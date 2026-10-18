@@ -1401,3 +1401,52 @@ Method & Manual: Bending item ("R<sub>B</sub> ≤ 50 is enforced … for each ed
 - **Build:** the `text/babel` block transpiles with @babel/standalone 7.23.5 (preset react, module).
 - **Render:** the transpiled app was rendered with React 18.2.0 `react-dom/server` in 6 state variants (analysis tab, report tab, check case, notch + point load + unbraced, timber error, manual mode). There were no React errors, and no NaN, undefined or Infinity in the output.
 - **Load harness:** `loadProject` was extracted verbatim and run with stub setters on a legacy file, a malformed file and a wrong-types file.
+
+## 2026-10-18 — PR: claude/timber-d11-report (PR link added after merge)
+
+The tool file uses CRLF line endings; keep them. Line numbers drift; search for the anchor text.
+
+### D11: calculation-sheet report (Tier 1, display only)
+- **Engineer request:** AUDIT.md D11 (2026-10-14 / 2026-10-18). Format copied from Base Plate & Anchor Designer (`/* D11 (2026-10-18)`) and Gusset Plate Rating.
+- **What changes for the user:** the output of **Print report** (the button and its dialog are unchanged; the section ticks still apply). Ctrl+P without the button is unchanged (see Open items).
+- **Where:** `PRINT_CSS` (anchor `/* D11 calculation sheet: cover, references, contents`) and the block from `/* D11 (2026-10-18): calculation-sheet report` down to the end of `buildPrintReport()` (just above `START-UP`): new `tbcPageCSS`, `tbcApplyPageCSS`, `tbcRefs`, `tbcResultRows`, `tbcResultBlock`; `buildPrintReport()` rewritten. To re-apply by hand, copy that block and the CSS lines.
+- **Before:** the report already reused the tabs' own builders (`BUILDERS()[id](holder)`), so the worked equations were the tool's own. It had a title box (Project, Job #, Member, Client, Designer, Checked by, Date, and a second "Member" that was the section), the governing banner, then one page per tab with a running header line (`.prRunHdr`), the cards numbered 1, 2, … per tab, no references, no contents, no result lines, `@page{margin:0.6in 0.55in}` with no page numbers.
+- **After:**
+  - Cover: title, project, member / mark, codes; title block Project / Project No. (`job`) / Calculated by (`designer`) / Date (`date`, else today, as before) / Checked by (`checker`) / Checked date ("—": no such field; **none added**) / Member / mark / Client / Section / Design method; governing banner; notes.
+  - References (`tbcRefs`): only what the tool cites: NDS 2018 articles (Ch. 4, 5 or 8 by material; App. N with LRFD), NDS Supplement 2018 tables, ASCE 7-16 Sec. 2.4.1 or 2.3.1, IBC 2018 Table 1604.3 (the edition the Reference Values tab states), the manufacturer (SCL), and AISC Manual Table 3-23 "edition: verify" only when Validation is printed.
+  - Numbered contents with links; sections n = the ticked tabs, subsections n.k = the tab's cards (`.secTitle` "k. Title" → "n.k Title", id `tbr-n-k`).
+  - Result lines (`tbcResultRows`, the same governing ratios as the Summary table): "Bending (combo): D/C = x.xxx (NDS 2018 3.3, Table 4.3.1; §5.3) PASS/FAIL", likewise Shear (or Shear at notched end), Bearing at support X, Deflection live/snow and total; at the end of each check section, and all of them in §1 plus "Code limits" (`R.fails`: R_B ≤ 50, notch depth) and "Member" (utilization, `isNG()`). Status = `stCls(ratio)`, as on screen. D/C is printed to 3 decimals, as everywhere in the tool.
+  - Print header / footer (`tbcPageCSS`, a `<style id="tbc-page">` that exists only while the report exists; removed in `cleanup`): top "Project No / Description" (member / mark, else project), "Computed By / Checked By", "Date / Date" (checked date "—"); bottom "<project> (Timber Beam Check)" and "Page X of Y". `PRINT_CSS` `@page` is now letter, `0.95in 0.6in 0.7in 0.6in`.
+  - Key code (before → after), in `buildPrintReport`:
+    - `const sec = el('div', 'prSec' + (first ? ' first' : '')); … sec.appendChild(el('div', 'prRunHdr', …)); sec.appendChild(el('h1', null, esc(names[id])));`
+    - → `const sec = el('section', 'cr-sec' + (n > 1 ? ' cr-break' : '')); const h = el('h1', 'cr-h1', n + '. ' + esc(names[id])); h.id = sid;` then `holder.querySelectorAll('.sec').forEach((s, k) => { … t.innerHTML = num + ' ' + t.innerHTML.replace(/^\s*\d+\.\s*/, ''); s.id = id2; if (card) cardMap[card] = { num, id: id2 }; … })`.
+- **Fixed along the way (report display only):**
+  - Title box: the section (`memberTxt()`) was labelled "Member" a second time; now "Section".
+  - In print the narrow-screen rule `@media (max-width:820px)` matched the page width, so the "where" source column (`td.wsrc`) lost its padding and ran into the value ("2452 ft-lbAnalysis Results tab"). `PRINT_CSS` now restores it: `.eqbW td.wsrc{display:table-cell;width:34%;padding-left:12px}`.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Saved data:** none. No key or format change (`tbc_autosave_v1`, `tbc_projects_v1`, `tbc_inputTab_v1`, `M.ui.print` untouched).
+- **Check case (default project, 2x10 DF-L No.2 @ 16 in., 16 ft, D 15 / L 40 psf):** 18 letter pages (was 16): cover, references + contents, §1 Summary (1.1–1.2), §2 Schematic & Inputs (2.1–2.4), §3 Analysis Results (3.1–3.3), §4 Design Values (4.1–4.5), §5 Bending (5.1–5.5), §6 Shear (6.1–6.3), §7 Bearing (7.1–7.2), §8 Deflection (8.1–8.3). Result lines: Bending (D + L) 1.208 FAIL (§5.3); Shear 0.333 PASS (§6.2); Bearing at support A 0.187 PASS (§7.1); Deflection live/snow (L) 0.932 PASS, total (Kcr·D + L) 1.028 FAIL (§8.2); Code limits none violated PASS; Member 120.8 % FAIL. Same values as the Summary tab.
+
+### D11 links: quoted values link to the card where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **Helpers** after `srcTag()` (anchor `/* ---- D11 links (CLAUDE.md §6, 2026-10-18)`): `TBC_CARDS` (card id = the `mkSec` id → tab, title), `tbcTabName`, `tbcCardTxt`, `tbcLink(card, txt, pre)`, `tbcWorkedIn(items)`, `tbcGoto(card)` and one document click handler for `a.wkA` (opens the tab as the tab button does, expands the card if collapsed, scrolls it under the tab bar, flashes it). CSS after `#printReport{display:none}` (anchor `/* D11 links (CLAUDE.md §6`).
+- **New line:** Summary, "Governing results", under the hint: `body.appendChild(tbcWorkedIn([['bCap', 'Bending'], [nt ? 'sNotch' : 'sCap', 'Shear'], ['brCalc', 'Bearing'], ['dfCheck', 'Deflection']]));` → "Worked in: → Bending · Adjusted bending design value and check; → Shear · …; → Bearing · …; → Deflection · Deflection checks".
+- **Existing text made into links (text unchanged on screen):** the "where" sources `'Design Values tab'` / `'Analysis Results tab'` become `tbcLink('<card>', 'Design Values tab')` etc.:
+  - Bending "Moment and bending stress": M → `anaPeaks`, S → `dvSect`; `clBlock` E′min → `dvAdj`; `cvBlock` (glulam) x₁, x₂ → `anaDiag`;
+  - Shear "Design shear V": V → `anaPeaks` (not when a point load within d sets V); notch R → `anaReac`; Bearing R → `anaReac`;
+  - Deflection "Bending stiffness": E′ → `dvAdj`, I → `dvSect`;
+  - Design Values factor table (`factorRows`): C_L "see the Bending tab" → `bCL`; glulam C_V "(see the Bending tab)" → `bCV`.
+- **In the report** each link reads "see §n.k" (with a label where given: "Bending: see §5.3", "CL: see §5.2"); a target left out of the printout reads "see the <Tab> tab (<card>; not in this printout)".
+- **Check case (default):** "Worked in: Bending: see §5.3; Shear: see §6.2; Bearing: see §7.1; Deflection: see §8.2"; M "see §3.3", S "see §4.1", E′ "see §4.5", I "see §4.1", R "see §3.2", C_L "CL: see §5.2".
+
+### How verified (both entries)
+- `node tests/check-syntax.mjs "Timber Beam Check.html"`: all 4 scripts pass. No other tests exist for this tool.
+- `node tests/compare.mjs --tool page --file "Timber Beam Check.html"`: page.storage same; page.text differs only by the new "Worked in" line (KaTeX is not in the kit; same 3 blocked requests on both sides).
+- **Main vs branch, headless Chromium, KaTeX 0.16.11 and plotly-basic 2.35.2 served locally (npm pack), 6 cases** (default; glulam 24F-1.8E two spans 22 + 18 ft with notch and snow; LRFD 2x12 No.1 with a 3 ft cantilever, point loads, uplift wind, notch and x/d; LVL fixed-free cantilever; 2x8 wet 19 ft NG; an input error): `TBC.res`, a fresh `TBC.run(model)`, the governing strip and the saved model identical in every case; every tab's text identical except the Summary "Worked in" line; building the report leaves `TBC.res` unchanged. 0 console errors or warnings.
+- **Report PDF** (print media, `preferCSSPageSize`): pages 18 / 20 / 20 / 19 / 19 / 4 for the six cases, 35 with every section ticked; every internal link resolves (56 in the default case), 0 KaTeX errors, no raw TeX, 3 diagram images. Pages looked at: cover, references and contents, Summary with result lines, Bending, LRFD bending combinations, the input-error report. With Bending unticked, the links to it read "not in this printout".
+- **In the app:** every link of three cases (38 clicks) opens the right tab with the target card expanded, scrolled into view and flashed; a collapsed target card is opened. Print with `window.print` stubbed: the header/footer style is present while printing and removed with the report after `afterprint`.
+- **Other copies:** none (tool-specific).
+
+### Open items (noticed, not changed)
+- **Ctrl+P without Print report prints a blank page.** `PRINT_CSS` hides `#app` in print whether or not a report exists (unchanged since R1). Decision: leave it (use Print report), or print the screen when no report exists?
+- **Checked date:** the tool has no such field; the title block and the print header show "—". Add an optional tool-only field (absent until typed, so saved files are unchanged)? Recommendation: add only if wanted.
+- **Report length:** 18 pages for the default project (was 16), mostly the cover and contents page. Section ticks are unchanged.
