@@ -14123,3 +14123,557 @@ Engineer's delegation 2026-10-12: open inventory items X-D6 / PILE-D6, X-C5 / PI
 - O64. **Client and Date are not shared through "Share / Use shared project info" (F59).** The shared project record (`bridgeSuite.v1.projectMeta`) has `client` and `date` fields; `PILE_PROJ_MAP` maps only project name, job no., prepared by and checked by, so the share payload is unchanged. **Ask:** map Client (and Date) too? Sharing would overwrite the shared client with this tool's value.
 - **Module 09 layout question (ENGINEER_CHECKS B8): decided 2026-10-12 (F60).** Micropile Module 09 stays on the Geotechnical tab (it holds the geotechnical pullout); the Structural tab has a link card to it. The H-pile Module 09 (structural tension) is on the Structural tab, as before.
 - **Proposals (ENGINEER_CHECKS B8): Client / Date fields and blank title-block defaults done in F59; "one save path" was already done on main (both save buttons call `exportProject`), not changed further.**
+
+## 2026-10-18 — PR: claude/pile-d11-report (PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11). The tool already had a full report builder (`PrintReport`, F13 / F40 and later); this entry closes the gaps to the house format instead of rewriting it. Every section's worked content (symbolic → substituted → result) is the existing one.
+- **Functions / anchors** (the exact before/after code is the unified diff in the appendix at the end of this entry):
+  - New helper block after `fitPrintReport`, anchor `/* D11 (2026-10-18): calculation-sheet report`: `RptNumCtx`, `rptSecGrpFor`, `RPT_SEC_TITLE`, `rptHKey`, `rptNumberScan`, `rptModFor`, `rptTargetOf`, `rptResText`, `RptResults`, `pdGotoModule`, `PdWorkedIn`, `RptSee`, `pdPageCss`, `RPT_D11_CSS`, `pileRefs`. To re-apply by hand, copy that block (down to `function RTex({`) from this version.
+  - `RptInputs` (anchor `function RptInputs({ title, rows })`): reads `RptNumCtx`; the group title gets `data-sk`, an `id` and its number n.k when its section is numbered.
+  - `RptHeading` (anchor `function RptHeading({`): `return …createElement("div", {` becomes `const head = …`; the heading carries `data-key` / `data-title` / `id` in the report, and its number. The old report letters (A–D, S) are replaced by the number; module numbers (G, 01 … 12, 02R, 02F) stay as the badge. The first heading of a multi-heading section is preceded by the section title (`div.rpt-sech`). On screen (no `RptNumCtx`) the heading is unchanged.
+  - `PrintReport`: numbering state (`rptRoot`, `num`, an effect that calls `rptNumberScan` after each render); `pageCss = pdPageCss(I, rptDate)` replaces `cssStr` / `footLeft` / `headLeft` / `headRight`; `RptNumCtx.Provider` and `ref: rptRoot` on `.print-only`; the cover (`div.rpt-cover`) and front matter (`div.rpt-front`); section C removed; `RptResults` at three places; `RptSee` lines; the Summary of Results "No." cell.
+  - Screen CSS anchor `/* D11 links (CLAUDE.md section 6)` after `.report-preview-show .print-only { display: block !important; }`.
+- **Before:** a title block (package label, pile-type title, status; Project / Job no. / Subject / Units / Prepared by / Checked by / Client / Date / Design basis) and seal box at the top of page 1, then lettered and module-numbered headings (A Input Summary, B Scope, C References, D Assumptions, G, 01 … 11, 02R, 02F, S Summary of Results), no table of contents, no result line per check (only the Summary of Results table), running header "project — subject" / "Pile Designer · by · date" and footer "project · job · pile type" / "Sheet X of Y".
+- **After:**
+  - **Cover** (own page): "Structural Calculation Package", pile-type title, project name ("Untitled project" when blank), subject, codes line ("AASHTO LRFD BDS 10th Ed. (2024); FHWA NHI-05-039 · Pile Designer · by Mario Lococo"; H-pile: FHWA-NHI-16-009; IAB: MassDOT Bridge Manual Part I §3.10 first), then the existing title block relabelled to the house order: Project / Project No. / Computed by / Date / Checked by / **Checked date "—"** / Subject / member / Units / Client (when entered) / Design basis, the overall status, the input-error notes and the PE seal box. **No project field was added**: the tool has no checked-date field, so the title block and the page header print "—" (decision for the engineer, below).
+  - **References table** (`pileRefs`, per pile type, only what the tool cites): AASHTO LRFD 10th Ed. (2024) with the articles the modules and report cite, marked "the tool relabelled its cites from the 9th Ed.; article numbers to be confirmed by the EOR" (the tool's own note, header comment); FHWA NHI-05-039 (Dec 2005) and FHWA-SA-97-070 (June 2000) for micropiles; FHWA-NHI-16-009 (GEC 12, "edition: verify") for H-piles; MassDOT Bridge Manual Part I §3.10 ("edition: verify") for IAB; AISC Steel Construction Manual ("edition: verify"); the p-y models (Reese 1974, Matlock 1970, Welch & Reese 1972, Reese 1997, Georgiadis 1983, Davisson & Robinson 1965); project geotechnical report (by others). The old section C list is folded into this table (removed text: see the appendix).
+  - **Numbered table of contents** with links (sections and subsections, module number in brackets).
+  - **Numbered sections** (consecutive headings of one kind form a section, `rptSecGrpFor`; numbers close up when the print chooser leaves a group out; each section starts on a new page while printing). Default micropile project:
+    1. Input Summary (1.1 Project … 1.8 Resistance factors; 1.9 Pile group when on);
+    2. Scope, Criteria & Assumptions (2.1 Scope & Design Criteria, 2.2 Assumptions & Design Notes);
+    3. Materials, Geometry & Code Limits (3.1 Materials, Geometry & Loads, 3.2 Code-Limit Checks — Module G);
+    4. Design Checks (4.1 Module 01 … 4.8 Module 08; 4.9 Module 09 and 4.10 Module 10 when on);
+    5. Lateral Analysis — Results & Figures (5.1 02R, 5.2–5.4 02F figures);
+    6. Pile Group (6.1 Rigid-Cap Load Distribution, 6.2 Axial Efficiency & Block Failure; when the group is on);
+    7. Summary of Results (6 when there is no group).
+    - H-pile: 1 Input Summary, 2 Scope…, 3 Materials, Section & Geometry, 4 Design Checks (4.1 Module 01, 4.2 Modules 03–09, 4.3 Module 06 / 10 when present), 5 Lateral Analysis…, (6 Pile Group), Summary. IAB: 1, 2, 3 Design Checks (3.1–3.4 Modules 01a–01d, 3.5 Module 12), 4 Figures, 5 Summary.
+  - **Result lines** ("Results — n. <section>"): at the end of section 3 (micropile Module G checks), section 4 (Design Checks) and the Pile Group section, one line per Summary-of-Results row worked in that section: "<check>: D/C = x.xx (<reference>; §n.k) PASS / FAIL". D/C = |demand| / capacity, the rule of the on-screen Summary of checks (`UtilizationDashboard`); PASS / FAIL is the row's own pass flag. Rows that are not ratios print what the summary prints: "p-y did not converge", "capacity 0", "stable / unstable", the IAB eligibility text, "L = x ft (not a ratio)". A check worked in 02R (H-pile combined-loading stability) is listed with the Design Checks.
+  - **Summary of Results table:** the "No." cell also links to the subsection ("01 · §4.1").
+  - **Print:** `@page` letter, margins 0.95 / 0.6 / 0.7 / 0.6 in, margin boxes inside `@media print` (applied only while printing): top "Project No: … / Description: <subject, else the pile type>", "Computed By: … / Checked By: …", "Date: <report date> / Date: —"; bottom "<project, else Untitled> (Pile Designer)" and "Page X of Y".
+- **Print / Ctrl+P output changes (explicit):** a cover page and a references + contents page are added; headings are numbered; the section letters A–D / S are gone; section C is replaced by the references table; result lines and "see §" lines are added; the header / footer text changes as above ("Sheet X of Y" → "Page X of Y"); each section starts on a new page. Default micropile project: 15 → 19 pages; H-pile (N60 = 20 sand) 11 → 16; IAB 6 → 10. Every number, equation, note and figure of the old report is still printed (token comparison below).
+- **Fixed along the way (display only):**
+  - The title block printed "Design basis: AASHTO LRFD Bridge Design Specifications; FHWA NHI-05-039" for every pile type; it now prints the pile type's basis (the same as the on-screen header line).
+  - The report quoted app/module numbers as if they were report sections: "from casing flexure, Section 04" (section 05), "see also 02." (Module G casing depth), "listed with the rigid-cap distribution (section 11 above) and applied in the lateral analysis (02)." (group section). They now read "§n.k" links (see D11 links).
+- **Not changed:** `computeAll` and every check; every on-screen module except the "Worked in" lines below; the print-section chooser and its key `micropile_lrfd_printSel_v1`; `fitPrintReport`; storage keys `micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, `micropile_lrfd_outTab_v1`, IndexedDB `micropile_lrfd_db`; the saved / exported JSON; `bridgeSuite.v1.*` hand-offs; library tags.
+- **Provision:** none. No formula, factor, unit, code reference used by a check, default or pass/fail logic changed.
+- **Saved data:** none. No key or format change; no field added.
+- **Check case (default micropile project):** 19 pages. Results — 3: "Casing past active moment zone: D/C = 0.83 (FHWA NHI-05-039; §3.2) PASS", "Uncased flexure (below casing tip): D/C = 1.34 (AASHTO 10.9 / FHWA NHI-05-039; §3.2) FAIL" (φM_n = 0.95, M_u,unc = 1.27 kip·ft as printed: 1.27/0.95 = 1.34). Results — 4: geotechnical bond 1.12 FAIL (86/77.0), stability "stable" PASS, cased 0.18, uncased 0.72, casing flexure 0.99 (53.45/53.9), combined 1.16 FAIL, bearing 0.47, punching 0.33, load tests 0.81 / 0.92, all equal to the Summary of checks on screen.
+
+### D11 links: quoted values link to the module where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **New helpers** (in the D11 block): `PdWorkedIn({ I, items })` renders "Worked in: <value> → <output tab> · <module> <title>" buttons; `pdGotoModule(id)` calls the existing `jumpToModule` (selects the output tab, opens the module, scrolls) and flashes the module (attribute `data-pd-wkflash`, not a class, because React rewrites the section's className when the module opens). `RptSee({ items })` is the report form: "<value>: see §n.k" (a PDF link); a target not printed reads "see Module xx (not in this printout)", or is left out when marked optional.
+- **On-screen lines added:**
+  1. Module G (micropile), after the uncased-flexure check: M_u,unc → Lateral (p-y) · 02.
+  2. Module 04 (micropile), after the check: M_max → 02.
+  3. Module 05 (micropile), after the check: M_u → 02 · M_n → Structural · 04.
+  4. Module 08, after the proof-bar check: P_n,geo → Geotechnical · 01.
+  5. Module 11, after the η check: per-pile bond P_n (micropile) / per-pile φR_n (H-pile) → Geotechnical · 01.
+  6. H-pile Module 04, after the check: M_u → 02.
+  7. H-pile Module 05 (plain interaction view), after the check: P_n → 03 · M_n → 04 · M_u → 02.
+- **Report lines:** Module G section "M_u,unc …: see §5.1" and "moment-decay depth: see §4.2"; section 04 "M_max: see §5.1"; section 05 "from casing flexure — M_n: see §4.4"; section 08 "P_n,geo: see §4.1"; H-pile 03–09 "M_u: see §5.1"; group section "per-pile … : see §4.1" and "rigid-cap distribution: see §6.1 · lateral analysis: see §5.1".
+- **Check case:** default micropile: in the app, "M_max → Lateral (p-y) · 02 …" in Module 04 (Structural tab, Module 02 collapsed) selects the Lateral (p-y) tab, opens Module 02, scrolls it into view and flashes it; the same for every link listed (tested headless: 20 clicks on 4 projects, each with the target module collapsed and on another output tab or further down the same tab). In the PDF: "M_max: see §5.1" links to 5.1 Lateral Analysis — Results & Diagnostics.
+
+### Verification (whole PR)
+- `node tests/check-syntax.mjs "Pile Designer.html"`: all scripts pass. There are no Pile Designer tests in `tests/`.
+- `node tests/compare.mjs --tool page --file "Pile Designer.html"`: page.text and page.storage identical; both sides have the same console errors because the kit does not hold React 18.3.1 / Tailwind (the page does not render in the kit on either side).
+- **Main vs branch with the libraries served locally** (React / ReactDOM 18.3.1, KaTeX 0.16.9 with its fonts, Plotly 2.32.0, three r128 from `npm pack`; Tailwind 3.4.5 compiled from the file's classes; all outside the repo). Six projects: default micropile; H-pile (sand N60 = 20); IAB with Tier 2; micropile with group + CFST + buckling + stickup 5 ft + uplift; micropile group with cap loads (P = 600, V_x = 30 kip) + uplift; H-pile clay-over-sand with group + buckling + stickup + uplift. For each:
+  - `computeAll(I)` (functions removed): identical.
+  - Text of every module, all expanded: identical except the added "Worked in" lines.
+  - Print-report text: a token diff (main → branch) removes only the title-block labels ("Job no.", "Prepared by"), the old letters A / B / C / D / S, the section C list (moved to the references table), the old design-basis text and the four in-text references listed above; everything else of the main report, every number included, is in the branch report in the same order.
+  - 0 console errors on both sides.
+- Headless Chromium PDFs (`emulateMedia print`, `preferCSSPageSize`): default 19 pages, H-pile 16, IAB 10, group 23, H-pile group 18. Looked at the cover, references + contents, section openings, the section 3 / 4 / 6 result blocks, the group pages and the header / footer. Report DOM: 59 internal links in the default project (the PDF has 59 link annotations), none broken, no duplicate ids (the on-screen preview copy uses its own `rptpv-` ids); with "Cap & connection" and "Geometry & limits" unticked the sections close up (3 Design Checks …), their result lines and links are left out, nothing points to a hidden section.
+- **Other copies:** none. The report helpers are specific to this tool.
+
+### Open items (not changed; engineer to decide)
+- **Checked date:** the tool has no checked-date field (`projDate` is the computation date). The title block and the page header print "Checked date: —" / "Date: —". A new optional, tool-prefixed field (absent until typed) could be added on request.
+- **Page breaks:** every numbered section starts on a new page (the house format), which adds about 4 pages; say if the engineer prefers sections to run on.
+- **D/C of the result lines** is |demand| / capacity of the Summary-of-Results row, the on-screen Summary-of-checks rule. **H-pile with the nonlinear P-crit buckling method:** `computeAll` leaves `hpileStruct.phiPn_axial` null (resolved at render once P_cr is computed), so the "Structural axial (compression)" row is not in the Summary of Results (existing behaviour) and therefore has no result line; the report section 03–09 computes P_n from P_cr inside `PrintReport` (a calculation in display code, existing, not changed). Should the resolved value feed the Summary row?
+
+### Appendix — unified diff (exact before/after, `Pile Designer.html`)
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 1ffcec3..839cdb5 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -83,2 +83,9 @@
+   .report-preview-show .print-only { display: block !important; }
++  /* D11 links (CLAUDE.md section 6): "Worked in: value -> Tab . Module" under a quoted value */
++  .pd-wk { font-size: 11px; color: #5A6B80; margin: 4px 0 2px; line-height: 1.4; }
++  .pd-wkA { color: var(--accent, #2a6f97); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: left; }
++  .pd-wkA:hover { text-decoration: underline; }
++  section[data-pd-wkflash] { animation: pdwkflash 1.5s ease-out; }
++  @keyframes pdwkflash { from { box-shadow: 0 0 0 3px rgba(42,111,151,0.55); background: #e8f1f8; } to { box-shadow: 0 0 0 0 rgba(42,111,151,0); } }
++  @media print { .pd-wk { display: none !important; } }
+   .fade-in { animation: fi .4s ease both; }
+@@ -8706,2 +8713,198 @@ function fitPrintReport(root) {
+ }
++/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format --
++   cover with title block, references, numbered table of contents (links), numbered sections n
++   and subsections n.k, a D/C result line per check, and the print header / "Page X of Y" footer
++   (@page margin boxes, pdPageCss). Display only: every number is the one the report already
++   printed (resultRows, r, pyRes); nothing is computed here except the numbering and the result
++   line's D/C = |demand| / capacity (the Summary-of-checks rule, UtilizationDashboard).
++   Numbering: after each render rptNumberScan reads the report's module headings (.rpt-h) in
++   order (sections unticked in the print chooser left out). Consecutive headings of the same
++   kind form one section (rptSecGrpFor); a section with several headings numbers them n.k, a
++   section with one heading numbers its input groups (.rpt-sub[data-sk]) n.k. */
++const RptNumCtx = React.createContext(null);
++function rptSecGrpFor(n) {
++  const s = String(n);
++  if (s === "A") return "inputs";
++  if (s === "B" || s === "C" || s === "D") return "basis";
++  if (s === "G") return "geom";
++  if (s === "02R" || s === "02F") return "latres";
++  if (s === "11") return "group";
++  if (s === "S") return "summary";
++  return "checks";
++}
++const RPT_SEC_TITLE = { basis: "Scope, Criteria & Assumptions", geom: "Materials, Geometry & Code Limits", checks: "Design Checks", latres: "Lateral Analysis \u2014 Results & Figures", group: "Pile Group" };
++function rptHKey(n, title) { return String(n) + "|" + String(title); }
++function rptNumberScan(root, sel) {
++  const pfx = root.closest(".report-preview-show") ? "rptpv-" : "rpt-";
++  const hs = [...root.querySelectorAll(".rpt-h[data-key]")].filter(h => !(sel && sel[h.getAttribute("data-rgrp")] === false));
++  const secs = [];
++  hs.forEach(h => { const g = rptSecGrpFor(h.getAttribute("data-n")); const last = secs[secs.length - 1]; if (last && last.g === g) last.hs.push(h); else secs.push({ g, hs: [h] }); });
++  const byKey = {}, byMod = {}, toc = [];
++  secs.forEach((s, i) => {
++    const n = String(i + 1), id = pfx + "s" + n, h0 = s.hs[0];
++    const single = s.hs.length === 1;
++    const title = single ? h0.getAttribute("data-title") : (RPT_SEC_TITLE[s.g] || h0.getAttribute("data-title"));
++    const subs = [];
++    if (single) {
++      byKey[h0.getAttribute("data-key")] = { single: true, num: n, id, title };
++      if (!byMod[h0.getAttribute("data-n")]) byMod[h0.getAttribute("data-n")] = { num: n, id, title };
++      const box = h0.parentElement;
++      if (box) [...box.querySelectorAll(".rpt-sub[data-sk]")].forEach((e, k) => {
++        const num = n + "." + (k + 1), sid = id + "-" + (k + 1);
++        byKey["sub|" + e.getAttribute("data-sk")] = { num, id: sid };
++        subs.push({ num, title: e.getAttribute("data-sk"), id: sid });
++      });
++    } else {
++      s.hs.forEach((h, k) => {
++        const num = n + "." + (k + 1), sid = id + "-" + (k + 1), t = h.getAttribute("data-title");
++        byKey[h.getAttribute("data-key")] = { num, id: sid, title: t, sec: k === 0 ? { num: n, id, title } : null };
++        if (!byMod[h.getAttribute("data-n")]) byMod[h.getAttribute("data-n")] = { num, id: sid, title: t };
++        subs.push({ num, title: t, id: sid, mod: h.getAttribute("data-n") });
++      });
++    }
++    toc.push({ num: n, title, id, g: s.g, subs });
++  });
++  return { pfx, byKey, byMod, toc };
++}
++/* the report heading where a Summary-of-Results row is worked (first match that is printed) */
++function rptModFor(name, pileType) {
++  const L = String(name);
++  if (pileType === "iab") {
++    if (/Tier 2/.test(L)) return ["12"];
++    if (L === IAB_ELIG_LBL) return ["01a"];
++    if (/^Required pile length/.test(L)) return ["01d"];
++    return ["01c"];
++  }
++  const m = checkNoFor(L, pileType);
++  if (pileType === "hpile" && ["03", "04", "05", "07", "09"].indexOf(m) >= 0) return [m, "03\u201309"];
++  if (m === "02") return ["02", "02R"];
++  if (m === "G" && pileType !== "hpile") return [rptHKey("G", "Code-Limit Checks"), "G"];   // micropile: the Module G code-limit checks
++  if (m === "11") return [rptHKey("11", "Pile Group \u2014 Axial Efficiency & Block Failure"), "11"];
++  return [m];
++}
++function rptTargetOf(num, mods) {
++  if (!num || !num.byMod) return null;
++  for (const m of mods) {
++    const t = m.indexOf("|") > 0 ? num.byKey[m] : num.byMod[m];   // a heading key ("n|title") or a module number
++    if (t) return Object.assign({ mod: m.split("|")[0] }, t);
++  }
++  return null;
++}
++/* result text of one Summary-of-Results row: D/C = |demand| / capacity, as the Summary of
++   checks (UtilizationDashboard); rows that are not a ratio print what the summary table prints */
++function rptResText(row, I, r) {
++  const [name, cap, unit, dem, pass] = row;
++  if (r.lateralNoConv && I.pileType !== "iab" && PY_LAT_ROW.test(name)) return "p-y did not converge";
++  if (I.pileType === "iab" && name === IAB_ELIG_LBL) return iabEligText(I, pass);
++  if (/stability/i.test(name)) return pass ? "stable" : "unstable";
++  if (/^Required pile length/.test(name)) return "L = " + fmt(dem, 0) + " " + unit + " (not a ratio)";
++  if (!(cap > 0) && Math.abs(dem) > 0 && !pass) return "capacity 0";
++  return "D/C = " + fmt(cap > 0 ? Math.abs(dem) / cap : 0, 2);
++}
++/* "Results -- <section>": one line per check whose calculation is printed in this section */
++function RptResults({ grp, rows, I, r }) {
++  const num = React.useContext(RptNumCtx);
++  if (!num || !num.toc) return null;
++  const sec = num.toc.find(s => s.g === grp);
++  if (!sec) return null;
++  const list = (rows || []).map(row => ({ row, t: rptTargetOf(num, rptModFor(row[0], I.pileType)) }))
++    .filter(x => x.t && ((g => g === "latres" ? "checks" : g)(rptSecGrpFor(x.t.mod))) === grp)   // a check worked in 02R (H-pile stability) is listed with the design checks
++    .sort((a, b) => a.t.num.localeCompare(b.t.num, undefined, { numeric: true }));
++  if (!list.length) return null;
++  const e = React.createElement;
++  return e("div", { className: "rpt-results" },
++    e("div", { className: "rpt-resh" }, "Results \u2014 " + sec.num + ". " + sec.title),
++    list.map(({ row, t }, i) => e("div", { key: i, className: "rpt-resline" },
++      e("div", null, row[0] + ":"),
++      e("div", null, e("b", null, rptResText(row, I, r)), " ", e("span", { className: "rpt-refi" }, "(" + row[5] + "; ", e("a", { href: "#" + t.id }, "\u00a7" + t.num), ")")),
++      e("div", { className: "rpt-resst" + (row[4] ? "" : " rpt-fail") }, e("b", null, row[4] ? "PASS" : "FAIL")))));
++}
++/* CLAUDE.md section 6 links. On screen: "Worked in: <value> -> <Tab> . <module>" (opens the
++   output tab and the module, scrolls, flashes). In the report: "<value>: see section n.k". */
++function pdGotoModule(id) {
++  if (!jumpToModule(id)) return;
++  const s = document.getElementById(id);
++  // an attribute, not a class: React re-renders the section's className when the module opens
++  if (s) { s.removeAttribute("data-pd-wkflash"); void s.offsetWidth; s.setAttribute("data-pd-wkflash", "1"); setTimeout(() => s.removeAttribute("data-pd-wkflash"), 1500); }
++}
++function PdWorkedIn({ I, items }) {
++  const e = React.createElement;
++  const tabOf = m => { const t = outTabFor({ getAttribute: a => a === "data-module" ? m : null }, I.pileType); return (OUT_TABS.find(x => x[0] === t) || ["", ""])[1]; };
++  return e("div", { className: "pd-wk" }, "Worked in: ",
++    items.map((it, i) => e(React.Fragment, { key: i }, i ? " \u00b7 " : null,
++      e("button", { type: "button", className: "pd-wkA", onClick: () => pdGotoModule("module-" + it.mod), title: "Show the module where this value is worked" },
++        it.txt, " \u2192 ", tabOf(it.mod), " \u00b7 ", it.mod, " ", it.title))));
++}
++function RptSee({ items, pre }) {
++  const num = React.useContext(RptNumCtx);
++  const e = React.createElement;
++  const list = items.filter(it => !it.opt || rptTargetOf(num, it.mods));   // opt: left out when that part is not printed
++  if (!list.length) return null;
++  return e("div", { className: "rpt-see" }, pre || null,
++    list.map((it, i) => {
++      const t = rptTargetOf(num, it.mods);
++      return e(React.Fragment, { key: i }, i ? " \u00b7 " : null,
++        t ? e("a", { href: "#" + t.id }, it.txt + ": see \u00a7" + t.num) : it.txt + ": see Module " + String(it.mods[0]).split("|")[0] + " (not in this printout)");
++    }));
++}
++/* page header / footer while printing (margin boxes; Chromium 131+) */
++function pdPageCss(I, rptDate) {
++  const esc = v => String(v == null || String(v).trim() === "" ? "\u2014" : v).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
++  const desc = (I.projSubject && String(I.projSubject).trim()) ? I.projSubject : (I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile");
++  const box = "font: 9.5pt 'Times New Roman', Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;";
++  return "@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;" +
++    " @top-left { content: \"Project No: " + esc(I.projNum) + "\\A Description: " + esc(String(desc).slice(0, 38)) + "\"; " + box + " text-align: left; }" +
++    " @top-center { content: \"Computed By: " + esc(I.projBy) + "\\A Checked By: " + esc(I.projChk) + "\"; " + box + " text-align: left; }" +
++    " @top-right { content: \"Date: " + esc(rptDate) + "\\A Date: \u2014\"; " + box + " text-align: right; }" +
++    " @bottom-left { content: \"" + esc(I.projName || "Untitled") + " (Pile Designer)\"; font: 9pt 'Times New Roman', Times, serif; vertical-align: top; padding-top: 6pt; }" +
++    " @bottom-right { content: \"Page \" counter(page) \" of \" counter(pages); font: 9pt 'Times New Roman', Times, serif; vertical-align: top; padding-top: 6pt; } } }";
++}
++/* report look of the D11 parts (cover, front matter, section headings, result lines, links) */
++const RPT_D11_CSS = [
++  ".print-only a { color: inherit; text-decoration: none; }",
++  ".print-only .rpt-cover { min-height: 8.6in; display: flex; flex-direction: column; justify-content: center; break-after: page; page-break-after: always; }",
++  ".print-only .rpt-cover-t { text-align: center; margin-bottom: 26pt; color: #000; }",
++  ".print-only .rpt-cover-k { font: 9pt Arial, Helvetica, sans-serif; letter-spacing: 1px; text-transform: uppercase; color: #5A6B80; }",
++  ".print-only .rpt-cover-t h1 { font: 700 23pt/1.2 Arial, Helvetica, sans-serif; margin: 8pt 0 14pt; }",
++  ".print-only .rpt-cover-t p { font: 700 13pt Arial, Helvetica, sans-serif; margin: 0 0 6pt; }",
++  ".print-only .rpt-cover-t .rpt-cover-p { font-weight: 400; font-size: 11pt; }",
++  ".print-only .rpt-front { break-after: page; page-break-after: always; color: #000; }",
++  ".print-only .rpt-front h2 { font: 700 12pt 'Times New Roman', Times, serif; text-decoration: underline; text-transform: uppercase; margin: 10pt 0 8pt; }",
++  ".print-only .rpt-refs { border-collapse: collapse; margin: 0 0 14pt; font-size: 10.5pt; } .print-only .rpt-refs td { padding: 1pt 14pt 3pt 0; vertical-align: top; }",
++  ".print-only .rpt-toc, .print-only .rpt-toc ol { list-style: none; margin: 0; padding: 0; } .print-only .rpt-toc > li { margin: 4pt 0; font-size: 11pt; } .print-only .rpt-toc ol { padding-left: 20pt; font-size: 10pt; } .print-only .rpt-toc ol li { margin: 1pt 0; }",
++  ".print-only .rpt-small { font-size: 9.5pt; margin-top: 16pt; color: #333; }",
++  ".print-only .rpt-sech { font: 700 12pt 'Times New Roman', Times, serif !important; color: #000; margin: 0 0 8pt !important; display: flex; align-items: baseline; gap: 6pt; break-after: avoid; page-break-after: avoid; }",
++  ".print-only .rpt-sech .rpt-sect { text-decoration: underline; text-transform: uppercase; font-size: 12pt !important; color: #000 !important; }",
++  ".print-only .rpt-sech1 { border-bottom: 0 !important; padding-bottom: 0 !important; }",
++  ".print-only .rpt-hnum { font-family: 'Times New Roman', Times, serif; font-weight: 700; color: #000; font-size: 13px; }",
++  ".print-only .rpt-sech .rpt-hnum { font-size: 12pt; }",
++  "@media print { .print-only .rpt-sech { break-before: page; page-break-before: always; } }",
++  ".print-only .rpt-results { margin: 12pt 0 10pt; border-bottom: 0.8pt solid #000; font-family: 'Times New Roman', Times, serif; color: #000; }",
++  ".print-only .rpt-resh { font-weight: 700; font-size: 11pt; margin: 0 0 2pt; break-after: avoid; page-break-after: avoid; }",
++  ".print-only .rpt-resline { display: grid; grid-template-columns: 2.25in 1fr 0.6in; gap: 0 10pt; align-items: baseline; padding: 3pt 0; border-top: 0.6pt solid #000; font-size: 10.5pt; break-inside: avoid; page-break-inside: avoid; }",
++  ".print-only .rpt-resst { text-align: right; } .print-only .rpt-fail { text-decoration: underline; color: #B91C1C; }",
++  ".print-only .rpt-refi { font-size: 9pt; font-style: italic; }",
++  ".print-only .rpt-see { font-family: 'Times New Roman', Times, serif; font-size: 10px; font-style: italic; color: #334155; margin: 1px 0 6px 12px; }"
++].join("\n");
++/* references the tool cites, per pile type (article lists from the module and report cites) */
++function pileRefs(I) {
++  const ed = "AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) \u2014 the tool relabelled its cites from the 9th Ed.; article numbers to be confirmed by the EOR";
++  const py = ["p-y models", "Reese et al. (1974) sand; Matlock (1970) soft clay; Welch & Reese (1972) stiff clay; Reese (1997) weak rock; Georgiadis (1983) layering; Davisson & Robinson (1965) fixity"];
++  const geo = ["Project", "Geotechnical report and contract drawings (by others)"];
++  if (I.pileType === "iab") return [
++    ["MassDOT BM", "MassDOT LRFD Bridge Manual Part I, \u00a73.10 Integral Abutment Bridges \u2014 \u00a73.10.2, \u00a73.10.10, \u00a73.10.11.1\u2013.5, Tables 3.10.11-1 to -4; edition: verify"],
++    ["AASHTO LRFD", ed + ": Art. 3.4 (load factors), 6.9.2.2 (combined axial and flexure), 6.9.4 (compression)"],
++    ["AISC SCM", "AISC Steel Construction Manual (published HP section properties; Z \u2264 1.5S); edition: verify"],
++    ["p-y models", "Reese et al. (1974) sand; Matlock (1970) soft clay; Welch & Reese (1972) stiff clay (Tier 2 nonlinear p-y check)"], geo];
++  if (I.pileType === "hpile") return [
++    ["AASHTO LRFD", ed + ": Art. 10.7.3.8.6 (static resistance), Table 10.5.5.2.3-1 (\u03c6 geotechnical), 10.7.3.9 (group), 10.7.5 (corrosion), 10.7.3.13.4 (fixity; verify), Table 10.7.2.4-1 (p-multipliers; verify), 6.5.4.2 (\u03c6), 6.8 (tension), 6.9.2.2.1 (combined), 6.9.4.1\u20136.9.4.2 (compression, local buckling), 6.10.9 / 6.12.1.2.3a (shear), 6.12 (flexure)"],
++    ["FHWA-NHI-16-009", "FHWA GEC 12, Design and Construction of Driven Pile Foundations (corrosion allowance); edition: verify"],
++    ["AISC SCM", "AISC Steel Construction Manual; edition: verify"],
++    py, geo];
++  return [
++    ["AASHTO LRFD", ed + ": Art. 10.9.3.5 and Table C10.9.3.5.2-1 (bond), 10.9.3.10 (micropile structural), 10.5.5.2.5 (uplift), 10.7.3.13.4 (fixity; verify), Table 10.7.2.4-1 (p-multipliers; verify), 6.5.4.2 (\u03c6), 6.9.2.2.1 (combined), 6.9.4 (compression, buckling), 6.9.6 (CFST), 6.12.2.2.3 (casing flexure), 5.6.5 (bearing), 5.12.8.6.3 (punching)"],
++    ["FHWA NHI-05-039", "Micropile Design and Construction Reference Manual, FHWA, December 2005"],
++    ["FHWA-SA-97-070", "Micropile Design and Construction Guidelines Implementation Manual, FHWA, June 2000"],
++    py, geo];
++}
+ function RTex({
+@@ -8837,2 +9040,4 @@ function RptInputs({ title, rows }) {
+   const live = (rows || []).filter(r => r && r[1] !== null && r[1] !== undefined && r[1] !== "");
++  const num = React.useContext(RptNumCtx);   // D11: subsection number n.k (report only)
++  const sk = num && num.byKey ? num.byKey["sub|" + title] : null;
+   if (!live.length) return null;
+@@ -8841,2 +9046,4 @@ function RptInputs({ title, rows }) {
+       className: "rpt-sub",
++      "data-sk": num ? title : undefined,
++      id: sk ? sk.id : undefined,
+       style: { fontFamily: RPT_UI, fontSize: "10px", fontWeight: 700, color: "#16304F",
+@@ -8844,3 +9051,3 @@ function RptInputs({ title, rows }) {
+                borderBottom: "1px solid #B9C8DB", paddingBottom: "2px" }
+-    }, title),
++    }, sk ? sk.num + "  " : null, title),
+     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "10px" } },
+@@ -8864,6 +9071,12 @@ function RptHeading({
+   const st = rptStatusFor(n, React.useContext(RptStatCtx), badge);
+-  return /*#__PURE__*/React.createElement("div", {
+-    className: "rpt-avoid rpt-h",
++  // D11: in the printed report (RptNumCtx) the heading carries its section / subsection number
++  const num = React.useContext(RptNumCtx);
++  const m = num && num.byKey ? num.byKey[rptHKey(n, title)] : null;
++  const head = /*#__PURE__*/React.createElement("div", {
++    className: "rpt-avoid rpt-h" + (m && m.single ? " rpt-sech rpt-sech1" : ""),
+     "data-rgrp": rptGrpFor(n),
+     "data-n": n,
++    "data-key": num ? rptHKey(n, title) : undefined,
++    "data-title": num ? title : undefined,
++    id: m ? m.id : undefined,
+     style: {
+@@ -8891,2 +9104,3 @@ function RptHeading({
+   }, n), /*#__PURE__*/React.createElement("span", {
++    className: m && m.single ? "rpt-sect" : undefined,
+     style: {
+@@ -8917,2 +9131,11 @@ function RptHeading({
+   }, code));
++  if (!m) return head;
++  // D11: the number goes first; the old report letters (A-D, S) are replaced by it
++  const kids = React.Children.toArray(head.props.children);
++  const letter = /^[A-DS]$/.test(String(n));
++  const numEl = /*#__PURE__*/React.createElement("span", { key: "rnum", className: "rpt-hnum" }, m.single ? m.num + "." : m.num);
++  const h2 = React.cloneElement(head, null, numEl, ...(letter ? kids.slice(1) : kids));
++  if (!m.sec) return h2;
++  return /*#__PURE__*/React.createElement(React.Fragment, null,
++    /*#__PURE__*/React.createElement("div", { className: "rpt-sech", id: m.sec.id }, /*#__PURE__*/React.createElement("span", { className: "rpt-hnum" }, m.sec.num + "."), /*#__PURE__*/React.createElement("span", { className: "rpt-sect" }, m.sec.title)), h2);
+ }
+@@ -8979,4 +9202,6 @@ function RptGroupChecks({ I, r }) {
+     note(hp ? "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency." : "Per-pile bond reduced by axial group efficiency."),
++    e(RptSee, { items: [{ txt: hp ? "per-pile H-pile \u03c6R_n" : "per-pile bond P_n", mods: ["01"] }] }),
+     // ---- 2. lateral p-multipliers: printed with the rigid-cap distribution and in 02 ----
+-    note("2 · Lateral p-multipliers by row: listed with the rigid-cap distribution (section 11 above) and applied in the lateral analysis (02)."),
++    note("2 · Lateral p-multipliers by row: listed with the rigid-cap distribution and applied in the lateral analysis."),
++    e(RptSee, { items: [{ txt: "rigid-cap distribution", opt: true, mods: [rptHKey("11", "Pile Group \u2014 Rigid-Cap Load Distribution")] }, { txt: "lateral analysis", mods: ["02R", "02"] }] }),
+     // ---- 3. block failure ----
+@@ -9022,2 +9247,3 @@ function RptGeomChecks({ I, r }) {
+     note("Uncased flexure over the whole uncased length below the casing tip: bar only, grout neglected (the fiber M–φ model gives M_n ≈ " + fmt(gc.Mn_uncased_fiber != null ? gc.Mn_uncased_fiber : 23, 0) + " kip·ft). φ = 0.90 kept for this bar-in-grout section (conservative; AASHTO 6.5.4.2's φ_f = 1.00 is the steel-member flexure factor — verify). Cased φM_n = " + fmt(gc.casedMn, 1) + " kip·ft for comparison."),
++    e(RptSee, { items: [{ txt: "M_u,unc (p-y moment below the casing tip)", mods: ["02R", "02"] }] }),
+     e(RptCheck, { pass: gc.Lb_geoReq_ok, eq: `L_{b,eff}=${fmt(gc.Lb_eff, 1)}\\text{ ft}${gc.Lb_geoReq_ok ? ' \\geq ' : ' < '}L_{b,req}=${fmt(gc.Lb_req, 1)}\\text{ ft}` }),
+@@ -9033,3 +9259,4 @@ function RptGeomChecks({ I, r }) {
+     gc.casingPastActive !== null && e(RptCheck, { pass: gc.casingPastActive, eq: `\\text{casing tip}=${fmt(gc.tipBelowGrade, 1)}\\text{ ft}${gc.casingPastActive ? ' \\geq ' : ' < '}\\text{moment-decay depth}=${fmt(gc.zDecay, 1)}\\text{ ft}` }),
+-    gc.casingPastActive !== null && note("Casing extends below the depth where the lateral moment has decayed to 5 % of its maximum (FHWA NHI-05-039); see also 02."),
++    gc.casingPastActive !== null && note("Casing extends below the depth where the lateral moment has decayed to 5 % of its maximum (FHWA NHI-05-039)."),
++    gc.casingPastActive !== null && e(RptSee, { items: [{ txt: "moment-decay depth", mods: ["02", "02R"] }] }),
+     e(RptCheck, { pass: gc.geomValid, eq: `\\text{plunge}\\le\\text{bond},\\;\\text{cased}\\ge\\text{plunge}` }),
+@@ -9054,2 +9281,11 @@ function PrintReport({
+   });
++  // D11: section / subsection numbers, table of contents and link targets (read after every render)
++  const rptRoot = useRef(null);
++  const [num, setNum] = useState({ byKey: {}, byMod: {}, toc: [] });
++  useEffect(() => {
++    if (!rptRoot.current) return;
++    const v = rptNumberScan(rptRoot.current, sel);
++    const k = JSON.stringify(v);
++    setNum(p => JSON.stringify(p) === k ? p : v);
++  });
+   const today = new Date().toLocaleDateString(undefined, {
+@@ -9123,7 +9359,11 @@ function PrintReport({
+   const headRight = ["Pile Designer", I.projBy, rptDate].filter(Boolean).join("  \u00b7  ");
+-  const pageCss = "@media print { @page { @top-left { content: \"" + cssStr(headLeft) + "\"; font: 7.5pt 'Times New Roman', Times, serif; color: #5A6B80; } @top-right { content: \"" + cssStr(headRight) + "\"; font: 7.5pt 'Times New Roman', Times, serif; color: #5A6B80; } @bottom-left { content: \"" + cssStr(footLeft) + "\"; font: 8pt 'Times New Roman', Times, serif; color: #475569; } @bottom-right { content: \"Sheet \" counter(page) \" of \" counter(pages); font: 8pt 'Times New Roman', Times, serif; color: #475569; } } }";
++  // D11: header "Project No / Description", "Computed By / Checked By", "Date / Date"; footer "<project> (Pile Designer)", "Page X of Y"
++  const pageCss = pdPageCss(I, rptDate);
+   // print-section chooser: hide the section (or group block) that holds a heading of an unticked group
+   const hideCss = RPT_GRP_ORDER.filter(g => sel && sel[g] === false).map(g => ".print-only :is(.rpt-section, .rpt-grp):has(> .rpt-h[data-rgrp=\"" + g + "\"]) { display: none !important; }").join("\n");
+-  return /*#__PURE__*/React.createElement(RptStatCtx.Provider, { value: modStat }, /*#__PURE__*/React.createElement("div", {
++  const pileTitle = I.pileType === "iab" ? "Integral Abutment H-Pile \u2014 MassDOT Simplified Method" : I.pileType === "hpile" ? "Driven Steel H-Pile — Structural & Geotechnical Design" : "Drilled Micropile — Structural & Geotechnical Design";
++  const basisTxt = I.pileType === "iab" ? "MassDOT Bridge Manual Part I \u00a73.10; AASHTO LRFD BDS 10th Ed. (2024)" : I.pileType === "hpile" ? "AASHTO LRFD BDS 10th Ed. (2024); FHWA-NHI-16-009" : "AASHTO LRFD BDS 10th Ed. (2024); FHWA NHI-05-039";
++  return /*#__PURE__*/React.createElement(RptStatCtx.Provider, { value: modStat }, /*#__PURE__*/React.createElement(RptNumCtx.Provider, { value: num }, /*#__PURE__*/React.createElement("div", {
+     className: "print-only",
++    ref: rptRoot,
+     style: {
+@@ -9134,6 +9374,12 @@ function PrintReport({
+     }
+-  }, /*#__PURE__*/React.createElement("style", null, pageCss + (hideCss ? "\n" + hideCss : "")),
+-  /* Title block (recent tools' layout): package label, pile-type title and
+-     overall status, then Project / Job no. / Subject / Units / Prepared by /
+-     Checked by / Date and the design basis. */
++  }, /*#__PURE__*/React.createElement("style", null, pageCss + "\n" + RPT_D11_CSS + (hideCss ? "\n" + hideCss : "")),
++  /* D11: cover page -- title, project, codes, then the title block (Project / Project No. /
++     Computed by / Date / Checked by / Checked date), the overall status and the seal box. */
++  /*#__PURE__*/React.createElement("div", { className: "rpt-cover" },
++  /*#__PURE__*/React.createElement("div", { className: "rpt-cover-t" },
++    /*#__PURE__*/React.createElement("div", { className: "rpt-cover-k" }, "Structural Calculation Package"),
++    /*#__PURE__*/React.createElement("h1", null, pileTitle),
++    /*#__PURE__*/React.createElement("p", null, (I.projName && String(I.projName).trim()) ? I.projName : "Untitled project"),
++    (I.projSubject && String(I.projSubject).trim()) ? /*#__PURE__*/React.createElement("p", { className: "rpt-cover-p" }, I.projSubject) : null,
++    /*#__PURE__*/React.createElement("p", { className: "rpt-cover-p" }, basisTxt + " \u00b7 Pile Designer \u00b7 by Mario Lococo")),
+   /*#__PURE__*/React.createElement("div", {
+@@ -9161,11 +9407,3 @@ function PrintReport({
+     }
+-  }, "Structural Calculation Package"), /*#__PURE__*/React.createElement("div", {
+-    style: {
+-      fontSize: "17px",
+-      fontWeight: 700,
+-      color: "#16304F",
+-      lineHeight: 1.2,
+-      marginTop: "2px"
+-    }
+-  }, I.pileType === "iab" ? "Integral Abutment H-Pile \u2014 MassDOT Simplified Method" : I.pileType === "hpile" ? "Driven Steel H-Pile — Structural & Geotechnical Design" : "Drilled Micropile — Structural & Geotechnical Design")), /*#__PURE__*/React.createElement("div", {
++  }, "Title block")), /*#__PURE__*/React.createElement("div", {
+     style: {
+@@ -9190,5 +9428,6 @@ function PrintReport({
+     }, /*#__PURE__*/React.createElement("tbody", null,
+-      row("a", "Project", I.projName, "Job no.", I.projNum),
++      row("a", "Project", I.projName, "Project No.", I.projNum),
++      row("c", "Computed by", I.projBy, "Date", rptDate),
++      row("e", "Checked by", I.projChk, "Checked date", "\u2014"),
+       row("b", "Subject / member", I.projSubject, "Units", "US customary (kip, ft, in, ksi)"),
+-      row("c", "Prepared by", I.projBy, "Checked by", I.projChk),
+       // F59: optional Client line (only when entered)
+@@ -9197,6 +9436,5 @@ function PrintReport({
+       /*#__PURE__*/React.createElement("tr", { key: "d" },
+-        /*#__PURE__*/React.createElement("td", { style: tdS }, lab("Date"), rptDate),
+-        /*#__PURE__*/React.createElement("td", { style: tdS }, /*#__PURE__*/React.createElement("span", {
++        /*#__PURE__*/React.createElement("td", { style: tdS, colSpan: 2 }, /*#__PURE__*/React.createElement("span", {
+           style: { fontFamily: RPT_UI, fontSize: "9.5px", fontWeight: 700, color: "#41546E" }
+-        }, "Design basis: "), "AASHTO LRFD Bridge Design Specifications; FHWA NHI-05-039"))));
++        }, "Design basis: "), basisTxt))));
+   })()), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
+@@ -9245,3 +9483,13 @@ function PrintReport({
+     }
+-  }, "Signature / Date"))),
++  }, "Signature / Date")))),
++  /* D11: references (the codes and articles the tool cites) and the numbered table of contents */
++  /*#__PURE__*/React.createElement("div", { className: "rpt-front" },
++    /*#__PURE__*/React.createElement("h2", null, "References:"),
++    /*#__PURE__*/React.createElement("table", { className: "rpt-refs" }, /*#__PURE__*/React.createElement("tbody", null,
++      pileRefs(I).map((rf, i) => /*#__PURE__*/React.createElement("tr", { key: i }, /*#__PURE__*/React.createElement("td", { style: { whiteSpace: "nowrap", fontWeight: 700 } }, rf[0]), /*#__PURE__*/React.createElement("td", null, rf[1]))))),
++    /*#__PURE__*/React.createElement("h2", null, "Table of contents:"),
++    /*#__PURE__*/React.createElement("ol", { className: "rpt-toc" }, num.toc.map(sc => /*#__PURE__*/React.createElement("li", { key: sc.id },
++      /*#__PURE__*/React.createElement("a", { href: "#" + sc.id }, sc.num + ". " + sc.title),
++      sc.subs.length ? /*#__PURE__*/React.createElement("ol", null, sc.subs.map(q => /*#__PURE__*/React.createElement("li", { key: q.id }, /*#__PURE__*/React.createElement("a", { href: "#" + q.id }, q.num + " " + q.title + (q.mod && !/^[A-DS]$/.test(q.mod) ? " (Module " + q.mod + ")" : ""))))) : null))),
++    /*#__PURE__*/React.createElement("p", { className: "rpt-small" }, "Equations are shown symbolically, then with values substituted, then with the result. Each group of checks ends with a result line per check (D/C = factored demand \u00f7 factored resistance, as in the Summary of checks). The app's module number (01, 02, \u2026) is shown beside each subsection heading. Units: kip, ft, in, ksi unless noted. The detailed module calculations reflect the active load case.")),
+   // ================= SECTION 0 - INPUT SUMMARY =================
+@@ -9370,3 +9618,3 @@ function PrintReport({
+     (Array.isArray(I.soilLayers) && I.soilLayers.length > 0) && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginBottom: "10px" } },
+-      /*#__PURE__*/React.createElement("div", { className: "rpt-sub", style: { fontFamily: RPT_UI, fontSize: "10px", fontWeight: 700, color: "#16304F", marginBottom: "3px", breakAfter: "avoid", borderBottom: "1px solid #B9C8DB", paddingBottom: "2px" } }, "Soil profile \u00b7 layers"),
++      /*#__PURE__*/React.createElement("div", { className: "rpt-sub", "data-sk": "Soil profile \u00b7 layers", id: num.byKey["sub|Soil profile \u00b7 layers"] ? num.byKey["sub|Soil profile \u00b7 layers"].id : undefined, style: { fontFamily: RPT_UI, fontSize: "10px", fontWeight: 700, color: "#16304F", marginBottom: "3px", breakAfter: "avoid", borderBottom: "1px solid #B9C8DB", paddingBottom: "2px" } }, num.byKey["sub|Soil profile \u00b7 layers"] ? num.byKey["sub|Soil profile \u00b7 layers"].num + "  " : null, "Soil profile \u00b7 layers"),
+       /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "9.5px" } },
+@@ -9467,29 +9715,2 @@ function PrintReport({
+     className: "rpt-section"
+-  }, /*#__PURE__*/React.createElement(RptHeading, {
+-    n: "C",
+-    title: "References"
+-  }), /*#__PURE__*/React.createElement("ol", {
+-    style: {
+-      fontSize: "11px",
+-      lineHeight: 1.55,
+-      color: "#334155",
+-      paddingLeft: "20px",
+-      margin: "4px 0"
+-    }
+-  }, I.pileType === "iab" ? [
+-    /*#__PURE__*/React.createElement("li", { key: 1 }, "MassDOT Bridge Manual Part I, \u00a73.10 \u2014 Design and Analysis of Integral Abutment Bridges (incl. Tables 3.10.11-1 through -4), Massachusetts Department of Transportation."),
+-    /*#__PURE__*/React.createElement("li", { key: 2 }, "AASHTO LRFD Bridge Design Specifications (Articles 3.4, 6.9.2.2, 6.9.4), American Association of State Highway and Transportation Officials."),
+-    /*#__PURE__*/React.createElement("li", { key: 3 }, "American Institute of Steel Construction, ", /*#__PURE__*/React.createElement("i", { key: 31 }, "Steel Construction Manual"), " (published HP section properties; Z \u2264 1.5S)."),
+-    /*#__PURE__*/React.createElement("li", { key: 4 }, "Project geotechnical report and contract drawings (by others).")
+-  ] : I.pileType === "hpile" ? [
+-    /*#__PURE__*/React.createElement("li", { key: 1 }, "AASHTO LRFD Bridge Design Specifications (Sections 6 and 10), American Association of State Highway and Transportation Officials."),
+-    /*#__PURE__*/React.createElement("li", { key: 2 }, "American Institute of Steel Construction, ", /*#__PURE__*/React.createElement("i", { key: 21 }, "Steel Construction Manual"), "."),
+-    /*#__PURE__*/React.createElement("li", { key: 3 }, "Project geotechnical report and contract drawings (by others).")
+-  ] : [
+-    /*#__PURE__*/React.createElement("li", { key: 1 }, "AASHTO LRFD Bridge Design Specifications, American Association of State Highway and Transportation Officials."),
+-    /*#__PURE__*/React.createElement("li", { key: 2 }, "FHWA NHI-05-039, ", /*#__PURE__*/React.createElement("i", { key: 21 }, "Micropile Design and Construction Reference Manual"), ", Federal Highway Administration, December 2005."),
+-    /*#__PURE__*/React.createElement("li", { key: 3 }, "FHWA-SA-97-070, ", /*#__PURE__*/React.createElement("i", { key: 31 }, "Micropile Design and Construction Guidelines Implementation Manual"), ", June 2000."),
+-    /*#__PURE__*/React.createElement("li", { key: 4 }, "Project geotechnical report and contract drawings (by others).")
+-  ])), /*#__PURE__*/React.createElement("div", {
+-    className: "rpt-section"
+   }, /*#__PURE__*/React.createElement(RptHeading, {
+@@ -9612,2 +9833,3 @@ function PrintReport({
+         /*#__PURE__*/React.createElement(RptRow, { label: "Flexure: φf·Mn ≥ Mu (φf=" + fmt(hs.phi_f, 2) + ")", val: nc ? "p-y did not converge" : fmt(hs.phiMn, 1) + " ≥ " + fmt(hs.Mu, 1) + " kip·ft", pass: hs.flex_pass }),
++        /*#__PURE__*/React.createElement(RptSee, { items: [{ txt: "M_u", mods: ["02R", "02"] }] }),
+         cRatio != null && /*#__PURE__*/React.createElement(RptRow, { label: "Combined " + (hs.biax ? "biaxial " : "") + (cBranch === "<0.2" ? "(6.9.2.2.1-1)" : "(6.9.2.2.1-2)") + " D/C", val: nc ? "p-y did not converge" : fmt(cRatio, 3) + " ≤ 1.0", pass: cPass }),
+@@ -9729,3 +9951,4 @@ function PrintReport({
+   // F40 (O23): the Module G code-limit checks
+-  React.createElement(RptGeomChecks, { I: I, r: r }), /*#__PURE__*/React.createElement("div", {
++  React.createElement(RptGeomChecks, { I: I, r: r }),
++  React.createElement(RptResults, { grp: "geom", rows: resultRows, I: I, r: r }), /*#__PURE__*/React.createElement("div", {
+     className: "rpt-section rpt-pagebreak"
+@@ -9866,3 +10089,3 @@ function PrintReport({
+     eq: r.lateralNoConv ? PY_NC_TEX : `\\phi_f M_n = ${fmt(r.flex.phiMn, 1)}\\ \\text{kip}\\cdot\\text{ft} \\;${r.flex.pass ? '\\geq' : '<'}\\; M_{max} = ${fmt(r.flex.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
+-  })), /*#__PURE__*/React.createElement("div", {
++  }), React.createElement(RptSee, { items: [{ txt: "M_max", mods: ["02R", "02"] }] })), /*#__PURE__*/React.createElement("div", {
+     className: "rpt-section"
+@@ -9909,3 +10132,3 @@ function PrintReport({
+     eq: `M_n = ${fmt(r.comb.Mn_comb, 1)}\\ \\text{kip}\\cdot\\text{ft}`,
+-    note: "from casing flexure, Section 04"
++    note: React.createElement(RptSee, { pre: "from casing flexure \u2014 ", items: [{ txt: "M_n", mods: ["04"] }] })
+   }), /*#__PURE__*/React.createElement(Calc, {
+@@ -10018,3 +10241,3 @@ function PrintReport({
+     eq: `P_{t,proof} = 0.8A_b f_{yb} = ${fmt(r.tests.Pt_proof, 0)}\\ \\text{kip} \\;${r.tests.proof_pass ? '\\geq' : '<'}\\; STL = ${fmt(r.tests.STL, 0)}\\ \\text{kip}`
+-  })), r.tension.enable && /*#__PURE__*/React.createElement("div", {
++  }), React.createElement(RptSee, { items: [{ txt: "P_n,geo", mods: ["01"] }] })), r.tension.enable && /*#__PURE__*/React.createElement("div", {
+     className: "rpt-section"
+@@ -10247,2 +10470,4 @@ function PrintReport({
+     )),
++  // D11: result line per check of the Design Checks section (values of the Summary of Results rows)
++  React.createElement(RptResults, { grp: "checks", rows: resultRows, I: I, r: r }),
+   // ---- F22 (O33): p-y lateral analysis did not converge -> a clear NG section ----
+@@ -10447,2 +10672,3 @@ function PrintReport({
+   (I.pileType !== "iab") && React.createElement(RptGroupChecks, { I: I, r: r }),
++  React.createElement(RptResults, { grp: "group", rows: resultRows, I: I, r: r }),
+   /*#__PURE__*/React.createElement("div", { className: "rpt-grp" }, /*#__PURE__*/React.createElement(RptHeading, {
+@@ -10527,5 +10753,6 @@ function PrintReport({
+       ...cell,
+-      color: "#64748b"
++      color: "#64748b",
++      whiteSpace: "nowrap"
+     }
+-  }, checkNoFor(name, I.pileType)), /*#__PURE__*/React.createElement("td", {
++  }, checkNoFor(name, I.pileType), (() => { const t = rptTargetOf(num, rptModFor(name, I.pileType)); return t ? /*#__PURE__*/React.createElement(React.Fragment, null, " \u00b7 ", /*#__PURE__*/React.createElement("a", { href: "#" + t.id }, "\u00a7" + t.num)) : null; })()), /*#__PURE__*/React.createElement("td", {
+     style: {
+@@ -10574,3 +10801,3 @@ function PrintReport({
+     }
+-  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", [I.projNum, rptDate].filter(Boolean).join(" · "))));
++  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", [I.projNum, rptDate].filter(Boolean).join(" · ")))));
+ }
+@@ -16833,3 +17060,3 @@ function App() {
+       note: "Uncased nominal from the central bar (grout tension neglected): φM_n = 0.90·f_yb·Z_bar. M_u,unc is the largest moment over the whole uncased length below the casing tip (" + belowTipSrcText(r.geoChecks) + "). Cased φM_n = " + fmt(r.geoChecks.casedMn, 1) + " kip·ft for comparison — the uncased section is far weaker, so keep demand off it (extend the casing past the active-moment zone)."
+-    }),
++    }), React.createElement(PdWorkedIn, { I: I, items: [{ mod: "02", txt: "M_u,unc", title: "Lateral Analysis \u2014 Maximum Moment" }] }),
+     /*#__PURE__*/React.createElement(CheckRow, {
+@@ -17209,2 +17436,3 @@ function App() {
+       /*#__PURE__*/React.createElement(RptCheck, { pass: hs.flex_pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\phi_f M_n=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}\\ ${hs.flex_pass?"\\ge":"<"}\\ M_u=${fmt(hs.Mu,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
++      React.createElement(PdWorkedIn, { I: I, items: [{ mod: "02", txt: "M_u", title: "Lateral Analysis \u2014 Maximum Moment" }] }),
+       hs.biax ? /*#__PURE__*/React.createElement(HpBiaxFlex, { hs }) : null,   // F39 (O50)
+@@ -17241,3 +17469,4 @@ function App() {
+       /*#__PURE__*/React.createElement(Calc, { label: "Interaction value", eq: branch === "<0.2" ? `\\dfrac{P_u}{2P_r}+\\dfrac{M_u}{M_r}=${fmt(PuPr/2,3)}+${fmt(MuMr,3)}` : `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\dfrac{M_u}{M_r}=${fmt(PuPr,3)}+${fmt(8/9*MuMr,3)}`, result: `=${fmt(ratio,3)}` }),
+-      /*#__PURE__*/React.createElement(RptCheck, { pass: r.lateralNoConv ? false : pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\text{D/C}=${fmt(ratio,3)}\\ ${pass?"\\le":">"}\\ 1.0` }));
++      /*#__PURE__*/React.createElement(RptCheck, { pass: r.lateralNoConv ? false : pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\text{D/C}=${fmt(ratio,3)}\\ ${pass?"\\le":">"}\\ 1.0` }),
++      React.createElement(PdWorkedIn, { I: I, items: [{ mod: "03", txt: "P_n", title: "Structural Axial \u2014 Compression + Buckling" }, { mod: "04", txt: "M_n", title: "Structural Flexure \u2014 Elastic" }, { mod: "02", txt: "M_u", title: "Lateral Analysis \u2014 Maximum Moment" }] }));
+   })()),
+@@ -17959,3 +18188,3 @@ function App() {
+     tex: r.lateralNoConv ? PY_NC_TEX : `\\phi_f M_n=${fmt(r.flex.phi_f, 2)}(${fmt(r.flex.Mn_j, 1)})=${fmt(r.flex.phiMn, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}${r.flex.pass ? ' \\geq ' : ' < '}M_{max}=${fmt(r.flex.Mmax, 1)}`
+-  }))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
++  }), React.createElement(PdWorkedIn, { I: I, items: [{ mod: "02", txt: "M_max", title: "Lateral Analysis \u2014 Maximum Moment" }] }))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
+     idx: "05",
+@@ -18017,3 +18246,3 @@ function App() {
+     tex: r.lateralNoConv ? PY_NC_TEX : `D/C=${fmt(r.comb.interaction, 3)}\\;${r.comb.pass ? '\\leq' : '>'}\\;1.0`
+-  }))), /*#__PURE__*/React.createElement("div", {
++  }), React.createElement(PdWorkedIn, { I: I, items: [{ mod: "02", txt: "M_u", title: "Lateral Analysis \u2014 Maximum Moment" }, { mod: "04", txt: "M_n", title: "Casing Flexure at Joints" }] }))), /*#__PURE__*/React.createElement("div", {
+     className: "bg-slate-50 rounded-sm p-3 border border-slate-200"
+@@ -18235,3 +18464,3 @@ function App() {
+     tex: `P_t=${fmt(r.tests.Pt_proof, 0)}${r.tests.proof_pass ? ' \\geq ' : ' < '}STL=${fmt(r.tests.STL, 0)}\\text{ kip}`
+-  })),
++  }), React.createElement(PdWorkedIn, { I: I, items: [{ mod: "01", txt: "P_n,geo", title: "Geotechnical Resistance \u2014 Axial Bond" }] })),
+   // F60 (Module 09 layout question): Module 09 stays on the Geotechnical tab (it holds the
+@@ -18543,3 +18772,3 @@ function App() {
+         note: r.group.capBasis === "hpile" ? "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency." : "Per-pile bond reduced by axial group efficiency."
+-      }))),
++      }), React.createElement(PdWorkedIn, { I: I, items: [r.group.capBasis === "hpile" ? { mod: "01", txt: "per-pile \u03c6R_n", title: "Geotechnical Axial \u2014 Tip + Skin (Static)" } : { mod: "01", txt: "per-pile bond P_n", title: "Geotechnical Resistance \u2014 Axial Bond" }] }))),
+ 
+```
