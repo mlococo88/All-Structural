@@ -663,3 +663,131 @@ Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25
   - Text changes elsewhere are the new input-echo row and the new θt line in the rectangular design blocks. Circular, plain and MassDOT-0.03 results are unchanged.
   - No console errors.
 - Screenshots (I-5 with the toggle, the anchored anchorage block, the Method B and Method A transverse lines) inspected: `scratchpad/followups/edm-anchored/`.
+
+## 2026-10-18 — PR: claude/edm-d11-report (AASHTO LRFD 10th Ed. basis; PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-18 (AUDIT.md D11: full report for every design-check tool).
+- **Functions / anchors:**
+  - `buildReport()` is rewritten. It is preceded by the new `EDM_REFS`, `edmPageCSS()` and `edmApplyPageCSS()` (anchor `/* D11 (2026-10-18): calculation-sheet report`).
+  - Print triggers (anchor `/* D11: the report is (re)built for the button and for Ctrl+P`): the Print / PDF Report button, plus new `beforeprint` / `afterprint` listeners.
+  - `checkLine(name,dc,ref,key)`: while the report is being built (`EDM_RPT` true), it returns a calculation-sheet result line, `edmResLine()`. The D/C is the same value.
+  - `inputEcho()`: the anchored row gets an "H" link to the anchorage block.
+  - New helpers `reinfLines(R)`, `coverLine()`, `stabTEq(R,ref)` and `edmDashDC(R,id)`, before `hbuEq` (anchor `/* D11: worked lines shared by the Method B block`). `reinfLines` and `coverLine` hold the Method B block's existing TeX lines unchanged; that block now calls them.
+  - CSS anchor `/* D11 calculation-sheet report`.
+- **Before** (the whole old builder):
+  ```js
+  document.getElementById("btnPrint").addEventListener("click",()=>{ buildReport(); window.print(); });
+  ```
+  ```js
+  function buildReport(){ const R=LAST; const P=S.proj;
+    let h=`<table class="tblock"><tr><td><span class="lbl">Project</span>${esc(P.name)||"—"}</td><td><span class="lbl">Project No.</span>${esc(P.num)||"—"}</td><td><span class="lbl">Calc by</span>${esc(P.calcBy)||"—"}</td><td><span class="lbl">Date</span>${esc(P.date)||"—"}</td></tr>
+      <tr><td><span class="lbl">Subject</span>Elastomeric Bearing Design</td><td><span class="lbl">Method</span>${isPlain()?"A (plain)":S.method}</td><td><span class="lbl">Checked by</span>${esc(P.chkBy)||"—"}</td><td><span class="lbl">Checked</span>${esc(P.chkDate)||"—"}</td></tr></table>
+      <h1>Elastomeric Bearing Design Calculation</h1>
+      <div style="text-align:center;font-style:italic;font-size:10.5pt;">AASHTO LRFD 10th Ed. (2024) · MassDOT Bridge Manual §3.5.7 · Elastomeric Bearing Design Module v1.0, by Mario Lococo · ${new Date().toLocaleString()}</div>
+      <h2>A — Design Summary</h2><p>${R.nInErr?"<b style='color:#c62828'>"+R.nInErr+" input error(s) — results not valid (see Warnings).</b> ":""}${R.nFail===0?"All "+R.dash.filter(d=>d.pass!==null).length+" checks PASS.":"<b style='color:#c62828'>"+R.nFail+" check(s) FAIL.</b>"}</p>
+      <table class="tblock"><tr><td><b>Check</b></td><td><b>D/C</b></td><td><b>Result</b></td></tr>${R.dash.map(d=>`<tr><td>${d.name}</td><td>${d.dc!=null?fmt(d.dc):"—"}</td><td><b>${d.pass===null?"INFO":d.pass?"PASS":"FAIL"}</b></td></tr>`).join("")}</table>
+      <h2>B — Input Echo</h2>${inputEcho()}`;
+    for(const [id,name] of TABS){ if(id==="tab-gird"&&!(S.girders&&S.girders.length))continue;
+      const src=document.getElementById(id); if(!src)continue; const cl=src.cloneNode(true);
+      cl.querySelectorAll(".panel").forEach(p=>p.classList.remove("closed"));
+      cl.querySelectorAll(".plotbox").forEach(pb=>pb.remove());
+      h+=`<h2 class="pagebreak">${name}</h2>${cl.innerHTML}`; }
+    const rp=document.getElementById("report"); rp.innerHTML=h; renderMathIn(rp); renderInlineMath(rp);
+  }
+  ```
+  - The old report was a title block, "A — Design Summary", "B — Input Echo", then a copy of each tab's DOM under the tab name. It had no references, no table of contents, no section numbers of its own (only the tabs' "1.1" … "5.2" card numbers), no result lines in the report format, and no page header or footer.
+  - **Broken, display only (fixed):**
+    - Ctrl+P (the browser's own print) printed an empty report, or the one from the last button click with old values, because the report was built only by the button.
+    - The thermal reference calculation printed live input boxes.
+    - With background graphics on, the screen's grey page colour filled the end of the last printed page.
+- **After:**
+  - **Cover:** title, project, pad type and method, codes, tool and version, print time, and the title block (Project / Project No. / Calculated by / Date / Checked by / Checked date). These are the tool's existing `proj` fields. **No field was added.**
+  - **References:**
+    - AASHTO LRFD 10th Ed. (2024): Arts. 14.7.5.1, 14.7.5.2, 14.7.5.3.2–14.7.5.3.5 and 14.7.5.4; Arts. 14.7.6.1, 14.7.6.2, 14.7.6.3.2, 14.7.6.3.4–14.7.6.3.7 and 14.7.6.4; Art. 14.4.2.1; Art. 14.6.3.1; Table 6.6.1.2.5-3.
+    - MassDOT LRFD Bridge Manual Part I §3.5.7 (§3.5.7.2 to §3.5.7.10; Figs 3.5.7-2 to 3.5.7-5). The tool states no MassDOT edition, so this reads "edition: verify".
+    - Only articles the tool already cites are listed.
+  - **Numbered table of contents** with links.
+  - **Sections:**
+    1. Design Summary: the dashboard table with a "Worked in" column.
+    2. Input Data: the existing input echo.
+    3. Geometry & Schematic.
+    4. Design Checks: one subsection per worked block, each ending with its result line, then "Results — Design Checks", one line per dashboard check.
+    5. Rotation & Movement: the nested Thermal Movement card is its own subsection.
+    6. Girder Run: only when girders are loaded, as before.
+    7. Warnings & Assumptions.
+  - The tab content is built by the same render functions (`renderGeom`, `renderDesign`, `renderRot`, `renderGird`, `renderWarn`) from `LAST`. It no longer depends on which tab is open.
+  - **Result line:** "<check>: D/C = x.xx (AASHTO <article>) PASS / FAIL / INFO", with "see §4.k" in the results block. These are the dashboard's own `R.dash` values.
+  - **Print:** `@page` letter with margin boxes, set only while printing (`beforeprint` / button → `afterprint` clears it):
+    - top: "Project No / Description", "Computed By / Checked By", "Date / Date";
+    - bottom: "<project> (Elastomeric Bearing Design Module)" and "Page X of Y".
+  - **Report-only worked blocks** for checks that have a result but no worked block in the tab. Each shows the comparison the check already makes, with the same values:
+    - Method A: stability thickness (h_rt ≤ D/4, or ≤ min(L, W)/3) [14.7.6.3.6, as the tool's check cites]; steel reinforcement thickness (the Method B block's lines, ref 14.7.6.3.7, as the check cites); cover layer (ref 14.7.6.1).
+    - Plain pad: stability thickness (h_rt ≤ min(L, W)/3; the tool cites no article for it).
+    - Method B: "γs = … ≤ 0.50" and its result line in the shear-strain block (the dashboard's "Shear deformation [14.7.5.3.2]" check; the tab has no check line for it).
+    - **The app's tabs are unchanged:** see Open items.
+- **Provision:** none. No formula, factor, unit, reference or result changed.
+- **Saved data:** none. No key or format changed. The report reads `S.proj` as before.
+- **Check case (default project: circular pad, Method B):**
+  - **11 letter pages:** cover, front matter, then 6 sections.
+    - 1 Design Summary (1.1)
+    - 2 Input Data (2.1)
+    - 3 Geometry & Schematic (3.1)
+    - 4 Design Checks (4.1 axial, 4.2 rotational, 4.3 shear strain from movement, 4.4 combined, 4.5 stability, 4.6 reinforcement, 4.7 cover, 4.8 anchorage, 4.9 H_bu)
+    - 5 Rotation & Movement (5.1, 5.2)
+    - 6 Warnings & Assumptions (6.1, 6.2)
+  - **Result lines:**
+    - Static axial strain: γa,st = 1.00·0.398/(0.160·8.00) = 0.311, D/C = 0.311/3.0 = 0.10, PASS.
+    - Combined shear strain: 3.793/4.75 = 0.80, PASS.
+    - Stability: 0.671/3.260 = 0.21, PASS.
+    - Shear deformation: 0.350/(0.5·3.500) = 0.20, PASS.
+    - Steel laminate: 0.0280/0.1196 = 0.23, PASS.
+    - Cover: 0.250/0.350 = 0.71, PASS.
+    - Anchorage: 3.22/16.00 = 0.20, PASS.
+    - These are identical to the dashboard.
+  - **Method A, rectangular, AASHTO tolerance, two girders:** 11 pages, 7 sections. "Compression–rotation (uplift): D/C = 14.12 (AASHTO 14.7.6.3.5) FAIL"; "Stability thickness: D/C = 0.58 (AASHTO 14.7.6.3.6) PASS", worked as 3.500 ≤ min(18.00, 24.00)/3 = 6.000 in.
+
+### D11 links: quoted values link to where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **New helpers** (anchor `/* ---- D11 links`, before `renderInlineMath`): `EDM_RPT`, `EDM_TABNAME`, `EDM_CARDS`, `EDM_DASH2CHK`, `edmLink`, `edmWorkedIn`, `edmGoto`, a click handler on `a.wkA`, `edmRefTxt` and `edmResLine`. CSS `.wkLink`, `a.wkA`, `.wkFlash`.
+- `eqB(title,ref,lines,note,key)` and `checkLine(…,key)` take an optional key, written as `data-chk`, so a link can find a check block. Keys:
+  - `sig`, `shear`, `gast`, `rot`, `gs`, `comb`, `stab`, `stabT`, `uplift`, `reinf`, `cover`, `anc`, `hbu`;
+  - plus the card ids `o-geom`, `o-rot`, `o-therm`.
+- **Links added:**
+  1. **Input I-2, the derived A / S / h_rt line:** "Worked in: → Geometry & Schematic · Plan Geometry & Shape Factor".
+  2. **Input I-4, the derived θs line:** "θs → Rotation & Movement · Design Rotation Build-up".
+  3. **Design Checks, top of the Method B / Method A / plain-pad card:** links to the shape-factor card ("S, A, hrt") and to the rotation build-up ("rotations" for Method B, "θs" for Method A; not shown for plain pads).
+  4. **Dashboard chips:** clicking opens Design Checks at that check's block (was: the tab only). A Method A check with no worked block in the tab (stability thickness, laminate, cover) opens its check line.
+  5. **Report only:** the Design Summary "Worked in" column, the results block, and the input-echo anchorage "H".
+- **Clicking a link** switches the tab, expands a collapsed card, scrolls to the block and flashes it.
+  - Only `S.ui.tab` and `S.ui.collapse` change, which tab and card clicks already change.
+  - Inputs, results and saved data are unchanged.
+- **In the report**, each link reads "see §n.k". A target not in the printout would read "see the <tab> tab (…; not in this printout)".
+- **Check case (default project):**
+  - Report: "S, A, hrt: see §3.1 · rotations: see §5.1"; Summary "Combined shear strain … see §4.4".
+  - App: chip "Combined shear strain" opens Design Checks and flashes the combined-strain block. The I-2 link opens Geometry & Schematic and flashes card 1.1.
+
+### Verification (whole PR)
+- `node tests/check-syntax.mjs elastomeric_design_module.html`: all scripts pass.
+- **No computed result changed.** Headless Chromium, main (fc815f9) vs branch, KaTeX 0.16.11 and Plotly 2.35.2 served locally (npm pack). 10 scenarios:
+  - default; rectangular; plain; Method A circular; Method A rectangular with the AASHTO tolerance and θt = 0.005; rectangular fixed / exterior with θt = 0.02; anchored with P_min = 10; P_min = 10; two girders; plain anchored.
+  - `LAST`, every girder's `computeEDM`, the state `S` and the dashboard text are identical in all 10.
+  - The rendered tab HTML (`renderGeom`, `renderDesign`, `renderRot`, `renderGird`, `renderWarn`, dashboard and derived readouts) is identical in 9 scenarios of the same kind (default, rectangular, plain, Method A circular and rectangular, rectangular fixed with θt = 0.02, anchored with P_min = 10, one girder, plain anchored), after removing the new `data-chk` / `title` attributes and the "Worked in" lines. This also checks the `reinfLines` / `coverLine` extraction.
+- `node tests/compare.mjs --tool page --file elastomeric_design_module.html`:
+  - `page.storage` same.
+  - `page.text` differs only in the "autosaved h:mm:ss" time.
+  - The console errors listed are the kit's blocked KaTeX CDN requests, identical on main.
+- **Report PDF** (print media, `preferCSSPageSize`) for 4 cases: default (11 pages), Method A rectangular with girders (11), plain anchored (9), rectangular Method B fixed (11).
+  - Every internal link (`#crp-…`) resolves, and every KaTeX block renders.
+  - pdftotext shows the "see §" links.
+  - Pages inspected: cover, references / TOC, summary, input echo, geometry, Design Checks with result lines, results block, rotation, girder run, last page, header and footer boxes.
+- **Headless click test:** the I-2, I-4, design-card and chip links (including with the design card collapsed, and a Method A chip) open the right tab and flash the right block. No console errors.
+
+### Open items (not changed; engineer to decide)
+- **Show the report-only worked blocks in the app too?** These are the Method A stability thickness, laminate and cover blocks, the plain-pad stability thickness, and the Method B "γs ≤ 0.50" line with its check line. Showing them would mean dropping the `EDM_RPT` condition. They were kept report-only because the task kept the tab layout unchanged.
+- **Some worked blocks show the symbolic form and the result but no substituted values:**
+  - Method B rotational shear strain γr (and θst itself);
+  - Method B stability A and B;
+  - Method A uplift σs,min.
+  - The variables σDL, σLL and σs = (P_DL + P_LL)/A are worked only for the plain pad. The Girder Run D/C per girder is not worked anywhere.
+  - Adding these would be a display change in the app.
+- **Plain-pad stability thickness cites no article** (Method A cites 14.7.6.3.6). The engineer should confirm the article.
