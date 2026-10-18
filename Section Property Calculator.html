@@ -166,6 +166,11 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#C4CDD8;border-radius:5px}
 #printReport{display:none}
+/* D11 links (CLAUDE.md §6, 2026-10-18): "Worked in" lines and links to the card or block where a value is worked */
+.wkLink{font-family:var(--font-ui);font-size:8pt;color:#6B7A8F;margin:4px 0 2px}
+a.wkA{color:var(--blue-600);text-decoration:none;cursor:pointer}
+a.wkA:hover{text-decoration:underline}
+.wkFlash{box-shadow:0 0 0 3px #F0C36D}
 /* narrow screens: panels stack and the page scrolls */
 @media (max-width:820px){
   html,body{overflow:auto;height:auto}
@@ -5479,6 +5484,29 @@ function renderTab(light) {
   if (id === 'sec') drawCanvas();
 }
 function errPanel() { return el('div', 'errBox', '<b>No results: input required</b><ul>' + ((R && R.errors) || []).map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>'); }
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card or block.
+   On screen: "Worked in: <values> → Tab · Card" (opens the tab, expands and scrolls to the card, flashes it). In the
+   calculation report the same link reads "see §n.k" (buildPrintReport rewrites it). Display only. ---- */
+const SPC_CARDS = { cTab: ['calc', 'Parallel-axis table'], cCen: ['calc', 'Centroid'], cI: ['calc', 'Moments of inertia'], cP: ['calc', 'Principal axes'],
+  cBk: ['calc', 'Buckling parameters r̄<sub>o</sub>, H, r<sub>ts</sub>'], cWag: ['calc', 'Wagner β<sub>x</sub>'], cKern: ['calc', 'Kern'], cWt: ['calc', 'Weight and coating area'],
+  plZx: ['plas', 'Z<sub>x</sub>'], plZy: ['plas', 'Z<sub>y</sub>'], plZ1: ['plas', 'Z<sub>1</sub>'], plZ2: ['plas', 'Z<sub>2</sub>'],
+  tJ: ['tors', 'J'], tCw: ['tors', 'Shear centre and C<sub>w</sub>'], qRes: ['q', 'Q and shear flow'],
+  inParts: ['props', 'Parts'], inDims: ['calc', 'Part geometry (plate model)'] };   // inParts, inDims: report-only targets (Inputs section)
+const spcTabName = id => (OUT_TABS.find(t => t[0] === id) || [id, id])[1];
+const spcCardTxt = card => SPC_CARDS[card] ? spcTabName(SPC_CARDS[card][0]) + ' · ' + SPC_CARDS[card][1] : card;
+function spcLink(card, txt) { return `<a class="wkA" href="#" data-card="${card}" title="Worked in: ${esc(spcCardTxt(card).replace(/<[^>]+>/g, ''))}">${txt}</a>`; }
+function spcWorkedIn(items) { return el('div', 'wkLink', 'Worked in: ' + items.map(([card, lab]) => lab + ': ' + spcLink(card, '→ ' + spcCardTxt(card))).join('; ')); }
+function spcGoto(card) {
+  const c = SPC_CARDS[card]; if (!c) return;
+  COLL[card] = false; M.ui.outTab = c[0]; autosave(); buildTabBar(); renderTab();
+  const op = $('outputPanel'); op.scrollTop = 0;
+  const s = document.querySelector('#tabPages [data-secid="' + card + '"]'); if (!s) return;
+  s.classList.remove('collapsed');
+  if (op.scrollHeight > op.clientHeight + 1) op.scrollTop += s.getBoundingClientRect().top - op.getBoundingClientRect().top - $('tabBar').offsetHeight - 6;
+  else s.scrollIntoView({ block: 'start' });
+  s.classList.add('wkFlash'); setTimeout(() => s.classList.remove('wkFlash'), 1600);
+}
+document.addEventListener('click', e => { const a = e.target && e.target.closest ? e.target.closest('a.wkA') : null; if (!a || a.closest('#printReport')) return; e.preventDefault(); spcGoto(a.getAttribute('data-card')); });
 function warnPanel(parent) {
   if (!R || !R.ok) return;
   const w = R.warnings.slice();
@@ -5523,6 +5551,7 @@ function buildSecSummary(s) {
     tile('r<sub>y</sub>', R.ry, 'L'), tile('r<sub>min</sub> (principal)', R.r2, 'L'), tile('J ' + (T.J !== null ? '(thin-wall)' : ''), T.J, 'I', { na: 'n/a', title: T.why || '' }),
     tile('C<sub>w</sub>', T.Cw, 'W', { na: 'n/a', title: T.cwWhy || '' }), tile('Shear centre x<sub>o</sub> (from centroid)', T.sc ? T.xo : null, 'L', { na: 'n/a' }), tile('Shear centre y<sub>o</sub> (from centroid)', T.sc ? T.yo : null, 'L', { na: 'n/a' })
   ].join('')));
+  s.appendChild(spcWorkedIn([['cTab', 'A'], ['cCen', 'x̄, ȳ'], ['cI', 'I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, S, r<sub>x</sub>, r<sub>y</sub>'], ['cP', 'I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, r<sub>min</sub>'], ['plZx', 'Z<sub>x</sub>'], ['plZy', 'Z<sub>y</sub>'], ['tJ', 'J'], ['tCw', 'C<sub>w</sub>, x<sub>o</sub>, y<sub>o</sub>']].concat(Q && M.q.on ? [['qRes', 'Q cut']] : [])));   // D11 links
   if (Q && M.q.on) s.appendChild(el('div', 'note', `<b>Q cut</b> (${M.q.dir === 'v' ? 'vertical, x' : 'horizontal, y'} = ${esc(nu(Q.pos, 'L'))}): Q = ${esc(nu(Q.Q, 'S'))}, material width on the cut b = ${esc(nu(Q.b, 'L'))}` + (isNum(Q.q) ? `, q = ${esc(nu(Q.q, 'q'))}, τ<sub>avg</sub> = ${esc(nu(Q.tau, 'tau'))}` : ' (enter V on the Q tab for the shear flow)')));
   if (R.single) s.appendChild(aisCompare(R.single));
   const notes = [];
@@ -5564,6 +5593,7 @@ function buildProps(pg) {
       ['Centroid x̄ from the origin', nf(R.cx, 'L'), un('L'), ''], ['Centroid ȳ from the origin', nf(R.cy, 'L'), un('L'), ''],
       ['Extents x (min … max)', nf(R.bbox[0], 'L') + ' … ' + nf(R.bbox[2], 'L'), un('L'), 'material only'], ['Extents y (min … max)', nf(R.bbox[1], 'L') + ' … ' + nf(R.bbox[3], 'L'), un('L'), '']
     ], { left: [0, 3] }));
+    body.appendChild(spcWorkedIn([['cTab', 'A'], ['cCen', 'x̄, ȳ']]));   // D11 links
   });
   mkSec(pg, 'pEl', 'Moments of inertia, section moduli, radii of gyration (about the centroid)', body => {
     body.appendChild(tblEl(['Property', 'Value', 'Unit', 'Note'], [
@@ -5575,6 +5605,7 @@ function buildProps(pg) {
       ['S<sub>y,left</sub> = I<sub>y</sub>/c<sub>left</sub>', nf(R.Syl, 'S'), un('S'), ''], ['S<sub>y,right</sub> = I<sub>y</sub>/c<sub>right</sub>', nf(R.Syr, 'S'), un('S'), ''],
       ['r<sub>x</sub> = √(I<sub>x</sub>/A)', nf(R.rx, 'L'), un('L'), ''], ['r<sub>y</sub> = √(I<sub>y</sub>/A)', nf(R.ry, 'L'), un('L'), '']
     ].map(r => r.map((c, i) => i === 0 || i === 3 ? { h: c } : c)), { left: [0, 3] }));
+    body.appendChild(spcWorkedIn([['cI', 'I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, S, r']]));   // D11 links
   });
   mkSec(pg, 'pPr', 'Principal axes', body => {
     body.appendChild(tblEl(['Property', 'Value', 'Unit', 'Note'], [
@@ -5584,12 +5615,14 @@ function buildProps(pg) {
       ['r<sub>1</sub>', nf(R.r1, 'L'), un('L'), ''], ['r<sub>2</sub> = r<sub>min</sub>', nf(R.r2, 'L'), un('L'), 'least radius of gyration'],
       ['Z<sub>1</sub>, Z<sub>2</sub> (plastic, principal)', nf(R.Z1, 'S') + ', ' + nf(R.Z2, 'S'), un('S'), 'see the Plastic tab']
     ].map(r => r.map((c, i) => i === 0 || i === 3 ? { h: c } : c)), { left: [0, 3] }));
+    body.appendChild(spcWorkedIn([['cP', 'I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, r<sub>2</sub>'], ['plZ1', 'Z<sub>1</sub>'], ['plZ2', 'Z<sub>2</sub>']]));   // D11 links
   });
   mkSec(pg, 'pPl', 'Plastic moduli and shape factors', body => {
     body.appendChild(tblEl(['Property', 'Value', 'Unit', 'Note'], [
       ['Z<sub>x</sub>', nf(R.Zx, 'S'), un('S'), 'PNA at y = ' + nf(R.plX.c, 'L') + ' ' + un('L')], ['Z<sub>y</sub>', nf(R.Zy, 'S'), un('S'), 'PNA at x = ' + nf(R.plY.c, 'L') + ' ' + un('L')],
       ['Shape factor Z<sub>x</sub>/S<sub>x,min</sub>', nf(R.SFx, 'n', 4), '', ''], ['Shape factor Z<sub>y</sub>/S<sub>y,min</sub>', nf(R.SFy, 'n', 4), '', '']
     ].map(r => r.map((c, i) => i === 0 || i === 3 ? { h: c } : c)), { left: [0, 3] }));
+    body.appendChild(spcWorkedIn([['plZx', 'Z<sub>x</sub>'], ['plZy', 'Z<sub>y</sub>']]));   // D11 links
   });
   mkSec(pg, 'pTo', 'Torsion and warping (thin-wall approximation)', body => {
     body.appendChild(tblEl(['Property', 'Value', 'Unit', 'Note'], [
@@ -5599,9 +5632,10 @@ function buildProps(pg) {
       ['x<sub>o</sub>, y<sub>o</sub> (shear centre from the centroid)', T.sc ? nf(T.xo, 'L') + ', ' + nf(T.yo, 'L') : 'n/a', un('L'), ''],
       ['r̄<sub>o</sub> = √(x<sub>o</sub>² + y<sub>o</sub>² + (I<sub>x</sub>+I<sub>y</sub>)/A)', T.sc ? nf(Math.sqrt(T.ro2), 'L') : 'n/a', un('L'), 'AISC 360-16 Eq. E4-9 form']
     ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
+    body.appendChild(spcWorkedIn([['tJ', 'J'], ['tCw', 'C<sub>w</sub>, shear centre'], ['cBk', 'r̄<sub>o</sub>']]));   // D11 links
   });
   if (R.single) pg.appendChild(aisCompare(R.single));
-  mkSec(pg, 'pParts', 'Parts', body => body.appendChild(PRMODE && PRMODE.parts ? el('div', 'hint', 'Listed in the Parts section of this report.') : partsTable()));   // print: the table once
+  mkSec(pg, 'pParts', 'Parts', body => body.appendChild(PRMODE && PRMODE.parts ? el('div', 'hint', 'Listed in the Inputs section of this report (parts: ' + spcLink('inParts', '→ Inputs') + ').') : partsTable()));   // print: the table once
   buildPropsP2a(pg);
 }
 function partsTable() {
@@ -5654,9 +5688,13 @@ function buildCalc(pg) {
       TX`r_{min}=\sqrt{I_2/A}=${nt(R.r2, 'L')}\ \text{${L}}`], result: 'θp: angle from +x to the major axis 1, counter-clockwise. Rotated-axis check: I(θp) = (Ix+Iy)/2 + (Ix−Iy)/2·cos2θp − Ixy·sin2θp = ' + nf((R.Ix + R.Iy) / 2 + (R.Ix - R.Iy) / 2 * Math.cos(2 * R.thp) - R.Ixy * Math.sin(2 * R.thp), 'I') + ' ' + I });
   });
   mkSec(pg, 'cG', 'Part geometry (plate model)', body => {
-    body.appendChild(tblEl(['Part', 'Model', 'Dimensions'], M.parts.map(p => { const g = SPC.partGeom(p); return [p.lbl, (p.hole ? 'hole: ' : '') + (p.type === 'shape' ? g.desc + ' as plates' : SPC.TYPES[p.type].name), Object.keys(g.dims).map(k => k + ' = ' + nf(g.dims[k], 'L', 4)).join(', ') + (p.type === 'poly' ? (g.prims[0] ? g.prims[0].pts.length + ' vertices' : '') : '')]; }), { left: [0, 1, 2] }));
+    body.appendChild(PRMODE && PRMODE.parts ? el('div', 'hint', 'Listed in the Inputs section of this report (part dimensions: ' + spcLink('inDims', '→ Inputs') + ').') : partGeomTable());   // print: the table once (D11)
   });
   buildCalcP2a(pg);
+}
+
+function partGeomTable() {
+  return tblEl(['Part', 'Model', 'Dimensions'], M.parts.map(p => { const g = SPC.partGeom(p); return [p.lbl, (p.hole ? 'hole: ' : '') + (p.type === 'shape' ? g.desc + ' as plates' : SPC.TYPES[p.type].name), Object.keys(g.dims).map(k => k + ' = ' + nf(g.dims[k], 'L', 4)).join(', ') + (p.type === 'poly' ? (g.prims[0] ? g.prims[0].pts.length + ' vertices' : '') : '')]; }), { left: [0, 1, 2] });
 }
 
 /* ---- Plastic tab ---- */
@@ -5667,10 +5705,10 @@ function buildPlas(pg) {
     TX`\Sigma A_{above}=\Sigma A_{below}=\tfrac{A}{2}=${nt(R.Ageo / 2, 'A')}\ \text{${A}}\quad\Rightarrow\quad \text{PNA at } ${axis}=${nt(p.c, 'L')}\ \text{${L}}`,
     TX`Z=A_{1}d_{1}+A_{2}d_{2}=${nt(p.Aup, 'A')}\times${nt(p.dUp, 'L')}+${nt(p.Adn, 'A')}\times${nt(p.dDn, 'L')}=${nt(p.Z, 'S')}\ \text{${S}}`],
     result: `Z = ${nu(p.Z, 'S')}` + (p.flat ? ' (the PNA lies in a gap with no material: any position in the gap gives the same Z)' : '') });
-  blk('Z<sub>x</sub> — bending about the x axis (PNA horizontal)', R.plX, 'y');
-  blk('Z<sub>y</sub> — bending about the y axis (PNA vertical)', R.plY, 'x');
-  blk('Z<sub>1</sub> — about the major principal axis', R.pl1, TX`s_2`);
-  blk('Z<sub>2</sub> — about the minor principal axis', R.pl2, TX`s_1`);
+  blk('Z<sub>x</sub> — bending about the x axis (PNA horizontal)', R.plX, 'y').setAttribute('data-secid', 'plZx');   // data-secid: D11 link targets
+  blk('Z<sub>y</sub> — bending about the y axis (PNA vertical)', R.plY, 'x').setAttribute('data-secid', 'plZy');
+  blk('Z<sub>1</sub> — about the major principal axis', R.pl1, TX`s_2`).setAttribute('data-secid', 'plZ1');
+  blk('Z<sub>2</sub> — about the minor principal axis', R.pl2, TX`s_1`).setAttribute('data-secid', 'plZ2');
   pg.appendChild(el('div', 'hint', 's<sub>1</sub>, s<sub>2</sub>: coordinates along the principal directions u<sub>1</sub> = (cos θp, sin θp), u<sub>2</sub> = (−sin θp, cos θp), measured from the origin.'));
   pg.appendChild(tblEl(['Shape factor', 'Value'], [['Z<sub>x</sub> / S<sub>x,min</sub>', nf(R.SFx, 'n', 4)], ['Z<sub>y</sub> / S<sub>y,min</sub>', nf(R.SFy, 'n', 4)], ['Z<sub>1</sub> / S<sub>1</sub>', nf(R.Z1 / R.S1, 'n', 4)], ['Z<sub>2</sub> / S<sub>2</sub>', nf(R.Z2 / R.S2, 'n', 4)]].map(r => [{ h: r[0] }, r[1]]), { left: [0] }));
 }
@@ -5846,6 +5884,7 @@ function buildPropsP2a(pg) {
       ['I<sub>1</sub> (major), I<sub>2</sub> (minor)', nf(R.I1, 'I') + ', ' + nf(R.I2, 'I'), '0', un('I')], ['2θ<sub>p</sub> (from X to I<sub>1</sub>, CCW on the circle)', ang(2 * R.thp), '', '']
     ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0] }));
     body.appendChild(el('div', 'hint', 'Sign convention: I horizontal, I<sub>xy</sub> = ∫xy dA plotted <b>upward</b>. Point X = (I<sub>x</sub>, I<sub>xy</sub>), point Y = (I<sub>y</sub>, −I<sub>xy</sub>). Turning the axes counter-clockwise by θ moves X counter-clockwise by 2θ on the circle (I<sub>x′</sub> = c + R cos(2θ + 2α), I<sub>x′y′</sub> = R sin(2θ + 2α)); X reaches I<sub>1</sub> after 2θ<sub>p</sub>. Some texts plot −I<sub>xy</sub> upward, which mirrors the figure.'));
+    body.appendChild(spcWorkedIn([['cP', 'centre, radius, I<sub>1</sub>, I<sub>2</sub>']]));   // D11 links
   });
   mkSec(pg, 'pBk', 'Flexural-torsional and lateral-torsional buckling parameters', body => {
     const na = (v, k, w) => isNum(v) ? nf(v, k) : 'n/a';
@@ -5859,6 +5898,7 @@ function buildPropsP2a(pg) {
     ];
     body.appendChild(tblEl(['Parameter', 'Value', 'Unit', 'Note'], rows.map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
     body.appendChild(el('div', 'hint', 'x<sub>o</sub>, y<sub>o</sub>: shear centre from the centroid (thin-wall model, Torsion tab). r̄<sub>o</sub> and H do not depend on the axis directions (AISC uses the principal axes). n/a when the shear centre is n/a (closed cells, separate pieces, custom polygons). v = axis 2 direction (for an unrotated section with x as the major axis, v = y, upward).'));
+    body.appendChild(spcWorkedIn([['cBk', 'r̄<sub>o</sub>, H, r<sub>ts</sub>'], ['cWag', 'β<sub>x</sub>']]));   // D11 links
   });
   mkSec(pg, 'pKern', 'Kern (core) of the section', body => {
     const K = ext('kern');
@@ -5871,6 +5911,7 @@ function buildPropsP2a(pg) {
     const rows = (many ? K.V.filter((v, i) => i % Math.ceil(K.V.length / 24) === 0) : K.V).map((v, i) => [String(i + 1), nf(v.e[0], 'L'), nf(v.e[1], 'L'), nf(v.p[0], 'L'), nf(v.p[1], 'L')]);
     body.appendChild(tblEl(['Vertex', 'e<sub>x</sub> (from centroid)', 'e<sub>y</sub> (from centroid)', 'x (from origin)', 'y (from origin)'], rows));
     body.appendChild(el('div', 'hint', (many ? `${K.V.length} vertices (curved boundary from round parts); every ${Math.ceil(K.V.length / 24)}th listed. ` : `${K.V.length} vertices, one per edge of the convex hull. `) + 'An axial force applied inside the kern causes no stress reversal over the section (compression only for a compressive force). Toggle "Kern" in Settings → Drawing to draw it.' + (R.anyN ? ' Transformed section (n): the kern of the transformed section.' : '')));
+    body.appendChild(spcWorkedIn([['cKern', 'kern vertices']]));   // D11 links
   });
   mkSec(pg, 'pWt', 'Weight and coating (paint) area per length', body => {
     const Wt = ext('w'), C = ext('coat');
@@ -5892,6 +5933,7 @@ function buildPropsP2a(pg) {
       ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
       body.appendChild(el('div', 'hint', 'Paint area per length = perimeter × 1 ft (' + (unitSys() === 'mm' ? 'perimeter in m × 1 m' : 'perimeter in in ÷ 12') + '). Faces closer than the contact tolerance (' + esc(nu(C.eps, 'L')) + ') to another part are treated as faying (not painted). Round parts exact (2πr); rectangular-tube and HSS corners as the 24 chords per corner the tool uses (perimeter 0.04 % short of the true arc). Rolled shapes: plate model (no fillets).'));
     }
+    body.appendChild(spcWorkedIn([['cWt', 'weight, coating perimeter']]));   // D11 links
   });
 }
 
@@ -6808,8 +6850,31 @@ const PRINT_CSS = `
 #printReport .fRow>.unit{flex:0 0 auto;text-align:left}
 #printReport .prKeepBlk{break-inside:avoid}
 #printReport .prFoot{margin-top:10px;padding-top:4px;border-top:1px solid #999;font-size:8pt;color:#444;display:flex;justify-content:space-between}
+/* D11 calculation sheet (2026-10-18): cover, references, contents, numbered sections; the page header / footer is the
+   @page rule of spcPageCSS (style #spc-page, only while the report exists) */
+#printReport a{color:#000;text-decoration:none}
+#printReport .cr-cover{break-after:page;padding-top:0.9in}
+#printReport .cr-cover-t{text-align:center;margin:0 0 0.55in}
+#printReport .cr-cover-t h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 12pt;color:#000}
+#printReport .cr-cover-t p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
+#printReport .cr-cover-t p.cr-cover-p{font-weight:400;font-size:11pt}
+#printReport .cr-tb{width:100%;border-collapse:collapse;font-size:10pt;margin:0 0 12pt;border:1.4px solid #16304F}
+#printReport .cr-tb td{padding:4px 8px;border:.6px solid #B8C2CE;vertical-align:top;width:50%}
+#printReport .cr-front{break-after:page}
+#printReport .cr-sec{margin:0 0 16px}
+#printReport .cr-sec.brk{break-before:page}
+#printReport .cr-h1{font:700 12pt var(--font-doc);text-transform:uppercase;text-decoration:underline;color:#000;margin:0 0 8pt;break-after:avoid}
+#printReport .cr-front .cr-h1{margin-top:10pt}
+#printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt;font-size:10pt}
+#printReport .cr-refs td{padding:2pt 14pt 2pt 0;vertical-align:top}
+#printReport .cr-refs td:first-child{white-space:nowrap;font-weight:700}
+#printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0}
+#printReport .cr-toc>li{margin:4pt 0}
+#printReport .cr-toc ol{padding-left:18pt;font-size:9.5pt}
+#printReport .cr-p{margin:0 0 7pt;font-size:9.5pt}
+#printReport .wkLink{color:#333;font-family:var(--font-doc)}
 `;
-const PR_LABELS = { sum: 'Drawing and key properties', parts: 'Parts table', props: 'Properties', calc: 'Calc detail (parallel-axis table)', plas: 'Plastic', tors: 'Torsion', q: 'Q & shear flow', stress: 'Stresses', val: 'Validation', man: 'Method and assumptions' };
+const PR_LABELS = { sum: 'Section drawing', parts: 'Inputs (units, parts, dimensions)', props: 'Properties', calc: 'Calc detail (parallel-axis table)', plas: 'Plastic', tors: 'Torsion', q: 'Q & shear flow', stress: 'Stresses', val: 'Validation', man: 'Method and assumptions' };
 const PR_DEFAULT = { sum: true, parts: true, props: true, calc: true, plas: true, tors: true, q: false, stress: false, val: false, man: true };
 function openPrintDialog() {
   if (!M.ui.print || typeof M.ui.print !== 'object') M.ui.print = {};
@@ -6818,7 +6883,7 @@ function openPrintDialog() {
   const box = el('div'); box.style.cssText = 'background:#fff;border-radius:8px;padding:16px 20px;width:min(420px,92vw);max-height:84vh;overflow:auto;font-family:var(--font-ui);box-shadow:0 12px 40px rgba(0,0,0,.3)';
   box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Print report');
   box.appendChild(el('div', null, '<b style="font-size:11pt">Print report — select contents</b>'));
-  box.appendChild(el('div', 'hint', 'The report has a title block, the drawing, the tables and the calculations with every section expanded. Use the browser\'s print dialog to print or save as PDF.'));
+  box.appendChild(el('div', 'hint', 'Calculation report: cover with title block, references, numbered contents, the inputs, the drawing, the worked results with every section expanded, and a Results summary (always included when there are results). Use the browser\'s print dialog to print or save as PDF.'));
   if (!R || !R.ok) box.appendChild(el('div', 'errBox', 'There are no results (input errors). The report will list the errors.'));
   Object.keys(PR_LABELS).forEach(id => {
     const r = el('label'); r.style.cssText = 'display:flex;gap:8px;align-items:center;padding:3px 0;font-size:9.5pt;cursor:pointer';
@@ -6897,50 +6962,163 @@ function fitPrintWidths(pr) {
   } catch (e) { console.error(e); }
   pr.classList.remove('prMeasure');
 }
+/* D11 (2026-10-18): slim calculation-sheet report (engineer's scope: inputs → worked results, no D/C section) in the
+   Gusset Plate Rating / Timber Beam Check format — cover with title block, references (only what the printed sections
+   cite), numbered table of contents (links), numbered sections n and subsections n.k (the tabs' own cards and worked
+   blocks, built by the tabs' own functions: symbolic → values substituted → result), a Results summary table whose rows
+   give "see §n.k", and the print header / "Page X of Y" footer (@page margin boxes, spcPageCSS, present only while the
+   report exists). No value is computed here: every number is the one the tabs show. */
+const SPC_TOOL = 'Section Property Calculator';
+function spcPageCSS() {
+  const p = M.project || {}, q = v => String(v == null || v === '' ? '—' : v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+  const desc = (p.member || p.name || 'Section properties').slice(0, 40);
+  const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const foot = 'font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt;';
+  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;' +
+    ' @top-left { content: "Project No: ' + q(p.job) + '\\A Description: ' + q(desc) + '"; ' + box + ' text-align: left; }' +
+    ' @top-center { content: "Computed By: ' + q(p.designer) + '\\A Checked By: ' + q(p.checker) + '"; ' + box + ' text-align: left; }' +
+    ' @top-right { content: "Date: ' + q(p.date || new Date().toISOString().slice(0, 10)) + '\\A Date: —"; ' + box + ' text-align: right; }' +
+    ' @bottom-left { content: "' + q(p.name || 'Untitled') + ' (' + SPC_TOOL + ')"; ' + foot + ' }' +
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); ' + foot + ' } } }';
+}
+function spcApplyPageCSS(on) {
+  let st = $('spc-page');
+  if (!st) { st = document.createElement('style'); st.id = 'spc-page'; document.head.appendChild(st); }
+  st.textContent = on ? spcPageCSS() : '';
+}
+// what the printed sections cite (the tabs' "ref" texts and the Method tab); nothing added. "edition: verify" where none is stated
+function spcRefs(sel) {
+  const ok = !!(R && R.ok), T = ok ? R.tors || {} : {}, rows = [];
+  const shapes = M.parts.some(p => p.type === 'shape'), tors = ok && sel.tors, man = !!sel.man;
+  if (shapes || man) rows.push(['AISC Shapes Database v16.0', 'Rolled-shape dimensions and tabulated properties (L, WT, MT, ST and 2L data: source as stated in Method and assumptions). Verify tabulated values against the printed Manual.']);
+  if (tors || man) rows.push(['AISC Design Guide 9', 'Torsional Analysis of Structural Steel Members (Seaburg &amp; Carter, 1997): thin-walled J, sectorial coordinates, C<sub>w</sub>, shear centre (App. C).']);
+  if (tors || man) rows.push(['Vlasov', 'Thin-walled beam theory, sectorial coordinates (shear centre, C<sub>w</sub>); edition: verify.']);
+  if ((tors && (T.comps || []).some(C => C.rect)) || man) rows.push(['Roark, 7th Ed.', 'Roark’s Formulas for Stress and Strain (Young &amp; Budynas, 7th Ed.), Table 10.7 case 4 (J of a solid rectangle).']);
+  const a360 = [];
+  if (ok && (sel.props || sel.calc) || man) a360.push('Eq. E4-8 (H), E4-9 (r̄<sub>o</sub>), F2-7 (r<sub>ts</sub>): equation numbers as understood by the tool, verify');
+  if (ok && sel.q || man) a360.push('Sec. J2.4 and Table J2.5 (welds), J3 (fasteners), for the optional connector check of the Q &amp; shear flow tab');
+  if (a360.length) rows.push(['AISC 360-16', 'Specification for Structural Steel Buildings: ' + a360.join('; ') + '.']);
+  if (ok && sel.q || man) rows.push(['AASHTO LRFD', 'Art. 6.13.2 (fasteners, optional connector check; strength per fastener supplied by the user); edition: verify.']);
+  if (ok && sel.calc || man) rows.push(['Wagner β<sub>x</sub>', 'Trahair &amp; Bradford; Kitipornchai &amp; Trahair (1980); SSRC Guide: monosymmetry constant; editions: verify.']);
+  if (ok && sel.q) rows.push(['Megson', 'Aircraft Structures, Ch. 17 and Eq. 17.14 (shear flow with I<sub>xy</sub> ≠ 0; closed sections); edition: verify.']);
+  if (ok && (sel.q || sel.stress)) rows.push(['Boresi &amp; Schmidt', 'Advanced Mechanics of Materials: general flexure formula and shear flow for unsymmetric bending; edition: verify.']);
+  return rows;
+}
+// Results summary: the key properties of the Section tab (same values, same format), each with the subsection that works it
+function spcResultsTable(cardMap) {
+  const T = R.tors || {};
+  const rows = [['A' + (R.anyN ? ' (transformed)' : ''), R.A, 'A', 'cTab'], ['x̄ (from origin)', R.cx, 'L', 'cCen'], ['ȳ (from origin)', R.cy, 'L', 'cCen'],
+    ['I<sub>x</sub>', R.Ix, 'I', 'cI'], ['I<sub>y</sub>', R.Iy, 'I', 'cI'], ['I<sub>xy</sub>', R.Ixy, 'I', 'cI'],
+    ['I<sub>1</sub> (major)', R.I1, 'I', 'cP'], ['I<sub>2</sub> (minor)', R.I2, 'I', 'cP'], ['θ<sub>p</sub> (x → axis 1, CCW)', null, 'ang', 'cP'],
+    ['S<sub>x</sub> top', R.Sxt, 'S', 'cI'], ['S<sub>x</sub> bottom', R.Sxb, 'S', 'cI'], ['S<sub>y</sub> left / right (smaller of the two)', Math.min(R.Syl, R.Syr), 'S', 'cI'],
+    ['Z<sub>x</sub>', R.Zx, 'S', 'plZx'], ['Z<sub>y</sub>', R.Zy, 'S', 'plZy'], ['r<sub>x</sub>', R.rx, 'L', 'cI'], ['r<sub>y</sub>', R.ry, 'L', 'cI'], ['r<sub>min</sub> (principal)', R.r2, 'L', 'cP'],
+    ['J' + (T.J !== null ? ' (thin-wall)' : ''), T.J, 'I', 'tJ'], ['C<sub>w</sub>', T.Cw, 'W', 'tCw'],
+    ['Shear centre x<sub>o</sub> (from centroid)', T.sc ? T.xo : null, 'L', 'tCw'], ['Shear centre y<sub>o</sub> (from centroid)', T.sc ? T.yo : null, 'L', 'tCw']];
+  const wk = card => { const hit = cardMap[card]; return hit ? { h: `<a href="#${hit.id}">see §${hit.num}</a>` } : { h: esc(spcTabName(SPC_CARDS[card][0])) + ' tab (not in this printout)' }; };
+  return tblEl(['Property', 'Value', 'Unit', 'Worked in'], rows.map(([lab, v, k, card]) => [{ h: lab }, k === 'ang' ? ang(R.thp) : isNum(v) ? nf(v, k) : 'n/a', k === 'ang' || !isNum(v) ? '' : un(k), wk(card)]), { left: [0, 3] });
+}
 async function buildPrintReport(opts) {
   opts = opts || {};
   const sel = Object.assign({}, PR_DEFAULT, M.ui.print || {});
   const old = $('printReport'); if (old) old.remove();
   const pr = el('div'); pr.id = 'printReport'; document.body.appendChild(pr);
-  const p = M.project, today = new Date().toISOString().slice(0, 10);
-  const tb = el('div', 'prTitle'); tb.appendChild(el('h1', null, 'Section Property Calculator'));
-  const tt = el('table'); const mk = (a, b, c, d) => { const tr = el('tr'); tr.appendChild(el('td', null, '<b>' + a + ':</b> ' + esc(b || '—'))); tr.appendChild(el('td', null, c ? '<b>' + c + ':</b> ' + esc(d || '—') : '')); tt.appendChild(tr); };
-  mk('Project', p.name, 'Job #', p.job); mk('Member / description', p.member, 'Client', p.client); mk('Prepared by', p.designer, 'Checked by', p.checker); mk('Date', p.date || today, 'Units', unitSys() === 'mm' ? 'mm, kN' : 'in, kip');
-  tb.appendChild(tt); pr.appendChild(tb);
-  if (!R || !R.ok) pr.appendChild(errPanel());
-  if ((p.notes || '').trim()) pr.appendChild(el('div', 'note', '<b>Notes and assumptions:</b><br>' + esc(p.notes).replace(/\n/g, '<br>')));
-  let first = true;
-  // Sections flow one after the other (no page break per section, so short sections leave no blank pages); headings stay
-  // with their first content and boxes / table rows are not split (PRINT_CSS). Only the appendices (Validation, Method)
-  // start a new page, with the running header.
+  const p = M.project, today = new Date().toISOString().slice(0, 10), ok = !!(R && R.ok), S = M.settings;
+  const toc = [], cardMap = {}, bodyAll = el('div', 'cr-bodyall');
+  let n = 0;
+  // one numbered section n; its cards (and the Plastic tab's worked blocks) become subsections n.k
   const section = (id, title, fill, brk) => {
-    if (!sel[id]) return;
-    const sec = el('div', 'prSec' + (first ? ' first' : brk ? ' brk' : ''));
-    if (first || brk) sec.appendChild(el('div', 'prRunHdr', `<span>${esc(p.name || '')}${p.member ? ' — ' + esc(p.member) : ''}</span><span>${esc(title)}</span><span>${esc(p.designer || '')} · ${esc(p.date || today)}</span>`));
-    first = false;
-    sec.appendChild(el('h1', null, esc(title)));
+    if (id && !sel[id]) return null;
+    n++; const sid = 'spr-' + n;
+    const sec = el('section', 'cr-sec' + (brk ? ' brk' : ''));
+    const h = el('h1', 'cr-h1', n + '. ' + esc(title)); h.id = sid; sec.appendChild(h);
     const holder = el('div'); sec.appendChild(holder); __secNum = 0;
     try { fill(holder); } catch (e) { holder.appendChild(el('div', 'errBox', 'Section failed to build: ' + esc(e.message))); }
-    pr.appendChild(sec);
+    const subs = [];
+    holder.querySelectorAll(':scope > .sec, :scope > .eqb[data-secid]').forEach(s => {
+      const t = s.classList.contains('sec') ? s.querySelector('.secTitle') : s.querySelector('.eqbT > span'); if (!t) return;
+      const k = subs.length + 1, num = n + '.' + k, id2 = sid + '-' + k, card = s.getAttribute('data-secid');
+      t.innerHTML = num + ' ' + t.innerHTML.replace(/^\s*\d+\.\s*/, ''); s.id = id2;
+      if (card) cardMap[card] = { num, id: id2 };
+      subs.push({ num, id: id2, t: t.textContent.slice(num.length + 1) });
+    });
+    bodyAll.appendChild(sec); toc.push({ n, t: title, id: sid, subs });
+    return holder;
   };
   PRMODE = { parts: !!sel.parts };
-  section('sum', 'Section drawing and key properties', h => { h.insertAdjacentHTML('beforeend', printSVG(720, 470)); h.appendChild(el('div', 'hint', 'Drawn to scale. ⊕ centroid; dashed: principal axes 1 and 2; × SC: shear centre; red x / green y: origin and axes.')); if (R && R.ok) buildSecSummary(h); });
-  if (R && R.ok) {
-    section('parts', 'Parts', h => h.appendChild(partsTable()));
+  section('parts', 'Inputs', h => {
+    const off = (M.contacts.off || []).map(k => String(k).split('|').map(id => { const q = partById(id); return q ? q.lbl : '?'; }).join(' — '));
+    mkSec(h, 'inSet', 'Units and calculation settings', b => b.appendChild(tblEl(['Input', 'Value'], [
+      ['Units', unitSys() === 'mm' ? 'mm, mm², mm³, mm⁴, mm⁶; kN' : 'in, in², in³, in⁴, in⁶; kip'], ['Significant figures shown', String(S.prec)],
+      ['Number of parts', String(M.parts.length)], ['Contact tolerance (touching parts are connected for torsion)', nu(S.tol, 'L')],
+      ['Contacts switched off for torsion', off.length ? off.join('; ') : 'none']], { left: [0, 1] })));
+    if (ok) mkSec(h, 'inParts', 'Parts: position, rotation, mirror, modulus ratio n', b => { b.appendChild(partsTable()); b.appendChild(el('div', 'hint', 'x, y: part centroid from the origin. A: area of the part (holes negative). Basis: plate model, AISC tabulated A and I, or exact geometry.')); });
+    mkSec(h, 'inDims', 'Part dimensions (plate model)', b => b.appendChild(partGeomTable()));
+  });
+  section('sum', 'Section drawing', h => {
+    h.insertAdjacentHTML('beforeend', printSVG(720, 470));
+    h.appendChild(el('div', 'hint', 'Drawn to scale. ⊕ centroid; dashed: principal axes 1 and 2; × SC: shear centre; red x / green y: origin and axes.'));
+    if (ok) { warnPanel(h); if (R.single && !sel.props) h.appendChild(aisCompare(R.single)); }
+  });
+  let resHolder = null;
+  if (ok) {
     section('props', 'Properties', h => buildProps(h));
     section('calc', 'Calc detail', h => buildCalc(h));
     section('plas', 'Plastic properties', h => buildPlas(h));
     section('tors', 'Torsion (thin-wall approximation)', h => buildTors(h));
     section('q', 'Q and shear flow', h => buildQ(h));
     section('stress', 'Stresses', h => buildStress(h));
+    resHolder = section(null, 'Results summary', () => { });
   }
   section('val', 'Validation', h => buildValid(h), true);
   section('man', 'Method and assumptions', h => buildManual(h), true);
   PRMODE = false;
+  // Results summary (after every section is numbered): the key properties with "see §n.k"
+  if (resHolder) {
+    const blk = el('div', 'prKeepBlk'); resHolder.appendChild(blk);   // the short summary table is kept on one page
+    blk.appendChild(spcResultsTable(cardMap));
+    const T = R.tors || {}, notes = [];
+    if (T.J !== null && T.J !== undefined) notes.push('J, C<sub>w</sub> and the shear centre are thin-wall approximations (verify).');
+    if (R.anyN) notes.push('Transformed section: A, I, S, Z are in units of the reference material (n = 1).');
+    notes.push('Section properties only: this report makes no design check.');
+    blk.appendChild(el('div', 'hint', notes.join(' ')));
+  }
+  // D11 links: "→ Tab · Card" reads "see §n.k" in the report
+  bodyAll.querySelectorAll('a.wkA').forEach(a => {
+    const card = a.getAttribute('data-card'), hit = cardMap[card], c = SPC_CARDS[card];
+    a.removeAttribute('title');
+    if (hit) { a.textContent = 'see §' + hit.num; a.setAttribute('href', '#' + hit.id); }
+    else { a.innerHTML = c ? 'see the ' + esc(spcTabName(c[0])) + ' tab (' + c[1] + '; not in this printout)' : 'not in this printout'; a.removeAttribute('href'); }
+  });
+  // front matter: cover with title block, references, table of contents
+  const cover = el('section', 'cr-cover');
+  cover.appendChild(el('div', 'cr-cover-t', `<h1>${SPC_TOOL}</h1><p>${esc(p.name || 'Untitled')}</p>` + (p.member ? `<p class="cr-cover-p">${esc(p.member)}</p>` : '') + '<p class="cr-cover-p">Section properties — inputs and worked results</p>'));
+  const tt = el('table', 'cr-tb'); const mk = (a, b, c, d) => { const tr = el('tr'); tr.appendChild(el('td', null, '<b>' + a + ':</b> ' + esc(b || '—'))); tr.appendChild(el('td', null, '<b>' + c + ':</b> ' + esc(d || '—'))); tt.appendChild(tr); };
+  mk('Project', p.name, 'Project No.', p.job); mk('Calculated by', p.designer, 'Date', p.date || today); mk('Checked by', p.checker, 'Checked date', '');
+  mk('Member / description', p.member, 'Client', p.client); mk('Parts', ok ? R.rows.map(r => r.lbl).join(', ') : String(M.parts.length), 'Units', unitSys() === 'mm' ? 'mm, kN' : 'in, kip');
+  cover.appendChild(tt);
+  if (!ok) cover.appendChild(errPanel());
+  if ((p.notes || '').trim()) cover.appendChild(el('div', 'note', '<b>Notes and assumptions:</b><br>' + esc(p.notes).replace(/\n/g, '<br>')));
+  const fm = el('section', 'cr-front'), refs = spcRefs(sel);
+  if (refs.length) {
+    fm.appendChild(el('h2', 'cr-h1', 'References:'));
+    const rt = el('table', 'cr-refs'); refs.forEach(([a, b]) => { const tr = el('tr'); tr.appendChild(el('td', null, a)); tr.appendChild(el('td', null, b)); rt.appendChild(tr); });
+    fm.appendChild(rt);
+  }
+  fm.appendChild(el('h2', 'cr-h1', 'Table of contents:'));
+  const ol = el('ol', 'cr-toc');
+  toc.forEach(s => {
+    const li = el('li', null, `<a href="#${s.id}">${s.n}. ${esc(s.t)}</a>`);
+    if (s.subs.length) li.appendChild(el('ol', null, s.subs.map(q => `<li><a href="#${q.id}">${q.num} ${esc(q.t)}</a></li>`).join('')));
+    ol.appendChild(li);
+  });
+  fm.appendChild(ol);
+  fm.appendChild(el('p', 'cr-p', 'Inputs first, then the section drawing and the results. Where the tool works a value, the equation is shown symbolically, then with the values substituted, then with the result (Calc detail, Plastic, Torsion); the parallel-axis table gives each part’s A, centroid, own I and transfer term A·d² with their sums. "see §n.k" points to the subsection where a quoted value is worked. Section properties only: no design check is summarised. Units: ' + (unitSys() === 'mm' ? 'mm, kN' : 'in, kip') + ' unless noted.'));
+  pr.appendChild(cover); pr.appendChild(fm); pr.appendChild(bodyAll);
   pr.querySelectorAll('.secBody').forEach(b => { b.style.display = 'block'; });
   printStatic(pr); printTables(pr);
-  pr.appendChild(el('div', 'prFoot', `<span>${esc(p.name || '')}${p.member ? ' — ' + esc(p.member) : ''}</span><span>Section Property Calculator.html · printed ${today}</span>`));
-  const cleanup = () => { const n = $('printReport'); if (n) n.remove(); renderTab(); window.removeEventListener('afterprint', cleanup); };
+  pr.appendChild(el('div', 'prFoot', `<span>${esc(p.name || '')}${p.member ? ' — ' + esc(p.member) : ''}</span><span>${SPC_TOOL}.html · printed ${today}</span>`));
+  spcApplyPageCSS(true);
+  const cleanup = () => { const n = $('printReport'); if (n) n.remove(); spcApplyPageCSS(false); renderTab(); window.removeEventListener('afterprint', cleanup); };
   try { await document.fonts.ready; } catch (e) { }
   fitPrintWidths(pr);
   if (opts.noPrint) return pr;
