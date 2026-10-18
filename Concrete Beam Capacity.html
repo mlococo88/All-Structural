@@ -353,6 +353,44 @@ table.cbT button:hover{color:var(--red-600)}
   width:24px;height:22px;cursor:pointer;color:#64748b;font-size:10pt;line-height:1;padding:0}
 .prjActs button:hover{background:var(--slate-100);color:var(--slate-900)}
 .prjActs button:last-child:hover{background:#FEE2E2;color:var(--red-600);border-color:#FCA5A5}
+/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
+#printReport.crdoc{background:#fff;color:#000;font:10.5pt/1.35 &quot;Times New Roman&quot;,Times,serif}
+#printReport.crdoc a{color:#000;text-decoration:none}
+#printReport .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page}
+#printReport .cr-cover-t{text-align:center;margin-bottom:28pt}
+#printReport .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt}
+#printReport .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
+#printReport .cr-cover .cr-cover-p{font-weight:400}
+#printReport .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt}
+#printReport .cr-front{break-after:page}
+#printReport .cr-break{break-before:page}
+#printReport h2.cr-h1{font:700 12pt &quot;Times New Roman&quot;,Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid}
+#printReport .cr-front h2.cr-h1{margin-top:10pt}
+#printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt}
+#printReport .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top}
+#printReport .cr-refs td:first-child{white-space:nowrap}
+#printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0}
+#printReport .cr-toc>li{margin:3pt 0}
+#printReport .cr-toc ol{padding-left:18pt;font-size:10pt}
+#printReport .cr-p{margin:0 0 7pt}
+#printReport .cr-small{font-size:9.5pt;margin-top:18pt}
+#printReport .cr-resh{font:700 11pt &quot;Times New Roman&quot;,Times,serif;margin:12pt 0 2pt}
+#printReport .cr-line{display:grid;grid-template-columns:2.6in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid}
+#printReport .cr-res{border-top:0.6pt solid #000}
+#printReport .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt}
+#printReport .cr-r{text-align:right}
+#printReport .cr-st-fail{text-decoration:underline}
+#printReport .cr-refi{font-size:9pt;font-style:italic}
+#printReport .caret{display:none}
+#printReport .secHead{break-after:avoid}
+#printReport .foot{margin-top:16px;border-top:1px solid #000;padding-top:6px;font-size:9pt;font-style:italic;color:#444}
+/* D11 links (CLAUDE.md §6): &quot;Worked in: → Tab · Card&quot;; &quot;see §n.k&quot; in the report */
+.wkLink{font-family:var(--font-ui);font-size:8.5pt;color:#64748b;margin:2px 0 8px}
+a.wkA{color:var(--blue-600);text-decoration:none;cursor:pointer}
+a.wkA:hover{text-decoration:underline}
+.sec.wkFlash{animation:wkflash 1.4s ease-out}
+@keyframes wkflash{from{background:#dbeafe}to{background:var(--color-surface)}}
+#printReport a.wkA{color:#000;font-style:italic}
 @media print{
   html,body{overflow:visible;height:auto}
   body{background:#fff}
@@ -1025,7 +1063,7 @@ function detailing(F,sh,neg,govMu,Vu,tor){
         `Shear the stirrups must carry. For reference the stirrups as detailed could provide V_s = ${fmt(sh.Vs)} kip.`],
        [&quot;V_{s,lim}=4\\sqrt{f'_c}b_w d&quot;,
         `4\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}(${fmt(bw)}\\text{ in})(${fmt(d)}\\text{ in})=${fmt(thr*1000,0)}\\text{ lb}=${fmt(thr)}\\text{ kip}`,
-        `V_{s,req}=${fmt(VsReq)}\\text{ kip }${tight?&quot;exceeds&quot;:&quot;does not exceed&quot;} the threshold.`],
+        `V_s,req = ${fmt(VsReq)} kip ${tight?&quot;exceeds&quot;:&quot;does not exceed&quot;} the threshold.`],   /* D11: plain-text title (was raw TeX) */
         [&quot;s_{max}=\\min\\left(&quot;+(tight?&quot;d/4&quot;:&quot;d/2&quot;)+&quot;,\\;&quot;+(tight?&quot;12&quot;:&quot;24&quot;)+&quot;\\text{ in}\\right)&quot;,
          `\\min\\left(${fmt(tight?d/4:d/2)},\\;${tight?&quot;12&quot;:&quot;24&quot;}\\right)=${fmt(sMax)}\\text{ in}`,
          tight?&quot;Tighter limit applies.&quot;:&quot;Standard limit applies.&quot;]];
@@ -1514,6 +1552,50 @@ function mkSection(id,title,builder,parent,extraCls){
   parent.appendChild(sec); return sec;
 }
 
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
+   On screen: &quot;Worked in: → Tab · Card&quot; (opens the tab, expands the card, scrolls to it and flashes it).
+   In the calculation report the same link reads &quot;see §n.k&quot; (buildReport rewrites it). Display only. ---- */
+function cbcTabName(tab){ const t=TABS().find(x=>x[0]===tab); return t?t[1]:null; }
+function cbcComboCi(ci){ const r=CC&amp;&amp;CC.combos[ci]; return (r&amp;&amp;r.sameAs!==undefined)?r.sameAs:ci; }   /* identical combination: its derivation lives in the first one */
+function cbcComboCard(prefix,ci){
+  if(!CC||ci==null||!CC.combos[ci]) return null;
+  const w=cbcComboCi(ci);
+  return {card:prefix+w, name:&quot;Combination &quot;+(w+1)+&quot; (&quot;+CC.combos[w].name+&quot;)&quot;};
+}
+function cbcLink(tab,cardObj,txt){
+  const tn=cbcTabName(tab); if(!tn||!cardObj) return null;
+  const a=el(&quot;a&quot;,&quot;wkA&quot;,(txt?txt+&quot; → &quot;:&quot;&quot;)+tn+&quot; · &quot;+cardObj.name); a.href=&quot;#&quot;;
+  a.dataset.tab=tab; a.dataset.card=cardObj.card; a.dataset.cname=cardObj.name; if(txt) a.dataset.txt=txt;
+  return a;
+}
+function cbcWorkedIn(parent,items){   /* items: [{tab, c:{card,name}, txt}] */
+  const links=items.map(o=>cbcLink(o.tab,o.c,o.txt)).filter(Boolean); if(!links.length) return null;
+  const d=el(&quot;div&quot;,&quot;wkLink&quot;); d.appendChild(document.createTextNode(&quot;Worked in: &quot;));
+  links.forEach((a,i)=>{ if(i) d.appendChild(document.createTextNode(&quot; · &quot;)); d.appendChild(a); });
+  parent.appendChild(d); return d;
+}
+/* the card where a dashboard check (allChecks entry) is worked */
+function cbcCheckCard(c){
+  if(!c||c.na) return null;
+  if(c.tab===&quot;tabFlex&quot;) return cbcComboCard(&quot;flexC&quot;,c.ci);
+  if(c.tab===&quot;tabShear&quot;) return cbcComboCard(&quot;shC&quot;,c.ci);
+  if(c.tab===&quot;tabTor&quot;) return cbcComboCard(&quot;torC&quot;,c.ci);
+  if(c.tab===&quot;tabServ&quot;) return {card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;};
+  if(c.tab===&quot;tabDetail&quot;&amp;&amp;c.id) return {card:&quot;det&quot;+c.id,name:c.label};
+  return null;
+}
+function cbcGoto(tab,card){
+  if(!cbcTabName(tab)) return;
+  S.ui.tab=tab; if(card) S.ui.collapse[card]=false; autosave(); refresh();
+  setTimeout(()=>{ const e=card&amp;&amp;document.querySelector(&quot;#tabPages #&quot;+card); if(!e) return;
+    const op=document.getElementById(&quot;outputPanel&quot;);   /* scroll the output panel only (scrollIntoView would also scroll the page and hide the header) */
+    if(op) op.scrollTo({top:op.scrollTop+e.getBoundingClientRect().top-op.getBoundingClientRect().top-6,behavior:&quot;smooth&quot;});
+    e.classList.add(&quot;wkFlash&quot;);
+    setTimeout(()=>e.classList.remove(&quot;wkFlash&quot;),1400); },60);
+}
+document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&amp;e.target.closest(&quot;a.wkA&quot;); if(!a||a.closest(&quot;#printReport&quot;)) return;
+  e.preventDefault(); cbcGoto(a.dataset.tab,a.dataset.card); });
+
 /* =====================================================================
    INPUT PANEL TABS (UI only)
    buildInput() still builds every section into #inputPanel exactly as
@@ -1994,7 +2076,7 @@ function detEnvelope(){
                 return; }
       const dcr=(d.cmp===&quot;\\ge&quot;)?(d.need>0?d.need/Math.max(d.have,1e-12):0)
                                 :(d.need>0?d.have/d.need:0);
-      if(E.na||dcr>E.dcr){ E.dcr=dcr; E.entry=d; E.combo=r.name; }
+      if(E.na||dcr>E.dcr){ E.dcr=dcr; E.entry=d; E.combo=r.name; E.ci=r.ci; }   /* ci: D11 link target only */
       E.allOk=(E.na?true:E.allOk)&amp;&amp;d.ok; E.na=false;
     });
   });
@@ -2008,8 +2090,8 @@ function allChecks(){
   const env=(label,ref,pick,tab)=>{
     let best={dcr:-1,combo:&quot;\u2014&quot;,na:true};
     CC.combos.forEach(r=>{ const v=pick(r); if(!v||v.na)return;
-      if(v.dcr>best.dcr) best={dcr:v.dcr,combo:r.name,na:false}; });
-    out.push({label,ref,dcr:best.na?null:best.dcr,combo:best.combo,na:best.na,tab});
+      if(v.dcr>best.dcr) best={dcr:v.dcr,combo:r.name,na:false,ci:r.ci}; });
+    out.push({label,ref,dcr:best.na?null:best.dcr,combo:best.combo,na:best.na,tab,ci:best.ci});   /* ci: D11 link target only */
   };
   env(&quot;Flexural capacity&quot;,&quot;ACI 9.3.3 / 22.2&quot;,r=>({dcr:r.dcM,na:Math.abs(r.Mu)<1e-9}),&quot;tabFlex&quot;);
   env(&quot;Shear capacity&quot;+(CC.combos.some(r=>r.share)?&quot; (after torsion demand)&quot;:&quot;&quot;),
@@ -2033,13 +2115,13 @@ function allChecks(){
     if(S.code==='AASHTO'){
       const need=Math.min((S.mat.gamma3||0.67)*1.6*g.svc.Mcr,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
       out.push({label:&quot;Minimum reinforcement&quot;,&quot;ref&quot;:&quot;AASHTO 5.6.3.3&quot;,
-        dcr:g.phiMn>0?need/g.phiMn:null,combo:g.name,na:false,tab:&quot;tabServ&quot;});
+        dcr:g.phiMn>0?need/g.phiMn:null,combo:g.name,na:false,tab:&quot;tabServ&quot;,ci:g.ci});
     }
     /* detailing rolled up individually, enveloped over every combination */
     detEnvelope().forEach(E=>{
       out.push({label:E.name,ref:E.ref,dcr:E.na?null:E.dcr,
         combo:E.na?&quot;—&quot;:E.combo,na:E.na,tab:&quot;tabDetail&quot;,
-        forceOK:E.na?null:E.allOk});
+        forceOK:E.na?null:E.allOk,id:E.id,ci:E.ci});
     });
   }
   return out;
@@ -2099,6 +2181,10 @@ function bothCapSection(pg,key){
               : (X.F.mode==='doubly' ? &quot;Doubly reinforced&quot; : &quot;Singly reinforced&quot;));
     row(&quot;Behaviour&quot;,beh(P),beh(N),&quot;&quot;);
     b.appendChild(t);
+    /* D11 link: each sense is worked on the Flexure tab under the first combination of that sense */
+    const senseCi=neg=>{ const r=CC&amp;&amp;CC.combos.find(x=>x.neg===neg&amp;&amp;x.sameAs===undefined); return r?r.ci:null; };
+    cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,senseCi(false)),txt:&quot;Positive&quot;},
+                   {tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,senseCi(true)),txt:&quot;Negative&quot;}]);
     const noS=[]; if(P.F.As<=1e-9) noS.push(&quot;positive&quot;); if(N.F.As<=1e-9) noS.push(&quot;negative&quot;);
     if(noS.length){
       var w=el(&quot;div&quot;,&quot;infoBox&quot;);
@@ -2130,7 +2216,7 @@ function buildSummaryTab(pg){
   d.appendChild(h);
   const t=el(&quot;table&quot;,&quot;dt&quot;);
   t.innerHTML=&quot;<tr><th>Check</th><th>Reference</th><th style='text-align:right'>D/C</th>&quot;+
-    &quot;<th>Governing combination</th><th>Status</th></tr>&quot;;
+    &quot;<th>Governing combination</th><th>Status</th><th>Worked in</th></tr>&quot;;
   checks.forEach(c=>{
     const tr=el(&quot;tr&quot;);
     const a=el(&quot;a&quot;,null,c.label); a.addEventListener(&quot;click&quot;,()=>{ S.ui.tab=c.tab; autosave(); refresh(); });
@@ -2144,6 +2230,8 @@ function buildSummaryTab(pg){
       td4.innerHTML=c.forceOK?'<span class=&quot;pill pass&quot;>PASS</span>':'<span class=&quot;pill fail&quot;>FAIL</span>';
     else td4.innerHTML=statusPill(c.dcr);
     tr.appendChild(td4);
+    const td5=el(&quot;td&quot;); const wk=cbcLink(c.tab,cbcCheckCard(c)); if(wk) td5.appendChild(wk); else td5.textContent=&quot;\u2014&quot;;   /* D11 link */
+    tr.appendChild(td5);
     t.appendChild(tr);
   });
   d.appendChild(t); pg.appendChild(d);
@@ -2209,6 +2297,10 @@ function buildSummaryTab(pg){
     row(&quot;A_s provided&quot;,fmt(g.F.As),&quot;in\u00b2&quot;,g.F.T.length+&quot; tension layer(s)&quot;);
     if(g.F.Asp>0) row(&quot;A\u2032_s provided&quot;,fmt(g.F.Asp),&quot;in\u00b2&quot;,g.F.C.length+&quot; compression layer(s)&quot;);
     b.appendChild(t);
+    cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,g.ci),txt:&quot;\u03c6M_n&quot;},
+      {tab:&quot;tabShear&quot;,c:cbcComboCard(&quot;shC&quot;,g.ci),txt:&quot;\u03c6V_n&quot;},
+      ...((g.tor&amp;&amp;S.tor.present&amp;&amp;S.code==='ACI')?[{tab:&quot;tabTor&quot;,c:cbcComboCard(&quot;torC&quot;,g.ci),txt:g.tor.negligible?&quot;\u03c6T_th&quot;:&quot;\u03c6T_n&quot;}]:[]),
+      {tab:&quot;tabServ&quot;,c:{card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;},txt:&quot;M_cr&quot;}]);   /* D11 link */
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Capacities are reported for the governing combination (&quot;+g.name+
       &quot;), since the face in tension — and therefore the capacity — depends on the sign of M_u. &quot;+
       &quot;The section\u2019s flexural capacity in BOTH senses is tabulated in the next section.&quot;));
@@ -2530,7 +2622,7 @@ function workShear(b,r){
     b.appendChild(el(&quot;h3&quot;,null,&quot;Step 2 — Concrete contribution&quot;));
     if(sh.stirAdequate){
       b.appendChild(eqBlock({
-        title:&quot;Concrete shear — Table 22.5.5.1 row (a), A_v \u2265 A_{v,min}&quot;,
+        title:&quot;Concrete shear — Table 22.5.5.1 row (a), A_v \u2265 A_v,min&quot;,
         ref:&quot;ACI Table 22.5.5.1(a)&quot;,
         lines:[`A_v/s = ${fmt(sh.avProv,4)} \\ge (A_v/s)_{min} = ${fmt(sh.avMinACI,4)}\\text{ in}^2/\\text{in}\\;\\Rightarrow\\;\\text{row (a) applies}`,
           `V_c = 2\\lambda\\sqrt{f'_c}\\,b_w d = 2(${fmt(S.mat.lambda,2)})\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}(${fmt(bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.Vc*1000,0)}\\text{ lb}`,
@@ -2541,7 +2633,7 @@ function workShear(b,r){
       }));
     } else {
       b.appendChild(eqBlock({
-        title:&quot;Concrete shear — Table 22.5.5.1 row (c): A_v < A_{v,min}, size effect applies&quot;,
+        title:&quot;Concrete shear — Table 22.5.5.1 row (c): A_v < A_v,min, size effect applies&quot;,
         ref:&quot;ACI Table 22.5.5.1(c) / 22.5.5.1.3&quot;,
         lines:[`A_v/s = ${fmt(sh.avProv,4)} < (A_v/s)_{min} = ${fmt(sh.avMinACI,4)}\\text{ in}^2/\\text{in}\\;\\Rightarrow\\;\\text{row (c) applies}`,
           `\\lambda_s = \\sqrt{\\dfrac{2}{1+d/10}} = \\sqrt{\\dfrac{2}{1+${fmt(sh.d)}/10}} = ${fmt(sh.lam_s_raw,3)}`,
@@ -2553,7 +2645,7 @@ function workShear(b,r){
               [&quot;\\rho_w&quot;,&quot;Longitudinal reinforcement ratio&quot;,fmt(sh.rho_w,5),&quot;&quot;]]
       }));
       const w=el(&quot;div&quot;,&quot;warnBox&quot;);
-      w.innerHTML=&quot;<b>Members without minimum stirrups take the size-effect V_c.</b> The familiar 2\u221af\u2032c row of Table 22.5.5.1 applies only when A_v \u2265 A_{v,min}; using it here would overstate V_c by &quot;+fmt((sh.Vc_a/Math.max(sh.Vc_c,1e-9)-1)*100,0)+&quot;%.&quot;;
+      w.innerHTML=&quot;<b>Members without minimum stirrups take the size-effect V_c.</b> The familiar 2\u221af\u2032c row of Table 22.5.5.1 applies only when A_v \u2265 A_v,min; using it here would overstate V_c by &quot;+fmt((sh.Vc_a/Math.max(sh.Vc_c,1e-9)-1)*100,0)+&quot;%.&quot;;
       b.appendChild(w);
     }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;The simplified expression of 22.5.5.1 is used. The detailed method of Table 22.5.5.1, which credits the reinforcement ratio and axial load, would generally give a larger V_c; it is not applied here, so the result is conservative.&quot;));
@@ -2585,11 +2677,12 @@ function workShear(b,r){
     b.appendChild(el(&quot;h3&quot;,null,&quot;Step &quot;+(S.code==='AASHTO'?&quot;4&quot;:&quot;4&quot;)+&quot; — Transverse steel shared with torsion&quot;));
     const wb=el(&quot;div&quot;,&quot;warnBox&quot;);
     wb.innerHTML=&quot;<b>The stirrup cannot resist shear and torsion independently.</b> &quot;+
-      &quot;The V_s computed above assumes the whole stirrup is available for shear, and \\u03c6T_n in the &quot;+
+      &quot;The V_s computed above assumes the whole stirrup is available for shear, and \u03c6T_n in the &quot;+
       &quot;Torsion tab assumes the whole leg is available for torsion. ACI 22.7.6.1 requires the two demands &quot;+
       &quot;to be added, so the torsional requirement is reserved first and the shear capacity is recomputed &quot;+
       &quot;on what remains.&quot;;
     b.appendChild(wb);
+    cbcWorkedIn(b,[{tab:&quot;tabTor&quot;,c:cbcComboCard(&quot;torC&quot;,r.ci),txt:&quot;(A_t/s)_req,T&quot;}]);   /* D11 link */
     b.appendChild(eqBlock({
       title:&quot;Transverse steel remaining for shear after the torsional demand is met&quot;,
       ref:&quot;ACI 22.7.6.1 / 9.5.4.3&quot;,
@@ -2613,7 +2706,7 @@ function workShear(b,r){
     if(SH.starved){
       const eb=el(&quot;div&quot;,&quot;errBox&quot;);
       eb.innerHTML=&quot;<b>The torsional demand consumes the entire stirrup.</b> No transverse steel remains &quot;+
-        &quot;for shear, so \\u03c6V_n falls to the concrete contribution alone. Reduce the spacing or increase the stirrup size.&quot;;
+        &quot;for shear, so \u03c6V_n falls to the concrete contribution alone. Reduce the spacing or increase the stirrup size.&quot;;
       b.appendChild(eb);
     }
   }
@@ -2905,6 +2998,7 @@ function buildServTab(pg){
       const v=el(&quot;div&quot;,ok?&quot;okBox&quot;:&quot;errBox&quot;);
       v.innerHTML=&quot;<b>&quot;+(ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> — minimum reinforcement per AASHTO 5.6.3.3.&quot;;
       b.appendChild(v);
+      cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,g.ci),txt:&quot;\u03c6M_n&quot;}]);   /* D11 link */
     }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Deflection and crack-width control are not evaluated by this tool.&quot;));
   },pg);
@@ -3008,6 +3102,12 @@ function buildDetailTab(pg){
       const v=el(&quot;div&quot;,d.ok?&quot;okBox&quot;:&quot;errBox&quot;);
       v.innerHTML=&quot;<b>&quot;+(d.ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> — &quot;+d.name+&quot; (&quot;+d.ref+&quot;).&quot;;
       b.appendChild(v);
+      /* D11 link: quantities quoted here that are worked on another tab, for the combination evaluated */
+      const DL={dStirS:[&quot;tabShear&quot;,&quot;shC&quot;,S.code==='ACI'?&quot;V_c&quot;:&quot;\u03c6, d_v&quot;],
+        dAvMin:S.stir.present?null:[&quot;tabShear&quot;,&quot;shC&quot;,S.code==='ACI'?&quot;d&quot;:&quot;V_c&quot;],dEpsMin:[&quot;tabFlex&quot;,&quot;flexC&quot;,&quot;\u03b5_t&quot;],
+        dTorS:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;p_h&quot;],dTorAl:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;A_cp, A_t/s, p_h&quot;],dTorAlReq:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;A_o, p_h&quot;],
+        dTorAts:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;A_t/s&quot;]}[d.id];
+      if(DL) cbcWorkedIn(b,[{tab:DL[0],c:cbcComboCard(DL[1],E.ci),txt:DL[2]}]);
     },pg);
   });
 }
@@ -3034,13 +3134,13 @@ function buildValidTab(pg){
       CC.combos.forEach(r=>{
         if(Math.abs(r.Mu)>1e-9&amp;&amp;r.dcM>1.0001)
           failed.push({code:&quot;ACI 9.3 / 22.2&quot;,name:&quot;Flexural strength \u2014 &quot;+r.name,
-            msg:&quot;D/C = &quot;+fmt(r.dcM)+&quot; exceeds 1.00.&quot;});
+            msg:&quot;D/C = &quot;+(isFinite(r.dcM)?fmt(r.dcM):&quot;\u226b1 (no capacity)&quot;)+&quot; exceeds 1.00.&quot;});   /* D11: was &quot;D/C = \u2014&quot; when unbounded */
         if(Math.abs(r.Vu)>1e-9&amp;&amp;r.dcV_eff>1.0001)
           failed.push({code:S.code==='ACI'?&quot;ACI 22.5&quot;:&quot;AASHTO 5.7.3&quot;,name:&quot;Shear strength \u2014 &quot;+r.name,
-            msg:&quot;D/C = &quot;+fmt(r.dcV_eff)+&quot; exceeds 1.00.&quot;});
+            msg:&quot;D/C = &quot;+(isFinite(r.dcV_eff)?fmt(r.dcV_eff):&quot;\u226b1 (no capacity)&quot;)+&quot; exceeds 1.00.&quot;});   /* D11: was &quot;D/C = \u2014&quot; when unbounded */
         if(r.tor&amp;&amp;!r.tor.negligible){
           if(r.dcT>1.0001) failed.push({code:&quot;ACI 22.7.6.1&quot;,name:&quot;Torsional strength \u2014 &quot;+r.name,
-            msg:&quot;D/C = &quot;+fmt(r.dcT)+&quot; exceeds 1.00.&quot;});
+            msg:&quot;D/C = &quot;+(isFinite(r.dcT)?fmt(r.dcT):&quot;\u226b1 (no capacity)&quot;)+&quot; exceeds 1.00.&quot;});   /* D11: was &quot;D/C = \u2014&quot; when unbounded */
           if(!r.tor.sizeOK) failed.push({code:&quot;ACI 22.7.7.1&quot;,name:&quot;Cross-sectional limit \u2014 &quot;+r.name,
             msg:&quot;Combined shear and torsional stress exceeds the limit; the section is too small.&quot;});
           if(!r.tor.combVT_OK) failed.push({code:&quot;ACI 22.7.6.1&quot;,name:&quot;Combined V+T stirrup \u2014 &quot;+r.name,
@@ -3968,32 +4068,95 @@ function doImport(f){
 /* =====================================================================
    PRINT REPORT (§11) — renders the same output the screen shows
    ===================================================================== */
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
+   cover with title block, references (the articles this printout cites), numbered table of contents
+   (links), numbered sections n (one per output tab) and subsections n.k (the tab's cards, with their
+   worked equations: symbolic -> substituted -> result, built by the same functions as the screen),
+   a D/C result line per check, the &quot;see §n.k&quot; form of the D11 links, and the print header /
+   &quot;Page X of Y&quot; footer (@page margin boxes, cbcPageCSS, only while printing). Display only: every
+   value shown is the tool's own (computeAll / allChecks / detEnvelope). */
+function cbcCodeLabel(){ return S.code==='ACI'?'ACI 318-19':'AASHTO LRFD, 9th Edition'; }
+/* the code articles cited in the printed content (equation-block references and check references) */
+function cbcRefs(root){
+  const fam={ACI:[],AASHTO:[]};
+  const add=txt=>{ let last=null;
+    String(txt||&quot;&quot;).replace(/^\[|\]$/g,&quot;&quot;).split(/\s*\/\s*/).forEach(p=>{
+      const m=/^(ACI|AASHTO)\s+(.+)$/.exec(p.trim());
+      let f=null, a=null;
+      if(m &amp;&amp; !/^MBE/.test(m[2])){ f=m[1]; a=m[2]; }
+      else if(last &amp;&amp; /^(Table |Eq\. )?\d/.test(p.trim())){ f=last; a=p.trim(); }
+      if(f){ last=f; if(fam[f].indexOf(a)<0) fam[f].push(a); }
+    }); };
+  root.querySelectorAll(&quot;.eqRef&quot;).forEach(e=>add(e.textContent));
+  allChecks().forEach(c=>add(c.ref));
+  const key=a=>a.replace(/^(Table|Eq\.)\s+/,&quot;&quot;);
+  Object.keys(fam).forEach(f=>fam[f].sort((x,y)=>key(x).localeCompare(key(y),undefined,{numeric:true})));
+  const rows=[];
+  if(fam.ACI.length) rows.push([&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete. Cited: &quot;+fam.ACI.join(&quot;, &quot;)+&quot;.&quot;]);
+  if(fam.AASHTO.length) rows.push([&quot;AASHTO LRFD&quot;,&quot;AASHTO LRFD Bridge Design Specifications (labelled 9th Edition in this tool; some provisions follow the 10th Ed. — edition: verify). Cited: &quot;+fam.AASHTO.join(&quot;, &quot;)+&quot;.&quot;]);
+  return rows;
+}
+function cbcPageCSS(){
+  const p=S.proj||{}, esc=v=>String(v==null||v===&quot;&quot;?&quot;—&quot;:v).replace(/\\/g,&quot;\\\\&quot;).replace(/&quot;/g,'\\&quot;').replace(/\n/g,&quot; &quot;);
+  const box='font: 9.5pt &quot;Times New Roman&quot;, Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+    ' @top-left { content: &quot;Project No: '+esc(p.num)+'\\A Description: '+esc(String(p.subj||p.name||&quot;&quot;).slice(0,40))+'&quot;; '+box+' text-align: left; }'+
+    ' @top-center { content: &quot;Computed By: '+esc(p.by)+'\\A Checked By: '+esc(p.chk)+'&quot;; '+box+' text-align: left; }'+
+    ' @top-right { content: &quot;Date: '+esc(p.date)+'\\A Date: '+esc(p.chkDate)+'&quot;; '+box+' text-align: right; }'+
+    ' @bottom-left { content: &quot;'+esc(p.name||&quot;Untitled&quot;)+' (Concrete Beam Design Suite — Beam Capacity)&quot;; font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; }'+
+    ' @bottom-right { content: &quot;Page &quot; counter(page) &quot; of &quot; counter(pages); font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; } }';
+}
+function cbcApplyPageCSS(on){
+  let st=document.getElementById(&quot;cbc-page&quot;);
+  if(!st){ st=document.createElement(&quot;style&quot;); st.id=&quot;cbc-page&quot;; document.head.appendChild(st); }
+  st.textContent=on?cbcPageCSS():&quot;&quot;;
+}
+/* result lines of one report section: [check, reference, D/C, combination, forceOK] — the values of the
+   Summary dashboard (allChecks) and, per combination, the same D/C the tab's tables show */
+function cbcResultRows(tabId){
+  const rows=[]; if(!CC||!CC.combos) return rows;
+  const chk=allChecks(), refOf=t=>{ const c=chk.find(x=>x.tab===t); return c?c.ref:&quot;&quot;; };
+  const nm=r=>&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;)&quot;;
+  if(tabId===&quot;tabFlex&quot;) CC.combos.forEach(r=>rows.push([&quot;Flexure — &quot;+nm(r),refOf(&quot;tabFlex&quot;),Math.abs(r.Mu)<1e-9?null:r.dcM]));
+  else if(tabId===&quot;tabShear&quot;) CC.combos.forEach(r=>rows.push([&quot;Shear — &quot;+nm(r),refOf(&quot;tabShear&quot;),Math.abs(r.Vu)<1e-9?null:r.dcV_eff]));
+  else if(tabId===&quot;tabTor&quot;){
+    const T=chk.filter(x=>x.tab===&quot;tabTor&quot;);
+    const pk=[r=>r.tor.dcr, r=>r.tor.lhs/r.tor.rhs, r=>r.tor.comb_prov>0?r.tor.comb_req/r.tor.comb_prov:Infinity];   /* as allChecks */
+    CC.combos.forEach(r=>T.forEach((c,i)=>rows.push([c.label+&quot; — &quot;+nm(r),c.ref,(!r.tor||r.tor.negligible)?null:pk[i](r)])));
+  }
+  else if(tabId===&quot;tabServ&quot;||tabId===&quot;tabDetail&quot;)
+    chk.filter(x=>x.tab===tabId).forEach(c=>rows.push([c.label,c.ref,c.na?null:c.dcr,c.na?null:c.combo,c.forceOK]));
+  return rows;
+}
+function cbcResultBlock(rows){
+  if(!rows.length) return null;
+  const box=el(&quot;div&quot;,&quot;cr-results&quot;);
+  rows.forEach(([lab,ref,dcr,cmb,fok])=>{
+    const na=(fok==null)&amp;&amp;(dcr==null);
+    const ok=(fok!=null)?fok:(dcr!=null&amp;&amp;isFinite(dcr)&amp;&amp;dcr<=1.0001);   /* the dashboard's PASS/FAIL rule */
+    const line=el(&quot;div&quot;,&quot;cr-line cr-res&quot;);
+    line.appendChild(el(&quot;div&quot;,&quot;cr-d&quot;,lab+&quot;:&quot;));
+    const m=el(&quot;div&quot;,&quot;cr-m&quot;);
+    m.innerHTML=&quot;D/C = <b>&quot;+(dcr==null?&quot;n/a&quot;:((!isFinite(dcr)||dcr>=1e6)?&quot;≫1&quot;:fmt(dcr,2)))+&quot;</b>&quot;+
+      &quot; <span class='cr-refi'>(&quot;+(ref||&quot;—&quot;)+(cmb&amp;&amp;cmb!==&quot;—&quot;?&quot;; governing combination &quot;+cmb:&quot;&quot;)+&quot;)</span>&quot;;
+    line.appendChild(m);
+    const r=el(&quot;div&quot;,&quot;cr-r&quot;+(!na&amp;&amp;!ok?&quot; cr-st-fail&quot;:&quot;&quot;)); r.innerHTML=&quot;<b>&quot;+(na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;))+&quot;</b>&quot;; line.appendChild(r);
+    box.appendChild(line);
+  });
+  return box;
+}
 function buildReport(){
-  const R=document.getElementById(&quot;printReport&quot;); R.innerHTML=&quot;&quot;;
-  const H=el(&quot;div&quot;);
-  H.innerHTML='<div style=&quot;text-align:center&quot;><div style=&quot;font-size:15pt;font-weight:bold&quot;>'+
-    'Reinforced Concrete Beam Capacity</div>'+
-    '<div style=&quot;font-style:italic;font-size:10pt&quot;>'+
-    (S.code==='ACI'?'ACI 318-19':'AASHTO LRFD, 9th Edition')+'</div></div>';
-  R.appendChild(H);
-  const grid=el(&quot;div&quot;);
-  grid.style.cssText=&quot;display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;&quot;+
-    &quot;border:1px solid #000;padding:6px 8px;font-size:10pt;margin:10px 0&quot;;
-  const gi=(k,v)=>{ const d=el(&quot;div&quot;); d.innerHTML=&quot;<b>&quot;+k+&quot;:</b> &quot;+(v||&quot;\u2014&quot;); grid.appendChild(d); };
-  gi(&quot;Project&quot;,S.proj.name); gi(&quot;Project No.&quot;,S.proj.num); gi(&quot;Subject&quot;,S.proj.subj);
-  gi(&quot;Calculated by&quot;,S.proj.by); gi(&quot;Date&quot;,S.proj.date); gi(&quot;Sheet&quot;,S.proj.sheet);
-  gi(&quot;Checked by&quot;,S.proj.chk); gi(&quot;Checked date&quot;,S.proj.chkDate); gi(&quot;Code&quot;,S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;);
-  R.appendChild(grid);
+  const R=document.getElementById(&quot;printReport&quot;); R.innerHTML=&quot;&quot;; R.className=&quot;crdoc&quot;;
   const opts=normRptOpts();
   const tabs=reportTabList();
-  let n=0;
   const saveTab=S.ui.tab;
+  const body=el(&quot;div&quot;), toc=[], cardMap={};   /* cardMap &quot;tab|cardId&quot; -> {num:&quot;n.k&quot;, id} for the &quot;see §n.k&quot; links */
+  let n=0;
   tabs.forEach(([id,label])=>{
     if(opts.tabs[id]===false) return;
     n++;
-    const h=el(&quot;h2&quot;,null,n+&quot;. &quot;+label);
-    h.style.cssText=&quot;font-size:13pt;border-bottom:1px solid #000;margin:14px 0 6px&quot;;
-    R.appendChild(h);
+    const sid=&quot;crp-&quot;+n, sec=el(&quot;section&quot;,&quot;cr-sec&quot;+(n>1?&quot; cr-break&quot;:&quot;&quot;));
+    const h=el(&quot;h2&quot;,&quot;cr-h1&quot;,n+&quot;. &quot;+label); h.id=sid; sec.appendChild(h);
     const holder=el(&quot;div&quot;);
     S.ui.tab=id;
     buildOutput(holder);
@@ -4003,17 +4166,67 @@ function buildReport(){
     S.combos.forEach((c,ci)=>{
       if(opts.combos[ci]!==false) return;
       [&quot;flexC&quot;,&quot;shC&quot;,&quot;torC&quot;].forEach(px=>{
-        const sec=holder.querySelector(&quot;#&quot;+px+ci);
-        if(!sec) return;
-        const bodyEl=sec.querySelector(&quot;.secBody&quot;);
-        if(bodyEl) bodyEl.innerHTML='<div class=&quot;infoBox&quot;>The fully-worked derivation for this combination was omitted from this report at the user\u2019s selection. Its factored actions and results appear in the summary table above; the on-screen output contains the complete work.</div>';
+        const sc=holder.querySelector(&quot;#&quot;+px+ci);
+        if(!sc) return;
+        const bodyEl=sc.querySelector(&quot;.secBody&quot;);
+        if(bodyEl) bodyEl.innerHTML='<div class=&quot;infoBox&quot;>The fully-worked derivation for this combination was omitted from this report at the user’s selection. Its factored actions and results appear in the summary table above; the on-screen output contains the complete work.</div>';
       });
     });
-    R.appendChild(holder);
+    /* the tab's cards become subsections n.k (a card's own leading &quot;k.&quot; is replaced) */
+    const subs=[];
+    holder.querySelectorAll(&quot;.sec&quot;).forEach(sc=>{
+      const t=sc.querySelector(&quot;.secTitle&quot;); if(!t) return;
+      const k=subs.length+1, nid=sid+&quot;-&quot;+k;
+      if(sc.id) cardMap[id+&quot;|&quot;+sc.id]={num:n+&quot;.&quot;+k,id:nid};
+      sc.id=nid;
+      const tt=t.textContent.replace(/^\s*\d+\.\s*/,&quot;&quot;);
+      subs.push({t:tt,id:nid}); t.textContent=n+&quot;.&quot;+k+&quot; &quot;+tt;
+    });
+    sec.appendChild(holder);
+    const rb=cbcResultBlock(cbcResultRows(id));
+    if(rb){ sec.appendChild(el(&quot;div&quot;,&quot;cr-resh&quot;,&quot;Results — &quot;+label)); sec.appendChild(rb); }
+    body.appendChild(sec); toc.push({n,t:label,id:sid,subs});
   });
   S.ui.tab=saveTab;
-  const f=el(&quot;div&quot;);
-  f.style.cssText=&quot;margin-top:16px;border-top:1px solid #000;padding-top:6px;font-size:9pt;font-style:italic;color:#444&quot;;
+  /* D11 links: &quot;→ Tab · Card&quot; becomes &quot;see §n.k&quot; */
+  body.querySelectorAll(&quot;a.wkA&quot;).forEach(a=>{
+    const hit=cardMap[a.dataset.tab+&quot;|&quot;+a.dataset.card], pre=a.dataset.txt?a.dataset.txt+&quot;: &quot;:&quot;&quot;;
+    if(hit){ a.textContent=pre+&quot;see §&quot;+hit.num; a.href=&quot;#&quot;+hit.id; }
+    else { a.textContent=pre+&quot;see the &quot;+(cbcTabName(a.dataset.tab)||a.dataset.tab)+&quot; tab (&quot;+(a.dataset.cname||a.dataset.card)+&quot;; not in this printout)&quot;; a.removeAttribute(&quot;href&quot;); }
+  });
+  body.querySelectorAll(&quot;.wkLink&quot;).forEach(d=>{ if(d.firstChild&amp;&amp;d.firstChild.nodeType===3) d.firstChild.textContent=&quot;&quot;; });
+  /* front matter: cover with title block, references, table of contents */
+  const cover=el(&quot;section&quot;,&quot;cr-cover&quot;);
+  const ct=el(&quot;div&quot;,&quot;cr-cover-t&quot;);
+  ct.appendChild(el(&quot;h1&quot;,null,&quot;Reinforced Concrete Beam Capacity&quot;));
+  ct.appendChild(el(&quot;p&quot;,null,S.proj.name||&quot;Untitled&quot;));
+  if(S.proj.subj) ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,S.proj.subj));
+  ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,cbcCodeLabel()+&quot; · Concrete Beam Design Suite · by Mario Lococo&quot;));
+  cover.appendChild(ct);
+  const grid=el(&quot;div&quot;,&quot;rptHdrGrid&quot;);
+  const gi=(k,v)=>{ const d=el(&quot;div&quot;); d.innerHTML=&quot;<b>&quot;+k+&quot;:</b> &quot;; d.appendChild(document.createTextNode(v||&quot;—&quot;)); grid.appendChild(d); };
+  gi(&quot;Project&quot;,S.proj.name); gi(&quot;Project No.&quot;,S.proj.num); gi(&quot;Subject&quot;,S.proj.subj);
+  gi(&quot;Calculated by&quot;,S.proj.by); gi(&quot;Date&quot;,S.proj.date); gi(&quot;Sheet&quot;,S.proj.sheet);
+  gi(&quot;Checked by&quot;,S.proj.chk); gi(&quot;Checked date&quot;,S.proj.chkDate); gi(&quot;Code&quot;,S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;);
+  cover.appendChild(grid);
+  const fm=el(&quot;section&quot;,&quot;cr-front&quot;);
+  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;References:&quot;));
+  const rt=el(&quot;table&quot;,&quot;cr-refs&quot;);
+  cbcRefs(body).forEach(([a,b])=>{ const tr=el(&quot;tr&quot;); tr.appendChild(el(&quot;td&quot;,null,a)); tr.appendChild(el(&quot;td&quot;,null,b)); rt.appendChild(tr); });
+  fm.appendChild(rt);
+  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;Table of contents:&quot;));
+  const ol=el(&quot;ol&quot;,&quot;cr-toc&quot;);
+  toc.forEach(s=>{ const li=el(&quot;li&quot;); const a=el(&quot;a&quot;,null,s.n+&quot;. &quot;+s.t); a.href=&quot;#&quot;+s.id; li.appendChild(a);
+    if(s.subs.length){ const o2=el(&quot;ol&quot;); s.subs.forEach((q,k)=>{ const l2=el(&quot;li&quot;); const a2=el(&quot;a&quot;,null,s.n+&quot;.&quot;+(k+1)+&quot;. &quot;+q.t); a2.href=&quot;#&quot;+q.id; l2.appendChild(a2); o2.appendChild(l2); }); li.appendChild(o2); }
+    ol.appendChild(li); });
+  fm.appendChild(ol);
+  const omitted=S.combos.map((c,i)=>opts.combos[i]===false?&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;:null).filter(Boolean);
+  fm.appendChild(el(&quot;p&quot;,&quot;cr-p cr-small&quot;,&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
+    &quot;The Flexure, Shear, Torsion, Serviceability and Detailing sections end with the D/C result of each check; PASS means D/C ≤ 1.00 &quot;+
+    &quot;(detailing: the limit is met for every combination it applies to). Units: kip, in, ksi unless noted. &quot;+
+    (omitted.length?&quot;The worked derivation is omitted at the user’s selection for: &quot;+omitted.join(&quot;, &quot;)+&quot;; their results are in every summary table.&quot;:&quot;Every load combination is worked.&quot;)));
+  R.appendChild(cover); R.appendChild(fm); R.appendChild(body);
+  const f=el(&quot;div&quot;,&quot;foot&quot;);
   f.textContent=&quot;This calculation is a computation aid. All results must be independently &quot;+
     &quot;verified and sealed by the responsible engineer of record. Generated &quot;+new Date().toLocaleString()+&quot;.&quot;;
   R.appendChild(f);
@@ -4071,6 +4284,7 @@ function doPrint(){ openRptDialog(); }
 function generateReport(){
   closeRptDialog();
   buildReport();
+  cbcApplyPageCSS(true);   /* D11: print header / footer, only while printing */
   setTimeout(()=>{ window.print(); },150);
 }
 
@@ -4126,6 +4340,9 @@ function init(){
             if(S.tor.present&amp;&amp;S.code==='ACI'&amp;&amp;CC.govTorIndex!=null) keep.add(CC.govTorIndex); }
     Object.keys(o.combos).forEach(k=>o.combos[k]=keep.has(parseInt(k))); autosave(); openRptDialog(); });
   document.getElementById(&quot;rptGo&quot;).addEventListener(&quot;click&quot;,generateReport);
+  /* D11: a print started from the browser builds the report if none is built; the page header/footer apply only while printing */
+  window.addEventListener(&quot;beforeprint&quot;,()=>{ const h=document.getElementById(&quot;printReport&quot;); if(h&amp;&amp;!h.innerHTML) buildReport(); cbcApplyPageCSS(true); });
+  window.addEventListener(&quot;afterprint&quot;,()=>cbcApplyPageCSS(false));
   refresh();
 }
 if(document.readyState===&quot;loading&quot;) document.addEventListener(&quot;DOMContentLoaded&quot;,init);
@@ -4472,6 +4689,44 @@ table.cbT button:hover{color:var(--red-600)}
   width:24px;height:22px;cursor:pointer;color:#64748b;font-size:10pt;line-height:1;padding:0}
 .prjActs button:hover{background:var(--slate-100);color:var(--slate-900)}
 .prjActs button:last-child:hover{background:#FEE2E2;color:var(--red-600);border-color:#FCA5A5}
+/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
+#printReport.crdoc{background:#fff;color:#000;font:10.5pt/1.35 &quot;Times New Roman&quot;,Times,serif}
+#printReport.crdoc a{color:#000;text-decoration:none}
+#printReport .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page}
+#printReport .cr-cover-t{text-align:center;margin-bottom:28pt}
+#printReport .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt}
+#printReport .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
+#printReport .cr-cover .cr-cover-p{font-weight:400}
+#printReport .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt}
+#printReport .cr-front{break-after:page}
+#printReport .cr-break{break-before:page}
+#printReport h2.cr-h1{font:700 12pt &quot;Times New Roman&quot;,Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid}
+#printReport .cr-front h2.cr-h1{margin-top:10pt}
+#printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt}
+#printReport .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top}
+#printReport .cr-refs td:first-child{white-space:nowrap}
+#printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0}
+#printReport .cr-toc>li{margin:3pt 0}
+#printReport .cr-toc ol{padding-left:18pt;font-size:10pt}
+#printReport .cr-p{margin:0 0 7pt}
+#printReport .cr-small{font-size:9.5pt;margin-top:18pt}
+#printReport .cr-resh{font:700 11pt &quot;Times New Roman&quot;,Times,serif;margin:12pt 0 2pt}
+#printReport .cr-line{display:grid;grid-template-columns:2.6in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid}
+#printReport .cr-res{border-top:0.6pt solid #000}
+#printReport .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt}
+#printReport .cr-r{text-align:right}
+#printReport .cr-st-fail{text-decoration:underline}
+#printReport .cr-refi{font-size:9pt;font-style:italic}
+#printReport .caret{display:none}
+#printReport .secHead{break-after:avoid}
+#printReport .foot{margin-top:16px;border-top:1px solid #000;padding-top:6px;font-size:9pt;font-style:italic;color:#444}
+/* D11 links (CLAUDE.md §6): &quot;Worked in: → Tab · Card&quot;; &quot;see §n.k&quot; in the report */
+.wkLink{font-family:var(--font-ui);font-size:8.5pt;color:#64748b;margin:2px 0 8px}
+a.wkA{color:var(--blue-600);text-decoration:none;cursor:pointer}
+a.wkA:hover{text-decoration:underline}
+.sec.wkFlash{animation:wkflash 1.4s ease-out}
+@keyframes wkflash{from{background:#dbeafe}to{background:var(--color-surface)}}
+#printReport a.wkA{color:#000;font-style:italic}
 @media print{
   html,body{overflow:visible;height:auto}
   body{background:#fff}
@@ -4715,6 +4970,36 @@ function mkSection(id,title,builder,parent,extraCls){
   const b=el(&quot;div&quot;,&quot;secBody&quot;); builder(b); sec.appendChild(b);
   parent.appendChild(sec); return sec;
 }
+
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
+   On screen: &quot;Worked in: → Tab · Card&quot; (opens the tab, expands the card, scrolls to it and flashes it).
+   In the calculation report the same link reads &quot;see §n.k&quot; (buildReport rewrites it). Display only. ---- */
+const ASD_CARDS={anProps:&quot;Elastic Section Properties&quot;,anNA:&quot;Neutral Axis&quot;,anZ:&quot;Internal Lever Arm&quot;,
+  anCap:&quot;Allowable Moment Capacity&quot;,anRF:&quot;Load Rating&quot;};
+function asdTabName(tab){ const t=TABS().find(x=>x[0]===tab); return t?t[1]:null; }
+function asdLink(card,txt){
+  const tn=asdTabName(&quot;tabAnalysis&quot;); if(!tn||!ASD_CARDS[card]) return null;
+  const a=el(&quot;a&quot;,&quot;wkA&quot;,(txt?txt+&quot; \u2192 &quot;:&quot;&quot;)+tn+&quot; \u00b7 &quot;+ASD_CARDS[card]); a.href=&quot;#&quot;;
+  a.dataset.tab=&quot;tabAnalysis&quot;; a.dataset.card=card; if(txt) a.dataset.txt=txt;
+  return a;
+}
+function asdWorkedIn(parent,items){   /* items: [{card, txt}] */
+  const links=items.map(o=>asdLink(o.card,o.txt)).filter(Boolean); if(!links.length) return null;
+  const d=el(&quot;div&quot;,&quot;wkLink&quot;); d.appendChild(document.createTextNode(&quot;Worked in: &quot;));
+  links.forEach((a,i)=>{ if(i) d.appendChild(document.createTextNode(&quot; \u00b7 &quot;)); d.appendChild(a); });
+  parent.appendChild(d); return d;
+}
+function asdGoto(tab,card){
+  if(!asdTabName(tab)) return;
+  S.ui.tab=tab; if(card) S.ui.collapse[card]=false; autosave(); refresh();
+  setTimeout(()=>{ const e=card&amp;&amp;document.querySelector(&quot;#tabPages #&quot;+card); if(!e) return;
+    const op=document.getElementById(&quot;outputPanel&quot;);   /* scroll the output panel only (scrollIntoView would also scroll the page and hide the header) */
+    if(op) op.scrollTo({top:op.scrollTop+e.getBoundingClientRect().top-op.getBoundingClientRect().top-6,behavior:&quot;smooth&quot;});
+    e.classList.add(&quot;wkFlash&quot;);
+    setTimeout(()=>e.classList.remove(&quot;wkFlash&quot;),1400); },60);
+}
+document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&amp;e.target.closest(&quot;a.wkA&quot;); if(!a||a.closest(&quot;#printReport&quot;)) return;
+  e.preventDefault(); asdGoto(a.dataset.tab,a.dataset.card); });
 
 /* =====================================================================
    INPUT PANEL TABS (UI only)
@@ -5018,7 +5303,7 @@ function buildSummaryTab(pg){
   d.appendChild(hd);
   const t=el(&quot;table&quot;,&quot;dt&quot;);
   t.innerHTML=&quot;<tr><th>Rating level</th><th style='text-align:right'>Capacity M<sub>all</sub><br>(k-ft)</th>&quot;+
-    &quot;<th>Controlled by</th><th style='text-align:right'>Rating factor</th><th>Status</th></tr>&quot;;
+    &quot;<th>Controlled by</th><th style='text-align:right'>Rating factor</th><th>Status</th><th>Worked in</th></tr>&quot;;
   const addRow=(lbl,M,ctrl,rf,show)=>{
     if(!show) return;
     const tr=el(&quot;tr&quot;);
@@ -5027,6 +5312,7 @@ function buildSummaryTab(pg){
     tr.appendChild(el(&quot;td&quot;,null,ctrl+&quot; controlled&quot;));
     const c2=el(&quot;td&quot;,&quot;n&quot;,isFinite(rf)?fmt(rf):&quot;—&quot;); if(rf<1){c2.style.color=&quot;#991B1B&quot;;c2.style.fontWeight=&quot;bold&quot;;} tr.appendChild(c2);
     const st=el(&quot;td&quot;); st.innerHTML=ratePill(rf); tr.appendChild(st);
+    const wk=el(&quot;td&quot;); const wd=asdWorkedIn(wk,[{card:&quot;anCap&quot;,txt:&quot;M_all&quot;},{card:&quot;anRF&quot;,txt:&quot;RF&quot;}]); if(wd) wd.style.margin=&quot;0&quot;; tr.appendChild(wk);   /* D11 link */
     t.appendChild(tr);
   };
   addRow(&quot;Inventory&quot;,R.M_inv,R.ctrl_inv,R.rf_inv,showInv);
@@ -5074,6 +5360,7 @@ function buildSummaryTab(pg){
     t.innerHTML=&quot;<tr><th>Modular ratio n</th><th>Steel ratio &amp;rho;</th><th>k</th><th>kd (in)</th><th>Lever arm j</th><th>z (in)</th></tr>&quot;+
       &quot;<tr><td>&quot;+R.n+&quot;</td><td>&quot;+fmt(R.rho,4)+&quot;</td><td>&quot;+fmt(R.k,3)+&quot;</td><td>&quot;+fmt(R.kd,2)+&quot;</td><td>&quot;+fmt(R.j,3)+&quot;</td><td>&quot;+fmt(R.z,2)+&quot;</td></tr>&quot;;
     b.appendChild(t);
+    asdWorkedIn(b,[{card:&quot;anProps&quot;,txt:&quot;n, \u03c1&quot;},{card:&quot;anNA&quot;,txt:&quot;k, kd&quot;},{card:&quot;anZ&quot;,txt:&quot;j, z&quot;}]);   /* D11 link */
   },pg);
 }
 
@@ -5207,7 +5494,7 @@ function buildAnalysisTab(pg){
   const rfBlock=(lvl,Mg,rf)=>eqBlock({
     title:lvl+&quot; rating factor&quot;, ref:&quot;AASHTO MBE 6B (ASD)&quot;,
     lines:[&quot;RF = \\dfrac{C - M_{DL}}{M_{LL+I}} = \\dfrac{&quot;+F(Mg)+&quot; - &quot;+F(R.L.m_dl)+&quot;}{&quot;+F(R.L.m_ll)+&quot;} = &quot;+(isFinite(rf)?F(rf):&quot;\\infty&quot;)],
-    vars:[[&quot;C&quot;,&quot;Allowable capacity (=M_{all})&quot;,F(Mg),&quot;k-ft&quot;],
+    vars:[[&quot;C&quot;,&quot;Allowable capacity (= M_all)&quot;,F(Mg),&quot;k-ft&quot;],
           [&quot;M_{DL}&quot;,&quot;Dead load moment&quot;,F(R.L.m_dl),&quot;k-ft&quot;],
           [&quot;M_{LL+I}&quot;,&quot;Live load moment&quot;,F(R.L.m_ll),&quot;k-ft&quot;],
           [&quot;RF&quot;,&quot;Rating factor&quot;,isFinite(rf)?F(rf):&quot;∞&quot;,&quot;&quot;]]
@@ -5261,32 +5548,113 @@ function reportTabList(){ return [[&quot;tabInputEcho&quot;,&quot;Input Echo&quo
 function defaultRptOpts(){ const o={tabs:{}}; reportTabList().forEach(([id])=>o.tabs[id]=true); return o; }
 function normRptOpts(){ let o=S.ui.rptOpts; if(!o||!o.tabs) o=defaultRptOpts();
   reportTabList().forEach(([id])=>{ if(o.tabs[id]===undefined) o.tabs[id]=true; }); S.ui.rptOpts=o; return o; }
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
+   cover with title block, references, numbered table of contents (links), numbered sections n (one per
+   output tab) and subsections n.k (the tab's cards, with their worked equations, built by the same
+   functions as the screen), a result line per rating level, the &quot;see §n.k&quot; form of the D11 links, and
+   the print header / &quot;Page X of Y&quot; footer (@page margin boxes, asdPageCSS, only while printing).
+   Display only: every value shown is compute()'s. */
+const ASD_REFS=[
+  [&quot;AASHTO Std. Spec.&quot;,&quot;AASHTO Standard Specifications for Highway Bridges — Art. 8.15 (service load design: 8.15.2 allowable stresses, 8.15.3 flexure, 8.15.3.4 modular ratio), 8.7.1 (E_c), 8.10.1.1 / 8.10.1.2 (effective flange width). Edition: verify (the tool’s code notes refer to the 17th Ed., 2002).&quot;],
+  [&quot;AASHTO MBE&quot;,&quot;Manual for Bridge Evaluation — Section 6 Part B (allowable stress rating): rating factor RF = (C − M_DL)/M_LL+I; 6B.6.2.3 and Table 6B.6.2.3-1 (allowable stresses). Edition: verify.&quot;]];
+function asdPageCSS(){
+  const p=S.proj||{}, esc=v=>String(v==null||v===&quot;&quot;?&quot;—&quot;:v).replace(/\\/g,&quot;\\\\&quot;).replace(/&quot;/g,'\\&quot;').replace(/\n/g,&quot; &quot;);
+  const box='font: 9.5pt &quot;Times New Roman&quot;, Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+    ' @top-left { content: &quot;Project No: '+esc(p.num)+'\\A Description: '+esc(String(p.subj||p.name||&quot;&quot;).slice(0,40))+'&quot;; '+box+' text-align: left; }'+
+    ' @top-center { content: &quot;Computed By: '+esc(p.by)+'\\A Checked By: '+esc(p.chk)+'&quot;; '+box+' text-align: left; }'+
+    ' @top-right { content: &quot;Date: '+esc(p.date)+'\\A Date: '+esc(p.chkDate)+'&quot;; '+box+' text-align: right; }'+
+    ' @bottom-left { content: &quot;'+esc(p.name||&quot;Untitled&quot;)+' (Concrete Beam Design Suite — ASD Beam Rating)&quot;; font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; }'+
+    ' @bottom-right { content: &quot;Page &quot; counter(page) &quot; of &quot; counter(pages); font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; } }';
+}
+function asdApplyPageCSS(on){
+  let st=document.getElementById(&quot;asd-page&quot;);
+  if(!st){ st=document.createElement(&quot;style&quot;); st.id=&quot;asd-page&quot;; document.head.appendChild(st); }
+  st.textContent=on?asdPageCSS():&quot;&quot;;
+}
+/* one result line per rating level shown; PASS when RF >= 1.00 (the Summary's rule, ratePill) */
+function asdResultBlock(){
+  const R=CC; if(!R||R.errors) return null;
+  const rows=[]; if(S.mode.inv) rows.push([&quot;Inventory rating&quot;,R.rf_inv,R.M_inv,R.ctrl_inv]);
+  if(S.mode.op) rows.push([&quot;Operating rating&quot;,R.rf_op,R.M_op,R.ctrl_op]);
+  if(!rows.length) return null;
+  const box=el(&quot;div&quot;,&quot;cr-results&quot;);
+  rows.forEach(([lab,rf,M,ctrl])=>{
+    const na=(rf==null||!isFinite(rf)), ok=!na&amp;&amp;rf>=1.0;
+    const line=el(&quot;div&quot;,&quot;cr-line cr-res&quot;);
+    line.appendChild(el(&quot;div&quot;,&quot;cr-d&quot;,lab+&quot;:&quot;));
+    const m=el(&quot;div&quot;,&quot;cr-m&quot;);
+    m.innerHTML=&quot;RF = <b>&quot;+(na?&quot;n/a&quot;:fmt(rf))+&quot;</b> <span class='cr-refi'>(AASHTO MBE 6B (ASD); M<sub>all</sub> = &quot;+fmt(M)+&quot; k-ft, &quot;+ctrl.toLowerCase()+&quot; controlled)</span>&quot;;
+    line.appendChild(m);
+    const r=el(&quot;div&quot;,&quot;cr-r&quot;+(!na&amp;&amp;!ok?&quot; cr-st-fail&quot;:&quot;&quot;)); r.innerHTML=&quot;<b>&quot;+(na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;))+&quot;</b>&quot;; line.appendChild(r);
+    box.appendChild(line);
+  });
+  return box;
+}
 function buildReport(){
-  const Rp=document.getElementById(&quot;printReport&quot;); Rp.innerHTML=&quot;&quot;;
-  const H=el(&quot;div&quot;);
-  H.innerHTML='<div style=&quot;text-align:center&quot;><div style=&quot;font-size:15pt;font-weight:bold&quot;>'+
-    'Concrete Beam Load Rating — ASD</div><div style=&quot;font-style:italic;font-size:10pt&quot;>'+
-    'AASHTO Standard Specifications, §8.15 (Working Stress)</div></div>';
-  Rp.appendChild(H);
-  const grid=el(&quot;div&quot;);
-  grid.style.cssText=&quot;display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt;margin:10px 0&quot;;
-  const gi=(k,v)=>{ const dd=el(&quot;div&quot;); dd.innerHTML=&quot;<b>&quot;+k+&quot;:</b> &quot;+(v||&quot;—&quot;); grid.appendChild(dd); };
+  const Rp=document.getElementById(&quot;printReport&quot;); Rp.innerHTML=&quot;&quot;; Rp.className=&quot;crdoc&quot;;
+  const opts=normRptOpts(); const saveTab=S.ui.tab;
+  const body=el(&quot;div&quot;), toc=[], cardMap={};   /* cardMap &quot;tab|cardId&quot; -> {num:&quot;n.k&quot;, id} for the &quot;see §n.k&quot; links */
+  const printed=reportTabList().filter(([id])=>opts.tabs[id]!==false);
+  /* the rating result lines go with the Analysis section (where RF is worked), else with the Summary */
+  const resTab=printed.some(([id])=>id===&quot;tabAnalysis&quot;)?&quot;tabAnalysis&quot;:&quot;tabSummary&quot;;
+  let n=0;
+  printed.forEach(([id,label])=>{
+    n++;
+    const sid=&quot;crp-&quot;+n, sec=el(&quot;section&quot;,&quot;cr-sec&quot;+(n>1?&quot; cr-break&quot;:&quot;&quot;));
+    const h=el(&quot;h2&quot;,&quot;cr-h1&quot;,n+&quot;. &quot;+label); h.id=sid; sec.appendChild(h);
+    const holder=el(&quot;div&quot;); S.ui.tab=id; buildOutput(holder);
+    holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));
+    const subs=[];
+    holder.querySelectorAll(&quot;.sec&quot;).forEach(sc=>{
+      const t=sc.querySelector(&quot;.secTitle&quot;); if(!t) return;
+      const k=subs.length+1, nid=sid+&quot;-&quot;+k;
+      if(sc.id) cardMap[id+&quot;|&quot;+sc.id]={num:n+&quot;.&quot;+k,id:nid};
+      sc.id=nid;
+      const tt=t.textContent.replace(/^\s*\d+\.\s*/,&quot;&quot;);   /* the card's own &quot;k.&quot; is replaced by n.k */
+      subs.push({t:tt,id:nid}); t.textContent=n+&quot;.&quot;+k+&quot; &quot;+tt;
+    });
+    sec.appendChild(holder);
+    if(id===resTab){ const rb=asdResultBlock(); if(rb){ sec.appendChild(el(&quot;div&quot;,&quot;cr-resh&quot;,&quot;Results — Load Rating&quot;)); sec.appendChild(rb); } }
+    body.appendChild(sec); toc.push({n,t:label,id:sid,subs});
+  });
+  S.ui.tab=saveTab;
+  /* D11 links: &quot;→ Tab · Card&quot; becomes &quot;see §n.k&quot; */
+  body.querySelectorAll(&quot;a.wkA&quot;).forEach(a=>{
+    const hit=cardMap[a.dataset.tab+&quot;|&quot;+a.dataset.card], pre=a.dataset.txt?a.dataset.txt+&quot;: &quot;:&quot;&quot;;
+    if(hit){ a.textContent=pre+&quot;see §&quot;+hit.num; a.href=&quot;#&quot;+hit.id; }
+    else { a.textContent=pre+&quot;see the &quot;+(asdTabName(a.dataset.tab)||a.dataset.tab)+&quot; tab (&quot;+(ASD_CARDS[a.dataset.card]||a.dataset.card)+&quot;; not in this printout)&quot;; a.removeAttribute(&quot;href&quot;); }
+  });
+  body.querySelectorAll(&quot;.wkLink&quot;).forEach(d=>{ if(d.firstChild&amp;&amp;d.firstChild.nodeType===3) d.firstChild.textContent=&quot;&quot;; });
+  /* front matter: cover with title block, references, table of contents */
+  const cover=el(&quot;section&quot;,&quot;cr-cover&quot;);
+  const ct=el(&quot;div&quot;,&quot;cr-cover-t&quot;);
+  ct.appendChild(el(&quot;h1&quot;,null,&quot;Concrete Beam Load Rating — ASD&quot;));
+  ct.appendChild(el(&quot;p&quot;,null,S.proj.name||&quot;Untitled&quot;));
+  if(S.proj.subj) ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,S.proj.subj));
+  ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,&quot;AASHTO Standard Specifications, §8.15 (Working Stress) · Concrete Beam Design Suite · by M. Lococo&quot;));
+  cover.appendChild(ct);
+  const grid=el(&quot;div&quot;,&quot;rptHdrGrid&quot;);
+  const gi=(k,v)=>{ const dd=el(&quot;div&quot;); dd.innerHTML=&quot;<b>&quot;+k+&quot;:</b> &quot;; dd.appendChild(document.createTextNode(v||&quot;—&quot;)); grid.appendChild(dd); };
   gi(&quot;Project&quot;,S.proj.name); gi(&quot;Project No.&quot;,S.proj.num); gi(&quot;Subject&quot;,S.proj.subj);
   gi(&quot;Calculated by&quot;,S.proj.by); gi(&quot;Date&quot;,S.proj.date); gi(&quot;Sheet&quot;,S.proj.sheet);
   gi(&quot;Checked by&quot;,S.proj.chk); gi(&quot;Checked date&quot;,S.proj.chkDate); gi(&quot;Method&quot;,&quot;AASHTO 8.15 (ASD)&quot;);
-  Rp.appendChild(grid);
-  const opts=normRptOpts(); const saveTab=S.ui.tab; let n=0;
-  reportTabList().forEach(([id,label])=>{
-    if(opts.tabs[id]===false) return; n++;
-    const h=el(&quot;h2&quot;,null,n+&quot;. &quot;+label);
-    h.style.cssText=&quot;font-size:13pt;border-bottom:1px solid #000;margin:14px 0 6px&quot;; Rp.appendChild(h);
-    const holder=el(&quot;div&quot;); S.ui.tab=id; buildOutput(holder);
-    holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));
-    Rp.appendChild(holder);
-  });
-  S.ui.tab=saveTab;
-  const f=el(&quot;div&quot;);
-  f.style.cssText=&quot;margin-top:16px;border-top:1px solid #000;padding-top:6px;font-size:9pt;font-style:italic;color:#444&quot;;
+  cover.appendChild(grid);
+  const fm=el(&quot;section&quot;,&quot;cr-front&quot;);
+  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;References:&quot;));
+  const rt=el(&quot;table&quot;,&quot;cr-refs&quot;); ASD_REFS.forEach(([a,b])=>{ const tr=el(&quot;tr&quot;); tr.appendChild(el(&quot;td&quot;,null,a)); tr.appendChild(el(&quot;td&quot;,null,b)); rt.appendChild(tr); });
+  fm.appendChild(rt);
+  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;Table of contents:&quot;));
+  const ol=el(&quot;ol&quot;,&quot;cr-toc&quot;);
+  toc.forEach(s=>{ const li=el(&quot;li&quot;); const a=el(&quot;a&quot;,null,s.n+&quot;. &quot;+s.t); a.href=&quot;#&quot;+s.id; li.appendChild(a);
+    if(s.subs.length){ const o2=el(&quot;ol&quot;); s.subs.forEach((q,k)=>{ const l2=el(&quot;li&quot;); const a2=el(&quot;a&quot;,null,s.n+&quot;.&quot;+(k+1)+&quot;. &quot;+q.t); a2.href=&quot;#&quot;+q.id; l2.appendChild(a2); o2.appendChild(l2); }); li.appendChild(o2); }
+    ol.appendChild(li); });
+  fm.appendChild(ol);
+  fm.appendChild(el(&quot;p&quot;,&quot;cr-p cr-small&quot;,&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
+    &quot;The section, f′c, f_y, d and A_s are received from the Beam Capacity tab of the suite (its own calculation report). &quot;+
+    &quot;A rating level passes when RF ≥ 1.00. Units: psi, in, k-ft unless noted.&quot;));
+  Rp.appendChild(cover); Rp.appendChild(fm); Rp.appendChild(body);
+  const f=el(&quot;div&quot;,&quot;foot&quot;);
   f.textContent=&quot;This calculation is a computation aid. All results must be independently verified and &quot;+
     &quot;sealed by the responsible engineer of record. Generated &quot;+new Date().toLocaleString()+&quot;.&quot;;
   Rp.appendChild(f);
@@ -5387,7 +5755,10 @@ function init(){
   document.getElementById(&quot;prjBg&quot;).addEventListener(&quot;mousedown&quot;,e=>{ if(e.target.id===&quot;prjBg&quot;) closeProjDialog(); });
   document.getElementById(&quot;rptX&quot;).addEventListener(&quot;click&quot;,closeRptDialog);
   document.getElementById(&quot;rptCancel&quot;).addEventListener(&quot;click&quot;,closeRptDialog);
-  document.getElementById(&quot;rptGo&quot;).addEventListener(&quot;click&quot;,()=>{ closeRptDialog(); buildReport(); setTimeout(()=>window.print(),60); });
+  document.getElementById(&quot;rptGo&quot;).addEventListener(&quot;click&quot;,()=>{ closeRptDialog(); buildReport(); asdApplyPageCSS(true); setTimeout(()=>window.print(),60); });
+  /* D11: a print started from the browser builds the report if none is built; the page header/footer apply only while printing */
+  window.addEventListener(&quot;beforeprint&quot;,()=>{ const h=document.getElementById(&quot;printReport&quot;); if(h&amp;&amp;!h.innerHTML) buildReport(); asdApplyPageCSS(true); });
+  window.addEventListener(&quot;afterprint&quot;,()=>asdApplyPageCSS(false));
   document.getElementById(&quot;rptAll&quot;).addEventListener(&quot;click&quot;,()=>{ const o=normRptOpts(); reportTabList().forEach(([id])=>o.tabs[id]=true); autosave(); openRptDialog(); });
   refresh();
 
