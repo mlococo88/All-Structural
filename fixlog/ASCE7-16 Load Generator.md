@@ -856,3 +856,20 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
 - **Duplicate panel key `o-rf0`** on the Wind: Roof tab ("Roof Procedure Selected" and "Roof, Wind Direction +X" share it, so their collapse state and DOM id are shared). Display only; the links target the later one. Rename the per-direction keys (`"o-rfd"+i`) if wanted (would reset saved collapse state of those panels only).
 - **p<sub>f,des</sub> when Sec. 7.3.4 does not apply** (θ ≥ 15°): the solver sets p<sub>f,des</sub> = p<sub>f</sub> (`sn.pfDes=sn.minApplies?Math.max(sn.pf,sn.pmGov):sn.pf`), so the link points to Flat Roof Snow Load, where p<sub>f</sub> is worked; the Minimum Roof Snow Load panel only says the minimum does not apply. The 780 CMR tabulated minimum is then not applied either; confirm that is intended (no change made).
 - **Report length:** default 69 pages (was 60); the User Manual appendix (ticked by default) is 18 of them.
+
+## 2026-10-18 — D11 follow-ups (engineer's decisions)
+
+Display/defaults only; no computed result changes (`R` identical to main for default, Gable 0.5 and Gable 0.25 cases, checked headless).
+
+1. **User Manual, scope list (Section H):** removed the tornado mention. ASCE 7-16 has no Ch. 32 (tornado loads are Ch. 32 of ASCE 7-22).
+   - Before: `<li><b>Floor live load L, rain load R, ice, flood, and tornado (Ch. 32).</b> Not addressed.`
+   - After: `<li><b>Floor live load L, rain load R, ice and flood.</b> Not addressed.`
+   - Also removed the now-unused `32:` entry from the chapter-title map used by `a7Refs`.
+2. **Snow, Minimum Roof Snow Load panel (`o-sn2`):** behaviour is unchanged. The 780 CMR Table 1604.11 note 1 minimum still applies only when θ < 15°, like ASCE 7-16 Sec. 7.3.4 (engineer's decision). When θ ≥ 15° and the community has a tabulated minimum, the note now says so.
+   - Before: `"…is 15° or steeper, so the Sec. 7.3.4 minimum does not apply."`
+   - After: the same sentence, plus `"The 780 CMR Table 1604.11 note 1 minimum flat roof snow load (X psf) is treated the same way and is not applied at this slope (engineer's decision 2026-10-18)."`
+   - Check: Melrose, Gable 0.5 (θ = 26.57°) shows the note with 30.00 psf; p_f,des = p_f, unchanged.
+3. **Print dialog default (`printSel`):** the User Manual is now unticked by default.
+   - Before: `S.print[s.k]=true;`
+   - After: `S.print[s.k]=(s.k!=="man");`
+   - Only applies when no print selection has been saved; saved choices are kept.

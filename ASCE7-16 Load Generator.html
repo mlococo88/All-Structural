@@ -2271,7 +2271,8 @@ function renderSnow(host){
     "p_f = 0.7\\,("+R2(sn.Ce)+")("+R2(sn.Ct)+")("+R2(sn.Is)+")("+R2(sn.pg)+")","p_f = "+R2(sn.pf)+"\\ \\text{psf}");
 
   b=panel(host,"o-sn2",++n+".","Minimum Roof Snow Load","ASCE 7-16 Sec. 7.3.4");
-  if(!sn.minApplies) note(b,"Roof slope \u03B8 = "+R2(g.theta)+"\u00B0 is 15\u00B0 or steeper, so the Sec. 7.3.4 minimum does not apply.","k");
+  if(!sn.minApplies) note(b,"Roof slope \u03B8 = "+R2(g.theta)+"\u00B0 is 15\u00B0 or steeper, so the Sec. 7.3.4 minimum does not apply"+
+    (sn.pmTab>0?". The 780 CMR Table 1604.11 note 1 minimum flat roof snow load ("+R2(sn.pmTab)+" psf) is treated the same way and is not applied at this slope (engineer's decision 2026-10-18).":"."),"k");
   else{
     eq(b,"Code minimum","ASCE 7-16 Sec. 7.3.4",
       sn.pg<=20?"p_m = I_s\\,p_g \\quad (p_g \\le 20\\ \\text{psf})":"p_m = 20\\,I_s \\quad (p_g > 20\\ \\text{psf})",
@@ -3828,7 +3829,7 @@ Implemented provisions:</p>
 <li><b>Table 12.2-1 footnote exceptions.</b> The system limitations and height limits are screened against the main table, and a system that is not permitted in the resulting design category, or that exceeds its height limit, is blocked. The footnote exceptions, including those of Sec. 12.2.5 that permit certain systems in higher categories under stated conditions, are not evaluated.</li>
 <li><b>Seismic beyond the story shears.</b> Story shears and overturning moments are produced, but their <i>horizontal</i> distribution to the vertical resisting elements is not, nor the inherent and accidental torsional moments of Sec. 12.8.4.1 and 12.8.4.2 or the amplification factor A<sub>x</sub> of Sec. 12.8.4.3. No drift or P-delta, no irregularity checks, no Ch. 13 components, no Ch. 15 nonbuilding structures, no modal analysis. Sec. 12.6 permissibility for the equivalent lateral force procedure is not checked, nor are Table 12.2-1 system limitations and height limits. E<sub>v</sub> per Sec. 12.4.2.2 <i>is</i> computed and carried into the combinations with both signs, and &rho; is applied as entered.</li>
 <li><b>Worked allowable stress combinations.</b> The Sec. 2.4 combinations are listed for reference but not worked. In Massachusetts 780 CMR 1605.1 deletes the Sec. 2.4 combinations containing wind or earthquake for structural steel and substitutes two-thirds of the strength combinations, so for a steel building the ASD path returns to combinations already worked in full. Where the governing material standard works in allowable stress terms, such as TMS 402 masonry or NDS wood, evaluate Sec. 2.4 separately. This is a deliberate scope decision, not an oversight.</li>
-<li><b>Floor live load L, rain load R, ice, flood, and tornado (Ch. 32).</b> Not addressed. Roof live load L<sub>r</sub> <i>is</i> carried, as the (L<sub>r</sub> or S) term of Sec. 2.3.1 combinations 2, 3 and 4.</li>
+<li><b>Floor live load L, rain load R, ice and flood.</b> Not addressed. Roof live load L<sub>r</sub> <i>is</i> carried, as the (L<sub>r</sub> or S) term of Sec. 2.3.1 combinations 2, 3 and 4.</li>
 <li><b>Template features the Excel writer cannot reproduce.</b> The page-header logo, conditional formatting, custom table styles and any live-equation add-in content do not survive the ExcelJS writer. The header text, margins, print scale and footer are reproduced exactly; the logo is not yet embedded.</li>
 <li><b>ASCE 7-10 and ASCE 7-22.</b> ASCE 7-16 only. Coefficients, the ground elevation factor, and the snow chapter differ between editions and are not interchangeable.</li>
 <li><b>Jurisdictions other than Massachusetts.</b> Manual hazard entry is provided with a mandatory source note, but no other state amendment set is applied.</li>
@@ -4430,7 +4431,7 @@ function renderCap3D(host){
   b.appendChild(el("div","cap","Figure 2. Three-dimensional model, captured from the interactive view."));
 }
 function printSel(){
-  if(!S.print){ S.print={}; RSECS.forEach(s=>{ S.print[s.k]=true; if(s.tier2) S.print[s.k+"_d"]=true; }); }
+  if(!S.print){ S.print={}; RSECS.forEach(s=>{ S.print[s.k]=(s.k!=="man"); if(s.tier2) S.print[s.k+"_d"]=true; }); }
   return S.print;
 }
 function openPrint(){
@@ -4478,8 +4479,7 @@ const A7_CH={1:"General",2:"Combinations of Loads",3:"Dead Loads, Soil Loads, an
   26:"Wind Loads: General Requirements",27:"Wind Loads on Buildings: Main Wind Force Resisting System (Directional Procedure)",
   28:"Wind Loads on Buildings: Main Wind Force Resisting System (Envelope Procedure)",
   29:"Wind Loads on Building Appurtenances and Other Structures: Main Wind Force Resisting System (Directional Procedure)",
-  30:"Wind Loads: Components and Cladding",
-  32:"cited by the User Manual for tornado loads; ASCE 7-16 has no Ch. 32 (tornado loads are Ch. 32 of ASCE 7-22): verify"};
+  30:"Wind Loads: Components and Cladding"};
 function a7Refs(body,sel){
   const c=body.cloneNode(true); c.querySelectorAll(".katex,svg,script").forEach(x=>x.remove());
   const tw=document.createTreeWalker(c,NodeFilter.SHOW_TEXT), parts=[];   /* text nodes joined with spaces: adjacent cells must not run together */
