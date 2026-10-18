@@ -146,6 +146,10 @@ svg text{font-family:var(--font-ui)}
 .plotHold3{height:230px}
 /* misc */
 .hint{font-family:var(--font-ui);font-size:8pt;color:#7C8CA3;margin:2px 0}
+/* D11 links (CLAUDE.md section 6): "Worked in: value -> Tab . Card" under a quoted value */
+.wkLink{font-family:var(--font-ui);font-size:8pt;color:#5A6B80;margin:3px 0 6px}
+a.wkA{color:var(--accent);text-decoration:none;cursor:pointer} a.wkA:hover{text-decoration:underline}
+.sec.wkFlash{animation:wkflash 1.4s ease-out} @keyframes wkflash{from{box-shadow:0 0 0 3px rgba(30,64,120,.45);background:#E8F0FA}to{box-shadow:0 0 0 0 rgba(30,64,120,0)}}
 .small{font-size:8.5pt}
 .ovrIn{background:#FFF7E8 !important;border-color:#E0B25A !important}
 .dirty{color:var(--warn);font-weight:700}
@@ -259,9 +263,13 @@ function texTextGroup(inner){
   if(buf)out.push('\\text{'+buf+'}');
   return out.join('');
 }
+/* D11 (2026-10-18): a TeX command or an exponent inside \text{} ("kip\cdot in", "in^2") is not text:
+   KaTeX printed it raw (red) or failed. Rewrite them to the unicode forms texTextGroup sets in math. */
+const TEX_SUP_INV={};Object.keys(TEX_SUP).forEach(k=>{TEX_SUP_INV[TEX_SUP[k]]=k;});
+function texTextFix(s){return s.replace(/\\cdot\s*/g,'\u00B7').replace(/\^\{?(\d+)\}?/g,(m,d)=>d.split('').map(c=>TEX_SUP_INV[c]).join(''));}
 function texSafe(src){
   let s=String(src),parts=[];
-  s=s.replace(/\\text\{([^{}]*)\}/g,(m,inner)=>{parts.push(inner);return '\u0001'+(parts.length-1)+'\u0001';});
+  s=s.replace(/\\text\{([^{}]*)\}/g,(m,inner)=>{parts.push(texTextFix(inner));return '\u0001'+(parts.length-1)+'\u0001';});
   s=texMath(s);
   s=s.replace(/\u0001(\d+)\u0001/g,(m,i)=>texTextGroup(parts[+i]));
   return s;
@@ -3049,7 +3057,7 @@ function buildAnalysisTab(pg){
         S.geom.nodes.map((n2,j)=>NN[j]+' '+(n2.t==='free'?'free':n2.t==='fixed'?'(v=0, \u03B8=0)':'(v=0)')).join('; ')+'.'));
       body.appendChild(eqBlock({title:'Element stiffness (per span, EI = '+fmt(EKSI*( AN.sect?AN.sect.Ix:0)/144,0)+' kip\u00B7ft\u00B2)',
         lines:['\\mathbf{k}_e=\\frac{EI}{L^3}\\begin{bmatrix}12&6L&-12&6L\\\\6L&4L^2&-6L&2L^2\\\\-12&-6L&12&-6L\\\\6L&2L^2&-6L&4L^2\\end{bmatrix},\\qquad \\mathbf{K}_{ff}\\,\\mathbf{d}_f=\\mathbf{f}_f,\\qquad \\mathbf{R}=\\mathbf{f}-\\mathbf{K}\\mathbf{d}'],
-        vars:[['E','29{,}000 ksi','steel modulus'],['I',fmt(AN.sect?AN.sect.Ix:0,1)+' in\u2074','resolved I\u2093 of '+(AN.sect?AN.sect.lbl:'')]]}));
+        vars:[['E','29,000 ksi','steel modulus'],['I',fmt(AN.sect?AN.sect.Ix:0,1)+' in\u2074','resolved I\u2093 of '+(AN.sect?AN.sect.lbl:'')]]}));
       /* reactions */
       S.geom.nodes.forEach((nd2,j)=>{
         if(nd2.t==='free')return;
@@ -4339,6 +4347,30 @@ const PRINT_CSS=`
   .prFoot{margin-top:10px;padding-top:4px;border-top:1px solid #999;font-size:8pt;color:#444;display:flex;justify-content:space-between}
   table{page-break-inside:auto}
   tr{page-break-inside:avoid}
+  /* D11 calculation-sheet report (single beam / member report only; the batch report has no .sbd-rpt) */
+  #printReport:not(.sbd-rpt) .wkLink{display:none!important}
+  #printReport .wkLink{font-family:var(--font-doc);font-size:8.5pt;font-style:italic;color:#333}
+  #printReport .wkLink a{color:#111}
+  .sbd-cover{min-height:8.2in;display:flex;flex-direction:column;justify-content:center;page-break-after:always;break-after:page}
+  .sbd-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;color:#16304F;text-align:center;margin:0 0 6pt}
+  .sbd-cover p{text-align:center;margin:0 0 6pt;font:700 13pt Arial,Helvetica,sans-serif}
+  .sbd-cover p.sbd-cv-codes{font-weight:400;font-size:10.5pt;margin-bottom:24pt}
+  .sbd-tb{width:100%;border-collapse:collapse;border:1.4px solid #16304F;font-size:10pt;margin-bottom:12px}
+  .sbd-tb td{padding:3px 8px;border:0.6px solid #B8C2CE;vertical-align:top}
+  .sbd-tb td b{color:#16304F}
+  .sbd-front{page-break-after:always;break-after:page}
+  .sbd-front h2{font:700 12pt "Times New Roman",Times,serif;text-transform:uppercase;text-decoration:underline;color:#111;margin:4pt 0 6pt}
+  .sbd-refs{border-collapse:collapse;margin:0 0 12pt;font-size:10pt}
+  .sbd-refs td{padding:1.5pt 14pt 1.5pt 0;vertical-align:top} .sbd-refs td:first-child{white-space:nowrap}
+  #printReport.sbd-rpt .prSec.short>h1{margin-top:14pt}
+  .sbd-toc,.sbd-toc ol{list-style:none;margin:0;padding:0}
+  .sbd-toc{column-count:2;column-gap:18pt;font-size:9.5pt}
+  .sbd-toc>li{margin:3pt 0} .sbd-toc ol{padding-left:12pt;font-size:8.5pt} .sbd-toc li li{break-inside:avoid}
+  .sbd-note{font-size:9pt;margin-top:12pt}
+  .sbd-resh{font:700 11pt "Times New Roman",Times,serif;color:#16304F;margin:12pt 0 2pt;break-after:avoid;page-break-after:avoid}
+  .sbd-res{border-bottom:0.8pt solid #000;margin-bottom:8pt}
+  .sbd-rl{display:grid;grid-template-columns:2.1in 1fr 0.7in;gap:0 10pt;align-items:baseline;padding:2.5pt 0;border-top:0.6pt solid #000;break-inside:avoid;page-break-inside:avoid;font-size:10pt}
+  .sbd-rl .r{text-align:right;font-weight:700} .sbd-rl .r.f{text-decoration:underline} .sbd-rl i{font-size:9pt}
 }`;
 function ensurePrintState(){
   if(!S.print)S.print={};
@@ -4451,42 +4483,135 @@ function printFig(kind,c){
   const L2=lay('Service Deflection (positive down)','\u03B4 (in)');L2.yaxis.autorange='reversed';
   return{data:tr,layout:L2};
 }
-async function buildPrintReport(){
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format --
+   cover with title block, references, numbered table of contents (links), numbered sections n
+   (one per printed tab) and subsections n.k (the tab's own cards, built by the same tab builders as
+   the screen: symbolic -> substituted -> result), a D/C result line per check, and the print header /
+   "Page X of Y" footer (@page margin boxes, sbdPageCSS, applied only while printing).
+   Display only: every number is the one the tabs and AN.design.checks already hold; the result line's
+   PASS / FAIL uses the Summary rule (DCR > 1.0001 fails). */
+function sbdEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function sbdRefs(){
+  const D=AN&&AN.design,mem=isMember(),r=[];
+  r.push(['AISC 360-16','Specification for Structural Steel Buildings (LRFD), incl. Commentary \u2014 Table B4.1, Ch. D, E, F, G, H (\u00A7H1, \u00A7H3), I (composite), \u00A7J10']);
+  r.push(['AISC Manual, 15th Ed.','Steel Construction Manual, 15th Edition']);
+  r.push([DBVER,'dimensional and torsional section properties']);
+  if(D&&D.torOpen&&!D.torOpen.blocked)r.push(['AISC Design Guide 9','Torsional Analysis of Structural Steel Members (open-section torsion with \u00A7H3.3); edition: verify']);
+  if(AN&&AN.comp&&!AN.comp.blocked)r.push(['AISC Design Guide 3','construction-stage and composite deflection limits; edition: verify']);
+  if(!mem)r.push(['ASCE/SEI 7-16','\u00A72.3.1 LRFD strength combinations (presets; the user manual says to verify the edition)']);
+  if(!mem||(S.member.defl&&S.member.defl.on))r.push(['IBC Table 1604.3','deflection limit convention; edition: verify']);
+  if(S.print&&S.print.secs&&S.print.secs.tabValid)r.push(['Validation','AISC Design Examples v15.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
+  return r;
+}
+function sbdPageCSS(){
+  const f=S.proj||{},q=v=>String(v==null||v===''?'\u2014':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');
+  const desc=f.subject||(AN&&AN.sect?((isMember()?'Steel member ':'Steel beam ')+AN.sect.lbl):'');
+  const box='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const ft='font: 9pt "Times New Roman", Times, serif; color: #000; vertical-align: top; padding-top: 6pt;';
+  return '@media print{@page{size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+    ' @top-left{content: "Project No: '+q(f.num)+'\\A Description: '+q(String(desc).slice(0,40))+'"; '+box+' text-align: left;}'+
+    ' @top-center{content: "Computed By: '+q(f.by||'Mario Lococo')+'\\A Checked By: '+q(f.chk)+'"; '+box+' text-align: left;}'+
+    ' @top-right{content: "Date: '+q(f.date||new Date().toISOString().slice(0,10))+'\\A Date: '+q(f.chkDate)+'"; '+box+' text-align: right;}'+
+    ' @bottom-left{content: "'+q(f.name||'Untitled')+' (Steel Beam Designer)"; '+ft+'}'+
+    ' @bottom-right{content: "Page " counter(page) " of " counter(pages); '+ft+'}}}';
+}
+function sbdApplyPageCSS(on){
+  let st=document.getElementById('sbdPageCss');
+  if(!st){st=document.createElement('style');st.id='sbdPageCss';document.head.appendChild(st);}
+  st.textContent=on?sbdPageCSS():'';
+}
+/* tab where a check is worked (the Summary keeps its own tab ids) */
+function sbdChkTab(ch){
+  if(ch.label==='Concentrated forces')return 'tabJ10';
+  if(ch.tab==='tabSummary'&&ch.label==='Deflection'&&TABS().some(t=>t[0]==='tabService'))return 'tabService';
+  return ch.tab;
+}
+/* the card where a check's governing value is worked: [tab, card id, card title] */
+function sbdChkTarget(ch){
+  const D=AN&&AN.design;if(!ch||ch.na||!D)return null;
+  const tab=sbdChkTab(ch),L=ch.label,C=D.perCombo.find(c=>c.name===ch.combo);
+  const pc=pfx=>C?[tab,pfx+C.id,(isMember()?'Case ':'Combination ')+C.name]:null;
+  if(L==='Pre-composite flexure')return['tabMx','cpConstr','Pre-Composite Strength \u2014 Bare Steel Section'];
+  if(L==='Pre-composite deflection'||/^Composite .*deflection$/.test(L))return['tabService','cpDefl','Composite and Construction-Stage Deflections'];
+  if(L==='Deflection'){
+    if(isMember())return tab==='tabService'?['tabService','mdDefl','Deflection Check']:null;
+    const sc=(AN.svc||[]).find(s=>s.name===ch.combo);return sc?['tabService','sv_'+sc.id,'Service: '+sc.name]:null;
+  }
+  if(tab==='tabComp')return pc(L==='Tension'?'tn_':'cp_');
+  const P={tabMx:'mx_',tabVx:'vx_',tabMy:'my_',tabVy:'vy_',tabTors:'to_',tabInter:'it_',tabJ10:'j1_'}[tab];
+  return P?pc(P):null;
+}
+/* ---- D11 links (CLAUDE.md section 6): a value quoted away from where it is worked links to that card.
+   On screen: "Worked in: value -> Tab . Card" (opens the tab, opens and scrolls to the card, flashes it).
+   In the printed report the same link reads "value: see section n.k" (sbdReportDOM rewrites it). ---- */
+function sbdLink(tab,sec,card,txt){
+  const t=TABS().find(x=>x[0]===tab);if(!t)return null;   /* target tab not shown in this mode */
+  const a=el('a','wkA');a.href='#';a.textContent=(txt?txt+' \u2192 ':'')+t[1]+' \u00B7 '+card;
+  a.dataset.tab=tab;a.dataset.sec=sec;a.dataset.card=card;if(txt)a.dataset.txt=txt;
+  return a;
+}
+function sbdWorkedIn(parent,items){   /* items: [tab, card id, card title, quoted value] */
+  const ls=(items||[]).filter(Boolean).map(o=>sbdLink(o[0],o[1],o[2],o[3])).filter(Boolean);if(!ls.length)return null;
+  const d=el('div','wkLink');d.appendChild(document.createTextNode('Worked in: '));
+  ls.forEach((a,i)=>{if(i)d.appendChild(document.createTextNode(' \u00B7 '));d.appendChild(a);});
+  parent.appendChild(d);return d;
+}
+function sbdGoto(tab,sec){
+  if(!TABS().some(t=>t[0]===tab))return;
+  S.ui.tab=tab;if(sec&&S.ui.collapse)S.ui.collapse[sec]=false;
+  autosave();buildTabs();
+  /* scroll the output panel only (scrollIntoView would also move the locked document); repeated once
+     the plots above the card have been drawn, because they change the heights */
+  const go=flash=>{const e=document.querySelector('#tabPages .sec[data-secid="'+sec+'"]'),op=$('outputPanel');if(!e||!op)return;
+    const bar=$('tabBar'),off=(bar?bar.offsetHeight:0)+8;
+    op.scrollTop=op.scrollTop+e.getBoundingClientRect().top-op.getBoundingClientRect().top-off;
+    if(flash){e.classList.add('wkFlash');setTimeout(()=>e.classList.remove('wkFlash'),1400);}};
+  setTimeout(()=>go(true),60);setTimeout(()=>go(false),500);
+}
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.wkA');if(!a||a.closest('#printReport'))return;
+  e.preventDefault();sbdGoto(a.dataset.tab,a.dataset.sec);});
+function sbdFmtDC(d){
+  if(d==null||!isFinite(d))return '\u2014';
+  return (d>=0.995&&d<1.005)?fmt(d,3):fmt(d,2);   /* 2 decimals, 3 where 2 would read 1.00 */
+}
+/* the report DOM (synchronous; diagrams are converted afterwards) */
+function sbdReportDOM(){
   ensurePrintState();
-  toast('Building report\u2026');
   const old=document.getElementById('printReport');if(old)old.remove();
-  const pr=el('div');pr.id='printReport';document.body.appendChild(pr);
-  /* title block (§16) */
-  const tb=el('div','prTitle');
-  const f=S.proj;
-  tb.appendChild(el('h1',null,(isMember()?'Steel Member Capacity Check':'Steel Beam Design')+' \u2014 AISC 360-16 (LRFD)'));
-  const tt=el('table');
-  const mk2=(a,b2,c2,d2)=>{const tr=el('tr');
-    tr.appendChild(el('td',null,'<b>'+a+':</b> '+(b2||'\u2014')));
-    tr.appendChild(el('td',null,c2?('<b>'+c2+':</b> '+(d2||'\u2014')):''));tt.appendChild(tr);};
-  mk2('Project',f.name,'Project no.',f.num);
-  mk2('Element',f.elem,'Designer',f.by||'Mario Lococo');
-  mk2('Client',f.client,'Checker',f.chk);
-  mk2('Date',f.date||new Date().toISOString().slice(0,10),'Section',AN&&AN.sect?(AN.sect.lbl+' \u2014 '+AN.sect.mat.name):'');
-  tb.appendChild(tt);
-  pr.appendChild(tb);
-  if(typeof bxSourceLine==='function'&&bxSourceLine())pr.appendChild(el('div','note',bxSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
-  if(isMember())pr.appendChild(el('div','warnBox','<b>MEMBER CHECK MODE \u2014 section capacity only.</b> Demands were entered directly; no structural model was solved. Equilibrium, reactions, moment distribution and deflection are not verified by this document.'));
+  const pr=el('div','sbd-rpt');pr.id='printReport';document.body.appendChild(pr);
+  const f=S.proj,today=new Date().toISOString().slice(0,10);
+  /* cover with title block (section 16) */
+  const cov=el('div','sbd-cover');
+  cov.appendChild(el('h1',null,isMember()?'Steel Member Capacity Check':'Steel Beam Design'));
+  cov.appendChild(el('p',null,'AISC 360-16 (LRFD)'));
+  cov.appendChild(el('p',null,sbdEsc(f.name||'Untitled')));
+  if(f.subject)cov.appendChild(el('p',null,sbdEsc(f.subject)));
+  cov.appendChild(el('p','sbd-cv-codes','AISC 360-16 \u00B7 AISC Steel Construction Manual, 15th Ed. \u00B7 Steel Beam Designer \u00B7 by Mario Lococo'));
+  const tt=el('table','sbd-tb');
+  [['Project',f.name,'Project No.',f.num,'Computed by',f.by||'Mario Lococo'],
+   ['Date',f.date||today,'Checked by',f.chk,'Checked date',f.chkDate],
+   ['Subject',f.subject,'Task',f.task,'Section',AN&&AN.sect?(AN.sect.lbl+' \u2014 '+AN.sect.mat.name):'']].forEach(r=>{
+    const tr=el('tr');for(let i=0;i<6;i+=2)tr.appendChild(el('td',null,'<b>'+r[i]+':</b> '+(r[i+1]?sbdEsc(r[i+1]):'\u2014')));tt.appendChild(tr);});
+  cov.appendChild(tt);
+  if(typeof bxSourceLine==='function'&&bxSourceLine())cov.appendChild(el('div','note',bxSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
+  if(isMember())cov.appendChild(el('div','warnBox','<b>MEMBER CHECK MODE \u2014 section capacity only.</b> Demands were entered directly; no structural model was solved. Equilibrium, reactions, moment distribution and deflection are not verified by this document.'));
   const govAll=(AN.design&&AN.design.checks||[]).filter(c=>!c.na);
   const worst=govAll.reduce((m,c)=>c.dcr>(m?m.dcr:-1)?c:m,null);
-  if(worst)pr.appendChild(el('div',worst.dcr>1?'errBox':'okBox','<b>Governing: '+worst.label+' \u2014 DCR = '+fmt(worst.dcr,3)+(worst.combo?(' ('+worst.combo+')'):'')+'</b>'+(worst.dcr>1?' \u2014 DESIGN FAILS':' \u2014 all implemented checks pass')));
+  if(worst)cov.appendChild(el('div',worst.dcr>1?'errBox':'okBox','<b>Governing: '+worst.label+' \u2014 DCR = '+fmt(worst.dcr,3)+(worst.combo?(' ('+worst.combo+')'):'')+'</b>'+(worst.dcr>1?' \u2014 DESIGN FAILS':' \u2014 all implemented checks pass')));
+  pr.appendChild(cov);
+  const front=el('div','sbd-front');pr.appendChild(front);
   /* clear app pages so print ids are unique */
   $('tabPages').innerHTML='';
   const names={};TABS().forEach(t=>names[t[0]]=t[1]);
-  let first=true;
   const avail={};TABS().forEach(t=>avail[t[0]]=1);
   const order=['tabBatch','tabSummary','tabSchem','tabDerive','tabAnalysis','tabMx','tabMy','tabVx','tabVy',
     'tabComp','tabTors','tabJ10','tabInter','tabService','tabSection','tabValid','tabManual'];
+  const toc=[],map={},secs={};let n=0;
   for(const id of order){
     if(!S.print.secs[id]||!avail[id])continue;
-    const sec=el('div','prSec'+(first?' first':''));first=false;
-    sec.appendChild(prRunHdr(names[id]||id));
-    sec.appendChild(el('h1',null,names[id]||id));
+    n++;
+    const sid='sbdr-'+n,sec=el('div','prSec');
+    const h1=el('h1',null,n+'. '+(names[id]||id));h1.id=sid;sec.appendChild(h1);
     const holder=el('div');sec.appendChild(holder);
     resetSecNum();
     try{
@@ -4503,18 +4628,112 @@ async function buildPrintReport(){
         fn(holder);
       }
     }catch(e){holder.appendChild(el('div','errBox','Section failed to build: '+e.message));}
+    /* the tab's cards become subsections n.k (the tab's own card number is replaced) */
+    const subs=[];let k=0;
+    holder.querySelectorAll('.sec').forEach(sc=>{
+      if(sc.parentElement&&sc.parentElement.closest('.sec'))return;
+      const t=sc.querySelector('.secTitle');if(!t)return;
+      k++;const num=n+'.'+k,cid=sid+'-'+k,title=t.textContent.replace(/^\s*\d+\.\s*/,'');
+      t.textContent=num+' '+title;sc.id=cid;
+      const key=id+'|'+sc.getAttribute('data-secid');if(!map[key])map[key]={num,id:cid};
+      subs.push({num,title,id:cid});
+    });
+    toc.push({num:String(n),title:names[id]||id,id:sid,subs});
+    secs[id]={sec,num:String(n),title:names[id]||id};
     pr.appendChild(sec);
   }
+  /* result lines: one per check, in the section of the tab where it is worked (else the Summary) */
+  const res={};
+  (AN.design&&AN.design.checks||[]).forEach(ch=>{
+    const tab=sbdChkTab(ch),s=secs[tab]?tab:(secs.tabSummary?'tabSummary':null);if(!s)return;
+    (res[s]=res[s]||[]).push(ch);
+  });
+  Object.keys(res).forEach(tab=>{
+    const s=secs[tab],box=el('div','sbd-res');
+    res[tab].forEach(ch=>{
+      const fail=!ch.na&&ch.dcr>1.0001,g=sbdChkTarget(ch),hit=g?map[g[0]+'|'+g[1]]:null;
+      const ln=el('div','sbd-rl');
+      ln.appendChild(el('div',null,sbdEsc(ch.label)+':'));
+      const ref=[ch.ref,ch.combo,ch.na?(ch.detail||''):''].filter(x=>x).map(sbdEsc).join('; ')+(hit?'; <a href="#'+hit.id+'">\u00A7'+hit.num+'</a>':'');
+      ln.appendChild(el('div',null,(ch.na?'D/C = n/a':'D/C = <b>'+sbdFmtDC(ch.dcr)+'</b>')+' <i>('+ref+')</i>'));
+      ln.appendChild(el('div','r'+(fail?' f':''),ch.na?'N/A':(fail?'FAIL':'PASS')));
+      box.appendChild(ln);
+    });
+    s.sec.appendChild(el('div','sbd-resh','Results \u2014 '+s.num+'. '+s.title));
+    s.sec.appendChild(box);
+  });
+  /* D11 links: "-> Tab . Card" becomes "see section n.k" */
+  pr.querySelectorAll('a.wkA').forEach(a=>{
+    const hit=map[a.dataset.tab+'|'+a.dataset.sec],pre=a.dataset.txt?a.dataset.txt+': ':'';
+    if(hit){a.textContent=pre+'see \u00A7'+hit.num;a.href='#'+hit.id;}
+    else{a.textContent=pre+'see the '+(names[a.dataset.tab]||a.dataset.tab)+' tab ('+a.dataset.card+'; not in this printout)';a.removeAttribute('href');}
+  });
+  pr.querySelectorAll('.wkLink').forEach(d=>{if(d.firstChild&&d.firstChild.nodeType===3)d.firstChild.textContent='';});
+  /* front matter: references and table of contents */
+  front.appendChild(el('h2',null,'References:'));
+  const rt=el('table','sbd-refs');
+  sbdRefs().forEach(([a,b])=>{const tr=el('tr');tr.appendChild(el('td',null,'<b>'+a+'</b>'));tr.appendChild(el('td',null,b));rt.appendChild(tr);});
+  front.appendChild(rt);
+  front.appendChild(el('h2',null,'Table of contents:'));
+  const ol=el('ol','sbd-toc');
+  toc.forEach(s=>{const li=el('li');const a=el('a',null,s.num+'. '+sbdEsc(s.title));a.href='#'+s.id;li.appendChild(a);
+    if(s.subs.length){const o2=el('ol');s.subs.forEach(q=>{const l2=el('li');const a2=el('a',null,q.num+' '+sbdEsc(q.title));a2.href='#'+q.id;l2.appendChild(a2);o2.appendChild(l2);});li.appendChild(o2);}
+    ol.appendChild(li);});
+  front.appendChild(ol);
+  front.appendChild(el('div','sbd-note','Each section is the corresponding tab of the tool, built by the same code. Equations are shown symbolically, then with values substituted, then with the result; identical combinations are cross-referenced (\u00A77.2). Each check section ends with the D/C result of its checks (D/C > 1.0 fails). Units: kip, ft, in, ksi unless noted.'));
   /* force sections open */
   pr.querySelectorAll('.secBody').forEach(b=>{b.style.display='block';});
+  pr.appendChild(el('div','prFoot','<span>'+sbdEsc(f.name||'')+' \u2014 '+sbdEsc(f.subject||'')+'</span><span>Steel Beam Designer \u00B7 by Mario Lococo \u00B7 '+today+'</span>'));
+  return pr;
+}
+/* Ctrl+P without the Print report button: the diagrams are drawn as static plots (no async image step) */
+function sbdStaticPlots(pr,c){
+  if(typeof Plotly==='undefined'){
+    pr.querySelectorAll('.plotHold').forEach(h=>h.replaceWith(el('div','hint','[diagram requires the Plotly CDN \u2014 offline print]')));
+    return;
+  }
+  pr.style.setProperty('display','block','important');   /* measurable while plotting */
+  pr.querySelectorAll('.plotHold').forEach(h=>{
+    let fig=null,w=680,ht=230;
+    if(h.id==='plotV'&&c)fig=printFig('V',c);
+    else if(h.id==='plotM'&&c)fig=printFig('M',c);
+    else if(h.id==='plotD')fig=printFig('D',c);
+    else if(PLOTREG[h.id]){fig=PLOTREG[h.id];ht=(fig.layout&&fig.layout.height)||320;w=Math.min(680,Math.round(ht*2.3));}
+    if(!fig){h.remove();return;}
+    const d=el('div','prPlotImg');d.style.width=w+'px';d.style.height=ht+'px';h.replaceWith(d);
+    try{Plotly.newPlot(d,fig.data,Object.assign({},fig.layout,{width:w,height:ht,autosize:false}),{staticPlot:true,displayModeBar:false});}
+    catch(e){d.replaceWith(el('div','hint','[diagram unavailable]'));}
+  });
+  pr.style.removeProperty('display');
+}
+async function buildPrintReport(){
+  toast('Building report\u2026');
+  const pr=sbdReportDOM();
   /* replace plot holders with static images */
   await rasterisePlots(pr,isMember()?null:curCombo());
   markShortSections(pr);
-  pr.appendChild(el('div','prFoot','<span>'+(f.name||'')+' \u2014 '+(f.elem||'')+'</span><span>Steel Beam Designer \u00B7 by Mario Lococo \u00B7 '+new Date().toISOString().slice(0,10)+'</span>'));
-  const cleanup=()=>{pr.remove();buildTabs();window.removeEventListener('afterprint',cleanup);};
+  sbdApplyPageCSS(true);
+  const cleanup=()=>{pr.remove();sbdApplyPageCSS(false);buildTabs();window.removeEventListener('afterprint',cleanup);};
   window.addEventListener('afterprint',cleanup);
   setTimeout(()=>{window.print();setTimeout(()=>{if(document.getElementById('printReport'))cleanup();},1500);},60);
 }
+/* D11: Ctrl+P / the browser's Print printed a blank page (the app is hidden in print and the report
+   existed only after the Print report button). Build the same report for it; batch mode keeps its own path. */
+window.addEventListener('beforeprint',()=>{
+  if(typeof isBatch==='function'&&isBatch())return;
+  const cur=document.getElementById('printReport');
+  if(cur){if(cur.classList.contains('sbd-rpt'))sbdApplyPageCSS(true);return;}
+  try{
+    const pr=sbdReportDOM();pr.setAttribute('data-auto','1');
+    sbdStaticPlots(pr,isMember()?null:curCombo());
+    markShortSections(pr);
+    sbdApplyPageCSS(true);
+  }catch(e){}
+});
+window.addEventListener('afterprint',()=>{
+  const pr=document.getElementById('printReport');
+  if(pr&&pr.getAttribute('data-auto')){pr.remove();sbdApplyPageCSS(false);buildTabs();}
+});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setupPrintUI);else setupPrintUI();
 /* =====================================================================
    STAGE 6 — EXCEL EXPORT (styled calc sheet, live formulas + cached values)
@@ -4816,6 +5035,7 @@ function buildSummaryTab(pg){
     });
     body.appendChild(el('div','hint','Demand and capacity are the governing pair that produced the DCR \u2014 the same numbers worked out on the linked tab. Interaction is dimensionless and is compared against the code limit of 1.000.'));
     body.appendChild(t);
+    sbdWorkedIn(body,D.checks.map(ch=>{const g=sbdChkTarget(ch);return g?g.concat([ch.label]):null;}));   /* D11 links */
   },pg);
   if(isMember())mkSection('sumMemIn','Entered Demands & Self-Weight',body=>{
     body.appendChild(el('div','note','Section <b>'+AN.sect.lbl+'</b> \u00B7 '+AN.sect.mat.name+' \u00B7 L\u1D47 = '+
@@ -5032,11 +5252,13 @@ function buildVxTab(pg){
   },pg);
   if(D.sw)mkSection('vxSw','Self-Weight Contribution',body=>{
     body.appendChild(el('div','note','V\u1D64 below includes \u0394V = '+fmt(D.sw.dV,2)+' kip from beam self-weight.'));
+    sbdWorkedIn(body,[['tabSummary','sumMemIn','Entered Demands & Self-Weight','\u0394V']]);   /* D11 links */
   },pg);
   perComboSections(pg,'vx_',isMember()?'Case ':'Combination ',(body,C)=>{
     if(p._kind==='P'&&!isMember())shearBlock(body,p,C.shearX,'Shear capacity at this combination\u2019s L\u1D65');
     dcrLine(body,'Major-axis shear DCR',C.shearX.route,' V',C.Vu,C.shearX.phi*C.shearX.Vn,C.dcrVx,
       isMember()?null:'V_u\\ \\text{at }x='+fmt(C.VuX,2)+'\\ \\text{ft}');
+    if(!isMember())sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'V\u1D64']]);   /* D11 links */
   });
 }
 /* =====================================================================
@@ -5254,6 +5476,7 @@ function buildJ10Tab(pg){
       t.appendChild(tr);
     });
     body.appendChild(t);
+    if(!isMember()&&D.j10.locs.some(l=>l.kind==='support'&&l.lb!=null))sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'Support reactions']]);   /* D11 links */
     if(C.j10.some(r=>r.dcrWLY>1||r.dcrWLC>1))
       body.appendChild(el('div','errBox','DCR > 1 at a bearing location \u2014 provide bearing stiffeners (\u00A7J10.8) or increase the bearing length.'));
   });
@@ -5303,6 +5526,12 @@ function buildInterTab(pg){
     lines.push('\\tfrac{M_{rx}}{M_{cx}}='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR)}');
     if(tm.My)lines.push('\\tfrac{M_{ry}}{M_{cy}}=\\tfrac{'+fmt(Math.abs(C.man.Muy),1)+'}{'+fmt(C.phiMny||0,1)+'}='+fmt(tm.My,3));
     body.appendChild(eqBlock({title:'Component ratios',ref:'Ch. H',lines:[lines.join(',\\quad ')]}));
+    {const cn=(isMember()?'Case ':'Combination ')+C.name,w=[];   /* D11 links: where each ratio is worked */
+      if(tm.P)w.push(C.dcrPt!=null?['tabComp','tnCap','Axial Tension (Chapter D)','P\u1D9C = \u03C6\u209CP\u2099']:['tabComp','cpCap','Compressive Strength','P\u1D9C = \u03C6P\u2099']);
+      w.push(['tabMx','mx_'+C.id,cn,'M\u1D63\u2093/M\u1D9C\u2093']);
+      if(tm.My)w.push(['tabMy','myCap','Minor-Axis Flexural Strength','M\u1D9C\u1D67']);
+      if(tm.V!=null){w.push(['tabVx','vx_'+C.id,cn,'V\u1D63/V\u1D9C']);w.push(['tabTors','to_'+C.id,cn,'T\u1D63/T\u1D9C']);}
+      sbdWorkedIn(body,w);}
     if(C.torsNeglect)body.appendChild(el('div','note','T\u1D64/\u03C6T\u2099 = '+fmt(C.dcrT,3)+' \u2264 0.20 \u2192 torsion neglected (\u00A7H3.2).'));
     let line;
     if(C.inter.eq==='H3-6')line='\\left(\\tfrac{P_r}{P_c}+\\tfrac{M_r}{M_c}\\right)+\\left(\\tfrac{V_r}{V_c}+\\tfrac{T_r}{T_c}\\right)^2='+
@@ -5506,7 +5735,7 @@ function buildMemDeflSection(pg){
       vars:[['c',fmt(r.c,5),'configuration coefficient'],
         [r.pt?'P':'w',fmt(r.w,3)+(r.pt?' kip':' kip/ft'),'service (unfactored) load'],
         ['L',fmt(r.L,2)+' ft','span'],['I',fmt(r.I,0)+' in\u2074','moment of inertia'],
-        ['1728','\\text{ft}^3/\\text{in}^3','unit conversion (w in kip/ft, L in ft)']]}));
+        ['1728','ft\u00B3/in\u00B3','unit conversion (w in kip/ft, L in ft)']]}));
     if(r.lim!=null){
       body.appendChild(eqBlock({title:'Limit and demand/capacity ratio',ref:'IBC Table 1604.3 convention',
         lines:['\\Delta_{allow}=\\tfrac{L}{'+r.den+'}=\\tfrac{'+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}',
@@ -5931,6 +6160,8 @@ function buildTorsTab(pg){
         ['F_{cr,E}',fmt(h.FcrE,2)+' ksi',h.FcrEsrc?'Chapter E: P\u2099/A\u1D4D at the stated effective lengths':(h.fa>0?'no compression buckling (P\u1D64 is not compression, or P\u2099/A\u1D4D \u2265 F\u1D67)':'no axial stress')],
         ['f_{by},\\ \\sigma_w',fmt(h.fby,2)+' ksi, '+fmt(h.sigW,2)+' ksi','divided by F\u1D9C\u02B3,F (conservative)']]}));
     else body.appendChild(el('div','note','\u00A7H3.3(c) buckling: the Chapter E/F buckling stress is not below F\u1D67 for this '+(isMember()?'case':'combination')+', so the yielding check (a) also covers buckling.'));
+    if(h.dcrB!=null)sbdWorkedIn(body,[h.FcrFsrc?['tabMx','mx_'+C.id,(isMember()?'Case ':'Combination ')+C.name,'M\u2099 (F\u1D9C\u02B3,F)']:null,
+      h.FcrEsrc?['tabComp','cpCap','Compressive Strength','P\u2099 (F\u1D9C\u02B3,E)']:null]);   /* D11 links */
     const hg=h33Gov(h);
     body.appendChild(el('div',h.dcr>1?'errBox':'okBox','Governing \u00A7H3.3 DCR = <b>'+fmt(h.dcr,3)+'</b> ('+(hg==='B'?'normal stress, buckling':hg==='N'?'normal':'shear')+' stress)'));
   },C=>C.h33?fmt(C.h33.dcr,4):'x');
@@ -9581,7 +9812,7 @@ function buildConstrSections(pg,p,r,which){
       cs.warns.forEach(w=>body.appendChild(el('div','warnBox',w)));
     },pg);
     if(r&&!r.blocked)mkSection('cpILB','Lower-Bound Moment of Inertia',body=>{
-      body.appendChild(eqBlock({title:'Elastic neutral axis and I_LB',ref:'Manual Part 3',
+      body.appendChild(eqBlock({title:'Elastic neutral axis and I\u1D38\u1D2E',ref:'Manual Part 3',
         lines:['Y_{ENA}=\\tfrac{A_sd_3+(\\Sigma Q_n/F_y)(2d_3+d_1)}{A_s+\\Sigma Q_n/F_y}=\\mathbf{'+fmt(r.YENA,3)+'\\ \\text{in}}',
           'I_{LB}=I_x+A_s(Y_{ENA}-d_3)^2+\\tfrac{\\Sigma Q_n}{F_y}(2d_3+d_1-Y_{ENA})^2=\\mathbf{'+fmt(r.ILB,0)+'\\ \\text{in}^4}'],
         vars:[['I_x',fmt(p.Ix,0)+' in\u2074','bare steel'],['I_{LB}/I_x',fmt(r.ILB/p.Ix,2),'stiffness gain']]}));
@@ -9650,7 +9881,7 @@ function compositeFlexSections(pg,p,r){
     body.appendChild(eqBlock({title:'Nominal flexural strength',ref:'Comm. Eq. C-I3-10',
       lines:['M_n=C(d_1+d_2)+P_y(d_3-d_2)='+fmt(r.C,0)+'('+fmt(r.d1,3)+'+'+fmt(r.d2,3)+')+'+fmt(r.Py,0)+'('+fmt(r.d3,3)+'-'+fmt(r.d2,3)+')=\\mathbf{'+fmt(r.Mn,0)+'}\\ \\text{kip\u00B7in}',
         '\\phi_bM_n=0.90\\times '+fmt(r.Mn/12,1)+'=\\mathbf{'+fmt(r.phiMn/12,1)+'\\ \\text{kip\u00B7ft}}'],
-      vars:[['d_1',fmt(r.d1,3)+' in',r.ribBlock?'Y_{con} \u2212 centroid of the slab + rib block':'Y_{con} \u2212 a/2'],['d_2',fmt(r.d2,3)+' in','to the steel compression centroid'],
+      vars:[['d_1',fmt(r.d1,3)+' in',r.ribBlock?'Ycon \u2212 centroid of the slab + rib block':'Ycon \u2212 a/2'],['d_2',fmt(r.d2,3)+' in','to the steel compression centroid'],
         ['d_3',fmt(r.d3,3)+' in','d/2']]}));
     const D=AN.design,bare=D&&D.capTop?D.capTop.phiMn/12:null;
     if(bare)body.appendChild(el('div','okBox','\u03C6M\u2099 composite = <b>'+fmt(r.phiMn/12,1)+' kip\u00B7ft</b> vs bare steel '+
@@ -9717,6 +9948,7 @@ function buildMxTab(pg){
   },pg);
   if(D.sw)mkSection('mxSw','Self-Weight Contribution',body=>{
     body.appendChild(el('div','note','M\u1D64 below includes \u0394M = '+fmt(D.sw.dM,2)+' kip\u00B7ft from beam self weight.'));
+    sbdWorkedIn(body,[['tabSummary','sumMemIn','Entered Demands & Self-Weight','\u0394M']]);   /* D11 links */
   },pg);
   perComboSections(pg,'mx_',isMember()?'Case ':'Combination ',(body,C)=>{
     const t=el('table','tbl');
@@ -9746,6 +9978,7 @@ function buildMxTab(pg){
       }
       dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':g.flange+' flange, region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
         g.cap.gov?g.cap.gov.clause:'',' M',g.Mu,g.phiMn,g.dcr);
+      if(!D.member)sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'M\u1D64']]);   /* D11 links */
       if(g.basis==='composite')body.appendChild(el('div','note','\u03C6M\u2099 = '+fmt(g.phiMn,1)+
         ' kip\u00B7ft is the composite plastic moment derived above. The bare steel section here would give '+
         fmt(g.steelPhiMn,1)+' kip\u00B7ft'+(g.steelGov?(' governed by '+g.steelGov.toLowerCase()):'')+'.'));
@@ -10063,7 +10296,7 @@ function buildSchemTab(pg){
    substituted numbers = value, so each step can be re-done by hand.
    ===================================================================== */
 function subEq(sym,expr,subst,val,unit){
-  return sym+'='+expr+'='+subst+'=\\mathbf{'+val+'}'+(unit?('\\ \\text{'+unit+'}'):'');
+  return sym+'='+expr+'='+(subst?subst+'=':'')+'\\mathbf{'+val+'}'+(unit?('\\ \\text{'+unit+'}'):'');   /* D11: no "= =" when there is no substitution step */
 }
 /* ---------------- Chapter G shear, all routes ---------------- */
 function shearBlock(body,p,sh,title){
@@ -10172,7 +10405,7 @@ function classFlexBlock(body,p,D){
     [r[0],r[1],r[2],r[3],r[4],clsBadge(r[5])].forEach((v,i)=>tr.appendChild(el('td',(i===0||i===4)?'lft':null,v)));t.appendChild(tr);});
   body.appendChild(t);
   body.appendChild(eqBlock({title:'Slenderness and its limits, worked',ref:'Table B4.1b',lines:eqs,
-    vars:[['\\sqrt{E/F_y}','\\sqrt{'+E+'/'+Fy+'}='+fmt(rt,3),'appears in every limit']]}));
+    vars:[['\\sqrt{E/F_y}','\u221A('+E+'/'+Fy+') = '+fmt(rt,3),'appears in every limit']]}));
 }
 /* ---------------- F2 supporting quantities ---------------- */
 function ltbTermsBlock(body,p,cap){

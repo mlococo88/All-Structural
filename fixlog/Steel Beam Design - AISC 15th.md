@@ -1757,3 +1757,140 @@ Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
 - O13. **Resolved 2026-10-10 by E3** (L_v measured to the point of zero shear within the span; support jumps excluded). **Round HSS / pipe shear length L_v at an interior support** (found while checking E2). The G5 L_v is the distance from the V_u station to the nearest entry in the "V = 0" list. That list includes the sign change across the shear jump at a support, so when V_u is at an interior support, L_v is about 0. Before E2 the jump crossing was interpolated a grid step away, giving L_v ≈ 0.08 ft and F_cr = 0.6F_y. With E2 it lands on the support, L_v can be exactly 0, and `shearMajor` treats 0 as "no zero-shear point" (`LvIn||1e9`): the derivation then shows L_v ≈ 83 000 000 ft and F_cr = max(G5-2b, ~0) ≤ 0.6F_y. For standard pipes and most round HSS (D/t below about 90) G5-2b still exceeds 0.6F_y, so V_n does not change (checked: Pipe8XS and Pipe12STD on 2 × 20 ft spans, F_cr = 21 ksi before and after). For very slender rounds it is lower, which is conservative. Both the old and the new L_v are artefacts. The intended L_v is the distance to the zero-shear point within the span (12.5 ft from the interior support of a 2 × 20 ft UDL beam). Decide whether to exclude support-jump crossings from the L_v search.
 - O14. **Resolved 2026-10-12 by Q3** (added to the default set and the preset when S and W cases exist). **New 2026-10-12 (Q3 of the sweep).** `defaultCombos` has 1.2D + 1.0L + 1.6S but not 1.2D + 1.6S + 0.5W (the other half of ASCE 7-16 §2.3.1 combination 3). Not changed; engineer to decide.
 - C1 open items (C&C, drift, Lr): **resolved 2026-10-12 by SW3** (Lr combinations added on import; C&C and drift warned in the dialog and on the dashboard). C2 (pattern loading in the reaction hand-off): kept, documented.
+
+## 2026-10-18 — PR: claude/steelbeam-d11-report (PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11). The tool already built its report from the tabs' own builders ("Stage 5", `buildPrintReport`), so this closes the gaps to the house format. The worked content of every section (symbolic → substituted → result) is the tab's own.
+- **Where:** helper block before `async function buildPrintReport()`, anchor `/* D11 (2026-10-18): calculation-sheet report`. It holds `sbdEsc`, `sbdRefs`, `sbdPageCSS`, `sbdApplyPageCSS`, `sbdChkTab`, `sbdChkTarget`, `sbdLink`, `sbdWorkedIn`, `sbdGoto` (plus one document click listener), `sbdFmtDC`, `sbdReportDOM` and `sbdStaticPlots`, then `buildPrintReport` and a `beforeprint` / `afterprint` pair. To re-apply by hand, copy that block (down to the line `if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setupPrintUI)`) from this version. Print CSS: anchor `/* D11 calculation-sheet report (single beam / member report only` at the end of `PRINT_CSS`. Screen CSS: anchor `/* D11 links (CLAUDE.md section 6)` after `.hint{`.
+- **Before** (`buildPrintReport`, main): a title box `.prTitle` (Project / Project no. (`f.num`) / Element (`f.elem`) / Designer / Client (`f.client`) / Checker / Date / Section) and a governing banner. Then one `.prSec` per ticked tab, with a running header `prRunHdr` and `h1` = tab name. The tab's cards were numbered 1, 2, 3 … per tab. There were no references, no contents and no result lines; `@page{margin:0.6in 0.55in}`; footer "name — `f.elem`".
+  ```js
+  mk2('Project',f.name,'Project no.',f.num);
+  mk2('Element',f.elem,'Designer',f.by||'Mario Lococo');
+  mk2('Client',f.client,'Checker',f.chk);
+  ...
+    sec.appendChild(prRunHdr(names[id]||id));
+    sec.appendChild(el('h1',null,names[id]||id));
+  ```
+- **After:** `buildPrintReport` = `sbdReportDOM()` + the existing `rasterisePlots` + `markShortSections` + `sbdApplyPageCSS(true)`, then print as before:
+  - **Cover** (own page): "Steel Beam Design" / "Steel Member Capacity Check", "AISC 360-16 (LRFD)", project, subject and a codes line. Title block: Project / **Project No.** / Computed by / Date / Checked by / **Checked date** / Subject / Task / Section. Then the hand-off source line, the member-mode banner and the governing banner (text unchanged).
+  - **References** (`sbdRefs`, only what the tool cites):
+    - AISC 360-16 (Table B4.1, Ch. D, E, F, G, H, I, §J10);
+    - AISC Manual 15th Ed.;
+    - `DBVER` (AISC Shapes Database v16.0);
+    - AISC DG 9 when open-section torsion is on, and DG 3 when composite is on (both "edition: verify"; the tool states no edition);
+    - ASCE/SEI 7-16 §2.3.1 (beam mode; "the user manual says to verify the edition");
+    - IBC Table 1604.3 ("edition: verify");
+    - the Validation benchmarks, when that section is printed.
+  - **Numbered table of contents** with links (sections and subsections, two columns).
+  - **Sections n** = the ticked tabs, in the existing order. **Subsections n.k** = the tab's cards (`.sec`); the tab's own card number is replaced by n.k. No content changed.
+  - **Result lines** ("Results — n. <tab>") at the end of the section where the check is worked. There is one per `AN.design.checks` row: "<label>: D/C = x.xx (<ref>; <governing combination>; §n.k) PASS / FAIL / N/A".
+    - D/C is the row's `dcr`, with 3 decimals where 2 would read 1.00.
+    - PASS / FAIL uses the Summary rule (`dcr > 1.0001` fails). N/A rows print their reason.
+    - The "Concentrated forces" row (HSS, N/A) goes to the Concentrated Forces section. The member-mode Deflection row (tab `tabSummary`) goes to Serviceability when that tab exists.
+  - **Print:** `@page` letter, margins 0.95 / 0.6 / 0.7 / 0.6 in. Margin boxes come from `sbdPageCSS`, a `<style id="sbdPageCss">` that is filled only while printing:
+    - top: "Project No: — / Description: <subject, else 'Steel beam <section>'>", "Computed By: <by, else Mario Lococo> / Checked By", "Date / Date (checked date)";
+    - bottom: "<project> (Steel Beam Designer)" and "Page X of Y".
+
+    This report no longer uses `prRunHdr`; the batch report still does.
+- **No field added.** The tool has no project-number field. "Project No." prints `S.proj.num` if an older project carries one (the old report read the same key), else "—". Checked date uses the existing `S.proj.chkDate`. This is a decision for the engineer (below).
+- **Print / Ctrl+P output changes (explicit):**
+  - A cover page and a references + contents page are added.
+  - Headings are numbered n / n.k, and result lines and "see §n.k" lines are added.
+  - The running header is replaced by the margin boxes.
+  - The title block labels are corrected (below).
+  - Page counts: default project 36 → 40; 2-span 46 → 49; open-section torsion 43 → 48; composite 43 → 48; member mode 27 → 30; HSS 36 → 42.
+  - **Ctrl+P / the browser's Print now prints the report.** It used to print a blank page (below).
+  - The batch report (`printBatchRows`) is unchanged apart from the TeX fixes below.
+- **Fixed along the way (display only):**
+  1. **The title block read fields that do not exist.** `f.num`, `f.elem` and `f.client` always printed "—". `f.subject`, `f.task` and `f.chkDate` were never printed. The footer printed "name — " (`f.elem`). The report now prints the real fields (above).
+  2. **Ctrl+P printed a blank page.** The print CSS hides `#app`, and `#printReport` existed only after the Print report button. `beforeprint` now builds the same report (`sbdReportDOM`) and draws the diagrams as static Plotly plots (`sbdStaticPlots`, no async image step); `afterprint` removes it. Batch mode keeps its own button.
+  3. **Raw or red TeX in the tabs and the report.**
+     - `\text{in^2}` was a KaTeX parse error and printed raw (r_ts², A_w in G2 / G4 / G6, A_e in E7). `\text{kip\cdot in}` printed "kip\cdotin" in red. Fixed in `texSafe` (anchor `function texSafe(src){`):
+       ```js
+       // before
+       s=s.replace(/\\text\{([^{}]*)\}/g,(m,inner)=>{parts.push(inner);return '\u0001'+(parts.length-1)+'\u0001';});
+       // after
+       const TEX_SUP_INV={};Object.keys(TEX_SUP).forEach(k=>{TEX_SUP_INV[TEX_SUP[k]]=k;});
+       function texTextFix(s){return s.replace(/\\cdot\s*/g,'\u00B7').replace(/\^\{?(\d+)\}?/g,(m,d)=>d.split('').map(c=>TEX_SUP_INV[c]).join(''));}
+       ...
+       s=s.replace(/\\text\{([^{}]*)\}/g,(m,inner)=>{parts.push(texTextFix(inner));return '\u0001'+(parts.length-1)+'\u0001';});
+       ```
+     - `subEq` printed "= =" when there is no substitution step (`0.7F_yS_x = 0.7(50)(88.90) == 3112`, λ limits, J10):
+       ```js
+       // before
+       return sym+'='+expr+'='+subst+'=\\mathbf{'+val+'}'+(unit?('\\ \\text{'+unit+'}'):'');
+       // after
+       return sym+'='+expr+'='+(subst?subst+'=':'')+'\\mathbf{'+val+'}'+(unit?('\\ \\text{'+unit+'}'):'');
+       ```
+     - Plain-text variable lines that carried TeX:
+       - `'29{,}000 ksi'` → `'29,000 ksi'` (Analysis, element stiffness);
+       - `'\\sqrt{'+E+'/'+Fy+'}='+fmt(rt,3)` → `'\u221A('+E+'/'+Fy+') = '+fmt(rt,3)` (`classFlexBlock`);
+       - `'Y_{con} \u2212 …'` → `'Ycon \u2212 …'` (`compositeFlexSections`);
+       - `'\\text{ft}^3/\\text{in}^3'` → `'ft\u00B3/in\u00B3'` (`buildMemDeflSection`, same text);
+       - eqBlock title `'Elastic neutral axis and I_LB'` → `'… I\u1D38\u1D2E'`.
+
+     These also show on screen, because the tabs and the report use the same code.
+- **Not changed:**
+  - `computeAll`, `buildDesignChecks` and every check;
+  - the print-section chooser and `S.print.secs`;
+  - `rasterisePlots`, `printFig` and `markShortSections`;
+  - the batch print path and the Excel export;
+  - storage keys (`sbd_autosave_v1`, `sbd_projects_v1`, `sbd_inputTab_v1`), the saved / exported JSON and the `bridgeSuite.v1.*` hand-offs;
+  - library tags.
+- **Provision:** none. No formula, factor, unit, code reference used by a check, default or pass/fail logic changed.
+- **Saved data:** no key or format change, and no field added. A "Worked in" click sets `S.ui.collapse[<card>] = false`, the same UI state that a click on the card header saves.
+- **Check case** (default project: W18X50, 20 ft, 1.2D + 1.6L + 0.5S governing):
+  - 40 pages. Sections: 1 Summary, 2 Schematic & Inputs, 3 Load Derivation, 4 Analysis Results, 5 Mₓ, 6 Mᵧ, 7 Vₓ, 8 Vᵧ, 9 Compression, 10 Torsion, 11 Concentrated Forces, 12 Interaction, 13 Serviceability, 14 Section Properties, 15 Validation.
+  - Result lines:
+    - "Flexure Mₓ: D/C = 0.12 (F2; 1.2DL + 1.6LL + 0.5SL; §5.5) PASS" (M_u = 44.0, φM_n = 378.75 kip·ft: 44.0/378.75 = 0.116);
+    - "Shear Vₓ: D/C = 0.05 (G2.1(a); …; §7.3) PASS" (8.80/191.70);
+    - "Interaction: D/C = 0.12 (H1-1b; …; §12.5) PASS";
+    - "Deflection: D/C = 0.09 (L/240; 1.0DL + 1.0LL; §13.3) PASS" (0.093/1.000 in);
+    - Mᵧ, Vᵧ, Compression, Torsion and J10 N/A, with their reasons.
+
+    These are the same values as the Summary's Governing Results table.
+
+### D11 links: quoted values link to the card where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **Helpers** (D11 block):
+  - `sbdWorkedIn(parent, [[tab, cardId, cardTitle, value], …])` adds "Worked in: <value> → <Tab> · <Card>". A link whose tab is not shown in the current mode is left out.
+  - A click (`sbdGoto`) selects the tab, opens the card (`S.ui.collapse[card] = false`), scrolls the output panel to the card and flashes it. Only the panel scrolls, repeated once after the plots are drawn; the document stays locked.
+  - In the report, `sbdReportDOM` rewrites each link to "<value>: see §n.k" (a PDF link). A target that is not printed reads "see the <Tab> tab (<card>; not in this printout)".
+- **Lines added** (one `sbdWorkedIn` call each, marked `/* D11 links */`):
+  1. Summary · Governing Results (`buildSummaryTab`, after the table): each check with a ratio → the card of its governing combination (`sbdChkTarget`: `mx_`, `vx_`, `my_`, `vy_`, `cp_` / `tn_`, `to_`, `it_`, `j1_`, `sv_<service id>`, `cpConstr`, `cpDefl`, `mdDefl`).
+  2. Mₓ per combination (`buildMxTab`, after the governing DCR, beam mode): M_u → Analysis Results · Combination.
+  3. Mₓ / Vₓ Self-Weight Contribution (member mode): ΔM / ΔV → Summary · Entered Demands & Self-Weight.
+  4. Vₓ per combination (`buildVxTab`, beam mode): V_u → Analysis Results · Combination.
+  5. Concentrated Forces per combination (`buildJ10Tab`, beam mode, when a support has a bearing length): support reactions → Analysis Results · Combination.
+  6. Interaction per combination (`buildInterTab`, after "Component ratios"): P_c → Compression · Compressive Strength (or Axial Tension); M_rx/M_cx → Mₓ · Combination; M_cy → Mᵧ · Minor-Axis Flexural Strength. With Eq. H3-6, also V_r/V_c → Vₓ and T_r/T_c → Torsion.
+  7. Torsion (open section) per combination, H3.3(c) block (`buildTorsTab`): F_cr,F (M_n) → Mₓ · Combination; F_cr,E (P_n) → Compression · Compressive Strength.
+- **Batch report:** the same tab builders run there. `#printReport:not(.sbd-rpt) .wkLink{display:none}` keeps those lines out of it.
+- **Check case** (default project, Summary): "Flexure Mₓ → Mₓ — Major Flexure · Combination 1.2DL + 1.6LL + 0.5SL" selects the Mₓ tab, opens card 5 of the tab and scrolls it under the tab bar. In the PDF the line reads "Flexure Mₓ: see §5.5 · Shear Vₓ: see §7.3 · Interaction: see §12.5 · Deflection: see §13.3".
+
+### Verification (whole PR)
+- `node tests/check-syntax.mjs "Steel Beam Design - AISC 15th.html"`: all scripts pass. There are no Steel Beam tests in `tests/`.
+- `node tests/compare.mjs --tool page --file "Steel Beam Design - AISC 15th.html"`: page.storage is the same. page.text differs only by the added Summary "Worked in" line. Both sides have the same 3 console errors, the KaTeX 0.16.11 requests that the kit does not hold.
+- Headless Chromium (Playwright), origin/main against the branch, with KaTeX 0.16.11 and plotly-basic 2.35.2 served locally (`npm pack`, outside the repo). Six projects:
+  - the default project;
+  - 2 × 20 ft continuous with L_b = 10 ft, manual P / M_uy / V_uy, a tension case and bearing lengths;
+  - open-section torsion (DG 9, H3.3(c) active) with compression;
+  - composite on;
+  - member mode (two cases, J10, self-weight, deflection);
+  - HSS8X8X1/2 with P, T and M_uy.
+
+  Results:
+  - `AN` (every computed value, functions dropped), the saved state and the localStorage keys are **identical** for all six.
+  - Every tab's text is identical apart from the TeX fixes above and the added "Worked in" lines.
+  - Report PDFs: every number of the main report is in the branch report (numeric-token count). The only "missing" tokens are the old per-tab card numbers 1–8 and "−0.0000" / "−0.1410", which were raw TeX and now print as math.
+  - 0 KaTeX errors (main: 3–5 per project), no broken or duplicate anchors (112 internal links in the default report), and no console errors.
+  - Batch report (two members): same page count; the token diff is the TeX fixes only.
+  - Ctrl+P (beforeprint without the button): main prints 1 blank page; the branch prints 42 pages with the diagrams.
+  - In-app links: a headless click test clicked every "Worked in" link of every tab in the six projects (161 clicks), with the target card collapsed first. Each click selected the tab, opened the card and put it under the tab bar, without scrolling the document.
+- **Other copies:** none. The report helpers are specific to this tool.
+
+### Open items (not changed; engineer to decide)
+- **Project No.:** the tool has no project-number field (the header has Project, Subject and Task), so "Project No." prints "—". Should an optional `S.proj.num` field (absent until typed) be added, or should Task print there?
+- **Interaction with composite action:** `C.inter` is formed before `applyCompositeToRegions`, so H1 uses the bare-steel flexure DCR. In the default composite project, Interaction is 0.116 while composite flexure is 0.054. This is conservative; please confirm it is intended.
+- **Composite live-load deflection is 0.000** in the default composite project (live load from the tributary generator), while Service 1.0LL gives 0.062 in. The generator's live load does not seem to be counted as post-composite load; please check.
+- **On-screen links of the Summary chips:** the HSS "Concentrated forces" N/A row carries `tab:'tabComp'`, and the member-mode Deflection row carries `tab:'tabSummary'`. Those chips open the Compression / Summary tab instead of Concentrated Forces / Serviceability. Not changed (outside the report); the report places their result lines correctly.
+- **`1728 = ft³/in³`** (member deflection variable list): the factor's unit is in³/ft³. The text is kept as it was; only the TeX rendering is fixed.
