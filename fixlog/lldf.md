@@ -1367,3 +1367,174 @@ This closes **LLDF-S10** (sweep entry above).
 - `node --check` on every plain `<script>` that holds the shared blocks, all four files.
 - Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
 - **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).
+
+## 2026-10-18 — PR: claude/lldf-d11-report (AUDIT.md D11, display only; PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14; scope decided 2026-10-18 (AUDIT.md D11: full report for every design-check tool).
+- **What existed:** the page is itself a calculation sheet (title block, sections 1.0–6.0), and Print / PDF printed it as it stands. Gaps against the format:
+  - no cover, references, table of contents or n.k numbering;
+  - section 4.0, section 4L and Figure 2 show **one girder only** (the selected one), so the printout worked one girder;
+  - no result lines;
+  - a fixed running header instead of the @page header and "Page X of Y" footer;
+  - with "Live recalc" off, the printout could show results that do not match the inputs on screen (stale print).
+- **Where (anchors; line numbers drift):**
+  - **New script block** before `/* Floating cross-app sync drawer`, anchor `/* ===== D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS (display only) =====` (≈ line 4576).
+    - It holds `LLDF_REFS`, `wk`, `window.lldfLinks`, `gotoStep` and its click handler, `staticClone`, `titleOf`, `replaceRef`, `pageCSS` / `applyPageCSS` (`window.lldfPageCSS`, `window.lldfApplyPageCSS`), `window.lldfBuildReport`, and the `beforeprint` / `afterprint` listeners.
+    - To re-apply by hand, copy the whole `<script>` block.
+  - **CSS** at the end of the main `<style>`:
+    - anchor `/* D11 (2026-10-18): derivation links on the sheet (CLAUDE.md §6) */` (links, flash);
+    - anchor `/* D11 calculation-sheet report` (report layout). In print, `body.lldf-rpt` hides `.sheet` and `.printhead` and shows `#lldfReport`.
+  - **HTML:** after the sheet's closing `</div>`: `<div id="lldfReport" class="crdoc"></div>`.
+  - **`run()`**, after `renderMembers(p,R);`:
+    ```js
+    if(typeof window.lldfLinks==="function") window.lldfLinks(p,R);   // D11: "Worked in" links (display only)
+    ```
+  - **MassDOT block, `buildDistSec()`:** one `<div class="wkLink">Worked in: …</div>` line between the `mdDistTable` wrapper and `<div id="mdDistAssume"`.
+- **Before:** Print / PDF ran `window.print()` on the sheet (`@page{size:letter;margin:0.6in}`). The `.printhead` fixed header read "project · Str. · LLDF — AASHTO LRFD 4.6.2.2 · By … · date".
+- **After (the printout):** Print / PDF (the button or the browser's Print) fires `beforeprint`, which builds `#lldfReport`. Only the report prints.
+  - **Cover:**
+    - tool title and project (the Project field, else "Untitled");
+    - the selected cross-section type;
+    - the sheet's code line: AASHTO LRFD 10th Ed. (2024) · MassDOT Bridge Manual Part I; LL Art. 4.6.2.2 · DL MassDOT §3.5.3;
+    - the design region (multi-span only);
+    - the title block: Project / Structure No. / Calculated by / Date / Checked by / Checked date;
+    - the suite project name and the geometry hand-off source line, when present.
+    - **No field was added.** The tool has no Checked-date field, so it reads "—". Its "Structure No." stands where the format has "Project No.". "Sheet" (`mSheet`) is not printed; the footer numbers the pages.
+  - **References** (`LLDF_REFS`, only what the tool cites):
+    - AASHTO LRFD 10th Ed. (2024): the Art. 4.6.2.2 tables and equations, Art. 4.6.2.3, Art. 4.6.3, Art. 3.6.1.1.1, C3.6.1.1.2, Art. 3.6.1.3.1, Table 3.5.1-1 and Eq. 5.4.2.4-1;
+    - MassDOT LRFD Bridge Manual Part I §3.5.3 and §3.8, and Part II Dwg 10.1.5, marked "edition: verify" (the tool states none).
+  - **Numbered table of contents** with links (sections and subsections).
+  - **Sections:**
+    1. Design Parameters (Given): the 1.0 card, with every input printed as its value. Its groups are 1.1 Cross-section type … 1.9 Derived quantities. Hidden rows are left out.
+    2. Distribution Factors — Summary:
+       - 2.1: the 2.0 table;
+       - 2.2: governing results. For interior and exterior girders, moment and shear: the largest design factor and the girder where it governs.
+    3. Bridge Geometry: Figure 1 of the sheet.
+    4. Dead & Pedestrian Load Distribution:
+       - the 3.6 card: method, loads table (as values), bar chart and per-beam table;
+       - the 4D worked steps, one subsection each.
+    5. Reference Images: only when the project has any.
+    6. … One section **per girder**, "Live Load Distribution — Girder Bj (exterior/interior)". Each section holds:
+       - every worked step of section 4.0 as a subsection n.k, made by the sheet's own `memberSteps` → `renderSteps`;
+       - "Lever rule — truck configurations" for types a/e/k, b/c and d: the sheet's `drawLever` figure in the governing configuration and the `renderLever` table;
+       - **Results — Girder Bj:** moment g_M (1 lane, 2 or more lanes, which governs, method), shear g_V (the same) and fatigue g_M,fat · g_V,fat, each with "see §n.k".
+    7. Range of Applicability: the 5.0 table and one result line per row. PASS / FAIL follows the table's OK / OUT OF RANGE exactly. Only when the sheet shows the table (types a/e/k and f/g).
+    8. Notes & Assumptions: the 6.0 notes and the sheet's disclaimer.
+    - The numbers close up when a section is absent.
+  - **Print:** `@page` letter with margin boxes.
+    - They are written into `<style id="lldf-page">` on `beforeprint` and cleared on `afterprint`.
+    - Top: "Structure No / Description", "Computed By / Checked By", "Date / Date" (the second date reads "—").
+    - Bottom: "<project> (LL & DL Distribution)" and "Page X of Y".
+    - If building the report fails, the sheet prints as before.
+  - **In-text references renumbered:**
+    - "Section 4L (below)" → "§n.k" of that girder's lever subsection;
+    - "§3.6" (4D.6) → "§4.1";
+    - "§4D Dead Load Distribution below" → "§4.3–4.9 below";
+    - box exterior "select an interior girder to see their full derivation" → "their full derivation is in girder B2: see §6.2";
+    - captions "Figure 1" / "Figure 2" → "Figure n.k";
+    - lever note "as input below Figure 2" → "as entered in the app";
+    - reference images "Figure 3.9-i" → "Figure 5-i".
+- **Fixed along the way (display only):**
+  - **One girder printed.** The printout now works every girder. The sheet still shows one at a time.
+  - **Stale print.** `lldfBuildReport()` first calls `run()` (what Recalculate does), so the printout always matches the inputs.
+    - With Live recalc on (the default) this changes nothing.
+    - With it off and edits not yet recalculated, the sheet is recalculated before printing. As with Recalculate, a locked DF / DL channel then republishes if the values changed.
+  - Each girder's lever figure is drawn in its governing configuration. Afterwards, `truckShown` (the Figure 2 truck picker; not saved) and the sheet are restored to the selected girder.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+  - The report runs the sheet's own functions on the same inputs.
+  - The "Results" lines are the members' own `gM`, `gV`, `fatM`, `fatV` and `r.*` values (`gM = max(1 lane, 2+ lanes)` in every family).
+- **Saved data:** none. No key or format changed, and no key was added. The page CSS is a `<style>` element, not storage.
+- **Check case (default project: Type IV on 5 beams @ 9.75 ft, L = 120 ft):**
+  - **37 letter pages:** cover, references and contents (3 pages), then 11 sections:
+    1. Design Parameters (1.1–1.9);
+    2. Summary (2.1–2.2);
+    3. Geometry;
+    4. Dead & pedestrian loads (4.1–4.9);
+    5. to 9. girders B1–B5 (B1 and B5: 18 subsections; B2–B4: 13);
+    10. Range of applicability;
+    11. Notes.
+  - **§2.2:**
+    - Interior girders: moment g_M = 0.741 (B2; empirical), see §6.9; shear g_V = 0.935, see §6.9.
+    - Exterior girders: moment g_M = 0.892 (B1; lever (1 ln)), see §5.14; shear 0.892, see §5.14.
+  - **§5 results:**
+    - "B1 (exterior) — moment: g_M = 0.892 (1 lane 0.892, 2 or more lanes 0.851: 1 lane governs; lever (1 ln)) see §5.14";
+    - fatigue 0.744 · 0.744, see §5.13.
+    - These are the same values as the 2.0 table and the DF hand-off (`governing.exterior.gM = 0.8923`).
+  - **§10:** S = 10 ft (3.5–16 ft), L = 120 ft, t_s = 8 in, N_b = 5 and K_g = 1,644,138 in⁴: all PASS.
+
+### D11 links: quoted values link to where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **Links added on the sheet** (small "Worked in:" lines, class `wkLink` / `a.wkA`):
+  1. **2.0 summary table** (a `<caption>` under the table, rebuilt by `lldfLinks`): "Worked in: B1 · B2 · … → 4.0 Detailed Calculations · governing distribution factors of that girder".
+  2. **1.0 derived block:** "Worked in: K_g · d_e left (B1) · d_e right (Bn) → 4.0 Detailed Calculations".
+     - K_g only for types a/e/k.
+     - d_e for types a/e/k and f/g, where 4.0 has a d_e step.
+  3. **3.6 per-beam dead-load table:** "Worked in: per-beam DC1 / DC2 / DW / PL and totals (4D.7) · deck slab DC1 (4D.2) · each load (4D.6) → 4D Dead Load Distribution — Detailed Calculations".
+- **Clicking a link:**
+  - It selects that girder exactly as a click on its summary row does (`selectedMember`, `pushDesignBeam()`, `run()`). The suite design beam follows, as before.
+  - It then scrolls the worked step into view and flashes it.
+  - The K_g link keeps the current girder. The dead-load links do not change the girder.
+  - Inputs and results are untouched.
+- **In the report,** each link reads "see §n.k" of the subsection that holds the step:
+  - "B1: see §5.14 · B2: see §6.9 …";
+  - "K_g: see §5.3 · d_e left (B1): see §5.2 · d_e right (B5): see §9.2";
+  - "per-beam …: see §4.9 · deck slab DC1: see §4.4 · each load: see §4.8".
+  - A target missing from the printout would read "(not in this printout)". None of the 7 test cases has one.
+- **Check case (default project):**
+  - Clicking "B4" under the summary table selects girder B4: the member list, the header chip and the 4.0 heading ("Girder B4 · interior") all follow. "4.9 Governing distribution factors — girder B4" is in view and flashed.
+  - "d_e right (B5)" selects B5 and opens 4.2.
+  - "K_g" stays on B1 and opens 4.3.
+  - The dead-load link opens 4D.7.
+
+### Verification (whole PR)
+- **Syntax:** `node tests/check-syntax.mjs lldf.html`: all scripts pass. There are no lldf-specific tests in `tests/`.
+- **Page smoke test:** `node tests/compare.mjs --tool page --file lldf.html`.
+  - `page.storage` is the same.
+  - `page.text` differs only by the three new "Worked in" lines.
+  - 0 console errors on both sides.
+- **No computed result changed.** Headless Chromium (tests/lib.mjs `openPage`), origin/main vs this branch.
+  - **7 cases,** set through `applyState`:
+    1. default;
+    2. steel (a), N_b = 3, skew 40°, title block filled;
+    3. 3-span spread box (b/c) at support 1–2, θ = 20°, θ_V = 30°;
+    4. adjacent box (f), 8 beams, sidewalk + railing, wearing surface, skew 15°;
+    5. type k with S = 17 ft (lever substitution);
+    6. CIP slab;
+    7. multicell (d), skew 25°.
+  - **Compared exactly:**
+    - `readInputs()`, the whole `computeBridge()` result, `serialize(true)` and `MD.distribute()`;
+    - every `bridgeSuite.v1.*` key after clicking "Send DFs" and "Send DL": the DF hand-off `bridgeSuite.v1.lldf`, `dlLoads`, `beamRoster`, `designBeam` and projects.
+    - Time stamps and the location-dependent `appPaths` record were normalized.
+  - **Result:** 0 differences in all 7 cases.
+  - On the branch, building the report changed none of these values and left the sheet's text identical (restore check). 0 console errors.
+- **Report PDF** (`page.emulateMedia({media:'print'})`, `page.pdf({preferCSSPageSize:true, printBackground:true})`):
+  - Page counts: default 37; steel N_b = 3 29; 3-span b/c 36; box (f) 41; S = 17 ft 33; slab 23; multicell 32.
+  - In all 7 cases:
+    - every internal link resolves;
+    - 0 KaTeX errors and no raw-TeX fallback;
+    - no empty subsection;
+    - no "(not in this printout)".
+  - Pages inspected:
+    - cover; references and contents; the 1.5–1.9 inputs;
+    - summary with results; geometry; 4.1–4.2 and 4.9;
+    - girder B1 steps, lever figure and results;
+    - box exterior with the interior link; steel skew steps;
+    - range-of-applicability results; notes.
+- **Print events:** `beforeprint` builds the report and sets the page CSS; `afterprint` clears it (headless event test).
+- **Narrow screens:** at 390 px the page width is the same as on main (the toolbar already overflows there).
+- **Other copies:** none. The shared `bridgeSuite.v1.*` blocks are untouched.
+
+### Open items (not changed; engineer to decide)
+- **Behaviour change to confirm:**
+  - Print / PDF now prints the calculation report, with every girder, instead of the screen sheet.
+  - It recalculates first (see "Stale print").
+- **Design region:** a multi-span calculation prints the selected region only. The report says so in §2 and on the cover. The DF hand-off envelopes all regions. Print one report per region, or all regions in one report?
+- **Title block:** there is no Checked-date field and no Project No. field (Structure No. is used). Add optional tool-prefixed fields?
+- **§6 gaps (quoted, worked nowhere):**
+  - S_avg, deck width, clear roadway and N_L: the 1.9 derived block states the rule, not a substitution.
+  - Several steps show only symbol → result, without substituted values: e.g. the beam-slab skew shear factor; the spread-box and multicell 2+ lane and shear equations; the box 2+ lane shear e; the slab E_2+.
+  - Add the substitutions?
+- **Display (raised only):** the 5.0 range table rounds the value to a whole number ("S = 10 ft" for S = 9.75 ft), while PASS / FAIL uses the unrounded value. A spacing of 16.4 ft would print "S = 16 ft … OUT OF RANGE / FAIL". Show 2 decimals?
+- **Calculation (raised only, not changed):**
+  - Type (d) exterior fatigue moment uses W_e/14 directly, without ÷ 1.20 (the tool's own note says "verify").
+  - The rigid cross-section method is always included for a/e/k exterior girders. The step note says it is required only with cross-frames or diaphragms. This is conservative.
