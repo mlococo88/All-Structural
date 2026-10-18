@@ -289,37 +289,50 @@ figcaption{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:3px;t
   .noprint{display:none !important;}
   a.jump{color:#000;border:none;}
 }
-/* The running header and footer are position:fixed, which repeats them on every
-   sheet but reserves no space in the flow — and both carry background:#fff, so
-   they do not merely collide with body text, they paint over it. On the sealed
-   package this deleted the "Allowable stress f_a = 640 psi" input row outright
-   between two pages, and clipped the second line of a rating-vehicle row.
-   The page margins now carry the bands: 1.25in top and 1.15in bottom against
-   band heights of about 0.30in, leaving roughly 0.35in of clear air on each
-   side of the text column. Change the two offsets below together with these
-   margins — they are one measurement expressed in two places. */
-@page{margin:1.25in 0.55in 1.15in;}
-/* Chrome does not support @page @bottom-right{content:counter(page)}, so the
-   running header and footer are fixed-position elements. A fixed element repeats
-   on every printed sheet, which is what a calculation package needs: project,
-   task and sheet identification on each page rather than only on the first. */
-#runHead,#runFoot{display:none;}
-@media print{
-  #runHead,#runFoot{display:block;position:fixed;left:0;right:0;
-    font-size:8pt;color:#111;background:#fff;}
-  /* Offsets are measured from the text column edge into the @page margin above.
-     0.60in of the 1.25in top margin puts the band clear of the first line;
-     0.58in of the 1.15in bottom margin does the same below. */
-  #runHead{top:-0.60in;border-bottom:0.75pt solid #000;padding-bottom:2px;}
-  #runFoot{bottom:-0.58in;border-top:0.75pt solid #000;padding-top:2px;}
-  #runHead .l,#runFoot .l{float:left;} #runHead .r,#runFoot .r{float:right;}
-  #runFoot .c{text-align:center;}
-}
+/* D11 (2026-10-18): the running header and footer are now @page margin boxes
+   (Project No / Description, Computed By / Checked By, Date / Date at the top;
+   "<project> (Stone Masonry Arch Load Rating)" and "Page X of Y" at the bottom),
+   written by archPageCSS() into <style id="arch-page"> inside @media print, so
+   they apply only while printing and reserve their own space. The old
+   position:fixed bands (#runHead / #runFoot) are no longer used. */
+#runHead,#runFoot{display:none !important;}
 #rptHead{border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px;}
 #rptHead .t{font-size:1.35rem;font-weight:700;}
 #rptHead table{width:100%;border-collapse:collapse;margin-top:5px;font-size:.95rem;}
 #rptHead td{padding:1px 6px;border:1px solid #999;}
 #rptFoot{border-top:1px solid #000;margin-top:14px;padding-top:5px;font-size:.9rem;font-style:italic;color:#333;}
+/* D11 (2026-10-18) links (CLAUDE.md §6): "Worked in: value → Tab · Panel" on screen; "value: see §n.k" in the report */
+.wkLink{font-size:.88rem;color:var(--soft);margin:3px 0 8px;}
+a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue);cursor:pointer;}
+.pnl.wkFlash,.sub.wkFlash{animation:wkflash 1.4s ease-out;}
+@keyframes wkflash{from{box-shadow:0 0 0 3px #9dbbe0;}to{box-shadow:0 0 0 3px transparent;}}
+/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
+#rptHost .cr-cover{min-height:8.2in;display:flex;flex-direction:column;justify-content:center;break-after:page;page-break-after:always;}
+#rptHost .cr-cover-t{text-align:center;margin-bottom:28pt;}
+#rptHost .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;}
+#rptHost .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
+#rptHost .cr-cover p.cr-cover-p{font-weight:400;font-size:11pt;}
+#rptHost table.cr-tb{width:100%;border-collapse:collapse;font-size:10pt;table-layout:fixed;}
+#rptHost table.cr-tb td{border:1px solid #000;padding:3pt 6pt;vertical-align:top;white-space:normal;}
+#rptHost .cr-front{break-after:page;page-break-after:always;}
+#rptHost section.cr-sec+section.cr-sec{break-before:page;page-break-before:always;}
+#rptHost h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;
+  border:0;margin:0 0 8pt;padding:0;}
+#rptHost .cr-front h2.cr-h1{margin-top:10pt;}
+#rptHost table.cr-refs{border-collapse:collapse;margin:0 0 14pt;font-size:10pt;}
+#rptHost table.cr-refs td{padding:1pt 14pt 2pt 0;vertical-align:top;}
+#rptHost table.cr-refs td:first-child{white-space:nowrap;font-weight:700;}
+#rptHost .cr-toc,#rptHost .cr-toc ol{list-style:none;margin:0;padding:0;}
+#rptHost .cr-toc>li{margin:3pt 0;} #rptHost .cr-toc ol{padding-left:18pt;font-size:10pt;}
+#rptHost .cr-small{font-size:9.5pt;margin-top:14pt;}
+#rptHost a{color:#000;text-decoration:none;}
+#rptHost a.wkA{color:#000;border:none;font-style:italic;}
+#rptHost .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:14pt 0 2pt;}
+#rptHost .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
+#rptHost .cr-line{display:grid;grid-template-columns:2.1in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;
+  border-top:0.6pt solid #000;break-inside:avoid;page-break-inside:avoid;}
+#rptHost .cr-r{text-align:right;} #rptHost .cr-st-fail{text-decoration:underline;}
+#rptHost .cr-refi{font-size:9pt;font-style:italic;}
 /* "All tools" link + shared project info buttons */
 .bx-all-tools{font-size:.85rem;color:var(--soft);text-decoration:none;}
 .bx-all-tools:hover{text-decoration:underline;}
@@ -4549,7 +4562,7 @@ function pane(p,M,selEl,selCase,selSec){
       note:"Elements are piecewise-prismatic; a tapering ring uses the mean depth over each element."})+
     step({label:"Axial and flexural rigidity",sym:"EA,\\ EI",
       sub:`E=${num(p.E,0)}\\ \\text{ksi}=${num(E,0)}\\ \\text{ksf}`,
-      res:`EA=${num(E*A,0)}\\ \\text{kip},\\ EI=${num(E*I,0)}\\ \\text{kip·ft²}`})+
+      res:`EA=${num(E*A,0)}\\ \\text{kip},\\ EI=${num(E*I,0)}\\ \\text{kip}\\cdot\\text{ft²}`})+
     eqLine("Local stiffness matrix, plane frame element",
       "\\mathbf{k}_{loc}=\\begin{bmatrix}"+
       "\\frac{EA}{L}&0&0&-\\frac{EA}{L}&0&0\\\\"+
@@ -5778,7 +5791,9 @@ function pane(p,M,govVeh,govRes){
         {k:"d",h:"Δ RF vs prescribed (%)",dp:1}],srows,{govIdx:srows.findIndex(r=>Math.abs(r.K-0.25)<1e-9)})+
       `<div class="note">Rated for ${esc(govVeh.name)}, the governing vehicle. K = 0 removes the lateral
        pressure entirely and is shown only to bound the effect — it is not a permissible assumption under
-       §7.2.7.5B. The prescribed value is shaded.</div>`,"§7.2.7.5B",true);
+       §7.2.7.5B. The prescribed value is shaded.</div>`+
+      ((govRes&&isFinite(govRes.rf))?archWorkedIn([{tab:"rate",card:"veh_"+govVeh.id,
+        txt:"reported RF "+nfx(govRes.rf,3),lab:"Rating · "+govVeh.name}]):""),"§7.2.7.5B",true);
   }
   return h;
 }
@@ -6550,6 +6565,7 @@ function pane(p,M,list,results){
     const r=results.find(q=>q.id===v.id);
     const tot=v.axles.reduce((s,a)=>s+a.P,0);
     h+=UI.pnl("vh_"+v.id,c(),v.name+(r?`  —  RF ${nfx(r.rf,3)}`:""),
+      (r?archWorkedIn([{tab:"rate",card:"veh_"+v.id,txt:"RF "+nfx(r.rf,3),lab:"Rating · "+v.name}]):"")+
       `<figure><svg id="figVeh_${v.id}" viewBox="0 0 1000 170"></svg>
         <figcaption>${esc(v.name)} — ${v.axles.length} axles, ${nfx(v.axles[v.axles.length-1].x,2)} ft
         overall, ${nfx(tot,1)} kip total${v.trail>0?`, with a ${nfx(v.trail,1)} k/ft uniform trailing load
@@ -6734,6 +6750,19 @@ return {render,build};
 
 </script>
 <script>
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that panel.
+   On screen: "Worked in: <value> → <Tab> · <Panel>"; a click opens the tab, expands the panel, scrolls to it
+   (or to the heading named by `sub` inside it) and flashes it (handler: archGoto, application layer).
+   In the calculation report buildReport rewrites the same link to "<value>: see §n.k".
+   items: [{tab, card, sub?, txt, lab}] — tab = output tab key (TABS), card = panel id, lab = "Tab · Panel". ---- */
+function archWorkedIn(items){
+  const q=v=>String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const a=(items||[]).filter(o=>o&&o.tab&&o.card).map(o=>
+    `<a class="wkA" href="#" data-wtab="${q(o.tab)}" data-wcard="${q(o.card)}"`+
+    (o.sub?` data-wsub="${q(o.sub)}"`:"")+` data-txt="${q(o.txt||"")}">`+
+    `${o.txt?q(o.txt)+" → ":""}${q(o.lab||"")}</a>`);
+  return a.length?`<div class="wkLink">Worked in: ${a.join(" &middot; ")}</div>`:"";
+}
 /* ==================================================================
    CALCULATION CONTENT LAYER
    Every derived quantity rendered symbolic = substituted = result
@@ -8296,7 +8325,9 @@ function vehicleSection(p,M,veh,res,vopt){
       here. It acts inward on both haunches, so on a symmetric arch it delivers no net horizontal force — but
       it is not a null load: it squeezes the ring, raising thrust, and it generates moment at the haunches and
       springings that frequently opposes the gravity moment. `:``)+
-      `Share columns are blank where the total passes through zero.</div>`;
+      `Share columns are blank where the total passes through zero.</div>`+
+      archWorkedIn([{tab:"dl",card:"o_dl",sub:"Dead load section forces",
+        txt:"P_DL, M_DL at "+secTag(M,i),lab:"Dead Load · Dead load section forces"}]);
   }
 
   if(!local)
@@ -9027,7 +9058,9 @@ function section(p,M,veh,pos,dir,govSec){
       {k:"ilMin",h:"max −M ordinate",dp:4},{k:"ilMinX",h:"load at x (ft)",dp:2}],rs,opt)+
     `<div class="note">Peak influence ordinates for moment at each section, in ft — a moment per unit force,
      and the load position producing each. This condenses the full influence coefficient matrix of §7.2.7.7B
-     into the two numbers that tell you where load has to sit to hurt a given section.</div>`,
+     into the two numbers that tell you where load has to sit to hurt a given section.</div>`+
+    archWorkedIn([{tab:"il",card:"il_tabM",txt:"moment influence ordinates",
+      lab:"Influence Lines · Influence coefficient table — moment"}]),
     "§7.2.7.7B",true);
 
   h+=UI.pnl("nd_res",c(),"Combined results and stress check",
@@ -10471,7 +10504,8 @@ function dashboard(p){
       (p.loadMode==="rail"
         ? " Railroad loading: Cooper ratings are reported as an E-number, RF × 80; the tonnage figure for "+
           "Cooper derives from that same 80 kip reference and is not a physical vehicle weight."
-        : ""))+h;
+        : "")+
+      archWorkedIn([{tab:"rate",card:"veh_"+worst.id,txt:"RF "+nfx(worst.rf,3),lab:"Rating · "+v.name}]))+h;
   }
   return h;
 }
@@ -10656,7 +10690,9 @@ function buildOutput(p){
     msg("inf","Worked at the controlling case",
       gv?`The distribution below is worked for <b>${esc(veh0.name)}</b> — the governing vehicle — at its `+
          `governing position, lead axle x = ${nfx(gv.pos,2)} ft`+
-         `${gv.dir<0?", traveling right to left":""}.`
+         `${gv.dir<0?", traveling right to left":""}.`+
+         archWorkedIn([{tab:"rate",card:"veh_"+gv.id,txt:"governing position x = "+nfx(gv.pos,2)+" ft",
+           lab:"Rating · "+ARCH.ALL_VEHICLES.find(v=>v.id===gv.id).name}])
         :"No vehicle selected; a default configuration is shown.")+
     CALC.liveLoadSection(p,M,veh0,pos0,dir0)+
     `<h4>Interactive load position</h4>`+
@@ -10786,6 +10822,8 @@ function buildOutput(p){
         "The influence coefficient tables required by §7.2.7.7B, and the structural analysis that produces "+
         "them, are set out in full on the <b>Influence Lines</b> tab. The chart below is the row of that table "+
         "for the section of interest; the terms beneath it are that row multiplied by the nodal loads above.")+
+      archWorkedIn([{tab:"il",card:"il_tabM",txt:"influence coefficients",
+        lab:"Influence Lines · Influence coefficient table — moment"}])+
       `<figure><div id="figIL" class="plot"></div>
         <figcaption>Influence lines for moment and thrust at ${esc(CALC.secTag(M,focusNode))}. Moment on the
         left axis in feet, thrust on the right, dimensionless; both share one zero gridline.</figcaption>
@@ -11343,6 +11381,7 @@ const TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Loa
             ["veh","Vehicles"],["lat","Earth Pressure"],["diag","Diagrams"],["il","Influence Lines"],["rate","Rating"],["rsum","Rating Summary"],["nodes","Nodal Results"],
             ["ver","Verification"],["man","Manual"]];
 function render(){
+  renderSeq++;
   let p;
   try{p=readP();}catch(e){
     archInTabMarks(e.message);
@@ -11463,6 +11502,31 @@ function render(){
   postRender(p);
   if(window.katex&&window.renderMathInElement)try{}catch(e){}
 }
+/* D11 links: open the tab, expand the panel, scroll to it (or to the named heading inside it) and flash it.
+   The report copies (#rptHost) are rewritten to "see §n.k" and are not handled here. */
+function archGoto(tab,card,sub){
+  if(!TABS.some(t=>t[0]===tab))return;
+  activeTab=tab; render(); autosave();
+  setTimeout(()=>{
+    const t=$(card); if(!t||t.closest("#rptHost"))return;
+    UI.setClp(card,false); t.classList.remove("clp");
+    const tw=t.querySelector(".hd .tw"); if(tw)tw.textContent="▾";
+    let at=t;
+    if(sub){const hh=[...t.querySelectorAll("h4,h5")].find(x=>x.textContent.trim()===sub); if(hh)at=hh;}
+    /* scroll the output panel (or the window on narrow screens) so the target clears the sticky tab bar */
+    const sc=$("outPanel"), bar=$("outTop"), bh=bar?bar.offsetHeight:0;
+    if(sc&&sc.scrollHeight>sc.clientHeight+2&&getComputedStyle(sc).overflowY!=="visible")
+      sc.scrollTo({top:sc.scrollTop+at.getBoundingClientRect().top-sc.getBoundingClientRect().top-bh-6,behavior:"smooth"});
+    else window.scrollTo({top:window.scrollY+at.getBoundingClientRect().top-bh-6,behavior:"smooth"});
+    t.classList.remove("wkFlash"); void t.offsetWidth; t.classList.add("wkFlash");
+    setTimeout(()=>t.classList.remove("wkFlash"),1500);
+  },60);
+}
+document.addEventListener("click",e=>{
+  const a=e.target.closest&&e.target.closest("a.wkA"); if(!a)return;
+  e.preventDefault(); if(a.closest("#rptHost"))return;
+  archGoto(a.getAttribute("data-wtab"),a.getAttribute("data-wcard"),a.getAttribute("data-wsub"));
+});
 function postRender(p){
   if(!M)return;
   const veh=$("animVeh")?ARCH.ALL_VEHICLES.find(v=>v.id===$("animVeh").value):null;
@@ -12487,10 +12551,27 @@ const RPT_SECTIONS=[
   ["r_man","User manual / design basis document"]
 ];
 let rptSel=null;
-function reportModal(){
+function rptSelDefaults(){
   const sel=rptSel||{};
   RPT_SECTIONS.forEach(s=>{if(sel[s[0]]==null)sel[s[0]]=true;});
   results.forEach(r=>{if(sel["rv_"+r.id]==null)sel["rv_"+r.id]=true;});
+  return sel;
+}
+/* D11 (2026-10-18): the report records which render it was built from. Ctrl+P (or the browser's Print) used
+   to print an empty #rptHost (blank sheet) before the first build, and a stale report after any later change;
+   beforeprint now rebuilds it from the current state with the last report selection. */
+let renderSeq=0, rptBuiltSeq=-1;
+function archBuildReport(sel){
+  window.__buildingReport=true;
+  try{buildReport(sel);rptBuiltSeq=renderSeq;}finally{window.__buildingReport=false;}
+}
+window.addEventListener("beforeprint",()=>{
+  if(!M)return;
+  if(rptBuiltSeq===renderSeq&&$("rptHost").innerHTML)return;
+  try{const sel=rptSelDefaults();rptSel=sel;archBuildReport(sel);}catch(e){}
+});
+function reportModal(){
+  const sel=rptSelDefaults();
   let h=`<h3>Report contents</h3>
     <p style="font-size:.96rem">Select what the printed report contains. The title block and the disclaimer
     footer always print. Deselected sections are removed and the remainder renumber sequentially.</p>`;
@@ -12510,8 +12591,7 @@ function reportModal(){
        because it costs a position sweep per vehicle. A report must never be
        lazy, so the flag forces it to build whether or not the operator ever
        visited the tab. */
-    window.__buildingReport=true;
-    try{buildReport(sel);}finally{window.__buildingReport=false;}
+    archBuildReport(sel);
     setTimeout(()=>window.print(),260);};
 }
 
@@ -12585,19 +12665,158 @@ function drawReportFigures(rh,p){
     ],{height:250,xlabel:"reference axle position (ft)",ylabel:"rating factor"});
   });
 }
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format — cover with the
+   title block, references, numbered table of contents (links), numbered sections n and subsections n.k (each
+   keeps the worked equations of its tab: symbolic → substituted → result), a rating-factor result line per
+   vehicle, "see §n.k" links, and the print header / "Page X of Y" footer (@page margin boxes, archPageCSS).
+   The worked content is built by the same functions as the tabs; nothing is recomputed here. */
+const ARCH_REFS=[
+  ["MassDOT BM Pt. I","MassDOT LRFD Bridge Manual, Part I, Ch. 7 Load Rating: §7.2.7 Special Instructions for Load Ratings of "+
+    "Stone Masonry Arches (§7.2.7.2B–§7.2.7.12, Fig. 7.2.7-1); §7.2.4.1B rating vehicles; §7.2.4.6B impact. Edition: verify (not stated in the tool)."],
+  ["AASHTO MBE","Manual for Bridge Evaluation: Art. 6A.9.1 (masonry arches, Allowable Stress, Inventory level only); "+
+    "Art. 6B.5.2.6 (allowable stress in masonry); Art. 6B.7 (posting). Edition: verify."],
+  ["AASHTO Std. Spec.","Standard Specifications for Highway Bridges: Art. 6.4, 6.4.1, 6.4.2 (wheel loads through fill); "+
+    "Art. 3.8.2.3 (impact by depth of fill); Art. 3.24.3, 3.24.3.2, 3.24.10 and 3.30 (shallow-fill distribution width, "+
+    "tire contact); Art. 3.6.3 and 3.12.1 (lanes, reduction in load intensity, side-by-side trucks). Edition: verify "+
+    "(the fix log works to the 17th Ed., 2002)."],
+  ["AASHTO LRFD","Art. 3.6.1.2.6, cited only for the optional \"tire patch + 1.75H\" spread basis. Edition: verify."],
+  ["AREMA","Manual for Railway Engineering, Ch. 8 (Art. 2.2.3c; Cooper E-80, distribution through ballast and fill, "+
+    "impact below the base of rail), railroad loading only. Edition: verify."],
+  ["Literature","Boothby, T. E., Load Rating of Masonry Arch Bridges, J. Bridge Eng. (elastic frame, zero tension); "+
+    "Kåsa, I., A Circle Fitting Procedure and Its Error Analysis, IEEE Trans. Instrum. Meas., 1976 (measured geometry)."]];
+function archPageCSS(){
+  const v=id=>{const e=$(id);return e&&e.value?String(e.value).trim():"";};
+  const q=x=>String(x==null||x===""?"—":x).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
+  const prj=v("tbProject"), desc=v("tbSubject")||prj;
+  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const foot='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
+  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.8in 0.6in;'+
+    ' @top-left { content: "Project No: —\\A Description: '+q(desc.slice(0,38))+'"; '+box+' text-align: left; }'+
+    ' @top-center { content: "Computed By: '+q(v("tbBy"))+'\\A Checked By: '+q(v("tbChk"))+'"; '+box+' text-align: left; }'+
+    ' @top-right { content: "Date: '+q(v("tbDate"))+'\\A Date: '+q(v("tbChkDate"))+'"; '+box+' text-align: right; }'+
+    ' @bottom-left { content: "'+q(prj||"Untitled")+' (Stone Masonry Arch Load Rating)\\A Stone Arch LR '+q(BUILD_ID)+
+      ' · Inventory level · Allowable Stress · MBE 6A.9.1"; '+foot+' text-align: left; }'+
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' text-align: right; } } }';
+}
+function archApplyPageCSS(){
+  let st=document.getElementById("arch-page");
+  if(!st){st=document.createElement("style");st.id="arch-page";document.head.appendChild(st);}
+  st.textContent=archPageCSS();
+}
+/* One result line per rating vehicle: the rating factor as the dashboard computes it, PASS when RF ≥ 1.0. */
+function archResultBlock(title,map){
+  if(!results.length)return "";
+  return `<div class="cr-resh">Results — ${esc(title)}</div><div class="cr-results">`+results.map(r=>{
+    const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id), ok=r.rf>=1.0, hit=map["veh_"+r.id];
+    return `<div class="cr-line"><div>${esc(v.name)} rating factor:</div>`+
+      `<div>RF = <b>${nfx(r.rf,3)}</b> &rarr; ${nfx(r.tons,1)} tons${v.eRef?`, E${(r.rf*v.eRef).toFixed(0)}`:""} `+
+      `<span class="cr-refi">(MassDOT BM Pt. I §7.2.7.12; MBE 6A.9.1; governs at ${esc(CALC.secTag(M,r.sec))}; `+
+      (hit?`<a href="#${hit.id}">§${hit.num}</a>`:"worked section not in this printout")+`)</span></div>`+
+      `<div class="cr-r${ok?"":" cr-st-fail"}"><b>${ok?"PASS":"FAIL"}</b></div></div>`;
+  }).join("")+`</div>`;
+}
+function archCalcSheet(rh){
+  const doc=rh.querySelector(".rpt"); if(!doc)return;
+  const foot=doc.querySelector("#rptFoot");
+  /* wrap each h2 and what follows it in a numbered section */
+  let cur=null; const secs=[];
+  [...doc.childNodes].forEach(k=>{
+    if(k===foot)return;
+    if(k.nodeType===1&&k.tagName==="H2"){cur=document.createElement("section");cur.className="cr-sec";doc.insertBefore(cur,k);secs.push(cur);}
+    if(cur)cur.appendChild(k);
+  });
+  if(foot)doc.appendChild(foot);
+  const map={}, toc=[];
+  const before=(a,b)=>(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)?-1:1;
+  secs.forEach(s=>{
+    const h2=s.querySelector("h2"), m=/^(\d+)\.\s*([\s\S]*)$/.exec(h2.textContent.trim());
+    const num=m?m[1]:String(toc.length+1), title=m?m[2]:h2.textContent.trim(), cid=h2.getAttribute("data-cid")||"";
+    h2.className="cr-h1"; h2.id="crs-"+num;
+    if(cid)map[cid]={num,id:h2.id};
+    const subs=[];
+    if(cid!=="man"){   /* the User Manual keeps its own chapter numbering */
+      const free=x=>!x.parentElement.closest(".pnl,.sub");
+      let c=[...s.querySelectorAll(".pnl>.hd,.sub>.hd")].filter(hd=>free(hd.parentElement))
+        .concat([...s.querySelectorAll("h3")].filter(free)).sort(before);
+      if(!c.length)c=[...s.querySelectorAll("h4")].filter(free);
+      c.forEach((x,k)=>{
+        const nk=num+"."+(k+1), id="crs-"+num+"-"+(k+1);
+        let t;
+        if(x.classList.contains("hd")){
+          const sp=x.children[1]; t=(sp?sp.textContent:x.textContent).trim().replace(/^\d+\.\s*/,"");
+          if(sp)sp.textContent=nk+" "+t;
+          const box=x.parentElement; if(box.id)map[box.id]={num:nk,id};
+        }else{
+          t=x.textContent.trim().replace(/^\d+(\.\d+)*\.?\s+/,"").replace(/\s+/g," ");
+          x.textContent=nk+" "+t;
+          if(x.getAttribute("data-cid"))map[x.getAttribute("data-cid")]={num:nk,id};
+          if(cid)map[cid+"|"+t]={num:nk,id};
+        }
+        x.id=id; subs.push({n:nk,t,id});
+      });
+    }
+    toc.push({n:num,t:title,id:h2.id,subs});
+  });
+  /* result lines: at the end of the vehicle-by-vehicle rating, else of the dashboard */
+  const rs=secs.find(s=>s.querySelector("h2[data-cid='rate']"))||secs.find(s=>s.querySelector("h2[data-cid='o_dash']"));
+  if(rs)rs.insertAdjacentHTML("beforeend",archResultBlock("Rating factors",map));
+  /* D11 links: "Worked in: value → Tab · Panel" becomes "value: see §n.k" */
+  const TN=Object.fromEntries(TABS);
+  rh.querySelectorAll("a.wkA").forEach(a=>{
+    const card=a.getAttribute("data-wcard"), sub=a.getAttribute("data-wsub"), txt=a.getAttribute("data-txt");
+    const hit=(sub&&map[card+"|"+sub])||map[card], pre=txt?txt+": ":"";
+    if(hit){a.textContent=pre+"see §"+hit.num;a.setAttribute("href","#"+hit.id);}
+    else{const lab=a.textContent.split(" → ").pop();
+      a.textContent=pre+"see the "+(TN[a.getAttribute("data-wtab")]||"")+" tab ("+lab.replace(/^[^·]*·\s*/,"")+"; not in this printout)";
+      a.removeAttribute("href");}
+  });
+  rh.querySelectorAll(".wkLink").forEach(d=>{if(d.firstChild&&d.firstChild.nodeType===3)d.firstChild.textContent="";});
+  /* the dashboard's "<vehicle> rating factor" jumps point at that vehicle's worked section */
+  rh.querySelectorAll("a.jump[data-go]").forEach(a=>{
+    const hit=map[a.getAttribute("data-go")];
+    a.insertAdjacentHTML("afterend",hit?` <a class="wkA" href="#${hit.id}">(see §${hit.num})</a>`:
+      ` <span class="wkA">(worked section not in this printout)</span>`);
+  });
+  /* front matter: references and the numbered table of contents, after the cover */
+  const li=toc.map(s=>`<li><a href="#${s.id}">${esc(s.n)}. ${esc(s.t)}</a>`+
+    (s.subs.length?`<ol>${s.subs.map(q=>`<li><a href="#${q.id}">${esc(q.n)} ${esc(q.t)}</a></li>`).join("")}</ol>`:"")+`</li>`).join("");
+  const front=`<section class="cr-front"><h2 class="cr-h1">References:</h2><table class="cr-refs">`+
+    ARCH_REFS.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join("")+`</table>`+
+    `<h2 class="cr-h1">Table of contents:</h2><ol class="cr-toc">${li}</ol>`+
+    `<p class="cr-small">Section numbers n and subsection numbers n.k are document level; "see §n.k" refers to them.
+      Headings numbered inside a subsection (the steps of a worked calculation) are set in a lighter face, and the
+      User Manual keeps its own chapter numbering. Equations are shown symbolically, then with values substituted,
+      then with the result. The rating section ends with one result line per vehicle: PASS when RF ≥ 1.0.
+      Units: kip, ft, psi unless noted; forces and moments are per foot of barrel width.</p></section>`;
+  const cov=rh.querySelector(".cr-cover");
+  if(cov)cov.insertAdjacentHTML("afterend",front);else rh.insertAdjacentHTML("afterbegin",front);
+}
 function buildReport(sel){
   const p=readP();
   const t=id=>$(id)?esc($(id).value||"—"):"—";
   let n=0; const N=()=>++n;
-  let h=`<div class="rpt"><div id="rptHead">
-    <div class="t">Stone Masonry Arch Load Rating</div>
-    <div style="font-size:.97rem">Allowable Stress Method, Inventory Level &middot;
-      MassDOT Bridge Manual Part I §7.2.7 &middot; AASHTO MBE Art. 6A.9.1</div>
-    <table><tr><td><b>Project</b></td><td>${t("tbProject")}</td><td><b>Computed by</b></td><td>${t("tbBy")}</td><td><b>Date</b></td><td>${t("tbDate")}</td></tr>
-    <tr><td><b>Subject</b></td><td>${t("tbSubject")}</td><td><b>Checked by</b></td><td>${t("tbChk")}</td><td><b>Date</b></td><td>${t("tbChkDate")}</td></tr>
-    <tr><td><b>Task</b></td><td colspan="5">${t("tbTask")}</td></tr></table></div>`;
+  /* D11 (2026-10-18): cover page with the title block (it was the #rptHead box at the top of page 1).
+     The tool has no project-number field, so Project No. prints "—". The controlling line repeats the
+     dashboard's controlling result (same values). */
+  const gvC=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
+  const vC=gvC?ARCH.ALL_VEHICLES.find(x=>x.id===gvC.id):null;
+  let h=`<section class="cr-cover"><div class="cr-cover-t">
+      <h1>Stone Masonry Arch Load Rating</h1>
+      <p>${$("tbProject")&&$("tbProject").value?esc($("tbProject").value):"Untitled"}</p>
+      ${$("tbSubject")&&$("tbSubject").value?`<p class="cr-cover-p">${esc($("tbSubject").value)}</p>`:""}
+      <p class="cr-cover-p">Allowable Stress Method, Inventory Level &middot; MassDOT Bridge Manual Part I §7.2.7 &middot;
+        AASHTO MBE Art. 6A.9.1 &middot; ${p.loadMode==="rail"?"AREMA Ch. 8 (railroad loading)":"AASHTO Std. Spec. Art. 6.4, 3.8.2.3"}
+        &middot; by Mario Lococo</p>`+
+    (gvC?`<p class="cr-cover-p">Controlling result: <b>${esc(vC.name)}, RF = ${nfx(gvC.rf,3)}</b>
+        (${nfx(gvC.tons,1)} tons${vC.eRef?`, E${(gvC.rf*vC.eRef).toFixed(0)}`:""}) at section ${esc(CALC.secTag(M,gvC.sec))}
+        &mdash; <b>${gvC.rf>=1?"all selected vehicles rate at or above 1.0":"at least one vehicle rates below 1.0"}</b></p>`:"")+
+    `</div>
+    <table class="cr-tb"><tr><td><b>Project:</b> ${t("tbProject")}</td><td><b>Project No.:</b> —</td><td><b>Subject:</b> ${t("tbSubject")}</td></tr>
+    <tr><td><b>Computed by:</b> ${t("tbBy")}</td><td><b>Date:</b> ${t("tbDate")}</td><td><b>Task:</b> ${t("tbTask")}</td></tr>
+    <tr><td><b>Checked by:</b> ${t("tbChk")}</td><td><b>Checked date:</b> ${t("tbChkDate")}</td><td><b>Program:</b> Stone Arch LR ${BUILD_ID}</td></tr></table>
+    </section><div class="rpt">`;
 
-  const sec=(title,body)=>`<h2>${N()}. ${title}</h2>${body}`;
+  const sec=(title,body,cid)=>`<h2${cid?` data-cid="${cid}"`:""}>${N()}. ${title}</h2>${body}`;
 
   if(sel.r_inputs){
     const rows=[];
@@ -12714,16 +12933,16 @@ function buildReport(sel){
     }else add("Deterioration","none entered","");
     h+=sec("Input Echo",dtab([{k:"k",h:"Input",txt:1},{k:"v",h:"Value",txt:1},{k:"u",h:"Units",txt:1}],rows));
   }
-  if(sel.r_dash)h+=sec("Summary Dashboard",dashboard(p));
+  if(sel.r_dash)h+=sec("Summary Dashboard",dashboard(p),"o_dash");
   if(sel.r_assume&&p.assume&&p.assume.trim())
     h+=sec("Engineering Assumptions",`<div style="white-space:pre-wrap">${esc(p.assume)}</div>`);
   if(sel.r_basis)h+=sec("Design Basis and Sign Conventions",
     document.getElementById("o_basis")?document.getElementById("o_basis").querySelector(".bd").innerHTML:"");
-  if(sel.r_geo)h+=sec("Geometry, Restraint and Model Definition",CALC.geometrySection(p,M));
+  if(sel.r_geo)h+=sec("Geometry, Restraint and Model Definition",CALC.geometrySection(p,M),"o_geo");
   if(sel.r_fig)h+=sec("Longitudinal Section",
     `<figure><svg id="rptFig" viewBox="0 0 980 520"></svg>
      <figcaption>Longitudinal section, to scale, at the governing position of the controlling vehicle.</figcaption></figure>`);
-  if(sel.r_dl)h+=sec("Dead Load",CALC.deadLoadSection(p,M));
+  if(sel.r_dl)h+=sec("Dead Load",CALC.deadLoadSection(p,M),"o_dl");
   if(sel.r_ll){
     const v0=results.length?ARCH.ALL_VEHICLES.find(x=>x.id===results.reduce((a,b)=>a.rf<b.rf?a:b).id):ARCH.vehiclesFor(M.p.loadMode)[1]||ARCH.vehiclesFor(M.p.loadMode)[0];
     const r0=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):{pos:M.g.xmin,dir:1};
@@ -12736,11 +12955,11 @@ function buildReport(sel){
     for(const r of results){
       if(!sel["rv_"+r.id])continue;
       const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id);
-      body+=`<h3>${n+1}.${++sub} ${esc(v.name)}${r.id===govId?" — GOVERNS":""} &nbsp;
+      body+=`<h3 data-cid="veh_${r.id}">${n+1}.${++sub} ${esc(v.name)}${r.id===govId?" — GOVERNS":""} &nbsp;
         (RF = ${nfx(r.rf,3)}, ${nfx(r.tons,1)} tons)</h3>`+CALC.vehicleSection(p,M,v,r);
     }
     if(!sub)body=msg("inf","No vehicle detail selected","Per-vehicle sections were deselected in the report settings.");
-    h+=sec("Rating — Vehicle by Vehicle",body);
+    h+=sec("Rating — Vehicle by Vehicle",body,"rate");
   }
   if(sel.r_veh)h+=sec("Rating Vehicle Configurations",
     VEHTAB.pane(p,M,ARCH.vehiclesFor(p.loadMode).filter(v=>p.vehicles.includes(v.id)),results));
@@ -12769,25 +12988,16 @@ function buildReport(sel){
      about discretisation error reads as though there were none. */
   if(sel.r_rsum)h+=sec("Rating Summary — every section, every vehicle",ratingSummary(p));
   if(sel.r_ver)h+=sec("Mesh Convergence",MESHCONV.block(M));
-  if(sel.r_man)h+=sec("User Manual and Design Basis",MANUAL.html(true));
+  if(sel.r_man)h+=sec("User Manual and Design Basis",MANUAL.html(true),"man");
 
   h+=`<div id="rptFoot">This calculation was produced with Stone Arch LR by Mario Lococo. The program is an
     engineering aid, not a substitute for engineering judgment. The engineer of record is responsible for the
     inputs, the assumptions, the interpretation of the governing codes, and the design. Results are Inventory
     level only; AASHTO MBE Art. 6A.9.1 provides no Operating allowable stress for unreinforced masonry.
     Independent verification of the frame analysis is recommended before the rating is issued.</div></div>`;
-  /* C3 — running header and footer. The sheet count is written after layout,
-     since it cannot be known until the content exists. */
-  {
-    const t2=id=>{const e=$(id);return e&&e.value?esc(e.value):"—";};
-    const stamp=BUILD_ID;
-    if($("runHead"))$("runHead").innerHTML=
-      `<span class="l"><b>${t2("tbProject")}</b> &nbsp;·&nbsp; ${t2("tbSubject")}</span>`+
-      `<span class="r">${t2("tbTask")} &nbsp;·&nbsp; Stone Arch LR ${stamp}</span>`;
-    if($("runFoot"))$("runFoot").innerHTML=
-      `<span class="l">Computed ${t2("tbBy")} ${t2("tbDate")} &nbsp;·&nbsp; Checked ${t2("tbChk")} ${t2("tbChkDate")}</span>`+
-      `<span class="r">Inventory level · Allowable Stress · MBE 6A.9.1</span>`;
-  }
+  /* C3 — running header and footer: since D11 (2026-10-18) @page margin boxes (archPageCSS), not the
+     position:fixed #runHead / #runFoot bands. */
+  archApplyPageCSS();
   $("rptHost").innerHTML=h;
   /* A panel collapsed on screen carries .clp, and .pnl.clp>.bd is display:none
      — a rule the print block never cleared. The printed package therefore
@@ -12833,24 +13043,12 @@ function buildReport(sel){
       `<div class="note">The engineer of record is responsible for the inputs, the assumptions, the
        interpretation of the governing codes and the resulting decision. This program is an engineering aid and
        its output must be reviewed before it is relied upon. Produced with Stone Arch LR ${BUILD_ID}.</div>`;
-    $("rptHost").insertAdjacentHTML("beforeend",sig);
+    $("rptHost").querySelector(".rpt").insertAdjacentHTML("beforeend",sig);   /* D11: inside the document, as its last section */
   }
-  /* C5 — contents. Built from the rendered headings rather than from the section
-     list, so it cannot fall out of step with what was actually included. */
-  {
-    const rh=$("rptHost");
-    const items=[...rh.querySelectorAll("h2")].map((x,i)=>{
-      const id="sec"+i; x.id=id;
-      return `<tr><td style="width:8%">${x.textContent.trim().split(".")[0]}.</td>`+
-        `<td>${esc(x.textContent.trim().replace(/^\d+\.\s*/,""))}</td></tr>`;
-    }).join("");
-    rh.insertAdjacentHTML("afterbegin",
-      `<div class="rpt-toc"><h2 style="border-bottom:1.5px solid #000">Contents</h2>`+
-      `<table class="dt" style="table-layout:fixed"><tbody>${items}</tbody></table>`+
-      `<div class="note">Section numbers are document level. Headings numbered inside a section — the steps of
-       a worked calculation, for example — are set in a lighter face and indented so they cannot be mistaken
-       for document sections.</div></div>`);
-  }
+  /* C5 — contents. D11 (2026-10-18): numbered sections and subsections, references, linked table of contents,
+     result lines and "see §n.k" links (archCalcSheet). Built from the rendered headings, so it cannot fall out of
+     step with what was actually included. */
+  archCalcSheet($("rptHost"));
   if($("rptFig")&&M){
     const gv=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
     schematic($("rptFig"),gv?gv.pos:null,{veh:gv?ARCH.ALL_VEHICLES.find(x=>x.id===gv.id):undefined,thrust:true});
