@@ -9,7 +9,7 @@ Last updated: 2026-10-13 (after the all-tools open-item sweep, PRs #121–#160, 
 | # | Tool | Check | Where it is logged |
 |---|---|---|---|
 | A1 | Base Plate & Anchor Designer | Type `5.5` into f'c (and a couple of other fields) in your own Edge/Chrome; it should stay 5.5. The decimal fix was tested only in headless Chromium. | `fixlog/BasePlateAnchorDesigner.md` D1 |
-| A2 | Concrete Beam ASD, Concrete Anchor | Open each and check the styling looks right after pinning Tailwind Play CDN 3.4.17 (could not be viewed here, CDN blocked). | fix logs, library pins |
+| A2 | Concrete Beam ASD (Concrete Anchor retired 2026-10-18) | Open it and check the styling looks right after pinning Tailwind Play CDN 3.4.17 (could not be viewed here, CDN blocked). | fix logs, library pins |
 | A3 | Section Property Calculator | AutoCAD MASSPROP: export a 1 × 1 square with its corner at 0,0 (tool-origin basis) — Product of inertia should read XY = +0.25; note which order MASSPROP lists the principal moments in. | `fixlog/Section Property Calculator.md` X-O1 |
 | A4 | Section Property Calculator | AISC 360-16 equation numbers E4-8 (H), E4-9 (r̄o²), F2-7 (r_ts) against the printed Specification. | P2a-O1 |
 | A5 | Section Property Calculator | Fillet weld strength in the shear-flow check: φ = 0.75 / Ω = 2.00, 0.60 F_EXX, throat 0.707w, no directional increase (AISC 360-16 J2.4, Table J2.5). HSS corner radii 2t_des / t_des basis. | P2b, O2 |

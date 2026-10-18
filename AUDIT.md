@@ -998,7 +998,7 @@ Items marked **❓** need your decision on the provision, edition or owner rule 
 | A6 | `Pile Designer.html` | Casing flexure slender branch (0.33E/(D/t)·S) and a hard error above 0.45E/Fy | M |
 | A7 | `Pile Designer.html` | Wire the H-pile φ inputs into the calculation (or remove them from the report); add φc 0.50 severe driving ❓ | M |
 | A8 | `Pile Designer.html` | Envelope "D/C comb" shows the interaction ratio; fix `tenR` field names | L |
-| A9 | `Concrete Anchor.html` | ❓ Decide: fix (A_se, plate Fy input, `condB` binding, pryout/pullout φ 0.70, breakout demand, shear (b) + ψ factors, side-face factors) **or** retire in favour of BasePlateAnchorDesigner. Recommend: add a "not for design" banner now (L), then decide. | L / H |
+| A9 | `Concrete Anchor.html` | ✅ **Retired 2026-10-18** (engineer: superseded by `BasePlateAnchorDesigner.html`; file removed, card removed from tools.html; history in fixlog/Concrete Anchor.md). Was: decide fix (A_se, plate Fy input, `condB` binding, pryout/pullout φ 0.70, breakout demand, shear (b) + ψ factors, side-face factors) **or** retire in favour of BasePlateAnchorDesigner. Recommend: add a "not for design" banner now (L), then decide. | L / H |
 | A10 | `BasePlateAnchorDesigner.html` | Pryout φ always 0.70; ψg 1.3 for Gr 100 | L |
 | A11 | `BasePlateAnchorDesigner.html` | Side-face blowout corner factor; A_Nc from tension anchors only | M |
 | A12 | `BasePlateAnchorDesigner.html` | Round HSS 0.8D; plate-too-small (`disc<0`) as a blocking error; plain-rod V_b min(a,b) | M |
@@ -1097,7 +1097,7 @@ Items marked **❓** need your decision on the provision, edition or owner rule 
 ### Questions for you before Phase A starts
 
 1. **Editions.** Which editions govern your work today? AASHTO LRFD 9th or 10th; MBE edition; ACI 318-19 or a later version; ASCE 7-16 vs 7-22 (building tools); and any MassDOT manual dates. Several findings flip between "bug" and "fine" depending on this (e.g. Lp = 1.1rt, Method A bearing limits, Fatigue I/II).
-2. **Retire or fix.** `Concrete Anchor.html` and `Timber Beam Check.html` have the most fundamental problems. Retire, banner, or fix?
+2. **Retire or fix.** `Concrete Anchor.html` (retired 2026-10-18) and `Timber Beam Check.html` have the most fundamental problems. Retire, banner, or fix?
 3. **Shared-snippet PRs.** May syncing a shared snippet (the rebar app + embedded copy; the `bridgeSuite` bootstrap) be done in one PR across the files that contain it, as an exception to one-tool-per-PR?
 4. **CDN reachability.** Which CDN hosts are reachable from the locked-down work laptop?
 5. **MassDOT-specific values** that look non-standard and should be confirmed:

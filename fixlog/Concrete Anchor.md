@@ -2014,3 +2014,15 @@ index a47eb55..0a06024 100644
                          {!ok && <div className="p-4 bg-red-900/40 border border-red-700 rounded text-sm text-red-200"><div className="font-bold mb-1">Input errors — no results calculated</div>{res.errors.map((m,i)=><div key={i}>• {m}</div>)}</div>}
                          {res.warnings && res.warnings.length > 0 && <div className="mb-6 p-3 bg-amber-900/20 border border-amber-700 rounded text-xs text-amber-200 space-y-1">
 ```
+
+## 2026-10-18 — Tool retired (file removed)
+- **Engineer decision:** 2026-10-18, "There is a basic concrete anchor app, that hasn't been developed and I think has basically been superseded by the baseplate app. Let's just remove that other app." This settles AUDIT.md A9 (fix or retire).
+- **Change:**
+  - `Concrete Anchor.html` deleted.
+  - Its card removed from `tools.html` (Connections & anchorage), along with its mention in the tools.html check list.
+  - AUDIT.md A9 and ENGINEER_CHECKS.md A2 updated.
+  - This fix log is kept as the record.
+- **Replacement:** `BasePlateAnchorDesigner.html` covers cast-in headed anchors under ACI 318-19 Ch. 17, single anchors to large groups, with or without a base plate check. It does not have the old tool's known problems (AUDIT.md §3.6: gross bolt area, rod Fy used as plate Fy, dead Condition B control).
+- **Saved data:** none in the browser. The tool saved projects to JSON files only (AUDIT.md "Save / load"), so no localStorage key is left behind. Old JSON files cannot be opened in Base Plate & Anchor (different format).
+- **Links:** no other tool linked to the file. The one remaining mention is a historical code comment in `BasePlateAnchorDesigner.html` (§17.6.2.2.3 note), left unchanged.
+- **Recovery:** the file can be restored from git history (`git show <commit before this PR>:"Concrete Anchor.html"`).
