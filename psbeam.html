@@ -231,6 +231,61 @@ table.eng tr.hot td{background:#FEF3C7;font-weight:600}
 }
 .printonly{display:none}
 
+/* ---- D11 (2026-10-18): calculation-sheet report (cover + title block, references, numbered contents, sections n and
+   subsections n.k, a result line per check) and the CLAUDE.md §6 "Worked in" derivation links. Display only. The page
+   header/footer (@page margin boxes) is a <style id="psbeam-page"> set only while the report prints (psbrPageCSS). ---- */
+.psbr-cover{border:1.5px solid var(--ink);padding:16px 20px 18px;margin-bottom:14px;background:var(--sheet)}
+.psbr-cover h1{font-stretch:75%;font-weight:800;font-size:28px;letter-spacing:.4px;line-height:1.1;text-transform:uppercase}
+.psbr-cover .s{font-family:var(--mono);font-size:11.5px;color:var(--ink2);margin-top:4px}
+.psbr-cover .p{font-size:16px;font-weight:600;margin-top:12px}
+.psbr-cover .d{font-size:13px;margin-top:3px}
+.psbr-tb{border-collapse:collapse;width:100%;margin-top:16px;font-size:12.5px}
+.psbr-tb td{border:1px solid var(--ink);padding:4px 8px 5px;vertical-align:top;width:33.3%}
+.psbr-tb td span{display:block;font-size:9px;letter-spacing:1.1px;color:var(--ink2);text-transform:uppercase}
+.psbr-front{margin-bottom:14px}
+.psbr-h{font-stretch:75%;font-weight:800;font-size:14px;letter-spacing:1px;text-transform:uppercase;border-bottom:1.5px solid var(--ink);margin:4px 0 8px;padding-bottom:3px}
+.psbr-refs{border-collapse:collapse;font-size:11.5px;margin-bottom:16px;width:100%}
+.psbr-refs td{border-bottom:1px solid var(--line2);padding:4px 12px 4px 0;vertical-align:top;line-height:1.5}
+.psbr-refs td:first-child{font-weight:600;white-space:nowrap}
+.psbr-toc,.psbr-toc ol{list-style:none;margin:0;padding:0}
+.psbr-toc{columns:2;column-gap:28px;font-size:12px}
+.psbr-toc>li{break-inside:avoid;margin:0 0 6px}
+.psbr-toc ol{padding-left:18px;font-size:11px;line-height:1.45}
+.psbr-toc a{color:var(--ink);text-decoration:none}
+.psbr-toc a:hover{color:var(--blue);text-decoration:underline}
+.psbr-note{font-size:11px;color:var(--ink2);margin-top:10px;line-height:1.5}
+.mcap .mnum{font-family:var(--mono);font-stretch:100%;letter-spacing:0;margin-right:8px}
+.psbr-res{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 14px;align-items:baseline;border-top:1px solid var(--ink);margin-top:6px;padding:4px 0 1px;font-size:12px;break-inside:avoid}
+.psbr-res .m{grid-column:1;font-size:11px;color:var(--ink2)}
+.psbr-res .st{grid-column:2;grid-row:1/span 2;align-self:center;font-family:var(--mono);font-weight:700}
+.psbr-res .st.ok{color:var(--pass)}
+.psbr-res .st.no{color:var(--fail);text-decoration:underline}
+.wk-row{font-size:11px;color:var(--ink2);margin:6px 0 2px;line-height:1.6}
+a.wk-a{color:var(--blue);text-decoration:none;cursor:pointer}
+a.wk-a:hover{text-decoration:underline}
+.psb-flash{animation:psbflash 1.4s ease-out}
+@keyframes psbflash{from{box-shadow:0 0 0 3px var(--blue)}to{box-shadow:0 0 0 3px transparent}}
+@media (prefers-reduced-motion:reduce){.psb-flash{animation:none}}
+.psbr-root .mcap span:first-child,.psbr-root table.eng th{text-transform:none}   /* upper case turned γ, β, θ, ε into Γ, Β, Θ, Ε */
+@media print{
+  html.psb-rpt-print,body.psb-rpt-print{background:#fff!important}
+  body.psb-rpt-print .calcsec{break-inside:auto}
+  body.psb-rpt-print .calch,body.psb-rpt-print .mcap{break-after:avoid}
+  body.psb-rpt-print .mline,body.psb-rpt-print .psbr-res,body.psb-rpt-print table.eng tr{break-inside:avoid}
+  body.psb-rpt-print .scrollx,body.psb-rpt-print .mline{overflow:visible}
+  body.psb-rpt-print table.eng{font-size:9.5px}
+  body.psb-rpt-print table.eng th{font-size:8.5px;letter-spacing:.2px}
+  body.psb-rpt-print table.eng td,body.psb-rpt-print table.eng th{padding:2px 4px;white-space:normal}
+  .psbr-cover{border:0;padding:0;min-height:8.6in;display:flex;flex-direction:column;justify-content:center;break-after:page}
+  .psbr-front{break-after:page}
+  .psbr-res .st.ok{color:#000}
+  .psbr-toc a,a.wk-a{color:#000}
+  body.psb-rpt-print .sheet-inner>*:not(.cols-full){display:none!important}
+  body.psb-rpt-print .sheet{border:0}
+  body.psb-rpt-print .sheet:before{display:none}
+  body.psb-rpt-print .sheet-inner{padding:0}
+}
+
 /* Geometry change notice — informational, so it uses the suite's steady
    "available" orange rather than the amber reserved for conflicts. */
 .geom-change-banner {
@@ -3752,12 +3807,12 @@ function sweepDesign(baseInp,mode,values){
 /* Card. `fold` makes it collapsible: the header toggles, the state is remembered
    per title, and the body is hidden rather than unmounted so print, search and
    the test harness still see everything inside a collapsed card. */
-const Card=({title,refTag,right,children,fold})=>{
+const Card=({title,refTag,right,children,fold,id})=>{
   const key='psbeam.fold.'+title;
   const [open,setOpen]=useState(()=>{ if(!fold) return true;
     try{ return localStorage.getItem(key)!=='0'; }catch(e){ return true; } });
   const tog=()=>{ const n=!open; setOpen(n); try{ localStorage.setItem(key,n?'1':'0'); }catch(e){} };
-  return <div className="card">
+  return <div className="card" id={id}>
     <div className={'card-h'+(fold?' fold':'')} onClick={fold?tog:undefined}
          title={fold?(open?'Collapse this section':'Expand this section'):undefined}>
       <span className="t">{fold&&<span className="fi">{open?'▾':'▸'}</span>}{title}</span>
@@ -3855,14 +3910,125 @@ const TeX=({s,d})=>{ let h=null;
     : <span style={{fontFamily:'var(--mono)',fontSize:11,whiteSpace:'pre-wrap'}}>{s}</span>; };
 const ML=({s})=><div className="mline"><TeX d s={s}/></div>;
 const MI=({s})=><TeX s={s}/>;
-const Step=({d,r,note,children})=>(
-  <div className="mstep"><div className="mcap"><span>{d}</span>{r&&<span className="mref">{r}</span>}</div>
+/* num / id (D11): the report numbers a Step or Deriv as subsection n.k (psbrNumber); wk names it for the §6 links. */
+const Step=({d,r,note,children,num,id,wk})=>(
+  <div className="mstep" id={id} data-wk={wk}><div className="mcap"><span>{num&&<span className="mnum">{num}</span>}{d}</span>{r&&<span className="mref">{r}</span>}</div>
   {children}{note&&<div className="mnote">{note}</div>}</div>);
-const CalcSec=({n,title,children})=>(
-  <div className="calcsec"><div className="calch">{n} · {title}</div><div className="calcb">{children}</div></div>);
+const CalcSec=({n,title,children,id})=>(
+  <div className="calcsec" id={id}><div className="calch">{n} · {title}</div><div className="calcb">{children}</div></div>);
 /* derivation card: same look as CalcSec but lives inside a tab without a number */
-const Deriv=({title,refTag,children})=>(
-  <Card title={title} refTag={refTag}><div className="calcb" style={{padding:'2px 0 0'}}>{children}</div></Card>);
+const Deriv=({title,refTag,children,num,id})=>(
+  <Card title={num?num+' '+title:title} refTag={refTag} id={id}><div className="calcb" style={{padding:'2px 0 0'}}>{children}</div></Card>);
+
+/* ---- D11 links (2026-10-18), CLAUDE.md §6: a value quoted away from where it is worked links to its derivation.
+   WkLink it=[{l:label, s:report key, tab, card}]. In the app: "Worked in: label → Tab · Card" (opens the tab and scrolls
+   to the card whose title contains `card`, or to the report subsection named `s`). Inside the calculation report
+   (PsbrSee context = the report's key → {n,id} map): "label: see §n.k" (jumps there on screen; printed). ---- */
+const PsbrSee=React.createContext(null);
+const PSB_TABN={inputs:'Inputs',section:'Section Props',losses:'Losses',stresses:'Stresses',flexure:'Flexure',shear:'Shear',
+  anchorage:'Anchorage Zone',diagrams:'Diagrams',camber:'Camber',handling:'Handling',deck:'Deck',rating:'Rating',report:'Report'};
+function psbGoto(tab,card,wk){ window.dispatchEvent(new CustomEvent('psbeam-goto',{detail:{tab,card,wk}})); }
+function psbFlash(el){ if(!el) return; el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('psb-flash'); setTimeout(()=>el.classList.remove('psb-flash'),1400); }
+function psbJump(e,id){ const el=document.getElementById(id); if(!el) return; e.preventDefault(); psbFlash(el); }
+const WkLink=({it,lead})=>{ const see=React.useContext(PsbrSee);
+  if(see) return <div className="wk-row">{lead||'Worked in:'} {it.map((x,i)=>{ const q=see[x.s];
+    return <span key={i}>{i?' · ':''}{x.l}: {q?<a className="wk-a" href={'#'+q.id} onClick={e=>psbJump(e,q.id)}>see §{q.n}</a>
+      :<span>{PSB_TABN[x.tab]} tab, {x.card} (not in this report)</span>}</span>; })}</div>;
+  return <div className="wk-row noprint">{lead||'Worked in:'} {it.map((x,i)=><span key={i}>{i?' · ':''}{x.l} <a className="wk-a" href="#"
+    onClick={e=>{ e.preventDefault(); psbGoto(x.tab,x.card,x.tab==='report'?x.s:null); }}>→ {PSB_TABN[x.tab]} · {x.card}</a></span>)}</div>; };
+/* "Worked in" cell of the report's Design Check Summary: "see §n.k" (jumps there; printed) and, on screen only, the tab. */
+const WkCell=({n})=>{ const see=React.useContext(PsbrSee)||{}, q=psbCkLink(n); if(!q) return '—'; const r=see[q.s];
+  return <span>{r?<a className="wk-a" href={'#'+r.id} onClick={e=>psbJump(e,r.id)}>see §{r.n}</a>:<span>{PSB_TABN[q.tab]} tab</span>}
+    <span className="noprint"> · <a className="wk-a" href="#" onClick={e=>{ e.preventDefault(); psbGoto(q.tab,q.card); }}>{PSB_TABN[q.tab]} →</a></span></span>; };
+
+/* ---- D11 calculation-sheet report helpers (2026-10-18). Display only: every value shown is one the engine (R)
+   already computed; nothing is recomputed here. ---- */
+/* Check name (R.checks[].n) → [code reference as the tool cites it, report key of the subsection that works it,
+   tab, card]. The reference is the article the tool already quotes for that check. */
+const PSB_CK={
+  'Prestressing strands':['input','','inputs','Prestressing Strands'],
+  'Release comp':['LRFD 5.9.2.3.1a','srel','stresses','Derivation — Fiber Stresses'],
+  'Release tens':['LRFD 5.9.2.3.1b','srel','stresses','Derivation — Fiber Stresses'],
+  'Release tens (+M, bot)':['LRFD 5.9.2.3.1b','outstress','stresses','Stresses at Transfer'],
+  'Srv comp (perm)':['LRFD 5.9.2.3.2a','ss1','stresses','Derivation — Fiber Stresses'],
+  'Srv comp (full)':['LRFD 5.9.2.3.2a','ss2','stresses','Derivation — Fiber Stresses'],
+  'Srv tens (top)':['LRFD 5.9.2.3.2b','outstress','stresses','Service Stresses'],
+  'Srv III tens':['LRFD 5.9.2.3.2b','ss3','stresses','Derivation — Fiber Stresses'],
+  'Deck comp':['LRFD 5.9.2.3.2','sdk','stresses','Derivation — Fiber Stresses'],
+  'Flexure':['LRFD 5.6.3.2','fmn','flexure','Derivation — Strength I Flexure'],
+  'Min reinf':['LRFD 5.6.3.3','fmin','flexure','Minimum Reinforcement'],
+  'Shear':['LRFD 5.7.3.3','vchk','shear','Derivation — Shear'],
+  'Long. reinf (5.7.3.5)':['LRFD 5.7.3.5','vlong','shear','Longitudinal Reinforcement'],
+  'Interface shear (5.7.4)':['LRFD 5.7.4','vif','shear','Interface Shear'],
+  'Splitting steel (5.9.4.4)':['LRFD 5.9.4.4.1','split','anchorage','Pretensioned Anchorage Zone'],
+  'Confinement steel (5.9.4.4.2)':['LRFD 5.9.4.4.2','conf','anchorage','Confinement Reinforcement'],
+  'Release tens. steel (5.9.2.3.1b)':['LRFD 5.9.2.3.1b','relst','anchorage','Release-Tension Bonded Steel'],
+  'Neg flexure (pier)':['LRFD 5.12.3.3','neg','flexure','Negative Moment at Pier'],
+  'Fatigue I (strand)':['LRFD 5.5.3.3','fats','stresses','Fatigue I'],
+  'Fatigue I (concrete, 5.5.3.1)':['LRFD 5.5.3.1','fatc','stresses','Fatigue I'],
+  'LL deflection':['LRFD 2.5.2.6.2','lld','camber','Derivation — Camber'],
+  'Lifting stress':['release-stage limit 0.24√f′ci (LRFD 5.9.2.3.1b)','hand','handling','Lifting — Overhang Stresses'],
+  'Lifting FS (crack, screening)':['screening, not PCI / Mast','hand','handling','Derivation — Lateral Stability'],
+  'Hauling FS (crack, screening)':['screening, not PCI / Mast','hand','handling','Derivation — Lateral Stability'],
+  'Deck +M':['LRFD 5.6.3; Table A4-1','deck','deck','Positive Moment'],
+  'Deck −M':['LRFD 5.6.3; Table A4-1','deck','deck','Negative Moment'],
+  'Deck overhang':['LRFD 13 / 5.6.3','deck','deck','Overhang'],
+};
+const psbCkLink=n=>{ const c=PSB_CK[n]; return c&&c[1]?{l:n,s:c[1],tab:c[2],card:c[3]}:null; };
+/* Result line(s) under a worked check: "<check>: D/C = x.xx (<ref>) PASS/FAIL", from R.checks (the same values as the
+   Design Check Summary table and the status band). */
+const PsbRes=({R,names,note})=>(<React.Fragment>{names.map(n=>{ const c=R.checks.find(x=>x.n===n); if(!c) return null;
+  const ref=(PSB_CK[n]||[])[0]||'';
+  return <div key={n} className="psbr-res"><div><b>{n}</b>: D/C = <b>{isFinite(c.r)?fmt(c.r,2):'—'}</b>{ref?' ('+ref+')':''}</div>
+    <div className="m">demand {fmt(Math.abs(c.v),c.u==='ksi'?3:2)} {c.u} vs capacity / limit {fmt(Math.abs(c.lim),c.u==='ksi'?3:2)} {c.u}{c.loc?', x = '+fmt(c.loc,1)+' ft':''}{note?' · '+note:''}</div>
+    <div className={'st '+(c.pass?'ok':'no')}>{c.pass?'PASS':'FAIL'}</div></div>; })}</React.Fragment>);
+/* Rating result line (MBE): RF from R.rating / R.shrRating / R.svcRating, as on the Rating tab. */
+const PsbRF=({t,inv,opr,ok,refTxt})=>(<div className="psbr-res"><div><b>{t}</b>: RF<sub>inv</sub> = <b>{inv>=99?'—':fmt(inv,2)}</b>{opr!=null?<span>, RF<sub>opr</sub> = <b>{fmt(opr,2)}</b></span>:null} ({refTxt})</div>
+  <div className="m">{inv>=99?'no live-load tension at Service III (RF not applicable)':'rating factor for the HL-93 design load'}</div>
+  <div className={'st '+(ok?'ok':'no')}>{ok?'RF ≥ 1.00':'RF < 1.00'}</div></div>);
+/* Numbers the report: every CalcSec is section n, every Step / Deriv directly inside it (fragments flattened) is
+   subsection n.k. Fills `see` (wk key → {n,id}) for the "see §" links and returns the contents. */
+function psbrNumber(secs,see){
+  const flat=ch=>React.Children.toArray(ch).flatMap(c=>c&&c.type===React.Fragment?flat(c.props.children):[c]);
+  const toc=[]; let i=0;
+  const out=flat(secs).map((s,si)=>{ if(!s||s.type!==CalcSec) return s; i++;
+    const id='psbr-s'+i, t={n:String(i),t:s.props.title,id,subs:[]}; toc.push(t);
+    if(s.props.wk) see[s.props.wk]={n:String(i),id};
+    let k=0;
+    const kids=flat(s.props.children).map((c,ci)=>{ if(!c||(c.type!==Step&&c.type!==Deriv)) return React.isValidElement(c)?React.cloneElement(c,{key:'c'+ci}):c;
+      k++; const n=i+'.'+k, sid=id+'-'+k; t.subs.push({n,t:c.type===Step?c.props.d:c.props.title,id:sid});
+      if(c.props.wk&&!see[c.props.wk]) see[c.props.wk]={n,id:sid};
+      return React.cloneElement(c,{key:'c'+ci,num:n,id:sid}); });
+    return React.cloneElement(s,{key:'s'+si,n:String(i),id},kids); });
+  return {out,toc};
+}
+const psbrEsc=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');
+const psbrShort=(t,n)=>{ t=String(t==null?'':t); return t.length>n? t.slice(0,n-1).replace(/\s+\S*$/,'')+'…' : t; };
+function psbrDesc(inp,R){ const p=inp.proj||{};
+  return (p.girderId?p.girderId+', ':'')+inp.girder+', L = '+fmt(R.L,1)+' ft'; }
+/* Page header / footer of the printed report (@page margin boxes, letter), the Gusset Plate Rating / ST-Girder pattern. */
+function psbrPageCSS(inp,R){ const p=inp.proj||{}, box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  return `@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;
+    @top-left { content: "Project No: ${psbrEsc(p.job||'—')}\\A Description: ${psbrEsc(psbrShort(psbrDesc(inp,R),40))}"; ${box} text-align: left; }
+    @top-center { content: "Computed By: ${psbrEsc(p.by||'—')}\\A Checked By: —"; ${box} text-align: left; }
+    @top-right { content: "Date: ${psbrEsc(p.date||'—')}\\A Date: —"; ${box} text-align: right; }
+    @bottom-left { content: "${psbrEsc(psbrShort(p.name||'—',60))} (PS-Girder)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } } }`; }
+/* Applied only while the report prints: the header/footer style and the body class that prints the report alone. */
+function psbrPrintMode(on,inp,R){
+  let st=document.getElementById('psbeam-page');
+  if(on){ if(!st){ st=document.createElement('style'); st.id='psbeam-page'; document.head.appendChild(st); }
+    st.textContent=psbrPageCSS(inp,R); document.body.classList.add('psb-rpt-print'); document.documentElement.classList.add('psb-rpt-print'); }
+  else { if(st) st.textContent=''; document.body.classList.remove('psb-rpt-print'); document.documentElement.classList.remove('psb-rpt-print'); }
+  psbrFit(on);
+}
+/* Shrinks a display equation wider than the printed line (7.3 in) so nothing is cut off; undone after printing. */
+function psbrFit(on){ const root=document.querySelector('.psbr-root'); if(!root) return;
+  const els=[...root.querySelectorAll('.mline .katex-display')]; els.forEach(el=>{ el.style.fontSize=''; });
+  if(!on) return;
+  const w0=root.style.width; root.style.width='7.3in';
+  els.forEach(el=>{ const w=el.clientWidth, need=el.scrollWidth; if(w>0&&need>w+1) el.style.fontSize=Math.max(55,Math.floor(100*w/need)-1)+'%'; });
+  root.style.width=w0; }
 
 
 /* ================= SVG: CROSS SECTION ================= */
@@ -5265,6 +5431,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
               :<React.Fragment>Interior: DF_m = max({fmt(R.df.m1,3)}, {fmt(R.df.m2,3)}) (eq. 4.6.2.2.2b-1, K_g = {fmt(R.df.Kg,0)} in⁴){R.df.isNext?(R.df.kgOmitted?' · NEXT, no topping: K_g term omitted (taken as 1.0)':' · NEXT: S = beam width '+fmt(R.df.Sf,2)+' ft, (K_g/12Lt_s³)^0.1 = '+fmt(R.df.kgt,3)):''}<br/></React.Fragment>}
               {R.df.th>0&&<React.Fragment>Skew {fmt(R.df.th,0)}°: moment × <b>{fmt(R.df.skM,3)}</b> (4.6.2.2.2e) · shear × <b>{fmt(R.df.skV,3)}</b> (4.6.2.2.3c)<br/></React.Fragment>}
               DF_m = <b>{fmt(R.dfm,3)}</b> · DF_v = <b>{fmt(R.dfv,3)}</b> → <b>M_LL+IM = {fmt(R.MLL,0)} k-ft</b> · <b>V_LL+IM = {fmt(R.VLL,0)} kip</b></div>}
+              {!R.error&&<WkLink it={[{l:'HL-93, DF_m / DF_v, M_LL+IM / V_LL+IM',s:'dfll',tab:'report',card:'Loads — Dead, HL-93 & Distribution'}]}/>}   {/* D11 links */}
               {!R.error&&(R.g.isBox||R.g.isDeck)&&inp.loads.dfAuto&&<div className="callout warn">⚠ <b>Adjacent box / deck beams use different distribution-factor equations</b> (LRFD 4.6.2.2.2b type f/g with the I/J torsion term), which this app does not auto-compute. The auto DF above uses the I-girder (type k) formula and may be significantly off for adjacent-beam bridges. Compute DF_m and DF_v per Table 4.6.2.2.2b-1 / 4.6.2.2.3a-1 and enter them with the MANUAL toggle.</div>}
             </div>}
           </React.Fragment>}
@@ -5928,6 +6095,27 @@ function StressHeatmap({inp,R}){
   </Card>);
 }
 
+/* Fatigue I worked steps (D11: a function so the Stresses tab card and the calculation report show the same steps). */
+function fatigueSteps(inp,R){
+  return <React.Fragment>
+        <Step d="Fatigue truck moment (single lane, IM = 15%, no lane load)" r="5.6.1.4">
+          <ML s={Tx`M_{fat}=${nx(R.fat.Mfat,0)}\;\mathrm{k\text{-}ft/lane}\quad DF_{fat}=${R.fat.extDF?`\\frac{\\max(g_{lever},\\,g_{rigid,1})}{1.2}=\\frac{\\max(${nx(R.df.lever,3)},\\,${nx(R.df.rigid1,3)})}{1.2}`:'\\frac{g_{m1}}{1.2}'}=${nx(R.fat.dfFat,4)}\quad M_{fat,girder}=M_{fat}(1.15)(DF_{fat})=${nx(R.fat.Mfat1,0)}\;\mathrm{k\text{-}ft}`}/>
+        </Step>
+        <Step d="Cracking trigger — bottom fiber under permanent + Fatigue I" r="5.5.3.1">
+          <ML s={Tx`f_{b,perm}=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_{g}+M_{dk}}{S_b}-\frac{M_{sd}}{S_{bc}}=${nx(R.fat.fbPerm,3)}\;\mathrm{ksi}\quad\Delta f_b=\frac{1.75M_{fat}}{S_{bc}}=${nx(R.fat.dfbFat,3)}\;\mathrm{ksi}`}/>
+          <ML s={Tx`f_{b,min}=f_{b,perm}-\Delta f_b=${nx(R.fat.fbMinFat,3)}\;${R.fat.cracksFat?'<':'\\ge'}\;-0.095\sqrt{f'_c}=${nx(-R.fat.frFat,3)}\;\mathrm{ksi}\;\Rightarrow\;\text{${R.fat.cracksFat?'cracked — strand fatigue governs':'uncracked — fatigue not critical'}}`}/>
+        </Step>
+        {R.fat.extDF&&<div className="mnote">Exterior girder: the single-lane moment DF is the lever rule (4.6.2.2.2d), checked against the rigid-section value for one lane (C4.6.2.2.2d); both include m = 1.2, which is removed (3.6.1.1.2).</div>}
+        <Step d="Concrete compression — ½(f_pe + permanent) + Fatigue I ≤ 0.40 f′c" r="5.5.3.1" wk="fatc">
+          <ML s={Tx`\text{top, midspan: }\tfrac12(${nx(R.fat.conc.topPerm,3)})+\frac{1.75M_{fat,girder}}{S_{tg}}=\tfrac12(${nx(R.fat.conc.topPerm,3)})+${nx(R.fat.conc.dTop,3)}=${nx(R.fat.conc.top,3)}\;\mathrm{ksi}`}/>
+          <ML s={Tx`\text{bottom, }x=${nx(R.fat.conc.xBot,1)}\,\mathrm{ft}:\;\tfrac12(${nx(R.fat.conc.botPerm,3)})=${nx(R.fat.conc.bot,3)}\;\mathrm{ksi}\qquad 0.40f'_c=0.40(${nx(+inp.mat.fc,2)})=${nx(R.fat.conc.lim,3)}\;\mathrm{ksi}\;${R.fat.conc.ok?'\\checkmark':'\\text{N.G.}'}\quad(D/C=${nx(R.fat.conc.dc,2)})`}/>
+          <div className="mnote">f_pe without elastic gains. The fatigue moment is taken at midspan (top fibre); the live load only relieves the bottom fibre, so the bottom check is the largest ½(f_pe + permanent) over the span.</div>
+        </Step>
+        <Step d="Strand stress range vs limit" r="5.5.3.3" wk="fats">
+          <ML s={Tx`\Delta f_{strand}\approx n\,\Delta f_b${R.fat.cracksFat?'\\,(\\text{cracked amplification})':''}=${nx(R.fat.dfStrand,2)}\;\mathrm{ksi}\le ${nx(R.fat.fatLimit,1)}\;\mathrm{ksi}\;${R.fat.ok?'\\checkmark':'\\text{N.G.}'}\quad(D/C=${nx(R.fat.dc,2)})`}/>
+        </Step>
+  </React.Fragment>;
+}
 function StressTab({inp,R}){
   const L=R.L,lim=R.lim,gr=R.grid;
   const X=gr.map(r=>r.x);
@@ -5999,6 +6187,9 @@ function StressTab({inp,R}){
           ['f_t,srv','Service III tension limit',-lim.srvT,'ksi'],
           ['γ_LL','Service III live-load factor',+inp.opt.gLLs3,'—'],
         ]}/>
+        <WkLink it={[{l:'f_pi, P_i',s:'pes',tab:'losses',card:'Derivation — Elastic Shortening'},
+          {l:'f_pe, P_e',s:'pe',tab:'losses',card:'Derivation — '+(inp.opt.lossMethod==='refined'?'Refined':'Approximate')+' Long-Term Losses'},
+          {l:'section moduli',s:'scomp',tab:'section',card:'Derivation — Composite Section'}]}/>   {/* D11 links */}
         <Step d="Allowable stress limits (LRFD 5.9.2.3)"
               note="The girder is checked at two stages — at transfer (release), on the bare girder with f′ci, and in service, on the composite section with f′c. Compression is limited to a fraction of strength; tension is limited to a fraction of the modulus of rupture (or to zero/√f′c thresholds) to control cracking. Sign convention below: compression +, tension −.">
           <ML s={Tx`\textbf{Release compression: }${nx(lim.relCfac||0.65,2)}f'_{ci}=${nx(lim.relCfac||0.65,2)}(${nx(m.fci,2)})=${nx(lim.relC,3)}\;\mathrm{ksi}`}/>
@@ -6037,22 +6228,7 @@ function StressTab({inp,R}){
       </Deriv>;})()}
     <Card title="Fatigue I — Strand Stress Range" refTag="LRFD 5.5.3">
       <div className="calcb" style={{padding:'2px 0 0'}}>
-        <Step d="Fatigue truck moment (single lane, IM = 15%, no lane load)" r="5.6.1.4">
-          <ML s={Tx`M_{fat}=${nx(R.fat.Mfat,0)}\;\mathrm{k\text{-}ft/lane}\quad DF_{fat}=${R.fat.extDF?`\\frac{\\max(g_{lever},\\,g_{rigid,1})}{1.2}=\\frac{\\max(${nx(R.df.lever,3)},\\,${nx(R.df.rigid1,3)})}{1.2}`:'\\frac{g_{m1}}{1.2}'}=${nx(R.fat.dfFat,4)}\quad M_{fat,girder}=M_{fat}(1.15)(DF_{fat})=${nx(R.fat.Mfat1,0)}\;\mathrm{k\text{-}ft}`}/>
-        </Step>
-        <Step d="Cracking trigger — bottom fiber under permanent + Fatigue I" r="5.5.3.1">
-          <ML s={Tx`f_{b,perm}=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_{g}+M_{dk}}{S_b}-\frac{M_{sd}}{S_{bc}}=${nx(R.fat.fbPerm,3)}\;\mathrm{ksi}\quad\Delta f_b=\frac{1.75M_{fat}}{S_{bc}}=${nx(R.fat.dfbFat,3)}\;\mathrm{ksi}`}/>
-          <ML s={Tx`f_{b,min}=f_{b,perm}-\Delta f_b=${nx(R.fat.fbMinFat,3)}\;${R.fat.cracksFat?'<':'\\ge'}\;-0.095\sqrt{f'_c}=${nx(-R.fat.frFat,3)}\;\mathrm{ksi}\;\Rightarrow\;\text{${R.fat.cracksFat?'cracked — strand fatigue governs':'uncracked — fatigue not critical'}}`}/>
-        </Step>
-        {R.fat.extDF&&<div className="mnote">Exterior girder: the single-lane moment DF is the lever rule (4.6.2.2.2d), checked against the rigid-section value for one lane (C4.6.2.2.2d); both include m = 1.2, which is removed (3.6.1.1.2).</div>}
-        <Step d="Concrete compression — ½(f_pe + permanent) + Fatigue I ≤ 0.40 f′c" r="5.5.3.1">
-          <ML s={Tx`\text{top, midspan: }\tfrac12(${nx(R.fat.conc.topPerm,3)})+\frac{1.75M_{fat,girder}}{S_{tg}}=\tfrac12(${nx(R.fat.conc.topPerm,3)})+${nx(R.fat.conc.dTop,3)}=${nx(R.fat.conc.top,3)}\;\mathrm{ksi}`}/>
-          <ML s={Tx`\text{bottom, }x=${nx(R.fat.conc.xBot,1)}\,\mathrm{ft}:\;\tfrac12(${nx(R.fat.conc.botPerm,3)})=${nx(R.fat.conc.bot,3)}\;\mathrm{ksi}\qquad 0.40f'_c=0.40(${nx(+inp.mat.fc,2)})=${nx(R.fat.conc.lim,3)}\;\mathrm{ksi}\;${R.fat.conc.ok?'\\checkmark':'\\text{N.G.}'}\quad(D/C=${nx(R.fat.conc.dc,2)})`}/>
-          <div className="mnote">f_pe without elastic gains. The fatigue moment is taken at midspan (top fibre); the live load only relieves the bottom fibre, so the bottom check is the largest ½(f_pe + permanent) over the span.</div>
-        </Step>
-        <Step d="Strand stress range vs limit" r="5.5.3.3">
-          <ML s={Tx`\Delta f_{strand}\approx n\,\Delta f_b${R.fat.cracksFat?'\\,(\\text{cracked amplification})':''}=${nx(R.fat.dfStrand,2)}\;\mathrm{ksi}\le ${nx(R.fat.fatLimit,1)}\;\mathrm{ksi}\;${R.fat.ok?'\\checkmark':'\\text{N.G.}'}\quad(D/C=${nx(R.fat.dc,2)})`}/>
-        </Step>
+        {fatigueSteps(inp,R)}
       </div>
       <div className="callout">Per 5.5.3.1, if the section remains uncracked under permanent load plus the Fatigue I combination, the strand stress range stays far below the limit and fatigue does not control. The 18 ksi limit applies to a strand radius of curvature ≥ 30 ft (straight/large-radius); reduce to 10 ksi where strands are sharply harped (5.5.3.3). Stress range is taken at midspan, the governing flexural location.</div>
     </Card>
@@ -6264,6 +6440,15 @@ function FlexTab({inp,R}){
   </div>);
 }
 
+/* Longitudinal-tie table (D11: shared by the Shear tab card and the calculation report). */
+function LongTieBody({R}){
+  const sh=R.shear;
+  return <React.Fragment>
+      <Tbl head={['x (ft)','T demand (k)','T strands (k)','T mild (k)','T capacity (k)','T/Tcap','Status']}
+        rows={sh.map(r=>({c:[(r.isBearing?'brg '+fmt(r.x,1):fmt(r.x,1)),fmt(r.Tdem,0),fmt(r.Tcap-r.TsMild,0),fmt(r.TsMild,0),fmt(r.Tcap,0),fmt(r.Tcap>0?r.Tdem/r.Tcap:0,2),PF(r.longOK)]}))}/>
+      <div className="callout">Tension tie demand T = |M_u|/(φ_f·d_v) + (|V_u|/φ_v − 0.5V_s − |V_p|)·cot θ. At the <b>inside edge of the bearing</b> (the "brg" row) 5.7.3.5 drops the flexural term, so T = (|V_u|/φ_v − 0.5V_s − |V_p|)·cot θ only. Strand capacity uses the <b>developed</b> stress f_ps,avail ramped over the transfer/development length — so right at the bearing the strands supply very little and the tie relies on <b>bottom mild steel</b> (A_s,bot·f_y = <b>{fmt(sh[0].TsMild,0)} kip</b>), which is why end-region bottom bars are provided. This is the positive-moment/bearing tie; top steel serves the pier region.</div>
+  </React.Fragment>;
+}
 function ShearTab({inp,R}){
   const sh=R.shear,L=R.L;
   return(<div>
@@ -6291,9 +6476,7 @@ function ShearTab({inp,R}){
     </Card>
 
     <Card title="Longitudinal Reinforcement (Shear–Flexure Tie)" refTag="LRFD 5.7.3.5">
-      <Tbl head={['x (ft)','T demand (k)','T strands (k)','T mild (k)','T capacity (k)','T/Tcap','Status']}
-        rows={sh.map(r=>({c:[(r.isBearing?'brg '+fmt(r.x,1):fmt(r.x,1)),fmt(r.Tdem,0),fmt(r.Tcap-r.TsMild,0),fmt(r.TsMild,0),fmt(r.Tcap,0),fmt(r.Tcap>0?r.Tdem/r.Tcap:0,2),PF(r.longOK)]}))}/>
-      <div className="callout">Tension tie demand T = |M_u|/(φ_f·d_v) + (|V_u|/φ_v − 0.5V_s − |V_p|)·cot θ. At the <b>inside edge of the bearing</b> (the "brg" row) 5.7.3.5 drops the flexural term, so T = (|V_u|/φ_v − 0.5V_s − |V_p|)·cot θ only. Strand capacity uses the <b>developed</b> stress f_ps,avail ramped over the transfer/development length — so right at the bearing the strands supply very little and the tie relies on <b>bottom mild steel</b> (A_s,bot·f_y = <b>{fmt(sh[0].TsMild,0)} kip</b>), which is why end-region bottom bars are provided. This is the positive-moment/bearing tie; top steel serves the pier region.</div>
+      <LongTieBody R={R}/>
     </Card>
 
     <Card title="Strand Development Length" refTag="LRFD 5.9.4.3.2">
@@ -6428,6 +6611,26 @@ function AnchDiagram({R,inp}){
   </svg>);
 }
 
+/* Release-tension bonded steel (D11: shared by the Anchorage Zone tab card and the calculation report). */
+function RelSteelBody({inp,R}){
+  return <div>
+          <KV rows={[['Governing concrete tensile force T',fmt(R.relSteel.T,1),'kip'],
+            ['Location',R.relSteel.where+' @ x = '+fmt(R.relSteel.x,1)+' ft',''],
+            ['Steel stress 0.5f_y ≤ 30 ksi',fmt(R.relSteel.fs,1),'ksi'],
+            ['Required A_s = T / (0.5f_y)',fmt(R.relSteel.AsReq,2),'in²'],
+            ['Provided A_s',fmt(R.relSteel.AsProv,2),'in²'],
+            ['D/C',fmt(R.relSteel.dc,2),R.relSteel.ok?'OK':'N.G.']]}/>
+          <Deriv title="Derivation — Release-Tension Bonded Steel" refTag="LRFD 5.9.2.3.1b">
+            <Step d="Steel to carry the concrete tensile force at release" r="5.9.2.3.1b">
+              <ML s={Tx`f_s=\min(0.5f_y,\,30)=\min(0.5(${nx(+inp.opt.relFy||60,0)}),30)=${nx(R.relSteel.fs,1)}\;\mathrm{ksi}`}/>
+              <ML s={Tx`A_{s,req}=\frac{T}{f_s}=\frac{${nx(R.relSteel.T,1)}}{${nx(R.relSteel.fs,1)}}=${nx(R.relSteel.AsReq,2)}\;\mathrm{in^2}\le A_{s,prov}=${nx(R.relSteel.AsProv,2)}\;\mathrm{in^2}\;${R.relSteel.ok?'\\checkmark':'\\text{N.G.}'}`}/>
+            </Step>
+          </Deriv>
+          <div className="callout">The higher 0.24√f′ci release-tension limit (5.9.2.3.1b) applies only where bonded steel carries the full concrete tensile force T, proportioned at 0.5f_y not more than 30 ksi. T is integrated over the uncracked section at the worst tension station — the top near the ends and the bottom at midspan — and the larger governs. {R.relSteel.ok
+            ? <span style={{color:'#15803D',fontWeight:600}}>Provided ≥ required — the higher limit is justified.</span>
+            : <span style={{color:'#B3261E',fontWeight:600}}>Provided is less than required — add steel, or switch off the bonded-reinforcement option and take the lower min(0.0948√f′ci, 0.2 ksi) limit.</span>} Voids are ignored in the integration, so the required steel is if anything conservative.</div>
+        </div>;
+}
 function AnchorageTab({inp,R}){
   const g=R.g, Pi=R.ss.Aps*R.fpi, relOn=!!inp.opt.relBondedReinf;
   const splitPass=(R.checks.find(c=>c.n==='Splitting steel (5.9.4.4)')||{}).pass;
@@ -6490,23 +6693,7 @@ function AnchorageTab({inp,R}){
 
     <Card title="Release-Tension Bonded Steel" refTag="LRFD 5.9.2.3.1b">
       {relOn
-        ? <div>
-          <KV rows={[['Governing concrete tensile force T',fmt(R.relSteel.T,1),'kip'],
-            ['Location',R.relSteel.where+' @ x = '+fmt(R.relSteel.x,1)+' ft',''],
-            ['Steel stress 0.5f_y ≤ 30 ksi',fmt(R.relSteel.fs,1),'ksi'],
-            ['Required A_s = T / (0.5f_y)',fmt(R.relSteel.AsReq,2),'in²'],
-            ['Provided A_s',fmt(R.relSteel.AsProv,2),'in²'],
-            ['D/C',fmt(R.relSteel.dc,2),R.relSteel.ok?'OK':'N.G.']]}/>
-          <Deriv title="Derivation — Release-Tension Bonded Steel" refTag="LRFD 5.9.2.3.1b">
-            <Step d="Steel to carry the concrete tensile force at release" r="5.9.2.3.1b">
-              <ML s={Tx`f_s=\min(0.5f_y,\,30)=\min(0.5(${nx(+inp.opt.relFy||60,0)}),30)=${nx(R.relSteel.fs,1)}\;\mathrm{ksi}`}/>
-              <ML s={Tx`A_{s,req}=\frac{T}{f_s}=\frac{${nx(R.relSteel.T,1)}}{${nx(R.relSteel.fs,1)}}=${nx(R.relSteel.AsReq,2)}\;\mathrm{in^2}\le A_{s,prov}=${nx(R.relSteel.AsProv,2)}\;\mathrm{in^2}\;${R.relSteel.ok?'\\checkmark':'\\text{N.G.}'}`}/>
-            </Step>
-          </Deriv>
-          <div className="callout">The higher 0.24√f′ci release-tension limit (5.9.2.3.1b) applies only where bonded steel carries the full concrete tensile force T, proportioned at 0.5f_y not more than 30 ksi. T is integrated over the uncracked section at the worst tension station — the top near the ends and the bottom at midspan — and the larger governs. {R.relSteel.ok
-            ? <span style={{color:'#15803D',fontWeight:600}}>Provided ≥ required — the higher limit is justified.</span>
-            : <span style={{color:'#B3261E',fontWeight:600}}>Provided is less than required — add steel, or switch off the bonded-reinforcement option and take the lower min(0.0948√f′ci, 0.2 ksi) limit.</span>} Voids are ignored in the integration, so the required steel is if anything conservative.</div>
-        </div>
+        ? <RelSteelBody inp={inp} R={R}/>
         : <div className="callout">The bonded-reinforcement option is off, so the release-tension limit is the lower min(0.0948√f′ci, 0.2 ksi) (5.9.2.3.1b) and no end-region tension steel is required for it. Turn the option on (Inputs tab) to claim the higher 0.24√f′ci limit and enter/verify the bonded steel here.</div>}
     </Card>
   </div>);
@@ -6752,6 +6939,89 @@ function DeckTab({inp,R}){
   </div>);
 }
 
+/* HL-93 load-rating derivations (D11: a function so the Rating tab and the calculation report show the same cards). */
+function ratingDerivs(inp,R){
+  const rt=R.rating, sv=R.svcRating, shr=R.shrRating;
+  return <React.Fragment>
+    <Deriv title={`Load Rating — Flexure at the Governing Section (x = ${fmt(rt.x,1)} ft, LRFR)`} refTag="MBE 6A.4 · Strength I">
+      <VarTable rows={[
+        ['x','Governing flexure section (lowest RF)',rt.x,'ft'],
+        ['φM_n','Factored flexural resistance',rt.Rn,'k-ft'],
+        ['M_DC','Dead-load moment (DC)',rt.MDC,'k-ft'],
+        ['M_DW','Wearing-surface moment (DW)',rt.MDW,'k-ft'],
+        ['M_LL+IM','Live-load moment (HL-93 + impact)',rt.MLL,'k-ft'],
+        ['γ_DC','DC load factor',rt.gDC!=null?rt.gDC:1.25,'—'],
+        ['γ_DW','DW load factor',rt.gDW!=null?rt.gDW:1.50,'—'],
+        ['RF_inv','Inventory rating factor',rt.RFinv,'—'],
+        ['RF_opr','Operating rating factor',rt.RFopr,'—'],
+        ['φ_cφ_s','Condition × system factor (used)',rt.phiCS,'—'],
+      ]}/>
+      <Step d="General rating equation">
+        <ML s={Tx`RF=\frac{\phi_c\phi_s\phi\,R_n-\gamma_{DC}M_{DC}-\gamma_{DW}M_{DW}}{\gamma_{LL}\,M_{LL+IM}}`}/>
+      </Step>
+      <Step d={`Demands (x = ${fmt(rt.x,1)} ft, per girder)`} note={`Rated at the station of the strength-check grid with the lowest inventory RF (positive LL moment). Midspan for comparison: φM_n = ${fmt(rt.mid.Rn,0)}, M_DC = ${fmt(rt.mid.MDC,0)}, M_DW = ${fmt(rt.mid.MDW,0)}, M_LL+IM = ${fmt(rt.mid.MLL,0)} k-ft → RF_inv = ${fmt(rt.mid.RFinv,2)}.`}>
+        <ML s={Tx`M_{DC}=${nx(rt.MDC,0)}\quad M_{DW}=${nx(rt.MDW,0)}\quad M_{LL+IM}=${nx(rt.MLL,0)}\;\mathrm{k\text{-}ft}\quad \phi M_n=${nx(rt.Rn,0)}\;\mathrm{k\text{-}ft}`}/>
+      </Step>
+      <Step d="Inventory (γ_LL = 1.75)">
+        <ML s={Tx`RF_{inv}=\frac{${nx(rt.phiCS,2)}(${nx(rt.Rn,0)})-1.25(${nx(rt.MDC,0)})-1.50(${nx(rt.MDW,0)})}{1.75(${nx(rt.MLL,0)})}=${nx(rt.RFinv,2)}\;${rt.okInv?'\\checkmark':'\\text{< 1.0}'}`}/>
+      </Step>
+      <Step d="Operating (γ_LL = 1.35)">
+        <ML s={Tx`RF_{opr}=\frac{${nx(rt.phiCS,2)}(${nx(rt.Rn,0)})-1.25(${nx(rt.MDC,0)})-1.50(${nx(rt.MDW,0)})}{1.35(${nx(rt.MLL,0)})}=${nx(rt.RFopr,2)}\;${rt.okOpr?'\\checkmark':'\\text{< 1.0}'}`}/>
+      </Step>
+      <WkLink it={[{l:'φM_n at midspan',s:'fmn',tab:'flexure',card:'Derivation — Strength I Flexure'},{l:'φM_n at every station',s:'outflex',tab:'flexure',card:'Output — Flexure Stations'}]}/>   {/* D11 links */}
+    </Deriv>
+    <div className="callout">LRFR flexural rating for the HL-93 design load (MBE 6A.4) at the governing section of the strength-check grid, using the same φM_n the strength check produces and φ<sub>c</sub>·φ<sub>s</sub> = {fmt(rt.phiCS,2)}. No tonnage is given for HL-93: it is a notional load with no gross weight, so "RF × tons" has no MBE basis (tonnage is shown only for the user-entered vehicles below). This rates the controlling positive-moment section only; a full rating also covers shear, the negative-moment region (if continuous), and legal/permit vehicles. Use it for preliminary capacity screening, not as a substitute for a complete load-rating report.</div>
+
+    <Deriv title="Load Rating — Shear at Governing Section (LRFR)" refTag="MBE 6A.5.6 · Strength I">
+      <VarTable rows={[
+        ['x','Governing shear section',shr.x,'ft'],
+        ['φV_n','Factored shear resistance (MCFT)',shr.phiVn,'kip'],
+        ['V_DC','Dead-load shear (DC)',shr.VDC,'kip'],
+        ['V_DW','Wearing-surface shear (DW)',shr.VDW,'kip'],
+        ['V_LL+IM','Live-load shear (HL-93 + impact)',shr.VLL,'kip'],
+        ['RF_inv','Inventory rating factor',shr.RFinv,'—'],
+        ['RF_opr','Operating rating factor',shr.RFopr,'—'],
+      ]}/>
+      <Step d="Rating equation" note="Shear rating at the section where V_u/φV_n is greatest (excluding the bearing face). φV_n is the same general-procedure (MCFT) capacity the shear design uses. φc·φs as entered above (floored at 0.85).">
+        <ML s={Tx`RF=\frac{\phi_c\phi_s\phi V_n-\gamma_{DC}V_{DC}-\gamma_{DW}V_{DW}}{\gamma_{LL}\,V_{LL+IM}}`}/>
+      </Step>
+      <Step d={`Component shears @ x = ${fmt(shr.x,1)} ft (per girder)`}>
+        <ML s={Tx`\phi V_n=${nx(shr.phiVn,0)}\quad V_{DC}=${nx(shr.VDC,0)}\quad V_{DW}=${nx(shr.VDW,0)}\quad V_{LL+IM}=${nx(shr.VLL,0)}\;\mathrm{kip}`}/>
+      </Step>
+      <Step d="Inventory (γ_LL = 1.75) & Operating (γ_LL = 1.35)">
+        <ML s={Tx`RF_{inv}=\frac{${nx(rt.phiCS,2)}(${nx(shr.phiVn,0)})-1.25(${nx(shr.VDC,0)})-1.50(${nx(shr.VDW,0)})}{1.75(${nx(shr.VLL,0)})}=${nx(shr.RFinv,2)}\;${shr.okInv?'\\checkmark':'\\text{< 1.0}'}\qquad RF_{opr}=${nx(shr.RFopr,2)}`}/>
+      </Step>
+      <WkLink it={[{l:'φV_n at every station',s:'outshear',tab:'shear',card:'Section-by-Section Design'},{l:'φV_n at the critical section',s:'vchk',tab:'shear',card:'Derivation — Shear'}]}/>   {/* D11 links */}
+    </Deriv>
+    <div className="callout">Shear rating (MBE 6A.5.6) at the governing shear section. For prestressed girders shear can control the operating rating even when flexure is comfortable, so it is reported alongside flexure. Uses the same MCFT φV_n as the design check; a complete rating also covers the negative-moment/pier region and legal/permit vehicles.</div>
+
+    <Deriv title="Load Rating — Service III Tension (Prestressed Concrete)" refTag="MBE 6A.5.4.1">
+      <VarTable rows={[
+        ['x','Governing bottom-tension section',sv.x,'ft'],
+        ['f_ps','Prestress compression @ bottom fiber',sv.fPS,'ksi'],
+        ['f_DC','Bottom tension from DC loads',sv.fDC,'ksi'],
+        ['f_DW','Bottom tension from DW (wearing)',sv.fDW,'ksi'],
+        ['f_LL','Bottom tension from LL+IM (unfactored)',sv.fLL,'ksi'],
+        ['f_r','Allowable Service III tension',sv.fr,'ksi'],
+        ['γ_LL','Service III live-load factor',sv.gLL,'—'],
+        ['RF','Service III rating factor',sv.RF>=99?0:sv.RF,'—'],
+      ]}/>
+      <Step d="Rating equation (tension limit state)"
+            note="For prestressed concrete the MBE requires a Service III rating: the bottom-fiber tension under (permanent + γLL·live) must not exceed the allowable f_r. Rearranged into RF form, the prestress compression and permanent-load tensions form the available capacity for live-load tension. γDC = γDW = 1.0, γLL = 0.8 (MBE Table 6A.4.2.2-1).">
+        <ML s={Tx`RF=\frac{f_r+f_{ps}-\gamma_{DC}f_{DC}-\gamma_{DW}f_{DW}}{\gamma_{LL}\,f_{LL}}`}/>
+      </Step>
+      <Step d={`Bottom-fiber stress components @ x = ${fmt(sv.x,1)} ft (+ = compression)`}>
+        <ML s={Tx`f_{ps}=\frac{P_e}{A_g}+\frac{P_e e}{S_b}=${nx(sv.fPS,3)}\quad f_{DC}=${nx(sv.fDC,3)}\quad f_{DW}=${nx(sv.fDW,3)}\quad f_{LL}=${nx(sv.fLL,3)}\;\mathrm{ksi}`}/>
+      </Step>
+      <Step d="Allowable tension & rating">
+        <ML s={Tx`f_r=${nx(sv.fr,3)}\;\mathrm{ksi}\qquad RF=\frac{${nx(sv.fr,3)}+${nx(sv.fPS,3)}-${nx(sv.fDC,3)}-${nx(sv.fDW,3)}}{0.8(${nx(sv.fLL,3)})}=${sv.RF>=99?'\\infty':nx(sv.RF,2)}\;${sv.ok?'\\checkmark':'\\text{< 1.0}'}`}/>
+        <div style={{fontSize:11.5,color:'var(--ink2)',marginTop:2}}>Allowable tension f_r = {inp.opt.corrosion==='severe'?'0.0948√f′c ≤ 0.3 ksi (severe corrosion)':'0.19√f′c ≤ 0.6 ksi (moderate corrosion)'}.</div>
+      </Step>
+      <WkLink it={[{l:'P_e, f_pe',s:'pe',tab:'losses',card:'Derivation — '+(inp.opt.lossMethod==='refined'?'Refined':'Approximate')+' Long-Term Losses'}]}/>   {/* D11 links */}
+    </Deriv>
+    <div className="callout">Service III load rating (MBE 6A.5.4.1) at the governing bottom-tension section — <b>mandatory for prestressed members</b>, and frequently the controlling rating for pretensioned girders even when the strength rating is high. The prestress compression and permanent-load tensions set the capacity available to resist live-load-induced tension; the RF is how many times the HL-93 live-load tension the section can carry before reaching the allowable {inp.opt.corrosion==='severe'?'0.0948√f′c ≤ 0.3 ksi':'0.19√f′c ≤ 0.6 ksi'} limit. {sv.RF>=99?'The section is in net compression under full Service III load, so live load never governs tension here (RF not applicable).':''} Uses f_pe without elastic gains (consistent with γLL = 0.8). Screening tool — not a substitute for a complete rating report.</div>
+  </React.Fragment>;
+}
 function RatingTab({inp,R,set,onSendCapacity,capLocked,onToggleCapLock}){
   const rt=R.rating, sv=R.svcRating, shr=R.shrRating;
   const veh=inp.rateVeh||[];
@@ -6786,80 +7056,7 @@ function RatingTab({inp,R,set,onSendCapacity,capLocked,onToggleCapLock}){
       </div>
       <div className="hint">φc·φs = {fmt(rt.phiC,2)} × {fmt(rt.phiS,2)} = {fmt(rt.phiC*rt.phiS,3)} → used <b>{fmt(rt.phiCS,3)}</b>{rt.phiCSfloor?' (floored at 0.85, MBE Eq. 6A.4.2.1-3)':rt.phiCScap?' (capped at 1.00)':''}. Applied to the flexure and shear strength ratings and to the vehicle table below; not to the Service III rating. A blank box is taken as 1.00.</div>
     </Card>
-    <Deriv title={`Load Rating — Flexure at the Governing Section (x = ${fmt(rt.x,1)} ft, LRFR)`} refTag="MBE 6A.4 · Strength I">
-      <VarTable rows={[
-        ['x','Governing flexure section (lowest RF)',rt.x,'ft'],
-        ['φM_n','Factored flexural resistance',rt.Rn,'k-ft'],
-        ['M_DC','Dead-load moment (DC)',rt.MDC,'k-ft'],
-        ['M_DW','Wearing-surface moment (DW)',rt.MDW,'k-ft'],
-        ['M_LL+IM','Live-load moment (HL-93 + impact)',rt.MLL,'k-ft'],
-        ['γ_DC','DC load factor',rt.gDC!=null?rt.gDC:1.25,'—'],
-        ['γ_DW','DW load factor',rt.gDW!=null?rt.gDW:1.50,'—'],
-        ['RF_inv','Inventory rating factor',rt.RFinv,'—'],
-        ['RF_opr','Operating rating factor',rt.RFopr,'—'],
-        ['φ_cφ_s','Condition × system factor (used)',rt.phiCS,'—'],
-      ]}/>
-      <Step d="General rating equation">
-        <ML s={Tx`RF=\frac{\phi_c\phi_s\phi\,R_n-\gamma_{DC}M_{DC}-\gamma_{DW}M_{DW}}{\gamma_{LL}\,M_{LL+IM}}`}/>
-      </Step>
-      <Step d={`Demands (x = ${fmt(rt.x,1)} ft, per girder)`} note={`Rated at the station of the strength-check grid with the lowest inventory RF (positive LL moment). Midspan for comparison: φM_n = ${fmt(rt.mid.Rn,0)}, M_DC = ${fmt(rt.mid.MDC,0)}, M_DW = ${fmt(rt.mid.MDW,0)}, M_LL+IM = ${fmt(rt.mid.MLL,0)} k-ft → RF_inv = ${fmt(rt.mid.RFinv,2)}.`}>
-        <ML s={Tx`M_{DC}=${nx(rt.MDC,0)}\quad M_{DW}=${nx(rt.MDW,0)}\quad M_{LL+IM}=${nx(rt.MLL,0)}\;\mathrm{k\text{-}ft}\quad \phi M_n=${nx(rt.Rn,0)}\;\mathrm{k\text{-}ft}`}/>
-      </Step>
-      <Step d="Inventory (γ_LL = 1.75)">
-        <ML s={Tx`RF_{inv}=\frac{${nx(rt.phiCS,2)}(${nx(rt.Rn,0)})-1.25(${nx(rt.MDC,0)})-1.50(${nx(rt.MDW,0)})}{1.75(${nx(rt.MLL,0)})}=${nx(rt.RFinv,2)}\;${rt.okInv?'\\checkmark':'\\text{< 1.0}'}`}/>
-      </Step>
-      <Step d="Operating (γ_LL = 1.35)">
-        <ML s={Tx`RF_{opr}=\frac{${nx(rt.phiCS,2)}(${nx(rt.Rn,0)})-1.25(${nx(rt.MDC,0)})-1.50(${nx(rt.MDW,0)})}{1.35(${nx(rt.MLL,0)})}=${nx(rt.RFopr,2)}\;${rt.okOpr?'\\checkmark':'\\text{< 1.0}'}`}/>
-      </Step>
-    </Deriv>
-    <div className="callout">LRFR flexural rating for the HL-93 design load (MBE 6A.4) at the governing section of the strength-check grid, using the same φM_n the strength check produces and φ<sub>c</sub>·φ<sub>s</sub> = {fmt(rt.phiCS,2)}. No tonnage is given for HL-93: it is a notional load with no gross weight, so "RF × tons" has no MBE basis (tonnage is shown only for the user-entered vehicles below). This rates the controlling positive-moment section only; a full rating also covers shear, the negative-moment region (if continuous), and legal/permit vehicles. Use it for preliminary capacity screening, not as a substitute for a complete load-rating report.</div>
-
-    <Deriv title="Load Rating — Shear at Governing Section (LRFR)" refTag="MBE 6A.5.6 · Strength I">
-      <VarTable rows={[
-        ['x','Governing shear section',shr.x,'ft'],
-        ['φV_n','Factored shear resistance (MCFT)',shr.phiVn,'kip'],
-        ['V_DC','Dead-load shear (DC)',shr.VDC,'kip'],
-        ['V_DW','Wearing-surface shear (DW)',shr.VDW,'kip'],
-        ['V_LL+IM','Live-load shear (HL-93 + impact)',shr.VLL,'kip'],
-        ['RF_inv','Inventory rating factor',shr.RFinv,'—'],
-        ['RF_opr','Operating rating factor',shr.RFopr,'—'],
-      ]}/>
-      <Step d="Rating equation" note="Shear rating at the section where V_u/φV_n is greatest (excluding the bearing face). φV_n is the same general-procedure (MCFT) capacity the shear design uses. φc·φs as entered above (floored at 0.85).">
-        <ML s={Tx`RF=\frac{\phi_c\phi_s\phi V_n-\gamma_{DC}V_{DC}-\gamma_{DW}V_{DW}}{\gamma_{LL}\,V_{LL+IM}}`}/>
-      </Step>
-      <Step d={`Component shears @ x = ${fmt(shr.x,1)} ft (per girder)`}>
-        <ML s={Tx`\phi V_n=${nx(shr.phiVn,0)}\quad V_{DC}=${nx(shr.VDC,0)}\quad V_{DW}=${nx(shr.VDW,0)}\quad V_{LL+IM}=${nx(shr.VLL,0)}\;\mathrm{kip}`}/>
-      </Step>
-      <Step d="Inventory (γ_LL = 1.75) & Operating (γ_LL = 1.35)">
-        <ML s={Tx`RF_{inv}=\frac{${nx(rt.phiCS,2)}(${nx(shr.phiVn,0)})-1.25(${nx(shr.VDC,0)})-1.50(${nx(shr.VDW,0)})}{1.75(${nx(shr.VLL,0)})}=${nx(shr.RFinv,2)}\;${shr.okInv?'\\checkmark':'\\text{< 1.0}'}\qquad RF_{opr}=${nx(shr.RFopr,2)}`}/>
-      </Step>
-    </Deriv>
-    <div className="callout">Shear rating (MBE 6A.5.6) at the governing shear section. For prestressed girders shear can control the operating rating even when flexure is comfortable, so it is reported alongside flexure. Uses the same MCFT φV_n as the design check; a complete rating also covers the negative-moment/pier region and legal/permit vehicles.</div>
-
-    <Deriv title="Load Rating — Service III Tension (Prestressed Concrete)" refTag="MBE 6A.5.4.1">
-      <VarTable rows={[
-        ['x','Governing bottom-tension section',sv.x,'ft'],
-        ['f_ps','Prestress compression @ bottom fiber',sv.fPS,'ksi'],
-        ['f_DC','Bottom tension from DC loads',sv.fDC,'ksi'],
-        ['f_DW','Bottom tension from DW (wearing)',sv.fDW,'ksi'],
-        ['f_LL','Bottom tension from LL+IM (unfactored)',sv.fLL,'ksi'],
-        ['f_r','Allowable Service III tension',sv.fr,'ksi'],
-        ['γ_LL','Service III live-load factor',sv.gLL,'—'],
-        ['RF','Service III rating factor',sv.RF>=99?0:sv.RF,'—'],
-      ]}/>
-      <Step d="Rating equation (tension limit state)"
-            note="For prestressed concrete the MBE requires a Service III rating: the bottom-fiber tension under (permanent + γLL·live) must not exceed the allowable f_r. Rearranged into RF form, the prestress compression and permanent-load tensions form the available capacity for live-load tension. γDC = γDW = 1.0, γLL = 0.8 (MBE Table 6A.4.2.2-1).">
-        <ML s={Tx`RF=\frac{f_r+f_{ps}-\gamma_{DC}f_{DC}-\gamma_{DW}f_{DW}}{\gamma_{LL}\,f_{LL}}`}/>
-      </Step>
-      <Step d={`Bottom-fiber stress components @ x = ${fmt(sv.x,1)} ft (+ = compression)`}>
-        <ML s={Tx`f_{ps}=\frac{P_e}{A_g}+\frac{P_e e}{S_b}=${nx(sv.fPS,3)}\quad f_{DC}=${nx(sv.fDC,3)}\quad f_{DW}=${nx(sv.fDW,3)}\quad f_{LL}=${nx(sv.fLL,3)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Allowable tension & rating">
-        <ML s={Tx`f_r=${nx(sv.fr,3)}\;\mathrm{ksi}\qquad RF=\frac{${nx(sv.fr,3)}+${nx(sv.fPS,3)}-${nx(sv.fDC,3)}-${nx(sv.fDW,3)}}{0.8(${nx(sv.fLL,3)})}=${sv.RF>=99?'\\infty':nx(sv.RF,2)}\;${sv.ok?'\\checkmark':'\\text{< 1.0}'}`}/>
-        <div style={{fontSize:11.5,color:'var(--ink2)',marginTop:2}}>Allowable tension f_r = {inp.opt.corrosion==='severe'?'0.0948√f′c ≤ 0.3 ksi (severe corrosion)':'0.19√f′c ≤ 0.6 ksi (moderate corrosion)'}.</div>
-      </Step>
-    </Deriv>
-    <div className="callout">Service III load rating (MBE 6A.5.4.1) at the governing bottom-tension section — <b>mandatory for prestressed members</b>, and frequently the controlling rating for pretensioned girders even when the strength rating is high. The prestress compression and permanent-load tensions set the capacity available to resist live-load-induced tension; the RF is how many times the HL-93 live-load tension the section can carry before reaching the allowable {inp.opt.corrosion==='severe'?'0.0948√f′c ≤ 0.3 ksi':'0.19√f′c ≤ 0.6 ksi'} limit. {sv.RF>=99?'The section is in net compression under full Service III load, so live load never governs tension here (RF not applicable).':''} Uses f_pe without elastic gains (consistent with γLL = 0.8). Screening tool — not a substitute for a complete rating report.</div>
+    {ratingDerivs(inp,R)}
 
     <Card title="Legal / Permit Vehicle Rating — User-Entered Forces" refTag="MBE 6A.4.4 / 6A.4.5 · Strength I">
       <div className="callout">Enter the <b>fully-factored</b> live-load moment and shear per vehicle — i.e. with the distribution factor, dynamic load allowance (impact), multiple-presence factor, <b>and</b> the LRFR live-load factor already applied (from your own analysis). The app supplies the resistance side (φM_n at midspan, φV_n at the governing shear section) and the factored dead loads, and reports RF = (φc·φs·φR − 1.25 DC − 1.50 DW) / (your factored LL) for flexure and shear, governed by the lower. Gross weight (tons) is optional and only used to convert RF to a rated tonnage.</div>
@@ -7160,18 +7357,27 @@ function ReportTab({inp,R}){
   const flex20=R.flexGrid.filter(r=>Math.abs(r.x*20/L-Math.round(r.x*20/L))<1e-6);
   const ckLL=ck.find(x=>x.n==='LL deflection');
 
-  return(<div>
-    <div className="btnrow noprint" style={{marginBottom:12}}>
-      <button className="btn pri" onClick={()=>window.print()}>Print / Save PDF</button>
-    </div>
-    <Card title="Design Check Summary" refTag={`${inp.girder} · L = ${inp.L} ft · ${R.ss.Ntot}-${inp.str.size} strands`}>
-      <Tbl head={['Check','Location (ft)','Demand','Capacity / Limit','Ratio','Status']}
-        rows={R.checks.map(c=>({c:[c.n,fmt(c.loc,1),fmt(Math.abs(c.v),2)+' '+c.u,fmt(Math.abs(c.lim),2)+' '+c.u,fmt(c.r,2),PF(c.pass)]}))}/>
-    </Card>
+  /* D11 (2026-10-18): print mode (page header/footer, report printed alone) only while this report prints. */
+  const prRef=useRef(null); prRef.current={inp,R};
+  useEffect(()=>{ const on=()=>psbrPrintMode(true,prRef.current.inp,prRef.current.R), off=()=>psbrPrintMode(false);
+    window.addEventListener('beforeprint',on); window.addEventListener('afterprint',off);
+    return ()=>{ window.removeEventListener('beforeprint',on); window.removeEventListener('afterprint',off); psbrPrintMode(false); }; },[]);
+  const p=inp.proj||{}, see={};
+  const refs=[
+    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications. The tool states “9th Ed. article numbering” (Assumptions & basis); edition: verify. Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3 (continuity)':'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
+    ['AASHTO MBE','Manual for Bridge Evaluation, Section 6A (LRFR): 6A.4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Eq. 6A.4.2.1-3, 6A.5.4.1, 6A.5.6 (HL-93 design-load rating). Edition not stated by the tool: verify.'],
+    ['PCI','PCI Design Handbook: long-term camber multipliers. Edition not stated by the tool: verify.']];
+  const {out,toc}=psbrNumber(<React.Fragment>
+
+    {/* ============ DESIGN SUMMARY ============ */}
+    <CalcSec title="Design Summary">
+      <Step d="Design check summary" r={`${inp.girder} · L = ${inp.L} ft · ${R.ss.Ntot}-${inp.str.size} strands`}>
+      <Tbl head={['Check','Location (ft)','Demand','Capacity / Limit','Ratio','Status','Worked in']}
+        rows={R.checks.map(c=>({c:[c.n,fmt(c.loc,1),fmt(Math.abs(c.v),2)+' '+c.u,fmt(Math.abs(c.lim),2)+' '+c.u,fmt(c.r,2),PF(c.pass),<WkCell n={c.n}/>]}))}/>
     {R.warns&&R.warns.length>0&&<div className="callout warn" style={{marginBottom:14}}>
       <b>Detailing warnings:</b><ul className="warnlist">{R.warns.map((w,i)=><li key={i}>{w}</li>)}</ul></div>}
-    <div className="cols" style={{paddingTop:0,gridTemplateColumns:'1fr 1fr'}}>
-      <Card title="Key Quantities">
+      </Step>
+      <Step d="Key quantities">
         <KV rows={[['Girder',inp.girder,''],['Span',fmt(R.L,1),'ft'],['Strands',`${R.ss.Ntot} — ${inp.str.size}`,''],
           ['e mid / end',`${fmt(R.ss.eMid,1)} / ${fmt(R.ss.eEnd,1)}`,'in'],
           ['f′ci / f′c / f′c,deck',`${inp.mat.fci} / ${inp.mat.fc} / ${inp.mat.fcd}`,'ksi'],
@@ -7181,29 +7387,33 @@ function ReportTab({inp,R}){
           ['M_LL+IM / V_LL+IM',`${fmt(R.MLL,0)} k-ft / ${fmt(R.VLL,0)} k`,''],
           ['φMn / Mu @ mid',`${fmt(R.fMid.phiMn/12,0)} / ${fmt(R.MuMid/12,0)}`,'k-ft'],
           ['Camber: release / final',`${fmt(R.cam.rel,2)} / ${fmt(R.cam.final,2)}`,'in']]}/>
-      </Card>
-      <Card title="Assumptions & Basis">
+        <WkLink it={[{l:'total loss, P_e',s:'pe',tab:'losses',card:'Derivation — '+(refined?'Refined':'Approximate')+' Long-Term Losses'},
+          {l:'DF_m / DF_v, M_LL+IM / V_LL+IM',s:'dfll',tab:'report',card:'Loads — Dead, HL-93 & Distribution'},
+          {l:'φMn / Mu @ mid',s:'fmn',tab:'flexure',card:'Derivation — Strength I Flexure'},
+          {l:'camber',s:'camf',tab:'camber',card:'Derivation — Camber'}]}/>   {/* D11 links */}
+      </Step>
+      <Step d="Assumptions & basis">
         <div style={{fontSize:12,lineHeight:1.65,color:'var(--ink2)'}}>
         AASHTO LRFD BDS (9th Ed. article numbering) · {R.useExt?<React.Fragment><b>composite-stage demands imported from MIDAS</b> (span {R.ext.sel.idx}, {fmt(R.ext.spanLen,0)} ft; DC2, DW and the LL+IM envelope by station, DF &amp; IM already applied; girder self-weight and DC1 deck/haunch computed by PS-Beam on the non-composite section) · </React.Fragment>:'simple span, '}unshored construction · {R.useT?'transformed section at release (P @ fpbt), gross/composite thereafter':'gross section properties (transformed-section elastic gains not itemized)'} · losses computed at midspan, applied uniformly · {R.useExt?'LL force effects interpolated from the imported station envelope':'LL moment shaped parabolically and shear linearly from envelope values'} · approximate fps method (5.6.3.1.1), deck f′c for the compression block · MCFT general procedure assuming ≥ minimum transverse reinforcement{R.cont?(R.cont.extPier?' · continuity: pier negative moment taken from the MIDAS envelope at the span ends':' · continuity for LL+SIDL: equal adjacent spans, pier negative moment only (positive-moment connection & restraint moments per 5.12.3.3 not computed)'):''} · time-dependent coefficients per 5.4.2.3 · units: kip, in, ksi (ft for span). Verify against jurisdiction-specific requirements (e.g., RIDOT LRFD supplements) before issue.
         </div>
-      </Card>
-    </div>
+      </Step>
+    </CalcSec>
 
     {/* ============ GRAPHICS ============ */}
-    <ReportGraphics inp={inp} R={R}/>
-    <StressHeatmap inp={inp} R={R}/>
+    <CalcSec title="Graphics">
+      <Step d="Force-effect diagrams"><ReportGraphics inp={inp} R={R}/></Step>
+      <Step d="Stress distribution on the cross-section"><StressHeatmap inp={inp} R={R}/></Step>
+      <Step d="3D reinforcement cage">
     <Card title="3D Reinforcement Cage" refTag={snapStore.png?snapStore.meta:'capture from Section Props tab'}>
       {snapStore.png
         ? <img src={snapStore.png} alt="3D reinforcement cage" style={{width:'100%',border:'1px solid var(--line2)',display:'block'}}/>
         : <div className="callout">No 3D snapshot captured yet. Open the <b>Section Props</b> tab, orient the 3D reinforcement cage how you like, and click <b>“📷 Capture for report”</b>. The image will appear here and in the printed report.</div>}
     </Card>
+      </Step>
+    </CalcSec>
 
-    <div style={{fontFamily:'var(--sans)',fontStretch:'75%',fontWeight:800,fontSize:17,letterSpacing:1,
-      textTransform:'uppercase',borderBottom:'2px solid var(--ink)',margin:'8px 0 12px',paddingBottom:5}}>
-      Calculation Package — {inp.proj.name||'—'} · {inp.proj.girderId||'—'}</div>
-
-    {/* ============ 1 — ELASTIC MODULI ============ */}
-    <CalcSec n="1" title="Materials — Elastic Moduli">
+    {/* ============ ELASTIC MODULI ============ */}
+    <CalcSec title="Materials — Elastic Moduli">
       <Step d="Girder modulus at release" r="LRFD 5.4.2.4">
         <ML s={Tx`E_{ci}=120{,}000\,K_1\,w_c^{2.0}\,(f'_{ci})^{0.33}=120{,}000(1.0)(${nx(m.wc,3)})^{2}(${nx(m.fci,2)})^{0.33}=${nx(lo.Eci,0)}\;\mathrm{ksi}`}/>
       </Step>
@@ -7215,8 +7425,8 @@ function ReportTab({inp,R}){
       </Step>
     </CalcSec>
 
-    {/* ============ 2 — SECTION PROPERTIES ============ */}
-    <CalcSec n="2" title="Section Properties">
+    {/* ============ SECTION PROPERTIES ============ */}
+    <CalcSec title="Section Properties">
       <Step d="Gross girder (library values)" r={inp.girder}>
         <ML s={Tx`A_g=${nx(g.A,0)}\;\mathrm{in^2}\qquad I_g=${nx(g.I,0)}\;\mathrm{in^4}\qquad y_b=${nx(g.yb,2)}\;\mathrm{in}\qquad y_t=h-y_b=${nx(g.h,0)}-${nx(g.yb,2)}=${nx(g.yt,2)}\;\mathrm{in}`}/>
         <ML s={Tx`S_b=\frac{I_g}{y_b}=\frac{${nx(g.I,0)}}{${nx(g.yb,2)}}=${nx(g.Sb,0)}\;\mathrm{in^3}\qquad S_t=\frac{I_g}{y_t}=\frac{${nx(g.I,0)}}{${nx(g.yt,2)}}=${nx(g.St,0)}\;\mathrm{in^3}`}/>
@@ -7237,7 +7447,7 @@ function ReportTab({inp,R}){
         <ML s={Tx`I_c=I_g+A_g(y_{bc}-y_b)^2+\tfrac{n\,b_{eff}t_s^3}{12}+A_d(y_d-y_{bc})^2+\tfrac{n\,b_{tf}t_h^3}{12}+A_h(y_h-y_{bc})^2`}/>
         <ML s={Tx`I_c=${nx(g.I,0)}+${nx(Ic2,0)}+${nx(Ic3,0)}+${nx(Ic4,0)}+${nx(Ic5,0)}+${nx(Ic6,0)}=${nx(cp.Ic,0)}\;\mathrm{in^4}`}/>
       </Step>
-      <Step d="Composite section moduli">
+      <Step d="Composite section moduli" wk="scomp">
         <ML s={Tx`S_{bc}=\frac{I_c}{y_{bc}}=\frac{${nx(cp.Ic,0)}}{${nx(cp.ybc,2)}}=${nx(cp.Sbc,0)}\quad S_{tg}=\frac{I_c}{h-y_{bc}}=\frac{${nx(cp.Ic,0)}}{${nx(g.h-cp.ybc,2)}}=${nx(cp.Stg,0)}\quad S_{td}=\frac{I_c}{n(h_c-y_{bc})}=${nx(cp.Std,0)}\;\mathrm{in^3}`}/>
       </Step>
       <Step d="Deck + haunch dead load (tributary)">
@@ -7246,8 +7456,8 @@ function ReportTab({inp,R}){
       </Step>
     </CalcSec>
 
-    {/* ============ 3 — STRAND GEOMETRY ============ */}
-    <CalcSec n="3" title="Strand Geometry">
+    {/* ============ STRAND GEOMETRY ============ */}
+    <CalcSec title="Strand Geometry">
       <Step d="Total strand area">
         <ML s={Tx`A_{ps}=N\cdot A_b=${nx(ss.Ntot,0)}(${nx(ss.st.Ab,3)})=${nx(ss.Aps,3)}\;\mathrm{in^2}`}/>
       </Step>
@@ -7263,8 +7473,8 @@ function ReportTab({inp,R}){
       </Step>}
     </CalcSec>
 
-    {/* ============ 4 — PRESTRESS & ELASTIC SHORTENING ============ */}
-    <CalcSec n="4" title="Prestress Force & Elastic Shortening">
+    {/* ============ PRESTRESS & ELASTIC SHORTENING ============ */}
+    <CalcSec title="Prestress Force & Elastic Shortening">
       <Step d="Stress immediately before transfer" r="LRFD T.5.9.2.2-1">
         <ML s={Tx`f_{pbt}=${nx(+inp.str.jack,2)}\,f_{pu}=${nx(+inp.str.jack,2)}(${nx(fpu,0)})=${nx(R.fpbt,2)}\;\mathrm{ksi}`}/>
       </Step>
@@ -7276,15 +7486,15 @@ function ReportTab({inp,R}){
         <ML s={Tx`I_g+e_m^2A_g=${nx(g.I,0)}+(${nx(em,2)})^2(${nx(g.A,0)})=${nx(X1,0)}\;\mathrm{in^4}`}/>
         <ML s={Tx`\Delta f_{pES}=\frac{${nx(ss.Aps,3)}(${nx(R.fpbt,2)})(${nx(X1,0)})-${nx(em,2)}(${nx(MgM,0)})(${nx(g.A,0)})}{${nx(ss.Aps,3)}(${nx(X1,0)})+\dfrac{${nx(g.A,0)}(${nx(g.I,0)})(${nx(lo.Eci,0)})}{${nx(Ep,0)}}}=${nx(lo.dfES,2)}\;\mathrm{ksi}`}/>
       </Step>
-      <Step d="Force & concrete stress at strand c.g. after transfer">
+      <Step d="Force & concrete stress at strand c.g. after transfer" wk="pes">
         <ML s={Tx`f_{pt}=f_{pbt}-\Delta f_{pES}=${nx(R.fpbt,2)}-${nx(lo.dfES,2)}=${nx(lo.fpt,2)}\;\mathrm{ksi}\qquad P_i=A_{ps}f_{pt}=${nx(ss.Aps,3)}(${nx(lo.fpt,2)})=${nx(lo.Pi,0)}\;\mathrm{kip}`}/>
         <ML s={Tx`f_{cgp}=\frac{P_i}{A_g}+\frac{P_i e_m^2}{I_g}-\frac{M_g e_m}{I_g}=${nx(lo.Pi/g.A,3)}+${nx(lo.Pi*em*em/g.I,3)}-${nx(MgM*em/g.I,3)}=${nx(lo.fcgp,3)}\;\mathrm{ksi}`}/>
       </Step>
     </CalcSec>
 
-    {/* ============ 5 — LONG-TERM LOSSES ============ */}
+    {/* ============ LONG-TERM LOSSES ============ */}
     {refined?
-    <CalcSec n="5" title="Long-Term Losses — Refined Method (LRFD 5.9.3.4)">
+    <CalcSec title="Long-Term Losses — Refined Method (LRFD 5.9.3.4)">
       <Step d="Time-development & humidity factors" r="LRFD 5.4.2.3">
         <ML s={Tx`k_s=\max(1.45-0.13\,V\!/\!S,\;1.0)=\max(1.45-0.13(${nx(m.VS,2)}),1.0)=${nx(rf.ks,3)}`}/>
         <ML s={Tx`k_{hs}=2.00-0.014H=2.00-0.014(${nx(m.H,0)})=${nx(rf.khs,3)}\qquad k_{hc}=1.56-0.008H=${nx(rf.khc,3)}\qquad k_f=\frac{5}{1+f'_{ci}}=\frac{5}{1+${nx(m.fci,1)}}=${nx(rf.kf,3)}`}/>
@@ -7313,33 +7523,33 @@ function ReportTab({inp,R}){
         <ML s={Tx`\Delta f_{pCD}=\frac{E_p}{E_{ci}}f_{cgp}(\psi_{bif}-\psi_{bid})K_{df}+\frac{E_p}{E_c}\Delta f_{cd}\,\psi_{bdf}K_{df}=${nx(fin.dfCD,3)}\;\mathrm{ksi}`}/>
         <ML s={Tx`\Delta f_{pR2}=\Delta f_{pR1}=${nx(fin.dfR2,3)}\;\mathrm{ksi}\qquad \Delta f_{pSS}=${nx(fin.dfSS,2)}\;\mathrm{ksi}\;(\text{deck shrinkage, 5.9.3.4.3d})`}/>
       </Step>
-      <Step d="Loss totals & effective prestress">
+      <Step d="Loss totals & effective prestress" wk="pe">
         <ML s={Tx`\Delta f_{pLT}=${nx(rf.dfSR,2)}+${nx(rf.dfCR,2)}+${nx(rf.dfR1,2)}+${nx(rf.dfSD,2)}+${nx(fin.dfCD,2)}+${nx(fin.dfR2,2)}-${nx(fin.dfSS,2)}=${nx(fin.total,2)}\;\mathrm{ksi}`}/>
         <ML s={Tx`f_{pe}=f_{pbt}-\Delta f_{pES}-\Delta f_{pLT}=${nx(R.fpbt,2)}-${nx(lo.dfES,2)}-${nx(R.LT,2)}=${nx(R.fpe,2)}\;\mathrm{ksi}\;(${nx(R.pctLoss,1)}\%\text{ total loss})`}/>
         <ML s={Tx`P_e=A_{ps}f_{pe}=${nx(ss.Aps,3)}(${nx(R.fpe,2)})=${nx(ss.Aps*R.fpe,0)}\;\mathrm{kip}`}/>
       </Step>
     </CalcSec>
     :
-    <CalcSec n="5" title="Long-Term Losses — Approximate Method (LRFD 5.9.3.3)">
+    <CalcSec title="Long-Term Losses — Approximate Method (LRFD 5.9.3.3)">
       <Step d="Correction factors">
         <ML s={Tx`\gamma_h=1.7-0.01H=1.7-0.01(${nx(m.H,0)})=${nx(gh,3)}\qquad \gamma_{st}=\frac{5}{1+f'_{ci}}=\frac{5}{1+${nx(m.fci,1)}}=${nx(gst,3)}`}/>
       </Step>
-      <Step d="Lump-sum long-term loss" r="LRFD 5.9.3.3-1">
+      <Step d="Lump-sum long-term loss" r="LRFD 5.9.3.3-1" wk="pe">
         <ML s={Tx`\Delta f_{pLT}=10\frac{f_{pi}A_{ps}}{A_g}\gamma_h\gamma_{st}+12\gamma_h\gamma_{st}+\Delta f_{pR}=10\frac{${nx(R.fpbt,1)}(${nx(ss.Aps,3)})}{${nx(g.A,0)}}(${nx(gh,3)})(${nx(gst,3)})+12(${nx(gh,3)})(${nx(gst,3)})+${nx(lo.apx.R,1)}=${nx(lo.apx.total,2)}\;\mathrm{ksi}`}/>
         <ML s={Tx`f_{pe}=${nx(R.fpbt,2)}-${nx(lo.dfES,2)}-${nx(R.LT,2)}=${nx(R.fpe,2)}\;\mathrm{ksi}\qquad P_e=${nx(ss.Aps*R.fpe,0)}\;\mathrm{kip}`}/>
       </Step>
     </CalcSec>}
 
-    {/* ============ 5b — ELASTIC GAINS ============ */}
-    <CalcSec n="5b" title="Elastic Gains (LRFD C5.9.3.4.3)">
+    {/* ============ ELASTIC GAINS ============ */}
+    <CalcSec title="Elastic Gains (LRFD C5.9.3.4.3)">
       <Step d="Loads applied after transfer increase strand stress: Δf_p = (E_p/E_c)(M·e/I)">
         <ML s={Tx`\Delta f_{p,precast}=\frac{E_p}{E_c}\frac{M_{DC1}e_m}{I_g}=+${nx(R.gains.precast,2)}\;\mathrm{ksi}\quad \Delta f_{p,comp}=\frac{E_p}{E_c}\frac{(M_{DC2}+M_{DW})e_{pc}}{I_c}=+${nx(R.gains.composite,2)}\;\mathrm{ksi}`}/>
         <ML s={Tx`\Delta f_{p,LL}=\frac{E_p}{E_c}\frac{M_{LL}e_{pc}}{I_c}=+${nx(R.gains.live,2)}\;\mathrm{ksi}\;(\text{transient})\qquad f_{pe}+\Delta f_{p,perm}=${nx(R.fpe,2)}+${nx(R.gains.permanent+(+inp.opt.dfpSS),2)}=${nx(R.fpeGain+(+inp.opt.dfpSS),2)}\;\mathrm{ksi}`}/>
       </Step>
     </CalcSec>
 
-    {/* ============ 5c — STRAND FORCE/STRESS BY ROW & STAGE ============ */}
-    <CalcSec n="5c" title="Strand Force & Stress by Row and Stage">
+    {/* ============ STRAND FORCE/STRESS BY ROW & STAGE ============ */}
+    <CalcSec title="Strand Force & Stress by Row and Stage">
       <table className="eng" style={{width:'100%',fontSize:11}}>
         <thead>
           <tr><th>Row y (in)</th><th>e (in)</th><th>n</th><th>f_pt (ksi)</th><th>P_rel (kip)</th><th>f_pD (ksi)</th><th>f_pe (ksi)</th><th>P_e (kip)</th></tr>
@@ -7359,8 +7569,8 @@ function ReportTab({inp,R}){
       <div style={{fontSize:11,color:'var(--ink2)',marginTop:5}}>Stages: f_pt at release (after elastic shortening); f_pD after transfer→deck-placement time-dependent losses (5.9.3.4.2); f_pe permanent after all long-term losses. Each row at its own eccentricity — elastic shortening and creep scale with the concrete stress at that level. “(H)” = harped group. See the Losses tab for the worked single-row derivation.</div>
     </CalcSec>
 
-    {/* ============ 6 — DEAD & LIVE LOADS ============ */}
-    <CalcSec n="6" title="Loads — Dead, HL-93 & Distribution">
+    {/* ============ DEAD & LIVE LOADS ============ */}
+    <CalcSec title="Loads — Dead, HL-93 & Distribution">
       <Step d="Midspan dead-load moments (simple span)">
         <ML s={Tx`M=\frac{wL^2}{8}:\quad M_g=\frac{${nx(R.wG,3)}(${nx(L,0)})^2}{8}=${nx(rMid.Mg/12,0)}\quad M_{dk}=\frac{${nx(R.wDk,3)}(${nx(L,0)})^2}{8}=${nx(rMid.Mdk/12,0)}\quad M_{bar}=${nx(Mbar/12,0)}\quad M_{dw}=${nx(Mdw/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
@@ -7399,13 +7609,13 @@ function ReportTab({inp,R}){
         <ML s={Tx`c_1=0.25\left(\frac{K_g}{12Lt_s^3}\right)^{0.25}\left(\frac{S}{L}\right)^{0.5}\;(\theta<30°\Rightarrow c_1=0)\qquad \text{moment}\times\left[1-c_1\tan^{1.5}\theta\right]=${nx(df.skM,4)}`}/>
         <ML s={Tx`\text{shear}\times\left[1+0.20\left(\frac{12Lt_s^3}{K_g}\right)^{0.3}\tan\theta\right]=1+0.20\left(\frac{12(${nx(L,0)})(${nx(ts,1)})^3}{${nx(df.Kg,0)}}\right)^{0.3}\tan ${nx(df.th,0)}°=${nx(df.skV,4)}`}/>
       </Step>}
-      <Step d="Design live load per girder">
+      <Step d="Design live load per girder" wk="dfll">
         <ML s={Tx`DF_m=${nx(R.dfm,4)}\quad DF_v=${nx(R.dfv,4)}\qquad M_{LL+IM}=${nx(hl.M,0)}(${nx(R.dfm,4)})=${nx(R.MLL,0)}\;\mathrm{k\text{-}ft}\qquad V_{LL+IM}=${nx(hl.V,1)}(${nx(R.dfv,4)})=${nx(R.VLL,1)}\;\mathrm{kip}`}/>
       </Step>
     </CalcSec>
 
-    {/* ============ 7 — STRESS LIMITS ============ */}
-    <CalcSec n="7" title="Stress Limits">
+    {/* ============ STRESS LIMITS ============ */}
+    <CalcSec title="Stress Limits">
       <Step d="At transfer" r="LRFD 5.9.2.3.1">
         <ML s={Tx`f_{c,rel}=${nx(lim.relCfac||0.65,2)}f'_{ci}=${nx(lim.relCfac||0.65,2)}(${nx(m.fci,2)})=${nx(lim.relC,3)}\;\mathrm{ksi}\qquad f_{t,rel}=${inp.opt.relBondedReinf?Tx`0.24\sqrt{f'_{ci}}=0.24\sqrt{${nx(m.fci,2)}}=${nx(lim.relT,3)}`:Tx`\min(0.0948\sqrt{f'_{ci}},0.2)=${nx(lim.relT,3)}`}\;\mathrm{ksi}`}/>
       </Step>
@@ -7414,41 +7624,52 @@ function ReportTab({inp,R}){
       </Step>
     </CalcSec>
 
-    {/* ============ 8 — GOVERNING SERVICE STRESSES ============ */}
-    <CalcSec n="8" title="Governing Service Stresses (+ compression, − tension)">
+    {/* ============ GOVERNING SERVICE STRESSES ============ */}
+    <CalcSec title="Governing Service Stresses (+ compression, − tension)">
       {R.useT?
-      <Step d={`Release — transformed section at x = ${fmt(cf('Release comp').loc,1)} ft`} r="P at f_pbt — ES implicit">
+      <Step d={`Release — transformed section at x = ${fmt(cf('Release comp').loc,1)} ft`} r="P at f_pbt — ES implicit" wk="srel">
         {(()=>{const t=transAt(rRc);return <React.Fragment>
           <ML s={Tx`n_i=\frac{E_p}{E_{ci}}=${nx(niT,3)}\quad A_t=A_g+(n_i-1)A_{ps}=${nx(g.A,0)}+(${nx(niT-1,3)})(${nx(rRc.Aps,3)})=${nx(t.At,0)}\;\mathrm{in^2}`}/>
           <ML s={Tx`y_{bt}=${nx(t.ybt,2)}\;\mathrm{in}\quad I_t=${nx(t.It,0)}\;\mathrm{in^4}\quad e_t=${nx(t.eT,2)}\;\mathrm{in}\quad P_0=A_{ps}f_{pbt}=${nx(t.P0,0)}\;\mathrm{kip}`}/>
           <ML s={Tx`f_{bot}=\frac{P_0}{A_t}+\frac{P_0 e_t}{S_{bt}}-\frac{M_g}{S_{bt}}=${nx(t.P0/t.At,3)}+${nx(t.P0*t.eT/t.Sbt,3)}-${nx(rRc.Mg/t.Sbt,3)}=${nx(rRc.relBot,3)}\le ${nx(lim.relC,3)}\;\mathrm{ksi}\;${cf('Release comp').pass?'\\checkmark':'\\;\\text{N.G.}'}`}/>
           <ML s={Tx`f_{top}@${nx(cf('Release tens').loc,1)}\,\mathrm{ft}=\frac{P_0}{A_t}-\frac{P_0 e_t}{S_{tt}}+\frac{M_g}{S_{tt}}=${nx(rRt.relTop,3)}\ge ${nx(-lim.relT,3)}\;\mathrm{ksi}\;${cf('Release tens').pass?'\\checkmark':'\\;\\text{N.G.}'}`}/>
         </React.Fragment>;})()}
+        <PsbRes R={R} names={['Release comp','Release tens']}/>
       </Step>
       :
-      <Step d={`Release stresses — gross section, x = ${fmt(cf('Release comp').loc,1)} / ${fmt(cf('Release tens').loc,1)} ft`} r="LRFD 5.9.2.3.1">
+      <Step d={`Release stresses — gross section, x = ${fmt(cf('Release comp').loc,1)} / ${fmt(cf('Release tens').loc,1)} ft`} r="LRFD 5.9.2.3.1" wk="srel">
         <ML s={Tx`P_i=A_{ps}(x)\,f_{pi}=${nx(rRc.Aps,3)}(${nx(R.fpi,2)})=${nx(rRc.Aps*R.fpi,0)}\;\mathrm{kip}\quad e=${nx(rRc.e,2)}\;\mathrm{in}\quad M_g=${nx(rRc.Mg,0)}\;\mathrm{k\text{-}in}`}/>
         <ML s={Tx`f_{bot}=\frac{P_i}{A_g}+\frac{P_i e}{S_b}-\frac{M_g}{S_b}=\frac{${nx(rRc.Aps*R.fpi,0)}}{${nx(g.A,0)}}+\frac{${nx(rRc.Aps*R.fpi,0)}(${nx(rRc.e,2)})}{${nx(g.Sb,0)}}-\frac{${nx(rRc.Mg,0)}}{${nx(g.Sb,0)}}=${nx(rRc.Aps*R.fpi/g.A,3)}+${nx(rRc.Aps*R.fpi*rRc.e/g.Sb,3)}-${nx(rRc.Mg/g.Sb,3)}=${nx(rRc.relBot,3)}\le ${nx(lim.relC,3)}\;${cf('Release comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <ML s={Tx`f_{top}@${nx(cf('Release tens').loc,1)}\,\mathrm{ft}=\frac{P_i}{A_g}-\frac{P_i e}{S_t}+\frac{M_g}{S_t}=${nx(rRt.Aps*R.fpi/g.A,3)}-${nx(rRt.Aps*R.fpi*rRt.e/g.St,3)}+${nx(rRt.Mg/g.St,3)}=${nx(rRt.relTop,3)}\ge ${nx(-lim.relT,3)}\;${cf('Release tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Release comp','Release tens']}/>
       </Step>}
-      <Step d={`Service I — top fiber, permanent loads, x = ${fmt(cf('Srv comp (perm)').loc,1)} ft`} r="LRFD 5.9.2.3.2a">
+      <Step d={`Service I — top fiber, permanent loads, x = ${fmt(cf('Srv comp (perm)').loc,1)} ft`} r="LRFD 5.9.2.3.2a" wk="ss1">
         <ML s={Tx`P_e=${nx(rS1.Aps*R.fpe,0)}\;\mathrm{kip}\quad M_g=${nx(rS1.Mg,0)}\quad M_{dk}=${nx(rS1.Mdk,0)}\quad M_{sd}=${nx(rS1.Msd,0)}\;\mathrm{k\text{-}in}`}/>
         <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx(rS1.Msd/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le 0.45f'_c=${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Srv comp (perm)']}/>
       </Step>
-      <Step d={`Service I — top fiber, full load, x = ${fmt(cf('Srv comp (full)').loc,1)} ft`}>
+      <Step d={`Service I — top fiber, full load, x = ${fmt(cf('Srv comp (full)').loc,1)} ft`} wk="ss2">
         <ML s={Tx`f=f_{perm}+\frac{M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+\frac{${nx(rS2.Mll,0)}}{${nx(cp.Stg,0)}}=${nx(rS2.s2Top,3)}\le 0.60f'_c=${nx(lim.srvC2,3)}\;\mathrm{ksi}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Srv comp (full)']}/>
       </Step>
-      <Step d={`Service III — bottom fiber, x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="LRFD T.3.4.1-4">
+      <Step d={`Service III — bottom fiber, x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="LRFD T.3.4.1-4" wk="ss3">
         <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}M_{LL}}{S_{bc}}`}/>
         <ML s={Tx`f=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*rS3.Mll)/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;\mathrm{ksi}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Srv III tens']}/>
       </Step>
-      <Step d={`Deck compression, x = ${fmt(cf('Deck comp').loc,1)} ft`}>
+      <Step d={`Deck compression, x = ${fmt(cf('Deck comp').loc,1)} ft`} wk="sdk">
         <ML s={Tx`f=\frac{M_{sd}+M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le 0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Deck comp']}/>
+      </Step>
+      <Step d="Other fiber-stress checks (governing station of the 61-point grid)" r="LRFD 5.9.2.3.1b / 5.9.2.3.2b">
+        <div className="mnote">Release tension at the bottom fiber (positive-moment region) and Service I tension at the top fiber are checked at every grid station with the same stress expressions as above; the stresses are tabulated (tenth points) in the stresses output table.</div>
+        <PsbRes R={R} names={['Release tens (+M, bot)','Srv tens (top)']}/>
+        <WkLink it={[{l:'stresses at the tenth points',s:'outstress',tab:'stresses',card:'Service Stresses'}]}/>
       </Step>
     </CalcSec>
 
-    {/* ============ 9 — STRENGTH FLEXURE ============ */}
-    <CalcSec n="9" title="Strength I Flexure @ Midspan">
+    {/* ============ STRENGTH FLEXURE ============ */}
+    <CalcSec title="Strength I Flexure @ Midspan">
       <Step d="Factored moment" r="LRFD T.3.4.1-1">
         <ML s={Tx`M_u=1.25(M_g+M_{dk}+M_{bar})+1.50\,M_{dw}+1.75\,M_{LL}=1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${nx(R.MLL,0)})=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
@@ -7460,22 +7681,24 @@ function ReportTab({inp,R}){
         <ML s={Tx`\beta_1c>t_s+t_h\Rightarrow\text{T-section: }c=\frac{A_{ps}f_{pu}-0.85f'_{cd}(b_{eff}-b_{tf})h_f}{0.85f'_{cd}\beta_1 b_{tf}+k\,A_{ps}f_{pu}/d_p}=${nx(f.c,2)}\;\mathrm{in}`}/>}
         <ML s={Tx`a=\beta_1 c=${nx(f.b1,3)}(${nx(f.c,2)})=${nx(f.a,2)}\;\mathrm{in}\qquad f_{ps}=f_{pu}\left(1-k\frac{c}{d_p}\right)=${nx(fpu,0)}\left(1-0.28\frac{${nx(f.c,2)}}{${nx(f.dp,2)}}\right)=${nx(f.fps,1)}\;\mathrm{ksi}`}/>
       </Step>
-      <Step d="Nominal resistance & φ" r="LRFD 5.6.3.2 / 5.5.4.2">
+      <Step d="Nominal resistance & φ" r="LRFD 5.6.3.2 / 5.5.4.2" wk="fmn">
         <ML s={f.rect?
           Tx`M_n=A_{ps}f_{ps}\left(d_p-\frac{a}{2}\right)=${nx(rMid.Aps,3)}(${nx(f.fps,1)})\left(${nx(f.dp,2)}-\frac{${nx(f.a,2)}}{2}\right)=${nx(f.Mn,0)}\;\mathrm{k\text{-}in}=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`
           :Tx`M_n=A_{ps}f_{ps}\left(d_p-\tfrac{a}{2}\right)+0.85f'_{cd}(b_{eff}-b_{tf})h_f\left(\tfrac{a}{2}-\tfrac{h_f}{2}\right)=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(f.dt,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\quad\Rightarrow\quad\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le 1.0=${nx(f.phi,3)}`}/>
+        <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(cp.hc-ss.yLow,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\quad\Rightarrow\quad\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le 1.0=${nx(f.phi,3)}`}/>
         <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\;\mathrm{k\text{-}ft}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(R.MuMid<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Flexure']} note="governing station of the flexure grid (midspan worked above; every station in the flexure output table)"/>
       </Step>
-      <Step d="Minimum reinforcement" r="LRFD 5.6.3.3">
+      <Step d="Minimum reinforcement" r="LRFD 5.6.3.3" wk="fmin">
         <ML s={Tx`f_r=0.24\sqrt{f'_c}=0.24\sqrt{${nx(m.fc,1)}}=${nx(R.fr,3)}\;\mathrm{ksi}\qquad f_{cpe}=\frac{P_e}{A_g}+\frac{P_e e_m}{S_b}=${nx(PeMid/g.A,3)}+${nx(PeMid*ss.eMid/g.Sb,3)}=${nx(R.fcpe,3)}\;\mathrm{ksi}`}/>
         <ML s={Tx`M_{cr}=\gamma_3\left[(\gamma_1 f_r+\gamma_2 f_{cpe})S_{bc}-M_{dnc}\left(\frac{S_{bc}}{S_b}-1\right)\right]=1.0\left[(1.6\cdot${nx(R.fr,3)}+1.1\cdot${nx(R.fcpe,3)})${nx(cp.Sbc,0)}-${nx(rMid.Mg+rMid.Mdk,0)}\left(\frac{${nx(cp.Sbc,0)}}{${nx(g.Sb,0)}}-1\right)\right]=${nx(R.Mcr/12,0)}\;\mathrm{k\text{-}ft}`}/>
         <ML s={Tx`\phi M_n\ge\min(M_{cr},\,1.33M_u)=\min(${nx(R.Mcr/12,0)},\,${nx(1.33*R.MuMid/12,0)})=${nx(R.minMr/12,0)}\;\mathrm{k\text{-}ft}\;${(R.minMr<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Min reinf']} note="governing station of the flexure grid (midspan worked above)"/>
       </Step>
     </CalcSec>
 
-    {/* ============ 10 — SHEAR ============ */}
-    <CalcSec n="10" title={`Shear — Critical Section @ x = ${fmt(shx,1)} ft (MCFT General Procedure)`}>
+    {/* ============ SHEAR ============ */}
+    <CalcSec title={`Shear — Critical Section @ x = ${fmt(shx,1)} ft (MCFT General Procedure)`}>
       <Step d="Effective shear depth" r="LRFD 5.7.2.8">
         <ML s={Tx`d_v=\max\left(d_p-\tfrac{a}{2},\;0.9d_p,\;0.72h_c\right)=\max(${nx(fgN.dp-fgN.a/2,1)},\;${nx(0.9*fgN.dp,1)},\;${nx(0.72*cp.hc,1)})=${nx(sh0.dv,1)}\;\mathrm{in}`}/>
       </Step>
@@ -7494,19 +7717,26 @@ function ReportTab({inp,R}){
       <Step d={`Steel contribution — trial s = ${sh0.sProv}″`}>
         <ML s={Tx`V_s=\frac{A_v f_y d_v\cot\theta}{s}=\frac{${nx(+inp.opt.stirAv,2)}(${nx(+inp.opt.fy,0)})(${nx(sh0.dv,1)})\cot ${nx(sh0.theta,2)}°}{${nx(sh0.sProv,0)}}=\frac{${nx(+inp.opt.stirAv,2)}(${nx(+inp.opt.fy,0)})(${nx(sh0.dv,1)})(${nx(cotT,3)})}{${nx(sh0.sProv,0)}}=${nx(sh0.Vs,1)}\;\mathrm{kip}`}/>
       </Step>
-      <Step d="Nominal resistance & check" r="LRFD 5.7.3.3">
+      <Step d="Nominal resistance & check" r="LRFD 5.7.3.3" wk="vchk">
         <ML s={Tx`V_n=\min\left(V_c+V_s+V_p,\;0.25f'_c b_v d_v+V_p\right)=\min(${nx(sh0.Vc+sh0.Vs+sh0.Vp,1)},\;${nx(0.25*m.fc*g.bw*sh0.dv+sh0.Vp,1)})=${nx(sh0.Vn,1)}\;\mathrm{kip}`}/>
         <ML s={Tx`\frac{V_u}{\phi V_n}=\frac{${nx(sh0.Vu,1)}}{0.9(${nx(sh0.Vn,1)})}=${nx(sh0.dc,3)}\;${sh0.dc<=1.0001?'\\checkmark':'\\text{N.G.}'}\qquad(\text{worst station: }x=${nx(R.wShear.x,1)}\,\mathrm{ft},\;D/C=${nx(R.wShear.dc,3)})`}/>
+        <PsbRes R={R} names={['Shear']} note="worst station (every station in the shear output table)"/>
       </Step>
-      <Step d="Interface shear (girder/deck) at critical section" r="LRFD 5.7.4 — c = 0.28 ksi, μ = 1.0">
+      <Step d="Longitudinal reinforcement — shear–flexure tie" r="LRFD 5.7.3.5" wk="vlong">
+        <LongTieBody R={R}/>
+        <PsbRes R={R} names={['Long. reinf (5.7.3.5)']}/>
+      </Step>
+      <Step d="Interface shear (girder/deck) at critical section" r="LRFD 5.7.4 — c = 0.28 ksi, μ = 1.0" wk="vif">
         <ML s={Tx`v_{ui}=\frac{V_u}{b_{vi}d_{vi}}=\frac{${nx(sh0.Vu,1)}}{${nx(g.btf,0)}(${nx(sh0.dv,1)})}=${nx(if0.vui,3)}\;\mathrm{ksi}\qquad A_{vf,req}=${nx(if0.AvfReq,3)}\;\;A_{vf,min}=${nx(if0.AvfMin,3)}\;\;A_{vf,prov}=\frac{A_v\cdot12}{s}=${nx(if0.AvfProv,3)}\;\mathrm{in^2/ft}\;${if0.ok?'\\checkmark':'\\text{N.G.}'}`}/>
         <ML s={Tx`V_{ni}\le\min(K_1 f'_c A_{cv},\,K_2 A_{cv})=${nx(if0.VniCap,0)}\;\mathrm{kip/ft}\ge \frac{V_{ui}}{\phi_v}=${nx(if0.Vui/R.phiV,0)}\;${if0.capOK?'\\checkmark':'\\text{N.G.}'}\quad(K_1=0.3,\;K_2=1.8\;\mathrm{ksi},\;5.7.4.3)`}/>
+        <PsbRes R={R} names={['Interface shear (5.7.4)']} note="governing station"/>
       </Step>
-      <Step d="Pretensioned anchorage zone (splitting / bursting)" r="LRFD 5.9.4.4">
+      <Step d="Pretensioned anchorage zone (splitting / bursting)" r="LRFD 5.9.4.4" wk="split">
         <ML s={Tx`P_r\ge 0.04P_i=0.04(${nx(ss.Aps*R.fpi,0)})=${nx(0.04*ss.Aps*R.fpi,1)}\;\mathrm{kip}\quad\Rightarrow\quad A_{s,req}=\frac{0.04P_i}{f_s}=\frac{${nx(0.04*ss.Aps*R.fpi,1)}}{20}=${nx(R.AsSplit,2)}\;\mathrm{in^2}\;\text{within}\;h/4=${nx(g.h/4,1)}\;\mathrm{in}`}/>
         <ML s={Tx`A_{s,prov}=${nx(+inp.opt.splitN,0)}\times${nx(+inp.opt.splitAv,2)}=${nx(R.AsSplitProv,2)}\;\mathrm{in^2}\quad\Rightarrow\quad P_{r,prov}=A_{s,prov}(20)=${nx(R.splitPr,1)}\;\mathrm{kip}\;\ge\;0.04P_i=${nx(R.splitDem,1)}\;\mathrm{kip}\quad\frac{D}{C}=${nx(R.splitDC,2)}\;${(R.checks.find(c=>c.n==='Splitting steel (5.9.4.4)')||{}).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Splitting steel (5.9.4.4)']}/>
       </Step>
-      <Step d="Confinement reinforcement in the bottom flange" r="LRFD 5.9.4.4.2 — prescriptive detailing rule">
+      <Step d="Confinement reinforcement in the bottom flange" r="LRFD 5.9.4.4.2 — prescriptive detailing rule" wk="conf">
         {R.conf.exempt
           ? <div className="callout">Not required — {R.conf.why}. No check is reported.</div>
           : <div>
@@ -7514,11 +7744,16 @@ function ReportTab({inp,R}){
             <ML s={Tx`d_b=${nx(R.conf.db,3)}\;\mathrm{in}\ \ge\ 0.375\ (\mathrm{No.}\,3)\;${R.conf.sizeOK?'\\checkmark':'\\text{N.G.}'}\qquad s=${nx(R.conf.s,1)}\ \le\ 6.0\;\mathrm{in}\;${R.conf.spOK?'\\checkmark':'\\text{N.G.}'}`}/>
             <div className="callout">There is no demand to compute here — 5.9.4.4.2 sets a minimum bar size, a maximum spacing and a minimum extent, nothing more. The governing item is <b>{R.conf.gov.lbl}</b> at D/C {fmt(R.conf.dc,2)}. That the bars are <b>shaped to enclose the strands</b> cannot be verified from the input; confirm it on the detail.</div>
           </div>}
+        <PsbRes R={R} names={['Confinement steel (5.9.4.4.2)']}/>
       </Step>
+      {inp.opt.relBondedReinf&&<Step d="Release-tension bonded steel" r="LRFD 5.9.2.3.1b" wk="relst">
+        <RelSteelBody inp={inp} R={R}/>
+        <PsbRes R={R} names={['Release tens. steel (5.9.2.3.1b)']}/>
+      </Step>}
     </CalcSec>
 
-    {/* ============ 11 — CONTINUITY ============ */}
-    {R.cont&&<CalcSec n="11" title="Continuity for LL + SIDL — Negative Moment @ Pier">
+    {/* ============ CONTINUITY ============ */}
+    {R.cont&&<CalcSec title="Continuity for LL + SIDL — Negative Moment @ Pier">
       <Step d="Pier-moment influence line — two equal spans" note="Unit load at ξ in either span; enumerated at 0.5-ft steps for trucks/tandem, both orientations; two-truck case with ≥ 50 ft between trucks per 3.6.1.3.1.">
         <ML s={Tx`\eta(\xi)=-\frac{\xi\,(L^2-\xi^2)}{4L^2}\;\;(0\le\xi\le L,\;\text{mirrored})\qquad M_{pier}=\sum P_i\,\eta(\xi_i)`}/>
       </Step>
@@ -7534,16 +7769,23 @@ function ReportTab({inp,R}){
         <ML s={Tx`M_{LL}=${nx(R.cont.negLL.MLL,0)}\,DF_m=${nx(R.cont.negLL.MLL,0)}(${nx(R.dfm,4)})=${nx(R.cont.MLLn,0)}\;\mathrm{k\text{-}ft}`}/>
         <ML s={Tx`M_u=1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${nx(R.cont.MLLn,0)})=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
-      <Step d="Negative-moment capacity (deck steel in tension, bottom flange in compression)" r="LRFD 5.12.3.3">
+      <Step d="Negative-moment capacity (deck steel in tension, bottom flange in compression)" r="LRFD 5.12.3.3" wk="neg">
         <ML s={Tx`d=h_c-d_{top}=${nx(cp.hc,1)}-${nx(+inp.cont.dTop,2)}=${nx(R.cont.dN,1)}\;\mathrm{in}\qquad a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(m.fc,1)})(${nx(g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}=${nx(R.cont.tbf,1)}\;\text{N.G.}`}`}/>
         <ML s={Tx`c=\frac{a}{\beta_1}=\frac{${nx(R.cont.aN,2)}}{${nx(R.cont.b1g,3)}}=${nx(R.cont.cN,2)}\;\mathrm{in}\qquad\varepsilon_t=0.003\left(\frac{d}{c}-1\right)=${nx(R.cont.etN*1000,1)}\times10^{-3}\;\Rightarrow\;\phi=${nx(R.cont.phiN,3)}`}/>
         <ML s={Tx`\phi M_n=\phi A_s f_y\left(d-\frac{a}{2}\right)=${nx(R.cont.phiN,3)}(${nx(R.cont.As,2)})(${nx(R.cont.fyr,0)})\left(${nx(R.cont.dN,1)}-\frac{${nx(R.cont.aN,2)}}{2}\right)\frac{1}{12}=${nx(R.cont.phiMnN/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`\frac{M_u}{\phi M_n}=\frac{${nx(R.cont.MuN/12,0)}}{${nx(R.cont.phiMnN/12,0)}}=${nx(R.cont.dc,3)}\;${ck.at(-1).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`\frac{M_u}{\phi M_n}=\frac{${nx(R.cont.MuN/12,0)}}{${nx(R.cont.phiMnN/12,0)}}=${nx(R.cont.dc,3)}\;${cf('Neg flexure (pier)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['Neg flexure (pier)']}/>
       </Step>
     </CalcSec>}
 
-    {/* ============ 12 — CAMBER ============ */}
-    <CalcSec n={R.cont?'12':'11'} title="Camber & Deflection (midspan, + = up)">
+    {/* ============ FATIGUE (D11: the Stresses-tab steps) ============ */}
+    <CalcSec title="Fatigue I — Strand Stress Range & Concrete Compression">
+      {fatigueSteps(inp,R)}
+      <PsbRes R={R} names={['Fatigue I (concrete, 5.5.3.1)','Fatigue I (strand)']}/>
+    </CalcSec>
+
+    {/* ============ CAMBER ============ */}
+    <CalcSec title="Camber & Deflection (midspan, + = up)">
       <Step d="Prestress camber — straight strands" r="P·e·L²/8EI">
         <ML s={Tx`\Delta_{ps,s}=\frac{P_s e_s L^2}{8E_{ci}I_g}=\frac{${nx(Ps,0)}(${nx(eS,2)})(${nx(Lin,0)})^2}{8(${nx(lo.Eci,0)})(${nx(g.I,0)})}=${nx(d1,3)}\;\mathrm{in}\;\uparrow`}/>
       </Step>
@@ -7554,19 +7796,43 @@ function ReportTab({inp,R}){
         <ML s={Tx`\Delta_{sw}=\frac{5w_{sw}L^4}{384E_{ci}I_g}=\frac{5(${nx(R.wG/12,4)})(${nx(Lin,0)})^4}{384(${nx(lo.Eci,0)})(${nx(g.I,0)})}=${nx(c.dSW,3)}\;\mathrm{in}\;\downarrow`}/>
         <ML s={Tx`\Delta_{dk}=\frac{5(${nx(R.wDk/12,4)})(${nx(Lin,0)})^4}{384(${nx(cp.Ecg,0)})(${nx(g.I,0)})}=${nx(c.dDK,3)}\;\downarrow\qquad\Delta_{sd}=\frac{5(${nx((R.wBar+R.wDW)/12,4)})(${nx(Lin,0)})^4}{384(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dSD,3)}\;\mathrm{in}\;\downarrow`}/>
       </Step>
-      <Step d="Stage history — PCI multipliers" r="PCI Design Handbook">
+      <Step d="Stage history — PCI multipliers" r="PCI Design Handbook" wk="camf">
         <ML s={Tx`\Delta_{rel}=\Delta_{ps}-\Delta_{sw}=${nx(c.dPS,3)}-${nx(c.dSW,3)}=${nx(c.rel,2)}\;\mathrm{in}`}/>
         <ML s={Tx`\Delta_{erect}=${nx(mu_.psE,2)}\Delta_{ps}-${nx(mu_.swE,2)}\Delta_{sw}=${nx(mu_.psE,2)}(${nx(c.dPS,3)})-${nx(mu_.swE,2)}(${nx(c.dSW,3)})=${nx(c.erect,2)}\;\mathrm{in}`}/>
         <ML s={Tx`\Delta_{deck}=\Delta_{erect}-\Delta_{dk}=${nx(c.erect,2)}-${nx(c.dDK,3)}=${nx(c.afterDeck,2)}\;\mathrm{in}`}/>
         <ML s={Tx`\Delta_{final}=${nx(mu_.psF,2)}\Delta_{ps}-${nx(mu_.swF,2)}\Delta_{sw}-${nx(mu_.dkF,2)}\Delta_{dk}-${nx(mu_.sdF,2)}\Delta_{sd}=${nx(c.final,2)}\;\mathrm{in}`}/>
       </Step>
-      <Step d="Live-load deflection (equivalent-UDL approximation)" r="LRFD 2.5.2.6.2">
+      <Step d="Live-load deflection (equivalent-UDL approximation)" r="LRFD 2.5.2.6.2" wk="lld">
         <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_cI_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\;\mathrm{in}\le\frac{L}{800}=\frac{${nx(Lin,0)}}{800}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <PsbRes R={R} names={['LL deflection']}/>
+      </Step>
+    </CalcSec>
+
+    {/* ============ HANDLING, DECK, RATING (D11: the tab content, unchanged) ============ */}
+    {R.handling&&<CalcSec title="Handling — Lifting & Hauling">
+      <Step d="Overhang stresses and lateral-stability screening (Handling tab)" r="release stage · stability: screening only, not PCI (2016) / Mast" wk="hand">
+        <HandlingTab inp={inp} R={R}/>
+        <PsbRes R={R} names={['Lifting stress','Lifting FS (crack, screening)','Hauling FS (crack, screening)']}/>
+      </Step>
+    </CalcSec>}
+    {R.deck&&<CalcSec title="Deck Design (Transverse)">
+      <Step d="Equivalent-strip moments and capacities (Deck tab)" r="LRFD 4.6.2.1 / 9.7.3" wk="deck">
+        <DeckTab inp={inp} R={R}/>
+        <PsbRes R={R} names={['Deck +M','Deck −M','Deck overhang']}/>
+      </Step>
+    </CalcSec>}
+    <CalcSec title="Load Rating — HL-93 Design Load (LRFR)">
+      {ratingDerivs(inp,R)}
+      <Step d="Rating factors" r="MBE 6A">
+        <PsbRF t="Flexure, governing section" inv={R.rating.RFinv} opr={R.rating.RFopr} ok={R.rating.okInv} refTxt="MBE 6A.4"/>
+        <PsbRF t="Shear, governing section" inv={R.shrRating.RFinv} opr={R.shrRating.RFopr} ok={R.shrRating.okInv} refTxt="MBE 6A.5.6"/>
+        <PsbRF t="Service III tension" inv={R.svcRating.RF} opr={null} ok={R.svcRating.ok} refTxt="MBE 6A.5.4.1"/>
+        <div className="mnote">Legal / permit vehicles: user-entered factored forces on the Rating tab (not in this report).</div>
       </Step>
     </CalcSec>
 
     {/* ============ OUTPUT TABLES ============ */}
-    <CalcSec n={R.cont?'13':'12'} title="Output — Stresses at Tenth Points (ksi, + compression)">
+    <CalcSec wk="outstress" title="Output — Stresses at Tenth Points (ksi, + compression)">
       <div style={{padding:'8px 0 2px'}}>
       <Tbl head={['x (ft)','e (in)','Aps (in²)','Mg (k-ft)','Mdk (k-ft)','Msd (k-ft)','MLL (k-ft)','Rel top','Rel bot','Srv top perm','Srv top +LL','Srv III bot']}
         rows={tenth.map(r=>({c:[fmt(r.x,1),fmt(r.e,2),fmt(r.Aps,2),fmt(r.Mg/12,0),fmt(r.Mdk/12,0),fmt(r.Msd/12,0),fmt(r.Mll/12,0),
@@ -7574,20 +7840,48 @@ function ReportTab({inp,R}){
       <div className="mnote" style={{marginTop:6}}>Limits: release {fmt(lim.relC,3)} / −{fmt(lim.relT,3)} ksi · service {fmt(lim.srvC1,3)} / {fmt(lim.srvC2,3)} / −{fmt(lim.srvT,3)} ksi. Transfer-length stations included in governing search (61-point grid).</div>
       </div>
     </CalcSec>
-    <CalcSec n={R.cont?'14':'13'} title="Output — Flexure Stations (to midspan)">
+    <CalcSec wk="outflex" title="Output — Flexure Stations (to midspan)">
       <div style={{padding:'8px 0 2px'}}>
       <Tbl head={['x (ft)','Mu (k-ft)','c (in)','a (in)','fps (ksi)','εt ×10³','φ','φMn (k-ft)','Mu/φMn']}
         rows={flex20.map(r=>({c:[fmt(r.x,1),fmt(r.Mu/12,0),fmt(r.c,2),fmt(r.a,2),fmt(r.fps,1),fmt(r.et*1000,2),fmt(r.phi,3),fmt(r.phiMn/12,0),fmt(r.Mu/r.phiMn,3)]}))}/>
       </div>
     </CalcSec>
-    <CalcSec n={R.cont?'15':'14'} title="Output — Shear Stations">
+    <CalcSec wk="outshear" title="Output — Shear Stations">
       <div style={{padding:'8px 0 2px'}}>
       <Tbl head={['x (ft)','dv (in)','Vu (k)','Vp (k)','εs ×10³','β','θ (°)','Vc (k)','Vs (k)','Vn (k)','Vu/φVn']}
         rows={R.shear.map(r=>({c:[fmt(r.x,1),fmt(r.dv,1),fmt(r.Vu,1),fmt(r.Vp,1),fmt(r.es*1000,3),fmt(r.beta,2),fmt(r.theta,1),
           fmt(r.Vc,1),fmt(r.Vs,1),fmt(r.Vn,1),fmt(r.dc,3)]}))}/>
       </div>
     </CalcSec>
-  </div>);
+  </React.Fragment>,see);
+
+  return(<PsbrSee.Provider value={see}><div className="psbr-root">
+    <div className="btnrow noprint" style={{marginBottom:12}}>
+      <button className="btn pri" onClick={()=>window.print()}>Print / Save PDF</button>
+    </div>
+    {/* ============ D11: cover, title block, references, contents ============ */}
+    <section className="psbr-cover">
+      <h1>PS-Girder</h1>
+      <div className="s">Prestressed concrete girder design · AASHTO LRFD · calculation report</div>
+      <div className="p">{p.name||'—'}</div>
+      <div className="d">{psbrDesc(inp,R)} · {R.ss.Ntot}-{inp.str.size} strands · {R.useExt?'demands imported from MIDAS (span '+R.ext.sel.idx+')':R.cont?'simple span made continuous for LL + SIDL':'simple span'} · {df.ext?'exterior':'interior'} girder</div>
+      <div className="d">Codes: AASHTO LRFD Bridge Design Specifications (9th Ed. article numbering as stated by the tool; edition: verify) · AASHTO MBE Section 6A (load rating) · PCI Design Handbook (camber multipliers)</div>
+      <table className="psbr-tb"><tbody>
+        <tr><td><span>Project</span>{p.name||'—'}</td><td><span>Project No</span>{p.job||'—'}</td></tr>
+        <tr><td><span>Calculated by</span>{p.by||'—'}</td><td><span>Date</span>{p.date||'—'}</td></tr>
+        <tr><td><span>Checked by</span>—</td><td><span>Checked date</span>—</td></tr>
+      </tbody></table>
+    </section>
+    <section className="psbr-front">
+      <div className="psbr-h">References</div>
+      <table className="psbr-refs"><tbody>{refs.map(([a,b])=><tr key={a}><td>{a}</td><td>{b}</td></tr>)}</tbody></table>
+      <div className="psbr-h">Contents</div>
+      <ol className="psbr-toc">{toc.map(s=><li key={s.id}><a href={'#'+s.id} onClick={e=>psbJump(e,s.id)}>{s.n}. {s.t}</a>
+        {s.subs.length?<ol>{s.subs.map(q=><li key={q.id}><a href={'#'+q.id} onClick={e=>psbJump(e,q.id)}>{q.n} {q.t}</a></li>)}</ol>:null}</li>)}</ol>
+      <div className="psbr-note">Equations are shown symbolically, then with values substituted, then with the result. Each check ends with a result line: D/C = demand / capacity (or limit), PASS when D/C ≤ 1.00; ratings give RF. Units: kip, in, ksi; moments in k-ft; positions along the span in ft. Values quoted away from their derivation read “see §n.k”.</div>
+    </section>
+    {out}
+  </div></PsbrSee.Provider>);
 }
 /* ================= APP ================= */
 /* ================= PERSISTENCE (localStorage) ================= */
@@ -7835,6 +8129,16 @@ function App(){
   const canSave=useMemo(()=>lsAvailable(),[]);
   const [inp,setInpRaw]=useState(()=> canSave? (mergeInputs(loadSaved())||DEFAULTS) : DEFAULTS);
   const [tab,setTab]=useState('inputs');
+  /* D11 links: "Worked in" (psbGoto) opens a tab and scrolls to the card whose title contains `card`
+     (or to the report subsection named `wk`), then flashes it. */
+  useEffect(()=>{ const h=e=>{ const d=e.detail||{}; if(!d.tab) return; setTab(d.tab); let n=0;
+      const find=()=>{ let el=d.wk?document.querySelector('[data-wk="'+d.wk+'"]'):null;
+        if(!el&&d.card){ const t=[...document.querySelectorAll('.card-h .t, .calch')].find(x=>x.textContent.includes(d.card));
+          el=t&&(t.closest('.card')||t.closest('.calcsec')); }
+        if(!el){ if(++n<40) setTimeout(find,50); return; }
+        psbFlash(el); };
+      setTimeout(find,30); };
+    window.addEventListener('psbeam-goto',h); return ()=>window.removeEventListener('psbeam-goto',h); },[]);
   const [savedTick,setSavedTick]=useState(0);
   // undo/redo history (snapshots of inp). Capped to avoid unbounded growth.
   const undoStack=useRef([]); const redoStack=useRef([]);
