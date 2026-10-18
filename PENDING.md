@@ -25,7 +25,7 @@ Items marked "pending reference" in the owner rules panel. Add the documents to 
 
 ## 3. Parked features (agreed, not started)
 
-- **D11** — calculation-sheet report (Gusset / ST-Girder format, with links to derivations per CLAUDE.md §6), one tool per PR, display only. In progress: Base Plate & Anchor done (#269, #270). Scope per tool decided 2026-10-18 (full / slim / refresh / none) — see AUDIT.md D11.
+- **D11** — calculation-sheet report (Gusset / ST-Girder format, with links to derivations per CLAUDE.md §6), one tool per PR, display only. Status 2026-10-18: done for Base Plate (#269/#270), Elastomeric (#273), Abutment (#274), Concrete Beam Capacity (#275, rebar tab synced #289), Shear & Moment (#276), Light Pole (#277), Stone Arch (#278), lldf (#279), psbeam (#280), Retaining Wall (#281), Pile (#282), index (#283), Spread Footing (#284), Timber (#285), Concrete Beam ASD (#286), Steel Beam (#287), ACI Rebar (#288), Section Property Calculator (#290), SubLoads (#291), Moving Load Generator (#292). Remaining: ASCE7-16 Load Generator (slim). Engineer decisions raised in each PR's "Open items" section. Scope per tool decided 2026-10-18 (full / slim / refresh / none) — see AUDIT.md D11.
 - **Suggest: steel grade options** — needs grade-dependent unit prices first (GD66 (e)).
 - **MassDOT exterior sidewalk beam Case I / Case II** (3.5.3.11) — warning only today (GD63 (c)).
 - **Low-priority owner items** from the manual reviews (mostly information-only notes).
