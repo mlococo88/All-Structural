@@ -1260,3 +1260,119 @@ Default check case for all entries below ("default inputs"): B 10 × L 8 × t 2.
 - **O5. ℓ_d side cover assumption.** RESOLVED 2026-10-12 (S4): optional side/end cover input; blank keeps the earlier behaviour.
 - **F8 note (item 8): surcharge in the structural resultant is less conservative for sagging moment and one-way shear. Keep, revert, or apply only where unfavourable?**
   - **RESOLVED 2026-10-04 (F12):** engineer keeps the surcharge in the structural resultant. No code change.
+
+## 2026-10-18 — PR: claude/sf-d11-report (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. The file uses LF line endings.
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11).
+- **What changes for the user:** the printout of **Print-to-PDF Report** (and of Ctrl+P, which is the same in-page print) changes as listed under "After". The screen is unchanged except for the new "Worked in" lines (next entry). No new input, button or saved field.
+- **Approach:** the tool already printed its result tabs in place, with numbered cards (1.1 … 6.k) whose equations are worked symbolically → substituted → result. That stays as it is: the report is the tabs' own render output, and nothing is recomputed. The gaps were closed around it (cover, references, contents, section headings, result lines, print header and footer).
+- **Before (print):**
+  - the screen title row and the six title-block **input boxes** printed at the top, followed by `#printHeader` (title, a one-row Project / No. / Calc By / Date / Checked By / Date table, the hand-off source lines);
+  - then the Summary Dashboard, warnings, the self-consistency table and every result tab, with no section headings (the tab bar is hidden in print), no references, no contents and no result lines;
+  - every open card title printed with the ▾ open-marker (`details.sec[open]>summary::before` outranked the print rule `details.sec>summary::before{content:""}`);
+  - the 3D View tab printed whatever the live WebGL panel held (empty unless the tab had been opened);
+  - default browser page margins, no header or footer.
+- **After (print):**
+  - **Cover** (`#printHeader`, built by `renderPrintHeader()`):
+    - "Spread Footing Design — Calculation Report", the project name, the codes (ACI 318-19 · ASCE 7-16 · IBC 2021);
+    - title block Project / Project No. / Calculated by / Date / Checked by / Checked date, from the existing `meta.*` fields (all six existed; none was added);
+    - the hand-off source lines (`sfMrSourceLine`, `sfFlSourceLine`), as before;
+    - a banner counting the dashboard chips by status ("1 of 17 checks FAIL · 14 PASS · 2 N/A" on the default project).
+  - **References** (`SFD_REFS`), only what the tool cites (taken from the cards and the manual's §A.2):
+    - ACI 318-19 (the sections the cards cite); ASCE/SEI 7-16 §2.3.1 / §2.4.1; IBC 2021 §1605.3 / §1610 / §1807.2.3;
+    - AASHTO LRFD Art. 10.6.3.1.2a, 10.6.3.3 / 11.6.3.3, 10.6.4.2 / 11.6.5.1, 10.6.3.4, marked "edition: verify (the tool states none)";
+    - Vesić (1973, 1975), Meyerhof (1953), Bowles 5th ed., Rankine.
+  - **Numbered table of contents** with links: Summary Dashboard, then 1–6 (the result tabs) with every card n.k. The entries are read from the card titles, so they follow the tool's own numbering (including 3.2a and 4.3a). "8. User Manual" is added when "Include this manual when printing" is ticked.
+  - **Section headings** "n. <tab name>" before each result tab, with a page break, built from the tab buttons.
+  - **Result lines** after each tab (`sfdResultRows()`): one per dashboard chip, "<check>: D/C = x.xx (<reference>; <the chip's own text>; §n.k) PASS / FAIL / REVIEW / N/A".
+    - The status is the chip's own class; the dashboard logic is not repeated.
+    - D/C uses the values the chip uses: bearing `R.govBear.DCR`; eccentricity `R.eccChk.gov.dcr`; flexure the max of `dcrBot` / `dcrTop`; one-way `dcrV`; punching, concrete bearing and pedestal `dcr` / `dcrAxial`.
+    - For a factor-of-safety check, D/C = FS_target / FS (overturning only when gated; 1/FS when the footing is unstable or FS < 1, which is when the chip fails). Rigidity: λℓ / (π/4). Dowel steel: A_s,min / A_s,prov; dowel ℓ_dc / available (the chips' own pass conditions).
+    - D/C is "n/a" for contact area, input validation, a non-gated overturning FS, and checks with no horizontal load or no water table.
+  - **Dashboard chips** print "see §n.k" under the status, pointing to where the check is worked (bearing → §3.3, flexure and one-way → §5.2, §5.3, and so on).
+  - **Print header and footer** (`sfdPageCSS(true)` on `beforeprint`, cleared on `afterprint`): `@page` letter, margins 0.95 / 0.6 / 0.7 / 0.6 in.
+    - Top: "Project No / Description" (Description = the project name: the tool has no description field), "Computed By / Checked By", "Date / Date" (`meta.calcDate`, `meta.chkDate`).
+    - Bottom: "<project> (Spread Footing Design Tool)" and "Page X of Y".
+  - **Hidden in print:** the screen title row and the title-block input boxes (the cover replaces them); the **3D View tab** (a live WebGL panel, not part of the calculation); the "★ governing" reset button of the combination selector bars (the selected combination still prints).
+- **Where (re-apply by hand):**
+  1. CSS: after the second `@media print{ … }` block (anchor `.chip.pass,.chip.fail,.warnbox,.errbox,table.tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact}`, then `}`), add the block that starts `/* D11 (2026-10-18): calculation-sheet report (print only:` and ends before `</style>`. Copy it from this version.
+  2. HTML: `<h2 style="margin-top:0">Summary Dashboard</h2>` → `<h2 style="margin-top:0" id="sfdRptSum">Summary Dashboard</h2>`.
+  3. `chip()`: after `c.appendChild(el('div','cs',status==='pass'?'PASS':status==='fail'?'FAIL':status==='warn'?'REVIEW':'N/A'));` add
+     ```js
+      if(nav&&nav.tab){c.dataset.tab=nav.tab;if(nav.sec)c.dataset.sec=nav.sec;}   /* D11: read by the report (result lines, "see §") */
+     ```
+  4. `renderPrintHeader()`: the old function (from `function renderPrintHeader(){` to the `sfFlSourceLine` line and its `}`) is replaced by the block from the anchor `/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format, printed` to the end of the new `renderPrintHeader()`: `SFD_REFS`, `sfdSecNum`, `sfdEsc`, `sfdPageCSS`, `sfdResultRows`, `renderPrintHeader`. Copy it from this version. It is still called at the end of `recalc()` (unchanged) and now also on `beforeprint`.
+  5. Print hooks (anchor `/* print: open all sections, restore after */`):
+     - Before:
+       ```js
+       window.addEventListener('beforeprint',()=>{
+        printPrev=$$('details').map(d=>[d,d.open]);
+        $$('details').forEach(d=>d.open=true);});
+       window.addEventListener('afterprint',()=>{
+        if(printPrev)printPrev.forEach(([d,o])=>d.open=o);printPrev=null;});
+       ```
+     - After:
+       ```js
+       window.addEventListener('beforeprint',()=>{
+        printPrev=$$('details').map(d=>[d,d.open]);
+        $$('details').forEach(d=>d.open=true);
+        renderPrintHeader();sfdPageCSS(true);});   /* D11: report parts (renderPrintHeader) and the print header/footer, only while printing */
+       window.addEventListener('afterprint',()=>{
+        sfdPageCSS(false);
+        if(printPrev)printPrev.forEach(([d,o])=>d.open=o);printPrev=null;});
+       ```
+- **Fixed along the way (report display only):**
+  - the ▾ marker before every printed card title (36 on the default project);
+  - the empty title-block input boxes printed above the report;
+  - the missing section headings (the hidden tab bar was the only place the tab names appeared);
+  - user text in the old `#printHeader` table was inserted unescaped (now escaped).
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Saved data:** none. `sfd_auto`, `sfd_projects`, `sfd_inputTab_v1` and the JSON export are unchanged; no new key.
+- **Check case (default project):** 32 letter pages (main: 23).
+  - Contents: Summary Dashboard; 1. Schematic & Input Echo (1.1–1.5); 2. Load Combinations (2.1–2.5); 3. Bearing (3.1, 3.2, 3.2a, 3.3); 4. Stability (4.1–4.3, 4.3a, 4.4, 4.5); 5. Footing Design (5.1–5.7); 6. Pedestal Design (6.1–6.3).
+  - 17 result lines, for example:
+    - Bearing (service): D/C = 0.70 (q_eff ≤ q_allow; §3.3) PASS. Eccentricity limit: 0.31 (§4.3a) PASS. Sliding, x: 0.20 (= 1.50 / 7.69; §4.2) PASS. Rigidity: 0.50 (= 0.40 / 0.79; §4.5) PASS.
+    - Flexure (footing): D/C = 0.30, **FAIL** ("DCR 0.30 OK, but A_s < A_s,min (top x)", the chip's own status; §5.2, §5.3). One-way shear 0.55, punching 0.32, concrete bearing 0.22, dowel steel 0.26, dowel ℓ_dc 0.76, pedestal 0.42 (§6.2, §6.3), all PASS.
+    - Overturning: D/C = n/a, "FS = 20.62 … (reported, not gated)", N/A.
+
+### D11 links: quoted values link to the card where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **New helpers** after `solve3()` (anchor `/* ---- D11 links (CLAUDE.md §6, 2026-10-18)`): `SFD_LINKS` (card id → tab and label), `SFD_TABNAME`, `sfdLink`, `sfdWorkedIn`, `sfdGoto`, and one document click handler for `a.wkA`. A click opens the tab (with the tab button's own click), opens the card, scrolls to it and flashes its title, as the dashboard chips already do.
+- **"Worked in" lines added** (each is one `….appendChild(sfdWorkedIn([...]));   /* D11 links */` line):
+  1. 1.4 Input Echo, after `b4.appendChild(buildInputEcho());`: footing self-weight → 2.2.
+  2. 2.3 combination table, after `b1.appendChild(comboTable(R.asd,true));`: q_max, contact % → 3.2; bearing DCR → 3.3; min FS OT → 4.3; FS sl → 4.2 ("worked for the governing or selected combination; the same procedure is applied to every row").
+  3. 3.1, after the ΣP / ΣH / ΣM / e table (anchor `['e_y','Eccentricity, y',r.ey,'ft']]));`): ΣP, ΣH, ΣM → 2.3.
+  4. 4.2 Sliding, just before `/* overturning */`: ΣP, ΣH → 2.3.
+  5. 4.3 Overturning, after the vertical-load table (`b2.appendChild(vt);`): self-weights, EV, U → 2.2; ΣP, ΣH, ΣM → 2.3.
+  6. 4.4 Flotation, after its note "EV already uses buoyant unit weight…": W_f, ΣW_ped, EV, U → 2.2.
+  7. 6.1 summary table, after `intro.appendChild(t);`: each pedestal → its 6.k "Detailed Checks" card.
+- **In the report** every link reads "<value>: see §n.k" (a PDF link to the card); n.k is read from the target card's own title (`sfdSecNum`). A target that is not printed would read "? (not in this printout)" (none in the cases tested).
+- **Check case (default):** 11 links on screen (13 in the 3-pedestal water-table case); each opens the right tab and card. The default PDF reads, for example, "footing self-weight: see §2.2", "q_max, contact %: see §3.2 · bearing DCR: see §3.3 · min FS OT: see §4.3 · FS sl: see §4.2", "Ped 1: see §6.2 · Ped 2: see §6.3". The PDF has 98 internal link annotations.
+
+### How verified (both entries)
+- `node tests/check-syntax.mjs "Spread Footing.html"`: all 18 scripts pass.
+- `node tests/compare.mjs --tool page --file "Spread Footing.html"`: page.storage identical; page.text differs only by the added line "Worked in: footing self-weight → Load Combinations · 2.2 …" (tab 1 is the open tab). The console errors are the same on both sides (the kit holds no KaTeX 0.16.11, Plotly 2.35.2 or three 0.160.0).
+- **Main vs branch with the pinned libraries served locally** (KaTeX 0.16.11, plotly.js-dist-min 2.35.2, three 0.160.0 from `npm pack`), five cases:
+  1. default;
+  2. Direct (factored) load mode;
+  3. water table, AASHTO e ≤ B/3, gated overturning, passive 0.5, top mats, side cover, a third pedestal, Mx and Wy loads;
+  4. direct net q_a with failures (V_c override, custom e limit, smaller footing, a zero-height pedestal, manual printing on);
+  5. an input error (B = 0).
+  - In every case `R` and `P2` (functions removed), the dashboard, warnings, self-consistency text, `state` and localStorage are identical, with 0 console errors.
+  - On the branch, building the report (`beforeprint` / `afterprint`) leaves `R`, `P2`, `state` and the storage keys unchanged.
+- **Headless Chromium PDF** (print media, `preferCSSPageSize`) of all five cases: no raw TeX, no ▾ marker, every internal link resolves (85–91 links per case, 0 broken), header and footer boxes filled (also with a `"` in the project name). Pages looked at: cover; references and contents; summary with "see §"; §1 start; §3.1 with its "Worked in" line; §4 results; the §4.3 table with its line; §5 results; §6.1 with its line; the input-error report.
+- In the app, every link of the default and a 3-pedestal case (24 clicks) opens the right tab, opens the card and scrolls it into view.
+- **Other copies:** none (the report builder and the links are specific to this tool).
+
+### Open items (noticed, not changed)
+- **Contact-area chip:** `R.minContact>=1-1e-6?'pass':(R.minContact>0?'pass':'fail')` gives PASS on both branches, so any partial contact passes (only zero contact fails). Probably intended (eccentricity and bearing are checked separately), but the chip shows no limit. The report prints it as is (D/C n/a).
+- **Sliding chips with no horizontal load** show "N/A — no net horizontal load" with the status PASS (FS = ∞ ≥ target). The report prints D/C n/a, PASS.
+- **The default project fails Flexure:** hogging between the two pedestals needs a top x mat and the default has none, so the chip reads "DCR 0.30 OK, but A_s < A_s,min (top x)", FAIL. On-screen behaviour, unchanged.
+- **Values quoted but not linked:** the pedestal P_u in 5.6 / 6.1 and the governing LRFD combination named in 5.2 / 5.3 come from the LRFD resultants (2.5 table), but no card works P_u per pedestal, so there is nothing to link to.
+
+### Needs engineer
+- **Report length:** the report prints every card of the tabs (default: 32 pages, was 23; the extra pages are the cover, references and contents, and one page break per section). Keep it all, or add section toggles later?
+- **3D View no longer prints.** It printed only a live WebGL panel (empty unless the tab had been opened). Confirm it should stay out of the report.
+- **Description** in the print header is the project name (the tool has no description field, and none was added).

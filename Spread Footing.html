@@ -167,6 +167,47 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
  .chip{-webkit-print-color-adjust:exact;print-color-adjust:exact}
  .chip.pass,.chip.fail,.warnbox,.errbox,table.tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+/* D11 (2026-10-18): calculation-sheet report (print only: cover, references, contents, section
+   headings, result lines; renderPrintHeader) and CLAUDE.md §6 "Worked in" links (sfdWorkedIn) */
+.wkLink{font-size:10.5px;color:#555;margin:2px 0 8px 0}
+a.wkA{color:#1c4e80;text-decoration:none;cursor:pointer}
+a.wkA:hover{text-decoration:underline}
+.wkPrt,.sfdRpt{display:none}
+@media print{
+ .wrap>div:first-child,#titleblock,#tab-3d{display:none !important}   /* screen title row and input title block: the cover replaces them; live 3D view not printed */
+ details.sec[open]>summary::before{content:""}                        /* the open-marker printed before every card title */
+ .wkScr{display:none}
+ .wkPrt{display:inline}
+ .sfdRpt{display:block}
+ a.wkA,a.sfdA{color:#000;text-decoration:none}
+ .wkLink{font-style:italic;color:#000;font-size:9.5pt}
+ .chip .wkPrt{display:block;font-size:9pt;font-style:italic}
+ .sfdCover{min-height:8.3in;display:flex;flex-direction:column;justify-content:center;break-after:page}
+ .sfdCover h1{font:700 22pt/1.2 Arial,Helvetica,sans-serif;text-align:center;margin:0 0 12pt}
+ .sfdCover p{text-align:center;font:700 12.5pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
+ .sfdCover p.sfdCp{font-weight:400;font-size:11pt}
+ .sfdTB{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;font-size:10.5pt;border:1px solid #000;padding:8px 10px;margin-top:20pt}
+ .sfdBanner{margin-top:14pt;text-align:center;font:700 11pt Arial,sans-serif;padding:6px;border:1.5px solid #000}
+ .sfdFront{break-after:page}
+ .sfdFront h2,h2.sfdRptH{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:10pt 0 8pt}
+ h2.sfdRptH{break-before:page;break-after:avoid}
+ .sfdRefs{border-collapse:collapse;width:100%;font-size:9.5pt;margin:0 0 10pt}
+ .sfdRefs td{padding:2pt 12pt 2pt 0;vertical-align:top;border:0}
+ .sfdRefs td:first-child{white-space:nowrap;font-weight:700}
+ .sfdToc,.sfdToc ol{list-style:none;margin:0;padding:0}
+ .sfdToc li{line-height:1.25}
+ .sfdToc>li{margin:1pt 0;font-size:10.5pt}
+ .sfdToc ol{padding-left:18pt;font-size:9.5pt;columns:2;column-gap:14pt}
+ .sfdSmall{font-size:9pt;margin-top:8pt}
+ .comboSel button{display:none}                                       /* the "reset to governing" button */
+ .sfdResH{font:700 11pt "Times New Roman",Times,serif;margin:14pt 0 2pt;break-after:avoid}
+ .sfdRes{border-bottom:0.8pt solid #000;margin-bottom:8pt}
+ .sfdLine{display:grid;grid-template-columns:2.1in 1fr 0.7in;gap:0 10pt;align-items:center;padding:3pt 0;border-top:0.6pt solid #000;break-inside:avoid;font-size:10.5pt}
+ .sfdLine .r{text-align:right}
+ .sfdLine .f{text-decoration:underline}
+ .sfdLine i{font-size:9pt}
+ #sfdRptSum{break-before:auto}
+}
 </style>
 </head>
 <body>
@@ -357,7 +398,7 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 <!-- ============ OUTPUT PANEL ============ -->
 <div class="out" id="outputPanel">
  <div id="printHeader"></div>
- <h2 style="margin-top:0">Summary Dashboard</h2>
+ <h2 style="margin-top:0" id="sfdRptSum">Summary Dashboard</h2>
  <div class="dash" id="dashboard"></div>
  <div id="warnings"></div>
  <div id="consistency"></div>
@@ -549,6 +590,29 @@ function solve3(M,b){
   if(Math.abs(A[p][i])<1e-14)return null;[A[i],A[p]]=[A[p],A[i]];
   for(let r=0;r<3;r++){if(r===i)continue;const f=A[r][i]/A[i][i];for(let cc=i;cc<4;cc++)A[r][cc]-=f*A[i][cc];}}
  return [A[0][3]/A[0][0],A[1][3]/A[1][1],A[2][3]/A[2][2]];}
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
+   On screen: "Worked in: <value> → <Tab> · <card>" (opens the tab and the card, scrolls, flashes it).
+   In the printed report the same link reads "<value>: see §n.k" (renderPrintHeader fills n.k from the card title). ---- */
+const SFD_LINKS={'o-cb-weights':['tab-combos','2.2 Self-Weights, Soil Overburden & Buoyancy'],
+ 'o-cb-asd':['tab-combos','2.3 Combination resultants'],
+ 'o-br-press':['tab-bearing','3.2 Base Pressure Distribution'],'o-br-cap':['tab-bearing','3.3 Bearing Check'],
+ 'o-st-slide':['tab-stab','4.2 Sliding'],'o-st-ot':['tab-stab','4.3 Overturning']};
+const SFD_TABNAME={'tab-schem':'Schematic','tab-combos':'Load Combinations','tab-bearing':'Bearing','tab-stab':'Stability','tab-footdes':'Footing Design','tab-peddes':'Pedestal Design'};
+function sfdLink(card,txt,lab){   /* lab: card label when the card is not in SFD_LINKS ([tab, label]) */
+ const c=lab||SFD_LINKS[card];if(!c)return '';
+ return '<a class="wkA" href="#'+card+'" data-card="'+card+'"><span class="wkScr">'+(txt?txt+' → ':'')+SFD_TABNAME[c[0]]+' · '+c[1]+'</span>'+
+  '<span class="wkPrt">'+(txt?txt+': ':'')+'see §<span class="wkN"></span></span></a>';}
+function sfdWorkedIn(items,tail){   /* items: [[card, value text, label?], …] */
+ const ls=items.map(x=>sfdLink(x[0],x[1],x[2])).filter(Boolean);
+ return el('div','wkLink','<span class="wkScr">Worked in: </span>'+ls.join(' · ')+(tail?' '+tail:''));}
+function sfdGoto(card){
+ const sec=document.getElementById(card);if(!sec)return;
+ const pg=sec.closest('.tabpage');
+ if(pg&&!pg.classList.contains('active')){const btn=$$('#tabbar button').find(b=>b.dataset.tab===pg.id);if(btn)btn.click();}
+ for(let d=sec;d;d=d.parentElement&&d.parentElement.closest('details'))if(d.tagName==='DETAILS'&&!d.open)d.open=true;
+ setTimeout(()=>{sec.scrollIntoView({behavior:'smooth',block:'start'});
+  const s=sec.querySelector('summary')||sec;const old=s.style.background;s.style.background='#fff3cd';setTimeout(()=>{s.style.background=old;},1100);},60);}
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.wkA');if(!a)return;e.preventDefault();sfdGoto(a.dataset.card);});
 /* ================= state ================= */
 const TYPES=['D','L','Lr','S','Wx','Wy'];
 const TYPE_DESC={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',Wx:'Wind, x-dir',Wy:'Wind, y-dir'};
@@ -1297,6 +1361,7 @@ function chip(name,val,status,asdIdx,nav){
  c.appendChild(el('div','cn',name));
  c.appendChild(el('div','cv',val));
  c.appendChild(el('div','cs',status==='pass'?'PASS':status==='fail'?'FAIL':status==='warn'?'REVIEW':'N/A'));
+ if(nav&&nav.tab){c.dataset.tab=nav.tab;if(nav.sec)c.dataset.sec=nav.sec;}   /* D11: read by the report (result lines, "see §") */
  // primary click: jump to the relevant calculation section (item 1)
  if(nav&&nav.tab){
   c.style.cursor='pointer';
@@ -1442,6 +1507,7 @@ function renderSchematic(){
  b3.appendChild(el('div','note','Origin at footing centroid. +x toward the B/2 edge, +y toward the L/2 edge. P positive downward (compression). +V\u2093, +V\u1D67 act in +x, +y at the top of the pedestal and generate base moments V\u00b7h. +M\u2093 shifts the resultant toward +y; +M\u1D67 shifts the resultant toward +x. Eccentricities: e\u2093 = \u03a3M\u1D67 / \u03a3P, e\u1D67 = \u03a3M\u2093 / \u03a3P.'));
  const b4=secPanel(T,'o-schem-echo','1.4  Input Echo');
  b4.appendChild(buildInputEcho());
+ b4.appendChild(sfdWorkedIn([['o-cb-weights','footing self-weight']]));   /* D11 links */
  const b5=secPanel(T,'o-schem-assump','1.5  Engineering Assumptions & Items Not Considered');
  const ul=el('div');
  if(state.assump.trim())ul.appendChild(el('p','', '<b>User assumptions:</b> '+state.assump.replace(/</g,'&lt;').replace(/\n/g,'<br>')));
@@ -1662,6 +1728,7 @@ function renderCombos(){
  wt.appendChild(el('p','note','These magnitudes are unfactored; each combination applies its own dead-load factor (and the min-dead bracket 0.6D/0.9D for stability). Stabilizing actions are reduced (min factor) in the uplift/overturning combinations so resistance is not overstated.'));
  const b1=secPanel(T,'o-cb-asd',R.directMode?'2.3  Direct Factored Envelope \u2014 Resultant & Bearing Check':'2.3  Service (ASD) Combinations \u2014 Resultants & Check Summary');
  b1.appendChild(comboTable(R.asd,true));
+ b1.appendChild(sfdWorkedIn([['o-br-press','q<sub>max</sub>, contact %'],['o-br-cap','bearing DCR'],['o-st-ot','min FS OT'],['o-st-slide','FS sl']],'(worked for the governing or selected combination; the same procedure is applied to every row).'));   /* D11 links */
  // substituted resultant breakdown for the governing/selected combination (hand-checkable)
  const selForBrk=selASD(R.govBear);
  if(selForBrk&&selForBrk.r)b1.appendChild(resultantBreakdown(selForBrk));
@@ -1972,6 +2039,7 @@ function renderBearing(){
   ['\\Sigma M_x,\\;\\Sigma M_y','Base moments about centroid',f2(r.Mx)+', '+f2(r.My),'kip-ft'],
   ['e_x','Eccentricity, x',r.ex,'ft'],
   ['e_y','Eccentricity, y',r.ey,'ft']]));
+ b0.appendChild(sfdWorkedIn([['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']]));   /* D11 links */
  b0.appendChild(eqBlock('Eccentricities','\u2014',
   'e_x = \\frac{\\Sigma M_y}{\\Sigma P}, \\qquad e_y = \\frac{\\Sigma M_x}{\\Sigma P}',
   'e_x = \\frac{'+f2(r.My)+'}{'+f2(r.P)+'}, \\qquad e_y = \\frac{'+f2(r.Mx)+'}{'+f2(r.P)+'}',
@@ -2229,6 +2297,7 @@ function renderStability(){
    'FS_{sl,R} = \\frac{\\mu\\,\\Sigma P + P_{p,R}}{\\sqrt{\\Sigma H_x^2+\\Sigma H_y^2}},\\quad P_{p,R} = \\frac{P_{p,x}|\\Sigma H_x| + P_{p,y}|\\Sigma H_y|}{\\sqrt{\\Sigma H_x^2+\\Sigma H_y^2}}',
    'FS_{sl,R} = \\frac{'+f2(R.mu)+'\\cdot'+f2(Math.max(selCombo.r.P,0))+' + '+f2(selCombo.PpR)+'}{'+f2(selCombo.Hres)+'}',
    'FS_{sl,R} = \\mathbf{'+f2(selCombo.FSslr)+'}'+(selCombo.FSslr>=num(state.stab.FSsl)?'\\;\\checkmark':'\\;\\text{NG}')));
+ b1.appendChild(sfdWorkedIn([['o-cb-asd','\u03a3P, \u03a3H (this combination\u2019s row)']]));   /* D11 links */
  /* overturning */
  const b2=secPanel(T,'o-st-ot','4.3  Overturning \u2014 '+(selCombo===R.govOT?'Governing Combination & Edge':'Selected Combination & Edge'));
  b2.appendChild(el('div','note',R.otGate?('The overturning factor of safety is <b>gating</b> in this run against a target of '+f2(num(state.stab.FSot))+'. Note that IBC and ASCE 7 impose no numeric FS on a building spread footing \u2014 confirm the target comes from the geotechnical report, owner criteria or agency policy. See &sect;4.3a.'):'The overturning factor of safety is <b>reported but not gated</b>: IBC and ASCE 7 set no numeric target for a building spread footing, and the stability margin is carried by the 0.6D / 0.9D combinations. Instability (resultant off the footing, or FS &lt; 1) still fails. The gating stability criterion in this run is the eccentricity limit in &sect;4.3a; the FS gate can be re-armed on the Stability tab.'));
@@ -2240,6 +2309,7 @@ function renderStability(){
  go.r.verts.forEach(v=>{const tr=document.createElement('tr');
   [v.src,f2(v.w),f2(v.x),f2(v.y)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});vt.appendChild(tr);});
  b2.appendChild(vt);
+ b2.appendChild(sfdWorkedIn([['o-cb-weights','self-weights, EV, U (unfactored)'],['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']]));   /* D11 links */
  b2.appendChild(overturningSVG(go,oe));
  b2.appendChild(eqBlock('Overturning check about edge '+oe.name,'FS_target = '+f2(num(state.stab.FSot)),
   'FS_{OT} = \\frac{M_r}{M_o} = \\frac{\\sum W_i\\,a_i^{+} + |M_{app}^{-}|}{\\sum |W_i\\,a_i^{-}| + M_{app}^{+}}',
@@ -2305,6 +2375,7 @@ function renderStability(){
    'FS_{fl} = \\frac{'+f2(R.Wf)+' + '+f2(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+f2(R.EV)+'}{'+f2(R.U)+'}',
    'FS_{fl} = \\mathbf{'+f2(R.flot.FS)+'}'+(R.flot.FS>=num(state.stab.FSfl)?'\\;\\checkmark':'\\;\\text{NG}')));
   b3.appendChild(el('p','note','EV already uses buoyant unit weight below the water table; concrete buoyancy is carried in U. Live and transient loads are excluded from flotation resistance.'));
+  b3.appendChild(sfdWorkedIn([['o-cb-weights','W<sub>f</sub>, \u03a3W<sub>ped</sub>, EV, U']]));   /* D11 links */
  }else b3.appendChild(el('p','note','Water table is below the footing base (or not defined) \u2014 flotation is not applicable.'));
  /* rigidity */
  const b4=secPanel(T,'o-st-rig','4.5  Rigid-Footing Verification (basis of linear pressure assumption)');
@@ -2447,14 +2518,129 @@ function ptInPoly(px,py,poly){
  return inside;
 }
 /* ---------- print header ---------- */
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format, printed
+   in place (Print-to-PDF Report / Ctrl+P). renderPrintHeader builds the print-only parts around the
+   tabs, which print as on screen: the cover with the title block, the references, a numbered table of
+   contents (links), a heading "n. <tab>" before each result tab (its cards are subsections n.k, with
+   the worked equations: symbolic → substituted → result), and after each tab the result lines of its
+   checks (the dashboard chips: status = the chip's own PASS/FAIL/REVIEW/N/A). The print header and
+   "Page X of Y" footer are @page margin boxes, applied only while printing (sfdPageCSS). */
+const SFD_REFS=[
+ ['ACI 318-19','Building Code Requirements for Structural Concrete — §5.3 (load factors), §6.2.5 (slenderness), §7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing), §8.4.2.3 / §8.4.4.2 (moment transfer), §10.6.1.1 / §10.7.3.1 (pedestal steel), §13.2.7.1, §13.3.3.3 (band steel), §16.3.4.1 (dowels), §20.5.1.3 (cover), §21.2.2 (φ), §22.3 (flexure), §22.4.2.1 (axial), Table 22.5.5.1 (one-way shear), §22.6 (two-way shear), §22.8.3.2 (bearing), §25.2.3, §25.4.2.4 / §25.4.9 (development), §25.7.2 (ties)'],
+ ['ASCE/SEI 7-16','Minimum Design Loads — §2.3.1 (strength combinations), §2.4.1 (allowable stress combinations)'],
+ ['IBC 2021','International Building Code — §1605.3 (combinations), §1610 (overburden, as cited), §1807.2.3 (FS 1.5 for retaining walls; quoted for comparison)'],
+ ['AASHTO LRFD','Bridge Design Specifications — Art. 10.6.3.1.2a (Vesić form, depth and inclination factors), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning); edition: verify (the tool states none)'],
+ ['Vesić (1973, 1975)','“Analysis of Ultimate Loads of Shallow Foundations,” JSMFD ASCE 99(1); Foundation Engineering Handbook — bearing capacity'],
+ ['Meyerhof (1953)','“The Bearing Capacity of Foundations Under Eccentric and Inclined Loads,” 3rd ICSMFE — effective area'],
+ ['Bowles','Foundation Analysis and Design, 5th ed. — rigid-footing criterion λℓ ≤ π/4, pressure distributions'],
+ ['Rankine','Passive earth-pressure coefficient K<sub>p</sub>']];
+/* §n.k of a card: the number its own title starts with (a nested card takes its parent's) */
+function sfdSecNum(card){
+ let d=document.getElementById(card);
+ while(d){const s=d.querySelector(':scope>summary'),mm=s&&s.textContent.match(/^\s*(\d+\.\d+[a-z]?)\s/);if(mm)return mm[1];
+  d=d.parentElement&&d.parentElement.closest('details.sec');}
+ return null;}
+function sfdEsc(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+/* the print header / footer boxes (@page margin boxes), only while printing */
+function sfdPageCSS(on){
+ let st=document.getElementById('sfd-page');
+ if(!st){st=document.createElement('style');st.id='sfd-page';document.head.appendChild(st);}
+ if(!on){st.textContent='';return;}
+ const m=state.meta,q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');
+ const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+ const foot='font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt;';
+ st.textContent='@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+  ' @top-left { content: "Project No: '+q(m.number)+'\\A Description: '+q(String(m.project||'').slice(0,40))+'"; '+box+' text-align: left; }'+
+  ' @top-center { content: "Computed By: '+q(m.calcBy)+'\\A Checked By: '+q(m.chkBy)+'"; '+box+' text-align: left; }'+
+  ' @top-right { content: "Date: '+q(m.calcDate)+'\\A Date: '+q(m.chkDate)+'"; '+box+' text-align: right; }'+
+  ' @bottom-left { content: "'+q(m.project||'Untitled')+' (Spread Footing Design Tool)"; '+foot+' }'+
+  ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' } } }';
+}
+/* one result line per dashboard chip: D/C from the same values the chip shows, status = the chip's own */
+function sfdResultRows(){
+ if(!R||R.fatal)return [];
+ const FSot=num(state.stab.FSot),FSsl=num(state.stab.FSsl),FSfl=num(state.stab.FSfl);
+ const fs=(req,FS)=>(isFinite(FS)&&FS>0)?req/FS:null, mx=a=>a.length?Math.max(...a):null;
+ const real=P2&&P2.bearing?P2.bearing.filter(z=>!z.isPatch):[];
+ const FST=t=>'FS ≥ '+f2(t)+' (input target); D/C = FS<sub>target</sub>/FS';
+ const D={   /* chip name → [reference, D/C, cards where it is worked] */
+  'Bearing (service)':()=>[R.directMode?'factored envelope vs allowable bearing (conservative)':'ASCE 7-16 §2.4.1 service; '+(state.soil.mode==='vesic'?'q<sub>eff</sub> ≤ q<sub>allow</sub> (Vesić, Meyerhof effective area)':'q ≤ q<sub>a</sub> (direct, '+sfdEsc(state.soil.qaBasis)+')'),R.govBear?R.govBear.DCR:null,['o-br-cap']],
+  'Overturning':()=>{const FS=R.govOT.otMin.FS,bad=R.asd.some(a=>a.bear.mode==='unstable'||a.r.P<=1e-9)||FS<1;
+   return bad?['FS<sub>OT</sub> = M<sub>r</sub>/M<sub>o</sub> ≥ 1.0; D/C = 1/FS',fs(1,FS),['o-st-ot']]
+    :R.otGate?['FS<sub>OT</sub> = M<sub>r</sub>/M<sub>o</sub>; '+FST(FSot),fs(FSot,FS),['o-st-ot']]
+    :['FS<sub>OT</sub> = M<sub>r</sub>/M<sub>o</sub>; reported, not gated',null,['o-st-ot']];},
+  'Eccentricity limit':()=>[sfdEsc(R.eccChk.ref),R.eccChk.gov.dcr,['o-st-ecc']],
+  'Sliding, x':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSlx.FSslx),['o-st-slide']],
+  'Sliding, y':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSly.FSsly),['o-st-slide']],
+  'Sliding, resultant √(Hx²+Hy²)':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSlr.FSslr),['o-st-slide']],
+  'Flotation':()=>R.flot?['FS<sub>fl</sub> = (W<sub>f</sub> + ΣW<sub>ped</sub> + EV)/U; '+FST(FSfl),fs(FSfl,R.flot.FS),['o-st-flot']]:['no water table above the base',null,['o-st-flot']],
+  'Contact area':()=>['no-tension soil, rigid footing',null,['o-br-press']],
+  'Rigidity (rigid method)':()=>['Bowles: λℓ ≤ π/4; D/C = λℓ/(π/4)',Math.max(R.rig.vx,R.rig.vy)/R.rig.limit,['o-st-rig']],
+  'Input validation':()=>['input checks',null,[]],
+  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> §7.6.1.1 / §24.4.3.2; s<sub>max</sub> §7.7.2.3',
+   Math.max(P2.desX.dcrBot,P2.desY.dcrBot,...[P2.desX.dcrTop,P2.desY.dcrTop].filter(v=>v!=null)),['o-fd-x','o-fd-y']],
+  'One-way shear':()=>[state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3',
+   (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
+  'Punching shear':()=>['ACI 318-19 §22.6.5.2, §8.4.4.2',mx(P2.punch.filter(z=>!z.perimOutside).map(z=>z.dcr)),['o-fd-punch']],
+  'Concrete bearing':()=>['ACI 318-19 §22.8.3.2',mx(P2.bearing.map(z=>z.dcr)),['o-fd-bear']],
+  'Dowel steel (min 0.005A_g)':()=>['ACI 318-19 §16.3.4.1; D/C = A<sub>s,min</sub>/A<sub>s,prov</sub>',mx(real.map(z=>z.AsDowProv>0?z.AsDowMin/z.AsDowProv:Infinity)),['o-fd-bear']],
+  'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; D/C = ℓ<sub>dc</sub>/available',mx(real.map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)),['o-fd-bear']],
+  'Pedestal design':()=>['ACI 318-19 §22.4.2.1 (axial; D/C shown); §10.6.1.1, §10.7.3.1, §25.7.2',
+   mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.dcrAxial)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
+ return $$('#dashboard .chip').map(c=>{
+  const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
+  const st=['pass','fail','warn','na'].find(k=>c.classList.contains(k))||'na';
+  let v=['',null,[]];try{if(D[name])v=D[name]();}catch(e){/* value not available: D/C n/a */}
+  const cards=v[2].length?v[2]:(c.dataset.sec?[c.dataset.sec]:[]);
+  const home=cards.map(k=>document.getElementById(k)).find(Boolean);
+  const tab=(home&&home.closest('.tabpage'))?home.closest('.tabpage').id:(c.dataset.tab||'tab-schem');
+  return {name,val,st,ref:v[0],dc:v[1],cards,tab,chip:c};});
+}
 function renderPrintHeader(){
- const m=state.meta;
- $('#printHeader').innerHTML='<h1 style="margin:0">Spread Footing Design \u2014 Calculation Report</h1>'+
- '<p style="font-size:10px;margin:2px 0">by Mario Lococo \u2014 Spread Footing Design Tool \u2014 ACI 318-19 / ASCE 7-16 / IBC 2021</p>'+
- '<table class="tbl" style="width:100%"><tr><th>Project</th><th>No.</th><th>Calc By</th><th>Date</th><th>Checked By</th><th>Date</th></tr>'+
- '<tr><td>'+(m.project||'\u2013')+'</td><td>'+(m.number||'\u2013')+'</td><td>'+(m.calcBy||'\u2013')+'</td><td>'+(m.calcDate||'\u2013')+'</td><td>'+(m.chkBy||'\u2013')+'</td><td>'+(m.chkDate||'\u2013')+'</td></tr></table>';
- if(typeof sfMrSourceLine==='function'&&sfMrSourceLine()){const sp=document.createElement('p');sp.style.cssText='font-size:10px;margin:2px 0';sp.textContent=sfMrSourceLine();$('#printHeader').appendChild(sp);}   /* hand-off source (HANDOFF.md §3.4) */
- if(typeof sfFlSourceLine==='function'&&sfFlSourceLine()){const sp=document.createElement('p');sp.style.cssText='font-size:10px;margin:2px 0';sp.textContent=sfFlSourceLine();$('#printHeader').appendChild(sp);}   /* foundationLoads hand-off source (HANDOFF.md §3.4) */
+ const m=state.meta,hd=$('#printHeader');
+ const fdc=v=>(v==null||isNaN(v))?'n/a':(isFinite(v)?v.toFixed(2):'∞');
+ const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'};
+ const see=k=>{const n=sfdSecNum(k);return n?'<a class="sfdA" href="#'+k+'">§'+n+'</a>':'';};
+ /* "Worked in" links and dashboard chips: the §n.k they print */
+ $$('a.wkA').forEach(a=>{const n=sfdSecNum(a.dataset.card),w=a.querySelector('.wkN');if(w)w.textContent=n||'? (not in this printout)';});
+ const rows=sfdResultRows();
+ rows.forEach(x=>{const old=x.chip.querySelector('.wkPrt');if(old)old.remove();
+  const s=x.cards.map(see).filter(Boolean);if(s.length)x.chip.appendChild(el('div','wkPrt','see '+s.join(', ')));});
+ /* section headings and result lines around the result tabs */
+ $$('.sfdRptH,.sfdRes,.sfdResH,.sfdNone').forEach(e=>e.remove());
+ const tabs=$$('#tabbar button').map(b=>({id:b.dataset.tab,n:(b.textContent.match(/^(\d+)\./)||[])[1],t:b.textContent.replace(/^\d+\.\s*/,'')}))
+  .filter(s=>s.n&&s.id!=='tab-3d'&&(s.id!=='tab-manual'||state.manPrint));
+ const toc=[];
+ tabs.forEach(s=>{const pg=document.getElementById(s.id);if(!pg)return;
+  const h=el('h2','sfdRpt sfdRptH',s.n+'. '+sfdEsc(s.t));h.id='sfdRpt-'+s.id;pg.parentNode.insertBefore(h,pg);
+  const subs=$$('#'+s.id+'>details.sec').map(d=>{const mm=d.querySelector(':scope>summary').textContent.match(/^\s*(\d+\.\d+[a-z]?)\s+(.*)$/);
+   return mm?{id:d.id,num:mm[1],t:mm[2]}:null;}).filter(Boolean);
+  if(s.id!=='tab-manual'&&!pg.textContent.trim())h.insertAdjacentElement('afterend',el('p','sfdRpt sfdNone note','Not computed: see the input errors in the Summary.'));
+  toc.push({id:h.id,n:s.n,t:s.t,subs});
+  const rs=rows.filter(x=>x.tab===s.id);if(!rs.length)return;
+  const rh=el('div','sfdRpt sfdResH','Results — §'+s.n+' '+sfdEsc(s.t));
+  const rb=el('div','sfdRpt sfdRes',rs.map(x=>{const sl=x.cards.map(see).filter(Boolean);
+   return '<div class="sfdLine"><div>'+sfdEsc(x.name)+':</div>'+
+    '<div>D/C = <b>'+fdc(x.dc)+'</b> <i>('+(x.ref?x.ref+'; ':'')+sfdEsc(x.val)+(sl.length?'; '+sl.join(', '):'')+')</i></div>'+
+    '<div class="r'+(x.st==='fail'?' f':'')+'"><b>'+ST[x.st]+'</b></div></div>';}).join(''));
+  pg.parentNode.insertBefore(rh,pg.nextSibling);rh.parentNode.insertBefore(rb,rh.nextSibling);});
+ /* cover, references, contents */
+ const cnt={pass:0,fail:0,warn:0,na:0};rows.forEach(x=>cnt[x.st]++);
+ const verdict=(R&&R.fatal)?'Input errors: no results (see the Summary)':(cnt.fail?cnt.fail+' of '+rows.length+' checks FAIL':'No check fails')+
+  ' · '+cnt.pass+' PASS'+(cnt.warn?' · '+cnt.warn+' REVIEW':'')+(cnt.na?' · '+cnt.na+' N/A':'');
+ const hand=[typeof sfMrSourceLine==='function'?sfMrSourceLine():'',typeof sfFlSourceLine==='function'?sfFlSourceLine():''].filter(Boolean);   /* hand-off sources (HANDOFF.md §3.4) */
+ const tb=[['Project',m.project],['Project No.',m.number],['Calculated by',m.calcBy],['Date',m.calcDate],['Checked by',m.chkBy],['Checked date',m.chkDate]];
+ const nTab=tabs.filter(s=>s.id!=='tab-manual').length;
+ hd.innerHTML='<section class="sfdCover"><h1>Spread Footing Design — Calculation Report</h1>'+
+  '<p>'+sfdEsc(m.project||'Untitled')+'</p>'+
+  '<p class="sfdCp">ACI 318-19 · ASCE 7-16 · IBC 2021 · Spread Footing Design Tool, by Mario Lococo</p>'+
+  '<div class="sfdTB">'+tb.map(([k,v])=>'<div><b>'+k+':</b> '+sfdEsc(v||'—')+'</div>').join('')+'</div>'+
+  hand.map(t=>'<p class="sfdCp" style="font-size:9.5pt;margin-top:8pt">'+sfdEsc(t)+'</p>').join('')+
+  '<div class="sfdBanner">'+verdict+'</div></section>'+
+  '<section class="sfdFront"><h2>References:</h2><table class="sfdRefs">'+SFD_REFS.map(([a,b])=>'<tr><td>'+a+'</td><td>'+b+'</td></tr>').join('')+'</table>'+
+  '<h2>Table of contents:</h2><ol class="sfdToc"><li><a class="sfdA" href="#sfdRptSum">Summary Dashboard</a></li>'+
+  toc.map(s=>'<li><a class="sfdA" href="#'+s.id+'">'+s.n+'. '+sfdEsc(s.t)+'</a>'+(s.subs.length?'<ol>'+s.subs.map(q=>'<li><a class="sfdA" href="#'+q.id+'">'+q.num+' '+sfdEsc(q.t)+'</a></li>').join('')+'</ol>':'')+'</li>').join('')+'</ol>'+
+  '<p class="sfdSmall">Sections 1–'+nTab+' are the result tabs, printed as on screen: each subsection n.k is the card of that number, with the equations shown symbolically, then with values substituted, then with the result. Each section ends with the result lines of its checks (one per dashboard chip; status = the chip’s own PASS / FAIL / REVIEW / N/A). For a factor-of-safety check, D/C = FS<sub>target</sub>/FS. Where a value is used away from where it is worked, “see §n.k” gives the subsection. Units: kips, ft, ksf unless noted.</p></section>';
 }
 </script>
 <script>
@@ -2651,8 +2837,10 @@ $('#btnAddPed').addEventListener('click',()=>{
 let printPrev=null;
 window.addEventListener('beforeprint',()=>{
  printPrev=$$('details').map(d=>[d,d.open]);
- $$('details').forEach(d=>d.open=true);});
+ $$('details').forEach(d=>d.open=true);
+ renderPrintHeader();sfdPageCSS(true);});   /* D11: report parts (renderPrintHeader) and the print header/footer, only while printing */
 window.addEventListener('afterprint',()=>{
+ sfdPageCSS(false);
  if(printPrev)printPrev.forEach(([d,o])=>d.open=o);printPrev=null;});
 $('#btnPrint').addEventListener('click',()=>window.print());
 </script>
@@ -3924,6 +4112,7 @@ function renderPedestalDesign(){
    if(k===9)td.style.color=tiesTxt==='OK'?'#1b5e20':'#b71c1c';tr.appendChild(td);});
   if(!pd.rhoOK||!pd.nBarsOK||!pd.barFitOK)tr.style.background='#fff8e1';t.appendChild(tr);});
  intro.appendChild(t);
+ intro.appendChild(sfdWorkedIn(P2.pedDes.map((pd,i)=>['o-pd-'+i,pd.label,['tab-peddes','6.'+(i+2)+' '+pd.label+' \u2014 Detailed Checks']])));   /* D11 links */
  P2.pedDes.forEach((pd,i)=>{
   const b=secPanel(T,'o-pd-'+i,'6.'+(i+2)+'  '+pd.label+' \u2014 Detailed Checks',false);
   if(!pd.barFitOK)b.appendChild(el('div','warnbox','Longitudinal bars do not fit: clear spacing '+f2(Math.min(pd.clrX,pd.clrY))+' in is below the ACI 318-19 25.2.3 minimum of '+f2(pd.clrMin)+' in for the entered bar count \u2014 check nx/ny.'));
