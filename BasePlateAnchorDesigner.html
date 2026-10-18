@@ -146,6 +146,30 @@
   #printReport h2{font-size:13pt;border-bottom:1px solid var(--ink);margin:14px 0 6px;}
   #printReport h3{font-size:11pt;margin:10px 0 4px;}
   #printReport .foot{margin-top:16px;border-top:1px solid var(--ink);padding-top:6px;font-size:9pt;font-style:italic;color:#444;}
+  /* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
+  #printReport.crdoc{background:#fff;color:#000;font:11pt/1.35 "Times New Roman",Times,serif;}
+  #printReport.crdoc a{color:#000;text-decoration:none;}
+  #printReport .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
+  #printReport .cr-cover-t{text-align:center;margin-bottom:28pt;}
+  #printReport .cr-cover .rptHdrGrid{box-sizing:border-box;width:100%;}
+  #printReport .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;}
+  #printReport .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
+  #printReport .cr-cover .cr-cover-p{font-weight:400;}
+  #printReport .cr-front{break-after:page;}
+  #printReport .cr-break{break-before:page;}
+  #printReport h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid;}
+  #printReport .cr-front h2.cr-h1{margin-top:10pt;}
+  #printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt;} #printReport .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top;}
+  #printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0;} #printReport .cr-toc>li{margin:3pt 0;} #printReport .cr-toc ol{padding-left:18pt;font-size:10.5pt;}
+  #printReport .cr-p{margin:0 0 7pt;} #printReport .cr-small{font-size:9.5pt;margin-top:18pt;}
+  #printReport .secTitle{font:700 11pt "Times New Roman",Times,serif;}
+  #printReport .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;}
+  #printReport .cr-line{display:grid;grid-template-columns:2.4in 1fr 0.9in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;}
+  #printReport .cr-res{border-top:0.6pt solid #000;}
+  #printReport .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
+  #printReport .cr-r{text-align:right;} #printReport .cr-st-fail{text-decoration:underline;}
+  #printReport .cr-refi{font-size:9pt;font-style:italic;}
+  #printReport .caret{display:none;}
   #valBox{margin:6px 0 0;}
   .valErr{background:#fdecea;border-left:4px solid var(--fail);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
   .valWarn{background:#fef7e6;border-left:4px solid var(--warn);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
@@ -2720,7 +2744,7 @@ function plateBending(combo, cc){
         "\\text{along B: } q="+fmt(qX,2)+"\\ \\text{ksi},\\ Y="+fmt(Ynx,2)+"\\ \\text{in vs } n="+fmt(n,2)+"\\ \\Rightarrow t="+fmt(cN.t,3)+"\\ \\text{in ("+cN.branch+")}"]
         .concat(isW&&lam_nprime>0? ["\\text{inner panel: } t=\\lambda n'\\sqrt{2f_p/(\\phi F_y)}="+fmt(cL.t,3)+"\\ \\text{in}"]:[])
         .concat(["t_{req,C}="+fmt(tReqC,3)+"\\ \\text{in — governed by "+govC+"}"]),
-       vars:[["\\text{Eq. 3.3.15}","t=\\sqrt{4f_pY(\\ell-Y/2)/(\\phi F_y)}","used when the bearing length is shorter than the cantilever — the moment at the section is f_p·Y·(ℓ−Y/2), not f_p·ℓ²/2"]]},
+       vars:[["\\text{Eq. 3.3.15}","t = √(4f_p·Y·(ℓ − Y/2)/(φF_y))","used when the bearing length is shorter than the cantilever — the moment at the section is f_p·Y·(ℓ−Y/2), not f_p·ℓ²/2"]]},
       {title:"Tension-side thickness demand (anchor pull)",ref:"AISC DG1 §3.4.3",
        lines:[
         "M_u=T_{u}\\cdot x="+fmt(Tu_per,2)+"\\times"+fmt(armT,2)+"="+fmt(Mu_t,2)+"\\ \\text{kip-in}",
@@ -9601,8 +9625,10 @@ function openPrintSettings(){
   const tabs=TABS();
   tabs.forEach(([id,label])=>{
     const row=el("div","chkRow"); const cb=document.createElement("input"); cb.type="checkbox";
-    cb.checked=S.print.sections[id]!==false; cb.addEventListener("change",()=>{S.print.sections[id]=cb.checked;autosave();});
-    row.appendChild(cb); row.appendChild(document.createTextNode(label)); box.appendChild(row);
+    const optIn=(id==="tabValidation"||id==="tabManual");   /* D11: appendices, off unless ticked */
+    if(id==="tabVisual") return;                              /* 3-D is never printed */
+    cb.checked=optIn? S.print.sections[id]===true : S.print.sections[id]!==false; cb.addEventListener("change",()=>{S.print.sections[id]=cb.checked;autosave();});
+    row.appendChild(cb); row.appendChild(document.createTextNode(label+(optIn?" (appendix)":""))); box.appendChild(row);
   });
   box.appendChild(el("h3",null,"Load combinations"));
   box.appendChild(el("div","note",
@@ -9650,7 +9676,7 @@ function openPrintSettings(){
     const nC=(CC&&CC.combos)?CC.combos.length:0;
     const perComboIds=["tabPlate","tabAnchor","tabConc"];
     const nPerCombo=perComboIds.filter(id=>S.print.sections[id]!==false && TABS().some(t=>t[0]===id)).length;
-    const nOther=TABS().filter(([id])=>id!=="tabVisual" && S.print.sections[id]!==false && perComboIds.indexOf(id)<0).length;
+    const nOther=TABS().filter(([id])=>id!=="tabVisual" && ((id==="tabValidation"||id==="tabManual")? S.print.sections[id]===true : S.print.sections[id]!==false) && perComboIds.indexOf(id)<0).length;
     let nRendered=(S.print.combos.all!==false)? nC : 1;
     let nCollapsed=0;
     if(S.print.collapseIdentical!==false && CC && CC.combos && (S.print.combos.all!==false)){
@@ -9677,33 +9703,116 @@ function openPrintSettings(){
   const btns=el("div"); btns.style.cssText="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;";
   const cancel=el("button",null,"Cancel"); cancel.addEventListener("click",()=>overlay.remove());
   const go=el("button","primary","Generate PDF"); go.addEventListener("click",()=>{ overlay.remove();
-    buildPrintReport(); setTimeout(()=>window.print(),120); });
+    buildPrintReport(); bpadApplyPageCSS(true); setTimeout(()=>window.print(),120); });
   btns.appendChild(cancel); btns.appendChild(go); box.appendChild(btns);
   overlay.appendChild(box); document.body.appendChild(overlay);
 }
 
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
+   cover with title block, references, numbered table of contents (links), numbered sections and
+   subsections (each tab's cards keep their worked equations: symbolic → substituted → result),
+   a D/C result line per check, and the print header / "Page X of Y" footer (@page margin boxes,
+   bpadPageCSS). The worked content is the same as the tabs (built by the same functions). */
+const BPAD_REFS=[
+  ["ACI 318-19","Building Code Requirements for Structural Concrete — Ch. 17 (anchoring), §22.8 (bearing), Ch. 25 (development)"],
+  ["AISC DG1","AISC Design Guide 1, Base Plate and Anchor Rod Design, 2nd Ed. (plate bending, bearing)"],
+  ["AISC 360","Specification for Structural Steel Buildings — §J3.10 (bolt bearing / tearout), §E3 (rod compression); edition: verify"],
+  ["ASCE 7-22","Minimum Design Loads — §2.3 (LRFD load combinations, when generated in this tool)"],
+  ["Hilti PROFIS","PROFIS Engineering stand-off lever-arm method (anchor bending with stand-off), as reproduced in this tool"]];
+function bpadPageCSS(){
+  const p=S.proj||{}, esc=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/\n/g," ");
+  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+    ' @top-left { content: "Project No: '+esc(p.num)+'\\A Description: '+esc((p.name||"Base plate").slice(0,38))+'"; '+box+' text-align: left; }'+
+    ' @top-center { content: "Computed By: '+esc(p.by)+'\\A Checked By: '+esc(p.chk)+'"; '+box+' text-align: left; }'+
+    ' @top-right { content: "Date: '+esc(p.date)+'\\A Date: '+esc(p.chkDate)+'"; '+box+' text-align: right; }'+
+    ' @bottom-left { content: "'+esc(p.name||"Untitled")+' (Base Plate & Anchor Bolt Design)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }'+
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } }';
+}
+function bpadApplyPageCSS(on){
+  let st=document.getElementById("bpad-page");
+  if(!st){ st=document.createElement("style"); st.id="bpad-page"; document.head.appendChild(st); }
+  st.textContent=on? bpadPageCSS() : "";
+}
+/* D/C result lines for one report section: per combination for the worked tabs, else the envelope */
+function bpadResultRows(tabId, ci){
+  const rows=[];
+  if(ci!=null && CC && CC.combos[ci]){
+    const c=CC.combos[ci];
+    if(tabId==="tabPlate"){
+      try{ const pb=plateBending(c,CC); rows.push(["Base plate bending","AISC DG1",pb.dcr]); }catch(e){}
+      try{ const to=plateTearout(c); rows.push(["Bolt bearing / tearout (plate)","AISC 360 §J3.10",to.dcr]); }catch(e){}
+    } else {
+      const M=dcrMatrix(); const r=M && M.rows[ci];
+      const map={stT:"tabAnchor",po:"tabAnchor",stV:"tabAnchor",so:"tabAnchor",int:"tabAnchor",tb:"tabConc",sfb:"tabConc",sbk:"tabConc",pry:"tabConc"};
+      if(r) M.modes.forEach(m=>{ if(map[m.key]===tabId && r.dcr[m.key]!==undefined) rows.push([m.label,"ACI 318-19 "+m.ref,r.dcr[m.key]]); });
+    }
+  } else {
+    allChecks().filter(k=>k.tab===tabId).forEach(k=>rows.push([k.label,k.ref,k.na?null:k.dcr,k.combo]));
+  }
+  return rows;
+}
+function bpadResultBlock(rows){
+  if(!rows.length) return null;
+  const box=el("div","cr-results");
+  rows.forEach(([lab,ref,dcr,cmb])=>{
+    const ok=(dcr==null)? null : (isFinite(dcr) && dcr<=1.0+1e-9);
+    const line=el("div","cr-line cr-res");
+    line.appendChild(el("div","cr-d",lab+":"));
+    const m=el("div","cr-m"); m.innerHTML="D/C = <b>"+(dcr==null?"n/a":(isFinite(dcr)?fmt(dcr,2):"∞"))+"</b>"+
+      " <span class='cr-refi'>("+ref+(cmb&&cmb!=="—"?"; governing combination "+cmb:"")+")</span>"; line.appendChild(m);
+    const r=el("div","cr-r"+(ok===false?" cr-st-fail":"")); r.innerHTML="<b>"+(ok==null?"N/A":(ok?"PASS":"FAIL"))+"</b>"; line.appendChild(r);
+    box.appendChild(line);
+  });
+  return box;
+}
 function buildPrintReport(){
   const holder=document.getElementById("printReport"); holder.innerHTML="";
+  holder.className="crdoc";
   S.ui.printing=true;   /* interactive controls render as static marks in the PDF */
-  /* title block (always) */
-  holder.appendChild(el("div","rptTitle","Base Plate & Anchor Bolt Design"));
-  holder.appendChild(el("div","rptSub","by Mario Lococo  ·  ACI 318-19 · AISC Design Guide 1"));
-  const hg=el("div","rptHdrGrid");
-  [["Project",S.proj.name],["Project No.",S.proj.num],["Calculated by",S.proj.by],
-   ["Date",S.proj.date],["Checked by",S.proj.chk],["Checked date",S.proj.chkDate]].forEach(([k,v])=>{
-    const d=el("div"); d.innerHTML="<b>"+k+":</b> "+(v||"—"); hg.appendChild(d); });
-  holder.appendChild(hg);
-  if(typeof bxMrSourceLine==="function"&&bxMrSourceLine()) holder.appendChild(el("div","note",bxMrSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
-
   const tabs=TABS();
   const savedTab=S.ui.tab, savedCombo=S.detailCombo;
-  let secNum=1;
   const gi=governingComboIndex();
   if(S.print.collapseIdentical===undefined) S.print.collapseIdentical=true;
   const combosToRender = (S.print.combos.all!==false)? CC.combos.map((c,i)=>i) : [gi];
+  const toc=[]; const bodyEl=el("div","cr-bodyall"); let secNum=1;
 
+  /* a numbered top-level section; its mkSection cards become numbered subsections n.k */
+  function addSection(title, content, resRows, xrefHtml){
+    const n=secNum++, id="crp-"+n, sec=el("section","cr-sec"+(n>1?" cr-break":""));
+    const h=el("h2","cr-h1",n+". "+title); h.id=id; sec.appendChild(h);
+    const subs=[];
+    if(xrefHtml){ const p=el("div","cr-p"); p.innerHTML=xrefHtml; sec.appendChild(p); }
+    if(content){
+      content.querySelectorAll(".sec").forEach((sc,k)=>{
+        const t=sc.querySelector(".secTitle"); if(!t) return;
+        const sid=id+"-"+(k+1); sc.id=sid; sc.removeAttribute("data-secid");
+        const tt=t.textContent.replace(/^\s*\d+\.\s*/,"");   /* the tab's own card number is replaced by n.k */
+        subs.push({t:tt, id:sid}); t.textContent=n+"."+(k+1)+" "+tt;
+      });
+      sec.appendChild(content);
+    }
+    const rb=resRows? bpadResultBlock(resRows) : null;
+    if(rb){ const hh=el("div","cr-h2 cr-resh","Results — "+title); sec.appendChild(hh); sec.appendChild(rb); }
+    bodyEl.appendChild(sec); toc.push({n,t:title,id,subs});
+    return n;
+  }
+  function renderTab(id){
+    const tmp=el("div","tabPage"); tmp.id="page_"+id;
+    const host=el("div"); host.appendChild(tmp);
+    document.getElementById("tabPages").appendChild(host);  /* need in DOM for katex */
+    buildOutputInto(id,tmp);
+    /* D11: cloneNode keeps attributes, not live state — carry the selected option / checked state
+       over (the combination picker otherwise printed the FIRST combination in every section) */
+    tmp.querySelectorAll("select").forEach(sl=>[...sl.options].forEach(o=>{ if(o.selected) o.setAttribute("selected",""); else o.removeAttribute("selected"); }));
+    tmp.querySelectorAll("input").forEach(ip=>{ if(ip.type==="checkbox"||ip.type==="radio"){ if(ip.checked) ip.setAttribute("checked",""); else ip.removeAttribute("checked"); } else ip.setAttribute("value",ip.value); });
+    const cl=tmp.cloneNode(true); host.remove(); return cl;
+  }
+
+  const BPAD_OPTIN={tabValidation:1,tabManual:1};   /* D11: appendices print only when ticked */
   tabs.forEach(([id,label])=>{
     if(S.print.sections[id]===false) return;
+    if(BPAD_OPTIN[id] && S.print.sections[id]!==true) return;
     if(id==="tabVisual") return; /* skip live 3D in print */
     const perCombo=(id==="tabPlate"||id==="tabAnchor"||id==="tabConc");
     if(perCombo){
@@ -9718,40 +9827,57 @@ function buildPrintReport(){
         const cbo=CC.combos[ci];
         const sig=[cbo.raw.P,cbo.raw.Vx,cbo.raw.Vy,cbo.raw.Mx,cbo.raw.My].join("|");
         if(collapse && firstBySig[sig]!==undefined){
-          const h2=el("h2",null,(secNum++)+". "+label+" — Combination: "+cbo.name);
-          holder.appendChild(h2);
-          const p=el("div","note comboXref");
-          p.innerHTML="Produces factored actions <b>identical</b> to combination <b>"+
-            firstBySig[sig]+"</b> (P, V<sub>x</sub>, V<sub>y</sub>, M<sub>x</sub>, M<sub>y</sub> all equal); "+
-            "see that section for the complete derivation. Repeating it here would add pages without "+
-            "adding information.";
-          holder.appendChild(p);
+          const f=firstBySig[sig];
+          addSection(label+" — Combination: "+cbo.name, null, bpadResultRows(id,ci),
+            "Produces factored actions <b>identical</b> to combination <b>"+f.name+"</b> (P, V<sub>x</sub>, V<sub>y</sub>, M<sub>x</sub>, M<sub>y</sub> all equal); "+
+            "see <a href='#crp-"+f.n+"'>§"+f.n+"</a> for the complete derivation. Repeating it here would add pages without adding information.");
           return;
         }
-        firstBySig[sig]=cbo.name;
         S.ui.tab=id; S.detailCombo=ci;
-        const tmp=el("div","tabPage"); tmp.id="page_"+id;
-        const host=el("div"); host.appendChild(tmp);
-        document.getElementById("tabPages").appendChild(host);  /* need in DOM for katex */
-        buildOutputInto(id,tmp);
-        const h2=el("h2",null,(secNum++)+". "+label+" — Combination: "+cbo.name);
-        holder.appendChild(h2); holder.appendChild(tmp.cloneNode(true)); host.remove();
+        const n=addSection(label+" — Combination: "+cbo.name, renderTab(id), bpadResultRows(id,ci));
+        firstBySig[sig]={name:cbo.name,n};
       });
     } else {
       S.ui.tab=id;
-      const tmp=el("div","tabPage"); tmp.id="page_"+id;
-      const host=el("div"); host.appendChild(tmp); document.getElementById("tabPages").appendChild(host);
-      buildOutputInto(id,tmp);
-      const h2=el("h2",null,(secNum++)+". "+label);
-      holder.appendChild(h2); holder.appendChild(tmp.cloneNode(true)); host.remove();
+      const rr=(id==="tabTRebar"||id==="tabVRebar")? bpadResultRows(id,null) : null;
+      addSection((BPAD_OPTIN[id]?"Appendix: ":"")+label, renderTab(id), rr);
     }
   });
-  /* assumptions always */
-  if(S.assume.trim()){ holder.appendChild(el("h2",null,(secNum++)+". Engineering Assumptions"));
-    const p=el("div"); p.style.whiteSpace="pre-wrap"; p.textContent=S.assume; holder.appendChild(p); }
+  /* assumptions */
+  if(S.assume.trim()){ const p=el("div"); p.style.whiteSpace="pre-wrap"; p.textContent=S.assume; addSection("Engineering Assumptions", p, null); }
+
+  /* front matter: cover with title block, references, table of contents */
+  const front=el("div","cr-frontall");
+  const cover=el("section","cr-cover");
+  const ct=el("div","cr-cover-t");
+  ct.appendChild(el("h1",null,"Base Plate & Anchor Bolt Design"));
+  ct.appendChild(el("p",null,S.proj.name||"Untitled"));
+  ct.appendChild(el("p","cr-cover-p","ACI 318-19 Chapter 17 · AISC Design Guide 1 · by Mario Lococo"));
+  cover.appendChild(ct);
+  const hg=el("div","rptHdrGrid");
+  [["Project",S.proj.name],["Project No.",S.proj.num],["Calculated by",S.proj.by],
+   ["Date",S.proj.date],["Checked by",S.proj.chk],["Checked date",S.proj.chkDate]].forEach(([k,v])=>{
+    const d=el("div"); d.innerHTML="<b>"+k+":</b> "+(v||"—"); hg.appendChild(d); });
+  cover.appendChild(hg);
+  if(typeof bxMrSourceLine==="function"&&bxMrSourceLine()) cover.appendChild(el("div","note",bxMrSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
+  front.appendChild(cover);
+  const fm=el("section","cr-front");
+  fm.appendChild(el("h2","cr-h1 cr-nonum","References:"));
+  const rt=el("table","cr-refs"); BPAD_REFS.forEach(([a,b])=>{ const tr=el("tr"); tr.appendChild(el("td",null,a)); tr.appendChild(el("td",null,b)); rt.appendChild(tr); });
+  fm.appendChild(rt);
+  fm.appendChild(el("h2","cr-h1 cr-nonum","Table of contents:"));
+  const ol=el("ol","cr-toc");
+  toc.forEach(s=>{ const li=el("li"); const a=el("a",null,s.n+". "+s.t); a.href="#"+s.id; li.appendChild(a);
+    if(s.subs.length){ const o2=el("ol"); s.subs.forEach((q,k)=>{ const l2=el("li"); const a2=el("a",null,s.n+"."+(k+1)+". "+q.t); a2.href="#"+q.id; l2.appendChild(a2); o2.appendChild(l2); }); li.appendChild(o2); }
+    ol.appendChild(li); });
+  fm.appendChild(ol);
+  fm.appendChild(el("p","cr-p cr-small","Equations are shown symbolically, then with values substituted, then with the result. Each section ends with the D/C result of its checks. Units: kip, in, ksi unless noted. "+
+    ((S.print.combos.all!==false)? "Every load combination is worked." : "Only the governing combination ("+CC.combos[gi].name+") is worked; every combination is analysed (see the Summary).")));
+  front.appendChild(fm);
+  holder.appendChild(front); holder.appendChild(bodyEl);
   /* disclaimer (always) */
   holder.appendChild(el("div","foot","This calculation must be reviewed and sealed by a licensed professional engineer. Results depend on the accuracy of the inputs and modeling assumptions stated herein. Concrete provisions per ACI 318-19 Chapter 17 (cast-in headed anchors); base plate flexure per AISC Design Guide 1. Combined tension–shear pass/fail per ACI 318-19 §17.8: both the 5/3 parabolic and the trilinear forms are permitted, both are computed, and the MORE CONSERVATIVE governs. Hilti PROFIS prints whichever is more favourable, so a PROFIS report may show a lower interaction value on identical numbers."));
-
+  window.BPAD_TOC=toc;
   S.ui.tab=savedTab; S.detailCombo=savedCombo;
   S.ui.printing=false;
 }
@@ -9773,6 +9899,9 @@ function buildOutputInto(id,node){
       case "tabConc": buildConcTab(node); break;
       case "tabTRebar": buildTRebarTab(node); break;
       case "tabVRebar": buildVRebarTab(node); break;
+      case "tabVCase": buildVCaseTab(node); break;          /* D11: was missing (printed an empty section) */
+      case "tabValidation": buildValidationTab(node); break; /* D11: optional appendix */
+      case "tabManual": buildManualTab(node); break;         /* D11: optional appendix */
     }
   } finally { document.getElementById=orig; }
   /* expand all collapsibles for print */
@@ -9943,7 +10072,8 @@ function init(){
       el0.style.color="var(--warn)";
     }
   }
-  window.addEventListener("beforeprint",()=>{ if(!document.getElementById("printReport").innerHTML) buildPrintReport(); });
+  window.addEventListener("beforeprint",()=>{ if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
+  window.addEventListener("afterprint",()=>bpadApplyPageCSS(false));   /* D11: header/footer only while printing */
   window.addEventListener("afterprint",()=>{ const h=document.getElementById("printReport"); if(h)h.innerHTML=""; });
   /* last-ditch save when the tab closes */
   window.addEventListener("beforeunload",()=>{ try{ autosave(); }catch(e){} });

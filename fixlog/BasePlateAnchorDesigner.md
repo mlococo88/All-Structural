@@ -1892,3 +1892,43 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: computed results and the printed report text are identical to main for the default design and the three built-in PROFIS cases; there are no console errors.
   - Every graphic was screenshotted headless before and after, for: W12X65 (default), W10X33 with plate eccentricity, HSS8X8, a clamped stand-off, both rebar types, and a 3-anchor tension breakout (PROFIS example 1 geometry).
+
+## 2026-10-18 — D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-18 (AUDIT.md D11, parked 2026-10-14).
+- **Functions / anchors:**
+  - `buildPrintReport()` is rewritten, preceded by the new `BPAD_REFS`, `bpadPageCSS()`, `bpadApplyPageCSS()`, `bpadResultRows()` and `bpadResultBlock()` (anchor `/* D11 (2026-10-18)`).
+  - `buildOutputInto()` gains cases `tabVCase`, `tabValidation`, `tabManual`.
+  - `openPrintSettings()`: the appendix check boxes and the size estimate.
+  - Print triggers: `beforeprint` / `afterprint` and the Generate PDF button.
+  - CSS anchor `/* D11 calculation-sheet report`.
+- **Before:**
+  - Title, sub-title and title block, then "n. Tab" headings with the tab content and the disclaimer.
+  - Shear Distribution, Validation and User Manual printed as empty headings: there was no builder case for them.
+  - The combination picker in every per-combination section showed the FIRST combination, because `cloneNode` drops a `<select>`'s live selection. The worked values were those of the correct combination.
+- **After:**
+  - **Cover:** title, project, codes and the title block (Project / No. / Calculated by / Date / Checked by / Checked date).
+  - **References:** ACI 318-19 Ch. 17, §22.8, Ch. 25; AISC Design Guide 1, 2nd Ed.; AISC 360 §J3.10 / §E3 (edition: verify); ASCE 7-22 §2.3; the PROFIS lever-arm method.
+  - **Numbered table of contents** with links.
+  - **Numbered sections n and subsections n.k:** each tab card, with its own "k." number replaced.
+  - **Results block** at the end of each section: one line per check, "<check>: D/C = x.xx (<ref>[; governing combination]) PASS / FAIL / N/A".
+    - Per combination for Base Plate (plate bending, tearout), Anchor Bolts (steel tension, pullout, steel shear, stand-off bending, interaction) and Concrete Embedment (breakout T/V, side-face blowout, pryout).
+    - The envelope for the tension and shear rebar sections.
+  - The identical-combination cross-reference links to "§n".
+  - Print uses `@page` margin boxes:
+    - top: "Project No / Description", "Computed By / Checked By", "Date / Date";
+    - bottom: "<project> (Base Plate & Anchor Bolt Design)" and "Page X of Y".
+  - Shear Distribution is now printed.
+  - Validation and User Manual are opt-in appendices, unticked by default in Report Contents.
+  - The selected combination and check-box states are carried into the print copy.
+  - Expand/collapse carets are hidden in print.
+  - Base Plate tab, "Eq. 3.3.15" note: the raw TeX `t=\sqrt{4f_pY(\ell-Y/2)/(\phi F_y)}` became "t = √(4f_p·Y·(ℓ − Y/2)/(φF_y))". Wording only.
+- **Provision:** none. No formula, factor, unit or result changed. The D/C values in the result lines are the existing `dcrMatrix()`, `plateBending()`, `plateTearout()` and `allChecks()` values.
+- **Saved data:** `S.print.sections.tabValidation` / `tabManual` are now read as "print only if true". A project saved with them unticked is unaffected; one saved with them included (the old default, which printed empty headings) now omits them until ticked. No key or format change.
+- **Check case (default design, all combinations):**
+  - 12 sections: Input (5 subsections), Summary (5), Base Plate × 3 combinations (3 each), Anchor Bolts × 3 (9 each), Concrete Embedment × 3 (7 each), Shear Distribution (4).
+  - 27 result lines; 67 letter pages.
+  - Combination 1.2D+1.6L, Anchor Bolts: steel tension 0.00, pullout 0.00, steel shear 0.36, interaction 0.56, all PASS. These equal the "All combinations × limit states" matrix row.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: every computed field is identical to main for the default design and the 3 built-in PROFIS cases. Only `report` (the printed text) differs, as intended, so its results-identity step reports DIFFERENT for this PR only.
+  - Headless Chromium PDF (print media, `preferCSSPageSize`, KaTeX 0.16.11 served locally): pages checked for the cover, references and TOC, a Base Plate section with its result block, Anchor Bolts, Concrete Embedment and the header/footer boxes. No console errors.
