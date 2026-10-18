@@ -696,3 +696,133 @@ Engineer's instruction 2026-10-12: work through every open item, use best judgme
 
 ### Remaining open items
 - None. O1, O2, O3, O6 and O8 (barrier) are fixed in F17–F21. O7 and the rest of O8 are closed above. O4 and O5 wait for the engineer (N1, N2).
+
+## 2026-10-18 — PR: claude/rw-d11-report (PR link added after merge)
+
+The tool file uses CRLF line endings; keep them. Line numbers are approximate; search for the anchor text.
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11).
+- **What changes for the user:** the **Export report** window is restructured, so its printout changes. Ctrl+P on the main page is unchanged apart from the new "Worked in" lines (D11 links below).
+- **Where:** the whole report block, from the anchor `// CALCULATION REPORT (D11, 2026-10-18)` down to the end of `buildReportHTML()` (just above `// 3D VIEW TAB — Three.js interactive model`). It replaces the old block that started at `// PDF REPORT GENERATOR` and ended with the old `generateReport()`. To re-apply by hand, copy that whole block from this version. It holds `RW_REFS`, `RW_SEC`, `rwTabSource()`, `rwPlotImages()`, `rwResultRows()`, `generateReport()` (now `async`) and `buildReportHTML()`.
+- **Before:** one template-literal report in a new window:
+  - a title block (Project No., Engineer, Checked By, Date, Standard, Units, Load combo, Status);
+  - its own re-derivations: §1 Input Parameters (1.1, 1.2, 1.4; no 1.3), §2 Wall Geometry, §3 Earth Pressure, §4 Stability, §5 Stem, §6 Footing, §7 Reinforcement Schedule, §8 Design Summary;
+  - no references, no table of contents, no result lines;
+  - `@page{size:letter;margin:1in 0.85in 1in 0.85in;}`, with no header or footer.
+- **After:**
+  - **Cover:**
+    - title, project name, Notes / Description, and the codes of the selected basis;
+    - title block: Project / Project No. / Calculated by (`proj_eng`) / Date (the date the report is generated, as before) / Checked by (`proj_chk`) / Checked date ("—": the tool has no such field, and none was added) / design basis / units;
+    - a PASS/FAIL banner from `r.checks` (same count as the status bar).
+  - **References table** (`RW_REFS`, by basis). It lists only what the tool cites:
+    - ACI basis: ACI 318-19, IBC 2021 §1807.2.3, ASCE 7-22 §2.3.1 / §11.8, Rankine (1857), Seed & Whitman (1970).
+    - AASHTO basis: AASHTO LRFD 10th Ed. (2024) articles; MassDOT LRFD Bridge Manual §3.3.2.2 / §3.3.2.4 / Table 3.3.2-1, marked "edition: verify" (the tool states none); ACI 318-19 §25.4.2 (cited for the footing bars' ℓd); ASCE 7-22 §2.3.1.
+  - **Numbered table of contents** with links (sections and subsections).
+  - **Sections:**
+    1. Design Summary: every check of `r.checks`, plus the card checks (below), with value, D/C, status and "Worked in §n.k".
+    2. Input Parameters: the old §1 tables, unchanged except the numbers (2.1 Wall Geometry, 2.2 Soil Properties & Loading, 2.3 Column / Beam Loads, 2.4 Materials & Cover; the materials table had no heading before).
+    3. Wall Geometry: the old figure.
+    4. Stability, 5. Stem Design, 6. Footing Design, 7. Reinforcement Schedule: the result tabs' own cards.
+       - They are built by `renderStability` / `renderStem` / `renderFooting` / `renderRebar` into a stand-in element (`rwTabSource`); the live tab is not touched.
+       - Each card is subsection n.k; its title keeps the tab's "Step x" text. The tabs' group headings are kept, unnumbered.
+       - The Plotly charts are drawn off screen by the tabs' own plot jobs and inserted as SVG images (`rwPlotImages`). Without Plotly the report says the chart is not included.
+  - **Result lines** at the end of §4–§7 (`rwResultRows`): "<check>: D/C = x.xx (<ref>; <note>; §n.k) PASS/FAIL".
+    - The status is the check's own flag (`r.checks[k].ok`, or the card's own condition).
+    - D/C uses the tool's values. For a FOS check, D/C = 1.5 / FOS, as on the Overview scorecard.
+    - Card checks that are not in the status bar are listed too, marked "card check, not counted in the status bar": S2 and F3 temperature & shrinkage bar selection, and (AASHTO with interface shear) the stem–footing interface.
+  - **ACI crack control** (`crackStem/Heel/Toe`, ACI 318-19 §24.3.2) was not worked in any tab. The report adds the card "Crack-Control Bar Spacing" in §7 with `eqCheck`, from `r.aciCr` (f_s, c_c, s_max, s). The two terms inside min( ) use the tool's own expressions `15(40000/fs) − 2.5cc` and `12(40000/fs)`.
+  - **Print:** `@page` letter with margin boxes, inside `@media print` (print only).
+    - Top: "Project No / Description" (Notes, else the project name), "Computed By / Checked By", "Date / Date".
+    - Bottom: "<project> (RetainCalc Pro — Retaining Wall Designer)" and "Page X of Y".
+    - The on-screen footer line is hidden in print.
+  - The report window opens inside the click (pop-up blockers) with a "Building…" note, then loads the report from a Blob URL as before.
+  - MathJax in the report: same CDN tag (3.2.2); inline math also accepts `\( \)`.
+- **Fixed along the way (report display only):**
+  - AASHTO mode printed ACI labels next to the AASHTO values. All of these are gone, because the report now prints the tabs' own equations:
+    - the old title block: "Standard: ACI 318-19, IBC 2021, ASCE 7-22" and "Load combo: U = 1.2D + 1.6H — ACI 318-19 §5.3";
+    - old §5 / §6, headed "(ACI 318-19)" with "U = 1.6H", "M_u = 1.6[…]" and "U = 1.2D + 1.6H";
+    - old §4.2 (AASHTO), which wrote the sliding demand as η(1.50 P_EH + 1.75 P_LS), while the tool uses γ_EH,max.
+  - The old report left out these checks, and its summary listed 9 checks. All checks are now worked and listed:
+    - mid-height stem section, hook, crack control and minimum reinforcement;
+    - interface shear, collision (Extreme Event II), barrier yield line and column axial.
+  - The section-number gap (no 1.3) and the unlabelled materials table.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Saved data:** none. No key or format change (`retaincalcpro.*` and `rcp_input_tab` untouched).
+- **Check case (default project, ACI basis):** 7 sections, 34 subsections, 32 letter pages (main: 9). 17 result lines, all PASS, for example:
+  - O.T.: D/C = 0.20 (FOS = 7.54); Sliding: 0.91 (FOS = 1.66); Bearing: 0.49 (1.47 ksf vs q_a = 3.00 ksf).
+  - Stem Flex 0.97 (§5.3), Stem Hook ℓdh 0.56 (§5.5), Heel Flex 0.97 (§6.4), Toe Shear 0.55 (§6.10).
+  - Stem / Heel / Toe Crack Ctrl 0.60 / 0.80 / 0.80 (§7.5: s_max = 10.00 / 7.50 / 7.50 in, s = 6 in).
+- **Check case (AASHTO with collision, barrier, yield line, interface shear, MassDOT heel and q_s = 100 psf):** 36 pages, 26 result lines.
+  - Sliding: D/C = 1.49, FAIL (§4.5). This is the only status-bar failure, as on screen.
+  - Heel Flex: 0.86, "MassDOT §3.3.2.2 governs". Stem–Footing Interface Shear: 0.24 (card check).
+
+### D11 links: quoted values link to the card where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **New helpers** after `fmtEqTitle()` (anchor `/* ---- D11 links (CLAUDE.md §6, 2026-10-18)`):
+  - `RW_TABNAME`; `RW_CARDS` (card key → tab and title prefix per basis); `RW_CHECK_CARD` (check → card);
+  - `rwCardTitle`, `rwLink`, `rwWorkedIn`, `rwGoto`, and one document click handler for `a.wkA`;
+  - a click opens the tab (with the tab button's own click), scrolls to the card and flashes it.
+  - CSS after `.mono   { font-family: var(--mono); }` (anchor `/* D11 links (CLAUDE.md §6)`).
+- **"Worked in" lines added** (each is `h += rwWorkedIn(...)` or `${rwWorkedIn(...)}`):
+  1. Stability (AASHTO), Load Combination Summary, after the "Concrete design is enveloped separately" line: Sliding → Step 4, Eccentricity → Step 5, Bearing → Step 6, Extreme Event II → Step 7b.
+  2. Stability (AASHTO), Step 8, after the stem–footing interface `eqCheck`: V_u (stem base) → Stem Step 4; S1 bars → Stem Step 3.
+  3. Stability (AASHTO), Step 9, after the toe crack-control `eqCheck`: S1 (s, A_s, M_u) → Stem Step 3; F1 → Heel Step 3; F2 → Toe Step 3.
+  4. Stem Step 1, after "Factored shear at base": K_a → Stability Step 1; q_LS → Stability Step 2 (AASHTO with LL surcharge).
+  5. Footing Heel Step 1 and Toe Step 1 (ACI basis only): q_u,back, q_u,heel and q_u,front, q_u,toe → Stability Step 7.
+  6. Rebar schedule, under the bar schedule table: S1, S3, S2, F1, F2, F3, and ℓ_d of S1, F1, F2 → their cards.
+- **Existing text made into links:**
+  - Footing "Factored Loads on Footing" card-ref, ACI basis only. On screen the text is unchanged.
+    - Before: `<span class="card-ref">bearing from Step 7 of Stability tab</span>`
+    - After: `<span class="card-ref">bearing from ${r.isAASHTO ? 'Step 7 of Stability tab' : '<a class="wkA" href="#" data-card="stabFactBrg" data-intext="1">Step 7 of Stability tab</a>'}</span>`
+  - Overview "Check Summary": each check label is a link to its card (tooltip "Worked in: <Tab> · <card>"). One line is added under the table: "Worked in: click a check to open the card where it is worked."
+    - Before: `${Object.values(r.checks).map(c => \`` … `<td class="lbl">${c.label}</td>`
+    - After: `${Object.entries(r.checks).map(([k, c]) => \`` … the label is wrapped in an `a.wkA` when its card exists.
+    - ACI crack control has no card on screen and stays plain text.
+- **In the report:**
+  - every "→ Tab · Card" link reads "<value>: see §n.k" (a PDF link);
+  - the in-text "Step 7 of Stability tab" reads "§4.7";
+  - a target that is not in the printout would read "not in this printout" (none in the cases tested).
+- **Check case (default):** 93 internal links, none broken. The report text reads:
+  - "Ka: see §4.1"; "qu,back, qu,heel: see §4.7";
+  - "S1: see §5.3 · S3: see §5.8 · S2: see §5.6 · F1: see §6.4 · F2: see §6.9 · F3: see §6.12 · ℓd S1: see §5.5 · ℓd F1: see §6.5 · ℓd F2: see §6.10".
+
+### How verified (both entries)
+- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: all scripts pass.
+- `node tests/compare.mjs --tool page --file "Retaining Wall Designer.html"`:
+  - page.storage is identical;
+  - page.text differs only by the added line "Worked in: click a check to open the card where it is worked.";
+  - the console errors on both sides come only from the CDN libraries the kit does not hold (MathJax tex-chtml 3.2.2, Plotly 2.35.2).
+- **Main vs branch with the libraries served locally** (MathJax 3.2.2 and plotly.js-dist-min 2.35.2 from `npm pack`, three r128 from `tests/libs`):
+  - Five cases:
+    1. default (ACI);
+    2. ACI with water table, k_h = 0.2, column loads, β = 10°, q_s = 250, passive and shear key;
+    3. AASHTO default;
+    4. AASHTO with collision, barrier, yield line, interface shear, MassDOT heel and q_s = 100;
+    5. AASHTO Coulomb δ = 20°, β = 5°, rock, q_n estimated, H_s = 16, water table.
+  - In every case these are identical: the full `window._R` (functions removed), every check flag and value, the status bar text and the localStorage keys. 0 console errors.
+  - The result tabs' text differs only by the "Worked in" lines.
+  - Building the report does not change `window._R`.
+- **Headless Chromium PDF of the report** (print media, `preferCSSPageSize`), in all five cases:
+  - 0 MathJax errors, no raw TeX, every internal link resolves, 6 chart images;
+  - pages checked: cover; references and contents; summary; inputs; §4 cards; a chart page; the §4 / §5 result blocks; the rebar schedule with its "see §" line; the §7.5 crack-control card; the AASHTO collision card; the header and footer boxes.
+- In the app, every link of the default case and the AASHTO collision case (15 and 19 targets) opens the right tab and flashes the right card.
+- **Other copies:** none. The report builder and the links are specific to this tool.
+
+### Open items (noticed, not changed)
+- **AASHTO footing bearing is not worked anywhere.**
+  - In AASHTO mode the factored bearing used for the footing design (q_u at toe, heel and stem faces, Strength I and Ia) has no card. The ACI basis has it in Stability Step 7.
+  - The Footing card-ref "bearing from Step 7 of Stability tab" then points to the collision step (or to nothing), and the report prints it as is.
+- **The AASHTO Service I row** of the Load Combination Summary (e ≤ B/6, q_max ≤ q_a) is not worked in any AASHTO card.
+- **The column axial check on the AASHTO basis** (`colAxial`, when column loads are entered) has no card: the column card is ACI only. The report summary shows "—" under Worked in.
+- **ACI crack control** (`crackStem/Heel/Toe`) is not worked in any tab on screen. The report now shows it (§7); the app does not.
+- **Some checks have a PASS/FAIL mark in a card but are not counted in the status bar:** the stem–footing interface shear (AASHTO Step 8), and the S2 and F3 T&S bar selections. A failure there would not show in the status bar.
+- **Over-stressed sections:** the Step 3 bar-selection badges (stem, heel, toe, mid-height) and the Overview scorecard test only A_s,prov ≥ A_s,des. The status-bar check also requires "not over-stressed", so they can disagree.
+- **Where-block labels that do not match the equation:**
+  - Stem Step 2 "assumed bar diameter (#6) 0.750" and Heel/Toe Step 3 "assumed bar diameter (#7) 0.875": the equation uses the selected bar.
+  - Heel Step 3 "top clear cover 2.00" and card-ref "d = t_f − 2.0'' cover": the equation uses the footing cover input (3.00 by default).
+- **ACI labels in AASHTO mode:** Stem Step 6 card-ref "ACI 318-19 §24.4.3.2"; Heel/Toe Step 4 ℓd "ACI 25.4.2"; the rebar tab's "ACI 318-19" card-ref and its notes "ACI §24.4.3".
+- **The toe service moment** for AASHTO crack control is |M_u| / 1.5 (an approximation, noted in the code).
+
+### Needs engineer
+- **Report length:** the report now carries every card of the tabs (default project: 32 pages, was 9). Keep it all, or add section toggles later?
+- **Checked date:** the tool has no checked-date field, so the title block and print header show "—". Add an optional tool-prefixed field?

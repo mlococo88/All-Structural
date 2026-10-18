@@ -508,6 +508,12 @@ select option { background: #fff; color: var(--text); }
 .n-warn { font-family: var(--mono); color: var(--warn); font-weight: 600; }
 .n-dim  { font-family: var(--mono); color: var(--muted); }
 .mono   { font-family: var(--mono); }
+/* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" */
+.wkLink { font-size: 11.5px; color: var(--muted); margin: 2px 0 8px; }
+a.wkA { color: var(--blue); text-decoration: none; cursor: pointer; }
+a.wkA:hover { text-decoration: underline; }
+.card.wkFlash { animation: wkflash 1.4s ease-out; }
+@keyframes wkflash { from { background: #dde6fa; } to { background: var(--card); } }
 
 /* ─────────────────────────── SCORECARD (overview hero) */
 .sc { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow); margin-bottom: 22px; }
@@ -1431,6 +1437,65 @@ function fmtEqTitle(title) {
   if (m) return `<span class="eq-num">${m[1].trim()}</span><span>${m[2]}</span>`;
   return `<span>${title}</span>`;
 }
+
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
+   On screen: "Worked in: <value> → <Tab> · <card>" (opens the tab, scrolls to the card, flashes it).
+   In the calculation report (generateReport) the same link reads "<value>: see §n.k". ---- */
+const RW_TABNAME = { stability:'Stability', stem:'Stem design', footing:'Footing design', rebar:'Rebar schedule' };
+// card key → [tab, card-title prefix on the ACI basis, on the AASHTO basis]; null = the card does not exist on that basis
+const RW_CARDS = {
+  stabKa:      ['stability', 'Step 1 — Earth Pressure Coefficient', 'Step 1 — Earth Pressure Coefficient'],
+  stabLS:      ['stability', null, 'Step 2 — Live Load Surcharge'],
+  stabOT:      ['stability', 'Step 4 — Overturning Check', null],
+  stabSlide:   ['stability', 'Step 5 — Sliding Check', 'Step 4 — Sliding Resistance'],
+  stabEcc:     ['stability', null, 'Step 5 — Eccentricity Limit'],
+  stabBrg:     ['stability', 'Step 6 — Bearing Pressure Check', 'Step 6 — Bearing Resistance'],
+  stabFactBrg: ['stability', 'Step 7 — Factored Bearing for Footing Design', null],
+  stabCol:     ['stability', 'Column / Beam Load Combinations', null],
+  stabCT:      ['stability', null, 'Step 7b — Stability under Collision'],
+  stabYL:      ['stability', null, 'Step 7c — Barrier Yield-Line Capacity'],
+  stabISH:     ['stability', null, 'Step 8 — Interface Shear'],
+  stabServ:    ['stability', null, 'Step 9 — Serviceability'],
+  stemFlex:    ['stem', 'Step 3 — Flexural Reinforcement', 'Step 3 — Flexural Reinforcement'],
+  stemShear:   ['stem', 'Step 4 — One-Way Shear Check', 'Step 4 — One-Way Shear Check'],
+  stemDev:     ['stem', 'Step 5 — Development Length', 'Step 5 — Development Length'],
+  stemTS:      ['stem', 'Step 6 — Horizontal Temperature', 'Step 6 — Horizontal Temperature'],
+  stemMid:     ['stem', 'Mid Step 2 — Flexural Reinforcement', 'Mid Step 2 — Flexural Reinforcement'],
+  heelFlex:    ['footing', 'Heel Step 3 — Flexural Steel', 'Heel Step 3 — Flexural Steel'],
+  heelShear:   ['footing', 'Heel Step 4 — Shear', 'Heel Step 4 — Shear'],
+  toeFlex:     ['footing', 'Toe Step 3 — Flexural Steel', 'Toe Step 3 — Flexural Steel'],
+  toeShear:    ['footing', 'Toe Step 4 — Shear', 'Toe Step 4 — Shear'],
+  ftgTS:       ['footing', 'Temperature & Shrinkage — Parallel to Wall', 'Temperature & Shrinkage — Parallel to Wall'],
+};
+// r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
+const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
+  stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid',
+  heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
+  ishFtg:'stabISH', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
+  crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
+function rwCardTitle(key, isAASHTO) { const c = RW_CARDS[key]; return c ? c[isAASHTO ? 2 : 1] : null; }
+function rwLink(r, key, txt) {
+  const t = rwCardTitle(key, r.isAASHTO); if (!t) return '';
+  return `<a class="wkA" href="#" data-card="${key}">${txt ? `<span class="wkT">${txt}</span> → ` : ''}${RW_TABNAME[RW_CARDS[key][0]]} · ${t}</a>`;
+}
+function rwWorkedIn(r, items) {   // items: [[cardKey, valueText], …]
+  const links = items.map(([k, txt]) => rwLink(r, k, txt)).filter(Boolean);
+  return links.length ? `<div class="wkLink">Worked in: ${links.join(' · ')}</div>` : '';
+}
+function rwGoto(key) {
+  const c = RW_CARDS[key], r = window._R; if (!c || !r) return;
+  const t = rwCardTitle(key, r.isAASHTO); if (!t) return;
+  const btn = document.querySelector(`.tab-btn[data-tab="${c[0]}"]`); if (btn) btn.click();
+  const card = [...document.querySelectorAll(`#tab-${c[0]} .card`)].find(e => {
+    const s = e.querySelector('.card-title'); return s && s.textContent.startsWith(t); });
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  card.classList.add('wkFlash'); setTimeout(() => card.classList.remove('wkFlash'), 1400);
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a.wkA'); if (!a) return;
+  e.preventDefault(); rwGoto(a.dataset.card);
+});
 
 // Typeset only the visible panel (perf) — debounced
 let _mjTimer = null;
@@ -3636,6 +3701,7 @@ function renderStabilityAASHTO(r) {
             {ok:r.bearing_ok, txt:F(r.q_max/1000,2)+'≤'+F(inp.qa/1000,2)+' ksf'} ])}
       </tbody></table>
       <div style="font-size:10.5px;color:var(--muted);margin-top:8px;">Concrete design is enveloped separately: Strength I vs Extreme Event II${r.stem_ee2_governs?' — <b>EE-II currently governs the stem</b>':''}${r.heel_md_governs?' · <b>MassDOT §3.3.2.2 governs the heel top steel</b>':''}.</div>
+      ${rwWorkedIn(r, [['stabSlide','Sliding'], ['stabEcc','Eccentricity'], ['stabBrg','Bearing'], ...(E ? [['stabCT','Extreme Event II']] : [])])}
       </div></div>`;
   }
 
@@ -3950,6 +4016,7 @@ function renderStabilityAASHTO(r) {
     }
     h += eqCheck('Stem\u2013footing interface (S1 bars as shear friction)',
       `\\phi V_n = ${F(s.Vr_stem,1)}\\ \\text{kip/ft} \\geq V_u = ${F(s.Vu_stem_ish,1)}\\ \\text{kip/ft}`, s.ish_stem_ok);
+    h += rwWorkedIn(r, [['stemShear','V<sub>u</sub> (stem base)'], ['stemFlex','S1 bars']]);
     h += `</div></div>`;
   }
 
@@ -3981,6 +4048,7 @@ function renderStabilityAASHTO(r) {
       [{sym:'f_{ss}', desc:'service tensile stress', val:F(sv.toe.crack.fss/1000,1), unit:'ksi'},
        {sym:'\\gamma_e', desc:'exposure factor (footing)', val:F(A.gamma_e1,2), unit:''},
        {sym:'s_{max}', desc:'max allowable spacing', val:F(sv.toe.crack.s_max,1), unit:'in'}]);
+    h += rwWorkedIn(r, [['stemFlex','S1 (s, A<sub>s</sub>, M<sub>u</sub>)'], ['heelFlex','F1'], ['toeFlex','F2']]);
     h += `</div></div>`;
   }
 
@@ -4563,6 +4631,7 @@ function renderStem(r) {
   h += eq('Factored shear at base',
     `V_u = \\boxed{${F(r.Vu_stem,1)}\\ \\text{lb/ft}} = ${Fk(r.Vu_stem)}\\ \\text{kip/ft}`,'',
     [{sym:'V_u', desc:'factored shear at base of stem', val:F(r.Vu_stem,1), unit:'lb/ft'}]);
+  h += rwWorkedIn(r, [['stabKa','K<sub>a</sub>'], ...(q_ll_stem > 0 ? [['stabLS','q<sub>LS</sub>']] : [])]);
   h += `<div class="alert info">ℹ ${r.stem_water
       ? '<strong>Water-aware:</strong> stem demands use the 3-block effective-stress profile (moist above WT, buoyant γ′ below) plus the full hydrostatic triangle. '
       : 'Stem demands use static earth pressure. '}${r.stem_ee2_governs?'<strong>Extreme Event II governs</strong> (collision + earth at γ=1.0, φ=1.0). ':''}${r.hasSeismic?'<strong>Seismic active:</strong> ΔPE is not included in stem flexure — add per ASCE 7 §11.8 load combos if required. ':''}Critical section at top of footing.</div>`;
@@ -4820,7 +4889,7 @@ function renderFooting(r) {
 
   // ── Load diagram ──
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Factored Loads on Footing</span><span class="card-ref">bearing from Step 7 of Stability tab</span></div>
+    <div class="card-hd"><span class="card-title">Factored Loads on Footing</span><span class="card-ref">bearing from ${r.isAASHTO ? 'Step 7 of Stability tab' : '<a class="wkA" href="#" data-card="stabFactBrg" data-intext="1">Step 7 of Stability tab</a>'}</span></div>
     <div class="card-body"><div id="plt-ftg-loads"></div></div>
   </div>`;
 
@@ -4842,6 +4911,7 @@ function renderFooting(r) {
     `q_{u}(0) = q_{u,back} = ${F(r.q0h,1)}\\ \\text{psf at face}, \\quad q_u(L_h) = q_{u,heel} = ${F(r.qLh,1)}\\ \\text{psf at tip}`,'',
     [{sym:'q_u(0)', desc:'upward bearing at stem face', val:F(r.q0h,1), unit:'psf'},
      {sym:'q_u(L_h)', desc:'upward bearing at heel tip', val:F(r.qLh,1), unit:'psf'}]);
+  h += rwWorkedIn(r, [['stabFactBrg','q<sub>u,back</sub>, q<sub>u,heel</sub>']]);
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
@@ -4941,6 +5011,7 @@ function renderFooting(r) {
     `q_{net}(0) = q_{u,front} - w_{sw} = ${F(r.net_q0t,1)}\\ \\text{psf}, \\quad q_{net}(L_t) = q_{u,toe} - w_{sw} = ${F(r.net_qLt,1)}\\ \\text{psf}`,'',
     [{sym:'q_{net}(0)', desc:'net upward pressure at stem face', val:F(r.net_q0t,1), unit:'psf'},
      {sym:'q_{net}(L_t)', desc:'net upward pressure at toe tip', val:F(r.net_qLt,1), unit:'psf'}]);
+  h += rwWorkedIn(r, [['stabFactBrg','q<sub>u,front</sub>, q<sub>u,toe</sub>']]);
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
@@ -5537,6 +5608,8 @@ function renderRebar(r) {
             }).join('')}
           </tbody>
         </table>
+        ${rwWorkedIn(r, [['stemFlex','S1'], ['stemMid','S3'], ['stemTS','S2'], ['heelFlex','F1'], ['toeFlex','F2'], ['ftgTS','F3'],
+          ['stemDev','ℓ<sub>d</sub> S1'], ['heelShear','ℓ<sub>d</sub> F1'], ['toeShear','ℓ<sub>d</sub> F2']])}
       </div>
     </div>
 
@@ -7112,14 +7185,16 @@ function renderOverview(r) {
           <div class="card-body">
             <table class="tbl">
               <tbody>
-                ${Object.values(r.checks).map(c => `
+                ${Object.entries(r.checks).map(([k, c]) => `
                   <tr>
-                    <td class="lbl">${c.label}</td>
+                    <td class="lbl">${(() => { const ck = RW_CHECK_CARD[k], t = rwCardTitle(ck, r.isAASHTO);
+                      return t ? `<a class="wkA" href="#" data-card="${ck}" title="Worked in: ${RW_TABNAME[RW_CARDS[ck][0]]} · ${t}">${c.label}</a>` : c.label; })()}</td>
                     <td class="right">${c.val ? `<span class="n-dim">${c.val}</span>` : ''}</td>
                     <td class="right">${pf(c.ok)}</td>
                   </tr>`).join('')}
               </tbody>
             </table>
+            <div class="wkLink">Worked in: click a check to open the card where it is worked.</div>
           </div>
         </div>
       </div>
@@ -7554,13 +7629,134 @@ function leader(x1, y1, x2, y2, color) {
 }
 
 // ================================================================
-// PDF REPORT GENERATOR
-// Opens a new window with full MathJax-rendered engineering report
+// CALCULATION REPORT (D11, 2026-10-18): calculation-sheet format.
+// Opens a new window: cover with title block, references, numbered table of contents (links),
+// numbered sections whose subsections n.k are the result tabs' own cards (worked equations:
+// symbolic → substituted → result, built by the same render functions as the tabs), a D/C result
+// line per check, and the print header / "Page X of Y" footer (@page margin boxes, print only).
 // ================================================================
-function generateReport() {
+const RW_REFS = {
+  ACI: [
+    ['ACI 318-19', 'Building Code Requirements for Structural Concrete — §5.3 (load factors), §7.6.1.1 / §13.3.7 (minimum flexural steel), §9.5 / §22.2 (flexure), Table 22.5.5.1(c) (one-way shear), §22.4 (stem axial), §24.3.2 (crack control), §24.4.3 (temperature &amp; shrinkage), §25.4.2 / §25.4.3 (development, hooks), §9.7.3 (bar cutoff)'],
+    ['IBC 2021', 'International Building Code — §1807.2.3 (retaining-wall stability, FOS ≥ 1.5)'],
+    ['ASCE 7-22', 'Minimum Design Loads — §2.3.1 (strength combinations for column / beam loads), §11.8 (seismic lateral earth pressure)'],
+    ['Rankine (1857)', 'Active / passive earth pressure coefficients'],
+    ['Seed &amp; Whitman (1970)', 'Simplified Mononobe-Okabe seismic increment (when k<sub>h</sub> &gt; 0)'],
+  ],
+  AASHTO: [
+    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4 and Table 3.11.6.4-1 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, cutoff), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
+    ['MassDOT LRFD Bridge Manual', 'Part I §3.3.2.2 (heel top steel, variable-height wall), §3.3.2.4 and Table 3.3.2-1 (vehicular collision on walls), when selected; edition: verify'],
+    ['ACI 318-19', '§25.4.2 (development length of the footing bars, as cited in the footing tab)'],
+    ['ASCE 7-22', '§2.3.1 (strength combinations for column / beam loads, when entered)'],
+  ],
+};
+const RW_SEC = { stability: 4, stem: 5, footing: 6, rebar: 7 };
+// a result tab's HTML, built by its own render function into a stand-in element (the live tab is untouched)
+function rwTabSource(tab, r) {
+  const fn = { stability: renderStability, stem: renderStem, footing: renderFooting, rebar: renderRebar }[tab];
+  const live = document.getElementById('tab-' + tab);
+  const tmp = document.createElement('div');
+  live.id = 'tab-' + tab + '--live';
+  tmp.id = 'tab-' + tab; tmp.hidden = true;
+  document.body.appendChild(tmp);
+  try { fn(r); return tmp.innerHTML; }
+  finally { tmp.remove(); live.id = 'tab-' + tab; }
+}
+// the tabs' Plotly charts as SVG images (drawn off screen by the tabs' own plot functions)
+async function rwPlotImages() {
+  const out = {};
+  if (typeof Plotly === 'undefined' || window._plotlyFailed) return out;
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:-10000px;top:0;width:700px;';
+  document.body.appendChild(host);
+  const made = [];
+  ['stability', 'stem', 'footing'].forEach(tab => {
+    const ids = [...document.querySelectorAll(`#tab-${tab} [id^="plt-"]`)].map(e => e.id);
+    const lives = ids.map(id => { const e = document.getElementById(id); e.id = id + '--live'; return e; });
+    const divs = ids.map(id => { const d = document.createElement('div'); d.id = id; d.style.width = '700px'; host.appendChild(d); return d; });
+    try { (_pltJobs[tab] || []).forEach(fn => { try { fn(); } catch (e) { console.warn('report plot:', e); } }); }
+    finally { divs.forEach(d => d.removeAttribute('id')); lives.forEach((e, i) => { e.id = ids[i]; }); }
+    divs.forEach((d, i) => made.push([ids[i], d]));
+  });
+  for (const [id, d] of made) {
+    try { if (d.data && d.layout) out[id] = await Plotly.toImage(d, { format: 'svg', width: 700, height: (d._fullLayout && d._fullLayout.height) || 320 }); }
+    catch (e) { console.warn('report plot image:', e); }
+    try { Plotly.purge(d); } catch (e) { /* ignore */ }
+  }
+  host.remove();
+  return out;
+}
+// one result line per check: D/C and PASS/FAIL from the tool's own values (status = the check's own flag)
+function rwResultRows(r) {
+  const A = r.isAASHTO, a = r.aashtoR, rows = [];
+  const AA = s => 'AASHTO LRFD 10th Ed. Art. ' + s;
+  const E = a && a.ct ? a.ct.ee2 : null, sv = a && a.serv, s = a && a.ish;
+  const D = {
+    ot:           () => ['IBC 2021 §1807.2.3; FOS ≥ 1.5, D/C = 1.5 / FOS', 1.5 / r.FOS_OT],
+    sliding:      () => A ? [AA('10.6.3.4') + '; Strength I', a.sliding_dcr] : ['IBC 2021 §1807.2.3; FOS ≥ 1.5, D/C = 1.5 / FOS', 1.5 / r.FOS_SL],
+    bearing:      () => A ? [AA(a.onRock ? '10.6.5' : '10.6.3.1') + '; Strength I / Ia', a.q_ult_gov / a.q_R_A] : ['service loads; q<sub>max</sub> ≤ q<sub>a</sub>', r.q_max / r.inp.qa],
+    ecc:          () => [AA('11.6.3.3') + '; e ≤ ' + a.e_limit_label, Math.abs(a.e_A) / a.e_limit],
+    stemFlex:     () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stem_des / r.sel_stem.As_prov,
+                         r.stem_overstressed ? 'section over-stressed' : (r.stem_ee2_governs ? 'Extreme Event II governs' : '')],
+    stemShear:    () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stem / r.phiVc_stem],
+    stemMidShear: () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stemT / r.phiVc_stemT],
+    stemHook:     () => [A ? AA('5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1', r.ldh_stem / r.ldh_avail],
+    stemMidFlex:  () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stemT_des / r.sel_stemT.As_prov,
+                         r.stemT_overstressed ? 'section over-stressed' : (r.stemT_ee2_governs ? 'Extreme Event II governs' : '')],
+    heelFlex:     () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_heel_des / r.sel_heel.As_prov,
+                         r.heel_overstressed ? 'section over-stressed' : (r.heel_md_governs ? 'MassDOT §3.3.2.2 governs' : '')],
+    heelShear:    () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_heel / r.phiVc_heel],
+    toeFlex:      () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_toe_des / r.sel_toe.As_prov, r.toe_overstressed ? 'section over-stressed' : ''],
+    toeShear:     () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_toe / r.phiVc_toe],
+    colAxial:     () => ['ACI 318-19 §22.4', r.col_axial_ratio],
+    ishFtg:       () => [AA('5.7.4.3') + (s.dowel_needed ? '; dowels' : ''), s.dowel_needed ? s.shear_deficit / s.Vr_dowel : s.Vu_ish / s.Vr_ftg],
+    ctSliding:    () => ['MassDOT §3.3.2.4; Extreme Event II', E.sliding_dcr_ct],
+    ctEcc:        () => ['Extreme Event II; e ≤ B/' + f(E.eccDiv, 0), Math.abs(E.e_ct) / E.e_lim_ct],
+    ctBearing:    () => ['Extreme Event II; q<sub>u</sub> ≤ q<sub>R</sub>', E.q_ult_ct / E.q_R_ct],
+    ctYield:      () => [AA('A13.3.1'), a.ct.yl.Ft / a.ct.yl.Rw],
+    crackStem:    () => A ? [AA('5.6.7'), sv.stem.spacing / sv.stem.crack.s_max] : ['ACI 318-19 §24.3.2', r.aciCr.stem.spacing / r.aciCr.stem.smax],
+    crackHeel:    () => A ? [AA('5.6.7'), sv.heel.spacing / sv.heel.crack.s_max] : ['ACI 318-19 §24.3.2', r.aciCr.heel.spacing / r.aciCr.heel.smax],
+    crackToe:     () => A ? [AA('5.6.7'), sv.toe.spacing / sv.toe.crack.s_max]   : ['ACI 318-19 §24.3.2', r.aciCr.toe.spacing / r.aciCr.toe.smax],
+    minRfStem:    () => [AA('5.6.3.3'), sv.stem.minR.demand / sv.stem.minR.Mr],
+    minRfHeel:    () => [AA('5.6.3.3'), sv.heel.minR.demand / sv.heel.minR.Mr],
+    minRfToe:     () => [AA('5.6.3.3'), sv.toe.minR.demand / sv.toe.minR.Mr],
+  };
+  Object.entries(r.checks).forEach(([k, c]) => {
+    let v = ['', null, ''];
+    try { if (D[k]) v = D[k](); } catch (e) { /* value not available: D/C n/a */ }
+    const card = (!A && /^crack/.test(k)) ? 'rptCrack' : RW_CHECK_CARD[k];
+    rows.push({ label: c.label, val: c.val, ref: v[0], dc: v[1], note: v[2] || '', ok: c.ok, card, status: true });
+  });
+  // checks worked (with a PASS/FAIL mark) in the cards but not part of the status bar
+  const xtra = 'card check, not counted in the status bar';
+  rows.push({ label: 'Stem Horiz. T&amp;S (S2)', ref: A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', dc: r.As_temp_stem / r.sel_temp.As_prov,
+              ok: r.sel_temp.As_prov >= r.As_temp_stem - 0.001, card: 'stemTS', note: xtra });
+  rows.push({ label: 'Ftg Long. T&amp;S (F3)', ref: A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', dc: r.As_ftg_long / r.sel_ftg_long.As_prov,
+              ok: r.sel_ftg_long.As_prov >= r.As_ftg_long - 0.001, card: 'ftgTS', note: xtra });
+  if (s) rows.push({ label: 'Stem–Footing Interface Shear', ref: AA('5.7.4.3'), dc: s.Vu_stem_ish / s.Vr_stem, ok: s.ish_stem_ok, card: 'stabISH', note: xtra });
+  return rows;
+}
+
+async function generateReport() {
   const r = window._R;
   if (!r || r.fatal) { alert('Please fix input errors before generating the report.'); return; }
+  // open the window inside the click (pop-up blockers), fill it when the report is built
+  const win = window.open('', '_blank', 'width=1050,height=850');
+  try { if (win) { win.document.write('<!DOCTYPE html><title>RetainCalc Pro — report</title><p style="font:14px Arial,sans-serif;padding:24px">Building the calculation report…</p>'); win.document.close(); } } catch (e) { /* ignore */ }
+  let html;
+  try { html = await buildReportHTML(r); }
+  catch (e) { console.error(e); if (win) win.close(); alert('Could not build the report: ' + e.message); return; }
+  // Use Blob URL so scripts execute properly in the new window
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  if (win) win.location.href = url; else window.open(url, '_blank', 'width=1050,height=850');
+  // Revoke after browser has had time to load
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+async function buildReportHTML(r) {
   const { inp } = r;
+  const hx = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   // Project info
   const proj_name = document.getElementById('proj_name').value || 'Unnamed Project';
@@ -7568,123 +7764,117 @@ function generateReport() {
   const proj_eng  = document.getElementById('proj_eng').value  || '—';
   const proj_chk  = document.getElementById('proj_chk').value  || '—';
   const proj_notes= document.getElementById('proj_notes').value || '';
+  const today     = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
 
   const fv  = (v, d=3) => (isFinite(v)&&!isNaN(v)) ? v.toFixed(d) : '—';
-  const fk2 = (v, d=3) => fv(v/1000, d);
-  const ck  = ok => ok
-    ? '<span class="ck pass">&#10003; PASS</span>'
-    : '<span class="ck fail">&#10007; FAIL</span>';
+  const fdc = v => (v == null || isNaN(v)) ? 'n/a' : (isFinite(v) ? v.toFixed(2) : '∞');
 
   const geomSvg = buildOverviewSVG(r)
     .replace(/style="width:100%;/, 'style="width:100%;max-width:520px;');
+  const imgs = await rwPlotImages();
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>RetainCalc Pro — ${proj_name}</title>
-<script>
-window.MathJax = {
-  tex: {
-    inlineMath:  [['$','$']],
-    displayMath: [['$$','$$']],
-    processEscapes: true,
-    packages: {'[+]': ['boldsymbol']}
-  },
-  options: {
-    skipHtmlTags: ['script','noscript','style','textarea','pre']
-  },
-  startup: {
-    ready() {
-      MathJax.startup.defaultReady();
-      MathJax.startup.promise.then(() => {
-        MathJax.typesetPromise(document.querySelectorAll('.calc-block, .page'));
-      });
-    }
-  }
-};
-<\/script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" id="MathJax-script"><\/script>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Times New Roman',Times,serif;font-size:11pt;color:#111;background:#fff;line-height:1.55;}
-  @page{size:letter;margin:1in 0.85in 1in 0.85in;}
-  @media print{.no-print{display:none!important;}.page-break{page-break-before:always;}body{padding:0;}}
+  // ── numbered sections from the result tabs (each card = subsection n.k) ──
+  const cardMap = [];   // {tab, title, num, id}
+  const tabBox = (tab, extraHTML) => {
+    const n = RW_SEC[tab];
+    const box = document.createElement('div');
+    box.innerHTML = rwTabSource(tab, r) + (extraHTML || '');
+    box.querySelectorAll('[id^="plt-"]').forEach(d => {
+      d.outerHTML = imgs[d.id] ? `<img class="rpt-plot" src="${imgs[d.id]}" alt="">`
+                               : '<p class="code-ref">(Chart not included: the charting library is not loaded.)</p>';
+    });
+    box.querySelectorAll('.sec-heading').forEach(d => { d.className = 'grp'; });
+    const subs = [];
+    box.querySelectorAll('.card').forEach((c, k) => {
+      const t = c.querySelector('.card-title');
+      const title = t ? t.textContent.trim() : 'Card ' + (k + 1);
+      const num = n + '.' + (k + 1), id = 's' + n + '-' + (k + 1);
+      c.id = id;
+      cardMap.push({ tab, title, num, id });
+      subs.push({ t: hx(title), id, num });
+      if (t) t.insertAdjacentHTML('afterbegin', `<span class="cr-num">${num}</span> `);
+    });
+    return { n, box, subs };
+  };
+  const crackCard = !r.aciCr ? '' : `<div class="card"><div class="card-hd"><span class="card-title">Crack-Control Bar Spacing</span>
+    <span class="card-ref">ACI 318-19 §24.3.2 · f<sub>s</sub> = ⅔f<sub>y</sub> · values of the calculation (report only)</span></div><div class="card-body">` +
+    [['Stem S1 (back face)', r.aciCr.stem], ['Heel F1', r.aciCr.heel], ['Toe F2', r.aciCr.toe]].map(([nm, x]) => eqCheck(nm + ' — maximum bar spacing',
+      `s_{max} = \\min\\!\\left(15\\,\\frac{40{,}000}{f_s} - 2.5\\,c_c,\\ 12\\,\\frac{40{,}000}{f_s}\\right) = \\min(${f(15*40000/x.fs - 2.5*x.cc,2)},\\ ${f(12*40000/x.fs,2)}) = \\boxed{${f(x.smax,2)}\\ \\text{in}} \\geq s = ${f(x.spacing,2)}\\ \\text{in}`,
+      x.ok, 'ACI 318-19 §24.3.2',
+      [{sym:'f_s', desc:'steel stress at service loads, ⅔f<sub>y</sub>', val:f(x.fs,0), unit:'psi'},
+       {sym:'c_c', desc:'clear cover (input)', val:f(x.cc,2), unit:'in'},
+       {sym:'s', desc:'selected bar spacing', val:f(x.spacing,2), unit:'in'}])).join('') + `</div></div>`;
+  const secs = [
+    { key: 'stability', title: r.isAASHTO ? 'Stability Analysis (AASHTO LRFD Limit States)' : 'Stability Analysis (Service, Unfactored)', ...tabBox('stability') },
+    { key: 'stem',      title: 'Stem Design', ...tabBox('stem') },
+    { key: 'footing',   title: 'Footing Design', ...tabBox('footing') },
+    { key: 'rebar',     title: 'Reinforcement Schedule', ...tabBox('rebar', crackCard) },
+  ];
+  const cardRef = key => {
+    const tab = key === 'rptCrack' ? 'rebar' : (RW_CARDS[key] || [])[0];
+    const t = key === 'rptCrack' ? 'Crack-Control Bar Spacing' : rwCardTitle(key, r.isAASHTO);
+    return (tab && t) ? cardMap.find(c => c.tab === tab && c.title.startsWith(t)) || null : null;
+  };
+  // D11 links: "→ Tab · Card" reads "see §n.k"; an in-text tab reference is replaced by §n.k
+  secs.forEach(s => {
+    s.box.querySelectorAll('a.wkA').forEach(a => {
+      const ref = cardRef(a.dataset.card), sp = a.querySelector('.wkT');
+      if (a.dataset.intext) a.textContent = ref ? '§' + ref.num : a.textContent + ' (not in this printout)';
+      else a.innerHTML = (sp ? sp.outerHTML + ': ' : '') + (ref ? 'see §' + ref.num : 'not in this printout');
+      a.removeAttribute('title');
+      if (ref) a.setAttribute('href', '#' + ref.id); else a.removeAttribute('href');
+    });
+    s.box.querySelectorAll('.wkLink').forEach(d => {
+      if (d.firstChild && d.firstChild.nodeType === 3) d.firstChild.textContent = d.firstChild.textContent.replace(/^\s*Worked in:\s*/, '');
+    });
+  });
 
-  .toolbar{background:#2155c4;color:#fff;padding:10px 20px;display:flex;align-items:center;
-           justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100;}
-  .toolbar h2{font-family:Arial,sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
-  .toolbar button{background:#fff;color:#2155c4;border:none;border-radius:4px;
-                  padding:7px 18px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
-  .page{max-width:7.5in;margin:0 auto;padding:0.5in 0;}
+  // ── result lines ──
+  const rows = rwResultRows(r).map(x => {
+    const ref = x.card ? cardRef(x.card) : null;
+    const sec = ref ? +ref.num.split('.')[0] : null;
+    return { ...x, ref2: ref, sec };
+  });
+  const seeLink = ref => ref ? `<a href="#${ref.id}">§${ref.num}</a>` : '—';
+  const resultBlock = n => {
+    const rs = rows.filter(x => x.sec === n);
+    if (!rs.length) return '';
+    return `<div class="cr-resh">Results — §${n}</div><div class="cr-results">` + rs.map(x => `<div class="cr-line">
+      <div class="cr-d">${x.label}:</div>
+      <div class="cr-m">D/C = <b>${fdc(x.dc)}</b> <span class="cr-refi">(${x.ref}${x.note ? '; ' + x.note : ''}; ${seeLink(x.ref2)})</span></div>
+      <div class="cr-r${x.ok ? '' : ' cr-st-fail'}"><b>${x.ok ? 'PASS' : 'FAIL'}</b></div></div>`).join('') + `</div>`;
+  };
+  const statusRows = rows.filter(x => x.status);
+  const nFail = statusRows.filter(x => !x.ok).length;
+  const nXFail = rows.filter(x => !x.status && !x.ok).length;
+  const verdict = nFail ? `${nFail} of ${statusRows.length} checks fail` : `All ${statusRows.length} checks pass`;
 
-  /* Title block */
-  .title-block{border:2px solid #2155c4;padding:16px 20px;margin-bottom:20px;}
-  .title-block h1{font-size:15pt;font-weight:700;color:#2155c4;letter-spacing:.04em;text-transform:uppercase;margin-bottom:3px;}
-  .title-block .subtitle{font-size:10.5pt;color:#333;margin-bottom:10px;}
-  .title-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px 16px;font-size:10pt;}
-  .title-grid .lbl{color:#555;font-size:9.5pt;}
-  .title-grid .val{font-weight:bold;}
+  // ── table of contents ──
+  const toc = [
+    { n: 1, t: 'Design Summary', id: 's1', subs: [] },
+    { n: 2, t: 'Input Parameters', id: 's2', subs: [
+      { num: '2.1', t: 'Wall Geometry', id: 's2-1' }, { num: '2.2', t: 'Soil Properties &amp; Loading', id: 's2-2' },
+      { num: '2.3', t: 'Column / Beam Loads', id: 's2-3' }, { num: '2.4', t: 'Materials &amp; Cover', id: 's2-4' }] },
+    { n: 3, t: 'Wall Geometry', id: 's3', subs: [] },
+    ...secs.map(s => ({ n: s.n, t: s.title, id: 's' + s.n, subs: s.subs })),
+  ];
+  const tocHTML = `<ol class="cr-toc">` + toc.map(s => `<li><a href="#${s.id}">${s.n}. ${s.t}</a>` +
+    (s.subs.length ? `<ol>` + s.subs.map(q => `<li><a href="#${q.id}">${q.num} ${q.t}</a></li>`).join('') + `</ol>` : '') + `</li>`).join('') + `</ol>`;
 
-  h2.sec{font-size:12.5pt;font-weight:700;color:#2155c4;text-transform:uppercase;
-         letter-spacing:.05em;border-bottom:1.5px solid #2155c4;padding-bottom:3px;margin:20px 0 9px;}
-  h3.sub{font-size:11pt;font-weight:700;color:#1c2a42;margin:12px 0 5px;
-         border-left:3px solid #2155c4;padding-left:8px;}
+  // ── print header / footer (@page margin boxes, only while printing) ──
+  const cssq = v => String(v == null || v === '' ? '—' : v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ').replace(/</g, '\\3C ');
+  const desc = (proj_notes || proj_name).slice(0, 40);
+  const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const pageCSS = '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;' +
+    ' @top-left { content: "Project No: ' + cssq(proj_num) + '\\A Description: ' + cssq(desc) + '"; ' + box + ' text-align: left; }' +
+    ' @top-center { content: "Computed By: ' + cssq(proj_eng) + '\\A Checked By: ' + cssq(proj_chk) + '"; ' + box + ' text-align: left; }' +
+    ' @top-right { content: "Date: ' + cssq(today) + '\\A Date: —"; ' + box + ' text-align: right; }' +
+    ' @bottom-left { content: "' + cssq(proj_name) + ' (RetainCalc Pro — Retaining Wall Designer)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }' +
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } } }';
 
-  .calc-block{background:#f7f9fc;border:1px solid #d4dbe8;border-left:3px solid #2155c4;
-              border-radius:3px;padding:9px 13px;margin:7px 0;font-size:10.5pt;}
-  .calc-block p{margin:3px 0;}
-  .code-ref{font-size:9pt;color:#2155c4;font-style:italic;}
-
-  table{width:100%;border-collapse:collapse;font-size:10pt;margin:7px 0;}
-  th{background:#e8edf5;color:#1c2a42;padding:5px 9px;text-align:left;border:1px solid #c0cad8;font-weight:700;}
-  td{padding:5px 9px;border:1px solid #d4dbe8;vertical-align:top;}
-  tr:nth-child(even) td{background:#f7f9fc;}
-  td.r{text-align:right;font-family:'Courier New',monospace;}
-  td.c{text-align:center;}
-
-  .ck{display:inline-block;padding:1px 8px;border-radius:3px;font-family:Arial,sans-serif;font-size:9pt;font-weight:700;}
-  .ck.pass{background:#d4f0e8;color:#0a6040;border:1px solid #99d8c0;}
-  .ck.fail{background:#fde8e8;color:#a01010;border:1px solid #f0b0b0;}
-
-  .summary-box{border:1.5px solid #2155c4;border-radius:4px;padding:11px 15px;margin:12px 0;background:#f0f4ff;}
-  .note{background:#fffbe6;border:1px solid #e0c84a;border-radius:3px;padding:7px 12px;font-size:9.5pt;margin:8px 0;color:#5a4a00;}
-  .geom-wrap{text-align:center;margin:8px 0 14px;}
-  .rpt-footer{margin-top:24px;padding-top:7px;border-top:1px solid #ccc;font-size:8.5pt;color:#777;display:flex;justify-content:space-between;}
-  .warn-row td{background:#fff8e8!important;}
-</style>
-</head>
-<body>
-<div class="toolbar no-print">
-  <h2>RetainCalc Pro — ${proj_name}</h2>
-  <div style="display:flex;gap:8px;">
-    <button onclick="if(window.MathJax)MathJax.typesetPromise();else alert('MathJax still loading — try again in a moment.');"
-      style="background:#e8edf5;color:#2155c4;">⟳ Re-render Math</button>
-    <button onclick="window.print()">&#128438; Print / Save as PDF</button>
-  </div>
-</div>
-<div class="page">
-
-<!-- TITLE BLOCK -->
-<div class="title-block">
-  <h1>${proj_name}</h1>
-  <div class="subtitle">Cantilever Retaining Wall Design — ${r.isAASHTO ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed.' : 'ACI 318-19 &amp; IBC 2021'}</div>
-  <div class="title-grid">
-    <span class="lbl">Project No.:</span><span class="val">${proj_num}</span><span></span>
-    <span class="lbl">Engineer:</span><span class="val">${proj_eng}</span>
-    <span class="lbl">Checked By:</span><span class="val">${proj_chk}</span>
-    <span class="lbl">Date:</span><span class="val">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</span>
-    <span class="lbl">Standard:</span><span class="val">ACI 318-19, IBC 2021, ASCE 7-22</span>
-    <span class="lbl">Units:</span><span class="val">US Customary (ft, in, lb, psi)</span>
-    <span class="lbl">Load combo:</span><span class="val">U = 1.2D + 1.6H — ACI 318-19 §5.3</span>
-    <span class="lbl">Status:</span><span class="val">${Object.values(r.checks).every(c=>c.ok) ? '✓ ALL CHECKS PASS' : '⚠ ONE OR MORE CHECKS FAIL'}</span>
-    ${proj_notes ? `<span class="lbl">Notes:</span><span class="val" style="grid-column:2/4">${proj_notes}</span>` : ''}
-  </div>
-</div>
-
-<!-- SECTION 1 — INPUTS -->
-<h2 class="sec">1. Input Parameters</h2>
-<h3 class="sub">1.1 Wall Geometry</h3>
+  const codes = r.isAASHTO ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
+  const sec1Input = `<h2 class="sec" id="s2">2. Input Parameters</h2>
+<h3 class="sub" id="s2-1">2.1 Wall Geometry</h3>
 <table>
   <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
   <tr><td>Stem height</td><td>$H_s$</td><td class="r">${fv(inp.Hs,2)}</td><td>ft</td></tr>
@@ -7700,7 +7890,7 @@ window.MathJax = {
   ${inp.useShearKey?`<tr><td>Shear key depth</td><td>$d_k$</td><td class="r">${fv(inp.dk,0)}</td><td>in</td></tr>`:''}
 </table>
 
-<h3 class="sub">1.2 Soil Properties &amp; Loading</h3>
+<h3 class="sub" id="s2-2">2.2 Soil Properties &amp; Loading</h3>
 <table>
   <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
   <tr><td>Soil unit weight</td><td>$\\gamma_s$</td><td class="r">${fv(inp.gamma_s,0)}</td><td>pcf</td></tr>
@@ -7716,7 +7906,7 @@ window.MathJax = {
   <tr class="warn-row"><td>Buoyant unit weight</td><td>$\\gamma' = \\gamma_{sat} - \\gamma_w$</td><td class="r">${fv(r.gamma_s_sub,1)}</td><td>pcf</td></tr>`:''}
 </table>
 
-<h3 class="sub">1.4 Column / Beam Loads${r.hasCol?'':' — None'}</h3>
+<h3 class="sub" id="s2-3">2.3 Column / Beam Loads${r.hasCol?'':' — None'}</h3>
 ${r.hasCol ? `<table>
   <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
   <tr><td>Dead load reaction</td><td>$P_{DL}$</td><td class="r">${fv(inp.col_DL,1)}</td><td>kip</td></tr>
@@ -7738,6 +7928,7 @@ $$\\text{Combo 6: } 0.9D+1.0W = ${fv((0.9*r.pDL+1.0*r.pWL)/1000,3)} \\text{ k/ft
 $$\\boxed{w_{col,u,max} = ${fv(r.Puf_max/1000,3)} \\text{ k/ft (governing downward)}}$$
 $$\\boxed{w_{col,u,min} = ${fv(r.Puf_min/1000,3)} \\text{ k/ft (governing uplift / minimum)}}$$
 </div>` : '<p class="code-ref">No column or beam loads applied.</p>'}
+<h3 class="sub" id="s2-4">2.4 Materials &amp; Cover</h3>
 <table>
   <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
   <tr><td>Concrete compressive strength</td><td>$f'_c$</td><td class="r">${fv(inp.fc,0)}</td><td>psi</td></tr>
@@ -7745,276 +7936,193 @@ $$\\boxed{w_{col,u,min} = ${fv(r.Puf_min/1000,3)} \\text{ k/ft (governing uplift
   <tr><td>Concrete unit weight</td><td>$\\gamma_c$</td><td class="r">${fv(inp.gamma_c,0)}</td><td>pcf</td></tr>
   <tr><td>Stem cover (back face)</td><td>$c_{stem}$</td><td class="r">${fv(inp.cov_stem,2)}</td><td>in</td></tr>
   <tr><td>Footing cover (bottom)</td><td>$c_{ftg}$</td><td class="r">${fv(inp.cov_ftg,2)}</td><td>in</td></tr>
-</table>
+</table>`;
 
-<!-- SECTION 2 — GEOMETRY -->
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RetainCalc Pro — ${hx(proj_name)}</title>
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath:  [['$','$'], ['\\\\(','\\\\)']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    packages: {'[+]': ['boldsymbol']}
+  },
+  options: {
+    skipHtmlTags: ['script','noscript','style','textarea','pre']
+  },
+  startup: {
+    ready() {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => {
+        MathJax.typesetPromise(document.querySelectorAll('.calc-block, .page'));
+      });
+    }
+  }
+};
+<\/script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" id="MathJax-script"><\/script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Times New Roman',Times,serif;font-size:11pt;color:#111;background:#fff;line-height:1.45;}
+  @media print{.no-print{display:none!important;}.page-break,.cr-break{break-before:page;}body{padding:0;}.page{padding:0!important;}}
+  a{color:inherit;text-decoration:none;}
+
+  .toolbar{background:#2155c4;color:#fff;padding:10px 20px;display:flex;align-items:center;
+           justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100;}
+  .toolbar h2{font-family:Arial,sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+  .toolbar button{background:#fff;color:#2155c4;border:none;border-radius:4px;
+                  padding:7px 18px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+  .page{max-width:7.5in;margin:0 auto;padding:0.5in 0;}
+
+  /* Cover, references, contents */
+  .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
+  .cr-cover-t{text-align:center;margin-bottom:26pt;}
+  .cr-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;}
+  .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
+  .cr-cover .cr-cover-p{font-weight:400;font-size:11.5pt;}
+  .title-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;font-size:10.5pt;border:1px solid #000;padding:8px 10px;}
+  .cr-banner{margin-top:14pt;text-align:center;font:700 11pt Arial,sans-serif;padding:6px;border:1.5px solid #000;}
+  .cr-front{break-after:page;}
+  .cr-refs{border-collapse:collapse;margin:0 0 14pt;width:100%;font-size:10pt;}
+  .cr-refs td{padding:2pt 14pt 2pt 0;vertical-align:top;border:0;background:none!important;}
+  .cr-refs td:first-child{white-space:nowrap;font-weight:700;}
+  .cr-toc,.cr-toc ol{list-style:none;margin:0;padding:0;}
+  .cr-toc>li{margin:4pt 0;} .cr-toc ol{padding-left:18pt;font-size:10pt;}
+  .cr-small{font-size:9.5pt;margin-top:14pt;}
+
+  h2.sec,h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:0 0 9pt;break-after:avoid;}
+  .cr-front h2.cr-h1{margin-top:10pt;}
+  h3.sub{font-size:11pt;font-weight:700;color:#111;margin:12px 0 5px;break-after:avoid;}
+  h3.sub + table,h3.sub + .calc-block{break-inside:avoid;}
+  .grp{font:700 11pt Arial,sans-serif;margin:14px 0 6px;border-bottom:1px solid #999;padding-bottom:2px;break-after:avoid;}
+
+  .calc-block{border:1px solid #bbb;border-left:3px solid #333;padding:9px 13px;margin:7px 0;font-size:10.5pt;}
+  .calc-block p{margin:3px 0;}
+  .code-ref{font-size:9pt;color:#333;font-style:italic;margin:4px 0;}
+
+  table{width:100%;border-collapse:collapse;font-size:10pt;margin:7px 0;}
+  th{background:#eee;color:#111;padding:4px 8px;text-align:left;border:1px solid #bbb;font-weight:700;}
+  td{padding:4px 8px;border:1px solid #ccc;vertical-align:top;}
+  td.r{text-align:right;font-family:'Courier New',monospace;}
+  td.c{text-align:center;}
+  .warn-row td{background:#fff8e8!important;}
+  .geom-wrap{text-align:center;margin:8px 0 14px;}
+
+  /* Cards cloned from the result tabs */
+  .card{border:1px solid #bbb;margin:0 0 12px;}
+  .card-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 9px;border-bottom:1px solid #bbb;background:#f2f2f2;break-after:avoid;}
+  .card-title{font:700 11pt "Times New Roman",Times,serif;}
+  .card-ref{font-size:8.5pt;color:#444;font-style:italic;text-align:right;}
+  .cr-num{margin-right:4px;}
+  .card-body{padding:6px 9px;}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .eq-block{border:1px solid #ddd;margin:6px 0;break-inside:avoid;}
+  .eq-block.eq-fail{border-color:#a01010;}
+  .eq-title{display:flex;justify-content:space-between;gap:10px;font-size:10pt;font-weight:700;padding:4px 8px;border-bottom:1px solid #eee;}
+  .eq-num{margin-right:6px;}
+  .eq-ref{font-weight:400;font-style:italic;font-size:8.5pt;color:#444;}
+  .eq-math{display:flex;align-items:center;justify-content:center;gap:12px;padding:4px 10px;font-size:10.5pt;border-left:3px solid #333;overflow:hidden;}
+  .eq-block.eq-fail .eq-math{border-left-color:#a01010;}
+  .eq-math mjx-container[display="true"]{margin:3px 0!important;}
+  .eq-where{padding:3px 10px 6px;}
+  .eq-where-hd{font-size:8.5pt;font-style:italic;color:#444;}
+  .eq-where table{margin:0;font-size:9pt;}
+  .eq-where td{border:0;padding:1px 6px 1px 0;background:none!important;}
+  .eq-where td.wsym{font-style:italic;white-space:nowrap;width:70px;}
+  .eq-where td.wval{text-align:right;white-space:nowrap;font-family:'Courier New',monospace;}
+  .wunit{margin-left:3px;font-size:8.5pt;}
+  .tbl td,.tbl th{font-size:9.5pt;}
+  .tbl .val,.tbl .right{text-align:right;}
+  .fbox{font-family:'Courier New',monospace;font-size:9pt;white-space:pre-wrap;border:1px solid #ddd;padding:5px 8px;margin:4px 0 8px;}
+  .chk-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px solid #eee;font-size:10pt;}
+  .alert{border:1px solid #bbb;border-left:3px solid #666;padding:5px 9px;margin:6px 0;font-size:9.5pt;break-inside:avoid;}
+  .alert.warn{border-left-color:#9a6410;background:#fffaf0;}
+  .alert.fail{border-left-color:#a01010;background:#fdf3f3;}
+  .badge{display:inline-block;padding:1px 7px;border:1px solid #000;font:700 8.5pt Arial,sans-serif;white-space:nowrap;}
+  .badge.fail{text-decoration:underline;}
+  .n-blue,.n-pass,.n-fail,.n-dim{font-family:'Courier New',monospace;}
+  .n-fail{font-weight:700;}
+  .wkLink{font-size:9pt;font-style:italic;margin:2px 0 6px;}
+  .rpt-plot{display:block;width:100%;max-width:6.6in;margin:4px auto;}
+
+  /* Result lines */
+  .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:14pt 0 2pt;break-after:avoid;}
+  .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
+  .cr-line{display:grid;grid-template-columns:2.0in 1fr 0.7in;gap:0 10pt;align-items:center;padding:3pt 0;border-top:0.6pt solid #000;break-inside:avoid;font-size:10.5pt;}
+  .cr-r{text-align:right;} .cr-st-fail{text-decoration:underline;}
+  .cr-refi{font-size:9pt;font-style:italic;}
+  .summary-tbl td,.summary-tbl th{font-size:9.5pt;}
+
+  .note{background:#fffbe6;border:1px solid #e0c84a;padding:7px 12px;font-size:9.5pt;margin:12px 0;color:#5a4a00;}
+  .rpt-footer{margin-top:24px;padding-top:7px;border-top:1px solid #ccc;font-size:8.5pt;color:#777;display:flex;justify-content:space-between;}
+  @media print{.rpt-footer{display:none;}}
+  ${pageCSS}
+</style>
+</head>
+<body>
+<div class="toolbar no-print">
+  <h2>RetainCalc Pro — ${hx(proj_name)}</h2>
+  <div style="display:flex;gap:8px;">
+    <button onclick="if(window.MathJax)MathJax.typesetPromise();else alert('MathJax still loading — try again in a moment.');"
+      style="background:#e8edf5;color:#2155c4;">⟳ Re-render Math</button>
+    <button onclick="window.print()">&#128438; Print / Save as PDF</button>
+  </div>
+</div>
+<div class="page">
+
+<!-- COVER -->
+<section class="cr-cover">
+  <div class="cr-cover-t">
+    <h1>Cantilever Retaining Wall Design</h1>
+    <p>${hx(proj_name)}</p>
+    ${proj_notes ? `<p class="cr-cover-p">${hx(proj_notes)}</p>` : ''}
+    <p class="cr-cover-p">${codes} · RetainCalc Pro</p>
+  </div>
+  <div class="title-grid">
+    <div><b>Project:</b> ${hx(proj_name)}</div><div><b>Project No.:</b> ${hx(proj_num)}</div><div><b>Calculated by:</b> ${hx(proj_eng)}</div>
+    <div><b>Date:</b> ${today}</div><div><b>Checked by:</b> ${hx(proj_chk)}</div><div><b>Checked date:</b> —</div>
+    <div style="grid-column:1/3"><b>Design basis:</b> ${r.isAASHTO ? 'AASHTO LRFD 10th Ed. (limit states)' : 'ACI 318-19 / IBC 2021 (ASD stability)'}</div><div><b>Units:</b> US customary</div>
+  </div>
+  <div class="cr-banner">${verdict}${nXFail ? ` · ${nXFail} card check${nXFail > 1 ? 's' : ''} not in the status bar fail${nXFail > 1 ? '' : 's'}` : ''}</div>
+</section>
+
+<!-- REFERENCES AND CONTENTS -->
+<section class="cr-front">
+  <h2 class="cr-h1">References:</h2>
+  <table class="cr-refs">${RW_REFS[r.isAASHTO ? 'AASHTO' : 'ACI'].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
+  <h2 class="cr-h1">Table of contents:</h2>
+  ${tocHTML}
+  <p class="cr-small">Each subsection of §4–§7 is the matching card of the tool's result tabs: equations are shown symbolically, then with values substituted, then with the result. Each of these sections ends with the D/C result of its checks (status = the check's own PASS/FAIL). D/C of a factor-of-safety check = required FOS / FOS. Units: lb, ft, in, psf, psi unless noted.</p>
+</section>
+
+<!-- SECTION 1 — SUMMARY -->
+<h2 class="sec" id="s1">1. Design Summary</h2>
+<p><b>${verdict}</b> (${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'}).${r.warnings.length ? ` ${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''}: see the end of <a href="#s4">§4</a>.` : ''}</p>
+<table class="summary-tbl">
+  <tr><th>Check</th><th>Value</th><th class="r">D/C</th><th class="c">Status</th><th>Worked in</th></tr>
+  ${rows.map(x => `<tr><td>${x.label}${x.status ? '' : ' <i>(card check)</i>'}</td><td>${x.val ? hx(x.val) : ''}</td><td class="r">${fdc(x.dc)}</td>
+    <td class="c"><b>${x.ok ? 'PASS' : '<u>FAIL</u>'}</b></td><td>${seeLink(x.ref2)}</td></tr>`).join('')}
+</table>
+<p class="code-ref">"Card check": worked with a PASS/FAIL mark in its card but not counted in the tool's status bar.</p>
+
+<!-- SECTION 2 — INPUTS -->
 <div class="page-break"></div>
-<h2 class="sec">2. Wall Geometry</h2>
+${sec1Input}
+
+<!-- SECTION 3 — GEOMETRY -->
+<div class="page-break"></div>
+<h2 class="sec" id="s3">3. Wall Geometry</h2>
 <div class="geom-wrap">${geomSvg}</div>
 
-<!-- SECTION 3 — EARTH PRESSURE -->
-<h2 class="sec">3. Earth Pressure Calculations</h2>
-<p class="code-ref">Reference: Rankine (1857); IBC 2021 §1807.2.3</p>
-
-<h3 class="sub">3.1 Pressure Coefficients</h3>
-<div class="calc-block">
-${inp.beta===0
-  ? `$$K_a = \\tan^2\\!\\left(45°-\\frac{\\phi}{2}\\right) = \\tan^2\\!\\left(45°-\\frac{${fv(inp.phi,0)}°}{2}\\right) = \\boxed{${fv(r.Ka,4)}}$$`
-  : `$$K_a = \\cos\\beta\\cdot\\frac{\\cos\\beta-\\sqrt{\\cos^2\\!\\beta-\\cos^2\\!\\phi}}{\\cos\\beta+\\sqrt{\\cos^2\\!\\beta-\\cos^2\\!\\phi}} = \\boxed{${fv(r.Ka,4)}}$$`}
-$$K_p = \\tan^2\\!\\left(45°+\\frac{\\phi}{2}\\right) = \\tan^2\\!\\left(45°+\\frac{${inp.phi}°}{2}\\right) = \\boxed{${fv(r.Kp,4)}}$$
-</div>
-
-<h3 class="sub">3.2 Resultant Forces${r.hasWT?' (with water table)':''}</h3>
-<div class="calc-block">
-${r.hasWT ? `
-<p>Wall split into above-WT zone ($h_{above}=${fv(r.h_above,2)}$ ft) and below-WT zone ($h_{below}=${fv(r.h_below,2)}$ ft):</p>
-$$P_{a,above} = \\tfrac{1}{2}K_a\\gamma_s h_{above}^2 = ${fv(0.5*r.Ka*inp.gamma_s*r.h_above**2,1)} \\text{ lb/ft}$$
-$$P_{a,rect} = K_a\\gamma_s h_{above}\\cdot h_{below} = ${fv(r.Ka*inp.gamma_s*r.h_above*r.h_below,1)} \\text{ lb/ft}$$
-$$P_{a,below} = \\tfrac{1}{2}K_a\\gamma'h_{below}^2 = ${fv(0.5*r.Ka*r.gamma_s_sub*r.h_below**2,1)} \\text{ lb/ft}$$
-$$P_{a,total} = ${fv(r.Pa_tri,1)} \\text{ lb/ft} \\quad P_{a,H} = ${fv(r.Pa_tri_h,1)} \\text{ lb/ft}$$
-<p><strong>Hydrostatic force</strong> (water column $h_w = ${fv(r.hw,2)}$ ft at base):</p>
-$$F_{hyd} = \\frac{1}{2}\\gamma_w h_w^2 = \\frac{1}{2}(${fv(r.gamma_w,1)})(${fv(r.hw,2)})^2 = ${fv(r.F_hyd,1)} \\text{ lb/ft}$$
-<p><strong>Uplift on footing base:</strong></p>
-$$U = ${r.upliftTri?'\\tfrac{1}{2}':''}\\gamma_w\\cdot h_w\\cdot B = ${fv(r.F_uplift,1)} \\text{ lb/ft (upward, ${r.upliftTri?'triangular, at 2B/3':'uniform, at B/2'} from toe)}$$
-` : `
-$$P_a = \\frac{1}{2}K_a\\gamma_s H^2 = \\frac{1}{2}(${fv(r.Ka,4)})(${inp.gamma_s})(${fv(r.H,3)})^2 = ${fv(r.Pa_tri,1)} \\text{ lb/ft}$$
-$$P_{a,H} = ${fv(r.Pa_tri_h,1)} \\text{ lb/ft} \\quad P_{a,V} = ${fv(r.Pa_tri_v,1)} \\text{ lb/ft}$$
-`}
-$$P_{a,sur} = K_a q_s H = (${fv(r.Ka,4)})(${inp.q_sur})(${fv(r.H,3)}) = ${fv(r.Pa_sur_h,1)} \\text{ lb/ft}$$
-$$P_p = \\frac{1}{2}K_p\\gamma_s D_f^2 = \\frac{1}{2}(${fv(r.Kp,4)})(${inp.gamma_s})(${fv(r.Df,3)})^2 = ${fv(r.Pp_full,1)} \\text{ lb/ft}$$
-<p style="font-size:9pt;color:${inp.inclPassive?'#155724':'#8a6d00'};">${inp.inclPassive ? 'Passive resistance is included in sliding and overturning.' : '⚠ Passive resistance is neglected (toggle off) — not counted in sliding or overturning. Conservative for scour/excavation of toe soil.'}</p>
-$$\\boxed{F_h = ${fv(r.Fh,1)} \\text{ lb/ft} = ${fk2(r.Fh,3)} \\text{ kip/ft (total horizontal thrust)}}$$
-</div>
-
-<!-- SECTION 4 — STABILITY -->
-<div class="page-break"></div>
-${r.isAASHTO ? `
-<h2 class="sec">4. Stability Analysis (AASHTO LRFD Limit States)</h2>
-<p class="code-ref">Reference: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); Strength I &amp; Service I</p>
-
-<h3 class="sub">4.1 Load Factors &amp; Components</h3>
-<p>Earth pressure: ${inp.aashto.ep_method === 'coulomb' ? 'Coulomb' : 'Rankine'}, ${inp.aashto.ep_cond === 'atrest' ? 'at-rest K₀' : 'active'}. Load modifier η = ${fv(r.aashtoR.eta,2)}.</p>
-<table>
-  <tr><th>Load</th><th class="r">Value</th><th class="r">Strength I γ</th></tr>
-  <tr><td>EH — horizontal earth $P_{EH}$ (lb/ft)</td><td class="r">${fv(r.aashtoR.P_EH,0)}</td><td class="r">1.50 / 0.90</td></tr>
-  <tr><td>LS — live surcharge $P_{LS}$ (lb/ft)</td><td class="r">${fv(r.aashtoR.P_LS,0)}</td><td class="r">1.75</td></tr>
-  <tr><td>DC — structure dead (lb/ft)</td><td class="r">${fv(r.Wftg+r.Wstem,0)}</td><td class="r">1.25 / 0.90</td></tr>
-  <tr><td>EV — vertical earth (lb/ft)</td><td class="r">${fv(r.Wsoil,0)}</td><td class="r">1.35 / 1.00</td></tr>
-  ${r.Pa_tri_v>0?`<tr><td>EH — vertical component of thrust $P_{a,V}$ (lb/ft)</td><td class="r">${fv(r.Pa_tri_v,0)}</td><td class="r">${fv(r.aashtoR.gEH_max,2)} / 0.90</td></tr>`:''}
-</table>
-
-<h3 class="sub">4.2 Sliding (Strength I)</h3>
-<div class="calc-block">
-$$\\sum\\gamma Q = \\eta(1.50 P_{EH}+1.75 P_{LS}) = ${fv(r.aashtoR.H_drive_str,0)} \\text{ lb/ft}$$
-$$R_R = \\phi_\\tau(0.90 V_{DC}+1.00 V_{EV}+0.90 V_{EH,v})\\tan\\delta + \\phi_{ep}P_p = ${fv(r.aashtoR.R_slide,0)} \\text{ lb/ft}$$
-$$\\text{DCR} = ${fv(r.aashtoR.sliding_dcr,2)}$$ ${ck(r.aashtoR.sliding_ok_A)}
-</div>
-
-<h3 class="sub">4.3 Eccentricity (Strength I)</h3>
-<div class="calc-block">
-$$e = \\frac{B}{2}-\\frac{M_r-M_o}{V} = ${fv(r.aashtoR.e_A,3)} \\text{ ft} \\leq ${r.aashtoR.e_limit_tex}=${fv(r.aashtoR.e_limit,3)} \\text{ ft}$$ ${ck(r.aashtoR.ecc_ok_A)}
-</div>
-
-<h3 class="sub">4.4 Bearing (Strength I)</h3>
-<div class="calc-block">
-$$V_u = 1.25 V_{DC}+1.35 V_{EV}+\\gamma_{EH} V_{EH,v}+1.75 V_{LS} = ${fv(r.aashtoR.V_str_max,0)} \\text{ lb/ft}$$
-${r.aashtoR.onRock ? `$$\\text{Footing on rock (AASHTO 10.6.5, Eq. 11.6.3.2-${Math.abs(r.aashtoR.e_brg) <= r.B/6 ? '2' : '3'}): } e = ${fv(Math.abs(r.aashtoR.e_brg),3)} \\text{ ft}, \\quad q_u = ${Math.abs(r.aashtoR.e_brg) <= r.B/6 ? '\\frac{V_u}{B}\\left(1+\\frac{6e}{B}\\right)' : '\\frac{2V_u}{3(B/2-e)}'} = ${fv(r.aashtoR.q_ult_A,0)} \\text{ psf}$$` : `$$B' = B-2e = ${fv(r.aashtoR.B_eff,3)} \\text{ ft}, \\quad q_u = \\frac{V_u}{B'} = ${fv(r.aashtoR.q_ult_A,0)} \\text{ psf}$$`}
-$$q_u = ${fk2(r.aashtoR.q_ult_A,2)} \\text{ ksf} \\leq q_R = ${fk2(r.aashtoR.q_R_A,2)} \\text{ ksf}$$ ${ck(r.aashtoR.bearing_ok_max)}
-$$\\text{Strength Ia: } ${r.aashtoR.onRock ? `e = ${fv(Math.abs(r.aashtoR.e_A),3)}` : `B' = ${fv(r.aashtoR.B_eff_Ia,3)}`} \\text{ ft}, \\quad q_u = ${fk2(r.aashtoR.q_ult_Ia,2)} \\text{ ksf} \\leq q_R = ${fk2(r.aashtoR.q_R_A,2)} \\text{ ksf}$$ ${ck(r.aashtoR.bearing_ok_Ia)}
-</div>
-${r.aashtoR.ct ? `
-<h3 class="sub">4.5 Vehicular Collision — Extreme Event II (MassDOT §3.3.2.4)</h3>
-<table>
-  <tr><th>Parameter</th><th class="r">Value</th><th>Notes</th></tr>
-  <tr><td>Test level force F_t</td><td class="r">${fv(r.aashtoR.ct.Ft,0)} kip</td><td>MassDOT Table 3.3.2-1</td></tr>
-  <tr><td>Distribution L_dist</td><td class="r">${fv(r.aashtoR.ct.Ldist,1)} ft</td><td>${r.aashtoR.ct.distMode==='section'?'full section between joints (§3.3.2.4)':'45° spread'}</td></tr>
-  <tr><td>Distributed CT</td><td class="r">${fv(r.aashtoR.ct.CT_h,3)} kip/ft</td><td>F_t / L_dist</td></tr>
-  <tr><td>Lever arm y_CT</td><td class="r">${fv(r.aashtoR.ct.y_CT,2)} ft</td><td>roadway (top of stem) + h_CT</td></tr>
-  <tr><td>Collision moment M_CT</td><td class="r">${fk2(r.aashtoR.ct.M_CT,2)} kip·ft/ft</td><td>CT × y_CT</td></tr>
-  ${r.hasBarrier?`<tr><td>Barrier on wall</td><td class="r">${fv(r.W_bar,0)} plf · h = ${fv(r.bar_h_ft,2)} ft</td><td>DC weight; retains no soil</td></tr>`:''}
-</table>
-${r.aashtoR.ct.ee2 ? `
-<p class="code-ref">${r.aashtoR.ct.ee2.ehDropped
-  ? 'Stability per MassDOT §3.3.2.4: γ_EH = 0 — the wall pulls away from the backfill during the impact; soil cannot respond in time.'
-  : 'Stability with γ_EH = 1.0 — earth pressure applied concurrently (generic AASHTO, conservative).'} φ = ${fv(r.aashtoR.ct.ee2.phi_ct,2)}, γ_LS = ${fv(r.aashtoR.ct.ee2.gLS_ct,2)}, γ_CT = 1.0.</p>
-<div class="calc-block">
-$$\\text{Sliding: } \\Sigma\\gamma Q = ${fv(r.aashtoR.ct.ee2.H_drive_ct,0)} \\leq \\phi R = ${fv(r.aashtoR.ct.ee2.R_ct,0)} \\text{ lb/ft} \\;(DCR=${fv(r.aashtoR.ct.ee2.sliding_dcr_ct,2)})$$ ${ck(r.aashtoR.ct.ee2.sliding_ok_ct)}
-$$\\text{Eccentricity: } |e| = ${fv(Math.abs(r.aashtoR.ct.ee2.e_ct),3)} \\leq B/${fv(r.aashtoR.ct.ee2.eccDiv,0)} = ${fv(r.aashtoR.ct.ee2.e_lim_ct,3)} \\text{ ft}$$ ${ck(r.aashtoR.ct.ee2.ecc_ok_ct)}
-$$\\text{Bearing (${r.aashtoR.onRock ? 'rock, linear' : 'Meyerhof'}): } q_u = ${fk2(r.aashtoR.ct.ee2.q_ult_ct,2)} \\leq q_R = ${fk2(r.aashtoR.ct.ee2.q_R_ct,2)} \\text{ ksf}$$ ${ck(r.aashtoR.ct.ee2.bearing_ok_ct)}
-</div>` : ''}
-${r.aashtoR.ct.yl ? `
-<h3 class="sub">4.6 Barrier Yield-Line Capacity (AASHTO §A13.3.1 — ${r.aashtoR.ct.yl.isEnd?'end':'interior'} segment)</h3>
-<div class="calc-block">
-$$L_c = \\frac{L_t}{2}+\\sqrt{\\left(\\frac{L_t}{2}\\right)^2+\\frac{${r.aashtoR.ct.yl.isEnd?'':'8'}H(M_b+M_w)}{M_c}} = ${fv(r.aashtoR.ct.yl.Lc,2)} \\text{ ft}$$
-$$R_w = ${fv(r.aashtoR.ct.yl.Rw,1)} \\text{ kip} \\geq F_t = ${fv(r.aashtoR.ct.yl.Ft,0)} \\text{ kip}$$ ${ck(r.aashtoR.ct.yl.yl_ok)}
-</div>` : ''}
-${r.useMassDOTFtg ? `
-<h3 class="sub">4.7 MassDOT §3.3.2.2 Heel Top-Steel Rule</h3>
-<p class="code-ref">Heel top reinforcement carries the DL of all materials above the heel including the heel itself; no live load; γ = φ = 1.0; upward soil pressure not credited.</p>
-<div class="calc-block">
-$$M_{u,MD} = \\frac{w_{DL} L_h^2}{2} = ${fk2(r.Mu_heel_md,2)} \\text{ kip·ft/ft} \\quad ${r.heel_md_governs?'\\textbf{(GOVERNS)}':'\\text{(does not govern)}'}$$
-</div>` : ''}
-` : ''}
-` : `
-<h2 class="sec">4. Stability Analysis (Service, Unfactored)</h2>
-<p class="code-ref">Reference: IBC 2021 §1807.2; Required FOS ≥ 1.5</p>
-
-<h3 class="sub">4.1 Vertical Forces &amp; Moments about Toe</h3>
-<table>
-  <tr><th>Component</th><th class="r">W (lb/ft)</th><th class="r">Arm (ft)</th><th class="r">M_stab (lb·ft/ft)</th></tr>
-  <tr><td>Footing concrete — $\\gamma_c B t_f$</td><td class="r">${fv(r.Wftg,1)}</td><td class="r">${fv(r.x_ftg,3)}</td><td class="r">${fv(r.Ms_ftg,1)}</td></tr>
-  <tr><td>Stem concrete — $\\gamma_c \\bar{t}_s H_s$</td><td class="r">${fv(r.Wstem,1)}</td><td class="r">${fv(r.x_stem,3)}</td><td class="r">${fv(r.Ms_stem,1)}</td></tr>
-  <tr><td>Soil on heel — $\\gamma_s H_s L_h$</td><td class="r">${fv(r.Wsoil,1)}</td><td class="r">${fv(r.x_soil,3)}</td><td class="r">${fv(r.Ms_soil,1)}</td></tr>
-  <tr><td>Surcharge on heel — $q_s L_h$</td><td class="r">${fv(r.Wsur,1)}</td><td class="r">${fv(r.x_soil,3)}</td><td class="r">${fv(r.Ms_sur,1)}</td></tr>
-  <tr><td>$P_{a,V}$ at heel</td><td class="r">${fv(r.Pa_tri_v,1)}</td><td class="r">${fv(r.B,3)}</td><td class="r">${fv(r.Ms_Pv,1)}</td></tr>
-  ${r.hasCol?`<tr class="warn-row"><td>Column/beam $w_{col}$ at $x_{col}=${fv(r.x_col,2)}$ ft</td><td class="r">${fv(r.W_col,1)}</td><td class="r">${fv(r.x_col,3)}</td><td class="r">${fv(r.Ms_col,1)}</td></tr>`:''}
-  ${r.hasWT?`<tr class="warn-row"><td>Hydrostatic uplift $U$ (↑ reduces stability)</td><td class="r">−${fv(r.F_uplift,1)}</td><td class="r">${fv(r.x_uplift,3)}</td><td class="r">−${fv(Math.abs(r.Ms_uplift),1)}</td></tr>`:''}
-  <tr style="font-weight:700;"><td><strong>TOTAL ΣV</strong></td><td class="r">${fv(r.SumV,1)}</td><td class="r">—</td><td class="r">${fv(r.Ms,1)}</td></tr>
-</table>
-<div class="calc-block">
-$$M_{OT} = P_{a,H}\\cdot\\frac{H}{3}+P_{a,sur}\\cdot\\frac{H}{2}${r.hasWT?`+F_{hyd}\\cdot\\frac{h_w}{3}`:''}= ${fv(r.Mo_tri,1)}+${fv(r.Mo_sur,1)}${r.hasWT?`+${fv(r.Mo_hyd,1)}`:''}$$
-$$\\boxed{M_{OT} = ${fv(r.Mo,1)} \\text{ lb·ft/ft} = ${fk2(r.Mo,3)} \\text{ kip·ft/ft}}$$
-</div>
-
-<h3 class="sub">4.2 Overturning</h3>
-<div class="calc-block">
-$$FOS_{OT} = \\frac{M_{stab,OT}}{M_{OT}} = \\frac{${fv(r.Ms_OT,1)}}{${fv(r.Mo,1)}} = ${fv(r.FOS_OT,3)} \\geq 1.5$$ ${ck(r.FOS_OT>=1.5)}
-<p class="note">M<sub>stab,OT</sub> = M<sub>stab</sub> − surcharge-over-heel and column live/snow moments (${fv(r.Ms_OT_excl,1)} lb·ft/ft excluded) — these loads are not relied on in any resisting force; they remain in the bearing check.</p>
-</div>
-
-<h3 class="sub">4.3 Sliding</h3>
-<div class="calc-block">
-$$F_r = \\mu\\cdot\\Sigma V_{fr}+P_p = ${fv(inp.mu,4)}\\times${fv(r.SumV_slide,1)}+${fv(r.Pp,1)} = ${fv(r.Fr,1)} \\text{ lb/ft}$$
-<p class="note">ΣV<sub>fr</sub> = ΣV − surcharge over heel − column live/snow load (${fv(r.V_slide_excl,1)} lb/ft excluded): friction relies only on weight certain to be present when the thrust acts. These loads remain in the bearing check.</p>
-$$FOS_{SL} = \\frac{F_r}{F_h} = \\frac{${fv(r.Fr,1)}}{${fv(r.Fh,1)}} = ${fv(r.FOS_SL,3)} \\geq 1.5$$ ${ck(r.FOS_SL>=1.5)}
-</div>
-
-<h3 class="sub">4.4 Bearing Pressure</h3>
-<div class="calc-block">
-$$x_R = \\frac{M_{stab}-M_{OT}}{\\Sigma V} = \\frac{${fv(r.Ms,1)}-${fv(r.Mo,1)}}{${fv(r.SumV,1)}} = ${fv(r.x_R,4)} \\text{ ft from toe}$$
-$$e = \\frac{B}{2}-x_R = \\frac{${fv(r.B,3)}}{2}-${fv(r.x_R,4)} = ${fv(r.e,4)} \\text{ ft} \\quad \\frac{B}{6}=${fv(r.B/6,4)} \\text{ ft} \\quad ${Math.abs(r.e)<=r.B/6?'\\checkmark \\text{ within kern}':'\\text{⚠ outside kern}'}$$
-${!r.tension_zone
-  ? `$$q_{toe}=\\frac{\\Sigma V}{B}\\!\\left(1+\\frac{6e}{B}\\right)=${fv(r.q_toe,1)} \\text{ psf}, \\quad q_{heel}=${fv(r.q_heel,1)} \\text{ psf}$$`
-  : `$$q_{max}=\\frac{2\\Sigma V}{3x_R}=${fv(r.q_toe,1)} \\text{ psf (triangular distribution)}$$`}
-$$q_{max}=${fv(r.q_max,1)} \\text{ psf} \\leq q_a=${fv(inp.qa,0)} \\text{ psf}$$ ${ck(r.bearing_ok)}
-</div>
-`}
-
-<!-- SECTION 5 — STEM -->
-<div class="page-break"></div>
-<h2 class="sec">5. Stem Design (ACI 318-19)</h2>
-<p class="code-ref">Reference: ACI 318-19 §9.5, §22.5, §25.5. b = 12 in, U = 1.6H</p>
-
-<h3 class="sub">5.1 Demands at Base of Stem</h3>
-<div class="calc-block">
-$$M_u = 1.6\\!\\left[\\frac{K_a\\gamma_s H_s^3}{6}+\\frac{K_a q_s H_s^2}{2}\\right] = \\boxed{${fk2(r.Mu_stem_lbft,3)} \\text{ kip·ft/ft}}$$
-$$V_u = 1.6\\!\\left[\\frac{1}{2}K_a\\gamma_s H_s^2+K_a q_s H_s\\right] = \\boxed{${fk2(r.Vu_stem,3)} \\text{ kip/ft}}$$
-$$d = t_{s,bot}-c_{stem}-\\frac{d_b}{2} = ${fv(inp.ts_bot,0)}-${fv(inp.cov_stem,2)}-${fv(r.sel_stem.bar.db/2,3)} = ${fv(r.d_stem,3)} \\text{ in}$$
-</div>
-
-<h3 class="sub">5.2 Flexural Steel</h3>
-<div class="calc-block">
-$$R_n = \\frac{M_u}{\\phi b d^2} = \\frac{${fv(r.Mu_stem_in,0)}}{0.90\\times12\\times${fv(r.d_stem,3)}^2} = ${fv(r.Rn_stem,2)} \\text{ psi}$$
-$$A_{s,req} = \\frac{0.85f'_c}{f_y}\\!\\left(1-\\sqrt{1-\\frac{2R_n}{0.85f'_c}}\\right)bd = ${fv(r.As_stem_req,4)} \\text{ in}^2\\text{/ft}$$
-$$A_{s,min} = ${fv(r.As_s_min,4)} \\text{ in}^2\\text{/ft} \\quad \\text{(${r.isAASHTO?'AASHTO 5.6.3.3: }\\phi M_n\\ge\\min(M_{cr},1.33M_u)\\text{':'ACI 7.6.1.1: 0.0018bh'})}$$
-$$A_{s,des} = ${fv(r.As_stem_des,4)} \\text{ in}^2\\text{/ft} \\Rightarrow \\textbf{#${r.sel_stem.bar.num} @ ${r.sel_stem.spacing}'' o.c.} \\Rightarrow A_{s,prov}=${fv(r.sel_stem.As_prov,4)} \\text{ in}^2\\text{/ft}$$ ${ck(r.sel_stem.As_prov>=r.As_stem_des-0.001)}
-</div>
-
-<h3 class="sub">5.3 Shear &amp; Development</h3>
-<div class="calc-block">
-$$\\phi V_c = ${r.isAASHTO?'\\phi\\,0.0316\\beta\\sqrt{f\'_c}b_vd_v':'0.75\\cdot8\\lambda_s\\rho_w^{1/3}\\sqrt{f\'_c}\\,bd'} = ${fk2(r.phiVc_stem,3)} \\text{ kip/ft} \\geq V_u = ${fk2(r.Vu_stem,3)} \\text{ kip/ft}$$ ${ck(r.stem_shear_ok)}
-$$\\ell_d = ${fv(r.ld_stem,1)} \\text{ in} = ${fv(r.ld_stem/12,2)} \\text{ ft} \\quad \\text{(ACI 318-19 §25.5.2.1)}$$
-</div>
-<h3 class="sub">5.4 Temp. &amp; Shrinkage — Horiz. Bars</h3>
-<div class="calc-block">
-$$A_{s,T\\&S} = ${r.isAASHTO ? `\\max\\!\\left(\\tfrac{1.30(${fv(r.b_TS_stem,0)})(${fv(inp.ts_bot,0)})}{2(${fv(r.b_TS_stem,0)}+${fv(inp.ts_bot,0)})f_y},0.11\\right)` : `0.0018\\times12\\times${fv(inp.ts_bot,0)}`} = ${fv(r.As_temp_stem,4)} \\text{ in}^2\\text{/ft} \\Rightarrow \\textbf{#${r.sel_temp.bar.num} @ ${r.sel_temp.spacing}''} \\quad \\text{(${r.isAASHTO ? 'AASHTO 5.10.6' : 'ACI 24.4.3'})}$$
-</div>
-
-<!-- SECTION 6 — FOOTING -->
-<div class="page-break"></div>
-<h2 class="sec">6. Footing Design (ACI 318-19)</h2>
-<p class="code-ref">Reference: ACI 318-19 §13.3, §22.5. U = 1.2D + 1.6H</p>
-
-<h3 class="sub">6.1 Factored Bearing</h3>
-<table>
-  <tr><th>Location</th><th class="r">q_u (psf)</th></tr>
-  <tr><td>Toe (end)</td><td class="r">${fv(r.qu_toe,1)}</td></tr>
-  <tr><td>Front face of stem</td><td class="r">${fv(r.quf_front,1)}</td></tr>
-  <tr><td>Back face of stem</td><td class="r">${fv(r.quf_back,1)}</td></tr>
-  <tr><td>Heel (end)</td><td class="r">${fv(r.qu_heel,1)}</td></tr>
-</table>
-
-<h3 class="sub">6.2 Heel Design — Cantilever (L_h = ${fv(inp.Lh,2)} ft)</h3>
-<div class="calc-block">
-$$w_u = ${fv(r.wu_heel,1)} \\text{ psf (factored downward)}$$
-$$M_{u,A}^{relief} = ${fv(r.Mu_heel_std,1)},\\quad M_{u,B}^{no\\,relief} = ${fv(r.Mu_heel_nr,1)} \\text{ lb·ft/ft} \\Rightarrow M_u = ${fv(Math.abs(r.Mu_heel_net),1)} \\text{ lb·ft/ft}, \\ V_u = ${fv(r.Vu_heel,1)} \\text{ lb/ft} \\;(${({std:'standard basis',norelief:'no-relief basis',envelope:'envelope'})[r.heelBasis]}${r.heel_md_governs?', MassDOT governs':''}),\\ d_{heel}=${fv(r.d_heel,3)} \\text{ in}$$
-$$A_{s,des}=${fv(r.As_heel_des,4)} \\text{ in}^2\\text{/ft} \\Rightarrow \\textbf{#${r.sel_heel.bar.num}@${r.sel_heel.spacing}''} \\Rightarrow A_{s,prov}=${fv(r.sel_heel.As_prov,4)}$$ ${ck(r.sel_heel.As_prov>=r.As_heel_des-0.001)}
-$$\\phi V_c=${fk2(r.phiVc_heel,3)} \\text{ kip/ft} \\geq V_u=${fk2(r.Vu_heel,3)} \\text{ kip/ft} \\quad \\ell_d=${fv(r.ld_heel,1)}\\text{ in} \\;(\\psi_t=1.3)$$ ${ck(r.heel_shear_ok)}
-</div>
-
-<h3 class="sub">6.3 Toe Design — Cantilever (L_t = ${fv(inp.Lt,2)} ft)</h3>
-<div class="calc-block">
-$$q_{net,0}=${fv(r.net_q0t,1)} \\text{ psf}, \\quad q_{net,L_t}=${fv(r.net_qLt,1)} \\text{ psf} \\quad (\\text{net upward})$$
-$$M_{u,toe}=${fv(r.Mu_toe_net,1)} \\text{ lb·ft/ft} \\Rightarrow d_{toe}=${fv(r.d_toe,3)} \\text{ in}$$
-$$A_{s,des}=${fv(r.As_toe_des,4)} \\text{ in}^2\\text{/ft} \\Rightarrow \\textbf{#${r.sel_toe.bar.num}@${r.sel_toe.spacing}''} \\Rightarrow A_{s,prov}=${fv(r.sel_toe.As_prov,4)}$$ ${ck(r.sel_toe.As_prov>=r.As_toe_des-0.001)}
-$$\\phi V_c=${fk2(r.phiVc_toe,3)} \\text{ kip/ft} \\geq V_u=${fk2(r.Vu_toe,3)} \\text{ kip/ft} \\quad \\ell_d=${fv(r.ld_toe,1)}\\text{ in}$$ ${ck(r.toe_shear_ok)}
-</div>
-
-<h3 class="sub">6.4 Longitudinal T&amp;S</h3>
-<div class="calc-block">
-$$A_{s,T\\&S}=${r.isAASHTO ? `\\max\\!\\left(\\tfrac{1.30(${fv(r.b_TS_ftg,0)})(${fv(inp.tf,0)})}{2(${fv(r.b_TS_ftg,0)}+${fv(inp.tf,0)})f_y},0.11\\right)` : `0.0018\\times12\\times${fv(inp.tf,0)}`}=${fv(r.As_ftg_long,4)} \\text{ in}^2\\text{/ft} \\Rightarrow \\textbf{#${r.sel_ftg_long.bar.num}@${r.sel_ftg_long.spacing}''} \\quad \\text{(${r.isAASHTO ? 'AASHTO 5.10.6' : 'ACI 24.4.3'})}$$
-</div>
-
-<!-- SECTION 7 — REBAR SCHEDULE -->
-<div class="page-break"></div>
-<h2 class="sec">7. Reinforcement Schedule</h2>
-<table>
-  <tr><th>Mark</th><th>Location</th><th class="c">Bar</th><th class="r">Sp (in)</th>
-      <th class="r">As,req</th><th class="r">As,prov</th><th class="r">Ratio</th><th class="r">ℓd (in)</th><th class="c">Status</th></tr>
-  ${[
-    {mark:'S1',desc:'Stem — vert. (back face)',   bar:r.sel_stem,     As_req:r.As_stem_des,  ld:r.ld_stem},
-    {mark:'S3',desc:'Stem — vert. mid-height',     bar:r.sel_stemT,    As_req:r.As_stemT_des, ld:null},
-    {mark:'S2',desc:'Stem — horiz. T&S (both)',   bar:r.sel_temp,     As_req:r.As_temp_stem, ld:null},
-    {mark:'F1',desc:'Heel — transverse top bars', bar:r.sel_heel,     As_req:r.As_heel_des,  ld:r.ld_heel},
-    {mark:'F2',desc:'Toe — transverse bot. bars', bar:r.sel_toe,      As_req:r.As_toe_des,   ld:r.ld_toe},
-    {mark:'F3',desc:'Ftg — longitudinal T&S',     bar:r.sel_ftg_long, As_req:r.As_ftg_long,  ld:null},
-  ].map(row=>{
-    const ok=row.bar.As_prov>=row.As_req-0.001;
-    const ratio=row.bar.As_prov/Math.max(row.As_req,0.001);
-    return `<tr>
-      <td><b>${row.mark}</b></td><td>${row.desc}</td><td class="c">#${row.bar.bar.num}</td>
-      <td class="r">${row.bar.spacing}"</td>
-      <td class="r">${fv(row.As_req,4)}</td>
-      <td class="r" style="${ok?'':'color:#a01010;font-weight:bold;'}">${fv(row.bar.As_prov,4)}</td>
-      <td class="r">${fv(ratio,2)}</td>
-      <td class="r">${row.ld?fv(row.ld,1):'—'}</td>
-      <td class="c">${ck(ok)}</td>
-    </tr>`;
-  }).join('')}
-</table>
-
-<!-- SECTION 8 — SUMMARY -->
-<h2 class="sec">8. Design Summary</h2>
-<div class="summary-box">
-<table>
-  <tr><th>Check</th><th>Calculated</th><th>Required</th><th class="c">Status</th></tr>
-  ${r.isAASHTO ? `
-  <tr><td>Eccentricity |e|</td><td class="r">${fv(Math.abs(r.aashtoR.e_A),3)} ft</td><td class="r">≤ ${r.aashtoR.e_limit_label} = ${fv(r.aashtoR.e_limit,3)} ft</td><td class="c">${ck(r.aashtoR.ecc_ok_A)}</td></tr>
-  <tr><td>Sliding DCR</td><td class="r">${fv(r.aashtoR.sliding_dcr,2)}</td><td class="r">≤ 1.00</td><td class="c">${ck(r.aashtoR.sliding_ok_A)}</td></tr>
-  <tr><td>Bearing q_u</td><td class="r">${fv(r.aashtoR.q_ult_gov,0)} psf</td><td class="r">≤ ${fv(r.aashtoR.q_R_A,0)} psf</td><td class="c">${ck(r.aashtoR.bearing_ok_A)}</td></tr>
-  ` : `
-  <tr><td>Overturning FOS</td><td class="r">${fv(r.FOS_OT,3)}</td><td class="r">≥ 1.50</td><td class="c">${ck(r.FOS_OT>=1.5)}</td></tr>
-  <tr><td>Sliding FOS</td><td class="r">${fv(r.FOS_SL,3)}</td><td class="r">≥ 1.50</td><td class="c">${ck(r.FOS_SL>=1.5)}</td></tr>
-  <tr><td>Bearing q_max</td><td class="r">${fv(r.q_max,0)} psf</td><td class="r">≤ ${fv(inp.qa,0)} psf</td><td class="c">${ck(r.bearing_ok)}</td></tr>
-  `}
-  <tr><td>Stem — flexure</td><td class="r">As,prov=${fv(r.sel_stem.As_prov,4)}</td><td class="r">≥${fv(r.As_stem_des,4)}</td><td class="c">${ck(r.sel_stem.As_prov>=r.As_stem_des-0.001)}</td></tr>
-  <tr><td>Stem — shear</td><td class="r">φVc=${fk2(r.phiVc_stem,3)} k/ft</td><td class="r">≥Vu=${fk2(r.Vu_stem,3)}</td><td class="c">${ck(r.stem_shear_ok)}</td></tr>
-  <tr><td>Heel — flexure</td><td class="r">As,prov=${fv(r.sel_heel.As_prov,4)}</td><td class="r">≥${fv(r.As_heel_des,4)}</td><td class="c">${ck(r.sel_heel.As_prov>=r.As_heel_des-0.001)}</td></tr>
-  <tr><td>Heel — shear</td><td class="r">φVc=${fk2(r.phiVc_heel,3)} k/ft</td><td class="r">≥Vu=${fk2(r.Vu_heel,3)}</td><td class="c">${ck(r.heel_shear_ok)}</td></tr>
-  <tr><td>Toe — flexure</td><td class="r">As,prov=${fv(r.sel_toe.As_prov,4)}</td><td class="r">≥${fv(r.As_toe_des,4)}</td><td class="c">${ck(r.sel_toe.As_prov>=r.As_toe_des-0.001)}</td></tr>
-  <tr><td>Toe — shear</td><td class="r">φVc=${fk2(r.phiVc_toe,3)} k/ft</td><td class="r">≥Vu=${fk2(r.Vu_toe,3)}</td><td class="c">${ck(r.toe_shear_ok)}</td></tr>
-</table>
-</div>
+${secs.map(s => `<!-- SECTION ${s.n} -->
+<section class="cr-break"><h2 class="sec" id="s${s.n}">${s.n}. ${s.title}</h2>
+${s.box.innerHTML}
+${resultBlock(s.n)}
+</section>`).join('\n')}
 
 <div class="note">⚠ <strong>Engineering Note:</strong> Generated by RetainCalc Pro as a calculation aid only.
 All results must be independently reviewed by a licensed Professional Engineer before use in construction.
@@ -8022,7 +8130,7 @@ Global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure
 drainage design, and site-specific geotechnical conditions require separate evaluation.</div>
 
 <div class="rpt-footer">
-  <span>RetainCalc Pro · ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'} · ${proj_name} · ${proj_num}</span>
+  <span>RetainCalc Pro · ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'} · ${hx(proj_name)} · ${hx(proj_num)}</span>
   <span>Generated ${new Date().toLocaleString()}</span>
 </div>
 </div>
@@ -8042,13 +8150,7 @@ if (document.readyState === 'loading') {
 <\/script>
 </body>
 </html>`;
-
-  // Use Blob URL so scripts execute properly in the new window
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, '_blank', 'width=1050,height=850');
-  // Revoke after browser has had time to load
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return html;
 }
 
 
@@ -8679,4 +8781,4 @@ syncHeaderControls();
 })();
 </script>
 </body>
-</html>
+</html>
