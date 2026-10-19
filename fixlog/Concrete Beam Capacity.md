@@ -1930,3 +1930,23 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - **Saved data:** no key or format change; the two optional fields (`betaT`, `hookR`) default to 0 / blank when absent (checked with an older `rebar_aci_autosave_v1` read by the suite).
 - **Verification:** decoded tab passes `node tests/check-syntax.mjs`. In the suite frame (headless Chromium, KaTeX / Plotly from npm pack; the other tabs' CDN libraries blocked), the 11 cases of the rebar entry: every computed value and hero value equal to the standalone branch file; the two ACI cases identical to main's suite (values, notices, dashboard, tab texts, report text); report builds 7 sections, every internal link resolves, 0 KaTeX errors.
 - **Other copies:** `ACI Rebar Development Length.html` (PR claude/aashto10-rebar). Open items: see the rebar entry.
+
+## 2026-10-19 — PR: claude/aashto10-cbc-capacity — Beam Capacity tab: shear φ for lightweight concrete per AASHTO LRFD 10th Ed. 5.5.4.2; AASHTO edition stated as 10th Ed. (2024) (calculation change; PR link added after merge)
+- **Branch:** based on claude/aashto10-cbc-rebar (Development & Splice tab sync, not merged yet) so the two PRs on this file do not conflict; it contains those commits. This entry changes only the `#suite-frame-capacity` srcdoc.
+- **Editing method:** as the earlier entries: decode (`&quot;`, `&amp;`; decode → encode of the unedited file reproduced it byte for byte), 6 exact-string replacements (each anchor found once), re-encode with CRLF kept; the decoded tab read back equals the edited text byte for byte.
+
+### K1. Shear resistance factor, lightweight concrete   [calculation change (§4)]
+- **Where:** `shear()`, AASHTO branch, anchor `const phi = 0.90;   /* AASHTO LRFD 10th Ed. 5.5.4.2`.
+- **Before:** `const phi = lam<1 ? 0.80 : 0.90;   /* 5.5.4.2: shear 0.90 normal weight, 0.80 lightweight */`
+- **After:** `const phi = 0.90;   /* AASHTO LRFD 10th Ed. 5.5.4.2: shear in reinforced concrete 0.90 for normal weight and lightweight concrete (was 0.80 when lambda < 1) */`
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Art. 5.5.4.2, φ for shear and torsion in reinforced concrete sections: 0.90 normal weight, 0.90 lightweight. Less conservative than before; affects only λ < 1 (φV_n, DCR, and the A_v,min trigger 0.5φV_c of 5.7.2.3, which uses `sh.phi`). ACI mode unchanged.
+- **Check case (AASHTO, default section 12 × 18 in., f′c 4 ksi, fy = fyt 60 ksi, 3 #5 bottom, #4 stirrups 2 legs @ 6 in., λ = 0.85, one combination Mu = 40 k-ft, Vu = 30 kip, no torsion):** d = 15.19 in., d_v = 14.24 in.; ε_s = 0.002362 → β = 1.732, θ = 37.27°; V_c = 0.0316 × 1.732 × 0.85 × √4 × 12 × 14.24 = 15.90 kip; V_s = 0.40 × 60 × 14.24 × cot 37.27° / 6 = 74.87 kip; V_n = min(90.77, 0.25 × 4 × 12 × 14.24 = 170.9) = 90.77 kip. Before φ = 0.80: φV_n = 72.62 kip, DCR = 30/72.62 = 0.413. After φ = 0.90: φV_n = **81.69 kip**, DCR = **0.367**. A_v,min trigger 0.5φV_c: 6.36 → 7.16 kip (required either way). λ = 1.0 and ACI cases identical to main.
+
+### K2. Edition labels (no result change)
+- Code selector "AASHTO LRFD 9th" → "AASHTO LRFD 10th (2024)"; input echo "AASHTO LRFD 9th Ed." → "AASHTO LRFD 10th Ed. (2024)"; `cbcCodeLabel()` "AASHTO LRFD, 9th Edition" → "AASHTO LRFD, 10th Edition (2024)"; references row "(labelled 9th Edition in this tool; some provisions follow the 10th Ed. — edition: verify)" → ", 10th Ed. (2024)"; Serviceability card title "Factored cracking moment with the 9th-Edition γ factors" → "Factored cracking moment with the γ factors" (ref "AASHTO 5.6.3.3, Eq. 5.6.3.3-1").
+- Basis: the 2026-10-19 inventory lists the tab's other AASHTO items as matching the 10th Ed. (Eq. 5.4.2.4-1, 5.4.2.6, 5.4.2.8, 5.4.3.1, 5.6.2.1, 5.6.2.2, 5.6.3.3, 5.6.7, 5.7.2.3, 5.7.2.5, 5.7.2.6, 5.7.2.8, 5.7.3, 5.7.3.3, 5.7.3.4.1, 5.7.3.4.2, 5.10.1, 5.10.3.1.1, 5.10.3.1.2). Re-checked against the 10th Ed. text here: 5.5.4.2 (K1) and 5.6.3.3 (γ1 = 1.6, γ3 values; see open item).
+- **Verification:** decoded tab passes `node tests/check-syntax.mjs`. Headless, main vs branch, Beam Capacity frame: the check case above (only `phi` and `phiVn` differ, validation identical); AASHTO λ = 1.0, ACI λ = 0.85 and ACI λ = 1.0 identical. No page errors.
+
+### Open items (not changed)
+- **γ3 selector (5.6.3.3):** the options read "0.67 — A615 Gr 60", "0.75 — A706 Gr 60", "0.76 — A615 Gr 75". In the 10th Ed., A615 Gr 75 is 0.75 and 0.76 is A615 Gr 80 (A706 Gr 80 = 0.80 and A1035 Gr 100 = 0.67 are not offered). The 0.76 value is ≥ the Gr 75 value (conservative), but the label names the wrong grade. Relabel to "A615 Gr 80" and/or add options? Engineer decision.
+- Pre-existing (inventory): the dashboard cites "ACI 9.3.3 / 22.2" for flexure in AASHTO mode.
