@@ -20113,3 +20113,63 @@ index e33e8be..663ce6b 100644
 +  flash(`Reactions of G1 to G${r.payload.supports[0].girders.length} sent to Substructure Loading.`);
 +  alert(`Reactions sent to Substructure Loading (unfactored, kip, DC1 / DC2 / DW per girder):\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail".`); });
 ```
+
+## 2026-10-19 — PR: claude/gd-superreactions-util (SRXU: MassDOT utilities carried from GirderDetail into Bridge Substructure Loading; engineer decision GD72a 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, ENGINEER_CHECKS GD72 closed; PR link added after merge)
+
+### SRXU. Utilities as their own reaction fields (superReactions)   [HAND-OFF CHANGE — additive fields; no GirderDetail result changes]
+- **Engineer decision GD72a (2026-10-19):** carry the MassDOT utilities into Substructure Loading as loads.
+- **Where:** `gdSrPayload` (anchor `// SRXU (engineer decision 2026-10-19, GD72a)`): each `girders[]` entry gets `UT: r3(q.UT)` when the girder carries existing utilities (`R.wUT > 0`) and `UF: r3(q.UF)` when it carries the future allowance (`R.wUF > 0`), from the same `R.reac` (Structural analysis Reactions card, utilities on the steel section). The payload gets `utilities:{ cite, section, existing:{ field:'UT', treatAs:'DW', strMax:1.50, strMin:0.65, service:1.0 }, future:{ field:'UF', treatAs:'DC', strMax:1.25, strMin:0, service:1.0, serviceRelieving:0 } }` (null for the one that is absent), only when some girder carries utilities. The notes line now says they are sent as fields (the values are still listed); the send summary shows "(UT …, UF …)"; the UI note says the utilities are sent as their own values.
+- **Before:** utilities only in a note ("NOT in DC1, DC2 or DW … Add them in Substructure Loading by hand"). **After:** the same values as optional fields; DC1, DC2, DW unchanged.
+- **Governing provision:** MassDOT LRFD Bridge Manual Part I 3.5.5.2 (future utility allowance), 3.5.5.4 (on the noncomposite section); existing utilities as DW (GD42); AASHTO LRFD 10th Ed. Table 3.4.1-2 (DW 1.50 / 0.65, DC 1.25 / 0.90).
+- **Check case (MassDOT util case, `tests/projects/gd/util.json`, owner MassDOT; GirderDetail payload pulled into the SubLoads built-in bridge with the defaults; before = main, which ignores the fields; after = this branch):**
+  - Sent (kip, unfactored): G2 and G3 each UT 5.846 at each abutment and 21.154 at each pier, UF 4.872 / 17.628; G1, G4, G5 none. Sum check UT per girder: 2 × 5.85 + 2 × 21.15 = 54.0 = 0.150 klf × 360 ft; UF: 2 × 4.87 + 2 × 17.63 = 45.0 = 0.125 × 360. Both girders: UT 108.0, UF 90.0 kip (the source record).
+  - Superstructure totals (sum of girders, Summary units table): Abut. 1 DC 299.0 → 308.7, DW 41.0 → 52.7; Pier 1 DC 1101.8 → 1137.1, DW 145.8 → 188.1 (Pier 1: UF 35.26, UT 42.31).
+  - Governing results that change (Summary "Governing design forces"; Strength I unless noted):
+
+| Unit, section, effect | Before | After |
+|---|---|---|
+| Abut. 1, bridge seat, P max (kip) | 963.6 | 993.3 |
+| Abut. 1, bridge seat, M_t max / min (kip-ft) | 4173.9 / −4171.8 | 4320.1 / −4091.3 |
+| Abut. 1, bottom of footing, P max (kip) | 2544.8 | 2574.5 |
+| Abut. 1, bottom of footing, M_l max / min (kip-ft) | 4153.6 / −1244.2 | 4190.7 / −1223.7 |
+| Pier 1, top of footing, P max / min (Str. III) (kip) | 2703.3 / 1149.3 | 2810.9 / 1208.5 |
+| Pier 1, bottom of footing, P max / min (Str. III) (kip) | 3504.5 / 1733.1 | 3612.1 / 1792.3 |
+| Pier 1, bottom of footing, M_t max / min (kip-ft) | 7429.5 / −7337.3 | 7958.3 / −7046.1 |
+| Pier 1, bottom of footing, P Service I max (kip) | 2556.7 | 2634.3 |
+| Pier 2, bottom of footing, P max / min (kip) | 3355.9 / 1623.6 | 3463.5 / 1682.8 |
+| Abut. 2, bottom of footing, M_l max / min (kip-ft) | 1439.1 / −4446.2 | 1418.6 / −4483.3 |
+
+  (Every resultant at the bridge seat, top and bottom of footing of every unit changes the same way; the full list is in the PR.) M_t grows because the utilities sit on G2 and G3, left of the bridge centerline.
+  - **Hand check:** Abut. 1 bridge seat P max = previous + 1.50 × UT + 1.25 × UF = 963.6 + 1.50 × 11.69 + 1.25 × 9.74 = 963.6 + 17.54 + 12.18 = **993.3 kip** ✓. Pier 1 bottom of footing P max = 3504.5 + 1.50 × 42.31 + 1.25 × 35.26 = 3504.5 + 63.46 + 44.07 = **3612.0** (tool 3612.1, rounding) ✓. P min (Strength III, minimum factors) = 1733.1 + 0.65 × 42.31 + 0.90 × 35.26 = 1733.1 + 27.50 + 31.73 = **1792.3** ✓; with GirderDetail's 0 on UF it would be 1760.6 (the 31.7 kip counted in the minimum is the documented approximation). Service I = 2556.7 + 42.31 + 35.26 = **2634.3** ✓.
+- **How verified:** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"`: pass. `node tests/compare.mjs --tool gd` (builtin / AASHTO) and `--project util --owner MassDOT`: all sections identical (the payload is not a compared section; nothing else moved). Built-in payload (no utilities): identical to main's apart from `producedAt`. Util payload: `UT`/`UF` on G2 and G3 only, `utilities` present; headless Send → SubLoads Pull → Apply: 100 values (60 DC/DW + 40 UT/UF), every DC value equal to the payload.
+- **Other copies:** none. Receiver: `fixlog/Bridge Substructure Loading.md` SRXU.
+- **Open items:** none (GD72 closed).
+
+Diff (`Steel Bridge Beam Modules.html`, `git diff -U0`):
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 663ce6b..a57a24a 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -13050 +13050 @@ function gdSrUi() {
+-    <p class="note">Runs this analysis for every girder (G1 to G${nb}, with the model settings above) and sends each girder's unfactored DC1, DC2 and DW reactions at every support (kip), the values of <a href="#" data-gdcard="combos:sa-r">Reactions</a> (Results tab, shown there for the girder selected above), to Bridge Substructure Loading. There: Reactions tab, Pull from PS-Beam / GirderDetail; each girder goes to the girder with the same number. Substructure Loading computes its own live load and applies its own load factors; GirderDetail's LL+IM, pedestrian load and utility reactions are listed in the notes of the hand-off, and the bridge owner's load rules are sent with it for information. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and Substructure Loading's Import hand-off (JSON).</p></div>`;
++    <p class="note">Runs this analysis for every girder (G1 to G${nb}, with the model settings above) and sends each girder's unfactored DC1, DC2 and DW reactions at every support (kip), the values of <a href="#" data-gdcard="combos:sa-r">Reactions</a> (Results tab, shown there for the girder selected above), to Bridge Substructure Loading. There: Reactions tab, Pull from PS-Beam / GirderDetail; each girder goes to the girder with the same number. Substructure Loading computes its own live load and applies its own load factors; GirderDetail's LL+IM and pedestrian load reactions are listed in the notes of the hand-off, the MassDOT utilities (existing and future allowance) are sent as their own values, and the bridge owner's load rules are sent with it for information. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and Substructure Loading's Import hand-off (JSON).</p></div>`;
+@@ -13059 +13059,3 @@ function gdSrPayload() {
+-    girders: Rs.map((R, i) => { const q = R.reac[k]; return { label: lab(i), position: R.ext ? 'exterior' : 'interior', DC1: r3(q.DC1), DC2: r3(q.DC2), DW: r3(q.DW) }; }) }));
++    girders: Rs.map((R, i) => { const q = R.reac[k]; return { label: lab(i), position: R.ext ? 'exterior' : 'interior', DC1: r3(q.DC1), DC2: r3(q.DC2), DW: r3(q.DW),
++      // SRXU (engineer decision 2026-10-19, GD72a): MassDOT utilities as their own optional fields, only on a girder that carries them (R.reac UT / UF, unfactored)
++      ...(R.wUT > 0 ? { UT: r3(q.UT || 0) } : {}), ...(R.wUF > 0 ? { UF: r3(q.UF || 0) } : {}) }; }) }));
+@@ -13068 +13070 @@ function gdSrPayload() {
+-    ...(gUT.length || gUF.length ? [`MassDOT utilities (OWN16; MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4) are NOT in DC1, DC2 or DW: the hand-off has no field for them. Add them in Substructure Loading by hand where they are to be carried. ${gUT.length ? `Existing utilities (UT; GirderDetail factors them as DW: Strength 1.50 where they add, 0.65 where they relieve), kip: ${per(q => f2(q.UT || 0), gUT)}.` : 'No existing utilities.'} ${gUF.length ? `Future utility allowance (UF; Strength 1.25 where it adds, 0 where it relieves), kip: ${per(q => f2(q.UF || 0), gUF)}.` : 'No future utility allowance.'}`] : []),
++    ...(gUT.length || gUF.length ? [`MassDOT utilities (OWN16; MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4) are NOT in DC1, DC2 or DW; they are sent as their own fields girders[].UT (existing) and girders[].UF (future allowance), unfactored, on the girders that carry them (0 on the others). ${gUT.length ? `Existing utilities (UT; GirderDetail factors them as DW: Strength 1.50 where they add, 0.65 where they relieve), kip: ${per(q => f2(q.UT || 0), gUT)}.` : 'No existing utilities.'} ${gUF.length ? `Future utility allowance (UF; Strength 1.25 where it adds, 0 where it relieves), kip: ${per(q => f2(q.UF || 0), gUF)}.` : 'No future utility allowance.'}`] : []),
+@@ -13076,2 +13078,6 @@ function gdSrPayload() {
+-    span: { index: null, length: r3(R0.xs[R0.N - 1]) }, supports, liveLoad: null, notes, ...(ownerRules ? { ownerRules } : {}) };
+-  return { ok: true, payload, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}`).join(', ')}`).join('\n') };
++    span: { index: null, length: r3(R0.xs[R0.N - 1]) }, supports, liveLoad: null, notes, ...(ownerRules ? { ownerRules } : {}),
++    // SRXU (optional, §4.4): what UT / UF are and how GirderDetail factors them; only when some girder carries utilities
++    ...(gUT.length || gUF.length ? { utilities: { cite: 'MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4 (OWN16)', section: 'noncomposite (steel)',
++      existing: gUT.length ? { field: 'UT', treatAs: 'DW', strMax: 1.50, strMin: 0.65, service: 1.0 } : null,
++      future: gUF.length ? { field: 'UF', treatAs: 'DC', strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0 } : null } } : {}) };
++  return { ok: true, payload, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}${g.UT != null || g.UF != null ? ` (UT ${f2(g.UT || 0)}, UF ${f2(g.UF || 0)})` : ''}`).join(', ')}`).join('\n') };
+```
