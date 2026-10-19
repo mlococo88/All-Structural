@@ -19581,3 +19581,70 @@ Each bare γ_LL number (e.g. 2.10) became 1.75(η)(m) under a brace with the pro
 +document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('[data-gdcard]'); if (!a) return; e.preventDefault(); const [t, id] = a.dataset.gdcard.split(':'); setOTab(t); delete P.ui.col[id]; applyCollapse();
 +  setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80); });
 ```
+
+
+## 2026-10-19 — PR: claude/gd-stgirder-load-inputs (GDL: the load inputs of the girder sent to ST-Girder with its demands; engineer request 2026-10-19; cross-tool PR with stgirder.html and HANDOFF.md §4.9; display only; PR link added after merge)
+
+Engineer's request: "When the analysis is sent from GirderDetail to ST-Girder, bring over the load inputs as well so there is no confusion. Update the load section of the Input tab [in ST-Girder] with the correct inputs from the GirderDetail app."
+
+### GDL. `girderDetail.loads` added to the "Send to ST-Girder" payload   [hand-off data, display only, Tier 1]
+- **Where:** new `GD_DL_METH` and `gdStLoads(R, addPL)` above `gdStPayload` (anchor `/* GDL (engineer request 2026-10-19; HANDOFF.md 4.9)`); in `gdStPayload`, after the payload object: `const ldIn = gdStLoads(R, pl); if (ldIn) p.girderDetail.loads = ldIn;`. One note line reworded (anchor `'Not sent as forces: construction live load`).
+- **Before:** the payload carried the forces and `girderDetail` (DFs, IM, materials, deck, bracing, skew, utilities in klf) but not the load inputs; ST-Girder showed its own load inputs beside GirderDetail's forces. Note: `'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.'`
+- **After:** optional `girderDetail.loads` (HANDOFF.md §4.9), read from the same `GM.sa.compute` run `R` as the forces and its LLDF and DLs dead loads (`R.DF.dead`): `components` = girder steel (length-weighted average of `R.wSt` over the node tributary lengths, min, max, detail allowance), cross-frames (`R.xf`: count, total kip), deck (`D.deck[j]`; t_s + sacrificial, w_c, tributary width), haunch (`D.haunch[j]`), SIP forms (`D.sip[j]`), and every row of `D.per` except the pedestrian load (barriers, curbs, railings, sidewalks, fences, median, wearing surface, overlays, added rows, utilities) with `w = L.r[j]` on this girder, `wTotal`, `x`, `dist`/`distLabel`, `byMethod`, `overridden`, basis fields and source; `totals` (`R.wDeck`, `R.wDC2`, `R.wDW`, `R.wUT`, `R.wUF`, `R.wPL`, steel average, cross-frame kip); `distribution` (method, label, beam class); `deck`, `edges`, `wearingSurface`, `construction` (`b.cll` psf × `R.beffFt` = `R.wCL`), `liveLoad` (HL-93, IM, `geo.NL` lanes, lane width, roadway, `gDef`, pedestrian psf, walkable widths, klf and rows, `inLL`). Rounded to 0.0001. The field is omitted if it cannot be built. Note: `'Not sent as forces: construction live load (its input is listed in girderDetail.loads), deck placement sequence, wind and flange lateral bending.'`
+- **Problem:** ST-Girder's own load inputs (barrier/SIDL 0.30, wearing surface 0.25 klf, …) could disagree with what GirderDetail used for the forces it sent.
+- **Governing provision:** none changed (data only). The values are the existing LLDF and DLs loads (AASHTO LRFD 10th Ed. (2024) 3.5.1, 4.6.2.2.1; MassDOT 3.5.3; RIDOT BDM 3.3.1) and HL-93 (3.6.1.2, 3.6.1.3.1, 3.6.2.1).
+- **Check case (built-in 15°, AASHTO, G2; dead load method MassDOT pile-cap, the project setting):** deck 9.50 ft × 8.00/12 × 0.150 = 0.950 klf; haunch 2/12 × 16/12 × 0.150 = 0.0333; SIP 15 psf × 8.167 ft = 0.1225; wet DC1 = 1.1058 = `R.wDeck` (the load behind `M_DC1wet`). DC2: left barrier 0.1705 + right barrier 0.0800 = 0.2505 = `R.wDC2`. DW: 25 psf × 41.50 ft / 5 = 0.2075 = `R.wDW`. Steel 0.2541 klf average (0.2276 to 0.3454), 34 cross-frame loads, 5.604 kip. Construction 20 psf × 9.50 ft = 0.190 klf. 3 lanes; g_Δ = 3 × 0.85 / 5 = 0.510. MassDOT utility project (`tests/projects/gd/util.json`, G2): also UT 0.150 and UF 0.125 klf = `R.wUT`, `R.wUF`. Built-in with a 6 ft × 8 in left sidewalk and 75 psf, RIDOT, G1: barrier 0.240 + sidewalk 0.360 = DC2 0.600; pedestrian 75 psf × 4.50 ft walkable, 0.320 klf on G1 (two adjacent), `inLL: true`.
+- **How verified (Tier 1, plus the payload):** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"` (all scripts pass); `node tests/compare.mjs --tool gd --project builtin,util --owner AASHTO,MassDOT`: all sections identical to main, no console errors. G2 payloads (built-in AASHTO; util MassDOT) made headless with main and with the branch: identical except `girderDetail.loads` and the one note line (producedAt removed).
+- **Saved data:** none (no key or project field added or changed). Channel, key, `_schema` and `schemaVersion` unchanged; the field is additive and optional (HANDOFF.md §3.6).
+- **Other copies:** the receiver is `stgirder.html` (fixlog/stgirder.md GDL).
+- **Open items:** ENGINEER_CHECKS GD69 (ST-Girder outputs that still use its own load inputs).
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 32429cc..052e26e 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -12837,0 +12838,37 @@ function gdStUi() {
++/* GDL (engineer request 2026-10-19; HANDOFF.md 4.9): the load INPUTS behind this girder's forces, optional field girderDetail.loads, so ST-Girder can show
++   them on its Inputs tab in place of its own. Display data only: read from the same run R (GM.sa.compute) and its LLDF and DLs dead loads (R.DF.dead); every
++   per-foot value is the one this analysis loaded the girder with. Nothing in the forces, this tool's results or saved data changes. null when it cannot be built. */
++const GD_DL_METH = { massdot: 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)', aashto: 'Typical AASHTO (all loads equally to all beams)', ridot: 'RIDOT BDM 3.3.1 (barriers and sidewalks 60% fascia beams, 40% interior beams)' };
++function gdStLoads(R, addPL) {
++  try {
++    const D = R.DF && R.DF.dead, b = R.b, j = R.j; if (!D || !D.per || !(j >= 0)) return null;
++    const r4 = v => Math.round((+v || 0) * 1e4) / 1e4, lab = `G${j + 1}`, src = `LLDF and DLs module, ${lab}`;
++    const trib = Array.from(R.trib), tL = trib.reduce((a, v) => a + v, 0) || 1, wSt = Array.from(R.wSt), stAvg = wSt.reduce((a, v, i) => a + v * trib[i], 0) / tL;
++    const rowSrc = id => /^bar|^curb|^rail/.test(id) ? 'LLDF and DLs: deck edges (barrier, curb, railing)' : /^sw|^fence/.test(id) ? 'LLDF and DLs: sidewalks' : id === 'med' ? 'LLDF and DLs: median'
++      : id === 'ws' ? 'LLDF and DLs: wearing surface (weight from Preliminary sizing, or thickness × unit weight)' : /^ovl/.test(id) ? 'LLDF and DLs: overlays' : /^ped/.test(id) ? 'LLDF and DLs: pedestrian LL on the sidewalks' : 'LLDF and DLs: added loads';
++    const comps = [
++      { id: 'steel', name: `Girder steel (flanges and web at 490 pcf × (1 + ${r4(b.allow)}% detail allowance))`, category: 'DC1', section: 'steel', w: r4(stAvg), wMin: r4(Math.min(...wSt)), wMax: r4(Math.max(...wSt)), wIs: 'length-weighted average (the plates vary along the girder)', unitWeight: 0.49, allowancePct: r4(b.allow), source: 'Preliminary sizing plates and detail allowance' },
++      ...(R.xf && R.xf.X && R.xf.X.on && R.xf.pts.length ? [{ id: 'xf', name: 'Cross-frames / diaphragms (point loads at this girder’s frames, half of each frame)', category: 'DC1', section: 'steel', points: R.xf.pts.length, Ptotal: r4(R.xf.tot), w: null, source: `LLDF and DLs: cross-frames and diaphragms (${gdXfDesc(R.xf.X)})` }] : []),
++      { id: 'deck', name: 'Deck slab', category: 'DC1', section: 'steel', w: r4(D.deck[j]), thickness: r4(b.tsDeck + (b.tsac > 0 ? b.tsac : 0)), tsStructural: r4(b.tsDeck), tsSacrificial: r4(b.tsac > 0 ? b.tsac : 0), unitWeight: r4(b.wc), width: r4(D.trib[j]), dist: 'tributary', source: 'Preliminary sizing deck; tributary width of this girder' },
++      { id: 'haunch', name: 'Haunch', category: 'DC1', section: 'steel', w: r4(D.haunch[j]), thickness: r4(b.haunch), widthIn: r4(D.bf * 12), unitWeight: r4(b.wc), source: 'Preliminary sizing haunch × top flange width' },
++      { id: 'sip', name: 'Stay-in-place forms', category: 'DC1', section: 'steel', w: r4(D.sip[j]), psf: r4(b.sip || 0), width: r4(b.sip > 0 ? D.sip[j] / (b.sip / 1000) : 0), source: 'Preliminary sizing SIP form weight × clear bay widths' },
++      ...D.per.filter(L => L.cat !== 'PL').map(L => ({ id: L.id, name: L.desc, category: L.cat, section: L.cat === 'DC1' || L.cat === 'UT' || L.cat === 'UF' ? 'steel' : 'long-term composite', w: r4(L.r[j]), wTotal: r4(L.plf), x: r4(L.x),
++        ...(L.x0 != null && L.x1 != null ? { width: r4(L.x1 - L.x0) } : {}), ...(L.q != null ? { psf: r4(L.q) } : L.id === 'ws' && L.x1 > L.x0 ? { psf: r4(L.plf / (L.x1 - L.x0) * 1000) } : {}), ...(L.thk != null ? { thickness: r4(L.thk), unitWeight: r4(L.gam) } : {}),
++        dist: L.dist, distLabel: DF_DIST[L.dist] || L.dist, ...(L.byMethod ? { byMethod: true } : {}), ...(L.ovr ? { overridden: L.ovr.slice() } : {}), source: rowSrc(L.id) }))];
++    const sumC = c => r4(comps.filter(q => q.category === c && q.id !== 'steel' && q.id !== 'xf').reduce((a, q) => a + (q.w || 0), 0));
++    const edge = sd => { const e = b.edge && b.edge[sd]; return e && e.mode === 'curb' ? { type: 'curb', curbWidthIn: r4(e.cw), curbHeightIn: r4(e.ch), railing: r4(e.rw), railingX: r4(e.rp) } : e && e.mode === 'barrier' ? { type: 'barrier', w: r4(e.w), width: r4(e.bw) } : b.barW > 0 ? { type: 'barrier', w: r4(b.barW), width: r4(b.barrier) } : null; };
++    const g0 = R.DF.regions[0].geo, ws = D.per.find(L => L.id === 'ws'), dl = (P.df && P.df.dl) || {}, wk = sd => Math.max(nm(dl['sw' + sd]) - (sd === 'L' ? R.DF.base.fL : R.DF.base.fR), 0);
++    return { source: src, units: { w: 'klf', wTotal: 'klf', P: 'kip', x: 'ft from the left deck edge', width: 'ft', widthIn: 'in', thickness: 'in', unitWeight: 'kcf', psf: 'psf' },
++      components: comps,
++      totals: { DC1wet: r4(R.wDeck), DC1steelAvg: r4(stAvg), crossFramesKip: r4(R.xf && R.xf.X && R.xf.X.on ? R.xf.tot : 0), DC2: r4(R.wDC2), DW: r4(R.wDW), UT: r4(R.wUT || 0), UF: r4(R.wUF || 0), PL: r4(R.wPL),
++        DC1otherRows: r4(sumC('DC1') - r4(D.deck[j]) - r4(D.haunch[j]) - r4(D.sip[j])) },
++      distribution: { method: D.method, label: GD_DL_METH[D.method] || D.method, beamClass: DF_CLS[D.cls[j]] || D.cls[j], note: 'Each row’s w is its share on this girder by its distribution rule (dist); DC1 rows, the utilities and the pedestrian load as set for that row.' },
++      deck: { ts: r4(b.tsDeck), tsac: r4(b.tsac > 0 ? b.tsac : 0), tsDL: r4(b.tsDeck + (b.tsac > 0 ? b.tsac : 0)), wc: r4(b.wc), haunch: r4(b.haunch), overhangL: r4(b.ohL), overhangR: r4(b.ohR) },
++      edges: { L: edge('L'), R: edge('R') },
++      wearingSurface: ws ? { psf: r4(ws.q != null ? ws.q : ws.plf / Math.max(ws.x1 - ws.x0, 1e-9) * 1000), width: r4(ws.x1 - ws.x0), ...(ws.thk != null ? { thickness: r4(ws.thk), unitWeight: r4(ws.gam) } : {}) } : null,
++      construction: { psf: r4(nm(b.cll) || 0), width: r4(R.beffFt), w: r4(R.wCL), source: 'Preliminary sizing construction live load × effective flange width (deck placement, Structural analysis "Con")' },
++      liveLoad: { vehicle: 'HL-93', note: 'design truck or tandem + design lane (3.6.1.2); 90% of two trucks + lane in the negative moment regions (3.6.1.3.1); fatigue truck (3.6.1.4.1)', im: { truck: r4(R.im * 100), fatigue: r4(R.imf * 100) },
++        lanes: g0.NL, laneWidth: r4(g0.laneW), roadway: r4(g0.roadway), deflectionDF: r4(R.DF.regions[0].gDef), dfIn: 'girderDetail.df',
++        pedestrian: R.wPL > 0 || nm(dl.ped) > 0 ? { psf: r4(nm(dl.ped)), widthL: r4(wk('L')), widthR: r4(wk('R')), w: r4(R.wPL), inLL: !!addPL && R.wPL > 0, rows: D.per.filter(L => L.cat === 'PL').map(L => ({ id: L.id, name: L.desc, w: r4(L.r[j]), wTotal: r4(L.plf), dist: L.dist })) } : null } };
++  } catch (e) { return null; }
++}
+@@ -12873 +12910 @@ function gdStPayload(g, addPL) {
+-    'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.',
++    'Not sent as forces: construction live load (its input is listed in girderDetail.loads), deck placement sequence, wind and flange lateral bending.',
+@@ -12901,0 +12939 @@ function gdStPayload(g, addPL) {
++  const ldIn = gdStLoads(R, pl); if (ldIn) p.girderDetail.loads = ldIn;   // GDL (2026-10-19): the load inputs of this girder (optional, display in ST-Girder)
+```

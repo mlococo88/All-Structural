@@ -2764,3 +2764,166 @@ index 386e526..7a9a1df 100644
 +      {R.ok&&R.ut&&<div className="noprint" style={{padding:'10px 24px 0'}}><UtBanner R={R}/></div>}
        <div className="tabs noprint">{TABS.map(([k,l])=>
 ```
+
+
+## 2026-10-19 — PR: claude/gd-stgirder-load-inputs (GDL: GirderDetail's load inputs shown on the Inputs tab while its demands are in use; engineer request 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; display only; PR link added after merge)
+
+Engineer's request: "When the analysis is sent from GirderDetail to ST-Girder, bring over the load inputs as well so there is no confusion. Update the load section of the Input tab with the correct inputs from the GirderDetail app."
+
+### GDL. Load inputs from GirderDetail (`girderDetail.loads`) on the Inputs tab, pull summary and report   [display only — no result change, Tier 1]
+- **Where:** helpers after `UtCard` (anchor `/* GDL (engineer request 2026-10-19; HANDOFF.md 4.9)`): `gdLoadsOf`, `gdLsrc`, `gdLoadsCheck`, `gdLoadGroups`, `gdLoadRows`, `gdOwnUse`, `gdLLText`, `GdLoadsBox`, `GdFld`. Inputs tab, Loads card (`const gL=extActive?gdLoadsOf(extRaw):null`): `GdLoadsBox` after the dlLoads strip; the DC1 cross-check hint hidden while `gL`; DC1 fields (steel self-weight, deck + haunch, other DC1) as `GdFld`; construction live load note; cross-frame list replaced by GirderDetail's point loads; DC1, DC2, DW hints; DC2 and DW fields as `GdFld`; live load hint. Deck card: deck-design note after the Table A4-1 hint. `gdCheck`: `gdLoadsCheck`. `gdAdopt` message: the load-input block before "Design inputs that change". Report `2. Input parameters`: "Loads (per girder) from GirderDetail (LLDF and DLs, G#)" (key `inp.gdl`) in place of the own-load list when `R.useExt&&gdLoadsOf(ext)`.
+- **Before:** with GirderDetail demands, the Loads card showed ST-Girder's own load inputs (default session: steel 0.233, deck + haunch 0.983, Add'l DC1 0.015, DC2 0.300, DW 0.250 klf), which are not the loads behind the imported forces; the report listed them as "Loads (per girder)".
+- **After (only when the imported demands are from GirderDetail and carry `girderDetail.loads`):** a box "Load inputs from GirderDetail (LLDF and DLs, G#)" lists every component (name, category, klf on this girder, basis, distribution and source) and the live load (HL-93, IM, lanes, deflection factor, pedestrian); the DC1 / DC2 / DW fields show GirderDetail's values locked (read-only, "from GirderDetail (LLDF and DLs, G#)"); utilities and the pedestrian load are read-only rows. ST-Girder's own inputs are **not changed** (session and saved project unchanged) and show again after "✕ use built-in simple-span analysis". The outputs that still read ST-Girder's own inputs are listed (box, next to the field, Deck card, pull summary, report) and not switched: constructibility (construction live load `loads.wConstr`), live load deflection (`loads.NL`), transverse deck design (`deck.wsFut`, slab thickness for the dead load, `deck.wBar`, `deck.bBar`, and `deck.oh` of an interior girder).
+- **Step 1 findings (outputs that read the Input-tab load fields while GirderDetail demands are in use):** `computeAll` takes M and V of DC1 (`hasDC1`), DC2, DW, LL+IM, fatigue (`hasFat`, `hasFatV`) and the utilities from the import, so `loads.wDCextra`, `loads.wBar`, `loads.wDW`, `loads.diaph`, the computed self-weight and deck + haunch, `llAuto`/`dfAuto`/`dfm`/`dfv`/`de`, `extDF*` (per girder: not applied) and `fatM`/`fatV` (imported fatigue) feed no result. Used: `loads.wConstr` (constructibility, 1.5·w on a simple span), `loads.NL` (live load deflection distribution factor), `deck.wsFut`, `deck.tsSeparate`/`tsDL`, `deck.wBar`, `deck.bBar`, `deck.oh` (deck design). `loads.pos` and `loads.skew` are set by the pull (existing). The superReactions note text still names ST-Girder's DC1 composition (its reactions come from the import).
+- **Governing provision:** none changed (display only).
+- **Check case (built-in 15°, AASHTO, G2 payload made by the branch):** Inputs tab: steel 0.254 (GirderDetail) in place of 0.233; deck + haunch 0.983 (0.950 + 0.033; ST-Girder's own also 0.983); other DC1 0.123 (SIP) in place of 0.015; DC2 0.251 (0.171 + 0.080) in place of 0.300; DW 0.208 in place of 0.250 klf. Still own: construction 0.010 vs 0.190 klf; N_L 2 (0.400) vs 3 (0.510); deck: FWS 0.025 ksf (same), slab 8.00 in (same), barrier 0.300 vs 0.400 klf, base 18 in (same), overhang 3.00 vs 3.25 ft. Every computed result is identical to main (below); the results if switched are in ENGINEER_CHECKS GD69.
+- **How verified:** `node tests/check-syntax.mjs stgirder.html` (JSX transpiled, all pass). `node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1,util_MassDOT_G2` (payloads without `loads`) and the branch's payloads (built-in AASHTO G2, util MassDOT G2, built-in with a sidewalk RIDOT G1; with `loads`): **all sections identical** to main (session, status, checks, rating, governing, sections, stations), no console errors. Page text of every tab and Inputs sub-pane, main vs branch (headless, `#gdpull`): identical for the payloads without `loads`; with `loads` only the Inputs Loads and Deck panes, the "Loaded from GirderDetail" summary banner and the report section differ. The session after the pull keeps ST-Girder's own `loads` (0.015 / 0.30 / 0.25 / 0.010 / 2); after "✕ use built-in simple-span analysis" the own values show. Screenshots of the Loads and Deck panes checked.
+- **Saved data:** none changed. The payload rides in `inp.external` (existing field); a session saved by this branch opens in main (main ignores `loads`).
+- **Other copies:** the sender is `Steel Bridge Beam Modules.html` (fixlog GDL there).
+- **Open items:** ENGINEER_CHECKS GD69 (a) constructibility, (b) live load deflection lanes, (c) deck design inputs: switch to GirderDetail's values or keep ST-Girder's own.
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index 7a9a1df..c7168cb 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -2456,0 +2457,72 @@ function UtCard({R}){ const ls=utLines(R); if(!ls) return null; const U=R.ut, st
++/* GDL (engineer request 2026-10-19; HANDOFF.md 4.9): the load INPUTS GirderDetail used for this girder (girderDetail.loads, optional), shown on the
++   Inputs tab, in the pull summary and in the report in place of ST-Girder's own load inputs while these GirderDetail demands are in use. Display only:
++   no result reads them (the forces are the imported demands). ST-Girder's own inputs are not changed and show again when the demands are cleared.
++   gdOwnUse lists the outputs that still read ST-Girder's own load inputs while these demands are in use (kept as they were; engineer to decide). */
++function gdLoadsOf(ext){ const L=extFromGD(ext)&&ext.girderDetail.loads; return L&&typeof L==='object'&&Array.isArray(L.components)? L : null; }
++const gdLsrc=ext=>'from GirderDetail (LLDF and DLs, '+((ext&&ext.girderDetail&&ext.girderDetail.label)||'G?')+')';
++function gdLoadsCheck(L){ if(L===undefined) return null;
++  if(!L||typeof L!=='object'||!Array.isArray(L.components)) return 'girderDetail.loads is not a list of load components';
++  const fin=v=>v===undefined||v===null||(typeof v==='number'&&isFinite(v));
++  for(const c of L.components){ if(!c||typeof c!=='object') return 'girderDetail.loads: a component is not an object';
++    for(const k of ['w','wTotal','wMin','wMax','Ptotal','thickness','unitWeight','psf','width','widthIn','x']) if(!fin(c[k])) return 'girderDetail.loads: '+(c.name||c.id||'a component')+', '+k+' is not a number'; }
++  for(const [k,v] of Object.entries(L.totals||{})) if(!fin(v)) return 'girderDetail.loads.totals.'+k+' is not a number';
++  return null; }
++// the GirderDetail values in ST-Girder's own load groups
++function gdLoadGroups(L){ const C=L.components, w=id=>{ const c=C.find(q=>q.id===id); return c&&typeof c.w==='number'? c.w : 0; }, T=L.totals||{};
++  const core=['steel','xf','deck','haunch','sip'], sumCat=k=>C.filter(q=>q.category===k&&typeof q.w==='number').reduce((a,q)=>a+q.w,0);
++  const otherDC1=C.filter(q=>q.category==='DC1'&&!core.includes(q.id));
++  return { steel:C.find(q=>q.id==='steel')||null, xf:C.find(q=>q.id==='xf')||null, deckHaunch:w('deck')+w('haunch'), deck:w('deck'), haunch:w('haunch'), sip:w('sip'),
++    otherDC1, addDC1:w('sip')+otherDC1.reduce((a,q)=>a+(q.w||0),0), dc2:typeof T.DC2==='number'?T.DC2:sumCat('DC2'), dw:typeof T.DW==='number'?T.DW:sumCat('DW'),
++    dc2rows:C.filter(q=>q.category==='DC2'), dwrows:C.filter(q=>q.category==='DW'), utrows:C.filter(q=>q.category==='UT'||q.category==='UF') }; }
++// one line per component: [name, category, w on this girder, basis, distribution and source]
++function gdLoadRows(L){ const f=(v,d)=>typeof v==='number'&&isFinite(v)?fmt(v,d):'—';
++  const basis=c=>c.id==='steel'? '0.490 kcf × (1 + '+f(c.allowancePct,0)+'%); '+f(c.wMin,3)+' to '+f(c.wMax,3)+' klf along the girder ('+(c.wIs||'average')+')'
++    : c.id==='xf'? f(c.points,0)+' point loads, '+f(c.Ptotal,2)+' kip in all'
++    : c.id==='deck'? f(c.thickness,2)+' in'+(c.tsSacrificial>0?' ('+f(c.tsStructural,2)+' + '+f(c.tsSacrificial,2)+' sacrificial)':'')+' × '+f(c.unitWeight,3)+' kcf × '+f(c.width,2)+' ft tributary'
++    : c.id==='haunch'? f(c.thickness,2)+' in × '+f(c.widthIn,1)+' in × '+f(c.unitWeight,3)+' kcf'
++    : c.id==='sip'? f(c.psf,1)+' psf × '+f(c.width,2)+' ft'
++    : [c.wTotal!=null?'whole load '+f(c.wTotal,3)+' klf':'', c.thickness!=null?f(c.thickness,2)+' in × '+f(c.unitWeight,3)+' kcf':'', c.psf!=null?f(c.psf,1)+' psf':'', c.width!=null?'width '+f(c.width,2)+' ft':'', c.x!=null?'at x = '+f(c.x,2)+' ft':''].filter(Boolean).join(', ');
++  const dist=c=>[c.distLabel||(c.dist==='tributary'?'tributary width':''), c.byMethod?'by the method':'', c.overridden?'overridden ('+c.overridden.join(', ')+')':''].filter(Boolean).join(', ');
++  return L.components.map(c=>[c.name||c.id, c.category||'', c.w==null?'—':f(c.w,3), basis(c), [dist(c),c.source||''].filter(Boolean).join(' · ')]); }
++// ST-Girder outputs that read its OWN load inputs while GirderDetail demands are in use: [{out, what, own, gd, ownT, gdT, same}]
++function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFinite(v)?fmt(v,d):'—', eq=(a,b)=>typeof a==='number'&&typeof b==='number'&&Math.abs(a-b)<=1e-6;
++  const add=o=>out.push({...o,same:eq(o.own,o.gd)});
++  const C=L.construction||null, ld=inp.loads, dk=inp.deck, gd=(ext&&ext.girderDetail)||{};
++  add({out:'Constructibility (6.10.3, deck placement)', what:'construction live load', own:+ld.wConstr||0, gd:C&&typeof C.w==='number'?C.w:null,
++    ownT:f(+ld.wConstr||0,3)+' klf', gdT:C?f(C.w,3)+' klf ('+f(C.psf,0)+' psf × '+f(C.width,2)+' ft)':'not sent'});
++  const LL=L.liveLoad||{}, NLc=clamp(Math.round(+ld.NL||1),1,4), mpf=[1.2,1.0,0.85,0.65][NLc-1], nG=Math.max(+inp.geom.nGirders,1);
++  add({out:'Live load deflection (2.5.2.6.2, optional)', what:'number of design lanes N_L', own:NLc, gd:typeof LL.lanes==='number'?LL.lanes:null,
++    ownT:f(NLc,0)+' (Δ distribution factor m·N_L/N_b = '+f(mpf,2)+'·'+NLc+'/'+f(nG,0)+' = '+f(mpf*NLc/nG,3)+')', gdT:typeof LL.lanes==='number'?f(LL.lanes,0)+(typeof LL.deflectionDF==='number'?' ('+f(LL.deflectionDF,3)+')':''):'not sent'});
++  if(dk.deckOn&&dk.designOn){ const ws=L.wearingSurface, D=L.deck||{}, E=L.edges||{}, nb=+gd.nGirders||0, gi=+gd.girder||0;
++    const sd=gi===1?['L']:(nb&&gi===nb)?['R']:['L','R'], eg=sd.map(s=>E[s]).filter(Boolean), one=a=>a.length&&a.every(v=>eq(v,a[0]))?a[0]:null, side=sd.length>1?' (left / right)':'';
++    add({out:'Deck design (transverse)', what:'future wearing surface', own:+dk.wsFut, gd:ws&&typeof ws.psf==='number'?ws.psf/1000:null, ownT:f(+dk.wsFut,3)+' ksf', gdT:ws?f(ws.psf/1000,3)+' ksf ('+f(ws.psf,1)+' psf)':'none'});
++    add({out:'Deck design (transverse)', what:'slab thickness for the dead load', own:dk.tsSeparate?(+dk.tsDL||+dk.ts):+dk.ts, gd:typeof D.tsDL==='number'?D.tsDL:null,
++      ownT:f(dk.tsSeparate?(+dk.tsDL||+dk.ts):+dk.ts,2)+' in', gdT:typeof D.tsDL==='number'?f(D.tsDL,2)+' in'+(D.tsac>0?' ('+f(D.ts,2)+' + '+f(D.tsac,2)+' sacrificial)':''):'not sent'});
++    const bw=eg.map(e=>e.type==='curb'?e.railing:e.w), bb=eg.map(e=>e.type==='curb'?e.curbWidthIn:e.width*12);
++    add({out:'Deck design (overhang)', what:'barrier weight', own:+dk.wBar, gd:one(bw), ownT:f(+dk.wBar,3)+' klf',
++      gdT:!eg.length?'not sent':one(bw)!=null&&eg.every(e=>e.type===eg[0].type)?(eg[0].type==='curb'?'curb + railing ':'')+f(one(bw),3)+' klf'+(sd.length>1?' (both sides)':''):eg.map(e=>e.type==='curb'?'curb + railing '+f(e.railing,3)+' klf':f(e.w,3)+' klf').join(' / ')+side});
++    add({out:'Deck design (overhang)', what:'barrier base width', own:+dk.bBar, gd:one(bb), ownT:f(+dk.bBar,1)+' in',
++      gdT:!eg.length?'not sent':one(bb)!=null&&eg.every(e=>e.type===eg[0].type)?f(one(bb),1)+' in'+(eg[0].type==='curb'?' (curb)':'')+(sd.length>1?' (both sides)':''):eg.map(e=>e.type==='curb'?f(e.curbWidthIn,1)+' in (curb)':f(e.width*12,1)+' in').join(' / ')+side});
++    if(gd.position!=='exterior'&&typeof D.overhangL==='number'){ const oh=sd.length>1?[D.overhangL,D.overhangR]:[sd[0]==='L'?D.overhangL:D.overhangR];
++      add({out:'Deck design (overhang)', what:'overhang (girder CL to deck edge; geometry)', own:+dk.oh, gd:one(oh), ownT:f(+dk.oh,2)+' ft', gdT:one(oh)!=null?f(one(oh),2)+' ft'+(sd.length>1?' (both sides)':''):oh.map(v=>f(v,2)+' ft').join(' / ')+side}); } }
++  return out; }
++function gdLLText(L){ const LL=L.liveLoad||{}, f=(v,d)=>typeof v==='number'&&isFinite(v)?fmt(v,d):'—', im=LL.im||{}, pd=LL.pedestrian;
++  return [(LL.vehicle||'HL-93')+(LL.note?' ('+LL.note+')':''), 'IM '+f(im.truck,0)+'% on the truck and tandem, '+f(im.fatigue,0)+'% on the fatigue truck',
++    f(LL.lanes,0)+' design lanes ('+f(LL.laneWidth,2)+' ft wide, roadway '+f(LL.roadway,2)+' ft)'+(typeof LL.deflectionDF==='number'?'; live load deflection distribution factor '+f(LL.deflectionDF,3):''),
++    'distribution factors: the per-girder values listed with the imported live load',
++    pd?'pedestrian '+f(pd.psf,0)+' psf on '+f(pd.widthL,2)+' ft (left) and '+f(pd.widthR,2)+' ft (right) walkable widths: '+f(pd.w,3)+' klf on this girder, '+(pd.inLL?'included in the imported LL+IM':'not in the imported LL+IM'):'no pedestrian load']; }
++// Inputs tab: the GirderDetail load inputs (read-only) and the outputs that still use ST-Girder's own inputs
++function GdLoadsBox({inp,L,ext}){ const own=gdOwnUse(inp,L,ext), src=gdLsrc(ext);
++  return <div id="stg-d-gdl" className="callout" style={{marginTop:0,marginBottom:12,borderLeftColor:'#1C4FC4',background:'#EEF4FF'}}>
++    <b>Load inputs {src}</b>
++    <div style={{fontSize:11.5,marginTop:3,lineHeight:1.55}}>The loads GirderDetail applied to this girder for the imported forces. The DC1, DC2, DW and live load fields below show them (locked, read-only); every row is listed here. ST-Girder’s own load inputs are kept and come back when these demands are no longer used (“✕ use built-in simple-span analysis” on the imported-demands banner, Inputs tab). {L.distribution&&L.distribution.label?<span>Superimposed loads distributed to the girders by <b>{L.distribution.label}</b>{L.distribution.beamClass?<span> ({L.distribution.beamClass})</span>:null}.</span>:null}</div>
++    <Tbl head={['Load','Cat.','w on this girder (klf)','Basis','Distribution · source']} rows={gdLoadRows(L).map(r=>({c:r}))}/>
++    <div style={{fontSize:11.5,marginTop:6,lineHeight:1.55}}><b>Live load:</b> {gdLLText(L).join('; ')}.</div>
++    {own.length>0&&<div style={{fontSize:11.5,marginTop:6,lineHeight:1.55}}><b style={{color:'#9a3412'}}>Still computed with ST-Girder’s own inputs while these demands are in use</b> (not switched to GirderDetail’s values; engineer to decide):
++      <ul style={{margin:'2px 0 0 18px',padding:0}}>{own.map((o,i)=><li key={i}>{o.out} uses ST-Girder’s own {o.what}: <b>{o.ownT}</b>; GirderDetail used {o.gdT}{o.same?' (same)':''}.</li>)}</ul></div>}
++  </div>; }
++// a locked field showing a GirderDetail value in place of an ST-Girder input (the input itself is not changed)
++const GdFld=({l,u,v,src,title})=>(
++  <div className="fld"><label>{l}</label><div className="fwrap">
++    <input value={v} readOnly className="bl-driven" title={title||('Shown '+src+' while these demands are in use; ST-Girder’s own value is kept.')}/>
++    {u&&<span className="unit">{u}</span>}</div><span className="bl-src">{src}</span></div>);
+@@ -4313,0 +4386,3 @@ function InputsTab({inp,set,R}){
++        {(()=>{ const gL=extActive?gdLoadsOf(extRaw):null; if(!gL) return null; const own=gdOwnUse(inp,gL,extRaw).filter(o=>/^Deck design/.test(o.out)); if(!own.length) return null;   // GDL (2026-10-19)
++          return <div className="hint" style={{marginTop:6,color:'#9a3412'}}>GirderDetail demands are in use: the deck design still uses ST-Girder’s own inputs above (not switched to GirderDetail’s; engineer to decide):
++            <ul style={{margin:'2px 0 0 18px',padding:0}}>{own.map((o,i)=><li key={i}>{o.what}: <b>{o.ownT}</b>; GirderDetail used {o.gdT}{o.same?' (same)':''}</li>)}</ul></div>; })()}
+@@ -4344,0 +4420,3 @@ function InputsTab({inp,set,R}){
++      // GDL (2026-10-19): GirderDetail's load inputs shown in place of ST-Girder's own while its demands with girderDetail.loads are in use (display only)
++      const gL=extActive?gdLoadsOf(extRaw):null, gG=gL?gdLoadGroups(gL):null, gSrc=gL?gdLsrc(extRaw):'', gOwn=gL?gdOwnUse(inp,gL,extRaw):[];
++      const gOwnOf=what=>gOwn.find(o=>o.what===what);
+@@ -4357 +4435,2 @@ function InputsTab({inp,set,R}){
+-      {(()=>{ const r=dlPeek; if(!r||r.why||!(r.dc1>0)||!Ld) return null;
++      {gL&&<GdLoadsBox inp={inp} L={gL} ext={extRaw}/>}
++      {(()=>{ const r=dlPeek; if(gL||!r||r.why||!(r.dc1>0)||!Ld) return null;
+@@ -4364,0 +4444,5 @@ function InputsTab({inp,set,R}){
++          {gL? <React.Fragment>
++            <GdFld l="Steel self-weight (average)" u="klf" v={gG.steel?fmt(gG.steel.w,3):'—'} src={gSrc} title={gG.steel?('GirderDetail: '+fmt(gG.steel.wMin,3)+' to '+fmt(gG.steel.wMax,3)+' klf along the girder, with the '+fmt(gG.steel.allowancePct,0)+'% detail allowance'):undefined}/>
++            <GdFld l="Deck + haunch" u="klf" v={fmt(gG.deckHaunch,3)} src={gSrc}/>
++            <GdFld l="Add'l DC1 (forms, other DC1)" u="klf" v={fmt(gG.addDC1,3)} src={gSrc}/>
++          </React.Fragment> : <React.Fragment>
+@@ -4369,0 +4454 @@ function InputsTab({inp,set,R}){
++          </React.Fragment>}
+@@ -4371,0 +4457 @@ function InputsTab({inp,set,R}){
++        {gL&&gOwnOf('construction live load')&&<div className="hint" style={{marginTop:4,color:'#9a3412'}}>Constructibility (deck placement) still uses ST-Girder’s own construction live load: <b>{gOwnOf('construction live load').ownT}</b>; GirderDetail used {gOwnOf('construction live load').gdT}{gOwnOf('construction live load').same?' (same)':''}. Not switched (engineer to decide).</div>}
+@@ -4375 +4461 @@ function InputsTab({inp,set,R}){
+-            <button className="btn sm" onClick={()=>S('loads.diaph',[...(loads.diaph||[]),{P:1.0,a:0}])}>+ add</button>
++            {!gL&&<button className="btn sm" onClick={()=>S('loads.diaph',[...(loads.diaph||[]),{P:1.0,a:0}])}>+ add</button>}
+@@ -4377 +4463,2 @@ function InputsTab({inp,set,R}){
+-          {(loads.diaph||[]).length===0
++          {gL? <div className="hint" style={{marginTop:0}}>{gG.xf?<span><b>{fmt(gG.xf.points,0)} point loads, {fmt(gG.xf.Ptotal,2)} kip in all</b> at this girder’s frames ({gG.xf.source||'GirderDetail'})</span>:<span>None in GirderDetail’s DC1 (the cross-frame weight is off or entered as a line load there)</span>}; <span className="bl-src" style={{display:'inline'}}>{gSrc}</span>. ST-Girder’s own list is kept and not used while these demands are in use (DC1 is imported).</div>
++          : (loads.diaph||[]).length===0
+@@ -4387 +4474,2 @@ function InputsTab({inp,set,R}){
+-        {Ld&&<div className="hint" style={{marginTop:6}}>Distributed DC1 = <b>{fmt(Ld.wDC1,3)} klf</b>{Ld.Pdia>0?<React.Fragment> + {fmt(Ld.Pdia,2)} kip diaphragms</React.Fragment>:null} · M_DC1(mid) = <b>{fmt(Ld.Mdc1,0)} k-ft</b>. Steel self-weight uses 0.490 kcf on the bare section; put stiffener/connection allowance under "Add'l DC1".</div>}
++        {gL&&<div className="hint" style={{marginTop:6}}>GirderDetail DC1 on this girder: steel {gG.steel?<b>{fmt(gG.steel.w,3)} klf</b>:'—'} (average; on the steel section) + deck {fmt(gG.deck,3)} + haunch {fmt(gG.haunch,3)} + SIP forms {fmt(gG.sip,3)}{gG.otherDC1.length?<span> + {gG.otherDC1.map(q=>q.name+' '+fmt(q.w,3)).join(' + ')}</span>:null} = wet <b>{fmt(gG.deckHaunch+gG.addDC1,3)} klf</b>{gG.xf?<span> + {fmt(gG.xf.Ptotal,2)} kip cross-frames</span>:null}. These produced the imported M_DC1 / V_DC1.</div>}
++        {Ld&&!gL&&<div className="hint" style={{marginTop:6}}>Distributed DC1 = <b>{fmt(Ld.wDC1,3)} klf</b>{Ld.Pdia>0?<React.Fragment> + {fmt(Ld.Pdia,2)} kip diaphragms</React.Fragment>:null} · M_DC1(mid) = <b>{fmt(Ld.Mdc1,0)} k-ft</b>. Steel self-weight uses 0.490 kcf on the bare section; put stiffener/connection allowance under "Add'l DC1".</div>}
+@@ -4393 +4481,3 @@ function InputsTab({inp,set,R}){
+-        <div className="frow"><Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} driven={dlLocked&&dlHasBar} src={dlSrc}/></div>
++        <div className="frow">{gL? <GdFld l="Barrier / SIDL (per girder)" u="klf" v={fmt(gG.dc2,3)} src={gSrc}/>
++          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} driven={dlLocked&&dlHasBar} src={dlSrc}/>}</div>
++        {gL&&<div className="hint" style={{marginTop:4}}>{gG.dc2rows.length?gG.dc2rows.map(q=>q.name+' '+fmt(q.w,3)).join(' + ')+' = '+fmt(gG.dc2,3)+' klf':'No DC2 rows'} (GirderDetail; these produced the imported M_DC2 / V_DC2).</div>}
+@@ -4399 +4489,3 @@ function InputsTab({inp,set,R}){
+-        <div className="frow"><Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} driven={dlLocked&&dlHasDW} src={dlSrc}/></div>
++        <div className="frow">{gL? <GdFld l="Wearing surface (per girder)" u="klf" v={fmt(gG.dw,3)} src={gSrc}/>
++          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} driven={dlLocked&&dlHasDW} src={dlSrc}/>}</div>
++        {gL&&<div className="hint" style={{marginTop:4}}>{gG.dwrows.length?gG.dwrows.map(q=>q.name+' '+fmt(q.w,3)).join(' + ')+' = '+fmt(gG.dw,3)+' klf':'No DW rows'} (GirderDetail; these produced the imported M_DW / V_DW).{gG.utrows.length?<span> Utilities, their own loads on the steel section (not DW here): {gG.utrows.map(q=>q.name+' ('+q.category+') '+fmt(q.w,3)+' klf').join('; ')}.</span>:null}</div>}
+@@ -4421,0 +4514 @@ function InputsTab({inp,set,R}){
++        {gL&&<div className="hint" style={{marginBottom:8}}><span className="bl-src" style={{display:'inline'}}>Live load {gSrc}</span>: {gdLLText(gL).join('; ')}.{gOwnOf('number of design lanes N_L')?<span style={{color:'#9a3412'}}> Live load deflection (optional check) still uses ST-Girder’s own number of design lanes N_L = <b>{gOwnOf('number of design lanes N_L').ownT}</b>; GirderDetail used {gOwnOf('number of design lanes N_L').gdT}{gOwnOf('number of design lanes N_L').same?' (same)':''}. Not switched (engineer to decide).</span>:null}</div>}
+@@ -6088 +6181,11 @@ function crModel(R,inp,o){
+-    sub(s,'Loads (per girder)','3.4.1 · 3.6',<React.Fragment><CrKV rows={[['Steel self-weight (0.490 kcf)',fmt(ld.wsw,3),'klf'],['Deck slab + haunch',fmt(ld.wdk,3),'klf'],
++    if(R.useExt&&gdLoadsOf(ext)){ const L=gdLoadsOf(ext), G=gdLoadGroups(L), own=gdOwnUse(inp,L,ext);   // GDL (2026-10-19): GirderDetail's load inputs in place of ST-Girder's own (display only)
++      sub(s,'Loads (per girder) '+gdLsrc(ext),'3.4.1 · 3.6',<React.Fragment>
++        <p className="cr-note">The loads GirderDetail applied to this girder for the imported forces (unfactored, per girder). ST-Girder’s own load inputs are kept but not used for these forces.{L.distribution&&L.distribution.label?' Superimposed loads distributed to the girders by '+L.distribution.label+(L.distribution.beamClass?' ('+L.distribution.beamClass+')':'')+'.':''}</p>
++        <CrKV rows={[['DC1 steel (average along the girder)',G.steel?fmt(G.steel.w,3):'—','klf'],['DC1 deck + haunch',fmt(G.deckHaunch,3),'klf'],['DC1 other (SIP forms, other DC1 rows)',fmt(G.addDC1,3),'klf'],
++          ['DC1 cross-frames / diaphragms',G.xf?fmt(G.xf.points,0)+' point loads, '+fmt(G.xf.Ptotal,2)+' kip':'none'],['DC2 barrier / SIDL',fmt(G.dc2,3),'klf'],['DW wearing surface',fmt(G.dw,3),'klf'],
++          ...G.utrows.map(q=>[q.name+' ('+q.category+')',fmt(q.w,3),'klf']),['Live load',gdLLText(L).join('; ')]]}/>
++        <CrT wide head={['Load','Cat.','w (klf)','Basis','Distribution · source']} rows={gdLoadRows(L)}/>
++        {own.length>0&&<React.Fragment><p className="cr-note"><b>Still computed with ST-Girder’s own inputs while these demands are in use</b> (not switched to GirderDetail’s values; engineer to decide):</p>
++          <ul className="cr-ul">{own.map((o,i)=><li key={i}>{o.out}: {o.what} {o.ownT}; GirderDetail used {o.gdT}{o.same?' (same)':''}.</li>)}</ul></React.Fragment>}
++      </React.Fragment>); tag(s,'inp.gdl'); }
++    else sub(s,'Loads (per girder)','3.4.1 · 3.6',<React.Fragment><CrKV rows={[['Steel self-weight (0.490 kcf)',fmt(ld.wsw,3),'klf'],['Deck slab + haunch',fmt(ld.wdk,3),'klf'],
+@@ -6824,0 +6928 @@ function App(){
++    { const le=gdLoadsCheck(p.girderDetail&&p.girderDetail.loads); if(le) return le; }   // GDL (2026-10-19, optional)
+@@ -6866,0 +6971,5 @@ function App(){
++      +(gdLoadsOf(p)?(()=>{ const L=gdLoadsOf(p), G=gdLoadGroups(L), own=gdOwnUse(nx,L,p), f3=v=>fmt(v,3);   // GDL (2026-10-19): display only
++        return 'Load inputs '+gdLsrc(p)+', shown on the Inputs tab in place of ST-Girder\u2019s own (kept, not changed; they show again when these demands are cleared): DC1 steel '+(G.steel?f3(G.steel.w)+' klf average':'\u2014')
++          +', deck + haunch '+f3(G.deckHaunch)+', other DC1 '+f3(G.addDC1)+' klf'+(G.xf?', cross-frames '+fmt(G.xf.Ptotal,2)+' kip':'')+'; DC2 '+f3(G.dc2)+' klf; DW '+f3(G.dw)+' klf'
++          +(G.utrows.length?'; utilities '+G.utrows.map(q=>q.category+' '+f3(q.w)).join(', ')+' klf':'')+'; live load '+((L.liveLoad&&L.liveLoad.vehicle)||'HL-93')+', '+gdLLText(L).filter((t,i)=>i!==0&&i!==3).join('; ')+'.\n'
++          +(own.length?'Still computed with ST-Girder\u2019s own inputs (not switched):\n'+own.map(o=>'  '+o.out+': '+o.what+' '+o.ownT+' (GirderDetail '+o.gdT+(o.same?', same':'')+')').join('\n')+'\n':''); })():'')
+```

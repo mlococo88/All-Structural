@@ -12835,6 +12835,43 @@ function gdStUi() {
     <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (stgirder.html): Pull from GirderDetail. Then offers to open ST-Girder in a new tab with this girder loaded">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
     <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears, and the MassDOT utilities as their own loads when there are any) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances (with the bridge owner's load rules, sent with the demands) and does not apply distribution factors again. After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
 }
+/* GDL (engineer request 2026-10-19; HANDOFF.md 4.9): the load INPUTS behind this girder's forces, optional field girderDetail.loads, so ST-Girder can show
+   them on its Inputs tab in place of its own. Display data only: read from the same run R (GM.sa.compute) and its LLDF and DLs dead loads (R.DF.dead); every
+   per-foot value is the one this analysis loaded the girder with. Nothing in the forces, this tool's results or saved data changes. null when it cannot be built. */
+const GD_DL_METH = { massdot: 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)', aashto: 'Typical AASHTO (all loads equally to all beams)', ridot: 'RIDOT BDM 3.3.1 (barriers and sidewalks 60% fascia beams, 40% interior beams)' };
+function gdStLoads(R, addPL) {
+  try {
+    const D = R.DF && R.DF.dead, b = R.b, j = R.j; if (!D || !D.per || !(j >= 0)) return null;
+    const r4 = v => Math.round((+v || 0) * 1e4) / 1e4, lab = `G${j + 1}`, src = `LLDF and DLs module, ${lab}`;
+    const trib = Array.from(R.trib), tL = trib.reduce((a, v) => a + v, 0) || 1, wSt = Array.from(R.wSt), stAvg = wSt.reduce((a, v, i) => a + v * trib[i], 0) / tL;
+    const rowSrc = id => /^bar|^curb|^rail/.test(id) ? 'LLDF and DLs: deck edges (barrier, curb, railing)' : /^sw|^fence/.test(id) ? 'LLDF and DLs: sidewalks' : id === 'med' ? 'LLDF and DLs: median'
+      : id === 'ws' ? 'LLDF and DLs: wearing surface (weight from Preliminary sizing, or thickness × unit weight)' : /^ovl/.test(id) ? 'LLDF and DLs: overlays' : /^ped/.test(id) ? 'LLDF and DLs: pedestrian LL on the sidewalks' : 'LLDF and DLs: added loads';
+    const comps = [
+      { id: 'steel', name: `Girder steel (flanges and web at 490 pcf × (1 + ${r4(b.allow)}% detail allowance))`, category: 'DC1', section: 'steel', w: r4(stAvg), wMin: r4(Math.min(...wSt)), wMax: r4(Math.max(...wSt)), wIs: 'length-weighted average (the plates vary along the girder)', unitWeight: 0.49, allowancePct: r4(b.allow), source: 'Preliminary sizing plates and detail allowance' },
+      ...(R.xf && R.xf.X && R.xf.X.on && R.xf.pts.length ? [{ id: 'xf', name: 'Cross-frames / diaphragms (point loads at this girder’s frames, half of each frame)', category: 'DC1', section: 'steel', points: R.xf.pts.length, Ptotal: r4(R.xf.tot), w: null, source: `LLDF and DLs: cross-frames and diaphragms (${gdXfDesc(R.xf.X)})` }] : []),
+      { id: 'deck', name: 'Deck slab', category: 'DC1', section: 'steel', w: r4(D.deck[j]), thickness: r4(b.tsDeck + (b.tsac > 0 ? b.tsac : 0)), tsStructural: r4(b.tsDeck), tsSacrificial: r4(b.tsac > 0 ? b.tsac : 0), unitWeight: r4(b.wc), width: r4(D.trib[j]), dist: 'tributary', source: 'Preliminary sizing deck; tributary width of this girder' },
+      { id: 'haunch', name: 'Haunch', category: 'DC1', section: 'steel', w: r4(D.haunch[j]), thickness: r4(b.haunch), widthIn: r4(D.bf * 12), unitWeight: r4(b.wc), source: 'Preliminary sizing haunch × top flange width' },
+      { id: 'sip', name: 'Stay-in-place forms', category: 'DC1', section: 'steel', w: r4(D.sip[j]), psf: r4(b.sip || 0), width: r4(b.sip > 0 ? D.sip[j] / (b.sip / 1000) : 0), source: 'Preliminary sizing SIP form weight × clear bay widths' },
+      ...D.per.filter(L => L.cat !== 'PL').map(L => ({ id: L.id, name: L.desc, category: L.cat, section: L.cat === 'DC1' || L.cat === 'UT' || L.cat === 'UF' ? 'steel' : 'long-term composite', w: r4(L.r[j]), wTotal: r4(L.plf), x: r4(L.x),
+        ...(L.x0 != null && L.x1 != null ? { width: r4(L.x1 - L.x0) } : {}), ...(L.q != null ? { psf: r4(L.q) } : L.id === 'ws' && L.x1 > L.x0 ? { psf: r4(L.plf / (L.x1 - L.x0) * 1000) } : {}), ...(L.thk != null ? { thickness: r4(L.thk), unitWeight: r4(L.gam) } : {}),
+        dist: L.dist, distLabel: DF_DIST[L.dist] || L.dist, ...(L.byMethod ? { byMethod: true } : {}), ...(L.ovr ? { overridden: L.ovr.slice() } : {}), source: rowSrc(L.id) }))];
+    const sumC = c => r4(comps.filter(q => q.category === c && q.id !== 'steel' && q.id !== 'xf').reduce((a, q) => a + (q.w || 0), 0));
+    const edge = sd => { const e = b.edge && b.edge[sd]; return e && e.mode === 'curb' ? { type: 'curb', curbWidthIn: r4(e.cw), curbHeightIn: r4(e.ch), railing: r4(e.rw), railingX: r4(e.rp) } : e && e.mode === 'barrier' ? { type: 'barrier', w: r4(e.w), width: r4(e.bw) } : b.barW > 0 ? { type: 'barrier', w: r4(b.barW), width: r4(b.barrier) } : null; };
+    const g0 = R.DF.regions[0].geo, ws = D.per.find(L => L.id === 'ws'), dl = (P.df && P.df.dl) || {}, wk = sd => Math.max(nm(dl['sw' + sd]) - (sd === 'L' ? R.DF.base.fL : R.DF.base.fR), 0);
+    return { source: src, units: { w: 'klf', wTotal: 'klf', P: 'kip', x: 'ft from the left deck edge', width: 'ft', widthIn: 'in', thickness: 'in', unitWeight: 'kcf', psf: 'psf' },
+      components: comps,
+      totals: { DC1wet: r4(R.wDeck), DC1steelAvg: r4(stAvg), crossFramesKip: r4(R.xf && R.xf.X && R.xf.X.on ? R.xf.tot : 0), DC2: r4(R.wDC2), DW: r4(R.wDW), UT: r4(R.wUT || 0), UF: r4(R.wUF || 0), PL: r4(R.wPL),
+        DC1otherRows: r4(sumC('DC1') - r4(D.deck[j]) - r4(D.haunch[j]) - r4(D.sip[j])) },
+      distribution: { method: D.method, label: GD_DL_METH[D.method] || D.method, beamClass: DF_CLS[D.cls[j]] || D.cls[j], note: 'Each row’s w is its share on this girder by its distribution rule (dist); DC1 rows, the utilities and the pedestrian load as set for that row.' },
+      deck: { ts: r4(b.tsDeck), tsac: r4(b.tsac > 0 ? b.tsac : 0), tsDL: r4(b.tsDeck + (b.tsac > 0 ? b.tsac : 0)), wc: r4(b.wc), haunch: r4(b.haunch), overhangL: r4(b.ohL), overhangR: r4(b.ohR) },
+      edges: { L: edge('L'), R: edge('R') },
+      wearingSurface: ws ? { psf: r4(ws.q != null ? ws.q : ws.plf / Math.max(ws.x1 - ws.x0, 1e-9) * 1000), width: r4(ws.x1 - ws.x0), ...(ws.thk != null ? { thickness: r4(ws.thk), unitWeight: r4(ws.gam) } : {}) } : null,
+      construction: { psf: r4(nm(b.cll) || 0), width: r4(R.beffFt), w: r4(R.wCL), source: 'Preliminary sizing construction live load × effective flange width (deck placement, Structural analysis "Con")' },
+      liveLoad: { vehicle: 'HL-93', note: 'design truck or tandem + design lane (3.6.1.2); 90% of two trucks + lane in the negative moment regions (3.6.1.3.1); fatigue truck (3.6.1.4.1)', im: { truck: r4(R.im * 100), fatigue: r4(R.imf * 100) },
+        lanes: g0.NL, laneWidth: r4(g0.laneW), roadway: r4(g0.roadway), deflectionDF: r4(R.DF.regions[0].gDef), dfIn: 'girderDetail.df',
+        pedestrian: R.wPL > 0 || nm(dl.ped) > 0 ? { psf: r4(nm(dl.ped)), widthL: r4(wk('L')), widthR: r4(wk('R')), w: r4(R.wPL), inLL: !!addPL && R.wPL > 0, rows: D.per.filter(L => L.cat === 'PL').map(L => ({ id: L.id, name: L.desc, w: r4(L.r[j]), wTotal: r4(L.plf), dist: L.dist })) } : null } };
+  } catch (e) { return null; }
+}
 function gdStPayload(g, addPL) {
   const R = GM.sa.compute({ ...P.sa, girder: g }); if (R.errors && R.errors.length) return { error: R.errors[0] };
   const b = R.b, r3 = v => Math.round(v * 1000) / 1000, r4 = v => Math.round(v * 1e4) / 1e4, N = R.N, xs = R.xs, sup = Array.from(R.sup), lab = `G${g}`;
@@ -12870,7 +12907,7 @@ function gdStPayload(g, addPL) {
     `Fatigue (M_FAT, V_FAT) = fatigue truck (3.6.1.4.1) with IM ${f0(R.imf * 100)}% and the single-lane fatigue distribution factors (no multiple presence), unfactored (gamma not applied). Range = positive minus negative.`,
     hasPL ? (pl ? 'The pedestrian load is ADDED to LL+IM (as GirderDetail does for its own design demands); M_PL/V_PL give it separately.' : 'The pedestrian load is NOT in LL+IM; M_PL/V_PL give it separately.') : 'No pedestrian load.',
     'Moments sagging positive. Shears in the MIDAS convention of this schema (negative at the left end of a span under gravity load). Shear at a node is the element just right of it; at each interior support there is one station 0.001 ft either side.',
-    'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.',
+    'Not sent as forces: construction live load (its input is listed in girderDetail.loads), deck placement sequence, wind and flange lateral bending.',
     ...(R.wUT || R.wUF ? [`Utilities (OWN16, GD54b/GD54c; MassDOT 3.5.5.2, 3.5.5.4) sent as their own loads on the steel (noncomposite) section, unfactored: ${R.MUT ? `M_UT/V_UT = existing utilities ${(R.wUT || 0).toFixed(3)} klf (DW factors: Strength 1.50 where they add, 0.65 where they relieve, with eta; Service 1.0; in the camber)` : 'no existing utilities on this girder'}; ${R.MUF ? `M_UF/V_UF = future utility allowance ${(R.wUF || 0).toFixed(3)} klf (Strength 1.25 where it adds, 0 where it relieves, with eta; Service 1.0 where it adds, 0 where it relieves; not in the camber)` : 'no future utility allowance on this girder'}. Neither is at deck placement (constructibility). M_DC1/V_DC1 do not include them.`] : []),
     ...(() => { const L = gdLF(); return gdLFid(L) ? [] : [`Owner load rules of ${L.o} (OWN6–OWN8), applied in GirderDetail's own checks, are NOT in these unfactored forces: ${[L.m !== 1 ? `design load multiplier ${L.m} on HL-93 LL+IM at the Strength and Service limit states (not on the pedestrian load)` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (1/eta on the minimum factors)` : '', L.h0 ? 'haunch taken as 0 in composite section properties (deck.haunch is the haunch as entered; the forces come from an analysis with the haunch at 0 in the composite stiffness)' : ''].filter(Boolean).join('; ')}. They are sent in ownerRules; ST-Girder applies them to its own checks.`]; })()];   // OWN6–OWN8; GD49: also sent as data (ownerRules)
   // GD49 (engineer decision 2026-10-15; HANDOFF.md §4.9): the owner rules as data, optional field ownerRules, whenever the bridge publishes its load rules (bridge.lf).
@@ -12899,6 +12936,7 @@ function gdStPayload(g, addPL) {
       ...(R.MUT || R.MUF ? { utilities: { section: 'noncomposite (steel)', cite: 'MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4; existing utilities = DW (GD42)',
         existing: R.MUT ? { w: r4(R.wUT), strMax: 1.50, strMin: 0.65, service: 1.0, camber: true, deckPlacement: false } : null,
         future: R.MUF ? { w: r4(R.wUF), strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0, camber: false, deckPlacement: false } : null } } : {}) } };
+  const ldIn = gdStLoads(R, pl); if (ldIn) p.girderDetail.loads = ldIn;   // GDL (2026-10-19): the load inputs of this girder (optional, display in ST-Girder)
   return { ok: true, payload: p };
 }
 function gdStGet() { const s = document.getElementById('gd-st-g'), c = document.getElementById('gd-st-pl'); return gdStPayload(Math.round(nm(s ? s.value : P.sa.girder)) || 1, c ? c.checked : true); }
