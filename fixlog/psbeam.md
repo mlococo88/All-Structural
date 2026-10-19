@@ -1529,3 +1529,13 @@ index b5f6ae4..a492f5d 100644
 +    // same locked channel.
 -8654 +8655,0  [deleted 1 lines: first "<button className="btn sm ghost" onClick={()=>bridgeNav('stgirder')} title="Open the composite steel design ap" ... last "<button className="btn sm ghost" onClick={()=>bridgeNav('stgirder')} title="Open"]
 ```
+
+## 2026-10-19 — Fatigue truck citation 5.6.1.4 → 3.6.1.4.1 (engineer-approved, wording only)
+
+The fatigue load (one design truck, constant 30-ft rear axle spacing, IM 15%, no lane load) is defined in AASHTO LRFD Art. 3.6.1.4.1; the tool cited "5.6.1.4". No computed value changes.
+
+- Engine comment (anchor `// Fatigue truck`): `// Fatigue truck (5.6.1.4.1): design truck…` → `// Fatigue truck (3.6.1.4.1): design truck…`
+- Fatigue tab step (anchor `Fatigue truck moment (single lane, IM = 15%, no lane load)`): `r="5.6.1.4"` → `r="3.6.1.4.1"`
+- Report references row "AASHTO LRFD" (anchor `and 3.6.2 (HL-93, dynamic load allowance);`): added `3.6.1.4.1 (fatigue truck);`
+
+Check: the Fatigue tab step and the report §15 step show "3.6.1.4.1"; the references table lists it. `node tests/check-syntax.mjs psbeam.html`: all scripts pass. Closes the open item from the D11 entry (#280).
