@@ -321,6 +321,7 @@ function readInputs(){
     sTr:num('sTr'),                   // spacing of transverse reinf, in
     nBars:num('nBars'),               // number of bars developed along split plane
     barSpc:num('barSpc'),             // c-c spacing of developed bars, in (ACI 25.4.2.2 check; optional, blank = unknown)
+    betaT:num('betaT'),               // AASHTO βt (5.10.8.2.1c), -1..0; blank = 0
     psiRc:g('psiRc').value,           // ψr for compression development (ACI Table 25.4.9.3): "1.0" or "0.75"
     // excess reinforcement (ACI 25.4.10 / AASHTO λer)
     useExcess:g('useExcess').checked,
@@ -330,6 +331,7 @@ function readInputs(){
     hookEpoxy:g('hookEpoxy').value,
     hookConfined:g('hookConfined').checked,   // ψr
     hookLoc:g('hookLoc').value,               // ψo
+    hookR:num('hookR'),                       // AASHTO bend radius R to the bar centroid, in (5.10.8.2.4a); blank = minimum standard bend
     // splices
     tensClass:g('tensClass').value,   // 'A' or 'B'
     pctSpliced:num('pctSpliced'),     // % of As spliced within lap
@@ -361,7 +363,7 @@ function computeFactors(inp){
   const sqrtFc = Math.min(sqrtFc_raw, 100);   // ACI 25.4.1.4 (psi)
   const fc_ksi = inp.fc/1000, fy_ksi = inp.fy/1000;
   const sqrtFc_ksi_raw = Math.sqrt(fc_ksi);
-  const sqrtFc_ksi = Math.min(sqrtFc_ksi_raw, Math.sqrt(10)); // AASHTO 5.10.8.2.1a: f'c<=10 ksi
+  const sqrtFc_ksi = Math.min(sqrtFc_ksi_raw, Math.sqrt(10)); // AASHTO compression development only (5.10.8.2.2a): f'c limited to 10 ksi, unchanged
 
   /* ---- ACI factors ---- */
   const psiT = inp.topBar ? 1.3 : 1.0;
@@ -390,32 +392,55 @@ function computeFactors(inp){
   // ψr for compression development (ACI 318-19 25.4.9.2 / Table 25.4.9.3); 1.0 when not selected (old saved states)
   const psiR_c = AASHTO ? 1.0 : (parseFloat(inp.psiRc) || 1.0);
 
-  /* ---- AASHTO factors (5.10.8.2.1) ---- */
-  // λrl reinforcement location (top bar) = 1.3; else 1.0
+  /* ---- AASHTO LRFD 10th Ed. (2024) factors (5.10.8.2.1) ---- */
+  // f'c used by 5.10.8.2.1, 5.10.8.2.4 and 5.10.8.4.3: up to 15.0 ksi for normal weight concrete (5.10.8.2.1, 5.10.8.2.4),
+  // 10.0 ksi for lightweight (C5.10.8.2.4). A higher input is flagged and the limit is used (longer lengths).
+  const fcLimA = inp.lightweight ? 10 : 15;
+  const fcA = Math.min(fc_ksi, fcLimA);
+  const fcA_capped = fc_ksi > fcLimA;
+  const fc4 = Math.pow(fcA, 0.25);                 // (f'c)^0.25 of Eq. 5.10.8.2.1a-2
+  // λrl reinforcement location (top bar) = 1.3; else 1.0 (5.10.8.2.1b; applies to hooked bars too)
   const lam_rl = inp.topBar ? 1.3 : 1.0;
   // λcf coating factor = same selector values (1.5 / 1.2 / 1.0), product λrl·λcf <= 1.7
   const lam_cf = psiE;
   const lam_rlcf_cap = Math.min(lam_rl*lam_cf, 1.7);
   const lam_rlcf_capped = (lam_rl*lam_cf) > 1.7;
-  // λrc reinforcement confinement = db/(cb+ktr), bounded 0.4 to 1.0; ktr=40Atr/(s·n) same form
-  const ktr_a = Ktr; // identical definition
-  const lam_rc_raw = db/(inp.cb + ktr_a);
-  const lam_rc = Math.max(0.4, Math.min(lam_rc_raw, 1.0));
-  const lam_rc_bounded = (lam_rc_raw<0.4)||(lam_rc_raw>1.0);
+  // λrc (5.10.8.2.1c, Eqs. 5.10.8.2.1c-1 to -3): λrc = db·cb/(cb·(1-βt) + 1.67·ns·ktr)^2, 0.3 <= λrc <= 1.0, ktr = Atr/(s·n).
+  // βt: -1 <= βt <= 0; blank or absent (older saved states) = 0 (no clamping credit, conservative).
+  // ns = Es/Ec: Es = 29,000 ksi (5.4.3.2); Ec = 120,000·K1·wc^2·f'c^0.33 (Eq. 5.4.2.4-1), K1 = 1.0, wc per Table 3.5.1-1
+  // for normal weight concrete (0.145 kcf up to 5 ksi, 0.140 + 0.001·f'c above). For lightweight concrete this Ec is
+  // too high, so ns and the ktr credit are too low (conservative).
+  const btIn = parseFloat(inp.betaT);
+  const betaT = isFinite(btIn) ? Math.min(0, Math.max(-1, btIn)) : 0;
+  const betaTAdj = isFinite(btIn) && (btIn<-1 || btIn>0);
+  const wcA = fcA<=5 ? 0.145 : 0.140+0.001*fcA;
+  const EcA = 120000*1.0*wcA*wcA*Math.pow(fcA,0.33);
+  const nsA = 29000/EcA;
+  let ktr_a = 0;
+  if (inp.sTr>0 && inp.nBars>0) ktr_a = inp.Atr/(inp.sTr*inp.nBars);
+  const rcA = k => (inp.cb>0) ? db*inp.cb/Math.pow(inp.cb*(1-betaT)+1.67*nsA*k, 2) : 1.0;   // c_b <= 0: no credit (1.0)
+  const lam_rc_raw = rcA(ktr_a);
+  const lam_rc = Math.max(0.3, Math.min(lam_rc_raw, 1.0));
+  const lam_rc_bounded = (lam_rc_raw<0.3)||(lam_rc_raw>1.0);
+  // the same with ktr = 0, for hooked bars that take the 0.8 tie reduction (5.10.8.2.4b)
+  const lam_rc0_raw = rcA(0);
+  const lam_rc0 = Math.max(0.3, Math.min(lam_rc0_raw, 1.0));
   // λ (lightweight) same
   return {AASHTO,db,Ab,barNum,lambda,lambdaAdj,excess,excessRaw,bigHook,psiRForced,psiOForced,
           sqrtFc,sqrtFc_raw,fc_ksi,fy_ksi,sqrtFc_ksi,sqrtFc_ksi_raw,
           psiT,psiE,psiS,psiG,psiTEcap,psiTEcapped,Ktr,cbKtr,cbKtr_raw,cbKtrCapped,
           psiE_h,psiR,psiO,psiC_h,psiR_c,
-          lam_rl,lam_cf,lam_rlcf_cap,lam_rlcf_capped,lam_rc,lam_rc_raw,lam_rc_bounded};
+          lam_rl,lam_cf,lam_rlcf_cap,lam_rlcf_capped,lam_rc,lam_rc_raw,lam_rc_bounded,
+          fcLimA,fcA,fcA_capped,fc4,betaT,betaTAdj,wcA,EcA,nsA,ktr_a,lam_rc0,lam_rc0_raw};
 }
 
 /* ---------- Tension development ---------- */
 function calcTension(inp,f){
   if(f.AASHTO){
-    // 5.10.8.2.1a: l_db = 2.4 db fy/√f'c (ksi); l_d = l_db·(λrl·λcf·λrc·λer)/λ  ; min 12 in
-    const ldb = 2.4*f.db*f.fy_ksi/f.sqrtFc_ksi;
-    const ld_calc = ldb*(f.lam_rlcf_cap*f.lam_rc*f.excess)/f.lambda;
+    // AASHTO LRFD 10th Ed. 5.10.8.2.1a (ksi): Eq. 5.10.8.2.1a-2 l_db = 0.17·db·[(λer·fy - Fh/Ab)/(1.97·λ·f'c^0.25)]^2,
+    // Fh = 0 for a straight bar; Eq. 5.10.8.2.1a-1 l_d = l_db·λrl·λcf·λrc (λrl·λcf <= 1.7); min 12 in
+    const ldb = 0.17*f.db*Math.pow((f.excess*f.fy_ksi)/(1.97*f.lambda*f.fc4), 2);
+    const ld_calc = ldb*f.lam_rlcf_cap*f.lam_rc;
     const ld = Math.max(ld_calc, 12);
     return {ldb, ld_calc, ld, governedByMin: ld_calc<12};
   } else {
@@ -428,16 +453,37 @@ function calcTension(inp,f){
 /* ---------- Standard hook ---------- */
 function calcHook(inp,f){
   if(f.AASHTO){
-    // 5.10.8.2.4a: lhb = 38.0 db fy/(60 √f'c) (ksi) ; ×λrc(coating), lightweight; min 8db & 6in
-    const lhb = 38.0*f.db*f.fy_ksi/(60*f.sqrtFc_ksi);
-    // AASHTO hook mod factors: coating 1.2, confinement 0.8 if confined, else 1.0; lightweight per 5.10.8.2.4b
+    // AASHTO LRFD 10th Ed. 5.10.8.2.4a (ksi): l_dh = l_d + R + db/2 (Eq. 5.10.8.2.4a-1) >= max(8db, 6 in), with l_d from
+    // Eqs. 5.10.8.2.1a-1/-2 and the hook force Fh = db·R·v·f'c (Eq. 5.10.8.2.4a-2), v for a CTT node
+    // (Table 5.8.2.5.3a-1: 0.85 - f'c/20, 0.45 to 0.65). No 12 in minimum on l_d here (it applies to straight bars).
+    // R: entered bend radius to the bar centroid, else the minimum standard bend: R = D/2 + db/2 with D from
+    // Table 5.10.2.3-1 (6db #3-#8, 8db #9-#11, 10db #14-#18); the smallest R gives the longest l_dh.
+    const Dmin = f.barNum<=8 ? 6 : (f.barNum<=11 ? 8 : 10);
+    const Rmin = (Dmin/2 + 0.5)*f.db;
+    const Rin = parseFloat(inp.hookR);
+    const Rentered = isFinite(Rin) && Rin>0;
+    const R = Rentered ? Rin : Rmin;
+    const v_raw = 0.85 - f.fcA/20;
+    const v = Math.max(0.45, Math.min(0.65, v_raw));
+    const Fh = f.db*R*v*f.fcA;
+    // modification factors (5.10.8.2.1b-c): λrl as for straight bars; λcf = 1.2 for coated hooked bars;
+    // 5.10.8.2.4b (#11 and smaller): with the tie details, ktr = 0 and l_dh × 0.8
     const cf = parseFloat(inp.hookEpoxy)>1?1.2:1.0;
-    const conf = (inp.hookConfined && !f.bigHook)?0.8:1.0;   // 5.10.8.2.4b: 0.8 for No. 11 and smaller bars only
-    const lw = 1/f.lambda; // AASHTO 10th Ed. 5.10.8.2.4a: l_dh = l_hb·(λrc·λcf)/λ, λ per 5.4.2.8 (was fixed ×1.3)
-    const ldh_calc = lhb*cf*conf*lw*f.excess;
+    const rlcf = Math.min(f.lam_rl*cf, 1.7);
+    const ties = inp.hookConfined && !f.bigHook;
+    const conf = ties ? 0.8 : 1.0;
+    const lam_rc_h = ties ? f.lam_rc0 : f.lam_rc;
+    const lam_rc_h_raw = ties ? f.lam_rc0_raw : f.lam_rc_raw;
+    const num = f.excess*f.fy_ksi - Fh/f.Ab;              // stress left for the straight portion (ksi)
+    const den = 1.97*f.lambda*f.fc4;
+    const ldb = 0.17*f.db*Math.pow(Math.max(num,0)/den, 2);   // num <= 0: the hook alone develops the bar, l_db = 0
+    const ld = ldb*rlcf*lam_rc_h;
+    const ldh_eq = ld + R + f.db/2;
+    const ldh_calc = ldh_eq*conf;
     const min1=8*f.db, min2=6;
     const ldh=Math.max(ldh_calc,min1,min2);
-    return {lhb,cf,conf,lw,ldh_calc,min1,min2,ldh,gov: ldh===ldh_calc?"calc":(ldh===min1?"8db":"6in")};
+    return {Dmin,Rmin,Rentered,R,v_raw,v,Fh,cf,rlcf,ties,conf,lam_rc_h,lam_rc_h_raw,num,den,ldb,ld,ldh_eq,
+            ldh_calc,min1,min2,ldh,gov: ldh===ldh_calc?"calc":(ldh===min1?"8db":"6in")};
   } else {
     const ldh_calc = (inp.fy*f.psiE_h*f.psiR*f.psiO*f.psiC_h*f.excess)/(55*f.lambda*f.sqrtFc)*Math.pow(f.db,1.5);
     const min1 = 8*f.db, min2 = 6;
@@ -449,7 +495,8 @@ function calcHook(inp,f){
 /* ---------- Compression development ---------- */
 function calcComp(inp,f){
   if(f.AASHTO){
-    // 5.10.8.2.5: l_dc = the larger of (0.63 db fy/√f'c) and (0.3 db fy), ksi; ×modifiers; min 8 in.
+    // AASHTO LRFD 10th Ed. 5.10.8.2.2a: l_db >= the larger of (0.63 db fy/√f'c) and (0.3 db fy) (Eqs. 5.10.8.2.2a-2/-3), ksi;
+    // l_d = l_db·λer·λrc/λ (Eq. 5.10.8.2.2a-1), min 8 in. The tool applies λer only (λrc = 1.0, λ not applied; open item).
     const a = 0.63*f.db*f.fy_ksi/f.sqrtFc_ksi;
     const b = 0.3*f.db*f.fy_ksi;
     const base = Math.max(a,b);
@@ -487,7 +534,7 @@ function ktrHSCheck(inp,f){
   return {relevant, known, applies, req, ok: !applies || f.Ktr>=req};
 }
 /* ---------- ACI 25.5.1.1: no lap splices for #14 / #18 bars (except compression to #11 and smaller, 25.5.5.3);
-   AASHTO 10th Ed. 5.10.8.4.2a (verify): lap splices not used for bars larger than No. 11 ---------- */
+   AASHTO LRFD 10th Ed. 5.10.8.4.2a: lap splices in tension not used for bars larger than No. 11 ---------- */
 function lapProhibited(inp,f){ return parseInt(inp.barSize)>=14; }
 function lapRef(f){ return f.AASHTO ? "AASHTO 5.10.8.4.2a" : "ACI 25.5.1.1"; }
 
@@ -549,7 +596,7 @@ function buildInputPanel(){
     <div class="field"><label>Design Code</label>
       <select id="codeSel" style="font-weight:bold;">
         <option value="ACI" selected>ACI 318-19 (buildings)</option>
-        <option value="AASHTO">AASHTO LRFD 9th Ed. §5.10.8 (bridges)</option>
+        <option value="AASHTO">AASHTO LRFD 10th Ed. (2024) §5.10.8 (bridges)</option>
       </select>
       <div class="hint" id="codeHint">Building code. Switch to AASHTO for MassDOT/RIDOT/CTDOT bridge work.</div></div>
     <div class="row2">
@@ -591,7 +638,10 @@ function buildInputPanel(){
       <div class="field"><label>s <span class="unit">(in)</span></label><input id="sTr" type="number" value="12" step="0.5" min="0"></div>
       <div class="field"><label>n bars</label><input id="nBars" type="number" value="1" step="1" min="1"></div>
     </div>
-    <div class="hint">Leave A<sub>tr</sub>=0 for no transverse steel (conservative). K<sub>tr</sub>=40A<sub>tr</sub>/(s·n).</div>
+    <div class="hint">Leave A<sub>tr</sub>=0 for no transverse steel (conservative). ACI: K<sub>tr</sub>=40A<sub>tr</sub>/(s·n). AASHTO: k<sub>tr</sub>=A<sub>tr</sub>/(s·n).</div>
+    <div class="field" style="margin-top:8px"><label>&beta;<sub>t</sub> &mdash; transverse compression / f<sub>r</sub> <span class="unit">(AASHTO only, &minus;1 to 0)</span></label>
+      <input id="betaT" type="number" value="0" step="0.05" min="-1" max="0">
+      <div class="hint">AASHTO 5.10.8.2.1c: ratio of the unfactored permanent-load compressive stress across the splitting plane to f<sub>r</sub> (5.4.2.6), entered as a negative number. Default 0 = no credit (conservative).</div></div>
     <div class="field" style="margin-top:8px"><label>Developed bars c-c spacing <span class="unit">(in, optional)</span></label>
       <input id="barSpc" type="number" step="0.5" min="0" placeholder="for ACI 25.4.2.2 check (fy ≥ 80 ksi)"></div>`)}
 
@@ -611,7 +661,11 @@ function buildInputPanel(){
         <option value="1.0" selected>Inside column/wall core w/ side cover ≥2.5&quot;, or side cover ≥6db (1.0)</option>
         <option value="1.25">Other, e.g. side cover &lt;2.5&quot; (1.25)</option>
       </select></div>
-    <div class="chk"><input id="hookConfined" type="checkbox"><label for="hookConfined">Confining reinf. present &rarr; &psi;<sub>r</sub>=1.0 (else 1.6)</label></div>`)}
+    <div class="chk"><input id="hookConfined" type="checkbox"><label for="hookConfined">Confining reinf. present &rarr; &psi;<sub>r</sub>=1.0 (else 1.6)</label></div>
+    <div class="hint">AASHTO: ticked = hook ties per 5.10.8.2.4b (#11 and smaller) &rarr; k<sub>tr</sub> = 0 and l<sub>dh</sub> &times; 0.8. Do not tick at a discontinuous end with side and top/bottom cover both under 2.5 in. (ties required there, no reduction).</div>
+    <div class="field" style="margin-top:8px"><label>Bend radius R to bar centroid <span class="unit">(in, AASHTO only)</span></label>
+      <input id="hookR" type="number" step="0.125" min="0" placeholder="blank = minimum standard bend">
+      <div class="hint">AASHTO 5.10.8.2.4a. Blank = minimum finished bend of Table 5.10.2.3-1: R = D/2 + d<sub>b</sub>/2 with D = 6d<sub>b</sub> (#3&ndash;#8), 8d<sub>b</sub> (#9&ndash;#11), 10d<sub>b</sub> (#14, #18). The smallest R gives the longest l<sub>dh</sub> (conservative); galvanized bars have larger bends (Table 5.10.2.3-2).</div></div>`)}
 
   ${panel("E2","Compression Development (&psi;<sub>r</sub>)",true,`
     <div class="field"><label>Confining Reinforcement (&psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
@@ -619,7 +673,7 @@ function buildInputPanel(){
         <option value="1.0" selected>Other (1.0)</option>
         <option value="0.75">Enclosed in spiral, circular tie (db≥1/4&quot;, pitch≤4&quot;), #4 ties or hoops @ ≤4&quot; c-c (0.75)</option>
       </select></div>
-    <div class="hint">ACI only. AASHTO compression modifiers are not applied (conservative).</div>`)}
+    <div class="hint">ACI only. AASHTO: &lambda;<sub>rc</sub> = 0.75 for spirals or hoops (5.10.8.2.2b) is not applied (conservative); &lambda; is not applied to compression development either (see the validation notice for lightweight concrete).</div>`)}
 
   ${panel("F","Splices",true,`
     <div class="field"><label>Tension Lap Class</label>
@@ -689,7 +743,8 @@ const REBAR_IN_WARN=[
   [/^f'c must be a positive/,'B'],
   [/^c_b \(cover/,'D'],[/^c_b = .*unusually large/,'D'],
   [/^Transverse steel area A_tr entered/,'D'],[/^ACI 25\.4\.2\.2/,'D'],
-  [/^As,req .*exceeds As,prov/,'D2'],[/^As,provided must be/,'D2'],[/^λ for lightweight/,'B']];
+  [/^As,req .*exceeds As,prov/,'D2'],[/^As,provided must be/,'D2'],[/^λ for lightweight/,'B'],
+  [/^β_t must be/,'D'],[/^Bend radius R/,'E']];
 const REBAR_IN_KEY='rebar_aci_inputTab_v1';
 let rebarInTabCur=null;   /* in-memory copy, used when storage is blocked */
 function rebarInTabGet(){ if(rebarInTabCur) return rebarInTabCur; try{ return localStorage.getItem(REBAR_IN_KEY)||''; }catch(e){ return ''; } }
@@ -782,9 +837,18 @@ function validate(inp,f){
   if (isNaN(inp.fc) || inp.fc<=0) w.push("f'c must be a positive number.");
   if (inp.fc < 2500) w.push(`f'c = ${fmt(inp.fc,0)} psi is below the 2,500 psi minimum typical for structural concrete.`);
   if (f.AASHTO){
-    if (inp.fc > 10000) w.push(`f'c = ${fmt(inp.fc,0)} psi exceeds 10 ksi; √f'c limited per AASHTO 5.10.8.2.1a.`);
+    if (f.fcA_capped) w.push(`f'c = ${fmt(inp.fc,0)} psi exceeds ${fmt(f.fcLimA,0)} ksi, the limit of AASHTO 5.10.8.2.1, 5.10.8.2.4 and 5.10.8.4.3 for ${inp.lightweight?"lightweight concrete (C5.10.8.2.4)":"normal weight concrete"}; f'c = ${fmt(f.fcA,1)} ksi is used for tension, hooks and tension splices.`);
+    if (inp.fc > 10000) w.push(`AASHTO 5.10.8.2.2a (compression development): √f'c is limited to √10 ksi in this tool.`);
+    if (inp.fc > 10000 && !inp.lightweight) w.push(`f'c > 10 ksi: AASHTO 5.10.8.2.1 requires transverse reinforcement of at least #3 bars at 12 in. along the development length, and 5.10.8.4.3 the same along tension lap splices (at least three bars); hooks need ties of #3 or larger at no more than 3d_b along l_dh, at least three (5.10.8.2.4b). Verify; the tool does not check it.`);
+    if (inp.fy > 75000) w.push(`f_y > 75 ksi: transverse reinforcement per AASHTO 5.7.2.5 (beams) or 5.10.4.3 (columns) is required over the development length (5.10.8.2.1) and the lap splice length (5.10.8.4), and hooks need ties per 5.10.8.2.4b (5.10.8.2.4). Verify; the tool does not check it.`);
     if (f.lam_rlcf_capped) w.push(`λ_rl·λ_cf = ${fmt(f.lam_rl*f.lam_cf,2)} exceeds 1.7; capped (AASHTO 5.10.8.2.1b).`);
-    if (f.lam_rc_bounded) w.push(`λ_rc = ${fmt(f.lam_rc_raw,3)} fell outside 0.4–1.0 and was bounded (AASHTO 5.10.8.2.1c).`);
+    if (f.lam_rc_bounded) w.push(`λ_rc = ${fmt(f.lam_rc_raw,3)} fell outside 0.3–1.0 and was bounded (AASHTO Eq. 5.10.8.2.1c-1).`);
+    if (f.betaTAdj) w.push(`β_t must be between −1 and 0 (AASHTO 5.10.8.2.1c); β_t = ${fmt(f.betaT,2)} is used.`);
+    if (f.bigHook) w.push(`AASHTO 5.10.8.2.4: standard hook provisions apply to #11 and smaller bars; the hook length shown for #${inp.barSize} is outside their scope.`);
+    { const hk = calcHook(inp,f);
+      if (hk.Rentered && hk.R < hk.Rmin - 1e-9) w.push(`Bend radius R = ${fmt(hk.R,3)} in. is less than the minimum standard bend for #${inp.barSize} (R = D/2 + d_b/2 = ${fmt(hk.Rmin,3)} in., Table 5.10.2.3-1); the entered R is used.`);
+      if (hk.num <= 0) w.push(`Hook: F_h/A_b = ${fmt(hk.Fh/f.Ab,2)} ksi ≥ λ_er·f_y; the straight portion l_d of Eq. 5.10.8.2.1a-2 is taken as 0.`); }
+    if (inp.lightweight) w.push(`AASHTO Eq. 5.10.8.2.2a-1 divides the compression development length by λ; this tool does not apply λ to compression development (open item, engineer decision pending).`);
   } else {
     if (inp.fc > 10000) w.push(`f'c = ${fmt(inp.fc,0)} psi exceeds 10,000 psi; √f'c is capped at 100 (ACI 25.4.1.4). Provisions not calibrated above this.`);
     if (f.sqrtFc_raw > 100) w.push(`√f'c capped: using 100 psi^0.5 instead of ${fmt(f.sqrtFc_raw,1)} (ACI 25.4.1.4).`);
@@ -802,7 +866,7 @@ function validate(inp,f){
     : `ACI 25.5.1.1: lap splices are not permitted for #${inp.barSize} bars. Use mechanical or welded splices. In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3); the splice lengths shown for this bar size do not apply.`);
   if (!f.AASHTO && f.psiRForced) w.push(`ACI Table 25.4.3.2: ψ_r = 1.0 applies only to No. 11 and smaller hooked bars; ψ_r = 1.6 is used for #${inp.barSize} although confining reinforcement is ticked.`);
   if (!f.AASHTO && f.psiOForced) w.push(`ACI Table 25.4.3.2: ψ_o = 1.0 applies only to No. 11 and smaller hooked bars; ψ_o = 1.25 is used for #${inp.barSize}.`);
-  if (f.AASHTO && f.bigHook && inp.hookConfined) w.push(`AASHTO 5.10.8.2.4b: the 0.8 confinement factor for hooks applies to No. 11 and smaller bars; 1.0 is used for #${inp.barSize}.`);
+  if (f.AASHTO && f.bigHook && inp.hookConfined) w.push(`AASHTO 5.10.8.2.4b: the 0.8 tie factor for hooks applies to No. 11 and smaller bars; 1.0 is used for #${inp.barSize}.`);
   if (f.lambdaAdj) w.push(`λ for lightweight concrete must be between 0.75 and 1.0; λ = ${fmt(f.lambda,2)} is used.`);
   if (inp.cb <= 0) w.push("c_b (cover / half-spacing) should be greater than 0.");
   if (inp.cb > 4) w.push(`c_b = ${fmt(inp.cb,2)}" is unusually large; confirm cover/spacing input.`);
@@ -851,13 +915,13 @@ function note(html){
 /* Excess reinforcement reduction block (shared ACI/AASHTO) */
 function excessBlock(inp,f){
   if(!inp.useExcess) return "";
-  const ref = f.AASHTO ? "§5.10.8.2.1a (λer)" : "§25.4.10.1";
+  const ref = f.AASHTO ? "Eq. 5.10.8.2.1c-4 (λer)" : "§25.4.10.1";
   return subsec("Excess Reinforcement Factor",ref, varTable([
       ["A_{s,req}","Area of steel required by analysis",fmt(inp.asReq,2),"in²"],
       ["A_{s,prov}","Area of steel actually provided",fmt(inp.asProv,2),"in²"],
       [f.AASHTO?"\\lambda_{er}":"\\text{ratio}","Reduction factor",fmt(f.excess,3),"—"],
     ])
-    + note(`<p>When more steel is provided than the analysis requires, each bar is stressed below its yield capacity, so it doesn't need to develop full f_y. The code lets you shorten the development length by the ratio of required to provided steel.</p>
+    + note(`<p>When more steel is provided than the analysis requires, each bar is stressed below its yield capacity, so it doesn't need to develop full f_y. The code lets you shorten the development length by the ratio of required to provided steel.${f.AASHTO?" In AASHTO 10th Ed. Eq. 5.10.8.2.1a-2, λ_er multiplies f_y inside the squared bracket (the bar stress to be developed), so for tension and hooks the length falls faster than the ratio; for compression (Eq. 5.10.8.2.2a-1) it multiplies the length.":""}</p>
       <p><b>Important limits:</b> this reduction is <em>not</em> permitted where the bar must reach full f_y — at seismic locations, at non-continuous supports, and anywhere the code requires development for f_y regardless of stress. It also never increases length (capped at 1.0).</p>${f.excessRaw>1?`<p><b>Note:</b> As,req > As,prov here, so the raw ratio (${fmt(f.excessRaw,3)}) exceeds 1.0 and is held at 1.0 — no reduction applied.</p>`:""}`)
     + eqBlock("Excess reinforcement factor",ref,
         (f.AASHTO?"\\lambda_{er}":"\\text{factor}")+" = \\dfrac{A_{s,req}}{A_{s,prov}} \\le 1.0",
@@ -962,50 +1026,78 @@ function tabTension(inp,f,forPrint){
       <div id="tensionChart" class="chart"></div></div>`);
 }
 
-/* ---- AASHTO tension branch (5.10.8.2.1) ---- */
+/* ---- AASHTO tension branch (AASHTO LRFD 10th Ed. 5.10.8.2.1) ---- */
+/* the λrc card (5.10.8.2.1c) of the tension tab; also used by the hook tab with ktr = 0 when the tie reduction is taken */
+function aashtoRcBlock(inp,f,k,raw,val,title){
+  return varTable([
+      ["c_b","Lesser of cover to bar center and half the c-c bar spacing",fmt(inp.cb,3),"in"],
+      ["\\beta_t","Permanent transverse compression / f_r (−1 to 0)",fmt(f.betaT,2),"—"],
+      ["w_c","Unit weight, normal weight concrete (Table 3.5.1-1)",fmt(f.wcA,4),"kcf"],
+      ["E_c","Concrete modulus (Eq. 5.4.2.4-1, K_1 = 1.0)",fmt(f.EcA,0),"ksi"],
+      ["n_s","Modular ratio E_s/E_c (E_s = 29,000 ksi, §5.4.3.2)",fmt(f.nsA,3),"—"],
+      ["A_{tr}","Transverse steel area crossing the splitting plane within s",fmt(inp.Atr,2),"in²"],
+      ["s","Spacing of transverse reinforcement",fmt(inp.sTr,2),"in"],
+      ["n","No. of bars developed along the splitting plane",fmt(inp.nBars,0),"—"],
+      ["k_{tr}","Transverse reinforcement index"+(k===0&&f.ktr_a>0?" (taken as 0, §5.10.8.2.4b)":""),fmt(k,4),"in"],
+    ])
+    + eqBlock("Concrete modulus","Eq. 5.4.2.4-1",
+        "E_c = 120{,}000\\,K_1\\,w_c^{2.0}\\,(f'_c)^{0.33}",
+        `120{,}000\\times 1.0\\times ${fmt(f.wcA,4)}^{2}\\times ${fmt(f.fcA,2)}^{0.33}`,
+        `E_c = ${fmt(f.EcA,0)}\\ \\text{ksi},\\quad n_s = \\dfrac{29{,}000}{${fmt(f.EcA,0)}} = ${fmt(f.nsA,3)}`)
+    + eqBlock("Transverse reinforcement index","Eq. 5.10.8.2.1c-3",
+        "k_{tr} = \\dfrac{A_{tr}}{s\\,n}",
+        (k===0&&f.ktr_a>0) ? "\\text{taken as 0 (hook tie reduction, 5.10.8.2.4b)}"
+          : ((inp.sTr>0&&inp.nBars>0) ? `\\dfrac{${fmt(inp.Atr,2)}}{${fmt(inp.sTr,2)}\\times ${fmt(inp.nBars,0)}}` : "\\text{s or n not entered: } k_{tr} = 0"),
+        `k_{tr} = ${fmt(k,4)}\\ \\text{in}`)
+    + eqBlock(title||"Confinement factor (0.3 ≤ λ_rc ≤ 1.0)","Eqs. 5.10.8.2.1c-1, -2",
+        "\\lambda_{rc} = \\dfrac{d_b\\,c_b}{\\left(c_b(1-\\beta_t) + 1.67\\,n_s\\,k_{tr}\\right)^{2}},\\quad 0.3 \\le \\lambda_{rc} \\le 1.0",
+        inp.cb>0 ? `\\dfrac{${fmt(f.db,3)}\\times ${fmt(inp.cb,3)}}{\\left(${fmt(inp.cb,3)}\\times(1-(${fmt(f.betaT,2)})) + 1.67\\times ${fmt(f.nsA,3)}\\times ${fmt(k,4)}\\right)^{2}} = ${fmt(raw,4)}`
+                 : "c_b \\le 0:\\ \\text{no confinement credit}",
+        `\\lambda_{rc} = ${fmt(val,4)}`);
+}
 function tabTensionAASHTO(inp,f,t,forPrint){
-  return hero("Tension Development Length","AASHTO LRFD §5.10.8.2.1a",
+  const hiFc = f.fc_ksi>10 && !inp.lightweight, hiFy = f.fy_ksi>75;
+  return hero("Tension Development Length","AASHTO LRFD 10th Ed. (2024) §5.10.8.2.1a",
               `${fmt(t.ld,2)} in`,"Governing l_d")
-  + `<div class="narr">AASHTO LRFD (8th Ed. onward) computes a <em>basic</em> development length l_db from bar size, yield, and
-     concrete strength, then applies modification factors for reinforcement location, coating, confinement, and excess steel,
-     divided by the lightweight factor λ. The structure mirrors ACI but uses ksi units and different constants. Bars must be
-     fully developed at every point of required strength (§5.10.8.1.1).</div>`
+  + `<div class="narr">The 10th Edition finds a <em>basic</em> length l_db from the bar stress to be developed (λ_er·f_y, less
+     F_h/A_b where a hook or head carries part of the force; F_h = 0 for a straight bar) and an effective bond-splitting strength
+     that grows with the fourth root of f'c. It then multiplies l_db by the location, coating and confinement factors, with a
+     12 in. minimum. Bars must be fully developed at every point of required strength (§5.10.8.1.1).</div>`
+  + excessBlock(inp,f)
   + subsec("1. Basic Development Length","Eq. 5.10.8.2.1a-2", varTable([
       ["f_y","Yield strength",fmt(f.fy_ksi,1),"ksi"],
-      ["f'_c","Concrete strength (≤10 ksi)",fmt(f.fc_ksi,2),"ksi"],
-      ["\\sqrt{f'_c}","Square root of f'c",fmt(f.sqrtFc_ksi,3),"ksi^{0.5}"],
+      ["f'_c","Concrete strength used (≤ "+fmt(f.fcLimA,0)+" ksi"+(inp.lightweight?", lightweight":"")+")",fmt(f.fcA,2),"ksi"],
+      ["(f'_c)^{0.25}","Fourth root of f'c",fmt(f.fc4,4),"ksi^{0.25}"],
       ["d_b","Bar diameter (#"+inp.barSize+")",fmt(f.db,3),"in"],
+      ["A_b","Bar area",fmt(f.Ab,2),"in²"],
+      ["\\lambda","Concrete density modification (§5.4.2.8)",fmt(f.lambda,2),"—"],
+      ["\\lambda_{er}","Excess reinforcement (1.0 unless the reduction is applied)",fmt(f.excess,3),"—"],
+      ["F_h","Force developed by a hook or head (straight bar)","0","kip"],
     ])
-    + note(`<p>The basic length is the anchorage a plain, uncoated, bottom-cast bar in normalweight concrete would need. All the refinements come from the modification factors that follow. Working in ksi, the coefficient 2.4 replaces ACI's 3/40 grouping.</p>`)
+    + note(`<p>The squared bracket is the bar stress to be developed divided by an effective splitting strength of the concrete, 1.97·λ·(f'c)^0.25. Because the bracket is squared, λ and λ_er act on the length as 1/λ² and λ_er²: lightweight concrete lengthens the bar more, and excess steel shortens it more, than in the 9th Ed. form. F_h is the force a hook or head takes by bearing; it is zero for a straight bar and for lap splices (see the Standard Hook tab for a hooked bar).</p>`)
     + eqBlock("Basic tension development length","Eq. 5.10.8.2.1a-2",
-        "l_{db} = \\dfrac{2.4\\,d_b\\,f_y}{\\sqrt{f'_c}}",
-        `\\dfrac{2.4\\times ${fmt(f.db,3)}\\times ${fmt(f.fy_ksi,1)}}{${fmt(f.sqrtFc_ksi,3)}}`,
+        "l_{db} = 0.17\\,d_b\\left(\\dfrac{\\lambda_{er}\\,f_y - F_h/A_b}{1.97\\,\\lambda\\,(f'_c)^{0.25}}\\right)^{2}",
+        `0.17\\times ${fmt(f.db,3)}\\times\\left(\\dfrac{${fmt(f.excess,3)}\\times ${fmt(f.fy_ksi,1)} - 0/${fmt(f.Ab,2)}}{1.97\\times ${fmt(f.lambda,2)}\\times ${fmt(f.fc4,4)}}\\right)^{2}`,
         `l_{db} = ${fmt(t.ldb,2)}\\ \\text{in}`))
-  + subsec("2. Modification Factors","§5.10.8.2.1b–c", varTable([
+  + subsec("2. Modification Factors","§5.10.8.2.1b", varTable([
       ["\\lambda_{rl}","Reinforcement location (top bar = 1.3)",fmt(f.lam_rl,1),"—"],
       ["\\lambda_{cf}","Coating factor",fmt(f.lam_cf,1),"—"],
-      ["\\lambda_{rc}","Reinforcement confinement",fmt(f.lam_rc,3),"—"],
-      ["\\lambda","Concrete density (lightweight)",fmt(f.lambda,2),"—"],
     ])
-    + note(`<p>These parallel ACI's ψ factors but are named λ and some enter differently.</p>
-      <div class="vardef"><span class="s">λ_rl = ${fmt(f.lam_rl,1)}</span> — Reinforcement location: 1.3 for horizontal bars with more than 12 in of fresh concrete cast below (top-bar effect), else 1.0.</div>
-      <div class="vardef"><span class="s">λ_cf = ${fmt(f.lam_cf,1)}</span> — Coating: up to 1.5 for epoxy with tight cover/spacing, 1.2 otherwise, 1.0 uncoated. The product λ_rl·λ_cf is capped at 1.7, same as ACI.</div>
-      <div class="vardef"><span class="s">λ_rc = ${fmt(f.lam_rc,3)}</span> — Confinement: λ_rc = d_b/(c_b + k_tr), bounded between 0.4 and 1.0. Note this is the <em>reciprocal</em> arrangement of ACI's confinement term — here a well-confined bar drives λ_rc toward its 0.4 floor, shortening the length.</div>
-      <div class="vardef"><span class="s">λ = ${fmt(f.lambda,2)}</span> — Concrete density modification (§5.4.2.8); it <em>divides</em> the length, so lightweight (0.75) lengthens it.</div>`)
+    + note(`<div class="vardef"><span class="s">λ_rl = ${fmt(f.lam_rl,1)}</span> — Reinforcement location: 1.3 for horizontal bars with more than 12 in of fresh concrete cast below (top-bar effect), else 1.0.</div>
+      <div class="vardef"><span class="s">λ_cf = ${fmt(f.lam_cf,1)}</span> — Coating: 1.5 for epoxy or zinc-and-epoxy dual-coated bars with tight cover/spacing, 1.2 otherwise, 1.0 uncoated or galvanized. The product λ_rl·λ_cf need not exceed 1.7.</div>`)
     + eqBlock("Product limit λ_rl·λ_cf","§5.10.8.2.1b",
         "\\lambda_{rl}\\cdot\\lambda_{cf} \\le 1.7",
         `${fmt(f.lam_rl,1)}\\times ${fmt(f.lam_cf,1)} = ${fmt(f.lam_rl*f.lam_cf,2)}`,
-        `= ${fmt(f.lam_rlcf_cap,2)}`)
-    + eqBlock("Confinement factor (0.4 ≤ λ_rc ≤ 1.0)","§5.10.8.2.1c",
-        "\\lambda_{rc} = \\dfrac{d_b}{c_b + k_{tr}}",
-        `\\dfrac{${fmt(f.db,3)}}{${fmt(inp.cb,2)} + ${fmt(f.Ktr,3)}} = ${fmt(f.lam_rc_raw,3)}`,
-        `\\lambda_{rc} = ${fmt(f.lam_rc,3)}`))
-  + excessBlock(inp,f)
-  + subsec("3. Development Length","Eq. 5.10.8.2.1a-1",
+        `= ${fmt(f.lam_rlcf_cap,2)}`))
+  + subsec("3. Confinement Factor","§5.10.8.2.1c",
+      note(`<p>λ_rc rewards cover, bar spacing and transverse steel crossing the splitting plane. With no transverse steel and β_t = 0 it reduces to d_b/c_b. k_tr = A_tr/(s·n) here has no factor of 40 (unlike ACI's K_tr), and is scaled by 1.67·n_s. β_t (negative) credits permanent compression across the splitting plane; 0 is conservative. The result is bounded between 0.3 and 1.0.</p>`)
+      + aashtoRcBlock(inp,f,f.ktr_a,f.lam_rc_raw,f.lam_rc))
+  + subsec("4. Development Length","Eq. 5.10.8.2.1a-1",
       eqBlock("Tension development length","Eq. 5.10.8.2.1a-1",
-        "l_d = l_{db}\\,\\dfrac{\\lambda_{rl}\\,\\lambda_{cf}\\,\\lambda_{rc}"+(inp.useExcess?"\\,\\lambda_{er}":"")+"}{\\lambda} \\ge 12\\ \\text{in}",
-        `${fmt(t.ldb,2)}\\times\\dfrac{${fmt(f.lam_rlcf_cap,2)}\\times ${fmt(f.lam_rc,3)}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:""}}{${fmt(f.lambda,2)}}`,
-        `\\boxed{l_d = ${fmt(t.ld,2)}\\ \\text{in}}`))
+        "l_d = l_{db}\\,\\lambda_{rl}\\,\\lambda_{cf}\\,\\lambda_{rc} \\ge 12\\ \\text{in}",
+        `${fmt(t.ldb,2)}\\times ${fmt(f.lam_rlcf_cap,2)}\\times ${fmt(f.lam_rc,4)} = ${fmt(t.ld_calc,2)}`,
+        `\\boxed{l_d = ${fmt(t.ld,2)}\\ \\text{in}}`)
+      + ((hiFc||hiFy)?`<div class="narr">${hiFc?"f'c > 10 ksi: transverse reinforcement of at least #3 bars at 12 in. is required along l_d (§5.10.8.2.1). ":""}${hiFy?"f_y > 75 ksi: transverse reinforcement per §5.7.2.5 (beams) or §5.10.4.3 (columns) is required over l_d (§5.10.8.2.1). ":""}Not checked by the tool.</div>`:""))
   + (forPrint?"":`<div class="subsec"><div class="sh"><span>4. Sensitivity Charts</span></div>
       <div class="chartctl"><span>View:</span>
         <button class="btn small" onclick="setChartMode('fc')" id="cm-fc">l_d vs f'c</button>
@@ -1056,35 +1148,70 @@ function tabHook(inp,f){
         `\\boxed{l_{dh} = ${fmt(h.ldh,2)}\\ \\text{in}}`));
 }
 
-/* ---- AASHTO hook branch (5.10.8.2.4) ---- */
+/* ---- AASHTO hook branch (AASHTO LRFD 10th Ed. 5.10.8.2.4) ---- */
 function tabHookAASHTO(inp,f,h){
-  return hero("Standard Hook Development","AASHTO LRFD §5.10.8.2.4a",`${fmt(h.ldh,2)} in`,"Required l_dh")
-  + `<div class="narr">AASHTO computes a basic hooked-bar length l_hb, then applies modification factors for coating,
-     confinement, and lightweight concrete. Applies to standard 90° and 180° hooks of #11 bars and smaller.</div>`
+  return hero("Standard Hook Development","AASHTO LRFD 10th Ed. (2024) §5.10.8.2.4a",`${fmt(h.ldh,2)} in`,"Required l_dh")
+  + `<div class="narr">The 10th Edition develops a hooked bar with the straight-bar equation: bearing inside the bend carries a
+     force F_h = d_b·R·v·f'c, so the straight lead-in only has to develop the rest of the bar stress (λ_er·f_y − F_h/A_b).
+     l_dh is that straight length plus the bend, R + d_b/2, measured from the critical section to the outside of the hook.
+     Applies to standard hooks (§5.10.2.1) of #11 bars and smaller, f'c up to 15 ksi (normal weight).</div>`
   + hookSchematic(inp,f,h)
-  + subsec("1. Basic Hook Length","Eq. 5.10.8.2.4a-1", varTable([
-      ["f_y","Yield strength",fmt(f.fy_ksi,1),"ksi"],
-      ["f'_c","Concrete strength",fmt(f.fc_ksi,2),"ksi"],
-      ["d_b","Bar diameter",fmt(f.db,3),"in"],
+  + subsec("1. Hook Force","Eq. 5.10.8.2.4a-2", varTable([
+      ["d_b","Bar diameter (#"+inp.barSize+")",fmt(f.db,3),"in"],
+      ["A_b","Bar area",fmt(f.Ab,2),"in²"],
+      ["D","Minimum finished bend diameter (Table 5.10.2.3-1)",fmt(h.Dmin,0)+"d_b = "+fmt(h.Dmin*f.db,3),"in"],
+      ["R","Bend radius to the bar centroid"+(h.Rentered?" (entered)":" (minimum standard bend)"),fmt(h.R,3),"in"],
+      ["f'_c","Concrete strength used (≤ "+fmt(f.fcLimA,0)+" ksi)",fmt(f.fcA,2),"ksi"],
+      ["v","Concrete efficiency factor, CTT node (Table 5.8.2.5.3a-1)",fmt(h.v,3),"—"],
     ])
-    + note(`<p>The AASHTO basic hook length uses the 38.0 db fy/(60√f'c) form (ksi units). The modifiers are simpler than ACI's: a coating factor, a confinement factor for ties around the hook, and a lightweight factor.</p>`)
-    + eqBlock("Basic hook development length","Eq. 5.10.8.2.4a-1",
-        "l_{hb} = \\dfrac{38.0\\,d_b\\,f_y}{60\\sqrt{f'_c}}",
-        `\\dfrac{38.0\\times ${fmt(f.db,3)}\\times ${fmt(f.fy_ksi,1)}}{60\\times ${fmt(f.sqrtFc_ksi,3)}}`,
-        `l_{hb} = ${fmt(h.lhb,2)}\\ \\text{in}`))
-  + subsec("2. Modification Factors","§5.10.8.2.4b", varTable([
-      ["\\lambda_{cf}","Coating (1.2 if epoxy)",fmt(h.cf,1),"—"],
-      ["\\lambda_{rc}","Confinement (0.8 if tied per code)",fmt(h.conf,1),"—"],
-      ["\\lambda","Concrete density factor (divides; 0.75 if LW)",fmt(f.lambda,2),"—"],
-    ])
-    + note(`<div class="vardef"><span class="s">λ_cf = ${fmt(h.cf,1)}</span> — 1.2 for epoxy-coated hooked bars, 1.0 uncoated.</div>
-      <div class="vardef"><span class="s">λ_rc = ${fmt(h.conf,1)}</span> — 0.8 where the hook is enclosed by ties/stirrups spaced ≤3d_b along the development length (with the first within 2d_b of the bend), else 1.0.</div>
-      <div class="vardef"><span class="s">λ = ${fmt(f.lambda,2)}</span> — Concrete density modification factor (§5.4.2.8). It <em>divides</em> the length, as for straight bars, so lightweight (0.75) lengthens it by 1/0.75 = 1.33; 1.0 normalweight.</div>`))
+    + note(`<p>R is measured from the center of the bend to the centroid of the bar. A tighter bend (smaller R) takes less force by bearing and adds less length, and gives the longer l_dh, so the minimum standard bend is the conservative default. The efficiency factor is that of a CTT node, bounded between 0.45 and 0.65.</p>`)
+    + (h.Rentered?"":eqBlock("Bend radius (minimum standard bend)","Table 5.10.2.3-1",
+        "R = \\dfrac{D}{2} + \\dfrac{d_b}{2}",
+        `\\dfrac{${fmt(h.Dmin,0)}\\times ${fmt(f.db,3)}}{2} + \\dfrac{${fmt(f.db,3)}}{2}`,
+        `R = ${fmt(h.R,3)}\\ \\text{in}`))
+    + eqBlock("Concrete efficiency factor (CTT node)","Table 5.8.2.5.3a-1",
+        "v = 0.85 - \\dfrac{f'_c}{20\\ \\text{ksi}},\\quad 0.45 \\le v \\le 0.65",
+        `0.85 - \\dfrac{${fmt(f.fcA,2)}}{20} = ${fmt(h.v_raw,3)}`,
+        `v = ${fmt(h.v,3)}`)
+    + eqBlock("Force developed by the hook","Eq. 5.10.8.2.4a-2",
+        "F_h = d_b\\,R\\,v\\,f'_c",
+        `${fmt(f.db,3)}\\times ${fmt(h.R,3)}\\times ${fmt(h.v,3)}\\times ${fmt(f.fcA,2)}`,
+        `F_h = ${fmt(h.Fh,3)}\\ \\text{kip},\\quad F_h/A_b = ${fmt(h.Fh/f.Ab,2)}\\ \\text{ksi}`))
   + excessBlock(inp,f)
-  + subsec("3. Hook Development Length","Eq. 5.10.8.2.4a",
-      eqBlock("Hook length","§5.10.8.2.4a",
-        "l_{dh} = l_{hb}\\,\\dfrac{\\lambda_{cf}\\,\\lambda_{rc}"+(inp.useExcess?"\\,\\lambda_{er}":"")+"}{\\lambda} \\ge \\max(8d_b, 6\\text{ in})",
-        `${fmt(h.lhb,2)}\\times\\dfrac{${fmt(h.cf,1)}\\times ${fmt(h.conf,1)}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:""}}{${fmt(f.lambda,2)}}`,
+  + subsec("2. Modification Factors","§5.10.8.2.1b–c, §5.10.8.2.4b", varTable([
+      ["\\lambda_{rl}","Reinforcement location (top bar = 1.3; also for hooks)",fmt(f.lam_rl,1),"—"],
+      ["\\lambda_{cf}","Coating, hooked bar (1.2 if coated)",fmt(h.cf,1),"—"],
+      ["\\lambda_{rc}","Confinement"+(h.ties?" (k_tr = 0, tie reduction taken)":""),fmt(h.lam_rc_h,4),"—"],
+      ["\\lambda","Concrete density modification (§5.4.2.8)",fmt(f.lambda,2),"—"],
+      ["\\text{tie factor}","0.8 with ties per §5.10.8.2.4b (#11 and smaller), else 1.0",fmt(h.conf,1),"—"],
+    ])
+    + note(`<div class="vardef"><span class="s">λ_rl = ${fmt(f.lam_rl,1)}</span> — Top-bar factor, from the Tension inputs. Since the 10th Ed. it applies to hooked bars too.</div>
+      <div class="vardef"><span class="s">λ_cf = ${fmt(h.cf,1)}</span> — Coated hooked bars take 1.2 (not 1.5); uncoated 1.0.</div>
+      <div class="vardef"><span class="s">λ_rc = ${fmt(h.lam_rc_h,4)}</span> — The straight-bar confinement factor of §5.10.8.2.1c with c_b, β_t and k_tr from the Tension inputs${h.ties?"; k_tr is taken as 0 because the tie reduction is taken":""}.</div>
+      <div class="vardef"><span class="s">tie factor = ${fmt(h.conf,1)}</span> — Where the hook is confined by ties or stirrups per §5.10.8.2.4b, k_tr is taken as 0 and l_dh is reduced by 20 %. Not at a discontinuous end with side and top/bottom cover both under 2.5 in.</div>`)
+    + eqBlock("Product limit λ_rl·λ_cf","§5.10.8.2.1b",
+        "\\lambda_{rl}\\cdot\\lambda_{cf} \\le 1.7",
+        `${fmt(f.lam_rl,1)}\\times ${fmt(h.cf,1)} = ${fmt(f.lam_rl*h.cf,2)}`,
+        `= ${fmt(h.rlcf,2)}`)
+    + aashtoRcBlock(inp,f,h.ties?0:f.ktr_a,h.lam_rc_h_raw,h.lam_rc_h))
+  + subsec("3. Straight Portion","Eqs. 5.10.8.2.1a-1, -2",
+      eqBlock("Basic development length with the hook force","Eq. 5.10.8.2.1a-2",
+        "l_{db} = 0.17\\,d_b\\left(\\dfrac{\\lambda_{er}\\,f_y - F_h/A_b}{1.97\\,\\lambda\\,(f'_c)^{0.25}}\\right)^{2}",
+        `0.17\\times ${fmt(f.db,3)}\\times\\left(\\dfrac{${fmt(f.excess,3)}\\times ${fmt(f.fy_ksi,1)} - ${fmt(h.Fh,3)}/${fmt(f.Ab,2)}}{1.97\\times ${fmt(f.lambda,2)}\\times ${fmt(f.fc4,4)}}\\right)^{2}`,
+        `l_{db} = ${fmt(h.ldb,2)}\\ \\text{in}${h.num<=0?"\\ (\\text{bracket} \\le 0\\text{: hook develops the bar})":""}`)
+    + eqBlock("Straight portion of the hooked bar","Eq. 5.10.8.2.1a-1",
+        "l_d = l_{db}\\,\\lambda_{rl}\\,\\lambda_{cf}\\,\\lambda_{rc}",
+        `${fmt(h.ldb,2)}\\times ${fmt(h.rlcf,2)}\\times ${fmt(h.lam_rc_h,4)}`,
+        `l_d = ${fmt(h.ld,2)}\\ \\text{in}`))
+  + subsec("4. Hook Development Length","Eq. 5.10.8.2.4a-1",
+      note(`<p>The result is measured from the critical section to the outside face of the hook. The 12 in. minimum of straight bars does not apply to the straight portion; l_dh itself is at least 8d_b and 6 in.${f.fy_ksi>75?" f_y > 75 ksi: ties per §5.10.8.2.4b are required (§5.10.8.2.4).":""}${(f.fc_ksi>10&&!inp.lightweight)?" f'c > 10 ksi: ties of #3 or larger at no more than 3d_b along l_dh, at least three, are required (§5.10.8.2.4b).":""}</p>`)
+    + eqBlock("Hooked bar development length","Eq. 5.10.8.2.4a-1"+(h.ties?", §5.10.8.2.4b":""),
+        "l_{dh} = "+(h.ties?"0.8\\,":"")+"\\left(l_d + R + \\dfrac{d_b}{2}\\right)",
+        `${h.ties?"0.8\\times":""}\\left(${fmt(h.ld,2)} + ${fmt(h.R,3)} + \\dfrac{${fmt(f.db,3)}}{2}\\right)`,
+        `l_{dh,calc} = ${fmt(h.ldh_calc,2)}\\ \\text{in}`)
+    + eqBlock("Minimum length governs","§5.10.8.2.4a",
+        "l_{dh} = \\max\\!\\left(l_{dh,calc},\\ 8d_b,\\ 6\\ \\text{in}\\right)",
+        `\\max(${fmt(h.ldh_calc,2)},\\ ${fmt(h.min1,2)},\\ 6)`,
         `\\boxed{l_{dh} = ${fmt(h.ldh,2)}\\ \\text{in}}`));
 }
 
@@ -1159,27 +1286,29 @@ function tabComp(inp,f){
   + excessBlock(inp,f);
 }
 
-/* ---- AASHTO compression branch (5.10.8.2.5) ---- */
+/* ---- AASHTO compression branch (AASHTO LRFD 10th Ed. 5.10.8.2.2a; numbered 5.10.8.2.5 in the tool before 2026-10-19) ---- */
 function tabCompAASHTO(inp,f,c){
-  return hero("Compression Development","AASHTO LRFD §5.10.8.2.5",`${fmt(c.ldc,2)} in`,"Required l_dc")
+  return hero("Compression Development","AASHTO LRFD 10th Ed. (2024) §5.10.8.2.2a",`${fmt(c.ldc,2)} in`,"Required l_dc")
   + `<div class="narr">AASHTO compression development takes the larger of two expressions (ksi units), then applies the
-     applicable modification factors, with an 8 in floor. As in ACI, the splitting mechanism is absent so the length is short.</div>`
-  + subsec("1. Governing Expressions","§5.10.8.2.5", varTable([
+     applicable modification factors, with an 8 in floor. As in ACI, the splitting mechanism is absent so the length is short.
+     This tool applies λ_er only: λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b) and λ is not applied
+     (Eq. 5.10.8.2.2a-1 divides by λ; open item for lightweight concrete).</div>`
+  + subsec("1. Governing Expressions","§5.10.8.2.2a", varTable([
       ["f_y","Yield strength",fmt(f.fy_ksi,1),"ksi"],
       ["f'_c","Concrete strength",fmt(f.fc_ksi,2),"ksi"],
       ["\\sqrt{f'_c}","Square root",fmt(f.sqrtFc_ksi,3),"ksi^{0.5}"],
       ["d_b","Bar diameter",fmt(f.db,3),"in"],
     ])
     + note(`<p>The two expressions parallel ACI's, converted to ksi. Expression (a) governs for lower-strength concrete; expression (b) is the strength-independent floor.</p>`)
-    + eqBlock("Expression (a)","§5.10.8.2.5",
+    + eqBlock("Expression (a)","Eq. 5.10.8.2.2a-2",
         "l_{dc,a} = \\dfrac{0.63\\,d_b\\,f_y}{\\sqrt{f'_c}}",
         `\\dfrac{0.63\\times ${fmt(f.db,3)}\\times ${fmt(f.fy_ksi,1)}}{${fmt(f.sqrtFc_ksi,3)}}`,
         `l_{dc,a} = ${fmt(c.a,2)}\\ \\text{in}`)
-    + eqBlock("Expression (b)","§5.10.8.2.5",
+    + eqBlock("Expression (b)","Eq. 5.10.8.2.2a-3",
         "l_{dc,b} = 0.3\\,d_b\\,f_y",
         `0.3\\times ${fmt(f.db,3)}\\times ${fmt(f.fy_ksi,1)}`,
         `l_{dc,b} = ${fmt(c.b,2)}\\ \\text{in}`)
-    + eqBlock("Governing length","§5.10.8.2.5",
+    + eqBlock("Governing length","Eq. 5.10.8.2.2a-1",
         "l_{dc} = \\max\\!\\left(l_{dc,a},\\ l_{dc,b},\\ 8\\ \\text{in}\\right)"+(inp.useExcess?"\\times\\tfrac{A_{s,req}}{A_{s,prov}}":""),
         `\\max(${fmt(c.a,2)},\\ ${fmt(c.b,2)})${inp.useExcess?`\\times ${fmt(f.excess,3)}`:""},\\ 8`,
         `\\boxed{l_{dc} = ${fmt(c.ldc,2)}\\ \\text{in}}`))
@@ -1197,6 +1326,7 @@ function tabTSplice(inp,f){
   + `<div class="narr">Tension lap splices are a multiple of the tension development length l_d. Class B (1.3 l_d) is the
      default; Class A (1.0 l_d) is permitted only where provided reinforcement is at least twice that required and no more
      than half the bars are spliced within the lap length (${ref}).</div>`
+  + (f.AASHTO?`<div class="narr">AASHTO 10th Ed.: l_d is that of §5.10.8.2.1a for the specified yield strength (F_h = 0).${f.fy_ksi>75?" f_y > 75 ksi: transverse reinforcement per §5.7.2.5 (beams) or §5.10.4.3 (columns) is required over the lap length (§5.10.8.4).":""}${(f.fc_ksi>10&&!inp.lightweight)?" f'c > 10 ksi: transverse reinforcement of at least #3 bars at 12 in., at least three bars, is required along the lap (§5.10.8.4.3).":""}</div>`:"")
   + (lapProhibited(inp,f)?`<div class="warnbox" style="border-left-color:var(--fail);background:var(--failbg)"><b style="color:var(--fail)">Lap splice NOT permitted (${lapRef(f)}).</b> #${inp.barSize} bars shall not be lap spliced in tension. Use a mechanical or welded splice. The length below is shown for reference only.</div>`:"")
   + classABlock(inp,f)
   + subsec("1. Base Development Length",ref, varTable([
@@ -1324,7 +1454,8 @@ function tabBatch(inp,f){
 const REBAR_CARDS={tLd:['tension','Development Length'],tConf:['tension','Confinement Term'],
   tExcess:['tension','Excess Reinforcement Factor'],hLdh:['hook','Hook Development Length'],
   cLdc:['compression','Governing Expressions'],tsLen:['tsplice','Base Development Length'],
-  tsClassA:['tsplice','Class A Eligibility Check'],csLen:['csplice','Splice Length']};
+  tsClassA:['tsplice','Class A Eligibility Check'],csLen:['csplice','Splice Length'],
+  tConfA:['tension','Confinement Factor']};
 function rebarLenCards(){ return [['tLd','l_d'],['hLdh','l_dh'],['cLdc','l_dc'],['tsLen','l_st'],['csLen','l_sc']]; }
 function rebarTabName(tab){ const b=document.querySelector('.tab[data-tab="'+tab+'"]'); return b?b.textContent.trim():tab; }
 function rebarCardTxt(card){ const c=REBAR_CARDS[card]; return rebarTabName(c[0])+' · '+c[1]; }
@@ -1372,9 +1503,9 @@ function buildDashboard(inp,f){
     {lbl:"Comp. splice (12 in min applied)", info:true, val:fmt(cs.lsc,1)+" in"},
     // Code limits applied in the calculation (information, not a deficiency)
     f.AASHTO
-      ? {lbl:"λ_rc (limited to 0.4–1.0)", info:true, val:fmt(f.lam_rc,2)+(f.lam_rc_bounded?" (limit applied)":"")}
+      ? {lbl:"λ_rc (limited to 0.3–1.0)", info:true, val:fmt(f.lam_rc,2)+(f.lam_rc_bounded?" (limit applied)":"")}
       : {lbl:"(c_b+K_tr)/d_b (limited to 2.5)", info:true, val:fmt(f.cbKtr,2)+(f.cbKtrCapped?" (limit applied)":"")},
-    {lbl:"f'c within code range", ok:(inp.fc>=2500 && inp.fc<=10000), val:fmt(inp.fc,0)+" psi"},
+    {lbl:"f'c within code range", ok:(inp.fc>=2500 && inp.fc<=(f.AASHTO?f.fcLimA*1000:10000)), val:fmt(inp.fc,0)+" psi"},
     f.AASHTO
       ? {lbl:"λ_rl·λ_cf (limited to 1.7)", info:true, val:fmt(f.lam_rlcf_cap,2)+(f.lam_rlcf_capped?" (limit applied)":"")}
       : {lbl:"ψ_t·ψ_e (limited to 1.7)", info:true, val:fmt(f.psiTEcap,2)+(f.psiTEcapped?" (limit applied)":"")},
@@ -1390,6 +1521,8 @@ function buildDashboard(inp,f){
   if(lapProhibited(inp,f)){
     checks.push({lbl:"Lap splice permitted ("+(f.AASHTO?"5.10.8.4.2a":"25.5.1.1")+")", ok:false, val:"#"+inp.barSize+" N/P"});
   }
+  if(f.AASHTO && f.fc_ksi>10 && !inp.lightweight) checks.push({lbl:"#3 transverse @ 12 in (f'c > 10 ksi)", ok:false, val:"verify"});
+  if(f.AASHTO && f.fy_ksi>75) checks.push({lbl:"Transverse reinf. (f_y > 75 ksi)", ok:false, val:"verify"});
   const codeTag = f.AASHTO?"AASHTO LRFD §5.10.8":"ACI 318-19";
   const html = `<h3>Summary Dashboard — Code Checks <span style="font-weight:normal;color:#888">(${codeTag})</span></h3>
     <div class="checks">${checks.map(k=>`
@@ -1461,6 +1594,8 @@ function render(){
 function fcHintUpdate(inp){
   const el=document.getElementById('fcHint'); if(!el) return;
   if(inp.fc<2500) el.innerHTML="⚠ below 2,500 psi";
+  else if(inp.code==="AASHTO" && inp.fc>(inp.lightweight?10000:15000)) el.innerHTML="⚠ above the AASHTO limit; "+(inp.lightweight?"10":"15")+" ksi used";
+  else if(inp.code==="AASHTO" && inp.fc>10000) el.innerHTML="⚠ > 10 ksi: #3 transverse bars @ 12 in required";
   else if(inp.fc>10000) el.innerHTML="⚠ √f'c capped at 100";
   else el.innerHTML="";
 }
@@ -1544,6 +1679,7 @@ function applyState(st){
   // keeping whatever the page currently shows (a loaded project must not inherit the previous project's ψr or λ)
   set('barSpc',inp.barSpc!=null?inp.barSpc:'');set('psiRc',inp.psiRc!=null?inp.psiRc:'1.0');
   set('lwLambda',(inp.lwLambda!=null&&inp.lwLambda!=='')?inp.lwLambda:0.75);
+  set('betaT',(inp.betaT!=null&&inp.betaT!=='')?inp.betaT:0);set('hookR',inp.hookR!=null?inp.hookR:'');
   if(st.currentTab) currentTab=st.currentTab;
   if(st.chartMode) chartMode=st.chartMode;
   if(st.panels){
@@ -1679,7 +1815,7 @@ function rebarApplyPageCSS(on){
 /* codes and articles the printed calculation cites (as the tool quotes them); nothing added */
 function rebarRefs(inp,f){
   if(f.AASHTO) return [
-    ["AASHTO LRFD","Bridge Design Specifications, labelled \"9th Ed.\" in this tool (edition: verify): 5.4.2.8 (λ); 5.10.2.1 (hook geometry); 5.10.8.1.1; 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c (λ<sub>rc</sub>"+(inp.useExcess?", λ<sub>er</sub>":"")+"); 5.10.8.2.4a, Eq. 5.10.8.2.4a-1, 5.10.8.2.4b (standard hooks); 5.10.8.2.5 (compression); 5.10.8.4.2a (no lap splices for bars larger than No. 11); 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5a (compression lap splices, m = 1.0). Article and equation numbers as quoted by the tool."],
+    ["AASHTO LRFD","Bridge Design Specifications, 10th Ed. (2024): 3.5.1 and Table 3.5.1-1 (w<sub>c</sub>); 5.4.2.4 and Eq. 5.4.2.4-1 (E<sub>c</sub>); 5.4.2.8 (λ); 5.4.3.2 (E<sub>s</sub>); Table 5.8.2.5.3a-1 (v, CTT node); 5.10.2.1 (standard hooks); 5.10.2.3 and Table 5.10.2.3-1 (minimum bend diameter); 5.10.8.1.1; 5.10.8.2.1 (scope, f′<sub>c</sub> ≤ 15 ksi); 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c, Eqs. 5.10.8.2.1c-1 to -3 (λ<sub>rc</sub>)"+(inp.useExcess?" and Eq. 5.10.8.2.1c-4 (λ<sub>er</sub>)":"")+"; 5.10.8.2.2a, Eqs. 5.10.8.2.2a-1 to -3, 5.10.8.2.2b (compression); 5.10.8.2.4, 5.10.8.2.4a, Eqs. 5.10.8.2.4a-1 and -2, 5.10.8.2.4b (standard hooks); 5.10.8.4 (f<sub>y</sub> &gt; 75 ksi); 5.10.8.4.2a (no tension lap splices for bars larger than No. 11); 5.10.8.4.3 and 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5a (compression lap splices, m = 1.0)."],
     ["ACI 318-19","25.3.1 (hook geometry, cited with AASHTO 5.10.2.1)."]];
   return [
     ["ACI 318-19","Building Code Requirements for Structural Concrete (ACI 318-19): "+(inp.lightweight?"Table 19.2.4.2 (λ); ":"")+"25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); "+(inp.fy>=80000?"25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); ":"")+"25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); "+(inp.useExcess?"25.4.10.1 (excess reinforcement); ":"")+"25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices)."],
@@ -1691,8 +1827,10 @@ function rebarResultRows(inp,f,tab){
   const t=calcTension(inp,f), h=calcHook(inp,f), c=calcComp(inp,f), ts=calcTensSplice(inp,f,t), cs=calcCompSplice(inp,f);
   const e=classAEligible(inp,f), k=ktrHSCheck(inp,f), np=lapProhibited(inp,f);
   const lapRow=()=>({lab:"Lap splice permitted",msg:`#${inp.barSize}: not permitted; use a mechanical or welded splice (the length is for reference only)`,ref:lapRef(f),st:"FAIL"});
-  if(all) rows.push({lab:"f′c within code range",msg:`f′<sub>c</sub> = ${fmt(inp.fc,0)} psi (2,500–10,000 psi)`,
-    ref:A?"√f′c limited to √10 ksi, AASHTO 5.10.8.2.1a":"√f′c limited to 100 psi, ACI 318-19 25.4.1.4",st:(inp.fc>=2500&&inp.fc<=10000)?"PASS":"FAIL"});
+  if(all) rows.push({lab:"f′c within code range",msg:`f′<sub>c</sub> = ${fmt(inp.fc,0)} psi (2,500–${A?fmt(f.fcLimA*1000,0).replace(/(\d)(\d{3})$/,"$1,$2"):"10,000"} psi)`,
+    ref:A?"f′c ≤ 15 ksi (10 ksi lightweight), AASHTO 5.10.8.2.1, C5.10.8.2.4":"√f′c limited to 100 psi, ACI 318-19 25.4.1.4",st:(inp.fc>=2500&&inp.fc<=(A?f.fcLimA*1000:10000))?"PASS":"FAIL"});
+  if(all && A && f.fc_ksi>10 && !inp.lightweight) rows.push({lab:"Transverse #3 bars @ 12 in. (f′c &gt; 10 ksi)",msg:"along l<sub>d</sub> and tension laps (≥ 3 bars); hook ties #3 @ ≤ 3d<sub>b</sub> (≥ 3): not checked by the tool",ref:"AASHTO 5.10.8.2.1, 5.10.8.4.3, 5.10.8.2.4b",st:"CHK"});
+  if(all && A && f.fy_ksi>75) rows.push({lab:"Transverse reinforcement (f<sub>y</sub> &gt; 75 ksi)",msg:"over l<sub>d</sub> and the lap length per 5.7.2.5 / 5.10.4.3; hook ties per 5.10.8.2.4b: not checked by the tool",ref:"AASHTO 5.10.8.2.1, 5.10.8.4, 5.10.8.2.4",st:"CHK"});
   if(all||tab==="tension"){
     rows.push({lab:"Tension development length",msg:`required l<sub>d</sub> = <b>${fmt(t.ld,2)} in.</b>${t.governedByMin?" (12 in. minimum governs)":""}`,
       ref:A?"AASHTO 5.10.8.2.1a, Eq. 5.10.8.2.1a-1":"ACI 318-19 Eq. 25.4.2.4a, 25.4.2.1",card:"tLd",st:"—"});
@@ -1701,9 +1839,9 @@ function rebarResultRows(inp,f,tab){
       ref:"ACI 318-19 25.4.2.2",card:"tConf",st:!k.known?"CHK":(k.ok?"PASS":"FAIL")});
   }
   if(all||tab==="hook") rows.push({lab:"Standard hook development length",msg:`required l<sub>dh</sub> = <b>${fmt(h.ldh,2)} in.</b>${h.gov==="8db"?" (8d<sub>b</sub> governs)":(h.gov==="6in"?" (6 in. governs)":"")}`,
-    ref:A?"AASHTO 5.10.8.2.4a":"ACI 318-19 Eq. 25.4.3.1",card:"hLdh",st:"—"});
+    ref:A?"AASHTO 5.10.8.2.4a, Eq. 5.10.8.2.4a-1":"ACI 318-19 Eq. 25.4.3.1",card:"hLdh",st:"—"});
   if(all||tab==="compression") rows.push({lab:"Compression development length",msg:`required l<sub>dc</sub> = <b>${fmt(c.ldc,2)} in.</b>${c.gov==="8in"?" (8 in. minimum governs)":(c.gov==="eqA"?" (expression (a) governs)":" (expression (b) governs)")}`,
-    ref:A?"AASHTO 5.10.8.2.5":"ACI 318-19 25.4.9.2",card:"cLdc",st:"—"});
+    ref:A?"AASHTO 5.10.8.2.2a":"ACI 318-19 25.4.9.2",card:"cLdc",st:"—"});
   if(all||tab==="tsplice"){
     rows.push({lab:"Tension lap splice, Class "+ts.cls,msg:`required l<sub>st</sub> = <b>${fmt(ts.lst,2)} in.</b> (${fmt(ts.factor,1)} × l<sub>d</sub> = ${fmt(ts.factor,1)} × ${fmt(ts.ldBase,2)} in.)`,
       ref:A?"AASHTO 5.10.8.4.3a":"ACI 318-19 25.5.2",card:"tsLen",st:"—"});
@@ -1729,7 +1867,7 @@ function buildReport(){
   const inp=readInputs(), f=computeFactors(inp);
   const w=validate(inp,f);
   const root=document.getElementById('printroot');
-  const codeName = f.AASHTO?"AASHTO LRFD 9th Ed. §5.10.8":"ACI 318-19";
+  const codeName = f.AASHTO?"AASHTO LRFD 10th Ed. (2024) §5.10.8":"ACI 318-19";
   const inputEcho=`
     <div class="subsec"><div class="sh"><span>Input Summary</span></div>
     <table class="vars">
@@ -1741,7 +1879,7 @@ function buildReport(){
       <tr><th>Casting</th><td>${inp.topBar?"Top bar":"Other/bottom"}</td>
           <th>Coating</th><td>${fmt(f.psiE,1)}</td></tr>
       <tr><th>c_b</th><td>${fmt(inp.cb,2)} in</td>
-          <th>K_tr</th><td>${fmt(f.Ktr,3)} in${f.AASHTO?"":" ("+rebarLink("tConf","see","")+")"}</td></tr>
+          <th>${f.AASHTO?"k_tr":"K_tr"}</th><td>${f.AASHTO?fmt(f.ktr_a,4)+" in ("+rebarLink("tConfA","see","")+")":fmt(f.Ktr,3)+" in ("+rebarLink("tConf","see","")+")"}</td></tr>
       ${inp.useExcess?`<tr><th>Excess reinf.</th><td>As,req=${fmt(inp.asReq,2)} / As,prov=${fmt(inp.asProv,2)} → ${fmt(f.excess,3)} (${rebarLink("tExcess","see","")})</td>
           <th>% spliced</th><td>${fmt(inp.pctSpliced,0)}%</td></tr>`:""}
     </table></div>`;
