@@ -1044,3 +1044,96 @@ Check cases come from headless Chromium, main (e29761a) vs branch, with the page
 - **Behaviour change to confirm:**
   - Ctrl+P now prints only the calculation report. Before, it printed every output tab, then the report.
   - The Report tab's sections are no longer collapsible.
+
+## 2026-10-19 — PR: claude/lightpole-shaft-phi (shaft flexure φ per ACI 318-19 Table 21.2.2; engineer decision 2026-10-19; PR link added after merge)
+
+Answers the D11 open item "Calculation (raised only), shaft φ" above. Engineer decision: replace the fixed φ = 0.65 with φ from the net tensile strain, tied row of Table 21.2.2.
+
+### SHAFT-PHI: strain-dependent φ for the drilled-shaft P–M (§4 result change)
+- **Where:** `pmCapacity(shape, b_in, As, nbar, rbar, fc, fy, Pu)`, anchor `// governing = smallest Mn` (≈ line 3172). Display: `rebarWorkedHTML`, anchor `\\phi M_n = ${fmt(cap.phi,2)}` (≈ line 4772). Manual Part 4C.1, anchor `β₁ follows §22.2.2.4.3`. Comment above `barLayoutRound`, anchor `φ = 0.65 (tied, compression-controlled default)`.
+- **Before** (`pmCapacity`):
+  ```js
+  // governing = smallest Mn
+  const gov=axes.reduce((a,x)=>x.detail.Mn<a.detail.Mn?x:a);
+  const phi=0.65;
+  return {phiMn:phi*gov.detail.Mn/12, Mn:gov.detail.Mn/12, Pn:gov.detail.Pn, c:gov.detail.c, phi,
+          detail:gov.detail, beta1, R:gov.hDepth, Es, ecu, Abar, nbar, rbar,
+          shape, axisName:gov.axisName, axes};
+  ```
+- **After:**
+  ```js
+  // φ per ACI 318-19 §21.2.1, Table 21.2.2 (tied transverse reinforcement): ε_t = net tensile strain
+  // in the extreme tension bar (deepest bar; eps > 0 is compression, so ε_t = −eps), ε_ty = f_y/E_s.
+  const ety=fy/Es;
+  axes.forEach(ax=>{
+    const rt=ax.detail.rows.reduce((a,r)=>r.di>a.di?r:a);
+    const et=-rt.eps;
+    const phiA = et<=ety ? 0.65 : (et>=ety+0.003 ? 0.90 : 0.65+0.25*(et-ety)/0.003);
+    Object.assign(ax,{phi:phiA, epsT:et, dt:rt.di, kT:rt.k,
+      phiCls: et<=ety ? 'compression-controlled' : (et>=ety+0.003 ? 'tension-controlled' : 'transition'),
+      phiMn:phiA*ax.detail.Mn/12});
+  });
+  // governing = smallest φMn (φ now differs per axis)
+  const gov=axes.reduce((a,x)=>x.phiMn<a.phiMn?x:a);
+  const phi=gov.phi;
+  return {phiMn:gov.phiMn, Mn:gov.detail.Mn/12, Pn:gov.detail.Pn, c:gov.detail.c, phi,
+          epsT:gov.epsT, ety, dt:gov.dt, kT:gov.kT, phiCls:gov.phiCls,
+          detail:gov.detail, beta1, R:gov.hDepth, Es, ecu, Abar, nbar, rbar,
+          shape, axisName:gov.axisName, axes};
+  ```
+- **Expression:**
+  - Before: φ = 0.65 for every section and every LRFD combination.
+  - After: ε_ty = f_y/E_s; ε_t = 0.003(d_t − c)/c of the extreme tension bar at the converged c (the existing strain-compatibility solution; the tool stores bar strain with compression positive, so ε_t = −ε of the deepest bar);
+    - ε_t ≤ ε_ty: φ = 0.65;
+    - ε_t ≥ ε_ty + 0.003: φ = 0.90;
+    - otherwise φ = 0.65 + 0.25(ε_t − ε_ty)/0.003.
+  - φ is evaluated for each LRFD combination's P_u (the auto-size loop and the check mode both go through `pmCapacity`, so both use it).
+  - **Square shafts:** each axis (face, diagonal) gets its own φ and the axis with the smaller **φM_n** governs. Before, the smaller M_n governed (the same thing while φ was constant). The card already said "smaller φM_n".
+- **Not changed:** the shaft has no spiral option (transverse steel is ties only, `manTieBar`/auto ties), so the tied row applies; no spiral row was added. There is no separate axial-only φ in the shaft check (no φP_n,max check exists). The anchor φ (0.65/0.70/0.75), shear φ = 0.75, torsion φ = 0.75 and base-plate φ = 0.90 are unchanged. Broms does not use φM_n of the shaft.
+- **Governing provision:** ACI 318-19 §21.2.1 (φ for moment, axial force, or combined), Table 21.2.2 (φ by net tensile strain ε_t, "Other" (tied) transverse reinforcement), with ε_ty = f_y/E_s (§21.2.2.1). Less conservative than before (φ rises from 0.65 up to 0.90).
+- **Display (CLAUDE.md §6):** Shaft · Shaft structural check, step 3, and report §13 (same `rebarWorkedHTML`): a new "Strength reduction factor φ [ACI 318-19 §21.2.1, Table 21.2.2]" block works ε_ty, ε_t and φ symbolically → substituted → result, names the extreme tension bar and d_t, and the φM_n line now shows φ to 3 decimals with its class (was the fixed text "φ = 0.65, tied, compression-controlled"). Manual Part 4C.1 gains one paragraph on φ.
+- **Saved data:** none. No key or format changed. New result fields only (`cap.epsT`, `ety`, `dt`, `kT`, `phiCls`, per-axis `phi`/`phiMn`).
+
+### Hand check (default light pole, "Main St Pole 4")
+- Round shaft b = 36 in, (12) #6, f′c = 4,000 psi, f_y = 60,000 psi, E_s = 29,000,000 psi, cover 3 in + #4 tie allowance → r_bar = 18 − 3 − 0.5 − 0.375 = 14.125 in.
+- Governing LRFD combination 1.2D + 1.0W: P_u = 1,088 lb, M_u = 19,949 lb·ft; converged c = 5.151 in (unchanged).
+- Extreme tension bar = bar 10 (270°): d_t = 18 + 14.125 = 32.125 in.
+- ε_ty = 60,000/29,000,000 = 2.069×10⁻³; ε_ty + 0.003 = 5.069×10⁻³.
+- ε_t = 0.003(32.125 − 5.151)/5.151 = 15.711×10⁻³ (the −15.711×10⁻³ bar-10 strain in the table; D11 quoted −15.7×10⁻³) ≥ 5.069×10⁻³ → tension-controlled, φ = 0.90.
+- M_n = 392,641 lb·ft (unchanged).
+- φM_n: before 0.65 × 392,641 = 255,217 lb·ft; after 0.90 × 392,641 = 353,377 lb·ft.
+- Shaft flexure D/C: before 19,949/255,217 = 0.078; after 19,949/353,377 = 0.056.
+- Bars: (12) #6 before and after (minimum steel governs the selection, not flexure).
+
+Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 in, d_t = 10.64 in, ε_t = 0.003(10.64 − 4.20)/4.20 = 4.598×10⁻³; φ = 0.65 + 0.25(4.598 − 2.069)/3.000 = 0.861; M_n = 62,294 lb·ft; φM_n = 0.65 × 62,294 = 40,491 → 0.861 × 62,294 = 53,621 lb·ft; D/C 33,907/40,491 = 0.837 → 0.632.
+
+### Before / after, the 6 PR #277 cases
+| Case | Bars (auto/check) | ε_t (×10⁻³) | φ | φM_n (lb·ft) | M_u (lb·ft) | Shaft flexure D/C |
+|---|---|---|---|---|---|---|
+| 1 Default pole | (12) #6 → (12) #6 | 15.711 | 0.65 → 0.90 | 255,217 → 353,377 | 19,949 | 0.078 → 0.056 |
+| 2 Square shaft / check mode / constrained | (8) #8 check → same | 29.915 (face axis governs; diagonal 9.95) | 0.65 → 0.90 | 334,250 → 462,808 | 17,492 | 0.052 → 0.038 |
+| 3 No cables / rect tube / V = 140 / custom soil | (12) #6 → (12) #6 | 15.724 | 0.65 → 0.90 | 254,994 → 353,069 | 39,064 | 0.153 → 0.111 |
+| 4 Monopost sign | (12) #6 → (12) #6 | 15.727 | 0.65 → 0.90 | 254,938 → 352,992 | 38,186 | 0.150 → 0.108 |
+| 5 Two-post sign (V = 130, square), P1 and P2 | (16) #6 → (16) #6 | 27.208 (face; diagonal 9.34) | 0.65 → 0.90 | 368,825 → 510,680 | 36,560 | 0.099 → 0.072 |
+| 6 Broms cohesive, K_d override 0.95 | (12) #6 → (12) #6 | 15.711 | 0.65 → 0.90 | 255,217 → 353,377 | 18,954 | 0.074 → 0.054 |
+
+- No auto-sized bar set changed in these 6 cases: flexure D/C is ≤ 0.15 and minimum steel governs the selection. The governing axis of the square shafts is unchanged (face). Shaft diameter is an input, not auto-sized, so no shaft size changes.
+- Flexure-governed demonstration (default pole, b = 1.5 ft, V = 180 mph, H = 50 ft): auto-size picks (9) #6 before (φ = 0.65, φM_n = 73,392, D/C 0.989) and (6) #6 after (ε_t = 6.909×10⁻³, φ = 0.90, φM_n = 75,113 lb·ft, D/C = 72,570/75,113 = 0.966).
+
+### Every output that changes (6 cases)
+- Shaft tab: "Vertical reinforcement" φM_n vs M_u readout (`oPhiMn`); the worked shaft card step 3 (new φ block, φM_n lines, "Provide … φM_n = …" line); check-mode table "Flexure" row (case 2).
+- Summary: "Shaft flexure (P–M)" row capacity and D/C (and its utilisation %).
+- Report: §13 shaft reinforcement (same worked block) and the Design Summary result line "Shaft flexure".
+- Captured result objects: only `reo.long.phiMn`, `reo.long.cap.phiMn`, `reo.long.cap.phi`, plus the new fields. Nothing else differs: loads, combinations, embedment, bearing, Broms, anchors, pole stress, ties and the governing check (tie spacing, D/C 1.00) are identical. `window.__summary` text is identical.
+
+### How verified
+- `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: all scripts pass.
+- `node tests/compare.mjs --tool page --file "Light Pole and Sign Post.html"`: page.text and page.storage same; the 3 console errors are the kit's blocked jsDelivr KaTeX requests, identical on main.
+- Headless Chromium, origin/main (78938d8) vs branch, KaTeX 0.16.9 served locally (npm pack), the PR #277 harness (wraps `renderSummary`, `buildReport`, `buildSignReport`): leaf-by-leaf diff of every captured object for the 6 cases; the only differing leaves are those listed above. No console errors; no `.katex-error` in any case; the report holds the φ block once per stack.
+- Screenshots of the worked φ step (tension-controlled, transition, and the flexure-governed case) inspected.
+
+### Other copies
+- None. `pmCapacity` exists only in this tool.
+
+### Open items
+- None new.
