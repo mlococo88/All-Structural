@@ -1421,3 +1421,46 @@ Line numbers are approximate; search for the anchor text. The file uses LF line 
   - Screenshots of the dashboard (main and branch) for (a), (b), (c) looked at: REVIEW chip amber, N/A chips grey.
 - **Other copies:** none.
 - **Resolves** the D11 entry's open items "Contact-area chip" and "Sliding chips with no horizontal load".
+
+## 2026-10-19 — PR: claude/aashto10-spread-footing (PR link added after merge)
+
+Line numbers are approximate, as of this fix. Search for the anchor text.
+
+### SF-A10: AASHTO LRFD edition stated (10th Ed., 2024); depth-factor citation corrected (text only, no result changes)
+- **Where:** six text strings; no function logic changed.
+  1. Soil inputs, depth-factor row hint (≈ line 312). Anchor: `data-path="soil.sfdDepthF"`
+  2. `renderBearing`, §3.3 note (≈ line 2138). Anchor: `Reference: Vesić (1973, 1975)`
+  3. `renderBearing`, §3.3 Depth factors line, option on, reference text (≈ line 2154). Anchor: `option on — soil above the base taken as competent and permanent`
+  4. `SFD_REFS`, AASHTO LRFD row (≈ line 2534). Anchor: `['AASHTO LRFD','Bridge Design Specifications`
+  5. User Manual §2 Input Reference, Depth factors row (≈ line 4908). Anchor: `["Depth factors d<sub>q</sub>, d<sub>c</sub>"`
+  6. User Manual §A.2 References, Vesić item (≈ line 5192). Anchor: `Foundation Engineering Handbook</i>, 1975.`
+- **Problem:** the tool stated no AASHTO edition ("edition: verify (the tool states none)") and said AASHTO LRFD 10.6.3.1.2a "presents the same form" as the Vesić equation it uses. Against the 10th Ed. (2024) that holds for N_q, N_c, N_γ, the shape factors and the inclination factors, but not for the depth factor: 10th Ed. Eq. 10.6.3.1.2a-10 is d_q = 1 + 2 tanφf (1 − sinφf)² arctan(Df/B) at every depth (no linear k = Df/B branch), with d_q ≤ 1.4, applied to the N_q term only (no d_c in Eq. 10.6.3.1.2a-2). The tool's option "On (Vesić)" uses Vesić's k = Df/B′ (≤ 1, arctan above), no cap, and d_c. The calculation is **not** changed in this PR: the tool is an ACI 318-19 / ASCE 7-16 / IBC 2021 building-footing tool with an ASD factor of safety on a Vesić capacity, so which depth factor it should use is an engineer decision (see Needs engineer). This entry only makes the text say what the tool does and which AASHTO edition the remaining citations were checked against.
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.6.3.1.2a (Eqs. 10.6.3.1.2a-1 to -10, Tables 10.6.3.1.2a-1 to -3), 10.6.3.3, 10.6.3.4, 10.6.4.2, 11.6.3.3, 11.6.5.1 (citations checked against the 10th Ed.; values in the tool unchanged).
+- **Before / After** (source text, exactly):
+  1. Before: `<span class="hint">AASHTO 10.6.3.1.2a</span></div>`
+     After: `<span class="hint">Vesi&cacute; form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a</span></div>`
+  2. Before: `Reference: Vesić (1973, 1975); AASHTO LRFD 10.6.3.1.2a form.'));`
+     After: `Reference: Vesić (1973, 1975). AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a uses the same N, shape and inclination factors, but its depth factor (Eq. 10.6.3.1.2a-10) differs from the Vesić depth factors used here (see the Depth factors line).'));`
+  3. Before: `option on — soil above the base taken as competent and permanent (AASHTO LRFD 10.6.3.1.2a)',`
+     After: `option on — soil above the base taken as competent and permanent (use condition: AASHTO LRFD 10.6.3.1.2a). Not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10, which takes arctan(Df/B) at every depth, caps dq at 1.4 and has no dc',`
+  4. Before: `['AASHTO LRFD','Bridge Design Specifications — Art. 10.6.3.1.2a (Vesić form, depth and inclination factors), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning); edition: verify (the tool states none)'],`
+     After: `['AASHTO LRFD','Bridge Design Specifications, 10th Ed. (2024) — Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning)'],`
+  5. Before: `On: Vesić depth factors from D<sub>f</sub>/B′. AASHTO LRFD 10.6.3.1.2a: use them`
+     After: `On: Vesić depth factors from D<sub>f</sub>/B′ (not the AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10 form, which uses arctan(D<sub>f</sub>/B) at every depth, caps d<sub>q</sub> at 1.4 and has no d<sub>c</sub>). AASHTO LRFD 10.6.3.1.2a: use them`
+  6. Before: `Foundation Engineering Handbook</i>, 1975. AASHTO LRFD 10.6.3.1.2a presents the same form.",`
+     After: `Foundation Engineering Handbook</i>, 1975. AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.6.3.1.2a uses the same N, shape and inclination factors; its depth factor (Eq. 10.6.3.1.2a-10) differs from Vesić’s.",`
+- **Saved data:** none. `soil.sfdDepthF` keeps its values (`off` / `on`) and meaning; the migration that opens pre-option saves with `on` is untouched.
+- **Check case** (results unchanged; numbers for the engineer's decision): square footing B = L = 8 ft, Df = 4 ft, φ = 32°, c = 0, γ = 120 pcf, no groundwater, concentric vertical load, FS = 3 (`vesicCapacity` run in Node: same on main and on the branch).
+  - N_q = 23.18, N_γ = 30.21, s_q = 1 + tan 32° = 1.625, s_γ = 0.60, q = 0.120 × 4 = 0.480 ksf. γ term = 0.5 × 0.120 × 8 × 30.21 × 0.60 = 8.70 ksf. 2 tanφ (1 − sinφ)² = 2 × 0.6249 × (1 − 0.5299)² = 0.2762.
+  - Option off (default): d_q = 1.000; q term = 0.480 × 23.18 × 1.625 = 18.08 ksf; q_n = 26.78 ksf; q_allow = 8.93 ksf.
+  - Option on, tool (Vesić, unchanged): k = Df/B = 0.5; d_q = 1 + 0.2762 × 0.5 = 1.138; d_c = 1.144 (no effect, c = 0); q term = 20.57 ksf; q_n = 29.27 ksf; q_allow = 9.76 ksf.
+  - For comparison only, 10th Ed. Eq. 10.6.3.1.2a-10 (not implemented): arctan(0.5) = 0.4636 rad; d_q = 1 + 0.2762 × 0.4636 = 1.128 (≤ 1.4); q term = 20.39 ksf; q_n = 29.09 ksf; q_allow = 9.70 ksf (0.6 % below the tool's "On").
+- **How verified:**
+  - `node tests/check-syntax.mjs "Spread Footing.html"`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file "Spread Footing.html"`: page.text and page.storage identical (the changed strings are not on the default visible page).
+  - Headless, main vs branch: B = L = 8, Df = 4, φ = 32°, c = 0, pedestals moved to the centre, depth factors Off and On, `recalc()`: governing `R.govBear.cap` (d_q, d_c, terms, q_ult, q_allow) identical; the page text differs only in the six strings above.
+- **Other copies:** none.
+- **Needs engineer:**
+  1. Depth factor when the option is On: keep Vesić (building practice, ASD FS), switch to 10th Ed. Eq. 10.6.3.1.2a-10 (arctan(Df/B) always, d_q ≤ 1.4, no d_c), or add a third choice. Projects saved before the option existed open with it On (Vesić), so changing what `on` means would change their results; a new option value would avoid that.
+  2. 10th Ed. C10.6.3.1.2a: Eq. 10.6.3.1.2a-10 is verified for φf 32°–42° and Df/B 1–8. The check case (Df/B = 0.5) and most building footings fall below that range.
+  3. Inclination exponent: 10th Ed. Eq. 10.6.3.1.2a-9 writes n with the footing B and L; the tool uses the effective B′/L′ (an earlier deliberate change). Not changed here.
