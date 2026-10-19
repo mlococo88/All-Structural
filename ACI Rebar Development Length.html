@@ -505,8 +505,10 @@ function calcTensSplice(inp,f,tens){
 function calcCompSplice(inp,f){
   let lsc_calc;
   if(f.AASHTO){
-    // 5.10.8.4.5: lsc = 0.5 m fy db (fy<=60), where m=1.0; higher fy adjustments; simplified
-    if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;   // same numeric as ACI in practice
+    // AASHTO LRFD 5.10.8.4.5a (edition: verify): l_c = 0.5·m·fy·db (fy <= 60 ksi), m·(0.9fy - 24)·db (fy > 60 ksi), fy in ksi;
+    // x4/3 where f'c < 3.0 ksi; >= 12 in. m = 1.0 (no reduction for ties or spirals; engineer decision 2026-10-19).
+    // Written in psi with m = 1.0 these are the same expressions as the ACI branch: 0.5·fy_ksi = 0.0005·fy_psi, 0.9·fy_ksi = 0.0009·fy_psi.
+    if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;   // = 0.5·m·fy·db, fy in ksi, m = 1.0
     else lsc_calc = (0.0009*inp.fy-24)*f.db;
     if(inp.fc<3000) lsc_calc *= (4/3);
   } else {
@@ -1220,6 +1222,7 @@ function tabTSplice(inp,f){
 function tabCSplice(inp,f){
   const s = calcCompSplice(inp,f);
   const fyLE60 = inp.fy<=60000;
+  if(f.AASHTO) return tabCSpliceAASHTO(inp,f,s);
   return hero("Compression Lap Splice","ACI 318-19 §25.5.5",`${fmt(s.lsc,2)} in`,"Required l_sc")
   + (lapProhibited(inp,f)?(f.AASHTO
       ? `<div class="warnbox" style="border-left-color:var(--fail);background:var(--failbg)"><b style="color:var(--fail)">Lap splice NOT permitted (${lapRef(f)}).</b> Lap splices shall not be used for bars larger than No. 11. Use a mechanical connection or welded splice. The length below is shown for reference only.</div>`
@@ -1243,6 +1246,38 @@ function tabCSplice(inp,f){
                : `(0.0009\\times ${fmt(inp.fy,0)} - 24)\\times ${fmt(f.db,3)}`,
         `${s.lowFc?"\\text{(×4/3 for }f'_c<3000)\\ ":""}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
     + eqBlock("Minimum governs",f.AASHTO?"§5.10.8.4.5":"§25.5.5.1",
+        "l_{sc} = \\max\\!\\left(l_{sc,calc},\\ 12\\ \\text{in}\\right)",
+        `\\max(${fmt(s.lsc_calc,2)},\\ 12)`,
+        `\\boxed{l_{sc} = ${fmt(s.lsc,2)}\\ \\text{in}}`));
+}
+
+/* ---- AASHTO compression lap splice branch (5.10.8.4.5a; engineer decision 2026-10-19: AASHTO citation and form,
+   m fixed at 1.0). Display only: l_sc comes from calcCompSplice, whose values equal the ACI expressions. ---- */
+function tabCSpliceAASHTO(inp,f,s){
+  const fyLE60 = inp.fy<=60000;
+  return hero("Compression Lap Splice","AASHTO LRFD §5.10.8.4.5a",`${fmt(s.lsc,2)} in`,"Required l_sc")
+  + (lapProhibited(inp,f)?`<div class="warnbox" style="border-left-color:var(--fail);background:var(--failbg)"><b style="color:var(--fail)">Lap splice NOT permitted (${lapRef(f)}).</b> Lap splices shall not be used for bars larger than No. 11. Use a mechanical connection or welded splice. The length below is shown for reference only.</div>`:"")
+  + `<div class="narr">The AASHTO compression lap length (ℓ_c in the specification; l_sc here) is a direct function of f_y and d_b
+     (ksi units) with the modification factor m. Where f'c is less than 3.0 ksi the length is increased by one-third (§5.10.8.4.5a).</div>`
+  + subsec("1. Splice Length","§5.10.8.4.5a", varTable([
+      ["f_y","Yield strength",fmt(f.fy_ksi,1),"ksi"],
+      ["d_b","Bar diameter",fmt(f.db,3),"in"],
+      ["f'_c","Concrete strength",fmt(f.fc_ksi,2),"ksi"],
+      ["m","Modification factor (1.0: no reduction for ties or spirals taken)","1.0","—"],
+    ])
+    + note(`
+      <p>Compression lap splices are governed by a simple empirical formula rather than the bond mechanics of tension. The required length depends on the steel grade and bar size, with the modification factor m.</p>
+      <div class="vardef"><span class="s">f_y ≤ 60 ksi</span> — l_c = 0.5·m·f_y·d_b.</div>
+      <div class="vardef"><span class="s">f_y > 60 ksi</span> — l_c = m·(0.9·f_y − 24)·d_b, a steeper relationship for high-strength bars.</div>
+      <div class="vardef"><span class="s">m = 1.0</span> — The article allows a smaller m where the splice is enclosed by ties or spirals meeting its requirements; the tool does not take that reduction (conservative).</div>
+      <div class="vardef"><span class="s">f'c < 3.0 ksi</span> — The length is increased by one-third (×4/3).${s.lowFc?" <b>This increase is active for your input.</b>":""}</div>
+      <div class="vardef"><span class="s">12 in minimum</span> — Absolute floor.</div>`)
+    + eqBlock(fyLE60?"Splice length (f_y ≤ 60 ksi)":"Splice length (f_y > 60 ksi)","§5.10.8.4.5a",
+        fyLE60 ? "l_{sc} = 0.5\\,m\\,f_y\\,d_b" : "l_{sc} = m\\,(0.9\\,f_y - 24)\\,d_b",
+        fyLE60 ? `0.5\\times 1.0\\times ${fmt(f.fy_ksi,1)}\\times ${fmt(f.db,3)}`
+               : `1.0\\times(0.9\\times ${fmt(f.fy_ksi,1)} - 24)\\times ${fmt(f.db,3)}`,
+        `${s.lowFc?"\\times\\tfrac{4}{3}\\ (f'_c<3.0\\ \\text{ksi})\\quad ":""}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
+    + eqBlock("Minimum governs","§5.10.8.4.5a",
         "l_{sc} = \\max\\!\\left(l_{sc,calc},\\ 12\\ \\text{in}\\right)",
         `\\max(${fmt(s.lsc_calc,2)},\\ 12)`,
         `\\boxed{l_{sc} = ${fmt(s.lsc,2)}\\ \\text{in}}`));
@@ -1644,8 +1679,8 @@ function rebarApplyPageCSS(on){
 /* codes and articles the printed calculation cites (as the tool quotes them); nothing added */
 function rebarRefs(inp,f){
   if(f.AASHTO) return [
-    ["AASHTO LRFD","Bridge Design Specifications, labelled \"9th Ed.\" in this tool (edition: verify): 5.4.2.8 (λ); 5.10.2.1 (hook geometry); 5.10.8.1.1; 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c (λ<sub>rc</sub>"+(inp.useExcess?", λ<sub>er</sub>":"")+"); 5.10.8.2.4a, Eq. 5.10.8.2.4a-1, 5.10.8.2.4b (standard hooks); 5.10.8.2.5 (compression); 5.10.8.4.2a (no lap splices for bars larger than No. 11); 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5 (compression lap splices). Article and equation numbers as quoted by the tool."],
-    ["ACI 318-19","25.3.1 (hook geometry, cited with AASHTO 5.10.2.1); 25.5.5 and 25.5.5.1 (cited by the Comp. Splice tab in this mode too)."]];
+    ["AASHTO LRFD","Bridge Design Specifications, labelled \"9th Ed.\" in this tool (edition: verify): 5.4.2.8 (λ); 5.10.2.1 (hook geometry); 5.10.8.1.1; 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c (λ<sub>rc</sub>"+(inp.useExcess?", λ<sub>er</sub>":"")+"); 5.10.8.2.4a, Eq. 5.10.8.2.4a-1, 5.10.8.2.4b (standard hooks); 5.10.8.2.5 (compression); 5.10.8.4.2a (no lap splices for bars larger than No. 11); 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5a (compression lap splices, m = 1.0). Article and equation numbers as quoted by the tool."],
+    ["ACI 318-19","25.3.1 (hook geometry, cited with AASHTO 5.10.2.1)."]];
   return [
     ["ACI 318-19","Building Code Requirements for Structural Concrete (ACI 318-19): "+(inp.lightweight?"Table 19.2.4.2 (λ); ":"")+"25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); "+(inp.fy>=80000?"25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); ":"")+"25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); "+(inp.useExcess?"25.4.10.1 (excess reinforcement); ":"")+"25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices)."],
     ["AASHTO LRFD","5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic; edition: verify)."]];
@@ -1679,7 +1714,7 @@ function rebarResultRows(inp,f,tab){
   }
   if(all||tab==="csplice"){
     rows.push({lab:"Compression lap splice",msg:`required l<sub>sc</sub> = <b>${fmt(cs.lsc,2)} in.</b>${cs.lowFc?" (incl. ×4/3 for f′c < 3,000 psi)":""}`,
-      ref:A?"AASHTO 5.10.8.4.5":"ACI 318-19 25.5.5.1",card:"csLen",st:"—"});
+      ref:A?"AASHTO 5.10.8.4.5a":"ACI 318-19 25.5.5.1",card:"csLen",st:"—"});
     if(np && !all) rows.push(lapRow());
   }
   return rows;
