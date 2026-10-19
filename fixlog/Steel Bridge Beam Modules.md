@@ -19648,3 +19648,42 @@ index 32429cc..052e26e 100644
 @@ -12901,0 +12939 @@ function gdStPayload(g, addPL) {
 +  const ldIn = gdStLoads(R, pl); if (ldIn) p.girderDetail.loads = ldIn;   // GDL (2026-10-19): the load inputs of this girder (optional, display in ST-Girder)
 ```
+
+
+## 2026-10-19 — PR: claude/gd-stgirder-import-all (GDX: the detail-module inputs sent to ST-Girder; engineer decision 2026-10-19 "Whatever can be imported from GirderDetail should be"; cross-tool PR with stgirder.html, HANDOFF.md §4.9 and ENGINEER_CHECKS GD69/GD70; PR link added after merge)
+
+### GDX. `girderDetail.details` added to the "Send to ST-Girder" payload   [hand-off data; no GirderDetail result change, Tier 1 for this file]
+- **Where:** new `gdStDetails()` above `gdStPayload` (anchor `/* GDX (engineer decision 2026-10-19`); in `gdStPayload` after the GDL line: `const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;`.
+- **Before:** the payload carried no stiffener, stud or fatigue inputs; ST-Girder used its own.
+- **After:** optional `girderDetail.details` (HANDOFF.md §4.9), read as entered in the modules: `transverseStiffener` (Transverse stiffeners type A: b_t, t_p, sides, grade and F_y, the d_o values of the type A rows), `bearingStiffeners` (Bearing stiffeners types: name, pairs, b_t, t_p; grade and F_y), `studs` (Shear connectors: d, h, F_u, transverse spacing, zones x1, x2, n per row, pitch), `fatigue` (Fatigue: ADTT one direction, p, (ADTT)SL = p × ADTT, design life, limit state; Girder section top and bottom flange fatigue categories; the cycles n of the Fatigue rows). Bridge-wide values (the module rows cover the interior and exterior girders). Omitted if it cannot be built.
+- **Governing provision:** none changed (data only).
+- **Check case (built-in 15°, AASHTO, G2):** `details.transverseStiffener` = { b_t 4.5, t_p 0.375, sides 1, grade 50W, F_y 50, spacings [60], rows 12 }; `bearingStiffeners` = abutment 1 pair 6.75 × 0.625, pier 1 pair 8.00 × 0.750, grade 50; `studs` = d 0.875, h 4, 30 zones; `fatigue` = ADTT 2000, p 0.85, (ADTT)SL 1700, life 75, limit auto, catTop B, catBot B, cycles [1, 1.5].
+- **How verified:** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"` (all scripts pass); `node tests/compare.mjs --tool gd --project builtin,util --owner AASHTO,MassDOT`: all sections identical to main (0573760), no console errors. G2 payloads (built-in AASHTO; `tests/projects/gd/util.json` MassDOT) from main and from the branch: identical except `girderDetail.details` (producedAt removed).
+- **Saved data:** none. Channel, key, `_schema`, `schemaVersion` unchanged; the field is additive and optional.
+- **Other copies:** receiver `stgirder.html` (fixlog/stgirder.md GDX).
+- **Open items:** ENGINEER_CHECKS GD70 (values not transferred).
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 052e26e..eaf5b08 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -12874,0 +12875,15 @@ function gdStLoads(R, addPL) {
++/* GDX (engineer decision 2026-10-19 "whatever can be imported from GirderDetail should be"; HANDOFF.md 4.9): the detail-module inputs, optional field
++   girderDetail.details, for ST-Girder's stiffener, stud and fatigue inputs. Read as entered in the modules (P.ts, P.bs, P.sc, P.fa, P.gs); bridge-wide values
++   (the modules' rows cover the interior and exterior girders), not girder-specific. Data only: nothing here changes. null when it cannot be built. */
++function gdStDetails() {
++  try {
++    const r4 = v => Math.round((+v || 0) * 1e4) / 1e4, Fy = g => { const q = GD_GR[g]; return q ? q.Fy : null; }, ts = P.ts || {}, bs = P.bs || {}, sc = P.sc || {}, fa = P.fa || {}, gs = P.gs || {};
++    const A = ts.types && ts.types.A, rowsA = (ts.rows || []).filter(r => r.type === 'A'), uniq = a => [...new Set(a.filter(v => isFinite(v) && v > 0))].sort((p, q) => p - q);
++    const ADTT = nm(fa.ADTT), p = nm(fa.p);
++    return { source: 'GirderDetail detail modules, as entered (bridge-wide: the module rows cover the interior and exterior girders)',
++      transverseStiffener: A ? { module: 'Transverse stiffeners', type: A.name || 'Intermediate stiffener', bt: r4(A.bt), tp: r4(A.tp), sides: String(A.sides) === '2' ? 2 : 1, grade: ts.gS, Fy: Fy(ts.gS), spacings: uniq(rowsA.flatMap(r => [nm(r.do1), nm(r.do2)])), rows: rowsA.length } : null,
++      bearingStiffeners: bs.types ? { module: 'Bearing stiffeners', grade: bs.gS, Fy: Fy(bs.gS), types: Object.entries(bs.types).map(([k, t]) => ({ type: k, name: t.name, pairs: nm(t.np), bt: r4(t.bt), tp: r4(t.tp) })) } : null,
++      studs: sc.d ? { module: 'Shear connectors', d: r4(sc.d), h: r4(sc.h), Fu: r4(sc.Fu), transverseSpacing: r4(sc.st), zones: (sc.zones || []).map(z => ({ x1: r4(z.x1), x2: r4(z.x2), nr: nm(z.nr), p: r4(z.p) })) } : null,
++      fatigue: ADTT > 0 ? { module: 'Fatigue; Girder section (flange details)', ADTT: r4(ADTT), adttBasis: 'one direction', p: r4(p), ADTTsl: r4(p * ADTT), life: nm(fa.life), limit: fa.limit || 'auto', catTop: gs.catT || null, catBot: gs.catB || null, cycles: uniq((fa.rows || []).map(r => nm(r.n))) } : null };
++  } catch (e) { return null; }
++}
+@@ -12939,0 +12955 @@ function gdStPayload(g, addPL) {
++  const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;   // GDX (2026-10-19): the detail-module inputs (optional; ST-Girder imports the 1:1 ones)
+```
