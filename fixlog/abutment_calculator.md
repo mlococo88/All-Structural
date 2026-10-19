@@ -3210,3 +3210,493 @@ index 6606efa..453d8aa 100644
      u.push(["Bearing fixity, type, height, pedestal, seat and girder elevations; girder stations; unit station","no matching calculator input (the calculator works from the bridge seat)"]);
      u.push(["Footing width, deck / seat / ground elevations","the calculator derives B = toe + stem + heel and uses heights, not elevations"]);
 ```
+
+## 2026-10-19 — PR: claude/abut-defects-calc — stability live-load case, batter centroid, stem M_s, support length, EDM count, seat A₂ (PR link added after merge)
+
+Branched from claude/abut-defects-factors (F27–F32); the numbers "before" below are that branch (`b8da0d5`), "after" this branch. Review defects N1, N2, N3, N5, N6, N9, as the engineer approved. Basis: AASHTO LRFD 10th Ed. (2024), checked against the text (Table 4.7.4.4-1, 5.6.5 and Fig. 5.6.5-1 read from the rendered pages). Results come from the real `computeAll()` in headless Chromium. The exact edits are in the appendix as a unified diff against `b8da0d5`. Default project as in F27.
+
+### F33. Sliding, eccentricity, pile minimum reaction, foundation hand-off: LS + BR with the girder LL reaction off (N1)   [calc change] [MORE conservative]
+- **Where:** `comboEffects` (anchor `liveOn 2: LS and BR on, girder LL reaction off`), `permutations(lsName,stab)` (anchor `stab = true (sliding, eccentricity, pile minimum reaction, foundation hand-off)`); the sliding and eccentricity loops and the permutation tables call `permutations(lsName,true)`; the pile loop uses the new case for `worstMin` only (`pl.liveOn!==2` guards `best` and `worstH`); foundation hand-off `cases()` uses it and adds "H/V max" and "|e| max" for a spread footing; e_lim (F30) uses γEQ only with `liveOn===1`; Tab 2 "Live" column shows "LS, BR only"; Tab 3 §3.1/§3.2 and Tab 4 §4.4 notes say which case governs. Bearing and the maximum pile reaction keep live load on/off only, as before.
+- **Before:** `else if(gr.cls==="LL") gamma = liveOn ? L.LL : 0;` and `const lives=L.liveOpt?[1,0]:[0];` (LL reaction, BR, LSh and LSv share one switch).
+- **After:**
+  ```js
+  else if(gr.cls==="LL") gamma = liveOn ? ((liveOn===2&&k==="LL")? 0 : L.LL) : 0;
+  function* permutations(lsName,stab){ … const lives=L.liveOpt?((stab&&L.perm&&!L.noSuper)?[1,2,0]:[1,0]):[0]; …
+  ```
+- **Provision:** AASHTO LRFD 10th Ed. C11.5.6 (live load on the bridge abutment counted for bearing and structural design, not for eccentricity and sliding) and Art. 3.4.1 (each load at the value that is least favourable; a transient load that relieves takes γ = 0).
+- **Check case (default project, Strength I, γp 0.90DC + 0.65DW + 1.00EV + 1.50EH, LSv excluded):** girder LL reaction 6·70 = 420 kip at x_brg = 3.5 + 4.5 − 1.5 − 1.25 = 5.25 ft from the toe; 1.75·420 = 735.0 kip, 735.0·5.25 = 3858.75 kip-ft.
+  - Eccentricity, before (LL on): V = 2392.83, ΣM_V = 15761.54, ΣM_H = 6209.11 → x̄ = 3.9921, e = 2.508 ft, D/C = 2.508/4.333 = **0.579**.
+  - After (LL reaction off): V = 2392.83 − 735.0 = 1657.83; ΣM_V = 15761.54 − 3858.75 = 11902.79 → x̄ = (11902.79 − 6209.11)/1657.83 = 3.4344, e = 6.5 − 3.4344 = **3.066 ft**, D/C = **0.707** (governs eccentricity).
+  - Sliding, Strength I: H = 744.20 kip; R_R = 0.80·V·tan 29°: LL on 0.80·2392.83·0.5543 = 1061.09 → 0.701; LL off 0.80·1657.83·0.5543 = 735.16 → **1.012**. The dashboard sliding D/C stays 1.153 (Constr — Str I governs).
+  - Pile minimum reaction (default project, piles; n = 24, Σx′² = 289 ft²): case 1.75(BR,LS) with the LL reaction off, LSv included as in the pile check: V = 1750.23 kip, M_y = −4712.62 kip-ft; P_min = 1750.23/24 + (−4712.62)(4.25)/289 = 72.93 − 69.30 = **3.62 kip** (before 10.36 kip, Constr — Str I). No uplift in either.
+  - Foundation hand-off (spread): new case "Strength I — H/V max, |e| max (no heel LS)": P = 1657.83, Vx = 744.20, My = 5082.22 kip-ft (|My|/P = 3.066 ft = the eccentricity case).
+
+### F34. Stem front-batter triangle centroid: L_toe + 2·t_w/3 (was L_toe + |t_w|/3) (N2)   [calc change] [mixed: depends on the side of the resultant]
+- **Where:** `computeAll` C-2, anchor `const xtri=g.Ltoe+2*tw/3;`.
+- **Geometry convention verified:** x is measured from the toe; the stem back face is vertical at L_toe + t_sb; the front face runs from (L_toe, top of footing) to (L_toe + t_w, top of stem), t_w = t_sb − t_st (`drawXsec` draws the same polygon); the rectangular core spans L_toe + t_w … L_toe + t_sb. The batter triangle is (L_toe, 0)–(L_toe + t_w, 0)–(L_toe + t_w, h_stem), centroid x = L_toe + 2t_w/3, y = h_stem/3 (the same formula holds for t_w < 0, where the triangle is subtracted).
+- **Before:** `const xtri=g.Ltoe+Math.abs(tw)/3; // triangle at front, wide at bottom`
+- **After:** `const xtri=g.Ltoe+2*tw/3;`
+- **Provision:** statics (no AASHTO change).
+- **Check case (default project with t_st = 3, t_sb = 6 ft):** t_w = 3 ft, W = 3·14/2·0.150·44 = 138.6 kip; x: 3.5 + 1.0 = 4.50 → 3.5 + 2.0 = **5.50 ft**; ΣW·x +138.6 kip-ft.
+  - Stem M_u (Strength I, γDC 0.90 governs M_ecc): ΔM = 0.90·138.6·1.0/44 = 2.835 → 89.36 → **86.53 kip-ft/ft**; Service M_s 55.54 → **52.39** (−138.6/44 = −3.15).
+  - The default project (t_st = t_sb) is unchanged.
+
+### F35. Stem crack-control M_s includes the earth surcharge ES (N3)   [calc change] [MORE conservative]
+- **Where:** `computeAll`, anchor `const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;`; `R.stemDem.Mst_ES` added; Tab 5 §5.2 shows M_s worked (symbolic → substituted → result).
+- **Before:** `const MsStem=Mst_EH+Mst_LS+HgirdSvc*g.hstem+MeccSvc;`
+- **After:** `const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;`
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.6.7 (crack control at the Service I load combination, Table 3.4.1-1, which includes ES at 1.00).
+- **Check case (default project with ES = 0.5 ksf):** M_ES = k_ah·q·H_s²/2 = 0.30726·0.5·19²/2 = 27.73 kip-ft/ft. M_s 74.79 → **102.52 kip-ft/ft**; f_ss 13.83 → 18.96 ksi; s_max 42.1 → 29.3 in; crack-control ratio 0.214 → **0.307**.
+  - The Service I V&M diagram at the stem base gives 101.60 kip-ft/ft. The remaining 0.92 is not ES: the stem design uses h_eq at its own height (19 ft → 2.10 ft) where the diagram uses the footing-base h_eq (2.0 ft), 0.71 kip-ft/ft (conservative, unchanged), plus 0.05 of numerical integration.
+  - The rest of the Service I diagram (EH, LS, girder horizontal forces, eccentric vertical load) was already in M_s.
+
+### F36. Minimum support length: N provided = girder overlap on the seat; Table 4.7.4.4-1 percentage (N9)   [calc change] [MORE conservative]
+- **Where:** `computeAll` C-9, anchor `// percentage of N by seismic zone and A_s [T.4.7.4.4-1]`; new input `geom.endGap` (I-1, "Girder end to backwall face g_end", in, default 4.0; range check); Tab 3 §3.5 shows N, the percentage, N_req and N_prov worked; input echo. Zone and A_s come from I-11 (F32).
+- **Before:**
+  ```js
+  const Nprov=seatW*12-0;   // seat width in inches
+  R.checks.seat={dc:Nreq/Nprov, Nreq, Nprov, Hsup, HsupMode};
+  ```
+- **After:**
+  ```js
+  const zoneN=…, AsN=…, pctN=zoneN>1?150:(AsN<0.05?75:100), NreqP=Nreq*pctN/100;
+  const endGap=Math.max(0,+g.endGap||0);
+  const Nprov=seatW*12-endGap;   // in
+  R.checks.seat={dc:NreqP/Nprov, Nreq, NreqP, pctN, zoneN, AsN, Nprov, seatIn:seatW*12, endGap, Hsup, HsupMode};
+  ```
+  An error is raised when g_end ≥ the bearing setback (girder end in front of the bearing line).
+- **Provision:** AASHTO LRFD 10th Ed. Art. 4.7.4.4, Eq. 4.7.4.4-1, C4.7.4.4 (N = girder-to-seat overlap measured normal to the bearing CL; the seat must exceed N by the movements; Eq. 4.7.4.4-1 already allows for cover at the girder end and seat face, so no edge deduction), Table 4.7.4.4-1 (Zone 1, A_s < 0.05: 75 %; Zone 1, A_s ≥ 0.05: 100 %; Zones 2–4: 150 %).
+- **Default g_end = 4 in:** no gap input existed; 4 in is at the conservative end of usual girder-end clearances and is meant to include the opening movement. Engineer to confirm.
+- **Check case (default project: L = 80 ft, H = 19 ft, S = 0, seat 4.5 − 1.5 = 3.0 ft):** N = (8 + 1.60 + 1.52)(1) = 11.12 in.
+  - Before: N_prov = 36 in, D/C = 11.12/36 = **0.309**.
+  - After (Zone 1, A_s = 0.15 → 100 %): N_prov = 36 − 4 = 32 in, D/C = 11.12/32 = **0.348**. Zone 3: 1.50·11.12 = 16.68 in, D/C = **0.521**. Zone 1 with A_s = 0.04: 0.75·11.12 = 8.34 in, D/C 0.261.
+  - With t_st = 3 ft (seat 18 in): 0.618 → 11.12/14 = **0.794**.
+- The self-test value "Seat N_req" is N before the percentage (11.12, unchanged).
+
+### F37. EDM pad return no longer resets the bearings per girder to 1; S11 re-checked (N5)   [hand-off fix] [MORE conservative where n > 1]
+- **Where:** the `message` listener, `PAD` branch, anchor `// bearings per girder: the EDM has no count input`.
+- **Before:** `if(p.nBrgPerGird) S.bearing.nBrgPerGird=+p.nBrgPerGird;`
+- **After:** the abutment keeps its own `bearing.nBrgPerGird`; the status line says so when the message carried a different count. The EDM has no bearing-count input and always sends `nBrgPerGird:1` (`elastomeric_design_module.html` `sendPadBack`), so this is not a value from the module. The elastomeric file is not changed.
+- **Check case (default project, calculated TU on, 2 bearings per girder; EDM returns a circular pad D = 20 in, G = 0.15 ksi, h_rt = 2.5 in):** Δ = 6.5e-6·68·480 = 0.2122 in; F per bearing = 0.15·314.16·0.2122/2.5 = 4.00 kip. Before: count reset to 1 → 6 bearings → TU = **23.99 kip**. After: 12 bearings → **47.99 kip**.
+- **S11 (abutment side) re-checked:** the circular pad arrives as L = D, W = πD/4 (equal area), verified (20 × 15.708 in); `thermalFactor` is not in the abutment state, so `+Lg.thermalFactor||1.2` gives 1.2 (no NaN), verified in the INIT payload (`factor: 1.2`).
+- **Found, not changed (engineer question):** the INIT payload sends the full girder-line reaction (P_DL, P_LL) as the load on one pad, also when there are 2 bearings per girder, and the seat bearing check (5.6.5) also puts the full girder reaction on one pad. Both are conservative for n > 1.
+
+### F38. Seat bearing (5.6.5): A₂ from the pad position on the seat (N6)   [calc change] [MORE conservative where the pad is near an edge]
+- **Where:** `computeAll` C-15, anchor `// A2 [5.6.5, Fig. 5.6.5-1]`; helper `seatM(i)`; Tab 5 §5.6 shows c, A₂ and m worked.
+- **Before:** `const mSpread=Math.min(2,Math.max(1,(seatW*12)/bg.padL));` (one m for every bearing; seat width over pad length).
+- **After:** for each girder i: c = min(c_front, c_back, c_trans) with c_front = (t_st − t_bw − setback)·12 − L_pad/2 (to the seat front edge), c_back = (setback + t_bw)·12 − L_pad/2 (to the stem back face; the stem continues under the backwall), c_trans = the lesser of (L_ab/2 − |y_i|)·12 − W_pad/2 (wall end) and half the clear distance to the adjacent girder's pad. A₂ = (L_pad + 2c)(W_pad + 2c); m = √(A₂/A₁) ≤ 2; m = 1 when c ≤ 0 (warning). The governing bearing is the one with the largest q_b/q_R.
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.6.5, Eq. 5.6.5-2 and Fig. 5.6.5-1 (notional area concentric with the loaded area; m = 1 where the support is not wider than the loaded area on all sides).
+- **Check case (pad 18 × 24 in, f′c = 4 ksi, P_u = 246.75 kip, A₁ = 432 in², q_b = 0.571 ksi):**
+  - Default (setback 1.25 ft): c_front = 36 − 15 − 9 = 12.0; c_back = 15 + 18 − 9 = 24.0; c_trans = (22 − 20)·12 − 12 = 12.0 (end girder); c = 12 → A₂ = 42·48 = 2016 → m = √4.667 = 2.16 → **2.00** (unchanged, D/C 0.120).
+  - Setback 1.8 ft: c_front = 36 − 21.6 − 9 = **5.4 in**; A₂ = 28.8·34.8 = 1002.2 in²; m = √2.320 = **1.523** (before 2.00); q_R = 0.70·0.85·4·1.523 = 3.625 ksi (before 4.760); D/C 0.120 → **0.158**.
+- **Not changed (engineer question):** the 10th Ed. 5.6.5 gives m = 0.75√(A₂/A₁) ≤ 1.50 where the bearing stress is not uniform (e.g. under pad rotation). The tool uses the uniform-stress form, as before.
+
+### Self-test re-bake
+- `__ST_EXPECT` "Eccentricity e (ft)" 2.507894818378456 → 3.065583297600188 (F33, hand-checked above). The other 15 values are unchanged; the self-test passes.
+
+### Saved data (CLAUDE.md §5)
+- No key renamed and no format change. New field `geom.endGap` (in). `migrate()` anchor `// defRev 2`: a project without `meta.defRev ≥ 2` and without `endGap` gets 4.0 in, and the one-time notice of F27–F32 lists it ("Girder end to backwall face g_end … set to 4 in — check it"); then `meta.defRev = 2`. Verified with a project autosaved by main (all seven items listed) and by the F27–F32 branch (only g_end listed); no notice after a reload.
+- The foundation hand-off payload format is unchanged; it carries more cases (F33). HANDOFF.md §4.6 updated.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless Chromium, `b8da0d5` vs branch, `computeAll()` on the default project and the variants piles (DR = 20), rock, seismic, seismic on rock (γEQ = 0.5), piles + seismic, front batter (t_st 3 / t_sb 6), ES = 0.5 ksf, setback 1.8 ft and Zone 3: the D/C changes are those listed above; every other value is identical. Every tab renders with no page error; 364 TeX strings render in KaTeX 0.16.9 with `throwOnError`. The "Send foundation loads" dialog lists "H/V max, |e| max" (spread) and "pile P min" = the LL-reaction-off case (piles). A simulated EDM PAD message (circular pad, count 1) keeps 2 bearings per girder.
+- **Other copies:** none.
+
+### Open items (not changed)
+- **N7, punching with pile embedment:** reported, not implemented. Which depth governs depends on where the bottom mat sits relative to the pile heads (a judgement call). Default pile project: d_e = 36 − 3 − 1.0 = 32 in, d_v = max(0.9·32, 0.72·36) = 28.8 in, b₀ = 4(12 + 28.8) = 163.2 in, φV_n = 0.9·0.126·2·163.2·28.8 = 1066.0 kip → D/C 212.71/1066.0 = 0.200. With 12 in embedment and the mat 3 in clear over the pile heads: d_e = 36 − 12 − 3 − 0.5 = 20.5 in, d_v = max(18.45, 0.72·24 = 17.28) = 18.45 in, b₀ = 4(30.45) = 121.8 in, φV_n = 0.9·0.126·2·121.8·18.45 = 509.7 kip → D/C **0.417**.
+- **N4, EE-I superstructure inertia × floating share:** not changed (engineer question). EQsup = A_s·(DC + DW)·sh_TU; with the floating 50 % share: A_s = 0.15 → 0.15·582·0.5 = 43.65 kip (vs 87.3 kip at 100 %); A_s = 0.30 → 87.3 kip (vs 174.6 kip). At A_s = 0.30 the missing 87.3 kip at z = 17 ft is 1484 kip-ft of overturning: in the governing EE-I eccentricity case (V = 1657.83 kip) e would grow by 0.90 ft (4.86 → 5.75 ft, D/C 1.12 → about 1.33) and the sliding demand by 87.3 kip.
+- The bearing-seat check and the EDM INIT load use the full girder reaction on one pad when there are 2 bearings per girder (conservative).
+- 5.6.5 non-uniform-stress m (0.75√(A₂/A₁) ≤ 1.5) not applied.
+
+### Appendix — unified diff (exact before/after)
+```diff
+diff --git a/HANDOFF.md b/HANDOFF.md
+index 030981a..5add167 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -196,7 +196,7 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
+   - *Moment convention (all senders).* Moments are defined by their effect, so receivers can map axes without a handedness question: **My + moves the resultant toward +x (e_x = My/P), Mx + moves it toward +y (e_y = Mx/P)**; P + = down; Vx, Vy + toward +x, +y. Each payload states its own x and y in words in `signConvention` and in the optional `axes:{ x:"<words>", y:"<words>" }`. Pile Designer's group workspace and Spread Footing use the same effect-based convention, so a receiver maps only the axes: receiver +x = ±hand-off x or ±hand-off y (user's choice, default identity); the moment about the receiver's other axis follows (e.g. receiver +x = hand-off −y gives Vx = −Vy and My = −Mx).
+   - *Optional fields.* `reference:{ level:"topOfFooting"|"baseOfWall"|"bottomOfFooting"|"bottomOfPileCap"|"pointOfFixity", point:"footingCentre"|"pileGroupCentroid"|"unitCentre", … }` (machine-readable form of `location`); `includes:{ footingWeight, soilOverFooting, earthPressure }` (booleans); `element.unitIndex`; `geometry` (abutment footing B, length, thickness, ft). Per case: `id`, `governs` (which target the case maximises or minimises, e.g. "P max, My max") and `combination` (the load factors in words). Receivers must not require them; a receiver that needs the level reads `reference.level`, else the `location` text, else asks the user.
+   - *Two producers, one channel.* As in §4.4: each sender writes the channel key and also keeps a copy at `bridgeSuite.v1.foundationLoads.by.<id>` (`abutment`, `subloads`). Receivers list every valid copy, newest first, and let the user pick. `updatedAt` and `adopted.<receiverId>` stay on the channel key only. Receiver ids: `pileDesigner`, `spreadFooting`.
+-  - *Abutment calculator (sender).* Toolbar **"Send foundation loads"** opens a dialog (limit states to send, preview) with **"Send to other tools"** and **"Export hand-off (JSON)"**. Cases come from its own permutation engine (`R.comboEffects` over `R.permutations`, γp max/min, with and without LL; the vertical LS over the heel included as in its bearing and pile checks). Per limit state it sends the permutations giving V max, V min, My max, My min and the largest horizontal resultant, plus in the pile branch the ones that govern its pile table ("pile P max", "pile P min"); identical sets are merged. Level: bottom of footing (spread) about the footing centre, or bottom of pile cap about the pile-group centroid (pile branch). x + toward the toe (toward the span), y + toward positive beam offsets. Strength, Extreme Event and the construction stage are `factored:true` (`limitState` "Strength I (construction stage)" for the latter); Service I is `factored:false`.
++  - *Abutment calculator (sender).* Toolbar **"Send foundation loads"** opens a dialog (limit states to send, preview) with **"Send to other tools"** and **"Export hand-off (JSON)"**. Cases come from its own permutation engine (`R.comboEffects` over `R.permutations`, γp max/min; LL on, off, and LS + BR with the girder LL reaction off [C11.5.6] (since 2026-10-19); the vertical LS over the heel included as in its bearing and pile checks). Per limit state it sends the permutations giving V max, V min, My max, My min and the largest horizontal resultant, plus in the pile branch the ones that govern its pile table ("pile P max", "pile P min") and, for a spread footing, the largest H/V and |My|/V ("H/V max", "|e| max", since 2026-10-19); identical sets are merged. Level: bottom of footing (spread) about the footing centre, or bottom of pile cap about the pile-group centroid (pile branch). x + toward the toe (toward the span), y + toward positive beam offsets. Strength, Extreme Event and the construction stage are `factored:true` (`limitState` "Strength I (construction stage)" for the latter); Service I is `factored:false`.
+   - *SubLoads (sender).* Header **"Send foundation loads"** opens a dialog: unit, reference level (`top of footing`, `bottom of footing`, `base of wall` or `point of fixity`, whichever the unit has; default bottom of footing) and limit states, with a preview, **"Send to other tools"** and **"Export hand-off (JSON)"**. Per limit state it sends the concurrent sets of the Combinations tab (`comboEval` with a target sign) for P max/min, M_t max/min and M_l max/min at that level, identical sets merged. Mapping: Vx = V_l, Vy = V_t, Mx = M_t, My = M_l, with x normal to the bearing line + ahead station and y along the bearing line + left looking ahead station. Strength and Extreme Event are `factored:true`; Service I and IV are `factored:false`.
+   - *Pile Designer (receiver).* "Loads & group" input tab (moved from the Project panel 2026-10-10, F15): **"Pull from Abutment / SubLoads"** (new-data marker) and **"Import hand-off (JSON)"**. Not shown in integral-abutment mode (the import is refused there). Target, the user's choice: (a) *Pile group workspace* (default): each case becomes one `groupCases` entry (type `strength`, `extreme` from an Extreme Event limit state, or `service` when `factored:false`) acting at one load location "Foundation hand-off" (`loadPoints`, z = 0) at the reference point, entered in pile coordinates (default: the centroid of the current pile layout); the dialog offers to turn on "Apply pile group to the design" and, when `includes.footingWeight`, to switch off the tool's own cap/stem self-weight. (b) *Single-pile LRFD case table*, only after the user confirms the loads act on one pile: STL = |P| (type `tension` when P < 0), lateral = √(Vx² + Vy²) (default) or one component, head moment 0 (default) or |M| in the same plane. Imported rows carry `_bx:{ ch:"foundationLoads", producer, producedAt, case }`; "replace" (default) removes only tagged rows. Source: new optional input field `I.foundationSrc`, shown in the Loads & group tab and in the report's input summary.
+   - *Spread Footing (receiver).* **"Pull from Abutment / SubLoads"** (new-data marker) and **"Import hand-off (JSON)"**, on a second line under the memberReactions buttons. Its by-load-type rows take unfactored loads by type and are **never** filled from this channel. One **factored** case is imported into one pedestal's Direct factored set (`peds[i].direct`, applied at the top of the pedestal); service cases are listed but not importable. Cases at the bottom of the footing or pile cap, or at a point of fixity, are refused (the tool adds the footing weight, soil and V·(t + h) itself); an unknown level needs the user's confirmation. Options: case (default the factored case with the largest P), pedestal, axis mapping, "refer the moments to the top of the pedestal" (M − V·h, default on when h > 0 and the shear couple is on), "switch Load input mode to Direct factored" (default on), "set the other pedestals' direct loads to 0" (default off). Source: new optional field `state.bxSrc.foundationLoads`, shown under the title block and in the printed report header.
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 453d8aa..08db78f 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -575,6 +575,7 @@ function defaultState(){
+       hbw:5.00, tbw:1.50,           // backwall height/thickness (ft)
+       hstem:14.00, tst:4.50, tsb:4.50, // stem height, top & bottom thickness (ft)
+       brgSetback:1.25,              // bearing setback from front face of backwall (ft)
++      endGap:4.0,                   // girder end to backwall face incl. opening movement (in); N provided = seat width − endGap [4.7.4.4]
+       Ltoe:3.50, Lheel:5.00, tf:3.00, // toe length, heel length, footing thickness (ft)
+       Lab:44.00,                    // wall (stem/backwall) length carrying earth pressure & self-weight (ft)
+       Lftg:44.00,                   // footing plan length — bearing area, pile group, footing self-weight (ft)
+@@ -694,6 +695,7 @@ const VALID = {
+   "geom.tst":   {hard:[0.5,20], typ:[2,8],    msg:"Stem top thickness outside the typical 2–8 ft range."},
+   "geom.tsb":   {hard:[0.5,20], typ:[2,10],   msg:"Stem bottom thickness outside the typical 2–10 ft range."},
+   "geom.brgSetback":{hard:[0,10], typ:[0.75,3], msg:"Bearing setback outside the typical 0.75–3 ft range."},
++  "geom.endGap":{hard:[0,48], typ:[1,6], msg:"Girder end to backwall gap outside the typical 1–6 in range."},
+   "geom.Ltoe":  {hard:[0,40],  typ:[1,12],    msg:"Toe length outside the typical 1–12 ft range."},
+   "geom.Lheel": {hard:[0,60],  typ:[2,20],    msg:"Heel length outside the typical 2–20 ft range."},
+   "geom.tf":    {hard:[0.5,15],typ:[2,6],     msg:"Footing thickness outside the typical 2–6 ft range."},
+@@ -989,6 +991,11 @@ function migrate(){
+     S.meta.defRev=1;
+     if(upd.length) DEFAULTS_NOTICE=upd;
+   }
++  // defRev 2: new input for the provided support length (girder overlap on the seat) [4.7.4.4]
++  if(!(S.meta.defRev>=2)){
++    if(S.geom.endGap===undefined){ S.geom.endGap=4.0; DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Girder end to backwall face g_end (new input: support length = seat width − g_end [4.7.4.4]) set to 4 in — check it"]); }
++    S.meta.defRev=2;
++  }
+ }
+ function seedExampleReactions(){
+   const ex={DC:{P:85},DW:{P:12},LL:{P:70},BR:{Vx:3.5},TU:{Vx:2.5},CRSH:{Vx:1.5},
+@@ -1016,6 +1023,7 @@ function buildInputs(){
+     ${inpRow("Stem thickness at top t<sub>st</sub>","geom.tst","ft",{title:"Includes the bridge seat width plus the backwall thickness. Back face is vertical; any taper is on the front face."})}
+     ${inpRow("Stem thickness at bottom t<sub>sb</sub>","geom.tsb","ft")}
+     ${inpRow("Bearing setback from backwall face","geom.brgSetback","ft")}
++    ${inpRow("Girder end to backwall face g<sub>end</sub>","geom.endGap","in",{title:"Gap between the girder end and the backwall face, including the opening movement (thermal fall, creep, shrinkage). The provided support length N is the girder overlap on the seat = seat width − g_end [4.7.4.4, C4.7.4.4]. Default 4 in."})}
+     <div class="derived">Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(derivedSeat)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b><br>Bearing eccentricity from stem centerline e<sub>brg</sub> = t<sub>bw</sub> + setback − t<sub>sb</sub>/2 = <b>${fmt(g.tbw+g.brgSetback-g.tsb/2)} ft</b> ${(g.tbw+g.brgSetback-g.tsb/2)>=0?"(toward toe → adds stem moment)":"(toward heel → relieves stem moment)"}</div>
+     <div class="subhead">Footing</div>
+     ${inpRow("Toe length L<sub>toe</sub>","geom.Ltoe","ft")}
+@@ -1544,7 +1552,7 @@ function computeAll(){
+   const tw=g.tsb-g.tst;
+   if(Math.abs(tw)>1e-9){
+     const Wtri=Math.abs(tw)*g.hstem/2*gcSub*Lab*Math.sign(tw);
+-    const xtri=g.Ltoe+Math.abs(tw)/3; // triangle at front, wide at bottom
++    const xtri=g.Ltoe+2*tw/3; // triangle (Ltoe,0)-(Ltoe+tw,0)-(Ltoe+tw,h_stem), x from the toe: centroid at Ltoe + 2·tw/3 (also for tw < 0)
+     parts.push({name:"Stem — front batter triangle", A:tw*g.hstem/2, W:Wtri, x:xtri, y:g.tf+g.hstem/3, note:"(t_sb−t_st)·h_stem/2·γ_c·L_ab"});
+   }
+   // Footing (buoyant below WT)
+@@ -1733,7 +1741,7 @@ function computeAll(){
+       let gamma;
+       if(["DC","DW","EV","ES"].includes(gr.cls)) gamma = L.perm ? GP[gr.cls][perm[gr.cls]??1] : 1.0;
+       else if(gr.cls==="EH") gamma = (L.eq && eqEHfixed()!==null) ? eqEHfixed() : (L.perm ? GP.EH[perm.EH] : 1.0);
+-      else if(gr.cls==="LL") gamma = liveOn ? L.LL : 0;
++      else if(gr.cls==="LL") gamma = liveOn ? ((liveOn===2&&k==="LL")? 0 : L.LL) : 0;   // liveOn 2: LS and BR on, girder LL reaction off [C11.5.6]
+       else if(gr.cls==="EQ") gamma = L.EQ||0;
+       else gamma = L[gr.cls]; // TU, CR, WS, WL
+       if(gr.cls==="DC" && L.perm && L.dcMax && (perm.DC??1)===1) gamma = L.dcMax;   // Strength IV γDC max
+@@ -1750,7 +1758,7 @@ function computeAll(){
+     const lbl = L.perm
+       ? `${(perm.DC===1&&L.dcMax?L.dcMax:GP.DC[perm.DC]).toFixed(2)}·DC + ${GP.DW[perm.DW].toFixed(2)}·DW + ${GP.EV[perm.EV].toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():GP.EH[perm.EH]).toFixed(2)}·EH`
+         +(esOn?` + ${GP.ES[perm.ES??1].toFixed(2)}·ES`:"")
+-        +(liveOn&&L.LL?` + ${L.LL.toFixed(2)}·(LL,BR,LS)`:"")
++        +(liveOn&&L.LL?(liveOn===2?` + ${L.LL.toFixed(2)}·(BR,LS), LL reaction off`:` + ${L.LL.toFixed(2)}·(LL,BR,LS)`):"")
+         +(L.WS?` + ${L.WS.toFixed(2)}·WS`:"")+(L.WL?` + ${L.WL.toFixed(2)}·WL`:"")
+         +(L.TU&&(groups.TU.Hx||groups.CRSH.Hx)&&!L.noSuper?` + ${L.TU.toFixed(2)}·TU/CR/SH`:"")
+         +(L.EQ?` + ${(+L.EQ).toFixed(2)}·EQ`:"")
+@@ -1758,9 +1766,11 @@ function computeAll(){
+       : `1.00·(all)`+(liveOn?" incl. LL":" excl. LL");
+     return {V,Mv,Hx,Mh,Hy,Mt,lbl,gset,lsName,liveOn,perm};
+   }
+-  function* permutations(lsName){
++  // stab = true (sliding, eccentricity, pile minimum reaction, foundation hand-off): also LS + BR with the girder LL reaction off
++  // (liveOn 2), since the LL reaction on the bridge is not counted as resisting in sliding / eccentricity [C11.5.6, 3.4.1]
++  function* permutations(lsName,stab){
+     const L=LIMITS[lsName];
+-    const lives=L.liveOpt?[1,0]:[0];
++    const lives=L.liveOpt?((stab&&L.perm&&!L.noSuper)?[1,2,0]:[1,0]):[0];
+     const esB=(+S.soil.esQ||0)>0?[0,1]:[1];
+     if(!L.perm){ for(const lv of lives) yield {perm:{DC:0,DW:0,EV:0,EH:0,ES:1}, liveOn:lv}; return; }
+     for(const dc of [0,1]) for(const dw of [0,1]) for(const ev of [0,1]) for(const eh of [0,1]) for(const es of esB)
+@@ -1772,7 +1782,7 @@ function computeAll(){
+   R.permTables={};
+   for(const lsName of Object.keys(LIMITS)){
+     const rows=[];
+-    for(const pl of permutations(lsName)){
++    for(const pl of permutations(lsName,true)){
+       const c=comboEffects(lsName,pl.perm,pl.liveOn,false);
+       const xbar=c.V>1e-9?(c.Mv-c.Mh)/c.V:NaN;
+       rows.push({...c, xbar, e:B/2-xbar});
+@@ -1783,7 +1793,7 @@ function computeAll(){
+   const STR_LIMITS=["Strength I","Strength III","Strength IV","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
+   // EE-I eccentricity limit [11.6.5.1]: B·(1/3 + (0.4 − 1/3)·γEQ), soil and rock; γEQ = 0 for a permutation without live load [10.6.4.2]
+   function eFracEQfor(liveOn){ const s=S.seismic; if(s.eLimEQmode==="user") return +s.eFracEQ;
+-    const gq=liveOn? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }
++    const gq=liveOn===1? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }
+   function resFor(lsName,liveOn){ const eq=LIMITS[lsName]&&LIMITS[lsName].eq;
+     return { phiTau: eq? +S.seismic.phiTauEQ : fn.phiTau,
+              phiB:   eq? +S.seismic.phiBEQ   : fn.phiB,
+@@ -1799,7 +1809,7 @@ function computeAll(){
+     // ---- Sliding [10.6.3.4] ----
+     let slid={dc:-1};
+     for(const lsName of STR_LIMITS){
+-      for(const pl of permutations(lsName)){
++      for(const pl of permutations(lsName,true)){   // incl. LS + BR with the LL reaction off [C11.5.6]
+         const c=comboEffects(lsName,pl.perm,pl.liveOn,true); // LSv excluded (no vertical LS benefit)
+         if(c.V<=0) continue;
+         const rf=resFor(lsName);
+@@ -1814,7 +1824,7 @@ function computeAll(){
+     // ---- Eccentricity [11.6.3.3] ----
+     let ecc={dc:-1};
+     for(const lsName of STR_LIMITS){
+-      for(const pl of permutations(lsName)){
++      for(const pl of permutations(lsName,true)){   // incl. LS + BR with the LL reaction off [C11.5.6]
+         const eLim=resFor(lsName,pl.liveOn).eLim;
+         const c=comboEffects(lsName,pl.perm,pl.liveOn,true);
+         if(c.V<=0) continue;
+@@ -1896,7 +1906,7 @@ function computeAll(){
+       const perLS={};
+       for(const lsName of Object.keys(LIMITS)){
+         let best={Pmax:-Infinity}, worstMin={Pmin:Infinity}, worstH={H:-1};
+-        for(const pl of permutations(lsName)){
++        for(const pl of permutations(lsName,true)){   // liveOn 2 (LS + BR, LL reaction off) is used for the minimum reaction only [C11.5.6]
+           const c=comboEffects(lsName,pl.perm,pl.liveOn,false);
+           if(c.V<=0) continue;
+           const xbar=(c.Mv-c.Mh)/c.V;
+@@ -1910,9 +1920,9 @@ function computeAll(){
+           let iMax=0,iMin=0;
+           loads.forEach((v,i)=>{ if(v>loads[iMax])iMax=i; if(v<loads[iMin])iMin=i; });
+           const Hres=Math.sqrt(c.Hx*c.Hx+c.Hy*c.Hy);
+-          if(loads[iMax]>best.Pmax) best={Pmax:loads[iMax], iMax, loads:[...loads], c, ex, My, Mx, xbar};
++          if(pl.liveOn!==2 && loads[iMax]>best.Pmax) best={Pmax:loads[iMax], iMax, loads:[...loads], c, ex, My, Mx, xbar};
+           if(loads[iMin]<worstMin.Pmin) worstMin={Pmin:loads[iMin], iMin, loads:[...loads], c, ex, My, Mx};
+-          if(Hres>worstH.H) worstH={H:Hres, Hx:c.Hx, Hy:c.Hy, c};
++          if(pl.liveOn!==2 && Hres>worstH.H) worstH={H:Hres, Hx:c.Hx, Hy:c.Hy, c};
+         }
+         perLS[lsName]={best,worstMin,worstH};
+       }
+@@ -1953,8 +1963,14 @@ function computeAll(){
+   if(HsupMode==="user"&&!(+g.HsupUser>=0)) warn("Input error — the entered pier height H for the minimum support length must be a number ≥ 0 [4.7.4.4]; 0 is used.","err");
+   else if(HsupMode==="user"&&+g.HsupUser>60) warn("Check input — pier height H for the minimum support length above 60 ft [4.7.4.4].");
+   const Nreq=(8+0.02*g.spanL+0.08*Hsup)*(1+0.000125*g.skew*g.skew); // in [4.7.4.4]
+-  const Nprov=seatW*12-0;   // seat width in inches
+-  R.checks.seat={dc:Nreq/Nprov, Nreq, Nprov, Hsup, HsupMode};
++  // percentage of N by seismic zone and A_s [T.4.7.4.4-1]: Zone 1 with A_s < 0.05 → 75 %, other Zone 1 → 100 %, Zones 2–4 → 150 %
++  const zoneN=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), AsN=Math.max(0,+S.seismic.As||0);
++  const pctN=zoneN>1?150:(AsN<0.05?75:100), NreqP=Nreq*pctN/100;
++  // provided support length = girder overlap on the seat: seat width less the girder-end gap to the backwall (incl. opening movement) [C4.7.4.4]
++  const endGap=Math.max(0,+g.endGap||0);
++  const Nprov=seatW*12-endGap;   // in
++  if(endGap>=g.brgSetback*12) warn("Girder end to backwall gap ("+fmt(endGap,1)+" in) is not less than the bearing setback ("+fmt(g.brgSetback*12,1)+" in): the girder end would be in front of the bearing line — check the seat geometry.","err");
++  R.checks.seat={dc:NreqP/Nprov, Nreq, NreqP, pctN, zoneN, AsN, Nprov, seatIn:seatW*12, endGap, Hsup, HsupMode};
+   // Minimum seismic connection force (each restrained direction) [3.10.9]:
+   //   Zone 1: c·(permanent + γEQ·LL) reaction, c = 0.15 when A_s < 0.05, else 0.25 [3.10.9.2];
+   //   single-span bridges, any zone: ≥ A_s × permanent reaction [3.10.9.1, 4.7.4.2] (taken as a floor here in every zone, conservative for multispan);
+@@ -2107,8 +2123,8 @@ function computeAll(){
+   const HgirdSvc=(groups.BR.Hx+groups.TU.Hx+groups.CRSH.Hx+wsFsv*groups.WS.Hx+groups.WL.Hx)/Lab;
+   // Service I: LL reaction on or off, whichever gives the larger back-face moment (LS and BR stay on)
+   const seSvc=stemEcc(LIMITS["Service I"],1), PvSvc=seSvc.Pv, MeccSvc=seSvc.Mecc, svcNoLL=!seSvc.llOn;
+-  const MsStem=Mst_EH+Mst_LS+HgirdSvc*g.hstem+MeccSvc;
+-  R.stemDem={Hs,heqS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc,svcNoLL};
++  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
++  R.stemDem={Hs,heqS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,Mst_ES,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc,svcNoLL};
+   if(g.hw>g.tf) warn("Water table above the top of footing: wall structural demands conservatively use moist unit weight over the full height (no buoyant reduction applied to wall pressures).");
+   R.checks.stemFlex=sectionCheck({name:"Stem", h:g.tsb*12, cover:m.coverT, bar:S.reinf.stem.size,
+     sp:+S.reinf.stem.sp, Mu:stemGov.Mu, Vu:stemGov.Vu, Ms:MsStem, lbl:stemGov.lbl,
+@@ -2310,23 +2326,36 @@ function computeAll(){
+   /* ===== C-15 Bearing on concrete — bridge seat [AASHTO 5.6.5] ===== */
+   {
+     const bg=S.bearing, A1=bg.padL*bg.padW;               // in²
+-    const mSpread=Math.min(2,Math.max(1,(seatW*12)/bg.padL)); // m = √(A2/A1) from geometrically-similar seat spread, floored at 1
+     const phiB=0.70;
+-    const qR=phiB*0.85*m.fc*mSpread;                      // ksi
+-    // governing single-bearing factored vertical (strength)
+-    let Pu=-Infinity, pgirder=0, pls="";
++    // A2 [5.6.5, Fig. 5.6.5-1]: notional area concentric with the pad, extended by the smallest clear edge distance c on all
++    // sides, c = min(pad to seat front edge, pad to stem back face (under the backwall), half the clear distance to the next
++    // pad, pad to the wall end). m = √(A2/A1) ≤ 2; m = 1 when the support is not wider than the pad on all sides (c ≤ 0).
++    const posB=R.beamPos||[], Lin=bg.padL, Win=bg.padW;
++    const cFront=(seatW-g.brgSetback)*12-Lin/2, cBack=(g.brgSetback+g.tbw)*12-Lin/2;
++    function seatM(i){
++      const y=posB[i]||0; let cT=(Lab/2-Math.abs(y))*12-Win/2, cTw="wall end";
++      for(const j of [i-1,i+1]){ if(j<0||j>=posB.length) continue; const cj=(Math.abs(posB[j]-y)*12-Win)/2; if(cj<cT){ cT=cj; cTw="½ clear distance to girder "+(j+1)+" pad"; } }
++      const cands=[[cFront,"seat front edge"],[cBack,"stem back face"],[cT,cTw]];
++      let c=cands[0]; cands.forEach(k=>{ if(k[0]<c[0]) c=k; });
++      const A2=c[0]>0?(Lin+2*c[0])*(Win+2*c[0]):A1, mRaw=Math.sqrt(A2/A1);
++      return {c:c[0], cBy:c[1], cT, A2, mRaw, m:c[0]>0?Math.min(2,mRaw):1};
++    }
++    // governing single bearing (largest q_b/q_R): factored vertical at Strength I, IV, V
++    let Pu=-Infinity, pgirder=0, pls="", dcB=-Infinity, sm=null;
+     for(let i=0;i<S.beams.N;i++){
+       const SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS1)*S.rx.LL[i].P;
+       const SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS5)*S.rx.LL[i].P
+                +(+F.wsS5)*wsF5*S.rx.WS[i].P+(+F.wlS5)*S.rx.WL[i].P;
+       const SIV=LIMITS["Strength IV"].dcMax*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P;
+-      if(SI>Pu){Pu=SI;pgirder=i+1;pls="Strength I";}
+-      if(SIV>Pu){Pu=SIV;pgirder=i+1;pls="Strength IV";}
+-      if(SV>Pu){Pu=SV;pgirder=i+1;pls="Strength V";}
++      let P=SI, ls="Strength I"; if(SIV>P){P=SIV;ls="Strength IV";} if(SV>P){P=SV;ls="Strength V";}
++      const mi=seatM(i), dci=(P/A1)/(phiB*0.85*m.fc*mi.m);
++      if(dci>dcB+1e-12){ dcB=dci; Pu=P; pgirder=i+1; pls=ls; sm=mi; }
+     }
++    const mSpread=sm?sm.m:1, qR=phiB*0.85*m.fc*mSpread;   // ksi
+     const qb=Pu/A1;                                       // ksi
+     R.checks.bearingSeat={dc:qb/qR, qb, qR, A1, m:mSpread, phiB, Pu, pgirder, pls,
+-      A2note:seatW*12};
++      A2:sm?sm.A2:A1, c:sm?sm.c:0, cBy:sm?sm.cBy:"", mRaw:sm?sm.mRaw:1, cFront, cBack, cT:sm?sm.cT:0};
++    if(sm&&sm.c<=0) warn("Bearing pad is not inside the seat on all sides (clear edge distance "+fmt(sm.c,1)+" in to the "+sm.cBy+"): m = 1 [5.6.5]; check the pad position.");
+     // seat reinforcement mat — prescriptive provision + STM trigger
+     const bar=BARS[bg.seatBar], AsMat=bar.Ab*12/bg.seatSp; // in²/ft each way
+     const AsMatMin=0.11;                                   // nominal minimum mat, in²/ft each way
+@@ -2615,7 +2644,7 @@ function computeAll(){
+ 
+   /* ===== C-11c Tag governing permutation rows for traceability ===== */
+   (function(){
+-    function permKey(c){ return c.lsName+"|"+(c.perm?[c.perm.DC,c.perm.DW,c.perm.EV,c.perm.EH,c.perm.ES].join(""):"")+"|"+(c.liveOn?1:0); }
++    function permKey(c){ return c.lsName+"|"+(c.perm?[c.perm.DC,c.perm.DW,c.perm.EV,c.perm.EH,c.perm.ES].join(""):"")+"|"+(+c.liveOn||0); }
+     function tagGov(c,label){ if(!c||!c.lsName||!R.permTables[c.lsName]) return;
+       const key=permKey(c), row=R.permTables[c.lsName].find(rr=>permKey(rr)===key);
+       if(row){ (row.govFor=row.govFor||[]).push(label); } }
+@@ -2988,13 +3017,13 @@ function renderTabComb(R){
+     <tr><td class="lft">Overturning / eccentricity</td><td>minimum</td><td>maximum</td><td class="lft">Least stabilizing moment</td></tr>
+     <tr><td class="lft">Bearing resistance</td><td>maximum</td><td>maximum</td><td class="lft">Greatest vertical + eccentricity</td></tr>
+     <tr><td class="lft">Structural / pile demand</td><td>governing per check</td><td>maximum</td><td class="lft">Worst factored section / pile demand</td></tr></table>
+-    <div class="eq-note">The tables in <span class="xlink" data-jump="tab-comb|o-perm-${Object.keys(R.permTables)[0]?.replace(/\s/g,"")}">§2.3</span> list every permutation so the selection is fully auditable. Vertical live-load surcharge (LSv) is zeroed where it would aid stability.</div>`);
++    <div class="eq-note">The tables in <span class="xlink" data-jump="tab-comb|o-perm-${Object.keys(R.permTables)[0]?.replace(/\s/g,"")}">§2.3</span> list every permutation so the selection is fully auditable. Vertical live-load surcharge (LSv) is zeroed where it would aid stability. Live "LS, BR only" = surcharge and braking with the girder LL reaction off: used for sliding, eccentricity, the minimum pile reaction and the foundation hand-off, not for bearing or the maximum pile reaction [C11.5.6].</div>`);
+   for(const [ls,rows] of Object.entries(R.permTables)){
+     const anyGov=rows.some(r=>r.govFor);
+     let t=`<table class="rtbl"><tr><th>γDC</th><th>γDW</th><th>γEV</th><th>γEH</th><th>Live</th><th>ΣV (kip)</th><th>ΣH<sub>x</sub> (kip)</th><th>ΣM<sub>V</sub> (kip·ft)</th><th>ΣM<sub>H</sub> (kip·ft)</th><th>x̄ (ft)</th><th>e (ft)</th><th>Governs</th></tr>`;
+     rows.forEach(r=>{
+       const g=r.govFor?`<span class="flagchip warn" style="font-size:0.72rem;">◄ ${r.govFor.join(", ")}</span>`:"";
+-      t+=`<tr${r.govFor?' class="gov"':''}><td>${fmt(r.gset.DCsub)}</td><td>${fmt(r.gset.DW)}</td><td>${fmt(r.gset.EV)}</td><td>${fmt(r.gset.EHh)}</td><td>${r.liveOn?"on":"off"}</td>
++      t+=`<tr${r.govFor?' class="gov"':''}><td>${fmt(r.gset.DCsub)}</td><td>${fmt(r.gset.DW)}</td><td>${fmt(r.gset.EV)}</td><td>${fmt(r.gset.EHh)}</td><td>${r.liveOn===2?"LS, BR only":r.liveOn?"on":"off"}</td>
+         <td>${fmt(r.V)}</td><td>${fmt(r.Hx)}</td><td>${fmt(r.Mv)}</td><td>${fmt(r.Mh)}</td><td>${fmt(r.xbar)}</td><td>${fmt(r.e)}</td><td class="lft">${g}</td></tr>`;
+     });
+     t+="</table>";
+@@ -3054,6 +3083,7 @@ function renderTabStab(R){
+     const sl=R.checks.sliding;
+     h+=panel("o-slide","3.1","Sliding [10.6.3.4]",`
+       ${govNote(sl.lbl+" — "+sl.ls)}
++      <div class="eq-note">Live-load cases checked: none; LL + BR + LS; and LS + BR with the girder LL reaction off (the LL reaction on the bridge is not counted as resisting) [C11.5.6].${sl.c&&sl.c.liveOn===2?" <b>The governing case is LS + BR with the LL reaction off.</b>":""}</div>
+       <div class="eq-note">See <span class="xlink" data-jump="tab-stab|o-fbd">§3.0 free-body ledger</span> for the force × arm breakdown of the governing case.</div>
+       ${fn.matl==="soil"
+         ? eqB("Nominal & factored sliding resistance (soil)","AASHTO 10.6.3.4, Eq. 10.6.3.4-1",[
+@@ -3073,6 +3103,7 @@ function renderTabStab(R){
+     const ec=R.checks.ecc;
+     h+=panel("o-ecc","3.2","Eccentricity / Overturning [11.6.3.3]",`
+       ${govNote(ec.lbl+" — "+ec.ls)}
++      <div class="eq-note">Live-load cases checked: none; LL + BR + LS; and LS + BR with the girder LL reaction off (the LL reaction on the bridge is not counted as resisting) [C11.5.6].${ec.c&&ec.c.liveOn===2?" <b>The governing case is LS + BR with the LL reaction off.</b>":""}</div>
+       <div class="eq-note">The governing permutation is highlighted in <span class="xlink" data-jump="tab-comb|o-perm-${ec.ls.replace(/\s/g,"")}">Tab 2 §2.3 (${esc(ec.ls)})</span>; force × arm in <span class="xlink" data-jump="tab-stab|o-fbd">§3.0</span>.</div>
+       ${eqB("Location of the resultant and eccentricity (moments about the toe)","AASHTO 11.6.3.3",[
+         "\\bar{x} = \\dfrac{\\Sigma M_{V} - \\Sigma M_{H}}{\\Sigma V}\\,, \\qquad e = \\dfrac{B}{2} - \\bar{x}",
+@@ -3080,7 +3111,7 @@ function renderTabStab(R){
+         `e = \\dfrac{${fmtT(geo.B)}}{2} - ${fmtT(ec.xbar)} = ${fmtT(ec.eSigned)}\\ \\text{ft}\\,, \\qquad |e| = ${fmtT(ec.e)}\\ \\text{ft}\\ (\\text{resultant on the ${ec.side} side})`])}
+       ${eqB(`Limit for founding material: ${fn.matl}${LIMITS_HAS_EQ(R)?" (EE-I uses the extreme-event fraction)":""}`,"AASHTO 11.6.3.3, 11.6.5.1",[
+         ...((R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq&&S.seismic.eLimEQmode!=="user")?["e_{lim} = B\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)\\gamma_{EQ}\\right)",
+-          `e_{lim} = ${fmtT(geo.B)}\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)(${fmtT(ec.c&&ec.c.liveOn?Math.min(1,Math.max(0,+S.seismic.gEQll||0)):0)})\\right) \\quad (\\gamma_{EQ}${ec.c&&ec.c.liveOn?"\\text{ as entered}":" = 0\\text{: permutation without live load}"})`]:[]),
++          `e_{lim} = ${fmtT(geo.B)}\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)(${fmtT(ec.c&&ec.c.liveOn===1?Math.min(1,Math.max(0,+S.seismic.gEQll||0)):0)})\\right) \\quad (\\gamma_{EQ}${ec.c&&ec.c.liveOn===1?"\\text{ as entered}":" = 0\\text{: permutation without live load}"})`]:[]),
+         `e_{lim} = ${fmtT(ec.eLim)}\\ \\text{ft} \\quad(${(R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq)?(S.seismic.eLimEQmode==="user"?`${fmt(+S.seismic.eFracEQ,3)}·B \\text{ at EE-I (owner rule)}`:`${fmtT(ec.eLim/geo.B,4)}\\,B \\text{ at EE-I}`):`${fmtT(fn.matl==="rock"?+fn.eFracRock:+fn.eFracSoil,3)}\\,B \\text{ at Strength — middle ${fn.matl==="rock"?"nine-tenths":"two-thirds"}}`})`])}
+       ${checkLine("Eccentricity",`\\dfrac{|e|}{e_{lim}} = \\dfrac{${fmtT(ec.e)}}{${fmtT(ec.eLim)}}`,ec.dc)}
+     `);
+@@ -3130,13 +3161,15 @@ function renderTabStab(R){
+   }
+   const st=R.checks.seat;
+   h+=panel("o-seat","3.5","Minimum Support (Seat) Length [4.7.4.4]",`
+-    ${eqB("Required support length (percentage N applies per SDC; 100% shown)","AASHTO 4.7.4.4, Eq. 4.7.4.4-1",[
++    ${eqB("Required support length (percentage of N per Table 4.7.4.4-1: Zone "+st.zoneN+", A_s = "+fmt(st.AsN,3)+" → "+st.pctN+" %)","AASHTO 4.7.4.4, Eq. 4.7.4.4-1, Table 4.7.4.4-1",[
+       "N = (8 + 0.02L + 0.08H)\\,(1 + 0.000125\\,S^2)",
+-      `N = (8 + 0.02(${fmtT(g.spanL)}) + 0.08(${fmtT(st.Hsup)}))\\,(1 + 0.000125(${fmtT(g.skew,1)})^2)`,
+-      `N = ${fmtT(st.Nreq)}\\ \\text{in} \\qquad\\text{vs. provided seat} = ${fmtT(st.Nprov)}\\ \\text{in}`])}
++      `N = (8 + 0.02(${fmtT(g.spanL)}) + 0.08(${fmtT(st.Hsup)}))\\,(1 + 0.000125(${fmtT(g.skew,1)})^2) = ${fmtT(st.Nreq)}\\ \\text{in}`,
++      `N_{req} = ${st.pctN}\\%\\cdot N = ${fmtT(st.pctN/100,2)}(${fmtT(st.Nreq)}) = ${fmtT(st.NreqP)}\\ \\text{in}`,
++      `N_{prov} = 12(t_{st} - t_{bw}) - g_{end} = ${fmtT(st.seatIn)} - ${fmtT(st.endGap)} = ${fmtT(st.Nprov)}\\ \\text{in} \\quad(\\text{girder overlap on the seat})`],
++      "N is the girder-to-seat overlap measured normal to the bearing centerline (C4.7.4.4); g_end = girder end to backwall face, including the opening movement (panel I-1). Zone and A_s are set in panel I-11.")}
+     ${varsTbl([["L","Bridge length to adjacent expansion joint / end",g.spanL,"ft"],
+       ["H",st.HsupMode==="single"?"Single-span bridge: H = 0 [4.7.4.4]":st.HsupMode==="user"?"Average pier height to the next expansion joint (entered) [4.7.4.4]":"Abutment height (stem + backwall) — conservative stand-in for H",st.Hsup,"ft"],["S","Skew",g.skew,"deg"]])}
+-    ${checkLine("Seat width",`\\dfrac{N_{req}}{N_{prov}} = \\dfrac{${fmtT(st.Nreq)}}{${fmtT(st.Nprov)}}`,st.dc)}
++    ${checkLine("Seat width",`\\dfrac{N_{req}}{N_{prov}} = \\dfrac{${fmtT(st.NreqP)}}{${fmtT(st.Nprov)}}`,st.dc)}
+   `);
+   if(S.seismic.on && R.seis){
+     const q=R.seis, sOK=isFinite(q.KAE);
+@@ -3236,6 +3269,7 @@ function renderTabFound(R){
+       :""}
+     ${pu.uplift?`
+       ${govNote(pu.lbl+" — "+pu.ls)}
++      <div class="eq-note">Live-load cases checked: none; LL + BR + LS; and LS + BR with the girder LL reaction off (the LL reaction on the bridge is not counted as resisting) [C11.5.6].${pu.det&&pu.det.c&&pu.det&&pu.det.c.liveOn===2?" <b>The governing case is LS + BR with the LL reaction off.</b>":""}</div>
+       ${eqB("Uplift (tension present)","AASHTO 10.7.3.10",[
+         "|P_{min}| \\le \\varphi_{up} R_{n,up}",
+         `${fmtT(-pu.P)} \\le (${fmtT(p.phiUp)})(${fmtT(p.RnUp)}) = ${fmtT(pu.RR)}\\ \\text{kip}`])}
+@@ -3345,7 +3379,8 @@ function renderTabStruct(R){
+       `M_{EH} = \\dfrac{k_{ah}\\gamma H_s^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.Hs)})^3}{6} = ${fmtT(sd.Mst_EH)}\\ \\text{kip-ft/ft}`,
+       `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} H_s^2}{2} = ${fmtT(sd.Mst_LS)}\\ \\text{kip-ft/ft}\\,, \\qquad H_{gird} = ${fmtT(sd.HgirdPerFt,3)}\\ \\text{kip/ft at } z = h_{stem} = ${fmtT(g.hstem)}\\ \\text{ft}`,
+       `M_{ecc} = \\dfrac{P_v\\,e_{brg} + \\Sigma W_{sw}\\,e_{sw}}{L_{ab}} = ${fmtT(sd.MeccPerFt)}\\ \\text{kip-ft/ft} \\quad(e_{brg} = ${fmtT(sd.eBrg,3)}\\ \\text{ft toe-ward}, \\; P_v = ${fmtT(sd.Pv)}\\ \\text{kip})`,
+-      `M_u = ${fmtT(R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`],
++      `M_u = ${fmtT(R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`,
++      `M_{s} = M_{EH} + M_{LS} + M_{ES} + H_{gird,SI}\\,h_{stem} + M_{ecc,SI} = ${fmtT(sd.Mst_EH)} + ${fmtT(sd.Mst_LS)} + ${fmtT(sd.Mst_ES)} + (${fmtT(sd.HgirdSvc,3)})(${fmtT(g.hstem)}) + ${fmtT(sd.MeccSvc)} = ${fmtT(sd.MsStem)}\\ \\text{kip-ft/ft} \\quad (\\text{Service I, crack control}; M_{ES} = k_{ah}q_{ES}H_s^2/2)`],
+       `H_gird = factored (BR + TU + CR/SH + WS + WL)·share ÷ L_ab. M_ecc = moment from the vertical girder reaction P_v acting at eccentricity e_brg = ${fmt(sd.eBrg,3)} ft from the stem centerline (bearing setback), plus the minor stem/backwall self-weight taper eccentricity; positive when the bearing sits toward the toe. Governing limit state: ${esc(sd.ls)}.${sd.eccMin?` M_ecc uses γDC = ${fmt(sd.gDCe)}, γDW = ${fmt(sd.gDWe)}${sd.llE?"":", no LL reaction"} (the minimum-factor / no-LL permutation gives the larger back-face moment because e_brg < 0 or the self-weight eccentricity governs; LS and BR stay on).`:""}${sd.svcNoLL?" Service I M_s for crack control uses no LL reaction (larger).":""} Section at top of footing; t_sb = ${fmt(g.tsb)} ft.`),
+     "5.2","Stem — Flexure, Shear, Crack Control (at base)");
+   const td=R.toeDem, cT=R.checks.toeFlex;
+@@ -3397,9 +3432,11 @@ function renderTabStruct(R){
+     ${govNote("Governing single-bearing factored vertical — girder "+bs.pgirder+", "+bs.pls)}
+     ${eqB("Factored bearing demand & resistance","AASHTO 5.6.5 (Eq. 5.6.5-1, -2), 5.5.4.2",[
+       `A_1 = L_{pad}\\,W_{pad} = ${fmtT(bg.padL,1)}\\times${fmtT(bg.padW,1)} = ${fmtT(bs.A1,0)}\\ \\text{in}^2\\,, \\qquad q_b = \\dfrac{P_u}{A_1} = \\dfrac{${fmtT(bs.Pu)}}{${fmtT(bs.A1,0)}} = ${fmtT(bs.qb,3)}\\ \\text{ksi}`,
+-      `m = \\sqrt{A_2/A_1} \\le 2 \\;\\Rightarrow\\; m = ${fmtT(bs.m,3)} \\quad(\\text{from seat spread, } w_{seat}=${fmtT(bs.A2note,1)}\\text{ in})`,
++      `c = \\min(c_{front},\\,c_{back},\\,c_{trans}) = \\min(${fmtT(bs.cFront,1)},\\,${fmtT(bs.cBack,1)},\\,${fmtT(bs.cT,1)}) = ${fmtT(bs.c,1)}\\ \\text{in} \\quad(\\text{${esc(bs.cBy)}})`,
++      `A_2 = (L_{pad}+2c)(W_{pad}+2c) = (${fmtT(bg.padL,1)}+2(${fmtT(Math.max(0,bs.c),1)}))(${fmtT(bg.padW,1)}+2(${fmtT(Math.max(0,bs.c),1)})) = ${fmtT(bs.A2,0)}\\ \\text{in}^2`,
++      `m = \\sqrt{A_2/A_1} = \\sqrt{${fmtT(bs.A2,0)}/${fmtT(bs.A1,0)}} = ${fmtT(bs.mRaw,3)} \\le 2 \\;\\Rightarrow\\; m = ${fmtT(bs.m,3)}`,
+       `q_R = \\varphi_b\\,(0.85 f'_c)\\,m = ${fmtT(bs.phiB,2)}(0.85\\times${fmtT(m.fc,1)})(${fmtT(bs.m,3)}) = ${fmtT(bs.qR,3)}\\ \\text{ksi}`],
+-      "P_u is the most heavily loaded single bearing (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind), evaluated at Strength I, IV and V. A₂ is the geometrically-similar confined area available on the seat; m is floored at 1.0 (no spread benefit) and capped at 2.0.")}
++      "P_u is the most heavily loaded single bearing (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind), evaluated at Strength I, IV and V; the governing bearing is the one with the largest q_b/q_R. A₂ is concentric with the pad, extended by the smallest clear edge distance c: c_front = (t_st − t_bw − setback)·12 − L_pad/2 to the seat front edge, c_back = (setback + t_bw)·12 − L_pad/2 to the stem back face (the stem continues under the backwall), c_trans = the lesser of the distance to the wall end and half the clear distance to the next girder's pad (Fig. 5.6.5-1). m = 1 if c ≤ 0.")}
+     ${checkLine("Bearing on concrete",`\\dfrac{q_b}{q_R} = \\dfrac{${fmtT(bs.qb,3)}}{${fmtT(bs.qR,3)}}`,bs.dc)}
+     <div class="subhead">Bearing-seat reinforcement (provision)</div>
+     <div class="note-box">AASHTO provides <b>no closed-form demand</b> for seat reinforcement under a bearing; a reinforcement mat under each bearing is a prescriptive detailing requirement, with a <b>strut-and-tie evaluation [5.8]</b> required for heavy or edge-loaded bearings. Provided mat: <b>#${bg.seatBar} @ ${fmt(+bg.seatSp,1)} in each way = ${fmt(sm.AsMat)} in²/ft</b>.</div>
+@@ -4321,7 +4358,7 @@ async function captureD3(R){
+    Runs the frozen benchmark input (the hand-verified built-in example) through the
+    LIVE engine and compares key results to baked expected values. Any drift means a
+    regression (or an intentional change that requires re-baking). */
+-window.__ST_EXPECT={"k_a (Rankine)": 0.3072585245224683, "P_a (kip/ft)": 8.92278755213248, "EH_h total (kip)": 392.6026522938291, "ΣDC wall (kip)": 722.6999999999999, "EV (kip)": 501.5999999999999, "h_eq (ft)": 2, "Sliding D/C": 1.1527595856623034, "Sliding R_R (kip)": 510.8645252361067, "Eccentricity e (ft)": 2.507894818378456, "Bearing q_f (ksf)": 7.560165332011858, "Bearing D/C": 0.933353744692822, "Seat N_req (in)": 11.12, "Stem M_u (kip·ft/ft)": 112.0617801358754, "Stem φM_n (kip·ft/ft)": 302.7336470588236, "Shear-friction D/C": 0.05761809346762622, "Bearing-seat q_b (ksi)": 0.5711805555555556};
++window.__ST_EXPECT={"k_a (Rankine)": 0.3072585245224683, "P_a (kip/ft)": 8.92278755213248, "EH_h total (kip)": 392.6026522938291, "ΣDC wall (kip)": 722.6999999999999, "EV (kip)": 501.5999999999999, "h_eq (ft)": 2, "Sliding D/C": 1.1527595856623034, "Sliding R_R (kip)": 510.8645252361067, "Eccentricity e (ft)": 3.065583297600188, "Bearing q_f (ksf)": 7.560165332011858, "Bearing D/C": 0.933353744692822, "Seat N_req (in)": 11.12, "Stem M_u (kip·ft/ft)": 112.0617801358754, "Stem φM_n (kip·ft/ft)": 302.7336470588236, "Shear-friction D/C": 0.05761809346762622, "Bearing-seat q_b (ksi)": 0.5711805555555556};
+ /* Baked from the hand-verified built-in example (Rankine ka, Pa, EHh, sliding, bearing, stem Mu
+    each independently hand-checked during validation). If the engine or the built-in defaults are
+    intentionally changed, re-validate by hand and re-bake these values. */
+@@ -4842,9 +4879,10 @@ window.addEventListener("message",ev=>{
+       S.bearing.padL=D; S.bearing.padW=+(A/D).toFixed(4);
+       circNote=` · circular pad D = ${D.toFixed(2)} in entered as L = D, W = πD/4 = ${(A/D).toFixed(2)} in (equal area)`;
+     }
+-    if(p.nBrgPerGird) S.bearing.nBrgPerGird=+p.nBrgPerGird;
++    // bearings per girder: the EDM has no count input (its PAD message always carries 1), so the abutment keeps its own I-10 value
++    const nbNote=(p.nBrgPerGird!=null&&+p.nBrgPerGird!==+S.bearing.nBrgPerGird)?` · bearings per girder kept at ${+S.bearing.nBrgPerGird} (abutment input; the module sends no count)`:"";
+     buildInputs(); recalcAll(); scheduleSave();
+-    document.getElementById("saveStatus").textContent="pad received from EDM — thermal/creep force updated"+(p.govDC?` (D/C ${(+p.govDC).toFixed(2)})`:"")+circNote;
++    document.getElementById("saveStatus").textContent="pad received from EDM — thermal/creep force updated"+(p.govDC?` (D/C ${(+p.govDC).toFixed(2)})`:"")+circNote+nbNote;
+   }
+ });
+ 
+@@ -4860,6 +4898,7 @@ function inputEchoHTML(){
+     ["Backwall height / thickness",fmt(g.hbw)+" / "+fmt(g.tbw),"ft"],
+     ["Stem height; top / bottom thickness",fmt(g.hstem)+"; "+fmt(g.tst)+" / "+fmt(g.tsb),"ft"],
+     ["Bearing setback from backwall face",g.brgSetback,"ft"],
++    ["Girder end to backwall face g_end (support length)",fmt(+g.endGap||0,1),"in"],
+     ["Toe / stem base / heel  (B total)",fmt(g.Ltoe)+" / "+fmt(g.tsb)+" / "+fmt(g.Lheel)+"  (B = "+fmt(g.Ltoe+g.tsb+g.Lheel)+")","ft"],
+     ["Footing thickness",g.tf,"ft"],["Wall (stem/backwall) length L_ab",g.Lab,"ft"],["Footing length L_ftg",fmt(g.Lftg),"ft"],
+     ["Soil height over heel / backfill slope β",fmt(g.soilH)+" / "+fmt(g.beta,1)+"°","ft / deg"],
+@@ -5531,16 +5570,20 @@ document.addEventListener("DOMContentLoaded",init);
+       const all=[];
+       const addC=(c,noLSv)=>{ const My=c.V*xc-c.Mv+c.Mh, Mx=c.Mt-c.V*yc;   // about the reference point; + toward the toe / + toward +y
+         all.push({c, noLSv, v:{P:r3(c.V), Vx:r3(c.Hx), Vy:r3(c.Hy), Mx:r3(Mx), My:r3(My)}, H:Math.hypot(c.Hx,c.Hy)}); };
+-      for(const pl of R.permutations(ls)) addC(R.comboEffects(ls,pl.perm,pl.liveOn,false),false);
++      for(const pl of R.permutations(ls,true)) addC(R.comboEffects(ls,pl.perm,pl.liveOn,false),false);   // incl. LS + BR with the LL reaction off [C11.5.6]
+       // the same live-load permutations without the vertical LS over the heel (it can help stability: less V, smaller My
+       // toward the heel); appended after the cases above, so on a tie the case with LSv is kept
+-      for(const pl of R.permutations(ls)){ if(!pl.liveOn) continue;
++      for(const pl of R.permutations(ls,true)){ if(!pl.liveOn) continue;
+         const c=R.comboEffects(ls,pl.perm,pl.liveOn,true); if(Math.abs(c.V-R.comboEffects(ls,pl.perm,pl.liveOn,false).V)>1e-9) addC(c,true); }
+       if(!all.length) return;
+       const pick=(f,s)=>all.reduce((b,a)=>s*f(a)>s*f(b)+1e-9?a:b,all[0]);
+       const sameV=(a,b)=>["P","Vx","Vy","Mx","My"].every(k=>a.v[k]===b.v[k]);
+       const mine=[], put=(a,tag)=>{ const same=mine.find(m=>sameV(m.a,a)); if(same){ same.tags.push(tag); return; } mine.push({a,tags:[tag]}); };
+       [["V max",a=>a.v.P,1],["V min",a=>a.v.P,-1],["My max",a=>a.v.My,1],["My min",a=>a.v.My,-1],["H max",a=>a.H,1]].forEach(([tag,f,s])=>put(pick(f,s),tag));
++      // spread footing: also the sliding- and eccentricity-critical permutations (largest H/V and |My|/V), which can be the
++      // LS + BR case with the girder LL reaction off [C11.5.6]
++      if(!pile){ const pos=all.filter(a=>a.v.P>1e-9); if(pos.length){ const pk=(f)=>pos.reduce((b,a)=>f(a)>f(b)+1e-9?a:b,pos[0]);
++        put(pk(a=>a.H/a.v.P),"H/V max"); put(pk(a=>Math.abs(a.v.My)/a.v.P),"|e| max"); } }
+       if(pile && R.pile.perLS && R.pile.perLS[ls]){   // the permutations that govern this calculator's own pile table
+         const q=R.pile.perLS[ls], find=c=>c&&all.find(a=>a.c.V===c.V&&a.c.Mv===c.Mv&&a.c.Mh===c.Mh&&a.c.Hx===c.Hx&&a.c.Mt===c.Mt&&a.c.Hy===c.Hy);
+         const b1=find(q.best&&q.best.c), b2=find(q.worstMin&&q.worstMin.c); if(b1) put(b1,"pile P max"); if(b2) put(b2,"pile P min"); }
+@@ -5570,7 +5613,7 @@ document.addEventListener("DOMContentLoaded",init);
+       geometry:{ footingWidthB:r3(B), footingLength:r3(+S.geom.Lftg||+S.geom.Lab), footingThickness:r3(S.geom.tf) },
+       signConvention:SIGN, cases:cs,
+       notes:[
+-        "Each limit state's load-factor permutations (γp max/min of DC, DW, EV, EH, ES, with and without live load) are the calculator's own; per limit state the permutations giving V max, V min, My max, My min and the largest horizontal resultant are sent, identical ones merged"+(pile?"; in the pile branch also the permutations that give the largest and smallest pile reaction in the calculator's pile table (\"pile P max\", \"pile P min\").":"."),
++        "Each limit state's load-factor permutations (γp max/min of DC, DW, EV, EH, ES; live load on, off, and LS + BR with the girder LL reaction off [C11.5.6]) are the calculator's own; per limit state the permutations giving V max, V min, My max, My min and the largest horizontal resultant are sent, identical ones merged"+(pile?"; in the pile branch also the permutations that give the largest and smallest pile reaction in the calculator's pile table (\"pile P max\", \"pile P min\").":"; for a spread footing also the permutations with the largest H/V (sliding) and the largest |My|/V (eccentricity) (\"H/V max\", \"|e| max\")."),
+         "Strength and Extreme Event cases are factored (factored:true); Service I has load factors of 1.0 (factored:false).",
+         "Every case includes the abutment and footing self-weight, the soil over the heel (EV), the earth pressure (EH, ES, LS) and the superstructure loads, at the bottom of the footing.",
+         "The vertical live-load surcharge over the heel (LSv) is included as in the calculator's bearing and pile checks. Each live-load permutation is also offered without it (its sliding and eccentricity checks leave it out where it helps); a case picked from those is marked \"(no heel LS)\".",
+```
