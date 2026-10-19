@@ -2135,6 +2135,9 @@ function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSa
 ============================================================ */
 const HP_BLOCK_PHI = 0.60;        // Table 10.5.5.2.3-1, group block failure, clay
 const HP_SOFT_SU_KSF = 0.50;      // surface soil "soft" below this S_u (verify)
+// ET4 (2026-10-19): warning only (eta unchanged). 10th Ed. 10.7.3.9: eta = 1.0 in cohesionless soil
+// is stated for c/c spacing >= 2.5 diameters; closer spacing is left to the engineer.
+function hpCohesionlessBelow25Text(s_dia) { return " ⚠ s/B = " + fmt(s_dia, 2) + " < 2.5: AASHTO LRFD 10th Ed. Art. 10.7.3.9 gives η = 1.0 in cohesionless soil only for c/c spacing ≥ 2.5B. Closer spacing needs engineer judgment or a reduced η (enter it with the η override); the tool keeps η = 1.0."; }
 function hpStaticIsClay(ly) { return (ly.staticType || ((ly.type === "clay" || ly.type === "stiffclay") ? "clay" : "sand")) === "clay"; }
 function hpGroupAashto({ layers, zTop, zToe, s_dia, capContact }) {
   const sorted = (layers || []).slice().sort((a, b) => a.topDepth - b.topDepth);
@@ -9197,7 +9200,7 @@ function RptGroupChecks({ I, r }) {
                   a.surfClay ? "; surface soil S" : "; surface soil cohesionless", a.surfClay ? e("sub", null, "u") : null, a.surfClay ? " = " + fmt(a.surfSu, 2) + " ksf" + (a.surfaceSoft ? " (soft)" : "") : "",
                   " → ", a.etaCase),
                 line(a.contactEff ? "η = 1.0" : "η = 0.65 + 0.35 × (s/B − 2.5)/3.5 at s/B = " + fmt(g.s_dia, 2) + " → η = " + fmt(a.eta, 3) + (a.below25 ? " (s < 2.5B: below the AASHTO minimum spacing; 0.65 used)" : "")))
-            : line("η = 1.0 (cohesionless; no block check)"))
+            : line("η = 1.0 (cohesionless; no block check)" + (a.below25 ? hpCohesionlessBelow25Text(g.s_dia) : "")))
       : !hp ? line(g.spacingOKforEta
           ? "✓ Spacing " + fmt(g.sEta_dia, 1) + "× ≥ 3× " + g.etaBlbl + " → η = 1.0 permitted (individual elements)"
           : "⚠ Spacing " + fmt(g.sEta_dia, 1) + "× < 3× " + g.etaBlbl + " → Converse-Labarre η = " + fmt(g.clEff, 3) + (I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=") + fmt(g.thetaDeg, 1) + "°)") : null,
@@ -18764,7 +18767,7 @@ function App() {
                   r.group.aashto.surfClay ? "; surface soil S" : "; surface soil cohesionless", r.group.aashto.surfClay ? /*#__PURE__*/React.createElement("sub", null, "u") : null, r.group.aashto.surfClay ? " = " + fmt(r.group.aashto.surfSu, 2) + " ksf" + (r.group.aashto.surfaceSoft ? " (soft)" : "") : "",
                   " → ", r.group.aashto.etaCase, /*#__PURE__*/React.createElement("br", null),
                   r.group.aashto.contactEff ? "η = 1.0" : "η = 0.65 + 0.35 × (s/B − 2.5)/3.5 at s/B = " + fmt(r.group.s_dia, 2) + " → η = " + fmt(r.group.aashto.eta, 3) + (r.group.aashto.below25 ? " (s < 2.5B: below the AASHTO minimum spacing; 0.65 used)" : ""))
-              : "η = 1.0 (cohesionless; no block check)")
+              : "η = 1.0 (cohesionless; no block check)" + (r.group.aashto.below25 ? hpCohesionlessBelow25Text(r.group.s_dia) : ""))
         : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
         r.group.spacingOKforEta
           ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.sEta_dia, 1), "× ≥ 3× " + r.group.etaBlbl + " → η = 1.0 permitted (individual elements)")
