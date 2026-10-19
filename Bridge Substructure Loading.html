@@ -1465,13 +1465,15 @@ function dlHtml() {
     ${S.rows.map((row, ri) => row.brg.map(p => `<tr>${S.joint ? `<td>${row.side}</td>` : ''}<td class="lbl">G${p.j + 1}</td><td class="val">${f2(p.s)}</td><td class="val">${f2(D.dc1[ri][p.j])}</td><td class="val">${f2(D.dc2[ri][p.j])}</td><td class="val">${f2(D.dw[ri][p.j])}</td></tr>`).join('')).join('')}
     <tr class="tot"><td${S.joint ? ' colspan="2"' : ''}>Total</td><td></td>${['dc1', 'dc2', 'dw'].map(c => `<td class="val">${f1(D[c].reduce((a, rr) => a + rr.reduce((x, y) => x + y, 0), 0))}</td>`).join('')}</tr></tbody></table></div></div></div>`;
   h += `<div class="card"><div class="card-h"><h2>Dead load effects</h2><span class="sub">DC super = DC1 + DC2 at the bearings; DC sub = self-weight of the substructure</span></div><div class="card-b">
-    ${respTable(r.UM.defs, [{ t: 'DC super' }, { t: 'DC sub' }, { t: 'DW' }, { t: 'DC + DW' }], (d, q) => [D.DCs[q], D.DCsub[q], D.DW[q], D.DCs[q] + D.DCsub[q] + D.DW[q]].map(v => `<td class="val">${fv(v, d.u)}</td>`).join(''))}
+    ${D.UF ? respTable(r.UM.defs, [{ t: 'DC super' }, { t: 'DC sub' }, { t: 'DW' }, { t: 'UF' }, { t: 'DC + DW + UF' }], (d, q) => [D.DCs[q], D.DCsub[q], D.DW[q], D.UF[q], D.DCs[q] + D.DCsub[q] + D.DW[q] + D.UF[q]].map(v => `<td class="val">${fv(v, d.u)}</td>`).join(''))   /* SRXF: future utility allowance, its own load */
+      : respTable(r.UM.defs, [{ t: 'DC super' }, { t: 'DC sub' }, { t: 'DW' }, { t: 'DC + DW' }], (d, q) => [D.DCs[q], D.DCsub[q], D.DW[q], D.DCs[q] + D.DCsub[q] + D.DW[q]].map(v => `<td class="val">${fv(v, d.u)}</td>`).join(''))}${D.UF ? '<p class="note" style="padding:6px 0 0">UF = future utility allowance (MassDOT utilities from GirderDetail), its own permanent load: DC super excludes it here; see the note above the bearing table.</p>' : ''}
     <p class="note" style="padding:8px 0 0">${SIGNS} ${u.type === 'mcb' || u.type === 'pile' ? `The bent is a 2D frame of the cap and ${u.type === 'pile' ? 'piles, fixed at the point of fixity' : `columns, ${u.base === 'pinned' ? 'pinned' : 'fixed'} at the base`}; loads act at the cap centroid, and column self-weight goes to the base.` : ''}</p></div></div>`;
   // every unit at its base
+  const anyUF = P.units.some((x, i) => { const rr = unitRes(i); return !rr.err && rr.DL && rr.DL.UF; });   // SRXF
   const rowsAll = P.units.map((x, i) => { const rr = unitRes(i); if (rr.err || !rr.DL) return `<tr><td class="lbl">${esc(x.name)}</td><td colspan="5" class="dim">${esc(rr.err || '')}</td></tr>`;
     const defs = rr.UM.defs, qi = (() => { let q = -1; defs.forEach((d, j) => { if (d.grp === 'Resultant' && /^Axial/.test(d.label)) q = j; }); return q; })(), lbl = defs[qi].label.replace(/^Axial, /, ''), mt = defs.findIndex((d, j) => j > qi - 3 && d.grp === 'Resultant' && d.label === 'M<sub>t</sub>, ' + lbl);
-    const Dl = rr.DL; return `<tr><td class="lbl">${esc(x.name)}</td><td>${lbl.charAt(0).toUpperCase() + lbl.slice(1)}</td><td class="val">${f1(Dl.DCs[qi])}</td><td class="val">${f1(Dl.DCsub[qi])}</td><td class="val">${f1(Dl.DW[qi])}</td><td class="val">${mt >= 0 ? f0(Dl.DCs[mt] + Dl.DCsub[mt] + Dl.DW[mt]) : '—'}</td></tr>`; }).join('');
-  h += `<div class="card"><div class="card-h"><h2>All units at the lowest section</h2><span class="sub">Unfactored axial (kip) and transverse moment of DC + DW (kip-ft)</span></div><div class="card-b tscroll"><table class="tbl"><thead><tr><th>Unit</th><th>Section</th><th class="right">DC super</th><th class="right">DC sub</th><th class="right">DW</th><th class="right">M<sub>t</sub>, DC + DW</th></tr></thead><tbody>${rowsAll}</tbody></table></div></div>`;
+    const Dl = rr.DL, uf = q => Dl.UF ? Dl.UF[q] : 0; return `<tr><td class="lbl">${esc(x.name)}</td><td>${lbl.charAt(0).toUpperCase() + lbl.slice(1)}</td><td class="val">${f1(Dl.DCs[qi])}</td><td class="val">${f1(Dl.DCsub[qi])}</td><td class="val">${f1(Dl.DW[qi])}</td>${anyUF ? `<td class="val">${f1(uf(qi))}</td>` : ''}<td class="val">${mt >= 0 ? f0(Dl.DCs[mt] + Dl.DCsub[mt] + Dl.DW[mt] + uf(mt)) : '—'}</td></tr>`; }).join('');
+  h += `<div class="card"><div class="card-h"><h2>All units at the lowest section</h2><span class="sub">Unfactored axial (kip) and transverse moment of DC + DW${anyUF ? ' + UF' : ''} (kip-ft)</span></div><div class="card-b tscroll"><table class="tbl"><thead><tr><th>Unit</th><th>Section</th><th class="right">DC super</th><th class="right">DC sub</th><th class="right">DW</th>${anyUF ? '<th class="right">UF</th>' : ''}<th class="right">M<sub>t</sub>, DC + DW${anyUF ? ' + UF' : ''}</th></tr></thead><tbody>${rowsAll}</tbody></table></div></div>`;
   return h;
 }
 
@@ -2914,7 +2916,7 @@ function comboComps(k, c) {
     return { comps, n, LL, L };
   }
   const svc = L.dc[0] === 1 && L.dc[1] === 1, DC = Float64Array.from(D.DCs, (v, q) => v + D.DCsub[q]);
-  perm(DC, L.dc, 'DC'); perm(D.DW, L.dw, 'DW'); fix(p4.SH && sc(p4.SH, gSHof(k)), 'SH');   // γSH, Table 3.4.1-3: 0.5 with I_g, 1.0 with I_eff; steel substructures 1.0
+  perm(DC, L.dc, 'DC'); perm(D.DW, L.dw, 'DW'); if (D.UF) perm(D.UF, [L.dc[0], 0], 'UF'); fix(p4.SH && sc(p4.SH, gSHof(k)), 'SH');   // SRXF: future utility allowance (MassDOT), DC max factor where it adds, 0 where it relieves   // γSH, Table 3.4.1-3: 0.5 with I_g, 1.0 with I_eff; steel substructures 1.0
   perm(ev('EH'), c.eq && eqEHfixed() !== null ? [eqEHfixed(), eqEHfixed()] : svc ? [1, 1] : EH, 'EH'); perm(ev('EV'), svc ? [1, 1] : EV, 'EV'); perm(ev('ES'), svc ? [1, 1] : ES, 'ES'); perm(ev('ASdc'), L.dc, 'DC (approach slab)');
   const gl = L.ll || (c.llEq ? gEQv() : 0);
   if (gl) { comps.push({ t: 'll', g: gl, nm: 'LL + IM' }); opt(p3.BR.map(v => sc(v, gl)), 'BR'); opt([p3.CE && sc(p3.CE, gl)], 'CE'); ['LSh', 'LSv', 'ASll'].forEach(x => opt([ev(x) && sc(ev(x), gl)], x === 'ASll' ? 'LL on approach slab' : x === 'LSh' ? 'LS' : 'LS vertical')); }
@@ -3445,9 +3447,9 @@ async function rxImport(file) {
   };
   /* ---------- SRXU (engineer decision 2026-10-19, GD72a): MassDOT utilities from GirderDetail ----------
      Kept as their own values in P.rx.data rows (optional keys ut, uf; uta, ufa for the ahead row of an expansion joint) and shown as their own
-     table "MassDOT utilities from GirderDetail" under each support. In the analysis UT (existing utilities) is added to DW and UF (future utility
-     allowance) to DC (superstructure, with DC2): SubLoads has no separate permanent load type, so UF takes the DC factors (Strength 1.25 max /
-     0.90 min, Service 1.0) where GirderDetail uses 1.25 / 0 (Service 0 where it relieves). The Dead load tab and the report show the breakdown.
+     table "MassDOT utilities from GirderDetail" under each support. In the analysis UT (existing utilities) is added to DW; UF (future utility
+     allowance) is its own permanent load D.UF (SRXF, 2026-10-19), factored in comboComps with the limit state's DC maximum where it adds and 0
+     where it relieves (GirderDetail: 1.25 / 0, Service 1.0 / 0). The Dead load tab and the report show the breakdown.
      A support without these keys is computed exactly as before. */
   const UK = ['ut', 'uf', 'uta', 'ufa'], hasUk = k => ((P.rx.data || [])[k] || []).some(r => r && UK.some(q => r[q] != null)), anyU = k => ((P.rx.data || [])[k] || []).some(r => r && UK.some(q => nz(r[q])));
   function utilTables(h) { const G = MODEL.G; if (!G || G.E.length) return h; let pos = 0;
@@ -3459,14 +3461,17 @@ async function rxImport(file) {
       h = h.slice(0, e) + t + h.slice(e); pos = e + t.length; });
     return h; }
   // analysis: UT into DW, UF into DC2 (DC superstructure) at the bearings of every row; unchanged when the support has none
+  { const ch0 = comboHtml; comboHtml = function () { const h = ch0(), k = P.ui.sel; let D = null; try { D = unitRes(k).DL; } catch (e) { } if (!D || !D.UF) return h;   // SRXF
+      return h.replace('<p class="note" style="padding:8px 0 0">Load factors: ', '<p class="note" style="padding:8px 0 0">Load factors: UF (future utility allowance, MassDOT utilities from GirderDetail) in every limit state: the DC maximum factor where it adds, 0 where it relieves (MassDOT Part I 3.5.5.2, as GirderDetail); '); }; }
   const dlu = dlUnit; dlUnit = function (G, UG, k, UM) { const r = dlu(G, UG, k, UM); if (!anyU(k)) return r;
     const S = G.sup[k], d = (P.rx.data || [])[k] || [], nb = G.nb;
     const L = key => S.rows.map((rw, ri) => { const a = new Float64Array(nb); for (let j = 0; j < nb; j++) { const c = d[j] || {}; a[j] = nz(ri === 1 ? c[key + 'a'] : c[key]); } return a; });
-    const add = (a, b) => a.map((rr, ri) => rr.map((v, j) => v + b[ri][j])), ut = L('ut'), uf = L('uf'), dc2 = add(r.dc2, uf), dw = add(r.dw, ut);
-    return { ...r, dc2, dw, ut, uf, DCs: UM.evalFn(add(r.dc1, dc2), false), DW: UM.evalFn(dw, false), has: true }; };
+    const add = (a, b) => a.map((rr, ri) => rr.map((v, j) => v + b[ri][j])), ut = L('ut'), uf = L('uf'), dc2 = add(r.dc2, uf), dw = add(r.dw, ut), hasUF = uf.some(rr => rr.some(v => v));
+    // SRXF (engineer decision 2026-10-19): UF is its own permanent load (D.UF; factors in comboComps); DC super (r.DCs) excludes it. dc2 / dw keep the totals per bearing (tables, seismic weight, abutment export)
+    return { ...r, dc2, dw, ut, uf, ...(hasUF ? { UF: UM.evalFn(uf, false) } : {}), DW: UM.evalFn(dw, false), has: true }; };
   const rxt = rxTotals; rxTotals = function (G) { const t = rxt(G), d = P.rx.data || []; t.forEach((x, k) => (d[k] || []).forEach(r => { if (!r) return; const a = nz(r.uf) + nz(r.ufa), b = nz(r.ut) + nz(r.uta); if (a || b) { x.dc2 += a; x.dc += a; x.dw += b; } })); return t; };
   const utTxt = k => { const d = (P.rx.data || [])[k] || [], sum = q => d.reduce((a, r) => a + nz(r && r[q]) + nz(r && r[q + 'a']), 0), by = q => d.map((r, j) => [j, nz(r && r[q]) + nz(r && r[q + 'a'])]).filter(x => x[1]).map(([j, v]) => `G${j + 1} ${f2(v)}`).join(', ');
-    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; DC2 (DC superstructure) includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). UF takes the DC factors (Strength 1.25 max / 0.90 min, Service 1.0): GirderDetail uses 1.25 / 0 (Service 0 where it relieves), which SubLoads cannot represent without a separate load type, so where UF relieves (minimum cases) 0.90 UF is counted.`; };
+    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
   { const dh0 = dlHtml; dlHtml = function () { const h = dh0(), k = P.ui.sel; if (!anyU(k)) return h;
     return h.replace('Superstructure loads at the bearings</h3>', `Superstructure loads at the bearings</h3><p class="note" style="padding:0 0 6px">${utTxt(k)}</p>`); }; }
   { const be0 = basisExtra; basisExtra = function () { const h = be0(), ks = (P.units || []).map((u, k) => k).filter(anyU); if (!ks.length) return h;
