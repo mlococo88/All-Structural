@@ -1050,7 +1050,7 @@ Check cases come from headless Chromium, main (e29761a) vs branch, with the page
 Answers the D11 open item "Calculation (raised only), shaft φ" above. Engineer decision: replace the fixed φ = 0.65 with φ from the net tensile strain, tied row of Table 21.2.2.
 
 ### SHAFT-PHI: strain-dependent φ for the drilled-shaft P–M (§4 result change)
-- **Where:** `pmCapacity(shape, b_in, As, nbar, rbar, fc, fy, Pu)`, anchor `// governing = smallest Mn` (≈ line 3172). Display: `rebarWorkedHTML`, anchor `\\phi M_n = ${fmt(cap.phi,2)}` (≈ line 4772). Manual Part 4C.1, anchor `β₁ follows §22.2.2.4.3`. Comment above `barLayoutRound`, anchor `φ = 0.65 (tied, compression-controlled default)`.
+- **Where:** `pmCapacity(shape, b_in, As, nbar, rbar, fc, fy, Pu)`, anchor `// governing = smallest Mn` (≈ line 3172). Display: `rebarWorkedHTML`, anchor `\\phi M_n = ${fmt(cap.phi,2)}` (≈ line 4772). Manual Part 4C.1, anchor `\u03b2\u2081 follows §22.2.2.4.3` (the source writes β₁ as \u escapes). Comment above `barLayoutRound`, anchor `φ = 0.65 (tied, compression-controlled default)`.
 - **Before** (`pmCapacity`):
   ```js
   // governing = smallest Mn
