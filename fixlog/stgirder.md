@@ -3548,3 +3548,433 @@ index 95a8076..e297ce6 100644
 -      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plate(s) each side of the web, b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in',gm('stiff.bearB')?'(from GirderDetail: the type at the support of the peak V_u)':''],
 +      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plates in total ('+fmt(R.bearing.nb/2,R.bearing.nb%2?1:0)+' each side of the web), b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in',gm('stiff.bearB')?'(from GirderDetail: the type at the support of the peak V_u)':''],
 ```
+
+
+## 2026-10-19 — PR: claude/stgirder-disconnect (DISC: ST-Girder disconnected from every bridge tool except GirderDetail; engineer decision 2026-10-19; the other tools' side is branch claude/stgirder-disconnect-others; PR link added after merge)
+
+### DISC. ST-Girder takes data from GirderDetail only   [removes cross-tool links; no change to the built-in analysis or to GirderDetail imports; saved MCT / LL & DL data cleared with a notice]
+- **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`). (1) Substructure Loading will take reactions from GirderDetail (separate, later PR; not here). (2) MCT's steel rating no longer uses ST-Girder's capacity. (3) No MIDAS / MCT demand input into ST-Girder: Import accepts only GirderDetail files. (4) ST-Girder's built-in simple-span analysis and its own inputs stay as they are. (5) Saved ST-Girder data that came from MCT or LL & DL is cleared on open, with a one-time visible notice listing exactly what was removed; CLAUDE.md §5 is satisfied by this explicit decision plus the notice, recorded here. (6) ST-Girder is removed from MCT's combined saved project.
+- **Removed from ST-Girder (anchors are the start of each removed block in main bcbd913):**
+  - Head: the shared design-beam block `Bridge Suite — shared DESIGN BEAM channel (v1)` (`window.BridgeBeam`, its `.beamchip` CSS).
+  - Body: `Bridge Suite shared-storage handoff (v1)` (`window.BridgeHandoff`, the MCT demands map `bridgeSuite.v1.handoffs` / `latestId` / `updatedAt` / `adopted.stgirder`), `Bridge Suite geometry change tracker (v1)` (`window.BridgeGeometryChanges`, `geometryChanges`), and the big shared block that starts `Bridge Suite unified project registry (v1)`: `window.BridgeProjects` (`projects`, `currentProjectId`, `migrated.stgirder`), `SHARED APP PATHS` (`window.BridgeApps`, `BridgeApps.boot('stgirder')`, the iframe hello to MCT), `SHARED CHANNEL LOCKS` (`window.BridgeLocks`: `locks`, `syncLog.*`, `lockSnap.*`, toasts, lock UI kit, suite panel and drawer). Replaced by the reduced, ST-Girder-only block `ST-Girder app-path record (reduced copy, 2026-10-19)` (below).
+  - Script `BXProject` (`/* Shared project info (HANDOFF.md §4.1)`; buttons "Use shared project info" / "Share project info", channel `projectMeta`). GirderDetail does not use `projectMeta` for ST-Girder (the `girderDemands` payload carries its own `project` string), so per the task it is removed; ST-Girder's title block is typed in ST-Girder only.
+  - Script `BXSuperRx` (`/* superReactions sender glue (HANDOFF.md §4.4)`) and `function bxSuperRxPayload` (buttons "Send reactions to Substructure Loading" / "Export hand-off (JSON)"; keys `superReactions`, `superReactions.by.stgirder`).
+  - Script `Floating cross-app sync drawer` (`BridgeLocks.drawer({app:'stgirder'})`).
+  - Babel: `const BL=window.BridgeLocks…`, `BLU`, `LOCK_APP`; `function bridgeNav` (MCT iframe embedding, "↩ MCT Analysis", "PS-Beam ↗"); `function PosTag`; the module-scope LL & DL resolvers (`extActiveOf`, `lldfResolveFor`, `LLDF_LABELS`, `lldfMineFor`, `lldfTheirsFor`, `applyLLDFTo`, `dlResolveFor`, `DL_*`, `applyDLTo`, `LOCK_SIG`, `function LockAutoSync`); in `InputsTab` the LL & DL two-way link (`pullLLDF`, `toggleLLDFLock`, `pullDL`, `toggleDLLock`, `dlPeek`, `sendLLDF` → `bridgeSuite.v1.lldfGeom`, `toggleGeomLock`), the "⇩ Pull DC2 / DW from LL & DL", "⇩ Pull from LL & DL", "Send geometry to LL & DL ↗" buttons with their lock toggles and driven strips, the DC1 cross-check hint, the fatigue-DF override hints, the read-only/driven state of the DC2, DW, imported-LL DF and manual DF_m / DF_v fields and the "🔒 FROM LL & DL" tag; the shared design-beam chip (`useDesignBeam`, `BeamChip`) and the App effect that set `loads.pos` from it; in `App` the MCT demands hand-off (`checkHandoff`, `adoptHandoff`, `dismissHandoff`, the "New analysis data available" banner, demands lock), the MCT geometry-change banner and modal (and their `.geom-*` CSS), the capacity publish to the MCT rating (`publishCapacity` → `bridgeSuite.v1.capacity`, capacity lock; the Rating tab callout "Feed this capacity to the MCT rating"), the shared-project participation (`adoptProject`, project follow, project slice autosave, "◆ Project:" indicator), the legacy project helpers (`ST_APP`, `BP`, `legacyLoadProjects`, `loadProjects` … `saveLastProjId`) and the one-time `BridgeProjects.migrate` call.
+- **Kept:** "⇩ Pull from GirderDetail" (`bridgeSuite.v1.girderDemands`, `BridgeXfer.read/isNew/markAdopted`, receiver `stgirder`), Import of GirderDetail's hand-off file, the `#gdpull` open-now path (OD1), the built-in simple-span analysis, the GirderDetail owner rules / loads / details transfers (GD49, GD54c, GDL, GDX, GD70, GD71), `BridgeXfer` (verbatim HANDOFF.md §5 copy, needed for `girderDemands`), the "← All tools" link to `tools.html`, the session autosave `stgirder.session`, Export JSON / Import of ST-Girder JSON files, Undo / Redo / Reset.
+- **Reduced app-path block:** GirderDetail's "Open ST-Girder now" reads `bridgeSuite.v1.appPaths.stgirder` (read only) to find this file. The new block `ST-Girder app-path record (reduced copy, 2026-10-19)` keeps only `register()` for app `stgirder`, copied from the shared block's `BridgeApps.register` with the same format (`{file, pinned, seenAt, dir, at:{<folder>:{file,pinned,seenAt}}}`, 24 folders, pins honoured). It is marked as not the shared byte-identical copy (CLAUDE.md §3: the shared bootstrap block is now in index.html, lldf.html, psbeam.html only).
+- **Import:** a demands file that is not GirderDetail's (`_schema` `psbeam-external-demands`, `steelbeam-external-demands`, `stgirder-external-demands` without `producer:"GirderDetail"` + `girderDetail`, or any JSON with a top-level `stations` array) is refused: "ST-Girder now takes demands only from GirderDetail; this file is from <producer> and was not loaded. Nothing was changed. Send the girder from GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder) and use "Pull from GirderDetail", or import its "Export hand-off (JSON)" file. Without GirderDetail demands ST-Girder uses its built-in simple-span analysis." An ST-Girder JSON file (Export JSON) still loads; it is cleaned like a saved session (below) and the removals are added to the notice ("File <name>: …").
+- **Saved data (CLAUDE.md §5, engineer decision 5): `stgDisconnect(inp)`, run on open on the saved `stgirder.session` (`stgBoot`), on an imported ST-Girder JSON file and on a shared-project design opened from the notice.** Each rule only acts when the data came from MCT / LL & DL; every removal is listed in the notice with its old and new value:
+  1. `inp.external` that is not GirderDetail's (`extFromGD` false: MCT hand-off, MIDAS / PS-Beam / steel-beam envelope) → `null` (built-in simple-span analysis). The span length `geom.L` and the plates `sec` that the import had set are kept as inputs (the notice says so), exactly as the existing "✕ use built-in simple-span analysis" button does.
+  2. Manual DFs from LL & DL: `loads.dfAuto === false` and (DF_m, DF_v) equal a factor pair published on `bridgeSuite.v1.lldf` (governing interior / exterior / byBeam, to 4 decimals), or the `lldf` channel is locked, or ST-Girder holds a pre-lock snapshot `lockSnap.stgirder.lldf` → `dfAuto = true` (ST-Girder's own AASHTO LRFD 4.6.2.2 factors). DF_m / DF_v values stay stored (unused while AUTO).
+  3. Imported-LL multipliers (`extDFpos`, `extDFneg`, `extDFv`, `extLLmpf`) not all at their defaults and equal to a published pair (or lock / snapshot) → the pre-lock snapshot values if ST-Girder has them, else the defaults 1.0.
+  4. `loads.fatM` / `loads.fatV` > 0 (only LL & DL ever set them) → 0 (ST-Girder's own single-lane estimate DF ÷ 1.2, or GirderDetail's fatigue envelopes).
+  5. `loads.wBar` (DC2) / `loads.wDW` (DW) equal to the DC2 / DW case published on `bridgeSuite.v1.dlLoads` (4 decimals), or the `dlLoads` channel locked / snapshot held (for a published case) → the pre-lock snapshot value if any, else ST-Girder's defaults 0.30 / 0.25 klf.
+  6. `loads.posAuto !== false` while a shared design beam (`bridgeSuite.v1.designBeam`) is stored → `posAuto = false`; `loads.pos` is kept (the position is set in ST-Girder from now on; `posAuto` is no longer read anywhere).
+  - Limitation: a DF / DC2 / DW value pulled once from LL & DL, when LL & DL's payload is no longer in the browser and no lock or snapshot exists, cannot be told apart from a value typed by hand; it is kept as ST-Girder's own input.
+- **Keys:** `stgPurgeOwnCopies()` removes, on every open, only ST-Girder's own published copies, so receivers stop listing them: `bridgeSuite.v1.superReactions.by.stgirder`; `bridgeSuite.v1.superReactions` (+ `.updatedAt` when it holds the same `producedAt`) only when its `producer` is "ST-Girder"; `bridgeSuite.v1.capacity` (+ `.capacity.updatedAt`, same rule) only when its `producer` is "ST-Girder"; `bridgeSuite.v1.lldfGeom` only when its `producer` is "ST-Girder". Every removal is listed in the notice with the key name. Other tools' keys are not touched (`lldf`, `dlLoads`, `designBeam`, `beamRoster`, `locks`, `syncLog.*`, `lockSnap.*`, `handoffs`, `latestId`, `geometryChanges`, `projects`, `currentProjectId`, `capacity.adopted.mct`, `superReactions.by.psbeam`, …). ST-Girder stops writing: `capacity`, `superReactions`, `superReactions.by.stgirder`, `lldfGeom`, `projects` (its slice), `currentProjectId`, `migrated.stgirder`, `locks`, `syncLog.stgirder`, `lockSnap.stgirder`, `adopted.stgirder` (MCT map), `geometryChanges.adopted.stgirder`, `designBeam`. It still writes `stgirder.session`, `stgirder.ui.v1`, `stgirder.inputTab.v1`, `bridgeSuite.v1.appPaths` (its own entry) and `bridgeSuite.v1.girderDemands.adopted.stgirder`.
+- **New key `stgirder.disconnect.v1`** (tool-prefixed, CLAUDE.md §5): `{v:1, pending, at, items:[…], projects:[{id,name,savedAt}]}`. The notice is shown while `pending` is true (it survives a reload or a closed tab) and the "✕ dismiss (do not show again)" button sets it false. On the first open only, ST-Girder designs found in the shared project registry (`bridgeSuite.v1.projects[*].slices.stgirder`, which MCT's combined project held) are listed in the notice with "Open here" (cleaned like the session; Undo restores the previous inputs) and "Export JSON" (an ST-Girder JSON file for Import), so they are not lost; nothing is deleted from the registry.
+- **Notice text** (heading "ST-Girder now takes data from GirderDetail only"): "Engineer decision 2026-10-19: ST-Girder no longer exchanges data with the MCT Generator, PS-Beam, LL & DL Distribution or Bridge Substructure Loading. Demands come only from GirderDetail (Pull from GirderDetail, or Import of its hand-off file); otherwise ST-Girder uses its own inputs and its built-in simple-span analysis. Saved data that came from those tools was removed:" followed by one line per removal, e.g. "Imported demands from MCT Generator (project "Old MCT bridge"), member G2, 363 stations: removed. ST-Girder runs its built-in simple-span analysis again (span length L = 140.00 ft and the plates are kept as they were; check them).", "Live load distribution factors DF_m = 0.712, DF_v = 0.884 (MANUAL, from LL & DL Distribution): replaced by ST-Girder’s own AASHTO LRFD 4.6.2.2 factors (Distribution factors: AUTO TYPE (a)).", "DC2 barrier / SIDL (per girder) 0.412 klf from LL & DL Distribution: set to 0.300 klf (ST-Girder default). …", "Capacity (φM_n, φV_n) for the MCT rating sent by ST-Girder: removed (key bridgeSuite.v1.capacity and bridgeSuite.v1.capacity.updatedAt).", then the shared-project designs with their buttons.
+- **Wording:** report "Girder position" now reads "<pos> (set here)" (was "(follows the shared design beam)" while `posAuto`); the PNA-out-of-scope note drops "Sending capacity to the MCT rating is blocked; … hand-offs"; the no-negative-moment note drops "or MCT/MIDAS"; the fatigue warning for imported demands without fatigue envelopes reads "Imported demands without fatigue envelopes:" (was "Imported MIDAS demands:"); the Fatigue tab DF hint drops "Pull an exact value from the LL & DL Distribution app if desired."; the GirderDetail pull summary drops "(no longer follows the design-beam chip)"; the autosave-failure message names only `stgirder.session`. The `DEFAULTS.loads.posAuto` comment says the field is no longer used.
+- **§4 / result change:** no formula, factor, unit or code reference changed. The compute path (`computeAll`, including the `loads.fatM` / `fatV` branches, which now only see 0) is untouched. Results change only for a saved session that held MCT / LL & DL data, by the removals listed in the notice (engineer decision 5): e.g. a session on MCT demands now runs the built-in simple span; DFs from LL & DL become ST-Girder's own 4.6.2.2 factors.
+- **Check case:** (a) built-in example, empty storage: every check (value, limit, ratio), the rating, the stations (x, M_u, V_u), fatigue and deflection results are identical to main (hashes checks 72123bf8f18a, rating 990718730b7c, stations c45626747a1d). (b) An old session (span 2 of a 110-140-110 ft MCT model, DF_m 0.712 / DF_v 0.884 and fatigue 0.401 / 0.512 from LL & DL, DC2 0.412 / DW 0.318 klf from LL & DL, `lldf` locked, design beam B3): after open `external = null`, `L = 140 ft`, `dfAuto = true`, `fatM = fatV = 0`, `wBar = 0.30`, `wDW = 0.25`, ext multipliers 1.0, `posAuto = false`; the cleaned session gives identical results on main and on this branch (same inputs, same computeAll).
+- **How verified:** `node tests/check-syntax.mjs stgirder.html` (all pass); `node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1,util_MassDOT_G2,def15_AASHTO_G2_gdx,util_MassDOT_G2_gdx,def15_AASHTO_G2_loads`: all sections identical to main (bcbd913), no console errors (GirderDetail `#gdpull` path); a headless script (scratch) on main vs branch: built-in results identical, every tab and Inputs sub-tab renders without console errors; old session above → notice shown and data cleared, keys removed / kept as listed, notice still shown after reload until dismissed and not after; shared-project design "Open here" cleaned; MCT demands file refused with nothing changed; "Pull from GirderDetail" button and Import of the GirderDetail hand-off file applied; screenshot of the notice checked.
+- **Other copies:** ST-Girder no longer carries the shared bootstrap block (BridgeBeam, BridgeHandoff, BridgeGeometryChanges, BridgeProjects + BridgeApps + BridgeLocks) or the BXSuperRx glue (still in psbeam.html); `BridgeXfer` stays the verbatim HANDOFF.md §5 copy. CLAUDE.md §3, HANDOFF.md, AUDIT.md and the other tools are updated in branch claude/stgirder-disconnect-others.
+- **Open items:** `projectMeta` ("Use / Share shared project info") was removed because GirderDetail does not use it for ST-Girder; if the engineer wants ST-Girder's title block to follow GirderDetail's shared project info, it can be restored as a GirderDetail-only receiver. Substructure Loading reactions from GirderDetail: separate PR (engineer decision 1).
+- **Diff (main → branch, `git diff -U0`; runs of more than 30 deleted lines and hunks that only delete are summarised by their first and last line):**
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index e297ce6..ac2134d 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -47 +47 @@ body{background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gr
+-.sheet-inner>.callout,.sheet-inner>.geom-change-banner{margin-left:28px;margin-right:28px}
++.sheet-inner>.callout{margin-left:28px;margin-right:28px}
+@@ -90 +90 @@ body{background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gr
+-  .cols,.cols-full{padding-left:14px;padding-right:14px}.sheet-inner>.callout,.sheet-inner>.geom-change-banner{margin-left:14px;margin-right:14px}}
++  .cols,.cols-full{padding-left:14px;padding-right:14px}.sheet-inner>.callout{margin-left:14px;margin-right:14px}}
+-247,155 +246,0  [deleted 155 lines: first "/* Geometry change notice — informational, so it uses the suite's steady" ... last ""]
+-566,81 +410,0  [deleted 81 lines: first "<!-- ═══════════════════════════════════════════════════════════════════════════" ... last "</script>"]
+@@ -652,119 +416,8 @@ var st=document.createElement('style'); st.textContent=css;
+-[... 119 deleted lines, first "Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html /" ... last "bridgeSuite.v1.currentProjectId  · bridgeSuite.v1.migrated.<app>"]
++     ST-Girder app-path record (reduced copy, 2026-10-19). NOT the shared bridge-suite
++     bootstrap block: ST-Girder is disconnected from MCT, PS-Beam, LL & DL and
++     Substructure Loading (engineer decision 2026-10-19) and keeps only what
++     GirderDetail's hand-off needs. It records where this file lives in
++     bridgeSuite.v1.appPaths (entry "stgirder", same format as the shared block's
++     register()), which GirderDetail reads (read only) for "Open ST-Girder now"
++     (HANDOFF.md §4.9). Nothing else is read or written here. Do not sync this block
++     with the shared block in index.html / psbeam.html / lldf.html.
+@@ -774,87 +427 @@ var st=document.createElement('style'); st.textContent=css;
+-[... 87 deleted lines, first ""use strict";" ... last "var ME='';                                   // which app this file is, set by b"]
++  var KEY='bridgeSuite.v1.appPaths', APP='stgirder';
+@@ -863 +430 @@ var st=document.createElement('style'); st.textContent=css;
+-  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
++  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+-865,31 +431,0  [deleted 31 lines: first "/* A write to the shared browser storage that fails because the storage is" ... last "with a space arrives percent-encoded and the value is shown to a human. */"]
+-903,3 +438,0  [deleted 3 lines: first "/* The folder this file sits in, as a URL ending in "/". Every relative link" ... last "filed under. */"]
+-912 +444,0  [deleted 1 lines: first "function same(a,b){ return String(a||'').toLowerCase()===String(b||'').toLowerCase(); }" ... last "function same(a,b){ return String(a||'').toLowerCase()===String(b||'').toLowerCa"]
+@@ -918,16 +450,5 @@ var st=document.createElement('style'); st.textContent=css;
+-  /* What is recorded for an app, for THIS folder. Entries written before
+-     sightings were filed by folder carry no folder at all; they are still
+-     honoured, since they were almost always made next door. */
+-  function entry(app){
+-    var o=read(), e=o[app]; if(!e) return null;
+-    var d=selfDir();
+-    if(e.at&&e.at[d]) return {file:e.at[d].file, pinned:!!e.at[d].pinned, legacy:false};
+-    if(e.file&&!e.dir) return {file:e.file, pinned:!!e.pinned, legacy:true};
+-    return null;
+-  }
+-  /* Record where this app lives. A sighting never overwrites a pin made for
+-     the same folder -- if the engineer said which file is PS-Beam, a stray
+-     copy does not get to argue. */
+-  function register(app){
+-    var f=selfFile(); if(!f||!NAMES[app]) return '';
+-    var d=selfDir(), o=read(), e=o[app]||{}, at=e.at||{}, cur=at[d];
++  /* Record where ST-Girder lives, filed by folder. A sighting never overwrites a pin
++     made for the same folder. Same logic and format as the shared block's register(). */
++  function register(){
++    var f=selfFile(); if(!f) return '';
++    var d=selfDir(), o=read(), e=o[APP]||{}, at=e.at||{}, cur=at[d];
+@@ -938,2 +459 @@ var st=document.createElement('style'); st.textContent=css;
+-    // A pin from before folders were tracked keeps its place at the top level.
+-    o[app]=(e.pinned&&!e.dir)
++    o[APP]=(e.pinned&&!e.dir)
+@@ -944,854 +464 @@ var st=document.createElement('style'); st.textContent=css;
+-[... 854 deleted lines, first "/* Point an app at a file for THIS folder (pinned unless told otherwise), or" ... last "toast:toast, onChange:onChange, onLog:onLog, ui:ui };"]
++  try{ register(); }catch(e){}
+-1875,88 +541,0  [deleted 88 lines: first "/* Shared project info (HANDOFF.md §4.1): glue for the "Use shared project info" and" ... last "})();"]
+-1966,4 +544,0  [deleted 4 lines: first "/* Shared cross-app channel locks (see the BridgeLocks block above). */" ... last "const LOCK_APP='stgirder';"]
+-1979,11 +553,0  [deleted 11 lines: first "// Navigate between suite apps. When embedded inside the MCT window, ask the parent to switch" ... last "}"]
+@@ -2023 +587 @@ const DEFAULTS = {
+-         pos:'interior', posAuto:true, de:2.5, skew:0, NL:2, fatM:0, fatV:0,   // posAuto: follow the shared design beam; fatV = single-lane fatigue SHEAR DF override (0 = auto)
++         pos:'interior', posAuto:true, de:2.5, skew:0, NL:2, fatM:0, fatV:0,   // posAuto: not used since 2026-10-19 (the shared design beam was removed; the position is set here); fatV = single-lane fatigue SHEAR DF override (0 = auto)
+-2929,46 +1492,0  [deleted 46 lines: first "/* ===== superReactions hand-off (HANDOFF.md §4.4) =====" ... last ""]
+@@ -3727 +2245 @@ function computeAll(inp){
+-    else if(useExt) warnings.fat.push('Imported MIDAS demands: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
++    else if(useExt) warnings.fat.push('Imported demands without fatigue envelopes: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
+-3942,15 +2459,0  [deleted 15 lines: first "/* Shows whether the INTERIOR/EXTERIOR position is being driven by the shared design" ... last ""]
+-3958,121 +2460,0  [deleted 121 lines: first "/* ===== Shared-channel resolvers, hoisted to module scope =====" ... last ""]
+-4151,175 +2532,0  [deleted 175 lines: first "// ── LL & DL Distribution app two-way link (shared storage; see lldf.html) ──" ... last ""]
+-4541,10 +2747,0  [deleted 10 lines: first "{/* ---- shared dead-load channel (DC2 / DW from the LL & DL app) ---- */}" ... last "{dlLocked&&BLU.DrivenStrip&&<BLU.DrivenStrip ch="dlLoads" detail={dlSrc+dlNote} "]
+-4552,3 +2748,0  [deleted 3 lines: first "{(()=>{ const r=dlPeek; if(gL||!r||r.why||!(r.dc1>0)||!Ld) return null;" ... last "return <div className="hint" style={{margin:'0 0 10px'}}>DC1 cross-check — LL &a"]
+@@ -4598 +2792 @@ function InputsTab({inp,set,R}){
+-          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} driven={dlLocked&&dlHasBar} src={dlSrc} gd={G('loads.wBar')}/>}</div>
++          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} gd={G('loads.wBar')}/>}</div>
+@@ -4606 +2800 @@ function InputsTab({inp,set,R}){
+-          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} driven={dlLocked&&dlHasDW} src={dlSrc} gd={G('loads.wDW')}/>}</div>
++          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} gd={G('loads.wDW')}/>}</div>
+-4613,17 +2806,0  [deleted 17 lines: first "<div className="btnrow" style={{margin:'2px 0 6px',alignItems:'center'}}>" ... last "{(+loads.fatV>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fa"]
+@@ -4636,4 +2813,4 @@ function InputsTab({inp,set,R}){
+-            <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFpos')}/>
+-            <Num l="DF — negative moment" v={loads.extDFneg} set={v=>S('loads.extDFneg',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFneg')}/>
+-            <Num l="DF — shear" v={loads.extDFv} set={v=>S('loads.extDFv',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFv')}/>
+-            <Num l="Multiple presence m" v={loads.extLLmpf} set={v=>S('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extLLmpf')}/>
++            <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} gd={G('loads.extDFpos')}/>
++            <Num l="DF — negative moment" v={loads.extDFneg} set={v=>S('loads.extDFneg',v)} step={0.05} min={0} gd={G('loads.extDFneg')}/>
++            <Num l="DF — shear" v={loads.extDFv} set={v=>S('loads.extDFv',v)} step={0.05} min={0} gd={G('loads.extDFv')}/>
++            <Num l="Multiple presence m" v={loads.extLLmpf} set={v=>S('loads.extLLmpf',v)} step={0.05} min={0} gd={G('loads.extLLmpf')}/>
+@@ -4651,3 +2828 @@ function InputsTab({inp,set,R}){
+-            {lldfLocked
+-              ? <span className="xlink live" title="Distribution factors are locked to the LL &amp; DL Distribution app — the AUTO/MANUAL choice is not available while locked."><span className="xlk">🔒</span><span>FROM LL &amp; DL</span></span>
+-              : <Seg opts={[{v:true,l:'AUTO TYPE (a)'},{v:false,l:'MANUAL'}]} v={loads.dfAuto} set={v=>S('loads.dfAuto',v)}/>}
++            <Seg opts={[{v:true,l:'AUTO TYPE (a)'},{v:false,l:'MANUAL'}]} v={loads.dfAuto} set={v=>S('loads.dfAuto',v)}/>
+-4656 +2830,0  [deleted 1 lines: first "{loads.dfAuto&&<PosTag inp={inp} set={set}/>}" ... last "{loads.dfAuto&&<PosTag inp={inp} set={set}/>}"]
+@@ -4658,3 +2832,2 @@ function InputsTab({inp,set,R}){
+-              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfm} readOnly={lldfLocked} className={lldfLocked?'bl-driven':undefined} title={lldfLocked?('Driven by '+lldfSrc+' — unlock to edit.'):undefined} onChange={e=>{ if(lldfLocked) return; S('loads.dfm',+e.target.value); }}/><span className="unit">DFm</span></div>
+-              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfv} readOnly={lldfLocked} className={lldfLocked?'bl-driven':undefined} title={lldfLocked?('Driven by '+lldfSrc+' — unlock to edit.'):undefined} onChange={e=>{ if(lldfLocked) return; S('loads.dfv',+e.target.value); }}/><span className="unit">DFv</span></div>
+-              {lldfLocked&&<span className="bl-src" style={{alignSelf:'center'}}>{lldfSrc}</span>}
++              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfm} onChange={e=>{ S('loads.dfm',+e.target.value); }}/><span className="unit">DFm</span></div>
++              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfv} onChange={e=>{ S('loads.dfv',+e.target.value); }}/><span className="unit">DFv</span></div>
+@@ -4738 +2911 @@ function InputsTab({inp,set,R}){
+-      <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is pulled from the LL &amp; DL Distribution app and will be used for the stress range. Clear it on the Loads card to fall back to the DF÷1.2 estimate.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence){inp.loads.pos==='exterior'?'; for an exterior girder the one-lane DF is the larger of the lever rule and the rigid-section value':''}. Pull an exact value from the LL &amp; DL Distribution app if desired.</span>}</div>
++      <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is used for the stress range.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence){inp.loads.pos==='exterior'?'; for an exterior girder the one-lane DF is the larger of the lever rule and the rigid-section value':''}.</span>}</div>
+@@ -5077 +3250 @@ const PNA_OOS_HEAD='Outside the scope of this app: the plastic neutral axis fall
+-const PNA_OOS_NOT='Not reported (OUT OF SCOPE): Strength I positive flexure, ductility D_p \u2264 0.42D_t, the web compactness / compact-section classification and M_p, D_p, D_cp of the segment(s) named, and the positive-moment and governing load ratings. The overall verdict is "Not all checks pass". Sending capacity to the MCT rating is blocked; the other checks and hand-offs are unaffected.';
++const PNA_OOS_NOT='Not reported (OUT OF SCOPE): Strength I positive flexure, ductility D_p \u2264 0.42D_t, the web compactness / compact-section classification and M_p, D_p, D_cp of the segment(s) named, and the positive-moment and governing load ratings. The overall verdict is "Not all checks pass". The other checks are unaffected.';
+@@ -5388 +3561 @@ const flexNoNegText=R=>(R.useExt
+-  +(R.useExt?'':' To check a continuous girder\'s pier region, import continuous demands from GirderDetail (Send to ST-Girder) or MCT/MIDAS.');
++  +(R.useExt?'':' To check a continuous girder\'s pier region, import continuous demands from GirderDetail (Send to ST-Girder).');
+@@ -6103 +4276 @@ function ConnTab({R}){
+-function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
++function RatingTab({R,inp,set}){
+-6110,11 +4282,0  [deleted 11 lines: first "{onSendCapacity&&<div className="callout" style={{marginTop:0,marginBottom:12,borderLeftColor:capLocked?'#ea58" ... last "</div>}"]
+@@ -6291 +4453 @@ function crModel(R,inp,o){
+-      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'+gm('geom.Lb')],['Girder position',gt.pos+(lq.posAuto!==false?' (follows the shared design beam)':' (set here)'),gm('loads.pos')],
++      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'+gm('geom.Lb')],['Girder position',gt.pos+' (set here)',gm('loads.pos')],
+-6670,19 +4831,0  [deleted 19 lines: first "const ST_APP='stgirder', BP=()=>window.BridgeProjects;" ... last "function saveLastProjId(id){ if(BP()) BP().setCurrent(id); }"]
+@@ -6693,16 +4836,112 @@ function mergeInputs(p){ if(!p) return null;
+-/* ================= APP ================= */
+-/* ═══ Shared design-beam chip ═══════════════════════════════════════════════
+-   Backed by BridgeBeam (the block in this file's <head>). The beam picked here
+-   is the beam the whole suite uses: the live-load distribution factors and the
+-   dead-load distribution in the LL & DL app, the DFs pulled into this design,
+-   and the UDLs pushed to the MCT Loads tab. Changing it in any app — or in
+-   another browser tab — moves every app to the same beam.
+-   The roster comes from the LL & DL Distribution app, which is the only one
+-   that knows the full cross-section, so this chip degrades to a read-only
+-   label until that app has been run once.
+-   ═══════════════════════════════════════════════════════════════════════════ */
+-function useDesignBeam(){
+-  const BB=(typeof window!=='undefined'&&window.BridgeBeam)||null;
+-  const [,setTick]=useState(0);
+-  useEffect(()=>{ if(!BB) return undefined; return BB.onChange(()=>setTick(t=>t+1)); },[BB]);
+-  return {BB, sel:BB?BB.get():null, roster:BB?BB.roster():null};
++/* ================= DISCONNECT (engineer decision 2026-10-19) =================
++   ST-Girder is connected to GirderDetail only. It no longer exchanges data with the MCT Generator,
++   PS-Beam, LL & DL Distribution or Bridge Substructure Loading. Saved ST-Girder data that came from
++   those tools is cleared when the page opens (and when an older ST-Girder JSON file is imported), and
++   a notice lists exactly what was removed (fixlog/stgirder.md DISC). Nothing here changes a result of
++   the built-in analysis or of GirderDetail demands; it only removes values the other tools supplied.
++     stgDisconnect(inp) -> {inp, items}: the cleaned copy of a saved session and the list of removals.
++     stgPurgeOwnCopies() -> items: removes ST-Girder's own published copies that other tools list.
++   The notice is kept in this tool's own key stgirder.disconnect.v1 until it is dismissed. */
++const STG_NS='bridgeSuite.v1.', STG_DISC_KEY='stgirder.disconnect.v1';
++function stgLS(k){ try{ const s=window.localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){ return null; } }
++function stgDisconnect(inp0){
++  const inp=JSON.parse(JSON.stringify(inp0)), items=[], L=inp.loads||(inp.loads={}), D=DEFAULTS.loads;
++  const f3=v=>fmt(+v,3), near=(a,b)=>b!=null&&isFinite(+a)&&Math.abs(+a-b)<5e-5;
++  const locks=((stgLS(STG_NS+'locks')||{}).channels)||{}, locked=ch=>!!(locks[ch]&&locks[ch].locked);
++  const snap=stgLS(STG_NS+'lockSnap.stgirder')||{};
++  const snapOf=(ch,k)=>(snap[ch]&&snap[ch].data&&typeof snap[ch].data[k]==='number'&&isFinite(snap[ch].data[k]))?snap[ch].data[k]:null;
++  // 1. Imported demands that are not GirderDetail's (MCT Generator hand-off, MIDAS / PS-Beam / steel-beam envelope files)
++  const e=inp.external;
++  if(e&&typeof e==='object'&&!extFromGD(e)){
++    const n=Array.isArray(e.stations)?e.stations.length:0;
++    items.push('Imported demands from '+(e.producer||e.generatedBy||'MCT Generator / MIDAS')+(e.project?' (project "'+e.project+'")':'')
++      +(e.member&&e.member.key?', member '+e.member.key:'')+', '+n+' station'+(n===1?'':'s')+': removed. ST-Girder runs its built-in simple-span analysis again'
++      +' (span length L = '+fmt(+inp.geom.L,2)+' ft and the plates are kept as they were; check them).');
++    inp.external=null;
++  }
++  // 2. LL & DL Distribution: distribution factors (pulled or followed under a lock). A value counts as LL & DL's when it equals a
++  //    published factor (to 4 decimals), or when the channel is locked or ST-Girder holds a pre-lock snapshot (it followed LL & DL).
++  const lp=stgLS(STG_NS+'lldf'), pairs=[];
++  if(lp&&typeof lp==='object'){ const add=(g,gn)=>{ if(g&&g.gM!=null) pairs.push({m:+(+g.gM).toFixed(4), v:g.gV!=null?+(+g.gV).toFixed(4):null, n:(gn&&gn.gM!=null)?+(+gn.gM).toFixed(4):+(+g.gM).toFixed(4)}); };
++    const G=lp.governing||{}, Gn=lp.governingNeg||{};
++    add(G.interior,Gn.interior); add(G.exterior,Gn.exterior);
++    Object.keys(G.byBeam||{}).forEach(k=>add(G.byBeam[k],(Gn.byBeam||{})[k])); }
++  const llLock=locked('lldf')||!!snap.lldf;
++  if(L.dfAuto===false&&(pairs.some(p=>near(L.dfm,p.m)&&near(L.dfv,p.v))||llLock)){
++    items.push('Live load distribution factors DF_m = '+f3(L.dfm)+', DF_v = '+f3(L.dfv)+' (MANUAL, from LL & DL Distribution): replaced by ST-Girder’s own AASHTO LRFD 4.6.2.2 factors (Distribution factors: AUTO TYPE (a)).');
++    L.dfAuto=true;
++  }
++  const extKs=['extDFpos','extDFneg','extDFv','extLLmpf'];
++  if(extKs.some(k=>+L[k]!==D[k])&&(pairs.some(p=>near(L.extDFpos,p.m)&&near(L.extDFv,p.v))||llLock)){
++    const was=extKs.map(k=>f3(L[k]));
++    extKs.forEach(k=>{ const s=snapOf('lldf',k); L[k]=s!=null?s:D[k]; });
++    items.push('Imported-LL multipliers (DF +M, DF −M, DF V, multiple presence) '+was.join(', ')+' from LL & DL Distribution: set to '+extKs.map(k=>f3(L[k])).join(', ')
++      +(snapOf('lldf','extDFpos')!=null?' (your values from before the lock)':' (ST-Girder defaults)')+'.');
++  }
++  if(+L.fatM>0||+L.fatV>0){
++    items.push('Single-lane fatigue distribution factor override'+(+L.fatM>0&&+L.fatV>0?'s':'')+' from LL & DL Distribution ('
++      +[+L.fatM>0?'moment '+f3(L.fatM):'',+L.fatV>0?'shear '+f3(L.fatV):''].filter(Boolean).join(', ')+'): removed; the Fatigue checks use ST-Girder’s own single-lane estimate (DF ÷ 1.2) again, or the fatigue envelopes of GirderDetail demands.');
++    L.fatM=0; L.fatV=0;
++  }
++  // 3. LL & DL Distribution: dead loads DC2 (barrier / SIDL) and DW (wearing surface) per girder
++  const dp=stgLS(STG_NS+'dlLoads'), by={};
++  if(dp&&Array.isArray(dp.cases)) dp.cases.forEach(c=>{ if(c&&c.key) by[c.key]=+(+(+c.udl||0)).toFixed(4); });
++  const dlLock=locked('dlLoads')||!!snap.dlLoads;
++  [['wBar','DC2','DC2 barrier / SIDL (per girder)'],['wDW','DW','DW wearing surface (per girder)']].forEach(([k,c,lab])=>{
++    if(!(near(L[k],by[c])||(dlLock&&(!dp||by[c]!=null)))) return;   // under a lock only the published cases were applied
++    const s=snapOf('dlLoads',k), to=s!=null?s:D[k];
++    if(+L[k]===+to) return;
++    items.push(lab+' '+f3(L[k])+' klf from LL & DL Distribution: set to '+f3(to)+' klf ('+(s!=null?'your value from before the lock':'ST-Girder default')+'). Enter the barrier / wearing surface load for this girder on the Inputs tab, Loads.');
++    L[k]=to;
++  });
++  // 4. Shared design beam (set in LL & DL or MCT): the interior / exterior position no longer follows it
++  if(L.posAuto!==false){
++    const db=stgLS(STG_NS+'designBeam');
++    if(db&&db._schema==='bridge-design-beam'&&db.type){
++      items.push('Girder position followed the shared design beam '+(db.label||('B'+db.index))+(db.clsLabel?' ('+db.clsLabel+')':'')+': it is now set in ST-Girder and kept as '+(L.pos==='exterior'?'exterior':'interior')+'.');
++      L.posAuto=false;
++    }
++  }
++  return {inp,items};
++}
++function stgPurgeOwnCopies(){
++  const out=[], has=k=>{ try{ return window.localStorage.getItem(k)!=null; }catch(e){ return false; } }, rm=k=>{ try{ window.localStorage.removeItem(k); }catch(e){} };
++  const at=k=>{ try{ return window.localStorage.getItem(k); }catch(e){ return null; } };
++  const mine=(ch,what)=>{ const k=STG_NS+ch, p=stgLS(k);
++    if(!(p&&p.producer==='ST-Girder')) return;
++    rm(k); const u=k+'.updatedAt', also=(at(u)!=null&&at(u)===p.producedAt);
++    if(also) rm(u);
++    out.push(what+' sent by ST-Girder: removed (key '+k+(also?' and '+u:'')+').'); };
++  if(has(STG_NS+'superReactions.by.stgirder')){ rm(STG_NS+'superReactions.by.stgirder');
++    out.push('Reactions sent to Bridge Substructure Loading: ST-Girder’s copy removed (key '+STG_NS+'superReactions.by.stgirder).'); }
++  mine('superReactions','Reactions on the Substructure Loading channel');
++  mine('capacity','Capacity (φM_n, φV_n) for the MCT rating');
++  mine('lldfGeom','Girder geometry for LL & DL Distribution');
++  return out;
++}
++/* ST-Girder designs in the shared project registry (MCT's combined project). ST-Girder no longer opens or saves them there;
++   the notice lists them once so each can be opened here or exported as an ST-Girder JSON file (nothing is deleted). */
++function stgSlices(){ const reg=stgLS(STG_NS+'projects'); if(!reg||typeof reg!=='object') return [];
++  return Object.keys(reg).filter(id=>reg[id]&&reg[id].slices&&reg[id].slices.stgirder&&typeof reg[id].slices.stgirder==='object')
++    .map(id=>({id, name:String(reg[id].name||'Untitled'), savedAt:String(reg[id].savedAt||'')})); }
++function stgSliceOf(id){ const reg=stgLS(STG_NS+'projects'); const e=reg&&reg[id]; return (e&&e.slices&&e.slices.stgirder&&typeof e.slices.stgirder==='object')?e.slices.stgirder:null; }
++function stgDiscRead(){ const r=stgLS(STG_DISC_KEY); return (r&&typeof r==='object')?r:null; }
++function stgDiscWrite(r){ try{ window.localStorage.setItem(STG_DISC_KEY,JSON.stringify(r)); }catch(e){} }
++/* Adds removals to the pending notice (kept until dismissed) and returns it. */
++function stgDiscAdd(items,projects){
++  const cur=stgDiscRead(), pend=!!(cur&&cur.pending);
++  const r={v:1, pending:true, at:new Date().toISOString(),
++    items:[...(pend&&Array.isArray(cur.items)?cur.items:[]),...items],
++    projects:(pend&&Array.isArray(cur.projects)&&cur.projects.length)?cur.projects:(projects||[])};
++  stgDiscWrite(r); return r;
++}
++/* On open: clean the saved session, remove the published copies, list the shared-project designs (first open only). */
++function stgBoot(canSave){
++  if(!canSave) return {inp:DEFAULTS, notice:null};
++  const raw=loadSaved(); let inp=mergeInputs(raw)||DEFAULTS, items=[];
++  if(raw){ const d=stgDisconnect(inp); inp=d.inp; items=d.items; if(items.length) saveInputs(inp); }
++  items=items.concat(stgPurgeOwnCopies());
++  const rec=stgDiscRead(), projects=rec?[]:stgSlices();
++  if(items.length||projects.length) return {inp, notice:stgDiscAdd(items,projects)};
++  if(!rec) stgDiscWrite({v:1, pending:false, at:new Date().toISOString(), items:[], projects:[]});
++  return {inp, notice:(rec&&rec.pending)?rec:null};
+@@ -6710,19 +4949,19 @@ function useDesignBeam(){
+-function BeamChip({nb,setBy}){
+-  const {BB,sel,roster}=useDesignBeam();
+-  if(!BB) return null;
+-  const beams=(roster&&roster.beams)||[];
+-  const mm=BB.mismatch?BB.mismatch(nb):null;
+-  return (
+-    <span className="beamchip" title={'Design beam — shared by every app in the suite. '
+-      +'Set the beam layout and the MassDOT classification in the LL & DL Distribution app; '
+-      +'the distribution factors, the dead load and the MCT beam loads all follow this beam.'}>
+-      <span className="bc-k">Design beam</span>
+-      {beams.length
+-        ? <select value={sel?sel.index:''} onChange={e=>BB.set(+e.target.value,null,setBy||'')}>
+-            {beams.map(b=><option key={b.i} value={b.i}>{b.label} · {b.ab||b.clsLabel||''}</option>)}
+-          </select>
+-        : <span className="bc-v" title="No beam roster published yet — open the LL & DL Distribution app and recalculate.">
+-            {sel?sel.label:'—'} <span className="bc-warn">no roster</span></span>}
+-      {mm&&<span className="bc-warn" title={'This app is set up for '+mm.mine+' girders but the published roster has '
+-        +mm.roster+'. Re-run the LL & DL Distribution app on the current layout.'}>⚠ {mm.mine}≠{mm.roster}</span>}
+-    </span>);
++function StgDiscNotice({rec,onDismiss,onOpen}){
++  if(!rec) return null;
++  const exp=p=>{ const s=stgSliceOf(p.id); if(!s){ alert('The design "'+p.name+'" is no longer in the browser storage.'); return; }
++    const blob=new Blob([JSON.stringify({...mergeInputs(s),_schema:'stgirder'},null,1)],{type:'application/json'});
++    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(p.name||'stgirder').replace(/\W+/g,'_')+'_stgirder.json'; a.click(); };
++  return <div className="callout warn noprint" id="stg-disc" style={{marginTop:14,marginBottom:0}}>
++    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
++      <b>ST-Girder now takes data from GirderDetail only</b>
++      <button className="btn sm ghost" onClick={onDismiss}>✕ dismiss (do not show again)</button></div>
++    <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>
++      Engineer decision 2026-10-19: ST-Girder no longer exchanges data with the MCT Generator, PS-Beam, LL &amp; DL Distribution or Bridge Substructure Loading. Demands come only from GirderDetail (<b>Pull from GirderDetail</b>, or <b>Import</b> of its hand-off file); otherwise ST-Girder uses its own inputs and its built-in simple-span analysis.
++      {(rec.items||[]).length?<React.Fragment> Saved data that came from those tools was removed:
++        <ul style={{margin:'4px 0 0 18px',padding:0}}>{rec.items.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>:null}
++      {(rec.projects||[]).length?<div style={{marginTop:6}}>ST-Girder designs saved in shared MCT projects (ST-Girder no longer opens or saves them there; they are still in this browser’s storage). Open one here (replaces the current inputs; it is cleaned the same way) or save it as an ST-Girder JSON file for <b>Import</b>:
++        <ul style={{margin:'4px 0 0 18px',padding:0}}>{rec.projects.map(p=><li key={p.id}>{p.name}{p.savedAt?' (saved '+p.savedAt.slice(0,10)+')':''}{' '}
++          <button className="btn sm ghost" style={{padding:'1px 8px'}} onClick={()=>onOpen(p)}>Open here</button>{' '}
++          <button className="btn sm ghost" style={{padding:'1px 8px'}} onClick={()=>exp(p)}>Export JSON</button></li>)}</ul>
++        These buttons are shown only until this notice is dismissed.</div>:null}
++    </div></div>;
+@@ -6730,0 +4970 @@ function BeamChip({nb,setBy}){
++/* ================= APP ================= */
+@@ -6733,2 +4973,6 @@ function App(){
+-  const [saveFail,setSaveFail]=useState('');   // '' | 'session' | 'project' — last autosave write failed (STG-S8)
+-  const [inp,setInpRaw]=useState(()=>canSave?(mergeInputs(loadSaved())||DEFAULTS):DEFAULTS);
++  const [saveFail,setSaveFail]=useState('');   // '' | 'session' — last autosave write failed (STG-S8)
++  // DISC (2026-10-19): the saved session is cleaned of MCT / LL & DL data on open; the notice lists what was removed
++  const [boot]=useState(()=>stgBoot(canSave));
++  const [inp,setInpRaw]=useState(()=>boot.inp);
++  const [disc,setDisc]=useState(()=>boot.notice);
++  const dismissDisc=()=>{ const r=stgDiscRead(); stgDiscWrite({...(r||{v:1,items:[],projects:[]}),pending:false}); setDisc(null); };
+-6752,17 +4995,0  [deleted 17 lines: first "// ── Follow the suite-wide design beam ──────────────────────────────────────" ... last "const [handoff,setHandoff]=useState(null);"]
+-6772,211 +4998,0  [deleted 211 lines: first "const checkHandoff=()=>{ const BH=window.BridgeHandoff; if(!BH){ return; }" ... last "};"]
+@@ -6985,22 +5001,2 @@ function App(){
+-  // ── Auto-participate in the shared Bridge Project (created & managed only in MCT) ──
+-  // ST-Girder has no Save / New / Delete / project-dropdown of its own. It autosaves its
+-  // slice into whatever project is active, follows external project switches live, and
+-  // keeps Export/Import JSON for portable single-design files + the per-session autosave.
+-  const [curProjId,setCurProjIdRaw]=useState(()=>canSave&&BP()?BP().current():null);
+-  const [activeName,setActiveName]=useState(()=>{ const id=canSave&&BP()?BP().current():null; const p=id&&BP().get(id); return p?p.name:''; });
+-  const adoptProject=id=>{
+-    if(!id||!BP()){ setCurProjIdRaw(null); setActiveName(''); return; }
+-    const e=BP().get(id), slice=BP().getSlice(id,ST_APP);
+-    setCurProjIdRaw(id); setActiveName(e?e.name:'');
+-    if(slice){ const merged=mergeInputs(slice); setInp(merged);
+-      try{ const dem=BP().getDemands(id); if(dem&&!merged.external&&window.BridgeHandoff) window.BridgeHandoff.publish(dem); }catch(e){}
+-    } };
+-  // Follow the active project when it's switched from another app (e.g. MCT loads a project).
+-  useEffect(()=>{ if(!canSave||!BP())return;
+-    const onStorage=e=>{ if(!e.key||e.key===BP().K_CUR||e.key===BP().K_PROJ){
+-      const cur=BP().current();
+-      if(cur!==curProjId){ adoptProject(cur); }
+-      else { const p=cur&&BP().get(cur); setActiveName(p?p.name:''); } } };
+-    window.addEventListener('storage',onStorage);
+-    return ()=>window.removeEventListener('storage',onStorage);
+-  },[curProjId]);
++  // ST-Girder saves its session in its own key (stgirder.session) only. Since 2026-10-19 (DISC) it no longer saves into,
++  // or follows, the shared bridge project of the MCT Generator.
+-7009,3 +5004,0  [deleted 3 lines: first "// Contribute to the ACTIVE shared project only — never create or rename one (that's MCT's job)." ... last "try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)) okP=!!BP().saveS"]
+@@ -7013 +5006 @@ function App(){
+-      setSaveFail(!okS?'session':(!okP?'project':''));
++      setSaveFail(!okS?'session':'');
+@@ -7014,0 +5008,5 @@ function App(){
++  // An ST-Girder design from a shared MCT project, opened from the notice: cleaned like the saved session.
++  const openSlice=p=>{ const s=stgSliceOf(p.id); if(!s){ alert('The design "'+p.name+'" is no longer in the browser storage.'); return; }
++    if(!window.confirm('Open the ST-Girder design saved in the shared project "'+p.name+'"? It replaces the current inputs (Undo restores them).')) return;
++    const d=stgDisconnect(mergeInputs(s)); setInp(d.inp);
++    if(d.items.length) setDisc(stgDiscAdd(d.items.map(t=>'"'+p.name+'": '+t))); };
+@@ -7025,6 +5023,4 @@ function App(){
+-      // external analysis envelope (MIDAS-style; PS-Girder or steel-beam schema)? attach, don't replace inputs.
+-      if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'){
+-        const spans=externalSpans(p);
+-        const sel=spans[0]||{idx:1,x0:0,x1:(p.member&&p.member.totalLength)||inp.geom.L,len:inp.geom.L};
+-        const secNew=zonesToSec(p,sel,inp.sec);          // auto-populate plates from section.zones if present
+-        setInp({...inp, external:{...p,_selSpan:sel}, geom:{...inp.geom, L:sel.len}, ...(secNew?{sec:secNew}:{})});
++      // Any other demands file (MCT Generator / MIDAS, PS-Beam or steel-beam envelope) is refused (DISC, engineer decision 2026-10-19).
++      if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'||Array.isArray(p.stations)){
++        alert('ST-Girder now takes demands only from GirderDetail; this file is from '+(p.producer||p.generatedBy||'another tool (MCT Generator / MIDAS)')+' and was not loaded. Nothing was changed.\n\n'
++          +'Send the girder from GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder) and use "Pull from GirderDetail", or import its "Export hand-off (JSON)" file. Without GirderDetail demands ST-Girder uses its built-in simple-span analysis.');
+@@ -7033 +5029,3 @@ function App(){
+-      setInp(mergeInputs(p)); }catch(err){alert('Invalid file: '+err.message);} }; rd.readAsText(f); };
++      // An ST-Girder JSON file (Export JSON): data that came from the MCT Generator or LL & DL is cleared, as on open, and listed.
++      const d=stgDisconnect(mergeInputs(p)); setInp(d.inp);
++      if(d.items.length) setDisc(stgDiscAdd(d.items.map(t=>'File '+f.name+': '+t))); }catch(err){alert('Invalid file: '+err.message);} }; rd.readAsText(f); };
+@@ -7092 +5090 @@ function App(){
+-    if(g.position==='interior'||g.position==='exterior'){ ld.pos=g.position; ld.posAuto=false; chg('Girder position',cur.loads.pos,g.position,'(no longer follows the design-beam chip)'); }
++    if(g.position==='interior'||g.position==='exterior'){ ld.pos=g.position; ld.posAuto=false; chg('Girder position',cur.loads.pos,g.position); }
+-7148,10 +5145,0  [deleted 10 lines: first "/* Shared project info (HANDOFF.md §4.1): title block <-> shared fields. Girder ID is not a bridge ID, so it i" ... last "const bxExportRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.exportJSON(()=>bxSu"]
+@@ -7168,25 +5156 @@ function App(){
+-    {handoff&&(handoff.version>HANDOFF_SUPPORTED_VERSION
+-      ? <div className="callout warn" style={{marginTop:14,marginBottom:0}}>
+-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
+-            <b>⚠ Analysis output is newer than this app</b>
+-            <button className="btn sm ghost" onClick={dismissHandoff}>✕ dismiss</button></div>
+-          <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>The MCT Generator published schema <b>v{handoff.version}</b>; this ST-Girder build understands <b>v{HANDOFF_SUPPORTED_VERSION}</b>. Update ST-Girder to load it, or use JSON Import with a matching file.</div>
+-        </div>
+-      : <div className="callout" style={{marginTop:14,marginBottom:0,borderLeftColor:'#ea580c',background:'#fff7ed'}}>
+-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
+-            <b>New analysis data available</b>
+-            <button className="btn sm ghost" onClick={dismissHandoff}>✕ dismiss</button></div>
+-          <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>
+-            From <b>{handoff.payload.producer||'MCT Generator'}</b>{handoff.payload.project?' · '+handoff.payload.project:''}
+-            {handoff.payload.member&&handoff.payload.member.key?' · '+handoff.payload.member.key:''} · {handoff.payload.stations?handoff.payload.stations.length:0} stations · LL: <b>{handoff.payload.liveLoadType||'HL-93'}</b>
+-            {handoff.payload.section&&handoff.payload.section.zones&&handoff.payload.section.zones.length?' · plate geometry included':''}.
+-            Loading replaces the <b>imported demands</b> (and seeds plate geometry) — your materials and design settings stay.
+-            <div className="btnrow" style={{marginTop:8}}>
+-              <button className="btn sm pri" onClick={()=>adoptHandoff(handoff.payload)}>Load these demands</button>
+-              {BLU.LockToggle&&<BLU.LockToggle ch="demands" onToggle={()=>{
+-                // One click: take these demands and keep taking them.
+-                adoptHandoff(handoff.payload); toggleDemandsLock(true); }}/>}
+-              <button className="btn sm ghost" onClick={dismissHandoff}>Not now</button>
+-            </div>
+-          </div>
+-        </div>)}
++    <StgDiscNotice rec={disc} onDismiss={dismissDisc} onOpen={openSlice}/>
+-7206,45 +5169,0  [deleted 45 lines: first "{geomChanges&&!demandsLocked&&(" ... last ")}"]
+-7267,5 +5185,0  [deleted 5 lines: first "<button className="btn sm ghost" onClick={bxUseProject} title="Fill Project, By, Date and Job No. from the pro" ... last "<span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span"]
+-7279,15 +5192,0  [deleted 15 lines: first "{canSave&&<React.Fragment>" ... last "<button className="btn sm ghost" onClick={bxExportRx} title="Save the same react"]
+@@ -7305,2 +5204 @@ function App(){
+-    {saveFail&&<div className="callout warn noprint" style={{marginTop:14}}><b>Autosave failed.</b> The last change could not be written to browser storage ({saveFail==='session'?'ST-Girder session key stgirder.session':'the active shared project'}). The storage is probably full: every tool opened from this folder shares one browser storage area (about 5 MB). Use <b>Export JSON</b> now to keep your work, then free space (for example delete old projects in the MCT app). This message clears on the next successful save.</div>}
+-    <LockAutoSync inp={inp} set={setInp}/>
++    {saveFail&&<div className="callout warn noprint" style={{marginTop:14}}><b>Autosave failed.</b> The last change could not be written to browser storage (ST-Girder session key stgirder.session). The storage is probably full: every tool opened from this folder shares one browser storage area (about 5 MB). Use <b>Export JSON</b> now to keep your work, then free space (for example delete old projects in the other tools). This message clears on the next successful save.</div>}
+@@ -7344 +5242 @@ function App(){
+-        {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp} onSendCapacity={publishCapacity} capLocked={capLocked} onToggleCapLock={toggleCapLock}/>}
++        {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp}/>}
+-7359,7 +5256,0  [deleted 7 lines: first "<script>" ... last "</script>"]
+```

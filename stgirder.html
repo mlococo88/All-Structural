@@ -44,7 +44,7 @@ body{background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gr
 #root{min-height:100vh}
 .sheet{position:relative}
 .sheet-inner{position:relative}
-.sheet-inner>.callout,.sheet-inner>.geom-change-banner{margin-left:28px;margin-right:28px}
+.sheet-inner>.callout{margin-left:28px;margin-right:28px}
 /* header (GirderDetail header) */
 .tblock{display:grid;grid-template-columns:minmax(250px,auto) minmax(0,1fr);gap:10px 24px;align-items:start;background:var(--sheet);border-bottom:1px solid var(--border);padding:12px 20px 10px;margin:0}
 .tblock h1{font-family:var(--cond);font-weight:700;font-size:21px;letter-spacing:0;line-height:1.2;color:var(--text)}
@@ -87,7 +87,7 @@ body{background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gr
 @media(max-width:1080px){.cols{grid-template-columns:1fr}.gfx{position:static}}
 /* narrow screens (STG-UI1): the title block stacks and its grid wraps to two columns, so the page does not scroll sideways */
 @media(max-width:600px){.tblock{grid-template-columns:minmax(0,1fr)}.tb-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tb-cell input{min-width:0;width:100%}
-  .cols,.cols-full{padding-left:14px;padding-right:14px}.sheet-inner>.callout,.sheet-inner>.geom-change-banner{margin-left:14px;margin-right:14px}}
+  .cols,.cols-full{padding-left:14px;padding-right:14px}.sheet-inner>.callout{margin-left:14px;margin-right:14px}}
 .gfx{position:sticky;top:12px}
 /* Inputs page sub-tabs (UI only — see stgInTabs in InputsTab); GirderDetail input-tab look */
 .stgInTabs{position:sticky;top:0;z-index:7;display:flex;flex-wrap:wrap;gap:0;margin:0 0 16px;padding:0 6px;background:var(--sidebar);border:1px solid var(--border);border-radius:var(--r-lg)}
@@ -243,161 +243,6 @@ button.dl:hover,a.dl:hover{text-decoration-style:solid} button.dl:focus-visible{
   .cols,.cols-full{padding:8px 0 0}.tblock{padding:0 0 10px}.footer{margin:10px 0 0}.card{box-shadow:none}
   .rbar .rb-t{display:none}.tb-cell input{border:0;padding:0;height:auto;box-shadow:none}.tblock{grid-template-columns:minmax(200px,auto) minmax(0,1fr)}
   .stgInTabs{display:none!important}.stgInPane[hidden]{display:block!important}}
-
-/* Geometry change notice — informational, so it uses the suite's steady
-   "available" orange rather than the amber reserved for conflicts. */
-.geom-change-banner {
-  padding: 11px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  background-color: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-left: 3px solid #ea580c;
-  color: #7c2d12;
-  margin-top: 14px;
-  margin-bottom: 12px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-.geom-change-banner:hover {
-  background-color: #ffedd5;
-  border-color: #fdba74;
-  border-left-color: #c2410c;
-}
-
-/* Geometry change modal overlay */
-.geom-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  font-family: var(--sans);
-}
-.geom-modal {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  max-width: 500px;
-  max-height: 80vh;
-  overflow-y: auto;
-  padding: 28px;
-  border: 2px solid #1d4ed8;
-}
-.geom-modal h2 {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  color: #1d4ed8;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.geom-modal-changes {
-  margin-bottom: 20px;
-}
-.geom-change-item {
-  padding: 12px;
-  margin-bottom: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8ee;
-  border-radius: 6px;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.geom-change-item input[type="checkbox"] {
-  margin-top: 3px;
-  cursor: pointer;
-  width: 18px;
-  height: 18px;
-}
-.geom-change-label {
-  flex: 1;
-}
-.geom-change-label .field {
-  font-weight: 600;
-  color: #1a2133;
-  margin-bottom: 4px;
-}
-.geom-change-label .detail {
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 6px;
-}
-.geom-change-values {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  font-family: var(--mono);
-  font-size: 11px;
-}
-.geom-old-val {
-  padding: 6px 8px;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  border-radius: 4px;
-  color: #991b1b;
-}
-.geom-new-val {
-  padding: 6px 8px;
-  background: #dcfce7;
-  border: 1px solid #bbf7d0;
-  border-radius: 4px;
-  color: #166534;
-}
-.geom-modal-buttons {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  margin-top: 24px;
-  border-top: 1px solid #e2e8ee;
-  padding-top: 16px;
-}
-.geom-modal-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-.geom-modal-btn.load {
-  background: #1d4ed8;
-  color: white;
-}
-.geom-modal-btn.load:hover {
-  background: #1e40af;
-}
-.geom-modal-btn.cancel {
-  background: #e2e8ee;
-  color: #1a2133;
-}
-.geom-modal-btn.cancel:hover {
-  background: #cbd5e1;
-}
-.geom-select-all {
-  padding: 12px;
-  background: #eff6ff;
-  border-radius: 6px;
-  margin-bottom: 12px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 13px;
-  font-weight: 500;
-  color: #1e3a8a;
-}
-.geom-select-all input[type="checkbox"] {
-  cursor: pointer;
-}
 
 /* Calculation-sheet report: the .cr-* / .crv-* rules below are copied from Gusset Plate Rating.html (same document style
    as GirderDetail), kept duplicated per CLAUDE.md §3; the ST-Girder additions follow them. Display only. */
@@ -563,336 +408,27 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
 .stgInTab.gd-tab span:first-child::after{content:' GD';font:700 9px/1 ui-sans-serif,system-ui,sans-serif;color:#fff;background:#1C4FC4;border-radius:3px;padding:1px 3px;margin-left:5px;vertical-align:1px}
 .gd-legend{border-left:3px solid #1C4FC4;background:#EEF4FF;padding:6px 10px;margin:0 0 10px;font-size:11.5px;line-height:1.5;color:var(--text-dim)}
 </style>
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     Bridge Suite — shared DESIGN BEAM channel (v1)
-     One beam selection shared by every app in the suite. Pick "B2" anywhere and
-     the LLDF, the dead-load distribution, the MCT loads and the girder design
-     all follow the same beam.
-       bridgeSuite.v1.beamRoster — beam layout, MassDOT classification and the
-           per-beam distributed dead load. Published by the LL & DL Distribution
-           app, which is the only app that knows the whole cross-section.
-       bridgeSuite.v1.designBeam — the selected beam. Whichever app writes it,
-           the others follow: same tab through onChange(), other tabs through the
-           browser's storage event.
-     This block is byte-identical in index.html / psbeam.html / stgirder.html /
-     lldf.html — edit it in one place and copy it to the other three.
-     ═══════════════════════════════════════════════════════════════════════════ -->
-<script>
-(function(){
-"use strict";
-if(window.BridgeBeam) return;
-var NS='bridgeSuite.v1', K_SEL=NS+'.designBeam', K_ROS=NS+'.beamRoster';
-var S_SEL='bridge-design-beam', S_ROS='bridge-beam-roster', VER=1;
-var subs=[];
-function rd(k,s){ try{ var raw=localStorage.getItem(k); if(!raw) return null; var o=JSON.parse(raw);
-  if(!o||o._schema!==s||(o.schemaVersion||1)>VER) return null; return o; }catch(e){ return null; } }
-function wr(k,o){ try{ localStorage.setItem(k,JSON.stringify(o)); return true; }catch(e){ return false; } }
-function roster(){ return rd(K_ROS,S_ROS); }
-function get(){ return rd(K_SEL,S_SEL); }
-function emit(){ var s=get(),r=roster(); subs.slice().forEach(function(f){ try{f(s,r);}catch(e){} }); }
-function beamOf(r,i){ var b=(r&&r.beams)||[],k; for(k=0;k<b.length;k++) if(+b[k].i===+i) return b[k]; return null; }
-// Default pick: the 1st interior roadway beam (MassDOT's usual design beam), else any
-// interior beam, else the middle of the layout.
-function defaultIndex(r){ var b=(r&&r.beams)||[],i;
-  for(i=0;i<b.length;i++) if(b[i].cls==='first-int') return b[i].i;
-  for(i=0;i<b.length;i++) if(b[i].type==='int') return b[i].i;
-  return b.length?b[Math.floor((b.length-1)/2)].i:1; }
-function set(index,r,by){
-  r=r||roster(); index=Math.max(1,Math.round(+index||1));
-  if(r&&r.Nb) index=Math.min(index,r.Nb);
-  var b=beamOf(r,index), prev=get(), same=prev&&+prev.index===index;
-  var o={_schema:S_SEL,schemaVersion:VER,index:index,
-    label:(b&&b.label)||(same&&prev.label)||('B'+index),
-    cls:(b&&b.cls)||(same?prev.cls:null), clsLabel:(b&&b.clsLabel)||(same?prev.clsLabel:null),
-    ab:(b&&b.ab)||(same?prev.ab:null), type:(b&&b.type)||(same?prev.type:null),
-    Nb:(r&&r.Nb)||(prev&&prev.Nb)||null, setBy:by||(prev&&prev.setBy)||'', setAt:new Date().toISOString()};
-  wr(K_SEL,o); emit(); return o; }
-function publishRoster(o){
-  o=o||{}; o._schema=S_ROS; o.schemaVersion=VER; o.producedAt=new Date().toISOString();
-  var old=roster();
-  if(old&&JSON.stringify(Object.assign({},old,{producedAt:0}))===JSON.stringify(Object.assign({},o,{producedAt:0}))) return old;
-  if(!wr(K_ROS,o)) return null;
-  var s=get();
-  set((s&&s.index&&(!o.Nb||s.index<=o.Nb))?s.index:defaultIndex(o), o, (s&&s.setBy)||o.producer||'');
-  return o; }
-// Per-beam distributed dead load (klf) for the given beam, or the selected one.
-function dl(index){
-  var r=roster(), s=get(), b=beamOf(r,index==null?(s&&s.index):index);
-  return b?{i:b.i,label:b.label,cls:b.cls,clsLabel:b.clsLabel,type:b.type,trib:+b.trib||0,
-    dc1:+b.dc1||0,dc2:+b.dc2||0,dw:+b.dw||0,pl:+b.pl||0,selfWt:+b.selfWt||0}:null; }
-// True when the caller's own girder count disagrees with the published roster.
-function mismatch(nb){ var r=roster(); return (r&&r.Nb&&nb&&+nb!==+r.Nb)?{mine:+nb,roster:+r.Nb}:null; }
-window.BridgeBeam={KEY_SEL:K_SEL,KEY_ROS:K_ROS,SCHEMA_SEL:S_SEL,SCHEMA_ROS:S_ROS,VERSION:VER,
-  get:get,set:set,roster:roster,publishRoster:publishRoster,defaultIndex:defaultIndex,
-  beamOf:beamOf,dl:dl,mismatch:mismatch,
-  onChange:function(f){ subs.push(f); return function(){ var k=subs.indexOf(f); if(k>=0) subs.splice(k,1); }; },
-  refresh:emit};
-window.addEventListener('storage',function(e){ if(!e.key||e.key===K_SEL||e.key===K_ROS) emit(); });
-/* Shared chip styling, injected here so every app renders the chip identically
-   without any of them having to carry the rules in its own stylesheet. */
-var css=".beamchip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid #c7d1db;"
- +"border-radius:999px;background:#f7f9fc;font:600 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;"
- +"color:#16212e;white-space:nowrap;vertical-align:middle}"
- +".beamchip .bc-k{color:#6b7a8c;text-transform:uppercase;letter-spacing:.06em;font-size:9.5px}"
- +".beamchip select{font:600 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;color:#1d4ed8;"
- +"border:1px solid #c7d1db;border-radius:5px;background:#fff;padding:1px 4px;max-width:250px;cursor:pointer}"
- +".beamchip .bc-v{color:#1d4ed8;font-weight:700}"
- +".beamchip .bc-warn{color:#b3261e;font-weight:700;font-size:9.5px}"
- +"@media print{.beamchip{border-color:#999;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
- +".beamchip select{border:none;-webkit-appearance:none;appearance:none}}";
-var st=document.createElement('style'); st.textContent=css;
-(document.head||document.documentElement).appendChild(st);
-})();
-</script>
 </head>
 <body>
 <div id="root"></div>
 <div id="calc-rpt" class="crdoc"></div>
 <!-- ═══════════════════════════════════════════════════════════════════════════
-     Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html /
-     psbeam.html. Reads the analysis app's external-demands payload from
-     localStorage. Spec: handoff-data-format-spec.md
+     ST-Girder app-path record (reduced copy, 2026-10-19). NOT the shared bridge-suite
+     bootstrap block: ST-Girder is disconnected from MCT, PS-Beam, LL & DL and
+     Substructure Loading (engineer decision 2026-10-19) and keeps only what
+     GirderDetail's hand-off needs. It records where this file lives in
+     bridgeSuite.v1.appPaths (entry "stgirder", same format as the shared block's
+     register()), which GirderDetail reads (read only) for "Open ST-Girder now"
+     (HANDOFF.md §4.9). Nothing else is read or written here. Do not sync this block
+     with the shared block in index.html / psbeam.html / lldf.html.
      ═════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
-  var NS='bridgeSuite.v1';
-  var SCHEMA='psbeam-external-demands';          // canonical shared id (both design apps accept)
-  var K_HANDOFFS=NS+'.handoffs', K_LATEST=NS+'.latestId', K_UPDATED=NS+'.updatedAt';
-  var KEEP_N=20, KEEP_DAYS=30;                   // hand-off pruning, see prune()
-  function K_ADOPTED(app){ return NS+'.adopted.'+app; }
-  function slug(s){ return (s==null?'':(''+s)).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'untitled'; }
-  function lsOK(){ try{ var k='__bh_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
-  function readMap(){ try{ return JSON.parse(localStorage.getItem(K_HANDOFFS)||'{}')||{}; }catch(e){ return {}; } }
-  function verOf(p){ return (p&&p.schemaVersion!=null)?p.schemaVersion:((p&&p._version!=null)?p._version:1); }
-  function stamp(p){
-    var out={}; for(var k in p){ if(Object.prototype.hasOwnProperty.call(p,k)) out[k]=p[k]; }
-    out._schema=SCHEMA;                                  // steelbeam export sets its own id — reset to shared
-    out.schemaVersion=verOf(p);
-    out.producer=p.generatedBy||p.producer||'MCT Generator';
-    out.producedAt=p.generatedAt||p.producedAt||new Date().toISOString();
-    var proj=p.project||'';
-    var mem=(p.member&&(p.member.key||p.member.type))||'';
-    out.handoffId=slug(proj)+'__'+slug(mem);
-    return out;
-  }
-  /* The hand-off map was never cleaned, and every tool opened from file:// in
-     Chrome/Edge shares one ~5 MB storage area (X-S8). On each publish, keep the
-     newest KEEP_N entries that are at most KEEP_DAYS old (an entry with no
-     readable date passes the age test but ranks last). Always kept, whatever
-     their age: the entry being published, and the one the latest pointer names
-     -- the only entry the design apps read, so the one a receiver may not have
-     pulled yet. Entry format and keys are unchanged; only old entries go. */
-  function prune(map,keep){
-    var ids=Object.keys(map), cutoff=Date.now()-KEEP_DAYS*864e5, out={};
-    ids.sort(function(a,b){ return String((map[b]||{}).producedAt||'').localeCompare(String((map[a]||{}).producedAt||'')); });
-    ids.forEach(function(id,i){
-      var t=Date.parse((map[id]||{}).producedAt||''), fresh=isNaN(t)||t>=cutoff;
-      if(keep.indexOf(id)>=0||(i<KEEP_N&&fresh)) out[id]=map[id];
-    });
-    return out;
-  }
-  function publish(raw){
-    if(!lsOK()) return {ok:false,reason:'localStorage unavailable'};
-    var p=stamp(raw);
-    try{
-      var map=readMap(); map[p.handoffId]=p;
-      map=prune(map,[p.handoffId,localStorage.getItem(K_LATEST)]);
-      localStorage.setItem(K_HANDOFFS,JSON.stringify(map));
-      localStorage.setItem(K_LATEST,p.handoffId);
-      localStorage.setItem(K_UPDATED,p.producedAt);
-      return {ok:true,handoffId:p.handoffId,payload:p};
-    }catch(e){
-      try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the analysis hand-off',e); }catch(x){}
-      return {ok:false,reason:e&&e.message||('storage error')};
-    }
-  }
-  function tokenOf(p){ return p?((p.handoffId||'')+'@'+(p.producedAt||'')):''; }
-  function readOne(id){
-    if(!lsOK()) return null;
-    var map=readMap(); var key=id||localStorage.getItem(K_LATEST);
-    var p=key&&map[key]; if(!p) return null;
-    return {id:key, version:verOf(p), token:tokenOf(p), payload:p};
-  }
-  function list(){
-    var map=readMap();
-    return Object.keys(map).map(function(k){ var p=map[k];
-      return {id:p.handoffId, project:p.project, member:(p.member&&p.member.key)||'', at:p.producedAt, version:verOf(p)};
-    }).sort(function(a,b){ return (b.at||'').localeCompare(a.at||''); });
-  }
-  function latestId(){ return lsOK()?localStorage.getItem(K_LATEST):null; }
-  function adoptedId(app){ return lsOK()?localStorage.getItem(K_ADOPTED(app)):null; }
-  function markAdopted(app,id){ try{ localStorage.setItem(K_ADOPTED(app),id); }catch(e){} }
-  window.BridgeHandoff={ NS:NS, SCHEMA:SCHEMA, K_LATEST:K_LATEST, K_UPDATED:K_UPDATED,
-    slug:slug, lsOK:lsOK, publish:publish, readOne:readOne, list:list,
-    latestId:latestId, adoptedId:adoptedId, markAdopted:markAdopted, tokenOf:tokenOf };
-})();
-</script>
-<!-- ═════════════════════════════════════════════════════════════════════════════
-     Bridge Suite geometry change tracker (v1) — MCT publishes section zones,
-     member geometry, and other design inputs; PS/ST detect changes and prompt
-     user to adopt selectively via modal with checkboxes.
-     Keys: bridgeSuite.v1.geometryChanges  { producedAt, changes:[{field,oldVal,newVal}...] }
-           bridgeSuite.v1.geometryChanges.adopted.<app>  timestamp of last adopted change
-     ═════════════════════════════════════════════════════════════════════════ -->
-<script>
-(function(){
-  var NS='bridgeSuite.v1';
-  var K_GEOM_CHANGES=NS+'.geometryChanges', K_GEOM_AT=NS+'.geometryChanges.updatedAt';
-  function K_ADOPTED_GEOM(app){ return NS+'.geometryChanges.adopted.'+app; }
-  function lsOK(){ try{ var k='__gct_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
-  function publishGeometryChanges(changes){
-    if(!lsOK() || !changes || changes.length===0) return {ok:false,reason:'no changes'};
-    try{
-      var payload={ schemaVersion:1, producer:'MCT Generator', producedAt:new Date().toISOString(), changes:changes };
-      localStorage.setItem(K_GEOM_CHANGES,JSON.stringify(payload));
-      localStorage.setItem(K_GEOM_AT,payload.producedAt);
-      return {ok:true, payload:payload};
-    }catch(e){ return {ok:false,reason:e&&e.message||'storage error'}; }
-  }
-  function readGeometryChanges(){
-    if(!lsOK()) return null;
-    try{ return JSON.parse(localStorage.getItem(K_GEOM_CHANGES)||'null'); }catch(e){ return null; }
-  }
-  function adoptedGeometryAt(app){ return lsOK()?localStorage.getItem(K_ADOPTED_GEOM(app)):null; }
-  function markGeometryAdopted(app,at){ try{ localStorage.setItem(K_ADOPTED_GEOM(app),at); }catch(e){} }
-  window.BridgeGeometryChanges={
-    NS:NS, K_GEOM_CHANGES:K_GEOM_CHANGES, K_GEOM_AT:K_GEOM_AT,
-    publishGeometryChanges:publishGeometryChanges, readGeometryChanges:readGeometryChanges,
-    adoptedGeometryAt:adoptedGeometryAt, markGeometryAdopted:markGeometryAdopted
-  };
-})();
-</script>
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     Bridge Suite unified project registry (v1) — one named project spans all
-     four apps; each app owns a "slice". Same-origin localStorage; identical in
-     every file. Legacy per-app project libraries are migrated once and kept.
-     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,stgirder,lldf},demands} }
-           bridgeSuite.v1.currentProjectId  · bridgeSuite.v1.migrated.<app>
-     ═════════════════════════════════════════════════════════════════════════ -->
-<script>
-(function(){
-  "use strict";
-  var NS='bridgeSuite.v1', K_PROJ=NS+'.projects', K_CUR=NS+'.currentProjectId';
-  function K_MIG(app){ return NS+'.migrated.'+app; }
-  function lsOK(){ try{var k='__bp_t';localStorage.setItem(k,'1');localStorage.removeItem(k);return true;}catch(e){return false;} }
-  function now(){ try{return new Date().toISOString();}catch(e){return '';} }
-  function newId(){ return 'bp_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6); }
-  function readReg(){ try{return JSON.parse(localStorage.getItem(K_PROJ)||'{}')||{};}catch(e){return {};} }
-  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}
-    catch(e){ try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the shared project',e); }catch(x){} return false;} }
-  function raw(){ return readReg(); }
-  function list(){ var r=readReg(); return Object.keys(r).map(function(id){var e=r[id];
-    return {id:id,name:e.name,savedAt:e.savedAt,apps:Object.keys(e.slices||{}),hasDemands:!!e.demands};})
-    .sort(function(a,b){return (b.savedAt||'').localeCompare(a.savedAt||'');}); }
-  function get(id){ return readReg()[id]||null; }
-  function getSlice(id,app){ var e=readReg()[id]; return (e&&e.slices&&e.slices[app]!=null)?e.slices[app]:null; }
-  function saveSlice(id,name,app,data){
-    if(!lsOK()) return null;
-    var r=readReg();
-    if(!id||!r[id]){ id=id||newId(); r[id]={name:name||'Untitled',savedAt:now(),slices:{}}; }
-    if(name) r[id].name=name;
-    if(!r[id].slices) r[id].slices={};
-    r[id].slices[app]=data; r[id].savedAt=now();
-    return writeReg(r)?id:null;
-  }
-  function setDemands(id,demands){ var r=readReg(); if(!r[id])return false; r[id].demands=demands; r[id].savedAt=now(); return writeReg(r); }
-  function getDemands(id){ var e=readReg()[id]; return e?(e.demands||null):null; }
-  function del(id){ var r=readReg(); delete r[id]; var ok=writeReg(r); if(current()===id) setCurrent(null); return ok; }
-  function delSlice(id,app){ var r=readReg(); if(r[id]&&r[id].slices){ delete r[id].slices[app]; r[id].savedAt=now(); return writeReg(r); } return false; }
-  function rename(id,name){ var r=readReg(); if(!r[id])return false; r[id].name=name; return writeReg(r); }
-  function current(){ try{return localStorage.getItem(K_CUR)||null;}catch(e){return null;} }
-  function setCurrent(id){ try{ if(id) localStorage.setItem(K_CUR,id); else localStorage.removeItem(K_CUR);}catch(e){} }
-  function migrated(app){ try{return localStorage.getItem(K_MIG(app))==='1';}catch(e){return false;} }
-  function setMigrated(app){ try{localStorage.setItem(K_MIG(app),'1');}catch(e){} }
-  // Import an app's legacy { id:{name,savedAt,...} } library once; merge into shared projects by NAME.
-  function migrate(app, legacyObj, pick){
-    if(!lsOK()||migrated(app)){ return; }
-    try{
-      var r=readReg(), byName={};
-      Object.keys(r).forEach(function(id){ byName[r[id].name]=id; });
-      Object.keys(legacyObj||{}).forEach(function(lid){
-        var le=legacyObj[lid]; if(!le) return;
-        var name=le.name||'Untitled', id=byName[name];
-        if(!id){ id=newId(); r[id]={name:name,savedAt:le.savedAt||now(),slices:{}}; byName[name]=id; }
-        if(!r[id].slices) r[id].slices={};
-        if(r[id].slices[app]==null){ var d=pick?pick(le):le; if(d!=null) r[id].slices[app]=d; }
-        if(le.savedAt && (!r[id].savedAt || String(le.savedAt)>String(r[id].savedAt))) r[id].savedAt=le.savedAt;
-      });
-      writeReg(r); setMigrated(app);
-    }catch(e){}
-  }
-  window.BridgeProjects={ NS:NS, K_PROJ:K_PROJ, K_CUR:K_CUR, ok:lsOK,
-    raw:raw, list:list, get:get, getSlice:getSlice, saveSlice:saveSlice,
-    setDemands:setDemands, getDemands:getDemands, del:del, delSlice:delSlice,
-    rename:rename, current:current, setCurrent:setCurrent, migrate:migrate, migrated:migrated };
-})();
-
-/* ============================================================================
-   SHARED APP PATHS  ·  bridgeSuite.v1.appPaths
-   ----------------------------------------------------------------------------
-   The four apps link to each other by bare file name: MCT embeds "psbeam.html"
-   in an iframe, PS-Beam opens "stgirder.html" in a tab, every app's back link
-   points at "index.html". That works only while each file is named exactly what
-   the others expect. Rename one, keep a second download called
-   "psbeam (1).html", or serve the folder from something that answers unknown
-   paths with the index page, and a link lands on the wrong document -- or on a
-   second copy of the app you were already in -- instead of failing loudly.
-
-   So each app writes down where it actually lives the moment it is opened, and
-   the others prefer that recorded path over the built-in guess. Open a file
-   once, directly, and every link to it is right from then on, whatever it is
-   called. A path the engineer types in by hand is pinned and outranks both.
-
-   Sightings are filed BY FOLDER. The browser keeps one storage area for every
-   local file on the machine, so a bare file name is not enough: opening an
-   ST-Girder copy saved as "index.html" in some other folder used to tell the
-   MCT in this folder that ST-Girder was "index.html" -- which, here, is the
-   MCT itself. Now a sighting only answers for the folder it was made in, and
-   no app will ever resolve a sibling to its own file name.
-
-   This block is byte-identical in index.html / psbeam.html / stgirder.html /
-   lldf.html. Edit one, edit all four.
-   ========================================================================== */
-(function(){
-  var KEY='bridgeSuite.v1.appPaths';
-  var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
-  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
-  var ME='';                                   // which app this file is, set by boot()
+  var KEY='bridgeSuite.v1.appPaths', APP='stgirder';
   var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
-  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
   function now(){ return new Date().toISOString(); }
-  /* A write to the shared browser storage that fails because the storage is
-     FULL is shown, not swallowed (X-S8). Every tool opened from file:// in
-     Chrome/Edge shares one ~5 MB area, so once it fills, every autosave and
-     hand-off stops at once. One banner per page, one line per item; the other
-     shared blocks reach it through window.BridgeApps.storageWarn. */
-  var warned={};
-  function isQuota(e){ return !!e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||
-    e.code===22||e.code===1014||/quota/i.test(String(e.message||''))); }
-  function storageWarn(what,e){
-    if(!isQuota(e)||warned[what]) return false;
-    warned[what]=true;
-    var show=function(){ try{
-      var b=document.getElementById('bridgeStorageWarn');
-      if(!b){
-        b=document.createElement('div'); b.id='bridgeStorageWarn'; b.setAttribute('role','alert');
-        b.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;background:#fdecea;color:#7a1a12;'
-          +'border:1px solid #b3261e;border-radius:6px;padding:8px 34px 8px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25)';
-        var x=document.createElement('button'); x.type='button'; x.textContent='\u00d7'; x.title='Dismiss'; x.setAttribute('aria-label','Dismiss');
-        x.style.cssText='position:absolute;top:4px;right:6px;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#7a1a12';
-        x.onclick=function(){ if(b.parentNode) b.parentNode.removeChild(b); };
-        b.appendChild(x); document.body.appendChild(b);
-      }
-      var line=document.createElement('div');
-      line.textContent='\u26a0 Browser storage is full: '+what+' was not saved. Export your work as JSON now, then delete old projects to free space.';
-      b.appendChild(line);
-    }catch(x){} };
-    if(document.body) show(); else { try{ document.addEventListener('DOMContentLoaded',show); }catch(x){} }
-    return true;
-  }
-  /* This app's own file name as the browser sees it. Decoded, because a name
-     with a space arrives percent-encoded and the value is shown to a human. */
   function selfFile(){
     try{
       var last=(location.pathname||'').split('/').pop()||'';
@@ -900,901 +436,32 @@ var st=document.createElement('style'); st.textContent=css;
       return last;
     }catch(e){ return ''; }
   }
-  /* The folder this file sits in, as a URL ending in "/". Every relative link
-     between the apps resolves against it, so it is what a sighting must be
-     filed under. */
   function selfDir(){
     try{
       var h=String(location.href||'').split('#')[0].split('?')[0];
       var i=h.lastIndexOf('/'); return i<0?'':h.slice(0,i+1);
     }catch(e){ return ''; }
   }
-  function same(a,b){ return String(a||'').toLowerCase()===String(b||'').toLowerCase(); }
   function prune(at){
     var ks=Object.keys(at); if(ks.length<=MAXDIRS) return at;
     ks.sort(function(a,b){ return String((at[b]||{}).seenAt).localeCompare(String((at[a]||{}).seenAt)); });
     var out={}; ks.slice(0,MAXDIRS).forEach(function(k){ out[k]=at[k]; }); return out;
   }
-  /* What is recorded for an app, for THIS folder. Entries written before
-     sightings were filed by folder carry no folder at all; they are still
-     honoured, since they were almost always made next door. */
-  function entry(app){
-    var o=read(), e=o[app]; if(!e) return null;
-    var d=selfDir();
-    if(e.at&&e.at[d]) return {file:e.at[d].file, pinned:!!e.at[d].pinned, legacy:false};
-    if(e.file&&!e.dir) return {file:e.file, pinned:!!e.pinned, legacy:true};
-    return null;
-  }
-  /* Record where this app lives. A sighting never overwrites a pin made for
-     the same folder -- if the engineer said which file is PS-Beam, a stray
-     copy does not get to argue. */
-  function register(app){
-    var f=selfFile(); if(!f||!NAMES[app]) return '';
-    var d=selfDir(), o=read(), e=o[app]||{}, at=e.at||{}, cur=at[d];
+  /* Record where ST-Girder lives, filed by folder. A sighting never overwrites a pin
+     made for the same folder. Same logic and format as the shared block's register(). */
+  function register(){
+    var f=selfFile(); if(!f) return '';
+    var d=selfDir(), o=read(), e=o[APP]||{}, at=e.at||{}, cur=at[d];
     if(cur&&cur.pinned) return cur.file;
     if(cur&&cur.file===f&&e.dir===d) return f;
     at[d]={file:f, pinned:false, seenAt:now()};
     at=prune(at);
-    // A pin from before folders were tracked keeps its place at the top level.
-    o[app]=(e.pinned&&!e.dir)
+    o[APP]=(e.pinned&&!e.dir)
       ? {file:e.file, pinned:true, seenAt:e.seenAt, at:at}
       : {file:f, pinned:false, seenAt:now(), dir:d, at:at};
     write(o); return f;
   }
-  /* Point an app at a file for THIS folder (pinned unless told otherwise), or
-     forget what this folder knows about it with an empty name. Refuses to
-     point a sibling at this very file. */
-  function set(app,file,pinned){
-    if(!NAMES[app]) return false;
-    var d=selfDir(), o=read(), e=o[app]||{}, at=e.at||{};
-    var f=String(file||'').trim();
-    if(f){
-      if(ME&&app!==ME&&same(f,selfFile())) return false;
-      var r={file:f, pinned:pinned!==false, seenAt:now()};
-      at[d]=r;
-      o[app]={file:f, pinned:r.pinned, seenAt:r.seenAt, dir:d, at:prune(at)};
-    } else {
-      delete at[d];
-      if(!e.dir||e.dir===d){                  // the top level described this folder
-        if(Object.keys(at).length) o[app]={at:at}; else delete o[app];
-      } else o[app]=Object.assign({},e,{at:at});
-    }
-    return write(o);
-  }
-  function path(app){
-    var e=entry(app), f=e&&e.file||'';
-    // Never send a sibling link back to this same file: that is how the MCT
-    // ended up framing a second copy of itself under the ST-Girder button.
-    if(f&&ME&&app!==ME&&same(f,selfFile())) f='';
-    return f||DEF[app]||'';
-  }
-  function info(app){ var e=entry(app);
-    return {app:app, name:NAMES[app]||app, file:path(app),
-      pinned:!!(e&&e.pinned), known:!!(e&&e.file)}; }
-  function all(){ var out={}; Object.keys(NAMES).forEach(function(k){ out[k]=info(k); }); return out; }
-  /* Tell whoever framed us who we are, so a wrong file is caught and named
-     rather than silently displayed. Repeated for a couple of seconds because a
-     parent that has just created the iframe may not have its listener up yet,
-     and a heavy app may not reach this line until well after the frame exists. */
-  function announce(app){
-    if(!NAMES[app]) return;
-    var msg={source:'bridge-suite', hello:app, file:selfFile(), title:NAMES[app]};
-    var send=function(){ try{ if(window.self!==window.top) window.parent.postMessage(msg,'*'); }catch(e){} };
-    send();
-    try{ if(document.readyState!=='complete') window.addEventListener('load',send); }catch(e){}
-    var n=0, t=setInterval(function(){ send(); if(++n>=8) clearInterval(t); },400);
-    // ...and then answer forever. The burst above only covers the first ~3 s after
-    // this frame boots; if the parent missed every one of those hellos -- its
-    // listener or the frame ref was not up yet, the file came off OneDrive slowly,
-    // or the tab was in the background -- a single miss used to be permanent, and
-    // the parent would drop a full-screen "Could not open" over an app that had in
-    // fact loaded and was working. This standing listener lets the parent re-ask at
-    // any time with a {whois:true} ping, so the handshake self-heals instead of
-    // requiring a full reload of the suite.
-    // Only the page framing this one, the window that opened it, or a frame
-    // this window holds may ask (X-S10; same rule as the abutment / EDM links).
-    var asker=function(src){
-      if(!src) return false;
-      try{
-        if(window.parent!==window&&src===window.parent) return true;
-        if(window.opener&&src===window.opener) return true;
-        for(var i=0;i<window.frames.length;i++) if(window.frames[i]===src) return true;
-      }catch(x){}
-      return false;
-    };
-    try{ window.addEventListener('message',function(e){
-      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois&&asker(e.source)) send();
-    }); }catch(e){}
-  }
-  function boot(app){ if(NAMES[app]) ME=app; register(app); announce(app); }
-  /* Where to send the browser for a sibling app, honouring the recorded path. */
-  function href(app){ return path(app); }
-  window.BridgeApps={ KEY:KEY, DEFAULTS:DEF, NAMES:NAMES, selfFile:selfFile, selfDir:selfDir,
-    register:register, announce:announce, boot:boot, set:set, path:path, href:href,
-    info:info, all:all, storageWarn:storageWarn };
-})();
-
-try{ window.BridgeApps.boot('stgirder'); }catch(e){}
-
-/* ============================================================================
-   SHARED CHANNEL LOCKS  ·  bridgeSuite.v1.locks
-   ----------------------------------------------------------------------------
-   A "lock" is a standing subscription to a shared channel. While a channel is
-   LOCKED, every app that consumes it adopts new values the moment they are
-   published, shows the affected inputs read-only (driven by the producing app),
-   and records what changed. While a channel is UNLOCKED the old behaviour
-   applies: an orange "data available" badge that the engineer clicks to adopt.
-
-   Lock state is shared across all four apps — locking the distribution-factor
-   channel anywhere locks it everywhere. Each consuming app keeps its own
-   private snapshot of the values it held at the moment of locking, so that
-   unlocking can hand the engineer's own numbers back.
-
-   State language used by the shared CSS below:
-     none   grey    no shared data for this channel yet
-     avail  ORANGE  data is published and differs from what this app holds
-     live   ORANGE  locked — auto-adopting, inputs read-only
-     warn   AMBER   locked but the payload failed a check; nothing was applied
-
-   This block is byte-identical in all four apps. Edit it in one place and
-   re-inject; do not patch a single copy.
-   ========================================================================== */
-(function(){
-  "use strict";
-  var NS='bridgeSuite.v1';
-  var K_LOCK=NS+'.locks', K_LOG=NS+'.syncLog', K_SNAP=NS+'.lockSnap';
-  var VER=1, LOG_CAP=300;
-
-  /* Channel registry. `key` is the storage key the channel's payload lives in,
-     `at` the companion timestamp key (null when the payload carries its own
-     producedAt only). `producer` is informational — '*' means any app may
-     publish. `fields` is the human list shown in the lock tooltip. */
-  var CHANNELS={
-    lldf:      {label:'Distribution factors', short:'DFs',       producer:'LL & DL Distribution',
-                key:NS+'.lldf',            at:NS+'.lldf.updatedAt',
-                fields:'g_M (+M and −M), g_V, fatigue DF'},
-    dlLoads:   {label:'Dead loads',           short:'DL',        producer:'LL & DL Distribution',
-                key:NS+'.dlLoads',         at:null,
-                fields:'DC1, DC2, DW, pedestrian LL, tributary width'},
-    /* Points at .lldfGeom, the structured MCT -> LL & DL layout payload, NOT at
-       .geometryChanges. The latter is a human-readable diff ("Span Lengths:
-       3 span(s) -> 4 span(s)") whose adopt handler in the design apps only
-       logs; there is nothing there to auto-apply, so locking it would promise
-       an update it cannot deliver. .lldfGeom carries real numbers and has a
-       real consumer. */
-    geometry:  {label:'Bridge geometry',      short:'Geometry',  producer:'*',
-                key:NS+'.lldfGeom',        at:null,
-                fields:'span lengths, girder count, spacing, skew, deck, overhang'},
-    psSection: {label:'Section properties',   short:'Section',   producer:'PS-Beam',
-                key:NS+'.psSection',       at:null,
-                fields:'A, I (composite), S_b / S_t, and box b / J from the girder design'},
-    materials: {label:'Materials',            short:'Materials', producer:'*',
-                key:NS+'.materials',       at:null,
-                fields:"deck f'c, girder f'c / Fy, unit weights, modular ratio"},
-    capacity:  {label:'Capacity',             short:'Capacity',  producer:'*',
-                key:NS+'.capacity',        at:NS+'.capacity.updatedAt',
-                fields:'φMn, φVn envelopes'},
-    project:   {label:'Project info',         short:'Project',   producer:'*',
-                key:NS+'.projectMeta',     at:null,
-                fields:'project name, bridge ID, prepared by, date, job number'},
-    /* The analysis hand-off, MCT -> the two design apps. `key` is the whole
-       handoff map rather than one payload, so it carries no producedAt of its
-       own: hasData() only needs to know the map is non-empty, and the timestamp
-       comes from the companion key BridgeHandoff already maintains. Single
-       producer, so drives() has nothing to arbitrate here. */
-    demands:   {label:'Analysis demands',      short:'Demands',   producer:'MCT Generator',
-                key:NS+'.handoffs',        at:NS+'.updatedAt',
-                fields:'per-station M and V envelopes, member layout, live-load type'}
-  };
-
-  /* App id -> short display name, used to attribute change-log rows and to
-     name the app in the suite panel header. */
-  var APPS={mct:'MCT', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL'};
-
-  /* Default channel order for the suite panel: the two the LL & DL app drives
-     first (they are the ones engineers lock day to day), then the rest. */
-  var PANEL_ORDER=['lldf','dlLoads','demands','geometry','psSection','materials','capacity','project'];
-
-  function lsOK(){ try{ var k='__bl_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
-  function rd(k){ try{ var s=localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){ return null; } }
-  function wr(k,o){ try{ localStorage.setItem(k,JSON.stringify(o)); return true; }catch(e){ return false; } }
-
-  /* ---------- lock registry ---------- */
-  function all(){
-    var r=rd(K_LOCK);
-    if(!r||typeof r!=='object'||!r.channels) r={schemaVersion:VER,channels:{},updatedAt:null};
-    return r;
-  }
-  function isLocked(ch){ var r=all().channels[ch]; return !!(r&&r.locked); }
-  function lockInfo(ch){ return all().channels[ch]||null; }
-  function setLock(ch,on,by){
-    if(!CHANNELS[ch]) return false;
-    if(!lsOK()) return false;
-    var r=all();
-    r.channels[ch]={locked:!!on, by:by||'', at:new Date().toISOString()};
-    r.schemaVersion=VER; r.updatedAt=r.channels[ch].at;
-    if(!wr(K_LOCK,r)) return false;
-    emit(ch,!!on);
-    return true;
-  }
-  /* Which app is allowed to auto-publish this channel while it is locked.
-
-     `capacity` and `geometry` each have more than one possible producer
-     (PS-Beam and ST-Girder for capacity; MCT and both design apps for
-     geometry). If every producer with a tab open republished on the lock, two
-     tabs would overwrite each other on every keystroke and the consumer would
-     see an endless alternating toast. So exactly one app drives: the one that
-     took the lock, or — when the lock was taken from the consuming side, so
-     that `by` names an app that cannot publish this channel at all — whichever
-     app produced the payload currently sitting on it.
-
-     The two tests can both pass for one round, if app A's payload is on the
-     channel and app B takes the lock. That settles itself: B's first publish
-     stamps its own name on the payload, A's producer test then fails, and A
-     goes quiet. Taking the lock from B is an explicit "use B's numbers", so
-     B winning is the right outcome.
-
-     `me` is this app's id; `myName` is the string this app writes into
-     payload.producer. */
-  function drives(ch,me,myName){
-    var i=lockInfo(ch); if(!i||!i.locked) return false;
-    if(i.by===me) return true;
-    var p=payload(ch);
-    return !!(p&&myName&&p.producer===myName);
-  }
-  function lock(ch,by){ return setLock(ch,true,by); }
-  function unlock(ch,by){ return setLock(ch,false,by); }
-  function toggle(ch,by){ return setLock(ch,!isLocked(ch),by); }
-
-  /* ---------- pre-lock snapshots (per consuming app) ---------- */
-  function snapKey(app){ return K_SNAP+'.'+app; }
-  function saveSnap(app,ch,obj){
-    var s=rd(snapKey(app))||{};
-    s[ch]={at:new Date().toISOString(),data:obj};
-    wr(snapKey(app),s);
-  }
-  function peekSnap(app,ch){ var s=rd(snapKey(app)); return (s&&s[ch])?s[ch]:null; }
-  function takeSnap(app,ch){
-    var s=rd(snapKey(app)); if(!s||!s[ch]) return null;
-    var v=s[ch]; delete s[ch]; wr(snapKey(app),s); return v;
-  }
-
-  /* ---------- change log ----------
-     Sharded one key per app rather than one shared array, because two tabs
-     adopting the same publish in the same instant would otherwise both
-     read-modify-write the single key and the slower writer would silently
-     drop the faster one's entry. Each app owns its shard; logs() merges. */
-  var LOG_APPS=['mct','psbeam','stgirder','lldf'];
-  function logKey(app){ return K_LOG+'.'+(app||'app'); }
-  function logShard(app){ var a=rd(logKey(app)); return Array.isArray(a)?a:[]; }
-  function logApps(){
-    var i=rd(K_LOG+'.index'), out=LOG_APPS.slice();
-    if(Array.isArray(i)) i.forEach(function(a){ if(out.indexOf(a)<0) out.push(a); });
-    return out;
-  }
-  function logs(){
-    var out=[];
-    logApps().forEach(function(app){ logShard(app).forEach(function(e){ out.push(e); }); });
-    var old=rd(K_LOG); if(Array.isArray(old)) old.forEach(function(e){ out.push(e); });  // pre-shard entries
-    out.sort(function(a,b){ var x=a.at||'', y=b.at||''; return x<y?1:(x>y?-1:0); });
-    if(out.length>LOG_CAP) out.length=LOG_CAP;
-    return out;
-  }
-  function log(entry){
-    if(!lsOK()) return null;
-    entry=entry||{};
-    entry.at=new Date().toISOString();
-    var app=entry.app||'app';
-    var a=logShard(app);
-    a.unshift(entry);
-    if(a.length>LOG_CAP) a.length=LOG_CAP;
-    wr(logKey(app),a);
-    if(LOG_APPS.indexOf(app)<0){
-      var idx=rd(K_LOG+'.index'); if(!Array.isArray(idx)) idx=[];
-      if(idx.indexOf(app)<0){ idx.push(app); wr(K_LOG+'.index',idx); }
-    }
-    emitLog();
-    return entry;
-  }
-  function clearLogs(){ logApps().forEach(function(app){ wr(logKey(app),[]); }); wr(K_LOG,[]); emitLog(); }
-
-  /* Build a readable one-line delta list from two flat objects.
-     labels maps key -> human name; digits maps key -> decimal places. */
-  function deltas(before,after,labels,digits){
-    var out=[];
-    before=before||{}; after=after||{}; labels=labels||{}; digits=digits||{};
-    Object.keys(after).forEach(function(k){
-      var a=before[k], b=after[k];
-      if(a==null&&b==null) return;
-      var na=+a, nb=+b, num=isFinite(na)&&isFinite(nb);
-      var d=digits[k]==null?3:digits[k];
-      if(num){ if(Math.abs(na-nb)<Math.pow(10,-(d+1))) return; }
-      else if(String(a)===String(b)) return;
-      out.push({key:k, label:labels[k]||k,
-        from:num?(a==null?'—':(+a).toFixed(d)):(a==null?'—':String(a)),
-        to:  num?(b==null?'—':(+b).toFixed(d)):(b==null?'—':String(b))});
-    });
-    return out;
-  }
-  function deltaText(ds){
-    return ds.map(function(d){ return d.label+' '+d.from+' → '+d.to; }).join(', ');
-  }
-
-  /* ---------- subscriptions ---------- */
-  var subs=[], logSubs=[];
-  function emit(ch,on){ subs.slice().forEach(function(f){ try{ f(ch,on,all()); }catch(e){} }); }
-  function emitLog(){ logSubs.slice().forEach(function(f){ try{ f(logs()); }catch(e){} }); }
-  function onChange(f){ subs.push(f); return function(){ var i=subs.indexOf(f); if(i>=0) subs.splice(i,1); }; }
-  function onLog(f){ logSubs.push(f); return function(){ var i=logSubs.indexOf(f); if(i>=0) logSubs.splice(i,1); }; }
-  window.addEventListener('storage',function(e){
-    if(!e.key) { emit(null,null); emitLog(); return; }
-    if(e.key===K_LOCK) emit(null,null);
-    else if(e.key===K_LOG||e.key.indexOf(K_LOG+'.')===0) emitLog();
-  });
-
-  /* ---------- payload freshness ---------- */
-  /* Returns the producedAt of a channel's current payload, or null. */
-  function producedAt(ch){
-    var c=CHANNELS[ch]; if(!c) return null;
-    var p=rd(c.key);
-    if(p&&p.producedAt) return p.producedAt;
-    if(c.at){ try{ return localStorage.getItem(c.at)||null; }catch(e){} }
-    return null;
-  }
-  function payload(ch){ var c=CHANNELS[ch]; return c?rd(c.key):null; }
-  /* An empty object does not count. `demands` points at the whole handoff map,
-     which BridgeHandoff initialises to {} long before anything is published;
-     without this test the suite panel would offer a lock on an empty channel. */
-  function hasData(ch){
-    var p=payload(ch);
-    if(!p) return false;
-    if(typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).length===0) return false;
-    if(Array.isArray(p)&&!p.length) return false;
-    return true;
-  }
-  function ago(iso){
-    if(!iso) return '';
-    var t=Date.parse(iso); if(!isFinite(t)) return '';
-    var s=Math.max(0,Math.round((Date.now()-t)/1000));
-    if(s<45) return 'just now';
-    if(s<5400) return Math.round(s/60)+' min ago';
-    if(s<172800) return Math.round(s/3600)+' h ago';
-    return Math.round(s/86400)+' d ago';
-  }
-
-  /* Resolve the four-state badge for a channel from this app's point of view.
-     `adoptedTok` is whatever token the app stores to remember what it adopted
-     (usually the producedAt it last applied); pass null if the app has none. */
-  function state(ch,adoptedTok){
-    if(isLocked(ch)) return 'live';
-    var pa=producedAt(ch);
-    if(!pa) return 'none';
-    if(adoptedTok && String(adoptedTok)===String(pa)) return 'none';
-    return 'avail';
-  }
-
-  /* ---------- toast ---------- */
-  var tHost=null;
-  function host(){
-    if(tHost&&tHost.isConnected) return tHost;
-    tHost=document.createElement('div');
-    tHost.className='bl-toasts';
-    (document.body||document.documentElement).appendChild(tHost);
-    return tHost;
-  }
-  function toast(title,body,kind,ms){
-    try{
-      var el=document.createElement('div');
-      el.className='bl-toast'+(kind?' '+kind:'');
-      var h=document.createElement('div'); h.className='bl-toast-t'; h.textContent=title||'';
-      el.appendChild(h);
-      if(body){ var b=document.createElement('div'); b.className='bl-toast-b'; b.textContent=body; el.appendChild(b); }
-      var x=document.createElement('button'); x.className='bl-toast-x'; x.type='button';
-      x.setAttribute('aria-label','Dismiss'); x.textContent='×';
-      x.onclick=function(){ if(el.parentNode) el.parentNode.removeChild(el); };
-      el.appendChild(x);
-      host().appendChild(el);
-      var life=ms==null?7000:ms;
-      if(life>0) setTimeout(function(){
-        el.classList.add('out');
-        setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },380);
-      },life);
-      return el;
-    }catch(e){ return null; }
-  }
-
-  /* ---------- shared styling ----------
-     Injected here so every app renders the lock controls, the orange
-     "available" state and the toasts identically without carrying the rules
-     in its own stylesheet. */
-  var CSS=
-   /* cross-app link button, four states */
-   ".xlink{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:8px;"
-  +"border:1px solid #c7d1db;background:#f7f9fc;color:#33455c;cursor:pointer;"
-  +"font:600 11.5px/1.3 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;"
-  +"white-space:nowrap;vertical-align:middle;transition:background .13s,border-color .13s,box-shadow .13s}"
-  +".xlink:hover{background:#eef2f7;border-color:#aab8c8}"
-  +".xlink:disabled{opacity:.5;cursor:not-allowed}"
-  +".xlink .xdot{width:7px;height:7px;border-radius:50%;background:#b6c2d0;flex:none}"
-  +/* ORANGE — data waiting to be adopted */
-   ".xlink.avail{border-color:#f59e0b;background:#fff7ed;color:#9a3412;box-shadow:0 0 0 3px rgba(245,158,11,.16)}"
-  +".xlink.avail:hover{background:#ffedd5;border-color:#ea580c}"
-  +".xlink.avail .xdot{background:#f59e0b;animation:blpulse 1.9s ease-in-out infinite}"
-  +/* ORANGE SOLID — locked and live */
-   ".xlink.live{border-color:#c2410c;background:#ea580c;color:#fff;box-shadow:0 1px 2px rgba(194,65,12,.35)}"
-  +".xlink.live:hover{background:#c2410c;border-color:#9a3412}"
-  +".xlink.live .xdot{background:#ffe8d5}"
-  +/* AMBER STRIPE — locked but the payload did not pass */
-   ".xlink.warn{border-color:#b45309;color:#7c2d12;"
-  +"background:repeating-linear-gradient(135deg,#fef3c7 0 7px,#fde68a 7px 14px)}"
-  +".xlink.warn .xdot{background:#b45309}"
-  +"@keyframes blpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}"
-  +/* padlock glyph */
-   ".xlink .xlk{font-size:12px;line-height:1;flex:none}"
-   /* inputs that a lock has taken over */
-  +".bl-driven{background:#fff7ed !important;border-color:#f59e0b !important;color:#7c2d12 !important;"
-  +"cursor:not-allowed !important;box-shadow:inset 3px 0 0 #ea580c !important}"
-  +".bl-driven:focus{outline:none !important}"
-  +".bl-src{display:block;margin-top:3px;font:600 10px/1.35 ui-sans-serif,system-ui,sans-serif;color:#c2410c;letter-spacing:.01em}"
-  +".bl-src::before{content:'\\1F512';margin-right:4px;font-weight:400}"
-   /* lock strip that sits above a group of driven fields */
-  +".bl-strip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 10px;padding:7px 11px;"
-  +"border:1px solid #f59e0b;border-left-width:4px;border-radius:8px;background:#fff7ed;"
-  +"font:500 11.5px/1.45 ui-sans-serif,system-ui,sans-serif;color:#7c2d12}"
-  +".bl-strip.live{border-color:#c2410c;background:#ffedd5}"
-  +".bl-strip b{color:#9a3412}"
-  +".bl-strip .sp{flex:1 1 auto}"
-   /* toasts */
-  +".bl-toasts{position:fixed;right:16px;bottom:16px;z-index:99999;display:flex;flex-direction:column;"
-  +"gap:8px;max-width:min(380px,calc(100vw - 32px));pointer-events:none}"
-  +".bl-toast{position:relative;pointer-events:auto;padding:10px 30px 11px 12px;border-radius:10px;"
-  +"border:1px solid #c2410c;border-left-width:4px;background:#fff;color:#1f2937;"
-  +"box-shadow:0 8px 24px rgba(15,23,42,.16);animation:blin .22s ease-out}"
-  +".bl-toast.warn{border-color:#b45309;background:#fffbeb}"
-  +".bl-toast.out{opacity:0;transform:translateY(6px);transition:opacity .35s,transform .35s}"
-  +".bl-toast-t{font:700 12px/1.4 ui-sans-serif,system-ui,sans-serif;color:#9a3412}"
-  +".bl-toast-b{margin-top:3px;font:500 11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#334155;"
-  +"word-break:break-word}"
-  +".bl-toast-x{position:absolute;top:5px;right:6px;width:20px;height:20px;border:0;background:transparent;"
-  +"color:#94a3b8;font-size:16px;line-height:1;cursor:pointer;border-radius:5px}"
-  +".bl-toast-x:hover{background:#f1f5f9;color:#475569}"
-  +"@keyframes blin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}"
-   /* change-log panel */
-  +".bl-log{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff}"
-  +".bl-log-h{display:flex;align-items:center;gap:8px;padding:8px 11px;background:#f8fafc;"
-  +"border-bottom:1px solid #e2e8f0;font:700 11.5px/1.3 ui-sans-serif,system-ui,sans-serif;color:#334155}"
-  +".bl-log-b{max-height:230px;overflow:auto}"
-  +".bl-row{display:flex;gap:9px;padding:7px 11px;border-bottom:1px solid #f1f5f9;"
-  +"font:500 11px/1.5 ui-sans-serif,system-ui,sans-serif}"
-  +".bl-row:last-child{border-bottom:0}"
-  +".bl-row .t{flex:none;width:52px;color:#94a3b8;font-variant-numeric:tabular-nums}"
-  +".bl-row .c{flex:none;width:74px;font-weight:700;color:#c2410c}"
-  +".bl-row .a{flex:none;width:66px;color:#64748b;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
-  +"overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
-  +".bl-row .d{flex:1 1 auto;color:#334155;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word}"
-  +".bl-empty{padding:14px 11px;color:#94a3b8;font:500 11.5px/1.4 ui-sans-serif,system-ui,sans-serif;text-align:center}"
-   /* suite status panel */
-  +".bl-panel{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff}"
-  +".bl-panel .bl-log{border:0;border-radius:0;border-top:1px solid #e2e8f0}"
-  +".bl-ph{display:flex;align-items:center;gap:8px;padding:8px 11px;background:#fff7ed;"
-  +"border-bottom:1px solid #fed7aa;font:700 11.5px/1.3 ui-sans-serif,system-ui,sans-serif;color:#9a3412}"
-  +".bl-ch{display:flex;align-items:center;gap:9px;padding:6px 11px;border-bottom:1px solid #f1f5f9;"
-  +"font:500 11.5px/1.4 ui-sans-serif,system-ui,sans-serif}"
-  +".bl-ch:last-child{border-bottom:0}"
-  +".bl-ch .n{flex:none;width:118px;font-weight:600;color:#1e293b}"
-  +".bl-ch .p{flex:1 1 auto;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
-  +".bl-ch .w{flex:none;color:#94a3b8;font-variant-numeric:tabular-nums;font-size:10.5px}"
-  +".bl-ch.on{background:#fff7ed}"
-  +".bl-ch.on .n{color:#9a3412}"
-  /* floating suite drawer — the panel is cross-cutting, so it does not belong
-     inside any one app's card layout */
-  +".bl-fab{position:fixed;right:18px;bottom:18px;z-index:9998;display:flex;align-items:center;gap:7px;"
-  +"padding:9px 14px;border:1px solid #cbd5e1;border-radius:999px;background:#fff;color:#475569;cursor:pointer;"
-  +"font:600 12px/1 ui-sans-serif,system-ui,sans-serif;box-shadow:0 3px 12px rgba(15,23,42,.14)}"
-  +".bl-fab:hover{border-color:#94a3b8}"
-  +".bl-fab.on{background:#ea580c;border-color:#ea580c;color:#fff;box-shadow:0 3px 14px rgba(234,88,12,.38)}"
-  +".bl-fab .b{padding:1px 7px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:11px}"
-  +".bl-fab.on .b{background:rgba(255,255,255,.24);color:#fff}"
-  +".bl-draw{position:fixed;right:18px;bottom:66px;z-index:9999;width:420px;max-width:calc(100vw - 36px);"
-  +"max-height:calc(100vh - 96px);overflow:auto;border-radius:12px;background:#fff;"
-  +"box-shadow:0 12px 40px rgba(15,23,42,.26);border:1px solid #e2e8f0}"
-  +".bl-draw .bl-panel{border:0}"
-  +"@media print{.bl-fab,.bl-draw{display:none!important}}";
-
-  try{
-    var st=document.createElement('style');
-    st.setAttribute('data-bridge-locks','1');
-    st.appendChild(document.createTextNode(CSS));
-    (document.head||document.documentElement).appendChild(st);
-  }catch(e){}
-
-  /* ---------- React UI kit ----------
-     Called from each app's babel block as BridgeLocks.ui(React); returns the
-     shared components so the markup is identical everywhere. */
-  function ui(React){
-    if(!React) return null;
-    var h=React.createElement;
-
-    /* The lock button. Props:
-         ch        channel id
-         app       this app's id (recorded as the locker)
-         st        optional state override ('none'|'avail'|'live'|'warn')
-         onAdopt   called when clicked while unlocked and data is available
-         onLock    called with (true) after locking / (false) after unlocking
-         label     optional text override
-         compact   render icon-only */
-    function LockBtn(p){
-      var locked=isLocked(p.ch);
-      var s=p.st||state(p.ch,p.adopted);
-      var c=CHANNELS[p.ch]||{label:p.ch,short:p.ch,fields:''};
-      var when=ago(producedAt(p.ch));
-      var title;
-      if(s==='live') title='LOCKED to '+c.producer+' — '+c.fields+' update automatically and cannot be edited here. Click to unlock and take manual control.';
-      else if(s==='avail') title='New '+c.label.toLowerCase()+' available'+(when?' ('+when+')':'')+' — '+c.fields+'. Click to adopt once, or lock to follow it from now on.';
-      else if(s==='warn') title='Locked, but the last payload failed a check — nothing was applied. Click for detail.';
-      else title='No '+c.label.toLowerCase()+' published yet.';
-      var txt=p.label!=null?p.label:(locked?('Locked · '+c.short):(s==='avail'?('Adopt '+c.short):c.short));
-      // data-ch makes the channel visible in the DOM: without it a padlock is
-      // just another .xlink button, and anything selecting one -- a test, a
-      // devtools poke -- has to guess from the label text.
-      return h('button',{type:'button',className:'xlink '+s,title:title,'data-ch':p.ch,
-        disabled:!!p.disabled||(s==='none'&&!locked&&!p.always),
-        onClick:function(e){
-          e&&e.preventDefault&&e.preventDefault();
-          if(p.onClick) return p.onClick(s,locked);
-          if(locked){ if(p.onLock) p.onLock(false); }
-          else if(p.onAdopt) p.onAdopt();
-        }},
-        h('span',{className:'xdot'}),
-        locked?h('span',{className:'xlk'},'🔒'):null,
-        p.compact?null:h('span',null,txt));
-    }
-
-    /* Separate padlock toggle to sit beside an adopt button. */
-    function LockToggle(p){
-      var locked=isLocked(p.ch);
-      var c=CHANNELS[p.ch]||{label:p.ch,short:p.ch,fields:''};
-      return h('button',{type:'button',className:'xlink '+(locked?'live':''),'data-ch':p.ch,
-        title:locked
-          ?('Following '+c.producer+' automatically. Click to unlock — your values from before the lock are restored.')
-          :('Lock to '+c.producer+': '+c.fields+' will update automatically from now on and become read-only here.'),
-        onClick:function(e){ e&&e.preventDefault&&e.preventDefault(); if(p.onToggle) p.onToggle(!locked); }},
-        h('span',{className:'xlk'},locked?'🔒':'🔓'),
-        p.compact?null:h('span',null,locked?'Locked':'Lock'));
-    }
-
-    /* Orange strip shown above a group of driven inputs. */
-    function DrivenStrip(p){
-      var c=CHANNELS[p.ch]||{label:p.ch,producer:'',fields:''};
-      return h('div',{className:'bl-strip live'},
-        h('span',{className:'xlk'},'🔒'),
-        h('span',null,h('b',null,c.label),' locked to ',h('b',null,c.producer),
-          p.detail?(' · '+p.detail):'',
-          ' — these fields update automatically and are read-only.'),
-        h('span',{className:'sp'}),
-        h('button',{type:'button',className:'xlink',onClick:p.onUnlock,
-          title:'Unlock and restore the values you had before locking.'},
-          h('span',{className:'xlk'},'🔓'),h('span',null,'Unlock')));
-    }
-
-    /* Session change log. */
-    function SyncLog(p){
-      var rows=(p&&p.rows)||logs();
-      var only=p&&p.channel;
-      if(only) rows=rows.filter(function(r){ return r.channel===only; });
-      var lim=(p&&p.limit)||60;
-      rows=rows.slice(0,lim);
-      return h('div',{className:'bl-log'},
-        h('div',{className:'bl-log-h'},
-          h('span',{className:'xlk'},'🕒'),
-          h('span',null,(p&&p.title)||'Auto-sync log'),
-          h('span',{style:{flex:'1 1 auto'}}),
-          rows.length?h('button',{type:'button',className:'xlink',
-            onClick:function(){ clearLogs(); if(p&&p.onClear) p.onClear(); }},'Clear'):null),
-        h('div',{className:'bl-log-b'},
-          rows.length?rows.map(function(r,i){
-            return h('div',{className:'bl-row',key:i},
-              h('span',{className:'t'},(r.at||'').slice(11,16)),
-              h('span',{className:'c'},(CHANNELS[r.channel]&&CHANNELS[r.channel].short)||r.channel||'—'),
-              h('span',{className:'a',title:r.app||''},APPS[r.app]||r.app||''),
-              h('span',{className:'d'},r.text||''));
-          }):h('div',{className:'bl-empty'},'Nothing has auto-updated yet.')));
-    }
-
-    /* Suite status panel: every channel, who produces it, whether this browser
-       is following it, and how fresh the payload is — plus the change log.
-       Props: app, order (channel ids), onToggle(ch,on), title, log:false. */
-    function SuitePanel(p){
-      p=p||{};
-      var order=p.order||PANEL_ORDER;
-      return h('div',{className:'bl-panel'},
-        h('div',{className:'bl-ph'},
-          h('span',{className:'xlk'},'⇄'),
-          h('span',null,p.title||'Suite sync'),
-          h('span',{style:{flex:'1 1 auto'}}),
-          h('span',{style:{fontWeight:500,color:'#c2410c'}},
-            order.filter(isLocked).length+' of '+order.length+' locked')),
-        order.map(function(ch){
-          var c=CHANNELS[ch]||{label:ch,producer:'',short:ch};
-          var on=isLocked(ch), pa=producedAt(ch), any=hasData(ch);
-          return h('div',{className:'bl-ch'+(on?' on':''),key:ch},
-            h('span',{className:'n'},c.label),
-            h('span',{className:'p',title:c.fields},
-              any?('from '+(c.producer==='*'?'the suite':c.producer)):'not published yet'),
-            h('span',{className:'w'},pa?ago(pa):''),
-            h(LockBtn,{ch:ch,compact:true,always:true,
-              onClick:function(st,locked){ if(p.onToggle) p.onToggle(ch,!locked); else if(locked) unlock(ch,p.app); else if(any) lock(ch,p.app); }}));
-        }),
-        p.log===false?null:h(SyncLog,{limit:p.limit||40,title:'Recent auto-updates'}));
-    }
-
-    /* Hook: re-render on any lock change or log append. */
-    function useLocks(){
-      var st=React.useState(0), n=st[0], set=st[1];
-      React.useEffect(function(){
-        var a=onChange(function(){ set(function(v){return v+1;}); });
-        var b=onLog(function(){ set(function(v){return v+1;}); });
-        return function(){ a(); b(); };
-      },[]);
-      return n;
-    }
-
-    return {LockBtn:LockBtn, LockToggle:LockToggle, DrivenStrip:DrivenStrip,
-            SyncLog:SyncLog, SuitePanel:SuitePanel, useLocks:useLocks};
-  }
-
-  /* ---------- vanilla-DOM lock control ----------
-     For the apps that are not React (LL & DL Distribution). Give it an existing
-     <button> and it keeps that button's class, label and tooltip in sync with
-     the channel's state; returns a detach function.
-       el       the button element
-       ch       channel id
-       app      this app's id
-       labels   {none,avail,live,warn} text overrides (optional)
-       onClick  fn(state, locked) — your own handler
-       onToggle fn(nextLocked) — called when the padlock half is clicked */
-  function bindBtn(o){
-    var el=o.el; if(!el) return function(){};
-    var c=CHANNELS[o.ch]||{label:o.ch,short:o.ch,fields:'',producer:''};
-    var lab=o.labels||{};
-    function paint(){
-      var locked=isLocked(o.ch), s=o.stateFn?o.stateFn():state(o.ch,o.adopted&&o.adopted());
-      el.className=(o.baseClass||'xlink')+' '+s;
-      var when=ago(producedAt(o.ch));
-      el.title=(s==='live')
-        ? ('LOCKED — '+c.fields+' publish automatically to the other apps. Click to unlock.')
-        : (s==='avail')
-          ? (c.label+' ready to send'+(when?' (updated '+when+')':'')+' — '+c.fields)
-          : (s==='warn') ? 'Locked, but the last publish failed a check.'
-          : (lab.noneTip||('No '+c.label.toLowerCase()+' to send yet.'));
-      var t=(s==='live')?(lab.live||('🔒 Auto-sending '+c.short)):
-            (s==='avail')?(lab.avail||('Send '+c.short)):
-            (s==='warn')?(lab.warn||('⚠ '+c.short)):(lab.none||('Send '+c.short));
-      el.textContent=t;
-    }
-    function click(e){
-      e&&e.preventDefault&&e.preventDefault();
-      if(o.onClick) o.onClick(state(o.ch,o.adopted&&o.adopted()),isLocked(o.ch));
-    }
-    el.addEventListener('click',click);
-    var off=onChange(paint);
-    paint();
-    el._blPaint=paint;
-    return function(){ el.removeEventListener('click',click); off(); };
-  }
-
-  /* Create a standalone padlock toggle next to an existing button. */
-  function makeToggle(o){
-    var b=document.createElement('button');
-    b.type='button';
-    var c=CHANNELS[o.ch]||{label:o.ch,short:o.ch,fields:'',producer:''};
-    function paint(){
-      var locked=isLocked(o.ch);
-      b.className='xlink '+(locked?'live':'');
-      b.textContent=(locked?'🔒 Locked':'🔓 Lock');
-      b.title=locked
-        ? ('Auto-sync is ON for '+c.label.toLowerCase()+'. Every recalculation publishes automatically and the consuming apps adopt it. Click to unlock.')
-        : ('Lock '+c.label.toLowerCase()+': every recalculation publishes automatically and the other apps follow it. '+c.fields);
-    }
-    b.addEventListener('click',function(e){
-      e.preventDefault();
-      var next=!isLocked(o.ch);
-      setLock(o.ch,next,o.app||'');
-      if(o.onToggle) o.onToggle(next);
-    });
-    onChange(paint); paint();
-    return b;
-  }
-
-  /* ---------- vanilla suite status panel ----------
-     The React apps get BridgeLocks.ui(React).SuitePanel; the LL & DL app is
-     plain DOM, so it gets this. Same markup and classes, so the two look
-     identical side by side. Re-renders on any lock change or log append.
-       o.el     container element (or its id)
-       o.app    this app's id
-       o.order  channel ids to show (defaults to PANEL_ORDER)
-       o.title  header text
-       o.log    false to omit the change log
-       o.limit  max log rows
-       o.onToggle fn(ch, nextLocked) — override the default lock/unlock
-     Returns an unmount function. */
-  function mountPanel(o){
-    o=o||{};
-    var el=(typeof o.el==='string')?document.getElementById(o.el):o.el;
-    if(!el) return function(){};
-    var order=o.order||PANEL_ORDER;
-    function mk(tag,cls,txt){
-      var e=document.createElement(tag);
-      if(cls) e.className=cls;
-      if(txt!=null) e.textContent=txt;
-      return e;
-    }
-    function render(){
-      el.innerHTML='';
-      var root=mk('div','bl-panel');
-
-      var hd=mk('div','bl-ph');
-      hd.appendChild(mk('span','xlk','⇄'));
-      hd.appendChild(mk('span',null,o.title||'Suite sync'));
-      var sp=mk('span'); sp.style.flex='1 1 auto'; hd.appendChild(sp);
-      var cnt=mk('span',null,order.filter(isLocked).length+' of '+order.length+' locked');
-      cnt.style.fontWeight='500'; cnt.style.color='#c2410c';
-      hd.appendChild(cnt);
-      root.appendChild(hd);
-
-      order.forEach(function(ch){
-        var c=CHANNELS[ch]||{label:ch,producer:'',short:ch,fields:''};
-        var on=isLocked(ch), pa=producedAt(ch), any=hasData(ch);
-        var row=mk('div','bl-ch'+(on?' on':''));
-        row.appendChild(mk('span','n',c.label));
-        var p=mk('span','p',any?('from '+(c.producer==='*'?'the suite':c.producer)):'not published yet');
-        p.title=c.fields||'';
-        row.appendChild(p);
-        row.appendChild(mk('span','w',pa?ago(pa):''));
-
-        var s=state(ch);
-        var b=mk('button','xlink '+s);
-        b.type='button';
-        b.disabled=(s==='none'&&!on);
-        b.title=on
-          ? ('LOCKED — '+c.fields+' update automatically across the suite. Click to unlock.')
-          : (any?('Lock '+c.label.toLowerCase()+' so every app follows it automatically — '+c.fields)
-                :('No '+c.label.toLowerCase()+' published yet.'));
-        b.appendChild(mk('span','xdot'));
-        if(on) b.appendChild(mk('span','xlk','🔒'));
-        b.addEventListener('click',function(e){
-          e.preventDefault();
-          if(o.onToggle) return o.onToggle(ch,!on);
-          if(on) unlock(ch,o.app); else if(any) lock(ch,o.app);
-        });
-        row.appendChild(b);
-        root.appendChild(row);
-      });
-
-      if(o.log!==false){
-        var rows=logs().slice(0,o.limit||40);
-        var lg=mk('div','bl-log');
-        var lh=mk('div','bl-log-h');
-        lh.appendChild(mk('span','xlk','🕒'));
-        lh.appendChild(mk('span',null,'Recent auto-updates'));
-        var sp2=mk('span'); sp2.style.flex='1 1 auto'; lh.appendChild(sp2);
-        if(rows.length){
-          var cl=mk('button','xlink','Clear'); cl.type='button';
-          cl.addEventListener('click',function(e){ e.preventDefault(); clearLogs(); });
-          lh.appendChild(cl);
-        }
-        lg.appendChild(lh);
-        var lb=mk('div','bl-log-b');
-        if(rows.length){
-          rows.forEach(function(r){
-            var rw=mk('div','bl-row');
-            rw.appendChild(mk('span','t',(r.at||'').slice(11,16)));
-            rw.appendChild(mk('span','c',(CHANNELS[r.channel]&&CHANNELS[r.channel].short)||r.channel||'—'));
-            var a=mk('span','a',APPS[r.app]||r.app||''); a.title=r.app||'';
-            rw.appendChild(a);
-            rw.appendChild(mk('span','d',r.text||''));
-            lb.appendChild(rw);
-          });
-        } else {
-          lb.appendChild(mk('div','bl-empty','Nothing has auto-updated yet.'));
-        }
-        lg.appendChild(lb);
-        root.appendChild(lg);
-      }
-      el.appendChild(root);
-    }
-    var a=onChange(render), b2=onLog(render);
-    render();
-    el._blRender=render;
-    return function(){ a(); b2(); el.innerHTML=''; };
-  }
-
-  /* ---------- floating suite drawer ----------
-     One call per app, from any script type: BridgeLocks.drawer({app:'psbeam'}).
-     Puts a pill in the bottom-right corner showing how many channels this
-     browser is following, and slides the suite panel out when clicked. The
-     panel is cross-app by nature, so it deliberately does not live inside any
-     single app's card layout — and this keeps the mount identical in the React
-     apps and the plain-DOM one. Returns a remove function. */
-  function drawer(o){
-    o=o||{};
-    if(window.__blDrawer) return window.__blDrawer;
-    var fab=document.createElement('button');
-    fab.type='button'; fab.className='bl-fab';
-    var wrap=document.createElement('div');
-    wrap.className='bl-draw'; wrap.style.display='none';
-    var un=null, open=false;
-
-    function nLocked(){ return (o.order||PANEL_ORDER).filter(isLocked).length; }
-    function paintFab(){
-      var n=nLocked();
-      fab.className='bl-fab'+(n?' on':'');
-      fab.innerHTML='';
-      var i=document.createElement('span'); i.className='xlk'; i.textContent=n?'🔒':'⇄';
-      var t=document.createElement('span'); t.textContent='Suite sync';
-      var b=document.createElement('span'); b.className='b';
-      b.textContent=n?(n+' locked'):'off';
-      fab.appendChild(i); fab.appendChild(t); fab.appendChild(b);
-      fab.title=n
-        ? (n+' channel'+(n>1?'s are':' is')+' locked — those values update automatically across the suite. Click for detail.')
-        : 'Nothing is locked. Lock a channel to have every app follow it automatically.';
-    }
-    function setOpen(v){
-      open=v;
-      wrap.style.display=v?'block':'none';
-      if(v&&!un) un=mountPanel({el:wrap, app:o.app, order:o.order, title:o.title||'Suite sync', limit:o.limit});
-    }
-    fab.addEventListener('click',function(e){ e.preventDefault(); setOpen(!open); });
-    document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&open) setOpen(false); });
-    document.addEventListener('mousedown',function(e){
-      if(open&&!wrap.contains(e.target)&&!fab.contains(e.target)) setOpen(false);
-    });
-    var offC=onChange(paintFab);
-    paintFab();
-    function attach(){
-      var b=document.body; if(!b) return setTimeout(attach,50);
-      b.appendChild(wrap); b.appendChild(fab);
-    }
-    attach();
-    var api={open:function(){ setOpen(true); }, close:function(){ setOpen(false); },
-      remove:function(){ offC(); if(un) un(); if(fab.parentNode) fab.parentNode.removeChild(fab);
-        if(wrap.parentNode) wrap.parentNode.removeChild(wrap); window.__blDrawer=null; }};
-    window.__blDrawer=api;
-    return api;
-  }
-
-  /* ---------- one-call adopt helper ----------
-     Wraps the whole locked-adopt cycle: compare, apply, log, toast.
-       o.app      this app's id
-       o.channel  channel id
-       o.before   flat object of current values
-       o.after    flat object of incoming values
-       o.labels   key -> human label
-       o.digits   key -> decimals
-       o.source   text describing where the values came from
-       o.apply    fn(after) — actually writes them into the app's state
-     Returns the delta list (empty when nothing changed, in which case no
-     toast is raised and nothing is applied). */
-  function adopt(o){
-    var ds=deltas(o.before,o.after,o.labels,o.digits);
-    if(!ds.length) return ds;
-    try{ o.apply&&o.apply(o.after,ds); }catch(e){ return []; }
-    var txt=deltaText(ds);
-    log({channel:o.channel, app:o.app, source:o.source||'', text:txt});
-    var c=CHANNELS[o.channel]||{label:o.channel};
-    toast(c.label+' updated'+(o.source?(' — '+o.source):''), txt);
-    return ds;
-  }
-
-  window.BridgeLocks={
-    NS:NS, VERSION:VER, K_LOCK:K_LOCK, K_LOG:K_LOG, CHANNELS:CHANNELS,
-    APPS:APPS, PANEL_ORDER:PANEL_ORDER, mountPanel:mountPanel, drawer:drawer, ok:lsOK,
-    all:all, isLocked:isLocked, lockInfo:lockInfo, lock:lock, unlock:unlock, toggle:toggle, drives:drives,
-    saveSnap:saveSnap, peekSnap:peekSnap, takeSnap:takeSnap,
-    logs:logs, log:log, clearLogs:clearLogs,
-    deltas:deltas, deltaText:deltaText, adopt:adopt, bindBtn:bindBtn, makeToggle:makeToggle,
-    payload:payload, producedAt:producedAt, hasData:hasData, ago:ago, state:state,
-    toast:toast, onChange:onChange, onLog:onLog, ui:ui };
+  try{ register(); }catch(e){}
 })();
 </script>
 
@@ -1872,101 +539,9 @@ try{ window.BridgeApps.boot('stgirder'); }catch(e){}
   function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
   window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
 })();
-/* Shared project info (HANDOFF.md §4.1): glue for the "Use shared project info" and
-   "Share project info" buttons. Uses BridgeXfer above. Duplicated per tool (CLAUDE.md §3).
-   share(own): own = {sharedKey: value} for the fields this tool has; the rest are sent as ''.
-   use(cur, apply): cur = {sharedKey: current value} for the fields this tool has. Shows what
-   will be overwritten, then calls apply(upd) with only the non-empty shared values that differ. */
-(function(){
-  if(window.BXProject) return;
-  var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
-  var LABELS={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
-              preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
-  function str(v){ return v==null?'':String(v); }
-  function share(own){
-    if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return null; }
-    var f={}; KEYS.forEach(function(k){ f[k]=str(own&&own[k]); });
-    var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f});
-    if(r.error) alert('Could not share project info: '+r.error);
-    else alert('Project info shared. Other tools can load it with "Use shared project info".');
-    return r;
-  }
-  function use(cur, apply){
-    if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return false; }
-    var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
-    if(r.error){ alert('No shared project info: '+r.error); return false; }
-    var f=r.payload.fields||{}, upd={}, lines=[], n=0;
-    Object.keys(cur||{}).forEach(function(k){
-      var v=str(f[k]); if(!v.trim()) return;          // never blank a field from an empty shared value
-      var c=str(cur[k]); if(v===c) return;
-      upd[k]=v; n++;
-      lines.push('  '+(LABELS[k]||k)+': "'+(c||'(blank)')+'" → "'+v+'"');
-    });
-    var src=BridgeXfer.describe(r.payload);
-    if(!n){ alert('Shared project info ('+src+') already matches this tool. Nothing to change.'); return false; }
-    if(!confirm('Use shared project info?\nFrom: '+src+'\n\nThis will overwrite:\n'+lines.join('\n'))) return false;
-    apply(upd);
-    return true;
-  }
-  window.BXProject={ KEYS:KEYS, share:share, use:use };
-})();
-</script>
-<script>
-/* superReactions sender glue (HANDOFF.md §4.4): "Send reactions to Substructure Loading" and
-   "Export hand-off (JSON)". Uses BridgeXfer above. Duplicated verbatim in psbeam.html and
-   stgirder.html (CLAUDE.md §3). build() returns {payload} or {error}; it runs on click only.
-   The payload goes to bridgeSuite.v1.superReactions, and a copy to
-   bridgeSuite.v1.superReactions.by.<id>, so Substructure Loading can choose when both girder
-   apps have sent. */
-(function(){
-  if(window.BXSuperRx) return;
-  function f2(v){ return (+v).toFixed(2); }
-  function summary(p){
-    var L=[];
-    (p.supports||[]).forEach(function(s){ (s.girders||[]).forEach(function(g){
-      L.push('  '+s.id+' (x = '+f2(s.x)+' ft), '+g.label+': DC1 '+f2(g.DC1)+', DC2 '+f2(g.DC2)+', DW '+f2(g.DW)+' kip'); }); });
-    if(p.liveLoad&&p.liveLoad.supports) L.push('  Live load per lane, no IM, no DF (information only): '
-      +p.liveLoad.supports.map(function(s){ return s.id+' '+f2(s.Rmax)+' kip'; }).join(', '));
-    return L.join('\n');
-  }
-  function stamp(payload, producer, file){
-    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
-    p.schemaVersion=p.schemaVersion||1; p.producer=p.producer||producer; p.producerFile=p.producerFile||file;
-    p.producedAt=new Date().toISOString();
-    if(!p.project) p.project=BridgeXfer.sharedProject()||{ name:'', bridgeId:'' };
-    if(!p.notes) p.notes=[];
-    return p;
-  }
-  function built(build){
-    if(!window.BridgeXfer){ alert('The hand-off helper is not available in this browser.'); return null; }
-    var b=null; try{ b=build(); }catch(e){ b={ error:e.message||String(e) }; }
-    if(!b||b.error||!b.payload){ alert('Cannot build the reactions hand-off: '+((b&&b.error)||'no results')+'.'); return null; }
-    return b.payload;
-  }
-  function send(build, producer, file, id){
-    var payload=built(build); if(!payload) return null;
-    var r=BridgeXfer.publish('superReactions', payload, producer, file);
-    if(r.error){ alert('Could not send the reactions: '+r.error); return r; }
-    try{ localStorage.setItem(BridgeXfer.NS+'superReactions.by.'+id, JSON.stringify(r.payload)); }catch(e){}
-    alert('Reactions sent to Substructure Loading (unfactored, kip, one girder line):\n\n'+summary(r.payload)
-      +'\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / ST-Girder".');
-    return r;
-  }
-  function exportJSON(build, producer, file){
-    var payload=built(build); if(!payload) return null;
-    var p=stamp(payload, producer, file), r=BridgeXfer.exportFile('superReactions', p);
-    if(r.error) alert('Could not export: '+r.error);
-    return p;
-  }
-  window.BXSuperRx={ send:send, exportJSON:exportJSON, summary:summary, stamp:stamp };
-})();
 </script>
 <script type="text/babel" data-presets="env,react">
 const {useState,useMemo,useEffect,useRef} = React;
-/* Shared cross-app channel locks (see the BridgeLocks block above). */
-const BL=window.BridgeLocks||null;
-const BLU=(BL&&BL.ui&&BL.ui(React))||{};
-const LOCK_APP='stgirder';
 
 /* ============================================================================
    ST-GIRDER  ·  AASHTO LRFD Steel Plate Girder Design
@@ -1976,17 +551,6 @@ const LOCK_APP='stgirder';
 
 const fmt=(v,d=2)=>!isFinite(v)?'—':v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-// Navigate between suite apps. When embedded inside the MCT window, ask the parent to switch
-// which app is shown (stay in one window); when standalone, open/return normally.
-function bridgeNav(app){
-  try{ if(window.self!==window.top){ window.parent.postMessage({source:'bridge-suite',embed:app||null},'*'); return; } }catch(e){}
-  // Standalone: go to the file where that app was last seen, not to a guessed
-  // name -- these links break the moment a file is called anything else.
-  var A=window.BridgeApps;
-  var file=A?A.href(app||'mct'):(app?(app==='lldf'?'lldf.html':app+'.html'):'index.html');
-  var url=encodeURI(file);
-  if(!app){ window.location.href=url; } else { window.open(url,'_blank'); }
-}
 const sqrt=Math.sqrt;
 const Ec=(fc,wc)=>120000*wc*wc*Math.pow(fc,0.33);   // LRFD 5.4.2.4 (ksi; wc in kcf, f'c in ksi)
 
@@ -2020,7 +584,7 @@ const DEFAULTS = {
         xnegAuto:true, xneg:0},      // −M design section from girder CL (in); auto per 4.6.2.1.6
   geom:{L:120, S:9.0, nGirders:5, Lb:20, shored:false},
   loads:{wDCextra:0.015, wBar:0.30, wDW:0.25, wConstr:0.010, diaph:[],
-         pos:'interior', posAuto:true, de:2.5, skew:0, NL:2, fatM:0, fatV:0,   // posAuto: follow the shared design beam; fatV = single-lane fatigue SHEAR DF override (0 = auto)
+         pos:'interior', posAuto:true, de:2.5, skew:0, NL:2, fatM:0, fatV:0,   // posAuto: not used since 2026-10-19 (the shared design beam was removed; the position is set here); fatV = single-lane fatigue SHEAR DF override (0 = auto)
          llAuto:true, MLL:0, VLL:0, dfAuto:true, dfm:0, dfv:0,
          extDFpos:1.0, extDFneg:1.0, extDFv:1.0, extLLmpf:1.0},  // fatM = single-lane fatigue DF override (0 = auto); applied to imported LL (impact already in envelope)
   stiff:{transverse:true, doSpc:60, bt:6, tp:0.5, bearB:7, bearT:0.75, bearN:2, Fys:50},   // Fys = stiffener yield (ksi)
@@ -2926,52 +1490,6 @@ function deckDesign(inp,F){
 }
 
 /* ================= MASTER COMPUTE ================= */
-/* ===== superReactions hand-off (HANDOFF.md §4.4) =====
-   UNFACTORED end reactions of this one girder line, per load type, for Bridge Substructure
-   Loading. Reads the load terms computeAll() already produced (R.loads = loadsCalc(), and R.ext
-   for an active MIDAS import, with the same DC1 rule as the station loop). Changes no result. */
-function bxSuperRxPayload(inp,R){
-  if(!R||!R.ok) return {error:'the design has an input error'+(R&&R.error?' ('+R.error+')':'')};
-  const L=+inp.geom.L, Ld=R.loads; if(!(L>0)) return {error:'the span length is not positive'};
-  const half=w=>(+w)*L/2;                                                 // simple span: R = wL/2 at each end
-  const dph=inp.loads.diaph||[];                                          // same list as diaM()/diaV() in computeAll
-  const diaL=dph.reduce((s,d)=>s+(+d.P||0)*(L-(+d.a||0))/L,0), diaR=dph.reduce((s,d)=>s+(+d.P||0)*(+d.a||0)/L,0);
-  // DC1 here = loadsCalc's wDC1 (steel self-weight + deck/haunch + extra DC) + diaphragm point loads
-  let dc1=[half(Ld.wDC1)+diaL, half(Ld.wDC1)+diaR];
-  let dc2=[half(Ld.wDC2),half(Ld.wDC2)], dw=[half(Ld.wDW),half(Ld.wDW)];
-  let ids=['Support 1','Support 2'], xs=[0,L], span={index:null,length:+L.toFixed(3)}, live=null;
-  const pos=inp.loads.pos==='exterior'?'exterior':'interior';
-  const BB=window.BridgeBeam, db=(BB&&inp.loads.posAuto!==false)?BB.get():null;
-  const label=(db&&db.label)?db.label:(String((inp.proj&&inp.proj.girderId)||'').trim()||(pos==='exterior'?'Exterior girder':'Interior girder'));
-  const notes=['Single girder line: '+label+' ('+pos+') designed in ST-Girder. The values are for this one girder; Substructure Loading decides which girders they apply to.',
-    'Unfactored. DC1 = steel self-weight '+Ld.wsw.toFixed(3)+' klf + deck/haunch '+Ld.wdk.toFixed(3)+' klf + other DC '+(+inp.loads.wDCextra||0).toFixed(3)+' klf'+(dph.length?' + '+dph.length+' diaphragm point load(s)':'')+', all on the non-composite girder. DC2 = barrier / SIDL. DW = wearing surface.'];
-  if(R.useExt&&R.ext){
-    const e=R.ext, sL=e.spanLen, sel=e.sel||{}, i=Math.max(1,+sel.idx||1), x0=+sel.x0||0;
-    const swc=R.swCont;                                                   // SW-CONT: continuous self-weight → this span's end shears
-    if(e.hasDC1) dc1=[e.V_DC1(0)+(e.swExcl?(swc?swc.Rspan[0]:half(Ld.wsw)):0), -e.V_DC1(L)+(e.swExcl?(swc?swc.Rspan[1]:half(Ld.wsw)):0)];
-    dc2=[e.V_DC2(0),-e.V_DC2(L)]; dw=[e.V_DW(0),-e.V_DW(L)];             // V_ already sign-flipped to + up at the left end
-    ids=['Support '+i,'Support '+(i+1)]; xs=[x0,x0+sL]; span={index:i,length:+sL.toFixed(3)};
-    notes.push('MIDAS import active (span '+i+'): '+(e.hasDC1?'DC1, ':'')+'DC2 and DW are the imported shears at the two ends of this span, sign-corrected to reactions (+ up)'+(e.hasDC1&&e.swExcl?', with the steel self-weight added by ST-Girder'+(swc?' ('+swContLabel(swc)+')':''):'')+'. At an interior pier they are this span\'s share only; add the share of the adjacent span.'+(e.hasDC1?'':' DC1 is computed by ST-Girder on the simple span (L = '+L.toFixed(2)+' ft).'));
-  } else {
-    notes.push('Simple span L = '+L.toFixed(2)+' ft: R = wL/2 for each uniform load; diaphragm point loads by statics.');
-    const hl=R.hl;
-    if(hl&&isFinite(hl.Vtr)&&isFinite(hl.Vtd)&&isFinite(hl.Vln)){
-      const Rmax=Math.max(hl.Vtr,hl.Vtd)+hl.Vln;
-      live={basis:'per lane, no IM, no DF',vehicle:'HL-93: max(design truck, design tandem) + lane load, simple span',
-        supports:ids.map(id=>({id,Rmax:+Rmax.toFixed(3),Rmin:0}))};
-      notes.push('Live load is information only: one lane on the simple span, no IM, no DF, no multiple presence.');
-    }
-  }
-  const r3=v=>+(+v).toFixed(3);
-  return {payload:{_schema:'bridge-super-reactions',schemaVersion:1,
-    project:(window.BridgeXfer&&BridgeXfer.sharedProject())||{name:(inp.proj&&inp.proj.name)||'',bridgeId:''},
-    units:{force:'kip',length:'ft'},factored:false,imIncluded:false,dfIncluded:false,perGirder:true,
-    girderLine:{label,position:pos,beamIndex:db?db.index:null,source:R.useExt?'MIDAS import (ST-Girder)':'ST-Girder simple span'},
-    span,
-    supports:ids.map((id,k)=>({id,x:r3(xs[k]),girders:[{label,position:pos,DC1:r3(dc1[k]),DC2:r3(dc2[k]),DW:r3(dw[k])}]})),
-    liveLoad:live,notes}};
-}
-
 function computeAll(inp){
   inp=gdOverlay(inp);   // GDX (2026-10-19): GirderDetail's transferred inputs (same object, unchanged, without them)
   try{
@@ -3724,7 +2242,7 @@ function computeAll(inp){
     if(warnings.fl.length) warnings.fl.push('The app assumes a straight girder; a horizontally curved girder needs f\u2113 from curvature (4.6.1.2.4) and is outside its scope.');
     // STG-O8: the imported envelopes carry no fatigue demands -- unless they do (GirderDetail export, HANDOFF.md §4.9).
     if(useExt&&fatImp) warnings.fat.push('Fatigue from the imported fatigue envelopes ('+((inp.external&&inp.external.producer)||'import')+': fatigue truck, IM and single-lane fatigue distribution factors included): bottom-flange stress range = (M_FAT+ \u2212 M_FAT\u2212)/S_b on the short-term composite section for both signs (6.6.1.2.1; requires shear connectors throughout and the 6.10.1.7 deck reinforcement)'+(fatImpV?', web special fatigue and stud fatigue pitch from the imported fatigue shears':'; no fatigue shears imported, so the web special fatigue and stud pitch still use the fatigue truck on a simple span of L = '+fmt(Lft,1)+' ft')+'. The top flange and its attachments and the deck reinforcement at interior piers are not checked here.');
-    else if(useExt) warnings.fat.push('Imported MIDAS demands: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
+    else if(useExt) warnings.fat.push('Imported demands without fatigue envelopes: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
 
     return {ok:true, sec, matR, deck, deckIn:deck0, lf:{...OWN,...LFc,plOn}, geom, beff, n, nRaw, EcDeck,
       bare, cN, c3N, pl, compact, compactWeb, compactMat, compactDtw, lambdaPw,
@@ -3939,143 +2457,7 @@ function Elevation({R}){
   </div>);
 }
 
-/* Shows whether the INTERIOR/EXTERIOR position is being driven by the shared design
-   beam or has been overridden by hand here. Clicking the override tag hands control
-   back to the design beam. */
-function PosTag({inp,set}){
-  const {sel}=useDesignBeam();
-  if(!sel||!sel.type) return null;
-  const want=(sel.type==='ext')?'exterior':'interior';
-  if(inp.loads.posAuto!==false)
-    return <span style={{fontSize:10.5,fontFamily:'var(--mono)',color:'var(--ink2)',whiteSpace:'nowrap'}}
-      title={'Following the shared design beam '+sel.label+(sel.clsLabel?' — '+sel.clsLabel:'')+'.'}>↳ {sel.label}</span>;
-  return <span style={{fontSize:10.5,fontFamily:'var(--mono)',color:'#B45309',whiteSpace:'nowrap',cursor:'pointer',textDecoration:'underline dotted'}}
-    title={'Overridden here. The shared design beam '+sel.label+(sel.clsLabel?' ('+sel.clsLabel+')':'')+' is an '+want+' girder — click to follow it again.'}
-    onClick={()=>set({...inp,loads:{...inp.loads,pos:want,posAuto:true}})}>⚑ overridden · follow {sel.label}</span>;
-}
-
 /* ================= TABS ================= */
-/* ===== Shared-channel resolvers, hoisted to module scope =====
-   These used to live inside InputsTab. React unmounts InputsTab the moment you
-   switch to any other tab, which took the locked-channel auto-sync effects down
-   with it: a lock looked "live" but quietly stopped following its publisher
-   until you navigated back to Inputs. The resolve/apply logic now sits here so
-   one implementation serves both the Inputs-tab UI and the always-mounted
-   <LockAutoSync/> at the app root. */
-function extActiveOf(inp){ const e=inp&&inp.external;
-  return !!(e&&(e._schema==='psbeam-external-demands'||e._schema==='stgirder-external-demands'||e._schema==='steelbeam-external-demands')); }
-function lldfResolveFor(inp){
-  const loads=inp.loads;
-    let raw=null; try{raw=localStorage.getItem('bridgeSuite.v1.lldf');}catch(e){}
-    if(!raw) return {why:'No distribution-factor results found.\n\nOpen the LL & DL Distribution app, compute the factors, and click "Send DFs to Design Apps" — then pull here.'};
-    let d; try{ d=JSON.parse(raw); }catch(e){ return {why:'Could not read LLDF data: '+(e&&e.message||e)}; }
-    if((d.schemaVersion||1)>1) return {why:'LL & DL Distribution data is v'+d.schemaVersion+'; this app supports v1. Update ST-Girder.'};
-    // CIP slab (lldf perFootStrip): factors per 1-ft strip of slab width, not per girder. Refused (HANDOFF.md §4.3).
-    if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. ST-Girder needs girder factors, so nothing was applied.\n\nRecompute in LL & DL Distribution with the girder cross-section type, then send again.'};
-    // Prefer the specific beam selected in the shared design-beam channel: its own DFs,
-    // not the interior/exterior envelope. Fall back to the envelope when no beam is
-    // selected, or when the published results predate the per-beam breakdown.
-    const want=(loads.pos==='exterior')?'exterior':'interior';
-    const BB=window.BridgeBeam, dbeam=BB?BB.get():null;
-    const bkey=dbeam?String(dbeam.index):null;
-    const byB=d.governing&&d.governing.byBeam, byBn=d.governingNeg&&d.governingNeg.byBeam;
-    const perBeam=!!(bkey&&byB&&byB[bkey]&&byB[bkey].gM!=null);
-    const src=perBeam?(dbeam.label+' — '+(dbeam.clsLabel||want)):('governing '+want+' girder');
-    const gov=perBeam?byB[bkey]:(d.governing&&d.governing[want]);
-    if(!gov||gov.gM==null) return {why:'The published LLDF results have no '+want+'-girder values.'};
-    const govN=perBeam?(byBn&&byBn[bkey]):(d.governingNeg&&d.governingNeg[want]);
-    const gMpos=+(+gov.gM).toFixed(4);
-    const gMneg=(govN&&govN.gM!=null)?+(+govN.gM).toFixed(4):gMpos;   // −M region DF (½-span L); falls back to +M
-    const gV=+(+gov.gV).toFixed(4);
-    const fatM=(gov.fatM!=null)?+(+gov.fatM).toFixed(4):0;            // single-lane fatigue DF (no MPF)
-    const fatV=(gov.fatV!=null)?+(+gov.fatV).toFixed(4):0;            // single-lane fatigue SHEAR DF (no MPF); 0 = not published
-    return {d,src,gMpos,gMneg,gV,fatM,fatV,hasNeg:!!govN,at:d.producedAt||'',project:d.project||''};
-}
-
-const LLDF_LABELS={extDFpos:'DF +M',extDFneg:'DF −M',extDFv:'DF V',extLLmpf:'MPF',fatM:'fatigue DF',fatV:'fatigue shear DF',dfm:'DFm',dfv:'DFv'};
-const LLDF_DIG={extDFpos:3,extDFneg:3,extDFv:3,extLLmpf:2,fatM:3,fatV:3,dfm:3,dfv:3};
-function lldfMineFor(inp){ const loads=inp.loads; return extActiveOf(inp)
-  ? {extDFpos:+loads.extDFpos, extDFneg:+loads.extDFneg, extDFv:+loads.extDFv, extLLmpf:+loads.extLLmpf, fatM:+loads.fatM, fatV:+loads.fatV||0}
-  : {dfm:+loads.dfm, dfv:+loads.dfv, fatM:+loads.fatM, fatV:+loads.fatV||0}; }
-function lldfTheirsFor(inp,r){ return extActiveOf(inp)
-  ? {extDFpos:r.gMpos, extDFneg:r.gMneg, extDFv:r.gV, extLLmpf:1.0, fatM:r.fatM, fatV:r.fatV||0}
-  : {dfm:r.gMpos, dfv:r.gV, fatM:r.fatM, fatV:r.fatV||0}; }
-function applyLLDFTo(set,inp,r){
-  const t=lldfTheirsFor(inp,r);
-  if(extActiveOf(inp)) set(p=>({...p, loads:{...p.loads, extDFpos:t.extDFpos, extDFneg:t.extDFneg, extDFv:t.extDFv, extLLmpf:t.extLLmpf, fatM:t.fatM, fatV:t.fatV}}));
-  else set(p=>({...p, loads:{...p.loads, llAuto:true, dfAuto:false, dfm:t.dfm, dfv:t.dfv, fatM:t.fatM, fatV:t.fatV}}));
-}
-function dlResolveFor(inp){
-    let raw=null; try{raw=localStorage.getItem('bridgeSuite.v1.dlLoads');}catch(e){}
-    if(!raw) return {why:'No dead-load distribution found.\n\nOpen the LL & DL Distribution app, run the dead-load distribution, and click "Send DL to MCT Loads" — then pull here.'};
-    let d; try{ d=JSON.parse(raw); }catch(e){ return {why:'Could not read dead-load data: '+(e&&e.message||e)}; }
-    if((d.schemaVersion||1)>1) return {why:'LL & DL dead-load data is v'+d.schemaVersion+'; this app supports v1. Update ST-Girder.'};
-    const by={}; (d.cases||[]).forEach(function(c){ by[c.key]=+c.udl||0; });
-    // publishDL drops zero cases, so an absent DC2/DW means "the LL & DL app has
-    // nothing for it" — which is NOT the same as "it is zero". Only the cases
-    // actually published are driven; anything missing stays under manual control
-    // rather than being silently zeroed out.
-    if(by.DC2==null&&by.DW==null) return {why:'The published dead-load cases contain no DC2 or DW.'};
-    const b=d.beam||{};
-    const src=b.label?(b.label+(b.clsLabel?(' — '+b.clsLabel):'')):'LL & DL Distribution';
-    return {d, src:src, hasBar:by.DC2!=null, hasDW:by.DW!=null,
-      wBar:+(+(by.DC2||0)).toFixed(4), wDW:+(+(by.DW||0)).toFixed(4),
-      dc1:+(+(by.DC1||0)).toFixed(4), pl:+(+(by.PL||0)).toFixed(4),
-      selfWt:+d.selfWt||0, trib:+b.trib||0, at:d.producedAt||'', project:d.project||''};
-}
-
-const DL_LABELS={wBar:'DC2 barrier / SIDL',wDW:'DW wearing surface'};
-const DL_DIG={wBar:3,wDW:3};
-function dlMineFor(inp){ return {wBar:+inp.loads.wBar, wDW:+inp.loads.wDW}; }
-function dlTheirsFor(r){ const o={}; if(r.hasBar) o.wBar=r.wBar; if(r.hasDW) o.wDW=r.wDW; return o; }
-function applyDLTo(set,r){ set(p=>({...p, loads:{...p.loads, ...dlTheirsFor(r)}})); }
-
-/* Signatures of the last publish each channel adopted. Module scope rather than a
-   ref, so the Inputs tab can clear one on unlock without owning the sync itself. */
-const LOCK_SIG={lldf:'',dlLoads:''};
-
-/* Always-mounted auto-sync for every value-carrying lock this app holds.
-   Rendered at the app root, so a locked channel keeps adopting each republish
-   no matter which tab is on screen. Renders nothing. */
-function LockAutoSync({inp,set}){
-  const ref=useRef(null);
-  ref.current=()=>{
-    if(!BL) return;
-    if(BL.isLocked('lldf')){
-      const r=lldfResolveFor(inp);
-      if(!r.why){
-        const after=lldfTheirsFor(inp,r);
-        const sig=(r.at||'')+'|'+r.src+'|'+JSON.stringify(after);
-        if(LOCK_SIG.lldf!==sig){ LOCK_SIG.lldf=sig;
-          BL.adopt({app:LOCK_APP, channel:'lldf', before:lldfMineFor(inp), after:after,
-            labels:LLDF_LABELS, digits:LLDF_DIG, source:r.src, apply:()=>applyLLDFTo(set,inp,r)}); }
-      }
-    }
-    if(BL.isLocked('dlLoads')){
-      const r=dlResolveFor(inp);
-      if(!r.why){
-        const after=dlTheirsFor(r);
-        const sig=(r.at||'')+'|'+r.src+'|'+JSON.stringify(after);
-        if(LOCK_SIG.dlLoads!==sig){ LOCK_SIG.dlLoads=sig;
-          BL.adopt({app:LOCK_APP, channel:'dlLoads', before:dlMineFor(inp), after:after,
-            labels:DL_LABELS, digits:DL_DIG, source:r.src, apply:()=>applyDLTo(set,r)}); }
-      }
-    }
-  };
-  useEffect(()=>{
-    if(!BL) return;
-    const run=()=>{ if(ref.current) ref.current(); };
-    run();
-    const off=BL.onChange(run);
-    const onS=(e)=>{ if(!e.key||e.key==='bridgeSuite.v1.lldf'||e.key==='bridgeSuite.v1.dlLoads'||e.key==='bridgeSuite.v1.designBeam') run(); };
-    window.addEventListener('storage',onS);
-    return ()=>{ off(); window.removeEventListener('storage',onS); };
-  },[]);
-  // Interior/exterior and the imported-envelope mode change WHICH published DF applies.
-  useEffect(()=>{ if(ref.current) ref.current(); },[inp.loads.pos, extActiveOf(inp)]);
-  return null;
-}
-
 /* ---------- Inputs page sub-tabs (UI only) ----------
    Every input card is still rendered exactly as before; the cards of the
    inactive sub-tabs are only hidden with the `hidden` attribute, so nothing
@@ -4148,181 +2530,6 @@ function InputsTab({inp,set,R}){
   // GDX (2026-10-19): inputs transferred from GirderDetail (locked) or pulled from it (highlighted); nothing without GirderDetail demands carrying loads
   const gX=extActive?gdXfer(extRaw):null, gPu=gX?gdPulled(extRaw,inp):{}, G=path=>gdFieldOf(inp,gX,gPu,path), inpE=gdOverlay(inp);
   const gdPanes={}; if(gX){ Object.keys(gX.set).forEach(k=>{ gdPanes[GD_PANE_OF[k.split('.')[0]]]=1; }); Object.keys(gPu).forEach(k=>{ if(G(k)) gdPanes[GD_PANE_OF[k.split('.')[0]]]=1; }); }
-  // ── LL & DL Distribution app two-way link (shared storage; see lldf.html) ──
-  // Resolve whatever the LL & DL app last published down to the numbers this app
-  // actually applies. Returns {why:'...'} when there is nothing usable, so the
-  // manual pull and the locked auto-sync share one code path.
-  const lldfResolve=()=>lldfResolveFor(inp);
-  // The fields the LLDF lock takes over, in this app's own terms. Two shapes,
-  // because an imported-envelope run applies the factors to that envelope
-  // instead of to the built-in HL-93 analysis.
-  const lldfMine=()=>lldfMineFor(inp);
-  const lldfTheirs=(r)=>lldfTheirsFor(inp,r);
-  const applyLLDF=(r)=>applyLLDFTo(set,inp,r);
-  const pullLLDF=()=>{
-    const r=lldfResolve();
-    if(r.why){ alert(r.why); return; }
-    const when=(r.at||'').slice(0,16).replace('T',' ');
-    const msg='Pull from LL & DL Distribution ('+when+')\nProject: '+(r.project||'—')+' · '+r.src+'\n\n'
-      +'  g_M +M (moment DF)   = '+r.gMpos.toFixed(3)+'\n'
-      +'  g_M −M (pier region) = '+r.gMneg.toFixed(3)+(r.hasNeg?'':'  (no continuity region → = +M)')+'\n'
-      +'  g_V (shear DF)       = '+r.gV.toFixed(3)+'\n'
-      +(r.fatM>0?'  fatigue DF (1 lane)  = '+r.fatM.toFixed(3)+'\n':'')
-      +(r.fatV>0?'  fatigue shear DF (1 lane) = '+r.fatV.toFixed(3)+'\n':'')+'\n'
-      +(extActive
-        ?'Applies to the imported-LL DF fields: +M DF = g_M(+M), −M DF = g_M(−M), shear DF = g_V, multiple presence = 1.0 (already in the factors)'+(r.fatM>0?', fatigue DF = single-lane value.':'.')
-        :'Applies as manual distribution factors (DF auto off): DFm = g_M(+M), DFv = g_V'+(r.fatM>0?', fatigue DF = single-lane value.':'.'))
-      +'\n\nApply?';
-    if(!window.confirm(msg)) return;
-    applyLLDF(r);
-  };
-  /* ---- LLDF channel lock ----
-     Locked = this app follows the LL & DL app. Every republish is adopted the
-     moment it lands, the DF fields go read-only, and each change is logged and
-     toasted. Unlocking offers back the values held at the moment of locking. */
-  const lockTick=BLU.useLocks?BLU.useLocks():0;
-  const lldfLocked=!!(BL&&BL.isLocked('lldf'));
-  const lldfSrc=lldfLocked?(lldfResolve().src||'LL & DL Distribution'):'';
-  // The auto-sync itself lives in <LockAutoSync/> at the app root — see the note
-  // there. This tab only owns the lock toggle, the manual pull, and the display.
-  const toggleLLDFLock=(on)=>{
-    if(!BL) return;
-    if(on){
-      const r=lldfResolve();
-      if(r.why){ alert(r.why+'\n\nPublish the factors first, then lock.'); return; }
-      BL.saveSnap(LOCK_APP,'lldf',lldfMine());
-      BL.lock('lldf',LOCK_APP);
-      const ds=BL.adopt({app:LOCK_APP, channel:'lldf', before:lldfMine(), after:lldfTheirs(r),
-        labels:LLDF_LABELS, digits:LLDF_DIG, source:r.src, apply:()=>applyLLDF(r)});
-      if(!ds.length) BL.toast('Distribution factors locked','Already matching '+r.src+'. These fields now follow the LL & DL app automatically.');
-    }else{
-      BL.unlock('lldf',LOCK_APP);
-      LOCK_SIG.lldf='';
-      const s=BL.takeSnap(LOCK_APP,'lldf');
-      if(s&&s.data){
-        const back=BL.deltas(lldfMine(),s.data,LLDF_LABELS,LLDF_DIG);
-        if(back.length&&window.confirm('Distribution factors unlocked.\n\nRestore the values you had before locking?\n\n  '+back.map(function(d){return d.label+'  '+d.from+' → '+d.to;}).join('\n  ')))
-          set(p=>({...p, loads:{...p.loads, ...s.data}}));
-        else BL.toast('Distribution factors unlocked','Manual control — the current values were kept.');
-      }else BL.toast('Distribution factors unlocked','Manual control restored.');
-    }
-  };
-  /* ---- Dead-load channel (DC2 / DW) lock ----
-     The LL & DL app distributes the superimposed dead load across the girder
-     line (MassDOT pile-cap analogy or the per-load rule set); the per-girder
-     results are exactly what this app wants for the barrier/SIDL and wearing
-     surface. DC1 is deliberately NOT driven — this app computes deck + haunch
-     from its own section geometry, so adopting the LLDF tributary DC1 as well
-     would count the slab twice. It is shown as a cross-check instead. */
-  const dlResolve=()=>dlResolveFor(inp);
-  const dlMine=()=>dlMineFor(inp);
-  const dlTheirs=(r)=>dlTheirsFor(r);
-  const applyDL=(r)=>applyDLTo(set,r);
-  const pullDL=()=>{
-    const r=dlResolve();
-    if(r.why){ alert(r.why); return; }
-    const when=(r.at||'').slice(0,16).replace('T',' ');
-    const msg='Pull dead loads from LL & DL Distribution ('+when+')\nProject: '+(r.project||'—')+' · '+r.src+(r.trib?('  ·  tributary '+r.trib.toFixed(2)+' ft'):'')+'\n\n'
-      +(r.hasBar?'  DC2  barrier / SIDL   = '+r.wBar.toFixed(3)+' klf\n':'  DC2  barrier / SIDL   — not published; your value is kept\n')
-      +(r.hasDW ?'  DW   wearing surface  = '+r.wDW.toFixed(3)+' klf\n':'  DW   wearing surface  — not published; your value is kept\n')
-      +(r.dc1>0?'  (DC1 deck = '+r.dc1.toFixed(3)+' klf — NOT applied; this app computes deck + haunch itself)\n':'')
-      +(r.pl>0?'  (PL pedestrian = '+r.pl.toFixed(3)+' klf — a live load; enter it on the LL group if it governs)\n':'')
-      +'\nApply the DC2 and DW values?';
-    if(!window.confirm(msg)) return;
-    applyDL(r);
-  };
-  const dlPeek=dlResolve();
-  const dlLocked=!!(BL&&BL.isLocked('dlLoads'));
-  const dlSrc=dlLocked?((dlPeek&&dlPeek.src)||'LL & DL Distribution'):'';
-  // Which of the two fields the current publish actually covers.
-  const dlHasBar=!!(dlPeek&&!dlPeek.why&&dlPeek.hasBar), dlHasDW=!!(dlPeek&&!dlPeek.why&&dlPeek.hasDW);
-  const dlNote=dlLocked?(dlHasBar&&dlHasDW?'':(' · '+(dlHasBar?'DW':'DC2')+' is not in the publish and stays under your control')):'';
-  const toggleDLLock=(on)=>{
-    if(!BL) return;
-    if(on){
-      const r=dlResolve();
-      if(r.why){ alert(r.why+'\n\nPublish the dead loads first, then lock.'); return; }
-      BL.saveSnap(LOCK_APP,'dlLoads',dlMine());
-      BL.lock('dlLoads',LOCK_APP);
-      const ds=BL.adopt({app:LOCK_APP, channel:'dlLoads', before:dlMine(), after:dlTheirs(r),
-        labels:DL_LABELS, digits:DL_DIG, source:r.src, apply:()=>applyDL(r)});
-      if(!ds.length) BL.toast('Dead loads locked','Already matching '+r.src+'. DC2 and DW now follow the LL & DL app automatically.');
-    }else{
-      BL.unlock('dlLoads',LOCK_APP);
-      LOCK_SIG.dlLoads='';
-      const s=BL.takeSnap(LOCK_APP,'dlLoads');
-      if(s&&s.data){
-        const back=BL.deltas(dlMine(),s.data,DL_LABELS,DL_DIG);
-        if(back.length&&window.confirm('Dead loads unlocked.\n\nRestore the values you had before locking?\n\n  '+back.map(function(d){return d.label+'  '+d.from+' → '+d.to;}).join('\n  ')))
-          set(p=>({...p, loads:{...p.loads, ...s.data}}));
-        else BL.toast('Dead loads unlocked','Manual control — the current values were kept.');
-      }else BL.toast('Dead loads unlocked','Manual control restored.');
-    }
-  };
-  const sendLLDF=(silent)=>{
-    try{
-      if(!R||!R.ok){ if(!silent) alert('Fix the section inputs first — the section engine reported an error.'); return false; }
-      const egv=(R.bare.hs+(+deck.haunch)+(+deck.ts)/2)-R.bare.ybar;
-      const Nb=Math.max(2,Math.round(+geom.nGirders||4));
-      const spansOut=(extRaw&&extRaw.member&&Array.isArray(extRaw.member.spans)&&extRaw.member.spans.length)?extRaw.member.spans.map(Number):[+geom.L];
-      const payload={_schema:'bridge-lldf-geometry',schemaVersion:1,producer:'ST-Girder',
-        producedAt:new Date().toISOString(),project:inp.proj.name||'',
-        position:loads.pos||'interior',memberLabel:inp.proj.girderId||'',
-        Nb, de:(loads.de!=null?+loads.de:null),
-        inputs:{type:'a', spans:spansOut, spacings:Array(Math.max(1,Nb-1)).fill(+geom.S),
-          ts:+deck.ts, skew:+loads.skew||0, depth:+R.bare.hs||undefined,
-          I:Math.round(R.bare.I), A:+R.bare.A.toFixed(1), eg:+egv.toFixed(2),
-          // STG-O11: send the modular ratio this app uses for its own section and K_g (rounded, ≥ 6),
-          // so LL & DL computes K_g on the same n; the unrounded Es/Ec goes along as nRaw (new optional field)
-          n:+(+R.n).toFixed(2), nRaw:+R.nRaw.toFixed(2)}};
-      const rawGeom=JSON.stringify(payload);
-      if(silent){
-        // A locked republish carrying the same layout is not news. Strip the
-        // timestamp and compare, so LL & DL only hears about real movement.
-        try{ const prev=localStorage.getItem('bridgeSuite.v1.lldfGeom');
-          if(prev){ const a=JSON.parse(prev), b=JSON.parse(rawGeom);
-            delete a.producedAt; delete b.producedAt;
-            if(JSON.stringify(a)===JSON.stringify(b)) return false; } }catch(e){}
-      }
-      try{ localStorage.setItem('bridgeSuite.v1.lldfGeom',rawGeom); }
-      catch(e){ if(!silent) alert('Could not write to shared storage: '+e.message); return false; }
-      // Locked republishes must not yank the engineer out of this app.
-      if(!silent) bridgeNav('lldf');
-      return true;
-    }catch(e){ if(!silent) alert('Could not send geometry: '+(e&&e.message||e)); return false; }
-  };
-  /* ---- Geometry channel lock ----
-     Same channel MCT publishes; drives() picks whichever app owns the lock, so
-     having this tab and MCT open at once does not start a republish war.
-     Debounced because the span / spacing fields are typed a digit at a time. */
-  const geomLocked=!!(BL&&BL.isLocked('geometry'));
-  const geomTimer=useRef(null);
-  useEffect(()=>{
-    if(!BL||!BL.drives('geometry',LOCK_APP,'ST-Girder')) return;
-    clearTimeout(geomTimer.current);
-    geomTimer.current=setTimeout(()=>{
-      if(sendLLDF(true)){
-        BL.log({channel:'geometry', app:LOCK_APP, source:'this app',
-          text:'republished the bridge layout'});
-      }
-    },800);
-    return ()=>clearTimeout(geomTimer.current);
-  },[inp,R,geomLocked]);
-  const toggleGeomLock=(on)=>{
-    if(!BL) return;
-    if(on){
-      const wrote=sendLLDF(true);
-      BL.lock('geometry',LOCK_APP);
-      BL.log({channel:'geometry', app:LOCK_APP, source:'this app',
-        text:'auto-send ON \u2014 LL & DL now follows this girder\u2019s layout'
-          +(wrote?'':' (layout already current)')});
-      BL.toast('Geometry locked','The LL & DL Distribution app will follow this girder\u2019s spans, spacing and skew until you unlock it.');
-    } else {
-      BL.unlock('geometry',LOCK_APP);
-      BL.log({channel:'geometry', app:LOCK_APP, source:'this app', text:'auto-send OFF'});
-    }
-  };
-
   // segment table helpers
   const segU=(i,k,v)=>set({...inp, sec:{...sec, segs:sec.segs.map((s,j)=>j===i?{...s,[k]:v}:s)}});
   const segAdd=()=>{ const last=sec.segs.at(-1)||{xEnd:geom.L,bft:sec.bft,tft:sec.tft,bfb:sec.bfb,tfb:sec.tfb};
@@ -4538,20 +2745,7 @@ function InputsTab({inp,set,R}){
       const gOwnOf=what=>gOwn.find(o=>o.what===what);
       return <React.Fragment>
 
-      {/* ---- shared dead-load channel (DC2 / DW from the LL & DL app) ---- */}
-      <div className="btnrow" style={{margin:'0 0 8px',alignItems:'center'}}>
-        {BLU.LockBtn
-          ? <BLU.LockBtn ch="dlLoads" always
-              label={dlLocked?'Following LL & DL':'⇩ Pull DC2 / DW from LL & DL'}
-              onClick={(st,locked)=>{ if(locked) toggleDLLock(false); else pullDL(); }}/>
-          : <button className="btn sm" onClick={pullDL}>⇩ Pull DC2 / DW from LL &amp; DL</button>}
-        {BLU.LockToggle&&<BLU.LockToggle ch="dlLoads" onToggle={toggleDLLock}/>}
-      </div>
-      {dlLocked&&BLU.DrivenStrip&&<BLU.DrivenStrip ch="dlLoads" detail={dlSrc+dlNote} onUnlock={()=>toggleDLLock(false)}/>}
       {gL&&<GdLoadsBox inp={inp} L={gL} ext={extRaw}/>}
-      {(()=>{ const r=dlPeek; if(gL||!r||r.why||!(r.dc1>0)||!Ld) return null;
-        const mine=Ld.wdk+(+loads.wDCextra||0), off=Math.abs(mine-r.dc1)/Math.max(r.dc1,1e-6);
-        return <div className="hint" style={{margin:'0 0 10px'}}>DC1 cross-check — LL &amp; DL puts <b>{fmt(r.dc1,3)} klf</b> of deck on {r.trib>0?<b>{fmt(r.trib,2)} ft</b>:'the'} tributary width; this app computes deck + haunch + extra = <b>{fmt(mine,3)} klf</b> from its own section geometry{off>0.10?<span style={{color:'#B3261E',fontWeight:600}}> — {fmt(off*100,0)}% apart; check that deck thickness, haunch and girder spacing agree in both apps</span>:<span> ✓ consistent</span>}. DC1 is never driven by the lock, so the slab cannot be counted twice.</div>; })()}
 
       {/* DC1 — noncomposite */}
       <div style={{marginBottom:14}}>
@@ -4595,7 +2789,7 @@ function InputsTab({inp,set,R}){
       <div style={{marginBottom:14}}>
         <LG tag="DC2" title="Composite superimposed dead load" color="#15803D" note="on long-term (3n) composite"/>
         <div className="frow">{gL? <GdFld l="Barrier / SIDL (per girder)" u="klf" v={fmt(gG.dc2,3)} src={gSrc}/>
-          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} driven={dlLocked&&dlHasBar} src={dlSrc} gd={G('loads.wBar')}/>}</div>
+          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} gd={G('loads.wBar')}/>}</div>
         {gL&&<div className="hint" style={{marginTop:4}}>{gG.dc2rows.length?gG.dc2rows.map(q=>q.name+' '+fmt(q.w,3)).join(' + ')+' = '+fmt(gG.dc2,3)+' klf':'No DC2 rows'} (GirderDetail; these produced the imported M_DC2 / V_DC2).</div>}
       </div>
 
@@ -4603,40 +2797,23 @@ function InputsTab({inp,set,R}){
       <div style={{marginBottom:14}}>
         <LG tag="DW" title="Wearing surface & utilities" color="#B45309" note="on long-term (3n) composite"/>
         <div className="frow">{gL? <GdFld l="Wearing surface (per girder)" u="klf" v={fmt(gG.dw,3)} src={gSrc}/>
-          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} driven={dlLocked&&dlHasDW} src={dlSrc} gd={G('loads.wDW')}/>}</div>
+          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} gd={G('loads.wDW')}/>}</div>
         {gL&&<div className="hint" style={{marginTop:4}}>{gG.dwrows.length?gG.dwrows.map(q=>q.name+' '+fmt(q.w,3)).join(' + ')+' = '+fmt(gG.dw,3)+' klf':'No DW rows'} (GirderDetail; these produced the imported M_DW / V_DW).{gG.utrows.length?<span> Utilities, their own loads on the steel section (not DW here): {gG.utrows.map(q=>q.name+' ('+q.category+') '+fmt(q.w,3)+' klf').join('; ')}.</span>:null}</div>}
       </div>
 
       {/* LL — live load */}
       <div>
         <LG tag="LL" title="Live load + impact (per girder)" color={extActive?'#1C4FC4':'#B3261E'} note={extActive?'from imported envelope':'HL-93 · on short-term (n) composite'}/>
-        <div className="btnrow" style={{margin:'2px 0 6px',alignItems:'center'}}>
-          {BLU.LockBtn
-            ? <BLU.LockBtn ch="lldf" always
-                label={lldfLocked?'Following LL & DL':'⇩ Pull from LL & DL'}
-                onClick={(st,locked)=>{ if(locked) toggleLLDFLock(false); else pullLLDF(); }}/>
-            : <button className="btn sm" onClick={pullLLDF}>⇩ Pull from LL &amp; DL</button>}
-          {BLU.LockToggle&&<BLU.LockToggle ch="lldf" onToggle={toggleLLDFLock}/>}
-          {BLU.LockBtn
-            ? <BLU.LockBtn ch="geometry" always
-                label={geomLocked?'Auto-sending geometry':'Send geometry to LL & DL \u2197'}
-                onClick={(st,locked)=>{ if(locked) toggleGeomLock(false); else sendLLDF(); }}/>
-            : <button className="btn sm ghost" onClick={sendLLDF} title="Send this girder's geometry (spans, spacing, deck, section properties) to the LL &amp; DL Distribution app and open it prefilled.">Send geometry to LL &amp; DL ↗</button>}
-          {BLU.LockToggle&&<BLU.LockToggle ch="geometry" onToggle={toggleGeomLock}/>}
-        </div>
-        {lldfLocked&&BLU.DrivenStrip&&<BLU.DrivenStrip ch="lldf" detail={lldfSrc} onUnlock={()=>toggleLLDFLock(false)}/>}
-        {(+loads.fatM>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fatigue DF override from LL &amp; DL: <b>{fmt(+loads.fatM,3)}</b> (single-lane, no MPF) — used on the Fatigue tab in place of the DF÷1.2 estimate. <button className="btn sm ghost" style={{padding:'1px 8px',marginLeft:4}} onClick={()=>S('loads.fatM',0)}>clear → auto</button></div>}
-        {(+loads.fatV>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fatigue shear DF override from LL &amp; DL: <b>{fmt(+loads.fatV,3)}</b> (single-lane, no MPF) — used for the stud shear range and the web special-fatigue check in place of the shear DF÷1.2 estimate. <button className="btn sm ghost" style={{padding:'1px 8px',marginLeft:4}} onClick={()=>S('loads.fatV',0)}>clear → auto</button></div>}
         {G('loads.NL')&&<div className="frow" style={{marginBottom:6}}><Num l="Design lanes N_L (live load deflection)" v={loads.NL} set={v=>S('loads.NL',v)} step={1} min={1} gd={G('loads.NL')}/></div>}
         {gL&&<div className="hint" style={{marginBottom:8}}><span className="gd-src" style={{display:'inline'}}>GD · Live load {gSrc}</span>: {gdLLText(gL).join('; ')}.{gOwnOf('number of design lanes N_L')?<span style={{color:'#9a3412'}}> Live load deflection (optional check) still uses ST-Girder’s own number of design lanes N_L = <b>{gOwnOf('number of design lanes N_L').ownT}</b>; GirderDetail used {gOwnOf('number of design lanes N_L').gdT}{gOwnOf('number of design lanes N_L').same?' (same)':''}. Not switched (engineer to decide).</span>:null}</div>}
         {extActive&&extPerGirderOf(extRaw)&&<div className="hint" style={{marginBottom:8}}>Imported ±LL+IM is <b>per girder</b> ({extRaw.producer||'import'}: impact, distribution factors and multiple presence already included). The DF and multiple-presence multipliers are <b>not applied</b> to it{extRaw.girderDetail&&extRaw.girderDetail.df&&Array.isArray(extRaw.girderDetail.df.spans)?<span> — factors used by {extRaw.producer}: {extRaw.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(extRaw.girderDetail.df.piers||[]).length?'; '+extRaw.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}</span>:null}.</div>}
         {extActive&&!extPerGirderOf(extRaw)&&<React.Fragment>
           <div className="hint" style={{marginBottom:8}}>Imported ±LL envelopes with <b>impact already included</b>. Apply the distribution factor (per effect) and multiple presence below if not already in the envelope (1.0 = no adjustment).</div>
           <div className="frow">
-            <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFpos')}/>
-            <Num l="DF — negative moment" v={loads.extDFneg} set={v=>S('loads.extDFneg',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFneg')}/>
-            <Num l="DF — shear" v={loads.extDFv} set={v=>S('loads.extDFv',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFv')}/>
-            <Num l="Multiple presence m" v={loads.extLLmpf} set={v=>S('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extLLmpf')}/>
+            <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} gd={G('loads.extDFpos')}/>
+            <Num l="DF — negative moment" v={loads.extDFneg} set={v=>S('loads.extDFneg',v)} step={0.05} min={0} gd={G('loads.extDFneg')}/>
+            <Num l="DF — shear" v={loads.extDFv} set={v=>S('loads.extDFv',v)} step={0.05} min={0} gd={G('loads.extDFv')}/>
+            <Num l="Multiple presence m" v={loads.extLLmpf} set={v=>S('loads.extLLmpf',v)} step={0.05} min={0} gd={G('loads.extLLmpf')}/>
           </div>
           <div className="hint" style={{marginTop:6}}>Combined DF×m: +M = <b>{fmt((+loads.extDFpos||1)*(+loads.extLLmpf||1),3)}</b> · −M = <b>{fmt((+loads.extDFneg||1)*(+loads.extLLmpf||1),3)}</b> · V = <b>{fmt((+loads.extDFv||1)*(+loads.extLLmpf||1),3)}</b>. AASHTO 4.6.2.2 gives different DFs for +M, −M, and shear.</div>
         </React.Fragment>}
@@ -4648,16 +2825,12 @@ function InputsTab({inp,set,R}){
         {!extActive&&loads.llAuto&&<div style={{marginTop:8}}>
           <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
             <span style={{fontSize:11,color:'var(--ink2)'}}>Distribution factors:</span>
-            {lldfLocked
-              ? <span className="xlink live" title="Distribution factors are locked to the LL &amp; DL Distribution app — the AUTO/MANUAL choice is not available while locked."><span className="xlk">🔒</span><span>FROM LL &amp; DL</span></span>
-              : <Seg opts={[{v:true,l:'AUTO TYPE (a)'},{v:false,l:'MANUAL'}]} v={loads.dfAuto} set={v=>S('loads.dfAuto',v)}/>}
+            <Seg opts={[{v:true,l:'AUTO TYPE (a)'},{v:false,l:'MANUAL'}]} v={loads.dfAuto} set={v=>S('loads.dfAuto',v)}/>
             {loads.dfAuto&&<Seg opts={[{v:'interior',l:'INTERIOR'},{v:'exterior',l:'EXTERIOR'}]} v={loads.pos}
               set={v=>set({...inp,loads:{...loads,pos:v,posAuto:false}})}/>}
-            {loads.dfAuto&&<PosTag inp={inp} set={set}/>}
             {!loads.dfAuto&&<React.Fragment>
-              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfm} readOnly={lldfLocked} className={lldfLocked?'bl-driven':undefined} title={lldfLocked?('Driven by '+lldfSrc+' — unlock to edit.'):undefined} onChange={e=>{ if(lldfLocked) return; S('loads.dfm',+e.target.value); }}/><span className="unit">DFm</span></div>
-              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfv} readOnly={lldfLocked} className={lldfLocked?'bl-driven':undefined} title={lldfLocked?('Driven by '+lldfSrc+' — unlock to edit.'):undefined} onChange={e=>{ if(lldfLocked) return; S('loads.dfv',+e.target.value); }}/><span className="unit">DFv</span></div>
-              {lldfLocked&&<span className="bl-src" style={{alignSelf:'center'}}>{lldfSrc}</span>}
+              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfm} onChange={e=>{ S('loads.dfm',+e.target.value); }}/><span className="unit">DFm</span></div>
+              <div className="fwrap" style={{width:90}}><input type="number" step="0.01" value={loads.dfv} onChange={e=>{ S('loads.dfv',+e.target.value); }}/><span className="unit">DFv</span></div>
             </React.Fragment>}
           </div>
           {loads.dfAuto&&<div className="frow" style={{marginTop:8}}>
@@ -4735,7 +2908,7 @@ function InputsTab({inp,set,R}){
         <Num l="Fatigue design life (yr)" v={inp.fatigue.designLife||75} set={v=>S('fatigue.designLife',v)} step={5} gd={G('fatigue.designLife')}/>
       </div>
       <GdFieldNote g={G('fatigue.ncyc')}/>
-      <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is pulled from the LL &amp; DL Distribution app and will be used for the stress range. Clear it on the Loads card to fall back to the DF÷1.2 estimate.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence){inp.loads.pos==='exterior'?'; for an exterior girder the one-lane DF is the larger of the lever rule and the rigid-section value':''}. Pull an exact value from the LL &amp; DL Distribution app if desired.</span>}</div>
+      <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is used for the stress range.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence){inp.loads.pos==='exterior'?'; for an exterior girder the one-lane DF is the larger of the lever rule and the rigid-section value':''}.</span>}</div>
     </Card>
     </div>
   </div>);
@@ -5074,7 +3247,7 @@ function SectionTab({R,inp,go}){
 /* PNA-OOS (2026-10-14): the positive-flexure PNA of a composite segment falls below the web (P_t > P_s + P_c + P_w),
    outside AASHTO Table D6.1-1 / D6.3.2 and so outside the scope of this app. Warning text and callout (display only). */
 const PNA_OOS_HEAD='Outside the scope of this app: the plastic neutral axis falls below the web (bottom flange plastic force P_t exceeds P_s + P_c + P_w), which AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 do not cover. Revise the section (e.g. reduce the bottom flange or increase the deck/top flange).';
-const PNA_OOS_NOT='Not reported (OUT OF SCOPE): Strength I positive flexure, ductility D_p \u2264 0.42D_t, the web compactness / compact-section classification and M_p, D_p, D_cp of the segment(s) named, and the positive-moment and governing load ratings. The overall verdict is "Not all checks pass". Sending capacity to the MCT rating is blocked; the other checks and hand-offs are unaffected.';
+const PNA_OOS_NOT='Not reported (OUT OF SCOPE): Strength I positive flexure, ductility D_p \u2264 0.42D_t, the web compactness / compact-section classification and M_p, D_p, D_cp of the segment(s) named, and the positive-moment and governing load ratings. The overall verdict is "Not all checks pass". The other checks are unaffected.';
 const pnaOosSegs=R=>(R.pnaOOS||[]).map(g=>'Segment '+(g.i+1)+' (x = '+spRange(R,g)+'): P_t = '+fmt(g.Pt,0)+' kip > P_s + P_c + P_w = '+fmt(g.Ps,0)+' + '+fmt(g.Pc,0)+' + '+fmt(g.Pw,0)+' = '+fmt(g.Ps+g.Pc+g.Pw,0)+' kip.');
 const pnaOosText=R=>[PNA_OOS_HEAD,...pnaOosSegs(R)].join(' ');
 function PnaOos({R,style}){
@@ -5385,7 +3558,7 @@ const flexNoNegText=R=>(R.useExt
   ? 'No negative moment in this span: the imported demands produce no factored negative moment in this span.'
   : 'Simple span — no negative moment. ST-Girder analyses a single simple span.')
   +' The pier-region checks apply only where the factored moment is negative: Strength I negative flexure (6.10.8, on the steel + longitudinal deck reinforcement section, concrete neglected, 6.10.1.1.1c), the 1% longitudinal deck reinforcement (6.10.1.7), the Service II web bend-buckling check (−M) and, in a continuous span, the 1.3R_hM_y limit on M_n (6.10.7.1.2).'
-  +(R.useExt?'':' To check a continuous girder\'s pier region, import continuous demands from GirderDetail (Send to ST-Girder) or MCT/MIDAS.');
+  +(R.useExt?'':' To check a continuous girder\'s pier region, import continuous demands from GirderDetail (Send to ST-Girder).');
 function flexNegCard(R){ const ng=R.neg, b=ng.negBGov, sg=R.segP[b.si||0];
       const bPass=b.r<=1.0001, tPass=(ng.negTGov.r||0)<=1.0001;
       return <Card id="stg-d-flexneg" title="Negative flexure — pier region" refTag="AASHTO 6.10.8 · cracked section (steel + rebar, 6.10.1.1.1c)">
@@ -6100,24 +4273,13 @@ function ConnTab({R}){
   </div>);
 }
 
-function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
+function RatingTab({R,inp,set}){
   if(!R.ok) return null;
   const r=R.rating, cell=v=>({v:fmt(v,2),cls:v>=1?'ok':'no'});
   const setRate=(k,v)=>{ if(set) set(p=>({...p, rate:{...((p&&p.rate)||{}), [k]:v}})); };
   const rq=(inp&&inp.rate)||{};
   return (<div>
     <GdNote ext={inp&&inp.external}/>
-    {onSendCapacity&&<div className="callout" style={{marginTop:0,marginBottom:12,borderLeftColor:capLocked?'#ea580c':'var(--blue)',background:capLocked?'#fff7ed':'#EEF4FF',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-      <div style={{flex:'1 1 340px'}}><b>Feed this capacity to the MCT rating.</b> Publishes φM<sub>n</sub>⁺ / φM<sub>n</sub>⁻ / φV<sub>n</sub> (plus Service II limits and fatigue resistance) at <b>every station across all spans</b> of the member, so the MCT app can rate any vehicle against the real section-by-section resistance instead of a few assumed points.</div>
-      {BLU.LockBtn
-        ? <BLU.LockBtn ch="capacity" always
-            label={capLocked?'Auto-sending capacity to MCT':'Send capacity to MCT Rating \u21c4'}
-            onClick={(st,locked)=>{ if(locked) onToggleCapLock(false); else onSendCapacity(); }}/>
-        : <button className="btn pri" onClick={onSendCapacity}>Send capacity to MCT Rating ⇄</button>}
-      {BLU.LockToggle&&<BLU.LockToggle ch="capacity" onToggle={onToggleCapLock}/>}
-      {capLocked&&<div style={{flexBasis:'100%',fontSize:'11.5px',color:'#9a3412',lineHeight:1.5}}>
-        Every recompute republishes this envelope and the MCT rating adopts it automatically. Unlock to go back to one-shot sends.</div>}
-    </div>}
     <PnaOos R={R}/>
     {r.oos? <div className="bigres">
       <div className="br f"><div className="l">Inventory RF (gov)</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">+M rating not determined</div></div>
@@ -6288,7 +4450,7 @@ function crModel(R,inp,o){
     sub(s,'Project and girder','',<CrKV rows={[['Project',p.name||'—'],['Girder',p.girderId||'—'],['Job No.',p.job||'—'],['Computed by',p.by||'—'],['Date',p.date||'—'],
       ['Checked by',p.checkedBy||'—'],['Check date',p.chkDate||'—'],['Description',crDesc(R,inp)]]}/>);
     sub(s,'Geometry and framing','',<CrKV rows={[['Span L',fmt(R.geom.L,2),'ft'+gm('geom.L')],['Girder spacing S',fmt(+inp.geom.S,2),'ft'+gm('geom.S')],['Number of girders',fmt(+inp.geom.nGirders,0),gm('geom.nGirders')],
-      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'+gm('geom.Lb')],['Girder position',gt.pos+(lq.posAuto!==false?' (follows the shared design beam)':' (set here)'),gm('loads.pos')],
+      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'+gm('geom.Lb')],['Girder position',gt.pos+' (set here)',gm('loads.pos')],
       ['Skew angle',fmt(+lq.skew||0,1),'deg'+gm('loads.skew')],['Construction','unshored (DC1 on the bare steel)'],['Analysis',R.useExt?'imported continuous-member envelopes':'built-in simple span']]}/>);
     sub(s,'Girder section','',<React.Fragment>
       <CrKV rows={[['Starting section',inp.preset||'—'],['Web D × t_w',fmt(R.sec.D,3)+' × '+fmt(R.sec.tw,4),'in'+gm('sec.D','sec.tw')],
@@ -6667,71 +4829,153 @@ function lsAvailable(){ try{const k='__t';window.localStorage.setItem(k,'1');win
 function loadSaved(){ try{const s=window.localStorage.getItem(LS_KEY);return s?JSON.parse(s):null;}catch(e){return null;} }
 function saveInputs(inp){ try{window.localStorage.setItem(LS_KEY,JSON.stringify(inp));return true;}catch(e){return false;} }
 function clearSaved(){ try{window.localStorage.removeItem(LS_KEY);}catch(e){} }
-const ST_APP='stgirder', BP=()=>window.BridgeProjects;
-function legacyLoadProjects(){ try{const s=window.localStorage.getItem(LS_PROJ);return s?JSON.parse(s):{};}catch(e){return {};} }
-try{ if(BP()) BP().migrate(ST_APP, legacyLoadProjects(), le=>le&&le.inp); }catch(e){}
-// Named projects live in the shared Bridge Suite registry — one project spans all apps.
-function loadProjects(){
-  if(!BP()) return legacyLoadProjects();
-  const reg=BP().raw(), out={};
-  for(const id in reg){ const e=reg[id];
-    out[id]={name:e.name, savedAt:e.savedAt, inp:(e.slices&&e.slices[ST_APP]!=null)?e.slices[ST_APP]:null,
-      _apps:Object.keys(e.slices||{}), _hasDemands:!!e.demands}; }
-  return out;
-}
-function writeProjects(o){ return true; }
-function saveProjectAs(name,inp){ return BP()?BP().saveSlice(null,name||'Untitled',ST_APP,JSON.parse(JSON.stringify(inp))):null; }
-function overwriteProject(id,inp){ return BP()?!!BP().saveSlice(id,undefined,ST_APP,JSON.parse(JSON.stringify(inp))):false; }
-function deleteProject(id){ return BP()?BP().del(id):false; }
-function renameProject(id,name){ return BP()?BP().rename(id,name):false; }
-function loadLastProjId(){ return BP()?BP().current():null; }
-function saveLastProjId(id){ if(BP()) BP().setCurrent(id); }
 function mergeInputs(p){ if(!p) return null;
   const deep=(d,s)=>{ const o={...d}; for(const k in s){ o[k]=(s[k]&&typeof s[k]==='object'&&!Array.isArray(s[k]))?deep(d[k]||{},s[k]):s[k]; } return o; };
   return deep(DEFAULTS,p); }
 
-/* ================= APP ================= */
-/* ═══ Shared design-beam chip ═══════════════════════════════════════════════
-   Backed by BridgeBeam (the block in this file's <head>). The beam picked here
-   is the beam the whole suite uses: the live-load distribution factors and the
-   dead-load distribution in the LL & DL app, the DFs pulled into this design,
-   and the UDLs pushed to the MCT Loads tab. Changing it in any app — or in
-   another browser tab — moves every app to the same beam.
-   The roster comes from the LL & DL Distribution app, which is the only one
-   that knows the full cross-section, so this chip degrades to a read-only
-   label until that app has been run once.
-   ═══════════════════════════════════════════════════════════════════════════ */
-function useDesignBeam(){
-  const BB=(typeof window!=='undefined'&&window.BridgeBeam)||null;
-  const [,setTick]=useState(0);
-  useEffect(()=>{ if(!BB) return undefined; return BB.onChange(()=>setTick(t=>t+1)); },[BB]);
-  return {BB, sel:BB?BB.get():null, roster:BB?BB.roster():null};
+/* ================= DISCONNECT (engineer decision 2026-10-19) =================
+   ST-Girder is connected to GirderDetail only. It no longer exchanges data with the MCT Generator,
+   PS-Beam, LL & DL Distribution or Bridge Substructure Loading. Saved ST-Girder data that came from
+   those tools is cleared when the page opens (and when an older ST-Girder JSON file is imported), and
+   a notice lists exactly what was removed (fixlog/stgirder.md DISC). Nothing here changes a result of
+   the built-in analysis or of GirderDetail demands; it only removes values the other tools supplied.
+     stgDisconnect(inp) -> {inp, items}: the cleaned copy of a saved session and the list of removals.
+     stgPurgeOwnCopies() -> items: removes ST-Girder's own published copies that other tools list.
+   The notice is kept in this tool's own key stgirder.disconnect.v1 until it is dismissed. */
+const STG_NS='bridgeSuite.v1.', STG_DISC_KEY='stgirder.disconnect.v1';
+function stgLS(k){ try{ const s=window.localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function stgDisconnect(inp0){
+  const inp=JSON.parse(JSON.stringify(inp0)), items=[], L=inp.loads||(inp.loads={}), D=DEFAULTS.loads;
+  const f3=v=>fmt(+v,3), near=(a,b)=>b!=null&&isFinite(+a)&&Math.abs(+a-b)<5e-5;
+  const locks=((stgLS(STG_NS+'locks')||{}).channels)||{}, locked=ch=>!!(locks[ch]&&locks[ch].locked);
+  const snap=stgLS(STG_NS+'lockSnap.stgirder')||{};
+  const snapOf=(ch,k)=>(snap[ch]&&snap[ch].data&&typeof snap[ch].data[k]==='number'&&isFinite(snap[ch].data[k]))?snap[ch].data[k]:null;
+  // 1. Imported demands that are not GirderDetail's (MCT Generator hand-off, MIDAS / PS-Beam / steel-beam envelope files)
+  const e=inp.external;
+  if(e&&typeof e==='object'&&!extFromGD(e)){
+    const n=Array.isArray(e.stations)?e.stations.length:0;
+    items.push('Imported demands from '+(e.producer||e.generatedBy||'MCT Generator / MIDAS')+(e.project?' (project "'+e.project+'")':'')
+      +(e.member&&e.member.key?', member '+e.member.key:'')+', '+n+' station'+(n===1?'':'s')+': removed. ST-Girder runs its built-in simple-span analysis again'
+      +' (span length L = '+fmt(+inp.geom.L,2)+' ft and the plates are kept as they were; check them).');
+    inp.external=null;
+  }
+  // 2. LL & DL Distribution: distribution factors (pulled or followed under a lock). A value counts as LL & DL's when it equals a
+  //    published factor (to 4 decimals), or when the channel is locked or ST-Girder holds a pre-lock snapshot (it followed LL & DL).
+  const lp=stgLS(STG_NS+'lldf'), pairs=[];
+  if(lp&&typeof lp==='object'){ const add=(g,gn)=>{ if(g&&g.gM!=null) pairs.push({m:+(+g.gM).toFixed(4), v:g.gV!=null?+(+g.gV).toFixed(4):null, n:(gn&&gn.gM!=null)?+(+gn.gM).toFixed(4):+(+g.gM).toFixed(4)}); };
+    const G=lp.governing||{}, Gn=lp.governingNeg||{};
+    add(G.interior,Gn.interior); add(G.exterior,Gn.exterior);
+    Object.keys(G.byBeam||{}).forEach(k=>add(G.byBeam[k],(Gn.byBeam||{})[k])); }
+  const llLock=locked('lldf')||!!snap.lldf;
+  if(L.dfAuto===false&&(pairs.some(p=>near(L.dfm,p.m)&&near(L.dfv,p.v))||llLock)){
+    items.push('Live load distribution factors DF_m = '+f3(L.dfm)+', DF_v = '+f3(L.dfv)+' (MANUAL, from LL & DL Distribution): replaced by ST-Girder’s own AASHTO LRFD 4.6.2.2 factors (Distribution factors: AUTO TYPE (a)).');
+    L.dfAuto=true;
+  }
+  const extKs=['extDFpos','extDFneg','extDFv','extLLmpf'];
+  if(extKs.some(k=>+L[k]!==D[k])&&(pairs.some(p=>near(L.extDFpos,p.m)&&near(L.extDFv,p.v))||llLock)){
+    const was=extKs.map(k=>f3(L[k]));
+    extKs.forEach(k=>{ const s=snapOf('lldf',k); L[k]=s!=null?s:D[k]; });
+    items.push('Imported-LL multipliers (DF +M, DF −M, DF V, multiple presence) '+was.join(', ')+' from LL & DL Distribution: set to '+extKs.map(k=>f3(L[k])).join(', ')
+      +(snapOf('lldf','extDFpos')!=null?' (your values from before the lock)':' (ST-Girder defaults)')+'.');
+  }
+  if(+L.fatM>0||+L.fatV>0){
+    items.push('Single-lane fatigue distribution factor override'+(+L.fatM>0&&+L.fatV>0?'s':'')+' from LL & DL Distribution ('
+      +[+L.fatM>0?'moment '+f3(L.fatM):'',+L.fatV>0?'shear '+f3(L.fatV):''].filter(Boolean).join(', ')+'): removed; the Fatigue checks use ST-Girder’s own single-lane estimate (DF ÷ 1.2) again, or the fatigue envelopes of GirderDetail demands.');
+    L.fatM=0; L.fatV=0;
+  }
+  // 3. LL & DL Distribution: dead loads DC2 (barrier / SIDL) and DW (wearing surface) per girder
+  const dp=stgLS(STG_NS+'dlLoads'), by={};
+  if(dp&&Array.isArray(dp.cases)) dp.cases.forEach(c=>{ if(c&&c.key) by[c.key]=+(+(+c.udl||0)).toFixed(4); });
+  const dlLock=locked('dlLoads')||!!snap.dlLoads;
+  [['wBar','DC2','DC2 barrier / SIDL (per girder)'],['wDW','DW','DW wearing surface (per girder)']].forEach(([k,c,lab])=>{
+    if(!(near(L[k],by[c])||(dlLock&&(!dp||by[c]!=null)))) return;   // under a lock only the published cases were applied
+    const s=snapOf('dlLoads',k), to=s!=null?s:D[k];
+    if(+L[k]===+to) return;
+    items.push(lab+' '+f3(L[k])+' klf from LL & DL Distribution: set to '+f3(to)+' klf ('+(s!=null?'your value from before the lock':'ST-Girder default')+'). Enter the barrier / wearing surface load for this girder on the Inputs tab, Loads.');
+    L[k]=to;
+  });
+  // 4. Shared design beam (set in LL & DL or MCT): the interior / exterior position no longer follows it
+  if(L.posAuto!==false){
+    const db=stgLS(STG_NS+'designBeam');
+    if(db&&db._schema==='bridge-design-beam'&&db.type){
+      items.push('Girder position followed the shared design beam '+(db.label||('B'+db.index))+(db.clsLabel?' ('+db.clsLabel+')':'')+': it is now set in ST-Girder and kept as '+(L.pos==='exterior'?'exterior':'interior')+'.');
+      L.posAuto=false;
+    }
+  }
+  return {inp,items};
 }
-function BeamChip({nb,setBy}){
-  const {BB,sel,roster}=useDesignBeam();
-  if(!BB) return null;
-  const beams=(roster&&roster.beams)||[];
-  const mm=BB.mismatch?BB.mismatch(nb):null;
-  return (
-    <span className="beamchip" title={'Design beam — shared by every app in the suite. '
-      +'Set the beam layout and the MassDOT classification in the LL & DL Distribution app; '
-      +'the distribution factors, the dead load and the MCT beam loads all follow this beam.'}>
-      <span className="bc-k">Design beam</span>
-      {beams.length
-        ? <select value={sel?sel.index:''} onChange={e=>BB.set(+e.target.value,null,setBy||'')}>
-            {beams.map(b=><option key={b.i} value={b.i}>{b.label} · {b.ab||b.clsLabel||''}</option>)}
-          </select>
-        : <span className="bc-v" title="No beam roster published yet — open the LL & DL Distribution app and recalculate.">
-            {sel?sel.label:'—'} <span className="bc-warn">no roster</span></span>}
-      {mm&&<span className="bc-warn" title={'This app is set up for '+mm.mine+' girders but the published roster has '
-        +mm.roster+'. Re-run the LL & DL Distribution app on the current layout.'}>⚠ {mm.mine}≠{mm.roster}</span>}
-    </span>);
+function stgPurgeOwnCopies(){
+  const out=[], has=k=>{ try{ return window.localStorage.getItem(k)!=null; }catch(e){ return false; } }, rm=k=>{ try{ window.localStorage.removeItem(k); }catch(e){} };
+  const at=k=>{ try{ return window.localStorage.getItem(k); }catch(e){ return null; } };
+  const mine=(ch,what)=>{ const k=STG_NS+ch, p=stgLS(k);
+    if(!(p&&p.producer==='ST-Girder')) return;
+    rm(k); const u=k+'.updatedAt', also=(at(u)!=null&&at(u)===p.producedAt);
+    if(also) rm(u);
+    out.push(what+' sent by ST-Girder: removed (key '+k+(also?' and '+u:'')+').'); };
+  if(has(STG_NS+'superReactions.by.stgirder')){ rm(STG_NS+'superReactions.by.stgirder');
+    out.push('Reactions sent to Bridge Substructure Loading: ST-Girder’s copy removed (key '+STG_NS+'superReactions.by.stgirder).'); }
+  mine('superReactions','Reactions on the Substructure Loading channel');
+  mine('capacity','Capacity (φM_n, φV_n) for the MCT rating');
+  mine('lldfGeom','Girder geometry for LL & DL Distribution');
+  return out;
+}
+/* ST-Girder designs in the shared project registry (MCT's combined project). ST-Girder no longer opens or saves them there;
+   the notice lists them once so each can be opened here or exported as an ST-Girder JSON file (nothing is deleted). */
+function stgSlices(){ const reg=stgLS(STG_NS+'projects'); if(!reg||typeof reg!=='object') return [];
+  return Object.keys(reg).filter(id=>reg[id]&&reg[id].slices&&reg[id].slices.stgirder&&typeof reg[id].slices.stgirder==='object')
+    .map(id=>({id, name:String(reg[id].name||'Untitled'), savedAt:String(reg[id].savedAt||'')})); }
+function stgSliceOf(id){ const reg=stgLS(STG_NS+'projects'); const e=reg&&reg[id]; return (e&&e.slices&&e.slices.stgirder&&typeof e.slices.stgirder==='object')?e.slices.stgirder:null; }
+function stgDiscRead(){ const r=stgLS(STG_DISC_KEY); return (r&&typeof r==='object')?r:null; }
+function stgDiscWrite(r){ try{ window.localStorage.setItem(STG_DISC_KEY,JSON.stringify(r)); }catch(e){} }
+/* Adds removals to the pending notice (kept until dismissed) and returns it. */
+function stgDiscAdd(items,projects){
+  const cur=stgDiscRead(), pend=!!(cur&&cur.pending);
+  const r={v:1, pending:true, at:new Date().toISOString(),
+    items:[...(pend&&Array.isArray(cur.items)?cur.items:[]),...items],
+    projects:(pend&&Array.isArray(cur.projects)&&cur.projects.length)?cur.projects:(projects||[])};
+  stgDiscWrite(r); return r;
+}
+/* On open: clean the saved session, remove the published copies, list the shared-project designs (first open only). */
+function stgBoot(canSave){
+  if(!canSave) return {inp:DEFAULTS, notice:null};
+  const raw=loadSaved(); let inp=mergeInputs(raw)||DEFAULTS, items=[];
+  if(raw){ const d=stgDisconnect(inp); inp=d.inp; items=d.items; if(items.length) saveInputs(inp); }
+  items=items.concat(stgPurgeOwnCopies());
+  const rec=stgDiscRead(), projects=rec?[]:stgSlices();
+  if(items.length||projects.length) return {inp, notice:stgDiscAdd(items,projects)};
+  if(!rec) stgDiscWrite({v:1, pending:false, at:new Date().toISOString(), items:[], projects:[]});
+  return {inp, notice:(rec&&rec.pending)?rec:null};
+}
+function StgDiscNotice({rec,onDismiss,onOpen}){
+  if(!rec) return null;
+  const exp=p=>{ const s=stgSliceOf(p.id); if(!s){ alert('The design "'+p.name+'" is no longer in the browser storage.'); return; }
+    const blob=new Blob([JSON.stringify({...mergeInputs(s),_schema:'stgirder'},null,1)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(p.name||'stgirder').replace(/\W+/g,'_')+'_stgirder.json'; a.click(); };
+  return <div className="callout warn noprint" id="stg-disc" style={{marginTop:14,marginBottom:0}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
+      <b>ST-Girder now takes data from GirderDetail only</b>
+      <button className="btn sm ghost" onClick={onDismiss}>✕ dismiss (do not show again)</button></div>
+    <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>
+      Engineer decision 2026-10-19: ST-Girder no longer exchanges data with the MCT Generator, PS-Beam, LL &amp; DL Distribution or Bridge Substructure Loading. Demands come only from GirderDetail (<b>Pull from GirderDetail</b>, or <b>Import</b> of its hand-off file); otherwise ST-Girder uses its own inputs and its built-in simple-span analysis.
+      {(rec.items||[]).length?<React.Fragment> Saved data that came from those tools was removed:
+        <ul style={{margin:'4px 0 0 18px',padding:0}}>{rec.items.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>:null}
+      {(rec.projects||[]).length?<div style={{marginTop:6}}>ST-Girder designs saved in shared MCT projects (ST-Girder no longer opens or saves them there; they are still in this browser’s storage). Open one here (replaces the current inputs; it is cleaned the same way) or save it as an ST-Girder JSON file for <b>Import</b>:
+        <ul style={{margin:'4px 0 0 18px',padding:0}}>{rec.projects.map(p=><li key={p.id}>{p.name}{p.savedAt?' (saved '+p.savedAt.slice(0,10)+')':''}{' '}
+          <button className="btn sm ghost" style={{padding:'1px 8px'}} onClick={()=>onOpen(p)}>Open here</button>{' '}
+          <button className="btn sm ghost" style={{padding:'1px 8px'}} onClick={()=>exp(p)}>Export JSON</button></li>)}</ul>
+        These buttons are shown only until this notice is dismissed.</div>:null}
+    </div></div>;
 }
 
+/* ================= APP ================= */
 function App(){
   const canSave=useMemo(()=>lsAvailable(),[]);
-  const [saveFail,setSaveFail]=useState('');   // '' | 'session' | 'project' — last autosave write failed (STG-S8)
-  const [inp,setInpRaw]=useState(()=>canSave?(mergeInputs(loadSaved())||DEFAULTS):DEFAULTS);
+  const [saveFail,setSaveFail]=useState('');   // '' | 'session' — last autosave write failed (STG-S8)
+  // DISC (2026-10-19): the saved session is cleaned of MCT / LL & DL data on open; the notice lists what was removed
+  const [boot]=useState(()=>stgBoot(canSave));
+  const [inp,setInpRaw]=useState(()=>boot.inp);
+  const [disc,setDisc]=useState(()=>boot.notice);
+  const dismissDisc=()=>{ const r=stgDiscRead(); stgDiscWrite({...(r||{v:1,items:[],projects:[]}),pending:false}); setDisc(null); };
   const [tab,setTab]=useState('inputs');
   // Derivation links (DLinks): switch tab, then scroll to the card and flash it. Inputs and results are untouched.
   const [go,setGo]=useState(null);
@@ -6749,269 +4993,23 @@ function App(){
   const undo=()=>{ if(!undoStack.current.length)return; setInpRaw(prev=>{redoStack.current.push(prev);return undoStack.current.pop();}); setHist(t=>t+1); };
   const redo=()=>{ if(!redoStack.current.length)return; setInpRaw(prev=>{undoStack.current.push(prev);return redoStack.current.pop();}); setHist(t=>t+1); };
   const R=useMemo(()=>computeAll(inp),[inp]);
-  // ── Follow the suite-wide design beam ──────────────────────────────────────
-  //    While loads.posAuto is on, the interior/exterior position comes from the beam
-  //    selected in the header chip — its MassDOT classification decides which — so
-  //    ST-Girder designs the same beam the LL & DL app is distributing load to.
-  //    Flipping the INTERIOR/EXTERIOR toggle by hand turns posAuto off and tags the
-  //    field as overridden until you click the tag to follow the beam again.
-  //    setInpRaw, not setInp: following the shared beam is not an edit worth undoing.
-  const dbSel=useDesignBeam().sel;
-  useEffect(()=>{
-    if(!dbSel||!dbSel.type||inp.loads.posAuto===false) return;
-    const want=(dbSel.type==='ext')?'exterior':'interior';
-    if(inp.loads.pos===want) return;
-    setInpRaw(prev=>({...prev,loads:{...prev.loads,pos:want}}));
-  },[dbSel&&dbSel.index,dbSel&&dbSel.type,inp.loads.posAuto,inp.loads.pos]);
-  // ── Shared-storage hand-off from the analysis app (banner-prompted; never clobbers inputs) ──
-  const APP_ID='stgirder', HANDOFF_SUPPORTED_VERSION=1;
-  const [handoff,setHandoff]=useState(null);
   // Always the current inputs, for the code paths that run from a [] effect
   // and would otherwise close over the first render's `inp`.
   const inpRef=useRef(inp); inpRef.current=inp;
-  const checkHandoff=()=>{ const BH=window.BridgeHandoff; if(!BH){ return; }
-    const id=BH.latestId(); if(!id){ setHandoff(null); return; }
-    const r=BH.readOne(id); if(!r){ setHandoff(null); return; }
-    if(BH.adoptedId(APP_ID)===r.token){ setHandoff(null); return; }  // re-flags when the same girder is re-published (token = id@producedAt)
-    // Locked = standing consent: adopt now, never raise the banner. The
-    // version guard below still applies -- a payload this build cannot read
-    // is reported rather than silently swallowed.
-    if(BL&&BL.ok()&&BL.isLocked('demands')&&r.version<=HANDOFF_SUPPORTED_VERSION){
-      adoptHandoff(r.payload,true); return;
-    }
-    setHandoff(r); };
-  useEffect(()=>{ checkHandoff();
-    const onStorage=e=>{ const BH=window.BridgeHandoff; if(!BH) return;
-      if(!e.key || e.key===BH.K_LATEST || e.key===BH.K_UPDATED) checkHandoff(); };
-    window.addEventListener('storage',onStorage);
-    return ()=>window.removeEventListener('storage',onStorage);
-  },[]);
-  const adoptHandoff=(payload,silent)=>{
-    // Background adopts arrive from a stale effect closure; take the live
-    // inputs from the ref so nothing typed since page load is lost.
-    const inp=inpRef.current;
-    if(silent){
-      // Re-stamped copy of the envelope we already hold? Mark it seen and stop:
-      // no state churn and no toast for something that did not move.
-      try{
-        const cur=inp.external;
-        if(cur){
-          const strip=o=>{ const c=Object.assign({},o);
-            delete c._selSpan; delete c.producedAt; delete c.generatedAt; delete c.handoffId;
-            return JSON.stringify(c); };
-          if(strip(cur)===strip(payload)){
-            if(window.BridgeHandoff) window.BridgeHandoff.markAdopted(APP_ID, window.BridgeHandoff.tokenOf(payload));
-            setHandoff(null); return false;
-          }
-        }
-      }catch(e){}
-    }
-    const spans=externalSpans(payload);
-    // A background adopt must not move the engineer to a different span.
-    // Keep the one they are on if the new payload still has it.
-    const curIdx=silent&&inp.external&&inp.external._selSpan?inp.external._selSpan.idx:null;
-    const keep=curIdx!=null?spans.find(x=>x.idx===curIdx):null;
-    const sel=keep||spans[0]||{idx:1,x0:0,x1:(payload.member&&payload.member.totalLength)||inp.geom.L,len:inp.geom.L};
-    const secNew=zonesToSec(payload,sel,inp.sec);
-    setInp({...inp, external:{...payload,_selSpan:sel}, geom:{...inp.geom,L:sel.len}, ...(secNew?{sec:secNew}:{})});
-    if(window.BridgeHandoff) window.BridgeHandoff.markAdopted(APP_ID, window.BridgeHandoff.tokenOf(payload));
-    setHandoff(null);
-    if(silent&&BL&&BL.ok()){
-      const n=(payload.stations&&payload.stations.length)||0;
-      // Recomputed here rather than reused: only PS-Beam keeps a `continuous`
-      // local, and this block is byte-identical in both design apps.
-      const multi=spans.length>1||!!(payload.member&&Array.isArray(payload.member.spans)&&payload.member.spans.length>1);
-      const what=n+' station'+(n===1?'':'s')+', span '+sel.idx+' \u2014 '
-        +(payload.liveLoadType||'HL-93')+(multi?', continuous':'');
-      BL.log({channel:'demands', app:LOCK_APP, source:payload.producer||'MCT Generator', text:what});
-      BL.toast('Demands updated \u2014 '+(payload.producer||'MCT Generator'),what);
-    }
-    return true;
-  };
-  const dismissHandoff=()=>{ if(handoff&&window.BridgeHandoff) window.BridgeHandoff.markAdopted(APP_ID, handoff.token); setHandoff(null); };
-
-  /* ---- Demands channel lock ----
-     Standing consent to the analysis hand-off. While locked, checkHandoff
-     adopts instead of raising the banner, and the change log plus a toast are
-     the record -- an update that lands while this tab is in the background is
-     still auditable afterwards. */
-  const demandsLocked=!!(BL&&BL.isLocked('demands'));
-  const toggleDemandsLock=(on)=>{
-    if(!BL) return;
-    if(on){
-      BL.lock('demands',LOCK_APP);
-      BL.log({channel:'demands', app:LOCK_APP, source:'MCT Generator',
-        text:'auto-adopt ON \u2014 following the analysis model'});
-      BL.toast('Demands locked','New MIDAS demands from the MCT Generator will load here automatically until you unlock.');
-    } else {
-      BL.unlock('demands',LOCK_APP);
-      BL.log({channel:'demands', app:LOCK_APP, source:'MCT Generator', text:'auto-adopt OFF'});
-    }
-  };
-  // Re-check when the lock flips in another tab, so locking from the suite
-  // panel adopts whatever is already waiting rather than waiting for the next
-  // publish.
-  useEffect(()=>{ if(!BL) return; return BL.onChange((ch)=>{ if(ch==='demands') checkHandoff(); }); },[]);
-  // ── Geometry change detection from MCT (banner-prompted; user selects which changes to adopt) ──
-  const [geomChanges,setGeomChanges]=useState(null);
-  const [geomModalOpen,setGeomModalOpen]=useState(false);
-  const checkGeometryChanges=()=>{ const BGC=window.BridgeGeometryChanges; if(!BGC){ return; }
-    const changes=BGC.readGeometryChanges(); if(!changes){ setGeomChanges(null); return; }
-    const adoptedAt=BGC.adoptedGeometryAt(APP_ID);
-    if(adoptedAt===changes.producedAt){ setGeomChanges(null); return; }  // already adopted
-    // Locked, the geometry arrives inside the demands envelope itself, so
-    // this notice would only say the same thing twice. Read the lock from
-    // storage rather than a captured `demandsLocked`: this runs from a []
-    // effect and from a storage handler, both of which hold stale closures.
-    if(BL&&BL.ok()&&BL.isLocked('demands')){
-      BGC.markGeometryAdopted(APP_ID,changes.producedAt); setGeomChanges(null); return; }
-    setGeomChanges(changes);
-  };
-  useEffect(()=>{ checkGeometryChanges();
-    const onStorage=e=>{ const BGC=window.BridgeGeometryChanges; if(!BGC) return;
-      if(!e.key || e.key===BGC.K_GEOM_AT) checkGeometryChanges(); };
-    window.addEventListener('storage',onStorage);
-    return ()=>window.removeEventListener('storage',onStorage);
-  },[]);
-  const skipGeometryChanges=()=>{
-    if(!geomChanges) return;
-    if(window.BridgeGeometryChanges){ window.BridgeGeometryChanges.markGeometryAdopted(APP_ID, geomChanges.producedAt); }
-    setGeomChanges(null);
-    setGeomModalOpen(false);
-  };
-  // A demands lock makes this notice redundant; re-evaluate the moment it flips
-  // in any tab, so locking from the suite panel clears a banner already up.
-  useEffect(()=>{ if(!BL) return; return BL.onChange((ch)=>{ if(ch==='demands') checkGeometryChanges(); }); },[]);
-  // ── Capacity feedback: publish per-node φMn±/φVn over the FULL member to the MCT rating ──
-  // Re-render on any lock change so the capacity control reflects the shared
-  // state; InputsTab subscribes separately for its own driven fields.
-  const appLockTick=BLU.useLocks?BLU.useLocks():0;
-  const publishCapacity=(silent)=>{
-    const say=(m)=>{ if(!silent) alert(m); };
-    try{
-      if(!R.ok){ say('Fix the section inputs first — the section engine reported an error.'); return false; }
-      const ext=inp.external;
-      const extOk=!!(ext&&Array.isArray(ext.stations)&&ext.stations.length);
-      const spansAll=extOk? externalSpans(ext) : [{idx:1,x0:0,x1:+inp.geom.L,len:+inp.geom.L}];
-      const stationsOut=[], warns=[], oosSpans=[];
-      spansAll.forEach(sp=>{
-        let R2;
-        if(extOk){
-          const secNew=zonesToSec(ext,sp,inp.sec);
-          R2=computeAll({...inp, external:{...ext,_selSpan:sp}, geom:{...inp.geom,L:sp.len}, ...(secNew?{sec:secNew}:{})});
-        } else R2=R;
-        if(!R2.ok){ warns.push('Span '+sp.idx+' could not be evaluated: '+R2.error); return; }
-        if(R2.pnaOOS){ oosSpans.push(sp.idx); return; }   // PNA-OOS: no +φMn for that span, so nothing is published
-        const phiVn=R2.shearR.phiv*R2.shearR.Vcr;                 // end-panel basis (conservative)
-        (R2.chartFlex||[]).forEach(c=>{
-          stationsOut.push({x:+(sp.x0+c.x).toFixed(3), span:sp.idx,
-            phiMn_pos:+c.capPos.toFixed(1), phiMn_neg:+c.capNeg.toFixed(1),   // k-ft; neg ≤ 0
-            phiVn:+phiVn.toFixed(1),
-            Sx_pos:+c.SxPos.toFixed(0), Sx_neg:+c.SxNeg.toFixed(0),           // in³ (short-term comp. / cracked top)
-            fServLim:+c.fServLim.toFixed(2),                                  // ksi · (0.95 composite / 0.80 noncomposite)RhFyf
-            basis:c.compact?'Mp':'stress'});
-        });
-      });
-      if(oosSpans.length){ say('Capacity NOT sent to the MCT rating: span'+(oosSpans.length>1?'s ':' ')+oosSpans.join(', ')+' '+(oosSpans.length>1?'are':'is')+' outside the scope of this app. The plastic neutral axis falls below the web (bottom flange plastic force P_t exceeds P_s + P_c + P_w), which AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 do not cover, so no positive-moment capacity is computed there. Revise the section (e.g. reduce the bottom flange or increase the deck/top flange). The capacity already in shared storage, if any, is left unchanged.'); return false; }
-      if(!stationsOut.length){ say('No capacity stations could be computed.'); return false; }
-      const supports=extOk&&ext.member?ext.member.supports:[0,+inp.geom.L];
-      const payload={_schema:'bridge-design-capacity',schemaVersion:1,
-        producer:'ST-Girder',producedAt:new Date().toISOString(),
-        project:inp.proj.name||'',memberKey:inp.proj.girderId||'',
-        units:{force:'kip',length:'ft',moment:'ft-kip',modulus:'in3'},
-        phiIncluded:true, phiFlex:1.0, phiShear:1.0, Fy:R.matR.Fyf,
-        member:{supports, spans:spansAll.map(s=>s.len), totalLength:supports[supports.length-1]},
-        designSpanIdx:(R.ext&&R.ext.sel)?R.ext.sel.idx:1,
-        basis:'AASHTO LRFD 6.10 — φMn+ per 6.10.7 (Mp basis where compact, else stress-basis equivalent min(Fnc·St, Fnt·Sb)); φMn− per 6.10.8 cracked steel+rebar section; φVn = C·Vp end-panel (interior tension-field capacity not taken). φf = φv = 1.0 included.',
-        service:{note:'fServLim per station = '+(R.stress.s2Coef.toFixed(2))+'RhFyf (ksi) — 0.95 for a composite section, 0.80 for both flanges of a noncomposite section per 6.10.4.2.2; Sx_pos = short-term composite Sb, Sx_neg = cracked-section St for stress-based Service II / fatigue rating.'},
-        fatigue:{category:gdOverlay(inp).fatigue.category, FnFat:+R.fatigue.FnFat.toFixed(2), life:inp.fatigue.life},
-        stationCount:stationsOut.length, stations:stationsOut, warnings:warns};
-      const raw=JSON.stringify(payload);
-      if(silent){
-        // A locked republish that carries the same numbers is not news. Strip the
-        // timestamp and compare, so the consumers only ever see real movement.
-        try{ const prev=localStorage.getItem('bridgeSuite.v1.capacity');
-          if(prev){ const a=JSON.parse(prev), b=JSON.parse(raw);
-            delete a.producedAt; delete b.producedAt;
-            if(JSON.stringify(a)===JSON.stringify(b)) return false; } }catch(e){}
-      }
-      try{ localStorage.setItem('bridgeSuite.v1.capacity',raw);
-           localStorage.setItem('bridgeSuite.v1.capacity.updatedAt',payload.producedAt); }
-      catch(e){ say('Could not write to shared storage: '+e.message); return false; }
-      say('Capacity published — '+stationsOut.length+' stations over '+spansAll.length+' span(s).\n\nOpen the MCT app → AASHTO Rating and apply the "Design capacity received" banner.'+(warns.length?'\n\nWarnings:\n• '+warns.join('\n• '):''));
-      return true;
-    }catch(e){ say('Capacity publish failed: '+(e&&e.message||e)); return false; }
-  };
-  /* ---- Capacity channel lock ----
-     One-shot publish is still there (click the button while unlocked). Locking
-     turns it into a standing subscription: every recompute republishes, and the
-     MCT rating tab applies the new envelope without prompting. The debounce
-     matters — R recomputes on every keystroke and the payload is a few hundred
-     stations, so an undebounced publish would thrash localStorage and fire a
-     storage event per character typed. */
-  const capLocked=!!(BL&&BL.isLocked('capacity'));
-  const capTimer=useRef(null);
-  useEffect(()=>{
-    // Only one app republishes capacity, even with PS-Beam and ST-Girder
-    // both open on the same locked channel.
-    if(!BL||!BL.drives('capacity',LOCK_APP,'ST-Girder')) return;
-    clearTimeout(capTimer.current);
-    capTimer.current=setTimeout(()=>{
-      // publishCapacity(true) returns false when the payload is unchanged, so a
-      // recompute that does not move the capacity raises no toast anywhere.
-      if(publishCapacity(true)){
-        BL.log({channel:'capacity', app:LOCK_APP, source:'this app',
-          text:'republished the \u03c6Mn / \u03c6Vn envelope'});
-      }
-    },700);
-    return ()=>clearTimeout(capTimer.current);
-  },[R,inp,capLocked]);
-  const toggleCapLock=(on)=>{
-    if(!BL) return;
-    if(on){
-      const wrote=publishCapacity(true);
-      BL.lock('capacity',LOCK_APP);
-      BL.log({channel:'capacity', app:LOCK_APP, source:'this app',
-        text:'auto-publish ON \u2014 the MCT rating now follows this capacity'
-          +(wrote?'':' (envelope already current)')});
-      BL.toast('Capacity locked','The MCT rating will follow this girder\u2019s \u03c6Mn / \u03c6Vn envelope until you unlock it.');
-    } else {
-      BL.unlock('capacity',LOCK_APP);
-      BL.log({channel:'capacity', app:LOCK_APP, source:'this app', text:'auto-publish OFF'});
-    }
-  };
 
   const fileRef=useRef(), saveTimer=useRef();
-  // ── Auto-participate in the shared Bridge Project (created & managed only in MCT) ──
-  // ST-Girder has no Save / New / Delete / project-dropdown of its own. It autosaves its
-  // slice into whatever project is active, follows external project switches live, and
-  // keeps Export/Import JSON for portable single-design files + the per-session autosave.
-  const [curProjId,setCurProjIdRaw]=useState(()=>canSave&&BP()?BP().current():null);
-  const [activeName,setActiveName]=useState(()=>{ const id=canSave&&BP()?BP().current():null; const p=id&&BP().get(id); return p?p.name:''; });
-  const adoptProject=id=>{
-    if(!id||!BP()){ setCurProjIdRaw(null); setActiveName(''); return; }
-    const e=BP().get(id), slice=BP().getSlice(id,ST_APP);
-    setCurProjIdRaw(id); setActiveName(e?e.name:'');
-    if(slice){ const merged=mergeInputs(slice); setInp(merged);
-      try{ const dem=BP().getDemands(id); if(dem&&!merged.external&&window.BridgeHandoff) window.BridgeHandoff.publish(dem); }catch(e){}
-    } };
-  // Follow the active project when it's switched from another app (e.g. MCT loads a project).
-  useEffect(()=>{ if(!canSave||!BP())return;
-    const onStorage=e=>{ if(!e.key||e.key===BP().K_CUR||e.key===BP().K_PROJ){
-      const cur=BP().current();
-      if(cur!==curProjId){ adoptProject(cur); }
-      else { const p=cur&&BP().get(cur); setActiveName(p?p.name:''); } } };
-    window.addEventListener('storage',onStorage);
-    return ()=>window.removeEventListener('storage',onStorage);
-  },[curProjId]);
+  // ST-Girder saves its session in its own key (stgirder.session) only. Since 2026-10-19 (DISC) it no longer saves into,
+  // or follows, the shared bridge project of the MCT Generator.
   useEffect(()=>{ if(!canSave)return; clearTimeout(saveTimer.current);
     saveTimer.current=setTimeout(()=>{ const okS=saveInputs(inp);          // per-session autosave (always)
-      // Contribute to the ACTIVE shared project only — never create or rename one (that's MCT's job).
-      let okP=true;
-      try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)) okP=!!BP().saveSlice(cur,undefined,ST_APP,JSON.parse(JSON.stringify(inp))); } }catch(e){ okP=false; }
       // STG-S8: a failed write (browser storage full or blocked) is shown, not swallowed
-      setSaveFail(!okS?'session':(!okP?'project':''));
+      setSaveFail(!okS?'session':'');
     },400); return ()=>clearTimeout(saveTimer.current); },[inp,canSave]);
+  // An ST-Girder design from a shared MCT project, opened from the notice: cleaned like the saved session.
+  const openSlice=p=>{ const s=stgSliceOf(p.id); if(!s){ alert('The design "'+p.name+'" is no longer in the browser storage.'); return; }
+    if(!window.confirm('Open the ST-Girder design saved in the shared project "'+p.name+'"? It replaces the current inputs (Undo restores them).')) return;
+    const d=stgDisconnect(mergeInputs(s)); setInp(d.inp);
+    if(d.items.length) setDisc(stgDiscAdd(d.items.map(t=>'"'+p.name+'": '+t))); };
   useEffect(()=>{ const h=e=>{ const mod=e.ctrlKey||e.metaKey; if(!mod)return; const k=e.key.toLowerCase();
     if(k==='z'&&!e.shiftKey){e.preventDefault();undo();} else if((k==='z'&&e.shiftKey)||k==='y'){e.preventDefault();redo();} };
     window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[]);
@@ -7022,15 +5020,15 @@ function App(){
     rd.onload=()=>{ try{ const p=JSON.parse(rd.result);
       // GirderDetail hand-off file (HANDOFF.md §4.9): same confirm-and-apply path as "Pull from GirderDetail".
       if(p._schema==='stgirder-external-demands'&&extFromGD(p)){ gdAdopt(p,'file '+f.name); return; }
-      // external analysis envelope (MIDAS-style; PS-Girder or steel-beam schema)? attach, don't replace inputs.
-      if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'){
-        const spans=externalSpans(p);
-        const sel=spans[0]||{idx:1,x0:0,x1:(p.member&&p.member.totalLength)||inp.geom.L,len:inp.geom.L};
-        const secNew=zonesToSec(p,sel,inp.sec);          // auto-populate plates from section.zones if present
-        setInp({...inp, external:{...p,_selSpan:sel}, geom:{...inp.geom, L:sel.len}, ...(secNew?{sec:secNew}:{})});
+      // Any other demands file (MCT Generator / MIDAS, PS-Beam or steel-beam envelope) is refused (DISC, engineer decision 2026-10-19).
+      if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'||Array.isArray(p.stations)){
+        alert('ST-Girder now takes demands only from GirderDetail; this file is from '+(p.producer||p.generatedBy||'another tool (MCT Generator / MIDAS)')+' and was not loaded. Nothing was changed.\n\n'
+          +'Send the girder from GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder) and use "Pull from GirderDetail", or import its "Export hand-off (JSON)" file. Without GirderDetail demands ST-Girder uses its built-in simple-span analysis.');
         return;
       }
-      setInp(mergeInputs(p)); }catch(err){alert('Invalid file: '+err.message);} }; rd.readAsText(f); };
+      // An ST-Girder JSON file (Export JSON): data that came from the MCT Generator or LL & DL is cleared, as on open, and listed.
+      const d=stgDisconnect(mergeInputs(p)); setInp(d.inp);
+      if(d.items.length) setDisc(stgDiscAdd(d.items.map(t=>'File '+f.name+': '+t))); }catch(err){alert('Invalid file: '+err.message);} }; rd.readAsText(f); };
   /* ---- GirderDetail -> ST-Girder (HANDOFF.md §4.9): channel bridgeSuite.v1.girderDemands, receiver id 'stgirder' ----
      "Pull from GirderDetail" (or Import of the hand-off file) shows what will change and applies nothing until confirmed.
      It attaches the payload as the imported envelope (inp.external, the existing field; the payload itself records producer
@@ -7089,7 +5087,7 @@ function App(){
     if(pos(br.Lb)){ gm.Lb=br.Lb; chg('Unbraced length L_b',cur.geom.Lb,br.Lb,'ft ('+(br.type||'bracing')+')'); }
     nx.geom=gm;
     const ld={...cur.loads};
-    if(g.position==='interior'||g.position==='exterior'){ ld.pos=g.position; ld.posAuto=false; chg('Girder position',cur.loads.pos,g.position,'(no longer follows the design-beam chip)'); }
+    if(g.position==='interior'||g.position==='exterior'){ ld.pos=g.position; ld.posAuto=false; chg('Girder position',cur.loads.pos,g.position); }
     if(typeof sk.max==='number'&&isFinite(sk.max)){ ld.skew=sk.max; chg('Skew',cur.loads.skew,sk.max,'deg (largest support skew)'); }
     nx.loads=ld;
     if(g.label){ const gid=g.label+(g.position?' ('+g.position.charAt(0).toUpperCase()+g.position.slice(1)+')':''); nx.proj={...cur.proj, girderId:gid}; chg('Girder ID',cur.proj.girderId,gid); }
@@ -7145,16 +5143,6 @@ function App(){
     if(!gdPullReq.id||r.payload.producedAt!==gdPullReq.id){ no('The hand-off stored in this browser is not the one GirderDetail sent (sent '+(gdPullReq.id||'?')+', stored '+(r.payload.producedAt||'?')+').'); return; }
     gdAdopt(r.payload,'opened from GirderDetail',true); },[gdPullReq]);
   const uP=(k,v)=>setInp({...inp,proj:{...inp.proj,[k]:v}});
-  /* Shared project info (HANDOFF.md §4.1): title block <-> shared fields. Girder ID is not a bridge ID, so it is not mapped. */
-  const BX_MAP={projectName:'name',preparedBy:'by',date:'date',jobNo:'job'};
-  const bxOwn=()=>{const o={};Object.keys(BX_MAP).forEach(k=>{o[k]=(inp.proj&&inp.proj[BX_MAP[k]])||'';});return o;};
-  const bxShareProject=()=>{ if(window.BXProject) window.BXProject.share(bxOwn()); };
-  const bxUseProject=()=>{ if(window.BXProject) window.BXProject.use(bxOwn(),upd=>{
-    const pp={}; Object.keys(upd).forEach(k=>{pp[BX_MAP[k]]=upd[k];});
-    setInp(p=>({...p,proj:{...p.proj,...pp}})); }); };
-  /* superReactions hand-off (HANDOFF.md §4.4): send / export the unfactored end reactions of this girder line. */
-  const bxSendRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.send(()=>bxSuperRxPayload(inp,R),'ST-Girder','stgirder.html','stgirder'); else alert('The hand-off helper is not available in this browser.'); };
-  const bxExportRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.exportJSON(()=>bxSuperRxPayload(inp,R),'ST-Girder','stgirder.html'); else alert('The hand-off helper is not available in this browser.'); };
 
   const TABS=[['inputs','Inputs'],['section','Section Props'],['construct','Constructibility'],
     ['stresses','Stresses'],['flexure','Flexure'],['shear','Shear'],['diagrams','Diagrams'],
@@ -7165,31 +5153,7 @@ function App(){
   const nPass=R.ok?R.checks.filter(c=>c.pass).length:0;
 
   return(<div className="sheet"><div className="sheet-inner">
-    {handoff&&(handoff.version>HANDOFF_SUPPORTED_VERSION
-      ? <div className="callout warn" style={{marginTop:14,marginBottom:0}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
-            <b>⚠ Analysis output is newer than this app</b>
-            <button className="btn sm ghost" onClick={dismissHandoff}>✕ dismiss</button></div>
-          <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>The MCT Generator published schema <b>v{handoff.version}</b>; this ST-Girder build understands <b>v{HANDOFF_SUPPORTED_VERSION}</b>. Update ST-Girder to load it, or use JSON Import with a matching file.</div>
-        </div>
-      : <div className="callout" style={{marginTop:14,marginBottom:0,borderLeftColor:'#ea580c',background:'#fff7ed'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
-            <b>New analysis data available</b>
-            <button className="btn sm ghost" onClick={dismissHandoff}>✕ dismiss</button></div>
-          <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>
-            From <b>{handoff.payload.producer||'MCT Generator'}</b>{handoff.payload.project?' · '+handoff.payload.project:''}
-            {handoff.payload.member&&handoff.payload.member.key?' · '+handoff.payload.member.key:''} · {handoff.payload.stations?handoff.payload.stations.length:0} stations · LL: <b>{handoff.payload.liveLoadType||'HL-93'}</b>
-            {handoff.payload.section&&handoff.payload.section.zones&&handoff.payload.section.zones.length?' · plate geometry included':''}.
-            Loading replaces the <b>imported demands</b> (and seeds plate geometry) — your materials and design settings stay.
-            <div className="btnrow" style={{marginTop:8}}>
-              <button className="btn sm pri" onClick={()=>adoptHandoff(handoff.payload)}>Load these demands</button>
-              {BLU.LockToggle&&<BLU.LockToggle ch="demands" onToggle={()=>{
-                // One click: take these demands and keep taking them.
-                adoptHandoff(handoff.payload); toggleDemandsLock(true); }}/>}
-              <button className="btn sm ghost" onClick={dismissHandoff}>Not now</button>
-            </div>
-          </div>
-        </div>)}
+    <StgDiscNotice rec={disc} onDismiss={dismissDisc} onOpen={openSlice}/>
     {gdAuto&&(gdAuto.ok
       ? <div className="callout" style={{marginTop:14,marginBottom:0,borderLeftColor:'#16a34a',background:'#f0fdf4'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
@@ -7203,51 +5167,6 @@ function App(){
             <button className="btn sm ghost" onClick={()=>setGdAuto(null)}>✕ dismiss</button></div>
           <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{gdAuto.text}</div>
         </div>)}
-    {geomChanges&&!demandsLocked&&(
-      <div className="geom-change-banner" onClick={()=>setGeomModalOpen(true)}>
-        Geometry has been updated in MCT – click to review what changed
-      </div>
-    )}
-    {geomModalOpen&&geomChanges&&(
-      <div className="geom-modal-overlay" onClick={()=>setGeomModalOpen(false)}>
-        <div className="geom-modal" onClick={e=>e.stopPropagation()}>
-          <h2>Geometry Changes from MCT</h2>
-          <div className="geom-select-all" style={{display:'block',fontSize:12,lineHeight:1.65,color:'#57534e'}}>
-            A record of what moved in the analysis model. The numbers themselves travel with the
-            demands hand-off, not from here — re-send the demands from the MCT Generator, or lock
-            the channel below and let every later change arrive on its own.
-          </div>
-          <div className="geom-modal-changes">
-            {(geomChanges.changes||[]).map((change,i)=>(
-              <div key={i} className="geom-change-item">
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:600,fontSize:13}}>{change.field}</div>
-                    {change.detail&&<div style={{fontSize:12,color:'#666',marginTop:2}}>{change.detail}</div>}
-                  </div>
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  <div>
-                    <div style={{fontSize:11,color:'#666',marginBottom:3}}>Current</div>
-                    <div className="geom-old-val">{String(change.oldVal||'—')}</div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:11,color:'#666',marginBottom:3}}>New</div>
-                    <div className="geom-new-val">{String(change.newVal||'—')}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="geom-modal-buttons">
-            <button className="geom-modal-btn cancel" onClick={skipGeometryChanges}>Dismiss</button>
-            <button className="geom-modal-btn load" style={{background:'#ea580c',borderColor:'#ea580c'}}
-              onClick={()=>{ skipGeometryChanges(); toggleDemandsLock(true); }}>
-              🔒 Auto-update from the analysis model</button>
-          </div>
-        </div>
-      </div>
-    )}
     <div className="tblock">
       <div><h1>ST-Girder <span>/ AASHTO LRFD</span></h1>
         <div className="sub">Built-up steel plate girder design · Strength · Service II · Constructibility · Fatigue</div></div>
@@ -7264,11 +5183,6 @@ function App(){
         <div className="btnrow noprint" style={{marginTop:6,justifyContent:'flex-end',alignItems:'center'}}>
           <a className="bx-alltools" href="tools.html" target="_top" title="Open the list of all tools"
             style={{fontSize:10.5,fontFamily:'var(--mono)',color:'var(--ink2)',textDecoration:'none',marginRight:'auto'}}>← All tools</a>
-          <button className="btn sm ghost" onClick={bxUseProject} title="Fill Project, By, Date and Job No. from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
-          <button className="btn sm ghost" onClick={bxShareProject} title="Share this title block with the other tools">Share project info</button>
-          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-          <BeamChip nb={Math.max(2,Math.round(+(inp.geom&&inp.geom.nGirders)||0))||null} setBy="ST-Girder"/>
-          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           {canSave
             ? (saveFail
               ? <span style={{fontSize:10.5,color:'var(--fail)',fontFamily:'var(--mono)',fontWeight:700,marginRight:2}} title="The last autosave could not be written to browser storage">⚠ autosave failed</span>
@@ -7276,21 +5190,6 @@ function App(){
             : <span style={{fontSize:10.5,color:'var(--ink2)',fontFamily:'var(--mono)',marginRight:2}}>⚠ session not saved here</span>}
           <button className="btn sm ghost" onClick={undo} disabled={!undoStack.current.length} style={!undoStack.current.length?{opacity:.4}:{}}>↶ Undo</button>
           <button className="btn sm ghost" onClick={redo} disabled={!redoStack.current.length} style={!redoStack.current.length?{opacity:.4}:{}}>↷ Redo</button>
-          {canSave&&<React.Fragment>
-            <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-            <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink2)',whiteSpace:'nowrap'}}
-              title="The whole bridge is saved as one project, created and managed in the MCT app. ST-Girder autosaves its part into the active project — there is no separate ST-Girder save.">
-              {activeName
-                ? <span>◆ Project: <b style={{color:'var(--ink)'}}>{activeName}</b></span>
-                : <span>◇ No active project — session autosaved</span>}
-            </span>
-            <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-          </React.Fragment>}
-          <button className="btn sm ghost" onClick={()=>bridgeNav(null)} title="Back to the MIDAS/MCT analysis app">↩ MCT Analysis</button>
-          <button className="btn sm ghost" onClick={()=>bridgeNav('psbeam')} title="Open the prestressed concrete design app">PS-Beam ↗</button>
-          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-          <button className="btn sm ghost" onClick={bxSendRx} title="Send the unfactored DC1, DC2 and DW end reactions of this girder line (kip) to Bridge Substructure Loading">Send reactions to Substructure Loading</button>
-          <button className="btn sm ghost" onClick={bxExportRx} title="Save the same reactions hand-off as a JSON file (for Import hand-off in Substructure Loading, or a calc package)">Export hand-off (JSON)</button>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           <button className="btn sm ghost" onClick={pullGD} title="Load the forces, plates and design inputs of one girder sent by GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder). Its hand-off file loads with Import.">⇩ Pull from GirderDetail{gdNew&&<span style={{color:'#ea580c'}}> ●</span>}</button>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
@@ -7302,8 +5201,7 @@ function App(){
       </div>
     </div>
 
-    {saveFail&&<div className="callout warn noprint" style={{marginTop:14}}><b>Autosave failed.</b> The last change could not be written to browser storage ({saveFail==='session'?'ST-Girder session key stgirder.session':'the active shared project'}). The storage is probably full: every tool opened from this folder shares one browser storage area (about 5 MB). Use <b>Export JSON</b> now to keep your work, then free space (for example delete old projects in the MCT app). This message clears on the next successful save.</div>}
-    <LockAutoSync inp={inp} set={setInp}/>
+    {saveFail&&<div className="callout warn noprint" style={{marginTop:14}}><b>Autosave failed.</b> The last change could not be written to browser storage (ST-Girder session key stgirder.session). The storage is probably full: every tool opened from this folder shares one browser storage area (about 5 MB). Use <b>Export JSON</b> now to keep your work, then free space (for example delete old projects in the other tools). This message clears on the next successful save.</div>}
     {!R.ok?
       <div className="callout warn" style={{marginTop:14}}><b>Input error:</b> {R.error}. Check the plate dimensions.</div>
     :<React.Fragment>
@@ -7341,7 +5239,7 @@ function App(){
         {tab==='fatigue'&&<FatigueTab R={R}/>}
         {tab==='stiff'&&<StiffTab R={R}/>}
         {tab==='conn'&&<ConnTab R={R}/>}
-        {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp} onSendCapacity={publishCapacity} capLocked={capLocked} onToggleCapLock={toggleCapLock}/>}
+        {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp}/>}
         {tab==='optimize'&&<OptimizeTab R={R} inp={inp}/>}
         {tab==='nomen'&&<NomenclatureTab/>}
         {tab==='report'&&<ReportTab R={R} inp={inp} set={setInp}/>}
@@ -7355,13 +5253,6 @@ function App(){
   </div></div>);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
-<script>
-/* Floating cross-app sync drawer — shows every shared channel, which of them
-   this browser is following, and the running log of automatic updates. It is
-   deliberately outside the app's own layout because the state it reports is
-   the suite's, not this page's. */
-try{ if(window.BridgeLocks&&BridgeLocks.ok()) BridgeLocks.drawer({app:'stgirder'}); }catch(e){}
 </script>
 </body>
 </html>
