@@ -11378,6 +11378,27 @@ function idxLegalPosting(mv, method){
   });
 }
 
+// Vehicle → MIDAS result-case auto-detect (2026-10-19). The MCT names each moving-load case
+// "<vehicle>_<lane>" and MIDAS reports it as e.g. "<vehicle>_<lane>(max)". A plain substring
+// test let "AASHTO Legal Type 3" claim the cases of "AASHTO Legal Type 3-3" / "…Type 3S2" (and
+// "WORKCONSIST-I" those of "-II", "-III", "-IV"), so whichever case came first in the pasted
+// results was used. Now the vehicle name must match whole: the case name equals it, or it occurs
+// with the next character not a letter, digit or "-" (the "_" before the lane, "(", a space, end).
+function idxLcIsVehicle(lc, vn){
+  if (typeof lc!=='string' || !vn) return false;
+  if (lc===vn) return true;
+  for (let i=lc.indexOf(vn); i>=0; i=lc.indexOf(vn,i+1)){
+    const c = lc.charAt(i+vn.length);
+    if (c==='' || !/[0-9A-Za-z-]/.test(c)) return true;
+  }
+  return false;
+}
+// Cases of vehicle vn in loadedLCs (order kept), the exact-name case first.
+function idxVehicleLCs(loadedLCs, vn){
+  const m = (loadedLCs||[]).filter(lc=>idxLcIsVehicle(lc,vn));
+  return [...m.filter(lc=>lc===vn), ...m.filter(lc=>lc!==vn)];
+}
+
 // Permit live-load factor — MBE (3rd Ed.) Table 6A.4.5.4.2a-1, ROUTINE / ANNUAL permits
 // (unlimited crossings, mixed with traffic, two or more lanes loaded). Columns are the
 // permit weight ratio GVW/AL (kip/ft): <= 2.0 | 2.0–3.0 | >= 3.0; rows ADTT (one direction)
@@ -12087,12 +12108,13 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       (cfg.selectedVehicles||[]).forEach(vn=>{
         const existing = next[vn]||{};
         // Auto-detect LCs if not already assigned
+        const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
         const posLC = existing.posLC || (
-          loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(max)')||lc.includes('max')))
-          || loadedLCs.find(lc=>lc.includes(vn))
+          vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
+          || vLCs[0]
         );
         const negLC = existing.negLC !== undefined ? existing.negLC : (
-          loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(min)')||lc.includes('min'))) || ''
+          vLCs.find(lc=>lc.includes('(min)')||lc.includes('min')) || ''
         );
         // Auto-assign category and gamLL if not manually set
         const category = existing.category || defaultVehicleCategory(vn);
@@ -16143,9 +16165,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     const loadedLCs = [...new Set(origRows.map(r=>r.load))];
                     const next = {};
                     (cfg?.selectedVehicles||[]).forEach(vn=>{
-                      const posLC = loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(max)')||lc.includes('max')))
-                                 || loadedLCs.find(lc=>lc.includes(vn));
-                      const negLC = loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(min)')||lc.includes('min')));
+                      const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
+                      const posLC = vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
+                                 || vLCs[0];
+                      const negLC = vLCs.find(lc=>lc.includes('(min)')||lc.includes('min'));
                       if (posLC) next[vn] = { posLC, negLC: negLC||'' };
                     });
                     setVehicleLCMap(next);

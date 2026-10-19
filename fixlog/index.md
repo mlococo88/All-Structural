@@ -3281,3 +3281,96 @@ After:
 - **Owner conventions** (rounding, minimum posting, single vs per-vehicle sign, Service II for steel at legal loads): none are cited in the tool. Owner to confirm.
 - **When the box shows:** still only when the rated vehicle's governing RF < 1. A legal truck with RF < 1 while the rated vehicle passes is visible in Multi-Vehicle but gets no posting box.
 - **Edition:** MBE edition unstated in the tool (verify against the printed edition in use).
+
+## 2026-10-19 — PR: claude/index-legal-match (PR link added after merge)
+
+### Vehicle → MIDAS result-case auto-detect matches whole vehicle names (Tier 2: result change in one module)
+- **Problem (open item 1 of the claude/index-posting entry; engineer approved the fix 2026-10-19):** the auto-detect that maps each selected vehicle to its MIDAS result cases (`vehicleLCMap`, AASHTO Rating → Multi-Vehicle) used `lc.includes(vn)`. "AASHTO Legal Type 3" is a prefix of "AASHTO Legal Type 3-3" and "AASHTO Legal Type 3S2" (and "WORKCONSIST-I" of "-II", "-III", "-IV"), so when the pasted results list a 3-3 or 3S2 case before the Type 3 case, Type 3 got the other truck's case. It was then rated, and since claude/index-posting also posted, with the other truck's forces. The error can go either way: the 3-3 forces are larger in the check case below (posting too low), but a shorter truck's forces would make it unconservative.
+- **Where:** new functions `idxLcIsVehicle(lc, vn)` and `idxVehicleLCs(loadedLCs, vn)` after `function idxLegalPosting` (anchor `function idxLcIsVehicle(lc, vn){`). Used at the two places that had the substring match, both in `StepResults`:
+  1. the auto-populate effect (anchor `// Auto-populate vehicleLCMap when rows or selected vehicles change`), and
+  2. the "↺ Auto-detect LCs" button on the Multi-Vehicle tab (anchor `// Re-run auto-detection, clearing manual overrides`).
+  No other place matches vehicle names inside case names this way. `mctCarriesImpact` already matches `vn + '_'`, longest name first, and is unchanged.
+- **Case names:** the MCT writes `*MVLDCASE NAME=<vehicle>_<lane>` (`${v.name}_${safeLaneName}`). MIDAS returns the moving-load results under that name with a "(max)" / "(min)" / "(all)" tag, which the tool already uses to group cases (`groupedLCs`). After the vehicle name comes "_" (or "(", a space, or the end of the name).
+- **Rule:** the case belongs to vehicle `vn` when its name **equals** `vn`, or `vn` occurs in it with the **next character not `[0-9A-Za-z-]`**. The vehicle's cases keep their order in the pasted results, except that an exact-name case comes first. The max/min choice is as before: the first case containing "(max)"/"max" (else the first case) for LL Max, and the first containing "(min)"/"min" for LL Min.
+- **Hand-set mappings are kept:** the auto-populate effect still fills a vehicle's case only when `existing.posLC` is empty, and LL Min only when `existing.negLC` is undefined (unchanged lines). "↺ Auto-detect LCs" still clears overrides when clicked, as before. It now uses the whole-name match.
+- **Before (effect):**
+```js
+        const posLC = existing.posLC || (
+          loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(max)')||lc.includes('max')))
+          || loadedLCs.find(lc=>lc.includes(vn))
+        );
+        const negLC = existing.negLC !== undefined ? existing.negLC : (
+          loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(min)')||lc.includes('min'))) || ''
+        );
+```
+- **After (effect):**
+```js
+        const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
+        const posLC = existing.posLC || (
+          vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
+          || vLCs[0]
+        );
+        const negLC = existing.negLC !== undefined ? existing.negLC : (
+          vLCs.find(lc=>lc.includes('(min)')||lc.includes('min')) || ''
+        );
+```
+- **Before ("↺ Auto-detect LCs" button):**
+```js
+                      const posLC = loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(max)')||lc.includes('max')))
+                                 || loadedLCs.find(lc=>lc.includes(vn));
+                      const negLC = loadedLCs.find(lc=>lc.includes(vn)&&(lc.includes('(min)')||lc.includes('min')));
+```
+- **After (button):**
+```js
+                      const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
+                      const posLC = vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
+                                 || vLCs[0];
+                      const negLC = vLCs.find(lc=>lc.includes('(min)')||lc.includes('min'));
+```
+- **New code:**
+```js
+function idxLcIsVehicle(lc, vn){
+  if (typeof lc!=='string' || !vn) return false;
+  if (lc===vn) return true;
+  for (let i=lc.indexOf(vn); i>=0; i=lc.indexOf(vn,i+1)){
+    const c = lc.charAt(i+vn.length);
+    if (c==='' || !/[0-9A-Za-z-]/.test(c)) return true;
+  }
+  return false;
+}
+// Cases of vehicle vn in loadedLCs (order kept), the exact-name case first.
+function idxVehicleLCs(loadedLCs, vn){
+  const m = (loadedLCs||[]).filter(lc=>idxLcIsVehicle(lc,vn));
+  return [...m.filter(lc=>lc===vn), ...m.filter(lc=>lc!==vn)];
+}
+```
+- **§4 callout:** no formula, factor, unit or code reference changes. Only *which result case* a vehicle is auto-assigned changes, and that changes that vehicle's Multi-Vehicle RF and its posting. The provisions involved are unchanged: MBE 6A.4.4 (legal-load rating, Table 6A.4.4.2.3a-1) and MBE 6A.8.3, Eq. 6A.8.3-1 (posting). Edition: verify (the tool states none).
+- **Name collisions in the vehicle library** (every `name:` checked against every other): "AASHTO Legal Type 3" ⊂ "…Type 3-3", "…Type 3S2"; "WORKCONSIST-I" ⊂ "WORKCONSIST-II", "-III", "-IV"; "WORKCONSIST-II" ⊂ "WORKCONSIST-III". All are prefixes followed by "-", "S", "I" or "V", so the new rule rejects them all. Unit test of `idxLcIsVehicle` (13 cases, all pass): "AASHTO Legal Type 3" matches "…Type 3_Lane 1(max)", "…Type 3", "…Type 3(max)" and does not match "…Type 3-3_Lane 1(max)" or "…Type 3S2_Lane 1(max)". "WORKCONSIST-I" does not match "WORKCONSIST-II_L(max)". "Type EV2" does not match "Type EV23_L". "AASHTO Posting load SU4" does not match "…SU45_L". "HL-93TRK" matches "HL-93TRK_Lane 1(max)" and "HL-93TRK Lane 1 (max)".
+
+#### Check case: the pasted results list Type 3-3 and 3S2 before Type 3
+Model as in the claude/index-posting check case B: 4 × 20.25 ft, Mn⁻ 700 ft·k, φc = φs = φ = 1, LRFR Strength I, γDC 1.25, γDW 1.50, ADTT 5000 → legal γLL 1.45, s = 1.33. Legal Type 3 / 3-3 / 3S2 are selected, and the results are pasted in the order 3-3, 3S2, Type 3. All govern in M⁻ at node 131: C = 700.0, DC = 36.91, DW = 7.69 ft·k; numerator = 700.0 − 1.25 × 36.91 − 1.50 × 7.69 = 642.33.
+- **Before:** Type 3 → "AASHTO Legal Type 3-3_L1(max)" / "(min)" (the first case containing "AASHTO Legal Type 3"), so LL = 384.44 (the 3-3 forces). RF = 642.33 / (1.45 × 1.33 × 384.44) = 642.33 / 741.39 = **0.866**. Posting = (25/0.7) × (0.866 − 0.3) = 35.71 × 0.566 = **20.2 T**. Multi-Vehicle: 0.866, 21.7 T.
+- **After:** Type 3 → "AASHTO Legal Type 3_L1(max)" / "(min)", LL = 307.56. RF = 642.33 / (1.45 × 1.33 × 307.56) = 642.33 / 593.13 = **1.083** ≥ 1.0 → **no posting**. Multi-Vehicle: 1.083, 27.1 T. This is the same as when Type 3 is pasted first.
+- Type 3-3 (0.866 → 32.3 T) and Type 3S2 (0.325 → 1.3 T) are unchanged.
+
+#### Saved data
+- No key or format change: `mct_cfg_v3.rating.vehicleLCMap` keeps its shape.
+- **A saved project can hold a wrong mapping.** An auto-detected mapping is stored in `vehicleLCMap` exactly like a hand-set one (nothing marks it as automatic), and the effect never overwrites a stored `posLC`. A project saved by an earlier build with the 3-3 / 3S2 case first therefore keeps Type 3 on the wrong case after this fix, until the engineer clicks "↺ Auto-detect LCs" or picks the case by hand. This shows on the Multi-Vehicle tab ("LL Result Case" column) and in the posting box's worked line (case name).
+- **Proposed migration (not implemented, engineer to decide).** It would run once on opening, without overwriting silently. For each selected vehicle whose stored `posLC` (or `negLC`) fails `idxLcIsVehicle(case, vn)` but whole-matches another selected vehicle whose name starts with `vn`, while a case that whole-matches `vn` exists in the results:
+  - show a notice on the Multi-Vehicle tab, e.g. "Type 3 is mapped to 'AASHTO Legal Type 3-3_L1(max)', a Type 3-3 case (auto-detect before 2026-10-19). Use 'AASHTO Legal Type 3_L1(max)'?", with one button to re-map;
+  - or re-map automatically and list what changed in the notice.
+  - A deliberate hand-set cross-mapping cannot be told apart from an old auto-detect, which is why a confirm button is proposed rather than a silent change.
+
+#### How verified
+- `node tests/check-syntax.mjs index.html`: all 7 scripts pass.
+- `node tests/compare.mjs --tool page --file index.html`: page.text and page.storage identical (only the usual Babel note on both sides).
+- Main (f35f938) vs branch, headless, same sibling files, eight cases with the claude/index-posting readout (every AASHTO Rating sub-tab, AREMA, Results, Generate, report tables/tiles/MCT/posting box, AREMA report, `bridgeSuite.v1.*` hand-off payloads, all localStorage):
+  - Built-in default, the 4-span check case, check case + legal trucks (Type 3 first), LFR with legal trucks (box shown), LFR with legal trucks (no box), 3-span quick-calc/IM: **all identical**.
+  - **Reordered results (3-3, 3S2 before Type 3):** only Type 3's mapping and its results differ. These are the Multi-Vehicle row (case, RF 0.866 → 1.083, tons 21.7 → 27.1), the posting card and worked line (20.2 T → no posting), the report posting box, and `mct_cfg_v3.rating.vehicleLCMap["AASHTO Legal Type 3"].posLC/negLC` (3-3 cases → Type 3 cases). Everything else is identical, including the `bridgeSuite.v1.*` payloads.
+  - **Hand-set mapping kept:** the reordered case with `vehicleLCMap["AASHTO Legal Type 3"]` saved pointing at the 3-3 cases gives identical results (the stored mapping is not touched).
+    - One run showed `bridgeSuite.v1.migrated.stgirder` present on main and absent on the branch: a timing artifact of the embedded ST-Girder page, with the sibling files identical on both sides. A re-run was all identical.
+- **Other copies:** none. The shared `bridgeSuite.v1.*` blocks are not touched.
+
+#### Open items
+- The saved-project migration above (engineer to decide).
+- **"↺ Auto-detect LCs" drops category and γLL (pre-existing, not changed).** The button writes `{posLC, negLC}` only, so a vehicle's stored category and γLL are dropped. Until the auto-populate effect runs again (new results, vehicle selection, limit state, method or ADTT), `multiVehicleData` falls back to category "Design" and the rating-level γLL. A legal truck is then rated, and its posting reported as "not computed — rated as Design", at the design γLL. Keep category/γLL in the button (a result change)? Engineer to decide.
