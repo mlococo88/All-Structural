@@ -559,7 +559,7 @@ const BARS = { // db (in), Ab (in^2)
   "7":{db:0.875,Ab:0.60}, "8":{db:1.000,Ab:0.79}, "9":{db:1.128,Ab:1.00},
   "10":{db:1.270,Ab:1.27}, "11":{db:1.410,Ab:1.56}
 };
-// AASHTO Table 3.11.6.4-1 — equivalent height of soil for vehicular load on
+// AASHTO Table 3.11.6.4.1-1 — equivalent height of soil for vehicular load on
 // abutments perpendicular to traffic. Editable in Load Factor panel.
 const HEQ_TABLE_DEFAULT = [{H:5,heq:4.0},{H:10,heq:3.0},{H:20,heq:2.0}];
 
@@ -734,7 +734,7 @@ const VALID = {
   "soil.esQ":{hard:[0,10], typ:[0,1.0], msg:"Earth surcharge ES above 1.0 ksf is unusual — confirm the adjacent-load source."},
   "piles.dd":{hard:[0,500], typ:[0,100], msg:"Downdrag above 100 kip/pile is unusual — confirm with the geotechnical report."},
   "seismic.As":{hard:[0,1.5], typ:[0.05,0.75], msg:"Acceleration coefficient A_s outside the typical 0.05–0.75 range."},
-  "seismic.khR":{hard:[0.1,1.0], typ:[0.5,1.0], msg:"k_h ratio: 0.5 applies to walls free to displace 1–2 in [11.6.5.2.1]; 1.0 for restrained walls."},
+  "seismic.khR":{hard:[0.1,1.0], typ:[0.5,1.0], msg:"k_h ratio: 0.5 applies to walls free to displace 1–2 in [11.6.5.2.2]; 1.0 for restrained walls."},
   "seismic.kv":{hard:[0,0.5], typ:[0,0.2], msg:"k_v is commonly taken as 0 for walls."},
   "seismic.hEQr":{hard:[0.33,0.7], typ:[0.4,0.6], msg:"ΔPAE application height ratio outside the common 0.4–0.6H range."},
   "constr.hFill":{hard:[0,80], typ:[0,40], msg:"Construction backfill height appears high — verify."},
@@ -1033,7 +1033,7 @@ function buildInputs(){
     ${inpRow("Backfill unit weight γ","soil.gamma","kcf")}
     ${inpRow("Backfill friction angle φ<sub>f</sub>","soil.phi","deg")}
     ${S.soil.method==="coulomb"? inpRow("Wall friction angle δ","soil.delta","deg",{title:"Coulomb only. The resultant acts at δ from the normal to the wall back; horizontal and vertical components are carried separately."}):""}
-    <div class="subhead">Live-load surcharge h<sub>eq</sub> (Table 3.11.6.4-1, editable)</div>
+    <div class="subhead">Live-load surcharge h<sub>eq</sub> (Table 3.11.6.4.1-1, editable)</div>
     ${inpRow("h<sub>eq</sub> at wall height 5 ft","soil.heq5","ft")}
     ${inpRow("h<sub>eq</sub> at wall height 10 ft","soil.heq10","ft")}
     ${inpRow("h<sub>eq</sub> at wall height ≥ 20 ft","soil.heq20","ft")}
@@ -1281,8 +1281,8 @@ function buildInputs(){
     <div class="chk-row"><input type="checkbox" id="chkSeis" data-path="seismic.on" ${sq.on?"checked":""}>
     <label for="chkSeis"><b>Enable Extreme Event I</b> (M–O seismic earth pressure + inertia)</label></div>
     ${sq.on?`
-      ${inpRow("Site acceleration coefficient A<sub>s</sub> (F<sub>pga</sub>·PGA)","seismic.As","g",{title:"From the seismic hazard maps / geotech report. [3.10.4.2]"})}
-      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × A<sub>s</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.1]"})}
+      ${inpRow("Site acceleration coefficient A<sub>s</sub> (S<sub>a</sub> at T = 0 s)","seismic.As","g",{title:"Risk-targeted design acceleration coefficient at T = 0 s for the site class, from the AASHTO-USGS Seismic Design Ground Motion Database or the geotech report [3.10.4.1]; k_h0 = A_s at the wall base [11.6.5.2.1]."})}
+      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × A<sub>s</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.2]"})}
       ${inpRow("Vertical coefficient k<sub>v</sub>","seismic.kv","–")}
       ${inpRow("ΔP<sub>AE</sub> application height ratio (× H)","seismic.hEQr","–",{title:"Dynamic increment applied at this fraction of H (0.6H classic Seed–Whitman; static part stays at H/3)."})}
       ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","γp max/min, as Strength (1.50 / 0.90) [T.3.4.1-1, -2]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
@@ -1982,8 +1982,12 @@ function computeAll(){
     const betaS=1+dc/(0.7*(o.h-dc));
     const gE=+S.reinf.gammaE;
     const sMax=fss>0? 700*gE/(betaS*fss)-2*dc : Infinity;
-    // development [5.10.8.2.1]
-    const ld=Math.max(12, 2.4*bar.db*m.fy/Math.sqrt(m.fc));
+    // development [AASHTO LRFD 10th Ed. 5.10.8.2.1a]: l_db = 0.17·db·[(λer·fy - Fh/Ab)/(1.97·λ·f'c^0.25)]^2 (Eq. 5.10.8.2.1a-2)
+    // with λer = λ = 1.0 and Fh = 0 (straight bar, normal weight); l_d = l_db·λrl·λcf·λrc (Eq. 5.10.8.2.1a-1) with all three
+    // factors taken as 1.0 (upper bound, as before) and >= 12 in; f'c <= 15 ksi (5.10.8.2.1). Same form as ACI Rebar Development Length.html.
+    const fc4=Math.pow(Math.min(m.fc,15),0.25);
+    const ldb=0.17*bar.db*Math.pow(m.fy/(1.97*fc4),2);
+    const ld=Math.max(12, ldb);
     // shrinkage & temperature [5.10.6]
     const hIn=o.hST||o.h, bST=o.bST||b;                 // b = least width, h = least thickness of the component (in) [Eq. 5.10.6-1]
     let AsST=1.30*bST*hIn/(2*(bST+hIn)*m.fy);
@@ -1994,7 +1998,7 @@ function computeAll(){
     if(!tensionCtrl) warn(`${o.name}: section is NOT tension-controlled (ε_t = ${fmt(epsT,4)} < 0.005) — φ reduced to ${fmt(phiF,3)} per the 5.5.4.2 transition; consider more depth or less steel.`);
     return {...o, As, AsReq, d, a, c:c2, beta1, epsT, tensionCtrl, phiF, phiMn, Sc, Mcr, MuMin, minOK,
       dv, Vc, phiVn, dcFlex:o.Mu/phiMn, dcShear:o.Vu/phiVn, betaMode, betaV, epsS, sxe,
-      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, ld, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
+      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
   }
 
   /* ---- Backwall ---- */
@@ -2553,8 +2557,8 @@ function computeAll(){
       ["fnd.phiB",0.45,"φb bearing [10.5.5.2.2] (tool default)"],
       ["piles.phiC",0.70,"φc pile compression (tool default; method-dependent)"],
       ["piles.phiUp",0.60,"φup pile uplift (tool default; method-dependent)"],
-      ["soil.heq5",4.0,"h_eq @ 5 ft [T.3.11.6.4-1]"],["soil.heq10",3.0,"h_eq @ 10 ft [T.3.11.6.4-1]"],
-      ["soil.heq20",2.0,"h_eq @ ≥20 ft [T.3.11.6.4-1]"]
+      ["soil.heq5",4.0,"h_eq @ 5 ft [T.3.11.6.4.1-1]"],["soil.heq10",3.0,"h_eq @ 10 ft [T.3.11.6.4.1-1]"],
+      ["soil.heq20",2.0,"h_eq @ ≥20 ft [T.3.11.6.4.1-1]"]
     ];
     const ov=[];
     DEF.forEach(([p,dv,label])=>{ const v=+getPath(S,p);
@@ -2742,7 +2746,7 @@ function renderTabLoads(R){
   h+=panel("o-basis","1.0","Basis of Design — Methods, Built-In Assumptions & Limits of Applicability",`
     <div class="note-box" style="line-height:1.55">
     <b>1.</b> Earth pressure: <b>${S.soil.method==="rankine"?"Rankine":"Coulomb"}</b> active theory on the vertical plane through the heel end; at-rest K₀ not used (free-standing cantilever) [3.11.5]. Valid for β &lt; φ and a wall free to translate/rotate.<br>
-    <b>2.</b> Live-load surcharge: equivalent soil height h<sub>eq</sub> interpolated from Table 3.11.6.4-1; vertical LSv counted only where it increases demand.<br>
+    <b>2.</b> Live-load surcharge: equivalent soil height h<sub>eq</sub> interpolated from Table 3.11.6.4.1-1; vertical LSv counted only where it increases demand.<br>
     <b>3.</b> Longitudinal distribution: <b>${S.dist.model==="floating"?"MassDOT floating bridge":S.dist.model==="fixed"?"defined fixed bearing (100%)":"manual"}</b> — BR/TU/CR·SH/WS<sub>x</sub> shares ${fmt(shB.shBR*100,0)}/${fmt(shB.shTU*100,0)}/${fmt(shB.shCR*100,0)}/${fmt(shB.shWS*100,0)}% to this abutment [MassDOT 3.1.8.3].<br>
     <b>4.</b> Passive resistance at toe: <b>${R.passive.on?"ENABLED (φep applied — verify scour)":"neglected (conservative default)"}</b> [3.11.1].<br>
     <b>5.</b> Groundwater: balanced condition assumed (equal water both sides — no net hydrostatic thrust); buoyant unit weights below the modeled water table.<br>
@@ -2822,10 +2826,10 @@ function renderTabLoads(R){
   /* --- LS --- */
   const Ls=R.LS;
   h+=panel("o-ls","1.4","Live-Load Surcharge (LS) [3.11.6.4]",`
-    ${eqB("Equivalent height of soil (interpolated from Table 3.11.6.4-1)","AASHTO 3.11.6.4",[
+    ${eqB("Equivalent height of soil (interpolated from Table 3.11.6.4.1-1)","AASHTO 3.11.6.4.1",[
       `h_{eq} = f(H) = f(${fmtT(geo.H)}\\ \\text{ft}) = ${fmtT(Ls.heq)}\\ \\text{ft}`],
       `Table points in use: H = 5 ft → ${fmt(+s.heq5,1)} ft; 10 ft → ${fmt(+s.heq10,1)} ft; ≥ 20 ft → ${fmt(+s.heq20,1)} ft (editable in panel I-3).`)}
-    ${eqB("Surcharge pressure and resultant (rectangular, at H/2)","AASHTO 3.11.6.4, Eq. 3.11.6.4-1",[
+    ${eqB("Surcharge pressure and resultant (rectangular, at H/2)","AASHTO 3.11.6.4.1, Eq. 3.11.6.4.1-1",[
       "p_{LS} = k_a\\,\\gamma\\,h_{eq}",
       `p_{LS} = (${fmtT(R.ka,4)})(${fmtT(s.gamma,3)})(${fmtT(Ls.heq)}) = ${fmtT(Ls.pLS,3)}\\ \\text{ksf}`,
       `P_{LS} = p_{LS}\\,H\\cos\\iota\\,L_{ab} = (${fmtT(Ls.pLS,3)})(${fmtT(geo.H)})(${fmtT(E.ci,4)})(${fmtT(g.Lab)}) = ${fmtT(Ls.LSh)}\\ \\text{kip at } z = H/2 = ${fmtT(Ls.zLS)}\\ \\text{ft}`])}
@@ -3073,13 +3077,13 @@ function renderTabStab(R){
       <div class="figcap">Bearing-pressure distributions: Service I (trapezoidal/triangular) and governing Strength (effective uniform over B′ for soil; linear for rock). |e| is used; the governing resultant is on the <b>${bc.side||"toe"}</b> side${bc.side==="heel"?" (diagram mirrored — peak at the heel)":""}. Toggle series in the legend.</div>
     `);
     const sv=R.serviceBearing;
-    h+=panel("o-svc","3.4","Service I — Bearing, Settlement & Global Stability Flags [10.6.2, 11.6.2.3]",`
+    h+=panel("o-svc","3.4","Service I — Bearing, Settlement & Global Stability Flags [10.6.2, 11.6.3.7]",`
       ${govNote(sv.lbl+" — Service I")}
       ${eqB("Service-level bearing pressures (γ = 1.0)","AASHTO 10.6.2, 11.6.3.4",[
         sv.mode==="trap"?"q_{max,min} = \\dfrac{\\Sigma V}{B\\,L_{ab}}\\left(1\\pm\\dfrac{6e}{B}\\right)":"q_{max} = \\dfrac{2\\,\\Sigma V}{3\\,L_{ab}(B/2-e)}\\ \\text{over } L_c=3(B/2-e)",
         ...(sv.bx?[`e_L = \\dfrac{|\\Sigma M_t|}{\\Sigma V} = \\dfrac{${fmtT(Math.abs(sv.c.Mt))}}{${fmtT(sv.V)}} = ${fmtT(sv.eL,3)}\\ \\text{ft}\\,, \\quad \\dfrac{6e}{B}+\\dfrac{6e_L}{L_{ftg}} = ${fmtT(sv.bx.kern,3)}\\ ${sv.bx.full?"\\le":">"}\\ 1 \\;\\Rightarrow\\; ${sv.bx.full?"q = \\dfrac{\\Sigma V}{B\\,L_{ftg}}\\left(1\\pm\\dfrac{6e}{B}\\pm\\dfrac{6e_L}{L_{ftg}}\\right)":"\\text{planar no-tension pressure (solved numerically)}"}`]:[]),
         `q_{max} = ${fmtT(sv.q)}\\ \\text{ksf}${sv.bx?"\\ (\\text{corner})":""}, \\qquad q_{min} = ${fmtT(sv.qmin)}\\ \\text{ksf}, \\qquad e_{svc} = ${fmtT(sv.e)}\\ \\text{ft}`])}
-      <div class="note-box"><b>External geotechnical items (not solved in this tool):</b> settlement and overall (global slope) stability are to be evaluated by the geotechnical engineer using the Service I pressures and loads above. [10.6.2.4, 11.6.2.3, 11.6.3.7]</div>
+      <div class="note-box"><b>External geotechnical items (not solved in this tool):</b> settlement and overall (global slope) stability are to be evaluated by the geotechnical engineer using the Service I pressures and loads above. [10.6.2.4, 11.6.3.7]</div>
     `);
   }else{
     h+=panel("o-stab-na","3.1","External Stability — Pile Branch Active",`
@@ -3264,10 +3268,11 @@ function sectionHTML(c, demHTML, secNo, title){
     <div class="checkline ${c.crackOK?"pass":"fail"}"><span class="flagchip ${c.crackOK?"pass":"fail"}">${c.crackOK?"PASS":"FAIL"}</span>
       Provided spacing s = ${fmt(c.sp,1)} in ${c.crackOK?"≤":">"} s<sub>max</sub> = ${fmt(c.sMax)} in &nbsp;(M<sub>s</sub> = ${fmt(c.Ms)} kip·ft/ft, γ<sub>e</sub> = ${fmt(c.gE)})</div>
     <div class="subhead">Shrinkage & temperature + development [5.10.6, 5.10.8]</div>
-    ${eqB("S&T reinforcement (each face, each direction) & basic development length","AASHTO 5.10.6 (Eq. 5.10.6-1), 5.10.8.2.1a (Eq. 5.10.8.2.1a-2)",[
+    ${eqB("S&T reinforcement (each face, each direction) & tension development length","AASHTO 5.10.6 (Eq. 5.10.6-1), 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2)",[
       `A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y} = \\dfrac{1.30(${fmtT(c.bST,1)})(${fmtT(c.hST,1)})}{2(${fmtT(c.bST,1)}+${fmtT(c.hST,1)})(${fmtT(m.fy,1)})} = ${fmtT(c.AsST)}\\ \\text{in}^2/\\text{ft} \\quad (0.11 \\le A_{s,ST} \\le 0.60;\\ b,\\,h = \\text{least width, least thickness of the component})`,
-      `\\ell_d = \\dfrac{2.4\\,d_b\\,f_y}{\\sqrt{f'_c}} = \\dfrac{2.4(${fmtT(BARS[c.bar].db,3)})(${fmtT(m.fy,1)})}{\\sqrt{${fmtT(m.fc,1)}}} = ${fmtT(c.ld,1)}\\ \\text{in}`],
-      "S&T applies to exposed faces not otherwise reinforced; development length shown with all modification factors = 1.0 — confirm hooks/embedment in detailing.")}
+      `\\ell_{db} = 0.17\\,d_b\\left(\\dfrac{\\lambda_{er}f_y - F_h/A_b}{1.97\\,\\lambda\\,(f'_c)^{0.25}}\\right)^2 = 0.17(${fmtT(BARS[c.bar].db,3)})\\left(\\dfrac{1.0(${fmtT(m.fy,1)}) - 0}{1.97(1.0)(${fmtT(Math.min(m.fc,15),1)})^{0.25}}\\right)^2 = ${fmtT(c.ldb,1)}\\ \\text{in}`,
+      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(1.0)(1.0)(1.0),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
+      "S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er, λ_rl, λ_cf and λ_rc all taken as 1.0 (λ_rc = 1.0 is its upper bound; no confinement credit) — confirm hooks/embedment in detailing.")}
     ${c.skinNote?`<div class="note-box"><b>Side-face (skin) reinforcement [5.6.7]:</b> effective depth d = ${fmt(c.d,1)} in exceeds 3 ft (36 in), so longitudinal skin reinforcement is required on each side face over the lower h/2, with A<sub>sk</sub> ≥ 0.012(d − 30) = <b>${fmt(c.skinAsk)} in²/ft per face</b> (need not exceed A<sub>s</sub>/4). Provide and detail this steel — it is a note, not designed by the tool.</div>`:""}
   `);
 }
@@ -3319,7 +3324,7 @@ function renderTabStruct(R){
   h+=panel("o-str-shearfric","5.5","Stem-to-Footing Shear Friction [AASHTO 5.7.4]",`
     ${govNote((sf.lbl||"")+" — "+(sf.ls||""))}
     ${abutWorkedIn([["tab-struct","o-str-Stem","5.2 Stem","V_ui (stem-base V_u)"]])}
-    <div class="note-box">Interface: <b>${esc(sf.prep.name)}</b> — c = ${fmt(sf.prep.c,3)} ksi, μ = ${fmt(sf.prep.mu,2)}, K₁ = ${fmt(sf.prep.K1,2)}, K₂ = ${fmt(sf.prep.K2,1)} ksi [Table 5.7.4.4-1]. Per 1-ft strip of wall; the crossing reinforcement is the stem back-face dowels (A<sub>vf</sub> = A<sub>s,stem</sub>).</div>
+    <div class="note-box">Interface: <b>${esc(sf.prep.name)}</b> — c = ${fmt(sf.prep.c,3)} ksi, μ = ${fmt(sf.prep.mu,2)}, K₁ = ${fmt(sf.prep.K1,2)}, K₂ = ${fmt(sf.prep.K2,1)} ksi [Art. 5.7.4.4]. Per 1-ft strip of wall; the crossing reinforcement is the stem back-face dowels (A<sub>vf</sub> = A<sub>s,stem</sub>).</div>
     ${eqB("Interface shear resistance","AASHTO 5.7.4.3, Eq. 5.7.4.3-3 (caps: Eq. -4, -5)",[
       "V_{ni} = c\\,A_{cv} + \\mu\\,(A_{vf}f_y + P_c) \\le \\min(K_1 f'_c A_{cv},\\; K_2 A_{cv})",
       `V_{ni} = ${fmtT(sf.prep.c,3)}(${fmtT(sf.Acv,0)}) + ${fmtT(sf.prep.mu,2)}\\,[(${fmtT(sf.Avf)})(${fmtT(m.fy,1)}) + ${fmtT(sf.Pc)}] = ${fmtT(sf.Vni_raw)}\\ \\text{kip/ft}`,
@@ -3338,7 +3343,7 @@ function renderTabStruct(R){
   const bs=R.checks.bearingSeat, sm=R.seatMat, bg=S.bearing;
   h+=panel("o-str-bearing","5.6","Bearing on Concrete — Bridge Seat [AASHTO 5.6.5]",`
     ${govNote("Governing single-bearing factored vertical — girder "+bs.pgirder+", "+bs.pls)}
-    ${eqB("Factored bearing demand & resistance","AASHTO 5.6.5 (Eq. 5.6.5-1, -2), 5.5.4.2.1",[
+    ${eqB("Factored bearing demand & resistance","AASHTO 5.6.5 (Eq. 5.6.5-1, -2), 5.5.4.2",[
       `A_1 = L_{pad}\\,W_{pad} = ${fmtT(bg.padL,1)}\\times${fmtT(bg.padW,1)} = ${fmtT(bs.A1,0)}\\ \\text{in}^2\\,, \\qquad q_b = \\dfrac{P_u}{A_1} = \\dfrac{${fmtT(bs.Pu)}}{${fmtT(bs.A1,0)}} = ${fmtT(bs.qb,3)}\\ \\text{ksi}`,
       `m = \\sqrt{A_2/A_1} \\le 2 \\;\\Rightarrow\\; m = ${fmtT(bs.m,3)} \\quad(\\text{from seat spread, } w_{seat}=${fmtT(bs.A2note,1)}\\text{ in})`,
       `q_R = \\varphi_b\\,(0.85 f'_c)\\,m = ${fmtT(bs.phiB,2)}(0.85\\times${fmtT(m.fc,1)})(${fmtT(bs.m,3)}) = ${fmtT(bs.qR,3)}\\ \\text{ksi}`],
@@ -4884,7 +4889,7 @@ const ABUT_REFS=[
   ["","Art. 4.7.4.4 (minimum support length)"],
   ["","Section 5 — 5.4.2, 5.5.4.2, 5.6.2.1, 5.6.3, 5.6.5, 5.6.7, 5.7.2.8, 5.7.3, 5.7.4, 5.8, 5.10.6, 5.10.8.2.1a, 5.12.8.6"],
   ["","Section 10 — 10.5.5.2.3, 10.6.1.3, 10.6.2, 10.6.3.1, 10.6.3.4, 10.6.5, 10.7.1.5, 10.7.3.8, 10.7.3.10"],
-  ["","Section 11 — 11.6.2.3, 11.6.3, 11.6.5; Appendix A11.3.1 (Mononobe–Okabe)"],
+  ["","Section 11 — 11.6.3 (incl. 11.6.3.7), 11.6.5; Appendix A11.3.1 (Mononobe–Okabe)"],
   ["","Art. 14.6.3.1 (elastomeric bearing shear force)"],
   ["MassDOT","MassDOT LRFD Bridge Manual, Part I — §3.1.8.3 (floating-bridge longitudinal distribution; seismic connection); edition: verify"],
   ["Design basis","This tool's own design-basis notes, cited as “Design basis §x” (method statements, not a published standard)"]];
