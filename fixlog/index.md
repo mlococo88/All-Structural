@@ -3842,3 +3842,143 @@ index 4402d55..4d6f8bd 100644
     - the kept `vehicleLCMap` fields (`gamLLinv`/`gamLLop`/`customGam` with a typed γLL).
   - The `bridgeSuite.v1.*` payloads and all other storage are identical. LFR example: main after the click rated Type 3 at Design Inv γLL 1.30 (the rating level's factor); the branch keeps the vehicle's LFR Inv 2.17, the same as before the click.
 - **Other copies:** none. The shared `bridgeSuite.v1.*` blocks are not touched.
+
+## 2026-10-19 — PR: claude/aashto10-index (PR link added after merge)
+
+### Lp for lateral-torsional buckling = 1.1·rt·√(E/Fyc) (AASHTO LRFD 10th Ed.); references row relabelled to the 10th Ed. (Tier 2: result change in the Steel Calc / Composite capacity zones)
+- **Problem:** the compact unbraced length Lp was the 9th Ed. value, Lp = 1.0·rt·√(E/Fyc). This was in two places:
+  - the steel capacity zones (`steelIFlexure`, used by `steelZoneCaps` for "Steel Calc" and "Composite" zones);
+  - the App. A6 gate for the composite plastic Mn⁻ (`compNegPlasticGate`).
+  - The 10th Ed. uses 1.1·rt·√(E/Fyc) in both.
+- **Effect:** the old results were conservative. For Lp(9th) < Lb ≤ Lp(10th), the tool reduced Fnc / Mnc for LTB where the 10th Ed. gives the plateau value. For Lp(10th) < Lb < Lr, the straight line from Lp to Lr is moved, so Fnc / Mnc rises slightly. From Lr on, nothing changes (Lr does not depend on Lp). The composite Mn⁻ gate now passes for Lb up to Lp(10th).
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Eq. 6.10.8.2.3a-4 (6.10.8 path) and Eq. A6.3.3.1-4 (App. A6 path). Before: 9th Ed. Eq. 6.10.8.2.3-4 and Eq. A6.3.3-4 (1.0·rt·√(E/Fyc)).
+- **Where (1):** `steelIFlexure`, App. A6 branch, the line before `const Lr = 1.95*rt*(E/FL)` (approx. line 10299).
+  - Before: `    const Lp = rt*Math.sqrt(E/Fy);`
+  - After: `    const Lp = 1.1*rt*Math.sqrt(E/Fy);                                // Eq. A6.3.3.1-4 (10th Ed.)`
+- **Where (2):** `steelIFlexure`, 6.10.8 branch (anchor `Lr = Math.PI*rt*Math.sqrt(E/Fyr);`, approx. line 10318).
+  - Before: `  const Lp = rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);`
+  - After: `  const Lp = 1.1*rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);   // Lp: Eq. 6.10.8.2.3a-4 (10th Ed.)`
+- **Where (3):** `compNegPlasticGate` (anchor `(A6.3.3)'};`, approx. line 10438).
+  - Before:
+```js
+  const Lp = rt*Math.sqrt(E/Fy);
+  if (!(LbIn <= Lp)) return {ok:false, why:'Lb = '+(LbIn/12).toFixed(2)+' ft > Lp = '+(Lp/12).toFixed(2)+' ft (A6.3.3)'};
+  return {ok:true, why:'', Dc, Dcp, Lp};
+```
+  - After:
+```js
+  const Lp = 1.1*rt*Math.sqrt(E/Fy);                                // Eq. A6.3.3.1-4 (10th Ed.)
+  if (!(LbIn <= Lp)) return {ok:false, why:'Lb = '+(LbIn/12).toFixed(2)+' ft > '+steelLpTxt(rt, Fy, Lp)+' (A6.3.3)'};
+  return {ok:true, why:'', Dc, Dcp, Lp, rt};
+```
+- **Where (4), show the work (CLAUDE.md §6):** Lp is now worked where it is used: symbolically, with values substituted, and the result, with Lb next to it. This is done with:
+  - a new helper `steelLpTxt`, just above `function capLbKnown(z)`;
+  - the basis text of `steelZoneCaps`. It is shown on the zone card as "basis: Mn⁺ … · Mn⁻ … · Vn …" and in the report's capacity table.
+  - Added:
+```js
+// Lp worked for the basis line: Lp = 1.1·rt·√(E/Fyc) (10th Ed. Eq. 6.10.8.2.3a-4 = Eq. A6.3.3.1-4).
+function steelLpTxt(rt, Fy, Lp) {
+  return 'Lp = 1.1·rt·√(E/Fyc) = 1.1×'+rt.toFixed(3)+'×√('+STEEL_E+'/'+(+Fy)+') = '+Lp.toFixed(1)+' in = '+(Lp/12).toFixed(2)+' ft';
+}
+```
+  - `steelZoneCaps`, inner `flex`. Before: `    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+')' };`
+  - After:
+```js
+    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+'; '
+      +steelLpTxt(r.rt, Fy, r.Lp)+', Lb = '+(Lb/12).toFixed(2)+' ft)' };
+```
+  - `steelZoneCaps`, composite Mn⁻. Before: `      MnNeg = computeCompositeMnNeg(z); basis.neg = 'App. A6 — composite Mp (steel + rebar)';`
+  - After:
+```js
+      MnNeg = computeCompositeMnNeg(z); basis.neg = 'App. A6 — composite Mp (steel + rebar; Lb = '+(Lb/12).toFixed(2)
+        +' ft ≤ '+steelLpTxt(gate.rt, Fy, gate.Lp)+')';
+```
+- **Where (5):** the references row of the AASHTO report (`IDX_REFS_MBE`, anchor `['AASHTO LRFD','Bridge Design Specifications`).
+  - Before: `'Bridge Design Specifications: 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors). 10th Ed. where the tool states one; otherwise edition: verify'`
+  - After: `'Bridge Design Specifications, 10th Ed. (2024): 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors), 6.10.8.2.3 and App. A6.3.3 (lateral-torsional buckling of steel zones; Lp per Eq. 6.10.8.2.3a-4 / A6.3.3.1-4)'`
+  - The listed articles were checked against the 10th Ed. (2026-10-19 inventory).
+  - The report's "Bridge Owner" field is free text, so there is no owner mapping.
+  - The MBE row keeps "Edition: verify".
+- **Not changed:**
+  - Cb stays an input (blank = 1.0, as before).
+  - Lr, Fyr, FL, Rb, rt and Fe are unchanged.
+  - The shared `bridgeSuite.v1.*` bootstrap block is not touched.
+- **Saved data:** no key or format change. Zones are recomputed from their stored inputs.
+
+#### Check case 1 (6.10.8 path)
+Steel Calc zone: d = 68 in, tw = 0.4375 in, flanges 16 × 1.0 in top and bottom, Fy = 50 ksi, Lb = 8.50 ft = 102 in, Cb blank (1.0). Mn⁺, compression flange on top.
+- **Section:**
+  - D = 66 in, Dc = 33 in.
+  - 2Dc/tw = 150.86 > 5.7√(E/Fyc) = 137.27, so the 6.10.8 path applies (not App. A6).
+- **rt** = bfc / √(12·(1 + Dc·tw/(3·bfc·tfc))) = 16 / √(12 × (1 + 33 × 0.4375/48)) = 16 / √15.609 = 4.050 in.
+- **Rb:**
+  - awc = 2 × 33 × 0.4375/16 = 1.8047.
+  - Rb = 1 − 1.8047/(1200 + 300 × 1.8047) × (150.86 − 137.27) = 0.98592.
+  - Fmax = Rb·Rh·Fyc = 49.296 ksi.
+- **Lr and Sxc:**
+  - Fyr = 0.7 × 50 = 35 ksi (symmetric section).
+  - Lr = π·rt·√(E/Fyr) = π × 4.050 × √(29000/35) = 366.2 in.
+  - Sxc = 1364.6 in³.
+- **Before:**
+  - Lp = 1.0 × 4.050 × √580 = 97.53 in (8.13 ft), which is less than Lb = 102 in.
+  - Fnc = Cb·[1 − (1 − Fyr/(Rh·Fyc))·(Lb − Lp)/(Lr − Lp)]·Fmax = [1 − 0.3 × 4.469/268.69] × 49.296 = 0.99501 × 49.296 = **49.05 ksi**.
+  - Mn⁺ = 49.050 × 1364.6/12 = **5577.8 ft·k**. Basis "6.10.8 (LTB)".
+- **After:**
+  - Lp = 1.1 × 4.050 × √580 = 107.28 in (8.94 ft), which is at least Lb = 102 in.
+  - Fnc = Fmax = **49.30 ksi** (Eq. 6.10.8.2.3a-1).
+  - Mn⁺ = 49.296 × 1364.6/12 = **5605.8 ft·k** (+0.50 %).
+  - Basis "6.10.8 (FLB; Lp = 1.1·rt·√(E/Fyc) = 1.1×4.050×√(29000/50) = 107.3 in = 8.94 ft, Lb = 8.50 ft)". FLB and LTB both give Fmax here; the existing tie-break labels it FLB.
+- Vn = 167.5 k, unchanged.
+
+#### Check case 2 (App. A6 path)
+Steel Calc zone: d = 36 in, tw = 0.6 in, flanges 12 × 1.0 in top and bottom, Fy = 50 ksi, Lb = 6.50 ft = 78 in, Cb = 1.
+- **Section:**
+  - rt = 12 / √(12 × (1 + 17 × 0.6/36)) = 3.058 in.
+  - Mp = 29670 k·in (2472.5 ft·k), Myc = 25881 k·in, Rpc = 1.1464, Sxc = 517.62 in³.
+  - FL = 35 ksi.
+  - Lr = 302.1 in (unchanged).
+- **Before:**
+  - Lp = 1.0 × 3.058 × √580 = 73.64 in (6.14 ft), which is less than Lb = 78 in.
+  - Mnc = Cb·[1 − (1 − FL·Sxc/(Rpc·Myc))·(Lb − Lp)/(Lr − Lp)]·Rpc·Myc = [1 − 0.38940 × 4.356/228.50] × 29670 = 29449.7 k·in = **2454.1 ft·k** (LTB).
+- **After:**
+  - Lp = 1.1 × 3.058 × √580 = 81.01 in (6.75 ft), which is at least Lb = 78 in.
+  - Mnc = Rpc·Myc = Mp = **2472.5 ft·k** (+0.75 %).
+
+#### Check case 3 (composite Mn⁻ gate)
+Composite zone: the case-2 steel with tw = 1.0 in, f′c = 4 ksi, beff = 96 in, ts = 8 in, Asr = 1 in² at 4 in, "composite Mn⁻" on, Lb = 6.00 ft. Gate rt = 2.845 in.
+- **Before:**
+  - Lp = 68.5 in = 5.71 ft, which is less than Lb = 72 in, so the gate fails.
+  - Warning "Lb = 6.00 ft > Lp = 5.71 ft (A6.3.3); steel section only".
+  - Mn⁻ = **2936.8 ft·k** (steel only).
+- **After:**
+  - Lp = 1.1 × 2.845 × √580 = 75.4 in = 6.28 ft, so the gate passes.
+  - Mn⁻ = composite Mp = **3062.7 ft·k**.
+  - Basis "App. A6 — composite Mp (steel + rebar; Lb = 6.00 ft ≤ Lp = 1.1·rt·√(E/Fyc) = 1.1×2.845×√(29000/50) = 75.4 in = 6.28 ft)".
+
+#### How verified
+- **Syntax:** `node tests/check-syntax.mjs index.html` reports that all scripts pass.
+- **Headless, offline** (tests/lib.mjs library routing):
+  - main (12b90f7) and the branch were opened with the check-case zones seeded in `mct_cap_zones_v1`, and the page's own `steelZoneCaps()` was read.
+  - main gave 5577.8 / 2454.1 / 2936.8 ft·k; the branch gave 5605.8 / 2472.5 / 3062.7 ft·k, equal to the hand values above.
+  - The zone cards are not reached headlessly: the AASHTO Rating step needs pasted MIDAS results before it shows them. The cards print these same `steelZoneCaps()` values.
+- **Page smoke** (same readout as `tests/compare.mjs --tool page`):
+  - page text and localStorage after load are identical on main and the branch, with only the usual Babel size note on both.
+  - `compare.mjs` itself hit its 30 s navigation limit on both sides on the heavily loaded container, so the same readout was taken with a 300 s limit.
+- **Other copies:** `stgirder.html` already uses 1.1·rt (see fixlog/stgirder.md). The GirderDetail modules are not part of this change.
+
+#### Open items (engineer decision; not changed)
+1. **Fyr for LTB, 6.10.8 path.**
+   - The 10th Ed. takes Fyr = 0.5Fyc for longitudinally unstiffened webs in Eqs. 6.10.8.2.3a-2 and -5. The tool still uses the 9th Ed. Fyr = min(0.7Fyc, Rh·Fyt·Sxt/Sxc, Fyw) ≥ 0.5Fyc for both FLB and LTB.
+   - The tool is unconservative in the inelastic LTB range. Case 1 at Lb = 20 ft gives 41.72 ksi with Fyr = 35 ksi, against 39.26 ksi with Fyr = 25 ksi (Lr 366.2 → 433.3 in).
+   - For FLB, the 10th Ed. Eq. 6.10.8.2.2 Fyr is min(0.7Fyc, Fyw) ≥ 0.5Fyc, without the Rh·Fyt·Sxt/Sxc term. That matters only for singly symmetric sections, where the tool is the more conservative.
+2. **App. A6 LTB Fyr.**
+   - The 10th Ed. Eqs. A6.3.3.1-2 and -5 use Fyr·Sxc, with Fyr = 0.5Fyc for welded sections and 0.7Fyc for rolled sections. The tool uses FL (0.7Fyc, or Rh·Fyt·Sxt/Sxc ≥ 0.5Fyc).
+   - A zone has no welded/rolled input, so this needs a decision.
+3. **Cb.**
+   - The 10th Ed. Eq. 6.10.8.2.3b-1 gives Cb = 12.5·Mmax / (2.5·Mmax + 3·MA + 4·MB + 3·MC), with rules for continuously braced quarters. Rm in C6.10.8.2.3b covers singly symmetric noncomposite members in reverse curvature.
+   - A zone stores only Lb, not the brace points, so the tool cannot compute Cb from the pasted envelope alone.
+   - Options:
+     - (a) keep the input as it is now (blank = 1.0);
+     - (b) a worked helper on the zone card: the engineer types Mmax, MA, MB and MC, and the card shows Cb symbolically, with values substituted, and the result;
+     - (c) brace-point stations per zone, with Cb computed per unbraced length from the governing envelope.
+4. **§6 show the work.** Apart from the new Lp line, the zone card and the report give only the governing check label (e.g. "6.10.8 (LTB)"), not a worked Fnc / Mnc. This gap was there before this change.
