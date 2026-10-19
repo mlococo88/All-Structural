@@ -880,3 +880,46 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
   - The report lists all three as "card check, not counted in the status bar".
 - **Scorecard D/C for an over-stressed section** is A_s,des / A_s,prov with A_s,des = A_s,min, so it reads below 1.0 (0.92 in the stem case) while the row is red. The over-stress is not in the D/C.
 - **Rebar banner wording:** "One or more bars do not satisfy required steel area" also appears when the cause is an over-stressed section.
+
+## 2026-10-19 — PR: claude/rw-count-card-checks (PR link added after merge)
+
+### Card checks counted in the status bar: stem–footing interface shear, S2 and F3 T&S bars (engineer decision 2026-10-19; Tier 2, pass/fail count only)
+- **Decision:** the engineer chose to COUNT the three card checks listed as open items in the claude/rw-status-badges entry, so any FAIL shows in the overall status. No computed value changes; the status bar, the Overview scorecard, the Overview Check Summary and the report summary now include them.
+- **§4 callout (pass/fail logic):** before, these three checks had a PASS/FAIL mark in their cards only; the status bar could read "All N checks pass" while one of them failed. After, they are entries of `r.checks`, so a failure is counted. The check total grows by 2 (ACI) or 2–3 (AASHTO: +1 when interface shear is enabled) in every project; the failure count changes only where one of them fails.
+  - Provisions (unchanged): S2 / F3 T&S: AASHTO LRFD 10th Ed. Art. 5.10.6 (Eq. 5.10.6-1), ACI 318-19 §24.4.3.2 (0.0018 b h). Stem–footing interface shear: AASHTO LRFD 10th Ed. Art. 5.7.4.3 (shear friction, φ_v = 0.90). The ACI basis has no stem–footing interface check: nothing added there.
+- **Changed:**
+  1. `calcAll`, `const checks = {`, after `toeShear: { ok: toe_shear_ok, label: 'Toe Shear' },` (added):
+     ```
+     tsStem:    { ok: sel_temp.As_prov >= As_temp_stem - 0.001,     label: 'Stem T&amp;S (S2)' },
+     tsFtg:     { ok: sel_ftg_long.As_prov >= As_ftg_long - 0.001,  label: 'Ftg T&amp;S (F3)' },
+     ```
+     These are the same conditions as the S2 and F3 card badges (`eqCheck('Bar selection — S2 horizontal'`, `eqCheck('Bar selection — F3 longitudinal'`) and the rebar schedule rows.
+  2. Same object, inside the `aashtoR.ish` spread after `ishFtg` (added):
+     ```
+     ishStem: { ok: aashtoR.ish.ish_stem_ok, label: 'Stem–Ftg Interface',
+                val: `${f(aashtoR.ish.Vu_stem_ish,1)}≤${f(aashtoR.ish.Vr_stem,1)}k` },
+     ```
+     `ish_stem_ok` is the governing combined check of that interface (V_n = c A_cv + μ A_vf f_y with the S1 bars, capped by K₁ f'c A_cv and K₂ A_cv); it has no dowel term. The existing `ishFtg` (footing–subfooting: `ish_ftg_ok || dowel_ok`, i.e. concrete, plus dowels when needed) is unchanged.
+  3. `RW_CHECK_CARD`: `ishFtg:'stabISH', ctSliding:'stabCT',` → `ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT',` (Overview Check Summary and report links).
+  4. `buildScorecard`, `struct`, after the `Toe Shear` row (added): `Stem T&amp;S (S2)` (A_s,prov vs A_s,T&S), `Ftg T&amp;S (F3)`, and on AASHTO with interface shear `Stem–Ftg Interface` (val `Vr_stem`, req `Vu_stem_ish`, k/ft), each `ok` equal to its `r.checks` entry.
+  5. `rwResultRows` (report): added `ishStem`, `tsStem`, `tsFtg` to the `D` map (refs AASHTO 5.7.4.3 / 5.10.6, ACI §24.4.3.2; D/C = V_u / φV_n and A_s,req / A_s,prov). Removed the block headed `// checks worked (with a PASS/FAIL mark) in the cards but not part of the status bar` (the `xtra` note "card check, not counted in the status bar" and its three `rows.push`). The three lines now come from `r.checks` like every other result line. (`nXFail` in the report banner is left in place; it is now always 0.)
+  6. Stability Step 8 card (`// ════ INTERFACE SHEAR & DOWELS ════`), so the card's headline is not misleading when concrete alone fails but the dowels make up the deficit:
+     - added `const ishFtgOk = s.ish_ftg_ok || s.dowel_ok;` and the card outcome in the header: `<span class="card-ref">shear friction · φ_v = 0.90 · outcome ${pf(ishFtgOk && s.ish_stem_ok)}</span>` (before: `…φ_v = 0.90</span>`);
+     - the concrete-only line is titled `'Footing interface resistance vs factored horizontal demand' + (s.dowel_needed ? ' (concrete alone; dowels below)' : '')` (its own badge still shows its own inequality);
+     - added, before the "Worked in" line: `Interface shear outcome (counted in the status bar): footing–subfooting[ with dowels] PASS/FAIL · stem–footing PASS/FAIL` (alert info / fail).
+  7. `renderRebar` banner wording (the banner already counted S2/F3). Before: any failure read `'⚠ One or more bars do not satisfy required steel area — review highlighted rows.'` After: an area shortfall keeps that text (adding ", and a section is over-stressed (increase thickness)" when both apply); a failure from an over-stressed section only reads `'⚠ One or more bars are in an over-stressed section (increase thickness) — review highlighted rows.'`
+- **Saved data:** none (`r.checks` is not saved).
+- **Check case 1 (ACI, S2 T&S):** default project, S2 override #3 @ 18".
+  - A_s,T&S = 0.0018 × 12 × 18 = 0.3888 in²/ft; A_s,prov = 0.11 × 12 / 18 = 0.0733 in²/ft < 0.3888 → S2 FAIL (D/C 5.30).
+  - Before: status bar "✓ All 15 checks pass"; S2 card badge FAIL; report line "Stem Horiz. T&S (S2) … card check, not counted in the status bar".
+  - After: "✕ 1 of 17 checks fail" (Stem T&S (S2) ✕); scorecard row red; report line counted. F3 override #3 @ 18" gives the same with Ftg T&S (F3).
+- **Check case 2 (AASHTO, stem–footing interface):** AASHTO basis, interface shear on, shear key and passive on, H_s = 10 ft, t_s,bot = 30 in, t_s,top = 12 in, L_h = 10 ft, c = 0, μ = 0.4, dowels #8 @ 12".
+  - Stem–footing: A_cv = 30 × 12 = 360 in²; A_vf = A_s,des(S1) = 0.2300 in²/ft; V_n = 0 × 360 + 0.4 × 0.2300 × 60 = 5.520 kip/ft; φV_n = 0.90 × 5.520 = 4.968 < V_u = 5.293 kip/ft → FAIL (D/C 1.07).
+  - Footing–subfooting: concrete alone φV_n = 0 < V_u = 6.60 kip/ft (FAIL line); dowels φμA_vf f_y = 0.90 × 0.4 × 0.79 × 60 = 17.06 ≥ deficit 6.60 → combined PASS (status-bar "Interface Shear" ✓, unchanged).
+  - Before: "✓ All 19 checks pass"; card header without outcome. After: "✕ 1 of 22 checks fail" (Stem–Ftg Interface ✕), card header "outcome FAIL", outcome line "footing–subfooting with dowels PASS · stem–footing FAIL", scorecard governing D/C "Stem–Ftg Interface 1.07".
+  - Same inputs with μ = 0.6: φV_n,stem = 0.90 × 0.6 × 0.2300 × 60 = 7.45 ≥ 5.29 PASS; dowels 25.6 ≥ 6.60. Concrete-alone line still FAIL, card header now reads "outcome PASS" and status "All 22 checks pass".
+- **How verified:**
+  - `node tests/check-syntax.mjs`: all scripts pass. `node tests/compare.mjs --tool page`: page.storage identical; page.text differs by the status count and the added Check Summary rows (expected).
+  - Headless main (48d7588) vs branch, MathJax 3.2.2 / Plotly 2.35.2 from `npm pack`, 13 cases: the 5 D11 cases, the stem/heel/toe over-stressed cases of the previous entry, S2 fail, F3 fail, the two interface cases above, and c = 0 / μ = 0.01. `window._R` with `checks` removed is identical in every case; `checks` differs only by the added `tsStem`, `tsFtg` (and `ishStem` on AASHTO with interface shear); every existing check's label/ok/val is unchanged. The failure count changes only in the S2, F3 and stem–footing failing cases. Report result lines: the three "card check, not counted" lines are replaced by the counted lines with the same PASS/FAIL and D/C. 0 console errors.
+  - Screenshots of the Step 8 card, the scorecard and the status bar checked.
+- **Other copies:** none.

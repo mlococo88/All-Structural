@@ -1471,7 +1471,7 @@ const RW_CARDS = {
 const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
-  ishFtg:'stabISH', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
+  ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
   crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
 function rwCardTitle(key, isAASHTO) { const c = RW_CARDS[key]; return c ? c[isAASHTO ? 2 : 1] : null; }
 function rwLink(r, key, txt) {
@@ -3052,10 +3052,14 @@ function calcAll(inp) {
     toeFlex:   { ok: !toe_overstressed && sel_toe.As_prov >= As_toe_des - 0.001,
                  label: 'Toe Flex' },
     toeShear:  { ok: toe_shear_ok,                 label: 'Toe Shear' },
+    tsStem:    { ok: sel_temp.As_prov >= As_temp_stem - 0.001,     label: 'Stem T&amp;S (S2)' },
+    tsFtg:     { ok: sel_ftg_long.As_prov >= As_ftg_long - 0.001,  label: 'Ftg T&amp;S (F3)' },
     ...(hasCol ? { colAxial: { ok: col_axial_ok,   label: 'Col. Axial', val: `P/φPn=${f(col_axial_ratio,3)}` } } : {}),
     ...(isAASHTO && aashtoR && aashtoR.ish ? {
       ishFtg:  { ok: aashtoR.ish.ish_ftg_ok || aashtoR.ish.dowel_ok, label: 'Interface Shear',
                  val: aashtoR.ish.dowel_needed ? 'dowels req' : `${f(aashtoR.ish.Vu_ish,1)}≤${f(aashtoR.ish.Vr_ftg,1)}k` },
+      ishStem: { ok: aashtoR.ish.ish_stem_ok, label: 'Stem–Ftg Interface',
+                 val: `${f(aashtoR.ish.Vu_stem_ish,1)}≤${f(aashtoR.ish.Vr_stem,1)}k` },
     } : {}),
     ...(isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
       ctSliding: { ok: aashtoR.ct.ee2.sliding_ok_ct, label: 'CT Sliding',
@@ -3997,8 +4001,9 @@ function renderStabilityAASHTO(r) {
   // ════ INTERFACE SHEAR & DOWELS ════
   if (a.ish) {
     const s = a.ish;
+    const ishFtgOk = s.ish_ftg_ok || s.dowel_ok;   // as r.checks.ishFtg (concrete, plus dowels when needed)
     h += `<div class="card" style="margin-bottom:16px;">
-      <div class="card-hd"><span class="card-title">Step 8 \u2014 Interface Shear (\u00a75.7.4.3)</span><span class="card-ref">shear friction \u00b7 \u03c6_v = 0.90</span></div>
+      <div class="card-hd"><span class="card-title">Step 8 \u2014 Interface Shear (\u00a75.7.4.3)</span><span class="card-ref">shear friction \u00b7 \u03c6_v = 0.90 \u00b7 outcome ${pf(ishFtgOk && s.ish_stem_ok)}</span></div>
       <div class="card-body">`;
     h += eq('Footing\u2013subfooting nominal shear (min of three limits)',
       `V_n = \\min(c\\,A_{cv},\\ K_1 f'_c A_{cv},\\ K_2 A_{cv}) = \\boxed{${F(s.Vn_ftg,1)}\\ \\text{kip/ft}}`,'\u00a75.7.4.3',
@@ -4007,7 +4012,7 @@ function renderStabilityAASHTO(r) {
        {sym:'K_1', desc:'fraction of f\u2032c limit', val:F(A.ish_k1,2), unit:''},
        {sym:'K_2', desc:'limiting stress', val:F(A.ish_k2,2), unit:'ksi'},
        {sym:'V_n', desc:'nominal interface shear', val:F(s.Vn_ftg,1), unit:'kip/ft'}]);
-    h += eqCheck('Footing interface resistance vs factored horizontal demand',
+    h += eqCheck('Footing interface resistance vs factored horizontal demand' + (s.dowel_needed ? ' (concrete alone; dowels below)' : ''),
       `\\phi V_n = ${F(s.Vr_ftg,1)}\\ \\text{kip/ft} \\geq V_u = ${F(s.Vu_ish,1)}\\ \\text{kip/ft}`, s.ish_ftg_ok);
     if (s.dowel_needed) {
       h += `<div class="alert warn" style="margin-top:8px;">\u26a0 Footing interface shear NG \u2014 shear deficit ${F(s.shear_deficit,1)} kip/ft requires dowels.</div>`;
@@ -4016,6 +4021,7 @@ function renderStabilityAASHTO(r) {
     }
     h += eqCheck('Stem\u2013footing interface (S1 bars as shear friction)',
       `\\phi V_n = ${F(s.Vr_stem,1)}\\ \\text{kip/ft} \\geq V_u = ${F(s.Vu_stem_ish,1)}\\ \\text{kip/ft}`, s.ish_stem_ok);
+    h += `<div class="alert ${ishFtgOk && s.ish_stem_ok ? 'info' : 'fail'}" style="margin-top:8px;">Interface shear outcome (counted in the status bar): footing\u2013subfooting${s.dowel_needed ? ' with dowels' : ''} ${pf(ishFtgOk)} \u00b7 stem\u2013footing ${pf(s.ish_stem_ok)}</div>`;
     h += rwWorkedIn(r, [['stemShear','V<sub>u</sub> (stem base)'], ['stemFlex','S1 bars']]);
     h += `</div></div>`;
   }
@@ -5565,7 +5571,9 @@ function renderRebar(r) {
     <div class="alert ${allOk?'info':'fail'}" style="margin-bottom:14px;">
       ${allOk
         ? '✓ All reinforcement requirements satisfied.'
-        : '⚠ One or more bars do not satisfy required steel area — review highlighted rows.'}
+        : rows.some(rw => rw.As_prov < rw.As_req - 0.001)
+          ? '⚠ One or more bars do not satisfy required steel area' + (rows.some(rw => rw.os) ? ', and a section is over-stressed (increase thickness)' : '') + ' — review highlighted rows.'
+          : '⚠ One or more bars are in an over-stressed section (increase thickness) — review highlighted rows.'}
     </div>
 
     <!-- ── Schedule table ────────────────────────────────────── -->
@@ -7011,6 +7019,10 @@ function buildScorecard(r) {
     { label:'Heel Shear',  val: r.phiVc_heel/1000,  req: r.Vu_heel/1000, unit:'k/ft', ok: r.heel_shear_ok },
     { label:'Toe Flex',    val: r.sel_toe.As_prov,  req: r.As_toe_des,  unit:'in²/ft', ok: !r.toe_overstressed && r.sel_toe.As_prov >= r.As_toe_des - 0.001 },
     { label:'Toe Shear',   val: r.phiVc_toe/1000,   req: r.Vu_toe/1000,  unit:'k/ft', ok: r.toe_shear_ok },
+    { label:'Stem T&amp;S (S2)', val: r.sel_temp.As_prov, req: r.As_temp_stem, unit:'in²/ft', ok: r.sel_temp.As_prov >= r.As_temp_stem - 0.001 },
+    { label:'Ftg T&amp;S (F3)',  val: r.sel_ftg_long.As_prov, req: r.As_ftg_long, unit:'in²/ft', ok: r.sel_ftg_long.As_prov >= r.As_ftg_long - 0.001 },
+    ...(r.isAASHTO && r.aashtoR && r.aashtoR.ish ? [
+    { label:'Stem–Ftg Interface', val: r.aashtoR.ish.Vr_stem, req: r.aashtoR.ish.Vu_stem_ish, unit:'k/ft', ok: r.aashtoR.ish.ish_stem_ok }] : []),
   ];
 
   // Demand / capacity: FOS-type items (val = capacity) invert the ratio
@@ -7710,6 +7722,9 @@ function rwResultRows(r) {
     toeShear:     () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_toe / r.phiVc_toe],
     colAxial:     () => ['ACI 318-19 §22.4', r.col_axial_ratio],
     ishFtg:       () => [AA('5.7.4.3') + (s.dowel_needed ? '; dowels' : ''), s.dowel_needed ? s.shear_deficit / s.Vr_dowel : s.Vu_ish / s.Vr_ftg],
+    ishStem:      () => [AA('5.7.4.3') + '; stem–footing, S1 bars as shear friction', s.Vu_stem_ish / s.Vr_stem],
+    tsStem:       () => [A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', r.As_temp_stem / r.sel_temp.As_prov],
+    tsFtg:        () => [A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', r.As_ftg_long / r.sel_ftg_long.As_prov],
     ctSliding:    () => ['MassDOT §3.3.2.4; Extreme Event II', E.sliding_dcr_ct],
     ctEcc:        () => ['Extreme Event II; e ≤ B/' + f(E.eccDiv, 0), Math.abs(E.e_ct) / E.e_lim_ct],
     ctBearing:    () => ['Extreme Event II; q<sub>u</sub> ≤ q<sub>R</sub>', E.q_ult_ct / E.q_R_ct],
@@ -7727,13 +7742,6 @@ function rwResultRows(r) {
     const card = (!A && /^crack/.test(k)) ? 'rptCrack' : RW_CHECK_CARD[k];
     rows.push({ label: c.label, val: c.val, ref: v[0], dc: v[1], note: v[2] || '', ok: c.ok, card, status: true });
   });
-  // checks worked (with a PASS/FAIL mark) in the cards but not part of the status bar
-  const xtra = 'card check, not counted in the status bar';
-  rows.push({ label: 'Stem Horiz. T&amp;S (S2)', ref: A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', dc: r.As_temp_stem / r.sel_temp.As_prov,
-              ok: r.sel_temp.As_prov >= r.As_temp_stem - 0.001, card: 'stemTS', note: xtra });
-  rows.push({ label: 'Ftg Long. T&amp;S (F3)', ref: A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', dc: r.As_ftg_long / r.sel_ftg_long.As_prov,
-              ok: r.sel_ftg_long.As_prov >= r.As_ftg_long - 0.001, card: 'ftgTS', note: xtra });
-  if (s) rows.push({ label: 'Stem–Footing Interface Shear', ref: AA('5.7.4.3'), dc: s.Vu_stem_ish / s.Vr_stem, ok: s.ish_stem_ok, card: 'stabISH', note: xtra });
   return rows;
 }
 
