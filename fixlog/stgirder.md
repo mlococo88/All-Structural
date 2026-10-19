@@ -3516,3 +3516,35 @@ index f81c5e3..95a8076 100644
 -      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr',gm('fatigue.designLife')?'(design life from GirderDetail)':''],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode,gm('fatigue.lsMode')]]}/>);
 +      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr',gm('fatigue.designLife','fatigue.ncyc')?'('+[gm('fatigue.ncyc')?'n: the largest of GirderDetail’s details':'',gm('fatigue.designLife')?'design life':''].filter(Boolean).join('; ')+' from GirderDetail)':''],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode,gm('fatigue.lsMode')]]}/>{gdNotesR.length>0&&<React.Fragment><p className="cr-note">Single values taken from GirderDetail’s several (governing value):</p><ul className="cr-ul">{gdNotesR.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>}</React.Fragment>);
 ```
+
+
+## 2026-10-19 — PR: claude/stgirder-gd71 (GD71: bearing stiffener plate count worded as the total; engineer approval 2026-10-19; wording only; PR link added after merge)
+
+### GD71. "Bearing plates" = total plates, both sides of the web   [wording only — no result change, Tier 0]
+- **Where:** InputsTab, Stiffeners / Studs / Fatigue: `<Num l="Bearing plates (…)"` (anchor `v={inp.stiff.bearN}`); `stiffBearDeriv` variable table row `n_b`; report `crModel` row "Bearing stiffeners"; `GD_LBL['stiff.bearN']` (pull summary).
+- **Before:** "Bearing plates (ea. side)"; "n_b — Plates each side"; report "2 plate(s) each side of the web"; pull summary "bearing plates".
+- **After:** "Bearing plates (total, both sides)"; "n_b — Plates in total (both sides of the web)"; report "2 plates in total (1 each side of the web)"; pull summary "bearing plates (total, both sides)".
+- **Problem:** the check has always used `stiff.bearN` as the total number of plates (A_pn = n_b(b_b − clip)t_b; column I = t_b(n_b b_b + t_w)³/12, so n_b = 2 is one plate each side), while the label said "each side". The default 2 and GirderDetail's "1 pair = 2 plates" (GD70) follow the formulas; only the wording was wrong. The GD70 transfer note ("1 pair = 2 plates (one each side of the web)") was already right and is unchanged.
+- **Governing provision:** none changed (AASHTO LRFD 10th Ed. (2024) 6.10.11.2.3, 6.10.11.2.4 as before).
+- **Check case:** built-in AASHTO G2 (GirderDetail payload): n_b = 2, A_pn = 2 × (8.00 − 1.5) × 0.75 = 9.75 in², φR_sb,n = 682.5 kip, unchanged; the report row now reads "2 plates in total (1 each side of the web), b_b × t_b = 8.00 × 0.750 in".
+- **How verified:** `node tests/check-syntax.mjs stgirder.html` (all pass); `node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1,util_MassDOT_G2,def15_AASHTO_G2_gdx,util_MassDOT_G2_gdx`: all sections identical to main (419921a), no console errors.
+- **Saved data:** none (`stiff.bearN` key and meaning unchanged). **Other copies:** none. **Open items:** none.
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index 95a8076..e297ce6 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -2629 +2629 @@ const GD_LBL={'loads.wConstr':'construction live load (klf)','loads.NL':'design
+-  'stiff.transverse':'transverse stiffeners','stiff.doSpc':'stiffener spacing d_o (in)','stiff.bearB':'bearing stiffener width (in)','stiff.bearT':'bearing stiffener thickness (in)','stiff.bearN':'bearing plates',
++  'stiff.transverse':'transverse stiffeners','stiff.doSpc':'stiffener spacing d_o (in)','stiff.bearB':'bearing stiffener width (in)','stiff.bearT':'bearing stiffener thickness (in)','stiff.bearN':'bearing plates (total, both sides)',
+@@ -4694 +4694 @@ function InputsTab({inp,set,R}){
+-        <Num l="Bearing plates (ea. side)" v={inp.stiff.bearN} set={v=>S('stiff.bearN',v)} step={1} gd={G('stiff.bearN')}/>
++        <Num l="Bearing plates (total, both sides)" v={inp.stiff.bearN} set={v=>S('stiff.bearN',v)} step={1} gd={G('stiff.bearN')}/>
+@@ -6000 +6000 @@ function stiffBearDeriv(R){ const br=R.bearing;
+-        ['n_b','Plates each side',br.nb,'—'],['b_b','Plate width',br.bb,'in'],['t_b','Plate thickness',br.tb,'in'],
++        ['n_b','Plates in total (both sides of the web)',br.nb,'—'],['b_b','Plate width',br.bb,'in'],['t_b','Plate thickness',br.tb,'in'],
+@@ -6326 +6326 @@ function crModel(R,inp,o){
+-      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plate(s) each side of the web, b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in',gm('stiff.bearB')?'(from GirderDetail: the type at the support of the peak V_u)':''],
++      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plates in total ('+fmt(R.bearing.nb/2,R.bearing.nb%2?1:0)+' each side of the web), b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in',gm('stiff.bearB')?'(from GirderDetail: the type at the support of the peak V_u)':''],
+```
