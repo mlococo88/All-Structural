@@ -1539,3 +1539,172 @@ The fatigue load (one design truck, constant 30-ft rear axle spacing, IM 15%, no
 - Report references row "AASHTO LRFD" (anchor `and 3.6.2 (HL-93, dynamic load allowance);`): added `3.6.1.4.1 (fatigue truck);`
 
 Check: the Fatigue tab step and the report §15 step show "3.6.1.4.1"; the references table lists it. `node tests/check-syntax.mjs psbeam.html`: all scripts pass. Closes the open item from the D11 entry (#280).
+
+## 2026-10-19 — PR: claude/aashto10-psbeam (AASHTO LRFD 10th Ed. gaps: debonding warnings, Service III γLL wording, 5.9.2.3.1a renumbering, edition label; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Every provision below was checked against the 10th Ed. text. **No computed result changes**: only warning strings, hints, notes, comments and labels. The `bridgeSuite.v1` bootstrap block is untouched. No saved-data key or format changes. Line numbers (≈) are for the file after this PR; hunks below are exact (`-` before, `+` after).
+
+### AE1. Debonding warnings per 10th Ed. Art. 5.9.4.3.3   [warnings only, no result change]
+- **Where:** `computeAll()`, input-validation warnings. Anchors: the removed block started `// Debonding limits (5.9.4.3.3): total debonded ≤ 25%` (≈2864, it duplicated the second block); the replaced block started `// debonding limits (LRFD 5.9.4.3.3): ≤25% of total strands, ≤40% per row`, now `// Debonding (AASHTO LRFD 10th Ed. 5.9.4.3.3)` (≈2871). New item (G) check right after `const ldDebond=2.0*(fpsM-(2/3)*fpe)*ss.st.db;` (≈3364). Live summary under the strand table in `InputsTab`, anchor `// live debond summary vs` (≈5216).
+- **Problem:** the tool warned above 25 % of all strands debonded and above 40 % of a row, citing 9th-edition conditions. The two warning blocks also duplicated each other (both fired). The 10th Ed. article has a per-row limit of 45 % (more with Owner approval), no total-percentage limit, a per-section termination limit, a 60 d_b termination spacing and symmetry requirements. Old warnings were more restrictive than the 10th Ed. for the row/total percentages and silent on terminations.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 5.9.4.3.3, items A–K (cited by letter; text not reproduced).
+- **Now checked (from the strand table; a row's debonded strands all share one length `dbnd`, so each distinct `dbnd` is one termination section):**
+  - (A) row: n_d / n > 45 % → warning (Owner approval needed). No total limit.
+  - (B) Σ n_d terminating at one `dbnd` > N_max, N_max = 4 if d_b = 0.7 in. or Σ n_d (all rows) ≤ 10, else 6.
+  - (C) consecutive distinct termination locations closer than 60 d_b.
+  - (D) a row with an even number of strands and an odd number debonded (cannot be symmetric about the vertical CL).
+  - (I) I-shapes (not NEXT, box or deck beams): Σ n_d / N_total > 25 % or b_bf / b_w > 4 → reminder that strands within the web width must stay bonded (the tool does not know which strands of a row are debonded).
+  - (G) simple span (continuity off): longest `dbnd` > min(0.20 L, L/2 − ℓ_d), ℓ_d = 2.0(f_ps − ⅔ f_pe) d_b (the existing `ldDebond`, worked on the Shear tab, Strand Development Length card).
+  - Not checkable from the tool's data, listed in the strand-table hint as "verify": symmetric placement/termination beyond the odd-count test (D), alternate bonded/debonded locations (E), section-type detailing (I–K), continuity restraint interaction (H, Art. 5.12.3.3).
+- **Before / After:**
+```diff
+@@ -2863,12 +2863,2 @@ function computeAll(inp){
+       warns.push(`Jacking at ${inp.str.jack}·fpu exceeds the 0.75·fpu limit for low-relaxation strand (Table 5.9.2.2-1).`);
+-    // Debonding limits (5.9.4.3.3): total debonded ≤ 25% of all strands (up to 45% permitted for
+-    // certain sections meeting the 9th-ed. conditions); per-row debonded ≤ 40% of that row.
+-    {const nTot=ss.rows.reduce((s,r)=>s+r.n,0);
+-     const nDb=ss.rows.reduce((s,r)=>s+((+r.dbnd>0)?(+r.nd||0):0),0);
+-     if(nTot>0&&nDb>0){
+-       const pct=100*nDb/nTot;
+-       if(pct>25) warns.push(`${fmt(pct,0)}% of strands are debonded — exceeds the 25% base limit of 5.9.4.3.3 (up to 45% is permitted only where the 9th-edition conditions are met; verify).`);
+-       ss.rows.forEach((r,i)=>{ if(+r.dbnd>0&&(+r.nd||0)>0.4*r.n+1e-9)
+-         warns.push(`Row ${i+1}: ${r.nd} of ${r.n} strands debonded (${fmt(100*r.nd/r.n,0)}%) — exceeds the 40% per-row limit (5.9.4.3.3).`);});
+-     }}
+     if(ss.nh>0){
+@@ -2880,10 +2870,26 @@ function computeAll(inp){
+     }
+-    // debonding limits (LRFD 5.9.4.3.3): ≤25% of total strands, ≤40% per row
++    // Debonding (AASHTO LRFD 10th Ed. 5.9.4.3.3). Warnings only: no computed value depends on them.
++    // Checked from the strand table: (A) per row ≤ 45% unless the Owner approves more (no limit on the
++    // total); (B) terminations per section ≤ 6, or ≤ 4 with 0.7-in. strand or when 10 or fewer strands
++    // are debonded; (C) termination sections ≥ 60 d_b apart; (D) symmetry about the vertical CL;
++    // (I) single-web flanged sections with > 25% of all strands debonded or b_f/b_w > 4. (G) is checked after ℓ_d below.
++    // All debonded strands of a row share one length dbnd, so each distinct dbnd is one termination section.
+     if(ss.Ndebond>0){
+-      const pctTot=100*ss.Ndebond/Math.max(ss.Ntot,1);
+-      if(pctTot>25.01) warns.push(`Debonded strands (${ss.Ndebond} of ${ss.Ntot} = ${fmt(pctTot,0)}%) exceed the 25% total limit (5.9.4.3.3).`);
++      const db=ss.st.db;
+       ss.rows.forEach((r,i)=>{ if(r.dbnd>0&&r.nd>0){ const pr=100*r.nd/r.n;
+-        if(pr>40.01) warns.push(`Row ${i+1}: ${r.nd} of ${r.n} debonded (${fmt(pr,0)}%) exceeds the 40% per-row limit (5.9.4.3.3).`);
++        if(pr>45.01) warns.push(`Row ${i+1}: ${r.nd} of ${r.n} debonded (${fmt(pr,0)}%) exceeds the 45% per-row limit of 5.9.4.3.3(A) (permitted only with Owner approval).`);
++        if(r.nd%2===1&&r.n%2===0) warns.push(`Row ${i+1}: ${r.nd} of ${r.n} strands debonded — an odd number in a row of an even number of strands cannot be symmetric about the vertical centerline (5.9.4.3.3(D)).`);
+         if(r.nd>r.n) warns.push(`Row ${i+1}: debonded count (${r.nd}) exceeds the strands in the row (${r.n}).`);
+       }});
++      const term={}; ss.rows.forEach(r=>{ if(r.dbnd>0&&r.nd>0) term[r.dbnd]=(term[r.dbnd]||0)+r.nd; });
++      const nTermMax=(db>=0.7-1e-9||ss.Ndebond<=10)?4:6;
++      const why=db>=0.7-1e-9?'0.7-in. strand':ss.Ndebond<=10?`only ${ss.Ndebond} strands debonded, ≤ 10`:'';
++      const locs=Object.keys(term).map(Number).sort((a,b)=>a-b);
++      locs.forEach(x=>{ if(term[x]>nTermMax)
++        warns.push(`Debonding of ${term[x]} strands terminates at the same section (${fmt(x,2)} ft from each end) — exceeds ${nTermMax} per section${why?` (${why})`:''} (5.9.4.3.3(B)). Stagger the debond lengths.`);});
++      for(let k=1;k<locs.length;k++){ const s=(locs[k]-locs[k-1])*12;
++        if(s<60*db-1e-9) warns.push(`Debond terminations at ${fmt(locs[k-1],2)} ft and ${fmt(locs[k],2)} ft are ${fmt(s,1)}″ apart — less than 60d_b = 60 × ${db}″ = ${fmt(60*db,1)}″ (5.9.4.3.3(C)).`); }
++      const pctTot=100*ss.Ndebond/Math.max(ss.Ntot,1), bfbw=(g.bw>0)?g.bbf/g.bw:0;
++      if(!g.isNext&&!g.isBox&&!g.isDeck&&(pctTot>25.01||bfbw>4+1e-9))
++        warns.push(`Single-web flanged section with debonding: ${pctTot>25.01?`${ss.Ndebond} of ${ss.Ntot} strands (${fmt(pctTot,0)}%) debonded > 25%`:''}${pctTot>25.01&&bfbw>4+1e-9?' and ':''}${bfbw>4+1e-9?`b_f/b_w = ${fmt(g.bbf,1)}/${fmt(g.bw,1)} = ${fmt(bfbw,2)} > 4`:''} — keep the strands that lie within the web width bonded (5.9.4.3.3(I)). The tool does not check which strands of a row are debonded; verify on the strand pattern.`);
+     } }
+@@ -3357,2 +3363,9 @@ function computeAll(inp){
+   const ldDebond=2.0*(fpsM-(2/3)*fpe)*ss.st.db;
++  // Debond length from the beam end, simple spans (10th Ed. 5.9.4.3.3(G)): ≤ min(0.20 L, L/2 − ℓ_d), ℓ_d with κ = 2.0.
++  // Warning only. Spans made continuous (continuity on) are left to 5.9.4.3.3(H) / 5.12.3.3.
++  if(ss.Ndebond>0&&!(inp.cont&&inp.cont.on)){
++    const dbMaxG=Math.min(0.20*L, L/2-ldDebond/12);
++    const dbLong=Math.max(...ss.rows.filter(r=>r.dbnd>0&&r.nd>0).map(r=>r.dbnd));
++    if(dbLong>dbMaxG+1e-9) warns.push(`Debond length ${fmt(dbLong,2)} ft exceeds min(0.20L, L/2 − ℓ_d) = min(0.20 × ${fmt(L,1)}, ${fmt(L/2,2)} − ${fmt(ldDebond/12,2)}) = ${fmt(dbMaxG,2)} ft for a simple span (5.9.4.3.3(G); ℓ_d of a debonded strand, κ = 2.0, worked on the Shear tab, Strand Development Length card).`);
++  }
+   // splitting (5.9.4.4) & interface shear (5.7.4)
+@@ -5202,10 +5215,9 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
+       </div>
+-      {!R.error&&(()=>{ // live debond summary vs LRFD 5.9.4.3.3
++      {!R.error&&(()=>{ // live debond summary vs AASHTO LRFD 10th Ed. 5.9.4.3.3 (display only)
+         const pct=100*R.ss.Ndebond/Math.max(R.ss.Nbond,1);
+-        const overTot=pct>25.01;
+-        const overRow=inp.rows.some(r=>+r.dbnd>0&&+r.n>0&&100*Math.min(+r.nd||0,+r.n)/+r.n>40.01);
++        const overRow=inp.rows.some(r=>+r.dbnd>0&&+r.n>0&&100*Math.min(+r.nd||0,+r.n)/+r.n>45.01);
+         if(R.ss.Ndebond===0) return null;
+         return <div className="hint" style={{marginTop:6}}>
+-          Debonded: <b>{R.ss.Ndebond}</b> of {R.ss.Nbond} straight strands (<b style={{color:overTot?'var(--fail)':'inherit'}}>{fmt(pct,0)}%</b>{overTot?' — exceeds 25% total':''}).
+-          {overRow&&<b style={{color:'var(--fail)'}}> One or more rows exceed 40% debonded.</b>} LRFD 5.9.4.3.3 caps total debonding at 25% and 40% per row; verify termination staggering.
++          Debonded: <b>{R.ss.Ndebond}</b> of {R.ss.Nbond} straight strands (<b>{fmt(pct,0)}%</b>).
++          {overRow&&<b style={{color:'var(--fail)'}}> One or more rows exceed 45% debonded (Owner approval needed).</b>} LRFD 10th Ed. 5.9.4.3.3 — checked here (see Detailing warnings): ≤ 45% per row (A; no limit on the total), terminations per section ≤ 6, or ≤ 4 with 0.7″ strand or ≤ 10 debonded (B), terminations ≥ 60d<sub>b</sub> apart (C), odd counts in even rows (D), single-web flanged sections (I), debond length on simple spans (G). Not checked — verify on the strand pattern: symmetric termination and placement (D), alternating bonded/debonded positions (E), section-type detailing (I–K), continuity restraint interaction (H, 5.12.3.3).
+         </div>;})()}
+```
+- **Check case** (default BT-72, L = 120 ft, 0.6-in. strand, rows 10/10/8 at y = 2/4/6 in., 12 harped; `computeAll` run headless in Chromium):
+  - Row 1 n_d = 6 at 10 ft, row 2 n_d = 4 at 10 ft: before "36% … exceeds the 25% base limit", "Row 1 … exceeds the 40% per-row limit" (twice). After: row 1 = 6/10 = 60 % > 45 % (A); Σ n_d = 10 ≤ 10 → N_max = 4, 10 strands terminate at 10 ft > 4 (B); b_bf/b_w = 26/6 = 4.33 > 4 (I).
+  - Rows 4/10 and 2/10 at 8 ft, 3/8 and 3/4 at 10.5 ft (Σ n_d = 12 > 10 → N_max = 6; 6 and 6 terminate: OK): spacing (10.5 − 8)·12 = 30 in. < 60 × 0.6 = 36 in. (C); rows 3 and 4 odd-in-even (D); row 4 = 75 % (A); 12/44 = 27 % > 25 % and 4.33 > 4 (I). Before: total 25 % and row 40 % warnings only.
+  - 0.7-in. strand, 4 + 2 = 6 terminate at 12 ft → N_max = 4 (B). Before: no warning.
+  - One row 4/10 debonded 30 ft, continuity off: ℓ_d = 191.4 in. = 15.95 ft; min(0.20 × 120, 60 − 15.95) = min(24.00, 44.05) = 24.00 ft < 30 ft (G). Continuity on: (G) not reported.
+  - Compliant layout 4+2 at 6 ft, 2+4 at 10 ft, 2 at 14 ft (Σ 14 → N_max 6; spacings 48 in. ≥ 36 in.): only the (I) reminder (b_bf/b_w 4.33). Before: "32% … exceeds the 25% base limit".
+- **How verified:** `computeAll()` of origin/main and of this branch run on 9 inputs (default, the debond cases above, γLL = 1.0): every field of the result other than `warns` is identical (leaf-by-leaf diff, 0 differences). Strand-table hint and Detailing warnings rendered by driving the Inputs → Strands pane headless (no console errors). `node tests/check-syntax.mjs psbeam.html` passes.
+- **Other copies:** none.
+
+### AE2. Service III γLL notes match Table 3.4.1-4   [wording only, factor and default (0.8) unchanged]
+- **Where:** `InputsTab` options, anchor `<Num l="γLL Service III"` (≈5566); `StressTab` callout, anchor `Service III bottom tension uses γLL` (≈6160).
+- **Problem:** the input note said "0.8 for components with bonded strand, 1.0 otherwise (Table 3.4.1-1)" and the callout "0.8 with refined losses, 1.0 legacy" — the inverse of the table. 10th Ed. Table 3.4.1-4: γLL = 1.0 only for refined time-dependent losses (Art. 5.9.3.4) taken together with the elastic gain; 0.8 for all other prestressed components.
+- **Before / After:**
+```diff
+@@ -5553,5 +5565,5 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
+         <Num l="γLL Service III" v={inp.opt.gLLs3} set={v=>u('opt.gLLs3',v)} step={0.1}
+-             sub="0.8 for components with bonded strand, 1.0 otherwise (Table 3.4.1-1)"/>
++             sub="1.0 only with refined losses (5.9.3.4) taking the elastic gain; 0.8 otherwise (Table 3.4.1-4)"/>
+         <Num l="Release compression limit (× f′ci)" v={inp.opt.relCfac} set={v=>u('opt.relCfac',v)} step={0.05} min={0}
+-             sub="0.65 per Table 5.9.2.3.1a-1 (8th Ed. on); some owners require 0.60. Blank = 0.65"/>
++             sub="0.65 per Art. 5.9.2.3.1a; some owners require 0.60. Blank = 0.65"/>
+         <Fld l="Corrosion exposure" sub="sets the Service III tension limit: 0.19√f′c vs. zero tension">
+@@ -6147,3 +6159,3 @@ function StressTab({inp,R}){
+         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'stress (ksi, + = compression)'}}}/>
+-      <div className="callout">Girder fiber stresses. Deck compression (SIDL + LL on composite section): max <b>{fmt((R.checks.find(c=>c.n==='Deck comp')||{}).v,3)} ksi</b> vs 0.60f′c_deck = <b>{fmt(lim.dkC2,3)} ksi</b>. Service III bottom tension uses γLL = {inp.opt.gLLs3} per LRFD Table 3.4.1-4 (0.8 with refined losses, 1.0 legacy).</div>
++      <div className="callout">Girder fiber stresses. Deck compression (SIDL + LL on composite section): max <b>{fmt((R.checks.find(c=>c.n==='Deck comp')||{}).v,3)} ksi</b> vs 0.60f′c_deck = <b>{fmt(lim.dkC2,3)} ksi</b>. Service III bottom tension uses γLL = {inp.opt.gLLs3} per LRFD Table 3.4.1-4 (1.0 only with refined losses per 5.9.3.4 taking the elastic gain; 0.8 for all other cases).</div>
+     </Card>
+```
+- **Check:** default γLL stays 0.8; results identical with γLL 0.8 and 1.0 (case `svc`).
+
+### AE3. "Table 5.9.2.3.1a-1" → Art. 5.9.2.3.1a   [citation only, 0.65 unchanged]
+- **Where:** `DEFAULTS.opt.relCfac` comment, `relCfacOf` comment, `computeAll` comment anchor `// Release compression limit factor (`, Options input sub-text anchor `<Num l="Release compression limit (× f′ci)"`.
+- **Problem:** the 10th Ed. has no Table 5.9.2.3.1a-1; the 0.65 f′ci limit is in the text of Art. 5.9.2.3.1a. The "8th Ed. on" note is dropped.
+- **Before / After:**
+```diff
+@@ -1941,3 +1941,3 @@ const DEFAULTS = {
+        relAs:0.62, relFy:60,
+-       relCfac:0.65,              // release compression limit = relCfac·f'ci (Table 5.9.2.3.1a-1: 0.65; some owners use 0.60)
++       relCfac:0.65,              // release compression limit = relCfac·f'ci (Art. 5.9.2.3.1a: 0.65; some owners use 0.60)
+        rtPhiC:1.0, rtPhiS:1.0,    // LRFR condition factor φc and system factor φs (MBE 6A.4.2.3 / 6A.4.2.4); product floored at 0.85
+@@ -2090,3 +2090,3 @@ function shapePayload(inp,g,cp){
+ function Ec(fc,wc){ return 120000*wc*wc*Math.pow(fc,0.33); } // LRFD 5.4.2.4
+-// Release compression limit factor: opt.relCfac × f'ci (Table 5.9.2.3.1a-1 value 0.65; blank → 0.65).
++// Release compression limit factor: opt.relCfac × f'ci (Art. 5.9.2.3.1a value 0.65; blank → 0.65).
+ function relCfacOf(inp){ const v=inp&&inp.opt&&inp.opt.relCfac; if(v===''||v==null) return 0.65; const n=+v; return (isFinite(n)&&n>0)? n : 0.65; }
+@@ -3077,3 +3083,3 @@ function computeAll(inp){
+   const m=inp.mat;
+-  // Release compression limit factor (Table 5.9.2.3.1a-1: 0.65 f'ci for pretensioned members, 8th Ed. on);
++  // Release compression limit factor (Art. 5.9.2.3.1a, 10th Ed.: 0.65 f'ci for pretensioned members);
+   // an input so an owner rule (e.g. 0.60) can be applied. Blank / invalid → 0.65.
+```
+(the Options sub-text change is in the AE2 hunk above.)
+
+### AE4. Edition label: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)   [label only]
+- **Where:** `ReportTab`: references row "AASHTO LRFD" (anchor `['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications`), Assumptions & basis line (anchor `composite-stage demands imported from MIDAS`), title-block Codes line (anchor `<div className="d">Codes: AASHTO LRFD`). The references row also lists 5.9.4.3.2, 5.9.4.3.3 (now cited by the warnings). No owner setting in this tool.
+- **Before / After:**
+```diff
+@@ -7369,3 +7381,3 @@ function ReportTab({inp,R}){
+   const refs=[
+-    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications. The tool states “9th Ed. article numbering” (Assumptions & basis); edition: verify. Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 3.6.1.4.1 (fatigue truck); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3 (continuity)':'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
++    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 3.6.1.4.1 (fatigue truck); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.3.2, 5.9.4.3.3 (development length, debonding); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3 (continuity)':'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
+     ['AASHTO MBE','Manual for Bridge Evaluation, Section 6A (LRFR): 6A.4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Eq. 6A.4.2.1-3, 6A.5.4.1, 6A.5.6 (HL-93 design-load rating). Edition not stated by the tool: verify.'],
+@@ -7399,3 +7411,3 @@ function ReportTab({inp,R}){
+         <div style={{fontSize:12,lineHeight:1.65,color:'var(--ink2)'}}>
+-        AASHTO LRFD BDS (9th Ed. article numbering) · {R.useExt?<React.Fragment><b>composite-stage demands imported from MIDAS</b> (span {R.ext.sel.idx}, {fmt(R.ext.spanLen,0)} ft; DC2, DW and the LL+IM envelope by station, DF &amp; IM already applied; girder self-weight and DC1 deck/haunch computed by PS-Beam on the non-composite section) · </React.Fragment>:'simple span, '}unshored construction · {R.useT?'transformed section at release (P @ fpbt), gross/composite thereafter':'gross section properties (transformed-section elastic gains not itemized)'} · losses computed at midspan, applied uniformly · {R.useExt?'LL force effects interpolated from the imported station envelope':'LL moment shaped parabolically and shear linearly from envelope values'} · approximate fps method (5.6.3.1.1), deck f′c for the compression block · MCFT general procedure assuming ≥ minimum transverse reinforcement{R.cont?(R.cont.extPier?' · continuity: pier negative moment taken from the MIDAS envelope at the span ends':' · continuity for LL+SIDL: equal adjacent spans, pier negative moment only (positive-moment connection & restraint moments per 5.12.3.3 not computed)'):''} · time-dependent coefficients per 5.4.2.3 · units: kip, in, ksi (ft for span). Verify against jurisdiction-specific requirements (e.g., RIDOT LRFD supplements) before issue.
++        AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · {R.useExt?<React.Fragment><b>composite-stage demands imported from MIDAS</b> (span {R.ext.sel.idx}, {fmt(R.ext.spanLen,0)} ft; DC2, DW and the LL+IM envelope by station, DF &amp; IM already applied; girder self-weight and DC1 deck/haunch computed by PS-Beam on the non-composite section) · </React.Fragment>:'simple span, '}unshored construction · {R.useT?'transformed section at release (P @ fpbt), gross/composite thereafter':'gross section properties (transformed-section elastic gains not itemized)'} · losses computed at midspan, applied uniformly · {R.useExt?'LL force effects interpolated from the imported station envelope':'LL moment shaped parabolically and shear linearly from envelope values'} · approximate fps method (5.6.3.1.1), deck f′c for the compression block · MCFT general procedure assuming ≥ minimum transverse reinforcement{R.cont?(R.cont.extPier?' · continuity: pier negative moment taken from the MIDAS envelope at the span ends':' · continuity for LL+SIDL: equal adjacent spans, pier negative moment only (positive-moment connection & restraint moments per 5.12.3.3 not computed)'):''} · time-dependent coefficients per 5.4.2.3 · units: kip, in, ksi (ft for span). Verify against jurisdiction-specific requirements (e.g., RIDOT LRFD supplements) before issue.
+         </div>
+@@ -7870,3 +7882,3 @@ function ReportTab({inp,R}){
+       <div className="d">{psbrDesc(inp,R)} · {R.ss.Ntot}-{inp.str.size} strands · {R.useExt?'demands imported from MIDAS (span '+R.ext.sel.idx+')':R.cont?'simple span made continuous for LL + SIDL':'simple span'} · {df.ext?'exterior':'interior'} girder</div>
+-      <div className="d">Codes: AASHTO LRFD Bridge Design Specifications (9th Ed. article numbering as stated by the tool; edition: verify) · AASHTO MBE Section 6A (load rating) · PCI Design Handbook (camber multipliers)</div>
++      <div className="d">Codes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · AASHTO MBE Section 6A (load rating) · PCI Design Handbook (camber multipliers)</div>
+       <table className="psbr-tb"><tbody>
+```
+- **Check:** Report tab shows "AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)" in the three places; no "9th Ed." or "edition: verify" for AASHTO LRFD remains in psbeam.html (the MBE and PCI rows still say "Edition not stated by the tool: verify", out of scope).
+
+### Open items (not changed)
+- Art. 5.9.2.3.1a (10th Ed.) permits 0.70 f′ci at component extremities when lateral bending (tilt, wind, transport) is explicitly considered; the tool uses 0.65 (user-editable). Engineer decision whether to note it.
+- Options "Corrosion exposure" sub-text says "0.19√f′c vs. zero tension"; the calculation uses 0.0948λ√f′c ≤ 0.3 ksi for severe exposure (Table 5.9.2.3.2b-1), which the Stresses tab states correctly. Wording only.
+- Item (I) shows a reminder for every debonded BT-72 design because b_bf/b_w = 26/6 > 4; the tool cannot check which strands in a row are debonded (it assumes outermost first in the 3-D view only).
+- The MBE and PCI reference rows still have "edition not stated: verify".
