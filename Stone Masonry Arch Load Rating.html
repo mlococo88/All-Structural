@@ -1886,7 +1886,7 @@ function sideBySide(p,w,conc){
    reports; the solver calls sideBySide with the width it is already using). */
 function sideBySideAt(p,H){
   if(H>=SHALLOW_FILL){const dT=deepTire(p);return sideBySide(p,dT.b+1.75*H,false);}
-  const r=shallowRate(p);
+  const r=rateAt(p,H);
   return (r>0)?sideBySide(p,TIRE_W+r*H,false):sideBySide(p,shallowWidth(p),true);
 }
 /* Transverse distribution width for the shallow-fill branch.
@@ -1947,7 +1947,11 @@ function shallowWidth(p){
                 Conservative against 6.4.2. Was 1.0 (an earlier LRFD rate for
                 fill that is not select granular) up to the 2026-10-19 change;
                 restore() maps a saved "1" to "1.15". The 0.06 D_i/12 width term
-                of Eqs. 3.6.1.2.6b-1 to -3 is not applied (open item). Wheel
+                of Eqs. 3.6.1.2.6b-1 to -3 is not applied (engineer, 2026-10-19:
+                it is a load-sharing width, like E = 4 + 0.06S, and no such width
+                is credited to an unreinforced ring). Applied only where the cover
+                at the axle is 1.0 ft or more (Art. 3.6.1.2.6a, nonconcrete
+                culverts); below that no spread is taken (rateAt). Wheel
                 interaction across the span (3.6.1.2.6b, H_int-t): the merge of
                 wheel lines over their outside limits once w_t reaches the gap
                 (transDisp) is the same test, H >= (gap - 20/12)/1.15 (3.77 ft for
@@ -1964,6 +1968,18 @@ function shallowWidth(p){
 function shallowRate(p){
   const r=(p&&isFinite(+p.shallowRate))?+p.shallowRate:0;
   return (r>0)?Math.min(r,1.75):0;
+}
+/* The rate actually applied to an axle landing on cover H. AASHTO LRFD 10th Ed.
+   Art. 3.6.1.2.6a applies the LLDF spread to nonconcrete culverts with 1.0 ft of
+   fill or more, so with the 1.15H (LRFD) option an axle over less than 1.0 ft
+   takes no spread: r = 0, the wheel arrives on its footprint (or the width E
+   selected), exactly as with no credit. The 1.75H option is a judgment credit
+   and is not limited. Engineer decision 2026-10-19. */
+const LRFD_RATE=1.15, LRFD_MIN_FILL=1.0;
+function isLrfdRate(r){return Math.abs(r-LRFD_RATE)<1e-9;}
+function rateAt(p,H){
+  const r=shallowRate(p);
+  return (isLrfdRate(r)&&H!=null&&H<LRFD_MIN_FILL)?0:r;
 }
 /* Cover at an arbitrary station, for the axle regime test. Returns null off the
    ring, where the load is carried by the abutment and not by the barrel. */
@@ -1983,8 +1999,9 @@ function llRegime(model,x){
   const H=coverAtX(model,x);
   const on=shallowRuleOn(model.p);
   const E=shallowWidth(model.p);
-  const r=shallowRate(model.p);
-  return {H,E,r,conc:!!(on&&H!=null&&H<SHALLOW_FILL),ruleOn:on,
+  const r=rateAt(model.p,H);
+  const lrfdCut=isLrfdRate(shallowRate(model.p))&&H!=null&&H<LRFD_MIN_FILL;
+  return {H,E,r,lrfdCut,conc:!!(on&&H!=null&&H<SHALLOW_FILL),ruleOn:on,
           basis:(r>0)?("spread "+r+"H"):((model.p&&model.p.shallowE==="slab")?"slab":"tire")};
 }
 /* A concentrated strip load at station x, placed on the two nodes that bracket
@@ -2029,7 +2046,8 @@ function nodalLL(model,vehicle,pos,dir){
   const disp=[],conc=[];
   for(const ax of vehicle.axles){
     const xa=(dir>0)?pos+ax.x:pos+maxOff-ax.x;
-    (llRegime(model,xa).conc?conc:disp).push({ax,xa});
+    const rg=llRegime(model,xa);
+    (rg.conc?conc:disp).push({ax,xa,r:rg.r});
   }
   for(let i=1;i<model.nN-1;i++){
     const h=model.coverAt(i), T=tribSpan(model,i);
@@ -2042,26 +2060,29 @@ function nodalLL(model,vehicle,pos,dir){
     }
     q[i]=press*model.tribH[i];
   }
-  if(conc.length){
-    const r=shallowRate(model.p);
-    if(r<=0){
-      const E=shallowWidth(model.p), kC=sideBySide(model.p,E,true).kappa;
-      for(const a of conc)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E)*kC);
-    }else{
-      /* Same arithmetic as the 6.4.2 branch, at the credited rate. The overlap
-         treatment goes with it: a fill spread is exactly the mechanism 6.4.2
-         has in mind when it directs that overlapping areas be combined over
-         their outside limits. */
-      for(let i=1;i<model.nN-1;i++){
-        const h=model.coverAt(i), T=tribSpan(model,i);
-        const sL=TIRE_L+r*h, wt2=TIRE_W+r*h, k2=sideBySide(model.p,wt2,false).kappa;
-        let pr=0;
-        for(const a of conc){
-          const f=coverFrac(T,a.xa-sL/2,a.xa+sL/2);
-          if(f>0)pr+=f*((wt2>=GAGE)?a.ax.P/((GAGE+wt2)*sL):(a.ax.P/2)/(wt2*sL))*k2;
-        }
-        q[i]+=pr*model.tribH[i];
+  /* Axles in the 6.4.1 branch with no spread (no credit, or the LRFD 1.15H
+     option over less than 1.0 ft of cover: rateAt) are concentrated; the others
+     take the credited spread. */
+  const concPt=conc.filter(a=>a.r<=0), concSp=conc.filter(a=>a.r>0);
+  if(concPt.length){
+    const E=shallowWidth(model.p), kC=sideBySide(model.p,E,true).kappa;
+    for(const a of concPt)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E)*kC);
+  }
+  if(concSp.length){
+    /* Same arithmetic as the 6.4.2 branch, at the credited rate. The overlap
+       treatment goes with it: a fill spread is exactly the mechanism 6.4.2
+       has in mind when it directs that overlapping areas be combined over
+       their outside limits. */
+    const r=concSp[0].r;
+    for(let i=1;i<model.nN-1;i++){
+      const h=model.coverAt(i), T=tribSpan(model,i);
+      const sL=TIRE_L+r*h, wt2=TIRE_W+r*h, k2=sideBySide(model.p,wt2,false).kappa;
+      let pr=0;
+      for(const a of concSp){
+        const f=coverFrac(T,a.xa-sL/2,a.xa+sL/2);
+        if(f>0)pr+=f*((wt2>=GAGE)?a.ax.P/((GAGE+wt2)*sL):(a.ax.P/2)/(wt2*sL))*k2;
       }
+      q[i]+=pr*model.tribH[i];
     }
   }
   return q;
@@ -2666,7 +2687,7 @@ const ALL_VEHICLES=VEHICLES.concat(RAIL_VEHICLES);
 function vehiclesFor(mode){return (mode==="rail")?RAIL_VEHICLES:VEHICLES;}
 
 return {buildModel,buildGeometry,denseIntrados,fitAll,fitOk,stressPair,
-        SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,shallowRuleOn,stripLoadConc,coverAtX,llRegime,deepTire,
+        SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,rateAt,isLrfdRate,LRFD_MIN_FILL,shallowRuleOn,stripLoadConc,coverAtX,llRegime,deepTire,
         RAIL_VEHICLES,ALL_VEHICLES,vehiclesFor,railSpread,railGroups,railTracks,TIE_LONG,nodalLL,nodalLLByAxle,llEffects,stressMax,
         impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,thrustOffsets,VEHICLES,
         TIRE_L,TIRE_W,GAGE,sideBySide,sideBySideAt,lanesOn,TRUCK_CLR};
@@ -4867,6 +4888,9 @@ function stateAt(p,M,veh,pos,dir,i){
       const rg=ARCH.llRegime(M,xa);
       if(rg.conc){shallow=true; rate=rg.r; Esh=rg.E; break;}
     }
+    /* LRFD 1.15H option: no spread where the cover is under 1.0 ft (rateAt), so a
+       node with less cover is drawn with the footprint, as the solver loads it. */
+    if(shallow&&H!=null&&ARCH.rateAt(p,H)<=0)rate=0;
   }
   /* rate 0 means no dispersion at all: the transverse dimension is then a
      load-SHARING width E, not a cone, and the figure must not draw a wedge. */
@@ -6909,11 +6933,24 @@ function validate(p,M,results){
       if(shallow&&rSh>0)
         add("wn","Fill spread credited below 2 ft — a judgment, state it",
           `The least cover on this barrel is ${nfx(covMinN,2)} ft, and a dispersion of ${nfx(rSh,2)}H is being `+
-          `credited below the ${nfx(ARCH.SHALLOW_FILL,1)} ft threshold, in both directions. <b>No article `+
-          `authorizes a spread at that depth.</b> Art. 6.4.2 applies at 2 ft and above; Art. 6.4.1 sends `+
-          `anything shallower to Art. 3.24.3, which disperses the wheel through no fill at all. The credit is `+
-          `defensible as engineering judgment about the fill — there is real material over the extrados and it `+
-          `does spread load — but it is a judgment and it must appear in the assumptions. `+
+          `credited below the ${nfx(ARCH.SHALLOW_FILL,1)} ft threshold, in both directions. `+
+          (ARCH.isLrfdRate(rSh)
+            ?`<b>The Std. Spec., to which this rating is made, has no spread at that depth</b>: Art. 6.4.2 applies `+
+             `at 2 ft and above, and Art. 6.4.1 sends anything shallower to Art. 3.24.3, which disperses the wheel `+
+             `through no fill at all. The 1.15H rate is taken from AASHTO LRFD 10th Ed. (2024): Table 3.6.1.2.6a-1 `+
+             `gives LLDF = 1.15 for buried structures other than concrete pipe, and Art. 3.6.1.2.6a applies the `+
+             `spread to nonconcrete culverts with ${nfx(ARCH.LRFD_MIN_FILL,1)} ft of fill or more. It is therefore `+
+             `taken only where the cover at the axle is ${nfx(ARCH.LRFD_MIN_FILL,1)} ft or more; an axle over less `+
+             `takes no spread and is carried as with no credit` +
+             (covMinN<ARCH.LRFD_MIN_FILL?` (the least cover here, ${nfx(covMinN,2)} ft, is below that)`:``)+
+             `. The patch width omits the 0.06 D<sub>i</sub>/12 term of LRFD Eqs. 3.6.1.2.6b-1 to -3: it is a `+
+             `load-sharing width of the same kind as E = 4 + 0.06S, which is not credited to an unreinforced ring. `+
+             `Using an LRFD distribution inside a Std. Spec. / MBE rating is a choice that must appear in the `+
+             `assumptions. `
+            :`<b>No article authorizes a spread at that depth.</b> Art. 6.4.2 applies at 2 ft and above; Art. 6.4.1 sends `+
+             `anything shallower to Art. 3.24.3, which disperses the wheel through no fill at all. The credit is `+
+             `defensible as engineering judgment about the fill — there is real material over the extrados and it `+
+             `does spread load — but it is a judgment and it must appear in the assumptions. `)+
           ((Math.abs(rSh-1.75)<1e-9)
             ?(ARCH.deepTire(p).tire
               ?"At 1.75H the result is arithmetically identical to applying Art. 6.4.2 (tire-patch basis) at every "+
@@ -7957,7 +7994,23 @@ function liveLoadSection(p,M,veh,pos,dir){
       h+=step({label:"Transverse spread width, shallow fill",ref:refSh,
         sym:"w_t=b_t+"+nfx(rateSh,2)+"H",sub:"",res:"",units:"ft",
         note:"Wheel lines merge over (s_g + w_t) where the spreads overlap, as in Art. 6.4.2 — a fill spread "+
-          "is exactly the mechanism that provision has in mind."});
+          "is exactly the mechanism that provision has in mind."+
+          (ARCH.isLrfdRate(rateSh)?" The 0.06 D_i/12 width term of AASHTO LRFD Eqs. 3.6.1.2.6b-1 to -3 is not added: "+
+            "it is a load-sharing width, like E = 4 + 0.06S, and none is credited to an unreinforced ring.":"")});
+      if(ARCH.isLrfdRate(rateSh)){
+        const cut=(covMinH<ARCH.LRFD_MIN_FILL);
+        h+=step({label:"Least fill for the LRFD spread",ref:"AASHTO LRFD 10th Ed. Art. 3.6.1.2.6a",
+          sym:"H_{ax}\\ge "+nfx(ARCH.LRFD_MIN_FILL,1)+"\\ \\text{ft}",
+          sub:`H_{min}=${num(covMinH,3)}\\ \\text{vs}\\ ${nfx(ARCH.LRFD_MIN_FILL,1)}`,
+          res:cut?"\\text{below on part of the barrel}":"\\text{met everywhere}",units:"",
+          note:"The LRFD spread applies to nonconcrete culverts with 1.0 ft of fill or more, so it is taken only "+
+            "where the cover at the axle is at least 1.0 ft. An axle over less takes no spread: it arrives on its "+
+            "footprint as a concentrated load over the transverse width E = "+nfx(Eslab,3)+" ft ("+
+            (tireBasis?"tire contact width":"Std Spec 3.24.3.2, E = 4 + 0.06S")+"; the shallow-fill width selector), "+
+            "worked below, exactly as with "+
+            "no credit. LRFD gives no spread for shallower fill over a nonconcrete culvert, and the Std. Spec. "+
+            "gives none below 2 ft."});
+      }
     }else if(tireBasis){
       h+=step({label:"Transverse distribution width, shallow fill",ref:"tire contact width, Std Spec 3.30",
         sym:"E=b_t",sub:"",res:num(Eslab,3),units:"ft",
@@ -7989,7 +8042,7 @@ function liveLoadSection(p,M,veh,pos,dir){
         `takes the transverse width from ${nfx(ARCH.TIRE_W,3)} ft to ${nfx(ARCH.slabWidthE(p.S),2)} ft, so `+
         `every shallow-cover wheel delivers ${nfx(ARCH.slabWidthE(p.S)/ARCH.TIRE_W,2)} times less load to the strip.`);
     }
-    if(rateSh<=0){
+    if(rateSh<=0||(ARCH.isLrfdRate(rateSh)&&covMinH<ARCH.LRFD_MIN_FILL)){
     h+=eqLine("Load delivered to the one-foot strip by a concentrated axle",
       "w=\\begin{cases}\\dfrac{P_{ax}/2}{E} & E\\le s_g\\quad\\text{(wheel lines do not reach each other)}\\\\[10pt]"+
       "\\dfrac{P_{ax}}{E} & E> s_g\\quad\\text{(widths overlap — superimposed, not merged)}\\end{cases}",
