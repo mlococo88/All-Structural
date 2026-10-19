@@ -20001,3 +20001,115 @@ index 6c399ad..e33e8be 100644
 -      ${fld('Normal frames', 'framing.arrange', '', 'sel', { options: [['contiguous', 'Contiguous lines'], ['staggered', 'Staggered by bay']] })}${fld('Min. offset if not aligned', 'framing.stagMin', 'ft')}
 +      ${fld('Normal frames', 'framing.arrange', '', 'sel', { options: [['contiguous', 'Contiguous lines'], ['staggered', 'Staggered by bay'], ['stepped', 'Stepped (RIDOT standard)']] })}${fld('Min. offset if not aligned', 'framing.stagMin', 'ft')}
 ```
+
+## 2026-10-19 — PR: claude/gd-superreactions (SRX: steel girder reactions for Bridge Substructure Loading from GirderDetail; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, tools.html, ENGINEER_CHECKS GD72; PR link added after merge)
+
+### SRX. "Send reactions to Substructure Loading" (superReactions sender)   [NEW HAND-OFF — no GirderDetail result changes; §4 callout for the receiver's values, below]
+- **Engineer decision (2026-10-19):** ST-Girder no longer sends bearing reactions to Bridge Substructure Loading (#309/#310); steel girder reactions come from GirderDetail, which has the full continuous staged analysis.
+- **Where:** Structural analysis, "Girder and model" tab, new section "Send reactions to Substructure Loading" after "Send to ST-Girder" (pane anchor `${secHd('sec-sasr', 'Send reactions to Substructure Loading')}`). New code after `gdStHref` (anchor `const GD_SR = { ch: 'superReactions'`): `gdSrUi()`, `gdSrPayload()` and a click handler (`[data-gdsr]`). The owner-rules object of the ST-Girder hand-off moved unchanged from an inline IIFE in `gdStPayload` into `gdOwnerRulesData()` (anchor `function gdOwnerRulesData()`), called by both hand-offs.
+- **What it sends (HANDOFF.md §4.4, schema `bridge-super-reactions` v1 unchanged):** on click only, `GM.sa.compute({ ...P.sa, girder: g })` for every girder g = 1…n (the Structural analysis itself, with its model settings: staged variable stiffness or constant EI), and from each run `R.reac` (the Reactions card): per support (`Abut. 1`, `Pier k`, `Abut. 2`, x in ft) and per girder (`G1`…`Gn`, position) the unfactored DC1, DC2, DW in kip. `factored:false`, `imIncluded:false`, `dfIncluded:false`, `perGirder:true`, `liveLoad:null`, `span:{ index:null, length }`, `project` from the project title block. New optional fields (additive, §5): `allGirders:true` and `ownerRules` (the §4.9 object). The notes list what the schema cannot carry: LL+IM per girder (max / min), the pedestrian load, the MassDOT utilities (UT, UF; not in DC1/DC2/DW), the owner load rules in words, manual DFs, simple-span piers. Written with `BridgeXfer.publish` (key + `updatedAt`), then the copy `bridgeSuite.v1.superReactions.by.girderdetail`; "Export hand-off (JSON)" writes the same payload to a file. An alert lists every value sent.
+- **Choice of analysis:** Structural analysis runs per girder, so every girder is run (about 0.4 s each on the built-in) rather than Preliminary sizing's approximate whole-bridge analysis: the reactions are then exactly GirderDetail's own Structural analysis values for each girder, including its girder-specific dead load distribution (LLDF and DLs module) and cross-frame point loads. Manual distribution factors (`sa.dfSrc = 'manual'`) belong to the selected girder only, so the other girders run with the module's factors; this affects only the LL+IM listed in the notes.
+- **Saved data:** none changed (no new key in GirderDetail's project; the hand-off keys are the existing channel). `P` is unchanged by a send (checked).
+- **§4:** no GirderDetail formula, factor or result changes (`tests/compare.mjs --tool gd`: all sections identical). The values are new for the receiver: steel reactions now come from GirderDetail's continuous staged analysis instead of ST-Girder's copy (which, for a GirderDetail import, was the imported station shears at the two ends of one span). Built-in project as opened (owner MassDOT, 5 girders, spans 110 / 140 / 110 ft, kip):
+
+| Support | G1 (exterior) DC1 / DC2 / DW | G2 (interior) DC1 / DC2 / DW | G3 (interior) DC2 | G1 LL+IM max / min | G2 LL+IM max / min |
+|---|---|---|---|---|---|
+| Abut. 1 (x = 0) | 44.008 / 13.467 / 8.194 | 52.639 / 9.896 / 8.197 | 6.320 | 99.90 / −15.07 | 113.14 / −17.07 |
+| Pier 1 (x = 110) | 164.139 / 47.922 / 29.156 | 194.934 / 35.198 / 29.153 | 22.480 | 199.74 / −16.39 | 226.26 / −18.59 |
+| Pier 2 (x = 250) | 164.175 / 47.922 / 29.156 | 194.971 / 35.198 / 29.153 | 22.480 | 199.74 / −16.39 | 226.26 / −18.59 |
+| Abut. 2 (x = 360) | 44.021 / 13.467 / 8.194 | 52.652 / 9.896 / 8.197 | 6.320 | 99.90 / −15.07 | 113.14 / −17.07 |
+
+  MassDOT utilities case (`tests/projects/gd/util.json`, owner MassDOT): DC1 / DC2 / DW identical to the table; in the notes, existing utilities UT on G2 and G3 (0.150 klf each): 5.85 kip at each abutment, 21.15 kip at each pier (2 × 5.85 + 2 × 21.15 = 54.0 = 0.150 × 360); future allowance UF (0.125 klf): 4.87 / 17.63 kip (sum 45.0 = 0.125 × 360). G1, G4, G5: none.
+- **Hand check (built-in, G2 interior, Pier 1, DC2; staged model):** shear just left of the pier V_L = −17.536 kip, just right V_R = +17.412 kip (Structural analysis "Shears, unfactored", both sides of the pier), load on the pier node w·trib = 0.25053 klf × 1.0 ft = 0.251 kip: R = V_R − V_L + w·trib = 17.412 + 17.536 + 0.251 = **35.198 kip** = the sent value. Abut. 1: R = V + w·trib = 9.771 + 0.25053 × 0.5 = **9.896 kip**. Equilibrium: 2 × 9.896 + 2 × 35.198 = 90.19 kip = 0.25053 × 360 = 90.19 kip (check SA2).
+- **Hand check (closed form, constant EI):** with the Structural analysis model set to "Constant EI" the same code gives DW (w = 0.2075 klf, every girder) 8.410 kip at the abutments and 28.940 kip at the piers. Three-moment equation, spans 110 / 140 / 110, symmetric: M₁(2(L₁ + L₂) + L₂) = −w(L₁³ + L₂³)/4 → M₁ = −w(1,331,000 + 2,744,000)/4/640 = −1591.8w; R₀ = wL₁/2 + M₁/L₁ = 55w − 14.471w = 40.529w = **8.410 kip**; R₁ = 180w − 40.529w = 139.471w = **28.940 kip**. The staged model (stiffer composite section over the piers) gives 8.194 / 29.156 kip, about 2.6% less at the abutments and 0.7% more at the piers.
+- **How verified:** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"`: all scripts pass. `node tests/compare.mjs --tool gd` (builtin / AASHTO): **all sections identical**, no console errors; also `--project util --owner MassDOT` and `--project xsA --owner RIDOT` (see the PR). `gdStPayload(1|2, true)` origin/main vs branch under AASHTO, RIDOT (m = 1.2) and MassDOT: identical (the `gdOwnerRulesData` move changes nothing). Headless end to end (built-in and util): Send → the channel key equals the `.by.girderdetail` copy, `updatedAt` = `producedAt`, `P` unchanged; Substructure Loading's Pull lists it, defaults to G1 → G1 … G5 → G5, Apply writes 60 values, every one equal to the payload. Screenshots of the button and of Substructure Loading after adopting (PR).
+- **Other copies:** `BridgeXfer` is used as is (not changed). The Substructure Loading side is in `fixlog/Bridge Substructure Loading.md` SRX.
+- **Open items:** ENGINEER_CHECKS GD72: (a) utilities are in the notes only (no schema field; SubLoads does not carry them); (b) owner rules sent for information, not applied by SubLoads; (c) the by-number default.
+
+Diff (`Steel Bridge Beam Modules.html`, `git diff -U0`):
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index e33e8be..663ce6b 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -12479 +12479 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
+-        <p class="note">This model is used by Preliminary sizing for its demands (and so by every module fed from it); changing it here changes the design demands. The reinforcement is taken at the deck centroid (1.0% is the minimum of 6.10.1.7).</p></div>${secHd('sec-sast', 'Send to ST-Girder')}<div class="sec-body" id="sec-sast">${gdStUi()}</div>` }; },
++        <p class="note">This model is used by Preliminary sizing for its demands (and so by every module fed from it); changing it here changes the design demands. The reinforcement is taken at the deck centroid (1.0% is the minimum of 6.10.1.7).</p></div>${secHd('sec-sast', 'Send to ST-Girder')}<div class="sec-body" id="sec-sast">${gdStUi()}</div>${secHd('sec-sasr', 'Send reactions to Substructure Loading')}<div class="sec-body" id="sec-sasr">${gdSrUi()}</div>` }; },
+@@ -12938,0 +12939,13 @@ function gdStDetails() {
++/* GD49 (2026-10-15): the owner load rules as data (optional field ownerRules of the girderDemands hand-off, §4.9), null when the bridge publishes no
++   load rules (bridge.lf). Moved out of gdStPayload unchanged (SRX, 2026-10-19) so the superReactions hand-off (§4.4) sends the same object. */
++function gdOwnerRulesData() {
++  const lf0 = P.df && P.df.bridge && P.df.bridge.lf; if (!lf0 || typeof lf0 !== 'object') return null;
++  const r4 = v => Math.round(v * 1e4) / 1e4;
++  const L = gdLF(), o = gdOwner() || L.o || 'AASHTO', ow = OWN_RULES.owners[o] || {}, row = id => gdOwnRules(o, id)[0] || null, cit = r => r ? gdOwnCite(r) : '', rr = gdRateRule(), mr = row('ld.mult'), hr = row('ld.haunch0');
++  const ec = [...new Set([L.cite && L.cite.D, L.cite && L.cite.R, L.cite && L.cite.I].filter(Boolean))].join('; ') || 'AASHTO LRFD 1.3.3 to 1.3.5';
++  return { owner: o, manual: ow.manual || '', codeBasis: 'AASHTO LRFD 10th Ed. (2024) with the owner rules on top',
++    llMultiplier: { m: L.m, cite: cit(mr), liveLoad: 'HL-93 LL+IM only; not the pedestrian load', limitStates: ['Strength I', 'Service I', 'Service II'], notApplied: ['live load deflection', 'fatigue', 'deck placement (constructibility)', 'load rating'] },
++    eta: { D: L.eD, R: L.eR, I: L.eI, product: r4(L.eD * L.eR * L.eI), max: L.eta, min: L.etaN, cite: ec, limitStates: ['Strength'], rule: 'maximum Strength load factors x max; minimum factors x min (AASHTO LRFD 1.3.2.1)' },
++    haunchInProperties: !L.h0, haunchCite: cit(hr),
++    ratingTarget: rr ? { kind: rr.kind, rf: rr.value && +rr.value.rf > 0 ? +rr.value.rf : null, fatigue: rr.value && +rr.value.fat > 0 ? +rr.value.fat : null, cite: cit(rr), basis: 'HL-93 inventory design-load rating, AASHTO factors without m or eta' } : null };
++}
+@@ -12979,8 +12992 @@ function gdStPayload(g, addPL) {
+-  const ownerRules = (() => { const lf0 = P.df && P.df.bridge && P.df.bridge.lf; if (!lf0 || typeof lf0 !== 'object') return null;
+-    const L = gdLF(), o = gdOwner() || L.o || 'AASHTO', ow = OWN_RULES.owners[o] || {}, row = id => gdOwnRules(o, id)[0] || null, cit = r => r ? gdOwnCite(r) : '', rr = gdRateRule(), mr = row('ld.mult'), hr = row('ld.haunch0');
+-    const ec = [...new Set([L.cite && L.cite.D, L.cite && L.cite.R, L.cite && L.cite.I].filter(Boolean))].join('; ') || 'AASHTO LRFD 1.3.3 to 1.3.5';
+-    return { owner: o, manual: ow.manual || '', codeBasis: 'AASHTO LRFD 10th Ed. (2024) with the owner rules on top',
+-      llMultiplier: { m: L.m, cite: cit(mr), liveLoad: 'HL-93 LL+IM only; not the pedestrian load', limitStates: ['Strength I', 'Service I', 'Service II'], notApplied: ['live load deflection', 'fatigue', 'deck placement (constructibility)', 'load rating'] },
+-      eta: { D: L.eD, R: L.eR, I: L.eI, product: r4(L.eD * L.eR * L.eI), max: L.eta, min: L.etaN, cite: ec, limitStates: ['Strength'], rule: 'maximum Strength load factors x max; minimum factors x min (AASHTO LRFD 1.3.2.1)' },
+-      haunchInProperties: !L.h0, haunchCite: cit(hr),
+-      ratingTarget: rr ? { kind: rr.kind, rf: rr.value && +rr.value.rf > 0 ? +rr.value.rf : null, fatigue: rr.value && +rr.value.fat > 0 ? +rr.value.fat : null, cite: cit(rr), basis: 'HL-93 inventory design-load rating, AASHTO factors without m or eta' } : null }; })();
++  const ownerRules = gdOwnerRulesData();   // SRX (2026-10-19): the same builder now also feeds the superReactions hand-off; content unchanged
+@@ -13030,0 +13037,51 @@ function gdStHref() { let f = '';
++/* ---------- Hand-off: "Send reactions to Substructure Loading" (HANDOFF.md §4.4, channel bridgeSuite.v1.superReactions, _schema bridge-super-reactions) ----------
++   SRX (engineer decision 2026-10-19: steel girder reactions for Bridge Substructure Loading come from GirderDetail; ST-Girder no longer sends them).
++   On click only: runs this module's analysis (GM.sa.compute, the same model settings) once for every girder G1…Gn and sends each girder's
++   UNFACTORED DC1, DC2 and DW reactions at every support, i.e. R.reac, the values of the Structural analysis Reactions card. Manual distribution
++   factors (sa.dfSrc 'manual') belong to the selected girder only, so the other girders run with the LLDF and DLs module's factors (they change
++   only LL+IM, which is listed in the notes, not sent as a load). LL+IM, the pedestrian load and the MassDOT utilities have no field in the schema:
++   their reactions are listed in the notes. The owner load rules go in the optional field ownerRules (same object as §4.9). Writes the channel key
++   and the copy bridgeSuite.v1.superReactions.by.girderdetail. Nothing in this tool's inputs, results or saved data changes. */
++const GD_SR = { ch: 'superReactions', schema: 'bridge-super-reactions', id: 'girderdetail', producer: 'GirderDetail', file: 'Steel Bridge Beam Modules.html' };
++function gdSrUi() {
++  const b = P && P.df && P.df.bridge, nb = b && b.ok ? b.nb : 0;
++  if (!nb) return '<p class="note full">Define the complete bridge in Preliminary sizing first.</p>';
++  return `<div class="full" id="gd-sr-box"><div class="fa-imp"><button type="button" class="proj-btn" data-gdsr="send" title="Run this analysis for every girder and write the unfactored DC1, DC2 and DW reactions to the shared browser storage for Bridge Substructure Loading (Reactions tab: Pull from PS-Beam / GirderDetail)">Send reactions to Substructure Loading</button><button type="button" class="proj-btn" data-gdsr="file" title="Save the same hand-off as a JSON file (Bridge Substructure Loading: Import hand-off (JSON))">Export hand-off (JSON)</button></div>
++    <p class="note">Runs this analysis for every girder (G1 to G${nb}, with the model settings above) and sends each girder's unfactored DC1, DC2 and DW reactions at every support (kip), the values of <a href="#" data-gdcard="combos:sa-r">Reactions</a> (Results tab, shown there for the girder selected above), to Bridge Substructure Loading. There: Reactions tab, Pull from PS-Beam / GirderDetail; each girder goes to the girder with the same number. Substructure Loading computes its own live load and applies its own load factors; GirderDetail's LL+IM, pedestrian load and utility reactions are listed in the notes of the hand-off, and the bridge owner's load rules are sent with it for information. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and Substructure Loading's Import hand-off (JSON).</p></div>`;
++}
++function gdSrPayload() {
++  const b = P.df && P.df.bridge; if (!b || !b.ok) return { error: 'The bridge is not defined. Define the complete bridge in Preliminary sizing first.' };
++  const nb = b.nb, sel = Math.round(nm(P.sa.girder)) || 1, r3 = v => Math.round(v * 1000) / 1000, Rs = [];
++  for (let g = 1; g <= nb; g++) { const p = { ...P.sa, girder: g }; if (g !== sel && p.dfSrc === 'manual') p.dfSrc = 'module';   // manual factors: the selected girder only
++    const R = GM.sa.compute(p); if (R.errors && R.errors.length) return { error: `G${g}: ${R.errors[0]}` }; Rs.push(R); }
++  const R0 = Rs[0], sup = Array.from(R0.sup), model = R0.fe ? 'staged, variable stiffness (steel / 3n / n)' : 'constant EI', lab = i => `G${i + 1}`;
++  const supports = R0.reac.map((r, k) => ({ id: r.name, x: r3(R0.xs[sup[k]]),
++    girders: Rs.map((R, i) => { const q = R.reac[k]; return { label: lab(i), position: R.ext ? 'exterior' : 'interior', DC1: r3(q.DC1), DC2: r3(q.DC2), DW: r3(q.DW) }; }) }));
++  const per = (fn, gs) => R0.reac.map((r, k) => `${r.name}: ${(gs || Rs.map((_, i) => i)).map(i => `${lab(i)} ${fn(Rs[i].reac[k])}`).join(', ')}`).join('; ');
++  const D = R0.DF && R0.DF.dead, hasPL = Rs.some(R => R.reac.some(q => q.Pp > 1e-9 || q.Pn < -1e-9));
++  const gUT = Rs.map((R, i) => i).filter(i => Rs[i].wUT > 0), gUF = Rs.map((R, i) => i).filter(i => Rs[i].wUF > 0), L = gdLF(), ownerRules = gdOwnerRulesData();
++  const notes = [
++    `Whole bridge: every girder (G1 to G${nb}) from GirderDetail's Structural analysis, ${model} line-girder model${R0.cont ? ', continuous' : ', simple spans'}, run once per girder with the same model settings; the reactions of the girder selected in Structural analysis (G${sel}) are those of its Reactions card. Each girder is labelled by its number, left to right.`,
++    `Unfactored, kip, + up. DC1 = girder steel (flanges and web at 490 pcf x (1 + ${f0(b.allow)}% detail allowance)), cross-frames and diaphragms (point loads at the girder's frames), deck, haunch, SIP forms and other DC1 rows of the LLDF and DLs module, on the steel section; DC2 and DW on the long-term composite section; each load on the stage that carries it. Dead loads per girder as distributed by the LLDF and DLs module${D && D.method ? ` (${GD_DL_METH[D.method] || D.method})` : ''}.`,
++    `Live load is not sent (liveLoad null): Substructure Loading computes its own. For information, GirderDetail's LL+IM reactions per girder (HL-93, IM ${f0(R0.im * 100)}% on the truck and tandem, x the girder's shear distribution factor with the skew correction, the larger of the adjacent spans; 90% of two trucks plus lane at interior supports), max / min, kip: ${per(q => `${f2(q.llMax)} / ${f2(q.llMin)}`)}.`,
++    ...(hasPL ? [`Pedestrian load: no field in this hand-off, not sent as a load. GirderDetail's pedestrian load reactions, max / min, kip: ${per(q => `${f2(q.Pp)} / ${f2(q.Pn)}`)}.`] : []),
++    ...(gUT.length || gUF.length ? [`MassDOT utilities (OWN16; MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4) are NOT in DC1, DC2 or DW: the hand-off has no field for them. Add them in Substructure Loading by hand where they are to be carried. ${gUT.length ? `Existing utilities (UT; GirderDetail factors them as DW: Strength 1.50 where they add, 0.65 where they relieve), kip: ${per(q => f2(q.UT || 0), gUT)}.` : 'No existing utilities.'} ${gUF.length ? `Future utility allowance (UF; Strength 1.25 where it adds, 0 where it relieves), kip: ${per(q => f2(q.UF || 0), gUF)}.` : 'No future utility allowance.'}`] : []),
++    ...(P.sa.dfSrc === 'manual' ? [`Manual distribution factors (Structural analysis) apply to G${sel} only; the other girders use the LLDF and DLs module's factors. Only the LL+IM values in these notes depend on them.`] : []),
++    ...(!R0.cont && R0.spans.length > 1 ? ['Simple spans: the reaction at a pier is the sum of the end reactions of the two spans on it (one support point in this model); split it between the back and ahead bearing rows by hand where needed.'] : []),
++    gdLFid(L) ? `Owner load rules: ${L.o || 'AASHTO'}, none on the loads (m = 1, eta = 1).${ownerRules ? ' Sent in ownerRules.' : ''}` : `Owner load rules of ${L.o} are NOT in these unfactored reactions: ${[L.m !== 1 ? `design load multiplier m = ${L.m} on HL-93 LL+IM at the Strength and Service limit states (not on the pedestrian load)` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (max ${L.eta}, 1/eta = ${L.etaN} on the minimum factors)` : ''].filter(Boolean).join('; ') || 'none on the loads'}${L.h0 ? '; the analysis takes the haunch as 0 in the composite section properties (owner rule)' : ''}. They are sent in ownerRules for information; GirderDetail applies them to its own checks, Substructure Loading applies its own load factors.`];
++  const payload = { _schema: GD_SR.schema, schemaVersion: 1, producer: GD_SR.producer, producerFile: GD_SR.file,
++    project: { name: String((P.tb && P.tb.name) || b.project || ''), bridgeId: String((P.tb && P.tb.bridge) || '') },
++    units: { force: 'kip', length: 'ft' }, factored: false, imIncluded: false, dfIncluded: false, perGirder: true,
++    allGirders: true,   // SRX (optional, §4.4): every girder of the cross-section, labels G1…Gn left to right
++    span: { index: null, length: r3(R0.xs[R0.N - 1]) }, supports, liveLoad: null, notes, ...(ownerRules ? { ownerRules } : {}) };
++  return { ok: true, payload, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}`).join(', ')}`).join('\n') };
++}
++document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-gdsr]'); if (!t) return;
++  if (!window.BridgeXfer) { alert('The hand-off helper is not available in this browser.'); return; }
++  const r = gdSrPayload(); if (r.error) { alert(`Structural analysis: ${r.error}`); return; }
++  if (t.dataset.gdsr === 'file') { BridgeXfer.exportFile(GD_SR.ch, r.payload); flash('Reactions hand-off file saved.'); return; }
++  const w = BridgeXfer.publish(GD_SR.ch, r.payload, GD_SR.producer, GD_SR.file);
++  if (w.error) { alert(`Could not send the reactions: ${w.error}\n\nUse "Export hand-off (JSON)" and Substructure Loading's Import hand-off (JSON) instead.`); return; }
++  try { localStorage.setItem(BridgeXfer.NS + GD_SR.ch + '.by.' + GD_SR.id, JSON.stringify(w.payload)); } catch (er) { }   // per-producer copy (§4.4 "two producers, one channel")
++  flash(`Reactions of G1 to G${r.payload.supports[0].girders.length} sent to Substructure Loading.`);
++  alert(`Reactions sent to Substructure Loading (unfactored, kip, DC1 / DC2 / DW per girder):\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail".`); });
+```

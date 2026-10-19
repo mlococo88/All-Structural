@@ -3231,16 +3231,18 @@ async function rxImport(file) {
 { const cvh = cvHtml; cvHtml = function () { const h = cvh(), k = P.ui.sel, u = P.units[k]; if (!u || !u.cv || u.cv.on !== 'yes') return h; let parts = []; try { parts = hitParts(MODEL.G, MODEL.UG, k, num(u.cv.mhw), u.cv.hit); } catch (e) { }
     if (parts && parts.length) return h; return h.replace('<div class="card-b">', `<div class="card-b"><p style="color:var(--fail);margin-bottom:8px">The impact elevation El. ${f2(num(u.cv.mhw))} does not meet any column, wall, or cap of ${esc(u.name)}, so no vessel force is applied. Enter the mean high water elevation on the Units tab.</p>`); }; }
 /* ---------- superstructure reactions hand-off (HANDOFF.md §4.4, channel superReactions) ----------
-   Reactions tab: "Pull from PS-Beam" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
-   not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only; reactions from
-   GirderDetail are a later change): a payload from ST-Girder is not listed, adopted or imported.
+   Reactions tab: "Pull from PS-Beam / GirderDetail" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
+   not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only): a payload from ST-Girder is
+   not listed, adopted or imported. GirderDetail (Steel Bridge Beam Modules) sends every girder of the bridge
+   (optional field allGirders, SRX 2026-10-19): by default each source girder Gi goes to SubLoads girder Gi; its
+   optional ownerRules are shown and recorded for information, never applied (SubLoads uses its own load factors).
    Nothing is applied on page load. The dialog shows the source and every cell it will overwrite, and
    the user maps the incoming girder line to SubLoads supports, bearing rows and girders. Only the
    confirmed P.rx.data cells change; the source is kept in the new optional field P.rxSrc and shown on
    the Reactions tab, the Dead load tab and the report. Values stay unfactored, in kip. */
 (function patchRxHandoff() {
   const CH = 'superReactions', SCH = 'bridge-super-reactions', RID = 'subloads';
-  const BY = ['psbeam', 'mct'];
+  const BY = ['psbeam', 'mct', 'girderdetail'];
   const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html');
   const ST_MSG = 'ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only).';
   /* the latest payload on the channel is new for SubLoads, and not ST-Girder's */
@@ -3252,6 +3254,11 @@ async function rxImport(file) {
   const when = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '?') : d.toLocaleString(); };
   const r3 = v => Math.round(v * 1000) / 1000;
   let DLG = null;   // open dialog state
+  /* SRX (2026-10-19): optional ownerRules (GirderDetail): a short summary for display and the source record, or null when absent or not valid */
+  const ownSum = p => { const o = p && p.ownerRules; if (!o || typeof o !== 'object') return null; const m = o.llMultiplier && +o.llMultiplier.m, e = o.eta || {};
+    const pos = v => typeof v === 'number' && Number.isFinite(v) && v > 0; if (!pos(m) || !pos(+e.max) || !pos(+e.min)) return null;
+    return { owner: String(o.owner || ''), m, etaMax: +e.max, etaMin: +e.min, haunch0: o.haunchInProperties === false }; };
+  const ownTxt = o => `${o.owner || 'owner'}: design load multiplier m = ${o.m} on HL-93 LL+IM, load modifier η = ${o.etaMax} (max) / ${o.etaMin} (min factors)${o.haunch0 ? ', haunch 0 in composite section properties' : ''}`;
 
   /* every published payload on the channel: the latest, plus the per-producer copies */
   function candidates() {
@@ -3314,6 +3321,7 @@ async function rxImport(file) {
     const n = nb(), all = [...Array(n)].map((_, j) => j), ext = n > 1 ? [0, n - 1] : [0], int = all.filter(j => j > 0 && j < n - 1);
     if (preset === 'all') return all; if (preset === 'ext') return ext; if (preset === 'int') return int.length ? int : all;
     if (preset === 'one') return idx >= 1 && idx <= n ? [idx - 1] : [];
+    if (preset === 'bynum') return all.filter(j => DLG && DLG.c && DLG.c.labels && DLG.c.labels.indexOf(`G${j + 1}`) >= 0);   // SRX: girders with a source of the same number
     return pos === 'exterior' ? ext : (int.length ? int : all);   // 'pos': girders of the same position
   }
   function gList(js) { return js.length ? js.map(j => `G${j + 1}`).join(', ') : 'none'; }
@@ -3332,6 +3340,9 @@ async function rxImport(file) {
     const gl = p.girderLine || {}, g0 = c.sups[0].girders[0];
     DLG.pos = gl.position || g0.position || 'interior'; DLG.idx = +gl.beamIndex || 0;
     DLG.preset = 'pos'; DLG.gir = presetGirders('pos', DLG.pos, DLG.idx); DLG.mode = 'replace';
+    // SRX (2026-10-19): a whole-bridge payload (allGirders, labels G1…Gn) goes by girder number by default
+    DLG.byN = !!p.allGirders && c.labels.length > 1 && c.labels.every(l => /^G\d+$/.test(l));
+    if (DLG.byN) { DLG.preset = 'bynum'; DLG.gir = presetGirders('bynum'); }
     DLG.map = c.sups.map((s, i) => { const k = defTarget(s.id, i, c.sups.length); return { k, side: i === 0 && c.sups.length > 1 ? 'ahead' : 'back' }; });
   }
   function plan() {   // the cells that will change: [{k, side, j, key, old, val}]
@@ -3339,9 +3350,10 @@ async function rxImport(file) {
     let err = '';
     c.sups.forEach((s, i) => { const t = DLG.map[i]; if (t.k < 0) return; const side = isJoint(t.k) ? t.side : 'back', tag = `${t.k}.${side}`;
       if (dup[tag]) err = `${s.id} and ${dup[tag]} both map to ${P.units[t.k].name}${isJoint(t.k) ? ` (${side} row)` : ''}. Map each to a different support or row, or skip one.`; dup[tag] = s.id;
-      const g = s.girders.find(x => x.label === lab); if (!g) return;
-      DLG.gir.forEach(j => ['dc1', 'dc2', 'dw'].forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]);
-        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + g[c0] : g[c0]), src: s.id }); })); });
+      const g0 = s.girders.find(x => x.label === lab); if (!g0 && !DLG.byN) return;
+      DLG.gir.forEach(j => { const g = DLG.byN ? s.girders.find(x => x.label === `G${j + 1}`) : g0; if (!g) return;   // SRX: by number, Gi to Gi
+        ['dc1', 'dc2', 'dw'].forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]);
+        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + g[c0] : g[c0]), src: s.id }); }); }); });
     if (!err && !out.length) err = 'Nothing selected: map at least one support and pick at least one girder.';
     return { cells: out, err };
   }
@@ -3350,20 +3362,23 @@ async function rxImport(file) {
     const srcSel = D.list.length > 1 ? `<h3>Source</h3>${D.list.map((q, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="radio" name="rxh-src" data-rxh="src" value="${i}"${i === D.pi ? ' checked' : ''}> ${esc(BX().describe(q))}${q.girderLine && q.girderLine.label ? `, girder ${esc(q.girderLine.label)}` : ''}</label>`).join('')}` : '';
     let h = `<div class="modal-box" style="width:min(760px,96vw)"><h2>Pull superstructure reactions</h2>${srcSel}`;
     h += `<table class="mini-t" style="margin-top:8px"><tbody><tr><td class="lbl">Producer</td><td>${esc(p.producer || '?')}${p.producerFile ? ` (${esc(p.producerFile)})` : ''}</td></tr><tr><td class="lbl">Produced</td><td>${esc(when(p.producedAt))}</td></tr><tr><td class="lbl">Project</td><td>${esc([p.project && p.project.name, p.project && p.project.bridgeId].filter(Boolean).join(', ') || '(not stated)')}</td></tr>`;
-    if (!c.err) h += `<tr><td class="lbl">Girder line</td><td>${esc((p.girderLine && p.girderLine.label) || c.labels.join(', '))}${D.pos ? ` (${esc(D.pos)})` : ''}</td></tr><tr><td class="lbl">Basis</td><td>Unfactored, kip, per girder; IM ${p.imIncluded ? 'included' : 'not included'}, DF ${p.dfIncluded ? 'included' : 'not included'}</td></tr>`;
+    if (!c.err) h += `<tr><td class="lbl">Girder line</td><td>${esc((p.girderLine && p.girderLine.label) || c.labels.join(', '))}${p.allGirders && c.labels.length > 1 ? ' (every girder of the bridge)' : D.pos ? ` (${esc(D.pos)})` : ''}</td></tr><tr><td class="lbl">Basis</td><td>Unfactored, kip, per girder; IM ${p.imIncluded ? 'included' : 'not included'}, DF ${p.dfIncluded ? 'included' : 'not included'}</td></tr>`;
+    if (!c.err && ownSum(p)) h += `<tr><td class="lbl">Owner load rules</td><td>${esc(ownTxt(ownSum(p)))}. Information only: not in these unfactored reactions and not applied here; SubLoads applies its own load factors (Combinations tab).</td></tr>`;
     h += `</tbody></table>`;
     if (Array.isArray(p.notes) && p.notes.length) h += `<h3>Notes from ${esc(p.producer || 'the producer')}</h3><ul style="margin:0 0 0 18px;font-size:.88rem;color:var(--text-dim)">${p.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
     if (D.errs.length) h += `<p style="color:var(--warn);margin-top:6px">Not usable: ${esc(D.errs.join('; '))}</p>`;
     if (c.err) { h += `<p style="color:var(--fail);margin-top:10px"><b>Refused:</b> ${esc(c.err)}. Nothing will be changed.</p><div class="modal-foot"><button type="button" class="btn" id="rxh-cancel">Close</button></div></div>`; m.innerHTML = h; return; }
     if (c.warns.length) h += `<p style="color:var(--warn);margin-top:6px">${c.warns.map(esc).join('<br>')}</p>`;
-    if (c.labels.length > 1) h += `<h3>Source girder</h3><select data-rxh="gl">${c.labels.map((l, i) => `<option value="${i}"${i === D.gl ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    if (p.allGirders && c.labels.length > 1 && c.labels.every(l => /^G\d+$/.test(l))) {   // SRX: whole-bridge payload
+      const n0 = nb(); h += `<h3>Source girders</h3><select data-rxh="byn"><option value="1"${D.byN ? ' selected' : ''}>Each girder to the girder with the same number (G1 → G1, G2 → G2, …)</option><option value="0"${D.byN ? '' : ' selected'}>One source girder to the girders chosen below</option></select>${c.labels.length !== n0 ? `<p style="color:var(--warn);margin-top:6px">${esc(p.producer || 'The producer')} sent ${c.labels.length} girders; this bridge has ${n0}. By number, girders without a source of the same number are not changed.</p>` : ''}`; }
+    if (c.labels.length > 1) h += `<h3>${D.byN ? 'Show the values of' : 'Source girder'}</h3><select data-rxh="gl">${c.labels.map((l, i) => `<option value="${i}"${i === D.gl ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const opt = (k, sel) => `<option value="-1"${sel < 0 ? ' selected' : ''}>(skip)</option>` + P.units.map((u, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
     h += `<h3>Supports</h3><table class="mini-t"><thead><tr><th>From</th><th>DC1</th><th>DC2</th><th>DW</th><th>To SubLoads support</th><th>Bearing row</th></tr></thead><tbody>`;
     const lab = c.labels[D.gl];
     c.sups.forEach((s, i) => { const g = s.girders.find(x => x.label === lab), t = D.map[i];
       h += `<tr><td class="lbl">${esc(s.id)}${s.x != null ? ` <small>(x = ${f2(s.x)} ft)</small>` : ''}</td>${g ? ['dc1', 'dc2', 'dw'].map(k => `<td style="text-align:right">${f2(g[k])}</td>`).join('') : '<td colspan="3">(no value for this girder)</td>'}<td><select data-rxh="k" data-i="${i}">${opt(i, t.k)}</select></td><td>${t.k >= 0 && isJoint(t.k) ? `<select data-rxh="side" data-i="${i}"><option value="back"${t.side === 'back' ? ' selected' : ''}>back (span behind)</option><option value="ahead"${t.side === 'ahead' ? ' selected' : ''}>ahead (span ahead)</option></select>` : '<span style="color:var(--muted)">single row</span>'}</td></tr>`; });
     h += `</tbody></table>`;
-    const n = nb(), presets = [['pos', `Same position as the source (${D.pos === 'exterior' ? 'exterior: G1 and G' + n : 'interior: G2 to G' + (n - 1)})`], ['all', 'All girders'], ['int', 'Interior girders only'], ['ext', 'Exterior girders only (G1, G' + n + ')']].concat(D.idx >= 1 && D.idx <= n ? [['one', `Only G${D.idx} (the source beam number)`]] : []).concat([['custom', 'Custom (tick below)']]);
+    const n = nb(), presets = (D.byN ? [['bynum', 'Every girder with a source of the same number']] : []).concat([['pos', `Same position as the source (${D.pos === 'exterior' ? 'exterior: G1 and G' + n : 'interior: G2 to G' + (n - 1)})`], ['all', 'All girders'], ['int', 'Interior girders only'], ['ext', 'Exterior girders only (G1, G' + n + ')']].concat(D.idx >= 1 && D.idx <= n ? [['one', `Only G${D.idx} (the source beam number)`]] : []).concat([['custom', 'Custom (tick below)']]));
     h += `<h3>Girders</h3><select data-rxh="preset">${presets.map(([v, l]) => `<option value="${v}"${v === D.preset ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">${[...Array(n)].map((_, j) => `<label style="display:flex;gap:4px;align-items:center;font-size:.9rem"><input type="checkbox" data-rxh="g" value="${j}"${D.gir.indexOf(j) >= 0 ? ' checked' : ''}> G${j + 1}</label>`).join('')}</div>`;
     h += `<h3>Existing values</h3><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="radio" name="rxh-mode" data-rxh="mode" value="replace"${D.mode === 'replace' ? ' checked' : ''}> Replace them</label><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="radio" name="rxh-mode" data-rxh="mode" value="add"${D.mode === 'add' ? ' checked' : ''}> Add to them (for example the other span's share at a continuous pier)</label>`;
     const pl = plan();
@@ -3381,6 +3396,8 @@ async function rxImport(file) {
     const tg = {}; pl.cells.forEach(x => { const t = `${x.k}.${x.side}`; (tg[t] = tg[t] || { k: x.k, support: P.units[x.k].name, row: isJoint(x.k) ? x.side : '', from: x.src, girders: [] }); if (tg[t].girders.indexOf(x.j + 1) < 0) tg[t].girders.push(x.j + 1); });
     const p = D.p, rec = { producer: p.producer || '', producerFile: p.producerFile || '', producedAt: p.producedAt || '', project: p.project || null,
       girder: D.c.labels[D.gl], position: D.pos, mode: D.mode, via: D.via, adoptedAt: new Date().toISOString(), targets: Object.values(tg) };
+    if (D.byN) { rec.girder = `${D.c.labels.join(', ')}, each to the girder with the same number`; rec.position = ''; rec.byNumber = true; }   // SRX (optional fields)
+    const os = ownSum(p); if (os) rec.ownerRules = os;   // SRX: recorded for information only
     P.rxSrc = (Array.isArray(P.rxSrc) ? P.rxSrc : []).concat([rec]).slice(-20);
     if (BX()) BX().markAdopted(CH, RID, p.producedAt || '');
     closeDialog(); buildSide(); recompute(); autosave();
@@ -3389,7 +3406,7 @@ async function rxImport(file) {
   }
   function pull() {
     const r = candidates();
-    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
+    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam, or in GirderDetail (Steel Bridge Beam Modules, Structural analysis), click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
     openDialog(r.list, 'pull', r.errs);
     if (r.st.length) flash(stNote(r.st));
   }
@@ -3404,14 +3421,14 @@ async function rxImport(file) {
   function srcText(rec, k) {
     const t = (rec.targets || []).filter(x => k == null || x.k === k);
     const where = t.map(x => `${esc(x.support)}${x.row ? ` (${esc(x.row)} row)` : ''} G${(x.girders || []).join(', G')}`).join('; ');
-    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}`;
+    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}${rec.ownerRules ? `; owner load rules ${esc(ownTxt(rec.ownerRules))} (information only, not applied here)` : ''}`;
   }
   const recsFor = k => (Array.isArray(P.rxSrc) ? P.rxSrc : []).filter(r => (r.targets || []).some(x => x.k === k));
   const css = document.createElement('style'); css.textContent = `.itab.bx-new::after { content: ' \\2022'; color: var(--warn); } .rxh-new { color: var(--warn); font-size: .8rem; font-weight: 600; align-self: center; }`; document.head.appendChild(css);
   const pr = paneRx; paneRx = function () {
     let h = pr(); const isNew = newOK(); let latest = null;
     if (isNew) { const r = BX().read(CH, SCH, 1); if (r.ok) latest = r.payload; }
-    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam (asks first)">Pull from PS-Beam</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
+    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder reactions sent by PS-Beam (one girder line) or GirderDetail (every girder) (asks first)">Pull from PS-Beam / GirderDetail</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
     h = h.replace('id="rx-clear">Clear all</button>', 'id="rx-clear">Clear all</button>' + btns);
     const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [];
     if (recs.length) h = h.replace(/(id="rx-hf-in"[^>]*>[\s\S]*?<\/div>)/, `$1<p class="note" style="padding:6px 0 0"><b>Hand-off sources</b> (values may have been edited since):<br>${recs.map(r => srcText(r)).join('<br>')}</p>`);
@@ -3422,6 +3439,9 @@ async function rxImport(file) {
     return h;
   };
   const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = newOK(); t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
+  /* SRX (2026-10-19): the Summary tab (and the report's Summary chapter) names the hand-off sources under the units table; nothing when none is recorded */
+  const sh = summaryHtml; summaryHtml = function () { const h = sh(), recs = Array.isArray(P.rxSrc) ? P.rxSrc : []; if (!recs.length) return h;
+    return h.replace('DC and DW are the superstructure reactions summed over the girders (kip, unfactored).', `DC and DW are the superstructure reactions summed over the girders (kip, unfactored). Reactions hand-off (values may have been edited since; see the Reactions tab): ${recs.map(r => srcText(r)).join('; ')}.`); };
   const dh = dlHtml; dlHtml = function () { const h = dh(), rs = recsFor(P.ui.sel); if (!rs.length) return h;
     return h.replace('Superstructure loads at the bearings</h3>', `Superstructure loads at the bearings</h3><p class="note" style="padding:0 0 6px">Reactions hand-off: ${rs.map(r => srcText(r, P.ui.sel)).join('; ')}.</p>`); };
   const be = basisExtra; basisExtra = function () { const h = be(), recs = Array.isArray(P.rxSrc) ? P.rxSrc : []; if (!recs.length) return h;
@@ -3439,6 +3459,7 @@ async function rxImport(file) {
     if (!DLG || !t.dataset || !t.dataset.rxh) return; const D = DLG, w = t.dataset.rxh;
     if (w === 'src') pickSource(+t.value);
     else if (w === 'gl') D.gl = +t.value;
+    else if (w === 'byn') { D.byN = t.value === '1'; D.preset = D.byN ? 'bynum' : 'pos'; D.gir = presetGirders(D.preset, D.pos, D.idx); }   // SRX
     else if (w === 'k') D.map[+t.dataset.i].k = +t.value;
     else if (w === 'side') D.map[+t.dataset.i].side = t.value;
     else if (w === 'preset') { D.preset = t.value; if (t.value !== 'custom') D.gir = presetGirders(t.value, D.pos, D.idx); }
