@@ -3374,3 +3374,112 @@ Model as in the claude/index-posting check case B: 4 × 20.25 ft, Mn⁻ 700 ft·
 #### Open items
 - The saved-project migration above (engineer to decide).
 - **"↺ Auto-detect LCs" drops category and γLL (pre-existing, not changed).** The button writes `{posLC, negLC}` only, so a vehicle's stored category and γLL are dropped. Until the auto-populate effect runs again (new results, vehicle selection, limit state, method or ADTT), `multiVehicleData` falls back to category "Design" and the rating-level γLL. A legal truck is then rated, and its posting reported as "not computed — rated as Design", at the design γLL. Keep category/γLL in the button (a result change)? Engineer to decide.
+
+## 2026-10-19 — PR: claude/index-legal-remap (PR link added after merge)
+
+### Notice and "Re-map" for result cases stored by the old auto-detect (Tier 1: display + user-initiated change)
+- **Problem (saved-data item of the claude/index-legal-match entry; engineer approved the proposed fix 2026-10-19):** a project saved before the whole-name match can hold `vehicleLCMap["AASHTO Legal Type 3"].posLC/negLC` = a Type 3-3 or 3S2 case. The auto-detect never overwrites a stored case, so after the fix such a project still rates and posts Type 3 with the other truck's forces. An old auto-detected mapping cannot be told apart from a deliberate hand-set one, so nothing is changed silently.
+- **What it does:**
+  - **Detection.** When the project has results, flag each selected vehicle whose stored `posLC` / `negLC` meets all three conditions:
+    - (a) it is not this vehicle's case (`idxLcIsVehicle` fails);
+    - (b) it is the case of another selected vehicle whose name is longer and starts with this vehicle's name;
+    - (c) a case of this vehicle itself exists in the results (`idxVehicleLCs` not empty).
+  - **Proposal.** The proposed case is the one the auto-detect would choose now: LL Max = the first own case containing "(max)"/"max", else the first own case; LL Min = the first own case containing "(min)"/"min", else "same as max".
+  - **Notice.** "⚠ Result case mapped to another vehicle" is shown at the top of the Multi-Vehicle tab and just above the posting box (AASHTO Rating → Inputs & Setup, under the RF chart). It lists each vehicle as `LL Max: "stored" → "proposed"` and `LL Min: …`.
+  - **Re-map** writes only `posLC` / `negLC` of the listed vehicles. The rest of each entry is spread over unchanged, so `category`, `gamLLinv`, `gamLLop` and `customGam` are kept.
+  - **Dismiss** hides the notice for this session (React state only). It shows again on the next load.
+  - Nothing is written until Re-map is clicked.
+- **Not flagged:** a cross-mapping when the vehicle has no case of its own in the results (deliberate use of another truck's case), and a case of an unrelated vehicle (no name prefix).
+- **Storage:** no new key, no format change. Re-map writes the existing `mct_cfg_v3.rating.vehicleLCMap` through the existing `setVehicleLCMap`.
+- **§4:** no formula, factor, unit or code reference changes. Results change only when the engineer clicks Re-map, and then they are the results of the vehicle's own case (MBE 6A.4.4 legal-load rating, MBE 6A.8.3 Eq. 6A.8.3-1 posting; edition: verify).
+- **Where:**
+  1. `StepResults`, inserted just before `// ── Multi-vehicle rating table ────` (anchor `// ── Old auto-detected mappings (2026-10-19)`):
+```jsx
+  // ── Old auto-detected mappings (2026-10-19) ──────────────────────────────
+  // Before the whole-name match (idxLcIsVehicle), the auto-detect could store a longer-named
+  // vehicle's case for a vehicle (e.g. Type 3 → "AASHTO Legal Type 3-3_…"), and a stored case is
+  // never overwritten. Flag a stored posLC / negLC that is not this vehicle's case but is the case
+  // of a selected vehicle whose name starts with this one, when this vehicle's own case exists.
+  // Display only: nothing changes until the engineer clicks "Re-map" (keeps category and γLL).
+  const [lcRemapDismissed, setLcRemapDismissed] = useState(false);
+  const lcRemap = useMemo(()=>{
+    const sel = cfg?.selectedVehicles||[];
+    if (!origRows.length || !sel.length) return [];
+    const loadedLCs = [...new Set(origRows.map(r=>r.load))];
+    const out = [];
+    sel.forEach(vn=>{
+      const a = vehicleLCMap[vn]; if (!a) return;
+      const own = idxVehicleLCs(loadedLCs, vn);
+      if (!own.length) return;
+      const other = lc => sel.some(o=>o!==vn && o.length>vn.length && o.startsWith(vn) && idxLcIsVehicle(lc,o));
+      const bad = lc => !!lc && !idxLcIsVehicle(lc,vn) && other(lc);
+      const r = { vn, label:(ALL_VEHICLES.find(v=>v.name===vn)||{}).label||vn };
+      if (bad(a.posLC)) { const p = own.find(lc=>lc.includes('(max)')||lc.includes('max')) || own[0]; if (p!==a.posLC) r.pos = [a.posLC, p]; }
+      if (bad(a.negLC)) { const n = own.find(lc=>lc.includes('(min)')||lc.includes('min')) || ''; if (n!==a.negLC) r.neg = [a.negLC, n]; }
+      if (r.pos || r.neg) out.push(r);
+    });
+    return out;
+  },[origRows, vehicleLCMap, JSON.stringify(cfg?.selectedVehicles)]);
+  const applyLcRemap = () => setVehicleLCMap(prev=>{
+    const next = {...prev};
+    lcRemap.forEach(r=>{ next[r.vn] = {...(prev[r.vn]||{}),            // category, γLL, customGam kept
+      ...(r.pos?{posLC:r.pos[1]}:{}), ...(r.neg?{negLC:r.neg[1]}:{}) }; });
+    return next;
+  });
+  const lcRemapNotice = (lcRemap.length>0 && !lcRemapDismissed) ? (
+    <div data-idx-remap="1" style={{background:'#fffbeb',border:'2px solid #f59e0b',borderRadius:'8px',padding:'10px 14px',marginBottom:'14px',fontSize:'11px',fontFamily:'monospace',color:'#92400e'}}>
+      <div style={{fontSize:'12.5px',fontWeight:'700',marginBottom:'4px'}}>⚠ Result case mapped to another vehicle</div>
+      <div style={{marginBottom:'6px'}}>These vehicles use a case of a vehicle whose name starts with theirs (auto-detect before 2026-10-19). Their RF and posting use the other vehicle's forces until re-mapped:</div>
+      {lcRemap.map(r=>(
+        <div key={r.vn} style={{marginLeft:'8px'}}>
+          <strong>{r.label}</strong>
+          {r.pos&&<div style={{marginLeft:'12px'}}>LL Max: "{r.pos[0]}" → "{r.pos[1]}"</div>}
+          {r.neg&&<div style={{marginLeft:'12px'}}>LL Min: "{r.neg[0]}" → "{r.neg[1]||'— same as max —'}"</div>}
+        </div>
+      ))}
+      <div style={{display:'flex',gap:'8px',marginTop:'8px'}}>
+        <button onClick={applyLcRemap} style={{background:'#f59e0b',border:'none',borderRadius:'5px',color:'#fff',padding:'5px 14px',cursor:'pointer',fontSize:'12px',fontWeight:'600'}}>Re-map</button>
+        <button onClick={()=>setLcRemapDismissed(true)} style={{background:'#fff',border:'1px solid #fcd34d',borderRadius:'5px',color:'#92400e',padding:'5px 14px',cursor:'pointer',fontSize:'12px'}}>Dismiss</button>
+      </div>
+    </div>
+  ) : null;
+```
+  2. Just above the posting box. Before:
+```jsx
+          {/* ── Posting Check ── */}
+```
+     After:
+```jsx
+          {lcRemapNotice}
+          {/* ── Posting Check ── */}
+```
+  3. Top of the Multi-Vehicle sub-tab. Before:
+```jsx
+            {ratingSubTab==='table'&&(<div>
+```
+     After:
+```jsx
+            {ratingSubTab==='table'&&(<div>
+              {lcRemapNotice}
+```
+
+#### Check case: old-style saved project
+Model as in the claude/index-posting check case B: Mn⁻ 700, γLL 1.45, s = 1.33. Results are pasted in the order 3-3, 3S2, Type 3, and the saved `vehicleLCMap["AASHTO Legal Type 3"]` = `{posLC: "AASHTO Legal Type 3-3_L1(max)", negLC: "AASHTO Legal Type 3-3_L1(min)", category: "Legal", γLL 1.45, customGam: true}`. Numerator = 700.0 − 1.25 × 36.91 − 1.50 × 7.69 = 642.33.
+- **On open:** the notice lists Legal Type 3: LL Max "AASHTO Legal Type 3-3_L1(max)" → "AASHTO Legal Type 3_L1(max)", LL Min "…3-3_L1(min)" → "…Type 3_L1(min)". It appears on the Multi-Vehicle tab and above the posting box. Type 3 still uses the 3-3 forces: RF = 642.33 / (1.45 × 1.33 × 384.44) = 0.866 → posting (25/0.7) × 0.566 = 20.2 T (same as main).
+- **Re-map:** the stored cases become the Type 3 cases, with category Legal, γLL 1.45 and customGam true unchanged. RF = 642.33 / (1.45 × 1.33 × 307.56) = **1.083** → **no posting**. The notice disappears.
+  - Same project with an engineer-typed γLL 1.40: after Re-map γLL stays 1.40 and RF = 642.33 / (1.40 × 1.33 × 307.56) = 1.122.
+- **Dismiss:** the notice hides; `vehicleLCMap` is unchanged (still the 3-3 cases) and Type 3 stays 0.866 / 20.2 T.
+
+#### How verified
+- `node tests/check-syntax.mjs index.html`: all 7 scripts pass.
+- `node tests/compare.mjs --tool page --file index.html`: page.text and page.storage identical (only the usual Babel note on both sides).
+- Headless, branch only (clicking the buttons): the old-style project above shows the notice on both tabs; Re-map and Dismiss behave as described (stored map read back from `mct_cfg_v3`); the γLL 1.40 variant keeps 1.40. 0 console errors.
+- **Deliberate cross-map not flagged:** Type 3 and 3-3 are selected, the results hold only 3-3 cases, and Type 3 is stored on the 3-3 cases. No notice; identical to main.
+- **Main (a12f566) vs branch** with the claude/index-posting readout (every AASHTO Rating sub-tab, AREMA, Results, Generate, reports, `bridgeSuite.v1.*` hand-off payloads, all localStorage), ten cases:
+  - Correct or absent mappings: built-in default, 4-span check case, check case + legal trucks, LFR with legal trucks (box / no box), 3-span quick-calc/IM, reordered results, cross-map with no own case. **All identical.**
+  - The two stored-wrong-mapping cases (old-style project; Type 3 → 3-3 with own cases present): the only difference is the 7 notice lines on Inputs & Setup and Multi-Vehicle. With those lines removed the text is identical. `mct_cfg_v3` and the payloads are identical: nothing changes until Re-map.
+  - Some runs differed in keys written by the embedded ST-Girder / PS-Beam pages (`bridgeSuite.v1.migrated.stgirder`, `bridgeSuite.v1.appPaths.stgirder`, `psbeam.inputs.v1`, `bridgeSuite.v1.psSection`) or in the order of the hand-off keys (same values). These differences moved between sides and between runs (sibling files identical), and a re-run cleared them. They are timing artifacts, not this change.
+- **Other copies:** none. The shared `bridgeSuite.v1.*` blocks are not touched.
+
+#### Open items
+- The "↺ Auto-detect LCs" button still drops category and γLL (pre-existing, see the claude/index-legal-match entry). Re-map does not use it.

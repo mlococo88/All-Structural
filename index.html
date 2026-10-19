@@ -13181,6 +13181,55 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     }).filter(Boolean);
   },[origRows,capZones,nodePositions,vehicleLCMap,cfg?.selectedVehicles,cfg,_aremaParams,ratingDcLC,gfsCapInfo]);
 
+  // ── Old auto-detected mappings (2026-10-19) ──────────────────────────────
+  // Before the whole-name match (idxLcIsVehicle), the auto-detect could store a longer-named
+  // vehicle's case for a vehicle (e.g. Type 3 → "AASHTO Legal Type 3-3_…"), and a stored case is
+  // never overwritten. Flag a stored posLC / negLC that is not this vehicle's case but is the case
+  // of a selected vehicle whose name starts with this one, when this vehicle's own case exists.
+  // Display only: nothing changes until the engineer clicks "Re-map" (keeps category and γLL).
+  const [lcRemapDismissed, setLcRemapDismissed] = useState(false);
+  const lcRemap = useMemo(()=>{
+    const sel = cfg?.selectedVehicles||[];
+    if (!origRows.length || !sel.length) return [];
+    const loadedLCs = [...new Set(origRows.map(r=>r.load))];
+    const out = [];
+    sel.forEach(vn=>{
+      const a = vehicleLCMap[vn]; if (!a) return;
+      const own = idxVehicleLCs(loadedLCs, vn);
+      if (!own.length) return;
+      const other = lc => sel.some(o=>o!==vn && o.length>vn.length && o.startsWith(vn) && idxLcIsVehicle(lc,o));
+      const bad = lc => !!lc && !idxLcIsVehicle(lc,vn) && other(lc);
+      const r = { vn, label:(ALL_VEHICLES.find(v=>v.name===vn)||{}).label||vn };
+      if (bad(a.posLC)) { const p = own.find(lc=>lc.includes('(max)')||lc.includes('max')) || own[0]; if (p!==a.posLC) r.pos = [a.posLC, p]; }
+      if (bad(a.negLC)) { const n = own.find(lc=>lc.includes('(min)')||lc.includes('min')) || ''; if (n!==a.negLC) r.neg = [a.negLC, n]; }
+      if (r.pos || r.neg) out.push(r);
+    });
+    return out;
+  },[origRows, vehicleLCMap, JSON.stringify(cfg?.selectedVehicles)]);
+  const applyLcRemap = () => setVehicleLCMap(prev=>{
+    const next = {...prev};
+    lcRemap.forEach(r=>{ next[r.vn] = {...(prev[r.vn]||{}),            // category, γLL, customGam kept
+      ...(r.pos?{posLC:r.pos[1]}:{}), ...(r.neg?{negLC:r.neg[1]}:{}) }; });
+    return next;
+  });
+  const lcRemapNotice = (lcRemap.length>0 && !lcRemapDismissed) ? (
+    <div data-idx-remap="1" style={{background:'#fffbeb',border:'2px solid #f59e0b',borderRadius:'8px',padding:'10px 14px',marginBottom:'14px',fontSize:'11px',fontFamily:'monospace',color:'#92400e'}}>
+      <div style={{fontSize:'12.5px',fontWeight:'700',marginBottom:'4px'}}>⚠ Result case mapped to another vehicle</div>
+      <div style={{marginBottom:'6px'}}>These vehicles use a case of a vehicle whose name starts with theirs (auto-detect before 2026-10-19). Their RF and posting use the other vehicle's forces until re-mapped:</div>
+      {lcRemap.map(r=>(
+        <div key={r.vn} style={{marginLeft:'8px'}}>
+          <strong>{r.label}</strong>
+          {r.pos&&<div style={{marginLeft:'12px'}}>LL Max: "{r.pos[0]}" → "{r.pos[1]}"</div>}
+          {r.neg&&<div style={{marginLeft:'12px'}}>LL Min: "{r.neg[0]}" → "{r.neg[1]||'— same as max —'}"</div>}
+        </div>
+      ))}
+      <div style={{display:'flex',gap:'8px',marginTop:'8px'}}>
+        <button onClick={applyLcRemap} style={{background:'#f59e0b',border:'none',borderRadius:'5px',color:'#fff',padding:'5px 14px',cursor:'pointer',fontSize:'12px',fontWeight:'600'}}>Re-map</button>
+        <button onClick={()=>setLcRemapDismissed(true)} style={{background:'#fff',border:'1px solid #fcd34d',borderRadius:'5px',color:'#92400e',padding:'5px 14px',cursor:'pointer',fontSize:'12px'}}>Dismiss</button>
+      </div>
+    </div>
+  ) : null;
+
   // ── Multi-vehicle rating table ────────────────────────────────────────────
   // ── Multi-vehicle rating — uses ACTUAL result rows per vehicle ────────────
   const multiVehicleData = useMemo(()=>{
@@ -15612,6 +15661,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
             </div>
           </div>
 
+          {lcRemapNotice}
           {/* ── Posting Check ── */}
           {govRating&&govRating.rfGov<1&&(()=>{
             // MBE 6A.8.3 (2026-10-18): posting from each AASHTO legal vehicle's OWN legal-load
@@ -16034,6 +16084,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
             {/* ════ SUB-TAB: MULTI-VEHICLE TABLE ════ */}
             {ratingSubTab==='table'&&(<div>
+              {lcRemapNotice}
 
               {/* ── Per-vehicle LC assignment ── */}
               <div style={{background:'#fff',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'14px 16px',marginBottom:'14px'}}>
