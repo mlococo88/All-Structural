@@ -2714,3 +2714,48 @@ index 6c9b39f..ebe0502 100644
 - **Open items:**
   - Tab 3 §3.1 Sliding says "See §3.0 free-body ledger for the force × arm breakdown of the governing case". However, §3.0 is assembled for the governing *bearing/pile* case (its own note says so); the sliding case uses its own permutation with LSv excluded. Not changed (wording only). Should the link say so, or should §3.1 get its own ledger?
   - The "Design basis §x" citations (the tool's own notes) now appear in a report whose sections are also numbered §x. They are labelled "Design basis", but the engineer may prefer a different marker.
+
+## 2026-10-19 — PR: claude/aashto10-abutment — ℓd per AASHTO LRFD 10th Ed. 5.10.8.2.1a; 10th Ed. renumbers (PR link added after merge)
+
+### A1. Tension development length ℓd   [calculation change (§4)]
+- **Where:** section-check function (the one returning `{...o, As, AsReq, d, …}`), anchor `// development [AASHTO LRFD 10th Ed. 5.10.8.2.1a]`; its display in the Structural tab, anchor `S&T reinforcement (each face, each direction) & tension development length`.
+- **Before:**
+  ```js
+  // development [5.10.8.2.1]
+  const ld=Math.max(12, 2.4*bar.db*m.fy/Math.sqrt(m.fc));
+  ```
+  display `\ell_d = 2.4 d_b f_y/\sqrt{f'_c}`, note "development length shown with all modification factors = 1.0".
+- **After:**
+  ```js
+  const fc4=Math.pow(Math.min(m.fc,15),0.25);
+  const ldb=0.17*bar.db*Math.pow(m.fy/(1.97*fc4),2);
+  const ld=Math.max(12, ldb);
+  ```
+  (`fc4`, `ldb` added to the returned object.) In symbols: ℓdb = 0.17·db·[(λer·fy − Fh/Ab)/(1.97·λ·f′c^0.25)]² with λer = λ = 1.0, Fh = 0 (straight bar, normal weight; the tool has no lightweight input); ℓd = ℓdb·λrl·λcf·λrc with all three factors 1.0 (λrc = 1.0 is its upper bound, no confinement credit, as before) and ≥ 12 in.; f′c ≤ 15 ksi (5.10.8.2.1; the input is already limited to 2–15 ksi). Display: two lines, ℓdb symbolic → substituted → result, then ℓd = max(ℓdb·1.0·1.0·1.0, 12). Same implementation as `ACI Rebar Development Length.html` (PR claude/aashto10-rebar), duplicated per CLAUDE.md §3.
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Art. 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and -2. More conservative (longer) at every f′c in the tool's range for the same bar.
+- **Used by:** the ℓd column of the reinforcement schedule (§5.7) and the estimated bar lengths B1 (backwall: h_bw + ℓd), C1 (toe: L_toe + t + ℓd), D1 (heel: L_heel + t + ℓd). No strength check uses ℓd.
+- **Check case (default project: f′c 4 ksi, fy 60 ksi; backwall #6, stem #9, toe and heel #8):** f′c^0.25 = 1.4142, 1.97 × 1.4142 = 2.786, (60/2.786)² = 463.8.
+  - #8: before 2.4 × 1.0 × 60/2 = 72.0 in.; after 0.17 × 1.0 × 463.8 = **78.85 in.** (toe C1 and heel D1 bars +0.57 ft each).
+  - #6: before 54.0 in.; after 0.17 × 0.75 × 463.8 = **59.14 in.** (backwall B1 bar +0.43 ft).
+  - #9: before 81.22 in.; after 0.17 × 1.128 × 463.8 = **88.94 in.**
+  - #8 at f′c 8 ksi: before 50.91 in.; after 0.17 × (60/(1.97 × 1.6818))² = **55.75 in.**
+
+### A2. Renumbers to the 10th Ed. (citation only, no result change)
+- Bearing φ = 0.70: "5.5.4.2.1" → **5.5.4.2** (Factored bearing demand & resistance card).
+- Live-load surcharge: "Table 3.11.6.4-1" → **Table 3.11.6.4.1-1** (code comment, input subhead, three limit labels `soil.heq5/10/20`, design-basis note 2, surcharge card); the surcharge cards' "AASHTO 3.11.6.4" / "Eq. 3.11.6.4-1" → **3.11.6.4.1 / Eq. 3.11.6.4.1-1** (the equation is renumbered in the 10th Ed. with its table; values unchanged).
+- Overall stability: "11.6.2.3" → **11.6.3.7** (Service I panel title and note; references row now "11.6.3 (incl. 11.6.3.7), 11.6.5").
+- Interface shear factors: "[Table 5.7.4.4-1]" → **[Art. 5.7.4.4]** (the 10th Ed. lists c, μ, K1, K2 in the article text).
+- k_h = 0.5·A_s for walls free to move 1–2 in.: "[11.6.5.2.1]" → **[11.6.5.2.2]** (limit message and input tooltip).
+- A_s input: label "(F<sub>pga</sub>·PGA)" → "(S<sub>a</sub> at T = 0 s)", tooltip "[3.10.4.2]" → the 0-s risk-targeted design acceleration coefficient for the site class from the AASHTO-USGS database or the geotech report **[3.10.4.1]**, k_h0 = A_s at the wall base [11.6.5.2.1]. In the 10th Ed. 3.10.4.2 no longer exists and A_s is read directly for the site class (no F_pga·PGA product). Input key `seismic.As`, its value and units unchanged.
+
+### Saved data
+- None. No key or format change.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless, main vs branch, default project: `computeAll()` ℓd of the four section checks as listed (tool = hand values); self-test passes; `node tests/compare.mjs --tool page --file abutment_calculator.html`: storage same, page text differs only by the renumbered Table/Eq. 3.11.6.4.1-1 lines. The new TeX lines render without error in KaTeX 0.16.9 (strict).
+- **Other copies:** same ℓd form in `ACI Rebar Development Length.html` (with all factors), the Development & Splice tab of `Concrete Beam Capacity.html`, and `Retaining Wall Designer.html`.
+
+### Open items (not changed)
+- 11.6.5.2.1: for walls founded on Site Class A, B or B/C, k_h0 = 1.2·A_s. The tool uses k_h = ratio × A_s with no 1.2 factor. Engineer decision (add a site-class input or a note?).
+- ℓd is still the upper bound (λrc = 1.0). A computed λrc (cover, spacing) would shorten it; not offered.
