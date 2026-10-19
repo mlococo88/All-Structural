@@ -10296,7 +10296,7 @@ function steelIFlexure(s, o) {
     const RM = Rpc*Myc, red = 1 - FL*Sxc/RM;
     const Mflb = lamF <= lamPf ? RM : (1 - red*(lamF-lamPf)/(lamRf-lamPf))*RM;
     const h = s.d - tfc/2 - tftn/2;
-    const Lp = rt*Math.sqrt(E/Fy);
+    const Lp = 1.1*rt*Math.sqrt(E/Fy);                                // Eq. A6.3.3.1-4 (10th Ed.)
     const Lr = 1.95*rt*(E/FL)*Math.sqrt(s.J/(Sxc*h))*Math.sqrt(1 + Math.sqrt(1 + 6.76*Math.pow(FL*Sxc*h/(E*s.J),2)));
     let Mltb;
     if (Lb <= Lp) Mltb = RM;
@@ -10315,7 +10315,7 @@ function steelIFlexure(s, o) {
   const lamRf = 0.56*Math.sqrt(E/Fyr);
   const Fmax = Rb*Rh*Fy, red = 1 - Fyr/(Rh*Fy);
   const Fflb = lamF <= lamPf ? Fmax : (1 - red*(lamF-lamPf)/(lamRf-lamPf))*Fmax;
-  const Lp = rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);
+  const Lp = 1.1*rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);   // Lp: Eq. 6.10.8.2.3a-4 (10th Ed.)
   let Fltb;
   if (Lb <= Lp) Fltb = Fmax;
   else if (Lb <= Lr) Fltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*Fmax, Fmax);
@@ -10344,6 +10344,11 @@ function steelIVn(s, Fy, doIn) {
   return { Vn, C, Vp, k, stiff };
 }
 
+// Lp worked for the basis line: Lp = 1.1·rt·√(E/Fyc) (10th Ed. Eq. 6.10.8.2.3a-4 = Eq. A6.3.3.1-4).
+function steelLpTxt(rt, Fy, Lp) {
+  return 'Lp = 1.1·rt·√(E/Fyc) = 1.1×'+rt.toFixed(3)+'×√('+STEEL_E+'/'+(+Fy)+') = '+Lp.toFixed(1)+' in = '+(Lp/12).toFixed(2)+' ft';
+}
+
 // Unbraced length entered? Blank means unknown (not "braced"): the AASHTO path needs it.
 function capLbKnown(z) { return z.Lb!=null && z.Lb!=='' && isFinite(+z.Lb) && +z.Lb >= 0; }
 
@@ -10357,7 +10362,8 @@ function steelZoneCaps(z) {
                   : 'enter Lb (unbraced length of the compression flange)';
   const flex = (comp, Zx) => {
     const r = steelIFlexure(s, {Fy, comp, Lb, Cb, Mp: Zx>0 ? Fy*Zx : 0});
-    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+')' };
+    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+'; '
+      +steelLpTxt(r.rt, Fy, r.Lp)+', Lb = '+(Lb/12).toFixed(2)+' ft)' };
   };
   let MnPos, MnNeg, Vn;
   if (z.type === 'composite') {
@@ -10369,7 +10375,8 @@ function steelZoneCaps(z) {
     // Negative moment
     const gate = (z.useCompNeg && s && lbOK) ? compNegPlasticGate(z, s, Lb) : null;
     if (z.useCompNeg && gate && gate.ok) {
-      MnNeg = computeCompositeMnNeg(z); basis.neg = 'App. A6 — composite Mp (steel + rebar)';
+      MnNeg = computeCompositeMnNeg(z); basis.neg = 'App. A6 — composite Mp (steel + rebar; Lb = '+(Lb/12).toFixed(2)
+        +' ft ≤ '+steelLpTxt(gate.rt, Fy, gate.Lp)+')';
     } else if (s && lbOK) {
       const f = flex('bot', +z.ZxNeg||0); MnNeg = f.Mn; basis.neg = f.txt+' — steel only';
       if (z.useCompNeg) warn.push('Mn⁻: composite plastic moment not used — '+(gate?gate.why:'')+'; steel section only');
@@ -10428,9 +10435,9 @@ function compNegPlasticGate(z, s, LbIn) {
   if (!(2*Dcp/s.tw <= lamPw)) return {ok:false, why:'web not compact, 2Dcp/tw = '+(2*Dcp/s.tw).toFixed(1)+' > λpw = '+lamPw.toFixed(1)+' (A6.2.1)'};
   if (!(s.bfb/(2*s.tfb) <= 0.38*Math.sqrt(E/Fy))) return {ok:false, why:'bottom flange not compact (A6.3.2)'};
   const rt = s.bfb/Math.sqrt(12*(1 + Dc*s.tw/(3*s.bfb*s.tfb)));
-  const Lp = rt*Math.sqrt(E/Fy);
-  if (!(LbIn <= Lp)) return {ok:false, why:'Lb = '+(LbIn/12).toFixed(2)+' ft > Lp = '+(Lp/12).toFixed(2)+' ft (A6.3.3)'};
-  return {ok:true, why:'', Dc, Dcp, Lp};
+  const Lp = 1.1*rt*Math.sqrt(E/Fy);                                // Eq. A6.3.3.1-4 (10th Ed.)
+  if (!(LbIn <= Lp)) return {ok:false, why:'Lb = '+(LbIn/12).toFixed(2)+' ft > '+steelLpTxt(rt, Fy, Lp)+' (A6.3.3)'};
+  return {ok:true, why:'', Dc, Dcp, Lp, rt};
 }
 
 function psGammaP(fpu, fpy) {
@@ -19729,7 +19736,7 @@ DEFAULT_CFG.loadCombos = buildDefaultCombos(DEFAULT_CFG.deadLoads);
    of Y" footer (@page margin boxes, idxPageCSS, print only). Nothing is recomputed here. */
 const IDX_REFS_MBE=[
   ['AASHTO MBE','Manual for Bridge Evaluation: 6A.4.2.1 (LRFR rating equation; Eq. 6A.4.2.1-3, φc·φs ≥ 0.85), Table 6A.4.2.2-1 (load factors), Table 6A.4.2.3-1 (condition factor φc), Table 6A.4.2.4-1 (system factor φs), 6A.4.4 (legal-load rating; Table 6A.4.4.2.3a-1, legal γLL), 6A.8 (posting; Eq. 6A.8.3-1), Section 6B (LFR). Edition: verify'],
-  ['AASHTO LRFD','Bridge Design Specifications: 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors). 10th Ed. where the tool states one; otherwise edition: verify'],
+  ['AASHTO LRFD','Bridge Design Specifications, 10th Ed. (2024): 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors), 6.10.8.2.3 and App. A6.3.3 (lateral-torsional buckling of steel zones; Lp per Eq. 6.10.8.2.3a-4 / A6.3.3.1-4)'],
   ['MIDAS Civil','Analysis results (beam forces) pasted from the MIDAS model built from the MCT file in this report'],
 ];
 const IDX_REFS_AREMA=[

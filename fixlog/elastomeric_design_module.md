@@ -791,3 +791,68 @@ Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25
   - The variables σDL, σLL and σs = (P_DL + P_LL)/A are worked only for the plain pad. The Girder Run D/C per girder is not worked anywhere.
   - Adding these would be a display change in the app.
 - **Plain-pad stability thickness cites no article** (Method A cites 14.7.6.3.6). The engineer should confirm the article.
+
+## 2026-10-19 — PR: claude/aashto10-elastomeric (AASHTO LRFD 10th Ed. gap fixes; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Owner: MassDOT LRFD Bridge Manual Part I §3.5.7, which is written to the AASHTO LRFD 9th Ed. (engineer decision 2026-10-19, "follow the owner"). The MassDOT manual §3.5.7 sets no cover-layer limit of its own (§3.5.7.8 and Fig. 3.5.7-5 only set how h_ri is computed and exclude tapered layers), so the AASHTO limit applies with both toggle settings; no MassDOT value was changed.
+
+### E10-1. Cover layer limit: max(0.7·h_ri, 5/16 in.)   [calc change] [LESS conservative for h_ri < 0.446 in.]
+- **Where:** `computeEDM`, anchor `// cover layer ≤`; dashboard items `cover` / `coverA`; `coverLine()`; the two `checkLine("Cover layer …")` calls in `renderDesign`.
+- **Problem:** the tool limited the cover layer to 0.7·h_ri. AASHTO LRFD 10th Ed. Art. 14.7.5.1 (Method B) and Art. 14.7.6.1 (Method A) allow the greater of 0.7·h_ri and 5/16 in. For h_ri < (5/16)/0.7 = 0.446 in. the old limit was smaller than the 10th Ed. limit (old check more conservative); for h_ri ≥ 0.446 in. nothing changes.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.7.5.1 and 14.7.6.1 (both on the 10th Ed. list of changed articles).
+- **Before:**
+  ```js
+  // cover layer ≤ 0.7 h_ri [14.7.5.1 / 14.7.6.1]; horizontal force H_bu = G A Δu / h_rt [14.6.3.1] (report only)
+  R.coverDC=isPlain()?null:(+g.cover)/(0.7*hri);
+  ```
+  ```js
+  add("cover","Cover layer ≤ 0.7 hri [14.7.5.1]",R.coverDC,"cover ≤ 0.7 hri");
+  add("coverA","Cover layer ≤ 0.7 hri [14.7.6.1]",R.coverDC,"cover ≤ 0.7 hri");
+  function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le 0.7\\,h_{ri} = ${fmtT(0.7*g.hri,3)}\\ \\text{in}`; }
+  ```
+  and `checkLine("Cover layer ≤ 0.7 hri",R.coverDC,…)` (Method B and Method A blocks).
+- **After:**
+  ```js
+  // cover layer ≤ max(0.7 h_ri, 5/16 in.) [14.7.5.1 / 14.7.6.1, 10th Ed.]; horizontal force H_bu = G A Δu / h_rt [14.6.3.1] (report only)
+  R.coverMax=Math.max(0.7*hri,5/16);
+  R.coverDC=isPlain()?null:(+g.cover)/R.coverMax;
+  ```
+  ```js
+  add("cover","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.5.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
+  add("coverA","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.6.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
+  function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le \\max(0.7\\,h_{ri},\\ 5/16) = \\max(0.7(${fmtT(g.hri,3)}),\\ 0.3125) = ${fmtT(Math.max(0.7*g.hri,5/16),3)}\\ \\text{in}`; }
+  ```
+  and `checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,…)` in both blocks. The worked block (Design Checks tab; report §4.7 for Method B, §4.6 for Method A) shows symbolic → substituted → result.
+- **Check case:** default project with h_ri = 0.375 in., cover c = 0.25 in. (Method B, circular).
+  - Before: limit = 0.7 × 0.375 = 0.2625 in.; D/C = 0.25 / 0.2625 = 0.952 (PASS).
+  - After: limit = max(0.2625, 0.3125) = 0.3125 in.; D/C = 0.25 / 0.3125 = 0.800 (PASS). The tool shows "max(0.7(0.375), 0.3125) = 0.313 in" and D/C 0.80.
+  - With c = 0.30 in.: before 0.30/0.2625 = 1.143 FAIL → after 0.30/0.3125 = 0.960 PASS (nFail 2 → 1).
+  - Default h_ri = 0.50 in.: max(0.35, 0.3125) = 0.35 in.; D/C 0.714 before and after (no change).
+- **Saved data:** unchanged (`R.coverMax` is computed, not saved).
+- **Other copies:** none.
+
+### E10-2. Method A / plain-pad anchorage citation 14.7.6.4 → 14.8.3.1 / C14.8.3.1   [citation] [no result change]
+- **Where:** `computeEDM`, anchor `R.anc={G:GAnc` (the `ref` value) and the comment above it; the `defaultState().loads.Pmin` comment; the I-4 `loads.Pmin` tooltip; `EDM_REFS` (Method A row and the 14.4.2.1 row); the `edmRefTxt` regex.
+- **Problem:** Art. 14.7.6.4 does not exist in the 10th Ed. The check H ≤ P_min/5 is the friction check with a coefficient of 0.2 under Art. 14.8.3.1 / C14.8.3.1 (anchorage; an elastomeric bearing may be left unanchored when friction is adequate).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.8.3.1 and commentary C14.8.3.1.
+- **Before:** `ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4"`; references "…14.7.6.3.7 (reinforcement), 14.7.6.4 (anchorage)"; `edmRefTxt`: `/^\[?\s*([\d.]+(?:-\d+)?)\s*\]?$/`.
+- **After:** `ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"C14.8.3.1"`; references "…14.7.6.3.7 (reinforcement)" and, in the third row, "Art. 14.8.3.1 / C14.8.3.1 (anchorage of Method A and plain pads, friction coefficient 0.2: H ≤ P_min/5)"; `edmRefTxt`: `/^\[?\s*(C?[\d.]+(?:-\d+)?)\s*\]?$/`, so the report result line reads "(AASHTO C14.8.3.1)".
+- **Check case:** Method A, circular, P_min = 10 kip: H = 0.200 × 201.1 × 0.35 / 3.50 = 4.02 kip; D/C = 4.02 / (10/5) = 2.01 before and after. Only the label changes.
+
+### E10-3. 14.7.6.3.2 plain-pad coefficient flag cleared   [wording] [no result change]
+- Verified against the 10th Ed.: PEP σs ≤ 1.00·G·S (Eq. 14.7.6.3.2-1) and ≤ 0.80 ksi (Eq. 14.7.6.3.2-2); steel-reinforced σs ≤ 1.25·G·Si (Eq. 14.7.6.3.2-7) and ≤ 1.25 ksi (Eq. 14.7.6.3.2-8). The defaults (`GSplainA` 1.00, `sigCapPlainA` 0.80, 1.25, `sigCapReinA` 1.25) match.
+- I-6 tooltip, before: `Plain-pad limit σs ≤ c·G·S [14.7.6.3.2] — EOR to confirm c against the 10th Ed. for the pad type (PEP/FGP)`; after: `Plain-pad (PEP) limit σs ≤ c·G·S [AASHTO LRFD 10th Ed. Eq. 14.7.6.3.2-1: c = 1.00, with σs ≤ 0.80 ksi, Eq. 14.7.6.3.2-2]`.
+- Plain-pad worked-block note, before: `The G·S coefficient is editable in I-6; EOR to confirm it against the 10th Ed. for the pad type.`; after: `The G·S coefficient (1.00, Eq. 14.7.6.3.2-1, 10th Ed.) is editable in I-6.`
+
+### E10-4. Edition label: MassDOT manual written to the 9th Ed.   [wording] [no result change]
+- Header `.codeline`, report cover line and the `EDM_REFS` MassDOT row now read "MassDOT LRFD Bridge Manual, Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.)" after "AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)". The MassDOT row keeps "edition: verify" for the manual's own edition (not verified here).
+
+### Verification
+- `node tests/check-syntax.mjs elastomeric_design_module.html`: all scripts pass.
+- Headless Chromium, origin/main (12b90f7) vs branch, KaTeX 0.16.11 and Plotly 2.35.2 served locally, 8 scenarios (default; h_ri 0.375; h_ri 0.375 with c 0.30; h_ri 0.375 Method A; rectangular Method A; plain; plain anchored; Method A with P_min 10). `LAST` is identical except `coverDC` (only where h_ri < 0.446 in.), the new `coverMax`, the cover dashboard labels, `anc.ref` and the anchorage warning text. Rendered worked line and report result lines checked (values above). No console errors.
+- `node tests/compare.mjs --tool page --file elastomeric_design_module.html`: `page.storage` same; `page.text` differs only in the header line.
+
+### Open items (engineer to decide; not changed)
+- **Method B anchorage, Art. 14.7.5.4 (10th Ed.):** the 10th Ed. criterion is a strain test (restraint needed when θs/n ≥ 3·εa/Si, Eq. 14.7.5.4-1). The tool's Method B anchorage check is H ≤ P_min/5 (the C14.8.3.1 friction check) labelled 14.7.5.4. Implement Eq. 14.7.5.4-1 (in addition to, or instead of, the friction check), or keep the friction check and relabel it?
+- **Minimum laminate thickness:** 10th Ed. 14.7.5.3.5 sets hs ≥ 0.0747 in.; the tool warns below the MassDOT 0.1196 in. in all cases (more conservative). No change.
+- **Minimum edge cover ¼ in.** (14.7.5.1 / 14.7.6.1): not checked (the tool has no edge-cover input).
