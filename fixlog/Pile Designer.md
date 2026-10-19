@@ -14895,3 +14895,42 @@ index 839cdb5..3fe2706 100644
 +          "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
 ```
+
+## 2026-10-19 — PR: claude/aashto10-pile-2 (PR link added after merge)
+
+### ET4. H-pile groups in cohesionless soil below 2.5B: warning (display only, η unchanged)
+- **Request:** follow-up to ET1 (open item "Cohesionless groups below 2.5B" of the claude/aashto10-pile entry). The engineer is still to decide on φ_c 0.80 (O20) and the S_u < 0.50 ksf "soft" limit; both are unchanged.
+- **Provision:** AASHTO LRFD BDS 10th Ed. (2024), Art. 10.7.3.9 (p. 10-117). In cohesionless soil η = 1.0 is stated for c/c spacing of 2.5 diameters or greater, with or without cap contact. The article gives nothing for closer spacing.
+- **Where / anchors:**
+  1. New helper `hpCohesionlessBelow25Text(s_dia)`, inserted just before `function hpStaticIsClay(ly) {`.
+  2. Report, `RptGroupChecks`: anchor `: line("η = 1.0 (cohesionless; no block check)"`.
+  3. Module 11 on screen, `App`: anchor `: "η = 1.0 (cohesionless; no block check)"`.
+- **Before:**
+  ```js
+  : line("η = 1.0 (cohesionless; no block check)"))
+  ```
+  ```js
+  : "η = 1.0 (cohesionless; no block check)")
+  ```
+- **After:**
+  ```js
+  // ET4 (2026-10-19): warning only (eta unchanged). 10th Ed. 10.7.3.9: eta = 1.0 in cohesionless soil
+  // is stated for c/c spacing >= 2.5 diameters; closer spacing is left to the engineer.
+  function hpCohesionlessBelow25Text(s_dia) { return " ⚠ s/B = " + fmt(s_dia, 2) + " < 2.5: AASHTO LRFD 10th Ed. Art. 10.7.3.9 gives η = 1.0 in cohesionless soil only for c/c spacing ≥ 2.5B. Closer spacing needs engineer judgment or a reduced η (enter it with the η override); the tool keeps η = 1.0."; }
+  ```
+  ```js
+  : line("η = 1.0 (cohesionless; no block check)" + (a.below25 ? hpCohesionlessBelow25Text(g.s_dia) : "")))
+  ```
+  ```js
+  : "η = 1.0 (cohesionless; no block check)" + (r.group.aashto.below25 ? hpCohesionlessBelow25Text(r.group.s_dia) : ""))
+  ```
+  `below25` (s/B < 2.5) is the existing field of `hpGroupAashto`.
+- **Calculation:** none. η, the group resistance, pass/fail and every computed value are unchanged.
+- **Saved data:** none.
+- **Check case:** H-pile, 3 × 3 group in the default sand profile.
+  - s = 2.0B: Module 11 and the report print "η = 1.0 (cohesionless; no block check) ⚠ s/B = 2.00 < 2.5: …". `computeAll` gives η = 1.0, the same as main.
+  - s = 3.0B: no warning; same as main.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Pile Designer.html"`.
+  - Headless Chromium, main vs branch, with React 18.2.0 and Plotly 2.27.0 served from `tests/libs` (the tool pins 18.3.1 / 2.32.0, which the kit does not hold). I compared Module 11 text, the report text and `computeAll` η.
+- **Other copies:** none.
