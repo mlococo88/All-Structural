@@ -2353,7 +2353,7 @@ function hl93(L){
   const Vtr=Math.max(32+32*(L-14)/L+8*(L-28)/L, 32+32*(L-14)/L); // truck at support
   const Vtd=25+25*(L-4)/L;
   const Vln=0.64*L/2;
-  // Fatigue truck (5.6.1.4.1): design truck with constant 30-ft rear axle spacing, single lane, no lane load
+  // Fatigue truck (3.6.1.4.1): design truck with constant 30-ft rear axle spacing, single lane, no lane load
   let Mfat=0;
   for(let xm=-30;xm<=L+30;xm+=0.25){
     Mfat=Math.max(Mfat,
@@ -6100,7 +6100,7 @@ function StressHeatmap({inp,R}){
 /* Fatigue I worked steps (D11: a function so the Stresses tab card and the calculation report show the same steps). */
 function fatigueSteps(inp,R){
   return <React.Fragment>
-        <Step d="Fatigue truck moment (single lane, IM = 15%, no lane load)" r="5.6.1.4">
+        <Step d="Fatigue truck moment (single lane, IM = 15%, no lane load)" r="3.6.1.4.1">
           <ML s={Tx`M_{fat}=${nx(R.fat.Mfat,0)}\;\mathrm{k\text{-}ft/lane}\quad DF_{fat}=${R.fat.extDF?`\\frac{\\max(g_{lever},\\,g_{rigid,1})}{1.2}=\\frac{\\max(${nx(R.df.lever,3)},\\,${nx(R.df.rigid1,3)})}{1.2}`:'\\frac{g_{m1}}{1.2}'}=${nx(R.fat.dfFat,4)}\quad M_{fat,girder}=M_{fat}(1.15)(DF_{fat})=${nx(R.fat.Mfat1,0)}\;\mathrm{k\text{-}ft}`}/>
         </Step>
         <Step d="Cracking trigger — bottom fiber under permanent + Fatigue I" r="5.5.3.1">
@@ -7367,7 +7367,7 @@ function ReportTab({inp,R}){
     return ()=>{ window.removeEventListener('beforeprint',on); window.removeEventListener('afterprint',off); psbrPrintMode(false); }; },[]);
   const p=inp.proj||{}, see={};
   const refs=[
-    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications. The tool states “9th Ed. article numbering” (Assumptions & basis); edition: verify. Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3 (continuity)':'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
+    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications. The tool states “9th Ed. article numbering” (Assumptions & basis); edition: verify. Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 3.6.1.4.1 (fatigue truck); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3 (continuity)':'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
     ['AASHTO MBE','Manual for Bridge Evaluation, Section 6A (LRFR): 6A.4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Eq. 6A.4.2.1-3, 6A.5.4.1, 6A.5.6 (HL-93 design-load rating). Edition not stated by the tool: verify.'],
     ['PCI','PCI Design Handbook: long-term camber multipliers. Edition not stated by the tool: verify.']];
   const {out,toc}=psbrNumber(<React.Fragment>
