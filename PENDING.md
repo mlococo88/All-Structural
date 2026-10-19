@@ -16,21 +16,20 @@ Last updated: 2026-10-18 (deflection item removed: already decided, LL8).
 | 6 | Owner phase 3b part 2 readings | GirderDetail | RIDOT 40 in diaphragm rule and X/K by S/d; CTDOT web-depth rule and channel table; CTDOT 4 bolts as a warning; MassDOT 0.5d uses girder depth; fascia stiffener rule incl. connection plates; RIDOT stiffener minimums; RIDOT fatigue categories (warns on B′ and studs); RIDOT jacking includes m and η | GD68 (a)–(h) |
 
 ### AASHTO LRFD 10th Ed. gaps (inventory 2026-10-19; engineer decision "follow the owner, else 10th")
-Labels relabelled where every cited article checked out: Bridge Geometry (#324), Section Property Calculator (#325). The tools below use provisions the 10th Ed. defines differently, so their labels were NOT changed; each needs an engineer decision (result changes). Some already say "10th Ed." while using the older provision.
-- **Rebar development (ACI Rebar, CBC Development & Splice, abutment, Retaining Wall):** ℓdb = 2.4 db fy/√f′c and hook 38 db fy/(60√f′c) are 9th Ed.; the 10th has a new ℓdb equation (5.10.8.2.1a), new λrc bounds (5.10.8.2.1c), new hook ℓdh (5.10.8.2.4), f′c up to 15 ksi; compression development renumbered to 5.10.8.2.2.
-- **ST-Girder studs:** done 2026-10-19 (#335, engineer approved): 10th Ed. Qn = 0.70AscFu, φsc 1.00, Zr = (ΔF)n·Asc (Condition 9.2), studs on their own Fatigue I/II crossover, renumbers, owner edition statement (fix log A10).
-- **GirderDetail studs:** done 2026-10-19 (#338): Qn = 0.70AscFu, φsc 1.00, Fatigue II Zr = (A/N)^(1/5)Asc (Condition 9.2), h/d ≥ 5.0. Open: lightweight h/d 7.0; keep the "Qn entered" override?; bearing stiffener web strip Fyw/Fys only below 0.7Fys (10th: whenever Fyw < Fys); n table 6.6.1.2.5-1 has no 40 ft row (fixlog AASHTO10-SC).
-- **index (MCT):** Lp = 1.0rt√(E/Fy) vs 10th 1.1rt; new Cb equation.
-- **Bridge Substructure Loading:** renumbers and MassDOT 9th Ed. note merged (#329). Seismic per 10th Ed. (entered 22-period AASHTO-USGS Sa table, SD1 per 3.10.6, critical/recovery/ordinary, kh0 1.2As on rock): branch claude/aashto10-subloads-seismic (awaiting approval; older projects keep their 2009 values and get no EQ until the table is entered).
-- **psbeam:** debonding limits 25 % total / 40 % per row vs 10th 45 % per row plus termination rules.
-- **CBC Beam Capacity:** lightweight shear φ 0.80 vs 10th 0.90.
-- **Pile Designer:** group efficiency reduces in more cases than 10.7.3.9 (conservative); φc default 0.80.
-- **Spread Footing:** depth factors (option) Vesić vs 10th arctan form, dq ≤ 1.4, Nq term only.
-- **Stone Arch:** 3.6.1.2.6a LLDF 1.15 for buried structures vs tool's rule.
-- **abutment:** As cited to 3.10.4.2 (deleted in 10th); several renumbered articles.
-- **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in) and 14.7.6.4 citation: done 2026-10-19 (engineer approved). Still open: Method B anchorage uses H ≤ P_min/5 labelled 14.7.5.4; the 10th Ed. 14.7.5.4 test is θs/n ≥ 3εa/Si (fixlog E10 open items).
-- **Gusset:** decided 2026-10-19 (engineer): the LRFR rating keeps the MBE 3rd Ed. φ (0.90 / 1.00 / 0.85); citations corrected to MBE, LRFD 10th 6.5.4.2 design values (0.75 / 0.80 / 0.65) noted as not used; fillers renumbered to 6.13.6.1.4 (#327, fix log C19).
-Full per-tool list (OK / renumbered / changed): agent inventory of 2026-10-19 (session scratchpad aashto-ed/inventory.md).
+All inventory items were fixed and merged on 2026-10-19 (engineer approved; PRs #324–#349). Each tool now states AASHTO LRFD 10th Ed. (2024), with the owner manual's edition noted where the tool has an owner setting. Details and check cases are in each tool's fix log. Remaining open questions:
+- **Pile Designer:** φc default kept at 0.80 (engineer, 2026-10-19). Still open: the S_u < 0.50 ksf "soft" limit for group efficiency; whether loose sand over clay counts as "soft".
+- **Spread Footing:** depth-factor option keeps Vesić (building-footing tool, engineer 2026-10-19); the 10th Ed. arctan form is noted only.
+- **Gusset:** the rating keeps the MBE 3rd Ed. φ (engineer); MBE article numbers still flagged "verify" (no MBE copy available).
+- **Elastomeric:** with the MassDOT 0.03 rad tolerance the default pad needs restraint per 14.7.5.4 (accepted as is); n not increased for cover layers (conservative).
+- **Rebar (ACI Rebar, CBC):** compression development does not divide by λ for lightweight concrete (notice shown); #14/#18 hooks flagged only; CBC γ3 option "0.76 — A615 Gr 75" names the wrong grade (10th: Gr 75 0.75, Gr 80 0.76).
+- **Retaining Wall:** stem hook uses λrc from the stem bar's cover (straight ℓd shorter with the 0.3 floor); confirm.
+- **abutment:** k_h0 = 1.2·A_s for Site Class A, B, B/C (11.6.5.2.1) not applied (Substructure Loading does apply it).
+- **Substructure Loading:** 4.7.4.5 displacement amplification not implemented.
+- **index (MCT):** old saved zones from rolled shapes read as welded until "Rolled shape" is ticked; Cb ≤ 3.0 cap applied only with Rm; §6 worked Fnc/Mnc still shown as a label.
+- **ST-Girder:** RIDOT 6d minimum pitch not in the ownerRules hand-off; GirderDetail's example 7/8 × 4 in. studs fail h/d ≥ 5.0.
+- **GirderDetail:** stud zones touching the 0.1L limit take n = 1.5 (inclusive edge); the Bearing stiffeners module has no flange grade / continuity input for the hybrid rule (note only).
+- **Stone Arch:** Live Load tab worked example and node text treat axles under 2 ft as concentrated even when a spread credit is selected (display only).
+Full per-tool inventory: session scratchpad aashto-ed/inventory.md.
 
 ## 2. Blocked — reference documents not available
 
