@@ -1772,9 +1772,11 @@ const TIRE_L=10/12, TIRE_W=20/12, GAGE=6.0;
              over a square whose sides are 1.75 times the depth of fill. No tire
              contact dimensions are added.
      "tire"  The tire contact area grown at 1.75H (L = 10 in + 1.75H, w = 20 in +
-             1.75H). This is the LRFD 3.6.1.2.6 form of the footprint, and it was
-             the only basis before v2026.10.04; it spreads the load further and so
-             gives lower pressures than the Std. Spec. text.
+             1.75H). This takes the tire-patch footprint form of LRFD 3.6.1.2.6,
+             but at the Std. Spec. 6.4.2 rate of 1.75 (the LRFD 10th Ed. LLDF for
+             buried structures other than concrete pipe is 1.15, Table
+             3.6.1.2.6a-1). It was the only basis before v2026.10.04; it spreads the
+             load further and so gives lower pressures than the Std. Spec. text.
    Returns the constant terms added to 1.75H. The shallow-fill (< 2 ft) credited
    spread is a separate control and always grows from the tire patch. */
 function deepTire(p){return (p&&p.deepSpread==="tire")?{l:TIRE_L,b:TIRE_W,tire:true}:{l:0,b:0,tire:false};}
@@ -1939,8 +1941,19 @@ function shallowWidth(p){
    ring, only material above it.
 
      r = 0      no credit. Wheel arrives on its footprint. Program default.
-     r = 1.0    the rate LRFD 3.6.1.2.6 applies to fill that is not select
-                granular. Conservative against 6.4.2.
+     r = 1.15   AASHTO LRFD 10th Ed. (2024) Table 3.6.1.2.6a-1: LLDF for
+                culverts and buried structures other than concrete pipe, grown
+                from the 10 in x 20 in tire patch (Eqs. 3.6.1.2.6b-2, -5).
+                Conservative against 6.4.2. Was 1.0 (an earlier LRFD rate for
+                fill that is not select granular) up to the 2026-10-19 change;
+                restore() maps a saved "1" to "1.15". The 0.06 D_i/12 width term
+                of Eqs. 3.6.1.2.6b-1 to -3 is not applied (open item). Wheel
+                interaction across the span (3.6.1.2.6b, H_int-t): the merge of
+                wheel lines over their outside limits once w_t reaches the gap
+                (transDisp) is the same test, H >= (gap - 20/12)/1.15 (3.77 ft for
+                the 6 ft gage, 2.03 ft for the 4 ft gap between trucks). Axle
+                interaction along the span (H_int-p) is not reached in this branch:
+                for axles 4 ft apart or more H_int-p >= (4 - 10/12)/1.15 = 2.75 ft.
      r = 1.75   the Art. 6.4.2 rate. At this value the shallow branch IS 6.4.2,
                 so the load is continuous across the 2 ft threshold and the step
                 at H = 2 ft disappears entirely.
@@ -7938,9 +7951,10 @@ function liveLoadSection(p,M,veh,pos,dir){
         "the ring, which is where the absence of distribution reinforcement bites. Fill dispersion needs no "+
         "mechanism in the ring, only material above it. The transverse width selector does not apply while a "+
         "spread credit is in force; the width grows from the tire patch at the credited rate.");
-      h+=step({label:"Longitudinal spread length, shallow fill",ref:"credited dispersion",
+      const refSh=(Math.abs(rateSh-1.15)<1e-9)?"credited dispersion; LLDF 1.15, AASHTO LRFD 10th Ed. Table 3.6.1.2.6a-1":"credited dispersion";
+      h+=step({label:"Longitudinal spread length, shallow fill",ref:refSh,
         sym:"L_s=\\ell_t+"+nfx(rateSh,2)+"H",sub:"",res:"",units:"ft"});
-      h+=step({label:"Transverse spread width, shallow fill",ref:"credited dispersion",
+      h+=step({label:"Transverse spread width, shallow fill",ref:refSh,
         sym:"w_t=b_t+"+nfx(rateSh,2)+"H",sub:"",res:"",units:"ft",
         note:"Wheel lines merge over (s_g + w_t) where the spreads overlap, as in Art. 6.4.2 — a fill spread "+
           "is exactly the mechanism that provision has in mind."});
@@ -9601,7 +9615,7 @@ let rsBasis="rf", rsCache=null, rsKey=null;
 let axExtLast=null;
 /* Set when a pre-inch session was converted on open, so the fact is reported
    rather than left for the user to notice from the numbers. */
-let unitMigrated=null, tieReverted=null;
+let unitMigrated=null, tieReverted=null, rateUpdated=false;
 let twsAuto=false;   // t_ws set to 0 by the switch to railroad loading (see bind)
 let dgState=null;
 
@@ -9701,7 +9715,7 @@ function inputPanel(){
           ["slab","Art. 3.24.3.2 — E = 4+0.06S ≤ 7 ft (assumes slab-like continuity)"]]))+
       row("Fill spread credit below 2 ft","applied in both directions, or in neither",
         sel("shallowRate",[["0","None — wheel arrives on its footprint (default)"],
-          ["1","1.0H both directions — LRFD 3.6.1.2.6 rate"],
+          ["1.15","1.15H both directions — AASHTO LRFD 10th Ed. Table 3.6.1.2.6a-1 LLDF"],
           ["1.75","1.75H both directions — Art. 6.4.2 rate (continuous at 2 ft with the tire-patch basis below)"]]))+
       row("Wheel spread, fill 2 ft or more","Std. Spec. 6.4.2",
         sel("deepSpread",[["std","Std. Spec. 6.4.2 literal — 1.75H square (default)"],
@@ -12283,6 +12297,14 @@ function restore(o){
      old file reopens to the same numbers rather than silently to the default. */
   if(o.fields&&o.fields.shallowRule==="spread"&&o.fields.shallowRate==null)
     o.fields.shallowRate="1.75";
+  /* 2026-10-19: the LRFD fill spread credit below 2 ft was 1.0H (value "1") and is
+     now the AASHTO LRFD 10th Ed. LLDF of 1.15 (Table 3.6.1.2.6a-1, value "1.15").
+     The select has no "1" any more, so an old file would otherwise open with no
+     credit at all. Map it to the option that replaced it, and say so. */
+  rateUpdated=false;
+  if(o.fields&&o.fields.shallowRate!=null&&String(o.fields.shallowRate).trim()!==""&&+o.fields.shallowRate===1){
+    o.fields.shallowRate="1.15"; rateUpdated=true;
+  }
   /* UNIT MIGRATION — ring depth, wearing surface thickness and the depth half
      of every override and deterioration entry were stored in FEET up to and
      including v2026.08.10j, and are entered in INCHES from v2026.08.10k. A file
@@ -12403,6 +12425,13 @@ function showAutoInfo(){
        <b>depth from the running surface to the bottom of the tie, in feet</b>, and the value in this file has
        been converted back. Check it against your section before rating.</div>`
     : "";
+  const sMsg=rateUpdated
+    ? `<div class="warn" style="margin-bottom:4px"><b>Fill spread credit updated on opening.</b> This file used
+       the 1.0H fill spread credit below 2 ft, labelled as the LRFD 3.6.1.2.6 rate. That option is now
+       <b>1.15H</b>, the live load distribution factor of AASHTO LRFD 10th Ed. (2024) Table 3.6.1.2.6a-1 for
+       buried structures other than concrete pipe, and the file has been set to it. Axles over less than 2 ft of
+       cover now spread further, so ratings governed there can rise. Check the rating against the earlier one.</div>`
+    : "";
   const uMsg=unitMigrated
     ? `<div class="warn" style="margin-bottom:4px"><b>Units converted on opening.</b> This file was written
        by ${esc(unitMigrated)}, which stored ring depth, wearing surface thickness and every override and
@@ -12412,7 +12441,7 @@ function showAutoInfo(){
        the file carries the new units and will not be converted again.</div>`
     : "";
   if(!storageWorks()){
-    e.innerHTML=rMsg+uMsg+`<span class="warn">This browser is not allowing local storage, so nothing is being saved
+    e.innerHTML=rMsg+sMsg+uMsg+`<span class="warn">This browser is not allowing local storage, so nothing is being saved
       automatically and named projects will not persist.</span> Storage can be blocked by browser policy or a
       private window, and in Chrome and Edge every file opened from disk shares one storage origin and one quota
       with every other file opened the same way, so other tools can fill it. Using Export JSON after each
@@ -12424,7 +12453,7 @@ function showAutoInfo(){
     (curProj?` under <b>${esc(curProj)}</b>`:` (unnamed — enter a name and press Save to keep a copy)`)+
     `. `+(when?`This session was restored from ${esc(when.toLocaleDateString())} `+
       `${esc(when.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}))}.`:"");
-  e.innerHTML=rMsg+uMsg+e.innerHTML;
+  e.innerHTML=rMsg+sMsg+uMsg+e.innerHTML;
 }
 window.__autosave=autosave;
 /* Test hooks. The round-trip of save -> reopen is the one path that can silently
@@ -12679,7 +12708,11 @@ const ARCH_REFS=[
     "Art. 3.8.2.3 (impact by depth of fill); Art. 3.24.3, 3.24.3.2, 3.24.10 and 3.30 (shallow-fill distribution width, "+
     "tire contact); Art. 3.6.3 and 3.12.1 (lanes, reduction in load intensity, side-by-side trucks). Edition: verify "+
     "(the fix log works to the 17th Ed., 2002)."],
-  ["AASHTO LRFD","Art. 3.6.1.2.6, cited only for the optional \"tire patch + 1.75H\" spread basis. Edition: verify."],
+  ["AASHTO LRFD","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 3.6.1.2.6a and Table 3.6.1.2.6a-1 "+
+    "(LLDF = 1.15 for culverts and buried structures other than concrete pipe: the optional 1.15H fill spread credit "+
+    "below 2 ft), Art. 3.6.1.2.5 (tire contact area 20 in wide by 10 in long), Art. 3.6.1.2.6b (wheel interaction: the "+
+    "wheel-line merge over the outside limits; axle interaction is not reached below 2 ft). The optional \"tire patch + 1.75H\" basis at 2 ft or more takes the LRFD tire-patch "+
+    "footprint form with the Std. Spec. 6.4.2 rate of 1.75, not the LRFD LLDF."],
   ["AREMA","Manual for Railway Engineering, Ch. 8 (Art. 2.2.3c; Cooper E-80, distribution through ballast and fill, "+
     "impact below the base of rail), railroad loading only. Edition: verify."],
   ["Literature","Boothby, T. E., Load Rating of Masonry Arch Bridges, J. Bridge Eng. (elastic frame, zero tension); "+
