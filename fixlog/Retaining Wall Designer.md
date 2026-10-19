@@ -923,3 +923,57 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
   - Headless main (48d7588) vs branch, MathJax 3.2.2 / Plotly 2.35.2 from `npm pack`, 13 cases: the 5 D11 cases, the stem/heel/toe over-stressed cases of the previous entry, S2 fail, F3 fail, the two interface cases above, and c = 0 / μ = 0.01. `window._R` with `checks` removed is identical in every case; `checks` differs only by the added `tsStem`, `tsFtg` (and `ishStem` on AASHTO with interface shear); every existing check's label/ok/val is unchanged. The failure count changes only in the S2, F3 and stem–footing failing cases. Report result lines: the three "card check, not counted" lines are replaced by the counted lines with the same PASS/FAIL and D/C. 0 console errors.
   - Screenshots of the Step 8 card, the scorecard and the status bar checked.
 - **Other copies:** none.
+
+## 2026-10-19 — PR: claude/aashto10-retwall — AASHTO mode: ℓd and stem hook per AASHTO LRFD 10th Ed. 5.10.8.2.1a / 5.10.8.2.4a; Table 3.11.6.4.1-1/-2 renumbers (PR link added after merge)
+
+The file uses CRLF line endings; keep them. ACI mode unchanged.
+
+### R1. Tension development length (AASHTO mode)   [calculation change (§4)]
+- **Where:** `devLengthAASHTO` (anchor `// AASHTO LRFD 10th Ed. (2024) §5.10.8.2.1a — tension development length (in)`), now a wrapper of the new `devLengthAASHTOParts`. Callers (stem, heel with top-bar factor, toe) unchanged.
+- **Before:**
+  ```js
+  const ldb = 2.4 * db * (fy/1000) / Math.sqrt(fc/1000);
+  const cb  = Math.min(cover_to_ctr, (spacing > 0 ? spacing : Infinity) / 2);
+  const lam_rc = Math.min(1.0, Math.max(0.4, db / Math.max(cb, 1e-6)));
+  const lam_rl = top ? 1.3 : 1.0;
+  return Math.max(12, ldb * lam_rl * lam_rc);
+  ```
+- **After:**
+  ```js
+  const fc4 = Math.pow(Math.min(fc/1000, 15), 0.25);
+  const ldb = 0.17 * db * Math.pow((fy/1000) / (1.97 * fc4), 2);
+  const cb  = Math.min(cover_to_ctr, (spacing > 0 ? spacing : Infinity) / 2);
+  const lam_rc_raw = cb > 0 ? db * cb / Math.pow(cb, 2) : 1.0;
+  const lam_rc = Math.min(1.0, Math.max(0.3, lam_rc_raw));
+  const lam_rl = top ? 1.3 : 1.0;
+  return { fc4, ldb, cb, lam_rc_raw, lam_rc, lam_rl, ld: Math.max(12, ldb * lam_rl * lam_rc) };
+  ```
+  ℓdb = 0.17·db·[(λer·fy − Fh/Ab)/(1.97·λ·f′c^0.25)]² with λer = λ = 1.0, Fh = 0; ℓd = ℓdb·λrl·λcf·λrc ≥ 12 in., λcf = 1.0; λrc = db·cb/(cb(1−βt) + 1.67·ns·ktr)² with βt = 0, ktr = 0 (no transverse steel credited, as before) = db/cb, bounded **0.3**–1.0 (was 0.4–1.0); f′c ≤ 15 ksi. Same implementation as `ACI Rebar Development Length.html` (PR claude/aashto10-rebar), duplicated per CLAUDE.md §3.
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Art. 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2), 5.10.8.2.1c (Eqs. 5.10.8.2.1c-1, -2).
+
+### R2. Stem bar standard hook (AASHTO mode)   [calculation change (§4)]
+- **Where:** new `hookAASHTOParts(bar, fy, fc, lam_rc)`; `hookDevLength(db, fy, fc, isAASHTO, bar, lam_rc)` AASHTO branch; call `const ldh_stem = hookDevLength(sel_stem.bar.db, inp.fy, inp.fc, isAASHTO, sel_stem.bar, ldA_stem ? ldA_stem.lam_rc : 1.0);`.
+- **Before:** `ldh = 38 * db / Math.sqrt(fc/1000) * (fy/1000/60)`, ≥ max(8db, 6 in.) (λrc = λcw = λer = 1.0).
+- **After:** ℓdh = ℓd + R + db/2 ≥ max(8db, 6 in.) (Eq. 5.10.8.2.4a-1), ℓd = ℓdb·λrl·λcf·λrc with ℓdb from Eq. 5.10.8.2.1a-2 and Fh = db·R·v·f′c (Eq. 5.10.8.2.4a-2); v = 0.85 − f′c/20, 0.45 ≤ v ≤ 0.65 (Table 5.8.2.5.3a-1, CTT node); R = D/2 + db/2 with the minimum finished bend D of Table 5.10.2.3-1 (6db #3–#8, 8db #9–#11, 10db #14–#18; smallest R = longest ℓdh); λrl = 1.0 (vertical stem bar), λcf = 1.0, **λrc = that of the straight stem bar (same c_b)**, as in the ACI Rebar tool; no tie reduction (5.10.8.2.4b); bracket ≤ 0 taken as 0.
+- **Note on λrc:** the old "λrc = 1.0, no confinement credit" was the 9th Ed. hook *tie* factor (0.8 with ties). In the 10th Ed. ties are a separate 0.8 factor (not taken here) and λrc in the hook's straight portion is the cover/spacing factor of 5.10.8.2.1c, so it is applied as for straight bars. Taking λrc = 1.0 instead would give ℓdh = 34.7 in. in the default AASHTO case (hook check FAIL vs 15.0 in. available); flagged as an open item.
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.10.8.2.4a (Eqs. 5.10.8.2.4a-1, -2), 5.10.8.2.4b, Table 5.8.2.5.3a-1, Table 5.10.2.3-1.
+
+### R3. Display / citations
+- Step 5 (stem): ℓdb, λrc and ℓd worked symbolically → substituted → result; a new line works R, v, Fh, ℓdb, ℓd and ℓdh of the hook; the hook check row text reads "ℓdh = ℓd + R + d_b/2 (10th Ed.), no tie reduction". Heel and toe development rows cite "AASHTO 5.10.8.2.1a" in AASHTO mode (were "ACI 25.4.2" in both modes; ACI text unchanged).
+- Table renumbers: "Table 3.11.6.4-2" → **Table 3.11.6.4.1-2** (h_eq source option, `heqAASHTO` comments). **Citation correction:** the Step 2 card, its equation reference, the drawing tooltip and the references row cited "Table 3.11.6.4-1" (abutments perpendicular to traffic, 4.0/3.0/2.0 ft), while `heqAASHTO` uses the wall table values (5.0/3.5/2.0 ft at 0 ft distance, 2.0 ft at ≥ 1 ft) — now cited as **Table 3.11.6.4.1-2** with Art. **3.11.6.4.1**. Values unchanged.
+
+### Check case (AASHTO, default project: H = 13.5 ft, f′c 4 ksi, fy 60 ksi, stem #5 @ 7 in. cover 2 in., heel #5 @ 8 in. top, toe #3, footing cover 3 in., t_f available 15.0 in.)
+- f′c^0.25 = 1.4142; ℓdb(#5) = 0.17 × 0.625 × (60/2.786)² = 49.28 in. (before 2.4 × 0.625 × 60/2 = 45.0 in.).
+- Stem: c_b = min(2 + 0.3125, 7/2) = 2.3125 in.; λrc = 0.625/2.3125 = 0.270 → **0.30** (before → 0.40). ℓd = max(49.28 × 0.30, 12) = **14.78 in.** (before 45.0 × 0.4 = 18.00 in.).
+- Heel (top, λrl 1.3, c_b = min(3.3125, 4) → λrc 0.30): ℓd = 49.28 × 1.3 × 0.30 = **19.22 in.** (before 23.40 in.). Toe #3: 12 in. both.
+- Hook (#5): R = 3 × 0.625 + 0.3125 = 2.1875 in.; v = 0.85 − 0.20 = 0.65; Fh = 0.625 × 2.1875 × 0.65 × 4 = 3.555 kip; Fh/Ab = 11.47 ksi; ℓdb = 0.17 × 0.625 × ((60 − 11.47)/2.786)² = 32.24 in.; ℓd = 32.24 × 0.30 = 9.67 in.; ℓdh = 9.67 + 2.1875 + 0.3125 = **12.17 in.** ≤ 15.0 in. PASS (before 38 × 0.625/2 × 1 = 11.88 in.).
+- Same at f′c = 8 ksi: ℓd stem 12.73 → **12.00** (min.), heel 16.55 → **13.59**, hook 8.40 → **8.15 in.**
+
+### How verified
+- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: all scripts pass.
+- Headless (`calcAll`), main vs branch: AASHTO at f′c 4 and 8 ksi give the numbers above; ACI identical (stem 12.00, hook 8.46, heel 14.80, toe 12.00 in.); warnings unchanged. `tests/compare.mjs --tool page` (default ACI): page text and storage identical. The new TeX of Step 5 renders in KaTeX 0.16.9 (other pre-existing "·" in \text warnings unchanged).
+- **Other copies:** `ACI Rebar Development Length.html` (all factors), the Development & Splice tab of `Concrete Beam Capacity.html`, `abutment_calculator.html` (ℓd only).
+
+### Open items (engineer decision)
+- Straight-bar ℓd in AASHTO mode is now shorter than before in the default case (λrc floor 0.3 instead of 0.4 outweighs the larger ℓdb). That is the 10th Ed. result; confirm.
+- Hook λrc: applied from the stem bar's c_b (see R2 note). Use 1.0 (no cover credit) instead? Then the default AASHTO hook (34.7 in.) does not fit the 18 in. footing.
