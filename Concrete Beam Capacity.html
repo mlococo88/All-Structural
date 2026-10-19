@@ -702,7 +702,7 @@ function shear(F,Mu,Vu,sOv){
   const s=(sOv!=null)?sOv:S.stir.s;
   const rt=sqrtfc_psi(fc);
   if(S.code==='AASHTO'){
-    const phi = lam<1 ? 0.80 : 0.90;   /* 5.5.4.2: shear 0.90 normal weight, 0.80 lightweight */
+    const phi = 0.90;   /* AASHTO LRFD 10th Ed. 5.5.4.2: shear in reinforced concrete 0.90 for normal weight and lightweight concrete (was 0.80 when lambda < 1) */
     let beta=2.0,theta=45,eps_s=null,beta0=2.0,sxeF=1.0,MuUse=Mu;
     /* Eq. 5.7.2.5-1: Av,min = 0.0316 lambda sqrt(f'c) bv s / fy */
     const avMinA = s>0 ? 0.0316*lam*Math.sqrt(fc)*bw*s/fyt : 0;
@@ -1709,7 +1709,7 @@ function buildProjGrid(){
   f(&quot;Checked Date&quot;,()=>S.proj.chkDate,v=>S.proj.chkDate=v,&quot;date&quot;);
   const L=el(&quot;label&quot;); L.appendChild(el(&quot;span&quot;,null,&quot;Design Code&quot;));
   const s=tag(el(&quot;select&quot;),&quot;pg_code&quot;);
-  [[&quot;ACI&quot;,&quot;ACI 318-19&quot;],[&quot;AASHTO&quot;,&quot;AASHTO LRFD 9th&quot;]].forEach(([v,t])=>{
+  [[&quot;ACI&quot;,&quot;ACI 318-19&quot;],[&quot;AASHTO&quot;,&quot;AASHTO LRFD 10th (2024)&quot;]].forEach(([v,t])=>{
     const o=el(&quot;option&quot;,null,t); o.value=v; s.appendChild(o); });
   s.value=S.code;
   s.addEventListener(&quot;change&quot;,()=>{ S.code=s.value; syncCoverPreset(); refresh(); });
@@ -2980,7 +2980,7 @@ function buildServTab(pg){
       const need=Math.min(McrF,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
       const ok=g.phiMn>=need-1e-9;
       b.appendChild(eqBlock({
-        title:&quot;Factored cracking moment with the 9th-Edition \u03b3 factors&quot;,ref:&quot;AASHTO 5.6.3.3&quot;,
+        title:&quot;Factored cracking moment with the \u03b3 factors&quot;,ref:&quot;AASHTO 5.6.3.3, Eq. 5.6.3.3-1&quot;,
         lines:[`M_{cr} = \\gamma_3\\left(\\gamma_1 f_r\\right)S_c`,
           `M_{cr} = ${fmt(g3,2)}\\left(${fmt(g1,2)}\\times${fmt(svc.fr,3)}\\text{ ksi}\\right)\\dfrac{${fmt(svc.Ig,0)}\\text{ in}^4}{${fmt(svc.yt)}\\text{ in}} = ${fmt(McrF*12,1)}\\text{ k-in}`,
           `M_{cr} = \\dfrac{${fmt(McrF*12,1)}\\text{ k-in}}{12\\;\\text{in/ft}} = ${fmt(McrF)}\\text{ k-ft}`],
@@ -3186,7 +3186,7 @@ function buildInputEchoTab(pg){
     t.innerHTML=&quot;<tr><th>Item</th><th>Value</th><th>Units</th></tr>&quot;;
     const row=(k,v,u)=>{const tr=el(&quot;tr&quot;);tr.appendChild(el(&quot;td&quot;,null,k));
       const td=el(&quot;td&quot;,&quot;v&quot;,v);tr.appendChild(td);tr.appendChild(el(&quot;td&quot;,&quot;u&quot;,u||&quot;&quot;));t.appendChild(tr);};
-    row(&quot;Design code&quot;,S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD 9th Ed.&quot;,&quot;&quot;);
+    row(&quot;Design code&quot;,S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD 10th Ed. (2024)&quot;,&quot;&quot;);
     row(&quot;Section type&quot;,S.sec.type==='tee'?&quot;T-beam&quot;:&quot;Rectangular&quot;,&quot;&quot;);
     row(&quot;Web width, b_w&quot;,fmt(S.sec.bw),&quot;in&quot;);
     row(&quot;Overall depth, h&quot;,fmt(S.sec.h),&quot;in&quot;);
@@ -4075,7 +4075,7 @@ function doImport(f){
    a D/C result line per check, the &quot;see §n.k&quot; form of the D11 links, and the print header /
    &quot;Page X of Y&quot; footer (@page margin boxes, cbcPageCSS, only while printing). Display only: every
    value shown is the tool's own (computeAll / allChecks / detEnvelope). */
-function cbcCodeLabel(){ return S.code==='ACI'?'ACI 318-19':'AASHTO LRFD, 9th Edition'; }
+function cbcCodeLabel(){ return S.code==='ACI'?'ACI 318-19':'AASHTO LRFD, 10th Edition (2024)'; }
 /* the code articles cited in the printed content (equation-block references and check references) */
 function cbcRefs(root){
   const fam={ACI:[],AASHTO:[]};
@@ -4093,7 +4093,7 @@ function cbcRefs(root){
   Object.keys(fam).forEach(f=>fam[f].sort((x,y)=>key(x).localeCompare(key(y),undefined,{numeric:true})));
   const rows=[];
   if(fam.ACI.length) rows.push([&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete. Cited: &quot;+fam.ACI.join(&quot;, &quot;)+&quot;.&quot;]);
-  if(fam.AASHTO.length) rows.push([&quot;AASHTO LRFD&quot;,&quot;AASHTO LRFD Bridge Design Specifications (labelled 9th Edition in this tool; some provisions follow the 10th Ed. — edition: verify). Cited: &quot;+fam.AASHTO.join(&quot;, &quot;)+&quot;.&quot;]);
+  if(fam.AASHTO.length) rows.push([&quot;AASHTO LRFD&quot;,&quot;AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Cited: &quot;+fam.AASHTO.join(&quot;, &quot;)+&quot;.&quot;]);
   return rows;
 }
 function cbcPageCSS(){
