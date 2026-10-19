@@ -11355,6 +11355,29 @@ function legalLLfactor(adtt) {
   return +(1.30 + (1.45 - 1.30) * (adtt - 1000) / (5000 - 1000)).toFixed(4);
 }
 
+// Load posting from each AASHTO legal vehicle's OWN legal-load rating (2026-10-18).
+// MBE 6A.8.3, Eq. 6A.8.3-1: Posting = (W/0.7)·[(RF) − 0.3] for 0.3 < RF < 1.0, where RF is the
+// legal-load rating factor of that vehicle (MBE 6A.4.4) and W its weight (tons). RF ≥ 1.0: no
+// posting for that vehicle. RF ≤ 0.3: the equation does not apply (MBE 6A.8.3: consider closing).
+// RF = the vehicle's governing Operating-column RF of the Multi-Vehicle rating (its own MIDAS
+// result case; Legal category → γLL per MBE Table 6A.4.4.2.3a-1). Replaces "rated vehicle's RF ×
+// legal weight". Not computed for LFR (Eq. 6A.8.3-1 is an LRFR provision; MBE Section 6B posting
+// or an owner method is not implemented) nor when the vehicle has no result case.
+const IDX_POST_VEH=[['AASHTO Legal Type 3','Type 3',25],['AASHTO Legal Type 3-3','Type 3-3',40],['AASHTO Legal Type 3S2','Type 3S2',36]];
+function idxLegalPosting(mv, method){
+  return IDX_POST_VEH.map(([name,label,W0])=>{
+    const v=(mv||[]).find(r=>r.name===name);
+    const W=(v&&v.tons)||W0;
+    if(!v) return {name,label,W,st:'none'};
+    const o={name,label,W,RF:v.opRF,v};
+    if(method==='LFR') return {...o,st:'lfr'};
+    if(v.category!=='Legal') return {...o,st:'cat'};
+    if(o.RF>=1) return {...o,st:'ok'};
+    if(!(o.RF>0.3)) return {...o,st:'close'};
+    return {...o,st:'post',P:W/0.7*(o.RF-0.3)};
+  });
+}
+
 // Permit live-load factor — MBE (3rd Ed.) Table 6A.4.5.4.2a-1, ROUTINE / ANNUAL permits
 // (unlimited crossings, mixed with traffic, two or more lanes loaded). Columns are the
 // permit weight ratio GVW/AL (kip/ft): <= 2.0 | 2.0–3.0 | >= 3.0; rows ADTT (one direction)
@@ -13185,7 +13208,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
         const p = { Mdc, Mdw, Vdc, Vdw, Mllpos, Mllneg, Vll, CmnPos, CmnNeg, Cvn };
         const inv = computeNodeRF(p, gamDC, gamDW, vGamLLinv, ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr);
         const op  = computeNodeRF(p, gamDC, gamDW, vGamLLop,  ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr);
-        return { node, pos:xPos, inv, op, CmnPos:+CmnPos.toFixed(1), CmnNeg:+CmnNeg.toFixed(1), Cvn:+Cvn.toFixed(1) };
+        return { node, pos:xPos, inv, op, CmnPos:+CmnPos.toFixed(1), CmnNeg:+CmnNeg.toFixed(1), Cvn:+Cvn.toFixed(1),
+                 p, sc:[ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr] };
       }).filter(Boolean);
 
       if (!nodeResults.length) return null;
@@ -13207,6 +13231,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
         opTons:   tons ? +(govOp.op.rfGov * tons).toFixed(1) : null,
         opGoverns: govOp.op.governs,
         opNode: govOp.node, opPos: govOp.pos,
+        // values behind opRF at its node (shown worked with the load posting, MBE 6A.8.3)
+        opWk: (()=>{ const g=govOp.op.governs, q=govOp.p, k=g==='M+'?0:g==='M-'?1:2;
+          return { act:g, rf:[govOp.op.rfMpos,govOp.op.rfMneg,govOp.op.rfV][k], C:[q.CmnPos,q.CmnNeg,q.Cvn][k], DC:[q.Mdc,q.Mdc,q.Vdc][k],
+                   DW:[q.Mdw,q.Mdw,q.Vdw][k], LL:[q.Mllpos,q.Mllneg,q.Vll][k], s:govOp.sc[k] }; })(),
         nodeCount: nodeResults.length,
       };
     }).filter(Boolean);
@@ -13228,10 +13256,12 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       capAt,
       // D11: the LL-scale product as the Inputs & Setup panel writes it (report §"Live-Load Scale Factor")
       ratingLLScaleExpr: ratingLLFactors.filter(llFactorActive).map(f=>f.id==='im'?`(1+${f.value}/100)`:f.value).join(' × ')||'1',
+      // Load posting (MBE 6A.8.3) from each legal vehicle's own Multi-Vehicle rating
+      legalPosting: idxLegalPosting(multiVehicleData, ratingMethod),
       // ── handoff wiring: let App publish the external-demands payload from the sidebar ──
       isGFS, gfsMember, gfsMembers, aremaSpan: (_aremaParams&&_aremaParams.span)||0,
     });
-  },[ratingData, nodePositions, gfsMember]);
+  },[ratingData, nodePositions, gfsMember, multiVehicleData]);
 
   // ── helpers ───────────────────────────────────────────────────────────────
   const toggleEnvLC  = lc => setEnvelopeLCs(p=>p.includes(lc)?p.filter(x=>x!==lc):[...p,lc]);
@@ -15562,59 +15592,39 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
           {/* ── Posting Check ── */}
           {govRating&&govRating.rfGov<1&&(()=>{
-            // Per MBE §6A.8: posting RF for each vehicle must use that vehicle's own LL demands.
-            // Since we only have one LL result case (from the rated vehicle), we scale LL demand
-            // proportionally by gross weight: LL_v ≈ LL_rated × (W_v / W_rated).
-            // RF_v = (C − γDC·DC − γDW·DW) / (γLL · LL_v · LLscale)
-            // This is an approximation valid when vehicle geometry is similar; note accordingly.
-            const POSTING_VEHICLES = [
-              {label:'Type 3',   W:25},
-              {label:'Type 3-3', W:40},
-              {label:'Type 3S2', W:36},
-            ];
+            // MBE 6A.8.3 (2026-10-18): posting from each AASHTO legal vehicle's OWN legal-load
+            // rating — the Multi-Vehicle RF from that vehicle's MIDAS result case (Operating column,
+            // Legal γLL per MBE Table 6A.4.4.2.3a-1) — with Eq. 6A.8.3-1. See idxLegalPosting.
+            // Before: the rated vehicle's LL scaled by weight (gave RF_rated × W_rated for every truck).
+            const legalPost = idxLegalPosting(multiVehicleData, ratingMethod);
             const W_rated = ratingVehicleTon || 36;
-
-            // Per-node posting RFs (take governing node's demands)
-            const gn = govRating;
-            // Rebuild numerator for governing node (consistent with RF formula)
-            // RF_rated = num / (gamLL * LL_rated * LLscale)  → num = RF_rated * gamLL * LL_rated * LLscale
-            // RF_v = num / (gamLL * LL_v * LLscale) = RF_rated * LL_rated / LL_v = RF_rated * W_rated / W_v
-            // → posting tons = RF_v * W_v = RF_rated * W_rated  (same for all! — the constant is C-DC-DW work)
-            // More accurately for individual vehicles, also recompute per-node worst:
-            const computePostRF = (W_v) => {
-              if (!ratingData.length || W_rated<=0) return null;
-              // Scale LL demands by weight ratio at each node, find governing RF
-              const scaled = ratingData.map(p=>{
-                const ratio = W_v / W_rated;
-                const MllposV = p.Mllpos * ratio;
-                const MllnegV = p.Mllneg * ratio;
-                const VllV    = p.Vll    * ratio;
-                const rfMpos = MllposV>0.001 ? (p.CmnPos - gamDC*Math.abs(p.Mdc) - gamDW*Math.abs(p.Mdw)) / (gamLL*MllposV*ratingLLScale) : null;
-                const rfMneg = MllnegV>0.001 ? (p.CmnNeg - gamDC*Math.abs(p.Mdc) - gamDW*Math.abs(p.Mdw)) / (gamLL*MllnegV*ratingLLScaleMn) : null;
-                const rfV    = VllV>0.001    ? (p.Cvn    - gamDC*Math.abs(p.Vdc||0) - gamDW*Math.abs(p.Vdw||0)) / (gamLL*VllV*ratingLLScaleV) : null;
-                return Math.min(...[rfMpos,rfMneg,rfV].filter(v=>v!==null&&isFinite(v)));
-              }).filter(isFinite);
-              return scaled.length ? Math.min(...scaled) : null;
-            };
+            const f2 = v=>Math.abs(+v||0).toFixed(2);
+            const why = x=>({
+              none:'not computed — no MIDAS result case',
+              lfr:'not computed — LFR (Eq. 6A.8.3-1 is LRFR)',
+              cat:`not computed — rated as ${x.v&&x.v.category}, not Legal`,
+              ok:'RF ≥ 1.0 → no posting',
+              close:'RF ≤ 0.3 → consider closing',
+              post:'❌ Post',
+            })[x.st];
 
             return (
               <div style={{background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:'8px',padding:'14px 16px',marginBottom:'14px'}}>
-                <div style={{fontSize:'13px',fontWeight:'700',color:'#dc2626',marginBottom:'4px'}}>⚠ Load Posting Required — MBE Section 6A.8</div>
+                <div style={{fontSize:'13px',fontWeight:'700',color:'#dc2626',marginBottom:'4px'}}>⚠ Load Posting — MBE Section 6A.8</div>
                 <div style={{fontSize:'10.5px',color:'#dc2626',fontFamily:'monospace',marginBottom:'10px',opacity:0.8}}>
-                  Operating rating RF and tonnage computed for each posting vehicle by scaling LL demands proportionally to gross weight.
+                  Posting per MBE Eq. 6A.8.3-1, Posting = (W/0.7)·[(RF) − 0.3] for 0.3 &lt; RF &lt; 1.0, with RF = each legal vehicle's own legal-load rating (Multi-Vehicle tab: its own MIDAS result case, Operating column).
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:'8px'}}>
-                  {POSTING_VEHICLES.map(({label,W})=>{
-                    const rfV = computePostRF(W);
-                    const postTons = rfV!==null ? rfV*W : null;
+                  {legalPost.map(x=>{
+                    const isPost = x.st==='post', isOk = x.st==='ok';
                     return (
-                      <div key={label} style={{background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'8px 12px'}}>
-                        <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'2px'}}>{label} · {W} T GVW</div>
-                        <div style={{fontSize:'18px',fontWeight:'700',color:postTons!==null&&postTons>=W?'#059669':'#dc2626',fontFamily:'monospace'}}>
-                          {postTons!==null?postTons.toFixed(1)+' T':'—'}
+                      <div key={x.label} style={{background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'8px 12px'}}>
+                        <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'2px'}}>{x.label} · {x.W} T GVW</div>
+                        <div style={{fontSize:'18px',fontWeight:'700',color:isOk?'#059669':(isPost||x.st==='close')?'#dc2626':'#9ca3af',fontFamily:'monospace'}}>
+                          {isPost?x.P.toFixed(1)+' T':isOk?'No posting':'—'}
                         </div>
                         <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'1px'}}>
-                          RF={rfV!==null?rfV.toFixed(3):'—'} · {postTons!==null&&postTons>=W?'✓ Adequate':'❌ Post'}
+                          RF={x.RF!=null?x.RF.toFixed(3):'—'} · {why(x)}
                         </div>
                       </div>
                     );
@@ -15628,15 +15638,31 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       {govRating.rfTons.toFixed(1)} T
                     </div>
                     <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'1px'}}>
-                      RF={govRating.rfGov.toFixed(3)} · {W_rated} T GVW
+                      RF={govRating.rfGov.toFixed(3)} · {W_rated} T GVW · RF × W, not a posting
                     </div>
                   </div>
                 </div>
-                <div style={{marginTop:'8px',fontSize:'10.5px',color:'#92400e',fontFamily:'monospace',
-                  background:'#fffbeb',padding:'6px 10px',borderRadius:'4px',border:'1px solid #fde68a'}}>
-                  ⚠ Posting based on proportional LL scaling from rated vehicle demands. For definitive posting values,
-                  run separate MIDAS analyses with each posting vehicle as the live load case.
+                {/* Worked: legal-load RF at its governing node, then Eq. 6A.8.3-1 (CLAUDE.md §6) */}
+                <div style={{marginTop:'8px',fontSize:'10px',color:'#374151',fontFamily:'monospace',background:'#fff',
+                  padding:'6px 10px',borderRadius:'4px',border:'1px solid #fecaca',lineHeight:1.6}}>
+                  {legalPost.map(x=>{
+                    const v=x.v, w=v&&v.opWk;
+                    if (!v) return <div key={x.label}>{x.label}: not computed — no MIDAS result case assigned. Select the vehicle in Vehicles, run MIDAS, assign its case in Multi-Vehicle.</div>;
+                    return (
+                      <div key={x.label}>
+                        <strong>{x.label}</strong> ({v.posLC}, {w.act==='M+'?'M⁺':w.act==='M-'?'M⁻':'V'} at N{v.opNode} · {v.opPos.toFixed(2)} ft, {v.category}, γ_LL = {v.gamLLop}):{' '}
+                        RF = (C − γ_DC·DC − γ_DW·DW)/(γ_LL·s·LL) = ({(+w.C).toFixed(1)} − {gamDC}×{f2(w.DC)} − {gamDW}×{f2(w.DW)})/({v.gamLLop}×{(+w.s).toFixed(4)}×{f2(w.LL)}) = {w.rf!=null?w.rf.toFixed(3):'—'}
+                        {x.st==='post'&&<> → Posting = (W/0.7)·(RF − 0.3) = ({x.W}/0.7)×({x.RF.toFixed(3)} − 0.3) = <strong>{x.P.toFixed(1)} T</strong></>}
+                        {x.st==='ok'&&<> → RF ≥ 1.0: no posting for this vehicle</>}
+                        {x.st==='close'&&<> → RF ≤ 0.3: Eq. 6A.8.3-1 does not apply; consider closing the bridge (MBE 6A.8.3)</>}
+                        {x.st==='lfr'&&<> → posting not computed: Eq. 6A.8.3-1 is an LRFR provision; LFR posting (MBE Section 6B or owner method) is not implemented</>}
+                        {x.st==='cat'&&<> → posting not computed: the vehicle is rated as {v.category}; set its category to Legal (γ_LL per MBE Table 6A.4.4.2.3a-1) in Multi-Vehicle</>}
+                      </div>
+                    );
+                  })}
                 </div>
+                <IdxWorkedIn items={[{txt:'Legal-vehicle RFs', label:'AASHTO Rating · Multi-Vehicle',
+                  go:()=>{ setRatingSubTab('table'); }}]}/>
               </div>
             );
           })()}
@@ -19715,7 +19741,7 @@ DEFAULT_CFG.loadCombos = buildDefaultCombos(DEFAULT_CFG.deadLoads);
    the result lines (RF and PASS/FAIL from the tool's own values) and the print header / "Page X
    of Y" footer (@page margin boxes, idxPageCSS, print only). Nothing is recomputed here. */
 const IDX_REFS_MBE=[
-  ['AASHTO MBE','Manual for Bridge Evaluation: 6A.4.2.1 (LRFR rating equation; Eq. 6A.4.2.1-3, φc·φs ≥ 0.85), Table 6A.4.2.2-1 (load factors), Table 6A.4.2.3-1 (condition factor φc), Table 6A.4.2.4-1 (system factor φs), 6A.8 (posting), Section 6B (LFR). Edition: verify'],
+  ['AASHTO MBE','Manual for Bridge Evaluation: 6A.4.2.1 (LRFR rating equation; Eq. 6A.4.2.1-3, φc·φs ≥ 0.85), Table 6A.4.2.2-1 (load factors), Table 6A.4.2.3-1 (condition factor φc), Table 6A.4.2.4-1 (system factor φs), 6A.4.4 (legal-load rating; Table 6A.4.4.2.3a-1, legal γLL), 6A.8 (posting; Eq. 6A.8.3-1), Section 6B (LFR). Edition: verify'],
   ['AASHTO LRFD','Bridge Design Specifications: 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors). 10th Ed. where the tool states one; otherwise edition: verify'],
   ['MIDAS Civil','Analysis results (beam forces) pasted from the MIDAS model built from the MCT file in this report'],
 ];
@@ -19885,7 +19911,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     gamDC, gamDW, gamLL, ratingLLScale, ratingLLScaleMn, ratingLLScaleV, dfSplit,
     ratingVehicleTon, ratingVehicleName,
     ratingDcLC, ratingDwLC, ratingLLposLC, ratingLLnegLC,
-    ratingMethod, ratingLimitState, ratingLevel, ratingEta, chartImages, ratingLLScaleExpr }) {
+    ratingMethod, ratingLimitState, ratingLevel, ratingEta, chartImages, ratingLLScaleExpr, legalPosting }) {
 
   const DLL = cfg.deadLoadLabels||{deckSlab:'Deck Slab',haunch:'Haunch',barrier:'Movable Barrier',diaphragm:'Diaphragm'};
   const totalLen = (cfg.spans||[]).reduce((a,b)=>a+b,0);
@@ -20265,12 +20291,21 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     <div class="cr-see-line">AASHTO Rating RF ${govRating.rfGov.toFixed(3)}: <a class="cr-see" data-see="${govCid(govRating.governs)}"></a></div>
     ${govRating.rfGov<1?`
     <div style="margin-bottom:14px;padding:10px 14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px">
-      <strong style="color:#991b1b">⚠ Load Posting Required — MBE §6A.8</strong><br/>
-      <div style="margin-top:6px;display:flex;gap:16px;font-size:9.5pt">
-        ${[['Type 3',25],['Type 3-3',40],['Type 3S2',36],[ratingVehicleName||'Rated Vehicle',ratingVehicleTon||36]]
-          .filter((v,i,a)=>a.findIndex(x=>x[0]===v[0])===i)
-          .map(([v,w])=>`<span><strong>${(govRating.rfGov*w).toFixed(1)} T</strong> — ${v}</span>`).join('')}
-      </div>
+      <strong style="color:#991b1b">⚠ Load Posting — MBE §6A.8</strong><br/>
+      <div style="margin-top:4px;font-size:9pt">Posting per MBE Eq. 6A.8.3-1 from each legal vehicle's own legal-load rating (MBE 6A.4.4; its own MIDAS result case, legal γ<sub>LL</sub> per MBE Table 6A.4.4.2.3a-1). Rated vehicle (${idxEsc(ratingVehicleName||'Rated Vehicle')}, ${ratingVehicleTon||36} T): RF × W = ${govRating.rfTons.toFixed(1)} T (rating tonnage, not a posting).</div>
+      ${(legalPosting||[]).map(x=>{
+        const v=x.v, w=v&&v.opWk, f2=t=>Math.abs(+t||0).toFixed(2);
+        if(!v) return `<div style="margin-top:6px;font-size:9.5pt"><strong>${idxEsc(x.label)} (${x.W} T):</strong> not computed — no MIDAS result case assigned to this vehicle.</div>`;
+        const eqR=`RF = \\frac{C-\\gamma_{DC}\\,DC-\\gamma_{DW}\\,DW}{\\gamma_{LL}\\,s\\,LL} = \\frac{${(+w.C).toFixed(1)}-${gamDC}\\times ${f2(w.DC)}-${gamDW}\\times ${f2(w.DW)}}{${v.gamLLop}\\times ${(+w.s).toFixed(4)}\\times ${f2(w.LL)}} = ${w.rf!=null?w.rf.toFixed(3):'—'}`;
+        const eqP=x.st==='post'?`\\text{Posting} = \\frac{W}{0.7}\\,[RF-0.3] = \\frac{${x.W}}{0.7}\\times(${x.RF.toFixed(3)}-0.3) = ${x.P.toFixed(1)}\\ \\text{T}`:'';
+        const res={post:`Posting = ${x.P!=null?x.P.toFixed(1):''} T (MBE Eq. 6A.8.3-1)`, ok:'RF ≥ 1.0: no posting for this vehicle',
+          close:'RF ≤ 0.3: Eq. 6A.8.3-1 does not apply; consider closing the bridge (MBE 6A.8.3)',
+          lfr:'posting not computed: Eq. 6A.8.3-1 is an LRFR provision; LFR posting (MBE Section 6B or owner method) is not implemented',
+          cat:`posting not computed: the vehicle is rated as ${idxEsc(v.category)}, not Legal`}[x.st];
+        return `<div style="margin-top:6px;font-size:9.5pt"><strong>${idxEsc(x.label)} (${x.W} T):</strong> ${idxEsc(v.posLC)}, ${w.act==='M+'?'M⁺':w.act==='M-'?'M⁻':'V'} at node ${v.opNode} (x = ${v.opPos.toFixed(2)} ft), ${idxEsc(v.category)}, γ<sub>LL</sub> = ${v.gamLLop}, RF = ${x.RF.toFixed(3)}
+          <table class="cr-wk"><tbody><tr><td>${idxTex(eqR,true)}</td></tr>${eqP?`<tr><td>${idxTex(eqP,true)}</td></tr>`:''}</tbody></table>
+          <div><strong>${res}</strong></div></div>`;
+      }).join('')}
     </div>`:''}` : ''}
     ${chartImages?.rating?`<img src="${chartImages.rating}" class="chart-img" alt="RF Diagram"/>`:''}
     ${secWorked}
@@ -21596,6 +21631,7 @@ function App() {
       ratingLevel:      rs.ratingLevel      || 'Inventory',
       chartImages,
       ratingLLScaleExpr: rs.ratingLLScaleExpr || '',
+      legalPosting:     rs.legalPosting     || [],
     });
     const win = window.open('', '_blank');
     if (win) { win.document.write(html); win.document.close(); }

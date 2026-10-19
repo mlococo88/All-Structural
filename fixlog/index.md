@@ -2984,3 +2984,300 @@ Display only (AUDIT.md D11 and CLAUDE.md §6). No formula, factor, unit, code re
 - **Charts section never printed.** `generateReportHTML` builds `secCharts` (the captured Results charts) but never puts it in the page; only the RF chart prints (inside the rating section). Include it, or remove the dead code?
 - **AREMA report settings.** The "Cover" and "TOC" switches still drop the cover / contents. The house format always has them; keep the switches?
 - **AREMA in-app calc sheet:** the "1 + I" row shows the base impact formula while the value includes rocking (the note says "incl. rocking"). Wording only; not changed.
+
+## 2026-10-19 — PR: claude/index-posting (PR link added after merge)
+
+### Load posting from each legal vehicle's own rating, MBE Eq. 6A.8.3-1 (Tier 2: result change in one module)
+- **Problem (raised in the D11 open items, engineer asked to fix 2026-10-18):** the "⚠ Load Posting Required — MBE Section 6A.8" box (AASHTO Rating → Inputs & Setup, under the RF chart; and the same box in Generate Report §"Rating Factor Results") gave posting tons for Type 3, Type 3-3 and Type 3S2 from the **rated** vehicle's RF (e.g. HL-93), not from each legal vehicle's own legal-load rating. The two places did not even agree:
+  - In the app: the rated vehicle's LL was scaled by W_v/W_rated, so RF_v = RF_rated·W_rated/W_v and the tonnage RF_v·W_v = RF_rated·W_rated was the **same for every truck** (4-span check case: 32.2 T for all three; Type 3 shown "✓ Adequate", RF 1.289).
+  - In the report: RF_gov(rated) × W_v (check case: 22.4 / 35.8 / 32.2 T).
+  - Neither used the legal vehicles' own MIDAS results, the legal γLL (MBE Table 6A.4.4.2.3a-1) or the posting equation (MBE Eq. 6A.8.3-1). Unconservative or conservative depending on the truck's geometry relative to HL-93.
+- **What the tool already had (so no new rating method):** the AASHTO Legal Type 3 / 3-3 / 3S2 vehicles (and SU4–SU7, EV2/EV3) in the vehicle library, their moving-load cases in the MCT, the per-vehicle result-case mapping (`vehicleLCMap`, Multi-Vehicle tab, auto-detected), category Legal by default (`defaultVehicleCategory`) with γLL = `legalLLfactor(ADTT)` (MBE Table 6A.4.4.2.3a-1: 1.30 at ADTT ≤ 1000, 1.45 at ≥ 5000 or unknown, linear between), per-vehicle IM (`mctCarriesImpact(cfg, vehicleName)`) and the per-vehicle RF from that vehicle's own forces (`multiVehicleData`: Inventory and Operating columns, governing over nodes and M⁺ / M⁻ / V). The posting now reads those RFs.
+- **§4 callout — before / after:**
+  - Before (app): RF_v = min over nodes of (C − γDC·DC − γDW·DW)/(γLL·s·LL_rated·W_v/W_rated) (γLL = rating-level factor, e.g. 1.75 Inventory) = RF_rated·W_rated/W_v; tons = RF_v·W_v = RF_rated·W_rated.
+  - Before (report): tons_v = RF_gov(rated) × W_v.
+  - After (both): RF_v = the vehicle's governing **Operating-column** RF in the Multi-Vehicle rating (its own MIDAS result case; γLL = that vehicle's Op γLL, for category Legal = MBE Table 6A.4.4.2.3a-1 at the rating ADTT; DC/DW factors and capacities as the rating step). Then
+    - 0.3 < RF_v < 1.0: **Posting = (W/0.7)·[(RF_v) − 0.3]** (MBE Eq. 6A.8.3-1), W = 25 / 40 / 36 T;
+    - RF_v ≥ 1.0: "No posting" for that vehicle;
+    - RF_v ≤ 0.3: no tonnage; "Eq. 6A.8.3-1 does not apply; consider closing the bridge (MBE 6A.8.3)";
+    - method LFR: no tonnage; "Eq. 6A.8.3-1 is an LRFR provision; LFR posting (MBE Section 6B or owner method) is not implemented" (RF still shown and worked);
+    - no result case assigned to the vehicle: "not computed — no MIDAS result case" (select the vehicle, run MIDAS, assign its case);
+    - vehicle category set to Design or Permit: "not computed — rated as …, not Legal".
+  - The rated-vehicle card stays (RF_gov × W_rated, unchanged value) and is labelled "RF × W, not a posting". Box title "Load Posting Required" → "Load Posting" (a legal truck may need none). When the box shows is unchanged (rated vehicle's governing RF < 1).
+  - Operating column: MBE 6A.4.4.1 puts the legal-load rating at about the operating reliability level; for a Legal-category vehicle the tool's Inventory and Operating γLL are the same value (`vehicleGamLL` returns `{inv: ll, op: ll}`), so the columns differ only when the engineer typed different γLL values.
+- **Governing provision:** AASHTO MBE 6A.8.3, Eq. 6A.8.3-1 (posting); 6A.4.4 / Table 6A.4.4.2.3a-1 (legal-load rating and γLL). The tool states no MBE edition ("Edition: verify" in its references; the permit table comment says 3rd Ed.). **Edition: verify.** No owner posting rule is cited anywhere in the tool (no MassDOT / RIDOT / CTDOT posting convention), so MBE Eq. 6A.8.3-1 is used.
+- **Shown worked (CLAUDE.md §6):** app box: for each truck, "RF = (C − γ_DC·DC − γ_DW·DW)/(γ_LL·s·LL) = (values) = RF → Posting = (W/0.7)·(RF − 0.3) = (values) = P T" at the governing node with the result case, action, node, category and γLL, and "Worked in: Legal-vehicle RFs → AASHTO Rating · Multi-Vehicle" (switches the sub-tab). Report box: the same two equations in KaTeX (symbolic → substituted → result) with the case/node/γLL line and the outcome. The report box stays a `div` (no new heading), so the §-numbering of the report is unchanged.
+- **References row** (`IDX_REFS_MBE`, printed in Generate Report): before `… Table 6A.4.2.4-1 (system factor φs), 6A.8 (posting), Section 6B (LFR). Edition: verify` → after `… Table 6A.4.2.4-1 (system factor φs), 6A.4.4 (legal-load rating; Table 6A.4.4.2.3a-1, legal γLL), 6A.8 (posting; Eq. 6A.8.3-1), Section 6B (LFR). Edition: verify`.
+
+#### Where / before / after code
+1. **New helper** after `function legalLLfactor(adtt)` (anchor `const IDX_POST_VEH=`):
+```js
+// Load posting from each AASHTO legal vehicle's OWN legal-load rating (2026-10-18).
+// MBE 6A.8.3, Eq. 6A.8.3-1: Posting = (W/0.7)·[(RF) − 0.3] for 0.3 < RF < 1.0, where RF is the
+// legal-load rating factor of that vehicle (MBE 6A.4.4) and W its weight (tons). RF ≥ 1.0: no
+// posting for that vehicle. RF ≤ 0.3: the equation does not apply (MBE 6A.8.3: consider closing).
+// RF = the vehicle's governing Operating-column RF of the Multi-Vehicle rating (its own MIDAS
+// result case; Legal category → γLL per MBE Table 6A.4.4.2.3a-1). Replaces "rated vehicle's RF ×
+// legal weight". Not computed for LFR (Eq. 6A.8.3-1 is an LRFR provision; MBE Section 6B posting
+// or an owner method is not implemented) nor when the vehicle has no result case.
+const IDX_POST_VEH=[['AASHTO Legal Type 3','Type 3',25],['AASHTO Legal Type 3-3','Type 3-3',40],['AASHTO Legal Type 3S2','Type 3S2',36]];
+function idxLegalPosting(mv, method){
+  return IDX_POST_VEH.map(([name,label,W0])=>{
+    const v=(mv||[]).find(r=>r.name===name);
+    const W=(v&&v.tons)||W0;
+    if(!v) return {name,label,W,st:'none'};
+    const o={name,label,W,RF:v.opRF,v};
+    if(method==='LFR') return {...o,st:'lfr'};
+    if(v.category!=='Legal') return {...o,st:'cat'};
+    if(o.RF>=1) return {...o,st:'ok'};
+    if(!(o.RF>0.3)) return {...o,st:'close'};
+    return {...o,st:'post',P:W/0.7*(o.RF-0.3)};
+  });
+}
+```
+2. **`multiVehicleData`** (`StepResults`, anchor `// ── Multi-vehicle rating — uses ACTUAL result rows per vehicle`) keeps the values behind each vehicle's Operating RF (no RF changes). In `nodeList.map`, before:
+```js
+        return { node, pos:xPos, inv, op, CmnPos:+CmnPos.toFixed(1), CmnNeg:+CmnNeg.toFixed(1), Cvn:+Cvn.toFixed(1) };
+```
+after:
+```js
+        return { node, pos:xPos, inv, op, CmnPos:+CmnPos.toFixed(1), CmnNeg:+CmnNeg.toFixed(1), Cvn:+Cvn.toFixed(1),
+                 p, sc:[ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr] };
+```
+and in the returned row, after `opNode: govOp.node, opPos: govOp.pos,` (before `nodeCount: nodeResults.length,`):
+```js
+        // values behind opRF at its node (shown worked with the load posting, MBE 6A.8.3)
+        opWk: (()=>{ const g=govOp.op.governs, q=govOp.p, k=g==='M+'?0:g==='M-'?1:2;
+          return { act:g, rf:[govOp.op.rfMpos,govOp.op.rfMneg,govOp.op.rfV][k], C:[q.CmnPos,q.CmnNeg,q.Cvn][k], DC:[q.Mdc,q.Mdc,q.Vdc][k],
+                   DW:[q.Mdw,q.Mdw,q.Vdw][k], LL:[q.Mllpos,q.Mllneg,q.Vll][k], s:govOp.sc[k] }; })(),
+```
+3. **Report state** (`onReportState({…})` in `StepResults`): after the `ratingLLScaleExpr: …` line add
+```js
+      // Load posting (MBE 6A.8.3) from each legal vehicle's own Multi-Vehicle rating
+      legalPosting: idxLegalPosting(multiVehicleData, ratingMethod),
+```
+and the effect's dependency list `},[ratingData, nodePositions, gfsMember]);` → `},[ratingData, nodePositions, gfsMember, multiVehicleData]);`. In `App`'s `generateReport`, after `ratingLLScaleExpr: rs.ratingLLScaleExpr || '',` add `legalPosting:     rs.legalPosting     || [],`; `generateReportHTML({… chartImages, ratingLLScaleExpr })` → `generateReportHTML({… chartImages, ratingLLScaleExpr, legalPosting })`.
+4. **App box** (`StepResults`, from `{/* ── Posting Check ── */}` to just before `{/* ── Top Locations Table ── */}`). Before:
+```jsx
+          {/* ── Posting Check ── */}
+          {govRating&&govRating.rfGov<1&&(()=>{
+            // Per MBE §6A.8: posting RF for each vehicle must use that vehicle's own LL demands.
+            // Since we only have one LL result case (from the rated vehicle), we scale LL demand
+            // proportionally by gross weight: LL_v ≈ LL_rated × (W_v / W_rated).
+            // RF_v = (C − γDC·DC − γDW·DW) / (γLL · LL_v · LLscale)
+            // This is an approximation valid when vehicle geometry is similar; note accordingly.
+            const POSTING_VEHICLES = [
+              {label:'Type 3',   W:25},
+              {label:'Type 3-3', W:40},
+              {label:'Type 3S2', W:36},
+            ];
+            const W_rated = ratingVehicleTon || 36;
+
+            // Per-node posting RFs (take governing node's demands)
+            const gn = govRating;
+            // Rebuild numerator for governing node (consistent with RF formula)
+            // RF_rated = num / (gamLL * LL_rated * LLscale)  → num = RF_rated * gamLL * LL_rated * LLscale
+            // RF_v = num / (gamLL * LL_v * LLscale) = RF_rated * LL_rated / LL_v = RF_rated * W_rated / W_v
+            // → posting tons = RF_v * W_v = RF_rated * W_rated  (same for all! — the constant is C-DC-DW work)
+            // More accurately for individual vehicles, also recompute per-node worst:
+            const computePostRF = (W_v) => {
+              if (!ratingData.length || W_rated<=0) return null;
+              // Scale LL demands by weight ratio at each node, find governing RF
+              const scaled = ratingData.map(p=>{
+                const ratio = W_v / W_rated;
+                const MllposV = p.Mllpos * ratio;
+                const MllnegV = p.Mllneg * ratio;
+                const VllV    = p.Vll    * ratio;
+                const rfMpos = MllposV>0.001 ? (p.CmnPos - gamDC*Math.abs(p.Mdc) - gamDW*Math.abs(p.Mdw)) / (gamLL*MllposV*ratingLLScale) : null;
+                const rfMneg = MllnegV>0.001 ? (p.CmnNeg - gamDC*Math.abs(p.Mdc) - gamDW*Math.abs(p.Mdw)) / (gamLL*MllnegV*ratingLLScaleMn) : null;
+                const rfV    = VllV>0.001    ? (p.Cvn    - gamDC*Math.abs(p.Vdc||0) - gamDW*Math.abs(p.Vdw||0)) / (gamLL*VllV*ratingLLScaleV) : null;
+                return Math.min(...[rfMpos,rfMneg,rfV].filter(v=>v!==null&&isFinite(v)));
+              }).filter(isFinite);
+              return scaled.length ? Math.min(...scaled) : null;
+            };
+
+            return (
+              <div style={{background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:'8px',padding:'14px 16px',marginBottom:'14px'}}>
+                <div style={{fontSize:'13px',fontWeight:'700',color:'#dc2626',marginBottom:'4px'}}>⚠ Load Posting Required — MBE Section 6A.8</div>
+                <div style={{fontSize:'10.5px',color:'#dc2626',fontFamily:'monospace',marginBottom:'10px',opacity:0.8}}>
+                  Operating rating RF and tonnage computed for each posting vehicle by scaling LL demands proportionally to gross weight.
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:'8px'}}>
+                  {POSTING_VEHICLES.map(({label,W})=>{
+                    const rfV = computePostRF(W);
+                    const postTons = rfV!==null ? rfV*W : null;
+                    return (
+                      <div key={label} style={{background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'8px 12px'}}>
+                        <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'2px'}}>{label} · {W} T GVW</div>
+                        <div style={{fontSize:'18px',fontWeight:'700',color:postTons!==null&&postTons>=W?'#059669':'#dc2626',fontFamily:'monospace'}}>
+                          {postTons!==null?postTons.toFixed(1)+' T':'—'}
+                        </div>
+                        <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'1px'}}>
+                          RF={rfV!==null?rfV.toFixed(3):'—'} · {postTons!==null&&postTons>=W?'✓ Adequate':'❌ Post'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Also show rated vehicle for reference */}
+                  <div style={{background:'#fff',border:'1px dashed #fca5a5',borderRadius:'6px',padding:'8px 12px'}}>
+                    <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'2px'}}>
+                      {ratingVehicleName?.replace('AASHTO ','').slice(0,22)||'Rated Vehicle'} (rated)
+                    </div>
+                    <div style={{fontSize:'18px',fontWeight:'700',color:'#dc2626',fontFamily:'monospace'}}>
+                      {govRating.rfTons.toFixed(1)} T
+                    </div>
+                    <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'1px'}}>
+                      RF={govRating.rfGov.toFixed(3)} · {W_rated} T GVW
+                    </div>
+                  </div>
+                </div>
+                <div style={{marginTop:'8px',fontSize:'10.5px',color:'#92400e',fontFamily:'monospace',
+                  background:'#fffbeb',padding:'6px 10px',borderRadius:'4px',border:'1px solid #fde68a'}}>
+                  ⚠ Posting based on proportional LL scaling from rated vehicle demands. For definitive posting values,
+                  run separate MIDAS analyses with each posting vehicle as the live load case.
+                </div>
+              </div>
+            );
+          })()}
+```
+After:
+```jsx
+          {/* ── Posting Check ── */}
+          {govRating&&govRating.rfGov<1&&(()=>{
+            // MBE 6A.8.3 (2026-10-18): posting from each AASHTO legal vehicle's OWN legal-load
+            // rating — the Multi-Vehicle RF from that vehicle's MIDAS result case (Operating column,
+            // Legal γLL per MBE Table 6A.4.4.2.3a-1) — with Eq. 6A.8.3-1. See idxLegalPosting.
+            // Before: the rated vehicle's LL scaled by weight (gave RF_rated × W_rated for every truck).
+            const legalPost = idxLegalPosting(multiVehicleData, ratingMethod);
+            const W_rated = ratingVehicleTon || 36;
+            const f2 = v=>Math.abs(+v||0).toFixed(2);
+            const why = x=>({
+              none:'not computed — no MIDAS result case',
+              lfr:'not computed — LFR (Eq. 6A.8.3-1 is LRFR)',
+              cat:`not computed — rated as ${x.v&&x.v.category}, not Legal`,
+              ok:'RF ≥ 1.0 → no posting',
+              close:'RF ≤ 0.3 → consider closing',
+              post:'❌ Post',
+            })[x.st];
+
+            return (
+              <div style={{background:'#fef2f2',border:'2px solid #fca5a5',borderRadius:'8px',padding:'14px 16px',marginBottom:'14px'}}>
+                <div style={{fontSize:'13px',fontWeight:'700',color:'#dc2626',marginBottom:'4px'}}>⚠ Load Posting — MBE Section 6A.8</div>
+                <div style={{fontSize:'10.5px',color:'#dc2626',fontFamily:'monospace',marginBottom:'10px',opacity:0.8}}>
+                  Posting per MBE Eq. 6A.8.3-1, Posting = (W/0.7)·[(RF) − 0.3] for 0.3 &lt; RF &lt; 1.0, with RF = each legal vehicle's own legal-load rating (Multi-Vehicle tab: its own MIDAS result case, Operating column).
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:'8px'}}>
+                  {legalPost.map(x=>{
+                    const isPost = x.st==='post', isOk = x.st==='ok';
+                    return (
+                      <div key={x.label} style={{background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'8px 12px'}}>
+                        <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'2px'}}>{x.label} · {x.W} T GVW</div>
+                        <div style={{fontSize:'18px',fontWeight:'700',color:isOk?'#059669':(isPost||x.st==='close')?'#dc2626':'#9ca3af',fontFamily:'monospace'}}>
+                          {isPost?x.P.toFixed(1)+' T':isOk?'No posting':'—'}
+                        </div>
+                        <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'1px'}}>
+                          RF={x.RF!=null?x.RF.toFixed(3):'—'} · {why(x)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Also show rated vehicle for reference */}
+                  <div style={{background:'#fff',border:'1px dashed #fca5a5',borderRadius:'6px',padding:'8px 12px'}}>
+                    <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'2px'}}>
+                      {ratingVehicleName?.replace('AASHTO ','').slice(0,22)||'Rated Vehicle'} (rated)
+                    </div>
+                    <div style={{fontSize:'18px',fontWeight:'700',color:'#dc2626',fontFamily:'monospace'}}>
+                      {govRating.rfTons.toFixed(1)} T
+                    </div>
+                    <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'1px'}}>
+                      RF={govRating.rfGov.toFixed(3)} · {W_rated} T GVW · RF × W, not a posting
+                    </div>
+                  </div>
+                </div>
+                {/* Worked: legal-load RF at its governing node, then Eq. 6A.8.3-1 (CLAUDE.md §6) */}
+                <div style={{marginTop:'8px',fontSize:'10px',color:'#374151',fontFamily:'monospace',background:'#fff',
+                  padding:'6px 10px',borderRadius:'4px',border:'1px solid #fecaca',lineHeight:1.6}}>
+                  {legalPost.map(x=>{
+                    const v=x.v, w=v&&v.opWk;
+                    if (!v) return <div key={x.label}>{x.label}: not computed — no MIDAS result case assigned. Select the vehicle in Vehicles, run MIDAS, assign its case in Multi-Vehicle.</div>;
+                    return (
+                      <div key={x.label}>
+                        <strong>{x.label}</strong> ({v.posLC}, {w.act==='M+'?'M⁺':w.act==='M-'?'M⁻':'V'} at N{v.opNode} · {v.opPos.toFixed(2)} ft, {v.category}, γ_LL = {v.gamLLop}):{' '}
+                        RF = (C − γ_DC·DC − γ_DW·DW)/(γ_LL·s·LL) = ({(+w.C).toFixed(1)} − {gamDC}×{f2(w.DC)} − {gamDW}×{f2(w.DW)})/({v.gamLLop}×{(+w.s).toFixed(4)}×{f2(w.LL)}) = {w.rf!=null?w.rf.toFixed(3):'—'}
+                        {x.st==='post'&&<> → Posting = (W/0.7)·(RF − 0.3) = ({x.W}/0.7)×({x.RF.toFixed(3)} − 0.3) = <strong>{x.P.toFixed(1)} T</strong></>}
+                        {x.st==='ok'&&<> → RF ≥ 1.0: no posting for this vehicle</>}
+                        {x.st==='close'&&<> → RF ≤ 0.3: Eq. 6A.8.3-1 does not apply; consider closing the bridge (MBE 6A.8.3)</>}
+                        {x.st==='lfr'&&<> → posting not computed: Eq. 6A.8.3-1 is an LRFR provision; LFR posting (MBE Section 6B or owner method) is not implemented</>}
+                        {x.st==='cat'&&<> → posting not computed: the vehicle is rated as {v.category}; set its category to Legal (γ_LL per MBE Table 6A.4.4.2.3a-1) in Multi-Vehicle</>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <IdxWorkedIn items={[{txt:'Legal-vehicle RFs', label:'AASHTO Rating · Multi-Vehicle',
+                  go:()=>{ setRatingSubTab('table'); }}]}/>
+              </div>
+            );
+          })()}
+```
+5. **Report box** (`generateReportHTML`, after the `cr-see-line` "AASHTO Rating RF …" line, up to `${chartImages?.rating?`). Before:
+```js
+    ${govRating.rfGov<1?`
+    <div style="margin-bottom:14px;padding:10px 14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px">
+      <strong style="color:#991b1b">⚠ Load Posting Required — MBE §6A.8</strong><br/>
+      <div style="margin-top:6px;display:flex;gap:16px;font-size:9.5pt">
+        ${[['Type 3',25],['Type 3-3',40],['Type 3S2',36],[ratingVehicleName||'Rated Vehicle',ratingVehicleTon||36]]
+          .filter((v,i,a)=>a.findIndex(x=>x[0]===v[0])===i)
+          .map(([v,w])=>`<span><strong>${(govRating.rfGov*w).toFixed(1)} T</strong> — ${v}</span>`).join('')}
+      </div>
+    </div>`:''}` : ''}
+```
+After:
+```js
+    ${govRating.rfGov<1?`
+    <div style="margin-bottom:14px;padding:10px 14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px">
+      <strong style="color:#991b1b">⚠ Load Posting — MBE §6A.8</strong><br/>
+      <div style="margin-top:4px;font-size:9pt">Posting per MBE Eq. 6A.8.3-1 from each legal vehicle's own legal-load rating (MBE 6A.4.4; its own MIDAS result case, legal γ<sub>LL</sub> per MBE Table 6A.4.4.2.3a-1). Rated vehicle (${idxEsc(ratingVehicleName||'Rated Vehicle')}, ${ratingVehicleTon||36} T): RF × W = ${govRating.rfTons.toFixed(1)} T (rating tonnage, not a posting).</div>
+      ${(legalPosting||[]).map(x=>{
+        const v=x.v, w=v&&v.opWk, f2=t=>Math.abs(+t||0).toFixed(2);
+        if(!v) return `<div style="margin-top:6px;font-size:9.5pt"><strong>${idxEsc(x.label)} (${x.W} T):</strong> not computed — no MIDAS result case assigned to this vehicle.</div>`;
+        const eqR=`RF = \\frac{C-\\gamma_{DC}\\,DC-\\gamma_{DW}\\,DW}{\\gamma_{LL}\\,s\\,LL} = \\frac{${(+w.C).toFixed(1)}-${gamDC}\\times ${f2(w.DC)}-${gamDW}\\times ${f2(w.DW)}}{${v.gamLLop}\\times ${(+w.s).toFixed(4)}\\times ${f2(w.LL)}} = ${w.rf!=null?w.rf.toFixed(3):'—'}`;
+        const eqP=x.st==='post'?`\\text{Posting} = \\frac{W}{0.7}\\,[RF-0.3] = \\frac{${x.W}}{0.7}\\times(${x.RF.toFixed(3)}-0.3) = ${x.P.toFixed(1)}\\ \\text{T}`:'';
+        const res={post:`Posting = ${x.P!=null?x.P.toFixed(1):''} T (MBE Eq. 6A.8.3-1)`, ok:'RF ≥ 1.0: no posting for this vehicle',
+          close:'RF ≤ 0.3: Eq. 6A.8.3-1 does not apply; consider closing the bridge (MBE 6A.8.3)',
+          lfr:'posting not computed: Eq. 6A.8.3-1 is an LRFR provision; LFR posting (MBE Section 6B or owner method) is not implemented',
+          cat:`posting not computed: the vehicle is rated as ${idxEsc(v.category)}, not Legal`}[x.st];
+        return `<div style="margin-top:6px;font-size:9.5pt"><strong>${idxEsc(x.label)} (${x.W} T):</strong> ${idxEsc(v.posLC)}, ${w.act==='M+'?'M⁺':w.act==='M-'?'M⁻':'V'} at node ${v.opNode} (x = ${v.opPos.toFixed(2)} ft), ${idxEsc(v.category)}, γ<sub>LL</sub> = ${v.gamLLop}, RF = ${x.RF.toFixed(3)}
+          <table class="cr-wk"><tbody><tr><td>${idxTex(eqR,true)}</td></tr>${eqP?`<tr><td>${idxTex(eqP,true)}</td></tr>`:''}</tbody></table>
+          <div><strong>${res}</strong></div></div>`;
+      }).join('')}
+    </div>`:''}` : ''}
+```
+6. **`IDX_REFS_MBE`**: the AASHTO MBE row as quoted above.
+
+#### Check cases (synthetic MIDAS rows, the D11 harness: 4 × 20.25 ft, manual zone Mn⁺ 900, Mn⁻ 700 ft·k, Vn 220 k, φc = φs = φ = 1, LRFR Strength I Inventory, γDC 1.25, γDW 1.50, ADTT 5000)
+- **A. The D11 4-span check case as is** (HL-93 truck + tandem selected, only the HL-93 result cases): HL-93 RF = 0.895 (M⁻, node 131).
+  - Before: report 22.4 / 35.8 / 32.2 T (0.895 × 25 / 40 / 36); app 32.2 / 32.2 / 32.2 T (RF 1.289 "✓ Adequate" / 0.806 / 0.895).
+  - After: Type 3, 3-3, 3S2 "— · not computed — no MIDAS result case" (app and report); rated-vehicle card 32.2 T "RF × W, not a posting" (unchanged value).
+- **B. Same model with Legal Type 3, 3-3 and 3S2 selected and their own result cases** (`AASHTO Legal Type 3_L1(max)/(min)` etc.; legal trucks have DLA 0 in the MCT, so IM 33 % is applied in their rating: s = 1.33; γLL = 1.45 at ADTT 5000). Every truck governs in M⁻ at node 131 (x = 60.75 ft): C = 1 × 1 × 1 × 700.0 = 700.0 ft·k, DC = 36.91, DW = 7.69 ft·k; numerator = 700.0 − 1.25 × 36.91 − 1.50 × 7.69 = 700.0 − 46.14 − 11.54 = 642.33.
+  - Type 3-3 (W = 40 T), LL = 384.44 ft·k: RF = 642.33 / (1.45 × 1.33 × 384.44) = 642.33 / 741.39 = **0.866**; Posting = (40/0.7) × (0.866 − 0.3) = 57.14 × 0.566 = **32.3 T**.
+  - Type 3 (W = 25 T), LL = 307.56: RF = 642.33 / 593.13 = **1.083** ≥ 1.0 → **no posting**.
+  - Type 3S2 (W = 36 T), LL = 1025.17: RF = 642.33 / 1977.04 = **0.325**; Posting = (36/0.7) × (0.325 − 0.3) = 51.43 × 0.025 = **1.3 T**.
+  - Before (this case; the HL-93 RF here is 0.673 because the synthetic case name "LL(max)" is not traceable to one vehicle, so the rating applies IM conservatively — `mctCarriesImpact`, unchanged): app 24.2 / 24.2 / 24.2 T (RF 0.969 / 0.606 / 0.673); report 16.8 / 26.9 / 24.2 T. Multi-Vehicle table identical before and after (Type 3 / 3-3 / 3S2 Op RF 1.083 / 0.866 / 0.325, γLL 1.45).
+- **C. LFR Operating, 2 spans 40 + 50 ft, legal trucks with their own cases** (HL-93 RF 0.381): before app 13.7 T for all three, report 9.5 / 15.2 / 13.7 T. After: no tonnage, "not computed — LFR"; RFs worked, e.g. Type 3: (1500.0 − 1.3 × 224.69 − 1.3 × 67.41)/(1.3 × 0.7980 × 629.84) = 1.715.
+- **D. 3 spans 30/36/30, global DLA 0, quick-calc zone, Poor condition, Operating** (HL-93 only, RF 0.591): before report 14.8 / 23.6 / 21.3 T, app 21.3 T for all three; after "not computed — no MIDAS result case".
+
+#### How verified
+- `node tests/check-syntax.mjs index.html`: all 7 scripts pass (JSX transpiled).
+- `node tests/compare.mjs --tool page --file index.html`: page.text and page.storage identical (only the usual Babel "deoptimised styling" note on both sides).
+- Main vs branch, headless Chromium, same sibling files, six cases (built-in default with no results, A, B, C, D, and C with the HL-93 RF ≥ 1 so no box shows), each imported through "⬇ Import JSON": compared the text of every AASHTO Rating sub-tab (Inputs, Summary, Multi-Vehicle, D/C, Service II, Fatigue, PS Strength I, PS Service III, Report Card), the AREMA Rating, Results and Generate steps, every table cell, tile value and the MCT block of Generate Report, Print AREMA Report, the `bridgeSuite.v1.handoffs` / `demandsKind` payloads written by both design hand-off buttons, and all localStorage. **Only** the posting box text (Inputs & Setup sub-tab and the report) and the report's MBE references row differ; every RF, table, payload and stored key is identical. 0 console errors.
+- Report posting box rendered from the saved report HTML (KaTeX CSS loaded) and looked at; in-app box screenshot looked at; the "Worked in … Multi-Vehicle" link switches to the Multi-Vehicle sub-tab.
+- **Saved data:** none changed. `mct_cfg_v3` (incl. `rating.vehicleLCMap`), `mct_results_*`, the JSON export and every `bridgeSuite.v1.*` key/payload are untouched (compared). The new `opWk` / `p` / `sc` fields and `legalPosting` live in memory only (the Multi-Vehicle CSV writes explicit columns, unchanged).
+- **Other copies:** none (rating code is specific to this tool; the shared `bridgeSuite.v1.*` blocks are not touched).
+
+#### Open items (not changed)
+- **Auto-detect can map Type 3 to the wrong case.** The auto-populate effect and "↺ Auto-detect LCs" use `lc.includes(vn)`; "AASHTO Legal Type 3" is a prefix of "AASHTO Legal Type 3-3" and "…3S2", so when a 3-3 or 3S2 case comes first in the pasted results, Type 3 is rated (and now posted) with the other truck's forces. The worked line shows the case used. Matching `vn + '_'` (as `mctCarriesImpact` does) is a result change: engineer to decide.
+- **Which posting vehicles.** The box covers the three trucks it listed before. SU4–SU7 (and EV2/EV3) are in the library and rated in Multi-Vehicle but are not posted here. Add them?
+- **LFR posting** is not computed (MBE Section 6B / owner method). Which rule?
+- **Owner conventions** (rounding, minimum posting, single vs per-vehicle sign, Service II for steel at legal loads): none are cited in the tool. Owner to confirm.
+- **When the box shows:** still only when the rated vehicle's governing RF < 1. A legal truck with RF < 1 while the rated vehicle passes is visible in Multi-Vehicle but gets no posting box.
+- **Edition:** MBE edition unstated in the tool (verify against the printed edition in use).
