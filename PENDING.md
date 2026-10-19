@@ -28,7 +28,7 @@ Labels relabelled where every cited article checked out: Bridge Geometry (#324),
 - **Spread Footing:** depth factors (option) Vesić vs 10th arctan form, dq ≤ 1.4, Nq term only.
 - **Stone Arch:** 3.6.1.2.6a LLDF 1.15 for buried structures vs tool's rule.
 - **abutment:** As cited to 3.10.4.2 (deleted in 10th); several renumbered articles.
-- **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in) and 14.7.6.4 citation: done 2026-10-19 (engineer approved). Still open: Method B anchorage uses H ≤ P_min/5 labelled 14.7.5.4; the 10th Ed. 14.7.5.4 test is θs/n ≥ 3εa/Si (fixlog E10 open items).
+- **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in) and 14.7.6.4 citation: done 2026-10-19 (engineer approved). Follow-up branch claude/aashto10-elastomeric-2 (awaiting approval): Method B restraint Eq. 14.7.5.4-1, slip check relabelled C14.8.3.1, edge cover ≥ 1/4 in. The default MassDOT pad (0.03 rad tolerance) then needs restraint (D/C 1.17): engineer to confirm (fixlog E10-5).
 - **Gusset:** decided 2026-10-19 (engineer): the LRFR rating keeps the MBE 3rd Ed. φ (0.90 / 1.00 / 0.85); citations corrected to MBE, LRFD 10th 6.5.4.2 design values (0.75 / 0.80 / 0.65) noted as not used; fillers renumbered to 6.13.6.1.4 (#327, fix log C19).
 Full per-tool list (OK / renumbered / changed): agent inventory of 2026-10-19 (session scratchpad aashto-ed/inventory.md).
 

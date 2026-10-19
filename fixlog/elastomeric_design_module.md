@@ -856,3 +856,70 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Owner: MassDOT
 - **Method B anchorage, Art. 14.7.5.4 (10th Ed.):** the 10th Ed. criterion is a strain test (restraint needed when θs/n ≥ 3·εa/Si, Eq. 14.7.5.4-1). The tool's Method B anchorage check is H ≤ P_min/5 (the C14.8.3.1 friction check) labelled 14.7.5.4. Implement Eq. 14.7.5.4-1 (in addition to, or instead of, the friction check), or keep the friction check and relabel it?
 - **Minimum laminate thickness:** 10th Ed. 14.7.5.3.5 sets hs ≥ 0.0747 in.; the tool warns below the MassDOT 0.1196 in. in all cases (more conservative). No change.
 - **Minimum edge cover ¼ in.** (14.7.5.1 / 14.7.6.1): not checked (the tool has no edge-cover input).
+
+## 2026-10-19 — PR: claude/aashto10-elastomeric-2 (10th Ed. follow-up: 14.7.5.4 restraint, slip check, edge cover; engineer decisions on the #328 open items; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 14.7.5.4 (Eq. 14.7.5.4-1), Art. 14.7.5.3.3 (Eqs. 14.7.5.3.3-15 to -17), Art. 14.8.3.1 / C14.8.3.1, Art. 14.7.5.1 / 14.7.6.1 (edge cover).
+
+### E10-5. Method B restraint check, Eq. 14.7.5.4-1   [calc change: new check] [MORE conservative]
+- **Where:** `computeEDM`, after the anchorage block (anchor `// Method B restraint [14.7.5.4, Eq. 14.7.5.4-1]`); dashboard helper `addRes`, called after `addAnc("anc")` (Method B only); new warning `Restraint: θs/n = …`; new render helper `resEq(R)` called after `ancEq(R)` in the Method B panel; `EDM_CARDS.res`, `EDM_DASH2CHK.res`.
+- **Problem:** the 10th Ed. Art. 14.7.5.4 test (a bearing without bonded external plates needs a restraint system when θs/n ≥ 3εa/Si) was not implemented. The tool used H ≤ P_min/5 labelled 14.7.5.4.
+- **Symbols (verified against the 10th Ed.):**
+  - θs = total static + cyclic maximum service design rotation (14.4.2.1), cyclic × 1.75.
+  - εa = total static + cyclic average axial strain, cyclic × 1.75.
+  - n = number of internal layers.
+  - Si = shape factor of the internal layer.
+  - εa from Eq. 14.7.5.3.3-15: εa = σs/(3·Ba·G·Si²), with Ba = 1.6 (Eqs. 14.7.5.3.3-16 rectangular, -17 circular).
+  - σs = σDL + 1.75·σLL.
+- **Before:** (no check).
+- **After:**
+  ```js
+  if(S.method==="B"&&!isPlain()){ const Ba=1.6, sigS=sigDL+1.75*sigLL, epsA=sigS/(3*Ba*G*Sf*Sf), thSL=thSt+1.75*thLongCyclic, thSW=isCirc()?0:thTransW, thS=Math.max(thSL,thSW), lhs=thS/n, rhs=3*epsA/Sf;
+    R.res={Ba,sigS,epsA,thSL,thSW,thS,lhs,rhs,dc:rhs>0?lhs/rhs:Infinity,anchored:!!tg.anchored}; } else R.res=null;
+  ```
+  - Dashboard: `add("res","Restraint θs/n < 3εa/Si [14.7.5.4]",R.res.dc,"θs/n < 3εa/Si")`, or an INFO item when "anchored / doweled" is ticked.
+  - D/C = (θs/n)/(3εa/Si). It counts in nFail and in the governing D/C, and so also in the PAD hand-off `pass` / `govDC`.
+- **Choices to confirm:**
+  - θst is the tool's static rotation including the construction tolerance (circular: the resultant). Rectangular uses the larger of θs about L and the transverse θt about W (static only, with the AASHTO tolerance as in A2).
+  - n is not increased by ½ for cover layers ≥ ½ hri, which is allowed but not required. Not increasing it is conservative.
+  - A bearing with bonded external plates is outside 14.7.5.4 and is secured per 14.8.3.1; the engineer ticks "anchored / doweled".
+- **Check case (default project):** circular D = 16 in, hri = 0.5 in, n = 6, Si = 8.00, G = 0.160 ksi, σDL = 0.3979 ksi, σLL = 0.2735 ksi; θst = 0.010 + 0.030 (MassDOT tolerance) = 0.040; θcy = 0.004.
+  - σs = 0.3979 + 1.75(0.2735) = 0.8766 ksi.
+  - εa = 0.8766/(3 × 1.6 × 0.160 × 8.00²) = 0.8766/49.152 = 0.01783.
+  - θs = 0.040 + 1.75(0.004) = 0.047 rad, so θs/n = 0.00783.
+  - 3εa/Si = 3(0.01783)/8.00 = 0.00669.
+  - D/C = 1.171, so restraint is required (FAIL). The tool shows 1.17.
+  - Same pad with the AASHTO 0.005 tolerance: θs = 0.015 + 0.007 = 0.022; θs/n = 0.00367; D/C = 0.548 (PASS).
+  - Default project before → after: nFail 0 → 1, governing D/C 0.80 → 1.17.
+
+### E10-6. Slip check H ≤ P_min/5 relabelled per 14.8.3.1 / C14.8.3.1, for all pad types   [citation] [no result change]
+- **Where:** `computeEDM` (anchor `// anchorage, slip check`, `R.anc={…}`), `addAnc` item name, the anchorage warning, `ancEq(R)` title, note and check line; the I-4 P_min tooltip; the I-5 anchored label; `EDM_REFS`.
+- The friction coefficient 0.2 of C14.8.3.1 applies to elastomeric bearings in general, not to one design method. So the check stays for Method B as well as Method A and plain pads; only its label changes. For Method B the G used in H is still the specified G, now chosen by `a.mB`.
+- **Before:** `ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"C14.8.3.1"`, name `"Anchorage H ≤ P_min/5 ["+R.anc.ref+"]"`.
+- **After:** `ref:"C14.8.3.1",mB:(S.method==="B"&&!isPlain())`, name `"Slip (friction 0.2) H ≤ P_min/5 ["+R.anc.ref+"]"`. The block title is "Anchorage — slip check, friction coefficient 0.2 (…)" with reference "AASHTO 14.8.3.1 / C14.8.3.1".
+- **Check:** default H = 0.160 × 201.1 × 0.35/3.50 = 3.22 kip; P_min/5 = 16.0 kip; D/C 0.20 before and after.
+
+### E10-7. Edge cover of the steel laminates ≥ ¼ in. (14.7.5.1 / 14.7.6.1)   [new input + check] [MORE conservative only when the input is below ¼ in.]
+- **Where:**
+  - `defaultState().geom.edge = 0.25` (`migrate()` gives older saves 0.25);
+  - `VALID["geom.edge"]`;
+  - I-2 input "Edge cover of steel laminates" (steel-reinforced pads only);
+  - `R.edge`; dashboard `addEdge("edge","14.7.5.1")` (Method B) and `addEdge("edgeA","14.7.6.1")` (Method A);
+  - `edgeEq(R,ref)` after the cover-layer check line in both panels;
+  - input echo row "Edge cover".
+- **The check is pass / fail without a D/C (dc null).** It is a detailing minimum: a D/C of 0.25/c_e would show 1.00 at the usual ¼ in. detail and become the governing D/C of every default pad, which would be misleading. It counts in nFail when it fails.
+- **Saved data:** new field `geom.edge`; older files get 0.25 (same as the MassDOT standard detail); nothing else changes.
+- **Check:** c_e = 0.25 → PASS; c_e = 0.20 → FAIL (nFail +1) with the input advisory.
+
+### Verification
+- `node tests/check-syntax.mjs elastomeric_design_module.html`: all scripts pass.
+- **Headless Chromium, origin/main (ee32a1c) vs branch, 9 scenarios** (default; rectangular; rectangular with AASHTO tolerance and θt 0.004; AASHTO tolerance; Method A; plain; anchored; edge 0.20; an older save without `geom.edge`):
+  - Every other computed value in `LAST` is identical.
+  - The dashboard changes only by the new `res` / `edge` items and the slip-check label.
+  - Restraint numbers match the hand check above; worked block and report result lines checked.
+  - No console errors.
+- `compare.mjs --tool page`: storage differs only by `geom.edge: 0.25`; text by the new check lines.
+
+### Open items (engineer)
+- **Default MassDOT pad:** it now needs restraint by 14.7.5.4. The 0.03 rad construction tolerance makes θs large; with the AASHTO 0.005 tolerance it passes. Should MassDOT designs with the 0.03 tolerance be expected to be anchored, or should the check use another θs basis?
+- **n:** increase by ½ per cover layer ≥ ½ hri (allowed by 14.7.5.4)?
