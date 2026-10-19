@@ -1376,3 +1376,48 @@ Line numbers are approximate; search for the anchor text. The file uses LF line 
 - **Report length:** the report prints every card of the tabs (default: 32 pages, was 23; the extra pages are the cover, references and contents, and one page break per section). Keep it all, or add section toggles later?
 - **3D View no longer prints.** It printed only a live WebGL panel (empty unless the tab had been opened). Confirm it should stay out of the report.
 - **Description** in the print header is the project name (the tool has no description field, and none was added).
+
+## 2026-10-19 — PR: claude/sf-status-chips (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. The file uses LF line endings.
+
+### SF-ST1: dashboard chip status for contact area and for sliding with no horizontal load (status only)
+- **Engineer decision:** 2026-10-19, on the two open items of the D11 entry (2026-10-18) above.
+  1. Contact area: full contact → PASS; partial contact → REVIEW (a warning: bearing and overturning still govern strength); no contact or instability (resultant off the footing) → FAIL.
+  2. Sliding with no net horizontal load: status N/A (it was PASS with the text "N/A — no net horizontal load"), the same N/A the dashboard already uses (overturning not gated, flotation with no water table). N/A is not counted as PASS or FAIL.
+- **What changes for the user:** only the status (colour and PASS / REVIEW / FAIL / N/A word) of these chips, and so the report's result lines and cover banner, which read the chip's own status (`sfdResultRows()` takes the chip's class; `renderPrintHeader()` counts the rows by status; neither was changed). No computed value changes: `R`, `P2`, warnings, self-consistency text, `state` and the saved data are identical (see "How verified"). The banner's "x of y checks" keeps counting every chip in y (unchanged); N/A chips are counted under N/A, as before.
+- **Where:** `renderDashboard()`.
+  1. Sliding chips (anchors `chip('Sliding, x'`, `chip('Sliding, y'`, `chip('Sliding, resultant`): the status argument.
+     - Before: `R.govSlx.FSslx>=FSsl?'pass':'fail'` (likewise `R.govSly.FSsly`, `R.govSlr.FSslr`)
+     - After: `R.govSlx.FSslx===Infinity?'na':(R.govSlx.FSslx>=FSsl?'pass':'fail')` (likewise for y and the resultant)
+     - FS = ∞ is exactly the condition the chip text already used for "N/A — no net horizontal load".
+  2. Contact-area chip (anchor `chip('Contact area'`):
+     - Before:
+       ```js
+        d.appendChild(chip('Contact area','min '+f2(R.minContact*100)+'% of footing',R.minContact>=1-1e-6?'pass':(R.minContact>0?'pass':'fail'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
+       ```
+     - After:
+       ```js
+        /* SF-ST1 (2026-10-19, engineer): full contact PASS; partial contact REVIEW (a warning: bearing and
+           overturning govern strength); no contact or resultant off the footing (anyUnstable) FAIL. */
+        d.appendChild(chip('Contact area','min '+f2(R.minContact*100)+'% of footing'+(anyUnstable?' — resultant off the footing in at least one combination':''),(anyUnstable||R.minContact<=0)?'fail':(R.minContact>=1-1e-6?'pass':'warn'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
+       ```
+     - `anyUnstable` is the existing local of `renderDashboard()` (`R.asd.some(a=>a.bear.mode==='unstable'||a.r.P<=1e-9)`), the same test the Overturning chip fails on.
+     - Why `anyUnstable` is needed: `solveBearing()` returns `{mode:'unstable'}` with no `contactFrac` when the resultant is off the footing, and `R.minContact` counts a missing `contactFrac` as 1, so an unstable footing showed "min 100.00% of footing", PASS. `R.minContact` itself is not changed (a computed value). The chip text gets the suffix " — resultant off the footing in at least one combination" only in that case, so the FAIL is not shown next to an unexplained "100%".
+  3. User Manual §3.1 chip table (anchors `["Sliding x / y",` and `["Contact area",`): rows reworded to the new statuses.
+     - Before: `"(μΣP + Pp)/|ΣH| ≥ target FS, per direction"`; `"informational: minimum contact fraction across service combos; warning issued when < 100%"`.
+     - After: `"(μΣP + Pp)/|ΣH| ≥ target FS, per direction (also the resultant); N/A when there is no net horizontal load"`; `"minimum contact fraction across service combos: PASS at full contact; REVIEW when < 100% (a warning: bearing and overturning govern strength); FAIL with no contact or the resultant off the footing"`.
+- **Provision:** none changed. No formula, factor, unit, target FS or code reference changed; this is the status shown for existing results (pass/fail logic of two dashboard chips, called out per CLAUDE.md §4).
+- **Saved data:** none. No key or saved field added or changed.
+- **Check cases** (default project plus the change listed; main → branch):
+  - **(a) Partial contact:** Wx M_y = 400 kip·ft on Ped 1 and Ped 2. Governing 0.6D + 0.6(+Wx): e/B = 0.31, so e = 3.1 ft > B/6 = 10/6 = 1.67 ft (outside the kern): partial contact. Contact area chip "min 58.35% of footing": PASS → **REVIEW**. Sliding y (no y load) PASS → N/A. Banner "3 of 17 checks FAIL · 12 PASS · 2 N/A" → "3 of 17 checks FAIL · 10 PASS · 1 REVIEW · 3 N/A". Bearing (DCR 1.00, PASS), eccentricity limit (FAIL), one-way shear (FAIL) unchanged.
+  - **(b) No horizontal load:** Wx V_x = 0 on Ped 1 and Ped 2 (no H in any combination). Sliding x, y and resultant "N/A — no net horizontal load …": PASS → **N/A** (3 chips). Banner "1 of 17 checks FAIL · 14 PASS · 2 N/A" → "1 of 17 checks FAIL · 11 PASS · 5 N/A".
+  - **(c) Resultant off the footing:** Wx M_y = 3000 kip·ft on Ped 1 and Ped 2 (0.6D + 0.6(+Wx): e/B = 1.96 > 0.5). Contact area "min 100.00% of footing", PASS → "min 100.00% of footing — resultant off the footing in at least one combination", **FAIL**. Sliding y PASS → N/A. Banner "4 of 17 checks FAIL · 12 PASS · 1 N/A" → "5 of 17 checks FAIL · 10 PASS · 2 N/A".
+  - **Default project:** only Sliding y (no y load) PASS → N/A. Banner "1 of 17 checks FAIL · 14 PASS · 2 N/A" → "1 of 17 checks FAIL · 13 PASS · 3 N/A".
+- **How verified:**
+  - `node tests/check-syntax.mjs "Spread Footing.html"`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file "Spread Footing.html"`: page.storage identical; page.text differs only by the Sliding, y status "PASS" → "N/A". Console errors the same on both sides (the kit holds none of this tool's libraries).
+  - Main vs branch, headless, with the pinned libraries served locally (KaTeX 0.16.11, plotly.js-dist-min 2.35.2, three 0.160.0 from `npm pack`), on the five cases of the D11 entry (default; Direct load mode; water table + AASHTO e ≤ B/3 + gated overturning + passive + top mats + third pedestal + moments; direct net q_a with failures; input error B = 0) and check cases (a)–(c): `R` and `P2` (functions dropped), warnings, self-consistency text, `state` and localStorage identical in every case, 0 console errors. Chip by chip, only the statuses listed above differ (and the contact chip text in (c)); the report's result lines differ only in those statuses, the banner only in its counts. The water-table case (horizontal load in x and y, full contact) and the input-error case are unchanged.
+  - Screenshots of the dashboard (main and branch) for (a), (b), (c) looked at: REVIEW chip amber, N/A chips grey.
+- **Other copies:** none.
+- **Resolves** the D11 entry's open items "Contact-area chip" and "Sliding chips with no horizontal load".

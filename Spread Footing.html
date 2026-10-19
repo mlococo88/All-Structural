@@ -1413,12 +1413,14 @@ function renderDashboard(){
  if(R.eccChk&&R.eccChk.gov){const e=R.eccChk;
   d.appendChild(chip('Eccentricity limit',e.lab+' \u2014 max e/B = '+f2(Math.max(e.gov.ratX,e.gov.ratY))+' ('+e.gov.name+')',
    e.ok?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-ecc'}));}
- d.appendChild(chip('Sliding, x',(R.govSlx.FSslx===Infinity?'N/A \u2014 no net horizontal load in x':'FS = '+f2(R.govSlx.FSslx)+' (min '+f2(FSsl)+')'),R.govSlx.FSslx>=FSsl?'pass':'fail',R.asd.indexOf(R.govSlx),{tab:'tab-stab',sec:'o-st-slide'}));
- d.appendChild(chip('Sliding, y',(R.govSly.FSsly===Infinity?'N/A \u2014 no net horizontal load in y':'FS = '+f2(R.govSly.FSsly)+' (min '+f2(FSsl)+')'),R.govSly.FSsly>=FSsl?'pass':'fail',R.asd.indexOf(R.govSly),{tab:'tab-stab',sec:'o-st-slide'}));
- d.appendChild(chip('Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)',(R.govSlr.FSslr===Infinity?'N/A \u2014 no net horizontal load':'FS = '+f2(R.govSlr.FSslr)+' (min '+f2(FSsl)+')'),R.govSlr.FSslr>=FSsl?'pass':'fail',R.asd.indexOf(R.govSlr),{tab:'tab-stab',sec:'o-st-slide'}));
+ d.appendChild(chip('Sliding, x',(R.govSlx.FSslx===Infinity?'N/A \u2014 no net horizontal load in x':'FS = '+f2(R.govSlx.FSslx)+' (min '+f2(FSsl)+')'),R.govSlx.FSslx===Infinity?'na':(R.govSlx.FSslx>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSlx),{tab:'tab-stab',sec:'o-st-slide'}));
+ d.appendChild(chip('Sliding, y',(R.govSly.FSsly===Infinity?'N/A \u2014 no net horizontal load in y':'FS = '+f2(R.govSly.FSsly)+' (min '+f2(FSsl)+')'),R.govSly.FSsly===Infinity?'na':(R.govSly.FSsly>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSly),{tab:'tab-stab',sec:'o-st-slide'}));
+ d.appendChild(chip('Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)',(R.govSlr.FSslr===Infinity?'N/A \u2014 no net horizontal load':'FS = '+f2(R.govSlr.FSslr)+' (min '+f2(FSsl)+')'),R.govSlr.FSslr===Infinity?'na':(R.govSlr.FSslr>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSlr),{tab:'tab-stab',sec:'o-st-slide'}));
  if(R.flot)d.appendChild(chip('Flotation','FS = '+f2(R.flot.FS)+' (min '+f2(FSfl)+')',R.flot.FS>=FSfl?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-flot'}));
  else d.appendChild(chip('Flotation','No water table above base','na',undefined,{tab:'tab-stab',sec:'o-st-flot'}));
- d.appendChild(chip('Contact area','min '+f2(R.minContact*100)+'% of footing',R.minContact>=1-1e-6?'pass':(R.minContact>0?'pass':'fail'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
+ /* SF-ST1 (2026-10-19, engineer): full contact PASS; partial contact REVIEW (a warning: bearing and
+    overturning govern strength); no contact or resultant off the footing (anyUnstable) FAIL. */
+ d.appendChild(chip('Contact area','min '+f2(R.minContact*100)+'% of footing'+(anyUnstable?' \u2014 resultant off the footing in at least one combination':''),(anyUnstable||R.minContact<=0)?'fail':(R.minContact>=1-1e-6?'pass':'warn'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
  d.appendChild(chip('Rigidity (rigid method)','\u03bb\u2113 = '+f2(Math.max(R.rig.vx,R.rig.vy))+' vs \u03c0/4 = '+f2(R.rig.limit),R.rig.rigid?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-rig'}));
  /* Only INPUT errors belong in the input-validation chip. A design failure (eccentricity
     limit, off-footing resultant) is an error, but it has its own chip and should not be
@@ -4931,9 +4933,9 @@ manPart("p3","3. Output Reference",[
 {tbl:{head:["Chip","Criterion"],rows:[
  ["Bearing (service)","max over service combos of qmax/qallow (direct) or qeff/qallow (Vesi\u0107) \u2264 1"],
  ["Overturning","min over combos & edges of Mr/Mo \u2265 target FS"],
- ["Sliding x / y","(\u03bc\u03a3P + Pp)/|\u03a3H| \u2265 target FS, per direction"],
+ ["Sliding x / y","(\u03bc\u03a3P + Pp)/|\u03a3H| \u2265 target FS, per direction (also the resultant); N/A when there is no net horizontal load"],
  ["Flotation","\u03a3P(min dead)/U \u2265 target FS when U > 0"],
- ["Contact area","informational: minimum contact fraction across service combos; warning issued when < 100%"],
+ ["Contact area","minimum contact fraction across service combos: PASS at full contact; REVIEW when < 100% (a warning: bearing and overturning govern strength); FAIL with no contact or the resultant off the footing"],
  ["Rigidity","\u03bb\u2113 \u2264 \u03c0/4 both directions \u2014 gate for everything else (\u00a70.3.1)"],
  ["Input validation","no blocking input errors"],
  ["Flexure / One-way shear / Punching","max DCR over LRFD combos \u2264 1"],
