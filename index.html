@@ -11772,7 +11772,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     setCapZones([...capZones, z]);
   };
   const removeCapZone = id => { if(capZones.length>1) setCapZones(capZones.filter(z=>z.id!==id)); };
-  const updateCapZone = (id, field, val) => setCapZones(capZones.map(z=>z.id===id?{...z,[field]:val}:z));
+  const updateCapZone = (id, field, val) => setCapZones(capZones.map(z=>z.id!==id?z:
+    // A manual zone kept from ST-Girder (STDISC): entering Mn+, Mn- or Vn replaces its station table by the values entered.
+    (z.fromST&&Array.isArray(z.stations)&&['MnPos','MnNeg','Vn'].includes(field))?{...z,[field]:val,stations:null}:{...z,[field]:val}));
   const syncCapToSecZones = () => {
     if (!cfg?.sectionZones?.length) return;
     const DLL = cfg.deadLoadLabels||{};
@@ -11823,7 +11825,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     if (!capZones.length) return {MnPos:500,MnNeg:500,Vn:150};
     const z = capZones.find(z=>xPos>=parseFloat(z.startX)-0.001&&xPos<parseFloat(z.endX)+0.001)
            || capZones[capZones.length-1];
-    if (z.type==='design') {
+    if (capZoneTab(z)) {   // design-app zone, or a manual zone kept from ST-Girder with its station table (STDISC)
       // The design apps publish φMn / φVn with their own φ already included, so divide the
       // rating's φf/φv back out here — C = φc·φs·φf·(φMn/φf) = φc·φs·φMn. Condition and
       // system factors still apply; the rating φ inputs are neutralized for this zone.
@@ -12299,7 +12301,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
       const z = capZones.find(z=>xPos>=parseFloat(z.startX)-0.001&&xPos<parseFloat(z.endX)+0.001)
              || capZones[capZones.length-1];
-      const zDes  = z&&z.type==='design' ? designCapAt(z,xPos) : null;   // per-node Sx/Fy from the design app
+      const zDes  = capZoneTab(z) ? designCapAt(z,xPos) : null;   // per-node Sx/Fy from the design app
       const Fyf   = zDes ? zDes.Fy    : (z?.Fy     || 50);
       const SxPos = zDes ? zDes.SxPos : (z?.SxPos  || 0);
       const SxNeg = zDes ? zDes.SxNeg : (z?.SxNeg  || 0);
@@ -12391,7 +12393,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
       const z = capZones.find(z=>xPos>=parseFloat(z.startX)-0.001&&xPos<parseFloat(z.endX)+0.001)
              || capZones[capZones.length-1];
-      const zDesF  = z&&z.type==='design' ? designCapAt(z,xPos) : null;  // per-node Sx from the design app
+      const zDesF  = capZoneTab(z) ? designCapAt(z,xPos) : null;  // per-node Sx from the design app
       const SxPos  = zDesF ? zDesF.SxPos : (z?.SxPos || 0);
       const SxNeg  = zDesF ? zDesF.SxNeg : (z?.SxNeg || 0);
       // Per-zone category overrides global default
@@ -14496,7 +14498,11 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         style={{marginTop:'8px',background:'#fff',border:'1px solid #e5e7eb',borderRadius:'5px',
                           color:'#6b7280',padding:'4px 12px',cursor:'pointer',fontSize:'11px'}}>↩ Revert to manual zones</button>
                     </div>);})()
-                  :z.type==='manual'?(
+                  :z.type==='manual'?(<div>
+                    {z.fromST&&<div style={{fontSize:'10.5px',color:'#92400e',lineHeight:1.55,background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'5px',padding:'7px 10px',marginBottom:'8px'}}>
+                      <b>{stCapFlag(z.fromST)}.</b>
+                      {capZoneTab(z)?<span> The rating still uses the per-station table this zone held ({z.stations.length} stations, interpolated linearly; φ already included, so the rating φ<sub>f</sub>/φ<sub>v</sub> are neutralized for this zone). Mn⁺, Mn⁻ and Vn below show its smallest values; entering one of them replaces the table by the values entered.</span>:<span> Its station table was replaced by the values entered below.</span>}
+                    </div>}
                     <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
                       {[['Mn⁺ (ft·k)','MnPos'],['Mn⁻ (ft·k)','MnNeg'],['Vn (kips)','Vn']].map(([lbl,field])=>(
                         <div key={field}>
@@ -14506,7 +14512,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         </div>
                       ))}
                     </div>
-                  ):(
+                  </div>):(
                     <div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'6px',marginBottom:'6px'}}>
                         {[['Fy (ksi)','Fy'],['Zx⁺ (in³)','ZxPos'],['Zx⁻ (in³)','ZxNeg'],['Aw (in²)','Aw']].map(([lbl,field])=>(
@@ -20185,7 +20191,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
             <td>${i+1}</td>
             <td class="mono">${parseFloat(z.startX).toFixed(3)}</td>
             <td class="mono">${parseFloat(z.endX).toFixed(3)}</td>
-            <td>${z.type==='quickcalc'?`Fy=${z.Fy}ksi Zx+=${z.ZxPos} Zx-=${z.ZxNeg} Aw=${z.Aw}`:'Manual'}${cap._basis?`<br/><span style="font-size:8pt;color:#6b7280">Mn⁺ ${cap._basis.pos} · Mn⁻ ${cap._basis.neg} · Vn ${cap._basis.v}</span>`:''}${(cap._warn||[]).map(w=>`<br/><span style="font-size:8pt;color:#b91c1c">⚠ ${w}</span>`).join('')}</td>
+            <td>${z.type==='quickcalc'?`Fy=${z.Fy}ksi Zx+=${z.ZxPos} Zx-=${z.ZxNeg} Aw=${z.Aw}`:'Manual'}${z.fromST?`<br/><span style="font-size:8pt;color:#92400e">${stCapFlag(z.fromST)}${capZoneTab(z)?'; per-station table kept':''}</span>`:''}${cap._basis?`<br/><span style="font-size:8pt;color:#6b7280">Mn⁺ ${cap._basis.pos} · Mn⁻ ${cap._basis.neg} · Vn ${cap._basis.v}</span>`:''}${(cap._warn||[]).map(w=>`<br/><span style="font-size:8pt;color:#b91c1c">⚠ ${w}</span>`).join('')}</td>
             <td class="mono">${cap.MnPos.toFixed(1)}</td>
             <td class="mono">${cap.MnNeg.toFixed(1)}</td>
             <td class="mono">${cap.Vn.toFixed(1)}</td>
@@ -20975,37 +20981,45 @@ function EmbedTrouble({app,name,health,onUse,onClose}){
     </div>);
 }
 
-/* Project data saved by an older build that the 2026-10-04 library corrections (F1, F2, F5)
-   could not rewrite, because it is user data (sweep IDX-O15). Returns one line per item;
-   shown once per load as a dismissible notice. Nothing is changed automatically. */
-/* ST-Girder capacity (engineer decision 2026-10-19, fixlog/index.md STDISC). MCT no longer uses capacity
-   published by ST-Girder: such a payload is not offered or adopted (capFromST), and a saved capacity zone
-   fed by ST-Girder (type 'design', producer 'ST-Girder') is replaced on load by MCT's own default manual
-   zone over the same extent (the zone "↩ Revert to manual zones" gives). Each replacement is listed in a
-   notice kept in mct_stcap_notice_v1 until it is dismissed. Zones fed by PS-Beam are unchanged. */
+/* ST-Girder capacity (engineer decisions 2026-10-19, fixlog/index.md STDISC). MCT no longer receives capacity
+   from ST-Girder: such a payload is not offered or adopted (capFromST). A saved capacity zone fed by ST-Girder
+   (type 'design', producer 'ST-Girder') becomes an ordinary MCT manual zone that KEEPS every value it held
+   (same span, the per-station phiMn+ / phiMn- / phiVn table and all other fields), flagged z.fromST
+   ("formerly from ST-Girder, no longer updated"). capZoneTab() treats it exactly like the design zone, so the
+   rating is unchanged; Mn+ / Mn- / Vn are pre-filled with the table's smallest values, and editing one of
+   them drops the table (the values entered then govern). Each conversion is listed in a notice kept in
+   mct_stcap_notice_v1 until it is dismissed. Zones fed by PS-Beam are unchanged. */
 const MCT_STCAP_KEY='mct_stcap_notice_v1';
 function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html')); }
 function stCapRead(){ try{ const a=JSON.parse(localStorage.getItem(MCT_STCAP_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 function stCapAdd(notes){ if(!notes||!notes.length) return;
   try{ localStorage.setItem(MCT_STCAP_KEY,JSON.stringify(stCapRead().concat(notes))); }catch(e){}
   try{ window.dispatchEvent(new Event('mct-stcap')); }catch(e){} }
+/* The zone interpolates a per-station capacity table: a design-app zone, or a manual zone kept from ST-Girder. */
+function capZoneTab(z){ return !!z&&(z.type==='design'||(z.type==='manual'&&!!z.fromST&&Array.isArray(z.stations)&&z.stations.length>0)); }
+function stCapFlag(f){ f=f||{}; return 'formerly from ST-Girder'+[f.memberKey,f.producedAt?'sent '+String(f.producedAt).slice(0,16).replace('T',' '):'',f.project?'project "'+f.project+'"':''].filter(Boolean).map((t,i)=>(i?', ':' (')+t).join('')+(f.memberKey||f.producedAt||f.project?')':'')+', no longer updated \u2014 check and edit as needed'; }
 function capDropST(zones,where){
   if(!Array.isArray(zones)||!zones.some(z=>z&&z.type==='design'&&capFromST(z))) return zones;
   const notes=[];
   const out=zones.map((z,i)=>{
     if(!(z&&z.type==='design'&&capFromST(z))) return z;
-    const n=Array.isArray(z.stations)?z.stations.length:0;
+    const st=Array.isArray(z.stations)?z.stations:[], n=st.length;
+    const mn=(k,abs)=>n?Math.min.apply(null,st.map(s=>abs?Math.abs(+s[k]||0):(+s[k]||0))):0;
+    const fromST={producer:z.producer||'ST-Girder', producedAt:z.producedAt||'', project:z.project||'', memberKey:z.memberKey||''};
     notes.push((where?where+': ':'')+'capacity zone '+(i+1)+' ('+(+z.startX||0)+' to '+(+z.endX||0)+' ft) held the \u03c6Mn / \u03c6Vn envelope from ST-Girder'
       +(z.memberKey?' ('+z.memberKey+')':'')+(z.producedAt?', sent '+String(z.producedAt).slice(0,16).replace('T',' '):'')+', '+n+' station'+(n===1?'':'s')
-      +'. It was replaced by a manual zone with MCT\u2019s default inputs (Mn\u207a = Mn\u207b = 500 ft\u00b7k, Vn = 150 kip). These are placeholders: enter this girder\u2019s capacity (Manual, Steel Calc or Composite) in AASHTO Rating before using the steel rating.');
-    return {id:'cap'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,4), startX:z.startX, endX:z.endX,
-      type:'manual', MnPos:500, MnNeg:500, Vn:150, Fy:50, ZxPos:0, ZxNeg:0, Aw:0, SxPos:0, SxNeg:0,
-      aremaComps:null, outToOut:42, holeDiam:1, holePitch:3, holeGage:1.5, holesInChain:0, unbracedL:240, ryc:0, autoRyc:true};
+      +'. The values were kept: it is now an ordinary MCT manual zone with the same numbers (the same per-station table over the same span, so the rating is unchanged), flagged \u201c'+stCapFlag(fromST)+'\u201d.');
+    // every field kept; only the type changes and the provenance flag is added
+    return {...z, type:'manual', fromST,
+      MnPos:+mn('phiMn_pos').toFixed(1), MnNeg:+mn('phiMn_neg',true).toFixed(1), Vn:+mn('phiVn').toFixed(1)};
   });
   stCapAdd(notes);
   return out;
 }
 
+/* Project data saved by an older build that the 2026-10-04 library corrections (F1, F2, F5)
+   could not rewrite, because it is user data (sweep IDX-O15). Returns one line per item;
+   shown once per load as a dismissible notice. Nothing is changed automatically. */
 function staleProjectNotes(cfg){
   const out=[];
   try{
@@ -22174,11 +22188,11 @@ function App() {
               <div style={{margin:'0 0 14px',padding:'10px 14px',borderRadius:'8px',border:'1px solid #fde68a',
                 borderLeft:'4px solid #d97706',background:'#fffbeb',fontSize:'12px',color:'#92400e',lineHeight:1.5}}>
                 <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                  <b>⚠ Capacity from ST-Girder is no longer used (engineer decision 2026-10-19)</b>
+                  <b>⚠ Capacity from ST-Girder is no longer updated (engineer decision 2026-10-19)</b>
                   <button onClick={()=>{ try{ localStorage.removeItem(MCT_STCAP_KEY); }catch(e){} setStCapNotes([]); }} style={{marginLeft:'auto',background:'#fff',border:'1px solid #fcd34d',
                     borderRadius:'5px',color:'#92400e',padding:'3px 10px',cursor:'pointer',fontSize:'11px'}}>Dismiss</button>
                 </div>
-                <div style={{marginTop:'4px'}}>ST-Girder is now connected to GirderDetail only, so the MCT steel rating takes its capacity from MCT's own capacity zones. Saved data changed:</div>
+                <div style={{marginTop:'4px'}}>ST-Girder is now connected to GirderDetail only, so MCT no longer receives its capacity. Capacity zones that came from ST-Girder were kept with the same values as MCT manual zones (ratings unchanged); check and edit them in AASHTO Rating as needed:</div>
                 <ul style={{margin:'6px 0 0 18px'}}>{stCapNotes.map((t,i)=><li key={i}>{t}</li>)}</ul>
               </div>
             )}
