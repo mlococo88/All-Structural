@@ -14677,3 +14677,260 @@ index 1ffcec3..839cdb5 100644
 +      }), React.createElement(PdWorkedIn, { I: I, items: [r.group.capBasis === "hpile" ? { mod: "01", txt: "per-pile \u03c6R_n", title: "Geotechnical Axial \u2014 Tip + Skin (Static)" } : { mod: "01", txt: "per-pile bond P_n", title: "Geotechnical Resistance \u2014 Axial Bond" }] }))),
  
 ```
+
+## 2026-10-19 — PR: claude/aashto10-pile (PR link added after merge)
+
+AASHTO LRFD 10th Ed. (2024) gap fixes from the 2026-10-19 edition inventory (section "Pile Designer"). Every provision below was checked against the 10th Ed. text (Section 10, pp. 10-117 / 10-118; Section 6, Art. 6.5.4.2).
+
+### ET1. H-pile groups in cohesive soil: group efficiency η per 10th Ed. Art. 10.7.3.9   [calc change] [H-pile groups, cohesive profiles only; LESS conservative in two cases, see below]
+- **Function / anchor:** `hpGroupAashto` (anchor `function hpGroupAashto({ layers, zTop, zToe, s_dia, capContact })`), the lines after `const surfaceSoft = surfClay && surfSu < HP_SOFT_SU_KSF;`.
+- **Before:**
+  ```js
+  const contactEff = !!capContact && !surfaceSoft;
+  let eta, etaCase;
+  if (!cohesive) { eta = 1.0; etaCase = "cohesionless"; }
+  else if (contactEff) { eta = 1.0; etaCase = "cohesive, cap in contact"; }
+  else {
+    eta = s_dia <= 2.5 ? 0.65 : (s_dia >= 6 ? 1.0 : 0.65 + 0.35 * (s_dia - 2.5) / 3.5);
+    etaCase = capContact ? "cohesive, soft surface soil (treated as not in contact)" : "cohesive, cap not in contact";
+  }
+  ```
+- **After:**
+  ```js
+  // ET1 (2026-10-19): 10th Ed. 10.7.3.9 -- reduce only when the cap is NOT in firm contact AND the
+  // surface soil is soft. contactEff = true means no reduction (eta = 1.0).
+  const contactEff = !!capContact || !surfaceSoft;
+  let eta, etaCase;
+  if (!cohesive) { eta = 1.0; etaCase = "cohesionless"; }
+  else if (contactEff) { eta = 1.0; etaCase = capContact ? "cohesive, cap in firm contact" : "cohesive, cap not in contact, surface soil not soft"; }
+  else {
+    eta = s_dia <= 2.5 ? 0.65 : (s_dia >= 6 ? 1.0 : 0.65 + 0.35 * (s_dia - 2.5) / 3.5);
+    etaCase = "cohesive, cap not in contact, soft surface soil";
+  }
+  ```
+  The block comment above `HP_BLOCK_PHI` and the comment in `computeAll` (anchor `// cohesive 0.65 at 2.5B -> 1.0 at 6B`) describe the new rule. The η narrative in Module 11 (on screen) and in report section "Pile Group — Axial Efficiency & Block Failure" (anchor `"AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles`) and the Group options hint (anchor `cap contact matters only in cohesive soil`) state the new rule. The worked lines (cap contact, surface S_u, case → η = 0.65 + 0.35 × (s/B − 2.5)/3.5 or η = 1.0) are unchanged and show the new case text.
+- **Problem:** the tool reduced η unless the cap was in firm contact AND the surface soil was not soft. The 10th Ed. reduces η only when the cap is not in firm contact AND the surface soil is soft; in every other case there is no reduction. The tool therefore reduced η in two cases where the 10th Ed. does not: (a) cap in firm contact over soft surface clay; (b) cap not in contact over surface soil that is not soft. The fix is **less conservative** in those two cases and changes nothing else.
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.7.3.9 (pile groups in compression, cohesive soil: η = 0.65 at 2.5 diameters, 1.0 at 6.0 diameters, linear between; applies only when the cap is not in firm contact and the surface soil is soft).
+- **Saved data:** none. `hpCapContact` keeps its meaning (missing = true, in contact). Old projects open unchanged; their η changes only in cases (a) and (b).
+- **Check case (hand + tool, headless):** H-pile, 3 × 3 group, s = 3B (`groupSpacingDia` 3), default H-pile section and embedded length, soil: clay 0–15 ft (α = 0.9) over stiff clay S_u = 2.0 ksf (α = 0.6). Spacing term: η = 0.65 + 0.35 × (3.0 − 2.5)/3.5 = 0.65 + 0.05 = **0.700**.
+
+  | Case | cap in firm contact | surface S_u (ksf) | η before | η after | per-pile φR_n (kip) | η·Σφ R_n before → after (kip) |
+  |---|---|---|---|---|---|---|
+  | A | yes | 0.40 (soft) | 0.700 | **1.000** | 49.1 | 0.700 × 9 × 49.1 = 309.4 → 1.000 × 9 × 49.1 = 442.0 |
+  | B | no | 0.40 (soft) | 0.700 | 0.700 (unchanged) | 49.1 | 309.4 → 309.4 |
+  | C | no | 1.50 (not soft) | 0.700 | **1.000** | 73.8 | 0.700 × 9 × 73.8 = 465.1 → 664.4 |
+  | D | yes | 1.50 (not soft) | 1.000 | 1.000 (unchanged) | 73.8 | 664.4 → 664.4 |
+
+  The tool (Module 11, Group tab) shows exactly these η and η·ΣφR_n values on both versions. The block check is unchanged (individual piles govern in all four cases).
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`; main vs branch in headless Chromium (React 18.3.1 and Plotly 2.32.0 are not in `tests/libs`, so the check routed React 18.2.0 and Plotly 2.27.0 from `tests/libs`, the same on both sides): `computeAll()` on 11 inputs (default micropile, micropile group, default H-pile, H-pile group in sand, cases A–D, IAB default / MassDOT preset / CTDOT preset). Only cases A and C change a number (`eta`, `eta_auto`, `Pn_geo_group`, `phiPn_geo_group`, `phiEtaSum`, `phiGroupBond`); all other differences are text (`etaCase`, `pmSourceLabel`).
+- **Other copies:** none.
+
+### ET2. Block failure equation numbers (renumber, no calc change)
+- **Where:** `hpGroupAashto` block comment (anchor `Block failure (cohesive groups only)`), report and Module 11 block narrative (anchor `pile group in cohesive soil (`), the block note (anchor `Group resistance (AASHTO 10.7.3.9, cohesive soil)`).
+- **Before:** "Eq. 10.7.3.9-2 / -3 / -4 (verify numbering)"; "(verify equation numbers and φ_g)"; "Verify the equations, N_c and φ_g = 0.60 against the edition in use."
+- **After:** "Eqs. C10.7.3.9-1 / -2 / -3"; "(Eqs. C10.7.3.9-1 to -3; φ_g)"; "φ_g = 0.60 (Table 10.5.5.2.3-1, block failure in clay)."
+- **Provision:** 10th Ed. Eqs. C10.7.3.9-1 (Q_g = (2X + 2Y) Z S̄_u + X Y N_c S_u), C10.7.3.9-2 (N_c = 5 (1 + 0.2X/Y)(1 + 0.2Z/X), Z/X ≤ 2.5), C10.7.3.9-3 (N_c = 7.5 (1 + 0.2X/Y), Z/X > 2.5): the same expressions as the tool (X/(5Y) = 0.2X/Y). Table 10.5.5.2.3-1, block failure in clay φ_b1 = 0.60 (= `HP_BLOCK_PHI`). The tool's "N_c ≤ 9" cap is not in the 10th Ed. equations but cannot bind with X ≤ Y (maximum 5 × 1.2 × 1.5 = 9.0), so results are unaffected; noted in the comment.
+
+### ET3. Edition label and "(verify)" flags (text only)
+- Header comment (anchor `All structural references AASHTO LRFD BDS 10th Ed (2024)`): "[relabelled from 9th Ed; article numbers to be confirmed by the EOR]" removed.
+- `pileRefs` (anchor `const ed = "AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)`): before `… 10th Ed. (2024) — the tool relabelled its cites from the 9th Ed.; article numbers to be confirmed by the EOR`; after `… 10th Ed. (2024)`. Every article and table listed in the references rows was checked to exist in the 10th Ed. with the subject the tool cites. Integral-abutment mode with the agency preset MassDOT or CTDOT (follow the owner): the AASHTO row reads "… 10th Ed. (2024) (calculations follow the 10th Ed.; the MassDOT / CTDOT bridge manual is written to the 9th Ed.)"; the report cover basis line adds "(MassDOT / CTDOT manual written to the 9th Ed.)" (anchor `const basisTxt = I.pileType === "iab"`). No preset: unchanged 10th Ed. text.
+- "(verify)" cleared only where checked: Art. 10.7.3.9 (narratives, block note, cohesionless note), Table 10.5.5.2.3-1 block φ 0.60 (`HP_BLOCK_PHI` comment), Table 10.7.2.4-1 p-multipliers (3B 0.8 / 0.4 / 0.3, 5B 1.0 / 0.85 / 0.7: `GROUP_PM_SRC_LABEL.aashto`, the F29 comment, the Module 11 note, the references row). Kept: the "soft" limit S_u < 0.50 ksf (the tool's choice; AASHTO gives no number), 10.7.3.13.4 fixity, and every other flag not checked here.
+- `GROUP_PM_SRC_LABEL` is display text only (not saved).
+
+### Open items (not changed; engineer to decide)
+- **O20 φ_c default 0.80** (`DEFAULT_INPUTS.phiC`, micropile casing/CFST axial and Module 05 interaction). 10th Ed. Art. 6.5.4.2: φ_c = 0.95 steel only, 0.90 composite columns and CFSTs. Not changed. Effect on the default micropile project (STL = 86 kip, P_n,col = 634.4 kip): φ_c 0.80 → P_r = 507.5 kip, P_u/P_r = 0.169, interaction 0.494; φ_c 0.90 → 570.9 kip, 0.151, 0.475; φ_c 0.95 → 602.7 kip, 0.143, 0.467. The default is 11 % (vs 0.90) or 16 % (vs 0.95) conservative on P_r.
+- **Surface soil "soft" when the surface layer is cohesionless** (cohesive profile by thickness, sand or silt at the top of the embedded length, cap not in contact): the tool's definition of "soft" covers only cohesive layers with S_u < 0.50 ksf, so this case now gets η = 1.0 (before: reduced). Confirm, or say if loose cohesionless surface soil should count as soft.
+- **"Soft" limit S_u < 0.50 ksf** (`HP_SOFT_SU_KSF`): the tool's choice; it now decides whether η is reduced (cap not in contact). Confirm the limit.
+- **Cohesionless groups below 2.5B:** 10th Ed. 10.7.3.9 sets η = 1.0 in cohesionless soil for c/c spacing of 2.5 diameters or more; the tool uses η = 1.0 at any spacing (existing F34 behaviour; no warning for cohesionless groups below 2.5B, the `below25` note shows only for cohesive groups). Not changed; say whether a warning or a reduction is wanted below 2.5B.
+
+### Appendix — unified diff (exact before/after, `Pile Designer.html`)
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 839cdb5..3fe2706 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -1350,3 +1350,3 @@ const blankInputsMsg = keys => "blank or invalid input" + (keys.length > 1 ? "s
+    CALC ENGINE  — mirrors GeoEngineers reference (Derby-Shelton)
+-   All structural references AASHTO LRFD BDS 10th Ed (2024) [relabelled from 9th Ed; article numbers to be confirmed by the EOR],
++   All structural references AASHTO LRFD BDS 10th Ed (2024),
+    micropile provisions FHWA NHI-05-039.
+@@ -2114,11 +2114,13 @@ function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSa
+    cohesive (the cohesive rules are the more conservative). Mixed profiles are flagged.
+-   Group efficiency eta:
++   Group efficiency eta (AASHTO LRFD 10th Ed. Art. 10.7.3.9; ET1, 2026-10-19):
+      cohesionless: eta = 1.0.
+-     cohesive: cap in firm contact with the ground and the soil at the surface not soft
+-       -> eta = 1.0; otherwise (cap not in firm contact, or soft surface soil, which is
+-       treated as not in contact) eta = 0.65 at s = 2.5B rising linearly to 1.0 at 6B
+-       (0.65 below 2.5B, 1.0 above 6B).
++     cohesive: eta is reduced ONLY when the cap is NOT in firm contact with the ground
++       AND the soil at the surface is soft: eta = 0.65 at s = 2.5B rising linearly to
++       1.0 at 6B (0.65 below 2.5B, 1.0 above 6B). Cap in firm contact (any surface soil),
++       or cap not in contact with surface soil that is not soft -> eta = 1.0.
++       (Before ET1: eta = 1.0 only for cap in contact AND surface not soft.)
+      "soft" surface soil: the layer at the top of the embedded length is cohesive with
+-       S_u < 0.50 ksf (soft / very soft consistency, Terzaghi & Peck; verify).
+-   Block failure (cohesive groups only), Eq. 10.7.3.9-2 / -3 / -4 (verify numbering):
++       S_u < 0.50 ksf (soft / very soft consistency, Terzaghi & Peck; verify). A
++       cohesionless surface layer is not "soft" by this definition.
++   Block failure (cohesive groups only), Eqs. C10.7.3.9-1 / -2 / -3:
+      R_g = (2X + 2Y) Z S_u,avg + X Y N_c S_u,base
+@@ -2129,6 +2131,7 @@ function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSa
+      N_c = 7.5 (1 + X/(5Y))             for Z/X >  2.5   (both <= 9)
+-     phi_g = 0.60 (Table 10.5.5.2.3-1, block failure in clay; verify).
++     (N_c <= 9 never binds with X <= Y; the 10th Ed. equations state no cap.)
++     phi_g = 0.60 (Table 10.5.5.2.3-1, block failure in clay).
+    in: layers (as hpileGeoCapacity), zTop / zToe (ft below grade), s_dia (s/B), capContact
+ ============================================================ */
+-const HP_BLOCK_PHI = 0.60;        // Table 10.5.5.2.3-1, group block failure, clay (verify)
++const HP_BLOCK_PHI = 0.60;        // Table 10.5.5.2.3-1, group block failure, clay
+ const HP_SOFT_SU_KSF = 0.50;      // surface soil "soft" below this S_u (verify)
+@@ -2161,9 +2164,11 @@ function hpGroupAashto({ layers, zTop, zToe, s_dia, capContact }) {
+   const surfaceSoft = surfClay && surfSu < HP_SOFT_SU_KSF;
+-  const contactEff = !!capContact && !surfaceSoft;
++  // ET1 (2026-10-19): 10th Ed. 10.7.3.9 -- reduce only when the cap is NOT in firm contact AND the
++  // surface soil is soft. contactEff = true means no reduction (eta = 1.0).
++  const contactEff = !!capContact || !surfaceSoft;
+   let eta, etaCase;
+   if (!cohesive) { eta = 1.0; etaCase = "cohesionless"; }
+-  else if (contactEff) { eta = 1.0; etaCase = "cohesive, cap in contact"; }
++  else if (contactEff) { eta = 1.0; etaCase = capContact ? "cohesive, cap in firm contact" : "cohesive, cap not in contact, surface soil not soft"; }
+   else {
+     eta = s_dia <= 2.5 ? 0.65 : (s_dia >= 6 ? 1.0 : 0.65 + 0.35 * (s_dia - 2.5) / 3.5);
+-    etaCase = capContact ? "cohesive, soft surface soil (treated as not in contact)" : "cohesive, cap not in contact";
++    etaCase = "cohesive, cap not in contact, soft surface soil";
+   }
+@@ -2610,3 +2615,3 @@ function solvePyWithRetry(input, D) {
+    - "aashto" (default for new projects): AASHTO LRFD 10th Ed. Table 10.7.2.4-1
+-     (verify table number / values): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70,
++     (checked against the 10th Ed.): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70,
+      linear between 3B and 5B; above 5B the 5B values; below 3B the 3B values
+@@ -2621,3 +2626,3 @@ function solvePyWithRetry(input, D) {
+ ============================================================ */
+-const GROUP_PM_SRC_LABEL = { aashto: "AASHTO LRFD 10th Ed. Table 10.7.2.4-1 — verify table number/values", rollins: "Rollins / FHWA (legacy curve)" };
++const GROUP_PM_SRC_LABEL = { aashto: "AASHTO LRFD 10th Ed. Table 10.7.2.4-1", rollins: "Rollins / FHWA (legacy curve)" };
+ function groupPmSourceOf(I) { return (I && I.groupPmSource === "rollins") ? "rollins" : "aashto"; }
+@@ -4499,4 +4504,4 @@ function computeAll(I, opts = {}) {
+       // block "not computed - verify by hand". Now eta per AASHTO 10.7.3.9 (cohesionless 1.0;
+-      // cohesive 0.65 at 2.5B -> 1.0 at 6B unless the cap is in firm contact with non-soft
+-      // ground) and, in cohesive soil, the block check. See hpGroupAashto.
++      // cohesive 0.65 at 2.5B -> 1.0 at 6B only when the cap is not in firm contact and the
++      // surface soil is soft (ET1, 10th Ed.)) and, in cohesive soil, the block check. See hpGroupAashto.
+       const ga = hpGroupAashto({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), zTop: embedTop_ft, zToe: toe_ft,
+@@ -8890,3 +8895,6 @@ const RPT_D11_CSS = [
+ function pileRefs(I) {
+-  const ed = "AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) \u2014 the tool relabelled its cites from the 9th Ed.; article numbers to be confirmed by the EOR";
++  const ed = "AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)";
++  // ET1 (2026-10-19): follow the owner -- IAB agency preset MassDOT / CTDOT: the owner manual is written to the 9th Ed.
++  const iabOwn = I.pileType === "iab" ? ({ massdot: "MassDOT", ctdot: "CTDOT" })[I.iabAgencyPreset] : null;
++  const edIab = iabOwn ? ed + " (calculations follow the 10th Ed.; the " + iabOwn + " bridge manual is written to the 9th Ed.)" : ed;
+   const py = ["p-y models", "Reese et al. (1974) sand; Matlock (1970) soft clay; Welch & Reese (1972) stiff clay; Reese (1997) weak rock; Georgiadis (1983) layering; Davisson & Robinson (1965) fixity"];
+@@ -8895,3 +8903,3 @@ function pileRefs(I) {
+     ["MassDOT BM", "MassDOT LRFD Bridge Manual Part I, \u00a73.10 Integral Abutment Bridges \u2014 \u00a73.10.2, \u00a73.10.10, \u00a73.10.11.1\u2013.5, Tables 3.10.11-1 to -4; edition: verify"],
+-    ["AASHTO LRFD", ed + ": Art. 3.4 (load factors), 6.9.2.2 (combined axial and flexure), 6.9.4 (compression)"],
++    ["AASHTO LRFD", edIab + ": Art. 3.4 (load factors), 6.9.2.2 (combined axial and flexure), 6.9.4 (compression)"],
+     ["AISC SCM", "AISC Steel Construction Manual (published HP section properties; Z \u2264 1.5S); edition: verify"],
+@@ -8899,3 +8907,3 @@ function pileRefs(I) {
+   if (I.pileType === "hpile") return [
+-    ["AASHTO LRFD", ed + ": Art. 10.7.3.8.6 (static resistance), Table 10.5.5.2.3-1 (\u03c6 geotechnical), 10.7.3.9 (group), 10.7.5 (corrosion), 10.7.3.13.4 (fixity; verify), Table 10.7.2.4-1 (p-multipliers; verify), 6.5.4.2 (\u03c6), 6.8 (tension), 6.9.2.2.1 (combined), 6.9.4.1\u20136.9.4.2 (compression, local buckling), 6.10.9 / 6.12.1.2.3a (shear), 6.12 (flexure)"],
++    ["AASHTO LRFD", ed + ": Art. 10.7.3.8.6 (static resistance), Table 10.5.5.2.3-1 (\u03c6 geotechnical), 10.7.3.9 (group), 10.7.5 (corrosion), 10.7.3.13.4 (fixity; verify), Table 10.7.2.4-1 (p-multipliers), 6.5.4.2 (\u03c6), 6.8 (tension), 6.9.2.2.1 (combined), 6.9.4.1\u20136.9.4.2 (compression, local buckling), 6.10.9 / 6.12.1.2.3a (shear), 6.12 (flexure)"],
+     ["FHWA-NHI-16-009", "FHWA GEC 12, Design and Construction of Driven Pile Foundations (corrosion allowance); edition: verify"],
+@@ -8904,3 +8912,3 @@ function pileRefs(I) {
+   return [
+-    ["AASHTO LRFD", ed + ": Art. 10.9.3.5 and Table C10.9.3.5.2-1 (bond), 10.9.3.10 (micropile structural), 10.5.5.2.5 (uplift), 10.7.3.13.4 (fixity; verify), Table 10.7.2.4-1 (p-multipliers; verify), 6.5.4.2 (\u03c6), 6.9.2.2.1 (combined), 6.9.4 (compression, buckling), 6.9.6 (CFST), 6.12.2.2.3 (casing flexure), 5.6.5 (bearing), 5.12.8.6.3 (punching)"],
++    ["AASHTO LRFD", ed + ": Art. 10.9.3.5 and Table C10.9.3.5.2-1 (bond), 10.9.3.10 (micropile structural), 10.5.5.2.5 (uplift), 10.7.3.13.4 (fixity; verify), Table 10.7.2.4-1 (p-multipliers), 6.5.4.2 (\u03c6), 6.9.2.2.1 (combined), 6.9.4 (compression, buckling), 6.9.6 (CFST), 6.12.2.2.3 (casing flexure), 5.6.5 (bearing), 5.12.8.6.3 (punching)"],
+     ["FHWA NHI-05-039", "Micropile Design and Construction Reference Manual, FHWA, December 2005"],
+@@ -9179,3 +9187,3 @@ function RptGroupChecks({ I, r }) {
+     hp
+-      ? e(Narr, null, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles; verify): cohesionless soil η = 1.0. Cohesive soil: η = 1.0 when the pile cap is in firm contact with the ground; when it is not (or the soil at the surface is soft, S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf, treated as not in contact) η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. η reduces the H-pile static resistance φR", e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). Conservative choices (verify): no waiver of the reduction when the cap is not in contact but the surface soil is stiff, and \"soft\" = S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf.")
++      ? e(Narr, null, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR", e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for \"soft\" is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
+       : e(Narr, null, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool uses s/d\u2095 (the bond-zone diameter) for \u03b7 and \u03b8; the lateral row f\u2098 use s/B with B = the casing OD (the p-y width) (F62)."),
+@@ -9213,3 +9221,3 @@ function RptGroupChecks({ I, r }) {
+           ? e(React.Fragment, null,
+-              e(Narr, null, "AASHTO LRFD 10th Ed. Art. 10.7.3.9, pile group in cohesive soil (verify equation numbers and φ", e("sub", null, "g"), "): block resistance R", e("sub", null, "g"), " = (2X + 2Y)·Z·S̄", e("sub", null, "u"), " + X·Y·N", e("sub", null, "c"), "·S", e("sub", null, "u,base"), "; N", e("sub", null, "c"), " = 5(1 + Z/5X)(1 + X/5Y) for Z/X ≤ 2.5, 7.5(1 + X/5Y) above (≤ 9). Group resistance = min(η·Σφ", e("sub", null, "stat"), "R", e("sub", null, "n"), ", φ", e("sub", null, "g"), "·R", e("sub", null, "g"), ") vs the total factored group demand. S̄", e("sub", null, "u"), " is averaged over the embedded length with cohesionless layers counted as S", e("sub", null, "u"), " = 0, and the base term is used only when the toe is in a cohesive layer (conservative for mixed profiles)."),
++              e(Narr, null, "AASHTO LRFD 10th Ed. Art. 10.7.3.9, pile group in cohesive soil (Eqs. C10.7.3.9-1 to -3; φ", e("sub", null, "g"), "): block resistance R", e("sub", null, "g"), " = (2X + 2Y)·Z·S̄", e("sub", null, "u"), " + X·Y·N", e("sub", null, "c"), "·S", e("sub", null, "u,base"), "; N", e("sub", null, "c"), " = 5(1 + Z/5X)(1 + X/5Y) for Z/X ≤ 2.5, 7.5(1 + X/5Y) above (≤ 9). Group resistance = min(η·Σφ", e("sub", null, "stat"), "R", e("sub", null, "n"), ", φ", e("sub", null, "g"), "·R", e("sub", null, "g"), ") vs the total factored group demand. S̄", e("sub", null, "u"), " is averaged over the embedded length with cohesionless layers counted as S", e("sub", null, "u"), " = 0, and the base term is used only when the toe is in a cohesive layer (conservative for mixed profiles)."),
+               line("X × Y = ", fmt(g.blk.X, 2), " × ", fmt(g.blk.Y, 2), " ft (c/c + B), Z = ", fmt(g.blk.Z, 1), " ft, Z/X = ", fmt(g.blk.ZX, 2), ", N", e("sub", null, "c"), " = ", fmt(g.blk.Nc, 3)),
+@@ -9219,5 +9227,5 @@ function RptGroupChecks({ I, r }) {
+               e(RptCheck, { pass: g.block_pass, eq: `\\min(\\eta\\,\\Sigma\\phi R_n,\\ \\phi_g R_g)=${fmt(g.phiGroupBond, 0)}\\text{ kip}${g.block_pass ? ' \\geq ' : ' < '}\\Sigma STL=${fmt(g.groupDemand, 0)}\\text{ kip}` }),
+-              note("Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). Verify the equations, N_c and φ_g = " + fmt(g.blk.phi, 2) + " against the edition in use."))
++              note("Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(g.blk.phi, 2) + " (Table 10.5.5.2.3-1, block failure in clay)."))
+           : e(React.Fragment, null,
+-              e(Narr, null, e("b", null, "Not required — cohesionless soil. "), "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (verify): for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
++              e(Narr, null, e("b", null, "Not required — cohesionless soil. "), "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
+               line("block footprint ≈ ", fmt(g.Bx_ft, 1), " × ", fmt(g.By_ft, 1), " ft (c/c + B); Σ individual H-pile φR", e("sub", null, "n"), " = ", fmt(g.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(g.groupDemand, 0), " kip")))
+@@ -9364,3 +9372,3 @@ function PrintReport({
+   const pileTitle = I.pileType === "iab" ? "Integral Abutment H-Pile \u2014 MassDOT Simplified Method" : I.pileType === "hpile" ? "Driven Steel H-Pile — Structural & Geotechnical Design" : "Drilled Micropile — Structural & Geotechnical Design";
+-  const basisTxt = I.pileType === "iab" ? "MassDOT Bridge Manual Part I \u00a73.10; AASHTO LRFD BDS 10th Ed. (2024)" : I.pileType === "hpile" ? "AASHTO LRFD BDS 10th Ed. (2024); FHWA-NHI-16-009" : "AASHTO LRFD BDS 10th Ed. (2024); FHWA NHI-05-039";
++  const basisTxt = I.pileType === "iab" ? "MassDOT Bridge Manual Part I \u00a73.10; AASHTO LRFD BDS 10th Ed. (2024)" + ((I.iabAgencyPreset === "massdot" || I.iabAgencyPreset === "ctdot") ? " (" + (I.iabAgencyPreset === "ctdot" ? "CTDOT" : "MassDOT") + " manual written to the 9th Ed.)" : "") : I.pileType === "hpile" ? "AASHTO LRFD BDS 10th Ed. (2024); FHWA-NHI-16-009" : "AASHTO LRFD BDS 10th Ed. (2024); FHWA NHI-05-039";
+   return /*#__PURE__*/React.createElement(RptStatCtx.Provider, { value: modStat }, /*#__PURE__*/React.createElement(RptNumCtx.Provider, { value: num }, /*#__PURE__*/React.createElement("div", {
+@@ -16760,3 +16768,3 @@ function App() {
+       "pile cap in firm contact with the ground"),
+-    r.group.capBasis === "hpile" && r.group.aashto ? /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta_auto, 3), " (AASHTO 10.7.3.9: ", r.group.aashto.etaCase, "; cap contact matters only in cohesive soil, and soft surface clay is treated as not in contact). Group layout and cap loads are set in the Pile group workspace (Loads & group tab).") :
++    r.group.capBasis === "hpile" && r.group.aashto ? /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta_auto, 3), " (AASHTO 10.7.3.9: ", r.group.aashto.etaCase, "; cap contact matters only in cohesive soil: η < 1 only when the cap is not in contact and the surface clay is soft). Group layout and cap loads are set in the Pile group workspace (Loads & group tab).") :
+     /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ?" (spacing \u2265 3\u00d7 " + (r.group.etaBlbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+@@ -18746,3 +18754,3 @@ function App() {
+         // F34 (O45): eta per AASHTO 10.7.3.9 (driven piles)
+-        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles; verify): cohesionless soil η = 1.0. Cohesive soil: η = 1.0 when the pile cap is in firm contact with the ground; when it is not (or the soil at the surface is soft, S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf, treated as not in contact) η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. η reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). Conservative choices (verify): no waiver of the reduction when the cap is not in contact but the surface soil is stiff, and “soft” = S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf.")
++        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for “soft” is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
+         : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool uses s/d\u2095 (the bond-zone diameter) for \u03b7 and \u03b8; the lateral row f\u2098 use s/B with B = the casing OD (the p-y width) (F62)."),
+@@ -18821,3 +18829,3 @@ function App() {
+       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "At " + fmt(r.group.s_dia, 1) + "× spacing (avg f", "" , /*#__PURE__*/React.createElement("sub", null, "m"), " = " + fmt(r.group.pmAvg, 2) + "). ",
+-        r.group.pmSource === "rollins" ? "Legacy curve: values interpolated between the 3× and 5× anchor sets; from 5× to 6× ramped to 1.0 (isolated piles)." : "AASHTO LRFD 10th Ed. Table 10.7.2.4-1 (verify table number/values): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70 for row 1 / 2 / 3+; linear between 3B and 5B; 5B values above 5B."),
++        r.group.pmSource === "rollins" ? "Legacy curve: values interpolated between the 3× and 5× anchor sets; from 5× to 6× ramped to 1.0 (isolated piles)." : "AASHTO LRFD 10th Ed. Table 10.7.2.4-1: 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70 for row 1 / 2 / 3+; linear between 3B and 5B; 5B values above 5B."),
+       /*#__PURE__*/React.createElement(PmAutoToggle, { I: I, set: set, where: "11" }),
+@@ -18844,3 +18852,3 @@ function App() {
+       r.group.capBasis === "hpile" ? (r.group.blockComputed ? /*#__PURE__*/React.createElement("div", null,
+-        /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9, pile group in cohesive soil (verify equation numbers and φ", /*#__PURE__*/React.createElement("sub", null, "g"), "): block resistance R", /*#__PURE__*/React.createElement("sub", null, "g"), " = (2X + 2Y)·Z·S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " + X·Y·N", /*#__PURE__*/React.createElement("sub", null, "c"), "·S", /*#__PURE__*/React.createElement("sub", null, "u,base"), "; N", /*#__PURE__*/React.createElement("sub", null, "c"), " = 5(1 + Z/5X)(1 + X/5Y) for Z/X ≤ 2.5, 7.5(1 + X/5Y) above (≤ 9). Group resistance = min(η·Σφ", /*#__PURE__*/React.createElement("sub", null, "stat"), "R", /*#__PURE__*/React.createElement("sub", null, "n"), ", φ", /*#__PURE__*/React.createElement("sub", null, "g"), "·R", /*#__PURE__*/React.createElement("sub", null, "g"), ") vs the total factored group demand. S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " is averaged over the embedded length with cohesionless layers counted as S", /*#__PURE__*/React.createElement("sub", null, "u"), " = 0, and the base term is used only when the toe is in a cohesive layer (conservative for mixed profiles)."),
++        /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9, pile group in cohesive soil (Eqs. C10.7.3.9-1 to -3; φ", /*#__PURE__*/React.createElement("sub", null, "g"), "): block resistance R", /*#__PURE__*/React.createElement("sub", null, "g"), " = (2X + 2Y)·Z·S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " + X·Y·N", /*#__PURE__*/React.createElement("sub", null, "c"), "·S", /*#__PURE__*/React.createElement("sub", null, "u,base"), "; N", /*#__PURE__*/React.createElement("sub", null, "c"), " = 5(1 + Z/5X)(1 + X/5Y) for Z/X ≤ 2.5, 7.5(1 + X/5Y) above (≤ 9). Group resistance = min(η·Σφ", /*#__PURE__*/React.createElement("sub", null, "stat"), "R", /*#__PURE__*/React.createElement("sub", null, "n"), ", φ", /*#__PURE__*/React.createElement("sub", null, "g"), "·R", /*#__PURE__*/React.createElement("sub", null, "g"), ") vs the total factored group demand. S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " is averaged over the embedded length with cohesionless layers counted as S", /*#__PURE__*/React.createElement("sub", null, "u"), " = 0, and the base term is used only when the toe is in a cohesive layer (conservative for mixed profiles)."),
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
+@@ -18857,3 +18865,3 @@ function App() {
+           tex: `\\min(\\eta\\,\\Sigma\\phi R_n,\\ \\phi_g R_g)=${fmt(r.group.phiGroupBond, 0)}\\text{ kip}${r.group.block_pass ? ' \\geq ' : ' < '}\\Sigma STL=${fmt(r.group.groupDemand, 0)}\\text{ kip}`,
+-          note: "Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). Verify the equations, N_c and φ_g = " + fmt(r.group.blk.phi, 2) + " against the edition in use."
++          note: "Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(r.group.blk.phi, 2) + " (Table 10.5.5.2.3-1, block failure in clay)."
+         })))
+@@ -18862,3 +18870,3 @@ function App() {
+           /*#__PURE__*/React.createElement("b", null, "Not required — cohesionless soil. "),
+-          "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (verify): for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
++          "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
+```
+
+## 2026-10-19 — PR: claude/aashto10-pile-2 (PR link added after merge)
+
+### ET4. H-pile groups in cohesionless soil below 2.5B: warning (display only, η unchanged)
+- **Request:** follow-up to ET1 (open item "Cohesionless groups below 2.5B" of the claude/aashto10-pile entry). The engineer is still to decide on φ_c 0.80 (O20) and the S_u < 0.50 ksf "soft" limit; both are unchanged.
+- **Provision:** AASHTO LRFD BDS 10th Ed. (2024), Art. 10.7.3.9 (p. 10-117). In cohesionless soil η = 1.0 is stated for c/c spacing of 2.5 diameters or greater, with or without cap contact. The article gives nothing for closer spacing.
+- **Where / anchors:**
+  1. New helper `hpCohesionlessBelow25Text(s_dia)`, inserted just before `function hpStaticIsClay(ly) {`.
+  2. Report, `RptGroupChecks`: anchor `: line("η = 1.0 (cohesionless; no block check)"`.
+  3. Module 11 on screen, `App`: anchor `: "η = 1.0 (cohesionless; no block check)"`.
+- **Before:**
+  ```js
+  : line("η = 1.0 (cohesionless; no block check)"))
+  ```
+  ```js
+  : "η = 1.0 (cohesionless; no block check)")
+  ```
+- **After:**
+  ```js
+  // ET4 (2026-10-19): warning only (eta unchanged). 10th Ed. 10.7.3.9: eta = 1.0 in cohesionless soil
+  // is stated for c/c spacing >= 2.5 diameters; closer spacing is left to the engineer.
+  function hpCohesionlessBelow25Text(s_dia) { return " ⚠ s/B = " + fmt(s_dia, 2) + " < 2.5: AASHTO LRFD 10th Ed. Art. 10.7.3.9 gives η = 1.0 in cohesionless soil only for c/c spacing ≥ 2.5B. Closer spacing needs engineer judgment or a reduced η (enter it with the η override); the tool keeps η = 1.0."; }
+  ```
+  ```js
+  : line("η = 1.0 (cohesionless; no block check)" + (a.below25 ? hpCohesionlessBelow25Text(g.s_dia) : "")))
+  ```
+  ```js
+  : "η = 1.0 (cohesionless; no block check)" + (r.group.aashto.below25 ? hpCohesionlessBelow25Text(r.group.s_dia) : ""))
+  ```
+  `below25` (s/B < 2.5) is the existing field of `hpGroupAashto`.
+- **Calculation:** none. η, the group resistance, pass/fail and every computed value are unchanged.
+- **Saved data:** none.
+- **Check case:** H-pile, 3 × 3 group in the default sand profile.
+  - s = 2.0B: Module 11 and the report print "η = 1.0 (cohesionless; no block check) ⚠ s/B = 2.00 < 2.5: …". `computeAll` gives η = 1.0, the same as main.
+  - s = 3.0B: no warning; same as main.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Pile Designer.html"`.
+  - Headless Chromium, main vs branch, with React 18.2.0 and Plotly 2.27.0 served from `tests/libs` (the tool pins 18.3.1 / 2.32.0, which the kit does not hold). I compared Module 11 text, the report text and `computeAll` η.
+- **Other copies:** none.

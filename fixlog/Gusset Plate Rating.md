@@ -2601,3 +2601,57 @@ index ed83d49..df13d08 100644
   - C15: confirm the MBE text on adjacent members.
   - Confirm the advisory formulas and tolerances (C14.4, C16, C17, C18) and whether any should become rating checks.
   - O8 and O13 (engineer's own action) stay open.
+
+## 2026-10-19 — PR: claude/aashto10-gusset (PR link added after merge)
+
+### C19. Resistance-factor citations: φ<sub>c</sub>, φ<sub>vy</sub> and φ<sub>cs</sub> attributed to MBE 3rd Ed. (rating values) instead of LRFD 10th Ed. 6.5.4.2; filler article renumbered 6.13.6.1.5 → 6.13.6.1.4   [citations and labels only; no φ value and no computed result changes]
+
+**Engineer decision 2026-10-19:** the LRFR rating keeps the MBE 3rd Ed. resistance factors: Whitmore compression φ<sub>c</sub> = 0.90, shear yielding φ<sub>vy</sub> = 1.00, chord splice φ<sub>cs</sub> = 0.85. No φ value changes.
+
+**Problem (citation only):**
+- φ<sub>c</sub> = 0.90 and φ<sub>vy</sub> = 1.00 were cited to "LRFD 10th Ed. 6.5.4.2". That article (10th Ed., checked against the 10th Ed. text) lists *design* factors for truss gusset plates that differ: φ<sub>cg</sub> = 0.75 (compression), φ<sub>vy</sub> = 0.80 (shear yielding), φ<sub>cs</sub> = 0.65 (chord splice). The tool's values are the MBE rating values, so the citation now names the MBE article the tool already used for each check (φ<sub>c</sub>: MBE 6A.6.12.6.8, the Whitmore compression article already cited by `K` and the WB check; φ<sub>vy</sub>: MBE 6A.6.12.6.6, already cited). φ<sub>cs</sub> already cited MBE (Table 6A.6.12.6.2-1, 6A.6.12.6.9, verify); that reference and its "verify" flag are kept, and only the note on the LRFD design value is added.
+- The filler reduction was cited to LRFD 6.13.6.1.5; in the 10th Ed. fillers are Art. 6.13.6.1.4 (Eq. 6.13.6.1.4-1; checked against the 10th Ed. text; there is no 6.13.6.1.5). Same factor (1 + γ)/(1 + 2γ), same 0.25 in. threshold.
+- Kept unchanged: "AASHTO LRFD 10th Ed. (2024)" for the resistance equations verified in the 2026-10-19 inventory (6.13.2.7, 6.13.2.9, 6.13.4, 6.13.5.2, 6.13.5.3, 6.14.2.8, 6.8.3, 6.9.4.1.x) and the other 6.5.4.2 citations whose values agree with the 10th Ed. (φ<sub>s</sub> bolts 0.80, φ<sub>bb</sub> 0.80, φ<sub>y</sub> 0.95, φ<sub>u</sub> 0.80, φ<sub>bs</sub> 0.80, φ<sub>vu</sub> 0.80).
+
+**Governing provisions:** AASHTO MBE 3rd Ed. 6A.6.12.6.6 (shear), 6A.6.12.6.8 (Whitmore compression), Table 6A.6.12.6.2-1 / 6A.6.12.6.9 (chord splice, verify); AASHTO LRFD BDS 10th Ed. (2024) Art. 6.5.4.2 (design factors, not used for rating) and Art. 6.13.6.1.4 / Eq. 6.13.6.1.4-1 (fillers).
+
+#### Where (anchors) and exact code
+
+1. `PARAMS` (approx. line 1233), anchor `['fillT', 'both'`: reference `'LRFD 10th Ed. 6.13.6.1.5'` → `'LRFD 10th Ed. 6.13.6.1.4'`.
+2. `PARAMS` (approx. line 1234), anchor `['fillRv', 'both'`: reference `'LRFD 10th Ed. 6.13.6.1.5 (written for bolts)'` → `'LRFD 10th Ed. 6.13.6.1.4 (written for bolts)'`.
+3. `PARAMS` (approx. line 1248), anchor `['phiC', 'lrfr'`:
+   - Before: `['phiC', 'lrfr', 'LRFR resistance factors', '\\phi_c', 'Compression, Whitmore section', 0.90, '', 'LRFD 10th Ed. 6.5.4.2', 0, ''],`
+   - After: `['phiC', 'lrfr', 'LRFR resistance factors', '\\phi_c', 'Compression, Whitmore section', 0.90, '', 'MBE 3rd Ed. 6A.6.12.6.8 (rating value; LRFD 10th Ed. 6.5.4.2 design value 0.75 not used)', 0, 'Engineer decision 2026-10-19: the rating keeps the MBE 3rd Ed. value. For design of truss gusset plates in compression, LRFD 10th Ed. 6.5.4.2 gives a lower factor (0.75); it is not used for rating.'],`
+4. `PARAMS` (approx. line 1249), anchor `['phiVY', 'lrfr'`:
+   - Before: `['phiVY', 'lrfr', 'LRFR resistance factors', '\\phi_{vy}', 'Shear yielding, gross plane', 1.00, '', 'LRFD 10th Ed. 6.5.4.2; MBE 6A.6.12.6.6', 1, ''],`
+   - After: `['phiVY', 'lrfr', 'LRFR resistance factors', '\\phi_{vy}', 'Shear yielding, gross plane', 1.00, '', 'MBE 3rd Ed. 6A.6.12.6.6 (rating value; LRFD 10th Ed. 6.5.4.2 design value 0.80 not used)', 1, 'Engineer decision 2026-10-19: the rating keeps the MBE 3rd Ed. value. For design of truss gusset plates in shear yielding, LRFD 10th Ed. 6.5.4.2 gives a lower factor (0.80); it is not used for rating.'],`
+5. `PARAMS` (approx. line 1252), anchor `['phiCS', 'lrfr'`:
+   - Before (reference and note): `'MBE 3rd Ed. Table 6A.6.12.6.2-1, 6A.6.12.6.9 (verify); NCHRP W-197', 1, 'Value as reported for the chord-splice resistance factor of NCHRP W-197 / MBE; the printed table was not available.'`
+   - After: `'MBE 3rd Ed. Table 6A.6.12.6.2-1, 6A.6.12.6.9 (verify); NCHRP W-197 (rating value; LRFD 10th Ed. 6.5.4.2 design value 0.65 not used)', 1, 'Value as reported for the chord-splice resistance factor of NCHRP W-197 / MBE; the printed table was not available. Engineer decision 2026-10-19: the rating keeps the MBE 3rd Ed. value. For design of truss gusset plate chord splices, LRFD 10th Ed. 6.5.4.2 gives a lower factor (0.65); it is not used for rating.'`
+6. Fastener-shear capacity builder, `R<sub>F</sub>` where-row (approx. line 1737), anchor `'Filler factor (no filler)'`: `'', 'LRFD 6.13.6.1.5')];` → `'', 'LRFD 6.13.6.1.4')];`.
+7. `capWB` where-row (approx. line 1784):
+   - Before: `wr('φ<sub>c</sub>', 'Resistance factor, compression', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'Std. Spec. 10.54.1.1')`
+   - After: `wr('φ<sub>c</sub>', lrfr ? 'Resistance factor, compression (MBE rating value; the LRFD 10th Ed. 6.5.4.2 design value for truss gusset plates, 0.75, is not used)' : 'Resistance factor, compression', f2(phi), '', lrfr ? 'MBE 6A.6.12.6.8' : 'Std. Spec. 10.54.1.1')`
+8. Shear-plane builder, `kind === 'pvy'` where-row (approx. line 1789):
+   - Before: `wr('φ<sub>vy</sub>', 'Resistance factor, shear yielding', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014')`
+   - After: `wr('φ<sub>vy</sub>', lrfr ? 'Resistance factor, shear yielding (MBE rating value; the LRFD 10th Ed. 6.5.4.2 design value for truss gusset plates, 0.80, is not used)' : 'Resistance factor, shear yielding', f2(phi), '', lrfr ? 'MBE 6A.6.12.6.6' : 'FHWA-IF-09-014')`
+9. `capSPC` where-row (approx. line 1883):
+   - Before: `wr('φ<sub>cs</sub>', 'Resistance factor, chord splice', f2(phi), '', 'MBE Table 6A.6.12.6.2-1 (verify)')`
+   - After: `wr('φ<sub>cs</sub>', 'Resistance factor, chord splice (MBE rating value; the LRFD 10th Ed. 6.5.4.2 design value for truss gusset plate chord splices, 0.65, is not used)', f2(phi), '', 'MBE Table 6A.6.12.6.2-1 (verify)')`
+10. `methodHtml()`, Rating paragraph (approx. line 3476), anchor `<h3>Rating</h3><p>LRFR: RF = `: after the LRFR RF sentence ending `/(γ<sub>LL</sub>(LL+IM)).` insert: ` LRFR resistance factors for the gusset plate: the MBE 3rd Ed. rating values are used (φ<sub>c</sub> = 0.90 Whitmore compression, MBE 6A.6.12.6.8; φ<sub>vy</sub> = 1.00 shear yielding, MBE 6A.6.12.6.6; φ<sub>cs</sub> = 0.85 chord splice, MBE 6A.6.12.6.9, verify), by engineer decision 2026-10-19. The LRFD 10th Ed. 6.5.4.2 factors for designing truss gusset plates are lower (0.75, 0.80 and 0.65) and are not used here.`
+
+#### Check case (unchanged before and after)
+
+Built-in validation model (Validation tab):
+- Whitmore buckling, LRFR: φ<sub>c</sub>P<sub>n</sub> = 0.90 × 2 × 0.6580<sup>0.6037</sup> × 36 × 7.696. By hand: 0.658<sup>0.6037</sup> = e<sup>0.6037 × ln 0.658</sup> = e<sup>−0.2527</sup> = 0.7767; 36 × 7.696 = 277.06; × 0.7767 = 215.19; × 2 = 430.38; × 0.90 = 387.3 kip. Tool: 387.35 kip before and after (Validation tab hand value 387.36, match).
+- Shear-plane yield SP1-Y, LRFR: φ<sub>vy</sub>V<sub>ny</sub> = 1.00 × 0.58 × 36 × 40 × 1.0 × 0.88 = 734.98 kip. Tool: 734.98 kip before and after.
+
+#### How verified (C19)
+
+- `node tests/check-syntax.mjs "Gusset Plate Rating.html"`: all scripts pass.
+- Chromium (Playwright, tests/lib.mjs `openPage`), origin/main (12b90f7) against the branch:
+  - `GPR.compute` on the default model, the validation model and the default with chord = spliced: every numeric leaf of the result identical (15 799, 8 277 and 16 894 values).
+  - Text of every tab (Summary, Checks, Rating, Code parameters, Validation, Method, Report), chord continuous and spliced: Summary, Rating and Validation identical; Checks, Code parameters, Method and Report differ only in the reference / label lines listed above. No console or page errors.
+- Saved data: no key, field or format changed (PARAMS keys and defaults unchanged).
+- **Other copies:** none.
+- **Open items:** the MBE article numbers keep their existing flags (φ<sub>cs</sub>: Table 6A.6.12.6.2-1 / 6A.6.12.6.9 "verify"); the printed MBE 3rd Ed. was not available to confirm them.

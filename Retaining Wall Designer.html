@@ -1014,7 +1014,7 @@ window.MathJax = {
     </div>
     <div class="ig full"><label for="aashto_heq_mode">h<sub>eq</sub> Source</label>
       <select id="aashto_heq_mode" onchange="onInputChange()">
-        <option value="auto">Auto from wall height (Table 3.11.6.4-2, walls)</option>
+        <option value="auto">Auto from wall height (Table 3.11.6.4.1-2, walls)</option>
         <option value="manual">Manual override</option>
       </select></div>
     <div class="ig full"><label for="aashto_heq_dist">Wall back face → edge of traffic</label>
@@ -1592,11 +1592,11 @@ function calcK_AASHTO(method, cond, phi, delta, beta, batter, ocr) {
 }
 
 /** AASHTO LL surcharge equivalent soil height h_eq (ft)
- *  Table 3.11.6.4-2 (walls parallel to traffic) — interpolated by wall height H (ft).
+ *  Table 3.11.6.4.1-2 (walls parallel to traffic) — interpolated by wall height H (ft).
  *  Distance to traffic 0 ft: ≤5 ft → 5.0; 10 ft → 3.5; ≥20 ft → 2.0.  ≥1 ft: 2.0.
  */
 function heqAASHTO(H_ft, dist_ft=0) {
-  // AASHTO Table 3.11.6.4-2 (retaining walls, traffic parallel to wall):
+  // AASHTO Table 3.11.6.4.1-2 (retaining walls, traffic parallel to wall):
   //   distance wall back face → edge of traffic = 0 ft : 5.0 / 3.5 / 2.0 ft at H = 5 / 10 / ≥20 ft
   //   distance ≥ 1 ft                                  : 2.0 ft for all heights
   if (dist_ft >= 1) return 2.0;
@@ -1654,26 +1654,50 @@ function devLength(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=I
   return Math.max(12, ld);                  // min 12 in per ACI 25.4.2.1
 }
 
-// AASHTO LRFD 10th §5.10.8.2.1a — tension development length (in)
-//   ℓd = ℓdb·(λrl·λcf/λ)·λrc·λer,   ℓdb = 2.4·db·fy/√f'c   (ksi)
-//   λrc = db/(cb + ktr) with 0.4 ≤ λrc ≤ 1.0 (ktr = 0);  λrl = 1.3 top bars
-function devLengthAASHTO(db, fy, fc, top, cover_to_ctr, spacing=Infinity) {
-  const ldb = 2.4 * db * (fy/1000) / Math.sqrt(fc/1000);
+// AASHTO LRFD 10th Ed. (2024) §5.10.8.2.1a — tension development length (in); same form as ACI Rebar Development Length.html
+//   ℓdb = 0.17·db·[(λer·fy − Fh/Ab)/(1.97·λ·f'c^0.25)]²  (Eq. 5.10.8.2.1a-2, ksi; λer = λ = 1.0, Fh = 0 straight bar)
+//   ℓd  = ℓdb·λrl·λcf·λrc ≥ 12 in  (Eq. 5.10.8.2.1a-1; λcf = 1.0 uncoated; λrl = 1.3 top bars)
+//   λrc = db·cb/(cb(1−βt) + 1.67·ns·ktr)² with βt = 0, ktr = 0 → db/cb, 0.3 ≤ λrc ≤ 1.0  (Eqs. 5.10.8.2.1c-1, -2)
+//   f'c ≤ 15 ksi (5.10.8.2.1)
+function devLengthAASHTOParts(db, fy, fc, top, cover_to_ctr, spacing=Infinity) {
+  const fc4 = Math.pow(Math.min(fc/1000, 15), 0.25);
+  const ldb = 0.17 * db * Math.pow((fy/1000) / (1.97 * fc4), 2);
   const cb  = Math.min(cover_to_ctr, (spacing > 0 ? spacing : Infinity) / 2);  // cover to ctr or s/2
-  const lam_rc = Math.min(1.0, Math.max(0.4, db / Math.max(cb, 1e-6)));
+  const lam_rc_raw = cb > 0 ? db * cb / Math.pow(cb, 2) : 1.0;
+  const lam_rc = Math.min(1.0, Math.max(0.3, lam_rc_raw));
   const lam_rl = top ? 1.3 : 1.0;
-  return Math.max(12, ldb * lam_rl * lam_rc);
+  return { fc4, ldb, cb, lam_rc_raw, lam_rc, lam_rl, ld: Math.max(12, ldb * lam_rl * lam_rc) };
+}
+function devLengthAASHTO(db, fy, fc, top, cover_to_ctr, spacing=Infinity) {
+  return devLengthAASHTOParts(db, fy, fc, top, cover_to_ctr, spacing).ld;
+}
+// AASHTO LRFD 10th Ed. §5.10.8.2.4a — standard hook (in): ℓdh = ℓd + R + db/2 ≥ max(8db, 6 in)  (Eq. 5.10.8.2.4a-1),
+//   ℓd from Eqs. 5.10.8.2.1a-1/-2 with Fh = db·R·v·f'c (Eq. 5.10.8.2.4a-2), v = 0.85 − f'c/20, 0.45 ≤ v ≤ 0.65
+//   (Table 5.8.2.5.3a-1, CTT node); R = minimum standard bend D/2 + db/2 (Table 5.10.2.3-1). Vertical stem bar
+//   (λrl = 1.0), uncoated (λcf = 1.0), λrc as for the straight stem bar (§5.10.8.2.1c, c_b = min(cover to centre, s/2),
+//   βt = 0, ktr = 0; as in ACI Rebar Development Length.html), no tie reduction (5.10.8.2.4b), λer = λ = 1.0.
+function hookAASHTOParts(bar, fy, fc, lam_rc=1.0) {
+  const db = bar.db, Ab = bar.Ab;
+  const fcA = Math.min(fc/1000, 15), fc4 = Math.pow(fcA, 0.25);
+  const Dmin = bar.num <= 8 ? 6 : (bar.num <= 11 ? 8 : 10);
+  const R = (Dmin/2 + 0.5) * db;
+  const v = Math.max(0.45, Math.min(0.65, 0.85 - fcA/20));
+  const Fh = db * R * v * fcA;
+  const num = fy/1000 - Fh/Ab;
+  const ldb = 0.17 * db * Math.pow(Math.max(num, 0) / (1.97 * fc4), 2);
+  const ld = ldb * 1.0 * 1.0 * lam_rc;
+  const ldh_eq = ld + R + db/2;
+  return { db, Ab, fcA, fc4, Dmin, R, v, Fh, num, ldb, lam_rc, ld, ldh_eq, ldh: Math.max(ldh_eq, 8*db, 6) };
 }
 
 // Standard 90° hook development length (in)
 //  ACI 318-19 §25.4.3.1: ℓdh = (fy·ψe·ψr·ψo·ψc / (55λ√f'c))·db^1.5 ≥ max(8db, 6 in)
 //    ψr = 1.6 (no confining ties), ψo = 1.0 (bar inside the wall), ψc = f'c/15000 + 0.6 (f'c < 6000)
-//  AASHTO §5.10.8.2.4a: ℓdh = ℓhb·λrc·λcw·λer/λ, ℓhb = 38·db/√f'c·(fy/60) (ksi) ≥ max(8db, 6 in)
-//    (λrc = λcw = λer = 1.0 — conservative, no confinement credit)
-function hookDevLength(db, fy, fc, isAASHTO) {
+//  AASHTO LRFD 10th Ed. §5.10.8.2.4a: see hookAASHTOParts (needs the bar's area and size, and λrc of the straight bar)
+function hookDevLength(db, fy, fc, isAASHTO, bar, lam_rc=1.0) {
   let ldh;
   if (isAASHTO) {
-    ldh = 38 * db / Math.sqrt(fc/1000) * (fy/1000/60);
+    return hookAASHTOParts(bar || BARS.find(b => Math.abs(b.db - db) < 1e-6), fy, fc, lam_rc).ldh;
   } else {
     const psi_c = fc < 6000 ? fc/15000 + 0.6 : 1.0;
     ldh = (fy * 1.0 * 1.6 * 1.0 * psi_c) / (55 * Math.min(100, Math.sqrt(fc))) * Math.pow(db, 1.5);
@@ -2563,7 +2587,10 @@ function calcAll(inp) {
     ? devLengthAASHTO(sel_stem.bar.db, inp.fy, inp.fc, false, inp.cov_stem + sel_stem.bar.db / 2, sel_stem.spacing)
     : devLength(sel_stem.bar.db, inp.fy, inp.fc, 1.0, 1.0, inp.cov_stem + sel_stem.bar.db / 2, 1.0, sel_stem.spacing);
   // Stem bars anchored into the footing with a standard 90° hook — must fit in t_f
-  const ldh_stem   = hookDevLength(sel_stem.bar.db, inp.fy, inp.fc, isAASHTO);
+  // AASHTO 10th Ed.: the hook's straight portion takes λrc of the straight stem bar (same c_b)
+  const ldA_stem   = isAASHTO ? devLengthAASHTOParts(sel_stem.bar.db, inp.fy, inp.fc, false, inp.cov_stem + sel_stem.bar.db / 2, sel_stem.spacing) : null;
+  const ldh_stem   = hookDevLength(sel_stem.bar.db, inp.fy, inp.fc, isAASHTO, sel_stem.bar, ldA_stem ? ldA_stem.lam_rc : 1.0);
+  const ldhA_stem  = isAASHTO ? hookAASHTOParts(sel_stem.bar, inp.fy, inp.fc, ldA_stem.lam_rc) : null;   // worked values for Step 5 (display)
   const ldh_avail  = inp.tf - inp.cov_ftg;                     // hook bears on the bottom mat
   const hook_ok    = ldh_stem <= ldh_avail;
   if (!hook_ok) warnings.push(`Stem bar hook: ℓdh = ${f(ldh_stem,1)}" > available ${f(ldh_avail,1)}" in footing — thicken footing or use smaller bars.`);
@@ -3127,7 +3154,7 @@ function calcAll(inp) {
     Rn_stem, As_stem_req, As_s_min, As_temp_stem, As_stem_des,
     Vc_stem, phiVc_stem, stem_shear_ok, stem_overstressed,
     a_stem, phiMn_stem, shearStem, shearStemT, shearHeel, shearToe,
-    ldh_stem, ldh_avail, hook_ok, epst_stem, epst_heel, epst_toe, aciCr,
+    ldh_stem, ldh_avail, hook_ok, ldA_stem, ldhA_stem, epst_stem, epst_heel, epst_toe, aciCr,
     z_cut_theory, cut_ext, As_rem, s_rem,
     Hp, dH_slope, y_Pa, heelLongForRankine, coulombDeltaWarn, Wwedge, Wsoil_rect, w_soil_col, wt_at_surface, M_wedge_heel,
     sel_stem, sel_temp, ld_stem, rho_min, b_TS_stem, b_TS_ftg,
@@ -3751,10 +3778,10 @@ function renderStabilityAASHTO(r) {
 
   if (A.ll_surcharge) {
     h += `<div class="card" style="margin-bottom:16px;">
-      <div class="card-hd"><span class="card-title">Step 2 \u2014 Live Load Surcharge (equivalent soil height)</span><span class="card-ref">AASHTO \u00a73.11.6.4 \u00b7 Table 3.11.6.4-1</span></div>
+      <div class="card-hd"><span class="card-title">Step 2 \u2014 Live Load Surcharge (equivalent soil height)</span><span class="card-ref">AASHTO \u00a73.11.6.4.1 \u00b7 Table 3.11.6.4.1-2</span></div>
       <div class="card-body">`;
     h += eq(A.heq_mode === 'manual' ? 'Equivalent height (manual override)' : 'Equivalent height from wall height (interpolated)',
-      `h_{eq} = \\boxed{${F(a.heq,2)}\\ \\text{ft}}`,'Table 3.11.6.4-1',
+      `h_{eq} = \\boxed{${F(a.heq,2)}\\ \\text{ft}}`,'Table 3.11.6.4.1-2',
       [{sym:'H', desc:'total wall height', val:F(r.H,2), unit:'ft'},
        {sym:'h_{eq}', desc:'equivalent height of soil for LL surcharge', val:F(a.heq,2), unit:'ft'}]);
     h += eq('Equivalent surcharge pressure',
@@ -4708,17 +4735,20 @@ function renderStem(r) {
     <div class="card-hd"><span class="card-title">Step 5 — Development Length &amp; Bar Cutoff</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.10.8.2.1a / §5.10.8.2.4a / §5.10.8.1.2':'ACI 318-19 §25.4.2.4 / §25.4.3 / §9.7.3'}</span></div>
     <div class="card-body">`;
   h += r.isAASHTO
-   ? eq('Development length (λrl = 1.0, λrc = d_b/c_b)',
-    `\\ell_d = \\ell_{db}\\,\\lambda_{rl}\\lambda_{rc},\\quad \\ell_{db} = \\frac{2.4\\,d_b f_y}{\\sqrt{f'_c}} \\Rightarrow \\boxed{${F(r.ld_stem,1)}\\ \\text{in}} = ${F(r.ld_stem/12,2)}\\ \\text{ft}`,'')
+   ? eq('Development length (λrl = 1.0, λcf = 1.0, λrc = d_b/c_b with β_t = 0, k_tr = 0)',
+    `\\ell_{db} = 0.17\\,d_b\\left(\\frac{\\lambda_{er}f_y - F_h/A_b}{1.97\\,\\lambda\\,(f'_c)^{0.25}}\\right)^2 = 0.17(${F(r.sel_stem.bar.db,3)})\\left(\\frac{${F(inp.fy/1000,1)} - 0}{1.97(1.0)(${F(r.ldA_stem.fc4,4)})}\\right)^2 = ${F(r.ldA_stem.ldb,1)}\\ \\text{in};\\quad \\lambda_{rc} = \\frac{d_b c_b}{c_b^{2}} = \\frac{${F(r.sel_stem.bar.db,3)}}{${F(r.ldA_stem.cb,3)}} = ${F(r.ldA_stem.lam_rc_raw,3)} \\to ${F(r.ldA_stem.lam_rc,3)};\\quad \\ell_d = \\max(\\ell_{db}\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12) = \\max(${F(r.ldA_stem.ldb,1)}(1.0)(1.0)(${F(r.ldA_stem.lam_rc,3)}),\\ 12) = \\boxed{${F(r.ld_stem,1)}\\ \\text{in}} = ${F(r.ld_stem/12,2)}\\ \\text{ft}`,'§5.10.8.2.1a, Eqs. 5.10.8.2.1a-1, -2; 5.10.8.2.1c')
    : eq('Development length (ψt = 1.0, ψe = 1.0, ψs = ' + (r.sel_stem.bar.db<=0.75?'0.8':'1.0') + ', ψg = ' + (inp.fy<=60000?'1.0':(inp.fy<=80000?'1.15':'1.3')) + '; c_b = min(cover to bar centre, s/2))',
     `\\ell_d = \\frac{3}{40}\\,\\frac{f_y\\,\\psi_t\\psi_e\\psi_s\\psi_g}{\\lambda\\sqrt{f'_c}\\left(\\frac{c_b+K_{tr}}{d_b}\\right)}\\,d_b = \\boxed{${F(r.ld_stem,1)}\\ \\text{in}} = ${F(r.ld_stem/12,2)}\\ \\text{ft}`,'',
     [{sym:'f_y', desc:'steel yield strength', val:F(inp.fy/1000,0), unit:'ksi'},
      {sym:'d_b', desc:'S1 bar diameter', val:F(r.sel_stem.bar.db,3), unit:'in'},
      {sym:'\\ell_d', desc:'tension development length', val:F(r.ld_stem,1), unit:'in'}]);
+  if (r.isAASHTO) h += eq('Stem bar standard hook (λrl = λcf = 1.0, λrc as the straight bar above, no tie reduction; R = minimum standard bend)',
+    `R = \\frac{D}{2} + \\frac{d_b}{2} = \\frac{${r.ldhA_stem.Dmin}(${F(r.ldhA_stem.db,3)})}{2} + \\frac{${F(r.ldhA_stem.db,3)}}{2} = ${F(r.ldhA_stem.R,3)}\\ \\text{in};\\quad v = 0.85 - \\frac{f'_c}{20} = ${F(r.ldhA_stem.v,3)}\\ (0.45 \\le v \\le 0.65);\\quad F_h = d_b R v f'_c = ${F(r.ldhA_stem.db,3)}(${F(r.ldhA_stem.R,3)})(${F(r.ldhA_stem.v,3)})(${F(r.ldhA_stem.fcA,2)}) = ${F(r.ldhA_stem.Fh,2)}\\ \\text{kip};\\quad \\ell_{db} = 0.17(${F(r.ldhA_stem.db,3)})\\left(\\frac{${F(inp.fy/1000,1)} - ${F(r.ldhA_stem.Fh,2)}/${F(r.ldhA_stem.Ab,2)}}{1.97(1.0)(${F(r.ldhA_stem.fc4,4)})}\\right)^2 = ${F(r.ldhA_stem.ldb,1)}\\ \\text{in};\\quad \\ell_d = \\ell_{db}\\lambda_{rl}\\lambda_{cf}\\lambda_{rc} = ${F(r.ldhA_stem.ldb,1)}(1.0)(1.0)(${F(r.ldhA_stem.lam_rc,3)}) = ${F(r.ldhA_stem.ld,1)}\\ \\text{in};\\quad \\ell_{dh} = \\max(\\ell_d + R + \\tfrac{d_b}{2},\\ 8d_b,\\ 6) = \\max(${F(r.ldhA_stem.ld,1)} + ${F(r.ldhA_stem.R,3)} + ${F(r.ldhA_stem.db/2,3)},\\ ${F(8*r.ldhA_stem.db,2)},\\ 6) = ${F(r.ldhA_stem.ldh,1)}\\ \\text{in}`,
+    '§5.10.8.2.4a, Eqs. 5.10.8.2.4a-1, -2; Table 5.8.2.5.3a-1; Table 5.10.2.3-1');
   h += eqCheck('Stem bar standard hook into footing',
     `\\ell_{dh} = ${F(r.ldh_stem,1)}\\ \\text{in} \\leq t_f - c_{c} = ${F(r.ldh_avail,1)}\\ \\text{in}`, r.hook_ok,
     r.isAASHTO ? '\u00a75.10.8.2.4a' : 'ACI 25.4.3.1',
-    [{sym:'\\ell_{dh}', desc: r.isAASHTO ? 'hook development ℓhb = 38d_b/√f\'c·(f_y/60), no confinement credit' : 'hook development, ψr = 1.6, ψc = f\'c/15000+0.6', val:F(r.ldh_stem,1), unit:'in'}]);
+    [{sym:'\\ell_{dh}', desc: r.isAASHTO ? 'hook development ℓdh = ℓd + R + d_b/2 (10th Ed.), no tie reduction' : 'hook development, ψr = 1.6, ψc = f\'c/15000+0.6', val:F(r.ldh_stem,1), unit:'in'}]);
   if (r.z_cutoff !== null)
     h += eq('Alternate-bar cutoff — half the S1 bars (#' + r.sel_stem.bar.num + ' @ ' + r.s_rem + '") carry M_u above z_th; terminated bars extend max(d, 12d_b) past it',
       `z_{th} = ${F(r.z_cut_theory,2)}\\ \\text{ft},\\quad z_{cut} = z_{th} - ${F(r.cut_ext,2)} = ${F(r.z_cutoff,2)}\\ \\text{ft from top} \\ \\Rightarrow\\ \\text{full S1 bars up to } ${F(r.z_cutoff_from_base,2)}\\ \\text{ft above base}`, r.isAASHTO ? '\u00a75.10.8.1.2' : 'ACI 9.7.3.3',
@@ -4992,7 +5022,7 @@ function renderFooting(r) {
   h += eqCheck('One-way shear at face of stem',
     `\\phi V_c = ${r.isAASHTO?'0.90':'0.75'}\\,V_c = ${Fk(r.phiVc_heel)}\\ \\text{kip/ft} \\geq V_u = ${Fk(r.Vu_heel)}\\ \\text{kip/ft}`, r.heel_shear_ok);
   h += eq('Development length (ψt = 1.3 for top bars with >12 in fresh concrete below)',
-    `\\ell_d = \\boxed{${F(r.ld_heel,1)}\\ \\text{in}} = ${F(r.ld_heel/12,2)}\\ \\text{ft}`,'ACI 25.4.2',
+    `\\ell_d = \\boxed{${F(r.ld_heel,1)}\\ \\text{in}} = ${F(r.ld_heel/12,2)}\\ \\text{ft}`,r.isAASHTO?'AASHTO 5.10.8.2.1a (as Step 5, λrl = 1.3)':'ACI 25.4.2',
     [{sym:'\\ell_d', desc:'tension development length (top bars)', val:F(r.ld_heel,1), unit:'in'}]);
   h += `</div></div>`;
 
@@ -5066,7 +5096,7 @@ function renderFooting(r) {
   h += eqCheck('One-way shear at front face',
     `\\phi V_c = ${r.isAASHTO?'0.90':'0.75'}\\,V_c = ${Fk(r.phiVc_toe)}\\ \\text{kip/ft} \\geq V_u = ${Fk(r.Vu_toe)}\\ \\text{kip/ft}`, r.toe_shear_ok);
   h += eq('Development length into stem',
-    `\\ell_d = \\boxed{${F(r.ld_toe,1)}\\ \\text{in}} = ${F(r.ld_toe/12,2)}\\ \\text{ft}`,'ACI 25.4.2',
+    `\\ell_d = \\boxed{${F(r.ld_toe,1)}\\ \\text{in}} = ${F(r.ld_toe/12,2)}\\ \\text{ft}`,r.isAASHTO?'AASHTO 5.10.8.2.1a (as Step 5)':'ACI 25.4.2',
     [{sym:'\\ell_d', desc:'tension development length', val:F(r.ld_toe,1), unit:'in'}]);
   h += `</div></div>`;
 
@@ -6334,7 +6364,7 @@ function buildCrossSection(r) {
   // Surcharge arrows (dead qs + AASHTO LL surcharge γ·h_eq)
   if (r.q_sur_eff > 0) {
     const stip = (r.isAASHTO && r.q_ll_aashto > 0)
-      ? `<b>Live-load surcharge (LS)</b><br>h_eq = ${f(r.heq,2)} ft (AASHTO Table 3.11.6.4-1)<br>q_LS = γ·h_eq = ${f(r.q_ll_aashto,0)} psf${inp.q_sur>0?`<br>+ dead qs = ${f(inp.q_sur,0)} psf`:''}<br>Lateral: Kₐ·q = ${f(r.Ka*r.q_sur_eff,0)} psf (uniform)`
+      ? `<b>Live-load surcharge (LS)</b><br>h_eq = ${f(r.heq,2)} ft (AASHTO Table 3.11.6.4.1-2)<br>q_LS = γ·h_eq = ${f(r.q_ll_aashto,0)} psf${inp.q_sur>0?`<br>+ dead qs = ${f(inp.q_sur,0)} psf`:''}<br>Lateral: Kₐ·q = ${f(r.Ka*r.q_sur_eff,0)} psf (uniform)`
       : `<b>Surcharge</b><br>qs = ${f(inp.q_sur,0)} psf<br>Lateral: Kₐ·qs = ${f(r.Ka*inp.q_sur,0)} psf (uniform)<br>P_sur = ${f(r.Pa_sur_h,0)} lb/ft at H/2`;
     s += `<g data-layer="surcharge">`;
     const na = Math.min(6, Math.max(3, Math.floor(Lh_px/18)));
@@ -7656,7 +7686,7 @@ const RW_REFS = {
     ['Seed &amp; Whitman (1970)', 'Simplified Mononobe-Okabe seismic increment (when k<sub>h</sub> &gt; 0)'],
   ],
   AASHTO: [
-    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4 and Table 3.11.6.4-1 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, cutoff), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
+    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4.1 and Table 3.11.6.4.1-2 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, cutoff), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
     ['MassDOT LRFD Bridge Manual', 'Part I §3.3.2.2 (heel top steel, variable-height wall), §3.3.2.4 and Table 3.3.2-1 (vehicular collision on walls), when selected; edition: verify'],
     ['ACI 318-19', '§25.4.2 (development length of the footing bars, as cited in the footing tab)'],
     ['ASCE 7-22', '§2.3.1 (strength combinations for column / beam loads, when entered)'],

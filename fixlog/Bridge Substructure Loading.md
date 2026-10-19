@@ -1316,3 +1316,163 @@ index 8a2a0af..038486a 100644
 -    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; DC2 (DC superstructure) includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). UF takes the DC factors (Strength 1.25 max / 0.90 min, Service 1.0): GirderDetail uses 1.25 / 0 (Service 0 where it relieves), which SubLoads cannot represent without a separate load type, so where UF relieves (minimum cases) 0.90 UF is counted.`; };
 +    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
 ```
+
+## 2026-10-19 — PR: claude/aashto10-substructure (AASHTO LRFD 10th Ed. renumbers and MassDOT edition note; wording only; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Engineer decision 2026-10-19 ("follow the owner"): in MassDOT mode, state that the MassDOT manual is written to the AASHTO LRFD 9th Ed. and that the calculations follow the AASHTO LRFD 10th Ed. (2024). The seismic hazard method (3.10.2 to 3.10.4, site factors) is **not** changed here (engineer decision pending; separate PR).
+
+### A10-1. Renumbered 10th Ed. tables and figures   [citation] [no result change]
+Each number was looked up in the 10th Ed. text; the values the tool uses are the same as in the 10th Ed. tables.
+- **Table 3.11.6.4-1 → Table 3.11.6.4.1-1** (h_eq for abutments perpendicular to traffic: 4.0 / 3.0 / 2.0 ft at H = 5 / 10 / ≥ 20 ft, the tool defaults `heq5: 4, heq10: 3, heq20: 2`). Table 3.11.6.4.1-2 is the retaining-wall table (walls parallel to traffic).
+  - `earthHtml` fact, before: `<span>h<sub>eq</sub> (Table 3.11.6.4-1)</span>`; after: `<span>h<sub>eq</sub> (Table 3.11.6.4.1-1)</span>`.
+  - Earth inputs note (anchor `balanced groundwater. h<sub>eq</sub> defaults are`), before: `h<sub>eq</sub> defaults are Table 3.11.6.4-1.</p>`; after: `h<sub>eq</sub> defaults are Table 3.11.6.4.1-1 (abutments; Table 3.11.6.4.1-2 is for walls parallel to traffic).</p>`.
+- **Table 3.12.2.1.1-1 → Table 3.12.2.1-1** (Procedure A ranges; steel 0 to 120 °F moderate, −30 to 120 °F cold; concrete 10 to 80 °F, 0 to 80 °F; same as `TEMP_A`).
+  - `TEMP_A` comment, before: `// Table 3.12.2.1.1-1, °F`; after: `// Table 3.12.2.1-1, °F`.
+  - Temperature card subtitle (anchor `superstructure (Table 3.12.2.`), before: `(Table 3.12.2.1.1-1)`; after: `(Table 3.12.2.1-1)`.
+  - Manual, Temperature item, before: `Procedure A uses the ranges of Table 3.12.2.1.1-1 by climate`; after: `… Table 3.12.2.1-1 by climate`.
+- **Figures 3.12.2.2.1-1 to -4 → Figures 3.12.2.2-1 to -4** (T_MaxDesign / T_MinDesign contour maps).
+  - Temperature card subtitle, before: `from Figures 3.12.2.2.1-1 to -4`; after: `from Figures 3.12.2.2-1 to -4`.
+- References row (anchor `3.11.5, 3.11.6.4 (`), before: `3.11.6.4 (Table 3.11.6.4-1); 3.12.2 (Table 3.12.2.1.1-1);`; after: `3.11.6.4 (Tables 3.11.6.4.1-1, -2); 3.12.2 (Table 3.12.2.1-1, Figures 3.12.2.2-1 to -4);`.
+
+### A10-2. MassDOT mode: manual written to the 9th Ed.; calculations 10th Ed.   [wording] [no result change]
+- Manual, owner item, before: `<li><b>MassDOT</b> (Bridge Manual Part I, Chapter 3, January 2025):`; after: `<li><b>MassDOT</b> (Bridge Manual Part I, Chapter 3, January 2025; written to the AASHTO LRFD 9th Ed.; calculations per AASHTO LRFD 10th Ed. (2024)):`.
+- Report design-basis row "Owner requirements" (anchor `rows.push(['Owner requirements'`), before: `'MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025): temperature,`; after: `'MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025; written to the AASHTO LRFD 9th Ed.; calculations per AASHTO LRFD 10th Ed. (2024)): temperature,`.
+- References row `['MassDOT', …`, before: `(January 2025): 3.1.6,`; after: `(January 2025; written to the AASHTO LRFD 9th Ed.): 3.1.6,`.
+- Report cover line (anchor `' · MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025`), before: `(January 2025)'`; after: `(January 2025; written to the AASHTO LRFD 9th Ed.)'`.
+- DXF index sheet design basis, before: `' MassDOT Bridge Manual Part I, Chapter 3.'`; after: `' MassDOT Bridge Manual Part I, Chapter 3 (written to the AASHTO LRFD 9th Ed.).'`.
+
+### Verification
+- `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: all scripts pass.
+- Headless Chromium, origin/main (12b90f7) vs branch, built-in project, four cases (owner AASHTO / MassDOT × temperature Procedure A / B): `MODEL.C` (every computed result) identical; every tab's text (except 3D) and the full printed report identical except the lines listed above; localStorage keys identical; no console errors.
+- `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"`: all sections identical.
+
+### Open items (not changed)
+- Seismic hazard (3.10.2 to 3.10.4, site factors, operational classes): pending engineer decision; separate PR.
+- In MassDOT mode with Procedure B selected, the Temperature card subtitle reads "Procedure MassDOT 3.1.8, T_MaxDesign and T_MinDesign from Figures 3.12.2.2-1 to -4" (the figure text follows `T.proc !== 'A'`). Pre-existing display wording; the MassDOT ranges are what is used. Not changed.
+
+## 2026-10-19 — PR: claude/aashto10-subloads-seismic (seismic ground motion per AASHTO LRFD 10th Ed. 3.10; engineer decision 2026-10-19, option (a); PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.10.3.1 (Table 3.10.3.1-1), 3.10.4.1, 3.10.5, 3.10.6 (Table 3.10.6-1), 3.10.7.1 (Tables 3.10.7.1-1, -2), 3.10.9.1, 3.10.9.2, 11.6.5.2.1. Engineer decision 2026-10-19: the engineer enters the 22-period risk-targeted S_a table of the AASHTO-USGS database for the site; the AASHTO-2009 PGA / S_s / S_1 × F_pga / F_a / F_v method (Tables 3.10.3.2-1 to -3, three-point spectrum of 3.10.4.2) is removed. Neither article exists in the 10th Ed.
+
+### EQ10-1. Ground motion from the entered S_a table   [calc change]
+- **Where:** `eqSite()` (anchor `function eqSite() {`), constants above it (`SA_T`, `SC10`, `SC10_VSHI`, `SC10_VSLO`, `OPC`, `OPC_NAME`, `OPC_OLD`, `eqOpCat`), new `eqLnk`, new `parseSaTable`.
+- **Before:**
+  ```js
+  const SF = {   // site factors, Tables 3.10.3.2-1 (F_pga, F_a) and -3 (F_v)
+    a: { A: [0.8, 0.8, 0.8, 0.8, 0.8], B: [1, 1, 1, 1, 1], C: [1.2, 1.2, 1.1, 1.0, 1.0], D: [1.6, 1.4, 1.2, 1.1, 1.0], E: [2.5, 1.7, 1.2, 0.9, 0.9] },
+    v: { A: [0.8, 0.8, 0.8, 0.8, 0.8], B: [1, 1, 1, 1, 1], C: [1.7, 1.6, 1.5, 1.4, 1.3], D: [2.4, 2.0, 1.8, 1.6, 1.5], E: [3.5, 3.2, 2.8, 2.4, 2.4] } };
+  const sfAt = (tab, sc, x, xs) => { … };
+  const R_TAB = { wall: [1.5, 1.5, 2.0], single: [1.5, 2.0, 3.0], multi: [1.5, 3.5, 5.0], pileC: [1.5, 2.0, 3.0], pileS: [1.5, 3.5, 5.0] };   // Table 3.10.7.1-1
+  const OPI = { critical: 0, essential: 1, other: 2 };
+  function eqSite() {
+    const b = P.br, sc = b.siteClass || 'D', pga = num(b.pga), ss = num(b.ss), s1 = num(b.s1);
+    const ok = isFinite(pga) && isFinite(ss) && isFinite(s1);
+    const Fpga = isFinite(num(b.Fpga)) ? num(b.Fpga) : sfAt(SF.a, sc, pga, [0.1, 0.2, 0.3, 0.4, 0.5]);
+    const Fa = isFinite(num(b.Fa)) ? num(b.Fa) : sfAt(SF.a, sc, ss, [0.25, 0.5, 0.75, 1.0, 1.25]);
+    const Fv = isFinite(num(b.Fv)) ? num(b.Fv) : sfAt(SF.v, sc, s1, [0.1, 0.2, 0.3, 0.4, 0.5]);
+    const As = Fpga * pga, SDS = Fa * ss, SD1 = Fv * s1, Ts = SD1 / SDS, T0 = 0.2 * Ts;
+    const zone = !(SD1 >= 0) ? null : SD1 <= 0.15 ? 1 : SD1 <= 0.30 ? 2 : SD1 <= 0.50 ? 3 : 4;
+    const Csm = T => !(T > 0) ? As : T < T0 ? As + (SDS - As) * T / T0 : T <= Ts ? SDS : SD1 / T;   // 3.10.4.2
+    return { sc, pga, ss, s1, Fpga, Fa, Fv, As, SDS, SD1, Ts, T0, zone, Csm, ok: ok && isFinite(Fpga) && isFinite(Fa) && isFinite(Fv), op: b.opClass || 'other' };
+  }
+  ```
+- **After** (R_TAB unchanged):
+  ```js
+  const SA_T = [0, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.5, 10];
+  const SC10_VSHI = ['A', 'B', 'B/C', 'C'], SC10_VSLO = ['C/D', 'D', 'D/E', 'E'];
+  const OPC = { critical: 0, recovery: 1, ordinary: 2 };
+  const OPC_OLD = { critical: 'critical', essential: 'recovery', other: 'ordinary' };
+  const eqOpCat = () => OPC[P.br.eqOpCat] != null ? P.br.eqOpCat : (OPC_OLD[P.br.opClass] || 'ordinary');
+  function eqSite() {
+    const b = P.br, sa = SA_T.map((T, i) => num((b.eqSa || [])[i])), sc = b.eqSiteClass || '', nOk = sa.filter(v => isFinite(v) && v >= 0).length;
+    const legacy = ['pga', 'ss', 's1'].some(k => isFinite(num(b[k])));
+    const vsAuto = b.eqVs !== 'gt' && b.eqVs !== 'le', vsHi = b.eqVs === 'gt' ? true : b.eqVs === 'le' ? false : SC10_VSHI.includes(sc) ? true : SC10_VSLO.includes(sc) ? false : null;
+    const ok = nOk === 22 && !!sc && vsHi !== null, As = sa[0];
+    const interp = T => { if (!(T > 0)) return { T: 0, i: 0, Sa: As }; if (!(T <= 10)) return { T, i: -1, Sa: NaN }; let i = 1; while (SA_T[i] < T) i++;
+      const t0 = SA_T[i - 1], t1 = SA_T[i], s0 = sa[i - 1], s1 = sa[i]; return { T, i, t0, t1, s0, s1, Sa: T === t1 ? s1 : s0 + (s1 - s0) * (T - t0) / (t1 - t0) }; };
+    const Csm = T => interp(T).Sa;
+    const Tmax = vsHi ? 2 : 5, pts = SA_T.map((T, i) => ({ T, Sa: sa[i], TSa: T * sa[i] })).filter(p => p.T >= 1 && p.T <= Tmax);
+    const pk = pts.reduce((a, p) => (p.TSa > a.TSa ? p : a), { T: NaN, TSa: -Infinity }), Sa1 = sa[SA_T.indexOf(1.0)];
+    const SD1v = 0.9 * pk.TSa, SD1 = Math.max(SD1v, Sa1);
+    const zone = !(SD1 >= 0) ? null : SD1 <= 0.15 ? 1 : SD1 <= 0.30 ? 2 : SD1 <= 0.50 ? 3 : 4;   // Table 3.10.6-1
+    const kh0f = ['A', 'B', 'B/C'].includes(sc) ? 1.2 : 1.0, kh0 = kh0f * As;   // 11.6.5.2.1
+    return { sc, sa, nOk, legacy, vsHi, vsAuto, Tmax, pts, pk, Sa1, SD1v, SD1, As, zone, kh0f, kh0, interp, Csm, ok, op: eqOpCat() };
+  }
+  ```
+  (`SC10`, `OPC_NAME`, `eqLnk` and `parseSaTable`: copy from the file; anchors `const SC10 = [`, `const eqLnk =`, `function parseSaTable(txt)`.)
+- **Provisions (10th Ed.):**
+  - S_a at a period: the 22 listed values, linear between them; above 10 s site-specific (3.10.4.1).
+  - A_s = S_a(T = 0) (3.10.4.1; notation list of Section 3).
+  - S_D1 = max(0.90·max(T·S_a), S_a(1.0 s)), taking T·S_a at the listed periods from 1 to 2 s (v_s > 1,450 ft/s) or 1 to 5 s (v_s ≤ 1,450 ft/s) (3.10.6). The v_s range is an input: "From the site class" (A to C → > 1,450; C/D to E → ≤ 1,450, Table 3.10.3.1-1; F must be chosen) or entered.
+  - Zone from S_D1, Table 3.10.6-1 (limits 0.15 / 0.30 / 0.50, unchanged).
+  - The site class (Table 3.10.3.1-1, nine classes A to F) is a label: the database values already include it. It sets only k_h0 (EQ10-3) and the automatic v_s range.
+- **`seismicModel`:** new line after the transverse period (anchor `CT = S0.Csm(TT), peT = CT * W / Ls;`): `if (TL > 10 || TT > 10) throw new Error(…)` (S_a beyond 10 s needs a site-specific analysis, 3.10.4.1).
+- **Check case:** sample table (illustrative, not a real site), site class D:
+
+  | T (s) | 0 | 0.01 | 0.02 | 0.03 | 0.05 | 0.075 | 0.1 | 0.15 | 0.2 | 0.25 | 0.3 | 0.4 | 0.5 | 0.75 | 1.0 | 1.5 | 2.0 | 3.0 | 4.0 | 5.0 | 7.5 | 10 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | S_a | 0.180 | 0.182 | 0.186 | 0.192 | 0.215 | 0.255 | 0.295 | 0.350 | 0.380 | 0.390 | 0.385 | 0.360 | 0.330 | 0.260 | 0.200 | 0.150 | 0.115 | 0.075 | 0.050 | 0.038 | 0.020 | 0.011 |
+
+  - A_s = 0.180.
+  - S_D1 (v_s ≤ 1,450 ft/s, 1 to 5 s): T·S_a = 0.200, 0.225, **0.230**, 0.225, 0.200, 0.190. 0.90 × 0.230 = 0.207 vs S_a(1.0) = 0.200, so S_D1 = 0.207 → Zone 2.
+  - Built-in three-span example: T_L = 0.641 s → S_a = 0.330 + (0.260 − 0.330)(0.641 − 0.5)/(0.75 − 0.5) = 0.2905 (tool 0.29053). T_T = 0.242 s → 0.380 + (0.390 − 0.380)(0.242 − 0.2)/(0.25 − 0.2) = 0.3884 (tool 0.38838).
+  - Before (old method, same bridge, PGA 0.15, S_s 0.30, S_1 0.08, class D):
+    - F_pga = 1.5, F_a = 1.56, F_v = 2.4 → A_s = 0.225, S_DS = 0.468, S_D1 = 0.192 (Zone 2).
+    - C_sm(0.641) = 0.192/0.641 = 0.2995; C_sm(0.242) = S_DS = 0.468.
+  - Pier 1 elastic forces: long. 869.1 / trans. 576.4 kip before → 842.9 / 478.4 kip after (R = 3.5, so design 248.3 / 164.7 → 240.8 / 136.7 kip). Different inputs, so this shows the method, not a like-for-like comparison.
+
+### EQ10-2. Operational categories critical / recovery / ordinary (3.10.5)   [rename; R unchanged]
+- **Where:** `rOf`. Before: `const oi = OPI[P.br.opClass || 'other'];`. After: `const oi = OPC[eqOpCat()];`.
+- Table 3.10.7.1-1 (10th Ed.) has the same R values under the new names (wall 1.5 / 1.5 / 2.0, single column 1.5 / 2.0 / 3.0, multiple column 1.5 / 3.5 / 5.0, pile bents 1.5 / 2.0 / 3.0 and 1.5 / 3.5 / 5.0), so `R_TAB` is unchanged. Table 3.10.7.1-2 is unchanged (0.8 superstructure to abutment).
+- New input `br.eqOpCat` (select Ordinary / Recovery / Critical). Old `br.opClass` is kept in the file.
+
+### EQ10-3. k_h0 = A_s, or 1.2·A_s for Site Class A, B or B/C (11.6.5.2.1)   [calc change on rock sites]
+- **Where:** `earthLoads` (anchor `kh = S0.ok && !(isMass() && S0.zone === 1) ? nz(br.khR) *`).
+- Before: `nz(br.khR) * S0.As`. After: `nz(br.khR) * S0.kh0`.
+- `br.khR` is now the ratio k_h/k_h0. The value is unchanged (default 0.5, 11.6.5.2.2); the label changed from "Seismic k_h / A_s" to "Seismic k_h / k_h0".
+- Check (sample table, A_s 0.180, k_h/k_h0 0.50):
+  - Site class D: k_h = 0.50 × 0.180 = 0.090.
+  - Site class B/C: k_h = 0.50 × 1.2 × 0.180 = 0.108 (tool 0.108).
+  - Before (old method, PGA 0.15 class D): k_h = 0.5 × 0.225 = 0.1125.
+- Unchanged and still using A_s: the Zone 1 connection force factor 0.15 / 0.25 (3.10.9.2), the single-span minimum A_s·N (3.10.9.1), the MassDOT "Low" SDC A rule (A_s < 0.05) and the support-length percentage of 4.7.4.4.
+
+### EQ10-4. Input, migration of older files, display (§5, §6)   [UI / saved data]
+- **Bridge tab, Seismic:**
+  - inputs: site class (Table 3.10.3.1-1), v_s range for S_D1, latitude / longitude (record only);
+  - a paste box with "Read pasted table" (`parseSaTable`) and "Clear table";
+  - the 22-cell S_a table (`br.eqSa.0` to `.21`, typed values);
+  - operational category, γ_EQ, R option;
+  - a note with A_s, S_D1 and the zone, linked to the Seismic tab.
+  - The parser accepts: period/value per line (tab, comma or spaces, header lines ignored, an index column allowed, a "PGA" line for T = 0), a period row with a value row, period/value pairs on one line, or the 22 values in period order. Anything else gives an error and changes nothing.
+- **Removed:** the "Get from USGS" button and `usgsGet()` (the AASHTO-2009 web service), and the PGA / S_s / S_1 / F inputs.
+- **Saved data:**
+  - New `br.eqSa` (22 values), `br.eqSiteClass`, `br.eqVs`, `br.eqOpCat`.
+  - Migration (wrapper on `migEHEQ`, anchor `const m0 = migEHEQ;`): a file with no `br.eqSa` gets a blank table, a blank site class, v_s "auto", and `eqOpCat` from `opClass` (essential → recovery, other → ordinary, critical → critical).
+  - `pga`, `ss`, `s1`, `Fpga`, `Fa`, `Fv`, `siteClass`, `opClass`, `usgs`, `lat`, `lon` are kept as they are. Nothing is computed from them.
+  - Such a file shows a notice on the Seismic tab and the Bridge tab, a warning in the Summary checks, and "not entered for the 10th Ed." in the report basis. Extreme Event I has no EQ until the table is entered.
+- **Seismic tab (worked, §6):**
+  - "Design response spectrum (3.10.4.1)": the 22 values, A_s, and the plot with the points.
+  - "S_D1 and seismic zone (3.10.6)": T·S_a rows, the max, 0.90 × max, S_a(1 s), S_D1 = max(…), the Table 3.10.6-1 band → zone, the operational category, and k_h0 per 11.6.5.2.1.
+  - "S_a at the computed periods (3.10.4.1)": T, the bracketing periods, the interpolation formula with values, and the result, for each segment and direction.
+  - Links: Earth tab k_h0, report basis row and Bridge-tab note → the S_D1 card (`eqLnk`; "Seismic, §n.k" in the printed report).
+- **Text:** report basis row, DXF index line (both copies), plan text, manual, references (3.10.2, 3.10.3.1, 3.10.4.1, 3.10.5, 3.10.6 …; 11.6.5.2.1; AASHTO-USGS database row replaces the USGS AASHTO-2009 row), in-tool open item.
+
+### Verification
+- `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: all scripts pass.
+- **Headless Chromium, origin/main (a6570c0) vs branch:**
+  - Built-in project with no seismic input: `MODEL.C`, every unit's EQ and Extreme Event I envelopes identical. Only the Seismic tab "no ground motion" text and the manual differ.
+  - Main project with PGA 0.15 / S_s 0.30 / S_1 0.08 / D / essential, opened in the branch:
+    - values kept (also after autosave), `eqOpCat` = recovery, not ok, no EQ;
+    - notices shown on the Seismic tab, Bridge tab and Summary.
+  - Sample table pasted through the UI (site class D):
+    - A_s 0.180, S_D1 0.207, Zone 2;
+    - C_sm at T_L / T_T equal to the hand interpolation (0.29053 / 0.38838);
+    - k_h 0.090 (D) and 0.108 (B/C);
+    - report shows the worked lines and "Zone 2 (Seismic, §6.9)".
+  - Parser: 8 formats read correctly; a 3-number paste is refused. Typing a cell updates the table. No console errors.
+- `compare.mjs --tool page`: `page.storage` differs only by the new `br.eq*` fields (blank table).
+
+### Open items (not changed)
+- **Abutment hand-off:** `subloads-abutment-v1` still sends `seismic.As` (now S_a(0) from the table). The abutment calculator applies its own k_h; it does not get the 1.2 factor for rock sites, and it still cites 3.10.4.2 (inventory).
+- **MassDOT rules:** the MassDOT 3.4.4.x SDC A rules still map to Zone 1 / A_s < 0.05 as before; the MassDOT manual is written to the 9th Ed.
+- **4.7.4.5 displacement amplification (S_DS = 0.90 × peak S_a):** not implemented, as before.

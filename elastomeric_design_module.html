@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="apptitle">Elastomeric Bearing Design Module</div>
   <div class="byline">by Mario Lococo</div>
-  <div class="codeline">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) &middot; MassDOT LRFD Bridge Manual, Part I §3.5.7 &middot; v1.0</div>
+  <div class="codeline">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) &middot; MassDOT LRFD Bridge Manual, Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.) &middot; v1.0</div>
 </header>
 <div class="toolbar">
   <button id="btnSaveProj" title="Save current inputs as a named project">Save Project</button>
@@ -325,7 +325,7 @@ function defaultState(){
       Pdl:80.0, Pll:55.0,                // dead / live service reactions (kip)
       thetaProfile:0.000, thetaDL:0.000, thetaLL:0.004, thetaCamber:0.000, thetaTrans:0.000, seatSlope:0.010,
       deltaS:0.35,                       // total design shear movement Δs (in) — thermal+creep, already ×1.2
-      Pmin:0                             // minimum vertical load from permanent loads for the anchorage check (kip); 0 = use P_DL [14.7.5.4 / 14.7.6.4]
+      Pmin:0                             // minimum vertical load from permanent loads for the anchorage check (kip); 0 = use P_DL [14.7.5.4 / C14.8.3.1]
     },
     // MassDOT ↔ AASHTO toggles
     tog:{
@@ -437,7 +437,7 @@ function buildInputs(){
     <div class="in-note">Auto-filled from the Abutment app when opened via its “Open EDM” button; editable here.</div>
     ${inpRow("Dead-load reaction P<sub>DL</sub>","loads.Pdl","kip")}
     ${inpRow("Live-load reaction P<sub>LL</sub>","loads.Pll","kip")}
-    ${inpRow("Min. permanent load P<sub>min</sub> (0 = P<sub>DL</sub>)","loads.Pmin","kip",{title:"Minimum vertical force due to permanent loads, for the anchorage check H ≤ P_min/5 [14.7.5.4 / 14.7.6.4]. 0 or blank uses P_DL (per girder in the Girder Run)."})}
+    ${inpRow("Min. permanent load P<sub>min</sub> (0 = P<sub>DL</sub>)","loads.Pmin","kip",{title:"Minimum vertical force due to permanent loads, for the anchorage check H ≤ P_min/5 [14.7.5.4 / C14.8.3.1]. 0 or blank uses P_DL (per girder in the Girder Run)."})}
     <div class="subhead">Rotations (rad)</div>
     ${inpRow("Profile-grade rotation θ<sub>pg</sub>","loads.thetaProfile","rad")}
     ${inpRow("Dead-load rotation θ<sub>DL</sub>","loads.thetaDL","rad",{title:"Neglect if girder is cambered for DL [§3.5.7.6]."})}
@@ -468,7 +468,7 @@ function buildInputs(){
     ${inpRow("Method-A stress cap (plain)","coef.sigCapPlainA","ksi")}
     ${inpRow("Method-A G for uplift &amp; anchorage (least favourable)","coef.GmaxA","ksi",{title:"Highest G of the specified durometer range (60 duro: 0.200 ksi) [14.7.6.2]; used in the Method A rotation (uplift) check and the Method A / plain-pad anchorage check"})}
     ${inpRow("Method-A G for stress limit (least favourable)","coef.GminA","ksi",{title:"Lowest G of the specified durometer range (60 duro: 0.130 ksi) [14.7.6.2]; used in σs ≤ c·G·S"})}
-    ${inpRow("Method-A G·S coeff. (plain pad)","coef.GSplainA","",{title:"Plain-pad limit σs ≤ c·G·S [14.7.6.3.2] — EOR to confirm c against the 10th Ed. for the pad type (PEP/FGP)"})}
+    ${inpRow("Method-A G·S coeff. (plain pad)","coef.GSplainA","",{title:"Plain-pad (PEP) limit σs ≤ c·G·S [AASHTO LRFD 10th Ed. Eq. 14.7.6.3.2-1: c = 1.00, with σs ≤ 0.80 ksi, Eq. 14.7.6.3.2-2]"})}
     ${inpRow("Method-A rotation coeff. (circ.)","coef.upliftCircA","",{title:"σs ≥ 0.75·G·S·(D/hri)²·θs/n for circular bearings [14.7.6.3.5]"})}`);
   // assumptions
   h+=panel("in-assum","I-7","Engineering Assumptions",`
@@ -633,16 +633,17 @@ function computeEDM(loadsOverride){
   const upliftA=DrA*GmA*Sf*Math.pow(Bdim/hri,2)*(thTotal/n);
   const upliftAW=(!isCirc()&&!isPlain())?DrA*GmA*Sf*Math.pow(planW/hri,2)*(thTransW/n):0;   // rectangular: transverse rotation about W (+0.005 with the AASHTO tolerance)
   R.methodA={GmA,GminA,sigGS,sigCap,upliftA,upliftAW,DrA};
-  // cover layer ≤ 0.7 h_ri [14.7.5.1 / 14.7.6.1]; horizontal force H_bu = G A Δu / h_rt [14.6.3.1] (report only)
-  R.coverDC=isPlain()?null:(+g.cover)/(0.7*hri);
+  // cover layer ≤ max(0.7 h_ri, 5/16 in.) [14.7.5.1 / 14.7.6.1, 10th Ed.]; horizontal force H_bu = G A Δu / h_rt [14.6.3.1] (report only)
+  R.coverMax=Math.max(0.7*hri,5/16);
+  R.coverDC=isPlain()?null:(+g.cover)/R.coverMax;
   R.Hbu=G*A*(+L.deltaS)/hrt;
-  // anchorage [14.7.5.4 Method B / 14.7.6.4 Method A]: secure the pad if the shear force H > P_min/5 (P_min = minimum vertical force due to permanent loads)
+  // anchorage [14.7.5.4 Method B / C14.8.3.1 Method A (friction coefficient 0.2)]: secure the pad if the shear force H > P_min/5 (P_min = minimum vertical force due to permanent loads)
   // H = G·A·Δs/h_rt with Method B: specified G [14.7.5.2]; Method A and plain pads: upper-bound G of the durometer range (GmaxA) [14.7.6.2]
   const GAnc=(S.method==="B"&&!isPlain())?G:GmA;
   const PminIn=+L.Pmin, PminUsed=(PminIn>0)?PminIn:Pdl;
   const Hanc=GAnc*A*(+L.deltaS)/hrt;
   const ancDC=(PminUsed>0)?Hanc/(PminUsed/5):Infinity;
-  R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4",anchored:!!tg.anchored};
+  R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"C14.8.3.1",anchored:!!tg.anchored};
   // dashboard
   const dash=[]; const add=(id,name,dc,ref)=>dash.push({id,name,dc,pass:dc<=1.0001,ref});
   // anchorage item: a D/C check, or (pad anchored / doweled) an informational item with no D/C and no pass/fail, so nFail / governing D/C exclude it
@@ -660,7 +661,7 @@ function computeEDM(loadsOverride){
     else dash.push({id:"stab",name:"Stability [14.7.5.3.4] — "+(tg.fixedShear?"A ≤ B (fixed)":"2A ≤ B")+", stable",dc:0,pass:true,ref:tg.fixedShear?"A ≤ B":"2A ≤ B"});
     add("shearB","Shear deformation [14.7.5.3.2]",(+L.deltaS)/(0.5*hrt),"γs ≤ 0.50");
     add("reinf","Steel laminate thickness [14.7.5.3.5]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
-    add("cover","Cover layer ≤ 0.7 hri [14.7.5.1]",R.coverDC,"cover ≤ 0.7 hri");
+    add("cover","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.5.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
     addAnc("anc");
   } else {
     add("sigA","Compressive stress [14.7.6.3.2]",sigTL/Math.min(sigGS,sigCap),"σs ≤ min(1.25GS, cap)");
@@ -669,7 +670,7 @@ function computeEDM(loadsOverride){
     if(!isCirc()) add("rotAW","Compression–rotation, transverse (uplift) [14.7.6.3.5]",upliftAW/sigTL,"σs ≥ Dr·GS(W/hri)²(θt/n)");
     add("stabA","Stability thickness [14.7.6.3.6]",hrt/(isCirc()?(+g.D)/4:Math.min(planL,planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3");
     add("reinfA","Steel laminate thickness [14.7.6.3.7]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
-    add("coverA","Cover layer ≤ 0.7 hri [14.7.6.1]",R.coverDC,"cover ≤ 0.7 hri");
+    add("coverA","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.6.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
     addAnc("ancA");
   }
   R.dash=dash; R.nFail=dash.filter(d=>d.pass===false).length;
@@ -749,7 +750,7 @@ function edmGoto(tab,card){
 document.addEventListener("click",ev=>{ const a=ev.target.closest&&ev.target.closest("a.wkA"); if(!a||a.closest("#report"))return;
   ev.preventDefault(); ev.stopPropagation(); edmGoto(a.dataset.tab,a.dataset.card); },true);
 /* calculation-sheet result line: "<check>: D/C = x.xx (<ref>) PASS/FAIL" */
-function edmRefTxt(ref){ const m=/^\[?\s*([\d.]+(?:-\d+)?)\s*\]?$/.exec(String(ref||"").trim()); return m?"AASHTO "+m[1]:String(ref||"").replace(/^\[|\]$/g,""); }
+function edmRefTxt(ref){ const m=/^\[?\s*(C?[\d.]+(?:-\d+)?)\s*\]?$/.exec(String(ref||"").trim()); return m?"AASHTO "+m[1]:String(ref||"").replace(/^\[|\]$/g,""); }
 function edmResLine(name,dcTxt,ref,verdict,xref){
   const r=edmRefTxt(ref);
   return `<div class="cr-line cr-res"><div class="cr-d">${name}:</div><div class="cr-m">${dcTxt==null?"":`D/C = <b>${dcTxt}</b> `}${r?`<span class="cr-refi">(${r})</span>`:""}${xref||""}</div><div class="cr-r${verdict==="FAIL"?" cr-st-fail":""}"><b>${verdict}</b></div></div>`; }
@@ -808,7 +809,7 @@ function renderDesign(R){
       ${edmWorkedIn([["o-geom","S, A, hrt"]])}
       ${eqB("Compressive stress","AASHTO 14.7.6.3.2 / MassDOT §3.5.7.9",["\\sigma_s = \\dfrac{P_{DL}+P_{LL}}{A}",`\\sigma_s = \\dfrac{${fmtT(R.Pdl)}+${fmtT(R.Pll)}}{${fmtT(R.A,1)}} = ${fmtT(R.sigTL,3)}\\ \\text{ksi} \\le ${fmtT(S.coef.sigCapPlainA,2)}\\ \\text{ksi}`,
         `\\sigma_s \\le ${fmtT(+S.coef.GSplainA,2)}\\,G\\,S = ${fmtT(+S.coef.GSplainA,2)}(${fmtT(R.methodA.GminA,3)})(${fmtT(R.S)}) = ${fmtT(R.methodA.sigGS,3)}\\ \\text{ksi}`],
-        `G = least favourable (lowest) value of the durometer range [14.7.6.2]. The G·S coefficient is editable in I-6; EOR to confirm it against the 10th Ed. for the pad type.`,"sig")}
+        `G = least favourable (lowest) value of the durometer range [14.7.6.2]. The G·S coefficient (1.00, Eq. 14.7.6.3.2-1, 10th Ed.) is editable in I-6.`,"sig")}
       ${checkLine("Compressive stress",R.sigTL/Math.min(R.methodA.sigGS,+S.coef.sigCapPlainA),"[14.7.6.3.2]","sig")}
       ${eqB("Shear deformation","AASHTO 14.7.6.3.4",["h_{rt} \\ge 2\\Delta_s",`${fmtT(R.hrt,3)} \\ge 2(${fmtT(S.loads.deltaS,3)}) = ${fmtT(2*S.loads.deltaS,3)}\\ \\text{in}`],"","shear")}
       ${checkLine("Shear deformation",(2*(+S.loads.deltaS))/R.hrt,"[14.7.6.3.4]","shear")}
@@ -840,7 +841,7 @@ function renderDesign(R){
       ${eqB("Steel reinforcement thickness","AASHTO 14.7.5.3.5",reinfLines(R),"","reinf")}
       ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.5.3.5]","reinf")}
       ${eqB("Cover layer","AASHTO 14.7.5.1",[coverLine()],"","cover")}
-      ${checkLine("Cover layer ≤ 0.7 hri",R.coverDC,"[14.7.5.1]","cover")}
+      ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.5.1]","cover")}
       ${ancEq(R)}
       ${hbuEq(R)}`);
   }
@@ -864,7 +865,7 @@ function renderDesign(R){
     ${EDM_RPT?eqB("Steel reinforcement thickness","AASHTO 14.7.6.3.7",reinfLines(R),"","reinf"):""}
     ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.6.3.7]","reinf")}
     ${EDM_RPT?eqB("Cover layer","AASHTO 14.7.6.1",[coverLine()],"","cover"):""}
-    ${checkLine("Cover layer ≤ 0.7 hri",R.coverDC,"[14.7.6.1]","cover")}
+    ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.6.1]","cover")}
     ${ancEq(R)}
     ${hbuEq(R)}`);
 }
@@ -874,7 +875,7 @@ function reinfLines(R){ const g=S.geom,m=S.mat; return [
         `h_s \\ge \\dfrac{3\\,h_{ri}\\,\\sigma_s}{F_y} = \\dfrac{3(${fmtT(g.hri,3)})(${fmtT(R.sigTL,3)})}{${fmtT(m.Fy)}} = ${fmtT(R.reinf.hsService,4)}\\ \\text{in (service)}`,
         `h_s \\ge \\dfrac{2.0\\,h_{ri}\\,\\sigma_L}{\\Delta F_{TH}} = \\dfrac{2.0(${fmtT(g.hri,3)})(${fmtT(R.sigLL,3)})}{${DFTH_A}} = ${fmtT(R.reinf.hsFatigue,4)}\\ \\text{in (fatigue, Cat. A)}`,
         `h_{s,req} = ${fmtT(R.reinf.hsReq,4)}\\ \\text{in} \\le h_{s,prov} = ${fmtT(R.reinf.tProvided,4)}\\ \\text{in}`]; }
-function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le 0.7\\,h_{ri} = ${fmtT(0.7*g.hri,3)}\\ \\text{in}`; }
+function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le \\max(0.7\\,h_{ri},\\ 5/16) = \\max(0.7(${fmtT(g.hri,3)}),\\ 0.3125) = ${fmtT(Math.max(0.7*g.hri,5/16),3)}\\ \\text{in}`; }
 /* D11 (report only): the stability-thickness check has no worked block in the tab; this shows the comparison the check itself makes */
 function stabTEq(R,ref){ const g=S.geom, circ=isCirc();
   return eqB("Stability thickness",ref,[circ?`h_{rt} \\le \\dfrac{D}{4} = \\dfrac{${fmtT(+g.D)}}{4} = ${fmtT((+g.D)/4,3)}\\ \\text{in}, \\quad h_{rt} = ${fmtT(R.hrt,3)}\\ \\text{in}`
@@ -1019,9 +1020,9 @@ function inputEcho(){ const g=S.geom,m=S.mat,L=S.loads;
    edmPageCSS). No value is computed here: every number is LAST (computeEDM) as shown in the tabs. */
 const EDM_REFS=[
   ["AASHTO LRFD, 10th Ed. (2024)","Art. 14.7.5, Method B: 14.7.5.1 (shape factor, cover layer), 14.7.5.2 (shear modulus), 14.7.5.3.2 (shear deformation), 14.7.5.3.3 (combined shear strain), 14.7.5.3.4 (stability), 14.7.5.3.5 (reinforcement), 14.7.5.4 (anchorage)"],
-  ["","Art. 14.7.6, Method A: 14.7.6.1 (cover layer), 14.7.6.2 (shear modulus), 14.7.6.3.2 (compressive stress), 14.7.6.3.4 (shear deformation), 14.7.6.3.5 (compression and rotation), 14.7.6.3.6 (stability), 14.7.6.3.7 (reinforcement), 14.7.6.4 (anchorage)"],
-  ["","Art. 14.4.2.1 (design rotation, construction tolerance); Art. 14.6.3.1 (horizontal force H_bu); Table 6.6.1.2.5-3 (ΔF_TH, Category A)"],
-  ["MassDOT LRFD Bridge Manual","Part I §3.5.7, elastomeric bearings (§3.5.7.2 to §3.5.7.10; Figs 3.5.7-2 to 3.5.7-5); edition: verify"]];
+  ["","Art. 14.7.6, Method A: 14.7.6.1 (cover layer), 14.7.6.2 (shear modulus), 14.7.6.3.2 (compressive stress), 14.7.6.3.4 (shear deformation), 14.7.6.3.5 (compression and rotation), 14.7.6.3.6 (stability), 14.7.6.3.7 (reinforcement)"],
+  ["","Art. 14.4.2.1 (design rotation, construction tolerance); Art. 14.6.3.1 (horizontal force H_bu); Table 6.6.1.2.5-3 (ΔF_TH, Category A); Art. 14.8.3.1 / C14.8.3.1 (anchorage of Method A and plain pads, friction coefficient 0.2: H ≤ P_min/5)"],
+  ["MassDOT LRFD Bridge Manual (written to the AASHTO LRFD 9th Ed.)","Part I §3.5.7, elastomeric bearings (§3.5.7.2 to §3.5.7.10; Figs 3.5.7-2 to 3.5.7-5); edition: verify"]];
 function edmPageCSS(){
   const p=S.proj||{}, q=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/\n/g," ");
   const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
@@ -1113,7 +1114,7 @@ function buildReport(){ const R=LAST; if(!R)return; const P=S.proj;
   ct.appendChild(mk("h1",null,"Elastomeric Bearing Design"));
   ct.appendChild(mk("p",null,esc(P.name)||"Untitled"));
   ct.appendChild(mk("p","cr-cover-p",esc(kind.charAt(0).toUpperCase()+kind.slice(1))+" pad, Method "+esc(meth)));
-  ct.appendChild(mk("p","cr-cover-p","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT LRFD Bridge Manual, Part I §3.5.7"));
+  ct.appendChild(mk("p","cr-cover-p","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT LRFD Bridge Manual, Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.)"));
   ct.appendChild(mk("p","cr-cover-p","Elastomeric Bearing Design Module v1.0, by Mario Lococo · "+esc(new Date().toLocaleString())));
   cover.appendChild(ct);
   const hg=mk("div","rptHdrGrid");

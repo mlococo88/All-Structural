@@ -528,3 +528,147 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
     - Screen wording or behaviour only; no rating uses it. Not changed. Which is intended?
   - **Dashboard jumps.** The existing "<vehicle> rating factor" jumps (`data-go`) still use `scrollIntoView`, so the panel header lands under the sticky tab bar. The new links avoid this. Not changed (existing behaviour); they could route through `archGoto`.
   - **Section order.** The report keeps its existing section order: Rating Summary (§15) prints after the Midas verification (§14), and Mesh Convergence after it.
+
+## 2026-10-19 — PR: claude/aashto10-stone-arch (PR link added after merge)
+
+Line numbers are approximate, as of this fix. Search for the anchor text.
+
+### SA-A10: LRFD fill spread credit below 2 ft: 1.0H → 1.15H (AASHTO LRFD 10th Ed. Table 3.6.1.2.6a-1)   [calc change, optional input only] [less conservative where it acts]
+- **Where:**
+  1. `inputPanel()`, select `shallowRate` (≈ line 9718). Anchor: `sel("shallowRate",[`
+  2. `restore()`, after the `shallowRule==="spread"` mapping (≈ line 12300). Anchor: `o.fields.shallowRate="1.75";`
+  3. Notice flag (≈ line 9618). Anchor: `let unitMigrated=null, tieReverted=null`
+  4. `showAutoInfo()`, new `sMsg` notice (≈ line 12426). Anchor: `const uMsg=unitMigrated`
+  5. `liveLoadSection()`, shallow-fill steps' reference (≈ line 7954). Anchor: `label:"Longitudinal spread length, shallow fill"`
+  6. `ARCH_REFS`, AASHTO LRFD row (≈ line 12709). Anchor: `["AASHTO LRFD",`
+  7. Comments in `ARCH` (≈ lines 1775 and 1944). Anchors: `"tire"  The tire contact area grown at 1.75H`, `r = 0      no credit.`
+- **Problem:** the option "1.0H both directions — LRFD 3.6.1.2.6 rate" used 1.0, an earlier LRFD rate for fill that is not select granular. In the 10th Ed., Table 3.6.1.2.6a-1 gives LLDF = 1.15 for all culverts and buried structures other than concrete pipe, with no fill-type distinction (1.15 to 1.75 applies only to concrete pipe, 2 ft to 8 ft diameter). The footprint grows from the tire patch, 20 in wide by 10 in long (Art. 3.6.1.2.5; w_t, l_t in Art. 3.6.1.2.6b), which the tool already uses (TIRE_W = 20/12, TIRE_L = 10/12). Where the option is selected and an axle lands over less than 2 ft of cover, the spread is now wider, so the pressure is lower: **less conservative**.
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 3.6.1.2.6a, Table 3.6.1.2.6a-1; Art. 3.6.1.2.6b, Eqs. 3.6.1.2.6b-1 to -6 (patch length and width, interaction depths); Art. 3.6.1.2.5 (tire contact area).
+- **Before / After:**
+  1. Select option. Before:
+     ```js
+               ["1","1.0H both directions — LRFD 3.6.1.2.6 rate"],
+     ```
+     After:
+     ```js
+               ["1.15","1.15H both directions — AASHTO LRFD 10th Ed. Table 3.6.1.2.6a-1 LLDF"],
+     ```
+     The option value is the rate itself (`shallowRate(p)` reads `+p.shallowRate`), so no other calculation code changes. The solver (`nodalLL`, shallow branch: `sL=TIRE_L+r*h, wt2=TIRE_W+r*h`) and every report that prints the rate (`nfx(rateSh,2)`) pick up 1.15.
+  2. `restore()`, inserted after `o.fields.shallowRate="1.75";` (migration of saved data, CLAUDE.md §5):
+     ```js
+       rateUpdated=false;
+       if(o.fields&&o.fields.shallowRate!=null&&String(o.fields.shallowRate).trim()!==""&&+o.fields.shallowRate===1){
+         o.fields.shallowRate="1.15"; rateUpdated=true;
+       }
+     ```
+     (with a comment). Without it, a saved "1" has no matching option, the select reads "", and the file would open with **no** credit (rate 0). Keys and file format are unchanged; only the value "1" is mapped to the option that replaced it.
+  3. Before: `let unitMigrated=null, tieReverted=null;` After: `let unitMigrated=null, tieReverted=null, rateUpdated=false;`
+  4. `showAutoInfo()`: new `const sMsg=rateUpdated ? '<div class="warn" …><b>Fill spread credit updated on opening.</b> …</div>' : "";` placed before `const uMsg=unitMigrated`, and both `e.innerHTML=rMsg+uMsg+…` lines become `e.innerHTML=rMsg+sMsg+uMsg+…`. The notice says the file used 1.0H, that it is now 1.15H per the 10th Ed. table, and to check the rating against the earlier one.
+  5. Before: both shallow-fill steps had `ref:"credited dispersion"`. After: `const refSh=(Math.abs(rateSh-1.15)<1e-9)?"credited dispersion; LLDF 1.15, AASHTO LRFD 10th Ed. Table 3.6.1.2.6a-1":"credited dispersion";` and `ref:refSh` on both steps.
+  6. Before: `["AASHTO LRFD","Art. 3.6.1.2.6, cited only for the optional \"tire patch + 1.75H\" spread basis. Edition: verify."],`
+     After: `["AASHTO LRFD","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 3.6.1.2.6a and Table 3.6.1.2.6a-1 (LLDF = 1.15 for culverts and buried structures other than concrete pipe: the optional 1.15H fill spread credit below 2 ft), Art. 3.6.1.2.5 (tire contact area 20 in wide by 10 in long), Art. 3.6.1.2.6b (wheel interaction: the wheel-line merge over the outside limits; axle interaction is not reached below 2 ft). The optional \"tire patch + 1.75H\" basis at 2 ft or more takes the LRFD tire-patch footprint form with the Std. Spec. 6.4.2 rate of 1.75, not the LRFD LLDF."],` (split over lines with `+`).
+  7. Comments only: the "tire" deep basis is described as the LRFD tire-patch form at the Std. Spec. rate of 1.75 (not "the LRFD 3.6.1.2.6 form"); the `r = 1.0` line of the rate list becomes `r = 1.15` with the 10th Ed. citation, the migration, the D_i open item and the interaction-depth note.
+- **Interaction depths (verified, no code change):** across the span, Eq. 3.6.1.2.6b-1 (H_int-t) is the depth at which adjacent wheel patches meet; the tool's merge of wheel lines over their outside limits once w_t reaches the gap (`transDisp`, `wt2>=GAGE`) is the same test: H ≥ (gap − 20/12)/1.15 = 3.77 ft for the 6 ft gage and 2.03 ft for the default 4 ft gap between trucks, so for default inputs it is not reached in the < 2 ft branch. Along the span, H_int-p = (s_a − 10/12)/1.15 ≥ 2.75 ft for the 4 ft minimum axle spacing of the tool's vehicles: not reached below 2 ft; the tool superposes axle patches (unchanged).
+- **Unchanged:** the default (0, no credit); the 1.75H option; the Std. Spec. 6.4.2 branch at 2 ft or more (both "std" and "tire" bases); MBE, MassDOT, AREMA and Std. Spec. items; impact (Std. Spec. 3.8.2.3).
+- **Check cases** (H20/HS20 legal loads; one wheel = 16 k of the 32 k axle; pressure without impact; t_ws = 0 so H is the fill):
+  - **H = 1.5 ft (option acts).** Before (1.0H): L_s = 10/12 + 1.0 × 1.5 = 2.333 ft; w_t = 20/12 + 1.0 × 1.5 = 3.167 ft (< 6 ft gage, separate wheel lines); p = 16/(2.333 × 3.167) = 2.165 ksf. After (1.15H): L_s = 0.833 + 1.15 × 1.5 = 2.558 ft; w_t = 1.667 + 1.725 = 3.392 ft; p = 16/(2.558 × 3.392) = 16/8.677 = 1.844 ksf (−14.8 %). The Nodal Results row at the crown shows H 1.500, L_s 2.558, w_t 3.392, area 8.677, "6.4.1 at 1.15H".
+  - Rating, span 20 ft, rise 5 ft, ring 12 in, crown cover 1.5 ft, springing cover 2.5 ft, otherwise defaults, option selected: H20 RF 0.3848 → 0.4327; HS20 0.3848 → 0.4333; Type 3, 3S2, 3-3, SU4, EV3 unchanged (their governing positions are not affected). Default 40/10 ft arch with 1.5 ft crown cover: all RF unchanged.
+  - **H = 3 ft (option does not act).** The < 2 ft credit does not apply; the Std. Spec. 6.4.2 branch governs before and after: L_s = w_t = 1.75 × 3 = 5.25 ft (std basis), p = 16/5.25² = 0.580 ksf; all RF identical (H20 0.8342, HS20 0.7456 on the default arch). For reference only, the 10th Ed. form at 3 ft would be l_w = 0.833 + 3.45 = 4.283 ft, w_w = 1.667 + 3.45 = 5.117 ft (+ 0.06 D_i/12; H < H_int-t = 3.77 ft), p = 16/(4.283 × 5.117) = 0.730 ksf. Not implemented: the tool rates at 2 ft or more to Std. Spec. 6.4.2.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Stone Masonry Arch Load Rating.html"`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file "Stone Masonry Arch Load Rating.html"`: page.text and page.storage identical (default rate 0).
+  - Headless, main with "1" vs branch with "1.15", through `__restoreForTest`: crown H, branch, L_s, w_t and the wheel pressure above; `ARCH.rateVehicle` for H20, HS20, T3, T3S2, T33, SU4, EV3 at covers 1.5 ft and 3.0 ft (results above). Nodal Results and Live Load tab text read back (values above; the step reference shows the 10th Ed. table).
+  - Migration: a snapshot with `shallowRate: "1"` restored on the branch: select "1.15", model rate 1.15, the next snapshot saves "1.15", the notice "Fill spread credit updated on opening" shows; H20/HS20 RF equal those of a fresh 1.15 run.
+- **Other copies:** none.
+- **Needs engineer:**
+  1. **D_i term.** 10th Ed. Eqs. 3.6.1.2.6b-1 to -3 add 0.06 D_i/12 (D_i = clear span, in.) to the patch width. Not applied: it is a structural load-sharing width of the same kind as E = 4 + 0.06S, which this tool deliberately does not credit to an unreinforced ring. For a 20 ft span it would add 1.2 ft to w_t. Apply it with the 1.15H option, or not?
+  2. **Fill under 1.0 ft.** 10th Ed. 3.6.1.2.6a applies the spread to nonconcrete culverts with 1.0 ft of fill or more. The option credits 1.15H at any cover below 2 ft, including under 1.0 ft. Limit it to H ≥ 1.0 ft?
+  3. **"Tire patch + 1.75H" basis at 2 ft or more.** It combines the LRFD footprint form with the Std. Spec. rate; the 10th Ed. rate for this structure type would be 1.15 (with the interaction-depth merge and the D_i term). Left unchanged and relabelled. Should it stay as is?
+  4. **Assumptions note "No article authorizes a spread at that depth"** (shown when a credit is taken below 2 ft): true for the Std. Spec. framework the tool rates to, but 10th Ed. 3.6.1.2.6a does give a spread for nonconcrete culverts with 1.0–2.0 ft of fill. Reword when the 1.15H option is selected?
+- **Resolved 2026-10-19 (engineer):** 1 not applied; 2 limit to H ≥ 1.0 ft; 3 keep; 4 reword. Done in SA-A10b below.
+
+## 2026-10-19 — PR: claude/aashto10-stone-arch-2 (PR link added after merge)
+
+Line numbers are approximate, as of this fix. Search for the anchor text.
+
+### SA-A10b: LRFD 1.15H credit only where the cover at the axle is ≥ 1.0 ft; D_i term and assumptions note stated   [calc change, 1.15H option only] [more conservative where it acts]
+- **Engineer decisions (2026-10-19), on the open items of SA-A10:**
+  1. Credit 1.15H only at H ≥ 1.0 ft (10th Ed. Art. 3.6.1.2.6a). Below that there is no spread, and the derivation says why.
+  2. The 0.06 D_i/12 term is not applied; this is stated in the assumptions.
+  3. The "tire patch + 1.75H" basis stays as it is.
+  4. The note "No article authorizes a spread at that depth" is reworded for the 1.15H option.
+- **Provision verified:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.6.1.2.6a. The distribution procedure applies to all nonconcrete culverts with 1.0 ft of fill or more (and to the concrete culverts named in that article). LLDF is from Table 3.6.1.2.6a-1. The D_i term is in Eqs. 3.6.1.2.6b-1 to -3. For a nonconcrete culvert under less than 1.0 ft of fill, the article gives no spread.
+- **Problem:** with the 1.15H option, SA-A10 spread every axle landing under 2 ft of cover, including under 1.0 ft, where the LRFD spread does not apply. Such an axle now takes no spread. It is carried exactly as with no credit: a concentrated strip load over the width E of the shallow-fill width selector (the tire width 20 in by default, or E = 4 + 0.06S). This is **more conservative** for axles over < 1.0 ft of cover. Nothing changes at 1.0 ft or more, with no credit, or with the 1.75H option.
+- **Where / Before / After:**
+  1. `ARCH`, after `function shallowRate(p){…}` (anchor `function shallowRate(p){`). Added:
+     ```js
+     const LRFD_RATE=1.15, LRFD_MIN_FILL=1.0;
+     function isLrfdRate(r){return Math.abs(r-LRFD_RATE)<1e-9;}
+     function rateAt(p,H){
+       const r=shallowRate(p);
+       return (isLrfdRate(r)&&H!=null&&H<LRFD_MIN_FILL)?0:r;
+     }
+     ```
+     `rateAt`, `isLrfdRate` and `LRFD_MIN_FILL` are exported from `ARCH` (anchor `SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,`).
+  2. `llRegime` (anchor `function llRegime(model,x){`).
+     - Before: `const r=shallowRate(model.p);`
+     - After: `const r=rateAt(model.p,H);` plus `const lrfdCut=isLrfdRate(shallowRate(model.p))&&H!=null&&H<LRFD_MIN_FILL;`, returned as `lrfdCut`. H is the cover where the axle lands, which is the station the regime is already decided at.
+  3. `sideBySideAt` (anchor `function sideBySideAt(p,H){`).
+     - Before: `const r=shallowRate(p);`
+     - After: `const r=rateAt(p,H);`
+  4. `nodalLL` (anchor `const disp=[],conc=[];`). Each 6.4.1 axle carries its own `r`.
+     - Before:
+       ```js
+         (llRegime(model,xa).conc?conc:disp).push({ax,xa});
+       …
+         if(conc.length){
+           const r=shallowRate(model.p);
+           if(r<=0){ …addConc… }else{ …spread loop over conc… }
+         }
+       ```
+     - After:
+       ```js
+         const rg=llRegime(model,xa);
+         (rg.conc?conc:disp).push({ax,xa,r:rg.r});
+       …
+         const concPt=conc.filter(a=>a.r<=0), concSp=conc.filter(a=>a.r>0);
+         if(concPt.length){ const E=shallowWidth(model.p), kC=sideBySide(model.p,E,true).kappa;
+           for(const a of concPt)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E)*kC); }
+         if(concSp.length){ const r=concSp[0].r; …same spread loop over concSp… }
+       ```
+     - With all axles in one group (no credit, 1.75H, or 1.15H with every 6.4.1 axle on ≥ 1.0 ft), the arithmetic and its order are the same as before. `nodalLLByAxle` already decides per axle from `rg.r`, so it follows without a change; checked against `nodalLL` (below).
+  5. Live Load figure, `stateAt` (anchor `if(rg.conc){shallow=true; rate=rg.r; Esh=rg.E; break;}`). Added `if(shallow&&H!=null&&ARCH.rateAt(p,H)<=0)rate=0;`, so a node under < 1.0 ft is drawn with the footprint, as the solver loads it.
+  6. `validate()` assumptions note (anchor `credited below the ${nfx(ARCH.SHALLOW_FILL,1)} ft threshold, in both directions.`). With the 1.15H option, the sentence "No article authorizes a spread at that depth …" is replaced by text saying:
+     - the Std. Spec. (the basis of this rating) has no spread below 2 ft;
+     - 1.15H comes from LRFD 10th Ed. Table 3.6.1.2.6a-1 and applies at 1.0 ft or more (Art. 3.6.1.2.6a);
+     - an axle over less takes no spread (and the least cover is named when it is below 1.0 ft);
+     - the 0.06 D_i/12 term is omitted, as a load-sharing width like E = 4 + 0.06S;
+     - an LRFD distribution inside a Std. Spec. / MBE rating is a stated choice.
+
+     The other rates keep the old wording.
+  7. `liveLoadSection()` (anchor `label:"Transverse spread width, shallow fill"`). With 1.15H:
+     - the transverse-width note adds the D_i statement;
+     - a new step, "Least fill for the LRFD spread" (H_ax ≥ 1.0 ft vs H_min, ref. AASHTO LRFD 10th Ed. Art. 3.6.1.2.6a), says why no spread is taken below 1.0 ft and names the width E used there;
+     - the concentrated-axle equation and note (anchor `if(rateSh<=0){`) are now also shown when 1.15H is selected and part of the barrel is under 1.0 ft. Condition before: `rateSh<=0`. After: `rateSh<=0||(ARCH.isLrfdRate(rateSh)&&covMinH<ARCH.LRFD_MIN_FILL)`.
+  8. Comment in the rate list (anchor `r = 1.15   AASHTO LRFD 10th Ed.`): the D_i item and the 1.0 ft limit are recorded as the engineer's decisions.
+- **Saved data:** none changed (no key, no field, no option value).
+- **Check cases** (H20/HS20 legal loads; one wheel = 16 k of the 32 k axle; pressure without impact; t_ws = 0; span 20 ft, rise 5 ft, 12 in ring, springing cover 2.5 ft; HS20 middle axle at the crown node, tributary length 2.489 ft; 1.15H option):
+  - **H = 0.75 ft (changed).**
+    - Before: L_s = 10/12 + 1.15 × 0.75 = 1.696 ft; w_t = 20/12 + 0.8625 = 2.529 ft; p = 16/(1.696 × 2.529) = 3.731 ksf over L_s. Strip load at the node = 3.731 × 1.696 = 16/2.529 = 6.326 kip.
+    - After: no spread, so the concentrated strip load is w = (P_ax/2)/E = 16/1.667 = 9.600 kip (E = b_t = 20 in; E < 6 ft gage), on the crown node. Tool: q = 6.32619 → 9.6 kip at the crown; nodal pressure 2.5414 → 3.8566 ksf (9.6/2.489).
+    - RF: H20 0.2493 → 0.1587; HS20 0.2493 → 0.1587; T3 0.3813 → 0.2846; T3S2 0.4182 → 0.3122; T33 0.463 → 0.3176; SU4 0.3813 → 0.2851; EV3 0.2091 → 0.1561. These equal neither the no-credit RF (H20 0.1302) nor the old 1.15H RF: axles over 1.0–2.0 ft of cover still take 1.15H.
+    - With the slab width (E = 4 + 0.06 × 20 = 5.2 ft): w = 16/5.2 = 3.077 kip per wheel line; the 24 ft barrel carries 2 lanes, and the adjacent trucks' wheel lines 4 ft apart lie within E, so they superimpose (κ = 2): 6.154 kip. Crown q 6.326 → 6.154 kip; HS20 0.2493 → 0.2476, SU6 0.4519 → 0.4799 (the slab width shares more than the 1.15H spread, so some RF rise).
+  - **H = 1.5 ft (unchanged).** L_s = 0.833 + 1.725 = 2.558 ft; w_t = 1.667 + 1.725 = 3.392 ft; p = 16/(2.558 × 3.392) = 1.844 ksf before and after. Tool crown pressure 1.844 ksf both; all RF identical (H20 0.4327, HS20 0.4333).
+- **How verified:**
+  - `node tests/check-syntax.mjs "Stone Masonry Arch Load Rating.html"`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file "Stone Masonry Arch Load Rating.html"`: page.text and page.storage identical.
+  - Headless, main vs branch, through `__restoreForTest`; `ARCH.nodalLL` (HS20 at the crown) and `ARCH.rateVehicle` for all 11 highway vehicles:
+    - Identical: default; default arch with 1.15H at 1.5 ft; 20/5 arch with 1.15H at 1.5 ft; 1.75H at 0.75 ft; no credit at 0.75 ft.
+    - Different only as above: 1.15H at 0.75 ft, with the tire width and with the slab width.
+  - `nodalLLByAxle` vs `nodalLL` at 0.75 ft with 1.15H, every vehicle, positions −40 to 30 ft at 0.7 ft steps, both directions: max |Σ axQ − q| = 2.2e−16.
+  - Live Load tab text read back: the new step, the concentrated-axle equation and the D_i note. Summary assumptions text read back. The figure's "Spread at cut" at the crown reads w_t 1.67 ft (the footprint).
+- **Other copies:** none.
+- **Open items (noticed, not changed):**
+  - **Live Load tab, "Worked example — node …, the most heavily loaded node"** (anchor `const reg=ARCH.llRegime(M,xa);` in `liveLoadSection`). Every axle with `reg.conc` is worked as a concentrated strip load, even when a spread credit (1.15H or 1.75H) is in force and the solver spreads it. Already so on main for any credit; this change does not affect it. The printed contributions can differ from the solver's nodal load when a credit is selected.
+  - **Node worked calculation (Nodal Results), note on 6.4.1 axles** (anchor `axles land on cover shallower than`). It says those axles are "not dispersed through the fill" even when a credit spreads them. Wording only; already so on main.
+  - **Live Load figure with mixed regimes:** the figure still takes the rate of the first 6.4.1 axle for the whole cut, now corrected only by the node's own cover (item 5).

@@ -18,17 +18,18 @@ Last updated: 2026-10-18 (deflection item removed: already decided, LL8).
 ### AASHTO LRFD 10th Ed. gaps (inventory 2026-10-19; engineer decision "follow the owner, else 10th")
 Labels relabelled where every cited article checked out: Bridge Geometry (#324), Section Property Calculator (#325). The tools below use provisions the 10th Ed. defines differently, so their labels were NOT changed; each needs an engineer decision (result changes). Some already say "10th Ed." while using the older provision.
 - **Rebar development (ACI Rebar, CBC Development & Splice, abutment, Retaining Wall):** ℓdb = 2.4 db fy/√f′c and hook 38 db fy/(60√f′c) are 9th Ed.; the 10th has a new ℓdb equation (5.10.8.2.1a), new λrc bounds (5.10.8.2.1c), new hook ℓdh (5.10.8.2.4), f′c up to 15 ksi; compression development renumbered to 5.10.8.2.2.
-- **ST-Girder studs:** Qn = min(0.5Asc√(f′cEc), AscFu) and φsc 0.85 vs 10th Qn = 0.70AscFu, φsc 1.00; stud fatigue Zr form changed. GirderDetail stud module uses 0.85·Qn.
+- **ST-Girder studs:** done 2026-10-19 (#335, engineer approved): 10th Ed. Qn = 0.70AscFu, φsc 1.00, Zr = (ΔF)n·Asc (Condition 9.2), studs on their own Fatigue I/II crossover, renumbers, owner edition statement (fix log A10).
+- **GirderDetail studs:** done 2026-10-19 (#338): Qn = 0.70AscFu, φsc 1.00, Fatigue II Zr = (A/N)^(1/5)Asc (Condition 9.2), h/d ≥ 5.0. Open: lightweight h/d 7.0; keep the "Qn entered" override?; bearing stiffener web strip Fyw/Fys only below 0.7Fys (10th: whenever Fyw < Fys); n table 6.6.1.2.5-1 has no 40 ft row (fixlog AASHTO10-SC).
 - **index (MCT):** Lp = 1.0rt√(E/Fy) vs 10th 1.1rt; new Cb equation.
-- **Bridge Substructure Loading:** 2009 three-point seismic spectrum and essential/other classes vs 10th risk-targeted spectra and critical/recovery/ordinary; several renumbered tables.
+- **Bridge Substructure Loading:** renumbers and MassDOT 9th Ed. note merged (#329). Seismic per 10th Ed. (entered 22-period AASHTO-USGS Sa table, SD1 per 3.10.6, critical/recovery/ordinary, kh0 1.2As on rock): branch claude/aashto10-subloads-seismic (awaiting approval; older projects keep their 2009 values and get no EQ until the table is entered).
 - **psbeam:** debonding limits 25 % total / 40 % per row vs 10th 45 % per row plus termination rules.
 - **CBC Beam Capacity:** lightweight shear φ 0.80 vs 10th 0.90.
 - **Pile Designer:** group efficiency reduces in more cases than 10.7.3.9 (conservative); φc default 0.80.
 - **Spread Footing:** depth factors (option) Vesić vs 10th arctan form, dq ≤ 1.4, Nq term only.
 - **Stone Arch:** 3.6.1.2.6a LLDF 1.15 for buried structures vs tool's rule.
 - **abutment:** As cited to 3.10.4.2 (deleted in 10th); several renumbered articles.
-- **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in); 14.7.6.4 citation.
-- **Gusset:** φ for gusset compression / shear yielding and chord splice differ between LRFD 10th and MBE 3rd; decide which governs for LRFR.
+- **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in) and 14.7.6.4 citation: done 2026-10-19 (engineer approved). Still open: Method B anchorage uses H ≤ P_min/5 labelled 14.7.5.4; the 10th Ed. 14.7.5.4 test is θs/n ≥ 3εa/Si (fixlog E10 open items).
+- **Gusset:** decided 2026-10-19 (engineer): the LRFR rating keeps the MBE 3rd Ed. φ (0.90 / 1.00 / 0.85); citations corrected to MBE, LRFD 10th 6.5.4.2 design values (0.75 / 0.80 / 0.65) noted as not used; fillers renumbered to 6.13.6.1.4 (#327, fix log C19).
 Full per-tool list (OK / renumbered / changed): agent inventory of 2026-10-19 (session scratchpad aashto-ed/inventory.md).
 
 ## 2. Blocked — reference documents not available
