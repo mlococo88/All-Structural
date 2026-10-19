@@ -5565,8 +5565,8 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
         <Num l="γLL Service III" v={inp.opt.gLLs3} set={v=>u('opt.gLLs3',v)} step={0.1}
              sub="1.0 only with refined losses (5.9.3.4) taking the elastic gain; 0.8 otherwise (Table 3.4.1-4)"/>
         <Num l="Release compression limit (× f′ci)" v={inp.opt.relCfac} set={v=>u('opt.relCfac',v)} step={0.05} min={0}
-             sub="0.65 per Art. 5.9.2.3.1a; some owners require 0.60. Blank = 0.65"/>
-        <Fld l="Corrosion exposure" sub="sets the Service III tension limit: 0.19√f′c vs. zero tension">
+             sub="0.65 per Art. 5.9.2.3.1a (10th Ed.: 0.70 at component extremities where lateral bending (tilt, wind, transport) is included in the analysis); some owners require 0.60. Blank = 0.65"/>
+        <Fld l="Corrosion exposure" sub="sets the Service III tension limit (Table 5.9.2.3.2b-1, λ = 1.0): moderate 0.19√f′c ≤ 0.6 ksi; severe 0.0948√f′c ≤ 0.3 ksi">
           <Seg opts={[{v:'normal',l:'MODERATE'},{v:'severe',l:'SEVERE'}]} v={inp.opt.corrosion} set={v=>u('opt.corrosion',v)}/></Fld>
       </div>
       {!R.error&&inp.opt.dfpSSauto&&+inp.ts>0&&<div className="hint" style={{marginTop:2}}>Deck-shrinkage gain computed per 5.9.3.4.3d = <b>{fmt(R.gains.deckShrAuto,2)} ksi</b> (deck shrinks against the composite section, relieving strand stress). Switch to MANUAL to override.</div>}

@@ -1708,3 +1708,38 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Every provisio
 - Options "Corrosion exposure" sub-text says "0.19√f′c vs. zero tension"; the calculation uses 0.0948λ√f′c ≤ 0.3 ksi for severe exposure (Table 5.9.2.3.2b-1), which the Stresses tab states correctly. Wording only.
 - Item (I) shows a reminder for every debonded BT-72 design because b_bf/b_w = 26/6 > 4; the tool cannot check which strands in a row are debonded (it assumes outermost first in the 3-D view only).
 - The MBE and PCI reference rows still have "edition not stated: verify".
+
+## 2026-10-19 — PR: claude/aashto10-psbeam-2 (follow-up to #330; Options input notes, wording only; PR link added after merge)
+
+No computed value changes: only two `sub` texts in `InputsTab` (Options pane). Basis: AASHTO LRFD 10th Ed. (2024). Closes two open items of the claude/aashto10-psbeam entry; the item (I) web-width reminder is kept as is (engineer decision 2026-10-19).
+
+### AE5. Corrosion exposure note matches the calculation and Table 5.9.2.3.2b-1   [wording only]
+- **Where:** `InputsTab`, anchor `<Fld l="Corrosion exposure"` (≈5569). Calculation unchanged: `computeAll` limits, anchor `srvT:inp.opt.corrosion==='severe'?`.
+- **Problem:** the note said "0.19√f′c vs. zero tension". The calculation uses 0.0948√f′c ≤ 0.3 ksi for severe exposure (the Stresses tab and report state this). No tension applies only to unbonded tendons in Table 5.9.2.3.2b-1, which this tool does not model. λ = 1.0 throughout (normal-weight concrete only; the tool warns for lightweight).
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 5.9.2.3.2b-1: bonded, not worse than moderate corrosion 0.19λ√f′c ≤ 0.6 ksi; bonded, severe corrosive conditions 0.0948λ√f′c ≤ 0.3 ksi.
+- **Before:**
+  ```jsx
+          <Fld l="Corrosion exposure" sub="sets the Service III tension limit: 0.19√f′c vs. zero tension">
+  ```
+- **After:**
+  ```jsx
+          <Fld l="Corrosion exposure" sub="sets the Service III tension limit (Table 5.9.2.3.2b-1, λ = 1.0): moderate 0.19√f′c ≤ 0.6 ksi; severe 0.0948√f′c ≤ 0.3 ksi">
+  ```
+- **Check:** default f′c = 8.5 ksi: moderate 0.19√8.5 = 0.554 ksi ≤ 0.6 → 0.554; severe 0.0948√8.5 = 0.276 ksi ≤ 0.3 → 0.276. Unchanged before and after (the note only).
+
+### AE6. Release compression note: 0.70 f′ci option of Art. 5.9.2.3.1a   [wording only, 0.65 default unchanged]
+- **Where:** `InputsTab`, anchor `<Num l="Release compression limit (× f′ci)"` (≈5568).
+- **Problem:** the 10th Ed. article also permits 0.70 f′ci at component extremities where lateral bending (tilt, wind, transport) is explicitly considered; the note did not say so. The tool does not analyse lateral bending at release, so the default stays 0.65; the user can enter 0.70 where that analysis is done.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 5.9.2.3.1a.
+- **Before:**
+  ```jsx
+               sub="0.65 per Art. 5.9.2.3.1a; some owners require 0.60. Blank = 0.65"/>
+  ```
+- **After:**
+  ```jsx
+               sub="0.65 per Art. 5.9.2.3.1a (10th Ed.: 0.70 at component extremities where lateral bending (tilt, wind, transport) is included in the analysis); some owners require 0.60. Blank = 0.65"/>
+  ```
+- **Check:** default `relCfac` 0.65: f′ci = 6.8 ksi → limit 0.65 × 6.8 = 4.42 ksi, before and after.
+
+- **How verified (AE5, AE6):** `computeAll()` of origin/main (ee32a1c) and this branch on the same 9 inputs as AE1 (default, debond cases, γLL = 1.0): every result field, warnings included, identical. `node tests/check-syntax.mjs psbeam.html` passes.
+- **Other copies:** none.
