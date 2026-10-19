@@ -6998,7 +6998,7 @@ function spcRefs(sel) {
   if (ok && (sel.props || sel.calc) || man) a360.push('Eq. E4-8 (H), E4-9 (r̄<sub>o</sub>), F2-7 (r<sub>ts</sub>): equation numbers as understood by the tool, verify');
   if (ok && sel.q || man) a360.push('Sec. J2.4 and Table J2.5 (welds), J3 (fasteners), for the optional connector check of the Q &amp; shear flow tab');
   if (a360.length) rows.push(['AISC 360-16', 'Specification for Structural Steel Buildings: ' + a360.join('; ') + '.']);
-  if (ok && sel.q || man) rows.push(['AASHTO LRFD', 'Art. 6.13.2 (fasteners, optional connector check; strength per fastener supplied by the user); edition: verify.']);
+  if (ok && sel.q || man) rows.push(['AASHTO LRFD', 'Bridge Design Specifications, 10th Ed. (2024): Art. 6.13.2 (fasteners, optional connector check; strength per fastener supplied by the user).']);
   if (ok && sel.calc || man) rows.push(['Wagner β<sub>x</sub>', 'Trahair &amp; Bradford; Kitipornchai &amp; Trahair (1980); SSRC Guide: monosymmetry constant; editions: verify.']);
   if (ok && sel.q) rows.push(['Megson', 'Aircraft Structures, Ch. 17 and Eq. 17.14 (shear flow with I<sub>xy</sub> ≠ 0; closed sections); edition: verify.']);
   if (ok && (sel.q || sel.stress)) rows.push(['Boresi &amp; Schmidt', 'Advanced Mechanics of Materials: general flexure formula and shear flow for unsymmetric bending; edition: verify.']);
