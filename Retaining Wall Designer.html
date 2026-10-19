@@ -4675,7 +4675,7 @@ function renderStem(r) {
     [{sym:'A_{s,des}', desc:'governing design steel area', val:F(r.As_stem_des,4), unit:'in²/ft'}]);
   h += eqCheck('Bar selection — S1 vertical, back face' + (r.sel_stem.overridden ? ' (USER OVERRIDE)' : ''),
     `\\text{\\#${r.sel_stem.bar.num} @ ${r.sel_stem.spacing}'' o.c.} \\Rightarrow A_{s,prov} = \\frac{A_b\\times 12}{s} = \\frac{(${F(r.sel_stem.bar.Ab,2)})(12)}{${r.sel_stem.spacing}} = ${F(r.sel_stem.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_stem_des,4)}`,
-    r.sel_stem.As_prov >= r.As_stem_des - 0.001);
+    !r.stem_overstressed && r.sel_stem.As_prov >= r.As_stem_des - 0.001);
   h += `</div></div>`;
 
   // ════ STEP 4 — SHEAR ════
@@ -4976,7 +4976,7 @@ function renderFooting(r) {
     [{sym:'A_{s,min}', desc:'minimum steel area', val:F(r.As_h_min,4), unit:'in²/ft'}]);
   h += eqCheck('Bar selection — F1 transverse ' + (heel_down?'top':'bottom') + (r.sel_heel.overridden?' (USER OVERRIDE)':''),
     `\\text{\\#${r.sel_heel.bar.num} @ ${r.sel_heel.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(r.sel_heel.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_heel_des,4)}`,
-    r.sel_heel.As_prov >= r.As_heel_des - 0.001);
+    !r.heel_overstressed && r.sel_heel.As_prov >= r.As_heel_des - 0.001);
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
@@ -5050,7 +5050,7 @@ function renderFooting(r) {
     [{sym:'A_{s,min}', desc:'minimum steel area', val:F(r.As_t_min,4), unit:'in²/ft'}]);
   h += eqCheck('Bar selection — F2 transverse bottom' + (r.sel_toe.overridden?' (USER OVERRIDE)':''),
     `\\text{\\#${r.sel_toe.bar.num} @ ${r.sel_toe.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(r.sel_toe.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_toe_des,4)}`,
-    r.sel_toe.As_prov >= r.As_toe_des - 0.001);
+    !r.toe_overstressed && r.sel_toe.As_prov >= r.As_toe_des - 0.001);
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
@@ -5519,14 +5519,14 @@ function renderRebar(r) {
       bar:r.sel_stem.bar.num, spacing:r.sel_stem.spacing,
       As_req:r.As_stem_des, As_prov:r.sel_stem.As_prov,
       ld:r.ld_stem, face:'Back', note:'Full height + ℓd into footing',
-      overridden: r.sel_stem.overridden
+      overridden: r.sel_stem.overridden, os: r.stem_overstressed
     },
     {
       mark:'S3', location:'Stem — vertical mid-height (top half)', zone:'Stem',
       bar:r.sel_stemT.bar.num, spacing:r.sel_stemT.spacing,
       As_req:r.As_stemT_des, As_prov:r.sel_stemT.As_prov,
       ld:null, face:'Back', note:'Upper half; S1 may cut off above mid-point',
-      overridden: r.sel_stemT.overridden
+      overridden: r.sel_stemT.overridden, os: r.stemT_overstressed
     },
     {
       mark:'S2', location:'Stem — horiz. temp & shrinkage (both faces)', zone:'Stem',
@@ -5540,14 +5540,14 @@ function renderRebar(r) {
       bar:r.sel_heel.bar.num, spacing:r.sel_heel.spacing,
       As_req:r.As_heel_des, As_prov:r.sel_heel.As_prov,
       ld:r.ld_heel, face:'Top', note:'ψt=1.3; hook/lap into stem',
-      overridden: r.sel_heel.overridden
+      overridden: r.sel_heel.overridden, os: r.heel_overstressed
     },
     {
       mark:'F2', location:'Toe — transverse bottom bars', zone:'Toe',
       bar:r.sel_toe.bar.num, spacing:r.sel_toe.spacing,
       As_req:r.As_toe_des, As_prov:r.sel_toe.As_prov,
       ld:r.ld_toe, face:'Bottom', note:'Extend into stem ≥ ℓd',
-      overridden: r.sel_toe.overridden
+      overridden: r.sel_toe.overridden, os: r.toe_overstressed
     },
     {
       mark:'F3', location:'Footing — longitudinal T&S (both faces)', zone:'Footing',
@@ -5558,7 +5558,7 @@ function renderRebar(r) {
     },
   ];
 
-  const allOk = rows.every(rw => rw.As_prov >= rw.As_req - 0.001);
+  const allOk = rows.every(rw => !rw.os && rw.As_prov >= rw.As_req - 0.001);
 
   el.innerHTML = `
     <!-- overall pass banner -->
@@ -5592,7 +5592,7 @@ function renderRebar(r) {
           </thead>
           <tbody>
             ${rows.map(rw => {
-              const ok = rw.As_prov >= rw.As_req - 0.001;
+              const ok = !rw.os && rw.As_prov >= rw.As_req - 0.001;
               const ratio = rw.As_prov / Math.max(rw.As_req, 0.001);
               return `<tr style="${ok?'':'background:var(--fail-dim);'}">
                 <td><strong class="n-blue">${rw.mark}</strong>${rw.overridden ? ' <span class="badge warn" style="font-size:8px;padding:1px 5px;">OVR</span>' : ''}</td>
@@ -7005,11 +7005,11 @@ function buildScorecard(r) {
   ];
   // Structural items
   const struct = [
-    { label:'Stem Flex',   val: r.sel_stem.As_prov, req: r.As_stem_des, unit:'in²/ft', ok: r.sel_stem.As_prov >= r.As_stem_des - 0.001 },
+    { label:'Stem Flex',   val: r.sel_stem.As_prov, req: r.As_stem_des, unit:'in²/ft', ok: !r.stem_overstressed && r.sel_stem.As_prov >= r.As_stem_des - 0.001 },
     { label:'Stem Shear',  val: r.phiVc_stem/1000,  req: r.Vu_stem/1000, unit:'k/ft', ok: r.stem_shear_ok },
-    { label:'Heel Flex',   val: r.sel_heel.As_prov, req: r.As_heel_des, unit:'in²/ft', ok: r.sel_heel.As_prov >= r.As_heel_des - 0.001 },
+    { label:'Heel Flex',   val: r.sel_heel.As_prov, req: r.As_heel_des, unit:'in²/ft', ok: !r.heel_overstressed && r.sel_heel.As_prov >= r.As_heel_des - 0.001 },
     { label:'Heel Shear',  val: r.phiVc_heel/1000,  req: r.Vu_heel/1000, unit:'k/ft', ok: r.heel_shear_ok },
-    { label:'Toe Flex',    val: r.sel_toe.As_prov,  req: r.As_toe_des,  unit:'in²/ft', ok: r.sel_toe.As_prov >= r.As_toe_des - 0.001 },
+    { label:'Toe Flex',    val: r.sel_toe.As_prov,  req: r.As_toe_des,  unit:'in²/ft', ok: !r.toe_overstressed && r.sel_toe.As_prov >= r.As_toe_des - 0.001 },
     { label:'Toe Shear',   val: r.phiVc_toe/1000,   req: r.Vu_toe/1000,  unit:'k/ft', ok: r.toe_shear_ok },
   ];
 
