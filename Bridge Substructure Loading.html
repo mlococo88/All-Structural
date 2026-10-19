@@ -3231,14 +3231,20 @@ async function rxImport(file) {
 { const cvh = cvHtml; cvHtml = function () { const h = cvh(), k = P.ui.sel, u = P.units[k]; if (!u || !u.cv || u.cv.on !== 'yes') return h; let parts = []; try { parts = hitParts(MODEL.G, MODEL.UG, k, num(u.cv.mhw), u.cv.hit); } catch (e) { }
     if (parts && parts.length) return h; return h.replace('<div class="card-b">', `<div class="card-b"><p style="color:var(--fail);margin-bottom:8px">The impact elevation El. ${f2(num(u.cv.mhw))} does not meet any column, wall, or cap of ${esc(u.name)}, so no vessel force is applied. Enter the mean high water elevation on the Units tab.</p>`); }; }
 /* ---------- superstructure reactions hand-off (HANDOFF.md §4.4, channel superReactions) ----------
-   Reactions tab: "Pull from PS-Beam / ST-Girder" (with a new-data marker) and "Import hand-off (JSON)".
+   Reactions tab: "Pull from PS-Beam" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
+   not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only; reactions from
+   GirderDetail are a later change): a payload from ST-Girder is not listed, adopted or imported.
    Nothing is applied on page load. The dialog shows the source and every cell it will overwrite, and
    the user maps the incoming girder line to SubLoads supports, bearing rows and girders. Only the
    confirmed P.rx.data cells change; the source is kept in the new optional field P.rxSrc and shown on
    the Reactions tab, the Dead load tab and the report. Values stay unfactored, in kip. */
 (function patchRxHandoff() {
   const CH = 'superReactions', SCH = 'bridge-super-reactions', RID = 'subloads';
-  const BY = ['psbeam', 'stgirder', 'mct'];
+  const BY = ['psbeam', 'mct'];
+  const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html');
+  const ST_MSG = 'ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only).';
+  /* the latest payload on the channel is new for SubLoads, and not ST-Girder's */
+  const newOK = () => { if (!BX() || !BX().isNew(CH, RID)) return false; const r = BX().read(CH, SCH, 1); return !(r.ok && isST(r.payload)); };
   const TOKIP = { kip: 1, kips: 1, k: 1, kn: 1 / 4.4482216152605, lb: 0.001, lbs: 0.001, lbf: 0.001 };   // force unit -> kip
   const TOFT = { ft: 1, feet: 1, m: 1 / 0.3048 };                                                          // length unit -> ft
   const LBL = { dc1: 'DC1', dc2: 'DC2', dw: 'DW' };
@@ -3249,14 +3255,22 @@ async function rxImport(file) {
 
   /* every published payload on the channel: the latest, plus the per-producer copies */
   function candidates() {
-    const out = [], seen = {}, errs = [];
-    if (!BX()) return { list: out, errs: ['The hand-off helper is not available in this browser.'] };
-    const add = (r, via) => { if (r.ok) { const p = r.payload, key = (p.producer || '') + '|' + (p.producedAt || ''); if (!seen[key]) { seen[key] = 1; out.push(p); } } else if (!r.empty) errs.push(`${via}: ${r.error}`); };
+    const out = [], seen = {}, errs = [], st = [];
+    if (!BX()) return { list: out, errs: ['The hand-off helper is not available in this browser.'], st };
+    const add = (r, via) => { if (r.ok) { const p = r.payload, key = (p.producer || '') + '|' + (p.producedAt || ''); if (seen[key]) return; seen[key] = 1;
+      if (isST(p)) { st.push(p); return; }   // ST-Girder: not offered (2026-10-19)
+      out.push(p); } else if (!r.empty) errs.push(`${via}: ${r.error}`); };
     add(BX().read(CH, SCH, 1), 'latest hand-off');
     BY.forEach(id => add(BX().read(`${CH}.by.${id}`, SCH, 1), `copy from ${id}`));
+    add(BX().read(`${CH}.by.stgirder`, SCH, 1), 'old copy from ST-Girder');   // read only to say it is not offered
     out.sort((a, b) => String(b.producedAt || '').localeCompare(String(a.producedAt || '')));
-    return { list: out, errs };
+    return { list: out, errs, st };
   }
+  /* ST-Girder copies still stored in this browser (shown as a short note on the Reactions tab) */
+  const stOld = () => { if (!BX()) return []; const o = [], s = {};
+    [CH, `${CH}.by.stgirder`].forEach(k => { const r = BX().read(k, SCH, 1); if (r.ok && isST(r.payload) && !s[r.payload.producedAt]) { s[r.payload.producedAt] = 1; o.push(r.payload); } });
+    return o; };
+  const stNote = st => st.length ? `A reactions hand-off from ST-Girder (sent ${st.map(p => when(p.producedAt)).join(', ')}) is stored in this browser but is not offered. ${ST_MSG}` : '';
   /* validate one payload and convert it to kip / ft; returns { err } or { sups, labels, warns } */
   function check(p) {
     const f = Number.isFinite;
@@ -3375,12 +3389,15 @@ async function rxImport(file) {
   }
   function pull() {
     const r = candidates();
-    if (!r.list.length) { alert(r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam or ST-Girder click "Send reactions to Substructure Loading", then pull here.'); return; }
+    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
     openDialog(r.list, 'pull', r.errs);
+    if (r.st.length) flash(stNote(r.st));
   }
   function importFile(file) {
     if (!BX()) return;
-    BX().importFile(file, SCH, 1, r => { if (r.error) { alert(`Cannot import ${file.name}: ${r.error}`); return; } openDialog([r.payload], 'file: ' + file.name, []); });
+    BX().importFile(file, SCH, 1, r => { if (r.error) { alert(`Cannot import ${file.name}: ${r.error}`); return; }
+      if (isST(r.payload)) { alert(`Cannot import ${file.name}: it was sent by ST-Girder. ${ST_MSG} Nothing was changed.`); return; }
+      openDialog([r.payload], 'file: ' + file.name, []); });
   }
 
   /* ---------- source records: text used by the Reactions tab, Dead load tab and report ---------- */
@@ -3392,9 +3409,9 @@ async function rxImport(file) {
   const recsFor = k => (Array.isArray(P.rxSrc) ? P.rxSrc : []).filter(r => (r.targets || []).some(x => x.k === k));
   const css = document.createElement('style'); css.textContent = `.itab.bx-new::after { content: ' \\2022'; color: var(--warn); } .rxh-new { color: var(--warn); font-size: .8rem; font-weight: 600; align-self: center; }`; document.head.appendChild(css);
   const pr = paneRx; paneRx = function () {
-    let h = pr(); const isNew = BX() ? BX().isNew(CH, RID) : false; let latest = null;
+    let h = pr(); const isNew = newOK(); let latest = null;
     if (isNew) { const r = BX().read(CH, SCH, 1); if (r.ok) latest = r.payload; }
-    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam or ST-Girder (asks first)">Pull from PS-Beam / ST-Girder</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}`;
+    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam (asks first)">Pull from PS-Beam</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
     h = h.replace('id="rx-clear">Clear all</button>', 'id="rx-clear">Clear all</button>' + btns);
     const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [];
     if (recs.length) h = h.replace(/(id="rx-hf-in"[^>]*>[\s\S]*?<\/div>)/, `$1<p class="note" style="padding:6px 0 0"><b>Hand-off sources</b> (values may have been edited since):<br>${recs.map(r => srcText(r)).join('<br>')}</p>`);
@@ -3404,7 +3421,7 @@ async function rxImport(file) {
       if (!rs.length) return; const r = rs[rs.length - 1], ins = ` <small title="${esc(srcText(r, k).replace(/<[^>]+>/g, ''))}">from ${esc(r.producer)}, ${esc(when(r.producedAt))}</small>`; h = h.slice(0, e) + ins + h.slice(e); pos = e + ins.length; });
     return h;
   };
-  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = BX() ? BX().isNew(CH, RID) : false; t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
+  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = newOK(); t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
   const dh = dlHtml; dlHtml = function () { const h = dh(), rs = recsFor(P.ui.sel); if (!rs.length) return h;
     return h.replace('Superstructure loads at the bearings</h3>', `Superstructure loads at the bearings</h3><p class="note" style="padding:0 0 6px">Reactions hand-off: ${rs.map(r => srcText(r, P.ui.sel)).join('; ')}.</p>`); };
   const be = basisExtra; basisExtra = function () { const h = be(), recs = Array.isArray(P.rxSrc) ? P.rxSrc : []; if (!recs.length) return h;

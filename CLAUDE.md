@@ -30,9 +30,11 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 - When syncing a shared snippet, copy it into each file and **list in the PR
   description which tools contain it**.
 - Known shared snippets: the `bridgeSuite.v1.*` bootstrap/handoff code at the
-  top of `index.html`, `lldf.html`, `psbeam.html`, and `stgirder.html`, and the
+  top of `index.html`, `lldf.html` and `psbeam.html`, and the
   ACI rebar development-length app that is also embedded in
-  `Concrete Beam Capacity.html`. See `AUDIT.md`.
+  `Concrete Beam Capacity.html`. See `AUDIT.md`. (`stgirder.html` no longer
+  carries the bootstrap block: since 2026-10-19 it is connected to GirderDetail
+  only and keeps a reduced, ST-Girder-only app-path record.)
 
 ## 4. Engineering calculations: change control
 

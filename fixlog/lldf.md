@@ -1538,3 +1538,126 @@ This closes **LLDF-S10** (sweep entry above).
 - **Calculation (raised only, not changed):**
   - Type (d) exterior fatigue moment uses W_e/14 directly, without ÷ 1.20 (the tool's own note says "verify").
   - The rigid cross-section method is always included for a/e/k exterior girders. The step note says it is required only with cross-frames or diaphragms. This is conservative.
+
+
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+
+### STDISC. LL & DL Distribution: ST-Girder link and receiver removed   [no result change, Tier 0/1]
+- **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
+- **Shared bootstrap block (CLAUDE.md §3; changed identically in index.html, psbeam.html, lldf.html):** the `stgirder` entries are removed from `BridgeApps` `DEF` and `NAMES`, `BridgeLocks` `APPS` and `LOG_APPS`; the comments now say the block is byte-identical in the three files ("edit all three"), the project registry lists slices `{mct,psbeam,lldf}` (older projects may still hold a `stgirder` slice; nothing reads it), the app-path note drops "PS-Beam opens stgirder.html in a tab", the demands-channel note reads "MCT -> PS-Beam" and the `drives()` note "any app may publish capacity; MCT and PS-Beam for geometry". Nothing else in the block changed. Effects: `BridgeApps.register/set` no longer accept `stgirder` (only ST-Girder registered itself; its reduced record in stgirder.html still writes `appPaths.stgirder`, and every other app keeps that entry when it writes the object back, so GirderDetail's open-now still finds ST-Girder); `BridgeApps.all()` and the sync drawer no longer list ST-Girder; an old `syncLog.stgirder` shard is no longer merged into the change log. Verified byte-identical: `diff` of the BridgeBeam script and of the big block between the three files shows only each file's own `BridgeApps.boot('<app>')` line, as before.
+- **Removed / changed in lldf.html:** the `ST ↗` button (`#openSTBtn`) and its listener; geometry receiver: new `isST(g)` (producer "ST-Girder" or producerFile stgirder.html); `_geomAvail()` returns null for it (the Pull button does not offer it), `checkGeom()` hides the banner and returns for it (never auto-applied under the geometry lock), and `validateGeom()` refuses it (Pull / Import of such a file say: "ST-Girder no longer sends geometry to LL & DL Distribution (it is connected to GirderDetail only, engineer decision 2026-10-19); use Bridge Geometry, the MCT Generator or PS-Beam"). Texts: the DF send button title and toast ("the MCT Generator and PS-Beam can pull them"; "use \"Pull from LL & DL Distribution\" in PS-Beam (or pull them in the MCT Generator)"), the integration and lock comments, and the printed / on-screen dead-load notes on the girder self-weight ("The design app (PS-Beam) applies the girder's own weight …", "→ PS-Beam", "PS-Beam generates it from the section").
+- **Saved data:** none changed (lldf's own state and `bridgeSuite.v1.lldfGeom` are not modified; ST-Girder removes its own old `lldfGeom` copy when it is opened). **§4:** no formula, factor or result changed.
+- **How verified:** `node tests/check-syntax.mjs index.html psbeam.html lldf.html "Bridge Substructure Loading.html" tools.html` (all pass); `node tests/compare.mjs --tool page --file <each>` against main (bcbd913): psbeam, lldf, SubLoads and tools storage identical, page text differs only by the removed ST-Girder controls and the reworded ST-Girder mentions (psbeam: the "ST-Girder ↗" button; lldf: the "ST ↗" button and the self-weight notes; tools: the ST-Girder card), no console errors; index.html with a longer load timeout (scratch script): page text identical apart from the removed "🅢 Composite Steel Design App ↗" hand-off button, no console errors, the embedded-app bar lists only "PS-Beam →" / "LL & DL"; a saved ST-Girder capacity zone is replaced and the notice shown, a PS-Beam zone kept; lldf with an old ST-Girder `lldfGeom`: nothing offered; SubLoads with old ST-Girder copies: "Pull from PS-Beam" lists only PS-Beam, the short note is shown, no new-data marker for ST-Girder. ST-Girder's own checks: branch claude/stgirder-disconnect.
+- **Diff (main → branch, `git diff -U0`; runs of more than 30 deleted lines and hunks that only delete are summarised by their first and last line):**
+```diff
+diff --git a/lldf.html b/lldf.html
+index 219cc2c..a3e337e 100644
+--- a/lldf.html
++++ b/lldf.html
+@@ -295,2 +295,3 @@
+-     This block is byte-identical in index.html / psbeam.html / stgirder.html /
+-     lldf.html — edit it in one place and copy it to the other three.
++     This block is byte-identical in index.html / psbeam.html / lldf.html — edit
++     it in one place and copy it to the other two. (ST-Girder, stgirder.html, left
++     the suite on 2026-10-19 and no longer carries it.)
+@@ -373 +374 @@ var st=document.createElement('style'); st.textContent=css;
+-        <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so PS-Beam and ST-Girder can pull them">⇄ Send DFs to Design Apps</button>
++        <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so the MCT Generator and PS-Beam can pull them">⇄ Send DFs to Design Apps</button>
+-377 +377,0  [deleted 1 lines: first "<button class="btn" id="openSTBtn" title="Open the composite steel design app (pull the DFs there with 'Pull f" ... last "<button class="btn" id="openSTBtn" title="Open the composite steel design app (p"]
+@@ -640 +640 @@ var st=document.createElement('style'); st.textContent=css;
+-     four apps; each app owns a "slice". Same-origin localStorage; identical in
++     three apps; each app owns a "slice". Same-origin localStorage; identical in
+@@ -642 +642,2 @@ var st=document.createElement('style'); st.textContent=css;
+-     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,stgirder,lldf},demands} }
++     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,lldf},demands} }
++           (projects saved before 2026-10-19 may also hold a "stgirder" slice; no app reads it now)
+@@ -706,3 +707,2 @@ var st=document.createElement('style'); st.textContent=css;
+-   The four apps link to each other by bare file name: MCT embeds "psbeam.html"
+-   in an iframe, PS-Beam opens "stgirder.html" in a tab, every app's back link
+-   points at "index.html". That works only while each file is named exactly what
++   The three apps link to each other by bare file name: MCT embeds "psbeam.html"
++   in an iframe, every app's back link points at "index.html". That works only while each file is named exactly what
+@@ -726,2 +726,3 @@ var st=document.createElement('style'); st.textContent=css;
+-   This block is byte-identical in index.html / psbeam.html / stgirder.html /
+-   lldf.html. Edit one, edit all four.
++   This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
++   one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
++   keeps only a reduced app-path record of its own, which GirderDetail reads.)
+@@ -731,2 +732,2 @@ var st=document.createElement('style'); st.textContent=css;
+-  var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
+-  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
++  var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};
++  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
+@@ -901 +902 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
+-   Lock state is shared across all four apps — locking the distribution-factor
++   Lock state is shared across all three apps — locking the distribution-factor
+@@ -912 +913 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
+-   This block is byte-identical in all four apps. Edit it in one place and
++   This block is byte-identical in all three apps. Edit it in one place and
+@@ -953 +954,2 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
+-    /* The analysis hand-off, MCT -> the two design apps. `key` is the whole
++    /* The analysis hand-off, MCT -> PS-Beam (ST-Girder no longer reads it,
++       2026-10-19). `key` is the whole
+@@ -965 +967 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
+-  var APPS={mct:'MCT', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL'};
++  var APPS={mct:'MCT', psbeam:'PS-Beam', lldf:'LL & DL'};
+@@ -996 +998 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
+-     (PS-Beam and ST-Girder for capacity; MCT and both design apps for
++     (any app may publish capacity; MCT and PS-Beam for
+@@ -1040 +1042 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
+-  var LOG_APPS=['mct','psbeam','stgirder','lldf'];
++  var LOG_APPS=['mct','psbeam','lldf'];
+@@ -2762 +2764 @@ function renderMembers(p,R){
+-// app, PS-Beam and ST-Girder all switch to the same beam. See BridgeBeam (in the head).
++// app and PS-Beam switch to the same beam. See BridgeBeam (in the head).
+@@ -3298,2 +3300,3 @@ window.addEventListener("load",initApp);
+-     Bridge Suite integration (v1) — two-way link with the MCT / PS-Beam /
+-     ST-Girder apps via shared localStorage (same origin, same folder).
++     Bridge Suite integration (v1) — two-way link with the MCT / PS-Beam apps
++     via shared localStorage (same origin, same folder). ST-Girder is not linked
++     (connected to GirderDetail only since 2026-10-19).
+@@ -3410 +3413 @@ function writeDF(payload,silent){
+-    if(!silent) flash('✓ DFs published — use "Pull from LL & DL Distribution" in PS-Beam / ST-Girder.');
++    if(!silent) flash('✓ DFs published — use "Pull from LL & DL Distribution" in PS-Beam (or pull them in the MCT Generator).');
+@@ -3470 +3473 @@ function geomToken(g){ return (g&&((g.producedAt||'')+'@'+(g.producer||'')))||''
+-   `project` is a plain string from MCT / PS-Beam / ST-Girder and the envelope's
++   `project` is a plain string from MCT / PS-Beam and the envelope's
+@@ -3476,0 +3480,2 @@ function isBG(g){ return !!g&&(g.producer==='Bridge Geometry'||g.producerFile===
++/* ST-Girder no longer sends geometry here (2026-10-19): an old payload from it is not offered or applied. */
++function isST(g){ return !!g&&(g.producer==='ST-Girder'||g.producerFile==='stgirder.html'); }
+@@ -3485,0 +3491 @@ function validateGeom(g){
++  if(isST(g)) return ['ST-Girder no longer sends geometry to LL & DL Distribution (it is connected to GirderDetail only, engineer decision 2026-10-19); use Bridge Geometry, the MCT Generator or PS-Beam'];
+@@ -3697 +3703 @@ function _geomAvail(){ try{ var r=localStorage.getItem(K_GEOM); if(!r) return nu
+-  var g=JSON.parse(r); return (g&&g._schema==='bridge-lldf-geometry')?g:null; }catch(e){ return null; } }
++  var g=JSON.parse(r); return (g&&g._schema==='bridge-lldf-geometry'&&!isST(g))?g:null; }catch(e){ return null; } }
+@@ -3794,0 +3801 @@ function checkGeom(){
++  if(isST(g)){ hideBanner(); return; }   // ST-Girder geometry is no longer used (2026-10-19)
+@@ -3817 +3824 @@ function _geomNewFlag(g){
+-  // Senders that use BridgeXfer stamp .updatedAt; the older senders (MCT / PS-Beam / ST-Girder) do not,
++  // Senders that use BridgeXfer stamp .updatedAt; the older senders (MCT / PS-Beam) do not,
+@@ -3862 +3869 @@ function bridgeNav(app){
+-   republishes automatically, and PS-Beam / ST-Girder / the MCT Generator adopt
++   republishes automatically, and PS-Beam / the MCT Generator adopt
+@@ -3870 +3877 @@ function paintLinkBtns(){
+-  [['sendDFBtn','lldf','DFs to Design Apps','Publish the computed distribution factors to shared storage so PS-Beam and ST-Girder can pull them'],
++  [['sendDFBtn','lldf','DFs to Design Apps','Publish the computed distribution factors to shared storage so the MCT Generator and PS-Beam can pull them'],
+-3924 +3930,0  [deleted 1 lines: first "var st=$('openSTBtn'); if(st) st.addEventListener('click',function(){ bridgeNav('stgirder'); });" ... last "var st=$('openSTBtn'); if(st) st.addEventListener('click',function(){ bridgeNav("]
+@@ -4174 +4180 @@ window.addEventListener('load',function(){
+-    // PS-Beam / ST-Girder apply the girder's own weight directly from its section, so including it
++    // PS-Beam applies the girder's own weight directly from its section, so including it
+@@ -4314 +4320 @@ window.addEventListener('load',function(){
+-    $("mdDistAssume").innerHTML=`Each load in the table above is distributed by its chosen method — <b>Equal</b> (Σ/N to all beams), <b>MassDOT pile-cap</b> (A=1, no uplift relief → each beam ≥ P/N), or <b>Two adjacent beams</b> (split by position to the beams either side; a load on an overhang is levered about the first interior beam: P(1+a/S) to the exterior beam and −P·a/S to the next). <b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add. <b>Beam self-weight is excluded</b> — the girder carries its own weight directly in PS-Beam / ST-Girder, so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf). Diaphragms/haunch/soffit are not auto-included — add them as DC1 rows if required. Adjacent box/deck (§3.8.2) modifications are pending the rest of that manual page. Step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below.`;
++    $("mdDistAssume").innerHTML=`Each load in the table above is distributed by its chosen method — <b>Equal</b> (Σ/N to all beams), <b>MassDOT pile-cap</b> (A=1, no uplift relief → each beam ≥ P/N), or <b>Two adjacent beams</b> (split by position to the beams either side; a load on an overhang is levered about the first interior beam: P(1+a/S) to the exterior beam and −P·a/S to the next). <b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add. <b>Beam self-weight is excluded</b> — the girder carries its own weight directly in the design app (PS-Beam), so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf). Diaphragms/haunch/soffit are not auto-included — add them as DC1 rows if required. Adjacent box/deck (§3.8.2) modifications are pending the rest of that manual page. Step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below.`;
+@@ -4376 +4382 @@ window.addEventListener('load',function(){
+-      note:`<b>Beam self-weight is deliberately excluded from DC1.</b> PS-Beam and ST-Girder apply the girder's own weight directly from its section properties, so carrying it here would double-count it on handoff. For reference only, the current section (A = ${f2(p.A||0)} in², ${D.steel?"steel 0.490":("concrete "+f3(concUW()))} kcf) would weigh ${f3(D.selfWt)} klf per beam. Haunch, diaphragms and stay-in-place forms are also not auto-generated — add them as DC1 rows in the loads table if they govern.`});
++      note:`<b>Beam self-weight is deliberately excluded from DC1.</b> The design app (PS-Beam) applies the girder's own weight directly from its section properties, so carrying it here would double-count it on handoff. For reference only, the current section (A = ${f2(p.A||0)} in², ${D.steel?"steel 0.490":("concrete "+f3(concUW()))} kcf) would weigh ${f3(D.selfWt)} klf per beam. Haunch, diaphragms and stay-in-place forms are also not auto-generated — add them as DC1 rows in the loads table if they govern.`});
+@@ -4438 +4444 @@ window.addEventListener('load',function(){
+-    st.push({title:"Per-beam dead & pedestrian load summary",ref:"→ PS-Beam / ST-Girder",
++    st.push({title:"Per-beam dead & pedestrian load summary",ref:"→ PS-Beam",
+@@ -4448 +4454 @@ window.addEventListener('load',function(){
+-      note:`These are the per-foot loads to apply to each beam line. <b>Add the girder self-weight separately</b> — PS-Beam / ST-Girder generate it from the section, so it is shown greyed above for reference only. DC1 is applied to the non-composite section; DC2, DW and PL are applied to the composite (long-term) section.`});
++      note:`These are the per-foot loads to apply to each beam line. <b>Add the girder self-weight separately</b> — PS-Beam generates it from the section, so it is shown greyed above for reference only. DC1 is applied to the non-composite section; DC2, DW and PL are applied to the composite (long-term) section.`});
+@@ -4457 +4463 @@ window.addEventListener('load',function(){
+-     PS-Beam, ST-Girder — reads the roster and follows the selected beam.
++     PS-Beam — reads the roster and follows the selected beam.
+```

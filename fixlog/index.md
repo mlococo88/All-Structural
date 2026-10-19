@@ -3483,3 +3483,248 @@ Model as in the claude/index-posting check case B: Mn⁻ 700, γLL 1.45, s = 1.3
 
 #### Open items
 - The "↺ Auto-detect LCs" button still drops category and γLL (pre-existing, see the claude/index-legal-match entry). Re-map does not use it.
+
+
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+
+### STDISC. MCT Generator: ST-Girder embed, steel demands hand-off and ST-Girder capacity removed   [result change for saved data only: MCT steel rating that used ST-Girder's capacity; §4 callout below]
+- **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
+- **Shared bootstrap block (CLAUDE.md §3; changed identically in index.html, psbeam.html, lldf.html):** the `stgirder` entries are removed from `BridgeApps` `DEF` and `NAMES`, `BridgeLocks` `APPS` and `LOG_APPS`; the comments now say the block is byte-identical in the three files ("edit all three"), the project registry lists slices `{mct,psbeam,lldf}` (older projects may still hold a `stgirder` slice; nothing reads it), the app-path note drops "PS-Beam opens stgirder.html in a tab", the demands-channel note reads "MCT -> PS-Beam" and the `drives()` note "any app may publish capacity; MCT and PS-Beam for geometry". Nothing else in the block changed. Effects: `BridgeApps.register/set` no longer accept `stgirder` (only ST-Girder registered itself; its reduced record in stgirder.html still writes `appPaths.stgirder`, and every other app keeps that entry when it writes the object back, so GirderDetail's open-now still finds ST-Girder); `BridgeApps.all()` and the sync drawer no longer list ST-Girder; an old `syncLog.stgirder` shard is no longer merged into the change log. Verified byte-identical: `diff` of the BridgeBeam script and of the big block between the three files shows only each file's own `BridgeApps.boot('<app>')` line, as before.
+- **Removed / changed in index.html:**
+  - `function buildSteelBeamExport` (anchor `// Steel-beam export — same force-effect demands as the PS-Beam export, PLUS`): the steelbeam demands payload for ST-Girder. `publishToDesign` builds `buildPSBeamExport` only, targets PS-Beam only (`target='psbeam'`), drops the "no section makeup" steel warning, and stores `demandsKind='psbeam'`; `demandsKind()` always returns `'psbeam'` (a stored `'steel'` from before, or a lock taken by ST-Girder, no longer sends steel demands); the demands lock log texts name PS-Beam only.
+  - Sidebar "Design Hand-off": the `{k:'steel', label:'Composite Steel Design App'}` button is removed (PS-Beam's stays).
+  - Embedded apps: `EMBED_META.stgirder`, the "ST-Girder →" switch button in the embedded-app bar, `EmbedTrouble` `NAMES.stgirder` and the `embedApp` comment.
+  - Texts: "Save to Bridge Project (shared with PS-Beam / LLDF)", "One project shared across MCT, PS-Beam and LLDF", the PS-Beam combos button title ("required by the PS-Beam design module"), "re-send it from PS-Beam to restore", the handoff comment ("the design app psbeam.html").
+  - **Capacity (MCT steel rating):** `capFromST(p)` (new, module scope): a `bridge-design-capacity` payload with `producer` "ST-Girder" (or `producerFile` stgirder.html) is not offered ("Design capacity received" banner) and not adopted under a capacity lock (`checkCapFeed` returns before the token / lock test). `capDropST(zones, where)` (new): a saved capacity zone `{type:'design', producer:'ST-Girder'}` is replaced by MCT's own default manual zone over the same `startX`–`endX` (`type:'manual'`, `MnPos = MnNeg = 500`, `Vn = 150`, `Fy = 50`, … exactly the fields of `defaultCapZone()`, which "↩ Revert to manual zones" uses); applied where saved zones are loaded: the initial state from `mct_cap_zones_v1`, Import JSON (bundle `ratingCapZones`) and a restored History entry. Each replacement adds a line to a notice kept in the new MCT key `mct_stcap_notice_v1` (array of strings) until "Dismiss"; the notice is shown above the step form: "⚠ Capacity from ST-Girder is no longer used (engineer decision 2026-10-19) … capacity zone 1 (0 to 120 ft) held the φMn / φVn envelope from ST-Girder (G3), sent 2026-09-03 00:00, 2 stations. It was replaced by a manual zone with MCT’s default inputs (Mn⁺ = Mn⁻ = 500 ft·k, Vn = 150 kip). These are placeholders: enter this girder’s capacity (Manual, Steel Calc or Composite) in AASHTO Rating before using the steel rating." Zones fed by PS-Beam, and every other zone type, are unchanged.
+- **Saved data (CLAUDE.md §5):** `mct_cap_zones_v1`, exported bundles and History entries keep their format; only an ST-Girder design zone is replaced (engineer decision 2: the steel rating falls back to MCT's own capacity inputs; MCT keeps no copy of the zones that a design-app zone replaced, so its own inputs are the default zone). New key `mct_stcap_notice_v1` (tool-prefixed). `bridgeSuite.v1.demandsKind` may still hold `'steel'` from before; it is ignored. Shared projects keep any `stgirder` slice (not read, not deleted).
+- **§4 callout (MCT AASHTO steel rating, saved data with an ST-Girder capacity zone only):**
+  - Before: in such a zone `capAt()` used ST-Girder's per-station envelope: `MnPos = φMn⁺(x)/φf`, `MnNeg = |φMn⁻(x)|/φf`, `Vn = φVn(x)/φv`, so C = φc·φs·φMn(ST-Girder). After: the default manual zone, C = φc·φs·φf·500 ft·k (moment) and φc·φs·φv·150 kip (shear), until the engineer enters the capacity. Governing provision unchanged: AASHTO MBE 3rd Ed. 6A.4.2.1, RF = (C − γ_DC·DC − γ_DW·DW ± γ_P·P) / (γ_LL·(LL+IM)).
+  - Worked check (one node, φc = φs = φf = 1.0, Inventory γ_DC = 1.25, γ_DW = 1.50, γ_LL = 1.75; DC = 1500 ft·k, DW = 200 ft·k, LL+IM = 1000 ft·k, ST-Girder φMn⁺ = 5000 ft·k): before RF = (5000 − 1875 − 300)/1750 = **1.614**; after RF = (500 − 1875 − 300)/1750 = **−0.957** (placeholder capacity; the notice tells the engineer to enter the capacity). This is the intended effect of decision 2 on saved data; it is not a formula change.
+  - Test cases: none of the repository's test projects (tests/projects) holds an MCT capacity zone from ST-Girder, so no test-case result changes; MCT, PS-Beam and LL & DL results are otherwise unchanged (page text identical apart from the removed controls).
+- **How verified:** `node tests/check-syntax.mjs index.html psbeam.html lldf.html "Bridge Substructure Loading.html" tools.html` (all pass); `node tests/compare.mjs --tool page --file <each>` against main (bcbd913): psbeam, lldf, SubLoads and tools storage identical, page text differs only by the removed ST-Girder controls and the reworded ST-Girder mentions (psbeam: the "ST-Girder ↗" button; lldf: the "ST ↗" button and the self-weight notes; tools: the ST-Girder card), no console errors; index.html with a longer load timeout (scratch script): page text identical apart from the removed "🅢 Composite Steel Design App ↗" hand-off button, no console errors, the embedded-app bar lists only "PS-Beam →" / "LL & DL"; a saved ST-Girder capacity zone is replaced and the notice shown, a PS-Beam zone kept; lldf with an old ST-Girder `lldfGeom`: nothing offered; SubLoads with old ST-Girder copies: "Pull from PS-Beam" lists only PS-Beam, the short note is shown, no new-data marker for ST-Girder. ST-Girder's own checks: branch claude/stgirder-disconnect.
+- **Other files (same PR):** tools.html (the ST-Girder card reads "Connected to GirderDetail only (demands from Steel Bridge Beam Modules); not linked to the MCT, PS-Girder, LL & DL or Substructure tools."; tools.html has no fix log of its own), HANDOFF.md (channel table, note under it, §3.7, §4.2–§4.4), AUDIT.md (§1.2, §1.3 and a note), CLAUDE.md §3.
+- **Open items:** the placeholder capacity (500 / 500 / 150) after an ST-Girder zone is removed is MCT's existing default; the engineer may prefer another fallback (for example a Steel Calc or Composite zone from MCT's section library). ENGINEER_CHECKS.md not changed in this PR.
+- **Diff (main → branch, `git diff -U0`; runs of more than 30 deleted lines and hunks that only delete are summarised by their first and last line):**
+```diff
+diff --git a/index.html b/index.html
+index 4402d55..20198e6 100644
+--- a/index.html
++++ b/index.html
+@@ -45,2 +45,3 @@
+-     This block is byte-identical in index.html / psbeam.html / stgirder.html /
+-     lldf.html — edit it in one place and copy it to the other three.
++     This block is byte-identical in index.html / psbeam.html / lldf.html — edit
++     it in one place and copy it to the other two. (ST-Girder, stgirder.html, left
++     the suite on 2026-10-19 and no longer carries it.)
+@@ -120 +121,2 @@ var st=document.createElement('style'); st.textContent=css;
+-     analysis app (this file) and the two design apps (psbeam.html, stgirder.html).
++     analysis app (this file) and the design app psbeam.html (ST-Girder, stgirder.html,
++     no longer reads it: engineer decision 2026-10-19).
+@@ -235 +237 @@ var st=document.createElement('style'); st.textContent=css;
+-     four apps; each app owns a "slice". Same-origin localStorage; identical in
++     three apps; each app owns a "slice". Same-origin localStorage; identical in
+@@ -237 +239,2 @@ var st=document.createElement('style'); st.textContent=css;
+-     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,stgirder,lldf},demands} }
++     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,lldf},demands} }
++           (projects saved before 2026-10-19 may also hold a "stgirder" slice; no app reads it now)
+@@ -301,3 +304,2 @@ var st=document.createElement('style'); st.textContent=css;
+-   The four apps link to each other by bare file name: MCT embeds "psbeam.html"
+-   in an iframe, PS-Beam opens "stgirder.html" in a tab, every app's back link
+-   points at "index.html". That works only while each file is named exactly what
++   The three apps link to each other by bare file name: MCT embeds "psbeam.html"
++   in an iframe, every app's back link points at "index.html". That works only while each file is named exactly what
+@@ -321,2 +323,3 @@ var st=document.createElement('style'); st.textContent=css;
+-   This block is byte-identical in index.html / psbeam.html / stgirder.html /
+-   lldf.html. Edit one, edit all four.
++   This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
++   one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
++   keeps only a reduced app-path record of its own, which GirderDetail reads.)
+@@ -326,2 +329,2 @@ var st=document.createElement('style'); st.textContent=css;
+-  var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
+-  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
++  var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};
++  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
+@@ -496 +499 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
+-   Lock state is shared across all four apps — locking the distribution-factor
++   Lock state is shared across all three apps — locking the distribution-factor
+@@ -507 +510 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
+-   This block is byte-identical in all four apps. Edit it in one place and
++   This block is byte-identical in all three apps. Edit it in one place and
+@@ -548 +551,2 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
+-    /* The analysis hand-off, MCT -> the two design apps. `key` is the whole
++    /* The analysis hand-off, MCT -> PS-Beam (ST-Girder no longer reads it,
++       2026-10-19). `key` is the whole
+@@ -560 +564 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
+-  var APPS={mct:'MCT', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL'};
++  var APPS={mct:'MCT', psbeam:'PS-Beam', lldf:'LL & DL'};
+@@ -591 +595 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
+-     (PS-Beam and ST-Girder for capacity; MCT and both design apps for
++     (any app may publish capacity; MCT and PS-Beam for
+@@ -635 +639 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
+-  var LOG_APPS=['mct','psbeam','stgirder','lldf'];
++  var LOG_APPS=['mct','psbeam','lldf'];
+-2074,110 +2077,0  [deleted 110 lines: first "// ─────────────────────────────────────────────────────────────────────────────" ... last ""]
+@@ -8155 +8049 @@ function StepCombos({cfg,set}) {
+-        title="Sets the load combinations required by the PS-Beam and ST-Girder design modules: HL-93 truck + tandem at 33% impact, plus passthrough combos (DC1, DC2, DW, LL) at factor 1.0. Replaces the vehicle selection and the psb_ combos; keeps your other combos."
++        title="Sets the load combinations required by the PS-Beam design module: HL-93 truck + tandem at 33% impact, plus passthrough combos (DC1, DC2, DW, LL) at factor 1.0. Replaces the vehicle selection and the psb_ combos; keeps your other combos."
+@@ -11911 +11805 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
+-  // ── Design-app capacity zone: interpolate the per-station table published by PS-Beam / ST-Girder ──
++  // ── Design-app capacity zone: interpolate the per-station table published by PS-Beam ──
+@@ -11980 +11874 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
+-  // ── Design-app capacity feed (PS-Beam / ST-Girder → this rating) ──────────
++  // ── Design-app capacity feed (PS-Beam → this rating; ST-Girder's capacity is no longer used, 2026-10-19) ──
+@@ -12001,0 +11896,2 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
++      // ST-Girder's capacity is not offered or adopted (engineer decision 2026-10-19, fixlog/index.md STDISC).
++      if(capFromST(p)){ setCapFeed(null); return; }
+@@ -13347,3 +13243,4 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
+-  // the sidebar design buttons (publishToDesign) now build the SAME payload via
+-  // buildPSBeamExport / buildSteelBeamExport, publish it to shared storage, and open the
+-  // embedded design app. Each design app also keeps its own Import JSON for portable files.
++  // the sidebar design button (publishToDesign) now builds the SAME payload via
++  // buildPSBeamExport, publishes it to shared storage, and opens the embedded PS-Beam app.
++  // PS-Beam also keeps its own Import JSON for portable files. (The steel-beam payload for
++  // ST-Girder was removed on 2026-10-19: ST-Girder takes demands from GirderDetail only.)
+@@ -14598 +14495 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
+-                      <button onClick={()=>{ if(window.confirm('Revert to a manual capacity zone? The design-app station data is discarded (re-send it from PS/ST to restore).')) setCapZones([{...defaultCapZone(), startX:0, endX:z.endX}]); }}
++                      <button onClick={()=>{ if(window.confirm('Revert to a manual capacity zone? The design-app station data is discarded (re-send it from PS-Beam to restore).')) setCapZones([{...defaultCapZone(), startX:0, endX:z.endX}]); }}
+@@ -20597 +20494 @@ function SavesModal({ cfg, onLoad, onClose,
+-      if (entry.ratingCapZones && setRatingCapZones) setRatingCapZones(entry.ratingCapZones);
++      if (entry.ratingCapZones && setRatingCapZones) setRatingCapZones(capDropST(entry.ratingCapZones,'Restored history entry'));
+@@ -21033 +20930 @@ function EmbedTrouble({app,name,health,onUse,onClose}){
+-  const NAMES={mct:'the MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
++  const NAMES={mct:'the MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
+@@ -21083,0 +20981,28 @@ function EmbedTrouble({app,name,health,onUse,onClose}){
++/* ST-Girder capacity (engineer decision 2026-10-19, fixlog/index.md STDISC). MCT no longer uses capacity
++   published by ST-Girder: such a payload is not offered or adopted (capFromST), and a saved capacity zone
++   fed by ST-Girder (type 'design', producer 'ST-Girder') is replaced on load by MCT's own default manual
++   zone over the same extent (the zone "↩ Revert to manual zones" gives). Each replacement is listed in a
++   notice kept in mct_stcap_notice_v1 until it is dismissed. Zones fed by PS-Beam are unchanged. */
++const MCT_STCAP_KEY='mct_stcap_notice_v1';
++function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html')); }
++function stCapRead(){ try{ const a=JSON.parse(localStorage.getItem(MCT_STCAP_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
++function stCapAdd(notes){ if(!notes||!notes.length) return;
++  try{ localStorage.setItem(MCT_STCAP_KEY,JSON.stringify(stCapRead().concat(notes))); }catch(e){}
++  try{ window.dispatchEvent(new Event('mct-stcap')); }catch(e){} }
++function capDropST(zones,where){
++  if(!Array.isArray(zones)||!zones.some(z=>z&&z.type==='design'&&capFromST(z))) return zones;
++  const notes=[];
++  const out=zones.map((z,i)=>{
++    if(!(z&&z.type==='design'&&capFromST(z))) return z;
++    const n=Array.isArray(z.stations)?z.stations.length:0;
++    notes.push((where?where+': ':'')+'capacity zone '+(i+1)+' ('+(+z.startX||0)+' to '+(+z.endX||0)+' ft) held the \u03c6Mn / \u03c6Vn envelope from ST-Girder'
++      +(z.memberKey?' ('+z.memberKey+')':'')+(z.producedAt?', sent '+String(z.producedAt).slice(0,16).replace('T',' '):'')+', '+n+' station'+(n===1?'':'s')
++      +'. It was replaced by a manual zone with MCT\u2019s default inputs (Mn\u207a = Mn\u207b = 500 ft\u00b7k, Vn = 150 kip). These are placeholders: enter this girder\u2019s capacity (Manual, Steel Calc or Composite) in AASHTO Rating before using the steel rating.');
++    return {id:'cap'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,4), startX:z.startX, endX:z.endX,
++      type:'manual', MnPos:500, MnNeg:500, Vn:150, Fy:50, ZxPos:0, ZxNeg:0, Aw:0, SxPos:0, SxNeg:0,
++      aremaComps:null, outToOut:42, holeDiam:1, holePitch:3, holeGage:1.5, holesInChain:0, unbracedL:240, ryc:0, autoRyc:true};
++  });
++  stCapAdd(notes);
++  return out;
++}
++
+@@ -21111 +21036 @@ function App() {
+-  const [embedApp,setEmbedApp]=useState(null);                  // null | 'lldf' | 'psbeam' | 'stgirder'
++  const [embedApp,setEmbedApp]=useState(null);                  // null | 'lldf' | 'psbeam'
+@@ -21265,2 +21190 @@ function App() {
+-    psbeam:{title:'PS-Beam · Prestressed Concrete Girder Design',color:'#0e7490'},
+-    stgirder:{title:'ST-Girder · Composite Steel Plate Girder Design',color:'#3b4a5a'} };
++    psbeam:{title:'PS-Beam · Prestressed Concrete Girder Design',color:'#0e7490'} };
+@@ -21320 +21244,4 @@ function App() {
+-  const [ratingCapZones,    setRatingCapZones]      = useState(()=>{ try { const s=localStorage.getItem('mct_cap_zones_v1'); return s?JSON.parse(s):[]; } catch(e){ return []; }});
++  const [ratingCapZones,    setRatingCapZones]      = useState(()=>{ try { const s=localStorage.getItem('mct_cap_zones_v1'); return s?capDropST(JSON.parse(s)):[]; } catch(e){ return []; }});
++  // STDISC (2026-10-19): notice for capacity zones from ST-Girder replaced on load (kept until dismissed)
++  const [stCapNotes,setStCapNotes]=useState(()=>stCapRead());
++  useEffect(()=>{ const h=()=>setStCapNotes(stCapRead()); window.addEventListener('mct-stcap',h); return ()=>window.removeEventListener('mct-stcap',h); },[]);
+@@ -21381 +21308 @@ function App() {
+-    const name=window.prompt('Save to Bridge Project (shared with PS-Beam / ST-Girder / LLDF):', suggested);
++    const name=window.prompt('Save to Bridge Project (shared with PS-Beam / LLDF):', suggested);
+@@ -21505 +21432 @@ function App() {
+-    // MCT, PS-Beam and ST-Girder can all publish geometry. Only the app
++    // MCT and PS-Beam can both publish geometry. Only the app
+@@ -21626,2 +21553,3 @@ function App() {
+-            setRatingCapZones(loaded.ratingCapZones);
+-            try{localStorage.setItem('mct_cap_zones_v1',JSON.stringify(loaded.ratingCapZones));}catch(e){}
++            const capZ=capDropST(loaded.ratingCapZones,'Imported file '+file.name);
++            setRatingCapZones(capZ);
++            try{localStorage.setItem('mct_cap_zones_v1',JSON.stringify(capZ));}catch(e){}
+@@ -21716,2 +21644,3 @@ function App() {
+-  // Reuses the SAME builders as the JSON export (buildPSBeamExport / buildSteelBeamExport). The design
+-  // apps read it from localStorage on load (banner-prompted). JSON export/import stays as the fallback.
++  // Reuses the SAME builder as the JSON export (buildPSBeamExport). PS-Beam reads it from localStorage
++  // on load (banner-prompted). JSON export/import stays as the fallback. Since 2026-10-19 there is no
++  // steel flavour: ST-Girder takes demands from GirderDetail only (fixlog/index.md STDISC).
+@@ -21722,2 +21651,2 @@ function App() {
+-    const target = kind==='steel' ? 'stgirder' : 'psbeam';
+-    const targetName = kind==='steel' ? 'ST-Girder' : 'PS-Beam';
++    const target = 'psbeam';
++    const targetName = 'PS-Beam';
+@@ -21742 +21671 @@ function App() {
+-      const payload = kind==='steel' ? buildSteelBeamExport(args) : buildPSBeamExport(args);
++      const payload = buildPSBeamExport(args);
+@@ -21748,5 +21677,3 @@ function App() {
+-      const noZones = kind==='steel' && !(payload.section&&payload.section.zones&&payload.section.zones.length);
+-      const mustConfirm = warns.some(w=>w.startsWith('LIVE LOAD')) || noZones;
+-      if(warns.length || noZones){
+-        const extra = noZones ? '\n\n• No section makeup found — enable the section library (Sections tab) so the steel app receives plate dimensions.' : '';
+-        const msg='Design hand-off warnings:\n\n• '+(warns.join('\n\n• ')||'(none)')+extra+(mustConfirm?'\n\nSend anyway?':'');
++      const mustConfirm = warns.some(w=>w.startsWith('LIVE LOAD'));
++      if(warns.length){
++        const msg='Design hand-off warnings:\n\n• '+(warns.join('\n\n• ')||'(none)')+(mustConfirm?'\n\nSend anyway?':'');
+@@ -21771 +21698 @@ function App() {
+-        try{ localStorage.setItem('bridgeSuite.v1.demandsKind',kind); }catch(e){}
++        try{ localStorage.setItem('bridgeSuite.v1.demandsKind','psbeam'); }catch(e){}
+@@ -21773 +21700 @@ function App() {
+-        if(!silent) openEmbed(kind==='steel' ? 'stgirder' : 'psbeam');
++        if(!silent) openEmbed('psbeam');
+@@ -21921,12 +21848,3 @@ function App() {
+-  const demandsKind=()=>{
+-    // Which design app a locked republish should build for. If the lock was
+-    // taken from one of the design apps, that app's own choice wins -- locking
+-    // from ST-Girder means "keep ST-Girder fed". Otherwise use whichever
+-    // flavour was last sent from here.
+-    try{
+-      const i=BL&&BL.lockInfo('demands');
+-      if(i&&i.by==='stgirder') return 'steel';
+-      if(i&&i.by==='psbeam')   return 'psbeam';
+-      return localStorage.getItem('bridgeSuite.v1.demandsKind')||'psbeam';
+-    }catch(e){ return 'psbeam'; }
+-  };
++  // Which design app a locked republish builds for: PS-Beam only since 2026-10-19 (a stored
++  // 'steel' kind from before, when ST-Girder was fed from here, is no longer used).
++  const demandsKind=()=>'psbeam';
+@@ -21949 +21867 @@ function App() {
+-          text:'republished analysis demands to '+(k==='steel'?'ST-Girder':'PS-Beam')});
++          text:'republished analysis demands to PS-Beam'});
+@@ -21963 +21881 @@ function App() {
+-        text:'auto-send ON \u2014 '+(k==='steel'?'ST-Girder':'PS-Beam')+' now follows this analysis'
++        text:'auto-send ON \u2014 PS-Beam now follows this analysis'
+@@ -22092,3 +22010,2 @@ function App() {
+-          {[{k:'psbeam',label:'Prestressed Concrete Beam Design',icon:'🅿',accent:'#0e7490',light:'#ecfeff',border:'#a5f3fc'},
+-            {k:'steel', label:'Composite Steel Design App',       icon:'🅢',accent:'#3b4a5a',light:'#f1f5f9',border:'#cbd5e1'}].map(b=>{
+-            const appId=b.k==='steel'?'stgirder':'psbeam';
++          {[{k:'psbeam',label:'Prestressed Concrete Beam Design',icon:'🅿',accent:'#0e7490',light:'#ecfeff',border:'#a5f3fc'}].map(b=>{
++            const appId='psbeam';
+@@ -22184 +22101 @@ function App() {
+-                  <span>Bridge Project</span><span title="One project shared across MCT, PS-Beam, ST-Girder and LLDF">shared ⇄</span></div>
++                  <span>Bridge Project</span><span title="One project shared across MCT, PS-Beam and LLDF">shared ⇄</span></div>
+@@ -22255,0 +22173,12 @@ function App() {
++            {stCapNotes.length>0&&(
++              <div style={{margin:'0 0 14px',padding:'10px 14px',borderRadius:'8px',border:'1px solid #fde68a',
++                borderLeft:'4px solid #d97706',background:'#fffbeb',fontSize:'12px',color:'#92400e',lineHeight:1.5}}>
++                <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
++                  <b>⚠ Capacity from ST-Girder is no longer used (engineer decision 2026-10-19)</b>
++                  <button onClick={()=>{ try{ localStorage.removeItem(MCT_STCAP_KEY); }catch(e){} setStCapNotes([]); }} style={{marginLeft:'auto',background:'#fff',border:'1px solid #fcd34d',
++                    borderRadius:'5px',color:'#92400e',padding:'3px 10px',cursor:'pointer',fontSize:'11px'}}>Dismiss</button>
++                </div>
++                <div style={{marginTop:'4px'}}>ST-Girder is now connected to GirderDetail only, so the MCT steel rating takes its capacity from MCT's own capacity zones. Saved data changed:</div>
++                <ul style={{margin:'6px 0 0 18px'}}>{stCapNotes.map((t,i)=><li key={i}>{t}</li>)}</ul>
++              </div>
++            )}
+@@ -22290 +22219 @@ function App() {
+-            {['lldf','psbeam','stgirder'].filter(a=>a!==embedApp).map(a=>(
++            {['lldf','psbeam'].filter(a=>a!==embedApp).map(a=>(
+@@ -22294 +22223 @@ function App() {
+-                {a==='lldf'?'LL & DL':a==='psbeam'?'PS-Beam':'ST-Girder'} →</button>))}
++                {a==='lldf'?'LL & DL':'PS-Beam'} →</button>))}
+```
+- **tools.html diff:** see fixlog/Bridge Substructure Loading.md (same PR), last hunk.

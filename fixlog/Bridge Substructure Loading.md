@@ -953,3 +953,77 @@ Line numbers are approximate; search for the anchor text.
 ### Needs engineer
 - **Report length:** the default is 109 pages (was 96). The cover, references and contents add 3; the narrower print area adds the rest.
 - **Description** in the print header is the project name (the tool has no description field). **Checked date** prints "—" (no field; none added).
+
+
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+
+### STDISC. Substructure Loading: ST-Girder no longer a reactions source   [no result change, Tier 0/1]
+- **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
+- **Changed in Bridge Substructure Loading.html (`patchRxHandoff`):** `BY = ['psbeam', 'mct']` (was with `'stgirder'`); new `isST(p)`; `candidates()` skips any payload from ST-Girder (the channel key or `superReactions.by.stgirder`) and returns them separately; `pull()` adds a short note when such a copy is stored ("A reactions hand-off from ST-Girder (sent …) is stored in this browser but is not offered. ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only)."); Import refuses a file sent by ST-Girder (nothing changed); the new-data marker (`newOK()`) ignores an ST-Girder payload; the Reactions tab shows "ST-Girder reactions in this browser are not offered" (with the note as tooltip) while an old copy is stored; the button reads "Pull from PS-Beam". Reactions already applied from ST-Girder stay in `P.rx.data` and their source records in `P.rxSrc` (saved data, unchanged).
+- **Saved data:** none changed. **§4:** no formula, factor or result changed. Reactions from GirderDetail: separate, later PR (engineer decision 1).
+- **How verified:** `node tests/check-syntax.mjs index.html psbeam.html lldf.html "Bridge Substructure Loading.html" tools.html` (all pass); `node tests/compare.mjs --tool page --file <each>` against main (bcbd913): psbeam, lldf, SubLoads and tools storage identical, page text differs only by the removed ST-Girder controls and the reworded ST-Girder mentions (psbeam: the "ST-Girder ↗" button; lldf: the "ST ↗" button and the self-weight notes; tools: the ST-Girder card), no console errors; index.html with a longer load timeout (scratch script): page text identical apart from the removed "🅢 Composite Steel Design App ↗" hand-off button, no console errors, the embedded-app bar lists only "PS-Beam →" / "LL & DL"; a saved ST-Girder capacity zone is replaced and the notice shown, a PS-Beam zone kept; lldf with an old ST-Girder `lldfGeom`: nothing offered; SubLoads with old ST-Girder copies: "Pull from PS-Beam" lists only PS-Beam, the short note is shown, no new-data marker for ST-Girder. ST-Girder's own checks: branch claude/stgirder-disconnect.
+- **Diff (main → branch, `git diff -U0`; runs of more than 30 deleted lines and hunks that only delete are summarised by their first and last line):**
+```diff
+diff --git a/Bridge Substructure Loading.html b/Bridge Substructure Loading.html
+index 4fe55e2..1be091f 100644
+--- a/Bridge Substructure Loading.html	
++++ b/Bridge Substructure Loading.html	
+@@ -3234 +3234,3 @@ async function rxImport(file) {
+-   Reactions tab: "Pull from PS-Beam / ST-Girder" (with a new-data marker) and "Import hand-off (JSON)".
++   Reactions tab: "Pull from PS-Beam" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
++   not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only; reactions from
++   GirderDetail are a later change): a payload from ST-Girder is not listed, adopted or imported.
+@@ -3241 +3243,5 @@ async function rxImport(file) {
+-  const BY = ['psbeam', 'stgirder', 'mct'];
++  const BY = ['psbeam', 'mct'];
++  const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html');
++  const ST_MSG = 'ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only).';
++  /* the latest payload on the channel is new for SubLoads, and not ST-Girder's */
++  const newOK = () => { if (!BX() || !BX().isNew(CH, RID)) return false; const r = BX().read(CH, SCH, 1); return !(r.ok && isST(r.payload)); };
+@@ -3252,3 +3258,5 @@ async function rxImport(file) {
+-    const out = [], seen = {}, errs = [];
+-    if (!BX()) return { list: out, errs: ['The hand-off helper is not available in this browser.'] };
+-    const add = (r, via) => { if (r.ok) { const p = r.payload, key = (p.producer || '') + '|' + (p.producedAt || ''); if (!seen[key]) { seen[key] = 1; out.push(p); } } else if (!r.empty) errs.push(`${via}: ${r.error}`); };
++    const out = [], seen = {}, errs = [], st = [];
++    if (!BX()) return { list: out, errs: ['The hand-off helper is not available in this browser.'], st };
++    const add = (r, via) => { if (r.ok) { const p = r.payload, key = (p.producer || '') + '|' + (p.producedAt || ''); if (seen[key]) return; seen[key] = 1;
++      if (isST(p)) { st.push(p); return; }   // ST-Girder: not offered (2026-10-19)
++      out.push(p); } else if (!r.empty) errs.push(`${via}: ${r.error}`); };
+@@ -3256,0 +3265 @@ async function rxImport(file) {
++    add(BX().read(`${CH}.by.stgirder`, SCH, 1), 'old copy from ST-Girder');   // read only to say it is not offered
+@@ -3258 +3267 @@ async function rxImport(file) {
+-    return { list: out, errs };
++    return { list: out, errs, st };
+@@ -3259,0 +3269,5 @@ async function rxImport(file) {
++  /* ST-Girder copies still stored in this browser (shown as a short note on the Reactions tab) */
++  const stOld = () => { if (!BX()) return []; const o = [], s = {};
++    [CH, `${CH}.by.stgirder`].forEach(k => { const r = BX().read(k, SCH, 1); if (r.ok && isST(r.payload) && !s[r.payload.producedAt]) { s[r.payload.producedAt] = 1; o.push(r.payload); } });
++    return o; };
++  const stNote = st => st.length ? `A reactions hand-off from ST-Girder (sent ${st.map(p => when(p.producedAt)).join(', ')}) is stored in this browser but is not offered. ${ST_MSG}` : '';
+@@ -3378 +3392 @@ async function rxImport(file) {
+-    if (!r.list.length) { alert(r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam or ST-Girder click "Send reactions to Substructure Loading", then pull here.'); return; }
++    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
+@@ -3379,0 +3394 @@ async function rxImport(file) {
++    if (r.st.length) flash(stNote(r.st));
+@@ -3383 +3398,3 @@ async function rxImport(file) {
+-    BX().importFile(file, SCH, 1, r => { if (r.error) { alert(`Cannot import ${file.name}: ${r.error}`); return; } openDialog([r.payload], 'file: ' + file.name, []); });
++    BX().importFile(file, SCH, 1, r => { if (r.error) { alert(`Cannot import ${file.name}: ${r.error}`); return; }
++      if (isST(r.payload)) { alert(`Cannot import ${file.name}: it was sent by ST-Girder. ${ST_MSG} Nothing was changed.`); return; }
++      openDialog([r.payload], 'file: ' + file.name, []); });
+@@ -3395 +3412 @@ async function rxImport(file) {
+-    let h = pr(); const isNew = BX() ? BX().isNew(CH, RID) : false; let latest = null;
++    let h = pr(); const isNew = newOK(); let latest = null;
+@@ -3397 +3414 @@ async function rxImport(file) {
+-    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam or ST-Girder (asks first)">Pull from PS-Beam / ST-Girder</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}`;
++    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam (asks first)">Pull from PS-Beam</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
+@@ -3407 +3424 @@ async function rxImport(file) {
+-  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = BX() ? BX().isNew(CH, RID) : false; t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
++  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = newOK(); t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
+diff --git a/tools.html b/tools.html
+index e93548b..9f9a238 100644
+--- a/tools.html
++++ b/tools.html
+@@ -66 +66 @@ details.checks ul{margin:0;padding-left:20px}details.checks li{margin:3px 0}deta
+-<a class="card" href="stgirder.html" target="_blank"><div class="name">ST-Girder</div><div class="desc">Steel plate girder design: flexure, shear, fatigue, stiffeners, studs, rating.</div><span class="tag">AASHTO LRFD Sec. 6</span></a>
++<a class="card" href="stgirder.html" target="_blank"><div class="name">ST-Girder</div><div class="desc">Steel plate girder design: flexure, shear, fatigue, stiffeners, studs, rating. Connected to GirderDetail only (demands from Steel Bridge Beam Modules); not linked to the MCT, PS-Girder, LL &amp; DL or Substructure tools.</div><span class="tag">AASHTO LRFD Sec. 6</span></a>
+```
