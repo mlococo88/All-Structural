@@ -1135,3 +1135,111 @@ index 1be091f..06e7a50 100644
 @@ -3441,0 +3462 @@ async function rxImport(file) {
 +    else if (w === 'byn') { D.byN = t.value === '1'; D.preset = D.byN ? 'bynum' : 'pos'; D.gir = presetGirders(D.preset, D.pos, D.idx); }   // SRX
 ```
+
+## 2026-10-19 — PR: claude/gd-superreactions-util (SRXU: MassDOT utilities carried from GirderDetail into Bridge Substructure Loading; engineer decision GD72a 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, ENGINEER_CHECKS GD72 closed; PR link added after merge)
+
+### SRXU. MassDOT utilities from GirderDetail adopted as loads   [RESULT CHANGE for payloads with UT / UF — §4 callout; every other payload unchanged]
+- **Engineer decision GD72a (2026-10-19):** UT as DW; UF as DC with 1.25 / 0 if representable, else as DC; shown as their own rows; if they cannot stay separate without a structural change, add them to DW / DC with a visible breakdown.
+- **What was possible:** the combination code has DC (superstructure + substructure) and DW as its only permanent loads, with the factor pairs repeated in the Strength / Extreme / Service engines (several `pf(…, g, hi)` blocks and the combination patches). A separate UF load with 1.25 / 0 would be a structural change to every engine, so: the values are **stored and shown separately** (own keys, own table), and in the analysis UT is **added to DW** and UF **to DC2** (DC superstructure) at the bearings, with the breakdown stated on the Dead load tab and in the report. UF therefore takes the DC factors 1.25 max / **0.90 min** and Service 1.0 (GirderDetail: 1.25 / 0, Service 0 where it relieves): in minimum cases 0.90 UF is counted (less conservative there; 31.7 kip of P min at Pier 1 in the check case).
+- **Where (`patchRxHandoff`):** `check()` reads optional `UT` / `UF` (finite, converted to kip) and returns `hasU`; `plan()` adds the cells `ut`, `uf` (`uta`, `ufa` on an ahead row; 0 where the source girder has none) only when `hasU`; the dialog shows UT / UF columns and a note; the source record gets `utilities:{ ut, uf }` and `srcText` states them. New block (anchor `/* ---------- SRXU (engineer decision 2026-10-19, GD72a)`): `utilTables` (table "MassDOT utilities from GirderDetail" under each support with the keys, editable inputs `rx.data.k.j.ut|uf|uta|ufa`, totals), a wrapper of `dlUnit` (UT added to `dw`, UF to `dc2`, then DC super and DW re-evaluated; returns the original result untouched when the support has no nonzero utility), a wrapper of `rxTotals` (Summary DC / DW include them), Dead load tab and report-basis breakdown text (`utTxt`), and a paste handler for the utilities table (the general one knows DC1, DC2, DW only).
+- **Saved data:** new optional keys in `P.rx.data` rows (`ut`, `uf`, `uta`, `ufa`) and `P.rxSrc[].utilities`; additive. Old projects: unchanged. A project with them opened by main: the keys are ignored (the utilities are not carried there).
+- **Check case (MassDOT util case, `tests/projects/gd/util.json`, owner MassDOT; GirderDetail payload pulled into the SubLoads built-in bridge with the defaults; before = main, which ignores the fields; after = this branch):**
+  - Sent (kip, unfactored): G2 and G3 each UT 5.846 at each abutment and 21.154 at each pier, UF 4.872 / 17.628; G1, G4, G5 none. Sum check UT per girder: 2 × 5.85 + 2 × 21.15 = 54.0 = 0.150 klf × 360 ft; UF: 2 × 4.87 + 2 × 17.63 = 45.0 = 0.125 × 360. Both girders: UT 108.0, UF 90.0 kip (the source record).
+  - Superstructure totals (sum of girders, Summary units table): Abut. 1 DC 299.0 → 308.7, DW 41.0 → 52.7; Pier 1 DC 1101.8 → 1137.1, DW 145.8 → 188.1 (Pier 1: UF 35.26, UT 42.31).
+  - Governing results that change (Summary "Governing design forces"; Strength I unless noted):
+
+| Unit, section, effect | Before | After |
+|---|---|---|
+| Abut. 1, bridge seat, P max (kip) | 963.6 | 993.3 |
+| Abut. 1, bridge seat, M_t max / min (kip-ft) | 4173.9 / −4171.8 | 4320.1 / −4091.3 |
+| Abut. 1, bottom of footing, P max (kip) | 2544.8 | 2574.5 |
+| Abut. 1, bottom of footing, M_l max / min (kip-ft) | 4153.6 / −1244.2 | 4190.7 / −1223.7 |
+| Pier 1, top of footing, P max / min (Str. III) (kip) | 2703.3 / 1149.3 | 2810.9 / 1208.5 |
+| Pier 1, bottom of footing, P max / min (Str. III) (kip) | 3504.5 / 1733.1 | 3612.1 / 1792.3 |
+| Pier 1, bottom of footing, M_t max / min (kip-ft) | 7429.5 / −7337.3 | 7958.3 / −7046.1 |
+| Pier 1, bottom of footing, P Service I max (kip) | 2556.7 | 2634.3 |
+| Pier 2, bottom of footing, P max / min (kip) | 3355.9 / 1623.6 | 3463.5 / 1682.8 |
+| Abut. 2, bottom of footing, M_l max / min (kip-ft) | 1439.1 / −4446.2 | 1418.6 / −4483.3 |
+
+  (Every resultant at the bridge seat, top and bottom of footing of every unit changes the same way; the full list is in the PR.) M_t grows because the utilities sit on G2 and G3, left of the bridge centerline.
+  - **Hand check:** Abut. 1 bridge seat P max = previous + 1.50 × UT + 1.25 × UF = 963.6 + 1.50 × 11.69 + 1.25 × 9.74 = 963.6 + 17.54 + 12.18 = **993.3 kip** ✓. Pier 1 bottom of footing P max = 3504.5 + 1.50 × 42.31 + 1.25 × 35.26 = 3504.5 + 63.46 + 44.07 = **3612.0** (tool 3612.1, rounding) ✓. P min (Strength III, minimum factors) = 1733.1 + 0.65 × 42.31 + 0.90 × 35.26 = 1733.1 + 27.50 + 31.73 = **1792.3** ✓; with GirderDetail's 0 on UF it would be 1760.6 (the 31.7 kip counted in the minimum is the documented approximation). Service I = 2556.7 + 42.31 + 35.26 = **2634.3** ✓.
+- **How verified:** `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: pass. origin/main (with SRX) vs branch, headless, Pull → defaults → Apply, then every text and value: real PS-Beam payload, PS-Beam MIDAS-style, older two-girder (`mct` copy), old ST-Girder copy beside PS-Beam, ST-Girder on the channel key, GirderDetail built-in (no utilities): **identical** in all six (dialog text, cells, `P.rx.data`, `P.rxSrc`, Summary, report basis, Dead load tab). `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"`: identical. Util case: the before / after above (main vs branch, same payload); the utilities table, the Dead load breakdown and the report basis checked on screen (screenshots in the PR); 100 cells applied.
+- **Other copies:** none. Sender: `fixlog/Steel Bridge Beam Modules.md` SRXU.
+- **Open items:** none (GD72 closed). Noted: the Excel template / import (DC1, DC2, DW) does not include the utility columns.
+
+Diff (`Bridge Substructure Loading.html`, `git diff -U0`):
+
+```diff
+diff --git a/Bridge Substructure Loading.html b/Bridge Substructure Loading.html
+index 06e7a50..8a2a0af 100644
+--- a/Bridge Substructure Loading.html	
++++ b/Bridge Substructure Loading.html	
+@@ -3252 +3252 @@ async function rxImport(file) {
+-  const LBL = { dc1: 'DC1', dc2: 'DC2', dw: 'DW' };
++  const LBL = { dc1: 'DC1', dc2: 'DC2', dw: 'DW', ut: 'UT', uf: 'UF' };
+@@ -3292 +3292 @@ async function rxImport(file) {
+-    const warns = [], labels = [], sups = [];
++    const warns = [], labels = [], sups = []; let hasU = false;
+@@ -3302,0 +3303,2 @@ async function rxImport(file) {
++        for (const c of ['UT', 'UF']) { if (!g || g[c] == null) continue; const n = g[c];   // SRXU (2026-10-19): optional MassDOT utilities (GirderDetail)
++          if (typeof n !== 'number' || !f(n)) return { err: `support ${id}, ${lab}: ${c} is not a valid number` }; v[c.toLowerCase()] = n * kf; hasU = true; }
+@@ -3308 +3310 @@ async function rxImport(file) {
+-    return { sups, labels, warns };
++    return { sups, labels, warns, hasU };
+@@ -3355,2 +3357,2 @@ async function rxImport(file) {
+-        ['dc1', 'dc2', 'dw'].forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]);
+-        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + g[c0] : g[c0]), src: s.id }); }); }); });
++        (DLG.c.hasU ? ['dc1', 'dc2', 'dw', 'ut', 'uf'] : ['dc1', 'dc2', 'dw']).forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]), gv = g[c0] || 0;   // SRXU: UT / UF (0 where the girder has none)
++        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + gv : gv), src: s.id }); }); }); });
+@@ -3376 +3378,3 @@ async function rxImport(file) {
+-    h += `<h3>Supports</h3><table class="mini-t"><thead><tr><th>From</th><th>DC1</th><th>DC2</th><th>DW</th><th>To SubLoads support</th><th>Bearing row</th></tr></thead><tbody>`;
++    const hu = !!c.hasU, uk = hu ? ['dc1', 'dc2', 'dw', 'ut', 'uf'] : ['dc1', 'dc2', 'dw'];   // SRXU
++    if (hu) h += `<p style="margin-top:6px"><b>MassDOT utilities from GirderDetail</b> are adopted as their own values (Reactions tab, under each support): UT (existing utilities) is carried as DW and UF (future utility allowance) as DC in the load cases; see the Dead load tab.</p>`;
++    h += `<h3>Supports</h3><table class="mini-t"><thead><tr><th>From</th><th>DC1</th><th>DC2</th><th>DW</th>${hu ? '<th>UT</th><th>UF</th>' : ''}<th>To SubLoads support</th><th>Bearing row</th></tr></thead><tbody>`;
+@@ -3379 +3383 @@ async function rxImport(file) {
+-      h += `<tr><td class="lbl">${esc(s.id)}${s.x != null ? ` <small>(x = ${f2(s.x)} ft)</small>` : ''}</td>${g ? ['dc1', 'dc2', 'dw'].map(k => `<td style="text-align:right">${f2(g[k])}</td>`).join('') : '<td colspan="3">(no value for this girder)</td>'}<td><select data-rxh="k" data-i="${i}">${opt(i, t.k)}</select></td><td>${t.k >= 0 && isJoint(t.k) ? `<select data-rxh="side" data-i="${i}"><option value="back"${t.side === 'back' ? ' selected' : ''}>back (span behind)</option><option value="ahead"${t.side === 'ahead' ? ' selected' : ''}>ahead (span ahead)</option></select>` : '<span style="color:var(--muted)">single row</span>'}</td></tr>`; });
++      h += `<tr><td class="lbl">${esc(s.id)}${s.x != null ? ` <small>(x = ${f2(s.x)} ft)</small>` : ''}</td>${g ? uk.map(k => `<td style="text-align:right">${f2(g[k] || 0)}</td>`).join('') : `<td colspan="${uk.length}">(no value for this girder)</td>`}<td><select data-rxh="k" data-i="${i}">${opt(i, t.k)}</select></td><td>${t.k >= 0 && isJoint(t.k) ? `<select data-rxh="side" data-i="${i}"><option value="back"${t.side === 'back' ? ' selected' : ''}>back (span behind)</option><option value="ahead"${t.side === 'ahead' ? ' selected' : ''}>ahead (span ahead)</option></select>` : '<span style="color:var(--muted)">single row</span>'}</td></tr>`; });
+@@ -3400,0 +3405 @@ async function rxImport(file) {
++    if (D.c.hasU) rec.utilities = { ut: r3(pl.cells.filter(x => x.c0 === 'ut').reduce((a, x) => a + x.val, 0)), uf: r3(pl.cells.filter(x => x.c0 === 'uf').reduce((a, x) => a + x.val, 0)) };   // SRXU (optional)
+@@ -3424 +3429 @@ async function rxImport(file) {
+-    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}${rec.ownerRules ? `; owner load rules ${esc(ownTxt(rec.ownerRules))} (information only, not applied here)` : ''}`;
++    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}${rec.utilities ? `; MassDOT utilities from GirderDetail: UT ${f2(rec.utilities.ut)} kip (carried as DW), UF ${f2(rec.utilities.uf)} kip (carried as DC), as adopted` : ''}${rec.ownerRules ? `; owner load rules ${esc(ownTxt(rec.ownerRules))} (information only, not applied here)` : ''}`;
+@@ -3439 +3444 @@ async function rxImport(file) {
+-    return h;
++    return utilTables(h);
+@@ -3440,0 +3446,34 @@ async function rxImport(file) {
++  /* ---------- SRXU (engineer decision 2026-10-19, GD72a): MassDOT utilities from GirderDetail ----------
++     Kept as their own values in P.rx.data rows (optional keys ut, uf; uta, ufa for the ahead row of an expansion joint) and shown as their own
++     table "MassDOT utilities from GirderDetail" under each support. In the analysis UT (existing utilities) is added to DW and UF (future utility
++     allowance) to DC (superstructure, with DC2): SubLoads has no separate permanent load type, so UF takes the DC factors (Strength 1.25 max /
++     0.90 min, Service 1.0) where GirderDetail uses 1.25 / 0 (Service 0 where it relieves). The Dead load tab and the report show the breakdown.
++     A support without these keys is computed exactly as before. */
++  const UK = ['ut', 'uf', 'uta', 'ufa'], hasUk = k => ((P.rx.data || [])[k] || []).some(r => r && UK.some(q => r[q] != null)), anyU = k => ((P.rx.data || [])[k] || []).some(r => r && UK.some(q => nz(r[q])));
++  function utilTables(h) { const G = MODEL.G; if (!G || G.E.length) return h; let pos = 0;
++    (P.units || []).forEach((u, k) => { const tag = `<div class="sec-h">${esc(u.name)}`; let i = h.indexOf(tag, pos);
++      while (i >= 0 && !/[< ]/.test(h.charAt(i + tag.length))) i = h.indexOf(tag, i + 1);
++      if (i < 0) return; const e = h.indexOf('</table>', i); if (e < 0) return; pos = e; if (!hasUk(k)) return;
++      const jt = !!(G.sup[k] && G.sup[k].joint), cols = jt ? [['ut', 'UT bk'], ['uf', 'UF bk'], ['uta', 'UT ah'], ['ufa', 'UF ah']] : [['ut', 'UT (as DW)'], ['uf', 'UF (as DC)']], row = P.rx.data[k];
++      const t = `</table><p class="note" style="padding:6px 0 2px"><b>MassDOT utilities from GirderDetail</b> (kip, unfactored; own values, not in the DC1, DC2, DW columns above). UT = existing utilities, carried as DW; UF = future utility allowance, carried as DC.</p><table class="mini-t"><thead><tr><th>Girder</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${row.map((r, j) => `<tr><td class="lbl">G${j + 1}</td>${cols.map(([c]) => `<td><input data-k="rx.data.${k}.${j}.${c}" data-kind="num" value="${esc(r && r[c] != null ? r[c] : 0)}"></td>`).join('')}</tr>`).join('')}<tr><td class="lbl">Total</td>${cols.map(([c]) => `<td style="text-align:right">${f1(row.reduce((a, r) => a + nz(r && r[c]), 0))}</td>`).join('')}</tr></tbody>`;
++      h = h.slice(0, e) + t + h.slice(e); pos = e + t.length; });
++    return h; }
++  // analysis: UT into DW, UF into DC2 (DC superstructure) at the bearings of every row; unchanged when the support has none
++  const dlu = dlUnit; dlUnit = function (G, UG, k, UM) { const r = dlu(G, UG, k, UM); if (!anyU(k)) return r;
++    const S = G.sup[k], d = (P.rx.data || [])[k] || [], nb = G.nb;
++    const L = key => S.rows.map((rw, ri) => { const a = new Float64Array(nb); for (let j = 0; j < nb; j++) { const c = d[j] || {}; a[j] = nz(ri === 1 ? c[key + 'a'] : c[key]); } return a; });
++    const add = (a, b) => a.map((rr, ri) => rr.map((v, j) => v + b[ri][j])), ut = L('ut'), uf = L('uf'), dc2 = add(r.dc2, uf), dw = add(r.dw, ut);
++    return { ...r, dc2, dw, ut, uf, DCs: UM.evalFn(add(r.dc1, dc2), false), DW: UM.evalFn(dw, false), has: true }; };
++  const rxt = rxTotals; rxTotals = function (G) { const t = rxt(G), d = P.rx.data || []; t.forEach((x, k) => (d[k] || []).forEach(r => { if (!r) return; const a = nz(r.uf) + nz(r.ufa), b = nz(r.ut) + nz(r.uta); if (a || b) { x.dc2 += a; x.dc += a; x.dw += b; } })); return t; };
++  const utTxt = k => { const d = (P.rx.data || [])[k] || [], sum = q => d.reduce((a, r) => a + nz(r && r[q]) + nz(r && r[q + 'a']), 0), by = q => d.map((r, j) => [j, nz(r && r[q]) + nz(r && r[q + 'a'])]).filter(x => x[1]).map(([j, v]) => `G${j + 1} ${f2(v)}`).join(', ');
++    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; DC2 (DC superstructure) includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). UF takes the DC factors (Strength 1.25 max / 0.90 min, Service 1.0): GirderDetail uses 1.25 / 0 (Service 0 where it relieves), which SubLoads cannot represent without a separate load type, so where UF relieves (minimum cases) 0.90 UF is counted.`; };
++  { const dh0 = dlHtml; dlHtml = function () { const h = dh0(), k = P.ui.sel; if (!anyU(k)) return h;
++    return h.replace('Superstructure loads at the bearings</h3>', `Superstructure loads at the bearings</h3><p class="note" style="padding:0 0 6px">${utTxt(k)}</p>`); }; }
++  { const be0 = basisExtra; basisExtra = function () { const h = be0(), ks = (P.units || []).map((u, k) => k).filter(anyU); if (!ks.length) return h;
++    return h.replace(/(<td class="lbl">Superstructure reactions<\/td><td>[\s\S]*?)(<\/td><\/tr>)/, `$1<br>${ks.map(utTxt).join('<br>')}$2`); }; }
++  // paste into the utilities table: its own columns (the general paste handler knows DC1, DC2, DW only)
++  window.addEventListener('paste', e => { const t = e.target; if (!t || !t.dataset || !/^rx\.data\.\d+\.\d+\.(ut|uf|uta|ufa)$/.test(t.dataset.k || '')) return;
++    const txt = (e.clipboardData || window.clipboardData).getData('text'); if (!/[\t\n]/.test(txt.trim())) return;
++    e.preventDefault(); e.stopImmediatePropagation(); const [, , k, j0, c0] = t.dataset.k.split('.'), cols = ['ut', 'uf', 'uta', 'ufa'], ci = cols.indexOf(c0), row = P.rx.data[+k]; let n = 0;
++    txt.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '').forEach((l, a) => { const r = row[+j0 + a]; if (!r) return; l.split('\t').forEach((v, b) => { const c = cols[ci + b], x = num(v.replace(/,/g, '')); if (c && isFinite(x)) { r[c] = x; n++; } }); });
++    buildSide(); recompute(); autosave(); flash(`Pasted ${n} utility value${n === 1 ? '' : 's'} into ${esc(P.units[+k].name)}.`); }, true);
+```
