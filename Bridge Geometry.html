@@ -4830,7 +4830,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +'. On a curved alignment these differ from the PGL station differences in the Bridge Geometry span summary. Rounded to 0.001 ft.',
       'Skew is measured at each support from the normal to the construction reference line chord (0 deg = support square to the chord); the sign is dropped. '
         +'Per support: '+su.map((u,i)=>u.name+' '+sk[i].toFixed(2)).join(', ')+' deg. Sent: '
-        +(skewRule==='moment'?('the skew for moment DFs = '+skewVal.toFixed(2)+' deg ('+(skNoRed?'0: adjacent supports differ by more than 10 deg, so AASHTO LRFD Art. 4.6.2.2.2e allows no moment reduction':'the smallest |skew|')+').')
+        +(skewRule==='moment'?('the skew for moment DFs = '+skewVal.toFixed(2)+' deg ('+(skNoRed?'0: adjacent supports differ by more than 10 deg, so AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e allows no moment reduction':'the smallest |skew|')+').')
           :('the '+(skewRule==='min'?'smallest':(skewRule==='mean'?'average':'largest'))+' |skew| = '+skewVal.toFixed(2)+' deg.')),
       (Nb?('Girder spacings and overhangs are from '+layoutLbl+', measured perpendicular to the reference line (girders are parallel to it), girders numbered left to right looking up-station. '
         +'Overhang = deck edge to exterior girder centerline. No barrier face or d_e is sent; LL & DL keeps its own curb/railing inputs.'):'')
@@ -4839,7 +4839,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     // BG-OH2 / lldf SW3: when the skews differ, LL & DL reads skewDetail and applies the moment and the shear
     // value in one run; the single inputs.skew matters only to a reader that does not use skewDetail.
     if(skDiffer) notes.push('Skews differ between supports (|skew| '+skMin.toFixed(2)+' to '+skMax.toFixed(2)+' deg; largest change between adjacent supports '+skAdj.toFixed(2)+' deg). '
-      +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+      +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
       +'Shear DFs need skew = '+skMax.toFixed(2)+' deg (largest |skew|, obtuse corner; Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). '
       +'LL & DL takes both from this hand-off (skewDetail) in one run: theta = '+skMoment.toFixed(2)+' deg for moment and theta_V = '+skMax.toFixed(2)+' deg for shear, whichever single value is sent. '
       +'The single skew sent ('+skewVal.toFixed(2)+' deg) is used for both actions only by a reader that does not use skewDetail'
