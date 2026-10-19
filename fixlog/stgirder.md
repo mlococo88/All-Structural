@@ -4177,3 +4177,128 @@ index ac2134d..e0b51e9 100644
 -      <p className="cr-p cr-small">Prepared with ST-Girder (AASHTO LRFD BDS 10th Ed.). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi, k-ft unless noted. Detail: {o.detail==='all'?'governing locations worked, every checked station tabulated':'governing locations worked'}.</p></section>
 +      <p className="cr-p cr-small">Prepared with ST-Girder (AASHTO LRFD BDS 10th Ed. (2024){edOwn(R)?' with the '+edOwn(R)+' rules on top':''}). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi, k-ft unless noted. Detail: {o.detail==='all'?'governing locations worked, every checked station tabulated':'governing locations worked'}.</p></section>
 ```
+
+
+## 2026-10-19 — PR: claude/aashto10-stgirder-2 (A10b: stud detailing checks per AASHTO LRFD 10th Ed. 6.10.10.1, stud F_u input; follow-up to A10 (#335), engineer request 2026-10-19; new checks, no change to an existing result; PR link added after merge)
+
+All limits below were checked against the AASHTO LRFD 10th Ed. (2024) text (cited only; nothing copied).
+
+### A10b-1. Stud F_u input   [no result change at the default]
+- **Where:** `DEFAULTS.conn` (anchor `conn:{studD:0.875, studH:6, nRow:3, pitch:12, Fu:60}`); `computeAll` anchor `Fustud=(+inp.conn.Fu>0)? +inp.conn.Fu : 60`; Inputs tab, Shear connectors row (`<Num l="Stud F_u"`); `gdXfer` stud block (`put('conn.Fu',St.Fu,…)`); `GD_LBL['conn.Fu']`.
+- **Before:** `const Asc=…, Fustud=60;` (fixed). **After:** `Fustud=(+inp.conn.Fu>0)? +inp.conn.Fu : 60` with a new input `conn.Fu`, default 60.
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.4.4 (F_u of the stud), used in Eq. 6.10.10.4.3-1 (Q_n = 0.70·A_sc·F_u). Formula unchanged.
+- **GirderDetail:** its "Send to ST-Girder" payload already carries `girderDetail.details.studs.Fu`; when it does, ST-Girder takes it (locked, GD 🔒) while the demands are in use. Hand-off unchanged.
+- **Saved data:** one new field `conn.Fu` in `stgirder.session` / projects / JSON export. Older saves have no `conn.Fu`; `mergeInputs` fills it from DEFAULTS, so they open with 60 ksi and every result unchanged (tested: a main-format session with d = 0.75 in, pitch 10 in opened with its own values and F_u = 60, Q_n = 0.70 × 0.4418 × 60 = 18.56 kip). No key renamed or removed.
+- **Check case:** d = 0.875 in, A_sc = 0.6013 in², P = 4742.4 kip (payload `def15_AASHTO_G2`): F_u = 60 → Q_n = 25.26 kip, n = 187.8 (unchanged); F_u = 65 → Q_n = 0.70 × 0.6013 × 65 = 27.36 kip, n = 4742.4/27.36 = 173.3.
+
+### A10b-2. Stud detailing checks (6.10.10.1)   [new checks; existing results unchanged]
+- **Where:** `computeAll`, after `if(contStud) conn.strOK=…` (anchor `const studD=+inp.conn.studD, studH=+inp.conn.studH, light=`), new `conn.det`; checks after `'Shear studs — fatigue pitch'` (tags `Studs h/d`, `Studs p lim`, `Studs s_t`, `Studs edge`, `Studs pen`, `Studs cover`); new `connDetDeriv(R)` and `studReminders(R)` (Connectors tab and report §"Stud detailing"); `gdXfer` takes `transverseSpacing` as `conn.st` (overlay only, not saved; shown locked on the Inputs tab).
+- **Checks added** (ratio ≤ 1 passes):
+  - h/d ≥ 5.0 (normal weight) or 7.0 (lightweight), 6.10.10.1.1. Lightweight taken as deck w_c ≤ 0.135 kcf (Art. 5.2 density limit). Ratio = limit/(h/d).
+  - Pitch 4d ≤ p ≤ p_max, p_max = 48 in for web depth D ≥ 24 in, else 24 in, 6.10.10.1.2. Ratio = max(4d/p, p/p_max).
+  - Transverse spacing s_t ≥ 4d, 6.10.10.1.3. s_t from GirderDetail when sent; otherwise ST-Girder (no spacing input) checks the widest spacing that fits the narrowest top flange with 1.0 in clear at both edges: s_fit = (b_ft,min − d − 2.0)/(n − 1). Only when n > 1.
+  - Clear edge distance e = (b_ft,min − (n − 1)s_t − d)/2 ≥ 1.0 in, 6.10.10.1.3 (when s_t is from GirderDetail, or n = 1; in the fit case e = 1.0 by construction).
+  - Penetration into the deck h − h_haunch ≥ 2.0 in and clear cover over the stud tops t_deck + h_haunch − h ≥ 2.0 in, 6.10.10.1.4 (haunch as entered, t_deck as built = t_s or t_s + sacrificial). Only with a composite deck.
+- **Reminders (not checked):** bottom-mat penetration for structures that are not load path redundant (6.10.10.1.4; no redundancy input); pitch limits of GirderDetail zones other than the one ST-Girder uses (GirderDetail SC3 checks them); 6.10.10.3 additional connectors at contraflexure: not applicable, ST-Girder treats negative flexure as composite (6.10.1.1.1c) (simple span: not applicable).
+- **Check case 1** (payload `def15_AASHTO_G2`, ST-Girder's own stud inputs): d = 0.875, h = 6.00, n = 3, p = 12 in, w_c = 0.150 kcf, D = 60 in, b_ft,min = 16.0 in, haunch 2.0 in, t_s = 8.0 in.
+  - h/d = 6.00/0.875 = 6.86 ≥ 5.0 (ratio 0.729); 4d = 3.50 ≤ 12 ≤ 48 (ratio 3.50/12 = 0.292); s_fit = (16.00 − 0.875 − 2.0)/2 = 6.56 ≥ 3.50 (0.533); penetration 6.00 − 2.00 = 4.00 ≥ 2.0 (0.500); cover 8.00 + 2.00 − 6.00 = 4.00 ≥ 2.0 (0.500). All pass.
+- **Check case 2** (payload `def15_AASHTO_G2_gdx`, GirderDetail's studs: d = 0.875, h = 4.00, zone 2 @ 8 in, s_t = 3.50 in):
+  - h/d = 4.00/0.875 = 4.57 < 5.0 → **N.G. (1.094)**; 3.50 ≤ 8 ≤ 48 (0.4375); s_t = 3.50 ≥ 3.50 (1.000); e = (16.00 − 1 × 3.50 − 0.875)/2 = 5.81 ≥ 1.0 (0.172); penetration 4.00 − 2.00 = 2.00 ≥ 2.0 (1.000); cover 8.00 + 2.00 − 4.00 = 6.00 ≥ 2.0 (0.333).
+- **How verified:** `node tests/check-syntax.mjs stgirder.html` (pass). `node tests/compare.mjs --tool st` on all 8 payloads against main (ee32a1c): `st.status`, `st.rating`, `st.governing`, `st.sections`, `st.stations` identical; `st.session` differs only by the new `conn.Fu: 60`; `st.checks` differs only by the new detailing checks (inserted after the stud fatigue check, so later indices shift); every existing check identical by name (value, limit, ratio). Headless readout of `R.conn.det` equals the hand values above; with a test payload carrying studs.Fu = 65 and transverseSpacing = 3.0, ST-Girder used F_u = 65 (Q_n = 27.36 kip) and s_t = 3.0 (ratio 3.5/3.0 = 1.167, N.G.), both shown locked on the Inputs tab. No console errors.
+- **Other copies:** GirderDetail has its own detailing checks (SC3, SC4, SC5; RIDOT 6d minimum pitch under OWN22). ST-Girder does not apply owner stud rules (they are not in the ownerRules hand-off).
+- **Open items:** (1) GirderDetail's example studs (7/8 × 4 in) fail h/d ≥ 5.0 in both tools. (2) RIDOT BDM 6.5.3 minimum pitch 6d is not applied in ST-Girder (owner rule not in the hand-off). (3) Lightweight threshold by w_c (unit weight used for dead load) rather than an equilibrium density input.
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index e0b51e9..cc33aae 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -591 +591 @@ const DEFAULTS = {
+-  conn:{studD:0.875, studH:6, nRow:3, pitch:12},
++  conn:{studD:0.875, studH:6, nRow:3, pitch:12, Fu:60},   // Fu: stud specified minimum tensile strength (ksi, 6.4.4); added 2026-10-19 (A10b), older saves take 60
+@@ -1156,0 +1157 @@ function gdXfer(ext){
++    if(num(St.Fu)&&St.Fu>0) put('conn.Fu',St.Fu,'Shear connectors','details'); if(num(St.transverseSpacing)&&St.transverseSpacing>0) put('conn.st',St.transverseSpacing,'Shear connectors','details');   // A10b
+@@ -1199 +1200 @@ const GD_LBL={'loads.wConstr':'construction live load (klf)','loads.NL':'design
+-  'conn.nRow':'studs per row','conn.pitch':'stud pitch (in)','fatigue.ncyc':'cycles per truck passage n',
++  'conn.nRow':'studs per row','conn.pitch':'stud pitch (in)','conn.Fu':'stud F_u (ksi)','conn.st':'stud transverse spacing (in)','fatigue.ncyc':'cycles per truck passage n',
+@@ -2074 +2075 @@ function computeAll(inp){
+-    const Asc=Math.PI*Math.pow(+inp.conn.studD,2)/4, Fustud=60;
++    const Asc=Math.PI*Math.pow(+inp.conn.studD,2)/4, Fustud=(+inp.conn.Fu>0)? +inp.conn.Fu : 60;   // A10b: stud F_u input (default 60 ksi, 6.4.4)
+@@ -2130,0 +2132,18 @@ function computeAll(inp){
++    /* A10b (2026-10-19): stud detailing per AASHTO LRFD 10th Ed. 6.10.10.1 (as far as ST-Girder has the data).
++       - h/d >= 5.0 normal weight, 7.0 lightweight (6.10.10.1.1); lightweight taken as deck w_c <= 0.135 kcf (5.2 density limit).
++       - pitch: 4d <= p <= 48 in (D >= 24 in) or 24 in (D < 24 in) (6.10.10.1.2); the one pitch ST-Girder checks.
++       - transverse spacing s_t >= 4d and clear edge distance >= 1.0 in (6.10.10.1.3) on the narrowest top flange: s_t from GirderDetail when sent
++         (conn.st, overlay only); otherwise the widest spacing that keeps 1.0 in at both edges, s_fit = (b_ft - d - 2.0)/(n - 1), is checked against 4d.
++       - clear cover over the stud tops >= 2.0 in and penetration into the deck >= 2.0 in (6.10.10.1.4), haunch as entered, deck as built
++         (t_s plus any sacrificial thickness). The bottom-mat rule for structures that are not load path redundant and 6.10.10.3 are reminders. */
++    const studD=+inp.conn.studD, studH=+inp.conn.studH, light=(+deck0.wc>0&&+deck0.wc<=0.135), hdLim=light?7.0:5.0, hd=studH/Math.max(studD,1e-9);
++    const pMin=4*studD, pMax=(+D)>=24? 48 : 24;
++    const bftMin=Math.min(...segP.map(g=>g.dims.bft)), stGD=(+inp.conn.st>0)? +inp.conn.st : null;
++    const stUse=nRow>1? (stGD!=null? stGD : (bftMin-studD-2.0)/(nRow-1)) : null;
++    const edge=(bftMin-(nRow>1?(nRow-1)*stUse:0)-studD)/2;
++    const hHaunch=+deck0.haunch||0, tDeck=deck0.tsSeparate? (+deck0.tsDL||+deck0.ts) : +deck0.ts;
++    const pen=studH-hHaunch, cov=tDeck+hHaunch-studH;
++    const rr=(lim,v)=>v>1e-9? lim/v : 9;
++    conn.det={hd, hdLim, light, wc:+deck0.wc, pMin, pMax, D, bftMin, stGD, stUse, edge, hHaunch, tDeck, pen, cov,
++      rHd:rr(hdLim,hd), rP:Math.max(pMin/Math.max(pitch,1e-9), pitch/pMax), rSt:nRow>1? rr(pMin,stUse) : 0, rEdge:rr(1.0,edge),
++      rPen:rr(2.0,pen), rCov:rr(2.0,cov), deckOn:!!deck.deckOn, contSpan:!!contSpan, gdZones:!!(gdXfer(inp.external)&&gdXfer(inp.external).set['conn.pitch'])};
+@@ -2219,0 +2239,7 @@ function computeAll(inp){
++    { const dt=conn.det;   // A10b: stud detailing (6.10.10.1)
++      checks.push({n:'Shear studs — h/d ≥ '+fmt(dt.hdLim,1), t:'Studs h/d', v:dt.hd, lim:dt.hdLim, r:dt.rHd, u:'—', ref:'6.10.10.1.1', loc:0});
++      checks.push({n:'Shear studs — pitch 4d ≤ p ≤ '+fmt(dt.pMax,0)+' in', t:'Studs p lim', v:pitch, lim:dt.rP===dt.pMin/Math.max(pitch,1e-9)?dt.pMin:dt.pMax, r:dt.rP, u:'in', ref:'6.10.10.1.2', loc:0});
++      if(nRow>1) checks.push({n:'Shear studs — transverse spacing ≥ 4d'+(dt.stGD!=null?'':' (fit on b_ft)'), t:'Studs s_t', v:dt.stUse, lim:dt.pMin, r:dt.rSt, u:'in', ref:'6.10.10.1.3', loc:0});
++      if(dt.stGD!=null||nRow<=1) checks.push({n:'Shear studs — edge distance ≥ 1.0 in', t:'Studs edge', v:dt.edge, lim:1.0, r:dt.rEdge, u:'in', ref:'6.10.10.1.3', loc:0});
++      if(dt.deckOn){ checks.push({n:'Shear studs — penetration into deck ≥ 2.0 in', t:'Studs pen', v:dt.pen, lim:2.0, r:dt.rPen, u:'in', ref:'6.10.10.1.4', loc:0});
++        checks.push({n:'Shear studs — cover over studs ≥ 2.0 in', t:'Studs cover', v:dt.cov, lim:2.0, r:dt.rCov, u:'in', ref:'6.10.10.1.4', loc:0}); } }
+@@ -2888,0 +2915,2 @@ function InputsTab({inp,set,R}){
++        <Num l="Stud F_u" u="ksi" v={inp.conn.Fu!=null?inp.conn.Fu:60} set={v=>S('conn.Fu',v)} step={1} gd={G('conn.Fu')}/>
++        {G('conn.st')&&<GdFld l="Stud transverse spacing" u="in" v={fmt(+G('conn.st').v,2)} src={G('conn.st').src}/>}
+@@ -4272,0 +4301,39 @@ function connFatDeriv(R){ const c=R.conn;
++/* A10b: stud detailing (AASHTO LRFD 10th Ed. 6.10.10.1, 6.10.10.3 reminder), shared by the Connectors tab and the report. */
++function connDetDeriv(R){ const c=R.conn, t=c.det, ok=r=>r<=1.0001, mk=r=>ok(r)?'\\checkmark':'\\text{N.G.}';
++  const rem=studReminders(R);
++  return (    <Deriv title="Stud detailing" refTag="6.10.10.1 · 6.10.10.3">
++      <VarTable title="Variables — stud detailing" rows={[
++        ['d / h','Stud diameter / overall height',fmt(c.studD,3)+' / '+fmt(c.studH,2),'in'],
++        ['w_c','Deck concrete unit weight ('+(t.light?'lightweight, ≤ 0.135 kcf':'normal weight, > 0.135 kcf')+')',t.wc,'kcf'],
++        ['D','Web depth',+t.D,'in'],
++        ['b_ft,min','Narrowest top flange',t.bftMin,'in'],
++        ['n','Studs per row (transverse)',c.nRow,'—'],
++        ['p','Longitudinal pitch',c.pitch,'in'],
++        ['h_haunch','Haunch, top of flange to bottom of deck (as entered)',t.hHaunch,'in'],
++        ['t_deck','Deck thickness as built'+(R.deckIn&&R.deckIn.tsSeparate?' (t_s + sacrificial)':''),t.tDeck,'in'],
++      ]}/>
++      <SG n="1">Height-to-diameter ratio (6.10.10.1.1)</SG>
++      <ML s={Tx`\frac{h}{d}=\frac{${nx(c.studH,2)}}{${nx(c.studD,3)}}=${nx(t.hd,2)}\;${ok(t.rHd)?'\\ge':'<'}\;${nx(t.hdLim,1)}\;\text{(${t.light?'lightweight':'normal weight'})}\quad ${mk(t.rHd)}`}/>
++      <SG n="2">Pitch limits (6.10.10.1.2)</SG>
++      <ML s={Tx`4d=4\cdot${nx(c.studD,3)}=${nx(t.pMin,2)}\;\text{in}\;\le\;p=${nx(c.pitch,2)}\;\text{in}\;\le\;p_{max}=${nx(t.pMax,0)}\;\text{in}\;(D=${nx(+t.D,2)}\;\text{in}\;${(+t.D)>=24?'\\ge':'<'}\;24\;\text{in})\quad ${mk(t.rP)}`}/>
++      <SG n="3">Transverse spacing and edge distance (6.10.10.1.3)</SG>
++      {c.nRow>1&&(t.stGD!=null
++        ? <ML s={Tx`s_t=${nx(t.stUse,2)}\;\text{in (GirderDetail)}\;${ok(t.rSt)?'\\ge':'<'}\;4d=${nx(t.pMin,2)}\;\text{in}\quad ${mk(t.rSt)}`}/>
++        : <ML s={Tx`s_{t,fit}=\frac{b_{ft,min}-d-2(1.0)}{n-1}=\frac{${nx(t.bftMin,2)}-${nx(c.studD,3)}-2.0}{${nx(c.nRow-1,0)}}=${nx(t.stUse,2)}\;\text{in}\;${ok(t.rSt)?'\\ge':'<'}\;4d=${nx(t.pMin,2)}\;\text{in}\quad ${mk(t.rSt)}`}/>)}
++      {(t.stGD!=null||c.nRow<=1)&&<ML s={Tx`e=\frac{b_{ft,min}-(n-1)s_t-d}{2}=\frac{${nx(t.bftMin,2)}-${nx(Math.max(c.nRow-1,0),0)}\cdot${nx(t.stUse||0,2)}-${nx(c.studD,3)}}{2}=${nx(t.edge,2)}\;\text{in}\;${ok(t.rEdge)?'\\ge':'<'}\;1.0\;\text{in}\quad ${mk(t.rEdge)}`}/>}
++      {t.stGD==null&&c.nRow>1&&<div className="mnote">ST-Girder has no transverse-spacing input: it checks that {c.nRow} studs fit on the narrowest top flange with at least 4d between them and 1.0 in clear to each edge (the widest possible spacing, so the edge distance is exactly 1.0 in). The transverse spacing from GirderDetail is used when its demands carry one.</div>}
++      {t.deckOn&&<React.Fragment>
++        <SG n="4">Penetration and cover (6.10.10.1.4)</SG>
++        <ML s={Tx`h-h_{haunch}=${nx(c.studH,2)}-${nx(t.hHaunch,2)}=${nx(t.pen,2)}\;\text{in}\;${ok(t.rPen)?'\\ge':'<'}\;2.0\;\text{in}\quad ${mk(t.rPen)}`}/>
++        <ML s={Tx`t_{deck}+h_{haunch}-h=${nx(t.tDeck,2)}+${nx(t.hHaunch,2)}-${nx(c.studH,2)}=${nx(t.cov,2)}\;\text{in}\;${ok(t.rCov)?'\\ge':'<'}\;2.0\;\text{in}\quad ${mk(t.rCov)}`}/>
++      </React.Fragment>}
++      <div className="mnote">AASHTO LRFD 10th Ed. (2024). Lightweight concrete is taken as w<sub>c</sub> ≤ 0.135 kcf (the density limit of Art. 5.2), with w<sub>c</sub> the deck unit weight on the Inputs tab.</div>
++      <div className="mnote"><b>Not checked (reminders):</b><ul style={{margin:'2px 0 0 18px',padding:0}}>{rem.map((x,i)=><li key={i}>{x}</li>)}</ul></div>
++    </Deriv>);
++}
++function studReminders(R){ const t=R.conn.det, out=[];
++  out.push('6.10.10.1.4: in a structure that is not load path redundant, the studs must reach above the bottom mat of deck reinforcement (ST-Girder has no redundancy input).');
++  if(t.gdZones) out.push('6.10.10.1.2: ST-Girder checks the pitch limits for the one GirderDetail stud zone it uses; GirderDetail checks every zone (its check SC3).');
++  out.push(t.contSpan? '6.10.10.3: additional connectors at points of permanent-load contraflexure apply only to members noncomposite for negative flexure in the final condition; ST-Girder treats the negative-moment region as composite (steel + deck reinforcement, 6.10.1.1.1c), so they are not computed. If the member is designed noncomposite for negative flexure, provide n_ac = A_s·f_sr/Z_r within one-third of the effective flange width each side of the steel dead-load contraflexure point (6.10.10.3).'
++    : '6.10.10.3 (additional connectors at contraflexure): not applicable, simple span.');
++  return out; }
+@@ -4291,0 +4359,2 @@ function ConnTab({R}){
++
++    {connDetDeriv(R)}
+@@ -4684 +4753,2 @@ function crModel(R,inp,o){
+-      sub(s,'Fatigue pitch requirement','6.10.10.1.2 · 6.10.10.2',<CrTab el={connFatDeriv(R)}/>,ck('Studs fat')); }
++      sub(s,'Fatigue pitch requirement','6.10.10.1.2 · 6.10.10.2',<CrTab el={connFatDeriv(R)}/>,ck('Studs fat'));
++      sub(s,'Stud detailing','6.10.10.1 · 6.10.10.3',<CrTab el={connDetDeriv(R)}/>,ck('Studs h/d','Studs p lim','Studs s_t','Studs edge','Studs pen','Studs cover')); }
+```
