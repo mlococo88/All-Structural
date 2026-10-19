@@ -10259,7 +10259,8 @@ function steelPlastic(s, Fy) {
 }
 
 // Nominal flexural resistance (kip·in) of a steel I-section with the compression flange
-// 'top' or 'bot'. o = {Fy, comp, Lb (in), Cb, Mp (kip·in, optional: tabulated Fy·Zx)}.
+// 'top' or 'bot'. o = {Fy, comp, Lb (in), Cb, Mp (kip·in, optional: tabulated Fy·Zx),
+// rolled (App. A6 only: true = rolled shape, Fyr = 0.7Fyc for LTB and kc = 0.76; else welded)}.
 function steelIFlexure(s, o) {
   const E = STEEL_E, Fy = +o.Fy||50, Rh = 1, top = o.comp !== 'bot';
   const bfc = top?s.bft:s.bfb, tfc = top?s.tft:s.tfb, bftn = top?s.bfb:s.bft, tftn = top?s.tfb:s.tft;
@@ -10291,38 +10292,44 @@ function steelIFlexure(s, o) {
       Rpt = Math.min((1 - (1 - Rh*Myt/Mp)*f)*Mp/Myt, Mp/Myt);
     }
     const FL = Sxt/Sxc >= 0.7 ? 0.7*Fy : Math.max(Rh*Fy*Sxt/Sxc, 0.5*Fy);
-    const kc = Math.min(Math.max(4/Math.sqrt(s.D/s.tw), 0.35), 0.76);
+    const rolled = !!o.rolled;
+    // kc: Eq. A6.3.2-6 for built-up sections, 0.76 for rolled shapes (10th Ed. A6.3.2)
+    const kc = rolled ? 0.76 : Math.min(Math.max(4/Math.sqrt(s.D/s.tw), 0.35), 0.76);
     const lamRf = 0.95*Math.sqrt(E*kc/FL);
     const RM = Rpc*Myc, red = 1 - FL*Sxc/RM;
     const Mflb = lamF <= lamPf ? RM : (1 - red*(lamF-lamPf)/(lamRf-lamPf))*RM;
     const h = s.d - tfc/2 - tftn/2;
     const Lp = 1.1*rt*Math.sqrt(E/Fy);                                // Eq. A6.3.3.1-4 (10th Ed.)
-    const Lr = 1.95*rt*(E/FL)*Math.sqrt(s.J/(Sxc*h))*Math.sqrt(1 + Math.sqrt(1 + 6.76*Math.pow(FL*Sxc*h/(E*s.J),2)));
+    // LTB Fyr (10th Ed. A6.3.3.1, Eqs. A6.3.3.1-2 and -5): 0.5Fyc welded, 0.7Fyc rolled
+    const FyrL = (rolled ? 0.7 : 0.5)*Fy, redL = 1 - FyrL*Sxc/RM;
+    const Lr = 1.95*rt*(E/FyrL)*Math.sqrt(s.J/(Sxc*h))*Math.sqrt(1 + Math.sqrt(1 + 6.76*Math.pow(FyrL*Sxc*h/(E*s.J),2)));
     let Mltb;
     if (Lb <= Lp) Mltb = RM;
-    else if (Lb <= Lr) Mltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*RM, RM);
+    else if (Lb <= Lr) Mltb = Math.min(Cb*(1 - redL*(Lb-Lp)/(Lr-Lp))*RM, RM);
     else { const Fcr = Cb*Math.PI*Math.PI*E/Math.pow(Lb/rt,2)*Math.sqrt(1 + 0.078*s.J/(Sxc*h)*Math.pow(Lb/rt,2));
            Mltb = Math.min(Fcr*Sxc, RM); }
     const Mnt = Rpt*Myt;
     const Mn = Math.max(0, Math.min(Mflb, Mltb, Mnt));
-    return { Mn, method:'A6', webCompact, Rpc, Rpt, Lp, Lr, rt, Dc, Dcp, Mp, Myc,
+    return { Mn, method:'A6', webCompact, Rpc, Rpt, Lp, Lr, rt, Dc, Dcp, Mp, Myc, rolled, kc, FL, FyrL, J:s.J, Sxc, h, Fy,
              gov: Mn >= 0.9999*Mp ? 'Mp' : Mn===Mnt ? 'TFY' : Mn===Mflb ? 'FLB' : 'LTB' };
   }
   // 6.10.8 — compression flange (6.10.8.2) and tension flange yielding (6.10.8.3)
-  const Fyr = Math.max(Math.min(0.7*Fy, Rh*Fy*Sxt/Sxc, Fy), 0.5*Fy);
+  // Fyr, 10th Ed.: FLB (6.10.8.2.2) min(0.7Fyc, Fyw) >= 0.5Fyc; LTB (6.10.8.2.3a) 0.5Fyc
+  // (longitudinally unstiffened web). Homogeneous section: Fyw = Fyc = Fy.
+  const Fyr = Math.max(Math.min(0.7*Fy, Fy), 0.5*Fy), FyrL = 0.5*Fy;
   const awc = 2*Dc*s.tw/(bfc*tfc);
   const Rb = 2*Dc/s.tw <= lamRw ? 1 : Math.min(1, 1 - awc/(1200+300*awc)*(2*Dc/s.tw - lamRw));
   const lamRf = 0.56*Math.sqrt(E/Fyr);
-  const Fmax = Rb*Rh*Fy, red = 1 - Fyr/(Rh*Fy);
+  const Fmax = Rb*Rh*Fy, red = 1 - Fyr/(Rh*Fy), redL = 1 - FyrL/(Rh*Fy);
   const Fflb = lamF <= lamPf ? Fmax : (1 - red*(lamF-lamPf)/(lamRf-lamPf))*Fmax;
-  const Lp = 1.1*rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);   // Lp: Eq. 6.10.8.2.3a-4 (10th Ed.)
+  const Lp = 1.1*rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/FyrL);  // Eqs. 6.10.8.2.3a-4, -5 (10th Ed.)
   let Fltb;
   if (Lb <= Lp) Fltb = Fmax;
-  else if (Lb <= Lr) Fltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*Fmax, Fmax);
+  else if (Lb <= Lr) Fltb = Math.min(Cb*(1 - redL*(Lb-Lp)/(Lr-Lp))*Fmax, Fmax);
   else Fltb = Math.min(Cb*Rb*Math.PI*Math.PI*E/Math.pow(Lb/rt,2), Fmax);
   const Mnc = Math.min(Fflb, Fltb)*Sxc, Mnt = Rh*Fy*Sxt;
   const Mn = Math.max(0, Math.min(Mnc, Mnt));
-  return { Mn, method:'6.10.8', Rb, Lp, Lr, rt, Dc, Dcp, Mp, Myc,
+  return { Mn, method:'6.10.8', Rb, Lp, Lr, rt, Dc, Dcp, Mp, Myc, Fyr, FyrL, Fy,
            gov: Mn===Mnt ? 'TFY' : Fflb<=Fltb ? 'FLB' : 'LTB' };
 }
 
@@ -10349,6 +10356,59 @@ function steelLpTxt(rt, Fy, Lp) {
   return 'Lp = 1.1·rt·√(E/Fyc) = 1.1×'+rt.toFixed(3)+'×√('+STEEL_E+'/'+(+Fy)+') = '+Lp.toFixed(1)+' in = '+(Lp/12).toFixed(2)+' ft';
 }
 
+// Fyr and Lr worked for the basis line (10th Ed.: 6.10.8.2.2, 6.10.8.2.3a; App. A6.3.2, A6.3.3.1).
+function steelFyrTxt(r) {
+  const f = v => (+v).toFixed(1), ft = v => (v/12).toFixed(2);
+  if (r.method === 'A6') {
+    return 'LTB Fyr = '+(r.rolled?'0.7':'0.5')+'·Fyc ('+(r.rolled?'rolled':'welded')+') = '+f(r.FyrL)+' ksi, '
+      +'Lr = 1.95·rt·(E/Fyr)·√(J/(Sxc·h) + √((J/(Sxc·h))² + 6.76·(Fyr/E)²)) with rt = '+r.rt.toFixed(3)+' in, J = '+r.J.toFixed(2)
+      +' in⁴, Sxc = '+r.Sxc.toFixed(1)+' in³, h = '+r.h.toFixed(2)+' in = '+r.Lr.toFixed(1)+' in = '+ft(r.Lr)+' ft; '
+      +'FLB FL = '+f(r.FL)+' ksi, kc = '+(r.rolled?'0.76 (rolled)':'4/√(D/tw) (0.35…0.76) = '+r.kc.toFixed(3));
+  }
+  return 'LTB Fyr = 0.5·Fyc = '+f(r.FyrL)+' ksi, Lr = π·rt·√(E/Fyr) = π×'+r.rt.toFixed(3)+'×√('+STEEL_E+'/'+f(r.FyrL)+') = '
+    +r.Lr.toFixed(1)+' in = '+ft(r.Lr)+' ft; FLB Fyr = min(0.7·Fyc, Fyw) ≥ 0.5·Fyc = '+f(r.Fyr)+' ksi';
+}
+
+/* Cb helper (10th Ed. Eq. 6.10.8.2.3b-1): Cb = 12.5·Mmax / (2.5·Mmax + 3·MA + 4·MB + 3·MC), moments as
+   absolute values typed by the engineer (z.cbMmax, cbMA, cbMB, cbMC). Steel Calc (noncomposite) zones may
+   tick z.cbRev (reverse curvature) to apply Rm of C6.10.8.2.3b: Rm = 1.0 when -0.5 < Msmall/Mlarge < 0
+   and x_inf <= 3Lb/8, otherwise Rm = 0.5 + 2.0·ρTop² with ρTop = Iy,top/Iy; Rm·Cb not above 3.0.
+   Returns null when the moments are not entered. The result is only used when "apply" copies it into Cb. */
+function steelCbCalc(z) {
+  const n = v => (v===''||v==null||!isFinite(+v)) ? null : Math.abs(+v);
+  const Mmax = n(z.cbMmax), MA = n(z.cbMA), MB = n(z.cbMB), MC = n(z.cbMC);
+  if (Mmax==null || MA==null || MB==null || MC==null || !(Mmax>0)) return null;
+  if (Math.max(MA,MB,MC) > Mmax*(1+1e-9)) return {ok:false, why:'Mmax must be the largest of Mmax, MA, MB, MC'};
+  const den = 2.5*Mmax + 3*MA + 4*MB + 3*MC, Cb0 = 12.5*Mmax/den;
+  const g = v => +(+v).toPrecision(4);
+  let txt = 'Cb = 12.5·Mmax/(2.5·Mmax + 3·MA + 4·MB + 3·MC) = 12.5×'+g(Mmax)+'/(2.5×'+g(Mmax)+' + 3×'+g(MA)+' + 4×'+g(MB)
+    +' + 3×'+g(MC)+') = '+Cb0.toFixed(3)+' (Eq. 6.10.8.2.3b-1)';
+  let Cb = Cb0, Rm = null, why = '';
+  if (z.type==='quickcalc' && z.cbRev) {
+    const s = steelPlateSection(z), r = +z.cbMratio, xinf = +z.cbXinf*12, LbIn = +z.Lb*12;
+    if (!s) why = 'Rm needs the plates';
+    else if (!(isFinite(r) && r < 0)) why = 'Rm not applied: Msmall/Mlarge must be negative (reverse curvature)';
+    else if (!(LbIn > 0) || !(xinf >= 0)) why = 'Rm needs Lb and x_inf';
+    else {
+      const IyT = s.tft*Math.pow(s.bft,3)/12, IyB = s.tfb*Math.pow(s.bfb,3)/12, Iy = IyT + IyB + s.D*Math.pow(s.tw,3)/12;
+      const rho = IyT/Iy, near = r > -0.5 && xinf <= 3*LbIn/8;
+      Rm = near ? 1.0 : 0.5 + 2.0*rho*rho;
+      Cb = Math.min(Rm*Cb0, 3.0);
+      txt += '; Rm (C6.10.8.2.3b): Msmall/Mlarge = '+r.toFixed(3)+', x_inf = '+(xinf/12).toFixed(2)+' ft vs 3Lb/8 = '+(3*LbIn/96).toFixed(2)+' ft → '
+        +(near ? 'Rm = 1.0' : 'Rm = 0.5 + 2.0·ρTop² = 0.5 + 2.0×'+rho.toFixed(3)+'² = '+Rm.toFixed(3)+' (ρTop = Iy,top/Iy = '
+        +IyT.toFixed(1)+'/'+Iy.toFixed(1)+')')+'; Cb = min(Rm·Cb, 3.0) = '+Cb.toFixed(3);
+    }
+  }
+  return {ok:true, Cb0, Rm, Cb: +Cb.toFixed(3), txt, why};
+}
+// Cb as used by the zone, for the basis line: worked when it is the applied helper value.
+function steelCbTxt(z) {
+  if (z.Cb==null || z.Cb==='' || !(+z.Cb>0)) return 'Cb = 1.0 (blank)';
+  const c = steelCbCalc(z);
+  if (c && c.ok && Math.abs(c.Cb - (+z.Cb)) < 5e-4) return c.txt;
+  return 'Cb = '+(+z.Cb)+' (entered)';
+}
+
 // Unbraced length entered? Blank means unknown (not "braced"): the AASHTO path needs it.
 function capLbKnown(z) { return z.Lb!=null && z.Lb!=='' && isFinite(+z.Lb) && +z.Lb >= 0; }
 
@@ -10361,9 +10421,9 @@ function steelZoneCaps(z) {
   const need = !s ? 'enter d, tw and the four flange plates' + (lbOK ? '' : ' and Lb')
                   : 'enter Lb (unbraced length of the compression flange)';
   const flex = (comp, Zx) => {
-    const r = steelIFlexure(s, {Fy, comp, Lb, Cb, Mp: Zx>0 ? Fy*Zx : 0});
+    const r = steelIFlexure(s, {Fy, comp, Lb, Cb, Mp: Zx>0 ? Fy*Zx : 0, rolled: !!z.rolled});
     return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+'; '
-      +steelLpTxt(r.rt, Fy, r.Lp)+', Lb = '+(Lb/12).toFixed(2)+' ft)' };
+      +steelLpTxt(r.rt, Fy, r.Lp)+', Lb = '+(Lb/12).toFixed(2)+' ft; '+steelFyrTxt(r)+'; '+steelCbTxt(z)+')' };
   };
   let MnPos, MnNeg, Vn;
   if (z.type === 'composite') {
@@ -11782,6 +11842,49 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const updateCapZone = (id, field, val) => setCapZones(capZones.map(z=>z.id!==id?z:
     // A manual zone kept from ST-Girder (STDISC): entering Mn+, Mn- or Vn replaces its station table by the values entered.
     (z.fromST&&Array.isArray(z.stations)&&['MnPos','MnNeg','Vn'].includes(field))?{...z,[field]:val,stations:null}:{...z,[field]:val}));
+  // Steel Calc / Composite zone: "rolled shape" box (App. A6 LTB Fyr and kc) and the Cb helper
+  // (Eq. 6.10.8.2.3b-1; Rm of C6.10.8.2.3b for noncomposite reverse curvature). "apply" copies Cb.
+  const capLtbExtras = z => {
+    const c = steelCbCalc(z);
+    const inp = (lbl, field, ph) => (
+      <div key={field}>
+        <div style={STYLES.monoTiny2}>{lbl}</div>
+        <input type="number" step="any" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+          value={z[field]??''} placeholder={ph}
+          onChange={e=>updateCapZone(z.id,field,e.target.value===''?null:(isFinite(parseFloat(e.target.value))?parseFloat(e.target.value):null))}/>
+      </div>);
+    return (
+      <div style={{marginTop:'6px',marginBottom:'6px',padding:'6px 8px',background:'#f9fafb',border:'1px solid #e5e7eb',
+        borderRadius:'4px',fontSize:'9.5px',fontFamily:'monospace',color:'#374151'}}>
+        <label style={{display:'flex',alignItems:'center',gap:'5px',cursor:'pointer'}}>
+          <input type="checkbox" checked={!!z.rolled} onChange={e=>updateCapZone(z.id,'rolled',e.target.checked)}/>
+          Rolled shape — App. A6 only: LTB Fyr = 0.7·Fyc and FLB kc = 0.76 (off = welded / built-up: Fyr = 0.5·Fyc, kc = 4/√(D/tw))
+        </label>
+        <div style={{marginTop:'6px',fontWeight:600}}>Cb helper — Eq. 6.10.8.2.3b-1 (optional; the zone uses the Cb input above, for Mn⁺ and Mn⁻)</div>
+        <div style={{color:'#6b7280'}}>Factored moments, absolute values, any one unit: Mmax = largest in Lb; MA, MB, MC at ¼, ½, ¾ of Lb (see 6.10.8.2.3b for which envelope values to use).</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'5px',marginTop:'4px'}}>
+          {inp('Mmax','cbMmax','—')}{inp('MA','cbMA','—')}{inp('MB','cbMB','—')}{inp('MC','cbMC','—')}
+        </div>
+        {z.type==='quickcalc'&&(<>
+          <label style={{display:'flex',alignItems:'center',gap:'5px',cursor:'pointer',marginTop:'4px'}}>
+            <input type="checkbox" checked={!!z.cbRev} onChange={e=>updateCapZone(z.id,'cbRev',e.target.checked)}/>
+            Reverse curvature, noncomposite: apply Rm (C6.10.8.2.3b; matters for singly symmetric sections)
+          </label>
+          {z.cbRev&&(<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'5px',marginTop:'4px'}}>
+            {inp('Msmall/Mlarge (signed)','cbMratio','e.g. −0.4')}{inp('x_inf (ft) from Msmall end','cbXinf','—')}
+          </div>)}
+        </>)}
+        {c&&(c.ok
+          ? <div style={{marginTop:'4px'}}>
+              {c.txt}{c.why?<span style={{color:'#b45309'}}> · {c.why}</span>:null}
+              &nbsp;<button onClick={()=>updateCapZone(z.id,'Cb',c.Cb)}
+                style={{fontSize:'9.5px',fontFamily:'monospace',padding:'1px 6px',border:'1px solid #93c5fd',borderRadius:'3px',
+                  background:'#eff6ff',color:'#1d4ed8',cursor:'pointer'}}>apply Cb = {c.Cb.toFixed(3)}</button>
+              {Math.abs((+z.Cb||0)-c.Cb)<5e-4?<span style={{color:'#047857'}}> ✓ applied</span>:null}
+            </div>
+          : <div style={{marginTop:'4px',color:'#b91c1c'}}>{c.why}</div>)}
+      </div>);
+  };
   const syncCapToSecZones = () => {
     if (!cfg?.sectionZones?.length) return;
     const DLL = cfg.deadLoadLabels||{};
@@ -11808,7 +11911,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     const rs = ROLLED_SHAPES[secZone.name];
     const plates = rs ? {d:rs.d, tw:rs.tw, bfTop:rs.bf, tfTop:rs.tf, bfBot:rs.bf, tfBot:rs.tf}
                       : {d, tw:props[1]};
-    setCapZones(capZones.map(q=>q.id===zoneId?{...q, ZxPos:Zx, ZxNeg:Zx, SxPos:Sx, SxNeg:Sx, Aw, ...plates}:q));
+    // Plates from the rolled-shape table also tick "rolled shape" (App. A6 Fyr / kc); the engineer can untick it.
+    setCapZones(capZones.map(q=>q.id===zoneId?{...q, ZxPos:Zx, ZxNeg:Zx, SxPos:Sx, SxNeg:Sx, Aw, ...plates, ...(rs?{rolled:true}:{})}:q));
   };
 
   // ── Design-app capacity zone: interpolate the per-station table published by PS-Beam ──
@@ -14544,6 +14648,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           ))}
                         </div>
                       )}
+                      {z.type==='quickcalc'&&capLtbExtras(z)}
                       <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280'}}>
                         → Mn⁺ = {(+cap.MnPos||0).toFixed(1)} ft·k &nbsp;
                            Mn⁻ = {(+cap.MnNeg||0).toFixed(1)} ft·k &nbsp;
@@ -14620,6 +14725,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           </div>
                         ))}
                       </div>
+                      {capLtbExtras(z)}
                       <div style={{marginTop:'4px',fontSize:'8.5px',fontFamily:'monospace',color:'#9ca3af'}}>
                         Lb = unbraced length of the bottom (compression) flange in the negative-moment region · do = transverse
                         stiffener spacing for 6.10.9 interior panels (blank = unstiffened web; leave blank for end panels) ·

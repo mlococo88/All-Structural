@@ -3982,3 +3982,156 @@ Composite zone: the case-2 steel with tw = 1.0 in, f′c = 4 ksi, beff = 96 in, 
      - (b) a worked helper on the zone card: the engineer types Mmax, MA, MB and MC, and the card shows Cb symbolically, with values substituted, and the result;
      - (c) brace-point stations per zone, with Cb computed per unbraced length from the governing envelope.
 4. **§6 show the work.** Apart from the new Lp line, the zone card and the report give only the governing check label (e.g. "6.10.8 (LTB)"), not a worked Fnc / Mnc. This gap was there before this change.
+
+## 2026-10-19 — PR: claude/aashto10-index-fyr (PR link added after merge)
+
+### Fyr for LTB and FLB per AASHTO LRFD 10th Ed.; "rolled shape" box (App. A6 Fyr and kc); Cb helper per Eq. 6.10.8.2.3b-1 (Tier 2: result change in the Steel Calc / Composite capacity zones)
+Engineer decision 2026-10-19, relayed by the coordinator. These close open items 1–3 of the claude/aashto10-index entry.
+
+**Problem**
+1. **6.10.8 path, Fyr.** The tool used the 9th Ed. Fyr = max(min(0.7Fyc, Rh·Fyt·Sxt/Sxc, Fyw), 0.5Fyc) for both FLB and LTB.
+   - The 10th Ed. takes Fyr = 0.5Fyc for LTB with a longitudinally unstiffened web (Eqs. 6.10.8.2.3a-2 and -5).
+   - For FLB, the 10th Ed. takes max(min(0.7Fyc, Fyw), 0.5Fyc) (6.10.8.2.2). The Rh·Fyt·Sxt/Sxc term is gone.
+   - I checked the 10th Ed. pages: FLB does **not** become 0.5Fyc.
+   - Effect on LTB: Fnc between Lp and Lr goes **down** (less unconservative than before). Lr goes up, so the elastic range starts later.
+   - Effect on FLB: changes only singly symmetric sections with Sxt/Sxc < 0.7, where FLB Fnc goes up slightly. In that case tension-flange yielding usually governs.
+2. **App. A6 path, LTB.** The tool used FL in the inelastic LTB line and in Lr.
+   - The 10th Ed. Eqs. A6.3.3.1-2 and -5 use Fyr·Sxc, with Fyr = 0.5Fyc for welded sections and 0.7Fyc for rolled sections.
+   - A zone did not know whether it was rolled. A new per-zone box `rolled` (default off = welded) now tells it.
+     - "↓ From <section>" ticks the box when it takes the plates from `ROLLED_SHAPES`.
+     - Old saves have no `rolled` field and are read as welded.
+   - The same box sets FLB kc = 0.76 for rolled shapes (10th Ed. A6.3.2, Eq. A6.3.2-6 is for built-up sections only). Before, the tool always used the built-up kc.
+   - Effect, welded (default): Mnc goes **down** in the inelastic LTB range.
+   - Effect, rolled: LTB is the same as before for doubly symmetric shapes (FL was already 0.7Fyc). FLB goes **up** for a noncompact flange.
+3. **Cb.** The tool had only an input (blank = 1.0). It now also has a helper on the Steel Calc and Composite zone cards.
+   - The engineer types Mmax, MA, MB and MC. The card works Cb out per the 10th Ed. Eq. 6.10.8.2.3b-1.
+   - On Steel Calc zones only (noncomposite), the box "reverse curvature" applies Rm from C6.10.8.2.3b, with Rm·Cb capped at 3.0.
+   - "apply Cb" copies the result into the Cb input. Nothing changes until the engineer clicks it.
+
+**Governing provisions:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 6.10.8.2.2 (Fyr for FLB), Art. 6.10.8.2.3a / Eqs. 6.10.8.2.3a-2 and -5 (Fyr for LTB), Eq. 6.10.8.2.3b-1 and C6.10.8.2.3b (Cb, Rm), Art. A6.3.2 / Eq. A6.3.2-6 (kc), Art. A6.3.3.1 / Eqs. A6.3.3.1-2 and -5 (Fyr for LTB, welded or rolled).
+
+#### Where and before/after code
+- **`steelIFlexure`, App. A6 branch** (anchor `// LTB Fyr (10th Ed. A6.3.3.1`). Before:
+```js
+    const kc = Math.min(Math.max(4/Math.sqrt(s.D/s.tw), 0.35), 0.76);
+    ...
+    const Lr = 1.95*rt*(E/FL)*Math.sqrt(s.J/(Sxc*h))*Math.sqrt(1 + Math.sqrt(1 + 6.76*Math.pow(FL*Sxc*h/(E*s.J),2)));
+    let Mltb;
+    if (Lb <= Lp) Mltb = RM;
+    else if (Lb <= Lr) Mltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*RM, RM);
+```
+- After:
+```js
+    const rolled = !!o.rolled;
+    // kc: Eq. A6.3.2-6 for built-up sections, 0.76 for rolled shapes (10th Ed. A6.3.2)
+    const kc = rolled ? 0.76 : Math.min(Math.max(4/Math.sqrt(s.D/s.tw), 0.35), 0.76);
+    ...
+    // LTB Fyr (10th Ed. A6.3.3.1, Eqs. A6.3.3.1-2 and -5): 0.5Fyc welded, 0.7Fyc rolled
+    const FyrL = (rolled ? 0.7 : 0.5)*Fy, redL = 1 - FyrL*Sxc/RM;
+    const Lr = 1.95*rt*(E/FyrL)*Math.sqrt(s.J/(Sxc*h))*Math.sqrt(1 + Math.sqrt(1 + 6.76*Math.pow(FyrL*Sxc*h/(E*s.J),2)));
+    let Mltb;
+    if (Lb <= Lp) Mltb = RM;
+    else if (Lb <= Lr) Mltb = Math.min(Cb*(1 - redL*(Lb-Lp)/(Lr-Lp))*RM, RM);
+```
+  - The return object also carries `rolled, kc, FL, FyrL, J:s.J, Sxc, h, Fy`.
+  - FL is unchanged and is still used for FLB (it matches the 10th Ed. A6.3.2 definition).
+- **`steelIFlexure`, 6.10.8 branch** (anchor `// Fyr, 10th Ed.: FLB (6.10.8.2.2)`). Before:
+```js
+  const Fyr = Math.max(Math.min(0.7*Fy, Rh*Fy*Sxt/Sxc, Fy), 0.5*Fy);
+  ...
+  const Fmax = Rb*Rh*Fy, red = 1 - Fyr/(Rh*Fy);
+  ...
+  const Lp = 1.1*rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);   // Lp: Eq. 6.10.8.2.3a-4 (10th Ed.)
+  let Fltb;
+  if (Lb <= Lp) Fltb = Fmax;
+  else if (Lb <= Lr) Fltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*Fmax, Fmax);
+```
+- After:
+```js
+  // Fyr, 10th Ed.: FLB (6.10.8.2.2) min(0.7Fyc, Fyw) >= 0.5Fyc; LTB (6.10.8.2.3a) 0.5Fyc
+  // (longitudinally unstiffened web). Homogeneous section: Fyw = Fyc = Fy.
+  const Fyr = Math.max(Math.min(0.7*Fy, Fy), 0.5*Fy), FyrL = 0.5*Fy;
+  ...
+  const Fmax = Rb*Rh*Fy, red = 1 - Fyr/(Rh*Fy), redL = 1 - FyrL/(Rh*Fy);
+  ...
+  const Lp = 1.1*rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/FyrL);  // Eqs. 6.10.8.2.3a-4, -5 (10th Ed.)
+  let Fltb;
+  if (Lb <= Lp) Fltb = Fmax;
+  else if (Lb <= Lr) Fltb = Math.min(Cb*(1 - redL*(Lb-Lp)/(Lr-Lp))*Fmax, Fmax);
+```
+  - The return object also carries `Fyr, FyrL, Fy`.
+- **New functions, just above `function capLbKnown(z)`:**
+  - `steelFyrTxt(r)`: works Fyr and Lr (and FL, kc on the A6 path) for the basis line.
+  - `steelCbCalc(z)`: Eq. 6.10.8.2.3b-1 plus the optional Rm. It returns `null` until Mmax, MA, MB and MC are all entered, and refuses when Mmax is not the largest.
+  - `steelCbTxt(z)`: gives the worked Cb when the zone's Cb equals the helper result; otherwise "Cb = x (entered)" or "Cb = 1.0 (blank)".
+- **`steelZoneCaps`, inner `flex`.** Before:
+```js
+    const r = steelIFlexure(s, {Fy, comp, Lb, Cb, Mp: Zx>0 ? Fy*Zx : 0});
+    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+'; '
+      +steelLpTxt(r.rt, Fy, r.Lp)+', Lb = '+(Lb/12).toFixed(2)+' ft)' };
+```
+- After:
+```js
+    const r = steelIFlexure(s, {Fy, comp, Lb, Cb, Mp: Zx>0 ? Fy*Zx : 0, rolled: !!z.rolled});
+    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+'; '
+      +steelLpTxt(r.rt, Fy, r.Lp)+', Lb = '+(Lb/12).toFixed(2)+' ft; '+steelFyrTxt(r)+'; '+steelCbTxt(z)+')' };
+```
+- **`StepResults`, new `capLtbExtras(z)` next to `updateCapZone`:**
+  - It holds the "Rolled shape" box, the Cb helper inputs (Mmax, MA, MB, MC), the "Reverse curvature" box with Msmall/Mlarge and x_inf (Steel Calc only), the worked Cb line, and the "apply Cb" button.
+  - It is rendered on the Steel Calc card (`{z.type==='quickcalc'&&capLtbExtras(z)}` after the plates grid) and on the Composite card (`{capLtbExtras(z)}` after the Lb / Cb / do grid).
+- **`importFromSectionProps`.** Before: `…{...q, ZxPos:Zx, ZxNeg:Zx, SxPos:Sx, SxNeg:Sx, Aw, ...plates}…`. After: `…{...q, ZxPos:Zx, ZxNeg:Zx, SxPos:Sx, SxNeg:Sx, Aw, ...plates, ...(rs?{rolled:true}:{})}…`.
+
+#### Show the work (CLAUDE.md §6)
+The basis line on the zone card and in the report's capacity table now works out:
+- Fyr for LTB;
+- Lr, with its values substituted;
+- Fyr for FLB (FL and kc on the A6 path);
+- Cb (the Eq. 6.10.8.2.3b-1 substitution and the Rm step, when the helper value is the one applied).
+
+#### Saved data
+- `mct_cap_zones_v1` zone objects gain optional fields: `rolled`, `cbMmax`, `cbMA`, `cbMB`, `cbMC`, `cbRev`, `cbMratio`, `cbXinf`.
+- When a field is missing, the zone behaves as: welded, no helper, no Rm. No key is renamed and no field is removed.
+- The `Cb` input keeps its meaning.
+
+#### Check cases (hand values = tool values)
+1. **6.10.8 LTB, doubly symmetric.** d = 68 in, tw = 0.4375 in, flanges 16 × 1 in, Fy = 50 ksi, Lb = 20 ft = 240 in, Cb = 1.
+   - Intermediate values: rt = 4.050 in, Rb = 0.98592, Fmax = 49.296 ksi, Lp = 107.28 in, Sxc = 1364.6 in³.
+   - Before: Fyr = 35 ksi, Lr = π × 4.050 × √(29000/35) = 366.22 in. Fnc = [1 − 0.3 × (240 − 107.28)/(366.22 − 107.28)] × 49.296 = **41.72 ksi**, Mn⁺ = **4743.8 ft·k**.
+   - After: Fyr = 0.5 × 50 = 25 ksi, Lr = π × 4.050 × √(29000/25) = 433.32 in. Fnc = [1 − 0.5 × 132.72/326.04] × 49.296 = **39.26 ksi**, Mn⁺ = **4464.8 ft·k** (−5.9 %).
+2. **6.10.8 FLB, singly symmetric.** d = 90 in, tw = 0.4375 in, top (compression) flange 24 × 1.25 in, bottom flange 14 × 0.75 in, Fy = 50 ksi, Lb = 0.
+   - Intermediate values: Sxc = 2795.9 in³, Sxt = 1713.75 in³, Rb = 0.99137, Fmax = 49.569 ksi, λf = 9.60, λpf = 9.152.
+   - Before: Fyr = 50 × 1713.75/2795.9 = 30.65 ksi, λrf = 0.56 × √(29000/30.65) = 17.23. FLB Fnc = 48.50 ksi.
+   - After: Fyr = 35 ksi, λrf = 16.12. FLB Fnc = 48.61 ksi.
+   - Mn = Mnt = 50 × 1713.75/12 = **7140.6 ft·k** both before and after (tension-flange yielding governs).
+3. **App. A6 LTB.** d = 36 in, tw = 0.6 in, flanges 12 × 1 in, Fy = 50 ksi, Lb = 12 ft = 144 in, Cb = 1.
+   - Intermediate values: Rpc·Myc = Mp = 29670 k·in, Sxc = 517.62 in³, Lp = 81.01 in.
+   - Before (FL = 35 ksi): Lr = 302.1 in, red = 1 − 35 × 517.62/29670 = 0.38939. Mnc = [1 − 0.38939 × 62.99/221.13] × 29670 = **2198.3 ft·k**.
+   - After, welded (box off): Fyr = 25 ksi, Lr = 370.05 in, red = 1 − 25 × 517.62/29670 = 0.56385. Mnc = [1 − 0.56385 × 62.99/289.04] × 29670 = **2168.7 ft·k** (−1.3 %).
+   - After, rolled (box on): Fyr = 35 ksi, so the result is the same as before, **2198.3 ft·k**.
+4. **App. A6 FLB, kc.** d = 36 in, tw = 0.6 in, flanges 16 × 0.8 in (λf = 10.0 > λpf = 9.152), Fy = 50 ksi, Lb = 0.
+   - Intermediate values: Rpc·Myc = 31403.2 k·in, red = 1 − 35 × 553.7/31403.2 = 0.38288.
+   - Before, and after with welded: kc = 4/√(34.4/0.6) = 0.528, λrf = 0.95 × √(29000 × 0.528/35) = 19.87. Mnc = [1 − 0.38288 × 0.848/10.72] × 31403.2 = **2537.7 ft·k**.
+   - After, rolled: kc = 0.76, λrf = 23.84. Mnc = [1 − 0.38288 × 0.848/14.69] × 31403.2 = **2559.1 ft·k** (+0.8 %).
+5. **Cb helper.**
+   - Mmax = 1000, MA = 250, MB = 500, MC = 750: Cb = 12.5 × 1000/(2500 + 750 + 2000 + 2250) = **1.667**.
+   - Reverse curvature, case-2 plates, Lb = 20 ft, Mmax = 1000, MA = 500, MB = 0, MC = 500:
+     - Cb = 12500/5500 = 2.273.
+     - With Msmall/Mlarge = −1.0 and x_inf = 10 ft > 3Lb/8 = 7.5 ft: ρTop = 1440.0/1612.1 = 0.893, Rm = 0.5 + 2 × 0.893² = 2.096, Rm·Cb = 4.76, so **Cb = 3.000** (cap).
+     - With −0.4 and x_inf = 5 ft: Rm = 1.0, so **Cb = 2.273**.
+
+#### How verified
+- `node tests/check-syntax.mjs index.html`: all scripts pass.
+- **Functions from main (ee32a1c) and the branch, run in Node:** cases 1–5 give the values above.
+- **Headless, offline page.** Zones were seeded in `mct_cap_zones_v1`, and minimal results rows in `mct_results_v1` so the AASHTO Rating step renders the zone cards.
+  - The page's `steelZoneCaps()` gives Mn⁺ 4743.8 / 2198.3 ft·k on main and 4464.8 / 2168.7 ft·k on the branch (cases 1 and 3, welded).
+  - On the cards: the "Rolled shape" box, the Cb helper line and the "apply Cb = 1.667" button render with no console errors.
+  - Clicking "apply" stores Cb = 1.667, shows "✓ applied", and puts the worked Cb into the basis line.
+  - Ticking "Rolled shape" on the A6 zone stores `rolled: true` and switches the basis line to "0.7·Fyc (rolled)" and "kc = 0.76 (rolled)".
+- **Page smoke** (same readout as `tests/compare.mjs --tool page`, with a 300 s load limit because the container was heavily loaded): page text and localStorage after load are identical on main and the branch.
+
+**Other copies:** `stgirder.html` and GirderDetail have their own steel checks and were not changed (one tool per PR).
+
+#### Open items
+- **Old saved zones** made from a rolled W shape (via "↓ From …" before this change) have no `rolled` field, so they are now treated as welded. That is conservative: the LTB Fyr drops to 0.5Fyc. Ticking "Rolled shape" restores 0.7Fyc. They are not migrated automatically, because the zone does not record where its plates came from.
+- **The 3.0 limit on Cb** is applied only together with Rm, because C6.10.8.2.3b states it right after the Rm definitions. Eq. 6.10.8.2.3b-1 itself has no limit and can reach 5.0 (MA = MB = MC = 0). **Engineer to confirm:** should the helper also cap Cb at 3.0 without Rm?
+- **The zone's single Cb** is used for both Mn⁺ and Mn⁻, as before. The helper says so on the card.
