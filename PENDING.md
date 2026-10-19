@@ -28,7 +28,7 @@ Labels relabelled where every cited article checked out: Bridge Geometry (#324),
 - **Stone Arch:** 3.6.1.2.6a LLDF 1.15 for buried structures vs tool's rule.
 - **abutment:** As cited to 3.10.4.2 (deleted in 10th); several renumbered articles.
 - **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in); 14.7.6.4 citation.
-- **Gusset:** φ for gusset compression / shear yielding and chord splice differ between LRFD 10th and MBE 3rd; decide which governs for LRFR.
+- **Gusset:** decided 2026-10-19 (engineer): the LRFR rating keeps the MBE 3rd Ed. φ (0.90 / 1.00 / 0.85); citations corrected to MBE, LRFD 10th 6.5.4.2 design values (0.75 / 0.80 / 0.65) noted as not used; fillers renumbered to 6.13.6.1.4 (branch claude/aashto10-gusset, fix log C19).
 Full per-tool list (OK / renumbered / changed): agent inventory of 2026-10-19 (session scratchpad aashto-ed/inventory.md).
 
 ## 2. Blocked — reference documents not available
