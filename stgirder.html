@@ -592,7 +592,7 @@ const DEFAULTS = {
   fatigue:{category:'C', ADTT:1000, life:'infinite',
     adttIsSingleLane:true,   // true → ADTT field is already (ADTT)SL; false → gross both-directions, apply p
     lanes:2,                 // # lanes available to trucks → single-lane fraction p (Table 3.6.1.4.2-1)
-    ncyc:1.0,               // cycles per truck passage n (Table 6.6.1.2.5-2)
+    ncyc:1.0,               // cycles per truck passage n (Table 6.6.1.2.5-1)
     designLife:75,          // fatigue design life (yr)
     lsMode:'auto'},         // 'auto' | 'I' | 'II' — auto decides Fatigue I vs II from (ADTT)SL crossover
   rateVeh:[],
@@ -970,6 +970,11 @@ function ownLFOf(ext){ const r=ext&&extFromGD(ext)&&ext.ownerRules; if(!r||typeo
 // the girder-check load factors of a rule set: Strength I maximum (DC, DW, LL) and Service II LL
 function lfFac(L){ return {gDC:1.25*L.eta, gDW:1.5*L.eta, gLL:1.75*L.eta*L.m, gS2:1.30*L.m}; }
 const lfS=R=>(R&&R.lf)||{...LF_ST,...lfFac(LF_ST),plOn:false};
+// Edition statement ("follow the owner", engineer decision 2026-10-19; same basis as GirderDetail's OWN_RULES): ST-Girder computes to
+// AASHTO LRFD 10th Ed. (2024); with an owner from GirderDetail its rules are on top, and the edition the owner's manual is written to is named.
+const OWN_ED={RIDOT:'10th Ed.',MassDOT:'9th Ed.',CTDOT:'9th Ed.'};
+const edOwn=R=>{ const L=lfS(R); return L.on&&L.o&&L.o!=='AASHTO'? L.o : ''; };
+const edNote=R=>{ const o=edOwn(R), L=lfS(R); return o? ' with the '+o+' rules on top'+(OWN_ED[o]?' ('+(L.manual||o)+' is written to AASHTO LRFD '+OWN_ED[o]+')':'') : ''; };
 // a factor as text: the AASHTO value exactly as before when no owner rule changes it
 const lfP=(v,base)=>Math.abs(v-(+base))<1e-12? base : fmt(v,3);
 // LL+IM for the owner combinations (GD45): (LL+IM+PL) − PL + PL/m, so that m × it = m(LL+IM) + PL; unchanged without a pedestrian part or with m = 1
@@ -986,7 +991,7 @@ function ownLines(R){ const L=R&&R.lf; if(!L||!L.on) return null; const f3=v=>fm
   return out; }
 function OwnBanner({R,go}){ const L=R&&R.ok&&R.lf; if(!L||!L.on) return null; const ls=ownLines(R);
   return <div className="callout" style={{marginTop:0,marginBottom:0,borderLeftColor:'#7c3aed',background:'#f5f3ff'}}>
-    <b>Owner load rules from GirderDetail: {L.o||'—'}</b>{L.manual?<span style={{fontSize:11.5}}> · {L.manual}</span>:null}
+    <b>Owner load rules from GirderDetail: {L.o||'—'}</b>{L.manual?<span style={{fontSize:11.5}}> · {L.manual}</span>:null}{edOwn(R)?<span style={{fontSize:11.5}}> · code basis: AASHTO LRFD 10th Ed. (2024) with the owner rules on top{OWN_ED[edOwn(R)]?' (the manual is written to AASHTO LRFD '+OWN_ED[edOwn(R)]+')':''}</span>:null}
     <ul style={{fontSize:11.5,margin:'4px 0 0 18px',lineHeight:1.6,padding:0}}>{ls.map((t,i)=><li key={i}>{t}</li>)}</ul>
     <div style={{fontSize:11.5,marginTop:4}}>Applied to every girder check{R.deckD?' and to the transverse deck design':''} while GirderDetail’s demands are in use; worked in the report, <i>2. Input parameters — Owner load rules</i> and <i>Demands — Load combinations</i>.{go?<span> Go to: <a href="#" onClick={e=>{e.preventDefault();go('inputs');}}>Inputs (imported demands)</a> · <a href="#" onClick={e=>{e.preventDefault();go('diagrams');}}>Diagrams (M_u, V_u)</a>{R.deckD?<span> · <a href="#" onClick={e=>{e.preventDefault();go('deck');}}>Deck</a></span>:null}{L.rt?<span> · <a href="#" onClick={e=>{e.preventDefault();go('rating');}}>Rating (target)</a></span>:null} · <a href="#" onClick={e=>{e.preventDefault();go('report');}}>Report</a></span>:null}</div>
   </div>; }
@@ -1341,7 +1346,7 @@ function llShearAt(L,x){
 }
 
 // Compression-flange nominal resistance Fnc = min(FLB, LTB), AASHTO 6.10.8.2.
-// Dc = elastic web depth in compression for the section being checked (6.10.8.2.3-9 uses Dc,
+// Dc = elastic web depth in compression for the section being checked (Eq. 6.10.8.2.3b-3 uses Dc,
 // not D); Fyw = web yield, for Fyr = min(0.7Fyc, Fyw) >= 0.5Fyc (6.10.8.2.2). Both default to
 // the old values (D, Fyc) only if a caller omits them.
 function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){
@@ -1349,7 +1354,7 @@ function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){
   const FyrV=Math.max(0.5*Fyc,Math.min(0.7*Fyc,FywV));
   const lf=bfc/(2*tfc), lpf=0.38*sqrt(Es/Fyc), lrf=0.56*sqrt(Es/FyrV);
   let FncFLB = lf<=lpf? Rb*Rh*Fyc : (1-(1-FyrV/(Rh*Fyc))*((lf-lpf)/(lrf-lpf)))*Rb*Rh*Fyc;
-  const rt=bfc/sqrt(12*(1+(DcV*tw)/(3*bfc*tfc)));     // 6.10.8.2.3-9 (Dc)
+  const rt=bfc/sqrt(12*(1+(DcV*tw)/(3*bfc*tfc)));     // Eq. 6.10.8.2.3b-3 (Dc)
   const Lp=1.1*rt*sqrt(Es/Fyc), Lr=Math.PI*rt*sqrt(Es/FyrV);   // Lp: 10th Ed. Eq. 6.10.8.2.3a-4 (9th Ed.: 1.0 r_t)
   let FncLTB;
   if(Lb_in<=Lp) FncLTB=Rb*Rh*Fyc;
@@ -1951,7 +1956,7 @@ function computeAll(inp){
 
     /* ---------- Fatigue (load-induced, 6.6.1 / 6.10.5) — fully worked ---------- */
     // Detail-category constants A (ksi³) and constant-amplitude fatigue threshold (ΔF)TH (ksi),
-    // AASHTO Table 6.6.1.2.5-1 / 6.6.1.2.5-3.
+    // AASHTO LRFD 10th Ed. Table 6.6.1.2.3-1 (the 9th Ed. had them in Tables 6.6.1.2.5-1 / 6.6.1.2.5-3).
     const CAT={A:{A:250e8,TH:24},B:{A:120e8,TH:16},"B'":{A:61e8,TH:12},C:{A:44e8,TH:10},
       "C'":{A:44e8,TH:12},D:{A:22e8,TH:7},E:{A:11e8,TH:4.5},"E'":{A:3.9e8,TH:2.6}};
     const fq=inp.fatigue||{};
@@ -1975,10 +1980,10 @@ function computeAll(inp){
     const pFrac = fq.lanes>=3?0.80 : fq.lanes==2?0.85 : 1.00;
     const adttRaw=+fq.ADTT||1000;
     const adttSL = (fq.adttIsSingleLane===false)? pFrac*adttRaw : adttRaw;
-    const nCyc = +fq.ncyc||1.0;                               // cycles per truck passage (Table 6.6.1.2.5-2)
+    const nCyc = +fq.ncyc||1.0;                               // cycles per truck passage (Table 6.6.1.2.5-1)
     const lifeYr = +fq.designLife||75;                        // fatigue design life (yr)
     const Nfat = 365*lifeYr*nCyc*adttSL;                      // total stress-range cycles (6.6.1.2.5-3)
-    // Infinite-life crossover (basis of Table 6.6.1.2.3-2): Fatigue I (γ=1.75 vs (ΔF)TH) governs
+    // Infinite-life crossover (Eq. C6.6.1.2.3-1, the (ADTT)SL equivalent to infinite life column of Table 6.6.1.2.3-1): Fatigue I (γ=1.75 vs (ΔF)TH) governs
     // over Fatigue II (γ=0.80 vs (A/N)^⅓) when (A/N)^⅓ ≤ (0.80/1.75)(ΔF)TH, i.e. when
     // (ADTT)SL ≥ A / [((0.80/1.75)(ΔF)TH)³ · 365 · Y · n]  (Cat C, 75 yr, n=1 → 1,684/day).
     const fatGRatio = 0.80/1.75;
@@ -2067,21 +2072,27 @@ function computeAll(inp){
 
     /* ---------- Shear connectors (6.10.10) ---------- */
     const Asc=Math.PI*Math.pow(+inp.conn.studD,2)/4, Fustud=60;
-    const Qn=Math.min(0.5*Asc*sqrt(deck.fc*EcDeck), Asc*Fustud), phisc=0.85, Qr=phisc*Qn;
+    // 10th Ed. Eq. 6.10.10.4.3-1: Qn = 0.70·Asc·Fu (Fu of the stud, 6.4.4); phi_sc = 1.00 (6.5.4.2); Qr = phi_sc·Qn (Eq. 6.10.10.4.1-1).
+    // (Before: Qn = min(0.5·Asc·sqrt(f'c·Ec), Asc·Fu) with phi_sc = 0.85, the 9th Ed. form.)
+    const Qn=0.70*Asc*Fustud, phisc=1.00, Qr=phisc*Qn;
     const Pslab=0.85*deck.fc*beff*deck.ts, Psteel=Fyf*(bft*tft+bfb*tfb)+Fyw*D*tw;
     const Pshear=Math.min(Pslab,Psteel), nReq=Pshear/Qr;
     const nRow=+inp.conn.nRow, pitch=+inp.conn.pitch;
     const nProv=nRow*Math.floor((Lft*12/2)/Math.max(pitch,1));
-    /* 6.10.10.2 -- the stud resistance branch has to be the one that goes with the
-       limit state the rest of the app already decided on (Step 2 of the Fatigue
-       tab): Fatigue I is the infinite-life check, Zr = 5.5d^2 (Eq. 6.10.10.2-1)
-       against a shear range factored by gamma = 1.75; Fatigue II is the finite-life
-       check, Zr = alpha*d^2 (Eq. 6.10.10.2-2) with gamma = 0.80. The old
-       "alpha*d^2 >= 5.5d^2/2" floor belonged to the pre-2009 single-load-factor
-       (0.75) format and must not be paired with gamma = 1.75. */
-    const alphaF=Math.max(34.5-4.28*(Math.log(Nfat)/Math.LN10),0);
-    const dStud2=Math.pow(+inp.conn.studD,2);
-    const Zr=fatInf? 5.5*dStud2 : alphaF*dStud2;
+    /* 10th Ed. 6.10.10.2, Eq. 6.10.10.2-1: Zr = (dF)n·Asc, with (dF)n per 6.6.1.2.5 for Condition 9.2 of
+       Table 6.6.1.2.3-1 (A = 1040e8 ksi^5, m = 5, (dF)TH = 7.0 ksi). The stud is its own detail, so its
+       Fatigue I / II choice uses its own (ADTT)SL equivalent to infinite life (Eq. C6.6.1.2.3-1 with m = 5,
+       divided by n and scaled by 75/Y as the flange crossover above): AUTO -> Fatigue I (gamma 1.75,
+       (dF)n = (dF)TH) when (ADTT)SL >= that value, else Fatigue II (gamma 0.80, (dF)n = (A/N)^(1/5),
+       Eq. 6.6.1.2.5-2). A manual Fatigue I / II choice on the Inputs tab applies to the studs as well.
+       (Before: Zr = 5.5d^2 / alpha·d^2 with alpha = 34.5 - 4.28 log N, branch taken from the flange category crossover.) */
+    const SC92={A:1040e8, m:5, TH:7.0};
+    const adttSLcrossSC=SC92.A/(Math.pow(fatGRatio*SC92.TH,SC92.m)*365*lifeYr*nCyc);
+    const recFatISC=adttSL>=adttSLcrossSC;
+    const fatInfSC=lsMode==='auto'? recFatISC : (lsMode==='I');
+    const gammaFatSC=fatInfSC?1.75:0.80;                      // load factor (Table 3.4.1-1)
+    const FnSCII=Math.pow(SC92.A/Nfat,1/SC92.m), FnSC=fatInfSC? SC92.TH : FnSCII;
+    const Zr=FnSC*Asc;
     // Fatigue shear range per station (STG-O6): the FATIGUE truck (3.6.1.4.1, 30-ft rear axle spacing)
     // shear range V+max − V−min at each station, IM 1.15, one-lane shear DF, on the short-term
     // composite section of that station (6.10.10.1.2). The governing station is the one needing the
@@ -2091,7 +2102,7 @@ function computeAll(inp){
       const yNA=(sg.bare.hs+deck.haunch+deck.ts/2)-cc.ybar, Q=(beff*deck.ts/n)*yNA;
       const rg=fatImpV? (()=>{ const vp=ext.V_FATpos(st.x), vn=ext.V_FATneg(st.x); return {Vpos:vp, Vneg:vn, range:vp-vn}; })()
         : fatShearRangeAt(Lft,st.x);
-      const VfU=fatImpV? rg.range : rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;   // imported: per girder, IM + DF in
+      const VfU=fatImpV? rg.range : rg.range*1.15*dfFatV, Vf=gammaFatSC*VfU, vsr=Vf*Q/cc.I;   // imported: per girder, IM + DF in
       const p_=nRow*Zr/Math.max(vsr,1e-6);
       if(!fatStud||p_<fatStud.pReq) fatStud={x:st.x,si:st.si,Vpos:rg.Vpos,Vneg:rg.Vneg,range:rg.range,VfatU:VfU,Vfat:Vf,Qslab:Q,Icomp:cc.I,Vsr:vsr,pReq:p_}; });
     const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar;
@@ -2115,7 +2126,7 @@ function computeAll(inp){
       contStud={xP, Pp, PpS, Pslab, sides, gov};
     }
     const conn={Asc,Qn,Qr,Pshear,nReq,nProv,strOK:nProv>=nReq,Zr,Vsr,pReq,pitch,pitchOK:pitch<=pReq,nRow,
-                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:fatStud.Icomp,dfFatV,Vtr:Ld.hl.Vtr,fatStud,contStud,yDeckNA,fatImpV};
+                Vfat,VfatU,gammaFat:gammaFatSC,fatInf:fatInfSC,studD:+inp.conn.studD,studH:+inp.conn.studH,SC92,adttSLcrossSC,recFatISC,FnSC,FnSCII,Fustud,phisc,Qslab,Icomp:fatStud.Icomp,dfFatV,Vtr:Ld.hl.Vtr,fatStud,contStud,yDeckNA,fatImpV};
     if(contStud) conn.strOK=contStud.gov.nProv>=contStud.gov.nReq;
 
     /* ---------- Load rating (LRFR, MBE) — station-based ---------- */
@@ -2345,6 +2356,7 @@ const DL_T={
   shear:{tab:'shear',id:'stg-d-shear',cr:'shear.res',l:'Shear · Shear resistance'},
   s2:{tab:'stresses',id:'stg-d-s2',cr:'serv.s2',l:'Stresses · Service II buildup'},
   ut:{tab:'inputs',id:'stg-d-ut',cr:'inp.ut',l:'Inputs · MassDOT utilities'},   // GD54c
+  fatn:{tab:'fatigue',id:'stg-d-fatn',cr:'fat.n',l:'Fatigue · Step 1 traffic and cycles'},
 };
 const sgI=(R,si)=>(R&&R.segP&&R.segP.length>1&&si!=null)? si : null;   // name a segment only when there are several
 const CrRefCtx=React.createContext(null);   // set by CalcDoc: {map: report key -> {n, id}, idp, midSeg}
@@ -2884,7 +2896,7 @@ function InputsTab({inp,set,R}){
           <Seg opts={[{v:'auto',l:'AUTO'},{v:'I',l:'FATIGUE I'},{v:'II',l:'FATIGUE II'}]}
             v={inp.fatigue.lsMode||'auto'} set={v=>S('fatigue.lsMode',v)}/></div>}
       </div>
-      <div className="hint" style={{margin:'2px 0 8px'}}>AUTO picks Fatigue&nbsp;I (infinite life, γ=1.75) when (ADTT)<sub>SL</sub> is at or above the category crossover, else Fatigue&nbsp;II (finite life, γ=0.80). See the Fatigue tab for the full determination.</div>
+      <div className="hint" style={{margin:'2px 0 8px'}}>AUTO picks Fatigue&nbsp;I (infinite life, γ=1.75) when (ADTT)<sub>SL</sub> is at or above the category crossover, else Fatigue&nbsp;II (finite life, γ=0.80); the shear studs use their own crossover (Condition 9.2, Connectors tab). See the Fatigue tab for the full determination.</div>
       <div className="grouplabel">Fatigue — traffic &amp; cycles</div>
       <div className="frow">
         <Num l="ADTT (trucks/day)" v={inp.fatigue.ADTT} set={v=>S('fatigue.ADTT',v)} step={100} gd={G('fatigue.ADTT')}/>
@@ -2897,8 +2909,8 @@ function InputsTab({inp,set,R}){
             v={+inp.fatigue.lanes||2} set={v=>S('fatigue.lanes',v)}/></div>}
       </div>
       <div className="frow">
-        {G('fatigue.ncyc')? <GdFld l="Cycles per passage n (Table 6.6.1.2.5-2)" v={fmt(+G('fatigue.ncyc').v,1)} src={G('fatigue.ncyc').src}/>
-        : <div className="fld"><label>Cycles per passage n (Table 6.6.1.2.5-2)</label>
+        {G('fatigue.ncyc')? <GdFld l="Cycles per passage n (Table 6.6.1.2.5-1)" v={fmt(+G('fatigue.ncyc').v,1)} src={G('fatigue.ncyc').src}/>
+        : <div className="fld"><label>Cycles per passage n (Table 6.6.1.2.5-1)</label>
           <div className="fwrap"><select value={+inp.fatigue.ncyc||1.0} onChange={e=>S('fatigue.ncyc',+e.target.value)}>
             <option value={1.0}>1.0 — simple span &gt; 40 ft; continuous away from support</option>
             <option value={1.5}>1.5 — continuous, near interior support &gt; 40 ft</option>
@@ -3976,13 +3988,13 @@ function fatCards(R,sel,right){
   const recName=f.recFatI?'Fatigue I':'Fatigue II';
   const overridden=f.lsMode!=='auto' && ((f.lsMode==='I')!==f.recFatI);
   const s1=(
-    <Card title="Step 1 — Fatigue traffic & number of stress cycles" refTag="LRFD 3.6.1.4 · 6.6.1.2.5">
+    <Card id="stg-d-fatn" title="Step 1 — Fatigue traffic & number of stress cycles" refTag="LRFD 3.6.1.4 · 6.6.1.2.5">
       <KV rows={[
         ['ADTT entered', fmt(f.adttRaw,0), 'trucks/day · '+(f.adttIsSingleLane?'already single-lane':'gross, all lanes')],
         ...(!f.adttIsSingleLane?[['Lanes available to trucks', f.lanes>=3?'3+':(''+f.lanes), ''],
           ['Single-lane fraction p', fmt(f.pFrac,2), 'Table 3.6.1.4.2-1']]:[]),
         ['(ADTT)ₛₗ single-lane', fmt(f.adttSL,0), 'trucks/day'],
-        ['Cycles per truck passage n', fmt(f.nCyc,2), 'Table 6.6.1.2.5-2'],
+        ['Cycles per truck passage n', fmt(f.nCyc,2), 'Table 6.6.1.2.5-1'],
         ['Fatigue design life', fmt(f.lifeYr,0), 'yr'],
       ]}/>
       <ML s={Tx`N=(365)(Y)(n)(\text{ADTT})_{SL}=365\cdot${nx(f.lifeYr,0)}\cdot${nx(f.nCyc,2)}\cdot${nx(f.adttSL,0)}=${nx(f.Nfat,0)}\;\text{cycles}`}/>
@@ -3999,15 +4011,15 @@ function fatCards(R,sel,right){
         <span className="k">Governing limit state</span><span className="dots"></span><span className="v">{lsName} · γ = {fmt(f.gammaFat,2)}</span>
       </div>
       {overridden && <div className="callout" style={{background:'#FCF3E3',borderColor:'var(--warn)',color:'var(--warn)'}}>You have manually selected <b>{lsName}</b>, but the (ADTT)ₛₗ crossover recommends <b>{recName}</b>. Switch the Limit-state control on the Inputs tab to AUTO to follow the code check.</div>}
-      <div className="mnote">Fatigue&nbsp;I (γ = 1.75) is the infinite-life check used when traffic is heavy enough that the Fatigue&nbsp;I check governs over Fatigue&nbsp;II, i.e. when (A/N)<sup>⅓</sup>/0.80 ≥ (ΔF)<sub>TH</sub>/1.75 — the basis of Table 6.6.1.2.3-2 (e.g. category C, 75 yr: 1,680 trucks/day); the section is then designed for unlimited cycles. Fatigue&nbsp;II (γ = 0.80) is the finite-life check for lighter traffic, where resistance depends on the actual cycle count N.</div>
+      <div className="mnote">Fatigue&nbsp;I (γ = 1.75) is the infinite-life check used when traffic is heavy enough that the Fatigue&nbsp;I check governs over Fatigue&nbsp;II, i.e. when (A/N)<sup>⅓</sup>/0.80 ≥ (ΔF)<sub>TH</sub>/1.75 — Eq. C6.6.1.2.3-1, the basis of the (ADTT)<sub>SL</sub> equivalent to infinite life in Table 6.6.1.2.3-1 (e.g. category C, 75 yr, n = 1: 1,680 trucks/day); the section is then designed for unlimited cycles. Fatigue&nbsp;II (γ = 0.80) is the finite-life check for lighter traffic, where resistance depends on the actual cycle count N. The shear studs are their own detail (Condition 9.2, m = 5) with their own crossover; see the Connectors tab.</div>
     </Card>
   );
   const s3=(
     <Card title="Step 3 — Detail category & nominal fatigue resistance (ΔF)ₙ" refTag="6.6.1.2.5 · category constants">
       <KV rows={[
         ['Detail category', f.cat, 'set on Inputs tab'],
-        ['Detail constant A', fmt(f.Acat/1e8,2)+'×10⁸', 'ksi³ (Table 6.6.1.2.5-1)'],
-        ['CAF threshold (ΔF)ᴛʜ', fmt(f.TH,1), 'ksi (Table 6.6.1.2.5-3)'],
+        ['Detail constant A', fmt(f.Acat/1e8,2)+'×10⁸', 'ksi³ (Table 6.6.1.2.3-1)'],
+        ['CAF threshold (ΔF)ᴛʜ', fmt(f.TH,1), 'ksi (Table 6.6.1.2.3-1)'],
       ]}/>
       {f.fatInf
         ? <React.Fragment>
@@ -4208,24 +4220,25 @@ function connStrDeriv(R){ const c=R.conn;
       <VarTable title="Variables — shear studs" rows={[
         ['A_sc','Area of one stud',c.Asc,'in²'],
         ['Q_n','Nominal shear resistance of one stud',c.Qn,'kip'],
-        ['Q_r','Factored resistance φ_sc·Q_n (φ_sc=0.85)',c.Qr,'kip'],
+        ['Q_r','Factored resistance φ_sc·Q_n (φ_sc=1.00, 6.5.4.2)',c.Qr,'kip'],
         ['P','Governing horizontal force min(slab, steel)',c.Pshear,'kip'],
         ['n_req','Required studs, max-M to support',c.nReq,'—'],
         ['n_prov','Provided studs over the half-span',c.nProv,'—'],
         ['pitch','Longitudinal stud pitch',c.pitch,'in'],
       ]}/>
       <SG n="1">Nominal & factored stud resistance</SG>
-      <ML s={Tx`Q_n=\min\!\left(0.5A_{sc}\sqrt{f'_cE_c},\;A_{sc}F_u\right)=${nx(c.Qn,1)}\;\text{kip}\qquad Q_r=\phi_{sc}Q_n=0.85\cdot${nx(c.Qn,1)}=${nx(c.Qr,1)}\;\text{kip}`}/>
+      <ML s={Tx`Q_n=0.70\,A_{sc}F_u=0.70\cdot${nx(c.Asc,4)}\cdot${nx(c.Fustud,0)}=${nx(c.Qn,2)}\;\text{kip}\quad(\text{Eq. 6.10.10.4.3-1})\qquad Q_r=\phi_{sc}Q_n=${nx(c.phisc,2)}\cdot${nx(c.Qn,2)}=${nx(c.Qr,2)}\;\text{kip}\quad(\text{Eq. 6.10.10.4.1-1})`}/>
+      <div className="mnote">A<sub>sc</sub> = πd²/4 of the stud diameter on the Inputs tab; F<sub>u</sub> = 60 ksi, the stud's specified minimum tensile strength (6.4.4); φ<sub>sc</sub> = 1.00 (6.5.4.2). AASHTO LRFD 10th Ed. (2024); the 9th Ed. form min(0.5A<sub>sc</sub>√(f′<sub>c</sub>E<sub>c</sub>), A<sub>sc</sub>F<sub>u</sub>) with φ<sub>sc</sub> = 0.85 is no longer used. Eq. 6.10.10.4.3-1 presumes the stud height-to-diameter ratio of 6.10.10.1.1 (h/d = {fmt(c.studH,2)}/{fmt(c.studD,3)} = {fmt(c.studH/Math.max(c.studD,1e-9),2)} here; not checked by this tool).</div>
       <SG n="2">Number of studs required (strength)</SG>
       <ML s={Tx`n=\frac{P}{Q_r}=\frac{${nx(c.Pshear,0)}}{${nx(c.Qr,1)}}=${nx(c.nReq,1)}\;\text{studs}\quad\text{(max-M}\to\text{support)}`}/>
       <ML s={Tx`n_{prov}=${nx(c.nProv,0)}\;${c.strOK?'\\ge':'<'}\;n_{req}=${nx(c.nReq,1)}\;${c.strOK?'\\checkmark':'\\text{N.G.}'}`}/>
-      <div className="mnote">P is the smaller of the slab force 0.85f′_c·b_eff·t_s and the steel force F_y·A_steel — the total horizontal shear that must be transferred between the point of maximum moment and the support.{c.contStud?' In this continuous span the governing requirement is the one below (6.10.10.4.2).':''}</div>
+      <div className="mnote">n = P/Q<sub>r</sub> is Eq. 6.10.10.4.1-2. P is the smaller of the slab force 0.85f′_c·b_eff·t_s and the steel force F_y·A_steel — the total horizontal shear that must be transferred between the point of maximum moment and the support.{c.contStud?' In this continuous span the governing requirement is the one below (6.10.10.4.2).':''}</div>
       {c.contStud&&<React.Fragment>
         <SG n="3">Continuous span — max +M to the interior support (6.10.10.4.2)</SG>
         <ML s={Tx`P_p=\min\!\left(0.85f'_cb_st_s,\;F_{yw}Dt_w+F_{yt}b_{ft}t_{ft}+F_{yc}b_{fc}t_{fc}\right)=\min(${nx(c.contStud.Pslab,0)},\;${nx(c.contStud.PpS,0)})=${nx(c.contStud.Pp,0)}\;\text{kip}\quad(x_{+M}=${nx(c.contStud.xP,1)}\;\text{ft})`}/>
         <Tbl head={['End','Interior support?','Length max +M → end (ft)','P_n = min(steel, 0.45f′c·b_s·t_s) (kip)','P = P_p + P_n (kip)','n req','n prov','Ratio']}
           rows={c.contStud.sides.map(sd=>({_cls:sd===c.contStud.gov?'tot':'',c:[sd.end,sd.pier?'yes':'no (P = P_p)',fmt(sd.len,1),sd.pier?fmt(sd.PnS,0)+' / '+fmt(sd.PnC,0)+' → '+fmt(sd.Pn,0):'—',fmt(sd.P,0),fmt(sd.nReq,1),fmt(sd.nProv,0),{v:fmt(sd.r,2),cls:sd.r<=1.0001?'ok':'no'}]}))}/>
-        <div className="mnote">The span is continuous (the imported demands have factored negative moment). Between the point of maximum positive moment and the centerline of an adjacent interior support the studs must develop P = P<sub>p</sub> + P<sub>n</sub> (6.10.10.4.2; straight girder, radial force F<sub>p</sub> = 0 — verify equation numbers against the 10th Ed.). An end is taken as an interior support when the factored −M there is below −1 k-ft. Provided studs are counted at the uniform pitch from the max +M station to that end.</div>
+        <div className="mnote">The span is continuous (the imported demands have factored negative moment). Between the point of maximum positive moment and the centerline of an adjacent interior support the studs must develop P = P<sub>p</sub> + P<sub>n</sub> (6.10.10.4.2, Eqs. 6.10.10.4.2-5 to -8: P<sub>T</sub> = P<sub>p</sub> + P<sub>n</sub>; straight girder, radial force F<sub>T</sub> = 0, so P = P<sub>T</sub>). An end is taken as an interior support when the factored −M there is below −1 k-ft. Provided studs are counted at the uniform pitch from the max +M station to that end.</div>
       </React.Fragment>}
     </Deriv>);
 }
@@ -4233,7 +4246,8 @@ function connFatDeriv(R){ const c=R.conn;
   return (    <Deriv title="Fatigue pitch requirement" refTag="6.10.10.1.2 / 6.10.10.2">
       <VarTable title="Variables — fatigue" rows={[
         ['\u03b3','Fatigue load factor ('+(c.fatInf?'Fatigue I, infinite life':'Fatigue II, finite life')+')',c.gammaFat,'—'],
-        ['Z_r','Fatigue shear resistance of one stud',c.Zr,'kip'],
+        ['(ΔF)_n','Nominal fatigue resistance, Condition 9.2 ('+(c.fatInf?'(ΔF)_TH':'(A/N)^1/5')+')',c.FnSC,'ksi'],
+        ['Z_r','Fatigue shear resistance of one stud (ΔF)_n·A_sc',c.Zr,'kip'],
         ['x','Governing station (closest required pitch)',c.fatStud.x,'ft'],
         ['V_+ / V_−',c.fatImpV?'Imported fatigue shear at x, per girder, IM and DF included (max +, max −)':'Fatigue-truck shear at x, per lane, no IM (max +, max −)',c.fatStud.Vpos.toFixed(2)+' / '+c.fatStud.Vneg.toFixed(2),'kip'],
         ['V_sr','Fatigue horizontal shear range per unit length',c.Vsr,'kip/in'],
@@ -4241,14 +4255,19 @@ function connFatDeriv(R){ const c=R.conn;
         ['p_req','Maximum permitted pitch n·Z_r/V_sr',c.pReq,'in'],
         ['pitch','Provided pitch',c.pitch,'in'],
       ]}/>
+      <SG n="1">Stud limit state: Fatigue I or II (Condition 9.2)</SG>
+      <ML s={Tx`(\text{ADTT})_{SL,\,cross}=\dfrac{A}{\left[\tfrac{0.80}{1.75}(\Delta F)_{TH}\right]^{5}(365)(Y)(n)}=\dfrac{1040\times10^{8}}{(${nx(R.fatigue.fatGRatio,4)}\cdot${nx(c.SC92.TH,1)})^{5}\cdot365\cdot${nx(R.fatigue.lifeYr,0)}\cdot${nx(R.fatigue.nCyc,2)}}=${nx(c.adttSLcrossSC,0)}\;\text{trucks/day}`}/>
+      <ML s={Tx`(\text{ADTT})_{SL}=${nx(R.fatigue.adttSL,0)}\;${c.recFatISC?'\\ge':'<'}\;${nx(c.adttSLcrossSC,0)}\;\Rightarrow\;\text{${c.recFatISC?'Fatigue I':'Fatigue II'} recommended}${R.fatigue.lsMode==='auto'?'':'\\quad(\\text{manual '+(c.fatInf?'Fatigue I':'Fatigue II')+' used})'}`}/>
+      <SG n="2">Fatigue resistance of one stud (Eq. 6.10.10.2-1)</SG>
       <ML s={c.fatInf
-        ? Tx`Z_r=5.5\,d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue I, infinite life, Eq. 6.10.10.2-1})`
-        : Tx`Z_r=\alpha d^{2}=(${nx(c.alphaF,2)})d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue II, finite life})`}/>
+        ? Tx`(\Delta F)_n=(\Delta F)_{TH}=${nx(c.SC92.TH,1)}\;\text{ksi}\quad(\text{Eq. 6.6.1.2.5-1})\qquad Z_r=(\Delta F)_nA_{sc}=${nx(c.FnSC,2)}\cdot${nx(c.Asc,4)}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}`
+        : Tx`(\Delta F)_n=\left(\frac{A}{N}\right)^{1/5}=\left(\frac{1040\times10^{8}}{${nx(R.fatigue.Nfat,0)}}\right)^{1/5}=${nx(c.FnSC,3)}\;\text{ksi}\quad(\text{Eq. 6.6.1.2.5-2})\qquad Z_r=(\Delta F)_nA_{sc}=${nx(c.FnSC,3)}\cdot${nx(c.Asc,4)}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}`}/>
+      <DLinks items={[{to:'fatn',what:'N, (ADTT)_SL, n and Y'}]}/>
       <ML s={c.fatImpV? Tx`V_f=\gamma\,(V_{+}-V_{-})=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}` : Tx`V_f=\gamma\,(V_{+}-V_{-})(1.15)\,g_{V,1}=${nx(c.gammaFat,2)}\cdot${nx(c.fatStud.range,2)}\cdot1.15\cdot${nx(c.dfFatV,3)}=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
-      <div className="mnote">The load factor and the Z<sub>r</sub> branch are a pair (6.10.10.2 with Table 3.4.1-1): Fatigue&nbsp;I applies γ&nbsp;=&nbsp;1.75 against the infinite-life resistance 5.5d², Fatigue&nbsp;II applies γ&nbsp;=&nbsp;0.80 against αd². Which one is in force is decided on the Fatigue tab and follows the same (ADTT)<sub>SL</sub> crossover as the flange check.</div>
+      <div className="mnote">The load factor and the Z<sub>r</sub> branch are a pair (6.6.1.2.5 with Table 3.4.1-1): Fatigue&nbsp;I applies γ&nbsp;=&nbsp;1.75 against (ΔF)<sub>n</sub> = (ΔF)<sub>TH</sub> = 7.0 ksi, Fatigue&nbsp;II applies γ&nbsp;=&nbsp;0.80 against (ΔF)<sub>n</sub> = (A/N)<sup>1/5</sup>. Condition 9.2 of Table 6.6.1.2.3-1 (A = 1040×10⁸ ksi⁵, m = 5, (ΔF)<sub>TH</sub> = 7.0 ksi) has its own (ADTT)<sub>SL</sub> equivalent to infinite life (Eq. C6.6.1.2.3-1 with m = 5; 11,320 trucks/day for 75 yr and n = 1), so in AUTO the studs may be in Fatigue&nbsp;II while the flange detail is in Fatigue&nbsp;I. A manual Fatigue&nbsp;I / II choice on the Inputs tab applies to both. AASHTO LRFD 10th Ed. (2024).</div>
       <ML s={Tx`p\le\frac{n\,Z_r}{V_{sr}}=\frac{${nx(c.nRow,0)}\cdot${nx(c.Zr,2)}}{${nx(c.Vsr,3)}}=${nx(c.pReq,1)}\;\text{in}\qquad p_{prov}=${nx(c.pitch,1)}\;${c.pitchOK?'\\le':'>'}\;p_{req}\;${c.pitchOK?'\\checkmark':'\\text{N.G.}'}`}/>
       <DLinks items={[{to:'trans',seg:sgI(R,c.fatStud&&c.fatStud.si),what:'I (short-term n)'}]}/>
-      <div className="mnote">Z_r is the fatigue shear resistance of one stud (Fatigue&nbsp;II: α = 34.5 − 4.28·log N; Fatigue&nbsp;I: 5.5d²). V_sr = V_f·Q/I is the horizontal shear range per unit length on the short-term composite section, with V_f the shear range V<sub>+</sub> − V<sub>−</sub> of the fatigue truck (3.6.1.4.1, 30-ft rear axle spacing, one lane, IM 1.15) at each station; the station needing the closest pitch governs (x = {fmt(c.fatStud.x,1)} ft). Radial fatigue shear F<sub>fat</sub> (curved or skewed girders) is not included. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
+      <div className="mnote">Z_r is the fatigue shear resistance of one stud (Eq. 6.10.10.2-1) and p ≤ n·Z_r/V_sr is Eq. 6.10.10.1.2-1 (regularly spaced studs). V_sr = V_f·Q/I is the horizontal shear range per unit length on the short-term composite section, with V_f the shear range V<sub>+</sub> − V<sub>−</sub> of the fatigue truck (3.6.1.4.1, 30-ft rear axle spacing, one lane, IM 1.15) at each station; the station needing the closest pitch governs (x = {fmt(c.fatStud.x,1)} ft). Radial fatigue shear F<sub>fat</sub> (curved or skewed girders) is not included. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
     </Deriv>);
 }
 function ConnTab({R}){
@@ -4436,7 +4455,7 @@ function crModel(R,inp,o){
   const gdn=gdNoteLines(ext), owl=ownLines(R);   // owl (GD49): the owner load rules from GirderDetail
   // 1. Objectives
   S('obj','Objectives',{body:<React.Fragment>
-    <p className="cr-p">Design check of the built-up steel plate girder <b>{gt.girder}</b> ({gt.pos} girder, {gt.sp}){p.name?<span> of {p.name}</span>:null} to the AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6: section proportions (6.10.2), constructibility (6.10.3), Service II (6.10.4) and live-load deflection (2.5.2.6.2, optional), Strength I flexure (6.10.7, 6.10.8) and shear (6.10.9), fatigue (6.6.1, 6.10.5.3), transverse and bearing stiffeners (6.10.11), shear connectors (6.10.10){R.deckD?', transverse deck design (4.6.2.1, Table A4-1, 9.7.3)':''}, an HL-93 design-load rating (AASHTO MBE 6A) and the dead-load camber.</p>
+    <p className="cr-p">Design check of the built-up steel plate girder <b>{gt.girder}</b> ({gt.pos} girder, {gt.sp}){p.name?<span> of {p.name}</span>:null} to the AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024){edNote(R)}, Section 6: section proportions (6.10.2), constructibility (6.10.3), Service II (6.10.4) and live-load deflection (2.5.2.6.2, optional), Strength I flexure (6.10.7, 6.10.8) and shear (6.10.9), fatigue (6.6.1, 6.10.5.3), transverse and bearing stiffeners (6.10.11), shear connectors (6.10.10){R.deckD?', transverse deck design (4.6.2.1, Table A4-1, 9.7.3)':''}, an HL-93 design-load rating (AASHTO MBE 6A) and the dead-load camber.</p>
     <p className="cr-p">Demands: {R.useExt?<span>imported continuous-member envelopes ({(ext&&ext.source)||'external analysis'}{ext&&ext.producer?', '+ext.producer:''}); see 2. Input parameters.</span>:<span>ST-Girder’s built-in simple-span analysis (dead loads from the section and deck geometry, HL-93 live load times the distribution factors).</span>} Load factors: {(()=>{ const f=lfFac(ownLFOf(ext)), n=v=>{ const t=v.toFixed(4).replace(/0+$/,''), d=(t.split('.')[1]||'').length; return d<2?v.toFixed(2):t; }, own=f.gDC!==1.25||f.gLL!==1.75||f.gS2!==1.30; return 'Strength I '+n(f.gDC)+' DC + '+n(f.gDW)+' DW + '+n(f.gLL)+' (LL+IM); Service II DC + DW + '+n(f.gS2)+' (LL+IM)'+(own?' (owner load rules from GirderDetail; see 2. Input parameters, Owner load rules)':'')+'.'; })()}</p>
     {owl&&<React.Fragment><p className="cr-p"><b>Owner load rules ({R.lf.o}{R.lf.manual?', '+R.lf.manual:''}), sent by GirderDetail with the demands and applied to every girder check here{R.deckD?' and to the transverse deck design':''}</b> (worked in 2. Input parameters, Owner load rules, and in Demands, Load combinations{R.deckD?'; deck: Deck design (transverse)':''}):</p><ul className="cr-ul">{owl.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>}
     {gdn&&<React.Fragment><p className="cr-p"><b>{gdn.head}</b> {gdn.src}</p><p className="cr-p">Known differences between the two tools:</p><ul className="cr-ul">{gdn.diffs.map((d,i)=><li key={i}>{d}</li>)}</ul><p className="cr-p"><i>{gdn.tbc}</i></p></React.Fragment>}
@@ -4648,7 +4667,7 @@ function crModel(R,inp,o){
       if(all) sub(s,'All stations','6.10.9 · kip',<CrT wide head={['x (ft)','Panel','V_u','φV_n','D/C']}
         rows={sc.map(q=>[fmt(q.x,2),q.isEnd?'end':(q.tensionField?'interior (TFA)':'interior'),fmt(q.Vu,1),fmt(q.phiVn,1),fmt(q.dc,3)])}/>); }
     { const s=S('fat','Fatigue',{ref:'6.6.1 · 6.10.5.3'}), fa=R.fatigue.fatCalc||[], i=crNear(fa,R.fatigue.xGov), FC=fatCards(R,fa[i]||null);
-      sub(s,'Fatigue traffic and number of stress cycles','3.6.1.4 · 6.6.1.2.5',<CrTab el={FC.s1}/>);
+      sub(s,'Fatigue traffic and number of stress cycles','3.6.1.4 · 6.6.1.2.5',<CrTab el={FC.s1}/>); tag(s,'fat.n');
       sub(s,'Fatigue I or Fatigue II','6.6.1.2.3',<CrTab el={FC.s2}/>);
       sub(s,'Detail category and nominal fatigue resistance','6.6.1.2.5',<CrTab el={FC.s3}/>);
       if(FC.s4) sub(s,'Fatigue live load and stress range at the peak station (x = '+fmt(fa[i].x,1)+' ft)','3.6.1.4 · 6.6.1.2.1',<CrTab el={FC.s4}/>);
@@ -4742,7 +4761,7 @@ function CalcDoc({R,inp,o,idp,model}){
       <h2 className="cr-h1 cr-nonum">Table of contents:</h2>
       <ol className="cr-toc">{toc.map(s=><li key={s.id}><a href={'#'+s.id} onClick={crJump}>{s.n}. {s.t}</a>
         {s.subs.length?<ol>{s.subs.map((q,i)=><li key={q.id}><a href={'#'+q.id} onClick={crJump}>{s.n}.{i+1}. {q.t}</a></li>)}</ol>:null}</li>)}</ol>
-      <p className="cr-p cr-small">Prepared with ST-Girder (AASHTO LRFD BDS 10th Ed.). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi, k-ft unless noted. Detail: {o.detail==='all'?'governing locations worked, every checked station tabulated':'governing locations worked'}.</p></section>
+      <p className="cr-p cr-small">Prepared with ST-Girder (AASHTO LRFD BDS 10th Ed. (2024){edOwn(R)?' with the '+edOwn(R)+' rules on top':''}). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi, k-ft unless noted. Detail: {o.detail==='all'?'governing locations worked, every checked station tabulated':'governing locations worked'}.</p></section>
     {body}
   </CrRefCtx.Provider>;
 }
