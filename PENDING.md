@@ -20,7 +20,7 @@ Labels relabelled where every cited article checked out: Bridge Geometry (#324),
 - **Rebar development (ACI Rebar, CBC Development & Splice, abutment, Retaining Wall):** ℓdb = 2.4 db fy/√f′c and hook 38 db fy/(60√f′c) are 9th Ed.; the 10th has a new ℓdb equation (5.10.8.2.1a), new λrc bounds (5.10.8.2.1c), new hook ℓdh (5.10.8.2.4), f′c up to 15 ksi; compression development renumbered to 5.10.8.2.2.
 - **ST-Girder studs:** Qn = min(0.5Asc√(f′cEc), AscFu) and φsc 0.85 vs 10th Qn = 0.70AscFu, φsc 1.00; stud fatigue Zr form changed. GirderDetail stud module uses 0.85·Qn.
 - **index (MCT):** Lp = 1.0rt√(E/Fy) vs 10th 1.1rt; new Cb equation.
-- **Bridge Substructure Loading:** 2009 three-point seismic spectrum and essential/other classes vs 10th risk-targeted spectra and critical/recovery/ordinary; several renumbered tables.
+- **Bridge Substructure Loading:** 2009 three-point seismic spectrum and essential/other classes vs 10th risk-targeted spectra and critical/recovery/ordinary. Renumbered tables/figures and the MassDOT 9th Ed. note: branch claude/aashto10-substructure (wording only).
 - **psbeam:** debonding limits 25 % total / 40 % per row vs 10th 45 % per row plus termination rules.
 - **CBC Beam Capacity:** lightweight shear φ 0.80 vs 10th 0.90.
 - **Pile Designer:** group efficiency reduces in more cases than 10.7.3.9 (conservative); φc default 0.80.
