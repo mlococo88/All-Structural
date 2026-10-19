@@ -317,7 +317,7 @@ function defaultState(){
     padType:"circRein",      // 'circRein' | 'rectRein' | 'plain'
     method:"B",              // 'B' (MassDOT preferred) | 'A'
     // geometry (in)
-    geom:{ L:18.0, W:24.0, D:16.0, hri:0.50, nLayer:6, cover:0.25, tSteel:0.1196 },
+    geom:{ L:18.0, W:24.0, D:16.0, hri:0.50, nLayer:6, cover:0.25, tSteel:0.1196, edge:0.25 },   // edge: plan edge cover of the steel laminates (in), ≥ 1/4 in. [14.7.5.1 / 14.7.6.1]; files saved before it get 0.25 (migrate)
     // material
     mat:{ G:0.160, Fy:36.0, fc:4.0 },   // shear modulus ksi (Method B 0.160), laminate yield ksi, seat f'c ksi
     // loads (service, per bearing) — auto-filled from the Abutment app hand-off
@@ -325,7 +325,7 @@ function defaultState(){
       Pdl:80.0, Pll:55.0,                // dead / live service reactions (kip)
       thetaProfile:0.000, thetaDL:0.000, thetaLL:0.004, thetaCamber:0.000, thetaTrans:0.000, seatSlope:0.010,
       deltaS:0.35,                       // total design shear movement Δs (in) — thermal+creep, already ×1.2
-      Pmin:0                             // minimum vertical load from permanent loads for the anchorage check (kip); 0 = use P_DL [14.7.5.4 / C14.8.3.1]
+      Pmin:0                             // minimum vertical load from permanent loads for the anchorage check (kip); 0 = use P_DL [C14.8.3.1]
     },
     // MassDOT ↔ AASHTO toggles
     tog:{
@@ -364,6 +364,7 @@ const VALID={
   "geom.hri":{hard:[0.1,1.0],typ:[0.25,0.6],msg:"Internal layer thickness outside the typical 0.25–0.60 in range."},
   "geom.nLayer":{hard:[1,30],typ:[2,12],msg:"Number of internal layers outside the typical 2–12."},
   "geom.cover":{hard:[0,0.5],typ:[0.2,0.3],msg:"Cover layer usually 0.25 in [MassDOT Fig 3.5.7-5]."},
+  "geom.edge":{hard:[0,3],typ:[0.25,1],msg:"Edge cover of the steel laminates: at least 0.25 in [14.7.5.1 / 14.7.6.1]."},
   "geom.tSteel":{hard:[0.05,0.5],typ:[0.1196,0.25],msg:"Steel laminate ≥ 0.1196 in (11 ga) per MassDOT §3.5.7.5."},
   "mat.G":{hard:[0.05,0.30],typ:[0.130,0.200],msg:"Shear modulus outside 0.130–0.200 ksi [14.7.6.2 / MassDOT §3.5.7.4]."},
   "mat.Fy":{hard:[30,80],typ:[36,50],msg:"Laminate yield outside typical 36–50 ksi (ASTM A1011 Gr36+)."},
@@ -425,7 +426,7 @@ function buildInputs(){
   h+=panel("in-geom","I-2","Pad Geometry",`
     ${isCirc()?inpRow("Diameter D","geom.D","in"):inpRow("Length L (longitudinal)","geom.L","in")+inpRow("Width W (transverse)","geom.W","in")}
     ${inpRow("Internal layer thickness h<sub>ri</sub>","geom.hri","in")}
-    ${!isPlain()?inpRow("Number of internal layers n","geom.nLayer","")+inpRow("Cover layer thickness","geom.cover","in")+inpRow("Steel laminate thickness","geom.tSteel","in"):""}
+    ${!isPlain()?inpRow("Number of internal layers n","geom.nLayer","")+inpRow("Cover layer thickness","geom.cover","in")+inpRow("Steel laminate thickness","geom.tSteel","in")+inpRow("Edge cover of steel laminates","geom.edge","in",{title:"Elastomer cover over the plan edges of the steel laminates; minimum 1/4 in. [14.7.5.1 / 14.7.6.1]"}):""}
     <div class="derived" id="geomDeriv"></div>`);
   // material
   h+=panel("in-mat","I-3","Materials",`
@@ -437,7 +438,7 @@ function buildInputs(){
     <div class="in-note">Auto-filled from the Abutment app when opened via its “Open EDM” button; editable here.</div>
     ${inpRow("Dead-load reaction P<sub>DL</sub>","loads.Pdl","kip")}
     ${inpRow("Live-load reaction P<sub>LL</sub>","loads.Pll","kip")}
-    ${inpRow("Min. permanent load P<sub>min</sub> (0 = P<sub>DL</sub>)","loads.Pmin","kip",{title:"Minimum vertical force due to permanent loads, for the anchorage check H ≤ P_min/5 [14.7.5.4 / C14.8.3.1]. 0 or blank uses P_DL (per girder in the Girder Run)."})}
+    ${inpRow("Min. permanent load P<sub>min</sub> (0 = P<sub>DL</sub>)","loads.Pmin","kip",{title:"Minimum vertical force due to permanent loads, for the slip check H ≤ P_min/5 [14.8.3.1 / C14.8.3.1]. 0 or blank uses P_DL (per girder in the Girder Run)."})}
     <div class="subhead">Rotations (rad)</div>
     ${inpRow("Profile-grade rotation θ<sub>pg</sub>","loads.thetaProfile","rad")}
     ${inpRow("Dead-load rotation θ<sub>DL</sub>","loads.thetaDL","rad",{title:"Neglect if girder is cambered for DL [§3.5.7.6]."})}
@@ -456,7 +457,7 @@ function buildInputs(){
     ${selRow("Thermal movement factor","tog.thermalFactor",[[1.2,"×1.2 — MassDOT explicit [§3.5.7.6]"],[1.0,"×1.0 — none"]])}
     <div class="chk-row"><input type="checkbox" data-path="tog.fixedShear"${tg.fixedShear?" checked":""}><label>Bearing fixed against shear translation</label></div>
     <div class="chk-row"><input type="checkbox" data-path="tog.exteriorCheck"${tg.exteriorCheck?" checked":""}><label>Exterior-beam check (forces the 5.0 limit)</label></div>
-    <div class="chk-row"><input type="checkbox" data-path="tog.anchored"${tg.anchored?" checked":""}><label>Pad anchored / doweled against horizontal movement (anchorage check becomes "design the anchorage for H")</label></div>`);
+    <div class="chk-row"><input type="checkbox" data-path="tog.anchored"${tg.anchored?" checked":""}><label>Pad anchored / doweled against horizontal movement (slip and restraint checks become "design the anchorage for H")</label></div>`);
   // editable coefficients
   h+=panel("in-coef","I-6","Code Coefficients (editable — EOR confirms)",`
     <div class="in-note">Standard AASHTO values shown; editable so the engineer of record can confirm against the governing edition [14.7.5.3.3 / 14.7.6].</div>
@@ -637,18 +638,28 @@ function computeEDM(loadsOverride){
   R.coverMax=Math.max(0.7*hri,5/16);
   R.coverDC=isPlain()?null:(+g.cover)/R.coverMax;
   R.Hbu=G*A*(+L.deltaS)/hrt;
-  // anchorage [14.7.5.4 Method B / C14.8.3.1 Method A (friction coefficient 0.2)]: secure the pad if the shear force H > P_min/5 (P_min = minimum vertical force due to permanent loads)
+  // anchorage, slip check [14.8.3.1 / C14.8.3.1, friction coefficient 0.2; all pad types]: secure the pad if the shear force H > 0.2 P_min = P_min/5 (P_min = minimum vertical force due to permanent loads)
   // H = G·A·Δs/h_rt with Method B: specified G [14.7.5.2]; Method A and plain pads: upper-bound G of the durometer range (GmaxA) [14.7.6.2]
   const GAnc=(S.method==="B"&&!isPlain())?G:GmA;
   const PminIn=+L.Pmin, PminUsed=(PminIn>0)?PminIn:Pdl;
   const Hanc=GAnc*A*(+L.deltaS)/hrt;
   const ancDC=(PminUsed>0)?Hanc/(PminUsed/5):Infinity;
-  R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"C14.8.3.1",anchored:!!tg.anchored};
+  R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:"C14.8.3.1",mB:(S.method==="B"&&!isPlain()),anchored:!!tg.anchored};
+  // Method B restraint [14.7.5.4, Eq. 14.7.5.4-1]: a bearing without bonded external plates needs a restraint system when θs/n ≥ 3εa/Si;
+  // εa = σs/(3 Ba G Si²) [Eq. 14.7.5.3.3-15, Ba = 1.6, Eqs. 14.7.5.3.3-16/-17]; σs and θs = static + 1.75 × cyclic; rectangular: the larger of θs about L and θt about W
+  if(S.method==="B"&&!isPlain()){ const Ba=1.6, sigS=sigDL+1.75*sigLL, epsA=sigS/(3*Ba*G*Sf*Sf), thSL=thSt+1.75*thLongCyclic, thSW=isCirc()?0:thTransW, thS=Math.max(thSL,thSW), lhs=thS/n, rhs=3*epsA/Sf;
+    R.res={Ba,sigS,epsA,thSL,thSW,thS,lhs,rhs,dc:rhs>0?lhs/rhs:Infinity,anchored:!!tg.anchored}; } else R.res=null;
+  R.edge=isPlain()?null:{ce:+g.edge,min:0.25,pass:+g.edge>=0.25-1e-9};   // edge cover of the steel laminates ≥ 1/4 in. [14.7.5.1 / 14.7.6.1]
   // dashboard
   const dash=[]; const add=(id,name,dc,ref)=>dash.push({id,name,dc,pass:dc<=1.0001,ref});
   // anchorage item: a D/C check, or (pad anchored / doweled) an informational item with no D/C and no pass/fail, so nFail / governing D/C exclude it
   const addAnc=id=>{ if(R.anc.anchored) dash.push({id,name:"Anchorage ["+R.anc.ref+"] — anchored/doweled: design the anchorage for H = "+fmt(Hanc)+" kip",dc:null,pass:null,ref:"info"});
-    else add(id,"Anchorage H ≤ P_min/5 ["+R.anc.ref+"]",ancDC,"H ≤ P_min/5"); };
+    else add(id,"Slip (friction 0.2) H ≤ P_min/5 ["+R.anc.ref+"]",ancDC,"H ≤ P_min/5"); };
+  // restraint item (Method B, Eq. 14.7.5.4-1): a D/C check, or (anchored / doweled) informational
+  const addRes=()=>{ if(R.res.anchored) dash.push({id:"res",name:"Restraint [14.7.5.4] — anchored/doweled: restraint provided",dc:null,pass:null,ref:"info"});
+    else add("res","Restraint θs/n < 3εa/Si [14.7.5.4]",R.res.dc,"θs/n < 3εa/Si"); };
+  // edge cover: pass/fail against the 1/4 in. minimum, no D/C (it is a detailing minimum, so it does not enter the governing D/C)
+  const addEdge=(id,ref)=>dash.push({id,name:"Edge cover ≥ 0.25 in ["+ref+"]",dc:null,pass:R.edge.pass,ref:"ce ≥ 0.25 in"});
   if(isPlain()){
     add("sigP","Compressive stress — plain [14.7.6.3.2]",sigTL/Math.min(sigGS,+cf.sigCapPlainA),"σs ≤ min("+fmt(+cf.GSplainA)+"GS, "+fmt(+cf.sigCapPlainA)+" ksi)");
     add("shearP","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
@@ -662,7 +673,9 @@ function computeEDM(loadsOverride){
     add("shearB","Shear deformation [14.7.5.3.2]",(+L.deltaS)/(0.5*hrt),"γs ≤ 0.50");
     add("reinf","Steel laminate thickness [14.7.5.3.5]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
     add("cover","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.5.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
+    addEdge("edge","14.7.5.1");
     addAnc("anc");
+    addRes();
   } else {
     add("sigA","Compressive stress [14.7.6.3.2]",sigTL/Math.min(sigGS,sigCap),"σs ≤ min(1.25GS, cap)");
     add("shearA","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
@@ -671,11 +684,13 @@ function computeEDM(loadsOverride){
     add("stabA","Stability thickness [14.7.6.3.6]",hrt/(isCirc()?(+g.D)/4:Math.min(planL,planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3");
     add("reinfA","Steel laminate thickness [14.7.6.3.7]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
     add("coverA","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.6.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
+    addEdge("edgeA","14.7.6.1");
     addAnc("ancA");
   }
   R.dash=dash; R.nFail=dash.filter(d=>d.pass===false).length;
   // applicability warnings
-  if(!R.anc.anchored&&isFinite(ancDC)&&ancDC>1.0001) warn("Anchorage: H = "+fmt(Hanc)+" kip > P_min/5 = "+fmt(PminUsed/5)+" kip — the pad must be secured against horizontal movement [AASHTO "+R.anc.ref+"].");
+  if(!R.anc.anchored&&isFinite(ancDC)&&ancDC>1.0001) warn("Anchorage: H = "+fmt(Hanc)+" kip > P_min/5 = "+fmt(PminUsed/5)+" kip — slip check: the pad must be secured against horizontal movement [AASHTO "+R.anc.ref+"].");
+  if(R.res&&!R.res.anchored&&R.res.dc>1.0001) warn("Restraint: θs/n = "+fmt(R.res.lhs,5)+" ≥ 3εa/Si = "+fmt(R.res.rhs,5)+" — a restraint system is required for a bearing without bonded external plates [AASHTO 14.7.5.4].");
   if(sigDL<0.2) warn("Dead-load stress σ_DL = "+fmt(sigDL)+" ksi < 0.20 ksi — risk of bearing walking/creep; increase DL or reduce pad area.");
   if((+L.deltaS)>2.5) warn("Δs = "+fmt(+L.deltaS)+" in > 2.5 in — a PTFE sliding bearing is required [MassDOT §3.5.7.10].","err");
   if(+g.tSteel<0.1196 && !isPlain()) warn("Steel laminate < 0.1196 in (11 ga) — below the MassDOT minimum [§3.5.7.5].","err");
@@ -685,7 +700,7 @@ function computeEDM(loadsOverride){
   let nInErr=0;
   Object.keys(VALID).forEach(p=>{
     if(isCirc()?(p==="geom.L"||p==="geom.W"):p==="geom.D") return;
-    if(isPlain()&&["geom.nLayer","geom.cover","geom.tSteel","mat.Fy"].includes(p)) return;
+    if(isPlain()&&["geom.nLayer","geom.cover","geom.tSteel","geom.edge","mat.Fy"].includes(p)) return;
     const V=(p==="mat.G"&&S.method==="B"&&!isPlain())?VALID_G_METHOD_B:VALID[p], v=Number(getPath(S,p));
     if(isPlain()&&p.indexOf("geom.")===0){ if(!(v>0)){ nInErr++; warn(`Input error: ${p} = ${esc(getPath(S,p))} is blank or zero; results are not valid until it is corrected.`,"err"); } return; }   // plain pad: the ranges are for steel-reinforced pads
     if(!isFinite(v)||v<V.hard[0]||v>V.hard[1]){ nInErr++; warn(`Input error: ${p} = ${esc(getPath(S,p))} is blank, zero or outside the accepted range ${V.hard[0]}–${V.hard[1]}; results are not valid until it is corrected. ${V.msg}`,"err"); }
@@ -730,10 +745,10 @@ const EDM_CARDS={"o-geom":["tab-in","Plan Geometry & Shape Factor"],"o-rot":["ta
   sig:["tab-des","Compressive stress"],shear:["tab-des","Shear deformation"],gast:["tab-des","Axial shear strain"],rot:["tab-des","Rotational shear strain"],
   gs:["tab-des","Shear strain from movement"],comb:["tab-des","Combined static + cyclic limit"],stab:["tab-des","Stability"],stabT:["tab-des","Stability thickness"],
   uplift:["tab-des","Combined compression & rotation (uplift)"],reinf:["tab-des","Steel reinforcement thickness"],cover:["tab-des","Cover layer"],
-  anc:["tab-des","Anchorage"],hbu:["tab-des","Horizontal force"]};
+  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
 // dashboard item id -> the check block (data-chk) where it is worked
 const EDM_DASH2CHK={gast:"gast",comb:"comb",stab:"stab",shearB:"gs",reinf:"reinf",cover:"cover",anc:"anc",ancA:"anc",ancP:"anc",
-  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",reinfA:"reinf",coverA:"cover"};
+  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
 function edmLink(card,txt){ const cd=EDM_CARDS[card]; if(!cd)return "";
   return `<a href="#" class="wkA" data-tab="${cd[0]}" data-card="${card}"${txt?` data-txt="${esc(txt)}"`:""}>${txt?esc(txt)+" ":""}→ ${EDM_TABNAME[cd[0]]} · ${cd[1]}</a>`; }
 function edmWorkedIn(items){   /* items: [[card, txt]] */
@@ -842,7 +857,9 @@ function renderDesign(R){
       ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.5.3.5]","reinf")}
       ${eqB("Cover layer","AASHTO 14.7.5.1",[coverLine()],"","cover")}
       ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.5.1]","cover")}
+      ${edgeEq(R,"14.7.5.1")}
       ${ancEq(R)}
+      ${resEq(R)}
       ${hbuEq(R)}`);
   }
   // Method A
@@ -866,6 +883,7 @@ function renderDesign(R){
     ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.6.3.7]","reinf")}
     ${EDM_RPT?eqB("Cover layer","AASHTO 14.7.6.1",[coverLine()],"","cover"):""}
     ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.6.1]","cover")}
+    ${edgeEq(R,"14.7.6.1")}
     ${ancEq(R)}
     ${hbuEq(R)}`);
 }
@@ -882,14 +900,29 @@ function stabTEq(R,ref){ const g=S.geom, circ=isCirc();
     :`h_{rt} \\le \\dfrac{\\min(L,W)}{3} = \\dfrac{\\min(${fmtT(R.planL)},\\,${fmtT(R.planW)})}{3} = ${fmtT(Math.min(R.planL,R.planW)/3,3)}\\ \\text{in}, \\quad h_{rt} = ${fmtT(R.hrt,3)}\\ \\text{in}`],"","stabT"); }
 function edmDashDC(R,id){ const d=R.dash.find(x=>x.id===id); return d?d.dc:NaN; }
 function hbuEq(R){ return eqB("Horizontal force for substructure design (report only)","AASHTO 14.6.3.1",[`H_{bu} = \\dfrac{G\\,A\\,\\Delta_u}{h_{rt}} = \\dfrac{(${fmtT(S.mat.G,3)})(${fmtT(R.A,1)})(${fmtT(S.loads.deltaS,3)})}{${fmtT(R.hrt,3)}} = ${fmtT(R.Hbu,2)}\\ \\text{kip per bearing}`],`Uses the input G and Δu = Δs. Use the upper-bound G of the durometer range for the substructure force if G is specified by hardness.`,"hbu"); }
-function ancEq(R){ const a=R.anc; return eqB("Anchorage (pad secured against horizontal movement if exceeded)","AASHTO "+a.ref,[
+function ancEq(R){ const a=R.anc; return eqB("Anchorage — slip check, friction coefficient 0.2 (pad secured against horizontal movement if exceeded)","AASHTO 14.8.3.1 / "+a.ref,[
     `H = \\dfrac{G\\,A\\,\\Delta_s}{h_{rt}} = \\dfrac{(${fmtT(a.G,3)})(${fmtT(R.A,1)})(${fmtT(S.loads.deltaS,3)})}{${fmtT(R.hrt,3)}} = ${fmtT(a.H,2)}\\ \\text{kip}`,
     `H \\le \\dfrac{P_{min}}{5} = \\dfrac{${fmtT(a.Pmin,1)}}{5} = ${fmtT(a.Pmin/5,2)}\\ \\text{kip}`],
-    `${a.ref==="14.7.5.4"?"G = specified shear modulus (Method B) [14.7.5.2].":"G = highest value of the durometer range (least favourable for the shear force) [14.7.6.2], panel I-6."} Δs taken as the factored shear deformation. P<sub>min</sub> = minimum vertical force due to permanent loads${a.PminFromDL?" (taken as P<sub>DL</sub>; enter P<sub>min</sub> in I-4 if lower)":""}.`,"anc")
+    `H ≤ 0.2 P<sub>min</sub> = P<sub>min</sub>/5 (friction coefficient 0.2 between elastomer and clean concrete or steel, C14.8.3.1). ${a.mB?"G = specified shear modulus (Method B) [14.7.5.2].":"G = highest value of the durometer range (least favourable for the shear force) [14.7.6.2], panel I-6."} Δs taken as the factored shear deformation. P<sub>min</sub> = minimum vertical force due to permanent loads${a.PminFromDL?" (taken as P<sub>DL</sub>; enter P<sub>min</sub> in I-4 if lower)":""}.`,"anc")
   +(a.anchored&&EDM_RPT?edmResLine("Anchorage — pad anchored / doweled: design the anchorage for H = "+fmt(a.H)+" kip per bearing",null,a.ref,"INFO")
     :a.anchored?`<div class="checkline" data-chk="anc"><span class="verdict" style="background:#888">INFO</span>
     <span style="flex:1">Pad anchored / doweled (panel I-5) — design the anchorage for H = <b>${fmt(a.H)} kip</b> per bearing; H/(P<sub>min</sub>/5) = ${fmt(a.dc)} for reference (not a pass/fail check) <span class="eqref">[${a.ref}]</span></span></div>`
-    :checkLine("Anchorage H ≤ P_min/5",a.dc,"["+a.ref+"]","anc")); }
+    :checkLine("Slip H ≤ P_min/5",a.dc,"["+a.ref+"]","anc")); }
+/* Method B restraint, Eq. 14.7.5.4-1 (10th Ed.); worked as symbolic → substituted → result */
+function resEq(R){ const r=R.res; if(!r) return ""; const m=S.loads;
+  return eqB("Restraint of a bearing without bonded external plates (Eq. 14.7.5.4-1)","AASHTO 14.7.5.4",[
+    `\\sigma_s = \\sigma_{DL} + 1.75\\,\\sigma_{LL} = ${fmtT(R.sigDL,4)} + 1.75(${fmtT(R.sigLL,4)}) = ${fmtT(r.sigS,4)}\\ \\text{ksi}`,
+    `\\varepsilon_a = \\dfrac{\\sigma_s}{3\\,B_a\\,G\\,S_i^2} = \\dfrac{${fmtT(r.sigS,4)}}{3(${fmtT(r.Ba,1)})(${fmtT(+S.mat.G,3)})(${fmtT(R.S,3)})^2} = ${fmtT(r.epsA,5)}`,
+    `\\theta_s = \\theta_{st} + 1.75\\,\\theta_{cy} = ${fmtT(R.strain.thSt,4)} + 1.75(${fmtT(R.strain.thCy,4)}) = ${fmtT(r.thSL,4)}\\ \\text{rad}`+(isCirc()?"":`, \\quad \\theta_{t} = ${fmtT(r.thSW,4)}\\ \\text{rad} \\Rightarrow \\theta_s = ${fmtT(r.thS,4)}`),
+    `\\dfrac{\\theta_s}{n} = \\dfrac{${fmtT(r.thS,4)}}{${fmtT(R.n,0)}} = ${fmtT(r.lhs,5)} \\quad \\text{vs.} \\quad \\dfrac{3\\,\\varepsilon_a}{S_i} = \\dfrac{3(${fmtT(r.epsA,5)})}{${fmtT(R.S,3)}} = ${fmtT(r.rhs,5)}`],
+    `A restraint system is required when θ<sub>s</sub>/n ≥ 3ε<sub>a</sub>/S<sub>i</sub>. ε<sub>a</sub> per Eq. 14.7.5.3.3-15 with B<sub>a</sub> = 1.6 (Eqs. 14.7.5.3.3-16/-17); σ<sub>s</sub> and θ<sub>s</sub> are static + 1.75 × cyclic (live load cyclic). θ<sub>st</sub> includes the construction tolerance (rotation build-up)${isCirc()?"":"; rectangular: the larger of the rotation about L and the transverse rotation θ<sub>t</sub> about W"}. n = number of internal layers (not increased for the cover layers). A bearing with bonded external plates is secured per 14.8.3.1: tick “anchored / doweled” in I-5.`,"res")
+  +(r.anchored&&EDM_RPT?edmResLine("Restraint — pad anchored / doweled: restraint provided",null,"14.7.5.4","INFO")
+    :r.anchored?`<div class="checkline" data-chk="res"><span class="verdict" style="background:#888">INFO</span><span style="flex:1">Pad anchored / doweled (panel I-5) — restraint provided; (θ<sub>s</sub>/n)/(3ε<sub>a</sub>/S<sub>i</sub>) = ${fmt(r.dc)} for reference <span class="eqref">[14.7.5.4]</span></span></div>`
+    :checkLine("Restraint θs/n < 3εa/Si",r.dc,"[14.7.5.4]","res")); }
+/* edge cover of the steel laminates ≥ 1/4 in. (pass/fail, no D/C) */
+function edgeEq(R,ref){ const e=R.edge; if(!e) return ""; const v=e.pass?"PASS":"FAIL";
+  return eqB("Edge cover of the steel laminates","AASHTO "+ref,[`c_e = ${fmtT(e.ce,3)}\\ \\text{in} ${e.pass?"\\ge":"<"} 0.25\\ \\text{in}`],"Plan cover of elastomer over the edges of the steel laminates (input I-2).","edge")
+  +(EDM_RPT?edmResLine("Edge cover ≥ 0.25 in",null,ref,v):`<div class="checkline" data-chk="edge"><span class="verdict ${e.pass?"ok":"bad"}">${v}</span><span style="flex:1">Edge cover c<sub>e</sub> = ${fmt(e.ce,3)} in ${e.pass?"≥":"<"} 0.25 in <span class="eqref">[${ref}]</span></span></div>`); }
 function thermEqHtml(){
   const th=S.thermal||{span:75,alpha:6.5e-6,dT:100}, f=isFinite(+S.tog.thermalFactor)&&+S.tog.thermalFactor>0?+S.tog.thermalFactor:1.2;   // factor from the I-5 toggle
   const dTherm=thermalMovement(+th.span,+th.alpha,+th.dT,f);
@@ -1006,7 +1039,7 @@ window.addEventListener("beforeprint",()=>{ buildReport(); edmApplyPageCSS(true)
 window.addEventListener("afterprint",()=>edmApplyPageCSS(false));
 function inputEcho(){ const g=S.geom,m=S.mat,L=S.loads;
   const rows=[["Pad type",S.padType,""],["Design method",S.method,""],
-    isCirc()?["Diameter D",g.D,"in"]:["Length × Width",g.L+" × "+g.W,"in"],["Internal layer hri",g.hri,"in"],["Internal layers n",g.nLayer,""],["Cover",g.cover,"in"],["Steel laminate",g.tSteel,"in"],
+    isCirc()?["Diameter D",g.D,"in"]:["Length × Width",g.L+" × "+g.W,"in"],["Internal layer hri",g.hri,"in"],["Internal layers n",g.nLayer,""],["Cover",g.cover,"in"],["Steel laminate",g.tSteel,"in"],["Edge cover",g.edge,"in"],
     ["Shear modulus G",m.G,"ksi"],["Laminate Fy",m.Fy,"ksi"],
     ["P_DL",L.Pdl,"kip"],["P_LL",L.Pll,"kip"],["P_min (anchorage)",(+L.Pmin>0)?L.Pmin:"= P_DL","kip"],["Pad anchored / doweled",S.tog.anchored?"yes — anchorage force H = "+fmt(LAST&&LAST.anc?LAST.anc.H:NaN):"no",S.tog.anchored?"kip · "+edmLink("anc","H"):""],["Δs",L.deltaS,"in"],
     ["Combined limit",S.tog.combLimit,""],["Rotation tolerance",S.tog.rotTol,"rad"]];
@@ -1019,9 +1052,9 @@ function inputEcho(){ const g=S.geom,m=S.mat,L=S.loads;
    block per design section, and the print header / "Page X of Y" footer (@page margin boxes,
    edmPageCSS). No value is computed here: every number is LAST (computeEDM) as shown in the tabs. */
 const EDM_REFS=[
-  ["AASHTO LRFD, 10th Ed. (2024)","Art. 14.7.5, Method B: 14.7.5.1 (shape factor, cover layer), 14.7.5.2 (shear modulus), 14.7.5.3.2 (shear deformation), 14.7.5.3.3 (combined shear strain), 14.7.5.3.4 (stability), 14.7.5.3.5 (reinforcement), 14.7.5.4 (anchorage)"],
+  ["AASHTO LRFD, 10th Ed. (2024)","Art. 14.7.5, Method B: 14.7.5.1 (shape factor, cover layer), 14.7.5.2 (shear modulus), 14.7.5.3.2 (shear deformation), 14.7.5.3.3 (combined shear strain), 14.7.5.3.4 (stability), 14.7.5.3.5 (reinforcement), 14.7.5.4 (restraint of bearings without bonded external plates, Eq. 14.7.5.4-1; ε_a per Eq. 14.7.5.3.3-15); 14.7.5.1 / 14.7.6.1 (edge cover ≥ 1/4 in.)"],
   ["","Art. 14.7.6, Method A: 14.7.6.1 (cover layer), 14.7.6.2 (shear modulus), 14.7.6.3.2 (compressive stress), 14.7.6.3.4 (shear deformation), 14.7.6.3.5 (compression and rotation), 14.7.6.3.6 (stability), 14.7.6.3.7 (reinforcement)"],
-  ["","Art. 14.4.2.1 (design rotation, construction tolerance); Art. 14.6.3.1 (horizontal force H_bu); Table 6.6.1.2.5-3 (ΔF_TH, Category A); Art. 14.8.3.1 / C14.8.3.1 (anchorage of Method A and plain pads, friction coefficient 0.2: H ≤ P_min/5)"],
+  ["","Art. 14.4.2.1 (design rotation, construction tolerance); Art. 14.6.3.1 (horizontal force H_bu); Table 6.6.1.2.5-3 (ΔF_TH, Category A); Art. 14.8.3.1 / C14.8.3.1 (anchorage; slip check with friction coefficient 0.2: H ≤ P_min/5, all pad types)"],
   ["MassDOT LRFD Bridge Manual (written to the AASHTO LRFD 9th Ed.)","Part I §3.5.7, elastomeric bearings (§3.5.7.2 to §3.5.7.10; Figs 3.5.7-2 to 3.5.7-5); edition: verify"]];
 function edmPageCSS(){
   const p=S.proj||{}, q=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/\n/g," ");
