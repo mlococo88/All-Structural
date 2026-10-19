@@ -1316,3 +1316,36 @@ index 8a2a0af..038486a 100644
 -    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; DC2 (DC superstructure) includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). UF takes the DC factors (Strength 1.25 max / 0.90 min, Service 1.0): GirderDetail uses 1.25 / 0 (Service 0 where it relieves), which SubLoads cannot represent without a separate load type, so where UF relieves (minimum cases) 0.90 UF is counted.`; };
 +    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
 ```
+
+## 2026-10-19 — PR: claude/aashto10-substructure (AASHTO LRFD 10th Ed. renumbers and MassDOT edition note; wording only; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Engineer decision 2026-10-19 ("follow the owner"): in MassDOT mode, state that the MassDOT manual is written to the AASHTO LRFD 9th Ed. and that the calculations follow the AASHTO LRFD 10th Ed. (2024). The seismic hazard method (3.10.2 to 3.10.4, site factors) is **not** changed here (engineer decision pending; separate PR).
+
+### A10-1. Renumbered 10th Ed. tables and figures   [citation] [no result change]
+Each number was looked up in the 10th Ed. text; the values the tool uses are the same as in the 10th Ed. tables.
+- **Table 3.11.6.4-1 → Table 3.11.6.4.1-1** (h_eq for abutments perpendicular to traffic: 4.0 / 3.0 / 2.0 ft at H = 5 / 10 / ≥ 20 ft, the tool defaults `heq5: 4, heq10: 3, heq20: 2`). Table 3.11.6.4.1-2 is the retaining-wall table (walls parallel to traffic).
+  - `earthHtml` fact, before: `<span>h<sub>eq</sub> (Table 3.11.6.4-1)</span>`; after: `<span>h<sub>eq</sub> (Table 3.11.6.4.1-1)</span>`.
+  - Earth inputs note (anchor `balanced groundwater. h<sub>eq</sub> defaults are`), before: `h<sub>eq</sub> defaults are Table 3.11.6.4-1.</p>`; after: `h<sub>eq</sub> defaults are Table 3.11.6.4.1-1 (abutments; Table 3.11.6.4.1-2 is for walls parallel to traffic).</p>`.
+- **Table 3.12.2.1.1-1 → Table 3.12.2.1-1** (Procedure A ranges; steel 0 to 120 °F moderate, −30 to 120 °F cold; concrete 10 to 80 °F, 0 to 80 °F; same as `TEMP_A`).
+  - `TEMP_A` comment, before: `// Table 3.12.2.1.1-1, °F`; after: `// Table 3.12.2.1-1, °F`.
+  - Temperature card subtitle (anchor `superstructure (Table 3.12.2.`), before: `(Table 3.12.2.1.1-1)`; after: `(Table 3.12.2.1-1)`.
+  - Manual, Temperature item, before: `Procedure A uses the ranges of Table 3.12.2.1.1-1 by climate`; after: `… Table 3.12.2.1-1 by climate`.
+- **Figures 3.12.2.2.1-1 to -4 → Figures 3.12.2.2-1 to -4** (T_MaxDesign / T_MinDesign contour maps).
+  - Temperature card subtitle, before: `from Figures 3.12.2.2.1-1 to -4`; after: `from Figures 3.12.2.2-1 to -4`.
+- References row (anchor `3.11.5, 3.11.6.4 (`), before: `3.11.6.4 (Table 3.11.6.4-1); 3.12.2 (Table 3.12.2.1.1-1);`; after: `3.11.6.4 (Tables 3.11.6.4.1-1, -2); 3.12.2 (Table 3.12.2.1-1, Figures 3.12.2.2-1 to -4);`.
+
+### A10-2. MassDOT mode: manual written to the 9th Ed.; calculations 10th Ed.   [wording] [no result change]
+- Manual, owner item, before: `<li><b>MassDOT</b> (Bridge Manual Part I, Chapter 3, January 2025):`; after: `<li><b>MassDOT</b> (Bridge Manual Part I, Chapter 3, January 2025; written to the AASHTO LRFD 9th Ed.; calculations per AASHTO LRFD 10th Ed. (2024)):`.
+- Report design-basis row "Owner requirements" (anchor `rows.push(['Owner requirements'`), before: `'MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025): temperature,`; after: `'MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025; written to the AASHTO LRFD 9th Ed.; calculations per AASHTO LRFD 10th Ed. (2024)): temperature,`.
+- References row `['MassDOT', …`, before: `(January 2025): 3.1.6,`; after: `(January 2025; written to the AASHTO LRFD 9th Ed.): 3.1.6,`.
+- Report cover line (anchor `' · MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025`), before: `(January 2025)'`; after: `(January 2025; written to the AASHTO LRFD 9th Ed.)'`.
+- DXF index sheet design basis, before: `' MassDOT Bridge Manual Part I, Chapter 3.'`; after: `' MassDOT Bridge Manual Part I, Chapter 3 (written to the AASHTO LRFD 9th Ed.).'`.
+
+### Verification
+- `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: all scripts pass.
+- Headless Chromium, origin/main (12b90f7) vs branch, built-in project, four cases (owner AASHTO / MassDOT × temperature Procedure A / B): `MODEL.C` (every computed result) identical; every tab's text (except 3D) and the full printed report identical except the lines listed above; localStorage keys identical; no console errors.
+- `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"`: all sections identical.
+
+### Open items (not changed)
+- Seismic hazard (3.10.2 to 3.10.4, site factors, operational classes): pending engineer decision; separate PR.
+- In MassDOT mode with Procedure B selected, the Temperature card subtitle reads "Procedure MassDOT 3.1.8, T_MaxDesign and T_MinDesign from Figures 3.12.2.2-1 to -4" (the figure text follows `T.proc !== 'A'`). Pre-existing display wording; the MassDOT ranges are what is used. Not changed.
