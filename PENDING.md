@@ -15,6 +15,22 @@ Last updated: 2026-10-18 (deflection item removed: already decided, LL8).
 | 5 | Owner phase 3b part 1 readings | GirderDetail | Shipping limits as warnings; RIDOT T2 thickness ratios; transition saving as weld equivalent; MassDOT quarter-point splices; CTDOT girder count/spacing as warnings; RIDOT skew G13; CTDOT construction wind advisory and L/100 camber shown separately | GD67 (a)–(g) |
 | 6 | Owner phase 3b part 2 readings | GirderDetail | RIDOT 40 in diaphragm rule and X/K by S/d; CTDOT web-depth rule and channel table; CTDOT 4 bolts as a warning; MassDOT 0.5d uses girder depth; fascia stiffener rule incl. connection plates; RIDOT stiffener minimums; RIDOT fatigue categories (warns on B′ and studs); RIDOT jacking includes m and η | GD68 (a)–(h) |
 
+### AASHTO LRFD 10th Ed. gaps (inventory 2026-10-19; engineer decision "follow the owner, else 10th")
+Labels relabelled where every cited article checked out: Bridge Geometry (#324), Section Property Calculator (#325). The tools below use provisions the 10th Ed. defines differently, so their labels were NOT changed; each needs an engineer decision (result changes). Some already say "10th Ed." while using the older provision.
+- **Rebar development (ACI Rebar, CBC Development & Splice, abutment, Retaining Wall):** ℓdb = 2.4 db fy/√f′c and hook 38 db fy/(60√f′c) are 9th Ed.; the 10th has a new ℓdb equation (5.10.8.2.1a), new λrc bounds (5.10.8.2.1c), new hook ℓdh (5.10.8.2.4), f′c up to 15 ksi; compression development renumbered to 5.10.8.2.2.
+- **ST-Girder studs:** Qn = min(0.5Asc√(f′cEc), AscFu) and φsc 0.85 vs 10th Qn = 0.70AscFu, φsc 1.00; stud fatigue Zr form changed. GirderDetail stud module uses 0.85·Qn.
+- **index (MCT):** Lp = 1.0rt√(E/Fy) vs 10th 1.1rt; new Cb equation.
+- **Bridge Substructure Loading:** 2009 three-point seismic spectrum and essential/other classes vs 10th risk-targeted spectra and critical/recovery/ordinary; several renumbered tables.
+- **psbeam:** debonding limits 25 % total / 40 % per row vs 10th 45 % per row plus termination rules.
+- **CBC Beam Capacity:** lightweight shear φ 0.80 vs 10th 0.90.
+- **Pile Designer:** group efficiency reduces in more cases than 10.7.3.9 (conservative); φc default 0.80.
+- **Spread Footing:** depth factors (option) Vesić vs 10th arctan form, dq ≤ 1.4, Nq term only.
+- **Stone Arch:** 3.6.1.2.6a LLDF 1.15 for buried structures vs tool's rule.
+- **abutment:** As cited to 3.10.4.2 (deleted in 10th); several renumbered articles.
+- **elastomeric:** cover-layer limit (10th: greater of 0.7hri and 5/16 in); 14.7.6.4 citation.
+- **Gusset:** φ for gusset compression / shear yielding and chord splice differ between LRFD 10th and MBE 3rd; decide which governs for LRFR.
+Full per-tool list (OK / renumbered / changed): agent inventory of 2026-10-19 (session scratchpad aashto-ed/inventory.md).
+
 ## 2. Blocked — reference documents not available
 
 Items marked "pending reference" in the owner rules panel. Add the documents to `Structural_References` to unblock.
