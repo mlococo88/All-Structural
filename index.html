@@ -16115,15 +16115,25 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 </div>
                 <div style={{marginTop:'10px',display:'flex',gap:'8px',alignItems:'center'}}>
                   <button onClick={()=>{
-                    // Re-run auto-detection, clearing manual overrides
+                    // Re-run auto-detection of the result cases (LL Max / LL Min), clearing manual
+                    // case picks. Every other field of an entry (category, γLL, customGam, …) is kept
+                    // (2026-10-19; it used to be dropped, so legal trucks fell back to Design and the
+                    // rating-level γLL). A vehicle with no entry gets the category and γLL the
+                    // auto-populate pass would give it.
                     const loadedLCs = [...new Set(origRows.map(r=>r.load))];
-                    const next = {};
+                    const next = {...vehicleLCMap};
                     (cfg?.selectedVehicles||[]).forEach(vn=>{
                       const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
                       const posLC = vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
                                  || vLCs[0];
                       const negLC = vLCs.find(lc=>lc.includes('(min)')||lc.includes('min'));
-                      if (posLC) next[vn] = { posLC, negLC: negLC||'' };
+                      const old = vehicleLCMap[vn];
+                      if (old) { next[vn] = {...old, posLC:posLC||'', negLC:negLC||''}; return; }
+                      if (!posLC) return;
+                      const category = defaultVehicleCategory(vn);
+                      const g = vehicleGamLL(category, ratingLimitState, ratingMethod, ratingAdtt, vn);
+                      next[vn] = { posLC, negLC:negLC||'', category,
+                                   gamLLinv:+g.inv.toFixed(4), gamLLop:+g.op.toFixed(4), customGam:false };
                     });
                     setVehicleLCMap(next);
                   }} style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:'5px',
