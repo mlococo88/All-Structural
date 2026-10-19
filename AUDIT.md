@@ -70,8 +70,9 @@ Sizes are on-disk bytes rounded. "Blob" means embedded base64 images, inlined li
 
 | From | To | How | Notes |
 |---|---|---|---|
-| `index.html` | `lldf.html`, `psbeam.html`, `stgirder.html` | `<iframe>` (:21106) whose `src` comes from `bridgeSuite.v1.appPaths` (defaults at :300) | All three exist. **File names are load-bearing:** renaming or moving breaks the default paths. |
-| `lldf.html`, `psbeam.html`, `stgirder.html` | each other and `index.html` | `bridgeNav()` / `BridgeApps.href` (e.g. lldf :3454-3462; defaults lldf :673, psbeam :644, stgirder :547) | Same shared bootstrap code in all four files (see §2.1). |
+| `index.html` | `lldf.html`, `psbeam.html` | `<iframe>` (:21106) whose `src` comes from `bridgeSuite.v1.appPaths` (defaults at :300) | Both exist. **File names are load-bearing:** renaming or moving breaks the default paths. `stgirder.html` was embedded too until 2026-10-19 (see the note under §1.3). |
+| `lldf.html`, `psbeam.html` | each other and `index.html` | `bridgeNav()` / `BridgeApps.href` (e.g. lldf :3454-3462; defaults lldf :673, psbeam :644) | Same shared bootstrap code in the three files (see §2.1). |
+| `Steel Bridge Beam Modules.html` (GirderDetail) | `stgirder.html` | `bridgeSuite.v1.girderDemands` ("Send to ST-Girder", HANDOFF.md §4.9) and "Open ST-Girder now" (`stgirder.html#gdpull=…`, file name from `bridgeSuite.v1.appPaths.stgirder`) | ST-Girder's only connection since 2026-10-19. |
 | `abutment_calculator.html` | `elastomeric_design_module.html` | `window.open("elastomeric_design_module.html","edm")` (:4249) plus postMessage `app:"abutment-edm"` | Both must stay in the same folder. |
 | `Concrete Beam Capacity.html` | (embedded copy of) `ACI Rebar Development Length.html` | `srcdoc` iframe, verbatim copy (suite line = standalone line + 5048 after ~line 187) | Only two CSS hunks differ. |
 | `Steel Bridge Beam Modules.html` | (embedded) PlateLine | `srcdoc` built from the plain-text `<script type="text/plain" id="pl-src">` block (base64 `PL_B64` at :2229 until 2026-10-15; fixlog PLSRC) | No standalone PlateLine file exists. |
@@ -91,21 +92,23 @@ The following files are **not reachable from `index.html`** and have no links in
 - `Bridge Geometry.html`
 - all the building tools
 
-### 1.3 The `bridgeSuite.v1.*` hand-off protocol (index / lldf / psbeam / stgirder)
+### 1.3 The `bridgeSuite.v1.*` hand-off protocol (index / lldf / psbeam; stgirder until 2026-10-19)
 
 | Key | Producer | Consumers | Schema check on read? |
 |---|---|---|---|
-| `.handoffs`, `.latestId`, `.updatedAt`, `.adopted.<app>` | index (MCT demands) | psbeam, stgirder | `_schema` is `psbeam-external-demands` for **both** the PS and steel flavours (index :132); the two share one `handoffId` (see §4.1) |
-| `.lldf`, `.lldf.updatedAt` | lldf | index, psbeam, stgirder | index checks version only, **not `_schema`** (index :6596) |
-| `.dlLoads` | lldf | index, psbeam, stgirder | yes (`bridge-dl-loads`) |
-| `.lldfGeom`, `.lldfGeom.seen` (+ `.updatedAt`, `.adopted.lldf` from Bridge Geometry) | index (also psbeam/stgirder, Bridge Geometry) | lldf | yes (`bridge-lldf-geometry`, version, every number; HANDOFF.md §4.2) — index always sends `type:'a'` (steel) even for PS girders (index :19958) |
+| `.handoffs`, `.latestId`, `.updatedAt`, `.adopted.<app>` | index (MCT demands) | psbeam (stgirder until 2026-10-19) | `_schema` is `psbeam-external-demands` for **both** the PS and steel flavours (index :132); the two share one `handoffId` (see §4.1) |
+| `.lldf`, `.lldf.updatedAt` | lldf | index, psbeam | index checks version only, **not `_schema`** (index :6596) |
+| `.dlLoads` | lldf | index, psbeam | yes (`bridge-dl-loads`) |
+| `.lldfGeom`, `.lldfGeom.seen` (+ `.updatedAt`, `.adopted.lldf` from Bridge Geometry) | index (also psbeam, Bridge Geometry; lldf refuses an old payload from stgirder) | lldf | yes (`bridge-lldf-geometry`, version, every number; HANDOFF.md §4.2) — index always sends `type:'a'` (steel) even for PS girders (index :19958) |
 | `.psSection`, `.psSection.updatedAt` | psbeam | index, lldf | **no `_schema`/version check** (index :6024-6027, :6139) |
-| `.capacity`, `.capacity.updatedAt`, `.capacity.adopted.mct` | psbeam, stgirder | index | yes (`bridge-design-capacity`) |
+| `.capacity`, `.capacity.updatedAt`, `.capacity.adopted.mct` | psbeam (stgirder until 2026-10-19; index ignores its payloads) | index | yes (`bridge-design-capacity`) |
 | `.designBeam`, `.beamRoster` | lldf / chip UI | all | yes |
-| `.geometryChanges` (+ `.updatedAt`, `.adopted.<app>`) | index, stgirder | others | — (human-readable diff only) |
+| `.geometryChanges` (+ `.updatedAt`, `.adopted.<app>`) | index | psbeam | — (human-readable diff only) |
 | `.locks`, `.syncLog.<app>`, `.lockSnap.<app>`, `.projects`, `.currentProjectId`, `.migrated.<app>`, `.appPaths`, `.demandsKind`, `.materials`, `.projectMeta` | shared | shared | — |
 
 `Bridge Geometry.html` takes part only as a sender on `.lldfGeom` ("Send to LL & DL", HANDOFF.md §4.2). It reads no `bridgeSuite.*` key except `.projectMeta` (for the project name in the envelope).
+
+**ST-Girder disconnected (engineer decision 2026-10-19).** `stgirder.html` is connected to GirderDetail only: it reads `bridgeSuite.v1.girderDemands` (HANDOFF.md §4.9) and writes only its own `appPaths` entry and `girderDemands.adopted.stgirder`. It no longer carries the shared bootstrap block (BridgeBeam, BridgeHandoff, BridgeGeometryChanges, BridgeProjects / BridgeApps / BridgeLocks) or the superReactions glue; the shared block is now in index.html, psbeam.html and lldf.html only (CLAUDE.md §3), without the `stgirder` entries (`DEF`, `NAMES`, `APPS`, `LOG_APPS`). MCT no longer embeds ST-Girder, sends it steel demands or receives its capacity (a saved ST-Girder capacity zone is kept with the same values as a flagged MCT manual zone, so ratings are unchanged, with a notice); PS-Beam and LL & DL have no ST-Girder links; LL & DL refuses geometry from ST-Girder; Substructure Loading no longer lists ST-Girder reactions. On open, ST-Girder clears saved MCT / LL & DL data and removes its own published copies, with a notice. Details: HANDOFF.md §4 (note under the channel table), fixlog/stgirder.md DISC, fixlog/index.md / psbeam.md / lldf.md / Bridge Substructure Loading.md STDISC. Items below that describe ST-Girder's MCT / LL & DL links (e.g. §4.1 S3, S4; A17; B11) are historical.
 
 ---
 

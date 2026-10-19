@@ -42,8 +42,9 @@
        bridgeSuite.v1.designBeam — the selected beam. Whichever app writes it,
            the others follow: same tab through onChange(), other tabs through the
            browser's storage event.
-     This block is byte-identical in index.html / psbeam.html / stgirder.html /
-     lldf.html — edit it in one place and copy it to the other three.
+     This block is byte-identical in index.html / psbeam.html / lldf.html — edit
+     it in one place and copy it to the other two. (ST-Girder, stgirder.html, left
+     the suite on 2026-10-19 and no longer carries it.)
      ═══════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
@@ -117,7 +118,8 @@ var st=document.createElement('style'); st.textContent=css;
 <div id="root"></div>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite shared-storage handoff (v1). Plain JS, shared verbatim by the
-     analysis app (this file) and the two design apps (psbeam.html, stgirder.html).
+     analysis app (this file) and the design app psbeam.html (ST-Girder, stgirder.html,
+     no longer reads it: engineer decision 2026-10-19).
      One localStorage channel; keyed library + latest pointer; explicit version guard.
      Spec: handoff-data-format-spec.md
      ═════════════════════════════════════════════════════════════════════════ -->
@@ -232,9 +234,10 @@ var st=document.createElement('style'); st.textContent=css;
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite unified project registry (v1) — one named project spans all
-     four apps; each app owns a "slice". Same-origin localStorage; identical in
+     three apps; each app owns a "slice". Same-origin localStorage; identical in
      every file. Legacy per-app project libraries are migrated once and kept.
-     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,stgirder,lldf},demands} }
+     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,lldf},demands} }
+           (projects saved before 2026-10-19 may also hold a "stgirder" slice; no app reads it now)
            bridgeSuite.v1.currentProjectId  · bridgeSuite.v1.migrated.<app>
      ═════════════════════════════════════════════════════════════════════════ -->
 <script>
@@ -298,9 +301,8 @@ var st=document.createElement('style'); st.textContent=css;
 /* ============================================================================
    SHARED APP PATHS  ·  bridgeSuite.v1.appPaths
    ----------------------------------------------------------------------------
-   The four apps link to each other by bare file name: MCT embeds "psbeam.html"
-   in an iframe, PS-Beam opens "stgirder.html" in a tab, every app's back link
-   points at "index.html". That works only while each file is named exactly what
+   The three apps link to each other by bare file name: MCT embeds "psbeam.html"
+   in an iframe, every app's back link points at "index.html". That works only while each file is named exactly what
    the others expect. Rename one, keep a second download called
    "psbeam (1).html", or serve the folder from something that answers unknown
    paths with the index page, and a link lands on the wrong document -- or on a
@@ -318,13 +320,14 @@ var st=document.createElement('style'); st.textContent=css;
    MCT itself. Now a sighting only answers for the folder it was made in, and
    no app will ever resolve a sibling to its own file name.
 
-   This block is byte-identical in index.html / psbeam.html / stgirder.html /
-   lldf.html. Edit one, edit all four.
+   This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
+   one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+   keeps only a reduced app-path record of its own, which GirderDetail reads.)
    ========================================================================== */
 (function(){
   var KEY='bridgeSuite.v1.appPaths';
-  var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
-  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
+  var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};
+  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
@@ -493,7 +496,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
    and records what changed. While a channel is UNLOCKED the old behaviour
    applies: an orange "data available" badge that the engineer clicks to adopt.
 
-   Lock state is shared across all four apps — locking the distribution-factor
+   Lock state is shared across all three apps — locking the distribution-factor
    channel anywhere locks it everywhere. Each consuming app keeps its own
    private snapshot of the values it held at the moment of locking, so that
    unlocking can hand the engineer's own numbers back.
@@ -504,7 +507,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
      live   ORANGE  locked — auto-adopting, inputs read-only
      warn   AMBER   locked but the payload failed a check; nothing was applied
 
-   This block is byte-identical in all four apps. Edit it in one place and
+   This block is byte-identical in all three apps. Edit it in one place and
    re-inject; do not patch a single copy.
    ========================================================================== */
 (function(){
@@ -545,7 +548,8 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
     project:   {label:'Project info',         short:'Project',   producer:'*',
                 key:NS+'.projectMeta',     at:null,
                 fields:'project name, bridge ID, prepared by, date, job number'},
-    /* The analysis hand-off, MCT -> the two design apps. `key` is the whole
+    /* The analysis hand-off, MCT -> PS-Beam (ST-Girder no longer reads it,
+       2026-10-19). `key` is the whole
        handoff map rather than one payload, so it carries no producedAt of its
        own: hasData() only needs to know the map is non-empty, and the timestamp
        comes from the companion key BridgeHandoff already maintains. Single
@@ -557,7 +561,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
 
   /* App id -> short display name, used to attribute change-log rows and to
      name the app in the suite panel header. */
-  var APPS={mct:'MCT', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL'};
+  var APPS={mct:'MCT', psbeam:'PS-Beam', lldf:'LL & DL'};
 
   /* Default channel order for the suite panel: the two the LL & DL app drives
      first (they are the ones engineers lock day to day), then the rest. */
@@ -588,7 +592,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
   /* Which app is allowed to auto-publish this channel while it is locked.
 
      `capacity` and `geometry` each have more than one possible producer
-     (PS-Beam and ST-Girder for capacity; MCT and both design apps for
+     (any app may publish capacity; MCT and PS-Beam for
      geometry). If every producer with a tab open republished on the lock, two
      tabs would overwrite each other on every keystroke and the consumer would
      see an endless alternating toast. So exactly one app drives: the one that
@@ -632,7 +636,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
      adopting the same publish in the same instant would otherwise both
      read-modify-write the single key and the slower writer would silently
      drop the faster one's entry. Each app owns its shard; logs() merges. */
-  var LOG_APPS=['mct','psbeam','stgirder','lldf'];
+  var LOG_APPS=['mct','psbeam','lldf'];
   function logKey(app){ return K_LOG+'.'+(app||'app'); }
   function logShard(app){ var a=rd(logKey(app)); return Array.isArray(a)?a:[]; }
   function logApps(){
@@ -2068,116 +2072,6 @@ function buildPSBeamExport({cfg, origRows, nodePositions, isGFS, gfsMember, gfsM
                 LL_neg:llNegLC||'' },
     stationCount:stations.length, stations,
     warnings,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Steel-beam export — same force-effect demands as the PS-Beam export, PLUS the
-// plate-girder section makeup and transitions along the member. For NEW welded
-// plate girders: top flange, bottom flange, web plate only (no built-up rivets).
-// Captures where each of the three plates changes dimension (transition stations).
-// ─────────────────────────────────────────────────────────────────────────────
-function buildSteelBeamExport({cfg, origRows, nodePositions, isGFS, gfsMember, gfsMembers, span}){
-  // Reuse the demand builder verbatim so the force effects are identical
-  const base = buildPSBeamExport({cfg, origRows, nodePositions, isGFS, gfsMember, gfsMembers, span});
-  const AS = cfg.aremaSection||{};
-  const lib = AS.sectionLibrary||[];
-
-  // Equivalent welded-plate-girder dims for a library section — the SAME computation
-  // as the "Applied Section Schedule" (matches depth, Ix, gross area, shear area of the
-  // built-up section). Returns the three plate elements the steel-beam tool designs.
-  const platesForSection = (libId) => {
-    const libSec = lib.find(s=>s.id===libId) || lib[0];
-    if(!libSec) return null;
-    try{
-      const def = {...AS, ...libSec};
-      const sec = computeAremaSection(def, false);
-      const eq  = computeEquivMCTSection(sec, def);
-      return {
-        depth:      +(+eq._D).toFixed(4),                 // total section depth (in)
-        topFlange:{ width:+(+eq._B).toFixed(4), thickness:+(+eq._tf).toFixed(4) },
-        web:      { depth:+(+eq._hw).toFixed(4), thickness:+(+eq._tw).toFixed(4) },  // clear web height
-        botFlange:{ width:+(+eq._B).toFixed(4), thickness:+(+eq._tf).toFixed(4) },
-        properties:{ Ix_gross:+(+sec.IxG).toFixed(2), A_gross:+(+(sec.totAg)||0).toFixed(3), Aw:+(+(sec.Aw)||0).toFixed(3) },
-        section: libSec.name || libSec.id || '',
-      };
-    }catch(e){ return null; }
-  };
-
-  // Build the zone list (start/end in member-local ft) + equivalent plates.
-  let zones = [];
-  if (isGFS && gfsMember) {
-    const g=cfg.gfs||{};
-    const mem=(gfsMembers||[]).find(m=>m.key===gfsMember);
-    const defs=mem?.type==='girder'?(g.girderDefs||[]):mem?.type==='floorbeam'?(g.floorbeamDefs||[]):(g.stringerDefs||[]);
-    const aid=(g.memberAssign||{})[gfsMember];
-    const def=(aid&&defs.find(d=>d.id===aid))||defs[0];
-    const L = base.member?.totalLength || (+span||0);
-    if(def?.zones?.length){
-      const isFrac = mem?.type==='stringer';
-      zones = [...def.zones].sort((a,b)=>(+a.startX||0)-(+b.startX||0)).map(z=>{
-        const pl=platesForSection(z.libId);
-        return pl ? {
-          startX:+(isFrac?(+z.startX||0)*L:(+z.startX||0)).toFixed(4),
-          endX:+(isFrac?(+z.endX||0)*L:(+z.endX||0)).toFixed(4),
-          ...pl,
-        } : null;
-      }).filter(Boolean);
-    }
-  } else {
-    const totalLen = base.member?.totalLength || (+span||0);
-    if(AS.zonesEnabled && AS.sectionZones?.length){
-      // Build a full contiguous zone list: the base section (library[0]) fills any
-      // range NOT covered by an explicit zone ("Section 1 elsewhere" in the UI).
-      const baseId = lib[0]?.id;
-      const explicit = [...AS.sectionZones].sort((a,b)=>+(a.startX||0)-+(b.startX||0));
-      const segs=[]; let cursor=0;
-      explicit.forEach(z=>{
-        const s=+(+z.startX||0), e=+(+z.endX||0);
-        if(s>cursor+1e-6) segs.push({startX:+cursor.toFixed(4), endX:+s.toFixed(4), libId:baseId}); // base gap
-        segs.push({startX:+s.toFixed(4), endX:+e.toFixed(4), libId:z.sectionId});
-        cursor=Math.max(cursor,e);
-      });
-      if(cursor<totalLen-1e-6) segs.push({startX:+cursor.toFixed(4), endX:+totalLen.toFixed(4), libId:baseId}); // trailing base
-      zones = segs.map(sg=>{ const pl=platesForSection(sg.libId); return pl?{startX:sg.startX,endX:sg.endX,...pl}:null; }).filter(Boolean);
-    } else {
-      const pl=platesForSection(lib[0]?.id);
-      if(pl) zones=[{startX:0, endX:+totalLen.toFixed(4), ...pl}];
-    }
-  }
-
-  // Derive transition stations per plate element — where a dimension actually changes.
-  // Merge consecutive zones with identical plates first (so "Section 1 → Section 1"
-  // adjacency doesn't create a spurious transition).
-  const merged=[];
-  const samePlates=(a,b)=> a&&b && a.topFlange.width===b.topFlange.width && a.topFlange.thickness===b.topFlange.thickness
-                        && a.web.depth===b.web.depth && a.web.thickness===b.web.thickness
-                        && a.botFlange.width===b.botFlange.width && a.botFlange.thickness===b.botFlange.thickness;
-  zones.forEach(z=>{
-    const last=merged[merged.length-1];
-    if(last && samePlates(last,z) && Math.abs(last.endX-z.startX)<1e-6) last.endX=z.endX;  // extend
-    else merged.push({...z});
-  });
-  const transitions = { topFlange:[], web:[], botFlange:[] };
-  const flChanged=(a,b)=>!a||!b||a.width!==b.width||a.thickness!==b.thickness;
-  const webChanged=(a,b)=>!a||!b||a.depth!==b.depth||a.thickness!==b.thickness;
-  for(let i=1;i<merged.length;i++){
-    const x=merged[i].startX, pv=merged[i-1], cu=merged[i];
-    if(flChanged(pv.topFlange,cu.topFlange)) transitions.topFlange.push({x, from:pv.topFlange, to:cu.topFlange});
-    if(webChanged(pv.web,cu.web))            transitions.web.push({x, from:pv.web, to:cu.web});
-    if(flChanged(pv.botFlange,cu.botFlange)) transitions.botFlange.push({x, from:pv.botFlange, to:cu.botFlange});
-  }
-
-  return {
-    ...base,
-    _schema:'steelbeam-external-demands',
-    girderType:'welded-plate',   // top flange + web + bottom flange only
-    section:{
-      units:{ length:'in' },
-      note:'Equivalent welded-plate-girder dimensions (match depth, Ix, gross area, shear area of the built-up section).',
-      zones: merged,   // contiguous, base section fills gaps, equal-plate zones merged
-      transitions,     // where each plate element changes, with from/to dimensions
-    },
   };
 }
 
@@ -8152,7 +8046,7 @@ function StepCombos({cfg,set}) {
           const kept = (cfg.loadCombos||combos).filter(c=>!c.id?.startsWith('psb_'));
           set('loadCombos', [...kept, ...fresh]);
         }}
-        title="Sets the load combinations required by the PS-Beam and ST-Girder design modules: HL-93 truck + tandem at 33% impact, plus passthrough combos (DC1, DC2, DW, LL) at factor 1.0. Replaces the vehicle selection and the psb_ combos; keeps your other combos."
+        title="Sets the load combinations required by the PS-Beam design module: HL-93 truck + tandem at 33% impact, plus passthrough combos (DC1, DC2, DW, LL) at factor 1.0. Replaces the vehicle selection and the psb_ combos; keeps your other combos."
         style={{background:'#eff6ff',border:'1px solid #1d4ed8',borderRadius:'5px',
           color:'#1d4ed8',padding:'6px 14px',cursor:'pointer',fontSize:'12px',fontWeight:'600'}}>
         🔗 PS/ST Load Combos
@@ -11878,7 +11772,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     setCapZones([...capZones, z]);
   };
   const removeCapZone = id => { if(capZones.length>1) setCapZones(capZones.filter(z=>z.id!==id)); };
-  const updateCapZone = (id, field, val) => setCapZones(capZones.map(z=>z.id===id?{...z,[field]:val}:z));
+  const updateCapZone = (id, field, val) => setCapZones(capZones.map(z=>z.id!==id?z:
+    // A manual zone kept from ST-Girder (STDISC): entering Mn+, Mn- or Vn replaces its station table by the values entered.
+    (z.fromST&&Array.isArray(z.stations)&&['MnPos','MnNeg','Vn'].includes(field))?{...z,[field]:val,stations:null}:{...z,[field]:val}));
   const syncCapToSecZones = () => {
     if (!cfg?.sectionZones?.length) return;
     const DLL = cfg.deadLoadLabels||{};
@@ -11908,7 +11804,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     setCapZones(capZones.map(q=>q.id===zoneId?{...q, ZxPos:Zx, ZxNeg:Zx, SxPos:Sx, SxNeg:Sx, Aw, ...plates}:q));
   };
 
-  // ── Design-app capacity zone: interpolate the per-station table published by PS-Beam / ST-Girder ──
+  // ── Design-app capacity zone: interpolate the per-station table published by PS-Beam ──
   const designCapAt = (z, xPos) => {
     const st = z.stations||[];
     if (!st.length) return {phiMnPos:0, phiMnNeg:0, phiVn:0, SxPos:0, SxNeg:0, Fy:z.Fy||50};
@@ -11929,7 +11825,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     if (!capZones.length) return {MnPos:500,MnNeg:500,Vn:150};
     const z = capZones.find(z=>xPos>=parseFloat(z.startX)-0.001&&xPos<parseFloat(z.endX)+0.001)
            || capZones[capZones.length-1];
-    if (z.type==='design') {
+    if (capZoneTab(z)) {   // design-app zone, or a manual zone kept from ST-Girder with its station table (STDISC)
       // The design apps publish φMn / φVn with their own φ already included, so divide the
       // rating's φf/φv back out here — C = φc·φs·φf·(φMn/φf) = φc·φs·φMn. Condition and
       // system factors still apply; the rating φ inputs are neutralized for this zone.
@@ -11977,7 +11873,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     return { MnPos:z.MnPos||0, MnNeg:z.MnNeg||0, Vn:z.Vn||0,
              SxPos: z.SxPos||0, SxNeg: z.SxNeg||0 };
   };
-  // ── Design-app capacity feed (PS-Beam / ST-Girder → this rating) ──────────
+  // ── Design-app capacity feed (PS-Beam → this rating; ST-Girder's capacity is no longer used, 2026-10-19) ──
   // Re-render on any lock change so the capacity control reflects the shared
   // state; InputsTab subscribes separately for its own driven fields.
   const appLockTick=BLU.useLocks?BLU.useLocks():0;
@@ -11999,6 +11895,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const checkCapFeed = () => { try{
       const raw = localStorage.getItem(CAP_KEY); if(!raw){ setCapFeed(null); return; }
       const p = JSON.parse(raw); if(!p||p._schema!=='bridge-design-capacity'){ setCapFeed(null); return; }
+      // ST-Girder's capacity is not offered or adopted (engineer decision 2026-10-19, fixlog/index.md STDISC).
+      if(capFromST(p)){ setCapFeed(null); return; }
       const token = capTokenOf(p);
       if (localStorage.getItem(CAP_SEEN)===token){ setCapFeed(null); return; }
       const tooNew=(p.schemaVersion||1)>1;
@@ -12403,7 +12301,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
       const z = capZones.find(z=>xPos>=parseFloat(z.startX)-0.001&&xPos<parseFloat(z.endX)+0.001)
              || capZones[capZones.length-1];
-      const zDes  = z&&z.type==='design' ? designCapAt(z,xPos) : null;   // per-node Sx/Fy from the design app
+      const zDes  = capZoneTab(z) ? designCapAt(z,xPos) : null;   // per-node Sx/Fy from the design app
       const Fyf   = zDes ? zDes.Fy    : (z?.Fy     || 50);
       const SxPos = zDes ? zDes.SxPos : (z?.SxPos  || 0);
       const SxNeg = zDes ? zDes.SxNeg : (z?.SxNeg  || 0);
@@ -12495,7 +12393,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
       const z = capZones.find(z=>xPos>=parseFloat(z.startX)-0.001&&xPos<parseFloat(z.endX)+0.001)
              || capZones[capZones.length-1];
-      const zDesF  = z&&z.type==='design' ? designCapAt(z,xPos) : null;  // per-node Sx from the design app
+      const zDesF  = capZoneTab(z) ? designCapAt(z,xPos) : null;  // per-node Sx from the design app
       const SxPos  = zDesF ? zDesF.SxPos : (z?.SxPos || 0);
       const SxNeg  = zDesF ? zDesF.SxNeg : (z?.SxNeg || 0);
       // Per-zone category overrides global default
@@ -13344,9 +13242,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const downloadAllCSV = () => downloadResultsCSV(rows,selectedLoad,nodePositions,CHANNELS.filter(ch=>activeChannels.includes(ch.key)),effectiveScale);
 
   // Note: the old Results-tab "Organize for PS-Beam / Steel-Beam" buttons were removed —
-  // the sidebar design buttons (publishToDesign) now build the SAME payload via
-  // buildPSBeamExport / buildSteelBeamExport, publish it to shared storage, and open the
-  // embedded design app. Each design app also keeps its own Import JSON for portable files.
+  // the sidebar design button (publishToDesign) now builds the SAME payload via
+  // buildPSBeamExport, publishes it to shared storage, and opens the embedded PS-Beam app.
+  // PS-Beam also keeps its own Import JSON for portable files. (The steel-beam payload for
+  // ST-Girder was removed on 2026-10-19: ST-Girder takes demands from GirderDetail only.)
 
   // ── handlers ──────────────────────────────────────────────────────────────
   const handleParse = () => {
@@ -14595,11 +14494,15 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         so the rating φ<sub>f</sub>/φ<sub>v</sub> are neutralized for this zone (condition φ<sub>c</sub> and system φ<sub>s</sub> still apply).
                         {z.basis?<span><br/>Basis: {z.basis}</span>:null}
                       </div>
-                      <button onClick={()=>{ if(window.confirm('Revert to a manual capacity zone? The design-app station data is discarded (re-send it from PS/ST to restore).')) setCapZones([{...defaultCapZone(), startX:0, endX:z.endX}]); }}
+                      <button onClick={()=>{ if(window.confirm('Revert to a manual capacity zone? The design-app station data is discarded (re-send it from PS-Beam to restore).')) setCapZones([{...defaultCapZone(), startX:0, endX:z.endX}]); }}
                         style={{marginTop:'8px',background:'#fff',border:'1px solid #e5e7eb',borderRadius:'5px',
                           color:'#6b7280',padding:'4px 12px',cursor:'pointer',fontSize:'11px'}}>↩ Revert to manual zones</button>
                     </div>);})()
-                  :z.type==='manual'?(
+                  :z.type==='manual'?(<div>
+                    {z.fromST&&<div style={{fontSize:'10.5px',color:'#92400e',lineHeight:1.55,background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'5px',padding:'7px 10px',marginBottom:'8px'}}>
+                      <b>{stCapFlag(z.fromST)}.</b>
+                      {capZoneTab(z)?<span> The rating still uses the per-station table this zone held ({z.stations.length} stations, interpolated linearly; φ already included, so the rating φ<sub>f</sub>/φ<sub>v</sub> are neutralized for this zone). Mn⁺, Mn⁻ and Vn below show its smallest values; entering one of them replaces the table by the values entered.</span>:<span> Its station table was replaced by the values entered below.</span>}
+                    </div>}
                     <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
                       {[['Mn⁺ (ft·k)','MnPos'],['Mn⁻ (ft·k)','MnNeg'],['Vn (kips)','Vn']].map(([lbl,field])=>(
                         <div key={field}>
@@ -14609,7 +14512,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         </div>
                       ))}
                     </div>
-                  ):(
+                  </div>):(
                     <div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'6px',marginBottom:'6px'}}>
                         {[['Fy (ksi)','Fy'],['Zx⁺ (in³)','ZxPos'],['Zx⁻ (in³)','ZxNeg'],['Aw (in²)','Aw']].map(([lbl,field])=>(
@@ -20288,7 +20191,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
             <td>${i+1}</td>
             <td class="mono">${parseFloat(z.startX).toFixed(3)}</td>
             <td class="mono">${parseFloat(z.endX).toFixed(3)}</td>
-            <td>${z.type==='quickcalc'?`Fy=${z.Fy}ksi Zx+=${z.ZxPos} Zx-=${z.ZxNeg} Aw=${z.Aw}`:'Manual'}${cap._basis?`<br/><span style="font-size:8pt;color:#6b7280">Mn⁺ ${cap._basis.pos} · Mn⁻ ${cap._basis.neg} · Vn ${cap._basis.v}</span>`:''}${(cap._warn||[]).map(w=>`<br/><span style="font-size:8pt;color:#b91c1c">⚠ ${w}</span>`).join('')}</td>
+            <td>${z.type==='quickcalc'?`Fy=${z.Fy}ksi Zx+=${z.ZxPos} Zx-=${z.ZxNeg} Aw=${z.Aw}`:'Manual'}${z.fromST?`<br/><span style="font-size:8pt;color:#92400e">${stCapFlag(z.fromST)}${capZoneTab(z)?'; per-station table kept':''}</span>`:''}${cap._basis?`<br/><span style="font-size:8pt;color:#6b7280">Mn⁺ ${cap._basis.pos} · Mn⁻ ${cap._basis.neg} · Vn ${cap._basis.v}</span>`:''}${(cap._warn||[]).map(w=>`<br/><span style="font-size:8pt;color:#b91c1c">⚠ ${w}</span>`).join('')}</td>
             <td class="mono">${cap.MnPos.toFixed(1)}</td>
             <td class="mono">${cap.MnNeg.toFixed(1)}</td>
             <td class="mono">${cap.Vn.toFixed(1)}</td>
@@ -20594,7 +20497,7 @@ function SavesModal({ cfg, onLoad, onClose,
       // Restore results if they were saved
       if (entry.resultsRows && setResultsRows)     setResultsRows(entry.resultsRows);
       if (entry.resultsCombos && setResultsCombos) setResultsCombos(entry.resultsCombos);
-      if (entry.ratingCapZones && setRatingCapZones) setRatingCapZones(entry.ratingCapZones);
+      if (entry.ratingCapZones && setRatingCapZones) setRatingCapZones(capDropST(entry.ratingCapZones,'Restored history entry'));
       onClose();
     }
   };
@@ -21030,7 +20933,7 @@ function BeamChip({nb,setBy}){
    within twenty seconds (missing file, or not a suite app). Both used to look
    identical from the outside: a button that appeared to do nothing. */
 function EmbedTrouble({app,name,health,onUse,onClose}){
-  const NAMES={mct:'the MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
+  const NAMES={mct:'the MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
   const tried=health.tried||'';
   const short=String(name||app).split(' ·')[0];
   const wrong=health.status==='wrong';
@@ -21078,6 +20981,42 @@ function EmbedTrouble({app,name,health,onUse,onClose}){
     </div>);
 }
 
+/* ST-Girder capacity (engineer decisions 2026-10-19, fixlog/index.md STDISC). MCT no longer receives capacity
+   from ST-Girder: such a payload is not offered or adopted (capFromST). A saved capacity zone fed by ST-Girder
+   (type 'design', producer 'ST-Girder') becomes an ordinary MCT manual zone that KEEPS every value it held
+   (same span, the per-station phiMn+ / phiMn- / phiVn table and all other fields), flagged z.fromST
+   ("formerly from ST-Girder, no longer updated"). capZoneTab() treats it exactly like the design zone, so the
+   rating is unchanged; Mn+ / Mn- / Vn are pre-filled with the table's smallest values, and editing one of
+   them drops the table (the values entered then govern). Each conversion is listed in a notice kept in
+   mct_stcap_notice_v1 until it is dismissed. Zones fed by PS-Beam are unchanged. */
+const MCT_STCAP_KEY='mct_stcap_notice_v1';
+function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html')); }
+function stCapRead(){ try{ const a=JSON.parse(localStorage.getItem(MCT_STCAP_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function stCapAdd(notes){ if(!notes||!notes.length) return;
+  try{ localStorage.setItem(MCT_STCAP_KEY,JSON.stringify(stCapRead().concat(notes))); }catch(e){}
+  try{ window.dispatchEvent(new Event('mct-stcap')); }catch(e){} }
+/* The zone interpolates a per-station capacity table: a design-app zone, or a manual zone kept from ST-Girder. */
+function capZoneTab(z){ return !!z&&(z.type==='design'||(z.type==='manual'&&!!z.fromST&&Array.isArray(z.stations)&&z.stations.length>0)); }
+function stCapFlag(f){ f=f||{}; return 'formerly from ST-Girder'+[f.memberKey,f.producedAt?'sent '+String(f.producedAt).slice(0,16).replace('T',' '):'',f.project?'project "'+f.project+'"':''].filter(Boolean).map((t,i)=>(i?', ':' (')+t).join('')+(f.memberKey||f.producedAt||f.project?')':'')+', no longer updated \u2014 check and edit as needed'; }
+function capDropST(zones,where){
+  if(!Array.isArray(zones)||!zones.some(z=>z&&z.type==='design'&&capFromST(z))) return zones;
+  const notes=[];
+  const out=zones.map((z,i)=>{
+    if(!(z&&z.type==='design'&&capFromST(z))) return z;
+    const st=Array.isArray(z.stations)?z.stations:[], n=st.length;
+    const mn=(k,abs)=>n?Math.min.apply(null,st.map(s=>abs?Math.abs(+s[k]||0):(+s[k]||0))):0;
+    const fromST={producer:z.producer||'ST-Girder', producedAt:z.producedAt||'', project:z.project||'', memberKey:z.memberKey||''};
+    notes.push((where?where+': ':'')+'capacity zone '+(i+1)+' ('+(+z.startX||0)+' to '+(+z.endX||0)+' ft) held the \u03c6Mn / \u03c6Vn envelope from ST-Girder'
+      +(z.memberKey?' ('+z.memberKey+')':'')+(z.producedAt?', sent '+String(z.producedAt).slice(0,16).replace('T',' '):'')+', '+n+' station'+(n===1?'':'s')
+      +'. The values were kept: it is now an ordinary MCT manual zone with the same numbers (the same per-station table over the same span, so the rating is unchanged), flagged \u201c'+stCapFlag(fromST)+'\u201d.');
+    // every field kept; only the type changes and the provenance flag is added
+    return {...z, type:'manual', fromST,
+      MnPos:+mn('phiMn_pos').toFixed(1), MnNeg:+mn('phiMn_neg',true).toFixed(1), Vn:+mn('phiVn').toFixed(1)};
+  });
+  stCapAdd(notes);
+  return out;
+}
+
 /* Project data saved by an older build that the 2026-10-04 library corrections (F1, F2, F5)
    could not rewrite, because it is user data (sweep IDX-O15). Returns one line per item;
    shown once per load as a dismissible notice. Nothing is changed automatically. */
@@ -21108,7 +21047,7 @@ function staleProjectNotes(cfg){
 function App() {
   const [step,setStepRaw]=useState(0);
   // ── Embedded sibling apps (full-screen overlay inside MCT; kept mounted so switching is instant) ──
-  const [embedApp,setEmbedApp]=useState(null);                  // null | 'lldf' | 'psbeam' | 'stgirder'
+  const [embedApp,setEmbedApp]=useState(null);                  // null | 'lldf' | 'psbeam'
   const [openedEmbeds,setOpenedEmbeds]=useState({});            // which app iframes have been mounted (keep-alive)
   const [lldfGeomMsg,setLldfGeomMsg]=useState('');
   // ── MCT → LLDF geometry push (layout only): spans, girder count, spacing, skew. ──
@@ -21262,8 +21201,7 @@ function App() {
     return ()=>clearInterval(iv);
   },[embedApp,embedHealth]);
   const EMBED_META={ lldf:{title:'LL & DL Distribution · AASHTO LRFD 4.6.2.2 + MassDOT §3.5.3',color:'#a21caf'},
-    psbeam:{title:'PS-Beam · Prestressed Concrete Girder Design',color:'#0e7490'},
-    stgirder:{title:'ST-Girder · Composite Steel Plate Girder Design',color:'#3b4a5a'} };
+    psbeam:{title:'PS-Beam · Prestressed Concrete Girder Design',color:'#0e7490'} };
   const [cfg,setCfg]=useState(()=>{
     // Replace characters MIDAS mojibakes (em-dash —, en-dash –, middot ·) with ASCII
     // so load CASE names round-trip cleanly through MIDAS. Applies to dead-load names
@@ -21317,7 +21255,10 @@ function App() {
   const [resultsSelectedLC, setResultsSelectedLC]  = useState('');
   const [resultsCfgSnap,    setResultsCfgSnap]     = useState(()=>{ try { return localStorage.getItem('mct_results_snap_v1')||null; } catch(e){ return null; }});
   const [resultsCombos,     setResultsCombos]      = useState(()=>{ try { const s=localStorage.getItem('mct_results_combos_v1'); return s?JSON.parse(s):[]; } catch(e){ return []; }});
-  const [ratingCapZones,    setRatingCapZones]      = useState(()=>{ try { const s=localStorage.getItem('mct_cap_zones_v1'); return s?JSON.parse(s):[]; } catch(e){ return []; }});
+  const [ratingCapZones,    setRatingCapZones]      = useState(()=>{ try { const s=localStorage.getItem('mct_cap_zones_v1'); return s?capDropST(JSON.parse(s)):[]; } catch(e){ return []; }});
+  // STDISC (2026-10-19): notice for capacity zones from ST-Girder replaced on load (kept until dismissed)
+  const [stCapNotes,setStCapNotes]=useState(()=>stCapRead());
+  useEffect(()=>{ const h=()=>setStCapNotes(stCapRead()); window.addEventListener('mct-stcap',h); return ()=>window.removeEventListener('mct-stcap',h); },[]);
   // Load results from IndexedDB on mount (migrating any legacy localStorage payload)
   const idbLoadedRef = React.useRef(false);
   useEffect(()=>{ (async()=>{
@@ -21378,7 +21319,7 @@ function App() {
     const curId=window.BridgeProjects.current();
     const cur=curId?window.BridgeProjects.get(curId):null;
     const suggested=(cur&&cur.name)||cfg.projectName||cfg.projectUser||('Bridge '+new Date().toLocaleDateString());
-    const name=window.prompt('Save to Bridge Project (shared with PS-Beam / ST-Girder / LLDF):', suggested);
+    const name=window.prompt('Save to Bridge Project (shared with PS-Beam / LLDF):', suggested);
     if(name==null) return;
     const nm=name.trim()||suggested;
     const targetId=(cur&&cur.name===nm)?curId:null;   // overwrite current if name unchanged, else new
@@ -21502,7 +21443,7 @@ function App() {
   const geomLocked=!!(BL&&BL.isLocked('geometry'));
   const geomTimer=useRef(null);
   useEffect(()=>{
-    // MCT, PS-Beam and ST-Girder can all publish geometry. Only the app
+    // MCT and PS-Beam can both publish geometry. Only the app
     // that owns the lock republishes on it.
     if(!BL||!BL.drives('geometry',LOCK_APP,'MCT Generator')) return;
     clearTimeout(geomTimer.current);
@@ -21623,8 +21564,9 @@ function App() {
             try{localStorage.setItem('mct_results_combos_v1',JSON.stringify(loaded.resultsCombos));}catch(e){}
           }
           if(loaded.ratingCapZones?.length){
-            setRatingCapZones(loaded.ratingCapZones);
-            try{localStorage.setItem('mct_cap_zones_v1',JSON.stringify(loaded.ratingCapZones));}catch(e){}
+            const capZ=capDropST(loaded.ratingCapZones,'Imported file '+file.name);
+            setRatingCapZones(capZ);
+            try{localStorage.setItem('mct_cap_zones_v1',JSON.stringify(capZ));}catch(e){}
           }
           if(loaded.resultsCfgSnap){
             setResultsCfgSnap(loaded.resultsCfgSnap);
@@ -21713,14 +21655,15 @@ function App() {
   };
 
   // ── Design hand-off: publish the external-demands payload to shared storage, open the design app ──
-  // Reuses the SAME builders as the JSON export (buildPSBeamExport / buildSteelBeamExport). The design
-  // apps read it from localStorage on load (banner-prompted). JSON export/import stays as the fallback.
+  // Reuses the SAME builder as the JSON export (buildPSBeamExport). PS-Beam reads it from localStorage
+  // on load (banner-prompted). JSON export/import stays as the fallback. Since 2026-10-19 there is no
+  // steel flavour: ST-Girder takes demands from GirderDetail only (fixlog/index.md STDISC).
   const publishToDesign = (kind, silent) => {
     const rs = reportState || {};
     const isGFSm = (cfg.geomMode||'beam')==='gfs';
     const nodePositions = rs.nodePositions || {};
-    const target = kind==='steel' ? 'stgirder' : 'psbeam';
-    const targetName = kind==='steel' ? 'ST-Girder' : 'PS-Beam';
+    const target = 'psbeam';
+    const targetName = 'PS-Beam';
     // No MIDAS demands yet? Still open the design app — it has its own HL-93 solver / manual load entry.
     if(!resultsRows.length || !Object.keys(nodePositions).length){
       if(silent) return false;   // nothing to send yet; stay quiet and wait
@@ -21739,17 +21682,15 @@ function App() {
         llNegLC: rs.ratingLLnegLC || (cfg.rating&&cfg.rating.llnegLC) || '',
         span:    rs.aremaSpan || cfg.spans.reduce((a,b)=>a+b,0),
       };
-      const payload = kind==='steel' ? buildSteelBeamExport(args) : buildPSBeamExport(args);
+      const payload = buildPSBeamExport(args);
       if(!payload.stations || !payload.stations.length){
         if(!silent) alert('No station data found to send.\n\nPaste MIDAS results first'+(args.isGFS?', and select a GFS member.':'.'));
         return false;
       }
       const warns = payload.warnings||[];
-      const noZones = kind==='steel' && !(payload.section&&payload.section.zones&&payload.section.zones.length);
-      const mustConfirm = warns.some(w=>w.startsWith('LIVE LOAD')) || noZones;
-      if(warns.length || noZones){
-        const extra = noZones ? '\n\n• No section makeup found — enable the section library (Sections tab) so the steel app receives plate dimensions.' : '';
-        const msg='Design hand-off warnings:\n\n• '+(warns.join('\n\n• ')||'(none)')+extra+(mustConfirm?'\n\nSend anyway?':'');
+      const mustConfirm = warns.some(w=>w.startsWith('LIVE LOAD'));
+      if(warns.length){
+        const msg='Design hand-off warnings:\n\n• '+(warns.join('\n\n• ')||'(none)')+(mustConfirm?'\n\nSend anyway?':'');
         if(mustConfirm && !silent){ if(!window.confirm(msg)) return false; } else console.warn(msg);
       }
       if(silent){
@@ -21768,9 +21709,9 @@ function App() {
       const res = window.BridgeHandoff ? window.BridgeHandoff.publish(payload) : {ok:false,reason:'handoff module missing'};
       if(res.ok){
         // Remember the flavour so a locked republish rebuilds the same one.
-        try{ localStorage.setItem('bridgeSuite.v1.demandsKind',kind); }catch(e){}
+        try{ localStorage.setItem('bridgeSuite.v1.demandsKind','psbeam'); }catch(e){}
         // A locked republish must not drag the engineer out of this app.
-        if(!silent) openEmbed(kind==='steel' ? 'stgirder' : 'psbeam');
+        if(!silent) openEmbed('psbeam');
         return true;
       } else {
         if(!silent) alert('Could not write to shared storage ('+res.reason+').\n\nUse the JSON Export on the Results step, then Import in the design app.');
@@ -21918,18 +21859,9 @@ function App() {
      MCT is the channel's only producer, so there is nothing for drives() to
      arbitrate -- the lock alone is the gate. */
   const demandsLocked=!!(BL&&BL.isLocked('demands'));
-  const demandsKind=()=>{
-    // Which design app a locked republish should build for. If the lock was
-    // taken from one of the design apps, that app's own choice wins -- locking
-    // from ST-Girder means "keep ST-Girder fed". Otherwise use whichever
-    // flavour was last sent from here.
-    try{
-      const i=BL&&BL.lockInfo('demands');
-      if(i&&i.by==='stgirder') return 'steel';
-      if(i&&i.by==='psbeam')   return 'psbeam';
-      return localStorage.getItem('bridgeSuite.v1.demandsKind')||'psbeam';
-    }catch(e){ return 'psbeam'; }
-  };
+  // Which design app a locked republish builds for: PS-Beam only since 2026-10-19 (a stored
+  // 'steel' kind from before, when ST-Girder was fed from here, is no longer used).
+  const demandsKind=()=>'psbeam';
   // Geometry is part of the envelope: spans, supports and the section zones
   // all end up in the payload, so an edit to any of them is new news for a
   // locked design app even with the results untouched.
@@ -21946,7 +21878,7 @@ function App() {
       const k=demandsKind();
       if(publishToDesign(k,true)){
         BL.log({channel:'demands', app:LOCK_APP, source:'this app',
-          text:'republished analysis demands to '+(k==='steel'?'ST-Girder':'PS-Beam')});
+          text:'republished analysis demands to PS-Beam'});
       }
     },900);
     return ()=>clearTimeout(demTimer.current);
@@ -21960,7 +21892,7 @@ function App() {
       // moment I have them" -- so unlike geometry this does not refuse.
       BL.lock('demands',LOCK_APP);
       BL.log({channel:'demands', app:LOCK_APP, source:'this app',
-        text:'auto-send ON \u2014 '+(k==='steel'?'ST-Girder':'PS-Beam')+' now follows this analysis'
+        text:'auto-send ON \u2014 PS-Beam now follows this analysis'
           +(wrote?'':' (nothing new to send yet)')});
       BL.toast('Demands locked','Every re-paste of MIDAS results is pushed straight into the design app until you unlock it.');
     } else {
@@ -22089,9 +22021,8 @@ function App() {
           {/* ── Design hand-off: send analysis demands to the design apps via shared storage ── */}
           <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af',textTransform:'uppercase',
             letterSpacing:'0.1em',margin:'10px 0 6px',paddingLeft:'8px',borderTop:'1px solid #f3f4f6',paddingTop:'10px'}}>Design Hand-off</div>
-          {[{k:'psbeam',label:'Prestressed Concrete Beam Design',icon:'🅿',accent:'#0e7490',light:'#ecfeff',border:'#a5f3fc'},
-            {k:'steel', label:'Composite Steel Design App',       icon:'🅢',accent:'#3b4a5a',light:'#f1f5f9',border:'#cbd5e1'}].map(b=>{
-            const appId=b.k==='steel'?'stgirder':'psbeam';
+          {[{k:'psbeam',label:'Prestressed Concrete Beam Design',icon:'🅿',accent:'#0e7490',light:'#ecfeff',border:'#a5f3fc'}].map(b=>{
+            const appId='psbeam';
             // Solid orange = this is the app the locked channel is feeding. Being
             // the locked target must NOT take away the button that opens the app --
             // the click opens it either way. Stopping the auto-send is the padlock
@@ -22181,7 +22112,7 @@ function App() {
             {window.BridgeProjects&&(()=>{ void bpTick; const cur=bpCurrent(); const items=window.BridgeProjects.list();
               return (<div style={{border:'1px solid #f0abfc',borderRadius:'6px',padding:'6px 7px',background:'#fdf4ff',display:'flex',flexDirection:'column',gap:'5px'}}>
                 <div style={{fontSize:'9px',fontFamily:'monospace',color:'#a21caf',textTransform:'uppercase',letterSpacing:'0.08em',display:'flex',justifyContent:'space-between'}}>
-                  <span>Bridge Project</span><span title="One project shared across MCT, PS-Beam, ST-Girder and LLDF">shared ⇄</span></div>
+                  <span>Bridge Project</span><span title="One project shared across MCT, PS-Beam and LLDF">shared ⇄</span></div>
                 <select value={cur||''} onChange={e=>loadFromProject(e.target.value)}
                   style={{fontSize:'11px',border:'1px solid #e9d5ff',borderRadius:'5px',padding:'4px 6px',background:'#fff',color:cur?'#a21caf':'#6b7280',fontWeight:cur?'600':'400'}}>
                   <option value="">— none / unsaved —</option>
@@ -22253,6 +22184,18 @@ function App() {
                 <ul style={{margin:'6px 0 0 18px'}}>{staleNotes.map((t,i)=><li key={i}>{t}</li>)}</ul>
               </div>
             )}
+            {stCapNotes.length>0&&(
+              <div style={{margin:'0 0 14px',padding:'10px 14px',borderRadius:'8px',border:'1px solid #fde68a',
+                borderLeft:'4px solid #d97706',background:'#fffbeb',fontSize:'12px',color:'#92400e',lineHeight:1.5}}>
+                <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                  <b>⚠ Capacity from ST-Girder is no longer updated (engineer decision 2026-10-19)</b>
+                  <button onClick={()=>{ try{ localStorage.removeItem(MCT_STCAP_KEY); }catch(e){} setStCapNotes([]); }} style={{marginLeft:'auto',background:'#fff',border:'1px solid #fcd34d',
+                    borderRadius:'5px',color:'#92400e',padding:'3px 10px',cursor:'pointer',fontSize:'11px'}}>Dismiss</button>
+                </div>
+                <div style={{marginTop:'4px'}}>ST-Girder is now connected to GirderDetail only, so MCT no longer receives its capacity. Capacity zones that came from ST-Girder were kept with the same values as MCT manual zones (ratings unchanged); check and edit them in AASHTO Rating as needed:</div>
+                <ul style={{margin:'6px 0 0 18px'}}>{stCapNotes.map((t,i)=><li key={i}>{t}</li>)}</ul>
+              </div>
+            )}
             <StepErrorBoundary key={step}>{steps[step]}</StepErrorBoundary>
           </div>
           {/* Footer */}
@@ -22287,11 +22230,11 @@ function App() {
             color:'#fff',padding:'7px 16px',cursor:'pointer',fontSize:'13px',fontWeight:'600'}}>← Back to MCT</button>
           <span style={{fontSize:'13px',fontWeight:'600',color:EMBED_META[embedApp].color}}>{EMBED_META[embedApp].title}</span>
           <div style={{marginLeft:'auto',display:'flex',gap:'6px'}}>
-            {['lldf','psbeam','stgirder'].filter(a=>a!==embedApp).map(a=>(
+            {['lldf','psbeam'].filter(a=>a!==embedApp).map(a=>(
               <button key={a} onClick={()=>openEmbed(a)} title={'Switch to '+EMBED_META[a].title}
                 style={{background:'#fff',border:'1px solid #e5e7eb',borderRadius:'5px',color:EMBED_META[a].color,
                   padding:'5px 10px',cursor:'pointer',fontSize:'11.5px',fontWeight:'600'}}>
-                {a==='lldf'?'LL & DL':a==='psbeam'?'PS-Beam':'ST-Girder'} →</button>))}
+                {a==='lldf'?'LL & DL':'PS-Beam'} →</button>))}
           </div>
         </div>}
         <div style={{flex:1,position:'relative'}}>

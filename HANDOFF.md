@@ -45,7 +45,7 @@ This file is the specification for every cross-tool data hand-off. Any tool that
 4. **Record the source.** After adopting a payload, the receiver records its source (producer, producedAt) in its own saved state. It also prints that source in its report, e.g. "Spans from Bridge Geometry, 2026-10-05 14:02".
 5. **No silent overwrite on load.** Opening a tool never auto-applies a hand-off. A banner such as "New data from X available" is fine.
 6. **Additive only.** Existing storage keys and saved-project formats are not changed (CLAUDE.md §5). Hand-off state lives in new optional fields.
-7. **Keep it simple.** Senders write their channel on an explicit **"Send to other tools"** button. Senders that already auto-publish (lldf, psbeam, stgirder) may keep doing so.
+7. **Keep it simple.** Senders write their channel on an explicit **"Send to other tools"** button. Senders that already auto-publish (lldf, psbeam) may keep doing so.
 8. **Copy the shared helper.** Each tool carries its own copy of the shared helper (§5); per CLAUDE.md §3 it stays duplicated. List the files that contain it in the PR.
 
 ## 4. Channels
@@ -55,15 +55,21 @@ Fields marked *(existing)* already exist; their schemas are documented in `AUDIT
 | Channel key (`bridgeSuite.v1.` + …) | `_schema` | Sender(s) | Receiver(s) |
 |---|---|---|---|
 | `projectMeta` | `bridge-project-meta` | any tool | every tool |
-| `lldfGeom` *(existing)* | `bridge-lldf-geometry` | index (MCT), psbeam, stgirder, **Bridge Geometry** | lldf |
-| `lldf` *(existing)* | `bridge-lldf-factors` | lldf | index, psbeam, stgirder, **Moving Load Generator**, **Steel Bridge Beam Modules** |
-| `dlLoads` *(existing)* | `bridge-dl-loads` | lldf | index, psbeam, stgirder |
-| `superReactions` | `bridge-super-reactions` | psbeam, stgirder, index (MCT) | Bridge Substructure Loading |
+| `lldfGeom` *(existing)* | `bridge-lldf-geometry` | index (MCT), psbeam, **Bridge Geometry** | lldf |
+| `lldf` *(existing)* | `bridge-lldf-factors` | lldf | index, psbeam, **Moving Load Generator**, **Steel Bridge Beam Modules** |
+| `dlLoads` *(existing)* | `bridge-dl-loads` | lldf | index, psbeam |
+| `superReactions` | `bridge-super-reactions` | psbeam, index (MCT) | Bridge Substructure Loading |
 | `abutmentLoads` | `bridge-abutment-loads` | Bridge Substructure Loading | abutment_calculator |
 | `foundationLoads` | `bridge-foundation-loads` | abutment_calculator, Bridge Substructure Loading | Pile Designer, Spread Footing |
 | `buildingLoads` | `bridge-building-loads` | ASCE7-16 Load Generator | Steel Beam Design |
 | `memberReactions` | `bridge-member-reactions` | Steel Beam Design | BasePlateAnchorDesigner, Spread Footing |
 | `girderDemands` | `stgirder-external-demands` (ST-Girder's existing imported-demands schema, §4.9) | Steel Bridge Beam Modules (GirderDetail) | stgirder |
+
+**ST-Girder is connected to GirderDetail only (engineer decision 2026-10-19).** `girderDemands` (§4.9) is the only channel ST-Girder (`stgirder.html`) reads, and it writes no channel. Removed on both sides (branches claude/stgirder-disconnect and claude/stgirder-disconnect-others; fixlog/stgirder.md DISC, fixlog/index.md, psbeam.md, lldf.md, Bridge Substructure Loading.md STDISC):
+- ST-Girder no longer sends `lldfGeom`, `superReactions` / `superReactions.by.stgirder`, `capacity`, `projectMeta` or its slice of `projects`, and no longer reads `lldf`, `dlLoads`, `designBeam` / `beamRoster`, the MCT demands map (`handoffs`, `latestId`, `updatedAt`, `adopted.stgirder`), `geometryChanges`, `projects` / `currentProjectId`, `locks` or `projectMeta`. It carries `BridgeXfer` (§5) and a reduced, ST-Girder-only `appPaths` record (its own entry, which GirderDetail's open-now reads), not the shared bootstrap block.
+- ST-Girder's **Import** accepts only GirderDetail hand-off files (and ST-Girder's own JSON files); a MIDAS / MCT / PS-Beam / steel-beam demands file is refused.
+- On open, ST-Girder clears saved data that came from MCT or LL & DL (imported MCT demands, LL & DL distribution factors and DC2 / DW, the design-beam position) and removes its own published copies (`superReactions.by.stgirder`; `superReactions`, `capacity`, `lldfGeom` when their `producer` is "ST-Girder"), with a notice that lists each removal (key `stgirder.disconnect.v1`).
+- MCT no longer sends steel demands to ST-Girder (no "Composite Steel Design App" hand-off, no ST-Girder embed), does not offer or adopt a `capacity` payload from ST-Girder, and turns a saved capacity zone fed by ST-Girder into an ordinary MCT manual zone that keeps every value (same span, same per-station table, so ratings are unchanged), flagged "formerly from ST-Girder, no longer updated — check and edit as needed", with a notice (key `mct_stcap_notice_v1`). PS-Beam and LL & DL have no ST-Girder link; LL & DL refuses `lldfGeom` from ST-Girder; Bridge Substructure Loading does not list, adopt or import `superReactions` from ST-Girder (a short note says when an old copy is stored). Substructure Loading reactions from GirderDetail are a separate, later change.
 
 ### 4.1 `projectMeta`
 
@@ -89,7 +95,7 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
   ```js
   { ...envelope, _schema:"bridge-lldf-geometry", producer:"Bridge Geometry", producerFile:"Bridge Geometry.html",
-    project:{ name:"", bridgeId:"" },            // envelope object (§2); MCT / PS-Beam / ST-Girder still send a plain string
+    project:{ name:"", bridgeId:"" },            // envelope object (§2); MCT / PS-Beam still send a plain string (ST-Girder did until 2026-10-19)
     units:{ spans:"ft", spacings:"ft", skew:"deg", OL:"ft", OR:"ft" },
     basis:{ spans:"chord, support centerlines"|"chord, bearing lines", skew:"moment"|"max"|"min"|"mean", girders:"global"|"<span no.>" },
     Nb:<girders>, de:null,                       // Nb only when spacings are sent; d_e is not sent
@@ -101,12 +107,13 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
   - `basis.skew` says what the single `inputs.skew` is: `"moment"` (default) = the skew for moment DFs, i.e. the smallest |skew|, or 0 when adjacent supports differ by more than 10° (AASHTO LRFD Art. 4.6.2.2.2e); `"max"` = the largest |skew| (the shear value, Art. 4.6.2.2.3c); `"min"` / `"mean"` = the smallest / average |skew|.
   - `inputs.ts` (deck structural thickness) and `inputs.depth` (default beam depth, top to bottom of beam) are in **inches**, and are sent unless the engineer unticks them. `units` then also has `ts:"in"`, `depth:"in"`.
-  - `skewDetail` (optional, additive): the per-support skews and the values for each action. `moment` = the moment value above; `shear` = the largest |skew|; `sent` = `inputs.skew`. **lldf reads it**: when `moment` and `shear` are valid numbers (|θ| < 90), lldf sets its θ = `moment` and its separate shear skew θ_V = `shear` (blank when equal), whichever single value was sent. So one hand-off gives both moment and shear DFs (fixlog/lldf.md 2026-10-12 SW3). A payload without a valid `skewDetail` (MCT, PS-Beam, ST-Girder, older Bridge Geometry) sets θ and clears θ_V. lldf does not save `skewDetail`; it saves only the resulting `skew` / `skewV` inputs.
+  - `skewDetail` (optional, additive): the per-support skews and the values for each action. `moment` = the moment value above; `shear` = the largest |skew|; `sent` = `inputs.skew`. **lldf reads it**: when `moment` and `shear` are valid numbers (|θ| < 90), lldf sets its θ = `moment` and its separate shear skew θ_V = `shear` (blank when equal), whichever single value was sent. So one hand-off gives both moment and shear DFs (fixlog/lldf.md 2026-10-12 SW3). A payload without a valid `skewDetail` (MCT, PS-Beam, older Bridge Geometry) sets θ and clears θ_V. lldf does not save `skewDetail`; it saves only the resulting `skew` / `skewV` inputs.
 
   - `inputs` uses lldf's own input names. `OL`/`OR` are deck edge to exterior girder centerline. `spacings`, `OL`, `OR` and `Nb` are left out when Bridge Geometry has fewer than two girders, and the `notes` say so.
   - The engineer picks the `basis` choices in Bridge Geometry's send dialog; each choice is also stated in `notes`.
 - lldf (receiver) accepts `project` as a string or an object, refuses any unit other than ft/deg, and validates every number. It has a **"Pull from <producer>"** button with a new-data dot and **"Import hand-off (JSON)"**. Both raise its existing prefill banner, which lists what will be overwritten and the sender's `notes`. It records the adopted source as the optional `geomSource` field in its saved state, and prints it below the title block.
-- lldf's "Lock" (auto-follow) on this channel stays for MCT, PS-Beam and ST-Girder. It is **not** offered for, and never auto-applies, a Bridge Geometry payload (§3.5).
+- lldf's "Lock" (auto-follow) on this channel stays for MCT and PS-Beam. It is **not** offered for, and never auto-applies, a Bridge Geometry payload (§3.5).
+- Since 2026-10-19 lldf refuses a payload whose `producer` is "ST-Girder" (not offered by "Pull", never auto-applied; Pull / Import say why): ST-Girder is connected to GirderDetail only.
 
 ### 4.3 `lldf` (existing; new receivers)
 
@@ -123,9 +130,9 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
   - `skewShear` (deg): lldf's separate shear skew θ_V, sent only when one is entered. `skew` is then the **moment** θ. `gV`/`fatV` already include the shear correction at θ_V, and `gM`/`fatM` the moment reduction at θ. A receiver that compares or shows the skew must use `skewShear` for shear (or the larger of the two), not `skew`.
   - `perFootStrip: true`: sent for the cast-in-place slab type (`bridgeType:"slab"`). Then `gM`/`gV`/`fatM`/`fatV` are per **1-ft strip of slab width** (AASHTO LRFD 4.6.2.3), not per girder, although `units.df` still reads "lanes per girder". A receiver must not use them as a girder DF.
   - What each receiver does with them:
-    - MCT Generator (index.html), PS-Beam, ST-Girder and Steel Bridge Beam Modules **refuse** a `perFootStrip` payload (nothing applied; a locked channel shows the warning state). They need girder factors and cannot convert a strip factor (no strip-to-girder width is defined).
+    - MCT Generator (index.html), PS-Beam and Steel Bridge Beam Modules **refuse** a `perFootStrip` payload (nothing applied; a locked channel shows the warning state). They need girder factors and cannot convert a strip factor (no strip-to-girder width is defined).
     - Moving Load Generator **applies** a `perFootStrip` payload as sent, because a slab-strip line analysis is a valid use. The pull dialog, the DF source line, the printed report and the results warnings say that the results are per foot of slab width, not per girder. The saved `lldfSource` gets the optional `perFootStrip: true`.
-    - Moving Load Generator shows `skewShear` in the pull dialog header. Steel Bridge Beam Modules compares `skewShear` (when present) with its bridge's largest skew. MCT, PS-Beam and ST-Girder do not read the payload skew; their DFs come in with the skew corrections already applied.
+    - Moving Load Generator shows `skewShear` in the pull dialog header. Steel Bridge Beam Modules compares `skewShear` (when present) with its bridge's largest skew. MCT and PS-Beam do not read the payload skew; their DFs come in with the skew corrections already applied. (ST-Girder no longer reads this channel since 2026-10-19.)
 - lldf also offers **"Export DF hand-off (JSON)"**, which writes the same payload to a file.
 - Steel Bridge Beam Modules / GirderDetail (receiver id `girderdetail`): its LLDF and DLs module computes its own factors from the bridge in Preliminary sizing, and those still feed Preliminary sizing. The hand-off fills the **existing** manual-factor inputs of the Structural analysis module (`sa.dfSrc = 'manual'`, `sa.dfm`) for the girder being analyzed; the "Live load distribution factors" select is the on/off switch (it stays "From the LLDF and DLs module" until the user confirms a pull). The user picks lldf's interior/exterior envelope for that girder's type (default) or lldf's beam with the same number (`byBeam`, only when both tools have the same number of girders). `governingBySpan[i]` `gM`/`gV`/`fatM`/`fatV` go to span *i* (`governing` for every span when the payload has no `governingBySpan`); `governingNeg.gM` goes to every pier region. A different span count is refused; different span lengths, girder count, skew or cross-section type are warned. The source is saved in the new optional field `sa.dfImport` and printed in the Structural analysis report.
 - Moving Load Generator (receiver id `movingLoad`): the user picks interior, exterior or a single beam (`byBeam`), defaulting to lldf's design beam when present. `gM`/`gV` from `governingBySpan[i]` go to span *i* (or `governing` for every span when the span counts differ or the payload has no `governingBySpan`). `governingNeg.gM` goes to the one negative-moment DF. Spans are compared and only overwritten when the user ticks the option. `fatM`/`fatV` are shown and quoted in the fatigue-truck warning but not applied, because the tool has one DF set for all vehicles.
@@ -143,9 +150,9 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
 - Unfactored dead-load reactions are given per girder, per support.
 - Live load is optional and informational, because Substructure Loading computes its own LL.
-- psbeam and stgirder model a single girder line: they send their girder, labelled by the design-beam selection, and say so in `notes`.
+- psbeam models a single girder line: it sends its girder, labelled by the design-beam selection, and says so in `notes`. (stgirder sent the same way until 2026-10-19; Bridge Substructure Loading no longer lists, adopts or imports a payload from ST-Girder.)
 - **Clarifications (added with the psbeam/stgirder → Substructure Loading connection):**
-  - *Two producers, one channel.* Each sender writes the channel key as usual and also keeps a copy of the same stamped payload at `bridgeSuite.v1.superReactions.by.<id>` (`psbeam`, `stgirder`, later `mct`). The receiver lists every valid copy, so the user can pick one when both girder apps have sent. `updatedAt` and `adopted.<receiverId>` stay on the channel key only.
+  - *Two producers, one channel.* Each sender writes the channel key as usual and also keeps a copy of the same stamped payload at `bridgeSuite.v1.superReactions.by.<id>` (`psbeam`, later `mct`; `stgirder` until 2026-10-19, now neither written nor listed). The receiver lists every valid copy, so the user can pick one when both girder apps have sent. `updatedAt` and `adopted.<receiverId>` stay on the channel key only.
   - *Support ids.* A sender that does not know the bridge's support names may use `"Support n"`, numbered from the start of its own model (a simple span is `Support 1`, `Support 2`; span *i* of an imported MIDAS model is `Support i`, `Support i+1`). The receiver maps ids to its own supports in the pull dialog.
   - *Optional fields.* `girderLine:{ label, position:"interior"|"exterior", beamIndex:<n>|null, source }`, `span:{ index:<n>|null, length:<ft> }`, `girders[].position`, and `liveLoad.vehicle` (text). Receivers must not require them.
   - *DC1 content.* DC1 is everything on the non-composite girder: girder self-weight, deck and haunch, other non-composite DC and diaphragm point loads. `notes` list the terms.

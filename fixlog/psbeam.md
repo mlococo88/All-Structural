@@ -1439,3 +1439,93 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 
 ### Open items
 - D11-O1 and D11-O2 are closed by this entry.
+
+
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+
+### STDISC. PS-Beam: ST-Girder link and sibling entries removed   [no result change, Tier 0/1]
+- **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
+- **Shared bootstrap block (CLAUDE.md §3; changed identically in index.html, psbeam.html, lldf.html):** the `stgirder` entries are removed from `BridgeApps` `DEF` and `NAMES`, `BridgeLocks` `APPS` and `LOG_APPS`; the comments now say the block is byte-identical in the three files ("edit all three"), the project registry lists slices `{mct,psbeam,lldf}` (older projects may still hold a `stgirder` slice; nothing reads it), the app-path note drops "PS-Beam opens stgirder.html in a tab", the demands-channel note reads "MCT -> PS-Beam" and the `drives()` note "any app may publish capacity; MCT and PS-Beam for geometry". Nothing else in the block changed. Effects: `BridgeApps.register/set` no longer accept `stgirder` (only ST-Girder registered itself; its reduced record in stgirder.html still writes `appPaths.stgirder`, and every other app keeps that entry when it writes the object back, so GirderDetail's open-now still finds ST-Girder); `BridgeApps.all()` and the sync drawer no longer list ST-Girder; an old `syncLog.stgirder` shard is no longer merged into the change log. Verified byte-identical: `diff` of the BridgeBeam script and of the big block between the three files shows only each file's own `BridgeApps.boot('<app>')` line, as before.
+- **Removed / changed in psbeam.html:** the header button `ST-Girder ↗` (`bridgeNav('stgirder')`); the superReactions glue comment (now "Only in psbeam.html since 2026-10-19 (ST-Girder's copy was removed …)") and its alert text ("In Bridge Substructure Loading, Reactions tab, click \"Pull from PS-Beam\"."); the handoff block comment ("shared verbatim with index.html (ST-Girder's copy was removed 2026-10-19)"); the capacity-lock comment. The BXSuperRx glue code itself is unchanged.
+- **Saved data:** none changed. **§4:** no formula, factor or result changed.
+- **How verified:** `node tests/check-syntax.mjs index.html psbeam.html lldf.html "Bridge Substructure Loading.html" tools.html` (all pass); `node tests/compare.mjs --tool page --file <each>` against main (bcbd913): psbeam, lldf, SubLoads and tools storage identical, page text differs only by the removed ST-Girder controls and the reworded ST-Girder mentions (psbeam: the "ST-Girder ↗" button; lldf: the "ST ↗" button and the self-weight notes; tools: the ST-Girder card), no console errors; index.html with a longer load timeout (scratch script): page text identical apart from the removed "🅢 Composite Steel Design App ↗" hand-off button, no console errors, the embedded-app bar lists only "PS-Beam →" / "LL & DL"; a saved ST-Girder capacity zone is replaced and the notice shown, a PS-Beam zone kept; lldf with an old ST-Girder `lldfGeom`: nothing offered; SubLoads with old ST-Girder copies: "Pull from PS-Beam" lists only PS-Beam, the short note is shown, no new-data marker for ST-Girder. ST-Girder's own checks: branch claude/stgirder-disconnect.
+- **Diff (main → branch, `git diff -U0`; runs of more than 30 deleted lines and hunks that only delete are summarised by their first and last line):**
+```diff
+diff --git a/psbeam.html b/psbeam.html
+index b5f6ae4..a492f5d 100644
+--- a/psbeam.html
++++ b/psbeam.html
+@@ -456,2 +456,3 @@ a.wk-a:hover{text-decoration:underline}
+-     This block is byte-identical in index.html / psbeam.html / stgirder.html /
+-     lldf.html — edit it in one place and copy it to the other three.
++     This block is byte-identical in index.html / psbeam.html / lldf.html — edit
++     it in one place and copy it to the other two. (ST-Girder, stgirder.html, left
++     the suite on 2026-10-19 and no longer carries it.)
+@@ -530,2 +531,2 @@ var st=document.createElement('style'); st.textContent=css;
+-     Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html /
+-     stgirder.html. Reads the analysis app's external-demands payload from
++     Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html
++     (ST-Girder's copy was removed 2026-10-19). Reads the analysis app's external-demands payload from
+@@ -645 +646 @@ var st=document.createElement('style'); st.textContent=css;
+-     four apps; each app owns a "slice". Same-origin localStorage; identical in
++     three apps; each app owns a "slice". Same-origin localStorage; identical in
+@@ -647 +648,2 @@ var st=document.createElement('style'); st.textContent=css;
+-     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,stgirder,lldf},demands} }
++     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,lldf},demands} }
++           (projects saved before 2026-10-19 may also hold a "stgirder" slice; no app reads it now)
+@@ -711,3 +713,2 @@ var st=document.createElement('style'); st.textContent=css;
+-   The four apps link to each other by bare file name: MCT embeds "psbeam.html"
+-   in an iframe, PS-Beam opens "stgirder.html" in a tab, every app's back link
+-   points at "index.html". That works only while each file is named exactly what
++   The three apps link to each other by bare file name: MCT embeds "psbeam.html"
++   in an iframe, every app's back link points at "index.html". That works only while each file is named exactly what
+@@ -731,2 +732,3 @@ var st=document.createElement('style'); st.textContent=css;
+-   This block is byte-identical in index.html / psbeam.html / stgirder.html /
+-   lldf.html. Edit one, edit all four.
++   This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
++   one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
++   keeps only a reduced app-path record of its own, which GirderDetail reads.)
+@@ -736,2 +738,2 @@ var st=document.createElement('style'); st.textContent=css;
+-  var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
+-  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
++  var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};
++  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
+@@ -906 +908 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-   Lock state is shared across all four apps — locking the distribution-factor
++   Lock state is shared across all three apps — locking the distribution-factor
+@@ -917 +919 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-   This block is byte-identical in all four apps. Edit it in one place and
++   This block is byte-identical in all three apps. Edit it in one place and
+@@ -958 +960,2 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-    /* The analysis hand-off, MCT -> the two design apps. `key` is the whole
++    /* The analysis hand-off, MCT -> PS-Beam (ST-Girder no longer reads it,
++       2026-10-19). `key` is the whole
+@@ -970 +973 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-  var APPS={mct:'MCT', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL'};
++  var APPS={mct:'MCT', psbeam:'PS-Beam', lldf:'LL & DL'};
+@@ -1001 +1004 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-     (PS-Beam and ST-Girder for capacity; MCT and both design apps for
++     (any app may publish capacity; MCT and PS-Beam for
+@@ -1045 +1048 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-  var LOG_APPS=['mct','psbeam','stgirder','lldf'];
++  var LOG_APPS=['mct','psbeam','lldf'];
+@@ -1794,5 +1797,4 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-   "Export hand-off (JSON)". Uses BridgeXfer above. Duplicated verbatim in psbeam.html and
+-   stgirder.html (CLAUDE.md §3). build() returns {payload} or {error}; it runs on click only.
+-   The payload goes to bridgeSuite.v1.superReactions, and a copy to
+-   bridgeSuite.v1.superReactions.by.<id>, so Substructure Loading can choose when both girder
+-   apps have sent. */
++   "Export hand-off (JSON)". Uses BridgeXfer above. Only in psbeam.html since 2026-10-19 (ST-Girder's
++   copy was removed: ST-Girder is connected to GirderDetail only). build() returns {payload} or {error};
++   it runs on click only. The payload goes to bridgeSuite.v1.superReactions, and a copy to
++   bridgeSuite.v1.superReactions.by.<id>, so Substructure Loading can choose between producers. */
+@@ -1830 +1832 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
+-      +'\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / ST-Girder".');
++      +'\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam".');
+@@ -8415,2 +8417,2 @@ function App(){
+-    // Only one app republishes capacity, even with PS-Beam and ST-Girder
+-    // both open on the same locked channel.
++    // Only one app republishes capacity, even with several tabs open on the
++    // same locked channel.
+-8654 +8655,0  [deleted 1 lines: first "<button className="btn sm ghost" onClick={()=>bridgeNav('stgirder')} title="Open the composite steel design ap" ... last "<button className="btn sm ghost" onClick={()=>bridgeNav('stgirder')} title="Open"]
+```

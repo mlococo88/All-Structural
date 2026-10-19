@@ -453,8 +453,9 @@ a.wk-a:hover{text-decoration:underline}
        bridgeSuite.v1.designBeam — the selected beam. Whichever app writes it,
            the others follow: same tab through onChange(), other tabs through the
            browser's storage event.
-     This block is byte-identical in index.html / psbeam.html / stgirder.html /
-     lldf.html — edit it in one place and copy it to the other three.
+     This block is byte-identical in index.html / psbeam.html / lldf.html — edit
+     it in one place and copy it to the other two. (ST-Girder, stgirder.html, left
+     the suite on 2026-10-19 and no longer carries it.)
      ═══════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
@@ -527,8 +528,8 @@ var st=document.createElement('style'); st.textContent=css;
 <body>
 <div id="root"></div>
 <!-- ═══════════════════════════════════════════════════════════════════════════
-     Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html /
-     stgirder.html. Reads the analysis app's external-demands payload from
+     Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html
+     (ST-Girder's copy was removed 2026-10-19). Reads the analysis app's external-demands payload from
      localStorage. Spec: handoff-data-format-spec.md
      ═════════════════════════════════════════════════════════════════════════ -->
 <script>
@@ -642,9 +643,10 @@ var st=document.createElement('style'); st.textContent=css;
 </script>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite unified project registry (v1) — one named project spans all
-     four apps; each app owns a "slice". Same-origin localStorage; identical in
+     three apps; each app owns a "slice". Same-origin localStorage; identical in
      every file. Legacy per-app project libraries are migrated once and kept.
-     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,stgirder,lldf},demands} }
+     Keys: bridgeSuite.v1.projects  { id:{name,savedAt,slices:{mct,psbeam,lldf},demands} }
+           (projects saved before 2026-10-19 may also hold a "stgirder" slice; no app reads it now)
            bridgeSuite.v1.currentProjectId  · bridgeSuite.v1.migrated.<app>
      ═════════════════════════════════════════════════════════════════════════ -->
 <script>
@@ -708,9 +710,8 @@ var st=document.createElement('style'); st.textContent=css;
 /* ============================================================================
    SHARED APP PATHS  ·  bridgeSuite.v1.appPaths
    ----------------------------------------------------------------------------
-   The four apps link to each other by bare file name: MCT embeds "psbeam.html"
-   in an iframe, PS-Beam opens "stgirder.html" in a tab, every app's back link
-   points at "index.html". That works only while each file is named exactly what
+   The three apps link to each other by bare file name: MCT embeds "psbeam.html"
+   in an iframe, every app's back link points at "index.html". That works only while each file is named exactly what
    the others expect. Rename one, keep a second download called
    "psbeam (1).html", or serve the folder from something that answers unknown
    paths with the index page, and a link lands on the wrong document -- or on a
@@ -728,13 +729,14 @@ var st=document.createElement('style'); st.textContent=css;
    MCT itself. Now a sighting only answers for the folder it was made in, and
    no app will ever resolve a sibling to its own file name.
 
-   This block is byte-identical in index.html / psbeam.html / stgirder.html /
-   lldf.html. Edit one, edit all four.
+   This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
+   one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+   keeps only a reduced app-path record of its own, which GirderDetail reads.)
    ========================================================================== */
 (function(){
   var KEY='bridgeSuite.v1.appPaths';
-  var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
-  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
+  var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};
+  var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
@@ -903,7 +905,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
    and records what changed. While a channel is UNLOCKED the old behaviour
    applies: an orange "data available" badge that the engineer clicks to adopt.
 
-   Lock state is shared across all four apps — locking the distribution-factor
+   Lock state is shared across all three apps — locking the distribution-factor
    channel anywhere locks it everywhere. Each consuming app keeps its own
    private snapshot of the values it held at the moment of locking, so that
    unlocking can hand the engineer's own numbers back.
@@ -914,7 +916,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
      live   ORANGE  locked — auto-adopting, inputs read-only
      warn   AMBER   locked but the payload failed a check; nothing was applied
 
-   This block is byte-identical in all four apps. Edit it in one place and
+   This block is byte-identical in all three apps. Edit it in one place and
    re-inject; do not patch a single copy.
    ========================================================================== */
 (function(){
@@ -955,7 +957,8 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
     project:   {label:'Project info',         short:'Project',   producer:'*',
                 key:NS+'.projectMeta',     at:null,
                 fields:'project name, bridge ID, prepared by, date, job number'},
-    /* The analysis hand-off, MCT -> the two design apps. `key` is the whole
+    /* The analysis hand-off, MCT -> PS-Beam (ST-Girder no longer reads it,
+       2026-10-19). `key` is the whole
        handoff map rather than one payload, so it carries no producedAt of its
        own: hasData() only needs to know the map is non-empty, and the timestamp
        comes from the companion key BridgeHandoff already maintains. Single
@@ -967,7 +970,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
 
   /* App id -> short display name, used to attribute change-log rows and to
      name the app in the suite panel header. */
-  var APPS={mct:'MCT', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL'};
+  var APPS={mct:'MCT', psbeam:'PS-Beam', lldf:'LL & DL'};
 
   /* Default channel order for the suite panel: the two the LL & DL app drives
      first (they are the ones engineers lock day to day), then the rest. */
@@ -998,7 +1001,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
   /* Which app is allowed to auto-publish this channel while it is locked.
 
      `capacity` and `geometry` each have more than one possible producer
-     (PS-Beam and ST-Girder for capacity; MCT and both design apps for
+     (any app may publish capacity; MCT and PS-Beam for
      geometry). If every producer with a tab open republished on the lock, two
      tabs would overwrite each other on every keystroke and the consumer would
      see an endless alternating toast. So exactly one app drives: the one that
@@ -1042,7 +1045,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
      adopting the same publish in the same instant would otherwise both
      read-modify-write the single key and the slower writer would silently
      drop the faster one's entry. Each app owns its shard; logs() merges. */
-  var LOG_APPS=['mct','psbeam','stgirder','lldf'];
+  var LOG_APPS=['mct','psbeam','lldf'];
   function logKey(app){ return K_LOG+'.'+(app||'app'); }
   function logShard(app){ var a=rd(logKey(app)); return Array.isArray(a)?a:[]; }
   function logApps(){
@@ -1791,11 +1794,10 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
 </script>
 <script>
 /* superReactions sender glue (HANDOFF.md §4.4): "Send reactions to Substructure Loading" and
-   "Export hand-off (JSON)". Uses BridgeXfer above. Duplicated verbatim in psbeam.html and
-   stgirder.html (CLAUDE.md §3). build() returns {payload} or {error}; it runs on click only.
-   The payload goes to bridgeSuite.v1.superReactions, and a copy to
-   bridgeSuite.v1.superReactions.by.<id>, so Substructure Loading can choose when both girder
-   apps have sent. */
+   "Export hand-off (JSON)". Uses BridgeXfer above. Only in psbeam.html since 2026-10-19 (ST-Girder's
+   copy was removed: ST-Girder is connected to GirderDetail only). build() returns {payload} or {error};
+   it runs on click only. The payload goes to bridgeSuite.v1.superReactions, and a copy to
+   bridgeSuite.v1.superReactions.by.<id>, so Substructure Loading can choose between producers. */
 (function(){
   if(window.BXSuperRx) return;
   function f2(v){ return (+v).toFixed(2); }
@@ -1827,7 +1829,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
     if(r.error){ alert('Could not send the reactions: '+r.error); return r; }
     try{ localStorage.setItem(BridgeXfer.NS+'superReactions.by.'+id, JSON.stringify(r.payload)); }catch(e){}
     alert('Reactions sent to Substructure Loading (unfactored, kip, one girder line):\n\n'+summary(r.payload)
-      +'\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / ST-Girder".');
+      +'\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam".');
     return r;
   }
   function exportJSON(build, producer, file){
@@ -8412,8 +8414,8 @@ function App(){
   const capLocked=!!(BL&&BL.isLocked('capacity'));
   const capTimer=useRef(null);
   useEffect(()=>{
-    // Only one app republishes capacity, even with PS-Beam and ST-Girder
-    // both open on the same locked channel.
+    // Only one app republishes capacity, even with several tabs open on the
+    // same locked channel.
     if(!BL||!BL.drives('capacity',LOCK_APP,'PS-Beam')) return;
     clearTimeout(capTimer.current);
     capTimer.current=setTimeout(()=>{
@@ -8651,7 +8653,6 @@ function App(){
             <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           </React.Fragment>}
           <button className="btn sm ghost" onClick={()=>bridgeNav(null)} title="Back to the MIDAS/MCT analysis app">↩ MCT Analysis</button>
-          <button className="btn sm ghost" onClick={()=>bridgeNav('stgirder')} title="Open the composite steel design app">ST-Girder ↗</button>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           <button className="btn sm ghost" onClick={bxSendRx} title="Send the unfactored DC1, DC2 and DW end reactions of this girder line (kip) to Bridge Substructure Loading">Send reactions to Substructure Loading</button>
           <button className="btn sm ghost" onClick={bxExportRx} title="Save the same reactions hand-off as a JSON file (for Import hand-off in Substructure Loading, or a calc package)">Export hand-off (JSON)</button>
