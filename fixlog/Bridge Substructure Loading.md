@@ -1243,3 +1243,76 @@ index 06e7a50..8a2a0af 100644
 +    txt.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '').forEach((l, a) => { const r = row[+j0 + a]; if (!r) return; l.split('\t').forEach((v, b) => { const c = cols[ci + b], x = num(v.replace(/,/g, '')); if (c && isFinite(x)) { r[c] = x; n++; } }); });
 +    buildSide(); recompute(); autosave(); flash(`Pasted ${n} utility value${n === 1 ? '' : 's'} into ${esc(P.units[+k].name)}.`); }, true);
 ```
+
+## 2026-10-19 — PR: claude/subloads-uf-loadtype (SRXF: the future utility allowance UF as its own permanent load, 1.25 / 0; engineer decision "merge, then fix UF min" after #312; PR link added after merge)
+
+### SRXF. UF: own permanent load in the combinations   [RESULT CHANGE — §4 callout; projects without UF unchanged]
+- **Engineer decision (2026-10-19, after #312):** give UF its own permanent load component: maximum factor where it adds, 0 where it relieves; Service 1.0 / 0; UT stays in DW (DW factors 1.50 / 0.65 already match GirderDetail).
+- **Where the factors are applied:** one engine runs. `combine` is reassigned four times before the unified engine (`combine = function (k) {` after `function comboEval`, which replaces, not wraps, the earlier versions); the Combinations tab, the governing table (`govSumHtml`), the governing-effect lines, the DXF table, the concurrent sets (`concurrentSets` → `comboEval`) and the foundation / abutment hand-offs all go through `comboComps`. The earlier `combine` bodies (DC/DW `pf(…)` pairs) never run and are left as they are. Changed:
+  - `comboComps` (anchor `if (D.UF) perm(D.UF, [L.dc[0], 0], 'UF')`): UF is a `perm` component with factors [the limit state's DC maximum (`lfOf(c).dc[0]`: Strength I, III, V and Extreme Event 1.25, Strength IV 1.50, Service I 1.0, follows a DC max override), 0]. The construction stage has no superstructure load, so no UF (as DC super).
+  - `dlUnit` wrapper (SRXU block): `DC super` (`DCs`) is the original DC1 + DC2 without UF; new `D.UF` (only when a bearing has a nonzero UF). `dc2` / `dw` per bearing still include UF / UT (bearing table, seismic weight, abutment export: unfactored totals as before).
+  - Dead load effects table: UF column and "DC + DW + UF" when the unit has UF; All units table: UF column when any unit has one. Combinations tab note: the UF factors. Breakdown note (Dead load tab, report basis): the 0.90 text replaced by the factors above.
+- **Before (#312):** UF in DC super: Strength I 1.25 / **0.90**, Service I 1.0 / **1.0**, Strength IV 1.50 / 0.90. **After:** 1.25 / **0**, Service I 1.0 / **0**, Strength IV 1.50 / 0.
+- **Governing provision:** MassDOT LRFD Bridge Manual Part I 3.5.5.2 (future utility allowance, not counted where it relieves), as GirderDetail's `utilities.future` (strMax 1.25, strMin 0, service 1.0, serviceRelieving 0); AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2 for DC / DW.
+- **Check case (util.json via GirderDetail into the SubLoads built-in bridge; before = main #312, after = this branch):** UF per pier 35.26 kip (G2 and G3 17.63 each; G2 at y = 9.84 ft, G3 at 0), per abutment 9.74 kip. Every maximum where UF adds is unchanged (e.g. Pier 1 bottom of footing P max 3612.1, Service I 2634.3; Abut. 1 seat P max 993.3). Changes, all where UF relieves:
+
+| Unit, section, effect | Before (#312) | After |
+|---|---|---|
+| Pier 1, bottom of footing, P min (Strength III) | 1792.3 | **1760.6** |
+| Pier 1, top of footing, P min (Strength III) | 1208.5 | 1176.8 |
+| Pier 2, bottom of footing, P min (Strength III) | 1682.8 | 1651.1 |
+| Pier 2, top of footing, P min (Strength III) | 1330.7 | 1299.0 |
+| Pier 1, bottom of footing, M_t min (Strength I) | −7046.1 | −7202.1 |
+| Pier 2, bottom of footing, M_t min | −6746.9 | −6902.9 |
+| Abut. 1, bridge seat / bottom of footing, M_t min | −4091.3 / −3414.2 | −4134.4 / −3457.4 |
+| Abut. 1, bottom of footing, M_l min | −1223.7 | −1234.7 |
+| Abut. 2, bottom of footing, M_l max (Strength I) / Service I | 1418.6 / 557.5 | 1429.6 / 569.7 |
+| Abut. 2, top of footing, M_l max (Strength V) / Service I | −1381.6 / −1298.2 | −1370.6 / −1286.0 |
+
+  - **Hand check:** Pier 1 bottom of footing P min = (without utilities) 1733.1 + 0.65 × UT 42.31 + **0** × UF 35.26 = 1733.1 + 27.50 = **1760.6 kip** ✓ (before: + 0.90 × 35.26 = 31.73 → 1792.3). M_t min at Pier 1: UF moment about the bearing line center = 17.63 × 9.84 + 17.63 × 0 = 173.5 kip-ft; before 0.90 × 173.5 = 156.1 kip-ft relieved it, after 0: −7046.1 − 156.0 = **−7202.1** ✓.
+- **How verified:** `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: pass. `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"`: identical. origin/main vs branch, Pull → defaults → Apply: PS-Beam (real), PS-Beam MIDAS-style, older two-girder (`mct`), old ST-Girder copy, ST-Girder on the channel, GirderDetail built-in: identical (texts, cells, stored data). Every limit state's max / min array, the envelope and every concurrent set of every unit, numerically, main vs branch: identical for the built-in project and for the util payload with UF removed (UT only). Util payload: only the changes in the table above (every value compared).
+- **Saved data:** none changed (UF already stored as `ut`/`uf` keys since SRXU).
+- **Other copies:** none. GirderDetail unchanged.
+- **Open items:** Strength IV takes UF at the DC maximum 1.50 (UF follows DC's γ_p; GirderDetail checks Strength I only, so its 1.25 does not say). Confirm, or fix UF's maximum at 1.25 in every Strength / Extreme limit state.
+
+Diff (`Bridge Substructure Loading.html`, `git diff -U0`):
+
+```diff
+diff --git a/Bridge Substructure Loading.html b/Bridge Substructure Loading.html
+index 8a2a0af..038486a 100644
+--- a/Bridge Substructure Loading.html	
++++ b/Bridge Substructure Loading.html	
+@@ -1468 +1468,2 @@ function dlHtml() {
+-    ${respTable(r.UM.defs, [{ t: 'DC super' }, { t: 'DC sub' }, { t: 'DW' }, { t: 'DC + DW' }], (d, q) => [D.DCs[q], D.DCsub[q], D.DW[q], D.DCs[q] + D.DCsub[q] + D.DW[q]].map(v => `<td class="val">${fv(v, d.u)}</td>`).join(''))}
++    ${D.UF ? respTable(r.UM.defs, [{ t: 'DC super' }, { t: 'DC sub' }, { t: 'DW' }, { t: 'UF' }, { t: 'DC + DW + UF' }], (d, q) => [D.DCs[q], D.DCsub[q], D.DW[q], D.UF[q], D.DCs[q] + D.DCsub[q] + D.DW[q] + D.UF[q]].map(v => `<td class="val">${fv(v, d.u)}</td>`).join(''))   /* SRXF: future utility allowance, its own load */
++      : respTable(r.UM.defs, [{ t: 'DC super' }, { t: 'DC sub' }, { t: 'DW' }, { t: 'DC + DW' }], (d, q) => [D.DCs[q], D.DCsub[q], D.DW[q], D.DCs[q] + D.DCsub[q] + D.DW[q]].map(v => `<td class="val">${fv(v, d.u)}</td>`).join(''))}${D.UF ? '<p class="note" style="padding:6px 0 0">UF = future utility allowance (MassDOT utilities from GirderDetail), its own permanent load: DC super excludes it here; see the note above the bearing table.</p>' : ''}
+@@ -1470,0 +1472 @@ function dlHtml() {
++  const anyUF = P.units.some((x, i) => { const rr = unitRes(i); return !rr.err && rr.DL && rr.DL.UF; });   // SRXF
+@@ -1473,2 +1475,2 @@ function dlHtml() {
+-    const Dl = rr.DL; return `<tr><td class="lbl">${esc(x.name)}</td><td>${lbl.charAt(0).toUpperCase() + lbl.slice(1)}</td><td class="val">${f1(Dl.DCs[qi])}</td><td class="val">${f1(Dl.DCsub[qi])}</td><td class="val">${f1(Dl.DW[qi])}</td><td class="val">${mt >= 0 ? f0(Dl.DCs[mt] + Dl.DCsub[mt] + Dl.DW[mt]) : '—'}</td></tr>`; }).join('');
+-  h += `<div class="card"><div class="card-h"><h2>All units at the lowest section</h2><span class="sub">Unfactored axial (kip) and transverse moment of DC + DW (kip-ft)</span></div><div class="card-b tscroll"><table class="tbl"><thead><tr><th>Unit</th><th>Section</th><th class="right">DC super</th><th class="right">DC sub</th><th class="right">DW</th><th class="right">M<sub>t</sub>, DC + DW</th></tr></thead><tbody>${rowsAll}</tbody></table></div></div>`;
++    const Dl = rr.DL, uf = q => Dl.UF ? Dl.UF[q] : 0; return `<tr><td class="lbl">${esc(x.name)}</td><td>${lbl.charAt(0).toUpperCase() + lbl.slice(1)}</td><td class="val">${f1(Dl.DCs[qi])}</td><td class="val">${f1(Dl.DCsub[qi])}</td><td class="val">${f1(Dl.DW[qi])}</td>${anyUF ? `<td class="val">${f1(uf(qi))}</td>` : ''}<td class="val">${mt >= 0 ? f0(Dl.DCs[mt] + Dl.DCsub[mt] + Dl.DW[mt] + uf(mt)) : '—'}</td></tr>`; }).join('');
++  h += `<div class="card"><div class="card-h"><h2>All units at the lowest section</h2><span class="sub">Unfactored axial (kip) and transverse moment of DC + DW${anyUF ? ' + UF' : ''} (kip-ft)</span></div><div class="card-b tscroll"><table class="tbl"><thead><tr><th>Unit</th><th>Section</th><th class="right">DC super</th><th class="right">DC sub</th><th class="right">DW</th>${anyUF ? '<th class="right">UF</th>' : ''}<th class="right">M<sub>t</sub>, DC + DW${anyUF ? ' + UF' : ''}</th></tr></thead><tbody>${rowsAll}</tbody></table></div></div>`;
+@@ -2917 +2919 @@ function comboComps(k, c) {
+-  perm(DC, L.dc, 'DC'); perm(D.DW, L.dw, 'DW'); fix(p4.SH && sc(p4.SH, gSHof(k)), 'SH');   // γSH, Table 3.4.1-3: 0.5 with I_g, 1.0 with I_eff; steel substructures 1.0
++  perm(DC, L.dc, 'DC'); perm(D.DW, L.dw, 'DW'); if (D.UF) perm(D.UF, [L.dc[0], 0], 'UF'); fix(p4.SH && sc(p4.SH, gSHof(k)), 'SH');   // SRXF: future utility allowance (MassDOT), DC max factor where it adds, 0 where it relieves   // γSH, Table 3.4.1-3: 0.5 with I_g, 1.0 with I_eff; steel substructures 1.0
+@@ -3448,3 +3450,3 @@ async function rxImport(file) {
+-     table "MassDOT utilities from GirderDetail" under each support. In the analysis UT (existing utilities) is added to DW and UF (future utility
+-     allowance) to DC (superstructure, with DC2): SubLoads has no separate permanent load type, so UF takes the DC factors (Strength 1.25 max /
+-     0.90 min, Service 1.0) where GirderDetail uses 1.25 / 0 (Service 0 where it relieves). The Dead load tab and the report show the breakdown.
++     table "MassDOT utilities from GirderDetail" under each support. In the analysis UT (existing utilities) is added to DW; UF (future utility
++     allowance) is its own permanent load D.UF (SRXF, 2026-10-19), factored in comboComps with the limit state's DC maximum where it adds and 0
++     where it relieves (GirderDetail: 1.25 / 0, Service 1.0 / 0). The Dead load tab and the report show the breakdown.
+@@ -3461,0 +3464,2 @@ async function rxImport(file) {
++  { const ch0 = comboHtml; comboHtml = function () { const h = ch0(), k = P.ui.sel; let D = null; try { D = unitRes(k).DL; } catch (e) { } if (!D || !D.UF) return h;   // SRXF
++      return h.replace('<p class="note" style="padding:8px 0 0">Load factors: ', '<p class="note" style="padding:8px 0 0">Load factors: UF (future utility allowance, MassDOT utilities from GirderDetail) in every limit state: the DC maximum factor where it adds, 0 where it relieves (MassDOT Part I 3.5.5.2, as GirderDetail); '); }; }
+@@ -3465,2 +3469,3 @@ async function rxImport(file) {
+-    const add = (a, b) => a.map((rr, ri) => rr.map((v, j) => v + b[ri][j])), ut = L('ut'), uf = L('uf'), dc2 = add(r.dc2, uf), dw = add(r.dw, ut);
+-    return { ...r, dc2, dw, ut, uf, DCs: UM.evalFn(add(r.dc1, dc2), false), DW: UM.evalFn(dw, false), has: true }; };
++    const add = (a, b) => a.map((rr, ri) => rr.map((v, j) => v + b[ri][j])), ut = L('ut'), uf = L('uf'), dc2 = add(r.dc2, uf), dw = add(r.dw, ut), hasUF = uf.some(rr => rr.some(v => v));
++    // SRXF (engineer decision 2026-10-19): UF is its own permanent load (D.UF; factors in comboComps); DC super (r.DCs) excludes it. dc2 / dw keep the totals per bearing (tables, seismic weight, abutment export)
++    return { ...r, dc2, dw, ut, uf, ...(hasUF ? { UF: UM.evalFn(uf, false) } : {}), DW: UM.evalFn(dw, false), has: true }; };
+@@ -3469 +3474 @@ async function rxImport(file) {
+-    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; DC2 (DC superstructure) includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). UF takes the DC factors (Strength 1.25 max / 0.90 min, Service 1.0): GirderDetail uses 1.25 / 0 (Service 0 where it relieves), which SubLoads cannot represent without a separate load type, so where UF relieves (minimum cases) 0.90 UF is counted.`; };
++    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
+```
