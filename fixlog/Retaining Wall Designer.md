@@ -826,3 +826,57 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
 ### Needs engineer
 - **Report length:** the report now carries every card of the tabs (default project: 32 pages, was 9). Keep it all, or add section toggles later?
 - **Checked date:** the tool has no checked-date field, so the title block and print header show "—". Add an optional tool-prefixed field?
+
+## 2026-10-19 — PR: claude/rw-status-badges (PR link added after merge)
+
+### Over-stressed sections: the bar-selection badges, the Overview scorecard and the rebar schedule now use the status-bar condition (engineer-approved 2026-10-19; Tier 1, display only)
+- **Problem:** when a flexural section is over-stressed (R_n so large that 1 − 2R_n/(0.85 f'c) < 0), `calcAll` sets A_s,req = 0 and A_s,des = A_s,min, and the bar picked for A_s,min passes A_s,prov ≥ A_s,des. The status bar marks the flexure check FAIL, because `r.checks.stemFlex / heelFlex / toeFlex` require `!<section>_overstressed`. The Step 3 bar-selection badges (S1, F1, F2), the Overview scorecard and the rebar schedule tested only A_s,prov ≥ A_s,des and showed PASS. A displayed PASS on these now reads FAIL when the section is over-stressed (more conservative display; no value changed).
+- **The status-bar condition** (`calcAll`, anchor `const checks = {`), unchanged:
+  - `stemFlex: { ok: !stem_overstressed && sel_stem.As_prov >= As_stem_des - 0.001`
+  - `stemMidFlex: { ok: !stemT_overstressed && sel_stemT.As_prov >= As_stemT_des - 0.001`
+  - `heelFlex: { ok: !heel_overstressed && sel_heel.As_prov >= As_heel_des - 0.001`
+  - `toeFlex: { ok: !toe_overstressed && sel_toe.As_prov >= As_toe_des - 0.001`
+- **Changed (each `ok` argument or field only):**
+  1. `renderStem`, anchor `eqCheck('Bar selection — S1 vertical, back face'`, third argument:
+     - Before: `    r.sel_stem.As_prov >= r.As_stem_des - 0.001);`
+     - After: `    !r.stem_overstressed && r.sel_stem.As_prov >= r.As_stem_des - 0.001);`
+  2. `renderFooting`, anchor `eqCheck('Bar selection — F1 transverse '`:
+     - Before: `    r.sel_heel.As_prov >= r.As_heel_des - 0.001);`
+     - After: `    !r.heel_overstressed && r.sel_heel.As_prov >= r.As_heel_des - 0.001);`
+  3. `renderFooting`, anchor `eqCheck('Bar selection — F2 transverse bottom'`:
+     - Before: `    r.sel_toe.As_prov >= r.As_toe_des - 0.001);`
+     - After: `    !r.toe_overstressed && r.sel_toe.As_prov >= r.As_toe_des - 0.001);`
+  4. `buildScorecard`, the `struct` rows `Stem Flex`, `Heel Flex`, `Toe Flex`:
+     - Before: `ok: r.sel_stem.As_prov >= r.As_stem_des - 0.001 },` (and `sel_heel / As_heel_des`, `sel_toe / As_toe_des`)
+     - After: `ok: !r.stem_overstressed && r.sel_stem.As_prov >= r.As_stem_des - 0.001 },` (and `!r.heel_overstressed && …`, `!r.toe_overstressed && …`)
+  5. `renderRebar` (the rebar schedule shows a PASS/FAIL per bar mark and an overall banner for the same checks):
+     - rows S1, S3, F1, F2 get an `os` field. Before: `      overridden: r.sel_stem.overridden` (likewise `sel_stemT`, `sel_heel`, `sel_toe`). After: `      overridden: r.sel_stem.overridden, os: r.stem_overstressed` (likewise `os: r.stemT_overstressed`, `os: r.heel_overstressed`, `os: r.toe_overstressed`). S2 and F3 have no `os` (T&S bars, no over-stress flag).
+     - Banner. Before: `  const allOk = rows.every(rw => rw.As_prov >= rw.As_req - 0.001);` After: `  const allOk = rows.every(rw => !rw.os && rw.As_prov >= rw.As_req - 0.001);`
+     - Row status. Before: `              const ok = rw.As_prov >= rw.As_req - 0.001;` After: `              const ok = !rw.os && rw.As_prov >= rw.As_req - 0.001;`
+- **Already consistent, not changed:** the mid-height S3 badge (`eqCheck('Bar selection — S3 mid-height vertical'` already had `!r.stemT_overstressed &&`); the unused `flexShearCard()` helper; the report summary result lines (`rwResultRows`, which read `r.checks[k].ok`). The report prints the tabs' cards, so its S1/F1/F2 badges follow item 1–3.
+- **Provision:** none changed. Over-stress test as coded: ACI 318-19 §22.2 / AASHTO LRFD 10th Ed. Art. 5.6.3 rectangular stress block, no real root of the A_s quadratic when R_n > 0.425 f'c. No formula, factor, unit, code reference or computed value changed; only the PASS/FAIL shown.
+- **Saved data:** none.
+- **Check case (stem over-stressed), ACI basis, default inputs except H_s = 18 ft, t_s,bot = t_s,top = 8 in, L_h = 12 ft, L_t = 4 ft:**
+  - M_u = 746,496 lb·in/ft (62.21 k·ft/ft); d = 8 − 2.00 − 0.375/2 = 5.8125 in (#3).
+  - R_n = 746,496 / (0.90 × 12 × 5.8125²) = 746,496 / 364.88 = 2045.9 psi > 0.425 f'c = 0.425 × 4000 = 1700 psi; 1 − 2(2045.9)/(0.85 × 4000) = −0.203 < 0 → over-stressed.
+  - A_s,req = 0 → A_s,des = A_s,min = 0.0018 × 12 × 8 = 0.1728 in²/ft; S1 #3 @ 7" → A_s,prov = 0.11 × 12 / 7 = 0.1886 ≥ 0.1728.
+  - Status bar (before and after): "3 of 15 checks fail" with Stem Flex ✕ (also Stem Shear ✕, Toe Shear ✕).
+  - Before: S1 badge PASS; scorecard Stem Flex green (D/C 0.92); rebar schedule S1 PASS and "✓ All reinforcement requirements satisfied."
+  - After: S1 badge FAIL; scorecard Stem Flex red (D/C 0.92 unchanged); rebar S1 FAIL and the "⚠ One or more bars …" banner.
+- **Check case (heel):** same defaults except H_s = 24 ft, t_s,bot = 30 in, t_s,top = 12 in, t_f = 12 in, L_h = 20 ft, L_t = 8 ft, f'c = 3000 psi: R_n,heel = 1316.5 psi > 0.425 × 3000 = 1275 psi; F1 #4 @ 9" = 0.2667 ≥ A_s,min = 0.2592. F1 badge, scorecard Heel Flex and rebar F1: PASS → FAIL; status bar Heel Flex ✕ before and after.
+- **Check case (toe):** as the heel case with L_h = 8 ft, L_t = 12 ft: R_n,toe = 1311.2 psi > 1275 psi; F2 #4 @ 9" = 0.2667 ≥ 0.2592. F2 badge, scorecard Toe Flex and rebar F2: PASS → FAIL; status bar Toe Flex ✕ before and after.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file "Retaining Wall Designer.html"`: page.text and page.storage identical (console errors on both sides are the CDN libraries the kit does not hold).
+  - Headless main vs branch (MathJax 3.2.2 and plotly.js-dist-min 2.35.2 from `npm pack`, three r128 from `tests/libs`), on the five cases of the D11 entry plus the stem, heel and toe over-stressed cases: the full `window._R` (functions removed) is identical in every case; the status bar text is identical; 0 console errors. The five D11 cases have identical tab text, badges, scorecard and rebar schedule. In the three over-stressed cases the only differences are the badge, scorecard row, rebar row and rebar banner listed above.
+  - Screenshots of the S1 / F1 / F2 badges, the scorecard and the rebar schedule checked.
+- **Other copies:** none.
+
+### Open items (noticed, not changed)
+- **Checks shown in cards but not counted in the status bar (decision for the engineer):**
+  - Stem–footing interface shear (AASHTO Stability Step 8, `eqCheck('Stem–footing interface (S1 bars as shear friction)'`, flag `aashtoR.ish.ish_stem_ok`) is not in `r.checks`. The status-bar "Interface Shear" chip (`ishFtg`) is the footing–subfooting check (`ish_ftg_ok || dowel_ok`). A stem–footing FAIL would not show in the status bar or the scorecard.
+  - In the same card, the footing-interface line shows FAIL when `ish_ftg_ok` is false even if dowels make up the deficit; the status-bar chip then reads PASS (`dowel_ok`). The dowel line in the card shows that PASS.
+  - S2 (stem horizontal T&S) and F3 (footing longitudinal T&S) badges (`eqCheck('Bar selection — S2 horizontal'`, `eqCheck('Bar selection — F3 longitudinal'`) are not in `r.checks`. The rebar schedule rows and banner do count them, so the rebar banner can read FAIL while the status bar reads all pass.
+  - The report lists all three as "card check, not counted in the status bar".
+- **Scorecard D/C for an over-stressed section** is A_s,des / A_s,prov with A_s,des = A_s,min, so it reads below 1.0 (0.92 in the stem case) while the row is red. The over-stress is not in the D/C.
+- **Rebar banner wording:** "One or more bars do not satisfy required steel area" also appears when the cause is an over-stressed section.
