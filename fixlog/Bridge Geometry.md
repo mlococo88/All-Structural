@@ -1358,3 +1358,29 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Check case:** demo bridge (supports 0° / 15° / 0°): `skewDetail` moment 0, shear 15 (unchanged). Dialog before: select "choose…", Send disabled. After: select "for moment DFs", Send enabled; notes as above. In lldf this payload sets θ = 0, θ_V = 15 (lldf SW3 check case).
 - **How verified:** headless Chromium, main vs branch: `bgxBuildLldfGeom({skewRule:'moment'})` (only the note text differs), `bgxOpenLldfGeom()` (select value, Send state); screenshot `bg_dialog_br.png` looked at. No page errors.
 - **Closes:** the HANDOFF.md §4.2 open item from the 2026-10-12 sweep entry (now documented in this PR).
+
+## 2026-10-19 — PR: claude/aashto-ed-geometry — AASHTO LRFD edition stated as 10th Ed. (2024) in the skew notes (wording only, no result change; PR link added after merge)
+
+Engineer decision 2026-10-19 ("follow the owner"): tools without an owner setting state AASHTO LRFD **10th Ed. (2024)**. Bridge Geometry has no owner setting and stated no edition.
+
+### ED1. Edition in the two AASHTO citations of the LL & DL hand-off notes   [wording] [no result change]
+- **Where:** `bgxBuildLldfGeom` ("Hand-off: Bridge Geometry -> LL & DL Distribution" script), the `notes` of the `bridgeSuite.v1.lldfGeom` payload. Anchors: `allows no moment reduction`, `Table 4.6.2.2.2e-1). '`.
+- **Before:**
+  ```js
+  '0: adjacent supports differ by more than 10 deg, so AASHTO LRFD Art. 4.6.2.2.2e allows no moment reduction'
+  ...
+  +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+  ```
+- **After:**
+  ```js
+  '0: adjacent supports differ by more than 10 deg, so AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e allows no moment reduction'
+  ...
+  +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+  ```
+- **Articles checked against AASHTO LRFD 10th Ed. (2024)** (every AASHTO LRFD item the tool cites; same number and same subject, no provision change): Art. 4.6.2.2.2e and Table 4.6.2.2.2e-1 (skew reduction of moment DFs; reduction only where adjacent support skews differ by no more than 10°: same rule as the tool's `skNoRed`); Art. 4.6.2.2.3c and Table 4.6.2.2.3c-1 (skew correction of shear DFs, obtuse corner). Neither article is in the 10th Ed. list of changed articles.
+- **Governing provision:** as above. No formula, factor, unit or skew rule changed; only the edition is named.
+- **Payload / saved data:** the `bridgeSuite.v1.lldfGeom` format and keys are unchanged; only the text of these two notes differs. No localStorage key touched.
+- **Check case:** demo bridge (supports 0° / 15° / 0°): `bgxBuildLldfGeom({skewRule})` for moment, min, mean, max: `inputs`, `basis`, `skewDetail` identical to main (moment skew 0.00°, shear skew 15.00°); `notes[1]` (moment rule) and `notes[3]` (all rules) differ only by the inserted "10th Ed. (2024) ".
+- **How verified (Tier 0):** `node tests/check-syntax.mjs "Bridge Geometry.html"`: all scripts pass. `node tests/compare.mjs --tool page --file "Bridge Geometry.html"`: page text and storage identical to main (the 4 console errors are the CDN libraries the test kit does not serve, the same on main). Headless payload comparison main vs branch as in the check case (only `producedAt` and the two notes differ).
+- **Other copies:** none.
+- **Open items:** none.
