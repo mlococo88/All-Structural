@@ -1027,3 +1027,111 @@ index e93548b..9f9a238 100644
 -<a class="card" href="stgirder.html" target="_blank"><div class="name">ST-Girder</div><div class="desc">Steel plate girder design: flexure, shear, fatigue, stiffeners, studs, rating.</div><span class="tag">AASHTO LRFD Sec. 6</span></a>
 +<a class="card" href="stgirder.html" target="_blank"><div class="name">ST-Girder</div><div class="desc">Steel plate girder design: flexure, shear, fatigue, stiffeners, studs, rating. Connected to GirderDetail only (demands from Steel Bridge Beam Modules); not linked to the MCT, PS-Girder, LL &amp; DL or Substructure tools.</div><span class="tag">AASHTO LRFD Sec. 6</span></a>
 ```
+
+## 2026-10-19 — PR: claude/gd-superreactions (SRX: steel girder reactions for Bridge Substructure Loading from GirderDetail; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, tools.html, ENGINEER_CHECKS GD72; PR link added after merge)
+
+### SRX. Reactions from GirderDetail (every girder, by number)   [RECEIVER CHANGE — PS-Beam and older payloads adopt exactly as before; §4 callout: steel reactions now from GirderDetail]
+- **Engineer decision (2026-10-19):** steel girder reactions come from GirderDetail (Steel Bridge Beam Modules), replacing the ST-Girder source removed in STDISC.
+- **Where (`patchRxHandoff`):** `BY` gains `'girderdetail'` (anchor `const BY = ['psbeam', 'mct', 'girderdetail'];`), so `superReactions.by.girderdetail` is listed with the others. New `ownSum` / `ownTxt` (optional `ownerRules`, validated: m, η max, η min finite and positive, else ignored). `pickSource`: `DLG.byN` when the payload has `allGirders` and G-numbered labels; then the girder preset is the new `'bynum'` (every SubLoads girder that has a source girder of the same number) and `plan()` takes, for each target girder Gj, the source girder labelled Gj (otherwise one source girder for every ticked girder, as before). Dialog: "Girder line … (every girder of the bridge)", an "Owner load rules" row (information only, not applied), a "Source girders" select (each girder to the same number / one source girder to the girders chosen below; a different girder count is warned), the source-girder select reads "Show the values of" in by-number mode. Source record `P.rxSrc[]`: optional `byNumber:true`, `ownerRules:{ owner, m, etaMax, etaMin, haunch0 }`, `girder` "G1, …, Gn, each to the girder with the same number"; `srcText` adds the owner rules when recorded. Button "Pull from PS-Beam / GirderDetail"; the "nothing sent yet" alert names GirderDetail. New: the Summary tab note under the substructure units table lists the recorded hand-off sources (wraps `summaryHtml`; also printed in the report's Summary chapter); nothing is added when no source is recorded.
+- **Unchanged:** validation (`check`), unit conversion, support mapping (`defTarget`: "Abut. 1" → first unit, "Pier k" → unit k, "Abut. 2" → last unit), replace / add, ST-Girder refusal, the import path, the new-data marker, every load calculation. A payload without `allGirders` follows exactly the old path.
+- **Saved data:** optional fields only (`P.rxSrc[].byNumber`, `P.rxSrc[].ownerRules`); old projects open unchanged; main reads the new records (unknown fields ignored).
+- **§4 callout (steel reactions now from GirderDetail's continuous staged analysis instead of ST-Girder's copy):** no SubLoads formula or factor changes; the reactions adopted for a steel bridge change. Built-in GirderDetail project (owner MassDOT) into the SubLoads built-in bridge (same geometry, 110 / 140 / 110 ft, 5 girders at 9.5 ft), compared with what main before #309 did with the same bridge: ST-Girder at 71fbbaa fed with GirderDetail's G1 and G2 "Send to ST-Girder" payloads, its "Send reactions" for every span (the end shears of that span), pier shares added, G1 applied to G1/G5 and G2 to G2–G4 (position, the old default):
+
+| Support, girder | Old (ST-Girder copy) DC1 / DC2 / DW | New (GirderDetail) DC1 / DC2 / DW |
+|---|---|---|
+| Abut. 1, G1 | 43.257 / 13.297 / 8.090 | 44.008 / 13.467 / 8.194 |
+| Abut. 1, G2 | 51.592 / 9.771 / 8.093 | 52.639 / 9.896 / 8.197 |
+| Abut. 1, G3 | 51.592 / 9.771 / 8.093 | 52.639 / 6.320 / 8.197 |
+| Pier 1, G1 | 162.710 / 47.581 / 28.948 | 164.139 / 47.922 / 29.156 |
+| Pier 1, G2 | 193.103 / 34.948 / 28.946 | 194.934 / 35.198 / 29.153 |
+| Pier 1, G3 | 193.103 / 34.948 / 28.946 | 194.934 / 22.480 / 29.153 |
+
+  Two reasons: (1) ST-Girder's copy was the element shear next to the support, without the load on the support node itself (half an element of uniform load and the end cross-frame point loads on the bearing line): e.g. G2 Abut. 1 DC1 51.592 + 2.094 klf × 0.5 ft = 52.639; Pier 1 DC2 17.412 + 17.536 = 34.948, + 0.251 = 35.198. (2) ST-Girder sent one interior girder (G2) for all interior girders; GirderDetail sends each girder, so G3 gets its own DC2 (MassDOT pile-cap distribution: 0.160 vs 0.251 klf). Governing results that change (SubLoads Summary "Governing design forces", Strength I; the others are unchanged):
+
+| Unit, section | Old | New | Change |
+|---|---|---|---|
+| Abut. 1, bridge seat, P max (kip) | 960.6 | 963.6 | +0.31% |
+| Abut. 1, bottom of footing, P max (kip) | 2541.8 | 2544.8 | +0.12% |
+| Abut. 1, bottom of footing, M_l max / min (kip-ft) | 4149.8 / −1246.6 | 4153.6 / −1244.2 | +0.09% |
+| Pier 1, bottom of footing, P max / min (kip) | 3506.6 / 1735.1 | 3504.5 / 1733.1 | −0.06% |
+| Pier 2, bottom of footing, P max / min (kip) | 3358.0 / 1625.5 | 3355.9 / 1623.6 | −0.06% |
+| Abut. 2, bridge seat, P max (kip) | 960.7 | 963.7 | +0.31% |
+| Abut. 2, bottom of footing, M_l max / min (kip-ft) | 1441.5 / −4442.4 | 1439.1 / −4446.2 | −0.17% / +0.09% |
+
+  At the piers the lower G3 DC2 (−12.5 kip per pier) outweighs the higher DC1 of every girder.
+- **Hand check (built-in, G2 interior, Pier 1, DC2; staged model):** shear just left of the pier V_L = −17.536 kip, just right V_R = +17.412 kip (Structural analysis "Shears, unfactored", both sides of the pier), load on the pier node w·trib = 0.25053 klf × 1.0 ft = 0.251 kip: R = V_R − V_L + w·trib = 17.412 + 17.536 + 0.251 = **35.198 kip** = the sent value. Abut. 1: R = V + w·trib = 9.771 + 0.25053 × 0.5 = **9.896 kip**. Equilibrium: 2 × 9.896 + 2 × 35.198 = 90.19 kip = 0.25053 × 360 = 90.19 kip (check SA2).
+- **Hand check (closed form, constant EI):** with the Structural analysis model set to "Constant EI" the same code gives DW (w = 0.2075 klf, every girder) 8.410 kip at the abutments and 28.940 kip at the piers. Three-moment equation, spans 110 / 140 / 110, symmetric: M₁(2(L₁ + L₂) + L₂) = −w(L₁³ + L₂³)/4 → M₁ = −w(1,331,000 + 2,744,000)/4/640 = −1591.8w; R₀ = wL₁/2 + M₁/L₁ = 55w − 14.471w = 40.529w = **8.410 kip**; R₁ = 180w − 40.529w = 139.471w = **28.940 kip**. The staged model (stiffer composite section over the piers) gives 8.194 / 29.156 kip, about 2.6% less at the abutments and 0.7% more at the piers.
+- **How verified:** `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: all scripts pass. origin/main vs branch, headless, same seeded storage, Pull → default dialog → Apply: a real PS-Beam payload (PS-Beam's own button), a PS-Beam MIDAS-style payload (Support 2/3), an older two-girder payload on the `mct` copy, an old ST-Girder copy beside a PS-Beam payload, an ST-Girder payload on the channel key: dialog text, defaults, the cells written, `P.rx.data`, `P.rxSrc`, the Dead load tab and the report basis **identical**; the only differences are the button label and, after an adoption, the new source line on the Summary tab. ST-Girder refusal unchanged. `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"` (see the PR). End to end with GirderDetail: Send → Pull → Apply, 60 / 60 values equal to the payload, the source on the Reactions tab, the Summary tab and the report basis, no console errors.
+- **Other copies:** none (the receiver code exists only here). Sender: `fixlog/Steel Bridge Beam Modules.md` SRX.
+- **Open items:** ENGINEER_CHECKS GD72 (utilities not carried; owner rules not applied; by-number default).
+
+Diff (`Bridge Substructure Loading.html`, `git diff -U0`):
+
+```diff
+diff --git a/Bridge Substructure Loading.html b/Bridge Substructure Loading.html
+index 1be091f..06e7a50 100644
+--- a/Bridge Substructure Loading.html	
++++ b/Bridge Substructure Loading.html	
+@@ -3234,3 +3234,5 @@ async function rxImport(file) {
+-   Reactions tab: "Pull from PS-Beam" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
+-   not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only; reactions from
+-   GirderDetail are a later change): a payload from ST-Girder is not listed, adopted or imported.
++   Reactions tab: "Pull from PS-Beam / GirderDetail" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
++   not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only): a payload from ST-Girder is
++   not listed, adopted or imported. GirderDetail (Steel Bridge Beam Modules) sends every girder of the bridge
++   (optional field allGirders, SRX 2026-10-19): by default each source girder Gi goes to SubLoads girder Gi; its
++   optional ownerRules are shown and recorded for information, never applied (SubLoads uses its own load factors).
+@@ -3243 +3245 @@ async function rxImport(file) {
+-  const BY = ['psbeam', 'mct'];
++  const BY = ['psbeam', 'mct', 'girderdetail'];
+@@ -3254,0 +3257,5 @@ async function rxImport(file) {
++  /* SRX (2026-10-19): optional ownerRules (GirderDetail): a short summary for display and the source record, or null when absent or not valid */
++  const ownSum = p => { const o = p && p.ownerRules; if (!o || typeof o !== 'object') return null; const m = o.llMultiplier && +o.llMultiplier.m, e = o.eta || {};
++    const pos = v => typeof v === 'number' && Number.isFinite(v) && v > 0; if (!pos(m) || !pos(+e.max) || !pos(+e.min)) return null;
++    return { owner: String(o.owner || ''), m, etaMax: +e.max, etaMin: +e.min, haunch0: o.haunchInProperties === false }; };
++  const ownTxt = o => `${o.owner || 'owner'}: design load multiplier m = ${o.m} on HL-93 LL+IM, load modifier η = ${o.etaMax} (max) / ${o.etaMin} (min factors)${o.haunch0 ? ', haunch 0 in composite section properties' : ''}`;
+@@ -3316,0 +3324 @@ async function rxImport(file) {
++    if (preset === 'bynum') return all.filter(j => DLG && DLG.c && DLG.c.labels && DLG.c.labels.indexOf(`G${j + 1}`) >= 0);   // SRX: girders with a source of the same number
+@@ -3334,0 +3343,3 @@ async function rxImport(file) {
++    // SRX (2026-10-19): a whole-bridge payload (allGirders, labels G1…Gn) goes by girder number by default
++    DLG.byN = !!p.allGirders && c.labels.length > 1 && c.labels.every(l => /^G\d+$/.test(l));
++    if (DLG.byN) { DLG.preset = 'bynum'; DLG.gir = presetGirders('bynum'); }
+@@ -3342,3 +3353,4 @@ async function rxImport(file) {
+-      const g = s.girders.find(x => x.label === lab); if (!g) return;
+-      DLG.gir.forEach(j => ['dc1', 'dc2', 'dw'].forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]);
+-        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + g[c0] : g[c0]), src: s.id }); })); });
++      const g0 = s.girders.find(x => x.label === lab); if (!g0 && !DLG.byN) return;
++      DLG.gir.forEach(j => { const g = DLG.byN ? s.girders.find(x => x.label === `G${j + 1}`) : g0; if (!g) return;   // SRX: by number, Gi to Gi
++        ['dc1', 'dc2', 'dw'].forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]);
++        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + g[c0] : g[c0]), src: s.id }); }); }); });
+@@ -3353 +3365,2 @@ async function rxImport(file) {
+-    if (!c.err) h += `<tr><td class="lbl">Girder line</td><td>${esc((p.girderLine && p.girderLine.label) || c.labels.join(', '))}${D.pos ? ` (${esc(D.pos)})` : ''}</td></tr><tr><td class="lbl">Basis</td><td>Unfactored, kip, per girder; IM ${p.imIncluded ? 'included' : 'not included'}, DF ${p.dfIncluded ? 'included' : 'not included'}</td></tr>`;
++    if (!c.err) h += `<tr><td class="lbl">Girder line</td><td>${esc((p.girderLine && p.girderLine.label) || c.labels.join(', '))}${p.allGirders && c.labels.length > 1 ? ' (every girder of the bridge)' : D.pos ? ` (${esc(D.pos)})` : ''}</td></tr><tr><td class="lbl">Basis</td><td>Unfactored, kip, per girder; IM ${p.imIncluded ? 'included' : 'not included'}, DF ${p.dfIncluded ? 'included' : 'not included'}</td></tr>`;
++    if (!c.err && ownSum(p)) h += `<tr><td class="lbl">Owner load rules</td><td>${esc(ownTxt(ownSum(p)))}. Information only: not in these unfactored reactions and not applied here; SubLoads applies its own load factors (Combinations tab).</td></tr>`;
+@@ -3359 +3372,3 @@ async function rxImport(file) {
+-    if (c.labels.length > 1) h += `<h3>Source girder</h3><select data-rxh="gl">${c.labels.map((l, i) => `<option value="${i}"${i === D.gl ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
++    if (p.allGirders && c.labels.length > 1 && c.labels.every(l => /^G\d+$/.test(l))) {   // SRX: whole-bridge payload
++      const n0 = nb(); h += `<h3>Source girders</h3><select data-rxh="byn"><option value="1"${D.byN ? ' selected' : ''}>Each girder to the girder with the same number (G1 → G1, G2 → G2, …)</option><option value="0"${D.byN ? '' : ' selected'}>One source girder to the girders chosen below</option></select>${c.labels.length !== n0 ? `<p style="color:var(--warn);margin-top:6px">${esc(p.producer || 'The producer')} sent ${c.labels.length} girders; this bridge has ${n0}. By number, girders without a source of the same number are not changed.</p>` : ''}`; }
++    if (c.labels.length > 1) h += `<h3>${D.byN ? 'Show the values of' : 'Source girder'}</h3><select data-rxh="gl">${c.labels.map((l, i) => `<option value="${i}"${i === D.gl ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+@@ -3366 +3381 @@ async function rxImport(file) {
+-    const n = nb(), presets = [['pos', `Same position as the source (${D.pos === 'exterior' ? 'exterior: G1 and G' + n : 'interior: G2 to G' + (n - 1)})`], ['all', 'All girders'], ['int', 'Interior girders only'], ['ext', 'Exterior girders only (G1, G' + n + ')']].concat(D.idx >= 1 && D.idx <= n ? [['one', `Only G${D.idx} (the source beam number)`]] : []).concat([['custom', 'Custom (tick below)']]);
++    const n = nb(), presets = (D.byN ? [['bynum', 'Every girder with a source of the same number']] : []).concat([['pos', `Same position as the source (${D.pos === 'exterior' ? 'exterior: G1 and G' + n : 'interior: G2 to G' + (n - 1)})`], ['all', 'All girders'], ['int', 'Interior girders only'], ['ext', 'Exterior girders only (G1, G' + n + ')']].concat(D.idx >= 1 && D.idx <= n ? [['one', `Only G${D.idx} (the source beam number)`]] : []).concat([['custom', 'Custom (tick below)']]));
+@@ -3383,0 +3399,2 @@ async function rxImport(file) {
++    if (D.byN) { rec.girder = `${D.c.labels.join(', ')}, each to the girder with the same number`; rec.position = ''; rec.byNumber = true; }   // SRX (optional fields)
++    const os = ownSum(p); if (os) rec.ownerRules = os;   // SRX: recorded for information only
+@@ -3392 +3409 @@ async function rxImport(file) {
+-    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
++    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam, or in GirderDetail (Steel Bridge Beam Modules, Structural analysis), click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
+@@ -3407 +3424 @@ async function rxImport(file) {
+-    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}`;
++    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}${rec.ownerRules ? `; owner load rules ${esc(ownTxt(rec.ownerRules))} (information only, not applied here)` : ''}`;
+@@ -3414 +3431 @@ async function rxImport(file) {
+-    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam (asks first)">Pull from PS-Beam</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
++    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder reactions sent by PS-Beam (one girder line) or GirderDetail (every girder) (asks first)">Pull from PS-Beam / GirderDetail</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
+@@ -3424,0 +3442,3 @@ async function rxImport(file) {
++  /* SRX (2026-10-19): the Summary tab (and the report's Summary chapter) names the hand-off sources under the units table; nothing when none is recorded */
++  const sh = summaryHtml; summaryHtml = function () { const h = sh(), recs = Array.isArray(P.rxSrc) ? P.rxSrc : []; if (!recs.length) return h;
++    return h.replace('DC and DW are the superstructure reactions summed over the girders (kip, unfactored).', `DC and DW are the superstructure reactions summed over the girders (kip, unfactored). Reactions hand-off (values may have been edited since; see the Reactions tab): ${recs.map(r => srcText(r)).join('; ')}.`); };
+@@ -3441,0 +3462 @@ async function rxImport(file) {
++    else if (w === 'byn') { D.byN = t.value === '1'; D.preset = D.byN ? 'bynum' : 'pos'; D.gir = presetGirders(D.preset, D.pos, D.idx); }   // SRX
+```
