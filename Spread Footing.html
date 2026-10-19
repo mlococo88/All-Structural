@@ -309,7 +309,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row sm-vesic"><label>Cohesion c</label><input type="number" step="0.05" data-path="soil.c" data-num><span class="unit">ksf</span></div>
  <div class="row sm-vesic"><label>Friction angle &phi;</label><input type="number" step="0.5" data-path="soil.phi" data-num><span class="unit">deg</span></div>
  <div class="row sm-vesic"><label>Bearing capacity FS</label><input type="number" step="0.1" data-path="soil.FSb" data-num><span class="unit">&ndash;</span></div>
- <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">AASHTO 10.6.3.1.2a</span></div>
+ <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">Vesi&cacute; form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a</span></div>
  <div class="row sm-vesic"><label>Override q<sub>allow</sub></label><select data-path="soil.qaOverride" id="qaOverSel"><option value="off">Off (use computed)</option><option value="on">On (user value)</option></select></div>
  <div class="row sm-vesic qa-over"><label>User q<sub>allow</sub></label><input type="number" step="0.25" data-path="soil.qaOverVal" data-num><span class="unit">ksf</span></div>
  <div class="row"><label>Soil unit weight &gamma;<sub>s</sub></label><input type="number" step="1" data-path="soil.gs" data-num><span class="unit">pcf</span></div>
@@ -2135,7 +2135,7 @@ function renderBearing(){
   const b2=secPanel(T,'o-br-cap','3.3  Bearing Capacity \u2014 Vesi\u0107 Method (effective area)');
   if(v.fail){b2.appendChild(el('div','errbox','Effective area is non-positive (eccentricity too large) \u2014 capacity cannot be computed.'));}
   else{
-  b2.appendChild(el('p','note','General bearing capacity equation (Vesi\u0107) with shape, depth, and load-inclination factors, applied to the Meyerhof effective footing B\u2032 \u00d7 L\u2032. The uniform effective pressure q_eff = \u03a3P/(B\u2032L\u2032) is compared with q_allow = q_ult/FS. Reference: Vesi\u0107 (1973, 1975); AASHTO LRFD 10.6.3.1.2a form.'));
+  b2.appendChild(el('p','note','General bearing capacity equation (Vesi\u0107) with shape, depth, and load-inclination factors, applied to the Meyerhof effective footing B\u2032 \u00d7 L\u2032. The uniform effective pressure q_eff = \u03a3P/(B\u2032L\u2032) is compared with q_allow = q_ult/FS. Reference: Vesi\u0107 (1973, 1975). AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a uses the same N, shape and inclination factors, but its depth factor (Eq. 10.6.3.1.2a-10) differs from the Vesi\u0107 depth factors used here (see the Depth factors line).'));
   b2.appendChild(eqBlock('Effective footing dimensions (Meyerhof)','Meyerhof (1953)',
    "B' = B - 2|e_x| ,\\qquad L' = L - 2|e_y|",
    "B' = "+f2(R.B)+' - 2\\cdot'+f2(Math.abs(r.ex))+',\\qquad L\' = '+f2(R.L)+' - 2\\cdot'+f2(Math.abs(r.ey)),
@@ -2151,7 +2151,7 @@ function renderBearing(){
   if(!v.useD)b2.appendChild(eqBlock('Depth factors','Option off \u2014 AASHTO LRFD 10.6.3.1.2a (soil above the base not relied on)',
    'd_q = d_c = d_\\gamma = 1',null,
    'd_q = 1.00,\\quad d_c = 1.00,\\quad d_\\gamma = 1.00'));
-  else b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan); option on \u2014 soil above the base taken as competent and permanent (AASHTO LRFD 10.6.3.1.2a)',
+  else b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan); option on \u2014 soil above the base taken as competent and permanent (use condition: AASHTO LRFD 10.6.3.1.2a). Not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10, which takes arctan(Df/B) at every depth, caps dq at 1.4 and has no dc',
    'k = '+ (R.Df/v.Beff<=1?'D_f/B_{eff}':'\\arctan(D_f/B_{eff})')+',\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
    'k = '+(R.Df/v.Beff<=1?f2(R.Df)+'/'+f2(v.Beff):'\\arctan('+f2(R.Df)+'/'+f2(v.Beff)+')')+' = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiDeg)+'^\\circ(1-\\sin '+f2(R.phiDeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
    'd_q = '+f2(v.dq)+',\\quad d_c = '+f2(v.dc)+',\\quad d_\\gamma = 1.00'));
@@ -2531,7 +2531,7 @@ const SFD_REFS=[
  ['ACI 318-19','Building Code Requirements for Structural Concrete — §5.3 (load factors), §6.2.5 (slenderness), §7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing), §8.4.2.3 / §8.4.4.2 (moment transfer), §10.6.1.1 / §10.7.3.1 (pedestal steel), §13.2.7.1, §13.3.3.3 (band steel), §16.3.4.1 (dowels), §20.5.1.3 (cover), §21.2.2 (φ), §22.3 (flexure), §22.4.2.1 (axial), Table 22.5.5.1 (one-way shear), §22.6 (two-way shear), §22.8.3.2 (bearing), §25.2.3, §25.4.2.4 / §25.4.9 (development), §25.7.2 (ties)'],
  ['ASCE/SEI 7-16','Minimum Design Loads — §2.3.1 (strength combinations), §2.4.1 (allowable stress combinations)'],
  ['IBC 2021','International Building Code — §1605.3 (combinations), §1610 (overburden, as cited), §1807.2.3 (FS 1.5 for retaining walls; quoted for comparison)'],
- ['AASHTO LRFD','Bridge Design Specifications — Art. 10.6.3.1.2a (Vesić form, depth and inclination factors), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning); edition: verify (the tool states none)'],
+ ['AASHTO LRFD','Bridge Design Specifications, 10th Ed. (2024) — Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning)'],
  ['Vesić (1973, 1975)','“Analysis of Ultimate Loads of Shallow Foundations,” JSMFD ASCE 99(1); Foundation Engineering Handbook — bearing capacity'],
  ['Meyerhof (1953)','“The Bearing Capacity of Foundations Under Eccentric and Inclined Loads,” 3rd ICSMFE — effective area'],
  ['Bowles','Foundation Analysis and Design, 5th ed. — rigid-footing criterion λℓ ≤ π/4, pressure distributions'],
@@ -4905,7 +4905,7 @@ manPart("p2","2. Input Reference",[
  ["Bearing basis","\u2013","<b>Direct</b>: enter allowable qa (gross or net) and the pressure check is qmax \u2264 qa. <b>Vesi\u0107 computed</b>: qult from c, \u03c6, \u03b3, Df on the Meyerhof effective footing; qallow = qult/FS; check is on the effective-area uniform pressure (Part 4B)."],
  ["qa + gross/net","ksf","Direct allowable. Gross compares total pressure; net subtracts the overburden at founding level."],
  ["c, \u03c6, \u03b3 soil, FS","ksf, deg, pcf, \u2013","Vesi\u0107 parameters and factor of safety."],
- ["Depth factors d<sub>q</sub>, d<sub>c</sub>","\u2013","Off (default for new projects): d<sub>q</sub> = d<sub>c</sub> = 1.0. On: Vesi\u0107 depth factors from D<sub>f</sub>/B\u2032. AASHTO LRFD 10.6.3.1.2a: use them only where the soil above the base is as competent as the bearing soil and will not be removed. Projects saved before this option existed open with it On, so their results are unchanged."],
+ ["Depth factors d<sub>q</sub>, d<sub>c</sub>","\u2013","Off (default for new projects): d<sub>q</sub> = d<sub>c</sub> = 1.0. On: Vesi\u0107 depth factors from D<sub>f</sub>/B\u2032 (not the AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10 form, which uses arctan(D<sub>f</sub>/B) at every depth, caps d<sub>q</sub> at 1.4 and has no d<sub>c</sub>). AASHTO LRFD 10.6.3.1.2a: use them only where the soil above the base is as competent as the bearing soil and will not be removed. Projects saved before this option existed open with it On, so their results are unchanged."],
  ["Water table depth","ft below grade","Buoyancy on base area when above base; effective \u03b3 in Vesi\u0107 (case 3 handling)."],
  ["Cover depth over footing","ft","Soil (EV) resting on the footing top outside pedestal footprints; capped at Df \u2212 t."],
  ["\u03b3 EV","pcf","Unit weight of that cover soil."]
@@ -5189,7 +5189,7 @@ manPart("pA","A. Notation & References",[
  "ACI 318-19, <i>Building Code Requirements for Structural Concrete</i> \u2014 Ch. 7/9 (flexure, min steel), 13 (foundations), 16.3 (interface), 22 (strength: 22.3 flexure, 22.5 one-way, 22.6 two-way, 22.8 bearing), 25 (detailing, development, ties), 8.4.4 (moment transfer).",
  "ASCE/SEI 7-16, <i>Minimum Design Loads</i> \u2014 \u00a72.3.1, \u00a72.4.1 load combinations.",
  "IBC 2021 \u2014 \u00a71605.3 (combinations), \u00a71807 (stability FS practice).",
- "Vesi\u0107, A.S., \u201cAnalysis of Ultimate Loads of Shallow Foundations,\u201d JSMFD ASCE 99(1), 1973; and in <i>Foundation Engineering Handbook</i>, 1975. AASHTO LRFD 10.6.3.1.2a presents the same form.",
+ "Vesi\u0107, A.S., \u201cAnalysis of Ultimate Loads of Shallow Foundations,\u201d JSMFD ASCE 99(1), 1973; and in <i>Foundation Engineering Handbook</i>, 1975. AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.6.3.1.2a uses the same N, shape and inclination factors; its depth factor (Eq. 10.6.3.1.2a-10) differs from Vesi\u0107\u2019s.",
  "Meyerhof, G.G., \u201cThe Bearing Capacity of Foundations Under Eccentric and Inclined Loads,\u201d Proc. 3rd ICSMFE, 1953 (effective-area method).",
  "Bowles, J.E., <i>Foundation Analysis and Design</i>, 5th ed. \u2014 rigid-footing criterion and pressure distributions.",
  "PCA, <i>Notes on ACI 318</i> \u2014 Examples 22.1\u201322.3 (basis of RISAFoundation Verification Problem 9).",
