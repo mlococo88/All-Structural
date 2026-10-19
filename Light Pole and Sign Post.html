@@ -2461,6 +2461,7 @@ manPart("p4c","4C. Concrete Shaft &amp; Anchors",[
 ]},
 {key:"Equilibrium is closed by <b>bisection</b>, exploiting that P<sub>n</sub> increases monotonically with c. The displayed check P<sub>n</sub> \u2248 P<sub>u</sub> closes to within a couple of pounds \u2014 it is a genuine verification, not a formatted restatement."},
 {p:"\u03b2\u2081 follows §22.2.2.4.3: 0.85 for f\u2032<sub>c</sub> \u2264 4,000 psi, reducing by 0.05 per 1,000 psi above that, clamped at 0.65."},
+{p:"\u03c6 for flexure follows §21.2.1 and Table 21.2.2 (tied transverse reinforcement), from the net tensile strain \u03b5<sub>t</sub> of the extreme tension bar at the converged c: 0.65 when \u03b5<sub>t</sub> \u2264 \u03b5<sub>ty</sub> = f<sub>y</sub>/E<sub>s</sub>, 0.90 when \u03b5<sub>t</sub> \u2265 \u03b5<sub>ty</sub> + 0.003, and 0.65 + 0.25(\u03b5<sub>t</sub> \u2212 \u03b5<sub>ty</sub>)/0.003 in between. It is evaluated at each LRFD combination's P<sub>u</sub>; for a square shaft each axis gets its own \u03c6 and the smaller \u03c6M<sub>n</sub> governs."},
 
 {h3:"4C.1.1 Compression-block geometry by shape"},
 {tbl:{head:["Shape and axis","Block shape","Area"],rows:[
@@ -3049,7 +3050,8 @@ function barByName(nm){return BAR_TABLE.find(b=>b.n===nm)||BAR_TABLE.find(b=>b.n
 
 // Circular-column P-M capacity by fiber integration (strip method).
 // Assumes n bars evenly spaced on radius rbar; concrete Whitney block; returns phiMn (lb-ft)
-// for a trial As at the factored axial Pu (lb). φ = 0.65 (tied, compression-controlled default).
+// for a trial As at the factored axial Pu (lb). φ per ACI 318-19 Table 21.2.2 (tied), from the net
+// tensile strain ε_t of the extreme tension bar: 0.65 at ε_t ≤ ε_ty, 0.90 at ε_t ≥ ε_ty + 0.003, linear between.
 // Bar layout generators -------------------------------------------------------
 // Round: n bars evenly spaced on a bar circle of radius rbar.
 // Square: perimeter layout — bars distributed around the rectangular tie perimeter
@@ -3170,10 +3172,22 @@ function pmCapacity(shape, b_in, As, nbar, rbar, fc, fy, Pu){
     const barsR=barLayoutRound(nbar, rbar);
     axes.push(runAxis(barsR.map(b=>({...b, yb:b.y})), b_in/2, (a)=>compBlockRound(b_in/2,a), 'any (axisymmetric)'));
   }
-  // governing = smallest Mn
-  const gov=axes.reduce((a,x)=>x.detail.Mn<a.detail.Mn?x:a);
-  const phi=0.65;
-  return {phiMn:phi*gov.detail.Mn/12, Mn:gov.detail.Mn/12, Pn:gov.detail.Pn, c:gov.detail.c, phi,
+  // φ per ACI 318-19 §21.2.1, Table 21.2.2 (tied transverse reinforcement): ε_t = net tensile strain
+  // in the extreme tension bar (deepest bar; eps > 0 is compression, so ε_t = −eps), ε_ty = f_y/E_s.
+  const ety=fy/Es;
+  axes.forEach(ax=>{
+    const rt=ax.detail.rows.reduce((a,r)=>r.di>a.di?r:a);
+    const et=-rt.eps;
+    const phiA = et<=ety ? 0.65 : (et>=ety+0.003 ? 0.90 : 0.65+0.25*(et-ety)/0.003);
+    Object.assign(ax,{phi:phiA, epsT:et, dt:rt.di, kT:rt.k,
+      phiCls: et<=ety ? 'compression-controlled' : (et>=ety+0.003 ? 'tension-controlled' : 'transition'),
+      phiMn:phiA*ax.detail.Mn/12});
+  });
+  // governing = smallest φMn (φ now differs per axis)
+  const gov=axes.reduce((a,x)=>x.phiMn<a.phiMn?x:a);
+  const phi=gov.phi;
+  return {phiMn:gov.phiMn, Mn:gov.detail.Mn/12, Pn:gov.detail.Pn, c:gov.detail.c, phi,
+          epsT:gov.epsT, ety, dt:gov.dt, kT:gov.kT, phiCls:gov.phiCls,
           detail:gov.detail, beta1, R:gov.hDepth, Es, ecu, Abar, nbar, rbar,
           shape, axisName:gov.axisName, axes};
 }
@@ -4769,7 +4783,17 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
     H+=g(`P_n = C_c+\\Sigma F_s = ${fmt(det.Cc,0)}+(${fmt(det.Fs,0)}) = ${fmt(det.Pn,0)}\\ \\text{lb}\\ \\approx\\ P_u = ${fmt(Pu,0)}\\ \\text{lb}`);
     H+=`<p class="eq-why"><b>Nominal moment</b> — concrete force times its arm to the section center, plus the bar-force moments:</p>`;
     H+=g(`M_n = C_c(R-\\bar y_c)+\\Sigma F_s y = ${fmt(det.Cc,0)}(${fmt(cap.R-det.ybarC,2)})+(${fmt(det.Ms,0)}) = ${fmt(det.Mn,0)}\\ \\text{lb}{\\cdot}\\text{in} = ${fmt(det.Mn/12,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
-    H+=g(`\\phi M_n = ${fmt(cap.phi,2)}(${fmt(det.Mn/12,0)}) = ${fmt(L.phiMn,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad(\\phi=0.65,\\ \\text{tied, compression-controlled})`);
+    H+=`<p class="eq-why"><b>Strength reduction factor φ</b> ${ref('ACI 318-19 §21.2.1, Table 21.2.2')} — φ depends on the net tensile strain ε<sub>t</sub> in the extreme tension bar (bar ${cap.kT}, depth d<sub>t</sub> = ${fmt(cap.dt,2)} in), compared with the yield strain ε<sub>ty</sub> = f<sub>y</sub>/E<sub>s</sub>. Tied transverse reinforcement: φ = 0.65 when ε<sub>t</sub> ≤ ε<sub>ty</sub> (compression-controlled), 0.90 when ε<sub>t</sub> ≥ ε<sub>ty</sub> + 0.003 (tension-controlled), linear in between (transition).</p>`;
+    H+=g(`\\varepsilon_{ty} = \\frac{f_y}{E_s} = \\frac{${fmt(reo.fy,0)}\\ \\text{psi}}{${fmt(cap.Es,0)}\\ \\text{psi}} = ${fmt(cap.ety*1000,3)}\\times10^{-3}`);
+    H+=g(`\\varepsilon_t = 0.003\\frac{d_t-c}{c} = 0.003\\frac{${fmt(cap.dt,2)}-${fmt(cap.c,2)}}{${fmt(cap.c,2)}} = ${fmt(cap.epsT*1000,3)}\\times10^{-3}`);
+    if(cap.phiCls==='tension-controlled'){
+      H+=g(`\\varepsilon_t = ${fmt(cap.epsT*1000,3)}\\times10^{-3} \\ge \\varepsilon_{ty}+0.003 = ${fmt((cap.ety+0.003)*1000,3)}\\times10^{-3}\\ \\Rightarrow\\ \\text{tension-controlled},\\ \\phi = 0.90`);
+    } else if(cap.phiCls==='compression-controlled'){
+      H+=g(`\\varepsilon_t = ${fmt(cap.epsT*1000,3)}\\times10^{-3} \\le \\varepsilon_{ty} = ${fmt(cap.ety*1000,3)}\\times10^{-3}\\ \\Rightarrow\\ \\text{compression-controlled},\\ \\phi = 0.65`);
+    } else {
+      H+=g(`\\phi = 0.65+0.25\\frac{\\varepsilon_t-\\varepsilon_{ty}}{0.003} = 0.65+0.25\\frac{(${fmt(cap.epsT*1000,3)}-${fmt(cap.ety*1000,3)})\\times10^{-3}}{3.000\\times10^{-3}} = ${fmt(cap.phi,3)}\\quad(\\text{transition})`);
+    }
+    H+=g(`\\phi M_n = ${fmt(cap.phi,3)}(${fmt(det.Mn/12,0)}) = ${fmt(L.phiMn,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad(\\phi=${fmt(cap.phi,3)},\\ \\text{tied, ${cap.phiCls}})`);
   } else {
     H+=g(`P_u = ${fmt(Pu,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad c = ${fmt(L.c,2)}\\ \\text{in}\\quad\\Rightarrow\\quad \\phi M_n = ${fmt(L.phiMn,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
   }
