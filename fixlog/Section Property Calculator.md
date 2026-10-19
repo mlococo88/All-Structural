@@ -2672,3 +2672,25 @@ None besides the "Needs engineer" list above.
 - **Ctrl+P without Print report prints a blank page** (unchanged, as in Timber Beam Check). Leave, or print the screen when no report exists?
 - **Values shown with their formula but not worked with numbers anywhere:** I<sub>p</sub> = I<sub>x</sub> + I<sub>y</sub>, r<sub>1</sub>, S<sub>1</sub> = I<sub>1</sub>/c<sub>2,max</sub>, S<sub>2</sub> (c<sub>1,max</sub>, c<sub>2,max</sub> are not shown), the extents and c values (Properties tab). Showing their substitution would add calculation content; not done. Decide whether S<sub>1</sub>, S<sub>2</sub> should be worked on Calc detail.
 - **Report length:** default 19 pages (was 13). The section ticks are unchanged; the Method appendix (ticked by default) is the last 5 pages.
+
+## 2026-10-19 — PR: claude/aashto-ed-secprop — References: AASHTO LRFD stated as 10th Ed. (2024) (wording only, no result change; PR link added after merge)
+
+Engineer decision 2026-10-19 ("follow the owner"): tools without an owner setting state AASHTO LRFD **10th Ed. (2024)**. This tool has no owner setting; its AASHTO row in the printed references said "edition: verify".
+
+### ED1. References row "AASHTO LRFD"   [wording] [no result change]
+- **Where:** `spcRefs(sel)`. Anchor: `rows.push(['AASHTO LRFD',`.
+- **Before:**
+  ```js
+  if (ok && sel.q || man) rows.push(['AASHTO LRFD', 'Art. 6.13.2 (fasteners, optional connector check; strength per fastener supplied by the user); edition: verify.']);
+  ```
+- **After:**
+  ```js
+  if (ok && sel.q || man) rows.push(['AASHTO LRFD', 'Bridge Design Specifications, 10th Ed. (2024): Art. 6.13.2 (fasteners, optional connector check; strength per fastener supplied by the user).']);
+  ```
+- **Articles checked against AASHTO LRFD 10th Ed. (2024)** (every AASHTO LRFD item the tool cites; same number and same subject): Art. 6.13.2 (bolted connections; the tool computes no AASHTO resistance, the user enters the strength per fastener); Art. 6.13.2.6 (spacing of bolts, incl. 6.13.2.6.2 sealing and 6.13.2.6.3 stitch bolts; listed as "not checked" in the method text); Art. 6.6.1 (fatigue; listed as "not checked"). None is in the 10th Ed. list of changed articles at the level the tool cites. "edition: verify" stays on the non-AASHTO rows (Vlasov, Wagner β, Megson, Boresi & Schmidt).
+- **Governing provision:** as above. No formula, factor or unit changed.
+- **Saved data:** none (`spc_autosave_v1` and project format unchanged).
+- **Check case:** `spcRefs({man:true})` main vs branch: the AASHTO row is the only difference (text above).
+- **How verified (Tier 0):** `node tests/check-syntax.mjs "Section Property Calculator.html"`: all scripts pass. `node tests/compare.mjs --tool page --file "Section Property Calculator.html"`: page text identical; storage differs only in the random part ids of the autosave (`parts[i].id`, generated on every load, the same between two runs of main). The result object `R` main vs branch, with the part ids normalised: identical (0 differences). The 2 console errors are the KaTeX CDN files the test kit does not serve (same on main).
+- **Other copies:** none.
+- **Open items:** none.
