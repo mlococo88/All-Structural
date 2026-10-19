@@ -788,3 +788,94 @@ The tool file uses CRLF line endings; keep them.
 - **REB-O4 / note on the 2026-10-18 open item:** the compression-splice part is closed by this decision (m fixed at 1.0, shown in the equation; the tie/spiral reduction is not offered). The AASHTO compression *development* modifiers (5.10.8.2.5) remain open as before. The 2026-10-18 open item "Comp. Splice tab in AASHTO mode" is resolved here.
 - **How verified:** `node tests/check-syntax.mjs`: all scripts pass. Main vs branch, headless Chromium (KaTeX / Plotly from npm pack), 6 cases (the 5 of the 2026-10-18 entry plus AASHTO #9 f_y 80 ksi f′c 2,500): inputs, factors, every calc function for all 11 bars, `validate`, dashboard, autosave identical; tab texts identical except the Comp. Splice tab in the three AASHTO cases (citation, units of the displayed inputs, m row, equation text; l_sc values identical). Report: §6.1 and its result line cite 5.10.8.4.5a, no "25.5.5" left in the AASHTO printout, all links resolve, 0 KaTeX errors. The AASHTO ×4/3 step no longer triggers the KaTeX "×" warning (ACI unchanged).
 - **Other copies:** the Development & Splice tab of `Concrete Beam Capacity.html` (branch claude/cbc-rebar-sync-compsplice).
+
+## 2026-10-19 — PR: claude/aashto10-rebar — AASHTO mode to AASHTO LRFD 10th Ed. (2024) §5.10.8 (PR link added after merge)
+
+The tool file uses CRLF line endings; keep them. **ACI mode unchanged** (verified: every computed value, validation notice, dashboard, tab text and report text identical to main in two ACI cases).
+
+### E1. Tension development length, AASHTO 10th Ed. 5.10.8.2.1a   [calculation change (§4)]
+- **Where:** `calcTension`, AASHTO branch (anchor `// AASHTO LRFD 10th Ed. 5.10.8.2.1a (ksi): Eq. 5.10.8.2.1a-2`).
+- **Before:**
+  ```js
+  const ldb = 2.4*f.db*f.fy_ksi/f.sqrtFc_ksi;
+  const ld_calc = ldb*(f.lam_rlcf_cap*f.lam_rc*f.excess)/f.lambda;
+  ```
+- **After:**
+  ```js
+  const ldb = 0.17*f.db*Math.pow((f.excess*f.fy_ksi)/(1.97*f.lambda*f.fc4), 2);
+  const ld_calc = ldb*f.lam_rlcf_cap*f.lam_rc;
+  ```
+  (`ld = Math.max(ld_calc, 12)` unchanged.) In symbols: ℓdb = 0.17·db·[(λer·fy − Fh/Ab)/(1.97·λ·f′c^0.25)]², Fh = 0 for straight bars and lap splices; ℓd = ℓdb·λrl·λcf·λrc ≥ 12 in. λ and λer now act squared (inside the bracket).
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Art. 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and -2; λer Eq. 5.10.8.2.1c-4.
+- **f′c limit (computeFactors, anchor `const fcLimA`):** before, √f′c capped at √10 ksi (comment "f′c ≤ 10 ksi"). After, tension, hooks and tension splices use f′c ≤ 15 ksi normal weight (5.10.8.2.1, 5.10.8.2.4, 5.10.8.4.3) and ≤ 10 ksi lightweight (C5.10.8.2.4); a higher input is flagged and the limit is used. Compression development keeps `sqrtFc_ksi` capped at √10 ksi (unchanged). Above 10 ksi (normal weight) a notice, a dashboard CHK and a report CHK line state the #3 @ 12 in. transverse bar requirement (5.10.8.2.1, 5.10.8.4.3) and the hook ties (5.10.8.2.4b); not checked by the tool.
+
+### E2. λrc, AASHTO 10th Ed. 5.10.8.2.1c   [calculation change (§4)]
+- **Where:** `computeFactors`, block `/* ---- AASHTO LRFD 10th Ed. (2024) factors (5.10.8.2.1) ---- */`.
+- **Before:** `const ktr_a = Ktr;` (= 40·Atr/(s·n)) `const lam_rc_raw = db/(inp.cb + ktr_a); const lam_rc = Math.max(0.4, Math.min(lam_rc_raw, 1.0));`
+- **After:**
+  ```js
+  const wcA = fcA<=5 ? 0.145 : 0.140+0.001*fcA;
+  const EcA = 120000*1.0*wcA*wcA*Math.pow(fcA,0.33);
+  const nsA = 29000/EcA;
+  let ktr_a = 0;
+  if (inp.sTr>0 && inp.nBars>0) ktr_a = inp.Atr/(inp.sTr*inp.nBars);
+  const rcA = k => (inp.cb>0) ? db*inp.cb/Math.pow(inp.cb*(1-betaT)+1.67*nsA*k, 2) : 1.0;
+  const lam_rc_raw = rcA(ktr_a);
+  const lam_rc = Math.max(0.3, Math.min(lam_rc_raw, 1.0));
+  ```
+  λrc = db·cb/(cb(1−βt) + 1.67·ns·ktr)², 0.3 ≤ λrc ≤ 1.0, ktr = Atr/(s·n) (no factor 40), ns = Es/Ec with Es = 29,000 ksi (5.4.3.2), Ec by Eq. 5.4.2.4-1 with K1 = 1.0 and wc of Table 3.5.1-1 for normal weight concrete (for lightweight this Ec is high, so ns and the ktr credit are low: conservative). With Atr = 0 and βt = 0 it reduces to db/cb, as before; only the lower bound (0.4 → 0.3) and the ktr term change results.
+- **New input βt** (panel D, id `betaT`, "AASHTO only", −1 to 0, default **0** = no clamping credit, conservative; out-of-range values are clamped with a notice). c_b ≤ 0 gives λrc = 1.0 (no credit; the expression itself would give 0).
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.10.8.2.1c, Eqs. 5.10.8.2.1c-1 to -3; Eq. 5.4.2.4-1; 5.4.3.2; Table 3.5.1-1.
+
+### E3. Standard hooks, AASHTO 10th Ed. 5.10.8.2.4 / .4a / .4b   [calculation change (§4)]
+- **Where:** `calcHook`, AASHTO branch (anchor `// AASHTO LRFD 10th Ed. 5.10.8.2.4a (ksi): l_dh = l_d + R + db/2`).
+- **Before:** `lhb = 38.0*db*fy/(60*√f′c)`, `ldh_calc = lhb*cf*conf*(1/λ)*excess` (cf 1.2 epoxy, conf 0.8 if confined and #11 or smaller), `ldh = max(ldh_calc, 8db, 6)`.
+- **After:** ℓdh = tie·(ℓd + R + db/2) ≥ max(8db, 6 in.), with ℓd = ℓdb·min(λrl·λcf, 1.7)·λrc and ℓdb from Eq. 5.10.8.2.1a-2 with Fh = db·R·v·f′c (Eq. 5.10.8.2.4a-2), v = 0.85 − f′c/20, 0.45 ≤ v ≤ 0.65 (Table 5.8.2.5.3a-1, CTT node). λrl (top bar) now applies to hooks; λcf = 1.2 for coated hooked bars; with the tie box ticked (#11 and smaller) ktr = 0 in λrc and tie = 0.8 (5.10.8.2.4b), else 1.0. No 12 in. minimum on the straight portion ℓd (it applies to straight bars). When Fh/Ab ≥ λer·fy the bracket is taken as 0 (ℓd = 0), with a notice. Code:
+  ```js
+  const Dmin = f.barNum<=8 ? 6 : (f.barNum<=11 ? 8 : 10);
+  const Rmin = (Dmin/2 + 0.5)*f.db;
+  const R = Rentered ? Rin : Rmin;
+  const v = Math.max(0.45, Math.min(0.65, v_raw));          // v_raw = 0.85 - f.fcA/20
+  const Fh = f.db*R*v*f.fcA;
+  const rlcf = Math.min(f.lam_rl*cf, 1.7);
+  const lam_rc_h = ties ? f.lam_rc0 : f.lam_rc;
+  const num = f.excess*f.fy_ksi - Fh/f.Ab;
+  const ldb = 0.17*f.db*Math.pow(Math.max(num,0)/den, 2);   // den = 1.97*f.lambda*f.fc4
+  const ld = ldb*rlcf*lam_rc_h;
+  const ldh_calc = (ld + R + f.db/2)*conf;
+  ```
+- **New input R** (panel E, id `hookR`, "AASHTO only"): bend radius to the bar centroid. Blank (default, and every older saved project) = minimum finished bend of Table 5.10.2.3-1, R = D/2 + db/2 (D = 6db #3–#8, 8db #9–#11, 10db #14–#18). A smaller R gives a longer ℓdh, so the minimum is the conservative default; an entered R below it is used with a notice. #14/#18 hooks are flagged as outside 5.10.8.2.4 (computed, no doubling).
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.10.8.2.4, 5.10.8.2.4a (Eqs. 5.10.8.2.4a-1, -2), 5.10.8.2.4b, 5.10.8.2.1b; Table 5.8.2.5.3a-1; Table 5.10.2.3-1. **Note:** the 2026-10-19 inventory wrote ℓdh = ℓd − R − db/2; Eq. 5.10.8.2.4a-1 (rendered page 5-194) is ℓdh = ℓd **+** R + db/2, which is implemented.
+
+### E4. Tension lap splices (5.10.8.4.3a)   [result change through E1]
+- `calcTensSplice` unchanged (Class A 1.0 / Class B 1.3 × ℓd without λer, ≥ 12 in.); ℓd is now that of E1. The Tension Splice tab adds, in AASHTO mode, notes for fy > 75 ksi (transverse reinforcement over the lap, 5.10.8.4) and f′c > 10 ksi (#3 @ 12 in., ≥ 3 bars, 5.10.8.4.3); dashboard and report CHK lines for both.
+
+### E5. Renumbers and labels (no result change)
+- Compression development 5.10.8.2.5 → **5.10.8.2.2a** (Eqs. 5.10.8.2.2a-1 / -2 / -3): `tabCompAASHTO`, `rebarResultRows`, comments. Calculation unchanged (λer only).
+- Code selector "AASHTO LRFD 9th Ed. §5.10.8 (bridges)" → "AASHTO LRFD 10th Ed. (2024) §5.10.8 (bridges)"; report code name → "AASHTO LRFD 10th Ed. (2024) §5.10.8"; references row: "labelled "9th Ed." … (edition: verify)" → "10th Ed. (2024)" with the articles now used; tension / hook / compression headings state the edition; narrative "(8th Ed. onward)" rewritten; λer card cites Eq. 5.10.8.2.1c-4; dashboard "λ_rc (limited to 0.3–1.0)"; f′c range check 2,500–15,000 psi (10,000 lightweight) in AASHTO mode; report Input Summary shows AASHTO k_tr with a link to the new card "Confinement Factor" (`REBAR_CARDS.tConfA`); comment "5.10.8.4.2a (verify)" verified.
+- §6: every new value is worked on its tab (Tension: 1 Basic Development Length, 2 Modification Factors, 3 Confinement Factor with Ec, ns, ktr, λrc, 4 Development Length; Hook: 1 Hook Force with R, v, Fh, 2 Modification Factors with λrc, 3 Straight Portion, 4 Hook Development Length) and in the report (§2.x, §3.x).
+
+### Saved data
+- No key or format change (`rebar_aci_autosave_v1`, `rebar_aci_projects_v1`, `rebar_aci_inputTab_v1`, JSON export). Two optional fields added to `inp`: `betaT`, `hookR`. `applyState` sets them to 0 / blank when absent, so older projects load with the stated defaults (checked with an older AASHTO autosave: it gives the #8 / 4 ksi numbers below).
+
+### Check cases (AASHTO, fy = 60 ksi, c_b = 1.5 in., Atr = 0, βt = 0, bottom bar, uncoated, normal weight, no excess, Class B; lengths in in.)
+| Case | ℓd before | ℓd after | ℓdh before | ℓdh after | Class B lap before | after |
+|---|---|---|---|---|---|---|
+| #5, f′c 4 ksi | 18.75 | **20.53** | 11.88 | **15.93** | 24.38 | **26.69** |
+| #5, f′c 8 ksi | 13.26 | **14.52** | 8.40 | **10.35** | 17.24 | **18.87** |
+| #8, f′c 4 ksi | 48.00 | **52.57** | 19.00 | **38.32** | 62.40 | **68.33** |
+| #8, f′c 8 ksi | 33.94 | **37.17** | 13.44 | **24.03** | 44.12 | **48.32** |
+
+Hand check #8, f′c = 4 ksi: f′c^0.25 = 1.4142; 1.97 × 1.4142 = 2.786; ℓdb = 0.17 × 1.0 × (60/2.786)² = 0.17 × 463.8 = 78.85 in.; λrc = 1.0 × 1.5/1.5² = 0.667; ℓd = 78.85 × 0.667 = 52.57 in. (before 2.4 × 1.0 × 60/2 × 0.667 = 48.00). Hook: R = 3db + db/2 = 3.5 in.; v = 0.85 − 4/20 = 0.65; Fh = 1.0 × 3.5 × 0.65 × 4 = 9.10 kip; Fh/Ab = 9.10/0.79 = 11.52 ksi; ℓdb = 0.17 × ((60 − 11.52)/2.786)² = 0.17 × 302.8 = 51.48 in.; ℓd = 51.48 × 0.667 = 34.32 in.; ℓdh = 34.32 + 3.5 + 0.5 = 38.32 in. ≥ 8 in. (before 38 × 1 × 60/(60 × 2) = 19.00 in.). #8 at 8 ksi: v = 0.85 − 0.40 = 0.45; Fh = 3.5 × 0.45 × 8 = 12.6 kip (15.95 ksi); f′c^0.25 = 1.6818; ℓdb = 0.17 × (44.05/3.313)² = 30.05; ℓd = 20.03; ℓdh = 24.03 in.
+
+### How verified
+- `node tests/check-syntax.mjs "ACI Rebar Development Length.html"`: all scripts pass.
+- Headless Chromium (KaTeX 0.16.9 and plotly.js-dist-min 2.27.0 from npm pack), main vs branch, 11 cases: the four check cases (tool = hand numbers to 0.01 in.); AASHTO #8 fy 80 ksi f′c 12 ksi top, epoxy 1.5, hook epoxy and ties, Atr 0.4 / s 6 / n 2, βt −0.3, excess 0.8, Class A (λrc 0.3081, ℓd 27.13, ℓdh 13.20 in.); #11 lightweight λ 0.85, f′c 11 ksi, R 5 in.; #14 fy 100, f′c 16 ksi, c_b 0; #4 fy 40 hook R 6 in. with excess (straight portion 0, ℓdh 6.25 in.); an older saved state; ACI default and ACI mixed (identical to main in every value, notice, dashboard, tab and report text). 0 KaTeX errors and no console errors on the branch; report builds 7 sections, every internal link resolves. Tension and hook tabs looked at in screenshots.
+- **Other copies:** the Development & Splice tab of `Concrete Beam Capacity.html` (follow-up branch claude/aashto10-cbc-rebar). The same 5.10.8.2.1a / hook implementation is duplicated in `abutment_calculator.html` and `Retaining Wall Designer.html` (own PRs).
+
+### Open items (not changed; engineer decision needed)
+1. **Compression development (5.10.8.2.2a):** Eq. 5.10.8.2.2a-1 divides by λ; the tool does not (unconservative for lightweight concrete; a notice now says so). λrc = 0.75 for spirals/hoops (5.10.8.2.2b) is not offered (conservative). √f′c stays capped at √10 ksi (conservative). Apply λ?
+2. **Hook bracket ≤ 0:** when Fh/Ab ≥ λer·fy the tool takes the straight portion as 0 (the squared form would otherwise give a positive length). Confirm this reading.
+3. **#14/#18 hooks:** outside 5.10.8.2.4; the commentary mentions doubling ℓdh after ACI. Not implemented; flagged only.
+4. **AASHTO compression lap splices of #14/#18:** the tool shows "not permitted" in compression too; 5.10.8.4.2a bars only *tension* laps above #11, and 5.10.8.4.5a allows #14/#18 to #11 and smaller in compression (pre-existing).
+5. The ACI-mode references row still reads "AASHTO LRFD 5.10.2.1 (hook geometry; … edition: verify)" (ACI mode left untouched by request; 5.10.2.1 is verified in the 10th Ed.).
