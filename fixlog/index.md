@@ -3762,3 +3762,83 @@ index 4402d55..4d6f8bd 100644
 +                {a==='lldf'?'LL & DL':'PS-Beam'} →</button>))}
 ```
 - **tools.html diff:** see fixlog/Bridge Substructure Loading.md (same PR), last hunk.
+
+## 2026-10-19 — PR: claude/index-autodetect-keep (PR link added after merge)
+
+### "↺ Auto-detect LCs" keeps each vehicle's category and γLL (Tier 2: result change in one module)
+- **Problem (open item of the claude/index-legal-match entry; engineer approved the fix 2026-10-19):** the "↺ Auto-detect LCs" button on the Multi-Vehicle tab rebuilt `vehicleLCMap` from scratch as `{posLC, negLC}` per vehicle, which dropped `category`, `gamLLinv`, `gamLLop` and `customGam`.
+  - `multiVehicleData` then fell back to category "Design" and the rating-level γLL (e.g. 1.75 / 1.35 LRFR, or the LFR level factor). A legal truck was rated at design factors, and its posting read "not computed — rated as Design, not Legal".
+  - On the next remount of the rating step (e.g. switching steps), the auto-populate effect filled the category back in, but it reset γLL to the table value, so an engineer-typed γLL (`customGam`) was lost.
+- **Where:** `StepResults`, the Multi-Vehicle tab's "↺ Auto-detect LCs" button (anchor `// Re-run auto-detection of the result cases (LL Max / LL Min), clearing manual`; before: `// Re-run auto-detection, clearing manual overrides`).
+- **Before:**
+```js
+                    // Re-run auto-detection, clearing manual overrides
+                    const loadedLCs = [...new Set(origRows.map(r=>r.load))];
+                    const next = {};
+                    (cfg?.selectedVehicles||[]).forEach(vn=>{
+                      const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
+                      const posLC = vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
+                                 || vLCs[0];
+                      const negLC = vLCs.find(lc=>lc.includes('(min)')||lc.includes('min'));
+                      if (posLC) next[vn] = { posLC, negLC: negLC||'' };
+                    });
+                    setVehicleLCMap(next);
+```
+- **After:**
+```js
+                    // Re-run auto-detection of the result cases (LL Max / LL Min), clearing manual
+                    // case picks. Every other field of an entry (category, γLL, customGam, …) is kept
+                    // (2026-10-19; it used to be dropped, so legal trucks fell back to Design and the
+                    // rating-level γLL). A vehicle with no entry gets the category and γLL the
+                    // auto-populate pass would give it.
+                    const loadedLCs = [...new Set(origRows.map(r=>r.load))];
+                    const next = {...vehicleLCMap};
+                    (cfg?.selectedVehicles||[]).forEach(vn=>{
+                      const vLCs = idxVehicleLCs(loadedLCs, vn);   // whole-name match (Type 3 ≠ Type 3-3)
+                      const posLC = vLCs.find(lc=>lc.includes('(max)')||lc.includes('max'))
+                                 || vLCs[0];
+                      const negLC = vLCs.find(lc=>lc.includes('(min)')||lc.includes('min'));
+                      const old = vehicleLCMap[vn];
+                      if (old) { next[vn] = {...old, posLC:posLC||'', negLC:negLC||''}; return; }
+                      if (!posLC) return;
+                      const category = defaultVehicleCategory(vn);
+                      const g = vehicleGamLL(category, ratingLimitState, ratingMethod, ratingAdtt, vn);
+                      next[vn] = { posLC, negLC:negLC||'', category,
+                                   gamLLinv:+g.inv.toFixed(4), gamLLop:+g.op.toFixed(4), customGam:false };
+                    });
+                    setVehicleLCMap(next);
+```
+- **Behaviour:**
+  - The button still re-detects LL Max / LL Min for every selected vehicle and still overwrites cases picked by hand (that is what it is for).
+  - Every other field of an existing entry is kept.
+  - A vehicle with no entry gets the same category and γLL a fresh auto-populate pass would give it: `defaultVehicleCategory`, then `vehicleGamLL` (Legal → `legalLLfactor(ADTT)`, MBE Table 6A.4.4.2.3a-1), `customGam: false`.
+  - Two side changes:
+    - (i) a selected vehicle whose cases are no longer found keeps its entry with `posLC: ''` instead of losing it (it is not rated either way);
+    - (ii) entries of vehicles that are no longer selected are kept instead of being removed (they are not used).
+- **§4 callout:** no formula, factor, unit or code reference changes. After a click, the γLL and category used for a vehicle are now its own (as before the click) instead of the design defaults. Provisions: MBE 6A.4.4 / Table 6A.4.4.2.3a-1 (legal γLL), MBE Table 6A.4.2.2-1 (design γLL), MBE 6A.8.3 Eq. 6A.8.3-1 (posting); edition: verify (the tool states none).
+- **Saved data:** no key or format change (`mct_cfg_v3.rating.vehicleLCMap` keeps its shape). Nothing changes until the button is clicked.
+
+#### Check case (the claude/index-posting check case B: 4 × 20.25 ft, Mn⁻ 700 ft·k, φ's 1, LRFR Strength I Inventory, γDC 1.25, γDW 1.50, ADTT 5000, legal trucks s = 1.33; numerator at node 131 (M⁻) = 700.0 − 1.25 × 36.91 − 1.50 × 7.69 = 642.33), click "↺ Auto-detect LCs"
+- **Type 3-3** (W = 40 T, LL = 384.44 ft·k):
+  - Before: category → Design, γLL Inv 1.75 / Op 1.35. Op RF = 642.33 / (1.35 × 1.33 × 384.44) = 642.33 / 690.26 = 0.931 (Inv 0.718). Posting "not computed — rated as Design, not Legal".
+  - After: category Legal, γLL 1.45. RF = 642.33 / (1.45 × 1.33 × 384.44) = 642.33 / 741.39 = **0.866**. Posting = (40/0.7) × (0.866 − 0.3) = **32.3 T** (same as before the click).
+- **Type 3:** before Design, Op RF 1.163, "not computed"; after Legal, RF 1.083, no posting.
+- **Type 3S2:** before Design, Op RF 0.349, "not computed"; after Legal, RF 0.325, posting 1.3 T.
+- **Typed γLL survives:** the same project with Type 3-3 at an engineer-typed γLL 1.40 (`customGam: true`):
+  - Before the fix, the click → Design; later remounts reset it to 1.45 with `customGam: false`.
+  - After the fix, γLL stays 1.40 with `customGam: true`. RF = 642.33 / (1.40 × 1.33 × 384.44) = 642.33 / 715.83 = **0.897**; Posting = (40/0.7) × (0.897 − 0.3) = **34.1 T**.
+
+#### How verified
+- `node tests/check-syntax.mjs index.html`: all 7 scripts pass.
+- `node tests/compare.mjs --tool page --file index.html`: page.text and page.storage identical (only the usual Babel note on both sides).
+- Main (6561ee3) vs branch, headless, same sibling files, with the claude/index-posting readout (every AASHTO Rating sub-tab, AREMA, Results, Generate, reports, `bridgeSuite.v1.*` hand-off payloads, all localStorage). The steel hand-off button is gone since #310, so the PS-Beam payload is the one compared.
+  - **Without clicking the button**, 11 cases (default, 4-span check case, check case + legal trucks, typed γLL 1.40, LFR with legal trucks box / no box, quick-calc/IM, reordered results, hand-set cross-map, cross-map with no own case, old-style saved mapping): **all identical**.
+    - One run differed only in keys written by the embedded PS-Beam page (`psbeam.inputs.v1`, `bridgeSuite.v1.psSection`, `bridgeSuite.v1.migrated.psbeam`): load timing; the sibling files are identical.
+  - **With the button clicked** (check case + legal trucks, typed γLL, reordered results, LFR with legal trucks, quick-calc/IM, old-style mapping, cross-map with no own case), only the following differ:
+    - the legal trucks' category / γLL / RF / tons on Multi-Vehicle;
+    - the posting cards and worked lines on Inputs & Setup;
+    - the report posting box only with a typed γLL (34.1 T vs 32.3 T). Otherwise it is identical, because the harness prints the report after a step change, and that remount lets main's auto-populate pass refill the category;
+    - the undo-history counter in the header (main makes one more write: the click, then the remount re-populate);
+    - the kept `vehicleLCMap` fields (`gamLLinv`/`gamLLop`/`customGam` with a typed γLL).
+  - The `bridgeSuite.v1.*` payloads and all other storage are identical. LFR example: main after the click rated Type 3 at Design Inv γLL 1.30 (the rating level's factor); the branch keeps the vehicle's LFR Inv 2.17, the same as before the click.
+- **Other copies:** none. The shared `bridgeSuite.v1.*` blocks are not touched.
