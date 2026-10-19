@@ -19687,3 +19687,36 @@ index 052e26e..eaf5b08 100644
 @@ -12939,0 +12955 @@ function gdStPayload(g, addPL) {
 +  const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;   // GDX (2026-10-19): the detail-module inputs (optional; ST-Girder imports the 1:1 ones)
 ```
+
+
+## 2026-10-19 — PR: claude/gd-stgirder-gd70 (GD70: per-span and per-position detail data for ST-Girder's governing values; engineer decision 2026-10-19; cross-tool PR with stgirder.html, HANDOFF.md §4.9, ENGINEER_CHECKS GD70; PR link added after merge)
+
+### GD70. `girderDetail.details` gains `rowsBy`, `supports`, `cyclesBy`   [hand-off data; no GirderDetail result change, Tier 1 for this file]
+- **Where:** `gdStDetails()` (anchor `/* GDX (engineer decision 2026-10-19`): new helpers `spanOf`, `posOf` (from the row names "Span k, …, interior/exterior"); `transverseStiffener.rowsBy` (name, span, pos, do1, do2, end of each type A row); `bearingStiffeners.types[].clip` and `bearingStiffeners.supports` (name and type of each Bearing stiffeners row); `fatigue.cyclesBy` (name, pos, n of each Fatigue row with n > 0).
+- **Before:** `details` gave the bridge-wide d_o list, the bearing types without their supports and the unique n values, so ST-Girder could not pick the value for its span and girder.
+- **After:** the per-row data above; existing fields unchanged.
+- **Governing provision:** none changed (data only).
+- **Check case (built-in, AASHTO, G2):** `rowsBy` 12 rows (span 1 interior: Abut. 1 and Pier 1 rows, d_o 60 / 60); `supports` Abut. 1 interior A, Pier 1 interior B, …; `cyclesBy` 62 rows, n 1 or 1.5.
+- **How verified:** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"`; `node tests/compare.mjs --tool gd --project builtin,util --owner AASHTO,MassDOT`: all sections identical to main (be08084), no console errors.
+- **Saved data:** none. **Other copies:** receiver `stgirder.html` (fixlog GD70). **Open items:** none.
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index eaf5b08..c0f7c07 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -12882,0 +12883,2 @@ function gdStDetails() {
++    // GD70 (engineer decision 2026-10-19): per span / girder position, so the receiver can take the governing value for its single check
++    const spanOf = nmS => { const m = /^Span (\d+)/.exec(String(nmS || '')); return m ? +m[1] : null; }, posOf = nmS => /exterior/i.test(nmS || '') ? 'exterior' : /interior/i.test(nmS || '') ? 'interior' : null;
+@@ -12884,2 +12886,4 @@ function gdStDetails() {
+-      transverseStiffener: A ? { module: 'Transverse stiffeners', type: A.name || 'Intermediate stiffener', bt: r4(A.bt), tp: r4(A.tp), sides: String(A.sides) === '2' ? 2 : 1, grade: ts.gS, Fy: Fy(ts.gS), spacings: uniq(rowsA.flatMap(r => [nm(r.do1), nm(r.do2)])), rows: rowsA.length } : null,
+-      bearingStiffeners: bs.types ? { module: 'Bearing stiffeners', grade: bs.gS, Fy: Fy(bs.gS), types: Object.entries(bs.types).map(([k, t]) => ({ type: k, name: t.name, pairs: nm(t.np), bt: r4(t.bt), tp: r4(t.tp) })) } : null,
++      transverseStiffener: A ? { module: 'Transverse stiffeners', type: A.name || 'Intermediate stiffener', bt: r4(A.bt), tp: r4(A.tp), sides: String(A.sides) === '2' ? 2 : 1, grade: ts.gS, Fy: Fy(ts.gS), spacings: uniq(rowsA.flatMap(r => [nm(r.do1), nm(r.do2)])), rows: rowsA.length,
++        rowsBy: rowsA.map(r => ({ name: r.name, span: spanOf(r.name), pos: posOf(r.name), do1: r4(r.do1), do2: r4(r.do2), end: r.end === 'yes' })) } : null,
++      bearingStiffeners: bs.types ? { module: 'Bearing stiffeners', grade: bs.gS, Fy: Fy(bs.gS), types: Object.entries(bs.types).map(([k, t]) => ({ type: k, name: t.name, pairs: nm(t.np), bt: r4(t.bt), tp: r4(t.tp), clip: r4(t.c) })),
++        supports: (bs.rows || []).map(r => ({ name: r.name, type: r.type, pos: posOf(r.name) })) } : null,
+@@ -12887 +12891,2 @@ function gdStDetails() {
+-      fatigue: ADTT > 0 ? { module: 'Fatigue; Girder section (flange details)', ADTT: r4(ADTT), adttBasis: 'one direction', p: r4(p), ADTTsl: r4(p * ADTT), life: nm(fa.life), limit: fa.limit || 'auto', catTop: gs.catT || null, catBot: gs.catB || null, cycles: uniq((fa.rows || []).map(r => nm(r.n))) } : null };
++      fatigue: ADTT > 0 ? { module: 'Fatigue; Girder section (flange details)', ADTT: r4(ADTT), adttBasis: 'one direction', p: r4(p), ADTTsl: r4(p * ADTT), life: nm(fa.life), limit: fa.limit || 'auto', catTop: gs.catT || null, catBot: gs.catB || null, cycles: uniq((fa.rows || []).map(r => nm(r.n))),
++        cyclesBy: (fa.rows || []).map(r => ({ name: r.name, pos: posOf(r.name), n: nm(r.n) })).filter(r => r.n > 0) } : null };
+```

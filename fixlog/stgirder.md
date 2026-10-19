@@ -3386,3 +3386,133 @@ index 5859151..f81c5e3 100644
 +          +ks.map(k=>'  '+(GD_LBL[k]||k)+': '+fv(X.set[k].v)+' ('+X.set[k].src.replace(/^from /,'')+')').join('\n')+'\n'
 +          +(X.dec.length?'GirderDetail values not transferred (method or interpretation; engineer to decide):\n'+X.dec.map(q=>'  '+q.what+': GirderDetail '+q.gdT).join('\n')+'\n':''); })():'')
 ```
+
+
+## 2026-10-19 — PR: claude/gd-stgirder-gd70 (GD70: d_o, bearing stiffeners, studs and cycles n taken from GirderDetail as the governing value; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, HANDOFF.md §4.9, ENGINEER_CHECKS GD70/GD71; PR link added after merge)
+
+Engineer (2026-10-19, on GD70): "I don't see why it shouldn't all come from the girderdetail app. If they are all preliminary sized in that app then it should be transferred over or at least maybe note in the stgirder app why it's not transferred over." Decision: transfer all four; where GirderDetail has several values and ST-Girder checks one, take the governing (least favourable) one, lock it and say so next to the field.
+
+### GD70. Governing GirderDetail values for ST-Girder's single checks   [RESULT CHANGE for GirderDetail payloads with `details` — §4 callout] [Tier 2]
+- **Where:** `gdXfer` (anchor `// GD70`): `note`, `spans`, `sel`, `si`, `nSp`, `gpos`; the four former `no(...)` entries for `stiff.doSpc`, `stiff.bearB`, `conn.pitch`, `fatigue.ncyc` replaced; `GD_LBL` new labels; `gdFieldOf` passes `note`. Inputs tab: `GdFieldNote`; transverse stiffener checkbox locked (`inpE.stiff.transverse`); n select as `GdFld` when transferred; notes after the stiffener, stud and cycles rows. Report: marks of the stiffener, bearing, stud and cycles rows; `gdNotesR` under "Stiffeners, connectors and fatigue".
+- **Before (GDX):** not transferred; ST-Girder's own d_o, bearing stiffener, studs per row and pitch, and n (listed as GD70).
+- **After:**
+  - **d_o** = the largest d_o of GirderDetail's type A stiffener rows in the selected span for this girder position (else the span, else all rows); transverse stiffeners on. ST-Girder applies one d_o to every panel and the end panel (no separate end-panel input), so the largest (least V_n) is used.
+  - **Bearing stiffener** = the GirderDetail type at the support where the span's end shear 1.25(V_DC1 + V_DC2) + 1.50V_DW + 1.75 max|V_LL| from the imported stations is larger (where ST-Girder's peak V_u is: verified x = 110 ft = Pier 1 in all three cases below); b_b, t_b of that type; 1 pair → 2 plates (ST-Girder's count is the total: A_pn = n(b_b − 1.5)t_b, I = t_b(n b_b + t_w)³/12; see GD71 for its label). Several pairs, or no row for the support → not transferred, with a note. ST-Girder's 1.5 in clip is kept (GirderDetail 1.0 in: ST-Girder is conservative).
+  - **Studs per row and pitch** = the zone of the span with the largest pitch per stud p/n (tie: larger p). ST-Girder's fatigue check compares p/n with Z_r/V_sr at the worst station and its strength count is n × ⌊length/p⌋, so this zone is the least favourable for both; conservative where GirderDetail places closer studs.
+  - **Cycles n** = the largest n of GirderDetail's fatigue details of this girder position (payloads without `cyclesBy`: of all details).
+- **Governing provisions (AASHTO LRFD 10th Ed. (2024)):** 6.10.9.3.2 (k = 5 + 5/(d_o/D)², V_n) and 6.10.11.1.3; 6.10.11.2.3 (R_sb,n = 1.4A_pn F_ys), 6.10.11.2.4 (column, K = 0.75), 6.10.11.2.2 (b_t ≤ 0.48t_p√(E/F_ys)); 6.10.10.1.2 (fatigue pitch p ≤ nZ_r I/(V_sr Q)), 6.10.10.4 (strength count); 6.6.1.2.5 and Table 6.6.1.2.5-2 (N = 365·75·n·(ADTT)SL).
+- **Before → after (ST-Girder span 1; main be08084 vs branch; payloads made by the branch):**
+
+| Check | Built-in 15°, AASHTO, G2 | `util.json`, MassDOT, G2 | Built-in + sidewalk, RIDOT, G1 |
+|---|---|---|---|
+| Bearing stiffener (pier type) b × t (in) | 7 × 0.75 → 8.00 × 0.75 | 7 × 0.75 → 8.50 × 0.75 | 7 × 0.75 → 8.50 × 0.75 |
+| Bearing resistance φR_sb,n (kip) vs R_u, ratio | 577.5 → 682.5 vs 396.4; 0.686 → 0.581 | 577.5 → 735.0 vs 423.5; 0.733 → 0.576 | 577.5 → 735.0 vs 460.2; 0.797 → 0.626 |
+| Projecting width b_b / 0.48t_b√(E/F_ys) = 8.67 in | 0.807 → 0.923 | 0.807 → 0.980 | 0.807 → 0.980 |
+| Axial φP_n (kip) (pass both) | 759.8 → 832.8 | 759.8 → 869.1 | 759.8 → 869.1 |
+| Studs: n per row @ pitch | 3 @ 12 → 2 @ 8 in (zone 33–44 ft) | same | same |
+| Stud fatigue pitch: provided / required (in), ratio | 12 / 9.123 → 8 / 6.082; 1.315 → 1.315 (FAIL before and after) | 12 / 8.985 → 8 / 5.990; 1.336 → 1.336 | 12 / 8.586 → 8 / 5.724; 1.398 → 1.398 |
+| Stud strength count (continuous, right side) | 198 → 198 (ratio 0.863) | 198 → 198 (0.863) | 198 → 198 (0.810) |
+| d_o | 60 → 60 in (GirderDetail = ST-Girder default: no change) | same | same |
+| Cycles n; N | 1.0 → 1.5; 46.5 × 10⁶ → 69.8 × 10⁶ | same | same |
+
+  No other result changes. The fatigue checks are Fatigue I (infinite life, ΔF_TH) in all three, so n does not change them here; with Fatigue II it lowers (ΔF)_n by (1/1.5)^(1/3) = 0.874. The stud fatigue ratio is unchanged because p/n is 4.0 in per stud in both (12/3 = 8/2): the stud fatigue check fails before and after (ST-Girder checks one pitch at the worst station; GirderDetail's per-zone design passes; open as before).
+- **Hand checks (built-in AASHTO G2):** A_pn = 2 × (8.00 − 1.5) × 0.75 = 9.75 in²; φR_sb,n = 1.0 × 1.4 × 9.75 × 50 = 682.5 kip ✓ (before 2 × 5.5 × 0.75 = 8.25 → 577.5); 396.35 / 682.5 = 0.581 ✓. 0.48 × 0.75 × √(29000/50) = 8.670 in; 8.00 / 8.670 = 0.923 ✓. Studs: required p = n Z_r I/(V_sr Q) with n = 2 instead of 3 → 9.123 × 2/3 = 6.082 in ✓; 8 / 6.082 = 1.315 ✓. Strength count over 66 ft: 2 × ⌊792/8⌋ = 198 = 3 × ⌊792/12⌋ ✓. Cycles: N = 365 × 75 × 1.5 × 1700 = 69.8 × 10⁶ ✓. End shear for the bearing choice: 396.4 kip at Pier 1 vs 286.7 kip at Abut. 1.
+- **How verified (Tier 2):** check-syntax both files; `node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1,util_MassDOT_G2`: all sections identical to main; branch payloads (AASHTO G2, MassDOT util G2, RIDOT sidewalk G1): only the values above differ, no console errors; page text of every tab and Inputs sub-pane for def15_AASHTO_G2 and util_MassDOT_G2: identical to main; peak V_u location x = 110 ft (Pier 1) confirmed headless for all three; screenshots of the Stiffeners / Studs / Fatigue sub-tab checked. `tests/projects/st/*_gdx.json` regenerated with the new fields.
+- **Saved data:** none changed.
+- **Other copies:** sender `Steel Bridge Beam Modules.html` (fixlog GD70 there).
+- **Open items:** GD71 (wording of ST-Girder's bearing plate count; no result change). Payloads made between #304 and this PR (details without `supports`): the bearing stiffener is not transferred (note shown); d_o from the bridge-wide list; n from all details.
+- **Diff (main → branch; no context lines):**
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index f81c5e3..95a8076 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -2547,0 +2548,2 @@ function gdXfer(ext){
++  const note=(path,t)=>{ if(set[path]) set[path].note=t; };   // GD70: what GirderDetail has and which value was taken (shown next to the field)
++  const spans=externalSpans(ext), sel=ext._selSpan||spans[0]||{idx:1,x0:0,x1:Infinity}, si=+sel.idx||1, nSp=spans.length||1, gpos=g.position;
+@@ -2565,2 +2567,7 @@ function gdXfer(ext){
+-    no('details','stiff.doSpc','transverse stiffener spacing d_o',(T.spacings||[]).length?(T.spacings.map(v=>f(v,1)).join(', ')+' in at the stiffener rows (supports and cross-frames)'):'none listed',
+-      'GirderDetail designs stiffeners at its listed rows; ST-Girder applies one d_o to every panel of the span (and to the end panel)'); }
++    /* GD70 (engineer decision 2026-10-19): d_o = the LARGEST spacing GirderDetail designs in this span for this girder position (fewer stiffeners
++       = smaller k and V_n; ST-Girder applies one d_o to every panel and to the end panel, which has no input of its own) */
++    const rB=T.rowsBy||[], pick=[rB.filter(r=>r.span===si&&(!r.pos||r.pos===gpos)), rB.filter(r=>r.span===si), rB].find(a=>a.length)||[];
++    const dos=pick.flatMap(r=>[r.do1,r.do2]).filter(v=>num(v)&&v>0), dMax=dos.length?Math.max(...dos):(T.spacings||[]).length?Math.max(...T.spacings):null;
++    if(num(dMax)){ put('stiff.transverse',true,'Transverse stiffeners','details'); put('stiff.doSpc',dMax,'Transverse stiffeners, largest d_o in span '+si,'details');
++      note('stiff.doSpc','GirderDetail: '+(pick.length?pick.length+' stiffener rows in span '+si+(pick[0]&&pick[0].pos?' ('+gpos+')':'')+', d_o '+[...new Set(dos)].sort((a,b)=>a-b).map(v=>f(v,1)).join(', ')+' in':'d_o '+T.spacings.map(v=>f(v,1)).join(', ')+' in')+'. ST-Girder checks one d_o for every panel and the end panel, so the largest is used: d_o = '+f(dMax,1)+' in. Panel-by-panel design: GirderDetail Transverse stiffeners.'); }
++    else no('details','stiff.doSpc','transverse stiffener spacing d_o','none listed','GirderDetail lists no intermediate stiffener rows'); }
+@@ -2569,2 +2576,11 @@ function gdXfer(ext){
+-  if(B) no('details','stiff.bearB','bearing stiffeners',(B.types||[]).map(t=>t.name+' '+f(t.pairs,0)+' pair(s) '+f(t.bt,2)+' × '+f(t.tp,3)+' in').join('; '),
+-    'ST-Girder checks one bearing stiffener for the peak V_u of the span (abutment or pier); which GirderDetail type applies, and pairs vs. its plate count, is a choice');
++  /* GD70: bearing stiffener = the GirderDetail type at the support where this span's factored end shear (and so ST-Girder's peak V_u) is larger,
++     from the imported stations: |1.25(V_DC1 + V_DC2) + 1.50 V_DW| + 1.75 max|V_LL|. One pair = ST-Girder's 2 plates (one each side of the web). */
++  if(B){ const sts=(ext.stations||[]).filter(q=>num(q.x)&&q.x>=(+sel.x0||0)-1e-9&&q.x<=(num(+sel.x1)?+sel.x1:Infinity)+1e-9);
++    const vu=q=>q?Math.abs(1.25*((+q.V_DC1||0)+(+q.V_DC2||0))+1.5*(+q.V_DW||0))+1.75*Math.max(Math.abs(+q.V_LLpos||0),Math.abs(+q.V_LLneg||0)):-1;
++    const qL=sts[0], qR=sts[sts.length-1], left=vu(qL)>=vu(qR), sup=left?(si===1?'Abut. 1':'Pier '+(si-1)):(si===nSp?'Abut. 2':'Pier '+si);
++    const row=(B.supports||[]).find(r=>String(r.name).indexOf(sup+',')===0&&(!r.pos||r.pos===gpos))||(B.supports||[]).find(r=>String(r.name).indexOf(sup)===0);
++    const ty=row&&(B.types||[]).find(t=>t.type===row.type), all=(B.types||[]).map(t=>t.name+' '+f(t.pairs,0)+' pair(s) '+f(t.bt,2)+' × '+f(t.tp,3)+' in').join('; ');
++    if(ty&&ty.pairs===1&&num(ty.bt)&&num(ty.tp)){ const m='Bearing stiffeners, '+ty.name+' at '+sup;
++      put('stiff.bearB',ty.bt,m,'details'); put('stiff.bearT',ty.tp,m,'details'); put('stiff.bearN',2,m+', 1 pair','details');
++      note('stiff.bearB','GirderDetail: '+all+'. ST-Girder checks one bearing stiffener for the peak V_u of span '+si+', which is at '+sup+' (1.25(DC1 + DC2) + 1.50DW + 1.75(LL+IM) of the imported end shears: '+f(vu(left?qL:qR),1)+' kip there vs '+f(vu(left?qR:qL),1)+' kip at the other end), so the '+ty.name+' type is used: '+f(ty.bt,2)+' × '+f(ty.tp,3)+' in, 1 pair = 2 plates (one each side of the web). ST-Girder deducts a 1.5 in clip; GirderDetail '+f(ty.clip,2)+' in. Every bearing: GirderDetail Bearing stiffeners.'); }
++    else no('details','stiff.bearB','bearing stiffeners',all,!row?'no GirderDetail bearing row for '+sup:!ty?'the type of '+sup+' is not listed':'more than one pair per bearing: ST-Girder’s column model (one plate each side of the web) does not represent several pairs'); }
+@@ -2572,2 +2588,7 @@ function gdXfer(ext){
+-    no('details','conn.pitch','studs per row and pitch',(St.zones||[]).length+' zones: '+[...new Set((St.zones||[]).map(z=>z.nr+' @ '+f(z.p,1)+' in'))].slice(0,6).join(', ')+((St.zones||[]).length>6?', …':''),
+-      'GirderDetail varies the studs by zone; ST-Girder checks one row count and pitch for the span'); }
++    /* GD70: the zone of this span with the LARGEST pitch per stud (p / n, the fewest studs per length). ST-Girder's fatigue check compares p / n with
++       Z_r / V_sr at the worst station and its strength check counts n per pitch over the length, so this zone is the least favourable for both. */
++    const zs=(St.zones||[]).filter(z=>num(z.x1)&&num(z.x2)&&z.x2>(+sel.x0||0)+1e-6&&z.x1<(num(+sel.x1)?+sel.x1:Infinity)-1e-6&&z.nr>0&&z.p>0);
++    if(zs.length){ const zg=zs.reduce((b,z)=>(z.p/z.nr>b.p/b.nr+1e-12||(Math.abs(z.p/z.nr-b.p/b.nr)<=1e-12&&z.p>b.p))?z:b,zs[0]), m='Shear connectors, zone '+f(zg.x1,0)+' to '+f(zg.x2,0)+' ft';
++      put('conn.nRow',zg.nr,m,'details'); put('conn.pitch',zg.p,m,'details');
++      note('conn.pitch','GirderDetail: '+zs.length+' stud zones in span '+si+' ('+[...new Set(zs.map(z=>z.nr+' @ '+f(z.p,1)+' in'))].join(', ')+'). ST-Girder checks one row count and pitch, so the zone with the largest pitch per stud is used (fewest studs per length; governs its fatigue pitch and strength count): '+zg.nr+' per row @ '+f(zg.p,1)+' in ('+f(zg.x1,0)+' to '+f(zg.x2,0)+' ft). The check is conservative where GirderDetail places closer studs. Per-zone design: GirderDetail Shear connectors.'); }
++    else no('details','conn.pitch','studs per row and pitch','no zone in span '+si,'GirderDetail lists no stud zone in this span'); }
+@@ -2578 +2599,4 @@ function gdXfer(ext){
+-    if((F.cycles||[]).length) no('details','fatigue.ncyc','cycles per truck passage n',F.cycles.map(v=>f(v,1)).join(', ')+' (by detail)','GirderDetail sets n per detail; ST-Girder uses one n for the span'); }
++    // GD70: cycles per passage = the largest n among GirderDetail's fatigue details of this girder position (more cycles: lower finite-life resistance)
++    const cb=(F.cyclesBy||[]).filter(r=>!r.pos||r.pos===gpos), ns=(cb.length?cb.map(r=>r.n):(F.cycles||[])).filter(v=>num(v)&&v>0);
++    if(ns.length){ const nMax=Math.max(...ns); put('fatigue.ncyc',nMax,'Fatigue, largest n','details');
++      note('fatigue.ncyc','GirderDetail: n = '+[...new Set(ns)].sort((a,b)=>a-b).map(v=>f(v,1)).join(', ')+' by detail ('+(cb.length?cb.length+' '+gpos+' details':'all details')+'). ST-Girder uses one n, so the largest is used: n = '+f(nMax,1)+'. Detail by detail: GirderDetail Fatigue.'); } }
+@@ -2599 +2623 @@ function gdPulled(ext,inp){ if(!gdXfer(ext)) return {}; const g=ext.girderDetail
+-function gdFieldOf(inp,X,Pu,path){ if(!X) return null; if(X.set[path]) return {lock:true,v:X.set[path].v,src:X.set[path].src};
++function gdFieldOf(inp,X,Pu,path){ if(!X) return null; if(X.set[path]) return {lock:true,v:X.set[path].v,src:X.set[path].src,note:X.set[path].note};
+@@ -2604,0 +2629,2 @@ const GD_LBL={'loads.wConstr':'construction live load (klf)','loads.NL':'design
++  'stiff.transverse':'transverse stiffeners','stiff.doSpc':'stiffener spacing d_o (in)','stiff.bearB':'bearing stiffener width (in)','stiff.bearT':'bearing stiffener thickness (in)','stiff.bearN':'bearing plates',
++  'conn.nRow':'studs per row','conn.pitch':'stud pitch (in)','fatigue.ncyc':'cycles per truck passage n',
+@@ -2606,0 +2633,2 @@ const GD_PANE_OF={sec:'section',negM:'section',mat:'mat',deck:'deck',geom:'span'
++// GD70: the note next to a field whose single ST-Girder value is the governing one of several GirderDetail values
++const GdFieldNote=({g})=>g&&g.note?<div className="hint" style={{margin:'2px 0 8px',color:'#1C4FC4'}}>{g.note}</div>:null;
+@@ -4658,2 +4686,2 @@ function InputsTab({inp,set,R}){
+-        <input type="checkbox" checked={inp.stiff.transverse} onChange={e=>S('stiff.transverse',e.target.checked)}/>
+-        Transverse intermediate stiffeners (unchecked = unstiffened web)</label></div>
++        <input type="checkbox" checked={inpE.stiff.transverse} disabled={!!(G('stiff.transverse')&&G('stiff.transverse').lock)} onChange={e=>S('stiff.transverse',e.target.checked)}/>
++        Transverse intermediate stiffeners (unchecked = unstiffened web)</label><GdBadge g={G('stiff.transverse')}/></div>
+@@ -4661,3 +4689,3 @@ function InputsTab({inp,set,R}){
+-        {inp.stiff.transverse&&<Num l="Stiffener spacing do" u="in" v={inp.stiff.doSpc} set={v=>S('stiff.doSpc',v)} step={6} gd={G('stiff.doSpc')}/>}
+-        {inp.stiff.transverse&&<Num l="Stiff. width bt" u="in" v={inp.stiff.bt} set={v=>S('stiff.bt',v)} step={0.5} gd={G('stiff.bt')}/>}
+-        {inp.stiff.transverse&&<Num l="Stiff. thick tp" u="in" v={inp.stiff.tp} set={v=>S('stiff.tp',v)} step={0.0625} gd={G('stiff.tp')}/>}
++        {inpE.stiff.transverse&&<Num l="Stiffener spacing do" u="in" v={inp.stiff.doSpc} set={v=>S('stiff.doSpc',v)} step={6} gd={G('stiff.doSpc')}/>}
++        {inpE.stiff.transverse&&<Num l="Stiff. width bt" u="in" v={inp.stiff.bt} set={v=>S('stiff.bt',v)} step={0.5} gd={G('stiff.bt')}/>}
++        {inpE.stiff.transverse&&<Num l="Stiff. thick tp" u="in" v={inp.stiff.tp} set={v=>S('stiff.tp',v)} step={0.0625} gd={G('stiff.tp')}/>}
+@@ -4668,0 +4697 @@ function InputsTab({inp,set,R}){
++      <GdFieldNote g={G('stiff.doSpc')}/><GdFieldNote g={G('stiff.bearB')}/>
+@@ -4675,0 +4705 @@ function InputsTab({inp,set,R}){
++      <GdFieldNote g={G('conn.pitch')}/>
+@@ -4697 +4727,2 @@ function InputsTab({inp,set,R}){
+-        <div className="fld"><label>Cycles per passage n (Table 6.6.1.2.5-2)</label>
++        {G('fatigue.ncyc')? <GdFld l="Cycles per passage n (Table 6.6.1.2.5-2)" v={fmt(+G('fatigue.ncyc').v,1)} src={G('fatigue.ncyc').src}/>
++        : <div className="fld"><label>Cycles per passage n (Table 6.6.1.2.5-2)</label>
+@@ -4703 +4734 @@ function InputsTab({inp,set,R}){
+-          </select></div></div>
++          </select></div></div>}
+@@ -4705,0 +4737 @@ function InputsTab({inp,set,R}){
++      <GdFieldNote g={G('fatigue.ncyc')}/>
+@@ -6292,3 +6324,4 @@ function crModel(R,inp,o){
+-    sub(s,'Stiffeners, connectors and fatigue','6.10.11 · 6.10.10 · 6.6.1',<CrKV rows={[['Transverse stiffeners',st.transverse?'yes, d_o = '+fmt(+st.doSpc,1)+' in, b_t × t_p = '+fmt(+st.bt,2)+' × '+fmt(+st.tp,3)+' in':'none',gm('stiff.bt','stiff.tp')?'(b_t, t_p from GirderDetail)':''],
+-      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plate(s) each side of the web, b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in'],
+-      ['Shear studs','d = '+fmt(+cn.studD,3)+' in, h = '+fmt(+cn.studH,2)+' in, '+fmt(+cn.nRow,0)+' per row, pitch '+fmt(+cn.pitch,2)+' in',gm('conn.studD','conn.studH')?'(d, h from GirderDetail)':''],
++    const gdNotesR=gXr?['stiff.doSpc','stiff.bearB','conn.pitch','fatigue.ncyc'].map(k=>gXr.set[k]&&gXr.set[k].note).filter(Boolean):[];   // GD70
++    sub(s,'Stiffeners, connectors and fatigue','6.10.11 · 6.10.10 · 6.6.1',<React.Fragment><CrKV rows={[['Transverse stiffeners',st.transverse?'yes, d_o = '+fmt(+st.doSpc,1)+' in, b_t × t_p = '+fmt(+st.bt,2)+' × '+fmt(+st.tp,3)+' in':'none',gm('stiff.bt','stiff.tp','stiff.doSpc')?'('+[gm('stiff.doSpc')?'d_o':'',gm('stiff.bt','stiff.tp')?'b_t, t_p':''].filter(Boolean).join('; ')+' from GirderDetail'+(gm('stiff.doSpc')?'; d_o the largest in the span':'')+')':''],
++      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plate(s) each side of the web, b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in',gm('stiff.bearB')?'(from GirderDetail: the type at the support of the peak V_u)':''],
++      ['Shear studs','d = '+fmt(+cn.studD,3)+' in, h = '+fmt(+cn.studH,2)+' in, '+fmt(+cn.nRow,0)+' per row, pitch '+fmt(+cn.pitch,2)+' in',gm('conn.studD','conn.studH','conn.pitch')?'('+[gm('conn.studD','conn.studH')?'d, h':'',gm('conn.pitch')?'n per row and pitch: the zone with the largest pitch per stud':''].filter(Boolean).join('; ')+' from GirderDetail)':''],
+@@ -6296 +6329 @@ function crModel(R,inp,o){
+-      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr',gm('fatigue.designLife')?'(design life from GirderDetail)':''],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode,gm('fatigue.lsMode')]]}/>);
++      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr',gm('fatigue.designLife','fatigue.ncyc')?'('+[gm('fatigue.ncyc')?'n: the largest of GirderDetail’s details':'',gm('fatigue.designLife')?'design life':''].filter(Boolean).join('; ')+' from GirderDetail)':''],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode,gm('fatigue.lsMode')]]}/>{gdNotesR.length>0&&<React.Fragment><p className="cr-note">Single values taken from GirderDetail’s several (governing value):</p><ul className="cr-ul">{gdNotesR.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>}</React.Fragment>);
+```
