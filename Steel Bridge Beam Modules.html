@@ -12872,6 +12872,21 @@ function gdStLoads(R, addPL) {
         pedestrian: R.wPL > 0 || nm(dl.ped) > 0 ? { psf: r4(nm(dl.ped)), widthL: r4(wk('L')), widthR: r4(wk('R')), w: r4(R.wPL), inLL: !!addPL && R.wPL > 0, rows: D.per.filter(L => L.cat === 'PL').map(L => ({ id: L.id, name: L.desc, w: r4(L.r[j]), wTotal: r4(L.plf), dist: L.dist })) } : null } };
   } catch (e) { return null; }
 }
+/* GDX (engineer decision 2026-10-19 "whatever can be imported from GirderDetail should be"; HANDOFF.md 4.9): the detail-module inputs, optional field
+   girderDetail.details, for ST-Girder's stiffener, stud and fatigue inputs. Read as entered in the modules (P.ts, P.bs, P.sc, P.fa, P.gs); bridge-wide values
+   (the modules' rows cover the interior and exterior girders), not girder-specific. Data only: nothing here changes. null when it cannot be built. */
+function gdStDetails() {
+  try {
+    const r4 = v => Math.round((+v || 0) * 1e4) / 1e4, Fy = g => { const q = GD_GR[g]; return q ? q.Fy : null; }, ts = P.ts || {}, bs = P.bs || {}, sc = P.sc || {}, fa = P.fa || {}, gs = P.gs || {};
+    const A = ts.types && ts.types.A, rowsA = (ts.rows || []).filter(r => r.type === 'A'), uniq = a => [...new Set(a.filter(v => isFinite(v) && v > 0))].sort((p, q) => p - q);
+    const ADTT = nm(fa.ADTT), p = nm(fa.p);
+    return { source: 'GirderDetail detail modules, as entered (bridge-wide: the module rows cover the interior and exterior girders)',
+      transverseStiffener: A ? { module: 'Transverse stiffeners', type: A.name || 'Intermediate stiffener', bt: r4(A.bt), tp: r4(A.tp), sides: String(A.sides) === '2' ? 2 : 1, grade: ts.gS, Fy: Fy(ts.gS), spacings: uniq(rowsA.flatMap(r => [nm(r.do1), nm(r.do2)])), rows: rowsA.length } : null,
+      bearingStiffeners: bs.types ? { module: 'Bearing stiffeners', grade: bs.gS, Fy: Fy(bs.gS), types: Object.entries(bs.types).map(([k, t]) => ({ type: k, name: t.name, pairs: nm(t.np), bt: r4(t.bt), tp: r4(t.tp) })) } : null,
+      studs: sc.d ? { module: 'Shear connectors', d: r4(sc.d), h: r4(sc.h), Fu: r4(sc.Fu), transverseSpacing: r4(sc.st), zones: (sc.zones || []).map(z => ({ x1: r4(z.x1), x2: r4(z.x2), nr: nm(z.nr), p: r4(z.p) })) } : null,
+      fatigue: ADTT > 0 ? { module: 'Fatigue; Girder section (flange details)', ADTT: r4(ADTT), adttBasis: 'one direction', p: r4(p), ADTTsl: r4(p * ADTT), life: nm(fa.life), limit: fa.limit || 'auto', catTop: gs.catT || null, catBot: gs.catB || null, cycles: uniq((fa.rows || []).map(r => nm(r.n))) } : null };
+  } catch (e) { return null; }
+}
 function gdStPayload(g, addPL) {
   const R = GM.sa.compute({ ...P.sa, girder: g }); if (R.errors && R.errors.length) return { error: R.errors[0] };
   const b = R.b, r3 = v => Math.round(v * 1000) / 1000, r4 = v => Math.round(v * 1e4) / 1e4, N = R.N, xs = R.xs, sup = Array.from(R.sup), lab = `G${g}`;
@@ -12937,6 +12952,7 @@ function gdStPayload(g, addPL) {
         existing: R.MUT ? { w: r4(R.wUT), strMax: 1.50, strMin: 0.65, service: 1.0, camber: true, deckPlacement: false } : null,
         future: R.MUF ? { w: r4(R.wUF), strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0, camber: false, deckPlacement: false } : null } } : {}) } };
   const ldIn = gdStLoads(R, pl); if (ldIn) p.girderDetail.loads = ldIn;   // GDL (2026-10-19): the load inputs of this girder (optional, display in ST-Girder)
+  const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;   // GDX (2026-10-19): the detail-module inputs (optional; ST-Girder imports the 1:1 ones)
   return { ok: true, payload: p };
 }
 function gdStGet() { const s = document.getElementById('gd-st-g'), c = document.getElementById('gd-st-pl'); return gdStPayload(Math.round(nm(s ? s.value : P.sa.girder)) || 1, c ? c.checked : true); }

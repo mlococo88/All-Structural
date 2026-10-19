@@ -2927,3 +2927,462 @@ index 7a9a1df..c7168cb 100644
 +          +(G.utrows.length?'; utilities '+G.utrows.map(q=>q.category+' '+f3(q.w)).join(', ')+' klf':'')+'; live load '+((L.liveLoad&&L.liveLoad.vehicle)||'HL-93')+', '+gdLLText(L).filter((t,i)=>i!==0&&i!==3).join('; ')+'.\n'
 +          +(own.length?'Still computed with ST-Girder\u2019s own inputs (not switched):\n'+own.map(o=>'  '+o.out+': '+o.what+' '+o.ownT+' (GirderDetail '+o.gdT+(o.same?', same':'')+')').join('\n')+'\n':''); })():'')
 ```
+
+
+## 2026-10-19 — PR: claude/gd-stgirder-import-all (GDX: GirderDetail's inputs transferred and highlighted; GD69 switched; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, HANDOFF.md §4.9 and ENGINEER_CHECKS GD69/GD70; PR link added after merge)
+
+Engineer decisions (2026-10-19): switch the constructibility construction live load, the live load deflection N_L and the deck overhang inputs to GirderDetail's values (GD69), and "Whatever can be imported from GirderDetail should be. I think the various input sections of the ST-Girder app should be highlighted indicating they were transferred from the GirderDetail app."
+
+### GDX-1. Transferred inputs (`gdXfer`, `gdOverlay`)   [RESULT CHANGE for GirderDetail payloads that carry `girderDetail.loads` — §4 callout] [Tier 2]
+- **Where:** helpers after `GdFld` (anchor `/* GDX (engineer decision 2026-10-19`): `GD_FAT_CATS`, `gdXfer`, `gdOverlay`, `gdPulled`, `gdFieldOf`, `GD_LBL`, `GD_PANE_OF`, `GdBadge`. `computeAll`: first line `inp=gdOverlay(inp);`. Report `crModel`: `gXr`, `gPr`, `gm`, `inp=gdOverlay(inp)` before `const ld=R.loads…`. Capacity hand-off: `category:gdOverlay(inp).fatigue.category`. `gdOwnUse`: each item has `path`; the transferred ones are filtered out.
+- **Before:** ST-Girder used its own construction live load, N_L, deck design inputs, stiffener, stud and fatigue inputs beside GirderDetail's forces.
+- **After:** while GirderDetail demands with `girderDetail.loads` are in use, `computeAll` (and the report and capacity hand-off) use these GirderDetail values; ST-Girder's saved inputs are not changed (they apply again after "✕ use built-in simple-span analysis"):
+
+| ST-Girder input | GirderDetail value | Condition |
+|---|---|---|
+| `loads.wConstr` | `loads.construction.w` (construction LL psf × b_eff) | always (ST-Girder's 1.5·w simple-span method kept; GirderDetail's "Con" combination is on the continuous girder) |
+| `loads.NL` | `loads.liveLoad.lanes` | 1 to 4 |
+| `deck.deckOn` | true (composite girder) | always |
+| `deck.wsFut` | `wearingSurface.psf` / 1000 | a wearing surface row |
+| `deck.tsSeparate`, `deck.tsDL` | t_s + sacrificial | separate only when the sacrificial thickness > 0 |
+| `deck.wBar`, `deck.bBar` | deck edge barrier w, width × 12 | barrier edges; interior girder: both edges equal |
+| `deck.oh` (interior girder) | overhang | both overhangs equal (exterior: set by the pull, as before) |
+| `stiff.bt`, `stiff.tp` | Transverse stiffeners type A | single-sided (ST-Girder's I_t = t_p b_t³/3) |
+| `stiff.Fys` | stiffener grade F_y | transverse and bearing grades equal |
+| `conn.studD`, `conn.studH` | Shear connectors d, h | always |
+| `fatigue.ADTT`, `fatigue.adttIsSingleLane` | (ADTT)SL = p × ADTT, entered as single-lane | ADTT > 0 |
+| `fatigue.designLife`, `fatigue.lsMode` | Fatigue design life, limit state | life > 0; auto / I / II |
+| `fatigue.category` | Girder section bottom flange fatigue detail | a valid category |
+
+  Not transferred (GD70, method or interpretation): d_o, bearing stiffeners, studs per row and pitch, cycles n, a curb edge, unequal edges or overhangs for an interior girder, stiffener pairs, unequal stiffener grades. Payloads without `loads` (before 2026-10-19), MIDAS/MCT imports, the built-in analysis: `gdXfer` returns null and `gdOverlay` returns the same object: nothing changes.
+- **Governing provisions (AASHTO LRFD 10th Ed. (2024)):** constructibility 6.10.3.2.1, 6.10.3.3 with construction loads 3.4.2.1 (γ = 1.5); live load deflection 2.5.2.6.2 (all design lanes loaded, all girders deflecting equally, multiple presence 3.6.1.1.2); deck overhang 3.6.1.3.4, Table 4.6.2.1.3-1 (strip 45.0 + 10.0X), Table 3.4.1-1 (DC 1.25, DW 1.50, LL 1.75; A13 railing collision not checked, as before); transverse stiffeners 6.10.11.1.2, 6.10.11.1.3; fatigue 3.6.1.4.2 ((ADTT)SL = p × ADTT), Table 3.4.1-1 (Fatigue I 1.75, Fatigue II 0.80), 6.6.1.2.3 (Tables 6.6.1.2.3-1, -2: category B, A = 120 × 10⁸, (ΔF)TH = 16 ksi), 6.6.1.2.5; studs 6.10.10.1.2, 6.10.10.2.
+- **Before → after (ST-Girder, span 1; main 0573760 vs branch; payloads made by the branch):**
+
+| Check | Built-in 15°, AASHTO, G2 | `util.json`, MassDOT, G2 | Built-in + 6 ft sidewalk, RIDOT, G1 (exterior) |
+|---|---|---|---|
+| LL deflection Δ (in), ratio to L/800 = 1.650 | 0.552 → 0.704; 0.335 → 0.427 | 0.590 → 0.752; 0.358 → 0.456 | 0.611 → 0.779; 0.370 → 0.472 |
+| Constr. compression flange f_bu (ksi), ratio | 13.945 → 17.959; 0.360 → 0.464 | same as AASHTO | 11.711 → 15.052; 0.302 → 0.389 |
+| Constr. shear V_u (kip), ratio | 121.75 → 136.60; 0.155 → 0.174 | same | 102.60 → 114.98; 0.131 → 0.147 |
+| Fatigue (flange) | C detail, Fatigue II: 3.552 / 5.437 ksi, 0.653 → B detail, Fatigue I: 7.769 / 16.0, 0.486 | C: 3.673 / 5.437, 0.676 → B: 8.035 / 16.0, 0.502 | C: 6.121 / 5.437, **1.126 FAIL** → B: 13.389 / 16.0, **0.837 pass** |
+| Transverse stiffener I_t provided (in⁴), ratio | 36.0 → 11.39; 0.148 → 0.469 | same | 36.0 → 13.29 (GirderDetail t_p = 7/16 in); 0.148 → 0.402 |
+| Transverse stiffener b_t ≥ min, ratio | 0.667 → 0.889 | same | same |
+| Transverse stiffener b_t ≤ 16t_p (in) | 6 / 8 → 4.5 / 6.0 (ratio 0.75) | same | 6 / 8 → 4.5 / 7.0 (0.75 → 0.643) |
+| Stud fatigue pitch: required (in), ratio (12 in provided) | 9.681 → 9.123; 1.239 → 1.315 (fails before and after) | 9.535 → 8.985; 1.259 → 1.336 | 9.111 → 8.586; 1.317 → 1.398 |
+| Deck overhang M_u (k-ft/ft), ratio | 6.811 → 9.628; 0.506 → 0.716 | same | 10.848 → 11.161; 0.806 → 0.830 |
+
+  Unchanged in all three: every Strength, Service, rating, camber, section and station result (`compare.mjs` sections `st.rating`, `st.governing`, `st.sections`, `st.stations` identical). The payloads with `loads` but no `details` (`tests/projects/st/*_loads.json`) change only the first three rows and the deck overhang.
+- **Hand checks (built-in AASHTO G2, L = 110 ft):**
+  - Construction shear: ΔV = 1.5 × (0.190 − 0.010) × 110 / 2 = 14.85 kip; 121.7525 + 14.85 = 136.6025 kip ✓. Flange: f_bu = [1.25 M_DC1(x) + 1.5 w x(L − x)/2] × 12 / S_t,bare; the construction term at the governing x = 44 ft is 1.5 × 0.190 × 44 × 66 / 2 = 413.8 k-ft (before: 1.5 × 0.010 × 38.5 × 71.5 / 2 = 20.6 k-ft at x = 38.5 ft).
+  - Deflection: g_Δ = m N_L / N_b = 0.85 × 3 / 5 = 0.510 (before 1.00 × 2 / 5 = 0.400); Δ = g_Δ × max(Δ_truck, 0.25Δ_truck + Δ_lane) = 0.510 × max(1.3807, 0.3452 + 0.6674) = 0.704 in ✓.
+  - Overhang (w_slab = 8/12 × 0.150 = 0.100 ksf, b_bar = 1.5 ft, oh = 3.25 ft, P_bar = 0.400 klf): M_DC = 0.100 × 3.25²/2 + 0.400 × (3.25 − 0.75) = 0.528 + 1.000 = 1.528; M_DW = 0.025 × (3.25 − 1.5)²/2 = 0.038; X = 3.25 − 1.5 − 1.0 = 0.75 ft, strip = 45 + 7.5 = 52.5 in; M_LL = 1.33 × 1.2 × 16 × 0.75 / (52.5/12) = 4.378; M_u = 1.25(1.528) + 1.50(0.038) + 1.75(4.378) = 9.628 k-ft/ft ✓; φM_n = 13.451 → 0.716 ✓.
+  - Fatigue: (ADTT)SL = 0.85 × 2000 = 1700 ≥ the category B crossover (1120 for 75 yr, n = 1) → Fatigue I: γΔf = 1.75 × 4.4395 = 7.769 ≤ (ΔF)TH = 16 ksi → 0.486 ✓ (before: C, 1000 < 1682 → Fatigue II: 0.80 × 4.4395 = 3.552 ≤ (44 × 10⁸ / (365 × 75 × 1 × 1000))^(1/3) = 5.437 ✓).
+  - Stiffener: I_t = t_p b_t³/3 = 0.375 × 4.5³ / 3 = 11.39 in⁴ ✓; b_t,min = max(2 + 60/30, 16/4) = 4.0 → 4.0/4.5 = 0.889 ✓; 16 t_p = 6.0 in.
+  - Studs: Fatigue I Z_r = 5.5 d² = 5.5 × 0.875² = 4.211 kip (before Fatigue II: α d² with α = 34.5 − 4.28 log(27.375 × 10⁶) = 2.668 → 2.043); V_f with γ = 1.75 (was 0.80): 38.71 → 84.68 kip; p_req 9.681 → 9.123 in.
+- **How verified (Tier 2):** `node tests/check-syntax.mjs stgirder.html` (all pass). `node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1,util_MassDOT_G2` (payloads without `loads`): **all sections identical** to main. The branch payloads (AASHTO G2, MassDOT util G2, RIDOT sidewalk G1) and `def15_AASHTO_G2_loads`, `util_MassDOT_G2_loads`: only the values in the table differ (`st.checks`), no console errors. Page text of every tab and Inputs sub-pane, main vs branch, payloads without `loads` (def15_AASHTO_G2, xsA_RIDOT_Iyes_G1): identical. After the pull the session keeps ST-Girder's own inputs; after "✕ use built-in simple-span analysis" they show and apply (screenshot).
+- **Saved data:** none changed (the overlay is never saved; `inp.external` as before).
+- **Other copies:** sender `Steel Bridge Beam Modules.html` (fixlog GDX there).
+- **Open items:** ENGINEER_CHECKS GD70 (a)–(e).
+
+### GDX-2. "Transferred from GirderDetail" highlight   [display only]
+- **Where:** CSS `.gd-in`, `.gd-src`, `.stgInTab.gd-tab`, `.gd-legend`; `Num` and `Sel` take an optional `gd` prop ({lock, v, src}: locked, shows GirderDetail's value; {hl, src}: tinted only); InputsTab `gX`, `gPu`, `G(path)`, `inpE`, `gdPanes` (after `clearExt`); every `Num` with `set={v=>S('path',v)}` gets `gd={G('path')}`; grade and fatigue category `Sel`; checkboxes composite deck, separate dead-load thickness (locked), b_eff auto, hybrid, flange transitions (badge); fatigue limit state and ADTT basis as `GdFld` when transferred; N_L field in the live load section; legend above the sub-tabs; "GD" on sub-tabs; the not-transferred list on Stiffeners / Studs / Fatigue; `GdFld` restyled to the GD look; report marks `gm(...)` in 2. Input parameters; pull summary lists the transferred inputs and the ones not transferred.
+- **Behaviour:** tinted with "GD 🔒 · from GirderDetail (<module>, G#)" = transferred (GDX-1); tinted with "GD · …" = set by the existing pull and still GirderDetail's value (editable; the tint goes when edited). Nothing for payloads without `loads`, MIDAS/MCT imports or the built-in analysis (page text identical to main).
+- **Diff (main → branch; no context lines; GDX-1 and GDX-2):**
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index 5859151..f81c5e3 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -559,0 +560,5 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
++/* GDX (2026-10-19): inputs transferred from GirderDetail */
++.gd-in{background:#e8f1ff !important;border-color:#1C4FC4 !important;color:#0b2e7a !important}
++.gd-src{display:block;margin-top:3px;font:600 10px/1.35 ui-sans-serif,system-ui,sans-serif;color:#1C4FC4;letter-spacing:.01em}
++.stgInTab.gd-tab span:first-child::after{content:' GD';font:700 9px/1 ui-sans-serif,system-ui,sans-serif;color:#fff;background:#1C4FC4;border-radius:3px;padding:1px 3px;margin-left:5px;vertical-align:1px}
++.gd-legend{border-left:3px solid #1C4FC4;background:#EEF4FF;padding:6px 10px;margin:0 0 10px;font-size:11.5px;line-height:1.5;color:var(--text-dim)}
+@@ -2491 +2496 @@ function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFini
+-  add({out:'Constructibility (6.10.3, deck placement)', what:'construction live load', own:+ld.wConstr||0, gd:C&&typeof C.w==='number'?C.w:null,
++  add({path:'loads.wConstr',out:'Constructibility (6.10.3, deck placement)', what:'construction live load', own:+ld.wConstr||0, gd:C&&typeof C.w==='number'?C.w:null,
+@@ -2494 +2499 @@ function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFini
+-  add({out:'Live load deflection (2.5.2.6.2, optional)', what:'number of design lanes N_L', own:NLc, gd:typeof LL.lanes==='number'?LL.lanes:null,
++  add({path:'loads.NL',out:'Live load deflection (2.5.2.6.2, optional)', what:'number of design lanes N_L', own:NLc, gd:typeof LL.lanes==='number'?LL.lanes:null,
+@@ -2498,2 +2503,2 @@ function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFini
+-    add({out:'Deck design (transverse)', what:'future wearing surface', own:+dk.wsFut, gd:ws&&typeof ws.psf==='number'?ws.psf/1000:null, ownT:f(+dk.wsFut,3)+' ksf', gdT:ws?f(ws.psf/1000,3)+' ksf ('+f(ws.psf,1)+' psf)':'none'});
+-    add({out:'Deck design (transverse)', what:'slab thickness for the dead load', own:dk.tsSeparate?(+dk.tsDL||+dk.ts):+dk.ts, gd:typeof D.tsDL==='number'?D.tsDL:null,
++    add({path:'deck.wsFut',out:'Deck design (transverse)', what:'future wearing surface', own:+dk.wsFut, gd:ws&&typeof ws.psf==='number'?ws.psf/1000:null, ownT:f(+dk.wsFut,3)+' ksf', gdT:ws?f(ws.psf/1000,3)+' ksf ('+f(ws.psf,1)+' psf)':'none'});
++    add({path:'deck.tsSeparate',out:'Deck design (transverse)', what:'slab thickness for the dead load', own:dk.tsSeparate?(+dk.tsDL||+dk.ts):+dk.ts, gd:typeof D.tsDL==='number'?D.tsDL:null,
+@@ -2502 +2507 @@ function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFini
+-    add({out:'Deck design (overhang)', what:'barrier weight', own:+dk.wBar, gd:one(bw), ownT:f(+dk.wBar,3)+' klf',
++    add({path:'deck.wBar',out:'Deck design (overhang)', what:'barrier weight', own:+dk.wBar, gd:one(bw), ownT:f(+dk.wBar,3)+' klf',
+@@ -2504 +2509 @@ function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFini
+-    add({out:'Deck design (overhang)', what:'barrier base width', own:+dk.bBar, gd:one(bb), ownT:f(+dk.bBar,1)+' in',
++    add({path:'deck.bBar',out:'Deck design (overhang)', what:'barrier base width', own:+dk.bBar, gd:one(bb), ownT:f(+dk.bBar,1)+' in',
+@@ -2507,2 +2512,2 @@ function gdOwnUse(inp,L,ext){ const out=[], f=(v,d)=>typeof v==='number'&&isFini
+-      add({out:'Deck design (overhang)', what:'overhang (girder CL to deck edge; geometry)', own:+dk.oh, gd:one(oh), ownT:f(+dk.oh,2)+' ft', gdT:one(oh)!=null?f(one(oh),2)+' ft'+(sd.length>1?' (both sides)':''):oh.map(v=>f(v,2)+' ft').join(' / ')+side}); } }
+-  return out; }
++      add({path:'deck.oh',out:'Deck design (overhang)', what:'overhang (girder CL to deck edge; geometry)', own:+dk.oh, gd:one(oh), ownT:f(+dk.oh,2)+' ft', gdT:one(oh)!=null?f(one(oh),2)+' ft'+(sd.length>1?' (both sides)':''):oh.map(v=>f(v,2)+' ft').join(' / ')+side}); } }
++  const X=gdXfer(ext); return X? out.filter(o=>!X.set[o.path]) : out; }   // GDX (2026-10-19): what is transferred is no longer "own"; the rest needs a decision
+@@ -2527,2 +2532,76 @@ const GdFld=({l,u,v,src,title})=>(
+-    <input value={v} readOnly className="bl-driven" title={title||('Shown '+src+' while these demands are in use; ST-Girder’s own value is kept.')}/>
+-    {u&&<span className="unit">{u}</span>}</div><span className="bl-src">{src}</span></div>);
++    <input value={v} readOnly className="gd-in" title={title||('Shown '+src+' while these demands are in use; ST-Girder’s own value is kept.')}/>
++    {u&&<span className="unit">{u}</span>}</div><span className="gd-src">GD 🔒 · {src}</span></div>);
++/* GDX (engineer decision 2026-10-19: "Whatever can be imported from GirderDetail should be", and the transferred inputs highlighted; HANDOFF.md 4.9).
++   Active only for GirderDetail demands that carry girderDetail.loads (payloads from 2026-10-19 on); nothing for older payloads, MIDAS/MCT imports or the
++   built-in analysis. gdXfer(ext).set = the inputs taken from GirderDetail (1:1 values only), applied by gdOverlay in computeAll, the report and the
++   capacity hand-off, shown locked on the Inputs tab; ST-Girder's own values stay in the saved inputs and apply again when the demands are cleared.
++   gdXfer(ext).dec = GirderDetail values NOT imported because they would need a method or interpretation change (engineer to decide).
++   gdPulled(ext,inp) = the inputs the existing pull already wrote (gdAdopt), highlighted while they still hold GirderDetail's value. */
++const GD_FAT_CATS=['A','B',"B'",'C',"C'",'D','E',"E'"];
++function gdXfer(ext){
++  if(!extFromGD(ext)||!gdLoadsOf(ext)) return null;
++  if(ext.__gdx) return ext.__gdx;
++  const g=ext.girderDetail, L=g.loads, Dt=g.details||{}, lab=g.label||(ext.member&&ext.member.key)||'G?', set={}, dec=[];
++  const num=v=>typeof v==='number'&&isFinite(v), S=m=>'from GirderDetail ('+m+', '+lab+')', f=(v,d)=>num(v)?fmt(v,d):'—';
++  const put=(path,v,mod,pane)=>{ if(num(v)||typeof v==='boolean'||typeof v==='string') set[path]={v,src:S(mod),pane}; };
++  const no=(pane,path,what,gdT,why)=>dec.push({pane,path,what,gdT,why});
++  // (a) constructibility, (b) live load deflection, (c) deck design (engineer decision 2026-10-19)
++  const C=L.construction; if(C&&num(C.w)) put('loads.wConstr',C.w,'Structural analysis, construction live load','loads');
++  const LL=L.liveLoad||{}; if(num(LL.lanes)&&LL.lanes>=1) put('loads.NL',clamp(Math.round(LL.lanes),1,4),'LLDF and DLs, design lanes','loads');
++  put('deck.deckOn',true,'composite girder','deck');
++  const ws=L.wearingSurface; if(ws&&num(ws.psf)) put('deck.wsFut',ws.psf/1000,'LLDF and DLs, wearing surface','deck');
++  const Dk=L.deck||{}; if(num(Dk.tsDL)&&num(Dk.ts)){ const sep=num(Dk.tsac)&&Dk.tsac>0; put('deck.tsSeparate',sep,'deck, sacrificial thickness','deck'); if(sep) put('deck.tsDL',Dk.tsDL,'deck, t_s + sacrificial','deck'); }
++  const E=L.edges||{}, nb=+g.nGirders||0, gi=+g.girder||0, sd=gi===1?['L']:(nb&&gi===nb)?['R']:['L','R'], eg=sd.map(s=>E[s]).filter(Boolean);
++  if(eg.length===sd.length&&eg.every(e=>e.type==='barrier'&&num(e.w)&&num(e.width))&&eg.every(e=>e.w===eg[0].w&&e.width===eg[0].width)){
++    put('deck.wBar',eg[0].w,'LLDF and DLs, deck edge barrier','deck'); put('deck.bBar',eg[0].width*12,'LLDF and DLs, deck edge barrier','deck'); }
++  else if(eg.length) no('deck','deck.wBar','barrier weight and base width (deck overhang design)',eg.map(e=>e.type==='curb'?'curb '+f(e.curbWidthIn,1)+' in + railing '+f(e.railing,3)+' klf':f(e.w,3)+' klf, '+f(e.width*12,1)+' in').join(' / ')+(sd.length>1?' (left / right)':''),
++    eg.some(e=>e.type==='curb')?'a curb and railing is not the single barrier the overhang design models':'the two deck edges differ; which one governs this interior girder is a choice');
++  if(g.position!=='exterior'&&num(Dk.overhangL)&&num(Dk.overhangR)){ if(Dk.overhangL===Dk.overhangR) put('deck.oh',Dk.overhangL,'deck overhang','deck');
++    else no('deck','deck.oh','overhang (deck overhang design, interior girder)',f(Dk.overhangL,2)+' ft / '+f(Dk.overhangR,2)+' ft (left / right)','the two overhangs differ; which one to check is a choice'); }
++  // details (stiffeners, studs, fatigue)
++  const T=Dt.transverseStiffener, B=Dt.bearingStiffeners, St=Dt.studs, F=Dt.fatigue;
++  if(T){ if(T.sides===1&&num(T.bt)&&num(T.tp)){ put('stiff.bt',T.bt,'Transverse stiffeners, '+(T.type||'type A'),'details'); put('stiff.tp',T.tp,'Transverse stiffeners, '+(T.type||'type A'),'details'); }
++    else no('details','stiff.bt','transverse stiffener b_t × t_p',f(T.bt,2)+' × '+f(T.tp,3)+' in, '+(T.sides===2?'pairs':'?'),'ST-Girder checks a single plate (I_t = t_p b_t³/3); a pair needs another I_t');
++    no('details','stiff.doSpc','transverse stiffener spacing d_o',(T.spacings||[]).length?(T.spacings.map(v=>f(v,1)).join(', ')+' in at the stiffener rows (supports and cross-frames)'):'none listed',
++      'GirderDetail designs stiffeners at its listed rows; ST-Girder applies one d_o to every panel of the span (and to the end panel)'); }
++  if(T&&B&&num(T.Fy)&&T.Fy===B.Fy) put('stiff.Fys',T.Fy,'Transverse and bearing stiffeners, grade '+T.grade,'details');
++  else if(T&&B) no('details','stiff.Fys','stiffener F_ys','transverse '+f(T.Fy,0)+' ksi, bearing '+f(B.Fy,0)+' ksi','ST-Girder has one F_ys for both');
++  if(B) no('details','stiff.bearB','bearing stiffeners',(B.types||[]).map(t=>t.name+' '+f(t.pairs,0)+' pair(s) '+f(t.bt,2)+' × '+f(t.tp,3)+' in').join('; '),
++    'ST-Girder checks one bearing stiffener for the peak V_u of the span (abutment or pier); which GirderDetail type applies, and pairs vs. its plate count, is a choice');
++  if(St){ if(num(St.d)) put('conn.studD',St.d,'Shear connectors','details'); if(num(St.h)) put('conn.studH',St.h,'Shear connectors','details');
++    no('details','conn.pitch','studs per row and pitch',(St.zones||[]).length+' zones: '+[...new Set((St.zones||[]).map(z=>z.nr+' @ '+f(z.p,1)+' in'))].slice(0,6).join(', ')+((St.zones||[]).length>6?', …':''),
++      'GirderDetail varies the studs by zone; ST-Girder checks one row count and pitch for the span'); }
++  if(F){ if(num(F.ADTTsl)&&F.ADTTsl>0){ put('fatigue.ADTT',F.ADTTsl,'Fatigue, (ADTT)SL = p × ADTT = '+f(F.p,2)+' × '+f(F.ADTT,0),'details'); put('fatigue.adttIsSingleLane',true,'Fatigue, (ADTT)SL','details'); }
++    if(num(F.life)&&F.life>0) put('fatigue.designLife',F.life,'Fatigue, design life','details');
++    if(['auto','I','II'].includes(F.limit)) put('fatigue.lsMode',F.limit,'Fatigue, limit state','details');
++    if(GD_FAT_CATS.includes(F.catBot)) put('fatigue.category',F.catBot,'Girder section, bottom flange fatigue detail','details');
++    if((F.cycles||[]).length) no('details','fatigue.ncyc','cycles per truck passage n',F.cycles.map(v=>f(v,1)).join(', ')+' (by detail)','GirderDetail sets n per detail; ST-Girder uses one n for the span'); }
++  const out={set,dec,lab}; try{ Object.defineProperty(ext,'__gdx',{value:out,enumerable:false,configurable:true}); }catch(e){} return out; }
++// the effective inputs: ST-Girder's inputs with the GirderDetail values of gdXfer applied (the same object when nothing is transferred)
++function gdOverlay(inp){ const X=inp&&gdXfer(inp.external); if(!X) return inp; const ks=Object.keys(X.set); if(!ks.length) return inp;
++  const o={...inp}; ks.forEach(k=>{ const [a,b]=k.split('.'); if(o[a]===inp[a]) o[a]={...inp[a]}; o[a][b]=X.set[k].v; }); return o; }
++// the inputs the existing pull (gdAdopt) wrote, with GirderDetail's value: highlighted while the input still holds it
++function gdPulled(ext,inp){ if(!gdXfer(ext)) return {}; const g=ext.girderDetail, m=g.materials||{}, d=g.deck||{}, br=g.bracing||{}, sk=g.skew||{}, o={}, lab=g.label||'G?';
++  const num=v=>typeof v==='number'&&isFinite(v), pos=v=>num(v)&&v>0, S=t=>'from GirderDetail ('+t+', '+lab+')', put=(k,v,t)=>{ if(v!==undefined&&v!==null) o[k]={v,src:S(t)}; };
++  if(pos(m.Fyf)&&pos(m.Fyw)&&pos(m.Fu)){ put('mat.Fyf',m.Fyf,'materials'); put('mat.Fyw',m.Fyw,'materials'); put('mat.Fu',m.Fu,'materials'); put('mat.hybrid',m.Fyw!==m.Fyf,'materials');
++    const gk=Object.keys(GRADES).find(k=>GRADES[k].Fy===m.Fyf&&GRADES[k].Fu===m.Fu); if(gk) put('mat.grade',gk,'materials'); if(pos(m.Es)) put('mat.Es',m.Es,'materials'); }
++  if(pos(d.ts)) put('deck.ts',d.ts,'deck'); if(num(d.haunch)&&d.haunch>=0) put('deck.haunch',d.haunch,'deck'); if(pos(m.fc)) put('deck.fc',m.fc,'materials'); if(pos(m.wc)) put('deck.wc',m.wc,'materials');
++  if(pos(d.beff)){ put('deck.beffAuto',false,'Structural analysis, b_eff'); put('deck.beff',d.beff,'Structural analysis, b_eff'); }
++  if(g.position==='exterior'&&num(g.overhang)&&g.overhang>=0) put('deck.oh',g.overhang,'deck overhang');
++  if(pos(d.Ar)){ put('negM.As',d.Ar,'Structural analysis, deck reinforcement'); if(pos(d.ts)) put('negM.dTop',d.ts/2,'Structural analysis, deck mid-depth'); }
++  if(pos(g.spacing)) put('geom.S',g.spacing,'girder spacing'); if(pos(g.nGirders)) put('geom.nGirders',g.nGirders,'girders'); if(pos(br.Lb)) put('geom.Lb',br.Lb,'Cross-frames, L_b');
++  const sel=ext._selSpan||externalSpans(ext)[0]; if(sel&&pos(sel.len)) put('geom.L',sel.len,'span '+(sel.idx||1));
++  if(g.position==='interior'||g.position==='exterior') put('loads.pos',g.position,'girder position'); if(num(sk.max)) put('loads.skew',sk.max,'largest support skew');
++  const z=sel?zonesToSec(ext,sel,inp.sec):null; if(z) ['D','tw','bft','tft','bfb','tfb','useSegs'].forEach(k=>{ if(z[k]!==undefined) put('sec.'+k,z[k],'Preliminary sizing plates'); });
++  if(z&&z.useSegs&&Array.isArray(z.segs)) put('sec.segs',z.segs,'Preliminary sizing plate zones');
++  return o; }
++// one field's GirderDetail state on the Inputs tab: {lock, v, src} (transferred, locked), {hl, src} (pulled, still GirderDetail's value) or null
++function gdFieldOf(inp,X,Pu,path){ if(!X) return null; if(X.set[path]) return {lock:true,v:X.set[path].v,src:X.set[path].src};
++  const q=Pu[path]; if(!q) return null; const [a,b]=path.split('.'), cur=inp[a]&&inp[a][b];
++  const same=typeof q.v==='number'? Math.abs((+cur)-q.v)<=1e-9 : (q.v&&typeof q.v==='object')? JSON.stringify(cur)===JSON.stringify(q.v) : cur===q.v; return same? {hl:true,v:q.v,src:q.src} : null; }
++const GD_LBL={'loads.wConstr':'construction live load (klf)','loads.NL':'design lanes N_L','deck.deckOn':'composite deck','deck.wsFut':'future wearing surface (ksf)',
++  'deck.tsSeparate':'separate dead-load slab thickness','deck.tsDL':'slab thickness for dead load (in)','deck.wBar':'barrier weight (klf)','deck.bBar':'barrier base width (in)','deck.oh':'overhang (ft)',
++  'stiff.bt':'transverse stiffener b_t (in)','stiff.tp':'transverse stiffener t_p (in)','stiff.Fys':'stiffener F_ys (ksi)','conn.studD':'stud diameter (in)','conn.studH':'stud height (in)',
++  'fatigue.ADTT':'ADTT (single-lane, (ADTT)SL)','fatigue.adttIsSingleLane':'ADTT entered as single-lane','fatigue.designLife':'fatigue design life (yr)','fatigue.lsMode':'fatigue limit state','fatigue.category':'fatigue detail category'};
++const GD_PANE_OF={sec:'section',negM:'section',mat:'mat',deck:'deck',geom:'span',loads:'loads',stiff:'details',conn:'details',fatigue:'details'};
++const GdBadge=({g})=>g?<span className="gd-src" title={g.src}>GD{g.lock?' 🔒':''} · {g.src}</span>:null;
+@@ -2868,0 +2948 @@ function computeAll(inp){
++  inp=gdOverlay(inp);   // GDX (2026-10-19): GirderDetail's transferred inputs (same object, unchanged, without them)
+@@ -3638 +3718,2 @@ const Card=({title,refTag,right,children,id})=>(
+-const Num=({l,u,v,set,step=0.1,min,driven,src})=>(
++// gd (GDX, 2026-10-19; optional): {lock, v, src} = transferred from GirderDetail (locked, shows v); {hl, src} = pulled from GirderDetail (highlight only)
++const Num=({l,u,v,set,step=0.1,min,driven,src,gd})=>{ const lk=!!(gd&&gd.lock); return (
+@@ -3640,4 +3721,4 @@ const Num=({l,u,v,set,step=0.1,min,driven,src})=>(
+-    <input type="number" step={step} min={min} value={v}
+-      readOnly={!!driven} title={driven?('Driven by '+(src||'a locked shared channel')+' — unlock to edit.'):undefined}
+-      className={driven?'bl-driven':undefined}
+-      onChange={e=>{ if(driven) return; set(e.target.value===''?'':+e.target.value); }}/>
++    <input type="number" step={step} min={min} value={lk?gd.v:v}
++      readOnly={!!driven||lk} title={lk?('Transferred '+gd.src+' — used while these demands are in use; ST-Girder’s own value is kept.'):driven?('Driven by '+(src||'a locked shared channel')+' — unlock to edit.'):undefined}
++      className={gd?'gd-in':driven?'bl-driven':undefined}
++      onChange={e=>{ if(driven||lk) return; set(e.target.value===''?'':+e.target.value); }}/>
+@@ -3645,2 +3726,2 @@ const Num=({l,u,v,set,step=0.1,min,driven,src})=>(
+-    {driven&&src?<span className="bl-src">{src}</span>:null}</div>);
+-const Sel=({l,v,set,opts})=>(
++    {gd?<span className="gd-src">GD{lk?' 🔒':''} · {gd.src}</span>:driven&&src?<span className="bl-src">{src}</span>:null}</div>); };
++const Sel=({l,v,set,opts,gd})=>{ const lk=!!(gd&&gd.lock); return (
+@@ -3648 +3729,2 @@ const Sel=({l,v,set,opts})=>(
+-    <select value={v} onChange={e=>set(e.target.value)}>{opts.map(o=><option key={o}>{o}</option>)}</select></div></div>);
++    <select value={lk?gd.v:v} disabled={lk} className={gd?'gd-in':undefined} onChange={e=>{ if(lk) return; set(e.target.value); }}>{opts.map(o=><option key={o}>{o}</option>)}</select></div>
++    {gd?<span className="gd-src">GD{lk?' 🔒':''} · {gd.src}</span>:null}</div>); };
+@@ -4037,0 +4120,3 @@ function InputsTab({inp,set,R}){
++  // GDX (2026-10-19): inputs transferred from GirderDetail (locked) or pulled from it (highlighted); nothing without GirderDetail demands carrying loads
++  const gX=extActive?gdXfer(extRaw):null, gPu=gX?gdPulled(extRaw,inp):{}, G=path=>gdFieldOf(inp,gX,gPu,path), inpE=gdOverlay(inp);
++  const gdPanes={}; if(gX){ Object.keys(gX.set).forEach(k=>{ gdPanes[GD_PANE_OF[k.split('.')[0]]]=1; }); Object.keys(gPu).forEach(k=>{ if(G(k)) gdPanes[GD_PANE_OF[k.split('.')[0]]]=1; }); }
+@@ -4243,0 +4329 @@ function InputsTab({inp,set,R}){
++    {gX&&<div className="gd-legend"><b>GD</b> = transferred from GirderDetail ({gX.lab}). Tinted fields with <b>GD 🔒</b> take GirderDetail’s value while these demands are in use (locked; your own value is kept and returns when the demands are cleared with “✕ use built-in simple-span analysis”). Tinted fields with <b>GD</b> only were set by the pull and still hold GirderDetail’s value (editable). Sub-tabs marked GD contain transferred inputs. White fields have no GirderDetail source.{gX.dec.length?<span> {gX.dec.length} GirderDetail value{gX.dec.length>1?'s are':' is'} not transferred (method or interpretation; listed on the Deck and Stiffeners / Studs / Fatigue tabs).</span>:null}</div>}
+@@ -4247 +4333 @@ function InputsTab({inp,set,R}){
+-        className={'stgInTab'+(inBad[k]?' has-err':'')} title={inBad[k]?'An input on this tab needs attention':undefined}
++        className={'stgInTab'+(inBad[k]?' has-err':'')+(gdPanes[k]?' gd-tab':'')} title={inBad[k]?'An input on this tab needs attention':gdPanes[k]?'Inputs on this tab were transferred from GirderDetail':undefined}
+@@ -4257,2 +4343,2 @@ function InputsTab({inp,set,R}){
+-        <Num l="Web depth D" u="in" v={sec.D} set={v=>S('sec.D',v)} step={1}/>
+-        <Num l="Web thick tw" u="in" v={sec.tw} set={v=>S('sec.tw',v)} step={0.0625}/>
++        <Num l="Web depth D" u="in" v={sec.D} set={v=>S('sec.D',v)} step={1} gd={G('sec.D')}/>
++        <Num l="Web thick tw" u="in" v={sec.tw} set={v=>S('sec.tw',v)} step={0.0625} gd={G('sec.tw')}/>
+@@ -4262,2 +4348,2 @@ function InputsTab({inp,set,R}){
+-        <Num l="Width bft" u="in" v={sec.bft} set={v=>S('sec.bft',v)} step={0.5}/>
+-        <Num l="Thick tft" u="in" v={sec.tft} set={v=>S('sec.tft',v)} step={0.0625}/>
++        <Num l="Width bft" u="in" v={sec.bft} set={v=>S('sec.bft',v)} step={0.5} gd={G('sec.bft')}/>
++        <Num l="Thick tft" u="in" v={sec.tft} set={v=>S('sec.tft',v)} step={0.0625} gd={G('sec.tft')}/>
+@@ -4267,2 +4353,2 @@ function InputsTab({inp,set,R}){
+-        <Num l="Width bfb" u="in" v={sec.bfb} set={v=>S('sec.bfb',v)} step={0.5}/>
+-        <Num l="Thick tfb" u="in" v={sec.tfb} set={v=>S('sec.tfb',v)} step={0.0625}/>
++        <Num l="Width bfb" u="in" v={sec.bfb} set={v=>S('sec.bfb',v)} step={0.5} gd={G('sec.bfb')}/>
++        <Num l="Thick tfb" u="in" v={sec.tfb} set={v=>S('sec.tfb',v)} step={0.0625} gd={G('sec.tfb')}/>
+@@ -4276,0 +4363 @@ function InputsTab({inp,set,R}){
++        <GdBadge g={G('sec.segs')||G('sec.useSegs')}/>
+@@ -4296,2 +4383,2 @@ function InputsTab({inp,set,R}){
+-        <Num l="Long. deck rebar As (in beff)" u="in²" v={inp.negM.As} set={v=>S('negM.As',v)} step={0.5}/>
+-        <Num l="Top of slab → bar CG" u="in" v={inp.negM.dTop} set={v=>S('negM.dTop',v)} step={0.25}/>
++        <Num l="Long. deck rebar As (in beff)" u="in²" v={inp.negM.As} set={v=>S('negM.As',v)} step={0.5} gd={G('negM.As')}/>
++        <Num l="Top of slab → bar CG" u="in" v={inp.negM.dTop} set={v=>S('negM.dTop',v)} step={0.25} gd={G('negM.dTop')}/>
+@@ -4307,5 +4394,5 @@ function InputsTab({inp,set,R}){
+-        <Sel l="Steel grade" v={mat.grade} set={applyGrade} opts={Object.keys(GRADES)}/>
+-        <Num l="Es" u="ksi" v={mat.Es} set={v=>S('mat.Es',v)} step={500}/>
+-        <Num l="Flange Fyf" u="ksi" v={mat.Fyf} set={v=>S('mat.Fyf',v)} step={1}/>
+-        <Num l="Web Fyw" u="ksi" v={mat.Fyw} set={v=>S('mat.Fyw',v)} step={1}/>
+-        <Num l="Fu" u="ksi" v={mat.Fu} set={v=>S('mat.Fu',v)} step={1}/>
++        <Sel l="Steel grade" v={mat.grade} set={applyGrade} opts={Object.keys(GRADES)} gd={G('mat.grade')}/>
++        <Num l="Es" u="ksi" v={mat.Es} set={v=>S('mat.Es',v)} step={500} gd={G('mat.Es')}/>
++        <Num l="Flange Fyf" u="ksi" v={mat.Fyf} set={v=>S('mat.Fyf',v)} step={1} gd={G('mat.Fyf')}/>
++        <Num l="Web Fyw" u="ksi" v={mat.Fyw} set={v=>S('mat.Fyw',v)} step={1} gd={G('mat.Fyw')}/>
++        <Num l="Fu" u="ksi" v={mat.Fu} set={v=>S('mat.Fu',v)} step={1} gd={G('mat.Fu')}/>
+@@ -4316 +4403 @@ function InputsTab({inp,set,R}){
+-          Hybrid girder (web Fyw ≠ flange Fyf) — applies Rh per 6.10.1.10.1</label>
++          Hybrid girder (web Fyw ≠ flange Fyf) — applies Rh per 6.10.1.10.1</label><GdBadge g={G('mat.hybrid')}/>
+@@ -4326,2 +4413,2 @@ function InputsTab({inp,set,R}){
+-          <input type="checkbox" checked={deck.deckOn} onChange={e=>S('deck.deckOn',e.target.checked)}/>
+-          Composite with concrete deck</label></div>
++          <input type="checkbox" checked={G('deck.deckOn')&&G('deck.deckOn').lock?G('deck.deckOn').v:deck.deckOn} disabled={!!(G('deck.deckOn')&&G('deck.deckOn').lock)} onChange={e=>S('deck.deckOn',e.target.checked)}/>
++          Composite with concrete deck</label><GdBadge g={G('deck.deckOn')}/></div>
+@@ -4329,4 +4416,4 @@ function InputsTab({inp,set,R}){
+-        <Num l="Deck f′c" u="ksi" v={deck.fc} set={v=>S('deck.fc',v)} step={0.5}/>
+-        <Num l="Deck wc" u="kcf" v={deck.wc} set={v=>S('deck.wc',v)} step={0.005}/>
+-        <Num l={deck.tsSeparate?"Slab ts (capacity)":"Slab ts"} u="in" v={deck.ts} set={v=>S('deck.ts',v)} step={0.5}/>
+-        <Num l="Haunch" u="in" v={deck.haunch} set={v=>S('deck.haunch',v)} step={0.5}/>
++        <Num l="Deck f′c" u="ksi" v={deck.fc} set={v=>S('deck.fc',v)} step={0.5} gd={G('deck.fc')}/>
++        <Num l="Deck wc" u="kcf" v={deck.wc} set={v=>S('deck.wc',v)} step={0.005} gd={G('deck.wc')}/>
++        <Num l={deck.tsSeparate?"Slab ts (capacity)":"Slab ts"} u="in" v={deck.ts} set={v=>S('deck.ts',v)} step={0.5} gd={G('deck.ts')}/>
++        <Num l="Haunch" u="in" v={deck.haunch} set={v=>S('deck.haunch',v)} step={0.5} gd={G('deck.haunch')}/>
+@@ -4336 +4423 @@ function InputsTab({inp,set,R}){
+-          <input type="checkbox" checked={!!deck.tsSeparate} onChange={e=>S('deck.tsSeparate',e.target.checked)}/>
++          <input type="checkbox" checked={G('deck.tsSeparate')&&G('deck.tsSeparate').lock?G('deck.tsSeparate').v:!!deck.tsSeparate} disabled={!!(G('deck.tsSeparate')&&G('deck.tsSeparate').lock)} onChange={e=>S('deck.tsSeparate',e.target.checked)}/>
+@@ -4338,3 +4425,4 @@ function InputsTab({inp,set,R}){
+-        {deck.tsSeparate && <div className="frow" style={{marginTop:6}}>
+-          <Num l="Slab ts (dead load)" u="in" v={deck.tsDL} set={v=>S('deck.tsDL',v)} step={0.5}/>
+-          <div className="hint" style={{alignSelf:'center',margin:0}}>Capacity/section uses <b>{fmt(deck.ts,2)}″</b>; DC1 deck weight uses <b>{fmt(+deck.tsDL||+deck.ts,2)}″</b>.</div>
++        <GdBadge g={G('deck.tsSeparate')}/>
++        {inpE.deck.tsSeparate && <div className="frow" style={{marginTop:6}}>
++          <Num l="Slab ts (dead load)" u="in" v={deck.tsDL} set={v=>S('deck.tsDL',v)} step={0.5} gd={G('deck.tsDL')}/>
++          <div className="hint" style={{alignSelf:'center',margin:0}}>Capacity/section uses <b>{fmt(deck.ts,2)}″</b>; DC1 deck weight uses <b>{fmt(+inpE.deck.tsDL||+deck.ts,2)}″</b>.</div>
+@@ -4346,2 +4434,2 @@ function InputsTab({inp,set,R}){
+-          Auto effective width = tributary width (interior S; exterior S/2 + overhang, 4.6.2.6.1)</label></div>
+-      {!deck.beffAuto && <div className="frow"><Num l="b_eff" u="in" v={deck.beff} set={v=>S('deck.beff',v)} step={1}/></div>}
++          Auto effective width = tributary width (interior S; exterior S/2 + overhang, 4.6.2.6.1)</label><GdBadge g={G('deck.beffAuto')}/></div>
++      {!deck.beffAuto && <div className="frow"><Num l="b_eff" u="in" v={deck.beff} set={v=>S('deck.beff',v)} step={1} gd={G('deck.beff')}/></div>}
+@@ -4352 +4440 @@ function InputsTab({inp,set,R}){
+-        {!deck.designOn&&<div className="frow" style={{marginTop:6}}><Num l="Overhang (web→edge)" u="ft" v={deck.oh} set={v=>S('deck.oh',v)} step={0.25}/></div>}
++        {!deck.designOn&&<div className="frow" style={{marginTop:6}}><Num l="Overhang (web→edge)" u="ft" v={deck.oh} set={v=>S('deck.oh',v)} step={0.25} gd={G('deck.oh')}/></div>}
+@@ -4364,11 +4452,11 @@ function InputsTab({inp,set,R}){
+-          <Num l="Overhang (web→edge)" u="ft" v={deck.oh} set={v=>S('deck.oh',v)} step={0.25}/>
+-          <Num l="Rebar fy" u="ksi" v={deck.fyd} set={v=>S('deck.fyd',v)} step={5}/>
+-          <Num l="Top bar area" u="in²" v={deck.barTop} set={v=>S('deck.barTop',v)} step={0.01}/>
+-          <Num l="Top bar spacing" u="in" v={deck.sTop} set={v=>S('deck.sTop',v)} step={0.5}/>
+-          <Num l="Bottom bar area" u="in²" v={deck.barBot} set={v=>S('deck.barBot',v)} step={0.01}/>
+-          <Num l="Bottom bar spacing" u="in" v={deck.sBot} set={v=>S('deck.sBot',v)} step={0.5}/>
+-          <Num l="Top cover" u="in" v={deck.coverT} set={v=>S('deck.coverT',v)} step={0.25}/>
+-          <Num l="Bottom cover" u="in" v={deck.coverB} set={v=>S('deck.coverB',v)} step={0.25}/>
+-          <Num l="Future wearing surf." u="ksf" v={deck.wsFut} set={v=>S('deck.wsFut',v)} step={0.005}/>
+-          <Num l="Barrier base width" u="in" v={deck.bBar} set={v=>S('deck.bBar',v)} step={1}/>
+-          <Num l="Barrier weight" u="klf" v={deck.wBar} set={v=>S('deck.wBar',v)} step={0.05}/>
++          <Num l="Overhang (web→edge)" u="ft" v={deck.oh} set={v=>S('deck.oh',v)} step={0.25} gd={G('deck.oh')}/>
++          <Num l="Rebar fy" u="ksi" v={deck.fyd} set={v=>S('deck.fyd',v)} step={5} gd={G('deck.fyd')}/>
++          <Num l="Top bar area" u="in²" v={deck.barTop} set={v=>S('deck.barTop',v)} step={0.01} gd={G('deck.barTop')}/>
++          <Num l="Top bar spacing" u="in" v={deck.sTop} set={v=>S('deck.sTop',v)} step={0.5} gd={G('deck.sTop')}/>
++          <Num l="Bottom bar area" u="in²" v={deck.barBot} set={v=>S('deck.barBot',v)} step={0.01} gd={G('deck.barBot')}/>
++          <Num l="Bottom bar spacing" u="in" v={deck.sBot} set={v=>S('deck.sBot',v)} step={0.5} gd={G('deck.sBot')}/>
++          <Num l="Top cover" u="in" v={deck.coverT} set={v=>S('deck.coverT',v)} step={0.25} gd={G('deck.coverT')}/>
++          <Num l="Bottom cover" u="in" v={deck.coverB} set={v=>S('deck.coverB',v)} step={0.25} gd={G('deck.coverB')}/>
++          <Num l="Future wearing surf." u="ksf" v={deck.wsFut} set={v=>S('deck.wsFut',v)} step={0.005} gd={G('deck.wsFut')}/>
++          <Num l="Barrier base width" u="in" v={deck.bBar} set={v=>S('deck.bBar',v)} step={1} gd={G('deck.bBar')}/>
++          <Num l="Barrier weight" u="klf" v={deck.wBar} set={v=>S('deck.wBar',v)} step={0.05} gd={G('deck.wBar')}/>
+@@ -4382 +4470 @@ function InputsTab({inp,set,R}){
+-          <Num l="Design section x" u="in" v={deck.xneg} set={v=>S('deck.xneg',v)} step={1}/>
++          <Num l="Design section x" u="in" v={deck.xneg} set={v=>S('deck.xneg',v)} step={1} gd={G('deck.xneg')}/>
+@@ -4397,4 +4485,4 @@ function InputsTab({inp,set,R}){
+-        <Num l="Span L" u="ft" v={geom.L} set={v=>S('geom.L',v)} step={1}/>
+-        <Num l="Girder spacing S" u="ft" v={geom.S} set={v=>S('geom.S',v)} step={0.25}/>
+-        <Num l="# girders" u="" v={geom.nGirders} set={v=>S('geom.nGirders',v)} step={1}/>
+-        <Num l="Brace spacing Lb" u="ft" v={geom.Lb} set={v=>S('geom.Lb',v)} step={1}/>
++        <Num l="Span L" u="ft" v={geom.L} set={v=>S('geom.L',v)} step={1} gd={G('geom.L')}/>
++        <Num l="Girder spacing S" u="ft" v={geom.S} set={v=>S('geom.S',v)} step={0.25} gd={G('geom.S')}/>
++        <Num l="# girders" u="" v={geom.nGirders} set={v=>S('geom.nGirders',v)} step={1} gd={G('geom.nGirders')}/>
++        <Num l="Brace spacing Lb" u="ft" v={geom.Lb} set={v=>S('geom.Lb',v)} step={1} gd={G('geom.Lb')}/>
+@@ -4453 +4541 @@ function InputsTab({inp,set,R}){
+-          <Num l="Add'l DC1 (forms, details)" u="klf" v={loads.wDCextra} set={v=>S('loads.wDCextra',v)} step={0.005}/>
++          <Num l="Add'l DC1 (forms, details)" u="klf" v={loads.wDCextra} set={v=>S('loads.wDCextra',v)} step={0.005} gd={G('loads.wDCextra')}/>
+@@ -4455 +4543 @@ function InputsTab({inp,set,R}){
+-          <Num l="Construction live load" u="klf" v={loads.wConstr} set={v=>S('loads.wConstr',v)} step={0.005}/>
++          <Num l="Construction live load" u="klf" v={loads.wConstr} set={v=>S('loads.wConstr',v)} step={0.005} gd={G('loads.wConstr')}/>
+@@ -4463 +4551 @@ function InputsTab({inp,set,R}){
+-          {gL? <div className="hint" style={{marginTop:0}}>{gG.xf?<span><b>{fmt(gG.xf.points,0)} point loads, {fmt(gG.xf.Ptotal,2)} kip in all</b> at this girder’s frames ({gG.xf.source||'GirderDetail'})</span>:<span>None in GirderDetail’s DC1 (the cross-frame weight is off or entered as a line load there)</span>}; <span className="bl-src" style={{display:'inline'}}>{gSrc}</span>. ST-Girder’s own list is kept and not used while these demands are in use (DC1 is imported).</div>
++          {gL? <div className="hint" style={{marginTop:0}}>{gG.xf?<span><b>{fmt(gG.xf.points,0)} point loads, {fmt(gG.xf.Ptotal,2)} kip in all</b> at this girder’s frames ({gG.xf.source||'GirderDetail'})</span>:<span>None in GirderDetail’s DC1 (the cross-frame weight is off or entered as a line load there)</span>}; <span className="gd-src" style={{display:'inline'}}>GD · {gSrc}</span>. ST-Girder’s own list is kept and not used while these demands are in use (DC1 is imported).</div>
+@@ -4482 +4570 @@ function InputsTab({inp,set,R}){
+-          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} driven={dlLocked&&dlHasBar} src={dlSrc}/>}</div>
++          : <Num l="Barrier / SIDL (per girder)" u="klf" v={loads.wBar} set={v=>S('loads.wBar',v)} step={0.01} driven={dlLocked&&dlHasBar} src={dlSrc} gd={G('loads.wBar')}/>}</div>
+@@ -4490 +4578 @@ function InputsTab({inp,set,R}){
+-          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} driven={dlLocked&&dlHasDW} src={dlSrc}/>}</div>
++          : <Num l="Wearing surface (per girder)" u="klf" v={loads.wDW} set={v=>S('loads.wDW',v)} step={0.01} driven={dlLocked&&dlHasDW} src={dlSrc} gd={G('loads.wDW')}/>}</div>
+@@ -4514 +4602,2 @@ function InputsTab({inp,set,R}){
+-        {gL&&<div className="hint" style={{marginBottom:8}}><span className="bl-src" style={{display:'inline'}}>Live load {gSrc}</span>: {gdLLText(gL).join('; ')}.{gOwnOf('number of design lanes N_L')?<span style={{color:'#9a3412'}}> Live load deflection (optional check) still uses ST-Girder’s own number of design lanes N_L = <b>{gOwnOf('number of design lanes N_L').ownT}</b>; GirderDetail used {gOwnOf('number of design lanes N_L').gdT}{gOwnOf('number of design lanes N_L').same?' (same)':''}. Not switched (engineer to decide).</span>:null}</div>}
++        {G('loads.NL')&&<div className="frow" style={{marginBottom:6}}><Num l="Design lanes N_L (live load deflection)" v={loads.NL} set={v=>S('loads.NL',v)} step={1} min={1} gd={G('loads.NL')}/></div>}
++        {gL&&<div className="hint" style={{marginBottom:8}}><span className="gd-src" style={{display:'inline'}}>GD · Live load {gSrc}</span>: {gdLLText(gL).join('; ')}.{gOwnOf('number of design lanes N_L')?<span style={{color:'#9a3412'}}> Live load deflection (optional check) still uses ST-Girder’s own number of design lanes N_L = <b>{gOwnOf('number of design lanes N_L').ownT}</b>; GirderDetail used {gOwnOf('number of design lanes N_L').gdT}{gOwnOf('number of design lanes N_L').same?' (same)':''}. Not switched (engineer to decide).</span>:null}</div>}
+@@ -4519,4 +4608,4 @@ function InputsTab({inp,set,R}){
+-            <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
+-            <Num l="DF — negative moment" v={loads.extDFneg} set={v=>S('loads.extDFneg',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
+-            <Num l="DF — shear" v={loads.extDFv} set={v=>S('loads.extDFv',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
+-            <Num l="Multiple presence m" v={loads.extLLmpf} set={v=>S('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
++            <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFpos')}/>
++            <Num l="DF — negative moment" v={loads.extDFneg} set={v=>S('loads.extDFneg',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFneg')}/>
++            <Num l="DF — shear" v={loads.extDFv} set={v=>S('loads.extDFv',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extDFv')}/>
++            <Num l="Multiple presence m" v={loads.extLLmpf} set={v=>S('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} gd={G('loads.extLLmpf')}/>
+@@ -4528,2 +4617,2 @@ function InputsTab({inp,set,R}){
+-          <Num l="M (LL+IM) @ midspan" u="k-ft" v={loads.MLL} set={v=>S('loads.MLL',v)} step={50}/>
+-          <Num l="V (LL+IM) @ support" u="kip" v={loads.VLL} set={v=>S('loads.VLL',v)} step={5}/>
++          <Num l="M (LL+IM) @ midspan" u="k-ft" v={loads.MLL} set={v=>S('loads.MLL',v)} step={50} gd={G('loads.MLL')}/>
++          <Num l="V (LL+IM) @ support" u="kip" v={loads.VLL} set={v=>S('loads.VLL',v)} step={5} gd={G('loads.VLL')}/>
+@@ -4547,3 +4636,3 @@ function InputsTab({inp,set,R}){
+-            {loads.pos==='exterior'&&<Num l="d_e — ext web to barrier face" u="ft" v={loads.de} set={v=>S('loads.de',v)} step={0.25}/>}
+-            {loads.pos==='exterior'&&<Num l="Design lanes N_L" v={loads.NL} set={v=>S('loads.NL',v)} step={1} min={1}/>}
+-            <Num l="Skew angle" u="deg" v={loads.skew} set={v=>S('loads.skew',v)} step={5} min={0}/>
++            {loads.pos==='exterior'&&<Num l="d_e — ext web to barrier face" u="ft" v={loads.de} set={v=>S('loads.de',v)} step={0.25} gd={G('loads.de')}/>}
++            {loads.pos==='exterior'&&<Num l="Design lanes N_L" v={loads.NL} set={v=>S('loads.NL',v)} step={1} min={1} gd={G('loads.NL')}/>}
++            <Num l="Skew angle" u="deg" v={loads.skew} set={v=>S('loads.skew',v)} step={5} min={0} gd={G('loads.skew')}/>
+@@ -4564,0 +4654,2 @@ function InputsTab({inp,set,R}){
++      {gX&&gX.dec.filter(q=>q.pane==='details').length>0&&<div className="hint" style={{margin:'0 0 8px',color:'#9a3412'}}>GirderDetail values not transferred (a method or interpretation choice; ST-Girder’s own inputs below are used; engineer to decide):
++        <ul style={{margin:'2px 0 0 18px',padding:0}}>{gX.dec.filter(q=>q.pane==='details').map((q,i)=><li key={i}><b>{q.what}</b>: GirderDetail {q.gdT}. {q.why}.</li>)}</ul></div>}
+@@ -4570,7 +4661,7 @@ function InputsTab({inp,set,R}){
+-        {inp.stiff.transverse&&<Num l="Stiffener spacing do" u="in" v={inp.stiff.doSpc} set={v=>S('stiff.doSpc',v)} step={6}/>}
+-        {inp.stiff.transverse&&<Num l="Stiff. width bt" u="in" v={inp.stiff.bt} set={v=>S('stiff.bt',v)} step={0.5}/>}
+-        {inp.stiff.transverse&&<Num l="Stiff. thick tp" u="in" v={inp.stiff.tp} set={v=>S('stiff.tp',v)} step={0.0625}/>}
+-        <Num l="Bearing stiff. width" u="in" v={inp.stiff.bearB} set={v=>S('stiff.bearB',v)} step={0.5}/>
+-        <Num l="Bearing stiff. thick" u="in" v={inp.stiff.bearT} set={v=>S('stiff.bearT',v)} step={0.0625}/>
+-        <Num l="Bearing plates (ea. side)" v={inp.stiff.bearN} set={v=>S('stiff.bearN',v)} step={1}/>
+-        <Num l="Stiffener Fys" u="ksi" v={inp.stiff.Fys} set={v=>S('stiff.Fys',v)} step={1}/>
++        {inp.stiff.transverse&&<Num l="Stiffener spacing do" u="in" v={inp.stiff.doSpc} set={v=>S('stiff.doSpc',v)} step={6} gd={G('stiff.doSpc')}/>}
++        {inp.stiff.transverse&&<Num l="Stiff. width bt" u="in" v={inp.stiff.bt} set={v=>S('stiff.bt',v)} step={0.5} gd={G('stiff.bt')}/>}
++        {inp.stiff.transverse&&<Num l="Stiff. thick tp" u="in" v={inp.stiff.tp} set={v=>S('stiff.tp',v)} step={0.0625} gd={G('stiff.tp')}/>}
++        <Num l="Bearing stiff. width" u="in" v={inp.stiff.bearB} set={v=>S('stiff.bearB',v)} step={0.5} gd={G('stiff.bearB')}/>
++        <Num l="Bearing stiff. thick" u="in" v={inp.stiff.bearT} set={v=>S('stiff.bearT',v)} step={0.0625} gd={G('stiff.bearT')}/>
++        <Num l="Bearing plates (ea. side)" v={inp.stiff.bearN} set={v=>S('stiff.bearN',v)} step={1} gd={G('stiff.bearN')}/>
++        <Num l="Stiffener Fys" u="ksi" v={inp.stiff.Fys} set={v=>S('stiff.Fys',v)} step={1} gd={G('stiff.Fys')}/>
+@@ -4580,4 +4671,4 @@ function InputsTab({inp,set,R}){
+-        <Num l="Stud diameter" u="in" v={inp.conn.studD} set={v=>S('conn.studD',v)} step={0.125}/>
+-        <Num l="Stud height" u="in" v={inp.conn.studH} set={v=>S('conn.studH',v)} step={0.5}/>
+-        <Num l="Studs per row" v={inp.conn.nRow} set={v=>S('conn.nRow',v)} step={1}/>
+-        <Num l="Stud pitch" u="in" v={inp.conn.pitch} set={v=>S('conn.pitch',v)} step={1}/>
++        <Num l="Stud diameter" u="in" v={inp.conn.studD} set={v=>S('conn.studD',v)} step={0.125} gd={G('conn.studD')}/>
++        <Num l="Stud height" u="in" v={inp.conn.studH} set={v=>S('conn.studH',v)} step={0.5} gd={G('conn.studH')}/>
++        <Num l="Studs per row" v={inp.conn.nRow} set={v=>S('conn.nRow',v)} step={1} gd={G('conn.nRow')}/>
++        <Num l="Stud pitch" u="in" v={inp.conn.pitch} set={v=>S('conn.pitch',v)} step={1} gd={G('conn.pitch')}/>
+@@ -4587,2 +4678,3 @@ function InputsTab({inp,set,R}){
+-        <Sel l="Detail category (6.6.1.2.3)" v={inp.fatigue.category} set={v=>S('fatigue.category',v)} opts={['A','B',"B'",'C',"C'",'D','E',"E'"]}/>
+-        <div className="fld"><label>Limit state</label>
++        <Sel l="Detail category (6.6.1.2.3)" v={inp.fatigue.category} set={v=>S('fatigue.category',v)} opts={['A','B',"B'",'C',"C'",'D','E',"E'"]} gd={G('fatigue.category')}/>
++        {G('fatigue.lsMode')? <GdFld l="Limit state" v={({auto:'AUTO',I:'FATIGUE I',II:'FATIGUE II'})[G('fatigue.lsMode').v]||G('fatigue.lsMode').v} src={G('fatigue.lsMode').src}/>
++        : <div className="fld"><label>Limit state</label>
+@@ -4590 +4682 @@ function InputsTab({inp,set,R}){
+-            v={inp.fatigue.lsMode||'auto'} set={v=>S('fatigue.lsMode',v)}/></div>
++            v={inp.fatigue.lsMode||'auto'} set={v=>S('fatigue.lsMode',v)}/></div>}
+@@ -4595,2 +4687,3 @@ function InputsTab({inp,set,R}){
+-        <Num l="ADTT (trucks/day)" v={inp.fatigue.ADTT} set={v=>S('fatigue.ADTT',v)} step={100}/>
+-        <div className="fld"><label>ADTT entered as</label>
++        <Num l="ADTT (trucks/day)" v={inp.fatigue.ADTT} set={v=>S('fatigue.ADTT',v)} step={100} gd={G('fatigue.ADTT')}/>
++        {G('fatigue.adttIsSingleLane')? <GdFld l="ADTT entered as" v="SINGLE-LANE (ADTT)SL" src={G('fatigue.adttIsSingleLane').src}/>
++        : <div className="fld"><label>ADTT entered as</label>
+@@ -4598,2 +4691,2 @@ function InputsTab({inp,set,R}){
+-            v={inp.fatigue.adttIsSingleLane!==false} set={v=>S('fatigue.adttIsSingleLane',v)}/></div>
+-        {inp.fatigue.adttIsSingleLane===false && <div className="fld"><label>Lanes available to trucks → p</label>
++            v={inp.fatigue.adttIsSingleLane!==false} set={v=>S('fatigue.adttIsSingleLane',v)}/></div>}
++        {inpE.fatigue.adttIsSingleLane===false && <div className="fld"><label>Lanes available to trucks → p</label>
+@@ -4611 +4704 @@ function InputsTab({inp,set,R}){
+-        <Num l="Fatigue design life (yr)" v={inp.fatigue.designLife||75} set={v=>S('fatigue.designLife',v)} step={5}/>
++        <Num l="Fatigue design life (yr)" v={inp.fatigue.designLife||75} set={v=>S('fatigue.designLife',v)} step={5} gd={G('fatigue.designLife')}/>
+@@ -6137,0 +6231,2 @@ function crModel(R,inp,o){
++  // GDX (2026-10-19): the inputs the checks used (GirderDetail's transferred values applied), each marked "(from GirderDetail)" where it came from there
++  const gXr=gdXfer(inp.external), gPr=gXr?gdPulled(inp.external,inp):{}, gm=(...ps)=>ps.some(k=>gdFieldOf(inp,gXr,gPr,k))?' (from GirderDetail)':''; inp=gdOverlay(inp);
+@@ -6163,3 +6258,3 @@ function crModel(R,inp,o){
+-    sub(s,'Geometry and framing','',<CrKV rows={[['Span L',fmt(R.geom.L,2),'ft'],['Girder spacing S',fmt(+inp.geom.S,2),'ft'],['Number of girders',fmt(+inp.geom.nGirders,0)],
+-      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'],['Girder position',gt.pos+(lq.posAuto!==false?' (follows the shared design beam)':' (set here)')],
+-      ['Skew angle',fmt(+lq.skew||0,1),'deg'],['Construction','unshored (DC1 on the bare steel)'],['Analysis',R.useExt?'imported continuous-member envelopes':'built-in simple span']]}/>);
++    sub(s,'Geometry and framing','',<CrKV rows={[['Span L',fmt(R.geom.L,2),'ft'+gm('geom.L')],['Girder spacing S',fmt(+inp.geom.S,2),'ft'+gm('geom.S')],['Number of girders',fmt(+inp.geom.nGirders,0),gm('geom.nGirders')],
++      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'+gm('geom.Lb')],['Girder position',gt.pos+(lq.posAuto!==false?' (follows the shared design beam)':' (set here)'),gm('loads.pos')],
++      ['Skew angle',fmt(+lq.skew||0,1),'deg'+gm('loads.skew')],['Construction','unshored (DC1 on the bare steel)'],['Analysis',R.useExt?'imported continuous-member envelopes':'built-in simple span']]}/>);
+@@ -6167,3 +6262,3 @@ function crModel(R,inp,o){
+-      <CrKV rows={[['Starting section',inp.preset||'—'],['Web D × t_w',fmt(R.sec.D,3)+' × '+fmt(R.sec.tw,4),'in'],
+-        ...(R.segP.length>1?[]:[['Top flange b_ft × t_ft',fmt(R.segP[0].dims.bft,3)+' × '+fmt(R.segP[0].dims.tft,4),'in'],['Bottom flange b_fb × t_fb',fmt(R.segP[0].dims.bfb,3)+' × '+fmt(R.segP[0].dims.tfb,4),'in']]),
+-        ['Flange transitions',R.segP.length>1?R.segP.length+' segments (table below)':'none (prismatic)']]}/>
++      <CrKV rows={[['Starting section',inp.preset||'—'],['Web D × t_w',fmt(R.sec.D,3)+' × '+fmt(R.sec.tw,4),'in'+gm('sec.D','sec.tw')],
++        ...(R.segP.length>1?[]:[['Top flange b_ft × t_ft',fmt(R.segP[0].dims.bft,3)+' × '+fmt(R.segP[0].dims.tft,4),'in'+gm('sec.bft','sec.tft')],['Bottom flange b_fb × t_fb',fmt(R.segP[0].dims.bfb,3)+' × '+fmt(R.segP[0].dims.tfb,4),'in'+gm('sec.bfb','sec.tfb')]]),
++        ['Flange transitions',R.segP.length>1?R.segP.length+' segments (table below)':'none (prismatic)',gm('sec.useSegs')]]}/>
+@@ -6173,6 +6268,6 @@ function crModel(R,inp,o){
+-    sub(s,'Materials','AASHTO 6.4.1',<CrKV rows={[['Steel grade',mat.grade],['Flange yield F_yf',fmt(R.matR.Fyf,1),'ksi'],['Web yield F_yw',fmt(R.matR.Fyw,1),'ksi'],
+-      ['Tensile strength F_u',fmt(+mat.Fu,1),'ksi'],['Steel modulus E_s',fmt(R.matR.Es,0),'ksi'],['Hybrid girder input',crYes(mat.hybrid)],['Stiffener yield F_ys',fmt(R.bearing.Fys,1),'ksi']]}/>);
+-    sub(s,'Deck and composite action','6.10.1.1 · 4.6.2.6',<CrKV rows={[['Composite deck',crYes(R.deck.deckOn)],["Concrete f'_c",fmt(R.deck.fc,2),'ksi'],['Unit weight w_c',fmt(+dk.wc,3),'kcf'],
+-      ['Structural slab t_s',fmt(+dk.ts,2),'in'],...(dk.tsSeparate?[['Slab thickness for dead load',fmt(+dk.tsDL,2),'in']]:[]),['Haunch',fmt(+dk.haunch,2),'in'],
+-      ['Effective width b_eff',fmt(R.beff,2),'in '+(dk.beffAuto?'(tributary width)':'(entered)')],['E_c (5.4.2.4)',fmt(R.EcDeck,0),'ksi'],['Modular ratio n (rounded, ≥ 6)',fmt(R.n,0)],
+-      ['Overhang (girder CL to deck edge)',fmt(+dk.oh,2),'ft'],['Longitudinal deck rebar A_s (−M section)',fmt(+inp.negM.As,2),'in²'],['Rebar depth from top of slab',fmt(+inp.negM.dTop,2),'in'],
++    sub(s,'Materials','AASHTO 6.4.1',<CrKV rows={[['Steel grade',mat.grade,gm('mat.grade')],['Flange yield F_yf',fmt(R.matR.Fyf,1),'ksi'+gm('mat.Fyf')],['Web yield F_yw',fmt(R.matR.Fyw,1),'ksi'+gm('mat.Fyw')],
++      ['Tensile strength F_u',fmt(+mat.Fu,1),'ksi'+gm('mat.Fu')],['Steel modulus E_s',fmt(R.matR.Es,0),'ksi'+gm('mat.Es')],['Hybrid girder input',crYes(mat.hybrid),gm('mat.hybrid')],['Stiffener yield F_ys',fmt(R.bearing.Fys,1),'ksi'+gm('stiff.Fys')]]}/>);
++    sub(s,'Deck and composite action','6.10.1.1 · 4.6.2.6',<CrKV rows={[['Composite deck',crYes(R.deck.deckOn),gm('deck.deckOn')],["Concrete f'_c",fmt(R.deck.fc,2),'ksi'+gm('deck.fc')],['Unit weight w_c',fmt(+dk.wc,3),'kcf'+gm('deck.wc')],
++      ['Structural slab t_s',fmt(+dk.ts,2),'in'+gm('deck.ts')],...(dk.tsSeparate?[['Slab thickness for dead load',fmt(+dk.tsDL,2),'in'+gm('deck.tsDL')]]:[]),['Haunch',fmt(+dk.haunch,2),'in'+gm('deck.haunch')],
++      ['Effective width b_eff',fmt(R.beff,2),'in '+(dk.beffAuto?'(tributary width)':'(entered)')+gm('deck.beff')],['E_c (5.4.2.4)',fmt(R.EcDeck,0),'ksi'],['Modular ratio n (rounded, ≥ 6)',fmt(R.n,0)],
++      ['Overhang (girder CL to deck edge)',fmt(+dk.oh,2),'ft'+gm('deck.oh')],['Longitudinal deck rebar A_s (−M section)',fmt(+inp.negM.As,2),'in²'+gm('negM.As')],['Rebar depth from top of slab',fmt(+inp.negM.dTop,2),'in'+gm('negM.dTop')],
+@@ -6180 +6275 @@ function crModel(R,inp,o){
+-        ['Cover top / bottom',fmt(+dk.coverT,2)+' / '+fmt(+dk.coverB,2),'in'],['Future wearing surface',fmt(+dk.wsFut,3),'ksf'],['Barrier base width / weight',fmt(+dk.bBar,1)+' in / '+fmt(+dk.wBar,3)+' klf']]:[])]}/>);
++        ['Cover top / bottom',fmt(+dk.coverT,2)+' / '+fmt(+dk.coverB,2),'in'],['Future wearing surface',fmt(+dk.wsFut,3),'ksf'+gm('deck.wsFut')],['Barrier base width / weight',fmt(+dk.bBar,1)+' in / '+fmt(+dk.wBar,3)+' klf',gm('deck.bBar','deck.wBar')]]:[])]}/>);
+@@ -6186 +6281 @@ function crModel(R,inp,o){
+-          ...G.utrows.map(q=>[q.name+' ('+q.category+')',fmt(q.w,3),'klf']),['Live load',gdLLText(L).join('; ')]]}/>
++          ...G.utrows.map(q=>[q.name+' ('+q.category+')',fmt(q.w,3),'klf']),['Construction live load (constructibility)',fmt(+lq.wConstr||0,3),'klf'+gm('loads.wConstr')],['Design lanes N_L (live load deflection)',fmt(+lq.NL||0,0),gm('loads.NL')],['Live load',gdLLText(L).join('; ')]]}/>
+@@ -6197 +6292 @@ function crModel(R,inp,o){
+-    sub(s,'Stiffeners, connectors and fatigue','6.10.11 · 6.10.10 · 6.6.1',<CrKV rows={[['Transverse stiffeners',st.transverse?'yes, d_o = '+fmt(+st.doSpc,1)+' in, b_t × t_p = '+fmt(+st.bt,2)+' × '+fmt(+st.tp,3)+' in':'none'],
++    sub(s,'Stiffeners, connectors and fatigue','6.10.11 · 6.10.10 · 6.6.1',<CrKV rows={[['Transverse stiffeners',st.transverse?'yes, d_o = '+fmt(+st.doSpc,1)+' in, b_t × t_p = '+fmt(+st.bt,2)+' × '+fmt(+st.tp,3)+' in':'none',gm('stiff.bt','stiff.tp')?'(b_t, t_p from GirderDetail)':''],
+@@ -6199,3 +6294,3 @@ function crModel(R,inp,o){
+-      ['Shear studs','d = '+fmt(+cn.studD,3)+' in, h = '+fmt(+cn.studH,2)+' in, '+fmt(+cn.nRow,0)+' per row, pitch '+fmt(+cn.pitch,2)+' in'],
+-      ['Fatigue detail category',R.fatigue.cat],['ADTT entered',fmt(R.fatigue.adttRaw,0)+' trucks/day ('+(R.fatigue.adttIsSingleLane?'single-lane (ADTT)SL':'gross, '+R.fatigue.lanes+' lanes')+')'],
+-      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr'],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode]]}/>);
++      ['Shear studs','d = '+fmt(+cn.studD,3)+' in, h = '+fmt(+cn.studH,2)+' in, '+fmt(+cn.nRow,0)+' per row, pitch '+fmt(+cn.pitch,2)+' in',gm('conn.studD','conn.studH')?'(d, h from GirderDetail)':''],
++      ['Fatigue detail category',R.fatigue.cat,gm('fatigue.category')],['ADTT entered',fmt(R.fatigue.adttRaw,0)+' trucks/day ('+(R.fatigue.adttIsSingleLane?'single-lane (ADTT)SL':'gross, '+R.fatigue.lanes+' lanes')+')',gm('fatigue.ADTT')],
++      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr',gm('fatigue.designLife')?'(design life from GirderDetail)':''],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode,gm('fatigue.lsMode')]]}/>);
+@@ -6799 +6894 @@ function App(){
+-        fatigue:{category:inp.fatigue.category, FnFat:+R.fatigue.FnFat.toFixed(2), life:inp.fatigue.life},
++        fatigue:{category:gdOverlay(inp).fatigue.category, FnFat:+R.fatigue.FnFat.toFixed(2), life:inp.fatigue.life},
+@@ -6928,0 +7024,4 @@ function App(){
++    { const D=p.girderDetail&&p.girderDetail.details; if(D!==undefined){ if(!D||typeof D!=='object') return 'girderDetail.details is not an object';   // GDX (2026-10-19, optional)
++      const fin=v=>v===undefined||v===null||(typeof v==='number'&&isFinite(v)&&v>=0);
++      for(const [k,o] of Object.entries(D)){ if(!o||typeof o!=='object') continue;
++        for(const [f,v] of Object.entries(o)) if(typeof v==='number'&&!fin(v)) return 'girderDetail.details.'+k+'.'+f+' is not a non-negative number'; } } }
+@@ -6975,0 +7075,4 @@ function App(){
++      +(gdXfer(p)?(()=>{ const X=gdXfer(p), ks=Object.keys(X.set), fv=v=>typeof v==='number'?String(+v.toFixed(4)):typeof v==='boolean'?(v?'yes':'no'):String(v);   // GDX (2026-10-19)
++        return 'Inputs transferred from GirderDetail (locked and used while these demands are in use; your own values are kept and return when the demands are cleared):\n'
++          +ks.map(k=>'  '+(GD_LBL[k]||k)+': '+fv(X.set[k].v)+' ('+X.set[k].src.replace(/^from /,'')+')').join('\n')+'\n'
++          +(X.dec.length?'GirderDetail values not transferred (method or interpretation; engineer to decide):\n'+X.dec.map(q=>'  '+q.what+': GirderDetail '+q.gdT).join('\n')+'\n':''); })():'')
+```
