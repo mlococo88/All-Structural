@@ -654,13 +654,25 @@ function iabDefault(){
     Dfront:4.0,                            // bottom of the cap below the finished grade at the front face (ft)
     straight:true, parallel:true, rockBelow:true, noScour:true, bothEnds:true,   // straight girders / alignment; parallel abutments and piers; top of rock below the pile tip; not scour susceptible; both ends semi-integral
     Lexp:0, Tset:50, epsSH:0.0005,         // expansion length to this abutment (ft, 0 = half the total length); CTDOT integral setting temperature (°F); CTDOT shrinkage strain
-    bfType:"dense", KpUser:0, gEH:1.35, qApp:0,   // backfill for Table C3.11.1-1; K_p entered (0 = Rankine); γEH on the movement-induced pressure; approach-slab dead load on the abutment (kip/ft)
+    bfType:"dense", KpUser:0, gEH:1.35, qApp:0,   // backfill for Table C3.11.1-1; K_p entered (0 = Rankine); γEH on the movement-induced pressure; qApp: approach-slab dead load of a saved project (kip/ft), moved to apSlab.qEq by migrate() (APS), then 0
     sec:"HP12X84", Fy:50, n:6, sp:8.0, orient:"weak", embed:24, Lpile:30,     // piles: section, F_y (ksi), number (single row), spacing (ft), "weak" (web parallel to the abutment CL) | "strong", embedment into the cap (in), length below the cap (ft)
     soilMD:3, head:"fixed", LE:10.0, EG:29000, IG:60000, MuPy:0, MuPy2:0,     // PXR2: MuPy2 = p-y pile-head moment about the other axis (kip-ft, 0 = none; biaxial 6.9.2.2.1)   // MassDOT soil type (Table 3.10.11-1); CTDOT head condition, equivalent cantilever L_E (ft), girder E (ksi) and composite I (in^4); pile-head moment from a p-y analysis (kip-ft, 0 = not entered)
     capBar:"8", capSp:9.0, hBar:"6", hSp:9.0, vBar:"6", vSp:9.0,
     stBar:"0", stLegs:2, stSp:12.0,
     Rn:0, phiC:0.70, RnUp:0, phiUp:0.60,                                     // ABR2 (N-4): integral piles, geotechnical nominal compression / uplift resistance (kip, 0 = not checked) and φ [10.5.5.2.3]
     KpE:0};                                                                  // ABR1: semi-integral, MassDOT 3.4.6.1: seismic passive coefficient on the end diaphragm (0 = the static Rankine K_p)                                         // IAB2: cap stirrups (vertical): bar ("0" = none), legs across the width, spacing along the cap (in)            // cap longitudinal bars (across the width); horizontal wall / diaphragm bars (per ft of height, each face); vertical rear-face bars
+}
+/* APS (2026-10-20): approach slab — panel I-0b; loads Tab 1 §1.4a; backwall shelf and slab design Tab 5 §5.8, §5.9 (Tab 10 §10.7, §10.8 for an
+   integral abutment). Off for a new AASHTO project and for a saved project without it (iab.qApp > 0 of an integral abutment maps to qEq). */
+function apDefault(on){
+  return {on:!!on,
+    L:16.0, t:1.25, W:0, ws:0.030,                  // length along the roadway (ft; the shortest side when the far end is square), thickness (ft), width normal to the roadway, edge to edge (ft; 0 = L_ab·cos θ), wearing surface (ksf)
+    skew:"follow",                                  // "follow" (ends parallel to the abutment) | "square" (far end square to the roadway) | "ct35" (CTDOT 11.14.1CT: follow up to 35°, square above)
+    sup:"shelf", bS:12.0, hS:15.0, hE:9.0, aV:0,    // support at the abutment: "shelf" (backwall shelf / paving notch, a bracket) | "deck" (deck over the backwall); shelf projection, depth at the face, depth at the outer edge (in); slab reaction to the face a_v (in, 0 = b_S/2)
+    far:"sleeper", mu:0.60, lsRed:true,             // far-end support "sleeper" | "soil"; friction coefficient of the sliding interface (integral / semi-integral); AASHTO 3.11.6.5 reduction of LS taken (AASHTO, RIDOT)
+    qEq:0,                                          // equivalent dead load of a project saved before this panel (kip/ft; > 0 = that load only, as before)
+    sBar:"5", sSp:9, hBar:"4", hSp:12, hN:2,        // shelf: primary tie bars (top, along the projection) and closed-tie legs within 2d_e/3 (bar, spacing along the wall, number of legs)
+    des:true, cov:2.0, aBar:"8", aSp:6, dBar:"5", dSp:9, tBar:"5", tSp:12};   // slab design on; bottom clear cover (in); main bottom bars; bottom distribution bars; top S&T bars (each way)
 }
 // MassDOT Bridge Manual Part I Tables 3.10.11-2 (HP10X57) and 3.10.11-3 (HP12X84): factored axial load per pile P_u (kip) at skew 0/10/20/30°
 // and depth to fixity L_f (ft); Table 3.10.11-4: equivalent length L_e (ft); soil types of Table 3.10.11-1 (same data as Pile Designer.html)
@@ -799,6 +811,7 @@ function defaultState(){
                                             // lap with the stem bars provided (in, 0 = not detailed: required length reported); % of bars spliced within the lap length [5.10.8.4.3a]
     },
     iab:iabDefault(),               // IAB (2026-10-20): abutment type, panel I-0a (conventional by default; a saved project without it opens as conventional)
+    apSlab:apDefault(false),        // APS (2026-10-20): approach slab, panel I-0b (off by default; owner defaults turn it on)
     wing:wingDefault(true),         // WING (2026-10-20): wingwall module, panel I-13 (on with typical dimensions for a new project; a saved project without it opens with the wingwalls off)
     bwLL:{ mode:"wheel" },          // ABCHK: live load on top of the backwall (FHWA LRFD steel girder example, Design Step 7.5): "wheel" (design truck wheels on an equivalent strip) | "off"
     assumptions:"1. Backfill is free-draining granular material; hydrostatic pressure behind the wall is not developed above the modeled water table.\n2. Vertical component of live-load surcharge over the heel is neglected where it would increase stability (conservative) and included where it increases demand.\n3. Passive resistance in front of the toe is neglected unless explicitly enabled.\n4. Piles (if used) are vertical with a rigid cap; lateral pile analysis (p–y / LPILE) is performed outside this tool.",
@@ -951,8 +964,8 @@ ABUT_OWN.rules=[
     ev:C=>ownCrack(C,false)},
   {owner:"MassDOT", id:"int", kind:"advisory", sec:"3.10.11.1 (p. 3-91); 2.3.5.1 (p. 2-14)", text:"Integral abutments to be considered where feasible; simplified method: total length 140 ft steel / 200 ft concrete, skew 30°, height 15 ft deck to bottom of cap",
     ev:C=>ownIntegral(C,{sk:30,Ls:140,Lc:200,more:"height ≤ 15 ft, U-wingwalls, not scour susceptible"})},
-  {owner:"MassDOT", id:"LSslab", kind:"note", sec:"3.3.1.3 (p. 3-18)", text:"With the MassDOT standard approach slab, the live-load surcharge on the abutment may be ignored",
-    ev:C=>({st:"note", val:`LS in use: h<sub>eq</sub> = ${fmt(C.R.LS.heq,2)} ft (panel I-3)`, lim:"may be 0 with an approach slab", link:OWN_LK.ls})},
+  {owner:"MassDOT", id:"LSslab", kind:"note", sec:"3.3.1.3 (p. 3-18)", text:"With the MassDOT standard approach slab, the live-load surcharge on the abutment may be ignored (applied when the approach slab is on, panel I-0b)",
+    ev:C=>apOn()? apLsEv(C) : ({st:"note", val:`no approach slab (panel I-0b): LS in use, h<sub>eq</sub> = ${fmt(C.R.LS.heq,2)} ft (panel I-3)`, lim:"may be 0 with an approach slab", link:OWN_LK.ls})},   // APS
   {owner:"MassDOT", id:"settle", kind:"note", sec:"3.2.1, 3.2.9 (pp. 3-8, 3-16)", text:"Settlement per the geotechnical report (Part I gives no numeric limit); not computed by this tool",
     ev:C=>({st:"note", val:"not computed", lim:"geotechnical report", link:OWN_LK.svc})},
   /* ---------------- RIDOT Bridge Design Manual (April 2026) ---------------- */
@@ -1011,7 +1024,9 @@ ABUT_OWN.rules=[
   {owner:"CTDOT", id:"passive", kind:"shall-check", sec:"V2 10.6.3.4 (p. 10-3)", text:"No footing keys for passive resistance and no passive pressure on the sides; sliding resisted by base friction only",
     ev:C=>({st:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"fail":"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive included (panel I-4)":"base friction only", lim:"friction only", link:OWN_LK.slide})},
   {owner:"CTDOT", id:"ls2", kind:"load", sec:"V2 3.11.6.4 (p. 3-7)", text:"Permanent earth-retaining structures designed for a live-load surcharge of at least 2 ft of soil (applied: h_eq = max(table value, 2 ft))",
-    ev:C=>{ const R=C.R, h=[R.LS.heq,R.bwDem?R.bwDem.heqBW:Infinity,R.stemDem?R.stemDem.heqS:Infinity], m=Math.min(...h);
+    ev:C=>{ const R=C.R;
+      if(R.ap&&R.ap.lsRem){ const hc=R.constrC.heqC; return {st:ownGE(hc,2)?"pass":"fail", val:`final state: LS neglected with the approach slab (CT11.1.1.3, §1.4a); construction stage h<sub>eq</sub> = ${fmt(hc,2)} ft`, lim:"≥ 2.00 ft (construction stage)", link:OWN_LK.ls}; }   // APS
+      const h=[R.LS.heq,R.bwDem?R.bwDem.heqBW:Infinity,R.stemDem?R.stemDem.heqS:Infinity], m=Math.min(...h);
       return {st:ownGE(m,2)?"pass":"fail", val:`h<sub>eq</sub> used: wall ${fmt(R.LS.heq,2)}, stem ${fmt(h[2],2)}, backwall ${fmt(h[1],2)} ft`, lim:"≥ 2.00 ft", link:OWN_LK.ls}; }},
   {owner:"CTDOT", id:"fc", kind:"shall-check", sec:"V2 5.4.2.1 (p. 5-1)", text:"Cast-in-place footings, abutments and walls: f′c at least 3.0 ksi",
     ev:C=>({st:ownGE(C.fc,3)?"pass":"fail", val:`f′c = ${fmt(C.fc,2)} ksi (panel I-2)`, lim:"≥ 3.0 ksi", link:OWN_LK.stem})},
@@ -1197,14 +1212,36 @@ ABUT_OWN.rules.push(
   {owner:"AASHTO", iab:"integral", id:"iab.ly", kind:"should-warning", sec:"6.9.2.2.1; C6.15.2", text:"Pile-head moment from a lateral (p-y) analysis under the thermal movement (Pile Designer, integral mode); combined axial and flexure checked with it",
     ev:C=>({st:+S.iab.MuPy>0?"pass":"warn", val:+S.iab.MuPy>0?`M<sub>u</sub> = ${fmt(+S.iab.MuPy,1)} kip-ft entered`:"not entered (panel I-0a)", lim:"p-y analysis", link:OWN_LK_IAB.pile})}
 );
+/* APS (2026-10-20): approach-slab rules. r.ap: listed while the slab is on (any abutment type); r.all: listed for every abutment type;
+   r.iab: as the IAB rules. The LS rule that applies is shown here (Tab 1 §1.0a) and worked in §1.4 / §1.4a. */
+const OWN_LK_AP={ap:["tab-loads","o-ap","§1.4a approach slab"]};
+function apLsEv(C){ const L=apLsRule(), R=C.R;
+  if(L.legacy) return {st:"note", val:"equivalent dead load only (project saved before panel I-0b): LS as before", lim:"—", link:OWN_LK_AP.ap};
+  if(iabType()==="integral") return {st:"pass", val:"integral abutment: no live-load surcharge in the integral design (Tab 10 §10.3)", lim:L.auto?"LS neglected (final state)":"reduction permitted", link:OWN_LK_AP.ap};
+  return {st:L.rem?"pass":"adv", val:L.rem? `final-state LS removed (rule: ${esc(L.ref)}): h<sub>eq</sub> = 0 on the wall, stem and backwall (table value ${fmt(R.LS.heqTab,2)} ft); construction stage kept, h<sub>eq</sub> = ${fmt(R.constrC.heqC,2)} ft` : `LS kept (panel I-0b: reduction not taken), h<sub>eq</sub> = ${fmt(R.LS.heq,2)} ft`,
+    lim:L.auto?"LS neglected in the final state, kept for construction":"reduction permitted (option)", link:OWN_LK.ls}; }
+function apReqEv(){ const A=S.apSlab, on=!!(A&&A.on); return {st:on?"pass":"fail", val:on?"approach slab on (panel I-0b)"+(+A.qEq>0?" — equivalent dead load only":""):"no approach slab (panel I-0b)", lim:"approach slab", link:OWN_LK_AP.ap}; }
+ABUT_OWN.rules.push(
+  {owner:"AASHTO", ap:1, id:"ap.ls", kind:"load", sec:"3.11.6.5, C3.11.6.5", text:"The live-load surcharge may be reduced where the vehicles reach the abutment through a structural slab supported other than by the earth (an approach slab on the backwall); taken as an option (panel I-0b, default on): final-state LS removed, construction stage kept", ev:C=>apLsEv(C)},
+  {owner:"RIDOT", ap:1, id:"ap.ls", kind:"load", sec:"AASHTO LRFD 3.11.6.5 (the BDM adds no rule)", text:"The live-load surcharge may be reduced where the vehicles reach the abutment through an approach slab on the backwall; taken as an option (panel I-0b, default on): final-state LS removed, construction stage kept", ev:C=>apLsEv(C)},
+  {owner:"CTDOT", ap:1, id:"ap.ls", kind:"load", sec:"V2 CT11.1.1.3 (p. 11-11)", text:"Live-load surcharge may be neglected with an approach slab in the final state, and is kept for the construction phase (written for integral abutments; applied with the approach slab to every abutment type: tool choice)", ev:C=>apLsEv(C)},
+  {owner:"CTDOT", all:1, id:"ap.std", kind:"should-warning", sec:"V2 11.14.1CT (pp. 11-7, 11-8); BDM 5.8", text:"Approach slabs on all bridges carrying State highways: full roadway width, 16 ft long, 1.25 ft thick, following the skew up to 35° (square to the roadway above 35°, at least 15 ft long), anchored to the abutment",
+    ev:C=>{ const A=S.apSlab; if(!A||!A.on) return {st:"warn", val:"no approach slab (panel I-0b)", lim:"approach slab on State-highway bridges", link:OWN_LK_AP.ap};
+      if(+A.qEq>0) return {st:"note", val:"equivalent dead load only (project saved before panel I-0b)", lim:"—", link:OWN_LK_AP.ap};
+      const P=C.R.ap||{}, sq=P.rule==="square", okL=sq? ownGE(+A.L,15) : Math.abs(+A.L-16)<1e-9, okT=Math.abs(+A.t-1.25)<1e-9, okS=(P.th<=35+1e-9)? !sq : sq;
+      return {st:okL&&okT&&okS?"pass":"warn", val:`L = ${fmt(+A.L,2)} ft${sq?" (short side)":""}, t = ${fmt(+A.t,2)} ft, ${sq?"far end square":"follows the skew"} at a skew of ${fmt(P.th,1)}°, W = ${fmt(P.W,1)} ft`, lim:"16 ft (≥ 15 ft when squared), 1.25 ft; follow ≤ 35°, square > 35°", link:OWN_LK_AP.ap}; }},
+  {owner:"MassDOT", iab:"integral", id:"ap.req", kind:"shall-check", sec:"3.10.4 (p. 3-87)", text:"Approach slab for every integral abutment bridge, kept stationary by a key away from the abutment and free to slide at the abutment (friction on the abutment, §1.4a)", ev:()=>apReqEv()},
+  {owner:"RIDOT", iab:"integral", id:"ap.req", kind:"shall-check", sec:"11.3.2 (p. 11-5)", text:"Approach slab with integral abutment bridges, detailed to allow sliding at the abutment (friction on the abutment, §1.4a)", ev:()=>apReqEv()},
+  {owner:"CTDOT", iab:"integral", id:"ap.req", kind:"shall-check", sec:"BDM 5.11.3; V2 11.14.1CT", text:"Full-width approach slab for every integral abutment bridge, anchored to the abutment", ev:()=>apReqEv()}
+);
 /* evaluates the current owner's rules; R.own = {owner, meta, rows:[{r, st, val, lim, tex, link}], nFail, nWarn} */
 function abutOwnChecks(R){
   const o=abutOwner(), meta=ABUT_OWN.owners[o];
   const it=iabType();   // IAB: integral / semi-integral rules listed for that type only (AASHTO too); the screening advisories "int"/"semi" only for a conventional
                       // abutment; an integral abutment lists no rule of the conventional cantilever (its footing, stem and backwall are not part of the design)
-  if(o==="AASHTO"&&it==="conv"&&S.fnd.branch!=="pile") return {owner:o, meta, rows:[], nFail:0, nWarn:0};   // ABR1: a pile footing lists the 10.7.1.2 checks
+  if(o==="AASHTO"&&it==="conv"&&S.fnd.branch!=="pile"&&!apOn()) return {owner:o, meta, rows:[], nFail:0, nWarn:0};   // ABR1: a pile footing lists the 10.7.1.2 checks; APS: an approach slab lists its LS rule
   const C=abutOwnCtx(R), rows=[];
-  ABUT_OWN.rules.filter(r=>r.owner===o&&(!r.wing||(S.wing&&S.wing.on))&&(r.iab? (r.iab===it||(r.iab==="any"&&it!=="conv")) : (r.wing||it==="conv"||(it==="semi"&&r.id!=="int"&&r.id!=="semi")))).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } if(r.iab&&!v.link) v.link=OWN_LK_IAB.elig; rows.push(Object.assign({r},v)); });
+  ABUT_OWN.rules.filter(r=>r.owner===o&&(!r.wing||(S.wing&&S.wing.on))&&(!r.ap||apOn())&&!(o==="AASHTO"&&it==="conv"&&S.fnd.branch!=="pile"&&!r.ap)&&((r.all||r.ap)? true : r.iab? (r.iab===it||(r.iab==="any"&&it!=="conv")) : (r.wing||it==="conv"||(it==="semi"&&r.id!=="int"&&r.id!=="semi")))).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } if(r.iab&&!v.link) v.link=OWN_LK_IAB.elig; rows.push(Object.assign({r},v)); });
   // OWNB: owner defaults — the value in use beside the owner value; a different value is the user's (kept, flagged)
   ABUT_OWN_DEF.filter(d=>d.owner===o).forEach(d=>{ const v=getPath(S,d.key), dv=ownDefVal(d), same=ownEq(v,dv);
     rows.push({r:{owner:o,id:"def."+d.key,kind:"default",sec:d.sec,text:d.text}, st:same?"pass":"warn",
@@ -1244,23 +1281,34 @@ const ABUT_OWN_DEF=[
   {owner:"CTDOT", key:"longit.dTfall", sec:"V2 3.12.2.1 (p. 3-8)", text:"Fall 60 °F (50 °F median to −10 °F)", val:()=>60, unit:"°F"},
   {owner:"CTDOT", key:"longit.cte", sec:"V2 3.12.2.3 (p. 3-8)", text:"Coefficient of thermal expansion 6.4×10⁻⁶ /°F", val:()=>6.4e-6, unit:"/°F"},
   {owner:"CTDOT", key:"reinf.gammaE", sec:"V2 5.6.7", text:"Crack control based on Class 2 exposure", val:()=>0.75},
-  {owner:"CTDOT", key:"mat.gc", sec:"V2 3.5.1 (p. 3-3)", text:"Reinforced concrete: the AASHTO Table 3.5.1-1 unit weight for the f′c plus 0.005 kcf (0.150 kcf for f′c ≤ 5 ksi)", val:Q=>(+Q.mat.fc<=5? 0.145 : 0.140+0.001*(+Q.mat.fc))+0.005, unit:"kcf"}
+  {owner:"CTDOT", key:"mat.gc", sec:"V2 3.5.1 (p. 3-3)", text:"Reinforced concrete: the AASHTO Table 3.5.1-1 unit weight for the f′c plus 0.005 kcf (0.150 kcf for f′c ≤ 5 ksi)", val:Q=>(+Q.mat.fc<=5? 0.145 : 0.140+0.001*(+Q.mat.fc))+0.005, unit:"kcf"},
+  // APS (2026-10-20): approach slab
+  {owner:"MassDOT", key:"apSlab.on", sec:"3.10.4 (p. 3-87)", text:"Integral abutments: an approach slab on every integral abutment bridge (other abutment types: Parts II / III details, not modelled)", val:Q=>!!(Q.iab&&Q.iab.type==="integral")},
+  {owner:"RIDOT", key:"apSlab.on", sec:"11.3.2 (p. 11-5)", text:"Integral abutments: approach slabs used with integral abutment bridges", val:Q=>!!(Q.iab&&Q.iab.type==="integral")},
+  {owner:"CTDOT", key:"apSlab.on", sec:"V2 11.14.1CT (p. 11-7)", text:"Approach slabs on all bridges carrying State highways (strongly considered on other bridges); every integral abutment bridge (BDM 5.11.3)", val:()=>true},
+  {owner:"CTDOT", key:"apSlab.L", sec:"V2 11.14.1CT (p. 11-8)", text:"Approach slab standard length 16 ft", val:()=>16, unit:"ft"},
+  {owner:"CTDOT", key:"apSlab.t", sec:"V2 11.14.1CT (p. 11-8)", text:"Approach slab thickness 1.25 ft", val:()=>1.25, unit:"ft"},
+  {owner:"CTDOT", key:"apSlab.skew", sec:"V2 11.14.1CT (p. 11-8)", text:"Approach slab follows the skew up to 35°; above 35° the far end is square to the roadway, at least 15 ft long", val:()=>"ct35"}
 ];
 const OWN_DEF_KEYS=[...new Set(ABUT_OWN_DEF.map(d=>d.key))];
 const OWN_DEF_PANEL={"mat.fc":"I-2","soil.method":"I-3","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
-  "reinf.coatBW":"I-9","reinf.gammaE":"I-9","seismic.on":"I-11","seismic.gEQll":"I-11","own.mLL":"I-0","seismic.khR":"I-11","seismic.shEQ":"I-11","seismic.bwStop":"I-11","seismic.shEQt":"I-11","mat.gc":"I-2","fnd.dNeg":"I-4"};
+  "reinf.coatBW":"I-9","reinf.gammaE":"I-9","seismic.on":"I-11","seismic.gEQll":"I-11","own.mLL":"I-0","seismic.khR":"I-11","seismic.shEQ":"I-11","seismic.bwStop":"I-11","seismic.shEQt":"I-11","mat.gc":"I-2","fnd.dNeg":"I-4",
+  "apSlab.on":"I-0b","apSlab.L":"I-0b","apSlab.t":"I-0b","apSlab.skew":"I-0b"};   // APS
 const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.method":["tab-loads","o-eh","§1.3 earth pressure"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
   "constr.qC":["tab-comb","o-ownload","§2.0a owner load rules"],"longit.dTrise":["tab-loads","o-longit-tu","§1.7 temperature"],"longit.dTfall":["tab-loads","o-longit-tu","§1.7 temperature"],"longit.cte":["tab-loads","o-longit-tu","§1.7 temperature"],
   "bearing.G":["tab-loads","o-longit-tu","§1.7 temperature"],"reinf.coatBW":["tab-struct","o-str-Backwall","§5.1 backwall"],"reinf.gammaE":["tab-struct","o-str-Stem","§5.2 stem"],
   "seismic.on":["tab-stab","o-seis","§3.6 connection force"],"seismic.gEQll":["tab-comb","o-facttbl","§2.1 load factors"],"own.mLL":["tab-comb","o-ownload","§2.0a owner load rules"],
-  "seismic.khR":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.shEQ":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.bwStop":["tab-struct","o-str-bwee","§5.1a backwall, extreme event"],"seismic.shEQt":["tab-stab","o-mo","§3.6a seismic earth pressure"],"mat.gc":["tab-loads","o-selfwt","§1.2 self-weights"],"fnd.dNeg":["tab-stab","o-slide","§3.1 sliding"]};
+  "seismic.khR":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.shEQ":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.bwStop":["tab-struct","o-str-bwee","§5.1a backwall, extreme event"],"seismic.shEQt":["tab-stab","o-mo","§3.6a seismic earth pressure"],"mat.gc":["tab-loads","o-selfwt","§1.2 self-weights"],"fnd.dNeg":["tab-stab","o-slide","§3.1 sliding"],
+  "apSlab.on":["tab-loads","o-ap","§1.4a approach slab"],"apSlab.L":["tab-loads","o-ap","§1.4a approach slab"],"apSlab.t":["tab-loads","o-ap","§1.4a approach slab"],"apSlab.skew":["tab-loads","o-ap","§1.4a approach slab"]};   // APS
 const OWN_DEF_LBL={"mat.fc":"f′c","soil.method":"active pressure theory","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
   "longit.cte":"α","bearing.G":"elastomer G","reinf.coatBW":"coated backwall bars","reinf.gammaE":"crack-control γe","seismic.on":"Extreme Event I","seismic.gEQll":"γEQ on live load","own.mLL":"design load multiplier m",
-  "seismic.khR":"k_h ratio","seismic.shEQ":"seismic share of the superstructure inertia","seismic.bwStop":"backwall as the seismic stop","seismic.shEQt":"transverse seismic share of the superstructure inertia","mat.gc":"concrete unit weight γ_c","fnd.dNeg":"depth neglected for passive d_n"};
+  "seismic.khR":"k_h ratio","seismic.shEQ":"seismic share of the superstructure inertia","seismic.bwStop":"backwall as the seismic stop","seismic.shEQt":"transverse seismic share of the superstructure inertia","mat.gc":"concrete unit weight γ_c","fnd.dNeg":"depth neglected for passive d_n",
+  "apSlab.on":"approach slab","apSlab.L":"approach slab length","apSlab.t":"approach slab thickness","apSlab.skew":"approach slab skew rule"};   // APS
 const ownDefLabel=k=>OWN_DEF_LBL[k]||k;
 const ownEq=(a,b)=>(typeof a==="boolean"||typeof b==="boolean"||typeof a==="string"&&isNaN(+a)||typeof b==="string"&&isNaN(+b)||a===""||b==="")? a===b : Math.abs(+a-+b)<=1e-9*Math.max(Math.abs(+a),Math.abs(+b))+1e-15;
 function ownDefVal(d){ return d.val(S); }
-function ownShow(d,v){ if(typeof v==="boolean") return d.key==="seismic.on"?(v?"on":"off"):(v?"yes":"no");
+function ownShow(d,v){ if(typeof v==="boolean") return (d.key==="seismic.on"||d.key==="apSlab.on")?(v?"on":"off"):(v?"yes":"no");
+  if(d.key==="apSlab.skew") return {follow:"follows the skew",square:"far end square",ct35:"follows the skew up to 35°, square above"}[v]||String(v);   // APS
   if(d.key==="seismic.khR") return fmt(+v,2);   // ABR1
   if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT at-rest on piles / rock"}[v]||String(v);
   if(d.key==="soil.method") return v==="coulomb"?"Coulomb":"Rankine";
@@ -1303,6 +1351,16 @@ function abutOwnLoad(){ const o=abutOwner(), adt=S.own.ADT, hasADT=adt!==""&&adt
   const eta=(o==="RIDOT"&&hasADT&&+adt>=5000)?1.05:1.0;
   const m=o==="AASHTO"?1:((+S.own.mLL>0)?+S.own.mLL:1);
   return {owner:o, eta, etaMin:1/eta, m, hasADT, adt:+adt, passEE:o==="RIDOT", lsMin:o==="CTDOT"?2.0:0}; }
+/* APS (2026-10-20): approach slab on (panel I-0b); the live-load surcharge rule that applies with it. Final-condition LS removed:
+   MassDOT Part I 3.3.1.3 and CTDOT BRSDM V2 CT11.1.1.3 (automatic); AASHTO LRFD 10th Ed. 3.11.6.5 (permitted reduction: an option, default on,
+   for AASHTO and RIDOT). The construction-stage LS is kept. A project saved before the panel (equivalent dead load only) keeps its LS. */
+function apOn(){ const A=S.apSlab; return !!(A&&A.on); }
+function apLsRule(){ const A=S.apSlab, o=abutOwner();
+  if(!A||!A.on) return {on:false, rem:false};
+  if(+A.qEq>0) return {on:true, rem:false, legacy:true, ref:""};
+  if(o==="MassDOT") return {on:true, rem:true, auto:true, ref:"MassDOT Part I 3.3.1.3"};
+  if(o==="CTDOT") return {on:true, rem:true, auto:true, ref:"CTDOT BRSDM V2 CT11.1.1.3"};
+  return {on:true, rem:A.lsRed!==false, auto:false, ref:"AASHTO LRFD 10th Ed. 3.11.6.5"+(o==="RIDOT"?" (RIDOT: no BDM rule)":"")}; }
 </script>
 
 <script>
@@ -1418,8 +1476,31 @@ const VALID = {
   "iab.hSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
   "iab.vSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
   "iab.capSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
-  "iab.stSp":{hard:[2,48], typ:[4,24], msg:"Stirrup spacing outside the typical 4–24 in range."}
+  "iab.stSp":{hard:[2,48], typ:[4,24], msg:"Stirrup spacing outside the typical 4–24 in range."},
+  // APS (2026-10-20): approach slab (checked only while the slab is on; shelf and design inputs only when used)
+  "apSlab.L":{hard:[4,60], typ:[10,30], msg:"Approach slab length outside the typical 10–30 ft range."},
+  "apSlab.t":{hard:[0.5,3], typ:[0.75,1.5], msg:"Approach slab thickness outside the typical 0.75–1.5 ft range."},
+  "apSlab.W":{hard:[0,300], typ:[0,120], msg:"Approach slab width outside the typical range (0 = L_ab·cos θ)."},
+  "apSlab.ws":{hard:[0,0.2], typ:[0,0.06], msg:"Approach slab wearing surface above 0.06 ksf is unusual."},
+  "apSlab.mu":{hard:[0,2], typ:[0.2,1.0], msg:"Approach slab friction coefficient outside the typical 0.2–1.0 range."},
+  "apSlab.bS":{hard:[3,36], typ:[6,18], msg:"Shelf projection outside the typical 6–18 in range."},
+  "apSlab.hS":{hard:[4,48], typ:[9,24], msg:"Shelf depth at the face outside the typical 9–24 in range."},
+  "apSlab.hE":{hard:[2,48], typ:[6,18], msg:"Shelf depth at the outer edge outside the typical 6–18 in range."},
+  "apSlab.aV":{hard:[0,36], typ:[0,12], msg:"Shelf load position outside the typical range (0 = b_S/2)."},
+  "apSlab.sSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
+  "apSlab.hSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
+  "apSlab.hN":{hard:[0,10], typ:[1,4], msg:"Number of closed-tie legs within 2d_e/3 outside the typical 1–4 range."},
+  "apSlab.cov":{hard:[1,4], typ:[1.5,3], msg:"Approach slab bottom cover outside the typical 1.5–3 in range."},
+  "apSlab.aSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
+  "apSlab.dSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
+  "apSlab.tSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."}
 };
+/* APS: an approach-slab input is validated only while it is used (slab on; shelf inputs with a shelf; bars with the design on) */
+function apInUse(p){ if(!p.startsWith("apSlab.")) return true; const A=S.apSlab; if(!A||!A.on) return false; const k=p.slice(7);
+  if(["bS","hS","hE","aV","sSp","hSp","hN"].includes(k)) return A.sup==="shelf"&&!(+A.qEq>0);
+  if(["cov","aSp","dSp","tSp"].includes(k)) return !!A.des&&!(+A.qEq>0);
+  if(k==="mu") return iabType()!=="conv"&&!(+A.qEq>0);
+  return !(+A.qEq>0); }
 
 function inpRow(label, path, unit, o={}){
   const v = getPath(S,path);
@@ -1456,7 +1537,7 @@ const ABUT_IN_TABS=[
   ['geom','Geometry'],['found','Soil & Foundation'],['gird','Girders'],
   ['fact','Factors'],['detail','Rebar & Bearings'],['seis','Seismic'],['wing','Wingwalls'],['assum','Assumptions']];
 const ABUT_IN_SEC={
-  'in-own':'geom','in-iab':'geom','in-geom':'geom','in-mat':'geom',
+  'in-own':'geom','in-iab':'geom','in-apslab':'geom','in-geom':'geom','in-mat':'geom',
   'in-soil':'found','in-fnd':'found','in-piles':'found',
   'in-beams':'gird','in-dist':'gird','in-longit':'gird',
   'in-fact':'fact',
@@ -1705,6 +1786,14 @@ function migrate(){
   // Input ID unchanged); missing fields of a newer project take their defaults
   if(!S.iab||typeof S.iab!=="object") S.iab=iabDefault();
   else{ const T=iabDefault(); Object.keys(T).forEach(k=>{ if(S.iab[k]===undefined) S.iab[k]=T[k]; }); }
+  // APS (2026-10-20): a project saved before the approach-slab panel has no S.apSlab: it opens with the slab OFF (results unchanged), except an
+  // integral abutment with an approach-slab dead load q_app > 0 (the former panel I-0a input), which opens with the slab ON carrying exactly that
+  // load as its equivalent dead load (apSlab.qEq; iab.qApp is then 0). Missing fields of a newer project take their defaults.
+  if(!S.apSlab||typeof S.apSlab!=="object"){ S.apSlab=apDefault(false); const q=+(S.iab&&S.iab.qApp)||0;
+    if(iabType()==="integral"&&q>0){ S.apSlab.on=true; S.apSlab.qEq=q; S.iab.qApp=0;
+      DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Approach slab (new panel I-0b): this integral abutment's approach-slab dead load "+q+" kip/ft (panel I-0a) is now the slab's equivalent dead load — results unchanged. Set it to 0 to compute the slab from its geometry (dead load, HL-93 live load, friction, shelf and slab design)"]); }
+    else if(abutOwner()!=="AASHTO"){ const d=ABUT_OWN_DEF.find(x=>x.owner===abutOwner()&&x.key==="apSlab.on"); if(d&&ownDefVal(d)===true) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Approach slab (new panel I-0b): off for this saved project (results unchanged); the "+abutOwner()+" default is on ("+abutOwnCite(d)+") — turn it on in panel I-0b"]); } }
+  else{ const T=apDefault(false); Object.keys(T).forEach(k=>{ if(S.apSlab[k]===undefined) S.apSlab[k]=T[k]; }); }
   if(!S.ui.d3Sel) S.ui.d3Sel="ls:Strength I";
   if(!S.ui.d3Tog) S.ui.d3Tog={piles:true,P:true,Vx:true,Vy:true,eh:true,ls:true,soil:true,water:true,dims:true,wire:false};
   if(!S.ui.vmSel) S.ui.vmSel="ls:Strength I";
@@ -1832,7 +1921,7 @@ function migrate(){
   }
 }
 /* WING: a saved state merged over the defaults keeps "no wing data" (→ wingwalls off in migrate), not the new-project default */
-function abutMergeState(o){ const st=Object.assign(defaultState(),o); if(!o||typeof o!=="object"||!o.wing) delete st.wing; return st; }
+function abutMergeState(o){ const st=Object.assign(defaultState(),o); if(!o||typeof o!=="object"||!o.wing) delete st.wing; if(!o||typeof o!=="object"||!o.apSlab) delete st.apSlab; return st; }   // APS: "no slab data" → migrate()
 function seedExampleReactions(){
   const ex={DC:{P:85},DW:{P:12},LL:{P:70},BR:{Vx:3.5},TU:{Vx:2.5},CRSH:{Vx:1.5},
             WS:{P:4,Vx:1.0,Vy:2.5},WL:{P:1.5,Vx:0.5,Vy:1.0}};
@@ -1880,7 +1969,7 @@ function buildInputs(){
       ${inpRow("End diaphragm height, deck surface to seat h<sub>d</sub>","iab.hd","ft")}
       <div class="derived">Deck surface to bottom of cap H = h<sub>d</sub> + h<sub>c</sub> = <b>${fmt(+I.hd + +I.hc)} ft</b></div>
       ${inpRow("Fill over the bottom of the cap at the front face","iab.Dfront","ft")}
-      ${inpRow("Approach slab dead load on the abutment","iab.qApp","kip/ft",{title:"DC carried by the abutment from the approach slab (per ft of abutment). 0 = not included."})}`;
+      <div class="in-note">Approach slab (its weight, live load and friction on the abutment): panel I-0b.</div>`;
       else body+=`<div class="in-note">End diaphragm (moves with the superstructure): height h<sub>bw</sub> and thickness t<sub>bw</sub> of panel I-1 (the backwall inputs). The lower abutment (stem, footing, bearings on the seat) is the conventional model of panels I-1 to I-11.</div>`
         +(oo==="MassDOT"?inpRow("Seismic passive coefficient K<sub>PE</sub> on the end diaphragm (0 = AASHTO Fig. A11.4-2)","iab.KpE","–",{title:"MassDOT 3.4.6.1: the end diaphragm is designed for 70 % of the seismic passive pressure (Extreme Event I on). 0 = log spiral of AASHTO Figure A11.4-2 (c = 0, wall friction 0.67φ, level backfill) at k_h; below 5 ft the same chart at k_h = 0 (static, 11.6.5.5). Enter a value for other conditions."}):"");   // ABR1 (N-3); ABR2
       body+=`<div class="subhead">Movement and earth pressure</div>
@@ -1912,6 +2001,35 @@ function buildInputs(){
       body+=`<div class="in-note">Designed in Tab 10; the owner's eligibility rules are in Tab 1 §1.0a.${it==="integral"?" The conventional inputs of panels I-1 (footing, stem), I-4 and I-7 are not used by the integral design.":""}</div>`;
     }
     html+=panel("in-iab","I-0a","Abutment Type",body); }
+
+  /* ---- I-0b Approach slab (APS, 2026-10-20) ---- */
+  { const A=S.apSlab, it=iabType(), oo=abutOwner(), bo=Object.keys(BARS).map(k=>[k,"#"+k]), lg=+A.qEq>0, Lr=apLsRule();
+    const ck=(path,lab,extra)=>{ const id="chk_"+path.replace(/\./g,"_"); return `<div class="chk-row chk-own" style="flex-wrap:wrap"><input type="checkbox" id="${id}" data-path="${path}" ${getPath(S,path)?"checked":""}><label for="${id}">${lab}</label>${extra||""}</div>`; };
+    let body=ck("apSlab.on","<b>Approach slab</b> on the abutment (its reaction, the live-load surcharge rule"+(lg?"":", the shelf and the slab design")+")",ownTagHTML("apSlab.on"));
+    if(!A.on) body+=`<div class="in-note">Off: no approach slab; the live-load surcharge of panel I-3 acts on the abutment${it==="conv"?" and the design truck wheel load acts on top of the backwall (panel I-9)":""}. ${oo!=="AASHTO"?"Owner default: see Tab 1 §1.0a.":""}</div>`;
+    else if(lg) body+=`<div class="note-box small">Project saved before this panel: the slab is represented by its equivalent dead load only, as before (DC on the integral abutment; no live load, friction, shelf or slab design). Set it to 0 to compute the slab from its geometry.</div>`
+      +inpRow("Equivalent dead load on the abutment (0 = compute from the slab)","apSlab.qEq","kip/ft",{title:"From the integral abutment's former input q_app (panel I-0a). 0 = the slab of this panel: DC, DW and HL-93 at the shelf, friction, shelf and slab design."});
+    else{
+      body+=`<div class="subhead">Slab (simple span: soil support beneath may be lost)</div>
+      ${inpRow("Length L along the roadway","apSlab.L","ft",{title:"Abutment to the far-end support, along the roadway. Far end square to the roadway: the shortest side (the long side is L + W·tan θ)."})}
+      ${inpRow("Thickness t","apSlab.t","ft")}
+      ${inpRow("Width W, edge to edge (0 = L<sub>ab</sub>·cos θ)","apSlab.W","ft",{title:"Measured normal to the roadway, full width incl. shoulders and sidewalks. 0 = the abutment length L_ab × cos(skew). The number of design lanes comes from the clear roadway width of panel I-6b."})}
+      ${inpRow("Wearing surface / overlay (DW)","apSlab.ws","ksf",{title:"e.g. 0.030 ksf ≈ 2.5 in of bituminous concrete. 0 = none."})}
+      ${selRow("Skew of the slab ends","apSlab.skew",[["follow","Both ends follow the skew (parallelogram)"],["square","Far end square to the roadway"],["ct35","CTDOT 11.14.1CT: follow up to 35°, square above"]])}
+      ${selRow("Support at the abutment","apSlab.sup",[["shelf",(it==="conv"?"Backwall":"End diaphragm")+" shelf (paving notch): bracket on the back face"],["deck","Deck over the backwall (the slab bears on the deck end)"]],{rebuild:true})}
+      ${A.sup==="shelf"?inpRow("&nbsp;&nbsp;Shelf projection b<sub>S</sub> from the back face","apSlab.bS","in")+inpRow("&nbsp;&nbsp;Shelf depth at the face h<sub>S</sub>","apSlab.hS","in")+inpRow("&nbsp;&nbsp;Shelf depth at the outer edge h<sub>E</sub>","apSlab.hE","in")+inpRow("&nbsp;&nbsp;Slab reaction to the face a<sub>v</sub> (0 = b<sub>S</sub>/2)","apSlab.aV","in",{title:"Distance from the back face of the wall to the resultant of the slab reaction on the shelf. 0 = the middle of the shelf (uniform bearing over b_S)."}):""}
+      ${selRow("Far-end support","apSlab.far",[["sleeper","Sleeper slab"],["soil","On the subbase (soil)"]])}
+      ${it!=="conv"?inpRow("Friction coefficient μ of the sliding interface","apSlab.mu","–",{title:"Integral / semi-integral: the slab slides on its support (MassDOT 3.10.4, RIDOT 11.3.2) or drags on the subbase; F = μ × the slab's dead-load end reaction on the abutment (§1.4a). Default 0.60: concrete on clean gravel / coarse sand, AASHTO Table 3.11.5.3-1."}):""}
+      ${(oo==="AASHTO"||oo==="RIDOT")?ck("apSlab.lsRed","Remove the final-state live-load surcharge LS (AASHTO 3.11.6.5: permitted with a slab supported on the abutment; the construction stage keeps it)"):`<div class="in-note">Live-load surcharge: removed in the final state with the slab (${esc(Lr.ref||"")}); the construction stage keeps it.</div>`}`;
+      if(A.sup==="shelf") body+=`<div class="subhead">Shelf reinforcement (bracket, ${it==="conv"?"Tab 5 §5.8":"Tab 10 §10.7"})</div>
+      ${selRow("Primary tie (top, across the shelf)","apSlab.sBar",bo)}${inpRow("&nbsp;&nbsp;spacing along the wall","apSlab.sSp","in")}
+      ${selRow("Closed ties (horizontal legs)","apSlab.hBar",bo)}${inpRow("&nbsp;&nbsp;spacing along the wall","apSlab.hSp","in")}${inpRow("&nbsp;&nbsp;legs within 2d<sub>e</sub>/3 below the tie","apSlab.hN","–",{step:1,title:"Number of horizontal legs of closed ties placed within 2d_e/3 below the primary tie (AASHTO 5.8.4.2.1, 5.8.4.2.2), each at the spacing above."})}`;
+      body+=`<div class="subhead">Slab design (${it==="conv"?"Tab 5 §5.9":"Tab 10 §10.8"})</div>
+      ${ck("apSlab.des","Design the approach slab (one-way simple span, HL-93 on the 4.6.2.3 strip)")}
+      ${A.des?inpRow("&nbsp;&nbsp;Bottom clear cover","apSlab.cov","in")+selRow("&nbsp;&nbsp;Main bottom bars (along the roadway)","apSlab.aBar",bo)+inpRow("&nbsp;&nbsp;&nbsp;&nbsp;spacing","apSlab.aSp","in")+selRow("&nbsp;&nbsp;Bottom distribution bars (transverse)","apSlab.dBar",bo)+inpRow("&nbsp;&nbsp;&nbsp;&nbsp;spacing","apSlab.dSp","in")+selRow("&nbsp;&nbsp;Top bars, each way (S&amp;T)","apSlab.tBar",bo)+inpRow("&nbsp;&nbsp;&nbsp;&nbsp;spacing","apSlab.tSp","in"):""}
+      <div class="in-note">The slab reaction (DC, DW, HL-93 with IM) acts at the ${A.sup==="shelf"?"shelf":"deck end over the backwall"}${it==="semi"?" and reaches the lower abutment through the end diaphragm and the bearings":""}: Tab 1 §1.4a. ${it==="conv"?"It replaces the design truck wheel load on top of the backwall (panel I-9).":""}</div>`;
+    }
+    html+=panel("in-apslab","I-0b","Approach Slab",body); }
 
   /* ---- I-1 Geometry ---- */
   html+=panel("in-geom","I-1","Geometry",`
@@ -2353,6 +2471,7 @@ function markFieldValidity(){
 }
 function collectInputWarnings(){
   for(const [p,r] of Object.entries(VALID)){
+    if(!apInUse(p)) continue;   // APS
     const v=Number(getPath(S,p));
     if(!isFinite(v)||v<r.hard[0]||v>r.hard[1]) warn("Input error — "+r.msg+" (entered: "+v+")","err");
     else if(v<r.typ[0]||v>r.typ[1]){ const od=p==="seismic.shEQ"?ownRuleFor(p):null; if(od&&ownEq(v,ownDefVal(od))) continue;   // ABR1: the MassDOT 3.4.6.1 share 0 % (owner default in use) is not flagged
@@ -2844,8 +2963,12 @@ function computeIAB(R,X){
     Q.c2.sec=sc({name:integ?"Integral wall horizontal (case 2)":"End diaphragm horizontal", h:tW*12, cover, bar:String(I.hBar), sp:+I.hSp, Mu:Q.c2.Mu, Vu:Q.c2.Vu, Ms:Q.c2.Ms, betaMode:"general", lbl:"Strength I: η·γEH·K·γ·H on 0.8 of the simple span between girders"}); }
   if(integ){
     const b=+I.b, hc=+I.hc, hd=+I.hd, gDC=+F.gpDCmax, gDW=+F.gpDWmax, gLL=+F.llS1, mL=OL.m;
-    Q.Wab=gc*b*(hc+hd)*Lab; Q.Wapp=(+I.qApp||0)*Lab;
-    Q.DC=a.DC.P+Q.Wab+Q.Wapp; Q.DW=a.DW.P; Q.LL=a.LL.P; Q.mL=mL; Q.gDC=gDC; Q.gDW=gDW; Q.gLL=gLL;
+    /* APS: approach slab on the end diaphragm (panel I-0b): DC (+ the shelf), DW, HL-93 with IM (cap) / without IM (piles, where IM is removed);
+       a project saved before the panel: its equivalent dead load only (= the former q_app·L_ab). No slab: 0, as before. */
+    const AP=R.ap; Q.ap=AP;
+    Q.Wapp=AP? (AP.legacy? AP.RDC : AP.RDC+AP.WSh) : 0; Q.WapDW=(AP&&!AP.legacy)? AP.RDW : 0; Q.apLL=(AP&&!AP.legacy)? AP.RLLim : 0; Q.apLLn=(AP&&!AP.legacy)? AP.RLL : 0;
+    Q.Wab=gc*b*(hc+hd)*Lab;
+    Q.DC=a.DC.P+Q.Wab+Q.Wapp; Q.DW=Q.WapDW? a.DW.P+Q.WapDW : a.DW.P; Q.LLg=a.LL.P; Q.LL=Q.apLL? a.LL.P+Q.apLL : a.LL.P; Q.mL=mL; Q.gDC=gDC; Q.gDW=gDW; Q.gLL=gLL;
     /* case 1: cap a continuous beam on the piles for all vertical loads (IM included) */
     Q.wu1=eta*(gDC*Q.DC+gDW*Q.DW+gLL*mL*Q.LL)/Lab; Q.ws1=(Q.DC+Q.DW+mL*Q.LL)/Lab;
     const sp=+I.sp;
@@ -2883,9 +3006,11 @@ function computeIAB(R,X){
     /* ABR4: IM not applied to the piles (foundation below ground, 3.6.2.1): LL·(1 − f_IM), f_IM of Tab 1 §1.9 (entered or simple span), AASHTO and
        MassDOT (MassDOT was LL/1.33, which also took 33 % off the lane load); CTDOT (V2 load rules) and RIDOT (BDM 11.3.2, top 4 ft of the pile)
        keep IM on the integral piles. P.eqD: MassDOT equal distribution. */
-    P.eqD=own==="MassDOT"; P.imKeep=own==="CTDOT"||own==="RIDOT"||!(R.im&&R.im.on); P.IM=!P.imKeep; P.fIM=P.IM? (R.im? R.im.f : imSplit().f) : 0; P.LLp=Q.LL*(1-P.fIM);
-    P.Pdl=eta*(gDC*Q.DC+gDW*Q.DW)/n; P.WLL=eta*gLL*mL*P.LLp; P.eLL=(own==="MassDOT"||!(a.LL.P>0))? 0 : a.LL.MtP/a.LL.P;
-    P.Pll=P.WLL/n+(P.Ix2>0? P.WLL*Math.abs(P.eLL)*P.xMax/P.Ix2 : 0); P.Pg=P.Pdl+P.Pll;
+    P.eqD=own==="MassDOT"; P.imKeep=own==="CTDOT"||own==="RIDOT"||!(R.im&&R.im.on); P.IM=!P.imKeep; P.fIM=P.IM? (R.im? R.im.f : imSplit().f) : 0;
+    // APS: the approach-slab LL (uniform along the abutment: no eccentricity) is added to the girder LL; without IM where IM is removed (its own static reaction)
+    P.LLg=Q.LLg*(1-P.fIM); P.LLs=Q.apLL? (P.IM? Q.apLLn : Q.apLL) : 0; P.LLp=P.LLs? P.LLg+P.LLs : P.LLg;
+    P.Pdl=eta*(gDC*Q.DC+gDW*Q.DW)/n; P.WLL=eta*gLL*mL*P.LLp; P.WLLg=P.LLs? eta*gLL*mL*P.LLg : P.WLL; P.eLL=(own==="MassDOT"||!(a.LL.P>0))? 0 : a.LL.MtP/a.LL.P;
+    P.Pll=P.WLL/n+(P.Ix2>0? P.WLLg*Math.abs(P.eLL)*P.xMax/P.Ix2 : 0); P.Pg=P.Pdl+P.Pll;
     /* section resistances: Pr = φc·Fy·As (fully braced, 6.9.2.1 with λ = 0), φc = 0.70; Mr = φf·Mn, φf = 1.00 [6.5.4.2] */
     P.Pn=Fy*sk.A; P.Pr=0.70*P.Pn; P.Mp=Fy*P.Zb;   // kip, kip-in
     P.lamF=sk.bf/(2*sk.tf); P.lamPf=0.38*Math.sqrt(E/Fy); P.lamRf=Math.sqrt(E/Fy);
@@ -2909,6 +3034,8 @@ function computeIAB(R,X){
       C.fixed=fixed; C.Mel=(fixed?6:3)*EI*C.dL/(LE*LE); C.MT=Math.min(P.Mp,C.Mel); C.FT=(fixed?12:3)*EI*C.dL/LE**3;   // k-in, kip [Eqs. CT11.1.1.4.2c-6 to -9]
       C.NG=+S.beams.N; C.R=P.Pg; C.W=2*n*C.R/C.NG; C.thW=C.W*Sin*Sin/(24*(+I.EG)*(+I.IG)); C.MW=4*EI*C.thW/LE;   // [Eqs. CT11.1.1.4.2c-2 to -4]
       C.PP=eta*Q.gEH*Q.PexpT/n; C.Hin=Hin; C.H0=2*Hin/3; C.RT=(C.PP*C.H0+eta*(C.FT*Hin+C.MT))/Sin;   // [Eq. CT11.1.1.4.2c-5], per pile
+      // APS: + the approach-slab friction (γ = 1.00, η) per pile at the shelf, t_slab below the deck surface (the arms of Eq. CT11.1.1.4.2c-5 are from the deck)
+      if(AP&&AP.F>0){ C.PF=eta*AP.F/n; C.zF=AP.t*12; C.RT=(C.PP*C.H0+C.PF*C.zF+eta*(C.FT*Hin+C.MT))/Sin; }
       C.Pu=P.Pg+C.RT; C.Mu=Math.min(P.Mp,C.MT+C.MW); C.I=inter(C.Pu,C.Mu); C.Lin=Lin; C.Sin=Sin; C.LEin=LE; C.EI=EI;
       P.ct=C; }
     else{ P.py={Mu:Math.max(0,+I.MuPy)*12}; P.py.on=P.py.Mu>0; P.py.I=inter(P.Pg,P.py.Mu);
@@ -2931,13 +3058,13 @@ function computeIAB(R,X){
     { const Rn=Math.max(0,+I.Rn||0), phiC=+I.phiC||0, RnUp=Math.max(0,+I.RnUp||0), phiUp=+I.phiUp||0, etaMin=OL.etaMin||1;
       const gDCmin=+F.gpDCmin, gDWmin=+F.gpDWmin, RT=P.ct? P.ct.RT : 0, PuC=P.ct? P.ct.Pu : P.Pg;
       const Pdlmin=etaMin*(gDCmin*Q.DC+gDWmin*Q.DW)/n, eLLabs=Math.abs(P.eLL||0);
-      const PllFar=(P.LLp>0)? eta*gLL*mL*P.LLp/n - (P.Ix2>0? eta*gLL*mL*P.LLp*eLLabs*P.xMax/P.Ix2 : 0) : 0;
+      const PllFar=(P.LLp>0)? eta*gLL*mL*P.LLp/n - (P.Ix2>0? eta*gLL*mL*(P.LLs? P.LLg : P.LLp)*eLLabs*P.xMax/P.Ix2 : 0) : 0;   // APS: eccentricity on the girder LL only
       const Pmin=Pdlmin+Math.min(0,PllFar)-RT;
       const geo={on:Rn>0, Rn, phiC, RnUp, phiUp, Pu:PuC, RT, Pdlmin, PllFar, Pmin, uplift:Pmin<0, gDCmin, gDWmin, etaMin};
       geo.dc=Rn>0&&phiC>0? PuC/(phiC*Rn) : null;
       geo.dcUp=geo.uplift? (RnUp>0&&phiUp>0? -Pmin/(phiUp*RnUp) : 99) : 0;
-      if(S.seismic.on){ const gq=Math.max(0,+S.seismic.gEQll||0), phiE=+S.seismic.phiCEQ||1, WL=gq*P.LLp;
-        geo.ee={gq, phiE, Pee:(Q.DC+Q.DW)/n+(WL>0? WL/n+(P.Ix2>0? WL*eLLabs*P.xMax/P.Ix2 : 0) : 0)};
+      if(S.seismic.on){ const gq=Math.max(0,+S.seismic.gEQll||0), phiE=+S.seismic.phiCEQ||1, WL=gq*P.LLp, WLg=P.LLs? gq*P.LLg : WL;   // APS: eccentricity on the girder LL only
+        geo.ee={gq, phiE, Pee:(Q.DC+Q.DW)/n+(WL>0? WL/n+(P.Ix2>0? WLg*eLLabs*P.xMax/P.Ix2 : 0) : 0)};
         geo.ee.dc=Rn>0? geo.ee.Pee/(phiE*Rn) : null; }
       P.geo=geo;
       if(!(Rn>0)) Q.notes.push("Integral piles: the geotechnical axial resistance is not checked — enter the nominal resistance R_n and φ_c of the piles (panel I-0a, from the geotechnical report or Pile Designer).");
@@ -2960,9 +3087,73 @@ function computeIAB(R,X){
       if(!user&&(ch.phiClamp||ch.khBeyond)) Q.notes.push("Semi-integral end diaphragm (MassDOT 3.4.6.1): "+(ch.phiClamp?"φ = "+fmt(phi,1)+"° is outside the 20–40° of Figure A11.4-2 (clamped)":"")+(ch.phiClamp&&ch.khBeyond?"; ":"")+(ch.khBeyond?"k_h = "+fmt(khE,3)+" is beyond the end of the chart curve (last value used)":"")+" — enter K_PE (panel I-0a)."); }
     if(!S.longit.computeTU) Q.notes.push("Semi-integral: the bearing shear from the superstructure movement is not computed (panel I-6b, TU off); enter the TU reactions or turn the calculation on.");
   }
+  /* APS: approach-slab friction on the moving wall (integral cap / semi-integral end diaphragm), F = μ(R_DC + R_DW), resisting the movement:
+     toward the span on expansion (added to the backfill force delivered to the superstructure), toward the backfill on contraction.
+     Extreme Event I, integral: the slab's tributary mass × k_h, capped by the friction it can transfer: min(k_h W_ap, F). */
+  if(R.ap&&!R.ap.legacy){ const AP=R.ap; Q.Ffr=AP.F; Q.PexpF=Q.PexpT+AP.F;
+    if(integ&&R.seis&&isFinite(R.seis.kh)){ const kh=R.seis.kh, W=AP.RDC+AP.RDW; Q.apEE={kh, W, Fi:kh*W, Fcap:AP.F, F:Math.min(kh*W,AP.F), capped:AP.F<kh*W}; } }
   Q.notes.forEach(x=>warn(x));
   return Q;
 }
+
+/* ============================================================
+   APS (2026-10-20): APPROACH SLAB (panel I-0b; Tab 1 §1.4a; Tab 5 §5.8, §5.9 / Tab 10 §10.7, §10.8). Runs only with the slab on:
+   with it off no result changes.
+   - The slab is a simple span L (abutment to the far-end support) — the soil beneath may settle away and lose its support, so it is
+     not counted (the usual DOT approach; AASHTO LRFD has no approach-slab article).
+   - Dead load per ft of slab width w_DC = γ_c·t, w_DW = overlay; end reaction w·L/2 per strip. Skew θ: the strips run along the roadway;
+     per ft along the (skewed) abutment the strip reaction is × cos θ. Far end square to the roadway: strips from L to L + W·tan θ.
+   - HL-93 per lane over the span of the longest strip: design truck (32-kip axle over the support) or tandem with IM 33 %, plus the lane
+     load [3.6.1.2, 3.6.1.3.1, 3.6.2.1]; spread over the slab width by the equivalent strip of 4.6.2.3 (Eqs. 4.6.2.3-1, -2, which include
+     multiple presence, C3.6.1.1.2: not applied again). Local per-ft intensity (backwall, shelf): the strip reaction; total on the abutment
+     (stability, stem, piles; spread over L_ab like the girder reactions): the loaded lanes × m of Table 3.6.1.1.2-1.
+   - Friction (integral / semi-integral): the slab slides on its support (MassDOT 3.10.4, RIDOT 11.3.2) or drags on the subbase; either
+     way the normal force at the sliding interface of a simple span is its end reaction: F = μ(R_DC + R_DW).
+   ============================================================ */
+function hl93End(L){   // one lane, simple span L (ft): largest support reaction of the design truck (32-kip axle over the support) and tandem; lane load
+  const tr=L>=28? 32+32*(L-14)/L+8*(L-28)/L : (L>=14? 32+32*(L-14)/L : 32), ta=L>=4? 25+25*(L-4)/L : 25;
+  return {tr, ta, T:Math.max(tr,ta), lane:0.64*L/2}; }
+function hl93Mom(L){   // one lane, simple span L (ft): largest moment of the design truck (8, 32, 32 kip at 14 ft) and the tandem (2 × 25 kip at 4 ft),
+                       // an axle over the section, both directions; the section found on a grid refined twice; lane load 0.64L²/8
+  const cfg=[[[0,8],[14,32],[28,32]],[[0,25],[4,25]]];
+  const at=(ax,x)=>{ let best=0; for(const dir of [1,-1]) for(const [ak] of ax){ let M=0; for(const [aj,P] of ax){ const a=x+dir*(aj-ak); if(a<-1e-12||a>L+1e-12) continue; M+=P*(a<=x? a*(L-x)/L : x*(L-a)/L); } if(M>best) best=M; } return best; };
+  const out=cfg.map(ax=>{ let bx=0,bM=0,lo=0,hi=L; for(let pass=0;pass<3;pass++){ const n=200; for(let i=0;i<=n;i++){ const x=lo+(hi-lo)*i/n, M=at(ax,x); if(M>bM){ bM=M; bx=x; } } const h=(hi-lo)/n; lo=Math.max(0,bx-h); hi=Math.min(L,bx+h); } return {M:bM, x:bx}; });
+  return {tr:out[0].M, xtr:out[0].x, ta:out[1].M, xta:out[1].x, T:Math.max(out[0].M,out[1].M), lane:0.64*L*L/8}; }
+function computeAp(R){
+  const A=S.apSlab; if(!A||!A.on) return null;
+  const g=S.geom, it=iabType(), Lab=+g.Lab, geo=R.geo, LR=apLsRule(), tbw=+g.tbw;
+  const P={it, own:abutOwner(), legacy:!!LR.legacy, lsRem:!!LR.rem, ls:LR, sup:A.sup==="deck"?"deck":"shelf", far:A.far==="soil"?"soil":"sleeper"};
+  P.th=Math.max(0,+g.skew||0); const thR=deg2rad(P.th); P.cs=Math.cos(thR); P.tn=Math.tan(thR);
+  P.rule=A.skew==="ct35"? (P.th>35+1e-9?"square":"follow") : (A.skew==="square"?"square":"follow");
+  P.W=(+A.W>0)? +A.W : Lab*P.cs; P.Wauto=!(+A.W>0); P.L=+A.L; P.t=+A.t; P.ws=Math.max(0,+A.ws||0); P.gc=+S.mat.gc;
+  P.Lmax=P.rule==="square"? P.L+P.W*P.tn : P.L; P.Lmean=P.rule==="square"? P.L+P.W*P.tn/2 : P.L;
+  P.area=P.W*P.Lmean; P.Lw=P.W/P.cs; P.Lload=Math.min(P.Lw,Lab);
+  // shelf (bracket on the back face of the backwall / end diaphragm): trapezoid b_S × (h_S at the face, h_E at the edge)
+  P.bS=+A.bS; P.hS=+A.hS; P.hE=+A.hE; P.av=(+A.aV>0)? +A.aV : P.bS/2;
+  const shelf=P.sup==="shelf"&&!P.legacy;
+  P.wSh=shelf? P.gc*(P.bS/12)*((P.hS+P.hE)/2/12) : 0; P.xSh=shelf? P.bS*(P.hS+2*P.hE)/(3*(P.hS+P.hE)) : 0; P.WSh=P.wSh*P.Lload;
+  // load position: from the backwall centroid (backwall couple, + = behind it, front-face tension) and from the toe (stability, stem)
+  P.eBw=P.sup==="shelf"? tbw/2+P.av/12 : 0; P.eSh=shelf? tbw/2+P.xSh/12 : 0;
+  P.x=it==="semi"? geo.xBrg : (P.sup==="shelf"? geo.xStemBack+P.av/12 : geo.xStemBack-tbw/2); P.xShT=it==="semi"? geo.xBrg : geo.xStemBack+P.xSh/12;
+  P.zSlab=+g.tf+(+g.hstem)+(+g.hbw)-P.t/2;   // slab mid-depth above the footing base (inertia)
+  if(P.Lw>Lab+0.01) warn(`Approach slab: its width along the abutment W/cos θ = ${fmt(P.Lw,2)} ft exceeds L_ab = ${fmt(Lab,2)} ft — the whole slab reaction is applied to the abutment (panel I-0b).`);
+  if(shelf&&it!=="integral"&&P.t+P.hS/12>+g.hbw+1e-9) warn(`Approach slab shelf: slab thickness + shelf depth = ${fmt(P.t+P.hS/12,2)} ft exceeds the backwall height h_bw = ${fmt(+g.hbw,2)} ft — the shelf would be below the seat (panels I-0b, I-1).`);
+  if(P.legacy){ P.qEq=+A.qEq; P.RDC=P.qEq*Lab; P.RDW=0; P.RLLim=0; P.RLL=0; P.qDC=P.qEq; P.qDW=0; P.qLL=0; P.qLLn=0; P.F=0; P.Wi=0; P.eqWall=false; P.eqSup=false; return P; }
+  P.wDC=P.gc*P.t; P.wDW=P.ws;
+  P.RDC=P.wDC*P.area/2; P.RDW=P.wDW*P.area/2;   // totals on the abutment (kip)
+  P.qDC=P.wDC*P.Lmax/2*P.cs; P.qDW=P.wDW*P.Lmax/2*P.cs;   // local, per ft along the abutment (the longest strip)
+  const e=hl93End(P.Lmax); P.hl=e; P.RlIM=1.33*e.T+e.lane; P.Rl=e.T+e.lane;
+  P.NL=Math.max(1,Math.floor((+S.longit.roadwayW||0)/12)); P.L1=Math.min(P.Lmax,60); P.W1s=Math.min(P.W,30); P.W1m=Math.min(P.W,60);
+  P.E1=10+5*Math.sqrt(P.L1*P.W1s); P.EMr=84+1.44*Math.sqrt(P.L1*P.W1m); P.EMc=12*P.W/P.NL; P.EM=Math.min(P.EMr,P.EMc);
+  P.w1=P.RlIM/(P.E1/12); P.wM=P.NL>1? P.RlIM/(P.EM/12) : 0; P.multi=P.wM>P.w1; P.wLL=Math.max(P.w1,P.wM); P.wLLn=P.wLL*P.Rl/P.RlIM;
+  P.qLL=P.wLL*P.cs; P.qLLn=P.wLLn*P.cs;
+  P.lanes=[]; for(let n=1;n<=P.NL;n++) P.lanes.push({n, m:mpfLanes(n), R:n*mpfLanes(n)*P.RlIM});
+  P.gov=P.lanes.reduce((a,b)=>b.R>a.R+1e-12?b:a); P.RLLim=P.gov.R; P.RLL=P.RLLim*P.Rl/P.RlIM;
+  P.mu=Math.max(0,+A.mu||0); P.F=it!=="conv"? P.mu*(P.RDC+P.RDW) : 0;
+  // Extreme Event I: the slab mass tributary to the abutment (its end reaction) × k_h — on the wall at the slab (shelf of a conventional
+  // abutment) or with the superstructure share (semi-integral: on the end diaphragm; deck over the backwall)
+  P.Wi=P.RDC+P.RDW+P.WSh; P.eqWall=it==="conv"&&P.sup==="shelf"; P.eqSup=it==="semi"||(it==="conv"&&P.sup==="deck");
+  return P; }
 
 /* ------------------------------------------------------------
    MAIN COMPUTE
@@ -3074,12 +3265,15 @@ function computeAll(){
   R.EH={P1,z1,P2,z2,P3,z3,PaSum,zEH,EHh,EHv,hwE,d1,ci,si,PaFull,zEHf,hCut,Pcut,zCut};
 
   /* LS — live-load surcharge */
-  const heq=interpHeq(H);
+  // APS: with an approach slab the final-condition LS is removed (MassDOT 3.3.1.3, CTDOT CT11.1.1.3; AASHTO 3.11.6.5 option): h_eq = 0 in the
+  // final state (wall, stem, backwall, heel); the construction stage keeps its own h_eq (below). No slab: unchanged.
+  const lsRem=apLsRule().rem, heq0=interpHeq(H);
+  const heq=lsRem? 0 : heq0;
   const pLS=ka*gam*heq;                       // ksf (horizontal, ka·γ·heq)
   const hLS=H-hCut;                           // IAB2: semi-integral — surcharge pressure below the seat only (hCut = 0 otherwise)
   const LSh=hCut>0? pLS*hLS*ci*Lab : pLS*H*ci*Lab, zLS=hCut>0? hLS/2 : H/2;   // horizontal resultant
   const LSvW=gam*heq*g.Lheel*Lab;             // vertical surcharge weight over heel
-  R.LS={heq,pLS,LSh,zLS,LSvW,xLSv:xHeel,hLS};
+  R.LS={heq,pLS,LSh,zLS,LSvW,xLSv:xHeel,hLS}; if(apOn()) Object.assign(R.LS,{heqTab:heq0,lsRem});
 
   /* Passive at toe (optional, sliding only) */
   let Pp=0,kp=0;
@@ -3167,9 +3361,11 @@ function computeAll(){
   /* ===== C-4b Calculated longitudinal loads (BR / TU / CR·SH) — override agg.Vx when toggled ===== */
   R.longit=computeLongitudinal(agg);
   R.agg=agg;
+  R.ap=computeAp(R);   // APS: approach slab (null when off)
+  const apSup=(R.ap&&R.ap.eqSup)? R.ap.Wi : 0;   // APS: slab mass moving with the superstructure (semi-integral, deck over the backwall)
   // superstructure inertia through the bearings/keepers: A_s·(DC + DW)·share, share = seismic.shEQ (panel I-11, default 100 %);
   // independent of the static longitudinal shares of I-6 (BR/TU/CR·SH/WS keep those)
-  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0))*R.seis.shEQ; }   // ABR2: + the end diaphragm (semi-integral)
+  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup; }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
 
   /* ===== C-5 Load groups (about toe; Mt about abutment CL) =====
      each: V (+down), Mv=V·x, Hx (+driving), Mh=Hx·z, Hy, Mt */
@@ -3206,6 +3402,13 @@ function computeAll(){
     WL:  {cls:"WL", V:agg.WL.P, Mv:agg.WL.P*xBrg, Hx:agg.WL.Vx*shWS, Mh:agg.WL.Vx*shWS*zB,
           Hy:agg.WL.Vy, Mt:agg.WL.MtP+agg.WL.Vy*zB, desc:"Wind on live load (long. share applied)"}
   };
+  /* APS: approach slab reaction (conventional: at the shelf / deck end over the backwall; semi-integral: on the end diaphragm, to the
+     bearings at x_brg). DC includes the shelf; LL = the loaded lanes, without IM on the footing / piles when they are below ground
+     (Vim = with IM, for the stem and seat), as the girder LL. Off in the construction stage (SUPER_GROUPS). */
+  if(R.ap&&iabType()!=="integral"){ const P=R.ap, sm=iabType()==="semi", at=sm?"end diaphragm (to the bearings)":P.sup==="shelf"?"shelf":"deck end over the backwall";
+    groups.APdc={cls:"DC", V:P.RDC+P.WSh, Mv:P.RDC*P.x+P.WSh*P.xShT, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Approach slab"+(P.WSh>0?" + shelf":"")+" — DC at the "+at+(P.legacy?" (equivalent dead load)":"")};
+    if(P.RDW>0) groups.APdw={cls:"DW", V:P.RDW, Mv:P.RDW*P.x, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Approach slab — wearing surface (DW)"};
+    if(P.RLLim>0){ const V=(R.im&&R.im.on)? P.RLL : P.RLLim; groups.APll={cls:"LL", V, Mv:V*P.x, Hx:0,Mh:0,Hy:0,Mt:0, Vim:P.RLLim, desc:"Approach slab — HL-93 "+((R.im&&R.im.on)?"(IM removed: foundation below ground)":"+ IM")+", "+P.gov.n+" lane"+(P.gov.n>1?"s":"")}; } }
   if(R.wingAb){ const A=R.wingAb, nw=A.nw;   // ABR2 (N-5)
     groups.WGv={cls:"DC", V:nw*A.Wt, Mv:nw*A.Wt*A.xW, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Attached wingwalls (pair) — self-weight"};
     if(A.orient==="inline"){
@@ -3251,14 +3454,18 @@ function computeAll(){
     groups.EQiS={cls:"EQ", V:0,Mv:0, Hx:ok?q.WiS:0, Mh:ok?q.WiS*q.zSoil:0, Hy:0,Mt:0, desc:"Soil-block inertia k_h·W_soil"};
     groups.EQs={cls:"EQ", V:0,Mv:0, Hx:ok?q.EQsup:0, Mh:ok?q.EQsup*zB:0, Hy:0,Mt:0, desc:"Superstructure inertia A_s·(DC+DW)·share"};
     if(R.wingAb&&ok&&q.kh>0){ const A=R.wingAb; groups.WGeq={cls:"EQ", V:0,Mv:0, Hx:q.kh*A.nw*A.Wt, Mh:q.kh*A.nw*A.Wt*A.zW, Hy:0,Mt:0, desc:"Attached wingwalls (pair) — inertia k_h·W"}; }   // ABR2 (N-5)
+    // APS: approach slab on the backwall shelf — its tributary mass × k_h at the slab mid-depth (with the wall inertia: × f_I in the 11.6.5.1 cases)
+    const apW=(R.ap&&R.ap.eqWall&&ok&&q.kh>0)? q.kh*R.ap.Wi : 0;
+    if(apW>0){ groups.EQap={cls:"EQ", V:0,Mv:0, Hx:apW, Mh:apW*R.ap.zSlab, Hy:0,Mt:0, desc:"Approach slab inertia k_h·W_ap (at the shelf)"}; q.apI=apW; }
     /* ABR3: transverse direction (along the abutment) [3.10.8, 3.10.9.1]: superstructure inertia A_s·(DC + DW)·s_EQ,t through the keepers / shear
        keys at the seat, plus the wall inertia k_h·W_wall (and the attached wings) at their centroids; no earth-pressure increment and no soil-block
        inertia (no soil is retained in that direction). 100 % of one direction with 30 % of the other [3.10.8] in the Extreme Event I cases. */
     { const st=S.seismic.shEQt, s=(st===undefined||st===null||st==="")? 1 : Math.min(100,Math.max(0,+st))/100, shT=isFinite(s)? s : 1;
-      const tS=ok? (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0))*shT : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;
-      const Hy=tS+tW+tWg, Mt=tS*zB+(tW>0?tW*q.zWall:0)+(tWg>0?tWg*R.wingAb.zW:0);
+      const tS=ok? (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
+      let Hy=tS+tW+tWg, Mt=tS*zB+(tW>0?tW*q.zWall:0)+(tWg>0?tWg*R.wingAb.zW:0);
+      if(apW>0){ Hy+=apW; Mt+=apW*R.ap.zSlab; }   // APS: slab inertia along the abutment (anchored on the shelf)
       if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
-      groups.EQt={cls:"EQ", V:0,Mv:0, Hx:0,Mh:0, Hy, Mt, desc:"Transverse EQ along the abutment: A_s·(DC+DW)·s_EQ,t + k_h·W_wall"}; }
+      groups.EQt={cls:"EQ", V:0,Mv:0, Hx:0,Mh:0, Hy, Mt, desc:"Transverse EQ along the abutment: A_s·(DC+DW)·s_EQ,t + k_h·W_wall"+(apW>0?" + k_h·W_ap":"")}; }
   }
   R.groups=groups;
 
@@ -3289,7 +3496,7 @@ function computeAll(){
             EV:[+F.gpEVmin*etaMin,+F.gpEVmax*eta], EH:[+F.gpEHmin*etaMin,(kEff==="atrest"?+F.gpEHmaxR:+F.gpEHmax)*eta], ES:[0.75*etaMin,1.50*eta]};
   R.GP=GP;
 
-  const SUPER_GROUPS=["DCsup","DW","LL","BR","TU","CRSH","WS","WL"]; // zeroed for the construction stage
+  const SUPER_GROUPS=["DCsup","DW","LL","BR","TU","CRSH","WS","WL","APdc","APdw","APll"]; // zeroed for the construction stage (APS: the approach slab too)
   function comboEffects(lsName, perm, liveOn, exclLSv){
     // perm = {DC,DW,EV,EH,ES: 0|1}  (0=min,1=max); ignored for Service
     const L=LIMITS[lsName];
@@ -3299,10 +3506,10 @@ function computeAll(){
       let gamma;
       if(["DC","DW","EV","ES"].includes(gr.cls)) gamma = L.perm ? GP[gr.cls][perm[gr.cls]??1] : 1.0;
       else if(gr.cls==="EH") gamma = (L.eq && eqEHfixed()!==null) ? eqEHfixed() : (L.perm ? GP.EH[perm.EH] : 1.0);
-      else if(gr.cls==="LL") gamma = liveOn ? ((liveOn===2&&k==="LL")? 0 : L.LL*((k==="LL"||k==="BR")&&L.mLL?L.mLL:1)) : 0;   // liveOn 2: LS and BR on, girder LL reaction off [C11.5.6]; OWNB: m on the LL reaction and BR
+      else if(gr.cls==="LL") gamma = liveOn ? (((liveOn===2&&(k==="LL"||k==="APll"))||(liveOn===3&&k==="APll"))? 0 : L.LL*((k==="LL"||k==="BR"||k==="APll")&&L.mLL?L.mLL:1)) : 0;   // liveOn 2: LS and BR on, girder LL reaction off [C11.5.6]; OWNB: m on the LL reaction and BR; APS: the slab LL goes with the LL reaction (off in liveOn 2), liveOn 3 = slab LL off
       else if(gr.cls==="CL") gamma = liveOn ? (L.CL||0) : 0;   // OWNB: construction surcharge (construction stage)
       else if(gr.cls==="EQ"){ gamma = L.EQ||0;   // ABR3: 11.6.5.1 cases (f_P on ΔP_AE, f_I on the wall / soil / wing inertia) and 100/30 [3.10.8]
-        if(perm.nc){ if(k==="EQd") gamma*=perm.fP; else if(k==="EQiW"||k==="EQiS"||k==="WGeq") gamma*=perm.fI; }
+        if(perm.nc){ if(k==="EQd") gamma*=perm.fP; else if(k==="EQiW"||k==="EQiS"||k==="WGeq"||k==="EQap") gamma*=perm.fI; }   // APS: EQap
         if(perm.dir) gamma*=((k==="EQt")===(perm.dir==="T"))? 1 : 0.3; }
       else gamma = L[gr.cls]; // TU, CR, WS, WL
       if(gr.cls==="DC" && L.perm && L.dcMax && (perm.DC??1)===1) gamma = L.dcMax;   // Strength IV γDC max
@@ -3326,8 +3533,9 @@ function computeAll(){
         +(L.EQ?` + ${(+L.EQ).toFixed(2)}·EQ`:"")
         +(perm.nc?` (11.6.5.1 case ${perm.nc}: ${perm.nc==="A"?"P_AE + 0.5·P_IR":"max(0.5·P_AE, P_A) + P_IR"})`:"")+(perm.dir?(perm.dir==="T"?" (0.3·EQ long. + 1.0·EQ trans.)":" (1.0·EQ long. + 0.3·EQ trans.)"):"")
         +(L.CL&&liveOn&&groups.CShC?` + ${L.CL.toFixed(2)}·CS`:"")
+        +(groups.APll&&!L.noSuper&&liveOn===1?", incl. approach-slab LL":"")+(liveOn===3?", approach-slab LL off":"")   // APS
         +(L.noSuper?" (no superstructure)":"")
-      : `1.00·(all)`+(liveOn?" incl. LL":" excl. LL")+(liveOn&&L.mLL&&L.mLL!==1?`, ${L.mLL.toFixed(2)}·(LL,BR)`:"");
+      : `1.00·(all)`+(liveOn?" incl. LL":" excl. LL")+(liveOn&&L.mLL&&L.mLL!==1?`, ${L.mLL.toFixed(2)}·(LL,BR)`:"")+(liveOn===3?", approach-slab LL off":"");   // APS
     return {V,Mv,Hx,Mh,Hy,Mt,lbl,gset,lsName,liveOn,perm};
   }
   // stab = true (sliding, eccentricity, pile minimum reaction, foundation hand-off): also LS + BR with the girder LL reaction off
@@ -3335,6 +3543,7 @@ function computeAll(){
   function* permutations(lsName,stab){
     const L=LIMITS[lsName];
     const lives=L.liveOpt?((stab&&(L.perm||L.eq)&&!L.noSuper)?[1,2,0]:[1,0]):[0];   // EEP: Extreme Event I keeps the "LS, BR only" live option
+    if(groups.APll&&!L.noSuper&&lives[0]===1) lives.splice(1,0,3);   // APS: also the girder LL reaction on with the approach-slab LL off
     const esB=(+S.soil.esQ||0)>0?[0,1]:[1];
     if(!L.perm){ const xs=L.eq? eqSubCases() : [{}];   // ABR3: Extreme Event I — the 11.6.5.1 cases × the two directions of 3.10.8
       for(const lv of lives) for(const x of xs) yield {perm:Object.assign({DC:0,DW:0,EV:0,EH:0,ES:1},x), liveOn:lv}; return; }
@@ -3363,7 +3572,7 @@ function computeAll(){
   const STR_LIMITS=["Strength I","Strength III","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
   // EE-I eccentricity limit [11.6.5.1]: B·(1/3 + (0.4 − 1/3)·γEQ), soil and rock; γEQ = 0 for a permutation without live load [10.6.4.2]
   function eFracEQfor(liveOn){ const s=S.seismic; if(s.eLimEQmode==="user") return +s.eFracEQ;
-    const gq=liveOn===1? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }
+    const gq=(liveOn===1||liveOn===3)? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }   // APS: liveOn 3 (slab LL off) carries the girder LL
   function resFor(lsName,liveOn){ const eq=LIMITS[lsName]&&LIMITS[lsName].eq;
     return { phiTau: eq? +S.seismic.phiTauEQ : fn.phiTau,
              phiB:   eq? +S.seismic.phiBEQ   : fn.phiB,
@@ -3879,7 +4088,7 @@ function computeAll(){
 
   /* ---- Backwall ---- */
   const hbwRet=Math.max(0,Math.min(g.hbw,g.soilH-g.hstem));
-  const heqBW=interpHeq(hbwRet||g.hbw);
+  const heqBW=lsRem? 0 : interpHeq(hbwRet||g.hbw);   // APS: final-state LS removed with the approach slab
   const Mbw_EH=kah*gam*Math.pow(hbwRet,3)/6, Vbw_EH=kah*gam*hbwRet*hbwRet/2;
   const Mbw_LS=kah*gam*heqBW*hbwRet*hbwRet/2, Vbw_LS=kah*gam*heqBW*hbwRet;
   const esQ=+S.soil.esQ||0;
@@ -3891,20 +4100,35 @@ function computeAll(){
   // from the load to the backwall base [T.4.6.2.1.3-1]; the second wheel of the axle 6 ft away [3.6.1.2.2]: when the strips overlap
   // (E > 72 in) both wheels are spread over E + 72 in. w_LL = m·(1 + IM)·max(P_w/E, 2P_w/(E + 72))·12 (kip/ft), m = 1.20 (one lane,
   // T.3.6.1.1.2-1), IM = 0.33 [T.3.6.2.1-1]. M_LL = w_LL·t_bw/2 (back-face tension, as EH and LS). No horizontal shear.
-  const bwMode=(S.bwLL&&S.bwLL.mode==="off")?"off":"wheel";
+  // APS: with an approach slab on a conventional abutment the slab reaction replaces the wheel load on top of the backwall (below)
+  const apB=(R.ap&&iabType()==="conv")? R.ap : null;
+  const bwMode=apB? "slab" : (S.bwLL&&S.bwLL.mode==="off")?"off":"wheel";
   const bwW={mode:bwMode, Pw:16, IM:0.33, m:1.20, X:g.hbw, E:45+10*g.hbw, sAx:72, e:g.tbw/2};
   bwW.w1=bwW.Pw/bwW.E; bwW.w2=2*bwW.Pw/(bwW.E+bwW.sAx); bwW.two=bwW.w2>bwW.w1;
-  bwW.wLL=bwMode==="off"?0 : bwW.m*(1+bwW.IM)*Math.max(bwW.w1,bwW.w2)*12;   // kip/ft
+  bwW.wLL=bwMode!=="wheel"?0 : bwW.m*(1+bwW.IM)*Math.max(bwW.w1,bwW.w2)*12;   // kip/ft
   bwW.M=bwW.wLL*bwW.e;                                                       // kip-ft/ft, unfactored
   const mBW=LIMITS["Strength I"].mLL||1, mBWs=LIMITS["Service I"].mLL||1;    // OWNB: RIDOT design load multiplier m on LL+IM
   bwW.mU=mBW; bwW.mS=mBWs;
-  const MuBW=gEH_max*Mbw_EH+gLSbw*Mbw_LS+GP.ES[1]*Mbw_ES+gLSbw*mBW*bwW.M, VuBW=gEH_max*Vbw_EH+gLSbw*Vbw_LS+GP.ES[1]*Vbw_ES;
-  const MsBW=Mbw_EH+Mbw_LS+Mbw_ES+mBWs*bwW.M;
+  let MuBW=gEH_max*Mbw_EH+gLSbw*Mbw_LS+GP.ES[1]*Mbw_ES+gLSbw*mBW*bwW.M, VuBW=gEH_max*Vbw_EH+gLSbw*Vbw_LS+GP.ES[1]*Vbw_ES;
+  let MsBW=Mbw_EH+Mbw_LS+Mbw_ES+mBWs*bwW.M;
+  /* APS: approach slab on the backwall shelf (or the deck end over the backwall: e = 0) — the vertical reaction per ft (local, the longest strip)
+     at e_bw = t_bw/2 + a_v behind the backwall centroid, plus the shelf weight at its centroid: a couple M = q·e down the backwall that puts the
+     FRONT face in tension (opposite to EH). Back face (Strength I): DC, DW at γ min, slab LL off (it relieves). Front face: DC, DW at γ max,
+     slab LL + IM on, EH, ES at γ min, LS off; checked when it governs (> 0), with the panel I-9 bars assumed on the front face too. */
+  let apBw=null;
+  if(apB){ const MDC=apB.qDC*apB.eBw+apB.wSh*apB.eSh, MDW=apB.qDW*apB.eBw, MLL=apB.qLL*apB.eBw;
+    const MuB0=MuBW, MsB0=MsBW;
+    MuBW=Math.max(0,MuB0-(GP.DC[0]*MDC+GP.DW[0]*MDW)); MsBW=Math.max(0,MsB0-(MDC+MDW));
+    const MuF=GP.DC[1]*MDC+GP.DW[1]*MDW+gLSbw*mBW*MLL-GP.EH[0]*Mbw_EH-GP.ES[0]*Mbw_ES, MsF=MDC+MDW+mBWs*MLL-Mbw_EH-Mbw_ES;
+    apBw={MDC,MDW,MLL,MuB0,MsB0,MuF,MsF,front:MuF>1e-9,gDCmin:GP.DC[0],gDWmin:GP.DW[0],gDCmax:GP.DC[1],gDWmax:GP.DW[1],gEHmin:GP.EH[0],gESmin:GP.ES[0],gLL:gLSbw*mBW,mS:mBWs}; }
   R.bwDem={hbwRet,heqBW,Mbw_EH,Vbw_EH,Mbw_LS,Vbw_LS,Mbw_ES,Vbw_ES,MuBW,VuBW,MsBW,wheel:bwW,
-    lbl:`${gEH_max.toFixed(2)}·EH + ${gLSbw.toFixed(2)}·LS${bwMode==="off"?"":` + ${(gLSbw*mBW).toFixed(2)}·LL (wheel on the backwall)`} (Strength I)`, gLS:gLSbw};
+    lbl:`${gEH_max.toFixed(2)}·EH + ${gLSbw.toFixed(2)}·LS${bwMode!=="wheel"?"":` + ${(gLSbw*mBW).toFixed(2)}·LL (wheel on the backwall)`}${apBw?` − (${GP.DC[0].toFixed(2)}·DC + ${GP.DW[0].toFixed(2)}·DW) approach slab, slab LL off`:""} (Strength I)`, gLS:gLSbw, ...(apBw?{ap:apBw}:{})};
   R.checks.bwFlex=sectionCheck({name:"Backwall", h:g.tbw*12, cover:m.coverT, bar:S.reinf.bw.size,
     sp:+S.reinf.bw.sp, Mu:MuBW, Vu:VuBW, Ms:MsBW, lbl:R.bwDem.lbl, coated:!!S.reinf.coatBW,
     bST:Math.min(Lab,g.hbw)*12, hST:g.tbw*12, betaMode:g.tbw*12<16?"simple":"general"});
+  if(apBw&&apBw.front) R.checks.bwFront=sectionCheck({name:"Backwall front face", h:g.tbw*12, cover:m.coverT, bar:S.reinf.bw.size,   // APS
+    sp:+S.reinf.bw.sp, Mu:apBw.MuF, Vu:0, Ms:Math.max(0,apBw.MsF), lbl:`${GP.DC[1].toFixed(2)}·DC + ${GP.DW[1].toFixed(2)}·DW + ${(gLSbw*mBW).toFixed(2)}·LL approach slab − ${GP.EH[0].toFixed(2)}·EH (Strength I, front face)`, coated:!!S.reinf.coatBW,
+    bST:Math.min(Lab,g.hbw)*12, hST:g.tbw*12, betaMode:"simple", quiet:true});
   /* ABR1 (2026-10-20): backwall at the extreme event, φ = 1.0 [1.3.2.1] against the nominal M_n, V_n of the backwall section (panel I-9 bars).
      (a) Extreme Event I [11.6.5.1, Table 3.4.1-1], when the M–O increment applies (Extreme Event I on, not a single-span bridge, C3.10.9.1):
          back face, 1.00·EH + ΔP_AE over the backwall's retained height (ΔK_h of the wall, at the ΔP_AE height ratio) + backwall inertia
@@ -3922,22 +4146,71 @@ function computeAll(){
       // ABR3: increment at h/3 ("static" mode, 11.6.5.3) or the entered ratio; the 11.6.5.1 cases (f_P, f_I), the larger D/C governs
       const dP0=0.5*q.dKh*gam*hbwRet*hbwRet, zP=eqZr()*hbwRet, Wi0=q.kh*g.tbw*g.hbw*m.gc, zI=g.hbw/2;
       for(const k of eqNC(q.fBk)){ const dP=k.fP*dP0, Wi=k.fI*Wi0;
-        const Mu=gEH*Mbw_EH+dP*zP+Wi*zI+gq*(Mbw_LS+bwW.M)+Mbw_ES, Vu=gEH*Vbw_EH+dP+Wi+gq*Vbw_LS+Vbw_ES;
-        const c=bwSec({Mu,Vu}), Mn=c.phiMn/c.phiF, Vn=c.Vc, r={gEH,gq,dKh:q.dKh,kh:q.kh,dP,zP,Wi,zI,Mu,Vu,Mn,Vn,dcM:Mu/Mn,dcV:Vu/Vn,c, nc:k.c, fP:k.fP, fI:k.fI, dP0, Wi0};
+        let Mu=gEH*Mbw_EH+dP*zP+Wi*zI+gq*(Mbw_LS+bwW.M)+Mbw_ES, Vu=gEH*Vbw_EH+dP+Wi+gq*Vbw_LS+Vbw_ES, apE=null;
+        if(apBw){ const Wa=apB.eqWall? k.fI*q.kh*(apB.qDC+apB.qDW+apB.wSh) : 0, zA=g.hbw-apB.t/2;   // APS: slab inertia on the shelf (× f_I), slab DL couple at 1.00 (relieving), slab LL off
+          Mu=Math.max(0,Mu+Wa*zA-(apBw.MDC+apBw.MDW)); Vu+=Wa; apE={Wa,zA}; }
+        const c=bwSec({Mu,Vu}), Mn=c.phiMn/c.phiF, Vn=c.Vc, r={gEH,gq,dKh:q.dKh,kh:q.kh,dP,zP,Wi,zI,Mu,Vu,Mn,Vn,dcM:Mu/Mn,dcV:Vu/Vn,c, nc:k.c, fP:k.fP, fI:k.fI, dP0, Wi0, ...(apE?{apE}:{})};
         if(!out.ee||Math.max(r.dcM,r.dcV)>Math.max(out.ee.dcM,out.ee.dcV)+1e-12) out.ee=r; }
     }
     if(abutOwner()==="MassDOT"&&S.seismic.bwStop){
       const sc=R.seismic, z1=sc.zone===1, cBW=z1? (sc.single? Math.max(sc.cZ1,sc.As) : sc.cZ1) : sc.As;
       const Ltot=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL, Wauto=2*(agg.DC.P+agg.DW.P)*Ltot/Math.max(1e-9,+g.spanL);
-      const user=+S.seismic.bwW>0, Wsup=user? +S.seismic.bwW : Wauto, F=cBW*Wsup, w=F/Lab, arm=g.hbw/2, Mu=w*arm, Vu=w;
+      const user=+S.seismic.bwW>0, Wsup=user? +S.seismic.bwW : Wauto, F=cBW*Wsup, w=F/Lab, arm=g.hbw/2, Mu=w*arm+(apBw? apBw.MDC+apBw.MDW : 0), Vu=w;   // APS: + the slab DL couple (front face, 1.00)
       const c=bwSec({Mu,Vu}), Mn=c.phiMn/c.phiF, Vn=c.Vc;
-      out.stop={zone:sc.zone, single:sc.single, As:sc.As, cZ1:sc.cZ1, cBW, Ltot, Wauto, user, Wsup, F, w, arm, Mu, Vu, Mn, Vn, dcM:Mu/Mn, dcV:Vu/Vn, c};
+      out.stop={zone:sc.zone, single:sc.single, As:sc.As, cZ1:sc.cZ1, cBW, Ltot, Wauto, user, Wsup, F, w, arm, Mu, Vu, Mn, Vn, dcM:Mu/Mn, dcV:Vu/Vn, c, ...(apBw?{apM:apBw.MDC+apBw.MDW}:{})};
       if(!z1) warn("Backwall as the seismic stop (MassDOT 3.4.8.1): seismic Zone "+sc.zone+" — the superstructure force is taken as A_s × W_sup; use the seismic analysis force where one is made (enter W_sup to match it, panel I-11).");
     }
     if(out.ee||out.stop) R.bwEE=out; }
 
+  /* ---- APS: shelf (paving notch) on the back face of the backwall / end diaphragm, designed as a bracket, per ft along the wall ----
+     a_v ≤ d: bracket [5.8.4.2.1, 5.8.4.2.2] — M_u = V_u a_v + N_uc(h − d) (Eq. 5.8.4.2.1-1), N_uc ≥ 0.2V_u (a live load; integral / semi-integral:
+     also the sliding friction γ_LL·μ·q_DL), shear friction A_vf = V_u/(φμf_y), μ = 1.4 (monolithic), c = 0 (brackets, 5.7.4.4), f_y ≤ 60 ksi
+     (5.7.4.3), V_n ≤ min(0.2f'c b d_e, 0.8 b d_e) (Eqs. 5.8.4.2.2-1, -2), A_s ≥ max(A_f + A_n, 2A_vf/3 + A_n, 0.04(f'c/f_y)bd) (Eq. 5.8.4.2.2-5,
+     5.8.4.2.1), A_n = N_uc/(φf_y) (Eq. 5.8.4.2.2-7), A_h ≥ max(0.5A_s, 0.5(A_s − A_n)) (5.8.4.2.1, Eq. 5.8.4.2.2-6) with A_s provided; h at
+     the outer edge ≥ h/2 (5.8.4.2.1); bearing of the slab on the shelf [5.6.5], φ_b = 0.70, m = 1. a_v > d: a cantilever (5.6.3, 5.7.3).
+     V_u = Strength I: η(γ_DC,max q_DC + γ_DW,max q_DW + γ_LL m q_LL+IM) of the longest strip, + γ_DC,max × the shelf weight. φ = 0.90 (5.5.4.2). */
+  R.apShelf=null;
+  if(R.ap&&!R.ap.legacy&&R.ap.sup==="shelf"){ const P=R.ap, A=S.apSlab, L1=LIMITS["Strength I"], fc=+m.fc, fy=+m.fy, bar=BARS[A.sBar]||BARS["5"], tie=BARS[A.hBar]||BARS["4"];
+    const b=12, h=P.hS, av=P.av, d=h-(+m.coverT)-bar.db/2, it=iabType();
+    const VuS=GP.DC[1]*P.qDC+GP.DW[1]*P.qDW+L1.LL*L1.mLL*P.qLL, VuW=GP.DC[1]*P.wSh, Vu=VuS+VuW;
+    const slide=it!=="conv", Nmin=0.2*Vu, Nfr=slide? L1.LL*P.mu*(P.qDC+P.qDW) : 0, Nuc=Math.max(Nmin,Nfr);
+    const Mu=VuS*av+VuW*P.xSh+Nuc*(h-d);   // kip-in/ft
+    const o={b,h,hE:P.hE,bS:P.bS,av,d,cov:+m.coverT,bar:String(A.sBar),sp:+A.sSp,tieBar:String(A.hBar),tieSp:+A.hSp,nT:Math.max(0,Math.round(+A.hN||0)),VuS,VuW,Vu,Nmin,Nfr,Nuc,slide,Mu,corbel:av<=d,fc,fy,gLL:L1.LL*L1.mLL,gDC:GP.DC[1],gDW:GP.DW[1],gLLn:L1.LL};
+    o.As=bar.Ab*12/o.sp; o.Ah=o.nT*tie.Ab*12/o.tieSp;
+    o.dcEdge=(h/2)/Math.max(1e-9,P.hE);
+    o.A1=P.bS*b; o.qb=VuS/o.A1; o.qR=0.70*0.85*fc; o.dcB=o.qb/o.qR;
+    o.An=Nuc/(0.9*fy);
+    if(o.corbel){ o.fyv=Math.min(fy,60); o.mu=1.4; o.Avf=Vu/(0.9*o.mu*o.fyv);
+      o.Vn1=0.2*fc*b*d; o.Vn2=0.8*b*d; o.Vnmax=Math.min(o.Vn1,o.Vn2); o.dcV=Vu/(0.9*o.Vnmax);
+      const disc=d*d-2*Mu/(0.9*0.85*fc*b); o.Af=disc>0? 0.85*fc*b/fy*(d-Math.sqrt(disc)) : NaN;
+      o.AsMin=0.04*fc/fy*b*d; o.Asr1=o.Af+o.An; o.Asr2=2*o.Avf/3+o.An; o.AsReq=Math.max(o.Asr1,o.Asr2,o.AsMin); o.dcAs=isFinite(o.AsReq)? o.AsReq/o.As : 99;
+      o.Ah1=0.5*o.As; o.Ah2=0.5*(o.As-o.An); o.AhReq=Math.max(o.Ah1,o.Ah2); o.dcAh=o.Ah>0? o.AhReq/o.Ah : 99; }
+    else{ const LS1=LIMITS["Service I"], Ms=((P.qDC+P.qDW+(LS1.mLL||1)*P.qLL)*av+P.wSh*P.xSh)/12;
+      o.sec=sectionCheck({name:"Backwall shelf", h, cover:+m.coverT, bar:o.bar, sp:o.sp, Mu:Mu/12, Vu, Ms, bST:12*Math.max(1,P.Lload), hST:h, betaMode:h<16?"simple":"general", quiet:true, lbl:"Strength I — cantilever (a_v > d), 5.8.4.2.1"});
+      o.AsReq=(isFinite(o.sec.AsReq)? o.sec.AsReq : NaN)+o.An; o.dcAs=isFinite(o.AsReq)? o.AsReq/o.As : 99; o.dcV=o.sec.dcShear; }
+    R.apShelf=o; }
+
+  /* ---- APS: approach slab design — one-way simple span L_s (the longest strip), per ft of width: DC, DW (w L²/8, w L/2) and HL-93 per lane
+     (the largest truck / tandem moment with IM 33 % + lane load; end reaction for the shear) over the equivalent strip of 4.6.2.3 (Eqs.
+     4.6.2.3-1, -2; multiple presence included), skew reduction r = 1.05 − 0.25 tan θ ≤ 1.00 on the live-load moment of a slab whose ends follow
+     the skew (Eq. 4.6.2.3-3). Strength I (η, γ max, m) and Service I; flexure 5.6.3, minimum steel 5.6.3.3, shear 5.7.3 (5.12.2.1: a slab designed
+     for moment per 4.6.2.3 may be taken as satisfactory for shear — shown, not a dashboard check), crack control 5.6.7, S&T 5.10.6, bottom
+     distribution steel 100/√L_s ≤ 50 % of the main bottom steel (9.7.3.2, 5.12.2.1). */
+  R.apDes=null;
+  if(R.ap&&!R.ap.legacy&&S.apSlab.des){ const P=R.ap, A=S.apSlab, L1=LIMITS["Strength I"], LS1=LIMITS["Service I"], Ls=P.Lmax, h=P.t*12;
+    const mo=hl93Mom(Ls), MlIM=1.33*mo.T+mo.lane;
+    const m1=MlIM/(P.E1/12), mM=P.NL>1? MlIM/(P.EM/12) : 0, MLL0=Math.max(m1,mM);
+    const r=(P.rule==="follow"&&P.th>0)? Math.min(1,1.05-0.25*P.tn) : 1, MLL=MLL0*r;
+    const MDC=P.wDC*Ls*Ls/8, MDW=P.wDW*Ls*Ls/8, VDC=P.wDC*Ls/2, VDW=P.wDW*Ls/2, VLL=P.wLL;
+    const gL=L1.LL*L1.mLL, mS=LS1.mLL||1;
+    const Mu=GP.DC[1]*MDC+GP.DW[1]*MDW+gL*MLL, Vu=GP.DC[1]*VDC+GP.DW[1]*VDW+gL*VLL, Ms=MDC+MDW+mS*MLL;
+    const sec=sectionCheck({name:"Approach slab", h, cover:+A.cov, bar:String(A.aBar), sp:+A.aSp, Mu, Vu, Ms, bST:P.W*12, hST:h, betaMode:h<16?"simple":"general", quiet:true,
+      lbl:`${GP.DC[1].toFixed(2)}·DC + ${GP.DW[1].toFixed(2)}·DW + ${gL.toFixed(2)}·LL+IM (Strength I), simple span ${fmt(Ls,2)} ft`});
+    const pct=Math.min(50,100/Math.sqrt(Ls)), AsD=BARS[A.dBar].Ab*12/(+A.dSp), AsT=BARS[A.tBar].Ab*12/(+A.tSp), AsDreq=Math.max(pct/100*sec.As,sec.AsST);
+    R.apDes={Ls,h,mo,MlIM,m1,mM,MLL0,r,MLL,MDC,MDW,VDC,VDW,VLL,gL,mS,Mu,Vu,Ms,sec,pct,AsD,AsDreq,dcD:AsDreq/AsD,AsT,dcT:sec.AsST/AsT}; }
+
   /* ---- Stem (at base, top of footing) ---- */
-  const Hs=g.soilH, heqS=interpHeq(Hs);
+  const Hs=g.soilH, heqS=lsRem? 0 : interpHeq(Hs);   // APS: final-state LS removed with the approach slab
   // IAB2: semi-integral — the stem retains the soil below the seat (depth c_s below the backfill surface at the stem face); the soil above it
   // stays as overburden: M = k·γ[H³/6 − (H c²/2 − c³/3)], V = k·γ(H² − c²)/2; LS and ES over H − c. c_s = 0 otherwise (unchanged formulas).
   const cS=iabType()==="semi"? Math.max(0,g.soilH-g.hstem) : 0;
@@ -3961,14 +4234,19 @@ function computeAll(){
   // vertical-reaction eccentricity moment per ft at the stem base for limit state L: γDC and γDW max/min [T.3.4.1-2]
   // and the LL reaction on/off are permuted and the largest (back-face tension) M_ecc is kept. When e_brg < 0 (bearing
   // behind the stem centroid) the minimum factors / no LL reaction govern. LS and BR stay on (conservative).
+  // APS: the approach slab's reaction (DC with the shelf, DW, LL with IM) at its own x: Σ γ·(V·x_sc − M_v) of its groups; the slab LL on / off
+  // independently of the girder LL reaction (it relieves the back face when it acts behind the stem centroid)
+  const apSG=groups.APdc||groups.APdw||groups.APll;
   function stemEcc(L,ns){
-    const dcs=L.perm?[L.dcMax||GP.DC[1],GP.DC[0]]:[1], dws=L.perm?[GP.DW[1],GP.DW[0]]:[1], lls=L.LL?[true,false]:[false];
+    const dcs=L.perm?[L.dcMax||GP.DC[1],GP.DC[0]]:[1], dws=L.perm?[GP.DW[1],GP.DW[0]]:[1], lls=L.LL?[true,false]:[false], aps=(groups.APll&&L.LL)?[true,false]:[false];
     let r=null;
-    for(const gDC of dcs) for(const gDW of dws) for(const llOn of lls){
+    for(const gDC of dcs) for(const gDW of dws) for(const llOn of lls) for(const apL of aps){
       const Pv = ns*( gDC*groups.DCsup.V + gDW*groups.DW.V + (llOn?L.LL*(L.mLL||1)*groups.LL.Vim:0)   // ABR3: the stem keeps IM
                + L.WS*groups.WS.V + L.WL*groups.WL.V );
-      const Mecc = ( Pv*(xSc-R.geo.xBrg) + gDC*MselfEccTot )/Lab;
-      if(!r||Mecc>r.Mecc+1e-12) r={Mecc,Pv,gDC,gDW,llOn}; }
+      const Map = apSG? ns*( (groups.APdc? gDC*(groups.APdc.V*xSc-groups.APdc.Mv) : 0) + (groups.APdw? gDW*(groups.APdw.V*xSc-groups.APdw.Mv) : 0)
+               + (apL? L.LL*(L.mLL||1)*groups.APll.Vim*(xSc-R.ap.x) : 0) ) : 0;
+      const Mecc = ( Pv*(xSc-R.geo.xBrg) + gDC*MselfEccTot + Map )/Lab;
+      if(!r||Mecc>r.Mecc+1e-12) r={Mecc,Pv,gDC,gDW,llOn,...(apSG?{Map,apL}:{})}; }
     return r; }
   R.stemEcc=stemEcc;
   let stemGov=null; const stemRecs=[];   // ABR1: every limit state's stem-base demand (the shear check takes each one's own V_u, below)
@@ -3978,7 +4256,7 @@ function computeAll(){
     const gES_ls=L.perm? GP.ES[1] : 1.0;                                              // EEP: Extreme Event I ES 1.00
     // construction stage: reduced backfill height for the wall pressures
     const Hs_ls=L.noSuper? Math.min(R.constrC.hfC,Hs) : Hs;
-    const heq_ls=interpHeq(Hs_ls||Hs);
+    const heq_ls=(lsRem&&!L.noSuper)? 0 : interpHeq(Hs_ls||Hs);   // APS: the construction stage keeps LS
     const cL=L.noSuper? 0 : cS;   // IAB2: construction stage (no superstructure, no diaphragm) unchanged
     const hwL=L.noSuper? 0 : hwSoil;   // ABR4: construction stage dry (as its stability groups)
     const MEH_ls=stEH(Hs_ls,cL,hwL).M, VEH_ls=stEH(Hs_ls,cL,hwL).V;
@@ -4010,20 +4288,21 @@ function computeAll(){
       const zWi=wallApf>0? (aCore*g.hstem/2+aBat*g.hstem/3+aBw*(g.hstem+g.hbw/2))/wallApf : g.hstem/2;
       const sup=ns*(R.seis.EQsup/Lab);                    // superstructure inertia at the seat
       const cs=S.seismic.nonConc===false? [{c:"",i:iA,fI:1}] : [{c:"A",i:iA,fI:0.5},{c:"B",i:iB,fI:1}];
-      const all=cs.map(k=>({c:k.c, fI:k.fI, dP:k.i.V, MdP:k.i.M, zP:k.i.V>1e-12? k.i.M/k.i.V : 0, Wi:k.fI*Wi0, Meq:k.i.M+k.fI*Wi0*zWi+sup*g.hstem, Veq:k.i.V+k.fI*Wi0+sup}));
+      const apIpf=(R.seis.apI||0)/Lab, zApS=R.ap? R.ap.zSlab-g.tf : 0;   // APS: approach slab inertia on the shelf (per ft, × f_I), arm above the stem base
+      const all=cs.map(k=>({c:k.c, fI:k.fI, dP:k.i.V, MdP:k.i.M, zP:k.i.V>1e-12? k.i.M/k.i.V : 0, Wi:k.fI*Wi0, Meq:k.i.M+k.fI*Wi0*zWi+sup*g.hstem+(apIpf>0?k.fI*apIpf*zApS:0), Veq:k.i.V+k.fI*Wi0+sup+(apIpf>0?k.fI*apIpf:0), ...(apIpf>0?{apI:k.fI*apIpf}:{})}));
       const best=all.reduce((b,x)=>(!b||x.Meq>b.Meq+1e-12)?x:b,null);
       Meq=best.Meq; Veq=best.Veq;
       eqT={dP:best.dP, zP:best.zP, MdP:best.MdP, nc:best.c, fI:best.fI, Wi0, iA, iB, mode:S.seismic.hEQmode==="ratio"?"ratio":"static", cS, mdS, kA, alt:all.filter(x=>x!==best),
-        dKh:R.seis.dKh, wallApf, Wi:best.Wi, sup, aCore, aBat, aBw, zWi,
+        dKh:R.seis.dKh, wallApf, Wi:best.Wi, sup, aCore, aBat, aBw, zWi, ...(apIpf>0?{apI:best.apI, apIpf, zApS}:{}),   // APS
         WiC:R.seis.kh*aCore*m.gc, WiB:R.seis.kh*aBat*m.gc, WiW:R.seis.kh*aBw*m.gc};   // ABSW: terms for the worked M_u, V_u (display only)
     }
     let Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
     let Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+gES_ls*VES_ls+HgirdPerFt + Veq;
     if(qCl>0){ Mu+=MCS_ls; Vu+=VCS_ls; }
     const eccMin=(gDCe!==gDCmx||gDWe!==(L.perm?GP.DW[1]:1.0)||llE!==!!L.LL);   // a minimum-factor / no-LL permutation governs M_ecc
-    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,
+    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
       Veq,eqT,cL,hwL,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
-      lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR`:` + ${L.LL.toFixed(2)}·(LS,BR)`):""}${qCl>0?` + ${L.CL.toFixed(2)}·CS`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ"+(eqT&&eqT.nc?` (11.6.5.1 case ${eqT.nc})`:""):""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+` (${lsName})`};
+      lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR`:` + ${L.LL.toFixed(2)}·(LS,BR)`):""}${qCl>0?` + ${L.CL.toFixed(2)}·CS`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ"+(eqT&&eqT.nc?` (11.6.5.1 case ${eqT.nc})`:""):""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+(se.Map!==undefined&&L.LL&&!se.apL?" [approach-slab LL off]":"")+` (${lsName})`};
     stemRecs.push(rec);
     // ABR3: the other 11.6.5.1 case of Extreme Event I, for the shear check (its M_u is the smaller one)
     if(eqT&&eqT.alt) eqT.alt.forEach(x=>stemRecs.push(Object.assign({},rec,{Mu:Mu-Meq+x.Meq, Vu:Vu-Veq+x.Veq, Meq:x.Meq, Veq:x.Veq,
@@ -4310,10 +4589,11 @@ function computeAll(){
     for(const r of (R.stemRecs||[R.stemDem])){
       const gDCc=(LIMITS[r.ls]&&!LIMITS[r.ls].perm)? 1.0 : GP.DC[0];   // EEP: 1.00 at Extreme Event I [T.3.4.1-1]
       const ns=(LIMITS[r.ls]&&LIMITS[r.ls].noSuper)? 0 : 1;              // construction stage: no superstructure reaction
-      const Pc=gDCc*(wallWtAbove+ns*agg.DC.P)/Lab;           // kips/ft, min DC factor (beneficial clamping)
+      const apDC=groups.APdc? groups.APdc.V : 0;   // APS: the approach slab DC (and shelf) also clamps the joint
+      const Pc=gDCc*(apDC? wallWtAbove+ns*agg.DC.P+ns*apDC : wallWtAbove+ns*agg.DC.P)/Lab;           // kips/ft, min DC factor (beneficial clamping)
       const Vni_raw=pr.c*Acv+pr.mu*(Avf*m.fy+Pc);           // kips/ft
       const Vni=Math.min(Vni_raw,Vni_cap), phiVni=0.9*Vni, Vui=r.Vu;
-      if(!sf||Vui/phiVni>sf.dc+1e-12) sf={dc:Vui/phiVni, Vui, Vni, Vni_raw, Vni_cap, phiVni, Acv, Avf, Pc, gDCc, ns, AvfMin, WwA:wallWtAbove, DCs:agg.DC.P,
+      if(!sf||Vui/phiVni>sf.dc+1e-12) sf={dc:Vui/phiVni, Vui, Vni, Vni_raw, Vni_cap, phiVni, Acv, Avf, Pc, gDCc, ns, AvfMin, WwA:wallWtAbove, DCs:agg.DC.P, ...(apDC?{apDC}:{}),
         minOK:Avf>=AvfMin, prep:pr, capGoverns:Vni_raw>Vni_cap, lbl:r.lbl, ls:r.ls};
     }
     R.checks.shearFric=sf;
@@ -4341,17 +4621,20 @@ function computeAll(){
     // (box / tub girders) each bearing takes the girder reaction / n
     const nBg=Math.max(1,Math.round(+bg.nBrgPerGird||1));
     let Pu=-Infinity, PuG=0, pgirder=0, pls="", dcB=-Infinity, sm=null, puT=null;
+    // APS: semi-integral — the approach slab on the end diaphragm reaches the seat through the girders: an equal share per girder
+    const apG=(R.ap&&iabType()==="semi")? {DC:(R.ap.RDC+R.ap.WSh)/Math.max(1,S.beams.N), DW:R.ap.RDW/Math.max(1,S.beams.N), LL:R.ap.RLLim/Math.max(1,S.beams.N)} : null;
     for(let i=0;i<S.beams.N;i++){
       const L1=LIMITS["Strength I"], L5=LIMITS["Strength V"];   // γ×η and m (OWNB); = the factors of panel I-8 for the AASHTO owner
-      const SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+L1.LL*L1.mLL*S.rx.LL[i].P;
-      const SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+L5.LL*L5.mLL*S.rx.LL[i].P
+      let SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+L1.LL*L1.mLL*S.rx.LL[i].P;
+      let SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+L5.LL*L5.mLL*S.rx.LL[i].P
                +L5.WS*S.rx.WS[i].P+L5.WL*S.rx.WL[i].P;
+      if(apG){ const d=GP.DC[1]*apG.DC+GP.DW[1]*apG.DW; SI+=d+L1.LL*L1.mLL*apG.LL; SV+=d+L5.LL*L5.mLL*apG.LL; }
       let P=SI, ls="Strength I"; if(SV>P){P=SV;ls="Strength V";}
       const PG=P; P=PG/nBg;
       const mi=seatM(i), dci=(P/A1)/(phiB*0.85*m.fc*mi.m);
       if(dci>dcB+1e-12){ dcB=dci; Pu=P; PuG=PG; pgirder=i+1; pls=ls; sm=mi;
         puT={DC:S.rx.DC[i].P, DW:S.rx.DW[i].P, LL:S.rx.LL[i].P, WS:S.rx.WS[i].P, WL:S.rx.WL[i].P, gDC:GP.DC[1], gDW:GP.DW[1],
-          gLL:(ls==="Strength I"?L1.LL*L1.mLL:L5.LL*L5.mLL), gWS:ls==="Strength V"?L5.WS:0, gWL:ls==="Strength V"?L5.WL:0, y:posB[i]||0}; }   // ABSW: worked P_u (display only)
+          gLL:(ls==="Strength I"?L1.LL*L1.mLL:L5.LL*L5.mLL), gWS:ls==="Strength V"?L5.WS:0, gWL:ls==="Strength V"?L5.WL:0, y:posB[i]||0, ...(apG?{ap:apG}:{})}; }   // ABSW: worked P_u (display only); APS: slab share
     }
     const mSpread=sm?sm.m:1, qR=phiB*0.85*m.fc*mSpread;   // ksi
     const qb=Pu/A1;                                       // ksi
@@ -4448,8 +4731,8 @@ function computeAll(){
     return best;
   }
   // ----- superposition helpers for individual-load footing effects -----
-  const GRP_OF={EH:["EHh","EHv","WGh"],LS:["LSh","LSv","WGls"],EV:["EV"],DC:["DCsub","DCsup","WGv"],DW:["DW"],   // ABR2: + the attached wingwalls
-                LL:["LL"],BR:["BR"],TU:["TU"],CRSH:["CRSH"],WS:["WS"],WL:["WL"],ES:["ESh","ESv"]};
+  const GRP_OF={EH:["EHh","EHv","WGh"],LS:["LSh","LSv","WGls"],EV:["EV"],DC:["DCsub","DCsup","WGv","APdc"],DW:["DW","APdw"],   // ABR2: + the attached wingwalls; APS: + the approach slab
+                LL:["LL","APll"],BR:["BR"],TU:["TU"],CRSH:["CRSH"],WS:["WS"],WL:["WL"],ES:["ESh","ESv"]};
   const GRP_OF_C={EH:["EHhC","EHvC"],LS:["LShC","LSvC"],EV:["EVC"],DC:["DCsub"],ES:["EShC","ESv"]}; // construction context
   function singleLoadEffect(key,isC){
     let V=0,Mv=0,Mh=0,Mt=0;
@@ -4496,7 +4779,7 @@ function computeAll(){
 
     // ---- Stem (includes bearing/self-weight vertical-load eccentricity as a constant moment at the seat) ----
     { const Hs=cctx? Math.min(R.constrC.hfC,g.soilH) : g.soilH, d1v=Hs-(cctx? 0 : Math.min(hwSoil,Hs));   // ABR4: water level depth (construction stage dry)
-      const heqL=interpHeq(Hs||g.soilH);   // ABLR: h_eq at the stem retained height H_s, as the stem design (§5.2); was h_eq(H) / h_eq of the construction H
+      const heqL=(lsRem&&!cctx)? 0 : interpHeq(Hs||g.soilH);   // APS: final-state LS removed with the approach slab; ABLR: h_eq at the stem retained height H_s, as the stem design (§5.2); was h_eq(H) / h_eq of the construction H
       const hAbove=(iabType()==="semi"&&!cctx)? 0 : Math.max(0,Hs-g.hstem), st=[], w=[];   // IAB2: semi-integral — the soil above the seat loads the end diaphragm
       for(let i=0;i<NST;i++){ const s=g.hstem*i/(NST-1); st.push(s); const e=g.hstem-s;
         w.push(fEH*kah*pLay(Math.max(0,Hs-e),d1v) + (e<=Hs? fLS*kah*gam*heqL + fES*kah*esQv + (fCS>0?fCS*kah*qCv:0) : 0)); }
@@ -4508,6 +4791,8 @@ function computeAll(){
       // vertical-reaction eccentricity moment (constant down the stem): P_v·e_brg + self-weight taper
       const Pv=ns*( fDCmax*groups.DCsup.V + fDW*groups.DW.V + fLL*groups.LL.Vim + fWS*groups.WS.V + fWL*groups.WL.V );   // ABR3: the stem keeps IM
       const Mecc=(isLS&&(Lst.perm||Lst.eq))? stemEcc(Lst,ns).Mecc   // strength / EE: the permutation used by the stem design (γDC, γDW max/min, LL reaction on/off)
+                : apSG? ( Pv*(R.geo.xStemCenter-R.geo.xBrg) + fDCmax*MselfEccTot + ns*( (groups.APdc? fDCmax*(groups.APdc.V*R.geo.xStemCenter-groups.APdc.Mv) : 0)   // APS: approach slab
+                      + (groups.APdw? fDW*(groups.APdw.V*R.geo.xStemCenter-groups.APdw.Mv) : 0) + (groups.APll? fLL*groups.APll.Vim*(R.geo.xStemCenter-R.ap.x) : 0) ) )/Lab
                 : ( Pv*(R.geo.xStemCenter-R.geo.xBrg) + fDCmax*MselfEccTot )/Lab;
       // ABSW: Extreme Event I — the stem design's EQ terms as point loads: ΔP_AE (wall share) at h_EQr·H_s above the footing, wall inertia
       // at h_stem/2, superstructure inertia at the seat (as C-10; the M–O increment above the seat adds its moment at the top)
@@ -4527,8 +4812,12 @@ function computeAll(){
       for(let i=0;i<NST;i++){ const s=hbwRet*i/(NST-1); st.push(s); w.push(fEH*kah*gam*s + fLS*kah*gam*heqBW + fES*kah*esQv); }
       const r=integ(st,w,[]);
       // ABLR: wheel load on top of the backwall (F61): a constant couple w_LL·t_bw/2 down the backwall, factored as LL+IM (as the backwall design)
-      const MbwLL=((R.bwDem&&R.bwDem.wheel)?R.bwDem.wheel.M:0)*(isLS?(cctx?0:fLL):one("LL"));
-      vm.backwall={pos:st.map(s=>hbwRet-s), V:r.V, M:r.M.map(x=>x+MbwLL), w:w.slice(), MbwLL,   // ABSW
+      let MbwLL=((R.bwDem&&R.bwDem.wheel)?R.bwDem.wheel.M:0)*(isLS?(cctx?0:fLL):one("LL"));
+      // APS: the approach-slab couple down the backwall (front-face tension: negative here). Strength (γ max/min): the backwall design's
+      // permutation (DC, DW at γ min, slab LL off); Extreme Event I: 1.00·DC + 1.00·DW (no slab LL); Service I: 1.00 with the LL factor; an individual load: its own term.
+      const AB=R.bwDem&&R.bwDem.ap; let MbwAp=0;
+      if(AB){ MbwAp= isLS? (cctx? 0 : (Lst.perm? -(GP.DC[0]*AB.MDC+GP.DW[0]*AB.MDW) : Lst.eq? -(AB.MDC+AB.MDW) : -(AB.MDC+AB.MDW+fLL*AB.MLL))) : -(one("DC")*AB.MDC+one("DW")*AB.MDW+one("LL")*AB.MLL); MbwLL+=MbwAp; }
+      vm.backwall={pos:st.map(s=>hbwRet-s), V:r.V, M:r.M.map(x=>x+MbwLL), w:w.slice(), MbwLL, ...(AB?{MbwAp}:{}),   // ABSW
         axis:"Height above bridge seat (ft)", peakV:R.bwDem.VuBW, peakM:R.bwDem.MuBW, ref:"§5.1"};
     }
     // ---- Toe: upward reaction minus footing self-weight ----
@@ -4671,6 +4960,7 @@ function computeAll(){
     if(fpS.wing&&!fpS.wing.on) delete fpS.wing;
     if(fpS.wing&&fpS.wing.toAb===true) delete fpS.wing.toAb;   // ABR2: the new input at its default                                   // WING: wingwalls off leave the Input ID unchanged
     if(fpS.iab&&fpS.iab.type!=="integral"&&fpS.iab.type!=="semi") delete fpS.iab;  // IAB: a conventional abutment leaves the Input ID unchanged
+    if(fpS.apSlab&&!fpS.apSlab.on) delete fpS.apSlab;                              // APS: no approach slab leaves the Input ID unchanged
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
       dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
       dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
@@ -4777,6 +5067,24 @@ function computeAll(){
       if(Q.dEE){ addD("iabDEF","End diaphragm, 70 % seismic passive — flexure (MassDOT 3.4.6.1)",Q.dEE.dcM,"tab-iab","0.70·K_PE·γ·H = "+fmt(Q.dEE.pB,3)+" ksf at the base; φ = 1.0");   // ABR1 (N-3)
         addD("iabDEV","End diaphragm, 70 % seismic passive — shear (MassDOT 3.4.6.1)",Q.dEE.dcV,"tab-iab","as the flexure; φ = 1.0"); } }
   }
+  /* APS: approach slab — backwall front face (conventional), shelf as a bracket, slab design (Tab 5; Tab 10 for an integral abutment) */
+  { const tb=iabType()==="integral"? "tab-iab" : "tab-struct", F=R.checks.bwFront, H=R.apShelf, D=R.apDes;
+    if(F&&iabType()==="conv"){ addD("apBwF","Backwall front face — approach-slab couple [5.6.3]",F.dcFlex,"tab-struct",F.lbl);
+      addD("apBwFc","Backwall front face — crack control [5.6.7]",F.sMax>0? F.sp/F.sMax : (F.fss>0?99:0),"tab-struct","s ≤ s_max"); }
+    if(H){ const nm="Approach-slab shelf (bracket)", gv=`V_u = ${fmt(H.Vu,2)} kip/ft, N_uc = ${fmt(H.Nuc,2)} kip/ft, a_v = ${fmt(H.av,1)} in`;
+      addD("apShAs",nm+" — primary tie A_s ["+(H.corbel?"5.8.4.2.2":"5.6.3, 5.8.4.2.1")+"]",H.dcAs,tb,`A_s,req = ${fmt(H.AsReq,3)} vs ${fmt(H.As,3)} in²/ft; `+gv);
+      if(H.corbel){ addD("apShAh",nm+" — closed ties A_h [5.8.4.2.1, 5.8.4.2.2]",H.dcAh,tb,`A_h,req = ${fmt(H.AhReq,3)} vs ${fmt(H.Ah,3)} in²/ft`);
+        addD("apShV",nm+" — shear-friction limit [5.8.4.2.2]",H.dcV,tb,`V_u/φV_n,max; φ = 0.90`); }
+      else addD("apShV",nm+" — shear, cantilever a_v > d [5.7.3]",H.dcV,tb,gv);
+      addD("apShB",nm+" — bearing of the slab [5.6.5]",H.dcB,tb,`q_b = ${fmt(H.qb,3)} ksi, φ_b = 0.70, m = 1`);
+      addD("apShE",nm+" — depth at the outer edge ≥ h/2 [5.8.4.2.1]",H.dcEdge,tb,`h_E = ${fmt(H.hE,1)} in vs h/2 = ${fmt(H.h/2,1)} in`); }
+    if(D){ const c=D.sec;
+      addD("apDF","Approach slab flexure [5.6.3]",c.dcFlex,tb,c.lbl);
+      addD("apDMin","Approach slab — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,tb,"φMn ≥ min(Mcr, 1.33Mu)");
+      addD("apDCr","Approach slab — crack control [5.6.7]",c.sMax>0? c.sp/c.sMax : (c.fss>0?99:0),tb,"s ≤ s_max");
+      addD("apDD","Approach slab — bottom distribution reinforcement [9.7.3.2, 5.10.6]",D.dcD,tb,`${fmt(D.pct,1)} % of the main bottom steel, ≥ S&T`);
+      addD("apDT","Approach slab — top S&T reinforcement [5.10.6]",D.dcT,tb,`A_s,ST = ${fmt(c.AsST,3)} in²/ft each way`);
+      addD("apDV","Approach slab shear [5.7.3] — information (5.12.2.1)",c.dcShear,tb,`V_u/φV_n = ${fmt(c.dcShear,3)}: a slab designed for moment per 4.6.2.3 may be taken as satisfactory for shear`,true); } }
   R.dash=dash;
   R.nFail=dash.filter(d=>d.pass===false).length;
   /* ===== C-22 Owner requirements (OWNA): checked after every result is final; they change no result ===== */
@@ -5134,7 +5442,12 @@ function renderTabIAB(R){
     ${eqB("Resultants (unfactored, triangular pressure, at H/3 above the bottom)","AASHTO 3.11.5.1",[
       `P_{exp} = \\tfrac12 K\\gamma H^2 = \\tfrac12(${t(Q.Kexp,3)})(${t(gam,3)})(${t(H)})^2 = ${t(Q.Pexp,3)}\\ \\text{kip/ft}\\,, \\quad \\times L_{ab} = ${t(Q.Pexp,3)}(${t(+S.geom.Lab)}) = ${t(Q.PexpT,1)}\\ \\text{kip}`,
       `P_{con} = \\tfrac12(${t(Q.Kcon,3)})(${t(gam,3)})(${t(H)})^2 = ${t(Q.Pcon,3)}\\ \\text{kip/ft}\\,, \\quad \\times L_{ab} = ${t(Q.PconT,1)}\\ \\text{kip}`],
-      `The expansion pressure designs the ${integ?"wall (§10.5)":"end diaphragm (§10.5)"}${integ&&own==="CTDOT"?" and enters the CTDOT pile axial force (§10.4)":""}; P<sub>exp</sub>·L<sub>ab</sub> is the compression delivered to the superstructure (design the superstructure for it${own==="RIDOT"?", RIDOT 11.3.2 / 11.3.3":""}). Live-load surcharge is not applied: an approach slab is required${own==="CTDOT"?" (CTDOT CT11.1.1.3: LS may be neglected in the final state)":own==="MassDOT"?" (MassDOT 3.10.4; 3.3.1.3)":""}.`)}`);
+      `The expansion pressure designs the ${integ?"wall (§10.5)":"end diaphragm (§10.5)"}${integ&&own==="CTDOT"?" and enters the CTDOT pile axial force (§10.4)":""}; P<sub>exp</sub>·L<sub>ab</sub> is the compression delivered to the superstructure (design the superstructure for it${own==="RIDOT"?", RIDOT 11.3.2 / 11.3.3":""}). Live-load surcharge is not applied${integ?"":" to the end diaphragm"}: ${Q.ap?"the approach slab carries the vehicles (panel I-0b, §1.4a)":"an approach slab is required (panel I-0b)"}${own==="CTDOT"?" (CTDOT CT11.1.1.3: LS may be neglected in the final state)":own==="MassDOT"?" (MassDOT 3.10.4; 3.3.1.3)":""}.`)}
+    ${Q.Ffr!=null&&Q.Ffr>0?eqB("Approach-slab friction on the moving wall","statics; "+(own==="MassDOT"?"MassDOT Part I 3.10.4":own==="RIDOT"?"RIDOT BDM 11.3.2":"approach slab detail"),[
+      `F = \\mu(R_{DC} + R_{DW}) = ${t(Q.Ffr,2)}\\ \\text{kip (§1.4a)}`,
+      `P_{exp}L_{ab} + F = ${t(Q.PexpT,1)} + ${t(Q.Ffr,2)} = ${t(Q.PexpF,1)}\\ \\text{kip (expansion: force delivered to the superstructure)}\\,, \\quad \\text{contraction: } F\\ \\text{toward the backfill}`,
+      ...(Q.apEE?[`\\text{Extreme Event I: } F_{EQ} = \\min(k_hW_{ap},\\ F) = \\min((${t(Q.apEE.kh,4)})(${t(Q.apEE.W,2)}),\\ ${t(Q.apEE.Fcap,2)}) = ${t(Q.apEE.F,2)}\\ \\text{kip}${Q.apEE.capped?"\\ (\\text{friction cap})":""}`]:[])],
+      `The sliding slab resists the wall movement with its end reaction × μ, in the direction opposite to the movement: it adds to the expansion force carried by the superstructure strut${integ&&own==="CTDOT"?" and to the CTDOT pile axial force (§10.4)":""}, and pulls the wall toward the backfill on contraction. ${Q.apEE?"At Extreme Event I the slab's inertia reaches the "+(integ?"abutment":"end diaphragm")+" through the same interface, so it is capped by F; add F<sub>EQ</sub> to the longitudinal seismic force on the abutment.":""}`):""}`);
   /* ---- 10.4 piles ---- */
   if(integ){ const P=Q.pile, sk=P.sk, ax=P.weak?"y":"x";
     let ph=eqB("Pile section and layout",(sk.pub?"AISC published properties":"flange and web rectangles, fillets neglected")+"; AASHTO 10.7.1.2",[
@@ -5143,11 +5456,14 @@ function renderTabIAB(R){
       `\\text{end distance along the skew (pile ${P.weak?"flange":"edge"} to the end of the abutment)} = (L_{ab}/2 - x_{max})\\cdot12 - ${P.weak?"d":"b_f"}/2 = (${t(+S.geom.Lab/2)} - ${t(P.xMax)})(12) - ${t((P.weak?sk.d:sk.bf)/2,2)} = ${t(P.endIn,1)}\\ \\text{in}`,
       `\\text{side clearance} = (12b - ${P.weak?"b_f":"d"})/2 = (12\\cdot${t(+I.b)} - ${t(P.weak?sk.bf:sk.d,2)})/2 = ${t(P.sideIn,1)}\\ \\text{in}\\,, \\quad \\text{embedment} = ${t(+I.embed,1)}\\ \\text{in}`],
       "Single row of vertical piles, centered on the abutment. L<sub>ab</sub>, the pile spacing and the beam positions (panel I-5) are all measured along the abutment centerline, i.e. along the skew — the direction in which MassDOT 3.10.10.3 measures the flange-to-end distance; the spacing normal to the girders s<sub>n</sub> is shown for reference. Layout limits per owner in "+ownLink+".");
-    const gl=[`DC = DC_{sup} + W_{ab} + W_{app} = ${t(R.agg.DC.P,1)} + \\gamma_c b(h_c+h_d)L_{ab} + q_{app}L_{ab} = ${t(R.agg.DC.P,1)} + ${t(Q.Wab,1)} + ${t(Q.Wapp,1)} = ${t(Q.DC,1)}\\ \\text{kip}\\,, \\quad DW = ${t(Q.DW,1)}\\,, \\quad LL{+}IM = ${t(Q.LL,1)}\\ \\text{kip}`,
-      P.IM? `LL\\ (\\text{no IM}) = (1 - f_{IM})(LL{+}IM) = (1 - ${t(P.fIM,4)})(${t(Q.LL,1)}) = ${t(P.LLp,1)}\\ \\text{kip}\\quad(f_{IM}\\text{: Tab 1 §1.9})` : "",
+    const apQ=Q.ap&&!Q.ap.legacy;   // APS: approach slab terms (§1.4a)
+    const gl=[`DC = DC_{sup} + W_{ab} + W_{app} = ${t(R.agg.DC.P,1)} + \\gamma_c b(h_c+h_d)L_{ab} + W_{app} = ${t(R.agg.DC.P,1)} + ${t(Q.Wab,1)} + ${t(Q.Wapp,1)} = ${t(Q.DC,1)}\\ \\text{kip}\\,, \\quad DW = ${Q.WapDW?`DW_{sup} + R_{DW,ap} = ${t(R.agg.DW.P,1)} + ${t(Q.WapDW,1)} = `:""}${t(Q.DW,1)}\\,, \\quad LL{+}IM = ${Q.apLL?`LL_{g} + R_{LL,ap} = ${t(Q.LLg,1)} + ${t(Q.apLL,1)} = `:""}${t(Q.LL,1)}\\ \\text{kip}`,
+      ...(Q.ap?[apQ? `W_{app} = R_{DC,ap} + W_{sh} = ${t(Q.ap.RDC,2)} + ${t(Q.ap.WSh,2)} = ${t(Q.Wapp,2)}\\ \\text{kip (approach slab and its shelf, §1.4a)}` : `W_{app} = q\\,L_{ab} = ${t(Q.ap.qEq,3)}(${t(+S.geom.Lab)}) = ${t(Q.Wapp,2)}\\ \\text{kip (equivalent dead load, §1.4a)}`]:[]),
+      P.IM? (P.LLs? `LL\\ (\\text{no IM}) = (1 - f_{IM})LL_g + R_{LL,ap,static} = (1 - ${t(P.fIM,4)})(${t(Q.LLg,1)}) + ${t(P.LLs,1)} = ${t(P.LLp,1)}\\ \\text{kip}\\quad(f_{IM}\\text{: Tab 1 §1.9; slab without IM: §1.4a})`
+        : `LL\\ (\\text{no IM}) = (1 - f_{IM})(LL{+}IM) = (1 - ${t(P.fIM,4)})(${t(Q.LL,1)}) = ${t(P.LLp,1)}\\ \\text{kip}\\quad(f_{IM}\\text{: Tab 1 §1.9})`) : "",
       `P_{DL} = \\dfrac{\\eta(\\gamma_{DC}DC + \\gamma_{DW}DW)}{n} = \\dfrac{${t(Q.eta)}(${t(Q.gDC)}\\cdot${t(Q.DC,1)} + ${t(Q.gDW)}\\cdot${t(Q.DW,1)})}{${P.n}} = ${t(P.Pdl,2)}\\ \\text{kip}`,
       `W_{LL} = \\eta\\,\\gamma_{LL}\\,m\\,LL = ${t(Q.eta)}(${t(Q.gLL)})(${t(Q.mL)})(${t(P.LLp,1)}) = ${t(P.WLL,1)}\\ \\text{kip}${P.eqD?"":`\\,, \\quad e = \\dfrac{\\sum P_iy_i}{\\sum P_i} = ${t(P.eLL,3)}\\ \\text{ft}`}`,
-      P.eqD? `P_{LL} = W_{LL}/n = ${t(P.WLL,1)}/${P.n} = ${t(P.Pll,2)}\\ \\text{kip}` : `P_{LL} = \\dfrac{W_{LL}}{n} + \\dfrac{W_{LL}\\,e\\,x_{max}}{\\sum x^2} = \\dfrac{${t(P.WLL,1)}}{${P.n}} + \\dfrac{${t(P.WLL,1)}(${t(Math.abs(P.eLL),3)})(${t(P.xMax)})}{${t(P.Ix2,1)}} = ${t(P.Pll,2)}\\ \\text{kip}`,
+      P.eqD? `P_{LL} = W_{LL}/n = ${t(P.WLL,1)}/${P.n} = ${t(P.Pll,2)}\\ \\text{kip}` : P.LLs? `P_{LL} = \\dfrac{W_{LL}}{n} + \\dfrac{W_{LL,g}\\,e\\,x_{max}}{\\sum x^2} = \\dfrac{${t(P.WLL,1)}}{${P.n}} + \\dfrac{${t(P.WLLg,1)}(${t(Math.abs(P.eLL),3)})(${t(P.xMax)})}{${t(P.Ix2,1)}} = ${t(P.Pll,2)}\\ \\text{kip}\\quad(W_{LL,g} = \\eta\\gamma_{LL}m\\,LL_g\\text{: the slab LL is uniform, no eccentricity})` : `P_{LL} = \\dfrac{W_{LL}}{n} + \\dfrac{W_{LL}\\,e\\,x_{max}}{\\sum x^2} = \\dfrac{${t(P.WLL,1)}}{${P.n}} + \\dfrac{${t(P.WLL,1)}(${t(Math.abs(P.eLL),3)})(${t(P.xMax)})}{${t(P.Ix2,1)}} = ${t(P.Pll,2)}\\ \\text{kip}`,
       `P_g = P_{DL} + P_{LL} = ${t(P.Pdl,2)} + ${t(P.Pll,2)} = ${t(P.Pg,2)}\\ \\text{kip (Strength I, gravity, per pile)}`];
     ph+=eqB("Factored gravity load per pile (Strength I)",(own==="MassDOT"?"MassDOT Part I 3.10.2.1, 3.10.2.2, 3.10.11.4":own==="CTDOT"?"CTDOT BRSDM V2 CT11.1.1.3, Eq. CT11.1.1.4.2c-1":own==="RIDOT"?"RIDOT BDM 11.3.2":"AASHTO 10.7.1.6")+"; AASHTO Tables 3.4.1-1, 3.4.1-2",gl,
       (own==="MassDOT"?"MassDOT: dead and live load distributed equally to all piles. ":"Dead load equally to all piles; live load with the rigid-cap eccentricity of the girder LL reactions (panel I-5). ")+(own==="RIDOT"?"IM included (RIDOT BDM 11.3.2: top 4 ft of the pile). ":own==="CTDOT"?"IM included (CTDOT BRSDM V2 load rules for abutments and supporting piles). ":P.IM?"IM not applied to the piles (foundation below ground, 3.6.2.1): the IM share f<sub>IM</sub> of the girder LL+IM reactions is removed (Tab 1 §1.9; IM is on the truck, not the lane load). ":"IM kept (panel I-4: foundation not entirely below ground). ")+`Abutment self-weight W<sub>ab</sub> = γ<sub>c</sub>·b·(h<sub>c</sub> + h<sub>d</sub>)·L<sub>ab</sub> = ${fmt(+S.mat.gc,3)}(${fmt(+I.b,2)})(${fmt(+I.hc+(+I.hd),2)})(${fmt(+S.geom.Lab,2)}); girder voids neglected. Braking not applied (integral abutment).`);
@@ -5180,7 +5496,9 @@ function renderTabIAB(R){
         `W = \\dfrac{2N_PR_{DL+LL}}{N_G} = \\dfrac{2(${P.n})(${t(C.R,2)})}{${C.NG}} = ${t(C.W,1)}\\ \\text{kip}\\,, \\quad \\theta_W = \\dfrac{WS^2}{24E_GI_G} = \\dfrac{${t(C.W,1)}(${t(C.Sin,0)})^2}{24(${t(+I.EG,0)})(${t(+I.IG,0)})} = ${t(C.thW,5)}\\ \\text{rad}`,
         `M_W = \\dfrac{4EI}{L_E}\\theta_W = \\dfrac{4(${t(C.EI,0)})}{${t(LE,1)}}(${t(C.thW,5)}) = ${t(C.MW,0)}\\ \\text{kip-in}`,
         `P_P = \\dfrac{\\eta\\gamma_{EH}P_{exp}L_{ab}}{n} = \\dfrac{${t(Q.eta)}(${t(Q.gEH)})(${t(Q.PexpT,1)})}{${P.n}} = ${t(C.PP,2)}\\ \\text{kip}\\,, \\quad H_0 = \\tfrac{2H}{3} = ${t(C.H0,1)}\\ \\text{in}`,
-        `R_T = \\dfrac{P_PH_0 + \\eta(F_TH + M_T)}{S} = \\dfrac{${t(C.PP,2)}(${t(C.H0,1)}) + ${t(Q.eta)}(${t(C.FT,2)}\\cdot${t(C.Hin,0)} + ${t(C.MT,0)})}{${t(C.Sin,0)}} = ${t(C.RT,2)}\\ \\text{kip}`,
+        ...(C.PF?[`P_F = \\dfrac{\\eta F}{n} = \\dfrac{${t(Q.eta)}(${t(Q.Ffr,2)})}{${P.n}} = ${t(C.PF,3)}\\ \\text{kip at } z_F = t = ${t(C.zF,1)}\\ \\text{in below the deck (approach-slab friction, §1.4a)}`,
+          `R_T = \\dfrac{P_PH_0 + P_Fz_F + \\eta(F_TH + M_T)}{S} = \\dfrac{${t(C.PP,2)}(${t(C.H0,1)}) + ${t(C.PF,3)}(${t(C.zF,1)}) + ${t(Q.eta)}(${t(C.FT,2)}\\cdot${t(C.Hin,0)} + ${t(C.MT,0)})}{${t(C.Sin,0)}} = ${t(C.RT,2)}\\ \\text{kip}`]
+        : [`R_T = \\dfrac{P_PH_0 + \\eta(F_TH + M_T)}{S} = \\dfrac{${t(C.PP,2)}(${t(C.H0,1)}) + ${t(Q.eta)}(${t(C.FT,2)}\\cdot${t(C.Hin,0)} + ${t(C.MT,0)})}{${t(C.Sin,0)}} = ${t(C.RT,2)}\\ \\text{kip}`]),
         `P_u = P_g + R_T = ${t(P.Pg,2)} + ${t(C.RT,2)} = ${t(C.Pu,2)}\\ \\text{kip}\\,, \\quad M_u = \\min(M_p,\\ M_T + M_W) = \\min(${t(P.Mp,0)},\\ ${t(C.MT+C.MW,0)}) = ${t(C.Mu,0)}\\ \\text{kip-in}`],
         `L = total length ${fmt(Q.Ltot,1)} ft; S = span ${fmt(+S.geom.spanL,1)} ft; E = 29,000 ksi; I = I<sub>${ax}</sub>; L<sub>E</sub>, E<sub>G</sub>, I<sub>G</sub> and the head condition from panel I-0a (L<sub>E</sub> from the lateral pile analysis). R<sub>DL+LL</sub> = the factored gravity load per pile P<sub>g</sub> above (tool choice: the BRSDM does not say factored or service; the factored rotation follows RIDOT 11.3.2). M<sub>T</sub> and M<sub>W</sub> are added (both at thermal expansion) and the design moment is limited to M<sub>p</sub> (elastic design). Passive force per pile at γ<sub>EH</sub> (§10.3), thermal terms at γ<sub>TU</sub> = 1.00.`);
       ph+=eqB("Combined axial and flexure","AASHTO 6.9.2.2.1 (Eqs. 6.9.2.2.1-1, -2), 6.5.4.2, 6.12.2.2.1",resL.concat([iTex(C.Pu,C.Mu,C.I)]),"φ<sub>c</sub> = 0.70 and φ<sub>f</sub> = 1.00 for the combined axial and flexural resistance of undamaged H-piles [6.5.4.2]; piles fully braced (not scour susceptible, CTDOT CT11.1.1.4.2c).")+checkLine("Pile axial + flexure",iTex(C.Pu,C.Mu,C.I).split("=").slice(0,2).join("="),C.I.val); }
@@ -5233,13 +5551,15 @@ function renderTabIAB(R){
         `M_n = ${t(DE.Mn)}\\ \\text{kip-ft/ft}\\,, \\quad V_n = V_c = ${t(DE.Vn)}\\ \\text{kip/ft} \\quad(\\text{bars and section of §10.5a, } \\varphi = 1.0)`],
         "Same horizontal-span model as the movement case (0.8 of the simple span between girders, pressure at the base of the diaphragm). "+(DE.user?"":"K<sub>PE</sub>: log-spiral seismic passive coefficient of AASHTO Figure A11.4-2 (c/γH = 0, wall friction 0.67φ, level backfill), read at k<sub>h</sub> of the active pressure (C11.6.5.5); "+(DE.low?"H &lt; 5 ft: the static passive of Section 3 (11.6.5.5), taken as the same log-spiral chart at k<sub>h</sub> = 0. ":"H ≥ 5 ft: with the inertia of the passive zone (11.6.5.5). ")+"The M–O passive equation is not used (11.6.5.5). Interpolated linearly in φ between the chart curves and in k<sub>h</sub> along each curve.")
       )+checkLine("End diaphragm, 70 % seismic passive — flexure",`\\dfrac{M_u}{M_n} = \\dfrac{${t(DE.Mu)}}{${t(DE.Mn)}}`,DE.dcM)+checkLine("End diaphragm, 70 % seismic passive — shear",`\\dfrac{V_u}{V_n} = \\dfrac{${t(DE.Vu,3)}}{${t(DE.Vn)}}`,DE.dcV) : "";
-    h+=panel("o-iab-cap","10.5","End Diaphragm — Demands",ch+eqB("Force to the superstructure (unfactored)","statics",[`P_{dia} = P_{exp}L_{ab} = ${t(Q.PexpT,1)}\\ \\text{kip}`],"Compression in the superstructure"+(own==="RIDOT"?" (RIDOT 11.3.3: the integral-abutment axial considerations apply)":"")+"; the seat receives only the bearing shear from the movement (Tab 1 §1.7, TU).")+deH);
+    h+=panel("o-iab-cap","10.5","End Diaphragm — Demands",ch+eqB("Force to the superstructure (unfactored)","statics",[Q.Ffr>0? `P_{dia} = P_{exp}L_{ab} + F = ${t(Q.PexpT,1)} + ${t(Q.Ffr,2)} = ${t(Q.PexpF,1)}\\ \\text{kip (approach-slab friction, §10.3)}` : `P_{dia} = P_{exp}L_{ab} = ${t(Q.PexpT,1)}\\ \\text{kip}`],"Compression in the superstructure"+(own==="RIDOT"?" (RIDOT 11.3.3: the integral-abutment axial considerations apply)":"")+"; the seat receives only the bearing shear from the movement (Tab 1 §1.7, TU).")+deH);
     h+=sectionHTML(Q.c2.sec,`<div class="note-box">Horizontal bars #${I.hBar} @ ${fmt(+I.hSp,1)} in each face, per ft of height; h = t<sub>bw</sub> = ${fmt(+S.geom.tbw*12,1)} in.</div>`,"10.5a","End Diaphragm — Horizontal");
   }
   /* ---- 10.6 stability basis ---- */
   h+=panel("o-iab-stab","10.6","External Stability — Basis",`<div class="note-box">${integ?
     `<b>No sliding, overturning (eccentricity) or footing bearing check.</b> The integral abutment has no footing: it is restrained longitudinally by the superstructure, which acts as a strut between the two abutments (the earth pressure at one end is balanced through the superstructure by the other end, MassDOT 3.10.8 / RIDOT 11.3.2 / CTDOT CT11.1.1.4.2c free body), and it is carried vertically by a single row of flexible piles. <b>Checked instead:</b> pile axial and flexural resistance (§10.4), pile length / fixity (§10.4), the cap for the vertical loads and the wall for the earth pressure (§10.5)${own==="CTDOT"?", with the girder end-rotation moment M<sub>W</sub> and the thermal axial force R<sub>T</sub> in the pile (§10.4)":""}. The superstructure is designed for the compression P<sub>exp</sub>·L<sub>ab</sub> (§10.3) and the end-moment connection (owner detail). Unbalanced backfilling during construction is controlled by notes on the plans. Geotechnical resistance of the piles, the fixity depth and the lateral analysis come from the geotechnical engineer${own==="MassDOT"?"":" (Pile Designer, integral mode, for the p-y analysis)"}.`
     :`<b>Lower abutment:</b> sliding, eccentricity and bearing (or pile reactions) are checked in Tabs 3 and 4 on the conventional model: the connection to the superstructure is pinned (vertical reactions; horizontal force only through the bearing shear, Tab 1 §1.7)${own==="CTDOT"?" (CTDOT V2 11.6.1.3.1CT)":""}. <b>End diaphragm:</b> moves with the superstructure; its earth pressure goes to the superstructure (§10.5), not to the lower abutment.${own==="MassDOT"?" MassDOT 3.4.6.1: also check overturning for 100 % of the M–O active force with no superstructure restraint (Extreme Event I, panel I-11: k<sub>h</sub> ratio 1.00, superstructure share 0 %).":""}`}</div>`);
+  if(integ){ h+=apShelfHTML(R,"10.7"); h+=apDesHTML(R,"10.8"); const rr=apRebarRows(R);   // APS: approach slab (integral abutment)
+    if(rr) h+=panel("o-ap-bars","10.9","Approach-Slab Bars",`<table class="rtbl"><tr><th>Mark</th><th>Location</th><th>Bar</th><th>Spacing (in)</th><th>A<sub>s</sub> prov / req (in²/ft)</th><th>ℓ<sub>d</sub> (in)</th><th>Est. length (ft)</th></tr>${rr}</table>`); }
   el.innerHTML=h;
 }
 /* ---------- integral / semi-integral section figure (display only; values from R.iab and the inputs) ---------- */
@@ -5264,7 +5584,10 @@ function svgIabSection(R){
     b+=`<rect x="${px}" y="${Y(hd+hc-emb)}" width="${pw}" height="${(cut-(hd+hc-emb))*sc}" fill="#8a8a80" stroke="#444"${FIG_STATIC?"":fia(`Piles: ${I.sec}, ${I.orient!=="strong"?"weak axis":"strong axis"}, n = ${Q.pile.n} @ ${fF(+I.sp,2)} ft along the skew, embedded ${fF(+I.embed,0)} in\nfactored gravity load per pile (Strength I) P = ${fF(Q.pile.Pg,1)} kip — worked in §10.4`,"tab-iab|o-iab-pile")}/>`;
     b+=`<path d="M${px-4},${Y(cut)} l${pw/2+4},6 l${pw/2+4},-6" fill="none" stroke="#444"/>`+svgT(X(bw/2)+pw/2+6,Y(hd+hc+Lp*0.3),`${esc(I.sec)}, ${I.orient!=="strong"?"weak axis":"strong axis"}, n = ${Q.pile.n} @ ${fmt(+I.sp,2)} ft`,{fs:10});
     if(Q.own==="MassDOT") b+=`<rect x="${X(bw/2-1.25)}" y="${Y(hd+hc)}" width="${2.5*sc}" height="${3*sc}" fill="rgba(150,150,150,0.25)" stroke="#999" stroke-dasharray="3 2"/>`+svgT(X(bw/2+1.4),Y(hd+hc+1.6),"crushed-stone trench 3 ft × 2'-6\"",{fs:9.5,c:"#666"});
-    b+=`<rect x="${X(bw)}" y="${Y(-0.7)}" width="${6*sc}" height="${0.7*sc}" fill="#cfd8dc" stroke="#78909c"/>`+svgT(X(bw+0.3),Y(-0.9),"approach slab",{fs:10,c:"#546e7a"});
+    if(R.ap){ const P=R.ap, ts=P.t, sh=P.sup==="shelf"&&!P.legacy, bS=P.bS/12, hS=P.hS/12, hE=P.hE/12;   // APS: the approach slab and its shelf (panel I-0b, §1.4a)
+      const apTip=P.legacy? `Approach slab: equivalent dead load ${fF(P.qEq,3)} kip/ft (project saved before panel I-0b), DC on the abutment (§10.4)` : `Approach slab: L_s = ${fF(P.Lmax,2)} ft, t = ${fF(ts,2)} ft; on the abutment R_DC = ${fF(P.RDC,1)}, R_DW = ${fF(P.RDW,1)}, R_LL+IM = ${fF(P.RLLim,1)} kip\nfriction F = μ(R_DC + R_DW) = ${fF(P.F,2)} kip — §1.4a, §10.3`;
+      b+=fg(apTip,"tab-loads|o-ap",`<rect x="${X(bw)}" y="${Y(-0.7)}" width="${6*sc}" height="${ts*sc}" fill="#cfd8dc" stroke="#78909c"/>`+(sh?`<polygon points="${X(bw)},${Y(-0.7+ts)} ${X(bw+bS)},${Y(-0.7+ts)} ${X(bw+bS)},${Y(-0.7+ts+hE)} ${X(bw)},${Y(-0.7+ts+hS)}" fill="#ecebe4" stroke="#333"/>`:"")+svgT(X(bw+0.3),Y(-0.9),"approach slab"+(sh?" on the shelf":""),{fs:10,c:"#546e7a"})); }
+    else b+=`<rect x="${X(bw)}" y="${Y(-0.7)}" width="${6*sc}" height="${0.7*sc}" fill="#cfd8dc" stroke="#78909c"/>`+svgT(X(bw+0.3),Y(-0.9),"approach slab",{fs:10,c:"#546e7a"});
     const pB=Kf*(+S.soil.gamma)*Q.H, ps=110/Math.max(1e-6,pB);
     b+=fg(tP(pB),"tab-iab|o-iab-ep",`<polygon points="${X(bw)},${Y(0)} ${X(bw)+pB*ps},${Y(Q.H)} ${X(bw)},${Y(Q.H)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(bw)+pB*ps+4,Y(Q.H),`K γ H = ${fmt(pB,3)} ksf (K = ${fmt(Kf,3)}, ${con?"contraction":"expansion"})`,{fs:10,c:"#1f3a5f"}));
     b+=fg(tD,"tab-iab|o-iab-move",(con?svgArrow(X(-0.1),Y(-0.35),X(-3),Y(-0.35),"#c62828",1.6):svgArrow(X(-3),Y(-0.35),X(-0.1),Y(-0.35),"#c62828",1.6))+svgT(X(-3),Y(-0.7)-18,`${con?"Δ_con":"Δ_exp"} = ${fmt(dF,3)} in`,{fs:10,c:"#c62828"}));
@@ -5284,7 +5607,10 @@ function svgIabSection(R){
     b+=`<rect x="${X(xBack-tbw-6)}" y="${Y(0)}" width="${(6+0.05)*sc}" height="${Math.max(0.3,Math.min(hbw-0.4,+I.dg))*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
     b+=`<rect x="${X(Math.min(brgX,xBack-tbw-0.6)-0.3)}" y="${Y(hbw)-6}" width="${0.6*sc}" height="6" fill="#444"/>`+svgT(X(Math.min(brgX,xBack-tbw-0.6)-0.5),Y(hbw)-4,"bearing",{fs:9.5,a:"end",c:"#444"});
     b+=`<line x1="${X(xBack-tbw)}" y1="${Y(hbw)}" x2="${X(xBack)}" y2="${Y(hbw)}" stroke="#c62828" stroke-width="2"/>`+svgT(X(xBack)+4,Y(hbw)+16,"joint (diaphragm slides on the stem)",{fs:9.5,c:"#c62828"});
-    b+=`<rect x="${X(xBack)}" y="${Y(-0.7)}" width="${5*sc}" height="${0.7*sc}" fill="#cfd8dc" stroke="#78909c"/>`+svgT(X(xBack+5),Y(0)+12,"approach slab",{fs:10,a:"end",c:"#546e7a"});
+    if(R.ap){ const P=R.ap, ts=P.t, sh=P.sup==="shelf"&&!P.legacy, bS=P.bS/12, hS=P.hS/12, hE=P.hE/12;   // APS: the approach slab and its shelf on the end diaphragm
+      const apTip=`Approach slab on the end diaphragm: L_s = ${fF(P.Lmax,2)} ft, t = ${fF(ts,2)} ft; R_DC = ${fF(P.RDC,1)}, R_DW = ${fF(P.RDW,1)}, R_LL+IM = ${fF(P.RLLim,1)} kip, to the bearings\nfriction F = ${fF(P.F,2)} kip on the end diaphragm — §1.4a, §10.5`;
+      b+=fg(apTip,"tab-loads|o-ap",`<rect x="${X(xBack)}" y="${Y(-0.7)}" width="${5*sc}" height="${ts*sc}" fill="#cfd8dc" stroke="#78909c"/>`+(sh?`<polygon points="${X(xBack)},${Y(-0.7+ts)} ${X(xBack+bS)},${Y(-0.7+ts)} ${X(xBack+bS)},${Y(-0.7+ts+hE)} ${X(xBack)},${Y(-0.7+ts+hS)}" fill="#ecebe4" stroke="#333"/>`:"")+svgT(X(xBack+5),Y(-0.7+ts)+12,"approach slab"+(sh?" on the shelf":""),{fs:10,a:"end",c:"#546e7a"})); }
+    else b+=`<rect x="${X(xBack)}" y="${Y(-0.7)}" width="${5*sc}" height="${0.7*sc}" fill="#cfd8dc" stroke="#78909c"/>`+svgT(X(xBack+5),Y(0)+12,"approach slab",{fs:10,a:"end",c:"#546e7a"});
     const pB=Kf*(+S.soil.gamma)*Q.H, ps=90/Math.max(1e-6,pB);
     b+=fg(tP(pB),"tab-iab|o-iab-ep",`<polygon points="${X(xBack)},${Y(0)} ${X(xBack)+pB*ps},${Y(hbw)} ${X(xBack)},${Y(hbw)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(xBack)+pB*ps+4,Y(hbw),`K γ h_bw = ${fmt(pB,3)} ksf (K = ${fmt(Kf,3)}${con?", contraction":""})`,{fs:10,c:"#1f3a5f"}));
     b+=fg(tD,"tab-iab|o-iab-move",(con?svgArrow(X(xBack-tbw-0.1),Y(-0.35),X(xBack-tbw-3.5),Y(-0.35),"#c62828",1.6):svgArrow(X(xBack-tbw-3.5),Y(-0.35),X(xBack-tbw-0.1),Y(-0.35),"#c62828",1.6))+svgT(X(xBack-tbw-3.5),Y(-0.7)-18,`${con?"Δ_con":"Δ_exp"} = ${fmt(dF,3)} in`,{fs:10,c:"#c62828"}));
@@ -5308,7 +5634,9 @@ const DASH_ANCHOR={iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",
   toeFlex:"o-str-Toe",toeShear:"o-str-Toe",toeFlexMin:"o-str-Toe",toeFlexCrack:"o-str-Toe",
   heelFlex:"o-str-Heel",heelShear:"o-str-Heel",heelMass:"o-str-Heel",heelFlexMin:"o-str-Heel",heelFlexCrack:"o-str-Heel",
   wJflex:"o-str-Wing junction",wJshear:"o-str-Wing junction",wJmin:"o-str-Wing junction",wJcrack:"o-str-Wing junction",wDev:"o-wing-ts",wTS:"o-wing-ts",   // WING
-  wSflex:"o-str-Wingwall stem",wSshear:"o-str-Wingwall stem",wSmin:"o-str-Wingwall stem",wScrack:"o-str-Wingwall stem",wSlide:"o-wing-stab",wEcc:"o-wing-stab",wBrg:"o-wing-stab"};
+  wSflex:"o-str-Wingwall stem",wSshear:"o-str-Wingwall stem",wSmin:"o-str-Wingwall stem",wScrack:"o-str-Wingwall stem",wSlide:"o-wing-stab",wEcc:"o-wing-stab",wBrg:"o-wing-stab",
+  apBwF:"o-str-Backwall front face",apBwFc:"o-str-Backwall front face",apShAs:"o-ap-shelf",apShAh:"o-ap-shelf",apShV:"o-ap-shelf",apShB:"o-ap-shelf",apShE:"o-ap-shelf",   // APS
+  apDF:"o-str-Approach slab",apDMin:"o-str-Approach slab",apDCr:"o-str-Approach slab",apDV:"o-str-Approach slab",apDD:"o-ap-des",apDT:"o-ap-des"};
 function gotoPanel(tab,anchor){
   activateTab(tab);
   setTimeout(()=>{
@@ -5501,8 +5829,9 @@ function renderTabLoads(R){
   /* --- LS --- */
   const Ls=R.LS;
   h+=panel("o-ls","1.4","Live-Load Surcharge (LS) [3.11.6.4]",`
+    ${Ls.lsRem?`<div class="note-box"><b>Approach slab (panel I-0b): final-state live-load surcharge removed</b> — ${esc((R.ap&&R.ap.ls&&R.ap.ls.ref)||"")}; h<sub>eq</sub> = 0 on the wall, the stem, the backwall and over the heel; the construction stage keeps its h<sub>eq</sub> (Tab 2). The table value below is shown for reference. Rule: <span class="xlink" data-jump="tab-loads|o-owner">Tab 1 §1.0a</span>; slab loads: <span class="xlink" data-jump="tab-loads|o-ap">§1.4a</span>.</div>`:""}
     ${eqB("Equivalent height of soil (interpolated from Table 3.11.6.4.1-1)","AASHTO 3.11.6.4.1",[
-      `h_{eq} = f(H) = f(${fmtT(geo.H)}\\ \\text{ft}) = ${fmtT(Ls.heq)}\\ \\text{ft}`],
+      Ls.lsRem? `h_{eq} = 0\\quad(\\text{final state, approach slab});\\quad \\text{table: } f(${fmtT(geo.H)}\\ \\text{ft}) = ${fmtT(Ls.heqTab)}\\ \\text{ft}` : `h_{eq} = f(H) = f(${fmtT(geo.H)}\\ \\text{ft}) = ${fmtT(Ls.heq)}\\ \\text{ft}`],
       `Table points in use: H = 5 ft → ${fmt(+s.heq5,1)} ft; 10 ft → ${fmt(+s.heq10,1)} ft; ≥ 20 ft → ${fmt(+s.heq20,1)} ft (editable in panel I-3).`+(R.ownLoad&&R.ownLoad.lsMin>0?` Owner minimum (CTDOT BRSDM V2 3.11.6.4): h<sub>eq</sub> = max(table, ${fmt(R.ownLoad.lsMin,1)} ft)${interpHeq0(geo.H)<R.ownLoad.lsMin?` — the table gives ${fmt(interpHeq0(geo.H),2)} ft, raised to ${fmt(R.ownLoad.lsMin,2)} ft`:""}.`:""))}
     ${eqB("Surcharge pressure and resultant (rectangular, at H/2)","AASHTO 3.11.6.4.1, Eq. 3.11.6.4.1-1",[
       `p_{LS} = ${R.Ksel&&R.Ksel.eff!=="active"?"K":"k_a"}\\,\\gamma\\,h_{eq}`,
@@ -5518,6 +5847,7 @@ function renderTabLoads(R){
       `P_p = \\tfrac{1}{2}k_p\\gamma_{fdn}D_e^2 L_{ftg} = \\tfrac{1}{2}(${fmtT(R.passive.kp,3)})(${fmtT(S.fnd.gammaF,3)})(${fmtT(Math.max(0,(+S.fnd.Df||0)-Math.max(0,+S.fnd.dNeg||0)))})^2(${fmtT(+g.Lftg||g.Lab)}) = ${fmtT(R.passive.Pp)}\\ \\text{kip}`],
       "Used only in the sliding check, factored by φ_ep. Only the embedment below d<sub>n</sub> (frost, scour, future excavation; panel I-4) is effective [10.6.3.4, 11.6.3.5]."):`<div class="note-box">Passive resistance at the toe is <b>OFF</b> (conservative default) — enable in panel I-4 if justified. [3.11.1 / 10.6.3.4]</div>`}
   `);
+  h+=apLoadsHTML(R);   // APS: §1.4a
   /* --- girders --- */
   const a=R.agg, sh=R.shares;
   let at=`<table class="rtbl"><tr><th>Load type</th><th>ΣP (kip)</th><th>ΣVx (kip)</th><th>ΣVy (kip)</th><th>ΣP·y (kip·ft)</th><th>Long. share</th><th>Vx after share (kip)</th></tr>`;
@@ -5612,6 +5942,134 @@ function renderTabLoads(R){
   document.getElementById("tab-loads").innerHTML=h;
 }
 
+/* ================= APS (2026-10-20): APPROACH SLAB — output panels =================
+   §1.4a loads on the abutment (Tab 1); §5.8 / §10.7 shelf as a bracket; §5.9 / §10.8 slab design. Every value from computeAll() (R.ap,
+   R.apShelf, R.apDes); worked symbolic → substituted → result. */
+const AP_RULE_TXT={follow:"both ends follow the skew (parallelogram)", square:"far end square to the roadway (strips from L to L + W tan θ)"};
+function apLoadsHTML(R){
+  const P=R.ap; if(!P) return "";
+  const A=S.apSlab, g=S.geom, t=fmtT, it=iabType(), Lr=P.ls||{}, own=abutOwner();
+  const ownLink='<span class="xlink" data-jump="tab-loads|o-owner">Tab 1 §1.0a</span>';
+  const desTab=it==="integral"? ["tab-iab","§10.7","§10.8"] : ["tab-struct","§5.8","§5.9"];
+  if(P.legacy) return panel("o-ap","1.4a","Approach Slab — Equivalent Dead Load (project saved before panel I-0b)",`
+    <div class="note-box">This project was saved before the approach-slab panel: the slab is represented by the equivalent dead load q = ${fmt(P.qEq,3)} kip/ft that it held (the former integral-abutment input q<sub>app</sub>), on the abutment as DC, as before. No live load, friction, shelf or slab design. Set the equivalent load to 0 in panel I-0b to compute the slab from its geometry.</div>
+    ${eqB("Equivalent dead load","statics",[`W_{app} = q\\,L_{ab} = (${t(P.qEq,3)})(${t(+g.Lab)}) = ${t(P.RDC,2)}\\ \\text{kip}`],it==="integral"?'Added to the integral abutment DC (<span class="xlink" data-jump="tab-iab|o-iab-pile">Tab 10 §10.4</span>, §10.5).':"Applied at the shelf / deck end as DC (§1.9).")}`);
+  const wkLS=`<span class="xlink" data-jump="tab-loads|o-ls">§1.4</span>`;
+  let h=`<div class="note-box"><b>Model.</b> The approach slab is a simple span of length L between the abutment and its far-end support (${P.far==="sleeper"?"sleeper slab":"the subbase"}): the soil beneath may settle away and lose its support, so it is not counted. AASHTO LRFD has no approach-slab article; the simple span is the usual DOT approach. Support at the abutment: <b>${P.sup==="shelf"?(it==="conv"?"backwall":"end-diaphragm")+" shelf (paving notch), a bracket on the back face":"deck over the backwall (the slab bears on the deck end)"}</b>; slab ends: ${AP_RULE_TXT[P.rule]}${A.skew==="ct35"?" (CTDOT 11.14.1CT rule at a skew of "+fmt(P.th,1)+"°)":""}. Live-load surcharge: <b>${Lr.rem?"removed in the final state":"kept"}</b> — ${Lr.rem?esc(Lr.ref)+(Lr.auto?"":" (option, panel I-0b)")+"; the construction stage keeps it ("+wkLS+")":"the AASHTO 3.11.6.5 reduction is not taken (panel I-0b)"}; owner rule in ${ownLink}.${it==="conv"?" The slab reaction replaces the design truck wheel load on top of the backwall (Tab 5 §5.1).":""}</div>`;
+  h+=`<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${figBox("apslab",R)}</div>`;
+  h+=eqB("Slab geometry and dead load","AASHTO LRFD 10th Ed. 3.5.1, Table 3.5.1-1; statics (simple span)",[
+    `W = ${P.Wauto?`L_{ab}\\cos\\theta = (${t(+g.Lab)})\\cos ${t(P.th,1)}° = `:""}${t(P.W)}\\ \\text{ft}\\,, \\quad L = ${t(P.L)}\\ \\text{ft}\\,, \\quad t = ${t(P.t)}\\ \\text{ft}`,
+    P.rule==="square"? `L_s = L + W\\tan\\theta = ${t(P.L)} + (${t(P.W)})\\tan ${t(P.th,1)}° = ${t(P.Lmax)}\\ \\text{ft (longest strip)}\\,, \\quad \\bar L = L + \\tfrac{W}{2}\\tan\\theta = ${t(P.Lmean)}\\ \\text{ft}` : `L_s = \\bar L = L = ${t(P.L)}\\ \\text{ft}`,
+    `w_{DC} = \\gamma_c t = (${t(P.gc,3)})(${t(P.t)}) = ${t(P.wDC,4)}\\ \\text{ksf}\\,, \\quad w_{DW} = ${t(P.wDW,4)}\\ \\text{ksf (overlay)}`,
+    `R_{DC} = w_{DC}\\dfrac{W\\bar L}{2} = (${t(P.wDC,4)})\\dfrac{(${t(P.W)})(${t(P.Lmean)})}{2} = ${t(P.RDC,2)}\\ \\text{kip}\\,, \\quad R_{DW} = (${t(P.wDW,4)})\\dfrac{(${t(P.W)})(${t(P.Lmean)})}{2} = ${t(P.RDW,2)}\\ \\text{kip (totals on the abutment)}`,
+    `q_{DC} = w_{DC}\\dfrac{L_s}{2}\\cos\\theta = (${t(P.wDC,4)})\\dfrac{${t(P.Lmax)}}{2}\\cos ${t(P.th,1)}° = ${t(P.qDC,3)}\\ \\text{kip/ft}\\,, \\quad q_{DW} = ${t(P.qDW,3)}\\ \\text{kip/ft (per ft along the abutment, local)}`,
+    ...(P.WSh>0?[`w_{sh} = \\gamma_c\\,b_S\\,\\dfrac{h_S + h_E}{2} = (${t(P.gc,3)})\\dfrac{${t(P.bS,1)}}{12}\\cdot\\dfrac{${t(P.hS,1)} + ${t(P.hE,1)}}{2(12)} = ${t(P.wSh,4)}\\ \\text{kip/ft at } \\bar x = \\dfrac{b_S(h_S + 2h_E)}{3(h_S + h_E)} = ${t(P.xSh,2)}\\ \\text{in};\\quad W_{sh} = w_{sh}\\min(W/\\cos\\theta,\\ L_{ab}) = ${t(P.WSh,2)}\\ \\text{kip}`]:[])],
+    `Strips of the slab span along the roadway; per ft of the skewed abutment a strip reaction is × cos θ (θ = ${fmt(P.th,1)}°, panel I-1). The totals act on the abutment (stability, stem, ${it==="integral"?"integral cap and piles":"footing and piles"}); the local values per ft act on the ${P.sup==="shelf"?"shelf and the backwall":"deck end over the backwall"}. W/cos θ = ${fmt(P.Lw,2)} ft along the abutment (L<sub>ab</sub> = ${fmt(+g.Lab,2)} ft).`);
+  const e=P.hl;
+  h+=eqB("HL-93 end reaction of one lane on the simple span L<sub>s</sub>","AASHTO LRFD 10th Ed. 3.6.1.2.2, 3.6.1.2.3, 3.6.1.2.4, 3.6.1.3.1, 3.6.2.1",[
+    P.Lmax>=28? `R_{truck} = 32 + 32\\dfrac{L_s-14}{L_s} + 8\\dfrac{L_s-28}{L_s} = 32 + 32\\dfrac{${t(P.Lmax)}-14}{${t(P.Lmax)}} + 8\\dfrac{${t(P.Lmax)}-28}{${t(P.Lmax)}} = ${t(e.tr)}\\ \\text{kip}` : P.Lmax>=14? `R_{truck} = 32 + 32\\dfrac{L_s-14}{L_s} = 32 + 32\\dfrac{${t(P.Lmax)}-14}{${t(P.Lmax)}} = ${t(e.tr)}\\ \\text{kip (the 8-kip axle is off the span)}` : `R_{truck} = 32\\ \\text{kip (one axle on the span)}`,
+    `R_{tandem} = 25 + 25\\dfrac{L_s-4}{L_s} = 25 + 25\\dfrac{${t(P.Lmax)}-4}{${t(P.Lmax)}} = ${t(e.ta)}\\ \\text{kip}\\,, \\quad R_{lane} = \\dfrac{0.64L_s}{2} = ${t(e.lane)}\\ \\text{kip}`,
+    `R_{L} = 1.33\\max(R_{truck},R_{tandem}) + R_{lane} = 1.33(${t(e.T)}) + ${t(e.lane)} = ${t(P.RlIM)}\\ \\text{kip}\\quad(\\text{without IM: } ${t(P.Rl)}\\ \\text{kip})`],
+    "The heaviest axle over the support; IM = 33 % on the truck or tandem, not on the lane load [3.6.2.1].");
+  h+=eqB("Per ft of slab width — equivalent strip","AASHTO LRFD 10th Ed. 4.6.2.3 (Eqs. 4.6.2.3-1, -2), 3.6.1.1.1; C3.6.1.1.2",[
+    `L_1 = \\min(L_s,\\ 60) = ${t(P.L1)}\\ \\text{ft}\\,, \\quad N_L = \\lfloor w_{road}/12 \\rfloor = \\lfloor ${t(+S.longit.roadwayW)}/12 \\rfloor = ${P.NL}`,
+    `E_1 = 10 + 5\\sqrt{L_1W_1} = 10 + 5\\sqrt{(${t(P.L1)})(${t(P.W1s)})} = ${t(P.E1,1)}\\ \\text{in}\\quad(W_1 = \\min(W,\\ 30))`,
+    ...(P.NL>1?[`E_M = 84 + 1.44\\sqrt{L_1W_1} = 84 + 1.44\\sqrt{(${t(P.L1)})(${t(P.W1m)})} = ${t(P.EMr,1)}\\ \\text{in} \\le \\dfrac{12W}{N_L} = \\dfrac{12(${t(P.W)})}{${P.NL}} = ${t(P.EMc,1)} \\Rightarrow E_M = ${t(P.EM,1)}\\ \\text{in}`]:[]),
+    `w_{LL} = \\max\\!\\left(\\dfrac{R_L}{E_1/12}${P.NL>1?",\\ \\dfrac{R_L}{E_M/12}":""}\\right) = \\max\\!\\left(\\dfrac{${t(P.RlIM)}}{${t(P.E1/12,3)}}${P.NL>1?`,\\ \\dfrac{${t(P.RlIM)}}{${t(P.EM/12,3)}}`:""}\\right) = ${t(P.wLL,3)}\\ \\text{kip/ft of width (${P.multi?"multiple lanes":"one lane"})}`,
+    `q_{LL} = w_{LL}\\cos\\theta = (${t(P.wLL,3)})\\cos ${t(P.th,1)}° = ${t(P.qLL,3)}\\ \\text{kip/ft along the abutment (with IM; without IM ${t(P.qLLn,3)})}`],
+    "The strip widths include the multiple presence factor (the one-lane strip is divided by 1.20, C4.6.2.3; C3.6.1.1.2), so m is not applied again. This local intensity loads the "+(P.sup==="shelf"?"shelf and the backwall":"deck end")+" and the slab design; the total below loads the abutment.");
+  let lt=`<table class="rtbl"><tr><th>Lanes loaded n</th><th>m [T.3.6.1.1.2-1]</th><th>n·m·R<sub>L</sub> (kip)</th></tr>`;
+  P.lanes.forEach(x=>{ lt+=`<tr${x===P.gov?' class="gov"':''}><td>${x.n}</td><td>${fmt(x.m,2)}</td><td>${fmt(x.R,2)}</td></tr>`; }); lt+="</table>";
+  h+=eqB("Total live load on the abutment","AASHTO LRFD 10th Ed. 3.6.1.1.1, 3.6.1.1.2, 3.6.2.1",[
+    `R_{LL} = \\max_n\\,(n\\,m_n R_L) = ${P.gov.n}(${t(P.gov.m,2)})(${t(P.RlIM)}) = ${t(P.RLLim,2)}\\ \\text{kip (with IM)}`,
+    `R_{LL,static} = R_{LL}\\dfrac{R_{truck/tandem} + R_{lane}}{1.33R_{truck/tandem} + R_{lane}} = ${t(P.RLLim,2)}\\dfrac{${t(P.Rl)}}{${t(P.RlIM)}} = ${t(P.RLL,2)}\\ \\text{kip (without IM)}`],
+    `Lanes on the slab (N<sub>L</sub> from the clear roadway width of panel I-6b). ${it==="integral"?"The cap takes R<sub>LL</sub> with IM and the piles take it "+((R.iab&&R.iab.pile&&R.iab.pile.IM)?"without IM (Tab 10 §10.4)":"with IM (owner rule, Tab 10 §10.4)"):"Spread along the abutment like the girder reactions; "+((R.im&&R.im.on)?"the footing and piles take it without IM (foundation below ground, 3.6.2.1; §1.9), the stem and seat with IM":"IM kept on the foundation (panel I-4)")}. Taken concurrent with the girder LL reaction (as the live-load surcharge it replaces); the permutations also take it off with the girder LL reaction on, and off with it in the C11.5.6 cases (Tab 2).`)+lt;
+  if(it!=="integral") h+=eqB("Point of application","statics",[
+    it==="semi"? `x_{ap} = x_{brg} = ${t(P.x,3)}\\ \\text{ft from the toe (on the end diaphragm, carried by the girders to the bearings)}`
+    : P.sup==="shelf"? `x_{ap} = x_{back} + a_v = ${t(R.geo.xStemBack,3)} + ${t(P.av,2)}/12 = ${t(P.x,3)}\\ \\text{ft from the toe}\\,, \\quad e_{bw} = \\dfrac{t_{bw}}{2} + a_v = \\dfrac{${t(+g.tbw)}}{2} + \\dfrac{${t(P.av,2)}}{12} = ${t(P.eBw,3)}\\ \\text{ft behind the backwall centroid}`
+    : `x_{ap} = x_{back} - \\dfrac{t_{bw}}{2} = ${t(P.x,3)}\\ \\text{ft from the toe (on the backwall centroid: } e_{bw} = 0)`],
+    `Load groups APdc${P.RDW>0?", APdw":""}, APll in §1.9 (the construction stage has no slab).`);
+  if(P.F>0||it!=="conv") h+=eqB("Friction of the sliding slab on the moving wall ("+(it==="integral"?"integral":"semi-integral")+")",(own==="MassDOT"?"MassDOT Part I 3.10.4":own==="RIDOT"?"RIDOT BDM 11.3.2":own==="CTDOT"?"CTDOT BRSDM V2 11.14.1CT":"AASHTO LRFD 10th Ed. C11.6.1.3")+"; AASHTO Table 3.11.5.3-1 (μ)",[
+    `F = \\mu\\,(R_{DC} + R_{DW}) = (${t(P.mu,2)})(${t(P.RDC,2)} + ${t(P.RDW,2)}) = ${t(P.F,2)}\\ \\text{kip}`],
+    `The slab ${own==="CTDOT"?"is anchored to the abutment and drags on its far support / subbase":"slides at the abutment (or at its far support)"}: the normal force at the sliding interface of a simple span is its end reaction, so F is the same at either end. It resists the wall movement — toward the span on expansion (added to the backfill force delivered to the superstructure), toward the backfill on contraction (<span class="xlink" data-jump="tab-iab|o-iab-ep">Tab 10 §10.3</span>); in the shelf as N<sub>uc</sub> (${desTab[1]}). μ = ${fmt(P.mu,2)} (panel I-0b).`);
+  if(S.seismic.on&&R.seis) h+=eqB("Extreme Event I — slab inertia","AASHTO LRFD 10th Ed. 11.6.5.1, 3.10.9.1",[
+    `W_{ap} = R_{DC} + R_{DW}${P.WSh>0?" + W_{sh}":""} = ${t(P.RDC,2)} + ${t(P.RDW,2)}${P.WSh>0?" + "+t(P.WSh,2):""} = ${t(P.Wi,2)}\\ \\text{kip (the slab mass tributary to the abutment)}`,
+    P.eqWall? `k_hW_{ap} = (${t(R.seis.kh,4)})(${t(P.Wi,2)}) = ${t((R.seis.kh||0)*P.Wi,2)}\\ \\text{kip at } z = t_f + h_{stem} + h_{bw} - t/2 = ${t(P.zSlab)}\\ \\text{ft}`
+    : it==="integral"? (R.iab&&R.iab.apEE? `F_{EQ} = \\min(k_hW,\\ F) = \\min((${t(R.iab.apEE.kh,4)})(${t(R.iab.apEE.W,2)}),\\ ${t(R.iab.apEE.Fcap,2)}) = ${t(R.iab.apEE.F,2)}\\ \\text{kip (friction cap)}` : `\\text{—}`)
+    : `A_sW_{ap}\\cdot s_{EQ} = (${t(+S.seismic.As,3)})(${t(P.Wi,2)})(${t(R.seis.shEQ||1,2)}) = ${t((+S.seismic.As)*P.Wi*(R.seis.shEQ||1),2)}\\ \\text{kip (with the superstructure inertia, Tab 3 §3.6a)}`],
+    P.eqWall? "On the shelf of the conventional backwall: with the wall inertia (× f<sub>I</sub> in the 11.6.5.1 cases), longitudinal and along the abutment (Tab 3 §3.6a, Tab 5 §5.1a, §5.2). Single-span bridge: k<sub>h</sub> = 0 (C3.10.9.1)."
+    : it==="integral"? "Integral abutment: the slab can transfer at most its sliding friction F; add F<sub>EQ</sub> to the longitudinal seismic force on the integral abutment (superstructure frame), Tab 10 §10.3."
+    : "Moves with the superstructure (semi-integral end diaphragm / deck end): in the superstructure inertia at the seat with the share of panel I-11 (Tab 3 §3.6a).");
+  return panel("o-ap","1.4a","Approach Slab — Loads on the Abutment",h);
+}
+/* shelf (bracket) panel: §5.8 (conventional, semi-integral) / §10.7 (integral) */
+function apShelfHTML(R,no){
+  const H=R.apShelf, P=R.ap; if(!H||!P) return "";
+  const t=fmtT, it=iabType(), wall=it==="conv"?"backwall":"end diaphragm", fc=H.fc, fy=H.fy;
+  let h=`<div class="note-box">Shelf (paving notch) on the back face of the ${wall}: projection b<sub>S</sub> = ${fmt(H.bS,1)} in, depth h = ${fmt(H.h,1)} in at the face and h<sub>E</sub> = ${fmt(H.hE,1)} in at the outer edge; the slab reaction at a<sub>v</sub> = ${fmt(H.av,2)} in from the face. Per ft along the wall (the longest strip of §1.4a). Primary tie #${esc(H.bar)} @ ${fmt(H.sp,1)} in at the top, ${H.nT} closed-tie leg${H.nT===1?"":"s"} #${esc(H.tieBar)} @ ${fmt(H.tieSp,1)} in within 2d<sub>e</sub>/3 below it (panel I-0b). Bar figure: ${it==="integral"?"below":'<span class="xlink" data-jump="tab-struct|o-rebar">§5.7</span>'}.</div>`;
+  h+=eqB("Factored loads (Strength I)","AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2; 5.8.4.2.1 (Eq. 5.8.4.2.1-1)",[
+    `V_{u,slab} = \\gamma_{DC}q_{DC} + \\gamma_{DW}q_{DW} + \\gamma_{LL}m\\,q_{LL} = ${t(H.gDC)}(${t(P.qDC,3)}) + ${t(H.gDW)}(${t(P.qDW,3)}) + ${t(H.gLL)}(${t(P.qLL,3)}) = ${t(H.VuS,3)}\\ \\text{kip/ft}`,
+    `V_u = V_{u,slab} + \\gamma_{DC}w_{sh} = ${t(H.VuS,3)} + ${t(H.gDC)}(${t(P.wSh,4)}) = ${t(H.Vu,3)}\\ \\text{kip/ft}`,
+    `N_{uc} = \\max(0.2V_u${H.slide?",\\ \\gamma_{LL}\\mu(q_{DC} + q_{DW})":""}) = \\max(0.2(${t(H.Vu,3)})${H.slide?`,\\ ${t(H.gLLn)}(${t(P.mu,2)})(${t(P.qDC+P.qDW,3)})`:""}) = ${t(H.Nuc,3)}\\ \\text{kip/ft}`,
+    `d = h - c - \\dfrac{d_b}{2} = ${t(H.h,1)} - ${t(H.cov,2)} - ${t(BARS[H.bar].db/2,3)} = ${t(H.d,3)}\\ \\text{in}\\,, \\quad a_v = ${t(H.av,2)}\\ \\text{in}\\ ${H.corbel?"\\le":">"}\\ d \\;\\Rightarrow\\; ${H.corbel?"\\text{bracket (5.8.4.2.1)}":"\\text{cantilever beam (5.8.4.2.1)}"}`,
+    `M_u = V_{u,slab}a_v + \\gamma_{DC}w_{sh}\\bar x + N_{uc}(h - d) = ${t(H.VuS,3)}(${t(H.av,2)}) + ${t(H.VuW,4)}(${t(P.xSh,2)}) + ${t(H.Nuc,3)}(${t(H.h-H.d,3)}) = ${t(H.Mu,2)}\\ \\text{kip-in/ft}`],
+    `q of §1.4a (local, per ft along the wall; LL with IM). N<sub>uc</sub> is a live load, at least 0.2V<sub>u</sub> (5.8.4.2.1)${H.slide?"; the slab slides on (or drags) the shelf of the moving "+wall+": γ<sub>LL</sub>·μ·(q<sub>DC</sub> + q<sub>DW</sub>), μ of §1.4a":""}.`);
+  if(H.corbel){
+    h+=eqB("Shear friction and the bracket limits","AASHTO LRFD 10th Ed. 5.8.4.2.2 (Eqs. 5.8.4.2.2-1, -2), 5.7.4.3, 5.7.4.4, 5.5.4.2",[
+      `A_{vf} = \\dfrac{V_u}{\\varphi\\mu f_y} = \\dfrac{${t(H.Vu,3)}}{0.90(${t(H.mu,1)})(${t(H.fyv,0)})} = ${t(H.Avf,4)}\\ \\text{in}^2/\\text{ft}\\quad(c = 0,\\ \\mu = 1.4\\ \\text{monolithic};\\ f_y \\le 60\\ \\text{ksi})`,
+      `V_{n,max} = \\min(0.2f'_cb\\,d_e,\\ 0.8\\,b\\,d_e) = \\min(0.2(${t(fc,1)})(12)(${t(H.d,3)}),\\ 0.8(12)(${t(H.d,3)})) = \\min(${t(H.Vn1,2)},\\ ${t(H.Vn2,2)}) = ${t(H.Vnmax,2)}\\ \\text{kip/ft}`]);
+    h+=checkLine("Shelf shear-friction limit",`\\dfrac{V_u}{\\varphi V_{n,max}} = \\dfrac{${t(H.Vu,3)}}{0.90(${t(H.Vnmax,2)})}`,H.dcV);
+    h+=eqB("Primary tension tie","AASHTO LRFD 10th Ed. 5.8.4.2.2 (Eqs. 5.8.4.2.2-5, -7), 5.8.4.2.1; 5.6.3.2",[
+      `A_f = \\dfrac{0.85f'_cb}{f_y}\\left(d - \\sqrt{d^2 - \\dfrac{2M_u}{\\varphi\\,0.85f'_cb}}\\right) = \\dfrac{0.85(${t(fc,1)})(12)}{${t(fy,0)}}\\left(${t(H.d,3)} - \\sqrt{${t(H.d,3)}^2 - \\dfrac{2(${t(H.Mu,2)})}{0.90(0.85)(${t(fc,1)})(12)}}\\right) = ${t(H.Af,4)}\\ \\text{in}^2/\\text{ft}`,
+      `A_n = \\dfrac{N_{uc}}{\\varphi f_y} = \\dfrac{${t(H.Nuc,3)}}{0.90(${t(fy,0)})} = ${t(H.An,4)}\\,, \\quad \\dfrac{2A_{vf}}{3} + A_n = ${t(H.Asr2,4)}\\,, \\quad A_f + A_n = ${t(H.Asr1,4)}\\,, \\quad 0.04\\dfrac{f'_c}{f_y}bd = ${t(H.AsMin,4)}\\ \\text{in}^2/\\text{ft}`,
+      `A_{s,req} = \\max(${t(H.Asr1,4)},\\ ${t(H.Asr2,4)},\\ ${t(H.AsMin,4)}) = ${t(H.AsReq,4)}\\,, \\quad A_s = A_b\\dfrac{12}{s} = ${t(BARS[H.bar].Ab,2)}\\dfrac{12}{${t(H.sp,1)}} = ${t(H.As,4)}\\ \\text{in}^2/\\text{ft}`],
+      "A_f by the flexure of an ordinary member (5.8.4.2.2), φ = 0.90 (tension-controlled, 5.5.4.2). The primary tie is anchored at the front face to develop f<sub>y</sub> (e.g. a welded cross bar or a loop: detailing, 5.8.4.2.1), and the bearing area stays within its straight portion.");
+    h+=checkLine("Shelf primary tie",`\\dfrac{A_{s,req}}{A_s} = \\dfrac{${t(H.AsReq,4)}}{${t(H.As,4)}}`,H.dcAs);
+    h+=eqB("Closed ties","AASHTO LRFD 10th Ed. 5.8.4.2.1, 5.8.4.2.2 (Eq. 5.8.4.2.2-6)",[
+      `A_{h,req} = \\max(0.5A_s,\\ 0.5(A_s - A_n)) = \\max(0.5(${t(H.As,4)}),\\ 0.5(${t(H.As,4)} - ${t(H.An,4)})) = ${t(H.AhReq,4)}\\ \\text{in}^2/\\text{ft}`,
+      `A_h = n_{leg}A_b\\dfrac{12}{s} = ${H.nT}(${t(BARS[H.tieBar].Ab,2)})\\dfrac{12}{${t(H.tieSp,1)}} = ${t(H.Ah,4)}\\ \\text{in}^2/\\text{ft}\\quad(\\text{within } 2d_e/3 = ${t(2*H.d/3,2)}\\ \\text{in below the tie})`],
+      "A<sub>s</sub> = the primary tie provided.");
+    h+=checkLine("Shelf closed ties",`\\dfrac{A_{h,req}}{A_h} = \\dfrac{${t(H.AhReq,4)}}{${t(H.Ah,4)}}`,H.dcAh);
+  }else{
+    const c=H.sec;
+    h+=eqB("Cantilever (a<sub>v</sub> &gt; d): flexure with the axial tension, shear","AASHTO LRFD 10th Ed. 5.8.4.2.1, 5.6.3.2, 5.7.3.3",[
+      `\\varphi M_n = ${t(c.phiMn,3)}\\ \\text{kip-ft/ft}\\,, \\quad A_{s,req} = A_{s,flex} + \\dfrac{N_{uc}}{\\varphi f_y} = ${t(c.AsReq,4)} + ${t(H.An,4)} = ${t(H.AsReq,4)}\\ \\text{in}^2/\\text{ft}\\ \\text{vs}\\ A_s = ${t(H.As,4)}`,
+      `\\varphi V_n = ${t(c.phiVn,3)}\\ \\text{kip/ft}\\,, \\quad V_u/\\varphi V_n = ${t(c.dcShear,3)}`]);
+    h+=checkLine("Shelf tie (cantilever)",`\\dfrac{A_{s,req}}{A_s} = \\dfrac{${t(H.AsReq,4)}}{${t(H.As,4)}}`,H.dcAs)+checkLine("Shelf shear (cantilever)",`\\dfrac{V_u}{\\varphi V_n}`,H.dcV);
+  }
+  h+=eqB("Bearing of the slab on the shelf and the outer-edge depth","AASHTO LRFD 10th Ed. 5.6.5 (Eq. 5.6.5-2), 5.5.4.2; 5.8.4.2.1",[
+    `q_b = \\dfrac{V_{u,slab}}{b_S(12)} = \\dfrac{${t(H.VuS,3)}}{(${t(H.bS,1)})(12)} = ${t(H.qb,4)}\\ \\text{ksi}\\,, \\quad q_R = \\varphi_b(0.85f'_c)m = 0.70(0.85)(${t(fc,1)})(1.0) = ${t(H.qR,3)}\\ \\text{ksi}`,
+    `h_E = ${t(H.hE,1)}\\ \\text{in}\\ ${H.dcEdge<=1?"\\ge":"<"}\\ \\dfrac{h}{2} = ${t(H.h/2,1)}\\ \\text{in}`],
+    "The slab bears over the shelf projection (m = 1: no confinement credit at the free edge).");
+  h+=checkLine("Shelf bearing",`\\dfrac{q_b}{q_R} = \\dfrac{${t(H.qb,4)}}{${t(H.qR,3)}}`,H.dcB)+checkLine("Shelf outer-edge depth",`\\dfrac{h/2}{h_E} = \\dfrac{${t(H.h/2,1)}}{${t(H.hE,1)}}`,H.dcEdge);
+  if(it==="integral") h+=figBox("apShelf",R);
+  return panel("o-ap-shelf",no,"Approach-Slab Shelf (Paving Notch) — Bracket [5.8.4.2]",h);
+}
+/* slab design: §5.9 / §10.8 */
+function apDesHTML(R,no){
+  const D=R.apDes, P=R.ap; if(!D||!P) return "";
+  const t=fmtT, c=D.sec, mo=D.mo, A=S.apSlab;
+  let h=`<div class="note-box">One-way slab on a simple span L<sub>s</sub> = ${fmt(D.Ls,2)} ft (${P.rule==="square"?"the longest strip of the squared slab":"abutment to the far-end support"}), per ft of width. The soil support beneath may be lost, so it is not counted; AASHTO LRFD has no approach-slab article and the simple span is the usual DOT approach. HL-93 per lane over the 4.6.2.3 equivalent strip (§1.4a). h = ${fmt(D.h,1)} in; main bottom bars #${esc(String(A.aBar))} @ ${fmt(+A.aSp,1)} in, clear cover ${fmt(+A.cov,2)} in (panel I-0b).</div>`;
+  h+=eqB("Moments and shear per ft of width","AASHTO LRFD 10th Ed. 3.6.1.2, 3.6.1.3.1, 3.6.2.1, 4.6.2.3 (Eqs. 4.6.2.3-1 to -3); Tables 3.4.1-1, 3.4.1-2",[
+    `M_{DC} = \\dfrac{w_{DC}L_s^2}{8} = \\dfrac{(${t(P.wDC,4)})(${t(D.Ls)})^2}{8} = ${t(D.MDC,3)}\\,, \\quad M_{DW} = \\dfrac{(${t(P.wDW,4)})(${t(D.Ls)})^2}{8} = ${t(D.MDW,3)}\\ \\text{kip-ft/ft}`,
+    `M_{truck} = ${t(mo.tr,2)}\\ (\\text{axle at } ${t(mo.xtr,2)}\\ \\text{ft})\\,, \\quad M_{tandem} = ${t(mo.ta,2)}\\ (\\text{axle at } ${t(mo.xta,2)}\\ \\text{ft})\\,, \\quad M_{lane} = \\dfrac{0.64L_s^2}{8} = ${t(mo.lane,2)}\\ \\text{kip-ft per lane}`,
+    `M_L = 1.33\\max(M_{truck},M_{tandem}) + M_{lane} = 1.33(${t(mo.T,2)}) + ${t(mo.lane,2)} = ${t(D.MlIM,2)}\\ \\text{kip-ft per lane}`,
+    `M_{LL} = r\\max\\!\\left(\\dfrac{M_L}{E_1/12}${P.NL>1?",\\ \\dfrac{M_L}{E_M/12}":""}\\right) = ${t(D.r,3)}\\max(${t(D.m1,3)}${P.NL>1?",\\ "+t(D.mM,3):""}) = ${t(D.MLL,3)}\\ \\text{kip-ft/ft}${D.r<1?`\\quad(r = 1.05 - 0.25\\tan ${t(P.th,1)}° = ${t(D.r,3)})`:""}`,
+    `M_u = ${t(GP_safe(R,"DC"))}(${t(D.MDC,3)}) + ${t(GP_safe(R,"DW"))}(${t(D.MDW,3)}) + ${t(D.gL)}(${t(D.MLL,3)}) = ${t(D.Mu,3)}\\ \\text{kip-ft/ft}\\,, \\quad M_s = ${t(D.MDC,3)} + ${t(D.MDW,3)} + ${D.mS!==1?t(D.mS,2)+"(":""}${t(D.MLL,3)}${D.mS!==1?")":""} = ${t(D.Ms,3)}\\ \\text{kip-ft/ft}`,
+    `V_u = ${t(GP_safe(R,"DC"))}\\dfrac{w_{DC}L_s}{2} + ${t(GP_safe(R,"DW"))}\\dfrac{w_{DW}L_s}{2} + ${t(D.gL)}\\,w_{LL} = ${t(GP_safe(R,"DC"))}(${t(D.VDC,3)}) + ${t(GP_safe(R,"DW"))}(${t(D.VDW,3)}) + ${t(D.gL)}(${t(D.VLL,3)}) = ${t(D.Vu,3)}\\ \\text{kip/ft}`],
+    "Moments: the design truck (8, 32, 32 kip at 14 ft) and tandem (2 × 25 kip at 4 ft) placed for the largest simple-span moment, with IM 33 % (not on the lane load); E<sub>1</sub>, E<sub>M</sub> of §1.4a include multiple presence. "+(D.r<1?"r reduces the live-load moment of a skewed slab (Eq. 4.6.2.3-3). ":(P.rule==="square"&&P.th>0?"r (Eq. 4.6.2.3-3) not taken: the slab is not a parallelogram (far end square). ":""))+"Shear: the end reaction w<sub>LL</sub> of §1.4a.");
+  h+=`<div class="note-box">Shear (5.12.2.1): a slab designed for moment per 4.6.2.3 may be taken as satisfactory for shear — V<sub>u</sub>/φV<sub>n</sub> = ${fmt(c.dcShear,3)} is shown below for information (not a dashboard check).</div>`;
+  let dh=eqB("Bottom distribution reinforcement and top S&amp;T reinforcement","AASHTO LRFD 10th Ed. 9.7.3.2, 5.12.2.1 (Eq. 5.12.2.1-1), 5.10.6 (Eq. 5.10.6-1)",[
+    `\\%_{dist} = \\dfrac{100}{\\sqrt{L_s}} = \\dfrac{100}{\\sqrt{${t(D.Ls)}}} = ${t(100/Math.sqrt(D.Ls),2)} \\le 50 \\;\\Rightarrow\\; ${t(D.pct,2)}\\,\\%`,
+    `A_{s,dist} \\ge \\max(\\%_{dist}A_s,\\ A_{s,ST}) = \\max(${t(D.pct/100,4)}(${t(c.As,3)}),\\ ${t(c.AsST,3)}) = ${t(D.AsDreq,4)}\\,, \\quad A_{s,dist,prov} = ${t(BARS[A.dBar].Ab,2)}\\dfrac{12}{${t(+A.dSp,1)}} = ${t(D.AsD,4)}\\ \\text{in}^2/\\text{ft}`,
+    `A_{s,top} = ${t(BARS[A.tBar].Ab,2)}\\dfrac{12}{${t(+A.tSp,1)}} = ${t(D.AsT,4)} \\ \\text{vs}\\ A_{s,ST} = ${t(c.AsST,4)}\\ \\text{in}^2/\\text{ft each way}`],
+    "Primary reinforcement parallel to traffic: the bottom transverse steel is a percentage of the main bottom steel provided (9.7.3.2), and not less than the S&T steel (5.10.6, each face, each direction).")
+    +checkLine("Approach slab distribution reinforcement",`\\dfrac{A_{s,dist,req}}{A_{s,dist}} = \\dfrac{${t(D.AsDreq,4)}}{${t(D.AsD,4)}}`,D.dcD)
+    +checkLine("Approach slab top S&T reinforcement",`\\dfrac{A_{s,ST}}{A_{s,top}} = \\dfrac{${t(c.AsST,4)}}{${t(D.AsT,4)}}`,D.dcT);
+  return panel("o-ap-des",no,"Approach Slab — Design Loads, Distribution &amp; S&amp;T Steel",h+dh)
+    + sectionHTML(c,`<div class="note-box">Approach slab main bottom bars #${esc(String(A.aBar))} @ ${fmt(+A.aSp,1)} in, per ft of width; M<sub>u</sub>, V<sub>u</sub>, M<sub>s</sub> above (${no}).</div>`,no+"a","Approach Slab — Flexure, Shear, Crack Control");
+}
+function GP_safe(R,k){ return R.GP&&R.GP[k]? R.GP[k][1] : 1; }
 /* ---- OWNB: owner load rules worked (η, design load multiplier m, construction surcharge, passive at Extreme Event, h_eq minimum) ---- */
 function ownLoadPanelHTML(R){
   const OL=R.ownLoad, qc=R.constrC&&R.constrC.qC;
@@ -5676,7 +6134,7 @@ function renderTabComb(R){
     let t=`<table class="rtbl"><tr><th>γDC</th><th>γDW</th><th>γEV</th><th>γEH</th><th>Live</th><th>ΣV (kip)</th><th>ΣH<sub>x</sub> (kip)</th><th>ΣM<sub>V</sub> (kip·ft)</th><th>ΣM<sub>H</sub> (kip·ft)</th><th>x̄ (ft)</th><th>e (ft)</th><th>Governs</th></tr>`;
     rows.forEach(r=>{
       const g=r.govFor?`<span class="flagchip warn" style="font-size:0.72rem;">◄ ${r.govFor.join(", ")}</span>`:"";
-      t+=`<tr${r.govFor?' class="gov"':''}><td>${fmt(r.gset.DCsub)}</td><td>${fmt(r.gset.DW)}</td><td>${fmt(r.gset.EV)}</td><td>${fmt(r.gset.EHh)}</td><td>${r.liveOn===2?"LS, BR only":r.liveOn?"on":"off"}</td>
+      t+=`<tr${r.govFor?' class="gov"':''}><td>${fmt(r.gset.DCsub)}</td><td>${fmt(r.gset.DW)}</td><td>${fmt(r.gset.EV)}</td><td>${fmt(r.gset.EHh)}</td><td>${r.liveOn===2?"LS, BR only":r.liveOn===3?"on, approach-slab LL off":r.liveOn?"on":"off"}</td>
         <td>${fmt(r.V)}</td><td>${fmt(r.Hx)}</td><td>${fmt(r.Mv)}</td><td>${fmt(r.Mh)}</td><td>${fmt(r.xbar)}</td><td>${fmt(r.e)}</td><td class="lft">${g}</td></tr>`;
     });
     t+="</table>";
@@ -5769,7 +6227,7 @@ function renderTabStab(R){
         `e = \\dfrac{${fmtT(geo.B)}}{2} - ${fmtT(ec.xbar)} = ${fmtT(ec.eSigned)}\\ \\text{ft}\\,, \\qquad |e| = ${fmtT(ec.e)}\\ \\text{ft}\\ (\\text{resultant on the ${ec.side} side})`])}
       ${eqB(`Limit for founding material: ${fn.matl}${LIMITS_HAS_EQ(R)?" (EE-I uses the extreme-event fraction)":""}`,"AASHTO 11.6.3.3, 11.6.5.1",[
         ...((R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq&&S.seismic.eLimEQmode!=="user")?["e_{lim} = B\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)\\gamma_{EQ}\\right)",
-          `e_{lim} = ${fmtT(geo.B)}\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)(${fmtT(ec.c&&ec.c.liveOn===1?Math.min(1,Math.max(0,+S.seismic.gEQll||0)):0)})\\right) \\quad (\\gamma_{EQ}${ec.c&&ec.c.liveOn===1?"\\text{ as entered}":" = 0\\text{: permutation without live load}"})`]:[]),
+          `e_{lim} = ${fmtT(geo.B)}\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)(${fmtT(ec.c&&(ec.c.liveOn===1||ec.c.liveOn===3)?Math.min(1,Math.max(0,+S.seismic.gEQll||0)):0)})\\right) \\quad (\\gamma_{EQ}${ec.c&&(ec.c.liveOn===1||ec.c.liveOn===3)?"\\text{ as entered}":" = 0\\text{: permutation without live load}"})`]:[]),
         `e_{lim} = ${fmtT(ec.eLim)}\\ \\text{ft} \\quad(${(R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq)?(S.seismic.eLimEQmode==="user"?`${fmt(+S.seismic.eFracEQ,3)}·B \\text{ at EE-I (owner rule)}`:`${fmtT(ec.eLim/geo.B,4)}\\,B \\text{ at EE-I}`):`${fmtT(fn.matl==="rock"?+fn.eFracRock:+fn.eFracSoil,3)}\\,B \\text{ at Strength — middle ${fn.matl==="rock"?"nine-tenths":"two-thirds"}}`})`])}
       ${ec.eL>1e-9?eqB("Eccentricity along the footing length","AASHTO LRFD 10th Ed. 10.6.3.3, 11.6.5.1",[
         `e_L = \\dfrac{|\\Sigma M_t|}{\\Sigma V} = \\dfrac{${fmtT(Math.abs(ec.Mt))}}{${fmtT(ec.V)}} = ${fmtT(ec.eL,3)}\\ \\text{ft}\\,, \\qquad e_{L,lim} = \\dfrac{e_{lim}}{B}L_{ftg} = \\dfrac{${fmtT(ec.eLim)}}{${fmtT(geo.B)}}(${fmtT(+g.Lftg||g.Lab)}) = ${fmtT(ec.eLimL)}\\ \\text{ft}`,
@@ -6289,7 +6747,14 @@ function renderTabStruct(R){
   }
   const bd=R.bwDem, cB=R.checks.bwFlex, bw=bd.wheel||{mode:"off",M:0,wLL:0}, gLb=bd.gLS??+S.factors.llS1, esB=(bd.Mbw_ES||0)>0;
   // ABCHK: backwall live load (wheel on top of the backwall), worked here; quoted in M_u and M_s below
-  const bwWheelH= bw.mode==="off"
+  const AB=bd.ap, Pa=R.ap;   // APS: approach-slab couple on the backwall (replaces the wheel load)
+  const bwWheelH= bw.mode==="slab"
+    ? eqB("Backwall — approach-slab reaction on the "+(Pa&&Pa.sup==="shelf"?"shelf (replaces the wheel load on top of the backwall)":"deck end over the backwall (replaces the wheel load)"),"AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2; statics",AB?[
+      `M_{DC} = q_{DC}\\,e_{bw} + w_{sh}\\,e_{sh} = (${fmtT(Pa.qDC,3)})(${fmtT(Pa.eBw,3)}) + (${fmtT(Pa.wSh,4)})(${fmtT(Pa.eSh,3)}) = ${fmtT(AB.MDC,3)}\\,, \\quad M_{DW} = (${fmtT(Pa.qDW,3)})(${fmtT(Pa.eBw,3)}) = ${fmtT(AB.MDW,3)}\\,, \\quad M_{LL} = (${fmtT(Pa.qLL,3)})(${fmtT(Pa.eBw,3)}) = ${fmtT(AB.MLL,3)}\\ \\text{kip-ft/ft}`,
+      `e_{bw} = \\dfrac{t_{bw}}{2} + a_v = ${fmtT(Pa.eBw,3)}\\ \\text{ft},\\ e_{sh} = \\dfrac{t_{bw}}{2} + \\bar x_{sh} = ${fmtT(Pa.eSh,3)}\\ \\text{ft (behind the backwall centroid: front-face tension)}`]
+      :[`e_{bw} = 0`],
+      `The slab reaction per ft (local, the longest strip: q of <span class="xlink" data-jump="tab-loads|o-ap">§1.4a</span>) acts ${Pa&&Pa.sup==="shelf"?"on the shelf behind the back face":"on the backwall centroid (e = 0: no couple)"}; it bends the backwall the opposite way to EH. Back face (below): DC and DW at γ min, the slab LL off (it relieves). Front face: DC, DW at γ max with the slab LL + IM, EH and ES at γ min, LS off — checked in §5.1b when it governs. With the slab on, no design truck wheel bears on top of the backwall (the slab carries it). Its axial compression is conservatively ignored.`)
+    : bw.mode==="off"
     ? `<div class="note-box">Live load on top of the backwall: <b>none</b> (panel I-9) — no design truck wheel is taken to bear on the backwall; M<sub>LL</sub> = 0.</div>`
     : eqB("Backwall live load — design truck wheels on top of the backwall (vertical, at the front top corner)","AASHTO LRFD 10th Ed. 3.6.1.2.2, 3.6.1.2.5, Table 4.6.2.1.3-1, Table 3.6.1.1.2-1, Table 3.6.2.1-1; FHWA LRFD steel girder design example, Design Step 7.5",[
       `E = 45 + 10X = 45 + 10(${fmtT(bw.X)}) = ${fmtT(bw.E,1)}\\ \\text{in} \\quad (X = h_{bw}:\\ \\text{load to the backwall base, ft})`,
@@ -6297,15 +6762,23 @@ function renderTabStruct(R){
       `w_{LL} = m\\,(1+IM)\\,\\max\\!\\left(\\dfrac{P_w}{E},\\,\\dfrac{2P_w}{E+72}\\right)(12) = ${fmtT(bw.m,2)}(1+${fmtT(bw.IM,2)})(${fmtT(Math.max(bw.w1,bw.w2),4)})(12) = ${fmtT(bw.wLL,3)}\\ \\text{kip/ft}`,
       `M_{LL} = w_{LL}\\,\\dfrac{t_{bw}}{2} = (${fmtT(bw.wLL,3)})\\dfrac{${fmtT(S.geom.tbw)}}{2} = ${fmtT(bw.M,3)}\\ \\text{kip-ft/ft}`],
       `P<sub>w</sub> = 16 kip, one wheel of the 32 kip design truck axle [3.6.1.2.2], on a 20 in × 10 in tire [3.6.1.2.5]. The wheel is spread along the backwall over the cantilever (overhang) strip of Table 4.6.2.1.3-1 with X = h<sub>bw</sub>; the other wheel of the axle is 6 ft (72 in) away [3.6.1.2.2], so when the strips overlap (E &gt; 72 in) the axle is spread over E + 72 in. m = 1.20 (one loaded lane, Table 3.6.1.1.2-1), IM = 33 % [Table 3.6.2.1-1]. The load acts vertically at the front top corner (bridge side), lever arm t<sub>bw</sub>/2 to the backwall centroid, as in the FHWA example (Design Step 7.5): it adds back-face tension, like EH and LS, and no horizontal shear (its axial compression is conservatively ignored in the section check). Backwall only, not the stem or footing (FHWA DS 7.5).${(bw.mU||1)!==1?` Owner design load multiplier m = ${fmt(bw.mU,2)} on LL+IM (panel I-0).`:""} Set "Live load on top of the backwall" to none (panel I-9) where no wheel can bear on the backwall.`);
-  h+=sectionHTML(cB, bwWheelH + eqB("Backwall demands — EH + LS"+(bw.mode==="off"?"":" + wheel load")+" over its own retained height, cantilever above the seat","AASHTO 3.11.5, 3.11.6.4; design basis §8.1",[
+  h+=sectionHTML(cB, bwWheelH + eqB("Backwall demands — EH + LS"+(bw.mode==="wheel"?" + wheel load":bw.mode==="slab"?" − approach-slab couple":"")+" over its own retained height, cantilever above the seat","AASHTO 3.11.5, 3.11.6.4; design basis §8.1",[
       `M_{EH} = \\dfrac{k_{ah}\\gamma h^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(bd.hbwRet)})^3}{6} = ${fmtT(bd.Mbw_EH)}\\ \\text{kip-ft/ft}`,
       `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} h^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(bd.heqBW)})(${fmtT(bd.hbwRet)})^2}{2} = ${fmtT(bd.Mbw_LS)}\\ \\text{kip-ft/ft}`,
       ...(esB?[`M_{ES} = \\dfrac{k_{ah}\\,q_{ES}\\,h^2}{2} = ${fmtT(bd.Mbw_ES)}\\ \\text{kip-ft/ft}`]:[]),
-      `M_u = ${fmtT(R.GP.EH[1])}(${fmtT(bd.Mbw_EH)}) + ${fmtT(gLb)}(${fmtT(bd.Mbw_LS)})${esB?` + ${fmtT(R.GP.ES[1])}(${fmtT(bd.Mbw_ES)})`:""}${bw.mode==="off"?"":` + ${fmtT(gLb*(bw.mU||1))}(${fmtT(bw.M,3)})`} = ${fmtT(bd.MuBW)}\\ \\text{kip-ft/ft}`,
+      AB? `M_u = \\max\\!\\left(0,\\ ${fmtT(R.GP.EH[1])}(${fmtT(bd.Mbw_EH)}) + ${fmtT(gLb)}(${fmtT(bd.Mbw_LS)})${esB?` + ${fmtT(R.GP.ES[1])}(${fmtT(bd.Mbw_ES)})`:""} - [${fmtT(AB.gDCmin)}(${fmtT(AB.MDC,3)}) + ${fmtT(AB.gDWmin)}(${fmtT(AB.MDW,3)})]\\right) = ${fmtT(bd.MuBW)}\\ \\text{kip-ft/ft (back face; slab LL off)}`
+      : `M_u = ${fmtT(R.GP.EH[1])}(${fmtT(bd.Mbw_EH)}) + ${fmtT(gLb)}(${fmtT(bd.Mbw_LS)})${esB?` + ${fmtT(R.GP.ES[1])}(${fmtT(bd.Mbw_ES)})`:""}${bw.mode!=="wheel"?"":` + ${fmtT(gLb*(bw.mU||1))}(${fmtT(bw.M,3)})`} = ${fmtT(bd.MuBW)}\\ \\text{kip-ft/ft}`,
       `V_u = ${fmtT(R.GP.EH[1])}(${fmtT(bd.Vbw_EH,3)}) + ${fmtT(gLb)}(${fmtT(bd.Vbw_LS,3)})${esB?` + ${fmtT(R.GP.ES[1])}(${fmtT(bd.Vbw_ES??0,3)})`:""} = ${fmtT(bd.VuBW)}\\ \\text{kip/ft} \\quad(V_{EH} = k_{ah}\\gamma h^2/2,\\ V_{LS} = k_{ah}\\gamma h_{eq}h${esB?",\\ V_{ES} = k_{ah}q_{ES}h":""})`,
-      `M_s = M_{EH} + M_{LS}${esB?" + M_{ES}":""}${bw.mode==="off"?"":" + M_{LL}"} = ${fmtT(bd.Mbw_EH)} + ${fmtT(bd.Mbw_LS)}${esB?` + ${fmtT(bd.Mbw_ES)}`:""}${bw.mode==="off"?"":` + ${(bw.mS||1)!==1?fmtT(bw.mS,2)+"(":""}${fmtT(bw.M,3)}${(bw.mS||1)!==1?")":""}`} = ${fmtT(bd.MsBW)}\\ \\text{kip-ft/ft} \\quad(\\text{Service I, crack control})`],
-      `Strength I. Retained height at backwall h = ${fmt(bd.hbwRet)} ft; h_eq(${fmt(bd.hbwRet)} ft) = ${fmt(bd.heqBW)} ft. The minimum seismic connection force (<span class="xlink" data-jump="tab-stab|o-seis">Tab 3, §3.6</span>) governs shear-key/keeper detailing separately.`),
+      AB? `M_s = \\max(0,\\ M_{EH} + M_{LS}${esB?" + M_{ES}":""} - M_{DC} - M_{DW}) = \\max(0,\\ ${fmtT(bd.Mbw_EH)} + ${fmtT(bd.Mbw_LS)}${esB?` + ${fmtT(bd.Mbw_ES)}`:""} - ${fmtT(AB.MDC,3)} - ${fmtT(AB.MDW,3)}) = ${fmtT(bd.MsBW)}\\ \\text{kip-ft/ft} \\quad(\\text{Service I, crack control; slab LL off})`
+      : `M_s = M_{EH} + M_{LS}${esB?" + M_{ES}":""}${bw.mode!=="wheel"?"":" + M_{LL}"} = ${fmtT(bd.Mbw_EH)} + ${fmtT(bd.Mbw_LS)}${esB?` + ${fmtT(bd.Mbw_ES)}`:""}${bw.mode!=="wheel"?"":` + ${(bw.mS||1)!==1?fmtT(bw.mS,2)+"(":""}${fmtT(bw.M,3)}${(bw.mS||1)!==1?")":""}`} = ${fmtT(bd.MsBW)}\\ \\text{kip-ft/ft} \\quad(\\text{Service I, crack control})`],
+      `Strength I. Retained height at backwall h = ${fmt(bd.hbwRet)} ft; h_eq(${fmt(bd.hbwRet)} ft) = ${fmt(bd.heqBW)} ft${R.LS&&R.LS.lsRem?" (approach slab: final-state LS removed, §1.4)":""}. The minimum seismic connection force (<span class="xlink" data-jump="tab-stab|o-seis">Tab 3, §3.6</span>) governs shear-key/keeper detailing separately.`),
     "5.1","Backwall — Flexure, Shear, Crack Control");
+  // APS 5.1b: front face of the backwall under the approach-slab couple (only when it governs)
+  if(R.checks.bwFront&&AB){ const F=R.checks.bwFront;
+    h+=sectionHTML(F, eqB("Backwall front face — approach-slab couple","AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2; statics",[
+      `M_u = ${fmtT(AB.gDCmax)}(${fmtT(AB.MDC,3)}) + ${fmtT(AB.gDWmax)}(${fmtT(AB.MDW,3)}) + ${fmtT(AB.gLL)}(${fmtT(AB.MLL,3)}) - ${fmtT(AB.gEHmin)}(${fmtT(bd.Mbw_EH)})${esB?` - ${fmtT(AB.gESmin)}(${fmtT(bd.Mbw_ES)})`:""} = ${fmtT(AB.MuF,3)}\\ \\text{kip-ft/ft (front-face tension)}`,
+      `M_s = M_{DC} + M_{DW} + ${AB.mS!==1?fmtT(AB.mS,2):""}M_{LL} - M_{EH}${esB?" - M_{ES}":""} = ${fmtT(Math.max(0,AB.MsF),3)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = 0\\ (\\text{a couple: no shear from the slab})`],
+      `The slab terms of §5.1 (M<sub>DC</sub>, M<sub>DW</sub>, M<sub>LL</sub>); LS off (it relieves). The panel I-9 backwall bars (#${esc(S.reinf.bw.size)} @ ${fmt(+S.reinf.bw.sp,1)} in) are assumed on the front face too — detail them there.`),"5.1b","Backwall — Front Face (Approach-Slab Couple)"); }
   /* ---- ABR1 5.1a Backwall at the extreme event: Extreme Event I (11.6.5.1) and the MassDOT 3.4.8.1 seismic stop ---- */
   if(R.bwEE){ const B=R.bwEE, E=B.ee, T=B.stop, bt=BARS[S.reinf.bw.size];
     let bh="";
@@ -6315,8 +6788,10 @@ function renderTabStruct(R){
       `\\Delta P_{AE,bw} = ${E.nc?"f_P\\cdot":""}\\tfrac12\\Delta K_h\\gamma h^2 = ${E.nc?`(${fmtT(E.fP,3)})`:""}\\tfrac12(${fmtT(E.dKh,4)})(${fmtT(S.soil.gamma,3)})(${fmtT(R.bwDem.hbwRet)})^2 = ${fmtT(E.dP,3)}\\ \\text{kip/ft at } ${S.seismic.hEQmode==="ratio"?fmtT(+S.seismic.hEQr,2)+"h":"h/3"} = ${fmtT(E.zP)}\\ \\text{ft}`,
       `k_hW_{bw} = ${E.nc?"f_I\\,":""}k_h\\gamma_c t_{bw}h_{bw} = ${E.nc?`(${fmtT(E.fI,2)})`:""}(${fmtT(E.kh,4)})(${fmtT(S.mat.gc,3)})(${fmtT(S.geom.tbw)})(${fmtT(S.geom.hbw)}) = ${fmtT(E.Wi,3)}\\ \\text{kip/ft at } h_{bw}/2 = ${fmtT(E.zI)}\\ \\text{ft}`,
       ...(E.nc?[`\\text{11.6.5.1 case ${E.nc}: } f_P = ${fmtT(E.fP,3)},\\ f_I = ${fmtT(E.fI,2)}\\quad(\\text{case B: } f_P = f_B = \\max(0,\\ \\tfrac12(\\Delta K_h + K_A) - K_A)/\\Delta K_h;\\ \\text{the case with the larger D/C governs})`]:[]),
-      `M_u = ${fmtT(E.gEH)}(${fmtT(R.bwDem.Mbw_EH)}) + (${fmtT(E.dP,3)})(${fmtT(E.zP)}) + (${fmtT(E.Wi,3)})(${fmtT(E.zI)})${E.gq>0?` + ${fmtT(E.gq)}(${fmtT(R.bwDem.Mbw_LS)} + ${fmtT(R.bwDem.wheel?R.bwDem.wheel.M:0,3)})`:""}${R.bwDem.Mbw_ES>0?` + ${fmtT(R.bwDem.Mbw_ES)}`:""} = ${fmtT(E.Mu)}\\ \\text{kip-ft/ft}`,
-      `V_u = ${fmtT(E.gEH)}(${fmtT(R.bwDem.Vbw_EH,3)}) + ${fmtT(E.dP,3)} + ${fmtT(E.Wi,3)}${E.gq>0?` + ${fmtT(E.gq)}(${fmtT(R.bwDem.Vbw_LS,3)})`:""}${R.bwDem.Vbw_ES>0?` + ${fmtT(R.bwDem.Vbw_ES,3)}`:""} = ${fmtT(E.Vu,3)}\\ \\text{kip/ft}`].concat(capL(E.c)),
+      ...(E.apE&&E.apE.Wa>0?[`k_hW_{ap} = ${E.nc?"f_I\\,":""}k_h(q_{DC} + q_{DW} + w_{sh}) = ${E.nc?`(${fmtT(E.fI,2)})`:""}(${fmtT(E.kh,4)})(${fmtT(R.ap.qDC+R.ap.qDW+R.ap.wSh,3)}) = ${fmtT(E.apE.Wa,3)}\\ \\text{kip/ft at } h_{bw} - t/2 = ${fmtT(E.apE.zA)}\\ \\text{ft (approach slab on the shelf, §1.4a)}`]:[]),
+      R.bwDem.ap? `M_u = \\max\\!\\left(0,\\ ${fmtT(E.gEH)}(${fmtT(R.bwDem.Mbw_EH)}) + (${fmtT(E.dP,3)})(${fmtT(E.zP)}) + (${fmtT(E.Wi,3)})(${fmtT(E.zI)})${E.apE&&E.apE.Wa>0?` + (${fmtT(E.apE.Wa,3)})(${fmtT(E.apE.zA)})`:""}${E.gq>0?` + ${fmtT(E.gq)}(${fmtT(R.bwDem.Mbw_LS)})`:""}${R.bwDem.Mbw_ES>0?` + ${fmtT(R.bwDem.Mbw_ES)}`:""} - (${fmtT(R.bwDem.ap.MDC,3)} + ${fmtT(R.bwDem.ap.MDW,3)})\\right) = ${fmtT(E.Mu)}\\ \\text{kip-ft/ft (slab DL couple at 1.00; slab LL off)}`
+      : `M_u = ${fmtT(E.gEH)}(${fmtT(R.bwDem.Mbw_EH)}) + (${fmtT(E.dP,3)})(${fmtT(E.zP)}) + (${fmtT(E.Wi,3)})(${fmtT(E.zI)})${E.gq>0?` + ${fmtT(E.gq)}(${fmtT(R.bwDem.Mbw_LS)} + ${fmtT(R.bwDem.wheel?R.bwDem.wheel.M:0,3)})`:""}${R.bwDem.Mbw_ES>0?` + ${fmtT(R.bwDem.Mbw_ES)}`:""} = ${fmtT(E.Mu)}\\ \\text{kip-ft/ft}`,
+      `V_u = ${fmtT(E.gEH)}(${fmtT(R.bwDem.Vbw_EH,3)}) + ${fmtT(E.dP,3)} + ${fmtT(E.Wi,3)}${E.apE&&E.apE.Wa>0?` + ${fmtT(E.apE.Wa,3)}`:""}${E.gq>0?` + ${fmtT(E.gq)}(${fmtT(R.bwDem.Vbw_LS,3)})`:""}${R.bwDem.Vbw_ES>0?` + ${fmtT(R.bwDem.Vbw_ES,3)}`:""} = ${fmtT(E.Vu,3)}\\ \\text{kip/ft}`].concat(capL(E.c)),
       `Permanent loads at 1.00 (EH at the agency value when set, panel I-11); ΔK<sub>h</sub> and k<sub>h</sub> of the abutment (<span class="xlink" data-jump="tab-stab|o-mo">Tab 3 §3.6a</span>); h = ${fmt(R.bwDem.hbwRet)} ft retained by the backwall; γ<sub>EQ</sub> = ${fmt(E.gq,2)} on LS and the wheel load (<span class="xlink" data-jump="tab-struct|o-str-Backwall">§5.1</span>). The superstructure inertia reaches the seat through the bearings, not the backwall. φ = 1.0 at the extreme event [1.3.2.1]: D/C = M<sub>u</sub>/M<sub>n</sub>, V<sub>u</sub>/V<sub>n</sub>.`)
       +checkLine("Backwall flexure — Extreme Event I",`\\dfrac{M_u}{M_n} = \\dfrac{${fmtT(E.Mu)}}{${fmtT(E.Mn)}}`,E.dcM)
       +checkLine("Backwall shear — Extreme Event I",`\\dfrac{V_u}{V_n} = \\dfrac{${fmtT(E.Vu,3)}}{${fmtT(E.Vn)}}`,E.dcV);
@@ -6324,7 +6799,8 @@ function renderTabStruct(R){
       `c = ${T.zone===1?(T.single?`\\max(c_{Z1},\\ A_s) = \\max(${fmtT(T.cZ1,2)},\\ ${fmtT(T.As,3)})`:`c_{Z1} = ${T.As<0.05?"0.15\\ (A_s < 0.05)":"0.25\\ (A_s \\ge 0.05)"}`):`A_s\\ (\\text{Zone ${T.zone}})`} = ${fmtT(T.cBW,3)} \\quad(\\text{as the connection force, Tab 3 §3.6})`,
       T.user? `W_{sup} = ${fmtT(T.Wsup,1)}\\ \\text{kip (entered, panel I-11)}` : `W_{sup} = 2(DC + DW)\\dfrac{L_{tot}}{L} = 2(${fmtT(R.agg.DC.P,1)} + ${fmtT(R.agg.DW.P,1)})\\dfrac{${fmtT(T.Ltot,1)}}{${fmtT(S.geom.spanL,1)}} = ${fmtT(T.Wsup,1)}\\ \\text{kip}`,
       `F = c\\,W_{sup} = (${fmtT(T.cBW,3)})(${fmtT(T.Wsup,1)}) = ${fmtT(T.F,1)}\\ \\text{kip}\\,, \\quad w = \\dfrac{F}{L_{ab}} = \\dfrac{${fmtT(T.F,1)}}{${fmtT(S.geom.Lab)}} = ${fmtT(T.w,3)}\\ \\text{kip/ft}`,
-      `M_u = w\\,\\dfrac{h_{bw}}{2} = (${fmtT(T.w,3)})(${fmtT(T.arm)}) = ${fmtT(T.Mu)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = w = ${fmtT(T.Vu,3)}\\ \\text{kip/ft}`].concat(capL(T.c)),
+      T.apM!=null? `M_u = w\\,\\dfrac{h_{bw}}{2} + M_{DC} + M_{DW} = (${fmtT(T.w,3)})(${fmtT(T.arm)}) + ${fmtT(T.apM,3)} = ${fmtT(T.Mu)}\\ \\text{kip-ft/ft (+ the approach-slab DL couple of §5.1, 1.00)}\\,, \\quad V_u = w = ${fmtT(T.Vu,3)}\\ \\text{kip/ft}`
+      : `M_u = w\\,\\dfrac{h_{bw}}{2} = (${fmtT(T.w,3)})(${fmtT(T.arm)}) = ${fmtT(T.Mu)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = w = ${fmtT(T.Vu,3)}\\ \\text{kip/ft}`].concat(capL(T.c)),
       `The superstructure drives toward the backfill and bears on the backwall (front-face tension). Contact taken over the backwall height (resultant at h<sub>bw</sub>/2 above the seat, tool choice); no relief from the earth pressure behind. The front face is assumed to have the panel I-9 backwall bars (#${esc(S.reinf.bw.size)} @ ${fmt(+S.reinf.bw.sp,1)} in) — detail them on that face. φ = 1.0 [1.3.2.1].`)
       +checkLine("Backwall seismic stop — flexure",`\\dfrac{M_u}{M_n} = \\dfrac{${fmtT(T.Mu)}}{${fmtT(T.Mn)}}`,T.dcM)
       +checkLine("Backwall seismic stop — shear",`\\dfrac{V_u}{V_n} = \\dfrac{${fmtT(T.Vu,3)}}{${fmtT(T.Vn)}}`,T.dcV);
@@ -6346,7 +6822,9 @@ function renderTabStruct(R){
       ...(sEsq>0?[`M_{ES} = \\dfrac{k_{ah}q_{ES}${sd.cL>0?"(H-c)":"H"}^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(sEsq,3)})(${fmtT(sHs-(sd.cL||0))})^2}{2} = ${fmtT(sd.MES)}\\,, \\qquad V_{ES} = k_{ah}q_{ES}H = ${fmtT(sd.VES,3)}`]:[]),
       `H_{gird} = ${fmtT(sd.HgirdPerFt,3)}\\ \\text{kip/ft at } z = h_{stem} = ${fmtT(g.hstem)}\\ \\text{ft} \\;\\Rightarrow\\; H_{gird}h_{stem} = ${fmtT(sd.HgirdPerFt*g.hstem)}\\ \\text{kip-ft/ft}`,
       `\\Sigma W_{sw}e_{sw} = ${swParts.map(pp=>`(${fmtT(pp.W)})(${fmtT(sxc-pp.x,3)})`).join(" + ")} = ${fmtT(sd.MselfEccTot)}\\ \\text{kip-ft} \\quad(e_{sw} = x_{sc} - \\bar x_i,\\ x_{sc} = ${fmtT(sxc,3)}\\ \\text{ft})`,
-      `M_{ecc} = \\dfrac{P_v\\,(x_{sc}-x_{brg}) + \\gamma_{DC}\\Sigma W_{sw}e_{sw}}{L_{ab}} = \\dfrac{(${fmtT(sd.Pv)})(${fmtT(sxc-R.geo.xBrg,3)}) + (${fmtT(sd.gDCe??1,2)})(${fmtT(sd.MselfEccTot)})}{${fmtT(g.Lab)}} = ${fmtT(sd.MeccPerFt)}\\ \\text{kip-ft/ft}`,
+      ...(sd.Map!=null?[`M_{ap} = \\gamma_{DC}(R_{DC}+W_{sh})(x_{sc}-x_{ap}) + \\gamma_{DW}R_{DW}(x_{sc}-x_{ap}) + ${sd.apL?"\\gamma_{LL}m\\,R_{LL+IM}(x_{sc}-x_{ap})":"0\\ (\\text{slab LL off})"} = ${fmtT(sd.Map)}\\ \\text{kip-ft} \\quad(x_{ap} = ${fmtT(R.ap.x,3)}\\ \\text{ft, approach slab §1.4a; } x_{sc} - x_{ap} = ${fmtT(sxc-R.ap.x,3)}\\ \\text{ft})`]:[]),
+      sd.Map!=null? `M_{ecc} = \\dfrac{P_v\\,(x_{sc}-x_{brg}) + \\gamma_{DC}\\Sigma W_{sw}e_{sw} + M_{ap}}{L_{ab}} = \\dfrac{(${fmtT(sd.Pv)})(${fmtT(sxc-R.geo.xBrg,3)}) + (${fmtT(sd.gDCe??1,2)})(${fmtT(sd.MselfEccTot)}) + (${fmtT(sd.Map)})}{${fmtT(g.Lab)}} = ${fmtT(sd.MeccPerFt)}\\ \\text{kip-ft/ft}`
+      : `M_{ecc} = \\dfrac{P_v\\,(x_{sc}-x_{brg}) + \\gamma_{DC}\\Sigma W_{sw}e_{sw}}{L_{ab}} = \\dfrac{(${fmtT(sd.Pv)})(${fmtT(sxc-R.geo.xBrg,3)}) + (${fmtT(sd.gDCe??1,2)})(${fmtT(sd.MselfEccTot)})}{${fmtT(g.Lab)}} = ${fmtT(sd.MeccPerFt)}\\ \\text{kip-ft/ft}`,
       ...(sEQ?[
         ...(sEQ.mode==="ratio"||sEQ.iA==null
           ? [`\\Delta P_{AE,wall} = \\tfrac{1}{2}\\Delta K_h\\gamma H_s^2 = \\tfrac{1}{2}(${fmtT(sEQ.dKh,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.Hs)})^2 = ${fmtT(sEQ.iA?sEQ.iA.V:sEQ.dP,3)}\\ \\text{kip/ft at } ${fmt(+S.seismic.hEQr,2)}H_s\\ \\text{(entered ratio)}`]
@@ -6358,7 +6836,8 @@ function renderTabStruct(R){
         ...(sEQ.nc&&sEQ.iA&&sEQ.iB? [`\\text{11.6.5.1 case A: } (V, M) = (${fmtT(sEQ.iA.V,3)},\\ ${fmtT(sEQ.iA.M)}) + 0.5k_hW\\,; \\quad \\text{case B: } (${fmtT(sEQ.iB.V,3)},\\ ${fmtT(sEQ.iB.M)}) + k_hW\\ \\ [\\max(0,\\ \\tfrac12 P_{AE} - P_A)] \\;\\Rightarrow\\; \\text{case ${sEQ.nc} (larger } M_{EQ})`] : []),
         `k_h W_{wall} = k_h\\gamma_c A_{wall} = (${fmtT(R.seis.kh,4)})(${fmtT(S.mat.gc,3)})(${fmtT(sEQ.wallApf,3)}) = ${fmtT(sEQ.Wi0??sEQ.Wi,3)}\\ \\text{kip/ft}${sEQ.nc?`\\ \\times f_I = ${fmtT(sEQ.fI,2)} \\Rightarrow ${fmtT(sEQ.Wi,3)}`:""}\\,, \\qquad EQ_{sup}/L_{ab} = ${fmtT(sEQ.sup,3)}\\ \\text{kip/ft at } h_{stem}`,
         ...(sEQ.zWi!=null?[`z_{W} = \\dfrac{A_{core}\\tfrac{h_{stem}}{2} + A_{bat}\\tfrac{h_{stem}}{3} + A_{bw}\\left(h_{stem}+\\tfrac{h_{bw}}{2}\\right)}{A_{wall}} = \\dfrac{(${fmtT(sEQ.aCore,3)})(${fmtT(g.hstem/2,3)}) + (${fmtT(sEQ.aBat,3)})(${fmtT(g.hstem/3,3)}) + (${fmtT(sEQ.aBw,3)})(${fmtT(g.hstem+g.hbw/2,3)})}{${fmtT(sEQ.wallApf,3)}} = ${fmtT(sEQ.zWi,3)}\\ \\text{ft (inertia arm above the stem base)}`]:[]),
-        `M_{EQ} = ${fmtT(sEQ.MdP??sEQ.dP*sEQ.zP)} + (${fmtT(sEQ.Wi,3)})(${fmtT(sEQ.zWi??g.hstem/2,3)}) + (${fmtT(sEQ.sup,3)})(${fmtT(g.hstem)}) = ${fmtT(sd.Meq)}\\,, \\qquad V_{EQ} = ${fmtT(sd.Veq,3)}\\ \\text{kip/ft}`]:[]),
+        ...(sEQ.apI>0?[`k_hW_{ap}/L_{ab} = ${sEQ.nc?"f_I\\,":""}\\dfrac{k_hW_{ap}}{L_{ab}} = ${sEQ.nc?`(${fmtT(sEQ.fI,2)})`:""}(${fmtT(sEQ.apIpf,4)}) = ${fmtT(sEQ.apI,4)}\\ \\text{kip/ft at } z_{ap} = ${fmtT(sEQ.zApS,3)}\\ \\text{ft above the stem base (approach slab, §1.4a)}`]:[]),
+        `M_{EQ} = ${fmtT(sEQ.MdP??sEQ.dP*sEQ.zP)} + (${fmtT(sEQ.Wi,3)})(${fmtT(sEQ.zWi??g.hstem/2,3)}) + (${fmtT(sEQ.sup,3)})(${fmtT(g.hstem)})${sEQ.apI>0?` + (${fmtT(sEQ.apI,4)})(${fmtT(sEQ.zApS,3)})`:""} = ${fmtT(sd.Meq)}\\,, \\qquad V_{EQ} = ${fmtT(sd.Veq,3)}\\ \\text{kip/ft}`]:[]),
       `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}(${fmtT(sd.MEH??sd.Mst_EH)}) + ${fmtT(sGL)}(${fmtT(sd.MLS??sd.Mst_LS)})${sEsq>0?` + ${fmtT(sd.gES,2)}(${fmtT(sd.MES)})`:""} + ${fmtT(sd.HgirdPerFt*g.hstem)} + ${fmtT(sd.MeccPerFt)}${sd.MCS>0?` + ${fmtT(sd.MCS)}`:""}${sEQ?` + ${fmtT(sd.Meq)}`:""} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}`,
       `V_u = ${fmtT(sd.gEH??R.GP.EH[1])}(${fmtT(sd.VEH??sd.Vst_EH,3)}) + ${fmtT(sGL)}(${fmtT(sd.VLS??sd.Vst_LS,3)})${sEsq>0?` + ${fmtT(sd.gES,2)}(${fmtT(sd.VES,3)})`:""} + ${fmtT(sd.HgirdPerFt,3)}${sd.MCS>0?` + ${fmtT(sd.VCS,3)}`:""}${sEQ?` + ${fmtT(sd.Veq,3)}`:""} = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`];
   // ABR1: the shear check takes each limit state's own V_u (with its concurrent M_u for β): the governing one, worked when it is not the M_u state
@@ -6472,7 +6951,8 @@ function renderTabStruct(R){
     <div class="note-box">Interface: <b>${esc(sf.prep.name)}</b> — c = ${fmt(sf.prep.c,3)} ksi, μ = ${fmt(sf.prep.mu,2)}, K₁ = ${fmt(sf.prep.K1,2)}, K₂ = ${fmt(sf.prep.K2,1)} ksi [Art. 5.7.4.4]. Per 1-ft strip of wall; the crossing reinforcement is the stem back-face dowels (A<sub>vf</sub> = A<sub>s,stem</sub>).</div>
     ${eqB("Interface shear resistance","AASHTO 5.7.4.3, Eq. 5.7.4.3-3 (caps: Eq. -4, -5)",[
       "V_{ni} = c\\,A_{cv} + \\mu\\,(A_{vf}f_y + P_c) \\le \\min(K_1 f'_c A_{cv},\\; K_2 A_{cv})",
-      ...(sf.WwA!=null?[`P_c = \\dfrac{\\gamma_{DC}(W_{wall} + ${sf.ns?"DC_{sup}":"0"})}{L_{ab}} = \\dfrac{${fmtT(sf.gDCc,2)}(${fmtT(sf.WwA,1)} + ${fmtT(sf.ns?sf.DCs:0,1)})}{${fmtT(S.geom.Lab)}} = ${fmtT(sf.Pc)}\\ \\text{kip/ft} \\quad(${esc(sf.ls)}${sf.ns?"":":\\ \\text{no superstructure}"})`]:[]),
+      ...(sf.WwA!=null?[sf.apDC&&sf.ns? `P_c = \\dfrac{\\gamma_{DC}(W_{wall} + DC_{sup} + DC_{ap})}{L_{ab}} = \\dfrac{${fmtT(sf.gDCc,2)}(${fmtT(sf.WwA,1)} + ${fmtT(sf.DCs,1)} + ${fmtT(sf.apDC,1)})}{${fmtT(S.geom.Lab)}} = ${fmtT(sf.Pc)}\\ \\text{kip/ft} \\quad(${esc(sf.ls)};\\ DC_{ap}\\text{: approach slab, §1.4a})`
+        : `P_c = \\dfrac{\\gamma_{DC}(W_{wall} + ${sf.ns?"DC_{sup}":"0"})}{L_{ab}} = \\dfrac{${fmtT(sf.gDCc,2)}(${fmtT(sf.WwA,1)} + ${fmtT(sf.ns?sf.DCs:0,1)})}{${fmtT(S.geom.Lab)}} = ${fmtT(sf.Pc)}\\ \\text{kip/ft} \\quad(${esc(sf.ls)}${sf.ns?"":":\\ \\text{no superstructure}"})`]:[]),
       `V_{ni} = ${fmtT(sf.prep.c,3)}(${fmtT(sf.Acv,0)}) + ${fmtT(sf.prep.mu,2)}\\,[(${fmtT(sf.Avf)})(${fmtT(m.fy,1)}) + ${fmtT(sf.Pc)}] = ${fmtT(sf.Vni_raw)}\\ \\text{kip/ft}`,
       `\\text{cap} = \\min(${fmtT(sf.prep.K1,2)}\\times${fmtT(m.fc,1)}\\times${fmtT(sf.Acv,0)},\\; ${fmtT(sf.prep.K2,1)}\\times${fmtT(sf.Acv,0)}) = ${fmtT(sf.Vni_cap)}\\ \\text{kip/ft}${sf.capGoverns?"\\;(governs)":""}`,
       `\\varphi V_{ni} = 0.90(${fmtT(sf.Vni)}) = ${fmtT(sf.phiVni)}\\ \\text{kip/ft}`])}
@@ -6490,7 +6970,7 @@ function renderTabStruct(R){
   h+=panel("o-str-bearing","5.6","Bearing on Concrete — Bridge Seat [AASHTO 5.6.5]",`
     ${govNote("Governing single-bearing factored vertical — girder "+bs.pgirder+", "+bs.pls)}
     ${eqB("Factored bearing demand & resistance","AASHTO 5.6.5 (Eq. 5.6.5-1, -2), 5.5.4.2",[
-      ...(bs.puT?[`P_{u,girder} = \\gamma_{DC}P_{DC} + \\gamma_{DW}P_{DW} + \\gamma_{LL}P_{LL}${bs.puT.gWS?" + \\gamma_{WS}P_{WS} + \\gamma_{WL}P_{WL}":""} = ${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.LL)})${bs.puT.gWS?` + ${fmtT(bs.puT.gWS)}(${fmtT(bs.puT.WS)}) + ${fmtT(bs.puT.gWL)}(${fmtT(bs.puT.WL)})`:""} = ${fmtT(bs.PuG)}\\ \\text{kip} \\quad(\\text{girder ${bs.pgirder}, ${esc(bs.pls)}; reactions from panel I-5})`]:[]),
+      ...(bs.puT?[`P_{u,girder} = \\gamma_{DC}P_{DC} + \\gamma_{DW}P_{DW} + \\gamma_{LL}P_{LL}${bs.puT.gWS?" + \\gamma_{WS}P_{WS} + \\gamma_{WL}P_{WL}":""}${bs.puT.ap?" + (\\gamma_{DC}P_{DC,ap} + \\gamma_{DW}P_{DW,ap} + \\gamma_{LL}P_{LL,ap})":""} = ${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.LL)})${bs.puT.gWS?` + ${fmtT(bs.puT.gWS)}(${fmtT(bs.puT.WS)}) + ${fmtT(bs.puT.gWL)}(${fmtT(bs.puT.WL)})`:""}${bs.puT.ap?` + (${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.ap.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.ap.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.ap.LL)}))`:""} = ${fmtT(bs.PuG)}\\ \\text{kip} \\quad(\\text{girder ${bs.pgirder}, ${esc(bs.pls)}; reactions from panel I-5}${bs.puT.ap?";\\ \\text{approach slab on the end diaphragm: an equal share per girder, §1.4a}":""})`]:[]),
       `P_u =\\dfrac{P_{u,girder}}{n_b} = \\dfrac{${fmtT(bs.PuG)}}{${bs.nBg}} = ${fmtT(bs.Pu)}\\ \\text{kip per bearing}`,
       `A_1 = L_{pad}\\,W_{pad} = ${fmtT(bg.padL,1)}\\times${fmtT(bg.padW,1)} = ${fmtT(bs.A1,0)}\\ \\text{in}^2\\,, \\qquad q_b = \\dfrac{P_u}{A_1} = \\dfrac{${fmtT(bs.Pu)}}{${fmtT(bs.A1,0)}} = ${fmtT(bs.qb,3)}\\ \\text{ksi}`,
       `c = \\min(c_{front},\\,c_{back},\\,c_{trans}) = \\min(${fmtT(bs.cFront,1)},\\,${fmtT(bs.cBack,1)},\\,${fmtT(bs.cT,1)}) = ${fmtT(bs.c,1)}\\ \\text{in} \\quad(\\text{${esc(bs.cBy)}})`,
@@ -6523,19 +7003,30 @@ function renderTabStruct(R){
       <tr><td><b>E1</b></td><td class="lft">Shrinkage & temperature — horizontal, each face, walls & footing [5.10.6]</td><td>#5</td><td>≤ ${stSp}</td><td>${fmt(BARS["5"].Ab*12/stSp)} / ${fmt(AsST)}</td><td>—</td><td>${fmt(Math.max(g.Lab,(+g.Lftg||g.Lab))-0.5,2)}</td></tr>
       <tr><td><b>F1</b></td><td class="lft">Bearing-seat mat — both ways under each bearing [detailing]</td><td>#${bgm.seatBar}</td><td>${fmt(+bgm.seatSp,1)}</td><td>${fmt(R.seatMat?R.seatMat.AsMat:0)} / mat</td><td>—</td><td>pad + 2·1.0</td></tr>
       ${cS.skinNote?`<tr><td><b>G1</b></td><td class="lft">Skin reinforcement — stem side faces, lower h/2 [5.6.7]</td><td>—</td><td>—</td><td>≥ ${fmt(cS.skinAsk)} /face</td><td>—</td><td>—</td></tr>`:""}
+      ${apRebarRows(R)}
     </table>`;
     h+=panel("o-rebar","5.7","Reinforcement Schedule & Placement Sketch",`
       <div class="svgbox" id="rebarSvg"></div>
       <div class="figcap">Reinforcement placement — schematic; bar marks keyed to the schedule below.</div>
       ${figBox("rebar",R)}
       <div class="figcap">Dimensioned section to scale (ABSW): ℓ<sub>dh</sub> and the dowel lap from <span class="xlink" data-jump="tab-struct|o-str-dowel">§5.2a</span>, ℓ<sub>d</sub> of the toe and heel bars from §5.3 / §5.4.</div>
+      ${R.apShelf?figBox("apShelf",R)+`<div class="figcap">Approach-slab shelf (bracket) bars S1, S2, to scale: worked in <span class="xlink" data-jump="tab-struct|o-ap-shelf">§5.8</span>.</div>`:""}
       ${rt}
       ${abutWorkedIn([["tab-struct","o-str-Stem","5.2 Stem","A1"],["tab-struct","o-str-Backwall","5.1 Backwall","B1"],["tab-struct","o-str-Toe","5.3 Toe","C1"],["tab-struct","o-str-Heel","5.4 Heel","D1"]])}
       <div class="note-box"><b>Lengths are estimates for quantity take-off only</b> (member length + development/hook allowances, no laps or bends detailed). Splice locations, hooks, corner bars and bar lists are the detailer's responsibility; development with λ<sub>rc</sub> per Eq. 5.10.8.2.1c-2 (k<sub>tr</sub> = 0, β<sub>t</sub> = 0), other modification factors as in each section.</div>
     `);
   }
+  if(iabType()!=="integral"){ h+=apShelfHTML(R,"5.8"); h+=apDesHTML(R,"5.9"); }   // APS
   document.getElementById("tab-struct").innerHTML=h;
 }
+/* APS: approach-slab bars in a bar schedule (Tab 5 §5.7; Tab 10 §10.8) */
+function apRebarRows(R){ const H=R.apShelf, D=R.apDes, A=S.apSlab; let t="";
+  if(H) t+=`<tr><td><b>S1</b></td><td class="lft">Approach-slab shelf — primary tie (top, across the shelf; anchored at the front face, developed into the wall) [5.8.4.2]</td><td>#${esc(H.bar)}</td><td>${fmt(H.sp,1)}</td><td>${fmt(H.As,3)} / ${fmt(H.AsReq,3)}</td><td>—</td><td>${fmt((H.bS+18)/12,2)}</td></tr>
+    <tr><td><b>S2</b></td><td class="lft">Approach-slab shelf — closed-tie legs within 2d<sub>e</sub>/3 (${H.nT} leg${H.nT===1?"":"s"}) [5.8.4.2]</td><td>#${esc(H.tieBar)}</td><td>${fmt(H.tieSp,1)}</td><td>${fmt(H.Ah,3)} / ${fmt(H.corbel?H.AhReq:0,3)}</td><td>—</td><td>—</td></tr>`;
+  if(D) t+=`<tr><td><b>P1</b></td><td class="lft">Approach slab — main bottom bars along the roadway [5.6.3]</td><td>#${esc(String(A.aBar))}</td><td>${fmt(+A.aSp,1)}</td><td>${fmt(D.sec.As,3)} / ${fmt(D.sec.AsReq,3)}</td><td>${fmt(D.sec.ld,0)}</td><td>${fmt(D.Ls,2)}</td></tr>
+    <tr><td><b>P2</b></td><td class="lft">Approach slab — bottom distribution bars, transverse [9.7.3.2]</td><td>#${esc(String(A.dBar))}</td><td>${fmt(+A.dSp,1)}</td><td>${fmt(D.AsD,3)} / ${fmt(D.AsDreq,3)}</td><td>—</td><td>${fmt(R.ap.W,2)}</td></tr>
+    <tr><td><b>P3</b></td><td class="lft">Approach slab — top bars each way (S&amp;T) [5.10.6]</td><td>#${esc(String(A.tBar))}</td><td>${fmt(+A.tSp,1)}</td><td>${fmt(D.AsT,3)} / ${fmt(D.sec.AsST,3)}</td><td>—</td><td>—</td></tr>`;
+  return t; }
 
 /* ---------- reinforcement placement sketch ---------- */
 function drawRebarSketch(){
@@ -6775,7 +7266,8 @@ function figInterp(pts,y){   /* pts [{y,p}] in any order: linear interpolation o
   for(let i=1;i<a.length;i++) if(y<=a[i].y){ const t=(y-a[i-1].y)/((a[i].y-a[i-1].y)||1); return a[i-1].p+(a[i].p-a[i-1].p)*t; }
   return a[a.length-1].p; }
 const FIG_FN={ press:R=>svgWallPressure(R), kern:R=>svgResultants(R), stem:R=>svgStemCapacity(R), rebar:R=>svgRebarDims(R), seat:R=>svgSeatPlan(R),
-  pileRx:R=>svgPileReactions(R), wingElev:R=>svgWingElev(R), wingPlan:R=>svgWingPlan(R), wingPress:R=>svgWingPress(R), iab:R=>svgIabSection(R) };
+  pileRx:R=>svgPileReactions(R), wingElev:R=>svgWingElev(R), wingPlan:R=>svgWingPlan(R), wingPress:R=>svgWingPress(R), iab:R=>svgIabSection(R),
+  apslab:R=>svgApSlab(R), apShelf:R=>svgApShelf(R) };   // APS
 const FIG_HINT='<span class="fighint">Hover, focus or tap an element for its value and equation; click or Enter opens the worked calculation.</span>';
 function figLsSel(R){ const ls=Object.keys(R.LIMITS||{});
   return `<label>Figures: limit state <select data-figls aria-label="Limit state shown in the figures">${[["","default (as printed)"]].concat(ls.map(k=>[k,k])).map(([v,l])=>`<option value="${esc(v)}"${v===FIG.ls?" selected":""}>${esc(l)}</option>`).join("")}</select></label>`; }
@@ -7125,6 +7617,78 @@ function svgPileReactions(R){
   return svgWrap(W,Hp,b,600);
 }
 
+/* APS (2026-10-20): approach slab section (Tab 1 §1.4a) and shelf bars (Tab 5 §5.7 / Tab 10 §10.7) — interactive like the other ABINT figures
+   (hover / focus / tap: value and equation; click / Enter: the worked panel); static in the report. Display only. */
+function svgApSlab(R){
+  const P=R.ap; if(!P) return "";
+  const g=S.geom, it=iabType(), I=S.iab, sh=P.sup==="shelf";
+  const tw=it==="integral"? +I.b : +g.tbw, hw=it==="integral"? (+I.hd)+(+I.hc)*0.35 : Math.min(+g.hbw,6), Ls=P.Lmax, ts=P.t;
+  const bS=sh? P.bS/12 : 0, hS=P.hS/12, hE=P.hE/12, av=sh? P.av/12 : 0;
+  const Wd=660, Hd=340, mL=40, mR=46, mT=74, mB=58, left=tw+2.2, right=Ls+2.2, sc=Math.min((Wd-mL-mR)/(left+right),(Hd-mT-mB)/(hw+0.6));
+  const X=x=>mL+(x+left)*sc, Y=y=>mT-y*sc;   // x = 0 at the back face of the wall (+ toward the approach); y = 0 at the roadway surface (+ up)
+  const desT=it==="integral"? "tab-iab" : "tab-struct", J0="tab-loads|o-ap", wall=it==="integral"?"end diaphragm":it==="semi"?"end diaphragm":"backwall";
+  const conc='fill="#ecebe4" stroke="#333" stroke-width="1.3"';
+  let b=svgT(10,18,`Approach slab — section along the roadway (schematic; slab span L_s = ${fmt(Ls,2)} ft)`,{b:1,fs:12});
+  // soil under the slab, and the possible loss of support
+  b+=`<polygon points="${X(0)},${Y(-ts-(sh?hS:0)-0.02)} ${X(Ls+2)},${Y(-ts-0.02)} ${X(Ls+2)},${Y(-hw)} ${X(0)},${Y(-hw)}" fill="#efe6cc" stroke="none"/>`;
+  b+=fg(`Simple span: the soil beneath the slab may settle away and lose its support, so it is not counted (§1.4a).`,J0,`<rect x="${X(bS+0.4)}" y="${Y(-ts)}" width="${Math.max(4,(Ls-bS-1.6)*sc)}" height="${0.32*sc}" fill="#fff" stroke="#b7a97e" stroke-dasharray="4 3"/>`+svgT(X((bS+Ls)/2),Y(-ts-0.32)+11,"support beneath may be lost",{a:"middle",fs:9.5,c:"#8a6d2b"}));
+  // superstructure side and the wall
+  if(it==="integral"){ b+=`<rect x="${X(-tw-2.2)}" y="${Y(0)}" width="${(2.2)*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(-tw-2.1),Y(0)-4,"deck",{fs:9.5,c:"#555"}); }
+  else if(P.sup==="deck"){ b+=`<rect x="${X(-tw-2.2)}" y="${Y(0)}" width="${(2.2+tw)*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(-tw-2.1),Y(0)-4,"deck (over the backwall)",{fs:9.5,c:"#555"}); }
+  else { b+=`<rect x="${X(-tw-2.2)}" y="${Y(0)}" width="${(2.1)*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(-tw-2.1),Y(0)-4,"deck",{fs:9.5,c:"#555"}); }
+  const wTop=(P.sup==="deck"&&it!=="integral")? -0.7 : 0;
+  b+=fg(`${wall[0].toUpperCase()+wall.slice(1)}: t = ${fF(tw)} ft`+(it==="conv"?`\nslab couple on the backwall: M = q·e_bw, e_bw = ${fF(P.eBw,3)} ft (front-face tension) — Tab 5 §5.1`:""),it==="conv"?"tab-struct|o-str-Backwall":(it==="integral"?"tab-iab|o-iab-cap":"tab-iab|o-iab-cap"),
+    `<rect x="${X(-tw)}" y="${Y(wTop)}" width="${tw*sc}" height="${(hw+wTop)*sc}" ${conc}/>`+svgT(X(-tw/2),Y(-hw)-6,wall,{a:"middle",fs:10}));
+  // shelf
+  if(sh){ const H=R.apShelf, shTip=`Shelf (paving notch) — bracket: b_S = ${fF(P.bS,1)} in, h = ${fF(P.hS,1)} in at the face, h_E = ${fF(P.hE,1)} in`+(H?`\nV_u = ${fF(H.Vu,3)} kip/ft, N_uc = ${fF(H.Nuc,3)} kip/ft, a_v = ${fF(H.av,2)} in ${H.corbel?"≤":">"} d = ${fF(H.d,2)} in\nA_s,req = ${fF(H.AsReq,4)} vs A_s = ${fF(H.As,4)} in²/ft (D/C ${fF(H.dcAs,3)})`:"");
+    b+=fg(shTip,desT+"|o-ap-shelf",`<polygon points="${X(0)},${Y(-ts)} ${X(bS)},${Y(-ts)} ${X(bS)},${Y(-ts-hE)} ${X(0)},${Y(-ts-hS)}" ${conc}/>`); }
+  // slab
+  const slTip=`Approach slab: L_s = ${fF(Ls,2)} ft, t = ${fF(ts,2)} ft, W = ${fF(P.W,1)} ft\nw_DC = γ_c·t = ${fF(P.wDC,4)} ksf, w_DW = ${fF(P.wDW,4)} ksf`+(R.apDes?`\nM_u = ${fF(R.apDes.Mu,2)} kip-ft/ft vs φM_n = ${fF(R.apDes.sec.phiMn,2)} (§${it==="integral"?"10.8":"5.9"})`:"");
+  b+=fg(slTip,R.apDes? desT+"|o-ap-des" : J0,`<rect x="${X(0)}" y="${Y(0)}" width="${Ls*sc}" height="${ts*sc}" fill="#cfd8dc" stroke="#546e7a" stroke-width="1.3"/>`+svgT(X(Ls/2),Y(-ts/2)+4,"approach slab",{a:"middle",fs:10,c:"#37474f"}));
+  // far support
+  if(P.far==="sleeper") b+=fg("Far end: sleeper slab (the simple-span support; joint at the free end)",J0,`<rect x="${X(Ls-1)}" y="${Y(-ts)}" width="${2*sc}" height="${0.8*sc}" ${conc}/>`+svgT(X(Ls),Y(-ts-0.8)+12,"sleeper slab",{a:"middle",fs:9.5,c:"#555"}));
+  else b+=fg("Far end: on the subbase (the simple-span support)",J0,`<line x1="${X(Ls-1)}" y1="${Y(-ts)}" x2="${X(Ls+1.6)}" y2="${Y(-ts)}" stroke="#8a6d2b" stroke-width="2"/>`+svgT(X(Ls),Y(-ts)+14,"subbase",{a:"middle",fs:9.5,c:"#8a6d2b"}));
+  // HL-93 axle over the support and the reaction at the abutment
+  const xa=av>0? av : 0.2, qTip=`Slab reaction per ft along the abutment (§1.4a, local, the longest strip):\nq_DC = w_DC·L_s/2·cos θ = ${fF(P.qDC,3)}, q_DW = ${fF(P.qDW,3)}, q_LL+IM = w_LL·cos θ = ${fF(P.qLL,3)} kip/ft\ntotal on the abutment: R_DC = ${fF(P.RDC,1)}, R_DW = ${fF(P.RDW,1)}, R_LL = ${fF(P.RLLim,1)} kip (${P.gov.n} lane${P.gov.n>1?"s":""})`;
+  b+=fg(`HL-93 axle over the support (one lane): R_L = 1.33·max(truck ${fF(P.hl.tr,2)}, tandem ${fF(P.hl.ta,2)}) + lane ${fF(P.hl.lane,2)} = ${fF(P.RlIM,2)} kip\nstrip E = ${fF(P.multi?P.EM:P.E1,1)} in (${P.multi?"multiple lanes":"one lane"}): w_LL = ${fF(P.wLL,3)} kip/ft`,J0,
+    `<circle cx="${X(xa+0.4)}" cy="${Y(0.35)}" r="${Math.max(5,0.35*sc)}" fill="#555"/><circle cx="${X(xa+0.4+4)}" cy="${Y(0.35)}" r="${Math.max(5,0.35*sc)}" fill="#999"/>`+svgT(X(xa+0.4),Y(0.9)-4,"HL-93",{a:"middle",fs:9.5}));
+  b+=fg(qTip,J0,svgArrow(X(xa),Y(1.6),X(xa),Y(-ts)+2,"#c62828",2)+svgT(X(xa)+6,Y(1.25),`q = ${fmt(P.qDC+P.qDW,2)} + ${fmt(P.qLL,2)} (LL+IM) kip/ft`,{fs:10,c:"#c62828"}));
+  // e_bw on the backwall
+  if(it==="conv"&&sh) b+=fg(`e_bw = t_bw/2 + a_v = ${fF(+g.tbw/2,3)} + ${fF(av,3)} = ${fF(P.eBw,3)} ft (backwall couple, front-face tension; replaces the wheel load on top of the backwall)`,"tab-struct|o-str-Backwall",
+    dimH(X(-tw/2),X(av),Y(-ts-hS)+26,`e_bw ${fmt(P.eBw,2)}'`,14));
+  if(sh) b+=dimH(X(0),X(bS),Y(0)-30,`b_S ${fmt(P.bS,1)}"`)+svgT(X(bS)+4,Y(-ts-hE/2)+4,`h ${fmt(P.hS,1)}" / h_E ${fmt(P.hE,1)}"`,{fs:9.5,c:"#555"});
+  b+=dimH(X(0),X(Ls),Y(0)-52,`L_s = ${fmt(Ls,2)} ft`)+dimV(Y(0),Y(-ts),X(Ls+1.7)+8,`t ${fmt(ts,2)}'`);
+  // friction (integral / semi-integral)
+  if(P.F>0) b+=fg(`Friction of the sliding slab on the moving wall: F = μ(R_DC + R_DW) = ${fF(P.mu,2)}(${fF(P.RDC,1)} + ${fF(P.RDW,1)}) = ${fF(P.F,2)} kip (§1.4a; Tab 10 §10.3)`,J0,
+    svgArrow(X(1.2),Y(-ts-0.15),X(0.15),Y(-ts-0.15),"#6a1b9a",1.8)+svgT(X(1.3),Y(-ts-0.15)+4,`F = ${fmt(P.F,1)} kip`,{fs:10,c:"#6a1b9a"}));
+  const Lr=P.ls||{}; b+=svgT(10,Hd-10,`Live-load surcharge: ${Lr.rem?"removed in the final state ("+esc(Lr.ref)+"), kept in the construction stage":"kept"}. Skew ${fmt(P.th,1)}°: ${P.rule==="square"?"far end square":"ends follow the skew"}.`,{fs:9.5,c:"#555"});
+  return svgWrap(Wd,Hd,b,660);
+}
+function svgApShelf(R){
+  const H=R.apShelf, P=R.ap; if(!H||!P) return "";
+  const it=iabType(), tw=it==="integral"? +S.iab.b : +S.geom.tbw, bS=H.bS, h=H.h, hE=H.hE, ts=P.t*12, cov=H.cov, bar=BARS[H.bar], tie=BARS[H.tieBar];
+  const Wd=560, Hd=330, wallIn=Math.min(tw*12,24), sc=Math.min(260/(bS+wallIn+6),190/(h+ts+6)), x0=60+wallIn*sc, y0=70+ts*sc;   // x in from the back face, y in down from the shelf top
+  const X=x=>x0+x*sc, Y=y=>y0+y*sc, J=(it==="integral"?"tab-iab":"tab-struct")+"|o-ap-shelf";
+  const conc='fill="#f2f2ec" stroke="#555" stroke-width="1.2"';
+  let b=svgT(10,18,`Approach-slab shelf — bracket reinforcement (to scale), ${it==="conv"?"backwall":"end diaphragm"}`,{b:1,fs:12});
+  b+=`<rect x="${X(-wallIn)}" y="${Y(-ts)}" width="${wallIn*sc}" height="${(h+ts+6)*sc}" ${conc}/>`+svgT(X(-wallIn/2),Y(h+5),it==="conv"?"backwall":"end diaphragm",{a:"middle",fs:10,c:"#555"});
+  b+=`<polygon points="${X(0)},${Y(0)} ${X(bS)},${Y(0)} ${X(bS)},${Y(hE)} ${X(0)},${Y(h)}" ${conc}/>`;
+  b+=`<rect x="${X(0)}" y="${Y(-ts)}" width="${(bS+6)*sc}" height="${ts*sc}" fill="#dde5e8" stroke="#78909c" stroke-dasharray="4 3"/>`+svgT(X(bS/2+3),Y(-ts/2)+4,"approach slab",{a:"middle",fs:9.5,c:"#546e7a"});
+  // 2d/3 zone for the closed ties
+  const yT=cov+bar.db/2, zone=2*H.d/3;
+  b+=`<rect x="${X(0)}" y="${Y(yT)}" width="${bS*sc}" height="${Math.min(zone,h-yT)*sc}" fill="rgba(31,58,95,0.07)" stroke="none"/>`;
+  const tTip=`S1 primary tie: #${H.bar} @ ${fF(H.sp,1)} in → A_s = ${fF(H.As,4)} in²/ft\nA_s,req = max(A_f + A_n, 2A_vf/3 + A_n, 0.04(f'c/f_y)bd) = ${fF(H.AsReq,4)} in²/ft (D/C ${fF(H.dcAs,3)})\nanchored at the front face to develop f_y (cross bar / loop); developed into the wall`;
+  b+=fg(tTip,J,`<line x1="${X(-wallIn+2)}" y1="${Y(yT)}" x2="${X(bS-cov)}" y2="${Y(yT)}" stroke="#c62828" stroke-width="2.4" stroke-linecap="round"/><circle cx="${X(bS-cov-bar.db)}" cy="${Y(yT+bar.db)}" r="3.5" fill="#c62828"/>`+svgT(X(bS)+6,Y(yT)+4,`S1 #${H.bar} @ ${fmt(H.sp,1)}"`,{fs:10,c:"#c62828",b:1}));
+  for(let i=1;i<=Math.min(H.nT,6);i++){ const yy=yT+Math.min(zone,h-yT-cov)*i/(Math.min(H.nT,6)+0.0001)*0.98;
+    b+=fg(`S2 closed ties: ${H.nT} horizontal leg${H.nT===1?"":"s"} #${H.tieBar} @ ${fF(H.tieSp,1)} in within 2d_e/3 = ${fF(zone,2)} in → A_h = ${fF(H.Ah,4)} in²/ft\nA_h,req = max(0.5A_s, 0.5(A_s − A_n)) = ${fF(H.AhReq,4)} in²/ft`+(H.corbel?` (D/C ${fF(H.dcAh,3)})`:" (cantilever: not required)"),J,
+      `<line x1="${X(-wallIn+4)}" y1="${Y(yy)}" x2="${X(Math.max(cov,bS-cov))}" y2="${Y(yy)}" stroke="#1f3a5f" stroke-width="1.6" stroke-dasharray="7 2"/>`); }
+  if(H.nT>0) b+=svgT(X(bS)+6,Y(yT+zone*0.6)+4,`S2 ${H.nT} × #${H.tieBar} @ ${fmt(H.tieSp,1)}"`,{fs:10,c:"#1f3a5f",b:1});
+  // load and dimensions
+  b+=fg(`Slab reaction at a_v = ${fF(H.av,2)} in: V_u = ${fF(H.Vu,3)} kip/ft (Strength I), N_uc = ${fF(H.Nuc,3)} kip/ft\nM_u = V_u a_v + N_uc(h − d) = ${fF(H.Mu,2)} kip-in/ft`,J,svgArrow(X(H.av),Y(-ts-14),X(H.av),Y(-0.4),"#c62828",2)+svgArrow(X(H.av),Y(-ts/2),X(H.av+8),Y(-ts/2),"#6a1b9a",1.6));
+  b+=dimH(X(0),X(bS),Y(h)+30,`b_S ${fmt(bS,1)}"`)+dimH(X(0),X(H.av),Y(-ts)-14,`a_v ${fmt(H.av,1)}"`,-4)+dimV(Y(0),Y(h),X(0)-16,`h ${fmt(h,1)}"`)+dimV(Y(0),Y(hE),X(bS)+46,`h_E ${fmt(hE,1)}"`)+dimV(Y(0),Y(H.d),X(bS)+70,`d ${fmt(H.d,2)}"`);
+  b+=svgT(10,Hd-10,`${H.corbel?"a_v ≤ d: bracket per 5.8.4.2.1 / 5.8.4.2.2 (shear friction, c = 0, μ = 1.4)":"a_v > d: cantilever beam (5.8.4.2.1)"}; shaded: 2d_e/3 below the tie. Worked in ${it==="integral"?"§10.7":"§5.8"}.`,{fs:9.5,c:"#555"});
+  return svgWrap(Wd,Hd,b,560);
+}
 /* ---------- cross-section ---------- */
 function drawXsec(){
   const el=document.getElementById("xsecSvg"); if(!el) return;
@@ -7166,6 +7730,12 @@ function drawXsec(){
       s+=`<line x1="${X(B)}" y1="${Y(yy)}" x2="${X(B)-w}" y2="${Y(yy)}" stroke="#1f3a5f" stroke-width="1.1" marker-end="url(#arr)"/>`; }
     s+=`<text x="${X(B)-pw-3}" y="${Y((g.tf+soilTop)/2)}" text-anchor="end" font-size="11" font-family="Times New Roman" fill="#1f3a5f">EH</text>`;
   }
+  // APS: approach slab on the backwall shelf (or the deck end), drawn over the backfill (section only; loads in §1.4a)
+  { const P=window.LAST_R&&window.LAST_R.ap;
+    if(P&&!P.legacy){ const ts=P.t, x1=xsb+Math.min(P.Lmax,B-xsb+mr/sc*0.6), sh=P.sup==="shelf", bS=P.bS/12, hS=P.hS/12, hE=P.hE/12, yT=Htot;
+      s+=`<rect x="${X(xsb)}" y="${Y(yT)}" width="${(x1-xsb)*sc}" height="${ts*sc}" fill="#cfd8dc" stroke="#546e7a" stroke-width="1.2"/>`;
+      if(sh) s+=`<polygon points="${X(xsb)},${Y(yT-ts)} ${X(xsb+bS)},${Y(yT-ts)} ${X(xsb+bS)},${Y(yT-ts-hE)} ${X(xsb)},${Y(yT-ts-hS)}" fill="#dcdcd4" stroke="#333" stroke-width="1.2"/>`;
+      s+=`<text x="${X((xsb+x1)/2)}" y="${Y(yT)-4}" text-anchor="middle" font-size="10.5" font-family="Times New Roman" fill="#37474f">approach slab L = ${fmt(P.Lmax,1)}'${x1<xsb+P.Lmax-1e-6?" (cut)":""}</text>`; } }
   // LS surcharge band (equivalent soil height h_eq above surface) when a live-load surcharge is present
   {
     const R0=window.LAST_R, heq=R0&&R0.LS?R0.LS.heq:0;
@@ -8196,7 +8766,8 @@ document.addEventListener("input",ev=>{
   setPath(S,p,v);
   if(ownPreN){ const r=ownReapply(ownPreN); if(r.set.includes("mat.gc")){ const e2=document.querySelector('[data-path="mat.gc"]'); if(e2) e2.value=S.mat.gc; } }
   scheduleSave();
-  if(el.type==="checkbox"&&(p==="fnd.usePassive"||p==="fnd.imBuried"||p==="seismic.on"||p==="seismic.bwStop"||p==="wing.on"||p==="longit.computeBR"||p==="longit.computeTU"||p==="longit.computeCRSH")){ buildInputs(); }
+  if(el.type==="checkbox"&&(p==="fnd.usePassive"||p==="fnd.imBuried"||p==="seismic.on"||p==="seismic.bwStop"||p==="wing.on"||p==="longit.computeBR"||p==="longit.computeTU"||p==="longit.computeCRSH"||p==="apSlab.on"||p==="apSlab.des")){ buildInputs(); }   // APS: apSlab.on, apSlab.des
+  if(p==="apSlab.qEq"&&!(+v>0)) buildInputs();   // APS: equivalent dead load cleared → the slab inputs
   if(p.startsWith("piles.rowSp")||p.startsWith("piles.colSp")){ if(S.piles.mode==="grid"){ S.piles.coords=gridPileCoords(); } }
   if(el.type==="checkbox"&&p.startsWith("piles.coords")){ /* active toggle */ }
   scheduleRecalc();
@@ -8210,7 +8781,7 @@ document.addEventListener("change",ev=>{
   const ownPre=(p==="own.owner"||p==="longit.material"||p==="iab.type"||p==="fnd.branch")?ownDefMap():null;   // OWNB: owner defaults before the change (ABR1: some depend on the abutment type and foundation)
   const raw=el.value;
   const num=Number(raw);
-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar"].includes(p))?num:raw;
+  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
   setPath(S,p,p==="reinf.gammaE"?Number(raw):v);
   if(p==="beams.N"){ S.beams.N=+raw; }
   if(p==="piles.nRows") S.piles.nRows=+raw;
@@ -8510,7 +9081,6 @@ function inputEchoHTML(){
       ["Cap width b; cap depth h_c; diaphragm h_d",fmt(+I.b)+" / "+fmt(+I.hc)+" / "+fmt(+I.hd),"ft"],
       ["Curvature; height difference; fill over the cap",fmt(+I.curve,1)+"°; "+fmt(+I.dH)+" ft; "+fmt(+I.Dfront)+" ft",""],
       ["Straight; parallel abutments; rock below tip; not scour susceptible",[I.straight,I.parallel,I.rockBelow,I.noScour].map(x=>x?"yes":"no").join(" / "),""],
-      ["Approach slab dead load",fmt(+I.qApp,2),"kip/ft"],
       ["Piles: section, F_y, orientation",I.sec+", "+fmt(+I.Fy,0)+" ksi, "+(I.orient!=="strong"?"weak axis":"strong axis"),""],
       ["Piles: n, spacing, embedment, length",I.n+", "+fmt(+I.sp)+" ft, "+fmt(+I.embed,1)+" in, "+fmt(+I.Lpile,1)+" ft",""],
       ["MassDOT soil type; CTDOT head, L_E, E_G, I_G; T_set, ε_s",I.soilMD+"; "+I.head+", "+fmt(+I.LE)+" ft, "+fmt(+I.EG,0)+" ksi, "+fmt(+I.IG,0)+" in⁴; "+fmt(+I.Tset,0)+" °F, "+fmt(+I.epsSH*1e6,0)+"×10⁻⁶",""],
@@ -8519,6 +9089,15 @@ function inputEchoHTML(){
       ["Cap stirrups",String(I.stBar)==="0"?"none":"#"+I.stBar+", "+I.stLegs+" legs @ "+fmt(+I.stSp,1)+" in",""]]:[
       ["Other end semi-integral",I.bothEnds?"yes":"no",""],
       ["End diaphragm horizontal bars","#"+I.hBar+" @ "+fmt(+I.hSp,1),"in"]])); }
+  if(S.apSlab&&S.apSlab.on){ const A=S.apSlab, lg=+A.qEq>0, P=window.LAST_R&&window.LAST_R.ap;   // APS
+    h+="<h3>Approach slab (panel I-0b)</h3>"+echoRows(lg?[["Equivalent dead load on the abutment (project saved before the panel)",fmt(+A.qEq,3),"kip/ft"]]:[
+      ["Length L; thickness t; width W (0 = L_ab·cos θ)",fmt(+A.L)+" / "+fmt(+A.t)+" / "+fmt(+A.W)+(P&&P.Wauto?" → "+fmt(P.W):""),"ft"],
+      ["Wearing surface (DW)",fmt(+A.ws,3),"ksf"],
+      ["Skew rule; support at the abutment; far-end support",({follow:"ends follow the skew",square:"far end square",ct35:"CTDOT: follow ≤ 35°, square above"}[A.skew]||A.skew)+"; "+(A.sup==="deck"?"deck over the backwall":"shelf (paving notch)")+"; "+(A.far==="soil"?"subbase":"sleeper slab"),""],
+      ...(A.sup==="shelf"?[["Shelf: b_S, h at the face, h_E, a_v (0 = b_S/2)",fmt(+A.bS,1)+" / "+fmt(+A.hS,1)+" / "+fmt(+A.hE,1)+" / "+fmt(+A.aV,1),"in"],
+        ["Shelf bars: primary tie; closed-tie legs","#"+A.sBar+" @ "+fmt(+A.sSp,1)+" in; "+A.hN+" × #"+A.hBar+" @ "+fmt(+A.hSp,1)+" in",""]]:[]),
+      ["Friction coefficient μ (integral / semi-integral); AASHTO 3.11.6.5 LS reduction taken",fmt(+A.mu,2)+"; "+(A.lsRed!==false?"yes":"no"),""],
+      ["Slab design; bottom cover; bars (main / distribution / top)",(A.des?"on":"off")+"; "+fmt(+A.cov,2)+" in; #"+A.aBar+" @ "+fmt(+A.aSp,1)+" / #"+A.dBar+" @ "+fmt(+A.dSp,1)+" / #"+A.tBar+" @ "+fmt(+A.tSp,1)+" in",""]]); }
   return h;
 }
 /* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
@@ -8530,7 +9109,7 @@ function inputEchoHTML(){
    same as the tabs (cloned from them); no value is recomputed. */
 const ABUT_REFS=[
   ["AASHTO LRFD","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Section 3 — 3.4.1 (Tables 3.4.1-1, 3.4.1-2), 3.5.1, 3.6.1.1, 3.6.1.2.2, 3.6.1.2.5, 3.6.2.1, 3.6.4, 3.10.9.2, 3.11.1, 3.11.3, 3.11.5, 3.11.6, 3.12.2"],
-  ["","Art. 4.6.2.1.3 (Table 4.6.2.1.3-1, equivalent strip: backwall wheel load); Art. 4.7.4.4 (minimum support length)"],
+  ["","Art. 4.6.2.1.3 (Table 4.6.2.1.3-1, equivalent strip: backwall wheel load); Art. 4.6.2.3 (equivalent strip, slab-type: approach slab); Art. 4.7.4.4 (minimum support length); 3.11.6.5 (reduction of surcharge); 5.8.4.2 (brackets), 5.12.2.1, 9.7.3.2 (approach slab)"],
   ["","Section 5 — 5.4.2, 5.5.4.2, 5.6.2.1, 5.6.3, 5.6.5, 5.6.7, 5.7.2.8, 5.7.3, 5.7.4, 5.8 (incl. Table 5.8.2.5.3a-1), 5.10.1 (Table 5.10.1-1), 5.10.2, 5.10.6, 5.10.8.2.1, 5.10.8.2.4, 5.10.8.4.3a, 5.12.8.6"],
   ["","Section 6 — 6.5.4.2, 6.5.5, 6.9.4.1.1, 6.9.4.2, 6.15.2, 6.15.3 (steel pile structural resistance)"],
   ["","Section 10 — 10.5.5.2.3, 10.6.1.3, 10.6.2, 10.6.3.1 (incl. 10.6.3.1.2a), 10.6.3.4, 10.6.5, 10.7.1.2, 10.7.1.5, 10.7.3.8, 10.7.3.10, 10.7.3.13"],
@@ -8568,7 +9147,8 @@ function abutApplyPageCSS(on){
 }
 /* D/C result lines for one tab's checks (the dashboard values, R.dash) */
 function abutResultBlock(R, tabId, title, map){
-  const rows=R.dash.filter(d=>d.tab===tabId); if(!rows.length) return "";
+  const apRow=d=>/^ap(?!Bw)/.test(d.id);   // APS: the approach-slab checks go with the approach-slab report section (the backwall front face stays in §5)
+  const rows=R.dash.filter(d=>tabId==="ap"? apRow(d) : (d.tab===tabId&&!apRow(d))); if(!rows.length) return "";
   return `<div class="cr-resh">Results — ${esc(title)}</div><div class="cr-results">`+rows.map(d=>{
     const m=/^(.*?)\s*\[([^\]]+)\]\s*$/.exec(d.name), lab=m?m[1]:d.name;
     const hit=map[DASH_ANCHOR[d.id]];
@@ -8637,6 +9217,7 @@ async function buildReport(){
   const itg=iabType()==="integral";   // IAB: an integral abutment's report leaves out the conventional cantilever sections
   const SKIP={ "tab-comb":!RO.permFull||itg, "tab-tables":!RO.detailTables||itg, "tab-wing":!(S.wing&&S.wing.on), "tab-iab":iabType()==="conv",
     "tab-stab":itg, "tab-found":itg, "tab-struct":itg, "tab-vm":itg };
+  const apPanels=[];   // APS: the approach-slab panels of the tabs get a report section of their own (after the tabs that hold them)
   for(const [id,name] of Object.entries(secNames)){
     if(SKIP[id]) continue;
     const src=document.getElementById(id);
@@ -8645,8 +9226,10 @@ async function buildReport(){
     cl.querySelectorAll(".panel").forEach(p=>p.classList.remove("closed"));
     if(RO.charts){ cl.querySelectorAll(".plotbox").forEach(pb=>{ pb.setAttribute("data-plot-src",pb.id); }); }
     else{ cl.querySelectorAll(".plotbox").forEach(pb=>pb.remove()); }
+    cl.querySelectorAll('.panel[data-cid="o-ap"], .panel[data-cid="o-ap-shelf"], .panel[data-cid="o-ap-des"], .panel[data-cid="o-str-Approach slab"], .panel[data-cid="o-ap-bars"]').forEach(p=>{ apPanels.push(p.outerHTML); p.remove(); });
     sec(name,`<div>${cl.innerHTML}</div>`,{brk:true,key:id});
   }
+  if(apPanels.length) sec("Approach Slab — Loads on the Abutment, Shelf and Slab Design",`<div>${apPanels.join("")}</div>`,{brk:true,key:"ap"});
   // 3D isometric snapshot
   if(RO.viz3d&&!itg){
     let d3url=null; try{ d3url=await captureD3(R); }catch(e){ d3url=null; }
@@ -8689,7 +9272,8 @@ async function buildReport(){
   });
   /* ---- D/C result line per check at the end of the sections that hold checks ---- */
   rp.querySelectorAll("section.cr-sec").forEach(se=>{
-    const k=se.dataset.key; if(!/^tab-(stab|found|struct|wing|iab)$/.test(k)) return;
+    const k=se.dataset.key; if(k==="ap"){ se.insertAdjacentHTML("beforeend",abutResultBlock(R,"ap",se.querySelector("h2").textContent.replace(/^\d+\.\s*/,""),map)); return; }   // APS
+    if(!/^tab-(stab|found|struct|wing|iab)$/.test(k)) return;
     const s=secs.find(x=>x.key===k);
     se.insertAdjacentHTML("beforeend",abutResultBlock(R,k,s.title,map));
   });
