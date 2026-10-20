@@ -5643,3 +5643,152 @@ index dd331d9..96eded2 100644
 @@ -5377,0 +5566 @@ function inputEchoHTML(){
 +    ["Backwall bars epoxy coated (λcf)",rf.coatBW?"yes":"no",""],
 ```
+
+## 2026-10-20 — PR: claude/abut-coulomb — Coulomb on the virtual back by heel length (AASHTO LRFD 10th Ed. C3.11.5.3); MassDOT Coulomb default; RIDOT at-rest on piles / rock (PR link added after merge)
+
+Note: #367 (F50–F58) was merged into `claude/abut-owner-a` after #366 had already been squash-merged to main, so it never reached main. This branch carries it as its first commit (a cherry-pick of `4803548`, unchanged), followed by the changes below.
+
+### F59. Coulomb active coefficient: δ on the virtual back from the heel case (CLMB)   [calc change] [Coulomb option only: MORE conservative with a long heel, unchanged with a short heel]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), 3.11.5.3 (Eqs. 3.11.5.3-1, -2), C3.11.5.3 and Fig. C3.11.5.3-1, p. 3-88 to 3-89. Both cases put the earth pressure on the vertical plane through the heel end:
+  - **(a) long heel:** the shear zone from the heel is not cut by the stem. The stress on that plane is the Rankine stress, inclined at β.
+  - **(b) short heel:** the stem restricts the sliding surface. Coulomb applies on the same plane, with the soil-on-soil wall friction usually limited to 0.67φ.
+  - The real wall back with concrete-on-soil δ is the gravity-wall case of Fig. C3.11.5.3-1b. It is not used for a cantilever abutment.
+- **Before:** `computeKa()` (Coulomb) used the input δ (default 17°) on the virtual back in every case. That was earlier review item N11.
+- **After:** the heel case is decided from the inner boundary of the Rankine shear zone, using the figure's angle:
+  - ε = asin(sin β / sin φ);
+  - a = ½(90° + β − φ − ε) from the vertical;
+  - s* = H / (cot a + tan β), the distance from the virtual back at which that boundary meets the ground.
+
+  If s* ≤ L_heel (long heel), δ = β, which reproduces Rankine exactly. Otherwise (short heel), δ = the input, now labelled "Friction angle δ on the virtual back (short heel)". A warning appears if that δ is over 0.67φ. The M–O δ follows the same value. The case is worked in Tab 1 §1.3, in a new "Coulomb: heel case" block.
+- **Where:** `computeKa()`, anchor `// CLMB (2026-10-20): Coulomb on the vertical plane through the heel end`; `R.coul`; M–O `dMO` (anchor `// CLMB: the δ of the static Coulomb case`); input label of `soil.delta`; Tab 1 §1.3 `coulCase` and the δ row.
+- **Check 1 (long heel; built-in project with Coulomb, L_toe 2 ft, L_heel 13 ft, β = 0, φ = 32°, H = 22 ft):**
+  - a = ½(90 − 32) = 29°; s* = 22·tan 29° = 12.19 ft ≤ 13 ft, so long heel and δ = 0.
+  - Ka = (1 − sin 32°)/(1 + sin 32°) = **0.3073** (before: δ = 17°, 0.2773).
+  - EH_h = ½·0.3073·0.120·22²·44 = **392.60 kip**, EH_v 0 (before: 338.90 and 103.61 kip).
+  - Sliding D/C 0.534 → **0.651**; stem M_u 100.07 → **112.06**; heel M_u 41.85 → **95.78** kip-ft/ft (the vertical component no longer relieves the heel).
+- **Check 2 (long heel, β = 15°):** Coulomb with δ = β gives Ka = **0.3405**. This is identical to the Rankine option on the same project: every result matched, which confirms the equivalence.
+- **Check 3 (short heel, built-in project, L_heel 5 ft):** s* = 12.19 ft > 5 ft, so δ = 17° as before.
+  - Ka = cos²32° / (cos 17° [1 + √(sin 49° · sin 32° / cos 17°)]²) = 0.7192 / (0.9563 · 2.7116) = **0.2773**.
+  - No change. The default project and every short-heel Coulomb project are unchanged.
+
+### F60. Owner defaults: MassDOT Coulomb; RIDOT at-rest on piles / rock   [default change, MassDOT and RIDOT owners only]
+- **MassDOT Part I 3.1.6 (p. 3-4):** Ka by Coulomb. New owner default `soil.method` = "coulomb". It is highlighted and can be overridden, like the other owner defaults.
+  - Built-in project under MassDOT (short heel, δ 17°): Ka 0.3073 → **0.2773**; EH_h 392.60 → **338.90 kip**, EH_v 0 → 103.61 kip.
+  - Sliding (construction stage) D/C 1.153 → **0.877**; eccentricity 0.707 → 0.419; bearing 0.933 → 0.855; stem M_u 112.06 → **100.07** kip-ft/ft.
+- **RIDOT BDM 11.3.4 (p. 11-9):** at-rest where outward tilting is restricted so that active pressure cannot develop.
+  - The BDM does not define which walls those are. It defers to AASHTO for the movement relationship, and its only other at-rest text is for integral abutments (11.3.2, movement under ½ in).
+  - Basis used: AASHTO 10th C3.11.1 (walls that tolerate little or no movement take at-rest pressure; Table C3.11.1-1 gives the Δ/H needed for active). A pile-supported footing (vertical piles, rigid cap) and a footing on rock are taken as unable to tilt or translate that Δ/H, the same split as MassDOT 3.1.6.
+  - New earth pressure state "ridot": K0 = 1 − sin φ on piles or rock, active otherwise. It is the RIDOT owner default, highlighted and overridable.
+  - Built-in project under RIDOT, pile footing: K = 0.4701 (was 0.3073); EH_h 392.60 → 600.65 kip; γEH max 1.35. Maximum pile D/C 0.963 → **1.113**; stem M_u 114.90 → **161.90** kip-ft/ft (construction stage 1.35·EH + 1.50·CS now governs).
+  - Spread footing on soil: unchanged.
+- **Saved data (§5):** no new key. `own.dv` goes 2 → 3 (default state 3). A project saved with owner MassDOT and `soil.method` still at the tool default "rankine" takes "coulomb". A RIDOT project with `soil.Kmode` still "active" takes "ridot". A value the user changed is kept. A one-time notice names the change. Projects under AASHTO and CTDOT are unchanged.
+- **Where:** `ABUT_OWN_DEF` (new rows MassDOT `soil.method`, RIDOT `soil.Kmode`), `OWN_DEF_PANEL/LK/LBL`, `ownShow`; `computeAll` anchor `// CLMB: "ridot"`; panel I-3 option "RIDOT 11.3.4: at-rest on piles or rock"; `migrate()` anchor `// CLMB (2026-10-20): new owner defaults`.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: pass.
+- Headless `computeAll()`, before (main + #367) and after. Unchanged:
+  - AASHTO default, pile, EE I, short-heel Coulomb (level and β = 15°), Rankine long heel with slope;
+  - CTDOT.
+- Changed as listed:
+  - Coulomb long heel (level, slope, EE I);
+  - MassDOT spread;
+  - RIDOT pile and rock;
+  - migrated MassDOT / RIDOT projects saved with `dv` 2.
+- Self-test passes. Report built with RIDOT, no console error. Screenshot of Tab 1 §1.3 checked.
+
+### Open items
+- With at-rest and Extreme Event I, the M–O increment is still taken over the active resultant (F51).
+- RIDOT's "restrained" basis (pile / rock) is the stated judgement above. Change `soil.Kmode` per project if the geotechnical engineer finds otherwise.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against main + #367, `e57fb65`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 96eded2..42344b9 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -643 +643 @@ function defaultState(){
+-    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:2 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
++    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:3 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
+@@ -830 +830 @@ ABUT_OWN.rules=[
+-  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop",
++  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop (the default \"RIDOT\" earth pressure state applies K0 on piles or rock)",
+@@ -899,0 +900 @@ const ABUT_OWN_DEF=[
++  {owner:"MassDOT", key:"soil.method", sec:"3.1.6 (p. 3-4)", text:"Active earth pressure coefficient by Coulomb theory", val:()=>"coulomb"},
+@@ -906,0 +908 @@ const ABUT_OWN_DEF=[
++  {owner:"RIDOT", key:"soil.Kmode", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where tilting is restricted: applied to pile-supported and rock-founded abutments (basis: AASHTO C3.11.1 / Table C3.11.1-1, the BDM sets no other definition)", val:()=>"ridot"},
+@@ -922 +924 @@ const OWN_DEF_KEYS=[...new Set(ABUT_OWN_DEF.map(d=>d.key))];
+-const OWN_DEF_PANEL={"mat.fc":"I-2","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
++const OWN_DEF_PANEL={"mat.fc":"I-2","soil.method":"I-3","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
+@@ -924 +926 @@ const OWN_DEF_PANEL={"mat.fc":"I-2","soil.Kmode":"I-3","soil.phi":"I-3","soil.ga
+-const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
++const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.method":["tab-loads","o-eh","§1.3 earth pressure"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
+@@ -928 +930 @@ const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.Kmode"
+-const OWN_DEF_LBL={"mat.fc":"f′c","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
++const OWN_DEF_LBL={"mat.fc":"f′c","soil.method":"active pressure theory","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
+@@ -934 +936,2 @@ function ownShow(d,v){ if(typeof v==="boolean") return d.key==="seismic.on"?(v?"
+-  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule"}[v]||String(v);
++  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT at-rest on piles / rock"}[v]||String(v);
++  if(d.key==="soil.method") return v==="coulomb"?"Coulomb":"Rankine";
+@@ -1260,0 +1264,5 @@ function migrate(){
++  if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
++    S.own.dv=3;
++    if(abutOwner()!=="AASHTO"){ const pre=ownDefMap(); pre["soil.method"]="rankine"; if(abutOwner()==="RIDOT") pre["soil.Kmode"]="active"; const r=ownReapply(pre);
++      if(r.set.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Owner "+abutOwner()+": new owner default applied — "+r.set.map(k=>ownDefLabel(k)).join("; ")+" (Tab 1 §1.0a, §1.3)"]); }
++  }
+@@ -1262 +1270 @@ function migrate(){
+-    S.own.dv=2;
++    S.own.dv=3;
+@@ -1416,2 +1424,2 @@ function buildInputs(){
+-    ${S.soil.method==="coulomb"? inpRow("Wall friction angle δ","soil.delta","deg",{title:"Coulomb only. The resultant acts at δ from the normal to the wall back; horizontal and vertical components are carried separately."}):""}
+-    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"]],{rebuild:true})}
++    ${S.soil.method==="coulomb"? inpRow("Friction angle δ on the virtual back (short heel)","soil.delta","deg",{title:"Coulomb only, on the vertical plane through the heel end (soil on soil, C3.11.5.3: at most 0.67φ). Used when the heel is short (the shear zone from the heel meets the stem); with a long heel δ = β (Tab 1 §1.3). The resultant acts at δ from the normal; horizontal and vertical components are carried separately."}):""}
++    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"],["ridot","RIDOT 11.3.4: at-rest on piles or rock"]],{rebuild:true})}
+@@ -1759 +1766,0 @@ function computeKa(){
+-    const delta=deg2rad(S.soil.delta);
+@@ -1760,0 +1768,9 @@ function computeKa(){
++    // CLMB (2026-10-20): Coulomb on the vertical plane through the heel end [3.11.5.3, C3.11.5.3, Fig. C3.11.5.3-1]. The inner boundary of the
++    // Rankine shear zone rises from the heel at a = ½(90° + β − φ − ε) from the vertical, ε = asin(sin β / sin φ); it meets the ground surface
++    // at s* = H/(cot a + tan β) from the virtual back. s* ≤ L_heel (long heel, Fig. C3.11.5.3-1a): the zone is not cut by the stem and the
++    // plane is soil on soil with δ = β (the Coulomb expression then gives the Rankine value). s* > L_heel (short heel, Fig. C3.11.5.3-1b):
++    // the stem restricts the sliding surface; δ = the soil-on-soil wall friction input on the same plane (C3.11.5.3: at most 0.67φ).
++    const g=S.geom, Hc=g.tf+g.soilH+g.Lheel*Math.tan(beta);
++    const eps=Math.asin(Math.sin(beta)/Math.sin(phi)), aB=0.5*(Math.PI/2+beta-phi-eps), sStar=Hc/(1/Math.tan(aB)+Math.tan(beta));
++    const longHeel=sStar<=g.Lheel+1e-9, dDeg=longHeel? +g.beta : +S.soil.delta, delta=deg2rad(dDeg);
++    if(!longHeel && +S.soil.delta>0.67*(+S.soil.phi)+1e-9) warn(`Coulomb, short heel: δ = ${fmt(+S.soil.delta,1)}° on the soil-on-soil plane through the heel exceeds 0.67φ = ${fmt(0.67*S.soil.phi,1)}° (C3.11.5.3) — check δ (panel I-3).`);
+@@ -1764 +1780 @@ function computeKa(){
+-    return {ka, iota:S.soil.delta}; // resultant at δ from normal to (vertical) plane
++    return {ka, iota:dDeg, cw:{longHeel, aDeg:aB*180/Math.PI, epsDeg:eps*180/Math.PI, sStar, Lheel:+g.Lheel, H:Hc, delta:dDeg}}; // resultant at δ from the normal to the vertical plane
+@@ -1948,2 +1964,5 @@ function computeAll(){
+-  const kMode=["atrest","blend","massdot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
+-  const kEff=kMode!=="massdot"?kMode:((S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"))?"atrest":(H<=5+1e-9?"blend":"active"));
++  const kMode=["atrest","blend","massdot","ridot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
++  const onPR=(S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"));
++  // CLMB: "ridot" — RIDOT BDM 11.3.4 (at-rest where tilting is restricted; the BDM defers to AASHTO for the movement needed): K0 for a
++  // pile-supported or rock-founded abutment (cannot rotate or translate the Δ/H of Table C3.11.1-1), active otherwise
++  const kEff=kMode==="massdot"?(onPR?"atrest":(H<=5+1e-9?"blend":"active")) : kMode==="ridot"?(onPR?"atrest":"active") : kMode;
+@@ -1953,0 +1973 @@ function computeAll(){
++  R.coul=KA.cw||null;   // CLMB: Coulomb heel case (long / short) and δ used
+@@ -1996 +2016 @@ function computeAll(){
+-    const dMO=S.soil.method==="coulomb"?deg2rad(S.soil.delta):0;
++    const dMO=S.soil.method==="coulomb"?deg2rad(KA.iota):0;   // CLMB: the δ of the static Coulomb case (β for a long heel)
+@@ -3333 +3353,6 @@ function renderTabLoads(R){
+-  const s=S.soil, E=R.EH;
++  const s=S.soil, E=R.EH, CW=R.coul, dC=CW?CW.delta:+s.delta;   // CLMB: δ used on the virtual back
++  const coulCase=(s.method==="coulomb"&&CW)? eqB(`Coulomb: heel case — ${CW.longHeel?"long heel (shear zone not cut by the stem): δ = β":"short heel (shear zone cut by the stem): δ = soil-on-soil input"}`,"AASHTO C3.11.5.3, Fig. C3.11.5.3-1",[
++      "\\varepsilon = \\sin^{-1}\\!\\left(\\dfrac{\\sin\\beta}{\\sin\\varphi_f}\\right),\\quad a = \\tfrac{1}{2}(90° + \\beta - \\varphi_f - \\varepsilon),\\quad s^{*} = \\dfrac{H}{\\cot a + \\tan\\beta}",
++      `\\varepsilon = ${fmtT(CW.epsDeg,2)}°,\\quad a = \\tfrac{1}{2}(90 + ${fmtT(g.beta,1)} - ${fmtT(s.phi,1)} - ${fmtT(CW.epsDeg,2)}) = ${fmtT(CW.aDeg,2)}°`,
++      `s^{*} = \\dfrac{${fmtT(CW.H)}}{\\cot ${fmtT(CW.aDeg,2)}° + \\tan ${fmtT(g.beta,1)}°} = ${fmtT(CW.sStar)}\\ \\text{ft} ${CW.longHeel?"\\le":">"} L_{heel} = ${fmtT(CW.Lheel)}\\ \\text{ft} \\;\\Rightarrow\\; \\delta = ${fmtT(CW.delta,1)}°`],
++      `s* = horizontal distance from the virtual back (vertical plane through the heel end) at which the inner boundary of the active shear zone, rising from the heel at a from the vertical, meets the ground. ${CW.longHeel?"It reaches the ground before the stem: the plane is soil on soil and the stress on it is the Rankine stress, inclined at β; Coulomb with δ = β gives that value.":"The stem cuts the zone: Coulomb on the same plane with the soil-on-soil wall friction δ of panel I-3 (C3.11.5.3: usually at most 0.67φ = "+fmt(0.67*s.phi,1)+"°)."} The soil between the stem and the plane is part of the wall weight (EV).`) : "";
+@@ -3339 +3364 @@ function renderTabLoads(R){
+-       `k_a = \\dfrac{\\cos^2 ${fmtT(s.phi,1)}°}{\\cos ${fmtT(s.delta,1)}°\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(s.phi+s.delta,1)}°)\\,\\sin(${fmtT(s.phi-g.beta,1)}°)}{\\cos ${fmtT(s.delta,1)}°\\,\\cos ${fmtT(g.beta,1)}°}}\\right]^2}`,
++       `k_a = \\dfrac{\\cos^2 ${fmtT(s.phi,1)}°}{\\cos ${fmtT(dC,1)}°\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(s.phi+dC,1)}°)\\,\\sin(${fmtT(s.phi-g.beta,1)}°)}{\\cos ${fmtT(dC,1)}°\\,\\cos ${fmtT(g.beta,1)}°}}\\right]^2}`,
+@@ -3363,0 +3389 @@ function renderTabLoads(R){
++    ${coulCase}
+@@ -3367 +3393 @@ function renderTabLoads(R){
+-      ...(s.method==="coulomb"?[["\\delta","Wall interface friction angle",s.delta,"deg"]]:[]),
++      ...(s.method==="coulomb"?[["\\delta","Friction angle on the virtual back ("+(CW&&CW.longHeel?"long heel: = β":"short heel: soil on soil, input")+")",dC,"deg"]]:[]),
+@@ -5550 +5576 @@ function inputEchoHTML(){
+-    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule"}[S.soil.Kmode]||"active Ka",""],
++    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT: at-rest on piles / rock"}[S.soil.Kmode]||"active Ka",""],
+```

@@ -640,7 +640,7 @@ function defaultState(){
       zone:1,                                                     // seismic zone [T.3.10.6-1]: connection force [3.10.9]
       shEQ:100 },                                                 // seismic share of the superstructure inertia at this abutment (%): EQsup = A_s·(DC+DW)·shEQ
     meta:{ revs:[] },                                             // revision history: {n, ts, fp} on each project save
-    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:2 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
+    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:3 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
     factors:{
       // Table 3.4.1-1 / 3.4.1-2 — all editable
       gpDCmax:1.25, gpDCmin:0.90, gpDWmax:1.50, gpDWmin:0.65,
@@ -827,7 +827,7 @@ ABUT_OWN.rules=[
     ev:C=>({st:"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive on (panel I-4): used at Extreme Event I only":"passive not used", lim:"strength: none; extreme event: allowed", link:OWN_LK.slide})},
   {owner:"RIDOT", id:"eta", kind:"load", sec:"1.3.1–1.3.3 (p. 1-8)", text:"Load modifier at the strength limit states: ηD = 1.00, ηR = 1.00 (redundant), ηI = 1.05 for ADT ≥ 5000, otherwise 1.00",
     ev:C=>{ const L=C.R.ownLoad; return {st:L.hasADT?"pass":"warn", val:L.hasADT?`ADT = ${fmt(L.adt,0)} → η = ${fmt(L.eta,2)}`:"ADT not entered (panel I-0): η = 1.00 used", lim:"η = 1.05 if ADT ≥ 5000", tex:`\\eta = \\eta_D\\eta_R\\eta_I = (1.00)(1.00)(${ownF(L.eta)}) = ${ownF(L.eta)}`, link:["tab-comb","o-ownload","§2.0a owner load rules"]}; }},
-  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop",
+  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop (the default \"RIDOT\" earth pressure state applies K0 on piles or rock)",
     ev:C=>({st:"adv", val:`${{active:"active K<sub>a</sub>",atrest:"at-rest K<sub>0</sub>",blend:"0.5(K<sub>0</sub> + K<sub>a</sub>)"}[C.R.Ksel.eff]} = ${fmt(C.R.Ksel.K,4)} used (panel I-3)`, lim:"at-rest where the wall cannot tilt (choose it in panel I-3)", link:OWN_LK.eh})},
   {owner:"RIDOT", id:"skew", kind:"should-warning", sec:"2.4.2.3 (p. 2-9)", text:"Skew minimized; consider lengthening the span where the skew exceeds 40°",
     ev:C=>ownSkew(C,40)},
@@ -897,6 +897,7 @@ function abutOwnChecks(R){
    (as GirderDetail values in ST-Girder) with the owner section. ---------- */
 const ABUT_OWN_DEF=[
   {owner:"MassDOT", key:"mat.fc", sec:"4.2.2.3, General Notes (p. 4-5)", text:"Concrete 5000 HP: f′c = 5.0 ksi", val:()=>5.0, unit:"ksi"},
+  {owner:"MassDOT", key:"soil.method", sec:"3.1.6 (p. 3-4)", text:"Active earth pressure coefficient by Coulomb theory", val:()=>"coulomb"},
   {owner:"MassDOT", key:"soil.Kmode", sec:"3.1.6 (p. 3-4)", text:"Earth pressure coefficient by the 3.1.6 rule: K0 for walls on rock or piles, 0.5(K0 + Ka) on soil 5 ft high or less, Ka otherwise", val:()=>"massdot"},
   {owner:"MassDOT", key:"longit.dTrise", sec:"3.1.8.2 (p. 3-7)", text:"Temperature rise: steel 70 °F, concrete 30 °F (the 65 % factor is included)", val:Q=>Q.longit.material==="concrete"?30:70, unit:"°F"},
   {owner:"MassDOT", key:"longit.dTfall", sec:"3.1.8.2 (p. 3-7)", text:"Temperature fall: steel 100 °F, concrete 70 °F", val:Q=>Q.longit.material==="concrete"?70:100, unit:"°F"},
@@ -904,6 +905,7 @@ const ABUT_OWN_DEF=[
   {owner:"MassDOT", key:"bearing.G", sec:"3.5.7.4 (p. 3-57)", text:"Elastomer G: least favorable value of 0.160 ksi ± 15 %; 0.184 ksi for the pad shear force on the abutment", val:()=>0.184, unit:"ksi"},
   {owner:"MassDOT", key:"reinf.coatBW", sec:"3.3.1.6 (p. 3-18)", text:"Backwall and beam seat bars epoxy coated (λcf on the backwall development length)", val:()=>true},
   {owner:"MassDOT", key:"seismic.on", sec:"3.4.4.3 (p. 3-35)", text:"SDC A conventional bridges: no seismic design of the abutment (Extreme Event I off); connection force and support length still checked", val:()=>false},
+  {owner:"RIDOT", key:"soil.Kmode", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where tilting is restricted: applied to pile-supported and rock-founded abutments (basis: AASHTO C3.11.1 / Table C3.11.1-1, the BDM sets no other definition)", val:()=>"ridot"},
   {owner:"RIDOT", key:"own.mLL", sec:"3.4.1.2 (p. 3-7)", text:"Design load multiplier 1.2 on HL-93 at the Strength and Service limit states (applied here to the girder LL+IM reaction and to BR)", val:()=>1.2},
   {owner:"RIDOT", key:"seismic.gEQll", sec:"3.2.1.3 (p. 3-2)", text:"γEQ on live load at Extreme Event I: 0.50 maximum, 0.0 minimum (both run)", val:()=>0.5},
   {owner:"RIDOT", key:"longit.dTrise", sec:"3.7.1 (p. 3-14)", text:"Procedure B, steel −10 to 105 °F, concrete 0 to 100 °F; force to the substructure from 65 % of the full range, one way each direction", val:Q=>0.65*(Q.longit.material==="concrete"?100:115), unit:"°F"},
@@ -919,19 +921,20 @@ const ABUT_OWN_DEF=[
   {owner:"CTDOT", key:"reinf.gammaE", sec:"V2 5.6.7", text:"Crack control based on Class 2 exposure", val:()=>0.75}
 ];
 const OWN_DEF_KEYS=[...new Set(ABUT_OWN_DEF.map(d=>d.key))];
-const OWN_DEF_PANEL={"mat.fc":"I-2","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
+const OWN_DEF_PANEL={"mat.fc":"I-2","soil.method":"I-3","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
   "reinf.coatBW":"I-9","reinf.gammaE":"I-9","seismic.on":"I-11","seismic.gEQll":"I-11","own.mLL":"I-0"};
-const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
+const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.method":["tab-loads","o-eh","§1.3 earth pressure"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
   "constr.qC":["tab-comb","o-ownload","§2.0a owner load rules"],"longit.dTrise":["tab-loads","o-longit-tu","§1.7 temperature"],"longit.dTfall":["tab-loads","o-longit-tu","§1.7 temperature"],"longit.cte":["tab-loads","o-longit-tu","§1.7 temperature"],
   "bearing.G":["tab-loads","o-longit-tu","§1.7 temperature"],"reinf.coatBW":["tab-struct","o-str-Backwall","§5.1 backwall"],"reinf.gammaE":["tab-struct","o-str-Stem","§5.2 stem"],
   "seismic.on":["tab-stab","o-seis","§3.6 connection force"],"seismic.gEQll":["tab-comb","o-facttbl","§2.1 load factors"],"own.mLL":["tab-comb","o-ownload","§2.0a owner load rules"]};
-const OWN_DEF_LBL={"mat.fc":"f′c","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
+const OWN_DEF_LBL={"mat.fc":"f′c","soil.method":"active pressure theory","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
   "longit.cte":"α","bearing.G":"elastomer G","reinf.coatBW":"coated backwall bars","reinf.gammaE":"crack-control γe","seismic.on":"Extreme Event I","seismic.gEQll":"γEQ on live load","own.mLL":"design load multiplier m"};
 const ownDefLabel=k=>OWN_DEF_LBL[k]||k;
 const ownEq=(a,b)=>(typeof a==="boolean"||typeof b==="boolean"||typeof a==="string"&&isNaN(+a)||typeof b==="string"&&isNaN(+b)||a===""||b==="")? a===b : Math.abs(+a-+b)<=1e-9*Math.max(Math.abs(+a),Math.abs(+b))+1e-15;
 function ownDefVal(d){ return d.val(S); }
 function ownShow(d,v){ if(typeof v==="boolean") return d.key==="seismic.on"?(v?"on":"off"):(v?"yes":"no");
-  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule"}[v]||String(v);
+  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT at-rest on piles / rock"}[v]||String(v);
+  if(d.key==="soil.method") return v==="coulomb"?"Coulomb":"Rankine";
   if(d.key==="reinf.gammaE") return Math.abs(+v-0.75)<1e-9?"Class 2 (γe = 0.75)":Math.abs(+v-1)<1e-9?"Class 1 (γe = 1.00)":"γe = "+fmt(+v,2);
   if(d.key==="longit.cte") return (+v*1e6).toFixed(2)+"×10⁻⁶ /°F";
   return fmt(+v,d.key==="bearing.G"||d.key==="soil.gamma"?3:2)+(d.unit?" "+d.unit:""); }
@@ -1258,8 +1261,13 @@ function migrate(){
   if(S.reinf.coatBW===undefined) S.reinf.coatBW=false;
   if(S.own.ADT===undefined) S.own.ADT="";
   if(S.own.mLL===undefined) S.own.mLL=1.0;
+  if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
+    S.own.dv=3;
+    if(abutOwner()!=="AASHTO"){ const pre=ownDefMap(); pre["soil.method"]="rankine"; if(abutOwner()==="RIDOT") pre["soil.Kmode"]="active"; const r=ownReapply(pre);
+      if(r.set.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Owner "+abutOwner()+": new owner default applied — "+r.set.map(k=>ownDefLabel(k)).join("; ")+" (Tab 1 §1.0a, §1.3)"]); }
+  }
   if(!(S.own.dv>=2)){   // a project saved with an owner before the owner defaults existed: apply them to the inputs still at the tool default
-    S.own.dv=2;
+    S.own.dv=3;
     if(abutOwner()!=="AASHTO"){ const r=ownReapply(ownDefMap("AASHTO"));
       if(r.set.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Owner "+abutOwner()+": owner defaults applied to inputs that still held the tool default — "+r.set.map(k=>ownDefLabel(k)).join("; ")+" (Tab 1 §1.0a)"]); }
   }
@@ -1413,8 +1421,8 @@ function buildInputs(){
     ${selRow("Active pressure theory","soil.method",[["rankine","Rankine (3.11.5.3)"],["coulomb","Coulomb (3.11.5.3)"]],{rebuild:true})}
     ${inpRow("Backfill unit weight γ","soil.gamma","kcf")}
     ${inpRow("Backfill friction angle φ<sub>f</sub>","soil.phi","deg")}
-    ${S.soil.method==="coulomb"? inpRow("Wall friction angle δ","soil.delta","deg",{title:"Coulomb only. The resultant acts at δ from the normal to the wall back; horizontal and vertical components are carried separately."}):""}
-    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"]],{rebuild:true})}
+    ${S.soil.method==="coulomb"? inpRow("Friction angle δ on the virtual back (short heel)","soil.delta","deg",{title:"Coulomb only, on the vertical plane through the heel end (soil on soil, C3.11.5.3: at most 0.67φ). Used when the heel is short (the shear zone from the heel meets the stem); with a long heel δ = β (Tab 1 §1.3). The resultant acts at δ from the normal; horizontal and vertical components are carried separately."}):""}
+    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"],["ridot","RIDOT 11.3.4: at-rest on piles or rock"]],{rebuild:true})}
     ${S.soil.Kmode&&S.soil.Kmode!=="active"?`<div class="in-note">K used for EH, LS, ES and the construction stage; worked in Tab 1 §1.3. At-rest takes γ<sub>EH</sub> max from panel I-8 (1.35 [T.3.4.1-2]).</div>`:""}
     <div class="subhead">Live-load surcharge h<sub>eq</sub> (Table 3.11.6.4.1-1, editable)</div>
     ${inpRow("h<sub>eq</sub> at wall height 5 ft","soil.heq5","ft")}
@@ -1756,12 +1764,20 @@ function computeKa(){
     const ka=cb*(cb-root)/(cb+root);
     return {ka, iota:S.geom.beta}; // resultant parallel to slope
   }else{
-    const delta=deg2rad(S.soil.delta);
     if(beta>=phi){ warn("Backfill slope β ≥ φ — Coulomb active theory is not applicable.","err"); return {ka:NaN, iota:S.soil.delta}; }
+    // CLMB (2026-10-20): Coulomb on the vertical plane through the heel end [3.11.5.3, C3.11.5.3, Fig. C3.11.5.3-1]. The inner boundary of the
+    // Rankine shear zone rises from the heel at a = ½(90° + β − φ − ε) from the vertical, ε = asin(sin β / sin φ); it meets the ground surface
+    // at s* = H/(cot a + tan β) from the virtual back. s* ≤ L_heel (long heel, Fig. C3.11.5.3-1a): the zone is not cut by the stem and the
+    // plane is soil on soil with δ = β (the Coulomb expression then gives the Rankine value). s* > L_heel (short heel, Fig. C3.11.5.3-1b):
+    // the stem restricts the sliding surface; δ = the soil-on-soil wall friction input on the same plane (C3.11.5.3: at most 0.67φ).
+    const g=S.geom, Hc=g.tf+g.soilH+g.Lheel*Math.tan(beta);
+    const eps=Math.asin(Math.sin(beta)/Math.sin(phi)), aB=0.5*(Math.PI/2+beta-phi-eps), sStar=Hc/(1/Math.tan(aB)+Math.tan(beta));
+    const longHeel=sStar<=g.Lheel+1e-9, dDeg=longHeel? +g.beta : +S.soil.delta, delta=deg2rad(dDeg);
+    if(!longHeel && +S.soil.delta>0.67*(+S.soil.phi)+1e-9) warn(`Coulomb, short heel: δ = ${fmt(+S.soil.delta,1)}° on the soil-on-soil plane through the heel exceeds 0.67φ = ${fmt(0.67*S.soil.phi,1)}° (C3.11.5.3) — check δ (panel I-3).`);
     const num=Math.pow(Math.cos(phi),2);
     const rad=Math.sqrt( (Math.sin(phi+delta)*Math.sin(phi-beta)) / (Math.cos(delta)*Math.cos(beta)) );
     const ka=num/( Math.cos(delta)*Math.pow(1+rad,2) );
-    return {ka, iota:S.soil.delta}; // resultant at δ from normal to (vertical) plane
+    return {ka, iota:dDeg, cw:{longHeel, aDeg:aB*180/Math.PI, epsDeg:eps*180/Math.PI, sStar, Lheel:+g.Lheel, H:Hc, delta:dDeg}}; // resultant at δ from the normal to the vertical plane
   }
 }
 
@@ -1945,12 +1961,16 @@ function computeAll(){
   // OWNB: earth pressure state [3.11.5.2; MassDOT 3.1.6; RIDOT 11.3.4]: active (as before) / at-rest K0 = 1 − sin φ (horizontal) /
   // 0.5(K0 + Ka) / the MassDOT rule (K0 on piles or rock, the blend on soil with H ≤ 5 ft, Ka otherwise). K replaces k_a for EH, LS, ES.
   const KA=computeKa(), K0=1-Math.sin(deg2rad(+S.soil.phi));
-  const kMode=["atrest","blend","massdot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
-  const kEff=kMode!=="massdot"?kMode:((S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"))?"atrest":(H<=5+1e-9?"blend":"active"));
+  const kMode=["atrest","blend","massdot","ridot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
+  const onPR=(S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"));
+  // CLMB: "ridot" — RIDOT BDM 11.3.4 (at-rest where tilting is restricted; the BDM defers to AASHTO for the movement needed): K0 for a
+  // pile-supported or rock-founded abutment (cannot rotate or translate the Δ/H of Table C3.11.1-1), active otherwise
+  const kEff=kMode==="massdot"?(onPR?"atrest":(H<=5+1e-9?"blend":"active")) : kMode==="ridot"?(onPR?"atrest":"active") : kMode;
   let ka=KA.ka, iota=KA.iota;
   if(kEff==="atrest"){ ka=K0; iota=0; }
   else if(kEff==="blend"){ const Kh=0.5*(K0+KA.ka*Math.cos(deg2rad(KA.iota))), Kv=0.5*KA.ka*Math.sin(deg2rad(KA.iota)); ka=Math.hypot(Kh,Kv); iota=Math.atan2(Kv,Kh)*180/Math.PI; }
   R.Ksel={mode:kMode, eff:kEff, K0, Ka:KA.ka, iotaA:KA.iota, K:ka, iota};
+  R.coul=KA.cw||null;   // CLMB: Coulomb heel case (long / short) and δ used
   if(kEff!=="active"&&(+g.beta||0)>0) warn("At-rest K0 = 1 − sin φ is for level backfill [3.11.5.2]; the backfill slopes (β > 0) — confirm K0 with the geotechnical engineer.");
   R.ka=ka; R.iota=iota;
   const gam=S.soil.gamma, gamB=gam-GAMMA_W;
@@ -1993,7 +2013,7 @@ function computeAll(){
   }else if(S.seismic.on){
     const kh=(+S.seismic.khR)*(+S.seismic.As), kv=+S.seismic.kv;
     const th=Math.atan(kh/(1-kv)), thd=th*180/Math.PI;
-    const dMO=S.soil.method==="coulomb"?deg2rad(S.soil.delta):0;
+    const dMO=S.soil.method==="coulomb"?deg2rad(KA.iota):0;   // CLMB: the δ of the static Coulomb case (β for a long heel)
     const phiR=deg2rad(S.soil.phi), betaR=deg2rad(g.beta);
     let KAE=NaN;
     if(phiR-th-betaR>1e-6){
@@ -3330,13 +3350,18 @@ function renderTabLoads(R){
       `W_{EV} = ${fmtT(R.EV.W)}\\ \\text{kip} \\quad\\text{at } \\bar{x} = ${fmtT(R.EV.x)}\\ \\text{ft from toe}`])}
   `);
   /* --- earth pressure --- */
-  const s=S.soil, E=R.EH;
+  const s=S.soil, E=R.EH, CW=R.coul, dC=CW?CW.delta:+s.delta;   // CLMB: δ used on the virtual back
+  const coulCase=(s.method==="coulomb"&&CW)? eqB(`Coulomb: heel case — ${CW.longHeel?"long heel (shear zone not cut by the stem): δ = β":"short heel (shear zone cut by the stem): δ = soil-on-soil input"}`,"AASHTO C3.11.5.3, Fig. C3.11.5.3-1",[
+      "\\varepsilon = \\sin^{-1}\\!\\left(\\dfrac{\\sin\\beta}{\\sin\\varphi_f}\\right),\\quad a = \\tfrac{1}{2}(90° + \\beta - \\varphi_f - \\varepsilon),\\quad s^{*} = \\dfrac{H}{\\cot a + \\tan\\beta}",
+      `\\varepsilon = ${fmtT(CW.epsDeg,2)}°,\\quad a = \\tfrac{1}{2}(90 + ${fmtT(g.beta,1)} - ${fmtT(s.phi,1)} - ${fmtT(CW.epsDeg,2)}) = ${fmtT(CW.aDeg,2)}°`,
+      `s^{*} = \\dfrac{${fmtT(CW.H)}}{\\cot ${fmtT(CW.aDeg,2)}° + \\tan ${fmtT(g.beta,1)}°} = ${fmtT(CW.sStar)}\\ \\text{ft} ${CW.longHeel?"\\le":">"} L_{heel} = ${fmtT(CW.Lheel)}\\ \\text{ft} \\;\\Rightarrow\\; \\delta = ${fmtT(CW.delta,1)}°`],
+      `s* = horizontal distance from the virtual back (vertical plane through the heel end) at which the inner boundary of the active shear zone, rising from the heel at a from the vertical, meets the ground. ${CW.longHeel?"It reaches the ground before the stem: the plane is soil on soil and the stress on it is the Rankine stress, inclined at β; Coulomb with δ = β gives that value.":"The stem cuts the zone: Coulomb on the same plane with the soil-on-soil wall friction δ of panel I-3 (C3.11.5.3: usually at most 0.67φ = "+fmt(0.67*s.phi,1)+"°)."} The soil between the stem and the plane is part of the wall weight (EV).`) : "";
   const kaEq = s.method==="rankine"
     ? ["k_a = \\cos\\beta\\,\\dfrac{\\cos\\beta-\\sqrt{\\cos^2\\beta-\\cos^2\\varphi_f}}{\\cos\\beta+\\sqrt{\\cos^2\\beta-\\cos^2\\varphi_f}}",
        `k_a = \\cos${fmtT(g.beta,1)}°\\,\\dfrac{\\cos${fmtT(g.beta,1)}°-\\sqrt{\\cos^2${fmtT(g.beta,1)}°-\\cos^2${fmtT(s.phi,1)}°}}{\\cos${fmtT(g.beta,1)}°+\\sqrt{\\cos^2${fmtT(g.beta,1)}°-\\cos^2${fmtT(s.phi,1)}°}}`,
        `k_a = ${fmtT(R.Ksel?R.Ksel.Ka:R.ka,4)}`]
     : ["k_a = \\dfrac{\\cos^2\\varphi_f}{\\cos\\delta\\left[1+\\sqrt{\\dfrac{\\sin(\\varphi_f+\\delta)\\sin(\\varphi_f-\\beta)}{\\cos\\delta\\,\\cos\\beta}}\\right]^2}\\quad(\\theta=90°)",
-       `k_a = \\dfrac{\\cos^2 ${fmtT(s.phi,1)}°}{\\cos ${fmtT(s.delta,1)}°\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(s.phi+s.delta,1)}°)\\,\\sin(${fmtT(s.phi-g.beta,1)}°)}{\\cos ${fmtT(s.delta,1)}°\\,\\cos ${fmtT(g.beta,1)}°}}\\right]^2}`,
+       `k_a = \\dfrac{\\cos^2 ${fmtT(s.phi,1)}°}{\\cos ${fmtT(dC,1)}°\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(s.phi+dC,1)}°)\\,\\sin(${fmtT(s.phi-g.beta,1)}°)}{\\cos ${fmtT(dC,1)}°\\,\\cos ${fmtT(g.beta,1)}°}}\\right]^2}`,
        `k_a = ${fmtT(R.Ksel?R.Ksel.Ka:R.ka,4)}`];
   const KS=R.Ksel||{eff:"active"}, kS=KS.eff==="active"?"k_a":"K";   // OWNB: symbol of the coefficient in use
   const kSelEq=KS.eff==="active"?"":eqB(`Earth pressure state — ${KS.eff==="atrest"?"at-rest":"0.5(K₀ + K<sub>a</sub>)"}${KS.mode==="massdot"?" (MassDOT 3.1.6 rule: "+(S.fnd.branch==="pile"?"pile-supported":S.fnd.matl==="rock"?"on rock":"on soil, H = "+fmt(geo.H,2)+" ft ≤ 5 ft")+")":""}`,KS.mode==="massdot"?"AASHTO 3.11.5.2, Eq. 3.11.5.2-1; MassDOT Part I 3.1.6":"AASHTO 3.11.5.2, Eq. 3.11.5.2-1",[
@@ -3361,10 +3386,11 @@ function renderTabLoads(R){
       "Triangular distribution over the full retained height at the vertical plane through the heel end.");
   }
   h+=panel("o-eh","1.3","Lateral Earth Pressure (EH) [3.11.5]",`
+    ${coulCase}
     ${eqB(`Active coefficient — ${s.method==="rankine"?"Rankine":"Coulomb"}${KS.eff==="atrest"?" (shown for reference; at-rest K₀ is used)":""}`,s.method==="coulomb"?"AASHTO 3.11.5.3, Eq. 3.11.5.3-1":"AASHTO C3.11.5.3 (Rankine)",kaEq)}
     ${varsTbl([["\\varphi_f","Backfill effective friction angle",s.phi,"deg"],
       ["\\beta","Backfill slope",g.beta,"deg"],
-      ...(s.method==="coulomb"?[["\\delta","Wall interface friction angle",s.delta,"deg"]]:[]),
+      ...(s.method==="coulomb"?[["\\delta","Friction angle on the virtual back ("+(CW&&CW.longHeel?"long heel: = β":"short heel: soil on soil, input")+")",dC,"deg"]]:[]),
       ["\\gamma","Backfill unit weight",s.gamma,"kcf",3],
       ["H","Retained height (t_f + h_{soil})",geo.H,"ft"]])}
     ${kSelEq}
@@ -5547,7 +5573,7 @@ function inputEchoHTML(){
     h+=pt+"</table>";
   }
   h+="<h3>Earth pressure state & construction surcharge</h3>"+echoRows([
-    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule"}[S.soil.Kmode]||"active Ka",""],
+    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT: at-rest on piles / rock"}[S.soil.Kmode]||"active Ka",""],
     ["γEH max at-rest",fmt(+F.gpEHmaxR,2),"–"],
     ["Construction surcharge q_c / γ_c",fmt(+S.constr.qC||0,3)+" / "+fmt(+S.constr.gC,2),"ksf / –"]]);
   h+="<h3>Load & resistance factors</h3>"+echoRows([
