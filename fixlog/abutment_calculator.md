@@ -4679,3 +4679,315 @@ index 053d0b9..250ef29 100644
 -    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
 +    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"1.00 [T.3.4.1-1]")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
 ```
+
+## 2026-10-20 — PR: claude/abut-owner-a — owner selector (AASHTO / MassDOT / RIDOT / CTDOT) with owner requirement checks; no computed result changes (PR link added after merge)
+
+### F49. Owner selector and "Owner requirements" card (OWNA)   [new checks and notes only] [no result changed]
+- **What:** a new input panel **I-0 Owner** (Geometry tab) with the bridge owner (AASHTO default, MassDOT, RIDOT, CTDOT), the total bridge length for the integral screening (0 = span L) and, while passive resistance is off, the existing input `fnd.Df` (bottom of footing below finished grade) for the frost / embedment rules. A new output panel **Tab 1 §1.0a "Owner Requirements"** lists every rule of the chosen owner: manual section and page, a paraphrase, the kind (Shall = pass/fail, Should = warning, Advisory, Note, Pending reference), the value checked with its worked line, the requirement, the result and a "Worked in" link (CLAUDE.md §6). A chip above the dashboard ("RIDOT: 1 TO CHECK") links to it; a failed Shall adds an error line and a Should a warning line in the warnings box (Tab 1 §1.0a cited). The report includes the card (it is a Tab 1 panel), the owner manual on the cover line and in the references, and an "Owner" block in the input echo.
+- **Pattern:** the OWN_RULES table of `Steel Bridge Beam Modules.html` (owners metadata, rule rows with owner / id / kind / sec / text), copied into this tool as `ABUT_OWN` (CLAUDE.md §3: duplicated, not shared). Each rule here also carries an `ev(C)` evaluator; `abutOwnCtx(R)` works the shared values once (pile spacing per row and column and the minimum over all pairs, footing edge to pile face, rows of piles, seat width, pad edge distance from §5.6, expansion movement, etc.).
+- **Rules (verified against each manual page; paraphrased, no text copied):**
+  - **MassDOT Bridge Manual Part I (Hundredth Anniversary Ed.; written to AASHTO LRFD 9th Ed., 3.1.1.1):** 3.3.1.1 proportions / seat / cover / frost / bar minimums per Part II (pending reference: Part II not available); 3.2.2.3(3) pile spacing 2.5D to 10 ft; 3.2.2.3(4) footing edge to pile perimeter ≥ 9 in; 2.3.4.1 skew 40° / 50° warnings; 3.3.1.1 passive neglected (Shall) and no shear keys (note); 3.1.6 earth pressure coefficient required (K0 on rock or piles, 0.5(K0+Ka) ≤ 5 ft on soil, Coulomb Ka otherwise) shown against the Ka in use; 3.3.1.2 soil over the toe in bearing (not modelled, flagged); 3.3.2.2 heel dead-load case (flagged, not checked in this version); 3.3.1.6 coated backwall / seat bars (flagged); 4.2.2.3 general notes f′c 5.0 ksi and mass concrete (every dimension ≥ 4 ft); 3.1.8.2 temperature; 3.5.7.4 G (least favourable 0.184 ksi for the force); 3.4.4.3 SDC A no abutment seismic design; 3.5.2 crack class (none set for abutments); 3.10.11.1 / 2.3.5.1 integral screening (140 ft steel / 200 ft concrete, 30°); 3.3.1.3 LS with approach slab; 3.2.1 / 3.2.9 settlement note.
+  - **RIDOT BDM (April 2026; written to the 10th Ed.):** 11.3.4 top thickness 15 in (backwall), seat width 2'-6" preferred, pad ≥ 2 in from the seat face, girder end gap ≥ Δ + 2 in (Δ = α·ΔT_rise·L_exp), at-rest where tilting is restricted (advisory); 10.4.1 spread footing ≥ 2 ft and D_f ≥ 4 ft; 10.5.1.2 pile cap ≥ 2'-6", spacing ≥ max(30 in, 2.5D + 6 in) and ≤ 10 ft, edge to pile face ≥ 1'-3", embedment ≥ 12 in; 5.4.1 Class 2 exposure (advisory); 5.7.1 / 5.4.1 S&T and skin ≥ #4 @ 12 (advisory, the required area listed per element); 5.2.2 galvanized bars (λcf = 1.0, note); 10.4.3 / 10.4.4 no passive at strength (Shall); 2.4.2.3 skew 40°; 11.3.1 type by height; 11.3.2 / 11.3.3 integral and semi-integral screening; 10.3.1 settlement 1 in / 0.5 in (note); 11.3.8 drainage (note).
+  - **CTDOT BRSDM Release 1 (2024; written to the 9th Ed.):** V2 11.6.8.1CT stem front face to CL bearing ≥ 1.25 ft and backwall ≥ 1.25 ft; V2 10.6.1.2 / 10.7.1.2 bottom of footing or cap ≥ 4 ft below grade (none on competent rock) and top of footing ≥ 12 in; V2 10.6.3.4 no keys / passive; V2 3.11.6.4 LS ≥ 2 ft of soil (h_eq values used); V2 5.4.2.1 f′c ≥ 3.0 ksi; V2 5.10 main bars ≥ #5 @ ≤ 12 in, all ≥ #4; V2 5.10.3 whole-inch spacing; V2 5.6.7 Class 2 (advisory); V2 10.7.1.2 ≥ 2 pile rows and 12 in embedment; AASHTO 10.7.1.2 spacing ≥ max(30 in, 2.5D) and 9 in edge (the BRSDM adds to that article); App. CT11.1.1.1 integral screening; Table 3.4.1-1 Extreme Event III (note: not modelled); settlement (note).
+- **Where (anchors):**
+  1. `defaultState()` anchor `own:{ owner:"AASHTO", Ltot:0 }` (new optional saved field).
+  2. After `function eqEHfixed()`: the block `/* ---------- Owner (state DOT) rules (OWNA, 2026-10-20)` with `ABUT_OWN_LIST`, `abutOwner()`, `ABUT_OWN`, `abutOwnCtx()`, the `own*` helpers, `ABUT_OWN.rules=[…]`, `abutOwnChecks()`.
+  3. `migrate()` anchor `// OWNA (2026-10-20): owner field.`
+  4. `buildInputs()` anchor `/* ---- I-0 Owner (OWNA) ---- */`; `ABUT_IN_SEC` gains `'in-own':'geom'`.
+  5. End of `computeAll()` anchor `/* ===== C-22 Owner requirements (OWNA)`.
+  6. Fingerprint anchor `own:abutOwner()==="AASHTO"?undefined:S.own`.
+  7. `ownerPanelHTML(R)` before `renderTabLoads`, called after panel 1.0; dashboard `ownChip`; `abutRefsNow()`; cover line; `inputEchoHTML()` Owner block; MassDOT reference row: "edition: verify" replaced by the verified "Hundredth Anniversary Ed.; written to AASHTO LRFD 9th Ed., 3.1.1.1".
+- **Saved data (§5):** one new optional field `S.own = {owner, Ltot}`. No key or existing format changed. A project saved before it (autosave, saved project, JSON) opens as `owner: "AASHTO"`, `Ltot: 0`. The tool's only MassDOT setting, the I-6 "Floating (MassDOT default)" restraint model, is the default of every project, so it does not mark a project as MassDOT (mapping it would make every saved project MassDOT). The Input ID (fingerprint) leaves `own` out while the owner is AASHTO, so an existing project keeps its Input ID.
+- **Check case (built-in project, pile footing, RIDOT):** pile grid 3 rows × 8 columns, row spacing 4.25 ft, column spacing 5.5 ft, HP 12 in, B = 13 ft. Spacing minimum = 4.25·12 = 51.0 in ≥ max(30, 2.5·12 + 6 = 36) in → pass; maximum 5.50 ft ≤ 10 ft → pass. Edge: row 1 at x = −4.25 ft from the footing CL, x_T = 6.50 − 4.25 = 2.25 ft → 27.0 − 6.0 = 21.0 in ≥ 15 in → pass. Pad edge: (3.00 − 1.25)·12 − 18/2 = 12.0 in ≥ 2 in. Gap: Δ = 6.5×10⁻⁶ · 52 · 40·12 = 0.162 in; Δ + 2 = 2.162 in ≤ 4.00 in → pass. Crack: γe = 1.00 vs Class 2 → CHECK. Tool: identical values; RIDOT "1 TO CHECK". CTDOT, spread: D_f = 3.00 ft < 4 ft → FAIL; D_f − t_f = 0 < 1 ft → CHECK.
+- **How verified:** `node tests/check-syntax.mjs abutment_calculator.html`: pass. Headless Chromium (tests/lib.mjs; the CDN libraries are blocked, the calculation does not need them), origin/main `e774618` vs branch, `computeAll()` on the default project, an old save (no `own`), pile footing, Extreme Event I with γEQ 0.5, rock, TU + BR + ES + construction fill: every check, the dashboard, stem / toe / heel demands, pile reactions per limit state, the permutation tables, warnings, self-test and the Input ID identical. MassDOT, RIDOT and CTDOT (spread and pile, and RIDOT with EE I) give results identical to AASHTO; only the owner rows and the owner warning lines differ. The report builds with the card (§6.2 in the printout) and no console error.
+- **Other copies:** the owner table pattern is copied from `Steel Bridge Beam Modules.html` (OWN_RULES); this copy is the abutment's own (different rules). No shared snippet changed.
+- **Open items:** MassDOT Part II (standard details) is needed for the MassDOT minimum dimensions, seat width, cover, frost depth and bar sizes (pending reference). MassDOT 3.3.1.2 soil over the toe in the bearing pressure is not modelled (flagged). Calculation owner defaults follow in the stacked PR (claude/abut-owner-b).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `e774618`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 250ef29..dd331d9 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -638,0 +639 @@ function defaultState(){
++    own:{ owner:"AASHTO", Ltot:0 },                               // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
+@@ -684,0 +686,209 @@ function eqEHfixed(){ const s=S.seismic||{}; return s.gEHEQmode==="agency"? +s.g
++/* ---------- Owner (state DOT) rules (OWNA, 2026-10-20) ----------
++   Same pattern as the OWN_RULES table of Steel Bridge Beam Modules.html, duplicated here on purpose (CLAUDE.md §3: no shared file).
++   AASHTO LRFD 10th Ed. (2024) stays the calculation basis; an owner's rules are checked on top. Saved as S.own.owner: 'AASHTO'
++   (default; an older project without the field opens as 'AASHTO' with identical results), 'MassDOT', 'RIDOT' or 'CTDOT'.
++   Per rule: owner, id, kind ('shall-check': pass/fail; 'should-warning': a warning; 'advisory': the owner value shown beside the
++   value in use; 'note'; 'pending-reference': needs a document that is not available), sec (manual section and page), text (a short
++   paraphrase; no manual text is reproduced), ev(C) → {st: pass|fail|warn|adv|note|pend|na, val, lim, tex (worked line), link}.
++   The checks change no computed result: they are listed in Tab 1 §1.0a and summarised above the dashboard. */
++const ABUT_OWN_LIST=["AASHTO","MassDOT","RIDOT","CTDOT"];
++function abutOwner(){ const o=S.own&&S.own.owner; return ABUT_OWN_LIST.includes(o)?o:"AASHTO"; }
++const ABUT_OWN={
++  v:1,
++  note:"The MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to AASHTO LRFD 9th Ed.; the RIDOT BDM (April 2026) to the 10th Ed. This tool applies AASHTO LRFD 10th Ed. (2024) with the owner rules on top.",
++  owners:{
++    AASHTO:{manual:"AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)", short:"AASHTO LRFD", aashto:"10th Ed.", none:true},
++    MassDOT:{manual:"MassDOT LRFD Bridge Manual, Part I (Hundredth Anniversary Ed.)", short:"MassDOT Bridge Manual Part I", aashto:"9th Ed."},
++    RIDOT:{manual:"RIDOT Bridge Design Manual (April 2026)", short:"RIDOT BDM", aashto:"10th Ed."},
++    CTDOT:{manual:"CTDOT Bridge and Roadway Structures Design Manual (BRSDM), Release 1 (2024)", short:"CTDOT BRSDM", aashto:"9th Ed."}
++  },
++  rules:[]
++};
++const abutOwnCite=r=>((ABUT_OWN.owners[r.owner]||{}).short||r.owner)+" "+r.sec;
++/* values the owner rules check, worked once per recalculation (geometry, pile layout, bars) */
++function abutOwnCtx(R){
++  const g=S.geom, B=R.geo.B, Lftg=(+g.Lftg||g.Lab), pile=S.fnd.branch==="pile";
++  const act=pile?activePiles():[], D=+S.piles.pileSize||0;
++  // pile spacing: gaps between neighbours in each row (piles with the same x) and each column (same y); minimum also over all pairs
++  let sMin=Infinity, sMax=0, sMinAt="", sMaxAt="";
++  const grp=(key,along)=>{ const m={}; act.forEach(q=>{ const k=q[key].toFixed(2); (m[k]=m[k]||[]).push(q[along]); });
++    Object.values(m).forEach(a=>{ a.sort((x,y)=>x-y); for(let i=1;i<a.length;i++){ const s=a[i]-a[i-1]; if(s>sMax+1e-9){ sMax=s; sMaxAt=along==="y"?"along the abutment (y)":"across the footing (x)"; } } }); };
++  grp("x","y"); grp("y","x");
++  for(let i=0;i<act.length;i++) for(let j=i+1;j<act.length;j++){ const s=Math.hypot(act[i].x-act[j].x,act[i].y-act[j].y); if(s<sMin-1e-9){ sMin=s; sMinAt="piles "+(S.piles.coords.indexOf(act[i])+1)+" and "+(S.piles.coords.indexOf(act[j])+1); } }
++  // footing edge to pile face (square envelope of side D, or radius D/2 for a round pile: the same distance to a straight edge)
++  let eMin=Infinity, eAt="", eSide="";
++  act.forEach(q=>{ const xT=B/2+q.x, no=S.piles.coords.indexOf(q)+1;
++    [[xT*12-D/2,"toe edge"],[(B-xT)*12-D/2,"heel edge"],[(Lftg/2-Math.abs(q.y))*12-D/2,"end of footing"]].forEach(([e,s])=>{ if(e<eMin-1e-9){ eMin=e; eAt="pile "+no; eSide=s; } }); });
++  const rows=new Set(act.map(q=>q.x.toFixed(2))).size;
++  const Ltot=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL;
++  const Lg=S.longit||{}, dExp=(+Lg.cte||0)*(+Lg.dTrise||0)*(+Lg.Lexp||0)*12;   // in: expansion toward the backwall (temperature rise)
++  const seatW=R.geo.seatW, brgFront=seatW-g.brgSetback;                          // ft: stem front face (at the seat) to CL bearing
++  const bars=[["bw","Backwall",S.reinf.bw],["stem","Stem",S.reinf.stem],["toe","Toe",S.reinf.toe],["heel","Heel",S.reinf.heel]];
++  return {g,B,Lftg,pile,act,D,sMin,sMax,sMinAt,sMaxAt,eMin,eAt,eSide,rows,Ltot,dExp,seatW,brgFront,bars,
++    cFront:R.checks.bearingSeat?R.checks.bearingSeat.cFront:NaN, mat:Lg.material==="concrete"?"concrete":"steel",
++    hTot:R.geo.hTotal, Df:+S.fnd.Df, rock:S.fnd.branch==="spread"&&S.fnd.matl==="rock", gE:+S.reinf.gammaE, fc:+S.mat.fc, R};
++}
++const ownF=(x,dp=2)=>fmtT(x,dp), ownLE=(v,l)=>v<=l+1e-9, ownGE=(v,l)=>v>=l-1e-9;
++const OWN_LK={sketch:["tab-loads","o-sketch","§1.1 cross-section"], pile:["tab-found","o-pilelay","§4.1 pile layout"], seat:["tab-struct","o-str-bearing","§5.6 bearing seat"],
++  supp:["tab-stab","o-seat","§3.5 support length"], eh:["tab-loads","o-eh","§1.3 earth pressure"], ls:["tab-loads","o-ls","§1.4 surcharge"], stem:["tab-struct","o-str-Stem","§5.2 stem"],
++  bw:["tab-struct","o-str-Backwall","§5.1 backwall"], heel:["tab-struct","o-str-Heel","§5.4 heel"], rebar:["tab-struct","o-rebar","§5.7 bar schedule"], tu:["tab-loads","o-longit-tu","§1.7 temperature"],
++  slide:["tab-stab","o-slide","§3.1 sliding"], svc:["tab-stab","o-svc","§3.4 Service I"], seis:["tab-stab","o-seis","§3.6 connection force"], basis:["tab-loads","o-basis","§1.0 basis"]};
++/* shared check bodies (each owner's own values) */
++function ownPileSp(C,minIn,maxFt,minTxt){ if(!C.pile) return {st:"na",val:"spread footing",lim:"—"};
++  if(C.act.length<2) return {st:"na",val:"fewer than 2 active piles",lim:"—"};
++  const ok=ownGE(C.sMin*12,minIn)&&ownLE(C.sMax,maxFt);
++  return {st:ok?"pass":"fail", val:`s<sub>min</sub> = ${fmt(C.sMin*12,1)} in (${C.sMinAt}); s<sub>max</sub> = ${fmt(C.sMax,2)} ft (${C.sMaxAt})`, lim:`${fmt(minIn,1)} in ≤ s ≤ ${fmt(maxFt,1)} ft`,
++    tex:`s_{min} = ${ownF(C.sMin*12,1)}\\ \\text{in} ${ownGE(C.sMin*12,minIn)?"\\ge":"<"} ${minTxt} = ${ownF(minIn,1)}\\ \\text{in};\\quad s_{max} = ${ownF(C.sMax)}\\ \\text{ft} ${ownLE(C.sMax,maxFt)?"\\le":">"} ${ownF(maxFt,1)}\\ \\text{ft}`, link:OWN_LK.pile}; }
++function ownPileEdge(C,minIn,face){ if(!C.pile) return {st:"na",val:"spread footing",lim:"—"};
++  if(!C.act.length) return {st:"na",val:"no active piles",lim:"—"};
++  return {st:ownGE(C.eMin,minIn)?"pass":"fail", val:`${fmt(C.eMin,1)} in (${C.eAt}, ${C.eSide})`, lim:`≥ ${fmt(minIn,1)} in`,
++    tex:`e_{min} = \\min(x_T,\\ B-x_T,\\ L_{ftg}/2-|y|)\\cdot12 - D/2 = ${ownF(C.eMin,1)}\\ \\text{in} ${ownGE(C.eMin,minIn)?"\\ge":"<"} ${ownF(minIn,1)}\\ \\text{in}\\ (\\text{footing edge to pile ${face}},\\ D = ${ownF(C.D,1)}\\ \\text{in})`, link:OWN_LK.pile}; }
++function ownPileEmb(C,minIn){ if(!C.pile) return {st:"na",val:"spread footing",lim:"—"};
++  const e=+S.piles.embed||0; return {st:ownGE(e,minIn)?"pass":"fail", val:`${fmt(e,1)} in (panel I-7)`, lim:`≥ ${fmt(minIn,0)} in`, link:OWN_LK.pile}; }
++function ownMinT(v,minFt,what,lk){ return {st:ownGE(v,minFt)?"pass":"fail", val:`${what} = ${fmt(v,2)} ft`, lim:`≥ ${fmt(minFt,2)} ft`, link:lk||OWN_LK.sketch}; }
++function ownSkew(C,lim1,lim2){ const s=+C.g.skew||0; const st=s>lim1+1e-9?"warn":"pass";
++  return {st, val:`skew = ${fmt(s,1)}°`, lim:`≤ ${fmt(lim1,0)}°`+(lim2?` (strong caution above ${fmt(lim2,0)}°)`:""), link:OWN_LK.supp}; }
++function ownCrack(C,owner){ const cls=Math.abs(C.gE-0.75)<1e-9?"Class 2 (γe = 0.75)":Math.abs(C.gE-1)<1e-9?"Class 1 (γe = 1.00)":"γe = "+fmt(C.gE,2);
++  if(!owner) return {st:"adv", val:cls+" (panel I-9)", lim:"not set by the owner for abutments", link:OWN_LK.stem};
++  return {st:Math.abs(C.gE-0.75)<1e-9?"pass":"warn", val:cls+" (panel I-9)", lim:"Class 2 (γe = 0.75)", link:OWN_LK.stem}; }
++function ownIntegral(C,lim){ const s=+C.g.skew||0, L=C.Ltot, Lm=C.mat==="concrete"?lim.Lc:lim.Ls;
++  const skOK=lim.strict?(s<lim.sk-1e-9):ownLE(s,lim.sk), okL=ownLE(L,Lm), okS=lim.Lsp?ownLE(+C.g.spanL,lim.Lsp):true;
++  const elig=skOK&&okL&&okS;
++  return {st:"adv", val:`skew ${fmt(s,1)}°, total length ${fmt(L,1)} ft (${C.mat})${lim.Lsp?`, span ${fmt(+C.g.spanL,1)} ft`:""} → <b>${elig?"within":"outside"}</b> the screening limits`,
++    lim:`skew ${lim.strict?"<":"≤"} ${lim.sk}°, L ≤ ${Lm} ft${lim.Lsp?`, span ≤ ${lim.Lsp} ft`:""}${lim.more?"; "+lim.more:""}`, link:OWN_LK.supp}; }
++ABUT_OWN.rules=[
++  /* ---------------- MassDOT LRFD Bridge Manual, Part I (Hundredth Anniversary Ed.) ---------------- */
++  {owner:"MassDOT", id:"geo.part2", kind:"pending-reference", sec:"3.3.1.1 (p. 3-18)", ref:"MassDOT Bridge Manual Part II (standard details)",
++    text:"Footing, stem and backwall proportions, bridge seat width, cover, frost depth / bottom-of-footing embedment and minimum bar size and spacing follow the Part II standard details; Part I gives no values",
++    ev:C=>({st:"pend", val:`t<sub>bw</sub> ${fmt(C.g.tbw)} ft, t<sub>st</sub> ${fmt(C.g.tst)} ft, t<sub>f</sub> ${fmt(C.g.tf)} ft, seat ${fmt(C.seatW)} ft`, lim:"Part II (not available)", link:OWN_LK.sketch})},
++  {owner:"MassDOT", id:"pile.sp", kind:"shall-check", sec:"3.2.2.3(3) (p. 3-9)", text:"Pile spacing at least 2.5 pile diameters and not more than 10 ft center to center (unless an alternate design is approved)",
++    ev:C=>ownPileSp(C,2.5*C.D,10,`2.5D = 2.5(${ownF(C.D,1)})`)},
++  {owner:"MassDOT", id:"pile.edge", kind:"shall-check", sec:"3.2.2.3(4) (p. 3-9)", text:"Footing edge to the perimeter of any pile at least 9 in",
++    ev:C=>ownPileEdge(C,9,"perimeter")},
++  {owner:"MassDOT", id:"skew", kind:"should-warning", sec:"2.3.4.1 (p. 2-10)", text:"Skew over 40°: the standard details may need modification; over about 50°: acute-corner, thermal-twist and diaphragm fatigue problems to be mitigated",
++    ev:C=>ownSkew(C,40,50)},
++  {owner:"MassDOT", id:"passive", kind:"shall-check", sec:"3.3.1.1 (p. 3-18)", text:"Passive resistance in front of the wall neglected for sliding, overturning and bearing",
++    ev:C=>({st:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"fail":"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive included (panel I-4)":"passive not used", lim:"neglected", link:OWN_LK.slide})},
++  {owner:"MassDOT", id:"key", kind:"note", sec:"3.3.1.1 (p. 3-18)", text:"Shear keys tied into footings preferably not used to resist sliding (widen the heel, batter piles or lower the footing instead)",
++    ev:C=>({st:"note", val:"no key is modelled", lim:"—", link:OWN_LK.slide})},
++  {owner:"MassDOT", id:"K", kind:"advisory", sec:"3.1.6 (p. 3-4)", text:"Earth pressure, unless the geotechnical report says otherwise: K0 for cantilever walls on rock or piles; 0.5(K0 + Ka) for cantilever walls on soil 5 ft high or less; Ka by Coulomb theory otherwise",
++    ev:C=>{ const onRP=C.pile||C.rock, H=C.R.geo.H, K0=1-Math.sin(deg2rad(+S.soil.phi)), req=onRP?"K0":(H<=5+1e-9?"0.5(K0 + Ka)":"Ka (Coulomb)");
++      return {st:req.startsWith("Ka")&&S.soil.method==="coulomb"?"pass":"warn", val:`${S.soil.method==="coulomb"?"Coulomb":"Rankine"} K<sub>a</sub> = ${fmt(C.R.ka,4)} used (active, panel I-3)`,
++        lim:`${req} (${onRP?(C.pile?"pile-supported":"on rock"):"on soil, H = "+fmt(H,2)+" ft"})`, tex:`K_0 = 1-\\sin\\varphi_f = 1-\\sin${ownF(+S.soil.phi,1)}° = ${ownF(K0,4)}`, link:OWN_LK.eh}; }},
++  {owner:"MassDOT", id:"toeSoil", kind:"advisory", sec:"3.3.1.2 (p. 3-18)", text:"Weight of the earth in front of the wall included when computing the footing bearing pressure",
++    ev:C=>({st:S.fnd.branch==="spread"?"warn":"na", val:S.fnd.branch==="spread"?"not modelled: soil over the toe is omitted (bearing pressure slightly low); add it by hand":"pile-supported footing", lim:"included in bearing", link:OWN_LK.svc})},
++  {owner:"MassDOT", id:"heel", kind:"advisory", sec:"3.3.2.2 (p. 3-21)", text:"Spread footings: toe steel without the soil above the toe offsetting the upward pressure; heel top steel for all dead load above the heel (incl. the heel), no live load, load and resistance factors 1.0, no upward pressure relief",
++    ev:C=>({st:S.fnd.branch==="spread"?"warn":"na", val:S.fnd.branch==="spread"?"toe: soil above the toe not used (as required); heel: the dead-load-only case is not checked in this version":"pile-supported footing", lim:"heel: M<sub>DL</sub> ≤ 1.0·M<sub>n</sub>", link:OWN_LK.heel})},
++  {owner:"MassDOT", id:"coat", kind:"advisory", sec:"3.3.1.6 (p. 3-18)", text:"Epoxy-coated reinforcement (or galvanized COATED BARS) at least in backwalls and beam seats, and next to faces within 30 ft of a traveled way",
++    ev:C=>({st:"warn", val:"development length uses uncoated bars (λ<sub>cf</sub> = 1.0)", lim:"coated backwall and seat bars", link:OWN_LK.bw})},
++  {owner:"MassDOT", id:"fc", kind:"advisory", sec:"4.2.2.3, General Notes (p. 4-5)", text:"Concrete 5000 HP (f′c = 5.0 ksi) unless otherwise specified",
++    ev:C=>({st:Math.abs(C.fc-5)<1e-9?"pass":"adv", val:`f′c = ${fmt(C.fc,2)} ksi (panel I-2)`, lim:"5.0 ksi", link:OWN_LK.stem})},
++  {owner:"MassDOT", id:"mass", kind:"note", sec:"4.2.2.3, General Notes (p. 4-5)", text:"Pours with every dimension 4 ft or more are mass concrete placements (heat-of-hydration analysis and thermal control plan)",
++    ev:C=>{ const g=C.g, ftg=g.tf>=4&&C.B>=4&&C.Lftg>=4, stem=g.tst>=4&&g.hstem>=4&&g.Lab>=4, L=[ftg?"footing":"",stem?"stem":""].filter(Boolean);
++      return {st:L.length?"warn":"pass", val:L.length?L.join(" and ")+": every dimension ≥ 4 ft":"no pour with every dimension ≥ 4 ft", lim:"thermal control plan if ≥ 4 ft in every direction", link:OWN_LK.sketch}; }},
++  {owner:"MassDOT", id:"temp", kind:"advisory", sec:"3.1.8.2 (p. 3-7)", text:"Uniform temperature (Cold Climate, Procedure A basis, the 65 % factor already included): steel +70 / −100 °F with α = 6.5×10⁻⁶; concrete +30 / −70 °F with α = 5.5×10⁻⁶",
++    ev:C=>{ const Lg=S.longit, st=C.mat==="concrete"?[30,70,5.5e-6]:[70,100,6.5e-6], ok=Math.abs(+Lg.dTrise-st[0])<1e-9&&Math.abs(+Lg.dTfall-st[1])<1e-9&&Math.abs(+Lg.cte-st[2])<1e-12;
++      return {st:ok?"pass":"adv", val:`+${fmt(+Lg.dTrise,0)} / −${fmt(+Lg.dTfall,0)} °F, α = ${(+Lg.cte*1e6).toFixed(1)}×10⁻⁶ (panel I-6b${Lg.computeTU?"":"; TU calculation off"})`, lim:`+${st[0]} / −${st[1]} °F, α = ${(st[2]*1e6).toFixed(1)}×10⁻⁶ (${C.mat})`, link:OWN_LK.tu}; }},
++  {owner:"MassDOT", id:"G", kind:"advisory", sec:"3.5.7.4 (p. 3-57)", text:"Elastomer specified G = 0.160 ksi; design with the least favorable value of 0.136–0.184 ksi (the larger value for the force on the abutment)",
++    ev:C=>({st:Math.abs(+S.bearing.G-0.184)<1e-9?"pass":"adv", val:`G = ${fmt(+S.bearing.G,3)} ksi (panel I-6b)`, lim:"0.184 ksi for the pad shear force", link:OWN_LK.tu})},
++  {owner:"MassDOT", id:"seis", kind:"note", sec:"3.4.4.3 (p. 3-35)", text:"SDC A conventional bridges: abutments need no seismic design (no abutment inertia or seismic soil force); connections per Guide Spec 4.6 on the permanent load only; support length per Guide Spec 4.12",
++    ev:C=>({st:(S.seismic.on&&+S.seismic.zone===1)?"warn":"note", val:S.seismic.on?"Extreme Event I is ON (panel I-11)":"Extreme Event I off", lim:"not required in SDC A (S<sub>D1</sub> &lt; 0.15)", link:OWN_LK.seis})},
++  {owner:"MassDOT", id:"crack", kind:"advisory", sec:"3.5.2 (p. 3-46)", text:"Part I sets no crack-control exposure class for abutments (Class 2 is specified for link slabs)",
++    ev:C=>ownCrack(C,false)},
++  {owner:"MassDOT", id:"int", kind:"advisory", sec:"3.10.11.1 (p. 3-91); 2.3.5.1 (p. 2-14)", text:"Integral abutments to be considered where feasible; simplified method: total length 140 ft steel / 200 ft concrete, skew 30°, height 15 ft deck to bottom of cap",
++    ev:C=>ownIntegral(C,{sk:30,Ls:140,Lc:200,more:"height ≤ 15 ft, U-wingwalls, not scour susceptible"})},
++  {owner:"MassDOT", id:"LSslab", kind:"note", sec:"3.3.1.3 (p. 3-18)", text:"With the MassDOT standard approach slab, the live-load surcharge on the abutment may be ignored",
++    ev:C=>({st:"note", val:`LS in use: h<sub>eq</sub> = ${fmt(C.R.LS.heq,2)} ft (panel I-3)`, lim:"may be 0 with an approach slab", link:OWN_LK.ls})},
++  {owner:"MassDOT", id:"settle", kind:"note", sec:"3.2.1, 3.2.9 (pp. 3-8, 3-16)", text:"Settlement per the geotechnical report (Part I gives no numeric limit); not computed by this tool",
++    ev:C=>({st:"note", val:"not computed", lim:"geotechnical report", link:OWN_LK.svc})},
++  /* ---------------- RIDOT Bridge Design Manual (April 2026) ---------------- */
++  {owner:"RIDOT", id:"bw.min", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Minimum wall thickness at the top 15 in (applied to the backwall, the top of the abutment wall)",
++    ev:C=>Object.assign(ownMinT(+C.g.tbw,1.25,"t<sub>bw</sub>"),{lim:"≥ 15 in (1.25 ft)"})},
++  {owner:"RIDOT", id:"seat.w", kind:"should-warning", sec:"11.3.4 (p. 11-9)", text:"Beam seat width preferably at least 2'-6\" (and enough for the bearings and the AASHTO seismic support length)",
++    ev:C=>({st:ownGE(C.seatW,2.5)?"pass":"warn", val:`t<sub>st</sub> − t<sub>bw</sub> = ${fmt(C.seatW,2)} ft`, lim:"≥ 2.50 ft (preferred)", tex:`b_{seat} = t_{st}-t_{bw} = ${ownF(C.g.tst)}-${ownF(C.g.tbw)} = ${ownF(C.seatW)}\\ \\text{ft}`, link:OWN_LK.supp})},
++  {owner:"RIDOT", id:"pad.edge", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Bearing pad or masonry plate at least 2 in from the face of the beam seat",
++    ev:C=>({st:ownGE(C.cFront,2)?"pass":"fail", val:`${fmt(C.cFront,1)} in`, lim:"≥ 2 in", tex:`c_{front} = (b_{seat}-a_{brg})\\cdot12-L_{pad}/2 = (${ownF(C.seatW)}-${ownF(C.g.brgSetback)})(12)-${ownF(+S.bearing.padL,1)}/2 = ${ownF(C.cFront,1)}\\ \\text{in}`, link:OWN_LK.seat})},
++  {owner:"RIDOT", id:"gap", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Girder end (or diaphragm) to backwall at least the predicted superstructure movement plus 2 in",
++    ev:C=>{ const Lg=S.longit, need=C.dExp+2; return {st:ownGE(+C.g.endGap,need)?"pass":"fail", val:`g<sub>end</sub> = ${fmt(+C.g.endGap,2)} in (panel I-1)`, lim:`≥ Δ + 2 = ${fmt(need,2)} in`,
++      tex:`\\Delta = \\alpha\\,\\Delta T_{rise}\\,L_{exp} = (${ownF(+Lg.cte*1e6,2)}\\times10^{-6})(${ownF(+Lg.dTrise,0)})(${ownF(+Lg.Lexp)}\\cdot12) = ${ownF(C.dExp,3)}\\ \\text{in};\\quad \\Delta+2 = ${ownF(need,3)}\\ \\text{in}`, link:OWN_LK.tu}; }},
++  {owner:"RIDOT", id:"ftg.t", kind:"shall-check", sec:"10.4.1 (p. 10-5); 10.5.1.2 (p. 10-6)", text:"Footing thickness at least 2 ft (spread footing) or 2'-6\" (pile-supported footing)",
++    ev:C=>ownMinT(+C.g.tf,C.pile?2.5:2.0,"t<sub>f</sub>")},
++  {owner:"RIDOT", id:"frost", kind:"shall-check", sec:"10.4.1 (p. 10-5)", text:"Spread footing embedment below finished grade at least the greatest of the geotechnical depth, the depth below computed scour and 4 ft (frost)",
++    ev:C=>C.pile?{st:"na",val:"pile-supported footing (10.4.1 covers spread footings)",lim:"—"}:{st:ownGE(C.Df,4)?"pass":"fail", val:`D<sub>f</sub> = ${fmt(C.Df,2)} ft (panel ${(S.fnd.branch==="spread"&&S.fnd.usePassive)?"I-4":"I-0"})`, lim:"≥ 4 ft; also below scour and the geotechnical depth", link:OWN_LK.sketch}},
++  {owner:"RIDOT", id:"pile.sp", kind:"shall-check", sec:"10.5.1.2 (p. 10-6)", text:"Pile spacing at least the greater of 30 in and 2.5 pile diameters + 6 in; not more than 10 ft center to center",
++    ev:C=>ownPileSp(C,Math.max(30,2.5*C.D+6),10,`\\max(30,\\ 2.5(${ownF(C.D,1)})+6)`)},
++  {owner:"RIDOT", id:"pile.edge", kind:"shall-check", sec:"10.5.1.2 (p. 10-7)", text:"Nearest footing edge to the face of any pile at least 1'-3\"",
++    ev:C=>ownPileEdge(C,15,"face")},
++  {owner:"RIDOT", id:"pile.emb", kind:"shall-check", sec:"10.5.1.2 (p. 10-6)", text:"Piles extend at least 12 in into the footing, positively anchored",
++    ev:C=>ownPileEmb(C,12)},
++  {owner:"RIDOT", id:"crack", kind:"advisory", sec:"5.4.1 (p. 5-5)", text:"Crack control: Class 2 exposure for all reinforced concrete members",
++    ev:C=>ownCrack(C,true)},
++  {owner:"RIDOT", id:"st", kind:"advisory", sec:"5.7.1 (p. 5-9); 5.4.1 (p. 5-5)", text:"Shrinkage and temperature steel, and skin steel where required, not less than #4 bars at 12 in (0.20 in²/ft)",
++    ev:C=>{ const L=[["bwFlex","backwall"],["stemFlex","stem"],["toeFlex","toe"],["heelFlex","heel"]].map(([k,n])=>{ const c=C.R.checks[k]; return c?`${n} ${fmt(Math.max(c.AsST,0.20),3)}`:""; }).filter(Boolean);
++      return {st:"adv", val:"provide A<sub>s</sub> ≥ max(A<sub>s,ST</sub>, 0.20) in²/ft: "+L.join(", "), lim:"#4 @ 12 in minimum", link:OWN_LK.rebar}; }},
++  {owner:"RIDOT", id:"galv", kind:"note", sec:"5.2.2 (p. 5-2)", text:"All reinforcement galvanized (A615 Gr 60): development length with λcf = 1.0, as used",
++    ev:C=>({st:"note", val:"λ<sub>cf</sub> = 1.0 in use", lim:"galvanized bars", link:OWN_LK.bw})},
++  {owner:"RIDOT", id:"passive", kind:"shall-check", sec:"10.4.3, 10.4.4 (p. 10-5)", text:"Passive resistance in front of the footing excluded for every strength failure mode; it may be included at the extreme event limit states",
++    ev:C=>({st:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"fail":"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive included in every limit state (panel I-4)":"passive not used", lim:"strength: none; extreme event: allowed", link:OWN_LK.slide})},
++  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop",
++    ev:C=>({st:"adv", val:`active K<sub>a</sub> = ${fmt(C.R.ka,4)} used (panel I-3)`, lim:"at-rest where the wall cannot tilt", link:OWN_LK.eh})},
++  {owner:"RIDOT", id:"skew", kind:"should-warning", sec:"2.4.2.3 (p. 2-9)", text:"Skew minimized; consider lengthening the span where the skew exceeds 40°",
++    ev:C=>ownSkew(C,40)},
++  {owner:"RIDOT", id:"type", kind:"should-warning", sec:"11.3.1 (p. 11-3)", text:"Height up to 12 ft: gravity or semi-gravity considered; 12–30 ft: cantilever; over 30 ft: counterfort considered",
++    ev:C=>({st:(C.hTot>12+1e-9&&C.hTot<=30+1e-9)?"pass":"warn", val:`h = t<sub>f</sub> + h<sub>stem</sub> + h<sub>bw</sub> = ${fmt(C.hTot,2)} ft`, lim:"12 to 30 ft for a cantilever", link:OWN_LK.sketch})},
++  {owner:"RIDOT", id:"int", kind:"advisory", sec:"11.3.1, 11.3.2 (pp. 11-3, 11-4)", text:"Integral or semi-integral abutments preferred and considered in every type study; integral: skew 30°, total length 150 ft steel / 200 ft concrete",
++    ev:C=>ownIntegral(C,{sk:30,Ls:150,Lc:200,more:"deck to bottom of cap ≤ 13 ft, girder depth ≤ 6 ft, grade ≤ 5 %"})},
++  {owner:"RIDOT", id:"semi", kind:"advisory", sec:"11.3.3 (p. 11-8)", text:"Semi-integral abutments: skew 30°, expansion length 175 ft steel / 300 ft concrete; backwall designed for full passive pressure",
++    ev:C=>{ const s=+C.g.skew||0, Le=+S.longit.Lexp||0, Lm=C.mat==="concrete"?300:175, ok=ownLE(s,30)&&ownLE(Le,Lm);
++      return {st:"adv", val:`skew ${fmt(s,1)}°, expansion length ${fmt(Le,1)} ft (panel I-6b) → <b>${ok?"within":"outside"}</b> the limits`, lim:`skew ≤ 30°, L<sub>exp</sub> ≤ ${Lm} ft`, link:OWN_LK.supp}; }},
++  {owner:"RIDOT", id:"settle", kind:"note", sec:"10.3.1 (p. 10-4)", text:"Post-construction settlement at most 1 in total and 0.5 in differential between adjacent units (unless approved)",
++    ev:C=>({st:"note", val:"not computed (geotechnical)", lim:"≤ 1 in total; ≤ 0.5 in differential", link:OWN_LK.svc})},
++  {owner:"RIDOT", id:"drain", kind:"note", sec:"11.3.8 (p. 11-10)", text:"Embankment behind abutments positively drained (weep holes and/or underdrain)",
++    ev:C=>({st:"note", val:"free-draining backfill assumed (Assumption 1)", lim:"drainage system", link:OWN_LK.basis})},
++  /* ---------------- CTDOT BRSDM, Release 1 (2024) ---------------- */
++  {owner:"CTDOT", id:"brg.front", kind:"shall-check", sec:"V2 11.6.8.1CT (p. 11-3)", text:"At the seat, front face of the stem to the centerline of bearings at least 1.25 ft (9 in for butted deck units and box beams, V2 11.6.8.2CT)",
++    ev:C=>({st:ownGE(C.brgFront,1.25)?"pass":"fail", val:`${fmt(C.brgFront,2)} ft`, lim:"≥ 1.25 ft (girders)", tex:`a = b_{seat}-a_{brg} = (t_{st}-t_{bw})-a_{brg} = ${ownF(C.seatW)}-${ownF(C.g.brgSetback)} = ${ownF(C.brgFront)}\\ \\text{ft}`, link:OWN_LK.sketch})},
++  {owner:"CTDOT", id:"bw.min", kind:"shall-check", sec:"V2 11.6.8.1CT (p. 11-3)", text:"Backwall thickness at least 1.25 ft",
++    ev:C=>ownMinT(+C.g.tbw,1.25,"t<sub>bw</sub>")},
++  {owner:"CTDOT", id:"frost", kind:"shall-check", sec:"V2 10.6.1.2, 10.7.1.2 (p. 10-3)", text:"Bottom of footing or pile cap at least 4 ft below finished grade (measured normal to grade); no minimum on competent rock",
++    ev:C=>C.rock?{st:"na",val:"spread footing on rock",lim:"no minimum on competent rock"}:{st:ownGE(C.Df,4)?"pass":"fail", val:`D<sub>f</sub> = ${fmt(C.Df,2)} ft (panel ${(S.fnd.branch==="spread"&&S.fnd.usePassive)?"I-4":"I-0"})`, lim:"≥ 4 ft", link:OWN_LK.sketch}},
++  {owner:"CTDOT", id:"tof", kind:"should-warning", sec:"V2 10.6.1.2, 10.7.1.2 (p. 10-3)", text:"Top of footing at least 12 in below finished grade",
++    ev:C=>C.rock?{st:"na",val:"spread footing on rock",lim:"—"}:{st:ownGE(C.Df-C.g.tf,1)?"pass":"warn", val:`D<sub>f</sub> − t<sub>f</sub> = ${fmt(C.Df-C.g.tf,2)} ft`, lim:"≥ 1.00 ft", tex:`D_f-t_f = ${ownF(C.Df)}-${ownF(+C.g.tf)} = ${ownF(C.Df-C.g.tf)}\\ \\text{ft}`, link:OWN_LK.sketch}},
++  {owner:"CTDOT", id:"passive", kind:"shall-check", sec:"V2 10.6.3.4 (p. 10-3)", text:"No footing keys for passive resistance and no passive pressure on the sides; sliding resisted by base friction only",
++    ev:C=>({st:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"fail":"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive included (panel I-4)":"base friction only", lim:"friction only", link:OWN_LK.slide})},
++  {owner:"CTDOT", id:"ls2", kind:"shall-check", sec:"V2 3.11.6.4 (p. 3-7)", text:"Permanent earth-retaining structures designed for a live-load surcharge of at least 2 ft of soil",
++    ev:C=>{ const R=C.R, h=[R.LS.heq,R.bwDem?R.bwDem.heqBW:Infinity,R.stemDem?R.stemDem.heqS:Infinity], m=Math.min(...h);
++      return {st:ownGE(m,2)?"pass":"fail", val:`h<sub>eq</sub> used: wall ${fmt(R.LS.heq,2)}, stem ${fmt(h[2],2)}, backwall ${fmt(h[1],2)} ft`, lim:"≥ 2.00 ft", link:OWN_LK.ls}; }},
++  {owner:"CTDOT", id:"fc", kind:"shall-check", sec:"V2 5.4.2.1 (p. 5-1)", text:"Cast-in-place footings, abutments and walls: f′c at least 3.0 ksi",
++    ev:C=>({st:ownGE(C.fc,3)?"pass":"fail", val:`f′c = ${fmt(C.fc,2)} ksi (panel I-2)`, lim:"≥ 3.0 ksi", link:OWN_LK.stem})},
++  {owner:"CTDOT", id:"bars", kind:"shall-check", sec:"V2 5.10 (p. 5-5)", text:"Bars carrying tension or compression at least #5 at no more than 12 in; no bar smaller than #4",
++    ev:C=>{ const bad=C.bars.filter(([,,b])=>+b.size<5||+b.sp>12+1e-9).map(([,n,b])=>`${n} #${b.size} @ ${fmt(+b.sp,1)} in`); const seatBad=+S.bearing.seatBar<4;
++      return {st:(bad.length||seatBad)?"fail":"pass", val:C.bars.map(([,n,b])=>`${n} #${b.size} @ ${fmt(+b.sp,1)}`).join(", ")+`; seat mat #${S.bearing.seatBar}`, lim:"main ≥ #5 @ ≤ 12 in; all ≥ #4", link:OWN_LK.rebar}; }},
++  {owner:"CTDOT", id:"spinc", kind:"should-warning", sec:"V2 5.10.3 (p. 5-5)", text:"Bar spacing in whole-inch increments",
++    ev:C=>{ const all=C.bars.map(([,n,b])=>[n,+b.sp]).concat([["seat mat",+S.bearing.seatSp]]), bad=all.filter(([,s])=>Math.abs(s-Math.round(s))>1e-9);
++      return {st:bad.length?"warn":"pass", val:bad.length?bad.map(([n,s])=>`${n} ${fmt(s,2)} in`).join(", "):"all whole inches", lim:"whole inches", link:OWN_LK.rebar}; }},
++  {owner:"CTDOT", id:"crack", kind:"advisory", sec:"V2 5.6.7", text:"Crack control based on Class 2 exposure",
++    ev:C=>ownCrack(C,true)},
++  {owner:"CTDOT", id:"pile.rows", kind:"shall-check", sec:"V2 10.7.1.2 (p. 10-3)", text:"Pile foundations of abutments have at least two rows of piles (unless fully integral)",
++    ev:C=>C.pile?{st:C.rows>=2?"pass":"fail", val:`${C.rows} row${C.rows===1?"":"s"} of active piles`, lim:"≥ 2 rows", link:OWN_LK.pile}:{st:"na",val:"spread footing",lim:"—"}},
++  {owner:"CTDOT", id:"pile.emb", kind:"shall-check", sec:"V2 10.7.1.2 (p. 10-3)", text:"Piles anchored to and embedded in the footing at least 12 in",
++    ev:C=>ownPileEmb(C,12)},
++  {owner:"CTDOT", id:"pile.sp", kind:"should-warning", sec:"AASHTO LRFD 10.7.1.2 (BRSDM V2 10.7.1.2 adds to it)", text:"Pile spacing not less than 30 in or 2.5 pile diameters (the BRSDM sets no other spacing)",
++    ev:C=>{ const r=ownPileSp(C,Math.max(30,2.5*C.D),Infinity,`\\max(30,\\ 2.5(${ownF(C.D,1)}))`); if(r.st==="fail") r.st="warn"; r.lim=`≥ ${fmt(Math.max(30,2.5*C.D),1)} in`; if(r.tex) r.tex=r.tex.replace(/;\\quad s_\{max\}.*$/,""); return r; }},
++  {owner:"CTDOT", id:"pile.edge", kind:"shall-check", sec:"AASHTO LRFD 10.7.1.2 (BRSDM V2 10.7.1.2 adds to it)", text:"Side of any pile to the nearest edge of the cap at least 9 in",
++    ev:C=>ownPileEdge(C,9,"side")},
++  {owner:"CTDOT", id:"int", kind:"advisory", sec:"V2 App. CT11.1.1.1 (p. 11-10)", text:"Fully integral abutments preferred where the limits are met: skew less than 30°, total length 150 ft steel / 200 ft concrete, single span 150 ft, height 12 ft grade to bottom of stem/cap",
++    ev:C=>ownIntegral(C,{sk:30,strict:true,Ls:150,Lc:200,Lsp:150,more:"height ≤ 12 ft, U-wingwalls 5–10 ft"})},
++  {owner:"CTDOT", id:"ee3", kind:"note", sec:"V2 Table 3.4.1-1 (p. 3-2)", text:"Extreme Event III (scour check flood): permanent loads, live load, water and friction at 1.00 with the scoured foundation; not modelled here, check by hand where scour applies",
++    ev:C=>({st:S.fnd.scour?"warn":"note", val:S.fnd.scour?"scour condition ON: Extreme Event III not checked":"scour condition off", lim:"hand check", link:OWN_LK.slide})},
++  {owner:"CTDOT", id:"settle", kind:"note", sec:"V2 Section 10", text:"Settlement per the geotechnical report (the BRSDM gives no numeric abutment limit); not computed by this tool",
++    ev:C=>({st:"note", val:"not computed", lim:"geotechnical report", link:OWN_LK.svc})}
++];
++/* evaluates the current owner's rules; R.own = {owner, meta, rows:[{r, st, val, lim, tex, link}], nFail, nWarn} */
++function abutOwnChecks(R){
++  const o=abutOwner(), meta=ABUT_OWN.owners[o];
++  if(o==="AASHTO") return {owner:o, meta, rows:[], nFail:0, nWarn:0};
++  const C=abutOwnCtx(R), rows=[];
++  ABUT_OWN.rules.filter(r=>r.owner===o).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } rows.push(Object.assign({r},v)); });
++  return {owner:o, meta, rows, nFail:rows.filter(x=>x.st==="fail").length, nWarn:rows.filter(x=>x.st==="warn").length};
++}
+@@ -800 +1010 @@ const ABUT_IN_SEC={
+-  'in-geom':'geom','in-mat':'geom',
++  'in-own':'geom','in-geom':'geom','in-mat':'geom',
+@@ -970,0 +1181,6 @@ function migrate(){
++  // OWNA (2026-10-20): owner field. A project saved before it opens as "AASHTO" (no owner rule; identical results). The I-6
++  // "Floating (MassDOT default)" restraint model is this tool's general default (every project has it), so it does not mark a
++  // project as MassDOT. An unknown value reads as "AASHTO".
++  if(!S.own||typeof S.own!=="object") S.own={owner:"AASHTO",Ltot:0};
++  if(!ABUT_OWN_LIST.includes(S.own.owner)) S.own.owner="AASHTO";
++  if(!(+S.own.Ltot>=0)) S.own.Ltot=0;
+@@ -1062,0 +1279,9 @@ function buildInputs(){
++  /* ---- I-0 Owner (OWNA) ---- */
++  { const oo=abutOwner(), om=ABUT_OWN.owners[oo], dfHere=oo!=="AASHTO"&&!(S.fnd.branch==="spread"&&S.fnd.usePassive);
++    html+=panel("in-own","I-0","Owner (State DOT Rules)",`
++    ${selRow("Bridge owner","own.owner",[["AASHTO","AASHTO LRFD only (no owner rules)"],["MassDOT","MassDOT — LRFD Bridge Manual, Part I"],["RIDOT","RIDOT — Bridge Design Manual (2026)"],["CTDOT","CTDOT — BRSDM, Release 1 (2024)"]],{rebuild:true})}
++    <div class="in-note">${oo==="AASHTO"?"Calculation and checks per AASHTO LRFD 10th Ed. (2024). Choose an owner to check its requirements (listed in Tab 1 §1.0a); no computed result changes.":esc(om.manual)+", written to AASHTO LRFD "+esc(om.aashto)+"; the calculation follows AASHTO LRFD 10th Ed. (2024). The owner's requirements are checked in Tab 1 §1.0a (pass / fail / advisory); no computed result changes."}</div>
++    ${oo!=="AASHTO"?inpRow("Total bridge length (integral screening; 0 = span L)","own.Ltot","ft",{title:"Used only for the owner's integral / semi-integral abutment screening (Tab 1 §1.0a). 0 uses the span length of panel I-1."}):""}
++    ${dfHere?inpRow("Bottom of footing below finished grade D<sub>f</sub>","fnd.Df","ft",{title:"Embedment for the owner's frost / minimum-depth rule (Tab 1 §1.0a). Same input as the passive embedment of panel I-4 (shown there when passive resistance is on)."}):""}
++  `); }
++
+@@ -2739 +2964 @@ function computeAll(){
+-    const s=JSON.stringify(Object.assign({},S,{ui:undefined}));
++    const s=JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own}));   // OWNA: owner AASHTO leaves the Input ID unchanged
+@@ -2789,0 +3015,4 @@ function computeAll(){
++  /* ===== C-22 Owner requirements (OWNA): checked after every result is final; they change no result ===== */
++  R.own=abutOwnChecks(R);
++  if(R.own.nFail) warn(`Owner requirements (${ABUT_OWN.owners[R.own.owner].short}): ${R.own.nFail} not met — ${R.own.rows.filter(x=>x.st==="fail").map(x=>x.r.sec).join("; ")} (Tab 1 §1.0a).`,"err");
++  if(R.own.nWarn) warn(`Owner requirements (${ABUT_OWN.owners[R.own.owner].short}): ${R.own.nWarn} to check — ${R.own.rows.filter(x=>x.st==="warn").map(x=>x.r.sec).join("; ")} (Tab 1 §1.0a).`);
+@@ -2867,0 +3097 @@ function renderDashboard(R){
++  const O=R.own, ownChip=(O&&O.owner!=="AASHTO")? `<span class="flagchip ${O.nFail?"fail":O.nWarn?"warn":"pass"} xlink" data-jump="tab-loads|o-owner" style="margin-right:8px;text-decoration:none;" title="Owner requirements — Tab 1 §1.0a">${esc(O.owner)}: ${O.nFail?O.nFail+" NOT MET":O.nWarn?O.nWarn+" TO CHECK":"MET"}</span>`:"";
+@@ -2869 +3099 @@ function renderDashboard(R){
+-  el.innerHTML=`<h2>Summary Dashboard — All Code Checks <span style="float:right;font-size:0.75rem;color:#777;font-weight:normal;">${stChip}Input ID: ${R.fingerprint||"—"}</span></h2>
++  el.innerHTML=`<h2>Summary Dashboard — All Code Checks <span style="float:right;font-size:0.75rem;color:#777;font-weight:normal;">${ownChip}${stChip}Input ID: ${R.fingerprint||"—"}</span></h2>
+@@ -2906,0 +3137,15 @@ function activateTab(id){
++/* ---- Owner requirements card (OWNA): each owner rule, its section, the value checked (worked) and the result ---- */
++const OWN_ST={pass:["pass","PASS"],fail:["fail","FAIL"],warn:["warn","CHECK"],adv:["","ADVISORY"],note:["","NOTE"],pend:["","PENDING"],na:["","N/A"]};
++const OWN_KIND={"shall-check":"Shall","should-warning":"Should","advisory":"Advisory","note":"Note","pending-reference":"Pending reference"};
++function ownerPanelHTML(R){
++  const O=R.own||{owner:"AASHTO",rows:[]}, m=ABUT_OWN.owners[O.owner]||ABUT_OWN.owners.AASHTO;
++  if(O.owner==="AASHTO") return panel("o-owner","1.0a","Owner Requirements — AASHTO LRFD only",`<div class="note-box">Owner: <b>AASHTO LRFD 10th Ed. (2024)</b>, no owner rules. Choose MassDOT, RIDOT or CTDOT in panel I-0 to check that owner's requirements here. ${esc(ABUT_OWN.note)}</div>`);
++  const chip=x=>{ const c=OWN_ST[x]||["",x]; return `<span class="flagchip ${c[0]}"${c[0]?"":' style="color:#2e5077;border-color:#9fb6d3;background:#eef4fb"'}>${c[1]}</span>`; };
++  let t=`<table class="rtbl"><tr><th>Section</th><th style="width:30%">Requirement (paraphrased)</th><th>Kind</th><th style="width:28%">Value checked</th><th>Required</th><th>Result</th><th>Worked in</th></tr>`;
++  O.rows.forEach(x=>{ t+=`<tr${x.st==="fail"?' class="failrow"':''}><td class="lft">${esc(x.r.sec)}</td><td class="lft">${esc(x.r.text)}${x.r.kind==="pending-reference"&&x.r.ref?`<br><i>Needs: ${esc(x.r.ref)}</i>`:""}</td><td>${OWN_KIND[x.r.kind]||esc(x.r.kind)}</td>
++    <td class="lft">${x.val||"—"}${x.tex?`<br><span class="ktx" data-tex="${esc(x.tex)}">${esc(x.tex)}</span>`:""}</td><td class="lft">${x.lim||"—"}</td><td>${chip(x.st)}</td><td>${x.link?abutWorkedIn([x.link]):"—"}</td></tr>`; });
++  t+="</table>";
++  const head=O.nFail?`<span class="flagchip fail" style="margin-left:8px;">${O.nFail} NOT MET</span>`:(O.nWarn?`<span class="flagchip warn" style="margin-left:8px;">${O.nWarn} TO CHECK</span>`:`<span class="flagchip pass" style="margin-left:8px;">MET</span>`);
++  return panel("o-owner","1.0a","Owner Requirements — "+esc(m.short)+head,`<div class="note-box">Owner: <b>${esc(m.manual)}</b>, written to AASHTO LRFD ${esc(m.aashto)}; the calculation follows AASHTO LRFD 10th Ed. (2024) with these owner rules checked on top. Requirements are paraphrased; the section and page cite the owner manual. Shall = pass/fail; Should = a warning; Advisory = the owner value beside the value in use (no result changes in this version); Pending reference = the owner document that sets it is not available. Values are worked in the row or in the linked panel.</div>${t}`);
++}
++
+@@ -2929,0 +3175 @@ function renderTabLoads(R){
++  h+=ownerPanelHTML(R);
+@@ -5063 +5309 @@ function inputEchoHTML(){
+-  let h="<h3>Geometry</h3>"+echoRows([
++  let h=(abutOwner()!=="AASHTO"?"<h3>Owner</h3>"+echoRows([["Bridge owner (requirements checked in Tab 1 §1.0a)",ABUT_OWN.owners[abutOwner()].manual,""],["Total bridge length for the integral screening",+S.own.Ltot>0?fmt(+S.own.Ltot):"= span L","ft"],["Bottom of footing below finished grade D_f",fmt(+S.fnd.Df),"ft"]]):"")+"<h3>Geometry</h3>"+echoRows([
+@@ -5153 +5399 @@ const ABUT_REFS=[
+-  ["MassDOT","MassDOT LRFD Bridge Manual, Part I — §3.1.8.3 (floating-bridge longitudinal distribution; seismic connection); edition: verify"],
++  ["MassDOT","MassDOT LRFD Bridge Manual, Part I (Hundredth Anniversary Ed.; written to AASHTO LRFD 9th Ed., 3.1.1.1) — §3.1.8.3 (floating-bridge longitudinal distribution)"],
+@@ -5154,0 +5401,4 @@ const ABUT_REFS=[
++/* references in the report: the owner manual is added when an owner is chosen (OWNA) */
++function abutRefsNow(){ const o=abutOwner(); if(o==="AASHTO") return ABUT_REFS; const m=ABUT_OWN.owners[o];
++  const row=[o,m.manual+" (written to AASHTO LRFD "+m.aashto+") — owner requirements checked in Tab 1 §1.0a, sections cited there"];
++  return o==="MassDOT"? ABUT_REFS.map(r=>r[0]==="MassDOT"?[r[0],r[1]+"; "+row[1]]:r) : ABUT_REFS.slice(0,-1).concat([row,ABUT_REFS[ABUT_REFS.length-1]]); }
+@@ -5315 +5565 @@ async function buildReport(){
+-        <p class="cr-cover-p">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT LRFD Bridge Manual</p>
++        <p class="cr-cover-p">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · ${abutOwner()==="AASHTO"?"MassDOT LRFD Bridge Manual":esc(ABUT_OWN.owners[abutOwner()].manual)+" (owner; written to AASHTO LRFD "+esc(ABUT_OWN.owners[abutOwner()].aashto)+")"}</p>
+@@ -5336 +5586 @@ async function buildReport(){
+-      <table class="cr-refs">${ABUT_REFS.map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
++      <table class="cr-refs">${abutRefsNow().map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
+```
