@@ -649,7 +649,10 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
    - integral: target "integral-abutment mode" (refused before): gravity load per pile, δT, skew, section, orientation,
      owner preset and the eligibility inputs; the pile type can be switched to integral abutment.
    Every input set from the hand-off is listed in I.foundationSrc.fields and marked (amber, "pfx-mk") in its panel while it
-   still holds the imported value; imported LRFD rows show a HAND-OFF badge. */
+   still holds the imported value; imported LRFD rows show a HAND-OFF badge.
+   ABPX2 (2026-10-20): integral target sets DC and DW separately (iabDW at iabGammaDW) and η (iabEta); CTDOT → weak axis;
+   group effects take the c/c spacing in the lateral-load direction; section adoption sets hpShape (tabulated AISC properties)
+   and the drag load hpDR / hpGammaDR (structural check at the neutral plane). */
 (function(){
   if(window.PileFoundationXfer) return;
   var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads'];
@@ -768,10 +771,11 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     var cx=r6(piles.reduce(function(a,q){ return a+q.x; },0)/n), cy=r6(piles.reduce(function(a,q){ return a+q.y; },0)/n);
     function uniq(k){ var v=[]; piles.forEach(function(q){ if(!v.some(function(w){ return Math.abs(w-q[k])<1e-6; })) v.push(q[k]); }); return v.sort(function(a,b){ return a-b; }); }
     var xs=uniq('x'), ys=uniq('y'), gaps=[];
+    function minGap(v){ var m=0; for(var i=1;i<v.length;i++){ var g=v[i]-v[i-1]; if(!m || g<m) m=g; } return m; }
     [xs,ys].forEach(function(v){ for(var i=1;i<v.length;i++) gaps.push(v[i]-v[i-1]); });
-    var smin=gaps.length? Math.min.apply(null,gaps) : 0;
+    var smin=gaps.length? Math.min.apply(null,gaps) : 0, sX=minGap(xs), sY=minGap(ys);   // ABPX2: spacing along x (between x-lines) and along y
     var swap=ax.x.charAt(1)!=='x', cc=mapPt(lay.cap.x,lay.cap.y,ax);
-    return {piles:piles, n:n, cx:cx, cy:cy, nCols:xs.length, nRows:ys.length, sMin:smin,
+    return {piles:piles, n:n, cx:cx, cy:cy, nCols:xs.length, nRows:ys.length, sMin:smin, sX:sX, sY:sY,
       capL:swap?lay.cap.L:lay.cap.B, capW:swap?lay.cap.B:lay.cap.L, capT:lay.cap.t, capCx:cc.x, capCy:cc.y};
   }
   function defaults(chk,I){
@@ -786,15 +790,24 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
   }
   function sameVal(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
   /* section adoption (group and per-pile targets): the abutment's HP section into this tool's driven H-pile inputs */
+  /* ABPX2: the abutment's drag load per pile and γDR (structural strength) into the H-pile drag-load inputs */
+  function planDrag(r,chk,I){
+    var D=chk.pd, DR=D && isNum(D.DR) && D.DR>0 ? D.DR : 0, gDR=D && pos(D.gDR) ? D.gDR : 1.10;
+    if(!(DR>0) && !(I.hpDR>0)) return;
+    var set=function(k,v,lbl,u){ if(!sameVal(I[k],v)){ r.patch[k]=v; r.changes.push(lbl+': '+(I[k]===undefined?'—':I[k])+' → '+v+(u?' '+u:'')); } r.fields[k]=v; };
+    set('hpDR',DR,'Drag load DR per pile','kip'); if(DR>0) set('hpGammaDR',gDR,'γDR (structural strength)');
+    if(DR>0) r.warn.push('Drag load DR = '+f2(DR,1)+' kip per pile: checked at the neutral plane, φc·P_o ≥ STL + '+f2(gDR,2)+'·DR (H-pile; not in Extreme Event cases); the geotechnical checks use STL (γDR = 0.00).');
+  }
   function planSection(r,lay,o,I){
     if(!lay || !o.adoptSec) return;
     if(!lay.secOk){ r.warn.push('The abutment\'s pile ('+(lay.sec.designation||lay.sec.shape||'?')+') is not an H-pile with d, b_f, t_f, t_w and F_y: its section is not adopted.'); return; }
     var s=lay.sec, set=function(k,v,lbl,u){ if(!sameVal(I[k],v)){ r.patch[k]=v; r.changes.push(lbl+': '+(I[k]===undefined?'—':I[k])+' → '+v+(u?' '+u:'')); } r.fields[k]=v; };
     set('pileType','hpile','Pile type');
     set('hpD',s.d,'H-pile depth d','in'); set('hpBf',s.bf,'Flange width b_f','in'); set('hpTf',s.tf,'Flange thickness t_f','in'); set('hpTw',s.tw,'Web thickness t_w','in'); set('hpFy',s.Fy,'Yield F_y','ksi');
+    var tab=hpAiscRow(s.designation,s.d,s.bf,s.tf,s.tw); if(tab) set('hpShape',s.designation,'Rolled section (AISC tabulated A = '+tab[0]+' in², I, S, Z, r)');   // ABPX2
     if(s.drive==='good' || s.drive==='severe'){ set('hpDriveCond',s.drive,'Driving condition'); set('hpPhiC',s.drive==='severe'?0.50:0.60,'φc axial'); }
     if(lay.embed!==null) set('hpCapEmbed',lay.embed,'Cap embedment','in');
-    r.warn.push('Section '+(s.designation||'')+': this tool idealizes the H-pile as three rectangles (no fillets), so its area differs slightly from the tabulated A = '+(isNum(s.A)?s.A:'?')+' in².');
+    if(!tab) r.warn.push('Section '+(s.designation||'')+' is not in this tool\'s AISC HP table at these dimensions: its properties are computed from three rectangles (no fillets; tabulated A = '+(isNum(s.A)?s.A:'?')+' in²).');
   }
   /* ---- plan: exactly what will change. Pure: reads I, returns the patch. ---- */
   function plan(p,chk,o,I){
@@ -835,11 +848,16 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
         var oldN=Array.isArray(I.groupPiles)&&I.groupPiles.length? I.groupPiles.length+' listed piles' : (I.groupNrows+' × '+I.groupNcols+' grid');
         fset('groupPiles',al.piles,'Pile layout: '+oldN+' → the abutment\'s '+al.n+' active piles (coordinates from the hand-off, mapped to pile x, y; origin at the footing centre)');
         fset('groupNrows',al.nRows,'Rows (along y)'); fset('groupNcols',al.nCols,'Columns (along x)');
-        if(al.sMin>0) fset('groupSpacingIn',r6(al.sMin*12),'c/c spacing for the group effects (the smallest row / column spacing)','in');
+        // ABPX2: group effects (p-multipliers by row in the load direction, AASHTO LRFD 10th Ed. 10.7.2.4) use the c/c spacing
+        // in the direction of the lateral load: the axis with the larger total |V| of the imported cases (pile x / y)
+        var sVx=add.reduce(function(a,g){ var m=g.mags[pt.id]; return a+Math.abs(m.Vx); },0), sVy=add.reduce(function(a,g){ var m=g.mags[pt.id]; return a+Math.abs(m.Vy); },0);
+        var dirX=sVx>=sVy, sDir=dirX? (al.sX||al.sY) : (al.sY||al.sX);
+        if(sDir>0) fset('groupSpacingIn',r6(sDir*12),'c/c spacing for the group effects: along '+(dirX?'x':'y')+', the direction of the lateral load (Σ|Vx| = '+f2(sVx,0)+', Σ|Vy| = '+f2(sVy,0)+' kip over the imported cases)','in');
+        if(al.sX>0 && al.sY>0 && Math.abs(al.sX-al.sY)>1e-6) r.warn.push('Group effects use one c/c spacing: '+f2(sDir*12,1)+' in, along '+(dirX?'x':'y')+' (the lateral load). The spacing along '+(dirX?'y':'x')+' is '+f2((dirX?al.sY:al.sX)*12,1)+' in; a case loading mainly along '+(dirX?'y':'x')+' uses '+f2(sDir*12,1)+' in too ('+((dirX?al.sY:al.sX)>sDir?'conservative':'unconservative: check it')+').');
         if(al.capL) fset('capL',al.capL,'Cap length L (x)','ft'); if(al.capW) fset('capW',al.capW,'Cap width W (y)','ft'); if(al.capT) fset('capThk',al.capT,'Cap thickness','ft');
         fset('capCx',al.capCx,'Cap centroid x','ft'); fset('capCy',al.capCy,'Cap centroid y','ft');
         r.layout={n:al.n, cx:al.cx, cy:al.cy};
-        planSection(r,chk.lay,o,I);
+        planSection(r,chk.lay,o,I); if(o.adoptSec && chk.lay.secOk) planDrag(r,chk,I);
       }
       if(!I.groupEnable){ if(o.groupOn){ r.patch.groupEnable=true; r.changes.push('"Apply pile group to the design": off → on'); } else r.warn.push('"Apply pile group to the design" is off: the imported group cases are stored but not used until you turn it on (Pile Group Workspace).'); }
       var inc=p.includes||{};
@@ -883,10 +901,10 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       r.patch.loadCases=kept2.concat(rows2);
       if(o.headFree){ if(I.solverHead!=='free'){ r.patch.solverHead='free'; r.changes.push('p-y head condition: '+I.solverHead+' → free (pinned head, as the abutment\'s distribution assumes)'); } r.fields.solverHead='free'; }
       else r.warn.push('The abutment\'s distribution assumes pinned pile heads (no head moment); the p-y head condition here stays '+(I.solverHead||'free')+'.');
-      planSection(r,chk.lay,o,I);
+      planSection(r,chk.lay,o,I); planDrag(r,chk,I);
       r.warn.push('Lateral = this pile\'s share of the horizontal load, √(Vx² + Vy²)/n ('+(chk.pd.share||'equal share')+'); head moment 0. The lateral (p-y) analysis is done here with these loads.');
       if(pdPicked.some(function(c){ return c.P<0; })) r.warn.push('Piles in uplift become "tension" rows with STL = |P|.');
-      if(chk.pd.DR>0) r.warn.push('The abutment\'s drag load DR = '+f2(chk.pd.DR,1)+' kip per pile is not in these rows.');
+      if(chk.pd.DR>0) r.warn.push('The rows carry STL = |P| without the drag load; DR is applied in the structural check at the neutral plane (above).');
       if(I.groupEnable) r.warn.push('The pile group is applied: the group workspace still adds its own Group ▦ rows.');
     }
     if(o.target!=='perpile'){ var nf=picked.filter(function(c){ return !c.factored; }).length;
@@ -917,7 +935,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
         if(d>0.01) bad.push(g.name+': up to '+f2(d,3)+' kip'); });
       if(!n && !bad.length) return;
       r.perPile={n:n, worst:worst, bad:bad};
-      if(bad.length) r.warn.push('Per-pile check: this tool\'s distribution differs from the abutment\'s pile reactions for '+bad.length+' case(s) ('+bad.slice(0,4).join('; ')+(bad.length>4?'; …':'')+'). Causes: this tool\'s own cap / stem weight left on, an unsymmetrical layout (this tool includes the product term Σx\'y\'; the abutment does not), or a different reference point.');
+      if(bad.length) r.warn.push('Per-pile check: this tool\'s distribution differs from the abutment\'s pile reactions for '+bad.length+' case(s) ('+bad.slice(0,4).join('; ')+(bad.length>4?'; …':'')+'). Causes: this tool\'s own cap / stem weight left on, an abutment payload sent before 2026-10-20 (no product term Σx\'y\' there for an unsymmetrical layout), or a different reference point.');
       else r.changes.push('Per-pile check: for all '+n+' case(s), every pile\'s reaction from this tool\'s rigid-cap distribution equals the abutment\'s to within '+f2(worst,4)+' kip');
     }catch(e){ r.warn.push('Per-pile check not run: '+e.message); }
   }
@@ -931,8 +949,14 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     if(isNum(G.Fy) && Math.abs(G.Fy-50)>1e-9) r.warn.push('The abutment uses F_y = '+G.Fy+' ksi; this mode is for Grade 50 only.');
     if(isNum(G.soilType) && G.soilType>=1 && G.soilType<=6) set('iabSoilType',Math.round(G.soilType),'MassDOT soil type');
     if(isNum(G.skew)) set('iabSkew',Math.abs(G.skew),'Skew','°');
-    set('iabDL',r6(g.DL),'Dead load per pile DL (unfactored)','kip'); set('iabLL',r6(g.LL),'Live load per pile LL (unfactored)','kip');
+    // ABPX2: DC and DW separately (DW at γDW) and η, when the sender gives them; an older payload: DL = DC + DW as before
+    var sepDW=isNum(g.DC) && isNum(g.DW) && g.DC>=0 && g.DW>=0;
+    if(sepDW){ set('iabDL',r6(g.DC),'Dead load per pile DC (unfactored)','kip'); set('iabDW',r6(g.DW),'DW per pile (unfactored)','kip'); }
+    else set('iabDL',r6(g.DL),'Dead load per pile DL (unfactored)','kip');
+    set('iabLL',r6(g.LL),'Live load per pile LL (unfactored)','kip');
     if(pos(g.gDC)) set('iabGammaDC',g.gDC,'γDC'); if(pos(g.gLL)) set('iabGammaLL',g.gLL,'γLL');
+    if(sepDW && pos(g.gDW)) set('iabGammaDW',g.gDW,'γDW');
+    set('iabEta',pos(g.eta)? g.eta : 1.0,'η (load modifier)');
     if(pos(G.bridgeLength)) set('iabBridgeLength',G.bridgeLength,'Total bridge length','ft');
     if(G.material==='steel' || G.material==='concrete') set('iabBridgeMaterial',G.material,'Bridge material');
     if(pos(G.abutHeight)) set('iabAbutHeight',G.abutHeight,'Abutment height (deck to bottom of cap)','ft');
@@ -950,11 +974,13 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     else if(!pr) r.warn.push('Owner '+(G.owner||'?')+': no preset in this tool (MassDOT and CTDOT only); orientation and θi are not preset.');
     var sk=isNum(G.skew)? Math.abs(G.skew) : 0;
     if(G.orient==='strong') set('iabOrient','strong','Pile orientation (web normal to the abutment: strong axis)');
+    else if(G.orient==='weak' && G.owner==='CTDOT') set('iabOrient','weak','Pile orientation (CTDOT: weak-axis bending, as its closed-form method)');   // ABPX2
     else if(G.orient==='weak' && sk>0) set('iabOrient','biaxial','Pile orientation (web parallel to the abutment at '+sk+'° skew: δT resolved into weak and strong components)');
     else if(G.orient==='weak' && !pr) set('iabOrient','weak','Pile orientation (weak axis)');
     if(G.orient==='strong' && sk>0) r.warn.push('Strong-axis orientation at '+sk+'° skew: this tool\'s "strong" option puts all of δT on the strong axis (bounding); the weak-axis component is not modelled.');
-    if(pos(g.gDW) && pos(g.gDC) && Math.abs(g.gDW-g.gDC)>1e-9 && pos(g.DW)) r.warn.push('This mode factors DL = DC + DW with γDC: P_u = '+f2(g.gDC,2)+' × '+f2(g.DL,1)+' + '+f2(g.gLL,2)+' × '+f2(g.LL,1)+' = '+f2(g.gDC*g.DL+g.gLL*g.LL,1)+' kip per pile; the abutment factors DW = '+f2(g.DW,1)+' kip with γDW = '+f2(g.gDW,2)+(pos(g.eta)&&g.eta!==1?' and applies η = '+f2(g.eta,2):'')+': P_u = '+f2(g.Pu,1)+' kip (its Tab 10).');
-    else if(pos(g.eta) && Math.abs(g.eta-1)>1e-9) r.warn.push('The abutment applies η = '+f2(g.eta,2)+' to the gravity load (P_u = '+f2(g.Pu,1)+' kip); this mode has no η.');
+    if(!sepDW && pos(g.gDW) && pos(g.gDC) && Math.abs(g.gDW-g.gDC)>1e-9 && pos(g.DW)) r.warn.push('This mode factors DL = DC + DW with γDC: P_u = '+f2(g.gDC,2)+' × '+f2(g.DL,1)+' + '+f2(g.gLL,2)+' × '+f2(g.LL,1)+' = '+f2(g.gDC*g.DL+g.gLL*g.LL,1)+' kip per pile; the abutment factors DW = '+f2(g.DW,1)+' kip with γDW = '+f2(g.gDW,2)+(pos(g.eta)&&g.eta!==1?' and applies η = '+f2(g.eta,2):'')+': P_u = '+f2(g.Pu,1)+' kip (its Tab 10).');
+    if(sepDW && isNum(g.Pu)){ var pu2=(pos(g.eta)?g.eta:1)*((pos(g.gDC)?g.gDC:1.25)*g.DC+(pos(g.gDW)?g.gDW:1.5)*g.DW+(pos(g.gLL)?g.gLL:1.75)*g.LL);
+      r.changes.push('Gravity demand here: η(γDC·DC + γDW·DW + γLL·LL) = '+f2(pos(g.eta)?g.eta:1,2)+'['+f2(g.gDC,2)+'('+f2(g.DC,2)+') + '+f2(g.gDW,2)+'('+f2(g.DW,2)+') + '+f2(g.gLL,2)+'('+f2(g.LL,3)+')] = '+f2(pu2,3)+' kip; the abutment\'s P_u = '+f2(g.Pu,3)+' kip'+(Math.abs(pu2-g.Pu)>0.01?' (differs: check the inputs)':' (equal)')); }
     if(g.LLincludesIM===false) r.warn.push('LL is without the dynamic load allowance (MassDOT gravity load per pile, as in the abutment).');
     if(!I.iabTier2) r.warn.push('δT is used by the Tier 2 check only, which is off.');
     if(isNum(G.Lpile)) r.warn.push('Pile length below the cap in the abutment: '+G.Lpile+' ft (not an input here; compare with the required length in the results).');
@@ -2122,13 +2148,33 @@ function pyDense(A, b) {
    I.OD for one silently substitutes a phantom micropile dimension. */
 function pileWidth(I) {
   if (I.pileType === "hpile") {
-    const hpx = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+    const hpx = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
     return (I.hpAxis !== "weak") ? hpx.d : hpx.bf;
   }
   return I.OD;
 }
 
-function hpileSection({ d, bf, tf, tw, Fy, E }) {
+/* ABPX2 (2026-10-20): rolled HP shapes, AISC Steel Construction Manual 15th Ed. shape database (as in Section Property
+   Calculator.html): [A (in²), d, b_f, t_f, t_w (in), I_x (in⁴), Z_x, S_x (in³), r_x (in), I_y (in⁴), Z_y, S_y (in³), r_y (in)].
+   Duplicated data (CLAUDE.md §3). */
+const HP_AISC = {
+  "HP8X36":[10.6,8.02,8.16,0.445,0.445,119,33.6,29.8,3.36,40.3,15.2,9.88,1.95], "HP10X42":[12.4,9.7,10.1,0.42,0.415,210,48.3,43.4,4.13,71.7,21.8,14.2,2.41],
+  "HP10X57":[16.7,9.99,10.2,0.565,0.565,294,66.5,58.8,4.18,101,30.3,19.7,2.45], "HP12X53":[15.5,11.8,12,0.435,0.435,393,74,66.7,5.03,127,32.2,21.1,2.86],
+  "HP12X63":[18.4,11.9,12.1,0.515,0.515,472,88.3,79.1,5.06,153,38.7,25.3,2.88], "HP12X74":[21.8,12.1,12.2,0.61,0.605,569,105,93.8,5.11,186,46.6,30.4,2.92],
+  "HP12X84":[24.6,12.3,12.3,0.685,0.685,650,120,106,5.14,213,53.2,34.6,2.94], "HP12X89":[25.9,12.4,12.3,0.72,0.72,693,127,112,5.17,224,56,36.4,2.94],
+  "HP14X73":[21.4,13.6,14.6,0.505,0.505,729,118,107,5.84,261,54.6,35.8,3.49], "HP14X89":[26.1,13.8,14.7,0.615,0.615,904,146,131,5.88,326,67.7,44.3,3.53],
+  "HP14X102":[30.1,14,14.8,0.705,0.705,1050,169,150,5.92,380,78.8,51.4,3.56], "HP14X117":[34.4,14.2,14.9,0.805,0.805,1220,194,172,5.96,443,91.4,59.5,3.59],
+  "HP16X88":[25.8,15.3,15.7,0.54,0.54,1110,161,145,6.56,349,68.2,44.5,3.68], "HP16X101":[29.9,15.5,15.8,0.625,0.625,1300,187,168,6.59,412,80.1,52.2,3.71],
+  "HP16X121":[35.8,15.8,15.9,0.75,0.75,1590,226,201,6.66,504,97.6,63.4,3.75], "HP16X141":[41.7,16,16,0.875,0.875,1870,264,234,6.7,599,116,74.9,3.79],
+  "HP16X162":[47.7,16.3,16.1,1,1,2190,306,269,6.78,697,134,86.6,3.82], "HP16X183":[54.1,16.5,16.3,1.13,1.13,2510,349,304,6.81,818,156,100,3.89],
+  "HP18X135":[39.9,17.5,17.8,0.75,0.75,2200,281,251,7.43,706,122,79.3,4.21], "HP18X157":[46.2,17.7,17.9,0.87,0.87,2570,327,290,7.46,833,143,93.1,4.25],
+  "HP18X181":[53.2,18,18,1,1,3020,379,336,7.53,974,167,108,4.28], "HP18X204":[60.2,18.3,18.1,1.13,1.13,3480,433,380,7.6,1120,191,124,4.31]};
+// the table row of shape when d, b_f, t_f, t_w are exactly its dimensions (else null: an edited or corroded section is computed)
+function hpAiscRow(shape, d, bf, tf, tw) {
+  const T = shape && HP_AISC[shape];
+  return (T && Math.abs(T[1] - d) < 1e-9 && Math.abs(T[2] - bf) < 1e-9 && Math.abs(T[3] - tf) < 1e-9 && Math.abs(T[4] - tw) < 1e-9) ? T : null;
+}
+function hpileSection({ d, bf, tf, tw, Fy, E, shape }) {
   E = E || 29000;
   const hw = d - 2 * tf;                    // clear web height between flanges
   const A = 2 * bf * tf + hw * tw;          // gross area (rectangular idealization)
@@ -2162,12 +2208,18 @@ function hpileSection({ d, bf, tf, tw, Fy, E }) {
   // Compression element check: nonslender if ≤ λr_comp
   const flangeCompSlender = flange_bt > lim.flange_lr_comp;
   const webCompSlender = web_htw > lim.web_lr_comp;
-  return {
+  const out = {
     d, bf, tf, tw, hw, A, Fy, E,
     Ix, Sx, rx, Zx, Iy, Sy, ry, Zy,
     flange_bt, web_htw, lim,
     flangeFlexClass, webFlexClass, flangeCompSlender, webCompSlender
   };
+  // ABPX2: a rolled shape at its table dimensions takes the tabulated AISC A, I, S, Z, r (fillets included); the computed
+  // three-rectangle values are kept as calc (display). The element slenderness ratios stay geometric.
+  const T = hpAiscRow(shape, d, bf, tf, tw);
+  if (T) Object.assign(out, { tab: shape, calc: { A, Ix, Sx, rx, Zx, Iy, Sy, ry, Zy },
+    A: T[0], Ix: T[5], Zx: T[6], Sx: T[7], rx: T[8], Iy: T[9], Zy: T[10], Sy: T[11], ry: T[12] });
+  return out;
 }
 /* F58 (O28, 2026-10-12): H-pile section loss (corrosion), optional.
    delta = I.hpCorrLoss, the loss per exposed face (in); 0 / blank = none (the default: every result
@@ -2229,7 +2281,7 @@ function hpileSectionForChecks(I) {
   const c = hpCorrInfo(I);
   return (c && c.applied)
     ? hpileSection({ d: c.d, bf: c.bf, tf: c.tf, tw: c.tw, Fy: I.hpFy, E: I.E || 29000 })
-    : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+    : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
 }
 
 /* Driven H-pile geotechnical axial capacity — AASHTO LRFD 10th Ed (2024) static analysis.
@@ -4100,7 +4152,7 @@ function computeAll(I, opts = {}) {
   const bklIsHP = I.pileType === "hpile";
   let bklI = Icas, bklA = Acas, bklR = rg, bklPo = Po, bklPhiC = phi_c;
   if (bklIsHP) {
-    const _hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+    const _hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
     const _strong = I.hpAxis !== "weak";   // strong is the default, matching the axial module
     bklI = _strong ? _hp.Ix : _hp.Iy;
     // F58 (O28): with a section-loss zone the column resistance (A, r, P_o) uses the corroded
@@ -4845,6 +4897,14 @@ function computeAll(I, opts = {}) {
     const phi_c_axial = I.hpPhiC != null ? I.hpPhiC : 0.60; // 6.5.4.2 H-pile axial (0.60 good driving / 0.50 severe)
     const phiPn_axial = Pn_axial != null ? phi_c_axial * Pn_axial : null;
     const axial_pass = phiPn_axial != null ? phiPn_axial >= STL : null;
+    // ABPX2 (2026-10-20): drag load DR (AASHTO LRFD 10th Ed. 3.11.8; Table 3.4.1-1 note: γDR for structural strength, 0.00 for
+    // geotechnical). The pile carries STL + γDR·DR at the neutral plane, below the ground where the soil braces it: φc·P_o
+    // (P_o = F_y·A_eff, no column reduction) ≥ STL + γDR·DR. Strength (and Service) compression cases; not Extreme Event (xPhi),
+    // not a tension case (STL = 0). The geotechnical checks keep STL (γDR = 0.00). DR = 0 (default): no check, as before.
+    const DRin = (typeof I.hpDR === "number" && isFinite(I.hpDR) && I.hpDR > 0) ? I.hpDR : 0;
+    const gDRin = (typeof I.hpGammaDR === "number" && isFinite(I.hpGammaDR) && I.hpGammaDR >= 0) ? I.hpGammaDR : 1.10;
+    const drag = (DRin > 0 && !xPhi && STL > 0) ? (() => { const Pu = STL + gDRin * DRin, phiPo = phi_c_axial * Po;
+      return { DR: DRin, gDR: gDRin, STL, Pu, Po, phiPo, phi: phi_c_axial, pass: phiPo >= Pu }; })() : null;
 
     // -- Flexure (6.12): elastic Mn = Fy·S (governing axis), Mr = φf·Mn, φf=1.00. Plastic permitted (noted).
     const phi_f = I.hpPhiF != null ? I.hpPhiF : 1.00;
@@ -4910,7 +4970,7 @@ function computeAll(I, opts = {}) {
       // local buckling
       flange_lr_comp, web_lr_comp, flangeSlender, webSlender, anySlender,
       // axial
-      Po, Pe, Pn_axial, phi_c_axial, phiPn_axial, axial_pass, buckMethod, hasStickup, stickup_ft, KLr_axial, KLr_ok, buckNote,
+      Po, Pe, Pn_axial, phi_c_axial, phiPn_axial, axial_pass, buckMethod, hasStickup, stickup_ft, KLr_axial, KLr_ok, buckNote, drag,
       hpLf_davisson, Lu_bkl,
       // flexure
       Mn_elastic, phiMn, phi_f, flex_pass, Mp_kipin, Mp: Mp_kipin / 12,
@@ -4984,7 +5044,12 @@ function computeAll(I, opts = {}) {
     const gDC = (I.iabGammaDC != null && I.iabGammaDC > 0) ? I.iabGammaDC : 1.25;
     const gLL = (I.iabGammaLL != null && I.iabGammaLL > 0) ? I.iabGammaLL : 1.75;
     const DL = I.iabDL || 0, LL = I.iabLL || 0;
-    const demand = gDC * DL + gLL * LL;
+    // ABPX2 (2026-10-20): DW at γDW (Table 3.4.1-2, max 1.50) and the load modifier η = ηD·ηR·ηI (Eq. 1.3.2.1-2); before, the
+    // demand was γDC·DL + γLL·LL with DW inside DL and no η. DW = 0 and η = 1 (the defaults) give that expression unchanged.
+    const DW = (I.iabDW > 0) ? I.iabDW : 0;
+    const gDW = (I.iabGammaDW != null && I.iabGammaDW > 0) ? I.iabGammaDW : 1.50;
+    const eta = (I.iabEta != null && I.iabEta > 0) ? I.iabEta : 1.0;
+    const demand = (DW > 0 || eta !== 1) ? eta * (gDC * DL + gDW * DW + gLL * LL) : gDC * DL + gLL * LL;
     const dcr = Pu > 0 ? demand / Pu : 0;
     const cap_pass = demand <= Pu;
 
@@ -4999,7 +5064,7 @@ function computeAll(I, opts = {}) {
       bc, bcAllOk, tier1Applicable, tier1NA: !tier1Applicable,
       simplifiedApplies: bcAllOk && tier1Applicable,
       Pu, Lf, Le, demand, dcr, cap_pass, interp,
-      DL, LL, gDC, gLL,
+      DL, LL, gDC, gLL, DW, gDW, eta,
       LfPlus5, reqLength, tipGovern, geoLength: I.iabGeoLength || 0,
       lenLimit,
       // overall pass: when Tier-1 applies, boundary conditions + capacity must pass.
@@ -5134,6 +5199,7 @@ function computeAll(I, opts = {}) {
     const hs = R.hpileStruct;
     const structPass = hs ? (
       (hs.axial_pass !== false) &&
+      (!hs.drag || hs.drag.pass) &&   // ABPX2: drag load at the neutral plane
       hs.flex_pass &&
       (hs.comb_pass2 !== false) &&
       hs.shear_pass &&
@@ -6847,7 +6913,7 @@ function PileSectionsFig({ I, r, pyRes, ei, print }) {
   const svgStyle = { display: "block", width: "100%", height: "auto", maxWidth: print ? "3.3in" : "340px", fontFamily: GFX_FONT };
   if (I.pileType === "hpile") {
     // F58 (O28): with a section loss the outline / analysis rows stay nominal and the corroded check values are listed
-    const hs = r.hpileStruct, hc = hs && hs.corr, hp = (hs && !hc) ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+    const hs = r.hpileStruct, hc = hs && hs.corr, hp = (hs && !hc) ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
     const strong = ((pyRes && pyRes.hpAx) || I.hpAxis) !== "weak";   // F39: the displayed solve's axis
     const W = 340, H = 300, cx = 132, cy = 152, k = 190 / Math.max(hp.d, hp.bf, 0.1);
     const hd = hp.d * k / 2, hb = hp.bf * k / 2, tf = hp.tf * k, tw = hp.tw * k;
@@ -8301,6 +8367,11 @@ const DEFAULT_INPUTS = {
   iabLL: 0,                 // unfactored live-load axial per pile (kip)
   iabGammaDC: 1.25,         // Strength I dead-load factor (AASHTO Table 3.4.1-2)
   iabGammaLL: 1.75,         // Strength I live-load factor
+  // ABPX2 (2026-10-20): wearing surface / utilities per pile at γDW, and the load modifier η = ηD·ηR·ηI (AASHTO LRFD 10th Ed.
+  // Eq. 1.3.2.1-2, Table 3.4.1-2). Defaults 0 / 1.50 / 1.00: a project saved before ABPX2 (DW inside DL, no η) is unchanged.
+  iabDW: 0,                 // unfactored DW axial per pile (kip), factored with iabGammaDW
+  iabGammaDW: 1.50,         // Strength I γDW max (Table 3.4.1-2)
+  iabEta: 1.0,              // load modifier η on the factored gravity load (1.0 = not applied)
   iabGeoLength: 0,          // required pile length from geotech report (ft), for tip-elev compare
   // Simplified-Method boundary-condition attestations (§3.10.11.1)
   iabBridgeLength: 0,       // total bridge length (ft)
@@ -8366,6 +8437,13 @@ const DEFAULT_INPUTS = {
   hpCorrLoss: 0,   // F58 (O28): section loss per exposed face (in); 0 = none
   hpCorrTop: 0,    // F58: loss zone top, ft below the pile head
   hpCorrBot: 0,    // F58: loss zone bottom, ft below the pile head (0 = the pile toe)
+  // ABPX2 (2026-10-20): rolled section designation ("" = custom geometry). When set and d, b_f, t_f, t_w equal the table row,
+  // the tabulated AISC A, I, S, Z, r (HP_AISC) are used instead of the three-rectangle values.
+  hpShape: "",
+  // ABPX2: drag load per pile (kip) and its factor for structural strength (AASHTO LRFD 10th Ed. Table 3.4.1-1 note, 3.11.8;
+  // 0.00 for geotechnical strength). Checked at the neutral plane: φc·P_o ≥ STL + γDR·DR (Strength cases; not Extreme Event).
+  hpDR: 0,
+  hpGammaDR: 1.10,
   // materials
   fc: 4000,
   fcGrout: 4000,
@@ -9590,6 +9668,7 @@ function PrintReport({
     }
     if (hs) {
       if (hs.phiPn_axial != null) rows.push(["Structural axial (compression)", hs.phiPn_axial, "kip", hs.STL, hs.axial_pass, "AASHTO 6.9.4.1"]);
+      if (hs.drag) rows.push(["Structural axial at the neutral plane (STL + \u03b3DR\u00b7DR)", hs.drag.phiPo, "kip", hs.drag.Pu, hs.drag.pass, "AASHTO 3.11.8, 6.9.4.1"]);
       rows.push(["Flexure (elastic)", hs.phiMn, "kip·ft", hs.Mu, hs.flex_pass, "AASHTO 6.12"]);
       if (hs.comb_ratio != null) rows.push(["Combined axial + flexure (D/C)", 1.0, "", hs.comb_ratio, hs.comb_pass2, "AASHTO 6.9.2.2.1"]);
       rows.push(["Shear", hs.phiVn, "kip", hs.Vu, hs.shear_pass, hs.axisStrong ? "AASHTO 6.10.9" : "AASHTO 6.12.1.2.3a"]);
@@ -9847,6 +9926,9 @@ function PrintReport({
       ["Live load per pile", I.iabLL, "kip", ""],
       ["\u03b3 DC", I.iabGammaDC, "", ""],
       ["\u03b3 LL", I.iabGammaLL, "", ""],
+      ["DW per pile", I.iabDW > 0 ? I.iabDW : null, "kip", "at \u03b3DW"],
+      ["\u03b3 DW", I.iabDW > 0 ? (I.iabGammaDW != null ? I.iabGammaDW : 1.5) : null, "", ""],
+      ["\u03b7 (load modifier)", (I.iabEta != null && I.iabEta !== 1) ? I.iabEta : null, "", "\u03b7D\u00b7\u03b7R\u00b7\u03b7I"],
       ["Factored demand P\u1d64", I.iabPu_demand, "kip", ""],
       ["Scour depth", I.iabScourDepth, "ft", ""],
       ["External moments", I.iabMoments_ext, "kip\u00b7ft", "override"],
@@ -10013,7 +10095,9 @@ function PrintReport({
               line(b.interp.exact
                 ? ("Pu at skew " + fmt(b.skew, 0) + "\u00b0 = " + fmt(b.Pu, 0) + " kip (table value, no interpolation)")
                 : ("Pu at skew " + fmt(b.skew, 1) + "\u00b0 = " + fmt(b.interp.PuLo, 0) + " + " + fmt(b.interp.t, 2) + "\u00b7(" + fmt(b.interp.PuHi, 0) + " \u2212 " + fmt(b.interp.PuLo, 0) + ") = " + fmt(b.Pu, 1) + " kip (linear interp. " + b.interp.skLo + "\u00b0\u2013" + b.interp.skHi + "\u00b0, \u00a73.10.11.3)")),
-              line("Factored gravity demand (Strength I): " + fmt(b.gDC, 2) + "·DL + " + fmt(b.gLL, 2) + "·LL = " + fmt(b.gDC, 2) + "(" + fmt(b.DL, 0) + ") + " + fmt(b.gLL, 2) + "(" + fmt(b.LL, 0) + ") = " + fmt(b.demand, 0) + " kip"),
+              line((b.DW > 0 || b.eta !== 1)
+                ? "Factored gravity demand (Strength I): η(" + fmt(b.gDC, 2) + "·DC + " + fmt(b.gDW, 2) + "·DW + " + fmt(b.gLL, 2) + "·LL) = " + fmt(b.eta, 2) + "[" + fmt(b.gDC, 2) + "(" + fmt(b.DL, 1) + ") + " + fmt(b.gDW, 2) + "(" + fmt(b.DW, 1) + ") + " + fmt(b.gLL, 2) + "(" + fmt(b.LL, 1) + ")] = " + fmt(b.demand, 1) + " kip"
+                : "Factored gravity demand (Strength I): " + fmt(b.gDC, 2) + "·DL + " + fmt(b.gLL, 2) + "·LL = " + fmt(b.gDC, 2) + "(" + fmt(b.DL, 0) + ") + " + fmt(b.gLL, 2) + "(" + fmt(b.LL, 0) + ") = " + fmt(b.demand, 0) + " kip"),
               /*#__PURE__*/React.createElement(RptRow, { label: "Pu,demand \u2264 Pu  (D/C = " + fmt(b.dcr, 3) + ")", val: fmt(b.demand, 0) + " \u2264 " + fmt(b.Pu, 0) + " kip", pass: b.cap_pass })),
             /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "01d", title: "Pile Tip Elevation & Fixity", code: "\u00a73.10.11.2 \u00b7 Table 3.10.11-4" }),
               line("Depth to fixity Lf = " + fmt(b.Lf, 0) + " ft \u2192 Lf + 5 = " + fmt(b.LfPlus5, 0) + " ft"),
@@ -10032,7 +10116,7 @@ function PrintReport({
     : I.pileType === "hpile"
     ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "G", title: "Materials, Section & Geometry" }),
     (() => {
-      const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+      const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
       const kv = (k, v) => [/*#__PURE__*/React.createElement("td", { style: cellK }, k), /*#__PURE__*/React.createElement("td", { style: cellV }, v)];
       const tr = (kk, ...cells) => /*#__PURE__*/React.createElement("tr", { key: kk }, ...cells);
       return /*#__PURE__*/React.createElement("table", { style: { borderCollapse: "collapse", width: "100%" } },
@@ -10087,6 +10171,7 @@ function PrintReport({
         hs.corr && line("Section loss " + fmt(hs.corr.loss, 4) + " in per exposed face (" + fmt(hs.corr.top, 1) + "–" + fmt(hs.corr.bot, 1) + " ft below head): corroded d × bf = " + fmt(hs.corr.d, 3) + " × " + fmt(hs.corr.bf, 3) + " in, tf = " + fmt(hs.corr.tf, 3) + " in, tw = " + fmt(hs.corr.tw, 3) + " in; A = " + fmt(hs.Ag, 2) + " in², S = " + fmt(hs.S_sel, 1) + " in³ (all structural checks below; p-y EI nominal)."),
         line("Axial: Po = Fy·A = " + fmt(hs.Po, 0) + " kip · " + (hs.hasStickup ? ({davisson:"Davisson",deflmatch:"deflection-matched",pcrit:"nonlinear P-crit"}[r.buckling.bklTab] || "Davisson") : "fully braced") + (Pn != null ? " · Pn = " + fmt(Pn, 0) + " kip" : " · (compute Pcr)")),
         phiPn != null && /*#__PURE__*/React.createElement(RptRow, { label: "Axial: φc·Pn ≥ STL (φc=" + fmt(hs.phi_c_axial, 2) + ")", val: fmt(phiPn, 0) + " ≥ " + fmt(hs.STL, 0) + " kip", pass: axPass }),
+        hs.drag && /*#__PURE__*/React.createElement(RptRow, { label: "Axial at the neutral plane with drag load: φc·Po ≥ STL + γDR·DR = " + fmt(hs.drag.STL, 1) + " + " + fmt(hs.drag.gDR, 2) + "×" + fmt(hs.drag.DR, 1) + " (3.11.8; see Module 03)", val: fmt(hs.drag.phiPo, 0) + " ≥ " + fmt(hs.drag.Pu, 1) + " kip", pass: hs.drag.pass }),
         line("Flexure: Mn = Fy·S = " + fmt(hs.Mn_elastic, 1) + " kip·ft (elastic; Mp = " + fmt(hs.Mp, 1) + " permitted)"),
         /*#__PURE__*/React.createElement(RptRow, { label: "Flexure: φf·Mn ≥ Mu (φf=" + fmt(hs.phi_f, 2) + ")", val: nc ? "p-y did not converge" : fmt(hs.phiMn, 1) + " ≥ " + fmt(hs.Mu, 1) + " kip·ft", pass: hs.flex_pass }),
         /*#__PURE__*/React.createElement(RptSee, { items: [{ txt: "M_u", mods: ["02R", "02"] }] }),
@@ -11601,6 +11686,7 @@ function UtilizationDashboard({ r, I, pyRes }) {
     if (g.enableTension) out.push(["Geotech uplift", g.phiRn_up, g.Tu, g.up_pass, "10.5.5.2.3"]);
     // Structural axial — resolve pcrit if needed handled at pass level; show when capacity known
     if (hs.phiPn_axial != null) out.push(["Struct axial", hs.phiPn_axial, hs.STL, hs.axial_pass, "6.9.4.1"]);
+    if (hs.drag) out.push(["Axial + drag load", hs.drag.phiPo, hs.drag.Pu, hs.drag.pass, "3.11.8"]);
     // Flexure
     out.push(["Flexure", hs.phiMn, hs.Mu, hs.flex_pass, "6.12"]);
     // Combined (normalized interaction) — only when resolved
@@ -15031,7 +15117,7 @@ function App() {
       // Equivalent lateral width D_eq for p-y uses the section depth d (governs soil bearing width).
       let hpEIconst = null, hpDepthDim = null;
       if (isHP) {
-        const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+        const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
         const I_sel = axSel === "weak" ? hp.Iy : hp.Ix;
         hpEIconst = (I.E || 29000) * I_sel; // kip·in²
         // For strong-axis bending the pile pushes soil over its flange width bf; for weak-axis, over depth d.
@@ -15999,7 +16085,7 @@ function App() {
           // and cap-embedment bugs fixed earlier.
           let Aeff, Ieff;
           if (I.pileType === "hpile") {
-            const _h = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+            const _h = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
             Aeff = _h.A;
             Ieff = ((pcrAx || I.hpAxis) !== "weak") ? _h.Ix : _h.Iy;
           } else {
@@ -16644,7 +16730,15 @@ function App() {
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Live load LL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
         /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLL'), title: PileFoundationXfer.mkTip(I, 'iabLL'), value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
-    r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
+    // ABPX2: DW per pile at γDW, and η
+    /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1" },
+      [["iabDW", "DW (wearing surface, utilities)", "kip", 0], ["iabGammaDW", "\u03b3DW", "", 1.5], ["iabEta", "\u03b7 = \u03b7D\u00b7\u03b7R\u00b7\u03b7I", "", 1]].map(([k, lbl, u, d0]) =>
+        /*#__PURE__*/React.createElement("div", { key: k },
+          /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, lbl, u ? /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + u + ")") : null),
+          /*#__PURE__*/React.createElement("input", { type: "number", step: "any", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, k), title: PileFoundationXfer.mkTip(I, k), value: I[k] != null ? I[k] : d0, onChange: e => set(k, parseFloat(e.target.value) || (k === "iabDW" ? 0 : d0)) })))),
+    r.iab && (r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
+      "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = \u03b7(\u03b3DC\u00b7DL + \u03b3DW\u00b7DW + \u03b3LL\u00b7LL) = ", fmt(r.iab.eta, 2), "[", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 1), ") + ", fmt(r.iab.gDW, 2), "(", fmt(r.iab.DW, 1), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 1), ")] = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 1), " kip")),
+    r.iab && !(r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
       "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = ", fmt(r.iab.gDC, 2), "\u00b7DL + ", fmt(r.iab.gLL, 2), "\u00b7LL = ", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 0), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 0), ") = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 0), " kip")),
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 mt-3" }, "Boundary conditions (\u00a73.10.11.1)"),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
@@ -16910,6 +17004,15 @@ function App() {
   }))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Pile Section"
   }, I.pileType === "hpile" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+    // ABPX2: rolled section: fills d, b_f, t_f, t_w; at those dimensions the checks use the tabulated AISC properties
+    /*#__PURE__*/React.createElement("label", { className: "block col-span-2" },
+      /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Rolled section (AISC tabulated A, I, S, Z, r)"),
+      /*#__PURE__*/React.createElement("select", { value: HP_AISC[I.hpShape] ? I.hpShape : "", title: PileFoundationXfer.mkTip(I, 'hpShape'), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" + PileFoundationXfer.mkCls(I, 'hpShape'),
+        onChange: e => { const k = e.target.value, T = HP_AISC[k]; set('hpShape', k); if (T) { set('hpD', T[1]); set('hpBf', T[2]); set('hpTf', T[3]); set('hpTw', T[4]); } } },
+        /*#__PURE__*/React.createElement("option", { value: "" }, "Custom geometry (properties from three rectangles, no fillets)"),
+        Object.keys(HP_AISC).map(k => /*#__PURE__*/React.createElement("option", { key: k, value: k }, k))),
+      HP_AISC[I.hpShape] && /*#__PURE__*/React.createElement("div", { className: "text-[10px] leading-tight mt-0.5", style: { color: hpAiscRow(I.hpShape, I.hpD, I.hpBf, I.hpTf, I.hpTw) ? "#2f7d4f" : "#8a5a1f" } },
+        hpAiscRow(I.hpShape, I.hpD, I.hpBf, I.hpTf, I.hpTw) ? "Tabulated AISC properties of " + I.hpShape + " used (A = " + fmt(HP_AISC[I.hpShape][0], 1) + " in\u00b2)." : "d, b_f, t_f or t_w differ from " + I.hpShape + ": the properties are computed from the three rectangles.")),
     /*#__PURE__*/React.createElement(Field, { label: "Depth d", unit: "in", value: I.hpD, bx: [I, 'hpD'], onChange: v => set('hpD', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "Flange width bf", unit: "in", value: I.hpBf, bx: [I, 'hpBf'], onChange: v => set('hpBf', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "Flange thick tf", unit: "in", value: I.hpTf, bx: [I, 'hpTf'], onChange: v => set('hpTf', v) }),
@@ -16932,6 +17035,9 @@ function App() {
         /*#__PURE__*/React.createElement("option", { value: "static_generic" }, "Custom (\u03c6c as entered)"))),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, bx: [I, 'hpPhiC'], onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6c combined", sub: "axial term, P-M", value: I.hpPhiCcomb, onChange: v => set('hpPhiCcomb', v) }),
+    // ABPX2: drag load at the neutral plane (structural strength only)
+    /*#__PURE__*/React.createElement(Field, { label: "Drag load DR", sub: "per pile; 0 = none (3.11.8)", unit: "kip", value: I.hpDR || 0, bx: [I, 'hpDR'], onChange: v => set('hpDR', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03b3DR structural", sub: "geotechnical 0.00 (T.3.4.1-1 note)", value: I.hpGammaDR != null ? I.hpGammaDR : 1.10, bx: [I, 'hpGammaDR'], onChange: v => set('hpGammaDR', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6f flexure", value: I.hpPhiF, onChange: v => set('hpPhiF', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6v shear", value: I.hpPhiV, onChange: v => set('hpPhiV', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6y tension yield", value: I.hpPhiTy, onChange: v => set('hpPhiTy', v) }),
@@ -17308,7 +17414,7 @@ function App() {
            ["Depth d / flange bf", fmt(I.hpD, 2) + " / " + fmt(I.hpBf, 2) + " in"],
            ["Flange tf / web tw", fmt(I.hpTf, 3) + " / " + fmt(I.hpTw, 3) + " in"],
            (r.hpileStruct && r.hpileStruct.corr)
-             ? ["Gross area Ag", fmt(hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 }).A, 2) + " in\u00b2 (" + fmt(r.hpileStruct.Ag, 2) + " after section loss)"]
+             ? ["Gross area Ag", fmt(hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape }).A, 2) + " in\u00b2 (" + fmt(r.hpileStruct.Ag, 2) + " after section loss)"]
              : ["Gross area Ag", fmt(r.hpileStruct ? r.hpileStruct.Ag : 0, 2) + " in\u00b2"],
            ...((r.hpileStruct && r.hpileStruct.corr) ? [["Section loss / face", fmt(r.hpileStruct.corr.loss, 4) + " in, " + fmt(r.hpileStruct.corr.top, 1) + "\u2013" + fmt(r.hpileStruct.corr.bot, 1) + " ft"]] : []),
            ["Yield Fy", fmt(I.hpFy, 0) + " ksi"],
@@ -17333,12 +17439,17 @@ function App() {
           /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => { const c = [...document.querySelectorAll(".pd-gfx-card")].find(x => { const b = x.querySelector(".module-badge"); return b && b.textContent === "S-1"; }); if (c) { showOutTabOf(c); setTimeout(() => c.scrollIntoView({ block: "start" }), 30); } }, className: "underline text-[var(--blueprint2)]" }, "S-1 \u2192")),
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Derived section properties \u2014 derivation"),
         (() => {
-          const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+          // ABPX2: hpT = the properties the checks use (tabulated AISC for a rolled shape at its dimensions); hp = the three-rectangle
+          // values derived below (the same as hpT for a custom section)
+          const hpT = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+          const hp = hpT.tab ? Object.assign({}, hpT, hpT.calc) : hpT;
           const d = I.hpD, bf = I.hpBf, tf = I.hpTf, tw = I.hpTw, Es = I.E || 29000;
           const hw = d - 2 * tf, df = d / 2 - tf / 2;
           const axisStrong = I.hpAxis !== "weak";
-          const I_sel = axisStrong ? hp.Ix : hp.Iy;
+          const I_sel = axisStrong ? hpT.Ix : hpT.Iy;
           return /*#__PURE__*/React.createElement("div", null,
+            hpT.tab && /*#__PURE__*/React.createElement("div", { className: "text-[10px] leading-snug mb-1 p-1.5 rounded-sm", style: { background: "#eef6f0", color: "#1f5135" } },
+              "Rolled section " + hpT.tab + " at its AISC dimensions: the checks and the p\u2013y stiffness use the tabulated AISC properties (fillets included): A = " + fmt(hpT.A, 2) + " in\u00b2, I", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.Ix, 0) + ", I", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.Iy, 0) + " in\u2074, S", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.Sx, 1) + ", S", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.Sy, 1) + ", Z", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.Zx, 1) + ", Z", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.Zy, 1) + " in\u00b3, r", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.rx, 2) + ", r", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.ry, 2) + " in (AISC Steel Construction Manual, 15th Ed.). The three-rectangle values below are for reference."),
             /*#__PURE__*/React.createElement(Narr, null, "All properties are computed for the built-up I-section from its two flanges (", /*#__PURE__*/React.createElement(RTex, { tex: `b_f\\times t_f` }), ") and web (", /*#__PURE__*/React.createElement(RTex, { tex: `t_w\\times h_w` }), "), with fillet radii neglected. The clear web height is ", /*#__PURE__*/React.createElement(RTex, { tex: `h_w=d-2t_f=${fmt(d,2)}-2(${fmt(tf,3)})=${fmt(hw,2)}\\text{ in}` }), "."),
             /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Gross area" }),
             /*#__PURE__*/React.createElement(Calc, { label: "Area", eq: `A=2b_ft_f+h_wt_w=2(${fmt(bf,2)})(${fmt(tf,3)})+(${fmt(hw,2)})(${fmt(tw,3)})`, result: `=${fmt(hp.A,2)}\\text{ in}^2` }),
@@ -17508,7 +17619,9 @@ function App() {
       /*#__PURE__*/React.createElement(Calc, { label: "Weak-axis flexural resistance", eq: `M_{ry}=Z_y F_y=\\min(${fmt(s.Zy, 1)},\\,1.5\\times ${fmt(s.Sy, 1)})\\times ${fmt(s.Fy, 0)}/12=${fmt(Math.min(s.Zy, 1.5 * s.Sy) * s.Fy / 12, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: "Z \u2264 1.5S per AISC" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Modified interaction (solved for P\u1d64)", eq: `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\left[\\dfrac{M_{uy}}{\\theta_i M_{ry}}+\\dfrac{M_{ux}}{M_{rx}}\\right]=1.0,\\quad \\theta_i=1.75`, note: "\u03b8\u1d62 = inelastic rotational capacity factor (weak axis only); thermal load factor \u03b3_TU = 1.0" }),
       /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-2 leading-snug" }, "The thermal moments M\u1d64\u1d67 baked into the table are MassDOT's L-Pile results and are not republished in the manual \u2014 the Tier-2 module below reproduces this derivation live for the entered \u03b4\u1d1b so the moment and interaction can be reviewed explicitly."),
-      /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\gamma_{DC}\\,DL+\\gamma_{LL}\\,LL=${fmt(b.gDC, 2)}(${fmt(b.DL, 0)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 0)})=${fmt(b.demand, 0)}\\ \\text{kip}`, note: "Strength I, one pile/beam line; dead + live only (\u00a73.10.11.4)" }),
+      (b.DW > 0 || b.eta !== 1)
+        ? /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\eta\\,(\\gamma_{DC}\\,DC+\\gamma_{DW}\\,DW+\\gamma_{LL}\\,LL)=${fmt(b.eta, 2)}\\,[${fmt(b.gDC, 2)}(${fmt(b.DL, 1)})+${fmt(b.gDW, 2)}(${fmt(b.DW, 1)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 1)})]=${fmt(b.demand, 1)}\\ \\text{kip}`, note: "Strength I, per pile; DW at \u03b3DW (AASHTO LRFD 10th Ed. Table 3.4.1-2), \u03b7 per Eq. 1.3.2.1-2 (\u00a73.10.11.4: dead + live)" })
+        : /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\gamma_{DC}\\,DL+\\gamma_{LL}\\,LL=${fmt(b.gDC, 2)}(${fmt(b.DL, 0)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 0)})=${fmt(b.demand, 0)}\\ \\text{kip}`, note: "Strength I, one pile/beam line; dead + live only (\u00a73.10.11.4)" }),
       /*#__PURE__*/React.createElement(RptCheck, { pass: b.cap_pass, eq: `P_{u,\\text{demand}}=${fmt(b.demand, 0)}\\ \\text{kip}\\ ${b.cap_pass ? "\\le" : ">"}\\ P_u=${fmt(b.Pu, 0)}\\ \\text{kip}\\quad(\\text{D/C}=${fmt(b.dcr, 3)})` }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "4", title: "Pile tip elevation & fixity", code: "\u00a73.10.11.2 \u00b7 Table 3.10.11-4" }),
       /*#__PURE__*/React.createElement(Narr, null, "To obtain the intended pile behavior the pile must be installed to the theoretical point of fixity or deeper. L", /*#__PURE__*/React.createElement("sub", null, "f"), " is defined as the depth along the pile to the second point of zero lateral deflection under the calculated thermal movement (\u00a73.10.11.2); the pile must then be installed 5 ft beyond it to cover uncertainty in the actual L", /*#__PURE__*/React.createElement("sub", null, "f"), ". The governing pile length is the longer of the fixity-based length and the geotechnical requirement."),
@@ -17682,7 +17795,8 @@ function App() {
     idx: "03",
     title: "Structural Axial \u2014 Compression + Buckling",
     code: "AASHTO 6.9.2.1 / 6.9.4.1 \u00b7 \u03c6c=" + fmt(r.hpileStruct.phi_c_axial, 2),
-    status: (() => { const hs = r.hpileStruct; if (!hs.hasStickup) return (hs.phi_c_axial * hs.Po) >= hs.STL;
+    status: (() => { const hs = r.hpileStruct; if (hs.drag && !hs.drag.pass) return false;   // ABPX2
+      if (!hs.hasStickup) return (hs.phi_c_axial * hs.Po) >= hs.STL;
       const bs = r.buckling && r.buckling.sel; return bs ? bs.pass : null; })(),
     open: open.HA,
     onToggle: () => setOpen(o => ({ ...o, HA: !o.HA }))
@@ -17705,7 +17819,7 @@ function App() {
       /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
       /*#__PURE__*/React.createElement(Narr, null, "The factored axial compressive resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "P_r=\\phi_c P_n" }), ", where the nominal resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_n" }), " follows the AASHTO unified column curve as a function of the yield resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_o=F_yA_g" }), " and the elastic critical buckling resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), ". For a driven H-pile the effective length is governed by the soil\u2013pile system: with no stickup the embedded pile is taken as fully braced (", /*#__PURE__*/React.createElement(RTex, { tex: "P_n=P_o" }), "); with stickup, ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), " is found either from the assumed effective-length factor or, more refined, from the nonlinear thrust-to-instability analysis on the p\u2013y model."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Section & local buckling classification", code: "AASHTO 6.9.4.2.1 \u00b7 Table 6.9.4.2.1-1" }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: "rectangular idealization" }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: hp.tab ? "AISC tabulated, " + hp.tab + " (three rectangles: " + fmt(hp.calc.A, 2) + " in\u00b2)" : "rectangular idealization" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Flange slenderness", eq: `\\lambda_f=\\dfrac{b_f/2}{t_f}=${fmt(hp.flange_bt,2)}`, result: `\\lambda_r=0.56\\sqrt{E/F_y}=${fmt(hs.flange_lr_comp,2)}`, cite: hs.flangeSlender ? "slender" : "nonslender" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Web slenderness", eq: `\\lambda_w=\\dfrac{h}{t_w}=${fmt(hp.web_htw,2)}`, result: `\\lambda_r=1.49\\sqrt{E/F_y}=${fmt(hs.web_lr_comp,2)}`, cite: hs.webSlender ? "slender" : "nonslender" }),
       hs.anySlender ? /*#__PURE__*/React.createElement(Calc, { label: "Effective area", eq: `A_{eff}=A_g-\\sum(b-b_e)t=${fmt(hs.Aeff,2)}\\ \\text{in}^2`, cite: "Eq. 6.9.4.2.2a-3", note: "approx.\u2014confirm b_e per 6.9.4.2.2b" }) : /*#__PURE__*/React.createElement(Calc, { label: "Local buckling", eq: `\\text{nonslender} \\Rightarrow A_{eff}=A_g=${fmt(hs.Aeff,2)}\\ \\text{in}^2`, cite: "6.9.4.2.1" }),
@@ -17759,6 +17873,11 @@ function App() {
                   ? /*#__PURE__*/React.createElement(Calc, { label: "Inelastic buckling", eq: `P_n=\\left[0.658^{P_o/P_e}\\right]P_o=${fmt(Pn,0)}\\ \\text{kip}`, cite: "Eq. 6.9.4.1.1-1" })
                   : /*#__PURE__*/React.createElement(Calc, { label: "Elastic buckling", eq: `P_n=0.877P_e=${fmt(Pn,0)}\\ \\text{kip}`, cite: "Eq. 6.9.4.1.1-2" }))),
       !needCompute && /*#__PURE__*/React.createElement(RptCheck, { pass: pass, eq: `\\phi_c P_n=${fmt(hs.phi_c_axial,2)}\\times ${fmt(Pn,0)}=${fmt(phiPn,0)}\\ \\text{kip}\\ ${pass?"\\ge":"<"}\\ STL=${fmt(hs.STL,0)}\\ \\text{kip}` }),
+      // ABPX2: drag load at the neutral plane (soil-braced: P_n = P_o), γDR for structural strength; geotechnical γDR = 0.00
+      hs.drag && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
+        /*#__PURE__*/React.createElement(Calc, { label: "Demand at the neutral plane", eq: `P_u=STL+\\gamma_{DR}\\,DR=${fmt(hs.drag.STL,1)}+${fmt(hs.drag.gDR,2)}(${fmt(hs.drag.DR,1)})=${fmt(hs.drag.Pu,1)}\\ \\text{kip}`, cite: "3.11.8; T.3.4.1-1 note" }),
+        /*#__PURE__*/React.createElement(RptCheck, { pass: hs.drag.pass, eq: `\\phi_c P_o=${fmt(hs.drag.phi,2)}\\times ${fmt(hs.drag.Po,0)}=${fmt(hs.drag.phiPo,0)}\\ \\text{kip}\\ ${hs.drag.pass?"\\ge":"<"}\\ P_u=${fmt(hs.drag.Pu,1)}\\ \\text{kip}` }),
+        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1" }, "Drag load DR = " + fmt(hs.drag.DR, 1) + " kip per pile (input, Pile Section panel). The neutral plane is below the ground, where the soil braces the pile (P_n = P_o = F_y A_eff). The geotechnical checks use STL (\u03b3DR = 0.00). Extreme Event cases: not applied.")),
       /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1" }, "\u03c6c = " + fmt(hs.phi_c_axial, 2) + " used (H-pile input). AASHTO 6.5.4.2: 0.60 good driving, no pile tip; 0.50 severe driving with a pile tip."));
   })()),
   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {

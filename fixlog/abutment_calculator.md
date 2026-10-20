@@ -9361,3 +9361,117 @@ index 46f54cc..a7abcf9 100644
 +        (b.p.pileLayout?"<div class='fdx-note' id='fdx-extra'><b>Also sent:</b> the pile layout ("+b.p.pileLayout.n+" active piles, "+escH(b.p.pileLayout.section.designation||b.p.pileLayout.section.shape)+", embedment "+f(b.p.pileLayout.embedment)+" in, cap "+f(b.p.pileLayout.cap.widthX)+" × "+f(b.p.pileLayout.cap.lengthY)+" × "+f(b.p.pileLayout.cap.thickness)+" ft) with each case's pile reactions, and "+b.p.pileDesign.cases.length+" per-pile governing loads (largest and smallest pile reaction per limit state, lateral share H/n, pinned head) for single-pile design in Pile Designer.</div>":"")+
 +        (b.p.integral?"<div class='fdx-note' id='fdx-extra'><b>Also sent (integral abutment, Tab 10):</b> per pile DL = "+f(b.p.integral.gravity.DL)+" kip and LL = "+f(b.p.integral.gravity.LL)+" kip (unfactored), δ = "+f(b.p.integral.thermal.delta)+" in, skew "+f(b.p.integral.skew)+"°, "+escH(b.p.integral.section)+" ("+b.p.integral.orient+" axis), abutment height "+f(b.p.integral.abutHeight)+" ft, owner "+escH(b.p.integral.owner)+", for Pile Designer's integral-abutment mode.</div>":""))+
 ```
+
+
+## 2026-10-20 — PR: claude/abut-pile-handoff-2 — Pile distribution with Σx'y'; drag load per pile on the hand-off (ABPX2; engineer decisions 2026-10-20 after ABPX) (PR link added after merge)
+
+Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `Pile Designer.html` (fixlog/Pile Designer.md ABPX2) and HANDOFF.md §4.6.
+
+### ABPX2-1. Rigid-cap pile reactions: product of inertia Σx'y' included   [calc change] [MORE accurate; unchanged for a symmetric layout]
+- **Where:** new global `pileReaction(V,My,Mx,xi,yi,pi)` after `activePiles()` (anchor `function activePiles(){ return S.piles.coords.filter(c=>c.active); }`); `computeAll` C-8 (anchors `const Sxy=act.reduce(` and `return pileReaction(c.V,My,Mx,xi,yi,R.pile);   // ABPX2: with Σx'y'`), `pileLoadsFor`, `elasticPilePts`, the hand-off `pileReactions`; report Tab 4 §4.1 (Σx'y' line when ≠ 0) and §4.2 (the general expression, substituted for the governing pile, when Σx'y' ≠ 0); the ABINT tooltips.
+- **Before:** P_i = ΣV/n + M_y·x'_i/Σx'² + M_x·y'_i/Σy'². This is the rigid-cap solution only when Σx'y' = 0, i.e. when the layout is symmetric about at least one centroidal axis. Omitting piles in coordinate or grid mode can break that.
+- **After:** P_i = ΣV/n + [(M_y·Σy'² − M_x·Σx'y')·x'_i + (M_x·Σx'² − M_y·Σx'y')·y'_i] / (Σx'²·Σy'² − (Σx'y')²), with Σx'y' = Σ(x_i − x̄)(y_i − ȳ). x' and M_y are + toward the heel; y' and M_x are + toward +y. When |Σx'y'| ≤ 10⁻⁹·(Σx'² + Σy'²), the old expression is evaluated, so a symmetric layout gives results identical to the bit.
+- **Governing basis:** rigid-cap statics: equilibrium of a rigid cap on identical vertical axial springs, solved about the group centroid. This is the method of AASHTO LRFD 10th Ed. Art. 10.7.1.5 as cited in §4.2; the article gives no closed form. Pile Designer's `computeCapDist` uses the same expression.
+- **Check case (default project, pile branch, piles 1, 2 and 9 omitted: 21 of 24 piles):**
+  - Group properties: n = 21; x̄ = 0.4048 ft (+ heel); ȳ = 2.4881 ft; Σx'² = 249.4345 ft²; Σy'² = 2751.3095 ft²; Σx'y' = −161.3988 ft²; D = Σx'²Σy'² − (Σx'y')² = 660 222.0 ft⁴.
+  - Strength I governing permutation: ΣV = 2977.875 kip, M_y = −7232.475 kip-ft, M_x = −7409.237 kip-ft.
+  - Pile 3 (x' = −4.6548 ft, y' = −10.7381 ft): P = 141.8036 + {[(−7232.475)(2751.3095) − (−7409.237)(−161.3988)](−4.6548) + [(−7409.237)(249.4345) − (−7232.475)(−161.3988)](−10.7381)} / 660 222.0 = **339.571 kip**.
+  - Results before → after (origin/main → this branch, same layout):
+    - Strength I governing pile 3: **305.688 → 339.571 kip**.
+    - Pile compression D/C (φc·R_n = 0.70 × 330 = 231 kip): **1.323 → 1.470**.
+    - Minimum reaction, pile 24: **−26.756 → −60.411 kip** (more uplift).
+    - The toe shear and punching use the same per-pile loads (`pileLoadsFor`), so they change with the distribution.
+  - Pile Designer, with the layout adopted: 339.571 kip, every pile equal to within 5.1 × 10⁻⁴ kip (payload rounding).
+- **Default project (full 3 × 8 grid, Σx'y' = 0) and spread footings:** unchanged. `computeAll` (dashboard, permutation tables, every pile reaction, every check) is identical to origin/main `f9f3617`.
+- **Saved data:** none. `R.pile` gets `Sxy`. The hand-off `pileLayout` gets `Sxy` (hand-off axes, sign reversed with x).
+
+### ABPX2-2. Per-pile governing loads: drag load with each entry   [feature: hand-off (no result change)]
+- **Where:** `pileDesign()` in the hand-off script (anchor `DR:+S.piles.dd||0, gDR:`), and the `pileDesign` note.
+- Each entry now carries DR (drag load per pile, panel I-7) and γDR (structural strength, default 1.10; geotechnical 0.00, as #351), alongside the existing `pileDesign.DR` / `gDR`. P itself is unchanged (no DR). Pile Designer applies DR in its structural check at the neutral plane (fixlog/Pile Designer.md ABPX2).
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html "Pile Designer.html"`: pass.
+- End-to-end in jsdom 24 (/tmp e2e2.js), 21 checks, all pass:
+  - origin/main invariance: default, pile branch (symmetric), integral MassDOT;
+  - the unsymmetrical layout above: every pile equals the hand formula to 0.0 kip;
+  - Pile Designer's adopted distribution equals the abutment's for all 28 cases;
+  - DR = 50 kip and γDR = 1.10 sent with every per-pile load;
+  - the Pile Designer items (its fixlog).
+
+### Open items
+None from ABPX open item 1 (resolved here).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `f9f3617`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index a7abcf9..d58ad55 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -1479,0 +1480,11 @@ function activePiles(){ return S.piles.coords.filter(c=>c.active); }
++/* ABPX2 (2026-10-20): rigid-cap reaction of a vertical pile about the group centroid, general biaxial form with the product
++   of inertia Σx'y' (a layout that is not symmetric about both centroidal axes: omitted piles, staggered coordinates):
++     P_i = ΣV/n + [(M_y·Σy'² − M_x·Σx'y')·x'_i + (M_x·Σx'² − M_y·Σx'y')·y'_i] / (Σx'²·Σy'² − (Σx'y')²)
++   (x' + toward the heel, M_y + toward the heel; y' and M_x + toward +y). With Σx'y' = 0 (every doubly symmetric layout,
++   e.g. a full grid) it is evaluated as before, ΣV/n + M_y·x'/Σx'² + M_x·y'/Σy'², so those results are unchanged to the bit.
++   pi = {n, Sxx, Syy, Sxy}. */
++function pileReaction(V,My,Mx,xi,yi,pi){
++  const {n,Sxx,Syy}=pi, Sxy=pi.Sxy||0, D=Sxx*Syy-Sxy*Sxy;
++  if(Math.abs(Sxy)>1e-9*Math.max(1,Sxx+Syy) && D>1e-9) return V/n+((My*Syy-Mx*Sxy)*xi+(Mx*Sxx-My*Sxy)*yi)/D;
++  return V/n + (Sxx>1e-9? My*xi/Sxx:0) + (Syy>1e-9? Mx*yi/Syy:0);
++}
+@@ -3138 +3149,2 @@ function computeAll(){
+-      R.pile={n,xgc,ygc,xgcT,Sxx,Syy};
++      const Sxy=act.reduce((a,c)=>a+(c.x-xgc)*(c.y-ygc),0); // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
++      R.pile={n,xgc,ygc,xgcT,Sxx,Syy,Sxy};
+@@ -3158 +3170 @@ function computeAll(){
+-            return c.V/n + (Sxx>1e-9? My*xi/Sxx:0) + (Syy>1e-9? Mx*yi/Syy:0);
++            return pileReaction(c.V,My,Mx,xi,yi,R.pile);   // ABPX2: with Σx'y'
+@@ -3836 +3848 @@ function computeAll(){
+-    return act.map(p=> c.V/n + (Sxx>1e-9?My*(p.x-xgc)/Sxx:0) + (Syy>1e-9?Mx*(p.y-ygc)/Syy:0));
++    return act.map(p=> pileReaction(c.V,My,Mx,p.x-xgc,p.y-ygc,R.pile));   // ABPX2
+@@ -3892 +3904 @@ function computeAll(){
+-    const loads=act.map(p=> eff.V/n + (Sxx>1e-9?My*(p.x-xgc)/Sxx:0) + (Syy>1e-9?Mx*(p.y-ygc)/Syy:0));
++    const loads=act.map(p=> pileReaction(eff.V,My,Mx,p.x-xgc,p.y-ygc,R.pile));   // ABPX2
+@@ -5287 +5299,2 @@ function renderTabFound(R){
+-      `\\Sigma x'^2_i = \\Sigma (x_i-\\bar{x}_{gc})^2 = ${fmtT(pi.Sxx)}\\ \\text{ft}^2, \\qquad \\Sigma y'^2_i = ${fmtT(pi.Syy)}\\ \\text{ft}^2, \\qquad n = ${pi.n}`],
++      `\\Sigma x'^2_i = \\Sigma (x_i-\\bar{x}_{gc})^2 = ${fmtT(pi.Sxx)}\\ \\text{ft}^2, \\qquad \\Sigma y'^2_i = ${fmtT(pi.Syy)}\\ \\text{ft}^2, \\qquad n = ${pi.n}`]
++      .concat(Math.abs(pi.Sxy||0)>1e-9?[`\\Sigma x'_i y'_i = \\Sigma (x_i-\\bar{x}_{gc})(y_i-\\bar{y}_{gc}) = ${fmtT(pi.Sxy)}\\ \\text{ft}^2 \\ne 0\\ \\text{(layout not symmetric about both centroidal axes)}`]:[]),
+@@ -5291 +5304,10 @@ function renderTabFound(R){
+-  h+=panel("o-pileform","4.2","Axial Pile Reactions — Rigid-Cap Biaxial Expression [Design basis §7.2]",`
++  // ABPX2: the governing pile's own x', y' and, for a layout with Σx'y' ≠ 0, the general biaxial expression
++  const gAct=activePiles()[det.iMax], gxi=gAct? gAct.x-pi.xgc : 0, gyi=gAct? gAct.y-pi.ygc : 0, gD=pi.Sxx*pi.Syy-(pi.Sxy||0)*(pi.Sxy||0), unsym=Math.abs(pi.Sxy||0)>1e-9*Math.max(1,pi.Sxx+pi.Syy)&&gD>1e-9;
++  h+=panel("o-pileform","4.2","Axial Pile Reactions — Rigid-Cap Biaxial Expression [Design basis §7.2]",unsym?`
++    ${eqB("Elastic rigid-cap distribution (vertical piles), layout not symmetric: product of inertia included","AASHTO 10.7.1.5 (method); rigid-cap statics about the group centroid",[
++      "P_i = \\dfrac{\\Sigma V}{n} + \\dfrac{(M_y\\Sigma y'^2 - M_x\\Sigma x'y')\\,x'_i + (M_x\\Sigma x'^2 - M_y\\Sigma x'y')\\,y'_i}{\\Sigma x'^2\\,\\Sigma y'^2 - (\\Sigma x'y')^2}",
++      `\\text{Governing max case: } \\Sigma V = ${fmtT(det.c.V)}\\ \\text{kip}, \\; M_y = \\Sigma V\\, e_x = (${fmtT(det.c.V)})(${fmtT(det.ex,3)}) = ${fmtT(det.My)}\\ \\text{kip-ft}, \\; M_x = ${fmtT(det.Mx)}\\ \\text{kip-ft}`,
++      `\\Sigma x'^2\\Sigma y'^2-(\\Sigma x'y')^2 = (${fmtT(pi.Sxx)})(${fmtT(pi.Syy)}) - (${fmtT(pi.Sxy)})^2 = ${fmtT(gD)}\\ \\text{ft}^4; \\quad \\text{pile ${R.checks.pileComp.pile}: } x'_i = ${fmtT(gxi,3)},\\ y'_i = ${fmtT(gyi,3)}\\ \\text{ft}`,
++      `P_{max} = \\dfrac{${fmtT(det.c.V)}}{${pi.n}} + \\dfrac{[(${fmtT(det.My)})(${fmtT(pi.Syy)}) - (${fmtT(det.Mx)})(${fmtT(pi.Sxy)})](${fmtT(gxi,3)}) + [(${fmtT(det.Mx)})(${fmtT(pi.Sxx)}) - (${fmtT(det.My)})(${fmtT(pi.Sxy)})](${fmtT(gyi,3)})}{${fmtT(gD)}} = ${fmtT(R.checks.pileComp.P)}\\ \\text{kip}`],
++      "x' and M_y + toward the heel; y' and M_x + toward +y. With Σx'y' = 0 this is P_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'². e_x = x̄ − x_gc = "+fmt(det.ex,3)+" ft for the governing case.")}
++  `:`
+@@ -6342 +6364 @@ function svgPileReactions(R){
+-    const tip=FIG_STATIC?"":`Pile row at ${fF(r.x)} ft from the toe — piles ${r.no.join(", ")} (${pc.ls})\nmax P = ${fF(r.max,1)} kip, min P = ${fF(r.min,1)} kip, ΣP = ${fF(r.sum,1)} kip\nP_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'², ΣV = ${fF(d.c&&d.c.V,1)} kip, M_y = ${fF(d.My,1)}, M_x = ${fF(d.Mx,1)} kip-ft, n = ${pi.n}, Σx'² = ${fF(pi.Sxx)}, Σy'² = ${fF(pi.Syy)} (§4.2)\nmax P/φ_cR_n = ${fF(r.max,1)}/(${fF(phiC,2)} × ${fF(+S.piles.Rn,1)}) = ${fF(r.max/(phiC*S.piles.Rn),3)}`;
++    const tip=FIG_STATIC?"":`Pile row at ${fF(r.x)} ft from the toe — piles ${r.no.join(", ")} (${pc.ls})\nmax P = ${fF(r.max,1)} kip, min P = ${fF(r.min,1)} kip, ΣP = ${fF(r.sum,1)} kip\nP_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'²${Math.abs((R.pile&&R.pile.Sxy)||0)>1e-9?" (+ the Σx'y' terms, §4.2)":""}, ΣV = ${fF(d.c&&d.c.V,1)} kip, M_y = ${fF(d.My,1)}, M_x = ${fF(d.Mx,1)} kip-ft, n = ${pi.n}, Σx'² = ${fF(pi.Sxx)}, Σy'² = ${fF(pi.Syy)} (§4.2)\nmax P/φ_cR_n = ${fF(r.max,1)}/(${fF(phiC,2)} × ${fF(+S.piles.Rn,1)}) = ${fF(r.max/(phiC*S.piles.Rn),3)}`;
+@@ -6575 +6597,2 @@ function pilePlanSVG(R){   // ABINT: the plan as a string (drawPilePlan on scree
+-          +`\nP_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'² = ${fF(q.c.V,1)}/${pi.n} + (${fF(q.My,1)})(${fF(xi,3)})/${fF(pi.Sxx)} + (${fF(q.Mx,1)})(${fF(yi,3)})/${fF(pi.Syy)} = ${fF(P0,2)} kip`
++          +(Math.abs(pi.Sxy||0)>1e-9*Math.max(1,pi.Sxx+pi.Syy)? `\nP_i = ΣV/n + [(M_y Σy'² − M_x Σx'y') x'_i + (M_x Σx'² − M_y Σx'y') y'_i]/(Σx'² Σy'² − (Σx'y')²), Σx'y' = ${fF(pi.Sxy)} ft², x'_i = ${fF(xi,3)}, y'_i = ${fF(yi,3)} ft: ${fF(P0,2)} kip`
++            : `\nP_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'² = ${fF(q.c.V,1)}/${pi.n} + (${fF(q.My,1)})(${fF(xi,3)})/${fF(pi.Sxx)} + (${fF(q.Mx,1)})(${fF(yi,3)})/${fF(pi.Syy)} = ${fF(P0,2)} kip`)
+@@ -8361 +8384,2 @@ document.addEventListener("DOMContentLoaded",init);
+-     (computeAll, C-8: P_i = ΣV/n + M_y·x'_i/Σx'² + M_x·y'_i/Σy'² about the group centroid, x' + toward the heel). Same
++     (computeAll, C-8: pileReaction, P_i = ΣV/n + M_y·x'_i/Σx'² + M_x·y'_i/Σy'² about the group centroid, with the Σx'y' terms
++     when the layout is not symmetric (ABPX2), x' + toward the heel). Same
+@@ -8366 +8390 @@ document.addEventListener("DOMContentLoaded",init);
+-    return act.map(p=>r3(c.V/n+(Sxx>1e-9? My*(p.x-xgc)/Sxx:0)+(Syy>1e-9? Mx*(p.y-ygc)/Syy:0)));
++    return act.map(p=>r3(pileReaction(c.V,My,Mx,p.x-xgc,p.y-ygc,R.pile)));   // ABPX2: same expression as C-8, with Σx'y'
+@@ -8385 +8409 @@ document.addEventListener("DOMContentLoaded",init);
+-      n:act.length, centroid:{x:r6(-rp.xgc), y:r6(rp.ygc)}, Sxx:r6(rp.Sxx), Syy:r6(rp.Syy),
++      n:act.length, centroid:{x:r6(-rp.xgc), y:r6(rp.ygc)}, Sxx:r6(rp.Sxx), Syy:r6(rp.Syy), Sxy:r6(-(rp.Sxy||0)),   // Sxy in the hand-off axes (x reversed)
+@@ -8390 +8414 @@ document.addEventListener("DOMContentLoaded",init);
+-      distribution:"rigid cap, identical vertical piles: P_i = P/n + My·x'_i/Σx'² + Mx·y'_i/Σy'² about the group centroid (no product term Σx'y'); each pile takes Vx/n and Vy/n; pinned heads (no head moment)",
++      distribution:"rigid cap, identical vertical piles: P_i = P/n + [(My·Σy'² − Mx·Σx'y')·x'_i + (Mx·Σx'² − My·Σx'y')·y'_i]/(Σx'²·Σy'² − (Σx'y')²) about the group centroid (= P/n + My·x'_i/Σx'² + Mx·y'_i/Σy'² when Σx'y' = 0); each pile takes Vx/n and Vy/n; pinned heads (no head moment)",
+@@ -8404,0 +8429 @@ document.addEventListener("DOMContentLoaded",init);
++          DR:+S.piles.dd||0, gDR:(S.piles.gDD===undefined||S.piles.gDD===null||S.piles.gDD==="")?1.10:+S.piles.gDD,   // ABPX2: drag load per pile and γDR (structural strength) [T.3.4.1-1 note, 3.11.8]
+@@ -8501 +8526 @@ document.addEventListener("DOMContentLoaded",init);
+-      p.notes.push("Per-pile governing loads (pileDesign): per limit state, the pile with the largest reaction and the pile with the smallest (uplift when < 0) of the calculator's pile table, each with its lateral share H/n and a pinned head. They are factored loads on one pile (Service I: factored:false). The drag load DR = "+fmt(+S.piles.dd||0,1)+" kip is not included.");
++      p.notes.push("Per-pile governing loads (pileDesign): per limit state, the pile with the largest reaction and the pile with the smallest (uplift when < 0) of the calculator's pile table, each with its lateral share H/n and a pinned head. They are factored loads on one pile (Service I: factored:false). The drag load DR = "+fmt(+S.piles.dd||0,1)+" kip per pile is not in P; it is sent on its own (DR, γDR = "+fmt(p.pileLayout.resistance.gDR,2)+" for structural strength, 0.00 for geotechnical) for the structural check at the neutral plane.");
+```

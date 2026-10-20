@@ -15779,3 +15779,317 @@ index ac9f965..d08a911 100644
 -    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
 +    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, bx: [I, 'hpPhiC'], onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
 ```
+
+
+## 2026-10-20 — PR: claude/abut-pile-handoff-2 (ABPX2: integral demand with DW at γDW and η; CTDOT weak axis; group spacing in the load direction; drag load; tabulated AISC HP properties; engineer decisions 2026-10-20 after ABPX; PR link added after merge)
+
+Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `abutment_calculator.html` (fixlog/abutment_calculator.md ABPX2: Σx'y' in its pile distribution, drag load per pile sent) and HANDOFF.md §4.6.
+
+### ABPX2-1. Integral mode: DW at γDW and the load modifier η   [calc change] [MORE accurate; unchanged for a project without DW / η]
+- **Where:** `computeAll`, integral block (anchor `const DL = I.iabDL || 0, LL = I.iabLL || 0;`); new inputs `iabDW` (0), `iabGammaDW` (1.50), `iabEta` (1.0) in `DEFAULT_INPUTS`; integral panel (three new fields; the P_u line), report line "Factored gravity demand (Strength I)", the Module Calc "Factored gravity demand", report inputs (DW, γDW, η rows when used); hand-off `planIab` (sets `iabDL` = DC, `iabDW` = DW, `iabGammaDW`, `iabEta`; states both demands).
+- **Before:** P_u = γDC·DL + γLL·LL. DW was entered inside DL at γDC, and η was not available.
+- **After:** P_u = η·(γDC·DC + γDW·DW + γLL·LL). DC is in the existing DL field, DW is per pile, and η = ηD·ηR·ηI. When DW = 0 and η = 1, the old expression is evaluated, so projects saved before keep their results to the bit (checked).
+- **Provision:** AASHTO LRFD 10th Ed. Table 3.4.1-2 (γDC max 1.25, γDW max 1.50); Eq. 1.3.2.1-2 (η = ηD·ηR·ηI ≥ 0.95 for maximum loads); MassDOT Bridge Manual Part I §3.10.11.4 (factored gravity load per pile; the owner manual's edition per its own front matter). η is taken from the hand-off when the abutment sends one, else 1.0.
+- **Check case:**
+  - Inputs: integral MassDOT, skew 15°, default abutment, 6 HP12X84.
+  - From the abutment: DC = 717.90/6 = 119.65 kip, DW = 72.00/6 = 12.00 kip, LL = 52.632 kip, η = 1.00.
+  - Before: 1.25 × 131.65 + 1.75 × 52.632 = **256.668 kip**, D/C 0.6039.
+  - After: 1.00 × [1.25(119.65) + 1.50(12.00) + 1.75(52.632)] = 149.5625 + 18.000 + 92.106 = **259.668 kip**, D/C 259.668/425 = 0.6110. This equals the abutment's P_g.
+  - CTDOT, skew 10°: 290.063 kip in both tools.
+
+### ABPX2-2. Hand-off, integral: CTDOT → weak-axis bending   [input mapping]
+- **Where:** `planIab` (anchor `G.owner==='CTDOT'`).
+- **Before:** web parallel to the abutment at a skew mapped to `biaxial` for every owner.
+- **After:** owner CTDOT → `weak` (consistent with the CTDOT preset and its closed-form method). Other owners: weak at a skew → `biaxial`, as before; strong → `strong`.
+- **Check:** CTDOT, skew 10°: `iabOrient` = weak (was biaxial). AASHTO, skew 10°: biaxial.
+
+### ABPX2-3. Hand-off, group target: c/c spacing in the lateral-load direction   [input mapping]
+- **Where:** `adoptedLayout` (new `sX`, `sY`), `plan()` group adoption (anchor `the direction of the lateral load`).
+- **Why it is directional:** this tool's group effects are directional. The p-multipliers are by row in the load direction (`pmRowDir`, `pmRowsDirX`; AASHTO LRFD 10th Ed. 10.7.2.4, Table 10.7.2.4-1), and the trailing rows are counted along the load. There is one spacing input (`groupSpacingIn`), so it is set to the c/c spacing along the axis with the larger Σ|V| of the imported cases. When the other direction's spacing differs, the dialog says whether a case loading along the other axis is then conservative or not.
+- **Before:** the smallest row / column spacing.
+- **After:** the spacing along the lateral load.
+- **Check:** default 3 × 8 layout, Vx dominant: s = 4.25 ft = **51 in** along x (y spacing 66 in). This is the same value as before; for this project the smallest spacing is along x.
+
+### ABPX2-4. H-pile: drag load at the neutral plane   [calc change] [new check; MORE conservative when DR > 0; none when DR = 0]
+- **Where:** `computeAll`, H-pile structural block (anchor `const DRin =`), `hs.drag`; `structPass` (anchor `(!hs.drag || hs.drag.pass)`); result rows (Structural axial at the neutral plane), the dashboard rows, report row, Module 03 (Calc + check), Pile Section panel (Drag load DR, γDR structural); hand-off `planDrag` (sets `hpDR` / `hpGammaDR` from `pileDesign.DR` / `gDR`, group target with the section adopted and per-pile target).
+- **Before:** there was no drag load in this tool.
+- **After:** when DR > 0, a compression case (STL > 0) that is not an Extreme Event case is checked with φc·P_o ≥ STL + γDR·DR. P_o = F_y·A_eff, with no column reduction, because the neutral plane is below the ground where the soil braces the pile. The geotechnical checks keep STL (γDR = 0.00 for geotechnical strength). The head axial / buckling and the combined checks are unchanged, since the drag load peaks at the neutral plane, not at the head.
+- **Provision:** AASHTO LRFD 10th Ed. Art. 3.11.8 (downdrag / drag load) and the note to Table 3.4.1-1 on γDR (structural strength 1.10, geotechnical 0.00), as #351 in the abutment; Art. 6.9.4.1 (P_o); 6.5.4.2 (φc).
+- **Check case:**
+  - Inputs: abutment default pile project with DR = 50 kip. Strength I per-pile row: STL = 212.713 kip; HP12X53 with tabulated A.
+  - Demand: P_u = 212.713 + 1.10 × 50 = **267.713 kip**.
+  - Resistance: A_eff = 15.5 − 4(6 − 0.97781 × 6)(0.435) = 15.268 in², P_o = 50 × 15.268 = 763.40 kip, φc·P_o = 0.60 × 763.40 = **458.04 kip** ≥ 267.71: passes.
+  - An Extreme Event case has no drag check. With DR = 0 nothing changes (checked).
+
+### ABPX2-5. H-pile: tabulated AISC properties for a rolled HP shape   [calc change] [MORE accurate; opt-in per project]
+- **Where:**
+  - new `HP_AISC` table (22 HP shapes, AISC Steel Construction Manual 15th Ed. database, the values of Section Property Calculator.html, checked row by row) and `hpAiscRow`;
+  - `hpileSection` takes `shape`; the 9 nominal-section calls pass `shape: I.hpShape`. The corroded section stays computed;
+  - new input `hpShape` (""); Pile Section panel selector "Rolled section", which fills d, b_f, t_f, t_w;
+  - the section derivation, with a note on the tabulated values used, and the three-rectangle derivation kept for reference;
+  - the hand-off section adoption sets `hpShape`.
+- **Before:** A, I, S, Z, r from three rectangles (no fillets).
+- **After:** when `hpShape` is set and d, b_f, t_f, t_w equal its table row, the checks and the p-y stiffness use the tabulated A, I_x, Z_x, S_x, r_x, I_y, Z_y, S_y, r_y. Element slenderness stays geometric. Edited dimensions or a corroded section fall back to the computed values. `hpShape` "" (every project saved before, the default) gives results identical to before.
+- **Check case, HP12X53:**
+
+  | Property | Computed (before) | Tabulated (after) |
+  |---|---|---|
+  | A (in²) | 2(12)(0.435) + (11.8 − 0.87)(0.435) = 15.195 | 15.5 |
+  | A_eff (in²) | 14.963 | 15.268 |
+  | φc·P_o, F_y 50, φc 0.60 (kip) | 448.89 | 458.04 |
+  | I_x (in⁴) | 384.6 | 393 |
+
+### Other
+- Per-pile check warning text, and the receiver header comment. HANDOFF.md §4.6 updated.
+- **Saved data (§5):** additive. New optional inputs `iabDW`, `iabGammaDW`, `iabEta`, `hpShape`, `hpDR`, `hpGammaDR`. Their defaults reproduce the earlier results, so no migration is needed. No key changed.
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html" abutment_calculator.html`: pass. End-to-end in jsdom 24 (React 18.2), script e2e2.js, 21 checks, all pass:
+  - against origin/main `f9f3617`: default page text identical, and `computeAll` for default / H-pile / integral inputs identical (after removing the new null / default keys);
+  - an integral project saved before keeps 256.668 kip;
+  - the unsymmetrical layout matches the abutment for all 28 cases (worst 5.1 × 10⁻⁴ kip);
+  - integral demand 259.668 = abutment; CTDOT weak; AASHTO biaxial;
+  - spacing along x = 51 in; hpShape / DR / γDR set on import;
+  - drag check 267.713 ≤ 458.04 with A = 15.5; no drag check in Extreme Event; the check is shown on screen.
+- **Open items:**
+  - The drag check uses the tool's first-pass A_eff (`hpileAeff`), as the other H-pile axial checks do. The abutment's pile structural check uses the 6.9.4.2.2 effective-width equations, so the two tools' A_eff for a slender HP flange differ slightly (HP12X53: 15.27 here vs the abutment's Tab 4 §4.4a value).
+  - A corroded section uses computed properties (not tabulated minus loss).
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `f9f3617`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index d08a911..db4feca 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -652 +652,4 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-   still holds the imported value; imported LRFD rows show a HAND-OFF badge. */
++   still holds the imported value; imported LRFD rows show a HAND-OFF badge.
++   ABPX2 (2026-10-20): integral target sets DC and DW separately (iabDW at iabGammaDW) and η (iabEta); CTDOT → weak axis;
++   group effects take the c/c spacing in the lateral-load direction; section adoption sets hpShape (tabulated AISC properties)
++   and the drag load hpDR / hpGammaDR (structural check at the neutral plane). */
+@@ -770,0 +774 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    function minGap(v){ var m=0; for(var i=1;i<v.length;i++){ var g=v[i]-v[i-1]; if(!m || g<m) m=g; } return m; }
+@@ -772 +776 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    var smin=gaps.length? Math.min.apply(null,gaps) : 0;
++    var smin=gaps.length? Math.min.apply(null,gaps) : 0, sX=minGap(xs), sY=minGap(ys);   // ABPX2: spacing along x (between x-lines) and along y
+@@ -774 +778 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    return {piles:piles, n:n, cx:cx, cy:cy, nCols:xs.length, nRows:ys.length, sMin:smin,
++    return {piles:piles, n:n, cx:cx, cy:cy, nCols:xs.length, nRows:ys.length, sMin:smin, sX:sX, sY:sY,
+@@ -788,0 +793,8 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++  /* ABPX2: the abutment's drag load per pile and γDR (structural strength) into the H-pile drag-load inputs */
++  function planDrag(r,chk,I){
++    var D=chk.pd, DR=D && isNum(D.DR) && D.DR>0 ? D.DR : 0, gDR=D && pos(D.gDR) ? D.gDR : 1.10;
++    if(!(DR>0) && !(I.hpDR>0)) return;
++    var set=function(k,v,lbl,u){ if(!sameVal(I[k],v)){ r.patch[k]=v; r.changes.push(lbl+': '+(I[k]===undefined?'—':I[k])+' → '+v+(u?' '+u:'')); } r.fields[k]=v; };
++    set('hpDR',DR,'Drag load DR per pile','kip'); if(DR>0) set('hpGammaDR',gDR,'γDR (structural strength)');
++    if(DR>0) r.warn.push('Drag load DR = '+f2(DR,1)+' kip per pile: checked at the neutral plane, φc·P_o ≥ STL + '+f2(gDR,2)+'·DR (H-pile; not in Extreme Event cases); the geotechnical checks use STL (γDR = 0.00).');
++  }
+@@ -794,0 +807 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    var tab=hpAiscRow(s.designation,s.d,s.bf,s.tf,s.tw); if(tab) set('hpShape',s.designation,'Rolled section (AISC tabulated A = '+tab[0]+' in², I, S, Z, r)');   // ABPX2
+@@ -797 +810 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    r.warn.push('Section '+(s.designation||'')+': this tool idealizes the H-pile as three rectangles (no fillets), so its area differs slightly from the tabulated A = '+(isNum(s.A)?s.A:'?')+' in².');
++    if(!tab) r.warn.push('Section '+(s.designation||'')+' is not in this tool\'s AISC HP table at these dimensions: its properties are computed from three rectangles (no fillets; tabulated A = '+(isNum(s.A)?s.A:'?')+' in²).');
+@@ -838 +851,6 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-        if(al.sMin>0) fset('groupSpacingIn',r6(al.sMin*12),'c/c spacing for the group effects (the smallest row / column spacing)','in');
++        // ABPX2: group effects (p-multipliers by row in the load direction, AASHTO LRFD 10th Ed. 10.7.2.4) use the c/c spacing
++        // in the direction of the lateral load: the axis with the larger total |V| of the imported cases (pile x / y)
++        var sVx=add.reduce(function(a,g){ var m=g.mags[pt.id]; return a+Math.abs(m.Vx); },0), sVy=add.reduce(function(a,g){ var m=g.mags[pt.id]; return a+Math.abs(m.Vy); },0);
++        var dirX=sVx>=sVy, sDir=dirX? (al.sX||al.sY) : (al.sY||al.sX);
++        if(sDir>0) fset('groupSpacingIn',r6(sDir*12),'c/c spacing for the group effects: along '+(dirX?'x':'y')+', the direction of the lateral load (Σ|Vx| = '+f2(sVx,0)+', Σ|Vy| = '+f2(sVy,0)+' kip over the imported cases)','in');
++        if(al.sX>0 && al.sY>0 && Math.abs(al.sX-al.sY)>1e-6) r.warn.push('Group effects use one c/c spacing: '+f2(sDir*12,1)+' in, along '+(dirX?'x':'y')+' (the lateral load). The spacing along '+(dirX?'y':'x')+' is '+f2((dirX?al.sY:al.sX)*12,1)+' in; a case loading mainly along '+(dirX?'y':'x')+' uses '+f2(sDir*12,1)+' in too ('+((dirX?al.sY:al.sX)>sDir?'conservative':'unconservative: check it')+').');
+@@ -842 +860 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-        planSection(r,chk.lay,o,I);
++        planSection(r,chk.lay,o,I); if(o.adoptSec && chk.lay.secOk) planDrag(r,chk,I);
+@@ -886 +904 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-      planSection(r,chk.lay,o,I);
++      planSection(r,chk.lay,o,I); planDrag(r,chk,I);
+@@ -889 +907 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-      if(chk.pd.DR>0) r.warn.push('The abutment\'s drag load DR = '+f2(chk.pd.DR,1)+' kip per pile is not in these rows.');
++      if(chk.pd.DR>0) r.warn.push('The rows carry STL = |P| without the drag load; DR is applied in the structural check at the neutral plane (above).');
+@@ -920 +938 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-      if(bad.length) r.warn.push('Per-pile check: this tool\'s distribution differs from the abutment\'s pile reactions for '+bad.length+' case(s) ('+bad.slice(0,4).join('; ')+(bad.length>4?'; …':'')+'). Causes: this tool\'s own cap / stem weight left on, an unsymmetrical layout (this tool includes the product term Σx\'y\'; the abutment does not), or a different reference point.');
++      if(bad.length) r.warn.push('Per-pile check: this tool\'s distribution differs from the abutment\'s pile reactions for '+bad.length+' case(s) ('+bad.slice(0,4).join('; ')+(bad.length>4?'; …':'')+'). Causes: this tool\'s own cap / stem weight left on, an abutment payload sent before 2026-10-20 (no product term Σx\'y\' there for an unsymmetrical layout), or a different reference point.');
+@@ -934 +952,5 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    set('iabDL',r6(g.DL),'Dead load per pile DL (unfactored)','kip'); set('iabLL',r6(g.LL),'Live load per pile LL (unfactored)','kip');
++    // ABPX2: DC and DW separately (DW at γDW) and η, when the sender gives them; an older payload: DL = DC + DW as before
++    var sepDW=isNum(g.DC) && isNum(g.DW) && g.DC>=0 && g.DW>=0;
++    if(sepDW){ set('iabDL',r6(g.DC),'Dead load per pile DC (unfactored)','kip'); set('iabDW',r6(g.DW),'DW per pile (unfactored)','kip'); }
++    else set('iabDL',r6(g.DL),'Dead load per pile DL (unfactored)','kip');
++    set('iabLL',r6(g.LL),'Live load per pile LL (unfactored)','kip');
+@@ -935,0 +958,2 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    if(sepDW && pos(g.gDW)) set('iabGammaDW',g.gDW,'γDW');
++    set('iabEta',pos(g.eta)? g.eta : 1.0,'η (load modifier)');
+@@ -952,0 +977 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    else if(G.orient==='weak' && G.owner==='CTDOT') set('iabOrient','weak','Pile orientation (CTDOT: weak-axis bending, as its closed-form method)');   // ABPX2
+@@ -956,2 +981,3 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    if(pos(g.gDW) && pos(g.gDC) && Math.abs(g.gDW-g.gDC)>1e-9 && pos(g.DW)) r.warn.push('This mode factors DL = DC + DW with γDC: P_u = '+f2(g.gDC,2)+' × '+f2(g.DL,1)+' + '+f2(g.gLL,2)+' × '+f2(g.LL,1)+' = '+f2(g.gDC*g.DL+g.gLL*g.LL,1)+' kip per pile; the abutment factors DW = '+f2(g.DW,1)+' kip with γDW = '+f2(g.gDW,2)+(pos(g.eta)&&g.eta!==1?' and applies η = '+f2(g.eta,2):'')+': P_u = '+f2(g.Pu,1)+' kip (its Tab 10).');
+-    else if(pos(g.eta) && Math.abs(g.eta-1)>1e-9) r.warn.push('The abutment applies η = '+f2(g.eta,2)+' to the gravity load (P_u = '+f2(g.Pu,1)+' kip); this mode has no η.');
++    if(!sepDW && pos(g.gDW) && pos(g.gDC) && Math.abs(g.gDW-g.gDC)>1e-9 && pos(g.DW)) r.warn.push('This mode factors DL = DC + DW with γDC: P_u = '+f2(g.gDC,2)+' × '+f2(g.DL,1)+' + '+f2(g.gLL,2)+' × '+f2(g.LL,1)+' = '+f2(g.gDC*g.DL+g.gLL*g.LL,1)+' kip per pile; the abutment factors DW = '+f2(g.DW,1)+' kip with γDW = '+f2(g.gDW,2)+(pos(g.eta)&&g.eta!==1?' and applies η = '+f2(g.eta,2):'')+': P_u = '+f2(g.Pu,1)+' kip (its Tab 10).');
++    if(sepDW && isNum(g.Pu)){ var pu2=(pos(g.eta)?g.eta:1)*((pos(g.gDC)?g.gDC:1.25)*g.DC+(pos(g.gDW)?g.gDW:1.5)*g.DW+(pos(g.gLL)?g.gLL:1.75)*g.LL);
++      r.changes.push('Gravity demand here: η(γDC·DC + γDW·DW + γLL·LL) = '+f2(pos(g.eta)?g.eta:1,2)+'['+f2(g.gDC,2)+'('+f2(g.DC,2)+') + '+f2(g.gDW,2)+'('+f2(g.DW,2)+') + '+f2(g.gLL,2)+'('+f2(g.LL,3)+')] = '+f2(pu2,3)+' kip; the abutment\'s P_u = '+f2(g.Pu,3)+' kip'+(Math.abs(pu2-g.Pu)>0.01?' (differs: check the inputs)':' (equal)')); }
+@@ -2125 +2151 @@ function pileWidth(I) {
+-    const hpx = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++    const hpx = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -2131 +2157,21 @@ function pileWidth(I) {
+-function hpileSection({ d, bf, tf, tw, Fy, E }) {
++/* ABPX2 (2026-10-20): rolled HP shapes, AISC Steel Construction Manual 15th Ed. shape database (as in Section Property
++   Calculator.html): [A (in²), d, b_f, t_f, t_w (in), I_x (in⁴), Z_x, S_x (in³), r_x (in), I_y (in⁴), Z_y, S_y (in³), r_y (in)].
++   Duplicated data (CLAUDE.md §3). */
++const HP_AISC = {
++  "HP8X36":[10.6,8.02,8.16,0.445,0.445,119,33.6,29.8,3.36,40.3,15.2,9.88,1.95], "HP10X42":[12.4,9.7,10.1,0.42,0.415,210,48.3,43.4,4.13,71.7,21.8,14.2,2.41],
++  "HP10X57":[16.7,9.99,10.2,0.565,0.565,294,66.5,58.8,4.18,101,30.3,19.7,2.45], "HP12X53":[15.5,11.8,12,0.435,0.435,393,74,66.7,5.03,127,32.2,21.1,2.86],
++  "HP12X63":[18.4,11.9,12.1,0.515,0.515,472,88.3,79.1,5.06,153,38.7,25.3,2.88], "HP12X74":[21.8,12.1,12.2,0.61,0.605,569,105,93.8,5.11,186,46.6,30.4,2.92],
++  "HP12X84":[24.6,12.3,12.3,0.685,0.685,650,120,106,5.14,213,53.2,34.6,2.94], "HP12X89":[25.9,12.4,12.3,0.72,0.72,693,127,112,5.17,224,56,36.4,2.94],
++  "HP14X73":[21.4,13.6,14.6,0.505,0.505,729,118,107,5.84,261,54.6,35.8,3.49], "HP14X89":[26.1,13.8,14.7,0.615,0.615,904,146,131,5.88,326,67.7,44.3,3.53],
++  "HP14X102":[30.1,14,14.8,0.705,0.705,1050,169,150,5.92,380,78.8,51.4,3.56], "HP14X117":[34.4,14.2,14.9,0.805,0.805,1220,194,172,5.96,443,91.4,59.5,3.59],
++  "HP16X88":[25.8,15.3,15.7,0.54,0.54,1110,161,145,6.56,349,68.2,44.5,3.68], "HP16X101":[29.9,15.5,15.8,0.625,0.625,1300,187,168,6.59,412,80.1,52.2,3.71],
++  "HP16X121":[35.8,15.8,15.9,0.75,0.75,1590,226,201,6.66,504,97.6,63.4,3.75], "HP16X141":[41.7,16,16,0.875,0.875,1870,264,234,6.7,599,116,74.9,3.79],
++  "HP16X162":[47.7,16.3,16.1,1,1,2190,306,269,6.78,697,134,86.6,3.82], "HP16X183":[54.1,16.5,16.3,1.13,1.13,2510,349,304,6.81,818,156,100,3.89],
++  "HP18X135":[39.9,17.5,17.8,0.75,0.75,2200,281,251,7.43,706,122,79.3,4.21], "HP18X157":[46.2,17.7,17.9,0.87,0.87,2570,327,290,7.46,833,143,93.1,4.25],
++  "HP18X181":[53.2,18,18,1,1,3020,379,336,7.53,974,167,108,4.28], "HP18X204":[60.2,18.3,18.1,1.13,1.13,3480,433,380,7.6,1120,191,124,4.31]};
++// the table row of shape when d, b_f, t_f, t_w are exactly its dimensions (else null: an edited or corroded section is computed)
++function hpAiscRow(shape, d, bf, tf, tw) {
++  const T = shape && HP_AISC[shape];
++  return (T && Math.abs(T[1] - d) < 1e-9 && Math.abs(T[2] - bf) < 1e-9 && Math.abs(T[3] - tf) < 1e-9 && Math.abs(T[4] - tw) < 1e-9) ? T : null;
++}
++function hpileSection({ d, bf, tf, tw, Fy, E, shape }) {
+@@ -2165 +2211 @@ function hpileSection({ d, bf, tf, tw, Fy, E }) {
+-  return {
++  const out = {
+@@ -2170,0 +2217,6 @@ function hpileSection({ d, bf, tf, tw, Fy, E }) {
++  // ABPX2: a rolled shape at its table dimensions takes the tabulated AISC A, I, S, Z, r (fillets included); the computed
++  // three-rectangle values are kept as calc (display). The element slenderness ratios stay geometric.
++  const T = hpAiscRow(shape, d, bf, tf, tw);
++  if (T) Object.assign(out, { tab: shape, calc: { A, Ix, Sx, rx, Zx, Iy, Sy, ry, Zy },
++    A: T[0], Ix: T[5], Zx: T[6], Sx: T[7], rx: T[8], Iy: T[9], Zy: T[10], Sy: T[11], ry: T[12] });
++  return out;
+@@ -2232 +2284 @@ function hpileSectionForChecks(I) {
+-    : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++    : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -4103 +4155 @@ function computeAll(I, opts = {}) {
+-    const _hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++    const _hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -4847,0 +4900,8 @@ function computeAll(I, opts = {}) {
++    // ABPX2 (2026-10-20): drag load DR (AASHTO LRFD 10th Ed. 3.11.8; Table 3.4.1-1 note: γDR for structural strength, 0.00 for
++    // geotechnical). The pile carries STL + γDR·DR at the neutral plane, below the ground where the soil braces it: φc·P_o
++    // (P_o = F_y·A_eff, no column reduction) ≥ STL + γDR·DR. Strength (and Service) compression cases; not Extreme Event (xPhi),
++    // not a tension case (STL = 0). The geotechnical checks keep STL (γDR = 0.00). DR = 0 (default): no check, as before.
++    const DRin = (typeof I.hpDR === "number" && isFinite(I.hpDR) && I.hpDR > 0) ? I.hpDR : 0;
++    const gDRin = (typeof I.hpGammaDR === "number" && isFinite(I.hpGammaDR) && I.hpGammaDR >= 0) ? I.hpGammaDR : 1.10;
++    const drag = (DRin > 0 && !xPhi && STL > 0) ? (() => { const Pu = STL + gDRin * DRin, phiPo = phi_c_axial * Po;
++      return { DR: DRin, gDR: gDRin, STL, Pu, Po, phiPo, phi: phi_c_axial, pass: phiPo >= Pu }; })() : null;
+@@ -4913 +4973 @@ function computeAll(I, opts = {}) {
+-      Po, Pe, Pn_axial, phi_c_axial, phiPn_axial, axial_pass, buckMethod, hasStickup, stickup_ft, KLr_axial, KLr_ok, buckNote,
++      Po, Pe, Pn_axial, phi_c_axial, phiPn_axial, axial_pass, buckMethod, hasStickup, stickup_ft, KLr_axial, KLr_ok, buckNote, drag,
+@@ -4987 +5047,6 @@ function computeAll(I, opts = {}) {
+-    const demand = gDC * DL + gLL * LL;
++    // ABPX2 (2026-10-20): DW at γDW (Table 3.4.1-2, max 1.50) and the load modifier η = ηD·ηR·ηI (Eq. 1.3.2.1-2); before, the
++    // demand was γDC·DL + γLL·LL with DW inside DL and no η. DW = 0 and η = 1 (the defaults) give that expression unchanged.
++    const DW = (I.iabDW > 0) ? I.iabDW : 0;
++    const gDW = (I.iabGammaDW != null && I.iabGammaDW > 0) ? I.iabGammaDW : 1.50;
++    const eta = (I.iabEta != null && I.iabEta > 0) ? I.iabEta : 1.0;
++    const demand = (DW > 0 || eta !== 1) ? eta * (gDC * DL + gDW * DW + gLL * LL) : gDC * DL + gLL * LL;
+@@ -5002 +5067 @@ function computeAll(I, opts = {}) {
+-      DL, LL, gDC, gLL,
++      DL, LL, gDC, gLL, DW, gDW, eta,
+@@ -5136,0 +5202 @@ function computeAll(I, opts = {}) {
++      (!hs.drag || hs.drag.pass) &&   // ABPX2: drag load at the neutral plane
+@@ -6850 +6916 @@ function PileSectionsFig({ I, r, pyRes, ei, print }) {
+-    const hs = r.hpileStruct, hc = hs && hs.corr, hp = (hs && !hc) ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++    const hs = r.hpileStruct, hc = hs && hs.corr, hp = (hs && !hc) ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -8303,0 +8370,5 @@ const DEFAULT_INPUTS = {
++  // ABPX2 (2026-10-20): wearing surface / utilities per pile at γDW, and the load modifier η = ηD·ηR·ηI (AASHTO LRFD 10th Ed.
++  // Eq. 1.3.2.1-2, Table 3.4.1-2). Defaults 0 / 1.50 / 1.00: a project saved before ABPX2 (DW inside DL, no η) is unchanged.
++  iabDW: 0,                 // unfactored DW axial per pile (kip), factored with iabGammaDW
++  iabGammaDW: 1.50,         // Strength I γDW max (Table 3.4.1-2)
++  iabEta: 1.0,              // load modifier η on the factored gravity load (1.0 = not applied)
+@@ -8368,0 +8440,7 @@ const DEFAULT_INPUTS = {
++  // ABPX2 (2026-10-20): rolled section designation ("" = custom geometry). When set and d, b_f, t_f, t_w equal the table row,
++  // the tabulated AISC A, I, S, Z, r (HP_AISC) are used instead of the three-rectangle values.
++  hpShape: "",
++  // ABPX2: drag load per pile (kip) and its factor for structural strength (AASHTO LRFD 10th Ed. Table 3.4.1-1 note, 3.11.8;
++  // 0.00 for geotechnical strength). Checked at the neutral plane: φc·P_o ≥ STL + γDR·DR (Strength cases; not Extreme Event).
++  hpDR: 0,
++  hpGammaDR: 1.10,
+@@ -9592,0 +9671 @@ function PrintReport({
++      if (hs.drag) rows.push(["Structural axial at the neutral plane (STL + \u03b3DR\u00b7DR)", hs.drag.phiPo, "kip", hs.drag.Pu, hs.drag.pass, "AASHTO 3.11.8, 6.9.4.1"]);
+@@ -9849,0 +9929,3 @@ function PrintReport({
++      ["DW per pile", I.iabDW > 0 ? I.iabDW : null, "kip", "at \u03b3DW"],
++      ["\u03b3 DW", I.iabDW > 0 ? (I.iabGammaDW != null ? I.iabGammaDW : 1.5) : null, "", ""],
++      ["\u03b7 (load modifier)", (I.iabEta != null && I.iabEta !== 1) ? I.iabEta : null, "", "\u03b7D\u00b7\u03b7R\u00b7\u03b7I"],
+@@ -10016 +10098,3 @@ function PrintReport({
+-              line("Factored gravity demand (Strength I): " + fmt(b.gDC, 2) + "·DL + " + fmt(b.gLL, 2) + "·LL = " + fmt(b.gDC, 2) + "(" + fmt(b.DL, 0) + ") + " + fmt(b.gLL, 2) + "(" + fmt(b.LL, 0) + ") = " + fmt(b.demand, 0) + " kip"),
++              line((b.DW > 0 || b.eta !== 1)
++                ? "Factored gravity demand (Strength I): η(" + fmt(b.gDC, 2) + "·DC + " + fmt(b.gDW, 2) + "·DW + " + fmt(b.gLL, 2) + "·LL) = " + fmt(b.eta, 2) + "[" + fmt(b.gDC, 2) + "(" + fmt(b.DL, 1) + ") + " + fmt(b.gDW, 2) + "(" + fmt(b.DW, 1) + ") + " + fmt(b.gLL, 2) + "(" + fmt(b.LL, 1) + ")] = " + fmt(b.demand, 1) + " kip"
++                : "Factored gravity demand (Strength I): " + fmt(b.gDC, 2) + "·DL + " + fmt(b.gLL, 2) + "·LL = " + fmt(b.gDC, 2) + "(" + fmt(b.DL, 0) + ") + " + fmt(b.gLL, 2) + "(" + fmt(b.LL, 0) + ") = " + fmt(b.demand, 0) + " kip"),
+@@ -10035 +10119 @@ function PrintReport({
+-      const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++      const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -10089,0 +10174 @@ function PrintReport({
++        hs.drag && /*#__PURE__*/React.createElement(RptRow, { label: "Axial at the neutral plane with drag load: φc·Po ≥ STL + γDR·DR = " + fmt(hs.drag.STL, 1) + " + " + fmt(hs.drag.gDR, 2) + "×" + fmt(hs.drag.DR, 1) + " (3.11.8; see Module 03)", val: fmt(hs.drag.phiPo, 0) + " ≥ " + fmt(hs.drag.Pu, 1) + " kip", pass: hs.drag.pass }),
+@@ -11603,0 +11689 @@ function UtilizationDashboard({ r, I, pyRes }) {
++    if (hs.drag) out.push(["Axial + drag load", hs.drag.phiPo, hs.drag.Pu, hs.drag.pass, "3.11.8"]);
+@@ -15034 +15120 @@ function App() {
+-        const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++        const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -16002 +16088 @@ function App() {
+-            const _h = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++            const _h = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+@@ -16647 +16733,9 @@ function App() {
+-    r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
++    // ABPX2: DW per pile at γDW, and η
++    /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1" },
++      [["iabDW", "DW (wearing surface, utilities)", "kip", 0], ["iabGammaDW", "\u03b3DW", "", 1.5], ["iabEta", "\u03b7 = \u03b7D\u00b7\u03b7R\u00b7\u03b7I", "", 1]].map(([k, lbl, u, d0]) =>
++        /*#__PURE__*/React.createElement("div", { key: k },
++          /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, lbl, u ? /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + u + ")") : null),
++          /*#__PURE__*/React.createElement("input", { type: "number", step: "any", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, k), title: PileFoundationXfer.mkTip(I, k), value: I[k] != null ? I[k] : d0, onChange: e => set(k, parseFloat(e.target.value) || (k === "iabDW" ? 0 : d0)) })))),
++    r.iab && (r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
++      "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = \u03b7(\u03b3DC\u00b7DL + \u03b3DW\u00b7DW + \u03b3LL\u00b7LL) = ", fmt(r.iab.eta, 2), "[", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 1), ") + ", fmt(r.iab.gDW, 2), "(", fmt(r.iab.DW, 1), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 1), ")] = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 1), " kip")),
++    r.iab && !(r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
+@@ -16912,0 +17007,9 @@ function App() {
++    // ABPX2: rolled section: fills d, b_f, t_f, t_w; at those dimensions the checks use the tabulated AISC properties
++    /*#__PURE__*/React.createElement("label", { className: "block col-span-2" },
++      /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Rolled section (AISC tabulated A, I, S, Z, r)"),
++      /*#__PURE__*/React.createElement("select", { value: HP_AISC[I.hpShape] ? I.hpShape : "", title: PileFoundationXfer.mkTip(I, 'hpShape'), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" + PileFoundationXfer.mkCls(I, 'hpShape'),
++        onChange: e => { const k = e.target.value, T = HP_AISC[k]; set('hpShape', k); if (T) { set('hpD', T[1]); set('hpBf', T[2]); set('hpTf', T[3]); set('hpTw', T[4]); } } },
++        /*#__PURE__*/React.createElement("option", { value: "" }, "Custom geometry (properties from three rectangles, no fillets)"),
++        Object.keys(HP_AISC).map(k => /*#__PURE__*/React.createElement("option", { key: k, value: k }, k))),
++      HP_AISC[I.hpShape] && /*#__PURE__*/React.createElement("div", { className: "text-[10px] leading-tight mt-0.5", style: { color: hpAiscRow(I.hpShape, I.hpD, I.hpBf, I.hpTf, I.hpTw) ? "#2f7d4f" : "#8a5a1f" } },
++        hpAiscRow(I.hpShape, I.hpD, I.hpBf, I.hpTf, I.hpTw) ? "Tabulated AISC properties of " + I.hpShape + " used (A = " + fmt(HP_AISC[I.hpShape][0], 1) + " in\u00b2)." : "d, b_f, t_f or t_w differ from " + I.hpShape + ": the properties are computed from the three rectangles.")),
+@@ -16934,0 +17038,3 @@ function App() {
++    // ABPX2: drag load at the neutral plane (structural strength only)
++    /*#__PURE__*/React.createElement(Field, { label: "Drag load DR", sub: "per pile; 0 = none (3.11.8)", unit: "kip", value: I.hpDR || 0, bx: [I, 'hpDR'], onChange: v => set('hpDR', v) }),
++    /*#__PURE__*/React.createElement(Field, { label: "\u03b3DR structural", sub: "geotechnical 0.00 (T.3.4.1-1 note)", value: I.hpGammaDR != null ? I.hpGammaDR : 1.10, bx: [I, 'hpGammaDR'], onChange: v => set('hpGammaDR', v) }),
+@@ -17311 +17417 @@ function App() {
+-             ? ["Gross area Ag", fmt(hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 }).A, 2) + " in\u00b2 (" + fmt(r.hpileStruct.Ag, 2) + " after section loss)"]
++             ? ["Gross area Ag", fmt(hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape }).A, 2) + " in\u00b2 (" + fmt(r.hpileStruct.Ag, 2) + " after section loss)"]
+@@ -17336 +17442,4 @@ function App() {
+-          const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++          // ABPX2: hpT = the properties the checks use (tabulated AISC for a rolled shape at its dimensions); hp = the three-rectangle
++          // values derived below (the same as hpT for a custom section)
++          const hpT = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
++          const hp = hpT.tab ? Object.assign({}, hpT, hpT.calc) : hpT;
+@@ -17340 +17449 @@ function App() {
+-          const I_sel = axisStrong ? hp.Ix : hp.Iy;
++          const I_sel = axisStrong ? hpT.Ix : hpT.Iy;
+@@ -17341,0 +17451,2 @@ function App() {
++            hpT.tab && /*#__PURE__*/React.createElement("div", { className: "text-[10px] leading-snug mb-1 p-1.5 rounded-sm", style: { background: "#eef6f0", color: "#1f5135" } },
++              "Rolled section " + hpT.tab + " at its AISC dimensions: the checks and the p\u2013y stiffness use the tabulated AISC properties (fillets included): A = " + fmt(hpT.A, 2) + " in\u00b2, I", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.Ix, 0) + ", I", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.Iy, 0) + " in\u2074, S", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.Sx, 1) + ", S", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.Sy, 1) + ", Z", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.Zx, 1) + ", Z", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.Zy, 1) + " in\u00b3, r", /*#__PURE__*/React.createElement("sub", null, "x"), " = " + fmt(hpT.rx, 2) + ", r", /*#__PURE__*/React.createElement("sub", null, "y"), " = " + fmt(hpT.ry, 2) + " in (AISC Steel Construction Manual, 15th Ed.). The three-rectangle values below are for reference."),
+@@ -17511 +17622,3 @@ function App() {
+-      /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\gamma_{DC}\\,DL+\\gamma_{LL}\\,LL=${fmt(b.gDC, 2)}(${fmt(b.DL, 0)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 0)})=${fmt(b.demand, 0)}\\ \\text{kip}`, note: "Strength I, one pile/beam line; dead + live only (\u00a73.10.11.4)" }),
++      (b.DW > 0 || b.eta !== 1)
++        ? /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\eta\\,(\\gamma_{DC}\\,DC+\\gamma_{DW}\\,DW+\\gamma_{LL}\\,LL)=${fmt(b.eta, 2)}\\,[${fmt(b.gDC, 2)}(${fmt(b.DL, 1)})+${fmt(b.gDW, 2)}(${fmt(b.DW, 1)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 1)})]=${fmt(b.demand, 1)}\\ \\text{kip}`, note: "Strength I, per pile; DW at \u03b3DW (AASHTO LRFD 10th Ed. Table 3.4.1-2), \u03b7 per Eq. 1.3.2.1-2 (\u00a73.10.11.4: dead + live)" })
++        : /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\gamma_{DC}\\,DL+\\gamma_{LL}\\,LL=${fmt(b.gDC, 2)}(${fmt(b.DL, 0)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 0)})=${fmt(b.demand, 0)}\\ \\text{kip}`, note: "Strength I, one pile/beam line; dead + live only (\u00a73.10.11.4)" }),
+@@ -17685 +17798,2 @@ function App() {
+-    status: (() => { const hs = r.hpileStruct; if (!hs.hasStickup) return (hs.phi_c_axial * hs.Po) >= hs.STL;
++    status: (() => { const hs = r.hpileStruct; if (hs.drag && !hs.drag.pass) return false;   // ABPX2
++      if (!hs.hasStickup) return (hs.phi_c_axial * hs.Po) >= hs.STL;
+@@ -17708 +17822 @@ function App() {
+-      /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: "rectangular idealization" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: hp.tab ? "AISC tabulated, " + hp.tab + " (three rectangles: " + fmt(hp.calc.A, 2) + " in\u00b2)" : "rectangular idealization" }),
+@@ -17761,0 +17876,5 @@ function App() {
++      // ABPX2: drag load at the neutral plane (soil-braced: P_n = P_o), γDR for structural strength; geotechnical γDR = 0.00
++      hs.drag && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
++        /*#__PURE__*/React.createElement(Calc, { label: "Demand at the neutral plane", eq: `P_u=STL+\\gamma_{DR}\\,DR=${fmt(hs.drag.STL,1)}+${fmt(hs.drag.gDR,2)}(${fmt(hs.drag.DR,1)})=${fmt(hs.drag.Pu,1)}\\ \\text{kip}`, cite: "3.11.8; T.3.4.1-1 note" }),
++        /*#__PURE__*/React.createElement(RptCheck, { pass: hs.drag.pass, eq: `\\phi_c P_o=${fmt(hs.drag.phi,2)}\\times ${fmt(hs.drag.Po,0)}=${fmt(hs.drag.phiPo,0)}\\ \\text{kip}\\ ${hs.drag.pass?"\\ge":"<"}\\ P_u=${fmt(hs.drag.Pu,1)}\\ \\text{kip}` }),
++        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1" }, "Drag load DR = " + fmt(hs.drag.DR, 1) + " kip per pile (input, Pile Section panel). The neutral plane is below the ground, where the soil braces the pile (P_n = P_o = F_y A_eff). The geotechnical checks use STL (\u03b3DR = 0.00). Extreme Event cases: not applied.")),
+```
