@@ -2639,7 +2639,11 @@ function computeAll(){
     // counted; the same basis as the stem-dowel check): λrc = d_b·c_b/c_b² = d_b/c_b, 0.3 ≤ λrc ≤ 1.0 (Eq. 5.10.8.2.1c-1); c_b = the smaller
     // of the cover to the bar centre (c + d_b/2) and half the bar spacing. Was λrc = 1.0 (upper bound).
     const cbLd=Math.min(cvE+bar.db/2, o.sp/2), lamRc=Math.min(1,Math.max(0.3,bar.db/cbLd));
-    const ld=Math.max(12, ldb*lamCf*lamRc);
+    // ABLR (2026-10-20): λrl = 1.3 for horizontal bars with more than 12.0 in of fresh concrete cast below them [5.10.8.2.1b]
+    // (o.topBar: the heel / footing top mat; concrete below = h − c − d_b, the footing cast in one lift); λrl·λcf ≤ 1.7 [5.10.8.2.1b]
+    const concBelow=o.topBar? o.h-o.cover-bar.db : 0, lamRl=(o.topBar&&concBelow>12+1e-9)? 1.3 : 1.0;
+    const lamRlCf=Math.min(1.7, lamRl*lamCf);
+    const ld=Math.max(12, ldb*lamRlCf*lamRc);
     // shrinkage & temperature [5.10.6]
     const hIn=o.hST||o.h, bST=o.bST||b;                 // b = least width, h = least thickness of the component (in) [Eq. 5.10.6-1]
     let AsST=1.30*bST*hIn/(2*(bST+hIn)*m.fy);
@@ -2650,7 +2654,7 @@ function computeAll(){
     if(!tensionCtrl) warn(`${o.name}: section is NOT tension-controlled (ε_t = ${fmt(epsT,4)} < 0.005) — φ reduced to ${fmt(phiF,3)} per the 5.5.4.2 transition; consider more depth or less steel.`);
     return {...o, hE, cvE, As, AsReq, d, a, c:c2, beta1, epsT, tensionCtrl, phiF, phiMn, Sc, Mcr, MuMin, minOK,
       dv, Vc, phiVn, dcFlex:o.Mu/phiMn, dcShear:o.Vu/phiVn, betaMode, betaV, epsS, sxe,
-      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, lamCf, cbLd, lamRc, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
+      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, lamCf, cbLd, lamRc, lamRl, lamRlCf, concBelow, topBar:!!o.topBar, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
   }
 
   /* ---- ABCHK: concrete cover advisory [5.10.1, Table 5.10.1-1] — PASS/FAIL notes only, no result depends on it ---- */
@@ -2958,7 +2962,7 @@ function computeAll(){
   if(toePileD && !(R.checks.toeFlex.d>0)) warn(`Toe: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(R.checks.toeFlex.d,1)} in) — check panel I-7.`,"err");
   R.checks.heelFlex=sectionCheck({name:"Heel", h:g.tf*12, cover:m.coverF, bar:S.reinf.heel.size,
     sp:+S.reinf.heel.sp, Mu:heelDem.Mu, Vu:heelDem.Vu, Ms:footSvc.heel, lbl:heelDem.lbl,
-    bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Lheel*12});
+    bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Lheel*12, topBar:true});   // ABLR: heel top bars, λrl [5.10.8.2.1b]
   // OWNB: MassDOT 3.3.2.2 (spread footings): heel top steel for the dead load of everything above the heel incl. the heel, no live load,
   // load and resistance factors 1.0, no upward pressure relief: M_DL ≤ 1.0·M_n (an additional check; the AASHTO heel check above stays)
   if(abutOwner()==="MassDOT" && fn.branch==="spread"){ const c=R.checks.heelFlex, wDL=wSoilHeel+wFoot+esQ, MDL=wDL*g.Lheel*g.Lheel/2+wedgeM, Mn=c.As*m.fy*(c.d-c.a/2)/12;
@@ -3102,12 +3106,16 @@ function computeAll(){
      combination ("ls:NAME") using each element's governing γp permutation. */
   function integ(stations,w,pts){
     const V=[0],M=[0];
+    // ABLR (2026-10-20): each point load belongs to exactly one interval (s_{i-1}, s_i] (the first interval also takes s ≤ s_0), so a
+    // load on a station is no longer counted twice; it adds P·(s_i − s_p) to the moment at s_i (its true arm). The distributed load
+    // is integrated exactly for a linear w over the interval: ΔM = V_{i-1}·ds + ds²(2w_{i-1} + w_i)/6 (was the trapezoid of V).
     for(let i=1;i<stations.length;i++){
       const ds=stations[i]-stations[i-1];
-      let dV=(w[i]+w[i-1])/2*ds;
-      (pts||[]).forEach(pl=>{ if(pl.s>stations[i-1]-1e-9 && pl.s<=stations[i]+1e-9) dV+=pl.P; });
-      const Vi=V[i-1]+dV;
-      M.push(M[i-1]+(V[i-1]+Vi)/2*ds);
+      let Vi=V[i-1]+(w[i]+w[i-1])/2*ds;
+      let Mi=M[i-1]+V[i-1]*ds+ds*ds*(2*w[i-1]+w[i])/6;
+      (pts||[]).forEach(pl=>{ const inI=(i===1? pl.s<=stations[1]+1e-9 : (pl.s>stations[i-1]+1e-9 && pl.s<=stations[i]+1e-9));
+        if(inI){ Vi+=pl.P; Mi+=pl.P*(stations[i]-pl.s); } });
+      M.push(Mi);
       V.push(Vi);
     }
     return {V,M};
@@ -3128,7 +3136,10 @@ function computeAll(){
   }
   // reaction line loads (kip/ft) at footing x-station, for a combo (max upward for toe, min for heel)
   function reactionAt(c){
-    if(fn.branch==="spread"){ const segs=bearingSegsFor(c); return {q:x=> segs? pressForce(segs,x,x+1e-4)/1e-4:0, pts:null}; }
+    if(fn.branch==="spread"){ const segs=bearingSegsFor(c); // ABLR: pressure evaluated on the piece that contains x (was the force on [x, x+1e-4]: 0 at x = B, the heel end)
+      const qAt=x=>{ if(!segs) return 0; for(const sg of segs){ if(x>=sg.x0-1e-9&&x<=sg.x1+1e-9) return sg.q0+(sg.q1-sg.q0)*(x-sg.x0)/((sg.x1-sg.x0)||1); } return 0; };
+      return {q:qAt, pts:null,
+      kinks:segs? segs.flatMap(sg=>[sg.x0,sg.x1]) : []}; }   // ABLR: ends of the contact-pressure pieces (added as stations)
     const loads=pileLoadsFor(c); if(!loads) return {q:()=>0, pts:[]};
     const act=activePiles(), rows={};
     act.forEach((pp,i)=>{const key=pp.x.toFixed(4);(rows[key]=rows[key]||{x:pp.x,P:0}).P+=loads[i];});
@@ -3210,7 +3221,7 @@ function computeAll(){
 
     // ---- Stem (includes bearing/self-weight vertical-load eccentricity as a constant moment at the seat) ----
     { const Hs=cctx? Math.min(R.constrC.hfC,g.soilH) : g.soilH;
-      const heqL=cctx? R.constrC.heqC : heqU;
+      const heqL=interpHeq(Hs||g.soilH);   // ABLR: h_eq at the stem retained height H_s, as the stem design (§5.2); was h_eq(H) / h_eq of the construction H
       const hAbove=Math.max(0,Hs-g.hstem), st=[], w=[];
       for(let i=0;i<NST;i++){ const s=g.hstem*i/(NST-1); st.push(s); const e=g.hstem-s;
         w.push(fEH*kah*gam*Math.max(0,Hs-e) + (e<=Hs? fLS*kah*gam*heqL + fES*kah*esQv + (fCS>0?fCS*kah*qCv:0) : 0)); }
@@ -3231,10 +3242,7 @@ function computeAll(){
         if(zP<=g.hstem) ptsS.push({s:g.hstem-zP,P:dP}); else { ptsS[0].P+=dP; MtopEQ+=dP*(zP-g.hstem); }
         ptsS.push({s:g.hstem/2,P:Wi}); ptsS[0].P+=ns*R.seis.EQsup/Lab;
       }
-      const r=integ(st,w,[ptsS[0]]);
-      // EE interior point loads added in closed form (V steps at s_p, M grows by P·(s − s_p)): integ() counts a point load twice
-      // when it falls exactly on a station, as the wall inertia at h_stem/2 does
-      ptsS.slice(1).forEach(q=>{ st.forEach((sv,i)=>{ if(sv>=q.s-1e-9){ r.V[i]+=q.P; r.M[i]+=q.P*(sv-q.s); } }); });
+      const r=integ(st,w,ptsS);   // ABLR: integ() now places each point load once, at its true arm
       vm.stem={pos:st.map(s=>g.hstem-s), V:r.V, M:r.M.map(m=>m+Mtop+Mecc+MtopEQ), w:w.slice(), ptsEQ:ptsS.slice(1), pTop:(Vtop>0&&hAbove>0)?{h:hAbove,V:Vtop}:null,   // ABSW: w, EQ points for the pressure diagram (display only)
         axis:"Elevation above footing base (ft)", peakV:R.stemDem.Vu, peakM:R.stemDem.Mu, ref:"§5.2"};
     }
@@ -3242,26 +3250,32 @@ function computeAll(){
     { const st=[], w=[];
       for(let i=0;i<NST;i++){ const s=hbwRet*i/(NST-1); st.push(s); w.push(fEH*kah*gam*s + fLS*kah*gam*heqBW + fES*kah*esQv); }
       const r=integ(st,w,[]);
-      vm.backwall={pos:st.map(s=>hbwRet-s), V:r.V, M:r.M, w:w.slice(),   // ABSW
+      // ABLR: wheel load on top of the backwall (F61): a constant couple w_LL·t_bw/2 down the backwall, factored as LL+IM (as the backwall design)
+      const MbwLL=((R.bwDem&&R.bwDem.wheel)?R.bwDem.wheel.M:0)*(isLS?(cctx?0:fLL):one("LL"));
+      vm.backwall={pos:st.map(s=>hbwRet-s), V:r.V, M:r.M.map(x=>x+MbwLL), w:w.slice(), MbwLL,   // ABSW
         axis:"Height above bridge seat (ft)", peakV:R.bwDem.VuBW, peakM:R.bwDem.MuBW, ref:"§5.1"};
     }
     // ---- Toe: upward reaction minus footing self-weight ----
     // limit state: design distribution (max-V case); individual load: elastic superposition of that load
     { const st=[], w=[]; let pts=[], qFn;
-      if(isLS){ const rc=reactionAt(govToeC(lsName)||govV(lsName,true)); qFn=rc.q;   // the permutation giving the largest toe moment
+      let kinks=[];   // ABLR
+      if(isLS){ const rc=reactionAt(govToeC(lsName)||govV(lsName,true)); qFn=rc.q; kinks=rc.kinks||[];   // the permutation giving the largest toe moment
         if(rc.pts){ pts=rc.pts.filter(rw=>(B/2+rw.x)<g.Ltoe).map(rw=>({s:B/2+rw.x, P:rw.P/Lftg})); }
       } else if(fn.branch==="pile"){ const rp=elasticPilePts(eff)||[];
         pts=rp.filter(rw=>(B/2+rw.x)<g.Ltoe).map(rw=>({s:B/2+rw.x, P:rw.P/Lftg})); qFn=()=>0;
       } else { qFn=elasticQ(eff); }
       const wFtDn = isLS ? fDCmin*wFoot : (key==="DC"?wFoot:0);
-      for(let i=0;i<NST;i++){ const x=g.Ltoe*i/(NST-1); st.push(x); w.push(qFn(x) - wFtDn); }
+      // ABLR: the ends of the contact-pressure pieces are added as stations so the linear integration is exact at a kink
+      const xsT=[...Array(NST)].map((_,i)=>g.Ltoe*i/(NST-1)).concat(kinks.filter(x=>x>1e-9&&x<g.Ltoe-1e-9)).sort((a,b)=>a-b);
+      xsT.forEach(x=>{ st.push(x); w.push(qFn(x) - wFtDn); });
       const r=integ(st,w,pts);
       vm.toe={pos:st, V:r.V, M:r.M, axis:"Distance from toe tip (ft)",
         peakV:R.checks.toeFlex.Vu, peakM:R.checks.toeFlex.Mu, ref:"§5.3", shearAtDv:true};
     }
     // ---- Heel: downward soil/self/LS minus upward reaction ----
     { const st=[], w=[]; let pts=[], qFn, hc=null;
-      if(isLS){ hc=govHeelC(lsName)||govV(lsName,false); const rc=reactionAt(hc); qFn=rc.q;   // the heel-governing permutation; its own downward factors below
+      let kinksH=[];   // ABLR
+      if(isLS){ hc=govHeelC(lsName)||govV(lsName,false); const rc=reactionAt(hc); qFn=rc.q; kinksH=(rc.kinks||[]).map(x=>B-x);   // the heel-governing permutation; its own downward factors below
         if(rc.pts){ pts=rc.pts.filter(rw=>(B/2+rw.x)>xBackFace).map(rw=>({s:g.Lheel-((B/2+rw.x)-xBackFace), P:rw.P/Lftg})); }
       } else if(fn.branch==="pile"){ const rp=elasticPilePts(eff)||[];
         pts=rp.filter(rw=>(B/2+rw.x)>xBackFace).map(rw=>({s:g.Lheel-((B/2+rw.x)-xBackFace), P:rw.P/Lftg})); qFn=()=>0;
@@ -3272,7 +3286,8 @@ function computeAll(){
       const wDn = isLS ? (hl? hl.wDn : (fEVmax*wSoil_ls + fDCmax*wFoot + fLS*wLSv_ls + fES*esQv))
                        : ((key==="EV"?wSoilHeel:0) + (key==="DC"?wFoot:0) + (key==="LS"?wLSv:0) + (key==="ES"?esQv:0));
       const fWdg = cctx?0:(isLS?(hl?hl.gEV:fEVmax):(key==="EV"?1:0)), hW=R.EV.hWedge;   // slope wedge: γ·h_wedge·(L_heel − x_l)/L_heel
-      for(let i=0;i<NST;i++){ const xl=g.Lheel*i/(NST-1); st.push(xl); const xg=B-xl; w.push(qFn(xg) - wDn - fWdg*gam*hW*(g.Lheel>0?(g.Lheel-xl)/g.Lheel:0)); }
+      const xsH=[...Array(NST)].map((_,i)=>g.Lheel*i/(NST-1)).concat(kinksH.filter(x=>x>1e-9&&x<g.Lheel-1e-9)).sort((a,b)=>a-b);   // ABLR: kinks as stations
+      xsH.forEach(xl=>{ st.push(xl); const xg=B-xl; w.push(qFn(xg) - wDn - fWdg*gam*hW*(g.Lheel>0?(g.Lheel-xl)/g.Lheel:0)); });
       const r=integ(st,w,pts);
       vm.heel={pos:st, V:r.V, M:r.M, axis:"Distance from heel end (ft)",
         peakV:R.checks.heelFlex.Vu, peakM:R.checks.heelFlex.Mu, ref:"§5.4", shearAtDv:true};
@@ -4332,8 +4347,9 @@ function sectionHTML(c, demHTML, secNo, title){
       `A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y} = \\dfrac{1.30(${fmtT(c.bST,1)})(${fmtT(c.hST,1)})}{2(${fmtT(c.bST,1)}+${fmtT(c.hST,1)})(${fmtT(m.fy,1)})} = ${fmtT(c.AsST)}\\ \\text{in}^2/\\text{ft} \\quad (0.11 \\le A_{s,ST} \\le 0.60;\\ b,\\,h = \\text{least width, least thickness of the component})`,
       `\\ell_{db} = 0.17\\,d_b\\left(\\dfrac{\\lambda_{er}f_y - F_h/A_b}{1.97\\,\\lambda\\,(f'_c)^{0.25}}\\right)^2 = 0.17(${fmtT(BARS[c.bar].db,3)})\\left(\\dfrac{1.0(${fmtT(m.fy,1)}) - 0}{1.97(1.0)(${fmtT(Math.min(m.fc,15),1)})^{0.25}}\\right)^2 = ${fmtT(c.ldb,1)}\\ \\text{in}`,
       `c_b = \\min\\!\\left(c + \\tfrac{d_b}{2},\\ \\tfrac{s}{2}\\right) = \\min(${fmtT(c.cvE,2)} + ${fmtT(BARS[c.bar].db/2,3)},\\ ${fmtT(c.sp/2,2)}) = ${fmtT(c.cbLd,3)}\\ \\text{in}\\,, \\qquad \\lambda_{rc} = \\dfrac{d_b\\,c_b}{(c_b(1-\\beta_t)+1.67n_s k_{tr})^2} = \\dfrac{d_b}{c_b} = \\dfrac{${fmtT(BARS[c.bar].db,3)}}{${fmtT(c.cbLd,3)}} \\to ${fmtT(c.lamRc,3)} \\quad(0.3 \\le \\lambda_{rc} \\le 1.0)`,
-      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(1.0)(${fmtT(c.lamCf??1,1)})(${fmtT(c.lamRc,3)}),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
-      ((c.lamCf??1)>1?`Epoxy-coated bars (panel I-9${abutOwner()==="MassDOT"?"; MassDOT Part I 3.3.1.6":""}): λ<sub>cf</sub> = ${fmt(c.lamCf,1)} [5.10.8.2.1b] — cover ${fmt(c.cvE,2)} in ${c.cvE<3*BARS[c.bar].db?"&lt;":"≥"} 3d<sub>b</sub> = ${fmt(3*BARS[c.bar].db,2)} in, clear spacing ${fmt(c.sp-BARS[c.bar].db,2)} in ${(c.sp-BARS[c.bar].db)<6*BARS[c.bar].db?"&lt;":"≥"} 6d<sub>b</sub> = ${fmt(6*BARS[c.bar].db,2)} in. `:"")+"S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er, λ_rl"+((c.lamCf??1)>1?"":" and λ_cf")+" taken as 1.0; λ_rc from Eq. 5.10.8.2.1c-2 with k_tr = 0 and β_t = 0 (no transverse reinforcement or transverse compression counted), c = the cover to the bar used in this section. ℓ_d sets the bar-length estimates of §5.7 — confirm hooks/embedment in detailing.")}
+      ...(c.topBar?[`\\text{concrete cast below the bar} = h - c - d_b = ${fmtT(c.h,1)} - ${fmtT(c.cover,2)} - ${fmtT(BARS[c.bar].db,3)} = ${fmtT(c.concBelow,2)}\\ \\text{in}\\ ${c.concBelow>12?">":"\\le"}\\ 12\\ \\text{in} \\;\\Rightarrow\\; \\lambda_{rl} = ${fmtT(c.lamRl,1)}${(c.lamCf??1)>1?`\\,, \\quad \\lambda_{rl}\\lambda_{cf} = ${fmtT(c.lamRl*(c.lamCf??1),2)} \\to ${fmtT(c.lamRlCf,2)}\\ (\\le 1.7)`:""}`]:[]),   // ABLR
+      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(${fmtT(c.lamRl??1,1)})(${fmtT(c.lamCf??1,1)})(${fmtT(c.lamRc,3)}),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
+      (c.topBar?`Top bars: λ<sub>rl</sub> = 1.3 for horizontal bars with more than 12.0 in of fresh concrete cast below them [5.10.8.2.1b]; the footing is taken as cast in one lift. `:"")+((c.lamCf??1)>1?`Epoxy-coated bars (panel I-9${abutOwner()==="MassDOT"?"; MassDOT Part I 3.3.1.6":""}): λ<sub>cf</sub> = ${fmt(c.lamCf,1)} [5.10.8.2.1b] — cover ${fmt(c.cvE,2)} in ${c.cvE<3*BARS[c.bar].db?"&lt;":"≥"} 3d<sub>b</sub> = ${fmt(3*BARS[c.bar].db,2)} in, clear spacing ${fmt(c.sp-BARS[c.bar].db,2)} in ${(c.sp-BARS[c.bar].db)<6*BARS[c.bar].db?"&lt;":"≥"} 6d<sub>b</sub> = ${fmt(6*BARS[c.bar].db,2)} in. `:"")+"S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er"+(c.topBar?"":", λ_rl")+((c.lamCf??1)>1?"":" and λ_cf")+" taken as 1.0; λ_rc from Eq. 5.10.8.2.1c-2 with k_tr = 0 and β_t = 0 (no transverse reinforcement or transverse compression counted), c = the cover to the bar used in this section. ℓ_d sets the bar-length estimates of §5.7 — confirm hooks/embedment in detailing.")}
     ${c.skinNote?`<div class="note-box"><b>Side-face (skin) reinforcement [5.6.7]:</b> effective depth d = ${fmt(c.d,1)} in exceeds 3 ft (36 in), so longitudinal skin reinforcement is required on each side face over the lower h/2, with A<sub>sk</sub> ≥ 0.012(d − 30) = <b>${fmt(c.skinAsk)} in²/ft per face</b> (need not exceed A<sub>s</sub>/4). Provide and detail this steel — it is a note, not designed by the tool.</div>`:""}
   `);
 }
