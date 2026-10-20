@@ -4457,3 +4457,68 @@ index 51b0834..f41976d 100644
    h+="<h3>Foundation</h3>"+echoRows(f.branch==="spread"?[
      ["Branch","Spread footing on "+f.matl,""],
 ```
+
+## 2026-10-20 — PR: claude/abut-pilecap-shear — pile toe one-way shear at d_v with partial piles (5.12.8.6.1); D-region note; sketch (PR link added after merge)
+
+Follow-up to the F45 open item ("Pile toe one-way shear now fails in the default pile project (D/C 1.516)"). Standing direction: accurate, not overly conservative. Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), checked against the text and the rendered pages (5.12.8.6.1 and Fig. C5.12.8.6.1-1, 5.7.3.2 / C5.7.3.2, 5.5.1.2.3, 5.8.1, 5.8.2.1 / C5.8.2.2, 5.12.8.2, 5.12.8.4). Numbers come from the real `computeAll()` of origin/main `22c6278` (before) and of this branch (after) in headless Chromium, on `benchState()` with `S.fnd.branch="pile"` (B = 13 ft, L_toe = 3.5 ft, t_f = 3 ft, L_ab = L_ftg = 44 ft, γc = 0.150 kcf; 3 pile rows at x = −4.25 / 0 / +4.25 ft from the footing CL, 12 in piles, e_pile = 12 in, c_top = 3 in; #8 @ 9 in toe bars; f′c = 4 ksi).
+
+### F47. Pile-supported toe: one-way shear V_u at d_v from the stem face, each pile spread over its width   [calc change] [LESS conservative; was over-conservative]
+- **Where:** `computeAll` C-10, pile branch of the toe demand (anchor `function toePile(loads){`, the lines above it from `// one-way shear [5.12.8.6.1, 5.7.3.2]`, and `toeDem={Mu:tM.Mu, Vu:tV.Vu,`); a consistency check after the toe `sectionCheck` (anchor `internal mismatch of d_v`); new `toePileShearHTML()` (Tab 5 §5.3, anchor `/* Pile-supported toe: one-way shear at d_v`) called from the pile branch of `toeDemH` in `renderTabStruct`; V&M note (anchor `Pile toe: the diagram shows each pile row as a point load`); I-7 tooltip of `piles.pileSize`; `migrate()` defRev 5 notice (anchor `// defRev 5 (2026-10-20)`).
+- **Before:**
+  ```js
+  function toePile(loads){
+    ...
+    let MtoeUp=0,VtoeUp=0;
+    rowArr.forEach(r=>{ const xT=B/2+r.x; if(xT<g.Ltoe){ VtoeUp+=r.P/Lftg; MtoeUp+=r.P/Lftg*(g.Ltoe-xT); } });
+    return {rowArr,MtoeUp,VtoeUp,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VtoeUp-0.9*wFoot*g.Ltoe)};
+  }
+  let tM=Object.assign(toePile(det.loads),{c:det.c,ls:R.checks.pileComp.ls}), tVu=tM.Vu, tVls=tM.ls;
+  ... if(t.Vu>tVu+1e-9){ tVu=t.Vu; tVls=lsName; }
+  toeDem={Mu:tM.Mu, Vu:tVu, ..., lsV:tVls, ...};
+  ```
+  i.e. V_u = Σ(P_row/L) of every row with its centre forward of the stem face − 0.90·γc·t_f·L_toe (shear at the face, full rows).
+- **After:**
+  ```js
+  const DpT=Math.max(0,+S.piles.pileSize||0)/12;
+  const hPv=g.tf*12-Math.max(0,+S.piles.embed||0), dTv=hPv-Math.max(0,+S.piles.clrTop||0)-BARS[S.reinf.toe.size].db;
+  const dvTp=Math.max(0.9*dTv,0.72*hPv)/12, xCrT=g.Ltoe-dvTp;
+  const fracOut=xT=> DpT>1e-9? Math.min(1,Math.max(0,(xCrT-(xT-DpT/2))/DpT)) : (xT<xCrT?1:0);
+  function toePile(loads){
+    ...
+    rowArr.forEach(r=>{ const xT=B/2+r.x; if(xT<g.Ltoe){ VtoeUp+=r.P/Lftg; MtoeUp+=r.P/Lftg*(g.Ltoe-xT); }
+      const f=fracOut(xT); VsUp+=f*r.P/Lftg;
+      if(xT-DpT/2<g.Ltoe) vRows.push({x:r.x, xT, a:g.Ltoe-xT, f, w:r.P/Lftg}); });
+    const VswDn=0.9*wFoot*Math.max(0,xCrT);
+    return {rowArr,MtoeUp,VtoeUp,VsUp,VswDn,vRows,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VsUp-VswDn)};
+  }
+  let tM=..., tV=tM;  ... if(t.Vu>tV.Vu+1e-9) tV=t;
+  toeDem={Mu:tM.Mu, Vu:tV.Vu, ..., lsV:tV.ls, ..., dvT:dvTp, xCr:xCrT, Dp:DpT, VsUp:tV.VsUp, VswDn:tV.VswDn, vRows:tV.vRows, lblV:tV.c?.lbl};
+  ```
+  In words: section at x_cr = L_toe − d_v from the toe tip (d_v = max(0.9d, 0.72h_p) of the toe over the pile heads, the same value `sectionCheck` uses; a mismatch raises an error); f_i = min[1, max(0, (x_cr − (x_i − D/2))/D)] with D = pile size (each pile load spread uniformly over its width or diameter); V_u = Σ f_i·P_i/L − 0.90·γc·t_f·x_cr ≥ 0. A row wholly between the face and the section has f = 0, a row wholly on the toe side f = 1. Self-weight: only the toe beyond the section (as the spread-footing toe); soil over the toe is neglected (as before). Flexure (M_u at the face with the full rows, 5.12.8.4), crack control, the heel and the spread footing are unchanged. V_u still feeds β of the general procedure when the zero-shear point is beyond 3d_v (5.7.3.4.2), so φV_n changes in that case.
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.12.8.6.1 (one-way critical section at the 5.7.3.2 distance; partial-pile rule), 5.7.3.2, Fig. C5.12.8.6.1-1 (toe section at d_v from the front face), 5.7.2.8 (d_v), 5.12.8.6.2 → 5.7.3.3.
+- **Check case (default pile project, Strength I governs V_u before and after; front row P = 1701.70 kip → P/L = 38.675 kip/ft; d_v = 18.00 in, φV_c = 0.9·0.0316·2.0·√4·12·18.00 = 24.572 kip/ft):**
+  - Before: V_u = 38.675 − 0.90·0.150·3.00·3.50 = 38.675 − 1.4175 = **37.258** kip/ft → D/C **1.516** (FAIL).
+  - After: front row centre x_i = 6.5 − 4.25 = 2.250 ft from the tip, a = 3.50 − 2.25 = 1.25 ft = 15.0 in from the face; pile from 9.0 to 21.0 in; section at d_v = 18.0 in (x_cr = 3.50 − 1.50 = 2.000 ft); f = (2.000 − (2.250 − 0.500))/1.000 = 0.250; V_up,cr = 0.250·38.675 = 9.669; V_dn,cr = 0.90·0.150·3.00·2.000 = 0.810; V_u = **8.859** kip/ft → D/C 8.859/24.572 = **0.361** (PASS). Middle and back rows are under the stem / heel (f = 0).
+  - Variant, first row wholly within d_v (`S.piles.offX = 0.25` ft, grid regenerated; front row P/L = 40.666 kip/ft at a = 12.0 in, pile 6.0–18.0 in): before V_u = 40.666 − 1.4175 = **39.248** → D/C **1.597**; after f = (2.000 − (2.500 − 0.500))/1.000 = 0 → V_u = max(0, 0 − 0.810) = **0** → D/C **0.000** (load carried to the stem by a direct strut; see the D-region note).
+  - Variant, first row wholly beyond d_v (`offX = −0.75` ft; P/L = 32.703 kip/ft, a = 24.0 in, pile 18.0–30.0 in, f = 1): before 32.703 − 1.4175 = 31.286 → D/C 1.273; after 32.703 − 0.810 = **31.893** → D/C **1.298** (slightly MORE conservative: only the self-weight beyond the section relieves the shear).
+  - Piles + EE-I (A_s = 0.30, multispan; EE-I governs V_u): 41.423 → **9.900** kip/ft, D/C 1.686 → **0.403**.
+  - Spread footing, rock, and every other check: identical.
+- **D-region / strut-and-tie (decision, informational only):** the 10th Ed. permits STM for D-regions (5.5.1.2.3, 5.8.1, 5.8.2.1) and says it should be considered for pile caps where the load-to-reaction distance is under twice the member depth (5.8.2.1; C5.8.2.2, a/d < 2); no article requires it for a pile-supported toe, and 5.12.8.6 gives a complete sectional procedure. So no STM check is added. Tab 5 §5.3 shows a "D-REGION" note when a pile row centre in front of the stem face is closer than 2·t_f to the face (default: a = 15 in < 72 in), naming the rows, and, for rows with centre within d_v, that the pile reaches the stem by a direct strut and its node may be checked by 5.8.2 (C5.7.3.2).
+- **Show the work (§6):** Tab 5 §5.3 has a new block "Toe one-way shear demand — critical section at d_v from the stem front face": x_cr, the f_i formula, each straddling row's f worked, Σf·P/L, the self-weight term and V_u; and a table of every pile row near the toe (x from the CL and from the tip, a from the face, pile extent from the face, position vs. the section, f, P/L, f·P/L). P_i links to Tab 4 §4.2 / §4.3 (the report prints "see §x.y").
+- **Display only (sketch, §5.7):** on a pile-supported footing the placement sketch draws the pile heads (embedment e_pile) and draws C1 (toe bottom bars) and the A1 hook at e_pile + c_top, above the pile heads. Spread footing: unchanged.
+
+### Saved data (CLAUDE.md §5)
+- No key, field or format change. `meta.defRev` = 5. `migrate()` anchor `// defRev 5 (2026-10-20)`: no value is changed; a pile project gets a one-time notice line on the toe shear. Verified: a pile project saved by `22c6278` (defRev 4) opens with the line and defRev 5, and a second `migrate()` adds nothing; a spread project gets no line.
+
+### Self-test
+- `__ST_EXPECT` unchanged; the self-test passes on both sides (the benchmark is a spread footing).
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless Chromium, `22c6278` vs branch, every `R.checks` field on 13 variants (default, pile, pile + EE-I 0.30, EE-I 0.15 / 0.30, single-span EE-I 0.15 / 0.30 / off, single-span pile + EE-I 0.30, rock, pile row wholly inside d_v, pile row wholly beyond d_v, 24 in piles with L_toe = 5 ft): the only differences are `toeFlex.Vu` / `toeFlex.dcShear` on the pile variants (and `toeFlex.phiVn` on the 24 in pile variant, general-procedure β with the new V_u: D/C 1.674 → 1.174). Warning counts unchanged. The default and both offset variants were recomputed by hand (above) and agree with the tool.
+- Tab 5 rendered for pile, pile + EE-I, both offset variants and spread: every TeX string (194–210 per variant) renders in KaTeX 0.16.9 with `throwOnError`; no page error. Sketch checked by screenshot. `node tests/compare.mjs --tool page --file abutment_calculator.html`: storage same; page text differs only in the input ID (defRev 5 in the state).
+- **Other copies:** none.
+
+### Open items (not changed)
+- **5.7.3.2, concentrated load within d_v.** 5.12.8.6.1 places the one-way section at the 5.7.3.2 distance, and 5.7.3.2 moves the section to the face when a concentrated load lies within d_v. Read literally for a pile cap, any pile within d_v would send the section back to the face with the full pile load (the old result), which would leave the 5.12.8.6.1 partial-pile rule nothing to apply to. This entry follows 5.12.8.6.1 (the footing-specific rule; Fig. C5.12.8.6.1-1). Engineer to confirm.
+- **Pile position tolerance (5.12.8.2).** For footing design the 10th Ed. assumes driven piles may be out of position by 6 in or D/4 (unless special equipment is specified). The tool uses planned positions everywhere (pile loads, punching, now the toe shear). Default project with the front row 6 in toward the toe (pile loads held): f = (2.000 − (1.750 − 0.500))/1.000 = 0.75, V_u ≈ 0.75·38.675 − 0.810 = 28.20 kip/ft, D/C ≈ 1.148. Engineer to decide whether to apply the tolerance here and in the punching check.
