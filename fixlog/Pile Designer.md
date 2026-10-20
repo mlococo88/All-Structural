@@ -17922,3 +17922,119 @@ index ccfeab7..95be8bb 100644
 +        g.drive.RndrEOD != null && /*#__PURE__*/React.createElement(Calc, { label: "Set-up / relaxation", eq: g.drive.formula ? `R_{ndr,EOD}=R_{ndr}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (driving formula: EOD method, \\phi\\text{ assumes set-up})}` : `f=\\dfrac{R_{restrike}}{R_{EOD}}=${fmt(g.drive.fsu, 2)};\\quad R_{ndr,EOD}=\\dfrac{R_{ndr}}{f}=\\dfrac{${fmt(g.drive.Rndr, 1)}}{${fmt(g.drive.fsu, 2)}}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip}`, note: g.drive.formula ? "C10.7.3.4.3." : (g.drive.fsu > 1 ? "Set-up: R_ndr to be verified by restrike (10.7.3.4.3)." : g.drive.fsu < 1 ? "Relaxation: restrike required (10.7.3.4.2)." : "No set-up or relaxation (f = 1.0)."), cite: "10.7.3.4" }),
 +        g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ R_{ndr,EOD}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` })),
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-rev-e (PDA-MP / PDA-BC: minimum penetration per 10.7.6 as a driving-resistance and tip-elevation case, and the blow-count limit per C10.7.8; closes the open items of claude/aashto10-pile-rev-d #384; PR link added after merge)
+
+### PDA-MP. H-pile minimum penetration   [new check; no change to existing results]
+- **Provision (AASHTO LRFD 10th Ed., verified):**
+  - 10.7.6: the minimum penetration is the deepest tip needed by the applicable requirements: settlement, lateral deflection, uplift, below soil subject to drag loads, below soil subject to scour, lateral fixity for buckling and lateral resistance, and extreme-event uplift or lateral. It should not be set solely for bearing when field verification is used.
+  - 10.7.8: the drivability analysis is based on the maximum driving resistance needed, including the resistance needed to reach the minimum penetration and the soil that will scour or cause drag.
+- **Where:**
+  - `computeAll` H-pile, inside `const drive = (() => {` after `const Rh = ...`. Output is `R.hpileGeo.drive.minPen` and `.RdrMax`; `drive.pass` (already in the H-pile `allPass`) now includes `minPen.pass`.
+  - Inputs: a "Minimum penetration requirements (AASHTO 10.7.6)" grid under the drivability row, a "Ground elevation" field, and a button that copies z_fix from Module 02 into "Lat. fixity".
+  - Output: Module 01 heading 4b (Calc "Minimum penetration", a check, Calc "Driving resistance to reach z_min") and a new report Module 01 line "Minimum penetration (10.7.6)".
+  - New optional fields: `hpMinPen` (null; object `{settle, defl, uplift, drag, scour, fixity, ee}`, ft below grade, 0 = n/a) and `hpGradeEl` (null = depths only). No migration needed: when no requirement is entered, no check runs.
+- **Change:**
+  - z_min = max(entered requirements). Check: modelled pile toe (`solverLembed`, ft below grade) ≥ z_min.
+  - Controlling tip = max(z_min, toe), reported as depth and as elevation (El. = ground El. − depth).
+  - Driving resistance to reach z_min: R_n,stat(z_min) uses the existing Module 01 static method (`hpileGeoCapacity`) with embedment z_min − embedTop and **no scour removed** (the scourable soil is driven through). The value is unfactored.
+  - Hammer check (from #384): R_hammer ≥ max(R_ndr,EOD, R_n,stat(z_min)) (was R_ndr,EOD only). The value is unchanged when no minimum penetration is entered.
+- **Check case** (#384 case: HP14×89, sand 0–30 ft N 20 and 30 ft+ N 40, N1,60 basis, toe 60 ft, 10 ft scour, dynamic testing with QC so R_ndr,EOD = 133.0 kip at f = 1.3; ground El. 100; hammer 300 kip):
+  - Case a, requirements scour 25 / fixity 18 / uplift 40 ft:
+    - z_min = max(25, 18, 40) = **40.0 ft (uplift)**, tip El. 100 − 40 = 60.0.
+    - Toe 60.0 ≥ 40.0, so the check is OK. Controlling tip 60.0 ft, **El. 40.0** (pile toe).
+    - Side resistance R_s = 0.4 ksf × 4.75 ft × 30 ft = 57.0 kip, plus 0.8 × 4.75 × 10 = 38.0 kip, giving 95.0 kip.
+    - Tip resistance R_p = q_p 261.2 ksf × 1.409 ft² = 368.0 kip.
+    - R_n,stat(40) = **463.0 kip**.
+    - Hammer 300 < max(133.0, 463.0) = 463.0, so the hammer check is **NG** (source: minimum penetration). Before this change the same project read 300 ≥ 133.0 OK.
+  - Case b, scour 70 ft:
+    - z_min = 70.0 ft, tip El. 30.0. Toe 60.0 < 70.0, so the check is **NG**. Controlling tip 70.0 ft, **El. 30.0** (minimum penetration).
+    - R_s = 57.0 + 0.8 × 4.75 × 40 = 209.0 kip; R_p = 320 ksf (limit) × 1.409 ft² = 450.8 kip.
+    - R_n,stat(70) = **659.8 kip** > 300, so the hammer check is NG.
+
+### PDA-BC. Blow-count limit   [new check; no change to existing results]
+- **Provision (AASHTO LRFD 10th Ed., verified):** C10.7.8: driving resistances (blow counts) above about 10 to 15 blows per inch should be used with care. Even 10 may be too high when the hard driving lasts over a large part of the penetration.
+- **Where:**
+  - Logic: same block, `blow`, included in `drive.pass`.
+  - Inputs: "Blow count" (`hpBlowCount`, 0 = not entered, from the wave equation at the driving criterion) and "Blow-count limit" (`hpBlowLimit`, default 10) after the φda field.
+  - Output: a check in Module 01 heading 4b, and the blow count is appended to the report drivability line.
+- **Change:** N_blow ≤ limit. A limit above 15 is flagged as outside the C10.7.8 range. The tool does not estimate blow counts; they come from the wave equation analysis that 10.7.8 requires.
+- **Check case:** 8 ≤ 10, OK; 12 > 10, **NG**; with the limit set to 15, 12 ≤ 15, OK.
+
+- **How verified:**
+  - `node tests/check-syntax.mjs "Pile Designer.html"` passes.
+  - jsdom: the check-case numbers above come from `computeAll`.
+  - `computeAll(DEFAULT_INPUTS)` for the three pile types differs from origin/main `e2f882e` only by the new `hpileGeo.drive.minPen` (null), `.RdrMax` and `.blow` (null).
+  - Saved projects with the case a and case b inputs render Module 01 4b and the report lines with no script errors.
+- **Open items:** none for Pile Designer from the 10th Ed. gap list.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `e2f882e`):
+
+```diff
+@@ -5074,3 +5074,27 @@ function computeAll(I, opts = {}) {
+-      const hammer = (RndrEOD != null && Rh > 0) ? { Rh, pass: Rh >= RndrEOD - 1e-9 } : null;
+-      return { phiDa, Fy: FyD, lim, stressC, stressT, fsu, formula, RndrEOD, Rndr: drv.phiDyn ? drv.Rndr : null, hammer,
+-        pass: (!stressC || stressC.pass) && (!stressT || stressT.pass) && (!hammer || hammer.pass) };
++      // PDA-MP (2026-10-20): minimum penetration, AASHTO LRFD 10th Ed. 10.7.6: the deepest tip needed by the applicable
++      // requirements (entered as depths below grade, 0 = not applicable). The pile modelled (toe at solverLembed below grade)
++      // must reach it. Driving to it (10.7.8: maximum driving resistance needed to obtain the minimum penetration): the
++      // static nominal resistance at that depth with all soil present (no scour removed), R_n,stat(z_min), unfactored.
++      const MP_KEYS = [["settle", "settlement (service)"], ["defl", "lateral deflection (service)"], ["uplift", "uplift (strength)"], ["drag", "below soil causing drag loads"], ["scour", "below soil subject to scour"], ["fixity", "lateral fixity (strength)"], ["ee", "extreme event uplift / lateral"]];
++      const mpIn = (I.hpMinPen && typeof I.hpMinPen === "object") ? I.hpMinPen : {};
++      const mpItems = MP_KEYS.map(([k, l]) => ({ k, l, z: (mpIn[k] > 0) ? mpIn[k] : 0 })).filter(x => x.z > 0);
++      let minPen = null;
++      if (mpItems.length) {
++        const gov = mpItems.reduce((a, b) => (b.z > a.z ? b : a));
++        const zMin = gov.z, toeNow = toe_ft;
++        const gEl = (I.hpGradeEl != null && isFinite(I.hpGradeEl)) ? I.hpGradeEl : null;
++        const gMin = hpileGeoCapacity({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), d: I.hpD, bf: I.hpBf, embedTop: embedTop_ft, embedLen: Math.max(zMin - embedTop_ft, 0),
++          smallGroup: !!I.hpSmallGroup, phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp, phiTipClay: I.hpPhiTipClay, scour: 0, nBasis: I.hpSptBasis });
++        const ctrlZ = Math.max(zMin, toeNow);
++        minPen = { items: mpItems, gov, zMin, toeNow, pass: toeNow >= zMin - 1e-9, gradeEl: gEl, tipElMin: gEl != null ? gEl - zMin : null, ctrlZ, tipElCtrl: gEl != null ? gEl - ctrlZ : null,
++          RdrMin: gMin.Rn_comp, ctrlSrc: toeNow >= zMin ? "pile toe modelled (bearing / length estimate)" : "minimum penetration (" + gov.l + ")" };
++      }
++      // maximum driving resistance needed (10.7.8): the larger of R_ndr,EOD and the resistance to reach the minimum penetration
++      const RdrMax = Math.max(RndrEOD != null ? RndrEOD : 0, minPen ? minPen.RdrMin : 0);
++      const hammer = (RdrMax > 0 && Rh > 0) ? { Rh, Rreq: RdrMax, src: (minPen && minPen.RdrMin > (RndrEOD || 0)) ? "minimum penetration" : "R_ndr,EOD", pass: Rh >= RdrMax - 1e-9 } : null;
++      // PDA-BC (2026-10-20): blow count from the wave equation at the driving criterion (blows/in), C10.7.8: above 10-15 bpi
++      // use with care. Limit input (default 10); 0 = not entered.
++      const bc = (I.hpBlowCount > 0) ? I.hpBlowCount : 0, bcLim = (I.hpBlowLimit > 0) ? I.hpBlowLimit : 10;
++      const blow = bc > 0 ? { n: bc, lim: bcLim, limOutside: bcLim > 15, pass: bc <= bcLim + 1e-9 } : null;
++      return { phiDa, Fy: FyD, lim, stressC, stressT, fsu, formula, RndrEOD, Rndr: drv.phiDyn ? drv.Rndr : null, hammer, minPen, RdrMax, blow,
++        pass: (!stressC || stressC.pass) && (!stressT || stressT.pass) && (!hammer || hammer.pass) && (!minPen || minPen.pass) && (!blow || blow.pass) };
+@@ -8863,0 +8888,4 @@ const DEFAULT_INPUTS = {
++  hpMinPen: null,         // PDA-MP: { settle, defl, uplift, drag, scour, fixity, ee } depths below grade (ft) per 10.7.6; 0/blank = n/a
++  hpGradeEl: null,        // PDA-MP: ground elevation (ft) for tip elevations; blank = depths only
++  hpBlowCount: 0,         // PDA-BC: wave-equation blow count at the driving criterion (blows/in); 0 = not entered
++  hpBlowLimit: 10,        // PDA-BC: limit (blows/in), C10.7.8 range 10-15
+@@ -10637 +10665,2 @@ function PrintReport({
+-        g.drive && line("Drivability (10.7.8): σdr ≤ 0.9·φda·fy = 0.9 × " + fmt(g.drive.phiDa, 2) + " × " + fmt(g.drive.Fy, 0) + " = " + fmt(g.drive.lim, 1) + " ksi" + (g.drive.stressC ? "; WEAP compression " + fmt(g.drive.stressC.s, 1) + " ksi " + (g.drive.stressC.pass ? "OK" : "NG") : "; compression stress not entered") + (g.drive.stressT ? "; tension " + fmt(g.drive.stressT.s, 1) + " ksi " + (g.drive.stressT.pass ? "OK" : "NG") : "") + (g.drive.RndrEOD != null ? "; EOD criterion R_ndr,EOD = " + (g.drive.formula ? "R_ndr (driving formula, EOD) = " : "R_ndr/f = " + fmt(g.drive.Rndr, 1) + "/" + fmt(g.drive.fsu, 2) + " = ") + fmt(g.drive.RndrEOD, 1) + " kip (10.7.3.4)" + (g.drive.hammer ? "; hammer " + fmt(g.drive.hammer.Rh, 1) + " kip " + (g.drive.hammer.pass ? "≥" : "<") + " R_ndr,EOD" : "") : "") + "."),   // PDA-DR
++        g.drive && line("Drivability (10.7.8): σdr ≤ 0.9·φda·fy = 0.9 × " + fmt(g.drive.phiDa, 2) + " × " + fmt(g.drive.Fy, 0) + " = " + fmt(g.drive.lim, 1) + " ksi" + (g.drive.stressC ? "; WEAP compression " + fmt(g.drive.stressC.s, 1) + " ksi " + (g.drive.stressC.pass ? "OK" : "NG") : "; compression stress not entered") + (g.drive.stressT ? "; tension " + fmt(g.drive.stressT.s, 1) + " ksi " + (g.drive.stressT.pass ? "OK" : "NG") : "") + (g.drive.RndrEOD != null ? "; EOD criterion R_ndr,EOD = " + (g.drive.formula ? "R_ndr (driving formula, EOD) = " : "R_ndr/f = " + fmt(g.drive.Rndr, 1) + "/" + fmt(g.drive.fsu, 2) + " = ") + fmt(g.drive.RndrEOD, 1) + " kip (10.7.3.4)" + "" : "") + (g.drive.hammer ? "; hammer " + fmt(g.drive.hammer.Rh, 1) + " kip " + (g.drive.hammer.pass ? "≥" : "<") + " max driving resistance needed " + fmt(g.drive.hammer.Rreq, 1) + " kip (" + g.drive.hammer.src + ")" : "") + (g.drive.blow ? "; blow count " + fmt(g.drive.blow.n, 1) + " " + (g.drive.blow.pass ? "≤" : ">") + " " + fmt(g.drive.blow.lim, 1) + " blows/in (C10.7.8)" : "") + "."),   // PDA-DR, PDA-BC
++        g.drive && g.drive.minPen && line("Minimum penetration (10.7.6): " + g.drive.minPen.items.map(x => x.l + " " + fmt(x.z, 1) + " ft").join("; ") + " → z_min = " + fmt(g.drive.minPen.zMin, 1) + " ft (" + g.drive.minPen.gov.l + ")" + (g.drive.minPen.tipElMin != null ? ", tip El. " + fmt(g.drive.minPen.tipElMin, 1) : "") + "; pile toe modelled " + fmt(g.drive.minPen.toeNow, 1) + " ft " + (g.drive.minPen.pass ? "≥" : "<") + " z_min; controlling tip: " + fmt(g.drive.minPen.ctrlZ, 1) + " ft below grade" + (g.drive.minPen.tipElCtrl != null ? " (El. " + fmt(g.drive.minPen.tipElCtrl, 1) + ")" : "") + ", " + g.drive.minPen.ctrlSrc + "; driving resistance to reach z_min R_n,stat = " + fmt(g.drive.minPen.RdrMin, 1) + " kip (no scour, unfactored)."),   // PDA-MP
+@@ -17642 +17671,15 @@ function App() {
+-        /*#__PURE__*/React.createElement(Field, { label: "\u03c6da", sub: "driving, 6.5.4.2", value: I.hpPhiDa != null ? I.hpPhiDa : 1.0, onChange: v => set('hpPhiDa', (isFinite(v) && v > 0) ? v : 1.0) }))),
++        /*#__PURE__*/React.createElement(Field, { label: "\u03c6da", sub: "driving, 6.5.4.2", value: I.hpPhiDa != null ? I.hpPhiDa : 1.0, onChange: v => set('hpPhiDa', (isFinite(v) && v > 0) ? v : 1.0) }),
++        // PDA-BC (2026-10-20): blow count from the wave equation, C10.7.8
++        /*#__PURE__*/React.createElement(Field, { label: "Blow count", sub: "WEAP at the criterion; 0 = not entered", unit: "bl/in", value: I.hpBlowCount || 0, onChange: v => set('hpBlowCount', (isFinite(v) && v > 0) ? v : 0) }),
++        /*#__PURE__*/React.createElement(Field, { label: "Blow-count limit", sub: "C10.7.8: 10\u201315", unit: "bl/in", value: I.hpBlowLimit != null ? I.hpBlowLimit : 10, onChange: v => set('hpBlowLimit', (isFinite(v) && v > 0) ? v : 10) }),
++        /*#__PURE__*/React.createElement(Field, { label: "Ground elevation", sub: "for tip elevations (blank = depths)", unit: "ft", value: I.hpGradeEl != null ? I.hpGradeEl : "", onChange: v => set('hpGradeEl', isFinite(v) ? v : null) })),
++      // PDA-MP (2026-10-20): minimum penetration requirements, 10.7.6 (depth below grade, ft; 0 = not applicable)
++      /*#__PURE__*/React.createElement("div", { className: "mt-1.5" },
++        /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Minimum penetration requirements (AASHTO 10.7.6), depth below grade, ft (0 = n/a)"),
++        /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-4 gap-1.5" },
++          [["settle", "Settlement"], ["defl", "Lat. deflection"], ["uplift", "Uplift"], ["drag", "Below drag soil"], ["scour", "Below scour"], ["fixity", "Lat. fixity"], ["ee", "Extreme event"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
++            /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: (I.hpMinPen && I.hpMinPen[k]) || 0,
++              onChange: e => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { [k]: Math.max(parseFloat(e.target.value) || 0, 0) })) }))),
++          (r.buckling && r.buckling.lateralFixity > 0) && /*#__PURE__*/React.createElement("button", { type: "button", className: "text-[9px] underline text-[var(--blueprint2)] self-end text-left",
++            title: "Depth to fixity from the lateral analysis (Module 02, moment zero crossing below M_max)",
++            onClick: () => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { fixity: +(+r.buckling.lateralFixity).toFixed(1) })) }, "fixity = z_fix " + fmt(r.buckling.lateralFixity, 1) + " ft (Module 02)")))),
+@@ -18418 +18461,7 @@ function App() {
+-        g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ R_{ndr,EOD}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` })),
++        // PDA-MP (2026-10-20): minimum penetration, 10.7.6
++        g.drive.minPen && /*#__PURE__*/React.createElement(Calc, { label: "Minimum penetration", eq: `z_{min}=\\max(${g.drive.minPen.items.map(x => fmt(x.z, 1)).join(",\\,")})=${fmt(g.drive.minPen.zMin, 1)}\\ \\text{ft}${g.drive.minPen.tipElMin != null ? `\\ (\\text{El. }${fmt(g.drive.minPen.gradeEl, 1)}-${fmt(g.drive.minPen.zMin, 1)}=${fmt(g.drive.minPen.tipElMin, 1)})` : ""}`, note: "Requirements entered (ft below grade): " + g.drive.minPen.items.map(x => x.l + " " + fmt(x.z, 1)).join("; ") + ". Governs: " + g.drive.minPen.gov.l + ".", cite: "10.7.6" }),
++        g.drive.minPen && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.minPen.pass, eq: `\\text{pile toe }${fmt(g.drive.minPen.toeNow, 1)}\\ ${g.drive.minPen.pass ? "\\ge" : "<"}\\ z_{min}=${fmt(g.drive.minPen.zMin, 1)}\\ \\text{ft};\\ \\text{controlling tip }${fmt(g.drive.minPen.ctrlZ, 1)}\\ \\text{ft}${g.drive.minPen.tipElCtrl != null ? `\\ (\\text{El. }${fmt(g.drive.minPen.tipElCtrl, 1)})` : ""}` }),
++        g.drive.minPen && /*#__PURE__*/React.createElement(Calc, { label: "Driving resistance to reach z_min", eq: `R_{n,stat}(z_{min})=${fmt(g.drive.minPen.RdrMin, 1)}\\ \\text{kip}`, note: "Static analysis (Module 01 method) to z_min with all soil present (scourable and drag-zone soil is driven through), unfactored.", cite: "10.7.8" }),
++        g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ \\max(R_{ndr,EOD},\\,R_{n,stat}(z_{min}))=${fmt(g.drive.hammer.Rreq, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` }),
++        // PDA-BC (2026-10-20): blow count, C10.7.8
++        g.drive.blow && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.blow.pass, eq: `N_{blow}=${fmt(g.drive.blow.n, 1)}\\ ${g.drive.blow.pass ? "\\le" : ">"}\\ ${fmt(g.drive.blow.lim, 1)}\\ \\text{blows/in (wave equation at the driving criterion; C10.7.8: 10\\text{\\textendash}15)}${g.drive.blow.limOutside ? "\\ \\text{limit above the C10.7.8 range}" : ""}` })),
+```
