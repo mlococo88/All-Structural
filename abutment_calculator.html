@@ -1021,6 +1021,15 @@ function migrate(){
     S.meta.defRev=3;
     if(add.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add);
   }
+  // defRev 4 (2026-10-20): no input added or changed; one-time notice where a saved project's results change:
+  // pile toe d over the pile heads; single-span Extreme Event I without M–O / wall inertia [C3.10.9.1].
+  if(!(S.meta.defRev>=4)){
+    const add=[];
+    if(S.fnd.branch==="pile") add.push("Pile-supported footing: the toe flexure, one-way shear and crack control now use the depth to the bottom mat above the pile heads, d = t_f − embedment − clear cover − d_b (panel I-7; Tab 5 §5.3)");
+    if(S.seismic.on&&S.geom.HsupMode==="single") add.push("Single-span bridge: Extreme Event I no longer includes the M–O seismic earth pressure or the wall / soil-block inertia [C3.10.9.1] (Tab 3 §3.6a)");
+    S.meta.defRev=4;
+    if(add.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add);
+  }
 }
 function seedExampleReactions(){
   const ex={DC:{P:85},DW:{P:12},LL:{P:70},BR:{Vx:3.5},TU:{Vx:2.5},CRSH:{Vx:1.5},
@@ -1272,8 +1281,8 @@ function buildInputs(){
       <div class="subhead">Pile section (for punching-shear perimeter)</div>
       ${selRow("Pile shape","piles.pileShape",[["hp","H-pile (square envelope)"],["square","Square / precast"],["round","Round / pipe / drilled"]])}
       ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing. [AASHTO 5.12.8.6]"})}
-      ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face. The punching-shear depth is measured above the pile heads (Tab 4 §4.6)."})}
-      ${inpRow("Clear cover, pile top to bottom mat","piles.clrTop","in",{title:"Clear distance from the top of the piles to the bottom reinforcement mat. d_e = t_f − embedment − this cover − d_b (Tab 4 §4.6)."})}
+      ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face. The punching-shear depth and the toe flexure / shear / crack-control depth are measured above the pile heads (Tab 4 §4.6, Tab 5 §5.3)."})}
+      ${inpRow("Clear cover, pile top to bottom mat","piles.clrTop","in",{title:"Clear distance from the top of the piles to the bottom reinforcement mat. d_e = t_f − embedment − this cover − d_b (Tab 4 §4.6; toe d, Tab 5 §5.3)."})}
     `);
   }
 
@@ -1337,6 +1346,7 @@ function buildInputs(){
     <div class="chk-row"><input type="checkbox" id="chkSeis" data-path="seismic.on" ${sq.on?"checked":""}>
     <label for="chkSeis"><b>Enable Extreme Event I</b> (M–O seismic earth pressure + inertia)</label></div>
     ${sq.on?`
+      ${S.geom.HsupMode==="single"?`<div class="note-box small">Single-span bridge (panel I-1): Extreme Event I uses the static earth pressure + the superstructure connection force; no M–O increment, wall or soil-block inertia [C3.10.9.1, 4.7.4.2] — k<sub>h</sub> ratio, k<sub>v</sub> and the ΔP<sub>AE</sub> height are not used. Wingwalls: engineer's judgment.</div>`:""}
       ${inpRow("Site acceleration coefficient A<sub>s</sub> (S<sub>a</sub> at T = 0 s)","seismic.As","g",{title:"Risk-targeted design acceleration coefficient at T = 0 s for the site class, from the AASHTO-USGS Seismic Design Ground Motion Database or the geotech report [3.10.4.1]; k_h0 = A_s at the wall base [11.6.5.2.1]."})}
       ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × A<sub>s</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.2]"})}
       ${inpRow("Vertical coefficient k<sub>v</sub>","seismic.kv","–")}
@@ -1638,7 +1648,13 @@ function computeAll(){
 
   /* ===== C-3b Seismic earth pressure & inertia (Mononobe–Okabe) [11.6.5, A11] ===== */
   R.seis=null;
-  if(S.seismic.on){
+  // single-span bridge (panel I-1 "Single-span bridge: H = 0", the tool's span-count input, as C-9): C3.10.9.1 excludes
+  // single-span abutments from the seismic earth-pressure increase of 3.11.4 / 11.6.5, and 4.7.4.2 needs no seismic
+  // analysis for a single-span bridge. Extreme Event I then carries the static earth pressure and the superstructure connection force
+  // A_s·(DC + DW)·share [3.10.9.1] only: no ΔP_AE, and no wall / soil-block inertia (those are part of the 11.6.5.1 method).
+  if(S.seismic.on && g.HsupMode==="single"){
+    R.seis={single:true, kh:0, kv:0, thd:0, dMO:0, KAE:NaN, PAE:NaN, dPAE:0, dPAEh:0, dKh:0, zEQ:0, WiW:0, zWall:0, WiS:0, zSoil:0, EQsup:0};
+  }else if(S.seismic.on){
     const kh=(+S.seismic.khR)*(+S.seismic.As), kv=+S.seismic.kv;
     const th=Math.atan(kh/(1-kv)), thd=th*180/Math.PI;
     const dMO=S.soil.method==="coulomb"?deg2rad(S.soil.delta):0;
@@ -2026,10 +2042,13 @@ function computeAll(){
   const gLL_str=Math.max(+F.llS1,+F.llS5), gEH_max=GP.EH[1];
 
   function sectionCheck(o){
-    /* o = {name, h(in), cover(in), bar, sp(in), Mu(k-ft/ft), Vu(k/ft), Ms(k-ft/ft), face, lbl, ls} */
+    /* o = {name, h(in), cover(in), bar, sp(in), Mu(k-ft/ft), Vu(k/ft), Ms(k-ft/ft), face, lbl, ls}
+       optional hEff, coverEff (in): pile-supported toe, bottom mat above the pile heads: d, d_v, d_c and β_s use the footing
+       above the pile heads (h_p) and the clear cover over the pile tops; S_c (M_cr) stays on the gross h [5.6.3.3, 5.7.2.8, 5.6.7] */
     const bar=BARS[o.bar], b=12;
     const As=bar.Ab*12/o.sp;
-    const d=o.h-o.cover-bar.db/2;
+    const hE=o.hEff!=null?o.hEff:o.h, cvE=o.coverEff!=null?o.coverEff:o.cover;
+    const d=hE-cvE-bar.db/2;
     const a=As*m.fy/(0.85*m.fc*b);
     const beta1=Math.max(0.65,0.85-0.05*Math.max(0,m.fc-4));
     const c2=a/beta1;
@@ -2048,7 +2067,7 @@ function computeAll(){
     const MuMin=Math.min(Mcr,1.33*o.Mu);
     const minOK=phiMn>=MuMin;
     // shear [5.7.3.3]: β = 2.0 only where 5.7.3.4.1 permits it; otherwise the general procedure [5.7.3.4.2] (no transverse reinforcement)
-    const dv=Math.max(0.9*d,0.72*o.h);
+    const dv=Math.max(0.9*d,0.72*hE);
     let betaMode=o.betaMode||"simple";
     if(o.zeroShearDist!=null) betaMode = o.zeroShearDist<3*dv ? "simple" : "general";   // footings: zero-shear point within 3dv of the face
     let betaV=2.0, epsS=null, sxe=null;
@@ -2063,8 +2082,8 @@ function computeAll(){
     // crack control [5.6.7]
     const rho=As/(b*d), k=Math.sqrt(2*rho*nMod+Math.pow(rho*nMod,2))-rho*nMod, j=1-k/3;
     const fss=As>0? Math.min(o.Ms*12/(As*j*d), 0.6*m.fy):0;
-    const dc=o.cover+bar.db/2;
-    const betaS=1+dc/(0.7*(o.h-dc));
+    const dc=cvE+bar.db/2;
+    const betaS=1+dc/(0.7*(hE-dc));
     const gE=+S.reinf.gammaE;
     const sMax=fss>0? 700*gE/(betaS*fss)-2*dc : Infinity;
     // development [AASHTO LRFD 10th Ed. 5.10.8.2.1a]: l_db = 0.17·db·[(λer·fy - Fh/Ab)/(1.97·λ·f'c^0.25)]^2 (Eq. 5.10.8.2.1a-2)
@@ -2081,7 +2100,7 @@ function computeAll(){
     const skinNote = d>36;
     const skinAsk = skinNote ? Math.min(0.012*(d-30), (bar.Ab*12/o.sp)/4) : 0; // in²/ft per face (≤ As/4)
     if(!tensionCtrl) warn(`${o.name}: section is NOT tension-controlled (ε_t = ${fmt(epsT,4)} < 0.005) — φ reduced to ${fmt(phiF,3)} per the 5.5.4.2 transition; consider more depth or less steel.`);
-    return {...o, As, AsReq, d, a, c:c2, beta1, epsT, tensionCtrl, phiF, phiMn, Sc, Mcr, MuMin, minOK,
+    return {...o, hE, cvE, As, AsReq, d, a, c:c2, beta1, epsT, tensionCtrl, phiF, phiMn, Sc, Mcr, MuMin, minOK,
       dv, Vc, phiVn, dcFlex:o.Mu/phiMn, dcShear:o.Vu/phiVn, betaMode, betaV, epsS, sxe,
       rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
   }
@@ -2145,7 +2164,7 @@ function computeAll(){
       const dP=0.5*R.seis.dKh*gam*Hs*Hs;
       Meq+=dP*((+S.seismic.hEQr)*Hs); Veq+=dP;
       const wallApf=(g.tst*g.hstem)+(Math.max(0,g.tsb-g.tst)*g.hstem/2)+(g.tbw*g.hbw);
-      const Wi=R.seis.kh*wallApf*m.gc;                    // kip per ft of wall
+      const Wi=R.seis.kh*wallApf*m.gc;                    // kip per ft of wall (0 for a single-span bridge: k_h = 0, C3.10.9.1)
       Meq+=Wi*(g.hstem/2); Veq+=Wi;
       Meq+=ns*(R.seis.EQsup/Lab)*g.hstem; Veq+=ns*(R.seis.EQsup/Lab); // superstructure inertia at seat
     }
@@ -2280,9 +2299,16 @@ function computeAll(){
     if(hMs>footSvc.heel){ footSvc.heel=hMs; footSvc.heelLbl=c.lbl; }
   }
   R.footSvc=footSvc;
+  // pile-supported footing: the toe (bottom) mat sits above the pile heads, so the toe d is measured from the top of the
+  // footing to the centroid of the bottom mat over the pile heads, d = t_f − e_pile − c_top − d_b (as the punching depth, C-13);
+  // h_p = t_f − e_pile for d_v and β_s [5.6.3.2, 5.7.2.8, 5.6.7]. Spread footing: d = t_f − c_F − d_b/2 (unchanged).
+  const toePileD=fn.branch==="pile"? {embP:Math.max(0,+S.piles.embed||0), clrP:Math.max(0,+S.piles.clrTop||0)} : null;
+  if(toePileD){ toePileD.hP=g.tf*12-toePileD.embP; }
   R.checks.toeFlex=sectionCheck({name:"Toe", h:g.tf*12, cover:m.coverF, bar:S.reinf.toe.size,
     sp:+S.reinf.toe.sp, Mu:toeDem.Mu, Vu:toeDem.Vu, Ms:footSvc.toe, lbl:toeDem.lbl,
-    bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Ltoe*12});
+    bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Ltoe*12,
+    ...(toePileD? {hEff:toePileD.hP, coverEff:toePileD.clrP+BARS[S.reinf.toe.size].db/2, pileMat:toePileD} : {})});
+  if(toePileD && !(R.checks.toeFlex.d>0)) warn(`Toe: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(R.checks.toeFlex.d,1)} in) — check panel I-7.`,"err");
   R.checks.heelFlex=sectionCheck({name:"Heel", h:g.tf*12, cover:m.coverF, bar:S.reinf.heel.size,
     sp:+S.reinf.heel.sp, Mu:heelDem.Mu, Vu:heelDem.Vu, Ms:footSvc.heel, lbl:heelDem.lbl,
     bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Lheel*12});
@@ -2862,7 +2888,7 @@ function renderTabLoads(R){
     <b>8.</b> V&amp;M diagrams: limit states use the design bearing distribution; individual loads use elastic (tension-allowed) superposition — the two intentionally differ for the footing.<br>
     <b>9.</b> Structural: 1-ft strips; strain-based φ per 5.5.4.2; footing crack-control service moments from Service I directly (linear contact pressure / pile reactions).<br>
     <b>10.</b> Construction stage: "Constr — Str I" checks the backfilled wall with <b>no superstructure</b> (fill height ${(+S.constr.hFill>0)?fmt(Math.min(+S.constr.hFill,S.geom.soilH),1)+" ft":"= full"}, dry, γ<sub>LL</sub> = ${fmt(+S.constr.gLL||0)}). If it fails, restrict backfill until erection or revise the design.<br>
-    <b>11.</b> Seismic: ${S.seismic.on?`<b>Extreme Event I ON</b> — M–O with k<sub>h</sub> = ${fmt(+S.seismic.khR,2)}·A<sub>s</sub>, ΔP<sub>AE</sub> at ${fmt(+S.seismic.hEQr,2)}H, wall/soil/superstructure inertia included; EE resistance factors per panel I-11`:`OFF — minimum connection force [3.10.9] surfaced as a note only`}.<br>
+    <b>11.</b> Seismic: ${S.seismic.on&&S.geom.HsupMode==="single"?`<b>Extreme Event I ON — single-span bridge</b>: static earth pressure + superstructure connection force A<sub>s</sub>·(DC+DW)·s<sub>EQ</sub> [3.10.9.1]; no M–O increment and no wall / soil-block inertia [C3.10.9.1, 4.7.4.2] (<span class="xlink" data-jump="tab-stab|o-mo">Tab 3 §3.6a</span>); wingwalls left to the engineer's judgment; EE resistance factors per panel I-11`:S.seismic.on?`<b>Extreme Event I ON</b> — M–O with k<sub>h</sub> = ${fmt(+S.seismic.khR,2)}·A<sub>s</sub>, ΔP<sub>AE</sub> at ${fmt(+S.seismic.hEQr,2)}H, wall/soil/superstructure inertia included; EE resistance factors per panel I-11`:`OFF — minimum connection force [3.10.9] surfaced as a note only`}.<br>
     <b>12.</b> Scour: ${S.fnd.scour?"<b>ON</b> — passive resistance eliminated; q<sub>n</sub> at scoured overburden":"not active"}. Earth surcharge ES = ${fmt(+S.soil.esQ||0,2)} ksf; pile drag load DR = ${fmt(+S.piles.dd||0,0)} kip/pile (γ<sub>DR</sub> = 0 for the geotechnical pile check, ${fmt(+S.piles.gDD,2)} for the structural demand [T.3.4.1-1 note]).<br>
     <b>13.</b> Out of scope / user-side: wingwalls, pile structural (member) design, wind attack-angle sweep (enter the governing directional WS/WL combination), metric units, settlement and global stability (flagged to geotechnical), bearing pad design.<br>
     <b>Sign conventions:</b> X longitudinal (+ driving toward toe), Y transverse, P vertical +down; moments about the toe [design basis §0.3].
@@ -3212,7 +3238,16 @@ function renderTabStab(R){
       ["H",st.HsupMode==="single"?"Single-span bridge: H = 0 [4.7.4.4]":st.HsupMode==="user"?"Average pier height to the next expansion joint (entered) [4.7.4.4]":"Abutment height (stem + backwall) — conservative stand-in for H",st.Hsup,"ft"],["S","Skew",g.skew,"deg"]])}
     ${checkLine("Seat width",`\\dfrac{N_{req}}{N_{prov}} = \\dfrac{${fmtT(st.NreqP)}}{${fmtT(st.Nprov)}}`,st.dc)}
   `);
-  if(S.seismic.on && R.seis){
+  if(S.seismic.on && R.seis && R.seis.single){
+    const q=R.seis;
+    h+=panel("o-mo","3.6a","Extreme Event I — Single-Span Bridge (no seismic earth pressure) [C3.10.9.1, 3.10.9.1, 4.7.4.2]",`
+      <div class="note-box"><b>Single-span bridge</b> (panel I-1, "Pier height H in N" = "Single-span bridge: H = 0", the tool's span-count input): AASHTO LRFD 10th Ed. C3.10.9.1 excludes abutments of single-span bridges from the seismic (M–O) earth-pressure increase of Arts. 3.11.4 and 11.6.5, and Art. 4.7.4.2 needs no seismic analysis for a single-span bridge. Extreme Event I therefore uses the <b>static</b> earth pressure (EH, with the EE-I γ<sub>EH</sub>) plus the superstructure connection force below. Not included: the M–O increment ΔP<sub>AE</sub> (K<sub>AE</sub>), the wall inertia k<sub>h</sub>W<sub>wall</sub> and the soil-block inertia k<sub>h</sub>W<sub>soil</sub> — these belong to the 11.6.5.1 seismic wall analysis that C3.10.9.1 excludes for single-span abutments (the k<sub>h</sub> ratio, k<sub>v</sub> and ΔP<sub>AE</sub> height inputs of panel I-11 are not used). <b>Wingwalls:</b> for single-span bridges C3.10.9.1 leaves their seismic design to the engineer's judgment (not checked by this tool).</div>
+      ${eqB("Superstructure connection force at the seat","AASHTO 3.10.9.1, 4.7.4.2",[
+        "EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
+        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}`],
+        "A_s × tributary permanent load (3.10.9.1) with s_EQ = the seismic share at this abutment (panel I-11, default 100 %). The Zone 1 connection force of 3.10.9.2 (§3.6 below) is a connection (keeper / shear key) design force and is not applied to the abutment stability here.")}
+    `);
+  }else if(S.seismic.on && R.seis){
     const q=R.seis, sOK=isFinite(q.KAE);
     h+=panel("o-mo","3.6a","Seismic Earth Pressure — Mononobe–Okabe (Extreme Event I) [11.6.5, A11]",`
       ${eqB("Seismic coefficients","AASHTO 11.6.5.2",[
@@ -3365,7 +3400,11 @@ function sectionHTML(c, demHTML, secNo, title){
     <div class="subhead">Flexural resistance [5.6.3]</div>
     ${eqB("Provided reinforcement & effective depth","AASHTO 5.6.3.2",[
       `A_s = A_b\\,\\dfrac{12}{s} = (${fmtT(BARS[c.bar].Ab)})\\dfrac{12}{${fmtT(c.sp,1)}} = ${fmtT(c.As)}\\ \\text{in}^2/\\text{ft} \\qquad(\\#${c.bar}\\ @\\ ${fmt(c.sp,1)}\\ \\text{in})`,
-      `d = h - c_{cl} - d_b/2 = ${fmtT(c.h,1)} - ${fmtT(c.cover,2)} - ${fmtT(BARS[c.bar].db/2,3)} = ${fmtT(c.d)}\\ \\text{in}`])}
+      ...(c.pileMat?[
+      `h_p = t_f - e_{pile} = ${fmtT(c.h,1)} - ${fmtT(c.pileMat.embP,2)} = ${fmtT(c.hE,1)}\\ \\text{in} \\quad(\\text{footing above the pile heads})`,
+      `d = h_p - c_{top} - d_b = ${fmtT(c.hE,1)} - ${fmtT(c.pileMat.clrP,2)} - ${fmtT(BARS[c.bar].db,3)} = ${fmtT(c.d)}\\ \\text{in} \\quad(\\text{to the centroid of the bottom mat over the pile heads})`]:[
+      `d = h - c_{cl} - d_b/2 = ${fmtT(c.h,1)} - ${fmtT(c.cover,2)} - ${fmtT(BARS[c.bar].db/2,3)} = ${fmtT(c.d)}\\ \\text{in}`])],
+      c.pileMat?`Pile-supported footing: the bottom mat sits on the clear cover c<sub>top</sub> above the pile heads (pile embedment e<sub>pile</sub> and c<sub>top</sub> in panel I-7). d is measured from the top of the footing to the centroid of the two orthogonal bottom layers (d<sub>b</sub> above the bottom of the mat), as the pile punching depth (<span class="xlink" data-jump="tab-found|o-punch">Tab 4, §4.6</span>); h<sub>p</sub> replaces h in d<sub>v</sub>, d<sub>c</sub> and β<sub>s</sub> below. M<sub>cr</sub> uses the gross thickness t<sub>f</sub>.`:"")}
     ${eqB("Stress block & factored resistance","AASHTO 5.6.3.2.2, 5.5.4.2",[
       "a = \\dfrac{A_s f_y}{0.85 f'_c b}\\,, \\qquad \\varphi M_n = \\varphi\\,A_s f_y (d - a/2)",
       `a = \\dfrac{(${fmtT(c.As)})(${fmtT(m.fy,1)})}{0.85(${fmtT(m.fc,1)})(12)} = ${fmtT(c.a)}\\ \\text{in}`,
@@ -3387,7 +3426,7 @@ function sectionHTML(c, demHTML, secNo, title){
     <div class="subhead">One-way shear [5.7.3]</div>
     ${eqB(c.betaMode==="general"?"Concrete shear resistance — general procedure, no transverse reinforcement":"Concrete shear resistance (β = 2.0 simplified)",c.betaMode==="general"?"AASHTO 5.7.3.3 (Eq. 5.7.3.3-3), 5.7.3.4.2 (Eqs. 5.7.3.4.2-2, -4, -7)":"AASHTO 5.7.3.3 (Eq. 5.7.3.3-3), 5.7.3.4.1",[
       "d_v = \\max(0.9d,\\,0.72h)\\,, \\qquad V_c = 0.0316\\,\\beta\\sqrt{f'_c}\\,b_v d_v",
-      `d_v = \\max(0.9\\times${fmtT(c.d)},\\,0.72\\times${fmtT(c.h,1)}) = ${fmtT(c.dv)}\\ \\text{in}`].concat(c.betaMode==="general"?[
+      `d_v = \\max(0.9\\times${fmtT(c.d)},\\,0.72\\times${fmtT(c.hE,1)}) = ${fmtT(c.dv)}\\ \\text{in}${c.pileMat?"\\quad(h = h_p)":""}`].concat(c.betaMode==="general"?[
       `s_{xe} = d_v\\dfrac{1.38}{a_g+0.63} = ${fmtT(c.sxe)}\\ \\text{in}\\,(12 \\le s_{xe} \\le 80)\\,, \\qquad \\varepsilon_s = \\dfrac{|M_u|/d_v + |V_u|}{E_s A_s} = ${fmtT(c.epsS*1000,3)}\\times10^{-3}`,
       `\\beta = \\dfrac{4.8}{1+750\\varepsilon_s}\\cdot\\dfrac{51}{39+s_{xe}} = ${fmtT(c.betaV,3)}`]:[]).concat([
       `\\varphi V_n = 0.90\\times0.0316(${fmtT(c.betaV,3)})\\sqrt{${fmtT(m.fc,1)}}\\,(12)(${fmtT(c.dv)}) = ${fmtT(c.phiVn)}\\ \\text{kip/ft}`]),
@@ -3397,7 +3436,8 @@ function sectionHTML(c, demHTML, secNo, title){
     ${eqB("Service steel stress (cracked elastic section) & spacing limit","AASHTO 5.6.7, Eq. 5.6.7-1 / 5.6.7-2; 5.4.2.4",[
       `E_c = 120{,}000\\,K_1\\,w_c^2\\,f'_c{}^{0.33} = 120{,}000(1.0)(${fmtT(c.wcE,3)})^2(${fmtT(m.fc,1)})^{0.33} = ${fmtT(c.Ec,0)}\\ \\text{ksi}\\,, \\quad n = \\max\\!\\left(6,\\ \\dfrac{29{,}000}{E_c}\\right) = ${fmtT(c.nMod,3)}`,
       `\\rho = ${fmtT(c.rho,4)}\\,, \\; k = ${fmtT(c.k,3)}\\,, \\; j = ${fmtT(c.j,3)}\\,, \\quad f_{ss} = \\dfrac{M_s}{A_s j d} = \\dfrac{(${fmtT(c.Ms)})(12)}{(${fmtT(c.As)})(${fmtT(c.j,3)})(${fmtT(c.d)})} = ${fmtT(c.fss)}\\ \\text{ksi} \\le 0.6f_y`,
-      `\\beta_s = 1+\\dfrac{d_c}{0.7(h-d_c)} = 1+\\dfrac{${fmtT(c.dcBar)}}{0.7(${fmtT(c.h,1)}-${fmtT(c.dcBar)})} = ${fmtT(c.betaS,3)}`,
+      ...(c.pileMat?[`d_c = c_{top} + d_b = ${fmtT(c.pileMat.clrP,2)} + ${fmtT(BARS[c.bar].db,3)} = ${fmtT(c.dcBar)}\\ \\text{in} \\quad(h = h_p = ${fmtT(c.hE,1)}\\ \\text{in};\\ \\text{tension face at the pile heads})`]:[]),
+      `\\beta_s = 1+\\dfrac{d_c}{0.7(h-d_c)} = 1+\\dfrac{${fmtT(c.dcBar)}}{0.7(${fmtT(c.hE,1)}-${fmtT(c.dcBar)})} = ${fmtT(c.betaS,3)}`,
       `s_{max} = \\dfrac{700\\,\\gamma_e}{\\beta_s f_{ss}} - 2d_c = \\dfrac{700(${fmtT(c.gE)})}{(${fmtT(c.betaS,3)})(${fmtT(c.fss)})} - 2(${fmtT(c.dcBar)}) = ${fmtT(c.sMax)}\\ \\text{in}`])}
     <div class="checkline ${c.crackOK?"pass":"fail"}"><span class="flagchip ${c.crackOK?"pass":"fail"}">${c.crackOK?"PASS":"FAIL"}</span>
       Provided spacing s = ${fmt(c.sp,1)} in ${c.crackOK?"≤":">"} s<sub>max</sub> = ${fmt(c.sMax)} in &nbsp;(M<sub>s</sub> = ${fmt(c.Ms)} kip·ft/ft, γ<sub>e</sub> = ${fmt(c.gE)})</div>
@@ -4964,7 +5004,7 @@ function inputEchoHTML(){
     ["Earth surcharge ES",fmt(+s.esQ||0,2),"ksf"],
     ["Construction stage (fill / γLL)",((+S.constr.hFill>0)?fmt(+S.constr.hFill,1):"full")+" / "+fmt(+S.constr.gLL||0),"ft / –"]]);
   h+="<h3>Seismic / scour</h3>"+echoRows([
-    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
+    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
     ["Scour condition",f.scour?"ON — passive eliminated; qn at scoured grade":"off",""]]);
   h+="<h3>Foundation</h3>"+echoRows(f.branch==="spread"?[
     ["Branch","Spread footing on "+f.matl,""],
