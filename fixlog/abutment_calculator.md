@@ -4991,3 +4991,804 @@ index 250ef29..dd331d9 100644
 -      <table class="cr-refs">${ABUT_REFS.map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
 +      <table class="cr-refs">${abutRefsNow().map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
 ```
+
+## 2026-10-20 — PR: claude/abut-owner-b (stacked on claude/abut-owner-a) — owner defaults and owner load rules that change results (PR link added after merge)
+
+Results under the AASHTO owner are unchanged: identical to origin/main for every tested project (see "How verified"). Under MassDOT, RIDOT and CTDOT the items below change results. Page numbers are the owner manuals'; rules are paraphrased.
+
+### F50. Owner defaults (kind "default") and their application   [input defaults] [changes results only for an owner other than AASHTO]
+- **What:** `ABUT_OWN_DEF` lists, per owner, an owner value for an input. On an owner change (I-0) or a superstructure-material change, `ownReapply(pre)` sets each input that still holds its previous default (tool default or previous owner value) to the new one. A value the user entered is kept and flagged "Overrides <manual> <section>". Inputs holding an owner value are highlighted with an "Owner · <manual> <section>" line (the GirderDetail → ST-Girder style). The owner card (Tab 1 §1.0a) lists every default with the value in use and the last change. "Apply preset" in I-6b uses the owner temperature values when the owner sets them.
+- **Values (verified on the manual page):**
+  - **MassDOT Part I:**
+    - f′c 5.0 ksi (4.2.2.3, General Notes, p. 4-5);
+    - earth pressure state "MassDOT 3.1.6 rule" (3.1.6, p. 3-4);
+    - temperature rise/fall and α (3.1.8.2, p. 3-7): steel 70 / 100 °F with 6.5×10⁻⁶; concrete 30 / 70 °F with 5.5×10⁻⁶;
+    - G 0.184 ksi (3.5.7.4, p. 3-57). The manual specifies 0.160 ksi and requires the least favourable value of ±15 %; the upper bound gives the larger force on the abutment;
+    - backwall bars coated (3.3.1.6, p. 3-18);
+    - Extreme Event I off (3.4.4.3, p. 3-35, SDC A).
+  - **RIDOT BDM:**
+    - design load multiplier m 1.2 (3.4.1.2, p. 3-7);
+    - γEQ on live load 0.5 (3.2.1.3, p. 3-2);
+    - temperature rise and fall each 0.65 × the Procedure B range (3.7.1, p. 3-14): steel 0.65·115 = 74.75 °F, concrete 0.65·100 = 65 °F;
+    - γe Class 2 (5.4.1, p. 5-5);
+    - construction surcharge q_c 0.60 ksf (3.2.2, p. 3-3).
+  - **CTDOT BRSDM:**
+    - φ 35° (V2 3.11.1, p. 3-7);
+    - γ 0.125 kcf (V2 3.5.1, p. 3-3);
+    - γEQ on live load 0.5 (V2 3.4.1, p. 3-2);
+    - rise/fall 60 / 60 °F (V2 3.12.2.1, p. 3-8);
+    - α 6.4×10⁻⁶ (V2 3.12.2.3, p. 3-8);
+    - γe Class 2 (V2 5.6.7).
+- **Where:** after `abutOwnChecks()`: `ABUT_OWN_DEF`, `ownDefMap`, `ownReapply`, `ownTagHTML`, `ownTagRefresh`, `abutOwnLoad`. `inpRow` / `selRow` (anchor `// OWNB: owner default highlight`), the change handler (anchor `const ownPre=`), `recalcAll` (`ownTagRefresh()`), and the thermal preset (anchor `// OWNB: the owner's temperature values`).
+
+### F51. Earth pressure state: at-rest K0, 0.5(K0 + Ka), MassDOT 3.1.6 rule   [calc change] [MORE conservative where at-rest applies]
+- **Before:** k = Ka (Rankine or Coulomb) always.
+- **After:** new input `soil.Kmode`:
+  - "active" (default, unchanged);
+  - "atrest": K = K0 = 1 − sin φ, horizontal (ι = 0) [AASHTO LRFD 10th Ed. 3.11.5.2, Eq. 3.11.5.2-1];
+  - "blend": K_h = ½(K0 + Ka cos ι), K_v = ½ Ka sin ι;
+  - "massdot": at-rest on piles or rock, blend on soil with H ≤ 5 ft, active otherwise [MassDOT Part I 3.1.6].
+  K replaces ka for EH, LS, ES and the construction stage. At-rest uses γEH max = `factors.gpEHmaxR` (new, 1.35) [T.3.4.1-2]; the blend keeps the active 1.50. Under Extreme Event I the M–O increment is taken over the active resultant and added to the K static pressure. A warning is shown for at-rest with β > 0.
+- **Where:** `computeAll`, anchor `// OWNB: earth pressure state`; `PaSumA` / `kahLoc` in the M–O block; `GP.EH`. Display: Tab 1 §1.3 "Earth pressure state" block (K0 worked), symbol K in §1.3 / §1.4, basis item 1.
+- **Check (pile footing, MassDOT rule → K0, H = 22 ft, γ = 0.120 kcf, φ = 32°, L_ab = 44 ft):**
+  - K0 = 1 − sin 32° = 0.4701 (Ka = 0.3073);
+  - EH_h = ½·0.4701·0.120·22²·44 = **600.65 kip** (before 392.60), with γEH max 1.35;
+  - stem M_u 112.06 → **148.85** kip-ft/ft;
+  - maximum pile reaction 212.71 → **247.36** kip (D/C 0.921 → **1.071**).
+  - Tool: same values.
+
+### F52. Load modifier η (RIDOT 1.3.1–1.3.3)   [calc change] [MORE conservative for ADT ≥ 5000]
+- **Before:** η = 1 (none).
+- **After:** RIDOT owner with ADT ≥ 5000 (new input `own.ADT`, panel I-0): η = 1.05. Every Strength I, III, V and construction-stage factor at its maximum is multiplied by η, and γp minimum is multiplied by 1/η [AASHTO LRFD 10th Ed. 1.3.2.1, Eqs. 1.3.2.1-2, -3]. Service I and Extreme Event I are unchanged. ADT blank: η = 1.00 and an owner "check" row.
+- **Where:** `abutOwnLoad`; `LIMITS` (anchor `// OWNB: owner load rules`); `GP`; toe self-weight `0.9*etaMin`; backwall γLL `LIMITS["Strength I"].LL`; bearing seat (`L1`, `L5`). Worked: Tab 2 §2.0a.
+- **Check (default project, RIDOT, ADT 6000):**
+  - ηγDC = 1.05·1.25 = 1.3125; γDC,min/η = 0.90/1.05 = 0.8571;
+  - seat P_u = 1.05(1.25·85 + 1.50·12) + 1.05·1.75·1.2·70 = 130.46 + 154.35 = **284.81 kip** (m included). Tool 284.81.
+
+### F53. Design load multiplier m on the LL+IM reaction and BR (RIDOT 3.4.1.2)   [calc change] [MORE conservative]
+- **Before:** LL and BR at γLL.
+- **After:** γLL·m on the girder LL+IM reaction and on BR at Strength I, III, V and Service I (input `own.mLL`, RIDOT default 1.2). Not applied to LS, Extreme Event I or the construction stage. Where the reaction relieves a check, the existing "LL reaction off" permutations govern, so m drops out there, as the BDM says.
+- **Where:** `comboEffects` (anchor `OWNB: m on the LL reaction and BR`), `stemEcc`, stem `HgirdPerFt`, `HgirdSvc`, bearing seat, `buildVM` `fLL` / `fBR`, `vmGamma`, `perBearingLoads`.
+- **Check (default project, RIDOT, ADT blank):** seat P_u = 1.25·85 + 1.50·12 + 1.75·1.2·70 = **271.25 kip** (before 246.75); q_b 0.571 → 0.628 ksi. Tool: same.
+
+### F54. Construction surcharge q_c in the construction stage (RIDOT 3.2.2; AASHTO 3.4.2.1)   [calc change] [MORE conservative]
+- **Before:** none (only γLL on h_eq).
+- **After:** new inputs `constr.qC` (ksf, RIDOT default 0.60) and `constr.gC` (1.50, the AASHTO 3.4.2.1 minimum). Construction stage only, as a live load (on/off):
+  - horizontal K·q_c·h_c·cos ι·L_ab at h_c/2;
+  - vertical q_c·L_heel·L_ab over the heel, left out for sliding and eccentricity;
+  - included in the stem and heel demands of that stage.
+- **Where:** groups `CShC` / `CSvC`; `LIMITS["Constr — Str I"].CL`; `comboEffects` class "CL"; stem loop `MCS_ls`; `heelLoads` `gCS`; `buildVM` `fCS`; `constrMaxFill`. Worked: Tab 2 §2.0a and the §5.2 stem line.
+- **Check (default project, RIDOT):**
+  - P_CS,h = 0.3073·0.600·22.0·1.000·44 = 178.46 kip; × 1.50 = 267.69 kip;
+  - construction-stage sliding D = 588.90 + 267.69 = **856.59 kip**, R_R = 510.86 kip;
+  - sliding D/C 1.153 → **1.677**. Tool: same.
+
+### F55. Passive resistance at Extreme Event only (RIDOT 10.4.3 / 10.4.4)   [calc change] [MORE conservative when passive is on]
+- **Before:** with passive on, φep·Pp entered every limit state.
+- **After:** with RIDOT, passive enters sliding only in Extreme Event I.
+- **Where:** sliding loop, anchor `// OWNB: RIDOT 10.4.3/10.4.4`; §3.1 display uses `sl.pUsed`.
+- **Check:** with passive off (the default) there is no change. With passive on, a strength-governed sliding R_R loses φep·Pp.
+
+### F56. Live-load surcharge h_eq ≥ 2 ft (CTDOT V2 3.11.6.4)   [calc change] [MORE conservative where the table gives < 2 ft]
+- **After:** `interpHeq(H) = max(table, 2.0)` for CTDOT.
+- **Check:** with the default table (4 / 3 / 2 ft) h_eq is never below 2 ft, so the default project does not change.
+
+### F57. MassDOT heel dead-load case (3.3.2.2)   [new check] [MORE conservative]
+- **After:** spread footing, MassDOT. M_DL = (w_soil + γc·t_f + q_ES)·L_heel²/2 (+ slope wedge) ≤ 1.0·M_n, with M_n = A_s·f_y·(d − a/2). This is an additional dashboard row; the AASHTO heel check stays.
+- **Check (default project, f′c 5 ksi):**
+  - w = 2.28 + 0.45 + 0 = 2.73 ksf;
+  - M_DL = 2.73·5²/2 = **34.13 kip-ft/ft**;
+  - #8 @ 9: A_s = 1.053 in²/ft; d = 36 − 3 − 0.5 = 32.5 in; a = 1.053·60/(0.85·5·12) = 1.239 in;
+  - M_n = 1.053·60·(32.5 − 0.619)/12 = **167.9 kip-ft/ft**;
+  - D/C = **0.203** (tool 0.2032, from the unrounded A_s = 0.79·12/9 = 1.0533).
+
+### F58. Coated backwall bars: λcf on ℓd (MassDOT 3.3.1.6; AASHTO 5.10.8.2.1b)   [calc change, bar length only]
+- **After:** new input `reinf.coatBW` (MassDOT default on). λcf = 1.5 when the cover is < 3d_b or the clear spacing is < 6d_b, otherwise 1.2; λrl = 1.0 here, so λrl·λcf ≤ 1.7.
+- **Check (#6 @ 12 in, cover 2 in < 3·0.75 = 2.25 in → 1.5; f′c 5 ksi):** ℓ_db = 0.17·0.75·(60/(1.97·5^0.25))² = 52.86 in; ℓ_d = 1.5·52.86 = **79.3 in** (before, uncoated and f′c 4: 59.1 in). Tool: 79.3.
+
+### Other results (default project, origin/main → branch, owner applied through I-0)
+- **MassDOT, spread:**
+  - seat q_R 4.76 → 5.95 ksi (f′c 5; D/C 0.120 → 0.096);
+  - heel MassDOT D/C 0.203;
+  - K = Ka (H = 22 ft > 5 ft): EH unchanged.
+- **MassDOT, TU calculated:** H_TU = 0.184·432·(6.5×10⁻⁶·100·480)/2.0·6 = **74.40 kip** (before 35.74 kip with G 0.130 and 68 °F); eccentricity D/C 0.774 → 0.866.
+- **RIDOT, ADT blank:**
+  - sliding 1.153 → 1.677 (construction surcharge);
+  - eccentricity 0.707 → 1.103 (construction stage);
+  - bearing 0.933 → 0.976;
+  - stem M_u 112.06 → 114.90;
+  - heel M_u 28.46 → 50.74.
+- **RIDOT, ADT 6000:** sliding 1.849, bearing 1.030, stem M_u 120.65.
+- **CTDOT:**
+  - Ka 0.3073 → 0.2710 (φ 35°);
+  - EH_h 392.60 → 360.69 kip;
+  - sliding 1.153 → 1.040;
+  - stem M_u 112.06 → 104.93.
+
+### Saved data (CLAUDE.md §5)
+- New optional fields, migrated to the values that reproduce earlier results: `soil.Kmode` "active", `factors.gpEHmaxR` 1.35, `constr.qC` 0, `constr.gC` 1.50, `reinf.coatBW` false, `own.ADT` "", `own.mLL` 1.0, `own.dv` 2. No key or existing format changed.
+- A project saved with a non-AASHTO owner before the defaults existed (PR A) gets the owner defaults on the inputs still at the tool default, once (`own.dv`), with a one-time notice.
+- The Input ID leaves these new fields out while they hold their defaults.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: pass.
+- Headless Chromium, origin/main `e774618` vs branch, `computeAll()`. Under AASHTO every check, demand, pile reaction, permutation table, warning, self-test and Input ID is identical for:
+  - default project; old save; pile; EE I γEQ 0.5; rock; TU + BR + ES + construction fill;
+  - passive + EE I; Coulomb + slope + water + ES; pile + EE I + TU + γLL construction; single span on rock.
+- Owner cases (default and pile) were checked against the hand checks above.
+- UI screenshots: I-0, I-3 highlights, Tab 2 §2.0a, Tab 1 §1.3 and §1.0a. The report builds with no console error.
+
+### Open items
+- MassDOT 3.1.6 asks for Coulomb Ka. Coulomb is not made a MassDOT default because this tool's Coulomb option applies wall friction δ on the virtual soil plane through the heel (earlier review item N11). The MassDOT row flags Rankine.
+- RIDOT "at-rest where restrained" is an advisory with the at-rest option available; it is not automatic.
+- CTDOT Extreme Event III is a note only: there are no scour-check-flood inputs.
+- CTDOT η_I 1.05 for scour design (V2 2.6.4.4.4CT) is not applied.
+- MassDOT 3.3.1.2 toe soil in the bearing pressure is not modelled.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against claude/abut-owner-a `88983f5`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index dd331d9..96eded2 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -131,0 +132,3 @@ header.app-head{
++.in-row .own-src,.chk-own .own-src{grid-column:1/-1;margin:-3px 0 2px 0;font:600 10px/1.35 ui-sans-serif,system-ui,sans-serif;color:#1C4FC4;letter-spacing:.01em}
++.own-src.ovr{color:#9a3412}
++.in-row input.ownv,.in-row select.ownv{border-color:#1C4FC4;background:#eef3ff}
+@@ -592 +595,2 @@ function defaultState(){
+-      esQ:0.0                            // permanent earth surcharge ES behind wall (ksf); 0 = none
++      esQ:0.0,                           // permanent earth surcharge ES behind wall (ksf); 0 = none
++      Kmode:"active"                     // OWNB: earth pressure state 'active' | 'atrest' (K0) | 'blend' (0.5(K0+Ka)) | 'massdot' (MassDOT 3.1.6 rule) [3.11.5.2]
+@@ -594 +598 @@ function defaultState(){
+-    constr:{ hFill:0.0, gLL:0.0 },       // construction stage: backfill height above footing top (0 = full = soilH); γ on LS during construction
++    constr:{ hFill:0.0, gLL:0.0, qC:0.0, gC:1.50 },   // construction stage: backfill height above footing top (0 = full = soilH); γ on LS during construction; OWNB: construction surcharge q_c (ksf) and its factor [3.4.2.1]
+@@ -639 +643 @@ function defaultState(){
+-    own:{ owner:"AASHTO", Ltot:0 },                               // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
++    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:2 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
+@@ -647,0 +652 @@ function defaultState(){
++      gpEHmaxR:1.35,              // OWNB: γEH max for at-rest earth pressure [T.3.4.1-2]
+@@ -651,0 +657 @@ function defaultState(){
++      coatBW:false, // OWNB: backwall bars epoxy coated → λcf on the development length [5.10.8.2.1b]
+@@ -774,4 +780,5 @@ ABUT_OWN.rules=[
+-  {owner:"MassDOT", id:"K", kind:"advisory", sec:"3.1.6 (p. 3-4)", text:"Earth pressure, unless the geotechnical report says otherwise: K0 for cantilever walls on rock or piles; 0.5(K0 + Ka) for cantilever walls on soil 5 ft high or less; Ka by Coulomb theory otherwise",
+-    ev:C=>{ const onRP=C.pile||C.rock, H=C.R.geo.H, K0=1-Math.sin(deg2rad(+S.soil.phi)), req=onRP?"K0":(H<=5+1e-9?"0.5(K0 + Ka)":"Ka (Coulomb)");
+-      return {st:req.startsWith("Ka")&&S.soil.method==="coulomb"?"pass":"warn", val:`${S.soil.method==="coulomb"?"Coulomb":"Rankine"} K<sub>a</sub> = ${fmt(C.R.ka,4)} used (active, panel I-3)`,
+-        lim:`${req} (${onRP?(C.pile?"pile-supported":"on rock"):"on soil, H = "+fmt(H,2)+" ft"})`, tex:`K_0 = 1-\\sin\\varphi_f = 1-\\sin${ownF(+S.soil.phi,1)}° = ${ownF(K0,4)}`, link:OWN_LK.eh}; }},
++  {owner:"MassDOT", id:"K", kind:"shall-check", sec:"3.1.6 (p. 3-4)", text:"Earth pressure, unless the geotechnical report says otherwise: K0 for cantilever walls on rock or piles; 0.5(K0 + Ka) for cantilever walls on soil 5 ft high or less; Ka by Coulomb theory otherwise",
++    ev:C=>{ const ks=C.R.Ksel, onRP=C.pile||C.rock, H=C.R.geo.H, req=onRP?"atrest":(H<=5+1e-9?"blend":"active"), nm={active:"K<sub>a</sub>",atrest:"K<sub>0</sub>",blend:"0.5(K<sub>0</sub> + K<sub>a</sub>)"};
++      const ruleOK=ks.eff===req, coulOK=req==="atrest"||S.soil.method==="coulomb";
++      return {st:!ruleOK?"fail":(coulOK?"pass":"warn"), val:`${nm[ks.eff]} = ${fmt(ks.K,4)} used (panel I-3${ks.mode==="massdot"?", MassDOT rule":""})${req!=="atrest"?"; K<sub>a</sub> by "+(S.soil.method==="coulomb"?"Coulomb":"Rankine (Coulomb required)"):""}`,
++        lim:`${nm[req]} (${onRP?(C.pile?"pile-supported":"on rock"):"on soil, H = "+fmt(H,2)+" ft"})${req!=="atrest"?", K<sub>a</sub> by Coulomb":""}`, tex:`K_0 = 1-\\sin\\varphi_f = 1-\\sin${ownF(+S.soil.phi,1)}° = ${ownF(ks.K0,4)}`, link:OWN_LK.eh}; }},
+@@ -780,6 +787,3 @@ ABUT_OWN.rules=[
+-  {owner:"MassDOT", id:"heel", kind:"advisory", sec:"3.3.2.2 (p. 3-21)", text:"Spread footings: toe steel without the soil above the toe offsetting the upward pressure; heel top steel for all dead load above the heel (incl. the heel), no live load, load and resistance factors 1.0, no upward pressure relief",
+-    ev:C=>({st:S.fnd.branch==="spread"?"warn":"na", val:S.fnd.branch==="spread"?"toe: soil above the toe not used (as required); heel: the dead-load-only case is not checked in this version":"pile-supported footing", lim:"heel: M<sub>DL</sub> ≤ 1.0·M<sub>n</sub>", link:OWN_LK.heel})},
+-  {owner:"MassDOT", id:"coat", kind:"advisory", sec:"3.3.1.6 (p. 3-18)", text:"Epoxy-coated reinforcement (or galvanized COATED BARS) at least in backwalls and beam seats, and next to faces within 30 ft of a traveled way",
+-    ev:C=>({st:"warn", val:"development length uses uncoated bars (λ<sub>cf</sub> = 1.0)", lim:"coated backwall and seat bars", link:OWN_LK.bw})},
+-  {owner:"MassDOT", id:"fc", kind:"advisory", sec:"4.2.2.3, General Notes (p. 4-5)", text:"Concrete 5000 HP (f′c = 5.0 ksi) unless otherwise specified",
+-    ev:C=>({st:Math.abs(C.fc-5)<1e-9?"pass":"adv", val:`f′c = ${fmt(C.fc,2)} ksi (panel I-2)`, lim:"5.0 ksi", link:OWN_LK.stem})},
++  {owner:"MassDOT", id:"heel", kind:"shall-check", sec:"3.3.2.2 (p. 3-21)", text:"Spread footings: toe steel without the soil above the toe offsetting the upward pressure; heel top steel for all dead load above the heel (incl. the heel), no live load, load and resistance factors 1.0, no upward pressure relief",
++    ev:C=>{ const h=C.R.checks.heelMass; if(S.fnd.branch!=="spread"||!h) return {st:"na", val:"pile-supported footing", lim:"—"};
++      return {st:h.dc<=1+1e-9?"pass":"fail", val:`toe: soil above the toe not used; heel: M<sub>DL</sub> = ${fmt(h.MDL)} vs M<sub>n</sub> = ${fmt(h.Mn)} kip-ft/ft`, lim:"M<sub>DL</sub> ≤ 1.0·M<sub>n</sub>", tex:`D/C = M_{DL}/(1.0\\,M_n) = ${ownF(h.MDL)}/${ownF(h.Mn)} = ${ownF(h.dc,3)}`, link:OWN_LK.heel}; }},
+@@ -789,7 +792,0 @@ ABUT_OWN.rules=[
+-  {owner:"MassDOT", id:"temp", kind:"advisory", sec:"3.1.8.2 (p. 3-7)", text:"Uniform temperature (Cold Climate, Procedure A basis, the 65 % factor already included): steel +70 / −100 °F with α = 6.5×10⁻⁶; concrete +30 / −70 °F with α = 5.5×10⁻⁶",
+-    ev:C=>{ const Lg=S.longit, st=C.mat==="concrete"?[30,70,5.5e-6]:[70,100,6.5e-6], ok=Math.abs(+Lg.dTrise-st[0])<1e-9&&Math.abs(+Lg.dTfall-st[1])<1e-9&&Math.abs(+Lg.cte-st[2])<1e-12;
+-      return {st:ok?"pass":"adv", val:`+${fmt(+Lg.dTrise,0)} / −${fmt(+Lg.dTfall,0)} °F, α = ${(+Lg.cte*1e6).toFixed(1)}×10⁻⁶ (panel I-6b${Lg.computeTU?"":"; TU calculation off"})`, lim:`+${st[0]} / −${st[1]} °F, α = ${(st[2]*1e6).toFixed(1)}×10⁻⁶ (${C.mat})`, link:OWN_LK.tu}; }},
+-  {owner:"MassDOT", id:"G", kind:"advisory", sec:"3.5.7.4 (p. 3-57)", text:"Elastomer specified G = 0.160 ksi; design with the least favorable value of 0.136–0.184 ksi (the larger value for the force on the abutment)",
+-    ev:C=>({st:Math.abs(+S.bearing.G-0.184)<1e-9?"pass":"adv", val:`G = ${fmt(+S.bearing.G,3)} ksi (panel I-6b)`, lim:"0.184 ksi for the pad shear force", link:OWN_LK.tu})},
+-  {owner:"MassDOT", id:"seis", kind:"note", sec:"3.4.4.3 (p. 3-35)", text:"SDC A conventional bridges: abutments need no seismic design (no abutment inertia or seismic soil force); connections per Guide Spec 4.6 on the permanent load only; support length per Guide Spec 4.12",
+-    ev:C=>({st:(S.seismic.on&&+S.seismic.zone===1)?"warn":"note", val:S.seismic.on?"Extreme Event I is ON (panel I-11)":"Extreme Event I off", lim:"not required in SDC A (S<sub>D1</sub> &lt; 0.15)", link:OWN_LK.seis})},
+@@ -824,2 +820,0 @@ ABUT_OWN.rules=[
+-  {owner:"RIDOT", id:"crack", kind:"advisory", sec:"5.4.1 (p. 5-5)", text:"Crack control: Class 2 exposure for all reinforced concrete members",
+-    ev:C=>ownCrack(C,true)},
+@@ -830,3 +825,5 @@ ABUT_OWN.rules=[
+-    ev:C=>({st:"note", val:"λ<sub>cf</sub> = 1.0 in use", lim:"galvanized bars", link:OWN_LK.bw})},
+-  {owner:"RIDOT", id:"passive", kind:"shall-check", sec:"10.4.3, 10.4.4 (p. 10-5)", text:"Passive resistance in front of the footing excluded for every strength failure mode; it may be included at the extreme event limit states",
+-    ev:C=>({st:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"fail":"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive included in every limit state (panel I-4)":"passive not used", lim:"strength: none; extreme event: allowed", link:OWN_LK.slide})},
++    ev:C=>({st:S.reinf.coatBW?"warn":"note", val:S.reinf.coatBW?"backwall bars set as epoxy coated (panel I-9)":"λ<sub>cf</sub> = 1.0 in use", lim:"galvanized bars (λ<sub>cf</sub> = 1.0)", link:OWN_LK.bw})},
++  {owner:"RIDOT", id:"passive", kind:"load", sec:"10.4.3, 10.4.4 (p. 10-5)", text:"Passive resistance in front of the footing excluded for every strength failure mode; it may be included at the extreme event limit states (applied: passive enters sliding at Extreme Event I only)",
++    ev:C=>({st:"pass", val:(S.fnd.branch==="spread"&&S.fnd.usePassive)?"passive on (panel I-4): used at Extreme Event I only":"passive not used", lim:"strength: none; extreme event: allowed", link:OWN_LK.slide})},
++  {owner:"RIDOT", id:"eta", kind:"load", sec:"1.3.1–1.3.3 (p. 1-8)", text:"Load modifier at the strength limit states: ηD = 1.00, ηR = 1.00 (redundant), ηI = 1.05 for ADT ≥ 5000, otherwise 1.00",
++    ev:C=>{ const L=C.R.ownLoad; return {st:L.hasADT?"pass":"warn", val:L.hasADT?`ADT = ${fmt(L.adt,0)} → η = ${fmt(L.eta,2)}`:"ADT not entered (panel I-0): η = 1.00 used", lim:"η = 1.05 if ADT ≥ 5000", tex:`\\eta = \\eta_D\\eta_R\\eta_I = (1.00)(1.00)(${ownF(L.eta)}) = ${ownF(L.eta)}`, link:["tab-comb","o-ownload","§2.0a owner load rules"]}; }},
+@@ -834 +831 @@ ABUT_OWN.rules=[
+-    ev:C=>({st:"adv", val:`active K<sub>a</sub> = ${fmt(C.R.ka,4)} used (panel I-3)`, lim:"at-rest where the wall cannot tilt", link:OWN_LK.eh})},
++    ev:C=>({st:"adv", val:`${{active:"active K<sub>a</sub>",atrest:"at-rest K<sub>0</sub>",blend:"0.5(K<sub>0</sub> + K<sub>a</sub>)"}[C.R.Ksel.eff]} = ${fmt(C.R.Ksel.K,4)} used (panel I-3)`, lim:"at-rest where the wall cannot tilt (choose it in panel I-3)", link:OWN_LK.eh})},
+@@ -859 +856 @@ ABUT_OWN.rules=[
+-  {owner:"CTDOT", id:"ls2", kind:"shall-check", sec:"V2 3.11.6.4 (p. 3-7)", text:"Permanent earth-retaining structures designed for a live-load surcharge of at least 2 ft of soil",
++  {owner:"CTDOT", id:"ls2", kind:"load", sec:"V2 3.11.6.4 (p. 3-7)", text:"Permanent earth-retaining structures designed for a live-load surcharge of at least 2 ft of soil (applied: h_eq = max(table value, 2 ft))",
+@@ -870,2 +866,0 @@ ABUT_OWN.rules=[
+-  {owner:"CTDOT", id:"crack", kind:"advisory", sec:"V2 5.6.7", text:"Crack control based on Class 2 exposure",
+-    ev:C=>ownCrack(C,true)},
+@@ -892,0 +888,4 @@ function abutOwnChecks(R){
++  // OWNB: owner defaults — the value in use beside the owner value; a different value is the user's (kept, flagged)
++  ABUT_OWN_DEF.filter(d=>d.owner===o).forEach(d=>{ const v=getPath(S,d.key), dv=ownDefVal(d), same=ownEq(v,dv);
++    rows.push({r:{owner:o,id:"def."+d.key,kind:"default",sec:d.sec,text:d.text}, st:same?"pass":"warn",
++      val:`${ownShow(d,v)} (panel ${OWN_DEF_PANEL[d.key]||"—"})`, lim:ownShow(d,dv)+(same?" (owner default in use)":" — your value is kept: it overrides the owner default"), link:OWN_DEF_LK[d.key]||null}); });
+@@ -894,0 +894,65 @@ function abutOwnChecks(R){
++/* ---------- OWNB (2026-10-20): owner defaults (kind 'default'). An owner value is applied to an input when the owner is chosen
++   (or the superstructure material changes) while the input still holds the previous default (tool default or the previous
++   owner's value); a value the user entered is kept and flagged "Overrides". Inputs holding an owner value are highlighted
++   (as GirderDetail values in ST-Girder) with the owner section. ---------- */
++const ABUT_OWN_DEF=[
++  {owner:"MassDOT", key:"mat.fc", sec:"4.2.2.3, General Notes (p. 4-5)", text:"Concrete 5000 HP: f′c = 5.0 ksi", val:()=>5.0, unit:"ksi"},
++  {owner:"MassDOT", key:"soil.Kmode", sec:"3.1.6 (p. 3-4)", text:"Earth pressure coefficient by the 3.1.6 rule: K0 for walls on rock or piles, 0.5(K0 + Ka) on soil 5 ft high or less, Ka otherwise", val:()=>"massdot"},
++  {owner:"MassDOT", key:"longit.dTrise", sec:"3.1.8.2 (p. 3-7)", text:"Temperature rise: steel 70 °F, concrete 30 °F (the 65 % factor is included)", val:Q=>Q.longit.material==="concrete"?30:70, unit:"°F"},
++  {owner:"MassDOT", key:"longit.dTfall", sec:"3.1.8.2 (p. 3-7)", text:"Temperature fall: steel 100 °F, concrete 70 °F", val:Q=>Q.longit.material==="concrete"?70:100, unit:"°F"},
++  {owner:"MassDOT", key:"longit.cte", sec:"3.1.8.2 (p. 3-7)", text:"Coefficient of thermal expansion: steel 6.5×10⁻⁶, concrete 5.5×10⁻⁶ /°F", val:Q=>Q.longit.material==="concrete"?5.5e-6:6.5e-6, unit:"/°F"},
++  {owner:"MassDOT", key:"bearing.G", sec:"3.5.7.4 (p. 3-57)", text:"Elastomer G: least favorable value of 0.160 ksi ± 15 %; 0.184 ksi for the pad shear force on the abutment", val:()=>0.184, unit:"ksi"},
++  {owner:"MassDOT", key:"reinf.coatBW", sec:"3.3.1.6 (p. 3-18)", text:"Backwall and beam seat bars epoxy coated (λcf on the backwall development length)", val:()=>true},
++  {owner:"MassDOT", key:"seismic.on", sec:"3.4.4.3 (p. 3-35)", text:"SDC A conventional bridges: no seismic design of the abutment (Extreme Event I off); connection force and support length still checked", val:()=>false},
++  {owner:"RIDOT", key:"own.mLL", sec:"3.4.1.2 (p. 3-7)", text:"Design load multiplier 1.2 on HL-93 at the Strength and Service limit states (applied here to the girder LL+IM reaction and to BR)", val:()=>1.2},
++  {owner:"RIDOT", key:"seismic.gEQll", sec:"3.2.1.3 (p. 3-2)", text:"γEQ on live load at Extreme Event I: 0.50 maximum, 0.0 minimum (both run)", val:()=>0.5},
++  {owner:"RIDOT", key:"longit.dTrise", sec:"3.7.1 (p. 3-14)", text:"Procedure B, steel −10 to 105 °F, concrete 0 to 100 °F; force to the substructure from 65 % of the full range, one way each direction", val:Q=>0.65*(Q.longit.material==="concrete"?100:115), unit:"°F"},
++  {owner:"RIDOT", key:"longit.dTfall", sec:"3.7.1 (p. 3-14)", text:"As the rise: 65 % of the full Procedure B range", val:Q=>0.65*(Q.longit.material==="concrete"?100:115), unit:"°F"},
++  {owner:"RIDOT", key:"reinf.gammaE", sec:"5.4.1 (p. 5-5)", text:"Crack control: Class 2 exposure for all reinforced concrete members", val:()=>0.75},
++  {owner:"RIDOT", key:"constr.qC", sec:"3.2.2 (p. 3-3)", text:"Construction load combination for abutments and walls: surcharge of the larger of the construction equipment and 600 psf", val:()=>0.60, unit:"ksf"},
++  {owner:"CTDOT", key:"soil.phi", sec:"V2 3.11.1 (p. 3-7)", text:"Pervious Structure Backfill: φ = 35°", val:()=>35, unit:"°"},
++  {owner:"CTDOT", key:"soil.gamma", sec:"V2 3.5.1 (p. 3-3)", text:"Compacted sand, gravel, silt and clay (incl. Pervious Structure Backfill): 0.125 kcf", val:()=>0.125, unit:"kcf"},
++  {owner:"CTDOT", key:"seismic.gEQll", sec:"V2 3.4.1 (p. 3-2)", text:"γEQ on live load at Extreme Event I: 0.50 for permanent bridges", val:()=>0.5},
++  {owner:"CTDOT", key:"longit.dTrise", sec:"V2 3.12.2.1 (p. 3-8)", text:"Range −10 to +110 °F with a 50 °F median: rise 60 °F", val:()=>60, unit:"°F"},
++  {owner:"CTDOT", key:"longit.dTfall", sec:"V2 3.12.2.1 (p. 3-8)", text:"Fall 60 °F (50 °F median to −10 °F)", val:()=>60, unit:"°F"},
++  {owner:"CTDOT", key:"longit.cte", sec:"V2 3.12.2.3 (p. 3-8)", text:"Coefficient of thermal expansion 6.4×10⁻⁶ /°F", val:()=>6.4e-6, unit:"/°F"},
++  {owner:"CTDOT", key:"reinf.gammaE", sec:"V2 5.6.7", text:"Crack control based on Class 2 exposure", val:()=>0.75}
++];
++const OWN_DEF_KEYS=[...new Set(ABUT_OWN_DEF.map(d=>d.key))];
++const OWN_DEF_PANEL={"mat.fc":"I-2","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
++  "reinf.coatBW":"I-9","reinf.gammaE":"I-9","seismic.on":"I-11","seismic.gEQll":"I-11","own.mLL":"I-0"};
++const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
++  "constr.qC":["tab-comb","o-ownload","§2.0a owner load rules"],"longit.dTrise":["tab-loads","o-longit-tu","§1.7 temperature"],"longit.dTfall":["tab-loads","o-longit-tu","§1.7 temperature"],"longit.cte":["tab-loads","o-longit-tu","§1.7 temperature"],
++  "bearing.G":["tab-loads","o-longit-tu","§1.7 temperature"],"reinf.coatBW":["tab-struct","o-str-Backwall","§5.1 backwall"],"reinf.gammaE":["tab-struct","o-str-Stem","§5.2 stem"],
++  "seismic.on":["tab-stab","o-seis","§3.6 connection force"],"seismic.gEQll":["tab-comb","o-facttbl","§2.1 load factors"],"own.mLL":["tab-comb","o-ownload","§2.0a owner load rules"]};
++const OWN_DEF_LBL={"mat.fc":"f′c","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
++  "longit.cte":"α","bearing.G":"elastomer G","reinf.coatBW":"coated backwall bars","reinf.gammaE":"crack-control γe","seismic.on":"Extreme Event I","seismic.gEQll":"γEQ on live load","own.mLL":"design load multiplier m"};
++const ownDefLabel=k=>OWN_DEF_LBL[k]||k;
++const ownEq=(a,b)=>(typeof a==="boolean"||typeof b==="boolean"||typeof a==="string"&&isNaN(+a)||typeof b==="string"&&isNaN(+b)||a===""||b==="")? a===b : Math.abs(+a-+b)<=1e-9*Math.max(Math.abs(+a),Math.abs(+b))+1e-15;
++function ownDefVal(d){ return d.val(S); }
++function ownShow(d,v){ if(typeof v==="boolean") return d.key==="seismic.on"?(v?"on":"off"):(v?"yes":"no");
++  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule"}[v]||String(v);
++  if(d.key==="reinf.gammaE") return Math.abs(+v-0.75)<1e-9?"Class 2 (γe = 0.75)":Math.abs(+v-1)<1e-9?"Class 1 (γe = 1.00)":"γe = "+fmt(+v,2);
++  if(d.key==="longit.cte") return (+v*1e6).toFixed(2)+"×10⁻⁶ /°F";
++  return fmt(+v,d.key==="bearing.G"||d.key==="soil.gamma"?3:2)+(d.unit?" "+d.unit:""); }
++/* map of every owner-default input → its default for owner o (or the tool default) for the current state */
++function ownDefMap(o){ o=o||abutOwner(); const T=defaultState(), m={};
++  OWN_DEF_KEYS.forEach(k=>{ const d=ABUT_OWN_DEF.find(x=>x.owner===o&&x.key===k); m[k]=d?ownDefVal(d):getPath(T,k); }); return m; }
++/* after the owner (or the material) changed: an input that still holds its previous default takes the new one */
++function ownReapply(pre){ const post=ownDefMap(), set=[], kept=[];
++  OWN_DEF_KEYS.forEach(k=>{ if(ownEq(pre[k],post[k])) return; const v=getPath(S,k);
++    if(ownEq(v,pre[k])){ setPath(S,k,post[k]); set.push(k); } else kept.push(k); });
++  return {set,kept}; }
++let OWN_LAST=null;   // the last owner / material change: inputs set and kept (shown in the owner card until the next change)
++function ownRuleFor(path){ const o=abutOwner(); return o==="AASHTO"? null : (ABUT_OWN_DEF.find(d=>d.owner===o&&d.key===path)||null); }
++function ownTagHTML(path){ const d=ownRuleFor(path); if(!d) return ""; const v=getPath(S,path), dv=ownDefVal(d), same=ownEq(v,dv);
++  return `<div class="own-src${same?"":" ovr"}" data-ownpath="${path}">${same?"Owner · "+esc(abutOwnCite(d)):"Overrides "+esc(abutOwnCite(d))+": "+esc(ownShow(d,dv))}</div>`; }
++function ownTagRefresh(){ document.querySelectorAll("#inputCol [data-ownpath]").forEach(el=>{ const p=el.dataset.ownpath, d=ownRuleFor(p); if(!d) return;
++  const dv=ownDefVal(d), same=ownEq(getPath(S,p),dv); el.classList.toggle("ovr",!same); el.textContent=same?"Owner · "+abutOwnCite(d):"Overrides "+abutOwnCite(d)+": "+ownShow(d,dv);
++  const inp=document.querySelector(`#inputCol [data-path="${p}"]`); if(inp) inp.classList.toggle("ownv",same); }); }
++/* OWNB load rules for this calculation: η (RIDOT 1.3.3 with the ADT), the design load multiplier m on the LL reaction and BR,
++   passive at Extreme Event only (RIDOT 10.4.3/10.4.4), h_eq ≥ 2 ft (CTDOT V2 3.11.6.4). AASHTO: η = 1, m = 1, no rule. */
++function abutOwnLoad(){ const o=abutOwner(), adt=S.own.ADT, hasADT=adt!==""&&adt!==null&&isFinite(+adt)&&+adt>0;
++  const eta=(o==="RIDOT"&&hasADT&&+adt>=5000)?1.05:1.0;
++  const m=o==="AASHTO"?1:((+S.own.mLL>0)?+S.own.mLL:1);
++  return {owner:o, eta, etaMin:1/eta, m, hasADT, adt:+adt, passEE:o==="RIDOT", lsMin:o==="CTDOT"?2.0:0}; }
+@@ -980,0 +1045 @@ function inpRow(label, path, unit, o={}){
++  const ot=ownTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight
+@@ -982,2 +1047,2 @@ function inpRow(label, path, unit, o={}){
+-    <input type="number" step="${step}" data-path="${path}" value="${v}">
+-    <span class="unit">${unit||"&nbsp;"}</span></div>`;
++    <input type="number" step="${step}" data-path="${path}" value="${v}"${oc}>
++    <span class="unit">${unit||"&nbsp;"}</span>${ot}</div>`;
+@@ -988,0 +1054 @@ function selRow(label, path, options, o={}){
++  const ot=ownTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight
+@@ -990 +1056 @@ function selRow(label, path, options, o={}){
+-    <select data-path="${path}"${rebuild} style="grid-column:span 2;">${opts}</select></div>`;
++    <select data-path="${path}"${rebuild}${oc} style="grid-column:span 2;">${opts}</select>${ot}</div>`;
+@@ -1186,0 +1253,13 @@ function migrate(){
++  // OWNB (2026-10-20): new inputs, each defaulting to the value that reproduces the earlier results (AASHTO owner)
++  if(S.soil.Kmode===undefined) S.soil.Kmode="active";
++  if(S.factors.gpEHmaxR===undefined) S.factors.gpEHmaxR=1.35;
++  if(S.constr.qC===undefined) S.constr.qC=0;
++  if(S.constr.gC===undefined) S.constr.gC=1.50;
++  if(S.reinf.coatBW===undefined) S.reinf.coatBW=false;
++  if(S.own.ADT===undefined) S.own.ADT="";
++  if(S.own.mLL===undefined) S.own.mLL=1.0;
++  if(!(S.own.dv>=2)){   // a project saved with an owner before the owner defaults existed: apply them to the inputs still at the tool default
++    S.own.dv=2;
++    if(abutOwner()!=="AASHTO"){ const r=ownReapply(ownDefMap("AASHTO"));
++      if(r.set.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Owner "+abutOwner()+": owner defaults applied to inputs that still held the tool default — "+r.set.map(k=>ownDefLabel(k)).join("; ")+" (Tab 1 §1.0a)"]); }
++  }
+@@ -1283 +1362 @@ function buildInputs(){
+-    <div class="in-note">${oo==="AASHTO"?"Calculation and checks per AASHTO LRFD 10th Ed. (2024). Choose an owner to check its requirements (listed in Tab 1 §1.0a); no computed result changes.":esc(om.manual)+", written to AASHTO LRFD "+esc(om.aashto)+"; the calculation follows AASHTO LRFD 10th Ed. (2024). The owner's requirements are checked in Tab 1 §1.0a (pass / fail / advisory); no computed result changes."}</div>
++    <div class="in-note">${oo==="AASHTO"?"Calculation and checks per AASHTO LRFD 10th Ed. (2024). Choosing an owner applies its defaults and load rules and checks its requirements (Tab 1 §1.0a).":esc(om.manual)+", written to AASHTO LRFD "+esc(om.aashto)+"; the calculation follows AASHTO LRFD 10th Ed. (2024). The owner's requirements are checked in Tab 1 §1.0a; the owner defaults are applied to inputs still at their previous default (highlighted, editable) and the owner load rules are worked in Tab 2 §2.0a."}</div>
+@@ -1284,0 +1364,2 @@ function buildInputs(){
++    ${oo==="RIDOT"?inpRow("Average daily traffic ADT (η<sub>I</sub>)","own.ADT","veh/day",{title:"RIDOT BDM 1.3.3: η_I = 1.05 for ADT ≥ 5000, else 1.00, at the strength limit states (Tab 2 §2.0a). Blank = not entered: η = 1.00 is used and flagged."}):""}
++    ${oo!=="AASHTO"?inpRow("Design load multiplier m (LL reaction, BR)","own.mLL","–",{title:"Multiplies the girder LL+IM reaction and braking BR at Strength I, III, V and Service I (not LS, not Extreme Event, not the construction stage). RIDOT BDM 3.4.1.2: 1.2. Worked in Tab 2 §2.0a."}):""}
+@@ -1335,0 +1417,2 @@ function buildInputs(){
++    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"]],{rebuild:true})}
++    ${S.soil.Kmode&&S.soil.Kmode!=="active"?`<div class="in-note">K used for EH, LS, ES and the construction stage; worked in Tab 1 §1.3. At-rest takes γ<sub>EH</sub> max from panel I-8 (1.35 [T.3.4.1-2]).</div>`:""}
+@@ -1345,0 +1429,2 @@ function buildInputs(){
++    ${inpRow("Construction surcharge q<sub>c</sub> (equipment)","constr.qC","ksf",{title:"Uniform construction surcharge behind the wall in the construction stage (no superstructure): horizontal K·q_c·h_c at h_c/2 and q_c over the heel, factored by γ_c (on or off, as live load). 0 = none. RIDOT BDM 3.2.2: the larger of the equipment load and 600 psf. Worked in Tab 2 §2.0a."})}
++    ${(+S.constr.qC>0)?inpRow("&nbsp;&nbsp;γ<sub>c</sub> on the construction surcharge","constr.gC","–",{title:"Construction loads in Strength I: load factor not less than 1.5 [AASHTO 3.4.2.1]."}):""}
+@@ -1460 +1545 @@ function buildInputs(){
+-      <div class="in-row"><label>AASHTO Procedure A range</label><button class="mini-btn" id="btnThermPreset" title="Fill α, ΔT rise/fall from Table 3.12.2.1-1 for the selected material & climate (editable after)">Apply preset</button></div>
++      <div class="in-row"><label>AASHTO Procedure A range</label><button class="mini-btn" id="btnThermPreset" title="Fill α, ΔT rise/fall from Table 3.12.2.1-1 for the selected material & climate (editable after); with an owner that sets them (MassDOT 3.1.8.2, RIDOT 3.7.1, CTDOT V2 3.12.2), the owner values">Apply preset</button></div>
+@@ -1534,0 +1620 @@ function buildInputs(){
++    ${S.soil.Kmode&&S.soil.Kmode!=="active"?inpRow("γ EH max (at-rest)","factors.gpEHmaxR","–",{title:"Used when the earth pressure state is at-rest K0 [T.3.4.1-2: 1.35]; 0.5(K0 + Ka) uses the active value."}):""}
+@@ -1561,0 +1648,2 @@ function buildInputs(){
++    <div class="chk-row chk-own" style="flex-wrap:wrap"><input type="checkbox" id="chkCoatBW" data-path="reinf.coatBW" ${S.reinf.coatBW?"checked":""}>
++    <label for="chkCoatBW">Backwall bars epoxy coated (λ<sub>cf</sub> on ℓ<sub>d</sub>) [5.10.8.2.1b]</label>${ownTagHTML("reinf.coatBW")}</div>
+@@ -1651 +1739,2 @@ function collectInputWarnings(){
+-function interpHeq(H){
++function interpHeq(H){ const v=interpHeq0(H), mn=abutOwnLoad().lsMin; return mn>0? Math.max(mn,v) : v; }   // OWNB: CTDOT V2 3.11.6.4, h_eq ≥ 2 ft
++function interpHeq0(H){
+@@ -1856 +1945,10 @@ function computeAll(){
+-  const {ka,iota}=computeKa();
++  // OWNB: earth pressure state [3.11.5.2; MassDOT 3.1.6; RIDOT 11.3.4]: active (as before) / at-rest K0 = 1 − sin φ (horizontal) /
++  // 0.5(K0 + Ka) / the MassDOT rule (K0 on piles or rock, the blend on soil with H ≤ 5 ft, Ka otherwise). K replaces k_a for EH, LS, ES.
++  const KA=computeKa(), K0=1-Math.sin(deg2rad(+S.soil.phi));
++  const kMode=["atrest","blend","massdot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
++  const kEff=kMode!=="massdot"?kMode:((S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"))?"atrest":(H<=5+1e-9?"blend":"active"));
++  let ka=KA.ka, iota=KA.iota;
++  if(kEff==="atrest"){ ka=K0; iota=0; }
++  else if(kEff==="blend"){ const Kh=0.5*(K0+KA.ka*Math.cos(deg2rad(KA.iota))), Kv=0.5*KA.ka*Math.sin(deg2rad(KA.iota)); ka=Math.hypot(Kh,Kv); iota=Math.atan2(Kv,Kh)*180/Math.PI; }
++  R.Ksel={mode:kMode, eff:kEff, K0, Ka:KA.ka, iotaA:KA.iota, K:ka, iota};
++  if(kEff!=="active"&&(+g.beta||0)>0) warn("At-rest K0 = 1 − sin φ is for level backfill [3.11.5.2]; the backfill slopes (β > 0) — confirm K0 with the geotechnical engineer.");
+@@ -1907 +2005,2 @@ function computeAll(){
+-    const dPAE=isFinite(PAE)? Math.max(0,PAE-PaSum) : NaN;    // dynamic increment over the static resultant
++    const PaSumA=kEff==="active"? PaSum : PaSum*KA.ka/ka;       // OWNB: the M–O increment is taken over the ACTIVE static resultant, added to the K static pressure
++    const dPAE=isFinite(PAE)? Math.max(0,PAE-PaSumA) : NaN;    // dynamic increment over the static resultant
+@@ -1909 +2008 @@ function computeAll(){
+-    const kahLoc=ka*Math.cos(deg2rad(iota));
++    const kahLoc=KA.ka*Math.cos(deg2rad(KA.iota));   // OWNB: active k_ah (= ka·cos ι when the state is active)
+@@ -1984,0 +2084,5 @@ function computeAll(){
++    // OWNB: construction surcharge q_c (equipment; RIDOT BDM 3.2.2), construction stage only, factor γ_c as a live load (on/off) [3.4.2.1]
++    const qCs=Math.max(0,+S.constr.qC||0);
++    if(qCs>0){ const CSh=ka*qCs*hcC*ci2*Lab, CSv=qCs*g.Lheel*Lab;
++      groups.CShC={cls:"CL", stage:"constr", V:0,Mv:0, Hx:CSh, Mh:CSh*(hcC/2), Hy:0,Mt:0, desc:"Construction surcharge q_c — horizontal"};
++      groups.CSvC={cls:"CL", stage:"constr", V:CSv, Mv:CSv*xHeel, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Construction surcharge q_c — vertical over heel"}; }
+@@ -1988 +2092 @@ function computeAll(){
+-  R.constrC={hfC,hcC,heqC};
++  R.constrC={hfC,hcC,heqC,qC:Math.max(0,+S.constr.qC||0)};
+@@ -2004,0 +2109,4 @@ function computeAll(){
++  // OWNB: owner load rules — η (strength: γ max ×η, γ min ×1/η [1.3.2.1]; RIDOT 1.3.3), design load multiplier m on the LL reaction and BR
++  // (Strength and Service; RIDOT 3.4.1.2), construction surcharge factor γ_c. AASHTO owner: η = 1, m = 1 (every factor unchanged).
++  const OL=abutOwnLoad(), eta=OL.eta, etaMin=OL.etaMin, mLL=OL.m, qCf=Math.max(0,+S.constr.qC||0);
++  R.ownLoad=OL;
+@@ -2006,2 +2114,2 @@ function computeAll(){
+-    "Strength I":  {LL:+F.llS1, WS:0,        WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
+-    "Strength III":{LL:0,       WS:+F.wsS3,  WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:false},
++    "Strength I":  {LL:+F.llS1*eta, WS:0,        WL:0,       TU:+F.gTU*eta, CR:+F.gCR*eta, perm:true , liveOpt:true , mLL },
++    "Strength III":{LL:0,       WS:+F.wsS3*eta,  WL:0,       TU:+F.gTU*eta, CR:+F.gCR*eta, perm:true , liveOpt:false, mLL },
+@@ -2010,3 +2118,3 @@ function computeAll(){
+-    "Strength V":  {LL:+F.llS5, WS:+F.wsS5*wsF5,  WL:+F.wlS5, TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
+-    "Constr — Str I":{LL:+S.constr.gLL||0, WS:0, WL:0, TU:0, CR:0, perm:true , liveOpt:(+S.constr.gLL||0)>0 , noSuper:true },
+-    "Service I":   {LL:1.0,     WS:1.0*wsFsv,      WL:1.0,     TU:1.0,    CR:1.0,    perm:false, liveOpt:true }
++    "Strength V":  {LL:+F.llS5*eta, WS:(+F.wsS5*wsF5)*eta,  WL:+F.wlS5*eta, TU:+F.gTU*eta, CR:+F.gCR*eta, perm:true , liveOpt:true , mLL },
++    "Constr — Str I":{LL:(+S.constr.gLL||0)*eta, WS:0, WL:0, TU:0, CR:0, perm:true , liveOpt:(+S.constr.gLL||0)>0||qCf>0 , noSuper:true, CL:qCf>0?(+S.constr.gC||0)*eta:0 },
++    "Service I":   {LL:1.0,     WS:1.0*wsFsv,      WL:1.0,     TU:1.0,    CR:1.0,    perm:false, liveOpt:true , mLL }
+@@ -2018,2 +2126,3 @@ function computeAll(){
+-  const GP={DC:[+F.gpDCmin,+F.gpDCmax], DW:[+F.gpDWmin,+F.gpDWmax],
+-            EV:[+F.gpEVmin,+F.gpEVmax], EH:[+F.gpEHmin,+F.gpEHmax], ES:[0.75,1.50]};
++  // γp max/min of the strength limit states (×η / ×1/η, OWNB); at-rest earth pressure takes γEH max 1.35 [T.3.4.1-2]
++  const GP={DC:[+F.gpDCmin*etaMin,+F.gpDCmax*eta], DW:[+F.gpDWmin*etaMin,+F.gpDWmax*eta],
++            EV:[+F.gpEVmin*etaMin,+F.gpEVmax*eta], EH:[+F.gpEHmin*etaMin,(kEff==="atrest"?+F.gpEHmaxR:+F.gpEHmax)*eta], ES:[0.75*etaMin,1.50*eta]};
+@@ -2032 +2141,2 @@ function computeAll(){
+-      else if(gr.cls==="LL") gamma = liveOn ? ((liveOn===2&&k==="LL")? 0 : L.LL) : 0;   // liveOn 2: LS and BR on, girder LL reaction off [C11.5.6]
++      else if(gr.cls==="LL") gamma = liveOn ? ((liveOn===2&&k==="LL")? 0 : L.LL*((k==="LL"||k==="BR")&&L.mLL?L.mLL:1)) : 0;   // liveOn 2: LS and BR on, girder LL reaction off [C11.5.6]; OWNB: m on the LL reaction and BR
++      else if(gr.cls==="CL") gamma = liveOn ? (L.CL||0) : 0;   // OWNB: construction surcharge (construction stage)
+@@ -2037 +2147 @@ function computeAll(){
+-      if((k==="LSvC") && exclLSv) gamma=0;
++      if((k==="LSvC"||k==="CSvC") && exclLSv) gamma=0;
+@@ -2050 +2160 @@ function computeAll(){
+-        +(liveOn&&L.LL?(liveOn===2?` + ${L.LL.toFixed(2)}·(BR,LS), LL reaction off`:` + ${L.LL.toFixed(2)}·(LL,BR,LS)`):"")
++        +(liveOn&&L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?(liveOn===2?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR, LL reaction off`:` + ${(L.LL*L.mLL).toFixed(2)}·(LL,BR) + ${L.LL.toFixed(2)}·LS`):(liveOn===2?` + ${L.LL.toFixed(2)}·(BR,LS), LL reaction off`:` + ${L.LL.toFixed(2)}·(LL,BR,LS)`)):"")
+@@ -2053,0 +2164 @@ function computeAll(){
++        +(L.CL&&liveOn&&groups.CShC?` + ${L.CL.toFixed(2)}·CS`:"")
+@@ -2055 +2166 @@ function computeAll(){
+-      : `1.00·(all)`+(liveOn?" incl. LL":" excl. LL");
++      : `1.00·(all)`+(liveOn?" incl. LL":" excl. LL")+(liveOn&&L.mLL&&L.mLL!==1?`, ${L.mLL.toFixed(2)}·(LL,BR)`:"");
+@@ -2106 +2217,2 @@ function computeAll(){
+-        const RR = rf.phiTau*Rn + (R.passive.on? fn.phiEP*Pp : 0);
++        const pUsed = R.passive.on && (!OL.passEE || !!LIMITS[lsName].eq);   // OWNB: RIDOT 10.4.3/10.4.4 — passive at Extreme Event only
++        const RR = rf.phiTau*Rn + (pUsed? fn.phiEP*Pp : 0);
+@@ -2108 +2220 @@ function computeAll(){
+-        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c};
++        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed};
+@@ -2335 +2447,3 @@ function computeAll(){
+-    const ld=Math.max(12, ldb);
++    // OWNB: epoxy-coated bars [5.10.8.2.1b]: λcf = 1.5 with cover < 3d_b or clear spacing < 6d_b, else 1.2 (λrl = 1.0, so λrl·λcf ≤ 1.7); uncoated 1.0
++    const lamCf=o.coated? ((cvE<3*bar.db||(o.sp-bar.db)<6*bar.db)?1.5:1.2) : 1.0;
++    const ld=Math.max(12, ldb*lamCf);
+@@ -2346 +2460 @@ function computeAll(){
+-      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
++      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, lamCf, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
+@@ -2356 +2470,2 @@ function computeAll(){
+-  const MuBW=gEH_max*Mbw_EH+(+F.llS1)*Mbw_LS+GP.ES[1]*Mbw_ES, VuBW=gEH_max*Vbw_EH+(+F.llS1)*Vbw_LS+GP.ES[1]*Vbw_ES;
++  const gLSbw=LIMITS["Strength I"].LL;   // γLL Strength I (×η, OWNB; = factors.llS1 for the AASHTO owner)
++  const MuBW=gEH_max*Mbw_EH+gLSbw*Mbw_LS+GP.ES[1]*Mbw_ES, VuBW=gEH_max*Vbw_EH+gLSbw*Vbw_LS+GP.ES[1]*Vbw_ES;
+@@ -2359 +2474 @@ function computeAll(){
+-    lbl:`${gEH_max.toFixed(2)}·EH + ${(+F.llS1).toFixed(2)}·LS (Strength I)`};
++    lbl:`${gEH_max.toFixed(2)}·EH + ${gLSbw.toFixed(2)}·LS (Strength I)`, gLS:gLSbw};
+@@ -2361 +2476 @@ function computeAll(){
+-    sp:+S.reinf.bw.sp, Mu:MuBW, Vu:VuBW, Ms:MsBW, lbl:R.bwDem.lbl,
++    sp:+S.reinf.bw.sp, Mu:MuBW, Vu:VuBW, Ms:MsBW, lbl:R.bwDem.lbl, coated:!!S.reinf.coatBW,
+@@ -2381 +2496 @@ function computeAll(){
+-      const Pv = ns*( gDC*groups.DCsup.V + gDW*groups.DW.V + (llOn?L.LL*groups.LL.V:0)
++      const Pv = ns*( gDC*groups.DCsup.V + gDW*groups.DW.V + (llOn?L.LL*(L.mLL||1)*groups.LL.V:0)
+@@ -2398 +2513,2 @@ function computeAll(){
+-    const HgirdPerFt=ns*( (L.LL? L.LL*groups.BR.Hx:0) + L.TU*groups.TU.Hx + L.CR*groups.CRSH.Hx
++    const qCl=(L.noSuper&&L.CL)? R.constrC.qC : 0, MCS_ls=qCl>0? L.CL*kah*qCl*Hs_ls*Hs_ls/2 : 0, VCS_ls=qCl>0? L.CL*kah*qCl*Hs_ls : 0;   // OWNB: construction surcharge
++    const HgirdPerFt=ns*( (L.LL? L.LL*(L.mLL||1)*groups.BR.Hx:0) + L.TU*groups.TU.Hx + L.CR*groups.CRSH.Hx
+@@ -2413,2 +2529,3 @@ function computeAll(){
+-    const Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
+-    const Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+gES_ls*VES_ls+HgirdPerFt + Veq;
++    let Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
++    let Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+gES_ls*VES_ls+HgirdPerFt + Veq;
++    if(qCl>0){ Mu+=MCS_ls; Vu+=VCS_ls; }
+@@ -2416,2 +2533,2 @@ function computeAll(){
+-    if(!stemGov||Mu>stemGov.Mu) stemGov={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,
+-      lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?` + ${L.LL.toFixed(2)}·(LS,BR)`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ":""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+` (${lsName})`};
++    if(!stemGov||Mu>stemGov.Mu) stemGov={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,
++      lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR`:` + ${L.LL.toFixed(2)}·(LS,BR)`):""}${qCl>0?` + ${L.CL.toFixed(2)}·CS`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ":""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+` (${lsName})`};
+@@ -2419 +2536 @@ function computeAll(){
+-  const HgirdSvc=(groups.BR.Hx+groups.TU.Hx+groups.CRSH.Hx+wsFsv*groups.WS.Hx+groups.WL.Hx)/Lab;
++  const HgirdSvc=(groups.BR.Hx*(LIMITS["Service I"].mLL||1)+groups.TU.Hx+groups.CRSH.Hx+wsFsv*groups.WS.Hx+groups.WL.Hx)/Lab;   // OWNB: m on BR (Service I)
+@@ -2440,2 +2557,3 @@ function computeAll(){
+-    const wDn=gEV*wS+gDC*wFoot+gLS*wL+gES*esQ;
+-    return {gEV,gDC,gLS,gES,wDn, MheelDn:wDn*g.Lheel*g.Lheel/2+(cc?0:gEV*wedgeM), VheelDn:wDn*g.Lheel+(cc?0:gEV*wedgeV)}; }
++    const gCS=cc? (gs.CSvC||0) : 0;   // OWNB: construction surcharge over the heel
++    const wDn=gEV*wS+gDC*wFoot+gLS*wL+gES*esQ+(gCS>0?gCS*R.constrC.qC:0);
++    return {gEV,gDC,gLS,gES,gCS,wDn, MheelDn:wDn*g.Lheel*g.Lheel/2+(cc?0:gEV*wedgeM), VheelDn:wDn*g.Lheel+(cc?0:gEV*wedgeV)}; }
+@@ -2449 +2567 @@ function computeAll(){
+-    const gTd=ls=>(LIMITS[ls]&&!LIMITS[ls].perm)? 1.0 : 0.9;   // toe self-weight (DC, relieving): γp min 0.90; EEP: Extreme Event I 1.00 [T.3.4.1-1]
++    const gTd=ls=>(LIMITS[ls]&&!LIMITS[ls].perm)? 1.0 : 0.9*etaMin;   // toe self-weight (DC, relieving): γp min 0.90 (×1/η, OWNB); EEP: Extreme Event I 1.00 [T.3.4.1-1]
+@@ -2480 +2598 @@ function computeAll(){
+-    const gTd=ls=>(LIMITS[ls]&&!LIMITS[ls].perm)? 1.0 : 0.9;   // toe self-weight (DC, relieving): γp min 0.90; EEP: Extreme Event I 1.00 [T.3.4.1-1]
++    const gTd=ls=>(LIMITS[ls]&&!LIMITS[ls].perm)? 1.0 : 0.9*etaMin;   // toe self-weight (DC, relieving): γp min 0.90 (×1/η, OWNB); EEP: Extreme Event I 1.00 [T.3.4.1-1]
+@@ -2572,0 +2691,4 @@ function computeAll(){
++  // OWNB: MassDOT 3.3.2.2 (spread footings): heel top steel for the dead load of everything above the heel incl. the heel, no live load,
++  // load and resistance factors 1.0, no upward pressure relief: M_DL ≤ 1.0·M_n (an additional check; the AASHTO heel check above stays)
++  if(abutOwner()==="MassDOT" && fn.branch==="spread"){ const c=R.checks.heelFlex, wDL=wSoilHeel+wFoot+esQ, MDL=wDL*g.Lheel*g.Lheel/2+wedgeM, Mn=c.As*m.fy*(c.d-c.a/2)/12;
++    R.checks.heelMass={MDL, Mn, dc:MDL/Mn, wDL, wSoil:wSoilHeel, wFoot, esQ, wedgeM}; }
+@@ -2673,3 +2795,4 @@ function computeAll(){
+-      const SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS1)*S.rx.LL[i].P;
+-      const SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS5)*S.rx.LL[i].P
+-               +(+F.wsS5)*wsF5*S.rx.WS[i].P+(+F.wlS5)*S.rx.WL[i].P;
++      const L1=LIMITS["Strength I"], L5=LIMITS["Strength V"];   // γ×η and m (OWNB); = the factors of panel I-8 for the AASHTO owner
++      const SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+L1.LL*L1.mLL*S.rx.LL[i].P;
++      const SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+L5.LL*L5.mLL*S.rx.LL[i].P
++               +L5.WS*S.rx.WS[i].P+L5.WL*S.rx.WL[i].P;
+@@ -2802,2 +2925,3 @@ function computeAll(){
+-    const fLL = isLS?Lst.LL:one("LL");
+-    const fBR = isLS?Lst.LL:one("BR");
++    const fLL = isLS?Lst.LL*(Lst.mLL||1):one("LL");   // OWNB: m on the LL reaction and BR
++    const fBR = isLS?Lst.LL*(Lst.mLL||1):one("BR");
++    const fCS = (isLS&&Lst.noSuper)?(Lst.CL||0):0, qCv=R.constrC.qC;   // OWNB: construction surcharge
+@@ -2819,3 +2943,3 @@ function computeAll(){
+-        w.push(fEH*kah*gam*Math.max(0,Hs-e) + (e<=Hs? fLS*kah*gam*heqL + fES*kah*esQv : 0)); }
+-      const Vtop=fEH*kah*gam*hAbove*hAbove/2 + (fLS*kah*gam*heqL+fES*kah*esQv)*hAbove;
+-      const Mtop=fEH*kah*gam*Math.pow(hAbove,3)/6 + (fLS*kah*gam*heqL+fES*kah*esQv)*hAbove*hAbove/2;
++        w.push(fEH*kah*gam*Math.max(0,Hs-e) + (e<=Hs? fLS*kah*gam*heqL + fES*kah*esQv + (fCS>0?fCS*kah*qCv:0) : 0)); }
++      const Vtop=fEH*kah*gam*hAbove*hAbove/2 + (fLS*kah*gam*heqL+fES*kah*esQv+(fCS>0?fCS*kah*qCv:0))*hAbove;
++      const Mtop=fEH*kah*gam*Math.pow(hAbove,3)/6 + (fLS*kah*gam*heqL+fES*kah*esQv+(fCS>0?fCS*kah*qCv:0))*hAbove*hAbove/2;
+@@ -2877 +3001 @@ function computeAll(){
+-    return { DC:L.perm?(L.dcMax||GP.DC[1]):1, DW:ns*(L.perm?GP.DW[1]:1), LL:ns*L.LL, EV:L.perm?GP.EV[1]:1,
++    return { DC:L.perm?(L.dcMax||GP.DC[1]):1, DW:ns*(L.perm?GP.DW[1]:1), LL:ns*L.LL*(L.mLL||1), EV:L.perm?GP.EV[1]:1,
+@@ -2879 +3003 @@ function computeAll(){
+-      BR:ns*L.LL, TU:ns*L.TU, CRSH:ns*L.CR, WS:ns*L.WS, WL:ns*L.WL, ns };
++      BR:ns*L.LL*(L.mLL||1), TU:ns*L.TU, CRSH:ns*L.CR, WS:ns*L.WS, WL:ns*L.WL, ns };
+@@ -2964 +3088,7 @@ function computeAll(){
+-    const s=JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own}));   // OWNA: owner AASHTO leaves the Input ID unchanged
++    const fpS=JSON.parse(JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own})));   // OWNA: owner AASHTO leaves the Input ID unchanged
++    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;              // OWNB: new inputs at their default leave it unchanged too
++    if(fpS.factors&&fpS.factors.gpEHmaxR===1.35) delete fpS.factors.gpEHmaxR;
++    if(fpS.constr&&fpS.constr.qC===0) delete fpS.constr.qC;
++    if(fpS.constr&&fpS.constr.gC===1.5) delete fpS.constr.gC;
++    if(fpS.reinf&&fpS.reinf.coatBW===false) delete fpS.reinf.coatBW;
++    const s=JSON.stringify(fpS);
+@@ -3007,0 +3138 @@ function computeAll(){
++  if(R.checks.heelMass) addD("heelMass","Heel flexure — MassDOT 3.3.2.2 (dead load, γ = φ = 1.0)",R.checks.heelMass.dc,"tab-struct","1.0·(soil + heel + ES) above the heel; no LL; no upward relief");   // OWNB
+@@ -3071 +3202 @@ const DASH_ANCHOR={sliding:"o-slide",ecc:"o-ecc",bearing:"o-brg",seat:"o-seat",
+-  heelFlex:"o-str-Heel",heelShear:"o-str-Heel",heelFlexMin:"o-str-Heel",heelFlexCrack:"o-str-Heel"};
++  heelFlex:"o-str-Heel",heelShear:"o-str-Heel",heelMass:"o-str-Heel",heelFlexMin:"o-str-Heel",heelFlexCrack:"o-str-Heel"};
+@@ -3139 +3270 @@ const OWN_ST={pass:["pass","PASS"],fail:["fail","FAIL"],warn:["warn","CHECK"],ad
+-const OWN_KIND={"shall-check":"Shall","should-warning":"Should","advisory":"Advisory","note":"Note","pending-reference":"Pending reference"};
++const OWN_KIND={"shall-check":"Shall","should-warning":"Should","advisory":"Advisory","note":"Note","pending-reference":"Pending reference","default":"Default (editable)","load":"Load rule (applied)"};
+@@ -3149 +3280 @@ function ownerPanelHTML(R){
+-  return panel("o-owner","1.0a","Owner Requirements — "+esc(m.short)+head,`<div class="note-box">Owner: <b>${esc(m.manual)}</b>, written to AASHTO LRFD ${esc(m.aashto)}; the calculation follows AASHTO LRFD 10th Ed. (2024) with these owner rules checked on top. Requirements are paraphrased; the section and page cite the owner manual. Shall = pass/fail; Should = a warning; Advisory = the owner value beside the value in use (no result changes in this version); Pending reference = the owner document that sets it is not available. Values are worked in the row or in the linked panel.</div>${t}`);
++  return panel("o-owner","1.0a","Owner Requirements — "+esc(m.short)+head,`<div class="note-box">Owner: <b>${esc(m.manual)}</b>, written to AASHTO LRFD ${esc(m.aashto)}; the calculation follows AASHTO LRFD 10th Ed. (2024) with these owner rules checked on top. Requirements are paraphrased; the section and page cite the owner manual. Shall = pass/fail; Should = a warning; Advisory = the owner value beside the value in use; Default = an owner value of an input (applied when the owner is chosen while the input held the previous default; a value you entered is kept and flagged); Load rule = applied in the calculation (worked in Tab 2 §2.0a); Pending reference = the owner document that sets it is not available. Values are worked in the row or in the linked panel.${OWN_LAST&&OWN_LAST.owner===O.owner&&(OWN_LAST.set.length||OWN_LAST.kept.length)?`<br><b>Last change:</b> ${OWN_LAST.set.length?"set to the owner default — "+OWN_LAST.set.map(ownDefLabel).join(", "):""}${OWN_LAST.set.length&&OWN_LAST.kept.length?"; ":""}${OWN_LAST.kept.length?"your values kept — "+OWN_LAST.kept.map(ownDefLabel).join(", "):""}.`:""}</div>${t}`);
+@@ -3160 +3291 @@ function renderTabLoads(R){
+-    <b>1.</b> Earth pressure: <b>${S.soil.method==="rankine"?"Rankine":"Coulomb"}</b> active theory on the vertical plane through the heel end; at-rest K₀ not used (free-standing cantilever) [3.11.5]. Valid for β &lt; φ and a wall free to translate/rotate.<br>
++    <b>1.</b> Earth pressure: ${R.Ksel&&R.Ksel.eff!=="active"?`<b>${R.Ksel.eff==="atrest"?"at-rest K₀ = 1 − sin φ":"0.5(K₀ + K<sub>a</sub>)"}</b>${R.Ksel.mode==="massdot"?" by the MassDOT 3.1.6 rule":""} on the vertical plane through the heel end (Tab 1 §1.3) [3.11.5.2]${R.Ksel.eff==="blend"?"; K<sub>a</sub> by "+(S.soil.method==="rankine"?"Rankine":"Coulomb"):""}.`:`<b>${S.soil.method==="rankine"?"Rankine":"Coulomb"}</b> active theory on the vertical plane through the heel end; at-rest K₀ not used (free-standing cantilever) [3.11.5]. Valid for β &lt; φ and a wall free to translate/rotate.`}<br>
+@@ -3206 +3337 @@ function renderTabLoads(R){
+-       `k_a = ${fmtT(R.ka,4)}`]
++       `k_a = ${fmtT(R.Ksel?R.Ksel.Ka:R.ka,4)}`]
+@@ -3209 +3340,9 @@ function renderTabLoads(R){
+-       `k_a = ${fmtT(R.ka,4)}`];
++       `k_a = ${fmtT(R.Ksel?R.Ksel.Ka:R.ka,4)}`];
++  const KS=R.Ksel||{eff:"active"}, kS=KS.eff==="active"?"k_a":"K";   // OWNB: symbol of the coefficient in use
++  const kSelEq=KS.eff==="active"?"":eqB(`Earth pressure state — ${KS.eff==="atrest"?"at-rest":"0.5(K₀ + K<sub>a</sub>)"}${KS.mode==="massdot"?" (MassDOT 3.1.6 rule: "+(S.fnd.branch==="pile"?"pile-supported":S.fnd.matl==="rock"?"on rock":"on soil, H = "+fmt(geo.H,2)+" ft ≤ 5 ft")+")":""}`,KS.mode==="massdot"?"AASHTO 3.11.5.2, Eq. 3.11.5.2-1; MassDOT Part I 3.1.6":"AASHTO 3.11.5.2, Eq. 3.11.5.2-1",[
++      "K_0 = 1-\\sin\\varphi_f",
++      `K_0 = 1-\\sin${fmtT(s.phi,1)}° = ${fmtT(KS.K0,4)}`].concat(KS.eff==="atrest"?[
++      `K = K_0 = ${fmtT(KS.K0,4)}\\quad(\\text{horizontal},\\ \\iota = 0)`]:[
++      `K_h = \\tfrac{1}{2}(K_0 + k_a\\cos\\iota_a) = \\tfrac{1}{2}(${fmtT(KS.K0,4)} + ${fmtT(KS.Ka,4)}\\cos${fmtT(KS.iotaA,1)}°) = ${fmtT(KS.K*Math.cos(deg2rad(KS.iota)),4)}`,
++      `K_v = \\tfrac{1}{2}k_a\\sin\\iota_a = ${fmtT(KS.K*Math.sin(deg2rad(KS.iota)),4)}\\,;\\quad K = \\sqrt{K_h^2+K_v^2} = ${fmtT(KS.K,4)},\\ \\iota = ${fmtT(KS.iota,2)}°`]),
++      `K replaces k_a below and in the surcharge LS, ES and the construction stage. ${KS.eff==="atrest"?`γ<sub>EH</sub> max = ${fmt(+S.factors.gpEHmaxR,2)} (at-rest) [T.3.4.1-2].`:"γ<sub>EH</sub> max as active."} The Extreme Event I M–O increment is taken over the active resultant and added to this static pressure.`);
+@@ -3213,3 +3352,3 @@ function renderTabLoads(R){
+-      `P_1 = \\tfrac{1}{2}k_a\\gamma d_1^2 = \\tfrac{1}{2}(${fmtT(R.ka,4)})(${fmtT(s.gamma,3)})(${fmtT(E.d1)})^2 = ${fmtT(E.P1)}\\ \\text{kip/ft at } z=${fmtT(E.z1)}\\ \\text{ft}`,
+-      `P_2 = k_a\\gamma d_1 h_{w} = (${fmtT(R.ka,4)})(${fmtT(s.gamma,3)})(${fmtT(E.d1)})(${fmtT(E.hwE)}) = ${fmtT(E.P2)}\\ \\text{kip/ft at } z=${fmtT(E.z2)}\\ \\text{ft}`,
+-      `P_3 = \\tfrac{1}{2}k_a(\\gamma-\\gamma_w) h_{w}^2 = \\tfrac{1}{2}(${fmtT(R.ka,4)})(${fmtT(s.gamma-GAMMA_W,4)})(${fmtT(E.hwE)})^2 = ${fmtT(E.P3)}\\ \\text{kip/ft at } z=${fmtT(E.z3)}\\ \\text{ft}`,
++      `P_1 = \\tfrac{1}{2}${kS}\\gamma d_1^2 = \\tfrac{1}{2}(${fmtT(R.ka,4)})(${fmtT(s.gamma,3)})(${fmtT(E.d1)})^2 = ${fmtT(E.P1)}\\ \\text{kip/ft at } z=${fmtT(E.z1)}\\ \\text{ft}`,
++      `P_2 = ${kS}\\gamma d_1 h_{w} = (${fmtT(R.ka,4)})(${fmtT(s.gamma,3)})(${fmtT(E.d1)})(${fmtT(E.hwE)}) = ${fmtT(E.P2)}\\ \\text{kip/ft at } z=${fmtT(E.z2)}\\ \\text{ft}`,
++      `P_3 = \\tfrac{1}{2}${kS}(\\gamma-\\gamma_w) h_{w}^2 = \\tfrac{1}{2}(${fmtT(R.ka,4)})(${fmtT(s.gamma-GAMMA_W,4)})(${fmtT(E.hwE)})^2 = ${fmtT(E.P3)}\\ \\text{kip/ft at } z=${fmtT(E.z3)}\\ \\text{ft}`,
+@@ -3218,2 +3357,2 @@ function renderTabLoads(R){
+-    ehLayers=eqB("Active earth pressure resultant (per unit length)","AASHTO 3.11.5.1",[
+-      "P_a = \\tfrac{1}{2}\\,k_a\\,\\gamma\\,H^2",
++    ehLayers=eqB((KS.eff==="active"?"Active":"Lateral")+" earth pressure resultant (per unit length)","AASHTO 3.11.5.1",[
++      `P_a = \\tfrac{1}{2}\\,${kS}\\,\\gamma\\,H^2`,
+@@ -3225 +3364 @@ function renderTabLoads(R){
+-    ${eqB(`Active coefficient — ${s.method==="rankine"?"Rankine":"Coulomb"}`,s.method==="coulomb"?"AASHTO 3.11.5.3, Eq. 3.11.5.3-1":"AASHTO C3.11.5.3 (Rankine)",kaEq)}
++    ${eqB(`Active coefficient — ${s.method==="rankine"?"Rankine":"Coulomb"}${KS.eff==="atrest"?" (shown for reference; at-rest K₀ is used)":""}`,s.method==="coulomb"?"AASHTO 3.11.5.3, Eq. 3.11.5.3-1":"AASHTO C3.11.5.3 (Rankine)",kaEq)}
+@@ -3230,0 +3370 @@ function renderTabLoads(R){
++    ${kSelEq}
+@@ -3236 +3376 @@ function renderTabLoads(R){
+-      "Horizontal component drives sliding/overturning; the vertical component adds to resisting vertical load. Both carry the EH load factor. At-rest K₀ is not used for this free-standing cantilever [3.11.5.2].")}
++      "Horizontal component drives sliding/overturning; the vertical component adds to resisting vertical load. Both carry the EH load factor."+(KS.eff==="active"?" At-rest K₀ is not used for this free-standing cantilever [3.11.5.2] (earth pressure state: panel I-3).":""))}
+@@ -3244 +3384 @@ function renderTabLoads(R){
+-      `Table points in use: H = 5 ft → ${fmt(+s.heq5,1)} ft; 10 ft → ${fmt(+s.heq10,1)} ft; ≥ 20 ft → ${fmt(+s.heq20,1)} ft (editable in panel I-3).`)}
++      `Table points in use: H = 5 ft → ${fmt(+s.heq5,1)} ft; 10 ft → ${fmt(+s.heq10,1)} ft; ≥ 20 ft → ${fmt(+s.heq20,1)} ft (editable in panel I-3).`+(R.ownLoad&&R.ownLoad.lsMin>0?` Owner minimum (CTDOT BRSDM V2 3.11.6.4): h<sub>eq</sub> = max(table, ${fmt(R.ownLoad.lsMin,1)} ft)${interpHeq0(geo.H)<R.ownLoad.lsMin?` — the table gives ${fmt(interpHeq0(geo.H),2)} ft, raised to ${fmt(R.ownLoad.lsMin,2)} ft`:""}.`:""))}
+@@ -3246 +3386 @@ function renderTabLoads(R){
+-      "p_{LS} = k_a\\,\\gamma\\,h_{eq}",
++      `p_{LS} = ${R.Ksel&&R.Ksel.eff!=="active"?"K":"k_a"}\\,\\gamma\\,h_{eq}`,
+@@ -3252 +3392 @@ function renderTabLoads(R){
+-    ${R.passive.on?eqB("Passive resistance at toe (ENABLED)","AASHTO 3.11.5.4, 10.6.3.4",[
++    ${R.passive.on?eqB("Passive resistance at toe (ENABLED"+(R.ownLoad&&R.ownLoad.passEE?"; Extreme Event I only, RIDOT BDM 10.4.3 / 10.4.4":"")+")","AASHTO 3.11.5.4, 10.6.3.4",[
+@@ -3335,0 +3476,26 @@ function renderTabLoads(R){
++/* ---- OWNB: owner load rules worked (η, design load multiplier m, construction surcharge, passive at Extreme Event, h_eq minimum) ---- */
++function ownLoadPanelHTML(R){
++  const OL=R.ownLoad, qc=R.constrC&&R.constrC.qC;
++  if(!OL||(OL.owner==="AASHTO"&&!(qc>0))) return "";
++  const m=ABUT_OWN.owners[OL.owner], L1=R.LIMITS["Strength I"], LC=R.LIMITS["Constr — Str I"], F=S.factors;
++  let b="";
++  if(OL.owner==="RIDOT") b+=eqB("Load modifier η (strength limit states)","AASHTO 1.3.2.1 (Eqs. 1.3.2.1-2, -3); RIDOT BDM 1.3.1–1.3.3",[
++      `\\eta_i = \\eta_D\\,\\eta_R\\,\\eta_I = (1.00)(1.00)(${fmtT(OL.eta)}) = ${fmtT(OL.eta)}\\quad(\\gamma\\ \\text{max}),\\qquad \\eta_i = 1/${fmtT(OL.eta)} = ${fmtT(OL.etaMin,4)}\\quad(\\gamma\\ \\text{min})`,
++      `\\text{e.g. Strength I: } \\eta\\gamma_{DC,max} = ${fmtT(OL.eta)}(${fmtT(+F.gpDCmax)}) = ${fmtT(R.GP.DC[1],4)},\\ \\eta\\gamma_{LL} = ${fmtT(OL.eta)}(${fmtT(+F.llS1)}) = ${fmtT(L1.LL,4)},\\ \\gamma_{DC,min}/\\eta = ${fmtT(+F.gpDCmin)}/${fmtT(OL.eta)} = ${fmtT(R.GP.DC[0],4)}`],
++      OL.hasADT?`η<sub>I</sub> = ${fmt(OL.eta,2)} for ADT = ${fmt(OL.adt,0)} (${OL.adt>=5000?"≥":"&lt;"} 5000, panel I-0); η<sub>D</sub> = η<sub>R</sub> = 1.00 (ductile, redundant). Applied to every load factor of Strength I, III, V and the construction stage; Service I and Extreme Event I use η = 1.00.`:"<b>ADT not entered (panel I-0): η = 1.00 is used.</b> RIDOT sets η<sub>I</sub> = 1.05 for ADT ≥ 5000.");
++  if(OL.m!==1) b+=eqB("Design load multiplier m on the girder LL+IM reaction and BR","RIDOT BDM 3.4.1.2"+(OL.owner==="RIDOT"?"":" (owner value entered in panel I-0)"),[
++      `\\text{Strength I: } \\gamma_{LL}\\,m = ${fmtT(L1.LL)}(${fmtT(OL.m)}) = ${fmtT(L1.LL*OL.m)}\\ \\text{on LL and BR};\\quad \\gamma_{LL} = ${fmtT(L1.LL)}\\ \\text{on LS}`,
++      `\\text{Strength V: } ${fmtT(R.LIMITS["Strength V"].LL)}(${fmtT(OL.m)}) = ${fmtT(R.LIMITS["Strength V"].LL*OL.m)};\\quad \\text{Service I: } 1.00(${fmtT(OL.m)}) = ${fmtT(OL.m)}`],
++      "Applied to the vehicular force effects carried from the superstructure (the HL-93 girder reaction and braking) at Strength I, III, V and Service I, in every check (stability, bearing, piles, stem, footing, seat). Not applied to the live-load surcharge LS (a 3.11.6.4 surcharge, not the HL-93 vehicle on the bridge), to Extreme Event I or to the construction stage. Where the reaction relieves a check (sliding, overturning, pile uplift) the permutations with the LL reaction off govern, so the multiplier is removed there as the BDM requires.");
++  if(qc>0){ const K=R.ka, ci=Math.cos(deg2rad(R.iota)), hc=R.constrC.hcC, g=S.geom;
++    b+=eqB("Construction surcharge q_c — construction stage (no superstructure)","AASHTO 3.4.2.1, 3.11.6.1"+(OL.owner==="RIDOT"?"; RIDOT BDM 3.2.2":""),[
++      `P_{CS,h} = K\\,q_c\\,h_c\\cos\\iota\\,L_{ab} = (${fmtT(K,4)})(${fmtT(qc,3)})(${fmtT(hc)})(${fmtT(ci,4)})(${fmtT(g.Lab)}) = ${fmtT(R.groups.CShC?R.groups.CShC.Hx:0)}\\ \\text{kip at } h_c/2 = ${fmtT(hc/2)}\\ \\text{ft}`,
++      `P_{CS,v} = q_c\\,L_{heel}\\,L_{ab} = (${fmtT(qc,3)})(${fmtT(g.Lheel)})(${fmtT(g.Lab)}) = ${fmtT(R.groups.CSvC?R.groups.CSvC.V:0)}\\ \\text{kip over the heel}`,
++      `\\gamma_c = ${fmtT(+S.constr.gC)}${OL.eta!==1?`\\times${fmtT(OL.eta)}`:""} = ${fmtT(LC.CL)}`],
++      `h<sub>c</sub> = t<sub>f</sub> + construction fill = ${fmt(hc,2)} ft. Taken as a live load of the construction stage ("Constr — Str I"): on or off in the permutations; the vertical part is left out where it would help sliding and eccentricity. Also in the stem (§5.2) and heel demands of that stage.`); }
++  if(OL.passEE) b+=`<div class="note-box"><b>Passive resistance (RIDOT BDM 10.4.3, 10.4.4):</b> ${S.fnd.branch==="spread"&&S.fnd.usePassive?"enabled in panel I-4 — used in sliding at Extreme Event I only, not at the strength limit states (Tab 3 §3.1).":"not used (panel I-4); if enabled, it enters Extreme Event I only."}</div>`;
++  if(OL.lsMin>0) b+=`<div class="note-box"><b>Live-load surcharge minimum (CTDOT BRSDM V2 3.11.6.4):</b> h<sub>eq</sub> = max(table value, ${fmt(OL.lsMin,1)} ft) wherever h<sub>eq</sub> is used (wall, stem, backwall, construction stage); see Tab 1 §1.4.</div>`;
++  return panel("o-ownload","2.0a","Owner Load Rules"+(OL.owner==="AASHTO"?" & Construction Surcharge":" — "+esc(m.short)),
++    `<div class="eq-note">${OL.owner==="AASHTO"?"Construction surcharge entered in panel I-3.":"Owner rules applied in the calculation; the owner requirements and defaults are listed in Tab 1 §1.0a."}</div>${b||'<div class="note-box">No owner load rule changes a factor for this owner.</div>'}`);
++}
++
+@@ -3346,0 +3513 @@ function renderTabComb(R){
++  h+=ownLoadPanelHTML(R);
+@@ -3359 +3526 @@ function renderTabComb(R){
+-    `<div class="note-box">γ<sub>p</sub> values show max / min. BR and LS carry the live-load factor. TU uses γ<sub>TU</sub> = ${fmt(+F.gTU)} for strength force effects (1.20 applies to displacements) [T.3.4.1-6]; CR/SH use γ = ${fmt(+F.gCR)} (concrete substructure under a non-segmental superstructure) [T.3.4.1-3].</div>`);
++    `<div class="note-box">${R.ownLoad&&(R.ownLoad.eta!==1||R.ownLoad.m!==1)?`<b>Owner load rules included (Tab 2 §2.0a):</b> ${R.ownLoad.eta!==1?`strength factors × η = ${fmt(R.ownLoad.eta,2)} (γ<sub>p</sub> min × 1/η); `:""}${R.ownLoad.m!==1?`the LL+IM reaction and BR × m = ${fmt(R.ownLoad.m,2)} at Strength I, III, V and Service I (the LL/BR/LS column shows γ before m). `:""}<br>`:""}γ<sub>p</sub> values show max / min. BR and LS carry the live-load factor. TU uses γ<sub>TU</sub> = ${fmt(+F.gTU)} for strength force effects (1.20 applies to displacements) [T.3.4.1-6]; CR/SH use γ = ${fmt(+F.gCR)} (concrete substructure under a non-segmental superstructure) [T.3.4.1-3].</div>`);
+@@ -3439 +3606 @@ function renderTabStab(R){
+-          `R_R = \\varphi_\\tau R_n${R.passive.on?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${R.passive.on?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`])
++          `R_R = \\varphi_\\tau R_n${(sl.pUsed??R.passive.on)?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${(sl.pUsed??R.passive.on)?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`])
+@@ -3447 +3614,2 @@ function renderTabStab(R){
+-        ...(R.passive.on?[["\\varphi_{ep}P_p","Factored passive resistance",fn.phiEP*R.passive.Pp,"kip"]]:[])])}
++        ...((sl.pUsed??R.passive.on)?[["\\varphi_{ep}P_p","Factored passive resistance",fn.phiEP*R.passive.Pp,"kip"]]:[])])}
++      ${R.passive.on&&!sl.pUsed&&R.ownLoad&&R.ownLoad.passEE?`<div class="note-box">Passive resistance is not used in ${esc(sl.ls)}: RIDOT BDM 10.4.3 excludes it at the strength limit states (it enters Extreme Event I only, 10.4.4).</div>`:""}
+@@ -3759,2 +3927,2 @@ function sectionHTML(c, demHTML, secNo, title){
+-      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(1.0)(1.0)(1.0),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
+-      "S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er, λ_rl, λ_cf and λ_rc all taken as 1.0 (λ_rc = 1.0 is its upper bound; no confinement credit) — confirm hooks/embedment in detailing.")}
++      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(1.0)(${fmtT(c.lamCf??1,1)})(1.0),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
++      ((c.lamCf??1)>1?`Epoxy-coated bars (panel I-9${abutOwner()==="MassDOT"?"; MassDOT Part I 3.3.1.6":""}): λ<sub>cf</sub> = ${fmt(c.lamCf,1)} [5.10.8.2.1b] — cover ${fmt(c.cvE,2)} in ${c.cvE<3*BARS[c.bar].db?"&lt;":"≥"} 3d<sub>b</sub> = ${fmt(3*BARS[c.bar].db,2)} in, clear spacing ${fmt(c.sp-BARS[c.bar].db,2)} in ${(c.sp-BARS[c.bar].db)<6*BARS[c.bar].db?"&lt;":"≥"} 6d<sub>b</sub> = ${fmt(6*BARS[c.bar].db,2)} in. `:"")+"S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er, λ_rl"+((c.lamCf??1)>1?"":", λ_cf")+" and λ_rc taken as 1.0 (λ_rc = 1.0 is its upper bound; no confinement credit) — confirm hooks/embedment in detailing.")}
+@@ -3773 +3941 @@ function renderTabStruct(R){
+-      `M_u = ${fmtT(R.GP.EH[1])}(${fmtT(bd.Mbw_EH)}) + ${fmtT(+S.factors.llS1)}(${fmtT(bd.Mbw_LS)}) = ${fmtT(bd.MuBW)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(bd.VuBW)}\\ \\text{kip/ft}`],
++      `M_u = ${fmtT(R.GP.EH[1])}(${fmtT(bd.Mbw_EH)}) + ${fmtT(bd.gLS??+S.factors.llS1)}(${fmtT(bd.Mbw_LS)}) = ${fmtT(bd.MuBW)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(bd.VuBW)}\\ \\text{kip/ft}`],
+@@ -3781 +3949,2 @@ function renderTabStruct(R){
+-      `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`,
++      `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc}${sd.MCS>0?" + \\gamma_c M_{CS}":""} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`,
++      ...(sd.MCS>0?[`\\gamma_c M_{CS} = \\gamma_c\\dfrac{K_h\\,q_c\\,H_s^2}{2} = ${fmtT(R.LIMITS["Constr — Str I"].CL)}\\dfrac{(${fmtT(kah,4)})(${fmtT(R.constrC.qC,3)})(${fmtT(Math.min(R.constrC.hfC,sd.Hs))})^2}{2} = ${fmtT(sd.MCS)}\\ \\text{kip-ft/ft (construction surcharge, Tab 2 §2.0a)}`]:[]),
+@@ -3807 +3976,8 @@ function renderTabStruct(R){
+-  h+=sectionHTML(cH, heelDemH, "5.4","Heel — Flexure & Shear ("+hd.face+" reinforcement)");
++  const hmD=R.checks.heelMass;   // OWNB: MassDOT 3.3.2.2 dead-load heel case
++  const heelMassH=hmD? eqB("MassDOT dead-load heel case (top steel) — all dead load above the heel incl. the heel, no live load, γ = φ = 1.0, no upward relief","MassDOT Bridge Manual Part I 3.3.2.2; AASHTO 5.6.3.2",[
++      `w_{DL} = w_{soil} + \\gamma_c t_f + q_{ES} = ${fmtT(hmD.wSoil,3)} + ${fmtT(hmD.wFoot,3)} + ${fmtT(hmD.esQ,3)} = ${fmtT(hmD.wDL,3)}\\ \\text{ksf}`,
++      `M_{DL} = w_{DL}\\dfrac{L_{heel}^2}{2}${hmD.wedgeM>0?" + \\gamma\\,h_{wedge}\\dfrac{L_{heel}^2}{3}":""} = (${fmtT(hmD.wDL,3)})\\dfrac{(${fmtT(g.Lheel)})^2}{2}${hmD.wedgeM>0?` + ${fmtT(hmD.wedgeM)}`:""} = ${fmtT(hmD.MDL)}\\ \\text{kip-ft/ft}`,
++      `M_n = A_s f_y (d - a/2) = (${fmtT(cH.As)})(${fmtT(S.mat.fy,1)})(${fmtT(cH.d)} - ${fmtT(cH.a,3)}/2)/12 = ${fmtT(hmD.Mn)}\\ \\text{kip-ft/ft}`],
++      "An additional check on the heel top steel (the AASHTO strength check above stays). Soil weight per ft² as the heel design above (buoyant below the water table); ES = the permanent earth surcharge over the heel.")
++    + checkLine("Heel flexure — MassDOT 3.3.2.2",`\\dfrac{M_{DL}}{1.0\\,M_n} = \\dfrac{${fmtT(hmD.MDL)}}{${fmtT(hmD.Mn)}}`,hmD.dc) : "";
++  h+=sectionHTML(cH, heelDemH+heelMassH, "5.4","Heel — Flexure & Shear ("+hd.face+" reinforcement)");
+@@ -4477 +4653 @@ function perBearingLoads(R, sel){
+-  const fLL=isLS?L.LL:one("LL"), fBR=isLS?L.LL:one("BR"), fTU=isLS?L.TU:one("TU");
++  const fLL=isLS?L.LL*(L.mLL||1):one("LL"), fBR=isLS?L.LL*(L.mLL||1):one("BR"), fTU=isLS?L.TU:one("TU");   // OWNB: m
+@@ -4833 +5009 @@ function sizingHints(R){
+-  const bc=d("bearing"), sl=d("sliding"), pc=d("pileC");
++  const bc=d("bearing"), sl=d("sliding"), pc=d("pileC"), noKey=["MassDOT","CTDOT"].includes(abutOwner());   // OWNB: owners that discourage keys
+@@ -4842,2 +5018,2 @@ function sizingHints(R){
+-        (hMax>0.5?`Restrict backfill to ≈ ${fmt(hMax,1)} ft above the footing until the superstructure is erected (enter it in panel I-3), or add a shear key / widen the heel.`:
+-        `Even minimal backfill fails — revise the footing (shear key, wider heel) before backfilling.`));
++        (hMax>0.5?`Restrict backfill to ≈ ${fmt(hMax,1)} ft above the footing until the superstructure is erected (enter it in panel I-3), or ${noKey?"widen the heel":"add a shear key / widen the heel"}.`:
++        `Even minimal backfill fails — revise the footing (${noKey?"wider heel, lower footing":"shear key, wider heel"}) before backfilling.`));
+@@ -4845 +5021,2 @@ function sizingHints(R){
+-      out.push(`Sliding D/C ${fmt(sl.dc)} — options: widen the heel (more soil weight), add a shear key, or enable justified passive resistance.`);
++      out.push(noKey?`Sliding D/C ${fmt(sl.dc)} — options: widen the heel (more soil weight), batter piles or lower the footing (${abutOwner()==="MassDOT"?"MassDOT 3.3.1.1: shear keys preferably not used; passive neglected":"CTDOT V2 10.6.3.4: no keys, no passive"}).`
++        :`Sliding D/C ${fmt(sl.dc)} — options: widen the heel (more soil weight), add a shear key, or enable justified passive resistance.`);
+@@ -4860 +5037,2 @@ function constrMaxFill(){
+-    const D=1.5*0.5*ka*gam*hc*hc*ci*Lab + gLLc*ka*gam*heq*hc*ci*Lab + 1.5*ka*esQ*hc*ci*Lab;
++    const gCS=(R0.LIMITS&&R0.LIMITS["Constr — Str I"]&&R0.LIMITS["Constr — Str I"].CL)||0, qCh=+S.constr.qC||0;   // OWNB: construction surcharge
++    const D=1.5*0.5*ka*gam*hc*hc*ci*Lab + gLLc*ka*gam*heq*hc*ci*Lab + 1.5*ka*esQ*hc*ci*Lab + gCS*ka*qCh*hc*ci*Lab;
+@@ -5068,0 +5247 @@ function recalcAll(){
++  ownTagRefresh();
+@@ -5112,0 +5292 @@ document.addEventListener("change",ev=>{
++  const ownPre=(p==="own.owner"||p==="longit.material")?ownDefMap():null;   // OWNB: owner defaults before the change
+@@ -5120,0 +5301,2 @@ document.addEventListener("change",ev=>{
++  if(ownPre){ const r=ownReapply(ownPre); OWN_LAST={owner:abutOwner(),set:r.set,kept:r.kept};
++    const ss=document.getElementById("saveStatus"); if(ss&&(r.set.length||r.kept.length)) ss.textContent=(r.set.length?"owner defaults applied: "+r.set.map(ownDefLabel).join(", "):"")+(r.kept.length?(r.set.length?"; ":"")+"your values kept: "+r.kept.map(ownDefLabel).join(", "):""); }
+@@ -5151,0 +5334 @@ document.addEventListener("click",ev=>{
++    ["longit.dTrise","longit.dTfall","longit.cte"].forEach(k=>{ const d=ownRuleFor(k); if(d) setPath(S,k,ownDefVal(d)); });   // OWNB: the owner's temperature values
+@@ -5309 +5492,2 @@ function inputEchoHTML(){
+-  let h=(abutOwner()!=="AASHTO"?"<h3>Owner</h3>"+echoRows([["Bridge owner (requirements checked in Tab 1 §1.0a)",ABUT_OWN.owners[abutOwner()].manual,""],["Total bridge length for the integral screening",+S.own.Ltot>0?fmt(+S.own.Ltot):"= span L","ft"],["Bottom of footing below finished grade D_f",fmt(+S.fnd.Df),"ft"]]):"")+"<h3>Geometry</h3>"+echoRows([
++  let h=(abutOwner()!=="AASHTO"?"<h3>Owner</h3>"+echoRows([["Bridge owner (requirements checked in Tab 1 §1.0a)",ABUT_OWN.owners[abutOwner()].manual,""],["Total bridge length for the integral screening",+S.own.Ltot>0?fmt(+S.own.Ltot):"= span L","ft"],["Bottom of footing below finished grade D_f",fmt(+S.fnd.Df),"ft"],
++    ["Design load multiplier m (LL reaction, BR)",fmt(+S.own.mLL||1,2),"–"]].concat(abutOwner()==="RIDOT"?[["ADT (η_I)",S.own.ADT===""?"not entered (η = 1.00)":fmt(+S.own.ADT,0),"veh/day"]]:[])):"")+"<h3>Geometry</h3>"+echoRows([
+@@ -5364,0 +5549,4 @@ function inputEchoHTML(){
++  h+="<h3>Earth pressure state & construction surcharge</h3>"+echoRows([
++    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule"}[S.soil.Kmode]||"active Ka",""],
++    ["γEH max at-rest",fmt(+F.gpEHmaxR,2),"–"],
++    ["Construction surcharge q_c / γ_c",fmt(+S.constr.qC||0,3)+" / "+fmt(+S.constr.gC,2),"ksf / –"]]);
+@@ -5377,0 +5566 @@ function inputEchoHTML(){
++    ["Backwall bars epoxy coated (λcf)",rf.coatBW?"yes":"no",""],
+```
+
+## 2026-10-20 — PR: claude/abut-coulomb — Coulomb on the virtual back by heel length (AASHTO LRFD 10th Ed. C3.11.5.3); MassDOT Coulomb default; RIDOT at-rest on piles / rock (PR link added after merge)
+
+Note: #367 (F50–F58) was merged into `claude/abut-owner-a` after #366 had already been squash-merged to main, so it never reached main. This branch carries it as its first commit (a cherry-pick of `4803548`, unchanged), followed by the changes below.
+
+### F59. Coulomb active coefficient: δ on the virtual back from the heel case (CLMB)   [calc change] [Coulomb option only: MORE conservative with a long heel, unchanged with a short heel]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), 3.11.5.3 (Eqs. 3.11.5.3-1, -2), C3.11.5.3 and Fig. C3.11.5.3-1, p. 3-88 to 3-89. Both cases put the earth pressure on the vertical plane through the heel end:
+  - **(a) long heel:** the shear zone from the heel is not cut by the stem. The stress on that plane is the Rankine stress, inclined at β.
+  - **(b) short heel:** the stem restricts the sliding surface. Coulomb applies on the same plane, with the soil-on-soil wall friction usually limited to 0.67φ.
+  - The real wall back with concrete-on-soil δ is the gravity-wall case of Fig. C3.11.5.3-1b. It is not used for a cantilever abutment.
+- **Before:** `computeKa()` (Coulomb) used the input δ (default 17°) on the virtual back in every case. That was earlier review item N11.
+- **After:** the heel case is decided from the inner boundary of the Rankine shear zone, using the figure's angle:
+  - ε = asin(sin β / sin φ);
+  - a = ½(90° + β − φ − ε) from the vertical;
+  - s* = H / (cot a + tan β), the distance from the virtual back at which that boundary meets the ground.
+
+  If s* ≤ L_heel (long heel), δ = β, which reproduces Rankine exactly. Otherwise (short heel), δ = the input, now labelled "Friction angle δ on the virtual back (short heel)". A warning appears if that δ is over 0.67φ. The M–O δ follows the same value. The case is worked in Tab 1 §1.3, in a new "Coulomb: heel case" block.
+- **Where:** `computeKa()`, anchor `// CLMB (2026-10-20): Coulomb on the vertical plane through the heel end`; `R.coul`; M–O `dMO` (anchor `// CLMB: the δ of the static Coulomb case`); input label of `soil.delta`; Tab 1 §1.3 `coulCase` and the δ row.
+- **Check 1 (long heel; built-in project with Coulomb, L_toe 2 ft, L_heel 13 ft, β = 0, φ = 32°, H = 22 ft):**
+  - a = ½(90 − 32) = 29°; s* = 22·tan 29° = 12.19 ft ≤ 13 ft, so long heel and δ = 0.
+  - Ka = (1 − sin 32°)/(1 + sin 32°) = **0.3073** (before: δ = 17°, 0.2773).
+  - EH_h = ½·0.3073·0.120·22²·44 = **392.60 kip**, EH_v 0 (before: 338.90 and 103.61 kip).
+  - Sliding D/C 0.534 → **0.651**; stem M_u 100.07 → **112.06**; heel M_u 41.85 → **95.78** kip-ft/ft (the vertical component no longer relieves the heel).
+- **Check 2 (long heel, β = 15°):** Coulomb with δ = β gives Ka = **0.3405**. This is identical to the Rankine option on the same project: every result matched, which confirms the equivalence.
+- **Check 3 (short heel, built-in project, L_heel 5 ft):** s* = 12.19 ft > 5 ft, so δ = 17° as before.
+  - Ka = cos²32° / (cos 17° [1 + √(sin 49° · sin 32° / cos 17°)]²) = 0.7192 / (0.9563 · 2.7116) = **0.2773**.
+  - No change. The default project and every short-heel Coulomb project are unchanged.
+
+### F60. Owner defaults: MassDOT Coulomb; RIDOT at-rest on piles / rock   [default change, MassDOT and RIDOT owners only]
+- **MassDOT Part I 3.1.6 (p. 3-4):** Ka by Coulomb. New owner default `soil.method` = "coulomb". It is highlighted and can be overridden, like the other owner defaults.
+  - Built-in project under MassDOT (short heel, δ 17°): Ka 0.3073 → **0.2773**; EH_h 392.60 → **338.90 kip**, EH_v 0 → 103.61 kip.
+  - Sliding (construction stage) D/C 1.153 → **0.877**; eccentricity 0.707 → 0.419; bearing 0.933 → 0.855; stem M_u 112.06 → **100.07** kip-ft/ft.
+- **RIDOT BDM 11.3.4 (p. 11-9):** at-rest where outward tilting is restricted so that active pressure cannot develop.
+  - The BDM does not define which walls those are. It defers to AASHTO for the movement relationship, and its only other at-rest text is for integral abutments (11.3.2, movement under ½ in).
+  - Basis used: AASHTO 10th C3.11.1 (walls that tolerate little or no movement take at-rest pressure; Table C3.11.1-1 gives the Δ/H needed for active). A pile-supported footing (vertical piles, rigid cap) and a footing on rock are taken as unable to tilt or translate that Δ/H, the same split as MassDOT 3.1.6.
+  - New earth pressure state "ridot": K0 = 1 − sin φ on piles or rock, active otherwise. It is the RIDOT owner default, highlighted and overridable.
+  - Built-in project under RIDOT, pile footing: K = 0.4701 (was 0.3073); EH_h 392.60 → 600.65 kip; γEH max 1.35. Maximum pile D/C 0.963 → **1.113**; stem M_u 114.90 → **161.90** kip-ft/ft (construction stage 1.35·EH + 1.50·CS now governs).
+  - Spread footing on soil: unchanged.
+- **Saved data (§5):** no new key. `own.dv` goes 2 → 3 (default state 3). A project saved with owner MassDOT and `soil.method` still at the tool default "rankine" takes "coulomb". A RIDOT project with `soil.Kmode` still "active" takes "ridot". A value the user changed is kept. A one-time notice names the change. Projects under AASHTO and CTDOT are unchanged.
+- **Where:** `ABUT_OWN_DEF` (new rows MassDOT `soil.method`, RIDOT `soil.Kmode`), `OWN_DEF_PANEL/LK/LBL`, `ownShow`; `computeAll` anchor `// CLMB: "ridot"`; panel I-3 option "RIDOT 11.3.4: at-rest on piles or rock"; `migrate()` anchor `// CLMB (2026-10-20): new owner defaults`.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: pass.
+- Headless `computeAll()`, before (main + #367) and after. Unchanged:
+  - AASHTO default, pile, EE I, short-heel Coulomb (level and β = 15°), Rankine long heel with slope;
+  - CTDOT.
+- Changed as listed:
+  - Coulomb long heel (level, slope, EE I);
+  - MassDOT spread;
+  - RIDOT pile and rock;
+  - migrated MassDOT / RIDOT projects saved with `dv` 2.
+- Self-test passes. Report built with RIDOT, no console error. Screenshot of Tab 1 §1.3 checked.
+
+### Open items
+- With at-rest and Extreme Event I, the M–O increment is still taken over the active resultant (F51).
+- RIDOT's "restrained" basis (pile / rock) is the stated judgement above. Change `soil.Kmode` per project if the geotechnical engineer finds otherwise.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against main + #367, `e57fb65`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 96eded2..42344b9 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -643 +643 @@ function defaultState(){
+-    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:2 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
++    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:3 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
+@@ -830 +830 @@ ABUT_OWN.rules=[
+-  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop",
++  {owner:"RIDOT", id:"atrest", kind:"advisory", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where outward tilting of the wall is restricted so that active pressure cannot develop (the default \"RIDOT\" earth pressure state applies K0 on piles or rock)",
+@@ -899,0 +900 @@ const ABUT_OWN_DEF=[
++  {owner:"MassDOT", key:"soil.method", sec:"3.1.6 (p. 3-4)", text:"Active earth pressure coefficient by Coulomb theory", val:()=>"coulomb"},
+@@ -906,0 +908 @@ const ABUT_OWN_DEF=[
++  {owner:"RIDOT", key:"soil.Kmode", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where tilting is restricted: applied to pile-supported and rock-founded abutments (basis: AASHTO C3.11.1 / Table C3.11.1-1, the BDM sets no other definition)", val:()=>"ridot"},
+@@ -922 +924 @@ const OWN_DEF_KEYS=[...new Set(ABUT_OWN_DEF.map(d=>d.key))];
+-const OWN_DEF_PANEL={"mat.fc":"I-2","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
++const OWN_DEF_PANEL={"mat.fc":"I-2","soil.method":"I-3","soil.Kmode":"I-3","soil.phi":"I-3","soil.gamma":"I-3","constr.qC":"I-3","longit.dTrise":"I-6b","longit.dTfall":"I-6b","longit.cte":"I-6b","bearing.G":"I-6b",
+@@ -924 +926 @@ const OWN_DEF_PANEL={"mat.fc":"I-2","soil.Kmode":"I-3","soil.phi":"I-3","soil.ga
+-const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
++const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.method":["tab-loads","o-eh","§1.3 earth pressure"],"soil.Kmode":["tab-loads","o-eh","§1.3 earth pressure"],"soil.phi":["tab-loads","o-eh","§1.3 earth pressure"],"soil.gamma":["tab-loads","o-eh","§1.3 earth pressure"],
+@@ -928 +930 @@ const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.Kmode"
+-const OWN_DEF_LBL={"mat.fc":"f′c","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
++const OWN_DEF_LBL={"mat.fc":"f′c","soil.method":"active pressure theory","soil.Kmode":"earth pressure state","soil.phi":"backfill φ","soil.gamma":"backfill γ","constr.qC":"construction surcharge q_c","longit.dTrise":"temperature rise","longit.dTfall":"temperature fall",
+@@ -934 +936,2 @@ function ownShow(d,v){ if(typeof v==="boolean") return d.key==="seismic.on"?(v?"
+-  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule"}[v]||String(v);
++  if(d.key==="soil.Kmode") return {active:"active K_a",atrest:"at-rest K_0",blend:"0.5(K_0 + K_a)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT at-rest on piles / rock"}[v]||String(v);
++  if(d.key==="soil.method") return v==="coulomb"?"Coulomb":"Rankine";
+@@ -1260,0 +1264,5 @@ function migrate(){
++  if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
++    S.own.dv=3;
++    if(abutOwner()!=="AASHTO"){ const pre=ownDefMap(); pre["soil.method"]="rankine"; if(abutOwner()==="RIDOT") pre["soil.Kmode"]="active"; const r=ownReapply(pre);
++      if(r.set.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Owner "+abutOwner()+": new owner default applied — "+r.set.map(k=>ownDefLabel(k)).join("; ")+" (Tab 1 §1.0a, §1.3)"]); }
++  }
+@@ -1262 +1270 @@ function migrate(){
+-    S.own.dv=2;
++    S.own.dv=3;
+@@ -1416,2 +1424,2 @@ function buildInputs(){
+-    ${S.soil.method==="coulomb"? inpRow("Wall friction angle δ","soil.delta","deg",{title:"Coulomb only. The resultant acts at δ from the normal to the wall back; horizontal and vertical components are carried separately."}):""}
+-    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"]],{rebuild:true})}
++    ${S.soil.method==="coulomb"? inpRow("Friction angle δ on the virtual back (short heel)","soil.delta","deg",{title:"Coulomb only, on the vertical plane through the heel end (soil on soil, C3.11.5.3: at most 0.67φ). Used when the heel is short (the shear zone from the heel meets the stem); with a long heel δ = β (Tab 1 §1.3). The resultant acts at δ from the normal; horizontal and vertical components are carried separately."}):""}
++    ${selRow("Earth pressure state","soil.Kmode",[["active","Active K<sub>a</sub> (wall free to move) [3.11.5.3]"],["atrest","At-rest K<sub>0</sub> = 1 − sin φ (restrained) [3.11.5.2]"],["blend","0.5(K<sub>0</sub> + K<sub>a</sub>)"],["massdot","MassDOT 3.1.6 rule (by foundation and height)"],["ridot","RIDOT 11.3.4: at-rest on piles or rock"]],{rebuild:true})}
+@@ -1759 +1766,0 @@ function computeKa(){
+-    const delta=deg2rad(S.soil.delta);
+@@ -1760,0 +1768,9 @@ function computeKa(){
++    // CLMB (2026-10-20): Coulomb on the vertical plane through the heel end [3.11.5.3, C3.11.5.3, Fig. C3.11.5.3-1]. The inner boundary of the
++    // Rankine shear zone rises from the heel at a = ½(90° + β − φ − ε) from the vertical, ε = asin(sin β / sin φ); it meets the ground surface
++    // at s* = H/(cot a + tan β) from the virtual back. s* ≤ L_heel (long heel, Fig. C3.11.5.3-1a): the zone is not cut by the stem and the
++    // plane is soil on soil with δ = β (the Coulomb expression then gives the Rankine value). s* > L_heel (short heel, Fig. C3.11.5.3-1b):
++    // the stem restricts the sliding surface; δ = the soil-on-soil wall friction input on the same plane (C3.11.5.3: at most 0.67φ).
++    const g=S.geom, Hc=g.tf+g.soilH+g.Lheel*Math.tan(beta);
++    const eps=Math.asin(Math.sin(beta)/Math.sin(phi)), aB=0.5*(Math.PI/2+beta-phi-eps), sStar=Hc/(1/Math.tan(aB)+Math.tan(beta));
++    const longHeel=sStar<=g.Lheel+1e-9, dDeg=longHeel? +g.beta : +S.soil.delta, delta=deg2rad(dDeg);
++    if(!longHeel && +S.soil.delta>0.67*(+S.soil.phi)+1e-9) warn(`Coulomb, short heel: δ = ${fmt(+S.soil.delta,1)}° on the soil-on-soil plane through the heel exceeds 0.67φ = ${fmt(0.67*S.soil.phi,1)}° (C3.11.5.3) — check δ (panel I-3).`);
+@@ -1764 +1780 @@ function computeKa(){
+-    return {ka, iota:S.soil.delta}; // resultant at δ from normal to (vertical) plane
++    return {ka, iota:dDeg, cw:{longHeel, aDeg:aB*180/Math.PI, epsDeg:eps*180/Math.PI, sStar, Lheel:+g.Lheel, H:Hc, delta:dDeg}}; // resultant at δ from the normal to the vertical plane
+@@ -1948,2 +1964,5 @@ function computeAll(){
+-  const kMode=["atrest","blend","massdot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
+-  const kEff=kMode!=="massdot"?kMode:((S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"))?"atrest":(H<=5+1e-9?"blend":"active"));
++  const kMode=["atrest","blend","massdot","ridot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
++  const onPR=(S.fnd.branch==="pile"||(S.fnd.branch==="spread"&&S.fnd.matl==="rock"));
++  // CLMB: "ridot" — RIDOT BDM 11.3.4 (at-rest where tilting is restricted; the BDM defers to AASHTO for the movement needed): K0 for a
++  // pile-supported or rock-founded abutment (cannot rotate or translate the Δ/H of Table C3.11.1-1), active otherwise
++  const kEff=kMode==="massdot"?(onPR?"atrest":(H<=5+1e-9?"blend":"active")) : kMode==="ridot"?(onPR?"atrest":"active") : kMode;
+@@ -1953,0 +1973 @@ function computeAll(){
++  R.coul=KA.cw||null;   // CLMB: Coulomb heel case (long / short) and δ used
+@@ -1996 +2016 @@ function computeAll(){
+-    const dMO=S.soil.method==="coulomb"?deg2rad(S.soil.delta):0;
++    const dMO=S.soil.method==="coulomb"?deg2rad(KA.iota):0;   // CLMB: the δ of the static Coulomb case (β for a long heel)
+@@ -3333 +3353,6 @@ function renderTabLoads(R){
+-  const s=S.soil, E=R.EH;
++  const s=S.soil, E=R.EH, CW=R.coul, dC=CW?CW.delta:+s.delta;   // CLMB: δ used on the virtual back
++  const coulCase=(s.method==="coulomb"&&CW)? eqB(`Coulomb: heel case — ${CW.longHeel?"long heel (shear zone not cut by the stem): δ = β":"short heel (shear zone cut by the stem): δ = soil-on-soil input"}`,"AASHTO C3.11.5.3, Fig. C3.11.5.3-1",[
++      "\\varepsilon = \\sin^{-1}\\!\\left(\\dfrac{\\sin\\beta}{\\sin\\varphi_f}\\right),\\quad a = \\tfrac{1}{2}(90° + \\beta - \\varphi_f - \\varepsilon),\\quad s^{*} = \\dfrac{H}{\\cot a + \\tan\\beta}",
++      `\\varepsilon = ${fmtT(CW.epsDeg,2)}°,\\quad a = \\tfrac{1}{2}(90 + ${fmtT(g.beta,1)} - ${fmtT(s.phi,1)} - ${fmtT(CW.epsDeg,2)}) = ${fmtT(CW.aDeg,2)}°`,
++      `s^{*} = \\dfrac{${fmtT(CW.H)}}{\\cot ${fmtT(CW.aDeg,2)}° + \\tan ${fmtT(g.beta,1)}°} = ${fmtT(CW.sStar)}\\ \\text{ft} ${CW.longHeel?"\\le":">"} L_{heel} = ${fmtT(CW.Lheel)}\\ \\text{ft} \\;\\Rightarrow\\; \\delta = ${fmtT(CW.delta,1)}°`],
++      `s* = horizontal distance from the virtual back (vertical plane through the heel end) at which the inner boundary of the active shear zone, rising from the heel at a from the vertical, meets the ground. ${CW.longHeel?"It reaches the ground before the stem: the plane is soil on soil and the stress on it is the Rankine stress, inclined at β; Coulomb with δ = β gives that value.":"The stem cuts the zone: Coulomb on the same plane with the soil-on-soil wall friction δ of panel I-3 (C3.11.5.3: usually at most 0.67φ = "+fmt(0.67*s.phi,1)+"°)."} The soil between the stem and the plane is part of the wall weight (EV).`) : "";
+@@ -3339 +3364 @@ function renderTabLoads(R){
+-       `k_a = \\dfrac{\\cos^2 ${fmtT(s.phi,1)}°}{\\cos ${fmtT(s.delta,1)}°\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(s.phi+s.delta,1)}°)\\,\\sin(${fmtT(s.phi-g.beta,1)}°)}{\\cos ${fmtT(s.delta,1)}°\\,\\cos ${fmtT(g.beta,1)}°}}\\right]^2}`,
++       `k_a = \\dfrac{\\cos^2 ${fmtT(s.phi,1)}°}{\\cos ${fmtT(dC,1)}°\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(s.phi+dC,1)}°)\\,\\sin(${fmtT(s.phi-g.beta,1)}°)}{\\cos ${fmtT(dC,1)}°\\,\\cos ${fmtT(g.beta,1)}°}}\\right]^2}`,
+@@ -3363,0 +3389 @@ function renderTabLoads(R){
++    ${coulCase}
+@@ -3367 +3393 @@ function renderTabLoads(R){
+-      ...(s.method==="coulomb"?[["\\delta","Wall interface friction angle",s.delta,"deg"]]:[]),
++      ...(s.method==="coulomb"?[["\\delta","Friction angle on the virtual back ("+(CW&&CW.longHeel?"long heel: = β":"short heel: soil on soil, input")+")",dC,"deg"]]:[]),
+@@ -5550 +5576 @@ function inputEchoHTML(){
+-    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule"}[S.soil.Kmode]||"active Ka",""],
++    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT: at-rest on piles / rock"}[S.soil.Kmode]||"active Ka",""],
+```
