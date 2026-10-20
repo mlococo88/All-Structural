@@ -636,7 +636,20 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
    Hand-off and group workspace use the same effect-based moment convention (+My moves the resultant toward +x,
    +Mx toward +y; P + down), so only the axes are mapped. Imported rows carry a "_bx" tag; "replace" removes only
    tagged rows. The source is kept in the new optional input field I.foundationSrc (saved with the inputs,
-   printed in the report). No calculation changes. Uses BridgeXfer v1 (above). */
+   printed in the report). No calculation changes. Uses BridgeXfer v1 (above).
+   ABPX (2026-10-20): payload revision 2 from the abutment calculator (optional blocks; schemaVersion stays 1, an older
+   payload imports exactly as before):
+   - pileLayout: the group target offers to adopt the abutment's pile layout (I.groupPiles in pile coordinates through the
+     same axis mapping, rows / columns, the smallest c/c spacing for the group effects, cap = footing plan and thickness)
+     and its H-pile section (pile type, d, b_f, t_f, t_w, F_y, driving condition, cap embedment). The reference point is then
+     the adopted centroid, and every imported case is distributed here and compared pile by pile with the abutment's
+     reactions (case.pileP);
+   - pileDesign: target "per-pile governing loads": per limit state the abutment's largest and smallest pile reaction,
+     each a single-pile LRFD row (STL = |P|, lateral = its share √(Vx² + Vy²), head moment 0; p-y head free = pinned);
+   - integral: target "integral-abutment mode" (refused before): gravity load per pile, δT, skew, section, orientation,
+     owner preset and the eligibility inputs; the pile type can be switched to integral abutment.
+   Every input set from the hand-off is listed in I.foundationSrc.fields and marked (amber, "pfx-mk") in its panel while it
+   still holds the imported value; imported LRFD rows show a HAND-OFF badge. */
 (function(){
   if(window.PileFoundationXfer) return;
   var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads'];
@@ -673,8 +686,15 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       var v={}, bad=[];
       ['P','Vx','Vy','Mx','My'].forEach(function(k){ if(!isNum(c[k])) bad.push(k+' = '+JSON.stringify(c[k])); else v[k]=c[k]*(k[0]==='M'?km:kf); });
       if(bad.length){ out.err.push(nm+': not a finite number: '+bad.join(', ')+'.'); return; }
-      out.cases.push({i:i,name:nm,limitState:String(c.limitState||''),factored:c.factored,governs:c.governs||'',combination:c.combination||'',P:v.P,Vx:v.Vx,Vy:v.Vy,Mx:v.Mx,My:v.My});
+      out.cases.push({i:i,name:nm,limitState:String(c.limitState||''),factored:c.factored,governs:c.governs||'',combination:c.combination||'',P:v.P,Vx:v.Vx,Vy:v.Vy,Mx:v.Mx,My:v.My,
+        pileP:(Array.isArray(c.pileP) && c.pileP.every(isNum) && kf===1)? c.pileP : null});   // ABPX: the sender's pile reactions (kip), for the per-pile check
     });
+    if(out.err.length) return out;
+    /* ABPX (payload revision 2, additive; HANDOFF.md §4.6): pile layout, per-pile governing loads, integral-abutment data */
+    out.rev=isNum(p.revision)? p.revision : 1;
+    out.lay=checkLayout(p.pileLayout,out.warn);
+    out.pd=checkPileDesign(p.pileDesign,out.warn);
+    out.iab=checkIntegral(p.integral,out.warn);
     return out;
   }
   function mapAxes(c,ax){
@@ -700,22 +720,100 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     catch(e){ return {x:0,y:0,n:0}; }
   }
   function tagged(o){ return !!(o && o._bx && o._bx.ch===CH); }
+  /* ABPX (2026-10-20): optional blocks of payload revision 2 (abutment calculator; HANDOFF.md §4.6). Each is checked on its
+     own; a block that fails is dropped with a warning and the load cases still import as before. */
+  function pos(v){ return isNum(v) && v>0; }
+  function checkLayout(L,warn){
+    if(L===undefined || L===null) return null;
+    function bad(m){ warn.push('Pile layout not usable ('+m+'); only the load cases can be imported.'); return null; }
+    if(typeof L!=='object' || !Array.isArray(L.piles) || !L.piles.length) return bad('no pile list');
+    var u=L.units||{};
+    if(u.coordinates!==undefined && u.coordinates!=='ft') return bad('coordinates in "'+u.coordinates+'", expected ft');
+    var act=[], i, q;
+    for(i=0;i<L.piles.length;i++){ q=L.piles[i];
+      if(!q || !isNum(q.x) || !isNum(q.y)) return bad('pile '+(i+1)+' has no finite x, y');
+      if(q.active!==false) act.push({no:isNum(q.no)?q.no:i+1, x:q.x, y:q.y}); }
+    if(!act.length) return bad('no active pile');
+    var c=L.cap||{}, ce=c.centre||{}, s=(L.section && typeof L.section==='object')? L.section : {};
+    var secOk=s.shape==='hp' && pos(s.d) && pos(s.bf) && pos(s.tf) && pos(s.tw) && pos(s.Fy) && (u.section===undefined || u.section==='in');
+    if(L.vertical===false || L.batter) warn.push('The sender models battered piles; this tool\'s rigid-cap distribution takes every pile as vertical.');
+    return {act:act, n:act.length, all:L.piles.length, cap:{B:pos(c.widthX)?c.widthX:null, L:pos(c.lengthY)?c.lengthY:null, t:pos(c.thickness)?c.thickness:null, x:isNum(ce.x)?ce.x:0, y:isNum(ce.y)?ce.y:0},
+      sec:s, secOk:secOk, embed:(isNum(L.embedment) && L.embedment>=0 && (u.embedment===undefined || u.embedment==='in'))? L.embedment : null,
+      head:L.head||'', dist:L.distribution||'', nRows:L.nRows, nCols:L.nCols};
+  }
+  function checkPileDesign(D,warn){
+    if(D===undefined || D===null) return null;
+    if(typeof D!=='object' || !Array.isArray(D.cases) || !D.cases.length){ warn.push('Per-pile governing loads not usable (no cases).'); return null; }
+    var u=D.units||{}; if(u.force!==undefined && u.force!=='kip'){ warn.push('Per-pile governing loads not usable (force in "'+u.force+'", expected kip).'); return null; }
+    var out=[];
+    D.cases.forEach(function(c,i){
+      if(!c || typeof c!=='object' || typeof c.factored!=='boolean' || !isNum(c.P) || !isNum(c.Vx) || !isNum(c.Vy)){ warn.push('Per-pile governing load '+(i+1)+' skipped (P, Vx, Vy or factored missing).'); return; }
+      out.push({i:i, id:String(c.id||i), limitState:String(c.limitState||''), factored:c.factored, role:String(c.role||''), pile:c.pile, x:c.x, y:c.y,
+        P:c.P, Vx:c.Vx, Vy:c.Vy, V:Math.hypot(c.Vx,c.Vy), head:String(c.head||D.head&&D.head.condition||''), combination:String(c.combination||'')}); });
+    return out.length? {cases:out, share:String(D.lateralShare||''), head:D.head||{}, DR:isNum(D.DR)?D.DR:0} : null;
+  }
+  var PRESETS={ massdot:{iabOrient:'biaxial', iabThetaWeak:1.75, iabThetaStrong:1.0, iabTier1Applicable:true}, ctdot:{iabOrient:'weak', iabThetaWeak:1.0, iabThetaStrong:1.0, iabTier1Applicable:false} };
+  function checkIntegral(G,warn){
+    if(G===undefined || G===null) return null;
+    if(typeof G!=='object'){ warn.push('Integral-abutment data not usable.'); return null; }
+    var u=G.units||{}, g=G.gravity||{}, t=G.thermal||{};
+    if((u.force!==undefined && u.force!=='kip') || (u.length!==undefined && u.length!=='ft') || (u.movement!==undefined && u.movement!=='in')){ warn.push('Integral-abutment data not usable (units must be kip, ft, in).'); return null; }
+    if(!isNum(g.DL) || g.DL<0 || !isNum(g.LL) || g.LL<0){ warn.push('Integral-abutment data not usable (no valid gravity load per pile).'); return null; }
+    return G;
+  }
+  /* the abutment's layout in this tool's pile coordinates (pile +x = hand-off o.ax.x, +y = o.ax.y), with its centroid */
+  function mapPt(x,y,ax){ function c(a){ var s=a.charAt(0)==='-'?-1:1; return s*(a.charAt(1)==='x'?x:y); } return {x:r6(c(ax.x)), y:r6(c(ax.y))}; }
+  function adoptedLayout(lay,ax){
+    var piles=lay.act.map(function(q){ var m=mapPt(q.x,q.y,ax); return {x:m.x, y:m.y}; }), n=piles.length;
+    var cx=r6(piles.reduce(function(a,q){ return a+q.x; },0)/n), cy=r6(piles.reduce(function(a,q){ return a+q.y; },0)/n);
+    function uniq(k){ var v=[]; piles.forEach(function(q){ if(!v.some(function(w){ return Math.abs(w-q[k])<1e-6; })) v.push(q[k]); }); return v.sort(function(a,b){ return a-b; }); }
+    var xs=uniq('x'), ys=uniq('y'), gaps=[];
+    [xs,ys].forEach(function(v){ for(var i=1;i<v.length;i++) gaps.push(v[i]-v[i-1]); });
+    var smin=gaps.length? Math.min.apply(null,gaps) : 0;
+    var swap=ax.x.charAt(1)!=='x', cc=mapPt(lay.cap.x,lay.cap.y,ax);
+    return {piles:piles, n:n, cx:cx, cy:cy, nCols:xs.length, nRows:ys.length, sMin:smin,
+      capL:swap?lay.cap.L:lay.cap.B, capW:swap?lay.cap.B:lay.cap.L, capT:lay.cap.t, capCx:cc.x, capCy:cc.y};
+  }
   function defaults(chk,I){
-    var c=centroid(I);
-    return {target:'group', sel:chk.cases.map(function(){ return true; }), ax:{x:'+x',y:'+y'}, px:c.x, py:c.y, mode:'replace',
-      groupOn:true, wtOff:true, lat:'res', mom:'zero', single:false};
+    var c=centroid(I), lay=chk.lay;
+    var o={target:chk.iab?'iab':'group', sel:chk.cases.map(function(){ return true; }), ax:{x:'+x',y:'+y'}, px:c.x, py:c.y, mode:'replace',
+      groupOn:true, wtOff:true, lat:'res', mom:'zero', single:false,
+      adopt:!!lay, adoptSec:!!(lay && lay.secOk),
+      pdSel:chk.pd? chk.pd.cases.map(function(q){ return q.role!=='minimum'; }) : [], headFree:true,
+      iabSwitch:I.pileType!=='iab', iabPreset:!!(chk.iab && PRESETS[chk.iab.preset])};
+    if(lay){ var a=adoptedLayout(lay,o.ax); o.px=a.cx; o.py=a.cy; }
+    return o;
+  }
+  function sameVal(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+  /* section adoption (group and per-pile targets): the abutment's HP section into this tool's driven H-pile inputs */
+  function planSection(r,lay,o,I){
+    if(!lay || !o.adoptSec) return;
+    if(!lay.secOk){ r.warn.push('The abutment\'s pile ('+(lay.sec.designation||lay.sec.shape||'?')+') is not an H-pile with d, b_f, t_f, t_w and F_y: its section is not adopted.'); return; }
+    var s=lay.sec, set=function(k,v,lbl,u){ if(!sameVal(I[k],v)){ r.patch[k]=v; r.changes.push(lbl+': '+(I[k]===undefined?'—':I[k])+' → '+v+(u?' '+u:'')); } r.fields[k]=v; };
+    set('pileType','hpile','Pile type');
+    set('hpD',s.d,'H-pile depth d','in'); set('hpBf',s.bf,'Flange width b_f','in'); set('hpTf',s.tf,'Flange thickness t_f','in'); set('hpTw',s.tw,'Web thickness t_w','in'); set('hpFy',s.Fy,'Yield F_y','ksi');
+    if(s.drive==='good' || s.drive==='severe'){ set('hpDriveCond',s.drive,'Driving condition'); set('hpPhiC',s.drive==='severe'?0.50:0.60,'φc axial'); }
+    if(lay.embed!==null) set('hpCapEmbed',lay.embed,'Cap embedment','in');
+    r.warn.push('Section '+(s.designation||'')+': this tool idealizes the H-pile as three rectangles (no fillets), so its area differs slightly from the tabulated A = '+(isNum(s.A)?s.A:'?')+' in².');
   }
   /* ---- plan: exactly what will change. Pure: reads I, returns the patch. ---- */
   function plan(p,chk,o,I){
-    var r={err:[],warn:[],changes:[],patch:{},rows:[]};
-    if(I.pileType==='iab') r.err.push('Integral-abutment mode takes the unfactored gravity load per pile (MassDOT simplified method), not foundation load cases. Switch the pile type to micropile or H-pile to import.');
+    var r={err:[],warn:[],changes:[],patch:{},rows:[],fields:{}};
+    if(I.pileType==='iab' && o.target!=='iab') r.err.push('Integral-abutment mode takes the unfactored gravity load per pile (MassDOT simplified method), not foundation load cases. '+(chk.iab?'Pick the target "Integral-abutment mode".':'This hand-off has no integral-abutment data (abutment type not Integral, or an older payload). Switch the pile type to micropile or H-pile to import the cases.'));
+    if(o.target==='iab' && !chk.iab) r.err.push('This hand-off has no integral-abutment data.');
+    if(o.target==='perpile' && !chk.pd) r.err.push('This hand-off has no per-pile governing loads.');
     if(o.ax.x.charAt(1)===o.ax.y.charAt(1)) r.err.push('Map pile x and y to different hand-off axes.');
     var picked=chk.cases.filter(function(c,j){ return o.sel[j]; });
-    if(!picked.length) r.err.push('Tick at least one case.');
+    if((o.target==='group' || o.target==='single') && !picked.length) r.err.push('Tick at least one case.');
+    var pdPicked=chk.pd? chk.pd.cases.filter(function(c,j){ return o.pdSel[j]; }) : [];
+    if(o.target==='perpile' && !pdPicked.length) r.err.push('Tick at least one per-pile load.');
     if(o.target==='single' && !o.single) r.err.push('Single-pile target: tick the box to confirm these loads act on one pile. A footing or pile-cap resultant must go to the pile group workspace.');
+    var lay=(o.target==='group' && o.adopt)? chk.lay : null, al=lay? adoptedLayout(lay,o.ax) : null;
+    if(al){ o.px=al.cx; o.py=al.cy; }
     if(o.target==='group' && (!isNum(o.px) || !isNum(o.py))) r.err.push('Enter the reference-point location (x, y) in pile coordinates.');
     if(r.err.length) return r;
     var src={ch:CH,producer:p.producer||'',producedAt:p.producedAt||''}, sh=short(p);
+    if(o.target==='iab') return planIab(p,chk,o,I,r);
     if(o.target==='group'){
       var pts=deriveLoadPoints(I).map(function(x){ return Object.assign({},x); }), gcs=deriveGroupCases(I).map(function(x){ return Object.assign({},x); });
       var pt=pts.filter(tagged)[0], nextPt=pts.reduce(function(m,x){ return Math.max(m,x.id||0); },0)+1;
@@ -727,11 +825,22 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       var nextId=gcs.reduce(function(m,c){ return Math.max(m,c.id||0); },0)+1, add=[];
       picked.forEach(function(c){ var m=mapAxes(c,o.ax), mags={}; mags[pt.id]={P:r6(m.P),Vx:r6(m.Vx),Vy:r6(m.Vy),Mx:r6(m.Mx),My:r6(m.My)};
         var g={id:nextId++,name:sh+': '+c.name,type:caseType(c),mags:mags,_bx:Object.assign({case:c.name},src)}; add.push(g);
-        r.rows.push({name:g.name,type:g.type,P:m.P,Vx:m.Vx,Vy:m.Vy,Mx:m.Mx,My:m.My}); });
+        r.rows.push({name:g.name,type:g.type,P:m.P,Vx:m.Vx,Vy:m.Vy,Mx:m.Mx,My:m.My,_c:c,_g:g}); });
       r.changes.push('Add '+add.length+' group load case(s) at "'+pt.name+'" (table below)');
       var others=keep.filter(function(c){ return !tagged(c) && !caseIsZero(c); });
       if(others.length) r.warn.push('The group workspace keeps '+others.length+' other non-zero case(s) ('+others.map(function(c){ return c.name; }).join('; ')+'); they also become Group ▦ rows in the LRFD table.');
       r.patch.loadPoints=pts; r.patch.groupCases=keep.concat(add);
+      if(al){   // ABPX: adopt the abutment's pile layout and cap
+        var fset=function(k,v,lbl,u){ if(!sameVal(I[k],v)){ r.patch[k]=v; r.changes.push(lbl+(typeof v==='object'?'':': '+(I[k]===undefined||I[k]===null?'—':I[k])+' → '+v+(u?' '+u:''))); } r.fields[k]=v; };
+        var oldN=Array.isArray(I.groupPiles)&&I.groupPiles.length? I.groupPiles.length+' listed piles' : (I.groupNrows+' × '+I.groupNcols+' grid');
+        fset('groupPiles',al.piles,'Pile layout: '+oldN+' → the abutment\'s '+al.n+' active piles (coordinates from the hand-off, mapped to pile x, y; origin at the footing centre)');
+        fset('groupNrows',al.nRows,'Rows (along y)'); fset('groupNcols',al.nCols,'Columns (along x)');
+        if(al.sMin>0) fset('groupSpacingIn',r6(al.sMin*12),'c/c spacing for the group effects (the smallest row / column spacing)','in');
+        if(al.capL) fset('capL',al.capL,'Cap length L (x)','ft'); if(al.capW) fset('capW',al.capW,'Cap width W (y)','ft'); if(al.capT) fset('capThk',al.capT,'Cap thickness','ft');
+        fset('capCx',al.capCx,'Cap centroid x','ft'); fset('capCy',al.capCy,'Cap centroid y','ft');
+        r.layout={n:al.n, cx:al.cx, cy:al.cy};
+        planSection(r,chk.lay,o,I);
+      }
       if(!I.groupEnable){ if(o.groupOn){ r.patch.groupEnable=true; r.changes.push('"Apply pile group to the design": off → on'); } else r.warn.push('"Apply pile group to the design" is off: the imported group cases are stored but not used until you turn it on (Pile Group Workspace).'); }
       var inc=p.includes||{};
       if(inc.footingWeight && (I.capIncludeWeight || I.stemEnable)){
@@ -740,9 +849,11 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
         else r.warn.push('The hand-off includes the footing/cap weight and the soil, and this tool also adds its cap'+(I.stemEnable?' and stem':'')+' self-weight: they are counted twice.');
       } else if(!inc.footingWeight && I.capIncludeWeight===false) r.warn.push('The hand-off does not include the footing/cap weight ('+(p.location||'')+'). Turn on the cap self-weight in the Pile Group Workspace if the cap is not otherwise counted.');
       var pnt=p.reference&&p.reference.point;
-      if(pnt!=='pileGroupCentroid') r.warn.push('The hand-off moments are about the '+(pnt==='footingCentre'?'footing centre':pnt==='unitCentre'?'unit centre':'sender\'s reference point')+'. The location (x, y) above must be that point in pile coordinates; the default is the pile-group centroid ('+f2(centroid(I).x)+', '+f2(centroid(I).y)+'), i.e. it assumes the group is centred on it.');
+      if(al) r.warn.push('Reference point = the centroid of the adopted layout ('+f2(al.cx)+', '+f2(al.cy)+') ft, the sender\'s pile-group centroid.');
+      else if(pnt!=='pileGroupCentroid') r.warn.push('The hand-off moments are about the '+(pnt==='footingCentre'?'footing centre':pnt==='unitCentre'?'unit centre':'sender\'s reference point')+'. The location (x, y) above must be that point in pile coordinates; the default is the pile-group centroid ('+f2(centroid(I).x)+', '+f2(centroid(I).y)+'), i.e. it assumes the group is centred on it.');
       r.warn.push('z = 0: the moments are taken as given at the pile heads (the hand-off level, '+(p.location||'')+'); no V·z is added.');
-    } else {
+      if(al) checkPerPile(r,I,pts,add);
+    } else if(o.target==='single'){
       var base=(Array.isArray(I.loadCases)&&I.loadCases.length)? I.loadCases.filter(function(c){ return c && !(typeof c.name==='string' && c.name.indexOf('Group ▦')===0); }) : [{name:'Case 1 — Strength',type:'strength',STL:I.STL,Plat:I.Plat,Mhead:I.pyMhead||0}];
       var kept=base, gone=[];
       if(o.mode==='replace') kept=base.filter(function(c){ if(tagged(c)){ gone.push(c.name); return false; } return true; });
@@ -758,13 +869,98 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       if(picked.some(function(c){ return c.P<0; })) r.warn.push('Cases with net uplift (P < 0) become "tension" rows with STL = |P|.');
       r.warn.push('Lateral = '+(o.lat==='res'?'√(Vx² + Vy²)':'V'+o.lat)+'; head moment = '+(o.mom==='same'?(o.lat==='res'?'√(Mx² + My²)':'|M| in the same plane')+', entered as positive (same sense as the lateral load)':'0 (not imported)')+'.');
       if(I.groupEnable) r.warn.push('The pile group is applied: the group workspace still adds its own Group ▦ rows.');
+    } else {   // ABPX: per-pile governing loads into the single-pile LRFD case table
+      var base2=(Array.isArray(I.loadCases)&&I.loadCases.length)? I.loadCases.filter(function(c){ return c && !(typeof c.name==='string' && c.name.indexOf('Group ▦')===0); }) : [{name:'Case 1 — Strength',type:'strength',STL:I.STL,Plat:I.Plat,Mhead:I.pyMhead||0}];
+      var kept2=base2, gone2=[];
+      if(o.mode==='replace') kept2=base2.filter(function(c){ if(tagged(c)){ gone2.push(c.name); return false; } return true; });
+      if(gone2.length) r.changes.push('Remove '+gone2.length+' previously imported LRFD case(s): '+gone2.join('; '));
+      var rows2=[];
+      pdPicked.forEach(function(c){ var t=!c.factored?'service':(/extreme/i.test(c.limitState)?'extreme':'strength'); if(c.P<0) t='tension';
+        var nm=sh+': '+c.limitState+' — pile '+(c.pile!=null?c.pile:'?')+' ('+(c.role==='compression'?'max compression':c.role==='uplift'?'uplift':'min reaction')+')';
+        var row={name:nm,type:t,STL:r6(Math.abs(c.P)),Plat:r6(c.V),Mhead:0,_bx:{ch:CH,producer:p.producer||'',producedAt:p.producedAt||'',case:c.id,perPile:true}};
+        rows2.push(row); r.rows.push({name:row.name,type:row.type,P:row.STL,V:row.Plat,M:0,Vx:c.Vx,Vy:c.Vy}); });
+      r.changes.push('Add '+rows2.length+' LRFD load case row(s), one pile each (table below)');
+      r.patch.loadCases=kept2.concat(rows2);
+      if(o.headFree){ if(I.solverHead!=='free'){ r.patch.solverHead='free'; r.changes.push('p-y head condition: '+I.solverHead+' → free (pinned head, as the abutment\'s distribution assumes)'); } r.fields.solverHead='free'; }
+      else r.warn.push('The abutment\'s distribution assumes pinned pile heads (no head moment); the p-y head condition here stays '+(I.solverHead||'free')+'.');
+      planSection(r,chk.lay,o,I);
+      r.warn.push('Lateral = this pile\'s share of the horizontal load, √(Vx² + Vy²)/n ('+(chk.pd.share||'equal share')+'); head moment 0. The lateral (p-y) analysis is done here with these loads.');
+      if(pdPicked.some(function(c){ return c.P<0; })) r.warn.push('Piles in uplift become "tension" rows with STL = |P|.');
+      if(chk.pd.DR>0) r.warn.push('The abutment\'s drag load DR = '+f2(chk.pd.DR,1)+' kip per pile is not in these rows.');
+      if(I.groupEnable) r.warn.push('The pile group is applied: the group workspace still adds its own Group ▦ rows.');
     }
-    var nf=picked.filter(function(c){ return !c.factored; }).length;
-    if(nf) r.warn.push(nf+' service case(s) (factored:false) are imported as type "service" (deflection check only).');
+    if(o.target!=='perpile'){ var nf=picked.filter(function(c){ return !c.factored; }).length;
+      if(nf) r.warn.push(nf+' service case(s) (factored:false) are imported as type "service" (deflection check only).'); }
+    else { var nf2=pdPicked.filter(function(c){ return !c.factored; }).length; if(nf2) r.warn.push(nf2+' service row(s) (factored:false) are imported as type "service" (deflection check only).'); }
+    srcPatch(r,p,o,o.target==='perpile'? pdPicked.map(function(c){ return c.limitState+' — pile '+c.pile+' ('+c.role+')'; }) : picked.map(function(c){ return c.name; }));
+    return r;
+  }
+  function srcPatch(r,p,o,names){
     r.patch.foundationSrc={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',project:p.project||'',
-      element:p.element||null,location:p.location||'',target:o.target,cases:picked.map(function(c){ return c.name; }),
+      element:p.element||null,location:p.location||'',target:o.target,cases:names,
       axes:{x:o.ax.x,y:o.ax.y},point:o.target==='group'?{x:o.px,y:o.py,z:0}:null,lateral:o.target==='single'?o.lat:null,moment:o.target==='single'?o.mom:null,mode:o.mode,
       notes:(p.notes||[]).slice(0,20)};
+    if(p.revision) r.patch.foundationSrc.revision=p.revision;
+    if(r.layout) r.patch.foundationSrc.layout=r.layout;
+    if(Object.keys(r.fields).length) r.patch.foundationSrc.fields=r.fields;   // ABPX: inputs set from the hand-off (marked in the UI while unchanged)
+  }
+  /* ABPX: with the layout adopted, distribute each imported case with this tool's own rigid-cap distribution (computeCapDist)
+     and compare each pile with the reaction the sender computed (case.pileP, same pile order). */
+  function checkPerPile(r,I,pts,add){
+    try{
+      var Ip=Object.assign({},I,r.patch), grp={nRows:Ip.groupNrows,nCols:Ip.groupNcols,s_in:groupWsSpacing(Ip)}, worst=0, n=0, bad=[];
+      add.forEach(function(g){ var c=r.rows.filter(function(q){ return q._g===g; })[0]; c=c&&c._c; var src=c? c.pileP : null;
+        if(!Array.isArray(src)) return;
+        var cd=computeCapDist(Ip,grp,caseLoadList(pts,g,stemTopZ(Ip)));
+        if(!cd || !cd.piles || cd.piles.length!==src.length){ bad.push(g.name+': pile count differs'); return; }
+        var d=0; cd.piles.forEach(function(q,i){ d=Math.max(d,Math.abs(q.axial-src[i])); }); worst=Math.max(worst,d); n++;
+        if(d>0.01) bad.push(g.name+': up to '+f2(d,3)+' kip'); });
+      if(!n && !bad.length) return;
+      r.perPile={n:n, worst:worst, bad:bad};
+      if(bad.length) r.warn.push('Per-pile check: this tool\'s distribution differs from the abutment\'s pile reactions for '+bad.length+' case(s) ('+bad.slice(0,4).join('; ')+(bad.length>4?'; …':'')+'). Causes: this tool\'s own cap / stem weight left on, an unsymmetrical layout (this tool includes the product term Σx\'y\'; the abutment does not), or a different reference point.');
+      else r.changes.push('Per-pile check: for all '+n+' case(s), every pile\'s reaction from this tool\'s rigid-cap distribution equals the abutment\'s to within '+f2(worst,4)+' kip');
+    }catch(e){ r.warn.push('Per-pile check not run: '+e.message); }
+  }
+  /* ABPX: integral-abutment target: the IAB inputs this tool has, from the abutment's Tab 10 */
+  function planIab(p,chk,o,I,r){
+    var G=chk.iab, g=G.gravity||{}, t=G.thermal||{}, f=r.fields;
+    function set(k,v,lbl,u){ if(v===undefined || v===null || (typeof v==='number' && !isFinite(v))) return; if(!sameVal(I[k],v)){ r.patch[k]=v; r.changes.push(lbl+': '+(I[k]===undefined||I[k]===null||I[k]===''?'—':String(I[k]))+' → '+v+(u?' '+u:'')); } f[k]=v; r.rows.push({field:lbl, now:I[k], val:v, u:u||''}); }
+    if(I.pileType!=='iab'){ if(o.iabSwitch) set('pileType','iab','Pile type'); else r.warn.push('Pile type stays '+I.pileType+': the integral-abutment inputs are stored but not used until you switch to "Integral Abutment".'); }
+    if(G.section==='HP10X57' || G.section==='HP12X84') set('iabSection',G.section,'Pile section');
+    else r.warn.push('Pile section '+(G.section||'?')+': this mode has only HP10×57 and HP12×84 (MassDOT tables); the section is not changed.');
+    if(isNum(G.Fy) && Math.abs(G.Fy-50)>1e-9) r.warn.push('The abutment uses F_y = '+G.Fy+' ksi; this mode is for Grade 50 only.');
+    if(isNum(G.soilType) && G.soilType>=1 && G.soilType<=6) set('iabSoilType',Math.round(G.soilType),'MassDOT soil type');
+    if(isNum(G.skew)) set('iabSkew',Math.abs(G.skew),'Skew','°');
+    set('iabDL',r6(g.DL),'Dead load per pile DL (unfactored)','kip'); set('iabLL',r6(g.LL),'Live load per pile LL (unfactored)','kip');
+    if(pos(g.gDC)) set('iabGammaDC',g.gDC,'γDC'); if(pos(g.gLL)) set('iabGammaLL',g.gLL,'γLL');
+    if(pos(G.bridgeLength)) set('iabBridgeLength',G.bridgeLength,'Total bridge length','ft');
+    if(G.material==='steel' || G.material==='concrete') set('iabBridgeMaterial',G.material,'Bridge material');
+    if(pos(G.abutHeight)) set('iabAbutHeight',G.abutHeight,'Abutment height (deck to bottom of cap)','ft');
+    if(isNum(G.grade)) set('iabGradeDiff',Math.abs(G.grade),'Grade difference','%');
+    if(isNum(G.curvature)) set('iabCurveAngle',Math.abs(G.curvature),'Curvature (subtended)','°');
+    if(typeof G.straight==='boolean') set('iabParallel',G.straight,'Straight bridge or parallel straight beams');
+    if(typeof G.parallel==='boolean') set('iabParallelAbut',G.parallel,'Parallel abutments and piers');
+    if(typeof G.uWingwalls==='boolean') set('iabUwingwalls',G.uWingwalls,'Parallel U-wingwalls'); else r.warn.push('U-wingwalls: the abutment\'s wingwall module is off; "Parallel U-wingwalls" is not changed.');
+    if(typeof G.rockBelow==='boolean') set('iabBedrockBelow',G.rockBelow,'Top of bedrock below the pile tip');
+    if(typeof G.noScour==='boolean') set('iabNotScour',G.noScour,'Not scour-susceptible');
+    if(isNum(t.delta) && t.delta>=0){ set('iabDeltaSource','direct','δT source'); set('iabDeltaT',r6(t.delta),'δT per abutment','in'); }
+    var pr=PRESETS[G.preset];
+    if(pr && o.iabPreset){ set('iabOrient',pr.iabOrient,'Pile orientation'); set('iabThetaWeak',pr.iabThetaWeak,'θi weak'); set('iabThetaStrong',pr.iabThetaStrong,'θi strong');
+      set('iabTier1Applicable',pr.iabTier1Applicable,'Tier-1 tables applicable'); set('iabAgencyPreset',G.preset,'Agency preset'); }
+    else if(!pr) r.warn.push('Owner '+(G.owner||'?')+': no preset in this tool (MassDOT and CTDOT only); orientation and θi are not preset.');
+    var sk=isNum(G.skew)? Math.abs(G.skew) : 0;
+    if(G.orient==='strong') set('iabOrient','strong','Pile orientation (web normal to the abutment: strong axis)');
+    else if(G.orient==='weak' && sk>0) set('iabOrient','biaxial','Pile orientation (web parallel to the abutment at '+sk+'° skew: δT resolved into weak and strong components)');
+    else if(G.orient==='weak' && !pr) set('iabOrient','weak','Pile orientation (weak axis)');
+    if(G.orient==='strong' && sk>0) r.warn.push('Strong-axis orientation at '+sk+'° skew: this tool\'s "strong" option puts all of δT on the strong axis (bounding); the weak-axis component is not modelled.');
+    if(pos(g.gDW) && pos(g.gDC) && Math.abs(g.gDW-g.gDC)>1e-9 && pos(g.DW)) r.warn.push('This mode factors DL = DC + DW with γDC: P_u = '+f2(g.gDC,2)+' × '+f2(g.DL,1)+' + '+f2(g.gLL,2)+' × '+f2(g.LL,1)+' = '+f2(g.gDC*g.DL+g.gLL*g.LL,1)+' kip per pile; the abutment factors DW = '+f2(g.DW,1)+' kip with γDW = '+f2(g.gDW,2)+(pos(g.eta)&&g.eta!==1?' and applies η = '+f2(g.eta,2):'')+': P_u = '+f2(g.Pu,1)+' kip (its Tab 10).');
+    else if(pos(g.eta) && Math.abs(g.eta-1)>1e-9) r.warn.push('The abutment applies η = '+f2(g.eta,2)+' to the gravity load (P_u = '+f2(g.Pu,1)+' kip); this mode has no η.');
+    if(g.LLincludesIM===false) r.warn.push('LL is without the dynamic load allowance (MassDOT gravity load per pile, as in the abutment).');
+    if(!I.iabTier2) r.warn.push('δT is used by the Tier 2 check only, which is off.');
+    if(isNum(G.Lpile)) r.warn.push('Pile length below the cap in the abutment: '+G.Lpile+' ft (not an input here; compare with the required length in the results).');
+    r.warn.push('Not used here: pile count and spacing ('+(G.nPiles||'?')+' at '+(G.spacing||'?')+' ft), embedment '+(G.embedment||'?')+' in, abutment length '+(G.abutLength||'?')+' ft, cap width '+(G.capWidth||'?')+' ft.');
+    srcPatch(r,p,o,[]);
+    r.patch.foundationSrc.integral={owner:G.owner||'', preset:G.preset||'', section:G.section||'', orient:G.orient||'', DL:g.DL, LL:g.LL, Pu:g.Pu, delta:t.delta, skew:G.skew};
     return r;
   }
   function apply(p,chk,o,I,setter,via){
@@ -789,6 +985,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     row.appendChild(ca); row.appendChild(go); box.appendChild(row);
     var WB='background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:4px 0', TB='border-collapse:collapse;width:100%;margin:4px 0', TD='border:1px solid #ddd;padding:1px 5px';
     function opt(sel,val,txt,on){ var op=document.createElement('option'); op.value=val; op.textContent=txt; if(on) op.selected=true; sel.appendChild(op); }
+    function ck(id,on,txt,dis){ return '<label><input type="checkbox" id="'+id+'"'+(on?' checked':'')+(dis?' disabled':'')+'> '+txt+'</label><br>'; }
     function draw(){
       head.innerHTML='';
       head.appendChild(h('div',null,'<b style="font-size:14px">Import foundation loads</b>'));
@@ -799,46 +996,74 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
         (p.element?' &middot; <b>element</b> '+esc((p.element.type||'')+' '+(p.element.label||'')):'')+(via==='file'?' &middot; from a JSON file':'')+
         '<br><b>Location:</b> '+esc(p.location||'—')+'<br><b>Sign convention (sender):</b> '+esc(p.signConvention||'—')+
         (p.axes?'<br><b>Axes (sender):</b> x: '+esc(p.axes.x||'')+'; y: '+esc(p.axes.y||''):'')));
-      head.appendChild(h('div',WB,'This tool (pile group workspace): P + = down; +Vx, +Vy toward +x, +y of the pile coordinates; M<sub>x,eff</sub> = Mx + Vy·z + P·e<sub>y</sub> and M<sub>y,eff</sub> = My + Vx·z + P·e<sub>x</sub>, so +My moves the resultant toward +x and +Mx toward +y — the same effect-based convention as the hand-off. Only the axes are mapped.'));
+      if(o.target==='group' || o.target==='single') head.appendChild(h('div',WB,'This tool (pile group workspace): P + = down; +Vx, +Vy toward +x, +y of the pile coordinates; M<sub>x,eff</sub> = Mx + Vy·z + P·e<sub>y</sub> and M<sub>y,eff</sub> = My + Vx·z + P·e<sub>x</sub>, so +My moves the resultant toward +x and +Mx toward +y — the same effect-based convention as the hand-off. Only the axes are mapped.'));
       if(chk.warn.length) head.appendChild(h('div',WB,chk.warn.map(esc).join('<br>')));
       if(p.notes && p.notes.length){ var nb=h('details'); nb.appendChild(h('summary',null,'Sender notes ('+p.notes.length+')'));
         nb.appendChild(h('div','color:#475569',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; head.appendChild(nb); }
       body.innerHTML='';
-      var tg=h('div','margin:6px 0','<b>Target:</b> <label><input type="radio" name="pfxTarget" value="group"'+(o.target==='group'?' checked':'')+'> Pile group workspace (footing / pile-cap resultant, distributed to the piles)</label> &nbsp; '+
-        '<label><input type="radio" name="pfxTarget" value="single"'+(o.target==='single'?' checked':'')+'> Single-pile LRFD case table</label>');
+      function rad(v,txt){ return '<label><input type="radio" name="pfxTarget" value="'+v+'"'+(o.target===v?' checked':'')+'> '+txt+'</label>'; }
+      var tg=h('div','margin:6px 0','<b>Target:</b> '+rad('group','Pile group workspace (footing / pile-cap resultant, distributed to the piles)')+' &nbsp; '+rad('single','Single-pile LRFD case table')+
+        (chk.pd?'<br>'+rad('perpile','Single-pile LRFD case table: the abutment\'s per-pile governing loads (one pile each)'):'')+
+        (chk.iab?'<br>'+rad('iab','Integral-abutment mode (gravity load per pile, δT, skew, section, eligibility)'):''));
       body.appendChild(tg);
-      var t=h('table',TB); t.innerHTML='<tr><th style="'+TD+'"><input type="checkbox" id="pfxAll"'+(o.sel.every(Boolean)?' checked':'')+'></th><th style="'+TD+'">Case</th><th style="'+TD+'">Factored</th><th style="'+TD+'">→ type</th><th style="'+TD+'">P (k)</th><th style="'+TD+'">Vx</th><th style="'+TD+'">Vy</th><th style="'+TD+'">Mx (k-ft)</th><th style="'+TD+'">My</th></tr>';
-      chk.cases.forEach(function(c,j){ var tr=h('tr');
-        tr.innerHTML='<td style="'+TD+'"><input type="checkbox" data-pfx-case="'+j+'"'+(o.sel[j]?' checked':'')+'></td><td style="'+TD+'" title="'+esc(c.combination)+'">'+esc(c.name)+'</td><td style="'+TD+'">'+(c.factored?'yes':'no')+'</td><td style="'+TD+'">'+((o.target==='single'&&c.P<0)?'tension':caseType(c))+'</td>'+
-          ['P','Vx','Vy','Mx','My'].map(function(k){ return '<td style="'+TD+';text-align:right">'+f2(c[k],1)+'</td>'; }).join('');
-        t.appendChild(tr); });
-      var tw=h('div','max-height:28vh;overflow:auto'); tw.appendChild(t); body.appendChild(tw);
-      var g=h('div','display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:8px 0');
-      ['x','y'].forEach(function(a){ var lb=h('label',null,'<b>Pile +'+a+' =</b> '), se=document.createElement('select'); se.id='pfxAx'+a;
-        AX.forEach(function(k){ opt(se,k,AXL[k],o.ax[a]===k); }); lb.appendChild(se); g.appendChild(lb); });
-      body.appendChild(g);
       var x='';
+      if(o.target==='group' || o.target==='single'){
+        var t=h('table',TB); t.innerHTML='<tr><th style="'+TD+'"><input type="checkbox" id="pfxAll"'+(o.sel.every(Boolean)?' checked':'')+'></th><th style="'+TD+'">Case</th><th style="'+TD+'">Factored</th><th style="'+TD+'">→ type</th><th style="'+TD+'">P (k)</th><th style="'+TD+'">Vx</th><th style="'+TD+'">Vy</th><th style="'+TD+'">Mx (k-ft)</th><th style="'+TD+'">My</th></tr>';
+        chk.cases.forEach(function(c,j){ var tr=h('tr');
+          tr.innerHTML='<td style="'+TD+'"><input type="checkbox" data-pfx-case="'+j+'"'+(o.sel[j]?' checked':'')+'></td><td style="'+TD+'" title="'+esc(c.combination)+'">'+esc(c.name)+'</td><td style="'+TD+'">'+(c.factored?'yes':'no')+'</td><td style="'+TD+'">'+((o.target==='single'&&c.P<0)?'tension':caseType(c))+'</td>'+
+            ['P','Vx','Vy','Mx','My'].map(function(k){ return '<td style="'+TD+';text-align:right">'+f2(c[k],1)+'</td>'; }).join('');
+          t.appendChild(tr); });
+        var tw=h('div','max-height:28vh;overflow:auto'); tw.appendChild(t); body.appendChild(tw);
+        var g=h('div','display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:8px 0');
+        ['x','y'].forEach(function(a){ var lb=h('label',null,'<b>Pile +'+a+' =</b> '), se=document.createElement('select'); se.id='pfxAx'+a;
+          AX.forEach(function(k){ opt(se,k,AXL[k],o.ax[a]===k); }); lb.appendChild(se); g.appendChild(lb); });
+        body.appendChild(g);
+      }
       if(o.target==='group'){
-        x+='<div><b>Reference point in pile coordinates:</b> x <input id="pfxPx" type="number" step="any" value="'+o.px+'" style="width:70px"> y <input id="pfxPy" type="number" step="any" value="'+o.py+'" style="width:70px"> ft, z = 0 '+
+        if(chk.lay){ var L=chk.lay;
+          x+=ck('pfxAdopt',o.adopt,'<b>adopt the abutment\'s pile layout</b>: '+L.n+' active pile(s)'+(L.all>L.n?' of '+L.all:'')+(L.cap.B&&L.cap.L?', cap '+f2(L.cap.B)+' × '+f2(L.cap.L)+(L.cap.t?' × '+f2(L.cap.t):'')+' ft':'')+' (replaces this tool\'s pile list and cap plan, so each pile\'s reaction is the abutment\'s)');
+          x+=ck('pfxAdoptSec',o.adopt&&o.adoptSec&&L.secOk,'adopt the pile section: '+esc(L.sec.designation||L.sec.shape||'?')+(L.secOk?' (d, b<sub>f</sub>, t<sub>f</sub>, t<sub>w</sub>, F<sub>y</sub>, driving condition'+(L.embed!==null?', cap embedment '+f2(L.embed,1)+' in':'')+'); pile type → driven H-pile':' — not an H-pile, not adoptable'),!o.adopt||!L.secOk); }
+        if(o.adopt && chk.lay){ var al=adoptedLayout(chk.lay,o.ax); x+='<div><b>Reference point:</b> the centroid of the adopted layout, ('+f2(al.cx)+', '+f2(al.cy)+') ft, z = 0</div>'; }
+        else x+='<div><b>Reference point in pile coordinates:</b> x <input id="pfxPx" type="number" step="any" value="'+o.px+'" style="width:70px"> y <input id="pfxPy" type="number" step="any" value="'+o.py+'" style="width:70px"> ft, z = 0 '+
           '<span style="color:#64748b">(default: centroid of the current '+centroid(I).n+'-pile layout)</span></div>';
-        if(!I.groupEnable) x+='<label><input type="checkbox" id="pfxGrpOn"'+(o.groupOn?' checked':'')+'> turn on "Apply pile group to the design"</label><br>';
-        if(p.includes && p.includes.footingWeight && (I.capIncludeWeight||I.stemEnable)) x+='<label><input type="checkbox" id="pfxWt"'+(o.wtOff?' checked':'')+'> switch off this tool\'s cap'+(I.stemEnable?' and stem':'')+' self-weight (the hand-off already includes them)</label><br>';
-      } else {
+        if(!I.groupEnable) x+=ck('pfxGrpOn',o.groupOn,'turn on "Apply pile group to the design"');
+        if(p.includes && p.includes.footingWeight && (I.capIncludeWeight||I.stemEnable)) x+=ck('pfxWt',o.wtOff,'switch off this tool\'s cap'+(I.stemEnable?' and stem':'')+' self-weight (the hand-off already includes them)');
+      } else if(o.target==='single'){
         x+='<div><label><input type="checkbox" id="pfxSingle"'+(o.single?' checked':'')+'> these loads act on <b>one</b> pile (e.g. a single shaft); a footing or pile-cap resultant must use the group workspace</label></div>'+
           '<div><b>Lateral load</b> <select id="pfxLat">'+[['res','resultant √(Vx² + Vy²)'],['x','Vx (pile x)'],['y','Vy (pile y)']].map(function(q){ return '<option value="'+q[0]+'"'+(o.lat===q[0]?' selected':'')+'>'+q[1]+'</option>'; }).join('')+'</select> '+
           '<b>Head moment</b> <select id="pfxMom"><option value="zero"'+(o.mom==='zero'?' selected':'')+'>0 (not imported)</option><option value="same"'+(o.mom==='same'?' selected':'')+'>|M| in the same plane, + with the lateral load</option></select></div>';
+      } else if(o.target==='perpile'){
+        var t2=h('table',TB); t2.innerHTML='<tr><th style="'+TD+'"></th><th style="'+TD+'">Limit state</th><th style="'+TD+'">Pile</th><th style="'+TD+'">Role</th><th style="'+TD+'">P (k)</th><th style="'+TD+'">Vx</th><th style="'+TD+'">Vy</th><th style="'+TD+'">lateral share (k)</th><th style="'+TD+'">head</th></tr>';
+        chk.pd.cases.forEach(function(c,j){ var tr=h('tr');
+          tr.innerHTML='<td style="'+TD+'"><input type="checkbox" data-pfx-pd="'+j+'"'+(o.pdSel[j]?' checked':'')+'></td><td style="'+TD+'" title="'+esc(c.combination)+'">'+esc(c.limitState)+(c.factored?'':' (service)')+'</td><td style="'+TD+'">'+esc(c.pile)+(isNum(c.x)&&isNum(c.y)?' ('+f2(c.x)+', '+f2(c.y)+')':'')+'</td><td style="'+TD+'">'+esc(c.role)+'</td>'+
+            ['P','Vx','Vy','V'].map(function(k){ return '<td style="'+TD+';text-align:right">'+f2(c[k],2)+'</td>'; }).join('')+'<td style="'+TD+'">'+esc(c.head||'—')+'</td>';
+          t2.appendChild(tr); });
+        var tw2=h('div','max-height:28vh;overflow:auto'); tw2.appendChild(t2); body.appendChild(tw2);
+        x+='<div style="color:#475569">Factored loads on <b>one</b> pile from the abutment\'s rigid-cap distribution: its largest and smallest pile reaction per limit state, each with that permutation\'s lateral share. Rows with a smallest reaction that is still compression are unticked by default (the largest governs).</div>';
+        x+=ck('pfxHeadFree',o.headFree,'p-y head condition: free / pinned (the abutment\'s distribution assumes pinned heads, no head moment)');
+        if(chk.lay) x+=ck('pfxAdoptSec',o.adoptSec&&chk.lay.secOk,'adopt the pile section: '+esc(chk.lay.sec.designation||chk.lay.sec.shape||'?')+(chk.lay.secOk?' (d, b<sub>f</sub>, t<sub>f</sub>, t<sub>w</sub>, F<sub>y</sub>, driving condition'+(chk.lay.embed!==null?', cap embedment '+f2(chk.lay.embed,1)+' in':'')+'); pile type → driven H-pile':' — not an H-pile, not adoptable'),!chk.lay.secOk);
+      } else if(o.target==='iab'){
+        var G=chk.iab;
+        x+='<div style="color:#475569">From the abutment\'s integral design (Tab 10): owner <b>'+esc(G.owner||'?')+'</b>, '+esc(G.section||'?')+' ('+esc(G.orient||'?')+' axis), '+esc(G.nPiles||'?')+' piles. The fields below are set; nothing else changes.</div>';
+        if(I.pileType!=='iab') x+=ck('pfxIabSw',o.iabSwitch,'switch the pile type to <b>Integral Abutment</b> (now '+esc(I.pileType)+')');
+        if(PRESETS[G.preset]) x+=ck('pfxIabPre',o.iabPreset,'apply the '+(G.preset==='massdot'?'MassDOT':'CTDOT')+' agency preset (orientation, θi, Tier-1 tables), as the "Auto-set" button does');
       }
-      x+='<div><b>Previously imported rows:</b> <label><input type="radio" name="pfxMode" value="replace"'+(o.mode==='replace'?' checked':'')+'> replace</label> <label><input type="radio" name="pfxMode" value="add"'+(o.mode==='add'?' checked':'')+'> keep and add</label> <span style="color:#64748b">(rows you entered yourself are never removed)</span></div>';
+      if(o.target!=='iab') x+='<div><b>Previously imported rows:</b> <label><input type="radio" name="pfxMode" value="replace"'+(o.mode==='replace'?' checked':'')+'> replace</label> <label><input type="radio" name="pfxMode" value="add"'+(o.mode==='add'?' checked':'')+'> keep and add</label> <span style="color:#64748b">(rows you entered yourself are never removed)</span></div>';
       body.appendChild(h('div',null,x));
     }
     function read(){
       var e, r=document.querySelector('input[name="pfxTarget"]:checked'); if(r) o.target=r.value;
       var m=document.querySelector('input[name="pfxMode"]:checked'); if(m) o.mode=m.value;
       Array.prototype.forEach.call(box.querySelectorAll('input[data-pfx-case]'),function(cb){ o.sel[+cb.getAttribute('data-pfx-case')]=cb.checked; });
+      Array.prototype.forEach.call(box.querySelectorAll('input[data-pfx-pd]'),function(cb){ o.pdSel[+cb.getAttribute('data-pfx-pd')]=cb.checked; });
       if((e=document.getElementById('pfxAxx'))) o.ax.x=e.value; if((e=document.getElementById('pfxAxy'))) o.ax.y=e.value;
       if((e=document.getElementById('pfxPx'))) o.px=parseFloat(e.value); if((e=document.getElementById('pfxPy'))) o.py=parseFloat(e.value);
       if((e=document.getElementById('pfxGrpOn'))) o.groupOn=e.checked; if((e=document.getElementById('pfxWt'))) o.wtOff=e.checked;
       if((e=document.getElementById('pfxSingle'))) o.single=e.checked; if((e=document.getElementById('pfxLat'))) o.lat=e.value; if((e=document.getElementById('pfxMom'))) o.mom=e.value;
+      if((e=document.getElementById('pfxAdopt'))) o.adopt=e.checked; if((e=document.getElementById('pfxAdoptSec')) && !e.disabled) o.adoptSec=e.checked;
+      if((e=document.getElementById('pfxHeadFree'))) o.headFree=e.checked;
+      if((e=document.getElementById('pfxIabSw'))) o.iabSwitch=e.checked; if((e=document.getElementById('pfxIabPre'))) o.iabPreset=e.checked;
+      if(o.target==='group' && !o.adopt && chk.lay) o.adoptSec=false;
       return o;
     }
     function refresh(){
@@ -846,8 +1071,11 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       if(r.err.length) x+='<div style="'+WB+';color:#b71c1c;font-weight:bold">'+r.err.map(esc).join('<br>')+'</div>';
       else {
         x+='<div style="margin:6px 0"><b>Will change:</b><ul style="margin:2px 0 2px 18px">'+r.changes.map(function(c){ return '<li>'+esc(c)+'</li>'; }).join('')+
-          '<li>Record the source (producer, time, cases) in the inputs (I.foundationSrc); shown in the project panel and printed in the report.</li></ul></div>';
-        var t='<table style="'+TB+'"><tr>'+(o.target==='group'?['New group case','type','P','Vx','Vy','Mx','My']:['New LRFD row','type','axial STL','lateral','M head']).map(function(s){ return '<th style="'+TD+'">'+s+'</th>'; }).join('')+'</tr>'+
+          '<li>Record the source (producer, time, cases'+(Object.keys(r.fields).length?', the inputs set from the hand-off, which are marked in the input panels until you change them':'')+') in the inputs (I.foundationSrc); shown in the Loads &amp; group tab and printed in the report.</li></ul></div>';
+        var t;
+        if(o.target==='iab') t='<table style="'+TB+'"><tr>'+['Input','now','from the abutment'].map(function(s){ return '<th style="'+TD+'">'+s+'</th>'; }).join('')+'</tr>'+
+          r.rows.map(function(q){ return '<tr><td style="'+TD+'">'+esc(q.field)+'</td><td style="'+TD+'">'+esc(q.now===undefined||q.now===null?'—':String(q.now))+'</td><td style="'+TD+';font-weight:'+(sameVal(q.now,q.val)?'normal':'bold')+'">'+esc(String(q.val))+(q.u?' '+esc(q.u):'')+'</td></tr>'; }).join('')+'</table>';
+        else t='<table style="'+TB+'"><tr>'+(o.target==='group'?['New group case','type','P','Vx','Vy','Mx','My']:['New LRFD row','type','axial STL','lateral','M head']).map(function(s){ return '<th style="'+TD+'">'+s+'</th>'; }).join('')+'</tr>'+
           r.rows.map(function(q){ return '<tr><td style="'+TD+'">'+esc(q.name)+'</td><td style="'+TD+'">'+q.type+'</td>'+(o.target==='group'?['P','Vx','Vy','Mx','My']:['P','V','M']).map(function(k){ return '<td style="'+TD+';text-align:right">'+f2(q[k],2)+'</td>'; }).join('')+'</tr>'; }).join('')+'</table>';
         x+='<div style="max-height:22vh;overflow:auto">'+t+'</div>';
       }
@@ -862,22 +1090,35 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
         if(chk.err.length){ sum.innerHTML='<div style="'+WB+';color:#b71c1c">'+chk.err.map(esc).join('<br>')+'</div>'; go.disabled=true; return; }
         o=defaults(chk,I); full(); return; }
       if(t.id==='pfxAll'){ o.sel=o.sel.map(function(){ return t.checked; }); full(); return; }
-      read(); if(t.name==='pfxTarget' || t.getAttribute('data-pfx-case')!==null){ full(); return; } refresh();
+      read();
+      if(t.id==='pfxAdopt'){ if(o.adopt && chk.lay) o.adoptSec=chk.lay.secOk; else { var c0=centroid(I); o.px=c0.x; o.py=c0.y; } full(); return; }
+      if(t.name==='pfxTarget' || t.getAttribute('data-pfx-case')!==null || t.id==='pfxAxx' || t.id==='pfxAxy'){ full(); return; } refresh();
     });
     box.addEventListener('input',function(e){ if(e.target && (e.target.id==='pfxPx'||e.target.id==='pfxPy')){ read(); refresh(); } });
     ca.addEventListener('click',function(){ ov.remove(); });
     go.addEventListener('click',function(){ var r=apply(p,chk,read(),I,setter,via); if(r.err.length){ refresh(); return; } ov.remove(); });
     document.body.appendChild(ov);
     full();
-    return {overlay:ov, opts:o, chk:chk, refresh:refresh, read:read};
+    return {overlay:ov, opts:o, chk:chk, refresh:refresh, read:read, full:full};
   }
   function sourceLine(I){
     var s=I && I.foundationSrc; if(!s || !s.producedAt && !s.producer) return '';
-    return (s.target==='single'?'LRFD case rows':'Pile-group load cases')+' from '+(s.producer||'?')+(s.element&&s.element.label?' ('+s.element.label+')':'')+', '+when(s.producedAt)+
+    if(s.target==='iab') return 'Integral-abutment inputs from '+(s.producer||'?')+(s.element&&s.element.label?' ('+s.element.label+')':'')+', '+when(s.producedAt)+
+      ((s.project&&(s.project.name||typeof s.project==='string'))?', project '+(s.project.name||s.project):'')+(s.integral?': owner '+(s.integral.owner||'?')+', '+(s.integral.section||'?')+', DL '+s.integral.DL+' kip, LL '+s.integral.LL+' kip per pile, δT '+s.integral.delta+' in, skew '+s.integral.skew+'°':'')+
+      '; '+Object.keys(s.fields||{}).length+' input(s) set (marked while unchanged)'+(s.via==='file'?'; via JSON file':'');
+    return (s.target==='single'?'LRFD case rows':s.target==='perpile'?'Per-pile governing LRFD rows':'Pile-group load cases')+' from '+(s.producer||'?')+(s.element&&s.element.label?' ('+s.element.label+')':'')+', '+when(s.producedAt)+
       ((s.project&&(s.project.name||typeof s.project==='string'))?', project '+(s.project.name||s.project):'')+': '+((s.cases||[]).length)+' case(s) at '+(s.location||'?')+
-      '; pile +x = hand-off '+((s.axes&&s.axes.x)||'?')+', +y = '+((s.axes&&s.axes.y)||'?')+(s.point?'; at ('+s.point.x+', '+s.point.y+') ft':'')+(s.via==='file'?'; via JSON file':'');
+      '; pile +x = hand-off '+((s.axes&&s.axes.x)||'?')+', +y = '+((s.axes&&s.axes.y)||'?')+(s.point?'; at ('+s.point.x+', '+s.point.y+') ft':'')+
+      (s.layout?'; the abutment\'s pile layout adopted ('+s.layout.n+' piles)':'')+(s.fields&&Object.keys(s.fields).length?'; '+Object.keys(s.fields).length+' input(s) set (marked while unchanged)':'')+(s.via==='file'?'; via JSON file':'');
   }
-  function refreshBar(){ var nd=document.getElementById('pfxNew'); if(nd) nd.hidden=!BridgeXfer.isNew(CH,RID); }
+  /* ABPX: an input set from the hand-off is marked (amber, with the source in its tooltip) while it still holds the imported value */
+  function marked(I,k){ var s=I&&I.foundationSrc, f=s&&s.fields; return !!(f && Object.prototype.hasOwnProperty.call(f,k) && sameVal(I[k],f[k])); }
+  function mkCls(I,k){ return marked(I,k)? ' pfx-mk' : ''; }
+  function mkTip(I,k){ if(!marked(I,k)) return undefined; var s=I.foundationSrc; return 'From '+(s.producer||'the hand-off')+', '+when(s.producedAt)+' (foundationLoads hand-off). Edit the value to clear this marker.'; }
+  (function(){ if(document.getElementById('pfxCss')) return; var st=document.createElement('style'); st.id='pfxCss';
+    st.textContent='.pfx-mk{background-color:#fff8e1 !important;box-shadow:inset 3px 0 0 #b45309 !important}.pfx-badge{font-size:7.5px;padding:0 4px;border-radius:2px;color:#fff;background:#b45309;margin-left:4px;vertical-align:middle}';
+    (document.head||document.documentElement).appendChild(st); })();
+  function refreshBar(){ var n=BridgeXfer.isNew(CH,RID); ['pfxNew','pfxNewIab'].forEach(function(id){ var nd=document.getElementById(id); if(nd) nd.hidden=!n; }); }
   function pull(I,setter){
     var list=candidates();
     if(!list.length){ var r=BridgeXfer.read(CH,SCHEMA,MAXV);
@@ -892,7 +1133,8 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     });
     ev.target.value='';
   }
-  window.PileFoundationXfer={check:check,mapAxes:mapAxes,candidates:candidates,centroid:centroid,defaults:defaults,plan:plan,apply:apply,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar,pull:pull,importFile:importFile};
+  window.PileFoundationXfer={check:check,mapAxes:mapAxes,candidates:candidates,centroid:centroid,defaults:defaults,plan:plan,apply:apply,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar,pull:pull,importFile:importFile,
+    adoptedLayout:adoptedLayout,marked:marked,mkCls:mkCls,mkTip:mkTip};
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);
   setInterval(refreshBar,2000);
@@ -5161,10 +5403,13 @@ function Field({
   onChange,
   unit,
   step = "any",
-  disabled
+  disabled,
+  bx
 }) {
   // F54 (O13): a blank or invalid number is stored as NaN -> say so at the field (display only)
   const bad = !disabled && typeof value === "number" && isNaN(value);
+  // ABPX: bx = [I, key]: marked while the input still holds the value set from the foundationLoads hand-off
+  const mk = bx && window.PileFoundationXfer ? PileFoundationXfer.mkCls(bx[0], bx[1]) : "";
   return /*#__PURE__*/React.createElement("label", {
     className: "block"
   }, /*#__PURE__*/React.createElement("div", {
@@ -5183,7 +5428,8 @@ function Field({
     onChange: e => onChange(parseFloat(e.target.value)),
     "aria-invalid": bad ? "true" : undefined,
     style: bad ? { borderColor: "#b23b3b" } : undefined,
-    className: "mt-1 w-full font-mono-tech text-[13px] px-2 py-1.5 bg-white border rounded-sm outline-none transition " + (disabled ? "opacity-50 border-slate-200 " : "border-slate-300 focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]")
+    title: mk ? PileFoundationXfer.mkTip(bx[0], bx[1]) : undefined,
+    className: "mt-1 w-full font-mono-tech text-[13px] px-2 py-1.5 bg-white border rounded-sm outline-none transition " + (disabled ? "opacity-50 border-slate-200 " : "border-slate-300 focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]") + mk
   }), bad && /*#__PURE__*/React.createElement("div", { className: "pd-fld-bad text-[10px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value"));
 }
 function TextField({
@@ -6918,7 +7164,7 @@ function LoadsGroupPanel({ I, set, setI, r, cases, activeIdx, casesCard }) {
             style: { display: "none" },
             onChange: ev => PileFoundationXfer.importFile(ev, I, setI)
           })),
-        e("p", { className: "text-[9px] text-slate-400 leading-snug mt-1" }, "From the abutment calculator or Bridge Substructure Loading (hand-off channel foundationLoads). The dialog lists the cases and asks where they go: the pile group workspace (a footing / pile-cap resultant; the default) or the single-pile load-case table. Nothing changes until you import."),
+        e("p", { className: "text-[9px] text-slate-400 leading-snug mt-1" }, "From the abutment calculator or Bridge Substructure Loading (hand-off channel foundationLoads). The dialog lists the cases and asks where they go: the pile group workspace (a footing / pile-cap resultant; the default) or the single-pile load-case table. From the abutment calculator (pile footing) it can also adopt the abutment's pile layout and H-pile section, so each pile's reaction is the abutment's, or import its per-pile governing loads (largest / smallest pile per limit state) as single-pile rows. Inputs set from the hand-off are marked (amber). Nothing changes until you import."),
         I.foundationSrc && e("div", {
           id: "pfxSrc",
           className: "text-[9px] text-slate-500 italic leading-snug mt-1"
@@ -11255,8 +11501,10 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
             className: "text-[8.5px] px-1 py-0.5 rounded-sm border " + (i === activeIdx ? "border-[var(--accent)] text-[var(--accent)] font-bold" : "border-slate-300 text-slate-400") }, i === activeIdx ? "◉" : "○")),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "24%" } },
           rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, c.name,
-            c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--blueprint2)" } }, "GROUP") : null)
-          : /*#__PURE__*/React.createElement("input", { className: cell, "aria-label": "Case " + (i + 1) + " name", value: c.name, onChange: e => upd(i, 'name', e.target.value) })),
+            c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--blueprint2)" } }, "GROUP") : null,
+            c._bx ? /*#__PURE__*/React.createElement("span", { className: "pfx-badge", title: "Imported from " + (c._bx.producer || "the hand-off") + " (foundationLoads)" }, "HAND-OFF") : null)
+          : /*#__PURE__*/React.createElement(React.Fragment, null, React.createElement("input", { className: cell, "aria-label": "Case " + (i + 1) + " name", value: c.name, onChange: e => upd(i, 'name', e.target.value) }),
+            c._bx ? /*#__PURE__*/React.createElement("span", { className: "pfx-badge", title: "Imported from " + (c._bx.producer || "the hand-off") + " (foundationLoads); renaming or editing the row keeps this tag, \"replace\" on the next import removes it" }, "HAND-OFF") : null)),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
           rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px] text-slate-500" }, c.type)
           : /*#__PURE__*/React.createElement("select", { className: cell, "aria-label": "Case " + (i + 1) + " type", value: c.type, onChange: e => upd(i, 'type', e.target.value) },
@@ -12543,12 +12791,12 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
 
   const capF = (lbl, key, unit) => /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, lbl, /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + unit + ")")),
-    /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
+    /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key), value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
   const leftA = [
           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2" }, "1 \u00b7 Pile layout"),
           /*#__PURE__*/React.createElement("div", { className: "flex items-end gap-2 mb-2" },
-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
+            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNrows'), title: PileFoundationXfer.mkTip(I, 'groupNrows'), value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
+            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNcols'), title: PileFoundationXfer.mkTip(I, 'groupNcols'), value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : "c/c spacing in multiples of the casing OD = " + fmt(pileWidth(I), 2) + " in", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
             /*#__PURE__*/React.createElement("button", { onClick: genGrid, className: "text-[10px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "\u21bb generate grid")),
           /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1" }, "Generate fills the table; then edit x,y freely for irregular layouts. Coordinates in ft, any origin (centroid computed automatically)."),
@@ -12562,8 +12810,8 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
                 const isSel = cap && cap.piles[i] && cap.piles[i].id === cap.selId;
                 return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: isSel ? "rgba(201,98,46,0.08)" : "transparent" } },
                   /*#__PURE__*/React.createElement("td", { className: "px-2 py-0.5 text-slate-400" }, i + 1),
-                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm", value: p.x, onChange: e => updPile(i, 'x', e.target.value) })),
-                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm", value: p.y, onChange: e => updPile(i, 'y', e.target.value) })),
+                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupPiles'), title: PileFoundationXfer.mkTip(I, 'groupPiles'), value: p.x, onChange: e => updPile(i, 'x', e.target.value) })),
+                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupPiles'), title: PileFoundationXfer.mkTip(I, 'groupPiles'), value: p.y, onChange: e => updPile(i, 'y', e.target.value) })),
                   cap && /*#__PURE__*/React.createElement("td", { className: "px-2", style: { color: cp && cp.axial < 0 ? "#b23b3b" : "#14304a" } }, cp ? fmt(cp.axial, 1) : "\u2014"),
                   /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("button", { onClick: () => delPile(i), className: "text-[10px] text-slate-300 hover:text-[var(--no)]" }, "\u00d7")));
               })))),
@@ -16352,14 +16600,26 @@ function App() {
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-[10px] text-slate-500 leading-snug"
   }, I.pileType === "iab"
-    ? "Integral-abutment mode takes the gravity load per pile in the Abutment tab; foundation-load hand-offs are not used in this mode."
+    ? "Integral-abutment mode takes the gravity load per pile in the Abutment tab; the abutment calculator's integral-abutment data (an Integral abutment) is pulled there. Foundation load cases are not used in this mode."
     : ["Foundation loads from the abutment calculator or Bridge Substructure Loading are pulled in the ", /*#__PURE__*/React.createElement("button", { key: "b", type: "button", onClick: () => gotoLoadsTab(setRailTab), className: "underline text-[var(--blueprint2)]" }, "Loads & group tab \u2192")])), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Integral Abutment Pile \u2014 Simplified Method"
   }, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-2 leading-snug" }, "MassDOT Bridge Manual Part I \u00a73.10.11. Pick the section, MassDOT soil type, and skew; enter the factored gravity load per pile (DL+LL). Capacity is read from Tables 3.10.11-2/-3 (thermal & skew effects pre-computed)."),
+    /*#__PURE__*/React.createElement("div", { className: "mb-2 pb-2 border-b border-slate-200 no-print" },
+      /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap gap-2" },
+        /*#__PURE__*/React.createElement("button", { type: "button", id: "pfxPullIab", onClick: () => PileFoundationXfer.pull(I, setI),
+          title: "Pull the integral-abutment data sent by the abutment calculator (channel foundationLoads): gravity load per pile, \u03b4T, skew, section, owner preset and eligibility inputs. Asks first; nothing changes until you import.",
+          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Pull from Abutment",
+          /*#__PURE__*/React.createElement("span", { id: "pfxNewIab", hidden: true, style: { color: "#b45309", fontWeight: 700 } }, " \u25cf new data")),
+        /*#__PURE__*/React.createElement("button", { type: "button", id: "pfxImpIab", onClick: () => { const f = document.getElementById("pfxFileIab"); if (f) f.click(); },
+          title: "Import a foundationLoads hand-off JSON file from the abutment calculator (asks first)",
+          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Import hand-off (JSON)"),
+        /*#__PURE__*/React.createElement("input", { type: "file", id: "pfxFileIab", accept: ".json,application/json", style: { display: "none" }, onChange: ev => PileFoundationXfer.importFile(ev, I, setI) })),
+      /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 leading-snug mt-1" }, "From the abutment calculator with the abutment type Integral (its Tab 10). Fields set from the hand-off are marked (amber) until you change them."),
+      I.foundationSrc && I.foundationSrc.target === "iab" && /*#__PURE__*/React.createElement("div", { id: "pfxSrcIab", className: "text-[9px] text-slate-500 italic leading-snug mt-1" }, PileFoundationXfer.sourceLine(I))),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Pile section"),
-        /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabSection, onChange: e => set('iabSection', e.target.value) },
+        /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white" + PileFoundationXfer.mkCls(I, 'iabSection'), title: PileFoundationXfer.mkTip(I, 'iabSection'), value: I.iabSection, onChange: e => set('iabSection', e.target.value) },
           /*#__PURE__*/React.createElement("option", { value: "HP10X57" }, "HP10\u00d757"),
           /*#__PURE__*/React.createElement("option", { value: "HP12X84" }, "HP12\u00d784"))),
       /*#__PURE__*/React.createElement("div", null,
@@ -16367,12 +16627,12 @@ function App() {
         /*#__PURE__*/React.createElement("input", { type: "text", disabled: true, className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-200 bg-slate-100 text-slate-500", value: "Grade 50 (Fy = 50 ksi)" }))),
     /*#__PURE__*/React.createElement("div", { className: "mb-2" },
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "MassDOT soil type (Table 3.10.11-1)"),
-      /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabSoilType, onChange: e => set('iabSoilType', parseInt(e.target.value)) },
+      /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white" + PileFoundationXfer.mkCls(I, 'iabSoilType'), title: PileFoundationXfer.mkTip(I, 'iabSoilType'), value: I.iabSoilType, onChange: e => set('iabSoilType', parseInt(e.target.value)) },
         MASSDOT_IAB.soils.map(s => /*#__PURE__*/React.createElement("option", { key: s.i, value: s.i }, s.i + " \u00b7 " + s.name)))),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Skew angle ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(\u00b0, \u226430)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabSkew || 0, onChange: e => set('iabSkew', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabSkew'), title: PileFoundationXfer.mkTip(I, 'iabSkew'), value: I.iabSkew || 0, onChange: e => set('iabSkew', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Geotech length ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(ft)")),
         /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabGeoLength || 0, onChange: e => set('iabGeoLength', parseFloat(e.target.value) || 0) }))),
@@ -16380,37 +16640,37 @@ function App() {
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-1" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Dead load DL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabDL || 0, onChange: e => set('iabDL', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDL'), title: PileFoundationXfer.mkTip(I, 'iabDL'), value: I.iabDL || 0, onChange: e => set('iabDL', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Live load LL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLL'), title: PileFoundationXfer.mkTip(I, 'iabLL'), value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
     r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
       "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = ", fmt(r.iab.gDC, 2), "\u00b7DL + ", fmt(r.iab.gLL, 2), "\u00b7LL = ", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 0), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 0), ") = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 0), " kip")),
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 mt-3" }, "Boundary conditions (\u00a73.10.11.1)"),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Bridge material"),
-        /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabBridgeMaterial, onChange: e => set('iabBridgeMaterial', e.target.value) },
+        /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white" + PileFoundationXfer.mkCls(I, 'iabBridgeMaterial'), title: PileFoundationXfer.mkTip(I, 'iabBridgeMaterial'), value: I.iabBridgeMaterial, onChange: e => set('iabBridgeMaterial', e.target.value) },
           /*#__PURE__*/React.createElement("option", { value: "steel" }, "Steel (\u2264140 ft)"),
           /*#__PURE__*/React.createElement("option", { value: "concrete" }, "Concrete (\u2264200 ft)"))),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Total bridge length (ft)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabBridgeLength'), title: PileFoundationXfer.mkTip(I, 'iabBridgeLength'), value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
         !((I.iabBridgeLength || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter the bridge length (eligibility)"))),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Abut. height (ft)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabAbutHeight'), title: PileFoundationXfer.mkTip(I, 'iabAbutHeight'), value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
         !((I.iabAbutHeight || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value")),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Grade diff (%)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabGradeDiff || 0, onChange: e => set('iabGradeDiff', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabGradeDiff'), title: PileFoundationXfer.mkTip(I, 'iabGradeDiff'), value: I.iabGradeDiff || 0, onChange: e => set('iabGradeDiff', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Curve (\u00b0)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabCurveAngle || 0, onChange: e => set('iabCurveAngle', parseFloat(e.target.value) || 0) }))),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabCurveAngle'), title: PileFoundationXfer.mkTip(I, 'iabCurveAngle'), value: I.iabCurveAngle || 0, onChange: e => set('iabCurveAngle', parseFloat(e.target.value) || 0) }))),
     /*#__PURE__*/React.createElement("div", { className: "space-y-1" },
       [["iabParallel", "Straight bridge or parallel straight beams"], ["iabParallelAbut", "Parallel abutments and piers"], ["iabUwingwalls", "Parallel U-wingwalls"], ["iabBedrockBelow", "Top of bedrock below pile tip"], ["iabNotScour", "Abutments not scour-susceptible"]].map(([key, lbl]) =>
-        /*#__PURE__*/React.createElement("label", { key: key, className: "flex items-center gap-1.5 text-[9.5px] text-slate-600 cursor-pointer" },
+        /*#__PURE__*/React.createElement("label", { key: key, className: "flex items-center gap-1.5 text-[9.5px] text-slate-600 cursor-pointer" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key) },
           /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I[key], onChange: e => set(key, e.target.checked) }), lbl))),
     r.iab && !r.iab.simplifiedApplies && /*#__PURE__*/React.createElement("div", { className: "mt-2 text-[9px] text-amber-800 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1.5 leading-snug" },
       "\u26a0 One or more boundary conditions are not satisfied \u2014 the Simplified Method does not apply. MassDOT requires the 3D Space Frame Analysis Method (\u00a73.10.11.5), which is outside this tool. Design must be performed separately."),
@@ -16440,32 +16700,32 @@ function App() {
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile orientation"),
-          /*#__PURE__*/React.createElement("select", { className: "w-full text-[9.5px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabOrient, onChange: e => set('iabOrient', e.target.value) },
+          /*#__PURE__*/React.createElement("select", { className: "w-full text-[9.5px] px-1 py-1 rounded-sm border border-slate-300 bg-white" + PileFoundationXfer.mkCls(I, 'iabOrient'), title: PileFoundationXfer.mkTip(I, 'iabOrient'), value: I.iabOrient, onChange: e => set('iabOrient', e.target.value) },
             /*#__PURE__*/React.createElement("option", { value: "weak" }, "Weak axis (CTDOT)"),
             /*#__PURE__*/React.createElement("option", { value: "biaxial" }, "Biaxial at skew (MassDOT)"),
             /*#__PURE__*/React.createElement("option", { value: "strong" }, "Strong axis (bounding)"))),
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Tier-1 tables"),
-          /*#__PURE__*/React.createElement("select", { className: "w-full text-[9.5px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabTier1Applicable ? "yes" : "no", onChange: e => set('iabTier1Applicable', e.target.value === "yes") },
+          /*#__PURE__*/React.createElement("select", { className: "w-full text-[9.5px] px-1 py-1 rounded-sm border border-slate-300 bg-white" + PileFoundationXfer.mkCls(I, 'iabTier1Applicable'), title: PileFoundationXfer.mkTip(I, 'iabTier1Applicable'), value: I.iabTier1Applicable ? "yes" : "no", onChange: e => set('iabTier1Applicable', e.target.value === "yes") },
             /*#__PURE__*/React.createElement("option", { value: "yes" }, "Applicable (MassDOT)"),
             /*#__PURE__*/React.createElement("option", { value: "no" }, "Not applicable (CTDOT)")))),
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b8\u1d62 weak-axis term"),
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabThetaWeak, onChange: e => set('iabThetaWeak', parseFloat(e.target.value) || 1.0) })),
+          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabThetaWeak'), title: PileFoundationXfer.mkTip(I, 'iabThetaWeak'), value: I.iabThetaWeak, onChange: e => set('iabThetaWeak', parseFloat(e.target.value) || 1.0) })),
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b8\u1d62 strong-axis term"),
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabThetaStrong, onChange: e => set('iabThetaStrong', parseFloat(e.target.value) || 1.0) }))),
+          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabThetaStrong'), title: PileFoundationXfer.mkTip(I, 'iabThetaStrong'), value: I.iabThetaStrong, onChange: e => set('iabThetaStrong', parseFloat(e.target.value) || 1.0) }))),
       /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mb-2 leading-snug" }, "\u03b8\u1d62 = 1.75 (inelastic rotation credit) is defensible only for a compact section in weak-axis bending with no unbraced length (MassDOT \u00a73.10.11.3); it reverts to 1.0 under scour automatically."),
       /*#__PURE__*/React.createElement("div", { className: "mb-2" },
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "\u03b4\u1d1b source"),
-        /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabDeltaSource, onChange: e => set('iabDeltaSource', e.target.value) },
+        /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white" + PileFoundationXfer.mkCls(I, 'iabDeltaSource'), title: PileFoundationXfer.mkTip(I, 'iabDeltaSource'), value: I.iabDeltaSource, onChange: e => set('iabDeltaSource', e.target.value) },
           /*#__PURE__*/React.createElement("option", { value: "compute" }, "Compute from bridge length & \u0394T"),
           /*#__PURE__*/React.createElement("option", { value: "direct" }, "Enter \u03b4\u1d1b directly"))),
       I.iabDeltaSource === "direct"
         ? /*#__PURE__*/React.createElement("div", { className: "mb-2" },
             /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "\u03b4\u1d1b per abutment ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(in)")),
-            /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabDeltaT || 0, onChange: e => set('iabDeltaT', parseFloat(e.target.value) || 0) }))
+            /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDeltaT'), title: PileFoundationXfer.mkTip(I, 'iabDeltaT'), value: I.iabDeltaT || 0, onChange: e => set('iabDeltaT', parseFloat(e.target.value) || 0) }))
         : /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u0394T range (\u00b0F)"),
@@ -16650,12 +16910,12 @@ function App() {
   }))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Pile Section"
   }, I.pileType === "hpile" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3" },
-    /*#__PURE__*/React.createElement(Field, { label: "Depth d", unit: "in", value: I.hpD, onChange: v => set('hpD', v) }),
-    /*#__PURE__*/React.createElement(Field, { label: "Flange width bf", unit: "in", value: I.hpBf, onChange: v => set('hpBf', v) }),
-    /*#__PURE__*/React.createElement(Field, { label: "Flange thick tf", unit: "in", value: I.hpTf, onChange: v => set('hpTf', v) }),
-    /*#__PURE__*/React.createElement(Field, { label: "Web thick tw", unit: "in", value: I.hpTw, onChange: v => set('hpTw', v) }),
-    /*#__PURE__*/React.createElement(Field, { label: "Yield Fy", unit: "ksi", value: I.hpFy, onChange: v => set('hpFy', v) }),
-    /*#__PURE__*/React.createElement(Field, { label: "Cap embed", sub: "below cap underside", unit: "in", value: I.hpCapEmbed, onChange: v => set('hpCapEmbed', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "Depth d", unit: "in", value: I.hpD, bx: [I, 'hpD'], onChange: v => set('hpD', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "Flange width bf", unit: "in", value: I.hpBf, bx: [I, 'hpBf'], onChange: v => set('hpBf', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "Flange thick tf", unit: "in", value: I.hpTf, bx: [I, 'hpTf'], onChange: v => set('hpTf', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "Web thick tw", unit: "in", value: I.hpTw, bx: [I, 'hpTw'], onChange: v => set('hpTw', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "Yield Fy", unit: "ksi", value: I.hpFy, bx: [I, 'hpFy'], onChange: v => set('hpFy', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "Cap embed", sub: "below cap underside", unit: "in", value: I.hpCapEmbed, bx: [I, 'hpCapEmbed'], onChange: v => set('hpCapEmbed', v) }),
     /*#__PURE__*/React.createElement("label", { className: "block" },
       /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Bending axis"),
       /*#__PURE__*/React.createElement("select", { value: I.hpAxis, onChange: e => set('hpAxis', e.target.value), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" },
@@ -16666,11 +16926,11 @@ function App() {
       /*#__PURE__*/React.createElement("input", { type: "text", value: I.hpGrade, onChange: e => set('hpGrade', e.target.value), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white font-mono-tech" })),
     /*#__PURE__*/React.createElement("label", { className: "block col-span-2" },
       /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Driving condition (sets \u03c6c, 6.5.4.2)"),
-      /*#__PURE__*/React.createElement("select", { value: I.hpDriveCond, onChange: e => { const v = e.target.value; set('hpDriveCond', v); if (v === "good") set('hpPhiC', 0.60); else if (v === "severe") set('hpPhiC', 0.50); }, className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" },
+      /*#__PURE__*/React.createElement("select", { value: I.hpDriveCond, onChange: e => { const v = e.target.value; set('hpDriveCond', v); if (v === "good") set('hpPhiC', 0.60); else if (v === "severe") set('hpPhiC', 0.50); }, title: PileFoundationXfer.mkTip(I, 'hpDriveCond'), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" + PileFoundationXfer.mkCls(I, 'hpDriveCond') },
         /*#__PURE__*/React.createElement("option", { value: "good" }, "Good driving, no pile tip (\u03c6c 0.60)"),
         /*#__PURE__*/React.createElement("option", { value: "severe" }, "Severe driving, pile tip needed (\u03c6c 0.50)"),
         /*#__PURE__*/React.createElement("option", { value: "static_generic" }, "Custom (\u03c6c as entered)"))),
-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, bx: [I, 'hpPhiC'], onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6c combined", sub: "axial term, P-M", value: I.hpPhiCcomb, onChange: v => set('hpPhiCcomb', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6f flexure", value: I.hpPhiF, onChange: v => set('hpPhiF', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6v shear", value: I.hpPhiV, onChange: v => set('hpPhiV', v) }),
