@@ -17434,3 +17434,409 @@ index 49701cd..843f9ce 100644
 -    tex: `V_n=0.125\\sqrt{f'_c}\\,b_o d_v=0.125\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})=${fmt(r.punch.Vn, 1)}\\text{ kip}`
 +    tex: `V_n=0.126\\lambda\\sqrt{f'_c}\\,b_o d_v=0.126(1.0)\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})=${fmt(r.punch.Vn, 1)}\\text{ kip}\\quad\\text{(Eq. 5.12.8.6.3-1: }\\beta_c=1\\Rightarrow 0.126\\text{ limit; }\\lambda=1.0)`   // PDA-D14
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-rev-c (PDA, part C: M1 resistance determination method and R_ndr, D7 micropile group per 10.7.3.9, D8 plunge length and transfer load, IAB pile spacing, H-pile C_b input; engineer decisions "follow AASHTO"; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); RIDOT BDM (2026); CTDOT BDM (02/24); MassDOT Bridge Manual Part I (Hundredth Ed.). Verified against the texts. Saved data: new optional fields `hpResMethod` ("static"), `hpDriveOwner` ("aashto"), `hpScourBias` (1.0), `hpRsDD` (0), `hpCb` (1.0) and `hpCbMmax/MA/MB/MC` (blank), `iabSpacing` (0), `iabDetailRule` ("auto"); `pdaRev` 3 with a one-time note. No key or format change.
+
+### PDA-M1. Driven H-pile: resistance determination method, required nominal driving resistance   [new outputs; no pass/fail change]
+- **Provision:** 10.5.5.2.3 and Table 10.5.5.2.3-1 (φ_dyn: static load test + dynamic testing 0.80; static load test 0.75; dynamic testing on 100 % 0.75; dynamic testing with QC on ≥ 2 piles / 2 % 0.65; wave equation 0.50; FHWA-modified Gates 0.40; EN 0.10); C10.5.5.2.3 (the field-verification φ sets the number of piles; small groups × 0.80); 10.7.3.6 / C10.7.3.6 (R_ndr includes the side resistance lost to scour, static, unfactored, × bias); 10.7.3.7 (drag load zero at the geotechnical strength limit state); C10.7.3.3 (Eq. C10.7.3.3-1: φ_dyn R_n = φ_stat R_n,stat, the static pile-length estimate). Owner: RIDOT BDM 10.5.6 (dynamic testing on every pile-driving project, ≥ 1 production pile per substructure unit and ≥ 2 %; a static load test per site condition, which may be waived) → preset φ_dyn 0.80; CTDOT BDM (test piles with dynamic monitoring; "Ultimate Pile Capacity = factored design load / φ + scour + downdrag", φ from the geotechnical report) → preset 0.65 and the downdrag side resistance added; MassDOT: no rule beyond AASHTO.
+- **Where:** new `HP_DRIVE_METHODS`; `computeAll` H-pile `const drv = (() => {` (R.hpileGeo.drv); inputs in the H-pile resistance-factor panel ("Resistance determination method", owner buttons, scour bias, CTDOT downdrag side resistance); Module 01 heading 4a "Required driving resistance"; report Module 01 line.
+- **Change:** with a field method: R_n = P_u/φ_dyn (φ_dyn × 0.80 for a small group; 1.0 at the extreme event), R_ndr = R_n + λ·R_s,scour (+ R_dd for CTDOT). The static check φ_stat R_n,stat ≥ P_u (already in the tool, with the scoured soil removed) is labelled as the pile-length estimate of Eq. C10.7.3.3-1; its pass / fail does not change. Default "static": unchanged.
+- **Check case (HP14×89; sand N1,60 20 / 40; toe 60 ft; scour 10 ft; P_u = 100 kip; dynamic testing with QC, φ_dyn 0.65):** R_n = 100/0.65 = **153.8 kip**; R_s,scour = 171 − 152 = 19.0 kip (λ = 1.0); R_ndr = **172.8 kip**. CTDOT with R_dd = 25 kip: R_ndr = **197.8 kip**.
+
+### PDA-D7. Micropile group efficiency and block per 10.9.3.6 → 10.7.3.9   [calc change] [sand: less conservative; clay block: different basis]
+- **Provision:** 10.9.3.6 (micropile groups per 10.7.3.9); 10.7.3.9 (cohesionless η = 1.0, no block check; cohesive: η reduced only with the cap not in firm contact over soft surface soil, 0.65 at 2.5B to 1.0 at 6B; block R_g = (2X + 2Y) Z S̄_u + X Y N_c S_u,base, Eqs. C10.7.3.9-1 to -3); Table 10.5.5.2.5-1 (block failure, clay φ_bl 0.60).
+- **Before:** FHWA NHI-05-039: η = 1.0 for s ≥ 3d_h, else Converse–Labarre in any soil; block = perimeter × bond × L_b at φ_geo (0.70), in any soil.
+- **Where:** `computeAll` after `R.group = {`, anchor `if (I.pileType !== "hpile" && I.pileType !== "iab") {` (g.aashtoMP); micropile `allPass` reads `R.group.geoGroup_pass` and `R.group.blockComputed`; Module 11 and report group sections (the AASHTO branch now shows for micropiles, with micropile wording).
+- **Change:** `hpGroupAashto` on the micropile (B = d_h; Z = grade, buried head or design scour to the toe; S_u: static S_u, else the p-y s_u); block in cohesive soil only, φ 0.60.
+- **Check case (3 × 3 at 17.5 in = 2.5 d_h, d_h 7 in, defaults):** sand: before η = 1 − (21.8°/90)(12/9) = **0.677**, φηP_n = 52.1 kip, block perimeter bond 840 kip; after η = **1.0**, φP_n = 86.6 kip, no block. Clay (s_u 2 ksf): before η 0.677, φ min(840, 0.677·Σ) = 469 kip; after X = Y = 3.5 ft, Z = 36 ft, N_c = 7.5(1 + 0.2) = 9.0, R_g = 2(7)(36)(2) + 12.25(9)(2) = 1008 + 220.5 = **1228.5 kip**, φ_bl R_g = **737.1 kip** < ΣP_u 774 kip (NG).
+
+### PDA-D8. Micropile plunge length in the bond; transfer load P_t on the uncased length   [calc change] [less conservative]
+- **Provision:** 10.9.3.10.4 (Eq. 10.9.3.10.4-1: P_t = φ π d_b α_b L_p; Eq. 10.9.3.10.4-2: P_u = Q − P_t on the uncased length); 10.9.3.10.2 and 10.9.3.10.3 (uncased length carries the load less P_t).
+- **Before:** L_b,eff = L_bond − L_plunge; uncased compression / tension checked for the full load.
+- **Where:** `computeAll` anchors `const Lb_scour = … - topOfBond`, `const Lb_eff = Math.max(L_bond - Lb_scour, 0);`, `const Pt_c =`, `const Pt_t =`, `ucased_pass: phiRn_ucased >= Math.max(STL - Pt_c, 0)`, `const Tu_unc =`; displays (L_b,eff, uncased checks, tension check, summary rows).
+- **Check case (defaults: d_h 7 in, α_b 2.5 ksf, L_bond 27 ft, L_p 3 ft, φ_geo 0.70, P_u 86 kip):** bond per ft = 7π(2.5/144)(12) = 4.581 kip/ft; before P_n = 4.581(24) = **109.96 kip**, φP_n 76.97 < 86 (NG); after P_n = 4.581(27) = **123.70 kip**, φP_n **86.59** ≥ 86 (OK). P_t = 0.70(4.581)(3) = 9.62 kip → uncased P_u = 86 − 9.62 = **76.38 kip** (before 86). Tension (T_u 50, φ_up 0.60): P_t = 8.25 kip, uncased demand 41.75 kip.
+
+### PDA-IS. Integral abutment pile spacing; owner detailing rule   [new check]
+- **Provision:** MassDOT 3.10.10.3 (3'-6" to 10 ft; embedment 2 ft); RIDOT BDM pile foundations (≥ max(30 in, 2.5D) + 6 in, ≤ 10 ft) and 11.3.2 (embedment 2 ft); CTDOT BDM (no integral-abutment spacing limit; embedment 12 in) → AASHTO 10.7.1.2 (≥ max(30 in, 2.5D)). D = max(d, b_f).
+- **Where:** `computeAll` IAB `const iabRule =`, `const spacingChk =` (in `R.iab.pass`); inputs "Pile spacing c/c" and "Detailing rules" (auto = MassDOT, CTDOT when the Simplified tables are off); report row.
+- **Check case (HP12×84, D = 12.29 in, s = 3.0 ft):** MassDOT 36 < 42 in NG; RIDOT 36 < max(30, 30.7) + 6 = 36.7 in NG; CTDOT / AASHTO (s = 2.6 ft) 31.2 ≥ 30.7 in OK.
+
+### PDA-Cb. H-pile C_b input for the strong-axis LTB   [input; default 1.0 = unchanged]
+- **Provision:** Eq. 6.10.8.2.3b-1 (C_b = 12.5 M_max / (2.5 M_max + 3 M_A + 4 M_B + 3 M_C)); A6.3.3; doubly symmetric section (no R_m).
+- **Where:** new `hpCbCalc(I)`; input group "C_b for lateral–torsional buckling" (C_b and M_max, M_A, M_B, M_C with "apply", as index.html); `const CbIn =` passed to `hpMnAASHTO`.
+- **Check case:** helper M_max 100, M_A 75, M_B 50, M_C 25 → C_b = 1250/750 = **1.667**. HP14×89, L_b = 35 ft (stickup 25 + scour 10): C_b 1.0 → M_n = **415.9 kip-ft** (inelastic LTB); C_b 1.67 → **565.2 kip-ft** (FLB governs; LTB capped at R_pc M_y).
+
+### Saved data
+- New optional fields listed above; defaults keep part B results except D7 / D8 (micropile).
+- One-time note (pdaRev < 3): micropile bond with the plunge / P_t, and the micropile group basis when the group is on.
+
+### How verified
+- `node tests/check-syntax.mjs "Pile Designer.html"`: pass.
+- jsdom harness: every check case above on origin/main `41db06d` and the branch. `computeAll(DEFAULT_INPUTS)`: differences only in the micropile bond (L_b,eff 24 → 27 ft, P_n 109.96 → 123.70 kip, geotechnical check NG → OK), its uplift, the load-test verification load reference P_n and the group fields (no group on by default). Micropile clay group, H-pile with a field method / CTDOT / C_b helper, and IAB spacing projects load with no script errors; the part C note appears for a project with pdaRev 2.
+
+### Open items
+- R_ndr: drivability (σ_dr ≤ 0.9 φ_da F_y, 10.7.8) and set-up / relaxation are not checked.
+- D7: micropile η and block use B = d_h; Z from grade to the toe.
+- The RIDOT and CTDOT φ_dyn presets are starting values; the geotechnical report governs.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `41db06d`):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 843f9ce..ccfeab7 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2316,0 +2317,12 @@ function hpColPn(hp, Es, Fy, Pe) {
++/* PDA-Cb (2026-10-20): C_b by AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3b-1, C_b = 12.5 M_max / (2.5 M_max + 3 M_A + 4 M_B + 3 M_C),
++   absolute moments entered by the engineer (hpCbMmax, hpCbMA, hpCbMB, hpCbMC). Doubly symmetric H-section: no R_m.
++   Returns null until all four are entered; the value is used only after "apply" copies it into hpCb (as index.html). */
++function hpCbCalc(I) {
++  const n = v => (v === "" || v == null || !isFinite(+v)) ? null : Math.abs(+v);
++  const Mmax = n(I.hpCbMmax), MA = n(I.hpCbMA), MB = n(I.hpCbMB), MC = n(I.hpCbMC);
++  if (Mmax == null || MA == null || MB == null || MC == null || !(Mmax > 0)) return null;
++  if (Math.max(MA, MB, MC) > Mmax * (1 + 1e-9)) return { ok: false, why: "M_max must be the largest of M_max, M_A, M_B, M_C." };
++  const Cb = 12.5 * Mmax / (2.5 * Mmax + 3 * MA + 4 * MB + 3 * MC);
++  const g = v => +(+v).toPrecision(4);
++  return { ok: true, Cb: +Cb.toFixed(3), txt: "Cb = 12.5·Mmax/(2.5·Mmax + 3·MA + 4·MB + 3·MC) = 12.5×" + g(Mmax) + "/(2.5×" + g(Mmax) + " + 3×" + g(MA) + " + 4×" + g(MB) + " + 3×" + g(MC) + ") = " + Cb.toFixed(3) + " (Eq. 6.10.8.2.3b-1)." };
++}
+@@ -2507,0 +2520,11 @@ function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSa
++/* PDA-M1 (2026-10-20): driven-pile resistance determination methods, AASHTO LRFD 10th Ed. Table 10.5.5.2.3-1 (phi_dyn). */
++const HP_DRIVE_METHODS = {
++  static: { phi: null, label: "Static analysis only (\u03c6stat; no field method selected)" },
++  slt_dyn: { phi: 0.80, label: "Static load test (\u2265 1 per site condition) + dynamic testing (\u2265 2 piles, \u2265 2 %)" },
++  slt: { phi: 0.75, label: "Static load test (\u2265 1 per site condition), no dynamic testing" },
++  dyn100: { phi: 0.75, label: "Dynamic testing with signal matching on 100 % of production piles" },
++  dyn_qc: { phi: 0.65, label: "Dynamic testing with signal matching, QC by dynamic testing (\u2265 2 piles per site condition, \u2265 2 %)" },
++  weap: { phi: 0.50, label: "Wave equation analysis, field confirmation of hammer performance" },
++  gates: { phi: 0.40, label: "FHWA-modified Gates dynamic formula (EOD only)" },
++  en: { phi: 0.10, label: "Engineering News formula (EOD only)" }
++};
+@@ -3661,2 +3684,8 @@ function computeAll(I, opts = {}) {
+-  const Lb_scour = scourD_mp > 0 ? Math.max(Math.min(zScourHead, bondBottom) - casingTip, 0) : 0;   // ft of effective bond lost
+-  const Lb_eff = Math.max(L_bond - L_plunge - Lb_scour, 0); // effective bond below the casing tip (and the scour line)
++  // PDA-D8 (2026-10-20): the plunge length transfers load to the ground (AASHTO LRFD 10th Ed. 10.9.3.10.4, Eq. 10.9.3.10.4-1),
++  // so the bond zone counts from its top (the plunge included). Before: L_b,eff = L_bond - L_plunge (plunge excluded).
++  const Lb_scour = scourD_mp > 0 ? Math.max(Math.min(zScourHead, bondBottom) - topOfBond, 0) : 0;   // ft of bond lost to scour
++  const Lb_eff = Math.max(L_bond - Lb_scour, 0); // effective bond (plunge included), below the scour line
++  // plunge length below the scour line, and the factored transfer load P_t = phi pi d_b alpha_b L_p (Eq. 10.9.3.10.4-1)
++  const Lp_eff = Math.max(L_plunge - Math.max(zScourHead - topOfBond, 0) * (scourD_mp > 0 ? 1 : 0), 0);
++  const Pt_c = phi_geo * dh * PI * beta_ksi * 12 * Lp_eff;   // compression (phi_geo), kip
++  const Pt_t = (I.phiUp != null ? I.phiUp : 0.60) * dh * PI * beta_ksi * 12 * Lp_eff;   // tension (phi_up), kip
+@@ -3689 +3718,2 @@ function computeAll(I, opts = {}) {
+-    scourD: scourD_mp, zScourHead, Lb_scour   // PDA-D12
++    scourD: scourD_mp, zScourHead, Lb_scour,   // PDA-D12
++    Lp_eff, Pt_c, Pt_t   // PDA-D8
+@@ -3773 +3803,3 @@ function computeAll(I, opts = {}) {
+-    ucased_pass: phiRn_ucased >= STL,
++    // PDA-D8: uncased length carries P_u = Q - P_t (Eq. 10.9.3.10.4-2); before: the full STL
++    Pu_unc: Math.max(STL - Pt_c, 0), Pt_c,
++    ucased_pass: phiRn_ucased >= Math.max(STL - Pt_c, 0),
+@@ -4249 +4281,3 @@ function computeAll(I, opts = {}) {
+-  const strUp_pass = phiPn_tension_cased >= Tu && phiPn_tension >= Tu;
++  // PDA-D8 (2026-10-20): the uncased length carries T_u - P_t (Eq. 10.9.3.10.4-2, P_t with phi_up; 10.9.3.10.3)
++  const Tu_unc = Math.max(Tu - Pt_t, 0);
++  const strUp_pass = phiPn_tension_cased >= Tu && phiPn_tension >= Tu_unc;
+@@ -4267,0 +4302 @@ function computeAll(I, opts = {}) {
++    Pt_t, Tu_unc,   // PDA-D8
+@@ -4826,0 +4862,35 @@ function computeAll(I, opts = {}) {
++  // ---- PDA-D7 (2026-10-20): micropile groups per AASHTO LRFD 10th Ed. 10.9.3.6 -> 10.7.3.9 ----
++  // Before: FHWA NHI-05-039 rule (eta = 1.0 for s >= 3 d_h, else Converse-Labarre, in any soil) and a grout-bond block
++  // (block perimeter x bond x L_b) at phi_geo. Now: eta by 10.7.3.9 (cohesionless 1.0; cohesive reduced only with the cap
++  // not in firm contact over soft surface soil, 0.65 at 2.5B -> 1.0 at 6B; B = d_h), and in cohesive soil the block
++  // R_g = (2X + 2Y) Z S_u,avg + X Y N_c S_u,base (10.7.3.9) at phi_bl = 0.60 (Table 10.5.5.2.5-1); no block check in
++  // cohesionless soil. Z = grade (or a buried head, or the design scour) to the micropile toe. S_u: the static S_u where
++  // entered, else the p-y s_u. The H-pile path below replaces R.group fields for H-piles.
++  if (I.pileType !== "hpile" && I.pileType !== "iab") {
++    const g = R.group;
++    const zToeMP = Math.max(R.geo.bondBottom - (I.solverFree || 0), 0);
++    const zTopMP = Math.min(Math.max(-(I.solverFree || 0), 0, I.scourDepth || 0), zToeMP);
++    const lyMP = (Array.isArray(I.soilLayers) ? I.soilLayers : []).map(l => Object.assign({}, l, { Su: l.Su != null ? l.Su : (l.su > 0 ? l.su / 1000 : 0) }));
++    const ga = hpGroupAashto({ layers: lyMP, zTop: zTopMP, zToe: zToeMP, s_dia: sEta_dia, capContact: I.hpCapContact !== false });
++    g.aashtoMP = true; g.aashto = ga; g.etaBasis = "aashto";
++    g.eta_auto = ga.eta;
++    g.eta = I.groupEtaOverride ? Math.max(Math.min(I.groupEta, 1.0), 0.1) : ga.eta;
++    g.Pn_geo_single = R.geo.Pn_geo; g.phiRn_single = phi_geo * R.geo.Pn_geo;
++    g.Pn_geo_group = R.geo.Pn_geo * g.eta; g.phiPn_geo_group = g.phiRn_single * g.eta;
++    g.geoGroup_pass = !grpOn || g.phiPn_geo_group >= STL;
++    g.sumIndiv = R.geo.Pn_geo * nPiles; g.sumPhiIndiv = g.phiRn_single * nPiles;
++    if (ga.cohesive) {
++      const Xft = Math.min(Bx, By) / 12, Yft = Math.max(Bx, By) / 12, Z = ga.Z;
++      const Nc = (Xft > 0 && Yft > 0) ? hpBlockNc(Z, Xft, Yft) : 0;
++      const Rside = 2 * (Xft + Yft) * Z * ga.SuAvg, Rbase = Xft * Yft * Nc * ga.SuBase;
++      g.blockComputed = true;
++      g.blk = { X: Xft, Y: Yft, Z, Nc, ZX: Xft > 0 ? Z / Xft : null, Rside, Rbase, phi: 0.60 };   // phi_bl, Table 10.5.5.2.5-1
++      g.Pn_block = Rside + Rbase; g.phiBlock = 0.60 * g.Pn_block;
++      g.phiEtaSum = g.eta * g.sumPhiIndiv;
++      g.blockGoverns = g.phiBlock < g.phiEtaSum;
++      g.phiGroupBond = Math.min(g.phiEtaSum, g.phiBlock); g.groupBondCap = null;
++      g.block_pass = !grpOn || g.phiGroupBond >= g.groupDemand;
++    } else {
++      g.blockComputed = false; g.Pn_block = null; g.blockGoverns = null; g.groupBondCap = null; g.phiGroupBond = null; g.block_pass = null;
++    }
++  }
+@@ -4963,0 +5034,24 @@ function computeAll(I, opts = {}) {
++    // PDA-M1 (2026-10-20): resistance determination method (AASHTO LRFD 10th Ed. 10.5.5.2.3, Table 10.5.5.2.3-1). With a
++    // field method (dynamic / load test / wave equation / driving formula) the number of piles comes from phi_dyn
++    // (C10.5.5.2.3): required nominal bearing R_n = P_u / phi_dyn; required nominal driving resistance (10.7.3.6)
++    // R_ndr = R_n + the side resistance lost to the design scour (static, unfactored, x method bias), and for the CTDOT
++    // owner rule (BDM "Ultimate Pile Capacity" = factored load / phi + scour + downdrag) + the side resistance above the
++    // neutral plane (input). AASHTO 10th Ed. 10.7.3.7: drag load = 0 at the geotechnical strength limit state (no downdrag
++    // term). The static check phi_stat R_n,stat >= P_u is then the pile-length estimate of C10.7.3.3-1 (bias), unchanged.
++    const drv = (() => {
++      const m = HP_DRIVE_METHODS[I.hpResMethod] || HP_DRIVE_METHODS.static;
++      if (!m.phi) return { method: "static", label: m.label };
++      const phiDyn = (xPhi ? 1.0 : m.phi) * (xPhi ? 1 : geo.grpFac);   // Extreme Event 1.0 (10.5.5.3); small group x 0.80
++      const Rn_req = STL / phiDyn;
++      let Rs_scour = 0;
++      if ((I.scourDepth || 0) > 0) {
++        const g0 = hpileGeoCapacity({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), d: I.hpD, bf: I.hpBf, embedTop: embedTop_ft, embedLen: embedLen_ft,
++          smallGroup: !!I.hpSmallGroup, phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp, phiTipClay: I.hpPhiTipClay, scour: 0, nBasis: I.hpSptBasis });
++        Rs_scour = Math.max(g0.Rs_comp - geo.Rs_comp, 0);
++      }
++      const bias = (I.hpScourBias > 0) ? I.hpScourBias : 1.0;
++      const own = I.hpDriveOwner || "aashto";
++      const Rdd = own === "ctdot" ? Math.max(I.hpRsDD || 0, 0) : 0;
++      return { method: I.hpResMethod, label: m.label, phiTab: m.phi, phiDyn, grpFac: geo.grpFac, xPhi, Rn_req, Rs_scour, bias, Rs_scour_b: bias * Rs_scour, own, Rdd,
++        Rndr: Rn_req + bias * Rs_scour + Rdd };
++    })();
+@@ -4966 +5060 @@ function computeAll(I, opts = {}) {
+-      comp_pass, up_pass,
++      comp_pass, up_pass, drv,   // PDA-M1
+@@ -5100 +5194,3 @@ function computeAll(I, opts = {}) {
+-    const mnd = hpMnAASHTO(hp, Es, Fy, axisStrong ? "strong" : "weak", axisStrong ? LbFlex_ft * 12 : 0, 1.0);
++    // PDA-Cb (2026-10-20): C_b input (default 1.0; helper Eq. 6.10.8.2.3b-1); before part C: 1.0 fixed
++    const CbIn = (I.hpCb != null && isFinite(I.hpCb) && I.hpCb > 0) ? I.hpCb : 1.0;
++    const mnd = hpMnAASHTO(hp, Es, Fy, axisStrong ? "strong" : "weak", axisStrong ? LbFlex_ft * 12 : 0, CbIn);
+@@ -5282,0 +5379,2 @@ function computeAll(I, opts = {}) {
++    // PDA-IS (2026-10-20): owner rule for the IAB detailing checks: "auto" = MassDOT with the Simplified tables, else CTDOT.
++    const iabRule = (I.iabDetailRule && I.iabDetailRule !== "auto") ? I.iabDetailRule : (tier1Applicable ? "massdot" : "ctdot");
+@@ -5284,2 +5382,11 @@ function computeAll(I, opts = {}) {
+-    const embReq = tier1Applicable ? 24 : 12;
+-    const embedChk = { prov: iabEmb, req: embReq, src: tier1Applicable ? "MassDOT 3.10.10.3" : "CTDOT BDM; AASHTO 10.7.1.2", pass: iabEmb >= embReq };
++    const embReq = iabRule === "ctdot" ? 12 : 24;   // MassDOT 3.10.10.3 and RIDOT BDM 11.3.2: 2 ft; CTDOT BDM: 12 in
++    const embedChk = { prov: iabEmb, req: embReq, src: iabRule === "massdot" ? "MassDOT 3.10.10.3" : iabRule === "ridot" ? "RIDOT BDM 11.3.2" : "CTDOT BDM; AASHTO 10.7.1.2", pass: iabEmb >= embReq };
++    // PDA-IS: pile spacing (c/c, ft). MassDOT 3.10.10.3: 3'-6" to 10 ft. RIDOT BDM (pile foundations): >= max(30 in, 2.5D) + 6 in,
++    // <= 10 ft. CTDOT BDM: no integral-abutment spacing limit -> AASHTO 10.7.1.2 >= max(30 in, 2.5D). D = max(d, b_f).
++    // 0 = not entered (no check).
++    const iabS = (I.iabSpacing > 0) ? I.iabSpacing : 0;
++    const Dp = Math.max(sect.d, sect.bf);
++    const sMin_in = iabRule === "massdot" ? 42 : iabRule === "ridot" ? Math.max(30, 2.5 * Dp) + 6 : Math.max(30, 2.5 * Dp);
++    const sMax_ft = iabRule === "ctdot" ? null : 10;
++    const spacingChk = iabS > 0 ? { s: iabS, sMin_in, sMax_ft, D: Dp, rule: iabRule, src: iabRule === "massdot" ? "MassDOT 3.10.10.3" : iabRule === "ridot" ? "RIDOT BDM (pile foundations)" : "AASHTO 10.7.1.2 (CTDOT BDM gives no limit)",
++      pass: iabS * 12 >= sMin_in - 1e-9 && (sMax_ft == null || iabS <= sMax_ft + 1e-9) } : null;
+@@ -5297,2 +5404,2 @@ function computeAll(I, opts = {}) {
+-      pass: (tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk) && embedChk.pass,   // PDA-D13
+-      embedChk
++      pass: (tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk) && embedChk.pass && (!spacingChk || spacingChk.pass),   // PDA-D13, PDA-IS
++      embedChk, spacingChk, iabRule
+@@ -5456 +5563 @@ function computeAll(I, opts = {}) {
+-    R.allPass = R.geoChecks.pass && R.geo.pass && R.axial.cased_pass && R.axial.ucased_pass && R.flex.pass && R.comb.pass && R.bearing.pass && R.punch.pass && R.tests.verf_pass && R.tests.proof_pass && (!enableTension || geoUp_pass && strUp_pass) && (!enableBuckling || buck_pass) && (!I.cfstEnable || R.cfst.pass) && R.casingExt.pass && (!grpOn || (geoGroup_pass && block_pass)) && R.stability.pass;
++    R.allPass = R.geoChecks.pass && R.geo.pass && R.axial.cased_pass && R.axial.ucased_pass && R.flex.pass && R.comb.pass && R.bearing.pass && R.punch.pass && R.tests.verf_pass && R.tests.proof_pass && (!enableTension || geoUp_pass && strUp_pass) && (!enableBuckling || buck_pass) && (!I.cfstEnable || R.cfst.pass) && R.casingExt.pass && (!grpOn || (R.group.geoGroup_pass && (R.group.blockComputed === false || R.group.block_pass))) && R.stability.pass;   // PDA-D7
+@@ -5489 +5596 @@ function HpMnCalcs({ m }) {
+-    L ? e(Calc, { label: "Lateral\u2013torsional buckling", eq: `r_t=${fmt(L.rt, 3)},\\ J=${fmt(L.J, 3)},\\ L_p=1.1r_t\\sqrt{E/F_y}=${fmt(L.Lp, 1)},\\ L_r=${fmt(L.Lr, 1)}\\ \\text{in};\\ L_b=${fmt(L.Lb, 1)}\\ \\text{in}\\Rightarrow M_{nc}=${fmt(L.Mltb, 0)}\\ \\text{kip}\\cdot\\text{in}` + (L.Fe != null ? `\\ (F_e=${fmt(L.Fe, 2)}\\ \\text{ksi})` : ""), note: "L_b = the unsupported length of Module 10 (stickup + scour + added); C_b = " + fmt(L.Cb, 2) + " (conservative). Below the ground the soil braces the pile.", cite: "Eqs. A6.3.3.1-1 to -6, A6.3.3.2-1; r_t Eq. 6.10.8.2.3b-3" })
++    L ? e(Calc, { label: "Lateral\u2013torsional buckling", eq: `r_t=${fmt(L.rt, 3)},\\ J=${fmt(L.J, 3)},\\ L_p=1.1r_t\\sqrt{E/F_y}=${fmt(L.Lp, 1)},\\ L_r=${fmt(L.Lr, 1)}\\ \\text{in};\\ L_b=${fmt(L.Lb, 1)}\\ \\text{in}\\Rightarrow M_{nc}=${fmt(L.Mltb, 0)}\\ \\text{kip}\\cdot\\text{in}` + (L.Fe != null ? `\\ (F_e=${fmt(L.Fe, 2)}\\ \\text{ksi})` : ""), note: "L_b = the unsupported length of Module 10 (stickup + scour + added); C_b = " + fmt(L.Cb, 3) + (L.Cb === 1 ? " (conservative, 6.10.8.2.3b)" : " (input; Eq. 6.10.8.2.3b-1 helper in the H-pile panel)") + ". Below the ground the soil braces the pile.", cite: "Eqs. A6.3.3.1-1 to -6, A6.3.3.2-1; r_t Eq. 6.10.8.2.3b-3" })
+@@ -8679 +8786,3 @@ const DEFAULT_INPUTS = {
+-  iabEmbed: 24,             // PDA-D13: pile embedment into the cap (in); MassDOT 3.10.10.3 requires 2 ft
++  iabEmbed: 24,
++  iabSpacing: 0,            // PDA-IS: IAB pile spacing c/c (ft); 0 = not checked
++  iabDetailRule: "auto",    // PDA-IS: "auto" | "massdot" | "ridot" | "ctdot"             // PDA-D13: pile embedment into the cap (in); MassDOT 3.10.10.3 requires 2 ft
+@@ -8721 +8830 @@ const DEFAULT_INPUTS = {
+-  pdaRev: 2,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B
++  pdaRev: 3,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C
+@@ -8724 +8833,7 @@ const DEFAULT_INPUTS = {
+-  hpSmallGroup: false, // apply Table 10.5.5.2.3-1 small-group 0.80 reduction on φ_stat  // Buckling / effective length for axial check
++  hpSmallGroup: false, // apply Table 10.5.5.2.3-1 small-group 0.80 reduction on φ_stat
++  // PDA-M1 (2026-10-20): resistance determination method (Table 10.5.5.2.3-1) and owner rule for R_ndr
++  hpCb: 1.0,              // PDA-Cb: C_b for the strong-axis LTB (Module 04); helper moments hpCbMmax/MA/MB/MC (kip-ft) optional
++  hpResMethod: "static", // "static" | "slt_dyn" | "slt" | "dyn100" | "dyn_qc" | "weap" | "gates" | "en"
++  hpDriveOwner: "aashto", // "aashto" | "massdot" | "ridot" | "ctdot" (CTDOT adds the downdrag side resistance to R_ndr)
++  hpScourBias: 1.0,       // bias on the static side resistance lost to scour (C10.7.3.6)
++  hpRsDD: 0,              // nominal side resistance above the neutral plane (kip), CTDOT rule only  // Buckling / effective length for axial check
+@@ -9273,0 +9389,9 @@ function mergeSavedInputs(parsed) {
++  // PDA part C (2026-10-20): one-time note for a project saved before it (pdaRev < 3). No input is changed.
++  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 3)) {
++    const ch = [];
++    const mp = out.pileType !== "hpile" && out.pileType !== "iab";
++    if (mp && (out.Lplunge || 0) > 0) ch.push("micropile bond: the plunge length is included in the bond resistance and the uncased length carries P_u - P_t (10.9.3.10.4)");
++    if (mp && out.groupEnable) ch.push("micropile group: efficiency and block failure per 10.9.3.6 \u2192 10.7.3.9 (block \u03c6 0.60 in cohesive soil; no block check in cohesionless soil)");
++    if (ch.length) notes.push("AASHTO LRFD 10th Ed. corrections, part C (2026-10-20). Results change: " + ch.join("; ") + ". Review the affected checks.");
++    out.pdaRev = 3;
++  }
+@@ -9822 +9946 @@ function RptGroupChecks({ I, r }) {
+-  const hp = g.capBasis === "hpile";
++  const hp = g.capBasis === "hpile" || !!g.aashtoMP;   // PDA-D7
+@@ -9837 +9961 @@ function RptGroupChecks({ I, r }) {
+-    subh(hp ? "1 · Axial group efficiency (η) — reduces the H-pile static resistance" : "1 · Axial group efficiency (η) — reduces bond capacity"),
++    subh(hp ? (g.aashtoMP ? "1 · Axial group efficiency (η) — reduces the micropile bond resistance" : "1 · Axial group efficiency (η) — reduces the H-pile static resistance") : "1 · Axial group efficiency (η) — reduces bond capacity"),
+@@ -9839 +9963 @@ function RptGroupChecks({ I, r }) {
+-      ? e(Narr, null, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR", e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for \"soft\" is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
++      ? e(Narr, null, (g.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (micropile groups, 10.9.3.6): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S" : "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S"), e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + (g.aashtoMP ? " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the micropile bond resistance φR" : " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR"), e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for \"soft\" is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
+@@ -9857 +9981 @@ function RptGroupChecks({ I, r }) {
+-      ? line("η used = ", e("b", null, fmt(g.eta, 3)), " → per-pile H-pile φR", e("sub", null, "n"), " = ", fmt(g.phiRn_single, 1), " kip (R", e("sub", null, "n"), " = ", fmt(g.Pn_geo_single, 1), " kip) → ηφR", e("sub", null, "n"), " = ", e("b", null, fmt(g.phiPn_geo_group, 1), " kip"))
++      ? line("η used = ", e("b", null, fmt(g.eta, 3)), (g.aashtoMP ? " → per-pile micropile φP" : " → per-pile H-pile φR"), e("sub", null, "n"), " = ", fmt(g.phiRn_single, 1), " kip (R", e("sub", null, "n"), " = ", fmt(g.Pn_geo_single, 1), " kip) → ηφR", e("sub", null, "n"), " = ", e("b", null, fmt(g.phiPn_geo_group, 1), " kip"))
+@@ -9861 +9985 @@ function RptGroupChecks({ I, r }) {
+-    note(hp ? "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency." : "Per-pile bond reduced by axial group efficiency."),
++    note(hp ? (g.aashtoMP ? "Per-pile micropile bond resistance (Module 01) reduced by axial group efficiency." : "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency.") : "Per-pile bond reduced by axial group efficiency."),
+@@ -9879 +10003 @@ function RptGroupChecks({ I, r }) {
+-              note("Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(g.blk.phi, 2) + " (Table 10.5.5.2.3-1, block failure in clay)."))
++              note("Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(g.blk.phi, 2) + (g.aashtoMP ? " (Table 10.5.5.2.5-1, block failure in clay)." : " (Table 10.5.5.2.3-1, block failure in clay).")))
+@@ -9881,2 +10005,2 @@ function RptGroupChecks({ I, r }) {
+-              e(Narr, null, e("b", null, "Not required — cohesionless soil. "), "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
+-              line("block footprint ≈ ", fmt(g.Bx_ft, 1), " × ", fmt(g.By_ft, 1), " ft (c/c + B); Σ individual H-pile φR", e("sub", null, "n"), " = ", fmt(g.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(g.groupDemand, 0), " kip")))
++              e(Narr, null, e("b", null, "Not required — cohesionless soil. "), (g.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for micropile groups (10.9.3.6) in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer." : "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer.")),
++              line("block footprint ≈ ", fmt(g.Bx_ft, 1), " × ", fmt(g.By_ft, 1), (g.aashtoMP ? " ft (c/c + B); Σ individual micropile φP" : " ft (c/c + B); Σ individual H-pile φR"), e("sub", null, "n"), " = ", fmt(g.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(g.groupDemand, 0), " kip")))
+@@ -9909 +10033 @@ function RptGeomChecks({ I, r }) {
+-    note("Effective bond below the casing tip L_b,eff = L_bond − L_plunge" + (r.geo.Lb_scour > 0 ? " − L_scour" : "") + " = " + fmt(gc.Lb_total, 1) + " − " + fmt(gc.L_plunge, 1) + (r.geo.Lb_scour > 0 ? " − " + fmt(r.geo.Lb_scour, 1) : "") + " = " + fmt(gc.Lb_eff, 1) + " ft vs the geotechnically required bond (AASHTO 10.9.3.5, section 01)."),
++    note("Effective bond (plunge included, 10.9.3.10.4) L_b,eff = L_bond" + (r.geo.Lb_scour > 0 ? " − L_scour" : "") + " = " + fmt(gc.Lb_total, 1) + (r.geo.Lb_scour > 0 ? " − " + fmt(r.geo.Lb_scour, 1) : "") + " = " + fmt(gc.Lb_eff, 1) + " ft vs the geotechnically required bond (AASHTO 10.9.3.5, section 01)."),
+@@ -10003 +10127 @@ function PrintReport({
+-  })() : [["Geotechnical bond resistance", r.geo.phiPn_geo, "kip", r.geo.demand, r.geo.pass, "AASHTO 10.9.3.5"], ["Structural axial — cased", r.axial.phiRn_cased, "kip", I.STL, r.axial.cased_pass, "AASHTO 10.9.3.10.2a"], ["Structural axial — uncased", r.axial.phiRn_ucased, "kip", I.STL, r.axial.ucased_pass, "AASHTO 10.9.3.10.2b"], ["Casing flexure at joints", r.flex.phiMn, "kip·ft", r.flex.Mmax, r.flex.pass, "AASHTO 6.12.2.2.3"], ["Combined loading (casing-only D/C)", 1.0, "", r.comb.interaction, r.comb.pass, "AASHTO 6.9.2.2.1"], ...(r.cfst.enable && r.cfst.qualifies ? [["Combined loading (CFST axial)", r.cfst.Pr_cfst, "kip", r.cfst.Pu_cfst, r.cfst.cfst_axial_pass, "AASHTO 6.9.6.3.2"], ["Combined loading (CFST P-M)", r.cfst.Mr_cfst, "kip·ft", r.cfst.Mmax, r.cfst.cfst_pm_pass, "AASHTO 6.9.6.3.4"]] : []), ["Pile head bearing", r.bearing.phiPn, "kip", I.STL, r.bearing.pass, "AASHTO 5.6.5"], ["Pile head punching shear", r.punch.phiVn, "kip", I.STL, r.punch.pass, "AASHTO 5.12.8.6.3"], ...(r.tension.enable ? [["Geotechnical uplift", r.tension.phiPn_up, "kip", r.tension.Tu, r.tension.geoUp_pass, "AASHTO 10.5.5.2.5"], ["Structural tension", r.tension.phiPn_tension_total, "kip", r.tension.Tu, r.tension.strUp_pass, "AASHTO 10.9.3.10.3"]] : []), ...(r.buckling.enable ? [["Buckling — unsupported length", r.buckling.phiPn_buck, "kip", I.STL, r.buckling.buck_pass, "AASHTO 6.9.4"]] : []), ...(r.stability && r.stability.checked ? [["Combined-loading stability", r.stability.converged ? 1 : 0, "", r.stability.pass ? 0 : 1, r.stability.pass, "AASHTO 6.9.4 / p-y"]] : []), ...(r.casingExt.checked ? [["Casing past active moment zone", r.casingExt.tipBelowGrade, "ft", r.casingExt.zDecay, r.casingExt.pass, "FHWA NHI-05-039"]] : []), ...(r.headFix && r.headFix.isFixedHead ? [["Head fixity — cap embedment", r.headFix.capEmbed_in, "in", r.headFix.embedReq_in, r.headFix.develops, "AASHTO 10.9 / detailing (" + fmt(r.headFix.kFix, 1) + "×D)"]] : []), ["Load test — verification bar", r.tests.Pt_verf, "kip", r.tests.Pn_geo, r.tests.verf_pass, "FHWA NHI-05-039"], ["Load test — proof bar", r.tests.Pt_proof, "kip", r.tests.STL, r.tests.proof_pass, "FHWA NHI-05-039"]];
++  })() : [["Geotechnical bond resistance", r.geo.phiPn_geo, "kip", r.geo.demand, r.geo.pass, "AASHTO 10.9.3.5"], ["Structural axial — cased", r.axial.phiRn_cased, "kip", I.STL, r.axial.cased_pass, "AASHTO 10.9.3.10.2a"], ["Structural axial — uncased", r.axial.phiRn_ucased, "kip", r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, r.axial.ucased_pass, "AASHTO 10.9.3.10.2b"], ["Casing flexure at joints", r.flex.phiMn, "kip·ft", r.flex.Mmax, r.flex.pass, "AASHTO 6.12.2.2.3"], ["Combined loading (casing-only D/C)", 1.0, "", r.comb.interaction, r.comb.pass, "AASHTO 6.9.2.2.1"], ...(r.cfst.enable && r.cfst.qualifies ? [["Combined loading (CFST axial)", r.cfst.Pr_cfst, "kip", r.cfst.Pu_cfst, r.cfst.cfst_axial_pass, "AASHTO 6.9.6.3.2"], ["Combined loading (CFST P-M)", r.cfst.Mr_cfst, "kip·ft", r.cfst.Mmax, r.cfst.cfst_pm_pass, "AASHTO 6.9.6.3.4"]] : []), ["Pile head bearing", r.bearing.phiPn, "kip", I.STL, r.bearing.pass, "AASHTO 5.6.5"], ["Pile head punching shear", r.punch.phiVn, "kip", I.STL, r.punch.pass, "AASHTO 5.12.8.6.3"], ...(r.tension.enable ? [["Geotechnical uplift", r.tension.phiPn_up, "kip", r.tension.Tu, r.tension.geoUp_pass, "AASHTO 10.5.5.2.5"], ["Structural tension", r.tension.phiPn_tension_total, "kip", r.tension.Tu, r.tension.strUp_pass, "AASHTO 10.9.3.10.3"]] : []), ...(r.buckling.enable ? [["Buckling — unsupported length", r.buckling.phiPn_buck, "kip", I.STL, r.buckling.buck_pass, "AASHTO 6.9.4"]] : []), ...(r.stability && r.stability.checked ? [["Combined-loading stability", r.stability.converged ? 1 : 0, "", r.stability.pass ? 0 : 1, r.stability.pass, "AASHTO 6.9.4 / p-y"]] : []), ...(r.casingExt.checked ? [["Casing past active moment zone", r.casingExt.tipBelowGrade, "ft", r.casingExt.zDecay, r.casingExt.pass, "FHWA NHI-05-039"]] : []), ...(r.headFix && r.headFix.isFixedHead ? [["Head fixity — cap embedment", r.headFix.capEmbed_in, "in", r.headFix.embedReq_in, r.headFix.develops, "AASHTO 10.9 / detailing (" + fmt(r.headFix.kFix, 1) + "×D)"]] : []), ["Load test — verification bar", r.tests.Pt_verf, "kip", r.tests.Pn_geo, r.tests.verf_pass, "FHWA NHI-05-039"], ["Load test — proof bar", r.tests.Pt_proof, "kip", r.tests.STL, r.tests.proof_pass, "FHWA NHI-05-039"]];
+@@ -10008 +10132 @@ function PrintReport({
+-    const gRef = r.group.capBasis === "hpile" ? "AASHTO 10.7.3.9" : "FHWA NHI-05-039";
++    const gRef = (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? "AASHTO 10.7.3.9" : "FHWA NHI-05-039";
+@@ -10430 +10554,2 @@ function PrintReport({
+-              b.embedChk && /*#__PURE__*/React.createElement(RptRow, { label: "Pile embedment into the cap (" + b.embedChk.src + ")", val: fmt(b.embedChk.prov, 1) + " ≥ " + fmt(b.embedChk.req, 1) + " in", pass: b.embedChk.pass })),   // PDA-D13
++              b.embedChk && /*#__PURE__*/React.createElement(RptRow, { label: "Pile embedment into the cap (" + b.embedChk.src + ")", val: fmt(b.embedChk.prov, 1) + " ≥ " + fmt(b.embedChk.req, 1) + " in", pass: b.embedChk.pass }),   // PDA-D13
++              b.spacingChk && /*#__PURE__*/React.createElement(RptRow, { label: "Pile spacing (" + b.spacingChk.src + (b.spacingChk.rule === "ridot" ? ": max(30 in, 2.5D) + 6 in, D = max(d, b_f) = " + fmt(b.spacingChk.D, 2) + " in" : b.spacingChk.rule === "ctdot" ? ": max(30 in, 2.5D), D = " + fmt(b.spacingChk.D, 2) + " in" : ": 3'-6\" to 10'-0\"") + ")", val: fmt(b.spacingChk.s * 12, 1) + " in ≥ " + fmt(b.spacingChk.sMin_in, 1) + " in" + (b.spacingChk.sMax_ft != null ? ", ≤ " + fmt(b.spacingChk.sMax_ft * 12, 0) + " in" : ""), pass: b.spacingChk.pass })),   // PDA-IS
+@@ -10485 +10610,3 @@ function PrintReport({
+-        /*#__PURE__*/React.createElement(RptRow, { label: "Compression: φstat·Rn ≥ STL", val: fmt(g.phiRn_comp, 1) + " ≥ " + fmt(g.STL, 0) + " kip", pass: g.comp_pass }),
++        /*#__PURE__*/React.createElement(RptRow, { label: "Compression: φstat·Rn ≥ STL" + (g.drv && g.drv.phiDyn ? " (pile-length estimate, Eq. C10.7.3.3-1)" : ""), val: fmt(g.phiRn_comp, 1) + " ≥ " + fmt(g.STL, 0) + " kip", pass: g.comp_pass }),
++        // PDA-M1: required driving resistance
++        g.drv && g.drv.phiDyn && line("Field method: " + g.drv.label + "; φdyn = " + fmt(g.drv.phiDyn, 3) + " (Table 10.5.5.2.3-1" + (g.drv.grpFac < 1 ? ", ×0.80 small group" : "") + (g.drv.xPhi ? "; Extreme Event 1.0" : "") + "). Rn = Pu/φdyn = " + fmt(g.STL, 1) + "/" + fmt(g.drv.phiDyn, 3) + " = " + fmt(g.drv.Rn_req, 1) + " kip; scour side lost " + fmt(g.drv.bias, 2) + "×" + fmt(g.drv.Rs_scour, 1) + " = " + fmt(g.drv.Rs_scour_b, 1) + " kip (10.7.3.6)" + (g.drv.Rdd > 0 ? "; downdrag side " + fmt(g.drv.Rdd, 1) + " kip (CTDOT BDM)" : "") + " → Rndr = " + fmt(g.drv.Rndr, 1) + " kip (required nominal driving resistance)."),
+@@ -10653,4 +10780,4 @@ function PrintReport({
+-    eq: r.geo.Lb_scour > 0   // PDA-D12: bond above the design scour line removed (10.7.3.6)
+-      ? `L_{b,eff} = L_{bond} - L_{plunge} - L_{scour} = ${fmt(r.geo.Lb_total, 1)} - ${fmt(r.geo.L_plunge, 1)} - ${fmt(r.geo.Lb_scour, 1)} = ${fmt(r.geo.Lb_eff, 1)}\\ \\text{ft}`
+-      : `L_{b,eff} = L_{bond} - L_{plunge} = ${fmt(r.geo.Lb_total, 1)} - ${fmt(r.geo.L_plunge, 1)} = ${fmt(r.geo.Lb_eff, 1)}\\ \\text{ft}`,
+-    note: r.geo.Lb_scour > 0 ? "L_scour = bond between the casing tip (" + fmt(r.geo.casingTip, 1) + " ft below the head) and the design scour line (" + fmt(r.geo.zScourHead, 1) + " ft below the head = stickup + " + fmt(r.geo.scourD, 1) + " ft scour); no resistance above the scour line (AASHTO LRFD 10th Ed. 10.7.3.6)." : undefined
++    eq: r.geo.Lb_scour > 0   // PDA-D12: bond above the design scour line removed (10.7.3.6); PDA-D8: plunge included (10.9.3.10.4)
++      ? `L_{b,eff} = L_{bond} - L_{scour} = ${fmt(r.geo.Lb_total, 1)} - ${fmt(r.geo.Lb_scour, 1)} = ${fmt(r.geo.Lb_eff, 1)}\\ \\text{ft}`
++      : `L_{b,eff} = L_{bond} = ${fmt(r.geo.Lb_eff, 1)}\\ \\text{ft (plunge included, 10.9.3.10.4)}`,
++    note: r.geo.Lb_scour > 0 ? "L_scour = bond between the top of the bond zone (" + fmt(r.geo.topOfBond, 1) + " ft below the head) and the design scour line (" + fmt(r.geo.zScourHead, 1) + " ft below the head = stickup + " + fmt(r.geo.scourD, 1) + " ft scour); no resistance above the scour line (AASHTO LRFD 10th Ed. 10.7.3.6)." : undefined
+@@ -10745 +10872 @@ function PrintReport({
+-    eq: `\\phi_{cu}R_n = ${fmt((r.phiUsed || I).phiCU, 2)}(${fmt(r.axial.Rn_ucased, 1)}) = ${fmt(r.axial.phiRn_ucased, 1)}\\ \\text{kip} \\;${r.axial.ucased_pass ? '\\geq' : '<'}\\; STL = ${fmt(I.STL, 0)}\\ \\text{kip}`
++    eq: `\\phi_{cu}R_n = ${fmt((r.phiUsed || I).phiCU, 2)}(${fmt(r.axial.Rn_ucased, 1)}) = ${fmt(r.axial.phiRn_ucased, 1)}\\ \\text{kip} \\;${r.axial.ucased_pass ? '\\geq' : '<'}\\; P_u = STL - P_t = ${fmt(I.STL, 0)} - ${fmt(r.axial.Pt_c, 1)} = ${fmt(r.axial.Pu_unc, 1)}\\ \\text{kip}`   // PDA-D8
+@@ -10939 +11066 @@ function PrintReport({
+-    eq: `\\phi_t\\min[f_y(A_b+A_{ct}),\\,f_{yb}A_b] = ${fmt(r.tension.phi_t, 2)}\\min[${fmt(r.tension.fyT_cas, 0)}(${fmt(r.tension.Ab, 2)}+${fmt(r.tension.casJointEff * 100, 0)}\\%\\times${fmt(r.axial.Acas, 2)}),\\,${fmt(r.tension.Pn_tension_bar, 1)}] = ${fmt(r.tension.phiPn_tension_total, 1)} \\;${r.tension.strUp_pass ? '\\geq' : '<'}\\; T_u = ${fmt(r.tension.Tu, 0)}\\ \\text{kip}\\quad\\text{(Eqs. 10.9.3.10.3a-2, 3b-2; Table 10.5.5.2.5-2)}`
++    eq: `\\phi_t\\min[f_y(A_b+A_{ct}),\\,f_{yb}A_b] = ${fmt(r.tension.phi_t, 2)}\\min[${fmt(r.tension.fyT_cas, 0)}(${fmt(r.tension.Ab, 2)}+${fmt(r.tension.casJointEff * 100, 0)}\\%\\times${fmt(r.axial.Acas, 2)}),\\,${fmt(r.tension.Pn_tension_bar, 1)}];\\ \\text{cased } ${fmt(r.tension.phiPn_tension_cased, 1)}\\ge T_u=${fmt(r.tension.Tu, 1)},\\ \\text{uncased } ${fmt(r.tension.phiPn_tension, 1)}\\ge T_u-P_t=${fmt(r.tension.Tu, 1)}-${fmt(r.tension.Pt_t, 1)}=${fmt(r.tension.Tu_unc, 1)}\\ \\text{kip}\\quad\\text{(Eqs. 10.9.3.10.3a-2, 3b-2, 10.9.3.10.4-2; Table 10.5.5.2.5-2)}`   // PDA-D8
+@@ -12060 +12187 @@ function UtilizationDashboard({ r, I, pyRes }) {
+-    ["Axial — uncased", r.axial.phiRn_ucased, I.STL, r.axial.ucased_pass, "10.9.3.10"],
++    ["Axial — uncased", r.axial.phiRn_ucased, r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, r.axial.ucased_pass, "10.9.3.10"],   // PDA-D8: STL - P_t
+@@ -12179 +12306 @@ function grpRows(r) {
+-  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, r.group.capBasis === "hpile" ? "AASHTO 10.7.3.9" : "FHWA"]);
++  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? "AASHTO 10.7.3.9" : "FHWA"]);
+@@ -17156 +17283,14 @@ function App() {
+-      r.iab && r.iab.embedChk && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: r.iab.embedChk.pass ? "#2f6f3e" : "#b23b3b" } }, (r.iab.embedChk.pass ? "\u2713 " : "\u2717 ") + fmt(r.iab.embedChk.prov, 1) + " in vs \u2265 " + fmt(r.iab.embedChk.req, 0) + " in (" + r.iab.embedChk.src + ")")),
++      r.iab && r.iab.embedChk && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: r.iab.embedChk.pass ? "#2f6f3e" : "#b23b3b" } }, (r.iab.embedChk.pass ? "\u2713 " : "\u2717 ") + fmt(r.iab.embedChk.prov, 1) + " in vs \u2265 " + fmt(r.iab.embedChk.req, 0) + " in (" + r.iab.embedChk.src + ")"),
++      // PDA-IS (2026-10-20): pile spacing and the owner rule for the detailing checks
++      /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile spacing c/c (ft; 0 = not checked)"),
++        /*#__PURE__*/React.createElement("input", { type: "number", step: "0.25", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabSpacing || 0, onChange: e => set('iabSpacing', parseFloat(e.target.value) || 0) })),
++      /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Detailing rules"),
++        /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabDetailRule || "auto", onChange: e => set('iabDetailRule', e.target.value) },
++          /*#__PURE__*/React.createElement("option", { value: "auto" }, "Auto (MassDOT; CTDOT when the tables are off)"),
++          /*#__PURE__*/React.createElement("option", { value: "massdot" }, "MassDOT 3.10.10.3"),
++          /*#__PURE__*/React.createElement("option", { value: "ridot" }, "RIDOT BDM"),
++          /*#__PURE__*/React.createElement("option", { value: "ctdot" }, "CTDOT BDM / AASHTO 10.7.1.2"))),
++      r.iab && r.iab.spacingChk && /*#__PURE__*/React.createElement("div", { className: "col-span-2 text-[9px]", style: { color: r.iab.spacingChk.pass ? "#2f6f3e" : "#b23b3b" } },
++        (r.iab.spacingChk.pass ? "\u2713 " : "\u2717 ") + "s = " + fmt(r.iab.spacingChk.s, 2) + " ft vs " + fmt(r.iab.spacingChk.sMin_in / 12, 2) + " ft min" + (r.iab.spacingChk.sMax_ft != null ? " / " + fmt(r.iab.spacingChk.sMax_ft, 0) + " ft max" : "") + " (" + r.iab.spacingChk.src + ")")),
+@@ -17455,0 +17596,23 @@ function App() {
++    // PDA-M1 (2026-10-20): resistance determination method and owner rule for the required driving resistance
++    /*#__PURE__*/React.createElement("div", { className: "col-span-2 rounded-sm border border-slate-200 p-2" },
++      /*#__PURE__*/React.createElement("div", { className: "text-[11px] text-[var(--blueprint)] font-medium mb-1" }, "Resistance determination method (Table 10.5.5.2.3-1)"),
++      /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[10.5px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white", value: I.hpResMethod || "static", onChange: e => set('hpResMethod', e.target.value) },
++        Object.keys(HP_DRIVE_METHODS).map(k => /*#__PURE__*/React.createElement("option", { key: k, value: k }, (HP_DRIVE_METHODS[k].phi ? "\u03c6dyn " + HP_DRIVE_METHODS[k].phi.toFixed(2) + " \u2014 " : "") + HP_DRIVE_METHODS[k].label))),
++      /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap items-center gap-1 mt-1.5 text-[10px] font-mono-tech" },
++        /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Owner rule:"),
++        [["aashto", "AASHTO", null], ["massdot", "MassDOT", null], ["ridot", "RIDOT", "slt_dyn"], ["ctdot", "CTDOT", "dyn_qc"]].map(([k, l, mth]) => /*#__PURE__*/React.createElement("button", { key: k, type: "button",
++          title: k === "ridot" ? "RIDOT BDM 10.5.6: dynamic testing on every pile-driving project (\u2265 1 production pile per substructure, \u2265 2 %) and a static load test per site condition \u2192 \u03c6dyn 0.80 (0.65 when the static load test is waived)." : k === "ctdot" ? "CTDOT BDM: test piles with dynamic monitoring; Ultimate Pile Capacity = factored load/\u03c6 + scour + downdrag (\u03c6 and the scour / downdrag resistances from the geotechnical report). Preset \u03c6dyn 0.65 \u2014 confirm." : k === "massdot" ? "MassDOT Bridge Manual: no rule beyond AASHTO for the driving resistance." : "AASHTO LRFD 10th Ed.",
++          onClick: () => { set('hpDriveOwner', k); if (mth) set('hpResMethod', mth); },
++          className: "px-2 py-0.5 rounded-sm border " + ((I.hpDriveOwner || "aashto") === k ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300") }, l))),
++      (I.hpResMethod && I.hpResMethod !== "static") && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mt-1.5" },
++        /*#__PURE__*/React.createElement(Field, { label: "Scour side bias", sub: "on the lost side resistance (C10.7.3.6)", value: I.hpScourBias != null ? I.hpScourBias : 1.0, step: 0.05, onChange: v => set('hpScourBias', (isFinite(v) && v > 0) ? v : 1.0) }),
++        (I.hpDriveOwner === "ctdot") && /*#__PURE__*/React.createElement(Field, { label: "Downdrag side resistance", sub: "above the neutral plane (CTDOT)", unit: "kip", value: I.hpRsDD || 0, onChange: v => set('hpRsDD', (isFinite(v) && v > 0) ? v : 0) }))),
++    // PDA-Cb (2026-10-20): moment-gradient modifier for the strong-axis LTB of Module 04
++    /*#__PURE__*/React.createElement("div", { className: "col-span-2 rounded-sm border border-slate-200 p-2" },
++      /*#__PURE__*/React.createElement("div", { className: "text-[11px] text-[var(--blueprint)] font-medium mb-1" }, "C\u1d47 for lateral\u2013torsional buckling (strong axis, over L\u1d64)"),
++      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-5 gap-1.5 items-end" },
++        [["hpCb", "C\u1d47"], ["hpCbMmax", "M\u2098\u2090\u2093"], ["hpCbMA", "M\u1d00"], ["hpCbMB", "M\u0299"], ["hpCbMC", "M\u1d04"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
++          /*#__PURE__*/React.createElement("input", { type: "number", step: "any", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: I[k] != null ? I[k] : (k === "hpCb" ? 1.0 : ""), onChange: e => set(k, e.target.value === "" ? null : parseFloat(e.target.value)) })))),
++      (() => { const c = hpCbCalc(I); return /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-1 leading-snug" },
++        c ? (c.ok ? [c.txt + " ", /*#__PURE__*/React.createElement("button", { key: "a", type: "button", className: "underline text-[var(--blueprint2)]", onClick: () => set('hpCb', c.Cb) }, "apply C\u1d47 = " + c.Cb.toFixed(3))] : c.why)
++          : "C\u1d47 = 1.0 is conservative (6.10.8.2.3b). To compute it, enter |M| (kip\u00b7ft) over the unbraced length: M\u2098\u2090\u2093 and the quarter-, mid- and three-quarter-point moments M\u1d00, M\u0299, M\u1d04 (Eq. 6.10.8.2.3b-1), then apply."); })()),
+@@ -17616 +17779 @@ function App() {
+-    r.group.capBasis === "hpile" && /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[12px] text-slate-600 cursor-pointer mt-2" },
++    (r.group.capBasis === "hpile" || !!r.group.aashtoMP) && /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[12px] text-slate-600 cursor-pointer mt-2" },
+@@ -17619 +17782 @@ function App() {
+-    r.group.capBasis === "hpile" && r.group.aashto ? /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta_auto, 3), " (AASHTO 10.7.3.9: ", r.group.aashto.etaCase, "; cap contact matters only in cohesive soil: η < 1 only when the cap is not in contact and the surface clay is soft). Group layout and cap loads are set in the Pile group workspace (Loads & group tab).") :
++    (r.group.capBasis === "hpile" || !!r.group.aashtoMP) && r.group.aashto ? /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta_auto, 3), " (AASHTO 10.7.3.9: ", r.group.aashto.etaCase, "; cap contact matters only in cohesive soil: η < 1 only when the cap is not in contact and the surface clay is soft). Group layout and cap loads are set in the Pile group workspace (Loads & group tab).") :
+@@ -17928 +18091 @@ function App() {
+-      note: "Effective grout-to-ground bond develops only BELOW the casing tip: L_b,eff = L_bond − L_plunge" + (r.geo.Lb_scour > 0 ? " − L_scour" : "") + " = " + fmt(r.geoChecks.Lb_total, 1) + " − " + fmt(r.geoChecks.L_plunge, 1) + (r.geo.Lb_scour > 0 ? " − " + fmt(r.geo.Lb_scour, 1) + " (bond above the design scour line, 10.7.3.6)" : "") + " = " + fmt(r.geoChecks.Lb_eff, 1) + " ft. Over the plunge the casing occupies the hole, so that length transfers load structurally to the bar/casing, not to the ground. Compared against the geotechnically-required bond (AASHTO 10.9.3.5, from Module 01)."
++      note: "Effective grout-to-ground bond, plunge included (the plunge length transfers load to the ground, AASHTO LRFD 10th Ed. 10.9.3.10.4): L_b,eff = L_bond" + (r.geo.Lb_scour > 0 ? " − L_scour" : "") + " = " + fmt(r.geoChecks.Lb_total, 1) + (r.geo.Lb_scour > 0 ? " − " + fmt(r.geo.Lb_scour, 1) + " (bond above the design scour line, 10.7.3.6)" : "") + " = " + fmt(r.geoChecks.Lb_eff, 1) + " ft. Compared against the geotechnically-required bond (AASHTO 10.9.3.5, from Module 01)."
+@@ -18204,0 +18368,9 @@ function App() {
++      // PDA-M1 (2026-10-20): field method -> required nominal bearing and driving resistance
++      g.drv && g.drv.phiDyn && /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement(RptHeading, { n: "4a", title: "Required driving resistance", code: "AASHTO 10.5.5.2.3 \u00b7 10.7.3.6 \u00b7 C10.7.3.3" }),
++        /*#__PURE__*/React.createElement(Narr, null, "Method: ", g.drv.label, ". The number of piles follows from \u03c6dyn of the field method (C10.5.5.2.3); the static check above is then the pile-length estimate of Eq. C10.7.3.3-1 (\u03c6dyn R_n = \u03c6stat R_n,stat, with R_n = P_u/\u03c6dyn)."),
++        /*#__PURE__*/React.createElement(Calc, { label: "\u03c6dyn", eq: g.drv.xPhi ? `\\phi_{dyn}=1.00\\ \\text{(Extreme Event, 10.5.5.3)}` : `\\phi_{dyn}=${fmt(g.drv.phiTab, 2)}${g.drv.grpFac < 1 ? `\\times 0.80=${fmt(g.drv.phiDyn, 3)}\\ \\text{(small group)}` : ""}`, cite: "Table 10.5.5.2.3-1" }),
++        /*#__PURE__*/React.createElement(Calc, { label: "Required nominal bearing", eq: `R_n=\\dfrac{P_u}{\\phi_{dyn}}=\\dfrac{${fmt(g.STL, 1)}}{${fmt(g.drv.phiDyn, 3)}}=${fmt(g.drv.Rn_req, 1)}\\ \\text{kip}` }),
++        g.drv.Rs_scour > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Side resistance lost to scour", eq: `R_{s,scour}=\\lambda_{bias}\\,(R_{s,no\\,scour}-R_s)=${fmt(g.drv.bias, 2)}(${fmt(g.drv.Rs_scour + g.Rs_comp, 1)}-${fmt(g.Rs_comp, 1)})=${fmt(g.drv.Rs_scour_b, 1)}\\ \\text{kip}`, note: "static analysis, unfactored, times the method bias (input)", cite: "10.7.3.6, C10.7.3.6" }),
++        g.drv.Rdd > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Downdrag side resistance (CTDOT)", eq: `R_{dd}=${fmt(g.drv.Rdd, 1)}\\ \\text{kip}`, note: "CTDOT BDM: Ultimate Pile Capacity = factored load/\u03c6 + scour + downdrag. AASHTO 10th Ed. 10.7.3.7 alone would take the drag load as zero at the geotechnical strength limit state.", cite: "CTDOT BDM" }),
++        /*#__PURE__*/React.createElement(RptCheck, { pass: true, eq: `R_{ndr}=R_n+R_{s,scour}${g.drv.Rdd > 0 ? "+R_{dd}" : ""}=${fmt(g.drv.Rn_req, 1)}+${fmt(g.drv.Rs_scour_b, 1)}${g.drv.Rdd > 0 ? "+" + fmt(g.drv.Rdd, 1) : ""}=${fmt(g.drv.Rndr, 1)}\\ \\text{kip (required nominal driving resistance)}` })),
+@@ -18490 +18662 @@ function App() {
+-    tex: `L_{b,eff}=L_{bond}-L_{plunge}${r.geo.Lb_scour > 0 ? "-L_{scour}" : ""}=${fmt(r.geo.Lb_total, 1)}-${fmt(r.geo.L_plunge, 1)}${r.geo.Lb_scour > 0 ? "-" + fmt(r.geo.Lb_scour, 1) : ""}=${fmt(r.geo.Lb_eff, 1)}\\text{ ft}\\;${r.geo.Lb_eff >= r.geo.Lb_req ? '\\geq' : '<'}\\;L_{b,req}`   // PDA-D12
++    tex: `L_{b,eff}=L_{bond}${r.geo.Lb_scour > 0 ? "-L_{scour}" : ""}=${fmt(r.geo.Lb_total, 1)}${r.geo.Lb_scour > 0 ? "-" + fmt(r.geo.Lb_scour, 1) : ""}=${fmt(r.geo.Lb_eff, 1)}\\text{ ft}\\;${r.geo.Lb_eff >= r.geo.Lb_req ? '\\geq' : '<'}\\;L_{b,req}`   // PDA-D12
+@@ -19012 +19184,2 @@ function App() {
+-    tex: `\\phi_{cu}R_n=${fmt((r.phiUsed || I).phiCU, 2)}(${fmt(r.axial.Rn_ucased, 1)})=${fmt(r.axial.phiRn_ucased, 1)}\\text{ kip}${r.axial.ucased_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`
++    tex: `\\phi_{cu}R_n=${fmt((r.phiUsed || I).phiCU, 2)}(${fmt(r.axial.Rn_ucased, 1)})=${fmt(r.axial.phiRn_ucased, 1)}\\text{ kip}${r.axial.ucased_pass ? ' \\geq ' : ' < '}P_u=STL-P_t=${fmt(I.STL, 0)}-${fmt(r.axial.Pt_c, 1)}=${fmt(r.axial.Pu_unc, 1)}`,   // PDA-D8
++    note: "P_t = \u03c6 \u03c0 d_b \u03b1_b L_p = " + fmt((r.phiUsed || I).phiGeo, 2) + " \u00d7 \u03c0 \u00d7 " + fmt(r.geo.dh / 12, 3) + " ft \u00d7 " + fmt(r.geo.beta_ksf, 2) + " ksf \u00d7 " + fmt(r.geo.Lp_eff, 2) + " ft = " + fmt(r.axial.Pt_c, 2) + " kip, load transferred to the ground over the plunge length (AASHTO LRFD 10th Ed. Eqs. 10.9.3.10.4-1, -2)"
+@@ -19429 +19602 @@ function App() {
+-    tex: `${fmt(r.tension.phiPn_tension_total, 1)}\\text{ kip}${r.tension.strUp_pass ? ' \\geq ' : ' < '}T_u=${fmt(r.tension.Tu, 1)}`,
++    tex: `\\text{cased } ${fmt(r.tension.phiPn_tension_cased, 1)}${r.tension.phiPn_tension_cased >= r.tension.Tu ? ' \\geq ' : ' < '}T_u=${fmt(r.tension.Tu, 1)};\\ \\text{uncased } ${fmt(r.tension.phiPn_tension, 1)}${r.tension.phiPn_tension >= r.tension.Tu_unc ? ' \\geq ' : ' < '}T_u-P_t=${fmt(r.tension.Tu, 1)}-${fmt(r.tension.Pt_t, 1)}=${fmt(r.tension.Tu_unc, 1)}\\text{ kip}`,   // PDA-D8: P_t = phi_up pi d_b alpha_b L_p (Eq. 10.9.3.10.4-1)
+@@ -19616 +19789 @@ function App() {
+-    code: r.group.capBasis === "hpile" && r.group.enable
++    code: (r.group.capBasis === "hpile" || !!r.group.aashtoMP) && r.group.enable
+@@ -19651,2 +19824,2 @@ function App() {
+-      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, r.group.capBasis === "hpile" ? "1 · Axial group efficiency (η) — reduces the H-pile static resistance" : "1 · Axial group efficiency (η) — reduces bond capacity"),
+-      r.group.capBasis === "hpile"
++      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? (r.group.aashtoMP ? "1 · Axial group efficiency (η) — reduces the micropile bond resistance" : "1 · Axial group efficiency (η) — reduces the H-pile static resistance") : "1 · Axial group efficiency (η) — reduces bond capacity"),
++      (r.group.capBasis === "hpile" || !!r.group.aashtoMP)
+@@ -19655 +19828 @@ function App() {
+-        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for “soft” is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
++        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, (r.group.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (micropile groups, 10.9.3.6): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S" : "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S"), /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + (r.group.aashtoMP ? " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the micropile bond resistance φR" : " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for “soft” is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
+@@ -19657 +19830 @@ function App() {
+-      r.group.capBasis === "hpile" && r.group.aashto
++      (r.group.capBasis === "hpile" || !!r.group.aashtoMP) && r.group.aashto
+@@ -19672,2 +19845,2 @@ function App() {
+-      r.group.capBasis === "hpile"
+-        ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
++      (r.group.capBasis === "hpile" || !!r.group.aashtoMP)
++        ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), (r.group.aashtoMP ? " → per-pile micropile φP" : " → per-pile H-pile φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
+@@ -19676 +19849 @@ function App() {
+-        items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""], ...(r.group.capBasis === "hpile" ? [["Pile cap in firm contact with the ground", I.hpCapContact !== false ? "yes" : "no", ""]] : [])] }),
++        items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""], ...((r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? [["Pile cap in firm contact with the ground", I.hpCapContact !== false ? "yes" : "no", ""]] : [])] }),
+@@ -19679,3 +19852,3 @@ function App() {
+-        tex: r.group.capBasis === "hpile" ? `\\eta\\,\\phi R_{n}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}` : `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
+-        note: r.group.capBasis === "hpile" ? "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency." : "Per-pile bond reduced by axial group efficiency."
+-      }), React.createElement(PdWorkedIn, { I: I, items: [r.group.capBasis === "hpile" ? { mod: "01", txt: "per-pile \u03c6R_n", title: "Geotechnical Axial \u2014 Tip + Skin (Static)" } : { mod: "01", txt: "per-pile bond P_n", title: "Geotechnical Resistance \u2014 Axial Bond" }] }))),
++        tex: (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? `\\eta\\,\\phi R_{n}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}` : `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
++        note: (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? (r.group.aashtoMP ? "Per-pile micropile bond resistance (Module 01) reduced by axial group efficiency." : "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency.") : "Per-pile bond reduced by axial group efficiency."
++      }), React.createElement(PdWorkedIn, { I: I, items: [(r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? { mod: "01", txt: "per-pile \u03c6R_n", title: (r.group.aashtoMP ? "Geotechnical Resistance \u2014 Axial Bond" : "Geotechnical Axial \u2014 Tip + Skin (Static)") } : { mod: "01", txt: "per-pile bond P_n", title: "Geotechnical Resistance \u2014 Axial Bond" }] }))),
+@@ -19749 +19922 @@ function App() {
+-      (r.group.capBasis === "hpile" && r.group.aashto && r.group.aashto.weakBelow) ? /*#__PURE__*/React.createElement("div", { className: "p-2 mb-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(201,98,46,0.08)", border: "1px solid rgba(201,98,46,0.35)", color: "#7a4d15" } }, "⚠ ", hpWeakBelowText(r.group.aashto.weakBelow)) : null,
++      ((r.group.capBasis === "hpile" || !!r.group.aashtoMP) && r.group.aashto && r.group.aashto.weakBelow) ? /*#__PURE__*/React.createElement("div", { className: "p-2 mb-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(201,98,46,0.08)", border: "1px solid rgba(201,98,46,0.35)", color: "#7a4d15" } }, "⚠ ", hpWeakBelowText(r.group.aashto.weakBelow)) : null,
+@@ -19752 +19925 @@ function App() {
+-      r.group.capBasis === "hpile" ? (r.group.blockComputed ? /*#__PURE__*/React.createElement("div", null,
++      (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? (r.group.blockComputed ? /*#__PURE__*/React.createElement("div", null,
+@@ -19766 +19939 @@ function App() {
+-          note: "Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(r.group.blk.phi, 2) + " (Table 10.5.5.2.3-1, block failure in clay)."
++          note: "Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(r.group.blk.phi, 2) + (r.group.aashtoMP ? " (Table 10.5.5.2.5-1, block failure in clay)." : " (Table 10.5.5.2.3-1, block failure in clay).")
+@@ -19771 +19944 @@ function App() {
+-          "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
++          (r.group.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for micropile groups (10.9.3.6) in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer." : "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer.")),
+@@ -19773 +19946 @@ function App() {
+-          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft (c/c + B); Σ individual H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
++          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), (r.group.aashtoMP ? " ft (c/c + B); Σ individual micropile φP" : " ft (c/c + B); Σ individual H-pile φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
+```
