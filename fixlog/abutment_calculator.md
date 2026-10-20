@@ -8619,3 +8619,602 @@ index 92d9a35..f06352c 100644
 +      ["Cap bars; horizontal bars; vertical bars","#"+I.capBar+" @ "+fmt(+I.capSp,1)+"; #"+I.hBar+" @ "+fmt(+I.hSp,1)+"; #"+I.vBar+" @ "+fmt(+I.vSp,1),"in"],
 +      ["Cap stirrups",String(I.stBar)==="0"?"none":"#"+I.stBar+", "+I.stLegs+" legs @ "+fmt(+I.stSp,1)+" in",""]]:[
 ```
+
+## 2026-10-20 — PR: claude/abut-interactive — Interactive figures (hover / tap values, selectors, click to the worked calculation) (ABINT) (PR link added after merge)
+
+UI only. No formula, factor, unit or code reference changed. `computeAll()` is not edited. The printed calculation report is byte-identical to main (checked below).
+
+### F-ABINT-1. Shared machinery — display only
+- **Where:** Section E, after `svgWrap()`, anchor `ABINT (2026-10-20): interactive figures`: `FIG`, `FIG_STATIC`, `FIG_X`, `fia()`, `fg()`, `fF()`, `figInterp()`, `FIG_FN`, `figLsSel()`, `figCtl()`, `figBox()`, `figRedraw()`, `figStaticIn()`, `figCrossDraw()`, `figTipShow()`, `figTipHide()`, `figLink()`, `d3PileHL()`, `figWire()`; CSS anchor `ABINT: interactive figures — selectors`.
+- **Before:** each tab inserted `${svgX(R)}` (static SVG string).
+- **After:** each tab inserts `${figBox("name",R)}` = `<div class="absfig" data-fig="name">` + a small control row (`.figctl`) + the same SVG. Elements carry `tabindex="0" class="fi" role aria-label data-tip data-fjump` (added by `fia()` / `fg()` only when `FIG_STATIC` is false).
+  - Hover, keyboard focus or a tap shows a tooltip (`#figTip`, role tooltip): the value and its expression with the values substituted.
+  - Click or Enter calls the existing `gotoPanel(tab, panel)` (scroll + flash of the worked panel). On touch, the first tap shows the value and a second tap follows the link. Escape closes the tooltip.
+  - A crosshair (`data-fx`) follows the pointer on the pressure and stem figures (↑/↓ on the focused figure).
+  - The figure selections live in `FIG`, in memory only. They are never saved and are kept across recalculation. A limit state that disappears (Extreme Event I switched off) falls back to the default.
+- **Report:** `buildReport()` calls `figStaticIn(clone,R)` on each cloned tab. Each `.absfig` is replaced by its figure drawn with `FIG_STATIC = true` and the default selection, i.e. exactly the SVG string of main. The pile plan is redrawn the same way. `.figctl` and the `data-pile` markers are removed. `@media print` hides `.figctl` and `#figTip`.
+
+### F-ABINT-2. §6.5 lateral pressure on the stem and backwall (`svgWallPressure`)
+- **Selector:** "Figures: limit state" (shared). Default = the Tab 6 selection `R.vmSel`, as before. Another state is drawn from `R.buildVM("ls:"+state)`, the V&M integration that already exists.
+- **Hover / crosshair:** z, and w(z) read from the V&M arrays by linear interpolation between stations. The tooltip also gives the expression with values, `w = γ_EH·k_ah·γ·(H_s − z) + γ_LS·k_ah·γ·h_eq (+ γ_ES·k_ah·q_ES)` (backwall: depth s and h_eq,bw), with γ from `R.vmGamma(state)`. The expression is shown only when it reproduces the V&M value within 1e-6; otherwise the tooltip says the value is read from §6.1 / §6.2.
+- **Click:** stem → §6.1, backwall → §6.2, value labels → Tab 1 §1.3, EE I arrows → §3.6a.
+
+### F-ABINT-3. §3.2a resultant vs kern (`svgResultants`)
+- **Selector:** shared limit state. The selected state's row is shaded and every permutation of that state is drawn as a hollow dot with its own tooltip.
+- **Hover:** x̄ = (ΣM_v − ΣM_h)/ΣV with the values; e = B/2 − x̄; |e|/e_lim against that state's limit (or "Service I: no limit"); kern inside / outside. The kern, B/3 and e_lim lines carry B/6, B/3 and e_lim with values.
+- **Click:** the governing state → §3.2; other states → that state's permutation table (Tab 2 §2.3).
+- `best` keeps its combination `c` (display only).
+
+### F-ABINT-4. §5.2b stem M_u and φM_n (`stemCapacityProfile`, new `stemProfAt`, `svgStemCapacity`)
+- **Refactor:** `stemCapacityProfile()` loops over `stemProfAt(R,z)`, which has the same expressions in the same order (the only change: the unused `c=R.checks.stemFlex` is gone). It also returns r, t, d, A_s, a, c, ε_t and φ for the tooltip. The profile values are unchanged (report identical; slider at z = 0 equals the §5.2 M_u and φM_n).
+- **Selector:** shared limit state. The governing state (default) keeps the §5.2b profile. Another state takes M_u(z) from its §6.1 V&M stem diagram; the figure title says so.
+- **Height slider and crosshair:** the readout gives z, M_u, φM_n and M_u/φM_n. The tooltip gives M_u(z) = Σγ·M·rⁿ + H_gird(h_stem − z) + M_ecc with the values, and φM_n(z) = φA_s f_y(d − a/2)/12 with t(z), d and ε_t.
+- **Click:** §5.2, or §6.1 for a V&M curve.
+
+### F-ABINT-5. §5.7 reinforcement section (`svgRebarDims`)
+- **Hover / focus on A1, B1, C1, D1 and the dowel:** bar, spacing, A_s = A_b·12/s (and A_s,req), cover, d, and ℓ_d = max(ℓ_db·λ_rl·λ_cf·λ_rc, 12) with the values of the section check. The dowel shows ℓ_dh, the available length and the lap.
+- **Click:** §5.1 to §5.4 and §5.2a.
+- **No selector:** the figure does not depend on the load state.
+
+### F-ABINT-6. §5.6 seat plan (`svgSeatPlan`)
+- **Selector:** "Bearing (load case)", governing girder (default) or any girder. For another girder, c_trans, c, A₂ and m are re-derived with the expressions of `computeAll` C-15 `seatM()` (geometry only; the factored load and q_b/q_R stay worked for the governing girder). Selecting the governing girder reproduces the printed plan exactly.
+- **Hover:** pad (A₁; and for the governing girder P_u, q_b, q_R, q_b/q_R), A₂ outline (A₂ and m), c_front, c_back, c_trans with their expressions.
+- **Click:** §5.6.
+
+### F-ABINT-7. §4.1 pile plan (`drawPilePlan` → new `pilePlanSVG`) and §4.3 pile reactions (`svgPileReactions`)
+- **Selector:** the shared limit state, also above the plan. Plan default: the largest compression over the limit states (as before). Selected: that state's governing max-compression case. The §4.3 row figure is drawn the same way (default: the governing case `R.checks.pileComp`).
+- **Hover a pile:** number, x and y, the case, and P_i = ΣV/n + M_y·x′/Σx′² + M_x·y′/Σy′² with the values of that case (`perLS[ls].best`: c.V, My, Mx), giving the plotted P. Also D/C = P/(φ_c·R_n) as the plan's colour scale. Inactive piles say so.
+- **Hover a row arrow:** piles in the row, max / min / Σ P, the rigid-cap terms and max P/(φ_c·R_n) for that state.
+- **Linking:** hovering a pile highlights that pile's "@ pile" cells in the §4.3 table (`data-pile`), its row arrow in the §4.3 figure (`data-prow`) and the pile in the 3D view (`D3.piles`, emissive colour; the last hovered pile stays marked). Hovering a row arrow highlights its piles in the plan.
+- **Click:** §4.2.
+- The plan draws transparent hit circles on top (interactive only). Static output is unchanged.
+
+### F-ABINT-8. Wing figures (`svgWingElev`, `svgWingPlan`, `svgWingPress`)
+- **Elevation / plan:** tooltips on the wing (L, H₀, H_L, t), the governing strip y* (Strength I strip moment), the design section x_s / H_s, the barrier (F, L_t, H_e) and the dimensions. Clicks go to §9.0, §9.2, §9.1 and §9.2a.
+- **Pressure — selector "Wing load case":** unfactored (default) or a combination of §9.2. The factors are taken from that combination's own term list `W.LS[lc].tm`; Extreme Event II uses `W.Kee2`.
+- **Pressure — hover / crosshair:** EH = γ·k_h·γ·depth, LS = γ·k_h·γ·h_eq, the seismic uniform equivalent ΔK_h·γ·H/2, and CT, each with values. Click → §9.1.
+
+### F-ABINT-9. Integral / semi-integral section (`svgIabSection`)
+- **Selector "Load case":** expansion (default) or contraction. The pressure triangle and its label use K_exp or K_con (§10.3), and the movement arrow uses Δ_exp or Δ_con (§10.2).
+- **Hover:** p = K·γ·H with the values, Δ_exp and Δ_con, the piles (section, axis, n, spacing, embedment, P per pile of §10.4), and the diaphragm / cap dimensions.
+- **Click:** §10.2 to §10.5.
+
+### Governing provision
+None: no engineering formula or reference changed. Engineer's guideline CLAUDE.md §6: values quoted in a figure link to their derivation.
+
+### Check case (display only, from the running tool, built-in project)
+| Element | Shown | Worked value |
+|---|---|---|
+| §6.5 pressure at z = 0, Strength I | 1.50(0.3073)(0.120)(19.00 − 0.00) + 1.75(0.3073)(0.120)(2.10) = 1.186 ksf | V&M w(0) = 1.186 |
+| §3.2a Strength I dot | x̄ = (11902.8 − 6209.1)/1657.8 = 3.434 ft; e = 6.500 − 3.434 = 3.066 ft; 3.066/4.333 = 0.707 | §3.2 D/C 0.707 |
+| §5.2b slider z = 0 | M_u = 112.06, φM_n = 302.73 kip-ft/ft | §5.2 112.06 / 302.73 |
+| §5.6 pad | q_b/q_R = 0.120 | §5.6 0.120 |
+| §4.1 pile 1 (pile footing) | 2977.9/24 + (−6027.1)(−4.250)/289.00 + 0 = 212.71 kip; 212.7/(0.70 × 330) = 0.921 | Strength I max 212.71 |
+
+### Saved data (§5)
+No key or format change. The figure selections are not saved, and no localStorage key was added.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless, origin/main vs the branch, 8 cases: built-in; pile AASHTO; pile + EE I RIDOT; spread + EE I CTDOT; MassDOT slope + water + ES; independent wing; integral MassDOT; semi-integral RIDOT.
+  - Identical in every case: the Input ID, every leaf of `computeAll()`, the warnings, the text of every tab (figure controls removed), and the calculation report HTML from `buildReport()` (26–49 SVG figures per report).
+- Branch, real pointer, keyboard and touch events: 28 checks pass.
+  - Hover values against R: §6.5, §3.2a, §5.2b, §5.6, §4.1, §9.1 and §10.0 (table above).
+  - Clicks and Enter open §3.2, §5.3 and §4.2.
+  - Selectors redraw every figure.
+  - Pile hover highlights the §4.3 table cells, the §4.3 row and the 3D pile.
+  - First tap shows, second tap follows.
+  - A report printed with non-default selections is identical to the default report, with no controls and no interactive attributes.
+  - Live update after an input change keeps the selection.
+  - No console errors.
+- Speed, median `recalcAll()` + active tab, main → branch: Tab 5 139 → 154 ms, Tab 4 109 → 127 ms, Tab 6 182 → 202 ms. `figRedraw()` takes about 17 ms.
+
+### Other copies
+None.
+
+### Open items
+1. A non-governing stem state in §5.2b takes M_u(z) from the V&M diagram. For the governing state, the V&M diagram and the §5.2b profile differ by up to 0.008 kip-ft/ft over the height (h_eq held at the base value in the profile); at the base they are equal.
+
+**Diff (exact before/after, `git diff -U0`):**
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index f06352c..46f54cc 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -343,0 +344,14 @@ svg.absw-fig{display:block;margin:6px 0;height:auto}
++/* ABINT: interactive figures — selectors, focus / hover highlight, linked highlight, tooltip; none of it prints */
++.figctl{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:12px;color:#444;margin:4px 0 2px}
++.figctl select,.figctl input{font-size:12px;vertical-align:middle}
++.figctl input[type=range]{width:180px}
++.figctl .figzout{font-variant-numeric:tabular-nums;color:#1f3a5f}
++.figctl .fighint{color:#777;font-style:italic}
++svg .fi{cursor:pointer;outline:none}
++svg .fi:hover,svg .fi:focus,svg .fi.fhl{filter:drop-shadow(0 0 2px #e08a00) drop-shadow(0 0 1px #e08a00)}
++svg .fi[data-fx]:hover{filter:none}
++svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-pile]:focus{stroke:#e08a00;stroke-width:3px}
++.rtbl td.fhl{background:#fff1c7 !important;outline:2px solid #e08a00}
++#figTip{position:fixed;z-index:10000;display:none;max-width:460px;background:#fffef6;color:#222;border:1px solid #b9a66b;border-radius:3px;box-shadow:0 2px 8px rgba(0,0,0,.18);padding:6px 9px;font:12px/1.4 "Times New Roman",serif;pointer-events:none}
++#figTip .figtip-go{margin-top:3px;color:#2e5077;font-style:italic}
++@media print{ .figctl,#figTip{display:none !important} }
+@@ -4241 +4255 @@ function renderTabWing(R){
+-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${svgWingElev(R)}${svgWingPlan(R)}</div>`);
++    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${figBox("wingElev",R)}${figBox("wingPlan",R)}</div>`);
+@@ -4278 +4292 @@ function renderTabWing(R){
+-    ${svgWingPress(R)}`);
++    ${figBox("wingPress",R)}`);
+@@ -4397,3 +4411,3 @@ function svgWingElev(R){
+-    b+=`<polygon points="${pts.map(p=>X(p[0])+","+Y(p[1])).join(" ")}" fill="#ecebe4" stroke="#333" stroke-width="1.4"/>`;
+-    if(!W.avg) b+=`<line x1="${X(0)}" y1="${Y(W.strip.y)}" x2="${X(W.strip.l)}" y2="${Y(W.strip.y)}" stroke="#c62828" stroke-dasharray="5 3"/>`+svgT(X(W.strip.l)+4,Y(W.strip.y)+4,`governing strip y* = ${fmt(W.strip.y,2)} ft`,{fs:10,c:"#c62828"});
+-    b+=dimH(X(0),X(L),Y(H0)-26,`L = ${fmt(L,2)} ft`)+dimV(Y(0),Y(H0),X(0)-48,`H₀ = ${fmt(H0,2)} ft`)+dimV(Y(dB*L),Y(H0+bT*L),X(L)+22,`H_L = ${fmt(HL,2)} ft`);
++    b+=`<polygon points="${pts.map(p=>X(p[0])+","+Y(p[1])).join(" ")}" fill="#ecebe4" stroke="#333" stroke-width="1.4"${FIG_STATIC?"":fia(`Attached wing, cantilever plate from the junction (x = 0)\nL = ${fF(L)} ft, H₀ = ${fF(H0)} ft at the junction, H_L = ${fF(HL)} ft at the free end; t = ${fF(W.tb*12,1)} in (§9.0)`,"tab-wing|o-wing-basis")}/>`;
++    if(!W.avg) b+=fg(`Governing horizontal strip at y* = ${fF(W.strip.y,3)} ft, length ℓ = ${fF(W.strip.l,3)} ft\nlargest strip moment γ_EH·m_EH + γ_LS·m_LS = ${fF(W.strip.mu,3)} kip-ft/ft (Strength I, §9.2)`,"tab-wing|o-wing-dem",`<line x1="${X(0)}" y1="${Y(W.strip.y)}" x2="${X(W.strip.l)}" y2="${Y(W.strip.y)}" stroke="#c62828" stroke-dasharray="5 3"/>`+svgT(X(W.strip.l)+4,Y(W.strip.y)+4,`governing strip y* = ${fmt(W.strip.y,2)} ft`,{fs:10,c:"#c62828"}));
++    b+=fg(`Wing length L = ${fF(L)} ft (panel I-13, §9.0)`,"tab-wing|o-wing-basis",dimH(X(0),X(L),Y(H0)-26,`L = ${fmt(L,2)} ft`))+fg(`Height at the junction H₀ = ${fF(H0)} ft (§9.0)`,"tab-wing|o-wing-basis",dimV(Y(0),Y(H0),X(0)-48,`H₀ = ${fmt(H0,2)} ft`))+fg(`Height at the free end H_L = ${fF(HL)} ft (§9.0)`,"tab-wing|o-wing-basis",dimV(Y(dB*L),Y(H0+bT*L),X(L)+22,`H_L = ${fmt(HL,2)} ft`));
+@@ -4404,3 +4418,3 @@ function svgWingElev(R){
+-    b+=`<polygon points="${X(0)},${Y(0)} ${X(0)},${Y(H0)} ${X(L)},${Y(HL)} ${X(L)},${Y(0)}" fill="#ecebe4" stroke="#333" stroke-width="1.4"/>`;
+-    b+=`<line x1="${X(W.xs)}" y1="${Y(0)}" x2="${X(W.xs)}" y2="${Y(W.Hs)}" stroke="#c62828" stroke-dasharray="5 3" stroke-width="1.3"/>`+svgT(X(W.xs)+5,Y(W.Hs/2),`design section H_s = ${fmt(W.Hs,2)} ft`,{fs:10,c:"#c62828"});
+-    b+=dimH(X(0),X(W.xs),Y(0)+(tfw*sc)+16,`x_s = ${fmt(W.xs,2)} ft`,12)+dimH(X(0),X(L),Y(H0)-26,`L = ${fmt(L,2)} ft`)+dimV(Y(0),Y(H0),X(0)-30,`H₀ = ${fmt(H0,2)} ft`)+dimV(Y(0),Y(HL),X(L)+22,`H_L = ${fmt(HL,2)} ft`);
++    b+=`<polygon points="${X(0)},${Y(0)} ${X(0)},${Y(H0)} ${X(L)},${Y(HL)} ${X(L)},${Y(0)}" fill="#ecebe4" stroke="#333" stroke-width="1.4"${FIG_STATIC?"":fia(`Independent wing on its own footing\nL = ${fF(L)} ft, H₀ = ${fF(H0)} ft at the joint, H_L = ${fF(HL)} ft; base thickness t_b = ${fF(W.tb*12,2)} in (§9.0)`,"tab-wing|o-wing-basis")}/>`;
++    b+=fg(`Design section at x_s = ${fF(W.xs)} ft: stem height H_s = ${fF(W.Hs)} ft (demands per ft in §9.2)`,"tab-wing|o-wing-dem",`<line x1="${X(W.xs)}" y1="${Y(0)}" x2="${X(W.xs)}" y2="${Y(W.Hs)}" stroke="#c62828" stroke-dasharray="5 3" stroke-width="1.3"/>`+svgT(X(W.xs)+5,Y(W.Hs/2),`design section H_s = ${fmt(W.Hs,2)} ft`,{fs:10,c:"#c62828"}));
++    b+=fg(`Design section x_s = ${fF(W.xs)} ft from the high end (§9.2)`,"tab-wing|o-wing-dem",dimH(X(0),X(W.xs),Y(0)+(tfw*sc)+16,`x_s = ${fmt(W.xs,2)} ft`,12))+fg(`Wing length L = ${fF(L)} ft (§9.0)`,"tab-wing|o-wing-basis",dimH(X(0),X(L),Y(H0)-26,`L = ${fmt(L,2)} ft`))+fg(`Stem height at the joint H₀ = ${fF(H0)} ft (§9.0)`,"tab-wing|o-wing-basis",dimV(Y(0),Y(H0),X(0)-30,`H₀ = ${fmt(H0,2)} ft`))+fg(`Stem height at the free end H_L = ${fF(HL)} ft (§9.0)`,"tab-wing|o-wing-basis",dimV(Y(0),Y(HL),X(L)+22,`H_L = ${fmt(HL,2)} ft`));
+@@ -4409 +4423 @@ function svgWingElev(R){
+-  if(W.CT){ const hb=W.CT.He/12, xb=att?0:0; b+=`<rect x="${X(xb)}" y="${Y((att?H0:H0)+hb)}" width="${L*sc}" height="${hb*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="4 2"/>`+svgT(X(L)-4,Y(H0+hb)-4,`barrier ${W.CT.tl.replace("TL","TL-")} (H_e = ${fmt(W.CT.He,0)} in)`,{fs:9.5,a:"end",c:"#1f3a5f"}); }
++  if(W.CT){ const hb=W.CT.He/12, xb=att?0:0; b+=`<rect x="${X(xb)}" y="${Y((att?H0:H0)+hb)}" width="${L*sc}" height="${hb*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="4 2"${FIG_STATIC?"":fia(`Barrier ${W.CT.tl}: collision F = ${fF(W.CT.F,1)} kip over L_t = ${fF(W.CT.Lt,1)} ft at H_e = ${fF(W.CT.He,0)} in (Extreme Event II, §9.1)`,"tab-wing|o-wing-load")}/>`+svgT(X(L)-4,Y(H0+hb)-4,`barrier ${W.CT.tl.replace("TL","TL-")} (H_e = ${fmt(W.CT.He,0)} in)`,{fs:9.5,a:"end",c:"#1f3a5f"}); }
+@@ -4419 +4433 @@ function svgWingPlan(R){
+-  let b=`<rect x="${Xp(-Lab/2)}" y="${Yp(tA)}" width="${Lab*sc}" height="${tA*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(cx,Yp(tA/2)+4,`abutment, L_ab = ${fmt(Lab,1)} ft`,{a:"middle",fs:10});
++  let b=`<rect x="${Xp(-Lab/2)}" y="${Yp(tA)}" width="${Lab*sc}" height="${tA*sc}" fill="#d9d9d0" stroke="#555"${FIG_STATIC?"":fia(`Abutment: L_ab = ${fF(Lab,1)} ft, stem t_sb = ${fF(tA,2)} ft (panel I-1)`+(att?`\nforces delivered by the wings to the abutment end region: §9.2a`:""),att?"tab-wing|o-wing-abut":"tab-loads|o-sketch")}/>`+svgT(cx,Yp(tA/2)+4,`abutment, L_ab = ${fmt(Lab,1)} ft`,{a:"middle",fs:10});
+@@ -4426 +4440 @@ function svgWingPlan(R){
+-    b+=`<line x1="${Xp(p1[1])}" y1="${Yp(p1[0])}" x2="${Xp(p2[1])}" y2="${Yp(p2[0])}" stroke="#8a8a80" stroke-width="${Math.max(3,tw*sc)}" stroke-linecap="butt"/>`;
++    b+=`<line x1="${Xp(p1[1])}" y1="${Yp(p1[0])}" x2="${Xp(p2[1])}" y2="${Yp(p2[0])}" stroke="#8a8a80" stroke-width="${Math.max(3,tw*sc)}" stroke-linecap="butt"${FIG_STATIC?"":fia(`${sd<0?"Left":"Right"} wing: L = ${fF(L)} ft, t = ${fF(tw*12,1)} in, ${att?(th===90?"U-wing normal to the abutment":"in-line with the abutment"):"flared at θ = "+fF(th,1)+"° (independent, expansion joint at the abutment)"} (§9.0)`,"tab-wing|o-wing-basis")}/>`;
+@@ -4436 +4450,5 @@ function svgWingPress(R){
+-  const H=att?W.H0:W.HE, k=W.Kst.kh, pEH=k*gam*H, pLS=k*gam*W.heq, pEQ=W.EQ?W.EQ.dKh*gam*H/2:0;
++  // ABINT: a factored load case of §9.2 (γ from the combination's own term list W.LS[lc].tm; Extreme Event II on its own K)
++  const lc=(!FIG_STATIC&&FIG.wingLC&&W.LS&&W.LS[FIG.wingLC]&&W.LS[FIG.wingLC].tm)? FIG.wingLC : "";
++  const gOf=n=>{ if(!lc) return 1; const t=W.LS[lc].tm.find(x=>x[3]===n); return t?t[0]:0; };
++  const gEH=gOf("EH"), gLS=gOf("LS"), gEQ=gOf("EQ"), gCT=gOf("CT"), KK=(lc==="Extreme Event II"&&W.Kee2)?W.Kee2:W.Kst;
++  const H=att?W.H0:W.HE, k=KK.kh, pEH=(lc?gEH:1)*k*gam*H, pLS=(lc?gLS:1)*k*gam*W.heq, pEQ=W.EQ?(lc?gEQ:1)*W.EQ.dKh*gam*H/2:0;
+@@ -4437,0 +4456,7 @@ function svgWingPress(R){
++  const J="tab-wing|o-wing-load", gS=g=>lc?fF(g)+"·":"";
++  const tEH=`EH: p = ${lc?"γ_EH·":""}k_h·γ·depth; at the base p = ${gS(gEH)}(${fF(k,4)})(${fF(gam,3)})(${fF(H)}) = ${fF(pEH,3)} ksf`+(lc?` (${lc})`:" (unfactored)")+"; k_h worked in §9.1";
++  const tLS=`LS: p = ${lc?"γ_LS·":""}k_h·γ·h_eq = ${gS(gLS)}(${fF(k,4)})(${fF(gam,3)})(${fF(W.heq)}) = ${fF(pLS,3)} ksf, uniform over the height (§9.1)`;
++  const tEQ=W.EQ?`Seismic increment: uniform equivalent p = ${lc?fF(gEQ)+"·":""}ΔK_h·γ·H/2 = (${fF(W.EQ.dKh,4)})(${fF(gam,3)})(${fF(H)})/2 = ${fF(pEQ,3)} ksf (same resultant as ΔP_AE; §9.1)`:"";
++  if(!FIG_STATIC) FIG_X.wingPress={range:[0,H], fromY:yv=>Math.max(0,Math.min(H,(Hd-mB-yv)/sc)), at:z=>{ const dpt=H-z, e=(lc?gEH:1)*k*gam*dpt, tot=e+pLS+pEQ;
++    return {y:Y(z), x1:x0-30, x2:x0+300, dots:[[x0+e*ps,Y(z),"#1f3a5f"],[x0+tot*ps,Y(z),"#b8860b"]],
++      tip:`Wing at depth ${fF(dpt)} ft below the top (z = ${fF(z)} ft above the base)${lc?" — "+lc:" — unfactored"}\nEH = ${gS(gEH)}k_h·γ·depth = ${gS(gEH)}(${fF(k,4)})(${fF(gam,3)})(${fF(dpt)}) = ${fF(e,3)} ksf\nLS = ${fF(pLS,3)} ksf${pEQ>0?`, EQ (uniform equivalent) = ${fF(pEQ,3)} ksf`:""}\ntotal = ${fF(tot,3)} ksf`}; }};
+@@ -4439,7 +4464,8 @@ function svgWingPress(R){
+-  b+=`<polygon points="${x0},${Y(H)} ${x0+pEH*ps},${Y(0)} ${x0},${Y(0)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.3"/>`;
+-  if(pLS>0) b+=`<polygon points="${x0+0},${Y(H)} ${x0+pLS*ps},${Y(H)} ${x0+(pEH+pLS)*ps},${Y(0)} ${x0+pEH*ps},${Y(0)}" fill="rgba(184,134,11,0.20)" stroke="#b8860b" stroke-width="1.1"/>`;
+-  if(pEQ>0) b+=`<rect x="${x0+(pEH+pLS)*ps}" y="${Y(H)}" width="${pEQ*ps}" height="${H*sc}" fill="rgba(198,40,40,0.12)" stroke="#c62828" stroke-dasharray="4 2"/>`;
+-  b+=svgT(x0+pEH*ps+4,Y(0)+14,`EH ${fmt(pEH,3)} ksf`,{fs:10,c:"#1f3a5f"});
+-  if(pLS>0) b+=svgT(x0+pLS*ps+4,Y(H)-4,`LS ${fmt(pLS,3)} ksf`,{fs:10,c:"#b8860b"});
+-  if(pEQ>0) b+=svgT(x0+(pEH+pLS+pEQ)*ps+4,Y(H*0.5),`ΔP_AE (uniform equivalent) ${fmt(pEQ,3)} ksf`,{fs:9.5,c:"#c62828"});
+-  if(!att&&W.ctS) b+=svgArrow(x0+200,Y(W.ctS.z),x0+4,Y(W.ctS.z),"#6a1b9a",1.6)+svgT(x0+204,Y(W.ctS.z)+4,`CT ${fmt(W.ctS.f,2)} kip/ft`,{fs:10,c:"#6a1b9a"});
++  if(!FIG_STATIC) b+=`<rect x="${x0-30}" y="${Y(H)}" width="330" height="${H*sc}" fill="transparent" data-fx="wingPress"${fia("Wing pressure: hover or drag along the height (↑/↓ with the keyboard) for the pressure at a depth",J)}/>`;
++  b+=`<polygon points="${x0},${Y(H)} ${x0+pEH*ps},${Y(0)} ${x0},${Y(0)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.3"${FIG_STATIC?"":` data-fx="wingPress"`+fia(tEH,J)}/>`;
++  if(pLS>0) b+=`<polygon points="${x0+0},${Y(H)} ${x0+pLS*ps},${Y(H)} ${x0+(pEH+pLS)*ps},${Y(0)} ${x0+pEH*ps},${Y(0)}" fill="rgba(184,134,11,0.20)" stroke="#b8860b" stroke-width="1.1"${FIG_STATIC?"":` data-fx="wingPress"`+fia(tLS,J)}/>`;
++  if(pEQ>0) b+=`<rect x="${x0+(pEH+pLS)*ps}" y="${Y(H)}" width="${pEQ*ps}" height="${H*sc}" fill="rgba(198,40,40,0.12)" stroke="#c62828" stroke-dasharray="4 2"${FIG_STATIC?"":fia(tEQ,J)}/>`;
++  b+=fg(tEH,J,svgT(x0+pEH*ps+4,Y(0)+14,`EH ${fmt(pEH,3)} ksf`,{fs:10,c:"#1f3a5f"}));
++  if(pLS>0) b+=fg(tLS,J,svgT(x0+pLS*ps+4,Y(H)-4,`LS ${fmt(pLS,3)} ksf`,{fs:10,c:"#b8860b"}));
++  if(pEQ>0) b+=fg(tEQ,J,svgT(x0+(pEH+pLS+pEQ)*ps+4,Y(H*0.5),`ΔP_AE (uniform equivalent) ${fmt(pEQ,3)} ksf`,{fs:9.5,c:"#c62828"}));
++  if(!att&&W.ctS&&(!lc||gCT>0)) b+=fg(`Barrier collision on the stem: ${fF(W.ctS.f,3)} kip/ft at z = ${fF(W.ctS.z)} ft (γ = 1.00, Extreme Event II; §9.1)`,J,svgArrow(x0+200,Y(W.ctS.z),x0+4,Y(W.ctS.z),"#6a1b9a",1.6)+svgT(x0+204,Y(W.ctS.z)+4,`CT ${fmt(W.ctS.f,2)} kip/ft`,{fs:10,c:"#6a1b9a"}));
+@@ -4447 +4473 @@ function svgWingPress(R){
+-  b+=svgT(10,18,att?"Unfactored horizontal pressure on the wing at the junction (x = 0), k_h = "+fmt(k,4):"Unfactored horizontal pressure on the stem at the design section, k_h = "+fmt(k,4),{b:1,fs:12});
++  b+=svgT(10,18,lc?`${lc} — factored horizontal pressure (γ_EH = ${fmt(gEH,2)}, γ_LS = ${fmt(gLS,2)}${pEQ>0?", EQ 1.00":""}), k_h = ${fmt(k,4)}`:(att?"Unfactored horizontal pressure on the wing at the junction (x = 0), k_h = "+fmt(k,4):"Unfactored horizontal pressure on the stem at the design section, k_h = "+fmt(k,4)),{b:1,fs:12});
+@@ -4468 +4494 @@ function renderTabIAB(R){
+-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${svgIabSection(R)}</div>`);
++    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${figBox("iab",R)}</div>`);
+@@ -4590,0 +4617,4 @@ function svgIabSection(R){
++  // ABINT: load case — expansion (as printed) or contraction (K of §10.3, Δ of §10.2)
++  const con=!FIG_STATIC&&FIG.iabLC==="con", Kf=con?Q.Kcon:Q.Kexp, dF=con?Q.dCon:Q.dExp, gs=+S.soil.gamma;
++  const tP=pB=>`Earth pressure at the bottom of the wall, ${con?"contraction":"expansion"}\np = K·γ·H = (${fF(Kf,3)})(${fF(gs,3)})(${fF(Q.H)}) = ${fF(pB,3)} ksf\nK = ${fF(Kf,3)} from the wall movement (§10.3)`;
++  const tD=`Thermal movement at the abutment: Δ_exp = ${fF(Q.dExp,3)} in, Δ_con = ${fF(Q.dCon,3)} in (§10.2)`;
+@@ -4597,0 +4628 @@ function svgIabSection(R){
++    if(!FIG_STATIC) b+=`<rect x="${X(0)}" y="${Y(-0.7)}" width="${bw*sc}" height="${(hd+hc+0.7)*sc}" fill="transparent"${fia(`End diaphragm and pile cap: b = ${fF(bw)} ft, h_d = ${fF(hd)} ft, h_c = ${fF(hc)} ft; H = h_d + h_c = ${fF(Q.H)} ft\ncap and wall demands and checks: §10.5`,"tab-iab|o-iab-cap")}/>`;
+@@ -4601 +4632 @@ function svgIabSection(R){
+-    b+=`<rect x="${px}" y="${Y(hd+hc-emb)}" width="${pw}" height="${(cut-(hd+hc-emb))*sc}" fill="#8a8a80" stroke="#444"/>`;
++    b+=`<rect x="${px}" y="${Y(hd+hc-emb)}" width="${pw}" height="${(cut-(hd+hc-emb))*sc}" fill="#8a8a80" stroke="#444"${FIG_STATIC?"":fia(`Piles: ${I.sec}, ${I.orient!=="strong"?"weak axis":"strong axis"}, n = ${Q.pile.n} @ ${fF(+I.sp,2)} ft along the skew, embedded ${fF(+I.embed,0)} in\nfactored gravity load per pile (Strength I) P = ${fF(Q.pile.Pg,1)} kip — worked in §10.4`,"tab-iab|o-iab-pile")}/>`;
+@@ -4605,3 +4636,3 @@ function svgIabSection(R){
+-    const pB=Q.Kexp*(+S.soil.gamma)*Q.H, ps=110/Math.max(1e-6,pB);
+-    b+=`<polygon points="${X(bw)},${Y(0)} ${X(bw)+pB*ps},${Y(Q.H)} ${X(bw)},${Y(Q.H)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(bw)+pB*ps+4,Y(Q.H),`K γ H = ${fmt(pB,3)} ksf (K = ${fmt(Q.Kexp,3)}, expansion)`,{fs:10,c:"#1f3a5f"});
+-    b+=svgArrow(X(-3),Y(-0.35),X(-0.1),Y(-0.35),"#c62828",1.6)+svgT(X(-3),Y(-0.7)-18,`Δ_exp = ${fmt(Q.dExp,3)} in`,{fs:10,c:"#c62828"});
++    const pB=Kf*(+S.soil.gamma)*Q.H, ps=110/Math.max(1e-6,pB);
++    b+=fg(tP(pB),"tab-iab|o-iab-ep",`<polygon points="${X(bw)},${Y(0)} ${X(bw)+pB*ps},${Y(Q.H)} ${X(bw)},${Y(Q.H)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(bw)+pB*ps+4,Y(Q.H),`K γ H = ${fmt(pB,3)} ksf (K = ${fmt(Kf,3)}, ${con?"contraction":"expansion"})`,{fs:10,c:"#1f3a5f"}));
++    b+=fg(tD,"tab-iab|o-iab-move",(con?svgArrow(X(-0.1),Y(-0.35),X(-3),Y(-0.35),"#c62828",1.6):svgArrow(X(-3),Y(-0.35),X(-0.1),Y(-0.35),"#c62828",1.6))+svgT(X(-3),Y(-0.7)-18,`${con?"Δ_con":"Δ_exp"} = ${fmt(dF,3)} in`,{fs:10,c:"#c62828"}));
+@@ -4617,0 +4649 @@ function svgIabSection(R){
++    if(!FIG_STATIC) b+=`<rect x="${X(xBack-tbw)}" y="${Y(-0.7)}" width="${tbw*sc}" height="${(hbw+0.7-0.15)*sc}" fill="transparent"${fia(`End diaphragm: h_bw = ${fF(hbw)} ft, t_bw = ${fF(tbw)} ft (panel I-1); moves with the superstructure\ndemands and checks: §10.5`,"tab-iab|o-iab-cap")}/>`;
+@@ -4624,3 +4656,3 @@ function svgIabSection(R){
+-    const pB=Q.Kexp*(+S.soil.gamma)*Q.H, ps=90/Math.max(1e-6,pB);
+-    b+=`<polygon points="${X(xBack)},${Y(0)} ${X(xBack)+pB*ps},${Y(hbw)} ${X(xBack)},${Y(hbw)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(xBack)+pB*ps+4,Y(hbw),`K γ h_bw = ${fmt(pB,3)} ksf (K = ${fmt(Q.Kexp,3)})`,{fs:10,c:"#1f3a5f"});
+-    b+=svgArrow(X(xBack-tbw-3.5),Y(-0.35),X(xBack-tbw-0.1),Y(-0.35),"#c62828",1.6)+svgT(X(xBack-tbw-3.5),Y(-0.7)-18,`Δ_exp = ${fmt(Q.dExp,3)} in`,{fs:10,c:"#c62828"});
++    const pB=Kf*(+S.soil.gamma)*Q.H, ps=90/Math.max(1e-6,pB);
++    b+=fg(tP(pB),"tab-iab|o-iab-ep",`<polygon points="${X(xBack)},${Y(0)} ${X(xBack)+pB*ps},${Y(hbw)} ${X(xBack)},${Y(hbw)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(xBack)+pB*ps+4,Y(hbw),`K γ h_bw = ${fmt(pB,3)} ksf (K = ${fmt(Kf,3)}${con?", contraction":""})`,{fs:10,c:"#1f3a5f"}));
++    b+=fg(tD,"tab-iab|o-iab-move",(con?svgArrow(X(xBack-tbw-0.1),Y(-0.35),X(xBack-tbw-3.5),Y(-0.35),"#c62828",1.6):svgArrow(X(xBack-tbw-3.5),Y(-0.35),X(xBack-tbw-0.1),Y(-0.35),"#c62828",1.6))+svgT(X(xBack-tbw-3.5),Y(-0.7)-18,`${con?"Δ_con":"Δ_exp"} = ${fmt(dF,3)} in`,{fs:10,c:"#c62828"}));
+@@ -5093 +5125 @@ function renderTabStab(R){
+-      ${svgResultants(R)}
++      ${figBox("kern",R)}
+@@ -5249,0 +5282 @@ function renderTabFound(R){
++    <div class="figctl">${figLsSel(R)}<span class="fighint">Hover, focus or tap a pile for its reaction and equation (it is also marked in the §4.3 table and figure and in the 3D view); click or Enter opens §4.2.</span></div>
+@@ -5272,2 +5305,2 @@ function renderTabFound(R){
+-      <td><b>${fmt(rr.best.Pmax)}</b></td><td>${pnoMax}</td>
+-      <td>${fmt(rr.worstMin.Pmin)}${up?" ⚠ UPLIFT":""}</td><td>${pnoMin}</td>
++      <td><b>${fmt(rr.best.Pmax)}</b></td><td data-pile="${pnoMax}">${pnoMax}</td>
++      <td>${fmt(rr.worstMin.Pmin)}${up?" ⚠ UPLIFT":""}</td><td data-pile="${pnoMin}">${pnoMin}</td>
+@@ -5280 +5313 @@ function renderTabFound(R){
+-     ${svgPileReactions(R)}`);
++     ${figBox("pileRx",R)}`);
+@@ -5601 +5634 @@ function renderTabStruct(R){
+-      ${svgStemCapacity(R)}
++      ${figBox("stem",R)}
+@@ -5692 +5725 @@ function renderTabStruct(R){
+-    ${svgSeatPlan(R)}
++    ${figBox("seat",R)}
+@@ -5720 +5753 @@ function renderTabStruct(R){
+-      ${svgRebarDims(R)}
++      ${figBox("rebar",R)}
+@@ -5840 +5873 @@ function renderTabVM(R){
+-    ${svgWallPressure(R)}
++    ${figBox("press",R)}
+@@ -5951,0 +5985,115 @@ function svgWrap(W,H,body,maxw){ return `<svg class="absw-fig" viewBox="0 0 ${W}
++/* ---------- ABINT (2026-10-20): interactive figures. Display only — no check uses them and computeAll() is not touched.
++   Hover, keyboard focus or a tap shows an element's value and its equation (values from R, or re-derived from the same worked
++   terms as the figure itself); a click / Enter jumps to the worked calculation with the existing gotoPanel() scroll + flash.
++   FIG holds the figure selections in memory only: nothing is saved (CLAUDE.md §5). The calculation report draws every figure
++   static with the default selection (FIG_STATIC = true: no controls, no interactive attributes — the same SVG as before). ---------- */
++const FIG={ls:"", seat:0, wingLC:"", iabLC:"exp", z:null, pile:0};
++let FIG_STATIC=false;
++const FIG_X={};   /* crosshair readers, set by the figure that is on screen: FIG_X[name]={fromY(yViewBox)→z, at(z)→{y,x1,x2,dots,tip}} */
++function fia(tip,jump,data){ return FIG_STATIC? "" : ` tabindex="0" class="fi" role="${jump?"link":"img"}" aria-label="${esc(String(tip).split("\n")[0])}" data-tip="${esc(tip)}"${jump?` data-fjump="${jump}"`:""}${data||""}`; }
++function fg(tip,jump,inner,data){ return FIG_STATIC? inner : `<g${fia(tip,jump,data)}>${inner}</g>`; }
++const fF=(x,dp=2)=>(x===null||x===undefined||!isFinite(x))?"—":Number(x).toFixed(dp);   /* plain fixed-point for tooltip equations */
++function figInterp(pts,y){   /* pts [{y,p}] in any order: linear interpolation of p at y (clamped) */
++  const a=pts.slice().sort((u,v)=>u.y-v.y); if(!a.length) return null; if(y<=a[0].y) return a[0].p; if(y>=a[a.length-1].y) return a[a.length-1].p;
++  for(let i=1;i<a.length;i++) if(y<=a[i].y){ const t=(y-a[i-1].y)/((a[i].y-a[i-1].y)||1); return a[i-1].p+(a[i].p-a[i-1].p)*t; }
++  return a[a.length-1].p; }
++const FIG_FN={ press:R=>svgWallPressure(R), kern:R=>svgResultants(R), stem:R=>svgStemCapacity(R), rebar:R=>svgRebarDims(R), seat:R=>svgSeatPlan(R),
++  pileRx:R=>svgPileReactions(R), wingElev:R=>svgWingElev(R), wingPlan:R=>svgWingPlan(R), wingPress:R=>svgWingPress(R), iab:R=>svgIabSection(R) };
++const FIG_HINT='<span class="fighint">Hover, focus or tap an element for its value and equation; click or Enter opens the worked calculation.</span>';
++function figLsSel(R){ const ls=Object.keys(R.LIMITS||{});
++  return `<label>Figures: limit state <select data-figls aria-label="Limit state shown in the figures">${[["","default (as printed)"]].concat(ls.map(k=>[k,k])).map(([v,l])=>`<option value="${esc(v)}"${v===FIG.ls?" selected":""}>${esc(l)}</option>`).join("")}</select></label>`; }
++function figCtl(name,R){
++  if(name==="press"||name==="kern"||name==="pileRx") return `<div class="figctl">${figLsSel(R)}${FIG_HINT}</div>`;
++  if(name==="stem"){ const h=+S.geom.hstem||0;
++    return `<div class="figctl">${figLsSel(R)}<label>height z <input type="range" data-figz min="0" max="${h}" step="${h/200}" value="${FIG.z===null?0:Math.min(h,FIG.z)}" aria-label="Height above the top of footing"></label><span class="figzout"></span>${FIG_HINT}</div>`; }
++  if(name==="seat"){ const bs=R.checks.bearingSeat, N=S.beams.N;
++    return `<div class="figctl"><label>Bearing (load case) <select data-figseat aria-label="Bearing shown in the seat plan"><option value="0">governing — girder ${bs?bs.pgirder:"—"} (as printed)</option>${[...Array(N)].map((_,i)=>`<option value="${i+1}"${FIG.seat===i+1?" selected":""}>girder ${i+1}</option>`).join("")}</select></label>${FIG_HINT}</div>`; }
++  if(name==="wingPress"){ const W=R.wing; if(!W||!W.LS) return "";
++    return `<div class="figctl"><label>Wing load case <select data-figwing aria-label="Wing load case"><option value="">unfactored (as printed)</option>${Object.keys(W.LS).map(k=>`<option value="${esc(k)}"${FIG.wingLC===k?" selected":""}>${esc(k)} (factored)</option>`).join("")}</select></label>${FIG_HINT}</div>`; }
++  if(name==="iab"){ return `<div class="figctl"><label>Load case <select data-figiab aria-label="Wall movement shown"><option value="exp"${FIG.iabLC!=="con"?" selected":""}>expansion (as printed)</option><option value="con"${FIG.iabLC==="con"?" selected":""}>contraction</option></select></label>${FIG_HINT}</div>`; }
++  return name==="wingPlan"? "" : `<div class="figctl">${FIG_HINT}</div>`;
++}
++function figBox(name,R){ if(FIG.ls&&!(R.LIMITS||{})[FIG.ls]) FIG.ls="";   // a limit state that no longer exists (e.g. Extreme Event I switched off)
++  const s=FIG_FN[name](R); if(!s) return "";
++  const mw=(/max-width:(\d+)px/.exec(s)||[])[1];
++  return `<div class="absfig" data-fig="${name}" style="width:100%${mw?";max-width:"+mw+"px":""}">${figCtl(name,R)}<div class="absfig-svg">${s}</div></div>`; }
++function figRedraw(){ const R=window.LAST_R; if(!R) return;
++  document.querySelectorAll(".absfig[data-fig]").forEach(f=>{ const n=f.dataset.fig, box=f.querySelector(".absfig-svg"); if(!box) return; box.innerHTML=FIG_FN[n](R)||""; });
++  if(document.getElementById("pilePlanSvg")) drawPilePlan();
++  document.querySelectorAll("select[data-figls]").forEach(s=>{ s.value=FIG.ls; });
++  if(FIG.z!==null) figCrossDraw("stem",FIG.z,true);
++}
++/* the report: every interactive figure in a cloned tab is replaced by its static default drawing (exactly the SVG printed before) */
++function figStaticIn(root,R){
++  const keep=Object.assign({},FIG); FIG_STATIC=true;
++  try{ Object.assign(FIG,{ls:"",seat:0,wingLC:"",iabLC:"exp",z:null});
++    root.querySelectorAll(".absfig[data-fig]").forEach(f=>{ f.outerHTML=FIG_FN[f.dataset.fig](R)||""; });
++    const pp=root.querySelector("#pilePlanSvg"); if(pp) pp.innerHTML=pilePlanSVG(R);
++    root.querySelectorAll(".figctl").forEach(x=>{ const pv=x.previousSibling; if(pv&&pv.nodeType===3&&!pv.textContent.trim()) pv.remove(); x.remove(); });
++    root.querySelectorAll("[data-pile]").forEach(x=>{ x.removeAttribute("data-pile"); x.classList.remove("fhl"); if(!x.className) x.removeAttribute("class"); });
++  }finally{ FIG_STATIC=false; Object.assign(FIG,keep); }
++}
++/* crosshair: a dashed line, dots and the readout at height z, drawn into a <g class="figx"> of the figure's SVG */
++function figCrossDraw(name,z,quiet,cx,cy){
++  const F=FIG_X[name], box=document.querySelector(`.absfig[data-fig="${name}"] svg`); if(!F||!box) return null;
++  const r=F.at(z); let g=box.querySelector("g.figx"); if(!g){ g=document.createElementNS(SVGNS,"g"); g.setAttribute("class","figx"); g.setAttribute("pointer-events","none"); box.appendChild(g); }
++  if(!r){ g.innerHTML=""; return null; }
++  g.innerHTML=`<line x1="${r.x1}" y1="${r.y}" x2="${r.x2}" y2="${r.y}" stroke="#e08a00" stroke-width="1.2" stroke-dasharray="4 3"/>`+(r.dots||[]).map(d=>`<circle cx="${d[0]}" cy="${d[1]}" r="3.6" fill="${d[2]||"#e08a00"}" stroke="#fff"/>`).join("");
++  if(name==="stem"){ const o=document.querySelector('.absfig[data-fig="stem"] .figzout'); if(o) o.textContent=r.short||""; }
++  if(!quiet) figTipShow(r.tip,null,cx,cy);
++  return r;
++}
++function figSvgPt(svg,cx,cy){ const m=svg.getScreenCTM(); if(!m) return null; const p=svg.createSVGPoint(); p.x=cx; p.y=cy; return p.matrixTransform(m.inverse()); }
++let FIG_TIP=null, FIG_TIP_FOR=null, FIG_PT="mouse", FIG_PDT=0;
++function figTipShow(txt,el,cx,cy){
++  if(!FIG_TIP){ FIG_TIP=document.createElement("div"); FIG_TIP.id="figTip"; FIG_TIP.setAttribute("role","tooltip"); document.body.appendChild(FIG_TIP); }
++  const [h,...rest]=String(txt||"").split("\n");
++  FIG_TIP.innerHTML=`<b>${esc(h)}</b>${rest.length?"<br>"+rest.map(esc).join("<br>"):""}${el&&el.dataset.fjump?`<div class="figtip-go">${FIG_PT==="touch"?"tap again":"click or Enter"}: worked calculation →</div>`:""}`;
++  FIG_TIP.style.display="block";
++  let x=cx, y=cy; if(x===undefined||x===null){ const bb=(el||document.body).getBoundingClientRect(); x=bb.left+bb.width/2; y=bb.bottom; }
++  const w=FIG_TIP.offsetWidth, hh=FIG_TIP.offsetHeight;
++  FIG_TIP.style.left=Math.max(4,Math.min(window.innerWidth-w-4,x+14))+"px";
++  FIG_TIP.style.top=(y+14+hh>window.innerHeight? Math.max(4,y-hh-10) : y+14)+"px";
++  if(FIG_TIP_FOR&&FIG_TIP_FOR!==el) figLink(FIG_TIP_FOR,false);
++  FIG_TIP_FOR=el; if(el) figLink(el,true);
++}
++function figTipHide(){ if(FIG_TIP) FIG_TIP.style.display="none"; if(FIG_TIP_FOR) figLink(FIG_TIP_FOR,false); FIG_TIP_FOR=null; }
++/* highlight linking: a pile (data-pile) or a pile row (data-prow) lights up in the plan, the §4.3 figure and table, and the 3D view */
++function figLink(el,on){
++  ["pile","prow"].forEach(k=>{ const v=el.getAttribute("data-"+k); if(!v) return;
++    v.split(" ").forEach(t=>document.querySelectorAll(`[data-${k}~="${t}"]`).forEach(x=>x.classList.toggle("fhl",on))); });
++  const pn=el.getAttribute("data-pile"); if(pn&&on&&!pn.includes(" ")){ FIG.pile=+pn; d3PileHL(); }
++}
++function d3PileHL(){ try{ (D3.piles||[]).forEach(q=>{ if(q.mesh.material&&q.mesh.material.emissive) q.mesh.material.emissive.setHex(q.no===FIG.pile?0xb86e00:0x000000); }); }catch(e){} }
++(function figWire(){
++  const tgt=ev=>ev.target&&ev.target.closest?ev.target.closest(".fi[data-tip]"):null;
++  const go=el=>{ figTipHide(); const [tb,an]=el.dataset.fjump.split("|"); gotoPanel(tb,an); };
++  const cross=(h,ev)=>{ const svg=h.ownerSVGElement||h.closest("svg"), pt=svg&&figSvgPt(svg,ev.clientX,ev.clientY), F=FIG_X[h.dataset.fx]; if(!pt||!F) return false;
++    const z=F.fromY(pt.y); if(z===null||!isFinite(z)) return false; if(h.dataset.fx==="stem"){ FIG.z=z; const sl=document.querySelector('.absfig[data-fig="stem"] input[data-figz]'); if(sl) sl.value=z; }
++    return !!figCrossDraw(h.dataset.fx,z,false,ev.clientX,ev.clientY); };
++  document.addEventListener("pointerdown",ev=>{ FIG_PT=ev.pointerType||"mouse"; FIG_PDT=performance.now(); const h=ev.target.closest&&ev.target.closest("[data-fx]"); if(h&&FIG_PT==="touch") cross(h,ev); },true);
++  document.addEventListener("pointermove",ev=>{ if(ev.pointerType==="touch") return; const h=ev.target.closest&&ev.target.closest("[data-fx]"); if(h){ if(cross(h,ev)) FIG_TIP_FOR=h; } });
++  document.addEventListener("pointerover",ev=>{ if(ev.pointerType==="touch") return; const el=tgt(ev); if(el&&!el.hasAttribute("data-fx")) figTipShow(el.getAttribute("data-tip"),el,ev.clientX,ev.clientY); });
++  document.addEventListener("pointerout",ev=>{ const el=tgt(ev)||(ev.target.closest&&ev.target.closest("[data-fx]")); if(!el) return; if(ev.relatedTarget&&el.contains(ev.relatedTarget)) return;
++    if(el.hasAttribute("data-fx")){ const svg=el.ownerSVGElement||el.closest("svg"), g=svg&&svg.querySelector("g.figx"); if(g&&el.dataset.fx!=="stem") g.innerHTML=""; }
++    if(FIG_PT!=="touch"&&FIG_TIP_FOR===el) figTipHide(); });
++  document.addEventListener("focusin",ev=>{ const el=tgt(ev); if(!el) return; if(FIG_PT==="touch"&&performance.now()-FIG_PDT<1000) return;   /* a tap focuses too: the click shows the tip */
++    figTipShow(el.getAttribute("data-tip"),el); });
++  document.addEventListener("focusout",ev=>{ if(FIG_TIP_FOR&&ev.target===FIG_TIP_FOR) figTipHide(); });
++  document.addEventListener("click",ev=>{ const el=tgt(ev); if(!el){ if(FIG_PT==="touch"&&FIG_TIP_FOR&&!(ev.target.closest&&ev.target.closest("[data-fx]"))) figTipHide(); return; }
++    if(FIG_PT==="touch"&&FIG_TIP_FOR!==el){ figTipShow(el.getAttribute("data-tip"),el); return; }   /* first tap shows the value, a second tap follows the link */
++    if(el.dataset.fjump) go(el); });
++  document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"){ figTipHide(); return; } const el=tgt(ev); if(!el) return;
++    if(el.dataset.fx&&(ev.key==="ArrowUp"||ev.key==="ArrowDown")){ const F=FIG_X[el.dataset.fx]; if(!F||!F.range) return; ev.preventDefault();
++      const [lo,hi]=F.range, st=(hi-lo)/40; FIG.zk=Math.max(lo,Math.min(hi,(FIG.zk===undefined||FIG.zk===null?lo:FIG.zk)+(ev.key==="ArrowUp"?st:-st)));
++      if(el.dataset.fx==="stem"){ FIG.z=FIG.zk; const sl=document.querySelector('.absfig[data-fig="stem"] input[data-figz]'); if(sl) sl.value=FIG.z; }
++      const bb=el.getBoundingClientRect(), r=figCrossDraw(el.dataset.fx,FIG.zk,true); if(r) figTipShow(r.tip,el,bb.left+bb.width/2,bb.top); return; }
++    if((ev.key==="Enter"||ev.key===" ")&&el.dataset.fjump){ ev.preventDefault(); go(el); } });
++  document.addEventListener("change",ev=>{ const t=ev.target; if(!t||!t.matches) return;
++    if(t.matches("select[data-figls]")){ FIG.ls=t.value; figRedraw(); }
++    else if(t.matches("select[data-figseat]")){ FIG.seat=+t.value||0; figRedraw(); }
++    else if(t.matches("select[data-figwing]")){ FIG.wingLC=t.value; figRedraw(); }
++    else if(t.matches("select[data-figiab]")){ FIG.iabLC=t.value; figRedraw(); } });
++  document.addEventListener("input",ev=>{ const t=ev.target; if(t&&t.matches&&t.matches("input[data-figz]")){ FIG.z=+t.value; FIG.zk=FIG.z; figCrossDraw("stem",FIG.z,true); } });
++})();
++
+@@ -5955 +6103,2 @@ function svgWallPressure(R){
+-  const vm=R.vm||{}, st=vm.stem, bw=vm.backwall; if(!st||!st.w||!bw||!bw.w) return "";
++  const sel=(!FIG_STATIC&&FIG.ls&&R.LIMITS&&R.LIMITS[FIG.ls]&&R.buildVM)? "ls:"+FIG.ls : R.vmSel;   // ABINT: figure selection (default: the Tab 6 selection)
++  const vm=(sel===R.vmSel? R.vm : R.buildVM(sel))||{}, st=vm.stem, bw=vm.backwall; if(!st||!st.w||!bw||!bw.w) return "";
+@@ -5968 +6116,0 @@ function svgWallPressure(R){
+-  const poly=(arr,base)=>`<polygon points="${x0},${Y(base(arr[0]))} ${arr.map(q=>`${x0+q.p*ps},${Y(q.y)}`).join(" ")} ${x0},${Y(arr[arr.length-1].y)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.4"/>`;
+@@ -5970 +6118,18 @@ function svgWallPressure(R){
+-  b+=poly(sP,q=>q.y)+poly(bP,q=>q.y);
++  // ABINT: w(z) read from the V&M arrays and, where it reproduces them, the expression with values (stem §6.1, backwall §6.2)
++  const sName=sel.replace(/^ls:|^c?load:/,""), isLS=sel.startsWith("ls:"), cctx=isLS&&R.LIMITS[sName]&&R.LIMITS[sName].noSuper;
++  const gm=isLS? (R.vmGamma(sName)||{}) : {EH:sel.slice(5)==="EH"?1:0, LS:sel.slice(5)==="LS"?1:0, ES:sel.slice(5)==="ES"?1:0};
++  const kah=R.kah, gam=+S.soil.gamma, esQ=+S.soil.esQ||0, HsW=cctx? Math.min(R.constrC.hfC,g.soilH) : g.soilH, heqW=interpHeq(HsW||g.soilH), bd=R.bwDem||{};
++  const pAt=z=>{ const onStem=z<=g.hstem+1e-9, w=figInterp(onStem?sP:bP,z); if(w===null) return null;
++    let f=null, ex="";
++    if(!sel.startsWith("cload:")&&!(cctx&&R.LIMITS[sName].CL)){
++      if(onStem){ f=gm.EH*kah*gam*Math.max(0,HsW-z)+(z<=HsW? gm.LS*kah*gam*heqW+gm.ES*kah*esQ : 0);
++        ex=`w = γ_EH·k_ah·γ·(H_s − z) + γ_LS·k_ah·γ·h_eq${esQ>0?" + γ_ES·k_ah·q_ES":""} = ${fF(gm.EH)}(${fF(kah,4)})(${fF(gam,3)})(${fF(HsW)} − ${fF(z)}) + ${fF(gm.LS)}(${fF(kah,4)})(${fF(gam,3)})(${fF(heqW)})${esQ>0?` + ${fF(gm.ES)}(${fF(kah,4)})(${fF(esQ,3)})`:""} = ${fF(f,3)} ksf`; }
++      else{ const s=(bd.hbwRet||0)-(z-g.hstem); f=gm.EH*kah*gam*s+gm.LS*kah*gam*(bd.heqBW||0)+gm.ES*kah*esQ;
++        ex=`w = γ_EH·k_ah·γ·s + γ_LS·k_ah·γ·h_eq,bw${esQ>0?" + γ_ES·k_ah·q_ES":""} = ${fF(gm.EH)}(${fF(kah,4)})(${fF(gam,3)})(${fF(s)}) + ${fF(gm.LS)}(${fF(kah,4)})(${fF(gam,3)})(${fF(bd.heqBW)})${esQ>0?` + ${fF(gm.ES)}(${fF(kah,4)})(${fF(esQ,3)})`:""} = ${fF(f,3)} ksf (s = depth below the top of the backwall)`; } }
++    const ok=f!==null&&Math.abs(f-w)<=1e-6*Math.max(1,Math.abs(w));
++    return {w, onStem, tip:`${onStem?"Stem":"Backwall"} — z = ${fF(z)} ft above the top of footing\nw(z) = ${fF(w,3)} ksf (${sName}${isLS?", factored":", γ = 1.0"}; V&M distributed load, ${onStem?"§6.1":"§6.2"})`+(ok?"\n"+ex:"\nread from the V&M integration (point values in §6.1 / §6.2)")}; };
++  if(!FIG_STATIC) FIG_X.press={range:[0,Ht], fromY:yv=>Math.max(0,Math.min(Ht,(Hp-mB-yv)/sc)), at:z=>{ const q=pAt(z); if(!q) return null;
++    return {y:Y(z), x1:x0-130, x2:x0+250, dots:[[x0+q.w*ps,Y(z)]], tip:q.tip}; }};
++  const poly=(arr,base,at)=>`<polygon points="${x0},${Y(base(arr[0]))} ${arr.map(q=>`${x0+q.p*ps},${Y(q.y)}`).join(" ")} ${x0},${Y(arr[arr.length-1].y)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.4"${at||""}/>`;
++  if(!FIG_STATIC) b+=`<rect x="${x0-130}" y="${Y(Ht)}" width="380" height="${Ht*sc}" fill="transparent" data-fx="press"${fia("Pressure diagram: hover or drag along the height (↑/↓ with the keyboard) for w(z) and its expression","tab-vm|o-vm-stem")}/>`;
++  b+=poly(sP,q=>q.y,FIG_STATIC?"":` data-fx="press"`+fia(`Stem pressure — ${sName}: hover for w(z); integrated to V and M in §6.1`,"tab-vm|o-vm-stem"))+poly(bP,q=>q.y,FIG_STATIC?"":` data-fx="press"`+fia(`Backwall pressure — ${sName}: hover for w(z); integrated to V and M in §6.2`,"tab-vm|o-vm-backwall"));
+@@ -5972 +6137 @@ function svgWallPressure(R){
+-  const lab=(q,txt)=>svgT(x0+q.p*ps+6,Y(q.y)+4,`${txt} ${fmt(q.p,3)} ksf`,{fs:10.5});
++  const lab=(q,txt)=>{ const t=svgT(x0+q.p*ps+6,Y(q.y)+4,`${txt} ${fmt(q.p,3)} ksf`,{fs:10.5}); if(FIG_STATIC) return t; const r=pAt(q.y); return fg(`${txt}: `+(r?r.tip:fmt(q.p,3)+" ksf"),"tab-loads|o-eh",t); };
+@@ -5975 +6140 @@ function svgWallPressure(R){
+-  if(st.pTop) b+=svgT(x0+8,Y(g.hstem)-8,`soil above the stem top: resultant ${fmt(st.pTop.V,2)} kip/ft at the seat (in V&M)`,{fs:9.5,c:"#555"});
++  if(st.pTop) b+=fg(`Soil above the stem top: resultant at the seat\nV_top = ${fF(st.pTop.V,3)} kip/ft over h = ${fF(st.pTop.h)} ft (applied in the V&M integration, §6.1)`,"tab-vm|o-vm-stem",svgT(x0+8,Y(g.hstem)-8,`soil above the stem top: resultant ${fmt(st.pTop.V,2)} kip/ft at the seat (in V&M)`,{fs:9.5,c:"#555"}));
+@@ -5977,3 +6142,3 @@ function svgWallPressure(R){
+-  (st.ptsEQ||[]).forEach(q=>{ const y=g.hstem-q.s; b+=svgArrow(x0+150,Y(y),x0+4,Y(y),"#c62828",1.6)+svgT(x0+154,Y(y)+4,`${fmt(q.P,2)} kip/ft`,{fs:10,c:"#c62828"}); });
+-  b+=svgT(10,18,`Lateral pressure on the back face — ${esc(R.vmSel.replace(/^ls:|^c?load:/,""))}${R.vmSel.startsWith("ls:")?" (factored)":" (γ = 1.0)"}`,{b:1,fs:12});
+-  b+=svgT(10,Hp-12,"Distributed load w(z) of the V&M integration (EH + LS + ES"+(R.vmSel.includes("Constr")?" + CS":"")+"); red arrows: EE I point loads on the stem; horizontal scale exaggerated.",{fs:9.5,c:"#555"});
++  (st.ptsEQ||[]).forEach(q=>{ const y=g.hstem-q.s; b+=fg(`Extreme Event I point load on the stem\nP = ${fF(q.P,3)} kip/ft at z = ${fF(y)} ft (ΔP_AE wall share or wall inertia; worked in §3.6a and §5.2)`,"tab-stab|o-mo",svgArrow(x0+150,Y(y),x0+4,Y(y),"#c62828",1.6)+svgT(x0+154,Y(y)+4,`${fmt(q.P,2)} kip/ft`,{fs:10,c:"#c62828"})); });
++  b+=svgT(10,18,`Lateral pressure on the back face — ${esc(sel.replace(/^ls:|^c?load:/,""))}${sel.startsWith("ls:")?" (factored)":" (γ = 1.0)"}`,{b:1,fs:12});
++  b+=svgT(10,Hp-12,"Distributed load w(z) of the V&M integration (EH + LS + ES"+(sel.includes("Constr")?" + CS":"")+"); red arrows: EE I point loads on the stem; horizontal scale exaggerated.",{fs:9.5,c:"#555"});
+@@ -5992 +6157 @@ function svgResultants(R){
+-      if(!best||r>best.r) best={r,xbar,e,lim,lbl:c.lbl}; }
++      if(!best||r>best.r) best={r,xbar,e,lim,lbl:c.lbl,c}; }
+@@ -5994,0 +6160,4 @@ function svgResultants(R){
++  const selLS=(!FIG_STATIC&&FIG.ls&&rows.some(r=>r.ls===FIG.ls))? FIG.ls : "";   // ABINT: every permutation of the selected limit state
++  const xTip=(ls,q,head)=>`${ls} — ${head}\n${q.lbl||""}\nx̄ = (ΣM_v − ΣM_h)/ΣV = (${fF(q.c.Mv,1)} − ${fF(q.c.Mh,1)})/${fF(q.c.V,1)} = ${fF(q.xbar,3)} ft from the toe\ne = B/2 − x̄ = ${fF(B/2,3)} − ${fF(q.xbar,3)} = ${fF(q.e,3)} ft`
++    +(q.lim? `\n|e|/e_lim = ${fF(Math.abs(q.e),3)}/${fF(q.lim,3)} = ${fF(Math.abs(q.e)/q.lim,3)} (e_lim = ${fF(q.lim/B,3)}·B)` : "\nService I: no eccentricity limit")+`\nkern B/6 = ${fF(B/6,3)} ft: ${Math.abs(q.e)<=B/6+1e-9?"inside (full contact)":"outside (partial contact)"}`;
++  const permJ=ls=>"tab-comb|o-perm-"+ls.replace(/\s/g,"");
+@@ -5999 +6168 @@ function svgResultants(R){
+-  const vline=(x,c,d,t,ty)=>`<line x1="${X(x)}" y1="${yF-2}" x2="${X(x)}" y2="${Hp-28}" stroke="${c}" stroke-dasharray="${d}" stroke-width="1"/>`+(t?svgT(X(x),ty,t,{fs:9.5,c,a:"middle"}):"");
++  const vline=(x,c,d,t,ty,tip)=>fg(tip||"","tab-stab|o-ecc",`<line x1="${X(x)}" y1="${yF-2}" x2="${X(x)}" y2="${Hp-28}" stroke="${c}" stroke-dasharray="${d}" stroke-width="1"/>`+(t?svgT(X(x),ty,t,{fs:9.5,c,a:"middle"}):""));
+@@ -6001,3 +6170,4 @@ function svgResultants(R){
+-  b+=vline(B/2,"#999","2 2","B/2",yF+30);
+-  b+=vline(B/2-B/6,"#1a7f37","4 3","B/6",Hp-16)+vline(B/2+B/6,"#1a7f37","4 3","B/6",Hp-16);
+-  b+=vline(B/2-B/3,"#b8860b","6 3","B/3",Hp-16)+vline(B/2+B/3,"#b8860b","6 3","B/3",Hp-16);
++  b+=vline(B/2,"#999","2 2","B/2",yF+30,`Footing centre B/2 = ${fF(B)}/2 = ${fF(B/2,3)} ft from the toe (e = 0)`);
++  const tK=`Kern: |e| ≤ B/6 = ${fF(B)}/6 = ${fF(B/6,3)} ft (full contact; §3.2)`, tT=`Middle two-thirds: |e| ≤ B/3 = ${fF(B)}/3 = ${fF(B/3,3)} ft (soil limit at Strength, §3.2)`;
++  b+=vline(B/2-B/6,"#1a7f37","4 3","B/6",Hp-16,tK)+vline(B/2+B/6,"#1a7f37","4 3","B/6",Hp-16,tK);
++  b+=vline(B/2-B/3,"#b8860b","6 3","B/3",Hp-16,tT)+vline(B/2+B/3,"#b8860b","6 3","B/3",Hp-16,tT);
+@@ -6005 +6175,5 @@ function svgResultants(R){
+-    if(r.lim&&Math.abs(r.lim-B/3)>1e-6){ b+=`<line x1="${X(B/2-r.lim)}" y1="${y-8}" x2="${X(B/2-r.lim)}" y2="${y+8}" stroke="#c62828" stroke-width="1.6"/><line x1="${X(B/2+r.lim)}" y1="${y-8}" x2="${X(B/2+r.lim)}" y2="${y+8}" stroke="#c62828" stroke-width="1.6"/>`; }
++    if(r.ls===selLS){ b+=`<rect x="2" y="${y-rowH/2}" width="${W-4}" height="${rowH}" fill="rgba(240,160,0,0.10)"/>`;
++      for(const pl of R.permutations(r.ls,true)){ const c=R.comboEffects(r.ls,pl.perm,pl.liveOn,true); if(c.V<=0) continue;
++        const xb=(c.Mv-c.Mh)/c.V, e=B/2-xb, lim=r.ls==="Service I"?null:R.resFor(r.ls,pl.liveOn).eLim;
++        b+=`<circle cx="${X(Math.min(B,Math.max(0,xb)))}" cy="${y+7}" r="3" fill="#fff" stroke="#e08a00" stroke-width="1.2"${fia(xTip(r.ls,{c,xbar:xb,e,lim,lbl:c.lbl},"one permutation (Tab 2 §2.3)"),permJ(r.ls))}/>`; } }
++    if(r.lim&&Math.abs(r.lim-B/3)>1e-6){ b+=fg(`${r.ls}: e_lim = ${fF(r.lim/B,3)}·B = ${fF(r.lim,3)} ft (§3.2)`,"tab-stab|o-ecc",`<line x1="${X(B/2-r.lim)}" y1="${y-8}" x2="${X(B/2-r.lim)}" y2="${y+8}" stroke="#c62828" stroke-width="1.6"/><line x1="${X(B/2+r.lim)}" y1="${y-8}" x2="${X(B/2+r.lim)}" y2="${y+8}" stroke="#c62828" stroke-width="1.6"/>`); }
+@@ -6008 +6182 @@ function svgResultants(R){
+-    b+=`<circle cx="${X(Math.min(B,Math.max(0,r.xbar)))}" cy="${y}" r="5" fill="${ok?"#1f3a5f":"#c62828"}"/>`;
++    b+=`<circle cx="${X(Math.min(B,Math.max(0,r.xbar)))}" cy="${y}" r="5" fill="${ok?"#1f3a5f":"#c62828"}"${fia(xTip(r.ls,r,"permutation with the largest |e|/e_lim"),r.ls===(R.checks.ecc&&R.checks.ecc.ls)?"tab-stab|o-ecc":permJ(r.ls))}/>`;
+@@ -6011,0 +6186 @@ function svgResultants(R){
++  if(selLS) b+=svgT(W-mR,yF-22,`${selLS}: hollow dots = every permutation`,{fs:9.5,a:"end",c:"#b86e00"});
+@@ -6018,3 +6193,8 @@ function stemCapacityProfile(R){
+-  const g=S.geom, m=S.mat, sd=R.stemDem, c=R.checks.stemFlex, bar=BARS[S.reinf.stem.size], sp=+S.reinf.stem.sp;
+-  const Hs=sd.HsL??sd.Hs, eq=sd.eqT, out=[];
+-  for(let i=0;i<=40;i++){ const z=g.hstem*i/40, h=Math.max(0,Hs-z), r=Hs>0?h/Hs:0;
++  const out=[];
++  for(let i=0;i<=40;i++) out.push(stemProfAt(R,S.geom.hstem*i/40));
++  return out;
++}
++function stemProfAt(R,z){   // ABINT: one station of the profile (same expressions as before), with the terms for the tooltip
++  const g=S.geom, m=S.mat, sd=R.stemDem, bar=BARS[S.reinf.stem.size], sp=+S.reinf.stem.sp;
++  const Hs=sd.HsL??sd.Hs, eq=sd.eqT;
++  { const h=Math.max(0,Hs-z), r=Hs>0?h/Hs:0;
+@@ -6030,2 +6210 @@ function stemCapacityProfile(R){
+-    out.push({z,Mu,phiMn:phi*As*m.fy*(d-a/2)/12}); }
+-  return out;
++    return {z,Mu,phiMn:phi*As*m.fy*(d-a/2)/12, r, tIn, d, As, a, cc, et, phi, semi:sd.cL>0, eq:!!eq}; }
+@@ -6034 +6213,5 @@ function svgStemCapacity(R){
+-  const pr=stemCapacityProfile(R), g=S.geom; if(!pr.length) return "";
++  let pr=stemCapacityProfile(R); const g=S.geom; if(!pr.length) return "";
++  // ABINT: another limit state — M_u(z) from the §6.1 V&M stem diagram of that state (equals the profile for the governing state)
++  const selLS=(!FIG_STATIC&&FIG.ls&&FIG.ls!==R.stemDem.ls&&R.LIMITS&&R.LIMITS[FIG.ls]&&R.buildVM)? FIG.ls : "";
++  let vmS=null;
++  if(selLS){ vmS=R.buildVM("ls:"+selLS).stem; const mp=vmS.pos.map((y,i)=>({y,p:vmS.M[i]})); pr=pr.map(q=>Object.assign({},q,{Mu:figInterp(mp,q.z)})); }
+@@ -6037 +6220 @@ function svgStemCapacity(R){
+-  let b=svgT(10,18,`Stem: M_u(z) of the governing state (${esc(R.stemDem.ls)}) vs φM_n(z)`,{b:1,fs:12});
++  let b=svgT(10,18,selLS?`Stem: M_u(z) of ${esc(selLS)} (V&M diagram §6.1) vs φM_n(z)`:`Stem: M_u(z) of the governing state (${esc(R.stemDem.ls)}) vs φM_n(z)`,{b:1,fs:12});
+@@ -6040,3 +6223,18 @@ function svgStemCapacity(R){
+-  b+=`<polyline points="${pr.map(q=>`${X(q.Mu)},${Y(q.z)}`).join(" ")}" fill="none" stroke="#c62828" stroke-width="2"/>`;
+-  b+=`<polyline points="${pr.map(q=>`${X(q.phiMn)},${Y(q.z)}`).join(" ")}" fill="none" stroke="#1f3a5f" stroke-width="2" stroke-dasharray="6 3"/>`;
+-  b+=svgT(X(pr[0].Mu)+4,Y(0)-6,`M_u = ${fmt(pr[0].Mu,2)}`,{fs:10,c:"#c62828"})+svgT(X(pr[0].phiMn)-4,Y(0)-18,`φM_n = ${fmt(pr[0].phiMn,2)}`,{fs:10,c:"#1f3a5f",a:"end"});
++  if(!FIG_STATIC){
++    const sd=R.stemDem, m=S.mat, bar=BARS[S.reinf.stem.size];
++    const muTxt=(q)=>{ if(selLS) return `M_u(z) = ${fF(q.Mu)} kip-ft/ft — ${selLS}, read from the V&M stem diagram (§6.1)`;
++      if(q.semi||q.eq) return `M_u(z) = ${fF(q.Mu)} kip-ft/ft — ${sd.ls}, expression of §5.2b${q.semi?" (semi-integral: no pressure above the seat)":""}${q.eq?" with the EE I terms":""}`;
++      const r=q.r, tm=[[sd.gEH??1,sd.MEH??0,3,"EH"],[sd.gLL||0,sd.MLS??0,2,"LS"],[sd.gES??1,sd.MES??0,2,"ES"]].filter(t=>t[1]);
++      return `M_u(z) = Σγ·M·r^n + H_gird(h_stem − z) + M_ecc, r = (H − z)/H = ${fF(r,4)}\n= ${tm.map(t=>`${fF(t[0])}(${fF(t[1])})(${fF(r,4)})${t[2]===3?"³":"²"}`).join(" + ")}${sd.MCS?` + ${fF(sd.MCS)}(${fF(r,4)})²`:""} + ${fF(sd.HgirdPerFt,3)}(${fF(g.hstem)} − ${fF(q.z)}) + ${fF(sd.MeccPerFt)} = ${fF(q.Mu)} kip-ft/ft (${sd.ls})`; };
++    const phTxt=q=>`φM_n(z) = φA_s f_y(d − a/2)/12 = ${fF(q.phi,3)}(${fF(q.As,3)})(${fF(m.fy,1)})(${fF(q.d)} − ${fF(q.a,3)}/2)/12 = ${fF(q.phiMn)} kip-ft/ft\nt(z) = ${fF(q.tIn)} in, d = t − c_wall − d_b/2 = ${fF(q.tIn)} − ${fF(m.coverT,2)} − ${fF(bar.db/2,3)} = ${fF(q.d)} in, ε_t = ${fF(q.et,4)}`;
++    const at=z=>{ const q=stemProfAt(R,z); if(vmS) q.Mu=figInterp(vmS.pos.map((y,i)=>({y,p:vmS.M[i]})),z);
++      return {q, y:Y(z), x1:mL, x2:W-mR, dots:[[X(q.Mu),Y(z),"#c62828"],[X(q.phiMn),Y(z),"#1f3a5f"]],
++        short:`z = ${fF(z)} ft: M_u = ${fF(q.Mu)}, φM_n = ${fF(q.phiMn)} kip-ft/ft, M_u/φM_n = ${fF(q.Mu/q.phiMn,3)}`,
++        tip:`Stem at z = ${fF(z)} ft above the top of footing\n${muTxt(q)}\n${phTxt(q)}\nM_u/φM_n = ${fF(q.Mu,2)}/${fF(q.phiMn,2)} = ${fF(q.Mu/q.phiMn,3)} (design check at the base: §5.2)`}; };
++    FIG_X.stem={range:[0,g.hstem], fromY:yv=>Math.max(0,Math.min(g.hstem,(Hp-mB-yv)/(Hp-mT-mB)*g.hstem)), at};
++    b+=`<rect x="${mL}" y="${mT}" width="${W-mL-mR}" height="${Hp-mT-mB}" fill="transparent" data-fx="stem"${fia("Stem profile: hover, drag or use the height slider (↑/↓ with the keyboard) for M_u and φM_n at a height","tab-struct|o-str-Stem")}/>`;
++  }
++  b+=`<polyline points="${pr.map(q=>`${X(q.Mu)},${Y(q.z)}`).join(" ")}" fill="none" stroke="#c62828" stroke-width="2"${FIG_STATIC?"":` data-fx="stem"`+fia("M_u(z): hover along the curve for the value at a height",selLS?"tab-vm|o-vm-stem":"tab-struct|o-str-Stem")}/>`;
++  b+=`<polyline points="${pr.map(q=>`${X(q.phiMn)},${Y(q.z)}`).join(" ")}" fill="none" stroke="#1f3a5f" stroke-width="2" stroke-dasharray="6 3"${FIG_STATIC?"":` data-fx="stem"`+fia("φM_n(z): hover along the curve for the value at a height","tab-struct|o-str-Stem")}/>`;
++  b+=fg(`M_u at the stem base (z = 0) = ${fF(pr[0].Mu)} kip-ft/ft${selLS?" ("+selLS+", §6.1)":" — the design value of §5.2 ("+R.stemDem.ls+")"}`,selLS?"tab-vm|o-vm-stem":"tab-struct|o-str-Stem",svgT(X(pr[0].Mu)+4,Y(0)-6,`M_u = ${fmt(pr[0].Mu,2)}`,{fs:10,c:"#c62828"}))
++    +fg(`φM_n at the stem base = ${fF(pr[0].phiMn)} kip-ft/ft (worked in §5.2)`,"tab-struct|o-str-Stem",svgT(X(pr[0].phiMn)-4,Y(0)-18,`φM_n = ${fmt(pr[0].phiMn,2)}`,{fs:10,c:"#1f3a5f",a:"end"}));
+@@ -6061 +6259 @@ function svgRebarDims(R){
+-  const L=(x1,y1,x2,y2,c)=>`<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${c}" stroke-width="2.2" stroke-linecap="round"/>`;
++  const L=(x1,y1,x2,y2,c,at)=>`<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${c}" stroke-width="2.2" stroke-linecap="round"${at||""}/>`;
+@@ -6062,0 +6261,6 @@ function svgRebarDims(R){
++  // ABINT: bar tooltips — size, spacing, A_s, cover, d and ℓ_d as worked in §5.1–§5.4 (values from R.checks)
++  const bT=(mk,desc,c,cov)=>!c?"":`${mk} — ${desc}: #${c.bar} @ ${fF(c.sp,1)} in\nA_s = A_b·12/s = ${fF(BARS[c.bar].Ab)}(12)/${fF(c.sp,1)} = ${fF(c.As)} in²/ft (A_s,req = ${fF(c.AsReq)})\ncover ${fF(cov,1)} in, d = ${fF(c.d)} in\nℓ_d = max(ℓ_db·λ_rl·λ_cf·λ_rc, 12) = max(${fF(c.ldb,1)}(${fF(c.lamRl??1,1)})(${fF(c.lamCf??1,1)})(${fF(c.lamRc,3)}), 12) = ${fF(c.ld,1)} in`;
++  const tA1=bT("A1","stem back-face vertical",R.checks.stemFlex,m.coverT), tB1=bT("B1","backwall back-face vertical",R.checks.bwFlex,m.coverT),
++        tC1=bT("C1","toe bottom transverse",R.checks.toeFlex,onP?yBot*12:m.coverF), tD1=bT("D1","heel top transverse",R.checks.heelFlex,m.coverF);
++  const tDw=dw?`A1 dowel into the footing (hooked): #${rf.stem.size} @ ${fF(+rf.stem.sp,1)} in\nℓ_dh = ${fF(dw.ldh,2)} in ≤ available ${fF(dw.lAv,2)} in (footing depth less cover)\nlap with the stem bars: required ${fF(dw.lapReq,2)} in${dw.lapProv>0?", provided "+fF(dw.lapProv,2)+" in":""} (§5.2a)`:"";
++  const ia=(t,j)=>FIG_STATIC?"":fia(t,j);
+@@ -6065,5 +6269,5 @@ function svgRebarDims(R){
+-  b+=L(xA,hookY,xA,g.tf+lap,"#c62828")+L(xA,hookY,xA-12*BARS[rf.stem.size].db/12-0.4,hookY,"#c62828");
+-  b+=L(xA-0.08,g.tf+0.05,xA-0.08,g.tf+g.hstem-0.2,"#7a1f1f");
+-  b+=L(xbwF+g.tbw-cT,Ht-0.15,xbwF+g.tbw-cT,g.tf+g.hstem-1.0,"#1f3a5f");
+-  b+=L(0.25,yBot+0.05,xsb+(R.checks.toeFlex.ld/12),yBot+0.05,"#1a7f37");
+-  b+=L(g.Ltoe-(R.checks.heelFlex.ld/12),g.tf-cF,B-0.25,g.tf-cF,"#b8860b");
++  b+=L(xA,hookY,xA,g.tf+lap,"#c62828",ia(tDw,"tab-struct|o-str-dowel"))+L(xA,hookY,xA-12*BARS[rf.stem.size].db/12-0.4,hookY,"#c62828",ia(tDw,"tab-struct|o-str-dowel"));
++  b+=L(xA-0.08,g.tf+0.05,xA-0.08,g.tf+g.hstem-0.2,"#7a1f1f",ia(tA1,"tab-struct|o-str-Stem"));
++  b+=L(xbwF+g.tbw-cT,Ht-0.15,xbwF+g.tbw-cT,g.tf+g.hstem-1.0,"#1f3a5f",ia(tB1,"tab-struct|o-str-Backwall"));
++  b+=L(0.25,yBot+0.05,xsb+(R.checks.toeFlex.ld/12),yBot+0.05,"#1a7f37",ia(tC1,"tab-struct|o-str-Toe"));
++  b+=L(g.Ltoe-(R.checks.heelFlex.ld/12),g.tf-cF,B-0.25,g.tf-cF,"#b8860b",ia(tD1,"tab-struct|o-str-Heel"));
+@@ -6071,5 +6275,5 @@ function svgRebarDims(R){
+-  const call=(x,y,t,c)=>svgT(X(x),Y(y),t,{fs:10.5,c,b:1});
+-  b+=call(xsb+0.3,g.tf+g.hstem*0.6,`A1 #${rf.stem.size} @ ${fmt(+rf.stem.sp,1)}"`,"#7a1f1f");
+-  b+=call(xsb+0.3,g.tf+g.hstem+g.hbw*0.5,`B1 #${rf.bw.size} @ ${fmt(+rf.bw.sp,1)}"`,"#1f3a5f");
+-  b+=call(0.3,yBot+0.35,`C1 #${rf.toe.size} @ ${fmt(+rf.toe.sp,1)}"`,"#1a7f37");
+-  b+=call(B-2.2,g.tf-cF-0.45,`D1 #${rf.heel.size} @ ${fmt(+rf.heel.sp,1)}"`,"#b8860b");
++  const call=(x,y,t,c,tip,j)=>fg(tip,j,svgT(X(x),Y(y),t,{fs:10.5,c,b:1}));
++  b+=call(xsb+0.3,g.tf+g.hstem*0.6,`A1 #${rf.stem.size} @ ${fmt(+rf.stem.sp,1)}"`,"#7a1f1f",tA1,"tab-struct|o-str-Stem");
++  b+=call(xsb+0.3,g.tf+g.hstem+g.hbw*0.5,`B1 #${rf.bw.size} @ ${fmt(+rf.bw.sp,1)}"`,"#1f3a5f",tB1,"tab-struct|o-str-Backwall");
++  b+=call(0.3,yBot+0.35,`C1 #${rf.toe.size} @ ${fmt(+rf.toe.sp,1)}"`,"#1a7f37",tC1,"tab-struct|o-str-Toe");
++  b+=call(B-2.2,g.tf-cF-0.45,`D1 #${rf.heel.size} @ ${fmt(+rf.heel.sp,1)}"`,"#b8860b",tD1,"tab-struct|o-str-Heel");
+@@ -6092 +6296,9 @@ function svgSeatPlan(R){
+-  const bs=R.checks.bearingSeat, bg=S.bearing, g=S.geom; if(!bs) return "";
++  let bs=R.checks.bearingSeat; const bg=S.bearing, g=S.geom; if(!bs) return "";
++  // ABINT: another girder's bearing — the clear edge distances, A₂ and m from the same expressions as §5.6 (geometry only;
++  // the factored load and q_b/q_R are worked for the governing bearing)
++  const gSel=(!FIG_STATIC&&FIG.seat>0&&FIG.seat<=S.beams.N)? FIG.seat : 0, isGov=!gSel||gSel===bs.pgirder;
++  if(gSel){ const posB=R.beamPos||[], i=gSel-1, y=posB[i]||0, Lab=+g.Lab, A1=bs.A1; let cT=(Lab/2-Math.abs(y))*12-(+bg.padW)/2, cTw="wall end";
++    for(const j of [i-1,i+1]){ if(j<0||j>=posB.length) continue; const cj=(Math.abs(posB[j]-y)*12-(+bg.padW))/2; if(cj<cT){ cT=cj; cTw="½ clear distance to girder "+(j+1)+" pad"; } }
++    const cands=[[bs.cFront,"seat front edge"],[bs.cBack,"stem back face"],[cT,cTw]]; let cc=cands[0]; cands.forEach(k=>{ if(k[0]<cc[0]) cc=k; });
++    const A2=cc[0]>0?(+bg.padL+2*cc[0])*(+bg.padW+2*cc[0]):A1, mRaw=Math.sqrt(A2/A1);
++    bs=Object.assign({},bs,{pgirder:gSel, c:cc[0], cBy:cc[1], cT, A2, mRaw, m:cc[0]>0?Math.min(2,mRaw):1}); }
+@@ -6097,2 +6309,3 @@ function svgSeatPlan(R){
+-  let b=svgT(10,18,`Bearing seat plan — girder ${bs.pgirder} (governing q_b/q_R)`,{b:1,fs:12});
+-  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${seatIn*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"/>`;
++  const J="tab-struct|o-str-bearing";
++  let b=svgT(10,18,isGov?`Bearing seat plan — girder ${bs.pgirder} (governing q_b/q_R)`:`Bearing seat plan — girder ${bs.pgirder} (selected; governing: girder ${R.checks.bearingSeat.pgirder})`,{b:1,fs:12});
++  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${seatIn*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"${FIG_STATIC?"":fia(`Bridge seat: width ${fF(R.geo.seatW,2)} ft = ${fF(seatIn,1)} in (t_st − t_bw); bearing setback ${fF(g.brgSetback,2)} ft from the backwall`,J)}/>`;
+@@ -6101,6 +6314,7 @@ function svgSeatPlan(R){
+-  if(c>0) b+=`<rect x="${X(xc-Lp/2-c)}" y="${Y(-Wp/2-c)}" width="${(Lp+2*c)*sc}" height="${(Wp+2*c)*sc}" fill="rgba(31,58,95,0.06)" stroke="#1f3a5f" stroke-dasharray="6 3"/>`;
+-  b+=`<rect x="${X(xc-Lp/2)}" y="${Y(-Wp/2)}" width="${Lp*sc}" height="${Wp*sc}" fill="#c9c3b3" stroke="#333" stroke-width="1.4"/>`;
+-  b+=svgT(X(xc),Y(0)+4,`pad ${fmt(Lp,1)}" × ${fmt(Wp,1)}"`,{a:"middle",fs:10});
+-  b+=dimH(X(0),X(xc-Lp/2),Y(Wp/2)+22,`c_front ${fmt(bs.cFront,1)}"`);
+-  b+=dimH(X(xc+Lp/2),X(seatIn+tbwIn),Y(Wp/2)+22,`c_back ${fmt(bs.cBack,1)}"`);
+-  b+=dimV(Y(-Wp/2),Y(-Wp/2-Math.max(0,Math.min(bs.cT,halfY-Wp/2))),X(xc)+Lp*sc/2+18,`c_trans ${fmt(bs.cT,1)}"`);
++  if(c>0) b+=`<rect x="${X(xc-Lp/2-c)}" y="${Y(-Wp/2-c)}" width="${(Lp+2*c)*sc}" height="${(Wp+2*c)*sc}" fill="rgba(31,58,95,0.06)" stroke="#1f3a5f" stroke-dasharray="6 3"${FIG_STATIC?"":fia(`A₂ (Fig. 5.6.5-1 concept), concentric with the pad\nA₂ = (L_pad + 2c)(W_pad + 2c) = (${fF(Lp,1)} + 2·${fF(c,1)})(${fF(Wp,1)} + 2·${fF(c,1)}) = ${fF(bs.A2,0)} in²\nm = √(A₂/A₁) = √(${fF(bs.A2,0)}/${fF(bs.A1,0)}) = ${fF(bs.mRaw,3)} ≤ 2 → m = ${fF(bs.m,3)}`,J)}/>`;
++  const padTip=`Bearing pad, girder ${bs.pgirder}: A₁ = L_pad·W_pad = ${fF(Lp,1)} × ${fF(Wp,1)} = ${fF(bs.A1,0)} in²`+(isGov?`\nP_u = P_u,girder/n_b = ${fF(bs.PuG)}/${bs.nBg} = ${fF(bs.Pu)} kip (${bs.pls})\nq_b = P_u/A₁ = ${fF(bs.Pu)}/${fF(bs.A1,0)} = ${fF(bs.qb,3)} ksi\nq_R = φ_b(0.85f'_c)m = ${fF(bs.phiB,2)}(0.85 × ${fF(S.mat.fc,1)})(${fF(bs.m,3)}) = ${fF(bs.qR,3)} ksi\nq_b/q_R = ${fF(bs.dc,3)}`:`\nm = ${fF(bs.m,3)}; the factored load and q_b/q_R are worked for the governing girder ${R.checks.bearingSeat.pgirder} in §5.6`);
++  b+=`<rect x="${X(xc-Lp/2)}" y="${Y(-Wp/2)}" width="${Lp*sc}" height="${Wp*sc}" fill="#c9c3b3" stroke="#333" stroke-width="1.4"${FIG_STATIC?"":fia(padTip,J)}/>`;
++  b+=fg(padTip,J,svgT(X(xc),Y(0)+4,`pad ${fmt(Lp,1)}" × ${fmt(Wp,1)}"`,{a:"middle",fs:10}));
++  b+=fg(`c_front = (w_seat − setback)·12 − L_pad/2 = (${fF(R.geo.seatW,3)} − ${fF(g.brgSetback,3)})(12) − ${fF(Lp,1)}/2 = ${fF(bs.cFront,1)} in (pad to the seat front edge)`,J,dimH(X(0),X(xc-Lp/2),Y(Wp/2)+22,`c_front ${fmt(bs.cFront,1)}"`));
++  b+=fg(`c_back = (setback + t_bw)·12 − L_pad/2 = (${fF(g.brgSetback,3)} + ${fF(g.tbw,3)})(12) − ${fF(Lp,1)}/2 = ${fF(bs.cBack,1)} in (pad to the stem back face)`,J,dimH(X(xc+Lp/2),X(seatIn+tbwIn),Y(Wp/2)+22,`c_back ${fmt(bs.cBack,1)}"`));
++  b+=fg(`c_trans = ${fF(bs.cT,1)} in, girder ${bs.pgirder}: the lesser of the distance to the wall end (L_ab/2 − |y|)·12 − W_pad/2 and half the clear distance to the next girder's pad`,J,dimV(Y(-Wp/2),Y(-Wp/2-Math.max(0,Math.min(bs.cT,halfY-Wp/2))),X(xc)+Lp*sc/2+18,`c_trans ${fmt(bs.cT,1)}"`));
+@@ -6114,3 +6328,6 @@ function svgPileReactions(R){
+-  const pc=R.checks.pileComp; if(!pc||!pc.det||!pc.det.loads) return "";
+-  const act=activePiles(), B=R.geo.B, rows={};
+-  act.forEach((p,i)=>{ const k=p.x.toFixed(4); const r=(rows[k]=rows[k]||{x:B/2+p.x,n:0,sum:0,max:-Infinity,min:Infinity}); const v=pc.det.loads[i]; r.n++; r.sum+=v; r.max=Math.max(r.max,v); r.min=Math.min(r.min,v); });
++  let pc=R.checks.pileComp; if(!pc||!pc.det||!pc.det.loads) return "";
++  // ABINT: the governing max-compression case of the selected limit state (R.pile.perLS, the rows of the §4.3 table)
++  const q=(!FIG_STATIC&&FIG.ls&&FIG.ls!==pc.ls&&R.pile&&R.pile.perLS&&R.pile.perLS[FIG.ls]&&R.pile.perLS[FIG.ls].best&&R.pile.perLS[FIG.ls].best.loads)? R.pile.perLS[FIG.ls].best : null;
++  if(q) pc={ls:FIG.ls, lbl:q.c&&q.c.lbl, det:q};
++  const act=activePiles(), B=R.geo.B, rows={}, pno=new Map(); S.piles.coords.forEach((c,i)=>pno.set(c,i+1));
++  act.forEach((p,i)=>{ const k=p.x.toFixed(4); const r=(rows[k]=rows[k]||{x:B/2+p.x,n:0,sum:0,max:-Infinity,min:Infinity,k,no:[]}); const v=pc.det.loads[i]; r.n++; r.sum+=v; r.max=Math.max(r.max,v); r.min=Math.min(r.min,v); r.no.push(pno.get(p)); });
+@@ -6122,0 +6340 @@ function svgPileReactions(R){
++  const phiC=FIG_STATIC?0:((R.resFor&&R.resFor(pc.ls)||{}).phiC??S.piles.phiC), d=pc.det, pi=R.pile||{};
+@@ -6124,2 +6342,3 @@ function svgPileReactions(R){
+-    b+=r.max>=0? svgArrow(x,y0+len+6,x,y0+2,"#1f3a5f",2) : svgArrow(x,y0+2,x,y0+len+6,"#5b7fa6",2);
+-    b+=svgT(x,y0+len+20,`max ${fmt(r.max,1)} k`,{a:"middle",fs:10})+svgT(x,y0+len+33,`${r.n} piles, Σ ${fmt(r.sum,0)} k`,{a:"middle",fs:9,c:"#555"}); });
++    const tip=FIG_STATIC?"":`Pile row at ${fF(r.x)} ft from the toe — piles ${r.no.join(", ")} (${pc.ls})\nmax P = ${fF(r.max,1)} kip, min P = ${fF(r.min,1)} kip, ΣP = ${fF(r.sum,1)} kip\nP_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'², ΣV = ${fF(d.c&&d.c.V,1)} kip, M_y = ${fF(d.My,1)}, M_x = ${fF(d.Mx,1)} kip-ft, n = ${pi.n}, Σx'² = ${fF(pi.Sxx)}, Σy'² = ${fF(pi.Syy)} (§4.2)\nmax P/φ_cR_n = ${fF(r.max,1)}/(${fF(phiC,2)} × ${fF(+S.piles.Rn,1)}) = ${fF(r.max/(phiC*S.piles.Rn),3)}`;
++    b+=fg(tip,"tab-found|o-pileform",(r.max>=0? svgArrow(x,y0+len+6,x,y0+2,"#1f3a5f",2) : svgArrow(x,y0+2,x,y0+len+6,"#5b7fa6",2))
++      +svgT(x,y0+len+20,`max ${fmt(r.max,1)} k`,{a:"middle",fs:10})+svgT(x,y0+len+33,`${r.n} piles, Σ ${fmt(r.sum,0)} k`,{a:"middle",fs:9,c:"#555"}),` data-prow="${r.k}"`); });
+@@ -6313 +6532,4 @@ function drawPilePlan(){
+-  const g=S.geom, B=g.Ltoe+g.tsb+g.Lheel, R=window.LAST_R, Lft=(+g.Lftg||g.Lab), Lwall=g.Lab;
++  el.innerHTML=pilePlanSVG(window.LAST_R);
++}
++function pilePlanSVG(R){   // ABINT: the plan as a string (drawPilePlan on screen, static in the report)
++  const g=S.geom, B=g.Ltoe+g.tsb+g.Lheel, Lft=(+g.Lftg||g.Lab), Lwall=g.Lab;
+@@ -6319 +6541 @@ function drawPilePlan(){
+-  let s=`<svg viewBox="0 0 ${W} ${Hpx}" width="100%">${svgDefs()}`;
++  let s=`<svg viewBox="0 0 ${W} ${Hpx}" width="100%">${svgDefs()}`, hit="";
+@@ -6327 +6549,2 @@ function drawPilePlan(){
+-  let pmax=null, capC=null;
++  let pmax=null, capC=null, pmaxLS=null;
++  const selLS=(!FIG_STATIC&&FIG.ls&&R&&R.pile&&R.pile.perLS&&R.pile.perLS[FIG.ls]&&R.pile.perLS[FIG.ls].best&&R.pile.perLS[FIG.ls].best.loads)? FIG.ls : "";   // ABINT
+@@ -6331,2 +6554,2 @@ function drawPilePlan(){
+-    pmax=new Array(nAct).fill(-Infinity);
+-    for(const rr of Object.values(R.pile.perLS)){
++    pmax=new Array(nAct).fill(-Infinity); pmaxLS=new Array(nAct).fill("");
++    for(const [lsN,rr] of Object.entries(R.pile.perLS)){
+@@ -6334 +6557,2 @@ function drawPilePlan(){
+-      rr.best.loads.forEach((v,ai)=>{ if(ai<nAct && v>pmax[ai]) pmax[ai]=v; });
++      if(selLS&&lsN!==selLS) continue;
++      rr.best.loads.forEach((v,ai)=>{ if(ai<nAct && v>pmax[ai]){ pmax[ai]=v; pmaxLS[ai]=lsN; } });
+@@ -6345,0 +6570,8 @@ function drawPilePlan(){
++    if(!FIG_STATIC){ const a0=ai, P0=c.active&&pmax&&a0<pmax.length?pmax[a0]:null, pr=R&&R.pile&&R.pile.perLS?R.pile.perLS[pmaxLS&&pmaxLS[a0]]:null, q=pr&&pr.best, pi=R&&R.pile;   // ABINT: hit target + equation
++      let tip=`Pile ${i+1} at x = ${fF(c.x)} ft (+ toward the heel), y = ${fF(c.y)} ft from the footing centre lines`;
++      if(!c.active) tip+="\nomitted (inactive): carries no load";
++      else if(P0!==null&&isFinite(P0)&&q&&pi){ const xi=c.x-pi.xgc, yi=c.y-pi.ygc;
++        tip+=`\n${selLS?selLS+": governing max-compression case":"largest compression over the limit states: "+pmaxLS[a0]} — ${q.c&&q.c.lbl||""}`
++          +`\nP_i = ΣV/n + M_y x'_i/Σx'² + M_x y'_i/Σy'² = ${fF(q.c.V,1)}/${pi.n} + (${fF(q.My,1)})(${fF(xi,3)})/${fF(pi.Sxx)} + (${fF(q.Mx,1)})(${fF(yi,3)})/${fF(pi.Syy)} = ${fF(P0,2)} kip`
++          +`\nD/C = P/φ_cR_n = ${fF(P0,1)}/(${fF(+S.piles.phiC,2)} × ${fF(+S.piles.Rn,1)}) = ${fF(P0/capC,3)}${P0<0?" (uplift)":""}`; }
++      hit+=`<circle cx="${cx}" cy="${cy}" r="10" fill="transparent" stroke="none"${fia(tip,"tab-found|o-pileform",` data-pile="${i+1}"${c.active?` data-prow="${c.x.toFixed(4)}"`:""}`)}/>`; }
+@@ -6384,2 +6616,3 @@ function drawPilePlan(){
+-  s+=`</svg>`;
+-  el.innerHTML=s;
++  if(selLS) s+=`<text x="${Xc(Lft/2)}" y="${Yc(-B/2)-14}" text-anchor="end" font-size="10" font-family="Times New Roman" fill="#b86e00">shown: ${esc(selLS)} (governing max-compression case)</text>`;
++  s+=hit+`</svg>`;
++  return s;
+@@ -6667,0 +6901 @@ function build3D(R){
++    D3.piles=[];   // ABINT: pile meshes by pile number (highlight linked from the Tab 4 figures)
+@@ -6671,0 +6906 @@ function build3D(R){
++      if(c.active) D3.piles.push({no:i+1, mesh});
+@@ -6672,0 +6908 @@ function build3D(R){
++    d3PileHL();
+@@ -7127 +7363 @@ function renderTabContent(id){
+-  if(id==="tab-struct"){ drawRebarSketch(); }
++  if(id==="tab-struct"){ drawRebarSketch(); if(FIG.z!==null) figCrossDraw("stem",FIG.z,true); }   // ABINT: keep the stem height readout
+@@ -7623,0 +7860 @@ async function buildReport(){
++    figStaticIn(cl,R);   // ABINT: figures as printed before — default selection, no controls, no interactive attributes
+```
