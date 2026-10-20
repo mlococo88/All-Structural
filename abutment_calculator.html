@@ -1030,6 +1030,12 @@ function migrate(){
     S.meta.defRev=4;
     if(add.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add);
   }
+  // defRev 5 (2026-10-20): no input added or changed; one-time notice for a pile project: the toe one-way shear is now taken
+  // at d_v from the stem face with each pile spread over its width [5.12.8.6.1].
+  if(!(S.meta.defRev>=5)){
+    S.meta.defRev=5;
+    if(S.fnd.branch==="pile") DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Pile-supported footing: the toe one-way shear V_u is now taken at d_v from the stem front face, with each pile row spread over the pile width and only the part beyond the section counted [5.12.8.6.1] (Tab 5 §5.3)"]);
+  }
 }
 function seedExampleReactions(){
   const ex={DC:{P:85},DW:{P:12},LL:{P:70},BR:{Vx:3.5},TU:{Vx:2.5},CRSH:{Vx:1.5},
@@ -1280,7 +1286,7 @@ function buildInputs(){
       ${inpRow("γ<sub>DR</sub> (structural strength)","piles.gDD","–",{title:"1.10 for structural strength; 0.00 for geotechnical strength (fixed) [T.3.4.1-1 note]."})}
       <div class="subhead">Pile section (for punching-shear perimeter)</div>
       ${selRow("Pile shape","piles.pileShape",[["hp","H-pile (square envelope)"],["square","Square / precast"],["round","Round / pipe / drilled"]])}
-      ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing. [AASHTO 5.12.8.6]"})}
+      ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing, and the width over which each pile load is spread for the toe one-way shear at d_v. [AASHTO 5.12.8.6]"})}
       ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face. The punching-shear depth and the toe flexure / shear / crack-control depth are measured above the pile heads (Tab 4 §4.6, Tab 5 §5.3)."})}
       ${inpRow("Clear cover, pile top to bottom mat","piles.clrTop","in",{title:"Clear distance from the top of the piles to the bottom reinforcement mat. d_e = t_f − embedment − this cover − d_b (Tab 4 §4.6; toe d, Tab 5 §5.3)."})}
     `);
@@ -2235,26 +2241,39 @@ function computeAll(){
     // TOE — every strength / EE permutation (as the heel); per-foot upward line loads by pile row (x from footing CL).
     // The max-pile-compression case is evaluated first, so it is kept on a tie.
     const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2;
+    // one-way shear [5.12.8.6.1, 5.7.3.2]: critical section at d_v from the stem front face, d_v of the toe over the pile heads
+    // (same expression as sectionCheck with h_p, F45); each pile row's reaction is spread uniformly over the pile width D, the part
+    // on the toe side of the section counts (fraction f), a row wholly inside the section does not; toe self-weight beyond the
+    // section at 0.90·γc·t_f. Flexure stays at the face with the full rows (5.12.8.4).
+    const DpT=Math.max(0,+S.piles.pileSize||0)/12;                                     // pile width / diameter, ft
+    const hPv=g.tf*12-Math.max(0,+S.piles.embed||0), dTv=hPv-Math.max(0,+S.piles.clrTop||0)-BARS[S.reinf.toe.size].db;
+    const dvTp=Math.max(0.9*dTv,0.72*hPv)/12, xCrT=g.Ltoe-dvTp;                       // d_v (ft); section from the toe tip (ft)
+    const fracOut=xT=> DpT>1e-9? Math.min(1,Math.max(0,(xCrT-(xT-DpT/2))/DpT)) : (xT<xCrT?1:0);
     function toePile(loads){
       const rows={};
       act.forEach((p,i)=>{ const key=p.x.toFixed(4); (rows[key]=rows[key]||{x:p.x,P:0}).P+=loads[i]; });
       const rowArr=Object.values(rows);
-      let MtoeUp=0,VtoeUp=0;
-      rowArr.forEach(r=>{ const xT=B/2+r.x; if(xT<g.Ltoe){ VtoeUp+=r.P/Lftg; MtoeUp+=r.P/Lftg*(g.Ltoe-xT); } });
-      return {rowArr,MtoeUp,VtoeUp,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VtoeUp-0.9*wFoot*g.Ltoe)};
+      let MtoeUp=0,VtoeUp=0,VsUp=0;
+      const vRows=[];
+      rowArr.forEach(r=>{ const xT=B/2+r.x; if(xT<g.Ltoe){ VtoeUp+=r.P/Lftg; MtoeUp+=r.P/Lftg*(g.Ltoe-xT); }
+        const f=fracOut(xT); VsUp+=f*r.P/Lftg;
+        if(xT-DpT/2<g.Ltoe) vRows.push({x:r.x, xT, a:g.Ltoe-xT, f, w:r.P/Lftg}); });
+      const VswDn=0.9*wFoot*Math.max(0,xCrT);
+      return {rowArr,MtoeUp,VtoeUp,VsUp,VswDn,vRows,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VsUp-VswDn)};
     }
-    let tM=Object.assign(toePile(det.loads),{c:det.c,ls:R.checks.pileComp.ls}), tVu=tM.Vu, tVls=tM.ls;
+    let tM=Object.assign(toePile(det.loads),{c:det.c,ls:R.checks.pileComp.ls}), tV=tM;
     for(const lsName of STR_LIMITS){
       for(const pl of permutations(lsName)){
         const c=comboEffects(lsName,pl.perm,pl.liveOn,false);
         const loads=pileLoadsFor(c); if(!loads) continue;
-        const t=toePile(loads);
-        if(t.Mu>tM.Mu+1e-9) tM=Object.assign(t,{c,ls:lsName});
-        if(t.Vu>tVu+1e-9){ tVu=t.Vu; tVls=lsName; }
+        const t=Object.assign(toePile(loads),{c,ls:lsName});
+        if(t.Mu>tM.Mu+1e-9) tM=t;
+        if(t.Vu>tV.Vu+1e-9) tV=t;
       }
     }
-    toeDem={Mu:tM.Mu, Vu:tVu, MtoeUp:tM.MtoeUp, VtoeUp:tM.VtoeUp, MtoeDn, rowArr:tM.rowArr, ls:tM.ls, lsV:tVls,
-      lbl:tM.c?.lbl+" ("+tM.ls+")", src:"pile"};
+    toeDem={Mu:tM.Mu, Vu:tV.Vu, MtoeUp:tM.MtoeUp, VtoeUp:tM.VtoeUp, MtoeDn, rowArr:tM.rowArr, ls:tM.ls, lsV:tV.ls,
+      lbl:tM.c?.lbl+" ("+tM.ls+")", src:"pile",
+      dvT:dvTp, xCr:xCrT, Dp:DpT, VsUp:tV.VsUp, VswDn:tV.VswDn, vRows:tV.vRows, lblV:tV.c?.lbl};
     // HEEL — every strength permutation; downward loads and pile reactions from the same permutation (consistent combination)
     let hTop=null,hBot=null,hV=null;
     for(const lsName of STR_LIMITS){
@@ -2308,6 +2327,7 @@ function computeAll(){
     sp:+S.reinf.toe.sp, Mu:toeDem.Mu, Vu:toeDem.Vu, Ms:footSvc.toe, lbl:toeDem.lbl,
     bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Ltoe*12,
     ...(toePileD? {hEff:toePileD.hP, coverEff:toePileD.clrP+BARS[S.reinf.toe.size].db/2, pileMat:toePileD} : {})});
+  if(toePileD && toeDem.src==="pile" && Math.abs(R.checks.toeFlex.dv/12-toeDem.dvT)>1e-9) warn(`Toe: internal mismatch of d_v between the shear section (${fmt(toeDem.dvT*12)} in) and the shear resistance (${fmt(R.checks.toeFlex.dv)} in) — report this.`,"err");
   if(toePileD && !(R.checks.toeFlex.d>0)) warn(`Toe: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(R.checks.toeFlex.d,1)} in) — check panel I-7.`,"err");
   R.checks.heelFlex=sectionCheck({name:"Heel", h:g.tf*12, cover:m.coverF, bar:S.reinf.heel.size,
     sp:+S.reinf.heel.sp, Mu:heelDem.Mu, Vu:heelDem.Vu, Ms:footSvc.heel, lbl:heelDem.lbl,
@@ -3392,6 +3412,37 @@ function renderTabFound(R){
 }
 
 /* ================= TAB 5 — STRUCTURAL ================= */
+/* Pile-supported toe: one-way shear at d_v from the stem front face [5.12.8.6.1, 5.7.3.2] and the D-region note [5.8] */
+function toePileShearHTML(td, cT){
+  const g=S.geom, D=td.Dp, Din=D*12, tfIn=g.tf*12;
+  const rows=(td.vRows||[]).slice().sort((a,b)=>a.xT-b.xT);
+  const st=r=> r.f>=1-1e-9? "wholly on the toe side — counts in full" : r.f<=1e-9? "wholly between the face and the section — not counted" : "straddles the section — part counts";
+  let t=`<table class="vtbl"><tr><th>Pile row x (ft, from footing CL)</th><th>x<sub>i</sub> from toe tip (ft)</th><th>a<sub>i</sub> centre from stem face (in)</th><th>Pile extent from face (in)</th><th>Position vs. section at d<sub>v</sub> = ${fmt(td.dvT*12)} in</th><th>f<sub>i</sub></th><th>P<sub>i</sub>/L<sub>ab</sub> (kip/ft)</th><th>f<sub>i</sub>P<sub>i</sub>/L<sub>ab</sub> (kip/ft)</th></tr>`;
+  rows.forEach(r=>{ const aIn=r.a*12;
+    t+=`<tr><td class="num">${fmt(r.x,3)}</td><td class="num">${fmt(r.xT,3)}</td><td class="num">${fmt(aIn,1)}</td><td class="num">${fmt(aIn-Din/2,1)} to ${fmt(aIn+Din/2,1)}</td><td>${st(r)}</td><td class="num">${fmt(r.f,3)}</td><td class="num">${fmt(r.w,3)}</td><td class="num">${fmt(r.f*r.w,3)}</td></tr>`; });
+  t+=`</table>`;
+  const part=rows.filter(r=>r.f>1e-9&&r.f<1-1e-9);
+  const cnt=rows.filter(r=>r.f>1e-9);
+  const sumTex=cnt.length? cnt.map(r=>`${fmtT(r.f,3)}(${fmtT(r.w,3)})`).join(" + ") : "0";
+  const lines=[
+    `x_{cr} = L_{toe} - d_v = ${fmtT(g.Ltoe)} - \\dfrac{${fmtT(td.dvT*12)}}{12} = ${fmtT(td.xCr,3)}\\ \\text{ft from the toe tip}\\,, \\qquad D = ${fmtT(Din,1)}\\ \\text{in} = ${fmtT(D,3)}\\ \\text{ft}`,
+    `f_i = \\min\\!\\left[1,\\ \\max\\!\\left(0,\\ \\dfrac{x_{cr} - (x_i - D/2)}{D}\\right)\\right] \\quad(\\text{share of pile } i \\text{ on the toe side of the section})`,
+    ...part.map(r=>`f = \\dfrac{${fmtT(td.xCr,3)} - (${fmtT(r.xT,3)} - ${fmtT(D/2,3)})}{${fmtT(D,3)}} = ${fmtT(r.f,3)} \\quad(\\text{row at } x_i = ${fmtT(r.xT,3)}\\ \\text{ft})`),
+    `V_{up,cr} = \\Sigma f_i\\,\\dfrac{P_i}{L_{ab}} = ${sumTex} = ${fmtT(td.VsUp,3)}\\ \\text{kip/ft}`,
+    `V_{dn,cr} = 0.90\\,\\gamma_c t_f\\,x_{cr} = 0.90(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})(${fmtT(Math.max(0,td.xCr),3)}) = ${fmtT(td.VswDn,3)}\\ \\text{kip/ft}`,
+    `V_u = \\max(0,\\ V_{up,cr} - V_{dn,cr}) = \\max(0,\\ ${fmtT(td.VsUp,3)} - ${fmtT(td.VswDn,3)}) = ${fmtT(td.Vu)}\\ \\text{kip/ft}`];
+  let h=eqB("Toe one-way shear demand — critical section at d<sub>v</sub> from the stem front face","AASHTO LRFD 10th Ed. 5.12.8.6.1, 5.7.3.2",lines,
+    `d<sub>v</sub> = ${fmt(cT.dv)} in is the toe shear depth over the pile heads (one-way shear block below). Each pile row's reaction is spread uniformly over the pile width D; the part of the pile on the toe side of the section is counted, a pile wholly between the stem face and the section is not. Soil over the toe neglected (as for the flexure). P<sub>i</sub> = row reaction of the permutation giving the largest V<sub>u</sub> (${esc((td.lsV||"")+(td.lblV?" — "+td.lblV:""))}), from the rigid-cap expression <span class="xlink" data-jump="tab-found|o-pileform">Tab 4, §4.2</span> (per limit state <span class="xlink" data-jump="tab-found|o-pilels">§4.3</span>). Planned pile positions are used; the out-of-position tolerance of 5.12.8.2 is not applied.`);
+  h+=t;
+  // D-region note [5.5.1.2.3, 5.8.1, 5.8.2.1, C5.7.3.2]
+  const front=rows.filter(r=>r.a>0);
+  const dReg=front.filter(r=>r.a<2*g.tf);
+  const inDv=front.filter(r=>r.a*12<td.dvT*12);
+  if(dReg.length){
+    h+=`<div class="checkline"><span class="flagchip warn">D-REGION</span><span>Pile row${dReg.length>1?"s":""} at a = ${dReg.map(r=>fmt(r.a*12,1)).join(", ")} in from the stem face, less than 2·t<sub>f</sub> = ${fmt(2*tfIn,0)} in: the toe is a disturbed region. AASHTO LRFD 10th Ed. permits the strut-and-tie method here (5.5.1.2.3, 5.8.1) and recommends considering it for pile caps with a load-to-reaction distance under twice the member depth (5.8.2.1); it does not require it. The design check is the sectional one-way shear above [5.12.8.6.1]; no STM check is made.${inDv.length?` The row${inDv.length>1?"s":""} with centre within d<sub>v</sub> of the face (a = ${inDv.map(r=>fmt(r.a*12,1)).join(", ")} in) reach${inDv.length>1?"":"es"} the stem by a direct strut; the node over the pile may be checked by 5.8.2 if wanted (C5.7.3.2).`:""}</span></div>`;
+  }
+  return h;
+}
 function sectionHTML(c, demHTML, secNo, title){
   const m=S.mat;
   return panel("o-str-"+c.name,secNo,title,`
@@ -3482,8 +3533,9 @@ function renderTabStruct(R){
     ? eqB("Toe demands — pile reactions minus footing self-weight, at front face of stem","Design basis §8.3",[
         `V_{up} = \\Sigma P_{row}/L_{ab} = ${fmtT(td.VtoeUp)}\\ \\text{kip/ft}\\,, \\qquad M_{up} = \\Sigma (P_{row}/L_{ab})\\,a_{row} = ${fmtT(td.MtoeUp)}\\ \\text{kip-ft/ft}`,
         `M_{dn} = 0.90\\,\\gamma_c t_f L_{toe}^2/2 = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
-        `M_u = ${fmtT(td.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(td.Vu)}\\ \\text{kip/ft}`],
-        "Pile rows forward of the stem front face; every strength / Extreme Event permutation is checked and the one giving the largest toe moment is shown"+(td.lsV&&td.lsV!==td.ls?" (V_u from "+td.lsV+")":"")+".")
+        `M_u = M_{up} - M_{dn} = ${fmtT(td.Mu)}\\ \\text{kip-ft/ft (at the stem front face)}\\,, \\qquad V_u = ${fmtT(td.Vu)}\\ \\text{kip/ft (at } d_v\\text{, below)}`],
+        "Pile rows forward of the stem front face (flexure at the face [5.12.8.4]); every strength / Extreme Event permutation is checked and the one giving the largest toe moment is shown"+(td.lsV&&td.lsV!==td.ls?" (V_u from "+td.lsV+")":"")+".")
+      + toePileShearHTML(td, cT)
     : `<div class="note-box">No toe demand source (check inputs).</div>`;
   h+=sectionHTML(cT, toeDemH, "5.3","Toe — Flexure & Shear (bottom reinforcement)");
   const hd=R.heelDem, cH=R.checks.heelFlex;
@@ -3577,16 +3629,27 @@ function drawRebarSketch(){
   s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
   const bar=(x1,y1,x2,y2,col)=>`<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${col}" stroke-width="2.4" stroke-linecap="round"/>`;
   const lbl=(x,y,t,col)=>`<text x="${X(x)}" y="${Y(y)}" font-size="12" font-weight="bold" font-family="Times New Roman" fill="${col}">${t}</text>`;
+  // pile-supported footing (display only): pile heads embedded e_pile into the footing; the bottom mat (C1, A1 hook) sits on
+  // the clear cover c_top above the pile heads, as in the toe design (Tab 5 §5.3, F45)
+  const onPiles=S.fnd.branch==="pile"&&S.piles&&Array.isArray(S.piles.coords);
+  let yBot=S.mat.coverF/12;
+  if(onPiles){
+    const emb=Math.max(0,+S.piles.embed||0)/12, clr=Math.max(0,+S.piles.clrTop||0)/12, Dp=(+S.piles.pileSize||12)/12;
+    yBot=Math.min(g.tf-0.1, emb+clr);
+    const xs=[...new Set(activePiles().map(c=>(B/2+c.x).toFixed(4)))].map(Number).filter(x=>x>-Dp/2&&x<B+Dp/2);
+    xs.forEach(x=>{ const x0=Math.max(0,x-Dp/2), x1=Math.min(B,x+Dp/2);
+      s+=`<rect x="${X(x0)}" y="${Y(emb)}" width="${(x1-x0)*sc}" height="${(emb+0.6)*sc}" fill="#d9d4c7" stroke="#888" stroke-width="1" stroke-dasharray="3 2"/>`; });
+  }
   // A1 stem back-face vertical with hook into footing
-  s+=bar(xsb-cvr,g.tf+g.hstem, xsb-cvr, S.mat.coverF/12,"#c62828");
-  s+=bar(xsb-cvr,S.mat.coverF/12, xsb-cvr-1.0, S.mat.coverF/12,"#c62828");
+  s+=bar(xsb-cvr,g.tf+g.hstem, xsb-cvr, yBot,"#c62828");
+  s+=bar(xsb-cvr,yBot, xsb-cvr-1.0, yBot,"#c62828");
   s+=lbl(xsb+0.25,g.tf+g.hstem*0.55,"A1","#c62828");
   // B1 backwall
   s+=bar(xsb-cvr,Htot-0.15, xsb-cvr, g.tf+g.hstem-1.2,"#1f3a5f");
   s+=lbl(xsb+0.25,g.tf+g.hstem+g.hbw*0.5,"B1","#1f3a5f");
-  // C1 toe bottom
-  s+=bar(cvr,S.mat.coverF/12+0.08, g.Ltoe+g.tsb+1.0, S.mat.coverF/12+0.08,"#1a7f37");
-  s+=lbl(g.Ltoe*0.3,0.55,"C1","#1a7f37");
+  // C1 toe bottom (above the pile heads on a pile-supported footing)
+  s+=bar(cvr,yBot+0.08, g.Ltoe+g.tsb+1.0, yBot+0.08,"#1a7f37");
+  s+=lbl(g.Ltoe*0.3,yBot-S.mat.coverF/12+0.55,"C1","#1a7f37");
   // D1 heel top
   s+=bar(g.Ltoe-1.0,g.tf-S.mat.coverF/12, B-cvr, g.tf-S.mat.coverF/12,"#b8860b");
   s+=lbl(B-g.Lheel*0.5,g.tf+0.35,"D1","#b8860b");
@@ -3646,7 +3709,7 @@ function renderTabVM(R){
     const govSign = (key==="heel") ? -1 : 1;
     const endM=d.M[d.M.length-1];
     const relieving=(!isLS)&&!nearZero&&(Math.abs(endM)>1e-2)&&(endM*govSign<0);
-    const shearNote=(!isLS)?"" : isFooting?" One-way design shear V<sub>u</sub> is taken at d<sub>v</sub> from the face, less than the peak face shear.":"";
+    const shearNote=(!isLS)?"" : isFooting?" One-way design shear V<sub>u</sub> is taken at d<sub>v</sub> from the face, less than the peak face shear."+(key==="toe"&&S.fnd.branch==="pile"?" Pile toe: the diagram shows each pile row as a point load; V<sub>u</sub> spreads each pile over its width and counts only the part beyond d<sub>v</sub> [5.12.8.6.1].":""):"";
     const demandNote=isLS
       ? `Diagram maxima for this combination: |V| = ${fmt(maxV)} kip/ft, |M| = ${fmt(maxM)} kip·ft/ft. Governing design demand (<span class="xlink" data-jump="tab-struct|o-str-${({stem:"Stem",backwall:"Backwall",toe:"Toe",heel:"Heel"})[key]}">Tab 5 ${d.ref}</span>): M<sub>u</sub> = ${fmt(d.peakM)}, V<sub>u</sub> = ${fmt(d.peakV)}.${shearNote}`
       : nearZero
