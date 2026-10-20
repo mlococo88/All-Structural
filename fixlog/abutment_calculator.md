@@ -7729,3 +7729,659 @@ index 92d1cf2..e05d029 100644
 -    if(sav){ S=Object.assign(defaultState(),JSON.parse(sav)); fresh=false; }
 +    if(sav){ S=abutMergeState(JSON.parse(sav)); fresh=false; }
 ```
+
+
+## 2026-10-20 — PR: claude/abut-integral — Abutment type: conventional / integral / semi-integral (input panel I-0a, Tab 10) (PR link added after merge)
+
+**What:** new abutment-type selector (IAB) with the design of integral and semi-integral abutments per owner. Conventional cantilever stays the default and the existing design (Tabs 1–9) is unchanged.
+
+- **Panel I-0a "Abutment Type"** (Geometry input tab, after I-0): conventional / integral / semi-integral, with the inputs of the chosen type (bridge geometry for eligibility, integral cap and diaphragm, movement and earth pressure, piles, bars).
+- **Eligibility and owner rules** on the Owner Requirements card (Tab 1 §1.0a), listed only for the chosen type (rule flag `iab`): MassDOT Part I 3.10.11.1 simplified-method boundary conditions (length 140/200 ft, skew 30°, straight/curvature 5°, grade 5 %, height 15 ft, parallel abutments, U-wings, rock below tip and not scour susceptible), 3.10.10.1 (HP10X57 / HP12X84 Gr 50, webs parallel to the abutment), 3.10.10.3 (spacing 3'-6"–10 ft, a pile per beam line, flange to end 18 in–3 ft, 2 ft embedment), 3.10.11.2 (L ≥ L_f + 5 ft), 3.10.2 / 3.10.8 load rules, 3.10.8 connection bars and fill cover, 3.1.8.3 joint, 3.4.6.1 (semi-integral seismic note); RIDOT 11.3.2 (skew, length, deck to bottom of cap 13 ft, cap depth 3.5–6 ft, grade, straight, girder 6 ft, pile 10 ft, weak axis, 2 ft embedment, p-y design, IM / γTU / at-rest below 0.5 in, pre-augering, joint at ½ in), 11.3.3 (skew, expansion length 175/300 ft, grade, girder depth, full passive, independent wings, both ends semi-integral, spread or multiple pile rows); CTDOT V2 App. CT11.1.1.1 (skew < 30°, length 150/200 ft, span 150 ft, height 12 ft, end heights within 1 ft, Gr 50 H-piles b_f ≥ 10 in weak axis, 10 ft below the stem, 2 ft embedment, U-wings), CT11.1.1.4.2a (stem 3.5 ft wide, 4 ft below grade), CT11.1.1.3 load rules, 11.6.1.3.1CT (semi-integral pinned, lower portion a standard cantilever); AASHTO (owner AASHTO, now also listed): 11.6.1.3 / C11.6.1.3 (no numeric limits), C3.11.1, 10.7.1.2, p-y moment. For an integral abutment the rules of the conventional cantilever (footing, stem, backwall) are not listed; the screening advisories "int"/"semi" are listed only for a conventional abutment.
+- **Thermal movement** (Tab 10 §10.2): Δ = γTU·α·ΔT·L_exp, γTU = 1.00, L_exp = L_tot/2 (or entered), α and ΔT from panel I-6b (owner defaults there), CTDOT integral: 150 °F range −30/+120 °F about the setting temperature (default 50 °F).
+- **Earth pressure from the wall movement** (§10.3), expansion and contraction: MassDOT 3.10.8 K = 0.43 + 5.7[1 − exp(−190 δT/H)]; CTDOT Eq. CT11.1.1.3-1 Rankine K_p (contraction: no soil pressure, CT11.1.1.4.2a); RIDOT 11.3.2 K_0 when Δ_exp < 0.5 in else K_p, 11.3.3 full K_p; AASHTO C3.11.1 / Table C3.11.1-1: K = K_0 + (K_p − K_0)·min(1, (Δ/H)/(Δ/H)_p); contraction (all but CTDOT integral) K = K_0 − (K_0 − K_a)·min(1, (Δ/H)/(Δ/H)_a). K_p Rankine unless entered. H = deck surface to bottom of cap (integral) or of the end diaphragm (semi-integral, = h_bw).
+- **Integral piles** (§10.4): gravity per pile at Strength I (DL equally; LL equally without IM for MassDOT, LL+IM with the rigid-cap eccentricity otherwise). MassDOT simplified method: P_u from Tables 3.10.11-2/-3 by soil type, interpolated on skew; L_f, L_e. CTDOT closed form CT11.1.1.3-2 and CT11.1.1.4.2c-2 to -9: Δ_L, M_T, F_T (fixed or pinned head), θ_W, M_W, R_T; P_u = P_g + R_T, M_u = min(M_p, M_T + M_W); AASHTO 6.9.2.2.1 interaction with φc = 0.70, φf = 1.00 (6.5.4.2), P_n = F_y·A_s (fully braced), M_n,y = min(F_yZ_y, 1.6F_yS_y) with the 6.12.2.2.1c FLB check. RIDOT / AASHTO: the same interaction with the pile-head moment entered from a p-y analysis (Pile Designer, integral mode); not complete until entered.
+- **Cap and wall** (§10.5): case 1 cap a continuous beam on the piles for all vertical loads, M_u = 0.8·w_u·s²/8, V_u = w_u·s/2 (MassDOT 3.10.8, CTDOT CT11.1.1.4.2a); case 2 whole wall a horizontal beam on the girders under the expansion pressure at its base, same 0.8 rule, largest girder spacing; rear face of the cap a cantilever from the seat under the expansion pressure (CTDOT design case 1). Semi-integral: the end diaphragm (backwall inputs) as case 2; its force to the superstructure reported. Section checks: the abutment's sectionCheck (general shear procedure, no stirrups).
+- **Stability basis** (§10.6): integral — no sliding / eccentricity / bearing check (restrained by the superstructure strut, single row of piles); checked instead: piles, pile length, cap and wall. Semi-integral — lower abutment = conventional Tabs 3–5 (pinned connection, bearing shear).
+- **Dashboard:** integral keeps only the wing checks of the conventional list and adds iabPile, iabTip (MassDOT), iabC1/C2/C3 (F, V, Min); semi-integral drops the four bw* backwall checks and adds iabD (F, V, Min). Tabs 2–8 carry a note for an integral abutment; Tab 5 a note for semi-integral. Report: Tab 10 section, IAB references, input echo; for an integral abutment the conventional sections (Tabs 2–6, 8, 3D) are left out and the key results are the integral ones.
+- **Graphics:** integral section (diaphragm, cap, girder, pile with embedment, MassDOT crushed-stone trench, approach slab, pressure triangle, dimensions) and semi-integral section (stem, footing, bearing, moving end diaphragm and joint), SVG in Tab 10 §10.0.
+
+**Saved data (CLAUDE.md §5):** new object `S.iab` (type, b, hc, hd, dg, grade, curve, dH, Dfront, straight, parallel, rockBelow, noScour, bothEnds, Lexp, Tset, epsSH, bfType, KpUser, gEH, qApp, sec, Fy, n, sp, orient, embed, Lpile, soilMD, head, LE, EG, IG, MuPy, capBar, capSp, hBar, hSp, vBar, vSp). `type` defaults to "conv" for new projects and for saved projects without it (`migrate()` creates it; missing fields take defaults). No existing key or format changed. With type "conv" the Input ID is unchanged (`fpS.iab` dropped from the fingerprint).
+
+**Result change (CLAUDE.md §4):** none for a conventional abutment (verified, below). New calculations only for integral / semi-integral.
+
+**Where:** `iabDefault`, `IAB_MD`, `IAB_PUB`, `iabSect`, `IAB_BF`, `iabType` (Section A, after `wingDefault`); `defaultState` key `iab`; owner rules `OWN_LK_IAB` … `ABUT_OWN.rules.push(` (before `abutOwnChecks`) and the filter in `abutOwnChecks` (anchor `const it=iabType();`); `ownerPanelHTML` (AASHTO card with rows); `VALID` entries `iab.*`; `ABUT_IN_SEC` `'in-iab'`; `buildInputs` panel `I-0a Abutment type`; `computeIAB` (Section C, after `computeWing`); `computeAll` anchor `C-11e Integral / semi-integral`, dashboard block `if(R.iab){` before `R.dash=dash;`, fingerprint `if(fpS.iab&&`; `migrate` anchor `IAB (2026-10-20): a project saved before`; `renderTabIAB`, `svgIabSection`, `DASH_ANCHOR` (iab*); `TABS`, `ABUT_TABNAME`, `TAB_RENDER`, `renderTabContent` (notes); change handler string paths; `inputEchoHTML`, `IAB_REFS`, `buildReport` (key results, secNames, SKIP, 3D, result-block regex).
+
+**Check case 1 — MassDOT integral (built-in project: L_ab = 44 ft, 6 girders @ 8 ft, DC/DW/LL+IM = 85/12/70 kip per girder; φ = 32°, γ = 0.120 kcf; owner MassDOT, steel, L_tot = 120 ft, skew 0; b = 3.5, h_c = 4, h_d = 5 ft; 6 HP12X84 @ 8 ft, soil type 3, pile 30 ft):**
+δT = 6.5×10⁻⁶ (70)(60×12) = 0.3276 in; δT/H = 0.3276/108 = 0.003033; K = 0.43 + 5.7[1 − e^(−0.5763)] = 2.927; P_exp = ½(2.927)(0.120)(9)² = 14.22 kip/ft.
+Pile: DC = 510 + 0.150(3.5)(9)(44) = 717.9 kip; P_DL = (1.25·717.9 + 1.50·72)/6 = 167.56 kip; LL without IM = 420/1.33 = 315.8 kip → P_LL = 1.75(315.8)/6 = 92.11 kip; P_g = 259.67 kip vs Table 3.10.11-3 (dense dry sand, 0°) 561 kip → D/C 0.463; L_f + 5 = 27 ft vs 30 ft → 0.90.
+Case 2: p = 2.927(0.120)(9) = 3.161 ksf; w_u = 1.35(3.161) = 4.267 kip/ft; M_u = 0.8(4.267)(8)²/8 = 27.31 kip-ft/ft. Rear face: M = (2.927·0.120)[(9³ − 5³)/3 − 5(9² − 5²)/2] = 21.54 kip-ft/ft.
+(Before: no integral design existed.) Tool values identical.
+
+**Check case 2 — CTDOT integral (same project; owner CTDOT: φ = 35°, γ = 0.125, α = 6.4×10⁻⁶; T_set = 50 °F; fixed head, L_E = 10 ft, E_G = 29,000 ksi, I_G = 60,000 in⁴):**
+K_p = tan²(62.5°) = 3.690; Δ_L = 0.6(6.4×10⁻⁶·80 + 500×10⁻⁶)(1440/2) = 0.4372 in; EI = 29,000(213) = 6.177×10⁶ kip-in²; M_T = min(2660, 6EIΔ/L_E²) = 1125 kip-in; F_T = 12EIΔ/L_E³ = 18.75 kip; P_g = 167.56 + 1.75(420)/6 = 290.06 kip; W = 2(6)(290.06)/6 = 580.1 kip; θ_W = 580.1(960)²/(24·29,000·60,000) = 0.01280 rad; M_W = 4EIθ/L_E = 2636 kip-in; P_P = 1.35(½·3.690·0.125·9²·44)/6 = 184.95 kip; R_T = (184.95·72 + 18.75·108 + 1125)/960 = 17.15 kip; P_u = 307.22 kip, M_u = min(2660, 3761) = 2660 kip-in; P_r = 0.70(50)(24.6) = 861 kip; 307.22/861 + (8/9)(2660/2660) = 1.246 → FAIL (the end-rotation moment of the soft default I_G governs; input-driven). Tool values identical.
+
+**Check case 3 — AASHTO semi-integral (built-in project, steel, L_exp = span/2 = 40 ft, ΔT_rise 52 °F, h_bw = 5 ft, dense sand):** Δ = 6.5×10⁻⁶(52)(480) = 0.1622 in; Δ/H = 0.002704; K = 0.470 + (3.255 − 0.470)(0.2704) = 1.223; p = 1.223(0.120)(5) = 0.734 ksf; M_u = 0.8(1.35·0.734)(8)²/8 = 6.34 kip-ft/ft; #6 @ 9, t_bw = 18 in: φM_n = 40.11 → D/C 0.158. Tool values identical.
+
+**How verified:** `node tests/check-syntax.mjs abutment_calculator.html` (all scripts pass). Headless (Playwright, tests/lib.mjs), origin/main vs branch, conventional type: built-in project, MassDOT, RIDOT on piles with ADT, CTDOT with Extreme Event I, AASHTO on piles with 20° skew, and an old save without `iab` and `wing` — Input ID, the whole computeAll() result (every value except the new `R.iab`), the warnings and the rendered text of Tabs 1–5, 8 and 9 identical (self-test time stamp masked). Integral (MassDOT, CTDOT, RIDOT with p-y moment, AASHTO) and semi-integral (RIDOT, AASHTO, MassDOT) run without page errors; every TeX line of Tab 10 and Tab 1 rendered with KaTeX (no errors); the report builds for all types. Check cases 1–3 reproduced in Python from the formulas above.
+
+**Other copies:** none (Pile Designer.html holds the same MassDOT table data; not edited, no hand-off added).
+
+**Open items (engineer decision):**
+1. γ_EH on the movement-induced (toward-passive) pressure: Table 3.4.1-2 has no passive row; default 1.35 (the at-rest maximum), editable.
+2. AASHTO owner: K between K_0 and K_p (expansion) and between K_0 and K_a (contraction) interpolated linearly in Δ/H against Table C3.11.1-1 — AASHTO gives the end points only.
+3. CTDOT: setting temperature for the 150 °F integral range (default 50 °F, the BRSDM median for bearings and joints); R_DL+LL in θ_W taken factored (as RIDOT 11.3.2); M_T and M_W added; passive force per pile factored by γ_EH; Δ_L from the fall (the "negative differential").
+4. Semi-integral end diaphragm: MassDOT 3.10.8 K and CTDOT K_p (both written for integral abutments) applied to it.
+5. Semi-integral lower stem keeps the full-height earth pressure of Tab 1 §1.3 (conservative: the diaphragm's soil goes to the superstructure).
+6. γTU = 1.00 on the movement for AASHTO (MassDOT and RIDOT state 1.00 for integral abutments).
+7. Cap shear (case 1) without stirrups (general procedure): the built-in project fails case 1 shear (D/C 1.70); stirrup shear V_s is not modelled.
+8. MassDOT pile end distance and all spacings measured along the abutment as entered (the manual measures along the skew).
+
+**Diff (exact before/after, `git diff -U0`):**
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index e05d029..92d9a35 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -604,0 +605,29 @@ function wingDefault(on){
++/* IAB (2026-10-20): abutment type — "conv" (conventional cantilever: the tool as before, the default for new and saved projects),
++   "integral" or "semi" (semi-integral). The calculation is computeIAB (Section C), Tab 10, panel I-0a. */
++function iabDefault(){
++  return {type:"conv",
++    b:3.5, hc:4.0, hd:5.0,                 // integral: cap / wall width, cap depth below the seat, end-diaphragm height above the seat (ft); deck surface to bottom of cap = hd + hc
++    dg:4.0, grade:2.0, curve:0.0, dH:0.0,  // girder depth (ft); grade between abutments (%); horizontal curvature, subtended angle (deg); height difference between the two abutments (ft)
++    Dfront:4.0,                            // bottom of the cap below the finished grade at the front face (ft)
++    straight:true, parallel:true, rockBelow:true, noScour:true, bothEnds:true,   // straight girders / alignment; parallel abutments and piers; top of rock below the pile tip; not scour susceptible; both ends semi-integral
++    Lexp:0, Tset:50, epsSH:0.0005,         // expansion length to this abutment (ft, 0 = half the total length); CTDOT integral setting temperature (°F); CTDOT shrinkage strain
++    bfType:"dense", KpUser:0, gEH:1.35, qApp:0,   // backfill for Table C3.11.1-1; K_p entered (0 = Rankine); γEH on the movement-induced pressure; approach-slab dead load on the abutment (kip/ft)
++    sec:"HP12X84", Fy:50, n:6, sp:8.0, orient:"weak", embed:24, Lpile:30,     // piles: section, F_y (ksi), number (single row), spacing (ft), "weak" (web parallel to the abutment CL) | "strong", embedment into the cap (in), length below the cap (ft)
++    soilMD:3, head:"fixed", LE:10.0, EG:29000, IG:60000, MuPy:0,              // MassDOT soil type (Table 3.10.11-1); CTDOT head condition, equivalent cantilever L_E (ft), girder E (ksi) and composite I (in^4); pile-head moment from a p-y analysis (kip-ft, 0 = not entered)
++    capBar:"8", capSp:9.0, hBar:"6", hSp:9.0, vBar:"6", vSp:9.0};            // cap longitudinal bars (across the width); horizontal wall / diaphragm bars (per ft of height, each face); vertical rear-face bars
++}
++// MassDOT Bridge Manual Part I Tables 3.10.11-2 (HP10X57) and 3.10.11-3 (HP12X84): factored axial load per pile P_u (kip) at skew 0/10/20/30°
++// and depth to fixity L_f (ft); Table 3.10.11-4: equivalent length L_e (ft); soil types of Table 3.10.11-1 (same data as Pile Designer.html)
++const IAB_MD={soils:["Dry loose sand","Wet loose sand","Dry dense sand","Wet dense sand","Wet stiff clay","Wet soft clay"],
++  HP10X57:{Pu:[[420,378,342,312],[429,390,356,330],[367,295,242,203],[378,312,263,226],[380,296,248,214],[471,428,403,385]], Lf:[26,28,19,20,16,26], Le:[8.3,8.5,7.3,7.5,7.5,10]},
++  HP12X84:{Pu:[[641,586,538,500],[654,603,560,525],[561,461,389,336],[580,488,423,374],[583,468,405,361],[713,657,625,603]], Lf:[31,32,22,23,18,30], Le:[9.5,9.8,8.3,8.5,8.5,11.5]}};
++// published AISC properties of the two MassDOT sections (as in Pile Designer.html); other HP shapes from flange and web rectangles (fillets neglected)
++const IAB_PUB={HP10X57:{Ix:294,Sx:58.8,Zx:66.5,Iy:101,Sy:19.7,Zy:30.3}, HP12X84:{Ix:650,Sx:106,Zx:120,Iy:213,Sy:34.6,Zy:53.2}};
++function iabSect(k){ const h=HP_SHAPES[k]||HP_SHAPES.HP12X84, [A,d,bf,tf,tw]=h, hw=d-2*tf, P=IAB_PUB[k];
++  if(P) return Object.assign({k,A,d,bf,tf,tw,pub:true},P);
++  const Ix=bf*d**3/12-(bf-tw)*hw**3/12, Iy=2*tf*bf**3/12+hw*tw**3/12, Zx=bf*tf*(d-tf)+tw*hw*hw/4, Zy=tf*bf*bf/2+hw*tw*tw/4;
++  return {k,A,d,bf,tf,tw,pub:false,Ix,Sx:Ix/(d/2),Zx,Iy,Sy:Iy/(bf/2),Zy}; }
++// AASHTO LRFD Table C3.11.1-1: Δ/H to reach active (a) and passive (p) pressure
++const IAB_BF={dense:{l:"Dense sand",a:0.001,p:0.01}, medium:{l:"Medium dense sand",a:0.002,p:0.02}, loose:{l:"Loose sand",a:0.004,p:0.04},
++  silt:{l:"Compacted silt",a:0.002,p:0.02}, lean:{l:"Compacted lean clay",a:0.010,p:0.05}, fat:{l:"Compacted fat clay",a:0.010,p:0.05}};
++const iabType=()=>{ const t=S.iab&&S.iab.type; return t==="integral"||t==="semi"?t:"conv"; };
+@@ -700,0 +730 @@ function defaultState(){
++    iab:iabDefault(),               // IAB (2026-10-20): abutment type, panel I-0a (conventional by default; a saved project without it opens as conventional)
+@@ -960,0 +991,115 @@ ABUT_OWN.rules.push(
++/* IAB (2026-10-20): integral / semi-integral eligibility and design rules per owner (listed only while that abutment type is chosen,
++   panel I-0a). r.iab = "integral" | "semi" | "any" (either). AASHTO rules (owner "AASHTO") are listed too: AASHTO LRFD sets no numeric
++   eligibility limits. Values worked in Tab 10. */
++const OWN_LK_IAB={elig:["tab-iab","o-iab-basis","§10.0 abutment type"], mv:["tab-iab","o-iab-move","§10.2 thermal movement"], ep:["tab-iab","o-iab-ep","§10.3 earth pressure"],
++  pile:["tab-iab","o-iab-pile","§10.4 integral piles"], cap:["tab-iab","o-iab-cap","§10.5 cap and wall"], stab:["tab-iab","o-iab-stab","§10.6 stability basis"], wing:["tab-wing","o-wing-basis","§9.0 wingwalls"]};
++const iabQ=C=>C.R.iab||{};
++function iabLim(v,lo,hi,lbl,u,lk,strict){ const okHi=hi==null||(strict?v<hi-1e-9:ownLE(v,hi)), okLo=lo==null||ownGE(v,lo), dp=u==="°"?1:2;
++  return {st:okHi&&okLo?"pass":"fail", val:`${lbl} = ${fmt(v,dp)}${u?" "+u:""}`, lim:(lo!=null&&hi!=null?`${fmt(lo,2)} to ${fmt(hi,2)}`:lo!=null?`≥ ${fmt(lo,2)}`:`${strict?"<":"≤"} ${fmt(hi,dp===1?0:2)}`)+(u?" "+u:""), link:lk||OWN_LK_IAB.elig}; }
++const iabYes=(ok,yes,no,lim,lk)=>({st:ok?"pass":"fail", val:ok?yes:no, lim, link:lk||OWN_LK_IAB.elig});
++function iabUwing(){ const w=S.wing; if(!w||!w.on) return {st:"warn", val:"wingwalls not designed (panel I-13)", lim:"U-wingwalls", link:OWN_LK_IAB.wing};
++  return {st:(w.type!=="indep"&&w.orient!=="inline")?"pass":"fail", val:(w.type==="indep"?"independent wing":(w.orient==="inline"?"attached in-line wing":"attached U-wing"))+`, L = ${fmt(+w.L,2)} ft`, lim:"attached U-wingwalls", link:OWN_LK_IAB.wing}; }
++const iabLen=(C,Ls,Lc)=>iabLim(C.Ltot,null,C.mat==="concrete"?Lc:Ls,`total length (${C.mat})`,"ft");
++const iabSkewR=(C,lim,strict)=>iabLim(+C.g.skew||0,null,lim,"skew","°",null,strict);
++const iabHt=(C,lim)=>{ const Q=iabQ(C); return Object.assign(iabLim(Q.H,null,lim,"h<sub>d</sub> + h<sub>c</sub> (deck to bottom of cap)","ft"),{tex:`H = h_d + h_c = ${ownF(+S.iab.hd)} + ${ownF(+S.iab.hc)} = ${ownF(Q.H)}\\ \\text{ft}`}); };
++const iabEmb=(C,min,lk)=>iabLim(+S.iab.embed,min,null,"pile embedment into the cap","in",lk||OWN_LK_IAB.pile);
++const iabWeak=()=>iabYes(S.iab.orient!=="strong","weak axis: web parallel to the abutment CL (panel I-0a)","strong axis selected","weak-axis bending under the longitudinal movement",OWN_LK_IAB.pile);
++const iabJoint=(C,lim,txt)=>{ const Q=iabQ(C); return {st:Q.dExp<=lim+1e-9?"pass":"warn", val:`Δ<sub>exp</sub> = ${fmt(Q.dExp,3)} in, Δ<sub>con</sub> = ${fmt(Q.dCon,3)} in`, lim:txt, link:OWN_LK_IAB.mv}; };
++const iabNote=(val,lk)=>({st:"note", val, lim:"—", link:lk||OWN_LK_IAB.elig});
++ABUT_OWN.rules.push(
++  /* ---- MassDOT Part I 3.10 (integral) ---- */
++  {owner:"MassDOT", iab:"integral", id:"iab.len", kind:"shall-check", sec:"3.10.11.1 (p. 3-91)", text:"Simplified pile design method only if the total length is at most 140 ft (steel) or 200 ft (concrete); otherwise the 3D space frame method (3.10.11.5)", ev:C=>iabLen(C,140,200)},
++  {owner:"MassDOT", iab:"integral", id:"iab.skew", kind:"shall-check", sec:"3.10.11.1 (p. 3-91)", text:"Simplified method: skew at most 30°", ev:C=>iabSkewR(C,30)},
++  {owner:"MassDOT", iab:"integral", id:"iab.str", kind:"shall-check", sec:"3.10.11.1 (p. 3-91)", text:"Simplified method: straight bridge, or curved with straight parallel beams; subtended curvature at most 5°", ev:C=>{ const r=iabLim(+S.iab.curve,null,5,"curvature","°"); if(!S.iab.straight){ r.st="fail"; r.val+="; beams not straight / parallel"; } return r; }},
++  {owner:"MassDOT", iab:"integral", id:"iab.grade", kind:"shall-check", sec:"3.10.11.1 (p. 3-91)", text:"Simplified method: profile-grade elevation difference between the abutments at most 5 % of the bridge length", ev:C=>iabLim(+S.iab.grade,null,5,"elevation difference / length","%")},
++  {owner:"MassDOT", iab:"integral", id:"iab.ht", kind:"shall-check", sec:"3.10.11.1 (p. 3-91)", text:"Simplified method: abutment height from the deck surface to the bottom of the cap at most 15 ft", ev:C=>iabHt(C,15)},
++  {owner:"MassDOT", iab:"integral", id:"iab.par", kind:"shall-check", sec:"3.10.11.1 (p. 3-91)", text:"Simplified method: parallel abutments and piers", ev:C=>iabYes(S.iab.parallel,"parallel (panel I-0a)","not parallel","parallel")},
++  {owner:"MassDOT", iab:"integral", id:"iab.uw", kind:"shall-check", sec:"3.10.11.1 (p. 3-91); 3.10.9 (p. 3-90)", text:"Simplified method: parallel (U) integral wingwalls", ev:C=>iabUwing()},
++  {owner:"MassDOT", iab:"integral", id:"iab.rock", kind:"shall-check", sec:"3.10.11.1 (p. 3-92); 3.10.11.2 (p. 3-92)", text:"Simplified method: top of bedrock below the pile tip; not scour susceptible (rock above the fixity point: site unsuitable for pile-supported integral abutments)", ev:C=>iabYes(S.iab.rockBelow&&S.iab.noScour,"rock below the tip, not scour susceptible (panel I-0a)",(!S.iab.rockBelow?"rock above the tip":"")+(!S.iab.rockBelow&&!S.iab.noScour?"; ":"")+(!S.iab.noScour?"scour susceptible":""),"both")},
++  {owner:"MassDOT", iab:"integral", id:"iab.sec", kind:"shall-check", sec:"3.10.10.1 (pp. 3-90, 3-91)", text:"Single row of vertical H-piles, HP10X57 or HP12X84 only, Grade 50, webs parallel to the abutment centerline regardless of skew",
++    ev:C=>{ const ok=(S.iab.sec==="HP10X57"||S.iab.sec==="HP12X84")&&Math.abs(+S.iab.Fy-50)<1e-9&&S.iab.orient!=="strong";
++      return {st:ok?"pass":"fail", val:`${S.iab.sec}, F<sub>y</sub> = ${fmt(+S.iab.Fy,0)} ksi, ${S.iab.orient!=="strong"?"web parallel to the abutment CL":"web normal to the abutment CL"}`, lim:"HP10X57 / HP12X84, Gr 50, web parallel", link:OWN_LK_IAB.pile}; }},
++  {owner:"MassDOT", iab:"integral", id:"iab.sp", kind:"shall-check", sec:"3.10.10.3 (p. 3-91)", text:"Pile spacing 3'-6\" to 10 ft; at least one pile per beam line; pile flange to the end of the abutment 18 in to 3 ft along the skew; piles embedded 2 ft into the cap",
++    ev:C=>{ const P=iabQ(C).pile||{}, n=+S.iab.n, N=+S.beams.N, okS=ownGE(+S.iab.sp,3.5)&&ownLE(+S.iab.sp,10), okN=n>=N, okE=ownGE(P.endIn,18)&&ownLE(P.endIn,36), okB=ownGE(+S.iab.embed,24);
++      return {st:okS&&okN&&okE&&okB?"pass":"fail", val:`s = ${fmt(+S.iab.sp,2)} ft; n = ${n} piles for ${N} beams; end distance ${fmt(P.endIn,1)} in; embedment ${fmt(+S.iab.embed,1)} in`, lim:"3.5 ft ≤ s ≤ 10 ft; n ≥ beams; 18 in ≤ end ≤ 36 in; 24 in", link:OWN_LK_IAB.pile}; }},
++  {owner:"MassDOT", iab:"integral", id:"iab.tip", kind:"shall-check", sec:"3.10.11.2 (p. 3-92)", text:"Pile length at least the depth to fixity L_f (Tables 3.10.11-2/-3) plus 5 ft, and the length for the factored geotechnical resistance",
++    ev:C=>{ const M=(iabQ(C).pile||{}).md; if(!M||!M.ok) return {st:"na", val:"section not in the MassDOT tables", lim:"—"}; return Object.assign(iabLim(+S.iab.Lpile,M.Lf+5,null,"pile length below the cap","ft",OWN_LK_IAB.pile),{lim:`≥ L<sub>f</sub> + 5 = ${fmt(M.Lf+5,0)} ft (and the geotechnical length)`}); }},
++  {owner:"MassDOT", iab:"integral", id:"iab.load", kind:"load", sec:"3.10.2.1–3.10.2.6 (pp. 3-86, 3-87)", text:"Dead and live load distributed equally to all piles; dynamic load allowance for the cap, not for the piles; no braking force; γTU = 1.0",
++    ev:C=>({st:"pass", val:"applied in §10.4 / §10.5 (piles: LL+IM ÷ 1.33)", lim:"—", link:OWN_LK_IAB.pile})},
++  {owner:"MassDOT", iab:"any", id:"iab.K", kind:"load", sec:"3.10.8, Fig. 3.10.8-1 (p. 3-89)", text:"Backfill pressure coefficient from the relative wall displacement δT/H (compacted gravel borrow): K = 0.43 + 5.7[1 − exp(−190 δT/H)]",
++    ev:C=>{ const Q=iabQ(C); return {st:"pass", val:`δ<sub>T</sub>/H = ${fmt(Q.rE,5)} → K = ${fmt(Q.Kexp,3)}${Q.type==="semi"?" (applied to the moving end diaphragm: tool choice)":""}`, lim:"—", link:OWN_LK_IAB.ep}; }},
++  {owner:"MassDOT", iab:"integral", id:"iab.cap", kind:"load", sec:"3.10.8 (p. 3-88)", text:"Cap: continuous beam on the piles for all vertical loads (80 % of the simple-span moment, simple-span shear); whole wall a horizontal beam on the girders for the earth pressure",
++    ev:C=>({st:"pass", val:"cases 1 and 2 in §10.5", lim:"—", link:OWN_LK_IAB.cap})},
++  {owner:"MassDOT", iab:"integral", id:"iab.conn", kind:"advisory", sec:"3.10.8 (p. 3-89)", text:"Connection bars #6 @ 9 in for girders up to 8 ft deep; deeper girders: designed",
++    ev:C=>({st:ownLE(+S.iab.dg,8)?"pass":"warn", val:`girder depth ${fmt(+S.iab.dg,2)} ft`, lim:"≤ 8 ft for the standard bars", link:OWN_LK_IAB.elig})},
++  {owner:"MassDOT", iab:"integral", id:"iab.cover", kind:"should-warning", sec:"3.10.8 (p. 3-88)", text:"Abutment kept short; at least 3 ft for inspection access; at least 3 ft of fill over the bottom of the abutment desirable; equal abutment heights recommended",
++    ev:C=>({st:ownGE(+S.iab.Dfront,3)&&ownLE(+S.iab.dH,0)?"pass":"warn", val:`fill over the bottom of the cap ${fmt(+S.iab.Dfront,2)} ft; height difference ${fmt(+S.iab.dH,2)} ft`, lim:"≥ 3 ft; equal heights", link:OWN_LK_IAB.elig})},
++  {owner:"MassDOT", iab:"integral", id:"iab.misc", kind:"note", sec:"3.10.3, 3.10.4, 3.10.10.4 (pp. 3-87, 3-91)", text:"Permitted superstructure types; approach slab required, sliding at the abutment; 3-ft deep, 2'-6\" wide crushed-stone trench below the cap",
++    ev:C=>iabNote("not modelled; detail per Part II Ch. 15")},
++  {owner:"MassDOT", iab:"any", id:"iab.joint", kind:"advisory", sec:"3.1.8.3 (p. 3-7)", text:"Sawcut joint for a one-way thermal movement up to ¾ in; otherwise a joint chosen for the movement",
++    ev:C=>iabJoint(C,0.75,"≤ 0.75 in for a sawcut joint")},
++  {owner:"MassDOT", iab:"semi", id:"iab.seis", kind:"note", sec:"3.4.6.1 (p. 3-39); 3.4.4.8", text:"Semi-integral (end diaphragm over the back of the abutment), any SDC: overturning checked for 100 % of the M–O active force with the superstructure giving vertical reaction only; end diaphragm designed for at most 70 % of the seismic passive pressure",
++    ev:C=>iabNote(S.seismic.on?`Extreme Event I on (panel I-11): k<sub>h</sub> ratio ${fmt(+S.seismic.khR,2)}, superstructure share ${fmt(+S.seismic.shEQ,0)} % — set 1.00 and 0 % for this check`:"Extreme Event I off (panel I-11)",["tab-stab","o-seis","§3.6 connection force"])},
++  /* ---- RIDOT BDM 11.3.2 (integral), 11.3.3 (semi-integral) ---- */
++  {owner:"RIDOT", iab:"integral", id:"iab.lim", kind:"shall-check", sec:"11.3.2 (p. 11-4)", text:"Integral limits: skew at most 30°; total length 150 ft (steel) / 200 ft (concrete)",
++    ev:C=>{ const a=iabSkewR(C,30), b=iabLen(C,150,200); return {st:a.st==="pass"&&b.st==="pass"?"pass":"fail", val:a.val+"; "+b.val, lim:"skew ≤ 30°; "+b.lim}; }},
++  {owner:"RIDOT", iab:"integral", id:"iab.ht", kind:"shall-check", sec:"11.3.2 (p. 11-4)", text:"Top of deck to bottom of pile cap at most 13 ft; pile cap depth 3.5 ft to 6 ft",
++    ev:C=>{ const a=iabHt(C,13), b=iabLim(+S.iab.hc,3.5,6,"cap depth h<sub>c</sub>","ft"); return {st:a.st==="pass"&&b.st==="pass"?"pass":"fail", val:a.val+"; "+b.val, lim:"≤ 13 ft; 3.5 to 6 ft", tex:a.tex, link:OWN_LK_IAB.elig}; }},
++  {owner:"RIDOT", iab:"integral", id:"iab.geo", kind:"shall-check", sec:"11.3.2 (p. 11-4)", text:"Grade between abutments at most 5 %; straight alignment; girder depth at most 6 ft; minimum pile length 10 ft",
++    ev:C=>{ const ok=ownLE(+S.iab.grade,5)&&S.iab.straight&&ownLE(+S.iab.dg,6)&&ownGE(+S.iab.Lpile,10);
++      return {st:ok?"pass":"fail", val:`grade ${fmt(+S.iab.grade,2)} %; ${S.iab.straight?"straight":"curved"}; girder ${fmt(+S.iab.dg,2)} ft; pile ${fmt(+S.iab.Lpile,1)} ft`, lim:"≤ 5 %; straight; ≤ 6 ft; ≥ 10 ft"}; }},
++  {owner:"RIDOT", iab:"integral", id:"iab.pile", kind:"shall-check", sec:"11.3.2 (p. 11-5)", text:"Single row of H-piles, weak axis normal to the bridge axis regardless of skew; embedded at least 2 ft into the cap (or as needed to develop M_p); rigid connection, anchored against uplift",
++    ev:C=>{ const a=iabWeak(), b=iabEmb(C,24); return {st:a.st==="pass"&&b.st==="pass"?"pass":"fail", val:a.val+"; "+b.val, lim:"weak axis; ≥ 24 in", link:OWN_LK_IAB.pile}; }},
++  {owner:"RIDOT", iab:"integral", id:"iab.ly", kind:"shall-check", sec:"11.3.2 (pp. 11-5, 11-6)", text:"Pile design by an iterative lateral analysis (L-Pile or similar) under the factored thermal movement and the pile-head moment matching the superstructure rotation; elastic or inelastic interaction",
++    ev:C=>({st:+S.iab.MuPy>0?"pass":"warn", val:+S.iab.MuPy>0?`M<sub>u</sub> = ${fmt(+S.iab.MuPy,1)} kip-ft entered (panel I-0a)`:"pile-head moment not entered: interaction not complete (Pile Designer, integral mode, for the p-y analysis)", lim:"p-y analysis", link:OWN_LK_IAB.pile})},
++  {owner:"RIDOT", iab:"integral", id:"iab.load", kind:"load", sec:"11.3.2 (pp. 11-5, 11-6); 3.2.1.3 (p. 3-2)", text:"IM included in the abutment and the top 4 ft of the piles; γTU = 1.00 for integral abutments; at-rest pressure in place of passive where the factored expansion movement is less than 0.5 in",
++    ev:C=>{ const Q=iabQ(C); return {st:"pass", val:`Δ<sub>exp</sub> = ${fmt(Q.dExp,3)} in → ${Q.kM==="ridot0"?"at-rest K<sub>0</sub>":"passive K<sub>p</sub>"} = ${fmt(Q.Kexp,3)}`, lim:"< 0.5 in: K<sub>0</sub>", link:OWN_LK_IAB.ep}; }},
++  {owner:"RIDOT", iab:"integral", id:"iab.aug", kind:"note", sec:"11.3.2 (p. 11-5)", text:"Piles in pre-augered holes 10 ft deep, filled with pea stone, diameter the larger of 2 ft and the pile diagonal + 10 in (not required for spans under 35 ft)",
++    ev:C=>{ const P=iabQ(C).pile||{}; return iabNote(+C.g.spanL<35?`span ${fmt(+C.g.spanL,1)} ft < 35 ft: not required`:`hole ≥ max(24, ${fmt(P.diag,1)} + 10) = ${fmt(Math.max(24,(P.diag||0)+10),1)} in`,OWN_LK_IAB.pile); }},
++  {owner:"RIDOT", iab:"integral", id:"iab.misc", kind:"note", sec:"11.3.2 (pp. 11-5 to 11-7)", text:"Equal movements at both abutments; no net uplift at any limit state; approach slab detailed to slide; deck end and diaphragm poured last; superstructure designed for the backwall compression",
++    ev:C=>iabNote(`backwall force to the superstructure ${fmt(iabQ(C).PexpT,1)} kip (unfactored, §10.3)`,OWN_LK_IAB.ep)},
++  {owner:"RIDOT", iab:"any", id:"iab.joint", kind:"advisory", sec:"11.3.2, 11.3.3 (pp. 11-7, 11-8)", text:"Movement over ½ in: expansion joint at the sleeper slab; ½ in or less: saw-and-seal detail",
++    ev:C=>iabJoint(C,0.5,"≤ 0.5 in for saw-and-seal")},
++  {owner:"RIDOT", iab:"semi", id:"iab.lim", kind:"shall-check", sec:"11.3.3 (p. 11-8)", text:"Semi-integral limits: skew at most 30°; expansion length 175 ft (steel) / 300 ft (concrete); grade at most 5 %; girder depth at most 6 ft",
++    ev:C=>{ const Q=iabQ(C), Lm=C.mat==="concrete"?300:175, ok=ownLE(+C.g.skew||0,30)&&ownLE(Q.Lexp,Lm)&&ownLE(+S.iab.grade,5)&&ownLE(+S.iab.dg,6);
++      return {st:ok?"pass":"fail", val:`skew ${fmt(+C.g.skew||0,1)}°; L<sub>exp</sub> ${fmt(Q.Lexp,1)} ft; grade ${fmt(+S.iab.grade,2)} %; girder ${fmt(+S.iab.dg,2)} ft`, lim:`≤ 30°; ≤ ${Lm} ft; ≤ 5 %; ≤ 6 ft`, link:OWN_LK_IAB.mv}; }},
++  {owner:"RIDOT", iab:"semi", id:"iab.Kp", kind:"load", sec:"11.3.3 (p. 11-8)", text:"Backwall (end diaphragm) designed for full passive pressure",
++    ev:C=>({st:"pass", val:`K<sub>p</sub> = ${fmt(iabQ(C).Kexp,3)} (§10.3)`, lim:"full passive", link:OWN_LK_IAB.ep})},
++  {owner:"RIDOT", iab:"semi", id:"iab.wing", kind:"shall-check", sec:"11.3.3 (p. 11-8)", text:"Wingwalls independent of the backwall, to allow its movement",
++    ev:C=>{ const w=S.wing; if(!w||!w.on) return {st:"warn", val:"wingwalls not designed (panel I-13)", lim:"independent", link:OWN_LK_IAB.wing}; return {st:w.type==="indep"?"pass":"fail", val:w.type==="indep"?"independent wing":"attached wing", lim:"independent", link:OWN_LK_IAB.wing}; }},
++  {owner:"RIDOT", iab:"semi", id:"iab.ends", kind:"shall-check", sec:"11.3.3 (p. 11-8)", text:"Not opposite a conventional abutment: the other end also semi-integral",
++    ev:C=>iabYes(S.iab.bothEnds,"both ends semi-integral (panel I-0a)","other end not semi-integral","both ends")},
++  {owner:"RIDOT", iab:"semi", id:"iab.fdn", kind:"shall-check", sec:"11.3.3 (p. 11-8)", text:"Supported on spread footings or multiple rows of piles",
++    ev:C=>({st:!C.pile||C.rows>=2?"pass":"fail", val:C.pile?`${C.rows} row${C.rows===1?"":"s"} of piles`:"spread footing", lim:"spread or ≥ 2 pile rows", link:OWN_LK.pile})},
++  /* ---- CTDOT BRSDM V2 App. CT11.1 (integral), 11.6.1.3.1CT (semi-integral) ---- */
++  {owner:"CTDOT", iab:"integral", id:"iab.lim", kind:"shall-check", sec:"V2 App. CT11.1.1.1 (p. 11-10)", text:"Skew less than 30°; total length 150 ft (steel) / 200 ft (concrete); single span at most 150 ft (otherwise a design variance and refined analysis)",
++    ev:C=>{ const a=iabSkewR(C,30,true), b=iabLen(C,150,200), c=iabLim(+C.g.spanL,null,150,"span","ft"); return {st:[a,b,c].every(x=>x.st==="pass")?"pass":"fail", val:[a,b,c].map(x=>x.val).join("; "), lim:"< 30°; "+b.lim+"; ≤ 150 ft"}; }},
++  {owner:"CTDOT", iab:"integral", id:"iab.ht", kind:"shall-check", sec:"V2 App. CT11.1.1.1 (p. 11-10)", text:"Height from finished grade to the bottom of stem / cap at most 12 ft; abutment heights at the two ends within 1 ft",
++    ev:C=>{ const a=iabHt(C,12), b=iabLim(+S.iab.dH,null,1,"height difference","ft"); return {st:a.st==="pass"&&b.st==="pass"?"pass":"fail", val:a.val+"; "+b.val, lim:"≤ 12 ft; ≤ 1 ft", tex:a.tex}; }},
++  {owner:"CTDOT", iab:"integral", id:"iab.pile", kind:"shall-check", sec:"V2 App. CT11.1.1.1 (p. 11-10); CT11.1.1.4.2c (p. 11-14)", text:"Grade 50 H-piles, flange at least 10 in, weak axis normal to the girders, single row; at least 10 ft below the stem (fixity verified); embedded at least 2 ft into the stem",
++    ev:C=>{ const P=iabQ(C).pile||{}, ok=Math.abs(+S.iab.Fy-50)<1e-9&&ownGE(P.bf,10)&&S.iab.orient!=="strong"&&ownGE(+S.iab.Lpile,10)&&ownGE(+S.iab.embed,24);
++      return {st:ok?"pass":"fail", val:`${S.iab.sec} (b<sub>f</sub> = ${fmt(P.bf,2)} in), F<sub>y</sub> = ${fmt(+S.iab.Fy,0)} ksi, ${S.iab.orient!=="strong"?"weak axis":"strong axis"}, length ${fmt(+S.iab.Lpile,1)} ft, embedment ${fmt(+S.iab.embed,1)} in`, lim:"Gr 50; b<sub>f</sub> ≥ 10 in; weak; ≥ 10 ft; ≥ 24 in", link:OWN_LK_IAB.pile}; }},
++  {owner:"CTDOT", iab:"integral", id:"iab.geo", kind:"shall-check", sec:"V2 App. CT11.1.1.1; CT11.1.1.4.2a (pp. 11-10, 11-12)", text:"Straight girders; stem at least 3.5 ft wide; bottom of stem at least 4 ft below the finished grade at the front face",
++    ev:C=>{ const ok=S.iab.straight&&ownGE(+S.iab.b,3.5)&&ownGE(+S.iab.Dfront,4); return {st:ok?"pass":"fail", val:`${S.iab.straight?"straight":"curved"}; b = ${fmt(+S.iab.b,2)} ft; ${fmt(+S.iab.Dfront,2)} ft below grade`, lim:"straight; ≥ 3.5 ft; ≥ 4 ft"}; }},
++  {owner:"CTDOT", iab:"integral", id:"iab.uw", kind:"shall-check", sec:"V2 App. CT11.1.1.1 (p. 11-10)", text:"Monolithic cantilevered U-wingwalls, 5 ft to 10 ft long", ev:C=>iabUwing()},
++  {owner:"CTDOT", iab:"integral", id:"iab.load", kind:"load", sec:"V2 CT11.1.1.3 (p. 11-11); 3.12.2.1 (p. 3-8)", text:"IM in the abutment and piles; LS neglected with an approach slab (final state); braking neglected; passive Rankine K_p under expansion; integral temperature range 150 °F (−30 to +120 °F)",
++    ev:C=>{ const Q=iabQ(C); return {st:"pass", val:`K<sub>p</sub> = ${fmt(Q.Kexp,3)}; ΔT<sub>rise</sub> = ${fmt(Q.dTr,0)} °F, ΔT<sub>fall</sub> = ${fmt(Q.dTf,0)} °F (setting ${fmt(Q.Tset,0)} °F)`, lim:"—", link:OWN_LK_IAB.mv}; }},
++  {owner:"CTDOT", iab:"integral", id:"iab.cf", kind:"load", sec:"V2 CT11.1.1.4.2c (pp. 11-14 to 11-16)", text:"Pile forces by the equivalent-cantilever closed form: displacement Eq. CT11.1.1.3-2, end-rotation moment, thermal moment and shear, thermal axial force; combined axial and flexure per the BDS",
++    ev:C=>{ const P=(iabQ(C).pile||{}).ct; return P?{st:"pass", val:`Δ<sub>L</sub> = ${fmt(P.dL,3)} in, M<sub>u</sub> = ${fmt(P.Mu/12,1)} kip-ft, P<sub>u</sub> = ${fmt(P.Pu,1)} kip`, lim:"—", link:OWN_LK_IAB.pile}:{st:"na",val:"—",lim:"—"}; }},
++  {owner:"CTDOT", iab:"integral", id:"iab.misc", kind:"note", sec:"V2 CT11.1.1.4.1, CT11.1.1.4.2a, CT11.1.1.4.2c (pp. 11-12 to 11-14)", text:"Girder bottom at least 4 in above the seat; pile centerline on the bearing centerline; deck end and end diaphragms placed last; unbalanced backfill limited (3.11.9CT)",
++    ev:C=>iabNote("detailing; not modelled")},
++  {owner:"CTDOT", iab:"semi", id:"iab.semi", kind:"load", sec:"V2 11.6.1.3.1CT (p. 11-2)", text:"Semi-integral: superstructure-to-substructure connection modelled pinned; the lower portion designed as a standard cantilever abutment taking all vertical superstructure forces",
++    ev:C=>({st:"pass", val:"Tabs 3–5 design the lower abutment; the end diaphragm in §10.5", lim:"—", link:OWN_LK_IAB.stab})},
++  {owner:"CTDOT", iab:"semi", id:"iab.Kp", kind:"note", sec:"V2 CT11.1.1.3 (p. 11-11)", text:"The BRSDM sets no semi-integral backwall pressure; the integral Rankine K_p (Eq. CT11.1.1.3-1) is applied to the moving end diaphragm (tool choice)",
++    ev:C=>iabNote(`K<sub>p</sub> = ${fmt(iabQ(C).Kexp,3)}`,OWN_LK_IAB.ep)},
++  /* ---- AASHTO LRFD 10th Ed. (no numeric eligibility limits) ---- */
++  {owner:"AASHTO", iab:"any", id:"iab.elig", kind:"note", sec:"11.6.1.3, C11.6.1.3", text:"AASHTO LRFD sets no length, skew or height limits for integral abutments; design them to resist or absorb creep, shrinkage and thermal deformations; not on spread footings keyed into rock unless one end can move; approach slab connected to the abutment, with drainage",
++    ev:C=>iabNote(`thermal movement computed (§10.2): Δ<sub>exp</sub> = ${fmt(iabQ(C).dExp,3)} in; creep and shrinkage movement not included (add for concrete superstructures)`,OWN_LK_IAB.mv)},
++  {owner:"AASHTO", iab:"any", id:"iab.K", kind:"load", sec:"3.11.1, C3.11.1 (Table C3.11.1-1)", text:"Earth pressure between at-rest and passive (expansion) or active (contraction) from the wall movement relative to its height",
++    ev:C=>{ const Q=iabQ(C); return {st:"pass", val:`Δ/H = ${fmt(Q.rE,5)} → K = ${fmt(Q.Kexp,3)} (expansion); ${fmt(Q.rC,5)} → K = ${fmt(Q.Kcon,3)} (contraction)`, lim:"—", link:OWN_LK_IAB.ep}; }},
++  {owner:"AASHTO", iab:"integral", id:"iab.pile", kind:"shall-check", sec:"10.7.1.2", text:"Pile spacing at least 30 in or 2.5 pile diameters; side of pile to the edge of the cap at least 9 in; pile embedded at least 12 in into the cap",
++    ev:C=>{ const P=iabQ(C).pile||{}, sMin=Math.max(30,2.5*P.D), ok=ownGE(+S.iab.sp*12,sMin)&&ownGE(P.sideIn,9)&&ownGE(+S.iab.embed,12);
++      return {st:ok?"pass":"fail", val:`s = ${fmt(+S.iab.sp*12,1)} in; side ${fmt(P.sideIn,1)} in; embedment ${fmt(+S.iab.embed,1)} in`, lim:`≥ ${fmt(sMin,1)} in; ≥ 9 in; ≥ 12 in`, link:OWN_LK_IAB.pile}; }},
++  {owner:"AASHTO", iab:"integral", id:"iab.ly", kind:"should-warning", sec:"6.9.2.2.1; C6.15.2", text:"Pile-head moment from a lateral (p-y) analysis under the thermal movement (Pile Designer, integral mode); combined axial and flexure checked with it",
++    ev:C=>({st:+S.iab.MuPy>0?"pass":"warn", val:+S.iab.MuPy>0?`M<sub>u</sub> = ${fmt(+S.iab.MuPy,1)} kip-ft entered`:"not entered (panel I-0a)", lim:"p-y analysis", link:OWN_LK_IAB.pile})}
++);
+@@ -964 +1109,3 @@ function abutOwnChecks(R){
+-  if(o==="AASHTO") return {owner:o, meta, rows:[], nFail:0, nWarn:0};
++  const it=iabType();   // IAB: integral / semi-integral rules listed for that type only (AASHTO too); the screening advisories "int"/"semi" only for a conventional
++                      // abutment; an integral abutment lists no rule of the conventional cantilever (its footing, stem and backwall are not part of the design)
++  if(o==="AASHTO"&&it==="conv") return {owner:o, meta, rows:[], nFail:0, nWarn:0};
+@@ -966 +1113 @@ function abutOwnChecks(R){
+-  ABUT_OWN.rules.filter(r=>r.owner===o&&(!r.wing||(S.wing&&S.wing.on))).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } rows.push(Object.assign({r},v)); });
++  ABUT_OWN.rules.filter(r=>r.owner===o&&(!r.wing||(S.wing&&S.wing.on))&&(r.iab? (r.iab===it||(r.iab==="any"&&it!=="conv")) : (r.wing||it==="conv"||(it==="semi"&&r.id!=="int"&&r.id!=="semi")))).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } if(r.iab&&!v.link) v.link=OWN_LK_IAB.elig; rows.push(Object.assign({r},v)); });
+@@ -1144 +1291,12 @@ const VALID = {
+-  "wing.vSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."}
++  "wing.vSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
++  "iab.b":{hard:[1,10], typ:[2.5,5], msg:"Integral cap width outside the typical 2.5–5 ft range."},
++  "iab.hc":{hard:[1,20], typ:[3,8], msg:"Integral cap depth outside the typical 3–8 ft range."},
++  "iab.hd":{hard:[1,20], typ:[3,10], msg:"End diaphragm height outside the typical 3–10 ft range."},
++  "iab.n":{hard:[1,40], typ:[2,20], msg:"Number of integral piles outside the typical 2–20 range."},
++  "iab.sp":{hard:[1,20], typ:[3.5,10], msg:"Integral pile spacing outside the typical 3.5–10 ft range."},
++  "iab.LE":{hard:[1,60], typ:[5,20], msg:"Equivalent cantilever length outside the typical 5–20 ft range."},
++  "iab.IG":{hard:[100,5e6], typ:[5000,1e6], msg:"Composite girder moment of inertia outside the typical range."},
++  "iab.gEH":{hard:[0.5,2], typ:[1.0,1.5], msg:"γEH outside the 1.00–1.50 range."},
++  "iab.hSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
++  "iab.vSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
++  "iab.capSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."}
+@@ -1182 +1340 @@ const ABUT_IN_SEC={
+-  'in-own':'geom','in-geom':'geom','in-mat':'geom',
++  'in-own':'geom','in-iab':'geom','in-geom':'geom','in-mat':'geom',
+@@ -1390,0 +1549,4 @@ function migrate(){
++  // IAB (2026-10-20): a project saved before the abutment-type selector has no S.iab: it opens as a conventional abutment (results and
++  // Input ID unchanged); missing fields of a newer project take their defaults
++  if(!S.iab||typeof S.iab!=="object") S.iab=iabDefault();
++  else{ const T=iabDefault(); Object.keys(T).forEach(k=>{ if(S.iab[k]===undefined) S.iab[k]=T[k]; }); }
+@@ -1501,0 +1664,48 @@ function buildInputs(){
++  /* ---- I-0a Abutment type (IAB, 2026-10-20) ---- */
++  { const I=S.iab, it=iabType(), oo=abutOwner(), bo=Object.keys(BARS).map(k=>[k,"#"+k]);
++    const ck=(path,lab)=>{ const id="chk_"+path.replace(/\./g,"_"); return `<div class="chk-row"><input type="checkbox" id="${id}" data-path="${path}" ${getPath(S,path)?"checked":""}><label for="${id}">${lab}</label></div>`; };
++    const hp=Object.keys(HP_SHAPES).map(k=>[k,k+(k==="HP10X57"||k==="HP12X84"?" (MassDOT)":"")]);
++    let body=selRow("Abutment type","iab.type",[["conv","Conventional cantilever (stem on a footing, bearings on the seat)"],["integral","Integral (superstructure cast into the abutment, single row of piles)"],["semi","Semi-integral (end diaphragm moves with the superstructure, bearings on the seat)"]],{rebuild:true});
++    if(it==="conv") body+=`<div class="in-note">Conventional: the design of Tabs 1–8 (unchanged). Integral and semi-integral abutments are designed in Tab 10 with the owner rules of panel I-0.</div>`;
++    else{
++      body+=`<div class="subhead">Bridge</div>
++      ${oo==="AASHTO"?inpRow("Total bridge length (0 = span L)","own.Ltot","ft"):`<div class="in-note">Total bridge length: panel I-0 (${fmt((+S.own.Ltot>0)?+S.own.Ltot:+S.geom.spanL,1)} ft). Span, skew: panel I-1. Superstructure material and temperatures: panel I-6b.</div>`}
++      ${inpRow("Expansion length to this abutment (0 = half the total length)","iab.Lexp","ft",{title:"Length from the point of zero movement to this abutment. 0 = L_tot/2 (symmetric bridge: MassDOT 3.10.2.4, CTDOT CT11.1.1.4.1)."})}
++      ${inpRow("Girder depth","iab.dg","ft")}
++      ${inpRow("Grade between the abutments (elevation difference / length)","iab.grade","%")}
++      ${it==="integral"?inpRow("Horizontal curvature, subtended angle","iab.curve","deg")+inpRow("Height difference between the two abutments","iab.dH","ft"):""}
++      ${it==="integral"?ck("iab.straight","Straight girders and alignment (curved bridge: straight parallel beams)")+ck("iab.parallel","Parallel abutments and piers"):ck("iab.bothEnds","The other end is also semi-integral")}`;
++      if(it==="integral") body+=`<div class="subhead">Integral abutment (cap below the seat, end diaphragm above)</div>
++      ${inpRow("Cap / wall width b","iab.b","ft")}
++      ${inpRow("Cap depth below the seat h<sub>c</sub>","iab.hc","ft")}
++      ${inpRow("End diaphragm height, deck surface to seat h<sub>d</sub>","iab.hd","ft")}
++      <div class="derived">Deck surface to bottom of cap H = h<sub>d</sub> + h<sub>c</sub> = <b>${fmt(+I.hd + +I.hc)} ft</b></div>
++      ${inpRow("Fill over the bottom of the cap at the front face","iab.Dfront","ft")}
++      ${inpRow("Approach slab dead load on the abutment","iab.qApp","kip/ft",{title:"DC carried by the abutment from the approach slab (per ft of abutment). 0 = not included."})}`;
++      else body+=`<div class="in-note">End diaphragm (moves with the superstructure): height h<sub>bw</sub> and thickness t<sub>bw</sub> of panel I-1 (the backwall inputs). The lower abutment (stem, footing, bearings on the seat) is the conventional model of panels I-1 to I-11.</div>`;
++      body+=`<div class="subhead">Movement and earth pressure</div>
++      ${oo==="CTDOT"&&it==="integral"?inpRow("Setting temperature (150 °F range: −30 to +120 °F)","iab.Tset","°F",{title:"CTDOT BRSDM V2 3.12.2.1: integral range −30 to +120 °F. Rise = 120 − T_set, fall = T_set + 30. Default 50 °F = the BRSDM median for bearings and joints."})+inpRow("Shrinkage strain ε<sub>s</sub> (pile displacement)","iab.epsSH","in/in",{title:"CTDOT Eq. CT11.1.1.3-2: 500×10⁻⁶ recommended."}):""}
++      ${!(oo==="CTDOT"&&it==="integral")?selRow("Backfill (Table C3.11.1-1)","iab.bfType",Object.entries(IAB_BF).map(([k,v])=>[k,v.l+" — Δ/H active "+v.a+", passive "+v.p])):""}
++      ${oo!=="MassDOT"?inpRow("K<sub>p</sub> entered (0 = Rankine)","iab.KpUser","–",{title:"Passive coefficient from the geotechnical report or AASHTO Fig. 3.11.5.4-1 / -2 (wall friction). 0 = Rankine tan²(45° + φ/2)."}):""}
++      ${inpRow("γ<sub>EH</sub> on the movement-induced pressure","iab.gEH","–",{title:"AASHTO Table 3.4.1-2 gives no factor for passive pressure; 1.35 = the at-rest maximum (tool default, ask the owner)."})}`;
++      if(it==="integral"){ body+=`<div class="subhead">Piles (single row, vertical)</div>
++      ${selRow("Section","iab.sec",hp)}
++      ${inpRow("F<sub>y</sub>","iab.Fy","ksi")}
++      ${selRow("Orientation","iab.orient",[["weak","Web parallel to the abutment CL (weak-axis bending)"],["strong","Web normal to the abutment CL (strong-axis bending)"]])}
++      ${inpRow("Number of piles n","iab.n","–",{step:1})}
++      ${inpRow("Pile spacing s (along the abutment)","iab.sp","ft")}
++      ${inpRow("Embedment into the cap","iab.embed","in")}
++      ${inpRow("Pile length below the cap","iab.Lpile","ft")}
++      ${oo==="MassDOT"?selRow("Soil type (Table 3.10.11-1)","iab.soilMD",IAB_MD.soils.map((x,i)=>[i+1,(i+1)+" — "+x]))+ck("iab.rockBelow","Top of bedrock below the pile tip")+ck("iab.noScour","Abutment not scour susceptible"):""}
++      ${oo==="CTDOT"?selRow("Pile head (equivalent cantilever)","iab.head",[["fixed","Fixed head"],["pinned","Pinned head"]])+inpRow("Equivalent cantilever length L<sub>E</sub>","iab.LE","ft",{title:"Bottom of the stem to the fixed base of the equivalent cantilever, from the lateral pile analysis (geotechnical engineer)."})+inpRow("Girder modulus E<sub>G</sub>","iab.EG","ksi")+inpRow("Composite girder I<sub>G</sub>","iab.IG","in⁴")+ck("iab.noScour","Abutment not scour susceptible (piles fully braced)"):""}
++      ${oo==="RIDOT"||oo==="AASHTO"?inpRow("Pile-head moment M<sub>u</sub> from the p-y analysis (0 = not entered)","iab.MuPy","kip-ft",{title:"Factored pile-head moment under the thermal movement from L-Pile or Pile Designer (integral mode); used in the combined axial and flexure check."}):""}
++      <div class="subhead">Reinforcement (provided)</div>
++      ${selRow("Cap longitudinal bars (top and bottom, across b)","iab.capBar",bo)}${inpRow("&nbsp;&nbsp;spacing","iab.capSp","in")}
++      ${selRow("Horizontal wall bars (each face)","iab.hBar",bo)}${inpRow("&nbsp;&nbsp;spacing","iab.hSp","in")}
++      ${selRow("Vertical rear-face bars of the cap","iab.vBar",bo)}${inpRow("&nbsp;&nbsp;spacing","iab.vSp","in")}`; }
++      else body+=`<div class="subhead">Reinforcement (provided)</div>
++      ${selRow("Horizontal end-diaphragm bars (each face)","iab.hBar",bo)}${inpRow("&nbsp;&nbsp;spacing","iab.hSp","in")}`;
++      body+=`<div class="in-note">Designed in Tab 10; the owner's eligibility rules are in Tab 1 §1.0a.${it==="integral"?" The conventional inputs of panels I-1 (footing, stem), I-4 and I-7 are not used by the integral design.":""}</div>`;
++    }
++    html+=panel("in-iab","I-0a","Abutment Type",body); }
++
+@@ -2323,0 +2534,93 @@ function computeWing(R,X){
++/* ============================================================
++   IAB (2026-10-20): INTEGRAL / SEMI-INTEGRAL ABUTMENT (panel I-0a, Tab 10). Runs only for those types; no conventional result
++   depends on it. Owner methods:
++   - thermal movement Δ = α·ΔT·L_exp (γTU = 1.0; MassDOT 3.1.8.2 / 3.10.2.4 / 3.10.2.6, RIDOT 3.7.1 / 3.2.1.3, CTDOT V2 3.12.2.1 integral 150 °F range)
++   - earth pressure from the wall movement: MassDOT 3.10.8 K(δT/H); CTDOT CT11.1.1.3-1 Rankine K_p; RIDOT 11.3.2 / 11.3.3 (K_0 below 0.5 in,
++     else K_p); AASHTO C3.11.1 / Table C3.11.1-1 (K_0 → K_p linear in Δ/H up to the passive Δ/H: tool choice); contraction K_0 → K_a the same way
++   - piles: MassDOT 3.10.11.4 simplified method (Tables 3.10.11-2/-3); CTDOT CT11.1.1.4.2c closed form; RIDOT / AASHTO with the p-y moment entered;
++     combined axial and flexure AASHTO 6.9.2.2.1 with φc = 0.70, φf = 1.00 (6.5.4.2), Mn,y per 6.12.2.2.1
++   - cap / wall: MassDOT 3.10.8 / CTDOT CT11.1.1.4.2a cases (80 % of the simple-span moment), section checks of Section 5
++   ============================================================ */
++function computeIAB(R,X){
++  const I=S.iab, t=iabType(), own=abutOwner(), g=S.geom, m=S.mat, F=S.factors, OL=R.ownLoad||abutOwnLoad(), eta=OL.eta, a=R.agg;
++  const gam=+S.soil.gamma, phi=+S.soil.phi, phiR=deg2rad(phi), Lab=+g.Lab, gc=+m.gc, integ=t==="integral";
++  const Ltot=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL, skew=+g.skew||0, mat=S.longit.material==="concrete"?"concrete":"steel";
++  const Q={type:t, own, integ, Ltot, skew, mat, eta, notes:[]};
++  Q.H=integ? (+I.hd)+(+I.hc) : +g.hbw;   // ft: deck surface to the bottom of the cap (integral) / of the end diaphragm (semi-integral)
++  /* ---- thermal movement at this abutment (γTU = 1.0) ---- */
++  Q.Lexp=(+I.Lexp>0)? +I.Lexp : Ltot/2;
++  Q.alpha=+S.longit.cte;
++  if(own==="CTDOT"&&integ){ Q.tSrc="ct"; Q.Tset=+I.Tset; Q.dTr=Math.max(0,120-Q.Tset); Q.dTf=Math.max(0,Q.Tset+30); }
++  else{ Q.tSrc="longit"; Q.dTr=+S.longit.dTrise; Q.dTf=+S.longit.dTfall; }
++  Q.dExp=Q.alpha*Q.dTr*Q.Lexp*12; Q.dCon=Q.alpha*Q.dTf*Q.Lexp*12;   // in
++  /* ---- earth pressure from the wall movement ---- */
++  const K0=1-Math.sin(phiR), Ka=Math.pow(Math.tan(Math.PI/4-phiR/2),2), KpR=Math.pow(Math.tan(Math.PI/4+phiR/2),2), Kp=(+I.KpUser>0)? +I.KpUser : KpR;
++  const bf=IAB_BF[I.bfType]||IAB_BF.dense, Hin=Q.H*12;
++  Object.assign(Q,{K0,Ka,KpR,Kp,KpIn:+I.KpUser>0,bf,rE:Q.dExp/Hin,rC:Q.dCon/Hin});
++  if(own==="MassDOT"){ Q.kM="massdot"; Q.Kexp=0.43+5.7*(1-Math.exp(-190*Q.rE)); }
++  else if(own==="CTDOT"){ Q.kM="ctdot"; Q.Kexp=Kp; }
++  else if(own==="RIDOT"){ if(integ&&Q.dExp<0.5){ Q.kM="ridot0"; Q.Kexp=K0; } else { Q.kM="ridotp"; Q.Kexp=Kp; } }
++  else{ Q.kM="aashto"; Q.fP=Math.min(1,Q.rE/bf.p); Q.Kexp=K0+(Kp-K0)*Q.fP; }
++  if(own==="CTDOT"&&integ){ Q.kC="ct0"; Q.Kcon=0; }   // CTDOT CT11.1.1.4.2a: thermal contraction without soil pressure
++  else{ Q.kC="aashto"; Q.fA=Math.min(1,Q.rC/bf.a); Q.Kcon=K0-(K0-Ka)*Q.fA; }
++  Q.Pexp=0.5*Q.Kexp*gam*Q.H*Q.H; Q.Pcon=0.5*Q.Kcon*gam*Q.H*Q.H;   // kip/ft, resultant at H/3 above the bottom
++  Q.PexpT=Q.Pexp*Lab; Q.PconT=Q.Pcon*Lab;
++  Q.gEH=+I.gEH;
++  /* ---- wall (integral: cap + diaphragm; semi: end diaphragm) spanning horizontally between the girders, pressure at its base ---- */
++  const pos=(R.beamPos||[]).slice().sort((x,y)=>x-y); let sG=0; for(let i=1;i<pos.length;i++) sG=Math.max(sG,pos[i]-pos[i-1]); Q.sG=sG;
++  const sc=X.sectionCheck, cover=+m.coverT, tW=integ? +I.b : +g.tbw;
++  { const pB=Q.Kexp*gam*Q.H, wu=eta*Q.gEH*pB;
++    Q.c2={pB, wu, Mu:0.8*wu*sG*sG/8, Vu:wu*sG/2, Ms:0.8*pB*sG*sG/8, t:tW};
++    Q.c2.sec=sc({name:integ?"Integral wall horizontal (case 2)":"End diaphragm horizontal", h:tW*12, cover, bar:String(I.hBar), sp:+I.hSp, Mu:Q.c2.Mu, Vu:Q.c2.Vu, Ms:Q.c2.Ms, betaMode:"general", lbl:"Strength I: η·γEH·K·γ·H on 0.8 of the simple span between girders"}); }
++  if(integ){
++    const b=+I.b, hc=+I.hc, hd=+I.hd, gDC=+F.gpDCmax, gDW=+F.gpDWmax, gLL=+F.llS1, mL=OL.m;
++    Q.Wab=gc*b*(hc+hd)*Lab; Q.Wapp=(+I.qApp||0)*Lab;
++    Q.DC=a.DC.P+Q.Wab+Q.Wapp; Q.DW=a.DW.P; Q.LL=a.LL.P; Q.mL=mL; Q.gDC=gDC; Q.gDW=gDW; Q.gLL=gLL;
++    /* case 1: cap a continuous beam on the piles for all vertical loads (IM included) */
++    Q.wu1=eta*(gDC*Q.DC+gDW*Q.DW+gLL*mL*Q.LL)/Lab; Q.ws1=(Q.DC+Q.DW+mL*Q.LL)/Lab;
++    const sp=+I.sp;
++    Q.c1={Mu:0.8*Q.wu1*sp*sp/8, Vu:Q.wu1*sp/2, Ms:0.8*Q.ws1*sp*sp/8};
++    Q.c1.sec=sc({name:"Pile cap longitudinal (case 1)", h:hc*12, cover, bar:String(I.capBar), sp:+I.capSp, Mu:Q.c1.Mu/b, Vu:Q.c1.Vu/b, Ms:Q.c1.Ms/b, betaMode:"general", lbl:"Strength I: η(γDC·DC + γDW·DW + γLL·m·LL)/L_ab on 0.8 of the simple span between piles"});
++    /* rear face: cap cantilevered down from the seat under the expansion pressure (CTDOT CT11.1.1.4.2a design case 1) */
++    const k=Q.Kexp*gam, z1=hd, z2=hd+hc, M3=k*((z2**3-z1**3)/3-z1*(z2*z2-z1*z1)/2), V3=k*(z2*z2-z1*z1)/2;
++    Q.c3={k, z1, z2, M:M3, V:V3, Mu:eta*Q.gEH*M3, Vu:eta*Q.gEH*V3, Ms:M3};
++    Q.c3.sec=sc({name:"Pile cap vertical rear face", h:b*12, cover, bar:String(I.vBar), sp:+I.vSp, Mu:Q.c3.Mu, Vu:Q.c3.Vu, Ms:Q.c3.Ms, betaMode:"general", lbl:"Strength I: η·γEH × cantilever from the seat"});
++    /* ---- piles ---- */
++    const sk=iabSect(I.sec), n=Math.max(1,Math.round(+I.n)), E=29000, Fy=+I.Fy, weak=I.orient!=="strong";
++    const P={sk, n, sp, E, Fy, weak, bf:sk.bf, D:Math.max(sk.d,sk.bf), diag:Math.hypot(sk.d,sk.bf)};
++    P.Ib=weak?sk.Iy:sk.Ix; P.Zb=weak?sk.Zy:sk.Zx; P.Sb=weak?sk.Sy:sk.Sx;
++    P.xs=Array.from({length:n},(_,i)=>(i-(n-1)/2)*sp); P.Ix2=P.xs.reduce((s2,x)=>s2+x*x,0); P.xMax=(n-1)/2*sp;
++    P.endIn=(Lab/2-P.xMax)*12-(weak?sk.d:sk.bf)/2; P.sideIn=(b*12-(weak?sk.bf:sk.d))/2;
++    /* gravity per pile, Strength I: dead load equally to all piles; LL with the rigid-cap eccentricity (MassDOT: equally, without IM) */
++    P.IM=own==="MassDOT"; P.LLp=P.IM? Q.LL/1.33 : Q.LL;
++    P.Pdl=eta*(gDC*Q.DC+gDW*Q.DW)/n; P.WLL=eta*gLL*mL*P.LLp; P.eLL=(own==="MassDOT"||!(a.LL.P>0))? 0 : a.LL.MtP/a.LL.P;
++    P.Pll=P.WLL/n+(P.Ix2>0? P.WLL*Math.abs(P.eLL)*P.xMax/P.Ix2 : 0); P.Pg=P.Pdl+P.Pll;
++    /* section resistances: Pr = φc·Fy·As (fully braced, 6.9.2.1 with λ = 0), φc = 0.70; Mr = φf·Mn, φf = 1.00 [6.5.4.2] */
++    P.Pn=Fy*sk.A; P.Pr=0.70*P.Pn; P.Mp=Fy*P.Zb;   // kip, kip-in
++    P.lamF=sk.bf/(2*sk.tf); P.lamPf=0.38*Math.sqrt(E/Fy); P.lamRf=Math.sqrt(E/Fy);
++    if(weak){ P.MnY=Math.min(Fy*P.Zb,1.6*Fy*P.Sb); P.Mn=P.lamF<=P.lamPf? P.MnY : (P.lamF<=P.lamRf? P.MnY-(P.MnY-0.7*Fy*P.Sb)*(P.lamF-P.lamPf)/(P.lamRf-P.lamPf) : 0.69*E*P.Sb/(P.lamF*P.lamF)); }
++    else P.Mn=P.Mp;
++    P.Mr=1.0*P.Mn;
++    const inter=(Pu,Mu)=>{ const r=Pu/P.Pr; return {r, eq:r<0.2?"1":"2", val:r<0.2? r/2+Mu/P.Mr : r+8/9*Mu/P.Mr}; };
++    if(own==="MassDOT"){ const key=(I.sec==="HP10X57"||I.sec==="HP12X84")?I.sec:null, si=Math.min(6,Math.max(1,Math.round(+I.soilMD)||1));
++      if(key){ const row=IAB_MD[key].Pu[si-1], sk2=Math.max(0,Math.min(30,skew)), lo=Math.min(2,Math.floor(sk2/10)), f=(sk2-lo*10)/10;
++        P.md={ok:true, key, si, row, lo, f, PuTab:row[lo]+(row[lo+1]-row[lo])*f, Lf:IAB_MD[key].Lf[si-1], Le:IAB_MD[key].Le[si-1]};
++        P.md.dc=P.Pg/P.md.PuTab; P.md.dcL=(P.md.Lf+5)/Math.max(1e-9,+I.Lpile); }
++      else P.md={ok:false}; }
++    else if(own==="CTDOT"){ const C={}, Lin=Ltot*12, Sin=+g.spanL*12, LE=+I.LE*12, EI=E*P.Ib, fixed=I.head!=="pinned";
++      C.F=0.6; C.epsT=Q.alpha*Q.dTf; C.epsS=+I.epsSH; C.dL=C.F*(C.epsT+C.epsS)*Lin/2+0.006*skew;   // in [Eq. CT11.1.1.3-2]
++      C.fixed=fixed; C.Mel=(fixed?6:3)*EI*C.dL/(LE*LE); C.MT=Math.min(P.Mp,C.Mel); C.FT=(fixed?12:3)*EI*C.dL/LE**3;   // k-in, kip [Eqs. CT11.1.1.4.2c-6 to -9]
++      C.NG=+S.beams.N; C.R=P.Pg; C.W=2*n*C.R/C.NG; C.thW=C.W*Sin*Sin/(24*(+I.EG)*(+I.IG)); C.MW=4*EI*C.thW/LE;   // [Eqs. CT11.1.1.4.2c-2 to -4]
++      C.PP=eta*Q.gEH*Q.PexpT/n; C.Hin=Hin; C.H0=2*Hin/3; C.RT=(C.PP*C.H0+eta*(C.FT*Hin+C.MT))/Sin;   // [Eq. CT11.1.1.4.2c-5], per pile
++      C.Pu=P.Pg+C.RT; C.Mu=Math.min(P.Mp,C.MT+C.MW); C.I=inter(C.Pu,C.Mu); C.Lin=Lin; C.Sin=Sin; C.LEin=LE; C.EI=EI;
++      P.ct=C; }
++    else{ P.py={Mu:Math.max(0,+I.MuPy)*12}; P.py.on=P.py.Mu>0; P.py.I=inter(P.Pg,P.py.Mu); }
++    Q.pile=P;
++  }else{
++    Q.Pdia=Q.PexpT;   // semi-integral: force from the end diaphragm to the superstructure (unfactored)
++    if(!S.longit.computeTU) Q.notes.push("Semi-integral: the bearing shear from the superstructure movement is not computed (panel I-6b, TU off); enter the TU reactions or turn the calculation on.");
++  }
++  Q.notes.forEach(x=>warn(x));
++  return Q;
++}
++
+@@ -3744,0 +4048 @@ function computeAll(){
++    if(fpS.iab&&fpS.iab.type!=="integral"&&fpS.iab.type!=="semi") delete fpS.iab;  // IAB: a conventional abutment leaves the Input ID unchanged
+@@ -3767,0 +4072,2 @@ function computeAll(){
++  /* ===== C-11e Integral / semi-integral abutment (IAB, panel I-0a; Tab 10) — only for those types ===== */
++  R.iab=iabType()!=="conv"? computeIAB(R,{sectionCheck}) : null;
+@@ -3818,0 +4125,14 @@ function computeAll(){
++  if(R.iab){ const Q=R.iab, sx=(id,nm,c,tab)=>{ addD(id+"F",nm+" flexure [5.6.3]",c.dcFlex,tab||"tab-iab",c.lbl); addD(id+"V",nm+" shear [5.7.3]",c.dcShear,tab||"tab-iab",c.lbl);
++      addD(id+"Min",nm+" — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,tab||"tab-iab","φMn ≥ min(Mcr, 1.33Mu)"); };
++    // IAB: an integral abutment has no footing, stem or backwall of the conventional model (Tabs 3–5 are not part of its design): only the wing
++    // checks are kept; a semi-integral abutment keeps the conventional lower abutment, its end diaphragm replaces the cantilever backwall
++    if(Q.integ){ dash.splice(0,dash.length,...dash.filter(d=>d.tab==="tab-wing"));
++      const P=Q.pile;
++      if(P.md){ if(P.md.ok){ addD("iabPile","Integral pile — MassDOT simplified method (3.10.11.4)",P.md.dc,"tab-iab",`P_u = ${fmt(P.Pg,1)} kip vs ${fmt(P.md.PuTab,1)} kip (${P.md.key}, soil ${P.md.si}, skew ${fmt(+S.geom.skew||0,1)}°)`);
++          addD("iabTip","Integral pile length ≥ L_f + 5 ft (MassDOT 3.10.11.2)",P.md.dcL,"tab-iab",`L_f + 5 = ${fmt(P.md.Lf+5,0)} ft vs ${fmt(+S.iab.Lpile,1)} ft`); }
++        else addD("iabPile","Integral pile — MassDOT simplified method (section not in the tables)",0,"tab-iab","HP10X57 / HP12X84 only",true); }
++      else if(P.ct) addD("iabPile","Integral pile — axial + flexure, CTDOT closed form [6.9.2.2.1]",P.ct.I.val,"tab-iab",`P_u = ${fmt(P.ct.Pu,1)} kip, M_u = ${fmt(P.ct.Mu/12,1)} kip-ft`);
++      else addD("iabPile","Integral pile — axial + flexure with the p-y moment [6.9.2.2.1]",P.py.on?P.py.I.val:0,"tab-iab",P.py.on?`P_u = ${fmt(P.Pg,1)} kip, M_u = ${fmt(P.py.Mu/12,1)} kip-ft`:"pile-head moment not entered (panel I-0a)",!P.py.on);
++      sx("iabC1","Pile cap longitudinal (case 1)",Q.c1.sec); sx("iabC2","Integral wall horizontal (case 2)",Q.c2.sec); sx("iabC3","Pile cap vertical rear face",Q.c3.sec); }
++    else{ dash.splice(0,dash.length,...dash.filter(d=>!/^bw/.test(d.id))); sx("iabD","End diaphragm horizontal",Q.c2.sec); }
++  }
+@@ -3858 +4178 @@ const ABUT_TABNAME={"tab-loads":"Geometry & Loads","tab-comb":"Load Combinations
+-  "tab-struct":"Structural Design","tab-vm":"V & M Diagrams","tab-3d":"3D View","tab-tables":"Detailed Tables","tab-wing":"Wingwalls"};
++  "tab-struct":"Structural Design","tab-vm":"V & M Diagrams","tab-3d":"3D View","tab-tables":"Detailed Tables","tab-wing":"Wingwalls","tab-iab":"Integral / Semi-integral"};
+@@ -4096,0 +4417,180 @@ function svgWingPress(R){
++/* ================= TAB 10 — INTEGRAL / SEMI-INTEGRAL ABUTMENT (IAB, 2026-10-20) =================
++   Every value is from computeIAB() (R.iab); worked symbolic → substituted → result. */
++function renderTabIAB(R){
++  const el=document.getElementById("tab-iab"); if(!el) return;
++  const Q=R.iab;
++  if(!Q){ el.innerHTML=panel("o-iab-basis","10.0","Integral / Semi-integral Abutment",`<div class="note-box">Abutment type: <b>conventional cantilever</b> (panel I-0a). Choose integral or semi-integral there to design that abutment type here; the conventional design of Tabs 1–8 is unchanged.</div>`); return; }
++  const I=S.iab, own=Q.own, t=fmtT, gam=+S.soil.gamma, phi=+S.soil.phi, integ=Q.integ, oS=(ABUT_OWN.owners[own]||{}).short||own;
++  const ownLink='<span class="xlink" data-jump="tab-loads|o-owner">Tab 1 §1.0a</span>';
++  const ir=(R.own&&R.own.rows||[]).filter(x=>x.r.iab), nF=ir.filter(x=>x.st==="fail").length, nW=ir.filter(x=>x.st==="warn").length;
++  let h="";
++  /* ---- 10.0 ---- */
++  h+=panel("o-iab-basis","10.0",(integ?"Integral":"Semi-integral")+" Abutment — Basis & Section",`
++    <div class="note-box">${integ?
++      `<b>Integral abutment.</b> The girders are cast into the end diaphragm (h<sub>d</sub> = ${fmt(+I.hd,2)} ft above the seat) and the pile cap (b = ${fmt(+I.b,2)} ft wide, h<sub>c</sub> = ${fmt(+I.hc,2)} ft deep), which sits on a single row of ${Q.pile.n} vertical ${esc(I.sec)} piles (${I.orient!=="strong"?"web parallel to the abutment centerline: the longitudinal movement bends them about the weak axis":"web normal to the abutment centerline: strong-axis bending"}). There are no bearings or deck joint at the abutment; the superstructure's thermal movement moves the whole abutment into and away from the backfill. Design per the owner method (${esc(oS)}): thermal movement (§10.2), earth pressure from the wall movement (§10.3), piles (§10.4), cap and wall (§10.5); external stability basis in §10.6. The conventional cantilever model of Tabs 3–8 is not part of this design.`
++      :`<b>Semi-integral abutment.</b> The end diaphragm (h<sub>bw</sub> = ${fmt(+S.geom.hbw,2)} ft, t<sub>bw</sub> = ${fmt(+S.geom.tbw,2)} ft — the backwall inputs of panel I-1) is cast with the girder ends and moves with the superstructure; the girders sit on bearings on the seat of a conventional lower abutment. The lower abutment (stem, footing / piles, seat, bearings) is the conventional model of Tabs 1–8 with the connection to the superstructure pinned (vertical reactions, bearing shear); the moving end diaphragm replaces the cantilever backwall check of Tab 5 §5.1 and is designed here (§10.3, §10.5). The stem earth pressure of Tab 1 §1.3 keeps the full retained height (the soil against the diaphragm is carried to the superstructure, so this is conservative for the lower abutment).`}
++      Calculation: AASHTO LRFD 10th Ed. (2024)${own!=="AASHTO"?" with the "+esc(oS)+" method":""}. Eligibility and owner rules: ${ownLink} — <b>${ir.length?(nF?nF+" not met":nW?nW+" to check":"all met"):"none"}</b>.</div>
++    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${svgIabSection(R)}</div>`);
++  /* ---- 10.2 thermal movement ---- */
++  const LtotTxt=(+S.own.Ltot>0)?"L_{tot}":"L";
++  h+=panel("o-iab-move","10.2","Thermal Movement at the Abutment",`
++    ${eqB("Expansion length, temperature change and movement",(own==="MassDOT"?"MassDOT Part I 3.1.8.2, 3.10.2.4, 3.10.2.6":own==="RIDOT"?"RIDOT BDM 3.7.1, 3.2.1.3":own==="CTDOT"?"CTDOT BRSDM V2 3.12.2.1, 3.12.2.3":"AASHTO 3.12.2")+"; AASHTO 3.12.2.3",[
++      +I.Lexp>0? `L_{exp} = ${t(Q.Lexp)}\\ \\text{ft (entered)}` : `L_{exp} = \\dfrac{${LtotTxt}}{2} = \\dfrac{${t(Q.Ltot)}}{2} = ${t(Q.Lexp)}\\ \\text{ft}`,
++      Q.tSrc==="ct"? `\\Delta T_{rise} = 120 - T_{set} = 120 - ${t(Q.Tset,0)} = ${t(Q.dTr,0)}\\ °\\text{F}\\,, \\quad \\Delta T_{fall} = T_{set} - (-30) = ${t(Q.dTf,0)}\\ °\\text{F}`
++                  : `\\Delta T_{rise} = ${t(Q.dTr,1)}\\ °\\text{F}\\,, \\quad \\Delta T_{fall} = ${t(Q.dTf,1)}\\ °\\text{F}\\quad(\\text{panel I-6b})`,
++      `\\Delta_{exp} = \\gamma_{TU}\\,\\alpha\\,\\Delta T_{rise}\\,L_{exp} = (1.00)(${t(Q.alpha*1e6,2)}\\times10^{-6})(${t(Q.dTr,1)})(${t(Q.Lexp)}\\times12) = ${t(Q.dExp,3)}\\ \\text{in}`,
++      `\\Delta_{con} = \\gamma_{TU}\\,\\alpha\\,\\Delta T_{fall}\\,L_{exp} = (1.00)(${t(Q.alpha*1e6,2)}\\times10^{-6})(${t(Q.dTf,1)})(${t(Q.Lexp)}\\times12) = ${t(Q.dCon,3)}\\ \\text{in}`],
++      `${Q.tSrc==="ct"?"CTDOT integral range −30 °F to +120 °F (150 °F) about the setting temperature of panel I-0a; α of panel I-6b (CTDOT 6.4×10⁻⁶ /°F).":"Temperatures and α of panel I-6b (owner defaults applied there"+(own==="MassDOT"?": MassDOT 3.1.8.2 rise / fall, the 65 % factor included":own==="RIDOT"?": RIDOT 3.7.1, 65 % of the Procedure B range":"")+")."} γ<sub>TU</sub> = 1.00 on the movement${own==="MassDOT"?" (MassDOT 3.10.2.6)":own==="RIDOT"?" (RIDOT 3.2.1.3: 1.00 for integral abutments)":" (tool choice: the movement is used unfactored)"}. Movement of this abutment only; creep and shrinkage are not included${own==="CTDOT"&&integ?" here (the CTDOT pile displacement of §10.4 adds the shrinkage strain)":""}.`)}`);
++  /* ---- 10.3 earth pressure ---- */
++  const H=Q.H, bfT=Q.bf;
++  const KpLine=Q.KpIn? `K_p = ${t(Q.Kp,3)}\\ \\text{(entered, panel I-0a)}` : `K_p = \\tan^2(45° + \\varphi/2) = \\tan^2(45° + ${t(phi,1)}°/2) = ${t(Q.Kp,3)}`;
++  const expL={massdot:[`\\dfrac{\\delta_T}{H} = \\dfrac{${t(Q.dExp,3)}}{${t(H)}\\times12} = ${t(Q.rE,5)}`,
++      `K = 0.43 + 5.7\\left[1 - e^{-190\\,\\delta_T/H}\\right] = 0.43 + 5.7\\left[1 - e^{-190(${t(Q.rE,5)})}\\right] = ${t(Q.Kexp,3)}`],
++    ctdot:[KpLine+"\\quad(\\text{full passive under expansion})"],
++    ridot0:[`\\Delta_{exp} = ${t(Q.dExp,3)}\\ \\text{in} < 0.5\\ \\text{in} \\Rightarrow K = K_0 = 1-\\sin\\varphi = ${t(Q.K0,3)}`],
++    ridotp:[KpLine, `K = K_p = ${t(Q.Kexp,3)}\\quad(${integ?`\\Delta_{exp} = ${t(Q.dExp,3)}\\ \\text{in} \\ge 0.5\\ \\text{in}`:"\\text{full passive, semi-integral}"})`],
++    aashto:[KpLine, `\\dfrac{\\Delta}{H} = \\dfrac{${t(Q.dExp,3)}}{${t(H)}\\times12} = ${t(Q.rE,5)}\\,, \\quad \\left(\\dfrac{\\Delta}{H}\\right)_p = ${t(bfT.p,3)}\\ (${bfT.l})`,
++      `K = K_0 + (K_p - K_0)\\min\\!\\left(1,\\ \\dfrac{\\Delta/H}{(\\Delta/H)_p}\\right) = ${t(Q.K0,3)} + (${t(Q.Kp,3)} - ${t(Q.K0,3)})(${t(Q.fP,4)}) = ${t(Q.Kexp,3)}`]}[Q.kM];
++  const conL=Q.kC==="ct0"? [`K = 0\\quad(\\text{thermal contraction without soil pressure})`]
++    : [`K_a = \\tan^2(45° - \\varphi/2) = ${t(Q.Ka,3)}\\,, \\quad \\dfrac{\\Delta_{con}}{H} = \\dfrac{${t(Q.dCon,3)}}{${t(H)}\\times12} = ${t(Q.rC,5)}\\,, \\quad \\left(\\dfrac{\\Delta}{H}\\right)_a = ${t(bfT.a,3)}`,
++       `K = K_0 - (K_0 - K_a)\\min\\!\\left(1,\\ \\dfrac{\\Delta_{con}/H}{(\\Delta/H)_a}\\right) = ${t(Q.K0,3)} - (${t(Q.K0,3)} - ${t(Q.Ka,3)})(${t(Q.fA,4)}) = ${t(Q.Kcon,3)}`];
++  const kRef={massdot:"MassDOT Part I 3.10.8, Fig. 3.10.8-1",ctdot:"CTDOT BRSDM V2 CT11.1.1.3, Eq. CT11.1.1.3-1",ridot0:"RIDOT BDM 11.3.2; AASHTO 3.11.5.2",ridotp:"RIDOT BDM "+(integ?"11.3.2":"11.3.3")+"; AASHTO 3.11.5.4",aashto:"AASHTO 3.11.1, C3.11.1 (Table C3.11.1-1), 3.11.5.2, 3.11.5.4"}[Q.kM];
++  const kNote={massdot:"MassDOT relation for compacted gravel borrow (at-rest 0.43 at no movement)."+(integ?"":" Applied to the moving end diaphragm of the semi-integral abutment (MassDOT gives it for integral abutments: tool choice)."),
++    ctdot:"CTDOT: passive Rankine pressure under thermal expansion."+(integ?"":" The BRSDM gives no semi-integral backwall pressure; the integral K<sub>p</sub> is applied (tool choice)."),
++    ridot0:"RIDOT 11.3.2: at-rest pressure may replace passive where the factored expansion movement is under 0.5 in.", ridotp:integ?"RIDOT 11.3.2: passive pressure on the backwall.":"RIDOT 11.3.3: semi-integral backwalls designed for full passive pressure.",
++    aashto:"AASHTO gives the movement that mobilizes full passive pressure (Table C3.11.1-1) but no curve between at-rest and passive; the coefficient is interpolated linearly in Δ/H (tool choice)."}[Q.kM];
++  h+=panel("o-iab-ep","10.3","Earth Pressure from the Wall Movement (Expansion and Contraction)",`
++    ${eqB("Coefficients","AASHTO 3.11.5.2, 3.11.5.3 (Rankine), 3.11.5.4",[`K_0 = 1 - \\sin\\varphi = 1 - \\sin ${t(phi,1)}° = ${t(Q.K0,3)}\\,, \\quad K_a = ${t(Q.Ka,3)}\\,, \\quad K_p = ${t(Q.Kp,3)}${Q.KpIn?"\\ (\\text{entered})":""}`],`Backfill φ = ${fmt(phi,1)}°, γ = ${fmt(gam,3)} kcf (panel I-3); level backfill. Height H = ${integ?"h<sub>d</sub> + h<sub>c</sub> (deck surface to the bottom of the cap)":"h<sub>bw</sub> (deck surface to the bottom of the end diaphragm)"} = ${fmt(H,2)} ft.`)}
++    ${eqB("Expansion — wall pushed into the backfill",kRef,expL,kNote)}
++    ${eqB("Contraction — wall moving away from the backfill",Q.kC==="ct0"?"CTDOT BRSDM V2 CT11.1.1.4.2a":"AASHTO 3.11.1, C3.11.1 (Table C3.11.1-1)",conL,Q.kC==="ct0"?"CTDOT design case 1: the front face is designed for the contraction effects without soil pressure.":"AASHTO gives the movement that mobilizes active pressure; between at-rest and active the coefficient is interpolated linearly (tool choice).")}
++    ${eqB("Resultants (unfactored, triangular pressure, at H/3 above the bottom)","AASHTO 3.11.5.1",[
++      `P_{exp} = \\tfrac12 K\\gamma H^2 = \\tfrac12(${t(Q.Kexp,3)})(${t(gam,3)})(${t(H)})^2 = ${t(Q.Pexp,3)}\\ \\text{kip/ft}\\,, \\quad \\times L_{ab} = ${t(Q.Pexp,3)}(${t(+S.geom.Lab)}) = ${t(Q.PexpT,1)}\\ \\text{kip}`,
++      `P_{con} = \\tfrac12(${t(Q.Kcon,3)})(${t(gam,3)})(${t(H)})^2 = ${t(Q.Pcon,3)}\\ \\text{kip/ft}\\,, \\quad \\times L_{ab} = ${t(Q.PconT,1)}\\ \\text{kip}`],
++      `The expansion pressure designs the ${integ?"wall (§10.5)":"end diaphragm (§10.5)"}${integ&&own==="CTDOT"?" and enters the CTDOT pile axial force (§10.4)":""}; P<sub>exp</sub>·L<sub>ab</sub> is the compression delivered to the superstructure (design the superstructure for it${own==="RIDOT"?", RIDOT 11.3.2 / 11.3.3":""}). Live-load surcharge is not applied: an approach slab is required${own==="CTDOT"?" (CTDOT CT11.1.1.3: LS may be neglected in the final state)":own==="MassDOT"?" (MassDOT 3.10.4; 3.3.1.3)":""}.`)}`);
++  /* ---- 10.4 piles ---- */
++  if(integ){ const P=Q.pile, sk=P.sk, ax=P.weak?"y":"x";
++    let ph=eqB("Pile section and layout",(sk.pub?"AISC published properties":"flange and web rectangles, fillets neglected")+"; AASHTO 10.7.1.2",[
++      `${esc(sk.k)}:\\ A_s = ${t(sk.A,2)}\\ \\text{in}^2,\\ d = ${t(sk.d,2)},\\ b_f = ${t(sk.bf,2)},\\ t_f = ${t(sk.tf,3)}\\ \\text{in};\\ I_${ax} = ${t(P.Ib,1)}\\ \\text{in}^4,\\ S_${ax} = ${t(P.Sb,1)},\\ Z_${ax} = ${t(P.Zb,1)}\\ \\text{in}^3\\quad(${P.weak?"\\text{weak axis}":"\\text{strong axis}"})`,
++      `n = ${P.n},\\ s = ${t(P.sp)}\\ \\text{ft}:\\ x_{max} = \\tfrac{n-1}{2}s = ${t(P.xMax)}\\ \\text{ft}\\,, \\quad \\textstyle\\sum x^2 = ${t(P.Ix2,1)}\\ \\text{ft}^2`,
++      `\\text{end distance (pile ${P.weak?"flange":"edge"} to the end of the abutment)} = (L_{ab}/2 - x_{max})\\cdot12 - ${P.weak?"d":"b_f"}/2 = (${t(+S.geom.Lab/2)} - ${t(P.xMax)})(12) - ${t((P.weak?sk.d:sk.bf)/2,2)} = ${t(P.endIn,1)}\\ \\text{in}`,
++      `\\text{side clearance} = (12b - ${P.weak?"b_f":"d"})/2 = (12\\cdot${t(+I.b)} - ${t(P.weak?sk.bf:sk.d,2)})/2 = ${t(P.sideIn,1)}\\ \\text{in}\\,, \\quad \\text{embedment} = ${t(+I.embed,1)}\\ \\text{in}`],
++      "Single row of vertical piles, centered on the abutment, spacing along the abutment as entered. Layout limits per owner in "+ownLink+".");
++    const gl=[`DC = DC_{sup} + W_{ab} + W_{app} = ${t(R.agg.DC.P,1)} + \\gamma_c b(h_c+h_d)L_{ab} + q_{app}L_{ab} = ${t(R.agg.DC.P,1)} + ${t(Q.Wab,1)} + ${t(Q.Wapp,1)} = ${t(Q.DC,1)}\\ \\text{kip}\\,, \\quad DW = ${t(Q.DW,1)}\\,, \\quad LL{+}IM = ${t(Q.LL,1)}\\ \\text{kip}`,
++      P.IM? `LL\\ (\\text{no IM}) = \\dfrac{LL{+}IM}{1.33} = \\dfrac{${t(Q.LL,1)}}{1.33} = ${t(P.LLp,1)}\\ \\text{kip}` : "",
++      `P_{DL} = \\dfrac{\\eta(\\gamma_{DC}DC + \\gamma_{DW}DW)}{n} = \\dfrac{${t(Q.eta)}(${t(Q.gDC)}\\cdot${t(Q.DC,1)} + ${t(Q.gDW)}\\cdot${t(Q.DW,1)})}{${P.n}} = ${t(P.Pdl,2)}\\ \\text{kip}`,
++      `W_{LL} = \\eta\\,\\gamma_{LL}\\,m\\,LL = ${t(Q.eta)}(${t(Q.gLL)})(${t(Q.mL)})(${t(P.LLp,1)}) = ${t(P.WLL,1)}\\ \\text{kip}${P.IM?"":`\\,, \\quad e = \\dfrac{\\sum P_iy_i}{\\sum P_i} = ${t(P.eLL,3)}\\ \\text{ft}`}`,
++      P.IM? `P_{LL} = W_{LL}/n = ${t(P.WLL,1)}/${P.n} = ${t(P.Pll,2)}\\ \\text{kip}` : `P_{LL} = \\dfrac{W_{LL}}{n} + \\dfrac{W_{LL}\\,e\\,x_{max}}{\\sum x^2} = \\dfrac{${t(P.WLL,1)}}{${P.n}} + \\dfrac{${t(P.WLL,1)}(${t(Math.abs(P.eLL),3)})(${t(P.xMax)})}{${t(P.Ix2,1)}} = ${t(P.Pll,2)}\\ \\text{kip}`,
++      `P_g = P_{DL} + P_{LL} = ${t(P.Pdl,2)} + ${t(P.Pll,2)} = ${t(P.Pg,2)}\\ \\text{kip (Strength I, gravity, per pile)}`];
++    ph+=eqB("Factored gravity load per pile (Strength I)",(own==="MassDOT"?"MassDOT Part I 3.10.2.1, 3.10.2.2, 3.10.11.4":own==="CTDOT"?"CTDOT BRSDM V2 CT11.1.1.3, Eq. CT11.1.1.4.2c-1":own==="RIDOT"?"RIDOT BDM 11.3.2":"AASHTO 10.7.1.6")+"; AASHTO Tables 3.4.1-1, 3.4.1-2",gl,
++      (own==="MassDOT"?"MassDOT: dead and live load distributed equally to all piles; IM not applied to the piles (the girder LL reactions of panel I-5 include IM = 33 % [Table 3.6.2.1-1]). ":"Dead load equally to all piles; live load with the rigid-cap eccentricity of the girder LL reactions (panel I-5). "+(own==="RIDOT"?"IM included (RIDOT: top 4 ft of the pile). ":own==="CTDOT"?"IM included (CTDOT CT11.1.1.3). ":""))+`Abutment self-weight W<sub>ab</sub> = γ<sub>c</sub>·b·(h<sub>c</sub> + h<sub>d</sub>)·L<sub>ab</sub> = ${fmt(+S.mat.gc,3)}(${fmt(+I.b,2)})(${fmt(+I.hc+(+I.hd),2)})(${fmt(+S.geom.Lab,2)}); girder voids neglected. Braking not applied (integral abutment).`);
++    const resL=[`P_r = \\varphi_c F_y A_s = 0.70(${t(P.Fy,0)})(${t(sk.A,2)}) = ${t(P.Pr,1)}\\ \\text{kip}\\quad(\\text{fully braced: } P_n = F_yA_s)`,
++      P.weak? `\\lambda_f = \\dfrac{b_f}{2t_f} = ${t(P.lamF,2)}\\ ${P.lamF<=P.lamPf?"\\le":">"}\\ 0.38\\sqrt{E/F_y} = ${t(P.lamPf,2)}\\,, \\quad M_n = M_p = F_yZ_y \\le 1.6F_yS_y:\\ \\min(${t(P.Fy*P.Zb,0)},\\ ${t(1.6*P.Fy*P.Sb,0)}) ${P.lamF<=P.lamPf?"":"\\to\\text{FLB}"}= ${t(P.Mn,0)}\\ \\text{kip-in}`
++             : `M_n = M_p = F_yZ_x = ${t(P.Fy,0)}(${t(P.Zb,1)}) = ${t(P.Mn,0)}\\ \\text{kip-in}\\quad(\\text{compact, braced: assumed})`,
++      `M_r = \\varphi_f M_n = 1.00(${t(P.Mn,0)}) = ${t(P.Mr,0)}\\ \\text{kip-in} = ${t(P.Mr/12,1)}\\ \\text{kip-ft}`];
++    const iTex=(Pu,Mu,I2)=>I2.eq==="1"? `\\dfrac{P_u}{2P_r} + \\dfrac{M_u}{M_r} = \\dfrac{${t(Pu,1)}}{2(${t(P.Pr,1)})} + \\dfrac{${t(Mu,0)}}{${t(P.Mr,0)}} = ${t(I2.val,3)}\\quad(P_u/P_r = ${t(I2.r,3)} < 0.2)`
++      : `\\dfrac{P_u}{P_r} + \\dfrac{8}{9}\\dfrac{M_u}{M_r} = \\dfrac{${t(Pu,1)}}{${t(P.Pr,1)}} + \\dfrac{8}{9}\\dfrac{${t(Mu,0)}}{${t(P.Mr,0)}} = ${t(I2.val,3)}\\quad(P_u/P_r = ${t(I2.r,3)} \\ge 0.2)`;
++    if(P.md){ const M=P.md;
++      if(M.ok){ ph+=eqB("MassDOT simplified method — tabulated factored axial load per pile",`MassDOT Part I 3.10.11.4, Table ${M.key==="HP10X57"?"3.10.11-2":"3.10.11-3"}; 3.10.11.2`,[
++          `\\text{soil type ${M.si} (${IAB_MD.soils[M.si-1]}), } ${esc(M.key)}:\\ P_u(0°,10°,20°,30°) = ${M.row.join(",\\ ")}\\ \\text{kip}`,
++          `P_{u,tab} = P_{${M.lo*10}°} + (P_{${(M.lo+1)*10}°} - P_{${M.lo*10}°})\\dfrac{S - ${M.lo*10}°}{10°} = ${M.row[M.lo]} + (${M.row[M.lo+1]} - ${M.row[M.lo]})(${t(M.f,3)}) = ${t(M.PuTab,1)}\\ \\text{kip}\\quad(S = ${t(Q.skew,1)}°)`,
++          `L_f = ${M.Lf}\\ \\text{ft} \\Rightarrow L_{pile} \\ge L_f + 5 = ${M.Lf+5}\\ \\text{ft}\\,, \\quad L_e = ${M.Le}\\ \\text{ft (Table 3.10.11-4, 3D frame method)}`],
++          "The tabulated loads include the thermal (½ in pile-head displacement) and skew effects, from MassDOT's lateral analyses with the inelastic rotation factor θ<sub>i</sub> = 1.75 and φ<sub>c</sub> = 0.70; valid only within the simplified-method boundary conditions ("+ownLink+"). Outside them the 3D space frame method applies (3.10.11.5): use the p-y analysis of Pile Designer (integral mode).");
++        ph+=checkLine("Pile axial (simplified method)",`\\dfrac{P_g}{P_{u,tab}} = \\dfrac{${t(P.Pg,1)}}{${t(M.PuTab,1)}}`,M.dc)+checkLine("Pile length",`\\dfrac{L_f + 5}{L_{pile}} = \\dfrac{${M.Lf+5}}{${t(+I.Lpile,1)}}`,M.dcL); }
++      else ph+=`<div class="note-box">MassDOT 3.10.10.1 permits only HP10X57 and HP12X84 (Grade 50); the simplified-method tables cover only those sections. Choose one in panel I-0a.</div>`; }
++    else if(P.ct){ const C=P.ct, LE=C.LEin;
++      ph+=eqB("CTDOT closed form — pile displacement, thermal and end-rotation effects","CTDOT BRSDM V2 Eq. CT11.1.1.3-2; Eqs. CT11.1.1.4.2c-2 to -9",[
++        `\\Delta_L = F(\\varepsilon_{\\Delta T} + \\varepsilon_s)\\dfrac{L}{2} + 0.006\\theta = 0.6\\left(${t(C.epsT*1e6,1)}\\times10^{-6} + ${t(C.epsS*1e6,0)}\\times10^{-6}\\right)\\dfrac{${t(C.Lin,0)}}{2} + 0.006(${t(Q.skew,1)}) = ${t(C.dL,3)}\\ \\text{in}\\quad(\\varepsilon_{\\Delta T} = \\alpha\\Delta T_{fall})`,
++        `M_T = \\min\\!\\left(M_p,\\ \\dfrac{${C.fixed?6:3}EI\\Delta_L}{L_E^2}\\right) = \\min\\!\\left(${t(P.Mp,0)},\\ \\dfrac{${C.fixed?6:3}(${t(C.EI,0)})(${t(C.dL,3)})}{${t(LE,1)}^2}\\right) = \\min(${t(P.Mp,0)},\\ ${t(C.Mel,0)}) = ${t(C.MT,0)}\\ \\text{kip-in}`,
++        `F_T = \\dfrac{${C.fixed?12:3}EI\\Delta_L}{L_E^3} = \\dfrac{${C.fixed?12:3}(${t(C.EI,0)})(${t(C.dL,3)})}{${t(LE,1)}^3} = ${t(C.FT,2)}\\ \\text{kip}\\quad(${C.fixed?"\\text{fixed head}":"\\text{pinned head}"})`,
++        `W = \\dfrac{2N_PR_{DL+LL}}{N_G} = \\dfrac{2(${P.n})(${t(C.R,2)})}{${C.NG}} = ${t(C.W,1)}\\ \\text{kip}\\,, \\quad \\theta_W = \\dfrac{WS^2}{24E_GI_G} = \\dfrac{${t(C.W,1)}(${t(C.Sin,0)})^2}{24(${t(+I.EG,0)})(${t(+I.IG,0)})} = ${t(C.thW,5)}\\ \\text{rad}`,
++        `M_W = \\dfrac{4EI}{L_E}\\theta_W = \\dfrac{4(${t(C.EI,0)})}{${t(LE,1)}}(${t(C.thW,5)}) = ${t(C.MW,0)}\\ \\text{kip-in}`,
++        `P_P = \\dfrac{\\eta\\gamma_{EH}P_{exp}L_{ab}}{n} = \\dfrac{${t(Q.eta)}(${t(Q.gEH)})(${t(Q.PexpT,1)})}{${P.n}} = ${t(C.PP,2)}\\ \\text{kip}\\,, \\quad H_0 = \\tfrac{2H}{3} = ${t(C.H0,1)}\\ \\text{in}`,
++        `R_T = \\dfrac{P_PH_0 + \\eta(F_TH + M_T)}{S} = \\dfrac{${t(C.PP,2)}(${t(C.H0,1)}) + ${t(Q.eta)}(${t(C.FT,2)}\\cdot${t(C.Hin,0)} + ${t(C.MT,0)})}{${t(C.Sin,0)}} = ${t(C.RT,2)}\\ \\text{kip}`,
++        `P_u = P_g + R_T = ${t(P.Pg,2)} + ${t(C.RT,2)} = ${t(C.Pu,2)}\\ \\text{kip}\\,, \\quad M_u = \\min(M_p,\\ M_T + M_W) = \\min(${t(P.Mp,0)},\\ ${t(C.MT+C.MW,0)}) = ${t(C.Mu,0)}\\ \\text{kip-in}`],
++        `L = total length ${fmt(Q.Ltot,1)} ft; S = span ${fmt(+S.geom.spanL,1)} ft; E = 29,000 ksi; I = I<sub>${ax}</sub>; L<sub>E</sub>, E<sub>G</sub>, I<sub>G</sub> and the head condition from panel I-0a (L<sub>E</sub> from the lateral pile analysis). R<sub>DL+LL</sub> = the factored gravity load per pile P<sub>g</sub> above (tool choice: the BRSDM does not say factored or service; the factored rotation follows RIDOT 11.3.2). M<sub>T</sub> and M<sub>W</sub> are added (both at thermal expansion) and the design moment is limited to M<sub>p</sub> (elastic design). Passive force per pile at γ<sub>EH</sub> (§10.3), thermal terms at γ<sub>TU</sub> = 1.00.`);
++      ph+=eqB("Combined axial and flexure","AASHTO 6.9.2.2.1 (Eqs. 6.9.2.2.1-1, -2), 6.5.4.2, 6.12.2.2.1",resL.concat([iTex(C.Pu,C.Mu,C.I)]),"φ<sub>c</sub> = 0.70 and φ<sub>f</sub> = 1.00 for the combined axial and flexural resistance of undamaged H-piles [6.5.4.2]; piles fully braced (not scour susceptible, CTDOT CT11.1.1.4.2c).")+checkLine("Pile axial + flexure",iTex(C.Pu,C.Mu,C.I).split("=").slice(0,2).join("="),C.I.val); }
++    else{ const Y=P.py;
++      ph+=eqB("Combined axial and flexure with the pile-head moment of the p-y analysis","AASHTO 6.9.2.2.1, 6.5.4.2, 6.12.2.2.1"+(own==="RIDOT"?"; RIDOT BDM 11.3.2":""),resL.concat(Y.on?[`M_u = ${t(+I.MuPy,1)}\\ \\text{kip-ft} = ${t(Y.Mu,0)}\\ \\text{kip-in (entered)}\\,, \\quad P_u = P_g = ${t(P.Pg,2)}\\ \\text{kip}`,iTex(P.Pg,Y.Mu,Y.I)]:[`P_u/P_r = ${t(P.Pg,1)}/${t(P.Pr,1)} = ${t(P.Pg/P.Pr,3)}\\quad(\\text{moment not entered})`]),
++        (own==="RIDOT"?"RIDOT 11.3.2 requires an iterative lateral analysis (L-Pile or similar) under the factored thermal movement Δ<sub>exp</sub> / Δ<sub>con</sub> (§10.2) and the pile-head moment matching the superstructure rotation, elastic or inelastic. ":"AASHTO LRFD gives no closed-form integral pile method; the pile-head moment comes from a lateral (p-y) analysis under the thermal movement (§10.2). ")+"Run it in Pile Designer (integral-abutment mode, p-y) and enter M<sub>u</sub> in panel I-0a.");
++      if(Y.on) ph+=checkLine("Pile axial + flexure",iTex(P.Pg,Y.Mu,Y.I).split("=").slice(0,2).join("="),Y.I.val);
++      else ph+=`<div class="note-box">Combined check not complete: enter the pile-head moment from the p-y analysis (panel I-0a).</div>`; }
++    h+=panel("o-iab-pile","10.4","Integral Piles — "+(P.md?"MassDOT Simplified Method":P.ct?"CTDOT Closed-Form Method":"Axial Load and p-y Moment"),ph); }
++  /* ---- 10.5 cap / wall / diaphragm ---- */
++  const c2=Q.c2;
++  let ch=eqB(integ?"Case 2 — whole wall spanning horizontally between the girders (earth pressure)":"End diaphragm spanning horizontally between the girders (earth pressure)",
++    (own==="MassDOT"?"MassDOT Part I 3.10.8 (case 2)":own==="CTDOT"?"CTDOT BRSDM V2 CT11.1.1.4.2a (design case 2)":"MassDOT 3.10.8 / CTDOT CT11.1.1.4.2a idealization")+"; AASHTO Table 3.4.1-2",[
++    `p = K\\gamma H = (${t(Q.Kexp,3)})(${t(gam,3)})(${t(Q.H)}) = ${t(c2.pB,3)}\\ \\text{ksf at the bottom}\\,, \\quad w_u = \\eta\\gamma_{EH}p = ${t(Q.eta)}(${t(Q.gEH)})(${t(c2.pB,3)}) = ${t(c2.wu,3)}\\ \\text{kip/ft per ft of height}`,
++    `s = ${t(Q.sG)}\\ \\text{ft (largest girder spacing)}:\\quad M_u = 0.8\\dfrac{w_us^2}{8} = 0.8\\dfrac{(${t(c2.wu,3)})(${t(Q.sG)})^2}{8} = ${t(c2.Mu)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = \\dfrac{w_us}{2} = ${t(c2.Vu)}\\ \\text{kip/ft}`,
++    `M_s = 0.8\\dfrac{p\\,s^2}{8} = ${t(c2.Ms)}\\ \\text{kip-ft/ft (Service I)}`],
++    `Continuous beam on the girders taken as 80 % of the simple-span moment, simple-span shear; the pressure at the bottom of the ${integ?"wall":"diaphragm"} governs every 1-ft strip (the same bars at every height). Section depth = ${integ?"b":"t<sub>bw</sub>"} = ${fmt(c2.t,2)} ft; the same check covers the front face (positive moment) and the back face (negative moment over the girders). γ<sub>EH</sub> = ${fmt(Q.gEH,2)} (panel I-0a).`);
++  if(integ){ const c1=Q.c1, c3=Q.c3;
++    ch=eqB("Case 1 — pile cap a continuous beam on the piles (vertical loads)",(own==="MassDOT"?"MassDOT Part I 3.10.8 (case 1)":own==="CTDOT"?"CTDOT BRSDM V2 CT11.1.1.4.2a (design case 1)":"MassDOT 3.10.8 / CTDOT CT11.1.1.4.2a idealization")+"; AASHTO Table 3.4.1-1",[
++      `w_u = \\dfrac{\\eta(\\gamma_{DC}DC + \\gamma_{DW}DW + \\gamma_{LL}m\\,LL)}{L_{ab}} = \\dfrac{${t(Q.eta)}(${t(Q.gDC)}\\cdot${t(Q.DC,1)} + ${t(Q.gDW)}\\cdot${t(Q.DW,1)} + ${t(Q.gLL)}\\cdot${t(Q.mL)}\\cdot${t(Q.LL,1)})}{${t(+S.geom.Lab)}} = ${t(Q.wu1,3)}\\ \\text{kip/ft}`,
++      `s = ${t(+I.sp)}\\ \\text{ft (pile spacing)}:\\quad M_u = 0.8\\dfrac{w_us^2}{8} = ${t(c1.Mu)}\\ \\text{kip-ft}\\,, \\quad V_u = \\dfrac{w_us}{2} = ${t(c1.Vu)}\\ \\text{kip}\\,, \\quad M_s = 0.8\\dfrac{w_ss^2}{8} = ${t(c1.Ms)}\\ \\text{kip-ft}\\ (w_s = ${t(Q.ws1,3)})`,
++      `\\text{per ft of cap width: } M_u/b = ${t(c1.Mu)}/${t(+I.b)} = ${t(c1.sec.Mu)}\\ \\text{kip-ft/ft}\\,, \\quad V_u/b = ${t(c1.sec.Vu)}\\ \\text{kip/ft}\\,, \\quad h = h_c = ${t(+I.hc*12,1)}\\ \\text{in}`],
++      "All vertical loads (girder reactions with IM, abutment and approach-slab weight) spread uniformly along the abutment (MassDOT 3.10.8). Longitudinal bars across the cap width b, top and bottom; the cap alone (below the seat) carries them.")+ch+
++      eqB("Rear face — cap cantilevered down from the seat (expansion pressure)",(own==="CTDOT"?"CTDOT BRSDM V2 CT11.1.1.4.2a (design case 1)":"CTDOT CT11.1.1.4.2a idealization (tool check)")+"; AASHTO 3.11.5.1",[
++      `M = K\\gamma\\left[\\dfrac{z_2^3 - z_1^3}{3} - z_1\\dfrac{z_2^2 - z_1^2}{2}\\right] = (${t(c3.k,4)})\\left[\\dfrac{${t(c3.z2)}^3 - ${t(c3.z1)}^3}{3} - ${t(c3.z1)}\\dfrac{${t(c3.z2)}^2 - ${t(c3.z1)}^2}{2}\\right] = ${t(c3.M,3)}\\ \\text{kip-ft/ft}`,
++      `V = K\\gamma\\dfrac{z_2^2 - z_1^2}{2} = ${t(c3.V,3)}\\ \\text{kip/ft}\\,, \\quad M_u = \\eta\\gamma_{EH}M = ${t(c3.Mu)}\\,, \\quad V_u = ${t(c3.Vu)}`],
++      "z<sub>1</sub> = h<sub>d</sub> (the seat) and z<sub>2</sub> = h<sub>d</sub> + h<sub>c</sub> (the bottom of the cap), depths below the deck surface; the cap below the seat is a cantilever fixed at the seat and free at the bottom (pile restraint neglected). Front face: contraction effects without soil pressure "+(own==="CTDOT"?"(CTDOT; the same bars may be used)":"(use the same bars)")+".");
++    h+=panel("o-iab-cap","10.5","Pile Cap and Wall — Demands",ch);
++    h+=sectionHTML(Q.c1.sec,`<div class="note-box">Case 1 (§10.5): longitudinal cap bars #${I.capBar} @ ${fmt(+I.capSp,1)} in across the width, per ft of width; h = h<sub>c</sub> = ${fmt(+I.hc*12,1)} in.</div>`,"10.5a","Pile Cap — Longitudinal (Case 1)");
++    h+=sectionHTML(Q.c2.sec,`<div class="note-box">Case 2 (§10.5): horizontal bars #${I.hBar} @ ${fmt(+I.hSp,1)} in each face, per ft of height; h = b = ${fmt(+I.b*12,1)} in.</div>`,"10.5b","Integral Wall — Horizontal (Case 2)");
++    h+=sectionHTML(Q.c3.sec,`<div class="note-box">Rear face (§10.5): vertical bars #${I.vBar} @ ${fmt(+I.vSp,1)} in, per ft of wall; h = b = ${fmt(+I.b*12,1)} in.</div>`,"10.5c","Pile Cap — Vertical Rear Face");
++  }else{
++    h+=panel("o-iab-cap","10.5","End Diaphragm — Demands",ch+eqB("Force to the superstructure (unfactored)","statics",[`P_{dia} = P_{exp}L_{ab} = ${t(Q.PexpT,1)}\\ \\text{kip}`],"Compression in the superstructure"+(own==="RIDOT"?" (RIDOT 11.3.3: the integral-abutment axial considerations apply)":"")+"; the seat receives only the bearing shear from the movement (Tab 1 §1.7, TU)."));
++    h+=sectionHTML(Q.c2.sec,`<div class="note-box">Horizontal bars #${I.hBar} @ ${fmt(+I.hSp,1)} in each face, per ft of height; h = t<sub>bw</sub> = ${fmt(+S.geom.tbw*12,1)} in.</div>`,"10.5a","End Diaphragm — Horizontal");
++  }
++  /* ---- 10.6 stability basis ---- */
++  h+=panel("o-iab-stab","10.6","External Stability — Basis",`<div class="note-box">${integ?
++    `<b>No sliding, overturning (eccentricity) or footing bearing check.</b> The integral abutment has no footing: it is restrained longitudinally by the superstructure, which acts as a strut between the two abutments (the earth pressure at one end is balanced through the superstructure by the other end, MassDOT 3.10.8 / RIDOT 11.3.2 / CTDOT CT11.1.1.4.2c free body), and it is carried vertically by a single row of flexible piles. <b>Checked instead:</b> pile axial and flexural resistance (§10.4), pile length / fixity (§10.4), the cap for the vertical loads and the wall for the earth pressure (§10.5)${own==="CTDOT"?", with the girder end-rotation moment M<sub>W</sub> and the thermal axial force R<sub>T</sub> in the pile (§10.4)":""}. The superstructure is designed for the compression P<sub>exp</sub>·L<sub>ab</sub> (§10.3) and the end-moment connection (owner detail). Unbalanced backfilling during construction is controlled by notes on the plans. Geotechnical resistance of the piles, the fixity depth and the lateral analysis come from the geotechnical engineer${own==="MassDOT"?"":" (Pile Designer, integral mode, for the p-y analysis)"}.`
++    :`<b>Lower abutment:</b> sliding, eccentricity and bearing (or pile reactions) are checked in Tabs 3 and 4 on the conventional model: the connection to the superstructure is pinned (vertical reactions; horizontal force only through the bearing shear, Tab 1 §1.7)${own==="CTDOT"?" (CTDOT V2 11.6.1.3.1CT)":""}. <b>End diaphragm:</b> moves with the superstructure; its earth pressure goes to the superstructure (§10.5), not to the lower abutment.${own==="MassDOT"?" MassDOT 3.4.6.1: also check overturning for 100 % of the M–O active force with no superstructure restraint (Extreme Event I, panel I-11: k<sub>h</sub> ratio 1.00, superstructure share 0 %).":""}`}</div>`);
++  el.innerHTML=h;
++}
++/* ---------- integral / semi-integral section figure (display only; values from R.iab and the inputs) ---------- */
++function svgIabSection(R){
++  const Q=R.iab, I=S.iab, g=S.geom, Wd=620, Hd=470, integ=Q.integ;
++  let b="";
++  if(integ){
++    const hd=+I.hd, hc=+I.hc, bw=+I.b, Lp=Math.min(+I.Lpile,Math.max(8,1.2*(hd+hc))), tot=hd+hc+Lp*0.55+1.5, sc=Math.min(320/tot,22), x0=250, yT=100;
++    const X=x=>x0+x*sc, Y=y=>yT+y*sc;   // x from the front face (toward the span negative), y down from the deck surface
++    const cut=hd+hc+Lp*0.55;
++    b+=`<rect x="${X(-7)}" y="${Y(-0.7)}" width="${7*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(-6.8),Y(-0.9),"deck",{fs:10,c:"#555"});   // deck slab
++    b+=`<rect x="${X(-7)}" y="${Y(0)}" width="${(7+0.4)*sc}" height="${Math.max(0.3,+I.dg)*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`+svgT(X(-6.8),Y(Math.max(0.3,+I.dg))-5,"girder (cast into the diaphragm)",{fs:10,c:"#1f3a5f"});
++    b+=`<rect x="${X(0)}" y="${Y(-0.7)}" width="${bw*sc}" height="${(hd+0.7)*sc}" fill="#ecebe4" stroke="#333" stroke-width="1.4"/>`+svgT(X(bw/2),Y(hd/2),"end diaphragm",{fs:10,a:"middle"});
++    b+=`<rect x="${X(0)}" y="${Y(hd)}" width="${bw*sc}" height="${hc*sc}" fill="#e4e2d8" stroke="#333" stroke-width="1.4"/>`+svgT(X(bw/2),Y(hd+0.9),"pile cap",{fs:10,a:"middle"});
++    b+=`<line x1="${X(0)}" y1="${Y(hd)}" x2="${X(bw)}" y2="${Y(hd)}" stroke="#777" stroke-dasharray="3 3"/>`+svgT(X(-0.2),Y(hd)+4,"seat",{fs:9.5,a:"end",c:"#666"});
++    const pw=Math.max(3,(I.orient!=="strong"?iabSect(I.sec).bf:iabSect(I.sec).d)/12*sc), px=X(bw/2)-pw/2, emb=(+I.embed||0)/12;
++    b+=`<rect x="${px}" y="${Y(hd+hc-emb)}" width="${pw}" height="${(cut-(hd+hc-emb))*sc}" fill="#8a8a80" stroke="#444"/>`;
++    b+=`<path d="M${px-4},${Y(cut)} l${pw/2+4},6 l${pw/2+4},-6" fill="none" stroke="#444"/>`+svgT(X(bw/2)+pw/2+6,Y(hd+hc+Lp*0.3),`${esc(I.sec)}, ${I.orient!=="strong"?"weak axis":"strong axis"}, n = ${Q.pile.n} @ ${fmt(+I.sp,2)} ft`,{fs:10});
++    if(Q.own==="MassDOT") b+=`<rect x="${X(bw/2-1.25)}" y="${Y(hd+hc)}" width="${2.5*sc}" height="${3*sc}" fill="rgba(150,150,150,0.25)" stroke="#999" stroke-dasharray="3 2"/>`+svgT(X(bw/2+1.4),Y(hd+hc+1.6),"crushed-stone trench 3 ft × 2'-6\"",{fs:9.5,c:"#666"});
++    b+=`<rect x="${X(bw)}" y="${Y(-0.7)}" width="${6*sc}" height="${0.7*sc}" fill="#cfd8dc" stroke="#78909c"/>`+svgT(X(bw+0.3),Y(-0.9),"approach slab",{fs:10,c:"#546e7a"});
++    const pB=Q.Kexp*(+S.soil.gamma)*Q.H, ps=110/Math.max(1e-6,pB);
++    b+=`<polygon points="${X(bw)},${Y(0)} ${X(bw)+pB*ps},${Y(Q.H)} ${X(bw)},${Y(Q.H)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(bw)+pB*ps+4,Y(Q.H),`K γ H = ${fmt(pB,3)} ksf (K = ${fmt(Q.Kexp,3)}, expansion)`,{fs:10,c:"#1f3a5f"});
++    b+=svgArrow(X(-3),Y(-0.35),X(-0.1),Y(-0.35),"#c62828",1.6)+svgT(X(-3),Y(-0.7)-18,`Δ_exp = ${fmt(Q.dExp,3)} in`,{fs:10,c:"#c62828"});
++    b+=dimV(Y(-0.7),Y(hd),X(-7)-16,`h_d = ${fmt(hd,2)}`)+dimV(Y(hd),Y(hd+hc),X(-7)-16,`h_c = ${fmt(hc,2)}`)+dimV(Y(0),Y(Q.H),X(bw)+12,`H = ${fmt(Q.H,2)} ft`)+dimH(X(0),X(bw),Y(-0.7)-34,`b = ${fmt(bw,2)} ft`);
++    b+=svgT(X(bw/2)+pw/2+3,Y(hd+hc-emb/2)+4,`embed ${fmt(+I.embed,0)} in`,{fs:9,c:"#555"});
++    b+=svgT(10,18,"Integral abutment — section normal to the abutment (schematic)",{b:1,fs:12});
++  }else{
++    const hbw=+g.hbw, tbw=+g.tbw, hs=+g.hstem, tst=+g.tst, tf=+g.tf, Lt=+g.Ltoe, Lh=+g.Lheel, tsb=+g.tsb, B=Lt+tsb+Lh, tot=hbw+hs+tf+1.5;
++    const sc=Math.min(340/tot,480/(B+8)), xT=40+5*sc, yT=90, X=x=>xT+x*sc, Y=y=>yT+y*sc;   // x from the toe; y down from the deck surface
++    const xBack=Lt+tsb, xSeatF=xBack-tst;
++    b+=`<polygon points="${X(xBack-tsb)},${Y(hbw+hs)} ${X(xSeatF)},${Y(hbw)} ${X(xBack)},${Y(hbw)} ${X(xBack)},${Y(hbw+hs)}" fill="#e4e2d8" stroke="#333" stroke-width="1.4"/>`+svgT(X(xBack-tst/2),Y(hbw+hs/2),"stem",{fs:10,a:"middle"});
++    b+=`<rect x="${X(0)}" y="${Y(hbw+hs)}" width="${B*sc}" height="${tf*sc}" fill="#e4e2d8" stroke="#333" stroke-width="1.4"/>`+svgT(X(B/2),Y(hbw+hs+tf/2)+4,"footing",{fs:10,a:"middle"});
++    b+=`<rect x="${X(xBack-tbw)}" y="${Y(-0.7)}" width="${tbw*sc}" height="${(hbw+0.7-0.15)*sc}" fill="#ecebe4" stroke="#1f3a5f" stroke-width="1.6"/>`+svgT(X(xBack-tbw/2),Y(-0.7)-6,"end diaphragm",{fs:10,a:"middle",c:"#1f3a5f"});
++    b+=`<rect x="${X(xBack-tbw-6)}" y="${Y(-0.7)}" width="${6*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(xBack-tbw-5.8),Y(-0.9),"deck",{fs:10,c:"#555"});
++    const brgX=xSeatF+(+g.brgSetback>0?Math.min(tst-tbw,+g.brgSetback):0.5);
++    b+=`<rect x="${X(xBack-tbw-6)}" y="${Y(0)}" width="${(6+0.05)*sc}" height="${Math.max(0.3,Math.min(hbw-0.4,+I.dg))*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
++    b+=`<rect x="${X(Math.min(brgX,xBack-tbw-0.6)-0.3)}" y="${Y(hbw)-6}" width="${0.6*sc}" height="6" fill="#444"/>`+svgT(X(Math.min(brgX,xBack-tbw-0.6)-0.5),Y(hbw)-4,"bearing",{fs:9.5,a:"end",c:"#444"});
++    b+=`<line x1="${X(xBack-tbw)}" y1="${Y(hbw)}" x2="${X(xBack)}" y2="${Y(hbw)}" stroke="#c62828" stroke-width="2"/>`+svgT(X(xBack)+4,Y(hbw)+16,"joint (diaphragm slides on the stem)",{fs:9.5,c:"#c62828"});
++    b+=`<rect x="${X(xBack)}" y="${Y(-0.7)}" width="${5*sc}" height="${0.7*sc}" fill="#cfd8dc" stroke="#78909c"/>`+svgT(X(xBack+5),Y(0)+12,"approach slab",{fs:10,a:"end",c:"#546e7a"});
++    const pB=Q.Kexp*(+S.soil.gamma)*Q.H, ps=90/Math.max(1e-6,pB);
++    b+=`<polygon points="${X(xBack)},${Y(0)} ${X(xBack)+pB*ps},${Y(hbw)} ${X(xBack)},${Y(hbw)}" fill="rgba(31,58,95,0.15)" stroke="#1f3a5f"/>`+svgT(X(xBack)+pB*ps+4,Y(hbw),`K γ h_bw = ${fmt(pB,3)} ksf (K = ${fmt(Q.Kexp,3)})`,{fs:10,c:"#1f3a5f"});
++    b+=svgArrow(X(xBack-tbw-3.5),Y(-0.35),X(xBack-tbw-0.1),Y(-0.35),"#c62828",1.6)+svgT(X(xBack-tbw-3.5),Y(-0.7)-18,`Δ_exp = ${fmt(Q.dExp,3)} in`,{fs:10,c:"#c62828"});
++    b+=dimV(Y(-0.7),Y(hbw),X(xBack-tbw-6)-14,`h_bw = ${fmt(hbw,2)} ft`);
++    b+=svgT(10,18,"Semi-integral abutment — section normal to the abutment (schematic)",{b:1,fs:12});
++    b+=svgT(10,Hd-12,"Lower abutment = conventional model (Tabs 1–8); the end diaphragm moves with the superstructure on the bearings.",{fs:9.5,c:"#555"});
++  }
++  return svgWrap(Wd,Hd,b,620);
++}
++
+@@ -4098 +4598,5 @@ function svgWingPress(R){
+-const DASH_ANCHOR={sliding:"o-slide",ecc:"o-ecc",bearing:"o-brg",seat:"o-seat",
++const DASH_ANCHOR={iabPile:"o-iab-pile",iabTip:"o-iab-pile",   // IAB
++  iabC1F:"o-str-Pile cap longitudinal (case 1)",iabC1V:"o-str-Pile cap longitudinal (case 1)",iabC1Min:"o-str-Pile cap longitudinal (case 1)",
++  iabC2F:"o-str-Integral wall horizontal (case 2)",iabC2V:"o-str-Integral wall horizontal (case 2)",iabC2Min:"o-str-Integral wall horizontal (case 2)",
++  iabC3F:"o-str-Pile cap vertical rear face",iabC3V:"o-str-Pile cap vertical rear face",iabC3Min:"o-str-Pile cap vertical rear face",
++  iabDF:"o-str-End diaphragm horizontal",iabDV:"o-str-End diaphragm horizontal",iabDMin:"o-str-End diaphragm horizontal",sliding:"o-slide",ecc:"o-ecc",bearing:"o-brg",seat:"o-seat",
+@@ -4154 +4658 @@ const TABS=[["tab-loads","1 · Geometry & Loads"],["tab-comb","2 · Load Combina
+-  ["tab-vm","6 · V &amp; M Diagrams"],["tab-3d","7 · 3D View"],["tab-tables","8 · Detailed Tables"],["tab-wing","9 · Wingwalls"]];
++  ["tab-vm","6 · V &amp; M Diagrams"],["tab-3d","7 · 3D View"],["tab-tables","8 · Detailed Tables"],["tab-wing","9 · Wingwalls"],["tab-iab","10 · Integral / Semi-integral"]];
+@@ -4177 +4681 @@ function ownerPanelHTML(R){
+-  if(O.owner==="AASHTO") return panel("o-owner","1.0a","Owner Requirements — AASHTO LRFD only",`<div class="note-box">Owner: <b>AASHTO LRFD 10th Ed. (2024)</b>, no owner rules. Choose MassDOT, RIDOT or CTDOT in panel I-0 to check that owner's requirements here. ${esc(ABUT_OWN.note)}</div>`);
++  if(O.owner==="AASHTO"&&!O.rows.length) return panel("o-owner","1.0a","Owner Requirements — AASHTO LRFD only",`<div class="note-box">Owner: <b>AASHTO LRFD 10th Ed. (2024)</b>, no owner rules. Choose MassDOT, RIDOT or CTDOT in panel I-0 to check that owner's requirements here. ${esc(ABUT_OWN.note)}</div>`);
+@@ -4183,0 +4688 @@ function ownerPanelHTML(R){
++  if(O.owner==="AASHTO") return panel("o-owner","1.0a","Owner Requirements — AASHTO LRFD, "+(iabType()==="integral"?"integral":"semi-integral")+" abutment"+head,`<div class="note-box">Owner: <b>AASHTO LRFD 10th Ed. (2024)</b>, no owner rules. The AASHTO provisions for the ${iabType()==="integral"?"integral":"semi-integral"} abutment type (panel I-0a) are listed; AASHTO LRFD sets no numeric eligibility limits for it. Choose MassDOT, RIDOT or CTDOT in panel I-0 to check that owner's eligibility limits.</div>${t}`);   // IAB
+@@ -6553 +7058 @@ const TAB_RENDER={ "tab-loads":renderTabLoads, "tab-comb":renderTabComb, "tab-st
+-  "tab-wing":renderTabWing };
++  "tab-wing":renderTabWing, "tab-iab":renderTabIAB };
+@@ -6558 +7063,5 @@ function renderTabContent(id){
+-  const el=document.getElementById(id); if(el) renderMathIn(el);
++  const el=document.getElementById(id);
++  // IAB: for an integral abutment the conventional cantilever tabs are not part of the design — say so at their top
++  if(el&&R.iab&&R.iab.integ&&["tab-comb","tab-stab","tab-found","tab-struct","tab-vm","tab-3d","tab-tables"].includes(id)) el.insertAdjacentHTML("afterbegin",`<div class="note-box" style="border-color:#c62828"><b>Integral abutment (panel I-0a):</b> this tab analyses the conventional cantilever inputs (stem, footing, bearings) and is not part of the integral design. The integral design is in <span class="xlink" data-jump="tab-iab|o-iab-basis">Tab 10</span>.</div>`);
++  if(el&&R.iab&&!R.iab.integ&&id==="tab-struct") el.insertAdjacentHTML("afterbegin",`<div class="note-box"><b>Semi-integral abutment (panel I-0a):</b> the cantilever backwall check (§5.1) does not apply — the end diaphragm moves with the superstructure and is designed in <span class="xlink" data-jump="tab-iab|o-iab-cap">Tab 10 §10.5</span>; its §5.1 results are not in the dashboard.</div>`);
++  if(el) renderMathIn(el);
+@@ -6629 +7138 @@ document.addEventListener("change",ev=>{
+-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize"].includes(p))?num:raw;
++  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar"].includes(p))?num:raw;
+@@ -6918,0 +7428,18 @@ function inputEchoHTML(){
++  if(iabType()!=="conv"){ const I=S.iab, it=iabType()==="integral";   // IAB
++    h+="<h3>Abutment type (panel I-0a)</h3>"+echoRows([
++      ["Type",it?"integral":"semi-integral",""],
++      ["Total length; expansion length (0 = half)",fmt((+S.own.Ltot>0)?+S.own.Ltot:+S.geom.spanL,1)+"; "+fmt(+I.Lexp,1),"ft"],
++      ["Girder depth; grade",fmt(+I.dg)+" ft; "+fmt(+I.grade)+" %",""],
++      ["Backfill (Table C3.11.1-1)",IAB_BF[I.bfType]?IAB_BF[I.bfType].l:I.bfType,""],
++      ["K_p entered (0 = Rankine); γEH on the movement pressure",fmt(+I.KpUser,3)+"; "+fmt(+I.gEH,2),""]].concat(it?[
++      ["Cap width b; cap depth h_c; diaphragm h_d",fmt(+I.b)+" / "+fmt(+I.hc)+" / "+fmt(+I.hd),"ft"],
++      ["Curvature; height difference; fill over the cap",fmt(+I.curve,1)+"°; "+fmt(+I.dH)+" ft; "+fmt(+I.Dfront)+" ft",""],
++      ["Straight; parallel abutments; rock below tip; not scour susceptible",[I.straight,I.parallel,I.rockBelow,I.noScour].map(x=>x?"yes":"no").join(" / "),""],
++      ["Approach slab dead load",fmt(+I.qApp,2),"kip/ft"],
++      ["Piles: section, F_y, orientation",I.sec+", "+fmt(+I.Fy,0)+" ksi, "+(I.orient!=="strong"?"weak axis":"strong axis"),""],
++      ["Piles: n, spacing, embedment, length",I.n+", "+fmt(+I.sp)+" ft, "+fmt(+I.embed,1)+" in, "+fmt(+I.Lpile,1)+" ft",""],
++      ["MassDOT soil type; CTDOT head, L_E, E_G, I_G; T_set, ε_s",I.soilMD+"; "+I.head+", "+fmt(+I.LE)+" ft, "+fmt(+I.EG,0)+" ksi, "+fmt(+I.IG,0)+" in⁴; "+fmt(+I.Tset,0)+" °F, "+fmt(+I.epsSH*1e6,0)+"×10⁻⁶",""],
++      ["p-y pile-head moment",fmt(+I.MuPy,1),"kip-ft"],
++      ["Cap bars; horizontal bars; vertical bars","#"+I.capBar+" @ "+fmt(+I.capSp,1)+"; #"+I.hBar+" @ "+fmt(+I.hSp,1)+"; #"+I.vBar+" @ "+fmt(+I.vSp,1),"in"]]:[
++      ["Other end semi-integral",I.bothEnds?"yes":"no",""],
++      ["End diaphragm horizontal bars","#"+I.hBar+" @ "+fmt(+I.hSp,1),"in"]])); }
+@@ -6941,0 +7469,3 @@ const WING_REFS=[["Wingwalls","AASHTO LRFD 10th Ed.: 1.3.2.1; 3.11.6.4.1 (Tables
++/* IAB: references added to the report for an integral / semi-integral abutment */
++const IAB_REFS=[["Integral / semi-integral","AASHTO LRFD 10th Ed.: 3.11.1 (Table C3.11.1-1), 3.11.5.2, 3.11.5.4, 3.12.2.3; 6.5.4.2, 6.9.2.2.1, 6.12.2.2.1; 10.7.1.2; 11.6.1.3"],
++  ["","Owner methods as cited in Tab 10: MassDOT Part I 3.1.8, 3.10; RIDOT BDM 3.7.1, 11.3.2, 11.3.3; CTDOT BRSDM V2 3.12.2, 11.6.1.3.1CT, App. CT11.1"]];
+@@ -6989,0 +7520,6 @@ async function buildReport(){
++  if(R.iab&&R.iab.integ){ const Q=R.iab, P=Q.pile;   // IAB: integral key results
++    key+=`<tr><td class="lft">Thermal movement Δ_exp / Δ_con; earth pressure K (expansion)</td><td>${fmt(Q.dExp,3)} / ${fmt(Q.dCon,3)} in; K = ${fmt(Q.Kexp,3)}</td><td>${wk("tab-iab","o-iab-ep")}</td></tr>
++    <tr><td class="lft">Factored gravity load per pile (Strength I)</td><td>${fmt(P.Pg,1)} kip${P.md&&P.md.ok?" vs "+fmt(P.md.PuTab,1)+" kip (MassDOT table)":P.ct?"; P_u = "+fmt(P.ct.Pu,1)+" kip, M_u = "+fmt(P.ct.Mu/12,1)+" kip-ft":""}</td><td>${wk("tab-iab","o-iab-pile")}</td></tr>
++    <tr><td class="lft">Wall (case 2): Mu vs φMn</td><td>${fmt(Q.c2.sec.Mu)} vs ${fmt(Q.c2.sec.phiMn)} kip·ft/ft</td><td>${wk("tab-iab","o-str-"+Q.c2.sec.name)}</td></tr>
++    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+"</b>":"none"}</td><td>${wk("rpt","ovr")}</td></tr></table>`; }
++  else{
+@@ -6995,0 +7532 @@ async function buildReport(){
++  }
+@@ -7023,2 +7560,4 @@ async function buildReport(){
+-    "tab-vm":"Shear & Moment Diagrams","tab-tables":"Detailed Force-Effect Tables"};
+-  const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables, "tab-wing":!(S.wing&&S.wing.on) };
++    "tab-iab":(iabType()==="semi"?"Semi-integral":"Integral")+" Abutment","tab-vm":"Shear & Moment Diagrams","tab-tables":"Detailed Force-Effect Tables"};
++  const itg=iabType()==="integral";   // IAB: an integral abutment's report leaves out the conventional cantilever sections
++  const SKIP={ "tab-comb":!RO.permFull||itg, "tab-tables":!RO.detailTables||itg, "tab-wing":!(S.wing&&S.wing.on), "tab-iab":iabType()==="conv",
++    "tab-stab":itg, "tab-found":itg, "tab-struct":itg, "tab-vm":itg };
+@@ -7035 +7574 @@ async function buildReport(){
+-  if(RO.viz3d){
++  if(RO.viz3d&&!itg){
+@@ -7076 +7615 @@ async function buildReport(){
+-    const k=se.dataset.key; if(!/^tab-(stab|found|struct|wing)$/.test(k)) return;
++    const k=se.dataset.key; if(!/^tab-(stab|found|struct|wing|iab)$/.test(k)) return;
+@@ -7127 +7666 @@ async function buildReport(){
+-      <table class="cr-refs">${abutRefsNow().concat(S.wing&&S.wing.on?WING_REFS:[]).map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
++      <table class="cr-refs">${abutRefsNow().concat(S.wing&&S.wing.on?WING_REFS:[]).concat(iabType()!=="conv"?IAB_REFS:[]).map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
+```
