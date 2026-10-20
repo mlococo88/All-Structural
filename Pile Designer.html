@@ -919,6 +919,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       axes:{x:o.ax.x,y:o.ax.y},point:o.target==='group'?{x:o.px,y:o.py,z:0}:null,lateral:o.target==='single'?o.lat:null,moment:o.target==='single'?o.mom:null,mode:o.mode,
       notes:(p.notes||[]).slice(0,20)};
     if(p.revision) r.patch.foundationSrc.revision=p.revision;
+    if(typeof p.contentHash==='string' && p.contentHash) r.patch.foundationSrc.contentHash=p.contentHash;   // PXR (2026-10-20): echoed on the pileResults hand-off (stale check in the sender)
     if(r.layout) r.patch.foundationSrc.layout=r.layout;
     if(Object.keys(r.fields).length) r.patch.foundationSrc.fields=r.fields;   // ABPX: inputs set from the hand-off (marked in the UI while unchanged)
   }
@@ -1164,6 +1165,180 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);
   setInterval(refreshBar,2000);
+})();
+</script>
+<script>
+/* Pile results hand-off, sender (HANDOFF.md §4.10, channel pileResults, schema bridge-pile-results v1; receiver:
+   abutment_calculator.html, receiver id "abutment"). PXR (2026-10-20).
+   "Send pile results to the abutment" (Loads & group tab) and "Send results to the abutment" (integral-abutment panel) open a
+   preview of the payload; "Send to other tools" publishes it with BridgeXfer (key bridgeSuite.v1.pileResults), "Export hand-off
+   (JSON)" writes the same payload to a file. Nothing is sent automatically. The payload carries:
+   - basis: the foundationLoads hand-off these results were produced from (I.foundationSrc: producer, producedAt, contentHash,
+     target), so the abutment can tell whether its loads or layout changed since;
+   - geotechnical: the static nominal / factored resistance (compression, uplift), the resistance-determination method
+     (Table 10.5.5.2.3-1, phi_dyn) with the governing required R_n and R_ndr over the case list, and the minimum penetration (10.7.6);
+   - structural: phi_c P_n, phi_f M_n, phi_v V_n of the H-pile (Modules 03 to 05);
+   - fixity: the buckling depth to fixity of the buckling module (Davisson, C10.7.3.13.4, unless another method is selected);
+   - cases: per row of the last "Run all cases": the loads it ran (P, V, M_head), the p-y maximum moment and its depth, the head
+     deflection and rotation, z_fix (first moment zero below M_max, reference), the D/C ratios, and where the row came from
+     (the abutment's per-pile governing load id, or its case name for a Group row);
+   - integral: the integral-abutment results (gravity D/C; with Tier 2 the pile-head moments and the interaction D/C).
+   Reads the live results the App registers with note(); computes nothing that feeds a result. Uses BridgeXfer v1 (above). */
+(function(){
+  if(window.PileResultsXfer) return;
+  var CH='pileResults', SCHEMA='bridge-pile-results';
+  var LIVE=null;
+  function note(o){ LIVE=o; }
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function rn(v,d){ if(!isNum(v)) return null; var m=Math.pow(10,d==null?3:d); return Math.round(v*m)/m; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function f(v,d){ return isNum(v)? v.toFixed(d==null?2:d) : '—'; }
+  function when(iso){ var d=new Date(iso); if(isNaN(d)) return String(iso||'?'); function p(n){ return (n<10?'0':'')+n; }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function hash(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return ('0000000'+h.toString(16)).slice(-8); }
+  /* the inputs a "Run all cases" result depends on: every input except the active-case write-through fields and the hand-off record */
+  var SKIP={activeCase:1,STL:1,Plat:1,pyMhead:1,Tu:1,SVL:1,foundationSrc:1};
+  function key(I){ var o={}; Object.keys(I||{}).sort().forEach(function(k){ if(!SKIP[k]) o[k]=I[k]; }); return hash(JSON.stringify(o)); }
+  function caseSource(c,I){
+    if(c && c._bx && c._bx.ch==='foundationLoads') return c._bx.perPile? {kind:'perPile', caseId:String(c._bx.case), producedAt:c._bx.producedAt||''} : {kind:'single', caseName:String(c._bx.case||''), producedAt:c._bx.producedAt||''};
+    if(c && c._fromGroup){ var g=(Array.isArray(I.groupCases)?I.groupCases:[]).filter(function(q){ return q && q.id===c._groupCaseId; })[0], bx=g && g._bx && g._bx.ch==='foundationLoads'? g._bx : null;
+      return {kind:'group', caseName:bx? String(bx.case||'') : null, groupCase:g? (g.name||'') : null, pile:c._pileId!=null? c._pileId : null, uplift:c.type==='tension', producedAt:bx? (bx.producedAt||'') : ''}; }
+    return {kind:'manual'};
+  }
+  function phiCase(c,drv){ return (c.type==='extreme' || c._ee)? 1.0 : drv.phiTab*drv.grpFac; }
+  function geotech(I,r,cases){
+    if(I.pileType==='hpile' && r.hpileGeo){
+      var g=r.hpileGeo, drv=g.drv||{}, dr=g.drive||{}, mp=dr.minPen;
+      var out={ pileType:'hpile',
+        static:{ Rn:rn(g.Rn_comp), phiRn:rn(g.phiRn_comp), phi:rn(g.phiEff_comp,4), side:rn(g.Rs_comp), tip:rn(g.Rp), RnUp:rn(g.Rn_up), phiRnUp:rn(g.phiRn_up), phiUp:rn(g.phiEff_up,4),
+          toeDepth:rn(g.toe), scour:rn(g.zScour), smallGroupFactor:rn(g.grpFac,3),
+          basis:'static analysis (Module 01): side and tip by the SPT method in cohesionless layers and the alpha-method in cohesive layers (10.7.3.8.6), phi per layer and component (Table 10.5.5.2.3-1); phi = phi*R_n/R_n (blended); uplift = side only' },
+        method:{ key:drv.method||'static', label:drv.label||'', phiDyn:isNum(drv.phiTab)? rn(drv.phiTab*drv.grpFac,4) : null },
+        field:null, minPen:null };
+      if(isNum(drv.phiTab)){
+        var gov=null; (cases||[]).forEach(function(c){ if(!c || c.type==='service' || c.type==='tension' || !isNum(c.STL) || !(c.STL>0)) return;
+          var ph=phiCase(c,drv), Rn=c.STL/ph; if(!gov || Rn>gov.Rn) gov={Rn:Rn, phi:ph, P:c.STL, name:c.name}; });
+        var Rndr=gov? gov.Rn+(drv.Rs_scour_b||0)+(drv.Rdd||0) : null;
+        out.field={ method:drv.method, label:drv.label, phiTab:drv.phiTab, grpFac:drv.grpFac, phi:rn(drv.phiTab*drv.grpFac,4), owner:drv.own||'aashto',
+          RnReq:gov? rn(gov.Rn) : null, RnReqCase:gov? gov.name : null, RnReqP:gov? rn(gov.P) : null, RnReqPhi:gov? rn(gov.phi,4) : null,
+          RsScour:rn(drv.Rs_scour_b||0), Rdd:rn(drv.Rdd||0), Rndr:rn(Rndr), setupFactor:isNum(dr.fsu)? dr.fsu : 1, formula:!!dr.formula,
+          RndrEOD:Rndr==null? null : rn(dr.formula? Rndr : Rndr/(isNum(dr.fsu)&&dr.fsu>0? dr.fsu : 1)),
+          basis:'R_n required = max over the strength / extreme-event compression rows of P/phi_dyn (Extreme Event phi = 1.0, 10.5.5.3); R_ndr = R_n + the side resistance lost to scour (10.7.3.6)'+(drv.Rdd>0?' + the downdrag side resistance (CTDOT rule)':'')+'; R_ndr,EOD = R_ndr/f (10.7.3.4)' };
+      }
+      if(mp) out.minPen={ zMin:rn(mp.zMin), governs:mp.gov&&mp.gov.l, items:(mp.items||[]).map(function(x){ return {key:x.k, label:x.l, z:rn(x.z)}; }), toeModelled:rn(mp.toeNow), pass:!!mp.pass,
+        gradeEl:isNum(mp.gradeEl)? mp.gradeEl : null, tipElMin:rn(mp.tipElMin), controllingTipDepth:rn(mp.ctrlZ), tipElControlling:rn(mp.tipElCtrl), controllingBasis:mp.ctrlSrc||'', RnStatAtZmin:rn(mp.RdrMin) };
+      if(isNum(dr.RdrMax) && dr.RdrMax>0) out.maxDrivingResistance=rn(dr.RdrMax);
+      return out;
+    }
+    if(I.pileType!=='iab' && r.geo){
+      var t=r.tension||{};
+      return { pileType:'micropile', static:{ Rn:rn(r.geo.Pn_geo), phiRn:rn(r.geo.phiPn_geo), phi:rn(r.geo.phi_geo,4), RnUp:rn(t.Pn_up_bond), phiRnUp:rn(t.phiPn_up), phiUp:rn(t.phi_up,4),
+        basis:'grout-to-ground bond over the bond length (micropile)' }, method:{ key:'static', label:'bond (micropile)', phiDyn:null }, field:null, minPen:null };
+    }
+    return null;
+  }
+  function structural(I,r){
+    var s=r.hpileStruct; if(I.pileType!=='hpile' || !s) return null;
+    return { Pn:rn(s.Pn_axial), phiC:s.phi_c_axial, phiPn:rn(s.phiPn_axial), phiCcomb:s.phi_c_comb, PrComb:rn(s.Pr), Mn:rn(s.Mn), phiF:s.phi_f, phiMn:rn(s.phiMn),
+      Vn:rn(s.Vn), phiV:s.phi_v, phiVn:rn(s.phiVn), phiPnTension:rn(s.phiPn_tension), axis:s.axisStrong? 'strong' : 'weak', Aeff:rn(s.Aeff,4), Ag:rn(s.Ag,4),
+      drag:s.drag? { Pu:rn(s.drag.Pu), phiPo:rn(s.drag.phiPo) } : null,
+      basis:'H-pile, Modules 03 to 05: phi_c P_n (6.9.4, 6.5.4.2), phi_f M_n about the axis of the p-y solve, phi_v V_n (6.10.9.2 / 6.12.1.2.3)' };
+  }
+  function fixity(I,r,pyRes){
+    var b=r.buckling; if(!b || I.pileType==='iab') return null;
+    return { Lf:rn(b.Lf_buck), method:(b.lfGoverning&&b.lfGoverning.src)||'', override:!!b.lfOverrideActive, Lf_davisson:rn(b.Lf_davisson), davissonBasis:b.bklBasis||'', soil:b.bklSoilSrc||'',
+      zFixActive:pyRes && isNum(pyRes.zFix2)? rn(pyRes.zFix2) : null,
+      basis:'buckling depth to fixity of the buckling module (Davisson & Robinson, AASHTO C10.7.3.13.4: 1.8T sand, 1.4R clay, weak-axis I_w for an H-pile) unless another method is selected there; the p-y moment-zero depth z_fix (per case) is a reference figure, not a buckling length' };
+  }
+  function integral(I,r){
+    var q=r.iab; if(I.pileType!=='iab' || !q) return null;
+    var t=q.tier2;
+    return { section:q.sectKey||I.iabSection, skew:q.skew, orient:I.iabOrient||'weak', preset:I.iabAgencyPreset||'',
+      tier1:{ applicable:!!q.tier1Applicable, eligible:!!q.bcAllOk, PuCap:rn(q.Pu), demand:rn(q.demand), dcr:rn(q.dcr,4), pass:!!q.cap_pass, Lf:rn(q.Lf), reqLength:rn(q.reqLength),
+        DC:rn(q.DL), DW:rn(q.DW), LL:rn(q.LL), gDC:q.gDC, gDW:q.gDW, gLL:q.gLL, eta:q.eta },
+      tier2:t && t.enabled? { deltaT:rn(t.deltaT,4), dWeak:rn(t.dWeak,4), dStrong:rn(t.dStrong,4), Muy:rn(t.Muy), Mux:rn(t.Mux), Muy_nl:rn(t.Muy_nl), Mux_nl:rn(t.Mux_nl),
+        Mry:rn(t.Mry), Mrx:rn(t.Mrx), Pr:rn(t.Pr), Pu:rn(t.Pu_dem), thetaWeak:t.thetaWeak, thetaStrong:t.thetaStrong,
+        interaction:rn(t.interaction,4), interaction_nl:rn(t.interaction_nl,4), pass:!!t.t2_pass, head:'fixed (displacement-controlled solve)',
+        basis:'Tier 2: delta_T imposed at a fixed pile head (gamma_TU = 1.0); M_uy, M_ux = the largest moment of the linear constant-k solve (MassDOT basis), _nl of the nonlinear p-y solve; P_u/P_r + 8/9[M_uy/(theta_w M_ry) + M_ux/(theta_s M_rx)] (MassDOT 3.10.11.3)' } : null };
+  }
+  function cases(I,cr,list){
+    var out={rows:[], warn:[], at:null, ok:false};
+    if(!cr || !Array.isArray(cr.rows)){ out.warn.push('No "Run all cases" results: run all cases in the load-case table first (Loads & group tab), so the p-y results of every case are sent. Only the resistances are sent now.'); return out; }
+    if(cr.key && cr.key!==key(I)){ out.warn.push('The inputs changed after the last "Run all cases": run all cases again. The per-case results are not sent.'); return out; }
+    if(!Array.isArray(list) || list.length!==cr.rows.length || cr.rows.some(function(x,i){ return !list[i] || x.name!==list[i].name; })){ out.warn.push('The case list changed after the last "Run all cases": run all cases again. The per-case results are not sent.'); return out; }
+    out.ok=true; out.at=cr.atISO||null;
+    cr.rows.forEach(function(x,i){ var c=list[i], py=I.lateralSource==='py';
+      out.rows.push({ index:i, name:c.name, type:c.type, factored:c.type!=='service', source:caseSource(c,I),
+        loads:{ P:rn(c.STL), tension:c.type==='tension', V:rn(c.Plat||0), Mhead:rn(c.Mhead||0), Vsolve:rn(isNum(x.pmV)? x.pmV : (c.Plat||0)) },
+        py:{ source:py? 'p-y' : 'entered', ok:!x.noConv && isNum(x.Mmax), Mmax:rn(x.Mmax), zMmax:rn(x.zMmax), y0:rn(x.y0,4), rot0:rn(x.rot0,6), zFix:rn(x.zFix),
+          pmRow:x.pmRow!=null? x.pmRow : null, pmPm:rn(x.pmPm,4), noConv:!!x.noConv },
+        checks:{ geo:rn(x.geoR,4), flex:rn(x.flexR,4), comb:rn(x.combR,4), buck:rn(x.buckR,4), ten:rn(x.tenR,4), svc:rn(x.svcR,4), pass:!!x.pass } }); });
+    return out;
+  }
+  function build(){
+    if(!LIVE || !LIVE.I || !LIVE.r) return { err:'No results yet.' };
+    var I=LIVE.I, r=LIVE.r, fs=I.foundationSrc||null, iab=I.pileType==='iab';
+    var cs=iab? {rows:[],warn:[],ok:false,at:null} : cases(I,LIVE.caseRes,LIVE.cases);
+    var sp=(window.BridgeXfer&&BridgeXfer.sharedProject)? BridgeXfer.sharedProject() : null;
+    var warn=cs.warn.slice();
+    var basis=fs && (fs.producedAt||fs.producer)? { channel:'foundationLoads', producer:fs.producer||'', producerFile:fs.producerFile||'', producedAt:fs.producedAt||'', contentHash:fs.contentHash||null,
+      target:fs.target||'', via:fs.via||'', adoptedAt:fs.adoptedAt||'', revision:fs.revision||null, element:fs.element||null } : null;
+    if(!basis) warn.push('These results are not based on a foundation-load hand-off (none imported): the abutment cannot match them to its cases or tell whether its loads changed.');
+    else if(!basis.contentHash) warn.push('The foundation-load hand-off these results use carries no content hash (sent before 2026-10-20): the abutment checks staleness by the time it sent and each case\'s loads only.');
+    var stk=+I.solverFree||0;
+    var p={ _schema:SCHEMA, schemaVersion:1, producer:'Pile Designer', producerFile:'Pile Designer.html',
+      project:{ name:I.projName||'', bridgeId:(sp&&sp.bridgeId)||'' },
+      units:{ force:'kip', moment:'kip-ft', length:'ft', deflection:'in', rotation:'rad', elevation:'ft', section:'in', stress:'ksi' },
+      basis:basis,
+      pile:{ type:I.pileType||'micropile', section:I.pileType==='hpile'? { designation:I.hpShape||'', d:I.hpD, bf:I.hpBf, tf:I.hpTf, tw:I.hpTw, Fy:I.hpFy } : iab? { designation:I.iabSection } : { OD:I.OD },
+        axis:I.pileType==='hpile'? (I.hpAxis==='weak'?'weak':'strong') : null, head:I.solverHead==='fixed'? 'fixed' : 'free', headKrot:+I.pyKrot||0,
+        stickup:stk, toeDepth:+I.solverLembed||0, scour:+I.scourDepth||0, lateralSource:I.lateralSource||'py' },
+      geotechnical:iab? null : geotech(I,r,LIVE.cases),
+      structural:iab? null : structural(I,r),
+      fixity:fixity(I,r,LIVE.pyRes),
+      casesRunAt:cs.at, cases:cs.rows,
+      integral:integral(I,r),
+      notes:[
+        'Per-case p-y results are from Pile Designer\'s last "Run all cases": each row\'s own p-y solve (head '+(I.solverHead==='fixed'?'fixed':'free')+(I.pyKrot>0?', rotational spring '+I.pyKrot+' kip-ft/rad':'')+', stick-up '+stk+' ft above grade'+(I.pileType==='hpile'?', bending about the '+(I.hpAxis==='weak'?'weak':'strong')+' axis':'')+'), with the row\'s axial load in the beam-column solve (P-Delta included). M_max is the largest |M| on the pile (kip-ft), z(M_max) its depth below grade (negative = in the stick-up), y0 and the rotation at the pile head.',
+        'Moments are factored when the row is (strength / extreme event rows carry factored loads); service rows give the deflection only.',
+        'A Group row is the governing pile of that group case by this tool\'s rigid-cap distribution, with the group p-multiplier of its row (equal-deflection distribution of the shear over the rows).',
+        'z_fix (per case) is the first moment zero below M_max (reference); the buckling depth to fixity is under fixity.'] };
+    if(stk>0) p.notes.push('The p-y model has a free length (stick-up) of '+stk+' ft above grade: the pile-head moment and deflection include it.');
+    return { p:p, warn:warn, nCases:cs.rows.length, nOk:cs.rows.filter(function(x){ return x.py.ok; }).length, iab:iab };
+  }
+  var TD='border:1px solid #ddd;padding:1px 5px', WB='background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:4px 0';
+  function close(){ var o=document.getElementById('pxrOverlay'); if(o) o.remove(); }
+  function open(){
+    if(!window.BridgeXfer){ alert('The hand-off helper is not available in this browser.'); return null; }
+    var b=build(); if(b.err){ alert('Send pile results: '+b.err); return null; }
+    close();
+    var ov=document.createElement('div'); ov.id='pxrOverlay'; ov.style.cssText='position:fixed;inset:0;background:rgba(8,18,28,.55);z-index:1000;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif';
+    var p=b.p, g=p.geotechnical, s=p.structural, fx=p.fixity, ib=p.integral, x='';
+    x+='<div style="font-size:14px;font-weight:700">Send pile results to the abutment calculator</div>';
+    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receiver: abutment calculator, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
+    if(b.warn.length) x+='<div style="'+WB+'">'+b.warn.map(esc).join('<br>')+'</div>';
+    var tb=function(rows){ return '<table style="border-collapse:collapse;width:100%;margin:4px 0">'+rows.map(function(rw,i){ return '<tr>'+rw.map(function(c){ return '<'+(i?'td':'th')+' style="'+TD+'">'+c+'</'+(i?'td':'th')+'>'; }).join('')+'</tr>'; }).join('')+'</table>'; };
+    if(g){ var gr=[['Geotechnical axial','R<sub>n</sub> (kip)','φ','φR<sub>n</sub> (kip)'],['Compression (static, '+esc(g.pileType)+')',f(g.static.Rn,1),f(g.static.phi,3),f(g.static.phiRn,1)],['Uplift (static)',f(g.static.RnUp,1),f(g.static.phiUp,3),f(g.static.phiRnUp,1)]];
+      if(g.field) gr.push(['Field method: '+esc(g.field.label),f(g.field.RnReq,1)+' required ('+esc(g.field.RnReqCase||'')+')',f(g.field.phi,3),'R<sub>ndr</sub> = '+f(g.field.Rndr,1)+', EOD '+f(g.field.RndrEOD,1)]);
+      x+=tb(gr);
+      if(g.minPen) x+='<div>Minimum penetration (10.7.6): z<sub>min</sub> = '+f(g.minPen.zMin,1)+' ft ('+esc(g.minPen.governs||'')+')'+(g.minPen.tipElMin!=null?', tip El. '+f(g.minPen.tipElMin,1):'')+'; controlling tip '+f(g.minPen.controllingTipDepth,1)+' ft'+(g.minPen.tipElControlling!=null?' (El. '+f(g.minPen.tipElControlling,1)+')':'')+'.</div>'; }
+    if(s) x+='<div>Structural ('+esc(p.pile.section.designation||'H-pile')+', '+s.axis+' axis): φ<sub>c</sub>P<sub>n</sub> = '+f(s.phiPn,1)+' kip, φ<sub>f</sub>M<sub>n</sub> = '+f(s.phiMn,1)+' kip-ft, φ<sub>v</sub>V<sub>n</sub> = '+f(s.phiVn,1)+' kip.</div>';
+    if(fx) x+='<div>Depth to fixity (buckling): L<sub>f</sub> = '+f(fx.Lf,2)+' ft ('+esc(fx.method)+(fx.override?', entered':'')+'; Davisson '+f(fx.Lf_davisson,2)+' ft).</div>';
+    if(p.cases.length){ var cr=[['Case (Run all cases)','from','P (kip)','V (kip)','M<sub>max</sub> (kip-ft)','z (ft)','y<sub>0</sub> (in)','θ<sub>0</sub> (rad)','z<sub>fix</sub> (ft)']];
+      p.cases.forEach(function(c){ var sr=c.source||{}; cr.push([esc(c.name),esc(sr.kind==='perPile'?sr.caseId:(sr.kind==='group'||sr.kind==='single')?(sr.caseName||''):'own row'),f(c.loads.P,1),f(c.loads.V,2),c.py.ok?f(c.py.Mmax,1):(c.py.noConv?'no conv.':'—'),f(c.py.zMmax,2),f(c.py.y0,3),f(c.py.rot0,5),f(c.py.zFix,2)]); });
+      x+='<div style="max-height:30vh;overflow:auto">'+tb(cr)+'</div>'; }
+    if(ib){ x+='<div>Integral abutment ('+esc(ib.section)+'): gravity D/C = '+f(ib.tier1.demand,1)+'/'+f(ib.tier1.PuCap,1)+' = '+f(ib.tier1.dcr,3)+(ib.tier2? '; Tier 2: M<sub>uy</sub> = '+f(ib.tier2.Muy,1)+' (nonlinear '+f(ib.tier2.Muy_nl,1)+'), M<sub>ux</sub> = '+f(ib.tier2.Mux,1)+' kip-ft, interaction '+f(ib.tier2.interaction,3) : '; Tier 2 off: no pile-head moment')+'.</div>'; }
+    x+='<div id="pxrMsg" style="margin-top:6px;color:#14532d"></div>';
+    x+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px"><button id="pxrCancel" style="padding:3px 10px;border:1px solid #94a3b8;border-radius:3px">Close</button><button id="pxrExport" style="padding:3px 10px;border:1px solid #94a3b8;border-radius:3px">Export hand-off (JSON)</button><button id="pxrGo" style="padding:3px 10px;border:1px solid #14304a;border-radius:3px;background:#14304a;color:#fff"><b>Send to other tools</b></button></div>';
+    var box=document.createElement('div'); box.style.cssText='background:#fff;color:#1a1a1a;border-radius:6px;padding:12px 16px;width:960px;max-width:96vw;max-height:90vh;overflow:auto;font-size:12px;line-height:1.4'; box.innerHTML=x; ov.appendChild(box);
+    document.body.appendChild(ov);
+    box.querySelector('#pxrCancel').addEventListener('click',close);
+    box.querySelector('#pxrExport').addEventListener('click',function(){ var r=BridgeXfer.exportFile(CH,Object.assign({},b.p,{producedAt:new Date().toISOString()})); box.querySelector('#pxrMsg').textContent=r.error? r.error : 'Exported.'; });
+    box.querySelector('#pxrGo').addEventListener('click',function(){ var r=BridgeXfer.publish(CH,b.p,'Pile Designer','Pile Designer.html');
+      box.querySelector('#pxrMsg').textContent=r.error? 'Could not send: '+r.error : 'Sent '+when(r.payload.producedAt)+' ('+b.nCases+' case(s)'+(b.iab?', integral abutment':'')+'). In the abutment calculator, click "Pull pile results".'; });
+    return { overlay:ov, build:b };
+  }
+  window.PileResultsXfer={ note:note, key:key, build:build, open:open, close:close };
 })();
 </script>
 <script>
@@ -7669,7 +7844,16 @@ function LoadsGroupPanel({ I, set, setI, r, cases, activeIdx, casesCard }) {
         I.foundationSrc && e("div", {
           id: "pfxSrc",
           className: "text-[9px] text-slate-500 italic leading-snug mt-1"
-        }, PileFoundationXfer.sourceLine(I)))),
+        }, PileFoundationXfer.sourceLine(I)),
+        // PXR (2026-10-20): pile results back to the abutment calculator (channel pileResults, HANDOFF.md §4.10)
+        e("div", { className: "flex flex-wrap gap-2 no-print mt-2" },
+          e("button", {
+            type: "button",
+            id: "pxrSend",
+            onClick: () => PileResultsXfer.open(),
+            title: "Send this tool's pile results to the abutment calculator (channel pileResults): geotechnical and structural resistance, depth to fixity, and per case (Run all cases) the p-y maximum moment, its depth, head deflection and rotation. The dialog previews them and also offers Export hand-off (JSON).",
+            className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+          }, "Send pile results to the abutment")))),
     grp && e(Panel, { title: "Pile group workspace", sub: "layout, cap loads and rigid-cap distribution" },
       e("div", { id: "pd-grpws" }, e(GroupWorkspaceBody, { I, set, cap: r.capDist, g: r.group, rail: true, cases, activeIdx }))),
     e(Panel, { title: grp ? "Design load cases (per pile)" : "LRFD load cases (per pile)", sub: grp ? "your rows + one computed Group ▦ row per group case · the active case drives every module" : "the active case drives every module" },
@@ -16187,7 +16371,7 @@ function App() {
          const runOne = (gPMc, Vc = c.Plat, solPre = null, ax = null, keepR = false) => {
           const S = SFor(ax);
           // per-case p-y solve (M-phi curves held at the ACTIVE case axial)
-          let Mx = null, y0 = null, decay = null, noConv = false, ncWhy = null, rsBelow = null;
+          let Mx = null, y0 = null, decay = null, noConv = false, ncWhy = null, rsBelow = null, zMx = null, rot0 = null, zFx = null;   // PXR: zMx, rot0, zFx (pile results hand-off)
           if (usePy) {
             const sol = solPre || caseSolve(gPMc, Vc, ax);
             const rs = sol.res;
@@ -16196,6 +16380,13 @@ function App() {
             if (rs) {
               let iM = 0; rs.M.forEach((m, i2) => { if (Math.abs(m) > Math.abs(rs.M[iM])) iM = i2; });
               Mx = Math.abs(rs.M[iM]) / 12000; y0 = rs.y[0];
+              // PXR (2026-10-20, pile results hand-off; display / hand-off only): depth of M_max below grade (negative = in the
+              // stick-up), head rotation dy/dz at the head (rad), and z_fix = the first moment zero below M_max on the embedded
+              // length (momentZeroCrossings, the same rule as Module 02's pyRes.zFix2)
+              zMx = (rs.z[iM] - S.stick_in) / 12;
+              rot0 = (rs.z.length > 1 && rs.z[1] > rs.z[0]) ? (rs.y[1] - rs.y[0]) / (rs.z[1] - rs.z[0]) : null;
+              { const zE = [], ME = []; for (let i2 = 0; i2 < rs.z.length; i2++) if (rs.z[i2] >= S.stick_in - 1e-9) { zE.push((rs.z[i2] - S.stick_in) / 12); ME.push(rs.M[i2]); }
+                zFx = momentZeroCrossings(zE, ME).second; }
               prof = { d: [], m: [] };
               for (let i2 = 0; i2 < rs.z.length; i2 += 2) { prof.d.push((rs.z[i2] - S.stick_in) / 12); prof.m.push(rs.M[i2] / 12000); }
               // moment-decay depth: the same search as pyRes (from max(Mmax node, mudline node) down)
@@ -16228,6 +16419,7 @@ function App() {
           const hg = R2.hpileGeo, hs = R2.hpileStruct, isHPc = I2.pileType === "hpile" && hg && hs;
           return {
             name: c.name, type: c.type, Mmax: noConv ? null : (Mx != null ? Mx : R2.MmaxUsed), y0, prof: (typeof prof !== "undefined") ? prof : null,
+            zMmax: noConv ? null : zMx, rot0: noConv ? null : rot0, zFix: noConv ? null : zFx,   // PXR (hand-off only)
             geoR: c.type === "service" ? null : (isHPc ? rat(I2.STL, hg.phiRn_comp) : rat(I2.STL, R2.geo.phiPn_geo)),
             // F22 (O33): no lateral demand when the p-y solve did not converge -> the
             // flexure / combined columns read NG (noConv), not a ratio of the fallback moment
@@ -16335,7 +16527,7 @@ function App() {
           delete out._sp; delete out._V; delete out.latFail;
           return out;
         });
-        setCaseRes({ rows, at: new Date().toLocaleTimeString() });
+        setCaseRes({ rows, at: new Date().toLocaleTimeString(), atISO: new Date().toISOString(), key: window.PileResultsXfer ? PileResultsXfer.key(I) : null });   // PXR: atISO, key (inputs the run used)
       } catch (e) { setCaseRes({ fail: true, msg: e.message }); }
     }, 30);
   }
@@ -16946,6 +17138,8 @@ function App() {
     if (pyRowsEval) return pyRowsEval.R;
     return computeAll(I, rOptsFor(pyRes));
   }, [I, activeLayers, solved, pyRes, pcr, pyRowsEval, lpileParse]);   // F43: lpileParse (uncased demand, Input Mmax)
+  // PXR (2026-10-20): the pile results hand-off (channel pileResults) reads the live results; no effect on any result
+  React.useEffect(() => { if (window.PileResultsXfer) PileResultsXfer.note({ I, r, pyRes, caseRes, cases }); });
   return /*#__PURE__*/React.createElement("div", {
     className: "min-h-screen text-[var(--ink)]"
   }, previewReport && /*#__PURE__*/React.createElement("div", {
@@ -17265,7 +17459,11 @@ function App() {
           className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Import hand-off (JSON)"),
         /*#__PURE__*/React.createElement("input", { type: "file", id: "pfxFileIab", accept: ".json,application/json", style: { display: "none" }, onChange: ev => PileFoundationXfer.importFile(ev, I, setI) })),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 leading-snug mt-1" }, "From the abutment calculator with the abutment type Integral (its Tab 10). Fields set from the hand-off are marked (amber) until you change them."),
-      I.foundationSrc && I.foundationSrc.target === "iab" && /*#__PURE__*/React.createElement("div", { id: "pfxSrcIab", className: "text-[9px] text-slate-500 italic leading-snug mt-1" }, PileFoundationXfer.sourceLine(I))),
+      I.foundationSrc && I.foundationSrc.target === "iab" && /*#__PURE__*/React.createElement("div", { id: "pfxSrcIab", className: "text-[9px] text-slate-500 italic leading-snug mt-1" }, PileFoundationXfer.sourceLine(I)),
+      /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap gap-2 mt-1" },   // PXR (2026-10-20): results back to the abutment calculator
+        /*#__PURE__*/React.createElement("button", { type: "button", id: "pxrSendIab", onClick: () => PileResultsXfer.open(),
+          title: "Send the integral-abutment results to the abutment calculator (channel pileResults): the gravity D/C, and with Tier 2 the pile-head moments and the interaction D/C. Previews first; also Export hand-off (JSON).",
+          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Send results to the abutment"))),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Pile section"),

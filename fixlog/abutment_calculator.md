@@ -11569,3 +11569,392 @@ index f530c84..8cf007d 100644
 -        note:"unfactored per pile; DL = (DC + DW)/n, LL = the most loaded pile's live load ("+(P.IM?"without IM (MassDOT)":"with IM")+"); Pu = the calculator's factored gravity load per pile η[(γDC·DC + γDW·DW)/n + γLL·LL]" },
 +        note:"unfactored per pile; DL = (DC + DW)/n, LL = the most loaded pile's live load ("+(P.IM?"without IM (3.6.2.1)":"with IM")+"); Pu = the calculator's factored gravity load per pile η[(γDC·DC + γDW·DW)/n + γLL·LL]" },
 ```
+
+
+## 2026-10-20 — PR: claude/pile-abut-return — Pile results back from Pile Designer: "Pull pile results" (channel pileResults) and a content hash on the foundation-load hand-off (PXR) (PR link added after merge)
+
+Cross-tool connection (CLAUDE.md §7 exception): the same PR changes the sender, `Pile Designer.html` (fixlog/Pile Designer.md PXR), and HANDOFF.md (§4 channel table, §4.6 content hash, new §4.10 `pileResults`).
+
+Before: the abutment sent its pile layout, cases, per-pile governing loads and integral data to Pile Designer (ABPX, ABPX2) and nothing came back; its pile checks used typed inputs: R_n / φ (panel I-7; integral I-0a), the p-y moment (else the Matlock–Reese estimate, ABR3) and the depth to fixity.
+
+### PXR-1. "Send foundation loads": `contentHash` (additive)   [hand-off field; no result change]
+- **Where:** the foundation-loads hand-off script (anchor `/* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------`): end of `build()` (anchor `p.contentHash=contentHash(lsSel? (build(null).p||p) : p);`), new `contentHash(p)` after it, `window.AbutFoundationHandoff.contentHash()`.
+- **What:** 8-hex-digit FNV-1a hash of `JSON.stringify({location, reference, cases, pileLayout without resistance, pileDesign, integral})` over every limit state (whatever the dialog ticks). The pile resistances are left out: Pile Designer returns them. Spread Footing / older receivers ignore the field.
+- **Check case:** default project, pile branch: the payload equals origin/main's except the new `contentHash` (jsdom: the whole payload compared after deleting the field). The same project gives the same hash in jsdom and in Chromium (`20cd634f`; integral AASHTO `53cdab0b`).
+
+### PXR-2. "Pull pile results" / "Import pile results (JSON)" (receiver of `pileResults`, HANDOFF.md §4.10)   [feature: hand-off]
+- **Where:** toolbar buttons `#pxr-pull`, `#pxr-imp`, `#pxr-file` (anchor `<button id="pxr-pull"`); new script at the end of the file (anchor `/* ---------- pile results hand-off, receiver (HANDOFF.md §4.10, channel pileResults; sender: Pile Designer) ----------`), IIFE `window.AbutPileResults` with `check`, `stale`, `match`, `iabPlan`, `defaults`, `plan`, `render`, `open`, `apply`, `clearRes`, `panelHTML`, `paint`; `recalcAll` and `buildReport` wrapped (as the SubLoads receiver does).
+- **Dialog (nothing changes until Import):** source, the foundation-load hand-off the results came from, the stale status (PXR-4), each limit state of §4.4b with the matched Pile Designer case (P, H now; P, V Pile Designer ran; M_max, its depth, head deflection and rotation, z_fix), the integral results, Pile Designer's structural resistance (information), warnings (section, bending axis, head condition and free length different from the abutment's; limit states without a case; panel I-7 p-y moment kept for those), and every input that changes (current → new). Options: geotechnical R_n (static, or a field method's required R_n with φ_dyn), per-limit-state moments, depth to fixity, integral moment (nonlinear or linear).
+- **Matching:** a §4.4b limit state takes the Pile Designer row with `source.caseId` = `"<limit state>:compression"` (the per-pile governing load ABPX sends), else the non-uplift Group row whose abutment case name starts with the limit state and contains "pile P max".
+- **Sets:** `piles.Rn`, `piles.phiC` (static: R_n,stat and φ = φR_n/R_n; field method: R_n = max P/φ_dyn over Pile Designer's compression rows and φ_dyn), `piles.RnUp`, `piles.phiUp` (static, when > 0), `piles.DfMode` = "user", `piles.DfUser` = Pile Designer's buckling depth to fixity, `S.pileRes.byLS` (PXR-3); integral (owner RIDOT / AASHTO, same orientation): `iab.MuPy` = Tier 2 moment about this abutment's bending axis. MassDOT / CTDOT integral: listed only (their methods have no p-y moment input).
+- **Governing provision:** none changed; values are Pile Designer's (its Module 01 static resistance with Table 10.5.5.2.3-1 φ, 10.5.5.2.3 field methods, C10.7.3.13.4 depth to fixity; AASHTO LRFD 10th Ed.).
+- **Check case (default project, pile branch; Pile Designer with the default soil layer plus SPT N60 = 25, no stick-up, weak axis, free head, per-pile target, "Run all cases"):** R_n 330 → **225.596 kip** (side 67.234 + tip 158.363), φ_c 0.70 → **0.30** (67.679/225.596), R_n,up 100 → **67.234 kip**, φ_up 0.60 → **0.25**, D_f computed 5.845 ft → entered **6.042 ft** (Davisson 1.8T, Pile Designer). §4.4 pile compression D/C 0.870 → 2.969 (200.97/(0.30 × 225.596) = 2.969).
+
+### PXR-3. §4.4b: the Pile Designer moment per limit state   [calc path, only with an import] [replaces the elastic estimate where a case is matched]
+- **Where:** `pileCombined` (anchors `const pxr=(S.pileRes&&S.pileRes.byLS` and `const pd=pxr&&pxr[lsName]`), the δ_s line (anchor `const dL=(G.Lu>0&&src!=="pd")`), the row record (`...(pd?{pd}:{})`); `renderTabFound` §4.4b (anchors `const Mtxt=r.src==="pd"?`, `...(G.Lu>0&&r.src!=="pd"?`, `(r.src==="pd"?"Moment from Pile Designer`, ` (PD)`).
+- **Before:** M = the panel I-7 p-y moment for every limit state when entered, else M = C_M·H·T (Matlock–Reese); with L_u > 0, M × δ_s = 1/(1 − P_u/P_e).
+- **After:** a limit state with a Pile Designer record: M = M_max,PD (the largest |M| of that case's p-y solve, factored), M_x = M·|H_x|/H, M_y = M·|H_y|/H (as the entered p-y moment), **no δ_s** (Pile Designer's p-y solve is a beam-column with the case's axial load, so P-Δ is in M_max; applying δ_s would count it twice). Limit states without a record: unchanged. A record whose P or H/n differs from the governing pile now (0.01 kip + 0.1 %) gives a warning; the moment is still used.
+- **Provision:** AASHTO LRFD 10th Ed. 6.9.2.2.1 (interaction, unchanged), 4.5.3.2.2b (δ_s, not applied to a second-order moment).
+- **Check case (same as PXR-2), Strength I, pile 1:** P_u = 200.97 kip, P_r = 0.70 × 769.75 = 538.82 kip, H_x = 31.008, H_y = 0 kip, M_rx = 1324.3, M_ry = 2608.1 kip-in, Eq. 6.9.2.2.1-3 (flange noncompact).
+  - Before (Matlock–Reese): M_ux = 0.772 × 31.008 × 3.247 = 77.74 kip-ft → 200.97/538.82 + 932.9/1324.3 = 0.3730 + 0.7045 = **1.0774**.
+  - After: Pile Designer "Abut: Strength I — pile 1 (max compression)", P = 200.969, V = 31.008 kip → M_max = **213.777 kip-ft** at 7.0 ft below grade (y_0 = 5.210 in, θ_0 = −0.0665 rad, z_fix = 14.48 ft) → M_ux = 213.777 × 12 = 2565.3 kip-in → 0.3730 + 2565.3/1324.3 = 0.3730 + 1.9371 = **2.3101** (hand = tool).
+  - Other limit states (before → after): Strength III 0.851 → 1.479, Strength V 1.047 → 2.148, construction stage 0.732 → 1.220.
+  - Group target instead (Pile Designer adopts the layout, Group row "Strength I — pile P max"): M_max = 213.781 kip-ft → 2.3101.
+  - δ_s, L_u = 5 ft (K = 2.1, Kℓ = 22.77 ft, P_e,x = 480.4 kip, P_r = 276.15 kip), M = 213.777 kip-ft: entered as the p-y moment, δ_x = 1/(1 − 200.97/480.4) = 1.7193 → 0.7278 + 2565.3 × 1.7193/1324.3 = **4.0581**; as a Pile Designer moment, δ = 1 → 0.7278 + 2565.3/1324.3 = **2.6648**.
+  - The large step from 77.7 to 213.8 kip-ft is the soil model: Pile Designer's nonlinear p-y with its default sand layer (φ = 32°, k = 90 pci) under 31 kip deflects 5.2 in; the elastic estimate uses n_h = 1.11 × 0.4375 ksi/ft. The check case only shows the data path; the soil is the engineer's.
+- **Integral (AASHTO owner, default integral project, Pile Designer IAB mode with Tier 2):** M_uy = 24.325 kip-ft linear, **59.557 kip-ft** nonlinear (imported, weak axis), M_ux = 0. Tab 10 interaction before: moment not entered (P_u/P_r = 266.73/861.0 = 0.310 only); after Eq. 6.9.2.2.1-2: 0.3098 + (8/9)(59.557 × 12/2660.0) = 0.3098 + 0.2388 = **0.5486**.
+
+### PXR-4. Marking, record, stale check, report   [feature]
+- **Where:** `pxrTagHTML`, `pxrTagRefresh` (anchor `/* PXR (2026-10-20): an input set by "Pull pile results"`), `inpRow` / `selRow` (anchor `ownTagHTML(path)||pxrTagHTML(path)`), `recalcAll` (anchor `ownTagRefresh(); pxrTagRefresh();`), panel I-7 and I-0a (anchor `AbutPileResults.panelHTML(`).
+- **Marking:** inputs in `S.pileRes.fields` get the owner-default style (`ownv`, tag "PD · from Pile Designer, <time> (Pull pile results)") while they hold the imported value; editing one clears its marker.
+- **Stale check:** "Current" when the result's `basis.contentHash` equals `AbutFoundationHandoff.contentHash()` now; STALE when it differs, or (no hash) when `basis.producedAt` is not the time of the abutment's last send (`bridgeSuite.v1.foundationLoads.by.abutment`); results based on another sender or none: "not from this abutment". Shown in the dialog, in panel I-7 / I-0a (re-checked after every recalculation), as a warning when STALE, and in the report.
+- **Check:** deactivating pile 1 changes the hash `20cd634f` → `62a43606` and gives the STALE warning plus a load-mismatch warning for each of the 4 limit states; reactivating it restores the hash and clears both; a surcharge change (+0.25 ksf) also gives STALE.
+- **Report:** a source line under the title (`#pxr-rpt-src`) and the §4.4b worked lines.
+- **Clear:** "Clear Pile Designer results" (panel I-7 / I-0a) removes `S.pileRes`; the imported input values stay (unmarked); §4.4b returns to the panel I-7 moment / Matlock–Reese.
+
+### Saved data
+- New optional field `S.pileRes` (see HANDOFF.md §4.10), saved with the project and in the Input ID. A project without it is computed exactly as before. No key or format changed; `bridgeSuite.v1.pileResults.adopted.abutment` is the standard adoption marker.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html "Pile Designer.html"`: all scripts pass.
+- `node tests/compare.mjs --tool page --file abutment_calculator.html`: storage identical; page text differs only by the two new toolbar buttons ("Pull pile results", "Import pile results (JSON)").
+- End-to-end in jsdom (one localStorage for both tools; React served for Pile Designer): 49 checks, all pass: nothing imported → `computeAll` (Input ID, dashboard, permutation tables, all checks, warnings) identical to origin/main for the default, pile-branch, integral AASHTO and integral MassDOT projects, and the foundationLoads payload identical apart from `contentHash`; abutment send → Pile Designer pull (per-pile) + Run all cases → publish → abutment pull: nothing changes before Import, the values above, every §4.4b limit state uses the matched M_max, highlight and clearing, saved with the project; stale cases above; integral path; group target; wrong schema and nothing sent refused.
+- Playwright (Chromium, libraries mapped to tests/libs: KaTeX 0.16.11 → 0.16.9, Plotly 2.35.2 → 2.27.0, three r128): the same import gives the same interaction per limit state as jsdom to 1e-12; Tab 4 §4.4b (16 formulas) and Tab 10 typeset without KaTeX errors; report line present; screenshot checked.
+
+### Open items (engineer decisions)
+1. Bending axis: Pile Designer's H-pile default bending axis is strong; this abutment's default orientation puts H_x on the weak axis. The foundationLoads import (ABPX) does not set Pile Designer's axis (the `pileLayout.section` block has no orientation), so the p-y moment can be for the other axis; the pull dialog warns. Should the hand-off carry the orientation and Pile Designer's import set `hpAxis`?
+2. Integral with Pile Designer's biaxial orientation (skew): this abutment's integral interaction takes one moment, so Pile Designer's other-axis moment is not included (the dialog warns and quotes Pile Designer's biaxial interaction). Keep, or add the second moment term?
+3. A stale Pile Designer moment (loads changed since) is still used, with warnings. Alternative: fall back to the elastic estimate until re-pulled.
+4. Field method: the imported R_n is Pile Designer's required R_n = max P/φ_dyn over its compression rows (including any of its own rows), so this abutment's compression D/C is ≤ 1 by construction for that case; the static option is offered in the dialog. Confirm the default (field method when Pile Designer has one).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `9abe9ef`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 8cf007d..848fdad 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -507,0 +508,3 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
++    <button id="pxr-pull" title="Pull the pile results sent by Pile Designer (channel pileResults): geotechnical R_n and φ, the p-y pile moment of each matched limit state, the depth to fixity, integral-abutment pile-head moment. Asks first; nothing changes until you import">Pull pile results<span id="pxr-new" class="axh-new" hidden> ● new data</span></button>
++    <button id="pxr-imp" title="Import a pileResults hand-off JSON file from Pile Designer (asks first)">Import pile results (JSON)</button>
++    <input type="file" id="pxr-file" accept=".json,application/json" style="display:none">
+@@ -1278,0 +1282,7 @@ function ownTagHTML(path){ const d=ownRuleFor(path); if(!d) return ""; const v=g
++/* PXR (2026-10-20): an input set by "Pull pile results" (S.pileRes.fields) is highlighted like an owner default, with the source,
++   while it still holds the imported value; editing it clears the highlight (pxrTagRefresh, after every recalculation). */
++function pxrTagHTML(path){ const s=S.pileRes, fl=s&&s.fields; if(!fl||!Object.prototype.hasOwnProperty.call(fl,path)||!ownEq(getPath(S,path),fl[path])) return "";
++  return `<div class="own-src" data-pxrpath="${path}">PD · from Pile Designer, ${esc(window.AbutPileResults? AbutPileResults.when(s.producedAt) : String(s.producedAt||""))} (Pull pile results)</div>`; }
++function pxrTagRefresh(){ document.querySelectorAll("#inputCol [data-pxrpath]").forEach(el=>{ const p=el.dataset.pxrpath, fl=S.pileRes&&S.pileRes.fields;
++  if(fl&&Object.prototype.hasOwnProperty.call(fl,p)&&ownEq(getPath(S,p),fl[p])) return;
++  const inp=document.querySelector(`#inputCol [data-path="${p}"]`); if(inp) inp.classList.remove("ownv"); el.remove(); }); }
+@@ -1410 +1420 @@ function inpRow(label, path, unit, o={}){
+-  const ot=ownTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight
++  const ot=ownTagHTML(path)||pxrTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight; PXR: value from Pile Designer
+@@ -1419 +1429 @@ function selRow(label, path, options, o={}){
+-  const ot=ownTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight
++  const ot=ownTagHTML(path)||pxrTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight; PXR: value from Pile Designer
+@@ -1885,0 +1896 @@ function buildInputs(){
++      ${window.AbutPileResults? AbutPileResults.panelHTML("iab") : ""}
+@@ -2169 +2180,2 @@ function buildInputs(){
+-          ${inpRow("Pile-head moment from a p-y analysis (0 = elastic solution)","piles.MuPy","kip-ft",{title:"Factored maximum pile moment from LPILE / Pile Designer for the governing case; used for every limit state in place of the elastic (Matlock–Reese) moment C_M·H·T."})}
++          ${inpRow("Pile-head moment from a p-y analysis (0 = elastic solution)","piles.MuPy","kip-ft",{title:"Factored maximum pile moment from LPILE / Pile Designer for the governing case; used for every limit state in place of the elastic (Matlock–Reese) moment C_M·H·T. Moments pulled from Pile Designer per limit state (Pull pile results) take precedence for those limit states."})}
++          ${window.AbutPileResults? AbutPileResults.panelHTML("piles") : ""}
+@@ -3668,0 +3681,5 @@ function computeAll(){
++    /* PXR (2026-10-20): moments pulled from Pile Designer (S.pileRes.byLS, "Pull pile results"): for a limit state with a matched
++       Pile Designer case, M = that case's p-y maximum moment (factored; split on the H directions like the entered p-y moment);
++       it replaces the entered p-y moment and the Matlock–Reese estimate for that limit state only. No δ_s: the p-y solve
++       carries the case's axial load (beam-column, P-Δ included). Limit states without a match: unchanged. */
++    const pxr=(S.pileRes&&S.pileRes.byLS&&typeof S.pileRes.byLS==="object")? S.pileRes.byLS : null;
+@@ -3676 +3693,5 @@ function computeAll(){
+-      if(MuPy>0){ ML=Hr>1e-9? MuPy*Math.abs(Hx)/Hr : MuPy; MT=Hr>1e-9? MuPy*Math.abs(Hy)/Hr : 0; src="py"; }
++      const pd=pxr&&pxr[lsName]&&typeof pxr[lsName]==="object"&&isFinite(+pxr[lsName].M)&&+pxr[lsName].M>=0? pxr[lsName] : null;   // PXR
++      if(pd){ const Mp=+pd.M*12; ML=Hr>1e-9? Mp*Math.abs(Hx)/Hr : Mp; MT=Hr>1e-9? Mp*Math.abs(Hy)/Hr : 0; src="pd";
++        const tP=0.01+1e-3*Math.abs(b.Pmax), tV=0.01+1e-3*Hr;
++        if(!(Math.abs(+pd.P-b.Pmax)<=tP&&Math.abs(+pd.V-Hr)<=tV)) warn(`Piles, ${lsName}: the pile moment from Pile Designer (${pd.caseName||"case"}) was computed for P = ${fmt(+pd.P,2)} kip, H = ${fmt(+pd.V,3)} kip, but the governing pile now has P = ${fmt(b.Pmax,2)} kip, H = ${fmt(Hr,3)} kip: send the foundation loads again, re-run Pile Designer and pull the pile results (Tab 4 §4.4b).`); }
++      else if(MuPy>0){ ML=Hr>1e-9? MuPy*Math.abs(Hx)/Hr : MuPy; MT=Hr>1e-9? MuPy*Math.abs(Hy)/Hr : 0; src="py"; }
+@@ -3678 +3699 @@ function computeAll(){
+-      const dL=G.Lu>0? (Pu<PeL? 1/(1-Pu/PeL) : Infinity) : 1, dT=G.Lu>0? (Pu<PeT? 1/(1-Pu/PeT) : Infinity) : 1;
++      const dL=(G.Lu>0&&src!=="pd")? (Pu<PeL? 1/(1-Pu/PeL) : Infinity) : 1, dT=(G.Lu>0&&src!=="pd")? (Pu<PeT? 1/(1-Pu/PeT) : Infinity) : 1;   // PXR: no δ_s on a Pile Designer moment
+@@ -3685 +3706 @@ function computeAll(){
+-      rows.push({ls:lsName, eq, Pu, Pmax:b.Pmax, pile:actIndexToNo(activePiles(),b.iMax), Hx, Hy, ML, MT, dL, dT, MuL, MuT, phiC, Pr, rP, mS, val, eqn, dV, lbl:b.c.lbl, src});
++      rows.push({ls:lsName, eq, Pu, Pmax:b.Pmax, pile:actIndexToNo(activePiles(),b.iMax), Hx, Hy, ML, MT, dL, dT, MuL, MuT, phiC, Pr, rP, mS, val, eqn, dV, lbl:b.c.lbl, src, ...(pd?{pd}:{})});   // PXR: pd (only with a Pile Designer moment)
+@@ -6049 +6070,3 @@ function renderTabFound(R){
+-      const Mtxt=r.src==="py"? [`M = M_{py} = ${t(pf.MuPy/12,1)}\\ \\text{kip-ft, split on } H_x, H_y`] : [latTex(LL,"x"), latTex(LT,"y"),
++      const Mtxt=r.src==="pd"? [`M = M_{max,PD} = ${t(+r.pd.M,1)}\\ \\text{kip-ft (Pile Designer p-y, case ${esc(String(r.pd.caseName||"").replace(/[\\{}$^_#%&~]/g," "))})}`,
++          `M_x = M\\dfrac{|H_x|}{H} = ${t(r.ML,1)},\\ M_y = M\\dfrac{|H_y|}{H} = ${t(r.MT,1)}\\ \\text{kip-in}\\quad(H = \\sqrt{H_x^2+H_y^2} = ${t(Math.hypot(r.Hx,r.Hy),3)}\\ \\text{kip})`]
++        : r.src==="py"? [`M = M_{py} = ${t(pf.MuPy/12,1)}\\ \\text{kip-ft, split on } H_x, H_y`] : [latTex(LL,"x"), latTex(LT,"y"),
+@@ -6053 +6076 @@ function renderTabFound(R){
+-      pf.rows.forEach(x=>{ tb+=`<tr${x.val>1?' class="failrow"':''}><td class="lft">${esc(x.ls)}</td><td>${x.pile}</td><td>${fmt(x.Pu,1)}</td><td>${fmt(x.Hx,2)}, ${fmt(x.Hy,2)}</td><td>${fmt(x.MuL/12,1)}, ${fmt(x.MuT/12,1)}</td><td>${x.eqn.replace("6.9.2.2.1","")}</td><td>${fmt(x.val,3)}</td><td>${fmt(x.dV,3)}</td></tr>`; });
++      pf.rows.forEach(x=>{ tb+=`<tr${x.val>1?' class="failrow"':''}><td class="lft">${esc(x.ls)}</td><td>${x.pile}</td><td>${fmt(x.Pu,1)}</td><td>${fmt(x.Hx,2)}, ${fmt(x.Hy,2)}</td><td>${fmt(x.MuL/12,1)}, ${fmt(x.MuT/12,1)}${x.src==="pd"?" (PD)":""}</td><td>${x.eqn.replace("6.9.2.2.1","")}</td><td>${fmt(x.val,3)}</td><td>${fmt(x.dV,3)}</td></tr>`; });
+@@ -6065 +6088 @@ function renderTabFound(R){
+-          ...(G.Lu>0?[`\\delta_s = \\dfrac{1}{1 - P_u/P_e}:\\ \\delta_x = ${t(r.dL,3)},\\ \\delta_y = ${t(r.dT,3)} \\quad(P_{e,x} = ${t(pf.PeL,1)},\\ P_{e,y} = ${t(pf.PeT,1)}\\ \\text{kip on } K\\ell)`]:[]),
++          ...(G.Lu>0&&r.src!=="pd"?[`\\delta_s = \\dfrac{1}{1 - P_u/P_e}:\\ \\delta_x = ${t(r.dL,3)},\\ \\delta_y = ${t(r.dT,3)} \\quad(P_{e,x} = ${t(pf.PeL,1)},\\ P_{e,y} = ${t(pf.PeT,1)}\\ \\text{kip on } K\\ell)`]:[]),
+@@ -6068 +6091 @@ function renderTabFound(R){
+-          (r.src==="py"?"Moment from the p-y analysis entered in panel I-7 (one value for every limit state, split on the directions of H). ":"Elastic laterally loaded pile, soil modulus "+(sand?"E<sub>s</sub> = n<sub>h</sub>z (n<sub>h</sub> = "+fmt(G.nh,3)+" ksi/ft incl. the group factor)":"E<sub>s</sub> = 0.465S<sub>u</sub> constant")+", "+(G.fixed?"fixed":"free (pinned)")+" head"+(G.Lu>0?", stick-up L<sub>u</sub> = "+fmt(G.Lu,2)+" ft without soil":"")+": M<sub>max</sub> = C<sub>M</sub>·H·T, C<sub>M</sub> from the beam-on-springs solution (Matlock & Reese, 1960). Check: with L<sub>u</sub> = 0 it gives C<sub>M</sub> = 0.772 at 1.3T (free head) and 0.927 at the head (fixed head), the published nondimensional coefficients A<sub>m,max</sub> ≈ 0.77 and F<sub>m</sub> ≈ 0.93. A p-y moment entered in panel I-7 overrides it. ")+"x = longitudinal (H<sub>x</sub>), y = transverse (H<sub>y</sub>); each pile takes H/n (rigid cap).")}
++          (r.src==="pd"?"Moment from Pile Designer (Pull pile results, "+esc(window.AbutPileResults? AbutPileResults.when(S.pileRes&&S.pileRes.producedAt) : "")+"): the largest |M| of its p-y solve for the matched case ("+esc(r.pd.kind==="group"?"group row":"per-pile governing load")+"; head deflection "+fmt(+r.pd.y0,3)+" in, M<sub>max</sub> at "+fmt(+r.pd.z,2)+" ft below grade), worked in Pile Designer (Module 02 and its report, \"Run all cases\"); split on the directions of H. The p-y solve carries the axial load (P-Δ included), so δ<sub>s</sub> is not applied. Limit states without a matched case use "+(pf.MuPy>0?"the p-y moment of panel I-7":"the elastic solution")+". The source and the stale check are in panel I-7. ":r.src==="py"?"Moment from the p-y analysis entered in panel I-7 (one value for every limit state, split on the directions of H). ":"Elastic laterally loaded pile, soil modulus "+(sand?"E<sub>s</sub> = n<sub>h</sub>z (n<sub>h</sub> = "+fmt(G.nh,3)+" ksi/ft incl. the group factor)":"E<sub>s</sub> = 0.465S<sub>u</sub> constant")+", "+(G.fixed?"fixed":"free (pinned)")+" head"+(G.Lu>0?", stick-up L<sub>u</sub> = "+fmt(G.Lu,2)+" ft without soil":"")+": M<sub>max</sub> = C<sub>M</sub>·H·T, C<sub>M</sub> from the beam-on-springs solution (Matlock & Reese, 1960). Check: with L<sub>u</sub> = 0 it gives C<sub>M</sub> = 0.772 at 1.3T (free head) and 0.927 at the head (fixed head), the published nondimensional coefficients A<sub>m,max</sub> ≈ 0.77 and F<sub>m</sub> ≈ 0.93. A p-y moment entered in panel I-7 overrides it. ")+"x = longitudinal (H<sub>x</sub>), y = transverse (H<sub>y</sub>); each pile takes H/n (rigid cap).")}
+@@ -8112 +8135 @@ function recalcAll(){
+-  ownTagRefresh();
++  ownTagRefresh(); pxrTagRefresh();   // PXR
+@@ -9240,0 +9264,4 @@ document.addEventListener("DOMContentLoaded",init);
++    /* PXR (2026-10-20): content hash of what a receiver designs the piles from, over every limit state whatever is ticked (cases,
++       pile layout without its resistances, per-pile governing loads, integral data). Pile Designer echoes it on the pileResults hand-off, so "Pull pile
++       results" can tell whether these loads or the layout changed since. Additive field; other receivers ignore it. */
++    p.contentHash=contentHash(lsSel? (build(null).p||p) : p);
+@@ -9242,0 +9270,3 @@ document.addEventListener("DOMContentLoaded",init);
++  function contentHash(p){ const lay=p.pileLayout? Object.assign({},p.pileLayout,{resistance:undefined}) : null;   // the resistances are what Pile Designer returns, not loads or layout
++    const s=JSON.stringify({location:p.location, reference:p.reference, cases:p.cases, pileLayout:lay, pileDesign:p.pileDesign||null, integral:p.integral||null});
++    let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return ("0000000"+h.toString(16)).slice(-8); }
+@@ -9295 +9325,252 @@ document.addEventListener("DOMContentLoaded",init);
+-  window.AbutFoundationHandoff={ build, cases, open, send, close, state:()=>DLG };   // used by tests; no effect on results
++  window.AbutFoundationHandoff={ build, cases, open, send, close, state:()=>DLG,   // used by tests; no effect on results
++    contentHash:()=>{ try{ const b=build(null); return b.err? null : b.p.contentHash; }catch(e){ return null; } } };   // PXR: the stale check of "Pull pile results"
++})();
++</script>
++<script>
++/* ---------- pile results hand-off, receiver (HANDOFF.md §4.10, channel pileResults; sender: Pile Designer) ----------
++   PXR (2026-10-20). Toolbar "Pull pile results" (new-data marker) and "Import pile results (JSON)" open one dialog: the source,
++   the foundation-load hand-off the results were produced from and whether this abutment's loads or pile layout changed since
++   (stale check: the content hash this calculator sends on foundationLoads, else the time it last sent), each limit state of
++   the pile check (Tab 4 §4.4b) with the Pile Designer case it matches, every input that changes (current → new) and options.
++   Nothing changes until "Import". On import (each part optional):
++   - piles.Rn / piles.phiC: Pile Designer's static nominal compression resistance and blended φ, or, with a field method
++     (Table 10.5.5.2.3-1), its required nominal resistance and φ_dyn; piles.RnUp / piles.phiUp: the static uplift resistance;
++   - S.pileRes.byLS: per limit state the matched case's p-y maximum moment, which §4.4b uses for that limit state in place of
++     the entered p-y moment and the Matlock–Reese estimate (pileCombined);
++   - piles.DfMode = "user", piles.DfUser: Pile Designer's buckling depth to fixity (C10.7.3.13.4);
++   - integral abutment, owner RIDOT / AASHTO: iab.MuPy = Pile Designer's Tier 2 pile-head moment about this abutment's bending axis.
++   Inputs set are listed in S.pileRes.fields and highlighted like owner defaults ("PD ·") while they hold the imported value.
++   The record is the new optional field S.pileRes (saved; part of the Input ID); panels I-7 / I-0a and the report show it with
++   the stale status, re-checked after every recalculation. Uses BridgeXfer v1 (top of this file). */
++(function(){
++  const CH="pileResults", SCH="bridge-pile-results", RID="abutment";
++  const BX=()=>window.BridgeXfer, num=v=>typeof v==="number"&&isFinite(v);
++  const when=iso=>{ const d=new Date(iso); if(isNaN(d)) return String(iso||"?"); const q=n=>(n<10?"0":"")+n; return d.getFullYear()+"-"+q(d.getMonth()+1)+"-"+q(d.getDate())+" "+q(d.getHours())+":"+q(d.getMinutes()); };
++  const f=(v,d=2)=>num(v)? fmt(v,d) : "—";
++  const lsOut=ls=>ls==="Constr — Str I"?"Strength I (construction stage)":ls;
++  let DLG=null, LAST=null;
++
++  function check(p){
++    const err=[];
++    const e=BX().validate(p,SCH,1); if(e){ err.push(e); return err; }
++    const u=p.units||{};
++    if(u.force!=="kip"||u.moment!=="kip-ft"||u.length!=="ft") err.push("Units must be kip, kip-ft and ft (received "+[u.force,u.moment,u.length].map(x=>x||"?").join(", ")+").");
++    if(u.deflection!==undefined&&u.deflection!=="in") err.push("Deflection must be in inches (received "+u.deflection+").");
++    if(!Array.isArray(p.cases)) err.push("The payload has no case list.");
++    (p.cases||[]).forEach((c,i)=>{ if(c&&c.py&&c.py.ok&&!(num(c.py.Mmax)&&c.py.Mmax>=0&&c.loads&&num(c.loads.P)&&num(c.loads.V))) err.push("Case "+(i+1)+": M_max, P or V is not a finite number."); });
++    return err;
++  }
++  /* stale check: the content hash of what this calculator sends now (all limit states) against the one the results were produced
++     from; without a hash, the time this calculator last sent its foundation loads */
++  function stale(basis){
++    let cur=null; try{ cur=window.AbutFoundationHandoff&&AbutFoundationHandoff.contentHash? AbutFoundationHandoff.contentHash() : null; }catch(e){}
++    let sent=null; try{ sent=JSON.parse(localStorage.getItem("bridgeSuite.v1.foundationLoads.by.abutment")||"null"); }catch(e){}
++    const o={cur, sentAt:sent&&sent.producedAt||null, level:"ok", msg:""};
++    if(!basis){ o.level="nomatch"; o.msg="Pile Designer's results are not based on a foundation-load hand-off: they cannot be matched to this abutment's limit states, and whether they are current cannot be checked."; return o; }
++    if(!/abutment/i.test(basis.producer||"")){ o.level="nomatch"; o.msg="Pile Designer's results are based on foundation loads from "+(basis.producer||"?")+", not from this abutment calculator."; return o; }
++    if(basis.contentHash){
++      if(cur&&basis.contentHash===cur){ o.msg="Current: this abutment's cases, pile layout and per-pile loads are those it sent on "+when(basis.producedAt)+" (content "+basis.contentHash+")."; return o; }
++      o.level="stale"; o.msg="STALE: this abutment's loads or pile layout changed after it sent the loads these Pile Designer results were produced from (sent "+when(basis.producedAt)+"; content then "+basis.contentHash+", now "+(cur||"?")+"). Send the foundation loads again, re-run Pile Designer and pull the pile results again."; return o; }
++    if(o.sentAt&&o.sentAt!==basis.producedAt){ o.level="stale"; o.msg="STALE: these Pile Designer results are from the foundation loads sent on "+when(basis.producedAt)+"; this abutment last sent them on "+when(o.sentAt)+"."; return o; }
++    o.level="unknown"; o.msg="The foundation loads these results are from ("+when(basis.producedAt)+") carry no content hash: only each limit state's pile load is compared.";
++    return o;
++  }
++  /* each limit state of the §4.4b pile check (the pile with the largest reaction of that state, H/n) with the Pile Designer case
++     it matches: the per-pile governing load of the same limit state (id "<limit state>:compression"), else the Group row of the
++     abutment case that governs the pile table ("pile P max") of that state */
++  function match(p){
++    const R=window.LAST_R, pf=R&&R.checks&&R.checks.pileCF, out=[];
++    if(!pf||!pf.ok) return out;
++    const cs=(p.cases||[]).filter(c=>c&&c.py&&c.py.ok&&num(c.py.Mmax)&&c.source&&c.type!=="service"&&c.type!=="tension");
++    pf.rows.forEach(x=>{ const lo=lsOut(x.ls), Hr=Math.hypot(x.Hx,x.Hy);
++      let c=cs.find(q=>q.source.kind==="perPile"&&q.source.caseId===x.ls+":compression"), kind="perPile";
++      if(!c){ c=cs.find(q=>q.source.kind==="group"&&typeof q.source.caseName==="string"&&q.source.caseName.indexOf(lo+" — ")===0&&/pile P max/.test(q.source.caseName)); kind="group"; }
++      const o={ls:x.ls, pile:x.pile, P:x.Pmax, V:Hr, Mnow:Math.hypot(x.ML,x.MT)/12, srcNow:x.src, c:c||null, kind:c?kind:null};
++      if(c){ const tP=0.01+1e-3*Math.abs(x.Pmax), tV=0.01+1e-3*Hr; o.okL=Math.abs(c.loads.P-x.Pmax)<=tP&&Math.abs(c.loads.V-Hr)<=tV; }
++      out.push(o); });
++    return out;
++  }
++  function iabPlan(p){
++    const q=p.integral; if(!q) return null;
++    const o={q, warn:[], use:null};
++    if(iabType()!=="integral"){ o.warn.push("This abutment is not Integral: Pile Designer's integral-abutment results are not used."); return o; }
++    const own=abutOwner();
++    if(!(own==="RIDOT"||own==="AASHTO")){ o.warn.push("Owner "+own+": the integral piles are checked by the owner's method (Tab 10), which has no p-y moment input; Pile Designer's results are listed for comparison only."); return o; }
++    if(!q.tier2){ o.warn.push("Pile Designer's Tier 2 (thermal p-y check) is off: there is no pile-head moment to import."); return o; }
++    const weak=S.iab.orient!=="strong", pdStrong=q.orient==="strong";
++    if(weak===pdStrong){ o.warn.push("Orientation differs: this abutment bends the piles about the "+(weak?"weak":"strong")+" axis, Pile Designer "+(q.orient==="biaxial"?"about both (biaxial)":"about the "+(pdStrong?"strong":"weak")+" axis")+". Set the same orientation in Pile Designer; the moment is not imported."); return o; }
++    const t=q.tier2; o.lin=weak? t.Muy : t.Mux; o.nl=weak? t.Muy_nl : t.Mux_nl; o.other=weak? t.Mux : t.Muy;
++    if(num(o.other)&&o.other>1e-6) o.warn.push("Pile Designer also has "+f(o.other,1)+" kip-ft about the other axis (δT resolved by the skew, orientation "+q.orient+"). This abutment's interaction (Tab 10) takes one moment, so that component is not included here; Pile Designer's biaxial interaction is "+f(t.interaction,3)+" (nonlinear "+f(t.interaction_nl,3)+").");
++    o.use=true; return o;
++  }
++  function defaults(p){
++    const g=p.geotechnical, conv=iabType()!=="integral";
++    return { geo:!!(g&&g.static)&&conv, rn:(g&&g.field&&num(g.field.RnReq))? "field" : "static", mom:conv, df:!!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0)&&conv, iab:true, im:"nl" };
++  }
++  /* everything that will change: inputs (path, value, label) and the per-limit-state moments; pure (reads S, LAST_R) */
++  function plan(p,st){
++    const items=[], warns=[], byLS={}, conv=iabType()!=="integral", pileB=S.fnd.branch==="pile";
++    const R=window.LAST_R, pf=R&&R.checks&&R.checks.pileCF, G=pf&&pf.ok? pf.G : null, sp=p.pile||{};
++    const add=(path,v,lbl,u)=>items.push({path,v,lbl,u:u||"",cur:getPath(S,path)});
++    const g=p.geotechnical, rows=conv&&pileB? match(p) : [];
++    if(conv&&!pileB) warns.push("The footing is not on piles (panel I-4): the conventional pile results are not used.");
++    if(conv&&pileB&&st.geo&&g&&g.static){
++      if(st.rn==="field"&&g.field){
++        if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add("piles.Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add("piles.phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
++          warns.push("Field method ("+g.field.label+"): R_n = the nominal resistance the piles are driven to (R_ndr = "+f(g.field.Rndr,1)+" kip with the scour"+(g.field.Rdd>0?" and downdrag":"")+" side resistance, EOD "+f(g.field.RndrEOD,1)+" kip). This abutment's check is then P/(φ_dyn·R_n) ≤ 1 by construction for the case that set R_n."); }
++        else warns.push("Pile Designer has no required R_n for its field method (no compression case): R_n not imported.");
++      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add("piles.Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add("piles.phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
++      else warns.push("Pile Designer's static R_n is 0 (soil layers without SPT N or strength?): R_n is not imported.");
++      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add("piles.RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add("piles.phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
++      if(g.minPen) warns.push("Minimum penetration (10.7.6, Pile Designer): z_min = "+f(g.minPen.zMin,1)+" ft below grade ("+(g.minPen.governs||"")+")"+(num(g.minPen.tipElMin)?", tip El. "+f(g.minPen.tipElMin,1):"")+"; controlling tip "+f(g.minPen.controllingTipDepth,1)+" ft"+(num(g.minPen.tipElControlling)?" (El. "+f(g.minPen.tipElControlling,1)+")":"")+". This calculator has no tip input: shown in panel I-7 and the report.");
++    }
++    if(conv&&pileB&&st.mom){
++      rows.forEach(x=>{ if(!x.c) return; const c=x.c;
++        byLS[x.ls]={ M:c.py.Mmax, P:c.loads.P, V:c.loads.V, z:c.py.zMmax, y0:c.py.y0, rot:c.py.rot0, zFix:c.py.zFix, caseName:c.name, caseId:c.source.caseId||c.source.caseName||"", kind:x.kind, pdPile:c.source.pile!=null?c.source.pile:null };
++        if(!x.okL) warns.push(x.ls+": Pile Designer ran P = "+f(c.loads.P,2)+" kip, V = "+f(c.loads.V,3)+" kip; the governing pile here has P = "+f(x.P,2)+", H = "+f(x.V,3)+" kip (stale: re-send, re-run and pull again)."); });
++      const nm=rows.filter(x=>!x.c).map(x=>x.ls);
++      if(nm.length) warns.push("No Pile Designer case for "+nm.join(", ")+": "+(+S.piles.MuPy>0?"the p-y moment of panel I-7":"the elastic (Matlock–Reese) moment")+" stays in use there.");
++      if(+S.piles.MuPy>0&&Object.keys(byLS).length) warns.push("The p-y moment entered in panel I-7 ("+fmt(+S.piles.MuPy,1)+" kip-ft) is replaced by Pile Designer's moment for the matched limit states only.");
++    }
++    if(conv&&pileB&&st.df&&p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0){ add("piles.DfMode","user","Depth to fixity D_f: entered"); add("piles.DfUser",p.fixity.Lf,"D_f (Pile Designer buckling depth to fixity, "+(p.fixity.method||"")+")","ft");
++      if(G&&!(G.Lu>0)) warns.push("D_f sets the buckling length K(L_u + D_f) only; with L_u = 0 (fully embedded) it changes no result."); }
++    // compatibility of the two models
++    if(conv&&pileB&&G){
++      if(G.shp==="hp"&&sp.type==="hpile"&&sp.section&&(Math.abs((+sp.section.d||0)-G.d)>0.01||Math.abs((+sp.section.bf||0)-G.bf)>0.01)) warns.push("Different section: Pile Designer "+(sp.section.designation||"")+" d = "+sp.section.d+", b_f = "+sp.section.bf+" in; this abutment "+G.sec+" d = "+G.d+", b_f = "+G.bf+" in.");
++      if(G.shp==="hp"&&sp.type&&sp.type!=="hpile") warns.push("Pile Designer's pile type is "+sp.type+", this abutment has H-piles.");
++      if(G.shp==="hp"&&sp.axis){ const ax=(S.piles.orient==="strong")? "strong" : "weak"; if(sp.axis!==ax) warns.push("Axis: Pile Designer bends the pile about its "+sp.axis+" axis; here the longitudinal load H_x bends the "+ax+" axis (panel I-7 orientation). The p-y moment is for a different stiffness: set the H-pile bending axis in Pile Designer to "+ax+" and re-run."); }
++      const hd=G.fixed?"fixed":"free"; if(sp.head&&sp.head!==hd) warns.push("Head: Pile Designer's p-y head is "+sp.head+", this abutment's pile head is "+(G.fixed?"fixed":"pinned")+" (panel I-7).");
++      if(num(sp.stickup)&&Math.abs(sp.stickup-G.Lu)>0.01) warns.push("Free length: Pile Designer's p-y model has "+f(sp.stickup,2)+" ft above grade, this abutment L_u = "+f(G.Lu,2)+" ft (panel I-7).");
++    }
++    const ip=iabPlan(p);
++    if(ip){ warns.push(...ip.warn);
++      if(ip.use&&st.iab){ const v=st.im==="nl"&&num(ip.nl)? ip.nl : ip.lin; if(num(v)&&v>0) add("iab.MuPy",v,"Integral pile-head moment M_u (Pile Designer Tier 2, "+(st.im==="nl"&&num(ip.nl)?"nonlinear p-y":"linear")+", δT at a fixed head, γTU = 1.0)","kip-ft"); } }
++    return { items, byLS, rows, warns, ip };
++  }
++  function css(){ if(document.getElementById("pxr-css")) return; const s=document.createElement("style"); s.id="pxr-css";
++    s.textContent="#pxr-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px}"+
++      "#pxr-dlg{background:#fff;color:#1a1a1a;max-width:1000px;width:100%;border-radius:6px;padding:14px 18px;box-shadow:0 6px 30px rgba(0,0,0,.3);font-size:.86rem}"+
++      "#pxr-dlg h3{margin:0 0 6px 0;font-size:1.05rem}#pxr-dlg h4{margin:10px 0 4px 0}#pxr-dlg table{border-collapse:collapse;width:100%;margin:4px 0}#pxr-dlg td,#pxr-dlg th{border:1px solid #ddd;padding:2px 6px;text-align:left}"+
++      "#pxr-dlg td.n{text-align:right}#pxr-dlg .pxr-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.pxr-warn{color:#9a3412}.pxr-stale{color:#c62828;font-weight:700}"+
++      ".pxr-box{font-size:.8rem;background:#eef3ff;border:1px solid #1C4FC4;border-radius:2px;padding:4px 7px;margin:4px 0 6px 0;grid-column:1/-1}"+
++      "@media print{#pxr-pull,#pxr-imp,#pxr-ov{display:none !important}}";
++    document.head.appendChild(s); }
++  function close(){ const ov=document.getElementById("pxr-ov"); if(ov) ov.remove(); DLG=null; }
++  function render(){
++    const {p,st}=DLG, pl=plan(p,st), sl=stale(p.basis), g=p.geotechnical, conv=iabType()!=="integral";
++    DLG.pl=pl;
++    const ck=(k,txt,dis)=>"<label><input type='checkbox' data-pxr='"+k+"'"+(st[k]?" checked":"")+(dis?" disabled":"")+"> "+txt+"</label><br>";
++    let h="<h3>Pull pile results from Pile Designer</h3>";
++    h+="<div><b>Source:</b> "+esc(p.producer||"?")+" · sent "+esc(when(p.producedAt))+" · project "+esc((p.project&&p.project.name)||"—")+(DLG.via==="file"?" · from a JSON file":"")+
++      (p.casesRunAt?" · cases run "+esc(when(p.casesRunAt)):"")+"</div>";
++    h+="<div><b>Based on:</b> "+(p.basis? esc(p.basis.producer||"?")+" foundation loads sent "+esc(when(p.basis.producedAt))+" ("+esc(p.basis.target||"?")+" import in Pile Designer)" : "no foundation-load hand-off")+"</div>";
++    h+="<div class='"+(sl.level==="stale"||sl.level==="nomatch"?"pxr-stale":"")+"' id='pxr-dlg-stale'>"+esc(sl.msg)+"</div>";
++    if(p.notes&&p.notes.length) h+="<details><summary>Sender notes ("+p.notes.length+")</summary><div style='color:#475569'>"+p.notes.map(n=>"• "+esc(n)).join("<br>")+"</div></details>";
++    h+="<h4>Import</h4>";
++    if(conv){
++      h+=ck("geo","Geotechnical axial resistance R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> (panel I-7)",!(g&&g.static));
++      if(g&&g.field) h+="&nbsp;&nbsp;&nbsp;<label><input type='radio' name='pxr-rn' value='static'"+(st.rn==="static"?" checked":"")+"> static analysis (R<sub>n</sub> = "+f(g.static.Rn,1)+" kip, φ = "+f(g.static.phi,3)+")</label> <label><input type='radio' name='pxr-rn' value='field'"+(st.rn==="field"?" checked":"")+"> field method "+esc(g.field.label)+" (required R<sub>n</sub> = "+f(g.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(g.field.phi,3)+")</label><br>";
++      h+=ck("mom","p-y pile moment per limit state, replacing the elastic (Matlock–Reese) estimate (Tab 4 §4.4b)");
++      h+=ck("df","Depth to fixity D<sub>f</sub> (buckling length, panel I-7)",!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0));
++    }
++    if(pl.ip&&pl.ip.use){ h+=ck("iab","Integral pile-head moment M<sub>u</sub> (panel I-0a)");
++      h+="&nbsp;&nbsp;&nbsp;<label><input type='radio' name='pxr-im' value='nl'"+(st.im==="nl"?" checked":"")+(num(pl.ip.nl)?"":" disabled")+"> nonlinear p-y ("+f(pl.ip.nl,1)+" kip-ft)</label> <label><input type='radio' name='pxr-im' value='lin'"+(st.im==="lin"?" checked":"")+"> linear, Pile Designer's interaction basis ("+f(pl.ip.lin,1)+" kip-ft)</label><br>"; }
++    if(conv&&pl.rows.length){
++      h+="<h4>Limit states of the pile check (Tab 4 §4.4b) and the matched Pile Designer case</h4><table><tr><th>Limit state</th><th>Pile</th><th>P (kip)</th><th>H (kip)</th><th>M now (kip-ft)</th><th>Pile Designer case</th><th>P, V run</th><th>M<sub>max</sub> (kip-ft)</th><th>z (ft)</th><th>y<sub>0</sub> (in)</th><th>θ<sub>0</sub> (rad)</th><th>z<sub>fix</sub> (ft)</th></tr>"+
++        pl.rows.map(x=>{ const c=x.c; return "<tr><td>"+esc(x.ls)+"</td><td>"+x.pile+"</td><td class='n'>"+f(x.P,2)+"</td><td class='n'>"+f(x.V,3)+"</td><td class='n'>"+f(x.Mnow,1)+" ("+(x.srcNow==="pd"?"PD":x.srcNow==="py"?"p-y entered":"M–R")+")</td>"+
++          (c? "<td>"+esc(c.name)+"</td><td class='n"+(x.okL?"":" pxr-stale")+"'>"+f(c.loads.P,2)+", "+f(c.loads.V,3)+(x.okL?"":" ≠")+"</td><td class='n'><b>"+f(c.py.Mmax,1)+"</b></td><td class='n'>"+f(c.py.zMmax,2)+"</td><td class='n'>"+f(c.py.y0,3)+"</td><td class='n'>"+f(c.py.rot0,5)+"</td><td class='n'>"+f(c.py.zFix,2)+"</td>"
++             : "<td colspan='7'>no matching case (stays "+(+S.piles.MuPy>0?"p-y entered":"Matlock–Reese")+")</td>")+"</tr>"; }).join("")+"</table>"; }
++    if(pl.ip&&pl.ip.q){ const q=pl.ip.q; h+="<h4>Integral abutment (Pile Designer)</h4><div>"+esc(q.section||"")+", orientation "+esc(q.orient||"")+": gravity D/C = "+f(q.tier1.demand,1)+"/"+f(q.tier1.PuCap,1)+" = "+f(q.tier1.dcr,3)+(q.tier2?"; Tier 2: M<sub>uy</sub> = "+f(q.tier2.Muy,1)+" (nonlinear "+f(q.tier2.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.tier2.Mux,1)+" kip-ft; interaction "+f(q.tier2.interaction,3)+" (nonlinear "+f(q.tier2.interaction_nl,3)+")":"; Tier 2 off")+".</div>"; }
++    if(p.structural){ const s=p.structural; h+="<div>Structural (Pile Designer, "+esc((p.pile&&p.pile.section&&p.pile.section.designation)||"")+", "+esc(s.axis)+" axis): φ<sub>c</sub>P<sub>n</sub> = "+f(s.phiPn,1)+" kip, φ<sub>f</sub>M<sub>n</sub> = "+f(s.phiMn,1)+" kip-ft, φ<sub>v</sub>V<sub>n</sub> = "+f(s.phiVn,1)+" kip (information; this calculator checks its own section, Tab 4 §4.4a/b).</div>"; }
++    if(pl.warns.length) h+="<h4>Notes and warnings</h4><ul>"+pl.warns.map(w=>"<li class='pxr-warn'>"+esc(w)+"</li>").join("")+"</ul>";
++    h+="<h4>This will change (current → new)</h4>";
++    const nM=Object.keys(pl.byLS).length;
++    if(!pl.items.length&&!nM) h+="<p>Nothing selected.</p>";
++    else h+="<table>"+pl.items.map(it=>"<tr><td style='width:45%'>"+esc(it.lbl)+"</td><td>"+esc(String(it.cur))+"</td><td><b>"+esc(String(it.v))+(it.u?" "+esc(it.u):"")+"</b></td></tr>").join("")+
++      (nM?"<tr><td>Pile moment per limit state (Tab 4 §4.4b)</td><td>"+esc(pl.rows.filter(x=>pl.byLS[x.ls]).map(x=>x.ls+" "+f(x.Mnow,1)).join("; "))+"</td><td><b>"+esc(Object.keys(pl.byLS).map(k=>k+" "+f(pl.byLS[k].M,1)).join("; "))+" kip-ft</b></td></tr>":"")+"</table>";
++    h+="<div style='font-size:.8rem;color:#555'>Inputs set here are highlighted (PD ·) while they hold the imported value. The source, the moments and the stale status are kept with the project (S.pileRes) and shown in panel "+(conv?"I-7":"I-0a")+" and the report. A later import replaces this record.</div>";
++    h+="<div class='pxr-btns'><button type='button' id='pxr-cancel'>Cancel</button><button type='button' class='primary' id='pxr-go'"+(!pl.items.length&&!nM?" disabled":"")+">Import</button></div>";
++    let ov=document.getElementById("pxr-ov");
++    if(!ov){ ov=document.createElement("div"); ov.id="pxr-ov"; ov.innerHTML="<div id='pxr-dlg' role='dialog' aria-modal='true' aria-label='Pull pile results'></div>"; document.body.appendChild(ov); }
++    ov.querySelector("#pxr-dlg").innerHTML=h;
++  }
++  function open(p,via){
++    if(!window.LAST_R){ alert("No results yet: fix the input errors first."); return null; }
++    const err=check(p); if(err.length){ alert("Pile results refused:\n  "+err.join("\n  ")); return null; }
++    DLG={p, via:via||"pull", st:defaults(p)}; css(); render(); return DLG;
++  }
++  function apply(){
++    const {p,st}=DLG, pl=plan(p,st), nM=Object.keys(pl.byLS).length;
++    if(!pl.items.length&&!nM) return;
++    if(typeof pushUndo==="function") pushUndo("pile-results:"+Date.now());
++    const fields={}; pl.items.forEach(it=>{ setPath(S,it.path,it.v); fields[it.path]=it.v; });
++    const sl=stale(p.basis), g=p.geotechnical, q=p.integral;
++    S.pileRes={ producer:p.producer||"", producerFile:p.producerFile||"", producedAt:p.producedAt||"", project:(p.project&&p.project.name)||"", via:DLG.via, adoptedAt:new Date().toISOString(),
++      basis:p.basis? { producer:p.basis.producer||"", producedAt:p.basis.producedAt||"", contentHash:p.basis.contentHash||null, target:p.basis.target||"" } : null,
++      stateAtImport:sl.level, casesRunAt:p.casesRunAt||null, fields, byLS:pl.byLS,
++      choices:{ geo:!!st.geo, rn:st.rn, mom:!!st.mom, df:!!st.df, iab:!!st.iab, im:st.im },
++      pile:p.pile? { type:p.pile.type||"", designation:(p.pile.section&&p.pile.section.designation)||"", axis:p.pile.axis||null, head:p.pile.head||"", stickup:p.pile.stickup } : null,
++      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,
++        minPen:g.minPen? { zMin:g.minPen.zMin, governs:g.minPen.governs||"", tipElMin:g.minPen.tipElMin, ctrl:g.minPen.controllingTipDepth, tipElCtrl:g.minPen.tipElControlling } : null } : null,
++      fixity:p.fixity? { Lf:p.fixity.Lf, method:p.fixity.method||"", Lf_davisson:p.fixity.Lf_davisson } : null,
++      struct:p.structural? { phiPn:p.structural.phiPn, phiMn:p.structural.phiMn, phiVn:p.structural.phiVn, axis:p.structural.axis } : null,
++      integral:q? { section:q.section||"", orient:q.orient||"", dcr:q.tier1&&q.tier1.dcr, interaction:q.tier2?q.tier2.interaction:null, interaction_nl:q.tier2?q.tier2.interaction_nl:null, Muy:q.tier2?q.tier2.Muy:null, Mux:q.tier2?q.tier2.Mux:null, Muy_nl:q.tier2?q.tier2.Muy_nl:null } : null };
++    buildInputs(); recalcAll(); scheduleSave();
++    if(p.producedAt) BX().markAdopted(CH,RID,p.producedAt);
++    close(); paint();
++    const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="pile results pulled from Pile Designer";
++  }
++  function clearRes(){ if(!S.pileRes) return; if(typeof pushUndo==="function") pushUndo("pile-results-clear:"+Date.now()); delete S.pileRes; buildInputs(); recalcAll(); scheduleSave(); }
++  /* the source box in panel I-7 ("piles") / I-0a ("iab"); the stale line is filled after each recalculation (paint) */
++  function panelHTML(kind){
++    const s=S.pileRes; if(!s) return "";
++    let h=`<div class="pxr-box" id="pxr-box-${kind}"><b>From Pile Designer</b>, ${esc(when(s.producedAt))}${s.project?" ("+esc(s.project)+")":""}${s.basis?"; based on the foundation loads sent "+esc(when(s.basis.producedAt)):""}.`;
++    if(kind==="piles"){ const ks=Object.keys(s.byLS||{});
++      h+=ks.length? "<br>p-y pile moment per limit state (Tab 4 §4.4b): "+ks.map(k=>esc(k)+" "+fmt(+s.byLS[k].M,1)+" kip-ft ("+esc(s.byLS[k].caseName||"")+")").join("; ")+"." : "<br>No per-limit-state moment imported.";
++      if(s.geo) h+=`<br>Geotechnical (Pile Designer): static R<sub>n</sub> = ${f(s.geo.Rn,1)} kip, φ = ${f(s.geo.phi,3)}; R<sub>n,up</sub> = ${f(s.geo.RnUp,1)} kip, φ<sub>up</sub> = ${f(s.geo.phiUp,3)}${s.geo.field?"; field method "+esc(s.geo.field.label)+": required R<sub>n</sub> = "+f(s.geo.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(s.geo.field.phi,3)+", R<sub>ndr</sub> = "+f(s.geo.field.Rndr,1)+" kip":""}${s.choices&&s.choices.geo?" (imported: "+(s.choices.rn==="field"?"field method":"static")+")":" (not imported)"}.`;
++      if(s.geo&&s.geo.minPen) h+=`<br>Minimum penetration (10.7.6): z<sub>min</sub> = ${f(s.geo.minPen.zMin,1)} ft (${esc(s.geo.minPen.governs)})${num(s.geo.minPen.tipElMin)?", tip El. "+f(s.geo.minPen.tipElMin,1):""}; controlling tip ${f(s.geo.minPen.ctrl,1)} ft${num(s.geo.minPen.tipElCtrl)?" (El. "+f(s.geo.minPen.tipElCtrl,1)+")":""}.`;
++      if(s.fixity) h+=`<br>Depth to fixity (buckling): ${f(s.fixity.Lf,2)} ft (${esc(s.fixity.method)})${s.choices&&s.choices.df?"":" (not imported)"}.`;
++      if(s.struct) h+=`<br>Structural (Pile Designer, ${esc(s.struct.axis||"")} axis): φ<sub>c</sub>P<sub>n</sub> = ${f(s.struct.phiPn,1)} kip, φ<sub>f</sub>M<sub>n</sub> = ${f(s.struct.phiMn,1)} kip-ft.`; }
++    else if(s.integral){ const q=s.integral; h+=`<br>${esc(q.section)} (${esc(q.orient)}): gravity D/C ${f(q.dcr,3)}${num(q.interaction)?"; Tier 2 interaction "+f(q.interaction,3)+" (nonlinear "+f(q.interaction_nl,3)+"), M<sub>uy</sub> = "+f(q.Muy,1)+" (nonlinear "+f(q.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.Mux,1)+" kip-ft":""}.`; }
++    h+=`<br><span class="pxr-stline" data-pxr-st="1"></span> <button type="button" class="mini-btn" data-pxr-clear="1">Clear Pile Designer results</button></div>`;
++    return h;
++  }
++  function statusNow(){ const s=S.pileRes; if(!s) return null; return stale(s.basis); }
++  function paint(){
++    const n=document.getElementById("pxr-new"); if(n) n.hidden=!(BX()&&BX().isNew(CH,RID));
++    const st=LAST; document.querySelectorAll("[data-pxr-st]").forEach(el=>{ el.textContent=st? st.msg : ""; el.className="pxr-stline"+(st&&(st.level==="stale"||st.level==="nomatch")?" pxr-stale":""); });
++  }
++  css();
++  window.addEventListener("storage",paint); window.addEventListener("focus",paint);
++  if(typeof recalcAll==="function"){ const rc=recalcAll; recalcAll=function(){ const r=rc.apply(this,arguments);
++    try{ LAST=statusNow(); if(LAST&&LAST.level==="stale"){ warn("Pile results from Pile Designer: "+LAST.msg); renderWarnings(); } paint(); }catch(e){} return r; }; }
++  if(typeof buildReport==="function"){ const br=buildReport; buildReport=async function(){ const r=await br.apply(this,arguments);
++    try{ const s=S.pileRes, sub=document.querySelector("#report .rpt-sub"); if(s&&sub){ const st=statusNow(), d=document.createElement("div"); d.className="rpt-sub"; d.id="pxr-rpt-src"; const ks=Object.keys(s.byLS||{});
++      d.textContent="Pile results from Pile Designer, "+when(s.producedAt)+(s.basis?" (from the foundation loads sent "+when(s.basis.producedAt)+")":"")+": "+[Object.keys(s.fields||{}).length?"inputs "+Object.keys(s.fields).map(k=>k+" = "+s.fields[k]).join(", "):"", ks.length?"p-y pile moment for "+ks.join(", ")+" (see §4.4b)":"", s.integral&&num(s.integral.interaction)?"integral Tier 2 interaction "+fmt(s.integral.interaction,3):""].filter(Boolean).join("; ")+". "+(st?st.msg:"");
++      sub.parentNode.insertBefore(d,sub.nextSibling); } }catch(e){}
++    return r; }; }
++  document.addEventListener("click",ev=>{
++    const t=ev.target; if(!t||!t.closest) return;
++    if(t.closest("#pxr-pull")){
++      if(!BX()){ alert("The hand-off helper is not available in this browser."); return; }
++      const r=BX().read(CH,SCH,1);
++      if(r.error){ alert(r.empty?"Nothing has been sent yet. In Pile Designer, click \"Send pile results to the abutment\" (or use \"Import pile results (JSON)\")." : "Cannot use the pile results: "+r.error); return; }
++      open(r.payload,"pull"); return; }
++    if(t.closest("#pxr-imp")){ const fl=document.getElementById("pxr-file"); if(fl) fl.click(); return; }
++    if(t.closest("[data-pxr-clear]")){ clearRes(); return; }
++    if(t.id==="pxr-cancel"){ close(); return; }
++    if(t.id==="pxr-go"){ apply(); return; }
++  });
++  document.addEventListener("change",ev=>{
++    const t=ev.target; if(!t) return;
++    if(t.id==="pxr-file"){ const fl=t.files&&t.files[0]; if(!fl) return;
++      BX().importFile(fl,SCH,1,r=>{ if(!r.ok){ alert("Import pile results: "+r.error); return; } open(r.payload,"file"); }); t.value=""; return; }
++    if(!DLG||!t.closest||!t.closest("#pxr-dlg")) return;
++    ev.stopPropagation();
++    const k=t.getAttribute("data-pxr"); if(k){ DLG.st[k]=t.checked; }
++    else if(t.name==="pxr-rn") DLG.st.rn=t.value;
++    else if(t.name==="pxr-im") DLG.st.im=t.value;
++    render();
++  },true);
++  window.AbutPileResults={ open, apply, close, plan, match, stale, check, panelHTML, paint, when, clear:clearRes, state:()=>DLG };   // used by tests and the input panels
++  paint();
+```
