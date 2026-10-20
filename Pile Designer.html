@@ -10656,10 +10656,10 @@ function PrintReport({
       I.lateralSource === "py" ? (r.group.pmAuto ? "Applied automatically per row (p-multiplier = row f\u2098 \u00d7 " + fmt(r.group.pmMod, 2) + "); the lateral results are the governing row's." : "Not applied automatically; the p-y analysis used the entered p-multiplier " + fmt(I.pyPM || 1, 2) + ".") : ""),
     r.group && r.group.pmAuto && pyRes && pyRes.pmAuto && /*#__PURE__*/React.createElement(PmRowTable, { info: pyRes.pmAuto, print: true }),
     r.capDist.capWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
-      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.",
+      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : "",
       r.capDist.stemWt_incl ? " Stem wall self-weight \u03b3DC\u00d7W = " + fmt(r.capDist.dlFactor, 2) + "\u00d7" + fmt(r.capDist.stemWeight_nom, 1) + " = " + fmt(r.capDist.stemWeight, 1) + " kip, applied at the stem plan centroid." : ""),
     !r.capDist.capWt_incl && r.capDist.stemWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
-      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid."),
+      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : ""),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } },
       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #94a3b8", textAlign: "left", color: "#64748b" } },
         ["Pile", "x (ft)", "y (ft)", "P/n", "bending", "Axial (kip)", "Shear (kip)"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, style: { padding: "2px 5px", textAlign: i >= 3 ? "right" : "left" } }, h2)))),
@@ -11990,12 +11990,14 @@ function stemTopZ(I) {
 // If a point is flagged atStemTop and a stem-top elevation is provided, its z resolves there.
 function caseLoadList(loadPoints, gcase, stemTop) {
   const mags = (gcase && gcase.mags) || {};
-  return loadPoints.map(pt => {
+  const list = loadPoints.map(pt => {
     const m = mags[pt.id] || {};
     return { name: pt.name, x: pt.x || 0, y: pt.y || 0,
       z: (pt.atStemTop && stemTop != null) ? stemTop : (pt.z || 0),
       P: m.P || 0, Vx: m.Vx || 0, Vy: m.Vy || 0, Mx: m.Mx || 0, My: m.My || 0 };
   });
+  list.caseType = (gcase && gcase.type) || "strength";   // EEP: computeCapDist reads it (Extreme Event cap / stem weight factor)
+  return list;
 }
 // Is a case's magnitude set all zero (skip emitting a degenerate _fromGroup case)?
 function caseIsZero(gcase) {
@@ -12040,7 +12042,10 @@ function computeCapDist(I, grp, loadListOverride) {
   // Offset from the pile-group centroid produces overturning like any eccentric load.
   // Both cap and stem self-weights carry the dead-load factor γDC (AASHTO LRFD
   // Strength I max = 1.25 default; user-overridable via dlFactor).
-  const dlF = (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
+  // EEP (2026-10-20): an Extreme Event group case takes the cap / stem self-weight at 1.00 (AASHTO LRFD 10th Ed.
+  // Table 3.4.1-1, permanent loads 1.00 in Extreme Event I and II; C3.4.1); before, the Strength factor dlFactor (1.25).
+  const dlEE = !!(loadListOverride && loadListOverride.caseType === "extreme");
+  const dlF = dlEE ? 1.00 : (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
   let capWeight = 0, capWeight_nom = 0, capWt_incl = false;
   if (I.capIncludeWeight && I.capL > 0 && I.capW > 0 && I.capThk > 0) {
     const Wc = I.capL * I.capW * I.capThk * (I.capGamma || 150) / 1000;
@@ -12094,7 +12099,7 @@ function computeCapDist(I, grp, loadListOverride) {
     loads: loadContrib, nLoads: loadList.length,
     loadPtX: loadList.length === 1 ? loadList[0].x : cx, loadPtY: loadList.length === 1 ? loadList[0].y : cy,
     capWeight, capWt_incl, capWeight_nom,
-    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF,
+    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF, dlEE,
     Jpolar: Sxx + Syy,
     Vresultant: Math.sqrt(Vx * Vx + Vy * Vy),
     Mx_shear: Vy * hh, My_shear: Vx * hh,
@@ -12585,7 +12590,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
             /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1.5 leading-snug" }, "Stem uses concrete \u03b3 above. Position is the stem plan centroid in the same x-y origin as the piles; eccentricity from the group centroid produces overturning. Loads can be applied at the stem top via the checkbox in the load-locations table (z = stem height above cap).")),
           (I.capIncludeWeight || I.stemEnable) && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1.5" },
             capF("Dead-load factor \u03b3DC", "dlFactor", "\u2013"),
-            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec.")),
+            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1).")),
   ];
   const leftB = [
           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mt-4 mb-2" }, "3 \u00b7 Design pile"),
