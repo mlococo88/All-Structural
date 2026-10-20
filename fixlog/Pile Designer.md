@@ -18291,3 +18291,38 @@ index 87a46f5..06ff89e 100644
 +          title: "Send the integral-abutment results to the abutment calculator (channel pileResults): the gravity D/C, and with Tier 2 the pile-head moments and the interaction D/C. Previews first; also Export hand-off (JSON).",
 +          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Send results to the abutment"))),
 ```
+
+
+## 2026-10-20 — PR: claude/pile-abut-return-2 — Follow-ups to PXR (#388): the abutment's H-pile orientation sets the bending axis on import (PXR2) (PR link added after merge)
+
+Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `abutment_calculator.html` (fixlog/abutment_calculator.md PXR2: `orient` on the hand-off, biaxial integral check with Pile Designer's two Tier 2 moments, stale results not used) and HANDOFF.md §4.6 / §4.10.
+
+### PXR2-1. Foundation-load import: bending axis and web direction from `pileLayout.section.orient`   [input set on import; no calculation change]
+- **Where:** `planSection` in the foundation-load receiver (anchor `// PXR2 (2026-10-20): the abutment's H-pile orientation`).
+- **Before:** the section was adopted without an orientation; `hpAxis` stayed at its value (default "strong"), while the abutment's default orientation bends the weak axis, so the p-y moments sent back were about the other axis (PXR open item 1).
+- **After:** with "adopt the pile section" and an `orient` in the payload: `hpAxis` = `orient` (the axis the abutment's longitudinal load bends); group target also `hpGroupWebDir` = the pile axis mapped to the web direction (hand-off y for "weak", x for "strong"), so each Group row direction is solved about its own axis (F39, with the per-row p-multipliers on). Both are listed in the dialog (now → new), recorded in `I.foundationSrc.fields` and marked. A payload without `orient`: unchanged.
+- **Check case (abutment default pile project, weak orientation; Pile Designer defaults):** per-pile import → `hpAxis` strong → **weak**; group target (identity axes) → `hpAxis` weak, `hpGroupWebDir` = **y**. With the axis now set by the import, the Strength I row gives the same M_max = 213.777 kip-ft as the PXR check case, where weak was entered by hand.
+- **Integral:** no change needed. Pile Designer already sends both Tier 2 moments (`integral.tier2.Muy`, `Mux` and the nonlinear `_nl`); the abutment now imports both (default integral project, AASHTO, skew 15°, biaxial: M_uy = 57.847, M_ux = 37.871 kip-ft nonlinear; linear 23.496 / 10.924).
+
+### Saved data
+- None changed (`hpAxis`, `hpGroupWebDir` are existing inputs).
+
+### How verified
+- `node tests/check-syntax.mjs "Pile Designer.html"`: pass. jsdom end to end with the abutment (59 checks, fixlog/abutment_calculator.md PXR2): `computeAll` (default, H-pile, integral) identical to origin/main; the axis and web direction set as above.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `c04ec0f`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 06ff89e..6d4f235 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -809,0 +810,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    // PXR2 (2026-10-20): the abutment's H-pile orientation (pileLayout.section.orient; "weak" = web parallel to the abutment, i.e. along
++    // hand-off y, so the longitudinal load along hand-off x bends the weak axis; "strong" = web along hand-off x). Bending axis = the
++    // axis the longitudinal load bends; for the group target also the web direction on the plan (the pile axis mapped to that
++    // hand-off axis), so each Group row direction is solved about its own axis (F39). Absent (older payload): unchanged.
++    if(s.orient==='weak' || s.orient==='strong'){
++      set('hpAxis',s.orient,'Bending axis (the abutment: web '+(s.orient==='weak'?'parallel':'normal')+' to the abutment, the longitudinal load bends the '+s.orient+' axis)');
++      if(o.target==='group'){ var webH=s.orient==='weak'?'y':'x', wd=o.ax.x.charAt(1)===webH?'x':'y'; set('hpGroupWebDir',wd,'H-pile web parallel to pile '+wd+' (the abutment\'s orientation)'); } }
+```
