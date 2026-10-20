@@ -38,6 +38,7 @@ Items marked "pending reference" in the owner rules panel. Add the documents to 
 - MassDOT Bridge Manual **Part II**: plate and weld minimums, deck/overhang tables, barrier weights, camber values, haunch and diaphragm details.
 - **RIDOT Bridge Standard Details**: cross-frame stagger pattern and details.
 - **CTDOT standard details/sheets**: cross-frame and diaphragm details.
+- **MassDOT Bridge Manual Part II** (abutment): abutment/backwall/footing/seat/cover/frost minimums and the standard approach slab detail; **CTDOT standard sheets 6.4.1–6.4.3** (approach slab details). Needed to turn the abutment's approach-slab inputs and geometry minimums into owner defaults.
 
 ## 3. Parked features (agreed, not started)
 
@@ -45,6 +46,12 @@ Items marked "pending reference" in the owner rules panel. Add the documents to 
 - **Suggest: steel grade options** — needs grade-dependent unit prices first (GD66 (e)).
 - **MassDOT exterior sidewalk beam Case I / Case II** (3.5.3.11) — warning only today (GD63 (c)).
 - **Low-priority owner items** from the manual reviews (mostly information-only notes).
+
+- **Abutment calculator — open items (review 2026-10-20, see scratchpad abrev2/review.md):**
+  - Approach slab module (in progress 2026-10-20: LS removal per MassDOT 3.3.1.3 / CTDOT CT11.1 / AASHTO 3.11.6.5, slab DC+HL-93 reaction on a backwall shelf, shelf corbel 5.8.4.2, integral sliding friction, slab one-way design, EE inertia). DOT rules: CTDOT 11.14CT 16 ft × 1.25 ft, skew ≤ 35° follows skew, required on State highways; MassDOT 3.10.4 / RIDOT 11.3.2 required with integral abutments, sliding at the abutment.
+  - Keeper blocks / anchor bolts / shear key (14.8.3); settlement (10.6.2.4) and global stability (11.6.3.7) beyond flags; scour cases (MassDOT EE II check flood, CTDOT Extreme Event III); CE, FR/PTFE, Strength II, WS on the substructure; pile group effects and batter piles; compaction pressure, water head, strip surcharge; stem bar cut-offs, pedestal design.
+  - Hand-offs: SubLoads → abutment owner and site class (and CE/FR/BR couple); independent wingwall → Retaining Wall Designer.
+- **Pile Designer — open items (review 2026-10-20, see scratchpad pdrev/review.md):** Nordlund/β/CPT/rock-socket static methods; neutral plane, downdrag settlement and group settlement (10.7.2.3); group uplift (10.7.3.11); battered piles; pipe, concrete-filled and prestressed piles; liquefaction/seismic; pier pile-cap design (no tool covers it); §6 work for H-pile modules 01/03–09; resistance-vs-depth and P-M figures; interactive figures like the abutment's.
 
 ## 4. Known limits (documented, no action planned)
 
