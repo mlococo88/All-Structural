@@ -6391,3 +6391,504 @@ index 42344b9..04ae525 100644
 -  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*S.fnd.qn)} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
 +  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*(R.checks.bearing.qn??S.fnd.qn))} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
 ```
+
+## 2026-10-20 — PR: claude/abut-show-work — ℓ_d with λ_rc per Eq. 5.10.8.2.1c-2; worked derivations (§6) and figures (PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Only F67 changes a computed value (the bar-length ℓ_d); F68 and F69 are display only.
+
+### F67. Section-check development length ℓ_d: λ_rc per Eq. 5.10.8.2.1c-2 (ABSW-1)   [calc change] [LESS conservative; bar-length estimates only]
+- **Provision:** 5.10.8.2.1a (Eqs. -1, -2), 5.10.8.2.1c (Eq. 5.10.8.2.1c-2: λ_rc = d_b·c_b/(c_b(1 − β_t) + 1.67n_s·k_tr)², Eq. -1: 0.3 ≤ λ_rc ≤ 1.0).
+- **Before:** `const ld=Math.max(12, ldb*lamCf);` (λ_rc = 1.0, its upper bound).
+- **After:** `const cbLd=Math.min(cvE+bar.db/2, o.sp/2), lamRc=Math.min(1,Math.max(0.3,bar.db/cbLd)); const ld=Math.max(12, ldb*lamCf*lamRc);` — k_tr = 0, β_t = 0 (no input for either; same basis as the dowel check F62), c_b = the smaller of the cover to the bar centre and half the spacing.
+- **Where:** `sectionCheck()` anchor `// ABSW (2026-10-20): λrc by Eq. 5.10.8.2.1c-2`; the S&T + development block of each §5.x section shows c_b and λ_rc; §5.7 note.
+- **Used by:** only the §5.7 bar-length estimates (B1, C1, D1) and the ℓ_d column. No check uses ℓ_d.
+- **Check (default project):**
+  - Backwall #6 @ 12, cover 2.0: c_b = min(2.375, 6.0) = 2.375 in, λ_rc = 0.75/2.375 = 0.316, ℓ_d = 59.14(0.316) = **18.67 in** (before 59.14).
+  - Stem #9 @ 9, cover 2.0: c_b = 2.564, λ_rc = 0.440, ℓ_d = 88.94(0.440) = **39.13 in** (before 88.94).
+  - Toe / heel #8 @ 9, cover 3.0: c_b = min(3.5, 4.5) = 3.5, 1/3.5 = 0.286 → 0.30, ℓ_d = 78.85(0.30) = **23.65 in** (before 78.85).
+  - Epoxy-coated backwall (λ_cf 1.5): 88.70 → 28.01 in.
+  - Bar lengths: B1 9.93 → 6.56 ft, C1 14.57 → 9.97 ft, D1 16.07 → 11.47 ft.
+
+### F68. Worked derivations (CLAUDE.md §6) — display only (ABSW-2)
+- **Stem (§5.2):** H and h_eq of the governing state; M_EH, M_LS, M_ES and V_EH, V_LS, V_ES substituted; H_gird·h_stem; Σ W_sw·e_sw itemised by part; M_ecc substituted; EE I terms (ΔP_AE wall share, k_h·W_wall, EQ_sup/L_ab with arms); M_u and V_u as term sums. Anchors `// ABSW: stem base M_u, V_u worked term by term`, stemGov fields `Veq,eqT,MEH,…` (computeAll stores them; no value changed).
+- **Toe / heel (§5.3, §5.4):** pressure at the ends of each loaded piece, V = ½(q_a + q_b)ℓ, M = rectangle + triangle (helper `pressWorkTex()`), toe V_u at d_v, heel w-components, M_dn, M_up (pressure or pile rows), V_dn, V_up, V_u.
+- **Footing service moments:** toe and heel M_s worked (§5.3, §5.4); `footSvc.toeD/heelD` stored.
+- **Service I pressures (§3.4):** e and q_max/q_min substituted.
+- **K_AE (§3.6a):** the M–O expression with values substituted; P_AE substituted.
+- **Seismic inertia (§3.6a):** W_w = ΣW_i, z̄ = ΣW_i·ȳ_i/W_w, k_h·W_w, k_h·W_s substituted.
+- **Seat bearing (§5.6):** P_u,girder = γDC·P_DC + γDW·P_DW + γLL·P_LL (+ WS, WL at Strength V) substituted (`bearingSeat.puT`); A₂ already worked.
+
+### F69. Figures (inline SVG, print-friendly; no new library) — display only (ABSW-3)
+- §6.5 lateral pressure on the stem and backwall for the V&M selection (the w(z) of the V&M integration; EE I point loads as arrows).
+- §3.2a resultant location per limit state with the kern (B/6), B/3 and each state's e_lim.
+- §5.2b stem M_u(z) of the governing state against φM_n(z) up the height (batter included). At z = 0 the profile reproduces the §5.2 M_u and φM_n exactly (checked in every test case).
+- §5.7 dimensioned reinforcement section to scale (bar marks, covers, ℓ_dh, lap, ℓ_d).
+- §5.6 seat plan: pad, c_front, c_back, c_trans and the A₂ outline.
+- §4.1 pile plan: punching perimeters (pile + d_v) and per-pile shear arrows; §4.3 pile reactions per row (arrows).
+- §6 V&M: "Extreme Event I" option when EE I is on. The stem diagram adds the stem design's EQ terms (ΔP_AE at h_EQr·H_s, wall inertia at h_stem/2, EQ_sup at the seat) in closed form; the EE γEH agency value is honoured. A saved `ui.vmSel` of EE with EE off falls back to Strength I.
+- CSS: `svg.absw-fig` with page-break avoidance in print.
+
+### Saved data (§5)
+No key or format change. `ui.vmSel` may now hold "ls:Extreme Event I".
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: pass. Self-test passes.
+- Headless deep comparison of every leaf of `computeAll()` (7,479 to 12,925 values per case) against main for default, pile + DR, pile EE, spread EE + ES, rock, q_n computed, coated backwall with slope and water, construction stage with surcharge: the only differences are the four `ld` values above.
+- All tabs and the print report rebuilt for 8 cases (incl. EE V&M, construction V&M, rock, pile EE) with no exception; every equation parsed by KaTeX (0 errors); screenshots of every new panel checked.
+- EE V&M stem base M = 255.28 vs design 256.26 kip-ft/ft (A_s 0.6, Site Class B): the 0.98 difference is the existing V&M vs §5.2 treatment of the soil above the stem top (Strength I shows 110.66 vs 112.06 on main as well).
+
+### Open items (not changed)
+- `integ()` (V&M) counts a point load twice when it falls exactly on a station; the EE points added here avoid it, the existing pile-row points could hit it. Diagram only.
+- Footing top bars (heel D1): λ_rl = 1.3 (more than 12 in of concrete below) is not applied to ℓ_d [5.10.8.2.1b]; it would lengthen D1. Needs a decision.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against main `c56a8c2`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 04ae525..ff84a19 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -340,0 +341,3 @@ dialog h3{margin-top:0;}
++/* ABSW: inline-SVG figures print on one page, full width, black-on-white */
++svg.absw-fig{display:block;margin:6px 0;height:auto}
++@media print{ svg.absw-fig{break-inside:avoid;page-break-inside:avoid;max-width:100% !important} }
+@@ -2120 +2123 @@ function computeAll(){
+-    R.seis={kh,kv,thd,dMO:dMO*180/Math.PI,KAE,PAE,dPAE,dPAEh,dKh,zEQ,WiW,zWall,WiS,zSoil,EQsup:0, kh0, kh0f, sc};
++    R.seis={kh,kv,thd,dMO:dMO*180/Math.PI,KAE,PAE,dPAE,dPAEh,dKh,zEQ,WiW,zWall,WiS,zSoil,EQsup:0, kh0, kh0f, sc, Wparts, Wev};   // ABSW: Wparts, Wev for the worked inertia (display only)
+@@ -2635 +2638,5 @@ function computeAll(){
+-    const ld=Math.max(12, ldb*lamCf);
++    // ABSW (2026-10-20): λrc by Eq. 5.10.8.2.1c-2 with k_tr = 0 and β_t = 0 (no transverse reinforcement or transverse compression
++    // counted; the same basis as the stem-dowel check): λrc = d_b·c_b/c_b² = d_b/c_b, 0.3 ≤ λrc ≤ 1.0 (Eq. 5.10.8.2.1c-1); c_b = the smaller
++    // of the cover to the bar centre (c + d_b/2) and half the bar spacing. Was λrc = 1.0 (upper bound).
++    const cbLd=Math.min(cvE+bar.db/2, o.sp/2), lamRc=Math.min(1,Math.max(0.3,bar.db/cbLd));
++    const ld=Math.max(12, ldb*lamCf*lamRc);
+@@ -2646 +2653 @@ function computeAll(){
+-      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, lamCf, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
++      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, Ec, wcE, nMod, fc4, ldb, ld, lamCf, cbLd, lamRc, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
+@@ -2743 +2750 @@ function computeAll(){
+-    let Meq=0,Veq=0;
++    let Meq=0,Veq=0, eqT=null;
+@@ -2750,0 +2758 @@ function computeAll(){
++      eqT={dP, zP:(+S.seismic.hEQr)*Hs, dKh:R.seis.dKh, wallApf, Wi, sup:ns*R.seis.EQsup/Lab};   // ABSW: terms for the worked M_u, V_u (display only)
+@@ -2756,0 +2765 @@ function computeAll(){
++      Veq,eqT,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
+@@ -2839 +2848 @@ function computeAll(){
+-        if(!tV||tVu>tV.Vu) tV={Vu:tVu,c,ls:lsName};
++        if(!tV||tVu>tV.Vu) tV={Vu:tVu,c,ls:lsName,segs,VtoeUp_dv,gT};   // ABSW: segs etc. for the worked V_u (display only)
+@@ -2842,2 +2851,2 @@ function computeAll(){
+-        if(!hM||hMu>hM.Mu) hM={Mu:hMu,...hl,MheelUp,VheelUp,c,ls:lsName,eS};
+-        if(!hV||hVu>hV.Vu) hV={Vu:hVu,c,ls:lsName};
++        if(!hM||hMu>hM.Mu) hM={Mu:hMu,...hl,MheelUp,VheelUp,c,ls:lsName,eS,segs};
++        if(!hV||hVu>hV.Vu) hV={Vu:hVu,c,ls:lsName,VheelDn:hl.VheelDn,VheelUp,wDn:hl.wDn,segs};   // ABSW: worked V_u (display only)
+@@ -2847,0 +2857 @@ function computeAll(){
++        segs:tM.segs, segsV:tV.segs, VupDv:tV.VtoeUp_dv, gTV:tV.gT, lblV:tV.c.lbl,   // ABSW
+@@ -2850,0 +2861 @@ function computeAll(){
++        segs:hM.segs, hVd:{VheelDn:hV.VheelDn, VheelUp:hV.VheelUp, wDn:hV.wDn, segs:hV.segs, lbl:hV.c.lbl}, wedgeV,   // ABSW
+@@ -2898,2 +2909,2 @@ function computeAll(){
+-        let MhU=0,VhU=0;
+-        act.forEach((pp,i)=>{ const xT=B/2+pp.x; if(xT>xStemBack){ VhU+=loads[i]/Lftg; MhU+=loads[i]/Lftg*(xT-xStemBack); } });
++        let MhU=0,VhU=0; const hRows={};
++        act.forEach((pp,i)=>{ const xT=B/2+pp.x; if(xT>xStemBack){ VhU+=loads[i]/Lftg; MhU+=loads[i]/Lftg*(xT-xStemBack); const k=pp.x.toFixed(4); (hRows[k]=hRows[k]||{xT,P:0}).P+=loads[i]; } });
+@@ -2901 +2912 @@ function computeAll(){
+-        const rec={Mnet,...hl,MheelUp:MhU,VheelUp:VhU,c,ls:lsName};
++        const rec={Mnet,...hl,MheelUp:MhU,VheelUp:VhU,c,ls:lsName,rows:Object.values(hRows)};
+@@ -2904 +2915 @@ function computeAll(){
+-        if(!hV||Vnet>hV.Vu) hV={Vu:Vnet,c,ls:lsName};
++        if(!hV||Vnet>hV.Vu) hV={Vu:Vnet,c,ls:lsName,VheelDn:hl.VheelDn,VheelUp:VhU,wDn:hl.wDn,rows:Object.values(hRows)};
+@@ -2911 +2922,2 @@ function computeAll(){
+-        wedgeM:hG.gEV*wedgeM, ls:hG.ls, lsV:hV.ls, lbl:hG.c.lbl+" ("+hG.ls+") − pile reactions, same permutation", src:"pile"};
++        wedgeM:hG.gEV*wedgeM, ls:hG.ls, lsV:hV.ls, lbl:hG.c.lbl+" ("+hG.ls+") − pile reactions, same permutation", src:"pile",
++        rows:hG.rows, hVd:{VheelDn:hV.VheelDn, VheelUp:hV.VheelUp, wDn:hV.wDn, rows:hV.rows, lbl:hV.c.lbl}, wedgeV};   // ABSW
+@@ -2932,2 +2944,2 @@ function computeAll(){
+-    if(tMs>footSvc.toe){ footSvc.toe=tMs; footSvc.toeLbl=c.lbl; }
+-    if(hMs>footSvc.heel){ footSvc.heel=hMs; footSvc.heelLbl=c.lbl; }
++    if(tMs>footSvc.toe){ footSvc.toe=tMs; footSvc.toeLbl=c.lbl; footSvc.toeD={MtU}; }
++    if(hMs>footSvc.heel){ footSvc.heel=hMs; footSvc.heelLbl=c.lbl; footSvc.heelD={MhU, Mdn:heelLoads(c).MheelDn}; }   // ABSW: worked M_s (display only)
+@@ -3052 +3064 @@ function computeAll(){
+-    let Pu=-Infinity, PuG=0, pgirder=0, pls="", dcB=-Infinity, sm=null;
++    let Pu=-Infinity, PuG=0, pgirder=0, pls="", dcB=-Infinity, sm=null, puT=null;
+@@ -3061 +3073,3 @@ function computeAll(){
+-      if(dci>dcB+1e-12){ dcB=dci; Pu=P; PuG=PG; pgirder=i+1; pls=ls; sm=mi; }
++      if(dci>dcB+1e-12){ dcB=dci; Pu=P; PuG=PG; pgirder=i+1; pls=ls; sm=mi;
++        puT={DC:S.rx.DC[i].P, DW:S.rx.DW[i].P, LL:S.rx.LL[i].P, WS:S.rx.WS[i].P, WL:S.rx.WL[i].P, gDC:GP.DC[1], gDW:GP.DW[1],
++          gLL:(ls==="Strength I"?L1.LL*L1.mLL:L5.LL*L5.mLL), gWS:ls==="Strength V"?L5.WS:0, gWL:ls==="Strength V"?L5.WL:0, y:posB[i]||0}; }   // ABSW: worked P_u (display only)
+@@ -3066 +3080 @@ function computeAll(){
+-      A2:sm?sm.A2:A1, c:sm?sm.c:0, cBy:sm?sm.cBy:"", mRaw:sm?sm.mRaw:1, cFront, cBack, cT:sm?sm.cT:0};
++      A2:sm?sm.A2:A1, c:sm?sm.c:0, cBy:sm?sm.cBy:"", mRaw:sm?sm.mRaw:1, cFront, cBack, cT:sm?sm.cT:0, puT};
+@@ -3178 +3192 @@ function computeAll(){
+-    const fEH = isLS?(Lst.perm?GP.EH[1]:1.0):one("EH");
++    const fEH = isLS?((Lst.eq&&eqEHfixed()!==null)? eqEHfixed() : (Lst.perm?GP.EH[1]:1.0)):one("EH");   // ABSW: EE I agency γEH as the stem design
+@@ -3211,2 +3225,14 @@ function computeAll(){
+-      const r=integ(st,w,[{s:0,P:Vtop+Hg}]);
+-      vm.stem={pos:st.map(s=>g.hstem-s), V:r.V, M:r.M.map(m=>m+Mtop+Mecc),
++      // ABSW: Extreme Event I — the stem design's EQ terms as point loads: ΔP_AE (wall share) at h_EQr·H_s above the footing, wall inertia
++      // at h_stem/2, superstructure inertia at the seat (as C-10; the M–O increment above the seat adds its moment at the top)
++      const ptsS=[{s:0,P:Vtop+Hg}]; let MtopEQ=0;
++      if(isLS&&Lst.eq&&R.seis&&isFinite(R.seis.dKh)){
++        const dP=0.5*R.seis.dKh*gam*g.soilH*g.soilH, zP=(+S.seismic.hEQr)*g.soilH;
++        const wallApf=(g.tst*g.hstem)+(Math.max(0,g.tsb-g.tst)*g.hstem/2)+(g.tbw*g.hbw), Wi=R.seis.kh*wallApf*m.gc;
++        if(zP<=g.hstem) ptsS.push({s:g.hstem-zP,P:dP}); else { ptsS[0].P+=dP; MtopEQ+=dP*(zP-g.hstem); }
++        ptsS.push({s:g.hstem/2,P:Wi}); ptsS[0].P+=ns*R.seis.EQsup/Lab;
++      }
++      const r=integ(st,w,[ptsS[0]]);
++      // EE interior point loads added in closed form (V steps at s_p, M grows by P·(s − s_p)): integ() counts a point load twice
++      // when it falls exactly on a station, as the wall inertia at h_stem/2 does
++      ptsS.slice(1).forEach(q=>{ st.forEach((sv,i)=>{ if(sv>=q.s-1e-9){ r.V[i]+=q.P; r.M[i]+=q.P*(sv-q.s); } }); });
++      vm.stem={pos:st.map(s=>g.hstem-s), V:r.V, M:r.M.map(m=>m+Mtop+Mecc+MtopEQ), w:w.slice(), ptsEQ:ptsS.slice(1), pTop:(Vtop>0&&hAbove>0)?{h:hAbove,V:Vtop}:null,   // ABSW: w, EQ points for the pressure diagram (display only)
+@@ -3219 +3245 @@ function computeAll(){
+-      vm.backwall={pos:st.map(s=>hbwRet-s), V:r.V, M:r.M,
++      vm.backwall={pos:st.map(s=>hbwRet-s), V:r.V, M:r.M, w:w.slice(),   // ABSW
+@@ -3264,0 +3291 @@ function computeAll(){
++  if(R.vmSel.startsWith("ls:")&&!LIMITS[R.vmSel.slice(3)]) R.vmSel="ls:Strength I";   // ABSW: Extreme Event I selected while it is off
+@@ -3907,0 +3935,4 @@ function renderTabStab(R){
++    // ABSW: resultant location per limit state against the kern and the eccentricity limits
++    h+=panel("o-kern","3.2a","Resultant Location per Limit State — Kern and Eccentricity Limits",`
++      ${svgResultants(R)}
++      <div class="figcap">x̄ = (ΣM_v − ΣM_h)/ΣV from the toe, e = B/2 − x̄, for the permutation of each limit state with the largest |e|/e_lim (the set of <span class="xlink" data-jump="tab-stab|o-ecc">§3.2</span>; permutations in <span class="xlink" data-jump="tab-comb|o-perm-StrengthI">Tab 2 §2.3</span>).</div>`);
+@@ -3964,0 +3996,5 @@ function renderTabStab(R){
++        // ABSW: substituted values (governing Service I permutation)
++        `e = \\left|\\dfrac{B}{2} - \\dfrac{\\Sigma M_v - \\Sigma M_h}{\\Sigma V}\\right| = \\left|${fmtT(geo.B/2,3)} - \\dfrac{${fmtT(sv.c.Mv,1)} - ${fmtT(sv.c.Mh,1)}}{${fmtT(sv.V,1)}}\\right| = ${fmtT(sv.e,3)}\\ \\text{ft}\\ ${sv.e<=geo.B/6?"\\le":">"}\\ B/6 = ${fmtT(geo.B/6,3)}\\ \\text{ft}`,
++        sv.mode==="trap"
++          ? `q_{max,min} = \\dfrac{${fmtT(sv.V,1)}}{(${fmtT(geo.B)})(${fmtT(+g.Lftg||g.Lab)})}\\left(1 \\pm \\dfrac{6(${fmtT(sv.e,3)})}{${fmtT(geo.B)}}\\right) = ${fmtT(sv.qP)}\\,,\\ ${fmtT(sv.qminP)}\\ \\text{ksf}${sv.bx?"\\ (\\text{before } e_L)":""}`
++          : `L_c = 3(B/2 - e) = 3(${fmtT(geo.B/2,3)} - ${fmtT(sv.e,3)}) = ${fmtT(sv.Lc,3)}\\ \\text{ft}\\,, \\quad q_{max} = \\dfrac{2(${fmtT(sv.V,1)})}{(${fmtT(sv.Lc,3)})(${fmtT(+g.Lftg||g.Lab)})} = ${fmtT(sv.qP)}\\ \\text{ksf}${sv.bx?"\\ (\\text{before } e_L)":""}`,
+@@ -4003 +4039,4 @@ function renderTabStab(R){
+-        `K_{AE} = ${fmtT(q.KAE,4)} \\qquad P_{AE} = \\tfrac{1}{2}\\gamma H^2 K_{AE}(1-k_v) = ${fmtT(q.PAE,3)}\\ \\text{kip/ft}`,
++        (()=>{ const ph=+S.soil.phi, th=q.thd, dl=q.dMO, bt=+S.geom.beta, r=x=>x*Math.PI/180;   // ABSW: substituted K_AE (display only)
++          const num=Math.pow(Math.cos(r(ph-th)),2), den1=Math.cos(r(th))*Math.cos(r(dl+th)), rad=Math.sqrt(Math.sin(r(ph+dl))*Math.sin(r(ph-th-bt))/(Math.cos(r(dl+th))*Math.cos(r(bt))));
++          return `K_{AE} = \\dfrac{\\cos^2(${fmtT(ph,1)}° - ${fmtT(th,2)}°)}{\\cos ${fmtT(th,2)}°\\,\\cos(${fmtT(dl,1)}° + ${fmtT(th,2)}°)\\left[1+\\sqrt{\\dfrac{\\sin(${fmtT(ph+dl,1)}°)\\sin(${fmtT(ph-th-bt,2)}°)}{\\cos(${fmtT(dl+th,2)}°)\\cos ${fmtT(bt,1)}°}}\\right]^2} = \\dfrac{${fmtT(num,4)}}{(${fmtT(den1,4)})(1 + ${fmtT(rad,4)})^2}`; })(),
++        `K_{AE} = ${fmtT(q.KAE,4)} \\qquad P_{AE} = \\tfrac{1}{2}\\gamma H^2 K_{AE}(1-k_v) = \\tfrac{1}{2}(${fmtT(S.soil.gamma,3)})(${fmtT(R.geo.H)})^2(${fmtT(q.KAE,4)})(1 - ${fmtT(q.kv,3)}) = ${fmtT(q.PAE,3)}\\ \\text{kip/ft}`,
+@@ -4006,2 +4045,4 @@ function renderTabStab(R){
+-        `\\text{Wall (incl. footing): } k_h W_w = ${fmtT(q.WiW)}\\ \\text{kip at } \\bar z = ${fmtT(q.zWall)}\\ \\text{ft}`,
+-        `\\text{Soil block: } k_h W_s = ${fmtT(q.WiS)}\\ \\text{kip at } \\bar z = ${fmtT(q.zSoil)}\\ \\text{ft}`,
++        // ABSW: weights and centroid heights worked (display only)
++        `W_w = \\Sigma W_i = ${R.parts.map(pp=>fmtT(pp.W,1)).join(" + ")} = ${fmtT(q.Wparts,1)}\\ \\text{kip}\\,, \\quad \\bar z = \\dfrac{\\Sigma W_i\\bar y_i}{W_w} = \\dfrac{${R.parts.map(pp=>`(${fmtT(pp.W,1)})(${fmtT(pp.y??S.geom.tf/2,2)})`).join(" + ")}}{${fmtT(q.Wparts,1)}} = ${fmtT(q.zWall)}\\ \\text{ft}`,
++        `\\text{Wall (incl. footing): } k_h W_w = (${fmtT(q.kh,4)})(${fmtT(q.Wparts,1)}) = ${fmtT(q.WiW)}\\ \\text{kip at } \\bar z = ${fmtT(q.zWall)}\\ \\text{ft}`,
++        `\\text{Soil block: } k_h W_s = (${fmtT(q.kh,4)})(${fmtT(q.Wev,1)}) = ${fmtT(q.WiS)}\\ \\text{kip at } \\bar z = t_f + \\tfrac{h_{soil}}{2} = ${fmtT(S.geom.tf)} + \\tfrac{${fmtT(S.geom.soilH)}}{2} = ${fmtT(q.zSoil)}\\ \\text{ft} \\quad(W_s = \\text{EV, Tab 1 §1.2})`,
+@@ -4082 +4123,2 @@ function renderTabFound(R){
+-     <div class="figcap">Per-pile axial reactions for the governing max-compression case of each limit state. Toggle series in the legend; hover for pile numbers and values.</div>`);
++     <div class="figcap">Per-pile axial reactions for the governing max-compression case of each limit state. Toggle series in the legend; hover for pile numbers and values.</div>
++     ${svgPileReactions(R)}`);
+@@ -4222,0 +4265,16 @@ function toePileShearHTML(td, cT){
++/* ABSW: worked integration of a linear contact-pressure diagram over [xa, xb] (x from the toe): pressure at the ends of each
++   loaded piece, force = ½(q_a + q_b)·ℓ and moment about x_s = rectangle + triangle (as pressForce / pressMoment). Display only. */
++function pressWorkTex(segs, xa, xb, xs, Vsym, Msym, withM){
++  const out=[]; let F=0, M=0; const fF=[], fM=[];
++  (segs||[]).forEach(sg=>{ const a=Math.max(xa,sg.x0), b=Math.min(xb,sg.x1); if(b<=a) return;
++    const q=x=> sg.q0+(sg.q1-sg.q0)*(x-sg.x0)/((sg.x1-sg.x0)||1), qa=q(a), qb=q(b), L=b-a;
++    const F1=Math.min(qa,qb)*L, x1=(a+b)/2, F2=Math.abs(qb-qa)*L/2, x2=qb>qa? a+2*L/3 : a+L/3;
++    F+=(qa+qb)/2*L; M+=F1*Math.abs(x1-xs)+F2*Math.abs(x2-xs);
++    out.push(`q(${fmtT(a,3)}) = ${fmtT(qa,3)},\\ q(${fmtT(b,3)}) = ${fmtT(qb,3)}\\ \\text{ksf} \\quad(x \\text{ from the toe, loaded length } ${fmtT(L,3)}\\ \\text{ft})`);
++    fF.push(`\\tfrac{1}{2}(${fmtT(qa,3)} + ${fmtT(qb,3)})(${fmtT(L,3)})`);
++    fM.push(`(${fmtT(Math.min(qa,qb),3)})(${fmtT(L,3)})(${fmtT(Math.abs(x1-xs),3)}) + \\tfrac{1}{2}(${fmtT(Math.abs(qb-qa),3)})(${fmtT(L,3)})(${fmtT(Math.abs(x2-xs),3)})`); });
++  if(!out.length){ out.push(`\\text{no contact pressure on this part}`); }
++  out.push(`${Vsym} = ${fF.length?fF.join(" + "):"0"} = ${fmtT(F,3)}\\ \\text{kip/ft}`);
++  if(withM) out.push(`${Msym} = ${fM.length?fM.join(" + "):"0"} = ${fmtT(M,3)}\\ \\text{kip-ft/ft}`);
++  return out;
++}
+@@ -4273 +4331 @@ function sectionHTML(c, demHTML, secNo, title){
+-    ${eqB("S&T reinforcement (each face, each direction) & tension development length","AASHTO 5.10.6 (Eq. 5.10.6-1), 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2)",[
++    ${eqB("S&T reinforcement (each face, each direction) & tension development length","AASHTO 5.10.6 (Eq. 5.10.6-1), 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2), 5.10.8.2.1c (Eqs. 5.10.8.2.1c-1, -2)",[
+@@ -4276,2 +4334,3 @@ function sectionHTML(c, demHTML, secNo, title){
+-      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(1.0)(${fmtT(c.lamCf??1,1)})(1.0),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
+-      ((c.lamCf??1)>1?`Epoxy-coated bars (panel I-9${abutOwner()==="MassDOT"?"; MassDOT Part I 3.3.1.6":""}): λ<sub>cf</sub> = ${fmt(c.lamCf,1)} [5.10.8.2.1b] — cover ${fmt(c.cvE,2)} in ${c.cvE<3*BARS[c.bar].db?"&lt;":"≥"} 3d<sub>b</sub> = ${fmt(3*BARS[c.bar].db,2)} in, clear spacing ${fmt(c.sp-BARS[c.bar].db,2)} in ${(c.sp-BARS[c.bar].db)<6*BARS[c.bar].db?"&lt;":"≥"} 6d<sub>b</sub> = ${fmt(6*BARS[c.bar].db,2)} in. `:"")+"S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er, λ_rl"+((c.lamCf??1)>1?"":", λ_cf")+" and λ_rc taken as 1.0 (λ_rc = 1.0 is its upper bound; no confinement credit) — confirm hooks/embedment in detailing.")}
++      `c_b = \\min\\!\\left(c + \\tfrac{d_b}{2},\\ \\tfrac{s}{2}\\right) = \\min(${fmtT(c.cvE,2)} + ${fmtT(BARS[c.bar].db/2,3)},\\ ${fmtT(c.sp/2,2)}) = ${fmtT(c.cbLd,3)}\\ \\text{in}\\,, \\qquad \\lambda_{rc} = \\dfrac{d_b\\,c_b}{(c_b(1-\\beta_t)+1.67n_s k_{tr})^2} = \\dfrac{d_b}{c_b} = \\dfrac{${fmtT(BARS[c.bar].db,3)}}{${fmtT(c.cbLd,3)}} \\to ${fmtT(c.lamRc,3)} \\quad(0.3 \\le \\lambda_{rc} \\le 1.0)`,
++      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(1.0)(${fmtT(c.lamCf??1,1)})(${fmtT(c.lamRc,3)}),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
++      ((c.lamCf??1)>1?`Epoxy-coated bars (panel I-9${abutOwner()==="MassDOT"?"; MassDOT Part I 3.3.1.6":""}): λ<sub>cf</sub> = ${fmt(c.lamCf,1)} [5.10.8.2.1b] — cover ${fmt(c.cvE,2)} in ${c.cvE<3*BARS[c.bar].db?"&lt;":"≥"} 3d<sub>b</sub> = ${fmt(3*BARS[c.bar].db,2)} in, clear spacing ${fmt(c.sp-BARS[c.bar].db,2)} in ${(c.sp-BARS[c.bar].db)<6*BARS[c.bar].db?"&lt;":"≥"} 6d<sub>b</sub> = ${fmt(6*BARS[c.bar].db,2)} in. `:"")+"S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er, λ_rl"+((c.lamCf??1)>1?"":" and λ_cf")+" taken as 1.0; λ_rc from Eq. 5.10.8.2.1c-2 with k_tr = 0 and β_t = 0 (no transverse reinforcement or transverse compression counted), c = the cover to the bar used in this section. ℓ_d sets the bar-length estimates of §5.7 — confirm hooks/embedment in detailing.")}
+@@ -4318,0 +4378,17 @@ function renderTabStruct(R){
++  // ABSW: stem base M_u, V_u worked term by term for the governing limit state (incl. ES, construction surcharge and EQ terms)
++  const sxc=R.geo.xStemCenter, swParts=R.parts.filter(pp=>!/Footing/.test(pp.name));
++  const sHs=sd.HsL??sd.Hs, sEQ=sd.eqT, sEsq=+S.soil.esQ||0, sGL=sd.gLL||0;
++  const stemWork=[
++      `H = ${fmtT(sHs)}\\ \\text{ft}${sHs!==sd.Hs?"\\ (\\text{construction-stage fill})":""}\\,, \\quad h_{eq}(${fmtT(sHs)}) = ${fmtT(sd.heqL??sd.heqS)}\\ \\text{ft} \\quad(\\text{${esc(sd.ls)}})`,
++      `M_{EH} = \\dfrac{k_{ah}\\gamma H^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sHs)})^3}{6} = ${fmtT(sd.MEH??sd.Mst_EH)}\\,, \\qquad V_{EH} = \\dfrac{k_{ah}\\gamma H^2}{2} = ${fmtT(sd.VEH??sd.Vst_EH,3)}`,
++      `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} H^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.heqL??sd.heqS)})(${fmtT(sHs)})^2}{2} = ${fmtT(sd.MLS??sd.Mst_LS)}\\,, \\qquad V_{LS} = k_{ah}\\gamma h_{eq}H = ${fmtT(sd.VLS??sd.Vst_LS,3)}`,
++      ...(sEsq>0?[`M_{ES} = \\dfrac{k_{ah}q_{ES}H^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(sEsq,3)})(${fmtT(sHs)})^2}{2} = ${fmtT(sd.MES)}\\,, \\qquad V_{ES} = k_{ah}q_{ES}H = ${fmtT(sd.VES,3)}`]:[]),
++      `H_{gird} = ${fmtT(sd.HgirdPerFt,3)}\\ \\text{kip/ft at } z = h_{stem} = ${fmtT(g.hstem)}\\ \\text{ft} \\;\\Rightarrow\\; H_{gird}h_{stem} = ${fmtT(sd.HgirdPerFt*g.hstem)}\\ \\text{kip-ft/ft}`,
++      `\\Sigma W_{sw}e_{sw} = ${swParts.map(pp=>`(${fmtT(pp.W)})(${fmtT(sxc-pp.x,3)})`).join(" + ")} = ${fmtT(sd.MselfEccTot)}\\ \\text{kip-ft} \\quad(e_{sw} = x_{sc} - \\bar x_i,\\ x_{sc} = ${fmtT(sxc,3)}\\ \\text{ft})`,
++      `M_{ecc} = \\dfrac{P_v\\,(x_{sc}-x_{brg}) + \\gamma_{DC}\\Sigma W_{sw}e_{sw}}{L_{ab}} = \\dfrac{(${fmtT(sd.Pv)})(${fmtT(sxc-R.geo.xBrg,3)}) + (${fmtT(sd.gDCe??1,2)})(${fmtT(sd.MselfEccTot)})}{${fmtT(g.Lab)}} = ${fmtT(sd.MeccPerFt)}\\ \\text{kip-ft/ft}`,
++      ...(sEQ?[
++        `\\Delta P_{AE,wall} = \\tfrac{1}{2}\\Delta K_h\\gamma H_s^2 = \\tfrac{1}{2}(${fmtT(sEQ.dKh,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.Hs)})^2 = ${fmtT(sEQ.dP,3)}\\ \\text{kip/ft at } ${fmtT(sEQ.zP)}\\ \\text{ft}`,
++        `k_h W_{wall} = k_h\\gamma_c A_{wall} = (${fmtT(R.seis.kh,4)})(${fmtT(S.mat.gc,3)})(${fmtT(sEQ.wallApf,3)}) = ${fmtT(sEQ.Wi,3)}\\ \\text{kip/ft at } h_{stem}/2\\,, \\qquad EQ_{sup}/L_{ab} = ${fmtT(sEQ.sup,3)}\\ \\text{kip/ft at } h_{stem}`,
++        `M_{EQ} = (${fmtT(sEQ.dP,3)})(${fmtT(sEQ.zP)}) + (${fmtT(sEQ.Wi,3)})(${fmtT(g.hstem/2)}) + (${fmtT(sEQ.sup,3)})(${fmtT(g.hstem)}) = ${fmtT(sd.Meq)}\\,, \\qquad V_{EQ} = ${fmtT(sd.Veq,3)}\\ \\text{kip/ft}`]:[]),
++      `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}(${fmtT(sd.MEH??sd.Mst_EH)}) + ${fmtT(sGL)}(${fmtT(sd.MLS??sd.Mst_LS)})${sEsq>0?` + ${fmtT(sd.gES,2)}(${fmtT(sd.MES)})`:""} + ${fmtT(sd.HgirdPerFt*g.hstem)} + ${fmtT(sd.MeccPerFt)}${sd.MCS>0?` + ${fmtT(sd.MCS)}`:""}${sEQ?` + ${fmtT(sd.Meq)}`:""} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}`,
++      `V_u = ${fmtT(sd.gEH??R.GP.EH[1])}(${fmtT(sd.VEH??sd.Vst_EH,3)}) + ${fmtT(sGL)}(${fmtT(sd.VLS??sd.Vst_LS,3)})${sEsq>0?` + ${fmtT(sd.gES,2)}(${fmtT(sd.VES,3)})`:""} + ${fmtT(sd.HgirdPerFt,3)}${sd.MCS>0?` + ${fmtT(sd.VCS,3)}`:""}${sEQ?` + ${fmtT(sd.Veq,3)}`:""} = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`];
+@@ -4320,4 +4396 @@ function renderTabStruct(R){
+-      `M_{EH} = \\dfrac{k_{ah}\\gamma H_s^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.Hs)})^3}{6} = ${fmtT(sd.Mst_EH)}\\ \\text{kip-ft/ft}`,
+-      `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} H_s^2}{2} = ${fmtT(sd.Mst_LS)}\\ \\text{kip-ft/ft}\\,, \\qquad H_{gird} = ${fmtT(sd.HgirdPerFt,3)}\\ \\text{kip/ft at } z = h_{stem} = ${fmtT(g.hstem)}\\ \\text{ft}`,
+-      `M_{ecc} = \\dfrac{P_v\\,e_{brg} + \\Sigma W_{sw}\\,e_{sw}}{L_{ab}} = ${fmtT(sd.MeccPerFt)}\\ \\text{kip-ft/ft} \\quad(e_{brg} = ${fmtT(sd.eBrg,3)}\\ \\text{ft toe-ward}, \\; P_v = ${fmtT(sd.Pv)}\\ \\text{kip})`,
+-      `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc}${sd.MCS>0?" + \\gamma_c M_{CS}":""} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`,
++      ...stemWork,
+@@ -4358,0 +4432,9 @@ function renderTabStruct(R){
++  // ABSW 5.2b: stem M_u(z) vs φM_n(z)
++  { const pr=stemCapacityProfile(R), dcMax=Math.max(...pr.map(q=>q.Mu/q.phiMn));
++    h+=panel("o-str-stemprof","5.2b","Stem — M<sub>u</sub> and φM<sub>n</sub> up the Height",`
++      ${svgStemCapacity(R)}
++      ${eqB("Profile expressions (governing state of §5.2)","AASHTO 5.6.3.2; design basis §8.2",[
++        "M_u(z) = \\gamma_{EH}M_{EH}r^3 + \\gamma_{LL}M_{LS}r^2 + \\gamma_{ES}M_{ES}r^2 + H_{gird}(h_{stem}-z) + M_{ecc} + M_{EQ}(z), \\quad r = \\dfrac{H - z}{H}",
++        "\\varphi M_n(z) = \\varphi A_s f_y\\left(d(z) - \\tfrac{a}{2}\\right), \\quad d(z) = 12\\,t(z) - c_{wall} - \\tfrac{d_b}{2}, \\quad t(z) = t_{sb} - (t_{sb}-t_{st})\\dfrac{z}{h_{stem}}",
++        `z = 0:\\ M_u = ${fmtT(pr[0].Mu)} = M_u\\ (\\S5.2),\\ \\varphi M_n = ${fmtT(pr[0].phiMn)}\\,; \\quad \\max_z M_u/\\varphi M_n = ${fmtT(dcMax,3)}`],
++        "Base values (r = 1) are the worked terms of §5.2; h_eq is held at its value for the stem base and the EE wall inertia is spread uniformly over the stem (its base moment equals the §5.2 term). The same A1 bars over the full stem height (no cut-off). Figure only; the design check is at the base (§5.2).")}`); }
+@@ -4362 +4444 @@ function renderTabStruct(R){
+-        `V_{up} = \\int q\\,dx = ${fmtT(td.VtoeUp)}\\ \\text{kip/ft}\\,, \\qquad M_{up} = ${fmtT(td.MtoeUp)}\\ \\text{kip-ft/ft (about the face)}`,
++        ...pressWorkTex(td.segs, 0, g.Ltoe, g.Ltoe, "V_{up}", "M_{up}", true),
+@@ -4364 +4446,4 @@ function renderTabStruct(R){
+-        `M_u = ${fmtT(td.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u\\text{(at } d_v = ${fmtT(td.dvT)}\\ \\text{ft from face)} = ${fmtT(td.Vu)}\\ \\text{kip/ft}`],
++        `M_u = M_{up} - M_{dn} = ${fmtT(td.MtoeUp)} - ${fmtT(td.MtoeDn)} = ${fmtT(td.Mu)}\\ \\text{kip-ft/ft}`,
++        ...(td.segsV? [`\\text{Shear at } d_v = ${fmtT(td.dvT*12)}\\ \\text{in from the face: section at } x = L_{toe} - d_v = ${fmtT(g.Ltoe-td.dvT,3)}\\ \\text{ft (${esc(td.lsV||"")})}`,
++          ...pressWorkTex(td.segsV, 0, Math.max(0,g.Ltoe-td.dvT), 0, "V_{up,d_v}", "", false),
++          `V_u = V_{up,d_v} - ${fmtT(td.gTV??0.9)}\\,\\gamma_c t_f (L_{toe}-d_v) = ${fmtT(td.VupDv,3)} - ${fmtT(td.gTV??0.9)}(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})(${fmtT(Math.max(0,g.Ltoe-td.dvT),3)}) = ${fmtT(td.Vu)}\\ \\text{kip/ft}`] : [`V_u = ${fmtT(td.Vu)}\\ \\text{kip/ft}`])],
+@@ -4368,2 +4453,4 @@ function renderTabStruct(R){
+-        `V_{up} = \\Sigma P_{row}/L_{ab} = ${fmtT(td.VtoeUp)}\\ \\text{kip/ft}\\,, \\qquad M_{up} = \\Sigma (P_{row}/L_{ab})\\,a_{row} = ${fmtT(td.MtoeUp)}\\ \\text{kip-ft/ft}`,
+-        `M_{dn} = ${fmtT(td.gTdn??0.9)}\\,\\gamma_c t_f L_{toe}^2/2 = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
++        ...(()=>{ const rr=(td.rowArr||[]).map(r=>({xT:R.geo.B/2+r.x,P:r.P})).filter(r=>r.xT<g.Ltoe), Lf=+g.Lftg||g.Lab;
++          return [`V_{up} = \\Sigma\\dfrac{P_{row}}{L_{ftg}} = ${rr.length?rr.map(r=>`\\dfrac{${fmtT(r.P,1)}}{${fmtT(Lf)}}`).join(" + "):"0"} = ${fmtT(td.VtoeUp,3)}\\ \\text{kip/ft}`,
++            `M_{up} = \\Sigma\\dfrac{P_{row}}{L_{ftg}}a_{row} = ${rr.length?rr.map(r=>`(${fmtT(r.P/Lf,3)})(${fmtT(g.Ltoe-r.xT,3)})`).join(" + "):"0"} = ${fmtT(td.MtoeUp,3)}\\ \\text{kip-ft/ft} \\quad(a_{row} = L_{toe} - x_{row})`]; })(),
++        `M_{dn} = ${fmtT(td.gTdn??0.9)}\\,\\gamma_c t_f \\dfrac{L_{toe}^2}{2} = ${fmtT(td.gTdn??0.9)}(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})\\dfrac{(${fmtT(g.Ltoe)})^2}{2} = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
+@@ -4374 +4461,9 @@ function renderTabStruct(R){
+-  h+=sectionHTML(cT, toeDemH, "5.3","Toe — Flexure & Shear (bottom reinforcement)");
++  // ABSW: footing service moments for crack control, worked (Service I, every permutation; the governing one shown)
++  const fsv=R.footSvc;
++  const toeSvcH= fsv.toeD? eqB("Toe service moment M<sub>s</sub> (crack control)","AASHTO 5.6.7; Service I",[
++      `M_{s} = M_{up,SI} - \\gamma_c t_f\\dfrac{L_{toe}^2}{2} = ${fmtT(fsv.toeD.MtU,3)} - (${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})\\dfrac{(${fmtT(g.Ltoe)})^2}{2} = ${fmtT(fsv.toe)}\\ \\text{kip-ft/ft}`],
++      `M<sub>up,SI</sub> = ${td.src==="pile"?"Σ(P<sub>row</sub>/L<sub>ftg</sub>)·a<sub>row</sub> of the Service I pile reactions":"moment of the Service I linear contact pressure about the stem front face"}, from the permutation giving the largest M<sub>s</sub> (${esc(fsv.toeLbl||"")}); all factors 1.0.`) : "";
++  const heelSvcH= fsv.heelD? eqB("Heel service moment M<sub>s</sub> (crack control)","AASHTO 5.6.7; Service I",[
++      `M_{s} = |M_{dn,SI} - M_{up,SI}| = |${fmtT(fsv.heelD.Mdn,3)} - ${fmtT(fsv.heelD.MhU,3)}| = ${fmtT(fsv.heel)}\\ \\text{kip-ft/ft}`],
++      `Soil, footing, LS and ES over the heel at 1.0, less the ${R.heelDem.src==="pile"?"Service I pile-row moment":"Service I contact-pressure moment"} about the stem back face; permutation ${esc(fsv.heelLbl||"")}.`) : "";
++  h+=sectionHTML(cT, toeDemH+toeSvcH, "5.3","Toe — Flexure & Shear (bottom reinforcement)");
+@@ -4378,2 +4473,9 @@ function renderTabStruct(R){
+-      `M_{dn} = w_{dn}\\dfrac{L_{heel}^2}{2}${hd.wedgeM>0?" + \\gamma_{EV}\\,\\gamma\\,h_{wedge}\\dfrac{L_{heel}^2}{3}":""} = ${fmtT(hd.MheelDn)}\\ \\text{kip-ft/ft}\\,, \\qquad M_{up} = ${fmtT(hd.MheelUp)}\\ \\text{kip-ft/ft}`,
+-      `M_u = |M_{dn}-M_{up}| = ${fmtT(hd.Mu)}\\ \\text{kip-ft/ft (}${hd.face}\\text{ tension)}\\,, \\qquad V_u = ${fmtT(hd.Vu)}\\ \\text{kip/ft}`],
++      `w_{soil} = ${fmtT(R.footWt.wSoilHeel,3)},\\ w_{ftg} = \\gamma_c t_f = ${fmtT(R.footWt.wFoot,3)},\\ w_{LS} = \\gamma h_{eq} = ${fmtT(R.footWt.wLSv,3)},\\ q_{ES} = ${fmtT(+S.soil.esQ||0,3)}\\ \\text{ksf}`,
++      `M_{dn} = w_{dn}\\dfrac{L_{heel}^2}{2}${hd.wedgeM>0?" + \\gamma_{EV}\\,\\gamma\\,h_{wedge}\\dfrac{L_{heel}^2}{3}":""} = (${fmtT(hd.wDn,3)})\\dfrac{(${fmtT(g.Lheel)})^2}{2}${hd.wedgeM>0?` + ${fmtT(hd.wedgeM)}`:""} = ${fmtT(hd.MheelDn)}\\ \\text{kip-ft/ft}`,
++      ...(hd.src==="bearing"? pressWorkTex(hd.segs, R.geo.xStemBack, R.geo.B, R.geo.xStemBack, "V_{up}", "M_{up}", true)
++        : hd.src==="pile"? (()=>{ const Lf=+g.Lftg||g.Lab, rr=hd.rows||[]; return [`M_{up} = \\Sigma\\dfrac{P_{row}}{L_{ftg}}(x_{row} - x_{back}) = ${rr.length?rr.map(r=>`(${fmtT(r.P/Lf,3)})(${fmtT(r.xT-R.geo.xStemBack,3)})`).join(" + "):"0"} = ${fmtT(hd.MheelUp,3)}\\ \\text{kip-ft/ft}`]; })() : []),
++      `M_u = |M_{dn}-M_{up}| = |${fmtT(hd.MheelDn)} - ${fmtT(hd.MheelUp)}| = ${fmtT(hd.Mu)}\\ \\text{kip-ft/ft (}${hd.face}\\text{ tension)}`,
++      ...(hd.hVd? [`\\text{Shear at the stem back face (${esc(hd.lsV||"")}): } V_{dn} = w_{dn}L_{heel}${hd.wedgeM>0?" + \\gamma_{EV}\\tfrac{1}{2}\\gamma h_{wedge}L_{heel}":""} = (${fmtT(hd.hVd.wDn,3)})(${fmtT(g.Lheel)})${hd.wedgeM>0?" + \\ldots":""} = ${fmtT(hd.hVd.VheelDn,3)}\\ \\text{kip/ft}`,
++          ...(hd.src==="bearing"? pressWorkTex(hd.hVd.segs, R.geo.xStemBack, R.geo.B, R.geo.xStemBack, "V_{up}", "", false)
++            : [`V_{up} = \\Sigma\\dfrac{P_{row}}{L_{ftg}} = ${(hd.hVd.rows||[]).length?hd.hVd.rows.map(r=>`\\dfrac{${fmtT(r.P,1)}}{${fmtT(+g.Lftg||g.Lab)}}`).join(" + "):"0"} = ${fmtT(hd.hVd.VheelUp,3)}\\ \\text{kip/ft}`]),
++          `V_u = |V_{dn} - V_{up}| = |${fmtT(hd.hVd.VheelDn,3)} - ${fmtT(hd.hVd.VheelUp,3)}| = ${fmtT(hd.Vu)}\\ \\text{kip/ft}`] : [`V_u = ${fmtT(hd.Vu)}\\ \\text{kip/ft}`])],
+@@ -4388 +4490 @@ function renderTabStruct(R){
+-  h+=sectionHTML(cH, heelDemH+heelMassH, "5.4","Heel — Flexure & Shear ("+hd.face+" reinforcement)");
++  h+=sectionHTML(cH, heelDemH+heelSvcH+heelMassH, "5.4","Heel — Flexure & Shear ("+hd.face+" reinforcement)");
+@@ -4415 +4517,2 @@ function renderTabStruct(R){
+-      `P_u = \\dfrac{P_{u,girder}}{n_b} = \\dfrac{${fmtT(bs.PuG)}}{${bs.nBg}} = ${fmtT(bs.Pu)}\\ \\text{kip per bearing}`,
++      ...(bs.puT?[`P_{u,girder} = \\gamma_{DC}P_{DC} + \\gamma_{DW}P_{DW} + \\gamma_{LL}P_{LL}${bs.puT.gWS?" + \\gamma_{WS}P_{WS} + \\gamma_{WL}P_{WL}":""} = ${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.LL)})${bs.puT.gWS?` + ${fmtT(bs.puT.gWS)}(${fmtT(bs.puT.WS)}) + ${fmtT(bs.puT.gWL)}(${fmtT(bs.puT.WL)})`:""} = ${fmtT(bs.PuG)}\\ \\text{kip} \\quad(\\text{girder ${bs.pgirder}, ${esc(bs.pls)}; reactions from panel I-5})`]:[]),
++      `P_u =\\dfrac{P_{u,girder}}{n_b} = \\dfrac{${fmtT(bs.PuG)}}{${bs.nBg}} = ${fmtT(bs.Pu)}\\ \\text{kip per bearing}`,
+@@ -4422,0 +4526 @@ function renderTabStruct(R){
++    ${svgSeatPlan(R)}
+@@ -4449,0 +4554,2 @@ function renderTabStruct(R){
++      ${svgRebarDims(R)}
++      <div class="figcap">Dimensioned section to scale (ABSW): ℓ<sub>dh</sub> and the dowel lap from <span class="xlink" data-jump="tab-struct|o-str-dowel">§5.2a</span>, ℓ<sub>d</sub> of the toe and heel bars from §5.3 / §5.4.</div>
+@@ -4452 +4558 @@ function renderTabStruct(R){
+-      <div class="note-box"><b>Lengths are estimates for quantity take-off only</b> (member length + development/hook allowances, no laps or bends detailed). Splice locations, hooks, corner bars and bar lists are the detailer's responsibility; development shown with all modification factors = 1.0.</div>
++      <div class="note-box"><b>Lengths are estimates for quantity take-off only</b> (member length + development/hook allowances, no laps or bends detailed). Splice locations, hooks, corner bars and bar lists are the detailer's responsibility; development with λ<sub>rc</sub> per Eq. 5.10.8.2.1c-2 (k<sub>tr</sub> = 0, β<sub>t</sub> = 0), other modification factors as in each section.</div>
+@@ -4522 +4628 @@ function renderTabVM(R){
+-  const selLabel=(()=>{ for(const[,opts]of VM_SEL_GROUPS)for(const[v,l]of opts)if(v===sel)return l; return sel; })();
++  const selLabel=sel==="ls:Extreme Event I"?"Extreme Event I":(()=>{ for(const[,opts]of VM_SEL_GROUPS)for(const[v,l]of opts)if(v===sel)return l; return sel; })();
+@@ -4524,2 +4630,2 @@ function renderTabVM(R){
+-  const optsHTML=VM_SEL_GROUPS.map(([grp,opts])=>
+-    `<optgroup label="${esc(grp)}">${opts.map(([v,l])=>`<option value="${v}"${v===sel?" selected":""}>${esc(l)}</option>`).join("")}</optgroup>`).join("");
++  const optsHTML=VM_SEL_GROUPS.map(([grp,opts],gi)=>
++    `<optgroup label="${esc(grp)}">${(gi===0&&LIMITS_HAS_EQ(R)?opts.concat([["ls:Extreme Event I","Extreme Event I (M–O + inertia)"]]):opts).map(([v,l])=>`<option value="${v}"${v===sel?" selected":""}>${esc(l)}</option>`).join("")}</optgroup>`).join("");   // ABSW: EE I when on
+@@ -4565,0 +4672,4 @@ function renderTabVM(R){
++  // ABSW: lateral pressure on the stem and backwall for the selected load state
++  h+=panel("o-vm-press","6.5","Lateral Pressure on the Stem & Backwall — "+esc(selLabel),`
++    ${svgWallPressure(R)}
++    <div class="figcap">Pressure diagram of the selected state (the distributed load w(z) integrated in §6.1 and §6.2); EH, LS and ES worked in <span class="xlink" data-jump="tab-loads|o-eh">Tab 1 §1.3</span> and <span class="xlink" data-jump="tab-struct|o-str-Stem">Tab 5 §5.2</span>.</div>`);
+@@ -4668,0 +4779,182 @@ function dimV(y1,y2,x,label){
++/* ---------- ABSW (2026-10-20): print-friendly inline-SVG figures. Display only: every value drawn comes from computeAll()
++   (R) or is re-derived from the same worked terms; no check uses them. ---------- */
++const SVGF='font-family="Times New Roman"';
++function svgT(x,y,t,o={}){ return `<text x="${x}" y="${y}" font-size="${o.fs||11}" ${SVGF} fill="${o.c||"#222"}"${o.a?` text-anchor="${o.a}"`:""}${o.b?' font-weight="bold"':""}>${t}</text>`; }
++function svgArrow(x1,y1,x2,y2,c,w){ return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c||"#444"}" stroke-width="${w||1.4}" marker-end="url(#arr)"/>`; }
++function svgWrap(W,H,body,maxw){ return `<svg class="absw-fig" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${maxw||W}px;background:#fff">${svgDefs()}${body}</svg>`; }
++
++/* 1. Lateral pressure on the stem and backwall for the V&M selection (factored for a limit state), from the same distributed
++      load the V&M integration uses; EE I point loads drawn as arrows. */
++function svgWallPressure(R){
++  const vm=R.vm||{}, st=vm.stem, bw=vm.backwall; if(!st||!st.w||!bw||!bw.w) return "";
++  const g=S.geom, Ht=g.hstem+g.hbw, W=620, Hp=430, mT=30, mB=40, sc=(Hp-mT-mB)/Ht, x0=230;
++  const Y=y=>Hp-mB-y*sc;
++  const pts=[]; st.w.forEach((p,i)=>pts.push({y:st.pos[i],p})); bw.w.forEach((p,i)=>pts.push({y:g.hstem+bw.pos[i],p}));
++  const pmax=Math.max(1e-6,...pts.map(q=>Math.abs(q.p))), ps=220/pmax;
++  let b="";
++  // wall (back face at x0; drawn to the height scale, thickness schematic)
++  b+=`<rect x="${x0-g.tsb*sc}" y="${Y(g.hstem)}" width="${g.tsb*sc}" height="${g.hstem*sc}" fill="#ecebe4" stroke="#555"/>`;
++  b+=`<rect x="${x0-g.tbw*sc}" y="${Y(Ht)}" width="${g.tbw*sc}" height="${g.hbw*sc}" fill="#ecebe4" stroke="#555"/>`;
++  b+=`<line x1="${x0-130}" y1="${Y(0)}" x2="${x0+250}" y2="${Y(0)}" stroke="#555"/>`+svgT(x0-128,Y(0)+14,"top of footing",{fs:10,c:"#666"});
++  b+=svgT(x0-g.tsb*sc/2,Y(g.hstem/2),"stem",{a:"middle",c:"#666",fs:10});
++  b+=svgT(x0-g.tbw*sc/2-2,Y(g.hstem+g.hbw/2),"bw",{a:"middle",c:"#666",fs:10});
++  // pressure polygons (stem, backwall)
++  const poly=(arr,base)=>`<polygon points="${x0},${Y(base(arr[0]))} ${arr.map(q=>`${x0+q.p*ps},${Y(q.y)}`).join(" ")} ${x0},${Y(arr[arr.length-1].y)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.4"/>`;
++  const sP=st.w.map((p,i)=>({y:st.pos[i],p})), bP=bw.w.map((p,i)=>({y:g.hstem+bw.pos[i],p}));
++  b+=poly(sP,q=>q.y)+poly(bP,q=>q.y);
++  // values at the stem base, the seat and the backwall base
++  const lab=(q,txt)=>svgT(x0+q.p*ps+6,Y(q.y)+4,`${txt} ${fmt(q.p,3)} ksf`,{fs:10.5});
++  const sBase=sP.reduce((a,q)=>q.y<a.y?q:a,sP[0]), sTop=sP.reduce((a,q)=>q.y>a.y?q:a,sP[0]), bBase=bP.reduce((a,q)=>q.y<a.y?q:a,bP[0]);
++  b+=lab(sBase,"stem base")+lab(sTop,"seat")+(bw.w.length&&Math.abs(bBase.p-sTop.p)>1e-6?lab({y:bBase.y+0.25,p:bBase.p},"backwall base"):"");
++  if(st.pTop) b+=svgT(x0+8,Y(g.hstem)-8,`soil above the stem top: resultant ${fmt(st.pTop.V,2)} kip/ft at the seat (in V&M)`,{fs:9.5,c:"#555"});
++  // EE I point loads (ΔP_AE, wall inertia) and the girder/superstructure force at the seat
++  (st.ptsEQ||[]).forEach(q=>{ const y=g.hstem-q.s; b+=svgArrow(x0+150,Y(y),x0+4,Y(y),"#c62828",1.6)+svgT(x0+154,Y(y)+4,`${fmt(q.P,2)} kip/ft`,{fs:10,c:"#c62828"}); });
++  b+=svgT(10,18,`Lateral pressure on the back face — ${esc(R.vmSel.replace(/^ls:|^c?load:/,""))}${R.vmSel.startsWith("ls:")?" (factored)":" (γ = 1.0)"}`,{b:1,fs:12});
++  b+=svgT(10,Hp-12,"Distributed load w(z) of the V&M integration (EH + LS + ES"+(R.vmSel.includes("Constr")?" + CS":"")+"); red arrows: EE I point loads on the stem; horizontal scale exaggerated.",{fs:9.5,c:"#555"});
++  return svgWrap(W,Hp,b,620);
++}
++
++/* 2. Resultant location in each limit state against the kern (B/6), B/3 and the eccentricity limit of that state. */
++function svgResultants(R){
++  if(S.fnd.branch!=="spread"||!R.permutations) return "";
++  const B=R.geo.B, rows=[];
++  for(const ls of Object.keys(R.LIMITS)){
++    let best=null;
++    for(const pl of R.permutations(ls,true)){
++      const c=R.comboEffects(ls,pl.perm,pl.liveOn,true); if(c.V<=0) continue;
++      const xbar=(c.Mv-c.Mh)/c.V, e=B/2-xbar, lim=ls==="Service I"?null:R.resFor(ls,pl.liveOn).eLim, r=lim?Math.abs(e)/lim:Math.abs(e);
++      if(!best||r>best.r) best={r,xbar,e,lim,lbl:c.lbl}; }
++    if(best) rows.push({ls,...best});
++  }
++  const W=640, mL=120, mR=30, rowH=26, Hp=110+rows.length*rowH, sc=(W-mL-mR)/B, X=x=>mL+x*sc, yF=60;
++  let b=svgT(10,18,"Resultant location per limit state (permutation with the largest |e| / e_lim)",{b:1,fs:11.5});
++  b+=`<rect x="${X(0)}" y="${yF}" width="${B*sc}" height="14" fill="#ecebe4" stroke="#555"/>`;
++  b+=svgT(X(0),yF-6,"toe",{fs:10,c:"#666"})+svgT(X(B),yF-6,"heel",{fs:10,c:"#666",a:"end"});
++  const vline=(x,c,d,t,ty)=>`<line x1="${X(x)}" y1="${yF-2}" x2="${X(x)}" y2="${Hp-28}" stroke="${c}" stroke-dasharray="${d}" stroke-width="1"/>`+(t?svgT(X(x),ty,t,{fs:9.5,c,a:"middle"}):"");
++  b+=`<rect x="${X(B/2-B/6)}" y="${yF+16}" width="${B/3*sc}" height="${Hp-28-yF-16}" fill="rgba(26,127,55,0.07)"/>`;
++  b+=vline(B/2,"#999","2 2","B/2",yF+30);
++  b+=vline(B/2-B/6,"#1a7f37","4 3","B/6",Hp-16)+vline(B/2+B/6,"#1a7f37","4 3","B/6",Hp-16);
++  b+=vline(B/2-B/3,"#b8860b","6 3","B/3",Hp-16)+vline(B/2+B/3,"#b8860b","6 3","B/3",Hp-16);
++  rows.forEach((r,i)=>{ const y=yF+36+i*rowH;
++    if(r.lim&&Math.abs(r.lim-B/3)>1e-6){ b+=`<line x1="${X(B/2-r.lim)}" y1="${y-8}" x2="${X(B/2-r.lim)}" y2="${y+8}" stroke="#c62828" stroke-width="1.6"/><line x1="${X(B/2+r.lim)}" y1="${y-8}" x2="${X(B/2+r.lim)}" y2="${y+8}" stroke="#c62828" stroke-width="1.6"/>`; }
++    const ok=!r.lim||Math.abs(r.e)<=r.lim+1e-9;
++    b+=`<line x1="${X(B/2)}" y1="${y}" x2="${X(Math.min(B,Math.max(0,r.xbar)))}" y2="${y}" stroke="#888" stroke-width="1"/>`;
++    b+=`<circle cx="${X(Math.min(B,Math.max(0,r.xbar)))}" cy="${y}" r="5" fill="${ok?"#1f3a5f":"#c62828"}"/>`;
++    b+=svgT(8,y+4,esc(r.ls),{fs:10.5});
++    b+=svgT(W-mR,y+4,`|e| = ${fmt(Math.abs(r.e),2)} ft${r.lim?` / e_lim ${fmt(r.lim,2)} (${fmt(Math.abs(r.e)/r.lim,2)})`:" (Service: no limit)"}`,{fs:9.5,a:"end",c:ok?"#333":"#c62828"});
++  });
++  b+=svgT(10,Hp-4,"Green band = kern (|e| ≤ B/6, full contact); B/3 = middle two-thirds (soil limit); red ticks = a different limit of that state (rock 0.45B, Extreme Event). Worked in §3.2.",{fs:9,c:"#555"});
++  return svgWrap(W,Hp,b,640);
++}
++
++/* 3. Stem M_u(z) of the governing limit state against φM_n(z) up the stem (front batter: thickness varies, same bars). */
++function stemCapacityProfile(R){
++  const g=S.geom, m=S.mat, sd=R.stemDem, c=R.checks.stemFlex, bar=BARS[S.reinf.stem.size], sp=+S.reinf.stem.sp;
++  const Hs=sd.HsL??sd.Hs, eq=sd.eqT, out=[];
++  for(let i=0;i<=40;i++){ const z=g.hstem*i/40, h=Math.max(0,Hs-z), r=Hs>0?h/Hs:0;
++    let Mu=(sd.gEH??1)*(sd.MEH??0)*r*r*r + (sd.gLL||0)*(sd.MLS??0)*r*r + (sd.gES??1)*(sd.MES??0)*r*r + (sd.MCS||0)*r*r
++          + sd.HgirdPerFt*(g.hstem-z) + sd.MeccPerFt;
++    if(eq) Mu+= eq.dP*Math.max(0,eq.zP-z) + eq.Wi*Math.pow(g.hstem-z,2)/(2*g.hstem) + eq.sup*(g.hstem-z);
++    const tIn=(g.tsb-(g.tsb-g.tst)*z/g.hstem)*12, d=tIn-m.coverT-bar.db/2, As=bar.Ab*12/sp, a=As*m.fy/(0.85*m.fc*12);
++    const b1=Math.max(0.65,0.85-0.05*Math.max(0,m.fc-4)), cc=a/b1, et=cc>1e-9?0.003*(d-cc)/cc:1;
++    const phi=et>=0.005?0.90:et<=0.002?0.75:0.75+0.15*(et-0.002)/0.003;
++    out.push({z,Mu,phiMn:phi*As*m.fy*(d-a/2)/12}); }
++  return out;
++}
++function svgStemCapacity(R){
++  const pr=stemCapacityProfile(R), g=S.geom; if(!pr.length) return "";
++  const W=600, Hp=390, mL=60, mR=20, mT=44, mB=42, Mmax=Math.max(...pr.map(q=>Math.max(q.Mu,q.phiMn)))*1.18;
++  const X=v=>mL+v/Mmax*(W-mL-mR), Y=z=>Hp-mB-z/g.hstem*(Hp-mT-mB);
++  let b=svgT(10,18,`Stem: M_u(z) of the governing state (${esc(R.stemDem.ls)}) vs φM_n(z)`,{b:1,fs:12});
++  for(let k=0;k<=4;k++){ const v=Mmax*k/4; b+=`<line x1="${X(v)}" y1="${mT}" x2="${X(v)}" y2="${Hp-mB}" stroke="#e3e3e3"/>`+svgT(X(v),Hp-mB+14,fmt(v,0),{fs:9.5,a:"middle",c:"#555"}); }
++  for(let k=0;k<=4;k++){ const z=g.hstem*k/4; b+=`<line x1="${mL}" y1="${Y(z)}" x2="${W-mR}" y2="${Y(z)}" stroke="#eee"/>`+svgT(mL-6,Y(z)+4,fmt(z,1),{fs:9.5,a:"end",c:"#555"}); }
++  b+=`<polyline points="${pr.map(q=>`${X(q.Mu)},${Y(q.z)}`).join(" ")}" fill="none" stroke="#c62828" stroke-width="2"/>`;
++  b+=`<polyline points="${pr.map(q=>`${X(q.phiMn)},${Y(q.z)}`).join(" ")}" fill="none" stroke="#1f3a5f" stroke-width="2" stroke-dasharray="6 3"/>`;
++  b+=svgT(X(pr[0].Mu)+4,Y(0)-6,`M_u = ${fmt(pr[0].Mu,2)}`,{fs:10,c:"#c62828"})+svgT(X(pr[0].phiMn)-4,Y(0)-18,`φM_n = ${fmt(pr[0].phiMn,2)}`,{fs:10,c:"#1f3a5f",a:"end"});
++  b+=svgT(W/2,Hp-8,"kip-ft/ft",{a:"middle",fs:10,c:"#555"})+`<text x="14" y="${Hp/2}" font-size="10" ${SVGF} fill="#555" transform="rotate(-90 14 ${Hp/2})" text-anchor="middle">height above the top of footing z (ft)</text>`;
++  const lx=W-158, ly=22;
++  b+=`<rect x="${lx-4}" y="${ly-4}" width="150" height="16" fill="#fff" stroke="#ccc"/><line x1="${lx}" y1="${ly+4}" x2="${lx+22}" y2="${ly+4}" stroke="#c62828" stroke-width="2"/>`+svgT(lx+26,ly+8,"M_u(z)",{fs:10})+`<line x1="${lx+70}" y1="${ly+4}" x2="${lx+92}" y2="${ly+4}" stroke="#1f3a5f" stroke-width="2" stroke-dasharray="6 3"/>`+svgT(lx+96,ly+8,"φM_n(z)",{fs:10});
++  return svgWrap(W,Hp,b,600);
++}
++
++/* 4. Dimensioned reinforcement section (to scale). */
++function svgRebarDims(R){
++  const g=S.geom, m=S.mat, B=g.Ltoe+g.tsb+g.Lheel, Ht=g.tf+g.hstem+g.hbw, dw=R.checks.dowel, rf=S.reinf;
++  const W=680, mL=70, mR=150, mT=58, mB=92, sc=Math.min((W-mL-mR)/B,(560-mT-mB)/Ht), Hp=mT+mB+Ht*sc;
++  const X=x=>mL+x*sc, Y=y=>mT+(Ht-y)*sc, xsb=g.Ltoe+g.tsb, xbwF=xsb-g.tbw;
++  const conc='fill="#f2f2ec" stroke="#555" stroke-width="1.2"';
++  let b=svgT(10,18,"Reinforcement section — to scale, bar marks of the schedule",{b:1,fs:12});
++  b+=`<rect x="${X(0)}" y="${Y(g.tf)}" width="${B*sc}" height="${g.tf*sc}" ${conc}/>`;
++  b+=`<polygon points="${X(g.Ltoe)},${Y(g.tf)} ${X(xsb)},${Y(g.tf)} ${X(xsb)},${Y(g.tf+g.hstem)} ${X(xsb-g.tst)},${Y(g.tf+g.hstem)}" ${conc}/>`;
++  b+=`<rect x="${X(xbwF)}" y="${Y(Ht)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
++  const cT=m.coverT/12, cF=m.coverF/12, onP=S.fnd.branch==="pile";
++  const yBot=onP? Math.min(g.tf-0.1,(Math.max(0,+S.piles.embed||0)+Math.max(0,+S.piles.clrTop||0))/12) : cF;
++  const L=(x1,y1,x2,y2,c)=>`<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${c}" stroke-width="2.2" stroke-linecap="round"/>`;
++  const xA=xsb-cT;
++  // A1 dowel with hook: vertical from the hook level up past the joint by the lap; stem bar above
++  const hookY=yBot+2*BARS[rf.toe.size].db/12, lap=(dw&&dw.lapProv>0?dw.lapProv:(dw?dw.lapReq:0))/12;
++  b+=L(xA,hookY,xA,g.tf+lap,"#c62828")+L(xA,hookY,xA-12*BARS[rf.stem.size].db/12-0.4,hookY,"#c62828");
++  b+=L(xA-0.08,g.tf+0.05,xA-0.08,g.tf+g.hstem-0.2,"#7a1f1f");
++  b+=L(xbwF+g.tbw-cT,Ht-0.15,xbwF+g.tbw-cT,g.tf+g.hstem-1.0,"#1f3a5f");
++  b+=L(0.25,yBot+0.05,xsb+(R.checks.toeFlex.ld/12),yBot+0.05,"#1a7f37");
++  b+=L(g.Ltoe-(R.checks.heelFlex.ld/12),g.tf-cF,B-0.25,g.tf-cF,"#b8860b");
++  // callouts
++  const call=(x,y,t,c)=>svgT(X(x),Y(y),t,{fs:10.5,c,b:1});
++  b+=call(xsb+0.3,g.tf+g.hstem*0.6,`A1 #${rf.stem.size} @ ${fmt(+rf.stem.sp,1)}"`,"#7a1f1f");
++  b+=call(xsb+0.3,g.tf+g.hstem+g.hbw*0.5,`B1 #${rf.bw.size} @ ${fmt(+rf.bw.sp,1)}"`,"#1f3a5f");
++  b+=call(0.3,yBot+0.35,`C1 #${rf.toe.size} @ ${fmt(+rf.toe.sp,1)}"`,"#1a7f37");
++  b+=call(B-2.2,g.tf-cF-0.45,`D1 #${rf.heel.size} @ ${fmt(+rf.heel.sp,1)}"`,"#b8860b");
++  // development / lap extents
++  if(dw){ b+=dimV(Y(g.tf),Y(hookY),X(xA)+18,`ℓdh ${fmt(dw.ldh,1)}" (avail. ${fmt(dw.lAv,1)}")`);
++    if(lap>0) b+=dimV(Y(g.tf+lap),Y(g.tf),X(xA)+44,`lap ${fmt(lap*12,1)}"${dw.lapProv>0?"":" req."}`); }
++  b+=dimH(X(xsb),X(xsb+R.checks.toeFlex.ld/12),Y(0)+20,`C1 ℓd past the stem ${fmt(R.checks.toeFlex.ld,1)}"`,14);
++  // overall dimensions
++  b+=dimH(X(0),X(g.Ltoe),Y(0)+50,`toe ${fmt(g.Ltoe,2)}'`)+dimH(X(g.Ltoe),X(xsb),Y(0)+50,`${fmt(g.tsb,2)}'`)+dimH(X(xsb),X(B),Y(0)+50,`heel ${fmt(g.Lheel,2)}'`);
++  b+=dimH(X(0),X(B),Y(0)+74,`B = ${fmt(B,2)}'`);
++  b+=dimV(Y(g.tf),Y(0),X(0)-14,`t_f ${fmt(g.tf,2)}'`)+dimV(Y(g.tf+g.hstem),Y(g.tf),X(0)-14,`h_stem ${fmt(g.hstem,2)}'`)+dimV(Y(Ht),Y(g.tf+g.hstem),X(0)-14,`h_bw ${fmt(g.hbw,2)}'`);
++  b+=dimH(X(xbwF),X(xsb),Y(Ht)-12,`t_bw ${fmt(g.tbw,2)}'`)+dimH(X(xsb-g.tst),X(xsb),Y(g.tf+g.hstem)+14,`t_st ${fmt(g.tst,2)}'`,12);
++  b+=svgT(X(B)+8,Y(g.tf)+12,`covers: wall ${fmt(m.coverT,1)}", footing ${fmt(m.coverF,1)}"`,{fs:9.5,c:"#555"});
++  if(onP) b+=svgT(X(B)+8,Y(g.tf)+26,`bottom mat on ${fmt(yBot*12,1)}" (pile emb. + clear)`,{fs:9.5,c:"#555"});
++  return svgWrap(W,Hp,b,680);
++}
++
++/* 5. Bridge-seat plan at the governing bearing: pad, clear edge distances c and the A₂ outline (Fig. 5.6.5-1 concept). */
++function svgSeatPlan(R){
++  const bs=R.checks.bearingSeat, bg=S.bearing, g=S.geom; if(!bs) return "";
++  const seatIn=R.geo.seatW*12, tbwIn=g.tbw*12, Lp=+bg.padL, Wp=+bg.padW, c=Math.max(0,bs.c);
++  const spanX=seatIn+tbwIn, halfY=Wp/2+Math.max(c,bs.cT>0?bs.cT:0)+12;
++  const W=600, Hp=360, mL=40, mT=40, sc=Math.min((W-2*mL)/spanX,(Hp-mT-50)/(2*halfY));
++  const X=x=>mL+x*sc, Y=y=>mT+(halfY+y)*sc, xc=seatIn-g.brgSetback*12;
++  let b=svgT(10,18,`Bearing seat plan — girder ${bs.pgirder} (governing q_b/q_R)`,{b:1,fs:12});
++  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${seatIn*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"/>`;
++  b+=`<rect x="${X(seatIn)}" y="${Y(-halfY)}" width="${tbwIn*sc}" height="${2*halfY*sc}" fill="#dcdcd4" stroke="#555"/>`;
++  b+=svgT(X(seatIn+tbwIn/2),Y(-halfY)-6,"backwall",{a:"middle",fs:10,c:"#555"})+svgT(X(0),Y(-halfY)-6,"seat front edge",{fs:10,c:"#555"});
++  if(c>0) b+=`<rect x="${X(xc-Lp/2-c)}" y="${Y(-Wp/2-c)}" width="${(Lp+2*c)*sc}" height="${(Wp+2*c)*sc}" fill="rgba(31,58,95,0.06)" stroke="#1f3a5f" stroke-dasharray="6 3"/>`;
++  b+=`<rect x="${X(xc-Lp/2)}" y="${Y(-Wp/2)}" width="${Lp*sc}" height="${Wp*sc}" fill="#c9c3b3" stroke="#333" stroke-width="1.4"/>`;
++  b+=svgT(X(xc),Y(0)+4,`pad ${fmt(Lp,1)}" × ${fmt(Wp,1)}"`,{a:"middle",fs:10});
++  b+=dimH(X(0),X(xc-Lp/2),Y(Wp/2)+22,`c_front ${fmt(bs.cFront,1)}"`);
++  b+=dimH(X(xc+Lp/2),X(seatIn+tbwIn),Y(Wp/2)+22,`c_back ${fmt(bs.cBack,1)}"`);
++  b+=dimV(Y(-Wp/2),Y(-Wp/2-Math.max(0,Math.min(bs.cT,halfY-Wp/2))),X(xc)+Lp*sc/2+18,`c_trans ${fmt(bs.cT,1)}"`);
++  if(c>0) b+=svgT(X(xc-Lp/2-c),Y(Wp/2+c)+14,`A₂ = (${fmt(Lp,1)} + 2·${fmt(c,1)})(${fmt(Wp,1)} + 2·${fmt(c,1)}) = ${fmt(bs.A2,0)} in²`,{fs:10,c:"#1f3a5f"});
++  b+=svgT(10,Hp-10,`c = min(c_front, c_back, c_trans) = ${fmt(bs.c,1)}" (${esc(bs.cBy)}); m = √(A₂/A₁) = ${fmt(bs.mRaw,3)} → ${fmt(bs.m,3)}. Worked above.`,{fs:9.5,c:"#555"});
++  return svgWrap(W,Hp,b,600);
++}
++
++/* 6. Pile reactions across the footing (section): one arrow per pile row for the governing max-compression case. */
++function svgPileReactions(R){
++  const pc=R.checks.pileComp; if(!pc||!pc.det||!pc.det.loads) return "";
++  const act=activePiles(), B=R.geo.B, rows={};
++  act.forEach((p,i)=>{ const k=p.x.toFixed(4); const r=(rows[k]=rows[k]||{x:B/2+p.x,n:0,sum:0,max:-Infinity,min:Infinity}); const v=pc.det.loads[i]; r.n++; r.sum+=v; r.max=Math.max(r.max,v); r.min=Math.min(r.min,v); });
++  const rr=Object.values(rows).sort((a,b)=>a.x-b.x), Pm=Math.max(1e-6,...rr.map(r=>Math.abs(r.max)),...rr.map(r=>Math.abs(r.min)));
++  const W=600, Hp=300, mL=50, sc=(W-2*mL)/B, X=x=>mL+x*sc, yF=70, aL=130/Pm;
++  let b=svgT(10,18,`Pile reactions per row — ${esc(pc.ls)}: ${esc(pc.lbl||"")}`,{b:1,fs:11});
++  b+=`<rect x="${X(0)}" y="${yF}" width="${B*sc}" height="${S.geom.tf*12>0?28:20}" fill="#ecebe4" stroke="#555"/>`;
++  b+=`<rect x="${X(S.geom.Ltoe)}" y="${yF-34}" width="${S.geom.tsb*sc}" height="34" fill="#ecebe4" stroke="#555"/>`;
++  b+=svgT(X(0),yF-6,"toe",{fs:10,c:"#666"})+svgT(X(B),yF-6,"heel",{fs:10,c:"#666",a:"end"});
++  rr.forEach(r=>{ const x=X(r.x), y0=yF+28, len=Math.abs(r.max)*aL;
++    b+=r.max>=0? svgArrow(x,y0+len+6,x,y0+2,"#1f3a5f",2) : svgArrow(x,y0+2,x,y0+len+6,"#5b7fa6",2);
++    b+=svgT(x,y0+len+20,`max ${fmt(r.max,1)} k`,{a:"middle",fs:10})+svgT(x,y0+len+33,`${r.n} piles, Σ ${fmt(r.sum,0)} k`,{a:"middle",fs:9,c:"#555"}); });
++  b+=svgT(10,Hp-8,"Arrow length ∝ the largest pile reaction in the row (upward = compression on the cap). From the rigid-cap distribution of §4.2.",{fs:9.5,c:"#555"});
++  return svgWrap(W,Hp,b,600);
++}
++
+@@ -4855 +5147 @@ function drawPilePlan(){
+-  const Hpx=B*sc+2*m+10;
++  const Hpx=B*sc+2*m+10+32;   // ABSW: +32 for the perimeter / shear legend lines
+@@ -4894,0 +5187,9 @@ function drawPilePlan(){
++  // ABSW: punching critical perimeters (pile size + d_v, square envelope, §4.6) and per-pile shear arrows (H/n, §4.5)
++  if(R&&R.checks&&R.checks.punching){ const pn=R.checks.punching, sd=(pn.sPile+pn.dv)/12;
++    S.piles.coords.forEach(c=>{ if(!c.active) return;
++      s+=`<rect x="${Xc(c.y)-sd/2*sc}" y="${Yc(c.x)-sd/2*sc}" width="${sd*sc}" height="${sd*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`; });
++    s+=`<text x="${Xc(Lft/2)}" y="${Yc(B/2)+44}" text-anchor="end" font-size="9.5" font-family="Times New Roman" fill="#7a2020">dashed squares: punching perimeter, side = pile + d_v = ${fmt(pn.sPile+pn.dv,1)} in (§4.6)</text>`; }
++  if(R&&R.pile&&R.pile.shear&&R.pile.shear.Hres>1e-6){ const sh=R.pile.shear, len=18, ux=sh.Hy/sh.Hres, uy=-sh.Hx/sh.Hres;
++    S.piles.coords.forEach(c=>{ if(!c.active) return; const cx=Xc(c.y), cy=Yc(c.x);
++      s+=`<line x1="${cx}" y1="${cy}" x2="${cx+ux*len}" y2="${cy+uy*len}" stroke="#555" stroke-width="1.2" marker-end="url(#arr)"/>`; });
++    s+=`<text x="${Xc(-Lft/2)}" y="${Yc(B/2)+60}" font-size="9.5" font-family="Times New Roman" fill="#555">arrows: shear per pile H/n = ${fmt(sh.Hres,2)} kip (H_x ${fmt(sh.Hx,2)}, H_y ${fmt(sh.Hy,2)}; ${esc(sh.ls||"")}, §4.5)</text>`; }
+```
