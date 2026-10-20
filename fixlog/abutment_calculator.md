@@ -11958,3 +11958,169 @@ index 8cf007d..848fdad 100644
 +  window.AbutPileResults={ open, apply, close, plan, match, stale, check, panelHTML, paint, when, clear:clearRes, state:()=>DLG };   // used by tests and the input panels
 +  paint();
 ```
+
+
+## 2026-10-20 — PR: claude/pile-abut-return-2 — Follow-ups to PXR (#388): H-pile orientation on the hand-off, biaxial integral pile check, stale results not used (PXR2) (PR link added after merge)
+
+Engineer decisions on the PXR open items (2026-10-20): 1 carry the orientation and set it in Pile Designer; 2 the integral interaction takes both axis moments (10th Ed. 6.9.2.2.1); 3 stale results are not used (Matlock–Reese and the values entered before the import), shown for reference only; 4 (field-method R_n default) kept. Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `Pile Designer.html` (fixlog/Pile Designer.md PXR2) and HANDOFF.md §4.6 / §4.10.
+
+### PXR2-1. foundationLoads: `pileLayout.section.orient`   [hand-off field; no result change]
+- **Where:** `pileSection()` in the foundation-loads hand-off script (anchor `o.orient=p.orient==="strong"? "strong" : "weak"; }   // PXR2`).
+- **Before:** the H-pile section had no orientation. **After:** `orient` = panel I-7 orientation: "weak" (web parallel to the abutment: the longitudinal load bends the weak axis) or "strong". Payload otherwise identical (checked); `contentHash` changes with it (default pile project `20cd634f` → `0562d47e`).
+- **Effect in Pile Designer:** fixlog/Pile Designer.md PXR2-1 (bending axis and web direction set on import).
+
+### PXR2-2. Integral piles (owner AASHTO / RIDOT): biaxial interaction   [calc change, only with a moment about the second axis]
+- **Where:** `computeIAB`, anchor `/* PXR2 (2026-10-20): biaxial bending (a moment about the other axis entered, iab.MuPy2 > 0)`; new input `iab.MuPy2` (panel I-0a under `iab.MuPy`; `iabDefault`, Input-ID `dropDef`); Tab 10 worked lines (anchors `const iTex2=`, `resL.concat(Y.on&&Y.Mu2>0?`); dashboard detail; input summary row; receiver `iabPlan` / `plan` (anchor `o.lin2=weak? t.Mux : t.Muy`).
+- **Before:** P_u/P_r + 8/9·M_u/M_r (Eq. 6.9.2.2.1-2; -1 / -3 as applicable), one moment about the orientation axis; Pile Designer's moment about the other axis was not imported (warning).
+- **After:** with M_u2 > 0: P_u/P_r + 8/9(M_u/M_r + M_u2/M_r2) (Eq. -2), P_u/(2P_r) + (…) (Eq. -1), or P_u/P_r + M_u/M_r + M_u2/M_r2 (Eq. -3) when the flange or the web is not compact for flexure (both axes bent: flange b/2t ≤ 0.38√(E/F_y) and web h/t_w ≤ 3.76√(E/F_y)). M_r2 = φ_f M_n about the other axis (φ_f = 1.00): strong axis M_p = F_yZ_x for a compact flange, else F_nc·S_x (Eq. 6.10.8.2.2-2); weak axis 6.12.2.2.1. "Pull pile results" sets `iab.MuPy2` from Pile Designer's other-axis Tier 2 moment of the same solve (nonlinear or linear, the user's choice). M_u2 = 0 (every existing project): unchanged.
+- **Provision:** AASHTO LRFD 10th Ed. 6.9.2.2.1 (Eqs. 6.9.2.2.1-1, -2, -3), 6.12.2.2.1, App. A6, 6.10.8.2.2, 6.5.4.2.
+- **Check case (default integral project, owner AASHTO, skew 15°, HP12X84 weak orientation; Pile Designer IAB mode Tier 2 biaxial, nonlinear):** M_u = 57.847 kip-ft (weak), M_u2 = 37.871 kip-ft (strong); P_g = 266.73 kip, P_r = 0.70 × 50 × 24.6 = 861.0 kip → P_u/P_r = 0.3098; M_r = 2660.0 kip-in (weak); λ_f = 8.98 ≤ 9.15 and h/t_w = 16.0 ≤ 90.6 → compact → M_r2 = F_yZ_x = 50 × 120.0 = 6000.0 kip-in, Eq. -2.
+  - Before (one moment): 0.3098 + (8/9)(694.2/2660.0) = **0.5418**.
+  - After: 0.3098 + (8/9)(694.2/2660.0 + 454.5/6000.0) = 0.3098 + (8/9)(0.2610 + 0.0757) = **0.6091** (hand = tool).
+
+### PXR2-3. Stale Pile Designer results are not used   [calc change, only with an import that is stale] [MORE conservative than PXR where the p-y moment is smaller]
+- **Where:** global `PXR_STALE` and `pxrTagState` / `pxrTagHTML` / `pxrTagRefresh` (anchor `/* PXR2 (2026-10-20): PXR_STALE`); `pileCombined` (anchors `pxr=PXR_STALE? null : pxr0`, `pdStale:pxr0[lsName]`); §4.4b (anchors `(PD stale: `, `Pile Designer (STALE, reference only, not used)`); receiver: `computeAll` and `recalcAll` wrappers (anchor `/* PXR2: while stale (hash mismatch, PXR_STALE)`), `apply` (anchor `/* PXR2: the value each input held before the import`), `S.pileRes.prev`.
+- **Before (PXR):** a stale import was still used, with warnings.
+- **After:** when the hash does not match ("STALE"), §4.4b uses the Matlock–Reese moment (or the panel I-7 p-y moment) for every limit state and shows the Pile Designer moment as "PD stale … not used"; every input still holding its imported value (R_n, φ_c, R_n,up, φ_up, D_f mode / value, integral M_u, M_u2) is computed with the value it held before the import (`S.pileRes.prev`, kept through a re-import); the inputs still show the imported values, tagged "PD · STALE, not used: the check uses the value before the import, …". The per-limit-state load-mismatch warning is not given then (the moment is not used). The flag is set after a recalculation (the hash needs the results and does not depend on these inputs); when it flips, the recalculation runs once more. Current results: used as in PXR.
+- **Check case (pile project of PXR-2, imported and current, then pile 1 deactivated → hash `0562d47e` → `4bf5bbd1`):** Strength I back to Matlock–Reese: H_x = 744.2/23 = 32.357 kip, M_ux = 0.772 × 32.357 × 3.247 = 81.12 kip-ft, interaction 0.4540 + 973.4/1324.3 = **1.1891** (PD 213.777 kip-ft shown, not used); §4.4 pile compression P = 244.66 kip against R_n = 330 kip, φ_c = 0.70 (before the import): 244.66/231.0 = **1.0591** (with the stale import it would be 244.66/(0.30 × 225.596) = 3.615); D_f computed 5.845 ft. Pile 1 reactivated → current → 2.3101 and 2.969 again. Integral (PXR2-2 project), approach-slab load +0.5 kip/ft → stale → M_u, M_u2 back to 0 (moment not entered, P_u/P_r only); restored → 0.6091.
+
+### Saved data
+- New input `iab.MuPy2` (default 0; older projects get 0 from `iabDefault`; left out of the Input ID at 0). New optional field `S.pileRes.prev`. A pileResults record imported before PXR2 has no `prev`: while stale it is computed with its imported values, as in PXR. No key or format changed otherwise.
+
+### How verified
+- `node tests/check-syntax.mjs`: pass. `tests/compare.mjs --tool page --file abutment_calculator.html`: page text and storage identical to origin/main (`c04ec0f`).
+- jsdom end to end, 59 checks, all pass: nothing imported → `computeAll` identical to origin/main (spread, pile branch, integral AASHTO / MassDOT); the pile-branch payload identical apart from `orient` and the hash; the PXR path unchanged (Strength I 1.0774 → 2.3101); the stale and integral cases above; the group target.
+- Playwright (libraries mapped): a stale record gives Matlock–Reese with R_n 330 (D/C 0.8700) and the stale line typesets (50 formulas, 0 KaTeX errors); the biaxial integral check 0.6091 typesets in Tab 10.
+
+### Open items
+- None new. PXR open item 4 (field-method R_n default) kept by the engineer.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `c04ec0f`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 848fdad..a8a7ec6 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -659 +659 @@ function iabDefault(){
+-    soilMD:3, head:"fixed", LE:10.0, EG:29000, IG:60000, MuPy:0,              // MassDOT soil type (Table 3.10.11-1); CTDOT head condition, equivalent cantilever L_E (ft), girder E (ksi) and composite I (in^4); pile-head moment from a p-y analysis (kip-ft, 0 = not entered)
++    soilMD:3, head:"fixed", LE:10.0, EG:29000, IG:60000, MuPy:0, MuPy2:0,     // PXR2: MuPy2 = p-y pile-head moment about the other axis (kip-ft, 0 = none; biaxial 6.9.2.2.1)   // MassDOT soil type (Table 3.10.11-1); CTDOT head condition, equivalent cantilever L_E (ft), girder E (ksi) and composite I (in^4); pile-head moment from a p-y analysis (kip-ft, 0 = not entered)
+@@ -1284,5 +1284,13 @@ function ownTagHTML(path){ const d=ownRuleFor(path); if(!d) return ""; const v=g
+-function pxrTagHTML(path){ const s=S.pileRes, fl=s&&s.fields; if(!fl||!Object.prototype.hasOwnProperty.call(fl,path)||!ownEq(getPath(S,path),fl[path])) return "";
+-  return `<div class="own-src" data-pxrpath="${path}">PD · from Pile Designer, ${esc(window.AbutPileResults? AbutPileResults.when(s.producedAt) : String(s.producedAt||""))} (Pull pile results)</div>`; }
+-function pxrTagRefresh(){ document.querySelectorAll("#inputCol [data-pxrpath]").forEach(el=>{ const p=el.dataset.pxrpath, fl=S.pileRes&&S.pileRes.fields;
+-  if(fl&&Object.prototype.hasOwnProperty.call(fl,p)&&ownEq(getPath(S,p),fl[p])) return;
+-  const inp=document.querySelector(`#inputCol [data-path="${p}"]`); if(inp) inp.classList.remove("ownv"); el.remove(); }); }
++/* PXR2 (2026-10-20): PXR_STALE = the Pile Designer results are stale (content hash mismatch, set after each recalculation by the
++   pile results receiver). Then the calculation uses the values held before the import (S.pileRes.prev) for every input still
++   holding its imported value, and §4.4b the elastic / entered p-y moment; the imported values are shown for reference only. */
++let PXR_STALE=false;
++function pxrTagState(path){ const s=S.pileRes, fl=s&&s.fields; if(!fl||!Object.prototype.hasOwnProperty.call(fl,path)||!ownEq(getPath(S,path),fl[path])) return null;
++  const pv=s.prev||{}, st=PXR_STALE&&Object.prototype.hasOwnProperty.call(pv,path), w=window.AbutPileResults? AbutPileResults.when(s.producedAt) : String(s.producedAt||"");
++  return st? {stale:true, txt:"PD · STALE, not used: the check uses the value before the import, "+pv[path]} : {stale:false, txt:"PD · from Pile Designer, "+w+" (Pull pile results)"}; }
++function pxrTagHTML(path){ const q=pxrTagState(path); if(!q) return "";
++  return `<div class="own-src${q.stale?" ovr":""}" data-pxrpath="${path}">${esc(q.txt)}</div>`; }
++function pxrTagRefresh(){ document.querySelectorAll("#inputCol [data-pxrpath]").forEach(el=>{ const p=el.dataset.pxrpath, q=pxrTagState(p);
++  const inp=document.querySelector(`#inputCol [data-path="${p}"]`);
++  if(q){ el.textContent=q.txt; el.classList.toggle("ovr",q.stale); if(inp) inp.classList.toggle("ownv",!q.stale); return; }
++  if(inp) inp.classList.remove("ownv"); el.remove(); }); }
+@@ -1895 +1903 @@ function buildInputs(){
+-      ${oo==="RIDOT"||oo==="AASHTO"?inpRow("Pile-head moment M<sub>u</sub> from the p-y analysis (0 = not entered)","iab.MuPy","kip-ft",{title:"Factored pile-head moment under the thermal movement from L-Pile or Pile Designer (integral mode); used in the combined axial and flexure check."}):""}
++      ${oo==="RIDOT"||oo==="AASHTO"?inpRow("Pile-head moment M<sub>u</sub> from the p-y analysis (0 = not entered)","iab.MuPy","kip-ft",{title:"Factored pile-head moment under the thermal movement from L-Pile or Pile Designer (integral mode); used in the combined axial and flexure check."})+inpRow("&nbsp;&nbsp;Moment about the other axis M<sub>u2</sub> (biaxial; 0 = none)","iab.MuPy2","kip-ft",{title:"Pile-head moment about the other principal axis, e.g. the component of δT resolved by the skew (Pile Designer, integral mode, biaxial). With a value, the interaction takes both moments (6.9.2.2.1: M_ux/M_rx + M_uy/M_ry)."}):""}
+@@ -2906 +2914,13 @@ function computeIAB(R,X){
+-    else{ P.py={Mu:Math.max(0,+I.MuPy)*12}; P.py.on=P.py.Mu>0; P.py.I=inter(P.Pg,P.py.Mu); }
++    else{ P.py={Mu:Math.max(0,+I.MuPy)*12}; P.py.on=P.py.Mu>0; P.py.I=inter(P.Pg,P.py.Mu);
++      /* PXR2 (2026-10-20): biaxial bending (a moment about the other axis entered, iab.MuPy2 > 0): 6.9.2.2.1 with both terms,
++         P_u/P_r + 8/9(M_u/M_r + M_u2/M_r2) (Eq. -2), P_u/(2P_r) + (M_u/M_r + M_u2/M_r2) (Eq. -1) when every element is compact for
++         flexure (flange b/2t ≤ 0.38√(E/F_y) and web h/t_w ≤ 3.76√(E/F_y), both axes bent), else P_u/P_r + M_u/M_r + M_u2/M_r2 (Eq. -3).
++         M_r2 = φ_f M_n about the other axis (φ_f = 1.00): weak axis 6.12.2.2.1 (as above), strong axis M_p for a compact flange,
++         else F_nc·S_x (Eq. 6.10.8.2.2-2). M_u2 = 0: unchanged. */
++      const Mu2=Math.max(0,+I.MuPy2||0)*12;
++      if(Mu2>0){ const o={};
++        if(weak){ o.Fyr=0.7*Fy; o.lamRfS=0.56*Math.sqrt(E/o.Fyr); o.Fnc=P.lamF<=P.lamPf? Fy : (1-(1-o.Fyr/Fy)*(P.lamF-P.lamPf)/(o.lamRfS-P.lamPf))*Fy; o.Mn=P.lamF<=P.lamPf? Fy*sk.Zx : o.Fnc*sk.Sx; o.ax="strong"; }
++        else{ o.MnY=Math.min(Fy*sk.Zy,1.6*Fy*sk.Sy); o.Mn=P.lamF<=P.lamPf? o.MnY : (P.lamF<=P.lamRf? o.MnY-(o.MnY-0.7*Fy*sk.Sy)*(P.lamF-P.lamPf)/(P.lamRf-P.lamPf) : 0.69*E*sk.Sy/(P.lamF*P.lamF)); o.ax="weak"; }
++        o.Mr=1.0*o.Mn; o.cmp=P.lamF<=P.lamPf&&P.hwtw<=P.lamWc; P.ax2=o;
++        const r=P.Pg/P.Pr, sM=P.py.Mu/P.Mr+Mu2/o.Mr;
++        P.py.Mu2=Mu2; P.py.on=true; P.py.I= !o.cmp? {r, eq:"3", val:r+sM, s:sM, biax:true} : {r, eq:r<0.2?"1":"2", val:r<0.2? r/2+sM : r+8/9*sM, s:sM, biax:true}; } }
+@@ -3685 +3705 @@ function computeAll(){
+-    const pxr=(S.pileRes&&S.pileRes.byLS&&typeof S.pileRes.byLS==="object")? S.pileRes.byLS : null;
++    const pxr0=(S.pileRes&&S.pileRes.byLS&&typeof S.pileRes.byLS==="object")? S.pileRes.byLS : null, pxr=PXR_STALE? null : pxr0;   // PXR2: stale → not used (reference only)
+@@ -3706 +3726 @@ function computeAll(){
+-      rows.push({ls:lsName, eq, Pu, Pmax:b.Pmax, pile:actIndexToNo(activePiles(),b.iMax), Hx, Hy, ML, MT, dL, dT, MuL, MuT, phiC, Pr, rP, mS, val, eqn, dV, lbl:b.c.lbl, src, ...(pd?{pd}:{})});   // PXR: pd (only with a Pile Designer moment)
++      rows.push({ls:lsName, eq, Pu, Pmax:b.Pmax, pile:actIndexToNo(activePiles(),b.iMax), Hx, Hy, ML, MT, dL, dT, MuL, MuT, phiC, Pr, rP, mS, val, eqn, dV, lbl:b.c.lbl, src, ...(pd?{pd}:{}), ...(PXR_STALE&&pxr0&&pxr0[lsName]?{pdStale:pxr0[lsName]}:{})});   // PXR: pd (only with a Pile Designer moment); PXR2: pdStale (stale, reference only)
+@@ -4658 +4678 @@ function computeAll(){
+-      if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp"]); }   // ABR1: new inputs at their default
++      if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
+@@ -4750 +4770 @@ function computeAll(){
+-      else addD("iabPile","Integral pile — axial + flexure with the p-y moment [6.9.2.2.1]",P.py.on?P.py.I.val:0,"tab-iab",P.py.on?`P_u = ${fmt(P.Pg,1)} kip, M_u = ${fmt(P.py.Mu/12,1)} kip-ft`:"pile-head moment not entered (panel I-0a)",!P.py.on);
++      else addD("iabPile","Integral pile — axial + flexure with the p-y moment [6.9.2.2.1]",P.py.on?P.py.I.val:0,"tab-iab",P.py.on?`P_u = ${fmt(P.Pg,1)} kip, M_u = ${fmt(P.py.Mu/12,1)} kip-ft`+(P.py.Mu2>0?`, M_u2 = ${fmt(P.py.Mu2/12,1)} kip-ft (biaxial)`:""):"pile-head moment not entered (panel I-0a)",!P.py.on);
+@@ -5142,0 +5163,4 @@ function renderTabIAB(R){
++    const iTex2=(Pu,Mu,Mu2,I2)=>{ const A=P.ax2, terms=`\\dfrac{${t(Mu,0)}}{${t(P.Mr,0)}} + \\dfrac{${t(Mu2,0)}}{${t(A.Mr,0)}}`;   // PXR2: biaxial
++      return I2.eq==="3"? `\\dfrac{P_u}{P_r} + \\dfrac{M_u}{M_r} + \\dfrac{M_{u2}}{M_{r2}} = \\dfrac{${t(Pu,1)}}{${t(P.Pr,1)}} + ${terms} = ${t(I2.val,3)}\\quad(\\text{Eq. 6.9.2.2.1-3})`
++        : I2.eq==="1"? `\\dfrac{P_u}{2P_r} + \\dfrac{M_u}{M_r} + \\dfrac{M_{u2}}{M_{r2}} = \\dfrac{${t(Pu,1)}}{2(${t(P.Pr,1)})} + ${terms} = ${t(I2.val,3)}\\quad(\\text{Eq. 6.9.2.2.1-1})`
++        : `\\dfrac{P_u}{P_r} + \\dfrac{8}{9}\\left(\\dfrac{M_u}{M_r} + \\dfrac{M_{u2}}{M_{r2}}\\right) = \\dfrac{${t(Pu,1)}}{${t(P.Pr,1)}} + \\dfrac{8}{9}\\left(${terms}\\right) = ${t(I2.val,3)}\\quad(\\text{Eq. 6.9.2.2.1-2})`; };
+@@ -5164 +5188,4 @@ function renderTabIAB(R){
+-      ph+=eqB("Combined axial and flexure with the pile-head moment of the p-y analysis","AASHTO 6.9.2.2.1, 6.5.4.2, 6.12.2.2.1"+(own==="RIDOT"?"; RIDOT BDM 11.3.2":""),resL.concat(Y.on?[`M_u = ${t(+I.MuPy,1)}\\ \\text{kip-ft} = ${t(Y.Mu,0)}\\ \\text{kip-in (entered)}\\,, \\quad P_u = P_g = ${t(P.Pg,2)}\\ \\text{kip}`,iTex(P.Pg,Y.Mu,Y.I)]:[`P_u/P_r = ${t(P.Pg,1)}/${t(P.Pr,1)} = ${t(P.Pg/P.Pr,3)}\\quad(\\text{moment not entered})`]),
++      ph+=eqB("Combined axial and flexure with the pile-head moment of the p-y analysis","AASHTO 6.9.2.2.1, 6.5.4.2, 6.12.2.2.1"+(own==="RIDOT"?"; RIDOT BDM 11.3.2":""),resL.concat(Y.on&&Y.Mu2>0?[`M_u = ${t(+I.MuPy,1)}\\ \\text{kip-ft} = ${t(Y.Mu,0)}\\ \\text{kip-in},\\quad M_{u2} = ${t(+I.MuPy2,1)}\\ \\text{kip-ft} = ${t(Y.Mu2,0)}\\ \\text{kip-in (${P.ax2.ax} axis; entered)}\\,, \\quad P_u = P_g = ${t(P.Pg,2)}\\ \\text{kip}`,
++          P.ax2.ax==="strong"? `M_{r2} = M_{n,strong} = ${P.lamF<=P.lamPf?`F_yZ_x = ${t(P.Fy,0)}(${t(P.sk.Zx,1)})`:`F_{nc}S_x = ${t(P.ax2.Fnc,3)}(${t(P.sk.Sx,2)})`} = ${t(P.ax2.Mr,0)}\\ \\text{kip-in}` : `M_{r2} = M_{n,weak} = ${t(P.ax2.Mr,0)}\\ \\text{kip-in (6.12.2.2.1)}`,
++          `\\text{biaxial: }${P.ax2.cmp?"\\text{flange and web compact} \\Rightarrow \\text{Eqs. 6.9.2.2.1-1 / -2}":"\\text{flange or web not compact} \\Rightarrow \\text{Eq. 6.9.2.2.1-3}"}`, iTex2(P.Pg,Y.Mu,Y.Mu2,Y.I)]
++        : Y.on?[`M_u = ${t(+I.MuPy,1)}\\ \\text{kip-ft} = ${t(Y.Mu,0)}\\ \\text{kip-in (entered)}\\,, \\quad P_u = P_g = ${t(P.Pg,2)}\\ \\text{kip}`,iTex(P.Pg,Y.Mu,Y.I)]:[`P_u/P_r = ${t(P.Pg,1)}/${t(P.Pr,1)} = ${t(P.Pg/P.Pr,3)}\\quad(\\text{moment not entered})`]),
+@@ -5166 +5193 @@ function renderTabIAB(R){
+-      if(Y.on) ph+=checkLine("Pile axial + flexure",iTex(P.Pg,Y.Mu,Y.I).split("=").slice(0,2).join("="),Y.I.val);
++      if(Y.on) ph+=checkLine("Pile axial + flexure"+(Y.Mu2>0?" (biaxial)":""),(Y.Mu2>0?iTex2(P.Pg,Y.Mu,Y.Mu2,Y.I):iTex(P.Pg,Y.Mu,Y.I)).split("=").slice(0,2).join("="),Y.I.val);   // PXR2
+@@ -6076 +6103 @@ function renderTabFound(R){
+-      pf.rows.forEach(x=>{ tb+=`<tr${x.val>1?' class="failrow"':''}><td class="lft">${esc(x.ls)}</td><td>${x.pile}</td><td>${fmt(x.Pu,1)}</td><td>${fmt(x.Hx,2)}, ${fmt(x.Hy,2)}</td><td>${fmt(x.MuL/12,1)}, ${fmt(x.MuT/12,1)}${x.src==="pd"?" (PD)":""}</td><td>${x.eqn.replace("6.9.2.2.1","")}</td><td>${fmt(x.val,3)}</td><td>${fmt(x.dV,3)}</td></tr>`; });
++      pf.rows.forEach(x=>{ tb+=`<tr${x.val>1?' class="failrow"':''}><td class="lft">${esc(x.ls)}</td><td>${x.pile}</td><td>${fmt(x.Pu,1)}</td><td>${fmt(x.Hx,2)}, ${fmt(x.Hy,2)}</td><td>${fmt(x.MuL/12,1)}, ${fmt(x.MuT/12,1)}${x.src==="pd"?" (PD)":x.pdStale?" (PD stale: "+fmt(+x.pdStale.M,1)+", not used)":""}</td><td>${x.eqn.replace("6.9.2.2.1","")}</td><td>${fmt(x.val,3)}</td><td>${fmt(x.dV,3)}</td></tr>`; });
+@@ -6090 +6117,2 @@ function renderTabFound(R){
+-          `${interTex} = ${t(r.val,3)} \\quad(\\text{Eq. ${r.eqn}}${pf.cmpAll?"":";\\ \\text{not all elements compact for flexure}"})`],
++          `${interTex} = ${t(r.val,3)} \\quad(\\text{Eq. ${r.eqn}}${pf.cmpAll?"":";\\ \\text{not all elements compact for flexure}"})`,
++          ...(r.pdStale?[`\\text{Pile Designer (STALE, reference only, not used): } M_{max,PD} = ${t(+r.pdStale.M,1)}\\ \\text{kip-ft}`]:[])],   // PXR2
+@@ -8489 +8517 @@ function inputEchoHTML(){
+-      ["p-y pile-head moment",fmt(+I.MuPy,1),"kip-ft"],
++      ["p-y pile-head moment"+(+I.MuPy2>0?"; other axis (biaxial)":""),fmt(+I.MuPy,1)+(+I.MuPy2>0?"; "+fmt(+I.MuPy2,1):""),"kip-ft"],
+@@ -9130 +9158,2 @@ document.addEventListener("DOMContentLoaded",init);
+-    if(shp==="hp"){ const nm=hpAuto(p), sx=HP_SHAPES[nm]; if(sx) Object.assign(o,{designation:nm, auto:!p.strSec, A:sx[0], d:sx[1], bf:sx[2], tf:sx[3], tw:sx[4]}); }
++    if(shp==="hp"){ const nm=hpAuto(p), sx=HP_SHAPES[nm]; if(sx) Object.assign(o,{designation:nm, auto:!p.strSec, A:sx[0], d:sx[1], bf:sx[2], tf:sx[3], tw:sx[4]});
++      o.orient=p.orient==="strong"? "strong" : "weak"; }   // PXR2: "weak" = web parallel to the abutment (hand-off y): the longitudinal load (x) bends the weak axis; "strong" = web along x
+@@ -9373 +9402 @@ document.addEventListener("DOMContentLoaded",init);
+-      o.level="stale"; o.msg="STALE: this abutment's loads or pile layout changed after it sent the loads these Pile Designer results were produced from (sent "+when(basis.producedAt)+"; content then "+basis.contentHash+", now "+(cur||"?")+"). Send the foundation loads again, re-run Pile Designer and pull the pile results again."; return o; }
++      o.level="stale"; o.msg="STALE: this abutment's loads or pile layout changed after it sent the loads these Pile Designer results were produced from (sent "+when(basis.producedAt)+"; content then "+basis.contentHash+", now "+(cur||"?")+"). The checks use the Matlock–Reese (or panel I-7 p-y) moment and the values entered before the import; the Pile Designer values are shown for reference only. Send the foundation loads again, re-run Pile Designer and pull the pile results again."; return o; }
+@@ -9402,2 +9431,2 @@ document.addEventListener("DOMContentLoaded",init);
+-    const t=q.tier2; o.lin=weak? t.Muy : t.Mux; o.nl=weak? t.Muy_nl : t.Mux_nl; o.other=weak? t.Mux : t.Muy;
+-    if(num(o.other)&&o.other>1e-6) o.warn.push("Pile Designer also has "+f(o.other,1)+" kip-ft about the other axis (δT resolved by the skew, orientation "+q.orient+"). This abutment's interaction (Tab 10) takes one moment, so that component is not included here; Pile Designer's biaxial interaction is "+f(t.interaction,3)+" (nonlinear "+f(t.interaction_nl,3)+").");
++    const t=q.tier2; o.lin=weak? t.Muy : t.Mux; o.nl=weak? t.Muy_nl : t.Mux_nl; o.lin2=weak? t.Mux : t.Muy; o.nl2=weak? t.Mux_nl : t.Muy_nl;   // PXR2: both axes
++    if(num(o.lin2)&&o.lin2>1e-6) o.warn.push("Biaxial: Pile Designer also has "+f(o.lin2,1)+" kip-ft (nonlinear "+f(o.nl2,1)+") about the other axis (δT resolved by the skew, orientation "+q.orient+"); it goes to M_u2 (panel I-0a) and Tab 10 checks both moments (6.9.2.2.1). Pile Designer's own biaxial interaction (θ-factored MassDOT form) is "+f(t.interaction,3)+" (nonlinear "+f(t.interaction_nl,3)+").");
+@@ -9447 +9476,3 @@ document.addEventListener("DOMContentLoaded",init);
+-      if(ip.use&&st.iab){ const v=st.im==="nl"&&num(ip.nl)? ip.nl : ip.lin; if(num(v)&&v>0) add("iab.MuPy",v,"Integral pile-head moment M_u (Pile Designer Tier 2, "+(st.im==="nl"&&num(ip.nl)?"nonlinear p-y":"linear")+", δT at a fixed head, γTU = 1.0)","kip-ft"); } }
++      if(ip.use&&st.iab){ const nl=st.im==="nl"&&num(ip.nl), v=nl? ip.nl : ip.lin, v2=nl? (num(ip.nl2)?ip.nl2:0) : (num(ip.lin2)?ip.lin2:0);
++        if(num(v)&&v>0){ add("iab.MuPy",v,"Integral pile-head moment M_u (Pile Designer Tier 2, "+(nl?"nonlinear p-y":"linear")+", δT at a fixed head, γTU = 1.0)","kip-ft");
++          if(v2>1e-9||+S.iab.MuPy2>0) add("iab.MuPy2",Math.max(0,v2),"Moment about the other axis M_u2 (biaxial, same solve)","kip-ft"); } } }
+@@ -9505,0 +9537,3 @@ document.addEventListener("DOMContentLoaded",init);
++    /* PXR2: the value each input held before the import (kept through a re-import of a still-unchanged field): used while the results are stale */
++    const oldR=S.pileRes||{}, oldF=oldR.fields||{}, oldP=oldR.prev||{}, prev={}, has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
++    pl.items.forEach(it=>{ prev[it.path]=(has(oldF,it.path)&&has(oldP,it.path)&&ownEq(it.cur,oldF[it.path]))? oldP[it.path] : it.cur; });
+@@ -9510 +9544 @@ document.addEventListener("DOMContentLoaded",init);
+-      stateAtImport:sl.level, casesRunAt:p.casesRunAt||null, fields, byLS:pl.byLS,
++      stateAtImport:sl.level, casesRunAt:p.casesRunAt||null, fields, prev, byLS:pl.byLS,
+@@ -9523 +9557 @@ document.addEventListener("DOMContentLoaded",init);
+-  function clearRes(){ if(!S.pileRes) return; if(typeof pushUndo==="function") pushUndo("pile-results-clear:"+Date.now()); delete S.pileRes; buildInputs(); recalcAll(); scheduleSave(); }
++  function clearRes(){ if(!S.pileRes) return; if(typeof pushUndo==="function") pushUndo("pile-results-clear:"+Date.now()); delete S.pileRes; PXR_STALE=false; buildInputs(); recalcAll(); scheduleSave(); }
+@@ -9529 +9563 @@ document.addEventListener("DOMContentLoaded",init);
+-      h+=ks.length? "<br>p-y pile moment per limit state (Tab 4 §4.4b): "+ks.map(k=>esc(k)+" "+fmt(+s.byLS[k].M,1)+" kip-ft ("+esc(s.byLS[k].caseName||"")+")").join("; ")+"." : "<br>No per-limit-state moment imported.";
++      h+=ks.length? "<br>p-y pile moment per limit state (Tab 4 §4.4b"+(PXR_STALE?"; STALE, reference only, not used":"")+"): "+ks.map(k=>esc(k)+" "+fmt(+s.byLS[k].M,1)+" kip-ft ("+esc(s.byLS[k].caseName||"")+")").join("; ")+"." : "<br>No per-limit-state moment imported.";
+@@ -9545,2 +9579,12 @@ document.addEventListener("DOMContentLoaded",init);
+-  if(typeof recalcAll==="function"){ const rc=recalcAll; recalcAll=function(){ const r=rc.apply(this,arguments);
+-    try{ LAST=statusNow(); if(LAST&&LAST.level==="stale"){ warn("Pile results from Pile Designer: "+LAST.msg); renderWarnings(); } paint(); }catch(e){} return r; }; }
++  /* PXR2: while stale (hash mismatch, PXR_STALE), computeAll runs with the values each imported input held before the import
++     (S.pileRes.prev; inputs edited since keep the user's value); S is restored afterwards. The flag is set after a recalculation
++     (the hash needs the results; it does not depend on these inputs) and, when it flips, the recalculation runs once more. */
++  if(typeof computeAll==="function"){ const ca=computeAll; computeAll=function(){ const s=S.pileRes;
++    if(!PXR_STALE||!s||!s.fields||!s.prev) return ca.apply(this,arguments);
++    const back=[], has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
++    Object.keys(s.fields).forEach(k=>{ if(has(s.prev,k)&&ownEq(getPath(S,k),s.fields[k])){ back.push([k,getPath(S,k)]); setPath(S,k,s.prev[k]); } });
++    try{ return ca.apply(this,arguments); } finally{ back.forEach(([k,v])=>setPath(S,k,v)); } }; }
++  if(typeof recalcAll==="function"){ const rc=recalcAll; recalcAll=function(){ let r=rc.apply(this,arguments);
++    try{ LAST=statusNow(); const st=!!(LAST&&LAST.level==="stale");
++      if(st!==PXR_STALE){ PXR_STALE=st; r=rc.apply(this,arguments); LAST=statusNow(); }
++      if(LAST&&LAST.level==="stale"){ warn("Pile results from Pile Designer: "+LAST.msg); renderWarnings(); } paint(); }catch(e){} return r; }; }
+```

@@ -807,6 +807,13 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     var tab=hpAiscRow(s.designation,s.d,s.bf,s.tf,s.tw); if(tab) set('hpShape',s.designation,'Rolled section (AISC tabulated A = '+tab[0]+' in², I, S, Z, r)');   // ABPX2
     if(s.drive==='good' || s.drive==='severe'){ set('hpDriveCond',s.drive,'Driving condition'); set('hpPhiC',s.drive==='severe'?0.50:0.60,'φc axial'); }
     if(lay.embed!==null) set('hpCapEmbed',lay.embed,'Cap embedment','in');
+    // PXR2 (2026-10-20): the abutment's H-pile orientation (pileLayout.section.orient; "weak" = web parallel to the abutment, i.e. along
+    // hand-off y, so the longitudinal load along hand-off x bends the weak axis; "strong" = web along hand-off x). Bending axis = the
+    // axis the longitudinal load bends; for the group target also the web direction on the plan (the pile axis mapped to that
+    // hand-off axis), so each Group row direction is solved about its own axis (F39). Absent (older payload): unchanged.
+    if(s.orient==='weak' || s.orient==='strong'){
+      set('hpAxis',s.orient,'Bending axis (the abutment: web '+(s.orient==='weak'?'parallel':'normal')+' to the abutment, the longitudinal load bends the '+s.orient+' axis)');
+      if(o.target==='group'){ var webH=s.orient==='weak'?'y':'x', wd=o.ax.x.charAt(1)===webH?'x':'y'; set('hpGroupWebDir',wd,'H-pile web parallel to pile '+wd+' (the abutment\'s orientation)'); } }
     if(!tab) r.warn.push('Section '+(s.designation||'')+' is not in this tool\'s AISC HP table at these dimensions: its properties are computed from three rectangles (no fillets; tabulated A = '+(isNum(s.A)?s.A:'?')+' in²).');
   }
   /* ---- plan: exactly what will change. Pure: reads I, returns the patch. ---- */
