@@ -8385,3 +8385,237 @@ index e05d029..92d9a35 100644
 -      <table class="cr-refs">${abutRefsNow().concat(S.wing&&S.wing.on?WING_REFS:[]).map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
 +      <table class="cr-refs">${abutRefsNow().concat(S.wing&&S.wing.on?WING_REFS:[]).concat(iabType()!=="conv"?IAB_REFS:[]).map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
 ```
+
+
+## 2026-10-20 — PR: claude/abut-integral-2 — Integral / semi-integral follow-up: nonlinear mobilization, semi-integral lower-stem pressure, cap stirrups, skew definitions (PR link added after merge)
+
+Engineer decisions on the open items of the IAB entry above (items 2, 5, 7, 8; items 1, 3, 4, 6 kept as they are).
+
+### F-IAB2-1. Earth-pressure mobilization between at-rest and the limit state: hyperbolic, not linear   [calc change] [integral / semi-integral only]
+- **Where:** Section A, new `IAB_RF`, `iabHyp` (anchor `IAB2 (2026-10-20): mobilization`); `computeIAB` anchors `Q.kM="aashto"` and `Q.kC="aashto"`; `renderTabIAB` §10.3 lines and notes.
+- **Before:** `Q.fP=Math.min(1,Q.rE/bf.p); Q.Kexp=K0+(Kp-K0)*Q.fP;` and `Q.fA=Math.min(1,Q.rC/bf.a); Q.Kcon=K0-(K0-Ka)*Q.fA;` (linear in Δ/H).
+- **After:** `Q.xP=Math.min(1,Q.rE/bf.p); Q.fP=iabHyp(Q.xP); Q.Kexp=K0+(Kp-K0)*Q.fP;` and `Q.xA=Math.min(1,Q.rC/bf.a); Q.fA=iabHyp(Q.xA); Q.Kcon=K0-(K0-Ka)*Q.fA;` with `iabHyp(x) = x/((1−R_f) + R_f·x)`, R_f = 0.85.
+- **Basis:** AASHTO LRFD 10th Ed. 3.11.1 and Table C3.11.1-1 give only the movement that reaches full active / passive pressure. The 10th Ed. has no mobilization curve (searched Sections 3, 10 and 11 and their commentary: no figure or equation). The hyperbolic load–deflection form of Duncan & Mokwa (2001), with failure ratio R_f = 0.85, is used. It is normalized so the limit is reached at the Table C3.11.1-1 Δ/H (x = 1). Applies to the AASHTO-owner expansion K and to the contraction K of every owner except CTDOT integral (CTDOT: no soil pressure in contraction). Less conservative (lower K) than linear at no movement: f(0) = 0 for both. It is more conservative (higher K) at every movement in between.
+- **Check case (AASHTO semi-integral, built-in project, Δ = 0.1622 in, h_bw = 5 ft, dense sand, φ = 32°):** x = 0.002704/0.01 = 0.2704. Before: f = 0.2704, K = 0.470 + 2.785(0.2704) = 1.223. After: f = 0.2704/(0.15 + 0.85·0.2704) = 0.7119, K = 0.470 + 2.785(0.7119) = 2.452. Diaphragm M_u = 0.8(1.35·2.452·0.120·5)(8²)/8 = 12.71 kip-ft/ft (before 6.34); D/C 0.158 → 0.317. AASHTO integral (Δ/H = 0.002253): K 1.098 → 2.307, case 2 M_u 10.24 → 21.53 kip-ft/ft.
+
+### F-IAB2-2. Semi-integral: the lower abutment takes the earth pressure below the seat only   [calc change] [semi-integral only; conventional and integral unchanged]
+- **Where:** `computeAll` C-3 (anchor `IAB2 (2026-10-20): semi-integral — the pressure on the virtual back plane`), LS (`const hLS=H-hCut`), ES (`const hES=`), M–O (`const PaSumA=` now on `PaFull`), stem demand (`const cS=`, `stEH`, `stLS`, `stQ`, `const cL=`), `buildVM` stem (`const hAbove=`), `stemCapacityProfile`, Tab 1 §1.3 / §1.4 and Tab 5 §5.2 worked lines, Tab 10 §10.0 text.
+- **Before:** EH, LS and ES on the lower abutment over the full retained height (conservative).
+- **After (semi-integral, not the construction stage):** h_cut = H − (t_f + h_stem) on the virtual back plane; P_a = P_a,full − P_cut, z̄ = (P_a,full·z̄_full − P_cut·z_cut)/P_a; LS and ES over H − h_cut. Stem base, c = h_soil − h_stem: M_EH = k_ah·γ[H³/6 − (Hc²/2 − c³/3)], V_EH = k_ah·γ(H² − c²)/2, M_LS = k_ah·γ·h_eq(H − c)²/2, V_LS = k_ah·γ·h_eq(H − c); the soil above the seat stays as overburden. V&M stem: no pressure above the seat. Construction stage (no superstructure, no diaphragm) and the Extreme Event I M–O increment stay on the full height. Conventional: h_cut = c = 0 and the original expressions are used unchanged (bit-identical).
+- **Basis:** statics; CTDOT BRSDM V2 11.6.1.3.1CT, RIDOT BDM 11.3.3: the end diaphragm moves with the superstructure (pinned connection, bearings on the seat), so the soil it retains loads the superstructure and not the lower abutment.
+- **Check case (AASHTO semi-integral, built-in: t_f = 3, h_stem = 14, h_soil = 19 ft, k_a = 0.3073, γ = 0.120):** H = 22, h_cut = 5 ft. P_a,full = ½(0.3073)(0.120)(22²) = 8.923 kip/ft; P_cut = ½(0.3073)(0.120)(5²) = 0.461 at z = 22 − 10/3 = 18.667 ft; P_a = 8.462 kip/ft at z̄ = (8.923·7.333 − 0.461·18.667)/8.462 = 6.716 ft (before 8.923 at 7.333). LS_h = 0.07374(17)(44) = 55.16 kip (before 71.38). Stem: c = 5, M_EH = 0.03687[19³/6 − (19·25/2 − 125/3)] = 34.93 kip-ft/ft (before 42.15); V_EH = 0.03687(361 − 25)/2 = 6.194 (6.655); M_LS = 0.03687(2.1)(14²)/2 = 7.588 (13.976). Stem M_u (Strength I) 112.06 → 90.05 kip-ft/ft, D/C 0.370 → 0.298; eccentricity D/C 0.707 → 0.551; bearing 0.933 → 0.861. Sliding 1.153 unchanged: the construction stage governs, and that stage is unchanged.
+
+### F-IAB2-3. Integral pile cap stirrups (case 1 shear)   [calc change] [integral only; default unchanged]
+- **Where:** `iabDefault` (`stBar:"0", stLegs:2, stSp:12.0`); panel I-0a (`Cap stirrups (vertical)`, with the note on D/C 1.70); `computeIAB` anchor `IAB2: cap stirrups`; `sectionHTML` (shear block: an extra block and the check use `c.stir` when present; unchanged otherwise); input echo; `VALID["iab.stSp"]`.
+- **Before:** concrete only, general procedure, β by Eq. 5.7.3.4.2-2.
+- **After (stirrups entered):** A_v = n·A_b; A_v,min = 0.0316√f′c·b_v·s/f_y (Eq. 5.7.2.5-1). If A_v ≥ A_v,min, β = 4.8/(1 + 750ε_s) (Eq. 5.7.3.4.2-1), else Eq. 5.7.3.4.2-2. θ = 29 + 3500ε_s (Eq. 5.7.3.4.2-3); V_s = A_v·f_y·d_v·cot θ/s (Eq. 5.7.3.3-4, α = 90°); φV_n = 0.90·min(V_c + V_s, 0.25f′c·b_v·d_v) (Eqs. 5.7.3.3-1, -2). Per ft of cap width. Default "none": results unchanged (built-in AASHTO project D/C 1.70, noted in the panel).
+- **Basis:** AASHTO LRFD 10th Ed. 5.7.2.5, 5.7.3.3, 5.7.3.4.2.
+- **Check case (MassDOT integral, f′c = 5 ksi, b = 3.5 ft, h_c = 4 ft, #5 × 4 legs @ 6 in):** d_v = 40.95 in, ε_s = 2.960×10⁻³, V_u = 45.20 kip/ft. A_v = 1.24 ≥ A_v,min = 0.0316√5(42)(6)/60 = 0.297 in². β = 4.8/(1 + 2.220) = 1.491; θ = 39.36°. V_c = 0.0316(1.491)√5(12)(40.95) = 51.76; V_s = 1.24(60)(40.95)cot 39.36°/(6·3.5) = 176.88 kip/ft. φV_n = 0.9(228.64) = 205.78 kip/ft. D/C = 0.220 (before, no stirrups: 1.521).
+
+### F-IAB2-4. MassDOT pile spacing and end distance: along the skew   [label / display only] [no result change]
+- **Where:** panel I-0a input label and title (`Pile spacing s along the abutment (along the skew)`); MassDOT rule `iab.sp` (value, limit, worked s_n); Tab 10 §10.4 layout lines; case 2 span label.
+- **Before / after:** values unchanged. L_ab, the beam positions (panel I-5: "positions along the abutment") and the pile spacing are all measured along the abutment centerline, i.e. along the skew. MassDOT Part I 3.10.10.3 measures the pile flange-to-abutment-end distance along the skew; the tool's end distance is that value. MassDOT gives no measuring direction for the 3'-6" to 10 ft spacing limits, so they are applied to the c/c spacing along the pile row; the spacing normal to the girders s_n = s·cos(skew) is shown for reference. MassDOT 3.10.8 case 2 spans "equal to the girder spacing along the skew" — the beam-position spacing used. The earlier open item 8 ("the manual measures along the skew, the tool along the abutment") was a misreading: the two are the same direction.
+- **Check case:** s = 8.00 ft along the skew, skew 20° → s_n = 8 cos 20° = 7.52 ft (display); end distance (22.00 − 20.00)(12) − 12.30/2 = 17.85 in along the skew (unchanged).
+
+### Saved data (§5)
+New `S.iab` fields `stBar` ("0"), `stLegs` (2), `stSp` (12). They are filled by `migrate()` for projects saved before this change, through the existing field-by-field fill of `S.iab`. No key or format changed. The conventional Input ID is unchanged: `fpS.iab` is dropped for "conv".
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless, origin/main (#373) vs the branch, conventional type. Cases: built-in, MassDOT, RIDOT on piles with ADT, CTDOT with Extreme Event I, AASHTO on piles at 20° skew, an old save without `iab`/`wing`, sloped backfill + water table + ES, and a conventional project carrying stirrup fields. Identical: the Input ID, every pre-existing value of `computeAll()` (new keys only: `EH.PaFull/zEHf/hCut/Pcut/zCut`, `LS.hLS`, `stemDem.cS/cL`), the warnings, and the rendered text of Tabs 1–6, 8 and 9 (self-test time stamp masked).
+- Check cases F-IAB2-1 to -3 read from the running tool, before (origin/main) and after, and recomputed by hand.
+- Every TeX line of Tabs 1, 5 and 10 renders with KaTeX for integral (MassDOT with stirrups, CTDOT, RIDOT, AASHTO) and semi-integral (RIDOT, AASHTO). The report builds for all types.
+
+### Other copies
+None.
+
+### Open items
+1. R_f = 0.85 (Duncan & Mokwa 2001) is a tool choice; the AASHTO 10th Ed. gives no curve.
+2. Semi-integral construction stage and Extreme Event I increment on the full height (unchanged, conservative).
+
+**Diff (exact before/after, `git diff -U0`):**
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 92d9a35..f06352c 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -617 +617,2 @@ function iabDefault(){
+-    capBar:"8", capSp:9.0, hBar:"6", hSp:9.0, vBar:"6", vSp:9.0};            // cap longitudinal bars (across the width); horizontal wall / diaphragm bars (per ft of height, each face); vertical rear-face bars
++    capBar:"8", capSp:9.0, hBar:"6", hSp:9.0, vBar:"6", vSp:9.0,
++    stBar:"0", stLegs:2, stSp:12.0};                                         // IAB2: cap stirrups (vertical): bar ("0" = none), legs across the width, spacing along the cap (in)            // cap longitudinal bars (across the width); horizontal wall / diaphragm bars (per ft of height, each face); vertical rear-face bars
+@@ -632,0 +634,4 @@ const IAB_BF={dense:{l:"Dense sand",a:0.001,p:0.01}, medium:{l:"Medium dense san
++/* IAB2 (2026-10-20): mobilization between at-rest and the limit state, hyperbolic (Duncan & Mokwa 2001 form, failure ratio R_f = 0.85)
++   normalized so the limit (full passive / active) is reached at the Δ/H of Table C3.11.1-1: f(x) = x / ((1 − R_f) + R_f·x), x = (Δ/H)/(Δ/H)_limit ≤ 1 */
++const IAB_RF=0.85;
++const iabHyp=x=>{ x=Math.max(0,Math.min(1,x)); return x/((1-IAB_RF)+IAB_RF*x); };
+@@ -1024 +1029,2 @@ ABUT_OWN.rules.push(
+-      return {st:okS&&okN&&okE&&okB?"pass":"fail", val:`s = ${fmt(+S.iab.sp,2)} ft; n = ${n} piles for ${N} beams; end distance ${fmt(P.endIn,1)} in; embedment ${fmt(+S.iab.embed,1)} in`, lim:"3.5 ft ≤ s ≤ 10 ft; n ≥ beams; 18 in ≤ end ≤ 36 in; 24 in", link:OWN_LK_IAB.pile}; }},
++      return {st:okS&&okN&&okE&&okB?"pass":"fail", val:`s = ${fmt(+S.iab.sp,2)} ft along the skew (${fmt(+S.iab.sp*Math.cos(deg2rad(+C.g.skew||0)),2)} ft normal to the girders); n = ${n} piles for ${N} beams; flange to the abutment end ${fmt(P.endIn,1)} in along the skew; embedment ${fmt(+S.iab.embed,1)} in`, lim:"3.5 ft ≤ s ≤ 10 ft (along the pile row); n ≥ beams; 18 in ≤ end ≤ 36 in along the skew; 24 in",
++        tex:`s_n = s\\cos\\theta_{sk} = ${ownF(+S.iab.sp)}\\cos ${ownF(+C.g.skew||0,1)}° = ${ownF(+S.iab.sp*Math.cos(deg2rad(+C.g.skew||0)))}\\ \\text{ft}`, link:OWN_LK_IAB.pile}; }},
+@@ -1302 +1308,2 @@ const VALID = {
+-  "iab.capSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."}
++  "iab.capSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
++  "iab.stSp":{hard:[2,48], typ:[4,24], msg:"Stirrup spacing outside the typical 4–24 in range."}
+@@ -1696 +1703 @@ function buildInputs(){
+-      ${inpRow("Pile spacing s (along the abutment)","iab.sp","ft")}
++      ${inpRow("Pile spacing s along the abutment (along the skew)","iab.sp","ft",{title:"Center-to-center along the abutment centerline, i.e. along the skew (L_ab and the beam positions of panel I-5 are measured along the abutment). The spacing normal to the girders is s·cos(skew)."})}
+@@ -1703,0 +1711 @@ function buildInputs(){
++      ${selRow("Cap stirrups (vertical)","iab.stBar",[["0","None"]].concat(bo),{rebuild:true})}${I.stBar!=="0"&&I.stBar!==0?inpRow("&nbsp;&nbsp;legs across the cap width","iab.stLegs","–",{step:1})+inpRow("&nbsp;&nbsp;spacing along the cap","iab.stSp","in"):`<div class="in-note">No stirrups: case 1 cap shear is concrete only (the built-in project gives D/C 1.70 without stirrups, Tab 10 §10.5a). Shear with stirrups: AASHTO 5.7.3.3.</div>`}
+@@ -2539 +2547 @@ function computeWing(R,X){
+-     else K_p); AASHTO C3.11.1 / Table C3.11.1-1 (K_0 → K_p linear in Δ/H up to the passive Δ/H: tool choice); contraction K_0 → K_a the same way
++     else K_p); AASHTO C3.11.1 / Table C3.11.1-1 (K_0 → K_p by the normalized hyperbola iabHyp, IAB2: tool choice); contraction K_0 → K_a the same way
+@@ -2563 +2571 @@ function computeIAB(R,X){
+-  else{ Q.kM="aashto"; Q.fP=Math.min(1,Q.rE/bf.p); Q.Kexp=K0+(Kp-K0)*Q.fP; }
++  else{ Q.kM="aashto"; Q.xP=Math.min(1,Q.rE/bf.p); Q.fP=iabHyp(Q.xP); Q.Kexp=K0+(Kp-K0)*Q.fP; }
+@@ -2565 +2573 @@ function computeIAB(R,X){
+-  else{ Q.kC="aashto"; Q.fA=Math.min(1,Q.rC/bf.a); Q.Kcon=K0-(K0-Ka)*Q.fA; }
++  else{ Q.kC="aashto"; Q.xA=Math.min(1,Q.rC/bf.a); Q.fA=iabHyp(Q.xA); Q.Kcon=K0-(K0-Ka)*Q.fA; }
+@@ -2583,0 +2592,7 @@ function computeIAB(R,X){
++    /* IAB2: cap stirrups [AASHTO 5.7.3.3, Eqs. 5.7.3.3-1, -2, -4; 5.7.3.4.2, Eqs. 5.7.3.4.2-1, -3; 5.7.2.5, Eq. 5.7.2.5-1], per ft of cap width */
++    { const c=Q.c1.sec, sb=String(I.stBar);
++      if(sb!=="0"&&BARS[sb]&&+I.stLegs>0&&+I.stSp>0){ const fc=+m.fc, fy=+m.fy, bv=b*12, sS=+I.stSp, Av=(+I.stLegs)*BARS[sb].Ab;
++        const AvMin=0.0316*Math.sqrt(fc)*bv*sS/fy, minOK=Av>=AvMin-1e-12, th=29+3500*c.epsS, beta=minOK? 4.8/(1+750*c.epsS) : c.betaV;
++        const Vc=0.0316*beta*Math.sqrt(fc)*12*c.dv, Vs=Av*fy*c.dv/Math.tan(deg2rad(th))/sS/b, Vmax=0.25*fc*12*c.dv, Vn=Math.min(Vc+Vs,Vmax);
++        c.stir={bar:sb, legs:+I.stLegs, sp:sS, Av, AvMin, minOK, bv, th, beta, Vc, Vs, Vmax, Vn, phiVn:0.9*Vn, b};
++        c.dcShear=c.Vu/c.stir.phiVn; } }
+@@ -2719,2 +2734,13 @@ function computeAll(){
+-  const PaSum=P1+P2+P3;                       // kips/ft — resultant of ka·σ'v
+-  const zEH=PaSum>0?(P1*z1+P2*z2+P3*z3)/PaSum:H/3;
++  const PaFull=P1+P2+P3;                      // kips/ft — resultant of ka·σ'v over the full retained height
++  const zEHf=PaFull>0?(P1*z1+P2*z2+P3*z3)/PaFull:H/3;
++  // IAB2 (2026-10-20): semi-integral — the pressure on the virtual back plane above the seat (bottom of the end diaphragm, z = t_f + h_stem)
++  // is carried by the end diaphragm to the superstructure; the lower abutment takes only the pressure below it (with the overburden).
++  // Conventional and integral: hCut = 0, nothing changes.
++  const hCut=iabType()==="semi"? Math.max(0,H-zSeat) : 0;
++  let Pcut=0, zCut=H;
++  if(hCut>0){ const c=hCut, pc=[];   // layered pressure over depth 0..c from the top of the plane (moist to d1, buoyant below)
++    if(c<=d1) pc.push([0.5*ka*gam*c*c, 2*c/3]);
++    else{ const e=c-d1; pc.push([0.5*ka*gam*d1*d1, 2*d1/3],[ka*gam*d1*e, d1+e/2],[0.5*ka*gamB*e*e, d1+2*e/3]); }
++    Pcut=pc.reduce((a,q)=>a+q[0],0); zCut=Pcut>0? H-pc.reduce((a,q)=>a+q[0]*q[1],0)/Pcut : H; }
++  const PaSum=hCut>0? PaFull-Pcut : PaFull;   // kips/ft on the lower abutment
++  const zEH=hCut>0? (PaSum>0?(PaFull*zEHf-Pcut*zCut)/PaSum:0) : zEHf;
+@@ -2723 +2749 @@ function computeAll(){
+-  R.EH={P1,z1,P2,z2,P3,z3,PaSum,zEH,EHh,EHv,hwE,d1,ci,si};
++  R.EH={P1,z1,P2,z2,P3,z3,PaSum,zEH,EHh,EHv,hwE,d1,ci,si,PaFull,zEHf,hCut,Pcut,zCut};
+@@ -2728 +2754,2 @@ function computeAll(){
+-  const LSh=pLS*H*ci*Lab, zLS=H/2;            // horizontal resultant
++  const hLS=H-hCut;                           // IAB2: semi-integral — surcharge pressure below the seat only (hCut = 0 otherwise)
++  const LSh=hCut>0? pLS*hLS*ci*Lab : pLS*H*ci*Lab, zLS=hCut>0? hLS/2 : H/2;   // horizontal resultant
+@@ -2730 +2757 @@ function computeAll(){
+-  R.LS={heq,pLS,LSh,zLS,LSvW,xLSv:xHeel};
++  R.LS={heq,pLS,LSh,zLS,LSvW,xLSv:xHeel,hLS};
+@@ -2764 +2791 @@ function computeAll(){
+-    const PaSumA=kEff==="active"? PaSum : PaSum*KA.ka/ka;       // OWNB: the M–O increment is taken over the ACTIVE static resultant, added to the K static pressure
++    const PaSumA=kEff==="active"? PaFull : PaFull*KA.ka/ka;   // IAB2: the full-height static resultant (= PaSum unless semi-integral)       // OWNB: the M–O increment is taken over the ACTIVE static resultant, added to the K static pressure
+@@ -2825,2 +2852,3 @@ function computeAll(){
+-    const ESh=ka*es*H*Math.cos(deg2rad(iota))*Lab, ESv=es*g.Lheel*Lab;
+-    groups.ESh={cls:"ES", V:0,Mv:0, Hx:ESh, Mh:ESh*(H/2), Hy:0,Mt:0, desc:"Earth surcharge — horizontal"};
++    const hES=hCut>0? H-hCut : H;   // IAB2: semi-integral — below the seat only
++    const ESh=ka*es*hES*Math.cos(deg2rad(iota))*Lab, ESv=es*g.Lheel*Lab;
++    groups.ESh={cls:"ES", V:0,Mv:0, Hx:ESh, Mh:ESh*(hES/2), Hy:0,Mt:0, desc:"Earth surcharge — horizontal"};
+@@ -3367,2 +3395,8 @@ function computeAll(){
+-  const Mst_EH=kah*gam*Math.pow(Hs,3)/6, Vst_EH=kah*gam*Hs*Hs/2;
+-  const Mst_LS=kah*gam*heqS*Hs*Hs/2, Vst_LS=kah*gam*heqS*Hs;
++  // IAB2: semi-integral — the stem retains the soil below the seat (depth c_s below the backfill surface at the stem face); the soil above it
++  // stays as overburden: M = k·γ[H³/6 − (H c²/2 − c³/3)], V = k·γ(H² − c²)/2; LS and ES over H − c. c_s = 0 otherwise (unchanged formulas).
++  const cS=iabType()==="semi"? Math.max(0,g.soilH-g.hstem) : 0;
++  const stEH=(Hx,c)=>c>0? {M:kah*gam*(Math.pow(Hx,3)/6-(Hx*c*c/2-c*c*c/3)), V:kah*gam*(Hx*Hx-c*c)/2} : {M:kah*gam*Math.pow(Hx,3)/6, V:kah*gam*Hx*Hx/2};
++  const stLS=(heq,Hx,c)=>c>0? {M:kah*gam*heq*(Hx-c)*(Hx-c)/2, V:kah*gam*heq*(Hx-c)} : {M:kah*gam*heq*Hx*Hx/2, V:kah*gam*heq*Hx};   // uniform LS pressure
++  const stQ=(q,Hx,c)=>c>0? {M:kah*q*(Hx-c)*(Hx-c)/2, V:kah*q*(Hx-c)} : {M:kah*q*Hx*Hx/2, V:kah*q*Hx};   // uniform ES pressure
++  const Mst_EH=stEH(Hs,cS).M, Vst_EH=stEH(Hs,cS).V;
++  const Mst_LS=stLS(heqS,Hs,cS).M, Vst_LS=stLS(heqS,Hs,cS).V;
+@@ -3374 +3408 @@ function computeAll(){
+-  const Mst_ES=kah*esQ*Hs*Hs/2, Vst_ES=kah*esQ*Hs;
++  const Mst_ES=stQ(esQ,Hs,cS).M, Vst_ES=stQ(esQ,Hs,cS).V;
+@@ -3396,3 +3430,4 @@ function computeAll(){
+-    const MEH_ls=kah*gam*Math.pow(Hs_ls,3)/6, VEH_ls=kah*gam*Hs_ls*Hs_ls/2;
+-    const MLS_ls=kah*gam*heq_ls*Hs_ls*Hs_ls/2, VLS_ls=kah*gam*heq_ls*Hs_ls;
+-    const MES_ls=kah*esQ*Hs_ls*Hs_ls/2, VES_ls=kah*esQ*Hs_ls;
++    const cL=L.noSuper? 0 : cS;   // IAB2: construction stage (no superstructure, no diaphragm) unchanged
++    const MEH_ls=stEH(Hs_ls,cL).M, VEH_ls=stEH(Hs_ls,cL).V;
++    const MLS_ls=stLS(heq_ls,Hs_ls,cL).M, VLS_ls=stLS(heq_ls,Hs_ls,cL).V;
++    const MES_ls=stQ(esQ,Hs_ls,cL).M, VES_ls=stQ(esQ,Hs_ls,cL).V;
+@@ -3421 +3456 @@ function computeAll(){
+-      Veq,eqT,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
++      Veq,eqT,cL,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
+@@ -3428 +3463 @@ function computeAll(){
+-  R.stemDem={Hs,heqS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,Mst_ES,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc,svcNoLL};
++  R.stemDem={Hs,heqS,cS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,Mst_ES,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc,svcNoLL};
+@@ -3877 +3912 @@ function computeAll(){
+-      const hAbove=Math.max(0,Hs-g.hstem), st=[], w=[];
++      const hAbove=(iabType()==="semi"&&!cctx)? 0 : Math.max(0,Hs-g.hstem), st=[], w=[];   // IAB2: semi-integral — the soil above the seat loads the end diaphragm
+@@ -4431 +4466 @@ function renderTabIAB(R){
+-      :`<b>Semi-integral abutment.</b> The end diaphragm (h<sub>bw</sub> = ${fmt(+S.geom.hbw,2)} ft, t<sub>bw</sub> = ${fmt(+S.geom.tbw,2)} ft — the backwall inputs of panel I-1) is cast with the girder ends and moves with the superstructure; the girders sit on bearings on the seat of a conventional lower abutment. The lower abutment (stem, footing / piles, seat, bearings) is the conventional model of Tabs 1–8 with the connection to the superstructure pinned (vertical reactions, bearing shear); the moving end diaphragm replaces the cantilever backwall check of Tab 5 §5.1 and is designed here (§10.3, §10.5). The stem earth pressure of Tab 1 §1.3 keeps the full retained height (the soil against the diaphragm is carried to the superstructure, so this is conservative for the lower abutment).`}
++      :`<b>Semi-integral abutment.</b> The end diaphragm (h<sub>bw</sub> = ${fmt(+S.geom.hbw,2)} ft, t<sub>bw</sub> = ${fmt(+S.geom.tbw,2)} ft — the backwall inputs of panel I-1) is cast with the girder ends and moves with the superstructure; the girders sit on bearings on the seat of a conventional lower abutment. The lower abutment (stem, footing / piles, seat, bearings) is the conventional model of Tabs 1–8 with the connection to the superstructure pinned (vertical reactions, bearing shear); the moving end diaphragm replaces the cantilever backwall check of Tab 5 §5.1 and is designed here (§10.3, §10.5). The soil against the end diaphragm (above the seat) is carried by the diaphragm to the superstructure: the lower abutment takes the earth pressure, surcharge and ES below the seat only, with the soil above as overburden (Tab 1 §1.3, §1.4; Tab 5 §5.2; construction stage and the Extreme Event I increment unchanged, full height).`}
+@@ -4453 +4488,2 @@ function renderTabIAB(R){
+-      `K = K_0 + (K_p - K_0)\\min\\!\\left(1,\\ \\dfrac{\\Delta/H}{(\\Delta/H)_p}\\right) = ${t(Q.K0,3)} + (${t(Q.Kp,3)} - ${t(Q.K0,3)})(${t(Q.fP,4)}) = ${t(Q.Kexp,3)}`]}[Q.kM];
++      `x = \\min\\!\\left(1,\\ \\dfrac{\\Delta/H}{(\\Delta/H)_p}\\right) = ${t(Q.xP,4)}\\,, \\quad f = \\dfrac{x}{(1-R_f) + R_f\\,x} = \\dfrac{${t(Q.xP,4)}}{0.15 + 0.85(${t(Q.xP,4)})} = ${t(Q.fP,4)}`,
++      `K = K_0 + (K_p - K_0)\\,f = ${t(Q.K0,3)} + (${t(Q.Kp,3)} - ${t(Q.K0,3)})(${t(Q.fP,4)}) = ${t(Q.Kexp,3)}`]}[Q.kM];
+@@ -4456 +4492,2 @@ function renderTabIAB(R){
+-       `K = K_0 - (K_0 - K_a)\\min\\!\\left(1,\\ \\dfrac{\\Delta_{con}/H}{(\\Delta/H)_a}\\right) = ${t(Q.K0,3)} - (${t(Q.K0,3)} - ${t(Q.Ka,3)})(${t(Q.fA,4)}) = ${t(Q.Kcon,3)}`];
++       `x = \\min\\!\\left(1,\\ \\dfrac{\\Delta_{con}/H}{(\\Delta/H)_a}\\right) = ${t(Q.xA,4)}\\,, \\quad f = \\dfrac{x}{(1-R_f) + R_f\\,x} = ${t(Q.fA,4)}`,
++       `K = K_0 - (K_0 - K_a)\\,f = ${t(Q.K0,3)} - (${t(Q.K0,3)} - ${t(Q.Ka,3)})(${t(Q.fA,4)}) = ${t(Q.Kcon,3)}`];
+@@ -4461 +4498 @@ function renderTabIAB(R){
+-    aashto:"AASHTO gives the movement that mobilizes full passive pressure (Table C3.11.1-1) but no curve between at-rest and passive; the coefficient is interpolated linearly in Δ/H (tool choice)."}[Q.kM];
++    aashto:"AASHTO LRFD 10th Ed. gives the movement that mobilizes full passive pressure (Table C3.11.1-1) but no curve between at-rest and passive. Mobilization is nonlinear: the hyperbolic form of Duncan &amp; Mokwa (2001), failure ratio R<sub>f</sub> = 0.85, is used, normalized so that full passive is reached at the Table C3.11.1-1 Δ/H (x = 1) — tool choice."}[Q.kM];
+@@ -4465 +4502 @@ function renderTabIAB(R){
+-    ${eqB("Contraction — wall moving away from the backfill",Q.kC==="ct0"?"CTDOT BRSDM V2 CT11.1.1.4.2a":"AASHTO 3.11.1, C3.11.1 (Table C3.11.1-1)",conL,Q.kC==="ct0"?"CTDOT design case 1: the front face is designed for the contraction effects without soil pressure.":"AASHTO gives the movement that mobilizes active pressure; between at-rest and active the coefficient is interpolated linearly (tool choice).")}
++    ${eqB("Contraction — wall moving away from the backfill",Q.kC==="ct0"?"CTDOT BRSDM V2 CT11.1.1.4.2a":"AASHTO 3.11.1, C3.11.1 (Table C3.11.1-1)",conL,Q.kC==="ct0"?"CTDOT design case 1: the front face is designed for the contraction effects without soil pressure.":"AASHTO gives the movement that mobilizes active pressure (Table C3.11.1-1); between at-rest and active the same normalized hyperbola (Duncan &amp; Mokwa 2001, R<sub>f</sub> = 0.85) is used, x = 1 at the active Δ/H (tool choice).")}
+@@ -4474,2 +4511,2 @@ function renderTabIAB(R){
+-      `n = ${P.n},\\ s = ${t(P.sp)}\\ \\text{ft}:\\ x_{max} = \\tfrac{n-1}{2}s = ${t(P.xMax)}\\ \\text{ft}\\,, \\quad \\textstyle\\sum x^2 = ${t(P.Ix2,1)}\\ \\text{ft}^2`,
+-      `\\text{end distance (pile ${P.weak?"flange":"edge"} to the end of the abutment)} = (L_{ab}/2 - x_{max})\\cdot12 - ${P.weak?"d":"b_f"}/2 = (${t(+S.geom.Lab/2)} - ${t(P.xMax)})(12) - ${t((P.weak?sk.d:sk.bf)/2,2)} = ${t(P.endIn,1)}\\ \\text{in}`,
++      `n = ${P.n},\\ s = ${t(P.sp)}\\ \\text{ft along the skew}\\ (s_n = s\\cos\\theta_{sk} = ${t(P.sp*Math.cos(deg2rad(Q.skew)))}\\ \\text{ft normal to the girders}):\\ x_{max} = \\tfrac{n-1}{2}s = ${t(P.xMax)}\\ \\text{ft}\\,, \\quad \\textstyle\\sum x^2 = ${t(P.Ix2,1)}\\ \\text{ft}^2`,
++      `\\text{end distance along the skew (pile ${P.weak?"flange":"edge"} to the end of the abutment)} = (L_{ab}/2 - x_{max})\\cdot12 - ${P.weak?"d":"b_f"}/2 = (${t(+S.geom.Lab/2)} - ${t(P.xMax)})(12) - ${t((P.weak?sk.d:sk.bf)/2,2)} = ${t(P.endIn,1)}\\ \\text{in}`,
+@@ -4477 +4514 @@ function renderTabIAB(R){
+-      "Single row of vertical piles, centered on the abutment, spacing along the abutment as entered. Layout limits per owner in "+ownLink+".");
++      "Single row of vertical piles, centered on the abutment. L<sub>ab</sub>, the pile spacing and the beam positions (panel I-5) are all measured along the abutment centerline, i.e. along the skew — the direction in which MassDOT 3.10.10.3 measures the flange-to-end distance; the spacing normal to the girders s<sub>n</sub> is shown for reference. Layout limits per owner in "+ownLink+".");
+@@ -4523 +4560 @@ function renderTabIAB(R){
+-    `s = ${t(Q.sG)}\\ \\text{ft (largest girder spacing)}:\\quad M_u = 0.8\\dfrac{w_us^2}{8} = 0.8\\dfrac{(${t(c2.wu,3)})(${t(Q.sG)})^2}{8} = ${t(c2.Mu)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = \\dfrac{w_us}{2} = ${t(c2.Vu)}\\ \\text{kip/ft}`,
++    `s = ${t(Q.sG)}\\ \\text{ft (largest girder spacing along the skew)}:\\quad M_u = 0.8\\dfrac{w_us^2}{8} = 0.8\\dfrac{(${t(c2.wu,3)})(${t(Q.sG)})^2}{8} = ${t(c2.Mu)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = \\dfrac{w_us}{2} = ${t(c2.Vu)}\\ \\text{kip/ft}`,
+@@ -4769 +4806 @@ function renderTabLoads(R){
+-      `P_a = P_1+P_2+P_3 = ${fmtT(E.PaSum)}\\ \\text{kip/ft}, \\qquad \\bar z = ${fmtT(E.zEH)}\\ \\text{ft above base}`]);
++      `P_a = P_1+P_2+P_3 = ${fmtT(E.PaFull)}\\ \\text{kip/ft}, \\qquad \\bar z = ${fmtT(E.zEHf)}\\ \\text{ft above base}`]);
+@@ -4774 +4811 @@ function renderTabLoads(R){
+-      `P_a = ${fmtT(E.PaSum)}\\ \\text{kip/ft}\\quad\\text{acting at } \\bar z = H/3 = ${fmtT(E.zEH)}\\ \\text{ft above the footing base}`],
++      `P_a = ${fmtT(E.PaFull)}\\ \\text{kip/ft}\\quad\\text{acting at } \\bar z = H/3 = ${fmtT(E.zEHf)}\\ \\text{ft above the footing base}`],
+@@ -4776,0 +4814,5 @@ function renderTabLoads(R){
++  if(E.hCut>0) ehLayers+=eqB("Semi-integral — pressure above the seat carried by the end diaphragm","statics; Tab 10 §10.6",[   // IAB2
++      `h_{cut} = H - (t_f + h_{stem}) = ${fmtT(geo.H)} - ${fmtT(R.geo.zSeat)} = ${fmtT(E.hCut)}\\ \\text{ft (depth of the seat below the top of the plane)}`,
++      `P_{cut} = \\tfrac12${kS}\\gamma h_{cut}^2 ${E.hCut>E.d1?"\\ (\\text{layered})":""} = ${E.hCut>E.d1?"":`\\tfrac12(${fmtT(R.ka,4)})(${fmtT(s.gamma,3)})(${fmtT(E.hCut)})^2 = `}${fmtT(E.Pcut)}\\ \\text{kip/ft at } z = ${fmtT(E.zCut)}\\ \\text{ft}`,
++      `P_a = P_{a,full} - P_{cut} = ${fmtT(E.PaFull)} - ${fmtT(E.Pcut)} = ${fmtT(E.PaSum)}\\ \\text{kip/ft}\\,, \\quad \\bar z = \\dfrac{P_{a,full}\\bar z_{full} - P_{cut}z_{cut}}{P_a} = \\dfrac{${fmtT(E.PaFull)}(${fmtT(E.zEHf)}) - ${fmtT(E.Pcut)}(${fmtT(E.zCut)})}{${fmtT(E.PaSum)}} = ${fmtT(E.zEH)}\\ \\text{ft}`],
++      "The end diaphragm moves with the superstructure and carries the pressure above the seat to it (Tab 10 §10.3, §10.5); the lower abutment takes the pressure below the seat, with the soil above as overburden. The pressure plot below shows the full height. The Extreme Event I M–O increment stays on the full height (conservative).");
+@@ -4803 +4845,2 @@ function renderTabLoads(R){
+-      `P_{LS} = p_{LS}\\,H\\cos\\iota\\,L_{ab} = (${fmtT(Ls.pLS,3)})(${fmtT(geo.H)})(${fmtT(E.ci,4)})(${fmtT(g.Lab)}) = ${fmtT(Ls.LSh)}\\ \\text{kip at } z = H/2 = ${fmtT(Ls.zLS)}\\ \\text{ft}`])}
++      E.hCut>0? `P_{LS} = p_{LS}\\,(H - h_{cut})\\cos\\iota\\,L_{ab} = (${fmtT(Ls.pLS,3)})(${fmtT(Ls.hLS)})(${fmtT(E.ci,4)})(${fmtT(g.Lab)}) = ${fmtT(Ls.LSh)}\\ \\text{kip at } z = (H - h_{cut})/2 = ${fmtT(Ls.zLS)}\\ \\text{ft (semi-integral: below the seat)}`
++      : `P_{LS} = p_{LS}\\,H\\cos\\iota\\,L_{ab} = (${fmtT(Ls.pLS,3)})(${fmtT(geo.H)})(${fmtT(E.ci,4)})(${fmtT(g.Lab)}) = ${fmtT(Ls.LSh)}\\ \\text{kip at } z = H/2 = ${fmtT(Ls.zLS)}\\ \\text{ft}`])}
+@@ -5433 +5476,6 @@ function sectionHTML(c, demHTML, secNo, title){
+-    ${checkLine(c.name+" shear",`\\dfrac{V_u}{\\varphi V_n} = \\dfrac{${fmtT(c.Vu)}}{${fmtT(c.phiVn)}}`,c.dcShear)}
++    ${c.stir?eqB("With stirrups — #"+c.stir.bar+", "+c.stir.legs+" legs @ "+fmt(c.stir.sp,1)+" in (per ft of width b = "+fmt(c.stir.b,2)+" ft)","AASHTO 5.7.2.5 (Eq. 5.7.2.5-1), 5.7.3.3 (Eqs. 5.7.3.3-1, -2, -4), 5.7.3.4.2 (Eqs. 5.7.3.4.2-1, -3)",[
++      `A_v = n_{legs}A_b = ${c.stir.legs}(${fmtT(BARS[c.stir.bar].Ab)}) = ${fmtT(c.stir.Av,3)}\\ \\text{in}^2\\ ${c.stir.minOK?"\\ge":"<"}\\ A_{v,min} = 0.0316\\sqrt{f'_c}\\dfrac{b_vs}{f_y} = 0.0316\\sqrt{${fmtT(m.fc,1)}}\\dfrac{(${fmtT(c.stir.bv,1)})(${fmtT(c.stir.sp,1)})}{${fmtT(m.fy,0)}} = ${fmtT(c.stir.AvMin,3)}\\ \\text{in}^2`,
++      c.stir.minOK? `\\beta = \\dfrac{4.8}{1+750\\varepsilon_s} = ${fmtT(c.stir.beta,3)}\\,, \\quad \\theta = 29 + 3500\\varepsilon_s = ${fmtT(c.stir.th,2)}°` : `\\beta = ${fmtT(c.stir.beta,3)}\\ (\\text{Eq. 5.7.3.4.2-2, below the minimum})\\,, \\quad \\theta = 29 + 3500\\varepsilon_s = ${fmtT(c.stir.th,2)}°`,
++      `V_c = 0.0316\\beta\\sqrt{f'_c}(12)d_v = ${fmtT(c.stir.Vc)}\\,, \\quad V_s = \\dfrac{A_vf_yd_v\\cot\\theta}{s\\,b} = \\dfrac{(${fmtT(c.stir.Av,3)})(${fmtT(m.fy,0)})(${fmtT(c.dv)})\\cot ${fmtT(c.stir.th,2)}°}{(${fmtT(c.stir.sp,1)})(${fmtT(c.stir.b,2)})} = ${fmtT(c.stir.Vs)}\\ \\text{kip/ft}`,
++      `\\varphi V_n = 0.90\\min(V_c + V_s,\\ 0.25f'_c(12)d_v) = 0.90\\min(${fmtT(c.stir.Vc+c.stir.Vs)},\\ ${fmtT(c.stir.Vmax)}) = ${fmtT(c.stir.phiVn)}\\ \\text{kip/ft}`],
++      "Vertical stirrups (α = 90°), no prestress (V<sub>p</sub> = 0), λ<sub>duct</sub> = 1; ε<sub>s</sub> as above. The stirrups replace the concrete-only resistance above."):""}${checkLine(c.name+" shear",`\\dfrac{V_u}{\\varphi V_n} = \\dfrac{${fmtT(c.Vu)}}{${fmtT(c.stir?c.stir.phiVn:c.phiVn)}}`,c.dcShear)}
+@@ -5496,0 +5545,4 @@ function renderTabStruct(R){
++      ...(sd.cL>0?[   // IAB2: semi-integral — soil above the seat on the end diaphragm (overburden kept)
++      `c = h_{soil} - h_{stem} = ${fmtT(sd.Hs)} - ${fmtT(g.hstem)} = ${fmtT(sd.cL)}\\ \\text{ft (semi-integral: depth of the seat below the backfill surface)}`,
++      `M_{EH} = k_{ah}\\gamma\\left[\\dfrac{H^3}{6} - \\left(\\dfrac{Hc^2}{2} - \\dfrac{c^3}{3}\\right)\\right] = (${fmtT(kah,4)})(${fmtT(s.gamma,3)})\\left[\\dfrac{${fmtT(sHs)}^3}{6} - \\left(\\dfrac{${fmtT(sHs)}(${fmtT(sd.cL)})^2}{2} - \\dfrac{${fmtT(sd.cL)}^3}{3}\\right)\\right] = ${fmtT(sd.MEH)}\\,, \\qquad V_{EH} = \\dfrac{k_{ah}\\gamma(H^2 - c^2)}{2} = ${fmtT(sd.VEH,3)}`,
++      `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq}(H-c)^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.heqL)})(${fmtT(sHs-sd.cL)})^2}{2} = ${fmtT(sd.MLS)}\\,, \\qquad V_{LS} = k_{ah}\\gamma h_{eq}(H-c) = ${fmtT(sd.VLS,3)}`]:[
+@@ -5498,2 +5550,2 @@ function renderTabStruct(R){
+-      `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} H^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.heqL??sd.heqS)})(${fmtT(sHs)})^2}{2} = ${fmtT(sd.MLS??sd.Mst_LS)}\\,, \\qquad V_{LS} = k_{ah}\\gamma h_{eq}H = ${fmtT(sd.VLS??sd.Vst_LS,3)}`,
+-      ...(sEsq>0?[`M_{ES} = \\dfrac{k_{ah}q_{ES}H^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(sEsq,3)})(${fmtT(sHs)})^2}{2} = ${fmtT(sd.MES)}\\,, \\qquad V_{ES} = k_{ah}q_{ES}H = ${fmtT(sd.VES,3)}`]:[]),
++      `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} H^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.heqL??sd.heqS)})(${fmtT(sHs)})^2}{2} = ${fmtT(sd.MLS??sd.Mst_LS)}\\,, \\qquad V_{LS} = k_{ah}\\gamma h_{eq}H = ${fmtT(sd.VLS??sd.Vst_LS,3)}`]),
++      ...(sEsq>0?[`M_{ES} = \\dfrac{k_{ah}q_{ES}${sd.cL>0?"(H-c)":"H"}^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(sEsq,3)})(${fmtT(sHs-(sd.cL||0))})^2}{2} = ${fmtT(sd.MES)}\\,, \\qquad V_{ES} = k_{ah}q_{ES}H = ${fmtT(sd.VES,3)}`]:[]),
+@@ -5970,0 +6023,3 @@ function stemCapacityProfile(R){
++    if(sd.cL>0){ const c=sd.cL, k=R.kah, gm=+S.soil.gamma, es=+S.soil.esQ||0, hc=Math.max(0,h-c);   // IAB2: semi-integral — no pressure above the seat
++      Mu=(sd.gEH??1)*k*gm*(h>c? h*h*h/6-(h*c*c/2-c*c*c/3) : 0) + (sd.gLL||0)*k*gm*(sd.heqL??sd.heqS)*hc*hc/2 + (sd.gES??1)*k*es*hc*hc/2
++        + sd.HgirdPerFt*(g.hstem-z) + sd.MeccPerFt; }
+@@ -7138 +7193 @@ document.addEventListener("change",ev=>{
+-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar"].includes(p))?num:raw;
++  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar"].includes(p))?num:raw;
+@@ -7443 +7498,2 @@ function inputEchoHTML(){
+-      ["Cap bars; horizontal bars; vertical bars","#"+I.capBar+" @ "+fmt(+I.capSp,1)+"; #"+I.hBar+" @ "+fmt(+I.hSp,1)+"; #"+I.vBar+" @ "+fmt(+I.vSp,1),"in"]]:[
++      ["Cap bars; horizontal bars; vertical bars","#"+I.capBar+" @ "+fmt(+I.capSp,1)+"; #"+I.hBar+" @ "+fmt(+I.hSp,1)+"; #"+I.vBar+" @ "+fmt(+I.vSp,1),"in"],
++      ["Cap stirrups",String(I.stBar)==="0"?"none":"#"+I.stBar+", "+I.stLegs+" legs @ "+fmt(+I.stSp,1)+" in",""]]:[
+```
