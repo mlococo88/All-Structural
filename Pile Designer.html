@@ -2155,20 +2155,21 @@ function pileWidth(I) {
 }
 
 /* ABPX2 (2026-10-20): rolled HP shapes, AISC Steel Construction Manual 15th Ed. shape database (as in Section Property
-   Calculator.html): [A (in²), d, b_f, t_f, t_w (in), I_x (in⁴), Z_x, S_x (in³), r_x (in), I_y (in⁴), Z_y, S_y (in³), r_y (in)].
+   Calculator.html): [A (in²), d, b_f, t_f, t_w (in), I_x (in⁴), Z_x, S_x (in³), r_x (in), I_y (in⁴), Z_y, S_y (in³), r_y (in),
+   h/t_w (AISC; h = clear web height less the fillets, the web b of Table 6.9.4.2.1-1; HPAE, 2026-10-20)].
    Duplicated data (CLAUDE.md §3). */
 const HP_AISC = {
-  "HP8X36":[10.6,8.02,8.16,0.445,0.445,119,33.6,29.8,3.36,40.3,15.2,9.88,1.95], "HP10X42":[12.4,9.7,10.1,0.42,0.415,210,48.3,43.4,4.13,71.7,21.8,14.2,2.41],
-  "HP10X57":[16.7,9.99,10.2,0.565,0.565,294,66.5,58.8,4.18,101,30.3,19.7,2.45], "HP12X53":[15.5,11.8,12,0.435,0.435,393,74,66.7,5.03,127,32.2,21.1,2.86],
-  "HP12X63":[18.4,11.9,12.1,0.515,0.515,472,88.3,79.1,5.06,153,38.7,25.3,2.88], "HP12X74":[21.8,12.1,12.2,0.61,0.605,569,105,93.8,5.11,186,46.6,30.4,2.92],
-  "HP12X84":[24.6,12.3,12.3,0.685,0.685,650,120,106,5.14,213,53.2,34.6,2.94], "HP12X89":[25.9,12.4,12.3,0.72,0.72,693,127,112,5.17,224,56,36.4,2.94],
-  "HP14X73":[21.4,13.6,14.6,0.505,0.505,729,118,107,5.84,261,54.6,35.8,3.49], "HP14X89":[26.1,13.8,14.7,0.615,0.615,904,146,131,5.88,326,67.7,44.3,3.53],
-  "HP14X102":[30.1,14,14.8,0.705,0.705,1050,169,150,5.92,380,78.8,51.4,3.56], "HP14X117":[34.4,14.2,14.9,0.805,0.805,1220,194,172,5.96,443,91.4,59.5,3.59],
-  "HP16X88":[25.8,15.3,15.7,0.54,0.54,1110,161,145,6.56,349,68.2,44.5,3.68], "HP16X101":[29.9,15.5,15.8,0.625,0.625,1300,187,168,6.59,412,80.1,52.2,3.71],
-  "HP16X121":[35.8,15.8,15.9,0.75,0.75,1590,226,201,6.66,504,97.6,63.4,3.75], "HP16X141":[41.7,16,16,0.875,0.875,1870,264,234,6.7,599,116,74.9,3.79],
-  "HP16X162":[47.7,16.3,16.1,1,1,2190,306,269,6.78,697,134,86.6,3.82], "HP16X183":[54.1,16.5,16.3,1.13,1.13,2510,349,304,6.81,818,156,100,3.89],
-  "HP18X135":[39.9,17.5,17.8,0.75,0.75,2200,281,251,7.43,706,122,79.3,4.21], "HP18X157":[46.2,17.7,17.9,0.87,0.87,2570,327,290,7.46,833,143,93.1,4.25],
-  "HP18X181":[53.2,18,18,1,1,3020,379,336,7.53,974,167,108,4.28], "HP18X204":[60.2,18.3,18.1,1.13,1.13,3480,433,380,7.6,1120,191,124,4.31]};
+  "HP8X36":[10.6,8.02,8.16,0.445,0.445,119,33.6,29.8,3.36,40.3,15.2,9.88,1.95,15.4], "HP10X42":[12.4,9.7,10.1,0.42,0.415,210,48.3,43.4,4.13,71.7,21.8,14.2,2.41,23.4],
+  "HP10X57":[16.7,9.99,10.2,0.565,0.565,294,66.5,58.8,4.18,101,30.3,19.7,2.45,24.1], "HP12X53":[15.5,11.8,12,0.435,0.435,393,74,66.7,5.03,127,32.2,21.1,2.86,34.2],
+  "HP12X63":[18.4,11.9,12.1,0.515,0.515,472,88.3,79.1,5.06,153,38.7,25.3,2.88,34.6], "HP12X74":[21.8,12.1,12.2,0.61,0.605,569,105,93.8,5.11,186,46.6,30.4,2.92,35.2],
+  "HP12X84":[24.6,12.3,12.3,0.685,0.685,650,120,106,5.14,213,53.2,34.6,2.94,35.6], "HP12X89":[25.9,12.4,12.3,0.72,0.72,693,127,112,5.17,224,56,36.4,2.94,35.9],
+  "HP14X73":[21.4,13.6,14.6,0.505,0.505,729,118,107,5.84,261,54.6,35.8,3.49,47.8], "HP14X89":[26.1,13.8,14.7,0.615,0.615,904,146,131,5.88,326,67.7,44.3,3.53,48.5],
+  "HP14X102":[30.1,14,14.8,0.705,0.705,1050,169,150,5.92,380,78.8,51.4,3.56,49.2], "HP14X117":[34.4,14.2,14.9,0.805,0.805,1220,194,172,5.96,443,91.4,59.5,3.59,49.9],
+  "HP16X88":[25.8,15.3,15.7,0.54,0.54,1110,161,145,6.56,349,68.2,44.5,3.68,57.9], "HP16X101":[29.9,15.5,15.8,0.625,0.625,1300,187,168,6.59,412,80.1,52.2,3.71,58.8],
+  "HP16X121":[35.8,15.8,15.9,0.75,0.75,1590,226,201,6.66,504,97.6,63.4,3.75,59.8], "HP16X141":[41.7,16,16,0.875,0.875,1870,264,234,6.7,599,116,74.9,3.79,60.5],
+  "HP16X162":[47.7,16.3,16.1,1,1,2190,306,269,6.78,697,134,86.6,3.82,61.6], "HP16X183":[54.1,16.5,16.3,1.13,1.13,2510,349,304,6.81,818,156,100,3.89,62.2],
+  "HP18X135":[39.9,17.5,17.8,0.75,0.75,2200,281,251,7.43,706,122,79.3,4.21,74.5], "HP18X157":[46.2,17.7,17.9,0.87,0.87,2570,327,290,7.46,833,143,93.1,4.25,75.3],
+  "HP18X181":[53.2,18,18,1,1,3020,379,336,7.53,974,167,108,4.28,76.5], "HP18X204":[60.2,18.3,18.1,1.13,1.13,3480,433,380,7.6,1120,191,124,4.31,77.7]};
 // the table row of shape when d, b_f, t_f, t_w are exactly its dimensions (else null: an edited or corroded section is computed)
 function hpAiscRow(shape, d, bf, tf, tw) {
   const T = shape && HP_AISC[shape];
@@ -2218,7 +2219,8 @@ function hpileSection({ d, bf, tf, tw, Fy, E, shape }) {
   // three-rectangle values are kept as calc (display). The element slenderness ratios stay geometric.
   const T = hpAiscRow(shape, d, bf, tf, tw);
   if (T) Object.assign(out, { tab: shape, calc: { A, Ix, Sx, rx, Zx, Iy, Sy, ry, Zy },
-    A: T[0], Ix: T[5], Zx: T[6], Sx: T[7], rx: T[8], Iy: T[9], Zy: T[10], Sy: T[11], ry: T[12] });
+    A: T[0], Ix: T[5], Zx: T[6], Sx: T[7], rx: T[8], Iy: T[9], Zy: T[10], Sy: T[11], ry: T[12],
+    web_htw: T[13] });   // HPAE: the AISC web h/t_w (h less the fillets) for the slender-element check
   return out;
 }
 /* F58 (O28, 2026-10-12): H-pile section loss (corrosion), optional.
@@ -2246,35 +2248,45 @@ function hpCorrInfo(I) {
   return { loss, top, bot, L, applied, toToe: !(I.hpCorrBot > 0) || I.hpCorrBot >= L,
     d: I.hpD - 2 * loss, bf: I.hpBf - 2 * loss, tf: I.hpTf - 2 * loss, tw: I.hpTw - 2 * loss };
 }
-/* F61 (O61, 2026-10-12): the slender-element effective area A_eff of an H-pile section
-   (AASHTO LRFD 10th Ed. 6.9.4.2: element λ > λ_r -> A_eff = A_g - Σ(b - b_e)t), with the tool's
-   first-pass b_e = (λ_r / λ)·b (Table 6.9.4.2.1-1: flange λ_r = 0.56√(E/F_y), web 1.49√(E/F_y)).
-   Moved here unchanged from the H-pile axial block so the column check (Module 10) and the
-   braced path (Module 03) use one A_eff. */
-function hpileAeff(hp, Es, Fy) {
+/* F61 (O61, 2026-10-12): the slender-element effective area A_eff of an H-pile section, one function for the braced path
+   (Module 03) and the column check (Module 10).
+   HPAE (2026-10-20): the full unified effective-width method of AASHTO LRFD 10th Ed. Art. 6.9.4.2.2 (verified against the
+   10th Ed. text, pp. 6-141 to 6-145), as the abutment calculator's pile structural check. Before: the first-pass
+   b_e = (λ_r/λ)·b for λ > λ_r, A_eff ≥ 0.5 A_g.
+     element slender at the member stress F_cr when b/t > λ_r·√(F_y/F_cr)                         (6.9.4.2.2b-1)
+     F_el = (c_2·λ_r/(b/t))²·F_y                                                                   (6.9.4.2.2b-4)
+     b_e = b·[(1 − c_1·√(F_el/F_cr))·√(F_el/F_cr) − c_3]                                          (6.9.4.2.2b-2)
+     A_eff = A_g − Σ(b − b_e)·t  (rolled section)                                                  (6.9.4.2.2a-3)
+   Table 6.9.4.2.1-1: flange b = b_f/2, λ_r = 0.56√(E/F_y); web b = h, λ_r = 1.49√(E/F_y).
+   Table 6.9.4.2.2b-1: flange (supported along one edge) c_1 = 0.22, c_2 = 1.49, c_3 = 0; rolled I web c_1 = 0.18,
+   c_2 = 1.31, c_3 = 0. Four half-flanges. F_cr = F_y (default) for the soil-braced pile (P_n = P_o = F_y·A_eff);
+   a column takes F_cr = P_cr/A_g (6.9.4.2.2a-2), see hpColPn. */
+function hpileAeff(hp, Es, Fy, Fcr) {
   const sqEFy = Math.sqrt(Es / Fy);
   const flange_lr_comp = 0.56 * sqEFy;
   const web_lr_comp = 1.49 * sqEFy;
-  const flangeSlender = hp.flange_bt > flange_lr_comp;
-  const webSlender = hp.web_htw > web_lr_comp;
+  const F = (typeof Fcr === "number" && isFinite(Fcr) && Fcr > 0) ? Math.min(Fcr, Fy) : Fy;
+  const kF = Math.sqrt(Fy / F);
+  const flangeSlender = hp.flange_bt > flange_lr_comp * kF;
+  const webSlender = hp.web_htw > web_lr_comp * kF;
   const anySlender = flangeSlender || webSlender;
   const Ag = hp.A;
+  const be = (b, bt, lr, c1, c2, c3) => { const Fel = Math.pow(c2 * lr / bt, 2) * Fy, r = Math.sqrt(Fel / F);
+    return { b, bt, lr, c1, c2, c3, Fel, r, be: b * ((1 - c1 * r) * r - c3) }; };
+  const fl = flangeSlender ? be(hp.bf / 2, hp.flange_bt, flange_lr_comp, 0.22, 1.49, 0) : null;
+  const hW = hp.web_htw * hp.tw;
+  const wb = webSlender ? be(hW, hp.web_htw, web_lr_comp, 0.18, 1.31, 0) : null;
   let Aeff = Ag;
-  if (anySlender) {
-    let dA = 0;
-    if (flangeSlender) {
-      const bt = hp.flange_bt, be_frac = flange_lr_comp / bt; // ≤1
-      const b = hp.bf / 2, be = be_frac * b;
-      dA += 2 * 2 * (b - be) * hp.tf; // 2 half-flanges × 2 sides projecting
-    }
-    if (webSlender) {
-      const htw = hp.web_htw, be_frac = web_lr_comp / htw;
-      const bw = hp.hw, bew = be_frac * bw;
-      dA += (bw - bew) * hp.tw;
-    }
-    Aeff = Math.max(Ag - dA, 0.5 * Ag);
-  }
-  return { Aeff, sqEFy, flange_lr_comp, web_lr_comp, flangeSlender, webSlender, anySlender };
+  if (anySlender) Aeff = Ag - (fl ? 4 * (fl.b - fl.be) * hp.tf : 0) - (wb ? (wb.b - wb.be) * hp.tw : 0);
+  return { Aeff, sqEFy, flange_lr_comp, web_lr_comp, flangeSlender, webSlender, anySlender, Fcr: F, fl, wb, hW };
+}
+/* HPAE: nominal axial resistance of an H-pile column with slender elements (6.9.4.2.2a): P_cr from Eq. 6.9.4.1.1-1/-2 with
+   P_o = F_y·A_g; F_cr = P_cr/A_g; P_n = F_cr·A_eff(F_cr). A nonslender section at F_cr: P_n = P_cr (unchanged). */
+function hpColPn(hp, Es, Fy, Pe) {
+  const Pog = Fy * hp.A, ratio = (Pe > 0 && isFinite(Pe)) ? Pog / Pe : 0;
+  const Pcr = ratio <= 2.25 ? Math.pow(0.658, ratio) * Pog : 0.877 * Pe;
+  const Fcr = Pcr / hp.A, ae = hpileAeff(hp, Es, Fy, Fcr);
+  return { Pog, ratio, Pcr, Fcr, Aeff: ae.Aeff, ae, Pn: ae.anySlender ? Fcr * ae.Aeff : Pcr, inelastic: ratio <= 2.25 };
 }
 // the H-pile section the structural resistances use: corroded when a loss zone applies, else nominal
 function hpileSectionForChecks(I) {
@@ -4150,7 +4162,7 @@ function computeAll(I, opts = {}) {
   // is derived HERE from the pure hpileSection() helper rather than read off R --
   // depending on assignment order would silently fall back to casing properties.
   const bklIsHP = I.pileType === "hpile";
-  let bklI = Icas, bklA = Acas, bklR = rg, bklPo = Po, bklPhiC = phi_c;
+  let bklI = Icas, bklA = Acas, bklR = rg, bklPo = Po, bklPhiC = phi_c, bklHp = null;
   if (bklIsHP) {
     const _hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
     const _strong = I.hpAxis !== "weak";   // strong is the default, matching the axial module
@@ -4160,9 +4172,10 @@ function computeAll(I, opts = {}) {
     const _hpR = hpileSectionForChecks(I);
     bklA = _hpR.A;                       // Ag (Euler term P_e = pi^2 E A_g / (KL/r)^2)
     bklR = _strong ? _hpR.rx : _hpR.ry;
-    // F61 (O61): P_o = F_y A_eff with a slender element (6.9.4.2), as the braced path (Module 03);
-    // before: P_o = F_y A_g here. A_eff = A_g for a nonslender section (no change).
-    bklPo = (I.hpFy || 50) * hpileAeff(_hpR, I.E || 29000, I.hpFy || 50).Aeff;
+    // F61 (O61): P_o = F_y A_eff with a slender element; HPAE (2026-10-20): the unified method of 6.9.4.2.2a: P_cr from the
+    // column curve with P_o = F_y A_g, then P_n = (P_cr/A_g)·A_eff(F_cr) (colChk, hpColPn). Nonslender: unchanged.
+    bklPo = (I.hpFy || 50) * _hpR.A;
+    bklHp = _hpR;
     bklPhiC = I.hpPhiC != null ? I.hpPhiC : 0.60; // H-pile phi_c input (6.5.4.2: 0.60 good driving / 0.50 severe)
   }
   const EI_bkl = Es * bklI; // kip-in^2
@@ -4306,11 +4319,12 @@ function computeAll(I, opts = {}) {
       ? PeOverride                                        // nonlinear ramp: Pcr used AS Pe
       : PI * PI * Es / (slender * slender) * bklA;        // Euler (section-aware area)
     const ratio = bklPo / Pe;
-    const Pn = ratio <= 2.25 ? Math.pow(0.658, ratio) * bklPo : 0.877 * Pe;
+    const uni = bklHp ? hpColPn(bklHp, Es, I.hpFy || 50, Pe) : null;   // HPAE: H-pile, slender elements at F_cr
+    const Pn = uni ? uni.Pn : (ratio <= 2.25 ? Math.pow(0.658, ratio) * bklPo : 0.877 * Pe);
     const phiPn = bklPhiC * Pn;
     return {
       Lf, Le, KL, slender, slender_ok: slender < 120,
-      Pe, ratio, Pn, phiPn,
+      Pe, ratio, Pn, phiPn, uni: uni && uni.ae.anySlender ? { Pcr: uni.Pcr, Fcr: uni.Fcr, Aeff: uni.Aeff, Ag: bklHp.A } : null,
       pass: phiPn >= STL,
       inelastic: ratio <= 2.25
     };
@@ -4855,7 +4869,7 @@ function computeAll(I, opts = {}) {
     // Effective area for slender elements (6.9.4.2.2a-3, rolled): Aeff = Ag − Σ(b−be)·t.
     // be per 6.9.4.2.2b needs Fcr (iterative); the tool uses a first-pass be = (λr/λ)·b.
     // F61: the formula is in hpileAeff() (shared with the Module 10 column check); unchanged.
-    const _ae = hpileAeff(hp, Es, Fy);
+    const _ae = hpileAeff(hp, Es, Fy);   // HPAE: unified effective width at F_cr = F_y
     const sqEFy = _ae.sqEFy, flange_lr_comp = _ae.flange_lr_comp, web_lr_comp = _ae.web_lr_comp;
     const flangeSlender = _ae.flangeSlender, webSlender = _ae.webSlender, anySlender = _ae.anySlender;
     const Aeff = _ae.Aeff;
@@ -4966,7 +4980,7 @@ function computeAll(I, opts = {}) {
     const strTension_pass = !enableTension || (phiPn_tension >= Tu);
 
     R.hpileStruct = {
-      hp, axisStrong, S_sel, I_sel, r_sel, Ag, Aeff, Mu, STL, Tu, enableTension,
+      hp, axisStrong, S_sel, I_sel, r_sel, Ag, Aeff, Mu, STL, Tu, enableTension, aeDet: { fl: _ae.fl, wb: _ae.wb },
       // local buckling
       flange_lr_comp, web_lr_comp, flangeSlender, webSlender, anySlender,
       // axial
@@ -10161,7 +10175,7 @@ function PrintReport({
       const line = (t) => /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "10px", margin: "2px 0" } }, t);
       let Pn = hs.Pn_axial, phiPn = hs.phiPn_axial, axPass = hs.axial_pass, Pr = hs.Pr, cRatio = hs.comb_ratio, cBranch = hs.comb_branch, cPass = hs.comb_pass2;
       if (hs.hasStickup && hs.buckMethod === "pcrit" && pcr && pcr.ok) {
-        const Pe = pcr.Pcr, rt = hs.Po / Pe; Pn = rt <= 2.25 ? Math.pow(0.658, rt) * hs.Po : 0.877 * Pe; phiPn = hs.phi_c_axial * Pn; axPass = phiPn >= hs.STL;
+        const Pe = pcr.Pcr; Pn = hpColPn(hs.hp, hs.Es, hs.Fy, Pe).Pn; phiPn = hs.phi_c_axial * Pn; axPass = phiPn >= hs.STL;   // HPAE
         Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0);   // F39: biaxial sum
         if (PuPr < 0.2) { cBranch = "<0.2"; cRatio = PuPr / 2 + MuMr; } else { cBranch = "≥0.2"; cRatio = PuPr + 8 / 9 * MuMr; } cPass = cRatio <= 1.0;
       }
@@ -10704,6 +10718,10 @@ function PrintReport({
       ? `\\tfrac{P_o}{P_e} = \\tfrac{${fmt(r.buckling.Po, 0)}}{${fmt(r.buckling.Pe_b, 0)}} = ${fmt(r.buckling.ratio_b, 2)} \\le 2.25 \\;\\Rightarrow\\; P_n = \\left[0.658^{P_o/P_e}\\right]P_o = ${fmt(r.buckling.Pn_buck, 1)}\\ \\text{kip}`
       : `\\tfrac{P_o}{P_e} = ${fmt(r.buckling.ratio_b, 2)} > 2.25 \\;\\Rightarrow\\; P_n = 0.877P_e = ${fmt(r.buckling.Pn_buck, 1)}\\ \\text{kip}`,
     cite: r.buckling.ratio_b <= 2.25 ? "Eq. 6.9.4.1.1-1 (inelastic)" : "Eq. 6.9.4.1.1-2 (elastic)"
+  }), r.buckling.sel && r.buckling.sel.uni && /*#__PURE__*/React.createElement(Calc, {
+    label: "Slender elements (H-pile)",
+    eq: `P_{cr}=${fmt(r.buckling.sel.uni.Pcr, 1)},\\; F_{cr}=\\dfrac{P_{cr}}{A_g}=\\dfrac{${fmt(r.buckling.sel.uni.Pcr, 1)}}{${fmt(r.buckling.sel.uni.Ag, 2)}}=${fmt(r.buckling.sel.uni.Fcr, 2)}\\ \\text{ksi},\\; P_n=F_{cr}A_{eff}=${fmt(r.buckling.sel.uni.Fcr, 2)}(${fmt(r.buckling.sel.uni.Aeff, 3)})=${fmt(r.buckling.Pn_buck, 1)}\\ \\text{kip}`,
+    cite: "Eqs. 6.9.4.2.2a-1, -2; A_eff at F_cr (6.9.4.2.2b)"
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.buckling.buck_pass,
     eq: `\\phi_c P_n = ${fmt(r.buckling.phiPn_buck, 1)}\\ \\text{kip} \\;${r.buckling.buck_pass ? '\\geq' : '<'}\\; STL = ${fmt(I.STL, 0)}\\ \\text{kip}`
@@ -13906,6 +13924,11 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
           : `\\tfrac{P_o}{P_e}=${fmt(mm.ratio, 2)}>2.25\\;\\Rightarrow\\; P_n=0.877P_e=${fmt(mm.Pn, 0)}\\ \\text{kip}`,
         cite: mm.inelastic ? "Eq. 6.9.4.1.1-1 (inelastic)" : "Eq. 6.9.4.1.1-2 (elastic)"
       }),
+      mm.uni && /*#__PURE__*/React.createElement(Calc, {   // HPAE: slender H-pile elements at F_cr
+        label: "4a · Slender elements",
+        eq: `F_{cr}=\\dfrac{P_{cr}}{A_g}=\\dfrac{${fmt(mm.uni.Pcr, 1)}}{${fmt(mm.uni.Ag, 2)}}=${fmt(mm.uni.Fcr, 2)}\\ \\text{ksi},\\quad P_n=F_{cr}A_{eff}=${fmt(mm.uni.Fcr, 2)}(${fmt(mm.uni.Aeff, 3)})=${fmt(mm.Pn, 0)}\\ \\text{kip}`,
+        cite: "Eqs. 6.9.4.2.2a-1, -2"
+      }),
       /*#__PURE__*/React.createElement(RptCheck, {
         pass: mm.pass,
         eq: `\\phi_c P_n=${fmt(b.phi_c, 2)}(${fmt(mm.Pn, 0)})=${fmt(mm.phiPn, 0)}\\ \\text{kip}\\;${mm.pass ? '\\geq' : '<'}\\;STL=${fmt(b.STL, 0)}\\ \\text{kip}`
@@ -16118,6 +16141,7 @@ function App() {
             PoPe = Po_col / Pe_pcr;
             if (PoPe <= 2.25) { Pn_pcr = Math.pow(0.658, PoPe) * Po_col; colBranch = "inelastic"; }
             else { Pn_pcr = 0.877 * Pe_pcr; colBranch = "elastic"; }
+            if (I.pileType === "hpile") { const _u = hpColPn(hpileSectionForChecks(I), I.E || 29000, I.hpFy || 50, Pe_pcr); Pn_pcr = _u.Pn; }   // HPAE: F_cr·A_eff(F_cr)
           }
           // Yield-limited flag: the column curve has driven Pn to within a few
           // percent of Po, i.e. the section yields essentially before it buckles.
@@ -17822,7 +17846,10 @@ function App() {
       /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: hp.tab ? "AISC tabulated, " + hp.tab + " (three rectangles: " + fmt(hp.calc.A, 2) + " in\u00b2)" : "rectangular idealization" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Flange slenderness", eq: `\\lambda_f=\\dfrac{b_f/2}{t_f}=${fmt(hp.flange_bt,2)}`, result: `\\lambda_r=0.56\\sqrt{E/F_y}=${fmt(hs.flange_lr_comp,2)}`, cite: hs.flangeSlender ? "slender" : "nonslender" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Web slenderness", eq: `\\lambda_w=\\dfrac{h}{t_w}=${fmt(hp.web_htw,2)}`, result: `\\lambda_r=1.49\\sqrt{E/F_y}=${fmt(hs.web_lr_comp,2)}`, cite: hs.webSlender ? "slender" : "nonslender" }),
-      hs.anySlender ? /*#__PURE__*/React.createElement(Calc, { label: "Effective area", eq: `A_{eff}=A_g-\\sum(b-b_e)t=${fmt(hs.Aeff,2)}\\ \\text{in}^2`, cite: "Eq. 6.9.4.2.2a-3", note: "approx.\u2014confirm b_e per 6.9.4.2.2b" }) : /*#__PURE__*/React.createElement(Calc, { label: "Local buckling", eq: `\\text{nonslender} \\Rightarrow A_{eff}=A_g=${fmt(hs.Aeff,2)}\\ \\text{in}^2`, cite: "6.9.4.2.1" }),
+      hs.anySlender ? /*#__PURE__*/React.createElement("div", null,   // HPAE: the full effective-width method (6.9.4.2.2b), F_cr = F_y (soil-braced)
+        hs.aeDet && hs.aeDet.fl && /*#__PURE__*/React.createElement(Calc, { label: "Flange (one edge)", eq: `F_{el}=\\left(c_2\\dfrac{\\lambda_r}{b/t}\\right)^2F_y=\\left(1.49\\dfrac{${fmt(hs.aeDet.fl.lr,3)}}{${fmt(hs.aeDet.fl.bt,3)}}\\right)^2(${fmt(hs.Fy,0)})=${fmt(hs.aeDet.fl.Fel,2)}\\ \\text{ksi};\\; b_e=b\\left[\\left(1-0.22\\sqrt{F_{el}/F_{cr}}\\right)\\sqrt{F_{el}/F_{cr}}\\right]=${fmt(hs.aeDet.fl.b,3)}\\,[(1-0.22\\times${fmt(hs.aeDet.fl.r,4)})(${fmt(hs.aeDet.fl.r,4)})]=${fmt(hs.aeDet.fl.be,4)}\\ \\text{in}`, cite: "Eqs. 6.9.4.2.2b-2, -4; Table 6.9.4.2.2b-1 (c₁ 0.22, c₂ 1.49)" }),
+        hs.aeDet && hs.aeDet.wb && /*#__PURE__*/React.createElement(Calc, { label: "Web (rolled I)", eq: `F_{el}=\\left(1.31\\dfrac{${fmt(hs.aeDet.wb.lr,3)}}{${fmt(hs.aeDet.wb.bt,3)}}\\right)^2F_y=${fmt(hs.aeDet.wb.Fel,2)}\\ \\text{ksi};\\; b_e=${fmt(hs.aeDet.wb.b,3)}\\,[(1-0.18\\times${fmt(hs.aeDet.wb.r,4)})(${fmt(hs.aeDet.wb.r,4)})]=${fmt(hs.aeDet.wb.be,4)}\\ \\text{in}`, cite: "Eqs. 6.9.4.2.2b-2, -4; Table 6.9.4.2.2b-1 (c₁ 0.18, c₂ 1.31)" }),
+        /*#__PURE__*/React.createElement(Calc, { label: "Effective area", eq: `A_{eff}=A_g-\\sum(b-b_e)t=${fmt(hs.Ag,3)}${hs.aeDet && hs.aeDet.fl ? `-4(${fmt(hs.aeDet.fl.b,3)}-${fmt(hs.aeDet.fl.be,4)})(${fmt(hp.tf,3)})` : ""}${hs.aeDet && hs.aeDet.wb ? `-(${fmt(hs.aeDet.wb.b,3)}-${fmt(hs.aeDet.wb.be,4)})(${fmt(hp.tw,3)})` : ""}=${fmt(hs.Aeff,3)}\\ \\text{in}^2`, cite: "Eq. 6.9.4.2.2a-3", note: "F_cr = F_y: the soil-braced pile; a column uses F_cr = P_cr/A_g (Module 10)" })) : /*#__PURE__*/React.createElement(Calc, { label: "Local buckling", eq: `\\text{nonslender} \\Rightarrow A_{eff}=A_g=${fmt(hs.Aeff,2)}\\ \\text{in}^2`, cite: "6.9.4.2.1" }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Yield resistance", code: "AASHTO 6.9.4.1.1" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Nominal yield resistance", eq: `P_o=F_yA_{eff}=${fmt(hs.Fy,0)}\\times ${fmt(hs.Aeff,2)}`, result: `=${fmt(hs.Po,0)}\\ \\text{kip}`, cite: "P_o=F_yA_g" }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "3", title: "Elastic buckling & effective length", code: "AASHTO 6.9.4.1.2" }),
@@ -17914,7 +17941,7 @@ function App() {
     const hs = r.hpileStruct;
     let Pr = hs.Pr, ratio = hs.comb_ratio, branch = hs.comb_branch, pass = hs.comb_pass2, needCompute = false, Pn = hs.Pn_axial;
     if (hs.hasStickup && hs.buckMethod === "pcrit") {
-      if (pcr && pcr.ok) { const Pe = pcr.Pcr, rt = hs.Po / Pe; Pn = rt <= 2.25 ? Math.pow(0.658, rt) * hs.Po : 0.877 * Pe; Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0); /* F39: biaxial sum */ if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + MuMr; } else { branch = "\u22650.2"; ratio = PuPr + (8 / 9) * MuMr; } pass = ratio <= 1.0; }
+      if (pcr && pcr.ok) { const Pe = pcr.Pcr; Pn = hpColPn(hs.hp, hs.Es, hs.Fy, Pe).Pn; /* HPAE */ Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0); /* F39: biaxial sum */ if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + MuMr; } else { branch = "\u22650.2"; ratio = PuPr + (8 / 9) * MuMr; } pass = ratio <= 1.0; }
       else { needCompute = true; }
     }
     if (needCompute) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Narr, null, "Nonlinear P-crit is selected. Compute ", /*#__PURE__*/React.createElement(RTex, { tex: "P_{cr}" }), " in the Structural Axial module first; the interaction below updates automatically."));
