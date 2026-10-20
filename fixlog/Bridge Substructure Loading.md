@@ -1476,3 +1476,59 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.10.3.1 
 - **Abutment hand-off:** `subloads-abutment-v1` still sends `seismic.As` (now S_a(0) from the table). The abutment calculator applies its own k_h; it does not get the 1.2 factor for rock sites, and it still cites 3.10.4.2 (inventory).
 - **MassDOT rules:** the MassDOT 3.4.4.x SDC A rules still map to Zone 1 / A_s < 0.05 as before; the MassDOT manual is written to the 9th Ed.
 - **4.7.4.5 displacement amplification (S_DS = 0.90 × peak S_a):** not implemented, as before.
+
+## 2026-10-20 — PR: claude/str4-subloads (STR4: Strength IV removed from the substructure combinations; engineer direction 2026-10-20 "accurate, not overly conservative"; same change as abutment_calculator #353 F44; PR link added after merge)
+
+### STR4. Strength IV removed   [calc change] [less conservative only where Strength IV governed]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.4.1 (Strength IV: dead-load force effects in bridge superstructures) and C3.4.1 (not applicable to construction stages, substructures, earth-retaining systems or bearing design). Checked against the 10th Ed. text, p. 3-9. Every result of this tool is a substructure, bearing or foundation force, so Strength IV is removed everywhere.
+- **Where:**
+  - `COMBOS` (anchor `const COMBOS = [`): the entry `{ id: 'StrIV', name: 'Strength IV', dc: [1.50, 0.90], dw: [1.50, 0.65] }` is replaced by a comment.
+  - TU factors by array position (anchor `Object.assign(COMBOS[0], { tu: 0.5 });`): Strength IV was index 2, so the positions move by one. Strength I, III, V keep 0.50; Service I, IV keep 1.00.
+  - Extreme Event I insertion (anchor `COMBOS.splice(`): index 6 → 5, so EE I stays just before EE II (same order as before).
+  - New `str4Old()` before `function lfOf(c)`: lists the numeric Strength IV overrides an older project has in `br.lf.StrIV`.
+  - Bridge tab, "Load factors (Table 3.4.1-1)" note (anchor `Strength II (owner permit vehicle) is not included.`): says Strength IV is not included and why; if the project has saved Strength IV overrides, lists them as kept but not used.
+  - Report basis, "Load factors" row (`basisExtra`, anchor `const ov = []; Object.entries(b.lf || {})`): Strength IV overrides are no longer listed as active overrides; the row says Strength IV is not used and lists any saved Strength IV overrides as kept, not used.
+  - Plan text (anchor `combo: ['Strength I`): "Strength I to V" → "Strength I, III and V".
+- **Before:** Strength IV (γDC 1.50 / 0.90, γDW 1.50 / 0.65, TU 0.50, no LL, no wind) entered the Strength / Extreme Event envelope, the concurrent design sets, the governing-forces table, the DXF tables and the foundation-loads hand-off. The future utility allowance UF (SRXF) took the limit state's DC maximum, i.e. 1.50 in Strength IV.
+- **After:** no Strength IV anywhere. UF now takes 1.25 (Strength I, III, V, Extreme Event) or 1.0 (Service I) as its maximum; this closes SRXF's open item (UF at 1.50 in Strength IV) by removing the combination.
+- **Saved data (§5):** no key or format change. An older project's `br.lf.StrIV` overrides are kept in the file (not moved to Strength I: a Strength IV DC factor is not a Strength I factor) and are shown on the Bridge tab and in the report basis as not used. Nothing else stored refers to Strength IV (the foundation-loads dialog selection is not saved).
+- **Hand-off (HANDOFF.md §4.6, foundationLoads):** cases are built from `COMBOS`, so Strength IV cases are no longer sent. Format unchanged (schema 1). A payload already on the channel from an earlier version still carries them until the user sends again; Pile Designer and Spread Footing list whatever cases arrive.
+- **Check case 1 (built-in project):** Strength IV governs no envelope value and no concurrent set: all 338 envelope values (169 effects, max and min), every other limit state's max / min and every concurrent set are identical (origin/main `2408b77` vs branch, headless Chromium). The foundation hand-off loses its Strength IV cases (32 over 4 units × 2 levels); every other case is identical.
+- **Check case 2 (built-in project, every DC1 / DC2 / DW reaction × 6, DC/LL ≈ 12):** Pier 2, column axial at the base, unfactored DC (super + sub) = 6893.72 kip, DW = 874.20 kip, LL+IM max = 586.11 kip (BR, TU + FR, WA, EV = 0 at this section):
+  - Before, Strength IV: 1.50 × 6893.72 + 1.50 × 874.20 = 10340.58 + 1311.30 = **11651.88 kip** (tool 11651.88), governing.
+  - After, Strength I: 1.25 × 6893.72 + 1.50 × 874.20 + 1.75 × 586.11 = 8617.15 + 1311.30 + 1025.68 = **10954.14 kip** (tool 10954.14), governing (Strength V 10719.69, Strength III 9928.45).
+  - 20 envelope values change in this case (all were Strength IV), e.g. Pier 1 bottom of footing P max 12338.29 → 11421.91, Pier 2 cap moment at column face min −51043.66 → −49702.11 kip-ft, Abut. 1 bottom of footing P max 4750.15 → 4696.36; 14 concurrent sets move from Strength IV to Strength I. All other values identical.
+- **How verified:** `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: pass. `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"`: page text and storage identical. Headless Chromium, origin/main vs branch, built-in and × 6 projects: every limit state's max / min array for every unit (Strength IV excluded) identical, the envelope differs only where Strength IV governed, concurrent sets ditto, hand-off cases identical except the dropped Strength IV cases. Combinations tab of each unit renders without Strength IV, no console errors. Older project with `br.lf.StrIV.dcMax = 1.6` and `br.lf.StrI.ll = 1.80`: opens, the Strength IV override is kept in storage and listed as not used on the Bridge tab and in the report basis; Strength I's override still applies.
+- **Other copies:** abutment_calculator.html removed Strength IV in #353 (F44). No other copy of this code.
+- **Open items:** none.
+
+Diff (`Bridge Substructure Loading.html`, `git diff -U0` against origin/main `2408b77`):
+
+```diff
+diff --git a/Bridge Substructure Loading.html b/Bridge Substructure Loading.html
+index 9d3d514..895aaeb 100644
+--- a/Bridge Substructure Loading.html	
++++ b/Bridge Substructure Loading.html	
+@@ -979 +979 @@ const PLAN = {
+-  combo: ['Strength I to V, Extreme Event I and II, and Service I (Tables 3.4.1-1 and 3.4.1-2) with γ<sub>p</sub> maximum and minimum enveloped, γ<sub>EQ</sub>, and γ<sub>TU</sub>.', 'Factored forces at the bearings, top of cap, column top and base, and top and bottom of footing, with the governing combination for each force component.', 'Abutment bearing reactions exported as JSON for the earth-pressure app.'],
++  combo: ['Strength I, III and V, Extreme Event I and II, and Service I (Tables 3.4.1-1 and 3.4.1-2) with γ<sub>p</sub> maximum and minimum enveloped, γ<sub>EQ</sub>, and γ<sub>TU</sub>.', 'Factored forces at the bearings, top of cap, column top and base, and top and bottom of footing, with the governing combination for each force component.', 'Abutment bearing reactions exported as JSON for the earth-pressure app.'],
+@@ -1670 +1670 @@ const COMBOS = [
+-  { id: 'StrIV', name: 'Strength IV', dc: [1.50, 0.90], dw: [1.50, 0.65] },
++  // STR4 (2026-10-20): no Strength IV; per AASHTO LRFD 10th Ed. C3.4.1 it does not apply to substructures, earth-retaining systems or bearing design (old saves: br.lf.StrIV kept, unused)
+@@ -1869 +1869 @@ function phase4(k) {
+-Object.assign(COMBOS[0], { tu: 0.5 }); Object.assign(COMBOS[1], { tu: 0.5 }); Object.assign(COMBOS[2], { tu: 0.5 }); Object.assign(COMBOS[3], { tu: 0.5 }); Object.assign(COMBOS[4], { tu: 1.0 }); Object.assign(COMBOS[5], { tu: 1.0 });
++Object.assign(COMBOS[0], { tu: 0.5 }); Object.assign(COMBOS[1], { tu: 0.5 }); Object.assign(COMBOS[2], { tu: 0.5 }); Object.assign(COMBOS[3], { tu: 1.0 }); Object.assign(COMBOS[4], { tu: 1.0 });   // Strength I, III, V 0.50; Service I, IV 1.00
+@@ -2118 +2118 @@ function supportLength(G, UG, SM) {   // 4.7.4.4
+-COMBOS.splice(6, 0, { id: 'EEI', name: 'Extreme Event I', dc: [1.25, 0.90], dw: [1.50, 0.65], llEq: true, eq: true });
++COMBOS.splice(5, 0, { id: 'EEI', name: 'Extreme Event I', dc: [1.25, 0.90], dw: [1.50, 0.65], llEq: true, eq: true });
+@@ -2948,0 +2949 @@ COMBOS.forEach(c => { if (c.ws && c.gws == null) c.gws = 1.0; });
++function str4Old() { const o = (P.br.lf || {}).StrIV || {}; return Object.entries(o).filter(([, v]) => String(v ?? '').trim() !== '' && isFinite(num(v))).map(([key, v]) => `${key} = ${v}`).join(', '); }   // STR4: Strength IV removed (C3.4.1); an older project's overrides stay in br.lf.StrIV, unused, and are listed
+@@ -3027 +3028 @@ function concHtml(k) {
+-      <p class="note">Blank uses the AASHTO value shown. Extreme Event I live load uses γ<sub>EQ</sub> (Seismic section); earth-load factors are under Earth loads. TU values are for force effects (0.50 Strength, 1.00 Service); movements are reported with 1.20 on the Temperature tab. Strength II (owner permit vehicle) is not included.</p>`; };
++      <p class="note">Blank uses the AASHTO value shown. Extreme Event I live load uses γ<sub>EQ</sub> (Seismic section); earth-load factors are under Earth loads. TU values are for force effects (0.50 Strength, 1.00 Service); movements are reported with 1.20 on the Temperature tab. Strength II (owner permit vehicle) is not included. Strength IV is not included: it does not apply to substructures (AASHTO LRFD 10th Ed. C3.4.1).${str4Old() ? ` <b>This project has saved Strength IV load factor overrides (${esc(str4Old())}): they are kept in the file but no longer used.</b>` : ''}</p>`; };
+@@ -3154,2 +3155,2 @@ function basisExtra() { const b = P.br, G = MODEL.G, rows = [];
+-  const ov = []; Object.entries(b.lf || {}).forEach(([id, o]) => Object.entries(o || {}).forEach(([key, v]) => { if (String(v ?? '').trim() !== '' && isFinite(num(v))) { const c = COMBOS.find(x => x.id === id); ov.push(`${c ? c.name : id} ${key} = ${v}`); } }));
+-  rows.push(['Load factors', ov.length ? 'AASHTO Table 3.4.1-1 except: ' + ov.join('; ') : 'AASHTO Table 3.4.1-1 (no overrides)']);
++  const ov = []; Object.entries(b.lf || {}).forEach(([id, o]) => { if (id === 'StrIV') return; Object.entries(o || {}).forEach(([key, v]) => { if (String(v ?? '').trim() !== '' && isFinite(num(v))) { const c = COMBOS.find(x => x.id === id); ov.push(`${c ? c.name : id} ${key} = ${v}`); } }); });   // STR4: Strength IV overrides are reported apart (not used)
++  rows.push(['Load factors', (ov.length ? 'AASHTO Table 3.4.1-1 except: ' + ov.join('; ') : 'AASHTO Table 3.4.1-1 (no overrides)') + '. Strength IV is not used: it does not apply to substructures (AASHTO LRFD 10th Ed. C3.4.1)' + (str4Old() ? `; saved Strength IV overrides (${esc(str4Old())}) are kept in the file, not used` : '')]);
+```
