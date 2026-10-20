@@ -10656,10 +10656,10 @@ function PrintReport({
       I.lateralSource === "py" ? (r.group.pmAuto ? "Applied automatically per row (p-multiplier = row f\u2098 \u00d7 " + fmt(r.group.pmMod, 2) + "); the lateral results are the governing row's." : "Not applied automatically; the p-y analysis used the entered p-multiplier " + fmt(I.pyPM || 1, 2) + ".") : ""),
     r.group && r.group.pmAuto && pyRes && pyRes.pmAuto && /*#__PURE__*/React.createElement(PmRowTable, { info: pyRes.pmAuto, print: true }),
     r.capDist.capWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
-      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : "",
+      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.", capDlNote(r.capDist),
       r.capDist.stemWt_incl ? " Stem wall self-weight \u03b3DC\u00d7W = " + fmt(r.capDist.dlFactor, 2) + "\u00d7" + fmt(r.capDist.stemWeight_nom, 1) + " = " + fmt(r.capDist.stemWeight, 1) + " kip, applied at the stem plan centroid." : ""),
     !r.capDist.capWt_incl && r.capDist.stemWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
-      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : ""),
+      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid.", capDlNote(r.capDist)),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } },
       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #94a3b8", textAlign: "left", color: "#64748b" } },
         ["Pile", "x (ft)", "y (ft)", "P/n", "bending", "Axial (kip)", "Shear (kip)"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, style: { padding: "2px 5px", textAlign: i >= 3 ? "right" : "left" } }, h2)))),
@@ -12005,7 +12005,40 @@ function caseIsZero(gcase) {
   return !Object.values(mags).some(m => m && (m.P || m.Vx || m.Vy || m.Mx || m.My));
 }
 
+/* PDL: the cap / stem weight factor basis in words, for the Module 11 cap-distribution text */
+function capDlNote(cd) {
+  if (!cd || !cd.dlBasis) return "";
+  const alt = cd.dlAlt && isFinite(cd.dlAlt.axial) ? (cd.dlBasis === "min" ? " (with \u03b3DC = " + fmt(cd.dlAlt.dlFactor, 2) + ": pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip)"
+    : "; a pile in uplift is not the governing pile of this case: with \u03b3DC = 0.90, pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip") : "";
+  if (cd.dlBasis === "ee") return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
+  if (cd.dlBasis === "svc") return " \u03b3DC = 1.00 for this Service case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
+  if (cd.dlBasis === "min") return " \u03b3DC = 0.90 (minimum, AASHTO LRFD 10th Ed. Table 3.4.1-2): the weight resists uplift on the governing pile" + alt + ".";
+  return " \u03b3DC = " + fmt(cd.dlFactor, 2) + " (maximum): the weight adds to compression on the governing pile" + alt + ".";
+}
+/* PDL (2026-10-20): cap / stem self-weight factor by group-case type (AASHTO LRFD 10th Ed. Table 3.4.1-1, Table 3.4.1-2):
+   - "extreme" and "service": 1.00;
+   - "tension" (uplift): γDC min 0.90;
+   - "strength" (and a list without a case type): the input dlFactor (default 1.25, γDC max) where the weight adds to
+     compression, 0.90 where it resists uplift: the case is first distributed with 0.90; if its governing pile (the selected
+     pile, else the largest |axial|) is then in uplift, the case is an uplift case and keeps 0.90, otherwise it is
+     redistributed with dlFactor. dlBasis says which ("max", "min", "ee", "svc"); dlAlt (text only) is the other side's
+     governing pile of an uplift case, or the most uplifted pile with 0.90 of a compression case. */
 function computeCapDist(I, grp, loadListOverride) {
+  const t = loadListOverride && loadListOverride.caseType;
+  if (t === "extreme") return computeCapDistAt(I, grp, loadListOverride, 1.00, "ee");
+  if (t === "service") return computeCapDistAt(I, grp, loadListOverride, 1.00, "svc");
+  if (t === "tension") return computeCapDistAt(I, grp, loadListOverride, 0.90, "min");
+  if (!(I.capIncludeWeight || I.stemEnable)) return computeCapDistAt(I, grp, loadListOverride, null, "max");
+  const dMin = computeCapDistAt(I, grp, loadListOverride, 0.90, "min");
+  const dMax = computeCapDistAt(I, grp, loadListOverride, null, "max");
+  const upl = dMin && dMin.sel && isFinite(dMin.sel.axial) && dMin.sel.axial < -1e-6;
+  const use = upl ? dMin : dMax, other = upl ? dMax : dMin;
+  // the other side, for the text: with 0.90 the most uplifted pile (if any) of a compression case; with dlFactor the governing pile of an uplift case
+  const oPile = upl ? (other && other.sel) : (other && other.piles && other.piles.reduce((a, q) => (!a || q.axial < a.axial) ? q : a, null));
+  if (use && oPile && (upl || oPile.axial < -1e-6)) use.dlAlt = { basis: other.dlBasis, dlFactor: other.dlFactor, selId: oPile.id, axial: oPile.axial };
+  return use;
+}
+function computeCapDistAt(I, grp, loadListOverride, dlFOverride, dlBasis) {
   // pile coordinates: explicit list (I.groupPiles) or generated grid from group geometry
   let pts = Array.isArray(I.groupPiles) && I.groupPiles.length
     ? I.groupPiles.map((p, i) => ({ id: i + 1, x: p.x, y: p.y }))
@@ -12044,8 +12077,9 @@ function computeCapDist(I, grp, loadListOverride) {
   // Strength I max = 1.25 default; user-overridable via dlFactor).
   // EEP (2026-10-20): an Extreme Event group case takes the cap / stem self-weight at 1.00 (AASHTO LRFD 10th Ed.
   // Table 3.4.1-1, permanent loads 1.00 in Extreme Event I and II; C3.4.1); before, the Strength factor dlFactor (1.25).
-  const dlEE = !!(loadListOverride && loadListOverride.caseType === "extreme");
-  const dlF = dlEE ? 1.00 : (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
+  // PDL (2026-10-20): the factor comes from computeCapDist (case type; Strength max / min); "max" = the input dlFactor.
+  const dlEE = dlBasis === "ee";
+  const dlF = dlFOverride != null ? dlFOverride : (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
   let capWeight = 0, capWeight_nom = 0, capWt_incl = false;
   if (I.capIncludeWeight && I.capL > 0 && I.capW > 0 && I.capThk > 0) {
     const Wc = I.capL * I.capW * I.capThk * (I.capGamma || 150) / 1000;
@@ -12099,7 +12133,7 @@ function computeCapDist(I, grp, loadListOverride) {
     loads: loadContrib, nLoads: loadList.length,
     loadPtX: loadList.length === 1 ? loadList[0].x : cx, loadPtY: loadList.length === 1 ? loadList[0].y : cy,
     capWeight, capWt_incl, capWeight_nom,
-    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF, dlEE,
+    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF, dlEE, dlBasis,
     Jpolar: Sxx + Syy,
     Vresultant: Math.sqrt(Vx * Vx + Vy * Vy),
     Mx_shear: Vy * hh, My_shear: Vx * hh,
@@ -12590,7 +12624,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
             /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1.5 leading-snug" }, "Stem uses concrete \u03b3 above. Position is the stem plan centroid in the same x-y origin as the piles; eccentricity from the group centroid produces overturning. Loads can be applied at the stem top via the checkbox in the load-locations table (z = stem height above cap).")),
           (I.capIncludeWeight || I.stemEnable) && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1.5" },
             capF("Dead-load factor \u03b3DC", "dlFactor", "\u2013"),
-            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1).")),
+            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution of a Strength group case where the weight adds to compression. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Where the weight resists uplift (uplift on the governing pile, or a tension case) 0.90; Extreme Event and Service group cases 1.00 (AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2).")),
   ];
   const leftB = [
           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mt-4 mb-2" }, "3 \u00b7 Design pile"),

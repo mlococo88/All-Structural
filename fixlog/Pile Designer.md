@@ -14990,3 +14990,93 @@ index 5f59029..366d5c6 100644
 -            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec.")),
 +            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1).")),
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-dl (PDL: cap / stem self-weight factor by group-case type, Service 1.00, Strength max / min; engineer direction 2026-10-20 "accuracy"; follow-up to EEP; PR link added after merge)
+
+### PDL. Rigid-cap distribution: γDC on the cap and stem self-weight by case type, maximum where it adds to compression, minimum where it resists uplift   [calc change] [Service less conservative; Strength uplift more conservative]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (Service I: permanent loads 1.00; Strength: γp) and Table 3.4.1-2 (γp for DC: maximum 1.25, minimum 0.90; the factor that gives the extreme effect is used).
+- **Problem:** after EEP only "extreme" group cases took 1.00. Service group cases still took `dlFactor` (1.25), and Strength cases always took the maximum, also where the cap and stem weight resists uplift.
+- **Rule:**
+  - "extreme" and "service" cases: 1.00.
+  - "tension" cases (uplift typed by the user): 0.90.
+  - "strength" cases, and a load list without a case type (the legacy single-load path): the case is distributed with 0.90 first. If its governing pile (the selected pile, else the largest |axial|, as before) is then in uplift, the case is an uplift case and keeps 0.90. Otherwise it is redistributed with `dlFactor` (default 1.25), since the weight adds to compression.
+  - Without cap or stem weight in the model, nothing changes.
+- **Where:**
+  - New wrapper `function computeCapDist(I, grp, loadListOverride)`, which picks the factor as above, and new `computeCapDistAt(I, grp, loadListOverride, dlFOverride, dlBasis)` (the former body, anchor `function computeCapDistAt(`). In it, the EEP line `const dlF = dlEE ? 1.00 : …` became `const dlF = dlFOverride != null ? dlFOverride : <dlFactor as before>`. `dlBasis` ("max" / "min" / "ee" / "svc") and `dlAlt` (text only) are returned.
+  - New `capDlNote(cd)` (before the wrapper). The Module 11 cap-distribution text uses it in place of the EEP Extreme-Event-only sentence; the two anchors are `kip (FHWA Eq. 8-79), applied at the cap centroid.` and `"Includes stem wall self-weight`. It states the factor and why. For a compression case with a pile in uplift it gives that pile's axial at 0.90; for an uplift case, the governing pile with dlFactor.
+  - Input note next to "Dead-load factor γDC".
+- **Before / after code:** see the diff below.
+- **Check cases** (3 × 3 group at 36 in, piles at x = −3, 0, +3 ft; cap 9 × 9 × 3 ft at 150 pcf, so W_cap = 36.45 kip; stem 9 × 2 × 6 ft, so W_stem = 16.20 kip, total 52.65 kip at the group centroid; one load point at the centroid; `dlFactor` 1.25; Σx² = 6 · 9 = 54 ft²):
+  - Service, P = 270 kip: before ΣP = 270 + 1.25 · 52.65 = 335.81 kip, 37.31 kip per pile. After: 270 + 52.65 = **322.65 kip**, **35.85 kip** per pile (tool 322.65 / 35.85).
+  - Tension (typed), P = 270 kip: before 335.81 / 37.31. After: 270 + 0.90 · 52.65 = **317.39 kip**, **35.27 kip** per pile (tool 317.385 / 35.265).
+  - Strength, P = 270 kip, M_y = 0: compression, 1.25: ΣP **335.81 kip**, 37.31 per pile (unchanged).
+  - Strength, P = 270 kip, M_y = 1200 kip-ft: governing pile P3 in compression, 37.31 + 1200 · 3/54 = **103.98 kip** at 1.25 (unchanged). P1 = −29.35 kip at 1.25 is not the governing pile. The text now adds that with 0.90 it is 317.385/9 − 66.67 = **−31.40 kip**.
+  - Strength, net uplift P = −200 kip, M_y = 300 kip-ft: before, 1.25: ΣP = −200 + 65.81 = −134.19 kip; P1 = −134.19/9 − 300 · 3/54 = −14.91 − 16.67 = **−31.58 kip**. After, 0.90 (uplift case): ΣP = −200 + 47.385 = −152.62 kip; P1 = −16.96 − 16.67 = **−33.62 kip** (tool −33.624).
+  - Extreme, P = 270 kip: 1.00, 322.65 / 35.85 (as EEP).
+- **Default project:** the pile group is off, so there is no result change. The default page text is identical (origin/main vs branch, headless).
+- **Saved data (§5):** no key or format change. `dlFactor` stays the Strength maximum (its meaning before EEP), so nothing needs migrating.
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. Headless Chromium (React 18.3.1 and three r128 routed to the tests/libs copies for the test only): `computeCapDist` with `caseLoadList` for the cases above on origin/main `cca06b1` and the branch, plus `capDlNote`; default page text identical; no page errors.
+- **Other copies:** none.
+- **Open items (unchanged behaviour, engineer):** a group case emits one row for its governing pile (largest |axial|). In a compression-governed Strength case, a pile in uplift is shown in the per-pile table at 1.25 and is not checked by that row. The text now gives its axial at 0.90. Checking every uplift pile at 0.90 would need a second row per case.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `cca06b1`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 366d5c6..a94a9c6 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -10659 +10659 @@ function PrintReport({
+-      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : "",
++      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.", capDlNote(r.capDist),
+@@ -10662 +10662 @@ function PrintReport({
+-      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : ""),
++      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid.", capDlNote(r.capDist)),
+@@ -12007,0 +12008,18 @@ function caseIsZero(gcase) {
++/* PDL: the cap / stem weight factor basis in words, for the Module 11 cap-distribution text */
++function capDlNote(cd) {
++  if (!cd || !cd.dlBasis) return "";
++  const alt = cd.dlAlt && isFinite(cd.dlAlt.axial) ? (cd.dlBasis === "min" ? " (with \u03b3DC = " + fmt(cd.dlAlt.dlFactor, 2) + ": pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip)"
++    : "; a pile in uplift is not the governing pile of this case: with \u03b3DC = 0.90, pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip") : "";
++  if (cd.dlBasis === "ee") return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
++  if (cd.dlBasis === "svc") return " \u03b3DC = 1.00 for this Service case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
++  if (cd.dlBasis === "min") return " \u03b3DC = 0.90 (minimum, AASHTO LRFD 10th Ed. Table 3.4.1-2): the weight resists uplift on the governing pile" + alt + ".";
++  return " \u03b3DC = " + fmt(cd.dlFactor, 2) + " (maximum): the weight adds to compression on the governing pile" + alt + ".";
++}
++/* PDL (2026-10-20): cap / stem self-weight factor by group-case type (AASHTO LRFD 10th Ed. Table 3.4.1-1, Table 3.4.1-2):
++   - "extreme" and "service": 1.00;
++   - "tension" (uplift): γDC min 0.90;
++   - "strength" (and a list without a case type): the input dlFactor (default 1.25, γDC max) where the weight adds to
++     compression, 0.90 where it resists uplift: the case is first distributed with 0.90; if its governing pile (the selected
++     pile, else the largest |axial|) is then in uplift, the case is an uplift case and keeps 0.90, otherwise it is
++     redistributed with dlFactor. dlBasis says which ("max", "min", "ee", "svc"); dlAlt (text only) is the other side's
++     governing pile of an uplift case, or the most uplifted pile with 0.90 of a compression case. */
+@@ -12008,0 +12027,15 @@ function computeCapDist(I, grp, loadListOverride) {
++  const t = loadListOverride && loadListOverride.caseType;
++  if (t === "extreme") return computeCapDistAt(I, grp, loadListOverride, 1.00, "ee");
++  if (t === "service") return computeCapDistAt(I, grp, loadListOverride, 1.00, "svc");
++  if (t === "tension") return computeCapDistAt(I, grp, loadListOverride, 0.90, "min");
++  if (!(I.capIncludeWeight || I.stemEnable)) return computeCapDistAt(I, grp, loadListOverride, null, "max");
++  const dMin = computeCapDistAt(I, grp, loadListOverride, 0.90, "min");
++  const dMax = computeCapDistAt(I, grp, loadListOverride, null, "max");
++  const upl = dMin && dMin.sel && isFinite(dMin.sel.axial) && dMin.sel.axial < -1e-6;
++  const use = upl ? dMin : dMax, other = upl ? dMax : dMin;
++  // the other side, for the text: with 0.90 the most uplifted pile (if any) of a compression case; with dlFactor the governing pile of an uplift case
++  const oPile = upl ? (other && other.sel) : (other && other.piles && other.piles.reduce((a, q) => (!a || q.axial < a.axial) ? q : a, null));
++  if (use && oPile && (upl || oPile.axial < -1e-6)) use.dlAlt = { basis: other.dlBasis, dlFactor: other.dlFactor, selId: oPile.id, axial: oPile.axial };
++  return use;
++}
++function computeCapDistAt(I, grp, loadListOverride, dlFOverride, dlBasis) {
+@@ -12047,2 +12080,3 @@ function computeCapDist(I, grp, loadListOverride) {
+-  const dlEE = !!(loadListOverride && loadListOverride.caseType === "extreme");
+-  const dlF = dlEE ? 1.00 : (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
++  // PDL (2026-10-20): the factor comes from computeCapDist (case type; Strength max / min); "max" = the input dlFactor.
++  const dlEE = dlBasis === "ee";
++  const dlF = dlFOverride != null ? dlFOverride : (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
+@@ -12102 +12136 @@ function computeCapDist(I, grp, loadListOverride) {
+-    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF, dlEE,
++    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF, dlEE, dlBasis,
+@@ -12593 +12627 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
+-            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1).")),
++            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution of a Strength group case where the weight adds to compression. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Where the weight resists uplift (uplift on the governing pile, or a tension case) 0.90; Extreme Event and Service group cases 1.00 (AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2).")),
+```
