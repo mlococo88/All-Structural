@@ -17840,3 +17840,85 @@ index 843f9ce..ccfeab7 100644
 -          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft (c/c + B); Σ individual H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
 +          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), (r.group.aashtoMP ? " ft (c/c + B); Σ individual micropile φP" : " ft (c/c + B); Σ individual H-pile φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-rev-d (PDA-DR: drivability per 10.7.8, hammer capability vs the EOD driving resistance, set-up / relaxation per 10.7.3.4; follow-up to part C #382; PR link added after merge)
+
+### PDA-DR. H-pile drivability   [new checks; no change to existing results]
+- **Provision (AASHTO LRFD 10th Ed., verified):** 10.7.8 (drivability analysis by wave equation; steel piles in compression and tension σ_dr ≤ 0.9 φ_da f_y, Eq. 10.7.8-1; analysis based on the maximum driving resistance needed, including soil subject to scour or downdrag); 6.5.4.2 (resistance during pile driving φ_da = 1.00; Table 10.5.5.2.3-1 refers to it); 10.7.3.4.1–.3 (set-up and relaxation; relaxation → restrike; set-up used only when verified by restrike); C10.7.3.4.3 (driving-formula φ developed for EOD and assuming set-up).
+- **Driving stresses:** entered from a wave equation analysis (10.7.8 requires one). The 10th Ed. gives no simplified driving-stress estimate, and none is computed; no FHWA reference is in the project library, so no FHWA estimate is used.
+- **Where:** `computeAll` H-pile, anchor `const drive = (() => {` (R.hpileGeo.drive; in the H-pile `allPass`); inputs in the resistance-method box (set-up factor f, hammer capability) and a new row (σ_dr compression, σ_dr tension, φ_da); Module 01 heading 4b "Drivability"; report Module 01 line. New optional fields `hpPhiDa` (1.00), `hpSigDrC` (0), `hpSigDrT` (0), `hpHammerR` (0), `hpSetupFactor` (1.0); 0 = not entered, no check. No migration needed.
+- **Change:**
+  - Stress: σ_dr,c and σ_dr,t ≤ 0.9 φ_da F_y.
+  - Set-up / relaxation: f = R_restrike / R_EOD; EOD criterion R_ndr,EOD = R_ndr / f (R_ndr from part C, verified on restrike). For a driving formula (Gates, EN) R_ndr,EOD = R_ndr (EOD method).
+  - Hammer: R_hammer ≥ R_ndr,EOD (only with a field method, when R_ndr exists).
+- **Check case (part C case: HP14×89, F_y 50, P_u 100 kip, 10 ft scour, dynamic testing with QC φ_dyn 0.65 → R_ndr = 172.8 kip):**
+  - Limit = 0.9(1.00)(50) = **45.0 ksi**; WEAP σ_c 38 ksi OK, σ_t 12 ksi OK; 47 ksi NG.
+  - Set-up f = 1.3: R_ndr,EOD = 172.8 / 1.3 = **133.0 kip**; hammer 150 kip ≥ 133.0 OK.
+  - Relaxation f = 0.9: R_ndr,EOD = 172.8 / 0.9 = **192.1 kip** > 150 NG.
+  - Gates (φ_dyn 0.40): R_ndr = 100/0.40 + 19 = 269 kip = R_ndr,EOD (f not applied) > 150 NG.
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. jsdom: the check case numbers above; `computeAll(DEFAULT_INPUTS)` for the three pile types differs from origin/main `e7532b8` only by the new `hpileGeo.drive` object (no inputs → no checks); the H-pile project with the inputs renders Module 01 4b and the report line with no script errors.
+- **Open items:** minimum penetration (10.7.6) as a driving-resistance case; blow-count limits (C10.7.8) are not checked.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `e7532b8`):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index ccfeab7..95be8bb 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -5057,0 +5058,20 @@ function computeAll(I, opts = {}) {
++    // PDA-DR (2026-10-20): drivability, AASHTO LRFD 10th Ed. 10.7.8 (steel piles, Eq. 10.7.8-1: sigma_dr <= 0.9 phi_da f_y,
++    // phi_da = 1.00 per 6.5.4.2 "resistance during pile driving"). Driving stresses: entered from a wave equation analysis
++    // (10.7.8 requires one; the 10th Ed. gives no simplified estimate, and none is computed here). Set-up / relaxation
++    // (10.7.3.4): f = R_restrike / R_EOD (input; > 1 set-up, < 1 relaxation); the EOD criterion is R_ndr / f, with R_ndr
++    // verified by restrike (10.7.3.4.2, 10.7.3.4.3). Driving formulas (Gates, EN) are EOD methods whose phi already assumes
++    // set-up (C10.7.3.4.3): the factor is not applied to them. Hammer: the maximum driving resistance the proposed hammer
++    // can achieve (input, from the wave equation bearing graph) >= the EOD driving resistance (10.7.8: maximum driving
++    // resistance needed). 0 = not entered (no check).
++    const drive = (() => {
++      const phiDa = (I.hpPhiDa > 0) ? I.hpPhiDa : 1.00, FyD = I.hpFy || 50, lim = 0.9 * phiDa * FyD;
++      const sC = (I.hpSigDrC > 0) ? I.hpSigDrC : 0, sT = (I.hpSigDrT > 0) ? I.hpSigDrT : 0;
++      const fsu = (I.hpSetupFactor > 0) ? I.hpSetupFactor : 1.0;
++      const formula = drv.method === "gates" || drv.method === "en";
++      const RndrEOD = drv.phiDyn ? (formula ? drv.Rndr : drv.Rndr / fsu) : null;
++      const Rh = (I.hpHammerR > 0) ? I.hpHammerR : 0;
++      const stressC = sC > 0 ? { s: sC, pass: sC <= lim + 1e-9 } : null, stressT = sT > 0 ? { s: sT, pass: sT <= lim + 1e-9 } : null;
++      const hammer = (RndrEOD != null && Rh > 0) ? { Rh, pass: Rh >= RndrEOD - 1e-9 } : null;
++      return { phiDa, Fy: FyD, lim, stressC, stressT, fsu, formula, RndrEOD, Rndr: drv.phiDyn ? drv.Rndr : null, hammer,
++        pass: (!stressC || stressC.pass) && (!stressT || stressT.pass) && (!hammer || hammer.pass) };
++    })();
+@@ -5060 +5080 @@ function computeAll(I, opts = {}) {
+-      comp_pass, up_pass, drv,   // PDA-M1
++      comp_pass, up_pass, drv, drive,   // PDA-M1, PDA-DR
+@@ -5561 +5581 @@ function computeAll(I, opts = {}) {
+-    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || (R.group.geoGroup_pass && (R.group.blockComputed === false || R.group.block_pass)));
++    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && (!R.hpileGeo || !R.hpileGeo.drive || R.hpileGeo.drive.pass) && structPass && fixPass && R.stability.pass && (!grpOn || (R.group.geoGroup_pass && (R.group.blockComputed === false || R.group.block_pass)));
+@@ -8838,0 +8859,5 @@ const DEFAULT_INPUTS = {
++  hpPhiDa: 1.00,          // PDA-DR: phi_da, resistance during pile driving (6.5.4.2)
++  hpSigDrC: 0,            // PDA-DR: max compressive driving stress from a wave equation analysis (ksi); 0 = not entered
++  hpSigDrT: 0,            // PDA-DR: max tensile driving stress (ksi); 0 = not entered
++  hpHammerR: 0,           // PDA-DR: max driving resistance the proposed hammer can achieve (kip); 0 = not entered
++  hpSetupFactor: 1.0,     // PDA-DR: R_restrike / R_EOD (> 1 set-up, < 1 relaxation), 10.7.3.4
+@@ -10611,0 +10637 @@ function PrintReport({
++        g.drive && line("Drivability (10.7.8): σdr ≤ 0.9·φda·fy = 0.9 × " + fmt(g.drive.phiDa, 2) + " × " + fmt(g.drive.Fy, 0) + " = " + fmt(g.drive.lim, 1) + " ksi" + (g.drive.stressC ? "; WEAP compression " + fmt(g.drive.stressC.s, 1) + " ksi " + (g.drive.stressC.pass ? "OK" : "NG") : "; compression stress not entered") + (g.drive.stressT ? "; tension " + fmt(g.drive.stressT.s, 1) + " ksi " + (g.drive.stressT.pass ? "OK" : "NG") : "") + (g.drive.RndrEOD != null ? "; EOD criterion R_ndr,EOD = " + (g.drive.formula ? "R_ndr (driving formula, EOD) = " : "R_ndr/f = " + fmt(g.drive.Rndr, 1) + "/" + fmt(g.drive.fsu, 2) + " = ") + fmt(g.drive.RndrEOD, 1) + " kip (10.7.3.4)" + (g.drive.hammer ? "; hammer " + fmt(g.drive.hammer.Rh, 1) + " kip " + (g.drive.hammer.pass ? "≥" : "<") + " R_ndr,EOD" : "") : "") + "."),   // PDA-DR
+@@ -17609 +17635,8 @@ function App() {
+-        (I.hpDriveOwner === "ctdot") && /*#__PURE__*/React.createElement(Field, { label: "Downdrag side resistance", sub: "above the neutral plane (CTDOT)", unit: "kip", value: I.hpRsDD || 0, onChange: v => set('hpRsDD', (isFinite(v) && v > 0) ? v : 0) }))),
++        (I.hpDriveOwner === "ctdot") && /*#__PURE__*/React.createElement(Field, { label: "Downdrag side resistance", sub: "above the neutral plane (CTDOT)", unit: "kip", value: I.hpRsDD || 0, onChange: v => set('hpRsDD', (isFinite(v) && v > 0) ? v : 0) }),
++        /*#__PURE__*/React.createElement(Field, { label: "Set-up factor f", sub: "R restrike / R EOD (10.7.3.4)", value: I.hpSetupFactor != null ? I.hpSetupFactor : 1.0, step: 0.05, onChange: v => set('hpSetupFactor', (isFinite(v) && v > 0) ? v : 1.0) }),
++        /*#__PURE__*/React.createElement(Field, { label: "Hammer capability", sub: "max driving resistance (WEAP); 0 = not entered", unit: "kip", value: I.hpHammerR || 0, onChange: v => set('hpHammerR', (isFinite(v) && v > 0) ? v : 0) })),
++      // PDA-DR (2026-10-20): driving stresses from a wave equation analysis (10.7.8)
++      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mt-1.5" },
++        /*#__PURE__*/React.createElement(Field, { label: "\u03c3dr compression", sub: "WEAP max; 0 = not entered", unit: "ksi", value: I.hpSigDrC || 0, onChange: v => set('hpSigDrC', (isFinite(v) && v > 0) ? v : 0) }),
++        /*#__PURE__*/React.createElement(Field, { label: "\u03c3dr tension", sub: "WEAP max; 0 = not entered", unit: "ksi", value: I.hpSigDrT || 0, onChange: v => set('hpSigDrT', (isFinite(v) && v > 0) ? v : 0) }),
++        /*#__PURE__*/React.createElement(Field, { label: "\u03c6da", sub: "driving, 6.5.4.2", value: I.hpPhiDa != null ? I.hpPhiDa : 1.0, onChange: v => set('hpPhiDa', (isFinite(v) && v > 0) ? v : 1.0) }))),
+@@ -18376,0 +18410,9 @@ function App() {
++      // PDA-DR (2026-10-20): drivability, 10.7.8; set-up / relaxation, 10.7.3.4
++      g.drive && /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement(RptHeading, { n: "4b", title: "Drivability", code: "AASHTO 10.7.8 \u00b7 10.7.3.4 \u00b7 \u03c6da 6.5.4.2" }),
++        /*#__PURE__*/React.createElement(Calc, { label: "Driving stress limit (steel)", eq: `\\sigma_{dr}\\le 0.9\\,\\phi_{da}f_y=0.9(${fmt(g.drive.phiDa, 2)})(${fmt(g.drive.Fy, 0)})=${fmt(g.drive.lim, 1)}\\ \\text{ksi}`, cite: "Eq. 10.7.8-1; \u03c6da = 1.00 (6.5.4.2)" }),
++        g.drive.stressC ? /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.stressC.pass, eq: `\\sigma_{dr,c}=${fmt(g.drive.stressC.s, 1)}\\ ${g.drive.stressC.pass ? "\\le" : ">"}\\ ${fmt(g.drive.lim, 1)}\\ \\text{ksi (wave equation, compression)}` })
++          : /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-700 mb-1" }, "Driving stresses not entered. 10.7.8 requires a wave equation analysis; enter its maximum compressive (and tensile) stress in the H-pile panel. The 10th Ed. gives no simplified estimate, and the tool does not compute one."),
++        g.drive.stressT && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.stressT.pass, eq: `\\sigma_{dr,t}=${fmt(g.drive.stressT.s, 1)}\\ ${g.drive.stressT.pass ? "\\le" : ">"}\\ ${fmt(g.drive.lim, 1)}\\ \\text{ksi (wave equation, tension)}` }),
++        g.drive.RndrEOD != null && /*#__PURE__*/React.createElement(Calc, { label: "Set-up / relaxation", eq: g.drive.formula ? `R_{ndr,EOD}=R_{ndr}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (driving formula: EOD method, \\phi\\text{ assumes set-up})}` : `f=\\dfrac{R_{restrike}}{R_{EOD}}=${fmt(g.drive.fsu, 2)};\\quad R_{ndr,EOD}=\\dfrac{R_{ndr}}{f}=\\dfrac{${fmt(g.drive.Rndr, 1)}}{${fmt(g.drive.fsu, 2)}}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip}`, note: g.drive.formula ? "C10.7.3.4.3." : (g.drive.fsu > 1 ? "Set-up: R_ndr to be verified by restrike (10.7.3.4.3)." : g.drive.fsu < 1 ? "Relaxation: restrike required (10.7.3.4.2)." : "No set-up or relaxation (f = 1.0)."), cite: "10.7.3.4" }),
++        g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ R_{ndr,EOD}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` })),
+```
