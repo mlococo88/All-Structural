@@ -12011,6 +12011,16 @@ function caseIsZero(gcase) {
    row: a tension check of the most uplifted pile at 0.90 (computeCapDist's dlAlt). Before, only the governing pile was
    checked. Synthetic, not saved; appended after all main Group rows. */
 function pupUpliftRow(gc, cd) {
+  // PUPE (2026-10-20): an Extreme Event group case (weight at 1.00) whose governing pile is in compression also gets the
+  // uplift row for its most uplifted pile at 1.00, checked with the Extreme Event resistance factors (row flag _ee).
+  if (gc && gc.type === "extreme") {
+    if (!cd || cd.dlBasis !== "ee" || !cd.sel || !(cd.sel.axial >= -1e-6) || !cd.piles || !cd.piles.length) return null;
+    const q = cd.piles.reduce((a, x) => x.axial < a.axial ? x : a, cd.piles[0]);
+    if (!(q.axial < -1e-6)) return null;
+    return { name: "Group \u25a6 " + (gc.name || "case") + " \u00b7 P" + q.id + " (uplift, Extreme Event, \u03b3DC 1.00)", type: "tension",
+      STL: Math.abs(q.axial), Plat: q.Vres || 0, Mhead: 0, _fromGroup: true, _groupCaseId: gc.id, _pileId: q.id, _ee: true,
+      _Vx: q.Vx, _Vy: q.Vy };
+  }
   if (!cd || cd.dlBasis !== "max" || !cd.dlAlt || !(cd.dlAlt.axial < -1e-6)) return null;
   if (gc && (gc.type || "strength") !== "strength") return null;
   const a = cd.dlAlt;
@@ -12023,7 +12033,11 @@ function capDlNote(cd) {
   if (!cd || !cd.dlBasis) return "";
   const alt = cd.dlAlt && isFinite(cd.dlAlt.axial) ? (cd.dlBasis === "min" ? " (with \u03b3DC = " + fmt(cd.dlAlt.dlFactor, 2) + ": pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip)"
     : "; pile P" + cd.dlAlt.selId + " is in uplift and is checked in its own Group row with \u03b3DC = 0.90: " + fmt(cd.dlAlt.axial, 1) + " kip") : "";   // PUP
-  if (cd.dlBasis === "ee") return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
+  if (cd.dlBasis === "ee") {   // PUPE: name a non-governing uplift pile, checked in its own row
+    const q = cd.piles && cd.piles.length ? cd.piles.reduce((a, x) => x.axial < a.axial ? x : a, cd.piles[0]) : null;
+    const own = q && q.axial < -1e-6 && cd.sel && cd.sel.axial >= -1e-6 ? "; pile P" + q.id + " is in uplift and is checked in its own Group row: " + fmt(q.axial, 1) + " kip" : "";
+    return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)" + own + ".";
+  }
   if (cd.dlBasis === "svc") return " \u03b3DC = 1.00 for this Service case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
   const pMin = cd.piles && cd.piles.length ? cd.piles.reduce((a, q) => q.axial < a.axial ? q : a, cd.piles[0]) : null;   // PUP: the most uplifted pile
   if (cd.dlBasis === "min") return " \u03b3DC = 0.90 (minimum, AASHTO LRFD 10th Ed. Table 3.4.1-2): the weight resists uplift" + (pMin && pMin.axial < -1e-6 ? " (pile P" + pMin.id + " = " + fmt(pMin.axial, 1) + " kip)" : "") + alt + ".";
@@ -15298,7 +15312,7 @@ function App() {
           const I2 = { ...I, STL: c.type === "tension" ? 0 : c.STL, Plat: Vc, pyMhead: c.Mhead || 0,
             Tu: c.type === "tension" ? c.STL : 0, ...(ax ? { hpAxis: ax } : {}) };
           // F44 (O35): EXTREME_PHI (micropile keys as before, plus the H-pile keys)
-          if (c.type === "extreme") Object.assign(I2, EXTREME_PHI);
+          if (c.type === "extreme" || c._ee) Object.assign(I2, EXTREME_PHI);   // PUPE: an Extreme Event uplift row (_ee) also takes the EE phi
           // F43 (O3): uncased-flexure demand from this case's own profile below the casing tip
           // (p-y); typed-in moments: the LPILE profile if imported, else the typed Mmax.
           // Before F43 the envelope passed no tip moment, so the uncased check always passed here.
@@ -15914,7 +15928,7 @@ function App() {
       Mtip: pyOK ? pyRes.Mtip_kft : Mtip,
       Mbelow: Mbel.M, zMbelow: Mbel.z, MbelowSrc: Mbel.src,
       // F44 (O35): Extreme Event phi when the active case is an Extreme case (as the envelope)
-      extremePhi: !!(cases[activeIdx] && cases[activeIdx].type === "extreme"),
+      extremePhi: !!(cases[activeIdx] && (cases[activeIdx].type === "extreme" || cases[activeIdx]._ee)),   // PUPE
       Mmax_kft: pyOK ? pyRes.Mmax_kft : solved.Mmax_kft,
       pyMmax: pyOK ? pyRes.Mmax_kft : null,
       pyMatchedLf,

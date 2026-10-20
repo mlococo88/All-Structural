@@ -15166,3 +15166,56 @@ index a94a9c6..4be0aa6 100644
 +      capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null,
 +      capDlMin: !!(cases[activeIdx] && cases[activeIdx]._dlMin)   // PUP: the active Group row is an uplift row at γDC 0.90
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-uplift-ee (PUPE: Extreme Event group cases also check their most uplifted pile, weight at 1.00; engineer decision 2026-10-20 after PUP; PR link added after merge)
+
+### PUPE. Extreme Event group case: second row, the pile in net uplift at γDC 1.00, with the Extreme Event resistance factors   [calc change] [MORE conservative: an uplift check that was missing]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (Extreme Event I and II: permanent loads 1.00); resistance factors as F44 (EXTREME_PHI: φ = 1.0, uplift 0.80; Art. 10.5.5.3.3 / 6.5.5, as already used for Extreme rows).
+- **Problem (PUP open item):** an "extreme" group case emitted one row, for its governing pile (largest |axial|). In a case governed by compression, a pile in net uplift was not checked.
+- **Rule:** for an "extreme" group case whose governing pile is in compression, if any pile is in net uplift (weight at 1.00, the case's only distribution), a second row is emitted: "Group ▦ <case> · P<id> (uplift, Extreme Event, γDC 1.00)", type "tension", T_u = |axial| of the most uplifted pile, with its shear. The row carries `_ee`, so "Run all" (anchor `if (c.type === "extreme" || c._ee)`) and the active-case modules (`extremePhi`) apply the Extreme Event resistance factors to it. As in PUP, the row is appended after all main Group rows.
+- **Service:** not added. The tool checks a Service row for head deflection only (`svcR`, the deflection limit); it has no Service uplift or capacity check, so there is nothing to apply the row to.
+- **Where:** `pupUpliftRow(gc, cd)` (new `if (gc && gc.type === "extreme")` branch at its top); the Run-all line `Object.assign(I2, EXTREME_PHI)`; `extremePhi:` in the App's `computeAll` options; `capDlNote` "ee" text names the uplift pile and says it is checked in its own row.
+- **Before / after code:** see the diff below.
+- **Check case** (as PUP: 3 × 3 group at 36 in, Σx² = 54 ft², cap + stem W = 52.65 kip at the centroid; Extreme Event case P = 270 kip, M_y = 1200 kip-ft):
+  - ΣP = 270 + 1.00 · 52.65 = 322.65 kip; 322.65 / 9 = 35.85 kip; bending 1200 · 3/54 = 66.67 kip.
+  - Main row (unchanged): P3 = 35.85 + 66.67 = **102.52 kip** compression (tool 102.5).
+  - Before: P1 = 35.85 − 66.67 = **−30.82 kip**, listed, not checked.
+  - After, new row: tension T_u = **30.82 kip** with the Extreme Event φ (tool "Group ▦ E1 · P1 (uplift, Extreme Event, γDC 1.00)", tension, 30.8).
+- **Default project:** the pile group is off, so no result change; the default page text is identical.
+- **Saved data (§5):** none (synthetic rows, stripped before saving).
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. Headless Chromium (React 18.3.1 / three r128 routed to the tests/libs copies for the test only), the PUP group project (S1 strength P 270 M_y 1200, S2 strength P 270, E1 extreme P 270 M_y 1200), origin/main `73be81e` vs the branch: the same four rows in both, plus "E1 · P1 (uplift, Extreme Event, γDC 1.00) tension 30.8" in the branch only; "Run all" lists it; default page text identical; no page errors.
+- **Other copies:** none.
+- **Open item (engineer):** when an Extreme Event case's *governing* pile is itself in uplift, its main row becomes type "tension" (existing behaviour, F44 era) and is checked with the Strength resistance factors, not the Extreme Event ones. Flagging it `_ee` too would make it consistent; not changed here.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `73be81e`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 4be0aa6..e4f8552 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -12013,0 +12014,10 @@ function pupUpliftRow(gc, cd) {
++  // PUPE (2026-10-20): an Extreme Event group case (weight at 1.00) whose governing pile is in compression also gets the
++  // uplift row for its most uplifted pile at 1.00, checked with the Extreme Event resistance factors (row flag _ee).
++  if (gc && gc.type === "extreme") {
++    if (!cd || cd.dlBasis !== "ee" || !cd.sel || !(cd.sel.axial >= -1e-6) || !cd.piles || !cd.piles.length) return null;
++    const q = cd.piles.reduce((a, x) => x.axial < a.axial ? x : a, cd.piles[0]);
++    if (!(q.axial < -1e-6)) return null;
++    return { name: "Group \u25a6 " + (gc.name || "case") + " \u00b7 P" + q.id + " (uplift, Extreme Event, \u03b3DC 1.00)", type: "tension",
++      STL: Math.abs(q.axial), Plat: q.Vres || 0, Mhead: 0, _fromGroup: true, _groupCaseId: gc.id, _pileId: q.id, _ee: true,
++      _Vx: q.Vx, _Vy: q.Vy };
++  }
+@@ -12026 +12036,5 @@ function capDlNote(cd) {
+-  if (cd.dlBasis === "ee") return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
++  if (cd.dlBasis === "ee") {   // PUPE: name a non-governing uplift pile, checked in its own row
++    const q = cd.piles && cd.piles.length ? cd.piles.reduce((a, x) => x.axial < a.axial ? x : a, cd.piles[0]) : null;
++    const own = q && q.axial < -1e-6 && cd.sel && cd.sel.axial >= -1e-6 ? "; pile P" + q.id + " is in uplift and is checked in its own Group row: " + fmt(q.axial, 1) + " kip" : "";
++    return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)" + own + ".";
++  }
+@@ -15301 +15315 @@ function App() {
+-          if (c.type === "extreme") Object.assign(I2, EXTREME_PHI);
++          if (c.type === "extreme" || c._ee) Object.assign(I2, EXTREME_PHI);   // PUPE: an Extreme Event uplift row (_ee) also takes the EE phi
+@@ -15917 +15931 @@ function App() {
+-      extremePhi: !!(cases[activeIdx] && cases[activeIdx].type === "extreme"),
++      extremePhi: !!(cases[activeIdx] && (cases[activeIdx].type === "extreme" || cases[activeIdx]._ee)),   // PUPE
+```
