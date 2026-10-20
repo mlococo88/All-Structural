@@ -2759,3 +2759,454 @@ index 6c9b39f..ebe0502 100644
 ### Open items (not changed)
 - 11.6.5.2.1: for walls founded on Site Class A, B or B/C, k_h0 = 1.2·A_s. The tool uses k_h = ratio × A_s with no 1.2 factor. Engineer decision (add a site-class input or a note?).
 - ℓd is still the upper bound (λrc = 1.0). A computed λrc (cover, spacing) would shorten it; not offered.
+
+## 2026-10-19 — PR: claude/abut-defects-factors — load factors, EE limits, drag load and connection force to AASHTO LRFD 10th Ed. (PR link added after merge)
+
+Defects from the 2026-10-19 review (H1, H2, H3, H5, H6, H7), approved by the engineer. Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); every value below was checked against the 10th Ed. text (Table 3.4.1-3 was read from the rendered page). Numbers come from the real `computeAll()` of origin/main `832728d` and of the branch in headless Chromium. "Default project" = the built-in example (B = 13 ft, L = 44 ft, 6 girders, DC/DW/LL = 85/12/70 kip per girder; TU/CR·SH entered 2.5/1.5 kip per girder, floating share 50 %). The exact edits are in the appendix as a unified diff against `832728d`.
+
+### F27. γTU = 1.00 for force effects (was 0.50)   [calc change] [MORE conservative]
+- **Where:** `defaultState()` `factors.gTU`; the `LIMITS` table uses it unchanged (Strength I, III, IV, V). Tooltip of I-8 "γ TU (force effects)"; note of Tab 2 §2.1 (anchor `TU uses γ<sub>TU</sub> =`); constants list C-20 (default 1.00).
+- **Before:** `gTU:0.50, gCR:0.50,         // γTU, γCR/SH (strength force effects; EOR confirm)`
+- **After:** `gTU:1.00, gCR:1.00,         // γTU force effects [T.3.4.1-6]; γCR/SH concrete substructure under a non-segmental superstructure [T.3.4.1-3]`
+- **Provision:** AASHTO LRFD 10th Ed. Table 3.4.1-1 (Strength rows: TU column = γTU) and Table 3.4.1-6 (γTU = 1.20 displacements, 1.00 force effects).
+- **Check case (default project, bearing, Strength I 1.25DC + 1.50DW + 1.00EV + 1.50EH + 1.75(LL,BR,LS) + γ·TU/CR/SH):** TU + CR·SH = (2.5 + 1.5)·6·0.50 = 12.0 kip at z = t_f + h_stem = 17.0 ft. V = 2977.88 kip, ΣM_V = 19538.16 kip-ft.
+  - Before (γ = 0.50): ΣM_H = 6107.11; x̄ = (19538.16 − 6107.11)/2977.88 = 4.5103 ft; e = 6.5 − 4.5103 = 1.9897 ft; B′ = 13 − 3.9794 = 9.0206 ft; q = 2977.88/(9.0206·44) = **7.503 ksf**, D/C = 7.503/(0.45·18) = **0.926**.
+  - After (γ = 1.00, together with F28): ΔM_H = 0.50·12.0·17.0 = 102.0 → ΣM_H = 6209.11; x̄ = 4.4760; e = 2.0240; B′ = 8.9520; q = 2977.88/(8.9520·44) = **7.560 ksf**, D/C = **0.933**.
+  - Eccentricity (Strength I, V = 2392.83, ΣM_V = 15761.54): e 2.465 → **2.508 ft**, D/C 0.569 → **0.579**.
+  - Stem M_u: +0.50·12.0·h_stem/L_ab = 6.0·14/44 = 1.909 → 110.15 → **112.06 kip-ft/ft**; V_u 13.111 → **13.248 kip/ft**.
+
+### F28. γCR/SH = 1.0 (was 0.50)   [calc change] [MORE conservative]
+- **Where / before / after:** same line as F27 (`gCR`); tooltip of I-8 "γ CR/SH" added.
+- **Provision:** AASHTO LRFD 10th Ed. Table 3.4.1-3: concrete substructures supporting non-segmental superstructures, CR and SH = 1.0 (for a segmental superstructure the table points to γp for DC; the tool has no superstructure-type input, so the tooltip says so).
+- **Check case:** included in F27 (the 12.0 kip is 7.5 kip TU + 4.5 kip CR·SH; the CR·SH part of ΔM_H is 0.50·4.5·17 = 38.25 of the 102.0 kip-ft).
+
+### F29. Extreme Event I bearing φ_b = 0.80 (was 1.00); other EE φ reviewed   [calc change] [MORE conservative]
+- **Where:** `defaultState()` `seismic.phiBEQ`; the `if(!S.seismic)` fallback in `migrate()`; I-11 tooltips; constants list C-20.
+- **Before:** `phiTauEQ:1.00, phiBEQ:1.00, phiCEQ:1.00, eFracEQ:0.3333 },`
+- **After:** `phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,` (+ `eLimEQmode`, `zone`: F30, F32)
+- **Provision:** AASHTO LRFD 10th Ed. Art. 11.5.8 (EE φ = 1.0 unless specified; bearing of gravity and semigravity walls 0.8; overall stability 0.9) and 10.5.5.3.3 (foundations 1.0; pile/shaft uplift ≤ 0.80).
+- **Other EE φ checked, unchanged:** φτ = 1.00 (11.5.8 general); φc pile compression = 1.00 (10.5.5.3.3); pile uplift at EE uses the strength φ_up (default 0.60 ≤ 0.80, conservative); φep at EE stays the strength 0.50 (conservative against 1.0); overall stability (0.9) is not computed by the tool.
+- **Check case (default project, EE-I on, A_s = 0.30):** governing EE-I bearing permutation 0.90DC + 0.65DW + 1.00EV + 1.50EH + 1.00EQ: V = 1657.83 kip, e = 4.855 ft, B′ = 13 − 9.711 = 3.289 ft, q = 1657.83/(3.289·44) = 11.455 ksf. D/C before 11.455/(1.00·18) = **0.636**; after 11.455/(0.80·18) = **0.796** (Strength I 0.933 still governs).
+
+### F30. Extreme Event I eccentricity limit interpolated on γEQ, soil and rock   [calc change] [unchanged at γEQ = 0; less restrictive with live load per 11.6.5.1; unconservative rock hint removed]
+- **Where:** `computeAll`, new `eFracEQfor(liveOn)` beside `resFor(lsName,liveOn)` (anchor `// EE-I eccentricity limit [11.6.5.1]`); the eccentricity loop takes e_lim per permutation; new input `seismic.eLimEQmode` ("aashto" | "user"; the e/B box shows only for "user"); Tab 3 §3.2 shows e_lim symbolic → substituted → result; report key-result row and input echo.
+- **Before:** `eLim: eq? (+S.seismic.eFracEQ)*B : …` (default 0.3333; tooltip suggested 0.45 on rock).
+- **After:**
+  ```js
+  function eFracEQfor(liveOn){ const s=S.seismic; if(s.eLimEQmode==="user") return +s.eFracEQ;
+    const gq=liveOn? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }
+  … eLim: eq? eFracEQfor(liveOn)*B : …
+  ```
+- **Provision:** AASHTO LRFD 10th Ed. Art. 11.6.5.1 (soil and rock: middle two-thirds at γEQ = 0, middle eight-tenths at γEQ = 1, linear between) and 10.6.4.2 (γEQ = 0 where live load reduces e; a permutation without live load therefore uses B/3).
+- **Check case (B = 13 ft):** γEQ = 0 → e_lim = 13/3 = 4.333 ft (before 0.3333·13 = 4.3329: EE-I eccentricity D/C 1.1206 → **1.1205** in the default project with EE-I on, A_s = 0.30). γEQ = 0.5 with live load → e_lim = 13·(1/3 + 0.0667·0.5) = **4.767 ft**. γEQ = 1 → 0.4·13 = 5.20 ft. The removed rock hint (0.45) would have allowed 5.85 ft.
+
+### F31. Drag load (downdrag): γDR = 0.00 geotechnical, 1.10 structural   [calc change] [LESS conservative for the geotechnical pile check, per the 10th Ed.]
+- **Where:** `computeAll`, pile branch, anchor `// governing over strength/EE states for capacity checks (per-LS φc). Drag load DR`; `defaultState()` `piles.gDD`; I-7 labels/tooltips; Tab 4 §4.4 (note + new block "Structural pile axial demand with drag load"); design-basis note 12; input echo.
+- **Before:**
+  ```js
+  const p=S.piles, DDf=(+p.gDD||1.4)*(+p.dd||0);
+  … const dcv=(r.best.Pmax+DDf)/(phiCls*p.Rn);
+  ```
+- **After:**
+  ```js
+  const p=S.piles, gDR=(p.gDD===undefined||p.gDD===null||p.gDD==="")?1.10:+p.gDD, DR=+p.dd||0, DDf=0;
+  … if(!LIMITS[lsName].eq && r.best.Pmax>gStr.P) gStr={P:r.best.Pmax, ls:lsName, lbl:r.best.c?.lbl};
+  … const dcv=(r.best.Pmax+DDf)/(phiCls*p.Rn);
+  R.checks.pileComp={…, DR, gDR, Pstr:gStr.P+gDR*DR, PstrTop:gStr.P, PstrLs:gStr.ls, PstrLbl:gStr.lbl, …}
+  ```
+  The input key `piles.gDD` keeps its name; it is now γDR for structural strength (default 1.10). The tool still has no pile structural check; the demand P_max,Str + γDR·DR is reported for it. The §4.4 compression line now shows the φc of the governing limit state (it showed the strength φc even when EE-I governed; display only).
+- **Provision:** AASHTO LRFD 10th Ed. Table 3.4.1-1 note (γDR = 1.10 structural strength, 0.00 geotechnical strength), Art. 3.11.8 / C3.11.8 (neutral-plane method; drag load does not act at the geotechnical strength limit; liquefaction drag only at Extreme Event I, not combined with consolidation drag).
+- **Check case (default project, piles, DR = 20 kip/pile; φc·R_n = 0.70·330 = 231 kip):**
+  - Before: P_max = 211.21 kip; D/C = (211.21 + 1.40·20)/231 = 239.21/231 = **1.036**.
+  - After: P_max = 212.71 kip (F27/F28 add 1.50 kip); D/C = 212.71/231 = **0.921**; structural demand P_u,str = 212.71 + 1.10·20 = **234.71 kip**.
+  - With DR = 0 only F27/F28 act: 0.914 → 0.921.
+
+### F32. Minimum seismic connection force per 3.10.9 (was 0.10(DC + DW))   [calc change, design note] [MORE conservative]
+- **Where:** `computeAll` C-9, anchor `// Minimum seismic connection force (each restrained direction) [3.10.9]`; new input `seismic.zone` (I-11, shown also with EE-I off, together with A_s); Tab 3 §3.6 (MassDOT note kept); design-basis note 11; SubLoads importer note.
+- **Before:**
+  ```js
+  const Fconn=0.10*(agg.DC.P+agg.DW.P);
+  R.seismic={Fconn, perBeam:0.10*(agg.DC.P/Math.max(1,S.beams.N)+agg.DW.P/Math.max(1,S.beams.N)), trib:agg.DC.P+agg.DW.P};
+  ```
+- **After:**
+  ```js
+  const zone=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), AsC=Math.max(0,+S.seismic.As||0), gEQc=Math.max(0,+S.seismic.gEQll||0);
+  const Wperm=agg.DC.P+agg.DW.P, Wtrib=Wperm+gEQc*agg.LL.P, cZ1=AsC<0.05?0.15:0.25;
+  const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm, Fconn=Math.max(F1,F0);
+  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, LL:agg.LL.P};
+  ```
+- **Provision:** AASHTO LRFD 10th Ed. Art. 3.10.9.2 (Zone 1: ≥ 0.15 × the reaction from tributary permanent + EQ live load where A_s < 0.05; ≥ 0.25 × for all other Zone 1 sites); 3.10.9.1 and 4.7.4.2 (single-span bridges, any zone: ≥ A_s × tributary permanent load); 3.10.9.3 / 3.10.9.4 (Zones 2–4: forces from the seismic analysis, not computed by the tool; the panel says so and shows only the single-span floor). Zone per Table 3.10.6-1 (user input, default 1).
+- **Choices made here (flag if not wanted):** the 3.10.9.1 floor A_s·(DC + DW) is applied in every zone (in Zone 1 it governs only when A_s > 0.25; conservative for a multispan bridge); the EQ live load is γEQ·LL with the I-11 γEQ (default 0).
+- **Check case (default project, A_s = 0.15, Zone 1, γEQ = 0):** DC + DW = 510 + 72 = 582 kip. Before 0.10·582 = **58.2 kip** (9.70 kip per beam). After F_Z1 = 0.25·582 = 145.5 kip; F_1span = 0.15·582 = 87.3 kip; F_conn = **145.5 kip** (24.25 kip per beam). A_s = 0.04: 0.15·582 = 87.3 kip. A_s = 0.30, γEQ = 0.5: F_Z1 = 0.25·(582 + 0.5·420) = 198.0 kip > 0.30·582 = 174.6 kip.
+
+### Self-test re-bake
+- `__ST_EXPECT` values changed by F27/F28 only (hand-checked above): Eccentricity e 2.465267469172704 → 2.507894818378456; Bearing q_f 7.502750812839938 → 7.560165332011858; Bearing D/C 0.9262655324493752 → 0.933353744692822; Stem M_u 110.15268922678449 → 112.0617801358754; Shear-friction D/C 0.05702500795507431 → 0.05761809346762622 (V_u 13.111 → 13.248 kip/ft, ratio 1.0104). The other 11 values are unchanged; the self-test passes.
+
+### Saved data (CLAUDE.md §5)
+- No key renamed and no format change. New fields: `seismic.eLimEQmode`, `seismic.zone`, `meta.defRev` (they change the Input ID once).
+- Migration in `migrate()`, anchor `// AASHTO LRFD 10th Ed. default revision (meta.defRev 1`: for a project without `meta.defRev`, a value that still equals the old default moves to the new default; an edited value is kept:
+  - `factors.gTU` 0.50 → 1.00; `factors.gCR` 0.50 → 1.00; `seismic.phiBEQ` 1.00 → 0.80; `piles.gDD` 1.40 → 1.10;
+  - `seismic.eFracEQ` = 0.3333 → `eLimEQmode` "aashto"; any other value → "user" (the fixed value is kept);
+  - `seismic.zone` (absent) → 1.
+  Then `meta.defRev = 1`. What changed is listed once in the warnings box (dismiss with OK). After the autosave is opened, the migrated project is saved at once, so the notice does not return; a copy in the saved-projects list is migrated each time it is loaded until it is overwritten. Compare (A vs B) runs migrate silently. Fresh projects and Reset already carry the new defaults (nothing listed).
+- The meaning of `piles.gDD` changes (geotechnical γDD → structural γDR). A project that stored an edited value keeps the number; it no longer enters the φc·R_n check (F31).
+- Verified: a project autosaved by main (old defaults) opens in the branch with all six items listed and gives the branch's default D/Cs; a project with γTU = 0.75, e/B = 0.45, φb,EE = 0.90 keeps all three (mode "user"), and only γCR, γDR and the zone are listed; after a reload no notice appears.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless Chromium, main `832728d` vs branch, `computeAll()` on the default project and the variants piles (DR = 20), spread on rock (q_n = 40 ksf), seismic (EE-I, A_s = 0.30), seismic on rock with γEQ = 0.5, piles + seismic, front batter, ES = 0.5 ksf: the only D/C changes are those listed above and their structural knock-ons (stem, toe, heel and shear friction through γTU/γCR). Every tab renders with no page error; all 353 TeX strings of these cases render in KaTeX 0.16.9 with `throwOnError`. `node tests/compare.mjs --tool page`: storage same, page text differs by the changed values and labels.
+- **Other copies:** none.
+
+### Open items (not changed)
+- N8 (review): the constants list C-20 still compares γWS,III with 1.40 (tool default and 10th Ed. 1.00). Not in the approved list.
+- MassDOT connection force (Guide Spec 4.6 / MassDOT 3.4.4: permanent load only, 1.25·S_a for high SDC A) is not implemented; the MassDOT note is kept.
+- φep at EE (strength 0.50 used; 11.5.8 gives 1.0) left conservative.
+
+### Appendix — unified diff (exact before/after)
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 6606efa..453d8aa 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -613,7 +613,7 @@ function defaultState(){
+       offX:0.0, offY:0.0,
+       Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60,
+       pileSize:12.0, pileShape:"hp",  // width/diameter (in); 'square' | 'round' | 'hp' — punching perimeter
+-      dd:0.0, gDD:1.40                    // downdrag per pile (kip) and its load factor [T.3.4.1-2]
++      dd:0.0, gDD:1.10                    // drag load DR per pile (kip) and γDR for structural strength [T.3.4.1-1 note: 1.10 structural, 0.00 geotechnical]
+     },
+     joint:{ prep:"roughened" },       // stem-footing construction joint: 'monolithic'|'roughened'|'smooth' [5.7.4.4]
+     bearing:{ padL:18.0, padW:24.0, seatBar:"5", seatSp:6.0, // bearing pad plan L(long)×W(trans) in; provided seat mat
+@@ -629,7 +629,9 @@ function defaultState(){
+     seismic:{ on:false, As:0.15, khR:0.5, kv:0.0, hEQr:0.6,       // EE-I: site accel coeff, kh = khR·As (walls free to displace), ΔPAE at hEQr·H
+       gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I (used only with gEHEQmode "agency"); γEQ on live load (project-specific)
+       gEHEQmode:"gp",                                             // EE-I γEH: "gp" = γp max/min [T.3.4.1-1/-2]; "agency" = fixed gEHEQ
+-      phiTauEQ:1.00, phiBEQ:1.00, phiCEQ:1.00, eFracEQ:0.3333 },  // extreme-event resistance factors & e/B limit (soil ⅓, rock 0.45)
++      phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,    // extreme-event resistance factors [11.5.8: 1.0; bearing 0.8 for semigravity walls; 10.5.5.3.3]; e/B (used only with eLimEQmode "user")
++      eLimEQmode:"aashto",                                        // EE-I e limit: "aashto" = B·(1/3 + (0.4 − 1/3)·γEQ) soil and rock [11.6.5.1]; "user" = fixed eFracEQ
++      zone:1 },                                                   // seismic zone [T.3.10.6-1]: connection force [3.10.9]
+     meta:{ revs:[] },                                             // revision history: {n, ts, fp} on each project save
+     factors:{
+       // Table 3.4.1-1 / 3.4.1-2 — all editable
+@@ -637,7 +639,7 @@ function defaultState(){
+       gpEVmax:1.35, gpEVmin:1.00, gpEHmax:1.50, gpEHmin:0.90,
+       llS1:1.75, llS5:1.35,       // γLL Strength I / Strength V
+       wsS3:1.00, wsS5:1.00, wlS5:1.00,   // γWS = 1.00 since the 2017 (8th Ed.) wind revision — WS inputs are ultimate (115-mph-class) pressures [3.8.1, Table 3.4.1-1]
+-      gTU:0.50, gCR:0.50,         // γTU, γCR/SH (strength force effects; EOR confirm)
++      gTU:1.00, gCR:1.00,         // γTU force effects [T.3.4.1-6]; γCR/SH concrete substructure under a non-segmental superstructure [T.3.4.1-3]
+       gpDCmaxS4:1.50,             // γDC max for Strength IV [T.3.4.1-2]
+       vWS3:0, vWS5:80, vWSsvc:70  // wind speeds (mph): WS reactions are entered at V_III; 0/blank V_III = no per-limit-state scaling [T.3.8.1.1.2-1]
+     },
+@@ -673,6 +675,7 @@ function setPath(obj,path,val){
+ }
+ let S = defaultState();
+ let WARNINGS = [];   // {level:'warn'|'err', msg}
++let DEFAULTS_NOTICE = null;   // one-time list of saved values moved to the 10th Ed. defaults by migrate() (shown in the warnings box until dismissed)
+ function warn(msg,level="warn"){ WARNINGS.push({level,msg}); }
+ // Extreme Event I γEH: null = γp max/min permuted [T.3.4.1-1, T.3.4.1-2] (default); a number = the "agency policy" fixed value seismic.gEHEQ
+ function eqEHfixed(){ const s=S.seismic||{}; return s.gEHEQmode==="agency"? +s.gEHEQ : null; }
+@@ -953,10 +956,10 @@ function migrate(){
+   if(S.fnd.scour===undefined) S.fnd.scour=false;
+   if(S.fnd.eFracSoil===undefined) S.fnd.eFracSoil=1/3;   // 11.6.3.3 (2015+): middle two-thirds on soil
+   if(S.fnd.eFracRock===undefined) S.fnd.eFracRock=0.45;  // middle nine-tenths on rock
+-  if(S.piles.dd===undefined){ S.piles.dd=0; S.piles.gDD=1.40; }
++  if(S.piles.dd===undefined){ S.piles.dd=0; S.piles.gDD=1.10; }
+   // EE-I γEH mode: a project that stores gEHEQ keeps that fixed value ("agency"); one without it gets the γp default
+   if(S.seismic && S.seismic.gEHEQmode===undefined) S.seismic.gEHEQmode=(S.seismic.gEHEQ!==undefined)?"agency":"gp";
+-  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:1.00,phiCEQ:1.00,eFracEQ:0.3333};
++  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
+   if(!S.meta) S.meta={revs:[]};
+   if(!S.ui.d3Sel) S.ui.d3Sel="ls:Strength I";
+   if(!S.ui.d3Tog) S.ui.d3Tog={piles:true,P:true,Vx:true,Vy:true,eh:true,ls:true,soil:true,water:true,dims:true,wire:false};
+@@ -969,6 +972,23 @@ function migrate(){
+   if(S.factors.vWSsvc===undefined) S.factors.vWSsvc=70;
+   if(!S.ui.rptOpts) S.ui.rptOpts={inputEcho:true, permFull:true, detailTables:true, viz3d:true, selftest:true, charts:true};
+   else["inputEcho","permFull","detailTables","viz3d","selftest","charts"].forEach(k=>{ if(S.ui.rptOpts[k]===undefined) S.ui.rptOpts[k]=true; });
++  // AASHTO LRFD 10th Ed. default revision (meta.defRev 1, 2026-10-19): a saved value that still equals the previous tool
++  // default moves to the new default; a value the user edited is kept. What changed is listed once (DEFAULTS_NOTICE).
++  if(!(S.meta.defRev>=1)){
++    const upd=[];
++    const mv=(path,oldV,newV,label)=>{ const v=getPath(S,path); if(v!==undefined&&v!==null&&v!==""&&Math.abs(+v-oldV)<1e-9){ setPath(S,path,newV); upd.push(label+": "+oldV.toFixed(2)+" → "+newV.toFixed(2)); } };
++    mv("factors.gTU",0.50,1.00,"γTU, force effects [T.3.4.1-6]");
++    mv("factors.gCR",0.50,1.00,"γCR/SH, concrete substructure, non-segmental superstructure [T.3.4.1-3]");
++    mv("seismic.phiBEQ",1.00,0.80,"φb bearing at Extreme Event I, semigravity wall [11.5.8]");
++    mv("piles.gDD",1.40,1.10,"γDR drag load, structural strength [T.3.4.1-1 note]");
++    if(S.seismic.eLimEQmode===undefined){
++      if(Math.abs(+S.seismic.eFracEQ-0.3333)<1e-9){ S.seismic.eLimEQmode="aashto"; upd.push("Extreme Event I eccentricity limit: fixed 0.3333·B → B·(1/3 + (0.4 − 1/3)·γEQ) [11.6.5.1]"); }
++      else S.seismic.eLimEQmode="user";   // an edited e/B is kept as a fixed (user) limit
++    }
++    if(S.seismic.zone===undefined){ S.seismic.zone=1; upd.push("Seismic zone (new input for the connection force [3.10.9]) set to Zone 1 — check it against Table 3.10.6-1"); }
++    S.meta.defRev=1;
++    if(upd.length) DEFAULTS_NOTICE=upd;
++  }
+ }
+ function seedExampleReactions(){
+   const ex={DC:{P:85},DW:{P:12},LL:{P:70},BR:{Vx:3.5},TU:{Vx:2.5},CRSH:{Vx:1.5},
+@@ -1213,9 +1233,9 @@ function buildInputs(){
+       ${inpRow("Resistance factor φ<sub>c</sub>","piles.phiC","–")}
+       ${inpRow("Nominal uplift R<sub>n,up</sub>","piles.RnUp","kip")}
+       ${inpRow("Resistance factor φ<sub>up</sub>","piles.phiUp","–")}
+-      <div class="subhead">Downdrag (DD) [3.11.8, T.3.4.1-2]</div>
+-      ${inpRow("Downdrag load per pile","piles.dd","kip",{title:"0 = none. Added to each pile's factored compression demand at γDD; conservatively excluded from uplift relief."})}
+-      ${inpRow("γ<sub>DD</sub>","piles.gDD","–")}
++      <div class="subhead">Drag load / downdrag (DR) [3.11.8, T.3.4.1-1]</div>
++      ${inpRow("Drag load per pile DR","piles.dd","kip",{title:"0 = none. Drag load from the neutral-plane analysis (geotechnical report). γDR = 0.00 for geotechnical strength: not added to the φc·Rn check. γDR (below) applies to the structural pile demand P + γDR·DR, reported in Tab 4 §4.4 for the structural pile check. Service (settlement at the neutral plane) is a geotechnical check. Excluded from uplift relief. [3.11.8, T.3.4.1-1 note]"})}
++      ${inpRow("γ<sub>DR</sub> (structural strength)","piles.gDD","–",{title:"1.10 for structural strength; 0.00 for geotechnical strength (fixed) [T.3.4.1-1 note]."})}
+       <div class="subhead">Pile section (for punching-shear perimeter)</div>
+       ${selRow("Pile shape","piles.pileShape",[["hp","H-pile (square envelope)"],["square","Square / precast"],["round","Round / pipe / drilled"]])}
+       ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing. [AASHTO 5.12.8.6]"})}
+@@ -1239,8 +1259,8 @@ function buildInputs(){
+     ${inpRow("γ WL — Strength V","factors.wlS5","–")}
+     ${inpRow("Wind speed V for the WS inputs (Strength III)","factors.vWS3","mph",{title:"Blank/0 = WS reactions used unscaled in Strength III, Strength V and Service I (previous behaviour). When entered, Strength V and Service I WS are scaled by (V_LS/V_III)² [Table 3.8.1.1.2-1]."})}
+     ${inpRow("&nbsp;&nbsp;Wind speed — Strength V","factors.vWS5","mph")}${inpRow("&nbsp;&nbsp;Wind speed — Service I","factors.vWSsvc","mph")}
+-    ${inpRow("γ TU (force effects)","factors.gTU","–",{title:"0.50 for strength force effects in most substructures; 1.20 for deformations. EOR to confirm."})}
+-    ${inpRow("γ CR/SH","factors.gCR","–")}
++    ${inpRow("γ TU (force effects)","factors.gTU","–",{title:"1.00 for force effects; 1.20 applies to displacements [T.3.4.1-6]. A reduction of TU force effects belongs in the stiffness (pad G, h_rt), not in this factor (C3.4.1)."})}
++    ${inpRow("γ CR/SH","factors.gCR","–",{title:"1.0 for a concrete substructure supporting a non-segmental superstructure [T.3.4.1-3]. Under a segmental superstructure use γp for DC [T.3.4.1-3]."})}
+     <div class="in-note">All factors are editable constants for state-DOT overrides; the engineer of record is responsible for confirming values against the governing edition. Service I uses γ = 1.0 throughout.</div>
+   `);
+ 
+@@ -1290,10 +1310,13 @@ function buildInputs(){
+       ${inpRow("γ<sub>EQ</sub> on live load","seismic.gEQll","–",{title:"Project-specific per 3.4.1; commonly 0 for abutments, up to 0.5 where live presence during EQ is credible."})}
+       <div class="subhead">Extreme-event resistance factors & limits [10.5.5.3, 11.6.5]</div>
+       ${inpRow("φ<sub>τ</sub> sliding (EE)","seismic.phiTauEQ","–")}
+-      ${inpRow("φ<sub>b</sub> bearing (EE)","seismic.phiBEQ","–")}
+-      ${inpRow("φ<sub>c</sub> pile axial (EE)","seismic.phiCEQ","–")}
+-      ${inpRow("Eccentricity limit fraction e/B (EE)","seismic.eFracEQ","–",{title:"Commonly ⅓ on soil, 0.45 on rock at Extreme Event. [11.6.5.1]"})}
+-    `:`<div class="in-note">OFF — Strength/Service only. The minimum seismic connection force (0.10·DC) remains surfaced as a design note in Tab 3. Enable for sites where SDC > A or where the owner requires an M–O check.</div>`}
++      ${inpRow("φ<sub>b</sub> bearing (EE)","seismic.phiBEQ","–",{title:"0.8 for bearing of gravity and semigravity walls (abutments) at Extreme Event [11.5.8]."})}
++      ${inpRow("φ<sub>c</sub> pile axial (EE)","seismic.phiCEQ","–",{title:"1.0 for compression at Extreme Event [10.5.5.3.3]. Uplift at EE uses the strength φ_up (≤ 0.80 required by 10.5.5.3.3)."})}
++      ${selRow("Eccentricity limit (EE)","seismic.eLimEQmode",[["aashto","Interpolated on γEQ, soil and rock [11.6.5.1]"],["user","Fixed fraction e/B (owner rule)"]],{rebuild:true})}
++      ${S.seismic.eLimEQmode==="user"?inpRow("&nbsp;&nbsp;Eccentricity limit fraction e/B (EE)","seismic.eFracEQ","–",{title:"Owner rule. The 10th Ed. limit is B/3 at γEQ = 0 and 0.4B at γEQ = 1, soil and rock [11.6.5.1]; a larger value is not conservative."}):`<div class="in-note">e<sub>lim</sub> = B·(1/3 + (0.4 − 1/3)·γ<sub>EQ</sub>): B/3 at γ<sub>EQ</sub> = 0, 0.4B at γ<sub>EQ</sub> = 1; permutations without live load use γ<sub>EQ</sub> = 0 [11.6.5.1, 10.6.4.2].</div>`}
++    `:`<div class="in-note">OFF — Strength/Service only. The minimum seismic connection force [3.10.9] remains surfaced as a design note in Tab 3. Enable for sites where SDC > A or where the owner requires an M–O check.</div>`}
++    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]])}
++    ${sq.on?"":inpRow("A<sub>s</sub> for the connection force","seismic.As","g",{title:"Zone 1 connection force: 0.15 when A_s < 0.05, else 0.25 [3.10.9.2]; single-span minimum A_s × permanent load [3.10.9.1]."})}
+   `);
+ 
+   /* ---- I-12 Assumptions ---- */
+@@ -1758,10 +1781,13 @@ function computeAll(){
+   }
+ 
+   const STR_LIMITS=["Strength I","Strength III","Strength IV","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
+-  function resFor(lsName){ const eq=LIMITS[lsName]&&LIMITS[lsName].eq;
++  // EE-I eccentricity limit [11.6.5.1]: B·(1/3 + (0.4 − 1/3)·γEQ), soil and rock; γEQ = 0 for a permutation without live load [10.6.4.2]
++  function eFracEQfor(liveOn){ const s=S.seismic; if(s.eLimEQmode==="user") return +s.eFracEQ;
++    const gq=liveOn? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }
++  function resFor(lsName,liveOn){ const eq=LIMITS[lsName]&&LIMITS[lsName].eq;
+     return { phiTau: eq? +S.seismic.phiTauEQ : fn.phiTau,
+              phiB:   eq? +S.seismic.phiBEQ   : fn.phiB,
+-             eLim:   eq? (+S.seismic.eFracEQ)*B : B*(fn.matl==="rock"?(+fn.eFracRock||0.45):(+fn.eFracSoil||(1/3))),
++             eLim:   eq? eFracEQfor(liveOn)*B : B*(fn.matl==="rock"?(+fn.eFracRock||0.45):(+fn.eFracSoil||(1/3))),
+              phiC:   eq? +S.seismic.phiCEQ   : +S.piles.phiC };
+   }
+   R.resFor=resFor;
+@@ -1788,8 +1814,8 @@ function computeAll(){
+     // ---- Eccentricity [11.6.3.3] ----
+     let ecc={dc:-1};
+     for(const lsName of STR_LIMITS){
+-      const eLim=resFor(lsName).eLim;
+       for(const pl of permutations(lsName)){
++        const eLim=resFor(lsName,pl.liveOn).eLim;
+         const c=comboEffects(lsName,pl.perm,pl.liveOn,true);
+         if(c.V<=0) continue;
+         const xbar=(c.Mv-c.Mh)/c.V, eS=B/2-xbar, e=Math.abs(eS), dc=e/eLim;   // |e| [11.6.3.3]; eS < 0 = resultant on the heel side
+@@ -1892,17 +1918,19 @@ function computeAll(){
+       }
+       R.pile.perLS=perLS;
+ 
+-      // governing over strength/EE states for capacity checks (per-LS φc; DD added to compression)
+-      const p=S.piles, DDf=(+p.gDD||1.4)*(+p.dd||0);
+-      let gMax={dcv:-Infinity}, gMin={Pmin:Infinity}, gH={H:-1};
++      // governing over strength/EE states for capacity checks (per-LS φc). Drag load DR: γDR = 0.00 for geotechnical strength,
++      // so it is not added to φc·Rn; γDR (1.10) for structural strength gives the structural pile demand P + γDR·DR [T.3.4.1-1 note, 3.11.8]
++      const p=S.piles, gDR=(p.gDD===undefined||p.gDD===null||p.gDD==="")?1.10:+p.gDD, DR=+p.dd||0, DDf=0;
++      let gMax={dcv:-Infinity}, gMin={Pmin:Infinity}, gH={H:-1}, gStr={P:-Infinity};
+       for(const lsName of STR_LIMITS){
+         const r=perLS[lsName], phiCls=resFor(lsName).phiC;
++        if(!LIMITS[lsName].eq && r.best.Pmax>gStr.P) gStr={P:r.best.Pmax, ls:lsName, lbl:r.best.c?.lbl};   // structural: strength states (EE-I DR is liquefaction-only [3.11.8])
+         const dcv=(r.best.Pmax+DDf)/(phiCls*p.Rn);
+         if(dcv>gMax.dcv) gMax={...r.best, ls:lsName, dcv, phiC:phiCls};
+         if(r.worstMin.Pmin<gMin.Pmin) gMin={...r.worstMin, ls:lsName};
+         if(r.worstH.H>gH.H) gH={...r.worstH, ls:lsName};
+       }
+-      R.checks.pileComp={dc:gMax.dcv, P:gMax.Pmax, DD:DDf, pile:actIndexToNo(act,gMax.iMax),
++      R.checks.pileComp={dc:gMax.dcv, P:gMax.Pmax, DD:DDf, DR, gDR, Pstr:gStr.P+gDR*DR, PstrTop:gStr.P, PstrLs:gStr.ls, PstrLbl:gStr.lbl, pile:actIndexToNo(act,gMax.iMax),
+         RR:gMax.phiC*p.Rn, phiC:gMax.phiC, lbl:gMax.c?.lbl, ls:gMax.ls, det:gMax};
+       const uplift=gMin.Pmin<0;
+       R.checks.pileUplift={dc:uplift? -gMin.Pmin/(p.phiUp*p.RnUp):0, P:gMin.Pmin, uplift,
+@@ -1927,8 +1955,14 @@ function computeAll(){
+   const Nreq=(8+0.02*g.spanL+0.08*Hsup)*(1+0.000125*g.skew*g.skew); // in [4.7.4.4]
+   const Nprov=seatW*12-0;   // seat width in inches
+   R.checks.seat={dc:Nreq/Nprov, Nreq, Nprov, Hsup, HsupMode};
+-  const Fconn=0.10*(agg.DC.P+agg.DW.P);
+-  R.seismic={Fconn, perBeam:0.10*(agg.DC.P/Math.max(1,S.beams.N)+agg.DW.P/Math.max(1,S.beams.N)), trib:agg.DC.P+agg.DW.P};
++  // Minimum seismic connection force (each restrained direction) [3.10.9]:
++  //   Zone 1: c·(permanent + γEQ·LL) reaction, c = 0.15 when A_s < 0.05, else 0.25 [3.10.9.2];
++  //   single-span bridges, any zone: ≥ A_s × permanent reaction [3.10.9.1, 4.7.4.2] (taken as a floor here in every zone, conservative for multispan);
++  //   Zones 2–4: the connection force comes from the seismic analysis [3.10.9.3, 3.10.9.4]; only the 3.10.9.1 floor is computed.
++  const zone=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), AsC=Math.max(0,+S.seismic.As||0), gEQc=Math.max(0,+S.seismic.gEQll||0);
++  const Wperm=agg.DC.P+agg.DW.P, Wtrib=Wperm+gEQc*agg.LL.P, cZ1=AsC<0.05?0.15:0.25;
++  const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm, Fconn=Math.max(F1,F0);
++  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, LL:agg.LL.P};
+ 
+   /* ===== C-10 Structural concrete checks ===== */
+   const kah=ka*Math.cos(deg2rad(iota)); // horizontal pressure coefficient used on wall faces
+@@ -2552,7 +2586,8 @@ function computeAll(){
+       ["factors.gpDCmaxS4",1.50,"γDC max Strength IV [T.3.4.1-2]"],
+       ["factors.llS1",1.75,"γLL Strength I [T.3.4.1-1]"],["factors.llS5",1.35,"γLL Strength V [T.3.4.1-1]"],
+       ["factors.wsS3",1.40,"γWS Strength III (design basis)"],["factors.wsS5",1.00,"γWS Strength V"],
+-      ["factors.wlS5",1.00,"γWL Strength V"],["factors.gTU",0.50,"γTU (force effects)"],["factors.gCR",0.50,"γCR/SH"],
++      ["factors.wlS5",1.00,"γWL Strength V"],["factors.gTU",1.00,"γTU (force effects) [T.3.4.1-6]"],["factors.gCR",1.00,"γCR/SH [T.3.4.1-3]"],
++      ["piles.gDD",1.10,"γDR drag load, structural [T.3.4.1-1 note]"],["seismic.phiBEQ",0.80,"φb bearing, Extreme Event I [11.5.8]"],
+       ["fnd.phiTau",0.80,"φτ sliding [T.10.5.5.2.2-1]"],["fnd.phiEP",0.50,"φep passive"],
+       ["fnd.phiB",0.45,"φb bearing [10.5.5.2.2] (tool default)"],
+       ["piles.phiC",0.70,"φc pile compression (tool default; method-dependent)"],
+@@ -2713,7 +2748,9 @@ function renderWarnings(){
+   const el=document.getElementById("warnbox");
+   let h=WARNINGS.map(w=>`<div class="warn-item ${w.level==="err"?"err":""}"><b>${w.level==="err"?"⛔":"⚠"}</b> ${esc(w.msg)}</div>`).join("");
+   if(window.LIBWARN) h=`<div class="warn-item">⚠ ${esc(window.LIBWARN)}</div>`+h;
++  if(DEFAULTS_NOTICE&&DEFAULTS_NOTICE.length) h=`<div class="warn-item" id="defNotice"><b>ℹ</b> This project was saved with earlier tool defaults. These values still equalled the old default and were updated to AASHTO LRFD 10th Ed. (values you had edited are kept): <ul style="margin:2px 0 2px 18px;padding:0">${DEFAULTS_NOTICE.map(t=>`<li>${esc(t)}</li>`).join("")}</ul><button class="mini-btn" id="btnDefNoticeOk">OK</button></div>`+h;
+   el.innerHTML=h;
++  const ok=document.getElementById("btnDefNoticeOk"); if(ok) ok.addEventListener("click",()=>{ DEFAULTS_NOTICE=null; renderWarnings(); });
+ }
+ 
+ /* ---------------- Tabs ---------------- */
+@@ -2755,8 +2792,8 @@ function renderTabLoads(R){
+     <b>8.</b> V&amp;M diagrams: limit states use the design bearing distribution; individual loads use elastic (tension-allowed) superposition — the two intentionally differ for the footing.<br>
+     <b>9.</b> Structural: 1-ft strips; strain-based φ per 5.5.4.2; footing crack-control service moments from Service I directly (linear contact pressure / pile reactions).<br>
+     <b>10.</b> Construction stage: "Constr — Str I" checks the backfilled wall with <b>no superstructure</b> (fill height ${(+S.constr.hFill>0)?fmt(Math.min(+S.constr.hFill,S.geom.soilH),1)+" ft":"= full"}, dry, γ<sub>LL</sub> = ${fmt(+S.constr.gLL||0)}). If it fails, restrict backfill until erection or revise the design.<br>
+-    <b>11.</b> Seismic: ${S.seismic.on?`<b>Extreme Event I ON</b> — M–O with k<sub>h</sub> = ${fmt(+S.seismic.khR,2)}·A<sub>s</sub>, ΔP<sub>AE</sub> at ${fmt(+S.seismic.hEQr,2)}H, wall/soil/superstructure inertia included; EE resistance factors per panel I-11`:`OFF — minimum connection force (0.10·DC) surfaced as a note only`}.<br>
+-    <b>12.</b> Scour: ${S.fnd.scour?"<b>ON</b> — passive resistance eliminated; q<sub>n</sub> at scoured overburden":"not active"}. Earth surcharge ES = ${fmt(+S.soil.esQ||0,2)} ksf; pile downdrag DD = ${fmt(+S.piles.dd||0,0)} kip/pile.<br>
++    <b>11.</b> Seismic: ${S.seismic.on?`<b>Extreme Event I ON</b> — M–O with k<sub>h</sub> = ${fmt(+S.seismic.khR,2)}·A<sub>s</sub>, ΔP<sub>AE</sub> at ${fmt(+S.seismic.hEQr,2)}H, wall/soil/superstructure inertia included; EE resistance factors per panel I-11`:`OFF — minimum connection force [3.10.9] surfaced as a note only`}.<br>
++    <b>12.</b> Scour: ${S.fnd.scour?"<b>ON</b> — passive resistance eliminated; q<sub>n</sub> at scoured overburden":"not active"}. Earth surcharge ES = ${fmt(+S.soil.esQ||0,2)} ksf; pile drag load DR = ${fmt(+S.piles.dd||0,0)} kip/pile (γ<sub>DR</sub> = 0 for the geotechnical pile check, ${fmt(+S.piles.gDD,2)} for the structural demand [T.3.4.1-1 note]).<br>
+     <b>13.</b> Out of scope / user-side: wingwalls, pile structural (member) design, wind attack-angle sweep (enter the governing directional WS/WL combination), metric units, settlement and global stability (flagged to geotechnical), bearing pad design.<br>
+     <b>Sign conventions:</b> X longitudinal (+ driving toward toe), Y transverse, P vertical +down; moments about the toe [design basis §0.3].
+     </div>`);
+@@ -2943,7 +2980,7 @@ function renderTabComb(R){
+   }
+   ft+="</table>";
+   h+=panel("o-facttbl","2.1","Load Factors In Use (editable constants) [Tables 3.4.1-1, 3.4.1-2]",ft+
+-    `<div class="note-box">γ<sub>p</sub> values show max / min. BR and LS carry the live-load factor. TU/CR/SH use γ = ${fmt(+F.gTU)} for strength force effects (1.20 applies to deformations) — EOR to confirm per project.</div>`);
++    `<div class="note-box">γ<sub>p</sub> values show max / min. BR and LS carry the live-load factor. TU uses γ<sub>TU</sub> = ${fmt(+F.gTU)} for strength force effects (1.20 applies to displacements) [T.3.4.1-6]; CR/SH use γ = ${fmt(+F.gCR)} (concrete substructure under a non-segmental superstructure) [T.3.4.1-3].</div>`);
+   h+=panel("o-permlogic","2.2","γp Max/Min Permutation Logic [3.4.1]",`
+     <div class="note-box">Each permanent load class (DC, DW, EV, EH) is factored at <b>both</b> its maximum and minimum bound — 16 permutations per limit state, each evaluated with live load present and absent (Strength III has no live load). For each individual check the engine selects the permutation producing the <b>worst</b> demand for that check, and reports the governing factor set. No single global load case is assumed.</div>
+     <table class="rtbl"><tr><th>Check</th><th>Vertical DC/EV/DW</th><th>Lateral EH/LS</th><th>Rationale</th></tr>
+@@ -3042,7 +3079,9 @@ function renderTabStab(R){
+         `\\bar{x} = \\dfrac{${fmtT(ec.Mv)} - ${fmtT(ec.Mh)}}{${fmtT(ec.V)}} = ${fmtT(ec.xbar)}\\ \\text{ft}`,
+         `e = \\dfrac{${fmtT(geo.B)}}{2} - ${fmtT(ec.xbar)} = ${fmtT(ec.eSigned)}\\ \\text{ft}\\,, \\qquad |e| = ${fmtT(ec.e)}\\ \\text{ft}\\ (\\text{resultant on the ${ec.side} side})`])}
+       ${eqB(`Limit for founding material: ${fn.matl}${LIMITS_HAS_EQ(R)?" (EE-I uses the extreme-event fraction)":""}`,"AASHTO 11.6.3.3, 11.6.5.1",[
+-        `e_{lim} = ${fmtT(ec.eLim)}\\ \\text{ft} \\quad(${(R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq)?`${fmt(+S.seismic.eFracEQ,3)}·B \\text{ at EE-I}`:`${fmtT(fn.matl==="rock"?+fn.eFracRock:+fn.eFracSoil,3)}\\,B \\text{ at Strength — middle ${fn.matl==="rock"?"nine-tenths":"two-thirds"}}`})`])}
++        ...((R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq&&S.seismic.eLimEQmode!=="user")?["e_{lim} = B\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)\\gamma_{EQ}\\right)",
++          `e_{lim} = ${fmtT(geo.B)}\\left(\\tfrac{1}{3} + \\left(0.4 - \\tfrac{1}{3}\\right)(${fmtT(ec.c&&ec.c.liveOn?Math.min(1,Math.max(0,+S.seismic.gEQll||0)):0)})\\right) \\quad (\\gamma_{EQ}${ec.c&&ec.c.liveOn?"\\text{ as entered}":" = 0\\text{: permutation without live load}"})`]:[]),
++        `e_{lim} = ${fmtT(ec.eLim)}\\ \\text{ft} \\quad(${(R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq)?(S.seismic.eLimEQmode==="user"?`${fmt(+S.seismic.eFracEQ,3)}·B \\text{ at EE-I (owner rule)}`:`${fmtT(ec.eLim/geo.B,4)}\\,B \\text{ at EE-I}`):`${fmtT(fn.matl==="rock"?+fn.eFracRock:+fn.eFracSoil,3)}\\,B \\text{ at Strength — middle ${fn.matl==="rock"?"nine-tenths":"two-thirds"}}`})`])}
+       ${checkLine("Eccentricity",`\\dfrac{|e|}{e_{lim}} = \\dfrac{${fmtT(ec.e)}}{${fmtT(ec.eLim)}}`,ec.dc)}
+     `);
+     const bc=R.checks.bearing;
+@@ -3115,13 +3154,20 @@ function renderTabStab(R){
+         "Superstructure inertia uses the full A_s (restrained by keepers) and the thermal-path share; EOR to confirm the distribution for the actual bearing/keeper layout. EE-I resistance factors and the e/B limit are editable in panel I-11.")}
+     `);
+   }
+-  h+=panel("o-seis","3.6","Minimum Seismic Connection Force — Design Note [3.10.9.2 / MassDOT]",`
++  const sz=R.seismic;
++  h+=panel("o-seis","3.6","Minimum Seismic Connection Force — Design Note [3.10.9 / MassDOT]",`
+     <div class="note-box">${S.seismic.on?"In addition to the Extreme Event I analysis above,":"Extreme Event I is currently OFF (enable in panel I-11), but"} MassDOT floating bridges require the superstructure–substructure connection (shear keys, keeper blocks, anchor bolts) to resist a minimum horizontal force in each restrained direction:</div>
+-    ${eqB("Minimum connection force (each restrained direction)","AASHTO 3.10.9.2",[
+-      "F_{conn} = 0.10\\,(\\Sigma P_{DC} + \\Sigma P_{DW})",
+-      `F_{conn} = 0.10\\,(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)})`,
+-      `F_{conn} = ${fmtT(R.seismic.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(R.seismic.perBeam)}\\ \\text{kip per beam})`],
+-      "Applies to backwall shear keys, keeper blocks and anchor bolts. Not run as a full Extreme Event combination in v1.")}
++    ${eqB("Minimum connection force (each restrained direction) — Seismic Zone "+sz.zone,"AASHTO 3.10.9.1, 3.10.9.2",[
++      ...(sz.zone===1?[
++      "F_{Z1} = c\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + \\gamma_{EQ}\\,\\Sigma P_{LL}), \\quad c = 0.15 \\text{ if } A_s < 0.05,\\ \\text{else } 0.25 \\quad [3.10.9.2]",
++      `F_{Z1} = ${fmtT(sz.cZ1)}\\,(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)} + (${fmtT(sz.gEQ)})(${fmtT(sz.LL)})) = ${fmtT(sz.F1)}\\ \\text{kip} \\quad (A_s = ${fmtT(sz.As,3)})`]:[]),
++      "F_{1span} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW}) \\quad [3.10.9.1,\\ \\text{single-span bridges, any zone}]",
++      `F_{1span} = (${fmtT(sz.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)}) = ${fmtT(sz.F0)}\\ \\text{kip}`,
++      sz.zone===1?`F_{conn} = \\max(F_{Z1},\\,F_{1span}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`
++                 :`F_{conn} \\ge F_{1span} = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`],
++      "Applies to backwall shear keys, keeper blocks and anchor bolts. Not run as a full Extreme Event combination in v1. "
++      +(sz.zone===1?"The single-span minimum is applied as a floor (conservative for a multispan bridge). ":"<b>Zone "+sz.zone+": the connection design force comes from the seismic analysis [3.10.9.3, 3.10.9.4, 4.7.4.3]; this tool computes only the single-span minimum A_s × permanent load [3.10.9.1, 4.7.4.2].</b> ")
++      +"γ_EQ = live load assumed present during the earthquake (panel I-11). Zone and A_s are set in panel I-11 [T.3.10.6-1].")}
+   `);
+   h+=panel("o-tornado","3.8","Sensitivity — Governing D/C vs ±10% Input Perturbation",`
+     <div class="eq-note">Each listed input is perturbed ±10% and the worst (governing) D/C across all checks is re-computed with the full engine. Long bars = the design is sensitive to that parameter; verify it carefully with the geotechnical report. Runs on demand.</div>
+@@ -3180,8 +3226,14 @@ function renderTabFound(R){
+     ${abutWorkedIn([["tab-found","o-pileform","4.2 Axial Pile Reactions","P_max"],["tab-found","o-pilels","4.3 Pile Reactions per Limit State","P_min"]])}
+     ${eqB("Compression","AASHTO 10.7.3.8 / 10.5.5.2.3",[
+       "P_{max} \\le \\varphi_c R_n",
+-      `${fmtT(pc.P)} \\le (${fmtT(p.phiC)})(${fmtT(p.Rn)}) = ${fmtT(pc.RR)}\\ \\text{kip}`])}
++      `${fmtT(pc.P)} \\le (${fmtT(pc.phiC)})(${fmtT(p.Rn)}) = ${fmtT(pc.RR)}\\ \\text{kip}`],
++      pc.DR>0?"Drag load DR is not added here: γ_DR = 0.00 for geotechnical strength [T.3.4.1-1 note, 3.11.8]. The geotechnical engineer checks the neutral plane and the settlement at the service limit state.":"")}
+     ${checkLine("Pile compression (pile "+pc.pile+")",`\\dfrac{P_{max}}{\\varphi_c R_n} = \\dfrac{${fmtT(pc.P)}}{${fmtT(pc.RR)}}`,pc.dc)}
++    ${pc.DR>0?eqB("Structural pile axial demand with drag load (for the pile structural check, not made in this tool)","AASHTO T.3.4.1-1 note, 3.11.8",[
++      "P_{u,str} = P_{max,Str} + \\gamma_{DR}\\,DR",
++      `P_{u,str} = ${fmtT(pc.PstrTop)} + (${fmtT(pc.gDR)})(${fmtT(pc.DR)}) = ${fmtT(pc.Pstr)}\\ \\text{kip}`],
++      "P_max,Str = largest pile reaction of the strength states ("+esc(pc.PstrLs||"")+": "+esc(pc.PstrLbl||"")+"). Applies at the neutral plane; compare with the structural resistance of the pile [10.7.3.13].")
++      :""}
+     ${pu.uplift?`
+       ${govNote(pu.lbl+" — "+pu.ls)}
+       ${eqB("Uplift (tension present)","AASHTO 10.7.3.10",[
+@@ -4269,7 +4321,7 @@ async function captureD3(R){
+    Runs the frozen benchmark input (the hand-verified built-in example) through the
+    LIVE engine and compares key results to baked expected values. Any drift means a
+    regression (or an intentional change that requires re-baking). */
+-window.__ST_EXPECT={"k_a (Rankine)": 0.3072585245224683, "P_a (kip/ft)": 8.92278755213248, "EH_h total (kip)": 392.6026522938291, "ΣDC wall (kip)": 722.6999999999999, "EV (kip)": 501.5999999999999, "h_eq (ft)": 2, "Sliding D/C": 1.1527595856623034, "Sliding R_R (kip)": 510.8645252361067, "Eccentricity e (ft)": 2.465267469172704, "Bearing q_f (ksf)": 7.502750812839938, "Bearing D/C": 0.9262655324493752, "Seat N_req (in)": 11.12, "Stem M_u (kip·ft/ft)": 110.15268922678449, "Stem φM_n (kip·ft/ft)": 302.7336470588236, "Shear-friction D/C": 0.05702500795507431, "Bearing-seat q_b (ksi)": 0.5711805555555556};
++window.__ST_EXPECT={"k_a (Rankine)": 0.3072585245224683, "P_a (kip/ft)": 8.92278755213248, "EH_h total (kip)": 392.6026522938291, "ΣDC wall (kip)": 722.6999999999999, "EV (kip)": 501.5999999999999, "h_eq (ft)": 2, "Sliding D/C": 1.1527595856623034, "Sliding R_R (kip)": 510.8645252361067, "Eccentricity e (ft)": 2.507894818378456, "Bearing q_f (ksf)": 7.560165332011858, "Bearing D/C": 0.933353744692822, "Seat N_req (in)": 11.12, "Stem M_u (kip·ft/ft)": 112.0617801358754, "Stem φM_n (kip·ft/ft)": 302.7336470588236, "Shear-friction D/C": 0.05761809346762622, "Bearing-seat q_b (ksi)": 0.5711805555555556};
+ /* Baked from the hand-verified built-in example (Rankine ka, Pa, EHh, sliding, bearing, stem Mu
+    each independently hand-checked during validation). If the engine or the built-in defaults are
+    intentionally changed, re-validate by hand and re-bake these values. */
+@@ -4416,8 +4468,8 @@ function flattenState(o,pre,out){
+   return out;
+ }
+ function computeFor(state){
+-  const saved=S;
+-  S=Object.assign(defaultState(),clone(state)); migrate();
++  const saved=S, savedNotice=DEFAULTS_NOTICE;
++  S=Object.assign(defaultState(),clone(state)); migrate(); DEFAULTS_NOTICE=savedNotice;   // compare runs never raise the defaults notice
+   let R=null, err=null;
+   try{ R=computeAll(); }catch(e){ err=e.message; }
+   const res=R?{fp:R.fingerprint, dash:R.dash.map(d=>({name:d.name,dc:d.dc,pass:d.pass}))}:{err};
+@@ -4824,7 +4876,7 @@ function inputEchoHTML(){
+     ["Earth surcharge ES",fmt(+s.esQ||0,2),"ksf"],
+     ["Construction stage (fill / γLL)",((+S.constr.hFill>0)?fmt(+S.constr.hFill,1):"full")+" / "+fmt(+S.constr.gLL||0),"ft / –"]]);
+   h+="<h3>Seismic / scour</h3>"+echoRows([
+-    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+fmt(+S.seismic.eFracEQ,3)+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")):"OFF",""],
++    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")):"OFF",""],
+     ["Scour condition",f.scour?"ON — passive eliminated; qn at scoured grade":"off",""]]);
+   h+="<h3>Foundation</h3>"+echoRows(f.branch==="spread"?[
+     ["Branch","Spread footing on "+f.matl,""],
+@@ -4838,7 +4890,7 @@ function inputEchoHTML(){
+     ["Rn / φc",fmt(p.Rn)+" / "+fmt(p.phiC),"kip / –"],
+     ["Rn,up / φup",fmt(p.RnUp)+" / "+fmt(p.phiUp),"kip / –"],
+     ["Pile section (punching)",(p.pileShape||"hp")+", "+fmt(p.pileSize,1)+" in",""],
+-    ["Downdrag DD / γDD",fmt(+p.dd||0,0)+" / "+fmt(+p.gDD||1.4,2),"kip / –"]]);
++    ["Drag load DR / γDR (structural; 0 geotechnical)",fmt(+p.dd||0,0)+" / "+fmt(+p.gDD,2),"kip / –"]]);
+   h+="<h3>Longitudinal distribution</h3>"+echoRows([
+     ["Model",d.model,""],["Shares BR / TU / CR-SH / WSx",
+       d.model==="fixed"?"100% each":fmt(+d.shBR,0)+"% / "+fmt(+d.shTU,0)+"% / "+fmt(+d.shCR,0)+"% / "+fmt(+d.shWS,0)+"%",""]]);
+@@ -4938,7 +4990,7 @@ async function buildReport(){
+   let key=`<table class="rtbl"><tr><th style="width:45%">Key result</th><th>Value</th><th>Worked in</th></tr>
+     <tr><td class="lft"><b>Governing check</b></td><td class="lft"><b>${g1?g1.name+" — D/C "+fmt(g1.dc)+" ("+(g1.pass?"PASS":"FAIL")+")":"—"}</b></td><td>${g1?wk(g1.tab,DASH_ANCHOR[g1.id]):""}</td></tr>`;
+   if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*S.fnd.qn)} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
+-    <tr><td class="lft">Eccentricity vs limit</td><td>${fmt(R.checks.ecc.e)} vs ${fmt(R.checks.ecc.eLim)} ft (e ≤ ${fmt(S.fnd.matl==="rock"?+S.fnd.eFracRock:+S.fnd.eFracSoil,3)}·B)</td><td>${wk("tab-stab","o-ecc")}</td></tr>
++    <tr><td class="lft">Eccentricity vs limit</td><td>${fmt(R.checks.ecc.e)} vs ${fmt(R.checks.ecc.eLim)} ft (e ≤ ${fmt(R.checks.ecc.eLim/R.geo.B,3)}·B)</td><td>${wk("tab-stab","o-ecc")}</td></tr>
+     <tr><td class="lft">Sliding demand vs resistance</td><td>${fmt(R.checks.sliding.D)} vs ${fmt(R.checks.sliding.RR)} kip</td><td>${wk("tab-stab","o-slide")}</td></tr>`; }
+   else if(R.checks.pileComp){ key+=`<tr><td class="lft">Max / min pile reaction vs φRn</td><td>${fmt(R.checks.pileComp.P)} / ${fmt(R.checks.pileUplift.P)} vs ${fmt(R.checks.pileComp.RR)} kip</td><td>${wk("tab-found","o-pilecap")}</td></tr>`; }
+   key+=`<tr><td class="lft">Stem base: Mu vs φMn</td><td>${fmt(R.checks.stemFlex.Mu)} vs ${fmt(R.checks.stemFlex.phiMn)} kip·ft/ft</td><td>${wk("tab-struct","o-str-Stem")}</td></tr>
+@@ -5128,6 +5180,7 @@ function init(){
+   }catch(e){}
+   if(fresh){ seedExampleReactions(); }
+   migrate();
++  if(DEFAULTS_NOTICE) scheduleSave();   // keep the migrated values (and meta.defRev) so the notice shows once
+   buildTabs();
+   buildInputs();
+   refreshProjHeader();
+@@ -5324,7 +5377,7 @@ document.addEventListener("DOMContentLoaded",init);
+     u.push(["TU Vy and the "+(st.tu==="rise"?"fall":st.tu==="fall"?"rise":"other (rise or fall)")+" case","the calculator's TU row is Vx only, one direction"]);
+     u.push(["FR (bearing friction)","the calculator has no FR row"]);
+     u.push(["SH P and Vy","the calculator's CR/SH row is Vx only"]);
+-    u.push(["EQ (superstructure seismic force"+(L.EQ&&L.EQ.basis?", "+L.EQ.basis:"")+")","the calculator computes its own superstructure inertia A_s·(DC+DW)·share for Extreme Event I and its own seat connection force 0.10·(DC+DW); SubLoads' basis (3.10.9.2 0.15/0.25 or elastic) differs, so it is not imported"]);
++    u.push(["EQ (superstructure seismic force"+(L.EQ&&L.EQ.basis?", "+L.EQ.basis:"")+")","the calculator computes its own superstructure inertia A_s·(DC+DW)·share for Extreme Event I and its own seat connection force per 3.10.9 (Zone 1: 0.15/0.25; single-span floor A_s·(DC+DW)); SubLoads' value is not imported"]);
+     u.push(["Approach slab reaction",L.approachSlab?"the calculator has no approach slab load; NOT imported":"none sent"]);
+     u.push(["Bearing fixity, type, height, pedestal, seat and girder elevations; girder stations; unit station","no matching calculator input (the calculator works from the bridge seat)"]);
+     u.push(["Footing width, deck / seat / ground elevations","the calculator derives B = toe + stem + heel and uses heights, not elevations"]);
+```
