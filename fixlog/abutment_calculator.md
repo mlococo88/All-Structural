@@ -4522,3 +4522,160 @@ Follow-up to the F45 open item ("Pile toe one-way shear now fails in the default
 ### Open items (not changed)
 - **5.7.3.2, concentrated load within d_v.** 5.12.8.6.1 places the one-way section at the 5.7.3.2 distance, and 5.7.3.2 moves the section to the face when a concentrated load lies within d_v. Read literally for a pile cap, any pile within d_v would send the section back to the face with the full pile load (the old result), which would leave the 5.12.8.6.1 partial-pile rule nothing to apply to. This entry follows 5.12.8.6.1 (the footing-specific rule; Fig. C5.12.8.6.1-1). Engineer to confirm.
 - **Pile position tolerance (5.12.8.2).** For footing design the 10th Ed. assumes driven piles may be out of position by 6 in or D/4 (unless special equipment is specified). The tool uses planned positions everywhere (pile loads, punching, now the toe shear). Default project with the front row 6 in toward the toe (pile loads held): f = (2.000 − (1.750 − 0.500))/1.000 = 0.75, V_u ≈ 0.75·38.675 − 0.810 = 28.20 kip/ft, D/C ≈ 1.148. Engineer to decide whether to apply the tolerance here and in the punching check.
+
+## 2026-10-20 — PR: claude/aashto10-abut-ee — Extreme Event I permanent loads at 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1); engineer direction 2026-10-20 "accurate, not overly conservative"; supersedes F25 (PR link added after merge)
+
+### F48. Extreme Event I: DC, DW, EV, EH, ES at 1.00, no γp max/min permutation   [calc change] [LESS conservative where EE I governed with γp max; MORE where it governed with γp min]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (p. 3-16): the permanent-load column (DC, DW, EH, EV, ES, EL, PS, CR, SH) reads 1.00 for Extreme Event I and II, not γp. C3.4.1 (p. 3-10): γp > 1.0 in extreme events was dropped in 2015. No wall / abutment exception: 11.5.6 refers to 3.4.1; Fig. C11.5.6-4 (p. 11-13) shows 1.00 DC / EV / P_AE for EE I; 11.5.8 and 10.5.5.3 are resistance factors only. The tool has no Extreme Event II.
+- **Supersedes:** F25 (EE I γEH = γp max/min by default, N2) and the γp max/min used for DC, DW, EV, ES in EE I since the tool was written; both followed the earlier reading that the table lists γp.
+- **Where (anchors) and before → after:**
+  1. `LIMITS["Extreme Event I"]` (anchor `if(S.seismic.on) LIMITS["Extreme Event I"]=`): `perm:true` → `perm:false`. With `perm:false` the engine (`comboEffects`) takes DC, DW, EV, ES at 1.0 and EH at 1.0, or the "agency policy" fixed γEH when `gEHEQmode === "agency"` (the `L.eq && eqEHfixed()` branch, unchanged).
+  2. `permutations(lsName, stab)` (anchor `const lives=L.liveOpt?`): `(stab&&L.perm&&!L.noSuper)` → `(stab&&(L.perm||L.eq)&&!L.noSuper)`, so EE I keeps the "LS, BR only" live option for sliding / eccentricity / pile minimum / hand-off. EE I now has one permanent-load case (×3 live options when γEQ > 0) instead of 16 (×3).
+  3. `comboEffects` label (anchor `const lbl = (L.perm||L.eq)`): new `gq(cl,i)` = `L.perm ? GP[cl][i] : 1.0`; EE I rows now print `1.00·DC + 1.00·DW + 1.00·EV + 1.00·EH (+ 1.00·ES) + γEQ·(…) + 1.00·EQ` (before: the γp max/min of each permutation). Strength labels unchanged (same expression when `L.perm`).
+  4. Stem demand loop (anchor `const gEH_ls=`): `gEH_ls` = agency value, else `L.perm ? gEH_max : 1.0` (was `gEH_max` = 1.50 in EE I); new `gES_ls = L.perm ? GP.ES[1] : 1.0` replaces `GP.ES[1]` in `Mu`, `Vu` and the label; `gDCmx = L.perm ? (L.dcMax||GP.DC[1]) : 1.0` and the `eccMin` DW test use 1.0 in EE I; `stemGov.gEH` stored. `stemEcc` already used `[1]` for DC / DW when `!L.perm`.
+  5. V&M stem eccentricity (anchor `const Mecc=(isLS&&(Lst.perm||Lst.eq))`): EE I keeps the `stemEcc` permutation (LL reaction on / off), now at γDC = γDW = 1.00.
+  6. Shear friction (anchor `const gDCc=`): clamping force P_c uses γDC = 1.00 when EE I governs V_ui (was 0.90 = γp min); report row "P_c … (min DC factor; 1.00 in Extreme Event I)".
+  7. Toe self-weight, spread and pile branches (anchor `const gTd=ls=>`): 0.90 (γp min) → 1.00 for EE I permutations; `toePile(loads, gT)`; `toeDem.gTdn` (moment case) and `toeDem.gTV` (pile shear case) printed in the Tab 5 equations instead of the fixed "0.90".
+  8. Text: `eqEHfixed()` comment; default-state comment of `gEHEQmode`; panel I-11 select `seismic.gEHEQmode`: stored value `"gp"` kept (no saved-data change), label "1.00, as DC, DW, EV, ES [T.3.4.1-1, 10th Ed.]" (was "γp max/min, as Strength (1.50 / 0.90)"); agency tooltip; design basis item 6; §2.2 permutation note; report seismic row "γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = 1.00 [T.3.4.1-1]" (or the agency value).
+- **Saved data (§5):** no key or format change. `seismic.gEHEQmode` "gp" keeps its stored value and now means 1.00; an "agency" fixed `gEHEQ` is kept and still applies. EE I has no separate saved γ for DC / DW / EV / ES (it used the Strength `factors.gp*`), so no saved override equals an old EE default. `migrate()` defRev 6: one-time notice (`DEFAULTS_NOTICE`) for a project with EE I on, naming the change (and the kept agency γEH). New projects (EE I off by default) get no notice.
+- **Check case 1 (built-in project, EE I on, A_s = 0.15, γEQ = 0, spread footing, B = 13 ft):** unfactored resultants: DC 722.70 (sub) + 510.00 (sup) = 1232.70 kip, M_V 4422.82 + 2677.50 = 7100.32 kip-ft; DW 72.00 kip, 378.00 kip-ft; EV 501.60 kip, 5266.80 kip-ft; EH H 392.603 kip, M_H 2879.09 kip-ft; EQ (M–O increment + wall + soil + superstructure inertia) H 56.732 + 54.202 + 37.620 + 87.300 = 235.854 kip, M_H 748.86 + 413.20 + 470.25 + 1484.10 = 3116.41 kip-ft.
+  - Before, EE I eccentricity governed by 0.90·DC + 0.65·DW + 1.00·EV + 1.50·EH + 1.00·EQ: V = 1109.43 + 46.80 + 501.60 = 1657.83 kip; M_V = 6390.29 + 245.70 + 5266.80 = 11902.79; M_H = 4318.64 + 3116.41 = 7435.05; e = 6.50 − (11902.79 − 7435.05)/1657.83 = **3.805 ft**; limit B/3 = 4.333 ft (γEQ = 0); **D/C 0.878**, governing (tool 0.8781, "Extreme Event I").
+  - After, EE I (single case): V = 1232.70 + 72.00 + 501.60 = **1806.30 kip**; H = 392.603 + 235.854 = **628.46 kip**; M_V = 12745.12; M_H = 2879.09 + 3116.41 = 5995.50; e = 6.50 − 6749.62/1806.30 = **2.763 ft** (D/C 0.638); eccentricity now governed by Strength I, **D/C 0.707** (tool 0.7074).
+  - Agency γEH 1.25: H = 1.25 · 392.603 + 235.854 = **726.61 kip** (tool 726.61).
+- **Other results (tool, origin/main `efab161` → branch):**
+  - Same project: stem M_u 113.88 (EE I, 1.50·EH) → 112.06 kip-ft/ft (Strength I now governs); heel M_u 41.90 → 30.52 kip-ft/ft (EE I, now 1.00 throughout), V_u 15.30 → 10.42 kip/ft; shear friction V_ui 13.72 → 13.25 kip/ft.
+  - γEQ = 0.5: eccentricity D/C 0.945 (EE I) → 0.707 (Strength I); stem M_u 124.92 (EE I) → 112.06 (Strength I); toe M_u 54.87 (EE I) → 53.85 (Strength I).
+  - γEQ = 0.5, pile footing: EE I minimum pile reaction −28.12 kip (uplift D/C 0.469) → −2.57 kip (D/C 0.043); EE I maximum pile reaction 207.43 → 167.91 kip.
+  - EE I off (default project): every check, the stem demand, the dashboard and the pile table identical; built-in self-test passes on both.
+- **How verified:** `node tests/check-syntax.mjs abutment_calculator.html`: pass. Headless Chromium (tests/lib.mjs; the tool's CDN libraries are blocked, the calculation does not need them), origin/main vs branch, `computeAll()`: default project, and EE I on with γEQ 0 / 0.5, spread and pile (`R.checks`, `R.stemDem`, `R.dash`, `R.pile.perLS`, the EE I permutation table); `migrate()` from defRev 5 with EE I on ("gp" and agency 1.25) and off; the EE I labels and page text.
+- **Other copies:** Bridge Substructure Loading.html made the same change in its own code (EEP, separate PR). No shared snippet.
+- **Open items:** none for this change. Wingwalls and the backwall are not designed for EE I (unchanged).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `efab161`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 053d0b9..250ef29 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -633 +633 @@ function defaultState(){
+-      gEHEQmode:"gp",                                             // EE-I γEH: "gp" = γp max/min [T.3.4.1-1/-2]; "agency" = fixed gEHEQ
++      gEHEQmode:"gp",                                             // EE-I γEH: "gp" = per Table 3.4.1-1 (10th Ed.: 1.00, EEP; the stored value is kept); "agency" = fixed gEHEQ
+@@ -683 +683 @@ function warn(msg,level="warn"){ WARNINGS.push({level,msg}); }
+-// Extreme Event I γEH: null = γp max/min permuted [T.3.4.1-1, T.3.4.1-2] (default); a number = the "agency policy" fixed value seismic.gEHEQ
++// Extreme Event I γEH: null = per Table 3.4.1-1 (stored mode "gp"; 10th Ed.: 1.00, EEP) (default); a number = the "agency policy" fixed value seismic.gEHEQ
+@@ -1038,0 +1039,7 @@ function migrate(){
++  // defRev 6 (EEP, 2026-10-20): no input added or changed; one-time notice for a project with Extreme Event I on: the permanent loads
++  // DC, DW, EV, EH, ES are now taken at 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1, C3.4.1), not the Strength γp max/min. Saved gEHEQmode
++  // "gp" keeps its stored value and now means 1.00; an "agency policy" fixed γEH is kept.
++  if(!(S.meta.defRev>=6)){
++    S.meta.defRev=6;
++    if(S.seismic&&S.seismic.on) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Extreme Event I: DC, DW, EV, EH and ES are now factored at 1.00, with no γp max/min permutation (AASHTO LRFD 10th Ed. Table 3.4.1-1, C3.4.1); before, the Strength γp max/min"+(S.seismic.gEHEQmode==="agency"?" (EH keeps the agency-policy value "+(+S.seismic.gEHEQ).toFixed(2)+")":", including EH")+" (Tab 2 §2.1)"]);
++  }
+@@ -1361,2 +1368,2 @@ function buildInputs(){
+-      ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","γp max/min, as Strength (1.50 / 0.90) [T.3.4.1-1, -2]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
+-      ${S.seismic.gEHEQmode==="agency"?inpRow("&nbsp;&nbsp;γ<sub>EH</sub> (agency policy)","seismic.gEHEQ","–",{title:"Fixed static earth-pressure factor within EE-I (e.g. 1.0 with the full M–O thrust) where the owner allows it instead of γp."}):""}
++      ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","1.00, as DC, DW, EV, ES [T.3.4.1-1, 10th Ed.]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
++      ${S.seismic.gEHEQmode==="agency"?inpRow("&nbsp;&nbsp;γ<sub>EH</sub> (agency policy)","seismic.gEHEQ","–",{title:"Fixed static earth-pressure factor within EE-I where the owner requires a value other than the 1.00 of AASHTO LRFD 10th Ed. Table 3.4.1-1."}):""}
+@@ -1782 +1789,3 @@ function computeAll(){
+-  if(S.seismic.on) LIMITS["Extreme Event I"]={LL:+S.seismic.gEQll, WS:0, WL:0, TU:0, CR:0, EQ:1.0, perm:true, liveOpt:(+S.seismic.gEQll)>0, eq:true};
++  // EEP (2026-10-20): Extreme Event I takes the permanent loads DC, DW, EV, EH, ES at 1.00, no γp max/min permutation
++  // (AASHTO LRFD 10th Ed. Table 3.4.1-1, C3.4.1; was perm:true, i.e. the Strength γp). The "agency policy" fixed γEH still applies.
++  if(S.seismic.on) LIMITS["Extreme Event I"]={LL:+S.seismic.gEQll, WS:0, WL:0, TU:0, CR:0, EQ:1.0, perm:false, liveOpt:(+S.seismic.gEQll)>0, eq:true};
+@@ -1812,3 +1821,4 @@ function computeAll(){
+-    const lbl = L.perm
+-      ? `${(perm.DC===1&&L.dcMax?L.dcMax:GP.DC[perm.DC]).toFixed(2)}·DC + ${GP.DW[perm.DW].toFixed(2)}·DW + ${GP.EV[perm.EV].toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():GP.EH[perm.EH]).toFixed(2)}·EH`
+-        +(esOn?` + ${GP.ES[perm.ES??1].toFixed(2)}·ES`:"")
++    const gq=(cl,i)=>L.perm?GP[cl][i]:1.0;   // EEP: Extreme Event I (perm false, eq) labels its permanent loads at 1.00
++    const lbl = (L.perm||L.eq)
++      ? `${(L.perm&&perm.DC===1&&L.dcMax?L.dcMax:gq("DC",perm.DC)).toFixed(2)}·DC + ${gq("DW",perm.DW).toFixed(2)}·DW + ${gq("EV",perm.EV).toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():gq("EH",perm.EH)).toFixed(2)}·EH`
++        +(esOn?` + ${gq("ES",perm.ES??1).toFixed(2)}·ES`:"")
+@@ -1827 +1837 @@ function computeAll(){
+-    const lives=L.liveOpt?((stab&&L.perm&&!L.noSuper)?[1,2,0]:[1,0]):[0];
++    const lives=L.liveOpt?((stab&&(L.perm||L.eq)&&!L.noSuper)?[1,2,0]:[1,0]):[0];   // EEP: Extreme Event I keeps the "LS, BR only" live option
+@@ -2155 +2165,2 @@ function computeAll(){
+-    const gEH_ls=(L.eq&&eqEHfixed()!==null)? eqEHfixed() : gEH_max;
++    const gEH_ls=(L.eq&&eqEHfixed()!==null)? eqEHfixed() : (L.perm? gEH_max : 1.0);   // EEP: Extreme Event I EH 1.00 [T.3.4.1-1]
++    const gES_ls=L.perm? GP.ES[1] : 1.0;                                              // EEP: Extreme Event I ES 1.00
+@@ -2165 +2176 @@ function computeAll(){
+-    const gDCmx = L.dcMax||GP.DC[1];   // Strength IV: γDC max 1.50
++    const gDCmx = L.perm? (L.dcMax||GP.DC[1]) : 1.0;   // Strength IV: γDC max 1.50; EEP: Extreme Event I 1.00
+@@ -2177,5 +2188,5 @@ function computeAll(){
+-    const Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+GP.ES[1]*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
+-    const Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+GP.ES[1]*VES_ls+HgirdPerFt + Veq;
+-    const eccMin=(gDCe!==gDCmx||gDWe!==GP.DW[1]||llE!==!!L.LL);   // a minimum-factor / no-LL permutation governs M_ecc
+-    if(!stemGov||Mu>stemGov.Mu) stemGov={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,
+-      lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${GP.ES[1].toFixed(2)}·ES`:""}${L.LL?` + ${L.LL.toFixed(2)}·(LS,BR)`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ":""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+` (${lsName})`};
++    const Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
++    const Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+gES_ls*VES_ls+HgirdPerFt + Veq;
++    const eccMin=(gDCe!==gDCmx||gDWe!==(L.perm?GP.DW[1]:1.0)||llE!==!!L.LL);   // a minimum-factor / no-LL permutation governs M_ecc
++    if(!stemGov||Mu>stemGov.Mu) stemGov={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,
++      lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?` + ${L.LL.toFixed(2)}·(LS,BR)`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ":""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+` (${lsName})`};
+@@ -2213 +2224 @@ function computeAll(){
+-    const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2;
++    const gTd=ls=>(LIMITS[ls]&&!LIMITS[ls].perm)? 1.0 : 0.9;   // toe self-weight (DC, relieving): γp min 0.90; EEP: Extreme Event I 1.00 [T.3.4.1-1]
+@@ -2223,2 +2234,3 @@ function computeAll(){
+-        const tMu=Math.max(0,MtoeUp-MtoeDn), tVu=Math.max(0,VtoeUp_dv-0.9*wFoot*Math.max(0,g.Ltoe-dvT));
+-        if(!tM||tMu>tM.Mu) tM={Mu:tMu,VtoeUp,MtoeUp,c,ls:lsName,eS,segs};
++        const gT=gTd(lsName), MtoeDn=gT*wFoot*g.Ltoe*g.Ltoe/2;
++        const tMu=Math.max(0,MtoeUp-MtoeDn), tVu=Math.max(0,VtoeUp_dv-gT*wFoot*Math.max(0,g.Ltoe-dvT));
++        if(!tM||tMu>tM.Mu) tM={Mu:tMu,VtoeUp,MtoeUp,MtoeDn,gT,c,ls:lsName,eS,segs};
+@@ -2233 +2245 @@ function computeAll(){
+-      toeDem={Mu:tM.Mu, Vu:tV.Vu, VtoeUp:tM.VtoeUp, MtoeUp:tM.MtoeUp, MtoeDn, dvT, eS:tM.eS, ls:tM.ls, lsV:tV.ls,
++      toeDem={Mu:tM.Mu, Vu:tV.Vu, VtoeUp:tM.VtoeUp, MtoeUp:tM.MtoeUp, MtoeDn:tM.MtoeDn, gTdn:tM.gT, dvT, eS:tM.eS, ls:tM.ls, lsV:tV.ls,
+@@ -2243 +2255 @@ function computeAll(){
+-    const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2;
++    const gTd=ls=>(LIMITS[ls]&&!LIMITS[ls].perm)? 1.0 : 0.9;   // toe self-weight (DC, relieving): γp min 0.90; EEP: Extreme Event I 1.00 [T.3.4.1-1]
+@@ -2252 +2264,2 @@ function computeAll(){
+-    function toePile(loads){
++    function toePile(loads,gT){
++      const MtoeDn=gT*wFoot*g.Ltoe*g.Ltoe/2;
+@@ -2261,2 +2274,2 @@ function computeAll(){
+-      const VswDn=0.9*wFoot*Math.max(0,xCrT);
+-      return {rowArr,MtoeUp,VtoeUp,VsUp,VswDn,vRows,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VsUp-VswDn)};
++      const VswDn=gT*wFoot*Math.max(0,xCrT);
++      return {rowArr,MtoeUp,VtoeUp,VsUp,VswDn,vRows,MtoeDn,gT,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VsUp-VswDn)};
+@@ -2264 +2277 @@ function computeAll(){
+-    let tM=Object.assign(toePile(det.loads),{c:det.c,ls:R.checks.pileComp.ls}), tV=tM;
++    let tM=Object.assign(toePile(det.loads,gTd(R.checks.pileComp.ls)),{c:det.c,ls:R.checks.pileComp.ls}), tV=tM;
+@@ -2269 +2282 @@ function computeAll(){
+-        const t=Object.assign(toePile(loads),{c,ls:lsName});
++        const t=Object.assign(toePile(loads,gTd(lsName)),{c,ls:lsName});
+@@ -2274 +2287 @@ function computeAll(){
+-    toeDem={Mu:tM.Mu, Vu:tV.Vu, MtoeUp:tM.MtoeUp, VtoeUp:tM.VtoeUp, MtoeDn, rowArr:tM.rowArr, ls:tM.ls, lsV:tV.ls,
++    toeDem={Mu:tM.Mu, Vu:tV.Vu, MtoeUp:tM.MtoeUp, VtoeUp:tM.VtoeUp, MtoeDn:tM.MtoeDn, gTdn:tM.gT, rowArr:tM.rowArr, ls:tM.ls, lsV:tV.ls,
+@@ -2276 +2289 @@ function computeAll(){
+-      dvT:dvTp, xCr:xCrT, Dp:DpT, VsUp:tV.VsUp, VswDn:tV.VswDn, vRows:tV.vRows, lblV:tV.c?.lbl};
++      dvT:dvTp, xCr:xCrT, Dp:DpT, VsUp:tV.VsUp, VswDn:tV.VswDn, gTV:tV.gT, vRows:tV.vRows, lblV:tV.c?.lbl};
+@@ -2399 +2412,2 @@ function computeAll(){
+-    const Pc=GP.DC[0]*(wallWtAbove+agg.DC.P)/Lab;          // kips/ft, min DC factor (beneficial clamping)
++    const gDCc=(LIMITS[R.stemDem.ls]&&!LIMITS[R.stemDem.ls].perm)? 1.0 : GP.DC[0];   // EEP: 1.00 when Extreme Event I governs V_ui [T.3.4.1-1]
++    const Pc=gDCc*(wallWtAbove+agg.DC.P)/Lab;              // kips/ft, min DC factor (beneficial clamping)
+@@ -2587 +2601 @@ function computeAll(){
+-      const Mecc=(isLS&&Lst.perm)? stemEcc(Lst,ns).Mecc   // strength / EE: the permutation used by the stem design (γDC, γDW max/min, LL reaction on/off)
++      const Mecc=(isLS&&(Lst.perm||Lst.eq))? stemEcc(Lst,ns).Mecc   // strength / EE: the permutation used by the stem design (γDC, γDW max/min, LL reaction on/off)
+@@ -2906 +2920 @@ function renderTabLoads(R){
+-    <b>6.</b> γ<sub>p</sub> permutation: every permanent class factored at both bounds; each check takes its own worst permutation — no single global case [3.4.1]. Limit states: Strength I, III, V, construction, Service I and (when on) Extreme Event I; Strength IV is not checked (3.4.1 defines it for superstructures; C3.4.1 excludes substructures, earth-retaining systems and bearing design).<br>
++    <b>6.</b> γ<sub>p</sub> permutation: every permanent class factored at both bounds; each check takes its own worst permutation — no single global case [3.4.1]. Limit states: Strength I, III, V, construction, Service I and (when on) Extreme Event I, which takes DC, DW, EV, EH and ES at 1.00 with no max/min permutation [T.3.4.1-1, C3.4.1]; Strength IV is not checked (3.4.1 defines it for superstructures; C3.4.1 excludes substructures, earth-retaining systems and bearing design).<br>
+@@ -3101 +3115 @@ function renderTabComb(R){
+-    <div class="note-box">Each permanent load class (DC, DW, EV, EH) is factored at <b>both</b> its maximum and minimum bound — 16 permutations per limit state, each evaluated with live load present and absent (Strength III has no live load). For each individual check the engine selects the permutation producing the <b>worst</b> demand for that check, and reports the governing factor set. No single global load case is assumed.</div>
++    <div class="note-box">Each permanent load class (DC, DW, EV, EH) is factored at <b>both</b> its maximum and minimum bound — 16 permutations per limit state, each evaluated with live load present and absent (Strength III has no live load). Extreme Event I takes every permanent class at 1.00 [T.3.4.1-1, C3.4.1], so it has a single permanent-load case (with live load on / off when γ<sub>EQ</sub> &gt; 0). For each individual check the engine selects the permutation producing the <b>worst</b> demand for that check, and reports the governing factor set. No single global load case is assumed.</div>
+@@ -3432 +3446 @@ function toePileShearHTML(td, cT){
+-    `V_{dn,cr} = 0.90\\,\\gamma_c t_f\\,x_{cr} = 0.90(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})(${fmtT(Math.max(0,td.xCr),3)}) = ${fmtT(td.VswDn,3)}\\ \\text{kip/ft}`,
++    `V_{dn,cr} = ${fmtT(td.gTV??0.9)}\\,\\gamma_c t_f\\,x_{cr} = ${fmtT(td.gTV??0.9)}(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})(${fmtT(Math.max(0,td.xCr),3)}) = ${fmtT(td.VswDn,3)}\\ \\text{kip/ft}`,
+@@ -3521 +3535 @@ function renderTabStruct(R){
+-      `M_u = ${fmtT(R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`,
++      `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}\\,M_{EH} + \\gamma_{LL}M_{LS} + H_{gird}\\,h_{stem} + M_{ecc} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(sd.Vu)}\\ \\text{kip/ft}`,
+@@ -3529 +3543 @@ function renderTabStruct(R){
+-        `M_{dn} = 0.90\\,\\gamma_c t_f \\dfrac{L_{toe}^2}{2} = 0.90(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})\\dfrac{(${fmtT(g.Ltoe)})^2}{2} = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
++        `M_{dn} = ${fmtT(td.gTdn??0.9)}\\,\\gamma_c t_f \\dfrac{L_{toe}^2}{2} = ${fmtT(td.gTdn??0.9)}(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})\\dfrac{(${fmtT(g.Ltoe)})^2}{2} = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
+@@ -3535 +3549 @@ function renderTabStruct(R){
+-        `M_{dn} = 0.90\\,\\gamma_c t_f L_{toe}^2/2 = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
++        `M_{dn} = ${fmtT(td.gTdn??0.9)}\\,\\gamma_c t_f L_{toe}^2/2 = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
+@@ -3562 +3576 @@ function renderTabStruct(R){
+-      ["P_c","Permanent compression across joint (min DC factor)",sf.Pc,"kip/ft"],
++      ["P_c","Permanent compression across joint (min DC factor; 1.00 in Extreme Event I)",sf.Pc,"kip/ft"],
+@@ -5070 +5084 @@ function inputEchoHTML(){
+-    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
++    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"1.00 [T.3.4.1-1]")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
+```
