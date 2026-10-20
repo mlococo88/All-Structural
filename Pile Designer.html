@@ -15142,7 +15142,10 @@ function App() {
           type,
           STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0,
           _fromGroup: true, _groupCaseId: gc.id, _pileId: sel.id,
-          _Vx: sel.Vx, _Vy: sel.Vy   // F36 (O47): per-pile shear components (not saved; synthetic rows)
+          _Vx: sel.Vx, _Vy: sel.Vy,   // F36 (O47): per-pile shear components (not saved; synthetic rows)
+          // PUPEM (2026-10-20): an Extreme Event case whose governing pile is in uplift becomes a tension row; it keeps the Extreme Event
+          // resistance factors (_ee: Run all and the active modules apply EXTREME_PHI, phi 1.0, uplift 0.80; AASHTO LRFD 10th Ed. 10.5.5.3.3)
+          ...(uplift && baseType === "extreme" ? { _ee: true } : {})
         });
         const ur = pupUpliftRow(gc, cd); if (ur) upl.push(ur);
       });

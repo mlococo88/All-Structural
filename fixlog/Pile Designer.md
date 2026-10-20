@@ -15219,3 +15219,37 @@ index 4be0aa6..e4f8552 100644
 -      extremePhi: !!(cases[activeIdx] && cases[activeIdx].type === "extreme"),
 +      extremePhi: !!(cases[activeIdx] && (cases[activeIdx].type === "extreme" || cases[activeIdx]._ee)),   // PUPE
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-ee-main (PUPEM: an Extreme Event case whose governing pile is in uplift keeps the Extreme Event resistance factors; engineer decision 2026-10-20 after PUPE; PR link added after merge)
+
+### PUPEM. Extreme Event group case, governing pile in uplift: its tension row uses φ = 1.0, uplift 0.80   [calc change] [LESS conservative; was the Strength φ]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.5.5.3.3 (extreme limit states: resistance factors 1.0; uplift resistance of piles and shafts 0.80 or less). Checked against the 10th Ed. text, p. 10-51. The tool's set is `EXTREME_PHI` (F44): φ 1.0 throughout, φ_up 0.80 (micropile) / hpPhiUp 0.80 (H-pile).
+- **Problem:** when an "extreme" group case's governing pile (largest |axial|) is in uplift, the emitted main row becomes type "tension" (so that the uplift is checked). "Run all" and the active modules chose `EXTREME_PHI` by `c.type === "extreme"` only, so this row was checked with the Strength resistance factors. The PUPE uplift row (`_ee`) of a compression-governed EE case already used the EE factors.
+- **Where:** `groupCasesEmitted`, matrix path, main row (anchor `_Vx: sel.Vx, _Vy: sel.Vy,   // F36 (O47)`): adds `_ee: true` when `uplift && baseType === "extreme"`. The PUPE lines (`if (c.type === "extreme" || c._ee)`, `extremePhi`) then apply `EXTREME_PHI`. The legacy single-load path has no case type (Strength) and is unchanged.
+- **Before / after code:** see the diff below.
+- **Check case** (as PUP: 3 × 3 group at 36 in, Σx² = 54 ft², cap + stem W = 52.65 kip at the centroid; default micropile inputs φ_up = 0.50, φ_t = 0.90; Extreme Event case P = −200 kip, M_y = 300 kip-ft):
+  - ΣP = −200 + 1.00 · 52.65 = −147.35 kip; −147.35 / 9 = −16.37 kip; bending 300 · 3/54 = 16.67 kip; governing P1 = **−33.04 kip**, so the main row is tension, T_u = 33.04 kip (unchanged).
+  - Nominal: bond uplift P_n,up = 54.98 / 0.50 = 109.96 kip; bar + casing tension P_n = 53.33 / 0.90 = 59.25 kip.
+  - Before (Strength φ): φP_n,up = 0.50 · 109.96 = 54.98 kip; φP_n,t = 0.90 · 59.25 = 53.33 kip; governing 53.33 kip; ratio 33.04 / 53.33 = **0.620**.
+  - After (EE φ): φP_n,up = 0.80 · 109.96 = 87.96 kip; φP_n,t = 1.00 · 59.25 = 59.25 kip; governing 59.25 kip; ratio 33.04 / 59.25 = **0.558** (tool `computeAll` with `EXTREME_PHI`: 87.96 / 59.25).
+  - Strength and Service rows, and EE rows whose governing pile is in compression: unchanged.
+- **Default project:** the pile group is off, so no result change; default page text identical.
+- **Saved data (§5):** none (synthetic rows).
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. Headless Chromium (React 18.3.1 / three r128 routed to the tests/libs copies for the test only): `computeCapDist` for the check case (governing P1 −33.04 kip, basis "ee"), `computeAll` on the row's inputs with and without `EXTREME_PHI` (the capacities above); default page text identical to origin/main `ba8bf74`; no page errors.
+- **Other copies:** none.
+- **Open items:** none. The value 0.80 is the 10.5.5.3.3 upper bound ("or less"); a lower owner value would be entered as an override of the Extreme Event factors (not available as an input today, as before).
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `ba8bf74`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index e4f8552..ac9f965 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -15145 +15145,4 @@ function App() {
+-          _Vx: sel.Vx, _Vy: sel.Vy   // F36 (O47): per-pile shear components (not saved; synthetic rows)
++          _Vx: sel.Vx, _Vy: sel.Vy,   // F36 (O47): per-pile shear components (not saved; synthetic rows)
++          // PUPEM (2026-10-20): an Extreme Event case whose governing pile is in uplift becomes a tension row; it keeps the Extreme Event
++          // resistance factors (_ee: Run all and the active modules apply EXTREME_PHI, phi 1.0, uplift 0.80; AASHTO LRFD 10th Ed. 10.5.5.3.3)
++          ...(uplift && baseType === "extreme" ? { _ee: true } : {})
+```
