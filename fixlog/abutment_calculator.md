@@ -9218,3 +9218,146 @@ index f06352c..46f54cc 100644
 @@ -7623,0 +7860 @@ async function buildReport(){
 +    figStaticIn(cl,R);   // ABINT: figures as printed before — default selection, no controls, no interactive attributes
 ```
+
+
+## 2026-10-20 — PR: claude/abut-pile-handoff — Foundation-load hand-off to Pile Designer: pile layout, per-pile governing loads, integral-abutment data (ABPX) (PR link added after merge)
+
+Cross-tool connection (CLAUDE.md §7 exception): the same PR changes the receiver, `Pile Designer.html` (fixlog/Pile Designer.md ABPX), and HANDOFF.md §4.6.
+
+### ABPX-1. "Send foundation loads": payload revision 2 (additive)   [feature: hand-off (no result change)]
+- **Where:** the foundation-loads hand-off script at the end of the file (anchor `/* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------`), IIFE that defines `window.AbutFoundationHandoff`. New functions in it: `pileReactions(R,c)`, `pileSection()`, `pileLayout(R)`, `pileDesign(R,lsSel)`, `integralBlock(R)`. Changed: `cases()` (anchor `mine.forEach(m=>{ const g=m.tags.join(", "), c=m.a.c;`), `build()` (anchors `signConvention:SIGN, cases:cs,` and `.concat(nErr?["The calculator reported "`), `render()` (anchor `b.p.cases.map(c=>"<tr><td title='"`), the toolbar button's tooltip (anchor `<button id="fdx-send" title=`).
+- **What it does:** the payload keeps `schemaVersion: 1` (Spread Footing accepts v1 only) and adds `revision: 2` and, only when they apply:
+  - pile branch, conventional / semi-integral abutment: `cases[].pileP` (each active pile's reaction for that case, by the same expression as the pile table, C-8 of `computeAll`), `pileLayout` (every pile in the hand-off axes, x = −x of panel I-7 so + toward the toe; rows, columns, spacings, offsets; centroid, Σx'², Σy'²; vertical, no batter; the panel I-7 section (HP designation and A, d, b_f, t_f, t_w from `HP_SHAPES` through `hpAuto`, or pipe D and t, or square), F_y, driving condition, embedment, clear cover; cap = footing B × footing length × t_f; R_n, φ_c, R_n,up, φ_up, DR, γ_DR; the distribution and head assumption in words), `pileDesign` (per limit state the pile table's largest reaction `R.pile.perLS[ls].best` and smallest `worstMin`, with that permutation's lateral share Hx/n, Hy/n and √(Hx² + Hy²)/n, head pinned, M = 0);
+  - abutment type Integral: `integral` from `R.iab` (Tab 10): per pile DL = (DC + DW)/n, DC/n, DW/n, LL of the most loaded pile = `P.Pll/(η·γLL)` (MassDOT: without IM), γ's, η, the abutment's P_g and the MassDOT table P_u; thermal α, ΔT rise / fall, L_exp, Δ_exp, Δ_con and δ = max(Δ_exp, Δ_con) (CTDOT: its Δ_L, `P.ct.dL`); skew, height deck to bottom of cap, abutment length, cap width / depth, diaphragm height, total length, material, grade, curvature, height difference, straight, parallel, rock below the tip, not scour susceptible, MassDOT soil type, U-wingwalls (from the wingwall module, null when it is off), pile section, F_y, orientation, n, spacing, embedment, length; owner and preset (`massdot` / `ctdot` / ""). No `pileLayout` / `pileDesign` for an integral abutment (its piles are in Tab 10, not the panel I-7 group).
+  - Notes describe each block; the send dialog lists what else is sent (`#fdx-extra`).
+- **Before / after code:** see the diff below.
+- **Governing provision:** none changed. The per-pile reaction is the calculator's existing rigid-cap expression (C-8): P_i = ΣV/n + M_y·x'_i/Σx'² + M_x·y'_i/Σy'², M_y = (M_v − M_h) − ΣV·x̄_gc,T (= ΣV·e_x of C-8, e_x + toward the heel), M_x = M_t − ΣV·ȳ_gc. `pileReactions` writes it with (M_v − M_h) − V·x_gcT instead of V·(x̄ − x_gcT); the two are equal (x̄ = (M_v − M_h)/V) and the first is also defined for V ≤ 0.
+- **Check case (default project, foundation branch set to piles; 24 HP12X53 in 3 rows × 8 columns, rows 4.25 ft, columns 5.5 ft):**
+  - Σx'² = 8 · 2 · 4.25² = 289.0 ft², Σy'² = 3 · 2 · (2.75² + 8.25² + 13.75² + 19.25²) = 3811.5 ft² (payload `Sxx` 289, `Syy` 3811.5).
+  - Case "Strength I — V max": P = 3153.435 kip, M_y = +3597.453 kip-ft (toward the toe), M_x = 0. Toe row (x' = 4.25 ft toward the toe): 3153.435/24 + 3597.453 · 4.25/289 = 131.393 + 52.904 = **184.297 kip**; middle row 131.393 kip; heel row 131.393 − 52.904 = **78.489 kip** (payload `pileP` 184.297 / 131.393 / 78.489).
+  - `pileDesign`, Strength I compression: pile 1 (toe row, y = −19.25 ft), P = **212.713 kip** = the pile table maximum (`R.pile.perLS["Strength I"].best.Pmax`), Vx/n = 744.2/24 = **31.008 kip**, Vy = 0.
+  - Integral, MassDOT, skew 15° (default integral inputs, 6 HP12X84): DL = (717.90 + 72.00)/6 = **131.65 kip**, LL = **52.632 kip**, δ = max(0.162, 0.212) = **0.212 in**, P_g = 259.668 kip, table P_u = 425 kip.
+- **Results:** unchanged. `computeAll` (dashboard, permutation tables, `R.pile`, `R.iab`) identical to origin/main for the default project, the pile branch and the integral MassDOT project; the cases sent are identical to origin/main's (the new fields only add); page text and storage identical (`tests/compare.mjs --tool page`).
+- **Saved data (§5):** none (the project format is unchanged; the payload only gets optional fields). `schemaVersion` stays 1.
+- **How verified:** `node tests/check-syntax.mjs abutment_calculator.html "Pile Designer.html"`: pass. `node tests/compare.mjs --tool page --file abutment_calculator.html`: page text and storage identical to origin/main. End-to-end in jsdom 24 (React 18.2 served for Pile Designer): 45 checks, all pass (fixlog/Pile Designer.md ABPX lists them), including: every pile of all 27 imported cases equal in both tools (max 5.0e-4 kip, payload rounding), and the "pile P max" case of the 5 limit states within 6.3e-6 kip of `R.pile.perLS[ls].best.loads`.
+- **Other copies:** none (the hand-off script is this tool's own; `BridgeXfer` unchanged).
+- **Open items (engineer):**
+  1. The pile-table distribution has no product term Σx'y'. For a layout that is not symmetric about both centroidal axes (inactive piles, staggered coordinates) it differs from the general rigid-cap solution, which Pile Designer uses (with Σx'y'). Not changed here (calculation change); Pile Designer's import warns when its per-pile reactions differ from `pileP` by more than 0.01 kip.
+  2. Integral gravity load: the abutment factors DW with γDW and applies η; Pile Designer's integral mode has DL = DC + DW at γDC and no η. Default MassDOT case: abutment P_g = 259.668 kip, Pile Designer 1.25 · 131.65 + 1.75 · 52.632 = 256.668 kip (difference (1.50 − 1.25) · 72.00/6 = 3.000 kip). The import dialog shows both; see fixlog/Pile Designer.md ABPX open item 1.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `302f07a`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 46f54cc..a7abcf9 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -506 +506 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
+-    <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Spread Footing; the dialog also offers Export hand-off (JSON)">Send foundation loads</button>
++    <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Spread Footing; with piles also the pile layout, section and each pile's reactions, and the governing compression / uplift pile per limit state; for an integral abutment the data of Pile Designer's integral-abutment mode. The dialog also offers Export hand-off (JSON)">Send foundation loads</button>
+@@ -8346,0 +8347,5 @@ document.addEventListener("DOMContentLoaded",init);
++   ABPX (2026-10-20, payload revision 2, additive): in the pile branch also the pile layout (pileLayout: every pile's x, y in the
++   hand-off axes, rows / columns / spacings, section of panel I-7, embedment, cap = footing B × L × t, resistances), each case's
++   pile reactions by the calculator's own distribution (pileP), and per limit state the governing compression and uplift pile
++   with its lateral share H/n and pinned head (pileDesign); for an integral abutment the Tab 10 data Pile Designer's
++   integral-abutment mode needs (integral). Pile Designer offers to adopt them (HANDOFF.md §4.6).
+@@ -8354,0 +8360,69 @@ document.addEventListener("DOMContentLoaded",init);
++  /* ABPX (2026-10-20): each active pile's reaction for one permutation, by the calculator's own pile-table distribution
++     (computeAll, C-8: P_i = ΣV/n + M_y·x'_i/Σx'² + M_x·y'_i/Σy'² about the group centroid, x' + toward the heel). Same
++     expression as R.pile.perLS; display / hand-off only, nothing here feeds a check. Order = the active piles of pileLayout. */
++  function pileReactions(R,c){
++    const act=activePiles(), {n,xgc,ygc,xgcT,Sxx,Syy}=R.pile;
++    const My=(c.Mv-c.Mh)-c.V*xgcT, Mx=c.Mt-c.V*ygc;   // = V·ex and the transverse moment of C-8 (ex + toward the heel)
++    return act.map(p=>r3(c.V/n+(Sxx>1e-9? My*(p.x-xgc)/Sxx:0)+(Syy>1e-9? Mx*(p.y-ygc)/Syy:0)));
++  }
++  const r6=v=>Math.round((+v||0)*1e6)/1e6;
++  const pileNo=p=>S.piles.coords.indexOf(p)+1;
++  /* ABPX: the pile section of panel I-7 (the #369 structural check's inputs) */
++  function pileSection(){
++    const p=S.piles, shp=p.pileShape||"hp", o={shape:shp, Fy:+p.Fy||50, drive:p.drive==="severe"?"severe":"good", size:+p.pileSize||0};
++    if(shp==="hp"){ const nm=hpAuto(p), sx=HP_SHAPES[nm]; if(sx) Object.assign(o,{designation:nm, auto:!p.strSec, A:sx[0], d:sx[1], bf:sx[2], tf:sx[3], tw:sx[4]}); }
++    else if(shp==="round") Object.assign(o,{designation:"Pipe "+fmt(+p.pileSize||0,2)+" × "+fmt(+p.pipeT||0,3)+" in (unfilled)", D:+p.pileSize||0, t:+p.pipeT||0});
++    else Object.assign(o,{designation:"Square / precast "+fmt(+p.pileSize||0,1)+" in", PrUser:+p.PrUser||0});
++    return o;
++  }
++  /* ABPX: pile layout, cap and section (pile branch, conventional / semi-integral abutment) */
++  function pileLayout(R){
++    const p=S.piles, act=activePiles(), B=R.geo.B, Lftg=+S.geom.Lftg||+S.geom.Lab, rp=R.pile;
++    return { units:{coordinates:"ft", spacing:"ft", section:"in", Fy:"ksi", embedment:"in", cap:"ft", resistance:"kip"},
++      frame:"the hand-off axes (x + toward the toe, y + toward positive beam offsets), origin at the footing centre (B/2 from the toe, on the abutment centreline); the calculator's own pile x (panel I-7) is + toward the heel, so x here = −x there",
++      mode:p.mode, nRows:+p.nRows, nCols:+p.nCols, rowSpacingX:p.rowSp.map(v=>r6(v)), colSpacingY:p.colSp.map(v=>r6(v)), offset:{x:r6(-(+p.offX||0)), y:r6(+p.offY||0)},
++      piles:p.coords.map((c,i)=>({no:i+1, x:r6(-c.x), y:r6(c.y), active:!!c.active})),
++      n:act.length, centroid:{x:r6(-rp.xgc), y:r6(rp.ygc)}, Sxx:r6(rp.Sxx), Syy:r6(rp.Syy),
++      vertical:true, batter:null,
++      section:pileSection(), embedment:+p.embed||0, clearTop:+p.clrTop||0,
++      cap:{ widthX:r6(B), lengthY:r6(Lftg), thickness:r6(S.geom.tf), centre:{x:0, y:0}, fromToeToCentre:r6(B/2) },
++      resistance:{ Rn:+p.Rn, phiC:+p.phiC, RnUp:+p.RnUp, phiUp:+p.phiUp, DR:+p.dd||0, gDR:(p.gDD===undefined||p.gDD===null||p.gDD==="")?1.10:+p.gDD },
++      distribution:"rigid cap, identical vertical piles: P_i = P/n + My·x'_i/Σx'² + Mx·y'_i/Σy'² about the group centroid (no product term Σx'y'); each pile takes Vx/n and Vy/n; pinned heads (no head moment)",
++      head:"pinned" };
++  }
++  /* ABPX: per limit state, the governing compression pile and the governing (smallest reaction / uplift) pile of the
++     calculator's pile table (R.pile.perLS: best, worstMin), with each pile's lateral share H/n (equal share, the calculator's assumption) */
++  function pileDesign(R,lsSel){
++    const act=activePiles(), n=R.pile.n, out=[];
++    Object.keys(R.pile.perLS||{}).forEach(ls=>{
++      if(lsSel && !lsSel.includes(ls)) return;
++      const q=R.pile.perLS[ls];
++      [["compression",q.best,"Pmax","iMax"],["uplift",q.worstMin,"Pmin","iMin"]].forEach(([role,b,kP,kI])=>{
++        if(!b||!b.c||!isFinite(b[kP])||!act[b[kI]]) return;
++        const c=b.c, pp=act[b[kI]], P=b[kP], rl=role==="uplift"&&P>=0?"minimum":role;
++        out.push({ id:ls+":"+rl, limitState:lsOut(ls), factored:factored(ls), role:rl, pile:pileNo(pp), x:r6(-pp.x), y:r6(pp.y),
++          P:r3(P), Vx:r3(c.Hx/n), Vy:r3(c.Hy/n), V:r3(Math.hypot(c.Hx,c.Hy)/n), M:0, head:"pinned",
++          combination:c.lbl+(c.liveOn?"":" (no live load)") }); });
++    });
++    return out;
++  }
++  /* ABPX: what Pile Designer's integral-abutment mode needs (computeIAB, R.iab; integral type only) */
++  function integralBlock(R){
++    const Q=R.iab, P=Q&&Q.pile, I=S.iab; if(!Q||!Q.integ||!P) return null;
++    const own=Q.own, kLL=(Q.eta||0)*(Q.gLL||0), w=S.wing||{};
++    const ct=own==="CTDOT"&&P.ct, delta=ct? ct.dL : Math.max(Q.dExp,Q.dCon);
++    return { units:{force:"kip", length:"ft", movement:"in", angle:"deg", section:"in", Fy:"ksi", alpha:"1/°F", temperature:"°F"},
++      owner:own, preset:own==="MassDOT"?"massdot":own==="CTDOT"?"ctdot":"",
++      section:I.sec, Fy:+I.Fy, orient:I.orient==="strong"?"strong":"weak", nPiles:P.n, spacing:+I.sp, embedment:+I.embed, Lpile:+I.Lpile,
++      gravity:{ DL:r3((Q.DC+Q.DW)/P.n), DC:r3(Q.DC/P.n), DW:r3(Q.DW/P.n), LL:r3(kLL>0? P.Pll/kLL : 0), LLincludesIM:!P.IM, mL:Q.mL,
++        gDC:Q.gDC, gDW:Q.gDW, gLL:Q.gLL, eta:Q.eta, Pu:r3(P.Pg), PuTable:P.md&&P.md.ok? r3(P.md.PuTab) : null,
++        note:"unfactored per pile; DL = (DC + DW)/n, LL = the most loaded pile's live load ("+(P.IM?"without IM (MassDOT)":"with IM")+"); Pu = the calculator's factored gravity load per pile η[(γDC·DC + γDW·DW)/n + γLL·LL]" },
++      thermal:{ alpha:Q.alpha, dTrise:Q.dTr, dTfall:Q.dTf, Lexp:r3(Q.Lexp), dExp:r3(Q.dExp), dCon:r3(Q.dCon), delta:r3(delta),
++        basis:ct? "CTDOT design movement Δ_L (Eq. CT11.1.1.3-2), the calculator's Tab 10" : "the larger of the expansion and contraction movement at this abutment, α·ΔT·L_exp (γTU = 1.0)" },
++      skew:Q.skew, abutHeight:r3(Q.H), abutLength:+S.geom.Lab, capWidth:+I.b, capDepth:+I.hc, diaphragmHeight:+I.hd,
++      bridgeLength:Q.Ltot, material:Q.mat, grade:+I.grade, curvature:+I.curve, heightDiff:+I.dH,
++      straight:!!I.straight, parallel:!!I.parallel, rockBelow:!!I.rockBelow, noScour:!!I.noScour,
++      soilType:own==="MassDOT"? Math.min(6,Math.max(1,Math.round(+I.soilMD)||1)) : null,
++      uWingwalls:w.on? (w.type==="attached"&&w.orient==="U") : null,
++      head:own==="CTDOT"? (I.head==="pinned"?"pinned":"fixed") : "fixed", LE:own==="CTDOT"? +I.LE : null };
++  }
+@@ -8383 +8457,2 @@ document.addEventListener("DOMContentLoaded",init);
+-          { governs:g, combination:c.lbl+(c.liveOn?"":" (no live load)")+(m.a.noLSv?" (no vertical LS surcharge over the heel)":"") })); });
++          { governs:g, combination:c.lbl+(c.liveOn?"":" (no live load)")+(m.a.noLSv?" (no vertical LS surcharge over the heel)":"") },
++          pile&&iabType()!=="integral"? { pileP:pileReactions(R,c) } : {})); });
+@@ -8405,0 +8481 @@ document.addEventListener("DOMContentLoaded",init);
++      revision:2,   // ABPX (2026-10-20): additive optional blocks (HANDOFF.md §4.6); schemaVersion stays 1
+@@ -8413,0 +8490,16 @@ document.addEventListener("DOMContentLoaded",init);
++    /* ABPX: pile layout + per-pile governing loads (pile branch, not for an integral abutment, whose piles are in Tab 10),
++       and the integral-abutment block (integral type) */
++    const integ=iabType()==="integral";
++    if(pile && !integ){
++      p.pileLayout=pileLayout(R);
++      p.pileDesign={ units:{force:"kip", moment:"kip-ft", length:"ft"},
++        lateralShare:"equal: each pile takes Vx/n and Vy/n of its permutation (rigid cap, identical vertical piles; the calculator's assumption)",
++        head:{ condition:"pinned", basis:"the calculator's rigid-cap distribution gives axial load and an equal shear share with no head moment; its pile embedment ("+fmt(+S.piles.embed||0,1)+" in) is not checked for head fixity (see the receiver's fixity check)" },
++        DR:+S.piles.dd||0, gDR:p.pileLayout.resistance.gDR,
++        cases:pileDesign(R,lsSel) };
++      p.notes.push("Pile layout (pileLayout): "+p.pileLayout.n+" active piles of "+p.pileLayout.piles.length+", in the hand-off axes, origin at the footing centre; vertical piles, rigid cap. Each case also lists each active pile's reaction by the calculator's distribution (pileP), so a receiver that adopts the layout can check its own distribution against it.");
++      p.notes.push("Per-pile governing loads (pileDesign): per limit state, the pile with the largest reaction and the pile with the smallest (uplift when < 0) of the calculator's pile table, each with its lateral share H/n and a pinned head. They are factored loads on one pile (Service I: factored:false). The drag load DR = "+fmt(+S.piles.dd||0,1)+" kip is not included.");
++    }
++    if(integ){ const ib=integralBlock(R);
++      if(ib){ p.integral=ib;
++        p.notes.push("Integral abutment (integral): the gravity load per pile (unfactored DL and LL), thermal movement, skew, pile section and orientation, abutment height and length, owner and the eligibility inputs of panel I-0a, from Tab 10. The cases above are the conventional cantilever model (Tabs 2 to 4), which is not part of the integral design."); } }
+@@ -8436 +8528,4 @@ document.addEventListener("DOMContentLoaded",init);
+-        b.p.cases.map(c=>"<tr><td title='"+escH(c.combination)+"'>"+escH(c.name)+"</td><td>"+(c.factored?"yes":"no")+"</td><td class='n'>"+f(c.P)+"</td><td class='n'>"+f(c.Vx)+"</td><td class='n'>"+f(c.Vy)+"</td><td class='n'>"+f(c.Mx)+"</td><td class='n'>"+f(c.My)+"</td></tr>").join("")+"</table></div>")+
++        b.p.cases.map(c=>"<tr><td title='"+escH(c.combination)+"'>"+escH(c.name)+"</td><td>"+(c.factored?"yes":"no")+"</td><td class='n'>"+f(c.P)+"</td><td class='n'>"+f(c.Vx)+"</td><td class='n'>"+f(c.Vy)+"</td><td class='n'>"+f(c.Mx)+"</td><td class='n'>"+f(c.My)+"</td></tr>").join("")+"</table></div>"+
++        // ABPX: the additional blocks Pile Designer can adopt
++        (b.p.pileLayout?"<div class='fdx-note' id='fdx-extra'><b>Also sent:</b> the pile layout ("+b.p.pileLayout.n+" active piles, "+escH(b.p.pileLayout.section.designation||b.p.pileLayout.section.shape)+", embedment "+f(b.p.pileLayout.embedment)+" in, cap "+f(b.p.pileLayout.cap.widthX)+" × "+f(b.p.pileLayout.cap.lengthY)+" × "+f(b.p.pileLayout.cap.thickness)+" ft) with each case's pile reactions, and "+b.p.pileDesign.cases.length+" per-pile governing loads (largest and smallest pile reaction per limit state, lateral share H/n, pinned head) for single-pile design in Pile Designer.</div>":"")+
++        (b.p.integral?"<div class='fdx-note' id='fdx-extra'><b>Also sent (integral abutment, Tab 10):</b> per pile DL = "+f(b.p.integral.gravity.DL)+" kip and LL = "+f(b.p.integral.gravity.LL)+" kip (unfactored), δ = "+f(b.p.integral.thermal.delta)+" in, skew "+f(b.p.integral.skew)+"°, "+escH(b.p.integral.section)+" ("+b.p.integral.orient+" axis), abutment height "+f(b.p.integral.abutHeight)+" ft, owner "+escH(b.p.integral.owner)+", for Pile Designer's integral-abutment mode.</div>":""))+
+```
