@@ -4377,10 +4377,11 @@ function computeAll(I, opts = {}) {
       const ai = opts.capCaseId != null ? gcs.findIndex(gc => gc.id === opts.capCaseId) : -1;
       const nz = gcs.findIndex(gc => !caseIsZero(gc));
       const active = ai >= 0 ? gcs[ai] : (gcs[nz >= 0 ? nz : 0]);
-      const cd = computeCapDist(I, R.group, caseLoadList(pts, active, stemTopZ(I)));
+      const cd = (opts.capDlMin && ai >= 0) ? computeCapDistAt(I, R.group, caseLoadList(pts, active, stemTopZ(I)), 0.90, "min")   // PUP: the active row is the case's uplift row
+        : computeCapDist(I, R.group, caseLoadList(pts, active, stemTopZ(I)));
       return cd ? { ...cd, caseName: (active && active.name) || "case", caseIsActive: ai >= 0 } : cd;
     }
-    return computeCapDist(I, R.group);
+    return opts.capDlMin ? computeCapDistAt(I, R.group, undefined, 0.90, "min") : computeCapDist(I, R.group);   // PUP
   })();
 
   // ---- GEOMETRY & CODE-LIMIT CHECKS (Module G) ----
@@ -12005,14 +12006,27 @@ function caseIsZero(gcase) {
   return !Object.values(mags).some(m => m && (m.P || m.Vx || m.Vy || m.Mx || m.My));
 }
 
+/* PUP (2026-10-20): a Strength group case whose governing pile is in compression (cap / stem weight at dlFactor, γDC max)
+   but which has a pile in net uplift with the weight at γDC min 0.90 (AASHTO LRFD 10th Ed. Table 3.4.1-2) gets a second
+   row: a tension check of the most uplifted pile at 0.90 (computeCapDist's dlAlt). Before, only the governing pile was
+   checked. Synthetic, not saved; appended after all main Group rows. */
+function pupUpliftRow(gc, cd) {
+  if (!cd || cd.dlBasis !== "max" || !cd.dlAlt || !(cd.dlAlt.axial < -1e-6)) return null;
+  if (gc && (gc.type || "strength") !== "strength") return null;
+  const a = cd.dlAlt;
+  return { name: "Group \u25a6 " + (gc ? (gc.name || "case") + " \u00b7 " : "pile ") + "P" + a.selId + " (uplift, \u03b3DC 0.90)", type: "tension",
+    STL: Math.abs(a.axial), Plat: a.Vres || 0, Mhead: 0, _fromGroup: true, _groupCaseId: gc ? gc.id : undefined, _pileId: a.selId, _dlMin: true,
+    _Vx: a.Vx, _Vy: a.Vy };
+}
 /* PDL: the cap / stem weight factor basis in words, for the Module 11 cap-distribution text */
 function capDlNote(cd) {
   if (!cd || !cd.dlBasis) return "";
   const alt = cd.dlAlt && isFinite(cd.dlAlt.axial) ? (cd.dlBasis === "min" ? " (with \u03b3DC = " + fmt(cd.dlAlt.dlFactor, 2) + ": pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip)"
-    : "; a pile in uplift is not the governing pile of this case: with \u03b3DC = 0.90, pile P" + cd.dlAlt.selId + " = " + fmt(cd.dlAlt.axial, 1) + " kip") : "";
+    : "; pile P" + cd.dlAlt.selId + " is in uplift and is checked in its own Group row with \u03b3DC = 0.90: " + fmt(cd.dlAlt.axial, 1) + " kip") : "";   // PUP
   if (cd.dlBasis === "ee") return " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
   if (cd.dlBasis === "svc") return " \u03b3DC = 1.00 for this Service case (AASHTO LRFD 10th Ed. Table 3.4.1-1).";
-  if (cd.dlBasis === "min") return " \u03b3DC = 0.90 (minimum, AASHTO LRFD 10th Ed. Table 3.4.1-2): the weight resists uplift on the governing pile" + alt + ".";
+  const pMin = cd.piles && cd.piles.length ? cd.piles.reduce((a, q) => q.axial < a.axial ? q : a, cd.piles[0]) : null;   // PUP: the most uplifted pile
+  if (cd.dlBasis === "min") return " \u03b3DC = 0.90 (minimum, AASHTO LRFD 10th Ed. Table 3.4.1-2): the weight resists uplift" + (pMin && pMin.axial < -1e-6 ? " (pile P" + pMin.id + " = " + fmt(pMin.axial, 1) + " kip)" : "") + alt + ".";
   return " \u03b3DC = " + fmt(cd.dlFactor, 2) + " (maximum): the weight adds to compression on the governing pile" + alt + ".";
 }
 /* PDL (2026-10-20): cap / stem self-weight factor by group-case type (AASHTO LRFD 10th Ed. Table 3.4.1-1, Table 3.4.1-2):
@@ -12035,7 +12049,8 @@ function computeCapDist(I, grp, loadListOverride) {
   const use = upl ? dMin : dMax, other = upl ? dMax : dMin;
   // the other side, for the text: with 0.90 the most uplifted pile (if any) of a compression case; with dlFactor the governing pile of an uplift case
   const oPile = upl ? (other && other.sel) : (other && other.piles && other.piles.reduce((a, q) => (!a || q.axial < a.axial) ? q : a, null));
-  if (use && oPile && (upl || oPile.axial < -1e-6)) use.dlAlt = { basis: other.dlBasis, dlFactor: other.dlFactor, selId: oPile.id, axial: oPile.axial };
+  if (use && oPile && (upl || oPile.axial < -1e-6)) use.dlAlt = { basis: other.dlBasis, dlFactor: other.dlFactor, selId: oPile.id, axial: oPile.axial,
+    Vx: oPile.Vx, Vy: oPile.Vy, Vres: oPile.Vres };   // PUP: shears of that pile, for the uplift row of a compression-governed case
   return use;
 }
 function computeCapDistAt(I, grp, loadListOverride, dlFOverride, dlBasis) {
@@ -15097,7 +15112,7 @@ function App() {
     if (usingMatrix) {
       const pts = deriveLoadPoints(I);
       const gcs = deriveGroupCases(I);
-      const out = [];
+      const out = [], upl = [];
       gcs.forEach(gc => {
         if (caseIsZero(gc)) return; // skip all-zero cases
         const cd = computeCapDist(I, groupGeom, caseLoadList(pts, gc, stemTopZ(I)));
@@ -15115,17 +15130,19 @@ function App() {
           _fromGroup: true, _groupCaseId: gc.id, _pileId: sel.id,
           _Vx: sel.Vx, _Vy: sel.Vy   // F36 (O47): per-pile shear components (not saved; synthetic rows)
         });
+        const ur = pupUpliftRow(gc, cd); if (ur) upl.push(ur);
       });
-      return out;
+      return out.concat(upl);   // PUP: uplift rows after every main row (the main rows keep their positions)
     }
     // legacy single-load path
     const cd = computeCapDist(I, groupGeom);
     if (!cd || !cd.sel || !cd.enable || !isFinite(cd.sel.axial)) return [];
     const sel = cd.sel, uplift = sel.axial < -1e-6;
+    const urL = pupUpliftRow(null, cd);   // PUP
     return [uplift
       ? { name: "Group \u25a6 pile P" + sel.id + " (uplift)", type: "tension", STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true, _Vx: sel.Vx, _Vy: sel.Vy }
-      : { name: "Group \u25a6 pile P" + sel.id, type: "strength", STL: sel.axial, Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true, _Vx: sel.Vx, _Vy: sel.Vy }];
-  }, [groupEnabled, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD, I.pileType, I.hpAxis, I.hpBf, I.hpD]);
+      : { name: "Group \u25a6 pile P" + sel.id, type: "strength", STL: sel.axial, Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true, _Vx: sel.Vx, _Vy: sel.Vy }].concat(urL ? [urL] : []);
+  }, [groupEnabled, I.dlFactor, I.stemEnable, I.stemWx, I.stemWy, I.stemH, I.stemX, I.stemY, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD, I.pileType, I.hpAxis, I.hpBf, I.hpD]);
   const cases = groupCasesEmitted.length ? [...baseCasesSafe, ...groupCasesEmitted] : baseCasesSafe;
   const groupCaseIdx = groupCasesEmitted.length ? baseCasesSafe.length : -1; // first group case index
   const groupCase = groupCasesEmitted.length ? groupCasesEmitted[0] : null;
@@ -15913,7 +15930,8 @@ function App() {
       pyNoConvWhy: (pyRes && pyRes.noConv) ? pyRes.why : null,
       // F21 (O29): the group case of the active Group row, for the Module 11 / report 11
       // distribution (null when the active row is a manual case). Display only.
-      capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null
+      capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null,
+      capDlMin: !!(cases[activeIdx] && cases[activeIdx]._dlMin)   // PUP: the active Group row is an uplift row at γDC 0.90
     };
   };
   // F29: per-row group p-multipliers -- evaluate each row's solve with the same options as r,
