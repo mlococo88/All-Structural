@@ -11410,3 +11410,162 @@ index 4bb0c72..f530c84 100644
 -    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·kh0, kh0 = "+(["A","B","B/C"].includes(S.seismic.siteClass)?"1.2·As":"As")+" (site class "+(S.seismic.siteClass||"not selected")+") [11.6.5.2.1], kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"1.00 [T.3.4.1-1]")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
 +    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·kh0, kh0 = "+(["A","B","B/C"].includes(S.seismic.siteClass)?"1.2·As":"As")+" (site class "+(S.seismic.siteClass||"not selected")+") [11.6.5.2.1], kv="+fmt(+S.seismic.kv,2)+", ΔPAE "+(S.seismic.hEQmode==="ratio"?"@ "+fmt(+S.seismic.hEQr,2)+"H":"as the static pressure [11.6.5.3]")+(S.seismic.nonConc!==false?", PAE/PIR nonconcurrent [11.6.5.1]":"")+", transverse share "+fmt(+(S.seismic.shEQt??100),0)+"% (100/30, 3.10.8)")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"1.00 [T.3.4.1-1]")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
 ```
+
+## 2026-10-20 — PR: claude/aashto10-abut-r4 — accuracy follow-ups to ABR3: integral pile gravity load without IM, stem earth pressure with water, passive depth neglected (ABR4) (PR link added after merge)
+
+Source: engineer decisions on the ABR3 open items (2026-10-20). Items 1 (transverse EQ: wall inertia, s_EQ,t 100 %), 2 (MassDOT semi-integral 100 % of P_AE) and the f_IM input for continuous spans are accepted as built. Provisions checked against the AASHTO LRFD 10th Ed. (2024) text and the owner manuals.
+
+### ABR4-1. Integral pile gravity load without IM   [calc change] [AASHTO: LESS conservative; MassDOT: MORE conservative]
+- **Where:** `computeIAB` (anchor `P.eqD=own==="MassDOT"; P.imKeep=`); Tab 10 §10.4 gravity lines (`P.eqD` now drives the MassDOT equal distribution, `P.IM` = IM removed); hand-off note.
+- **Before:** AASHTO: LL+IM; MassDOT: LL/1.33 (removes 33 % of the lane load as well); CTDOT, RIDOT: LL+IM.
+- **After:** AASHTO and MassDOT: LL·(1 − f_IM) with the f_IM of Tab 1 §1.9 (simple span or entered), when panel I-4 has the foundation below ground. CTDOT (V2: dynamic load allowance considered for the abutment and its supporting piles) and RIDOT (BDM 11.3.2: IM in the top 4 ft of the pile) keep IM — owner rules.
+- **Provision:** AASHTO LRFD 10th Ed. 3.6.2.1; CTDOT BRSDM V2 (integral abutment load rules); RIDOT BDM 11.3.2.
+- **Check case (built-in integral project, n = 6, η = 1, γLL = 1.75, m = 1):** f_IM = 0.1905; LL = 420 × (1 − 0.1905) = **340.0 kip**; W_LL = 1.75 × 340.0 = 595.0 kip; P_LL = 595.0/6 = 99.17 kip; P_g = 167.56 + 99.17 = **266.73 kip** (AASHTO before: 290.06). MassDOT before: 420/1.33 = 315.79 → P_g = 259.67 kip; after 266.73 kip; simplified-method D/C **0.4629 → 0.4755**. CTDOT 290.06, RIDOT 314.56: unchanged.
+
+### ABR4-2. Stem earth pressure with water: buoyant unit weight below the water level   [calc change] [LESS conservative]
+- **Where:** `computeAll` stem: `pLay`, `lay`, `stEH(Hx, c, hwL)` (anchor `const pLay=(z,d1)=>`); stem loop `hwL` (construction stage dry); stem EE `shp` (layered, as P_AE); stem V&M diagram (`d1v`, `lTop`); Tab 5 §5.2 M_EH / V_EH lines; water warning text.
+- **Before:** moist γ over the full stem height (warning: "conservatively use moist unit weight").
+- **After:** as the stability pressure (C-3, P1–P3): γ above the water level, γ′ = γ − γ_w below it, balanced groundwater (no net hydrostatic thrust); water height on the stem h_w = min(h_w − t_f, h_soil). Closed form (c = 0): V = k_ah[γd₁²/2 + γd₁h_w + γ′h_w²/2], M = k_ah[γd₁²/2·(h_w + d₁/3) + γd₁h_w²/2 + γ′h_w³/6], d₁ = H − h_w. The construction stage stays dry. The backwall and wingwalls keep the moist γ.
+- **Provision:** AASHTO LRFD 10th Ed. 3.11.3, 3.11.5; consistent with 11.6.5.3 (P_AE, ABR3-6).
+- **Check case (built-in project, h_w = 8 ft above the footing base → 5 ft above the top of footing):** H = 19, d₁ = 14, γ′ = 0.0576 kcf, k_ah = 0.30726. V = 0.30726[11.76 + 8.40 + 0.72] = **6.416 kip/ft** (before 0.30726 × 0.120 × 361/2 = 6.655); M = 0.30726[11.76(5 + 4.667) + 21.0 + 1.20] = 0.30726 × 135.88 = **41.75 kip-ft/ft** (before 42.15). Strength I M_u 112.06 → 111.46; stem flexure D/C 0.3702 → 0.3682, shear 0.2659 → 0.2573.
+
+### ABR4-3. Passive resistance: depth of soil neglected   [calc change only when d_n > 0] [MORE conservative]
+- **Where:** C-3 passive (anchor `const De=Math.max(0,(+S.fnd.Df||0)-Math.max(0,+S.fnd.dNeg||0));`); new input `fnd.dNeg` (panel I-4, under passive); Tab 1 passive lines; RIDOT owner default 4 ft; `own.dv` 6 migration.
+- **Before:** P_p = ½k_pγD_f²L_ftg.
+- **After:** P_p = ½k_pγ(D_f − d_n)²L_ftg: only the embedment below the frost / scour / future-excavation depth is effective. Default d_n = 0; RIDOT 4 ft (BDM 10.4.1 frost depth). CTDOT's 4-ft minimum embedment (V2 10.6.1.2) does not state a frost depth, so no CTDOT default.
+- **Provision:** AASHTO LRFD 10th Ed. 10.6.3.4 (R_ep available over the design life; future removal of soil in front), 11.6.3.5 (only the embedment below the scour / freeze-thaw depth is effective); RIDOT BDM 10.4.1.
+- **Check case (passive on, D_f = 5 ft, d_n = 2 ft, k_p = 3.0, γ = 0.120, L_ftg = 44 ft):** D_e = 3 ft; P_p = ½(3.0)(0.120)(3.0)²(44) = **71.28 kip** (before ½(3.0)(0.120)(5.0)²(44) = 198.0); sliding D/C **0.929 → 1.032**. RIDOT (d_n = 4): P_p = ½(3.0)(0.120)(1.0)²(44) = 7.92 kip.
+
+### Saved data
+- No key renamed and no format change. New optional field `fnd.dNeg` (0). `own.dv` 6 applies the RIDOT default to a saved RIDOT project still at 0. One-time notice `meta.defRev` 11 for a saved project with water above the footing or an AASHTO / MassDOT integral abutment.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: pass.
+- Headless Chromium, origin/main (`6aa5e32`) vs this branch, 12 scenarios (default; water 8 ft Strength and EE I; semi-integral with water; passive with d_n; RIDOT passive; integral AASHTO, MassDOT, CTDOT, RIDOT; pile; MassDOT semi-integral); every tab and the report rendered: no errors, no NaN. Default, pile and dry projects equal origin/main. Self-test passes.
+- Each hand-check number above equals the value the tool shows. Saved projects written by origin/main open with the notices above.
+
+### Open items (engineer decisions)
+1. CTDOT: should the 4-ft minimum embedment (V2 10.6.1.2) also be the default d_n?
+2. Backwall and wingwalls keep the moist γ with water (normally above the water level).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `6aa5e32`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index f530c84..8cf007d 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -734 +734,2 @@ function defaultState(){
+-      imBuried:true, imFrac:0,            // ABR3: footing / piles entirely below ground → no IM on the girder LL reaction there [3.6.2.1]; IM share of the reaction (0 = computed)
++      imBuried:true, imFrac:0, dNeg:0,    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
++                                          // ABR3: footing / piles entirely below ground → no IM on the girder LL reaction there [3.6.2.1]; IM share of the reaction (0 = computed)
+@@ -778 +779 @@ function defaultState(){
+-    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:5 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
++    own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:6 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
+@@ -1233,0 +1235 @@ const ABUT_OWN_DEF=[
++  {owner:"RIDOT", key:"fnd.dNeg", sec:"10.4.1 (p. 10-5)", text:"Frost: 4 ft below finished grade (the BDM's maximum anticipated frost depth); the soil above is not counted in the passive resistance", val:()=>4.0, unit:"ft"},
+@@ -1246 +1248 @@ const OWN_DEF_PANEL={"mat.fc":"I-2","soil.method":"I-3","soil.Kmode":"I-3","soil
+-  "reinf.coatBW":"I-9","reinf.gammaE":"I-9","seismic.on":"I-11","seismic.gEQll":"I-11","own.mLL":"I-0","seismic.khR":"I-11","seismic.shEQ":"I-11","seismic.bwStop":"I-11","seismic.shEQt":"I-11","mat.gc":"I-2"};
++  "reinf.coatBW":"I-9","reinf.gammaE":"I-9","seismic.on":"I-11","seismic.gEQll":"I-11","own.mLL":"I-0","seismic.khR":"I-11","seismic.shEQ":"I-11","seismic.bwStop":"I-11","seismic.shEQt":"I-11","mat.gc":"I-2","fnd.dNeg":"I-4"};
+@@ -1251 +1253 @@ const OWN_DEF_LK={"mat.fc":["tab-struct","o-str-Stem","§5.2 stem"],"soil.method
+-  "seismic.khR":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.shEQ":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.bwStop":["tab-struct","o-str-bwee","§5.1a backwall, extreme event"],"seismic.shEQt":["tab-stab","o-mo","§3.6a seismic earth pressure"],"mat.gc":["tab-loads","o-selfwt","§1.2 self-weights"]};
++  "seismic.khR":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.shEQ":["tab-stab","o-mo","§3.6a seismic earth pressure"],"seismic.bwStop":["tab-struct","o-str-bwee","§5.1a backwall, extreme event"],"seismic.shEQt":["tab-stab","o-mo","§3.6a seismic earth pressure"],"mat.gc":["tab-loads","o-selfwt","§1.2 self-weights"],"fnd.dNeg":["tab-stab","o-slide","§3.1 sliding"]};
+@@ -1254 +1256 @@ const OWN_DEF_LBL={"mat.fc":"f′c","soil.method":"active pressure theory","soil
+-  "seismic.khR":"k_h ratio","seismic.shEQ":"seismic share of the superstructure inertia","seismic.bwStop":"backwall as the seismic stop","seismic.shEQt":"transverse seismic share of the superstructure inertia","mat.gc":"concrete unit weight γ_c"};
++  "seismic.khR":"k_h ratio","seismic.shEQ":"seismic share of the superstructure inertia","seismic.bwStop":"backwall as the seismic stop","seismic.shEQt":"transverse seismic share of the superstructure inertia","mat.gc":"concrete unit weight γ_c","fnd.dNeg":"depth neglected for passive d_n"};
+@@ -1640 +1642 @@ function migrate(){
+-    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac"]);   // ABR3: imBuried, imFrac
++    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg"]);   // ABR4: dNeg   // ABR3: imBuried, imFrac
+@@ -1674,0 +1677,5 @@ function migrate(){
++  if(S.own.dv===5){   // ABR4 (2026-10-20): new owner default (RIDOT 10.4.1 frost depth for the passive) for a project saved with the earlier ones
++    S.own.dv=6;
++    if(abutOwner()==="RIDOT"){ const pre=ownDefMap(); pre["fnd.dNeg"]=0; const r=ownReapply(pre);
++      if(r.set.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Owner RIDOT: new owner default applied — "+r.set.map(k=>ownDefLabel(k)+" → "+ownShow(ABUT_OWN_DEF.find(d=>d.owner==="RIDOT"&&d.key===k),getPath(S,k))).join("; ")+" (Tab 1 §1.0a)"]); }
++  }
+@@ -1799,0 +1807,8 @@ function migrate(){
++  // defRev 11 (ABR4, 2026-10-20): one-time notice where a saved project's results change (the new input d_n defaults to 0)
++  if(!(S.meta.defRev>=11)){
++    if(defRev0>=1){ const add=[], it=(S.iab&&S.iab.type)||"conv", o=(S.own&&S.own.owner)||"AASHTO";
++      if((+S.geom.hw||0)>(+S.geom.tf||0)) add.push("Water table above the top of footing: the stem earth pressure now uses the buoyant unit weight below the water level, as the stability (Tab 5 §5.2)");
++      if(it==="integral"&&(o==="AASHTO"||o==="MassDOT")&&!(S.fnd&&S.fnd.imBuried===false)) add.push("Integral piles: the gravity load per pile now takes the girder LL reaction without IM (3.6.2.1; f_IM of Tab 1 §1.9"+(o==="MassDOT"?"; was LL/1.33":"")+") (Tab 10 §10.4)");
++      DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add); }
++    S.meta.defRev=11;
++  }
+@@ -1988,0 +2004 @@ function buildInputs(){
++        ${inpRow("Depth of soil neglected d<sub>n</sub> (frost, scour, future excavation)","fnd.dNeg","ft",{title:"Only the embedment below this depth counts in the passive resistance: P_p = ½k_pγ(D_f − d_n)² L_ftg [10.6.3.4, 11.6.3.5]. RIDOT owner default 4 ft (frost, BDM 10.4.1); otherwise 0."})}
+@@ -2847 +2863,4 @@ function computeIAB(R,X){
+-    P.IM=own==="MassDOT"; P.LLp=P.IM? Q.LL/1.33 : Q.LL;
++    /* ABR4: IM not applied to the piles (foundation below ground, 3.6.2.1): LL·(1 − f_IM), f_IM of Tab 1 §1.9 (entered or simple span), AASHTO and
++       MassDOT (MassDOT was LL/1.33, which also took 33 % off the lane load); CTDOT (V2 load rules) and RIDOT (BDM 11.3.2, top 4 ft of the pile)
++       keep IM on the integral piles. P.eqD: MassDOT equal distribution. */
++    P.eqD=own==="MassDOT"; P.imKeep=own==="CTDOT"||own==="RIDOT"||!(R.im&&R.im.on); P.IM=!P.imKeep; P.fIM=P.IM? (R.im? R.im.f : imSplit().f) : 0; P.LLp=Q.LL*(1-P.fIM);
+@@ -3038 +3057,3 @@ function computeAll(){
+-    Pp=0.5*kp*S.fnd.gammaF*S.fnd.Df*S.fnd.Df*Lftg;   // ABR3: passive on the footing's front face, length L_ftg (was L_ab) [10.6.3.4]
++    // ABR4: only the embedment below the neglected depth d_n (frost, scour, future excavation) is effective [10.6.3.4, 11.6.3.5]: D_e = D_f − d_n
++    const De=Math.max(0,(+S.fnd.Df||0)-Math.max(0,+S.fnd.dNeg||0));
++    Pp=0.5*kp*S.fnd.gammaF*De*De*Lftg;   // ABR3: passive on the footing's front face, length L_ftg (was L_ab) [10.6.3.4]
+@@ -3882 +3903,7 @@ function computeAll(){
+-  const stEH=(Hx,c)=>c>0? {M:kah*gam*(Math.pow(Hx,3)/6-(Hx*c*c/2-c*c*c/3)), V:kah*gam*(Hx*Hx-c*c)/2} : {M:kah*gam*Math.pow(Hx,3)/6, V:kah*gam*Hx*Hx/2};
++  /* ABR4 (2026-10-20): layered vertical stress below the backfill surface, as the stability pressure (C-3): γ above the water level, γ′ = γ − γ_w
++     below it (balanced groundwater, no net hydrostatic thrust) [3.11.3]; d1 = depth of the water level. lay(a, b, ref, d1) = ∫σ dz and ∫σ(ref − z) dz
++     over depths a..b (Simpson's rule, exact for the piecewise-linear σ). Water level at the stem: h_w,s = hwSoil above the top of footing. */
++  const pLay=(z,d1)=> z<=d1? gam*z : gam*d1+(gam-GAMMA_W)*(z-d1);
++  const lay=(a,b,ref,d1)=>{ const seg=(u,v)=>{ if(v<=u+1e-12) return {V:0,M:0}; const mm=(u+v)/2, h=(v-u)/6, f=z=>pLay(z,d1), q=z=>pLay(z,d1)*(ref-z); return {V:h*(f(u)+4*f(mm)+f(v)), M:h*(q(u)+4*q(mm)+q(v))}; };
++    const k=Math.min(Math.max(d1,a),b), s1=seg(a,k), s2=seg(k,b); return {V:s1.V+s2.V, M:s1.M+s2.M}; };
++  const stEH=(Hx,c,hwL)=>{ const d1=Hx-Math.min(Math.max(0,hwL||0),Hx), r=lay(c>0?c:0,Hx,Hx,d1); return {M:kah*r.M, V:kah*r.V}; };   // ABR4: was k_ah·γ·[H³/6 − (Hc²/2 − c³/3)], k_ah·γ(H² − c²)/2 (moist γ)
+@@ -3885 +3912 @@ function computeAll(){
+-  const Mst_EH=stEH(Hs,cS).M, Vst_EH=stEH(Hs,cS).V;
++  const Mst_EH=stEH(Hs,cS,hwSoil).M, Vst_EH=stEH(Hs,cS,hwSoil).V;   // ABR4: buoyant below the water level
+@@ -3915 +3942,2 @@ function computeAll(){
+-    const MEH_ls=stEH(Hs_ls,cL).M, VEH_ls=stEH(Hs_ls,cL).V;
++    const hwL=L.noSuper? 0 : hwSoil;   // ABR4: construction stage dry (as its stability groups)
++    const MEH_ls=stEH(Hs_ls,cL,hwL).M, VEH_ls=stEH(Hs_ls,cL,hwL).V;
+@@ -3931 +3959 @@ function computeAll(){
+-      const q=R.seis, kA=q.kahA||0, mdS=cS>0&&abutOwner()==="MassDOT", shp=(Hx,c)=>({M:Math.pow(Hx,3)/6-(c>0?(Hx*c*c/2-c*c*c/3):0), V:(Hx*Hx-c*c)/2});
++      const q=R.seis, kA=q.kahA||0, mdS=cS>0&&abutOwner()==="MassDOT", shp=(Hx,c)=>{ const r=lay(c>0?c:0,Hx,Hx,Hx-Math.min(hwSoil,Hx)); return {M:r.M/gam, V:r.V/gam}; };   // ABR4: layered (γ′ below the water level), as P_AE
+@@ -3956 +3984 @@ function computeAll(){
+-      Veq,eqT,cL,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
++      Veq,eqT,cL,hwL,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
+@@ -3971 +3999 @@ function computeAll(){
+-  if(g.hw>g.tf) warn("Water table above the top of footing: wall structural demands conservatively use moist unit weight over the full height (no buoyant reduction applied to wall pressures).");
++  if(g.hw>g.tf) warn("Water table above the top of footing: the stem earth pressure uses the buoyant unit weight below the water level, as the stability (balanced groundwater, no net hydrostatic thrust); the backwall and wingwalls use the moist unit weight.");
+@@ -4429 +4457 @@ function computeAll(){
+-    { const Hs=cctx? Math.min(R.constrC.hfC,g.soilH) : g.soilH;
++    { const Hs=cctx? Math.min(R.constrC.hfC,g.soilH) : g.soilH, d1v=Hs-(cctx? 0 : Math.min(hwSoil,Hs));   // ABR4: water level depth (construction stage dry)
+@@ -4433,3 +4461,4 @@ function computeAll(){
+-        w.push(fEH*kah*gam*Math.max(0,Hs-e) + (e<=Hs? fLS*kah*gam*heqL + fES*kah*esQv + (fCS>0?fCS*kah*qCv:0) : 0)); }
+-      const Vtop=fEH*kah*gam*hAbove*hAbove/2 + (fLS*kah*gam*heqL+fES*kah*esQv+(fCS>0?fCS*kah*qCv:0))*hAbove;
+-      const Mtop=fEH*kah*gam*Math.pow(hAbove,3)/6 + (fLS*kah*gam*heqL+fES*kah*esQv+(fCS>0?fCS*kah*qCv:0))*hAbove*hAbove/2;
++        w.push(fEH*kah*pLay(Math.max(0,Hs-e),d1v) + (e<=Hs? fLS*kah*gam*heqL + fES*kah*esQv + (fCS>0?fCS*kah*qCv:0) : 0)); }
++      const lTop=lay(0,hAbove,hAbove,d1v);   // ABR4: layered
++      const Vtop=fEH*kah*lTop.V + (fLS*kah*gam*heqL+fES*kah*esQv+(fCS>0?fCS*kah*qCv:0))*hAbove;
++      const Mtop=fEH*kah*lTop.M + (fLS*kah*gam*heqL+fES*kah*esQv+(fCS>0?fCS*kah*qCv:0))*hAbove*hAbove/2;
+@@ -5077 +5106 @@ function renderTabIAB(R){
+-      P.IM? `LL\\ (\\text{no IM}) = \\dfrac{LL{+}IM}{1.33} = \\dfrac{${t(Q.LL,1)}}{1.33} = ${t(P.LLp,1)}\\ \\text{kip}` : "",
++      P.IM? `LL\\ (\\text{no IM}) = (1 - f_{IM})(LL{+}IM) = (1 - ${t(P.fIM,4)})(${t(Q.LL,1)}) = ${t(P.LLp,1)}\\ \\text{kip}\\quad(f_{IM}\\text{: Tab 1 §1.9})` : "",
+@@ -5079,2 +5108,2 @@ function renderTabIAB(R){
+-      `W_{LL} = \\eta\\,\\gamma_{LL}\\,m\\,LL = ${t(Q.eta)}(${t(Q.gLL)})(${t(Q.mL)})(${t(P.LLp,1)}) = ${t(P.WLL,1)}\\ \\text{kip}${P.IM?"":`\\,, \\quad e = \\dfrac{\\sum P_iy_i}{\\sum P_i} = ${t(P.eLL,3)}\\ \\text{ft}`}`,
+-      P.IM? `P_{LL} = W_{LL}/n = ${t(P.WLL,1)}/${P.n} = ${t(P.Pll,2)}\\ \\text{kip}` : `P_{LL} = \\dfrac{W_{LL}}{n} + \\dfrac{W_{LL}\\,e\\,x_{max}}{\\sum x^2} = \\dfrac{${t(P.WLL,1)}}{${P.n}} + \\dfrac{${t(P.WLL,1)}(${t(Math.abs(P.eLL),3)})(${t(P.xMax)})}{${t(P.Ix2,1)}} = ${t(P.Pll,2)}\\ \\text{kip}`,
++      `W_{LL} = \\eta\\,\\gamma_{LL}\\,m\\,LL = ${t(Q.eta)}(${t(Q.gLL)})(${t(Q.mL)})(${t(P.LLp,1)}) = ${t(P.WLL,1)}\\ \\text{kip}${P.eqD?"":`\\,, \\quad e = \\dfrac{\\sum P_iy_i}{\\sum P_i} = ${t(P.eLL,3)}\\ \\text{ft}`}`,
++      P.eqD? `P_{LL} = W_{LL}/n = ${t(P.WLL,1)}/${P.n} = ${t(P.Pll,2)}\\ \\text{kip}` : `P_{LL} = \\dfrac{W_{LL}}{n} + \\dfrac{W_{LL}\\,e\\,x_{max}}{\\sum x^2} = \\dfrac{${t(P.WLL,1)}}{${P.n}} + \\dfrac{${t(P.WLL,1)}(${t(Math.abs(P.eLL),3)})(${t(P.xMax)})}{${t(P.Ix2,1)}} = ${t(P.Pll,2)}\\ \\text{kip}`,
+@@ -5083 +5112 @@ function renderTabIAB(R){
+-      (own==="MassDOT"?"MassDOT: dead and live load distributed equally to all piles; IM not applied to the piles (the girder LL reactions of panel I-5 include IM = 33 % [Table 3.6.2.1-1]). ":"Dead load equally to all piles; live load with the rigid-cap eccentricity of the girder LL reactions (panel I-5). "+(own==="RIDOT"?"IM included (RIDOT: top 4 ft of the pile). ":own==="CTDOT"?"IM included (CTDOT CT11.1.1.3). ":""))+`Abutment self-weight W<sub>ab</sub> = γ<sub>c</sub>·b·(h<sub>c</sub> + h<sub>d</sub>)·L<sub>ab</sub> = ${fmt(+S.mat.gc,3)}(${fmt(+I.b,2)})(${fmt(+I.hc+(+I.hd),2)})(${fmt(+S.geom.Lab,2)}); girder voids neglected. Braking not applied (integral abutment).`);
++      (own==="MassDOT"?"MassDOT: dead and live load distributed equally to all piles. ":"Dead load equally to all piles; live load with the rigid-cap eccentricity of the girder LL reactions (panel I-5). ")+(own==="RIDOT"?"IM included (RIDOT BDM 11.3.2: top 4 ft of the pile). ":own==="CTDOT"?"IM included (CTDOT BRSDM V2 load rules for abutments and supporting piles). ":P.IM?"IM not applied to the piles (foundation below ground, 3.6.2.1): the IM share f<sub>IM</sub> of the girder LL+IM reactions is removed (Tab 1 §1.9; IM is on the truck, not the lane load). ":"IM kept (panel I-4: foundation not entirely below ground). ")+`Abutment self-weight W<sub>ab</sub> = γ<sub>c</sub>·b·(h<sub>c</sub> + h<sub>d</sub>)·L<sub>ab</sub> = ${fmt(+S.mat.gc,3)}(${fmt(+I.b,2)})(${fmt(+I.hc+(+I.hd),2)})(${fmt(+S.geom.Lab,2)}); girder voids neglected. Braking not applied (integral abutment).`);
+@@ -5440,2 +5469,3 @@ function renderTabLoads(R){
+-      `P_p = \\tfrac{1}{2}k_p\\gamma_{fdn}D_f^2 L_{ftg} = \\tfrac{1}{2}(${fmtT(R.passive.kp,3)})(${fmtT(S.fnd.gammaF,3)})(${fmtT(S.fnd.Df)})^2(${fmtT(+g.Lftg||g.Lab)}) = ${fmtT(R.passive.Pp)}\\ \\text{kip}`],
+-      "Used only in the sliding check, factored by φ_ep. Verify against scour/erosion loss."):`<div class="note-box">Passive resistance at the toe is <b>OFF</b> (conservative default) — enable in panel I-4 if justified. [3.11.1 / 10.6.3.4]</div>`}
++      `D_e = D_f - d_n = ${fmtT(S.fnd.Df)} - ${fmtT(+S.fnd.dNeg||0)} = ${fmtT(Math.max(0,(+S.fnd.Df||0)-Math.max(0,+S.fnd.dNeg||0)))}\\ \\text{ft (effective embedment)}`,
++      `P_p = \\tfrac{1}{2}k_p\\gamma_{fdn}D_e^2 L_{ftg} = \\tfrac{1}{2}(${fmtT(R.passive.kp,3)})(${fmtT(S.fnd.gammaF,3)})(${fmtT(Math.max(0,(+S.fnd.Df||0)-Math.max(0,+S.fnd.dNeg||0)))})^2(${fmtT(+g.Lftg||g.Lab)}) = ${fmtT(R.passive.Pp)}\\ \\text{kip}`],
++      "Used only in the sliding check, factored by φ_ep. Only the embedment below d<sub>n</sub> (frost, scour, future excavation; panel I-4) is effective [10.6.3.4, 11.6.3.5]."):`<div class="note-box">Passive resistance at the toe is <b>OFF</b> (conservative default) — enable in panel I-4 if justified. [3.11.1 / 10.6.3.4]</div>`}
+@@ -6259 +6289 @@ function renderTabStruct(R){
+-      `M_{EH} = k_{ah}\\gamma\\left[\\dfrac{H^3}{6} - \\left(\\dfrac{Hc^2}{2} - \\dfrac{c^3}{3}\\right)\\right] = (${fmtT(kah,4)})(${fmtT(s.gamma,3)})\\left[\\dfrac{${fmtT(sHs)}^3}{6} - \\left(\\dfrac{${fmtT(sHs)}(${fmtT(sd.cL)})^2}{2} - \\dfrac{${fmtT(sd.cL)}^3}{3}\\right)\\right] = ${fmtT(sd.MEH)}\\,, \\qquad V_{EH} = \\dfrac{k_{ah}\\gamma(H^2 - c^2)}{2} = ${fmtT(sd.VEH,3)}`,
++      `M_{EH} = k_{ah}\\gamma\\left[\\dfrac{H^3}{6} - \\left(\\dfrac{Hc^2}{2} - \\dfrac{c^3}{3}\\right)\\right] = (${fmtT(kah,4)})(${fmtT(s.gamma,3)})\\left[\\dfrac{${fmtT(sHs)}^3}{6} - \\left(\\dfrac{${fmtT(sHs)}(${fmtT(sd.cL)})^2}{2} - \\dfrac{${fmtT(sd.cL)}^3}{3}\\right)\\right] = ${fmtT(sd.MEH)}\\,, \\qquad V_{EH} = \\dfrac{k_{ah}\\gamma(H^2 - c^2)}{2} = ${fmtT(sd.VEH,3)}${sd.hwL>0?"\\quad(\\gamma' = \\gamma - \\gamma_w \\text{ below the water level, } h_w = "+fmtT(sd.hwL)+"\\text{ ft; layered integral)}":""}`,
+@@ -6261 +6291,3 @@ function renderTabStruct(R){
+-      `M_{EH} = \\dfrac{k_{ah}\\gamma H^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sHs)})^3}{6} = ${fmtT(sd.MEH??sd.Mst_EH)}\\,, \\qquad V_{EH} = \\dfrac{k_{ah}\\gamma H^2}{2} = ${fmtT(sd.VEH??sd.Vst_EH,3)}`,
++      sd.hwL>0? (()=>{ const hw=Math.min(sd.hwL,sHs), d1=sHs-hw, gb=s.gamma-GAMMA_W;   // ABR4: buoyant below the water level
++        return `d_1 = H - h_w = ${fmtT(sHs)} - ${fmtT(hw)} = ${fmtT(d1)}\\ \\text{ft},\\ \\gamma' = ${fmtT(gb,4)}:\\ M_{EH} = k_{ah}\\left[\\tfrac{\\gamma d_1^2}{2}\\left(h_w + \\tfrac{d_1}{3}\\right) + \\tfrac{\\gamma d_1h_w^2}{2} + \\tfrac{\\gamma' h_w^3}{6}\\right] = (${fmtT(kah,4)})\\left[\\tfrac{(${fmtT(s.gamma,3)})(${fmtT(d1)})^2}{2}\\left(${fmtT(hw)} + \\tfrac{${fmtT(d1)}}{3}\\right) + \\tfrac{(${fmtT(s.gamma,3)})(${fmtT(d1)})(${fmtT(hw)})^2}{2} + \\tfrac{(${fmtT(gb,4)})(${fmtT(hw)})^3}{6}\\right] = ${fmtT(sd.MEH)}\\,, \\qquad V_{EH} = k_{ah}\\left[\\tfrac{\\gamma d_1^2}{2} + \\gamma d_1h_w + \\tfrac{\\gamma' h_w^2}{2}\\right] = ${fmtT(sd.VEH,3)}`; })()
++      : `M_{EH} = \\dfrac{k_{ah}\\gamma H^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(sHs)})^3}{6} = ${fmtT(sd.MEH??sd.Mst_EH)}\\,, \\qquad V_{EH} = \\dfrac{k_{ah}\\gamma H^2}{2} = ${fmtT(sd.VEH??sd.Vst_EH,3)}`,
+@@ -9122 +9154 @@ document.addEventListener("DOMContentLoaded",init);
+-        note:"unfactored per pile; DL = (DC + DW)/n, LL = the most loaded pile's live load ("+(P.IM?"without IM (MassDOT)":"with IM")+"); Pu = the calculator's factored gravity load per pile η[(γDC·DC + γDW·DW)/n + γLL·LL]" },
++        note:"unfactored per pile; DL = (DC + DW)/n, LL = the most loaded pile's live load ("+(P.IM?"without IM (3.6.2.1)":"with IM")+"); Pu = the calculator's factored gravity load per pile η[(γDC·DC + γDW·DW)/n + γLL·LL]" },
+```
