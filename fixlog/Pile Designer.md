@@ -14934,3 +14934,59 @@ index 839cdb5..3fe2706 100644
   - `node tests/check-syntax.mjs "Pile Designer.html"`.
   - Headless Chromium, main vs branch, with React 18.2.0 and Plotly 2.27.0 served from `tests/libs` (the tool pins 18.3.1 / 2.32.0, which the kit does not hold). I compared Module 11 text, the report text and `computeAll` η.
 - **Other copies:** none.
+
+## 2026-10-20 — PR: claude/aashto10-pile-ee (EEP: cap / stem self-weight at 1.00 in Extreme Event group cases; engineer direction 2026-10-20 "accurate, not overly conservative"; PR link added after merge)
+
+### EEP. Rigid-cap distribution: γDC = 1.00 on the cap and stem self-weight for an Extreme Event group case   [calc change] [less conservative for EE compression, more for EE uplift]
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (p. 3-16): the permanent-load column (DC, DW, EH, EV, ES, …) reads 1.00 for Extreme Event I and Extreme Event II, not γp; C3.4.1 (p. 3-10): γp > 1.0 in extreme events was dropped in 2015.
+- **Problem:** `computeCapDist` added the cap self-weight (+ soil surcharge) and the stem wall self-weight to every group case at the single input `dlFactor` (default 1.25, the Strength I maximum γDC), including the cases typed "extreme" in Table 2 of the group workspace.
+- **Where:**
+  - `function caseLoadList(loadPoints, gcase, stemTop)`: the returned list carries `caseType` (the group case's `type`, default `"strength"`). Not saved; built on each call.
+  - `function computeCapDist(I, grp, loadListOverride)`, anchor `const dlF = (I.dlFactor != null`: `dlEE = loadListOverride.caseType === "extreme"`; `dlF = dlEE ? 1.00 : <dlFactor as before>`; `dlEE` is returned with `dlFactor`.
+  - Report (Module 11 cap distribution), anchors `kip (FHWA Eq. 8-79), applied at the cap centroid.` and `"Includes stem wall self-weight`: adds "γDC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." when `dlEE`. The worked line already prints γDC × W = value with the factor used.
+  - Input note next to "Dead-load factor γDC": "Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1)."
+- **Before / after code:** see the diff below.
+- **Unchanged:** strength, service and tension group cases, manual load rows, the legacy single-load path (`computeCapDist(I, grp)` without a case: Strength), the integral-abutment `iabGammaDC`, and the Extreme Event φ = 1.0 / uplift 0.80 (F44). Saved data: no key or format change (the `dlFactor` input keeps its meaning, Strength); nothing to migrate.
+- **Check case (3 × 3 group at 36 in, load point at the group centroid):** cap 9 × 9 × 3 ft at 150 pcf, so W_cap = 9 · 9 · 3 · 0.150 = 36.45 kip; stem 9 × 2 × 6 ft, so W_stem = 16.20 kip; both at the group centroid; group case P = 270 kip, no shear or moment; `dlFactor` 1.25.
+  - Strength case (before and after): ΣP = 270 + 1.25 · (36.45 + 16.20) = 270 + 65.81 = **335.81 kip**; per pile 335.81 / 9 = **37.31 kip**.
+  - Extreme case, before: same as Strength, **335.81 kip**, **37.31 kip** per pile.
+  - Extreme case, after: ΣP = 270 + 1.00 · 52.65 = **322.65 kip**; per pile **35.85 kip** (tool 322.65 / 35.85).
+- **Default project:** the pile group is off (`groupEnable: false`), so no result changes; the default page text is identical (origin/main vs branch, headless).
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. Headless Chromium (React 18.3.1 / three r128 served from the 18.2.0 / r128 copies in tests/libs for the test only): `computeCapDist` with `caseLoadList` for the check case on origin/main `efab161` and the branch (numbers above); default page text identical; no page errors.
+- **Other copies:** none (Spread Footing and the abutment calculator have their own load handling).
+- **Open items (not changed, engineer decision):**
+  - Service group cases also get `dlFactor` (1.25) on the cap / stem weight; Table 3.4.1-1 gives 1.00 for Service.
+  - Uplift (tension) under a Strength case uses the same maximum 1.25 on the stabilizing cap / stem weight; the minimum γp (0.90, Table 3.4.1-2) would govern uplift.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `efab161`):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 5f59029..366d5c6 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -10659 +10659 @@ function PrintReport({
+-      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.",
++      "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : "",
+@@ -10662 +10662 @@ function PrintReport({
+-      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid."),
++      "Includes stem wall self-weight \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.stemWeight_nom, 1), " = ", fmt(r.capDist.stemWeight, 1), " kip, applied at the stem plan centroid.", r.capDist.dlEE ? " \u03b3DC = 1.00 for this Extreme Event case (AASHTO LRFD 10th Ed. Table 3.4.1-1)." : ""),
+@@ -11993 +11993 @@ function caseLoadList(loadPoints, gcase, stemTop) {
+-  return loadPoints.map(pt => {
++  const list = loadPoints.map(pt => {
+@@ -11998,0 +11999,2 @@ function caseLoadList(loadPoints, gcase, stemTop) {
++  list.caseType = (gcase && gcase.type) || "strength";   // EEP: computeCapDist reads it (Extreme Event cap / stem weight factor)
++  return list;
+@@ -12043 +12045,4 @@ function computeCapDist(I, grp, loadListOverride) {
+-  const dlF = (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
++  // EEP (2026-10-20): an Extreme Event group case takes the cap / stem self-weight at 1.00 (AASHTO LRFD 10th Ed.
++  // Table 3.4.1-1, permanent loads 1.00 in Extreme Event I and II; C3.4.1); before, the Strength factor dlFactor (1.25).
++  const dlEE = !!(loadListOverride && loadListOverride.caseType === "extreme");
++  const dlF = dlEE ? 1.00 : (I.dlFactor != null && isFinite(I.dlFactor) && I.dlFactor > 0) ? I.dlFactor : 1.25;
+@@ -12097 +12102 @@ function computeCapDist(I, grp, loadListOverride) {
+-    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF,
++    stemWeight, stemWt_incl, stemWeight_nom, dlFactor: dlF, dlEE,
+@@ -12588 +12593 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
+-            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec.")),
++            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1).")),
+```
