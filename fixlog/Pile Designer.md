@@ -16929,3 +16929,508 @@ index 31a97eb..49701cd 100644
 @@ -19041,0 +19257 @@ function App() {
 +          r.buckling.scourBkl > 0 ? [" (\u2265 stickup + design scour ", fmt(r.buckling.scourBkl, 1), " ft, 10.7.3.6)"] : "",   // PDA-D12
 ```
+
+## 2026-10-20 — PR: claude/aashto10-pile-rev-b (PDA, part B: D6 H-pile M_n and interaction form, D9 micropile f_y, D10 φ presets / labels, D11 n_h presets / units, D13 / D14 detailing, punching, S_u note; IAB scour M_r; C_N averaged over each layer; follow-up to part A #379; PR link added after merge)
+
+Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); MassDOT Bridge Manual Part I (Hundredth Ed.); CTDOT BDM (02/24). Verified against the 10th Ed. text. Saved data: new optional field `iabEmbed` (default 24 in); `pdaRev` 2; a one-time migration note (see the end of this entry).
+
+### PDA-D6. H-pile M_n per 6.12.2.2.1 / Appendix A6; interaction form by compactness   [calc change] [M_n: less conservative; Eq. -3: more conservative for noncompact flanges]
+- **Provision:** 6.12.2.2.1a (weak axis: smaller of yielding and FLB; strong axis per 6.10); Eq. 6.12.2.2.1b-1 (M_p = F_y Z_y ≤ 1.6 F_y S_y); Eqs. 6.12.2.2.1c-1 to -5 (FLB, λ_pf = 0.38√(E/F_y), λ_rf = 1.0√(E/F_y)); Appendix A6 (6.10.6.2.3): A6.2.1 (compact web, R_pc = M_p/M_yc), A6.3.2 (FLB, rolled k_c = 0.76, F_yr = 0.7F_y, λ_rf = 0.95√(Ek_c/F_yr)), A6.3.3.1 / A6.3.3.2 (LTB, L_p, L_r, F_e, J), Eq. 6.10.8.2.3b-3 (r_t); 6.9.2.2.1 (Eqs. -1 / -2 only when all elements are compact for flexure per A6.2.1, A6.3.2, …; otherwise Eq. -3).
+- **Problem:** `Mn_elastic = Fy * S_sel` and Eqs. 6.9.2.2.1-1 / -2 for every section.
+- **Where:** new `hpMnAASHTO(sec, E, Fy, axis, Lb_in, Cb)`, `hpInteract(PuPr, sumMuMr, compact)`, `hpEqLbl` (before `hpileSectionForChecks`); `computeAll` H-pile anchors `const mnd = hpMnAASHTO(`, `const it = hpInteract(PuPr, MuMr, mnd.compact);`; `hpBiaxCombine`; report 03–09 and Module 05 P-crit overrides; Module 04 (`HpMnCalcs`, title "Structural Flexure"), Module 05 ("Interaction form"), `HpBiaxComb`; new `hpMnTxt`, `HpMnCalcs`.
+- **Change:** weak axis M_n = min(M_p, FLB); strong axis M_n = min(FLB, LTB) with L_b = the Module 10 unsupported length (stickup + scour + added; 0 → no LTB), C_b = 1.0. A noncompact web (not the case for rolled HP shapes) is taken at R_pc = 1.0. Interaction: Eq. -1 / -2 when the web and flanges are compact, else Eq. -3 (uniaxial and biaxial).
+- **Check case (HP14×89 tabulated: S_x 131, Z_x 146, S_y 44.3, Z_y 67.7, b_f/2t_f = 11.95; F_y 50; E 29000):**
+  - Strong axis, L_b = 0: before M_n = 50(131) = 6550 kip-in = **545.8 kip-ft**. After: R_pc = 7300/6550 = 1.1145; λ_pf = 9.152, λ_rf = 0.95√(29000·0.76/35) = 23.84; M_nc = [1 − (1 − 35·131/7300)(11.95 − 9.152)/(23.84 − 9.152)]·7300 = **6782 kip-in = 565.2 kip-ft**.
+  - Weak axis: before 50(44.3) = 2215 kip-in; after M_p = min(3385, 3544) = 3385; FLB = 3385 − (3385 − 1550.5)(2.799/14.93) = **3041 kip-in** (253.4 kip-ft).
+  - Strong axis, L_b = 40 ft: r_t = 3.970 in, J = 3.194 in⁴, L_p = 105.2 in, L_r = 475.3 in; F_e = 34.52 ksi; M_n = 34.52(131) = **4522 kip-in**.
+  - Interaction (P_u 300, P_r 0.70·1305 = 913.5, M_u 300 kip-ft): before Eq. -2: 0.328 + (8/9)(300/545.8) = **0.817**; after (flange noncompact → Eq. -3): 0.328 + 300/565.2 = **0.859**.
+
+### PDA-D2b. IAB Tier 2 with scour: M_ry, M_rx per AASHTO (strong axis LTB over the scour depth)   [calc change]
+- **Provision:** MassDOT 3.10.11.3 (with scour, M_rx, M_ry per AASHTO with the unbraced length); 6.12.2.2.1; Appendix A6 as D6.
+- **Where:** `computeAll` IAB Tier 2, anchor `const mnScourY = hasScour ?`; Module 12 and report lines.
+- **Change:** with scour, M_ry = `hpMnAASHTO(…,"weak")`, M_rx = `hpMnAASHTO(…,"strong", L_b = scour)`, φ_f = 1.00. No scour: Z ≤ 1.5S (MassDOT) unchanged.
+- **Check case (part A IAB case, biaxial at 20° skew, scour 8 ft, HP12×84):** before M_ry = min(53.2, 1.5·34.6)·50/12 = 216.25, M_rx = min(120, 159)·50/12 = 500.0 kip-ft, interaction **0.6404**; after M_ry = 2660/12 = 221.67 (compact flange, M_p = min(2660, 2768)), M_rx: L_b = 96 in > L_p = 87.7 in, L_r = 459.4 in → 5949 kip-in = 495.75 kip-ft; interaction **0.6372**.
+
+### PDA-D9. Micropile f_y: limited to the stress at 0.003 strain; uncased length uses the bar f_y   [calc change]
+- **Provision:** Eq. 10.9.3.10.2a-2 (f_y = least of bar, casing and the stress at 0.003 strain); Eq. 10.9.3.10.2b-2 (bar or the stress at 0.003 strain).
+- **Where:** `computeAll` anchors `const fy003 =`, `const fyU = Math.min(fyb, fy003);`, `Rn_ucased = … fyU * Ab`; Module 03 and report derivations.
+- **Check cases:** (a) f_yb 120, f_yc 80: uncased f_y 80 → 87; R_n,u = 0.85[0.85(4)(37.69) + f_y(0.79)] = **162.66 → 167.36 kip**. (b) f_yb 95, f_yc 110: cased f_y 95 → 87; R_n,c = 0.85[0.85(4)(28.38) + f_y(0.79 + 7.955)] = **788.2 → 728.7 kip**. Defaults (75 / 80): unchanged.
+
+### PDA-D10. Micropile φ presets and labels   [default change: φ_up 0.50 → 0.60]
+- **Provision:** Table 10.5.5.2.5-1 (uplift: presumptive bond 0.55, preliminary only; tension load test: Table 10.5.5.2.3-1 value, ≤ 0.70); Table 10.5.5.2.3-1 (uplift, static load test 0.60); Table 10.5.5.2.5-2 (φ_CC = φ_CU = 0.75); 6.5.5 (extreme event 1.0); 10.5.5.3.2 (uplift extreme 0.80).
+- **Change:** `DEFAULT_INPUTS.phiUp` 0.50 → 0.60 (tension load test, consistent with the φ_geo 0.70 load-test default); presets "tension load test 0.60" and "presumptive 0.55" (cited); φ_cc / φ_cu and extreme-event entries marked cited. Old saved 0.50 → 0.55 (migration).
+- **Check case (defaults):** φ_up P_n = 0.50(109.96) = **54.98 → 0.60(109.96) = 65.97 kip**.
+
+### PDA-D11. Sand n_h presets per Table C10.4.6.3-2; unit labels   [presets / labels only]
+- **Provision:** Table C10.4.6.3-2 (ksi/ft): loose 0.417 / 0.208, medium 1.11 / 0.556, dense 2.78 / 1.39 (× 144 = kip/ft³).
+- **Change:** `SAND_NH_PRESETS` 20/10, 60/35, 125/65 → 60.0/30.0, 159.8/80.1, 400.3/200.2 kip/ft³ (fills the input only; no saved result changes). Labels "pci/in" / "pci" → kip/ft³ / kip/ft² (report basis table, Module 10, lateral graph label).
+
+### PDA-D13. Detailing per 10.7.1.2; IAB embedment   [new checks]
+- **Provision:** 10.7.1.2 (spacing ≥ max(30 in, 2.5D); side of pile to cap edge ≥ 9 in; projection ≥ 12 in, 6 in with embedded bars); MassDOT 3.10.10.3 (integral piles embedded 2 ft); CTDOT BDM (piles embedded ≥ 12 in).
+- **Where:** `computeAll` `embedFloor_in = isHPfix ? 12.0 : 6.0`; new `R.hpileDetail` (anchor `const det = { Dpl, embed:`), in the H-pile `fixPass`; new Module 06a "Pile Detailing"; report rows; IAB `embedChk` (input "Pile embedment into cap", default 24 in; 12 in when the Simplified tables are off, the CTDOT setting), in `R.iab.pass`.
+- **Check case (HP14×89, 2×2 at 30 in, cap 6 × 6 ft, embedment 10 in):** projection 10 < 12 in NG; spacing 30 < max(30, 2.5·14.7 = 36.75) NG; edge centre 6.0 < 9 + 7.35 = 16.35 in NG. Fixed-head floor: before max(2·13.8, 6) = 27.6 in, after max(27.6, 12) = 27.6 in (the floor governs only when k·d < 12 in).
+
+### PDA-D14. Punching 0.126λ√f'c; S_u consistency note   [calc change, +0.8 %]
+- **Provision:** Eq. 5.12.8.6.3-1 (round pile β_c = 1 → the 0.126 limit; λ = 1.0 normal-weight, 5.4.2.8).
+- **Check case (defaults: b_o 49.59 in, d_v 23.04 in, f'c 4 ksi):** V_n = 0.125(2)(49.59)(23.04) = **285.66 → 0.126(1.0)(2)(49.59)(23.04) = 287.95 kip**.
+- S_u note: a clay layer with both the p-y s_u (psf) and the static S_u (ksf) entered and differing by more than 10 % gives an input note (no value change).
+
+### PDA-D5b. C_N averaged over each layer's contact length   [calc change, engineer request after part A]
+- **Change:** C̄_N = mean of C_N at the mid-points of n equal slices ≤ 1 ft (was C_N at the layer mid-depth); tip unchanged (C_N at the toe).
+- **Check case (part A profile, basis N60):** layer 0–30 ft (γ 120 pcf): C_N(mid) 1.037 → C̄_N 1.130 (30 slices; C_N capped at 2.0 in the top 1.7 ft), R_s1 59.11 → 64.41 kip; layer 30–60 ft: 0.7306 → 0.7329, R_s2 83.29 → 83.55 kip; φR_n **133.28 → 134.95 kip**.
+
+### Saved data
+- New optional field `iabEmbed` (default 24 in). `pdaRev` 2 for new projects.
+- One-time migration for a project with `pdaRev` < 2: `phiUp` 0.50 → 0.55; a load note lists the changes that apply to the project (H-pile M_n / interaction form, H-pile fixed-head floor, C̄_N, micropile f_y limits, punching, IAB scour M_r).
+
+### How verified
+- `node tests/check-syntax.mjs "Pile Designer.html"`: pass.
+- jsdom harness: every check case above on origin/main `a7435f1` and the branch (tool numbers). `computeAll(DEFAULT_INPUTS)` (three pile types, micropile with Module 10): differences only φ_up (54.98 → 65.97 kip), punching (285.66 → 287.95 kip), the H-pile default M_r (537.8 → 557.0 kip-ft, Eq. -3), the fixed-head floor field, a new "embedment not entered" note and new fields. Default page text differs only in φ_up, the presets and a citation. H-pile (stickup, scour, N60) and IAB (scour, biaxial) projects load with no script errors; the part B note appears for a project with `pdaRev` 1.
+
+### Open items
+- IAB minimum / maximum spacing (MassDOT 3.10.10.3: 3'-6" to 10 ft) needs a spacing input in the IAB mode (not added).
+- H-pile edge distance uses D = max(d, b_f) (the plan orientation of the web is not used).
+- Strong-axis LTB uses C_b = 1.0.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `a7435f1`):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 49701cd..843f9ce 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -1584 +1584,2 @@ const PI = Math.PI;
+-// Representative mid-range values; above/below water table differ, so two columns.
++// PDA-D11 (2026-10-20): AASHTO LRFD 10th Ed. Table C10.4.6.3-2 (ksi/ft; x 144 = kip/ft^3): loose 0.417 / 0.208,
++// medium 1.11 / 0.556, dense 2.78 / 1.39 (dry or moist / submerged). Before: 20/10, 60/35, 125/65 kip/ft^3 (no source).
+@@ -1590,2 +1591,2 @@ const SAND_NH_PRESETS = [
+-  above: 20,
+-  below: 10
++  above: 60.0,
++  below: 30.0
+@@ -1595,2 +1596,2 @@ const SAND_NH_PRESETS = [
+-  above: 60,
+-  below: 35
++  above: 159.8,
++  below: 80.1
+@@ -1600,2 +1601,2 @@ const SAND_NH_PRESETS = [
+-  above: 125,
+-  below: 65
++  above: 400.3,
++  below: 200.2
+@@ -1782 +1783 @@ const PHI_PRESETS = {
+-        v: "guess", note: "φcc/φcu (10.9.3.10.2a/b) = 0.75 is UNVERIFIED — confirm from spec. φc seeded at 0.90 (6.5.4.2 composite); steel-only axial compression is 0.95 (6.5.4.2, 8th Ed.+). φf=1.00, φv=1.00 (steel) per 6.5.4.2 (cited); φv does not apply to cap punching. φb bearing = 0.70 (verify)." },
++        v: "guess", note: "φcc/φcu = 0.75: AASHTO LRFD 10th Ed. Table 10.5.5.2.5-2 (verified). φc seeded at 0.90 (6.5.4.2 composite); steel-only axial compression is 0.95 (6.5.4.2, 8th Ed.+). φf=1.00, φv=1.00 (steel) per 6.5.4.2 (cited); φv does not apply to cap punching. φb bearing = 0.70 (verify)." },
+@@ -1795,2 +1796,2 @@ const PHI_PRESETS = {
+-      { name: "Geotechnical uplift — load tested", set: { phiUp: 0.60 }, v: "guess", note: "Geotechnical uplift, load-test verified — UNVERIFIED value, confirm from 10.5.5.2.5." },
+-      { name: "Geotechnical uplift — not tested", set: { phiUp: 0.50 }, v: "guess", note: "Geotechnical uplift, not verified by test — UNVERIFIED value, confirm." }
++      { name: "Geotechnical uplift — tension load test", set: { phiUp: 0.60 }, v: "cited", note: "Table 10.5.5.2.5-1: tension load test → Table 10.5.5.2.3-1 uplift, static load test 0.60 (not more than 0.70) (AASHTO LRFD 10th Ed.)." },
++      { name: "Geotechnical uplift — presumptive bond (preliminary)", set: { phiUp: 0.55 }, v: "cited", note: "Table 10.5.5.2.5-1: presumptive bond values 0.55, preliminary design only (AASHTO LRFD 10th Ed.)." }
+@@ -1814 +1815 @@ const PHI_INFO = {
+-    art: "AASHTO 10.9.3.10.2a",
++    art: "AASHTO 10.9.3.10.2a; Table 10.5.5.2.5-2",
+@@ -1817,2 +1818,2 @@ const PHI_INFO = {
+-      { v: "0.75", who: "Strength (micropile cased)", mean: "Micropile-specific cased axial compression. VALUE UNVERIFIED in search — confirm against your controlling edition of 10.9.3.10.2a.", cited: false },
+-      { v: "1.00", who: "Extreme event", mean: "Structural resistance commonly taken at φ = 1.0 for extreme events — verify per project.", cited: false }
++      { v: "0.75", who: "Strength (micropile cased)", mean: "AASHTO LRFD 10th Ed. Table 10.5.5.2.5-2, cased length, compression φCC.", cited: true },
++      { v: "1.00", who: "Extreme event", mean: "AASHTO LRFD 10th Ed. 6.5.5: resistance factors 1.0 at the extreme event limit state.", cited: true }
+@@ -1821 +1822 @@ const PHI_INFO = {
+-    art: "AASHTO 10.9.3.10.2b",
++    art: "AASHTO 10.9.3.10.2b; Table 10.5.5.2.5-2",
+@@ -1824,2 +1825,2 @@ const PHI_INFO = {
+-      { v: "0.75", who: "Strength (micropile uncased)", mean: "Micropile-specific uncased axial compression. VALUE UNVERIFIED — confirm against 10.9.3.10.2b.", cited: false },
+-      { v: "1.00", who: "Extreme event", mean: "φ = 1.0 for extreme events — verify per project.", cited: false }
++      { v: "0.75", who: "Strength (micropile uncased)", mean: "AASHTO LRFD 10th Ed. Table 10.5.5.2.5-2, uncased length, compression φCU.", cited: true },
++      { v: "1.00", who: "Extreme event", mean: "AASHTO LRFD 10th Ed. 6.5.5: resistance factors 1.0 at the extreme event limit state.", cited: true }
+@@ -1861 +1862 @@ const PHI_INFO = {
+-    art: "AASHTO 10.5.5.2.5",
++    art: "AASHTO LRFD 10th Ed. Table 10.5.5.2.5-1",
+@@ -1864,3 +1865,3 @@ const PHI_INFO = {
+-      { v: "0.60", who: "Uplift — load tested", mean: "Geotechnical uplift with load-test verification. VALUE UNVERIFIED — confirm from 10.5.5.2.5.", cited: false },
+-      { v: "0.50", who: "Uplift — not tested", mean: "Geotechnical uplift without load testing. VALUE UNVERIFIED — confirm.", cited: false },
+-      { v: "0.80", who: "Extreme event", mean: "Uplift under extreme events (commonly 0.80) — verify per project.", cited: false }
++      { v: "0.60", who: "Uplift — tension load test", mean: "Table 10.5.5.2.5-1 refers to Table 10.5.5.2.3-1 (uplift, static load test 0.60), not more than 0.70.", cited: true },
++      { v: "0.55", who: "Uplift — presumptive bond", mean: "Table 10.5.5.2.5-1 presumptive bond values 0.55, for preliminary design only (C10.9.3.5.2).", cited: true },
++      { v: "0.80", who: "Extreme event", mean: "10.5.5.3.2: uplift of piles at the extreme event, 0.80 or less.", cited: true }
+@@ -2306,0 +2308,47 @@ function hpColPn(hp, Es, Fy, Pe) {
++/* PDA-D6 (2026-10-20): nominal flexural resistance of a rolled H-section, AASHTO LRFD 10th Ed.
++   Weak axis (6.12.2.2.1): M_n = min(M_p, FLB); M_p = F_y Z_y <= 1.6 F_y S_y (Eq. 6.12.2.2.1b-1); FLB with
++   lambda_f = b_f / 2t_f, lambda_pf = 0.38 sqrt(E/F_y), lambda_rf = 1.0 sqrt(E/F_y) (Eqs. 6.12.2.2.1c-1 to -5).
++   Strong axis (6.12.2.2.1a -> 6.10; Appendix A6, noncomposite, compact web): R_pc = M_p / M_yc when
++   2D_cp/t_w <= lambda_pw(Dcp) (Eqs. A6.2.1-1 to -6; doubly symmetric D_cp = D_c = D/2, R_h = 1); FLB (Eqs. A6.3.2-1 to -5,
++   rolled: k_c = 0.76, F_yr = 0.7 F_y); LTB over L_b (Eqs. A6.3.3.1-1 to -6, A6.3.3.2-1, r_t by Eq. 6.10.8.2.3b-3,
++   C_b as given). A noncompact web (not the case for rolled HP shapes) is taken at R_pc = 1.0 (A6.2.2 not coded).
++   Moments in kip-in. compact = every element compact for flexure (A6.2.1, A6.3.2 / 6.12.2.2.1c), the condition
++   for Eqs. 6.9.2.2.1-1 / -2. */
++function hpMnAASHTO(sec, E, Fy, axis, Lb_in, Cb) {
++  const sq = Math.sqrt(E / Fy), lf = sec.bf / (2 * sec.tf), lpf = 0.38 * sq, D = sec.d - 2 * sec.tf;
++  const Dc = D / 2, awc = 2 * Dc * sec.tw / (sec.bf * sec.tf);
++  const crw = Math.min(Math.max(3.1 + 5.0 / awc, 4.6), 5.7), lrw = crw * sq;
++  const MyX = Fy * sec.Sx, MpX = Fy * sec.Zx;
++  const lpw = Math.min(sq / Math.pow(0.54 * MpX / MyX - 0.09, 2), lrw);
++  const webCompact = D / sec.tw <= lpw;
++  const compact = webCompact && lf <= lpf;
++  if (axis === "weak") {
++    const Mp_raw = Fy * sec.Zy, Mp_cap = 1.6 * Fy * sec.Sy, Mp = Math.min(Mp_raw, Mp_cap), lrf = 1.0 * sq;
++    let Mflb = Mp, flb = "compact";
++    if (lf > lpf && lf <= lrf) { Mflb = Mp - (Mp - 0.7 * Fy * sec.Sy) * (lf - lpf) / (lrf - lpf); flb = "noncompact"; }
++    else if (lf > lrf) { Mflb = 0.69 * E * sec.Sy / (lf * lf); flb = "slender"; }
++    return { axis: "weak", Mn: Math.min(Mp, Mflb), Mp, Mp_raw, Mp_cap, lf, lpf, lrf, Mflb, flb, compact, webCompact, D, Dtw: D / sec.tw, lpw, Fy, Sy: sec.Sy, Zy: sec.Zy };
++  }
++  const Rpc = webCompact ? MpX / MyX : 1.0, RM = Rpc * MyX;
++  const Fyr = 0.7 * Fy, kc = 0.76, lrf = 0.95 * Math.sqrt(E * kc / Fyr);
++  const Mflb = lf <= lpf ? RM : (1 - (1 - Fyr * sec.Sx / RM) * (lf - lpf) / (lrf - lpf)) * RM;
++  let ltb = null, Mltb = RM;
++  if (Lb_in > 0) {
++    const rt = sec.bf / Math.sqrt(12 * (1 + Dc * sec.tw / (3 * sec.bf * sec.tf)));
++    const J = D * Math.pow(sec.tw, 3) / 3 + 2 * (sec.bf * Math.pow(sec.tf, 3) / 3) * (1 - 0.63 * sec.tf / sec.bf);
++    const h = sec.d - sec.tf, jsh = J / (sec.Sx * h), Lp = 1.1 * rt * sq;
++    const Lr = 1.95 * rt * (E / Fyr) * Math.sqrt(jsh + Math.sqrt(jsh * jsh + 6.76 * Math.pow(Fyr / E, 2)));
++    let Fe = null, zone;
++    if (Lb_in <= Lp) { Mltb = RM; zone = "Lb<=Lp"; }
++    else if (Lb_in <= Lr) { Mltb = Math.min(Cb * (1 - (1 - Fyr * sec.Sx / RM) * (Lb_in - Lp) / (Lr - Lp)) * RM, RM); zone = "inelastic"; }
++    else { Fe = Cb * Math.PI * Math.PI * E / Math.pow(Lb_in / rt, 2) * Math.sqrt(1 + 0.078 * jsh * Math.pow(Lb_in / rt, 2)); Mltb = Math.min(Fe * sec.Sx, RM); zone = "elastic"; }
++    ltb = { Lb: Lb_in, Cb, rt, J, h, jsh, Lp, Lr, Fe, zone, Mltb };
++  }
++  return { axis: "strong", Mn: Math.min(Mflb, Mltb), My: MyX, Mp: MpX, Rpc, RM, lf, lpf, lrf, Fyr, kc, Mflb, ltb, Mltb, compact, webCompact, D, Dtw: D / sec.tw, lpw, lrw, Fy, Sx: sec.Sx, Zx: sec.Zx };
++}
++/* PDA-D6: AASHTO LRFD 10th Ed. 6.9.2.2.1: Eqs. -1 / -2 only when every element is compact for flexure; otherwise Eq. -3. */
++function hpInteract(PuPr, sumMuMr, compact) {
++  if (!compact) return { branch: "-3", ratio: PuPr + sumMuMr };
++  return PuPr < 0.2 ? { branch: "<0.2", ratio: PuPr / 2 + sumMuMr } : { branch: "\u22650.2", ratio: PuPr + (8 / 9) * sumMuMr };
++}
++const hpEqLbl = b => b === "-3" ? "Eq. 6.9.2.2.1-3" : b === "<0.2" ? "Eq. 6.9.2.2.1-1" : "Eq. 6.9.2.2.1-2";
+@@ -2391,2 +2439,6 @@ function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSa
+-      const zMid = (zTop + zBot) / 2, sv = sptSigmaV(sorted, zMid), CN = nCorr ? sptCN(sv) : 1;   // PDA-D5
+-      spt = { N: N60, zMid, sv, CN, N160: CN * N60 };
++      const zMid = (zTop + zBot) / 2, sv = sptSigmaV(sorted, zMid);   // PDA-D5
++      // PDA-D5b (2026-10-20): C_N averaged over the layer's contact length in slices of at most 1 ft (midpoint rule),
++      // so a thick layer is not represented by its mid-depth value alone. Before (part A): C_N at the mid-depth.
++      let CN = 1, nSl = 0;
++      if (nCorr) { nSl = Math.max(1, Math.ceil((zBot - zTop) / 1.0 - 1e-9)); let sC = 0; for (let k = 0; k < nSl; k++) sC += sptCN(sptSigmaV(sorted, zTop + (k + 0.5) * (zBot - zTop) / nSl)); CN = sC / nSl; }
++      spt = { N: N60, zMid, sv, CN, CNmid: nCorr ? sptCN(sv) : 1, nSl, N160: CN * N60 };
+@@ -3389 +3441 @@ function hpBiaxCombine(Rx, Ry, okX, okY, yX, yY, STL) {
+-    if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + sM; } else { branch = "≥0.2"; ratio = PuPr + (8 / 9) * sM; }
++    const it = hpInteract(PuPr, sM, !!(hx.mnd && hx.mnd.compact)); branch = it.branch; ratio = it.ratio;   // PDA-D6
+@@ -3650 +3702,6 @@ function computeAll(I, opts = {}) {
+-  const fy = Math.min(fyb, fyc); // ksi (per ref uses min)
++  // PDA-D9 (2026-10-20): AASHTO LRFD 10th Ed. Eq. 10.9.3.10.2a-2: f_y = the least of bar, casing and the stress at a strain
++  // of 0.003 (E x 0.003 = 87 ksi); Eq. 10.9.3.10.2b-2 (uncased): bar or the stress at 0.003, whichever is less.
++  // Before: f_y = min(f_yb, f_yc) for both lengths, with no 0.003-strain limit.
++  const fy003 = (Es > 0 ? Es : 29000) * 0.003;
++  const fy = Math.min(fyb, fyc, fy003);   // cased length, ksi
++  const fyU = Math.min(fyb, fy003);       // uncased length, ksi
+@@ -3659 +3716 @@ function computeAll(I, opts = {}) {
+-  const Rn_ucased = 0.85 * (0.85 * fcGrout * Ag_ucas + fy * Ab);
++  const Rn_ucased = 0.85 * (0.85 * fcGrout * Ag_ucas + fyU * Ab);   // PDA-D9: bar f_y (<= E x 0.003)
+@@ -3704 +3761 @@ function computeAll(I, opts = {}) {
+-    fy,
++    fy, fyU, fy003,   // PDA-D9
+@@ -4116 +4173,5 @@ function computeAll(I, opts = {}) {
+-  const Vn = 0.125 * Math.sqrt(fc) * bo * dv; // kip (fc in ksi)
++  // PDA-D14 (2026-10-20): AASHTO LRFD 10th Ed. Eq. 5.12.8.6.3-1: V_n = (0.063 + 0.126/beta_c) lambda sqrt(f'c) b_o d_v
++  // <= 0.126 lambda sqrt(f'c) b_o d_v; round pile beta_c = 1 -> the 0.126 limit governs; lambda = 1.0 (normal-weight
++  // concrete, 5.4.2.8; no lightweight option). Before: 0.125.
++  const lambdaC = 1.0;
++  const Vn = 0.126 * lambdaC * Math.sqrt(fc) * bo * dv; // kip (fc in ksi)
+@@ -4658 +4719,3 @@ function computeAll(I, opts = {}) {
+-  const embedFloor_in = 6.0;                                 // absolute minimum floor
++  // PDA-D13 (2026-10-20): H-pile floor 12 in (AASHTO LRFD 10th Ed. 10.7.1.2: pile tops project >= 12 in into the cap;
++  // 6 in only with embedded bars or strands, not modelled). Micropile: 6 in (unchanged; 10.7.1.2 is for driven piles).
++  const embedFloor_in = isHPfix ? 12.0 : 6.0;                // absolute minimum floor
+@@ -4888,0 +4952,12 @@ function computeAll(I, opts = {}) {
++    // PDA-D14 (2026-10-20): the p-y undrained strength (su, psf) and the static S_u (ksf) are separate inputs; note a layer
++    // where both are entered and differ by more than 10 %. Note only, no value changes.
++    {
++      const bad = [];
++      (Array.isArray(I.soilLayers) ? I.soilLayers : []).forEach((ly, i) => {
++        if ((ly.type === "clay" || ly.type === "stiffclay") && hpStaticIsClay(ly) && ly.su > 0 && ly.Su > 0) {
++          const a = ly.su / 1000, b = ly.Su;
++          if (Math.abs(a - b) / Math.max(a, b) > 0.10) bad.push("layer " + (i + 1) + " (p-y s_u " + fmt(a, 2) + " ksf, static S_u " + fmt(b, 2) + " ksf)");
++        }
++      });
++      if (bad.length) inputNotes.push("Undrained strength differs between the p-y input and the static (H-pile axial) input: " + bad.join(", ") + ". Check that both describe the same soil.");
++    }
+@@ -5020 +5095 @@ function computeAll(I, opts = {}) {
+-    const Mn_elastic_kipin = Fy * S_sel;          // kip-in
++    const Mn_elastic_kipin = Fy * S_sel;          // kip-in (F_y S, reference only since PDA-D6)
+@@ -5022,2 +5097,7 @@ function computeAll(I, opts = {}) {
+-    const Mp_kipin = axisStrong ? (Fy * hp.Zx) : Math.min(Fy * hp.Zy, 1.5 * Fy * hp.Sy); // for the note only
+-    const phiMn = phi_f * Mn_elastic;             // kip-ft
++    // PDA-D6 (2026-10-20): M_n per 6.12.2.2.1 (weak) / Appendix A6 (strong; L_b = the unsupported length of Module 10,
++    // stickup + scour + added, C_b = 1.0). Before: M_n = F_y S (elastic).
++    const LbFlex_ft = (R.buckling && R.buckling.Lu_free > 0) ? R.buckling.Lu_free : 0;
++    const mnd = hpMnAASHTO(hp, Es, Fy, axisStrong ? "strong" : "weak", axisStrong ? LbFlex_ft * 12 : 0, 1.0);
++    const Mn = mnd.Mn / 12;                       // kip-ft
++    const Mp_kipin = mnd.Mp;
++    const phiMn = phi_f * Mn;                     // kip-ft
+@@ -5030 +5110 @@ function computeAll(I, opts = {}) {
+-    const Mr = phi_f * Mn_elastic;                 // kip-ft (governing axis; uniaxial for a pile)
++    const Mr = phi_f * Mn;                         // kip-ft (governing axis; uniaxial for a pile); PDA-D6: M_n per 6.12 / A6
+@@ -5035,2 +5115,2 @@ function computeAll(I, opts = {}) {
+-      if (PuPr < 0.2) { comb_branch = "<0.2"; comb_ratio = PuPr / 2 + MuMr; }        // 6.9.2.2.1-1
+-      else { comb_branch = "≥0.2"; comb_ratio = PuPr + (8 / 9) * MuMr; }             // 6.9.2.2.1-2
++      const it = hpInteract(PuPr, MuMr, mnd.compact);   // PDA-D6: Eq. 6.9.2.2.1-1 / -2 if compact, else -3
++      comb_branch = it.branch; comb_ratio = it.ratio;
+@@ -5085 +5165 @@ function computeAll(I, opts = {}) {
+-      Mn_elastic, phiMn, phi_f, flex_pass, Mp_kipin, Mp: Mp_kipin / 12,
++      Mn_elastic, Mn, mnd, LbFlex_ft, phiMn, phi_f, flex_pass, Mp_kipin, Mp: Mp_kipin / 12,   // PDA-D6
+@@ -5116,0 +5197,29 @@ function computeAll(I, opts = {}) {
++    // PDA-D13 (2026-10-20): AASHTO LRFD 10th Ed. 10.7.1.2 detailing: projection into the cap >= 12 in; centre-to-centre
++    // spacing >= max(30 in, 2.5 D); side of pile to cap edge >= 9 in (centre >= 9 + D/2). D = the larger plan dimension
++    // max(d, b_f) (the plan orientation is not modelled for the edge distance). Embedment 0 = not entered (note only);
++    // spacing / edge only with the pile group on and a cap plan entered.
++    {
++      const Dpl = Math.max(I.hpD || 0, I.hpBf || 0);
++      const embIn = I.hpCapEmbed || 0;
++      const det = { Dpl, embed: { prov: embIn, req: 12, entered: embIn > 0, pass: !(embIn > 0) || embIn >= 12 } };
++      const pl = (grpOn && R.capDist && Array.isArray(R.capDist.piles)) ? R.capDist.piles.filter(p => isFinite(p.xg) && isFinite(p.yg)) : [];
++      if (pl.length > 1) {
++        let sMin = Infinity, pr = null;
++        for (let a = 0; a < pl.length; a++) for (let b2 = a + 1; b2 < pl.length; b2++) {
++          const s = Math.hypot(pl[a].xg - pl[b2].xg, pl[a].yg - pl[b2].yg) * 12;
++          if (s < sMin) { sMin = s; pr = [pl[a].id, pl[b2].id]; }
++        }
++        const req = Math.max(30, 2.5 * Dpl);
++        det.spacing = { sMin, req, pair: pr, pass: sMin >= req - 1e-9 };
++      }
++      if (pl.length && I.capL > 0 && I.capW > 0) {
++        const cx0 = I.capCx || 0, cy0 = I.capCy || 0;
++        let eMin = Infinity, id = null;
++        pl.forEach(p => { const e = Math.min(I.capL / 2 - Math.abs(p.xg - cx0), I.capW / 2 - Math.abs(p.yg - cy0)) * 12; if (e < eMin) { eMin = e; id = p.id; } });
++        const req = 9 + Dpl / 2;
++        det.edge = { eMin, req, id, side: eMin - Dpl / 2, pass: eMin >= req - 1e-9 };
++      }
++      det.pass = det.embed.pass && (!det.spacing || det.spacing.pass) && (!det.edge || det.edge.pass);
++      if (!det.embed.entered) inputNotes.push("H-pile embedment into the cap is not entered (0 in). AASHTO LRFD 10th Ed. 10.7.1.2: the pile top projects at least 12 in into the cap (6 in only with embedded bars or strands).");
++      R.hpileDetail = det;
++    }
+@@ -5170,0 +5280,6 @@ function computeAll(I, opts = {}) {
++    // PDA-D13 (2026-10-20): embedment into the cap: MassDOT Bridge Manual 3.10.10.3, 2 ft; with the Simplified tables
++    // not applicable (the CTDOT setting): CTDOT BDM 12 in, as AASHTO LRFD 10th Ed. 10.7.1.2. Optional saved field iabEmbed;
++    // missing -> 24 in.
++    const iabEmb = (I.iabEmbed != null && isFinite(I.iabEmbed)) ? I.iabEmbed : 24;
++    const embReq = tier1Applicable ? 24 : 12;
++    const embedChk = { prov: iabEmb, req: embReq, src: tier1Applicable ? "MassDOT 3.10.10.3" : "CTDOT BDM; AASHTO 10.7.1.2", pass: iabEmb >= embReq };
+@@ -5182 +5297,2 @@ function computeAll(I, opts = {}) {
+-      pass: tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk
++      pass: (tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk) && embedChk.pass,   // PDA-D13
++      embedChk
+@@ -5264,2 +5380,6 @@ function computeAll(I, opts = {}) {
+-      const Mry = Zy_eff * sect.Fy / 12;                    // kip·ft
+-      const Mrx = Zx_eff * sect.Fy / 12;                    // kip·ft
++      // PDA-D2/D6 (2026-10-20): with scour, M_ry and M_rx "per AASHTO" (MassDOT 3.10.11.3): hpMnAASHTO, weak axis
++      // (6.12.2.2.1) and strong axis (App. A6, LTB over L_b = the scour depth, C_b = 1.0), phi_f = 1.00. No scour: Z <= 1.5 S.
++      const mnScourY = hasScour ? hpMnAASHTO(sect, 29000, sect.Fy, "weak", 0, 1.0) : null;
++      const mnScourX = hasScour ? hpMnAASHTO(sect, 29000, sect.Fy, "strong", scourD * 12, 1.0) : null;
++      const Mry = hasScour ? mnScourY.Mn / 12 : Zy_eff * sect.Fy / 12;   // kip·ft
++      const Mrx = hasScour ? mnScourX.Mn / 12 : Zx_eff * sect.Fy / 12;   // kip·ft
+@@ -5286 +5406 @@ function computeAll(I, opts = {}) {
+-        interaction, t2_pass, Pu_dem, iabK, colScour, checkFlood,   // PDA-D2
++        interaction, t2_pass, Pu_dem, iabK, colScour, checkFlood, mnScourY, mnScourX,   // PDA-D2
+@@ -5331 +5451 @@ function computeAll(I, opts = {}) {
+-    const fixPass = R.hpileHeadFix ? R.hpileHeadFix.pass : true;
++    const fixPass = (R.hpileHeadFix ? R.hpileHeadFix.pass : true) && (R.hpileDetail ? R.hpileDetail.pass : true);   // PDA-D13
+@@ -5342,0 +5463,30 @@ function computeAll(I, opts = {}) {
++/* PDA-D6 (2026-10-20): one-line M_n summary (report) and the worked M_n (modules), from hpMnAASHTO. */
++function hpMnTxt(m) {
++  if (!m) return "";
++  if (m.axis === "weak") return "Mp = min(Fy·Zy, 1.6·Fy·Sy) = min(" + fmt(m.Mp_raw, 0) + ", " + fmt(m.Mp_cap, 0) + ") = " + fmt(m.Mp, 0) + " kip·in; λf = " + fmt(m.lf, 2) + (m.flb === "compact" ? " ≤ λpf = " + fmt(m.lpf, 2) + " (no FLB)" : " > λpf = " + fmt(m.lpf, 2) + ", λrf = " + fmt(m.lrf, 2) + ": FLB Mn = " + fmt(m.Mflb, 0) + " kip·in (Eq. 6.12.2.2.1c-" + (m.flb === "noncompact" ? "1" : "2") + ")");
++  return "Rpc = Mp/My = " + fmt(m.Mp, 0) + "/" + fmt(m.My, 0) + " = " + fmt(m.Rpc, 4) + (m.webCompact ? " (compact web, A6.2.1)" : " (noncompact web: 1.0)") + "; FLB: λf = " + fmt(m.lf, 2) + (m.lf <= m.lpf ? " ≤ λpf → Mnc = Rpc·My = " : " > λpf = " + fmt(m.lpf, 2) + ", λrf = " + fmt(m.lrf, 2) + " → Mnc = ") + fmt(m.Mflb, 0) + " kip·in (A6.3.2)" + (m.ltb ? "; LTB: Lb = " + fmt(m.ltb.Lb, 1) + " in, Lp = " + fmt(m.ltb.Lp, 1) + ", Lr = " + fmt(m.ltb.Lr, 1) + " in, Cb = " + fmt(m.ltb.Cb, 2) + " → Mnc = " + fmt(m.Mltb, 0) + " kip·in (A6.3.3)" : "; LTB: Lb = 0 (soil-braced)");
++}
++function HpMnCalcs({ m }) {
++  if (!m) return null;
++  const e = React.createElement;
++  if (m.axis === "weak") return e("div", null,
++    e(Calc, { label: "Yielding", eq: `M_p=\\min(F_yZ_y,\\,1.6F_yS_y)=\\min(${fmt(m.Fy, 0)}\\times${fmt(m.Zy, 2)},\\,1.6\\times${fmt(m.Fy, 0)}\\times${fmt(m.Sy, 2)})=${fmt(m.Mp, 0)}\\ \\text{kip}\\cdot\\text{in}`, cite: "Eq. 6.12.2.2.1b-1" }),
++    e(Calc, { label: "Flange local buckling", eq: m.flb === "compact"
++        ? `\\lambda_f=\\dfrac{b_f}{2t_f}=${fmt(m.lf, 2)}\\le\\lambda_{pf}=0.38\\sqrt{E/F_y}=${fmt(m.lpf, 2)}\\Rightarrow \\text{FLB does not apply}`
++        : m.flb === "noncompact"
++          ? `\\lambda_f=${fmt(m.lf, 2)},\\ \\lambda_{pf}=${fmt(m.lpf, 2)},\\ \\lambda_{rf}=1.0\\sqrt{E/F_y}=${fmt(m.lrf, 2)};\\ M_n=M_p-(M_p-0.7F_yS_y)\\dfrac{\\lambda_f-\\lambda_{pf}}{\\lambda_{rf}-\\lambda_{pf}}=${fmt(m.Mp, 0)}-(${fmt(m.Mp, 0)}-${fmt(0.7 * m.Fy * m.Sy, 0)})\\dfrac{${fmt(m.lf - m.lpf, 3)}}{${fmt(m.lrf - m.lpf, 3)}}=${fmt(m.Mflb, 0)}`
++          : `\\lambda_f=${fmt(m.lf, 2)}>\\lambda_{rf}=${fmt(m.lrf, 2)};\\ M_n=\\dfrac{0.69ES_y}{\\lambda_f^2}=${fmt(m.Mflb, 0)}`,
++      cite: "Eqs. 6.12.2.2.1c-1 to -5" }),
++    e(Calc, { label: "Nominal flexural resistance", eq: `M_n=\\min(${fmt(m.Mp, 0)},\\,${fmt(m.Mflb, 0)})=${fmt(m.Mn, 0)}\\ \\text{kip}\\cdot\\text{in}=${fmt(m.Mn / 12, 1)}\\ \\text{kip}\\cdot\\text{ft}` }));
++  const L = m.ltb;
++  return e("div", null,
++    e(Calc, { label: "Web compactness", eq: `\\dfrac{2D_{cp}}{t_w}=\\dfrac{D}{t_w}=${fmt(m.Dtw, 2)}\\ ${m.webCompact ? "\\le" : ">"}\\ \\lambda_{pw}=\\dfrac{\\sqrt{E/F_y}}{(0.54M_p/M_y-0.09)^2}=${fmt(m.lpw, 1)}`, cite: "Eqs. A6.2.1-1, -2 (D_cp = D_c = D/2)" }),
++    e(Calc, { label: "Web plastification factor", eq: `R_{pc}=\\dfrac{M_p}{M_{yc}}=\\dfrac{F_yZ_x}{F_yS_x}=\\dfrac{${fmt(m.Mp, 0)}}{${fmt(m.My, 0)}}=${fmt(m.Rpc, 4)}`, cite: m.webCompact ? "Eq. A6.2.1-6" : "noncompact web: taken as 1.0" }),
++    e(Calc, { label: "Flange local buckling", eq: m.lf <= m.lpf
++        ? `\\lambda_f=${fmt(m.lf, 2)}\\le\\lambda_{pf}=${fmt(m.lpf, 2)}\\Rightarrow M_{nc}=R_{pc}M_{yc}=${fmt(m.Mflb, 0)}`
++        : `\\lambda_f=${fmt(m.lf, 2)},\\ \\lambda_{pf}=0.38\\sqrt{E/F_y}=${fmt(m.lpf, 2)},\\ \\lambda_{rf}=0.95\\sqrt{Ek_c/F_{yr}}=${fmt(m.lrf, 2)}\\ (k_c=0.76,\\ F_{yr}=0.7F_y);\\ M_{nc}=\\left[1-\\left(1-\\dfrac{F_{yr}S_x}{R_{pc}M_{yc}}\\right)\\dfrac{\\lambda_f-\\lambda_{pf}}{\\lambda_{rf}-\\lambda_{pf}}\\right]R_{pc}M_{yc}=\\left[1-\\left(1-\\dfrac{${fmt(m.Fyr * m.Sx, 0)}}{${fmt(m.RM, 0)}}\\right)\\dfrac{${fmt(m.lf - m.lpf, 3)}}{${fmt(m.lrf - m.lpf, 3)}}\\right]${fmt(m.RM, 0)}=${fmt(m.Mflb, 0)}`,
++      cite: "Eqs. A6.3.2-1 to -5" }),
++    L ? e(Calc, { label: "Lateral\u2013torsional buckling", eq: `r_t=${fmt(L.rt, 3)},\\ J=${fmt(L.J, 3)},\\ L_p=1.1r_t\\sqrt{E/F_y}=${fmt(L.Lp, 1)},\\ L_r=${fmt(L.Lr, 1)}\\ \\text{in};\\ L_b=${fmt(L.Lb, 1)}\\ \\text{in}\\Rightarrow M_{nc}=${fmt(L.Mltb, 0)}\\ \\text{kip}\\cdot\\text{in}` + (L.Fe != null ? `\\ (F_e=${fmt(L.Fe, 2)}\\ \\text{ksi})` : ""), note: "L_b = the unsupported length of Module 10 (stickup + scour + added); C_b = " + fmt(L.Cb, 2) + " (conservative). Below the ground the soil braces the pile.", cite: "Eqs. A6.3.3.1-1 to -6, A6.3.3.2-1; r_t Eq. 6.10.8.2.3b-3" })
++      : e(Calc, { label: "Lateral\u2013torsional buckling", eq: `L_b=0\\ \\text{(soil-braced, no unsupported length)}\\Rightarrow \\text{LTB does not apply}`, cite: "A6.3.3.1" }),
++    e(Calc, { label: "Nominal flexural resistance", eq: `M_n=${L ? `\\min(${fmt(m.Mflb, 0)},\\,${fmt(m.Mltb, 0)})` : fmt(m.Mflb, 0)}=${fmt(m.Mn, 0)}\\ \\text{kip}\\cdot\\text{in}=${fmt(m.Mn / 12, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: "Tension-flange yielding (A6.4) does not govern a doubly symmetric section." }));
++}
+@@ -8528,0 +8679 @@ const DEFAULT_INPUTS = {
++  iabEmbed: 24,             // PDA-D13: pile embedment into the cap (in); MassDOT 3.10.10.3 requires 2 ft
+@@ -8570 +8721 @@ const DEFAULT_INPUTS = {
+-  pdaRev: 1,           // PDA (2026-10-20): migration marker (mergeSavedInputs)
++  pdaRev: 2,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B
+@@ -8669 +8820 @@ const DEFAULT_INPUTS = {
+-  phiUp: 0.50,
++  phiUp: 0.60,   // PDA-D10 (2026-10-20): tension load test, Tables 10.5.5.2.5-1 / 10.5.5.2.3-1 (as phiGeo 0.70 assumes a load test); was 0.50
+@@ -9107,0 +9259,15 @@ function mergeSavedInputs(parsed) {
++  // PDA part B (2026-10-20): one-time, for a project saved before it (pdaRev < 2).
++  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 2)) {
++    const ch = [];
++    const mp = out.pileType !== "hpile" && out.pileType !== "iab";
++    // PDA-D10: phiUp 0.50 was the old default for an untested uplift bond: the table value for that case is 0.55
++    if (out.phiUp === 0.50) { out.phiUp = 0.55; if (mp) ch.push("micropile uplift \u03c6up 0.50 \u2192 0.55 (presumptive bond, Table 10.5.5.2.5-1; 0.60 with a tension load test)"); }
++    if (out.pileType === "hpile") ch.push("H-pile flexure: M_n per 6.12.2.2.1 / Appendix A6 instead of F_y S, and the combined check uses Eq. 6.9.2.2.1-3 when an element is not compact for flexure");
++    if (out.pileType === "hpile" && out.solverHead === "fixed" && (out.hpCapEmbed || 0) < 12) ch.push("H-pile head fixity: embedment floor 12 in (10.7.1.2)");
++    if (out.pileType === "hpile" && out.hpSptBasis !== "N160" && Array.isArray(out.soilLayers) && out.soilLayers.some(l => l && l.N60 > 0)) ch.push("H-pile SPT N60 basis: C_N averaged over each layer in slices of at most 1 ft");
++    if (mp && ((out.fyb || 0) > 87 || (out.fyc || 0) > 87 || (out.fyc || 0) < (out.fyb || 0))) ch.push("micropile axial: f_y limited to the stress at 0.003 strain (87 ksi) and the uncased length uses the bar f_y (10.9.3.10.2)");
++    if (mp) ch.push("cap punching: 0.126\u221af'c (Eq. 5.12.8.6.3-1), was 0.125");
++    if (out.pileType === "iab" && out.iabTier2 && out.iabScourDepth > 0) ch.push("integral-abutment Tier 2 with scour: M_ry, M_rx per AASHTO (6.12.2.2.1; A6 with lateral-torsional buckling over the scour depth)");
++    if (ch.length) notes.push("AASHTO LRFD 10th Ed. corrections, part B (2026-10-20). Results change: " + ch.join("; ") + ". Review the affected checks.");
++    out.pdaRev = 2;
++  }
+@@ -10111,2 +10277,2 @@ function PrintReport({
+-      ["n\u2095 (sand)", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? null : (I.solverSoil === "cohesionless" ? I.solverNh : null), "pci/in", ""],
+-      ["k\u2095 (clay)", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? null : (I.solverSoil !== "cohesionless" ? I.solverKh : null), "pci", ""],
++      ["n\u2095 (sand)", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? null : (I.solverSoil === "cohesionless" ? I.solverNh : null), "kip/ft\u00b3", ""],   // PDA-D11: was "pci/in"
++      ["k\u2095 (clay)", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? null : (I.solverSoil !== "cohesionless" ? I.solverKh : null), "kip/ft\u00b2", ""],   // PDA-D11: was "pci"
+@@ -10263 +10429,2 @@ function PrintReport({
+-              line("Equivalent length Le = " + fmt(b.Le, 1) + " ft (reference)")),
++              line("Equivalent length Le = " + fmt(b.Le, 1) + " ft (reference)"),
++              b.embedChk && /*#__PURE__*/React.createElement(RptRow, { label: "Pile embedment into the cap (" + b.embedChk.src + ")", val: fmt(b.embedChk.prov, 1) + " ≥ " + fmt(b.embedChk.req, 1) + " in", pass: b.embedChk.pass })),   // PDA-D13
+@@ -10269 +10436 @@ function PrintReport({
+-                ? line("Scour design flood, unbraced: L = Lu + Lf = " + fmt(b.tier2.colScour.Lu, 1) + " + " + fmt(b.tier2.colScour.Lf, 2) + " = " + fmt(b.tier2.colScour.L, 2) + " ft (Lf = " + (b.tier2.colScour.sand ? "1.8T, T = (EIw/nh)^0.2 = (" + fmt(b.tier2.colScour.EIw_ft, 0) + "/" + fmt(b.tier2.colScour.nh, 1) + ")^0.2 = " + fmt(b.tier2.colScour.T, 3) : "1.4R, R = (EIw/Es)^0.25 = (" + fmt(b.tier2.colScour.EIw_ft, 0) + "/" + fmt(b.tier2.colScour.Es, 1) + ")^0.25 = " + fmt(b.tier2.colScour.R, 3)) + " ft, C10.7.3.13.4); KL/ry = " + fmt(b.tier2.colScour.K, 2) + "(" + fmt(b.tier2.colScour.L, 2) + ")(12)/" + fmt(s.ry, 2) + " = " + fmt(b.tier2.colScour.KLr, 1) + "; Pe = " + fmt(b.tier2.colScour.Pe, 1) + " kip; Po/Pe = " + fmt(b.tier2.colScour.ratio, 3) + " \u2192 Pn = " + fmt(b.tier2.colScour.Pn, 1) + " kip (6.9.4.1.1); Pr = 0.70\u00b7Pn = " + fmt(b.tier2.Pr, 1) + " kip \u00b7 Mry = " + fmt(b.tier2.Mry, 1) + " \u00b7 Mrx = " + fmt(b.tier2.Mrx, 1) + " kip\u00b7ft")
++                ? line("Scour design flood, unbraced: L = Lu + Lf = " + fmt(b.tier2.colScour.Lu, 1) + " + " + fmt(b.tier2.colScour.Lf, 2) + " = " + fmt(b.tier2.colScour.L, 2) + " ft (Lf = " + (b.tier2.colScour.sand ? "1.8T, T = (EIw/nh)^0.2 = (" + fmt(b.tier2.colScour.EIw_ft, 0) + "/" + fmt(b.tier2.colScour.nh, 1) + ")^0.2 = " + fmt(b.tier2.colScour.T, 3) : "1.4R, R = (EIw/Es)^0.25 = (" + fmt(b.tier2.colScour.EIw_ft, 0) + "/" + fmt(b.tier2.colScour.Es, 1) + ")^0.25 = " + fmt(b.tier2.colScour.R, 3)) + " ft, C10.7.3.13.4); KL/ry = " + fmt(b.tier2.colScour.K, 2) + "(" + fmt(b.tier2.colScour.L, 2) + ")(12)/" + fmt(s.ry, 2) + " = " + fmt(b.tier2.colScour.KLr, 1) + "; Pe = " + fmt(b.tier2.colScour.Pe, 1) + " kip; Po/Pe = " + fmt(b.tier2.colScour.ratio, 3) + " \u2192 Pn = " + fmt(b.tier2.colScour.Pn, 1) + " kip (6.9.4.1.1); Pr = 0.70\u00b7Pn = " + fmt(b.tier2.Pr, 1) + " kip \u00b7 Mry = " + fmt(b.tier2.Mry, 1) + " \u00b7 Mrx = " + fmt(b.tier2.Mrx, 1) + " kip\u00b7ft (per AASHTO with scour: weak " + hpMnTxt(b.tier2.mnScourY) + "; strong " + hpMnTxt(b.tier2.mnScourX) + ")")
+@@ -10304 +10471 @@ function PrintReport({
+-          /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Layer", "z (ft)", g.nCorr ? "σ'v (ksf) · C_N × N60 = N1,60" : "N1,60", "qs (ksf)", "As (ft²)", "Rs (kip)", "φ"].map((h, hi) => /*#__PURE__*/React.createElement("td", { key: hi, style: cellK }, h)))),
++          /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Layer", "z (ft)", g.nCorr ? "σ'v mid (ksf) · C̄_N × N60 = N1,60" : "N1,60", "qs (ksf)", "As (ft²)", "Rs (kip)", "φ"].map((h, hi) => /*#__PURE__*/React.createElement("td", { key: hi, style: cellK }, h)))),
+@@ -10314 +10481 @@ function PrintReport({
+-        line(g.nCorr ? "SPT basis: N60 entered; N1,60 = C_N·N60, C_N = 0.77·log10(40/σ'v) ≤ 2.0, σ'v = Σγ'h at the layer mid-depth (10.4.6.2.4)." : "SPT basis: N1,60 entered (no correction applied)."),   // PDA-D5
++        line(g.nCorr ? "SPT basis: N60 entered; N1,60 = C̄_N·N60, C_N = 0.77·log10(40/σ'v) ≤ 2.0, σ'v = Σγ'h; C̄_N = average over ≤ 1 ft slices of each layer's contact length; tip: C_N at the toe (10.4.6.2.4)." : "SPT basis: N1,60 entered (no correction applied)."),   // PDA-D5
+@@ -10331 +10498 @@ function PrintReport({
+-        if (PuPr < 0.2) { cBranch = "<0.2"; cRatio = PuPr / 2 + MuMr; } else { cBranch = "≥0.2"; cRatio = PuPr + 8 / 9 * MuMr; } cPass = cRatio <= 1.0;
++        const it = hpInteract(PuPr, MuMr, !!(hs.mnd && hs.mnd.compact)); cBranch = it.branch; cRatio = it.ratio; cPass = cRatio <= 1.0;   // PDA-D6
+@@ -10340 +10507 @@ function PrintReport({
+-        line("Flexure: Mn = Fy·S = " + fmt(hs.Mn_elastic, 1) + " kip·ft (elastic; Mp = " + fmt(hs.Mp, 1) + " permitted)"),
++        line("Flexure (" + (hs.axisStrong ? "strong axis, App. A6" : "weak axis, 6.12.2.2.1") + "): " + hpMnTxt(hs.mnd) + " → Mn = " + fmt(hs.Mn, 1) + " kip·ft"),   // PDA-D6
+@@ -10343 +10510 @@ function PrintReport({
+-        cRatio != null && /*#__PURE__*/React.createElement(RptRow, { label: "Combined " + (hs.biax ? "biaxial " : "") + (cBranch === "<0.2" ? "(6.9.2.2.1-1)" : "(6.9.2.2.1-2)") + " D/C", val: nc ? "p-y did not converge" : fmt(cRatio, 3) + " ≤ 1.0", pass: cPass }),
++        cRatio != null && /*#__PURE__*/React.createElement(RptRow, { label: "Combined " + (hs.biax ? "biaxial " : "") + "(" + hpEqLbl(cBranch).replace("Eq. ", "") + ")" + " D/C", val: nc ? "p-y did not converge" : fmt(cRatio, 3) + " ≤ 1.0", pass: cPass }),
+@@ -10349 +10516,5 @@ function PrintReport({
+-        hs.enableTension && /*#__PURE__*/React.createElement(RptRow, { label: "Tension: φ·Pn ≥ Tu", val: fmt(hs.phiPn_tension, 0) + " ≥ " + fmt(hs.Tu, 0) + " kip", pass: hs.strTension_pass }));
++        hs.enableTension && /*#__PURE__*/React.createElement(RptRow, { label: "Tension: φ·Pn ≥ Tu", val: fmt(hs.phiPn_tension, 0) + " ≥ " + fmt(hs.Tu, 0) + " kip", pass: hs.strTension_pass }),
++        // PDA-D13: detailing, AASHTO LRFD 10th Ed. 10.7.1.2
++        r.hpileDetail && /*#__PURE__*/React.createElement(RptRow, { label: "Detailing (10.7.1.2): projection into cap ≥ 12 in", val: r.hpileDetail.embed.entered ? fmt(r.hpileDetail.embed.prov, 1) + " ≥ 12.0 in" : "not entered", pass: r.hpileDetail.embed.pass }),
++        r.hpileDetail && r.hpileDetail.spacing && /*#__PURE__*/React.createElement(RptRow, { label: "Detailing (10.7.1.2): spacing ≥ max(30 in, 2.5D), D = max(d, b_f) = " + fmt(r.hpileDetail.Dpl, 2) + " in", val: fmt(r.hpileDetail.spacing.sMin, 1) + " ≥ " + fmt(r.hpileDetail.spacing.req, 1) + " in", pass: r.hpileDetail.spacing.pass }),
++        r.hpileDetail && r.hpileDetail.edge && /*#__PURE__*/React.createElement(RptRow, { label: "Detailing (10.7.1.2): pile centre to cap edge ≥ 9 in + D/2", val: fmt(r.hpileDetail.edge.eMin, 1) + " ≥ " + fmt(r.hpileDetail.edge.req, 1) + " in (P" + r.hpileDetail.edge.id + ")", pass: r.hpileDetail.edge.pass }));
+@@ -10553 +10724,2 @@ function PrintReport({
+-    eq: `f_y = \\min(f_{yc},f_{yb}) = ${fmt(r.axial.fy, 0)}\\ \\text{ksi}`
++    eq: `f_y = \\min(f_{yc},f_{yb},0.003E) = \\min(${fmt(I.fyc, 0)},${fmt(I.fyb, 0)},${fmt(r.axial.fy003, 0)}) = ${fmt(r.axial.fy, 0)}\\ \\text{ksi}`,   // PDA-D9
++    cite: "Eq. 10.9.3.10.2a-2"
+@@ -10568 +10740 @@ function PrintReport({
+-    eq: `R_n = 0.85[0.85(${fmt(r.axial.fcGrout, 2)})(${fmt(r.axial.Ag_ucas, 1)}) + ${fmt(r.axial.fy, 0)}(${fmt(r.axial.Ab, 2)})]`,
++    eq: `f_y=\\min(f_{yb},0.003E)=${fmt(r.axial.fyU, 0)};\\ R_n = 0.85[0.85(${fmt(r.axial.fcGrout, 2)})(${fmt(r.axial.Ag_ucas, 1)}) + ${fmt(r.axial.fyU, 0)}(${fmt(r.axial.Ab, 2)})]`,   // PDA-D9: Eq. 10.9.3.10.2b-2
+@@ -10735 +10907 @@ function PrintReport({
+-    eq: `V_n = 0.125\\sqrt{f'_c}\\,b_o d_v = 0.125\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})`,
++    eq: `V_n = 0.126\\lambda\\sqrt{f'_c}\\,b_o d_v = 0.126(1.0)\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})`,   // PDA-D14: Eq. 5.12.8.6.3-1, beta_c = 1
+@@ -12049 +12221 @@ function latDavisson(r, s) {
+-  const basis = (b.bklSoilIsSand ? "n_h = " : "k_h = ") + latFmt(b.bklStiff, 0) + (b.bklSoilIsSand ? " pci/in" : " pci") + " (" + (b.bklSoilSrc || "") + "), EI = " + latFmt((b.EI_dav || b.EI_bkl) / 1e6, 2) + "\u00d710\u2076 kip\u00b7in\u00b2 (" + (b.isHPile ? "H-pile section, weak axis I_w" : "casing") + ", Module 10)";   // PDA-D1
++  const basis = (b.bklSoilIsSand ? "n_h = " : "k_h = ") + latFmt(b.bklStiff, 0) + (b.bklSoilIsSand ? " kip/ft\u00b3" : " kip/ft\u00b2")   /* PDA-D11 */ + " (" + (b.bklSoilSrc || "") + "), EI = " + latFmt((b.EI_dav || b.EI_bkl) / 1e6, 2) + "\u00d710\u2076 kip\u00b7in\u00b2 (" + (b.isHPile ? "H-pile section, weak axis I_w" : "casing") + ", Module 10)";   // PDA-D1
+@@ -13497 +13669 @@ function HpBiaxComb({ hs, Pn: PnOv }) {
+-  const lo = PuPr < 0.2, ratio = lo ? PuPr / 2 + sM : PuPr + (8 / 9) * sM, pass = ratio <= 1.0;
++  const itB = hpInteract(PuPr, sM, !!(hs.mnd && hs.mnd.compact)), lo = itB.branch === "<0.2", eq3 = itB.branch === "-3", ratio = itB.ratio, pass = ratio <= 1.0;   // PDA-D6
+@@ -13505 +13677 @@ function HpBiaxComb({ hs, Pn: PnOv }) {
+-    e(Calc, { label: "Axial ratio", eq: `\\dfrac{P_u}{P_r}=\\dfrac{${fmt(hs.STL, 0)}}{${fmt(Pr, 0)}}=${fmt(PuPr, 3)}`, cite: lo ? "< 0.2" : "≥ 0.2" }),
++    e(Calc, { label: "Axial ratio", eq: `\\dfrac{P_u}{P_r}=\\dfrac{${fmt(hs.STL, 0)}}{${fmt(Pr, 0)}}=${fmt(PuPr, 3)}`, cite: eq3 ? "" : lo ? "< 0.2" : "≥ 0.2" }),
+@@ -13507,2 +13679,2 @@ function HpBiaxComb({ hs, Pn: PnOv }) {
+-    e(RptHeading, { n: "3", title: "Biaxial interaction", code: lo ? "Eq. 6.9.2.2.1-1 (verify)" : "Eq. 6.9.2.2.1-2 (verify)" }),
+-    e(Calc, { label: "Interaction value", eq: lo ? `\\dfrac{P_u}{2P_r}+\\left(\\dfrac{M_{ux}}{M_{rx}}+\\dfrac{M_{uy}}{M_{ry}}\\right)=${fmt(PuPr / 2, 3)}+${fmt(sM, 3)}` : `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\left(\\dfrac{M_{ux}}{M_{rx}}+\\dfrac{M_{uy}}{M_{ry}}\\right)=${fmt(PuPr, 3)}+${fmt(8 / 9 * sM, 3)}`, result: `=${fmt(ratio, 3)}` }),
++    e(RptHeading, { n: "3", title: "Biaxial interaction", code: hpEqLbl(itB.branch) + (eq3 ? " (not all elements compact for flexure)" : "") }),   // PDA-D6
++    e(Calc, { label: "Interaction value", eq: eq3 ? `\\dfrac{P_u}{P_r}+\\dfrac{M_{ux}}{M_{rx}}+\\dfrac{M_{uy}}{M_{ry}}=${fmt(PuPr, 3)}+${fmt(sM, 3)}` : lo ? `\\dfrac{P_u}{2P_r}+\\left(\\dfrac{M_{ux}}{M_{rx}}+\\dfrac{M_{uy}}{M_{ry}}\\right)=${fmt(PuPr / 2, 3)}+${fmt(sM, 3)}` : `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\left(\\dfrac{M_{ux}}{M_{rx}}+\\dfrac{M_{uy}}{M_{ry}}\\right)=${fmt(PuPr, 3)}+${fmt(8 / 9 * sM, 3)}`, result: `=${fmt(ratio, 3)}` }),
+@@ -14205 +14377 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
+-        note: b.bklSoilIsSand ? "Sand / modulus increasing with depth: n_h = " + fmt(b.bklStiff, 0) + " pci/in" : "Clay / constant modulus: k_h = " + fmt(b.bklStiff, 0) + " pci"
++        note: b.bklSoilIsSand ? "Sand / modulus increasing with depth: n_h = " + fmt(b.bklStiff, 0) + " kip/ft\u00b3 (EI in kip\u00b7ft\u00b2)" : "Clay / constant modulus: k_h = " + fmt(b.bklStiff, 0) + " kip/ft\u00b2 (EI in kip\u00b7ft\u00b2)"
+@@ -16978,0 +17151,6 @@ function App() {
++    // PDA-D13 (2026-10-20): embedment into the cap, MassDOT 3.10.10.3
++    /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mt-2 items-end" },
++      /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile embedment into cap (in)"),
++        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabEmbed != null ? I.iabEmbed : 24, onChange: e => set('iabEmbed', parseFloat(e.target.value) || 0) })),
++      r.iab && r.iab.embedChk && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: r.iab.embedChk.pass ? "#2f6f3e" : "#b23b3b" } }, (r.iab.embedChk.pass ? "\u2713 " : "\u2717 ") + fmt(r.iab.embedChk.prov, 1) + " in vs \u2265 " + fmt(r.iab.embedChk.req, 0) + " in (" + r.iab.embedChk.src + ")")),
+@@ -17904,2 +18082,7 @@ function App() {
+-      /*#__PURE__*/React.createElement(Calc, { label: "Weak-axis resistance", eq: `M_{ry}=Z_y F_y=\\min(${fmt(s.Zy, 1)},\\,1.5\\times ${fmt(s.Sy, 1)}=${fmt(1.5 * s.Sy, 1)})\\times ${fmt(s.Fy, 0)}/12=${fmt(t.Mry, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: t.Zy_eff < s.Zy ? "Z_y capped at 1.5S_y (AISC)" : "Z_y \u2264 1.5S_y \u2713" }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Strong-axis resistance", eq: `M_{rx}=Z_x F_y=\\min(${fmt(s.Zx, 0)},\\,1.5\\times ${fmt(s.Sx, 1)}=${fmt(1.5 * s.Sx, 1)})\\times ${fmt(s.Fy, 0)}/12=${fmt(t.Mrx, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: t.orient === "weak" ? "M_ux = 0 (pure weak-axis case)" : "used with the strong-axis moment M_ux below" }),
++      t.mnScourY && /*#__PURE__*/React.createElement("div", null,   // PDA-D2/D6: with scour, M_r per AASHTO (MassDOT 3.10.11.3)
++        /*#__PURE__*/React.createElement(Narr, null, "Scour: M_ry and M_rx per AASHTO LRFD 10th Ed. (MassDOT 3.10.11.3) \u2014 weak axis 6.12.2.2.1; strong axis Appendix A6 with L_b = the scour depth, C_b = 1.0; \u03c6f = 1.00."),
++        /*#__PURE__*/React.createElement(HpMnCalcs, { m: t.mnScourY }),
++        /*#__PURE__*/React.createElement(HpMnCalcs, { m: t.mnScourX }),
++        /*#__PURE__*/React.createElement(Calc, { label: "Factored flexural resistances", eq: `M_{ry}=${fmt(t.Mry, 1)},\\quad M_{rx}=${fmt(t.Mrx, 1)}\\ \\text{kip}\\cdot\\text{ft}` })),
++      !t.mnScourY && /*#__PURE__*/React.createElement(Calc, { label: "Weak-axis resistance", eq: `M_{ry}=Z_y F_y=\\min(${fmt(s.Zy, 1)},\\,1.5\\times ${fmt(s.Sy, 1)}=${fmt(1.5 * s.Sy, 1)})\\times ${fmt(s.Fy, 0)}/12=${fmt(t.Mry, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: t.Zy_eff < s.Zy ? "Z_y capped at 1.5S_y (AISC)" : "Z_y \u2264 1.5S_y \u2713" }),
++      !t.mnScourY && /*#__PURE__*/React.createElement(Calc, { label: "Strong-axis resistance", eq: `M_{rx}=Z_x F_y=\\min(${fmt(s.Zx, 0)},\\,1.5\\times ${fmt(s.Sx, 1)}=${fmt(1.5 * s.Sx, 1)})\\times ${fmt(s.Fy, 0)}/12=${fmt(t.Mrx, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: t.orient === "weak" ? "M_ux = 0 (pure weak-axis case)" : "used with the strong-axis moment M_ux below" }),
+@@ -17995 +18178 @@ function App() {
+-          ["Layer", "z (ft)", "method", g.nCorr ? "\u03c3'v mid (ksf) \u00b7 C_N \u00b7 N1,60" : "N1,60", "qs (ksf)", "As (ft\u00b2)", "Rs (kip)", "\u03c6stat"].map(h => /*#__PURE__*/React.createElement("th", { key: h, className: "font-normal pb-1 pr-2" }, h)))),
++          ["Layer", "z (ft)", "method", g.nCorr ? "\u03c3'v mid (ksf) \u00b7 C\u0304_N \u00d7 N60 = N1,60" : "N1,60", "qs (ksf)", "As (ft\u00b2)", "Rs (kip)", "\u03c6stat"].map(h => /*#__PURE__*/React.createElement("th", { key: h, className: "font-normal pb-1 pr-2" }, h)))),
+@@ -18007 +18190 @@ function App() {
+-      g.nCorr && (() => { const r0 = g.rows.find(x => x.spt); return r0 ? /*#__PURE__*/React.createElement(Calc, { label: "SPT overburden correction (first sand row)", eq: `\\sigma'_v(${fmt(r0.spt.zMid, 2)}\\ \\text{ft})=\\sum\\gamma'_ih_i=${fmt(r0.spt.sv, 3)}\\ \\text{ksf};\\ C_N=0.77\\log_{10}\\dfrac{40}{\\sigma'_v}=0.77\\log_{10}\\dfrac{40}{${fmt(r0.spt.sv, 3)}}=${fmt(r0.spt.CN, 3)}\\ (\\le 2.0);\\ N_{1,60}=C_NN_{60}=${fmt(r0.spt.CN, 3)}(${fmt(r0.spt.N, 0)})=${fmt(r0.spt.N160, 2)}`, note: "C_N at the mid-depth of each layer's contact length (table above); \u03b3 per layer (effective below the water table), top layer to grade. Split a thick layer for a finer average.", cite: "Eqs. 10.4.6.2.4-1, -3" }) : null; })(),
++      g.nCorr && (() => { const r0 = g.rows.find(x => x.spt); return r0 ? /*#__PURE__*/React.createElement(Calc, { label: "SPT overburden correction (first sand row)", eq: `C_N(z)=0.77\\log_{10}\\dfrac{40}{\\sigma'_v(z)}\\le 2.0,\\ \\sigma'_v=\\sum\\gamma'_ih_i;\\ \\text{mid-depth: } C_N(${fmt(r0.spt.zMid, 2)})=0.77\\log_{10}\\dfrac{40}{${fmt(r0.spt.sv, 3)}}=${fmt(r0.spt.CNmid, 3)};\\ \\bar C_N=\\dfrac{1}{n}\\sum_{k=1}^{n}C_N(z_k)=${fmt(r0.spt.CN, 3)}\\ (n=${r0.spt.nSl});\\ N_{1,60}=\\bar C_NN_{60}=${fmt(r0.spt.CN, 3)}(${fmt(r0.spt.N, 0)})=${fmt(r0.spt.N160, 2)}`, note: "C\u0304_N = average of C_N at the mid-points of n equal slices (\u2264 1 ft) of each layer's contact length (table above); \u03b3 per layer (effective below the water table), top layer to grade.", cite: "Eqs. 10.4.6.2.4-1, -3" }) : null; })(),
+@@ -18127,2 +18310,2 @@ function App() {
+-    title: "Structural Flexure \u2014 Elastic",
+-    code: "AASHTO 6.12.1.2.1 / 6.12.2.2.1 \u00b7 \u03c6f=" + fmt(r.hpileStruct.phi_f, 2),
++    title: "Structural Flexure",
++    code: (r.hpileStruct.axisStrong ? "AASHTO 6.12.2.2.1a \u2192 6.10 / App. A6" : "AASHTO 6.12.2.2.1") + " \u00b7 \u03c6f=" + fmt(r.hpileStruct.phi_f, 2),
+@@ -18136 +18319 @@ function App() {
+-      /*#__PURE__*/React.createElement(Narr, null, "The factored flexural resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "M_r=\\phi_f M_n" }), ". This tool takes the nominal flexural resistance as the elastic yield moment ", /*#__PURE__*/React.createElement(RTex, { tex: "M_n=F_yS" }), " about the ", hs.axisStrong ? "strong (x\u2013x)" : "weak (y\u2013y)", " axis, where ", /*#__PURE__*/React.createElement(RTex, { tex: "S" }), " is the elastic section modulus. Lateral\u2013torsional buckling need not be checked for a soil-braced pile."),
++      /*#__PURE__*/React.createElement(Narr, null, "The factored flexural resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "M_r=\\phi_f M_n" }), ". M_n is computed per AASHTO LRFD 10th Ed. (", hs.axisStrong ? "strong axis: Appendix A6, flange local buckling and lateral\u2013torsional buckling over the unsupported length" : "weak axis: 6.12.2.2.1, yielding and flange local buckling", "). Reference: the elastic yield moment ", /*#__PURE__*/React.createElement(RTex, { tex: "F_yS" }), " about the ", hs.axisStrong ? "strong (x\u2013x)" : "weak (y\u2013y)", " axis, where ", /*#__PURE__*/React.createElement(RTex, { tex: "S" }), " is the elastic section modulus. Lateral\u2013torsional buckling (strong axis) is checked over the unsupported length (Module 10 L\u1d64); below the ground the soil braces the pile."),
+@@ -18139,3 +18322,3 @@ function App() {
+-      /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Nominal flexural resistance", code: "AASHTO 6.12 (elastic)" }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Elastic yield moment", eq: `M_n=F_yS=${fmt(hs.Fy,0)}\\times ${fmt(hs.S_sel,1)}=${fmt(hs.Mn_elastic*12,0)}\\ \\text{kip}\\cdot\\text{in}`, result: `=${fmt(hs.Mn_elastic,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `M_r=\\phi_f M_n=${fmt(hs.phi_f,2)}\\times ${fmt(hs.Mn_elastic,1)}=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=" + fmt(hs.phi_f, 2) + ", 6.5.4.2" }),
++      /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Nominal flexural resistance", code: hs.axisStrong ? "App. A6 (6.12.2.2.1a \u2192 6.10)" : "AASHTO 6.12.2.2.1" }),
++      /*#__PURE__*/React.createElement(HpMnCalcs, { m: hs.mnd }),   // PDA-D6
++      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `M_r=\\phi_f M_n=${fmt(hs.phi_f,2)}\\times ${fmt(hs.Mn,1)}=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=" + fmt(hs.phi_f, 2) + ", 6.5.4.2" }),
+@@ -18145 +18328 @@ function App() {
+-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-600 bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 mt-1 leading-snug" },
++      false && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-600 bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 mt-1 leading-snug" },   // PDA-D6: superseded (M_n now per 6.12.2.2.1 / A6)
+@@ -18159 +18342 @@ function App() {
+-      if (pcr && pcr.ok) { const Pe = pcr.Pcr; Pn = (r.buckling && r.buckling.weakGov) ? hs.Pn_axial : hpColPn(hs.hp, hs.Es, hs.Fy, Pe).Pn; /* HPAE; PDA-D1 */ Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0); /* F39: biaxial sum */ if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + MuMr; } else { branch = "\u22650.2"; ratio = PuPr + (8 / 9) * MuMr; } pass = ratio <= 1.0; }
++      if (pcr && pcr.ok) { const Pe = pcr.Pcr; Pn = (r.buckling && r.buckling.weakGov) ? hs.Pn_axial : hpColPn(hs.hp, hs.Es, hs.Fy, Pe).Pn; /* HPAE; PDA-D1 */ Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0); /* F39: biaxial sum */ { const it = hpInteract(PuPr, MuMr, !!(hs.mnd && hs.mnd.compact)); branch = it.branch; ratio = it.ratio; }   /* PDA-D6 */ pass = ratio <= 1.0; }
+@@ -18172 +18355 @@ function App() {
+-      /*#__PURE__*/React.createElement(Calc, { label: "Axial ratio", eq: `\\dfrac{P_u}{P_r}=\\dfrac{${fmt(hs.STL,0)}}{${fmt(Pr,0)}}=${fmt(PuPr,3)}`, cite: branch === "<0.2" ? "< 0.2" : "\u2265 0.2" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Axial ratio", eq: `\\dfrac{P_u}{P_r}=\\dfrac{${fmt(hs.STL,0)}}{${fmt(Pr,0)}}=${fmt(PuPr,3)}`, cite: branch === "-3" ? "" : branch === "<0.2" ? "< 0.2" : "\u2265 0.2" }),
+@@ -18174,2 +18357,3 @@ function App() {
+-      /*#__PURE__*/React.createElement(RptHeading, { n: "3", title: "Interaction", code: branch === "<0.2" ? "Eq. 6.9.2.2.1-1" : "Eq. 6.9.2.2.1-2" }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Interaction value", eq: branch === "<0.2" ? `\\dfrac{P_u}{2P_r}+\\dfrac{M_u}{M_r}=${fmt(PuPr/2,3)}+${fmt(MuMr,3)}` : `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\dfrac{M_u}{M_r}=${fmt(PuPr,3)}+${fmt(8/9*MuMr,3)}`, result: `=${fmt(ratio,3)}` }),
++      /*#__PURE__*/React.createElement(RptHeading, { n: "3", title: "Interaction", code: hpEqLbl(branch) }),
++      hs.mnd && /*#__PURE__*/React.createElement(Calc, { label: "Interaction form", eq: hs.mnd.compact ? `\\text{all elements compact for flexure} \\Rightarrow \\text{Eq. 6.9.2.2.1-1 / -2}` : `\\lambda_f=${fmt(hs.mnd.lf,2)}${hs.mnd.lf > hs.mnd.lpf ? ">" : "\\le"}\\lambda_{pf}=${fmt(hs.mnd.lpf,2)}${hs.mnd.webCompact ? "" : ",\\ \\text{web noncompact}"} \\Rightarrow \\text{not compact: Eq. 6.9.2.2.1-3}`, cite: "6.9.2.2.1; A6.2.1, A6.3.2, 6.12.2.2.1c" }),   // PDA-D6
++      /*#__PURE__*/React.createElement(Calc, { label: "Interaction value", eq: branch === "-3" ? `\\dfrac{P_u}{P_r}+\\dfrac{M_u}{M_r}=${fmt(PuPr,3)}+${fmt(MuMr,3)}` : branch === "<0.2" ? `\\dfrac{P_u}{2P_r}+\\dfrac{M_u}{M_r}=${fmt(PuPr/2,3)}+${fmt(MuMr,3)}` : `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\dfrac{M_u}{M_r}=${fmt(PuPr,3)}+${fmt(8/9*MuMr,3)}`, result: `=${fmt(ratio,3)}` }),
+@@ -18177 +18361 @@ function App() {
+-      React.createElement(PdWorkedIn, { I: I, items: [{ mod: "03", txt: "P_n", title: "Structural Axial \u2014 Compression + Buckling" }, { mod: "04", txt: "M_n", title: "Structural Flexure \u2014 Elastic" }, { mod: "02", txt: "M_u", title: "Lateral Analysis \u2014 Maximum Moment" }] }));
++      React.createElement(PdWorkedIn, { I: I, items: [{ mod: "03", txt: "P_n", title: "Structural Axial \u2014 Compression + Buckling" }, { mod: "04", txt: "M_n", title: "Structural Flexure" }, { mod: "02", txt: "M_u", title: "Lateral Analysis \u2014 Maximum Moment" }] }));
+@@ -18239,0 +18424,17 @@ function App() {
++  // PDA-D13 (2026-10-20): H-pile detailing per AASHTO LRFD 10th Ed. 10.7.1.2
++  I.pileType === "hpile" && r.hpileDetail && /*#__PURE__*/React.createElement(Module, {
++    idx: "06a",
++    title: "Pile Detailing \u2014 Embedment, Spacing, Edge Distance",
++    code: "AASHTO LRFD 10th Ed. 10.7.1.2",
++    status: r.hpileDetail.pass,
++    open: open.HD,
++    onToggle: () => setOpen(o => ({ ...o, HD: !o.HD }))
++  }, (() => {
++    const d = r.hpileDetail;
++    return /*#__PURE__*/React.createElement("div", null,
++      /*#__PURE__*/React.createElement(Calc, { label: "Projection into the cap", eq: d.embed.entered ? `\\ell=${fmt(d.embed.prov, 1)}\\ \\text{in}\\ ${d.embed.pass ? "\\ge" : "<"}\\ 12.0\\ \\text{in}` : `\\ell\\ \\text{not entered (}\\ge 12.0\\ \\text{in required)}`, note: "6 in only where the pile is attached by embedded bars or strands (not modelled).", cite: "10.7.1.2" }),
++      d.spacing && /*#__PURE__*/React.createElement(Calc, { label: "Minimum spacing", eq: `s_{min}=${fmt(d.spacing.sMin, 1)}\\ \\text{in (P${d.spacing.pair[0]}\\text{\\textendash}P${d.spacing.pair[1]})}\\ ${d.spacing.pass ? "\\ge" : "<"}\\ \\max(30,\\,2.5D)=\\max(30,\\,2.5\\times${fmt(d.Dpl, 2)})=${fmt(d.spacing.req, 1)}\\ \\text{in}`, note: "D = max(d, b_f).", cite: "10.7.1.2" }),
++      d.edge && /*#__PURE__*/React.createElement(Calc, { label: "Edge distance", eq: `e_{c,min}=${fmt(d.edge.eMin, 1)}\\ \\text{in (P${d.edge.id}, centre)}\\ ${d.edge.pass ? "\\ge" : "<"}\\ 9.0+D/2=9.0+${fmt(d.Dpl / 2, 2)}=${fmt(d.edge.req, 1)}\\ \\text{in}`, note: "Side of pile to cap edge \u2265 9 in, with D = max(d, b_f) (orientation not modelled). Side distance = " + fmt(d.edge.side, 1) + " in.", cite: "10.7.1.2" }),
++      !d.spacing && !d.edge && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "Spacing and edge distance are checked when the pile group is on (and the cap plan L \u00d7 W is entered for the edge distance)."),
++      /*#__PURE__*/React.createElement(RptCheck, { pass: d.pass, eq: `\\text{detailing (10.7.1.2)}\\ ${d.pass ? "\\text{OK}" : "\\text{NG}"}` }));
++  })()),
+@@ -18638 +18839 @@ function App() {
+-  }, "Reese/Terzaghi representative values. Use your geotechnical report's value where available.")), !I.solverLayered && (I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement(Field, {
++  }, "Sand n_h: AASHTO LRFD 10th Ed. Table C10.4.6.3-2 (ksi/ft \u00d7 144 = kip/ft\u00b3). Clay k_h: representative values. Use your geotechnical report's value where available.")), !I.solverLayered && (I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement(Field, {
+@@ -18790 +18991 @@ function App() {
+-    tex: `f_y=\\min(f_{yc},f_{yb})=${fmt(r.axial.fy, 0)}\\text{ ksi}`
++    tex: `f_y=\\min(f_{yc},f_{yb},0.003E)=\\min(${fmt(I.fyc, 0)},${fmt(I.fyb, 0)},${fmt(r.axial.fy003, 0)})=${fmt(r.axial.fy, 0)}\\text{ ksi (cased, Eq. 10.9.3.10.2a-2)}`   // PDA-D9
+@@ -18806 +19007 @@ function App() {
+-    tex: `R_n=0.85\\big(0.85f'_cA_g+f_yA_b\\big)=0.85\\big(0.85(${fmt(r.axial.fcGrout, 2)})(${fmt(r.axial.Ag_ucas, 1)})+${fmt(r.axial.fy, 0)}(${fmt(r.axial.Ab, 2)})\\big)=${fmt(r.axial.Rn_ucased, 1)}`
++    tex: `R_n=0.85\\big(0.85f'_cA_g+f_yA_b\\big)=0.85\\big(0.85(${fmt(r.axial.fcGrout, 2)})(${fmt(r.axial.Ag_ucas, 1)})+${fmt(r.axial.fyU, 0)}(${fmt(r.axial.Ab, 2)})\\big)=${fmt(r.axial.Rn_ucased, 1)},\\ f_y=\\min(f_{yb},0.003E)=${fmt(r.axial.fyU, 0)}\\text{ ksi (Eq. 10.9.3.10.2b-2)}`   // PDA-D9
+@@ -19135 +19336 @@ function App() {
+-    tex: `V_n=0.125\\sqrt{f'_c}\\,b_o d_v=0.125\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})=${fmt(r.punch.Vn, 1)}\\text{ kip}`
++    tex: `V_n=0.126\\lambda\\sqrt{f'_c}\\,b_o d_v=0.126(1.0)\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})=${fmt(r.punch.Vn, 1)}\\text{ kip}\\quad\\text{(Eq. 5.12.8.6.3-1: }\\beta_c=1\\Rightarrow 0.126\\text{ limit; }\\lambda=1.0)`   // PDA-D14
+```
