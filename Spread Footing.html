@@ -726,7 +726,7 @@ function refreshVis(){
  $$('.swUser').forEach(e=>e.style.display=state.mat.swMode==='user'?'flex':'none');
  const lmn=$('#loadModeNote');
  if(lmn){lmn.innerHTML=(state.loadMode==='direct')
-  ?'<b>Direct factored mode.</b> Enter one already-factored (LRFD/strength) load set per pedestal. The combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks. Footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding). Bearing is checked conservatively (factored loads vs allowable bearing \u2014 a service quantity). Stability results are indicative only, since a single envelope is not a true combination-by-combination sweep.'
+  ?'<b>Direct factored mode.</b> Enter one already-factored (LRFD/strength) load set per pedestal. The combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks. Footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding). A case imported from the abutment calculator or Bridge Substructure Loading uses that case\'s AASHTO LRFD 10th Ed. factors instead (Strength γp as built, Extreme Event 1.00). Bearing is checked conservatively (factored loads vs allowable bearing \u2014 a service quantity). Stability results are indicative only, since a single envelope is not a true combination-by-combination sweep.'
   :'<b>By-load-type mode.</b> Enter unfactored loads by type; the app generates the full ASD and LRFD combination sets (ASCE 7-16) and runs bearing/stability on service (ASD) and concrete design on strength (LRFD).';}
 }
 function buildPedCards(){
@@ -910,6 +910,37 @@ function sfdInputTabMarks(){
 }
 </script>
 <script>
+/* SFAD (2026-10-20): "Direct factored" mode with an imported AASHTO case (foundationLoads hand-off from the abutment calculator or
+   Bridge Substructure Loading; record state.bxSrc.foundationLoads). The footing and pedestal self-weight (DC), the soil over the footing
+   (EV), the dead surcharge (ES) and the live surcharge take that case's AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) instead
+   of this tool's ASCE 7-16 bracket 1.2 / 0.9:
+   - Strength: γp max or min as the case was built: the DC, EV and ES factors are read from the case's combination text (record field
+     "combination", stored at import since SFAD); a class not named there follows the case's DC side (max: DC 1.25, EV 1.35, ES 1.50;
+     min: DC 0.90, EV 1.00, ES 0.75). Without a DC factor (older import record) both sides are run.
+   - Extreme Event and Service: 1.00.
+   - Live surcharge: the case's live-load factor (its LL / BR / LS term; 0 when the case has none). Without a combination record:
+     the limit state's Table 3.4.1-1 live-load factor (γEQ taken as 1.00 for Extreme Event I) and 0, both run.
+   Used only while the imported pedestal still holds exactly the imported set; after a manual edit the ASCE 7 bracket applies again. */
+function sfEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }   // SFAD
+function sfAashtoDirect(){
+ const s=state.bxSrc&&state.bxSrc.foundationLoads; if(!s||!s.applied||typeof s.applied!=='object') return null;
+ const ls=String(s.limitState||''), kind=/^strength/i.test(ls)?'str':/^extreme/i.test(ls)?'ee':/^service/i.test(ls)?'svc':null; if(!kind) return null;
+ const p=(state.peds||[])[s.pedIndex]; if(!p) return null;
+ const d=p.direct||{}; if(['P','Vx','Vy','Mx','My'].some(k=>!(Math.abs(num(d[k])-num(s.applied[k]))<=1e-6))) return null;
+ const cmb=(typeof s.combination==='string'&&s.combination.trim())?s.combination:null;
+ const fac=re=>{ if(!cmb) return null; const m=cmb.match(re); return m?parseFloat(m[1]):null; };
+ const gDC=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*DC\b/), gEV=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*EV\b/), gES=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*ES\b/);
+ const gLL=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*(?:LL\b|\((?:LL|BR|LS)\b)/);
+ const base=ls.toLowerCase().replace(/\s*\(.*$/,'').trim(), LLT={'strength i':1.75,'strength iii':0,'strength v':1.35,'extreme event i':1.0,'extreme event ii':0.5,'service i':1.0};
+ const lsSets=cmb?[gLL!=null?gLL:0]:((LLT[base]||0)>0?[LLT[base],0]:[0]);
+ const ref='AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2; imported case "'+(s.caseName||'')+'"'+(cmb?'':' (no combination record: bracketed)');
+ const sets=[];
+ const add=(tag,dc,ev,es)=>lsSets.forEach((l,i)=>sets.push({tag:tag+(lsSets.length>1?(i?', no live surcharge':', live surcharge '+l.toFixed(2)):''),dc,ev,es,ls:l,ref}));
+ if(kind!=='str') add('permanent loads 1.00',1,1,1);
+ else if(gDC!=null){ const mx=gDC>1+1e-9; add('γDC '+gDC.toFixed(2)+' as in the case',gDC,gEV!=null?gEV:(mx?1.35:1.00),gES!=null?gES:(mx?1.50:0.75)); }
+ else { add('γp max',1.25,1.35,1.50); add('γp min',0.90,1.00,0.75); }
+ return {ls,kind,caseName:s.caseName||'',combination:cmb,gDC,gEV,gES,gLL,sets};
+}
 /* ================= combination generation (ASCE 7-16) ================= */
 function genCombos(kind,present){
  const out=[];
@@ -1145,6 +1176,7 @@ function computeAll(){
  const U=Uslab+Uped;
  /* type presence */
  const directMode=(state.loadMode==='direct');
+ const AD=directMode?sfAashtoDirect():null;   // SFAD: AASHTO factors for an imported AASHTO case (null: ASCE 7 1.2 / 0.9 bracket)
  const hFac=(state.stab.shearCouple==='off')?0:1; // V·h base-moment couple toggle
  // E-1: horizontal shears are applied at the pedestal TOP; the datum for pressure/OT/sliding
  // is the BOTTOM of the footing. Lever from that datum = footing thickness + pedestal height.
@@ -1157,10 +1189,15 @@ function computeAll(){
   /* single factored envelope; dead bracket 1.2 (max) for demand/bearing, 0.9 (min) for stability/uplift.
      E-2: the 0.9D case is now included in the ASD evaluation set so sliding & overturning
      resistance is driven by the minimum stabilizing dead load, not the 1.2D maximum. */
+  if(AD){   /* SFAD: an imported AASHTO case: footing / pedestal SW (DC), EV, dead surcharge (ES) and live surcharge at that case's factors */
+   combosASD=AD.sets.map(st=>({name:'Direct '+AD.ls+' (AASHTO, '+st.tag+')',f:{direct:true,dead:st.dc,ev:st.ev,es:st.es,ls:st.ls,aashto:true},ref:st.ref}));
+   combosLRFD=combosASD.map(c=>({name:c.name,f:c.f,ref:c.ref}));
+  }else{
   combosASD=[{name:'Direct LRFD (dead \u00d71.2)',f:{direct:true,dead:1.2},ref:'User factored'},
              {name:'Direct LRFD (dead \u00d70.9, min)',f:{direct:true,dead:0.9},ref:'User factored (min-dead / stability bracket)'}];
   combosLRFD=[{name:'Direct LRFD (dead \u00d71.2)',f:{direct:true,dead:1.2},ref:'User factored'},
               {name:'Direct LRFD (dead \u00d70.9, min)',f:{direct:true,dead:0.9},ref:'User factored (uplift bracket)'}];
+  }
  }else{
   combosASD=genCombos('ASD',present);combosLRFD=genCombos('LRFD',present);
  }
@@ -1169,11 +1206,12 @@ function computeAll(){
   let P=0,Hx=0,Hy=0,Mx=0,My=0,MaX=0,MaY=0;
   const verts=[];
   const fD=f.direct?(f.dead||1):(f.D||0);
-  const fL=f.direct?(f.dead||1):(f.L||0); // live factor; in direct mode surcharge rides the single envelope
+  const fL=f.direct?(f.ls!=null?f.ls:(f.dead||1)):(f.L||0); // live factor; in direct mode surcharge rides the single envelope (SFAD: an AASHTO case's own live factor)
+  const fEV=(f.direct&&f.ev!=null)?f.ev:fD, fES=(f.direct&&f.es!=null)?f.es:fD;   // SFAD: AASHTO γEV / γES of the imported case; otherwise the dead factor
   P+=fD*Wf;verts.push({w:fD*Wf,x:0,y:0,src:'Footing SW',f:fD,mag:Wf});
-  if(EV>0){P+=fD*EV;Mx+=fD*EV*yev;My+=fD*EV*xev;verts.push({w:fD*EV,x:xev,y:yev,src:'EV',f:fD,mag:EV});}
+  if(EV>0){P+=fEV*EV;Mx+=fEV*EV*yev;My+=fEV*EV*xev;verts.push({w:fEV*EV,x:xev,y:yev,src:'EV',f:fEV,mag:EV});}
   // applied surcharge: dead portion at dead factor, live portion at live factor
-  if(surD>0){P+=fD*surD;Mx+=fD*surD*yev;My+=fD*surD*xev;verts.push({w:fD*surD,x:xev,y:yev,src:'Dead surcharge',f:fD,mag:surD});}
+  if(surD>0){P+=fES*surD;Mx+=fES*surD*yev;My+=fES*surD*xev;verts.push({w:fES*surD,x:xev,y:yev,src:'Dead surcharge',f:fES,mag:surD});}
   if(surL>0){P+=fL*surL;Mx+=fL*surL*yev;My+=fL*surL*xev;verts.push({w:fL*surL,x:xev,y:yev,src:'Live surcharge',f:fL,mag:surL});}
   peds.forEach((p,i)=>{if(Wpeds[i]>0){P+=fD*Wpeds[i];Mx+=fD*Wpeds[i]*p.y;My+=fD*Wpeds[i]*p.x;verts.push({w:fD*Wpeds[i],x:p.x,y:p.y,src:p.label+' SW',f:fD,mag:Wpeds[i]});}});
   if(f.direct){
@@ -1314,7 +1352,7 @@ function computeAll(){
  return{W,fatal:false,B,L,t,Df,gc,fc,ks,phi,phiDeg,c,gs,gev,gw,dw:dwc===Infinity?Infinity:dwc,
   peds,Wf,WfAuto,Wpeds,Aped,Aev,covEff,covDry,covSub,evPress,EV,xev,yev,surD,surL,qDsur,qLsur,hsub,U,topDepth,
   present,combosASD,combosLRFD,asd,lrfd,govBear,govOT,govSlx,govSly,govSlr,minContact,flot,eccChk,otGate:(state.stab.otGate==='on'),
-  mu,Kp,pf,PpX,PpY,rig,FSb,directMode,loadMode:state.loadMode};
+  mu,Kp,pf,PpX,PpY,rig,FSb,directMode,aashtoDirect:AD,loadMode:state.loadMode};
 }
 </script>
 <script>
@@ -1513,7 +1551,7 @@ function renderSchematic(){
  const b5=secPanel(T,'o-schem-assump','1.5  Engineering Assumptions & Items Not Considered');
  const ul=el('div');
  if(state.assump.trim())ul.appendChild(el('p','', '<b>User assumptions:</b> '+state.assump.replace(/</g,'&lt;').replace(/\n/g,'<br>')));
- if(R.directMode)ul.appendChild(el('p','note','<b>Direct factored load mode is active.</b> Loads were entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed. Self-weight/EV are auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets. Bearing is checked conservatively against allowable bearing, and overturning/sliding/flotation are indicative (single envelope, not a full combination evaluation). The engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'));
+ if(R.directMode)ul.appendChild(el('p','note','<b>Direct factored load mode is active.</b> Loads were entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed. '+(R.aashtoDirect?'Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'): self-weight, EV and surcharge are added at its AASHTO LRFD 10th Ed. factors ('+R.aashtoDirect.sets.map(st=>'DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+'; Tables 3.4.1-1, 3.4.1-2).':'Self-weight/EV are auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets.')+' Bearing is checked conservatively against allowable bearing, and overturning/sliding/flotation are indicative (single envelope, not a full combination evaluation). The engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'));
  ul.appendChild(el('p','note','<b>Not considered in this version (v1 audit trail):</b> settlement; live-load patterning; seismic loads (E); rain load (R); minimum/accidental eccentricity; lateral earth pressure; slender-pedestal moment magnification; non-rectangular footings. Passive resistance is neglected unless a mobilized fraction is entered. Buoyancy U is applied at a factor of 1.0 in all combinations as a permanent action. Structural (LRFD, ACI 318-19) design of the footing and pedestals uses the generated LRFD combinations and is reported on the Footing Design and Pedestal Design tabs.'));
  b5.appendChild(ul);
 }
@@ -1667,7 +1705,7 @@ function renderCombos(){
  if(R.fatal)return;
  const intro=secPanel(T,'o-cb-basis','2.1  Load Basis & Common Quantities');
  if(R.directMode){
-  intro.appendChild(el('div','warnbox','<b>Direct factored (LRFD) mode.</b> A single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed. Footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding. Bearing DCR is computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity). Stability results are <b>indicative only</b> \u2014 a single envelope is not a true combination-by-combination evaluation. For full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'));
+  intro.appendChild(el('div','warnbox','<b>Direct factored (LRFD) mode.</b> A single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed. Footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding. Bearing DCR is computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity). Stability results are <b>indicative only</b> \u2014 a single envelope is not a true combination-by-combination evaluation. For full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'+(R.aashtoDirect?' <b>Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):</b> the 1.2 / 0.9 bracket is replaced by the case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) on the footing and pedestal self-weight (DC), EV, dead surcharge (ES) and live surcharge: '+R.aashtoDirect.sets.map(st=>st.tag+': DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+' (see the resultant breakdown below for each factor × magnitude).':'')));   // SFAD
  }else{
   intro.appendChild(el('p','note','Service (ASD) combinations per ASCE 7-16 \u00a72.4.1 / IBC 2021 \u00a71605.3 govern all geotechnical and stability checks. Strength (LRFD) combinations per ASCE 7-16 \u00a72.3.1 / ACI 318-19 \u00a75.3 are generated for the Phase 2 structural design of the footing and pedestals. EV (soil on footing) and self-weights carry the dead-load factor of each combination; minimum-dead bracketing is provided by the 0.6D (ASD) and 0.9D (LRFD) combinations. Wind is swept in \u00b1x and \u00b1y as separate cases. Buoyancy U is applied at 1.0 in every combination.'));
  }
@@ -2967,7 +3005,8 @@ function computePhase2(R){
      which is algebraically identical to the old treatment under full contact (the uniform
      pressure share cancels the uniform weight pointwise) and correct under partial contact. */
   const fDsw=f.direct?(f.dead||1):(f.D||0);
-  const swF=fDsw*Wf, evF=fDsw*EV, buF=U;      // kips: down, down, up
+  const fEVsw=(f.direct&&f.ev!=null)?f.ev:fDsw, fESsw=(f.direct&&f.es!=null)?f.es:fDsw;   // SFAD
+  const swF=fDsw*Wf, evF=fEVsw*EV, buF=U;      // kips: down, down, up
   P+=swF; My+=swF*0; Mx+=swF*0;               // footing SW acts at the footing centroid
   P+=evF; My+=evF*xev; Mx+=evF*yev;
   P-=buF;                                      // buoyancy uplift at the centroid
@@ -2975,8 +3014,8 @@ function computePhase2(R){
      resultant (dead at the dead factor, live at the live factor; direct mode rides the single
      envelope). Same reasoning as self-weight: it cancels under full contact, but under partial
      contact the surcharge over the uplifted region must be carried back in bending. */
-  const fLsur=f.direct?(f.dead||1):(f.L||0);
-  const surF=fDsw*(R.surD||0)+fLsur*(R.surL||0);
+  const fLsur=f.direct?(f.ls!=null?f.ls:(f.dead||1)):(f.L||0);
+  const surF=fESsw*(R.surD||0)+fLsur*(R.surL||0);
   P+=surF; My+=surF*xev; Mx+=surF*yev;
   return{P,Mx,My,pl,swF,evF,buF,surF,ex:Math.abs(P)>1e-9?My/P:0,ey:Math.abs(P)>1e-9?Mx/P:0};
  }
@@ -5575,7 +5614,7 @@ buildManualTab();
       : 'The pedestal is '+f2(hp)+' ft tall and the tool applies V at its top (couple V·(t + h)): without the correction the moment at the footing base is overstated by V·h.');
     if(!on) r.warn.push('"Shear couple" is set to Exclude: the tool adds no V·(t + h) moment, so the moment at the bottom of the footing will miss V·t.');
     if(hp>0) r.warn.push('The tool also adds the self-weight of the '+f2(hp)+' ft pedestal; '+(p.producer||'the sender')+'\'s top-of-footing P already includes the column or wall above. Set the pedestal height to 0 if the pedestal is that column or wall.');
-    r.warn.push('Direct mode adds the footing and pedestal self-weight and the soil over the footing at 1.2 (0.9 where they resist), the ASCE 7-16 bracket of this tool — not AASHTO γp. Bearing is checked with factored loads against the allowable bearing.');
+    r.warn.push('Direct mode adds the footing and pedestal self-weight, the soil over the footing and the surcharge at this case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2): Strength γp max or min as the case was built, Extreme Event 1.00; live surcharge at the case\'s live-load factor. A manual edit of the imported set returns to the ASCE 7-16 bracket 1.2 / 0.9. Bearing is checked with factored loads against the allowable bearing.');   // SFAD
     if(p.includes && p.includes.earthPressure) r.warn.push('The case includes earth pressure on the stem (abutment). This tool adds no earth pressure on its own.');
     return r;
   }
@@ -5589,7 +5628,7 @@ buildManualTab();
     if(!state.bxSrc || typeof state.bxSrc!=='object') state.bxSrc={};
     state.bxSrc.foundationLoads={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',
       project:p.project||'',via:via||'pull',adoptedAt:new Date().toISOString(),
-      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,
+      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,combination:c.combination||'',
       sent:{P:c.P,Vx:c.Vx,Vy:c.Vy,Mx:c.Mx,My:c.My},applied:r.set,pedestal:ped.label,pedIndex:o.ped,
       axes:{x:o.ax.x,y:o.ax.y},heightCorrection:r.corr?r.h:0,toDirect:!!o.toDirect,zeroOther:!!o.zeroOther,
       notes:(p.notes||[]).slice(0,20)};

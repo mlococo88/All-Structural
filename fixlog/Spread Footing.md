@@ -1464,3 +1464,128 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   1. Depth factor when the option is On: keep Vesić (building practice, ASD FS), switch to 10th Ed. Eq. 10.6.3.1.2a-10 (arctan(Df/B) always, d_q ≤ 1.4, no d_c), or add a third choice. Projects saved before the option existed open with it On (Vesić), so changing what `on` means would change their results; a new option value would avoid that.
   2. 10th Ed. C10.6.3.1.2a: Eq. 10.6.3.1.2a-10 is verified for φf 32°–42° and Df/B 1–8. The check case (Df/B = 0.5) and most building footings fall below that range.
   3. Inclination exponent: 10th Ed. Eq. 10.6.3.1.2a-9 writes n with the footing B and L; the tool uses the effective B′/L′ (an earlier deliberate change). Not changed here.
+
+## 2026-10-20 — PR: claude/aashto10-sf-direct (SFAD: AASHTO load factors on the tool's own self-weight, EV and surcharge for an imported AASHTO case; engineer direction 2026-10-20 "accuracy"; PR link added after merge)
+
+### SFAD. Direct factored mode, imported AASHTO case: footing / pedestal self-weight, EV and surcharge at that case's AASHTO factors   [calc change] [direct mode with an imported case only]
+- **Problem:** in "Direct factored" mode the tool adds the footing and pedestal self-weight, the soil over the footing (EV) and the dead and live surcharge at its ASCE 7-16 bracket, 1.2 (and 0.9 in a second "min" row), even when the direct set is an AASHTO case imported from Bridge Substructure Loading or the abutment calculator (foundationLoads hand-off, HANDOFF.md §4.6). The case itself was built with AASHTO factors, so the added weights were factored on a different basis.
+- **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (permanent loads γp in Strength; 1.00 in Extreme Event I / II and Service) and Table 3.4.1-2 (γp: DC 1.25 / 0.90; EV, retaining walls and abutments, 1.35 / 1.00; ES 1.50 / 0.75); C3.4.1.
+- **Rule (new function `sfAashtoDirect()`, placed before `/* ================= combination generation (ASCE 7-16) ================= */`):**
+  - Applies only in Direct mode, when `state.bxSrc.foundationLoads` (the import record) exists, its limit state is Strength, Extreme Event or Service, and the imported pedestal still holds exactly the imported set (`applied`, tolerance 1e-6). A manual edit of that set, a manual direct set, or the by-load-type mode keep the ASCE 7 bracket (unchanged).
+  - **Strength:** "max or min as the case was built". The DC, EV and ES factors are read from the case's combination text (SubLoads `1.25 DC + 1.50 DW + 1.35 EV + …`; abutment `1.25·DC + … + 1.35·EV + …`). Footing and pedestal self-weight take the case's γDC; EV takes the case's γEV, or the DC side when the case has no EV term (max 1.35, min 1.00); the dead surcharge takes the case's γES, or the DC side (max 1.50, min 0.75). One row.
+  - **Extreme Event and Service:** 1.00 for all. One row.
+  - **Live surcharge:** the case's live-load factor (its `LL` / `(LL,BR,LS)` / `(BR,LS)` term), 0 when the case has no live load (e.g. Strength III). Before: the dead factor 1.2 / 0.9.
+  - **Ambiguous (checked both, reported):** an import record without the combination text (imported before this change) has no DC factor: both γp max (1.25 / 1.35 / 1.50) and γp min (0.90 / 1.00 / 0.75) are run, each with the limit state's Table 3.4.1-1 live-load factor (γEQ taken as 1.00 for Extreme Event I) and with no live surcharge. Re-importing the case removes the ambiguity.
+- **Where:**
+  - `computeAll()`: `const AD=directMode?sfAashtoDirect():null;` after `const directMode=…`; in `if(directMode){`, `if(AD){ combosASD = AD.sets → {direct, dead, ev, es, ls, aashto} …; combosLRFD = same }` else the old 1.2 / 0.9 rows; `aashtoDirect:AD` in the returned R.
+  - `resultant(f)`: `fEV`, `fES` (EV and dead surcharge) and `fL` (live surcharge) from `f.ev` / `f.es` / `f.ls` when given, else as before (dead factor in direct mode). The resultant breakdown already prints factor × magnitude for each action (§6).
+  - `netResultant(f)` (Phase 2 free body): `fEVsw`, `fESsw`, `fLsur` the same way.
+  - Import (`apply`): the record also stores `combination` (new optional field of `state.bxSrc.foundationLoads`; older records have none and are handled as above). The dialog warning about the 1.2 bracket now states the AASHTO factors.
+  - Text: Loads tab Direct-mode note; Tab 2 §2.1 warn box; Bearing tab note (lists the factors used); new `sfEsc()` for the case name.
+- **Before / after code:** see the diff below.
+- **Check case** (built-in footing, Direct mode, pedestal 1 direct set P = 150 kip, Vx = 12 kip, My = 60 kip-ft; dead surcharge 200 psf, live surcharge 250 psf). Unfactored: W_f = 30.000, EV = 13.590, F_D,sur = 15.100, F_L,sur = 18.875, pedestal SW 0.675 + 0.675 kip.
+  - Before (any import): ΣP = 150 + 1.2 · (30.000 + 13.590 + 15.100 + 18.875 + 1.350) = 150 + 1.2 · 78.915 = **244.70 kip**; min row 150 + 0.9 · 78.915 = **221.02 kip**.
+  - Strength I built with γp max (`1.25·DC + 1.50·DW + 1.35·EV + 1.50·EH + 1.75·(LL,BR,LS)`): ΣP = 150 + 1.25 · 30.000 + 1.35 · 13.590 + 1.50 · 15.100 + 1.75 · 18.875 + 1.25 · 1.350 = 150 + 37.500 + 18.347 + 22.650 + 33.031 + 1.688 = **263.22 kip** (tool 263.215, one row).
+  - Strength I built with γp min (`0.90·DC + 0.65·DW + 1.00·EV + 1.50·EH + 1.75·(BR,LS), LL reaction off`): 150 + 27.000 + 13.590 + 0.75 · 15.100 + 33.031 + 1.215 = **236.16 kip** (tool 236.161).
+  - SubLoads Strength V (`1.25 DC + 1.50 DW + 1.35 EV + 1.35 LL + IM + …`): 150 + 37.500 + 18.347 + 22.650 + 1.35 · 18.875 + 1.688 = **255.67 kip** (tool 255.665).
+  - Extreme Event I (`1.00·DC + … + 0.50·(LL,BR,LS) + 1.00·EQ`): 150 + 30.000 + 13.590 + 15.100 + 0.50 · 18.875 + 1.350 = **219.48 kip** (tool 219.478).
+  - Old record, Strength I, no combination: four rows 263.22 / 230.18 / 236.16 / 203.13 kip (γp max / min × live surcharge 1.75 / 0).
+  - Imported set edited by hand afterwards: 1.2 / 0.9 rows as before (identical to origin/main).
+  - The Phase 2 net resultant (`netResultant`) carries the same totals (263.215, 236.161, 255.665, 219.478 kip).
+- **End to end:** Bridge Substructure Loading (built-in project, Pier 1, top of footing) → Send foundation loads → Spread Footing → Pull → Extreme Event I case → Import: the record stores `combination: "1.00 DC + 1.00 DW + 1.00 EV + FR + WA (design flood)"`; the footing runs one row "Direct Extreme Event I (AASHTO, permanent loads 1.00)", ΣP = 1815.76 kip; no page error.
+- **Unchanged:** by-load-type mode (ASCE 7-16 sweeps); Direct mode without an import record or after a manual edit; buoyancy (1.0). Built-in project: page text and storage identical to origin/main (`tests/compare.mjs --tool page`).
+- **Saved data (§5):** no key renamed; one new optional field `bxSrc.foundationLoads.combination`, written at import. Older records without it are read as described (both brackets).
+- **How verified:** `node tests/check-syntax.mjs "Spread Footing.html"`: pass. Headless Chromium (tests/lib.mjs), origin/main `cca06b1` vs branch, eight Direct-mode scenarios above (`computeAll` via `recalc`, every ASD / LRFD row's ΣP and M_y, the factor of every action in the resultant breakdown, Phase 2 `P2`); the SubLoads → Spread Footing hand-off in one browser context. Plotly is not served by the test kit (page error "Plotly is not defined" on both sides; plots only).
+- **Other copies:** none.
+- **Open items (engineer):**
+  - Service cases are not importable in this tool (factored cases only, unchanged), so the Service rule (1.00) is implemented but unreachable today.
+  - A Strength case whose combination mixes sides (SubLoads "M_t max" is `0.90 DC + 0.65 DW + 1.35 EV …`) gives the footing self-weight 0.90 and the soil 1.35, as the case was built; the dead surcharge (not in a SubLoads pier case) follows the DC side (0.75 here).
+  - A SubLoads construction-stage case names LS without its factor, so the live surcharge gets 0 for that case.
+  - Abutment-calculator cases are at the bottom of the footing, which this tool refuses (unchanged), so only SubLoads top-of-footing cases reach this path in practice.
+
+Diff (`Spread Footing.html`, `git diff -U0` against origin/main `cca06b1`):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 81fdd1e..352c5eb 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -729 +729 @@ function refreshVis(){
+-  ?'<b>Direct factored mode.</b> Enter one already-factored (LRFD/strength) load set per pedestal. The combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks. Footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding). Bearing is checked conservatively (factored loads vs allowable bearing \u2014 a service quantity). Stability results are indicative only, since a single envelope is not a true combination-by-combination sweep.'
++  ?'<b>Direct factored mode.</b> Enter one already-factored (LRFD/strength) load set per pedestal. The combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks. Footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding). A case imported from the abutment calculator or Bridge Substructure Loading uses that case\'s AASHTO LRFD 10th Ed. factors instead (Strength γp as built, Extreme Event 1.00). Bearing is checked conservatively (factored loads vs allowable bearing \u2014 a service quantity). Stability results are indicative only, since a single envelope is not a true combination-by-combination sweep.'
+@@ -912,0 +913,31 @@ function sfdInputTabMarks(){
++/* SFAD (2026-10-20): "Direct factored" mode with an imported AASHTO case (foundationLoads hand-off from the abutment calculator or
++   Bridge Substructure Loading; record state.bxSrc.foundationLoads). The footing and pedestal self-weight (DC), the soil over the footing
++   (EV), the dead surcharge (ES) and the live surcharge take that case's AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) instead
++   of this tool's ASCE 7-16 bracket 1.2 / 0.9:
++   - Strength: γp max or min as the case was built: the DC, EV and ES factors are read from the case's combination text (record field
++     "combination", stored at import since SFAD); a class not named there follows the case's DC side (max: DC 1.25, EV 1.35, ES 1.50;
++     min: DC 0.90, EV 1.00, ES 0.75). Without a DC factor (older import record) both sides are run.
++   - Extreme Event and Service: 1.00.
++   - Live surcharge: the case's live-load factor (its LL / BR / LS term; 0 when the case has none). Without a combination record:
++     the limit state's Table 3.4.1-1 live-load factor (γEQ taken as 1.00 for Extreme Event I) and 0, both run.
++   Used only while the imported pedestal still holds exactly the imported set; after a manual edit the ASCE 7 bracket applies again. */
++function sfEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }   // SFAD
++function sfAashtoDirect(){
++ const s=state.bxSrc&&state.bxSrc.foundationLoads; if(!s||!s.applied||typeof s.applied!=='object') return null;
++ const ls=String(s.limitState||''), kind=/^strength/i.test(ls)?'str':/^extreme/i.test(ls)?'ee':/^service/i.test(ls)?'svc':null; if(!kind) return null;
++ const p=(state.peds||[])[s.pedIndex]; if(!p) return null;
++ const d=p.direct||{}; if(['P','Vx','Vy','Mx','My'].some(k=>!(Math.abs(num(d[k])-num(s.applied[k]))<=1e-6))) return null;
++ const cmb=(typeof s.combination==='string'&&s.combination.trim())?s.combination:null;
++ const fac=re=>{ if(!cmb) return null; const m=cmb.match(re); return m?parseFloat(m[1]):null; };
++ const gDC=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*DC\b/), gEV=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*EV\b/), gES=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*ES\b/);
++ const gLL=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*(?:LL\b|\((?:LL|BR|LS)\b)/);
++ const base=ls.toLowerCase().replace(/\s*\(.*$/,'').trim(), LLT={'strength i':1.75,'strength iii':0,'strength v':1.35,'extreme event i':1.0,'extreme event ii':0.5,'service i':1.0};
++ const lsSets=cmb?[gLL!=null?gLL:0]:((LLT[base]||0)>0?[LLT[base],0]:[0]);
++ const ref='AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2; imported case "'+(s.caseName||'')+'"'+(cmb?'':' (no combination record: bracketed)');
++ const sets=[];
++ const add=(tag,dc,ev,es)=>lsSets.forEach((l,i)=>sets.push({tag:tag+(lsSets.length>1?(i?', no live surcharge':', live surcharge '+l.toFixed(2)):''),dc,ev,es,ls:l,ref}));
++ if(kind!=='str') add('permanent loads 1.00',1,1,1);
++ else if(gDC!=null){ const mx=gDC>1+1e-9; add('γDC '+gDC.toFixed(2)+' as in the case',gDC,gEV!=null?gEV:(mx?1.35:1.00),gES!=null?gES:(mx?1.50:0.75)); }
++ else { add('γp max',1.25,1.35,1.50); add('γp min',0.90,1.00,0.75); }
++ return {ls,kind,caseName:s.caseName||'',combination:cmb,gDC,gEV,gES,gLL,sets};
++}
+@@ -1147,0 +1179 @@ function computeAll(){
++ const AD=directMode?sfAashtoDirect():null;   // SFAD: AASHTO factors for an imported AASHTO case (null: ASCE 7 1.2 / 0.9 bracket)
+@@ -1159,0 +1192,4 @@ function computeAll(){
++  if(AD){   /* SFAD: an imported AASHTO case: footing / pedestal SW (DC), EV, dead surcharge (ES) and live surcharge at that case's factors */
++   combosASD=AD.sets.map(st=>({name:'Direct '+AD.ls+' (AASHTO, '+st.tag+')',f:{direct:true,dead:st.dc,ev:st.ev,es:st.es,ls:st.ls,aashto:true},ref:st.ref}));
++   combosLRFD=combosASD.map(c=>({name:c.name,f:c.f,ref:c.ref}));
++  }else{
+@@ -1163,0 +1200 @@ function computeAll(){
++  }
+@@ -1172 +1209,2 @@ function computeAll(){
+-  const fL=f.direct?(f.dead||1):(f.L||0); // live factor; in direct mode surcharge rides the single envelope
++  const fL=f.direct?(f.ls!=null?f.ls:(f.dead||1)):(f.L||0); // live factor; in direct mode surcharge rides the single envelope (SFAD: an AASHTO case's own live factor)
++  const fEV=(f.direct&&f.ev!=null)?f.ev:fD, fES=(f.direct&&f.es!=null)?f.es:fD;   // SFAD: AASHTO γEV / γES of the imported case; otherwise the dead factor
+@@ -1174 +1212 @@ function computeAll(){
+-  if(EV>0){P+=fD*EV;Mx+=fD*EV*yev;My+=fD*EV*xev;verts.push({w:fD*EV,x:xev,y:yev,src:'EV',f:fD,mag:EV});}
++  if(EV>0){P+=fEV*EV;Mx+=fEV*EV*yev;My+=fEV*EV*xev;verts.push({w:fEV*EV,x:xev,y:yev,src:'EV',f:fEV,mag:EV});}
+@@ -1176 +1214 @@ function computeAll(){
+-  if(surD>0){P+=fD*surD;Mx+=fD*surD*yev;My+=fD*surD*xev;verts.push({w:fD*surD,x:xev,y:yev,src:'Dead surcharge',f:fD,mag:surD});}
++  if(surD>0){P+=fES*surD;Mx+=fES*surD*yev;My+=fES*surD*xev;verts.push({w:fES*surD,x:xev,y:yev,src:'Dead surcharge',f:fES,mag:surD});}
+@@ -1317 +1355 @@ function computeAll(){
+-  mu,Kp,pf,PpX,PpY,rig,FSb,directMode,loadMode:state.loadMode};
++  mu,Kp,pf,PpX,PpY,rig,FSb,directMode,aashtoDirect:AD,loadMode:state.loadMode};
+@@ -1516 +1554 @@ function renderSchematic(){
+- if(R.directMode)ul.appendChild(el('p','note','<b>Direct factored load mode is active.</b> Loads were entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed. Self-weight/EV are auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets. Bearing is checked conservatively against allowable bearing, and overturning/sliding/flotation are indicative (single envelope, not a full combination evaluation). The engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'));
++ if(R.directMode)ul.appendChild(el('p','note','<b>Direct factored load mode is active.</b> Loads were entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed. '+(R.aashtoDirect?'Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'): self-weight, EV and surcharge are added at its AASHTO LRFD 10th Ed. factors ('+R.aashtoDirect.sets.map(st=>'DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+'; Tables 3.4.1-1, 3.4.1-2).':'Self-weight/EV are auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets.')+' Bearing is checked conservatively against allowable bearing, and overturning/sliding/flotation are indicative (single envelope, not a full combination evaluation). The engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'));
+@@ -1670 +1708 @@ function renderCombos(){
+-  intro.appendChild(el('div','warnbox','<b>Direct factored (LRFD) mode.</b> A single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed. Footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding. Bearing DCR is computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity). Stability results are <b>indicative only</b> \u2014 a single envelope is not a true combination-by-combination evaluation. For full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'));
++  intro.appendChild(el('div','warnbox','<b>Direct factored (LRFD) mode.</b> A single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed. Footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding. Bearing DCR is computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity). Stability results are <b>indicative only</b> \u2014 a single envelope is not a true combination-by-combination evaluation. For full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'+(R.aashtoDirect?' <b>Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):</b> the 1.2 / 0.9 bracket is replaced by the case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) on the footing and pedestal self-weight (DC), EV, dead surcharge (ES) and live surcharge: '+R.aashtoDirect.sets.map(st=>st.tag+': DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+' (see the resultant breakdown below for each factor × magnitude).':'')));   // SFAD
+@@ -2970 +3008,2 @@ function computePhase2(R){
+-  const swF=fDsw*Wf, evF=fDsw*EV, buF=U;      // kips: down, down, up
++  const fEVsw=(f.direct&&f.ev!=null)?f.ev:fDsw, fESsw=(f.direct&&f.es!=null)?f.es:fDsw;   // SFAD
++  const swF=fDsw*Wf, evF=fEVsw*EV, buF=U;      // kips: down, down, up
+@@ -2978,2 +3017,2 @@ function computePhase2(R){
+-  const fLsur=f.direct?(f.dead||1):(f.L||0);
+-  const surF=fDsw*(R.surD||0)+fLsur*(R.surL||0);
++  const fLsur=f.direct?(f.ls!=null?f.ls:(f.dead||1)):(f.L||0);
++  const surF=fESsw*(R.surD||0)+fLsur*(R.surL||0);
+@@ -5578 +5617 @@ buildManualTab();
+-    r.warn.push('Direct mode adds the footing and pedestal self-weight and the soil over the footing at 1.2 (0.9 where they resist), the ASCE 7-16 bracket of this tool — not AASHTO γp. Bearing is checked with factored loads against the allowable bearing.');
++    r.warn.push('Direct mode adds the footing and pedestal self-weight, the soil over the footing and the surcharge at this case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2): Strength γp max or min as the case was built, Extreme Event 1.00; live surcharge at the case\'s live-load factor. A manual edit of the imported set returns to the ASCE 7-16 bracket 1.2 / 0.9. Bearing is checked with factored loads against the allowable bearing.');   // SFAD
+@@ -5592 +5631 @@ buildManualTab();
+-      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,
++      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,combination:c.combination||'',
+```
