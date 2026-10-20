@@ -6997,3 +6997,735 @@ index ff84a19..92d1cf2 100644
 +      `\\ell_d = \\max\\!\\left(\\ell_{db}\\,\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\ 12\\right) = \\max\\!\\left(${fmtT(c.ldb,1)}(${fmtT(c.lamRl??1,1)})(${fmtT(c.lamCf??1,1)})(${fmtT(c.lamRc,3)}),\\ 12\\right) = ${fmtT(c.ld,1)}\\ \\text{in}`],
 +      (c.topBar?`Top bars: λ<sub>rl</sub> = 1.3 for horizontal bars with more than 12.0 in of fresh concrete cast below them [5.10.8.2.1b]; the footing is taken as cast in one lift. `:"")+((c.lamCf??1)>1?`Epoxy-coated bars (panel I-9${abutOwner()==="MassDOT"?"; MassDOT Part I 3.3.1.6":""}): λ<sub>cf</sub> = ${fmt(c.lamCf,1)} [5.10.8.2.1b] — cover ${fmt(c.cvE,2)} in ${c.cvE<3*BARS[c.bar].db?"&lt;":"≥"} 3d<sub>b</sub> = ${fmt(3*BARS[c.bar].db,2)} in, clear spacing ${fmt(c.sp-BARS[c.bar].db,2)} in ${(c.sp-BARS[c.bar].db)<6*BARS[c.bar].db?"&lt;":"≥"} 6d<sub>b</sub> = ${fmt(6*BARS[c.bar].db,2)} in. `:"")+"S&T applies to exposed faces not otherwise reinforced. Development length per AASHTO LRFD 10th Ed. 5.10.8.2.1a for a straight bar (F_h = 0) in normal weight concrete, with λ_er"+(c.topBar?"":", λ_rl")+((c.lamCf??1)>1?"":" and λ_cf")+" taken as 1.0; λ_rc from Eq. 5.10.8.2.1c-2 with k_tr = 0 and β_t = 0 (no transverse reinforcement or transverse compression counted), c = the cover to the bar used in this section. ℓ_d sets the bar-length estimates of §5.7 — confirm hooks/embedment in detailing.")}
 ```
+
+
+## 2026-10-20 — PR: claude/abut-wingwalls — Wingwall module (input panel I-13, Tab 9) (PR link added after merge)
+
+**What:** new wingwall design module (WING). Two types:
+
+- **Attached** (U-wing parallel to the roadway, or in-line), cast with the stem / backwall, no footing, no soil bearing: a cantilever plate from the junction [AASHTO LRFD 10th Ed. 11.6.1.4]. Junction moment and shear from the earth pressure on the whole wing (closed-form integrals of h(x) = H₀ + (H_L − H₀)x/L); horizontal bars at the junction designed per foot of junction height for either the total junction moment spread over H₀ (default; the basis of MassDOT Part I 3.10.9) or the most loaded 1-ft horizontal strip (input "Junction design moment"); the other value is shown for information. Tie bars across the junction developed on the abutment side (straight ℓ_d, else hooked ℓ_dh) [11.6.1.5.2, 5.10.8.2.1a, 5.10.8.2.4a]. Vertical bars: S&T [5.10.6]. Junction resultants delivered to the abutment end (V, M_h, torsion about mid-height, wing weight and in-plane moment) are reported, not added to the abutment design.
+- **Independent** cantilever wing on its own spread footing behind an expansion joint, flared at θ. Stem per 1-ft strip at the design section (FHWA LRFD Steel Girder Superstructure Design Example, Design Step 7, wingwall Steps 7.4–7.9): one-third of L down from the high end, MassDOT Part I 3.3.2.2 (low end + 75 %) for MassDOT, or an entered fraction; EH on the stem face (default, as the abutment stem) or on the virtual back plane at the heel end (FHWA DS 7.6). Simplified per-foot stability of the same section (sliding, eccentricity, bearing) with the panel I-4 resistances, clearly labelled.
+- **Loads:** EH with the abutment soil, theory (Rankine / Coulomb with δ of panel I-3) and earth-pressure state incl. the owner rules (MassDOT 3.1.6, RIDOT), with the wing's own backfill slope β_w; LS for traffic parallel to the wall, Table 3.11.6.4.1-2 (verified against the 10th Ed.: H 5/10/≥20 ft → 5.0/3.5/2.0 ft at 0 ft, 2.0 ft at ≥ 1.0 ft; linear in H, and linear in d between the two columns — tool choice), in-line wing Table 3.11.6.4.1-1; LS only where traffic is within H/2 [3.11.6.4.1]; CTDOT h_eq ≥ 2 ft. EE I per 11.6.5 (M–O increment over K_a cos ι, wall inertia; k_h from panel I-11); an attached wing of a single-span bridge follows the abutment (no increment, C3.10.9.1); an independent wing is treated as a retaining wall (C3.10.9.1 leaves single-span wings to judgment — warning shown). EE II barrier collision: AASHTO Table A13.2-1 (verified, 10th Ed.: TL-1 13.5 k/4 ft/18 in, TL-2 27/4/20, TL-3 54/4/24, TL-4 54/3.5/32, TL-5 124/8/42, TL-6 175/8/56); MassDOT Table 3.3.2-1 (TL-2/3 23 k/4 ft/24 in, TL-4 28/5/30, TL-5 80/10/34) on the whole wall section, stability with EH γp = 0, stem EH γp = 1.0 (attached integral wing: 1.5 active + 1.0 CT, 3.10.9). CTDOT attached wings: case 1 at-rest, case 2 active + CT (CT11.1.1.4.2b). Extreme events checked with φ = 1.0 [1.3.2.1] against M_n, V_c of the same section.
+- **Section design** reuses the abutment's sectionCheck (flexure, strain-based φ, minimum steel 5.6.3.3, shear 5.7.3 with β = 2.0 below 16 in else general procedure, crack control 5.6.7, S&T 5.10.6, ℓ_d 5.10.8.2.1a).
+- **Owner Requirements card (Tab 1 §1.0a)** — rows listed only while the wingwalls are designed: MassDOT 3.10.9 (integral U-wings 2–10 ft), 3.3.2.2 (75 % height), 3.3.2.4 / Table 3.3.2-1 (collision), 3.4.9.1 (SDC A/B), 2.3.5.3 (note); RIDOT 11.3.6 (independent footings — shall; flared preferred; cheek walls); CTDOT V2 11.6.1.4 (U-type preferred), 11.6.1.4.1CT (flared: 1.33 ft top, batter ≥ 10:1), 11.6.1.4 / App. CT11.1.1.1 (monolithic U-wings 5–10 ft, longer = freestanding behind a joint), CT11.1.1.4.2b (design cases), 11.6.1.4.2CT/3CT (note).
+- **Graphics:** wing elevation and plan with dimensions, pressure diagram (SVG, Tab 9 §9.0–9.1); the wings in the 3D view. **Report:** section "Wingwalls" with its D/C result lines, input echo, references.
+
+**Saved data (CLAUDE.md §5):** new object `S.wing` (keys on, type, orient, theta, L, H0, HL, taper, t, ttop, bat, beta, dTr, barrier, jMethod, secMode, secFr, ehPlane, Ltoe, Lheel, tf, fdn, hSize, hSp, vSize, vSp). A new project (defaultState) has it on with typical dimensions (attached U-wing 10 ft, H₀ 19 ft, H_L 8 ft, t 1.5 ft, #6 @ 9 horizontal, #5 @ 12 vertical). A saved project without it (autosave, saved project, JSON import, compare) opens with `wing.on = false`: `abutMergeState()` keeps "no wing data" when a saved state is merged over the defaults, and `migrate()` creates the off-state object. No existing key or format changed. With the wingwalls off the Input ID is unchanged (`fpS.wing` dropped from the fingerprint).
+
+**Result change (CLAUDE.md §4):** none to the abutment. New checks only (Tab 9, dashboard ids wJ*/wS*/wTS/wDev/wSlide/wEcc/wBrg, tab "tab-wing").
+
+**Where:** `wingDefault`, `WING_TL`, `WING_TL_MD` (Section A, before `defaultState`); `wingHeqWall`, `wingKa`, `computeWing` (Section C, before "MAIN COMPUTE"); `computeAll` anchor `C-11d Wingwalls`, dashboard rows before `R.dash=dash;`, fingerprint `if(fpS.wing&&!fpS.wing.on)`; `migrate` anchor `WING (2026-10-20): a project saved before`; `abutMergeState`; `buildInputs` panel `I-13 Wingwalls`; owner rules `OWN_LK_WING` + `ABUT_OWN.rules.push(` and the filter in `abutOwnChecks`; `renderTabWing`, `svgWingElev`, `svgWingPlan`, `svgWingPress` (Section D); `build3D` anchor `WING: wingwalls (panel I-13), schematic`; `inputEchoHTML`, `WING_REFS`, `buildReport` (secNames, SKIP, result-block regex).
+
+**Check case 1 — FHWA DS7 wingwall (independent wing), reproduces the example:** φ = 35.865° (Rankine K_a = 0.3000 at β_w = 18.5°, as the example's K_a = 0.30), γ = 0.120 kcf, H₀ = 22 ft, H_L = 17 ft, L = 20.5 ft, section x/L = 0.30 → H_s = 22 − 5(0.30) = 20.50 ft; t_top = 1.5 ft, batter 1 in/ft → t_b = 1.5 + 20.5/12 = 3.208 ft = 38.50 in; EH height on the virtual back plane, L_heel = 4.27 ft → Δ = (4.27 + 3.208 − 1.5) tan 18.5° = 2.000 ft, H_E = 22.50 ft; d = 2 ft → h_eq = 2.00 ft; f′c 4, f_y 60, cover 2.5 in, #9 @ 9.
+k_h = 0.300 cos 18.5° = 0.2845. EH = ½(0.2845)(0.120)(22.50)² = 8.64 kip/ft (FHWA 8.64); LS = 0.2845(0.120)(2.0)(22.50) = 1.54 kip/ft (FHWA 1.54). M_u = 1.50(8.64)(7.50) + 1.75(1.54)(11.25) = 127.47 kip-ft/ft (FHWA 127.46); V_u = 15.65 kip/ft (15.65); M_s = 82.10 kip-ft/ft (82.10). A_s = 1.33 in²/ft, d = 35.44 in, a = 1.96 in (all as FHWA); φM_n = 0.90(1.333)(60)(35.44 − 0.98)/12 = 206.73 kip-ft/ft. Differences by edition: f_ss = 22.28 ksi (n = 7.27 from Eq. 5.4.2.4-1; FHWA n = 8 → 22.34), M_min = min(γ3γ1 f_r S_c, 1.33M_u) = 127.12 (FHWA 1.2M_cr = 142.30), shear by the general procedure (h ≥ 16 in, 5.7.3.4.1) β = 1.546, φV_n = 33.65 kip/ft (FHWA β = 2.0, 47.04), crack control by s_max (5.6.7) instead of Z.
+Stability (simplified, toe 3.0 ft, t_f 2.5 ft — not in the example): Strength I 0.90DC + 1.00EV + 1.50EH + 1.75LS: V = 0.9(4.612 + 2.627 + 3.929) + (2.101 + 10.504 + 0.718) + 1.5(3.570) = 28.729 kip/ft; H = 1.5(10.669) + 1.75(1.707) = 18.991; R_R = 0.80(28.729) tan 29° = 12.740 → D/C 1.49 (the hand values reproduce the tool to 0.001).
+
+**Check case 2 — attached U-wing (new-project default):** H₀ = 19, H_L = 8, L = 10 ft (bottom tapered), t = 1.5 ft, Rankine φ = 32°, β_w = 0: k_h = K_a = 0.3073; a = 19, b = −1.1; I₁ = 135.00, J₁ = 583.33, I₂ = 1923.33, J₂ = 7141.67. M_EH = 0.3073(0.120)(7141.67)/2 = 131.66 kip-ft; d = 2 ft, H = 19 → h_eq = 2.00 ft; M_LS = 0.3073(0.120)(2.0)(583.33) = 43.02 kip-ft. Per ft of junction: m_EH = 6.929, m_LS = 2.264; M_u = 1.50(6.929) + 1.75(2.264) = 14.36 kip-ft/ft; V_u = (1.5·35.46 + 1.75·9.96)/19 = 3.72 kip/ft. #6 @ 9, d = 15.63 in, a = 0.86 in, φM_n = 40.11 → D/C 0.36. Strip method (info): y* = 11.0 ft, strip 10 ft: m_u = 1.5(14.71) + 1.75(3.69) = 28.52 kip-ft/ft (D/C 0.71 if selected). Junction bars into the 1.5-ft backwall: ℓ_av = 18 − 2 = 16.0 in; straight ℓ_d = 18.7 in > 16 → hooked ℓ_dh = 15.1 in, D/C 0.95.
+
+**How verified:** `node tests/check-syntax.mjs abutment_calculator.html` (all scripts pass). Headless (Playwright, tests/lib.mjs): origin/main vs branch with the wingwalls off — default, pile, MassDOT, RIDOT (ADT, piles), CTDOT (Coulomb, β = 10°), seismic, single-span seismic — Input ID, dashboard, every R.checks value, owner rows, warnings, stem demands, EH, LS and the permutation tables identical; main's saved state of each case opened by the branch from localStorage opens with wing.on = false and identical results. Check cases 1 and 2 read from the running tool. Tab 9 rendered with KaTeX (no KaTeX errors), report built with the Wingwalls section, 3D view drawn; seven further configurations (strip + EE I + TL-4, CTDOT, MassDOT independent TL-4 + EE I, MassDOT TL-5, RIDOT in-line, pile wing single-span EE I, attached single-span EE I) run without errors or NaN.
+
+**Other copies:** none.
+
+**Open items (engineer decision):**
+1. Attached-wing junction design moment: default = total junction moment / H₀ (MassDOT 3.10.9 basis); the most-loaded-strip method gives about twice the value for a tall, short wing (check case 2: 28.5 vs 14.4 kip-ft/ft). Both are shown; the default is a choice.
+2. h_eq between d = 0 and d = 1.0 ft interpolated linearly (Table 3.11.6.4.1-2 gives only the two columns).
+3. AASHTO-owner collision on an independent wing stem spread over L_t + 2H_s (45°) at the section, capped at L; the junction collision arm for attached wings = max(L/2, L − L_t/2) and the collision moment spread over H₀ in both methods.
+4. CTDOT CT11.1.1.4.2b cases (written for integral abutments) are applied to attached U-wings of this conventional abutment.
+5. Independent wing on a single-span bridge carries the 11.6.5 increment (C3.10.9.1 leaves it to judgment).
+6. EE II eccentricity limit B/3 (11.6.5.1 with γ_EQ = 0); EE II uses the panel I-11 extreme-event φ_τ, φ_b.
+
+**Diff (exact before/after, `git diff -U0`):**
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 92d1cf2..e05d029 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -592,0 +593,12 @@ const LT_LABEL = {DC:"DC — structural dead", DW:"DW — wearing surface / util
++/* WING (2026-10-20): wingwall module — collision tables and input defaults (the calculation is computeWing, Section C) */
++const WING_TL={TL1:{F:13.5,L:4.0,He:18},TL2:{F:27.0,L:4.0,He:20},TL3:{F:54.0,L:4.0,He:24},TL4:{F:54.0,L:3.5,He:32},TL5:{F:124.0,L:8.0,He:42},TL6:{F:175.0,L:8.0,He:56}};   // AASHTO LRFD 10th Ed. Table A13.2-1: F_t (kip), L_t (ft), H_e min (in)
++const WING_TL_MD={TL2:{F:23,L:4,He:24},TL3:{F:23,L:4,He:24},TL4:{F:28,L:5,He:30},TL5:{F:80,L:10,He:34}};   // MassDOT Part I Table 3.3.2-1 (pseudo-static, from NCHRP Web-Only Doc. 326)
++function wingDefault(on){
++  return {on:!!on, type:"attached", orient:"U", theta:45.0,         // type "attached" | "indep"; attached orientation "U" | "inline"; independent flare angle θ from the abutment face line (90 = straight, parallel to the roadway)
++    L:10.0, H0:19.0, HL:8.0, taper:"bottom",                          // length along the wing (ft); height at the junction / high end and at the free / low end (ft); attached: "bottom" = top level, bottom tapered; "top" = top sloped, bottom level
++    t:1.5, ttop:1.5, bat:1.0,                                         // attached thickness (ft); independent: stem top thickness (ft), back-face batter (in of thickness per ft of height)
++    beta:0.0, dTr:2.0, barrier:"none",                                 // backfill slope behind the wing (deg); back face to the edge of traffic (ft); barrier on the wing: "none" | "TL1"…"TL6"
++    jMethod:"avg", secMode:"auto", secFr:0.3333, ehPlane:"face",      // attached junction method "avg" | "strip"; independent design section "auto" | "user" (fraction of L from the high end); EH height for the stem "face" | "heel"
++    Ltoe:2.0, Lheel:6.0, tf:2.0, fdn:"spread",                         // independent footing (ft); "spread" (stability checked, panel I-4 resistances) | "pile" (not checked)
++    hSize:"6", hSp:9.0, vSize:"5", vSp:12.0};                          // horizontal / vertical bars (attached: horizontal = junction flexure; independent: vertical = stem flexure)
++}
+@@ -688,0 +701 @@ function defaultState(){
++    wing:wingDefault(true),         // WING (2026-10-20): wingwall module, panel I-13 (on with typical dimensions for a new project; a saved project without it opens with the wingwalls off)
+@@ -911,0 +925,36 @@ ABUT_OWN.rules=[
++/* WING (2026-10-20): owner rules for the wingwalls (listed only while the wingwalls are designed, panel I-13) */
++const OWN_LK_WING={geo:["tab-wing","o-wing-basis","§9.0 wingwall geometry"], load:["tab-wing","o-wing-load","§9.1 wing loads"], dem:["tab-wing","o-wing-dem","§9.2 wing demands"], ts:["tab-wing","o-wing-ts","§9.4 junction bars"], stab:["tab-wing","o-wing-stab","§9.5 wing stability"]};
++const wAtt=()=>S.wing.type!=="indep", wU=()=>wAtt()&&S.wing.orient!=="inline", wTh=()=>wAtt()?(S.wing.orient==="inline"?0:90):+S.wing.theta;
++ABUT_OWN.rules.push(
++  {owner:"MassDOT", wing:1, id:"wing.int", kind:"should-warning", sec:"3.10.9 (p. 3-90)", text:"Integral wingwalls: U-shaped only, 2 ft to 10 ft long; a longer wing is a combination of an integral and an independent wing",
++    ev:C=>{ if(!wAtt()) return {st:"na", val:"independent wing", lim:"—"}; const L=+S.wing.L;
++      return {st:(wU()&&ownGE(L,2)&&ownLE(L,10))?"pass":"warn", val:`${wU()?"U-wing":"in-line wing"}, L = ${fmt(L,2)} ft (panel I-13)`, lim:"U-shaped, 2 ft ≤ L ≤ 10 ft", link:OWN_LK_WING.geo}; }},
++  {owner:"MassDOT", wing:1, id:"wing.ht", kind:"load", sec:"3.3.2.2 (p. 3-21)", text:"Wall segments of variable height designed (stem and footing) for the low-end height plus 75 % of the difference to the high end (applied to the independent wing's design section)",
++    ev:C=>{ const W=C.R.wing; if(wAtt()||!W) return {st:"na", val:"attached wing (junction design)", lim:"—"};
++      return {st:W.secRule==="massdot"?"pass":"warn", val:`H<sub>s</sub> = ${fmt(W.Hs,2)} ft (${W.secRule==="massdot"?"rule applied":"entered section"})`, lim:`H<sub>L</sub> + 0.75(H<sub>0</sub> − H<sub>L</sub>) = ${fmt(W.HL+0.75*(W.H0-W.HL),2)} ft`, link:OWN_LK_WING.dem}; }},
++  {owner:"MassDOT", wing:1, id:"wing.ct", kind:"load", sec:"3.3.2.4, Table 3.3.2-1 (p. 3-22)", text:"Barrier on a U-wing or wall: Extreme Event II with the pseudo-static collision load of Table 3.3.2-1 (γ = 1.0) on the whole wall section; stability without EH (γp = 0), stem with EH at γp = 1.0 (integral U-wings, 3.10.9: active pressure at 1.5 with the collision at 1.0)",
++    ev:C=>{ const W=C.R.wing; return W&&W.CT? {st:"pass", val:`${W.CT.tl.replace("TL","TL-")}: F = ${fmt(W.CT.F,1)} kip, L = ${fmt(W.CT.Lt,1)} ft, H<sub>e</sub> = ${fmt(W.CT.He,0)} in (${W.CT.src})`, lim:"Table 3.3.2-1", link:OWN_LK_WING.load} : {st:"na", val:"no barrier on the wing (panel I-13)", lim:"—"}; }},
++  {owner:"MassDOT", wing:1, id:"wing.seis", kind:"note", sec:"3.4.9.1 (p. 3-41)", text:"Wingwalls and free-standing walls in SDC A or B need no seismic analysis; SDC C or D: seismic soil forces",
++    ev:C=>({st:"note", val:S.seismic.on?"Extreme Event I on (panel I-11): wing EE I computed":"Extreme Event I off", lim:"SDC A/B: none", link:OWN_LK_WING.load})},
++  {owner:"MassDOT", wing:1, id:"wing.type", kind:"note", sec:"2.3.5.3 (p. 2-14)", text:"Splayed wings are more economical but need more right of way; U-wings suit restricted right of way and need more railing; consider MSE walls for long wings",
++    ev:C=>({st:"note", val:wAtt()?(wU()?"attached U-wing":"attached in-line wing"):`independent wing, θ = ${fmt(wTh(),1)}°`, lim:"—", link:OWN_LK_WING.geo})},
++  {owner:"RIDOT", wing:1, id:"wing.indep", kind:"shall-check", sec:"11.3.6 (p. 11-10)", text:"Wingwalls or return walls are U-shaped walls on independent footings; the interface detailed for the movement and the transverse force effects",
++    ev:C=>({st:wAtt()?"fail":"pass", val:wAtt()?"attached to the abutment (panel I-13)":"independent wing on its own footing", lim:"independent footing", link:OWN_LK_WING.geo})},
++  {owner:"RIDOT", wing:1, id:"wing.flare", kind:"should-warning", sec:"11.3.6 (p. 11-10)", text:"Flared wingwalls preferred for economy; walls parallel to the roadway in restrictive situations; step the footings with the fill slope",
++    ev:C=>({st:wTh()<90-1e-6?"pass":"warn", val:`θ = ${fmt(wTh(),1)}° from the abutment face line`, lim:"flared (θ < 90°) preferred", link:OWN_LK_WING.geo})},
++  {owner:"RIDOT", wing:1, id:"wing.cheek", kind:"note", sec:"11.3.6 (p. 11-10)", text:"Superstructure lateral forces carried to the wing or return wall foundations through cheek walls",
++    ev:C=>({st:"note", val:"cheek walls not modelled", lim:"—", link:OWN_LK_WING.geo})},
++  {owner:"CTDOT", wing:1, id:"wing.type", kind:"should-warning", sec:"V2 11.6.1.4 (p. 11-2)", text:"Wingwalls preferably U-type (parallel to the roadway); flared where conditions warrant (e.g. hydraulics); non-proprietary",
++    ev:C=>({st:Math.abs(wTh()-90)<1e-6?"pass":"warn", val:`θ = ${fmt(wTh(),1)}°`, lim:"U-type (θ = 90°) preferred", link:OWN_LK_WING.geo})},
++  {owner:"CTDOT", wing:1, id:"wing.flared", kind:"shall-check", sec:"V2 11.6.1.4.1CT (p. 11-2)", text:"Flared wingwall stems 1.33 ft wide at the top, rear face battered at least 10:1",
++    ev:C=>{ if(wAtt()||Math.abs(wTh()-90)<1e-6) return {st:"na", val:wAtt()?"attached wing":"straight (U-type) wing", lim:"—"}; const tt=+S.wing.ttop, bt=+S.wing.bat;
++      return {st:(Math.abs(tt-1.33)<=0.005&&ownGE(bt,1.2))?"pass":"fail", val:`t<sub>top</sub> = ${fmt(tt,2)} ft, batter ${fmt(bt,2)} in/ft (${bt>0?fmt(12/bt,1)+":1":"vertical"})`, lim:"t<sub>top</sub> = 1.33 ft; batter ≥ 1.2 in/ft (10:1)", link:OWN_LK_WING.geo}; }},
++  {owner:"CTDOT", wing:1, id:"wing.len", kind:"shall-check", sec:"V2 11.6.1.4; App. CT11.1.1.1 (p. 11-10)", text:"Monolithic cantilevered U-wings 5 ft to 10 ft long from the rear face of the abutment; a longer wing is a freestanding wall behind a full-movement expansion joint",
++    ev:C=>{ if(!wAtt()) return {st:"na", val:"independent wing", lim:"—"}; const L=+S.wing.L;
++      return {st:!ownLE(L,10)?"fail":(ownGE(L,5)&&wU()?"pass":"warn"), val:`${wU()?"U-wing":"in-line wing"}, L = ${fmt(L,2)} ft`, lim:"U-type, 5 ft ≤ L ≤ 10 ft", link:OWN_LK_WING.geo}; }},
++  {owner:"CTDOT", wing:1, id:"wing.cases", kind:"load", sec:"V2 CT11.1.1.4.2b (p. 11-13)", text:"Monolithic U-wings: biaxial bending, torsion and shear at the connection; case 1 at-rest pressure, case 2 active pressure with the vehicular impact on the parapet; no soil bearing; horizontal bars doweled into the abutment; 1-ft chamfer",
++    ev:C=>{ const W=C.R.wing; if(!wAtt()||!W) return {st:"na", val:"independent wing", lim:"—"};
++      return {st:"pass", val:`case 1: k<sub>h</sub> = K<sub>0</sub> = ${fmt(W.Kst.kh,4)} (Strength I, Service I)${W.CT?`; case 2: k<sub>h</sub> = ${fmt(W.Kee2.kh,4)} with ${W.CT.tl.replace("TL","TL-")} (Extreme Event II)`:"; case 2: no barrier on the wing"}; junction V, M<sub>h</sub>, T reported (§9.2a)`, lim:"cases 1 and 2", link:OWN_LK_WING.dem}; }},
++  {owner:"CTDOT", wing:1, id:"wing.top", kind:"note", sec:"V2 11.6.1.4.2CT, 11.6.1.4.3CT (pp. 11-2, 11-3)", text:"U-type wing top conforms to the parapet width over the full length; any batter starts about 12 in below the sidewalk or subbase",
++    ev:C=>({st:"note", val:wAtt()?`t = ${fmt(+S.wing.t,2)} ft`:`t<sub>top</sub> = ${fmt(+S.wing.ttop,2)} ft`, lim:"parapet width", link:OWN_LK_WING.geo})}
++);
+@@ -917 +966 @@ function abutOwnChecks(R){
+-  ABUT_OWN.rules.filter(r=>r.owner===o).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } rows.push(Object.assign({r},v)); });
++  ABUT_OWN.rules.filter(r=>r.owner===o&&(!r.wing||(S.wing&&S.wing.on))).forEach(r=>{ let v; try{ v=r.ev(C)||{}; }catch(e){ v={st:"warn",val:"not evaluated ("+esc(e.message)+")",lim:"—"}; } rows.push(Object.assign({r},v)); });
+@@ -1080 +1129,16 @@ const VALID = {
+-  "bearing.nBrgPerGird":{hard:[1,6], typ:[1,2], msg:"Bearings per girder outside the typical 1–2 range."}
++  "bearing.nBrgPerGird":{hard:[1,6], typ:[1,2], msg:"Bearings per girder outside the typical 1–2 range."},
++  "wing.L":{hard:[0.5,100], typ:[2,40], msg:"Wing length outside the typical 2–40 ft range."},
++  "wing.H0":{hard:[0.5,60], typ:[3,30], msg:"Wing height outside the typical 3–30 ft range."},
++  "wing.HL":{hard:[0,60], typ:[0,30], msg:"Wing end height outside the typical 0–30 ft range."},
++  "wing.t":{hard:[0.5,6], typ:[1,3], msg:"Wing thickness outside the typical 1–3 ft range."},
++  "wing.ttop":{hard:[0.5,6], typ:[1,2.5], msg:"Wing stem top thickness outside the typical 1–2.5 ft range."},
++  "wing.bat":{hard:[0,6], typ:[0,2], msg:"Back-face batter outside the typical 0–2 in/ft range."},
++  "wing.theta":{hard:[0,90], typ:[20,90], msg:"Flare angle outside the typical 20–90° range."},
++  "wing.beta":{hard:[0,45], typ:[0,26.6], msg:"Backfill slope behind the wing steeper than 2H:1V (26.6°) — verify; theory requires β < φ."},
++  "wing.dTr":{hard:[0,100], typ:[0,20], msg:"Distance to traffic outside the typical range."},
++  "wing.secFr":{hard:[0,1], typ:[0.2,0.5], msg:"Design section fraction outside the usual 0.25–0.33 of L from the high end."},
++  "wing.Ltoe":{hard:[0,30], typ:[0.5,8], msg:"Wing toe length outside the typical 0.5–8 ft range."},
++  "wing.Lheel":{hard:[0,40], typ:[1,15], msg:"Wing heel length outside the typical 1–15 ft range."},
++  "wing.tf":{hard:[0.5,10], typ:[1.5,4], msg:"Wing footing thickness outside the typical 1.5–4 ft range."},
++  "wing.hSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
++  "wing.vSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."}
+@@ -1116 +1180 @@ const ABUT_IN_TABS=[
+-  ['fact','Factors'],['detail','Rebar & Bearings'],['seis','Seismic'],['assum','Assumptions']];
++  ['fact','Factors'],['detail','Rebar & Bearings'],['seis','Seismic'],['wing','Wingwalls'],['assum','Assumptions']];
+@@ -1123,0 +1188 @@ const ABUT_IN_SEC={
++  'in-wing':'wing',
+@@ -1321,0 +1387,4 @@ function migrate(){
++  // WING (2026-10-20): a project saved before the wingwall module has no S.wing: it opens with the wingwalls OFF (abutment results,
++  // Input ID and checks unchanged); missing wing fields of a newer project take their defaults
++  if(!S.wing||typeof S.wing!=="object") S.wing=wingDefault(false);
++  else{ const T=wingDefault(false); Object.keys(T).forEach(k=>{ if(S.wing[k]===undefined) S.wing[k]=T[k]; }); }
+@@ -1403,0 +1473,2 @@ function migrate(){
++/* WING: a saved state merged over the defaults keeps "no wing data" (→ wingwalls off in migrate), not the new-project default */
++function abutMergeState(o){ const st=Object.assign(defaultState(),o); if(!o||typeof o!=="object"||!o.wing) delete st.wing; return st; }
+@@ -1786,0 +1858,35 @@ function buildInputs(){
++  /* ---- I-13 Wingwalls (WING, 2026-10-20) ---- */
++  { const w=S.wing, att=w.type!=="indep", bo=Object.keys(BARS).map(k=>[k,"#"+k]), own=abutOwner();
++    const tlO=[["none","No barrier on the wing"]].concat(["TL1","TL2","TL3","TL4","TL5","TL6"].map(k=>[k,k.replace("TL","TL-")+(own==="MassDOT"&&WING_TL_MD[k]?" (MassDOT Table 3.3.2-1)":" (AASHTO Table A13.2-1)")]));
++    html+=panel("in-wing","I-13","Wingwalls",`
++    <div class="chk-row"><input type="checkbox" id="chkWing" data-path="wing.on" ${w.on?"checked":""}>
++    <label for="chkWing"><b>Design the wingwalls</b> (Tab 9; the abutment results do not depend on them)</label></div>
++    ${w.on?`
++    ${selRow("Wingwall type","wing.type",[["attached","Attached: cast with the stem / backwall, cantilevered from the junction (no footing)"],["indep","Independent: own footing, behind an expansion joint"]],{rebuild:true})}
++    ${att?selRow("Orientation","wing.orient",[["U","U-wing (parallel to the roadway)"],["inline","In-line (in the plane of the abutment)"]],{rebuild:true})
++         :inpRow("Flare angle θ from the abutment face line","wing.theta","deg",{title:"90° = straight wing parallel to the roadway; 45° = flared (FHWA example). Plan drawing only: the earth pressure acts normal to the wing."})}
++    <div class="subhead">Elevation</div>
++    ${inpRow("Wing length L (from the "+(att?"abutment rear face":"joint")+")","wing.L","ft")}
++    ${inpRow(att?"Height at the junction H<sub>0</sub>":"Stem height at the high end H<sub>0</sub>","wing.H0","ft",{title:att?"Top of wing at the top of the backwall; the wing hangs from the junction.":"Above the top of the wing footing."})}
++    ${inpRow(att?"Height at the free end H<sub>L</sub>":"Stem height at the low end H<sub>L</sub>","wing.HL","ft")}
++    ${att?selRow("Height change along the wing","wing.taper",[["bottom","Top level, bottom tapered (bottom rises to the free end)"],["top","Top sloped (follows the embankment), bottom level"]]):""}
++    ${att?inpRow("Wing thickness t","wing.t","ft"):`${inpRow("Stem thickness at the top t<sub>top</sub>","wing.ttop","ft")}
++      ${inpRow("Back-face batter","wing.bat","in/ft",{title:"Increase of thickness per ft of height (1.0 in/ft = 12:1, FHWA example; 1.2 in/ft = 10:1). Front face vertical."})}
++      ${selRow("Design section","wing.secMode",[["auto",own==="MassDOT"?"MassDOT 3.3.2.2: low end + 75 % of the height difference":"One-third of L down from the high end (FHWA DS 7.4)"],["user","Entered: fraction of L from the high end"]],{rebuild:true})}
++      ${w.secMode==="user"?inpRow("&nbsp;&nbsp;Section at x/L from the high end","wing.secFr","–"):""}`}
++    <div class="subhead">Backfill and traffic</div>
++    ${inpRow("Backfill slope behind the wing β<sub>w</sub>","wing.beta","deg",{title:"Slope of the ground surface measured normal to the wing (0 = level). The abutment soil, theory and earth-pressure state (panel I-3) apply."})}
++    ${att?"":selRow("Earth pressure height for the stem","wing.ehPlane",[["face","Retained height at the stem face (as the abutment stem)"],["heel","Virtual back plane at the heel end (FHWA DS 7.6)"]])}
++    ${inpRow("Back face of wing to the edge of traffic","wing.dTr","ft",{title:"Live-load surcharge applies when traffic is within H/2 of the back face [3.11.6.4.1]; h_eq from Table 3.11.6.4.1-2 (0 ft / ≥ 1.0 ft columns)."})}
++    ${selRow("Barrier on the wing (Extreme Event II)","wing.barrier",tlO)}
++    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Total junction moment spread over the junction height"],["strip","Most loaded 1-ft horizontal strip"]]):""}
++    ${att?"":`<div class="subhead">Wing footing</div>
++      ${selRow("Foundation","wing.fdn",[["spread","Spread footing — stability checked with panel I-4 resistances"],["pile","Pile-supported — stability not checked here"]],{rebuild:true})}
++      ${inpRow("Toe length","wing.Ltoe","ft")}${inpRow("Heel length","wing.Lheel","ft")}${inpRow("Footing thickness","wing.tf","ft")}`}
++    <div class="subhead">Reinforcement (provided)</div>
++    ${selRow(att?"Horizontal bars at the junction (soil face)":"Horizontal bars (S&T, each face)","wing.hSize",bo)}${inpRow("&nbsp;&nbsp;spacing","wing.hSp","in")}
++    ${selRow(att?"Vertical bars (S&T, each face)":"Vertical bars (back face, flexure)","wing.vSize",bo)}${inpRow("&nbsp;&nbsp;spacing","wing.vSp","in")}
++    <div class="in-note">Cover, f′c, f<sub>y</sub> and crack-control γ<sub>e</sub> as the abutment (panels I-2, I-9). The wings are designed in Tab 9; owner wing rules are in Tab 1 §1.0a.</div>
++    `:`<div class="in-note">OFF — no wingwall design. A project saved before this module opens with the wingwalls off.</div>`}
++  `); }
++
+@@ -1974,0 +2081,243 @@ function computeLongitudinal(agg){
++/* ------------------------------------------------------------
++   WING (2026-10-20): wingwall module (input panel I-13, Tab 9). Computed only when S.wing.on; nothing here feeds the
++   abutment results (a project saved before the module opens with the wingwalls off and identical results).
++   Two types:
++   - "attached": wing cast monolithic with the abutment stem / backwall (U-wing parallel to the roadway, or in-line), no footing
++     below it (no soil bearing assumed), acting as a cantilever plate from the junction [11.6.1.4]. Horizontal bars at the junction
++     designed for the junction moment per foot of junction height (method in panel I-13: the total junction moment spread uniformly
++     over the junction height, or the most loaded 1-ft horizontal strip); tie bars developed on both sides of the junction [11.6.1.5.2].
++   - "indep": free-standing cantilever wingwall on its own spread footing behind an expansion joint [11.6.1.4] (flared at θ, or
++     straight θ = 90°). Stem designed per 1-ft vertical strip at a design section (FHWA LRFD Steel Girder Superstructure Design
++     Example, Design Step 7, wingwall Steps 7.4–7.9: section one-third down from the high end; MassDOT Part I 3.3.2.2: low end + 75 %
++     of the height difference); simplified per-foot stability of that section (sliding, eccentricity, bearing) with the abutment's
++     foundation resistances (panel I-4).
++   Loads: EH with the abutment's soil, theory and earth-pressure state (owner rules included), the wing's own backfill slope β_w;
++   LS for traffic parallel to the wall [Table 3.11.6.4.1-2] (in-line attached wing: Table 3.11.6.4.1-1, panel I-3 values); EE I per
++   11.6.5 (M–O increment + wall inertia; an attached wing of a single-span bridge follows the abutment, C3.10.9.1); EE II barrier
++   collision CT [Table A13.2-1; MassDOT Part I 3.3.2.4, Table 3.3.2-1].
++   ------------------------------------------------------------ */
++/* equivalent height of soil for traffic parallel to a wall [Table 3.11.6.4.1-2]: wall height H (ft), back face to the edge of
++   traffic d (ft); columns d = 0 and d ≥ 1.0 ft, linear in H [3.11.6.4.1] and (tool choice) linear in d between the two columns */
++function wingHeqWall(H,d){
++  const c0=[[5,5.0],[10,3.5],[20,2.0]], c1=[[5,2.0],[10,2.0],[20,2.0]];
++  const it=c=>{ if(H<=c[0][0]) return c[0][1]; if(H>=c[2][0]) return c[2][1]; for(let i=0;i<2;i++){ const [h1,v1]=c[i],[h2,v2]=c[i+1]; if(H<=h2) return v1+(v2-v1)*(H-h1)/(h2-h1); } return c[2][1]; };
++  const v0=it(c0), v1=it(c1), f=Math.min(1,Math.max(0,+d||0));
++  return {v0,v1,f,heq:v0+(v1-v0)*f};
++}
++/* active coefficient on the wing pressure surface with the abutment's theory: Rankine (resultant at β_w) or Coulomb on a vertical
++   surface with the wall friction δ of panel I-3 [3.11.5.3] */
++function wingKa(betaDeg){
++  const phi=deg2rad(+S.soil.phi), beta=deg2rad(+betaDeg||0);
++  if(!(beta<phi)) return {ka:NaN, iota:+betaDeg||0};
++  if(S.soil.method!=="coulomb"){ const cb=Math.cos(beta), r=Math.sqrt(Math.max(0,cb*cb-Math.pow(Math.cos(phi),2))); return {ka:cb*(cb-r)/(cb+r), iota:+betaDeg||0, th:"Rankine"}; }
++  const d=deg2rad(+S.soil.delta), rad=Math.sqrt((Math.sin(phi+d)*Math.sin(phi-beta))/(Math.cos(d)*Math.cos(beta)));
++  return {ka:Math.pow(Math.cos(phi),2)/(Math.cos(d)*Math.pow(1+rad,2)), iota:+S.soil.delta, th:"Coulomb"};
++}
++function computeWing(R,X){
++  const f2=x=>Number(x).toFixed(2);
++  const w=S.wing, g=S.geom, m=S.mat, fn=S.fnd, F=S.factors, gam=+S.soil.gamma, gc=+m.gc, own=abutOwner();
++  const att=w.type!=="indep", W={type:att?"attached":"indep", own, notes:[]};
++  const L=Math.max(0.5,+w.L||0), H0=Math.max(0.5,+w.H0||0), HL=Math.min(H0,Math.max(0,+w.HL||0));
++  if(+w.HL>+w.H0+1e-9) warn("Wingwall: the end height H_L exceeds the junction / high-end height H_0 — H_L = H_0 is used (panel I-13).","err");
++  W.L=L; W.H0=H0; W.HL=HL; W.betaW=+w.beta||0;
++  /* ---- earth pressure coefficient (abutment soil, theory and state; the wing's own height and foundation for the owner rule) ---- */
++  const KAw=wingKa(W.betaW), K0=1-Math.sin(deg2rad(+S.soil.phi));
++  if(!isFinite(KAw.ka)) warn("Wingwall: backfill slope β_w ≥ φ — the active coefficient is undefined (panel I-13).","err");
++  const kMode=["atrest","blend","massdot","ridot"].includes(S.soil.Kmode)?S.soil.Kmode:"active";
++  const onPRab=(fn.branch==="pile"||(fn.branch==="spread"&&fn.matl==="rock"));
++  const onPR=att? onPRab : (w.fdn==="pile"||fn.matl==="rock");
++  const Kof=eff=>{ if(eff==="atrest") return {eff, K:K0, iota:0, kh:K0};
++    if(eff==="blend"){ const Kh=0.5*(K0+KAw.ka*Math.cos(deg2rad(KAw.iota))), Kv=0.5*KAw.ka*Math.sin(deg2rad(KAw.iota)); return {eff, K:Math.hypot(Kh,Kv), iota:Math.atan2(Kv,Kh)*180/Math.PI, kh:Kh}; }
++    return {eff:"active", K:KAw.ka, iota:KAw.iota, kh:KAw.ka*Math.cos(deg2rad(KAw.iota))}; };
++  /* ---- geometry of the design section / junction ---- */
++  let Hs=H0, xs=0, tb=+w.t||1, ttop=+w.ttop||1, bat=Math.max(0,+w.bat||0), Delta=0, Hk=H0, Hheq=H0, secRule="";
++  if(att){ tb=ttop=Math.max(0.25,+w.t||0); }
++  else{
++    const fr=w.secMode==="user"? Math.min(1,Math.max(0,+w.secFr||0)) : (own==="MassDOT"? 0.25 : 1/3);
++    secRule=w.secMode==="user"?"user":(own==="MassDOT"?"massdot":"fhwa");
++    xs=fr*L; Hs=H0+(HL-H0)*fr; ttop=Math.max(0.25,+w.ttop||0); tb=ttop+bat*Hs/12;
++    Delta=(Math.max(0,+w.Lheel||0)+tb-ttop)*Math.tan(deg2rad(W.betaW));
++    Hk=(+w.tf||0)+Hs+(w.ehPlane==="heel"?Delta:0); Hheq=Hk;
++    W.fr=fr;
++  }
++  const kEff=kMode==="massdot"?(onPR?"atrest":(Hk<=5+1e-9?"blend":"active")) : kMode==="ridot"?(onPR?"atrest":"active") : kMode;
++  const ctCase=own==="CTDOT"&&att;   // CTDOT BRSDM CT11.1.1.4.2b: case 1 at-rest; case 2 active + CT on the parapet
++  const Kst=Kof(ctCase?"atrest":kEff), Kee2=Kof((ctCase||(own==="MassDOT"&&att))?"active":kEff), Kact=Kof("active");
++  Object.assign(W,{KAw,K0,kMode,onPR,kEff,ctCase,Kst,Kee2,Kact,Hs,xs,tb,ttop,bat,Delta,Hk,secRule});
++  /* ---- load factors (strength ×η, OWNB) ---- */
++  const OL=abutOwnLoad(), eta=OL.eta;
++  const gEHof=K=>(K.eff==="atrest"? +F.gpEHmaxR : +F.gpEHmax)*eta;
++  const gLS1=+F.llS1*eta, gEQll=Math.max(0,+S.seismic.gEQll||0), gEH1=(eqEHfixed()!==null)? eqEHfixed() : 1.0;
++  W.gEHst=gEHof(Kst); W.gLS1=gLS1; W.eta=eta;
++  /* ---- LS: Table 3.11.6.4.1-2 (parallel to traffic) or 3.11.6.4.1-1 (in-line wing, perpendicular) ---- */
++  const dTr=Math.max(0,+w.dTr||0), lsT2=!(att&&w.orient==="inline");
++  let heq=0, hq=null; const lsOn=dTr<=Hheq/2+1e-9;   // 3.11.6.4.1: traffic within H/2 of the back face
++  if(lsT2){ hq=wingHeqWall(Hheq,dTr); heq=hq.heq; } else heq=interpHeq0(Hheq);
++  const lsMin=OL.lsMin; if(lsOn&&lsMin>0) heq=Math.max(lsMin,heq);
++  if(!lsOn) heq=0;
++  Object.assign(W,{dTr,lsT2,heq,hq,lsOn,Hheq,lsMin});
++  /* ---- EE I (11.6.5): k_h as the abutment (A_s, site class, ratio); attached wing of a single-span bridge follows the abutment [C3.10.9.1] ---- */
++  const single=g.HsupMode==="single", eqOn=!!S.seismic.on&&!(att&&single);
++  let EQ=null;
++  if(eqOn){ const sc=String(S.seismic.siteClass||""), kh0=(["A","B","B/C"].includes(sc)?1.2:1.0)*(+S.seismic.As||0), kh=(+S.seismic.khR||0)*kh0, kv=+S.seismic.kv||0;
++    const th=Math.atan(kh/(1-kv)), phiR=deg2rad(+S.soil.phi), bR=deg2rad(W.betaW), dMO=S.soil.method==="coulomb"?deg2rad(KAw.iota):0;
++    let KAE=NaN; if(phiR-th-bR>1e-6){ const rad=Math.sqrt((Math.sin(phiR+dMO)*Math.sin(phiR-th-bR))/(Math.cos(dMO+th)*Math.cos(bR))); KAE=Math.pow(Math.cos(phiR-th),2)/(Math.cos(th)*Math.cos(dMO+th)*Math.pow(1+rad,2)); }
++    else warn("Wingwall: M–O theory invalid (φ − θ_MO − β_w ≤ 0) — the wing EE I increment is not computed.","err");
++    const dKh=isFinite(KAE)? Math.max(0,KAE*Math.cos(dMO)*(1-kv)-Kact.kh) : 0;
++    EQ={kh0,kh,kv,thd:th*180/Math.PI,dMO:dMO*180/Math.PI,KAE,dKh,hEQr:+S.seismic.hEQr||0.5,sc};
++    if(!att&&single) W.notes.push("Single-span bridge: C3.10.9.1 leaves wingwalls of single-span structures to the engineer's judgment; this free-standing wing is treated as a retaining wall and carries the 11.6.5 increment.");
++  }
++  W.eqOn=eqOn; W.EQ=EQ; W.single=single;
++  /* ---- CT: barrier on the wing (EE II) ---- */
++  let CT=null;
++  if(w.barrier&&w.barrier!=="none"){ const md=own==="MassDOT"&&WING_TL_MD[w.barrier], src=md?WING_TL_MD[w.barrier]:WING_TL[w.barrier];
++    if(src) CT={tl:w.barrier, F:src.F, Lt:src.L, He:src.He, src:md?"MassDOT":"AASHTO"};
++    if(own==="MassDOT"&&!md) W.notes.push("MassDOT Table 3.3.2-1 lists TL-2/3, TL-4 and TL-5 only; "+w.barrier+" uses AASHTO Table A13.2-1.");
++  }
++  W.CT=CT;
++  /* ===================================== attached wing: cantilever plate from the junction ===================================== */
++  if(att){
++    const a=H0, b=(HL-H0)/L;                       // h(x) = a + b·x, x from the junction face
++    const I1=a*L+b*L*L/2, J1=a*L*L/2+b*L*L*L/3, I2=a*a*L+a*b*L*L+b*b*L*L*L/3, J2=a*a*L*L/2+2*a*b*L*L*L/3+b*b*Math.pow(L,4)/4;
++    const bT=w.taper==="top"? b : 0, dB=w.taper==="top"? 0 : (H0-HL)/L;   // top slope, bottom rise per ft
++    const wI=EQ? EQ.kh*gc*tb : 0, dP=EQ? EQ.dKh*gam/2 : 0;               // inertia (ksf), M–O increment coefficient (h(x)²·dP per ft of length)
++    const tot=K=>({FEH:K.kh*gam*I2/2, MEH:K.kh*gam*J2/2, FLS:K.kh*gam*heq*I1, MLS:K.kh*gam*heq*J1});
++    const Tst=tot(Kst), Tee2=tot(Kee2);
++    const TEQ={F:dP*I2+wI*I1, M:dP*J2+wI*J1, FdP:dP*I2, MdP:dP*J2, FI:wI*I1, MI:wI*J1};
++    const xct=CT? Math.max(L/2, L-CT.Lt/2) : 0, MCT=CT? CT.F*xct : 0;
++    Object.assign(W,{a,b,I1,J1,I2,J2,bT,dB,wI,dP,Tst,Tee2,TEQ,xct,MCT,Hj:H0});
++    // strip at elevation y (above the lowest point of the wing bottom, at the junction): length Lm(y), per-ft moment and shear
++    const Lm=y=>{ let l=L; if(bT<0) l=Math.min(l,(a-y)/(-bT)); if(dB>0) l=Math.min(l,y/dB); return Math.max(0,l); };
++    const strip=(y,K)=>{ const l=Lm(y), k=K.kh*gam;
++      return {y, l, mEH:k*((a-y)*l*l/2+bT*l*l*l/3), vEH:k*((a-y)*l+bT*l*l/2), mLS:k*heq*l*l/2, vLS:k*heq*l}; };
++    // M–O increment on a strip: the slice resultant dP·h(x)² spread uniformly over the slice height h(x) → dP·h(x) per ft of height
++    const stripEQ=y=>{ const l=Lm(y); return {m:dP*(a*l*l/2+b*l*l*l/3)+wI*l*l/2, v:dP*(a*l+b*l*l/2)+wI*l}; };
++    let sg=null;
++    for(let i=0;i<=400;i++){ const y=a*i/400, s=strip(y,Kst), mu=W.gEHst*s.mEH+gLS1*s.mLS; if(!sg||mu>sg.mu+1e-12) sg=Object.assign(s,{mu}); }
++    W.strip=sg; W.stripEQ=stripEQ(sg.y); W.stripEE2=strip(sg.y,Kee2);
++    // per-ft demands at the junction for each limit state
++    const avg=w.jMethod!=="strip"; W.avg=avg;
++    const per=(M,Fv,ms,vs)=>avg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs};
++    const sEH=per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS=per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS);
++    const e2=W.stripEE2, eEH=per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS=per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS);
++    const sEQ=per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
++    const LS={};
++    LS["Strength I"]={Mu:W.gEHst*sEH.m+gLS1*sLS.m, Vu:W.gEHst*sEH.v+gLS1*sLS.v, phi:"str", lbl:`${f2(W.gEHst)}·EH + ${f2(gLS1)}·LS`};
++    LS["Service I"]={Mu:sEH.m+sLS.m, Vu:sEH.v+sLS.v, svc:true, lbl:"1.00·EH + 1.00·LS"};
++    if(eqOn) LS["Extreme Event I"]={Mu:gEH1*sEH.m+sEQ.m+gEQll*sLS.m, Vu:gEH1*sEH.v+sEQ.v+gEQll*sLS.v, phi:"ee", lbl:`${f2(gEH1)}·EH + 1.00·EQ + ${f2(gEQll)}·LS`};
++    if(CT){ const gE2=(own==="MassDOT")? +F.gpEHmax : gEHof(Kee2); W.gEH2=gE2;
++      LS["Extreme Event II"]={Mu:gE2*eEH.m+0.5*eLS.m+sCT.m, Vu:gE2*eEH.v+0.5*eLS.v+sCT.v, phi:"ee", lbl:`${f2(gE2)}·EH${Kee2.eff!==Kst.eff?" (K = "+(Kee2.eff==="atrest"?"K₀":"K_a")+")":""} + 0.50·LS + 1.00·CT`}; }
++    W.per={sEH,sLS,eEH,eLS,sEQ,sCT}; W.LS=LS;
++    LS["Strength I"].tm=[[W.gEHst,sEH.m,sEH.v,"EH"],[gLS1,sLS.m,sLS.v,"LS"]]; LS["Service I"].tm=[[1,sEH.m,sEH.v,"EH"],[1,sLS.m,sLS.v,"LS"]];
++    if(LS["Extreme Event I"]) LS["Extreme Event I"].tm=[[gEH1,sEH.m,sEH.v,"EH"],[1,sEQ.m,sEQ.v,"EQ"],[gEQll,sLS.m,sLS.v,"LS"]];
++    if(LS["Extreme Event II"]) LS["Extreme Event II"].tm=[[W.gEH2,eEH.m,eEH.v,"EH"],[0.5,eLS.m,eLS.v,"LS"],[1,sCT.m,sCT.v,"CT"]];
++    // the other method, for information
++    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};
++    const gov=LS["Strength I"];
++    const c=X.sectionCheck({name:"Wing junction", h:tb*12, cover:+m.coverT, bar:String(w.hSize), sp:+w.hSp, Mu:gov.Mu, Vu:gov.Vu, Ms:LS["Service I"].Mu,
++      lbl:gov.lbl+" (Strength I)", bST:H0*12, hST:tb*12, betaMode:tb*12<16?"simple":"general"});
++    W.sec=c;
++    // vertical bars: shrinkage and temperature, each face [5.10.6]
++    const vb=BARS[String(w.vSize)]||BARS["5"], AsV=vb.Ab*12/(+w.vSp||12), sMaxTS=tb*12>18? 12 : Math.min(3*tb*12,18);
++    W.ts={bar:String(w.vSize), sp:+w.vSp, As:AsV, req:c.AsST, sMax:sMaxTS, dc:Math.max(c.AsST/AsV, (+w.vSp)/sMaxTS), dir:"vertical"};
++    // junction tie bars into the abutment [11.6.1.5.2]: developed on each side. U-wing: the bars cross the stem / backwall thickness;
++    // in-line wing: the bars continue along the abutment wall
++    const hb=BARS[String(w.hSize)], db=hb.db, Ab=hb.Ab, fc4=Math.pow(Math.min(+m.fc,15),0.25);
++    const tTop=g.hstem+g.hbw, yRoot=tTop-H0;   // wing top at the top of the backwall; elevations above the top of footing
++    const tMin=w.orient==="inline"? Infinity : (H0>g.hbw+1e-9? Math.min(g.tbw, g.tst) : g.tbw);
++    const lAv=w.orient==="inline"? (g.Lab/2)*12 : tMin*12-(+m.coverT);
++    const nBar=+w.hSize, Dbend=(nBar>=9?8:6)*db, Rh=Dbend/2+db/2, nu=Math.min(0.65,Math.max(0.45,0.85-(+m.fc)/20)), Fh=db*Rh*nu*(+m.fc);
++    const ldbH=0.17*db*Math.pow(Math.max(0,+m.fy-Fh/Ab)/(1.97*fc4),2), ldH=ldbH*c.lamRc, ldh=Math.max(ldH+Rh+db/2, 8*db, 6);
++    const straightOK=c.ld<=lAv+1e-9, lReq=straightOK? c.ld : ldh;
++    W.dev={db, lAv, tMin, ld:c.ld, ldh, ldbH, Fh, Rh, nu, Dbend, straightOK, lReq, dc:lAv>0? lReq/lAv : 99, inline:w.orient==="inline", yRoot};
++    if(yRoot<-1e-9) warn("Wingwall: the junction height H₀ exceeds the abutment height h_stem + h_bw — the wing would extend below the top of footing (panel I-13).");
++    // loads delivered to the abutment end region (Strength I, total): reported for the engineer (not added to the abutment design)
++    W.toAbut={V:W.gEHst*Tst.FEH+gLS1*Tst.FLS, M:W.gEHst*Tst.MEH+gLS1*Tst.MLS, Wt:gc*tb*I1, Mip:gc*tb*J1};
++    // resultant elevation (EH + LS, Strength I) → torsion about the junction mid-height (reported)
++    { let Fy=0,Fs=0; const n=400; for(let i=0;i<n;i++){ const x=(i+0.5)*L/n, h=a+b*x, yb=dB*x, f1=W.gEHst*Kst.kh*gam*h*h/2, f2=gLS1*Kst.kh*gam*heq*h; Fs+=(f1+f2)*L/n; Fy+=(f1*(yb+h/3)+f2*(yb+h/2))*L/n; }
++      W.toAbut.yRes=Fs>0? Fy/Fs : 0; W.toAbut.T=W.toAbut.V*(W.toAbut.yRes-H0/2); }
++    if(own==="MassDOT"&&w.orient==="U"&&(L<2-1e-9||L>10+1e-9)) W.notes.push("MassDOT Part I 3.10.9: integral U-wings 2 to 10 ft long (longer: integral + independent wing).");
++  }
++  /* ===================================== independent cantilever wing on its own footing ===================================== */
++  else{
++    const k=Kst.kh*gam, HE=w.ehPlane==="heel"? Hs+Delta : Hs;
++    const MEH=k*HE*HE*HE/6, VEH=k*HE*HE/2, MLS=k*heq*HE*HE/2, VLS=k*heq*HE;
++    const Wst=gc*(ttop+tb)/2*Hs, yst=Hs*(tb+2*ttop)/(3*(tb+ttop));   // stem weight per ft and centroid height above the top of footing
++    let MEQ=0,VEQ=0,eqT=null;
++    if(EQ){ const dPf=0.5*EQ.dKh*gam*HE*HE; eqT={dP:dPf, zP:EQ.hEQr*HE, Wi:EQ.kh*Wst, yst}; MEQ=dPf*EQ.hEQr*HE+EQ.kh*Wst*yst; VEQ=dPf+EQ.kh*Wst; }
++    let ctS=null; if(CT){ const Ld=CT.src==="MassDOT"? L : Math.min(L, CT.Lt+2*Hs), f=CT.F/Ld, z=Hs+CT.He/12; ctS={Ld,f,z,M:f*z,V:f}; }
++    const k2=Kee2.kh*gam, ME2=k2*HE*HE*HE/6, VE2=k2*HE*HE/2, ML2=k2*heq*HE*HE/2, VL2=k2*heq*HE;
++    Object.assign(W,{HE,MEH,VEH,MLS,VLS,Wst,yst,MEQ,VEQ,eqT,ctS,ME2,VE2,ML2,VL2});
++    const LS={};
++    LS["Strength I"]={Mu:W.gEHst*MEH+gLS1*MLS, Vu:W.gEHst*VEH+gLS1*VLS, phi:"str", lbl:`${f2(W.gEHst)}·EH + ${f2(gLS1)}·LS`};
++    LS["Service I"]={Mu:MEH+MLS, Vu:VEH+VLS, svc:true, lbl:"1.00·EH + 1.00·LS"};
++    if(eqOn) LS["Extreme Event I"]={Mu:gEH1*MEH+MEQ+gEQll*MLS, Vu:gEH1*VEH+VEQ+gEQll*VLS, phi:"ee", lbl:`${f2(gEH1)}·EH + 1.00·EQ + ${f2(gEQll)}·LS`};
++    if(CT){ const gE2=own==="MassDOT"? 1.0 : gEHof(Kee2); W.gEH2=gE2;
++      LS["Extreme Event II"]={Mu:gE2*ME2+0.5*ML2+ctS.M, Vu:gE2*VE2+0.5*VL2+ctS.V, phi:"ee", lbl:`${f2(gE2)}·EH + 0.50·LS + 1.00·CT`}; }
++    W.LS=LS;
++    LS["Strength I"].tm=[[W.gEHst,MEH,VEH,"EH"],[gLS1,MLS,VLS,"LS"]]; LS["Service I"].tm=[[1,MEH,VEH,"EH"],[1,MLS,VLS,"LS"]];
++    if(LS["Extreme Event I"]) LS["Extreme Event I"].tm=[[gEH1,MEH,VEH,"EH"],[1,MEQ,VEQ,"EQ"],[gEQll,MLS,VLS,"LS"]];
++    if(LS["Extreme Event II"]) LS["Extreme Event II"].tm=[[W.gEH2,ME2,VE2,"EH"],[0.5,ML2,VL2,"LS"],[1,ctS.M,ctS.V,"CT"]];
++    const gov=LS["Strength I"];
++    const c=X.sectionCheck({name:"Wingwall stem", h:tb*12, cover:+m.coverT, bar:String(w.vSize), sp:+w.vSp, Mu:gov.Mu, Vu:gov.Vu, Ms:LS["Service I"].Mu,
++      lbl:gov.lbl+" (Strength I)", bST:Math.min(L,Hs)*12, hST:ttop*12, betaMode:tb*12<16?"simple":"general"});
++    W.sec=c;
++    const hb2=BARS[String(w.hSize)]||BARS["5"], AsH=hb2.Ab*12/(+w.hSp||12), sMaxTS=ttop*12>18? 12 : Math.min(3*ttop*12,18);
++    W.ts={bar:String(w.hSize), sp:+w.hSp, As:AsH, req:c.AsST, sMax:sMaxTS, dc:Math.max(c.AsST/AsH, (+w.hSp)/sMaxTS), dir:"horizontal"};
++    /* ---- simplified per-foot stability of the design section (spread footing; panel I-4 resistances) ---- */
++    if(w.fdn!=="pile"){
++      const tf=Math.max(0.5,+w.tf||0), Lt=Math.max(0,+w.Ltoe||0), Lh=Math.max(0,+w.Lheel||0), B=Lt+tb+Lh, Hv=tf+Hs+Delta;
++      const xBk=Lt+ttop, run=B-xBk;
++      const G={   // per ft: V (+down), x from the toe; H (+ toward the toe), z above the base
++        DCst:{cls:"DC", V:gc*ttop*Hs, x:Lt+ttop/2, y:tf+Hs/2, d:"stem (rectangle t_top·H_s)"},
++        DCbt:{cls:"DC", V:gc*(tb-ttop)*Hs/2, x:Lt+ttop+(tb-ttop)/3, y:tf+Hs/3, d:"stem (back batter)"},
++        DCf:{cls:"DC", V:gc*B*tf, x:B/2, y:tf/2, d:"footing B·t_f"},
++        EVbt:{cls:"EV", V:gam*(tb-ttop)*Hs/2, x:Lt+ttop+2*(tb-ttop)/3, y:tf+2*Hs/3, d:"soil over the batter"},
++        EVh:{cls:"EV", V:gam*Lh*Hs, x:Lt+tb+Lh/2, y:tf+Hs/2, d:"soil over the heel"},
++        EVw:{cls:"EV", V:gam*run*Delta/2, x:xBk+2*run/3, y:tf+Hs+Delta/3, d:"slope wedge above the stem top"}};
++      const Kv=Kst, Pa=0.5*Kv.K*gam*Hv*Hv, ci=Math.cos(deg2rad(Kv.iota)), si=Math.sin(deg2rad(Kv.iota));
++      G.EHh={cls:"EH", H:Pa*ci, z:Hv/3, d:"EH on the virtual back plane, horizontal"}; G.EHv={cls:"EH", V:Pa*si, x:B, d:"EH vertical component"};
++      G.LSh={cls:"LS", H:Kv.K*gam*heq*Hv*ci, z:Hv/2, d:"LS horizontal"}; G.LSv={cls:"LSv", V:gam*heq*Lh, x:Lt+tb+Lh/2, d:"LS vertical over the heel"};
++      if(EQ){ const Wall=G.DCst.V+G.DCbt.V+G.DCf.V, Ws=G.EVbt.V+G.EVh.V+G.EVw.V;
++        const zw=(G.DCst.V*G.DCst.y+G.DCbt.V*G.DCbt.y+G.DCf.V*G.DCf.y)/Wall, zs=Ws>0?(G.EVbt.V*G.EVbt.y+G.EVh.V*G.EVh.y+G.EVw.V*G.EVw.y)/Ws:tf;
++        G.EQd={cls:"EQ", H:0.5*EQ.dKh*gam*Hv*Hv, z:EQ.hEQr*Hv, d:"M–O increment ΔP_AE"}; G.EQw={cls:"EQ", H:EQ.kh*Wall, z:zw, d:"wall inertia k_h·W"}; G.EQs={cls:"EQ", H:EQ.kh*Ws, z:zs, d:"soil inertia k_h·W_s"}; }
++      if(CT){ const Ld=CT.src==="MassDOT"? L : Math.min(L, CT.Lt+2*(Hs+tf)); G.CT={cls:"CT", H:CT.F/Ld, z:tf+Hs+CT.He/12, d:"collision CT over "+fmt(Ld,2)+" ft", Ld}; }
++      const Kv2=Kee2, Pa2=0.5*Kv2.K*gam*Hv*Hv, c2=Math.cos(deg2rad(Kv2.iota)), s2=Math.sin(deg2rad(Kv2.iota));
++      const EH2={h:Pa2*c2, v:Pa2*s2, lh:Kv2.K*gam*heq*Hv*c2};
++      const gp={DC:[+F.gpDCmin/eta,+F.gpDCmax*eta], EV:[+F.gpEVmin/eta,+F.gpEVmax*eta], EH:[+F.gpEHmin/eta,gEHof(Kst)]};
++      const res=(ls,f,ehAlt)=>{ let V=0,Mv=0,Hh=0,Mh=0;
++        for(const [k,q] of Object.entries(G)){ let gg=f[q.cls]||0; if(!gg) continue;
++          let Vq=q.V||0, Hq=q.H||0; if(ehAlt&&k==="EHh") Hq=EH2.h; if(ehAlt&&k==="EHv") Vq=EH2.v; if(ehAlt&&k==="LSh") Hq=EH2.lh;
++          V+=gg*Vq; Mv+=gg*Vq*(q.x||0); Hh+=gg*Hq; Mh+=gg*Hq*(q.z||0); }
++        const xb=V>0?(Mv-Mh)/V:NaN, e=B/2-xb; return {ls,f,V,Mv,Hh,Mh,xb,e}; };
++      const combos=[];
++      for(const dc of [0,1]) for(const ev of [0,1]) for(const eh of [0,1]) for(const lv of [0,1])
++        combos.push(res("Strength I",{DC:gp.DC[dc],EV:gp.EV[ev],EH:gp.EH[eh],LS:gLS1,LSv:lv?gLS1:0},false));
++      if(eqOn) for(const lv of [0,1]) combos.push(res("Extreme Event I",{DC:1,EV:1,EH:gEH1,EQ:1,LS:gEQll,LSv:lv?gEQll:0},false));
++      if(CT){ const ehs=own==="MassDOT"? [0] : [gp.EH[0],gEHof(Kee2)];
++        for(const dc of [0,1]) for(const ev of [0,1]) for(const eh of ehs) for(const lv of [0,1])
++          combos.push(res("Extreme Event II",{DC:gp.DC[dc],EV:gp.EV[ev],EH:eh,CT:1,LS:0.5,LSv:lv?0.5:0},true)); }
++      const rock=fn.matl==="rock", qn=+fn.qn||0;
++      const resist=c=>{ const ee=c.ls!=="Strength I", phiT=ee? +S.seismic.phiTauEQ : +fn.phiTau, phiB=ee? +S.seismic.phiBEQ : +fn.phiB;
++        const RR=phiT*(rock? (+fn.muRock*c.V+(+fn.caRock||0)*B) : c.V*Math.tan(deg2rad(+fn.deltaB)));
++        const gq=c.ls==="Extreme Event I"&&(c.f.LS>0)? Math.min(1,gEQll) : 0;
++        const eLim=c.ls==="Strength I"? B*(rock?(+fn.eFracRock||0.45):(+fn.eFracSoil||1/3)) : B*(1/3+(0.4-1/3)*gq);
++        const ea=Math.abs(c.e), q=rock? (ea<=B/6? c.V/B*(1+6*ea/B) : 2*c.V/(3*Math.max(1e-9,B/2-ea))) : c.V/Math.max(1e-9,B-2*ea);
++        return Object.assign(c,{phiT,phiB,RR,eLim,q,dcS:RR>0?c.Hh/RR:99, dcE:ea/eLim, dcB:q/(phiB*qn)}); };
++      combos.forEach(resist);
++      const worst=k=>combos.reduce((b,c)=>(isFinite(c[k])&&(!b||c[k]>b[k]))?c:b,null);
++      const sl=worst("dcS"), ec=worst("dcE"), br=worst("dcB");
++      W.stab={B,tf,Lt,Lh,Hv,xBk,run,G,Pa,ci,si,EH2,gp,combos,sl,ec,br,rock,qn};
++      if(fn.qnMode==="soil") W.notes.push("Bearing: the wing uses the q_n entered in panel I-4 (the computed q_n option applies to the abutment footing only).");
++    }
++  }
++  /* ---- extreme-event D/C (φ = 1.0, 1.3.2.1) against the nominal resistances of the same section ---- */
++  { const c=W.sec, Mn=c.phiMn/c.phiF, Vn=c.Vc; W.ee=[];
++    for(const [ls,q] of Object.entries(W.LS)) if(q.phi==="ee") W.ee.push({ls, Mu:q.Mu, Vu:q.Vu, Mn, Vn, dcM:q.Mu/Mn, dcV:q.Vu/Vn, lbl:q.lbl});
++    W.dcFlex=Math.max(c.dcFlex,...W.ee.map(x=>x.dcM)); W.dcShear=Math.max(c.dcShear,...W.ee.map(x=>x.dcV));
++    const gF=W.ee.reduce((b,x)=>x.dcM>(b?b.dcM:c.dcFlex)?x:b,null), gV=W.ee.reduce((b,x)=>x.dcV>(b?b.dcV:c.dcShear)?x:b,null);
++    W.govFlex=gF?gF.ls:"Strength I"; W.govShear=gV?gV.ls:"Strength I"; }
++  W.notes.forEach(t=>warn("Wingwall: "+t));
++  return W;
++}
++
+@@ -3394,0 +3744 @@ function computeAll(){
++    if(fpS.wing&&!fpS.wing.on) delete fpS.wing;                                   // WING: wingwalls off leave the Input ID unchanged
+@@ -3415,0 +3766,3 @@ function computeAll(){
++  /* ===== C-11d Wingwalls (WING, panel I-13; Tab 9) — only when designed; no abutment result depends on them ===== */
++  R.wing=(S.wing&&S.wing.on)? computeWing(R,{sectionCheck}) : null;
++
+@@ -3453,0 +3807,12 @@ function computeAll(){
++  if(R.wing){ const W=R.wing, c=W.sec, ws=W.type==="attached";   // WING: wingwall checks (Tab 9)
++    const nm=ws?"Wing junction":"Wingwall stem", gl=ls=>ls+": "+((W.LS[ls]||{}).lbl||"");
++    addD(ws?"wJflex":"wSflex",nm+" flexure [5.6.3]",W.dcFlex,"tab-wing",gl(W.govFlex));
++    addD(ws?"wJshear":"wSshear",nm+" shear [5.7.3]",W.dcShear,"tab-wing",gl(W.govShear));
++    addD(ws?"wJmin":"wSmin",nm+" — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,"tab-wing","φMn ≥ min(Mcr, 1.33Mu)");
++    addD(ws?"wJcrack":"wScrack",nm+" — crack control [5.6.7]",c.sMax>0? c.sp/c.sMax : (c.fss>0?99:0),"tab-wing","s ≤ s_max");
++    addD("wTS","Wing "+W.ts.dir+" bars — S&T [5.10.6]",W.ts.dc,"tab-wing","#"+W.ts.bar+" @ "+fmt(W.ts.sp,1)+" in each face");
++    if(ws) addD("wDev","Wing junction bars into the abutment [11.6.1.5.2]",W.dev.dc,"tab-wing",(W.dev.straightOK?"straight ℓd = ":"hooked ℓdh = ")+fmt(W.dev.lReq,1)+" in vs "+fmt(W.dev.lAv,1)+" in");
++    if(W.stab){ addD("wSlide","Wing sliding (simplified, per ft) [10.6.3.4]",W.stab.sl.dcS,"tab-wing",W.stab.sl.ls);
++      addD("wEcc","Wing eccentricity (simplified, per ft) [11.6.3.3]",W.stab.ec.dcE,"tab-wing",W.stab.ec.ls);
++      addD("wBrg","Wing bearing (simplified, per ft) [10.6.3.1]",W.stab.br.dcB,"tab-wing",W.stab.br.ls); }
++  }
+@@ -3493 +3858 @@ const ABUT_TABNAME={"tab-loads":"Geometry & Loads","tab-comb":"Load Combinations
+-  "tab-struct":"Structural Design","tab-vm":"V & M Diagrams","tab-3d":"3D View","tab-tables":"Detailed Tables"};
++  "tab-struct":"Structural Design","tab-vm":"V & M Diagrams","tab-3d":"3D View","tab-tables":"Detailed Tables","tab-wing":"Wingwalls"};
+@@ -3505,0 +3871,226 @@ function renderMathIn(el){
++/* ================= TAB 9 — WINGWALLS (WING, 2026-10-20) =================
++   Every value is from computeWing() (R.wing); worked symbolic → substituted → result. */
++function renderTabWing(R){
++  const el=document.getElementById("tab-wing"); if(!el) return;
++  const W=R.wing, w=S.wing;
++  if(!w||!w.on||!W){ el.innerHTML=panel("o-wing-basis","9.0","Wingwalls",`<div class="note-box">The wingwalls are off (input panel I-13, tab “Wingwalls”). Turn them on to design an attached (cantilevered from the abutment) or an independent (own footing) wingwall. The abutment results do not depend on this module.</div>`); return; }
++  const att=W.type==="attached", m=S.mat, gam=+S.soil.gamma, gc=+m.gc, own=W.own, t=fmtT;
++  const Kn=K=>K.eff==="atrest"?"K_0":(K.eff==="blend"?"\\tfrac12(K_0+K_a)":"K_a");
++  let h="";
++  /* ---- 9.0 basis, elevation and plan ---- */
++  h+=panel("o-wing-basis","9.0","Wingwall Basis & Geometry",`
++    <div class="note-box"><b>${att?"Attached wing":"Independent wing"}</b> — ${att?
++      `${w.orient==="inline"?"in-line (in the plane of the abutment)":"U-wing (parallel to the roadway)"}, cast monolithic with the stem / backwall and cantilevered from the junction; no footing and no soil bearing below the wing [11.6.1.4]. The wing acts as a cantilever plate fixed along the junction. Horizontal bars at the junction are designed per foot of junction height for ${W.avg?"<b>the total junction moment spread uniformly over the junction height H<sub>0</sub></b> (moment and shear by equilibrium of the whole wing; the plate is taken to redistribute the moment along the junction — the basis of MassDOT Part I 3.10.9 for integral U-wings)":"<b>the most loaded 1-ft horizontal strip</b> (each horizontal strip a cantilever from the junction, no vertical redistribution)"}; the other method is shown for information. The tie bars are developed on both sides of the junction [11.6.1.5.2]. Vertical bars: shrinkage and temperature [5.10.6].`
++      :`free-standing cantilever wall on its own spread footing behind an expansion joint [11.6.1.4], flared at θ = ${fmt(+w.theta,1)}° from the abutment face line. The stem is designed per 1-ft vertical strip at the design section (method of the FHWA LRFD Steel Girder Superstructure Design Example, Design Step 7, wingwall Steps 7.4–7.9), with AASHTO LRFD 10th Ed. Section 5 resistances. ${w.fdn==="pile"?"Pile-supported footing: stability not checked here.":"Simplified stability of the same 1-ft section on a spread footing (sliding, eccentricity, bearing) with the abutment's foundation resistances (panel I-4) — a per-foot check of the design section, not a 3-D analysis of the wing footing."}`}
++      Earth pressure from the abutment backfill (panel I-3: γ = ${fmt(gam,3)} kcf, φ = ${fmt(+S.soil.phi,1)}°, ${S.soil.method==="coulomb"?"Coulomb, δ = "+fmt(+S.soil.delta,1)+"°":"Rankine"}, earth-pressure state of panel I-3 with the owner rule) and the wing's own backfill slope β<sub>w</sub> = ${fmt(W.betaW,1)}°. Water table, ES surcharge and wind on the wing are not applied (free-draining backfill; FHWA DS 7.6: wind relieves the final state). Calculation: AASHTO LRFD 10th Ed. (2024)${own!=="AASHTO"?"; owner rules of "+esc(ABUT_OWN.owners[own].short)+" applied as listed in "+'<span class="xlink" data-jump="tab-loads|o-owner">Tab 1 §1.0a</span>':""}.</div>
++    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${svgWingElev(R)}${svgWingPlan(R)}</div>`);
++  /* ---- 9.1 coefficients and loads ---- */
++  const KA=W.KAw, phi=+S.soil.phi;
++  const kaTex=S.soil.method==="coulomb"
++    ? [`K_a = \\dfrac{\\cos^2\\varphi}{\\cos\\delta\\left[1+\\sqrt{\\dfrac{\\sin(\\varphi+\\delta)\\sin(\\varphi-\\beta_w)}{\\cos\\delta\\cos\\beta_w}}\\right]^2} = \\dfrac{\\cos^2 ${t(phi,1)}°}{\\cos ${t(+S.soil.delta,1)}°\\,[1+\\sqrt{\\sin ${t(phi+(+S.soil.delta),1)}°\\,\\sin ${t(phi-W.betaW,1)}°/(\\cos ${t(+S.soil.delta,1)}°\\cos ${t(W.betaW,1)}°)}]^2} = ${t(KA.ka,4)}`]
++    : [`K_a = \\cos\\beta_w\\,\\dfrac{\\cos\\beta_w-\\sqrt{\\cos^2\\beta_w-\\cos^2\\varphi}}{\\cos\\beta_w+\\sqrt{\\cos^2\\beta_w-\\cos^2\\varphi}} = \\cos ${t(W.betaW,1)}°\\,\\dfrac{${t(Math.cos(deg2rad(W.betaW)),4)}-\\sqrt{${t(Math.cos(deg2rad(W.betaW))**2,4)}-${t(Math.cos(deg2rad(phi))**2,4)}}}{${t(Math.cos(deg2rad(W.betaW)),4)}+\\sqrt{${t(Math.cos(deg2rad(W.betaW))**2,4)}-${t(Math.cos(deg2rad(phi))**2,4)}}} = ${t(KA.ka,4)}\\quad(\\text{resultant at }\\iota=\\beta_w)`];
++  const kLines=K=>K.eff==="atrest"? `k_h = K_0 = 1-\\sin\\varphi = 1-\\sin ${t(phi,1)}° = ${t(K.kh,4)}`
++    : K.eff==="blend"? `k_h = \\tfrac12(K_0 + K_a\\cos\\iota) = \\tfrac12(${t(W.K0,4)} + ${t(KA.ka,4)}\\cos ${t(KA.iota,1)}°) = ${t(K.kh,4)}`
++    : `k_h = K_a\\cos\\iota = ${t(KA.ka,4)}\\cos ${t(KA.iota,1)}° = ${t(K.kh,4)}`;
++  const ruleTxt={active:"active (panel I-3)",atrest:"at-rest K<sub>0</sub> (panel I-3)",blend:"0.5(K<sub>0</sub> + K<sub>a</sub>) (panel I-3)",
++    massdot:`MassDOT 3.1.6 rule: ${W.onPR?"wall on rock or piles → K<sub>0</sub>":(W.Hk<=5?"on soil, H ≤ 5 ft → 0.5(K<sub>0</sub> + K<sub>a</sub>)":"on soil, H > 5 ft → K<sub>a</sub>")} (H = ${fmt(W.Hk,2)} ft)`,
++    ridot:`RIDOT rule: ${W.onPR?"on piles / rock → K<sub>0</sub>":"→ K<sub>a</sub>"}`}[W.kMode]||"";
++  let ls="";
++  if(!W.lsOn) ls=eqB("Live-load surcharge LS","AASHTO 3.11.6.4.1",[`d = ${t(W.dTr)}\\ \\text{ft} > H/2 = ${t(W.Hheq)}/2 = ${t(W.Hheq/2)}\\ \\text{ft} \\Rightarrow h_{eq} = 0`],"Traffic is farther than half the wall height from the back face: no live-load surcharge.");
++  else if(W.lsT2) ls=eqB("Live-load surcharge LS — traffic parallel to the wall","AASHTO 3.11.6.4.1, Table 3.11.6.4.1-2",[
++    `H = ${att?"H_0":"t_f + H_s"+(w.ehPlane==="heel"?" + \\Delta":"")} = ${t(W.Hheq)}\\ \\text{ft}\\,, \\quad d = ${t(W.dTr)}\\ \\text{ft} \\le H/2`,
++    `h_{eq}(d{=}0) = ${t(W.hq.v0)}\\ \\text{ft}\\,, \\quad h_{eq}(d{\\ge}1.0) = ${t(W.hq.v1)}\\ \\text{ft} \\quad(\\text{linear in } H)`,
++    `h_{eq} = h_{eq,0} + (h_{eq,1}-h_{eq,0})\\min(d,1) = ${t(W.hq.v0)} + (${t(W.hq.v1)}-${t(W.hq.v0)})(${t(W.hq.f)}) = ${t(W.hq.heq)}\\ \\text{ft}`+(W.lsMin>0&&W.heq>W.hq.heq+1e-9?`\\ \\to\\ ${t(W.heq)}\\ \\text{ft}\\ (\\text{CTDOT} \\ge 2\\ \\text{ft})`:"")],
++    "The table gives the 0 ft and ≥ 1.0 ft columns; between them h<sub>eq</sub> is interpolated linearly on d (tool choice). Wall height from the backfill surface to the bottom of the footing along the pressure surface [3.11.6.4.1].");
++  else ls=eqB("Live-load surcharge LS — in-line wing (traffic perpendicular)","AASHTO 3.11.6.4.1, Table 3.11.6.4.1-1 (panel I-3 values)",[`H = H_0 = ${t(W.Hheq)}\\ \\text{ft} \\Rightarrow h_{eq} = ${t(W.heq)}\\ \\text{ft}`]);
++  let eqH="";
++  if(S.seismic.on&&!W.eqOn) eqH=`<div class="note-box">Extreme Event I: single-span bridge — the attached wing follows the abutment (no M–O increment or wall inertia) [C3.10.9.1]; the abutment connection force is in Tab 3.</div>`;
++  else if(W.EQ){ const E=W.EQ; eqH=eqB("Seismic increment (Extreme Event I)","AASHTO 11.6.5.2.1, 11.6.5.2.2, A11.3.1",[
++    `k_{h0} = ${E.kh0>(+S.seismic.As||0)+1e-12?"1.2":""}A_s = ${t(E.kh0,3)}\\,, \\quad k_h = ${t(+S.seismic.khR,2)}\\,k_{h0} = ${t(E.kh,4)}\\,, \\quad \\theta_{MO} = \\tan^{-1}\\dfrac{k_h}{1-k_v} = ${t(E.thd,2)}°`,
++    `K_{AE} = \\dfrac{\\cos^2(\\varphi-\\theta_{MO})}{\\cos\\theta_{MO}\\cos(\\delta+\\theta_{MO})\\left[1+\\sqrt{\\dfrac{\\sin(\\varphi+\\delta)\\sin(\\varphi-\\theta_{MO}-\\beta_w)}{\\cos(\\delta+\\theta_{MO})\\cos\\beta_w}}\\right]^2} = ${t(E.KAE,4)}\\quad(\\delta = ${t(E.dMO,1)}°)`,
++    `\\Delta K_h = K_{AE}\\cos\\delta\\,(1-k_v) - K_a\\cos\\iota = ${t(E.KAE,4)}\\cos ${t(E.dMO,1)}°(1-${t(E.kv,2)}) - ${t(W.Kact.kh,4)} = ${t(E.dKh,4)}`],
++    `Increment ½ΔK<sub>h</sub>γH² at ${fmt(E.hEQr,2)}H (panel I-11); wall inertia k<sub>h</sub>·W at the wall centroid.`); }
++  let ctH="";
++  if(W.CT){ const C=W.CT; ctH=eqB("Barrier collision CT (Extreme Event II)",C.src==="MassDOT"?"MassDOT Part I 3.3.2.4, Table 3.3.2-1":"AASHTO LRFD 10th Ed. Table A13.2-1",[
++    `${C.tl.replace("TL","TL\\text{-}")}:\\quad F = ${t(C.F,1)}\\ \\text{kip},\\ L_t = ${t(C.Lt,1)}\\ \\text{ft},\\ H_e = ${t(C.He,0)}\\ \\text{in}`],
++    C.src==="MassDOT"?"Pseudo-static collision load, γ = 1.00, engaging the whole wall section between joints; the stem takes EH with γ<sub>p</sub> = "+(att?"1.50 (3.10.9, active pressure)":"1.00")+", the stability check EH γ<sub>p</sub> = 0 (3.3.2.4).":"Transverse railing design force at H<sub>e</sub> above the top of the wing, γ = 1.00 at Extreme Event II with γ<sub>p</sub> on EH and γ<sub>LL</sub> = 0.50 on LS [Table 3.4.1-1]."); }
++  h+=panel("o-wing-load","9.1","Wing Earth Pressure, Surcharge, Seismic and Collision Loads",`
++    ${eqB("Active coefficient on the wing ("+(KA.th||"")+")","AASHTO 3.11.5.3, Eq. 3.11.5.3-1"+(S.soil.method==="coulomb"?"":"; Rankine (C3.11.5.3)"),kaTex)}
++    ${eqB("Earth-pressure state and horizontal coefficient","AASHTO 3.11.5.2, 3.11.5.3"+(W.ctCase?"; CTDOT BRSDM CT11.1.1.4.2b":""),[
++      `\\text{state: }${W.ctCase?"\\text{case 1 } K_0,\\ \\text{case 2 (with CT) } K_a":Kn(W.Kst)}`, kLines(W.Kst)].concat(W.Kee2.eff!==W.Kst.eff?[`\\text{Extreme Event II: } ${kLines(W.Kee2)}`]:[]),
++      `Earth-pressure state: ${ruleTxt}${W.ctCase?". CTDOT integral U-wing design cases: case 1 at-rest pressure (Strength I, Service I); case 2 active pressure with the collision force (Extreme Event II)":""}${own==="MassDOT"&&att&&W.CT?". MassDOT 3.10.9: integral wing with active pressure at γ = 1.50 and the collision at 1.00 (Extreme Event II)":""}.`)}
++    ${ls}${eqH}${ctH}
++    ${svgWingPress(R)}`);
++  /* ---- 9.2 demands ---- */
++  const lsTbl=()=>{ let tb=`<table class="rtbl"><tr><th>Limit state</th><th>Combination</th><th>M<sub>u</sub> (kip-ft/ft)</th><th>V<sub>u</sub> (kip/ft)</th><th>φ</th></tr>`;
++    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
++    tb+=`</table>`+eqB("Factored demands (per ft)","AASHTO 3.4.1 (Tables 3.4.1-1, 3.4.1-2)",Object.entries(W.LS).map(([k,q])=>{ const tm=(q.tm||[]).filter(x=>x[0]);
++      return `\\text{${k}:}\\ M_u = ${tm.map(x=>`${t(x[0])}(${t(x[1],3)})`).join(" + ")} = ${t(q.Mu)}\\,, \\quad V_u =${tm.map(x=>`${t(x[0])}(${t(x[2],3)})`).join(" + ")} = ${t(q.Vu)}`; }),
++      "Terms in the order of the combination column (EH, EQ, LS, CT); unfactored values from the equations above.");
++    return tb+`<div class="eq-note">Strength I governs the strength combinations of EH and LS (Strength III and V carry no LS or a smaller γ<sub>LS</sub>; no wind on the wing). Extreme events use φ = 1.0 [1.3.2.1]. Load modifier η = ${fmt(W.eta,2)}.</div>`; };
++  if(att){ const T=W.Tst, E2=W.Tee2, s=W.strip, kS=W.Kst.kh;
++    h+=panel("o-wing-dem","9.2","Junction Moment and Shear — Cantilever Plate from the Abutment",`
++      ${eqB("Wing height along the wing (x from the junction face)","geometry",[
++        `h(x) = H_0 + (H_L - H_0)\\dfrac{x}{L} = a + b\\,x\\,, \\quad a = ${t(W.a)}\\ \\text{ft},\\ b = \\dfrac{${t(W.HL)} - ${t(W.H0)}}{${t(W.L)}} = ${t(W.b,4)}`,
++        `I_1 = \\int_0^L h\\,dx = aL + \\tfrac{b L^2}{2} = ${t(W.I1,3)}\\ \\text{ft}^2\\,, \\quad J_1 = \\int_0^L h\\,x\\,dx = \\tfrac{aL^2}{2} + \\tfrac{bL^3}{3} = ${t(W.J1,3)}\\ \\text{ft}^3`,
++        `I_2 = \\int_0^L h^2 dx = a^2L + abL^2 + \\tfrac{b^2L^3}{3} = ${t(W.I2,3)}\\ \\text{ft}^3\\,, \\quad J_2 = \\int_0^L h^2 x\\,dx = \\tfrac{a^2L^2}{2} + \\tfrac{2abL^3}{3} + \\tfrac{b^2L^4}{4} = ${t(W.J2,3)}\\ \\text{ft}^4`])}
++      ${eqB("Total force and junction moment (unfactored)","AASHTO 3.11.5.1, 3.11.6.4.1",[
++        `F_{EH} = k_h\\gamma\\,\\tfrac{I_2}{2} = (${t(kS,4)})(${t(gam,3)})\\tfrac{${t(W.I2,2)}}{2} = ${t(T.FEH)}\\ \\text{kip}\\,, \\quad M_{EH} = k_h\\gamma\\,\\tfrac{J_2}{2} = (${t(kS,4)})(${t(gam,3)})\\tfrac{${t(W.J2,2)}}{2} = ${t(T.MEH)}\\ \\text{kip-ft}`,
++        `F_{LS} = k_h\\gamma h_{eq} I_1 = (${t(kS,4)})(${t(gam,3)})(${t(W.heq)})(${t(W.I1,2)}) = ${t(T.FLS)}\\ \\text{kip}\\,, \\quad M_{LS} = k_h\\gamma h_{eq} J_1 = ${t(T.MLS)}\\ \\text{kip-ft}`]
++        .concat(W.Kee2.eff!==W.Kst.eff?[`\\text{EE II }(k_h = ${t(W.Kee2.kh,4)}):\\ F_{EH} = ${t(E2.FEH)},\\ M_{EH} = ${t(E2.MEH)},\\ F_{LS} = ${t(E2.FLS)},\\ M_{LS} = ${t(E2.MLS)}`]:[])
++        .concat(W.EQ?[`F_{EQ} = \\tfrac{\\Delta K_h\\gamma}{2}I_2 + k_h\\gamma_c t\\,I_1 = (${t(W.dP,4)})(${t(W.I2,2)}) + (${t(W.wI,4)})(${t(W.I1,2)}) = ${t(W.TEQ.F)}\\ \\text{kip}\\,, \\quad M_{EQ} = (${t(W.dP,4)})(${t(W.J2,2)}) + (${t(W.wI,4)})(${t(W.J1,2)}) = ${t(W.TEQ.M)}\\ \\text{kip-ft}`]:[])
++        .concat(W.CT?[`x_{CT} = \\max(L/2,\\ L - L_t/2) = ${t(W.xct)}\\ \\text{ft}\\,, \\quad M_{CT} = F\\,x_{CT} = (${t(W.CT.F,1)})(${t(W.xct)}) = ${t(W.MCT)}\\ \\text{kip-ft}`]:[]),
++        `Each vertical slice of the wing carries its earth pressure resultant k<sub>h</sub>γh²/2 (and LS k<sub>h</sub>γh<sub>eq</sub>h) to the junction at the arm x. ${W.CT?"The collision is placed at the free end (largest arm), its force over L<sub>t</sub>. ":""}${W.EQ?"Seismic: the M–O increment ½ΔK<sub>h</sub>γh² per slice and the wing inertia k<sub>h</sub>γ<sub>c</sub>t per unit area. ":""}`)}
++      ${eqB(W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
++        `m = \\dfrac{M}{H_0}\\,, \\ v = \\dfrac{F}{H_0}:\\quad m_{EH} = \\tfrac{${t(T.MEH)}}{${t(W.H0)}} = ${t(W.per.sEH.m,3)}\\,, \\ m_{LS} = \\tfrac{${t(T.MLS)}}{${t(W.H0)}} = ${t(W.per.sLS.m,3)}\\ \\text{kip-ft/ft}`,
++        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:"")]:[
++        `\\text{strip at } y^* = ${t(s.y)}\\ \\text{ft above the junction bottom, length } L_m = ${t(s.l)}\\ \\text{ft}`,
++        `m_{EH} = k_h\\gamma\\left[(a-y^*)\\tfrac{L_m^2}{2} + b_T\\tfrac{L_m^3}{3}\\right] = (${t(kS,4)})(${t(gam,3)})\\left[(${t(W.a)}-${t(s.y)})\\tfrac{${t(s.l)}^2}{2} + (${t(W.bT,4)})\\tfrac{${t(s.l)}^3}{3}\\right] = ${t(s.mEH,3)}\\ \\text{kip-ft/ft}`,
++        `m_{LS} = k_h\\gamma h_{eq}\\tfrac{L_m^2}{2} = ${t(s.mLS,3)}\\,, \\quad v_{EH} = ${t(s.vEH,3)}\\,, \\ v_{LS} = ${t(s.vLS,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = M_{CT}/H_0 = ${t(W.per.sCT.m,3)}`:"")]),
++        (W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
++      ${lsTbl()}`);
++    const A=W.toAbut;
++    h+=panel("o-wing-abut","9.2a","Forces Delivered to the Abutment End Region (Strength I, report only)",`
++      ${eqB("Junction resultants","statics",[
++        `V = ${t(W.gEHst)}F_{EH} + ${t(W.gLS1)}F_{LS} = ${t(A.V)}\\ \\text{kip}\\,, \\quad M_h = ${t(W.gEHst)}M_{EH} + ${t(W.gLS1)}M_{LS} = ${t(A.M)}\\ \\text{kip-ft}`,
++        `\\bar y = ${t(A.yRes)}\\ \\text{ft above the junction bottom}\\,, \\quad T = V\\,(\\bar y - H_0/2) = (${t(A.V)})(${t(A.yRes)} - ${t(W.H0/2)}) = ${t(A.T)}\\ \\text{kip-ft}`,
++        `W_{wing} = \\gamma_c\\,t\\,I_1 = (${t(gc,3)})(${t(W.tb)})(${t(W.I1,2)}) = ${t(A.Wt)}\\ \\text{kip}\\,, \\quad M_{ip} = \\gamma_c\\,t\\,J_1 = ${t(A.Mip)}\\ \\text{kip-ft (in-plane, self-weight)}`],
++        "These act on the end of the abutment stem / backwall (shear normal to the wing, horizontal bending, torsion of the junction section and the wing weight hung from the junction). They are not added to the abutment design of Tabs 3–5; check the abutment end region for them.")}`);
++  }else{
++    const sec=W.secRule==="massdot"?`H_s = H_L + 0.75(H_0 - H_L) = ${t(W.HL)} + 0.75(${t(W.H0)} - ${t(W.HL)}) = ${t(W.Hs)}\\ \\text{ft}\\quad(x_s = 0.25L = ${t(W.xs)}\\ \\text{ft})`
++      : `x_s = ${W.secRule==="user"?t(W.fr,4):"\\tfrac13"}L = ${t(W.xs)}\\ \\text{ft}\\,, \\quad H_s = H_0 + (H_L - H_0)\\dfrac{x_s}{L} = ${t(W.H0)} + (${t(W.HL)} - ${t(W.H0)})(${t(W.fr,4)}) = ${t(W.Hs)}\\ \\text{ft}`;
++    const kS=W.Kst.kh;
++    h+=panel("o-wing-dem","9.2","Wingwall Stem — Design Section and Demands (per ft)",`
++      ${eqB("Design section","FHWA DS 7.4"+(W.secRule==="massdot"?"; MassDOT Part I 3.3.2.2":""),[sec,
++        `t_b = t_{top} + \\text{batter}\\cdot\\dfrac{H_s}{12} = ${t(W.ttop)} + ${t(W.bat,2)}\\dfrac{${t(W.Hs)}}{12} = ${t(W.tb,4)}\\ \\text{ft} = ${t(W.tb*12,2)}\\ \\text{in}`,
++        `\\Delta = (L_{heel} + t_b - t_{top})\\tan\\beta_w = (${t(+w.Lheel)} + ${t(W.tb,4)} - ${t(W.ttop)})\\tan ${t(W.betaW,1)}° = ${t(W.Delta,3)}\\ \\text{ft}`,
++        `H_E = ${w.ehPlane==="heel"?"H_s + \\Delta = "+t(W.Hs)+" + "+t(W.Delta,3)+" = ":""}${t(W.HE,3)}\\ \\text{ft}\\quad(${w.ehPlane==="heel"?"\\text{virtual back plane at the heel end}":"\\text{retained height at the stem face}"})`],
++        w.ehPlane==="heel"?"Earth pressure on the virtual back plane through the heel end, arms measured from the top of footing (FHWA DS 7.6, Fig. 7-29).":"Earth pressure on the stem face over the stem height (as the abutment stem, Tab 5 §5.2); the slope rise over the heel enters the stability check.")}
++      ${eqB("Unfactored stem demands at the top of footing","AASHTO 3.11.5.1, 3.11.6.4.1",[
++        `M_{EH} = k_h\\gamma\\dfrac{H_E^3}{6} = (${t(kS,4)})(${t(gam,3)})\\dfrac{${t(W.HE,3)}^3}{6} = ${t(W.MEH)}\\ \\text{kip-ft/ft}\\,, \\quad V_{EH} = k_h\\gamma\\dfrac{H_E^2}{2} = ${t(W.VEH)}\\ \\text{kip/ft}`,
++        `M_{LS} = k_h\\gamma h_{eq}\\dfrac{H_E^2}{2} = (${t(kS,4)})(${t(gam,3)})(${t(W.heq)})\\dfrac{${t(W.HE,3)}^2}{2} = ${t(W.MLS)}\\ \\text{kip-ft/ft}\\,, \\quad V_{LS} = k_h\\gamma h_{eq}H_E = ${t(W.VLS)}\\ \\text{kip/ft}`]
++        .concat(W.eqT?[`\\Delta P = \\tfrac12\\Delta K_h\\gamma H_E^2 = ${t(W.eqT.dP,3)}\\ \\text{at } ${t(W.eqT.zP)}\\ \\text{ft}\\,, \\ k_hW_{st} = (${t(W.EQ.kh,4)})(${t(W.Wst,3)}) = ${t(W.eqT.Wi,3)}\\ \\text{at } \\bar y = ${t(W.yst)}\\ \\text{ft} \\Rightarrow M_{EQ} = ${t(W.MEQ)},\\ V_{EQ} = ${t(W.VEQ)}`]:[])
++        .concat(W.ctS?[`f_{CT} = \\dfrac{F}{L_d} = \\dfrac{${t(W.CT.F,1)}}{${t(W.ctS.Ld)}} = ${t(W.ctS.f,3)}\\ \\text{kip/ft at } z = H_s + H_e/12 = ${t(W.ctS.z)}\\ \\text{ft} \\Rightarrow M_{CT} = ${t(W.ctS.M)}\\ \\text{kip-ft/ft}`]:[])
++        .concat(W.Kee2.eff!==W.Kst.eff?[`\\text{EE II }(k_h = ${t(W.Kee2.kh,4)}):\\ M_{EH} = ${t(W.ME2)},\\ M_{LS} = ${t(W.ML2)}`]:[]),
++        `Arms: EH at H<sub>E</sub>/3, LS at H<sub>E</sub>/2${W.ctS?(W.CT.src==="MassDOT"?"; collision spread over the whole wing length (MassDOT 3.3.2.4)":"; collision spread at 45° from L<sub>t</sub> to the section, L<sub>d</sub> = min(L, L<sub>t</sub> + 2H<sub>s</sub>) (tool choice)"):""}. The vertical load of the stem is not counted (conservative for flexure, as FHWA DS 7.9).`)}
++      ${lsTbl()}`);
++  }
++  /* ---- 9.3 section design (the abutment's section checks) ---- */
++  const c=W.sec;
++  const eeHTML=W.ee.length?`<div class="subhead">Extreme event limit states (φ = 1.0, AASHTO 1.3.2.1)</div>`+W.ee.map(x=>
++      checkLine(x.ls+" flexure",`\\dfrac{M_u}{M_n} = \\dfrac{${t(x.Mu)}}{${t(x.Mn)}}`,x.dcM)+checkLine(x.ls+" shear",`\\dfrac{V_u}{V_n} = \\dfrac{${t(x.Vu)}}{${t(x.Vn)}}`,x.dcV)).join(""):"";
++  h+=sectionHTML(c,`<div class="note-box">${att?`Horizontal bars at the junction, soil face (#${c.bar} @ ${fmt(c.sp,1)} in), per foot of junction height; section thickness t = ${fmt(W.tb*12,1)} in.`:`Vertical back-face bars at the design section (#${c.bar} @ ${fmt(c.sp,1)} in), per foot of wing; base thickness t<sub>b</sub> = ${fmt(W.tb*12,2)} in.`} Strength I and Service I demands from §9.2 (<span class="xlink" data-jump="tab-wing|o-wing-dem">§9.2</span>).</div>${eeHTML}`,"9.3",att?"Junction Horizontal Reinforcement":"Wingwall Stem Vertical Reinforcement");
++  /* ---- 9.4 S&T and junction bars ---- */
++  const T=W.ts;
++  let dv="";
++  if(att){ const D=W.dev;
++    dv=eqB("Tie bars across the junction — development on the abutment side","AASHTO 11.6.1.5.2; 5.10.8.2.1a, 5.10.8.2.4a",[
++      D.inline? `\\ell_{av} = \\tfrac{L_{ab}}{2}\\cdot 12 = ${t(D.lAv,1)}\\ \\text{in (bars continue along the abutment wall)}`
++              : `\\ell_{av} = 12\\,t_{min} - c = 12(${t(D.tMin)}) - ${t(+m.coverT,2)} = ${t(D.lAv,1)}\\ \\text{in}\\quad(t_{min} = ${W.H0>S.geom.hbw?"\\min(t_{bw}, t_{st})":"t_{bw}"}\\text{ over the junction height})`,
++      `\\ell_d = ${t(D.ld,1)}\\ \\text{in (§9.3)} ${D.straightOK?"\\le":">"} \\ell_{av}`+(D.straightOK?"\\Rightarrow \\text{straight bar}":""),
++      ...(D.straightOK?[]:[`F_h = d_b R_h \\nu f'_c = (${t(D.db,3)})(${t(D.Rh,3)})(${t(D.nu,3)})(${t(+m.fc,1)}) = ${t(D.Fh,2)}\\ \\text{kip}\\,, \\quad \\ell_{dh} = \\max(\\ell_{db,h}\\lambda_{rc} + R_h + d_b/2,\\ 8d_b,\\ 6) = ${t(D.ldh,1)}\\ \\text{in (hooked)}`]),
++      `\\ell_{req}/\\ell_{av} = ${t(D.lReq,1)}/${t(D.lAv,1)} = ${t(D.dc,3)}`],
++      "The horizontal bars cross the junction and are developed on each side [11.6.1.5.2]; on the wing side the bars run the wing length. Stagger the bar ends (vary the lengths) to avoid a plane of weakness [11.6.1.5.2]."+(own==="CTDOT"?" CTDOT CT11.1.1.4.2b: all horizontal wing bars doweled into the abutment; 1-ft chamfer at the corner.":""));
++  }
++  h+=panel("o-wing-ts","9.4",att?"Vertical S&T Bars and Junction Development":"Horizontal S&T Bars",`
++    ${eqB("Shrinkage and temperature, "+T.dir+" bars, each face","AASHTO 5.10.6 (Eq. 5.10.6-1)",[
++      `A_{s,prov} = A_b\\dfrac{12}{s} = (${t(BARS[T.bar].Ab)})\\dfrac{12}{${t(T.sp,1)}} = ${t(T.As,3)}\\ \\text{in}^2/\\text{ft} \\ ${T.As>=T.req-1e-9?"\\ge":"<"}\\ A_{s,ST} = ${t(T.req,3)}\\ \\text{in}^2/\\text{ft (§9.3)}`,
++      `s = ${t(T.sp,1)}\\ \\text{in} \\ ${T.sp<=T.sMax+1e-9?"\\le":">"}\\ s_{max} = ${t(T.sMax,1)}\\ \\text{in}\\quad(12\\ \\text{in for walls thicker than 18 in, else } \\min(3h, 18))`],"")}
++    ${checkLine("S&T "+T.dir+" bars",`\\max\\!\\left(\\dfrac{A_{s,ST}}{A_{s,prov}},\\ \\dfrac{s}{s_{max}}\\right)`,T.dc)}
++    ${dv}${att?checkLine("Junction bar development",`\\ell_{req}/\\ell_{av}`,W.dev.dc):""}`);
++  /* ---- 9.5 stability (independent, spread) ---- */
++  if(!att&&W.stab){ const St=W.stab;
++    let gt=`<table class="rtbl"><tr><th>Load (per ft)</th><th>V (kip/ft)</th><th>x from toe (ft)</th><th>H (kip/ft)</th><th>z above base (ft)</th></tr>`;
++    Object.values(St.G).forEach(q=>{ gt+=`<tr><td class="lft">${esc(q.d)} [${q.cls==="LSv"?"LS":q.cls}]</td><td>${q.V!=null?fmt(q.V,3):"—"}</td><td>${q.x!=null?fmt(q.x,3):"—"}</td><td>${q.H!=null?fmt(q.H,3):"—"}</td><td>${q.z!=null?fmt(q.z,3):"—"}</td></tr>`; });
++    gt+="</table>";
++    const fl=c=>Object.entries(c.f).filter(([k,v])=>v).map(([k,v])=>fmt(v,2)+"·"+(k==="LSv"?"LS_v":k)).join(" + ");
++    const sl=St.sl, ec=St.ec, br=St.br;
++    const sums=c=>`V = \\sum\\gamma_iV_i = ${t(c.V,3)}\\ \\text{kip/ft},\\ M_v = \\sum\\gamma_iV_ix_i = ${t(c.Mv,3)},\\ H = \\sum\\gamma_iH_i = ${t(c.Hh,3)}\\ \\text{kip/ft},\\ M_h = \\sum\\gamma_iH_iz_i = ${t(c.Mh,3)}\\ \\text{kip-ft/ft}`;
++    h+=panel("o-wing-stab","9.5","Wing Footing Stability — Simplified, per ft at the Design Section",`
++      <div class="note-box">Simplified check of a 1-ft slice of the wing at the design section (H<sub>s</sub> = ${fmt(W.Hs,2)} ft) on a spread footing B = L<sub>toe</sub> + t<sub>b</sub> + L<sub>heel</sub> = ${fmt(St.Lt,2)} + ${fmt(W.tb,3)} + ${fmt(St.Lh,2)} = <b>${fmt(St.B,3)} ft</b>, t<sub>f</sub> = ${fmt(St.tf,2)} ft, with the abutment's foundation inputs (panel I-4: ${St.rock?"rock, μ = "+fmt(+S.fnd.muRock,2):"soil, δ<sub>b</sub> = "+fmt(+S.fnd.deltaB,1)+"°"}, φ<sub>τ</sub>, φ<sub>b</sub>, q<sub>n</sub> = ${fmt(St.qn,2)} ksf, e limits). The 3-D action of the wing footing (varying height, transverse loads) is not modelled — the engineer confirms the footing by a full analysis where it governs.</div>
++      ${eqB("Earth pressure on the virtual back plane at the heel end","AASHTO 11.6.3.2, 3.11.5",[
++        `H_v = t_f + H_s + \\Delta = ${t(St.tf)} + ${t(W.Hs)} + ${t(W.Delta,3)} = ${t(St.Hv,3)}\\ \\text{ft}\\,, \\quad P_a = \\tfrac12 K\\gamma H_v^2 = \\tfrac12(${t(W.Kst.K,4)})(${t(gam,3)})(${t(St.Hv,3)})^2 = ${t(St.Pa,3)}\\ \\text{kip/ft at } \\iota = ${t(W.Kst.iota,1)}°`])}
++      ${gt}
++      ${eqB("Sliding — governing: "+esc(sl.ls),"AASHTO 10.6.3.4, 11.6.3.6",[
++        `\\text{combination: } ${fl(sl).replace(/·/g,"\\cdot ")}`, sums(sl),
++        `R_R = \\varphi_\\tau ${St.rock?"(\\mu V + c_a B)":"V\\tan\\delta_b"} = (${t(sl.phiT,2)})${St.rock?`(${t(+S.fnd.muRock,2)}\\cdot${t(sl.V,3)} + ${t(+S.fnd.caRock||0,2)}\\cdot${t(St.B,3)})`:`(${t(sl.V,3)})\\tan ${t(+S.fnd.deltaB,1)}°`} = ${t(sl.RR,3)}\\ \\text{kip/ft}\\,, \\quad H_u = ${t(sl.Hh,3)}\\ \\text{kip/ft}`])}
++      ${checkLine("Wing sliding",`\\dfrac{H_u}{R_R} = \\dfrac{${t(sl.Hh,3)}}{${t(sl.RR,3)}}`,sl.dcS)}
++      ${eqB("Eccentricity — governing: "+esc(ec.ls),"AASHTO 11.6.3.3, 11.6.5.1",[
++        `\\text{combination: } ${fl(ec).replace(/·/g,"\\cdot ")}`, sums(ec),
++        `e = \\dfrac{B}{2} - \\dfrac{M_v - M_h}{V} = \\dfrac{${t(St.B,3)}}{2} - \\dfrac{${t(ec.Mv,3)} - ${t(ec.Mh,3)}}{${t(ec.V,3)}} = ${t(ec.e,3)}\\ \\text{ft}\\,, \\quad e_{lim} = ${t(ec.eLim/St.B,4)}B = ${t(ec.eLim,3)}\\ \\text{ft}`])}
++      ${checkLine("Wing eccentricity",`\\dfrac{|e|}{e_{lim}} = \\dfrac{${t(Math.abs(ec.e),3)}}{${t(ec.eLim,3)}}`,ec.dcE)}
++      ${eqB("Bearing — governing: "+esc(br.ls),"AASHTO 10.6.3.1, 11.6.3.2",[
++        `\\text{combination: } ${fl(br).replace(/·/g,"\\cdot ")}`, sums(br),
++        St.rock? `q_{max} = ${Math.abs(br.e)<=St.B/6?"\\dfrac{V}{B}\\left(1+\\dfrac{6e}{B}\\right)":"\\dfrac{2V}{3(B/2-e)}"} = ${t(br.q,3)}\\ \\text{ksf}\\quad(e = ${t(br.e,3)}\\ \\text{ft})`
++                : `q = \\dfrac{V}{B-2e} = \\dfrac{${t(br.V,3)}}{${t(St.B,3)} - 2(${t(Math.abs(br.e),3)})} = ${t(br.q,3)}\\ \\text{ksf}`,
++        `\\varphi_b q_n = (${t(br.phiB,2)})(${t(St.qn,2)}) = ${t(br.phiB*St.qn,3)}\\ \\text{ksf}`])}
++      ${checkLine("Wing bearing",`\\dfrac{q}{\\varphi_b q_n} = \\dfrac{${t(br.q,3)}}{${t(br.phiB*St.qn,3)}}`,br.dcB)}
++      <div class="eq-note">Combinations: Strength I with γ<sub>p</sub> max/min on DC, EV, EH and the vertical LS on/off (${St.combos.filter(c=>c.ls==="Strength I").length} cases)${W.eqOn?"; Extreme Event I at 1.00 with EQ":""}${W.CT?"; Extreme Event II with CT"+(own==="MassDOT"?" and EH γ<sub>p</sub> = 0 (MassDOT 3.3.2.4)":" and γ<sub>p</sub> max/min"):""}. Extreme events: φ<sub>τ</sub>, φ<sub>b</sub> of panel I-11, e ≤ B(1/3 + (0.4 − 1/3)γ<sub>EQ</sub>) [11.6.5.1] (γ<sub>EQ</sub> = 0 at Extreme Event II).</div>`);
++  }
++  el.innerHTML=h;
++}
++/* ---------- wing figures (display only; values from R.wing) ---------- */
++function svgWingElev(R){
++  const W=R.wing, w=S.wing, att=W.type==="attached", Wd=620, Hd=340, m=46;
++  const L=W.L, H0=W.H0, HL=W.HL, tfw=att?0:(+w.tf||0), tot=H0+tfw+(W.CT?W.CT.He/12:0)+1;
++  const sc=Math.min((Wd-2*m-60)/L,(Hd-m-72)/tot), x0=m+40, yb=Hd-m;
++  const X=x=>x0+x*sc, Y=y=>yb-(y+tfw)*sc;
++  let b="";
++  if(att){ const dB=W.dB, bT=W.bT;
++    b+=`<rect x="${X(-1.2)}" y="${Y(H0+0.3)}" width="${1.2*sc}" height="${(H0+0.6)*sc}" fill="#d9d9d0" stroke="#777"/>`+svgT(X(-0.6),Y(H0+0.6),"abutment",{fs:9.5,a:"middle",c:"#666"});
++    const pts=[[0,0],[0,H0],[L,H0+bT*L],[L,dB*L]];
++    b+=`<polygon points="${pts.map(p=>X(p[0])+","+Y(p[1])).join(" ")}" fill="#ecebe4" stroke="#333" stroke-width="1.4"/>`;
++    if(!W.avg) b+=`<line x1="${X(0)}" y1="${Y(W.strip.y)}" x2="${X(W.strip.l)}" y2="${Y(W.strip.y)}" stroke="#c62828" stroke-dasharray="5 3"/>`+svgT(X(W.strip.l)+4,Y(W.strip.y)+4,`governing strip y* = ${fmt(W.strip.y,2)} ft`,{fs:10,c:"#c62828"});
++    b+=dimH(X(0),X(L),Y(H0)-26,`L = ${fmt(L,2)} ft`)+dimV(Y(0),Y(H0),X(0)-48,`H₀ = ${fmt(H0,2)} ft`)+dimV(Y(dB*L),Y(H0+bT*L),X(L)+22,`H_L = ${fmt(HL,2)} ft`);
++    b+=svgT(X(L/2),Y((dB*L/2+H0+bT*L/2)/2),"wing",{a:"middle",fs:10.5,c:"#444"})+svgT(X(0)+4,Y(0)+14,"junction (x = 0)",{fs:9.5,c:"#666"});
++  }else{
++    const Bf=W.stab?W.stab.B:(W.tb+(+w.Ltoe||0)+(+w.Lheel||0));
++    b+=`<rect x="${X(0)}" y="${Y(0)}" width="${L*sc}" height="${tfw*sc}" fill="#d9d9d0" stroke="#777"/>`+svgT(X(L/2),Y(-tfw/2)+4,`footing t_f = ${fmt(tfw,2)} ft, B = ${fmt(Bf,2)} ft`,{fs:9.5,a:"middle",c:"#555"});
++    b+=`<polygon points="${X(0)},${Y(0)} ${X(0)},${Y(H0)} ${X(L)},${Y(HL)} ${X(L)},${Y(0)}" fill="#ecebe4" stroke="#333" stroke-width="1.4"/>`;
++    b+=`<line x1="${X(W.xs)}" y1="${Y(0)}" x2="${X(W.xs)}" y2="${Y(W.Hs)}" stroke="#c62828" stroke-dasharray="5 3" stroke-width="1.3"/>`+svgT(X(W.xs)+5,Y(W.Hs/2),`design section H_s = ${fmt(W.Hs,2)} ft`,{fs:10,c:"#c62828"});
++    b+=dimH(X(0),X(W.xs),Y(0)+(tfw*sc)+16,`x_s = ${fmt(W.xs,2)} ft`,12)+dimH(X(0),X(L),Y(H0)-26,`L = ${fmt(L,2)} ft`)+dimV(Y(0),Y(H0),X(0)-30,`H₀ = ${fmt(H0,2)} ft`)+dimV(Y(0),Y(HL),X(L)+22,`H_L = ${fmt(HL,2)} ft`);
++    b+=svgT(X(-0.2),Y(H0)-8,"high end (joint)",{fs:9.5,a:"end",c:"#666"});
++  }
++  if(W.CT){ const hb=W.CT.He/12, xb=att?0:0; b+=`<rect x="${X(xb)}" y="${Y((att?H0:H0)+hb)}" width="${L*sc}" height="${hb*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="4 2"/>`+svgT(X(L)-4,Y(H0+hb)-4,`barrier ${W.CT.tl.replace("TL","TL-")} (H_e = ${fmt(W.CT.He,0)} in)`,{fs:9.5,a:"end",c:"#1f3a5f"}); }
++  b+=svgT(10,16,att?"Wing elevation (view normal to the wing)":"Wing elevation (view normal to the wing; stem heights above the top of footing)",{b:1,fs:12});
++  return svgWrap(Wd,Hd,b,480);
++}
++function svgWingPlan(R){
++  const W=R.wing, w=S.wing, g=S.geom, att=W.type==="attached", Wd=620, Hd=300;
++  const Lab=+g.Lab, tA=+g.tsb, L=W.L, th=att?(w.orient==="inline"?0:90):Math.min(90,Math.max(0,+w.theta||0)), tw=W.tb;
++  const ux=Math.sin(deg2rad(th)), uzA=Math.cos(deg2rad(th));
++  const ext=Lab/2+L*uzA+4, sc=Math.min((Wd-60)/(2*ext),(Hd-90)/(tA+L*ux+4));
++  const cx=Wd/2, y0=Hd-50, Xp=z=>cx+z*sc, Yp=x=>y0-x*sc;   // z along the abutment, x toward the fill (up the page)
++  let b=`<rect x="${Xp(-Lab/2)}" y="${Yp(tA)}" width="${Lab*sc}" height="${tA*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(cx,Yp(tA/2)+4,`abutment, L_ab = ${fmt(Lab,1)} ft`,{a:"middle",fs:10});
++  b+=svgT(cx,Yp(tA)-8,"backfill / roadway ↑",{a:"middle",fs:10,c:"#666"});
++  [-1,1].forEach(sd=>{
++    let p1, p2;
++    if(att&&th===90){ p1=[tA, sd*(Lab/2-tw/2)]; p2=[tA+L, sd*(Lab/2-tw/2)]; }
++    else if(att){ p1=[tA-tw/2, sd*Lab/2]; p2=[tA-tw/2, sd*(Lab/2+L)]; }
++    else{ p1=[tA-tw/2, sd*(Lab/2+0.4)]; p2=[p1[0]+L*ux, p1[1]+sd*L*uzA]; }
++    b+=`<line x1="${Xp(p1[1])}" y1="${Yp(p1[0])}" x2="${Xp(p2[1])}" y2="${Yp(p2[0])}" stroke="#8a8a80" stroke-width="${Math.max(3,tw*sc)}" stroke-linecap="butt"/>`;
++    if(!att) b+=`<line x1="${Xp(sd*(Lab/2+0.2))}" y1="${Yp(0)}" x2="${Xp(sd*(Lab/2+0.2))}" y2="${Yp(tA)}" stroke="#c62828" stroke-width="1.4"/>`;
++    if(sd>0){ b+=svgT(Xp((p1[1]+p2[1])/2)+10,Yp((p1[0]+p2[0])/2)+4,`L = ${fmt(L,2)} ft`,{fs:10.5,c:"#1f3a5f",b:1});
++      b+=svgT(Xp(p2[1])+6,Yp(p2[0])-6,`t = ${fmt(tw*12,1)} in`,{fs:9.5,c:"#555"}); }
++  });
++  b+=svgT(10,16,`Plan — ${att?(w.orient==="inline"?"in-line wings":"U-wings")+" attached at the abutment ends":"independent wings flared at θ = "+fmt(th,1)+"° from the abutment face line (expansion joint in red)"}`,{b:1,fs:12});
++  return svgWrap(Wd,Hd,b,480);
++}
++function svgWingPress(R){
++  const W=R.wing, att=W.type==="attached", gam=+S.soil.gamma, Wd=620, Hd=330, mT=34, mB=40;
++  const H=att?W.H0:W.HE, k=W.Kst.kh, pEH=k*gam*H, pLS=k*gam*W.heq, pEQ=W.EQ?W.EQ.dKh*gam*H/2:0;
++  const sc=(Hd-mT-mB)/H, x0=170, Y=y=>Hd-mB-y*sc, pm=Math.max(1e-6,pEH+pLS+pEQ), ps=240/pm;
++  let b=`<rect x="${x0-30}" y="${Y(H)}" width="30" height="${H*sc}" fill="#ecebe4" stroke="#555"/>`;
++  b+=`<polygon points="${x0},${Y(H)} ${x0+pEH*ps},${Y(0)} ${x0},${Y(0)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.3"/>`;
++  if(pLS>0) b+=`<polygon points="${x0+0},${Y(H)} ${x0+pLS*ps},${Y(H)} ${x0+(pEH+pLS)*ps},${Y(0)} ${x0+pEH*ps},${Y(0)}" fill="rgba(184,134,11,0.20)" stroke="#b8860b" stroke-width="1.1"/>`;
++  if(pEQ>0) b+=`<rect x="${x0+(pEH+pLS)*ps}" y="${Y(H)}" width="${pEQ*ps}" height="${H*sc}" fill="rgba(198,40,40,0.12)" stroke="#c62828" stroke-dasharray="4 2"/>`;
++  b+=svgT(x0+pEH*ps+4,Y(0)+14,`EH ${fmt(pEH,3)} ksf`,{fs:10,c:"#1f3a5f"});
++  if(pLS>0) b+=svgT(x0+pLS*ps+4,Y(H)-4,`LS ${fmt(pLS,3)} ksf`,{fs:10,c:"#b8860b"});
++  if(pEQ>0) b+=svgT(x0+(pEH+pLS+pEQ)*ps+4,Y(H*0.5),`ΔP_AE (uniform equivalent) ${fmt(pEQ,3)} ksf`,{fs:9.5,c:"#c62828"});
++  if(!att&&W.ctS) b+=svgArrow(x0+200,Y(W.ctS.z),x0+4,Y(W.ctS.z),"#6a1b9a",1.6)+svgT(x0+204,Y(W.ctS.z)+4,`CT ${fmt(W.ctS.f,2)} kip/ft`,{fs:10,c:"#6a1b9a"});
++  b+=dimV(Y(0),Y(H),x0-50,`${att?"H₀":"H_E"} = ${fmt(H,2)} ft`);
++  b+=svgT(10,18,att?"Unfactored horizontal pressure on the wing at the junction (x = 0), k_h = "+fmt(k,4):"Unfactored horizontal pressure on the stem at the design section, k_h = "+fmt(k,4),{b:1,fs:12});
++  b+=svgT(10,Hd-12,"EH = k_h·γ·depth; LS = k_h·γ·h_eq"+(pEQ>0?"; seismic increment drawn as a uniform pressure of the same resultant":"")+". Horizontal scale exaggerated.",{fs:9.5,c:"#555"});
++  return svgWrap(Wd,Hd,b,620);
++}
++
+@@ -3513 +4104,3 @@ const DASH_ANCHOR={sliding:"o-slide",ecc:"o-ecc",bearing:"o-brg",seat:"o-seat",
+-  heelFlex:"o-str-Heel",heelShear:"o-str-Heel",heelMass:"o-str-Heel",heelFlexMin:"o-str-Heel",heelFlexCrack:"o-str-Heel"};
++  heelFlex:"o-str-Heel",heelShear:"o-str-Heel",heelMass:"o-str-Heel",heelFlexMin:"o-str-Heel",heelFlexCrack:"o-str-Heel",
++  wJflex:"o-str-Wing junction",wJshear:"o-str-Wing junction",wJmin:"o-str-Wing junction",wJcrack:"o-str-Wing junction",wDev:"o-wing-ts",wTS:"o-wing-ts",   // WING
++  wSflex:"o-str-Wingwall stem",wSshear:"o-str-Wingwall stem",wSmin:"o-str-Wingwall stem",wScrack:"o-str-Wingwall stem",wSlide:"o-wing-stab",wEcc:"o-wing-stab",wBrg:"o-wing-stab"};
+@@ -3561 +4154 @@ const TABS=[["tab-loads","1 · Geometry & Loads"],["tab-comb","2 · Load Combina
+-  ["tab-vm","6 · V &amp; M Diagrams"],["tab-3d","7 · 3D View"],["tab-tables","8 · Detailed Tables"]];
++  ["tab-vm","6 · V &amp; M Diagrams"],["tab-3d","7 · 3D View"],["tab-tables","8 · Detailed Tables"],["tab-wing","9 · Wingwalls"]];
+@@ -5479,0 +6073,18 @@ function build3D(R){
++    // WING: wingwalls (panel I-13), schematic: elevation of each wing extruded by its thickness
++    if(S.wing&&S.wing.on&&R.wing){ const W=R.wing, w=S.wing, att=W.type==="attached", yTop=tf+hstem+hbw;
++      const wmat=new THREE.MeshLambertMaterial({color:0xc9d3dc, transparent:T.wire, opacity:T.wire?0.15:1, wireframe:T.wire});
++      const mk=(pts,depth,zOff)=>{ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],q[1])); sh.closePath();
++        const geo=new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false}); geo.translate(0,0,zOff); return geo; };
++      const th=att?(w.orient==="inline"?0:90):Math.min(90,Math.max(0,+w.theta||0)), tw=att?W.tb:(W.ttop+W.tb)/2, tfw=att?0:Math.max(0,+w.tf||0);
++      const pts=att? [[0,yTop-W.H0],[0,yTop],[W.L,yTop+W.bT*W.L],[W.L,yTop-W.H0+W.dB*W.L]] : [[0,tfw],[0,tfw+W.H0],[W.L,tfw+W.HL],[W.L,tfw]];
++      [-1,1].forEach(sd=>{
++        const add=(geo,mat)=>{ const ms=new THREE.Mesh(geo,mat), a=Math.atan2(-sd*Math.cos(deg2rad(th)),Math.sin(deg2rad(th)));
++          ms.rotation.y=a;
++          if(att&&th===90) ms.position.set(xStemBack-cx,0,sd>0?Lab/2-tw:-Lab/2);
++          else if(att) ms.position.set(xStemBack-cx-(sd>0?0:tw),0,sd*Lab/2);
++          else ms.position.set(xStemBack-cx,0,sd*(Lab/2+0.4));
++          grp.add(ms); if(!T.wire){ const l=new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat); l.rotation.y=a; l.position.copy(ms.position); grp.add(l); } };
++        add(mk(pts,tw,0),wmat);
++        if(!att&&tfw>0&&W.stab) add(mk([[0,0],[0,tfw],[W.L,tfw],[W.L,0]],W.stab.B,tw+W.stab.Lt-W.stab.B),cmat);   // toe on the outer (front-face) side
++      });
++    }
+@@ -5821 +6432 @@ function computeFor(state){
+-  S=Object.assign(defaultState(),clone(state)); migrate(); DEFAULTS_NOTICE=savedNotice;   // compare runs never raise the defaults notice
++  S=abutMergeState(clone(state)); migrate(); DEFAULTS_NOTICE=savedNotice;   // compare runs never raise the defaults notice
+@@ -5941 +6552,2 @@ const TAB_RENDER={ "tab-loads":renderTabLoads, "tab-comb":renderTabComb, "tab-st
+-  "tab-tables":(R)=>{try{renderTabTables(R);}catch(e){console.warn("tables:",e);}} };
++  "tab-tables":(R)=>{try{renderTabTables(R);}catch(e){console.warn("tables:",e);}},
++  "tab-wing":renderTabWing };
+@@ -6003 +6615 @@ document.addEventListener("input",ev=>{
+-  if(el.type==="checkbox"&&(p==="fnd.usePassive"||p==="seismic.on"||p==="longit.computeBR"||p==="longit.computeTU"||p==="longit.computeCRSH")){ buildInputs(); }
++  if(el.type==="checkbox"&&(p==="fnd.usePassive"||p==="seismic.on"||p==="wing.on"||p==="longit.computeBR"||p==="longit.computeTU"||p==="longit.computeCRSH")){ buildInputs(); }
+@@ -6017 +6629 @@ document.addEventListener("change",ev=>{
+-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate"].includes(p))?num:raw;
++  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize"].includes(p))?num:raw;
+@@ -6140 +6752 @@ document.getElementById("importFile").addEventListener("change",ev=>{
+-      S=Object.assign(defaultState(),o);
++      S=abutMergeState(o);
+@@ -6297,0 +6910,9 @@ function inputEchoHTML(){
++  if(S.wing&&S.wing.on){ const w=S.wing, at=w.type!=="indep";   // WING
++    h+="<h3>Wingwalls (panel I-13)</h3>"+echoRows([
++      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":"total moment over H₀")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
++      ["Length L; height H₀ / H_L",fmt(+w.L)+"; "+fmt(+w.H0)+" / "+fmt(+w.HL)+(at?" ("+(w.taper==="top"?"top sloped":"bottom tapered")+")":""),"ft"],
++      [at?"Thickness t":"Top thickness / back-face batter",at?fmt(+w.t):fmt(+w.ttop)+" ft / "+fmt(+w.bat,2)+" in/ft",at?"ft":""],
++      ["Backfill slope β_w; back face to traffic",fmt(+w.beta,1)+"°; "+fmt(+w.dTr),"deg; ft"],
++      ["Barrier on the wing",w.barrier==="none"?"none":w.barrier.replace("TL","TL-"),""]].concat(at?[]:[
++      ["Wing footing: toe / heel / t_f; foundation",fmt(+w.Ltoe)+" / "+fmt(+w.Lheel)+" / "+fmt(+w.tf)+"; "+(w.fdn==="pile"?"pile-supported (not checked)":"spread"),"ft"]]).concat([
++      ["Horizontal bars; vertical bars","#"+w.hSize+" @ "+fmt(+w.hSp,1)+" in; #"+w.vSize+" @ "+fmt(+w.vSp,1)+" in",""]])); }
+@@ -6317,0 +6939,3 @@ const ABUT_REFS=[
++/* WING: references added to the report while the wingwalls are designed */
++const WING_REFS=[["Wingwalls","AASHTO LRFD 10th Ed.: 1.3.2.1; 3.11.6.4.1 (Tables 3.11.6.4.1-1, 3.11.6.4.1-2); 11.6.1.4, 11.6.1.5.2, 11.6.5; C3.10.9.1; Table A13.2-1 (railing design forces)"],
++  ["","FHWA LRFD Steel Girder Superstructure Design Example, Design Step 7 — wingwall Steps 7.4–7.9 (design section, stem demands, stem design)"]];
+@@ -6398 +7022 @@ async function buildReport(){
+-    "tab-stab":"External Stability, Free Body & Notes","tab-found":"Foundation / Pile Group","tab-struct":"Structural Design (Concrete)",
++    "tab-stab":"External Stability, Free Body & Notes","tab-found":"Foundation / Pile Group","tab-struct":"Structural Design (Concrete)","tab-wing":"Wingwalls",
+@@ -6400 +7024 @@ async function buildReport(){
+-  const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables };
++  const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables, "tab-wing":!(S.wing&&S.wing.on) };
+@@ -6452 +7076 @@ async function buildReport(){
+-    const k=se.dataset.key; if(!/^tab-(stab|found|struct)$/.test(k)) return;
++    const k=se.dataset.key; if(!/^tab-(stab|found|struct|wing)$/.test(k)) return;
+@@ -6503 +7127 @@ async function buildReport(){
+-      <table class="cr-refs">${abutRefsNow().map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
++      <table class="cr-refs">${abutRefsNow().concat(S.wing&&S.wing.on?WING_REFS:[]).map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
+@@ -6553 +7177 @@ function init(){
+-    if(sav){ S=Object.assign(defaultState(),JSON.parse(sav)); fresh=false; }
++    if(sav){ S=abutMergeState(JSON.parse(sav)); fresh=false; }
+```
