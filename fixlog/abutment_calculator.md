@@ -3700,3 +3700,486 @@ index 453d8aa..08db78f 100644
          "Every case includes the abutment and footing self-weight, the soil over the heel (EV), the earth pressure (EH, ES, LS) and the superstructure loads, at the bottom of the footing.",
          "The vertical live-load surcharge over the heel (LSv) is included as in the calculator's bearing and pile checks. Each live-load permutation is also offered without it (its sliding and eccentricity checks leave it out where it helps); a case picked from those is marked \"(no heel LS)\".",
 ```
+
+
+## 2026-10-20 — PR: claude/abut-followups — EE inertia share, punching depth over the pile heads, bearings per girder, connection force span rule, Strength IV removed (PR link added after merge)
+
+Engineer decisions of 2026-10-20 (follow-ups to F27–F38: open items N4, N7 and "2 bearings per girder", plus the review note on the constants list), and two further items the engineer asked for the same day (connection force single-span rule; Strength IV). Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), checked against the text (3.4.1/C3.4.1, 3.10.9.1, 3.10.9.2, 4.7.4.2, 5.12.8.6.1, 5.12.8.6.3). Numbers come from the real `computeAll()` of origin/main `877876b` (before) and of this branch (after) in headless Chromium. "Default project" = the built-in benchmark (`benchState()`: B = 13 ft, L_ab = 44 ft, t_f = 3 ft, 6 girders, DC/DW/LL = 85/12/70 kip per girder; ΣDC + ΣDW = 582 kip; seat z = 17 ft). The exact edits are in the appendix as a unified diff against `877876b`.
+
+### F39. Extreme Event I superstructure inertia: own share input s_EQ, default 100 % (was the I-6 TU share)   [calc change] [MORE conservative with the floating 50 % share]
+- **Where:** `computeAll` C-4b, anchor `// superstructure inertia through the bearings/keepers`; new input `seismic.shEQ` (%, I-11, shown with EE-I on, range 0–100); Tab 3 §3.6a shows EQ_sup symbolic → substituted → result; basis note 3; input echo.
+- **Before:** `if(R.seis){ R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P)*shTU; } // superstructure inertia through bearings, thermal-path share`
+- **After:**
+  ```js
+  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P)*R.seis.shEQ; }
+  ```
+  The static longitudinal shares of I-6 (BR, TU, CR·SH, WS) are unchanged.
+- **Provision:** AASHTO LRFD 10th Ed. Art. 11.6.5.1 (wall inertia and seismic earth pressure; the superstructure inertia carried into the abutment is a project load path), 3.10.9 (connection forces). The share is an engineer input (decision 2026-10-20: default 100 %).
+- **Check case (default project, EE-I on, γEQ = 0):**
+  - A_s = 0.30: EQ_sup before 0.30·582·0.50 = 87.3 kip; after 0.30·582·1.00 = **174.6 kip**. ΔM at the seat = 87.3·17.0 = 1484.1 kip-ft.
+    - Eccentricity (EE-I 0.90DC + 0.65DW + 1.00EV + 1.50EH + 1.00EQ, V = 1657.83 kip): e = 4.8555 + 1484.1/1657.83 = 4.8555 + 0.8952 = **5.751 ft**; D/C 4.8555/4.3333 = 1.120 → 5.751/4.3333 = **1.327**.
+    - Bearing: B′ = 13 − 2·5.751 = 1.499 ft; q = 1657.83/(1.499·44) = 25.14 ksf; D/C = 25.14/(0.80·18) = **1.746** (EE-I now governs; before Strength I 0.933 governed, EE-I was 0.796).
+    - Sliding: EE-I H = 981.6 → 1068.9 kip, R_R = 918.95 kip: D/C 1.068 → **1.163** (EE-I now governs over Constr — Str I 1.153).
+    - Stem M_u: 131.99 → 159.77 kip-ft/ft (Δ = 87.3·14/44 = 27.78).
+    - Piles + EE-I (A_s = 0.30): P_min −49.30 → −71.12 kip (Δ = 1484.1·4.25/289 = 21.83), uplift D/C 49.30/60 = 0.822 → **1.185**; toe shear D/C 0.938 → 1.037.
+  - A_s = 0.15: EQ_sup 43.65 → **87.3 kip**; e 3.357 → 3.357 + 742.05/1657.83 = **3.805 ft**, eccentricity D/C 0.775 → **0.878**; stem M_u 112.06 → 113.88 kip-ft/ft (EE-I now governs the stem).
+
+### F40. Pile punching: effective depth over the pile heads (embedment and clear cover inputs)   [calc change] [MORE conservative]
+- **Where:** `computeAll` C-13, anchor `// bottom mat above the pile heads`; new inputs `piles.embed` (in, default 12) and `piles.clrTop` (in, default 3) in I-7; Tab 4 §4.6 shows h_p, d_e and d_v worked; error when d_e ≤ 0; input echo.
+- **Before:**
+  ```js
+  const deF=g.tf*12-m.coverF-dbF;                     // footing effective depth (bottom mat), in
+  const dvF=Math.max(0.9*deF,0.72*g.tf*12);            // in
+  ```
+- **After:**
+  ```js
+  const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
+  const hP=g.tf*12-embP;                               // in
+  const deF=hP-clrP-dbF;                               // footing effective depth over the pile heads, in
+  const dvF=Math.max(0.9*deF,0.72*hP);                 // in
+  ```
+- **Convention:** d_e is measured from the top of the footing to the centroid of the bottom mat. The tool's punching check already used −d_b (centroid of the two orthogonal bottom layers), so that convention is kept: d_e = t_f − e_pile − c_top − d_b. The engineer's decision note wrote −d_b/2 (centroid of the lowest layer only); the difference is shown below. In d_v = max(0.9d_e, 0.72h) the height h is taken as h_p = t_f − e_pile (the footing above the pile heads).
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.12.8.6.1 (critical section for two-way action at 0.5d_v from the reaction area), 5.12.8.6.3 (Eq. 5.12.8.6.3-1), 5.7.2.8 (d_v).
+- **Check case (default project, piles; #8 toe bars d_b = 1.0 in, 12 in pile, f′c = 4 ksi, V_u = 212.71 kip):**
+  - Before: d_e = 36 − 3 − 1.0 = 32.0 in; d_v = max(28.8, 25.92) = 28.8 in; b₀ = 4(12 + 28.8) = 163.2 in; V_n = 0.126·2·163.2·28.8 = 1184.44 kip; D/C = 212.71/(0.9·1184.44) = **0.200**.
+  - After: h_p = 36 − 12 = 24.0 in; d_e = 24 − 3 − 1.0 = 20.0 in; d_v = max(18.0, 17.28) = 18.0 in; b₀ = 4(12 + 18) = 120 in; V_n = 0.126·2·120·18 = 544.32 kip; D/C = 212.71/489.89 = **0.434**.
+  - With −d_b/2 instead: d_e = 20.5, d_v = 18.45, b₀ = 121.8, V_n = 566.3 kip, D/C 0.417.
+- **Pile-cap one-way shear (checked, not changed):** the toe (and heel) one-way shear does not use the punching depth. It comes from `sectionCheck`, whose d = t_f − c_F − d_b/2 (footing cover from the bottom face, 36 − 3 − 0.5 = 32.5 in) is shared with the toe flexure and crack control. See open items.
+
+### F41. Bearings per girder > 1: seat bearing and the EDM load per bearing   [calc change] [LESS conservative where n > 1; was conservative]
+- **Where:** `computeAll` C-15, anchor `// (box / tub girders) each bearing takes the girder reaction / n`; `edmPayload()`, anchor `load on one bearing = girder reaction / bearings per girder`; the input "Bearings per girder line" moves from I-6b (shown only with calculated TU/CR·SH) to I-10, so it can always be set (I-6b shows the value); Tab 5 §5.6 shows P_u = P_u,girder/n_b worked; input echo. TU/CR·SH totals unchanged (F37).
+- **Before:** `let P=SI, ls="Strength I"; … const mi=seatM(i), dci=(P/A1)/(phiB*0.85*m.fc*mi.m);` and `const Pdl=(DC+DW); const Pll=LL;` per girder in the INIT payload.
+- **After:** `const PG=P; P=PG/nBg;` (nBg = round(bearing.nBrgPerGird) ≥ 1) before the stress, and `Pdl=(DC+DW)/nBg; Pll=LL/nBg;` in the payload. The payload format is unchanged (the EDM receives one bearing's load); `elastomeric_design_module.html` is not changed.
+- **Provision:** statics; AASHTO LRFD 10th Ed. Art. 5.6.5 (bearing on concrete, per loaded area).
+- **Check case (default project, n_b = 2):** P_u,girder = 1.25·85 + 1.50·12 + 1.75·70 = 246.75 kip → P_u = 123.38 kip; q_b = 123.38/432 = 0.286 ksi (before 0.571); q_R = 0.70·0.85·4·2.0 = 4.76 ksi; D/C 0.120 → **0.060**. EDM INIT: P_DL 97 → **48.5** kip, P_LL 70 → **35** kip.
+- **Limitation (stated in §5.6):** with n_b > 1 each pad is still placed at the girder centreline for c_trans (pad spacing within a girder is not an input).
+
+### F42. Constants list: γWS Strength III compared with 1.00 (was 1.40)   [display only]
+- **Where:** `computeAll` C-20 `DEF` list. **Before:** `["factors.wsS3",1.40,"γWS Strength III (design basis)"]`. **After:** `["factors.wsS3",1.00,"γWS Strength III [T.3.4.1-1]"]` (the tool default since the 8th Ed. wind revision, and the 10th Ed. Table 3.4.1-1 value). The default project no longer lists γWS,III as differing from the default. No result change. (N8 of the 2026-10-19 review.)
+
+### F43. Minimum connection force: single-span rule only for a single-span bridge   [calc change, design note] [LESS conservative for multispan bridges]
+- **Where:** `computeAll` C-9, anchor `const single=g.HsupMode==="single";`; Tab 3 §3.6 (title says single-span / multispan; F_1span shown only for a single span; multispan Zones 2–4 say the force comes from the seismic analysis); I-11 tooltip.
+- **Span count:** the tool's only span-count input is I-1 "Pier height H in N [4.7.4.4]" = "Single-span bridge: H = 0". That setting now also marks the bridge as single-span here; any other setting (default "Stem + backwall height") is treated as multispan. No new input; §3.6 says which input decides.
+- **Before:** `const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm, Fconn=Math.max(F1,F0);`
+- **After:**
+  ```js
+  const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm;
+  const Fconn=zone===1? (single? Math.max(F1,F0) : F1) : (single? F0 : NaN);
+  ```
+- **Provision:** AASHTO LRFD 10th Ed. Art. 3.10.9.1 and 4.7.4.2 (A_s × tributary permanent load for single-span bridges, any zone), 3.10.9.2 (Zone 1: 0.15 / 0.25 × permanent + EQ live load), 3.10.9.3 / 3.10.9.4 (Zones 2–4, from the analysis).
+- **Check case (default project, ΣDC + ΣDW = 582 kip, γEQ = 0):**
+  - Zone 1, A_s = 0.15: F_Z1 = 0.25·582 = 145.5 kip governs either way: **unchanged** (145.5 kip; 24.25 kip per beam).
+  - Zone 1, A_s = 0.30, multispan (default H setting): before max(145.5, 0.30·582 = 174.6) = 174.6 kip; after F_Z1 = **145.5 kip** (29.10 → 24.25 kip per beam). Single-span: 174.6 kip (unchanged).
+  - Zone 3, A_s = 0.15: multispan before 87.3 kip (floor only); after **not computed** ("from the seismic analysis"); single-span 87.3 kip (unchanged).
+
+### F44. Strength IV removed from the abutment limit states   [calc change] [no D/C changed in the tested projects]
+- **Where:** `computeAll` C-6 `LIMITS` (anchor `// Strength IV is not a limit state of this tool`), `STR_LIMITS`, the seat bearing loop (C-15); the I-8 input "γ DC max — Strength IV" is replaced by a note; the C-20 constants list entry for it is removed; the V&M selector loses "Strength IV"; basis note 6 says why; `migrate()` moves a saved V&M / 3-D selection "ls:Strength IV" to "ls:Strength I".
+- **Before:** `"Strength IV": {LL:0, WS:0, WL:0, TU:+F.gTU, CR:+F.gCR, perm:true, liveOpt:false, dcMax:(+F.gpDCmaxS4||1.50)}`; `STR_LIMITS=["Strength I","Strength III","Strength IV","Strength V","Constr — Str I"]`; seat: `const SIV=LIMITS["Strength IV"].dcMax*DC+GP.DW[1]*DW; … if(SIV>P){P=SIV;ls="Strength IV";}`.
+- **After:** no Strength IV entry; `STR_LIMITS=["Strength I","Strength III","Strength V","Constr — Str I"]`; seat compares Strength I and V only. `factors.gpDCmaxS4` stays in the saved data (unused); the `dcMax` code paths stay (no limit state sets it).
+- **Provision:** AASHTO LRFD 10th Ed. Art. 3.4.1 (Strength IV: dead-load force effects in bridge superstructures) and C3.4.1 (the combination does not apply to substructures, earth-retaining systems or bearing design).
+- **Hand-offs:** the foundation-loads payload (HANDOFF.md §4.6) is built from `Object.keys(R.LIMITS)`, so it no longer carries Strength IV cases; the format is unchanged and Pile Designer / Spread Footing take whatever limit states arrive. No other hand-off uses it.
+- **Check case:** in all 12 tested variants (default, EE-I A_s 0.15 / 0.30, piles, piles + EE-I, 2 bearings, single-span / multispan A_s 0.30, Zone 3 multispan / single-span, rock, front batter) Strength IV governed no check: no D/C changed. Seat: Strength IV 1.50·85 + 1.50·12 = 145.5 kip < Strength I 246.75 kip. Where it could govern (DC/LL > 7 with a 1.50 DC factor) the result was over-conservative and outside the 10th Ed. scope.
+
+### Self-test
+- `__ST_EXPECT` unchanged (16 values); the self-test passes (the benchmark has EE-I off, spread footing, one bearing per girder, Strength IV not governing).
+
+### Saved data (CLAUDE.md §5)
+- No key renamed and no format change. New fields: `seismic.shEQ` (%), `piles.embed` (in), `piles.clrTop` (in); `meta.defRev` = 3.
+- `migrate()` anchor `// defRev 3 (2026-10-20)`: a project without `shEQ` gets 100 % (engineer decision); when its old effective share (the I-6 TU share: 50 % floating; 100 % with fixed bearing or calculated TU) was not 100 %, the one-time notice says "Seismic share of superstructure inertia … set to 100 % — … used the floating TU share (50 %) before; change it if wanted" (with "(Extreme Event I is off)" when off). A project without `embed`/`clrTop` gets 12 / 3 in; a pile project gets a notice line ("… the punching-shear depth is now measured to the bottom mat above the pile heads — check them"). The notice shows once (the migrated project is autosaved).
+- `ui.vmSel` / `ui.d3Sel` = "ls:Strength IV" → "ls:Strength I" (display selection only).
+- Verified: projects autosaved by `877876b` (piles + EE-I + 2 bearings + V&M on Strength IV; spread with EE-I off; fixed-bearing model) open in the branch with the expected notice lines (none for the fixed model), shEQ = 100, embed 12, clrTop 3, the selection moved to Strength I, and no notice after a reload.
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Headless Chromium, `877876b` vs branch, `computeAll()` (`benchState()` + variant) on the 12 variants listed in F44: the only differences are those listed in F39–F44; every other check D/C is identical. Every tab renders with no page error; all TeX strings of four variants (194–206 each) render in KaTeX 0.16.9 with `throwOnError`. `node tests/compare.mjs --tool page --file abutment_calculator.html`: storage same, page text differs only by the changed labels.
+- **Other copies:** none (the EDM payload change needs no change in `elastomeric_design_module.html`).
+
+### Open items (not changed)
+- **Pile-cap one-way shear and toe flexure with the mat over the pile heads (engineer question).** `sectionCheck` uses d = t_f − c_F − d_b/2 from the footing bottom (32.5 in in the default pile project) for the toe flexure, crack control and one-way shear. With the bottom mat over 12 in embedment + 3 in clear: d = 20.5 in, d_v = max(18.45, 0.72·24 = 17.28) = 18.45 in, φV_c = 0.9·0.0316·2·√4·12·18.45 = 25.18 kip/ft against V_u = 37.26 kip/ft → D/C **1.48** (now 37.26/39.93 = 0.933). Not changed: it also changes the toe flexure and crack control, which share the same d.
+- **Span count:** F43 reuses the I-1 "Single-span bridge: H = 0" setting. If the engineer wants a separate "single-span bridge" checkbox (so that H can be "stem + backwall" while the span count is single), say so.
+- **C3.10.9.1:** abutments of single-span bridges are not subject to acceleration-augmented soil pressure. The tool still applies M–O when EE-I is on, whatever the span count.
+- **c_trans with n_b > 1** (pad spacing within a girder) is not modelled (F41).
+- 5.6.5 non-uniform-stress m (0.75√(A₂/A₁) ≤ 1.5) not applied (from F38).
+
+### Appendix — unified diff (exact before/after)
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 08db78f..51b0834 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -614,6 +614,7 @@ function defaultState(){
+       offX:0.0, offY:0.0,
+       Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60,
+       pileSize:12.0, pileShape:"hp",  // width/diameter (in); 'square' | 'round' | 'hp' — punching perimeter
++      embed:12.0, clrTop:3.0,         // pile embedment into the footing (in); clear cover from the pile top to the bottom mat (in) — punching depth [5.12.8.6]
+       dd:0.0, gDD:1.10                    // drag load DR per pile (kip) and γDR for structural strength [T.3.4.1-1 note: 1.10 structural, 0.00 geotechnical]
+     },
+     joint:{ prep:"roughened" },       // stem-footing construction joint: 'monolithic'|'roughened'|'smooth' [5.7.4.4]
+@@ -632,7 +633,8 @@ function defaultState(){
+       gEHEQmode:"gp",                                             // EE-I γEH: "gp" = γp max/min [T.3.4.1-1/-2]; "agency" = fixed gEHEQ
+       phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,    // extreme-event resistance factors [11.5.8: 1.0; bearing 0.8 for semigravity walls; 10.5.5.3.3]; e/B (used only with eLimEQmode "user")
+       eLimEQmode:"aashto",                                        // EE-I e limit: "aashto" = B·(1/3 + (0.4 − 1/3)·γEQ) soil and rock [11.6.5.1]; "user" = fixed eFracEQ
+-      zone:1 },                                                   // seismic zone [T.3.10.6-1]: connection force [3.10.9]
++      zone:1,                                                     // seismic zone [T.3.10.6-1]: connection force [3.10.9]
++      shEQ:100 },                                                 // seismic share of the superstructure inertia at this abutment (%): EQsup = A_s·(DC+DW)·shEQ
+     meta:{ revs:[] },                                             // revision history: {n, ts, fp} on each project save
+     factors:{
+       // Table 3.4.1-1 / 3.4.1-2 — all editable
+@@ -733,6 +735,8 @@ const VALID = {
+   "reinf.toe.sp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
+   "reinf.heel.sp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."},
+   "piles.pileSize":{hard:[6,60], typ:[10,36], msg:"Pile size/diameter outside the typical 10–36 in range."},
++  "piles.embed":{hard:[0,60], typ:[6,24], msg:"Pile embedment into the footing outside the typical 6–24 in range."},
++  "piles.clrTop":{hard:[0,12], typ:[2,6], msg:"Clear cover from the pile top to the bottom mat outside the typical 2–6 in range."},
+   "bearing.padL":{hard:[3,60], typ:[8,36], msg:"Bearing pad length (along span) outside the typical 8–36 in range."},
+   "bearing.padW":{hard:[3,72], typ:[8,48], msg:"Bearing pad width (transverse) outside the typical 8–48 in range."},
+   "bearing.seatSp":{hard:[2,18], typ:[4,12], msg:"Seat mat spacing outside the typical 4–12 in range."},
+@@ -742,6 +746,7 @@ const VALID = {
+   "seismic.khR":{hard:[0.1,1.0], typ:[0.5,1.0], msg:"k_h ratio: 0.5 applies to walls free to displace 1–2 in [11.6.5.2.2]; 1.0 for restrained walls."},
+   "seismic.kv":{hard:[0,0.5], typ:[0,0.2], msg:"k_v is commonly taken as 0 for walls."},
+   "seismic.hEQr":{hard:[0.33,0.7], typ:[0.4,0.6], msg:"ΔPAE application height ratio outside the common 0.4–0.6H range."},
++  "seismic.shEQ":{hard:[0,100], typ:[50,100], msg:"Seismic share of the superstructure inertia below 50 % — confirm the restraint (keepers / shear keys) at both supports."},
+   "constr.hFill":{hard:[0,80], typ:[0,40], msg:"Construction backfill height appears high — verify."},
+   "constr.gLL":{hard:[0,2], typ:[0,1.75], msg:"γLL during construction outside 0–1.75."},
+   "fnd.eFracSoil":{hard:[0.1,0.5], typ:[0.33,0.34], msg:"Soil eccentricity limit differs from 11.6.3.3 (middle two-thirds, f = 1/3) — confirm the governing edition."},
+@@ -966,6 +971,8 @@ function migrate(){
+   if(!S.ui.d3Sel) S.ui.d3Sel="ls:Strength I";
+   if(!S.ui.d3Tog) S.ui.d3Tog={piles:true,P:true,Vx:true,Vy:true,eh:true,ls:true,soil:true,water:true,dims:true,wire:false};
+   if(!S.ui.vmSel) S.ui.vmSel="ls:Strength I";
++  if(S.ui.vmSel==="ls:Strength IV") S.ui.vmSel="ls:Strength I";   // Strength IV removed (3.4.1, C3.4.1)
++  if(S.ui.d3Sel==="ls:Strength IV") S.ui.d3Sel="ls:Strength I";
+   if(S.geom.Lftg===undefined) S.geom.Lftg=S.geom.Lab;   // footing length defaults to wall length (single-length model)
+   if(S.mat.ag===undefined) S.mat.ag=0.75;                 // max aggregate size (in), 5.7.3.4.2
+   if(S.factors.gpDCmaxS4===undefined) S.factors.gpDCmaxS4=1.50;   // Strength IV γDC max [T.3.4.1-2]
+@@ -996,6 +1003,24 @@ function migrate(){
+     if(S.geom.endGap===undefined){ S.geom.endGap=4.0; DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Girder end to backwall face g_end (new input: support length = seat width − g_end [4.7.4.4]) set to 4 in — check it"]); }
+     S.meta.defRev=2;
+   }
++  // defRev 3 (2026-10-20): new inputs. Seismic share of the superstructure inertia (was the I-6 TU share; now 100 % unless
++  // changed, engineer decision); pile embedment and clear cover over the pile heads for the punching depth [5.12.8.6].
++  if(!(S.meta.defRev>=3)){
++    const add=[];
++    if(S.seismic.shEQ===undefined){
++      const Lg0=S.longit||{}, d0=S.dist||{};
++      const old=Lg0.computeTU?100:(d0.model==="fixed"?100:+d0.shTU);
++      S.seismic.shEQ=100;
++      if(!(Math.abs(old-100)<1e-9)) add.push("Seismic share of superstructure inertia at this abutment (new input, panel I-11) set to 100 % — the Extreme Event I superstructure inertia used the floating TU share ("+(isFinite(old)?old.toFixed(0):"—")+" %) before; change it if wanted"+(S.seismic.on?"":" (Extreme Event I is off)"));
++    }
++    if(S.piles.embed===undefined||S.piles.clrTop===undefined){
++      if(S.piles.embed===undefined) S.piles.embed=12.0;
++      if(S.piles.clrTop===undefined) S.piles.clrTop=3.0;
++      if(S.fnd.branch==="pile") add.push("Pile embedment into the footing 12 in and clear cover from the pile top to the bottom mat 3 in (new inputs, panel I-7): the punching-shear depth is now measured to the bottom mat above the pile heads [5.12.8.6] — check them");
++    }
++    S.meta.defRev=3;
++    if(add.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add);
++  }
+ }
+ function seedExampleReactions(){
+   const ex={DC:{P:85},DW:{P:12},LL:{P:70},BR:{Vx:3.5},TU:{Vx:2.5},CRSH:{Vx:1.5},
+@@ -1202,7 +1227,7 @@ function buildInputs(){
+       <div class="subhead">Elastomeric pad shear parameters [14.6.3.1]</div>
+       ${inpRow("Shear modulus G","bearing.G","ksi",{title:"AASHTO 14.7.6.2 — 50-durometer nominal ≈0.095–0.200 ksi. Use the low-temperature value for cold-climate thermal force."})}
+       ${inpRow("Total elastomer thickness h<sub>rt</sub>","bearing.hrt","in",{title:"Σ of the interior elastomer layer thicknesses subject to shear."})}
+-      ${inpRow("Bearings per girder line","bearing.nBrgPerGird","–")}
++      <div class="in-note">Bearings per girder line n = ${fmt(+S.bearing.nBrgPerGird,0)} (panel I-10).</div>
+       <div class="in-note">Pad plan area A = padL × padW = ${fmt(S.bearing.padL)} × ${fmt(S.bearing.padW)} in (from panel I-10).</div>
+     `:""}
+   `);
+@@ -1247,6 +1272,8 @@ function buildInputs(){
+       <div class="subhead">Pile section (for punching-shear perimeter)</div>
+       ${selRow("Pile shape","piles.pileShape",[["hp","H-pile (square envelope)"],["square","Square / precast"],["round","Round / pipe / drilled"]])}
+       ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing. [AASHTO 5.12.8.6]"})}
++      ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face. The punching-shear depth is measured above the pile heads (Tab 4 §4.6)."})}
++      ${inpRow("Clear cover, pile top to bottom mat","piles.clrTop","in",{title:"Clear distance from the top of the piles to the bottom reinforcement mat. d_e = t_f − embedment − this cover − d_b (Tab 4 §4.6)."})}
+     `);
+   }
+ 
+@@ -1258,7 +1285,7 @@ function buildInputs(){
+     ${inpRow("γ DW max","factors.gpDWmax","–")}${inpRow("&nbsp;&nbsp;γ DW min","factors.gpDWmin","–")}
+     ${inpRow("γ EV max","factors.gpEVmax","–")}${inpRow("&nbsp;&nbsp;γ EV min","factors.gpEVmin","–")}
+     ${inpRow("γ EH max (active)","factors.gpEHmax","–")}${inpRow("&nbsp;&nbsp;γ EH min","factors.gpEHmin","–")}
+-    ${inpRow("γ DC max — Strength IV","factors.gpDCmaxS4","–",{title:"Table 3.4.1-2: DC maximum 1.50 for Strength IV only"})}
++    <div class="in-note">Strength IV is not checked: Art. 3.4.1 defines it for dead-load force effects in superstructures, and C3.4.1 excludes substructures, earth-retaining systems and bearing design.</div>
+     <div class="subhead">Transient loads — Table 3.4.1-1</div>
+     ${inpRow("γ LL — Strength I (also BR, LS)","factors.llS1","–")}
+     ${inpRow("γ LL — Strength V","factors.llS5","–")}
+@@ -1296,6 +1323,7 @@ function buildInputs(){
+     <div class="subhead">Bearing pad (each bearing) — for concrete bearing stress [5.6.5]</div>
+     ${inpRow("Pad length (along span, longitudinal)","bearing.padL","in")}
+     ${inpRow("Pad width (transverse)","bearing.padW","in")}
++    ${inpRow("Bearings per girder line","bearing.nBrgPerGird","–",{title:"Box / tub girders: 2. The seat bearing check (Tab 5 §5.6) and the load sent to the elastomeric module use the girder reaction / n; TU and CR·SH pad forces count N girders × n bearings."})}
+     <div class="in-note">The tool checks the most heavily loaded single bearing. The confined area A<sub>2</sub> is taken from the geometric spread available on the seat (m = √(A₂/A₁) ≤ 2).</div>
+     <div class="subhead">Bearing-seat reinforcement mat (provided under each bearing)</div>
+     ${selRow("Seat mat bar size","bearing.seatBar",Object.keys(BARS).map(k=>[k,"#"+k]))}
+@@ -1313,6 +1341,7 @@ function buildInputs(){
+       ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × A<sub>s</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.2]"})}
+       ${inpRow("Vertical coefficient k<sub>v</sub>","seismic.kv","–")}
+       ${inpRow("ΔP<sub>AE</sub> application height ratio (× H)","seismic.hEQr","–",{title:"Dynamic increment applied at this fraction of H (0.6H classic Seed–Whitman; static part stays at H/3)."})}
++      ${inpRow("Seismic share of superstructure inertia at this abutment","seismic.shEQ","%",{title:"EQ_sup = A_s·(DC + DW)·share, at the seat (Tab 3 §3.6a). 100 % = all of the superstructure inertia through this abutment's keepers / shear keys. Independent of the static longitudinal shares of panel I-6."})}
+       ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","γp max/min, as Strength (1.50 / 0.90) [T.3.4.1-1, -2]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
+       ${S.seismic.gEHEQmode==="agency"?inpRow("&nbsp;&nbsp;γ<sub>EH</sub> (agency policy)","seismic.gEHEQ","–",{title:"Fixed static earth-pressure factor within EE-I (e.g. 1.0 with the full M–O thrust) where the owner allows it instead of γp."}):""}
+       ${inpRow("γ<sub>EQ</sub> on live load","seismic.gEQll","–",{title:"Project-specific per 3.4.1; commonly 0 for abutments, up to 0.5 where live presence during EQ is credible."})}
+@@ -1324,7 +1353,7 @@ function buildInputs(){
+       ${S.seismic.eLimEQmode==="user"?inpRow("&nbsp;&nbsp;Eccentricity limit fraction e/B (EE)","seismic.eFracEQ","–",{title:"Owner rule. The 10th Ed. limit is B/3 at γEQ = 0 and 0.4B at γEQ = 1, soil and rock [11.6.5.1]; a larger value is not conservative."}):`<div class="in-note">e<sub>lim</sub> = B·(1/3 + (0.4 − 1/3)·γ<sub>EQ</sub>): B/3 at γ<sub>EQ</sub> = 0, 0.4B at γ<sub>EQ</sub> = 1; permutations without live load use γ<sub>EQ</sub> = 0 [11.6.5.1, 10.6.4.2].</div>`}
+     `:`<div class="in-note">OFF — Strength/Service only. The minimum seismic connection force [3.10.9] remains surfaced as a design note in Tab 3. Enable for sites where SDC > A or where the owner requires an M–O check.</div>`}
+     ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]])}
+-    ${sq.on?"":inpRow("A<sub>s</sub> for the connection force","seismic.As","g",{title:"Zone 1 connection force: 0.15 when A_s < 0.05, else 0.25 [3.10.9.2]; single-span minimum A_s × permanent load [3.10.9.1]."})}
++    ${sq.on?"":inpRow("A<sub>s</sub> for the connection force","seismic.As","g",{title:"Zone 1 connection force: 0.15 when A_s < 0.05, else 0.25 [3.10.9.2]; single-span bridges (panel I-1 H = single-span): minimum A_s × permanent load [3.10.9.1]."})}
+   `);
+ 
+   /* ---- I-12 Assumptions ---- */
+@@ -1654,7 +1683,9 @@ function computeAll(){
+   /* ===== C-4b Calculated longitudinal loads (BR / TU / CR·SH) — override agg.Vx when toggled ===== */
+   R.longit=computeLongitudinal(agg);
+   R.agg=agg;
+-  if(R.seis){ R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P)*shTU; } // superstructure inertia through bearings, thermal-path share
++  // superstructure inertia through the bearings/keepers: A_s·(DC + DW)·share, share = seismic.shEQ (panel I-11, default 100 %);
++  // independent of the static longitudinal shares of I-6 (BR/TU/CR·SH/WS keep those)
++  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P)*R.seis.shEQ; }
+ 
+   /* ===== C-5 Load groups (about toe; Mt about abutment CL) =====
+      each: V (+down), Mv=V·x, Hx (+driving), Mh=Hx·z, Hy, Mt */
+@@ -1720,7 +1751,8 @@ function computeAll(){
+   const LIMITS={
+     "Strength I":  {LL:+F.llS1, WS:0,        WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
+     "Strength III":{LL:0,       WS:+F.wsS3,  WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:false},
+-    "Strength IV": {LL:0,       WS:0,        WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:false, dcMax:(+F.gpDCmaxS4||1.50)},   // Table 3.4.1-1; γDC max 1.50 [T.3.4.1-2]
++    // Strength IV is not a limit state of this tool: 3.4.1 defines it for dead-load force effects in superstructures, and
++    // C3.4.1 excludes substructures, earth-retaining systems and bearing design (factors.gpDCmaxS4 is kept in saved data, unused)
+     "Strength V":  {LL:+F.llS5, WS:+F.wsS5*wsF5,  WL:+F.wlS5, TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
+     "Constr — Str I":{LL:+S.constr.gLL||0, WS:0, WL:0, TU:0, CR:0, perm:true , liveOpt:(+S.constr.gLL||0)>0 , noSuper:true },
+     "Service I":   {LL:1.0,     WS:1.0*wsFsv,      WL:1.0,     TU:1.0,    CR:1.0,    perm:false, liveOpt:true }
+@@ -1790,7 +1822,7 @@ function computeAll(){
+     R.permTables[lsName]=rows;
+   }
+ 
+-  const STR_LIMITS=["Strength I","Strength III","Strength IV","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
++  const STR_LIMITS=["Strength I","Strength III","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
+   // EE-I eccentricity limit [11.6.5.1]: B·(1/3 + (0.4 − 1/3)·γEQ), soil and rock; γEQ = 0 for a permutation without live load [10.6.4.2]
+   function eFracEQfor(liveOn){ const s=S.seismic; if(s.eLimEQmode==="user") return +s.eFracEQ;
+     const gq=liveOn===1? Math.min(1,Math.max(0,+s.gEQll||0)) : 0; return 1/3+(0.4-1/3)*gq; }
+@@ -1973,12 +2005,15 @@ function computeAll(){
+   R.checks.seat={dc:NreqP/Nprov, Nreq, NreqP, pctN, zoneN, AsN, Nprov, seatIn:seatW*12, endGap, Hsup, HsupMode};
+   // Minimum seismic connection force (each restrained direction) [3.10.9]:
+   //   Zone 1: c·(permanent + γEQ·LL) reaction, c = 0.15 when A_s < 0.05, else 0.25 [3.10.9.2];
+-  //   single-span bridges, any zone: ≥ A_s × permanent reaction [3.10.9.1, 4.7.4.2] (taken as a floor here in every zone, conservative for multispan);
+-  //   Zones 2–4: the connection force comes from the seismic analysis [3.10.9.3, 3.10.9.4]; only the 3.10.9.1 floor is computed.
++  //   single-span bridges only, any zone: ≥ A_s × permanent reaction [3.10.9.1, 4.7.4.2]; single span = panel I-1 "Pier height H"
++  //   set to "Single-span bridge" (the tool's span-count input); otherwise multispan;
++  //   multispan Zones 2–4: the connection force comes from the seismic analysis [3.10.9.3, 3.10.9.4]; not computed.
+   const zone=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), AsC=Math.max(0,+S.seismic.As||0), gEQc=Math.max(0,+S.seismic.gEQll||0);
++  const single=g.HsupMode==="single";
+   const Wperm=agg.DC.P+agg.DW.P, Wtrib=Wperm+gEQc*agg.LL.P, cZ1=AsC<0.05?0.15:0.25;
+-  const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm, Fconn=Math.max(F1,F0);
+-  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, LL:agg.LL.P};
++  const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm;
++  const Fconn=zone===1? (single? Math.max(F1,F0) : F1) : (single? F0 : NaN);
++  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, single, LL:agg.LL.P};
+ 
+   /* ===== C-10 Structural concrete checks ===== */
+   const kah=ka*Math.cos(deg2rad(iota)); // horizontal pressure coefficient used on wall faces
+@@ -2265,8 +2300,13 @@ function computeAll(){
+   if(fn.branch==="pile" && R.pile && R.pile.n>0 && R.checks.pileComp && R.checks.pileComp.det){
+     const p=S.piles, act=activePiles();
+     const dbF=BARS[S.reinf.toe.size].db;
+-    const deF=g.tf*12-m.coverF-dbF;                     // footing effective depth (bottom mat), in
+-    const dvF=Math.max(0.9*deF,0.72*g.tf*12);            // in
++    // bottom mat above the pile heads: d_e from the top of the footing to the centroid of the bottom mat (two orthogonal
++    // layers of d_b: centroid d_b above the bottom of the mat), h_p = footing thickness above the pile heads [5.12.8.6, 5.7.2.8]
++    const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
++    const hP=g.tf*12-embP;                               // in
++    const deF=hP-clrP-dbF;                               // footing effective depth over the pile heads, in
++    const dvF=Math.max(0.9*deF,0.72*hP);                 // in
++    if(!(deF>0)) warn(`Punching shear: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(deF,1)} in) — check panel I-7.`,"err");
+     const sPile=+p.pileSize;                             // square-envelope side (round treated as square envelope), in
+     const betaC=1.0;                                     // reaction area long/short ratio (≈1)
+     const vnCoef=Math.min(0.063+0.126/betaC,0.126);      // ksi coefficient
+@@ -2291,7 +2331,7 @@ function computeAll(){
+       if(dc>gov.dc){ let no=0,t=c; for(const cc of S.piles.coords){no++; if(cc===t)break;}
+         gov={dc, Vu, Vn, b0:b0in, dv:dvF, de:deF, pile:no, sides, spanX:spanX*12, spanY:spanY*12}; }
+     });
+-    R.checks.punching={...gov, sPile, betaC, vnCoef, ls:R.checks.pileComp.ls, lbl:det.c?.lbl};
++    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl};
+     // overlapping-perimeter flag (group punching / beam shear governs — hand check)
+     let minSp=Infinity;
+     for(let i=0;i<act.length;i++)for(let j=i+1;j<act.length;j++){
+@@ -2340,20 +2380,22 @@ function computeAll(){
+       const A2=c[0]>0?(Lin+2*c[0])*(Win+2*c[0]):A1, mRaw=Math.sqrt(A2/A1);
+       return {c:c[0], cBy:c[1], cT, A2, mRaw, m:c[0]>0?Math.min(2,mRaw):1};
+     }
+-    // governing single bearing (largest q_b/q_R): factored vertical at Strength I, IV, V
+-    let Pu=-Infinity, pgirder=0, pls="", dcB=-Infinity, sm=null;
++    // governing single bearing (largest q_b/q_R): factored vertical at Strength I, V; with n bearings per girder line
++    // (box / tub girders) each bearing takes the girder reaction / n
++    const nBg=Math.max(1,Math.round(+bg.nBrgPerGird||1));
++    let Pu=-Infinity, PuG=0, pgirder=0, pls="", dcB=-Infinity, sm=null;
+     for(let i=0;i<S.beams.N;i++){
+       const SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS1)*S.rx.LL[i].P;
+       const SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS5)*S.rx.LL[i].P
+                +(+F.wsS5)*wsF5*S.rx.WS[i].P+(+F.wlS5)*S.rx.WL[i].P;
+-      const SIV=LIMITS["Strength IV"].dcMax*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P;
+-      let P=SI, ls="Strength I"; if(SIV>P){P=SIV;ls="Strength IV";} if(SV>P){P=SV;ls="Strength V";}
++      let P=SI, ls="Strength I"; if(SV>P){P=SV;ls="Strength V";}
++      const PG=P; P=PG/nBg;
+       const mi=seatM(i), dci=(P/A1)/(phiB*0.85*m.fc*mi.m);
+-      if(dci>dcB+1e-12){ dcB=dci; Pu=P; pgirder=i+1; pls=ls; sm=mi; }
++      if(dci>dcB+1e-12){ dcB=dci; Pu=P; PuG=PG; pgirder=i+1; pls=ls; sm=mi; }
+     }
+     const mSpread=sm?sm.m:1, qR=phiB*0.85*m.fc*mSpread;   // ksi
+     const qb=Pu/A1;                                       // ksi
+-    R.checks.bearingSeat={dc:qb/qR, qb, qR, A1, m:mSpread, phiB, Pu, pgirder, pls,
++    R.checks.bearingSeat={dc:qb/qR, qb, qR, A1, m:mSpread, phiB, Pu, PuG, nBg, pgirder, pls,
+       A2:sm?sm.A2:A1, c:sm?sm.c:0, cBy:sm?sm.cBy:"", mRaw:sm?sm.mRaw:1, cFront, cBack, cT:sm?sm.cT:0};
+     if(sm&&sm.c<=0) warn("Bearing pad is not inside the seat on all sides (clear edge distance "+fmt(sm.c,1)+" in to the "+sm.cBy+"): m = 1 [5.6.5]; check the pad position.");
+     // seat reinforcement mat — prescriptive provision + STM trigger
+@@ -2612,9 +2654,8 @@ function computeAll(){
+       ["factors.gpDWmax",1.50,"γDW max [T.3.4.1-2]"],["factors.gpDWmin",0.65,"γDW min [T.3.4.1-2]"],
+       ["factors.gpEVmax",1.35,"γEV max [T.3.4.1-2]"],["factors.gpEVmin",1.00,"γEV min [T.3.4.1-2]"],
+       ["factors.gpEHmax",1.50,"γEH max (active) [T.3.4.1-2]"],["factors.gpEHmin",0.90,"γEH min [T.3.4.1-2]"],
+-      ["factors.gpDCmaxS4",1.50,"γDC max Strength IV [T.3.4.1-2]"],
+       ["factors.llS1",1.75,"γLL Strength I [T.3.4.1-1]"],["factors.llS5",1.35,"γLL Strength V [T.3.4.1-1]"],
+-      ["factors.wsS3",1.40,"γWS Strength III (design basis)"],["factors.wsS5",1.00,"γWS Strength V"],
++      ["factors.wsS3",1.00,"γWS Strength III [T.3.4.1-1]"],["factors.wsS5",1.00,"γWS Strength V"],
+       ["factors.wlS5",1.00,"γWL Strength V"],["factors.gTU",1.00,"γTU (force effects) [T.3.4.1-6]"],["factors.gCR",1.00,"γCR/SH [T.3.4.1-3]"],
+       ["piles.gDD",1.10,"γDR drag load, structural [T.3.4.1-1 note]"],["seismic.phiBEQ",0.80,"φb bearing, Extreme Event I [11.5.8]"],
+       ["fnd.phiTau",0.80,"φτ sliding [T.10.5.5.2.2-1]"],["fnd.phiEP",0.50,"φep passive"],
+@@ -2813,10 +2854,10 @@ function renderTabLoads(R){
+     <div class="note-box" style="line-height:1.55">
+     <b>1.</b> Earth pressure: <b>${S.soil.method==="rankine"?"Rankine":"Coulomb"}</b> active theory on the vertical plane through the heel end; at-rest K₀ not used (free-standing cantilever) [3.11.5]. Valid for β &lt; φ and a wall free to translate/rotate.<br>
+     <b>2.</b> Live-load surcharge: equivalent soil height h<sub>eq</sub> interpolated from Table 3.11.6.4.1-1; vertical LSv counted only where it increases demand.<br>
+-    <b>3.</b> Longitudinal distribution: <b>${S.dist.model==="floating"?"MassDOT floating bridge":S.dist.model==="fixed"?"defined fixed bearing (100%)":"manual"}</b> — BR/TU/CR·SH/WS<sub>x</sub> shares ${fmt(shB.shBR*100,0)}/${fmt(shB.shTU*100,0)}/${fmt(shB.shCR*100,0)}/${fmt(shB.shWS*100,0)}% to this abutment [MassDOT 3.1.8.3].<br>
++    <b>3.</b> Longitudinal distribution: <b>${S.dist.model==="floating"?"MassDOT floating bridge":S.dist.model==="fixed"?"defined fixed bearing (100%)":"manual"}</b> — BR/TU/CR·SH/WS<sub>x</sub> shares ${fmt(shB.shBR*100,0)}/${fmt(shB.shTU*100,0)}/${fmt(shB.shCR*100,0)}/${fmt(shB.shWS*100,0)}% to this abutment [MassDOT 3.1.8.3]${S.seismic.on?"; Extreme Event I superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"% (panel I-11)":""}.<br>
+     <b>4.</b> Passive resistance at toe: <b>${R.passive.on?"ENABLED (φep applied — verify scour)":"neglected (conservative default)"}</b> [3.11.1].<br>
+     <b>5.</b> Groundwater: balanced condition assumed (equal water both sides — no net hydrostatic thrust); buoyant unit weights below the modeled water table.<br>
+-    <b>6.</b> γ<sub>p</sub> permutation: every permanent class factored at both bounds; each check takes its own worst permutation — no single global case [3.4.1].<br>
++    <b>6.</b> γ<sub>p</sub> permutation: every permanent class factored at both bounds; each check takes its own worst permutation — no single global case [3.4.1]. Limit states: Strength I, III, V, construction, Service I and (when on) Extreme Event I; Strength IV is not checked (3.4.1 defines it for superstructures; C3.4.1 excludes substructures, earth-retaining systems and bearing design).<br>
+     <b>7.</b> Foundation: <b>${S.fnd.branch==="spread"?("spread footing on "+S.fnd.matl+" — effective-width (soil) / linear (rock) design bearing distribution [10.6]"):"pile group — elastic rigid-cap biaxial distribution, vertical piles; lateral resistance is an LPILE hand-off [10.7]"}</b>.<br>
+     <b>8.</b> V&amp;M diagrams: limit states use the design bearing distribution; individual loads use elastic (tension-allowed) superposition — the two intentionally differ for the footing.<br>
+     <b>9.</b> Structural: 1-ft strips; strain-based φ per 5.5.4.2; footing crack-control service moments from Service I directly (linear contact pressure / pile reactions).<br>
+@@ -3183,23 +3224,28 @@ function renderTabStab(R){
+       ${eqB("Inertial forces (k_h · weight)","AASHTO 11.6.5.1",[
+         `\\text{Wall (incl. footing): } k_h W_w = ${fmtT(q.WiW)}\\ \\text{kip at } \\bar z = ${fmtT(q.zWall)}\\ \\text{ft}`,
+         `\\text{Soil block: } k_h W_s = ${fmtT(q.WiS)}\\ \\text{kip at } \\bar z = ${fmtT(q.zSoil)}\\ \\text{ft}`,
+-        `\\text{Superstructure: } A_s(DC+DW)\\cdot\\text{share} = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}`],
+-        "Superstructure inertia uses the full A_s (restrained by keepers) and the thermal-path share; EOR to confirm the distribution for the actual bearing/keeper layout. EE-I resistance factors and the e/B limit are editable in panel I-11.")}
++        "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
++        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}`],
++        "Superstructure inertia uses the full A_s (restrained by keepers) and s_EQ = the seismic share of the superstructure inertia at this abutment (panel I-11, default 100 %); it does not use the static longitudinal shares of panel I-6. EOR to confirm the distribution for the actual bearing/keeper layout. EE-I resistance factors and the e/B limit are editable in panel I-11.")}
+     `);
+   }
+   const sz=R.seismic;
+   h+=panel("o-seis","3.6","Minimum Seismic Connection Force — Design Note [3.10.9 / MassDOT]",`
+     <div class="note-box">${S.seismic.on?"In addition to the Extreme Event I analysis above,":"Extreme Event I is currently OFF (enable in panel I-11), but"} MassDOT floating bridges require the superstructure–substructure connection (shear keys, keeper blocks, anchor bolts) to resist a minimum horizontal force in each restrained direction:</div>
+-    ${eqB("Minimum connection force (each restrained direction) — Seismic Zone "+sz.zone,"AASHTO 3.10.9.1, 3.10.9.2",[
++    ${eqB("Minimum connection force (each restrained direction) — Seismic Zone "+sz.zone+", "+(sz.single?"single-span":"multispan")+" bridge","AASHTO 3.10.9.1, 3.10.9.2, 4.7.4.2",[
+       ...(sz.zone===1?[
+       "F_{Z1} = c\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + \\gamma_{EQ}\\,\\Sigma P_{LL}), \\quad c = 0.15 \\text{ if } A_s < 0.05,\\ \\text{else } 0.25 \\quad [3.10.9.2]",
+       `F_{Z1} = ${fmtT(sz.cZ1)}\\,(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)} + (${fmtT(sz.gEQ)})(${fmtT(sz.LL)})) = ${fmtT(sz.F1)}\\ \\text{kip} \\quad (A_s = ${fmtT(sz.As,3)})`]:[]),
+-      "F_{1span} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW}) \\quad [3.10.9.1,\\ \\text{single-span bridges, any zone}]",
+-      `F_{1span} = (${fmtT(sz.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)}) = ${fmtT(sz.F0)}\\ \\text{kip}`,
+-      sz.zone===1?`F_{conn} = \\max(F_{Z1},\\,F_{1span}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`
+-                 :`F_{conn} \\ge F_{1span} = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`],
++      ...(sz.single?[
++      "F_{1span} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW}) \\quad [3.10.9.1,\\ 4.7.4.2:\\ \\text{single-span bridges, any zone}]",
++      `F_{1span} = (${fmtT(sz.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)}) = ${fmtT(sz.F0)}\\ \\text{kip}`]:[]),
++      sz.zone===1?(sz.single?`F_{conn} = \\max(F_{Z1},\\,F_{1span}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`
++                            :`F_{conn} = F_{Z1} = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`)
++                 :(sz.single?`F_{conn} \\ge F_{1span} = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`
++                            :"F_{conn}:\\ \\text{from the seismic analysis (not computed)}")],
+       "Applies to backwall shear keys, keeper blocks and anchor bolts. Not run as a full Extreme Event combination in v1. "
+-      +(sz.zone===1?"The single-span minimum is applied as a floor (conservative for a multispan bridge). ":"<b>Zone "+sz.zone+": the connection design force comes from the seismic analysis [3.10.9.3, 3.10.9.4, 4.7.4.3]; this tool computes only the single-span minimum A_s × permanent load [3.10.9.1, 4.7.4.2].</b> ")
++      +"Single-span bridge = panel I-1 \"Pier height H in N\" set to \"Single-span bridge\""+(sz.single?"":" (not set: multispan assumed, so the single-span minimum A_s × permanent load [3.10.9.1] is not applied)")+". "
++      +(sz.zone===1||sz.single?"":"<b>Zone "+sz.zone+", multispan: the connection design force comes from the seismic analysis [3.10.9.3, 3.10.9.4, 4.7.4.3]; this tool does not compute it.</b> ")
+       +"γ_EQ = live load assumed present during the earthquake (panel I-11). Zone and A_s are set in panel I-11 [T.3.10.6-1].")}
+   `);
+   h+=panel("o-tornado","3.8","Sensitivity — Governing D/C vs ±10% Input Perturbation",`
+@@ -3289,9 +3335,11 @@ function renderTabFound(R){
+     h+=panel("o-punch","4.6","Two-Way (Punching) Shear at Piles [AASHTO 5.12.8.6]",`
+       ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+pnc.sides+"-sided critical section)")}
+       ${abutWorkedIn([["tab-found","o-pileform","4.2 Axial Pile Reactions","V_u (pile reaction)"]])}
+-      ${eqB("Footing effective depth & shear depth","AASHTO 5.12.8.6, 5.7.2.8",[
+-        `d_e = t_f - c_{cl} - d_b = ${fmtT(g.tf*12,1)} - ${fmtT(S.mat.coverF,2)} - ${fmtT(BARS[S.reinf.toe.size].db,3)} = ${fmtT(pnc.de)}\\ \\text{in}`,
+-        `d_v = \\max(0.9d_e,\\,0.72h) = ${fmtT(pnc.dv)}\\ \\text{in}`])}
++      ${eqB("Footing effective depth & shear depth over the pile heads","AASHTO 5.12.8.6, 5.7.2.8",[
++        `h_p = t_f - e_{pile} = ${fmtT(g.tf*12,1)} - ${fmtT(pnc.embed,1)} = ${fmtT(pnc.hP,1)}\\ \\text{in}`,
++        `d_e = h_p - c_{top} - d_b = ${fmtT(pnc.hP,1)} - ${fmtT(pnc.clrTop,2)} - ${fmtT(pnc.db,3)} = ${fmtT(pnc.de)}\\ \\text{in}`,
++        `d_v = \\max(0.9d_e,\\,0.72h_p) = \\max(0.9(${fmtT(pnc.de)}),\\,0.72(${fmtT(pnc.hP,1)})) = ${fmtT(pnc.dv)}\\ \\text{in}`],
++        "e_pile = pile embedment into the footing; c_top = clear cover from the pile top to the bottom mat (panel I-7). The bottom mat sits above the pile heads; d_e is measured from the top of the footing to the mat centroid (two orthogonal layers, centroid d_b above the bottom of the mat), and h_p is the footing thickness above the pile heads.")}
+       ${eqB("Critical perimeter at d_v/2 from the pile face (square envelope, edge-truncated)","AASHTO 5.12.8.6.3",[
+         `\\text{pile size} = ${fmtT(pnc.sPile,1)}\\ \\text{in}, \\quad \\text{critical section side} = ${fmtT(pnc.sPile,1)}+${fmtT(pnc.dv)} = ${fmtT(pnc.sPile+pnc.dv,1)}\\ \\text{in}`,
+         `b_0 = ${fmtT(pnc.b0,1)}\\ \\text{in} \\quad(${pnc.sides}\\text{ faces inside the footing for the governing pile})`])}
+@@ -3431,12 +3479,13 @@ function renderTabStruct(R){
+   h+=panel("o-str-bearing","5.6","Bearing on Concrete — Bridge Seat [AASHTO 5.6.5]",`
+     ${govNote("Governing single-bearing factored vertical — girder "+bs.pgirder+", "+bs.pls)}
+     ${eqB("Factored bearing demand & resistance","AASHTO 5.6.5 (Eq. 5.6.5-1, -2), 5.5.4.2",[
++      `P_u = \\dfrac{P_{u,girder}}{n_b} = \\dfrac{${fmtT(bs.PuG)}}{${bs.nBg}} = ${fmtT(bs.Pu)}\\ \\text{kip per bearing}`,
+       `A_1 = L_{pad}\\,W_{pad} = ${fmtT(bg.padL,1)}\\times${fmtT(bg.padW,1)} = ${fmtT(bs.A1,0)}\\ \\text{in}^2\\,, \\qquad q_b = \\dfrac{P_u}{A_1} = \\dfrac{${fmtT(bs.Pu)}}{${fmtT(bs.A1,0)}} = ${fmtT(bs.qb,3)}\\ \\text{ksi}`,
+       `c = \\min(c_{front},\\,c_{back},\\,c_{trans}) = \\min(${fmtT(bs.cFront,1)},\\,${fmtT(bs.cBack,1)},\\,${fmtT(bs.cT,1)}) = ${fmtT(bs.c,1)}\\ \\text{in} \\quad(\\text{${esc(bs.cBy)}})`,
+       `A_2 = (L_{pad}+2c)(W_{pad}+2c) = (${fmtT(bg.padL,1)}+2(${fmtT(Math.max(0,bs.c),1)}))(${fmtT(bg.padW,1)}+2(${fmtT(Math.max(0,bs.c),1)})) = ${fmtT(bs.A2,0)}\\ \\text{in}^2`,
+       `m = \\sqrt{A_2/A_1} = \\sqrt{${fmtT(bs.A2,0)}/${fmtT(bs.A1,0)}} = ${fmtT(bs.mRaw,3)} \\le 2 \\;\\Rightarrow\\; m = ${fmtT(bs.m,3)}`,
+       `q_R = \\varphi_b\\,(0.85 f'_c)\\,m = ${fmtT(bs.phiB,2)}(0.85\\times${fmtT(m.fc,1)})(${fmtT(bs.m,3)}) = ${fmtT(bs.qR,3)}\\ \\text{ksi}`],
+-      "P_u is the most heavily loaded single bearing (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind), evaluated at Strength I, IV and V; the governing bearing is the one with the largest q_b/q_R. A₂ is concentric with the pad, extended by the smallest clear edge distance c: c_front = (t_st − t_bw − setback)·12 − L_pad/2 to the seat front edge, c_back = (setback + t_bw)·12 − L_pad/2 to the stem back face (the stem continues under the backwall), c_trans = the lesser of the distance to the wall end and half the clear distance to the next girder's pad (Fig. 5.6.5-1). m = 1 if c ≤ 0.")}
++      "P_u is the most heavily loaded single bearing: the factored girder reaction (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind) divided by n_b, the bearings per girder line (panel I-10), evaluated at Strength I and V; the governing bearing is the one with the largest q_b/q_R. A₂ is concentric with the pad, extended by the smallest clear edge distance c: c_front = (t_st − t_bw − setback)·12 − L_pad/2 to the seat front edge, c_back = (setback + t_bw)·12 − L_pad/2 to the stem back face (the stem continues under the backwall), c_trans = the lesser of the distance to the wall end and half the clear distance to the next girder's pad (Fig. 5.6.5-1). m = 1 if c ≤ 0."+(bs.nBg>1?" With "+bs.nBg+" bearings per girder each pad is placed at the girder centreline for c_trans (the pad spacing within a girder is not an input): check c_trans by hand.":""))}
+     ${checkLine("Bearing on concrete",`\\dfrac{q_b}{q_R} = \\dfrac{${fmtT(bs.qb,3)}}{${fmtT(bs.qR,3)}}`,bs.dc)}
+     <div class="subhead">Bearing-seat reinforcement (provision)</div>
+     <div class="note-box">AASHTO provides <b>no closed-form demand</b> for seat reinforcement under a bearing; a reinforcement mat under each bearing is a prescriptive detailing requirement, with a <b>strut-and-tie evaluation [5.8]</b> required for heavy or edge-loaded bearings. Provided mat: <b>#${bg.seatBar} @ ${fmt(+bg.seatSp,1)} in each way = ${fmt(sm.AsMat)} in²/ft</b>.</div>
+@@ -3513,7 +3562,7 @@ function drawRebarSketch(){
+ const VM_SEL_GROUPS=[
+   ["Limit-state combinations (factored)",[
+     ["ls:Strength I","Strength I"],["ls:Strength III","Strength III"],
+-    ["ls:Strength IV","Strength IV"],["ls:Strength V","Strength V"],["ls:Constr — Str I","Construction — Str I (no superstructure)"],
++    ["ls:Strength V","Strength V"],["ls:Constr — Str I","Construction — Str I (no superstructure)"],
+     ["ls:Service I","Service I"]]],
+   ["Individual loads (unfactored, γ = 1.0)",[
+     ["load:DC","DC — dead load (self-wt + superstructure)"],["load:DW","DW — wearing surface / utilities"],
+@@ -4838,11 +4887,11 @@ document.getElementById("btnReset").addEventListener("click",()=>{
+ let EDM_WIN=null;
+ function edmPayload(){
+   const R=window.LAST_R||recalcAll()||window.LAST_R, g=S.geom, br=S.bearing, Lg=S.longit;
+-  // per-girder service loads for the EDM "run all girders" batch
+-  const girders=[]; const N=S.beams.N;
++  // per-girder service loads for the EDM "run all girders" batch: load on one bearing = girder reaction / bearings per girder
++  const girders=[]; const N=S.beams.N, nBg=Math.max(1,Math.round(+br.nBrgPerGird||1));
+   for(let i=0;i<N;i++){
+-    const Pdl=(S.rx.DC[i]?S.rx.DC[i].P:0)+(S.rx.DW[i]?S.rx.DW[i].P:0);
+-    const Pll=S.rx.LL[i]?S.rx.LL[i].P:0;
++    const Pdl=((S.rx.DC[i]?S.rx.DC[i].P:0)+(S.rx.DW[i]?S.rx.DW[i].P:0))/nBg;
++    const Pll=(S.rx.LL[i]?S.rx.LL[i].P:0)/nBg;
+     girders.push({tag:"G"+(i+1),Pdl:+Pdl.toFixed(3),Pll:+Pll.toFixed(3),thetaLL:0.004});
+   }
+   // representative (first interior) load
+@@ -4869,7 +4918,7 @@ function fromEDM(src){   // accept messages only from the EDM window this page o
+ window.addEventListener("message",ev=>{
+   const d=ev.data; if(!d||d.app!=="abutment-edm") return;
+   if(!fromEDM(ev.source)) return;
+-  if(d.type==="EDM_READY"){ try{ (ev.source||EDM_WIN).postMessage(edmPayload(),"*"); document.getElementById("saveStatus").textContent="inputs handed off to EDM"; }catch(e){} }
++  if(d.type==="EDM_READY"){ try{ (ev.source||EDM_WIN).postMessage(edmPayload(),"*"); const nB=Math.max(1,Math.round(+S.bearing.nBrgPerGird||1)); document.getElementById("saveStatus").textContent="inputs handed off to EDM"+(nB>1?" (load per bearing = girder reaction / "+nB+")":""); }catch(e){} }
+   if(d.type==="PAD"){ const p=d.payload||{};
+     if(p.G) S.bearing.G=+p.G; if(p.hrt) S.bearing.hrt=+p.hrt;
+     let circNote="";
+@@ -4915,7 +4964,7 @@ function inputEchoHTML(){
+     ["Earth surcharge ES",fmt(+s.esQ||0,2),"ksf"],
+     ["Construction stage (fill / γLL)",((+S.constr.hFill>0)?fmt(+S.constr.hFill,1):"full")+" / "+fmt(+S.constr.gLL||0),"ft / –"]]);
+   h+="<h3>Seismic / scour</h3>"+echoRows([
+-    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")):"OFF",""],
++    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
+     ["Scour condition",f.scour?"ON — passive eliminated; qn at scoured grade":"off",""]]);
+   h+="<h3>Foundation</h3>"+echoRows(f.branch==="spread"?[
+     ["Branch","Spread footing on "+f.matl,""],
+@@ -4929,6 +4978,7 @@ function inputEchoHTML(){
+     ["Rn / φc",fmt(p.Rn)+" / "+fmt(p.phiC),"kip / –"],
+     ["Rn,up / φup",fmt(p.RnUp)+" / "+fmt(p.phiUp),"kip / –"],
+     ["Pile section (punching)",(p.pileShape||"hp")+", "+fmt(p.pileSize,1)+" in",""],
++    ["Pile embedment / clear cover pile top to bottom mat",fmt(+p.embed,1)+" / "+fmt(+p.clrTop,1),"in"],
+     ["Drag load DR / γDR (structural; 0 geotechnical)",fmt(+p.dd||0,0)+" / "+fmt(+p.gDD,2),"kip / –"]]);
+   h+="<h3>Longitudinal distribution</h3>"+echoRows([
+     ["Model",d.model,""],["Shares BR / TU / CR-SH / WSx",
+@@ -4965,6 +5015,7 @@ function inputEchoHTML(){
+     ["Stem–footing joint (shear friction)",{monolithic:"cast monolithic",roughened:"roughened ¼ in",smooth:"not roughened"}[S.joint?.prep||"roughened"],""]]);
+   h+="<h3>Bearings & seat</h3>"+echoRows([
+     ["Bearing pad (L × W)",fmt(S.bearing.padL,1)+" × "+fmt(S.bearing.padW,1),"in"],
++    ["Bearings per girder line",fmt(+S.bearing.nBrgPerGird,0),""],
+     ["Bearing-seat mat","#"+S.bearing.seatBar+" @ "+fmt(+S.bearing.seatSp,1)+" in each way",""]]);
+   return h;
+ }
+```
