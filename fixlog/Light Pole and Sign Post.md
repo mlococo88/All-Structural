@@ -1137,3 +1137,43 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
 
 ### Open items
 - None new.
+
+## 2026-10-21 — PR: claude/lightpole-torqued (anchor installation input and ACI 318-19 §17.9 minimum geometry; PR link added after merge)
+
+### TQ1. Anchor installation input (Untorqued / Torqued) and ACI 318-19 §17.9.2 minimum spacing and edge distance checks   [new checks] [no existing result changes]
+- **Where:**
+  - Input card 7 "Anchor bolts & base plate": new row after "Anchor reinforcement", anchor text `id="segAnchTq"`, and the notice `<p ... id="anchTqMigNote">`.
+  - State: `let anchTq='torqued';` below `let anchRe='yes';`; click handler below the `#segAnchRe` handler; `calc()` input object `bpDia:num('bpDia'),anchTq:anchTq,`.
+  - `anchorBolts()`: new block after `const sfbApplies = ca1 < 0.4*hef;`; new return fields `torq,sAnch,sMinReq,spOK,edReq,edProv,edOK`.
+  - New `boltMinGeomRows(b)` above `function boltNotCheckedRows(b){`; called before `boltNotCheckedRows` in both limit-state tables (light pole, `$('boltTbl')`; sign posts, `S('boltTbl')`).
+  - `boltWorkedHTML()`: new step "9 · Minimum spacing and edge distance" after the base-plate step (also printed in the report's anchor sections, which reuse `boltWorkedHTML`).
+  - `collectChecks()`: two new checks after `'Anchor T–V interaction'`; `LPP_CHK2K` maps both to `anchors`; `summaryHTML()` Demand-vs-capacity cells use `c.dec` when set (2 decimals for the new rows; other rows unchanged); new design row `drow('Anchor installation', …)`.
+  - Report: anchor varsub line adds "torqued (pretensioned)" / "untorqued"; `LPP_REFS` ACI and AASHTO LTS lines extended.
+  - Manual Part (inputs table, anchor rows): new "Anchor installation" row.
+  - `captureState()` adds `anchTq`; `applyState()` reads it (migration below).
+- **Problem:** the tool computed c_a1 = R_edge − R (for ψ_ed,N and the side-face blowout flag) but had no ACI 318-19 §17.9 minimum spacing / edge distance check, and no way to say whether the anchors are torqued.
+- **Governing provision:** ACI 318-19 §17.9.1, §17.9.2 Table 17.9.2(a) (cast-in anchors: minimum spacing 4d_a not torqued, 6d_a torqued; minimum edge distance = specified cover per §20.5.1.3 not torqued, 6d_a torqued), §17.9.3 (d_a′ substitution for untorqued anchors; cited, not computed), §17.9.4 (h_ef limit for post-installed expansion/screw/undercut anchors; does not apply to cast-in, stated in the work). Wording and table values cited from the code; verify against the engineer's copy.
+- **Default (decided):** Torqued for new projects. AASHTO LTS practice (snug-tight, then turn-of-nut pretension of the anchor rods in the base connection; the tool's reference list already names AASHTO LTS) means pole and sign anchor rods are tightened, so the torqued limits are the accurate ones. Article/edition of the LTS tightening provision: verify (cited by subject only).
+- **Expressions (new):**
+  - s = BC·sin(π/n) (chord between adjacent bolts); s_min = 6d_a torqued, 4d_a untorqued. Not checked for n = 1.
+  - Torqued: c_a1 = R_edge − BC/2 ≥ 6d_a.
+  - Untorqued: clear cover to the anchor shank c_a1 − d_a/2 ≥ specified cover (the Clear cover input, §20.5.1.3).
+  - Utilization = required ÷ provided (the tool's convention for minimum-type checks); PASS when provided ≥ required.
+- **Existing formulas, factors, units:** none changed. No capacity depends on the new input.
+- **Saved data / migration:** new top-level field `anchTq` in the project state (`lpp_projects_v1`, `lpp_session_v1`); no key or existing field changed. A save without `anchTq` opens as **Untorqued** with the notice `anchTqMigNote` (hidden once the user picks a setting). Every earlier result is unchanged in both settings (verified, below); only the new rows are added. New projects (`DEFAULT_STATE`, the "New" button, empty storage) start Torqued.
+- **Check cases** (lengths in in; f′c, loads irrelevant):
+  - Default pole: (6) 1 in, BC 16, shaft 3.0 ft → R_edge = 18, c_a1 = 18 − 8 = 10.00. s = 16·sin(30°) = 8.00.
+    - Torqued (new default): s_min = 6.00 → 6.00/8.00 = 0.75 PASS; c_min = 6.00 → 6.00/10.00 = 0.60 PASS.
+    - Untorqued (old save): s_min = 4.00 → 0.50 PASS; cover 10.00 − 0.50 = 9.50 ≥ 3.00 → 0.32 PASS.
+  - Edge case: shaft 2.0 ft → R_edge = 12, c_a1 = 4.00. Torqued: 4.00 < 6.00 → 1.50 **FAIL**. Untorqued: 4.00 − 0.50 = 3.50 ≥ 3.00 → 0.86 PASS.
+  - Spacing case: n = 12, BC 16 → s = 16·sin(15°) = 4.14. Torqued: 6.00/4.14 = 1.45 **FAIL**. Untorqued: 4.00/4.14 = 0.97 PASS.
+  - 1½ in bolts, shaft 2.5 ft (R_edge 15, c_a1 = 7.00): torqued s_min = c_min = 9.00 → spacing 9.00/8.00 = 1.13 FAIL, edge 9.00/7.00 = 1.29 FAIL; untorqued spacing 6.00/8.00 = 0.75 PASS, cover 7.00 − 0.75 = 6.25 ≥ 3.00 → 0.48 PASS.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: all scripts pass.
+  - Headless Chromium, origin/main (23778ea) vs branch, KaTeX 0.16.9 served locally. Five cases seeded as an old save (main's `DEFAULT_STATE`, no `anchTq`): default pole, shaft 2.0 ft, n = 12, two-post sign (V 130, square shaft), 1½ in bolts with no anchor reinforcement. For each: every existing `collectChecks` row (demand, capacity, ratio, ok) and every scalar of the governing `anchorBolts` result are identical to main, opened as Untorqued and again after clicking Torqued. Branch opens old saves as Untorqued with the notice shown; empty storage opens Torqued with no notice. New rows, step 9, Summary rows and the report result lines (Design Summary and the anchor section, per post for the sign) are as in the check cases. No console errors, no `.katex-error`, no ERR tokens.
+- **Other copies:** none (`anchorBolts` exists only in this tool).
+- **Open items:**
+  - §17.9.1 allows lesser values where supplementary reinforcement is provided to control splitting. The tool does not take this from the "Anchor reinforcement: Provided" input (that input is the §17.5.2.1 breakout tie cage); the work says so. Engineer to decide whether the shaft's top-zone ties should waive the check.
+  - c_a1 for a square shaft is b/2 − R (the existing value, also used for ψ_ed,N), i.e. a bolt on a face normal; it is conservative when no bolt sits on a face normal. Unchanged.
+  - Untorqued cover is measured to the anchor shank; head/plate-washer and template clearance to the shaft cage are detailing checks, not done.
+  - §17.9.3 d_a′ substitution for untorqued anchors that fail the limits is cited, not computed.

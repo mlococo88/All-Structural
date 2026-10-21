@@ -627,6 +627,9 @@
         <div class="row"><label>Base plate diameter</label><div class="ctl"><input id="bpDia" type="number" value="20" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
           <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes" class="on">Provided</button><button data-v="no">None</button></div></div></div>
+        <div class="row"><label>Anchor installation<span class="note">torqued = rods pretensioned after snug-tight (AASHTO LTS turn-of-nut); sets the ACI 318-19 §17.9.2 minimum spacing and edge distance</span></label>
+          <div class="ctl"><div class="seg" id="segAnchTq"><button data-v="untorqued">Untorqued</button><button data-v="torqued" class="on">Torqued</button></div></div></div>
+        <p class="tbl-note" id="anchTqMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
       </div>
     </section>
   </div>
@@ -1017,6 +1020,8 @@ function setSeg(group,val){
   document.querySelectorAll('#'+group+' button').forEach(x=>x.classList.toggle('on', x.dataset.v==String(val)));
 }
 let anchRe='yes';
+// anchor installation (ACI 318-19 Table 17.9.2(a)): 'torqued' (default for new projects) | 'untorqued'
+let anchTq='torqued';
 if($('soilClass')) $('soilClass').addEventListener('change',()=>{applySoilClass($('soilClass').value);markDirty();calc();});
 function applyBromsUI(){
   const v=$('bromsSoil')?$('bromsSoil').value:'none';
@@ -1041,6 +1046,7 @@ if($('signCfMode')) $('signCfMode').addEventListener('change',()=>{
 document.querySelectorAll('#segIso button').forEach(b=>b.onclick=()=>{setSeg('segIso',b.dataset.v);isoFac=+b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segCon button').forEach(b=>b.onclick=()=>{setSeg('segCon',b.dataset.v);constraint=b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;markDirty();calc();});
+document.querySelectorAll('#segAnchTq button').forEach(b=>b.onclick=()=>{setSeg('segAnchTq',b.dataset.v);anchTq=b.dataset.v;const mn=$('anchTqMigNote');if(mn)mn.style.display='none';markDirty();calc();});
 
 // ---- master mode: 'pole' | 'sign' ; sign posts: 1 | 2 ----
 let appMode='pole', signPosts=1;
@@ -2239,7 +2245,8 @@ manPart("p2","2. Input Reference",[
  ["Bolt circle diameter, BC","in","Lever arms in the elastic force distribution; group breakout geometry","A larger bolt circle reduces bolt tension for the same moment, but pushes anchors closer to the shaft edge, which reduces breakout capacity. There is an optimum."],
  ["Bolt group orientation, \u03b8\u2080","deg","Which bolts are most heavily loaded relative to the moment vector","Whether a bolt sits <i>on</i> the tension axis or straddles it changes the peak bolt force noticeably."],
  ["Effective embedment, h<sub>ef</sub>","in","Tension breakout, pullout, pryout","Measured from the concrete surface to the bearing face of the head or nut. Deeper embedment increases breakout capacity as h<sub>ef</sub><sup>1.5</sup>."],
- ["Base plate diameter","in","Cantilever arm for the plate thickness estimate","Used with the pole diameter to find the yield-line cantilever."]
+ ["Base plate diameter","in","Cantilever arm for the plate thickness estimate","Used with the pole diameter to find the yield-line cantilever."],
+ ["Anchor installation","\u2014","Minimum spacing and edge distance (ACI 318-19 \u00a717.9.2, Table 17.9.2(a))","Torqued (default for new projects): s \u2265 6d<sub>a</sub>, c<sub>a1</sub> \u2265 6d<sub>a</sub>. Untorqued: s \u2265 4d<sub>a</sub>, clear cover to the anchor \u2265 the specified cover (\u00a720.5.1.3). AASHTO LTS practice pretensions anchor rods (snug-tight, then turn-of-nut), so pole and sign anchors are normally torqued. No capacity depends on it; projects saved before this input open as Untorqued."]
 ]}},
 {warn:"<b>Anchor reinforcement.</b> Where reinforcement developed into the breakout cone is provided per ACI §17.5.2.1, breakout is carried by that reinforcement and drops out of the governing tension capacity. This materially increases the reported capacity \u2014 so if you rely on it, it must actually be detailed on the drawings."},
 
@@ -2670,6 +2677,9 @@ function collectChecks(ctx){
     push('Anchor tension','ACI 318-19 Ch.17',bT.Tmax,bT.phiNn,'lb');
     push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
     push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
+    // §17.9.2 minimum geometry (load-independent): required ÷ provided, like the other minimum-type checks
+    if(b.n>=2){ push('Anchor min. spacing','ACI 318-19 §17.9.2',b.sMinReq,b.sAnch,'in',b.spOK,b.sMinReq/Math.max(b.sAnch,1e-9)); C[C.length-1].dec=2; }
+    push('Anchor min. edge distance','ACI 318-19 §17.9.2'+(b.torq?'':', §20.5.1.3'),b.edReq,b.edProv,'in',b.edOK,b.edReq/Math.max(b.edProv,1e-9)); C[C.length-1].dec=2;
   }
   if(found.Tu>0) push('Shaft torsion ≤ φT_th (neglect)','ACI 318-19 §22.7.1.1',found.Tu,found.phiTth,'lb·ft');
   if(pstress&&pstress.govRow) push('Post combined stress',pstress.govRow.form==='H3-6'?'AISC 360 §H3.2':'AISC 360 §H1.1',pstress.govRow.ratio,1.0,'—',pstress.govRow.ok);
@@ -2717,6 +2727,7 @@ function summaryHTML(ctx){
   drow('Longitudinal bars',st=>`(${st.found.reo.long.n}) ${st.found.reo.long.bar.n}`);
   drow('Ties',st=>`${st.found.reo.tie.bar.n} @ ${fmt(st.found.reo.tie.s,0)} in (top zone @ ${fmt(st.found.reo.tie.sTop,0)} in for ${fmt(st.found.reo.tie.zoneH,0)} in)`);
   drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in`:'—');
+  drow('Anchor installation',st=>st.found.bolts?(st.found.bolts.torq?'Torqued (pretensioned)':'Untorqued')+`: s = ${st.found.bolts.n>=2?fmt(st.found.bolts.sAnch,2)+' in':'—'}, c<sub>a1</sub> = ${fmt(st.found.bolts.ca1,2)} in ${lppLink('anchors',stacks.indexOf(st))}`:'—');
   drow('Base plate',st=>st.found.bolts?`Ø${fmt(inp.bpDia,1)} in, t_req ${fmt(st.found.bolts.tpReq,2)} in`:'—');
   H+=`</table>`;
   // ---- governing demands ----
@@ -2735,8 +2746,8 @@ function summaryHTML(ctx){
     const si=Math.max(0,stacks.findIndex(st=>(st.label||'')===(c.label||'')));
     const pct=Math.max(0,Math.min(150,100*c.ratio));
     H+=`<tr><td style="text-align:left">${c.name}${c.label?' · '+c.label:''}</td><td style="text-align:left"><span class="eq-ref">${c.code}</span></td>
-      <td>${fmt(c.demand,c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0)} ${c.unit}</td>
-      <td>${fmt(c.cap,c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0)} ${c.unit}</td>
+      <td>${fmt(c.demand,c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0))} ${c.unit}</td>
+      <td>${fmt(c.cap,c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0))} ${c.unit}</td>
       <td>${fmt(100*c.ratio,0)}%</td>
       <td style="width:110px"><span class="ratiobar"><i class="${c.ok?(pct>85?'warn':'ok'):'bad'}" style="width:${Math.min(100,pct)}%"></i></span></td>
       <td>${c.ok?'<span class="pill ok">OK</span>':'<span class="pill bad">NG</span>'}</td><td style="text-align:left">${lppLink(LPP_CHK2K[c.name],si)}</td></tr>`;
@@ -3429,6 +3440,19 @@ function anchorBolts(inp,gov,struct){
   // here (reported as "not checked" when it applies); shear breakout §17.7.2 is NOT computed.
   const sfbApplies = ca1 < 0.4*hef;
 
+  // ---- minimum spacing and edge distance, cast-in anchors — ACI 318-19 §17.9.2, Table 17.9.2(a) ----
+  // Geometry only (no load). Spacing = chord between adjacent bolts on the circle, BC·sin(π/n).
+  // Edge distance = c_a1 to the shaft face (the shaft top is the pedestal). Torqued: s ≥ 6d_a, c ≥ 6d_a.
+  // Untorqued: s ≥ 4d_a; edge = the specified cover per §20.5.1.3 (the Clear cover input), taken as
+  // the clear distance from the anchor shank to the face, c_a1 − d_a/2.
+  const torq = inp.anchTq==='torqued';
+  const sAnch = n>=2 ? BC*Math.sin(Math.PI/n) : NaN;          // in
+  const sMinReq = (torq?6:4)*d;                                // in
+  const spOK = !(n>=2) || sAnch >= sMinReq - 1e-9;
+  const edReq = torq ? 6*d : inp.cover;                        // in (torqued: to the anchor axis; untorqued: clear cover)
+  const edProv = torq ? ca1 : ca1 - d/2;                       // in
+  const edOK = edProv >= edReq - 1e-9;
+
   // ---- pullout (ACI §17.6.3), cast-in heavy hex head ----
   // Abrg = bearing area of head ≈ heavy hex: 0.5·(3d)·(3d)·(√3/2)-... use table approx.
   const Abrg=(d*d)*0.9;                      // heavy hex head bearing area approx (in²)
@@ -3466,7 +3490,8 @@ function anchorBolts(inp,gov,struct){
           futa,Nsa,phiNsa,Vsa,phiVsa,
           kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,sfbApplies,
           Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
-          m,beff,Fyp,tpReq,Dpole};
+          m,beff,Fyp,tpReq,Dpole,
+          torq,sAnch,sMinReq,spOK,edReq,edProv,edOK};
 }
 
 function solveEmbed(P,M,h,inp){
@@ -3502,6 +3527,17 @@ function anchorsAllCombos(inp, cands){
 
 // Rows appended to every anchor limit-state table: the ACI Ch.17 modes this tool does NOT
 // compute (shown prominently, never as a pass), and the governing LRFD combination per check.
+// ACI 318-19 §17.9.2 minimum spacing / edge distance rows for the anchor limit-state tables
+// (lengths in in, required vs provided; ratio = required ÷ provided). Worked in boltWorkedHTML step 9.
+function boltMinGeomRows(b){
+  const pill=ok=>`<span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span>`, L='text-align:left';
+  let h=`<tr><td colspan="5" style="${L};font-size:11px">Minimum geometry, ACI 318-19 §17.9.2: <b>${b.torq?'torqued':'untorqued'}</b> cast-in anchors (lengths in in: required · provided)</td></tr>`;
+  h+= b.n>=2
+    ? `<tr><td style="${L}">Min. spacing, chord BC·sin(π/n) (§17.9.2)</td><td>${fmt(b.sMinReq,2)} in</td><td>${fmt(b.sAnch,2)} in</td><td>${fmt(b.sMinReq/Math.max(b.sAnch,1e-9),2)}</td><td>${pill(b.spOK)}</td></tr>`
+    : `<tr><td style="${L}">Min. spacing (§17.9.2)</td><td colspan="4" style="${L}">N/A (single anchor)</td></tr>`;
+  h+=`<tr><td style="${L}">Min. edge distance${b.torq?', c<sub>a1</sub> ≥ 6d<sub>a</sub>':', cover c<sub>a1</sub> − d<sub>a</sub>/2 (§20.5.1.3)'} (§17.9.2)</td><td>${fmt(b.edReq,2)} in</td><td>${fmt(b.edProv,2)} in</td><td>${fmt(b.edReq/Math.max(b.edProv,1e-9),2)}</td><td>${pill(b.edOK)}</td></tr>`;
+  return h;
+}
 function boltNotCheckedRows(b){
   const red='color:#a02818;font-weight:700;text-align:left';
   let h=`<tr><td style="text-align:left">Concrete breakout in shear (§17.7.2)</td><td colspan="4" style="${red}">NOT CHECKED — anchors near the shaft face are often governed by shear breakout; verify separately.</td></tr>`;
@@ -4047,7 +4083,7 @@ function calc(){
     b:num('b'),S1:num('S1'),qAllow:num('qAllow'),fc:num('fc'),fy:num('fy'),
     cover:num('cover'),minSteel:($('minSteel')?$('minSteel').value:'half'),
     boltDia:parseFloat($('boltDia')?$('boltDia').value:1),boltGrade:parseInt($('boltGrade')?$('boltGrade').value:55),
-    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),
+    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),anchTq:anchTq,
     // mode + sign
     mode:appMode, signPosts:signPosts,
     signB:num('signB'),signS:num('signS'),signClr:num('signClr'),signWt:num('signWt'),signSpacing:num('signSpacing'),
@@ -4415,6 +4451,7 @@ function calc(){
     bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
     bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
     bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
+    bt+=boltMinGeomRows(bolts);
     bt+=boltNotCheckedRows(bolts);
     $('boltTbl').innerHTML=bt;
     $('oBoltInt').innerHTML=`${fmt(bolts.inter,2)} ${bolts.vr<=0.2||bolts.tr<=0.2?'(uncoupled)':'≤ 1.2'} <span class="pill ${bolts.interOK?'ok':'bad'}">${bolts.interOK?'OK':'NG'}</span>`;
@@ -4651,6 +4688,19 @@ function boltWorkedHTML(bo,inp){
   H+=`<p class="eq-why">The plate cantilevers from the pole face to the bolt circle over arm m; a tributary width b<sub>eff</sub> per bolt yields the required thickness at φ = 0.90, F<sub>y</sub> = ${fmt(bo.Fyp,0)} ksi.</p>`;
   H+=g(`m = \\frac{BC-D_{pole}}{2} = ${fmt(bo.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,BC}{n} = ${fmt(bo.beff,2)}\\text{ in}`);
   H+=g(`t_{p,req} = \\sqrt{\\frac{4\\,T_{max}\\,m}{0.9\\,F_y\\,b_{eff}}} = \\sqrt{\\frac{4(${fmt(bo.Tmax,0)})(${fmt(bo.m,2)})}{0.9(${fmt(bo.Fyp*1000,0)})(${fmt(bo.beff,2)})}} = ${fmt(bo.tpReq,3)}\\text{ in}`);
+
+  // 9 — minimum spacing and edge distance (geometry; independent of the load combination)
+  H+=step(`9 · Minimum spacing and edge distance, ${bo.torq?'torqued':'untorqued'} cast-in anchors ${ref('ACI 318-19 §17.9.2, Table 17.9.2(a)')}`);
+  H+=`<p class="eq-why">Anchor installation input: <b>${bo.torq?'Torqued':'Untorqued'}</b>. Table 17.9.2(a), cast-in anchors: minimum spacing 4d<sub>a</sub> not torqued, 6d<sub>a</sub> torqued; minimum edge distance = the specified cover per §20.5.1.3 not torqued, 6d<sub>a</sub> torqued. The bolts are equally spaced on the bolt circle, so the spacing is the chord between adjacent bolts; the edge distance is c<sub>a1</sub> from the bolt axis to the shaft face (the same c<sub>a1</sub> as in ψ<sub>ed,N</sub>, step 3).</p>`;
+  if(bo.n>=2){
+    H+=g(`s = BC\\,\\sin\\frac{\\pi}{n} = ${fmt(bo.BC,2)}\\,\\sin\\frac{\\pi}{${bo.n}} = ${fmt(bo.sAnch,2)}\\text{ in}\\qquad s_{min} = ${bo.torq?6:4}d_a = ${bo.torq?6:4}(${fmt(bo.d,3)}) = ${fmt(bo.sMinReq,2)}\\text{ in}`);
+    H+=`<p class="eq-result">Spacing: s = ${fmt(bo.sAnch,2)} in ${bo.spOK?'≥':'&lt;'} s<sub>min</sub> = ${fmt(bo.sMinReq,2)} in → <b>${bo.spOK?'PASS':'FAIL'}</b> (required ÷ provided = ${fmt(bo.sMinReq/Math.max(bo.sAnch,1e-9),2)}).</p>`;
+  } else H+=`<p class="eq-result">Spacing: N/A (single anchor).</p>`;
+  H+=g(`c_{a1} = R_{edge}-\\tfrac{BC}{2} = ${fmt(bo.Redge,2)}-${fmt(bo.R,2)} = ${fmt(bo.ca1,2)}\\text{ in}`);
+  if(bo.torq) H+=g(`c_{min} = 6d_a = 6(${fmt(bo.d,3)}) = ${fmt(bo.edReq,2)}\\text{ in}\\qquad c_{a1} = ${fmt(bo.edProv,2)}\\text{ in}`);
+  else H+=g(`c_{c} = c_{a1}-\\tfrac{d_a}{2} = ${fmt(bo.ca1,2)}-${fmt(bo.d/2,3)} = ${fmt(bo.edProv,2)}\\text{ in}\\qquad c_{c,min} = \\text{specified cover (20.5.1.3)} = ${fmt(bo.edReq,2)}\\text{ in}`);
+  H+=`<p class="eq-result">Edge distance: ${bo.torq?'c<sub>a1</sub>':'clear cover to the anchor shank'} = ${fmt(bo.edProv,2)} in ${bo.edOK?'≥':'&lt;'} ${fmt(bo.edReq,2)} in → <b>${bo.edOK?'PASS':'FAIL'}</b> (required ÷ provided = ${fmt(bo.edReq/Math.max(bo.edProv,1e-9),2)}).</p>`;
+  H+=`<p class="eq-why">${bo.torq?'Torqued = the rods are pretensioned after snug-tight (AASHTO LTS turn-of-nut practice for pole and sign base connections); the larger torqued limits guard against splitting from the pretension.':'Untorqued anchors that do not meet these limits may be designed with a smaller d<sub>a</sub>′ that does, with the anchor forces limited to that diameter (§17.9.3); not computed here.'} §17.9.1 permits lesser values where supplementary reinforcement is provided to control splitting (not assumed from the "Anchor reinforcement" input). §17.9.4 (h<sub>ef</sub> limit for post-installed expansion, screw and undercut anchors) does not apply to cast-in anchors. Clearance of the anchor head and of any template plate to the shaft cage is a detailing check, not done here.</p>`;
 
   return H;
 }
@@ -5283,7 +5333,7 @@ const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
-  'Anchor T–V interaction':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
+  'Anchor T–V interaction':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
 const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
   asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
@@ -5323,10 +5373,10 @@ function lppResLine(c,st,withLink){
 const LPP_REFS=[
   ['ASCE/SEI 7-22','Ch. 26 wind: §26.2, Table 26.6-1 (K_d), §26.10 / Table 26.10-1 (K_z), Eq. 26.10-1 (q_z), §26.11.5 (G_f, flexible structures); Ch. 29: §29.3, Fig. 29.3-1, Eq. 29.3-1 (solid freestanding signs, Cases A, B, C), §29.4 (other structures); Ch. 10 (atmospheric ice, wind-on-ice); strength and ASD load combinations (the tool cites no section)'],
   ['IBC 2021','Table 1806.2 (presumptive load-bearing values); §1806.3.3, §1806.3.4 (lateral bearing increases); §1807.3.2.1 (non-constrained) and §1807.3.2.2 (constrained) embedded posts and poles'],
-  ['ACI 318-19','Ch. 17: §17.5.1.2, §17.5.2.1 (anchor reinforcement), §17.6.1 to §17.6.4 (tension), §17.7.1 to §17.7.3 (shear), §17.8 (interaction); §21.2, §22.2, §22.4 (axial and flexure), §22.5 (shear), §22.7.1.1 (threshold torsion); §10.3.1.2, §10.6.1.1, §10.7.6; §25.2.3, §25.7.2 (bar spacing, ties)'],
+  ['ACI 318-19','Ch. 17: §17.5.1.2, §17.5.2.1 (anchor reinforcement), §17.6.1 to §17.6.4 (tension), §17.7.1 to §17.7.3 (shear), §17.8 (interaction), §17.9.1 to §17.9.4 (minimum spacing and edge distance, Table 17.9.2(a)); §20.5.1.3 (cover); §21.2, §22.2, §22.4 (axial and flexure), §22.5 (shear), §22.7.1.1 (threshold torsion); §10.3.1.2, §10.6.1.1, §10.7.6; §25.2.3, §25.7.2 (bar spacing, ties)'],
   ['AISC 360-16','§E3 (flexural buckling; §E7 noted, not applied), §F7 (rectangular / square HSS), §F8 (round HSS), §H1.1 (interaction), §H3.2 (torsion), Tables B4.1a / B4.1b, Appendix 8 (B₂), Commentary Table C-A-7.1 (K = 2.1)'],
   ['ASTM F1554','Anchor rods, Grades 36, 55 and 105'],
-  ['AASHTO LTS','Structural Supports for Highway Signs, Luminaires, and Traffic Signals, Commentary C13.6.1.1 (Broms embedment, reference check only); edition: verify']];
+  ['AASHTO LTS','Structural Supports for Highway Signs, Luminaires, and Traffic Signals, Commentary C13.6.1.1 (Broms embedment, reference check only); anchor rod tightening (snug-tight, then turn-of-nut pretension), the basis of the Torqued default; edition and article: verify']];
 function lppPageCSS(){
   const q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,' ');
   const nm=activeProject||'', ttl=$('appTitle')?$('appTitle').textContent:'Light pole';
@@ -5489,7 +5539,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`<div class="subhead">Shaft &amp; soil</div>`;
   H+=`<p class="varsub">b = ${n(b,2)} ft &nbsp;·&nbsp; S₁ = ${n(inp.S1,0)} psf/ft ${isoFac===2?'× 2 (isolated)':''} &nbsp;·&nbsp; q<sub>allow</sub> = ${n(inp.qAllow,2)} ksf &nbsp;·&nbsp; f′c = ${n(inp.fc,0)} psi &nbsp;·&nbsp; f<sub>y</sub> = ${n(inp.fy,0)} psi &nbsp;·&nbsp; cover = ${n(inp.cover,1)} in</p>`;
   H+=`<div class="subhead">Anchor bolts</div>`;
-  H+=`<p class="varsub">(${inp.boltQty}) ${n(inp.boltDia,3)} in Ø ASTM F1554 Gr. ${inp.boltGrade} &nbsp;·&nbsp; bolt circle ${n(inp.boltBC,0)} in &nbsp;·&nbsp; h<sub>ef</sub> = ${n(inp.boltHef,0)} in &nbsp;·&nbsp; anchor reinforcement ${anchRe==='yes'?'provided':'none'}</p>`;
+  H+=`<p class="varsub">(${inp.boltQty}) ${n(inp.boltDia,3)} in Ø ASTM F1554 Gr. ${inp.boltGrade} &nbsp;·&nbsp; bolt circle ${n(inp.boltBC,0)} in &nbsp;·&nbsp; h<sub>ef</sub> = ${n(inp.boltHef,0)} in &nbsp;·&nbsp; anchor reinforcement ${anchRe==='yes'?'provided':'none'} &nbsp;·&nbsp; ${anchTq==='torqued'?'torqued (pretensioned)':'untorqued'}</p>`;
   if(fxs.length){
     H+=`<div class="subhead">Fixture schedule</div>`;
     H+=`<table class="matrix"><thead><tr><th>Fixture</th><th>Mount height<span class="sym">h (ft)</span></th><th>Azimuth<span class="sym">θ (°)</span></th><th>Arm<span class="sym">a (ft)</span></th><th>Wind EPA<span class="sym">(ft²)</span></th><th>Ice area<span class="sym">(ft²)</span></th><th>Ice depth<span class="sym">(ft)</span></th><th>Weight<span class="sym">(lb)</span></th></tr></thead><tbody>`;
@@ -6101,6 +6151,7 @@ function populateDetailStack(sfx, ctx){
   bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
   bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu+(bolts.VbT||0)*bolts.n,bolts.phiVcp);
   if(bolts.VbT>0) bt+=`<tr><td colspan="5" style="text-align:left;font-size:11px">Monopost torsion T<sub>u</sub> = ${fmt(bolts.Tu/12,0)} lb·ft (Case B/C eccentricity): each bolt's shear includes T<sub>u</sub>/(n·R) = ${fmt(bolts.VbT,0)} lb, added to V<sub>u</sub>/n = ${fmt(bolts.Vu/bolts.n,0)} lb (conservative scalar sum). Shaft torsion check (ACI 318-19 §22.7.1.1): T<sub>u</sub> = ${fmt(ctx.found.Tu,0)} vs φT<sub>th</sub> = ${fmt(ctx.found.phiTth,0)} lb·ft. Soil torsional resistance is NOT checked.</td></tr>`;
+  bt+=boltMinGeomRows(bolts);
   bt+=boltNotCheckedRows(bolts);
   S('boltTbl').innerHTML=bt;
   S('oBoltInt').innerHTML=`${fmt(bolts.inter,2)} ${bolts.vr<=0.2||bolts.tr<=0.2?'(uncoupled)':'≤ 1.2'} <span class="pill ${bolts.interOK?'ok':'bad'}">${bolts.interOK?'OK':'NG'}</span>`;
@@ -6141,7 +6192,7 @@ try{const k='__lpp_test';localStorage.setItem(k,'1');localStorage.removeItem(k);
 function captureState(){
   const inputs={};
   INPUT_IDS.forEach(id=>{const el=$(id); if(el) inputs[id]=el.value;});
-  return {inputs, isoFac, constraint, anchRe, cablesEnabled, appMode, signPosts, cables:JSON.parse(JSON.stringify(cables)),
+  return {inputs, isoFac, constraint, anchRe, anchTq, cablesEnabled, appMode, signPosts, cables:JSON.parse(JSON.stringify(cables)),
           fixtures:JSON.parse(JSON.stringify(fixtures)), _v:2};
 }
 function applyState(st){
@@ -6184,6 +6235,13 @@ function applyState(st){
   setSeg('segIso', isoFac);
   setSeg('segCon', constraint);
   setSeg('segAnchRe', anchRe);
+  // anchor installation (added 2026-10-21). Saves made before it have no anchTq: they open as
+  // Untorqued (no capacity depends on it; only the §17.9.2 checks use it) with a notice.
+  anchTq = st.anchTq==='torqued' ? 'torqued' : 'untorqued';
+  setSeg('segAnchTq', anchTq);
+  { const mn=$('anchTqMigNote'); if(mn){
+      if(st.anchTq===undefined){ mn.textContent='Older save: anchor installation was not an input when this project was saved. It opens as Untorqued, so every earlier result is unchanged; the new ACI 318-19 §17.9.2 minimum spacing / edge distance checks use the untorqued limits (4d_a; cover per §20.5.1.3). New projects default to Torqued (AASHTO LTS pretensions anchor rods by turn-of-nut): select Torqued if the rods will be tightened.'; mn.style.display=''; }
+      else { mn.style.display='none'; mn.textContent=''; } } }
   cablesEnabled = st.cablesEnabled!==undefined ? !!st.cablesEnabled : true;
   appMode = st.appMode || 'pole';
   signPosts = st.signPosts || 1;
