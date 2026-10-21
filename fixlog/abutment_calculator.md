@@ -14088,3 +14088,234 @@ index 6bda3ab..492087f 100644
 +  const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables, "tab-wing":!(S.wing&&S.wing.on), "tab-iab":iabType()==="conv",
 +    "tab-stab":itg };   // ABT2: an integral abutment prints its integral Tabs 2, 4, 5, 6 and 8 (Tab 3: not checked, basis in Tab 10 §10.6)
 ```
+
+
+## 2026-10-21 — PR: claude/abut-calc-gaps — Integral / semi-integral calculation gaps: wing weight on the integral piles, semi-integral end-diaphragm dead load, bearing shear from movement on by default, integral Extreme Event I, integral wing earth pressure and k_h (ABC) (PR link added after merge)
+
+Basis: AASHTO LRFD BDS 10th Ed. (2024); owner rules as in Tab 10. Engineer's decisions of 2026-10-21 (accuracy, not extra conservatism). Every code site is tagged `ABC`; search for `ABC` to find them all. **Conventional abutments: no result changes** (`computeAll` identical to origin/main `eac35f4`, with and without seismic, spread and piles).
+
+### ABC (a). Integral: attached wing weight on the integral piles   [calc change] [MORE conservative]
+- **Where:** `computeIAB` (anchor `Q.Wwing=0; Q.wingW1=0;`), `P.Pdl=eta*(gDC*(Q.DC+Q.Wwing)+gDW*Q.DW)/n;`, `Pdlmin`, `geo.ee.Pee`; §10.4 display (`W_{wing} = 2\,\gamma_c\,t\,I_1`), Tab 1 §1.9 ledger, Tab 8 §8.1, Tab 9 §9.2a note.
+- **Before:** `P.Pdl=eta*(gDC*Q.DC+gDW*Q.DW)/n` — the attached U-wings of an integral abutment were on no load path (`R.wingAb` is skipped for integral). **After:** `P.Pdl=eta*(gDC*(Q.DC+Q.Wwing)+gDW*Q.DW)/n`, W_wing = 2·γc·t·I1 of the attached pair (the same weight as the conventional path), also in the uplift minimum and the Extreme Event I pile load; rigid cap, symmetric pair → equal share per pile. Not on cap case 1 (the wings hang at the cap ends, outside the interior spans). "Apply to the abutment" (panel I-13) honoured.
+- **Provision:** AASHTO LRFD 10th Ed. 3.5.1, Tables 3.4.1-1/-2; owner pile method of Tab 10 §10.4 unchanged.
+- **Check (default, U-wing L = 10 ft, H₀ = 9 ft, H_L = 8 ft, t = 1.5 ft):** I1 = (9 + 8)/2 × 10 = 85 ft² → W = 0.150 × 1.5 × 85 = 19.125 kip, pair 38.25 kip; ΔP_dl = 1.25 × 38.25/6 = 7.969 kip/pile. P_g before → after: AASHTO 266.73 → 274.70, MassDOT 320.84 → 328.81 (MassDOT table D/C 0.572 → 0.586 vs P_u,tab = 561.0), CTDOT 354.91 → 362.88 (P_u 371.09 → 379.06, interaction 1.320 → 1.329), RIDOT 388.83 → 396.80. Smallest pile load (uplift) +5.738 kip (0.90 × 38.25/6).
+
+### ABC (b). Semi-integral: end-diaphragm dead load — counted once, on the bearings   [calc change]
+- **Check of the double count:** the tool counted the end diaphragm once (t_bw·h_bw·γc·L_ab as abutment concrete "Backwall" in DCsub; its seismic mass moved to the superstructure share, ABR2). It is not in the girder DC reactions unless the user put it there; the superstructure tools of the suite do not include the concrete end diaphragm. So there was no double count inside the tool, but (1) the load acted at the backwall centroid instead of the bearing line, (2) it was present in the construction stage although it is cast with the deck, (3) it was missing from the bearing reactions, and (4) a user whose girder reactions already include it got it twice.
+- **Where:** C-2 self-weights (anchor `const semiDia=iabType()==="semi", Wdia0=`), `groups.DCsup` (anchor `V:agg.DC.P+WdiaAdd`), seismic (`iParts=parts, Wdia=semiI? WdiaAdd : 0`), connection force (`Wperm=agg.DC.P+WdiaAdd+agg.DW.P`), shear friction (`ns*groups.DCsup.V`), bearing on concrete (`if(WdiaAdd>0){ const d=GP.DC[1]*WdiaAdd/`), Tab 1 §1.2 note, new input `iab.diaRx` (panel I-0a checkbox "End-diaphragm weight already included in the girder DC reactions", default off).
+- **Before:** `parts.push({name:"Backwall", …, x:xBwFront+g.tbw/2})` for every type. **After (semi-integral):** no "Backwall" part; `DCsup.V = ΣP_DC + W_dia` at x_brg (not in the construction stage); bearing reaction per girder + γ_DC·W_dia/N; nothing added when `iab.diaRx` is checked.
+- **Provision:** AASHTO LRFD 10th Ed. 3.5.1, 3.4.1 (construction stage: Design basis §10), 5.6.5 (bearing).
+- **Check (semi-integral AASHTO default, TU on in both):** W_dia = 1.50 × 5.00 × 0.150 × 44.0 = 49.5 kip; x moves 7.25 → 5.25 ft from the toe: DCsub V 722.70 → 673.20, M_v 4422.83 → 4063.95 (−49.5 × 7.25); DCsup V 510.0 → 559.5, M_v 2677.5 → 2937.38 (+49.5 × 5.25). Bearing (girder 1, Strength I): P_u = 246.75 + 1.25 × 49.5/6 = 257.06 kip → q_b = 257.06/432 = 0.595 ksi, D/C 0.120 → 0.125. Eccentricity e 2.407 → 2.459 ft. Dashboard (AASHTO, TU on → + this change): ecc 0.556 → 0.568, bearing 0.841 → 0.848, stem flexure 0.327 → 0.336, heel flexure 0.139 → 0.144; RIDOT sliding (construction stage governs) 1.172 → 1.223.
+
+### ABC (c). Semi-integral: bearing shear from the movement on by default   [calc change, default] [MORE conservative]
+- **Where:** select change handler (anchor `if(p==="iab.type"&&raw==="semi"&&S.longit&&!S.longit.computeTU)`), `migrate()` (anchor `pre=S.iab.diaRx===undefined`).
+- **Before:** TU off unless turned on (the girder TU reactions of panel I-5 × the floating share). **After:** choosing semi-integral turns the TU calculation on (F = G·A·Δ/h_rt per bearing, 100 % share). A semi-integral project saved before this PR keeps its setting; a one-time notice says the default changed (saved data unchanged).
+- **Provision:** AASHTO LRFD 10th Ed. 3.12.2, 14.6.3.1 (Eq. 14.6.3.1-2).
+- **Check (default):** Δ = 6.5×10⁻⁶ × 68 × 480 in = 0.2122 in; F = 0.130 × 432 × 0.2122/2.0 = 5.957 kip/bearing × 6 = 35.74 kip (was 15.0 × 50 % = 7.5 kip). Semi-integral AASHTO before → TU on: sliding 0.903 → 0.940, eccentricity 0.491 → 0.556, bearing 0.813 → 0.841, stem flexure 0.297 → 0.327; MassDOT 0.722 → 0.803, 0.264 → 0.397, 0.772 → 0.821, 0.267 → 0.337; CTDOT 0.679 → 0.708, 0.323 → 0.374, 0.844 → 0.863; RIDOT eccentricity 0.499 → 0.572. Semi-integral AASHTO on piles (TU + ABC b): pile axial + flexure 0.991 → 1.034 (FAIL).
+
+### ABC (d). Integral: Extreme Event I of the wall and the pile cap   [new check, seismic on]
+- **Where:** `computeIAB` (anchor `ABC (d), 2026-10-21: integral abutment, Extreme Event I`), dashboard `iabEEP`, `iabEEWF`, `iabEEWV`, `iabEERF`, `iabEERV`, Tab 10 §10.5d (`o-iab-ee`), K_PE input for integral (panel I-0a, seismic on), Tab 2 §2.1 text.
+- **After:** F_d = A_s(ΣDC + ΣDW)s_EQ + k_h·W_ab + k_h·W_wing + F_ap (k_h = k_h0: restrained); seismic passive K_PE (11.6.5.5: Figure A11.4-2 at k_h, static below 5 ft, or entered — as #383); P_PE = ½K_PE·γ·H²·L_ab; f = min(1, F_d/P_PE); wall case 2 and cap rear face with f·K_PE·γ·z, γ = 1.00, φ = 1.0, M_n and V_n = V_c of the Strength I sections; check F_d/P_PE (excess to the piles, flagged). Cap case 1 and the pile axial structure stay governed by Strength I (larger loads, φ_c 0.70); geotechnical EE in §10.4 (unchanged).
+- **Provision:** AASHTO LRFD 10th Ed. 3.10.9, 11.6.5.1, 11.6.5.5, Figure A11.4-2, 1.3.2.1, Table 3.4.1-1.
+- **Check (integral AASHTO, seismic on, A_s = 0.15, site class not set):** k_h = 0.150; F_d = 87.3 + 0.15 × 207.9 + 0.15 × 38.25 = 124.22 kip; K_PE = 5.094; P_PE = ½ × 5.094 × 0.120 × 9² × 44 = 1089.3 kip; f = 0.1140; p_B = 0.1140 × 5.094 × 0.120 × 9 = 0.627 ksf; wall M_u = 0.8 × 0.627 × 8²/8 = 4.02 kip-ft/ft (D/C 0.035), V_u 2.51 (0.035); rear face M_u 4.276 (0.037), V_u 1.952 (0.026); F_d/P_PE = 0.114. MassDOT (with the slab F_ap = 5.74): F_d = 129.96, f = 0.1193, D/C 0.119 / 0.036 / 0.033 / 0.039 / 0.024. Before: not checked.
+
+### ABC (decision 3). Integral attached wings: at-rest pressure and k_h = k_h0   [calc change] [MORE conservative]
+- **Where:** `computeWing` (anchors `const itWing=att&&iabType()==="integral";`, `const kEff=itWing? "atrest"`, `khR=itWing? 1 : (+S.seismic.khR||0)`), Tab 9 §9.1 text (`ruleTxtI`), owner card (Kmode and khR rows no longer listed for integral).
+- **Before:** the state and k_h came from the abutment's `fnd.branch` (spread by default): active K_a (AASHTO, RIDOT), Coulomb K_a by the MassDOT 3.1.6 "on soil" branch, and k_h = 0.5·k_h0 (MassDOT on spread). **After:** wing attached to an integral abutment: on piles → at-rest K₀ (MassDOT 3.1.6 and RIDOT 11.3.4 give K₀ for walls on piles; other owners AASHTO C3.11.1), γ_EH,max = 1.35 (at-rest), k_h = k_h0. CTDOT (already at-rest, case 1) unchanged. Semi-integral wings keep the lower abutment's foundation (its real foundation).
+- **Provision:** AASHTO LRFD 10th Ed. 3.11.5.2, C3.11.1, Table 3.4.1-2, 11.6.5.2.2; MassDOT Part I 3.1.6; RIDOT BDM 11.3.4.
+- **Check (integral AASHTO default, H₀ = 9, L = 10, H_L = 8 ft):** K₀ = 1 − sin 32° = 0.4701; M_EH = ½K₀γ∫h²x dx = ½(0.4701)(0.120)(3475) = 98.01 kip-ft, M_LS = 47.01; per ft /9: 10.890, 5.223; M_u = 1.35(10.890) + 1.75(5.223) = 23.842 kip-ft/ft → D/C 23.842/40.111 = 0.594 (before 0.415 with K_a = 0.3073, γ_EH = 1.50). Junction before → after: AASHTO flexure 0.415 → 0.594, shear 0.138 → 0.235, min 0.552 → 0.693, crack 0.262 → 0.433; MassDOT 0.356 → 0.591, 0.100 → 0.210, 0.474 → 0.770, 0.222 → 0.432; RIDOT 0.415 → 0.594, 0.138 → 0.235, 0.552 → 0.693, 0.367 → 0.625; CTDOT unchanged.
+
+### Tab 9 wording
+- Attached wing "cast monolithic with the stem / backwall" → integral: "the integral wall (pile cap and end diaphragm), moving with it"; semi-integral: "the lower abutment (stem; the end diaphragm moves separately on the bearings)". §9.2a: resultants act on the "pile cap / integral wall" (integral) or "lower-abutment stem" (semi); integral: the pair weight goes to the integral piles (link §10.4).
+
+### Saved data
+- New key `iab.diaRx` (default false; additive). Old semi-integral saves: TU setting kept, one-time notice. Input ID of integral / semi-integral projects changes (new key). No other key or format changed.
+
+### How verified
+- `node tests/check-syntax.mjs`: all scripts pass.
+- Playwright, origin/main `eac35f4` vs branch, 21 configurations (all types × four owners, conv/semi on piles, conv and integral with seismic, integral without wings, an old semi save, semi with diaRx). Conventional (6, incl. seismic and piles): `computeAll` identical. Hand checks above equal the tool. No console errors; all tabs and the report render.
+
+### Open items
+1. The integral approach-slab inertia (APS-7, `Q.apEE`) still uses the abutment k_h (0.5·k_h0 on the spread default); the new EE check uses k_h0. Harmonize?
+2. Rigid-cap distribution of the wing pair to the piles (equal share); an end pile under a flexible cap takes more.
+3. Wall panel inertia is in the driving force but not deducted from the panel load (small, conservative).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `eac35f4`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 492087f..b8d5942 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -665 +665,2 @@ function iabDefault(){
+-    KpE:0};                                                                  // ABR1: semi-integral, MassDOT 3.4.6.1: seismic passive coefficient on the end diaphragm (0 = the static Rankine K_p)                                         // IAB2: cap stirrups (vertical): bar ("0" = none), legs across the width, spacing along the cap (in)            // cap longitudinal bars (across the width); horizontal wall / diaphragm bars (per ft of height, each face); vertical rear-face bars
++    KpE:0,                                                                   // ABC: also the integral wall at Extreme Event I (any owner)
++    diaRx:false};                                                            // ABC (b): semi-integral — the end-diaphragm weight is already in the girder DC reactions of panel I-5 (default: no, it is added at the bearings)                                                                  // ABR1: semi-integral, MassDOT 3.4.6.1: seismic passive coefficient on the end diaphragm (0 = the static Rankine K_p)                                         // IAB2: cap stirrups (vertical): bar ("0" = none), legs across the width, spacing along the cap (in)            // cap longitudinal bars (across the width); horizontal wall / diaphragm bars (per ft of height, each face); vertical rear-face bars
+@@ -1266 +1267 @@ const ABUT_OWN_DEF=[   // ABT (2026-10-21): types = the abutment types whose des
+-  {owner:"MassDOT", key:"soil.Kmode", sec:"3.1.6 (p. 3-4)", text:"Earth pressure coefficient by the 3.1.6 rule: K0 for walls on rock or piles, 0.5(K0 + Ka) on soil 5 ft high or less, Ka otherwise", val:()=>"massdot", types:["conv","semi"], wingAlso:true},
++  {owner:"MassDOT", key:"soil.Kmode", sec:"3.1.6 (p. 3-4)", text:"Earth pressure coefficient by the 3.1.6 rule: K0 for walls on rock or piles, 0.5(K0 + Ka) on soil 5 ft high or less, Ka otherwise", val:()=>"massdot", types:["conv","semi"]},
+@@ -1273 +1274 @@ const ABUT_OWN_DEF=[   // ABT (2026-10-21): types = the abutment types whose des
+-  {owner:"MassDOT", key:"seismic.khR", sec:"3.4.6.3 (p. 3-39)", text:"Horizontal acceleration: 0.5·A_s for abutments on spread footings (about 1 to 2 in of permanent displacement), the full A_s for abutments on piles (restrained)", val:Q=>Q.fnd&&Q.fnd.branch==="pile"?1.0:0.5, types:["conv","semi"], wingAlso:true},
++  {owner:"MassDOT", key:"seismic.khR", sec:"3.4.6.3 (p. 3-39)", text:"Horizontal acceleration: 0.5·A_s for abutments on spread footings (about 1 to 2 in of permanent displacement), the full A_s for abutments on piles (restrained)", val:Q=>Q.fnd&&Q.fnd.branch==="pile"?1.0:0.5, types:["conv","semi"]},
+@@ -1277 +1278 @@ const ABUT_OWN_DEF=[   // ABT (2026-10-21): types = the abutment types whose des
+-  {owner:"RIDOT", key:"soil.Kmode", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where tilting is restricted: applied to pile-supported and rock-founded abutments (basis: AASHTO C3.11.1 / Table C3.11.1-1, the BDM sets no other definition)", val:()=>"ridot", types:["conv","semi"], wingAlso:true},
++  {owner:"RIDOT", key:"soil.Kmode", sec:"11.3.4 (p. 11-9)", text:"At-rest earth pressure where tilting is restricted: applied to pile-supported and rock-founded abutments (basis: AASHTO C3.11.1 / Table C3.11.1-1, the BDM sets no other definition)", val:()=>"ridot", types:["conv","semi"]},
+@@ -1796 +1797,3 @@ function migrate(){
+-  else{ const T=iabDefault(); Object.keys(T).forEach(k=>{ if(S.iab[k]===undefined) S.iab[k]=T[k]; }); }
++  else{ const T=iabDefault(), pre=S.iab.diaRx===undefined; Object.keys(T).forEach(k=>{ if(S.iab[k]===undefined) S.iab[k]=T[k]; });
++    // ABC (c): a semi-integral project saved before 2026-10-21 keeps its TU setting; one-time notice when the bearing shear from the movement is off
++    if(pre&&S.iab.type==="semi"&&S.longit&&!S.longit.computeTU) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(["Semi-integral: the bearing shear from the superstructure movement (TU, panel I-6b) is now calculated by default for semi-integral abutments. This saved project has it off and keeps it off (results unchanged by this setting) — turn it on in panel I-6b unless the TU reactions of panel I-5 already carry it."]); }
+@@ -1973 +1976 @@ function buildInputs(){
+-      ${it==="integral"?ck("iab.straight","Straight girders and alignment (curved bridge: straight parallel beams)")+ck("iab.parallel","Parallel abutments and piers"):ck("iab.bothEnds","The other end is also semi-integral")}`;
++      ${it==="integral"?ck("iab.straight","Straight girders and alignment (curved bridge: straight parallel beams)")+ck("iab.parallel","Parallel abutments and piers"):ck("iab.bothEnds","The other end is also semi-integral")+ck("iab.diaRx","End-diaphragm weight already included in the girder DC reactions (panel I-5)")}`;   // ABC (b)
+@@ -1979,0 +1983 @@ function buildInputs(){
++      ${S.seismic&&S.seismic.on?inpRow("Seismic passive coefficient K<sub>PE</sub> on the integral wall (0 = AASHTO Fig. A11.4-2)","iab.KpE","–",{title:"Extreme Event I of the integral wall and cap (Tab 10 §10.5d): seismic passive coefficient of the backfill, 11.6.5.5. 0 = log spiral of AASHTO Figure A11.4-2 (c = 0, δ = 0.67φ) at the abutment k_h; static passive below 5 ft."}):""}
+@@ -2719 +2723,5 @@ function computeWing(R,X){
+-  const onPRab=(fn.branch==="pile"||(fn.branch==="spread"&&fn.matl==="rock"));
++  // ABC (decision 3): a wing attached to an integral abutment stands on the pile-supported integral wall, which cannot tilt away from the
++  // backfill: at-rest K0 (the MassDOT 3.1.6 and RIDOT 11.3.4 rules give K0 for walls on piles; other owners: AASHTO C3.11.1), and k_h = k_h0
++  // (no 11.6.5.2.2 reduction: the wall is restrained by the superstructure and the piles). Was: the abutment's fnd.branch (spread by default).
++  const itWing=att&&iabType()==="integral"; if(itWing) W.itWing=true;
++  const onPRab=itWing||(fn.branch==="pile"||(fn.branch==="spread"&&fn.matl==="rock"));
+@@ -2735 +2743 @@ function computeWing(R,X){
+-  const kEff=kMode==="massdot"?(onPR?"atrest":(Hk<=5+1e-9?"blend":"active")) : kMode==="ridot"?(onPR?"atrest":"active") : kMode;
++  const kEff=itWing? "atrest" : kMode==="massdot"?(onPR?"atrest":(Hk<=5+1e-9?"blend":"active")) : kMode==="ridot"?(onPR?"atrest":"active") : kMode;   // ABC (decision 3)
+@@ -2754 +2762 @@ function computeWing(R,X){
+-  if(eqOn){ const sc=String(S.seismic.siteClass||""), kh0=(["A","B","B/C"].includes(sc)?1.2:1.0)*(+S.seismic.As||0), kh=(+S.seismic.khR||0)*kh0, kv=+S.seismic.kv||0;
++  if(eqOn){ const sc=String(S.seismic.siteClass||""), kh0=(["A","B","B/C"].includes(sc)?1.2:1.0)*(+S.seismic.As||0), khR=itWing? 1 : (+S.seismic.khR||0), kh=khR*kh0, kv=+S.seismic.kv||0;   // ABC (decision 3)
+@@ -2759 +2767 @@ function computeWing(R,X){
+-    EQ={kh0,kh,kv,thd:th*180/Math.PI,dMO:dMO*180/Math.PI,KAE,dKh,hEQr:eqZr(),sc,fB:eqFB(dKh,Kact.kh),mode:S.seismic.hEQmode==="ratio"?"ratio":"static"};   // ABR3: h/3 in the static mode; 11.6.5.1 case-B factor
++    EQ={kh0,kh,kv,...(itWing?{khR}:{}),thd:th*180/Math.PI,dMO:dMO*180/Math.PI,KAE,dKh,hEQr:eqZr(),sc,fB:eqFB(dKh,Kact.kh),mode:S.seismic.hEQmode==="ratio"?"ratio":"static"};   // ABR3: h/3 in the static mode; 11.6.5.1 case-B factor
+@@ -2982,0 +2991,4 @@ function computeIAB(R,X){
++    /* ABC (a): the attached wingwalls (pair) hang from the integral wall: their weight goes to the piles with the abutment DC (rigid cap: an equal
++       share per pile, the pair being symmetric). Not on cap case 1 (it acts at the cap ends, beyond the interior spans). "Apply to the abutment" (panel I-13) honoured. */
++    Q.Wwing=0; Q.wingW1=0;
++    if(S.wing&&S.wing.on&&S.wing.type!=="indep"&&S.wing.toAb!==false){ const n0=WARNINGS.length, Wp=computeWing(R,{pre:true}); WARNINGS.length=n0; if(Wp&&Wp.pre){ Q.wingW1=Wp.Wt; Q.Wwing=2*Wp.Wt; } }
+@@ -3024 +3036 @@ function computeIAB(R,X){
+-    P.Pdl=eta*(gDC*Q.DC+gDW*Q.DW)/n; P.WLL=eta*gLL*mL*P.LLp; P.WLLg=P.LLs? eta*gLL*mL*P.LLg : P.WLL; P.eLL=(own==="MassDOT"||!(a.LL.P>0))? 0 : a.LL.MtP/a.LL.P;
++    P.Pdl=eta*(gDC*(Q.DC+Q.Wwing)+gDW*Q.DW)/n; P.WLL=eta*gLL*mL*P.LLp; P.WLLg=P.LLs? eta*gLL*mL*P.LLg : P.WLL; P.eLL=(own==="MassDOT"||!(a.LL.P>0))? 0 : a.LL.MtP/a.LL.P;
+@@ -3072 +3084 @@ function computeIAB(R,X){
+-      const Pdlmin=etaMin*(gDCmin*Q.DC+gDWmin*Q.DW)/n, eLLabs=Math.abs(P.eLL||0);
++      const Pdlmin=etaMin*(gDCmin*(Q.DC+(Q.Wwing||0))+gDWmin*Q.DW)/n, eLLabs=Math.abs(P.eLL||0);
+@@ -3079 +3091 @@ function computeIAB(R,X){
+-        geo.ee={gq, phiE, Pee:(Q.DC+Q.DW)/n+(WL>0? WL/n+(P.Ix2>0? WLg*eLLabs*P.xMax/P.Ix2 : 0) : 0)};
++        geo.ee={gq, phiE, Pee:(Q.DC+(Q.Wwing||0)+Q.DW)/n+(WL>0? WL/n+(P.Ix2>0? WLg*eLLabs*P.xMax/P.Ix2 : 0) : 0)};
+@@ -3106,0 +3119,21 @@ function computeIAB(R,X){
++  /* ABC (d), 2026-10-21: integral abutment, Extreme Event I. Driving the abutment into the backfill: the superstructure share
++     F_sup = A_s(ΣDC + ΣDW)s_EQ (panel I-11, as the conventional EQ_sup), the abutment inertia k_h·W_ab, the wing pair k_h·W_wing and the approach
++     slab min(k_h W_ap, F). The backfill resists with the seismic passive pressure (11.6.5.5: log spiral of Figure A11.4-2 at k_h, or K_PE
++     entered, panel I-0a; static passive below 5 ft). Mobilized fraction f = min(1, F_d / P_PE), P_PE = ½K_PE·γ·H²·L_ab; the excess, when
++     f = 1, goes to the piles (flagged). The wall (case 2) and the cap rear face are designed for f·K_PE·γ·z with γ = 1.00 and φ = 1.0
++     [1.3.2.1, Table 3.4.1-1]. Cap case 1 (vertical loads: DC + DW + γ_EQ·LL) and the pile axial structure are covered by Strength I
++     (larger loads, φ_c = 0.70 < 1.0); the geotechnical pile check is §10.4 (iabGeoEE). */
++  if(integ&&S.seismic&&S.seismic.on&&R.seis&&isFinite(R.seis.kh)){
++    const kh=isFinite(R.seis.kh0)? R.seis.kh0 : R.seis.kh, user=+I.KpE>0, low=Q.H<5-1e-9, ch=kpeA114(phi, low? 0 : kh), KpE=user? +I.KpE : ch.K;   // k_h = k_h0: the integral abutment is restrained (no 11.6.5.2.2 reduction), as its wings
++    const Fsup=R.seis.EQsup||0, Fab=kh*Q.Wab, Fwg=kh*(Q.Wwing||0), Fap=Q.apEE? Q.apEE.F : 0, Fd=Fsup+Fab+Fwg+Fap;
++    const PPE=0.5*KpE*gam*Q.H*Q.H*Lab, f=PPE>0? Math.min(1,Fd/PPE) : 1, k=f*KpE*gam, pB=k*Q.H;
++    const M2=0.8*pB*Q.sG*Q.sG/8, V2=pB*Q.sG/2;
++    const s2=sc({name:"Integral wall EE I", h:tW*12, cover, bar:String(I.hBar), sp:+I.hSp, Mu:M2, Vu:V2, Ms:0, betaMode:"general", quiet:true, lbl:"Extreme Event I: f·K_PE·γ·H, 0.8 of the simple span between girders"});
++    const z1=+I.hd, z2=z1+(+I.hc), M3=k*((z2**3-z1**3)/3-z1*(z2*z2-z1*z1)/2), V3=k*(z2*z2-z1*z1)/2;
++    const s3=sc({name:"Pile cap rear face EE I", h:(+I.b)*12, cover, bar:String(I.vBar), sp:+I.vSp, Mu:M3, Vu:V3, Ms:0, betaMode:"general", quiet:true, lbl:"Extreme Event I: f·K_PE·γ·z, cantilever from the seat"});
++    const E={kh, user, KpE, ch, low, Fsup, Fab, Fwg, Fap, Fd, PPE, f, k, pB, z1, z2, dcS:PPE>0? Fd/PPE : 99,
++      c2:{Mu:M2, Vu:V2, Mn:s2.phiMn/s2.phiF, Vn:s2.Vc, sec:s2}, c3:{Mu:M3, Vu:V3, Mn:s3.phiMn/s3.phiF, Vn:s3.Vc, sec:s3}};
++    E.c2.dcM=M2/E.c2.Mn; E.c2.dcV=V2/E.c2.Vn; E.c3.dcM=M3/E.c3.Mn; E.c3.dcV=V3/E.c3.Vn; Q.wEE=E;
++    if(!user&&(ch.phiClamp||ch.khBeyond)) Q.notes.push("Integral wall, Extreme Event I: "+(ch.phiClamp?"φ = "+fmt(phi,1)+"° is outside the 20–40° of Figure A11.4-2 (clamped)":"")+(ch.phiClamp&&ch.khBeyond?"; ":"")+(ch.khBeyond?"k_h = "+fmt(kh,3)+" is beyond the end of the chart curve (last value used)":"")+" — enter K_PE (panel I-0a).");
++    if(Fd>PPE) Q.notes.push("Integral abutment, Extreme Event I: the longitudinal seismic force F = "+fmt(Fd,1)+" kip exceeds the seismic passive resistance P_PE = "+fmt(PPE,1)+" kip of the backfill — the excess "+fmt(Fd-PPE,1)+" kip must be resisted by the piles (lateral p-y analysis, Tab 10 §10.5d).");
++  }
+@@ -3208 +3241,6 @@ function computeAll(){
+-  parts.push({name:"Backwall", A:g.tbw*g.hbw, W:g.tbw*g.hbw*gcSub*Lab,
++  /* ABC (b): semi-integral — the backwall inputs are the end diaphragm, cast on the girder ends: its weight reaches the seat through the
++     girders and bearings (x_brg) with the superstructure DC (not in the construction stage). Counted once: added to the superstructure DC
++     unless it is already in the girder DC reactions of panel I-5 (iab.diaRx). Was: abutment concrete at the backwall centroid. */
++  const semiDia=iabType()==="semi", Wdia0=g.tbw*g.hbw*gcSub*Lab, WdiaAdd=(semiDia&&!(S.iab&&S.iab.diaRx))? Wdia0 : 0;
++  if(semiDia) R.diaSemi={W:Wdia0, add:WdiaAdd, inRx:!!(S.iab&&S.iab.diaRx), x:xBrg};
++  if(!semiDia) parts.push({name:"Backwall", A:g.tbw*g.hbw, W:g.tbw*g.hbw*gcSub*Lab,
+@@ -3347 +3385 @@ function computeAll(){
+-    const semiI=iabType()==="semi", iParts=semiI? parts.filter(pp=>pp.name!=="Backwall") : parts, Wdia=semiI? parts.filter(pp=>pp.name==="Backwall").reduce((a,pp)=>a+pp.W,0) : 0;
++    const semiI=iabType()==="semi", iParts=parts, Wdia=semiI? WdiaAdd : 0;   // ABC (b): the end diaphragm is no longer in parts; its mass with the superstructure (unless already in the reactions)
+@@ -3400 +3438 @@ function computeAll(){
+-    DCsup:{cls:"DC", V:agg.DC.P, Mv:agg.DC.P*xBrg, Hx:0,Mh:0,Hy:0, Mt:agg.DC.MtP, desc:"Superstructure DC reactions"},
++    DCsup:{cls:"DC", V:agg.DC.P+WdiaAdd, Mv:(agg.DC.P+WdiaAdd)*xBrg, Hx:0,Mh:0,Hy:0, Mt:agg.DC.MtP, desc:"Superstructure DC reactions"+(WdiaAdd>0?" + end diaphragm (semi-integral, on the bearings)":"")},   // ABC (b)
+@@ -3983 +4021 @@ function computeAll(){
+-  const Wperm=agg.DC.P+agg.DW.P, Wtrib=Wperm+gEQc*agg.LL.P, cZ1=AsC<0.05?0.15:0.25;
++  const Wperm=agg.DC.P+WdiaAdd+agg.DW.P, Wtrib=Wperm+gEQc*agg.LL.P, cZ1=AsC<0.05?0.15:0.25;
+@@ -4609 +4647 @@ function computeAll(){
+-      const Pc=gDCc*(apDC? wallWtAbove+ns*agg.DC.P+ns*apDC : wallWtAbove+ns*agg.DC.P)/Lab;           // kips/ft, min DC factor (beneficial clamping)
++      const Pc=gDCc*(apDC? wallWtAbove+ns*groups.DCsup.V+ns*apDC : wallWtAbove+ns*groups.DCsup.V)/Lab;   // ABC (b): DCsup includes the semi-integral end diaphragm           // kips/ft, min DC factor (beneficial clamping)
+@@ -4612 +4650 @@ function computeAll(){
+-      if(!sf||Vui/phiVni>sf.dc+1e-12) sf={dc:Vui/phiVni, Vui, Vni, Vni_raw, Vni_cap, phiVni, Acv, Avf, Pc, gDCc, ns, AvfMin, WwA:wallWtAbove, DCs:agg.DC.P, ...(apDC?{apDC}:{}),
++      if(!sf||Vui/phiVni>sf.dc+1e-12) sf={dc:Vui/phiVni, Vui, Vni, Vni_raw, Vni_cap, phiVni, Acv, Avf, Pc, gDCc, ns, AvfMin, WwA:wallWtAbove, DCs:groups.DCsup.V, ...(apDC?{apDC}:{}),
+@@ -4647,0 +4686 @@ function computeAll(){
++      if(WdiaAdd>0){ const d=GP.DC[1]*WdiaAdd/Math.max(1,S.beams.N); SI+=d; SV+=d; }   // ABC (b): the end diaphragm, an equal share per girder
+@@ -4653 +4692 @@ function computeAll(){
+-          gLL:(ls==="Strength I"?L1.LL*L1.mLL:L5.LL*L5.mLL), gWS:ls==="Strength V"?L5.WS:0, gWL:ls==="Strength V"?L5.WL:0, y:posB[i]||0, ...(apG?{ap:apG}:{})}; }   // ABSW: worked P_u (display only); APS: slab share
++          gLL:(ls==="Strength I"?L1.LL*L1.mLL:L5.LL*L5.mLL), gWS:ls==="Strength V"?L5.WS:0, gWL:ls==="Strength V"?L5.WL:0, y:posB[i]||0, ...(apG?{ap:apG}:{}), ...(WdiaAdd>0?{dia:WdiaAdd/Math.max(1,S.beams.N)}:{})}; }   // ABSW: worked P_u (display only); APS: slab share
+@@ -5085 +5124,7 @@ function computeAll(){
+-      sx("iabC1","Pile cap longitudinal (case 1)",Q.c1.sec); sx("iabC2","Integral wall horizontal (case 2)",Q.c2.sec); sx("iabC3","Pile cap vertical rear face",Q.c3.sec); }
++      sx("iabC1","Pile cap longitudinal (case 1)",Q.c1.sec); sx("iabC2","Integral wall horizontal (case 2)",Q.c2.sec); sx("iabC3","Pile cap vertical rear face",Q.c3.sec);
++      if(Q.wEE){ const E=Q.wEE;   // ABC (d)
++        addD("iabEEP","Integral abutment — seismic longitudinal force vs seismic passive resistance [11.6.5.5]",E.dcS,"tab-iab",`F = ${fmt(E.Fd,1)} kip vs P_PE = ${fmt(E.PPE,1)} kip (K_PE = ${fmt(E.KpE,3)}); excess to the piles`);
++        addD("iabEEWF","Integral wall — Extreme Event I flexure [11.6.5, 5.6.3]",E.c2.dcM,"tab-iab",`f·K_PE·γ·H = ${fmt(E.pB,3)} ksf at the base; φ = 1.0`);
++        addD("iabEEWV","Integral wall — Extreme Event I shear [11.6.5, 5.7.3]",E.c2.dcV,"tab-iab","as the flexure; φ = 1.0");
++        addD("iabEERF","Pile cap rear face — Extreme Event I flexure [11.6.5, 5.6.3]",E.c3.dcM,"tab-iab","f·K_PE·γ·z from the seat; φ = 1.0");
++        addD("iabEERV","Pile cap rear face — Extreme Event I shear [11.6.5, 5.7.3]",E.c3.dcV,"tab-iab","as the flexure; φ = 1.0"); } }
+@@ -5172 +5217 @@ function renderTabWing(R){
+-      `${w.orient==="inline"?"in-line (in the plane of the abutment)":"U-wing (parallel to the roadway)"}, cast monolithic with the stem / backwall and cantilevered from the junction; no footing and no soil bearing below the wing [11.6.1.4]. The wing acts as a cantilever plate fixed along the junction. Horizontal bars at the junction are designed per foot of junction height for ${W.avg?"<b>the total junction moment spread uniformly over the junction height H<sub>0</sub></b> (moment and shear by equilibrium of the whole wing; the plate is taken to redistribute the moment along the junction — the basis of MassDOT Part I 3.10.9 for integral U-wings)":"<b>the most loaded 1-ft horizontal strip</b> (each horizontal strip a cantilever from the junction, no vertical redistribution)"}; the other method is shown for information. The tie bars are developed on both sides of the junction [11.6.1.5.2]. Vertical bars: shrinkage and temperature [5.10.6].`
++      `${w.orient==="inline"?"in-line (in the plane of the abutment)":"U-wing (parallel to the roadway)"}, cast monolithic with ${iabType()==="integral"?"the integral wall (pile cap and end diaphragm), moving with it":iabType()==="semi"?"the lower abutment (stem; the end diaphragm moves separately on the bearings)":"the stem / backwall"} and cantilevered from the junction; no footing and no soil bearing below the wing [11.6.1.4]. The wing acts as a cantilever plate fixed along the junction. Horizontal bars at the junction are designed per foot of junction height for ${W.avg?"<b>the total junction moment spread uniformly over the junction height H<sub>0</sub></b> (moment and shear by equilibrium of the whole wing; the plate is taken to redistribute the moment along the junction — the basis of MassDOT Part I 3.10.9 for integral U-wings)":"<b>the most loaded 1-ft horizontal strip</b> (each horizontal strip a cantilever from the junction, no vertical redistribution)"}; the other method is shown for information. The tie bars are developed on both sides of the junction [11.6.1.5.2]. Vertical bars: shrinkage and temperature [5.10.6].`
+@@ -5186,0 +5232 @@ function renderTabWing(R){
++  const ruleTxtI=W.itWing? `integral abutment — the wing stands on the pile-supported integral wall, which cannot tilt away from the backfill: at-rest K<sub>0</sub> (${own==="MassDOT"?"MassDOT 3.1.6 rule: walls on piles":own==="RIDOT"?"RIDOT 11.3.4: pile-supported":"AASHTO C3.11.1"}); Extreme Event I with k<sub>h</sub> = k<sub>h0</sub> (restrained, no 11.6.5.2.2 reduction)` : "";   // ABC (decision 3)
+@@ -5198 +5244 @@ function renderTabWing(R){
+-    `k_{h0} = ${E.kh0>(+S.seismic.As||0)+1e-12?"1.2":""}A_s = ${t(E.kh0,3)}\\,, \\quad k_h = ${t(+S.seismic.khR,2)}\\,k_{h0} = ${t(E.kh,4)}\\,, \\quad \\theta_{MO} = \\tan^{-1}\\dfrac{k_h}{1-k_v} = ${t(E.thd,2)}°`,
++    `k_{h0} = ${E.kh0>(+S.seismic.As||0)+1e-12?"1.2":""}A_s = ${t(E.kh0,3)}\\,, \\quad k_h = ${t(E.khR??+S.seismic.khR,2)}\\,k_{h0} = ${t(E.kh,4)}\\,, \\quad \\theta_{MO} = \\tan^{-1}\\dfrac{k_h}{1-k_v} = ${t(E.thd,2)}°`,
+@@ -5210 +5256 @@ function renderTabWing(R){
+-      `Earth-pressure state: ${ruleTxt}${W.ctCase?". CTDOT integral U-wing design cases: case 1 at-rest pressure (Strength I, Service I); case 2 active pressure with the collision force (Extreme Event II)":""}${own==="MassDOT"&&att&&W.CT?(iabType()==="integral"?". MassDOT 3.10.9: integral U-wing of an integral abutment with active pressure at γ = 1.50 and the collision at 1.00 (Extreme Event II)":". MassDOT 3.3.2.4: stem with active pressure at γ<sub>p</sub> = 1.00 and the collision at 1.00 (Extreme Event II)"):""}.`)}
++      `Earth-pressure state: ${ruleTxtI||ruleTxt}${W.ctCase?". CTDOT integral U-wing design cases: case 1 at-rest pressure (Strength I, Service I); case 2 active pressure with the collision force (Extreme Event II)":""}${own==="MassDOT"&&att&&W.CT?(iabType()==="integral"?". MassDOT 3.10.9: integral U-wing of an integral abutment with active pressure at γ = 1.50 and the collision at 1.00 (Extreme Event II)":". MassDOT 3.3.2.4: stem with active pressure at γ<sub>p</sub> = 1.00 and the collision at 1.00 (Extreme Event II)"):""}.`)}
+@@ -5249 +5295 @@ function renderTabWing(R){
+-        "Strength I resultants at one junction: they act on the end of the abutment stem / backwall (shear normal to the wing, horizontal bending, torsion of the junction section and the wing weight hung from the junction). The end region carries them through the junction bars (§9.4) continuing into the abutment; check its horizontal reinforcement for M<sub>h</sub> and T.")}
++        "Strength I resultants at one junction: they act on the end of the "+(iabType()==="integral"?"pile cap / integral wall":iabType()==="semi"?"lower-abutment stem":"abutment stem / backwall")+" (shear normal to the wing, horizontal bending, torsion of the junction section and the wing weight hung from the junction). The end region carries them through the junction bars (§9.4) continuing into the abutment; check its horizontal reinforcement for M<sub>h</sub> and T.")}
+@@ -5255 +5301,2 @@ function renderTabWing(R){
+-        (AB.orient==="U"?"U-wings: their earth pressures are normal to the wings, equal and opposite on the pair, so no net horizontal force reaches the abutment; their weight does. ":"In-line wings retain soil in the abutment's direction: their EH and LS push the abutment toward the toe. ")+"Applied as load groups WG (Tab 1 §1.5 loads table) in every limit state of the stability (Tab 3), the pile reactions (Tab 4) and the footing (Tab 5); the stem strip design (§5.2) is per foot and does not take them. Uncheck \"apply to the abutment\" in panel I-13 to leave them out.") : `<div class="note-box">Not applied to the abutment design (panel I-13).</div>`}`);
++        (AB.orient==="U"?"U-wings: their earth pressures are normal to the wings, equal and opposite on the pair, so no net horizontal force reaches the abutment; their weight does. ":"In-line wings retain soil in the abutment's direction: their EH and LS push the abutment toward the toe. ")+"Applied as load groups WG (Tab 1 §1.5 loads table) in every limit state of the stability (Tab 3), the pile reactions (Tab 4) and the footing (Tab 5); the stem strip design (§5.2) is per foot and does not take them. Uncheck \"apply to the abutment\" in panel I-13 to leave them out.") : (R.iab&&R.iab.integ&&R.iab.Wwing>0? `<div class="note-box">Integral abutment: the pair's weight 2W = 2(${fmt(R.iab.wingW1,2)}) = ${fmt(R.iab.Wwing,2)} kip is carried by the integral piles with the abutment DC (<span class="xlink" data-jump="tab-iab|o-iab-pile">Tab 10 §10.4</span>); U-wing earth pressures are equal and opposite on the pair.</div>`
++      : `<div class="note-box">Not applied to the abutment design (panel I-13${iabType()==="integral"?": \"apply to the abutment\" unchecked":""}).</div>`)}`);   // ABC (a)
+@@ -5484 +5531,3 @@ function renderTabIAB(R){
+-      `P_{DL} = \\dfrac{\\eta(\\gamma_{DC}DC + \\gamma_{DW}DW)}{n} = \\dfrac{${t(Q.eta)}(${t(Q.gDC)}\\cdot${t(Q.DC,1)} + ${t(Q.gDW)}\\cdot${t(Q.DW,1)})}{${P.n}} = ${t(P.Pdl,2)}\\ \\text{kip}`,
++      ...(Q.Wwing>0?[`W_{wing} = 2\\,\\gamma_c\\,t\\,I_1 = 2(${t(Q.wingW1,2)}) = ${t(Q.Wwing,2)}\\ \\text{kip (attached wingwall pair, Tab 9 §9.2a; on the piles, not on cap case 1)}`]:[]),   // ABC (a)
++      Q.Wwing>0? `P_{DL} = \\dfrac{\\eta[\\gamma_{DC}(DC + W_{wing}) + \\gamma_{DW}DW]}{n} = \\dfrac{${t(Q.eta)}[${t(Q.gDC)}(${t(Q.DC,1)} + ${t(Q.Wwing,1)}) + ${t(Q.gDW)}\\cdot${t(Q.DW,1)}]}{${P.n}} = ${t(P.Pdl,2)}\\ \\text{kip}`
++        : `P_{DL} = \\dfrac{\\eta(\\gamma_{DC}DC + \\gamma_{DW}DW)}{n} = \\dfrac{${t(Q.eta)}(${t(Q.gDC)}\\cdot${t(Q.DC,1)} + ${t(Q.gDW)}\\cdot${t(Q.DW,1)})}{${P.n}} = ${t(P.Pdl,2)}\\ \\text{kip}`,
+@@ -5564,0 +5614,12 @@ function renderTabIAB(R){
++    if(Q.wEE){ const E=Q.wEE, Lab=+S.geom.Lab;   // ABC (d)
++      h+=panel("o-iab-ee","10.5d","Integral Wall and Pile Cap — Extreme Event I",eqB("Longitudinal seismic force driving the abutment into the backfill","AASHTO LRFD 10th Ed. 3.10.9, 11.6.5.1, 11.6.5.5, Figure A11.4-2; 1.3.2.1",[
++        `F_{sup} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ} = ${t(E.Fsup,1)}\\ \\text{kip (Tab 3 §3.6a)}\\,, \\quad k_h = ${t(E.kh,4)}`,
++        `F_d = F_{sup} + k_hW_{ab} + k_hW_{wing}${E.Fap>0?" + F_{ap}":""} = ${t(E.Fsup,1)} + (${t(E.kh,4)})(${t(Q.Wab,1)}) + (${t(E.kh,4)})(${t(Q.Wwing||0,1)})${E.Fap>0?` + ${t(E.Fap,1)}`:""} = ${t(E.Fd,1)}\\ \\text{kip}`,
++        `K_{PE} = ${t(E.KpE,3)}\\ ${E.user?"\\text{(entered, panel I-0a)}":E.low?"\\text{(Fig. A11.4-2 at } k_h = 0:\\ H < 5\\text{ ft, static passive, 11.6.5.5)}":"\\text{(Fig. A11.4-2, } \\delta = 0.67\\varphi,\\ k_h = "+t(E.kh,3)+")"}\\,, \\quad P_{PE} = \\tfrac12K_{PE}\\gamma H^2L_{ab} = \\tfrac12(${t(E.KpE,3)})(${t(gam,3)})(${t(Q.H)})^2(${t(Lab)}) = ${t(E.PPE,1)}\\ \\text{kip}`,
++        `f = \\min\\left(1,\\ \\dfrac{F_d}{P_{PE}}\\right) = \\min\\left(1,\\ \\dfrac{${t(E.Fd,1)}}{${t(E.PPE,1)}}\\right) = ${t(E.f,4)}\\,, \\quad p_B = f\\,K_{PE}\\gamma H = (${t(E.f,4)})(${t(E.KpE,3)})(${t(gam,3)})(${t(Q.H)}) = ${t(E.pB,3)}\\ \\text{ksf}`,
++        `\\text{wall (case 2): } M_u = 0.8\\dfrac{p_Bs_G^2}{8} = 0.8\\dfrac{(${t(E.pB,3)})(${t(Q.sG)})^2}{8} = ${t(E.c2.Mu,2)}\\,, \\quad V_u = \\dfrac{p_Bs_G}{2} = ${t(E.c2.Vu,2)}\\quad(\\text{per ft of height})`,
++        `\\text{rear face: } M_u = fK_{PE}\\gamma\\left[\\dfrac{z_2^3 - z_1^3}{3} - z_1\\dfrac{z_2^2 - z_1^2}{2}\\right] = ${t(E.c3.Mu,3)}\\,, \\quad V_u = fK_{PE}\\gamma\\,\\dfrac{z_2^2 - z_1^2}{2} = ${t(E.c3.Vu,3)}\\quad(z_1 = ${t(E.z1)},\\ z_2 = ${t(E.z2)}\\ \\text{ft})`],
++        `The backfill resists the longitudinal seismic force with its seismic passive pressure; only the fraction f of the full seismic passive pressure that this force can mobilize acts on the wall. ${E.f>=1?"<b>f = 1: the force exceeds the passive resistance — the excess "+fmt(E.Fd-E.PPE,1)+" kip goes to the piles (lateral p-y analysis outside this tool).</b> ":""}Permanent loads at 1.00, φ = 1.0 (1.3.2.1); M<sub>n</sub> and V<sub>n</sub> = V<sub>c</sub> of the Strength I sections (§10.5b, §10.5c). Cap case 1 and the pile axial resistance are governed by Strength I (larger vertical loads, φ<sub>c</sub> = 0.70); the geotechnical pile check at Extreme Event I is in §10.4.`)
++        +checkLine("Seismic force vs passive resistance",`\\dfrac{F_d}{P_{PE}} = \\dfrac{${t(E.Fd,1)}}{${t(E.PPE,1)}}`,E.dcS)
++        +checkLine("Integral wall — EE I flexure",`\\dfrac{M_u}{M_n} = \\dfrac{${t(E.c2.Mu,2)}}{${t(E.c2.Mn,2)}}`,E.c2.dcM)+checkLine("Integral wall — EE I shear",`\\dfrac{V_u}{V_n} = \\dfrac{${t(E.c2.Vu,2)}}{${t(E.c2.Vn,2)}}`,E.c2.dcV)
++        +checkLine("Pile cap rear face — EE I flexure",`\\dfrac{M_u}{M_n} = \\dfrac{${t(E.c3.Mu,3)}}{${t(E.c3.Mn,2)}}`,E.c3.dcM)+checkLine("Pile cap rear face — EE I shear",`\\dfrac{V_u}{V_n} = \\dfrac{${t(E.c3.Vu,3)}}{${t(E.c3.Vn,2)}}`,E.c3.dcV)); }
+@@ -5665,0 +5727 @@ function renderIntLoads(R){
++    ${Q.Wwing>0?`<tr><td class="lft">DC — attached wingwall pair (Tab 9 §9.2a): piles only</td><td>${fmt(Q.Wwing,1)}</td><td>${fmt(Q.gDC,2)}</td><td>${intXl("o-iab-pile","§10.4")}</td></tr>`:""}
+@@ -5685 +5747 @@ function intCombHTML(R){
+-    `<div class="note-box">The pile and cap loads take each permanent load at its maximum factor (all add to the pile load); the smallest pile load takes the minimum factors. ${S.seismic&&S.seismic.on?"Extreme Event I: the geotechnical pile check and the approach-slab inertia; the wall and cap are not checked at the extreme event in this version.":"Extreme Event I is off (panel I-11)."}</div>`);
++    `<div class="note-box">The pile and cap loads take each permanent load at its maximum factor (all add to the pile load); the smallest pile load takes the minimum factors. ${S.seismic&&S.seismic.on?"Extreme Event I: the geotechnical pile check, the approach-slab inertia, and the wall and cap rear face under the mobilized seismic passive pressure with γ = 1.00 and φ = 1.0 (Tab 10 §10.5d).":"Extreme Event I is off (panel I-11)."}</div>`);
+@@ -5775,0 +5838 @@ function renderIntTables(R){
++    ${Q.Wwing>0?`<tr><td class="lft">DC — attached wingwall pair</td><td>${fmt(Q.Wwing,2)}</td><td>${fmt(eta*Q.gDC,3)}</td><td>${fmt(eta*Q.gDC*Q.Wwing,2)}</td><td>${fmt(eta*Q.gDC*Q.Wwing/n,3)}</td></tr>`:""}
+@@ -5860,0 +5924 @@ const DASH_ANCHOR={iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",
++  iabEEP:"o-iab-ee",iabEEWF:"o-iab-ee",iabEEWV:"o-iab-ee",iabEERF:"o-iab-ee",iabEERV:"o-iab-ee",   // ABC (d)
+@@ -6007,0 +6072 @@ function renderTabLoads(R){
++  if(R.diaSemi){ const D=R.diaSemi; pw+=`<div class="note-box"><b>End diaphragm (semi-integral):</b> W<sub>dia</sub> = t<sub>bw</sub>·h<sub>bw</sub>·γ<sub>c</sub>·L<sub>ab</sub> = ${fmt(+g.tbw)} × ${fmt(+g.hbw)} × ${fmt(+m.gc,3)} × ${fmt(+g.Lab)} = <b>${fmt(D.W,1)} kip</b> — cast on the girder ends, it reaches the seat through the bearings: ${D.inRx?"already included in the girder DC reactions (panel I-0a), not added again":`added once to the superstructure DC at the bearing line x<sub>brg</sub> = ${fmt(D.x)} ft (§1.5; not in the construction stage; an equal share ${fmt(D.W/Math.max(1,S.beams.N),2)} kip per girder on the bearings, Tab 5 §5.6)`}. It is not abutment concrete.</div>`; }   // ABC (b)
+@@ -6615 +6680 @@ function renderTabStab(R){
+-        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
++        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
+@@ -6622 +6687 @@ function renderTabStab(R){
+-        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
++        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
+@@ -7231 +7296 @@ function renderTabStruct(R){
+-      ...(bs.puT?[`P_{u,girder} = \\gamma_{DC}P_{DC} + \\gamma_{DW}P_{DW} + \\gamma_{LL}P_{LL}${bs.puT.gWS?" + \\gamma_{WS}P_{WS} + \\gamma_{WL}P_{WL}":""}${bs.puT.ap?" + (\\gamma_{DC}P_{DC,ap} + \\gamma_{DW}P_{DW,ap} + \\gamma_{LL}P_{LL,ap})":""} = ${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.LL)})${bs.puT.gWS?` + ${fmtT(bs.puT.gWS)}(${fmtT(bs.puT.WS)}) + ${fmtT(bs.puT.gWL)}(${fmtT(bs.puT.WL)})`:""}${bs.puT.ap?` + (${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.ap.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.ap.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.ap.LL)}))`:""} = ${fmtT(bs.PuG)}\\ \\text{kip} \\quad(\\text{girder ${bs.pgirder}, ${esc(bs.pls)}; reactions from panel I-5}${bs.puT.ap?";\\ \\text{approach slab on the end diaphragm: an equal share per girder, §1.4a}":""})`]:[]),
++      ...(bs.puT?[`P_{u,girder} = \\gamma_{DC}P_{DC} + \\gamma_{DW}P_{DW} + \\gamma_{LL}P_{LL}${bs.puT.gWS?" + \\gamma_{WS}P_{WS} + \\gamma_{WL}P_{WL}":""}${bs.puT.ap?" + (\\gamma_{DC}P_{DC,ap} + \\gamma_{DW}P_{DW,ap} + \\gamma_{LL}P_{LL,ap})":""}${bs.puT.dia?" + \\gamma_{DC}W_{dia}/N":""} = ${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.LL)})${bs.puT.gWS?` + ${fmtT(bs.puT.gWS)}(${fmtT(bs.puT.WS)}) + ${fmtT(bs.puT.gWL)}(${fmtT(bs.puT.WL)})`:""}${bs.puT.ap?` + (${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.ap.DC)}) + ${fmtT(bs.puT.gDW)}(${fmtT(bs.puT.ap.DW)}) + ${fmtT(bs.puT.gLL)}(${fmtT(bs.puT.ap.LL)}))`:""}${bs.puT.dia?` + ${fmtT(bs.puT.gDC)}(${fmtT(bs.puT.dia,2)})`:""} = ${fmtT(bs.PuG)}\\ \\text{kip} \\quad(\\text{girder ${bs.pgirder}, ${esc(bs.pls)}; reactions from panel I-5}${bs.puT.ap?";\\ \\text{approach slab on the end diaphragm: an equal share per girder, §1.4a}":""})`]:[]),
+@@ -9200,0 +9266,2 @@ document.addEventListener("change",ev=>{
++  if(p==="iab.type"&&raw==="semi"&&S.longit&&!S.longit.computeTU){ S.longit.computeTU=true; buildInputs();   // ABC (c): semi-integral — the bearing shear from the superstructure movement is calculated by default
++    const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="semi-integral: bearing shear from the superstructure movement (TU) turned on (panel I-6b)"; }
+```
