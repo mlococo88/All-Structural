@@ -1177,3 +1177,50 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
   - c_a1 for a square shaft is b/2 − R (the existing value, also used for ψ_ed,N), i.e. a bolt on a face normal; it is conservative when no bolt sits on a face normal. Unchanged.
   - Untorqued cover is measured to the anchor shank; head/plate-washer and template clearance to the shaft cage are detailing checks, not done.
   - §17.9.3 d_a′ substitution for untorqued anchors that fail the limits is cited, not computed.
+
+## 2026-10-21 — PR: claude/lightpole-splitting (follow-up to #402: §17.9.1 splitting reinforcement input; square-shaft edge distance per bolt; PR link added after merge)
+
+### TQ2. "Splitting reinforcement at the shaft top" input waives the §17.9.2 minimums (ACI 318-19 §17.9.1)   [new input] [default: no change]
+- **Where:**
+  - Input card 7: new row after `id="anchTqMigNote"`, anchor text `id="segSplitRe"` (Provided / None, default None). Separate from the breakout `segAnchRe` input.
+  - State: `let splitRe='no';` below `let anchTq='torqued';`; click handler above the `#segAnchTq` handler; `calc()` input `anchTq:anchTq,splitRe:splitRe,`.
+  - `anchorBolts()`: `const splitW = inp.splitRe==='yes';`, returned as `splitW`.
+  - `collectChecks()`: the two §17.9.2 checks are pushed only when `!b.splitW` (a waived minimum is not a design check, so it is neither a pass nor a fail in the verdict).
+  - `boltMinGeomRows()`: when waived, a single "WAIVED: splitting reinforcement provided at the shaft top (§17.9.1)" row with the provided s, c_a,min and the limits that would apply.
+  - `boltWorkedHTML()` step 9: the values are still worked; the PASS/FAIL words become "waived (§17.9.1)" and a WAIVED paragraph follows; the closing note names the new input.
+  - Summary "Anchor installation" design row and the report varsub line state the waiver.
+  - Manual inputs table: new row. `captureState()` adds `splitRe`; `applyState()` reads it (`st.splitRe==='yes' ? 'yes' : 'no'`).
+- **Governing provision:** ACI 318-19 §17.9.1 (the minimum spacing / edge distance of §17.9 apply unless supplementary reinforcement is provided to control splitting); Table 17.9.2(a).
+- **Before / after:** before, the §17.9.2 checks always applied. After: unchanged with None (default); with Provided, both checks are waived (shown, not checked).
+- **Saved data:** new top-level field `splitRe`; saves without it open as None, i.e. exactly as before.
+- **Check case:** round shaft 2.0 ft, (6) 1 in, BC 16, torqued: c_a1 = 12 − 8 = 4.00 < 6.00 → edge distance 1.50 FAIL, verdict "1 CHECK FAIL". With splitting reinforcement Provided: the row reads WAIVED (s = 8.00, c_a,min = 4.00; torqued limits 6.00 / 6.00), step 9 says "waived (§17.9.1)", the check is not in the Summary, verdict "ALL CHECKS PASS".
+
+### TQ3. Square shaft: §17.9 edge distance per bolt to the nearest face   [calc change to the #402 check] [less conservative = exact; round shafts and squares with a bolt on a face normal unchanged]
+- **Where:** `anchorBolts()`, block above `const torq = inp.anchTq==='torqued';`; `edProv` now uses `ca17`; new return fields `sqShaft, ca17, caGovK, caGovAng`; each bolt object gets `ca`. `boltMinGeomRows()` and step 9 of `boltWorkedHTML()` show c_a,min (and the governing bolt for a square shaft, with every bolt's value listed). Summary design row shows c_a,min.
+- **Before:**
+  ```js
+  const edProv = torq ? ca1 : ca1 - d/2;                       // in
+  ```
+  with ca1 = R_edge − R for both shapes (for a square, b/2 − R: the distance of a bolt on a face normal).
+- **After:**
+  ```js
+  const sqShaft = inp.shaftShape==='square';
+  bolts.forEach(b=>{ b.ca = sqShaft ? Redge - R*Math.max(Math.abs(Math.cos(b.ang*RAD)),Math.abs(Math.sin(b.ang*RAD))) : ca1; });
+  const caGovB = bolts.reduce((a,b)=>b.ca<a.ca?b:a, bolts[0]);
+  const ca17 = caGovB ? caGovB.ca : ca1;
+  ...
+  const edProv = torq ? ca17 : ca17 - d/2;
+  ```
+  c_a,i = b/2 − R·max(|cos θ_i|, |sin θ_i|), θ_i = θ_b + (i−1)·360°/n, shaft faces normal to 0°/90°/180°/270° (as `drawBoltGroup` draws the square). The smallest c_a,i governs.
+- **ψ_ed,N not changed:** the tool's tension breakout is a group calculation (one A_Nc, one ψ_ed,N with c_a,min = c_a1), not per bolt, so ψ_ed,N keeps c_a1 = b/2 − R; the side-face blowout flag also keeps c_a1. Step 9 says so.
+- **Governing provision:** ACI 318-19 §17.9.2, Table 17.9.2(a) (edge distance of each anchor); §20.5.1.3 (untorqued cover).
+- **Check cases** (square shaft b = 2.0 ft → b/2 = 12 in, BC 16 → R = 8 in, 1 in bolts, torqued unless noted):
+  - n = 6, θ_b = 0°: bolt 1 at 0° → 12 − 8·1 = 4.00 (others 12 − 8·0.866 = 5.07). c_a,min = 4.00 → 6/4 = 1.50 FAIL. Before: 4.00, 1.50 FAIL (unchanged).
+  - n = 4, θ_b = 45°: every bolt on a diagonal → 12 − 8·0.7071 = 6.34. 6/6.34 = 0.95 PASS. Before: 4.00 → 1.50 FAIL.
+  - n = 6, θ_b = 15°: θ = 15, 75, 135, 195, 255, 315° → max(|cos|,|sin|) = 0.9659, 0.9659, 0.7071, … → c_a,min = 12 − 7.727 = 4.27. 6/4.27 = 1.40 FAIL. Before: 4.00 → 1.50 FAIL.
+  - n = 4, θ_b = 45°, untorqued: cover 6.34 − 0.50 = 5.84 ≥ 3.00 → 0.51 PASS. Before: 4.00 − 0.50 = 3.50 → 0.86 PASS.
+- **How verified:** `node tests/check-syntax.mjs "Light Pole and Sign Post.html"` passes. Headless Chromium, origin/main (8adebd1, with #402) vs branch, KaTeX 0.16.9 local, 9 cases (default; an old save without `anchTq`/`splitRe`; round shaft 2.0 ft; the four square cases above; splitting reinforcement on the round 2.0 ft case; two-post sign, square 2.0 ft, n = 12, splitting on). Every check that existed before #402 and every anchor result scalar is identical in all 9. The §17.9 rows are identical for the default, the old save, the round shaft and the square with θ_b = 0°; they differ only as listed above; with splitting reinforcement they leave the Summary and are shown as WAIVED. No console errors, no `.katex-error`, no ERR tokens.
+- **Other copies:** none.
+- **Open items:**
+  - The tension-breakout A_Nc integration clips by a circle of radius b/2 for a square shaft too (`u*u+w*w>Redge*Redge`), i.e. the inscribed circle; conservative for a square. Unchanged (pre-existing; engineer to decide).
+  - ψ_ed,N for a square shaft keeps c_a1 = b/2 − R even when no bolt sits on a face normal; conservative. Unchanged, per the group method.
