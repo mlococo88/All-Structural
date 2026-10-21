@@ -14511,3 +14511,33 @@ index c180de7..10b01be 100644
 +      if(s.geo) h+=`<br>Geotechnical (Pile Designer Module 13${num(s.geo.toe)?", toe "+f(s.geo.toe,1)+" ft below the cap":""}): static R<sub>n</sub> = ${f(s.geo.Rn,1)} kip, φ = ${f(s.geo.phi,3)}; R<sub>n,up</sub> = ${f(s.geo.RnUp,1)} kip, φ<sub>up</sub> = ${f(s.geo.phiUp,3)}${s.geo.field?"; field method "+esc(s.geo.field.label)+": required R<sub>n</sub> = "+f(s.geo.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(s.geo.field.phi,3)+", R<sub>ndr</sub> = "+f(s.geo.field.Rndr,1)+" kip":""}${s.choices&&s.choices.geo?" (imported"+(PXR_STALE?"; STALE, not used":"")+": "+(s.choices.rn==="field"?"field method":"static")+"; Tab 10 §10.4)":" (not imported)"}.`;   // PDA-IAB
 +      if(s.geo&&s.geo.minPen) h+=`<br>Minimum penetration (10.7.6): z<sub>min</sub> = ${f(s.geo.minPen.zMin,1)} ft below the cap (${esc(s.geo.minPen.governs)})${num(s.geo.minPen.tipElMin)?", tip El. "+f(s.geo.minPen.tipElMin,1):""}; controlling tip ${f(s.geo.minPen.ctrl,1)} ft${num(s.geo.minPen.tipElCtrl)?" (El. "+f(s.geo.minPen.tipElCtrl,1)+")":""}.`; }
 ```
+
+
+## 2026-10-21 — PR: claude/pile-iab-length — Pile length warnings for the integral pile results (PDA-IAB2) (PR link added after merge)
+
+Cross-tool PR with `Pile Designer.html` (fixlog/Pile Designer.md PDA-IAB2: the designed pile length is imported, Module 13 evaluated at it, required ≤ designed checked, R_n / φ sent unrounded) and HANDOFF.md §4.6, §4.10. **No calculation change here**; the §10.4 check now receives unrounded R_n and φ.
+
+### PDA-IAB2-a. plan(): length warnings
+- **Where:** `AbutPileResults` `plan()`, integral block, anchor `// PDA-IAB2: since the import sets Pile Designer's designed length`.
+- **Before:** "Pile length: Pile Designer's R_n is for the toe … (its required pile length, MassDOT 3.10.11.2); this abutment's pile length below the cap is … Set the same length (Pile Designer: geotechnical length) …" whenever the toe ≠ `iab.Lpile`.
+- **After:** same condition (toe ≠ `iab.Lpile` by > 0.05 ft), which now arises only when the length was changed in Pile Designer after the import (or an older Pile Designer); the text says which ("its designed pile length, changed there after the import" / "no designed length in Pile Designer: its required length"). New warning when Pile Designer's `integral.tier1.lengthPass` is false: "Pile Designer: required pile length max(L_geo, L_f + 5) = … ft > the designed … ft (MassDOT 3.10.11.2)."
+
+### Check case
+- MassDOT integral default, L_pile 30 ft, Pile Designer with the imported 30 ft: no length warning; `iab.Rn` = 449.0166944444444, `iab.phiC` = 0.3071819434330609 → φ_c R_n = 137.9298208333333 = Pile Designer's φR_n; §10.4 P_u/(φ_c R_n) = 328.810/137.930 = 2.3839 (with #399's rounded φ 0.3072: 2.3838; with #399's toe = required 27 ft: 2.4363).
+- Pile Designer length changed to 32 ft: mismatch warning. Pile Designer L_geo 35 ft: "required … 35.0 ft > the designed 30.0 ft".
+
+### How verified
+- Nothing imported, origin/main `c04815d` vs branch: `LAST_R`, report text and Tab 10 identical for conv-AASHTO, int-MassDOT, int-AASHTO, int-CTDOT, conv pile, semi-MassDOT. End to end as in fixlog/Pile Designer.md PDA-IAB2.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `c04815d`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 10b01be..fd977fc 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -10593 +10593,2 @@ document.addEventListener("DOMContentLoaded",init);
+-        if(num(g.static.toeDepth)&&Lp>0&&Math.abs(g.static.toeDepth-Lp)>0.05) warns.push("Pile length: Pile Designer's R_n is for the toe "+f(g.static.toeDepth,1)+" ft below the cap (its required pile length, MassDOT 3.10.11.2); this abutment's pile length below the cap is "+f(Lp,1)+" ft (panel I-0a). Set the same length (Pile Designer: geotechnical length) or check R_n for "+f(Lp,1)+" ft.");
++        if(num(g.static.toeDepth)&&Lp>0&&Math.abs(g.static.toeDepth-Lp)>0.05) warns.push("Pile length: Pile Designer's R_n is for the toe "+f(g.static.toeDepth,1)+" ft below the cap ("+(g.static.toeBasis==="designed"?"its designed pile length, changed there after the import":"no designed length in Pile Designer: its required length max(L_geo, L_f + 5), MassDOT 3.10.11.2")+"); this abutment's pile length below the cap is "+f(Lp,1)+" ft (panel I-0a). Use the same designed length in Pile Designer or check R_n for "+f(Lp,1)+" ft.");   // PDA-IAB2: since the import sets Pile Designer's designed length, only a user override (or an older Pile Designer) reaches this
++        const t1=p.integral&&p.integral.tier1; if(t1&&t1.lengthPass===false) warns.push("Pile Designer: required pile length max(L_geo, L_f + 5) = "+f(t1.reqLength,1)+" ft > the designed "+f(t1.designedLength,1)+" ft (MassDOT 3.10.11.2).");   // PDA-IAB2
+```
