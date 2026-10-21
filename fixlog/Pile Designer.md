@@ -18326,3 +18326,32 @@ index 06ff89e..6d4f235 100644
 +      set('hpAxis',s.orient,'Bending axis (the abutment: web '+(s.orient==='weak'?'parallel':'normal')+' to the abutment, the longitudinal load bends the '+s.orient+' axis)');
 +      if(o.target==='group'){ var webH=s.orient==='weak'?'y':'x', wd=o.ax.x.charAt(1)===webH?'x':'y'; set('hpGroupWebDir',wd,'H-pile web parallel to pile '+wd+' (the abutment\'s orientation)'); } }
 ```
+
+
+## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR link added after merge)
+
+Cross-tool connection in one PR (CLAUDE.md §7 exception): abutment_calculator.html (sender of foundationLoads, receiver of pileResults and abutmentLoads), Pile Designer.html and Spread Footing.html (receivers of foundationLoads), HANDOFF.md §4.5, §4.6, §4.10. Every code site is tagged `AXI`. **No calculation changes in any tool:** the abutment's `computeAll` is identical to origin/main (`c729c12`) for conventional, semi-integral and integral projects (with seismic, on piles); the receivers change only what they accept.
+
+### AXI-PD. foundationLoads from an integral abutment: integral-abutment target only   [hand-off; no calculation change]
+- **Where:** `PileFoundationXfer.check()` (anchor `out.intSrc=el.type==='integralAbutment' || el.abutmentType==='integral';`), `plan()` (anchor `if(chk.intSrc && o.target!=='iab')`).
+- **Before:** an integral abutment's payload carried the conventional cantilever cases; Pile Designer (not in integral mode) could import them into the group workspace or the LRFD table as if they were pile-cap loads. **After:** a payload with `element.type "integralAbutment"` (or `element.abutmentType "integral"`, HANDOFF.md §4.6 AXI) is imported only through the target "Integral-abutment mode" (default when the payload has the `integral` block); the group, single-pile and per-pile targets are refused with the reason. An integral payload without a usable `integral` block gives a warning. Older payloads: unchanged.
+- **Check:** the abutment's integral MassDOT payload: `check` → `intSrc:true`, default target `iab`; `plan` target iab: DC 138.125, DW 13.76 per pile, "η(γDC·DC + γDW·DW + γLL·LL) = 1.00[1.25(138.13) + 1.50(13.76) + 1.75(77.437)] = 328.811 kip; the abutment's P_u = 328.810 kip (equal)"; target group: refused.
+- **Other copies:** none.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `c729c12`):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 6d4f235..682aa9e 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -700,0 +701,4 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    /* AXI (2026-10-21): a payload from an integral abutment (element.type "integralAbutment", or element.abutmentType "integral")
++       carries per-pile loads of the integral design, not footing / pile-cap resultants: only the integral-abutment target applies */
++    var el=p.element||{}; out.intSrc=el.type==='integralAbutment' || el.abutmentType==='integral';
++    if(out.intSrc && !out.iab) out.warn.push('This hand-off is from an integral abutment but carries no usable integral-abutment data: nothing can be imported.');
+@@ -823 +827,2 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    if(o.target==='iab' && !chk.iab) r.err.push('This hand-off has no integral-abutment data.');
++    if(o.target==='iab' && !chk.iab) r.err.push('This hand-off has no integral-abutment data.');
++    if(chk.intSrc && o.target!=='iab') r.err.push('This hand-off is from an integral abutment: its cases are per-pile axial loads of the integral design (no footing or pile cap resultant; the lateral demand is the imposed thermal movement). Pick the target "Integral-abutment mode".');   // AXI
+```

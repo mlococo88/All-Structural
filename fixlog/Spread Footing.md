@@ -1589,3 +1589,31 @@ index 81fdd1e..352c5eb 100644
 -      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,
 +      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,combination:c.combination||'',
 ```
+
+
+## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR link added after merge)
+
+Cross-tool connection in one PR (CLAUDE.md §7 exception): abutment_calculator.html (sender of foundationLoads, receiver of pileResults and abutmentLoads), Pile Designer.html and Spread Footing.html (receivers of foundationLoads), HANDOFF.md §4.5, §4.6, §4.10. Every code site is tagged `AXI`. **No calculation changes in any tool:** the abutment's `computeAll` is identical to origin/main (`c729c12`) for conventional, semi-integral and integral projects (with seismic, on piles); the receivers change only what they accept.
+
+### AXI-SF. foundationLoads from an integral abutment: refused   [hand-off; no calculation change]
+- **Where:** foundation-load receiver `check()` (anchor `if(el.type==='integralAbutment' || el.abutmentType==='integral'`), `BAD_LEVEL` (`pileHead`).
+- **Before:** an integral abutment's payload (conventional cantilever cases at the bottom of the footing) was refused only by its level; a payload at an unknown level could be confirmed by the user. **After:** a payload with `element.type "integralAbutment"`, `element.abutmentType "integral"`, `reference.level "pileHead"`, `reference.perPile` or `perPile` is refused: "This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Spread Footing cannot design it; use Pile Designer (integral-abutment mode)." `pileHead` added to the refused levels.
+- **Check:** the abutment's integral MassDOT payload: `bxFl.check` returns that error; conventional payloads: unchanged (only `element.abutmentType` added by the sender, ignored here).
+- **Other copies:** none.
+
+Diff (`Spread Footing.html`, `git diff -U0` against origin/main `c729c12`):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 352c5eb..23de227 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -5529 +5529 @@ buildManualTab();
+-  var OK_LEVEL={topOfFooting:1,baseOfWall:1,baseOfColumn:1}, BAD_LEVEL={bottomOfFooting:'the bottom of the footing',bottomOfPileCap:'the bottom of the pile cap',pointOfFixity:'a pile or shaft point of fixity'};
++  var OK_LEVEL={topOfFooting:1,baseOfWall:1,baseOfColumn:1}, BAD_LEVEL={bottomOfFooting:'the bottom of the footing',bottomOfPileCap:'the bottom of the pile cap',pointOfFixity:'a pile or shaft point of fixity',pileHead:'the head of one pile (per-pile loads)'};   // AXI: pileHead
+@@ -5542,0 +5543,4 @@ buildManualTab();
++    /* AXI (2026-10-21): an integral abutment has no footing; its payload carries per-pile loads (HANDOFF.md §4.6) */
++    var el=p.element||{};
++    if(el.type==='integralAbutment' || el.abutmentType==='integral' || (p.reference && (p.reference.level==='pileHead' || p.reference.perPile)) || p.perPile){
++      out.err.push('This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Spread Footing cannot design it; use Pile Designer (integral-abutment mode).'); return out; }
+```

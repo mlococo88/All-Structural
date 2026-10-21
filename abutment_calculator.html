@@ -9994,6 +9994,10 @@ document.addEventListener("DOMContentLoaded",init);
       ["fnd.Df",(+E.ground)-(+E.bottomOfFooting),"Footing embedment D_f = ground − bottom of footing (passive)","ft"]];
     if(ci.mat&&ci.mat.gc!=null) o.geom.push(["mat.gc",+ci.mat.gc,"Concrete unit weight","kcf"]);
     if(p.bridge&&p.bridge.roadwayWidth!=null) o.geom.push(["longit.roadwayW",+p.bridge.roadwayWidth,"Clear roadway width (used only by the calculator's own BR)","ft"]);
+    /* AXI (2026-10-21): integral abutment — no stem, footing, backwall or bearings: only the length, span, skew and concrete weight
+       of the geometry group apply; bearings, BR / TU / CR·SH (TU = the movement of Tab 10 §10.2; BR, CR·SH go into the superstructure
+       strut) and WS / WL (not used by the integral design) are not offered. DC, DW, LL, layout, A_s and ΔT apply. */
+    if(iabType()==="integral"){ const keep=["geom.Lab","geom.spanL","geom.skew","mat.gc"]; o.geomSkip=o.geom.filter(g=>!keep.includes(g[0])).map(g=>g[2]); o.geom=o.geom.filter(g=>keep.includes(g[0])); }
     const gBad=o.geom.filter(g=>!hardOK(g[0],g[1])).map(g=>g[2]+" = "+nfmt(g[1]));
     if(gBad.length) o.gerr.geom="out of the calculator's accepted range or not a number: "+gBad.join("; ");
     if(fin(+G.footingWidth)&&Math.abs((+G.toe)+(+G.stemThickness)+(+G.heel)-(+G.footingWidth))>0.01) o.warns.push("SubLoads footing width "+nfmt(+G.footingWidth)+" ft ≠ toe + stem + heel = "+nfmt((+G.toe)+(+G.stemThickness)+(+G.heel))+" ft; the calculator uses toe + stem + heel.");
@@ -10001,6 +10005,9 @@ document.addEventListener("DOMContentLoaded",init);
     o.brg=[["bearing.padL",+B.padLengthIn,"Pad length (along span)","in"],["bearing.padW",+B.padWidthIn,"Pad width (transverse)","in"],["bearing.G",+B.shearModulusKsi,"Elastomer shear modulus G","ksi"],["bearing.hrt",+B.rubberThicknessIn,"Total elastomer thickness h_rt","in"],["bearing.nBrgPerGird",1,"Bearings per girder (SubLoads: one per girder)",""]];
     if(B.type!=="elastomeric") o.gerr.brg="SubLoads bearing type is "+(B.type||"not stated")+", not elastomeric";
     else { const bb=o.brg.filter(g=>!hardOK(g[0],g[1])).map(g=>g[2]+" = "+nfmt(g[1])); if(bb.length) o.gerr.brg="out of range or not a number: "+bb.join("; "); }
+    if(iabType()==="integral"){ o.gerr.brg="integral abutment: no bearings (the girders are cast into the abutment)";   // AXI
+      ["br","tu","crsh"].forEach(k=>{ o.gerr[k]="integral abutment: not applied (TU is the movement of Tab 10 §10.2; BR and CR·SH go into the superstructure strut)"; });
+      ["ws","wl"].forEach(k=>{ o.gerr[k]="integral abutment: not used by the integral design (Tab 10)"; }); }
     o.As=ci.seismic?+ci.seismic.As:(L.EQ?+L.EQ.As:NaN);
     if(!hardOK("seismic.As",o.As)) o.gerr.seis="no valid A_s";
     o.dT=L.TU?[+L.TU.riseDegF,+L.TU.fallDegF]:[NaN,NaN];
@@ -10073,6 +10080,7 @@ document.addEventListener("DOMContentLoaded",init);
   /* fields the calculator does not use, and why */
   function unused(o,st){
     const L=o.L, u=[];
+    if(o.geomSkip&&o.geomSkip.length) u.push(["Integral abutment: "+o.geomSkip.join("; "),"no stem, footing, backwall or bearing seat in an integral abutment (its cap and wall are panel I-0a); not imported"]);   // AXI
     u.push(["LL+IM "+(st.ll==="env"?"concurrent set (max total at the bridge seat)":"per-bearing envelope maxima")+", envelope minima, lanes loaded, multiple presence","the calculator has one LL+IM row; the other set is not concurrent with it, and IM / multiple presence are already inside the values"]);
     u.push(["BR P (overturning couple) and Vy","the calculator's BR row is Vx only, applied at the bridge seat; it does not model the couple from the 6-ft application height [3.6.4]"]);
     u.push(["CE (centrifugal force)",L.CE?"the calculator has no CE row; NOT imported, add it by hand if it matters":"none for this abutment"]);
@@ -10291,7 +10299,7 @@ document.addEventListener("DOMContentLoaded",init);
     return { units:{force:"kip", length:"ft", movement:"in", angle:"deg", section:"in", Fy:"ksi", alpha:"1/°F", temperature:"°F"},
       owner:own, preset:own==="MassDOT"?"massdot":own==="CTDOT"?"ctdot":"",
       section:I.sec, Fy:+I.Fy, orient:I.orient==="strong"?"strong":"weak", nPiles:P.n, spacing:+I.sp, embedment:+I.embed, Lpile:+I.Lpile,
-      gravity:{ DL:r3((Q.DC+Q.DW)/P.n), DC:r3(Q.DC/P.n), DW:r3(Q.DW/P.n), LL:r3(kLL>0? P.Pll/kLL : 0), LLincludesIM:!P.IM, mL:Q.mL,
+      gravity:{ DL:r3((Q.DC+(Q.Wwing||0)+Q.DW)/P.n), DC:r3((Q.DC+(Q.Wwing||0))/P.n), DW:r3(Q.DW/P.n), LL:r3(kLL>0? P.Pll/kLL : 0), LLincludesIM:!P.IM, mL:Q.mL,   // AXI: DC includes the attached wing pair (ABC a), so η(γDC·DC + γDW·DW + γLL·LL) = P_g
         gDC:Q.gDC, gDW:Q.gDW, gLL:Q.gLL, eta:Q.eta, Pu:r3(P.Pg), PuTable:P.md&&P.md.ok? r3(P.md.PuTab) : null,
         note:"unfactored per pile; DL = (DC + DW)/n, LL = the most loaded pile's live load ("+(P.IM?"without IM (3.6.2.1)":"with IM")+"); Pu = the calculator's factored gravity load per pile η[(γDC·DC + γDW·DW)/n + γLL·LL]" },
       thermal:{ alpha:Q.alpha, dTrise:Q.dTr, dTfall:Q.dTf, Lexp:r3(Q.Lexp), dExp:r3(Q.dExp), dCon:r3(Q.dCon), delta:r3(delta),
@@ -10302,6 +10310,24 @@ document.addEventListener("DOMContentLoaded",init);
       soilType:own==="MassDOT"? Math.min(6,Math.max(1,Math.round(+I.soilMD)||1)) : null,
       uWingwalls:w.on? (w.type==="attached"&&w.orient==="U") : null,
       head:own==="CTDOT"? (I.head==="pinned"?"pinned":"fixed") : "fixed", LE:own==="CTDOT"? +I.LE : null };
+  }
+  /* AXI (2026-10-21): an integral abutment sends per-pile loads of its integral design (Tab 10 §10.4), not the conventional
+     cantilever cases: at the head of one pile, factored as the limit state (Service I unfactored); P only — the lateral demand of an
+     integral pile is the imposed thermal movement (integral block, thermal.delta), not a force, so Vx = Vy = Mx = My = 0. */
+  function integralCases(R,lsSel){
+    const Q=R.iab, P=Q&&Q.pile; if(!Q||!Q.integ||!P) return [];
+    const n=P.n, G=P.geo||{}, out=[], want=ls=>!lsSel||lsSel.includes(ls), Ww=Q.Wwing||0, eA=Math.abs(P.eLL||0);
+    const mk=(id,name,ls,fac,Pv,gov,comb)=>out.push({ id, name, limitState:ls, factored:fac, P:r3(Pv), Vx:0, Vy:0, Mx:0, My:0, governs:gov, combination:comb, perPile:true });
+    if(want("Strength I")){
+      mk("Strength I:pile P max","Strength I — integral pile, P max (per pile)","Strength I",true, P.ct? P.ct.Pu : P.Pg, "P max (per pile)",
+        "η[γDC(DC + W_wing) + γDW·DW]/n + ηγLL·m·LL/n + LL eccentricity"+(P.ct?" + R_T (CTDOT thermal axial)":"")+" — Tab 10 §10.4");
+      if(isFinite(G.Pmin)) mk("Strength I:pile P min","Strength I — integral pile, P min (per pile)","Strength I",true, G.Pmin, G.Pmin<0?"P min (uplift)":"P min",
+        "η_min(γDC,min(DC + W_wing) + γDW,min·DW)/n with the LL on the far pile"+(P.ct?" − R_T":"")+" — Tab 10 §10.4"); }
+    if(G.ee&&want("Extreme Event I")) mk("Extreme Event I:pile P max","Extreme Event I — integral pile, P max (per pile)","Extreme Event I",true, G.ee.Pee, "P max (per pile)",
+      "(DC + W_wing + DW)/n + γEQ·LL/n with the LL eccentricity, γEQ = "+r3(G.ee.gq)+" — Tab 10 §10.4");
+    if(want("Service I")){ const LLs=P.LLs? P.LLg : P.LLp, Ps=(Q.DC+Ww+Q.DW)/n+(Q.mL||1)*P.LLp/n+(P.Ix2>0? (Q.mL||1)*LLs*eA*P.xMax/P.Ix2 : 0);
+      mk("Service I:pile P max","Service I — integral pile, P max (per pile)","Service I",false, Ps, "P max (per pile)", "(DC + W_wing + DW)/n + m·LL/n + LL eccentricity, all factors 1.00"); }
+    return out;
   }
   /* all cases the payload can carry, per limit state, from the current results */
   function cases(R, lsSel){
@@ -10340,7 +10366,8 @@ document.addEventListener("DOMContentLoaded",init);
     const R=window.LAST_R; if(!R||!R.LIMITS||!R.permutations) return { err:"No results yet: fix the input errors first." };
     const pile=S.fnd.branch==="pile" && R.pile && R.pile.n>0;
     if(S.fnd.branch==="pile" && !pile) return { err:"Pile branch with no active piles: activate piles first." };
-    const cs=cases(R,lsSel); if(!cs.length) return { err:"Pick at least one limit state." };
+    const integ0=iabType()==="integral"&&R.iab&&R.iab.integ;   // AXI
+    const cs=integ0? integralCases(R,lsSel) : cases(R,lsSel); if(!cs.length) return { err:"Pick at least one limit state"+(integ0?" (integral abutment: Strength I, Extreme Event I or Service I)":"")+"." };
     const nErr=(typeof WARNINGS!=="undefined"?WARNINGS:[]).filter(w=>w.level==="err").length;
     const sp=window.BridgeXfer&&BridgeXfer.sharedProject?BridgeXfer.sharedProject():null;
     const B=R.geo.B;
@@ -10367,6 +10394,23 @@ document.addEventListener("DOMContentLoaded",init);
     /* ABPX: pile layout + per-pile governing loads (pile branch, not for an integral abutment, whose piles are in Tab 10),
        and the integral-abutment block (integral type) */
     const integ=iabType()==="integral";
+    p.element.abutmentType=iabType();   // AXI: additive
+    if(integ0){ /* AXI: an integral abutment — per-pile loads of the integral design, no footing (receivers: Pile Designer integral mode;
+                   Spread Footing refuses) */
+      const Q=R.iab, P=Q.pile;
+      p.element.type="integralAbutment";
+      p.location="head of one integral pile (single row of "+P.n+" "+S.iab.sec+" piles under the pile cap); per-pile loads of the integral design (Tab 10 §10.4)";
+      p.reference={ level:"pileHead", point:"pile", perPile:true };
+      p.includes={ footingWeight:false, soilOverFooting:false, earthPressure:false, capWeight:true, superstructure:true, wingwalls:(Q.Wwing||0)>0 };
+      p.perPile=true;
+      p.axes={ x:"horizontal, normal to the abutment, + toward the span", y:"horizontal, along the abutment" };
+      delete p.geometry; p.geometryIntegral={ capWidth:+S.iab.b, capDepth:+S.iab.hc, diaphragmHeight:+S.iab.hd, abutLength:+S.geom.Lab, nPiles:P.n, spacing:+S.iab.sp };
+      p.notes=[ "Integral abutment: the cases are per-pile axial loads of the integral design (Tab 10 §10.4), at the head of one pile. They are NOT footing loads: there is no footing; the pile cap and the integral wall are cast with the superstructure.",
+        "Lateral: the integral piles are loaded by the imposed thermal movement of the abutment (integral.thermal.delta), not by a horizontal force; Vx, Vy, Mx, My are 0 in every case. Design the piles for the movement (Pile Designer integral-abutment mode).",
+        "Strength I and Extreme Event I are factored (η and the load factors of Tab 2 §2.1); Service I has all factors 1.00 (factored:false).",
+        "Receivers: Pile Designer imports these through its integral-abutment target; Spread Footing refuses them (element.type \"integralAbutment\")." ]
+        .concat(nErr?["The calculator reported "+nErr+" input error(s) when these loads were sent; check them."]:[]);
+    }
     if(pile && !integ){
       p.pileLayout=pileLayout(R);
       p.pileDesign={ units:{force:"kip", moment:"kip-ft", length:"ft"},
@@ -10379,7 +10423,7 @@ document.addEventListener("DOMContentLoaded",init);
     }
     if(integ){ const ib=integralBlock(R);
       if(ib){ p.integral=ib;
-        p.notes.push("Integral abutment (integral): the gravity load per pile (unfactored DL and LL), thermal movement, skew, pile section and orientation, abutment height and length, owner and the eligibility inputs of panel I-0a, from Tab 10. The cases above are the conventional cantilever model (Tabs 2 to 4), which is not part of the integral design."); } }
+        p.notes.push("Integral abutment (integral): the gravity load per pile (unfactored DL and LL), thermal movement, skew, pile section and orientation, abutment height and length, owner and the eligibility inputs of panel I-0a, from Tab 10. The cases above are the per-pile loads of the integral design (AXI, 2026-10-21; before, the conventional cantilever model, which is not part of the integral design."); } }
     /* PXR (2026-10-20): content hash of what a receiver designs the piles from, over every limit state whatever is ticked (cases,
        pile layout without its resistances, per-pile governing loads, integral data). Pile Designer echoes it on the pileResults hand-off, so "Pull pile
        results" can tell whether these loads or the layout changed since. Additive field; other receivers ignore it. */
@@ -10404,7 +10448,8 @@ document.addEventListener("DOMContentLoaded",init);
     let ov=document.getElementById("fdx-ov"); if(!ov){ ov=document.createElement("div"); ov.id="fdx-ov"; document.body.appendChild(ov); }
     const f=v=>escH(r3(v));
     ov.innerHTML="<div id='fdx-dlg' role='dialog' aria-label='Send foundation loads'><h3>Send foundation loads</h3>"+
-      "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</div>"+
+      (iabType()==="integral"? "<div>Integral abutment: factored and service <b>per-pile</b> loads of the integral design (Tab 10 §10.4), for Pile Designer's integral-abutment mode (channel foundationLoads). Spread Footing refuses them.</div>"
+        : "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</div>")+
       "<div style='margin:6px 0'>"+lss.map(ls=>"<label style='margin-right:12px'><input type='checkbox' data-fdx-ls='"+escH(ls)+"'"+(DLG.sel.includes(ls)?" checked":"")+"> "+escH(lsOut(ls))+"</label>").join("")+"</div>"+
       (b.err?"<div style='color:#c62828'>"+escH(b.err)+"</div>":
         "<div class='fdx-note'><b>Location:</b> "+escH(b.p.location)+"<br><b>Sign convention:</b> "+escH(SIGN)+"</div>"+
@@ -10524,7 +10569,7 @@ document.addEventListener("DOMContentLoaded",init);
   }
   function defaults(p){
     const g=p.geotechnical, conv=iabType()!=="integral";
-    return { geo:!!(g&&g.static)&&conv, rn:(g&&g.field&&num(g.field.RnReq))? "field" : "static", mom:conv, df:!!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0)&&conv, iab:true, im:"nl" };
+    return { geo:!!(g&&g.static), rn:(g&&g.field&&num(g.field.RnReq))? "field" : "static", mom:conv, df:!!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0)&&conv, iab:true, im:"nl" };
   }
   /* everything that will change: inputs (path, value, label) and the per-limit-state moments; pure (reads S, LAST_R) */
   function plan(p,st){
@@ -10533,14 +10578,15 @@ document.addEventListener("DOMContentLoaded",init);
     const add=(path,v,lbl,u)=>items.push({path,v,lbl,u:u||"",cur:getPath(S,path)});
     const g=p.geotechnical, rows=conv&&pileB? match(p) : [];
     if(conv&&!pileB) warns.push("The footing is not on piles (panel I-4): the conventional pile results are not used.");
-    if(conv&&pileB&&st.geo&&g&&g.static){
+    const geoOn=st.geo&&g&&g.static&&(conv? pileB : iabType()==="integral"), kp=conv? "piles." : "iab.";   // AXI (2026-10-21): an integral abutment takes R_n / φ into panel I-0a (iab.Rn, iab.phiC, iab.RnUp, iab.phiUp)
+    if(geoOn){
       if(st.rn==="field"&&g.field){
-        if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add("piles.Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add("piles.phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
+        if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add(kp+"Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add(kp+"phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
           warns.push("Field method ("+g.field.label+"): R_n = the nominal resistance the piles are driven to (R_ndr = "+f(g.field.Rndr,1)+" kip with the scour"+(g.field.Rdd>0?" and downdrag":"")+" side resistance, EOD "+f(g.field.RndrEOD,1)+" kip). This abutment's check is then P/(φ_dyn·R_n) ≤ 1 by construction for the case that set R_n."); }
         else warns.push("Pile Designer has no required R_n for its field method (no compression case): R_n not imported.");
-      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add("piles.Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add("piles.phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
+      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
       else warns.push("Pile Designer's static R_n is 0 (soil layers without SPT N or strength?): R_n is not imported.");
-      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add("piles.RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add("piles.phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
+      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
       if(g.minPen) warns.push("Minimum penetration (10.7.6, Pile Designer): z_min = "+f(g.minPen.zMin,1)+" ft below grade ("+(g.minPen.governs||"")+")"+(num(g.minPen.tipElMin)?", tip El. "+f(g.minPen.tipElMin,1):"")+"; controlling tip "+f(g.minPen.controllingTipDepth,1)+" ft"+(num(g.minPen.tipElControlling)?" (El. "+f(g.minPen.tipElControlling,1)+")":"")+". This calculator has no tip input: shown in panel I-7 and the report.");
     }
     if(conv&&pileB&&st.mom){

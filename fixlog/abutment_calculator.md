@@ -14319,3 +14319,117 @@ index 492087f..b8d5942 100644
 +  if(p==="iab.type"&&raw==="semi"&&S.longit&&!S.longit.computeTU){ S.longit.computeTU=true; buildInputs();   // ABC (c): semi-integral — the bearing shear from the superstructure movement is calculated by default
 +    const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="semi-integral: bearing shear from the superstructure movement (TU) turned on (panel I-6b)"; }
 ```
+
+
+## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR link added after merge)
+
+Cross-tool connection in one PR (CLAUDE.md §7 exception): abutment_calculator.html (sender of foundationLoads, receiver of pileResults and abutmentLoads), Pile Designer.html and Spread Footing.html (receivers of foundationLoads), HANDOFF.md §4.5, §4.6, §4.10. Every code site is tagged `AXI`. **No calculation changes in any tool:** the abutment's `computeAll` is identical to origin/main (`c729c12`) for conventional, semi-integral and integral projects (with seismic, on piles); the receivers change only what they accept.
+
+### AXI-1. foundationLoads for an integral abutment: per-pile cases and `element.type`   [hand-off; no result change]
+- **Where:** `AbutFoundationHandoff`: new `integralCases(R,lsSel)` (anchor `function integralCases(R,lsSel){`), `build()` (anchors `const integ0=iabType()==="integral"&&R.iab&&R.iab.integ;`, `p.element.abutmentType=iabType();`, `p.element.type="integralAbutment";`), `integralBlock` gravity (anchor `DC:r3((Q.DC+(Q.Wwing||0))/P.n)`), dialog text.
+- **Before:** an integral abutment sent the conventional cantilever cases (bottom of footing, footing centre, 23–27 cases with P ≈ 3 000 kip, active EH and BR / TU shares) with only a note that they were not part of the integral design; `integral.gravity.DC = Q.DC/n` (without the wing pair of ABC a).
+- **After:** `element.type = "integralAbutment"`, `element.abutmentType = "integral"`, `reference = {level:"pileHead", point:"pile", perPile:true}`, `perPile:true`, no `geometry` (`geometryIntegral` instead), integral notes, and per-pile cases: Strength I P max (P_g; CTDOT P_u = P_g + R_T), Strength I P min, Extreme Event I P max (seismic on), Service I P max (factored:false), Vx = Vy = Mx = My = 0 (lateral demand = the imposed movement, `integral.thermal.delta`). `gravity.DC`, `gravity.DL` include the wing pair, so η(γDC·DC + γDW·DW + γLL·LL) = P_g. Conventional and semi-integral: only `element.abutmentType` added (content hash unchanged).
+- **Check (integral AASHTO default, seismic on, 6 × HP12X84):** DC = 717.9, W_wing = 38.25, DW = 72.0, LL on the piles 340.0 kip; Strength I P max = P_g = 274.70 kip; P min = 121.22; Extreme Event I = (717.9 + 38.25 + 72.0)/6 + 0 × LL = 138.03 (γEQ = 0); Service I = (717.9 + 38.25 + 72.0)/6 + 340.0/6 = 138.03 + 56.67 = 194.69 kip (tool = hand). MassDOT: gravity DC = (790.5 + 38.25)/6 = 138.125, DW 13.76, LL 77.437 → Pile Designer's demand 1.25(138.125) + 1.50(13.76) + 1.75(77.437) = 328.81 kip = the abutment's P_g.
+
+### AXI-2. pileResults: R_n / φ into the integral inputs   [hand-off]
+- **Where:** `AbutPileResults` `defaults()` (anchor `return { geo:!!(g&&g.static), rn:`), `plan()` (anchor `const geoOn=st.geo&&g&&g.static&&(conv? pileB : iabType()==="integral"), kp=conv? "piles." : "iab.";`).
+- **Before:** Pile Designer's geotechnical R_n / φ were imported only for a conventional / semi-integral abutment on piles; an integral abutment's warning pointed to Pile Designer but nothing mapped. **After:** for an integral abutment the static (or field-method) R_n, φ_c and the uplift R_n,up, φ_up go to `iab.Rn`, `iab.phiC`, `iab.RnUp`, `iab.phiUp` (panel I-0a; marked "PD", stale handling as PXR2). Checked: a payload with R_n = 520, φ = 0.55, R_n,up = 180, φ_up = 0.40 plans exactly those four inputs.
+
+### AXI-3. abutmentLoads (SubLoads) import: type-aware   [hand-off]
+- **Where:** receiver `check` (anchor `if(iabType()==="integral"){ const keep=["geom.Lab","geom.spanL","geom.skew","mat.gc"];`, `o.gerr.brg="integral abutment: no bearings`), `unused()`.
+- **Before:** type-blind: an integral abutment was offered the stem / footing / backwall geometry, the elastomeric bearing pad, BR / TU / CR·SH and WS / WL. **After (integral):** geometry limited to L_ab, span, skew, γ_c (the rest listed as not used); bearing pad, BR, TU, CR/SH, WS, WL disabled with the reason; layout, DC, DW, LL+IM, A_s and ΔT apply. Conventional and semi-integral unchanged.
+
+### Saved data
+- No key or format changed. Payloads: additive (`element.abutmentType`); the integral payload's `cases`, `reference`, `location`, `includes` change (receivers updated in this PR; HANDOFF.md §4.6).
+
+### How verified
+- `node tests/check-syntax.mjs` on the three tools: all scripts pass.
+- Playwright, origin/main vs branch: `computeAll` identical for conventional (spread, pile, seismic), semi-integral (spread, pile) and integral (MassDOT, CTDOT, AASHTO seismic). foundationLoads payload: conventional / semi-integral differ only by `element.abutmentType`; integral as AXI-1 (values above).
+- One browser context: SubLoads "Send to Abutment Calculator" → abutment (integral) "Pull from SubLoads": the dialog disables bearing, BR, TU, CR/SH, WS, WL with the reason and offers L_ab, span, skew only in the geometry group. Pile Designer `PileFoundationXfer.check/plan` on the integral payload: default target "Integral-abutment mode", plan without error, gravity demand 328.811 = P_u 328.810; group target refused. Spread Footing `bxFl.check`: refused with the integral message. No page errors.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `c729c12`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index b8d5942..61e56be 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -9996,0 +9997,4 @@ document.addEventListener("DOMContentLoaded",init);
++    /* AXI (2026-10-21): integral abutment — no stem, footing, backwall or bearings: only the length, span, skew and concrete weight
++       of the geometry group apply; bearings, BR / TU / CR·SH (TU = the movement of Tab 10 §10.2; BR, CR·SH go into the superstructure
++       strut) and WS / WL (not used by the integral design) are not offered. DC, DW, LL, layout, A_s and ΔT apply. */
++    if(iabType()==="integral"){ const keep=["geom.Lab","geom.spanL","geom.skew","mat.gc"]; o.geomSkip=o.geom.filter(g=>!keep.includes(g[0])).map(g=>g[2]); o.geom=o.geom.filter(g=>keep.includes(g[0])); }
+@@ -10003,0 +10008,3 @@ document.addEventListener("DOMContentLoaded",init);
++    if(iabType()==="integral"){ o.gerr.brg="integral abutment: no bearings (the girders are cast into the abutment)";   // AXI
++      ["br","tu","crsh"].forEach(k=>{ o.gerr[k]="integral abutment: not applied (TU is the movement of Tab 10 §10.2; BR and CR·SH go into the superstructure strut)"; });
++      ["ws","wl"].forEach(k=>{ o.gerr[k]="integral abutment: not used by the integral design (Tab 10)"; }); }
+@@ -10075,0 +10083 @@ document.addEventListener("DOMContentLoaded",init);
++    if(o.geomSkip&&o.geomSkip.length) u.push(["Integral abutment: "+o.geomSkip.join("; "),"no stem, footing, backwall or bearing seat in an integral abutment (its cap and wall are panel I-0a); not imported"]);   // AXI
+@@ -10294 +10302 @@ document.addEventListener("DOMContentLoaded",init);
+-      gravity:{ DL:r3((Q.DC+Q.DW)/P.n), DC:r3(Q.DC/P.n), DW:r3(Q.DW/P.n), LL:r3(kLL>0? P.Pll/kLL : 0), LLincludesIM:!P.IM, mL:Q.mL,
++      gravity:{ DL:r3((Q.DC+(Q.Wwing||0)+Q.DW)/P.n), DC:r3((Q.DC+(Q.Wwing||0))/P.n), DW:r3(Q.DW/P.n), LL:r3(kLL>0? P.Pll/kLL : 0), LLincludesIM:!P.IM, mL:Q.mL,   // AXI: DC includes the attached wing pair (ABC a), so η(γDC·DC + γDW·DW + γLL·LL) = P_g
+@@ -10305,0 +10314,18 @@ document.addEventListener("DOMContentLoaded",init);
++  /* AXI (2026-10-21): an integral abutment sends per-pile loads of its integral design (Tab 10 §10.4), not the conventional
++     cantilever cases: at the head of one pile, factored as the limit state (Service I unfactored); P only — the lateral demand of an
++     integral pile is the imposed thermal movement (integral block, thermal.delta), not a force, so Vx = Vy = Mx = My = 0. */
++  function integralCases(R,lsSel){
++    const Q=R.iab, P=Q&&Q.pile; if(!Q||!Q.integ||!P) return [];
++    const n=P.n, G=P.geo||{}, out=[], want=ls=>!lsSel||lsSel.includes(ls), Ww=Q.Wwing||0, eA=Math.abs(P.eLL||0);
++    const mk=(id,name,ls,fac,Pv,gov,comb)=>out.push({ id, name, limitState:ls, factored:fac, P:r3(Pv), Vx:0, Vy:0, Mx:0, My:0, governs:gov, combination:comb, perPile:true });
++    if(want("Strength I")){
++      mk("Strength I:pile P max","Strength I — integral pile, P max (per pile)","Strength I",true, P.ct? P.ct.Pu : P.Pg, "P max (per pile)",
++        "η[γDC(DC + W_wing) + γDW·DW]/n + ηγLL·m·LL/n + LL eccentricity"+(P.ct?" + R_T (CTDOT thermal axial)":"")+" — Tab 10 §10.4");
++      if(isFinite(G.Pmin)) mk("Strength I:pile P min","Strength I — integral pile, P min (per pile)","Strength I",true, G.Pmin, G.Pmin<0?"P min (uplift)":"P min",
++        "η_min(γDC,min(DC + W_wing) + γDW,min·DW)/n with the LL on the far pile"+(P.ct?" − R_T":"")+" — Tab 10 §10.4"); }
++    if(G.ee&&want("Extreme Event I")) mk("Extreme Event I:pile P max","Extreme Event I — integral pile, P max (per pile)","Extreme Event I",true, G.ee.Pee, "P max (per pile)",
++      "(DC + W_wing + DW)/n + γEQ·LL/n with the LL eccentricity, γEQ = "+r3(G.ee.gq)+" — Tab 10 §10.4");
++    if(want("Service I")){ const LLs=P.LLs? P.LLg : P.LLp, Ps=(Q.DC+Ww+Q.DW)/n+(Q.mL||1)*P.LLp/n+(P.Ix2>0? (Q.mL||1)*LLs*eA*P.xMax/P.Ix2 : 0);
++      mk("Service I:pile P max","Service I — integral pile, P max (per pile)","Service I",false, Ps, "P max (per pile)", "(DC + W_wing + DW)/n + m·LL/n + LL eccentricity, all factors 1.00"); }
++    return out;
++  }
+@@ -10343 +10369,2 @@ document.addEventListener("DOMContentLoaded",init);
+-    const cs=cases(R,lsSel); if(!cs.length) return { err:"Pick at least one limit state." };
++    const integ0=iabType()==="integral"&&R.iab&&R.iab.integ;   // AXI
++    const cs=integ0? integralCases(R,lsSel) : cases(R,lsSel); if(!cs.length) return { err:"Pick at least one limit state"+(integ0?" (integral abutment: Strength I, Extreme Event I or Service I)":"")+"." };
+@@ -10369,0 +10397,17 @@ document.addEventListener("DOMContentLoaded",init);
++    p.element.abutmentType=iabType();   // AXI: additive
++    if(integ0){ /* AXI: an integral abutment — per-pile loads of the integral design, no footing (receivers: Pile Designer integral mode;
++                   Spread Footing refuses) */
++      const Q=R.iab, P=Q.pile;
++      p.element.type="integralAbutment";
++      p.location="head of one integral pile (single row of "+P.n+" "+S.iab.sec+" piles under the pile cap); per-pile loads of the integral design (Tab 10 §10.4)";
++      p.reference={ level:"pileHead", point:"pile", perPile:true };
++      p.includes={ footingWeight:false, soilOverFooting:false, earthPressure:false, capWeight:true, superstructure:true, wingwalls:(Q.Wwing||0)>0 };
++      p.perPile=true;
++      p.axes={ x:"horizontal, normal to the abutment, + toward the span", y:"horizontal, along the abutment" };
++      delete p.geometry; p.geometryIntegral={ capWidth:+S.iab.b, capDepth:+S.iab.hc, diaphragmHeight:+S.iab.hd, abutLength:+S.geom.Lab, nPiles:P.n, spacing:+S.iab.sp };
++      p.notes=[ "Integral abutment: the cases are per-pile axial loads of the integral design (Tab 10 §10.4), at the head of one pile. They are NOT footing loads: there is no footing; the pile cap and the integral wall are cast with the superstructure.",
++        "Lateral: the integral piles are loaded by the imposed thermal movement of the abutment (integral.thermal.delta), not by a horizontal force; Vx, Vy, Mx, My are 0 in every case. Design the piles for the movement (Pile Designer integral-abutment mode).",
++        "Strength I and Extreme Event I are factored (η and the load factors of Tab 2 §2.1); Service I has all factors 1.00 (factored:false).",
++        "Receivers: Pile Designer imports these through its integral-abutment target; Spread Footing refuses them (element.type \"integralAbutment\")." ]
++        .concat(nErr?["The calculator reported "+nErr+" input error(s) when these loads were sent; check them."]:[]);
++    }
+@@ -10382 +10426 @@ document.addEventListener("DOMContentLoaded",init);
+-        p.notes.push("Integral abutment (integral): the gravity load per pile (unfactored DL and LL), thermal movement, skew, pile section and orientation, abutment height and length, owner and the eligibility inputs of panel I-0a, from Tab 10. The cases above are the conventional cantilever model (Tabs 2 to 4), which is not part of the integral design."); } }
++        p.notes.push("Integral abutment (integral): the gravity load per pile (unfactored DL and LL), thermal movement, skew, pile section and orientation, abutment height and length, owner and the eligibility inputs of panel I-0a, from Tab 10. The cases above are the per-pile loads of the integral design (AXI, 2026-10-21; before, the conventional cantilever model, which is not part of the integral design."); } }
+@@ -10407 +10451,2 @@ document.addEventListener("DOMContentLoaded",init);
+-      "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</div>"+
++      (iabType()==="integral"? "<div>Integral abutment: factored and service <b>per-pile</b> loads of the integral design (Tab 10 §10.4), for Pile Designer's integral-abutment mode (channel foundationLoads). Spread Footing refuses them.</div>"
++        : "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</div>")+
+@@ -10527 +10572 @@ document.addEventListener("DOMContentLoaded",init);
+-    return { geo:!!(g&&g.static)&&conv, rn:(g&&g.field&&num(g.field.RnReq))? "field" : "static", mom:conv, df:!!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0)&&conv, iab:true, im:"nl" };
++    return { geo:!!(g&&g.static), rn:(g&&g.field&&num(g.field.RnReq))? "field" : "static", mom:conv, df:!!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0)&&conv, iab:true, im:"nl" };
+@@ -10536 +10581,2 @@ document.addEventListener("DOMContentLoaded",init);
+-    if(conv&&pileB&&st.geo&&g&&g.static){
++    const geoOn=st.geo&&g&&g.static&&(conv? pileB : iabType()==="integral"), kp=conv? "piles." : "iab.";   // AXI (2026-10-21): an integral abutment takes R_n / φ into panel I-0a (iab.Rn, iab.phiC, iab.RnUp, iab.phiUp)
++    if(geoOn){
+@@ -10538 +10584 @@ document.addEventListener("DOMContentLoaded",init);
+-        if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add("piles.Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add("piles.phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
++        if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add(kp+"Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add(kp+"phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
+@@ -10541 +10587 @@ document.addEventListener("DOMContentLoaded",init);
+-      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add("piles.Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add("piles.phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
++      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
+@@ -10543 +10589 @@ document.addEventListener("DOMContentLoaded",init);
+-      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add("piles.RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add("piles.phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
++      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
+```

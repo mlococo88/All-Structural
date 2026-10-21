@@ -5526,7 +5526,7 @@ buildManualTab();
   var FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};               /* -> kip */
   var MOMENT={'kip-ft':1,'kip·ft':1,'k-ft':1,'ft-kip':1,'kip-in':1/12,'lb-ft':0.001,'ft-lb':0.001,'lb-in':0.001/12};   /* -> kip-ft */
   var AX=['+x','-x','+y','-y'], AXL={'+x':'+x of the hand-off','-x':'−x of the hand-off','+y':'+y of the hand-off','-y':'−y of the hand-off'};
-  var OK_LEVEL={topOfFooting:1,baseOfWall:1,baseOfColumn:1}, BAD_LEVEL={bottomOfFooting:'the bottom of the footing',bottomOfPileCap:'the bottom of the pile cap',pointOfFixity:'a pile or shaft point of fixity'};
+  var OK_LEVEL={topOfFooting:1,baseOfWall:1,baseOfColumn:1}, BAD_LEVEL={bottomOfFooting:'the bottom of the footing',bottomOfPileCap:'the bottom of the pile cap',pointOfFixity:'a pile or shaft point of fixity',pileHead:'the head of one pile (per-pile loads)'};   // AXI: pileHead
   function isNum(v){ return typeof v==='number' && isFinite(v); }
   function f2(v,d){ return isNum(v) ? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -5540,6 +5540,10 @@ buildManualTab();
   function check(p){
     var out={err:[],warn:[],cases:[]};
     var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    /* AXI (2026-10-21): an integral abutment has no footing; its payload carries per-pile loads (HANDOFF.md §4.6) */
+    var el=p.element||{};
+    if(el.type==='integralAbutment' || el.abutmentType==='integral' || (p.reference && (p.reference.level==='pileHead' || p.reference.perPile)) || p.perPile){
+      out.err.push('This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Spread Footing cannot design it; use Pile Designer (integral-abutment mode).'); return out; }
     var u=p.units||{}, kf=FORCE[u.force], km=MOMENT[u.moment];
     if(!kf){ out.err.push('Unknown force unit "'+(u.force||'')+'". Accepted: kip, or lb (converted ÷ 1000).'); return out; }
     if(!km){ out.err.push('Unknown moment unit "'+(u.moment||'')+'". Accepted: kip-ft, kip-in, lb-ft, lb-in.'); return out; }
