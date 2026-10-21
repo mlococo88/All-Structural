@@ -8186,9 +8186,146 @@ function d3Label(text, cls){
   return sp;
 }
 
+/* WING: wingwalls (panel I-13), schematic: elevation of each wing extruded by its thickness. AB3D (2026-10-21): moved out of build3D unchanged
+   (xb = back face of the wall in world x, yTop = top of the wall) so the integral view attaches the wings to the integral wall. */
+function d3Wings(R,T,cmat,edgeMat,xb,yTop,Lab){ const grp=D3.group;
+    if(S.wing&&S.wing.on&&R.wing){ const W=R.wing, w=S.wing, att=W.type==="attached";
+      const wmat=new THREE.MeshLambertMaterial({color:0xc9d3dc, transparent:T.wire, opacity:T.wire?0.15:1, wireframe:T.wire});
+      const mk=(pts,depth,zOff)=>{ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],q[1])); sh.closePath();
+        const geo=new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false}); geo.translate(0,0,zOff); return geo; };
+      const th=att?(w.orient==="inline"?0:90):Math.min(90,Math.max(0,+w.theta||0)), tw=att?W.tb:(W.ttop+W.tb)/2, tfw=att?0:Math.max(0,+w.tf||0);
+      const pts=att? [[0,yTop-W.H0],[0,yTop],[W.L,yTop+W.bT*W.L],[W.L,yTop-W.H0+W.dB*W.L]] : [[0,tfw],[0,tfw+W.H0],[W.L,tfw+W.HL],[W.L,tfw]];
+      [-1,1].forEach(sd=>{
+        const add=(geo,mat)=>{ const ms=new THREE.Mesh(geo,mat), a=Math.atan2(-sd*Math.cos(deg2rad(th)),Math.sin(deg2rad(th)));
+          ms.rotation.y=a;
+          if(att&&th===90) ms.position.set(xb,0,sd>0?Lab/2-tw:-Lab/2);
+          else if(att) ms.position.set(xb-(sd>0?0:tw),0,sd*Lab/2);
+          else ms.position.set(xb,0,sd*(Lab/2+0.4));
+          grp.add(ms); if(!T.wire){ const l=new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat); l.rotation.y=a; l.position.copy(ms.position); grp.add(l); } };
+        add(mk(pts,tw,0),wmat);
+        if(!att&&tfw>0&&W.stab) add(mk([[0,0],[0,tfw],[W.L,tfw],[W.L,0]],W.stab.B,tw+W.stab.Lt-W.stab.B),cmat);   // toe on the outer (front-face) side
+      });
+    }
+}
+/* AB3D (2026-10-21): integral and semi-integral abutments in the 3D view (display only: no computed value changes). Geometry from the inputs the
+   Tab 10 section figure uses (panel I-0a: b, h_c, h_d, piles; panel I-1: L_ab, skew, h_bw, t_bw; panel I-0b approach slab; panel I-13 wings).
+   Skew: the girders, the deck and the approach slab run at θ (panel I-1) to the normal of the abutment; the piles stay square to the abutment
+   (weak axis = web parallel to the abutment CL, spaced along it). The plan sense of the skew is schematic (the inputs give its magnitude). */
+function d3Add(geo,mat,edgeMat){ const ms=new THREE.Mesh(geo,mat); D3.group.add(ms); if(edgeMat) D3.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat)); return ms; }
+// a plan polygon [[x, z], …] (world) extruded vertically from y0 to y0 + h
+function d3PlanGeo(pts,y0,h){ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],-pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],-q[1])); sh.closePath();
+  const geo=new THREE.ExtrudeGeometry(sh,{depth:h,bevelEnabled:false}); geo.rotateX(-Math.PI/2); geo.translate(0,y0,0); return geo; }
+// a section [[x, y], …] (world) extruded along the abutment over a length L centred on z = 0
+function d3SecGeo(pts,L){ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],q[1])); sh.closePath();
+  const geo=new THREE.ExtrudeGeometry(sh,{depth:L,bevelEnabled:false}); geo.translate(0,0,-L/2); return geo; }
+function d3Mats(T){ const w=!!T.wire, ed=w?null:new THREE.LineBasicMaterial({color:0x555550});
+  return {ed, conc:new THREE.MeshLambertMaterial({color:0xd6d6cc, transparent:w, opacity:w?0.15:1, wireframe:w}),
+    wall:new THREE.MeshLambertMaterial({color:0xd6d6cc, transparent:true, opacity:w?0.15:0.5, wireframe:w, depthWrite:false}),   // see-through: the girder ends and the pile embedment show
+    diaph:new THREE.MeshLambertMaterial({color:0xc9d6e3, transparent:true, opacity:w?0.15:0.55, wireframe:w, depthWrite:false}),
+    steel:new THREE.MeshLambertMaterial({color:0x6d7f94, transparent:w, opacity:w?0.3:1, wireframe:w}),
+    deck:new THREE.MeshLambertMaterial({color:0xe4e4dc, transparent:true, opacity:w?0.15:0.4, wireframe:w, depthWrite:false}),   // see-through: the girders show under it
+    slab:new THREE.MeshLambertMaterial({color:0xcfd8dc, transparent:w, opacity:w?0.15:1, wireframe:w})}; }
+// girder stubs and the deck toward the span. Girder i crosses x = o.xRef at z = beam position i (panel I-5, along the abutment); its end is at
+// x = o.xEnd (inside the wall); the deck runs from x = o.xDeck to o.xDeck − o.Ls (normal to the abutment), its top at o.yTop.
+function d3Super(R,M,o){
+  const t=deg2rad(o.th), tn=Math.tan(t), cs=Math.cos(t), td=o.td, dg=Math.max(0.5,o.dg), yGb=o.yTop-td-dg, xFar=o.xDeck-o.Ls;
+  const bf=Math.min(1.5,Math.max(0.8,0.3*dg)), tfl=Math.max(0.08,0.05*dg), tw=Math.max(0.06,0.025*dg);
+  const ish=[[-bf/2,0],[bf/2,0],[bf/2,tfl],[tw/2,tfl],[tw/2,dg-tfl],[bf/2,dg-tfl],[bf/2,dg],[-bf/2,dg],[-bf/2,dg-tfl],[-tw/2,dg-tfl],[-tw/2,tfl],[-bf/2,tfl]];
+  (R.beamPos||beamPositions()).forEach(zb=>{ if(Math.abs(zb)>o.Lab/2+0.01) return;
+    const sh=new THREE.Shape(); ish.forEach((q,i)=>i?sh.lineTo(q[0],q[1]):sh.moveTo(q[0],q[1])); sh.closePath();
+    const geo=new THREE.ExtrudeGeometry(sh,{depth:(o.xEnd-xFar)/cs,bevelEnabled:false});
+    geo.rotateY(Math.atan2(-cs,Math.sin(t)));   // local +z → (−cos θ, 0, sin θ): toward the span
+    geo.translate(o.xEnd,yGb,zb+(o.xRef-o.xEnd)*tn); d3Add(geo,M.steel,M.ed); });
+  d3Add(d3PlanGeo([[o.xDeck,-o.Lab/2],[o.xDeck,o.Lab/2],[xFar,o.Lab/2+o.Ls*tn],[xFar,-o.Lab/2+o.Ls*tn]],o.yTop-td,td),M.deck,M.ed);
+  return {yGb, xFar};
+}
+// approach slab (panel I-0b, §1.4a) behind the wall back face x = xb, top at yTop; ends follow the skew or the far end square (P.rule); shelf below it
+function d3ApSlab(R,M,xb,yTop,th,Lab){
+  const P=R.ap; if(!P||P.legacy) return null;
+  const t=deg2rad(th), ux=Math.cos(t), uz=-Math.sin(t), half=P.Lw/2, A=[xb,-half], B=[xb,half], pr=q=>q[0]*ux+q[1]*uz, d0=Math.max(pr(A),pr(B))+P.L;
+  const far=q=>{ const s=P.rule==="square"? d0-pr(q) : P.L; return [q[0]+s*ux,q[1]+s*uz]; };
+  d3Add(d3PlanGeo([A,B,far(B),far(A)],yTop-P.t,P.t),M.slab,M.ed);
+  if(P.sup==="shelf"){ const y=yTop-P.t, bS=P.bS/12;
+    d3Add(d3SecGeo([[xb,y],[xb+bS,y],[xb+bS,y-P.hE/12],[xb,y-P.hS/12]],Math.min(P.Lw,Lab)),M.conc,M.ed); }
+  return {xEnd:Math.max(far(A)[0],far(B)[0])};
+}
+// semi-integral: end diaphragm (h_bw × t_bw, panel I-1) cast around the girder ends, on the bearings at the seat; the lower abutment is drawn by build3D
+function d3SemiParts(R,T,o){
+  const M=d3Mats(T), padH=0.5, seatY=o.tf+o.hstem, yTop=seatY+o.hbw, x0=o.xBwFront-o.cx, x1=o.xStemBack-o.cx, yB=seatY+padH, th=+S.geom.skew||0;
+  d3Add(d3SecGeo([[x0,yB],[x1,yB],[x1,yTop],[x0,yTop]],o.Lab),M.diaph,M.ed);   // moves with the superstructure; its bottom at the girder bottoms (on the bearings)
+  const td=Math.min(0.7,0.3*o.hbw);
+  d3Super(R,M,{xRef:o.xBrg-o.cx, xEnd:x0+Math.min(1.0,0.6*(x1-x0)), xDeck:x0, Ls:o.xBwFront+Math.max(4,0.3*o.B), yTop, td, dg:yTop-td-yB, th, Lab:o.Lab});
+  if(S.apSlab&&S.apSlab.on) d3ApSlab(R,M,x1,yTop,th,o.Lab);
+  if(T.dims){ const l=d3Label('end diaphragm (on bearings)','dim'); l.position.set((x0+x1)/2,yTop+0.9,-o.Lab/2); D3.group.add(l); }
+}
+// integral abutment: pile cap + end diaphragm (one wall, b × (h_c + h_d)) with the girders cast in, on one row of H-piles; no seat, no bearings
+function build3DIntegral(R){
+  const Q=R.iab, I=S.iab, Pp=Q.pile, sk=Pp.sk, T=S.ui.d3Tog, sel=S.ui.d3Sel||"ls:Strength I", grp=D3.group; d3ClearGroup(); D3.piles=[];
+  const b=+I.b, hc=+I.hc, hd=+I.hd, H=hc+hd, Lab=+S.geom.Lab, th=+S.geom.skew||0, cx=b/2, M=d3Mats(T);
+  const P=(xl,y,zt)=> new THREE.Vector3(xl-cx, y, zt);
+  // wall: pile cap (0 … h_c) and end diaphragm (h_c … H) — monolithic; the edge at h_c marks the seat level (construction joint)
+  d3Add(d3SecGeo([[-cx,0],[b-cx,0],[b-cx,hc],[-cx,hc]],Lab),M.wall,M.ed);
+  d3Add(d3SecGeo([[-cx,hc],[b-cx,hc],[b-cx,H],[-cx,H]],Lab),M.wall,M.ed);
+  const td=Math.min(0.7,0.3*hd), Ls=Math.max(6,Math.min(12,1.5*H));
+  d3Super(R,M,{xRef:0, xEnd:-cx+Math.min(1.0,0.5*b), xDeck:-cx, Ls, yTop:H, td, dg:Math.min(+I.dg||hd-td,hd-td+0.5*hc), th, Lab});
+  const ap=(S.apSlab&&S.apSlab.on)? d3ApSlab(R,M,b-cx,H,th,Lab) : null;
+  d3Wings(R,T,M.conc,M.ed||new THREE.LineBasicMaterial({color:0x555550}),b-cx,H,Lab);
+  // soil: backfill behind the wall (below the approach slab) and the fill in front over D_front
+  if(T.soil){ const sw=Math.max(6,ap? R.ap.L : 8), sh2=H-(ap? R.ap.t+(R.ap.sup==="shelf"? R.ap.hS/12 : 0) : 0);
+    const mat=new THREE.MeshLambertMaterial({color:0xd9c48f,transparent:true,opacity:0.24,depthWrite:false});
+    if(sh2>0){ const ms=new THREE.Mesh(new THREE.BoxGeometry(sw,sh2,Lab),mat); ms.position.set(b-cx+sw/2,sh2/2,0); grp.add(ms); }
+    const Df=Math.min(Math.max(0,+I.Dfront||0),H); if(Df>0){ const ms=new THREE.Mesh(new THREE.BoxGeometry(4,Df,Lab),mat.clone()); ms.position.set(-cx-2,Df/2,0); grp.add(ms); } }
+  // piles: one row on the cap centreline, spaced along the abutment; H-section, web parallel to the abutment CL (weak) or normal to it (strong)
+  const emb=Math.max(0,+I.embed||0)/12, Lfull=Math.max(1,+I.Lpile||20), Lp=Math.min(Lfull,Math.max(8,1.5*H)), weak=Pp.weak;
+  if(T.piles){ const d=sk.d/12, bf=sk.bf/12, tf=sk.tf/12, tw=sk.tw/12;
+    // plan section, x normal to the abutment, z along it: weak → the web (depth d) along z, flanges (b_f) along x; strong → turned 90°
+    const hs=[[-bf/2,-d/2],[bf/2,-d/2],[bf/2,-d/2+tf],[tw/2,-d/2+tf],[tw/2,d/2-tf],[bf/2,d/2-tf],[bf/2,d/2],[-bf/2,d/2],[-bf/2,d/2-tf],[-tw/2,d/2-tf],[-tw/2,-d/2+tf],[-bf/2,-d/2+tf]];
+    Pp.xs.forEach((z,i)=>{ const pts=hs.map(q=>weak? [q[0],z+q[1]] : [q[1],z+q[0]]);
+      const mesh=new THREE.Mesh(d3PlanGeo(pts,-Lp,Lp+emb),new THREE.MeshLambertMaterial({color:0x8891a0, transparent:!!T.wire, opacity:T.wire?0.5:1, wireframe:!!T.wire}));
+      grp.add(mesh); D3.piles.push({no:i+1, mesh}); });
+    d3PileHL(); }
+  // girder reactions: arrows at each girder on the cap centreline at the seat level (the girders bear on the cap before the diaphragm is cast)
+  const pb=perBearingLoads(R,sel), pos=R.beamPos||beamPositions();
+  let maxF=1e-6;
+  pb.beams.forEach(q=>{ if(T.P)maxF=Math.max(maxF,Math.abs(q.P)); if(T.Vx)maxF=Math.max(maxF,Math.abs(q.Vx)); if(T.Vy)maxF=Math.max(maxF,Math.abs(q.Vy)); });
+  const refLen=Math.max(4, 0.42*Math.max(H,2*b)), scaleF=refLen/maxF;
+  const mkArrow=(dir,origin,len,color)=>{ const a=new THREE.ArrowHelper(dir.clone().normalize(),origin,Math.max(0.4,len),color,Math.min(1.1,0.28*Math.max(0.4,len)),0.5*Math.min(1.1,0.28*Math.max(0.4,len))); grp.add(a); return a; };
+  pos.forEach((yb,i)=>{ if(Math.abs(yb)>Lab/2+0.01) return; const bp=P(b/2,hc,yb), q=pb.beams[i];
+    if(T.P && Math.abs(q.P)>0.05){ const len=Math.abs(q.P)*scaleF, top=bp.clone().add(new THREE.Vector3(0,len,0)); mkArrow(new THREE.Vector3(0,-1,0),top,len,D3COL.P);
+      if(T.dims){ const l=d3Label('P='+fmt(q.P)+' k'); l.position.copy(top.clone().add(new THREE.Vector3(0,0.4,0))); grp.add(l);} }
+    if(T.Vx && Math.abs(q.Vx)>0.05){ const len=Math.abs(q.Vx)*scaleF, dir=new THREE.Vector3(-Math.sign(q.Vx),0,0); mkArrow(dir,bp.clone().sub(dir.clone().multiplyScalar(len)),len,D3COL.Vx);
+      if(T.dims){ const l=d3Label('Vx='+fmt(q.Vx)+' k'); l.position.copy(bp.clone().add(new THREE.Vector3(0,0.35,0))); grp.add(l);} }
+    if(T.Vy && Math.abs(q.Vy)>0.05){ const len=Math.abs(q.Vy)*scaleF, dir=new THREE.Vector3(0,0,Math.sign(q.Vy)); mkArrow(dir,bp.clone().sub(dir.clone().multiplyScalar(len)),len,D3COL.Vy);
+      if(T.dims){ const l=d3Label('Vy='+fmt(q.Vy)+' k'); l.position.copy(bp.clone().add(new THREE.Vector3(0,0.7,0))); grp.add(l);} } });
+  // earth pressure on the back face over H: the shape of K·γ·z with K of the wall movement (expansion, §10.3)
+  if(T.eh && pb.fEH>0 && Q.Kexp>0){ const gs=+S.soil.gamma, rows=6, cols=Math.max(2,Math.min(5,Math.round(Lab/12))), pMax=pb.fEH*Q.Kexp*gs*H, pScale=Math.max(2.0,0.30*Math.max(2*b,H))/Math.max(1e-6,pMax);
+    for(let r=0;r<rows;r++){ const y=H*(r+0.5)/rows, p=pb.fEH*Q.Kexp*gs*(H-y);
+      for(let c2=0;c2<cols;c2++){ const zt=-Lab/2+Lab*(c2+0.5)/cols, len=p*pScale; if(len>0.15) mkArrow(new THREE.Vector3(-1,0,0),P(b,y,zt).add(new THREE.Vector3(len,0,0)),len,D3COL.EH); } }
+    if(T.dims){ const l=d3Label('EH: K = '+fmt(Q.Kexp,3)+' (expansion, §10.3)'); l.position.copy(P(b,H/3,Lab/2).add(new THREE.Vector3(0.5,0,0))); grp.add(l); } }
+  // key dimensions
+  if(T.dims){ const addDim=(a,c,txt)=>{ grp.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([a,c]),new THREE.LineBasicMaterial({color:0x777}))); const l=d3Label(txt,'dim'); l.position.copy(a.clone().add(c).multiplyScalar(0.5)); grp.add(l); };
+    addDim(P(0,-0.6,-Lab/2),P(b,-0.6,-Lab/2),'b = '+fmt(b)+' ft');
+    addDim(P(b,H+0.3,-Lab/2),P(b,H+0.3,Lab/2),'L_ab = '+fmt(Lab)+' ft');
+    const l=d3Label('H = h_d + h_c = '+fmt(H)+' ft','dim'); l.position.copy(P(0,H/2,-Lab/2-0.6)); grp.add(l);
+    const l2=d3Label('seat (h_c = '+fmt(hc)+' ft)','dim'); l2.position.copy(P(0,hc,Lab/2+0.6)); grp.add(l2);
+    if(T.piles&&Pp.xs.length){ const z0=Pp.xs[0];
+      const l3=d3Label(sk.k+', '+(weak?'weak':'strong')+' axis, n = '+Pp.n+' @ '+fmt(+I.sp)+' ft'+(Lp<Lfull-1e-6?' (length '+fmt(Lfull)+' ft, cut)':''),'dim'); l3.position.copy(P(b/2,-Lp*0.6,z0-1)); grp.add(l3);
+      const l4=d3Label('embedment '+fmt(+I.embed,0)+' in','dim'); l4.position.copy(P(b/2,emb/2,z0-2.2)); grp.add(l4); }
+    if(Math.abs(th)>0.05){ const l5=d3Label('skew θ = '+fmt(th,1)+'°','dim'); l5.position.copy(P(-Ls*0.7,H+0.6,Ls*0.7*Math.tan(deg2rad(th)))); grp.add(l5); } }
+  // frame camera
+  const yBot=T.piles? -Lp : -0.8, cY=(H+yBot)/2, span=Math.max(b+Ls,Lab,H-yBot), center=new THREE.Vector3(0,cY,0);
+  D3.controls.target.copy(center); D3.controls.minDistance=span*0.4; D3.controls.maxDistance=span*6;
+  D3.modelSpan=span; D3.modelCenter=center.clone();
+  if(!D3._posed){ setD3View('iso'); D3._posed=true; }
+  D3.legend={maxF, refLen, unit:"kip", sel}; updateD3Legend();
+  if(D3.resize) D3.resize();
+}
+
 function build3D(R){
   const cont=document.getElementById('d3canvas'); if(!cont) return;
   if(!ensure3D(cont)){ cont.querySelector('.d3-hud')||(()=>{const h=document.createElement('div');h.className='d3-hud';h.textContent='Loading 3D engine…';cont.appendChild(h);})(); return; }
+  if(iabType()==="integral"&&R.iab&&R.iab.integ&&R.iab.pile){ build3DIntegral(R); return; }   // AB3D: integral abutment (cap / integral wall on one row of H-piles)
+  const semi=iabType()==="semi";   // AB3D: semi-integral — lower abutment + end diaphragm on bearings
   const g=S.geom, T=S.ui.d3Tog, sel=S.ui.d3Sel||"ls:Strength I";
   const B=R.geo.B, Lab=g.Lab, Lftg=(+g.Lftg||g.Lab), tf=g.tf, hstem=g.hstem, hbw=g.hbw, soilH=g.soilH;
   const xStemBack=g.Ltoe+g.tsb, xBwFront=xStemBack-g.tbw, xStemTopFront=xStemBack-g.tst, xBrg=R.geo.xBrg;
@@ -8209,28 +8346,14 @@ function build3D(R){
     addBlock(fsh,Lftg);
     // stem + backwall — sits on the footing, out-of-plane length L_ab
     const wsh=new THREE.Shape();
+    if(semi){ wsh.moveTo(...pt(g.Ltoe,tf)); wsh.lineTo(...pt(xStemTopFront,tf+hstem)); wsh.lineTo(...pt(xStemBack,tf+hstem)); wsh.lineTo(...pt(xStemBack,tf)); wsh.closePath(); }   // AB3D: semi-integral, the lower abutment stops at the seat (no backwall)
+    else{
     wsh.moveTo(...pt(g.Ltoe,tf)); wsh.lineTo(...pt(xStemTopFront,tf+hstem)); wsh.lineTo(...pt(xBwFront,tf+hstem));
     wsh.lineTo(...pt(xBwFront,tf+hstem+hbw)); wsh.lineTo(...pt(xStemBack,tf+hstem+hbw)); wsh.lineTo(...pt(xStemBack,tf+hstem));
-    wsh.lineTo(...pt(xStemBack,tf)); wsh.closePath();
+    wsh.lineTo(...pt(xStemBack,tf)); wsh.closePath(); }
     addBlock(wsh,Lab);
-    // WING: wingwalls (panel I-13), schematic: elevation of each wing extruded by its thickness
-    if(S.wing&&S.wing.on&&R.wing){ const W=R.wing, w=S.wing, att=W.type==="attached", yTop=tf+hstem+hbw;
-      const wmat=new THREE.MeshLambertMaterial({color:0xc9d3dc, transparent:T.wire, opacity:T.wire?0.15:1, wireframe:T.wire});
-      const mk=(pts,depth,zOff)=>{ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],q[1])); sh.closePath();
-        const geo=new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false}); geo.translate(0,0,zOff); return geo; };
-      const th=att?(w.orient==="inline"?0:90):Math.min(90,Math.max(0,+w.theta||0)), tw=att?W.tb:(W.ttop+W.tb)/2, tfw=att?0:Math.max(0,+w.tf||0);
-      const pts=att? [[0,yTop-W.H0],[0,yTop],[W.L,yTop+W.bT*W.L],[W.L,yTop-W.H0+W.dB*W.L]] : [[0,tfw],[0,tfw+W.H0],[W.L,tfw+W.HL],[W.L,tfw]];
-      [-1,1].forEach(sd=>{
-        const add=(geo,mat)=>{ const ms=new THREE.Mesh(geo,mat), a=Math.atan2(-sd*Math.cos(deg2rad(th)),Math.sin(deg2rad(th)));
-          ms.rotation.y=a;
-          if(att&&th===90) ms.position.set(xStemBack-cx,0,sd>0?Lab/2-tw:-Lab/2);
-          else if(att) ms.position.set(xStemBack-cx-(sd>0?0:tw),0,sd*Lab/2);
-          else ms.position.set(xStemBack-cx,0,sd*(Lab/2+0.4));
-          grp.add(ms); if(!T.wire){ const l=new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat); l.rotation.y=a; l.position.copy(ms.position); grp.add(l); } };
-        add(mk(pts,tw,0),wmat);
-        if(!att&&tfw>0&&W.stab) add(mk([[0,0],[0,tfw],[W.L,tfw],[W.L,0]],W.stab.B,tw+W.stab.Lt-W.stab.B),cmat);   // toe on the outer (front-face) side
-      });
-    }
+    d3Wings(R,T,cmat,edgeMat,xStemBack-cx,tf+hstem+hbw,Lab);   // AB3D: the wing block moved to d3Wings (same objects, same order)
+    if(semi) d3SemiParts(R,T,{cx,tf,hstem,hbw,Lab,xStemBack,xBwFront,xBrg,B});   // AB3D: semi-integral end diaphragm, girders, deck, approach slab
   }
   // ---------- soil block ----------
   if(T.soil){ const sw=B-xStemBack, sd=Lab, sh2=soilH;
