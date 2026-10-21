@@ -3115,7 +3115,7 @@ function computeIAB(R,X){
      toward the span on expansion (added to the backfill force delivered to the superstructure), toward the backfill on contraction.
      Extreme Event I, integral: the slab's tributary mass × k_h, capped by the friction it can transfer: min(k_h W_ap, F). */
   if(R.ap&&!R.ap.legacy){ const AP=R.ap; Q.Ffr=AP.F; Q.PexpF=Q.PexpT+AP.F;
-    if(integ&&R.seis&&isFinite(R.seis.kh)){ const kh=R.seis.kh, W=AP.RDC+AP.RDW; Q.apEE={kh, W, Fi:kh*W, Fcap:AP.F, F:Math.min(kh*W,AP.F), capped:AP.F<kh*W}; } }
+    if(integ&&R.seis&&isFinite(R.seis.kh)){ const kh=isFinite(R.seis.kh0)? R.seis.kh0 : R.seis.kh, W=AP.RDC+AP.RDW; Q.apEE={kh, W, Fi:kh*W, Fcap:AP.F, F:Math.min(kh*W,AP.F), capped:AP.F<kh*W}; } }   // ABK (2026-10-21): k_h = k_h0 — the integral abutment is restrained (as the §10.5d check and its wings); was the abutment k_h (k_h ratio × k_h0)
   /* ABC (d), 2026-10-21: integral abutment, Extreme Event I. Driving the abutment into the backfill: the superstructure share
      F_sup = A_s(ΣDC + ΣDW)s_EQ (panel I-11, as the conventional EQ_sup), the abutment inertia k_h·W_ab, the wing pair k_h·W_wing and the approach
      slab min(k_h W_ap, F). The backfill resists with the seismic passive pressure (11.6.5.5: log spiral of Figure A11.4-2 at k_h, or K_PE
