@@ -13672,3 +13672,419 @@ index d42dc2b..6bda3ab 100644
 -      <p class="cr-p cr-small">Equations are shown symbolically, then with values substituted, then with the result. ${[stabN,fndN,strN].filter(Boolean).map(n=>"§"+n).join(", ")} end with the D/C result of their checks. Units: kip, ft, in, ksi, ksf unless noted.</p>
 +      <p class="cr-p cr-small">Equations are shown symbolically, then with values substituted, then with the result. ${resN.length?resN.map(n=>"§"+n).join(", ")+" end with the D/C result of their checks.":""} Units: kip, ft, in, ksi, ksf unless noted.</p>
 ```
+
+
+## 2026-10-21 — PR: claude/abut-tabs-1b — Integral abutment content in Tabs 1–6 and 8, Tab 3 hidden, semi-integral end diaphragm in Tabs 1, 5, 6, 8, integral wing height, dowel lap as information (ABT2, part 1b) (PR link added after merge)
+
+Every code site is tagged `ABT2`; search for `ABT2` to find them all. Basis: AASHTO LRFD BDS 10th Ed. (2024); owner methods as in Tab 10. Engineer's decisions of 2026-10-21: the stem dowel lap with no lap entered is information only; integral U-wing height limited to the integral wall height.
+
+**Computed results.** Conventional: `computeAll()` identical to origin/main (`af43d24`) and every tab's text and SVG identical (Plotly element ids normalized). Semi-integral: `computeAll()` identical. Integral without wingwalls: identical. Integral with an attached wing taller than h_c + h_d: the wing results change (ABT2-6, §4 callout).
+
+### ABT2-1. Integral abutment: Tabs 1, 2, 4, 5, 6 and 8 show the integral design; Tab 3 hidden   [display]
+- **Where:** new functions `intXl`, `intNote`, `intMethod`, `svgIntChart`, `svgIntPress`, `renderIntLoads`, `intCombHTML`, `renderIntStab`, `intDashRows`, `intDashTbl`, `svgIntPilePlan`, `renderIntFound`, `renderIntStruct`, `intVM`, `renderIntVM`, `renderIntTables`, `t4End` (block anchor `ABT2 (2026-10-21): integral abutment — Tabs 1 to 6 and 8`, before `function svgIabSection(R){`); first line of `renderTabLoads`, `renderTabStab`, `renderTabFound`, `renderTabStruct`, `renderTabVM`, `renderTabTables` (anchor `if(R.iab&&R.iab.integ) return renderInt`); `renderTabComb` (anchor `h+=intCombHTML(R);`); `renderTabContent` (the red "not part of the integral design" banner and the semi-integral §5.1 note removed, anchor `// ABT2: an integral abutment's Tabs 1 to 6 and 8`); `buildReport` (`SKIP`, anchor `"tab-stab":itg };   // ABT2`; section name "Integral Piles — Summary").
+- **Before:** the conventional cantilever content rendered under a banner (sliding / eccentricity / bearing PASS chips, stem/toe/heel design, active EH, cantilever V & M, "Pile Branch Inactive"); the report left Tabs 2–6 and 8 out for an integral abutment.
+- **After (integral):**
+  - Tab 1: integral basis (§1.0), owner card (§1.0a), the Tab 10 section figure (§1.1), W_ab = γ_c·b·(h_c + h_d)·L_ab (§1.2), the movement-induced pressure K_exp / K_con, p, P and P·L_ab with a pressure figure in place of the active EH (§1.3, panel id `o-eh` kept so existing links land there), LS statement (§1.4), approach slab (§1.4a, unchanged), vertical girder reactions (§1.5), thermal movement Δ_exp / Δ_con (§1.7, id `o-longit-tu`), vertical-load ledger DC / DW / LL (§1.9). No EV over a heel.
+  - Tab 2: §2.0, §2.0a and §2.5 kept; §2.1 "Load Combinations of the Integral Design" lists the combinations Tab 10 uses (piles P_g, CTDOT R_T, uplift, cap case 1, wall case 2 / rear face, Service I crack control, Extreme Event I pile check) with the factors in use. The γp permutation tables are not shown.
+  - Tab 3: one note — external stability not checked (restrained by the superstructure, loads to the piles), link to Tab 10 §10.6; the report leaves Tab 3 out.
+  - Tab 4: pile plan, section and P_g = P_dl + P_ll, the pile dashboard rows (owner method, length, geotechnical, uplift, EE) with links to §10.4.
+  - Tab 5: cap / wall summary (M_u/φM_n, V_u/φV_n, s/s_max of cases 1, 2 and the rear face) and their dashboard rows; integral reinforcement schedule (cap bars, stirrups, wall horizontal bars, rear-face bars, skin steel when required).
+  - Tab 6: movement pressure (unfactored) on the wall; V & M of case 1 (simple span between piles, 0.8·M_simple marked), case 2 (between girders), rear face (cantilever from the seat).
+  - Tab 8: per-pile load breakdown (sums to P_g), case 1 moment by load (sums to M_u), case 2 / rear-face effects, movement-pressure stations.
+- **Check (integral, MassDOT owner, default project, 6 × HP12X84):** §1.2 W_ab = 0.150 × 3.50 × (4.00 + 5.00) × 44.0 = 207.9 kip (= Tab 10). §1.3 p_exp = 2.2484 × 0.120 × 9.00 = 2.428 ksf, P_exp = ½ × 2.2484 × 0.120 × 9.00² = 10.927 kip/ft, × 44 = 480.8 kip (= §10.3). Tab 8 §8.1: DC 1.25 × 790.5/6 = 164.69 + DW 1.50 × 82.56/6 = 20.64 → P_dl = 185.33; LL 1.75 × 464.62/6 = 135.51 → P_g = 320.84 kip (= §10.4). §8.2: w = 790.5/44 = 17.966, 82.56/44 = 1.876, 581.43/44 = 13.214 kip/ft; 0.8 × 8²/8 = 6.4 → M = 1.25(114.98) + 1.50(12.01) + 1.75(84.57) = 309.74 kip-ft (= case 1 M_u, 88.50 kip-ft/ft over b = 3.5 ft).
+
+### ABT2-2. Semi-integral: end diaphragm in place of the backwall   [display]
+- **Where:** `renderTabStruct` (anchor `const semiT=iabType()==="semi";   // ABT2`; backwall §5.1, §5.1b, §5.1a inside `else{ … }   // ABT2: end of the backwall sections`); §5.7 schedule row B1 (anchor `End diaphragm — horizontal bars, each face`); §5.0a cover row name; `renderTabVM` (anchor `const semiV=iabType()==="semi";`); `svgWallPressure` (anchor `const semiP=iabType()==="semi"&&R.iab`); `renderTabTables` (anchor `ELS=semiT? TBL_ELS.filter`); `drawXsec` (anchor `const semiX=iabType()==="semi"`).
+- **Before:** Tab 5 §5.1 / §5.1a designed a cantilever backwall with PASS chips; Tab 6 §6.2 and §6.5 showed active + LS pressure on the "bw"; Tab 8 had backwall columns and tables; the Tab 1 schematic drew a fixed backwall with the active wedge over the full height; report §10.3 / §13.3 / §14.4 followed.
+- **After:** §5.1 is an end-diaphragm summary card (panel id `o-str-Backwall` kept for existing links) with the Tab 10 §10.5a results; §5.7 row B1 = end-diaphragm bars; §6.2 not shown; §6.5 draws the end diaphragm with K_exp·γ·s (× η·γ_EH at a strength state, 1.00 at Service I, Extreme Event I or the EH load alone) and the joint at the seat; Tab 8 has no backwall column or station table, §8.3 is the end-diaphragm effect table; Tab 1 draws the end diaphragm on the stem (joint, girder outline, K_exp·γ·h pressure) and the active EH of the lower abutment below the seat only. The report follows.
+- **Check (semi-integral AASHTO default):** K_exp = 2.452, γ = 0.120, h_bw = 5.00 ft → K_exp·γ·h = 1.47 ksf unfactored; × η·γ_EH = 1.35 → 1.986 ksf at the diaphragm base in §6.5 (Strength I). §5.1 card: M_u / φM_n = 12.71 / 40.11 kip-ft/ft (= §10.5a).
+
+### ABT2-3. Stem dowel lap with no lap entered: information only   [display]
+- **Where:** `DASH_INFO` (anchor `const DASH_INFO=new Set(["apDV","dowelLap"]);`).
+- **Before:** an undetailed lap (n/a row) set "DESIGN INCOMPLETE". **After:** listed as n/a ("not detailed — provide ≥ … in"), counted as not checked, and does not set "DESIGN INCOMPLETE" (engineer, 2026-10-21).
+
+### ABT2-4. Report   [display]
+- Integral: Tabs 1, 2, 4, 5, 6, 8 printed with the integral content; Tab 3 left out. Semi-integral: no backwall sections (former §10.3 backwall design, §13.3 backwall V&M, §14.4 backwall tables).
+
+### ABT2-5. Integral wingwall: junction height limited to the integral wall height   [calc change, integral abutment with an attached wing taller than h_c + h_d only]
+- **Where:** `computeWing` (anchor `const H0in=Math.max(0.5,+w.H0||0), HwI=`), Tab 9 §9.0 note (anchor `<b>Integral abutment:</b> the wing hangs from the integral wall`), select change handler (anchor `if(p==="iab.type"&&raw==="integral"&&S.wing`).
+- **Before:** `H0=Math.max(0.5,+w.H0||0)` — the attached wing kept the conventional height (default 19 ft) on a 9 ft integral wall. **After:** `H0=Math.min(H0in, h_c + h_d)` for an attached wing on an integral abutment; a warning and a Tab 9 note when the entered value is taller; switching the type to integral sets an attached wing's H_0 (and H_L if larger) to h_c + h_d. The 3D view and the wing design use the limited H_0. Other types and independent wings: unchanged.
+- **Provision:** geometry (the wing is cast with, and hangs from, the integral wall); AASHTO LRFD 10th Ed. 11.6.1.4, 3.11.5, 3.11.6.4 unchanged.
+- **Check case (integral AASHTO default, U-wing L = 10 ft, H_L = 8 ft, bottom tapered, K = 0.3073, γ = 0.120 kcf, junction method "total moment / H_0"):** before H_0 = 19 ft: ∫h² dx = (19³ − 8³)/(3 × 1.1) = 1923.33, ∫h²x dx = 361(50) − 41.8(1000/3) + 1.21(2500) = 7141.7 → M_EH = ½Kγ × 7141.7 = 0.018435 × 7141.7 = 131.66 kip-ft, M_LS = 43.02; per ft: 131.66/19 = 6.929, 43.02/19 = 2.264 → M_u = 1.50(6.929) + 1.75(2.264) = 14.356 kip-ft/ft; φM_n = 40.11 → D/C 0.358. After H_0 = 9 ft: h = 9 − 0.1x, ∫h² dx = (9³ − 8³)/0.3 = 723.33, ∫h²x dx = 81(50) − 1.8(1000/3) + 0.01(2500) = 3475 → M_EH = 0.018435 × 3475 = 64.06 kip-ft, M_LS = 30.73; per ft 7.118 and 3.414 → M_u = 1.50(7.118) + 1.75(3.414) = 16.652 kip-ft/ft → D/C 0.415 (tool 0.415).
+- **Results (default projects, before → after):** AASHTO: junction flexure 0.358 → 0.415, shear 0.143 → 0.138, min. reinf. 0.476 → 0.552, crack 0.225 → 0.262; MassDOT 0.307 → 0.356, 0.104 → 0.100, 0.409 → 0.474, 0.191 → 0.222; CTDOT 0.480 → 0.562, 0.218 → 0.216, 0.638 → 0.693, 0.488 → 0.580; RIDOT 0.358 → 0.415, 0.143 → 0.138, 0.476 → 0.552, 0.313 → 0.367. Junction bar development and S&T unchanged. More conservative per ft (a shorter junction), less total force.
+
+### Saved data
+- No key or format changed. An integral project saved with a wing taller than h_c + h_d opens with the limited H_0 and the warning (the saved input is kept).
+
+### How verified
+- `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+- Playwright, origin/main `af43d24` vs this branch, 18 configurations (conv / integral / semi × four owners, conv and semi on piles, integral with R_n and M_u,py, semi with TU, integral without wings, integral set without the select = an old save). Conventional (5): `computeAll` deep-equal, every tab's text and SVG identical; dashboard and report differ only by ABT2-3. Semi-integral (6) and integral without wings: `computeAll` identical. Integral with wings: only `R.wing` (H_0 and what follows from it) and, through the select, the Input ID differ. No console errors; all tabs including 3D and the report render for every configuration. Tab 8 §8.1 and §8.2 sums equal the engine's P_g and M_u.
+- Screenshots: scratch folder `abtabs/fix/1b-shots/`.
+
+### Open items
+1. Integral wing earth-pressure state and k_h from the integral foundation: PR 2 (engineer decision 3).
+2. Tab 9 text still says the attached wing is cast with the "stem / backwall"; wording for integral left for a later pass.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `af43d24`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 6bda3ab..492087f 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -2708 +2708,5 @@ function computeWing(R,X){
+-  const L=Math.max(0.5,+w.L||0), H0=Math.max(0.5,+w.H0||0), HL=Math.min(H0,Math.max(0,+w.HL||0));
++  // ABT2: a wing attached to an integral abutment hangs from the integral wall: its junction height is at most the wall height h_c + h_d
++  // (deck surface to the bottom of the cap); a taller entry is flagged and h_c + h_d is used (the 3D view and the wing design follow)
++  const H0in=Math.max(0.5,+w.H0||0), HwI=(att&&iabType()==="integral")? (+S.iab.hc)+(+S.iab.hd) : Infinity;
++  const L=Math.max(0.5,+w.L||0), H0=Math.min(H0in,Math.max(0.5,HwI)), HL=Math.min(H0,Math.max(0,+w.HL||0));
++  if(H0in>HwI+1e-9) warn(`Wingwall (integral abutment): the junction height H_0 = ${fmt(H0in,2)} ft exceeds the integral wall height h_c + h_d = ${fmt(HwI,2)} ft — H_0 = ${fmt(H0,2)} ft is used (panels I-13, I-0a).`);
+@@ -2710 +2714 @@ function computeWing(R,X){
+-  W.L=L; W.H0=H0; W.HL=HL; W.betaW=+w.beta||0;
++  W.L=L; W.H0=H0; W.HL=HL; W.betaW=+w.beta||0; if(isFinite(HwI)){ W.H0in=H0in; W.H0cap=HwI; }
+@@ -5166 +5170 @@ function renderTabWing(R){
+-  h+=panel("o-wing-basis","9.0","Wingwall Basis & Geometry",`
++  h+=panel("o-wing-basis","9.0","Wingwall Basis & Geometry",`${isFinite(W.H0cap)?`<div class="note-box"${W.H0in>W.H0cap+1e-9?' style="border-color:#c62828"':""}><b>Integral abutment:</b> the wing hangs from the integral wall, so its junction height is at most h<sub>c</sub> + h<sub>d</sub> = ${fmt(+S.iab.hc,2)} + ${fmt(+S.iab.hd,2)} = ${fmt(W.H0cap,2)} ft${W.H0in>W.H0cap+1e-9?` — <b>the entered H<sub>0</sub> = ${fmt(W.H0in,2)} ft is taller; H<sub>0</sub> = ${fmt(W.H0,2)} ft is used</b> (panel I-13)`:` (H<sub>0</sub> = ${fmt(W.H0,2)} ft)`}.</div>`:""}
+@@ -5581,0 +5586,212 @@ function renderTabIAB(R){
++/* ============ ABT2 (2026-10-21): integral abutment — Tabs 1 to 6 and 8 show the integral design. Every value is a field of R.iab
++   (computeIAB, worked in Tab 10) or a statics restatement of one from the same numbers; each block links to its Tab 10 derivation.
++   The conventional cantilever content of those tabs (footing, stem, backwall, active EH, stability) is not rendered for an integral
++   abutment. Display only: no result depends on these functions. ============ */
++function intXl(cid,txt,tab){ return `<span class="xlink" data-jump="${tab||"tab-iab"}|${cid}">${txt}</span>`; }
++function intNote(txt){ return `<div class="note-box" style="border-color:#1f3a5f"><b>Integral abutment (panel I-0a).</b> ${txt}</div>`; }
++function intMethod(P){ return P.md? "MassDOT simplified method (Part I 3.10.11)" : P.ct? "CTDOT closed-form method (BRSDM V2 App. CT11.1)" : "axial + flexure with the pile-head moment of a p-y analysis (AASHTO 6.9.2.2.1)"; }
++/* simple x–y line chart (SVG) for the integral V & M diagrams; series = [{y:[], name, c}] */
++function svgIntChart(title,xs,series,xl,yl,o={}){
++  const W=560, H=260, ml=62, mr=18, mt=40, mb=40, all=series.flatMap(s=>s.y).concat([0]);
++  let lo=Math.min(...all), hi=Math.max(...all); if(hi-lo<1e-9){ hi=lo+1; }
++  const pad=(hi-lo)*0.08; lo-=lo<0?pad:0; hi+=pad;
++  const x0=Math.min(...xs), x1=Math.max(...xs), X=x=>ml+(x-x0)/Math.max(1e-9,x1-x0)*(W-ml-mr), Y=y=>mt+(hi-y)/(hi-lo)*(H-mt-mb);
++  let b=svgT(10,17,esc(title),{b:1,fs:12});
++  b+=`<line x1="${ml}" y1="${Y(0)}" x2="${W-mr}" y2="${Y(0)}" stroke="#999"/><line x1="${ml}" y1="${mt}" x2="${ml}" y2="${H-mb}" stroke="#999"/>`;
++  [lo,hi].forEach(v=>{ b+=svgT(ml-4,Y(v)+4,fmt(v,2),{fs:9.5,a:"end",c:"#666"}); });
++  [x0,x1].forEach(v=>{ b+=svgT(X(v),H-mb+14,fmt(v,2),{fs:9.5,a:"middle",c:"#666"}); });
++  b+=svgT((ml+W-mr)/2,H-6,esc(xl),{fs:10,a:"middle",c:"#444"})+svgT(ml+4,mt-6,esc(yl),{fs:10,c:"#444"});
++  series.forEach((s,k)=>{ b+=`<polyline points="${xs.map((x,i)=>X(x)+","+Y(s.y[i])).join(" ")}" fill="none" stroke="${s.c||"#1f3a5f"}" stroke-width="1.8"${s.dash?' stroke-dasharray="5 3"':""}/>`;
++    const im=s.y.reduce((a,v,i)=>Math.abs(v)>Math.abs(s.y[a])?i:a,0); b+=`<circle cx="${X(xs[im])}" cy="${Y(s.y[im])}" r="3" fill="${s.c||"#1f3a5f"}"/>`+svgT(X(xs[im])+(X(xs[im])>W*0.7?-5:5),Y(s.y[im])-5,`${esc(s.name)} ${fmt(s.y[im],2)}`,{fs:10,c:s.c||"#1f3a5f",a:X(xs[im])>W*0.7?"end":undefined}); });
++  (o.marks||[]).forEach(m=>{ b+=`<line x1="${ml}" y1="${Y(m.y)}" x2="${W-mr}" y2="${Y(m.y)}" stroke="#c62828" stroke-dasharray="4 3"/>`+svgT(W-mr-2,Y(m.y)-4,esc(m.txt),{fs:10,a:"end",c:"#c62828"}); });
++  return svgWrap(W,H,b,W);
++}
++/* movement-induced pressure on the integral wall (expansion and contraction), unfactored, z from the deck surface (Tab 10 §10.3) */
++function svgIntPress(R){
++  const Q=R.iab; if(!Q) return "";
++  const gam=+S.soil.gamma, H=Q.H, pE=Q.Kexp*gam*H, pC=Q.Kcon*gam*H, W=560, Hd=300, mt=40, mb=36, sc=(Hd-mt-mb)/H, x0=170, ps=170/Math.max(1e-6,pE,pC);
++  const Y=z=>mt+z*sc;   // z down from the deck surface
++  let b=svgT(10,18,"Earth pressure from the wall movement — unfactored (Tab 10 §10.3)",{b:1,fs:12});
++  b+=`<rect x="${x0-40}" y="${Y(0)}" width="40" height="${H*sc}" fill="#ecebe4" stroke="#555"/>`+svgT(x0-20,Y(H/2),Q.integ?"wall":"diaphragm",{a:"middle",fs:10,c:"#666"});
++  b+=fg(`Expansion: p(z) = K_exp·γ·z, K_exp = ${fF(Q.Kexp,3)}\np(H) = K_exp·γ·H = ${fF(Q.Kexp,3)} × ${fF(gam,3)} × ${fF(H,2)} = ${fF(pE,3)} ksf\nP_exp = ½K_exp·γ·H² = ${fF(Q.Pexp,3)} kip/ft (§10.3)`,"tab-iab|o-iab-ep",
++    `<polygon points="${x0},${Y(0)} ${x0+pE*ps},${Y(H)} ${x0},${Y(H)}" fill="rgba(31,58,95,0.18)" stroke="#1f3a5f" stroke-width="1.4"/>`+svgT(x0+pE*ps+6,Y(H)-2,`expansion ${fmt(pE,3)} ksf (K = ${fmt(Q.Kexp,3)})`,{fs:10.5,c:"#1f3a5f"}));
++  b+=fg(`Contraction: p(z) = K_con·γ·z, K_con = ${fF(Q.Kcon,3)}\np(H) = ${fF(pC,3)} ksf; P_con = ½K_con·γ·H² = ${fF(Q.Pcon,3)} kip/ft (§10.3)`,"tab-iab|o-iab-ep",
++    `<polygon points="${x0},${Y(0)} ${x0+pC*ps},${Y(H)} ${x0},${Y(H)}" fill="none" stroke="#7c6a46" stroke-width="1.4" stroke-dasharray="5 3"/>`+svgT(x0+pC*ps+6,Y(H)+14,`contraction ${fmt(pC,3)} ksf (K = ${fmt(Q.Kcon,3)})`,{fs:10.5,c:"#7c6a46"}));
++  if(Q.integ){ const zs=+S.iab.hd; b+=`<line x1="${x0-60}" y1="${Y(zs)}" x2="${x0+4}" y2="${Y(zs)}" stroke="#888" stroke-dasharray="3 3"/>`+svgT(x0-44,Y(zs)-3,"seat",{fs:9.5,c:"#666"}); }
++  b+=dimV(Y(0),Y(H),x0-80,`H = ${fmt(H,2)} ft`)+svgT(x0-44,Y(0)-6,"deck surface",{fs:9.5,c:"#666"});
++  return svgWrap(W,Hd,b,W);
++}
++function renderIntLoads(R){
++  const Q=R.iab, I=S.iab, g=S.geom, t=fmtT, gam=+S.soil.gamma, Lab=+g.Lab, a=R.agg, P=Q.pile, gc=+S.mat.gc, AP=R.ap;
++  let h=intNote(`This tab shows the loads of the integral design: pile cap and integral wall cast with the superstructure, on a single row of piles. The conventional cantilever model (footing, stem, backwall, active earth pressure on a heel plane, soil over the heel) is not part of this design. Worked in ${intXl("o-iab-basis","Tab 10")}.`);
++  h+=panel("o-basis","1.0","Basis of Design — Integral Abutment",`<div class="note-box" style="line-height:1.55">
++    <b>1.</b> Structure: the girders are cast into the end diaphragm (h<sub>d</sub> = ${fmt(+I.hd,2)} ft) and the pile cap (b = ${fmt(+I.b,2)} ft, h<sub>c</sub> = ${fmt(+I.hc,2)} ft); the abutment moves with the superstructure, which acts as a strut between the abutments. No bearings and no deck joint at the abutment.<br>
++    <b>2.</b> Thermal movement: Δ<sub>exp</sub> = ${fmt(Q.dExp,3)} in, Δ<sub>con</sub> = ${fmt(Q.dCon,3)} in (§1.7; ${intXl("o-iab-move","Tab 10 §10.2")}). BR and CR·SH go into the superstructure strut; they are not applied to the abutment as bearing shears.<br>
++    <b>3.</b> Earth pressure: the movement-induced pressure K·γ·z on the integral wall, H = h<sub>c</sub> + h<sub>d</sub> = ${fmt(Q.H,2)} ft (§1.3; ${intXl("o-iab-ep","Tab 10 §10.3")}). No active Coulomb / Rankine pressure on a heel plane.<br>
++    <b>4.</b> Foundation: single row of ${P.n} ${esc(I.sec)} piles (${P.weak?"weak":"strong"} axis bending), ${intMethod(P)} (Tab 4; ${intXl("o-iab-pile","Tab 10 §10.4")}). External stability (sliding, eccentricity, bearing) is not checked: the abutment is restrained by the superstructure and its loads go to the piles (Tab 3; ${intXl("o-iab-stab","Tab 10 §10.6")}).<br>
++    <b>5.</b> Approach slab: ${apOn()?`modelled (§1.4a); it slides on the abutment (friction F = ${fmt(Q.Ffr||0,2)} kip)`:"not modelled (panel I-0b)"}.<br>
++    <b>6.</b> Limit states: Strength I for the piles, cap and wall; Service I for crack control; Extreme Event I for the geotechnical pile check when seismic is on (Tab 2).</div>`);
++  h+=ownerPanelHTML(R);
++  h+=panel("o-sketch","1.1","Abutment Cross-Section — Integral Abutment",`<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${figBox("iab",R)}</div>
++    <div class="figcap">The section of ${intXl("o-iab-basis","Tab 10 §10.0")}. Dimensions in panel I-0a.</div>`);
++  h+=panel("o-selfwt","1.2","Self-Weight — Pile Cap and Integral Wall (DC) [3.5.1]",eqB("Pile cap and integral wall","AASHTO LRFD 10th Ed. 3.5.1",[
++      `W_{ab} = \\gamma_c\\,b\\,(h_c + h_d)\\,L_{ab} = (${t(gc,3)})(${t(+I.b)})(${t(+I.hc)} + ${t(+I.hd)})(${t(Lab)}) = ${t(Q.Wab,1)}\\ \\text{kip}`],
++    `Carried by the piles with the superstructure DC (§1.9; ${intXl("o-iab-pile","Tab 10 §10.4")}).${Q.Wapp>0?` Approach slab and shelf on the abutment: ${fmt(Q.Wapp,1)} kip (§1.4a).`:""} Wingwalls: their weight is not in the integral pile loads (Tab 9). No footing and no soil over a heel (no EV).`));
++  const pE=Q.Kexp*gam*Q.H, pC=Q.Kcon*gam*Q.H;
++  h+=panel("o-eh","1.3","Earth Pressure from the Wall Movement (replaces the active EH) [3.11.1]",eqB("Expansion (wall pushed into the backfill) and contraction","AASHTO LRFD 10th Ed. 3.11.1, 3.11.5; owner method of Tab 10 §10.3",[
++      `H = h_c + h_d = ${t(+I.hc)} + ${t(+I.hd)} = ${t(Q.H)}\\ \\text{ft}\\,, \\quad K_{exp} = ${t(Q.Kexp,4)}\\,, \\quad K_{con} = ${t(Q.Kcon,4)}`,
++      `p_{exp} = K_{exp}\\,\\gamma\\,H = (${t(Q.Kexp,4)})(${t(gam,3)})(${t(Q.H)}) = ${t(pE,3)}\\ \\text{ksf}\\,, \\quad P_{exp} = \\tfrac12 K_{exp}\\gamma H^2 = ${t(Q.Pexp,3)}\\ \\text{kip/ft}\\,, \\quad P_{exp}L_{ab} = ${t(Q.PexpT,1)}\\ \\text{kip}`,
++      `p_{con} = K_{con}\\,\\gamma\\,H = (${t(Q.Kcon,4)})(${t(gam,3)})(${t(Q.H)}) = ${t(pC,3)}\\ \\text{ksf}\\,, \\quad P_{con} = \\tfrac12 K_{con}\\gamma H^2 = ${t(Q.Pcon,3)}\\ \\text{kip/ft}\\,, \\quad P_{con}L_{ab} = ${t(Q.PconT,1)}\\ \\text{kip}`],
++    `K<sub>exp</sub> and K<sub>con</sub> are worked in ${intXl("o-iab-ep","Tab 10 §10.3")} (owner method, movement Δ/H). Factored on the wall with γ<sub>EH</sub> = ${fmt(Q.gEH,2)} (panel I-0a).`)+svgIntPress(R));
++  const lsTxt=(AP&&AP.lsRem)? `removed in the final state by the approach slab (§1.4a).` : `not applied: the integral design of Tab 10 takes the movement-induced pressure only (§1.3).`;
++  h+=panel("o-ls","1.4","Live-Load Surcharge (LS) [3.11.6.4]",`<div class="note-box">Live-load surcharge on the integral wall: ${lsTxt}</div>`);
++  h+=apLoadsHTML(R);
++  const pos=R.beamPos||[];
++  let gt=`<table class="rtbl"><tr><th>Beam</th><th>y (ft)</th><th>DC P (kip)</th><th>DW P (kip)</th><th>LL+IM P (kip)</th></tr>`;
++  for(let i=0;i<S.beams.N;i++) gt+=`<tr><td>${i+1}</td><td>${fmt(pos[i])}</td><td>${fmt(S.rx.DC[i].P)}</td><td>${fmt(S.rx.DW[i].P)}</td><td>${fmt(S.rx.LL[i].P)}</td></tr>`;
++  gt+=`<tr class="gov"><td class="lft" colspan="2">Σ (panel I-5)</td><td>${fmt(a.DC.P)}</td><td>${fmt(a.DW.P)}</td><td>${fmt(a.LL.P)}</td></tr></table>`;
++  h+=panel("o-gird","1.5","Girder Reactions — Vertical Loads on the Integral Abutment [3.6]",`<div class="svgbox" id="beamSketchOut"></div>
++    <div class="figcap">Plan view — beam positions along the abutment. CL abutment at y = 0.</div>${gt}
++    <div class="note-box">The vertical reactions go to the pile cap (${intXl("o-iab-cap","Tab 10 §10.5")}) and the piles (${intXl("o-iab-pile","§10.4")}). The BR, TU and CR·SH reactions of panel I-5 are not applied: TU is the movement of §1.7; BR and CR·SH go into the superstructure strut.</div>`);
++  h+=panel("o-longit-tu","1.7","Uniform Temperature (TU) — Movement of the Integral Abutment [3.12.2]",eqB("Thermal movement at this abutment","AASHTO LRFD 10th Ed. 3.12.2; owner temperatures (panel I-6b"+(Q.tSrc==="ct"?"; CTDOT setting temperature, panel I-0a":"")+")",[
++      `\\Delta_{exp} = \\alpha\\,\\Delta T_{rise}\\,L_{exp}(12) = (${(Q.alpha*1e6).toFixed(2)}\\times10^{-6})(${t(Q.dTr,1)})(${t(Q.Lexp,2)})(12) = ${t(Q.dExp,4)}\\ \\text{in}`,
++      `\\Delta_{con} = \\alpha\\,\\Delta T_{fall}\\,L_{exp}(12) = (${(Q.alpha*1e6).toFixed(2)}\\times10^{-6})(${t(Q.dTf,1)})(${t(Q.Lexp,2)})(12) = ${t(Q.dCon,4)}\\ \\text{in}`],
++    `Worked in ${intXl("o-iab-move","Tab 10 §10.2")}; it sets K<sub>exp</sub> and K<sub>con</sub> (§1.3). No elastomeric pad shear: no bearings.`));
++  const imN=P.IM?`without IM on the piles (f<sub>IM</sub> = ${fmt(P.fIM,3)}; 3.6.2.1)`:"with IM on the piles (owner rule)";
++  let lt=`<table class="rtbl"><tr><th>Load</th><th>Unfactored (kip)</th><th>γ (Strength I)</th><th>Used in</th></tr>
++    <tr><td class="lft">DC — superstructure (girder reactions, §1.5)</td><td>${fmt(a.DC.P,1)}</td><td rowspan="${Q.Wapp>0?3:2}">${fmt(Q.gDC,2)}</td><td rowspan="${Q.Wapp>0?4:3}">${intXl("o-iab-pile","§10.4")}, ${intXl("o-iab-cap","§10.5")}</td></tr>
++    <tr><td class="lft">DC — pile cap and integral wall W<sub>ab</sub> (§1.2)</td><td>${fmt(Q.Wab,1)}</td></tr>
++    ${Q.Wapp>0?`<tr><td class="lft">DC — approach slab and shelf (§1.4a)</td><td>${fmt(Q.Wapp,1)}</td></tr>`:""}
++    <tr class="gov"><td class="lft">Σ DC</td><td>${fmt(Q.DC,1)}</td><td>${fmt(Q.gDC,2)}</td></tr>
++    <tr><td class="lft">DW — superstructure${Q.WapDW>0?" + approach slab ("+fmt(Q.WapDW,2)+")":""}</td><td>${fmt(Q.DW,1)}</td><td>${fmt(Q.gDW,2)}</td><td>§10.4, §10.5</td></tr>
++    <tr><td class="lft">LL+IM — girders (§1.5)${Q.apLL>0?" + approach slab ("+fmt(Q.apLL,1)+")":""}: pile cap</td><td>${fmt(Q.LL,1)}</td><td>${fmt(Q.gLL,2)} × m = ${fmt(Q.mL,2)}</td><td>${intXl("o-iab-cap","§10.5")}</td></tr>
++    <tr><td class="lft">LL — piles, ${imN}</td><td>${fmt(P.LLp,1)}</td><td>${fmt(Q.gLL,2)} × m = ${fmt(Q.mL,2)}</td><td>${intXl("o-iab-pile","§10.4")}</td></tr></table>`;
++  h+=panel("o-groups","1.9","Vertical-Load Ledger of the Integral Abutment",lt+`<div class="note-box">η = ${fmt(Q.eta,2)} on the strength factors (Tab 2). Factored load per pile P<sub>g</sub> = ${fmt(P.Pg,1)} kip (Tab 4; ${intXl("o-iab-pile","Tab 10 §10.4")}); per-pile breakdown in Tab 8 §8.1.</div>`);
++  document.getElementById("tab-loads").innerHTML=h;
++}
++function intCombHTML(R){
++  const Q=R.iab, P=Q.pile, F=S.factors, G=P.geo||{};
++  const row=(chk,ls,fac,cid)=>`<tr><td class="lft">${chk}</td><td>${ls}</td><td class="lft">${fac}</td><td>${intXl(cid,"§"+({"o-iab-pile":"10.4","o-iab-cap":"10.5","o-iab-ep":"10.3"}[cid]||"10"))}</td></tr>`;
++  let tb=`<table class="rtbl"><tr><th>Check</th><th>Limit state</th><th>Load factors used</th><th>Worked in</th></tr>`;
++  tb+=row("Piles — factored gravity load per pile P<sub>g</sub>","Strength I",`η(γ<sub>DC</sub>DC + γ<sub>DW</sub>DW)/n + ηγ<sub>LL</sub>m·LL/n (+ LL eccentricity): η = ${fmt(Q.eta,2)}, γ<sub>DC</sub> = ${fmt(Q.gDC,2)}, γ<sub>DW</sub> = ${fmt(Q.gDW,2)}, γ<sub>LL</sub> = ${fmt(Q.gLL,2)}, m = ${fmt(Q.mL,2)}; LL ${P.IM?"without":"with"} IM`,"o-iab-pile");
++  if(P.ct) tb+=row("Piles — thermal axial force R<sub>T</sub> (CTDOT)","Strength I",`P<sub>P</sub> = ηγ<sub>EH</sub>P<sub>exp</sub>L<sub>ab</sub>/n, γ<sub>EH</sub> = ${fmt(Q.gEH,2)}; F<sub>T</sub>, M<sub>T</sub> at 1.00 × η`,"o-iab-pile");
++  if(G.uplift!==undefined) tb+=row("Piles — smallest pile load (uplift)","Strength I",`η<sub>min</sub>(γ<sub>DC,min</sub>DC + γ<sub>DW,min</sub>DW)/n: γ<sub>DC,min</sub> = ${fmt(G.gDCmin,2)}, γ<sub>DW,min</sub> = ${fmt(G.gDWmin,2)}, η<sub>min</sub> = ${fmt(G.etaMin,2)}; LL on the far pile`,"o-iab-pile");
++  tb+=row("Pile cap — longitudinal (case 1)","Strength I",`η(γ<sub>DC</sub>DC + γ<sub>DW</sub>DW + γ<sub>LL</sub>m·LL)/L<sub>ab</sub> (LL with IM)`,"o-iab-cap");
++  tb+=row("Integral wall — horizontal (case 2); pile cap rear face","Strength I",`ηγ<sub>EH</sub>·K<sub>exp</sub>γz: γ<sub>EH</sub> = ${fmt(Q.gEH,2)} (panel I-0a), η = ${fmt(Q.eta,2)}`,"o-iab-cap");
++  tb+=row("Crack control (cap, wall, rear face)","Service I","all loads at 1.00 (M<sub>s</sub>)","o-iab-cap");
++  if(G.ee) tb+=row("Piles — geotechnical, Extreme Event I","Extreme Event I",`(DC + DW)/n + γ<sub>EQ</sub>LL/n: γ<sub>EQ</sub> = ${fmt(G.ee.gq,2)}, φ = ${fmt(G.ee.phiE,2)} (panel I-11)`,"o-iab-pile");
++  tb+="</table>";
++  return panel("o-int-comb","2.1","Load Combinations of the Integral Design [Tables 3.4.1-1, 3.4.1-2]",intNote(`The γ<sub>p</sub> permutations of the conventional cantilever (§2.2, §2.3) are not part of the integral design. The combinations below are the ones Tab 10 uses; the load factors are the editable constants of panel I-12${R.ownLoad&&R.ownLoad.eta!==1?" with the owner η of §2.0a":""}.`)+tb+
++    `<div class="note-box">The pile and cap loads take each permanent load at its maximum factor (all add to the pile load); the smallest pile load takes the minimum factors. ${S.seismic&&S.seismic.on?"Extreme Event I: the geotechnical pile check and the approach-slab inertia; the wall and cap are not checked at the extreme event in this version.":"Extreme Event I is off (panel I-11)."}</div>`);
++}
++function renderIntStab(R){
++  document.getElementById("tab-stab").innerHTML=panel("o-int-stab","3.0","External Stability — Not Checked for an Integral Abutment",intNote(`Sliding, overturning (eccentricity) and footing bearing are not checked: the abutment has no footing, it is restrained longitudinally by the superstructure (the earth pressure at one end is balanced through the superstructure by the other end) and carried vertically by a single row of piles. The piles are checked instead (Tab 4; ${intXl("o-iab-pile","Tab 10 §10.4")}), and the cap and wall for their loads (${intXl("o-iab-cap","Tab 10 §10.5")}). Basis: ${intXl("o-iab-stab","Tab 10 §10.6")}.`));
++}
++function intDashRows(R,re){ return R.dash.filter(d=>re.test(d.id)); }
++function intDashTbl(rows){
++  let t=`<table class="rtbl"><tr><th>Check</th><th>Result</th><th>D/C</th><th>Governing / note</th><th>Worked in</th></tr>`;
++  rows.forEach(d=>{ t+=`<tr${d.pass===false?' class="failrow"':""}><td class="lft">${d.name}</td><td><b>${d.pass===null?"n/a":(d.pass?"PASS":"FAIL")}</b></td><td>${d.pass===null?"—":(d.txt?esc(d.txt):fmt(d.dc))}</td><td class="lft small">${esc(d.gov)}</td><td>${intXl(DASH_ANCHOR[d.id]||"o-iab-pile","Tab 10",d.tab)}</td></tr>`; });
++  return t+"</table>";
++}
++function svgIntPilePlan(R){
++  const Q=R.iab, P=Q.pile, Lab=+S.geom.Lab, b=+S.iab.b, W=600, Hd=150, ml=30, sc=(W-2*ml)/Math.max(1,Lab), X=y=>ml+(y+Lab/2)*sc, yc=78, hb=Math.max(14,b*sc);
++  let s=svgT(10,18,"Plan — pile cap, piles and girders (along the abutment)",{b:1,fs:12});
++  s+=`<rect x="${X(-Lab/2)}" y="${yc-hb/2}" width="${Lab*sc}" height="${hb}" fill="#ecebe4" stroke="#555"/>`;
++  (R.beamPos||[]).forEach((y,i)=>{ s+=`<line x1="${X(y)}" y1="${yc-hb/2-22}" x2="${X(y)}" y2="${yc+hb/2}" stroke="#1f3a5f" stroke-width="2"/>`+svgT(X(y),yc-hb/2-26,"G"+(i+1),{fs:9.5,a:"middle",c:"#1f3a5f"}); });
++  P.xs.forEach((x,i)=>{ s+=fg(`Pile ${i+1}: ${S.iab.sec} at ${fF(x)} ft from CL (${P.weak?"web along the abutment":"web across the abutment"})\nP_g = ${fF(P.Pg,1)} kip (Strength I, §10.4)`,"tab-iab|o-iab-pile",
++    `<rect x="${X(x)-5}" y="${yc-5}" width="10" height="10" fill="#c62828"/>`+svgT(X(x),yc+hb/2+14,String(i+1),{fs:9.5,a:"middle",c:"#c62828"})); });
++  s+=dimH(X(-Lab/2),X(Lab/2),Hd-12,`L_ab = ${fmt(Lab,2)} ft; ${P.n} piles @ ${fmt(P.sp,2)} ft`);
++  return svgWrap(W,Hd,s,W);
++}
++function renderIntFound(R){
++  const Q=R.iab, P=Q.pile, I=S.iab, t=fmtT;
++  let h=intNote(`The integral piles are designed in ${intXl("o-iab-pile","Tab 10 §10.4")} by the ${intMethod(P)}; their results are summarized here. The rigid-cap pile group of the conventional model (panel I-7) is not part of the integral design.`);
++  h+=panel("o-int-pile","4.1","Integral Piles — Summary",`${svgIntPilePlan(R)}
++    ${eqB("Section and factored gravity load per pile","Tab 10 §10.4; AASHTO LRFD 10th Ed. 6.9.2.1, 6.5.4.2",[
++      `${esc(I.sec)}:\\ n = ${P.n},\\ s = ${t(P.sp)}\\ \\text{ft},\\ F_y = ${t(P.Fy,0)}\\ \\text{ksi},\\ ${P.weak?"\\text{weak axis}":"\\text{strong axis}"}\\,, \\quad P_r = 0.70F_yA_s = ${t(P.Pr,1)}\\ \\text{kip}\\,, \\quad M_r = ${t(P.Mr/12,1)}\\ \\text{kip-ft}`,
++      `P_g = P_{dl} + P_{ll} = ${t(P.Pdl,2)} + ${t(P.Pll,2)} = ${t(P.Pg,2)}\\ \\text{kip}\\quad\\text{(Strength I; breakdown in Tab 8 §8.1)}`])}
++    ${intDashTbl(intDashRows(R,/^iab(Pile|Tip|Geo|Up|GeoEE)$/))}
++    ${P.geo&&!P.geo.on?`<div class="note-box">Geotechnical axial resistance not checked: enter R<sub>n</sub> and φ<sub>c</sub> (panel I-0a, from the geotechnical report or Pile Designer).</div>`:""}`);
++  document.getElementById("tab-found").innerHTML=h;
++}
++function renderIntStruct(R){
++  const Q=R.iab, I=S.iab, t=fmtT;
++  let h=intNote(`The pile cap and integral wall are designed in ${intXl("o-iab-cap","Tab 10 §10.5")}; the stem, footing toe and heel, backwall and bridge seat of the conventional model are not part of the integral design.`);
++  let st=`<table class="rtbl"><tr><th>Member (Tab 10)</th><th>M<sub>u</sub> / φM<sub>n</sub> (kip·ft/ft)</th><th>V<sub>u</sub> / φV<sub>n</sub> (kip/ft)</th><th>s / s<sub>max</sub> (in)</th><th>Worked in</th></tr>`;
++  [[Q.c1.sec,"10.5a","per ft of cap width"],[Q.c2.sec,"10.5b","per ft of wall height"],[Q.c3.sec,"10.5c","per ft of wall"]].forEach(([c,no,u])=>{
++    const vR=c.stir? c.stir.phiVn : c.phiVn;
++    st+=`<tr><td class="lft">${c.name} <span class="small">(${u})</span></td><td>${fmt(c.Mu)} / ${fmt(c.phiMn)}</td><td>${fmt(c.Vu,3)} / ${fmt(vR)}</td><td>${fmt(c.sp,1)} / ${fmt(c.sMax,1)}</td><td>${intXl("o-str-"+c.name,"§"+no)}</td></tr>`; });
++  st+="</table>";
++  h+=panel("o-int-cap","5.1","Pile Cap and Integral Wall — Design Summary",st+intDashTbl(intDashRows(R,/^iabC\d/))+
++    `<div class="note-box">Case 1: the cap as a continuous beam on the piles for all vertical loads (0.8 × the simple-span moment); case 2: the wall spanning horizontally between the girders under the expansion pressure; rear face: the cap cantilevered down from the seat. Demands in ${intXl("o-iab-cap","§10.5")}, diagrams in Tab 6, breakdown by load in Tab 8.</div>`);
++  const bar=(b)=>BARS[String(b)]||{Ab:0,db:0}, As=(b,s)=>bar(b).Ab*12/Math.max(1e-9,+s);
++  let rt=`<table class="rtbl"><tr><th>Mark</th><th>Location</th><th>Bar</th><th>Spacing (in)</th><th>A<sub>s</sub> (in²/ft)</th><th>Design</th></tr>
++    <tr><td>I1</td><td class="lft">Pile cap — longitudinal bars (case 1), across the width</td><td>#${esc(I.capBar)}</td><td>${fmt(+I.capSp,1)}</td><td>${fmt(As(I.capBar,I.capSp),3)}</td><td>${intXl("o-str-"+Q.c1.sec.name,"§10.5a")}</td></tr>
++    <tr><td>I2</td><td class="lft">Pile cap — stirrups</td><td>${String(I.stBar)==="0"?"none":"#"+esc(I.stBar)+", "+I.stLegs+" legs"}</td><td>${String(I.stBar)==="0"?"—":fmt(+I.stSp,1)}</td><td>—</td><td>${intXl("o-str-"+Q.c1.sec.name,"§10.5a")}</td></tr>
++    <tr><td>I3</td><td class="lft">Integral wall — horizontal bars (case 2), each face</td><td>#${esc(I.hBar)}</td><td>${fmt(+I.hSp,1)}</td><td>${fmt(As(I.hBar,I.hSp),3)}</td><td>${intXl("o-str-"+Q.c2.sec.name,"§10.5b")}</td></tr>
++    <tr><td>I4</td><td class="lft">Pile cap — vertical bars, rear face</td><td>#${esc(I.vBar)}</td><td>${fmt(+I.vSp,1)}</td><td>${fmt(As(I.vBar,I.vSp),3)}</td><td>${intXl("o-str-"+Q.c3.sec.name,"§10.5c")}</td></tr>`;
++  [Q.c1.sec,Q.c2.sec,Q.c3.sec].filter(c=>c.skinNote).forEach((c,k)=>{ rt+=`<tr><td>I${5+k}</td><td class="lft">Skin reinforcement — ${c.name}, side faces over the lower h/2 [5.6.7]</td><td>—</td><td>—</td><td>≥ ${fmt(c.skinAsk,3)} /face</td><td>${intXl("o-str-"+c.name,"Tab 10")}</td></tr>`; });
++  rt+=`</table><div class="note-box">Girder-to-diaphragm connection bars and the pile embedment detail: owner details (Tab 1 §1.0a). Approach-slab shelf and slab bars: ${intXl("o-ap-bars","Tab 10 §10.9")}.</div>`;
++  h+=panel("o-int-bars","5.7","Integral Abutment — Reinforcement Schedule",rt);
++  document.getElementById("tab-struct").innerHTML=h;
++}
++/* V & M of the integral members, from the same loads as Tab 10 §10.5 (factored, Strength I) */
++function intVM(R){
++  const Q=R.iab, N=40, o={};
++  { const s=+S.iab.sp, w=Q.wu1, xs=[...Array(N+1)].map((_,i)=>s*i/N); o.c1={xs, V:xs.map(x=>w*(s/2-x)), M:xs.map(x=>w*x*(s-x)/2), s, w, Ms:w*s*s/8}; }
++  { const s=Q.sG, w=Q.c2.wu, xs=[...Array(N+1)].map((_,i)=>s*i/N); o.c2={xs, V:xs.map(x=>w*(s/2-x)), M:xs.map(x=>w*x*(s-x)/2), s, w, Ms:w*s*s/8}; }
++  if(Q.c3){ const C=Q.c3, f=Q.eta*Q.gEH, zs=[...Array(N+1)].map((_,i)=>C.z1+(C.z2-C.z1)*i/N);
++    o.c3={zs, V:zs.map(z=>f*C.k*(z*z-C.z1*C.z1)/2), M:zs.map(z=>f*C.k*((z**3-C.z1**3)/3-C.z1*(z*z-C.z1*C.z1)/2)), f}; }
++  return o;
++}
++function renderIntVM(R){
++  const Q=R.iab, I=S.iab, t=fmtT, V=intVM(R), gam=+S.soil.gamma;
++  let h=intNote(`Diagrams of the integral members under the loads of ${intXl("o-iab-cap","Tab 10 §10.5")} (Strength I, factored). The cantilever stem, backwall, toe and heel diagrams of the conventional model are not part of the integral design.`);
++  h+=panel("o-int-vm-press","6.1","Earth Pressure on the Integral Wall (movement-induced)",svgIntPress(R)+`<div class="figcap">Unfactored; K<sub>exp</sub> and K<sub>con</sub> from ${intXl("o-iab-ep","Tab 10 §10.3")}; factored by ηγ<sub>EH</sub> = ${fmt(Q.eta*Q.gEH,3)} in §6.3 and §6.4.</div>`);
++  h+=panel("o-int-vm-c1","6.2","Pile Cap — Longitudinal (Case 1) — Shear & Moment",
++    eqB("Simple span between piles under w<sub>u</sub>; design moment 0.8 × the simple-span moment","Tab 10 §10.5",[
++      `w_u = ${t(Q.wu1,3)}\\ \\text{kip/ft},\\ s = ${t(V.c1.s)}\\ \\text{ft}:\\quad V(x) = w_u\\left(\\tfrac{s}{2} - x\\right),\\ M(x) = \\tfrac{w_u\\,x\\,(s - x)}{2}`,
++      `M_u = 0.8\\,\\dfrac{w_u s^2}{8} = 0.8\\,\\dfrac{(${t(Q.wu1,3)})(${t(V.c1.s)})^2}{8} = ${t(Q.c1.Mu,2)}\\ \\text{kip-ft}\\,, \\quad V_u = w_u\\,x_v = (${t(Q.wu1,3)})(${t(Q.c1.xv,3)}) = ${t(Q.c1.Vu,2)}\\ \\text{kip (at } d_v\\text{ from the pile face)}`])
++    +svgIntChart("Case 1 — shear V (kip), whole cap width",V.c1.xs,[{y:V.c1.V,name:"V",c:"#1f3a5f"}],"x from the pile (ft)","V (kip)")
++    +svgIntChart("Case 1 — moment M (kip-ft), whole cap width",V.c1.xs,[{y:V.c1.M,name:"M simple",c:"#1f3a5f"}],"x from the pile (ft)","M (kip-ft)",{marks:[{y:Q.c1.Mu,txt:"M_u = 0.8 M_simple = "+fmt(Q.c1.Mu,1)}]}));
++  h+=panel("o-int-vm-c2","6.3","Integral Wall — Horizontal (Case 2) — Shear & Moment",
++    eqB("Wall spanning between girders under the expansion pressure at its base, per ft of height","Tab 10 §10.5",[
++      `w_u = \\eta\\gamma_{EH}K_{exp}\\gamma H = ${t(Q.c2.wu,3)}\\ \\text{kip/ft}^2,\\ s_G = ${t(Q.sG)}\\ \\text{ft}:\\quad M_u = 0.8\\,\\dfrac{w_u s_G^2}{8} = ${t(Q.c2.Mu,2)}\\,, \\quad V_u = \\dfrac{w_u s_G}{2} = ${t(Q.c2.Vu,2)}`])
++    +svgIntChart("Case 2 — shear V (kip/ft)",V.c2.xs,[{y:V.c2.V,name:"V",c:"#1f3a5f"}],"x from the girder (ft)","V (kip/ft)")
++    +svgIntChart("Case 2 — moment M (kip-ft/ft)",V.c2.xs,[{y:V.c2.M,name:"M simple",c:"#1f3a5f"}],"x from the girder (ft)","M (kip-ft/ft)",{marks:[{y:Q.c2.Mu,txt:"M_u = 0.8 M_simple = "+fmt(Q.c2.Mu,2)}]}));
++  if(V.c3) h+=panel("o-int-vm-c3","6.4","Pile Cap — Vertical Rear Face — Shear & Moment",
++    eqB("Cap cantilevered down from the seat under K<sub>exp</sub>γz, per ft of wall","Tab 10 §10.5",[
++      `V(z) = \\eta\\gamma_{EH}\\,k\\,\\dfrac{z^2 - z_1^2}{2}\\,, \\quad M(z) = \\eta\\gamma_{EH}\\,k\\left[\\dfrac{z^3 - z_1^3}{3} - z_1\\dfrac{z^2 - z_1^2}{2}\\right],\\ k = K_{exp}\\gamma = ${t(Q.c3.k,4)},\\ z_1 = h_d = ${t(Q.c3.z1)},\\ z_2 = ${t(Q.c3.z2)}\\ \\text{ft}`,
++      `M_u = M(z_2) = ${t(Q.c3.Mu,3)}\\ \\text{kip-ft/ft}\\,, \\quad V_u = V(z_2) = ${t(Q.c3.Vu,3)}\\ \\text{kip/ft}`])
++    +svgIntChart("Rear face — shear V (kip/ft)",V.c3.zs,[{y:V.c3.V,name:"V",c:"#1f3a5f"}],"z below the deck surface (ft)","V (kip/ft)")
++    +svgIntChart("Rear face — moment M (kip-ft/ft)",V.c3.zs,[{y:V.c3.M,name:"M",c:"#1f3a5f"}],"z below the deck surface (ft)","M (kip-ft/ft)"));
++  document.getElementById("tab-vm").innerHTML=h;
++}
++function renderIntTables(R){
++  const Q=R.iab, P=Q.pile, I=S.iab, n=P.n, eta=Q.eta, gam=+S.soil.gamma, z=x=>Math.abs(x)<5e-4?"—":fmt(x,3);
++  let h=intNote(`Force-effect tables of the integral design (${intXl("o-iab-pile","Tab 10 §10.4")}, ${intXl("o-iab-cap","§10.5")}). The cantilever tables of the conventional model are not part of the integral design.`);
++  const eT=P.Ix2>0? P.WLLg*Math.abs(P.eLL||0)*P.xMax/P.Ix2 : 0;
++  let t=`<table class="rtbl"><tr><th>Load</th><th>Unfactored total (kip)</th><th>η·γ</th><th>Factored total (kip)</th><th>Per pile (kip)</th></tr>
++    <tr><td class="lft">DC (Σ, Tab 1 §1.9)</td><td>${fmt(Q.DC,2)}</td><td>${fmt(eta*Q.gDC,3)}</td><td>${fmt(eta*Q.gDC*Q.DC,2)}</td><td>${fmt(eta*Q.gDC*Q.DC/n,3)}</td></tr>
++    <tr><td class="lft">DW</td><td>${fmt(Q.DW,2)}</td><td>${fmt(eta*Q.gDW,3)}</td><td>${fmt(eta*Q.gDW*Q.DW,2)}</td><td>${fmt(eta*Q.gDW*Q.DW/n,3)}</td></tr>
++    <tr><td class="lft">LL on the piles (${P.IM?"without IM":"with IM"}) × m = ${fmt(Q.mL,2)}</td><td>${fmt(P.LLp,2)}</td><td>${fmt(eta*Q.gLL,3)}</td><td>${fmt(P.WLL,2)}</td><td>${fmt(P.WLL/n,3)}</td></tr>
++    <tr><td class="lft">LL eccentricity on the end pile: W<sub>LL</sub>·|e|·x<sub>max</sub>/Σx² (e = ${fmt(P.eLL||0,3)} ft)</td><td>—</td><td>—</td><td>—</td><td>${fmt(eT,3)}</td></tr>
++    <tr class="gov"><td class="lft">P<sub>g</sub> = Σ (Strength I)</td><td></td><td></td><td></td><td><b>${fmt(P.Pg,3)}</b></td></tr></table>`;
++  h+=panel("o-int-tbl-pile","8.1","Factored Load per Pile — Breakdown (Strength I)",t+`<div class="note-box">n = ${n}; η = ${fmt(eta,2)}. ${P.ct?`CTDOT adds the thermal axial force R<sub>T</sub> = ${fmt(P.ct.RT,2)} kip: P<sub>u</sub> = ${fmt(P.ct.Pu,2)} kip. `:""}Worked in ${intXl("o-iab-pile","Tab 10 §10.4")}.</div>`);
++  const s=+I.sp, L=+S.geom.Lab, k8=0.8*s*s/8, b=+I.b;
++  const c1r=[["DC",Q.DC,Q.gDC],["DW",Q.DW,Q.gDW],["LL+IM × m",Q.mL*Q.LL,Q.gLL]];
++  let t2=`<table class="rtbl"><tr><th>Load</th><th>w = load/L<sub>ab</sub> (kip/ft)</th><th>0.8·w·s²/8 (kip-ft)</th><th>η·γ</th><th>Factored M (kip-ft)</th><th>Per ft of width (kip-ft/ft)</th></tr>`;
++  let sM=0; c1r.forEach(([nm,Wt,g])=>{ const w=Wt/L, M=w*k8, f=eta*g*M; sM+=f; t2+=`<tr><td class="lft">${nm}</td><td>${fmt(w,3)}</td><td>${fmt(M,2)}</td><td>${fmt(eta*g,3)}</td><td>${fmt(f,2)}</td><td>${fmt(f/b,3)}</td></tr>`; });
++  t2+=`<tr class="gov"><td class="lft">Σ = M<sub>u</sub> (case 1)</td><td></td><td></td><td></td><td><b>${fmt(sM,2)}</b></td><td><b>${fmt(sM/b,3)}</b></td></tr></table>`;
++  h+=panel("o-int-tbl-c1","8.2","Pile Cap Case 1 — Moment by Load",t2+`<div class="note-box">s = ${fmt(s,2)} ft (pile spacing), L<sub>ab</sub> = ${fmt(L,2)} ft, b = ${fmt(b,2)} ft. Engine value M<sub>u</sub> = ${fmt(Q.c1.Mu,2)} kip-ft (${intXl("o-str-"+Q.c1.sec.name,"§10.5a")}).</div>`);
++  let t3=`<table class="rtbl"><tr><th>Member</th><th>Load</th><th>Unfactored</th><th>η·γ<sub>EH</sub></th><th>M<sub>u</sub></th><th>V<sub>u</sub></th><th>M<sub>s</sub> (Service I)</th></tr>
++    <tr><td class="lft">Integral wall, case 2 (per ft of height)</td><td class="lft">EH movement: p = K<sub>exp</sub>γH = ${fmt(Q.c2.pB,3)} ksf, s<sub>G</sub> = ${fmt(Q.sG,2)} ft</td><td>0.8·p·s<sub>G</sub>²/8 = ${fmt(Q.c2.Ms,3)}</td><td>${fmt(eta*Q.gEH,3)}</td><td>${fmt(Q.c2.Mu,3)}</td><td>${fmt(Q.c2.Vu,3)}</td><td>${fmt(Q.c2.Ms,3)}</td></tr>
++    <tr><td class="lft">Pile cap rear face (per ft of wall)</td><td class="lft">EH movement, z = ${fmt(Q.c3.z1,2)} to ${fmt(Q.c3.z2,2)} ft</td><td>M = ${fmt(Q.c3.M,3)}; V = ${fmt(Q.c3.V,3)}</td><td>${fmt(eta*Q.gEH,3)}</td><td>${fmt(Q.c3.Mu,3)}</td><td>${fmt(Q.c3.Vu,3)}</td><td>${fmt(Q.c3.Ms,3)}</td></tr></table>`;
++  h+=panel("o-int-tbl-c2","8.3","Integral Wall Case 2 and Rear Face — Effects",t3+`<div class="note-box">Units: kip-ft/ft and kip/ft. Worked in ${intXl("o-iab-cap","§10.5")}.</div>`);
++  const V=intVM(R), H=Q.H; let t4=`<table class="rtbl"><tr><th>z below the deck surface (ft)</th><th>p<sub>exp</sub> (ksf)</th><th>p<sub>con</sub> (ksf)</th><th>Rear face V<sub>u</sub> (kip/ft)</th><th>Rear face M<sub>u</sub> (kip-ft/ft)</th></tr>`;
++  for(let i=0;i<=10;i++){ const zz=H*i/10, inC=V.c3&&zz>=Q.c3.z1-1e-9, f=V.c3?V.c3.f:0, C=Q.c3;
++    t4+=`<tr><td><b>${fmt(zz,2)}</b></td><td>${z(Q.Kexp*gam*zz)}</td><td>${z(Q.Kcon*gam*zz)}</td><td>${inC?z(f*C.k*(zz*zz-C.z1*C.z1)/2):"—"}</td><td>${inC?z(f*C.k*((zz**3-C.z1**3)/3-C.z1*(zz*zz-C.z1*C.z1)/2)):"—"}</td></tr>`; }
++  h+=panel("o-int-tbl-sta","8.4","Movement-Pressure Stations",t4+t4End(H));
++  document.getElementById("tab-tables").innerHTML=h;
++}
++function t4End(H){ return `<div class="note-box">Eleven stations over H = ${fmt(H,2)} ft; pressures unfactored (§10.3), rear-face effects factored (Strength I) below the seat.</div>`; }
+@@ -5671 +5887 @@ function gotoPanel(tab,anchor){
+-const DASH_INFO=new Set(["apDV"]);   // n/a rows that are information only (not a required check)
++const DASH_INFO=new Set(["apDV","dowelLap"]);   // n/a rows that are information only (not a required check); ABT2 (engineer, 2026-10-21): the stem dowel lap with no lap entered is "lap not detailed", information only
+@@ -5752,0 +5969 @@ function renderTabLoads(R){
++  if(R.iab&&R.iab.integ) return renderIntLoads(R);   // ABT2: integral abutment
+@@ -6139,0 +6357,3 @@ function renderTabComb(R){
++  if(R.iab&&R.iab.integ){ h+=intCombHTML(R);   // ABT2: integral abutment — the combinations Tab 10 uses (the γp permutations of §2.2, §2.3 are not part of its design)
++    h+=panel("o-selftest","2.5","Validation Self-Test — Benchmark vs Live Engine",selfTestHTML()+`<div style="margin-top:4px;"><button class="mini-btn" id="btnSelfTest2">Re-run self-test</button></div>`);
++    document.getElementById("tab-comb").innerHTML=h; return; }
+@@ -6186,0 +6407 @@ function renderTabStab(R){
++  if(R.iab&&R.iab.integ) return renderIntStab(R);   // ABT2
+@@ -6436,0 +6658 @@ function renderTabFound(R){
++  if(R.iab&&R.iab.integ) return renderIntFound(R);   // ABT2
+@@ -6759,0 +6982 @@ function renderTabStruct(R){
++  if(R.iab&&R.iab.integ) return renderIntStruct(R);   // ABT2
+@@ -6767 +6990 @@ function renderTabStruct(R){
+-    cv.rows.forEach(r=>{ t+=`<tr${r.ok?"":' class="failrow"'}><td class="lft">${esc(r.name)}</td><td class="lft">${esc(r.sitTxt)}</td><td>${r.cat}</td><td>${fmt(r.base,1)}</td><td>${fmt(r.req,2)}</td><td>${fmt(r.prov,2)} <span class="small">(${esc(r.provTxt)})</span></td><td><b>${r.ok?"PASS":"FAIL"}</b></td></tr>`; });
++    cv.rows.forEach(r=>{ t+=`<tr${r.ok?"":' class="failrow"'}><td class="lft">${esc((iabType()==="semi"&&r.name==="Backwall — faces")?"End diaphragm — faces":r.name)}</td><td class="lft">${esc(r.sitTxt)}</td><td>${r.cat}</td><td>${fmt(r.base,1)}</td><td>${fmt(r.req,2)}</td><td>${fmt(r.prov,2)} <span class="small">(${esc(r.provTxt)})</span></td><td><b>${r.ok?"PASS":"FAIL"}</b></td></tr>`; });
+@@ -6793,0 +7017,5 @@ function renderTabStruct(R){
++  const semiT=iabType()==="semi";   // ABT2: semi-integral — the end diaphragm replaces the backwall (designed in Tab 10 §10.5a)
++  if(semiT){ const c=R.iab.c2.sec;
++    h+=panel("o-str-Backwall","5.1","End Diaphragm (replaces the backwall) — Summary",intNote(`<b>Semi-integral:</b> the end diaphragm (h<sub>bw</sub> = ${fmt(+S.geom.hbw,2)} ft, t<sub>bw</sub> = ${fmt(+S.geom.tbw,2)} ft) moves with the superstructure on the bearings; it is designed for the movement-induced pressure (K = ${fmt(R.iab.Kexp,3)}, ${intXl("o-iab-ep","Tab 10 §10.3")}) in ${intXl("o-str-"+c.name,"Tab 10 §10.5a")}. The cantilever backwall check (EH + LS fixed at the seat) does not apply.`).replace("Integral abutment (panel I-0a).","Abutment type (panel I-0a).")+
++      `<table class="rtbl"><tr><th>Member</th><th>M<sub>u</sub> / φM<sub>n</sub> (kip·ft/ft)</th><th>V<sub>u</sub> / φV<sub>n</sub> (kip/ft)</th><th>s / s<sub>max</sub> (in)</th></tr><tr><td class="lft">${c.name}</td><td>${fmt(c.Mu)} / ${fmt(c.phiMn)}</td><td>${fmt(c.Vu,3)} / ${fmt(c.phiVn)}</td><td>${fmt(c.sp,1)} / ${fmt(c.sMax,1)}</td></tr></table>`+intDashTbl(intDashRows(R,/^iabD/))); }
++  else{
+@@ -6836,0 +7065 @@ function renderTabStruct(R){
++  }   // ABT2: end of the backwall sections (not for a semi-integral abutment)
+@@ -7029 +7258,2 @@ function renderTabStruct(R){
+-      <tr><td><b>B1</b></td><td class="lft">Backwall — back-face vertical (lapped with A1)</td><td>#${rf.bw.size}</td><td>${fmt(+rf.bw.sp,1)}</td><td>${fmt(cBW.As)} / ${fmt(cBW.AsReq)}</td><td>${ld(cBW)}</td><td>${fmt(lenBW,2)}</td></tr>
++      ${iabType()==="semi"? `<tr><td><b>B1</b></td><td class="lft">End diaphragm — horizontal bars, each face (replaces the backwall bars; <span class="xlink" data-jump="tab-iab|o-str-${R.iab.c2.sec.name}">Tab 10 §10.5a</span>)</td><td>#${esc(S.iab.hBar)}</td><td>${fmt(+S.iab.hSp,1)}</td><td>${fmt(R.iab.c2.sec.As)} / ${fmt(R.iab.c2.sec.AsReq)}</td><td>${ld(R.iab.c2.sec)}</td><td>${fmt(+S.geom.Lab,2)}</td></tr>`   // ABT2
++        : `<tr><td><b>B1</b></td><td class="lft">Backwall — back-face vertical (lapped with A1)</td><td>#${rf.bw.size}</td><td>${fmt(+rf.bw.sp,1)}</td><td>${fmt(cBW.As)} / ${fmt(cBW.AsReq)}</td><td>${ld(cBW)}</td><td>${fmt(lenBW,2)}</td></tr>`}
+@@ -7121,0 +7352 @@ function renderTabVM(R){
++  if(R.iab&&R.iab.integ) return renderIntVM(R);   // ABT2
+@@ -7125 +7356,2 @@ function renderTabVM(R){
+-  const els=[["stem","6.1","Stem"],["backwall","6.2","Backwall"],["toe","6.3","Footing Toe"],["heel","6.4","Footing Heel"]];
++  const semiV=iabType()==="semi";   // ABT2: semi-integral — no cantilever backwall (§6.2 hidden; the end diaphragm in §6.5 and Tab 10 §10.5a)
++  const els=[["stem","6.1","Stem"],["backwall","6.2","Backwall"],["toe","6.3","Footing Toe"],["heel","6.4","Footing Heel"]].filter(e=>!(semiV&&e[0]==="backwall"));
+@@ -7140,2 +7372,2 @@ function renderTabVM(R){
+-      stem base M: ${fmt(R.superChk.stemSum)} vs ${fmt(R.superChk.stemSvc)} kip·ft/ft;
+-      backwall base M: ${fmt(R.superChk.bwSum)} vs ${fmt(R.superChk.bwSvc)} kip·ft/ft
++      stem base M: ${fmt(R.superChk.stemSum)} vs ${fmt(R.superChk.stemSvc)} kip·ft/ft${semiV?"":`;
++      backwall base M: ${fmt(R.superChk.bwSum)} vs ${fmt(R.superChk.bwSvc)} kip·ft/ft`}
+@@ -7169 +7401 @@ function renderTabVM(R){
+-  h+=panel("o-vm-press","6.5","Lateral Pressure on the Stem & Backwall — "+esc(selLabel),`
++  h+=panel("o-vm-press","6.5","Lateral Pressure on the Stem & "+(semiV?"End Diaphragm":"Backwall")+" — "+esc(selLabel),`
+@@ -7181,0 +7414 @@ function renderTabTables(R){
++  if(R.iab&&R.iab.integ) return renderIntTables(R);   // ABT2
+@@ -7183,0 +7417 @@ function renderTabTables(R){
++  const semiT=iabType()==="semi", ELS=semiT? TBL_ELS.filter(e=>e[0]!=="backwall") : TBL_ELS;   // ABT2: semi-integral — no cantilever backwall
+@@ -7194,2 +7428,2 @@ function renderTabTables(R){
+-  { let t=`<table class="rtbl"><tr><th rowspan="2">Load (γ = 1.0)</th>${TBL_ELS.map(([,lab])=>`<th colspan="2">${lab}</th>`).join("")}</tr>
+-      <tr>${TBL_ELS.map(()=>"<th>V (kip/ft)</th><th>M (kip·ft/ft)</th>").join("")}</tr>`;
++  { let t=`<table class="rtbl"><tr><th rowspan="2">Load (γ = 1.0)</th>${ELS.map(([,lab])=>`<th colspan="2">${lab}</th>`).join("")}</tr>
++      <tr>${ELS.map(()=>"<th>V (kip/ft)</th><th>M (kip·ft/ft)</th>").join("")}</tr>`;
+@@ -7197 +7431 @@ function renderTabTables(R){
+-      const cells=TBL_ELS.map(([el])=>{ const e=vmEnd(unf[k],el); return `<td>${z(e.V)}</td><td>${z(e.M)}</td>`; }).join("");
++      const cells=ELS.map(([el])=>{ const e=vmEnd(unf[k],el); return `<td>${z(e.V)}</td><td>${z(e.M)}</td>`; }).join("");
+@@ -7205,0 +7440,4 @@ function renderTabTables(R){
++    if(semiT&&el==="backwall"){ const Q=R.iab, c=Q.c2.sec;   // ABT2: the end diaphragm in place of the backwall breakdown
++      h+=panel("o-tbl-"+el,"8."+(ei+2),"End Diaphragm (replaces the backwall) — Effects",`<table class="rtbl"><tr><th>Load</th><th>Unfactored</th><th>η·γ<sub>EH</sub></th><th>M<sub>u</sub> (kip·ft/ft)</th><th>V<sub>u</sub> (kip/ft)</th><th>M<sub>s</sub> (kip·ft/ft)</th></tr>
++        <tr><td class="lft">EH movement: p = K<sub>exp</sub>γH = ${fmt(Q.c2.pB,3)} ksf at the diaphragm base, span s<sub>G</sub> = ${fmt(Q.sG,2)} ft between girders</td><td>0.8·p·s<sub>G</sub>²/8 = ${fmt(Q.c2.Ms,3)}</td><td>${fmt(Q.eta*Q.gEH,3)}</td><td>${fmt(Q.c2.Mu,3)}</td><td>${fmt(Q.c2.Vu,3)}</td><td>${fmt(Q.c2.Ms,3)}</td></tr></table>
++        <div class="note-box">Horizontal bending of the end diaphragm between the girders (per ft of height); worked in <span class="xlink" data-jump="tab-iab|o-str-${c.name}">Tab 10 §10.5a</span>. The cantilever backwall breakdown does not apply to a semi-integral abutment.</div>`); return; }
+@@ -7234 +7472 @@ function renderTabTables(R){
+-    TBL_ELS.forEach(([el,lab])=>{
++    ELS.forEach(([el,lab])=>{
+@@ -7405 +7643,6 @@ function svgWallPressure(R){
+-  const pts=[]; st.w.forEach((p,i)=>pts.push({y:st.pos[i],p})); bw.w.forEach((p,i)=>pts.push({y:g.hstem+bw.pos[i],p}));
++  // ABT2: semi-integral — above the seat the end diaphragm with its movement-induced pressure K_exp·γ·s (Tab 10 §10.3), factored by η·γ_EH (panel I-0a)
++  // at a strength state and 1.00 at Service I / Extreme Event I / the EH load alone; not the active EH + LS of a cantilever backwall
++  const semiP=iabType()==="semi"&&R.iab, Qs=R.iab; let dP=null;
++  if(semiP){ const nm=sel.replace(/^ls:|^c?load:/,""), isL=sel.startsWith("ls:"), f=isL? ((/^Service/.test(nm)||(R.LIMITS[nm]&&R.LIMITS[nm].eq))? 1 : Qs.eta*Qs.gEH) : (nm==="EH"&&sel.startsWith("load:")? 1 : 0), k=Qs.Kexp*(+S.soil.gamma);
++    dP={f, k, arr:[...Array(21)].map((_,i)=>{ const sd=g.hbw*(20-i)/20; return {y:g.hstem+g.hbw-sd, p:f*k*sd}; })}; }
++  const pts=[]; st.w.forEach((p,i)=>pts.push({y:st.pos[i],p})); if(dP) dP.arr.forEach(q=>pts.push(q)); else bw.w.forEach((p,i)=>pts.push({y:g.hstem+bw.pos[i],p}));
+@@ -7413 +7656,2 @@ function svgWallPressure(R){
+-  b+=svgT(x0-g.tbw*sc/2-2,Y(g.hstem+g.hbw/2),"bw",{a:"middle",c:"#666",fs:10});
++  b+=svgT(x0-g.tbw*sc/2-2,Y(g.hstem+g.hbw/2),dP?"diaphragm":"bw",{a:"middle",c:"#666",fs:10});
++  if(dP) b+=`<line x1="${x0-g.tbw*sc}" y1="${Y(g.hstem)}" x2="${x0}" y2="${Y(g.hstem)}" stroke="#c62828" stroke-width="2"/>`+svgT(x0-g.tbw*sc-4,Y(g.hstem)+12,"joint (seat)",{a:"end",fs:9.5,c:"#c62828"});
+@@ -7415 +7659 @@ function svgWallPressure(R){
+-  const sP=st.w.map((p,i)=>({y:st.pos[i],p})), bP=bw.w.map((p,i)=>({y:g.hstem+bw.pos[i],p}));
++  const sP=st.w.map((p,i)=>({y:st.pos[i],p})), bP=dP? dP.arr : bw.w.map((p,i)=>({y:g.hstem+bw.pos[i],p}));
+@@ -7420 +7664,4 @@ function svgWallPressure(R){
+-  const pAt=z=>{ const onStem=z<=g.hstem+1e-9, w=figInterp(onStem?sP:bP,z); if(w===null) return null;
++  const pAt=z=>{ const onStem=z<=g.hstem+1e-9;
++    if(dP&&!onStem){ const sd=g.hstem+g.hbw-z, w=dP.f*dP.k*sd;   // ABT2
++      return {w, onStem:false, tip:`End diaphragm — z = ${fF(z)} ft above the top of footing\nw = f·K_exp·γ·s = ${fF(dP.f,3)}(${fF(Qs.Kexp,4)})(${fF(+S.soil.gamma,3)})(${fF(sd)}) = ${fF(w,3)} ksf (s = depth below the top; K_exp of Tab 10 §10.3; designed in §10.5a)`}; }
++    const w=figInterp(onStem?sP:bP,z); if(w===null) return null;
+@@ -7433 +7680 @@ function svgWallPressure(R){
+-  b+=poly(sP,q=>q.y,FIG_STATIC?"":` data-fx="press"`+fia(`Stem pressure — ${sName}: hover for w(z); integrated to V and M in §6.1`,"tab-vm|o-vm-stem"))+poly(bP,q=>q.y,FIG_STATIC?"":` data-fx="press"`+fia(`Backwall pressure — ${sName}: hover for w(z); integrated to V and M in §6.2`,"tab-vm|o-vm-backwall"));
++  b+=poly(sP,q=>q.y,FIG_STATIC?"":` data-fx="press"`+fia(`Stem pressure — ${sName}: hover for w(z); integrated to V and M in §6.1`,"tab-vm|o-vm-stem"))+poly(bP,q=>q.y,FIG_STATIC?"":` data-fx="press"`+(dP? fia(`End diaphragm — movement-induced pressure K_exp·γ·s (Tab 10 §10.3), designed in §10.5a`,"tab-iab|o-iab-ep") : fia(`Backwall pressure — ${sName}: hover for w(z); integrated to V and M in §6.2`,"tab-vm|o-vm-backwall")));
+@@ -7437 +7684,2 @@ function svgWallPressure(R){
+-  b+=lab(sBase,"stem base")+lab(sTop,"seat")+(bw.w.length&&Math.abs(bBase.p-sTop.p)>1e-6?lab({y:bBase.y+0.25,p:bBase.p},"backwall base"):"");
++  b+=lab(sBase,"stem base")+lab(sTop,"seat")+(dP? (dP.f>0? svgT(x0+bBase.p*ps+6,Y(bBase.y)-10,`diaphragm ${fmt(bBase.p,3)} ksf`,{fs:10.5,c:"#1f3a5f"}) : "")
++    : (bw.w.length&&Math.abs(bBase.p-sTop.p)>1e-6?lab({y:bBase.y+0.25,p:bBase.p},"backwall base"):""));
+@@ -7442 +7690 @@ function svgWallPressure(R){
+-  b+=svgT(10,Hp-12,"Distributed load w(z) of the V&M integration (EH + LS + ES"+(sel.includes("Constr")?" + CS":"")+"); red arrows: EE I point loads on the stem; horizontal scale exaggerated.",{fs:9.5,c:"#555"});
++  b+=svgT(10,Hp-12,(dP?"Stem: distributed":"Distributed")+" load w(z) of the V&M integration (EH + LS + ES"+(sel.includes("Constr")?" + CS":"")+")"+(dP?"; end diaphragm: movement pressure (Tab 10 §10.3)":"")+"; red arrows: EE I point loads on the stem; horizontal scale exaggerated.",{fs:9.5,c:"#555"});
+@@ -7748 +7996,9 @@ function drawXsec(){
+-  s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
++  const semiX=iabType()==="semi"&&window.LAST_R&&window.LAST_R.iab;   // ABT2: semi-integral — the end diaphragm (on the bearings, moving with the superstructure) in place of the backwall
++  if(!semiX) s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
++  else{ const Qx=window.LAST_R.iab, zs=g.tf+g.hstem, pB=Qx.Kexp*(+S.soil.gamma)*g.hbw, pw=Math.min(46,(g.Lheel)*sc*0.6);
++    s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${(g.hbw-0.12)*sc}" fill="#ecebe4" stroke="#1f3a5f" stroke-width="1.6"/>`;
++    s+=`<rect x="${X(xbwF)-26}" y="${Y(Htot)}" width="26" height="${Math.min(g.hbw-0.3,+S.iab.dg||g.hbw*0.7)*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
++    s+=`<line x1="${X(xbwF)}" y1="${Y(zs)}" x2="${X(xsb)}" y2="${Y(zs)}" stroke="#c62828" stroke-width="2.2"/><text x="${X(xsb)+4}" y="${Y(zs)+12}" font-size="10" font-family="Times New Roman" fill="#c62828">joint (diaphragm on the stem)</text>`;
++    s+=`<text x="${X(xbwF+g.tbw/2)}" y="${Y(Htot)-4}" text-anchor="middle" font-size="10.5" font-family="Times New Roman" fill="#1f3a5f">end diaphragm</text>`;
++    s+=`<polygon points="${X(xsb)},${Y(Htot)} ${X(xsb)+pw},${Y(zs)} ${X(xsb)},${Y(zs)}" fill="rgba(31,58,95,0.14)" stroke="#1f3a5f" stroke-width="1"/>`
++      +`<text x="${X(xsb)+pw+3}" y="${Y((Htot+zs)/2)}" font-size="10" font-family="Times New Roman" fill="#1f3a5f">K_exp·γ·h = ${fmt(pB,2)} ksf (§10.3)</text>`; }
+@@ -7757,2 +8013,4 @@ function drawXsec(){
+-    s+=`<polygon points="${X(B)},${Y(soilTop)} ${X(B)-pw},${Y(g.tf)} ${X(B)},${Y(g.tf)}" fill="rgba(31,58,95,0.14)" stroke="#1f3a5f" stroke-width="1"/>`;
+-    for(let k=1;k<=3;k++){ const yy=g.tf+(soilTop-g.tf)*(1-k/4); const w=pw*(soilTop-yy)/Math.max(soilTop-g.tf,0.01);
++    const zCut=(iabType()==="semi")? Math.min(soilTop,g.tf+g.hstem) : soilTop, wCut=pw*(soilTop-zCut)/Math.max(soilTop-g.tf,0.01);   // ABT2: semi-integral — EH of the lower abutment below the seat
++    s+=zCut<soilTop? `<polygon points="${X(B)},${Y(zCut)} ${X(B)-wCut},${Y(zCut)} ${X(B)-pw},${Y(g.tf)} ${X(B)},${Y(g.tf)}" fill="rgba(31,58,95,0.14)" stroke="#1f3a5f" stroke-width="1"/>`
++      : `<polygon points="${X(B)},${Y(soilTop)} ${X(B)-pw},${Y(g.tf)} ${X(B)},${Y(g.tf)}" fill="rgba(31,58,95,0.14)" stroke="#1f3a5f" stroke-width="1"/>`;
++    for(let k=1;k<=3;k++){ const yy=g.tf+(soilTop-g.tf)*(1-k/4); if(yy>zCut+1e-9) continue; const w=pw*(soilTop-yy)/Math.max(soilTop-g.tf,0.01);
+@@ -8859,3 +9117 @@ function renderTabContent(id){
+-  // IAB: for an integral abutment the conventional cantilever tabs are not part of the design — say so at their top
+-  if(el&&R.iab&&R.iab.integ&&["tab-comb","tab-stab","tab-found","tab-struct","tab-vm","tab-3d","tab-tables"].includes(id)) el.insertAdjacentHTML("afterbegin",`<div class="note-box" style="border-color:#c62828"><b>Integral abutment (panel I-0a):</b> this tab analyses the conventional cantilever inputs (stem, footing, bearings) and is not part of the integral design. The integral design is in <span class="xlink" data-jump="tab-iab|o-iab-basis">Tab 10</span>.</div>`);
+-  if(el&&R.iab&&!R.iab.integ&&id==="tab-struct") el.insertAdjacentHTML("afterbegin",`<div class="note-box"><b>Semi-integral abutment (panel I-0a):</b> the cantilever backwall check (§5.1) does not apply — the end diaphragm moves with the superstructure and is designed in <span class="xlink" data-jump="tab-iab|o-iab-cap">Tab 10 §10.5</span>; its §5.1 results are not in the dashboard.</div>`);
++  // ABT2: an integral abutment's Tabs 1 to 6 and 8 render the integral design (no banner); a semi-integral abutment's §5.1 is the end-diaphragm link card
+@@ -8944,0 +9201,2 @@ document.addEventListener("change",ev=>{
++  if(p==="iab.type"&&raw==="integral"&&S.wing&&S.wing.type!=="indep"){ const Hw=(+S.iab.hc)+(+S.iab.hd);   // ABT2: switching to integral, an attached wing taller than the integral wall defaults to h_c + h_d
++    if(+S.wing.H0>Hw+1e-9){ S.wing.H0=Hw; if(+S.wing.HL>Hw) S.wing.HL=Hw; buildInputs(); const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="wing height H₀ set to the integral wall height h_c + h_d = "+fmt(Hw,2)+" ft (panel I-13)"; } }
+@@ -9396 +9654 @@ async function buildReport(){
+-    "tab-stab":"External Stability, Free Body & Notes","tab-found":"Foundation / Pile Group","tab-struct":"Structural Design (Concrete)","tab-wing":"Wingwalls",
++    "tab-stab":"External Stability, Free Body & Notes","tab-found":iabType()==="integral"?"Integral Piles — Summary":"Foundation / Pile Group","tab-struct":"Structural Design (Concrete)","tab-wing":"Wingwalls",
+@@ -9399,2 +9657,2 @@ async function buildReport(){
+-  const SKIP={ "tab-comb":!RO.permFull||itg, "tab-tables":!RO.detailTables||itg, "tab-wing":!(S.wing&&S.wing.on), "tab-iab":iabType()==="conv",
+-    "tab-stab":itg, "tab-found":itg, "tab-struct":itg, "tab-vm":itg };
++  const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables, "tab-wing":!(S.wing&&S.wing.on), "tab-iab":iabType()==="conv",
++    "tab-stab":itg };   // ABT2: an integral abutment prints its integral Tabs 2, 4, 5, 6 and 8 (Tab 3: not checked, basis in Tab 10 §10.6)
+```
