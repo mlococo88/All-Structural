@@ -2092,3 +2092,53 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - Still catches regressions. With `--a 23778ea` (before BP-T1), the four original cases are `same`, but the `torqued` case is DIFFERENT and the exit code is 1:
     - checks go from 10 to 12 rows;
     - one warning becomes a FAIL row.
+
+## 2026-10-21 — BP-H1: "Anchor shear share" option, Hilti PROFIS equal share V/n (Tier 2, opt-in; default results unchanged)
+- **Engineer decision (2026-10-21):** the app should make the same assumptions as Hilti PROFIS where it can. Add the PROFIS shear share as an option, and keep the current behavior as the default so the validated results do not change.
+- **Function / anchor:**
+  - `defaultState()`, `shear:` group, comment `BP-H1 (2026-10-21)`. New field `shear.hiltiDist:false`. Old saves get `false` through `mergeState()` (BP-M1).
+  - `computeAll()`, per-combination shear demand, anchor text `const hiltiDist=!!(S.shear&&S.shear.hiltiDist);`.
+  - Input tab, "6. Shear Distribution": new row "Anchor shear share".
+  - `buildVCaseTab()`, "1. Basis and Case Selection": a note states which share is used.
+- **Before:**
+  ```js
+  const Vu_per=Vfront;
+  …
+  p.inFront = frontSet? !!frontSet[i] : true;
+  ```
+- **After:**
+  ```js
+  const hiltiDist=!!(S.shear&&S.shear.hiltiDist);
+  const Vu_per=hiltiDist? Vres/nTot : Vfront;
+  if(hiltiDist && Vres>1e-9) frontDesc="all "+nTot+" anchors, V/n (Hilti PROFIS option; concrete breakout: "+frontDesc+")";
+  …
+  p.inFront = (frontSet && !hiltiDist)? !!frontSet[i] : true;
+  ```
+- **What changes when the option is on:**
+  - The per-anchor shear demand `Vu_per` changes. It is used by steel shear (§17.7.1) and by the stand-off lever-arm check, and through them by the T–V interaction (§17.8).
+  - Before (and the default): the share of the governing ACI 318-19 Fig. R17.7.2.1b case. Case 1 gives V/n; Case 2 gives V / (anchors in the rear row); Case 3 gives V / (anchors in the front row).
+  - After: V/n on every anchor. This is a rigid plate sharing the shear equally, which is how PROFIS assigns shear for these checks.
+  - Concrete breakout and pryout are unchanged: the case still sets `nV`, the breakout row and the group demand.
+- **Why:** comparing with PROFIS, the anchor shear did not match. On a 2 × 2 group where Case 2 governs, the tool checked each anchor's steel shear at V/2, where PROFIS uses V/4 (for anchors in standard holes the PROFIS template also has `HoleCondition One`).
+  - Option on is less conservative than the default whenever Case 2 or 3 governs.
+  - The default follows R17.7.2.1(b), which assigns the full shear to one row.
+- **Governing provision:** ACI 318-19 §17.7.1 (steel strength in shear), §17.7.2.1 / Fig. R17.7.2.1b (shear assumed on a row for breakout), §17.8 (interaction). PROFIS assumes a rigid anchor plate.
+- **Check case 1, default design** (1 in F1554-36, 2 × 2 at ±6 in, flush on a 1 in grout pad, default combinations):
+  - Governing: 1.2D+1.0W, V = 16.155 kip, Case 2 (2 anchors in the row set back 12.00 in from the +x edge).
+  - φV_sa per anchor = 0.65 × 0.6 × 0.606 × 58 × 0.80 = 10.966 kip.
+  - Before / default: V_u,a = 16.155 / 2 = 8.078 kip; steel shear DCR = 8.078 / 10.966 = **0.737**.
+  - Option on: V_u,a = 16.155 / 4 = 4.039 kip; DCR = 4.039 / 10.966 = **0.368**.
+  - Breakout 1.126, pryout 0.186 and the interaction 1.328 (governed by 0.9D+1.0W) are the same both ways.
+- **Check case 2, msa3a (grouted stand-off, PROFIS 3.1.34):** V = 2.828 kip, Case 2.
+  - Default: V_u,a = 1.414 kip; steel 0.129; stand-off bending 1.414 / 1.860 = 0.761.
+  - Option on: V_u,a = 0.707 kip; steel 0.064; stand-off bending 0.707 / 1.860 = **0.380**. The interaction follows: 0.761 → 0.380.
+- **Check case 3, struct2v1:** V = 1.015 kip, 6 anchors, Case 2 (3 in the rear row).
+  - V_u,a goes 0.338 → 0.169 kip. Stand-off bending goes 0.350 → 0.175, and the interaction 0.669 → 0.453.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` (origin/main 061e92a vs working tree): default, msa3a, struct2v1, struct2v2 and torqued are all `same`. PASS.
+  - Scratch headless script, not committed: check cases 1–3 above with the option off and on; no console errors.
+- **Other copies:** the Canopy MCT Generator (mlococo88/canopy-mct-generator) embeds this file through its `tools/sync-bpad.py`. It is re-synced there.
+- **Open items:**
+  - PROFIS's exact shear rule (hole condition, `ShearLoadDistributionType UpToFirstThreeRows`) is not documented in the repository, and the Hilti design guide was not reachable. The option implements an equal V/n share on every anchor. Confirm it against a PROFIS anchor-force table for a design where Case 2 governs.
+  - The PROFIS export still writes the template `HoleCondition One` / `UpToFirstThreeRows`, whatever this option is.
