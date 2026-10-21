@@ -14433,3 +14433,11 @@ index b8d5942..61e56be 100644
 -      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add("piles.RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add("piles.phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
 +      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
 ```
+## 2026-10-21 — PR: claude/abut-ap-kh0 — Integral approach-slab inertia with k_h0 (ABK) (PR link added after merge)
+
+### ABK-1. Integral abutment, Extreme Event I: approach-slab inertia with k_h = k_h0   [calc change, integral + approach slab + seismic only] [MORE conservative]
+- **Where:** `computeIAB`, APS block (anchor `const kh=isFinite(R.seis.kh0)? R.seis.kh0 : R.seis.kh, W=AP.RDC+AP.RDW;`).
+- **Before:** `const kh=R.seis.kh, W=AP.RDC+AP.RDW;` — the abutment k_h (k_h ratio of panel I-11 × k_h0; 0.5·k_h0 on the spread-footing default). **After:** `const kh=isFinite(R.seis.kh0)? R.seis.kh0 : R.seis.kh, W=AP.RDC+AP.RDW;` — k_h0, as the integral wall Extreme Event I check (§10.5d, ABC d) and the integral wings (ABC decision 3): the integral abutment is restrained by the superstructure and the piles, so the 11.6.5.2.2 displacement reduction does not apply. Engineer's decision 2026-10-21.
+- **Provision:** AASHTO LRFD 10th Ed. 11.6.5.2.1, 11.6.5.2.2, 11.6.5.1; APS-7.
+- **Check (integral, approach slab on, seismic on, A_s = 0.15, k_h ratio 0.5, R_DC + R_DW = 66.0 + 10.56 = 76.56 kip, F = 45.94 kip):** before F_EQ = min(0.075 × 76.56, 45.94) = 5.742 kip; after min(0.150 × 76.56, 45.94) = 11.484 kip. §10.5d: F_d 129.96 → 135.71 kip; MassDOT / RIDOT f = F_d/P_PE 0.1193 → 0.1246 (P_PE = 1089.3), wall case 2 M_u 4.201 → 4.386 kip-ft/ft (D/C 0.036 → 0.038); CTDOT (P_PE = 1403.3) 0.0926 → 0.0967.
+- **How verified:** `node tests/check-syntax.mjs` passes; Playwright, origin/main `c729c12` vs branch: conventional (with / without seismic), integral without seismic, integral AASHTO with seismic (no slab) and semi-integral MassDOT: `computeAll` identical; integral MassDOT / CTDOT / RIDOT with seismic and slab: only `apEE` and the §10.5d values above change.
