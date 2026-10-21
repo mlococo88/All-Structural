@@ -18355,3 +18355,615 @@ index 6d4f235..682aa9e 100644
 +    if(o.target==='iab' && !chk.iab) r.err.push('This hand-off has no integral-abutment data.');
 +    if(chk.intSrc && o.target!=='iab') r.err.push('This hand-off is from an integral abutment: its cases are per-pile axial loads of the integral design (no footing or pile cap resultant; the lateral demand is the imposed thermal movement). Pick the target "Integral-abutment mode".');   // AXI
 ```
+
+
+## 2026-10-21 — PR: claude/pile-iab-results — Integral-abutment mode sends the geotechnical axial resistance on pileResults (PDA-IAB) (PR link added after merge)
+
+Cross-tool connection in one PR (CLAUDE.md §7 exception): `abutment_calculator.html` (fixlog/abutment_calculator.md PDA-IAB) and HANDOFF.md §4.6, §4.10. Every code site is tagged `PDA-IAB`.
+
+**Problem.** AXI (PR #398) maps pileResults `geotechnical.static` / `field` into the abutment's integral inputs `iab.Rn`, `iab.phiC`, `iab.RnUp`, `iab.phiUp`, but in integral-abutment mode Pile Designer sent `geotechnical: null` (no static resistance is computed in that mode), so nothing was filled.
+
+### PDA-IAB-1. Refactor: `hpGeoAxial` (H-pile static engine + PDA-M1 method + PDA-DR drivability + PDA-MP minimum penetration)   [no result change]
+- **Where:** new function `hpGeoAxial(I, { d, bf, toe_ft, embedTop_ft, scour, STL, xPhi, Fy })` after `HP_DRIVE_METHODS`; in `computeAll`, H-pile path, anchor `const { geo, drv, drive } = hpGeoAxial(I, { d: I.hpD, bf: I.hpBf, toe_ft, embedTop_ft, scour: I.scourDepth, STL, xPhi, Fy: I.hpFy });`.
+- **Before / after:** the inline `const geo = hpileGeoCapacity({...})`, `const drv = (() => {...})()`, `const drive = (() => {...})()` blocks moved verbatim into the function; the only textual changes are the parameters (`I.hpD`, `I.hpBf` → `d`, `bf`; `I.scourDepth` → `scour`; `I.hpFy` → `Fy`). Exact code in the diff below.
+- **How checked (pure refactor):** `computeAll` on 8 input sets (micropile default; H-pile default; H-pile 3-layer profile; H-pile with field method slt_dyn, scour 5 ft, minimum penetration, grade El., tension, set-up 1.2, hammer, σ_dr; H-pile CTDOT dyn_qc with downdrag, small group, N1,60 basis; integral default; integral Tier 2; integral Tier 2 layered with scour) and the pileResults payload of the live app for each: JSON identical to origin/main `deb5090` (16/16). The H-pile Module 01 HTML, its input panel, the page text and the report text: identical on 3 H-pile sets.
+
+### PDA-IAB-2. UI refactor: `hpResMethodBlock` and `hpGeoModuleBody`   [no result change]
+- **Where:** new `hpResMethodBlock(I, set, r, iab)` (the "Resistance determination method" box of the H-pile Pile Section panel, PDA-M1 / DR / BC / MP inputs) and `hpGeoModuleBody(I, g, o)` (the worked body of H-pile Module 01), both before `function SoilProfilePanel`. Call sites: `hpResMethodBlock(I, set, r, false),` and `return hpGeoModuleBody(I, r.hpileGeo, { d: I.hpD, bf: I.hpBf, dl: "STL", dlDec: 0, panel: "H-pile panel", upRef: false });`.
+- **Changes inside, active only for the integral pile:** labels "Bottom-of-cap elevation" / "depth below the bottom of the cap" (iab), demand symbol `P_u` with 1 decimal, the input panel named in the driving-stress note, the uplift resistance shown without an uplift demand (`upRef`), datum "the cap" in the scour and minimum-penetration notes. With the H-pile arguments the rendered HTML is identical to origin/main (checked as above).
+
+### PDA-IAB-3. Integral-abutment mode: geotechnical axial resistance, Module 13   [new optional calculation; off by default]
+- **Where:** `computeAll`, integral branch after `R.iab = {...}`, anchor `// ---- PDA-IAB (2026-10-21): geotechnical axial resistance of the integral pile (Module 13, optional, I.iabGeoOn) ----`; overall status anchor `R.allPass = R.iab ? R.iab.pass && (!R.iab.geo || R.iab.geo.pass) : false;`.
+- **Inputs (new optional saved fields, defaults = off):** `iabGeoOn: false`, `iabGeoTop: 0` (ft below the cap with no side resistance: pre-bored hole / sleeve). Reused existing keys: `soilLayers` (static columns of the Soil profile tab, now shown in this mode when on), `hpPhiGeo`, `hpPhiGeoClay`, `hpPhiTipClay`, `hpPhiUp`, `hpSptBasis`, `hpSmallGroup`, `hpResMethod`, `hpDriveOwner`, `hpScourBias`, `hpRsDD`, `hpSetupFactor`, `hpHammerR`, `hpSigDrC/T`, `hpPhiDa`, `hpBlowCount/Limit`, `hpGradeEl` (here: bottom-of-cap elevation), `hpMinPen` (here: depths below the cap). No saved key or format changed; an older project opens with Module 13 off and every result unchanged.
+- **Calculation (when on):** `hpGeoAxial` with d, b_f of `IAB_SECTIONS[iabSection]` (HP12X84: 12.28 × 12.29 in; HP10X57: 9.99 × 10.20 in), F_y 50 ksi, toe = `R.iab.reqLength` = max(L_geo, L_f + 5) (MassDOT BM Part I 3.10.11.2, the length Tier 2 models), top of contact `iabGeoTop`, scour = `iabScourDepth` when Tier 2 is on (as the Tier 2 p-y profile), demand STL = `R.iab.demand` = η(γDC·DC + γDW·DW + γLL·LL) (Strength I), no Extreme Event, no uplift demand. Provisions as Module 01: AASHTO LRFD 10th Ed. (2024) 10.7.3.8.6 (side: Eq. 10.7.3.8.6b-1 α S_u, Eq. 10.7.3.8.6g-3 N̄1,60/50; tip: Eq. 10.7.3.8.6e-1 9 S_u, Eq. 10.7.3.8.6g-1 0.8 N1,60 D_b/D ≤ q_L), Table 10.5.5.2.3-1 (φ), 10.5.5.2.3 / C10.7.3.3 (field method), 10.7.6 (minimum penetration), 10.7.8 (drivability). New check: φ_stat R_n ≥ P_u (and the PDA-DR/MP drive checks) enter the overall status only when Module 13 is on; Module 01 (Simplified Method) status is unchanged.
+- **Show the work (§6):** input panel "Geotechnical axial resistance (optional, Module 13)" with a result line and "Worked in → Geotechnical · 13"; Module 13 (Geotechnical output tab) = the Module 01 body (geometry, side by layer, tip, R_n, φR_n vs P_u, 4a field method, 4b drivability / minimum penetration, 5 uplift) plus "6 Values sent to the abutment calculator" (φ = φ_stat R_n/R_n, φ_up = φR_n,up/R_n,up, field R_n); P_u and L link to Module 01; report section "Integral Pile — Geotechnical Axial Resistance" (heading 13) with "Pu: see §…, L: see §…"; summary rows "Geotech axial (tip+skin)" and "Geotech minimum penetration" (dashboard and Summary of Results, linked to Module 13).
+- **Check case (hand):** HP12X84, toe L = 30 ft below the cap, N1,60 basis; layer 1 clay 0–15 ft, S_u = 1.5 ksf, α = 0.7; layer 2 sand from 15 ft, N1,60 = 40; φ defaults (sand 0.30, clay side 0.35, clay tip 0.35, uplift 0.25).
+  p_box = 2(12.28 + 12.29)/12 = 4.0950 ft; A_p = 12.28 × 12.29/144 = 1.048064 ft².
+  R_s1 = 0.7(1.5)(4.095)(15) = 64.496 kip; R_s2 = (40/50)(4.095)(15) = 49.140 kip; R_s = 113.636 kip.
+  q_p = min(0.8(40)(15)/(12.29/12) = 468.67, 8(40) = 320) = 320 ksf; R_p = 320(1.048064) = 335.380 kip.
+  R_n = 449.017 kip; φR_n = 0.35(64.496) + 0.30(49.140 + 335.380) = 137.930 kip; φ = 0.3072; R_n,up = 113.636 kip, φR_n,up = 28.409 kip, φ_up = 0.25.
+  Tool (Module 13 and pileResults): R_n 449.017, φR_n 137.930, φ 0.3072, R_n,up 113.636, φR_n,up 28.409 — equal. Demand P_u = 1.00[1.25(138.125) + 1.50(13.76) + 1.75(77.437)] = 328.811 kip → φR_n < P_u, Module 13 NG (before: not computed).
+  Field method slt_dyn (φ_dyn 0.80): R_n,req = 328.811/0.80 = 411.014 kip. Minimum penetration 35 ft (uplift), bottom-of-cap El. 100: z_min 35 > toe 30 → NG, tip El. 65.0; R_n,stat(35) = 64.496 + 0.8(4.095)(20) + 320(1.048064) = 465.397 kip (tool 465.397).
+
+### PDA-IAB-4. pileResults: `geotechnical` in integral mode   [hand-off]
+- **Where:** `PileResultsXfer` `geotech()` (anchor `var gI=(I.pileType==='iab' && r.iab && r.iab.geo)? r.iab.geo : null;`) and `build()` (anchor `geotechnical:geotech(I,r,LIVE.cases),   // PDA-IAB`).
+- **Before:** `geotechnical: iab? null : geotech(...)`. **After:** the same block from Module 13 when on, `pileType:"iab"`, basis text with the datum and toe, `field.RnReq` = P_u/φ_dyn of the integral demand (`RnReqCase` "Strength I, integral pile P_u"); preview warning when off; a sender note with the section, toe and P_u. H-pile and micropile payloads unchanged (checked above).
+
+### Saved data
+- New optional input fields `iabGeoOn`, `iabGeoTop` (defaults off / 0; old saves load unchanged). No key renamed or removed.
+
+### How verified
+- `node tests/check-syntax.mjs "Pile Designer.html" abutment_calculator.html`: pass.
+- Playwright (temporary harness, CDN libraries from tests/libs): refactor equality as above (16/16 computeAll + payload, H-pile UI and report text identical; the integral page text differs only by the new input section).
+- End to end in one browser context (shared file:// storage): abutment calculator, owner MassDOT, type Integral → "Send foundation loads" (content fadaaf34) → Pile Designer "Pull from Abutment / SubLoads", target Integral-abutment mode → soil profile above, geotechnical length 30 ft, Module 13 on → "Send results to the abutment" → abutment "Pull pile results" (Current) → Import: `iab.Rn` 449.017, `iab.phiC` 0.3072, `iab.RnUp` 113.636, `iab.phiUp` 0.25; Tab 10 §10.4 P_u/(φ_c R_n) = 328.810/(0.3072 × 449.017) = 2.384 (before: not checked). Field variant: `iab.Rn` 411.014, `iab.phiC` 0.80 → 1.000. Length variant (geotechnical length 0: toe 27 ft) → the length warning. No console errors.
+
+### Open items
+- φ_up for clay side in uplift is `hpPhiUp` (0.25) for both soils, as in Module 01 (not changed here).
+- The abutment's pile length `integral.Lpile` is not imported into `iabGeoLength` (semantics differ: required geotechnical length vs designed length); the abutment warns when the two differ. Engineer to decide whether the import should set it.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `deb5090`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 682aa9e..6e4028a 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -1222,3 +1222,4 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    if(I.pileType==='hpile' && r.hpileGeo){
+-      var g=r.hpileGeo, drv=g.drv||{}, dr=g.drive||{}, mp=dr.minPen;
+-      var out={ pileType:'hpile',
++    var gI=(I.pileType==='iab' && r.iab && r.iab.geo)? r.iab.geo : null;   // PDA-IAB (2026-10-21): the integral pile's Module 13
++    if((I.pileType==='hpile' && r.hpileGeo) || gI){
++      var g=gI||r.hpileGeo, drv=g.drv||{}, dr=g.drive||{}, mp=dr.minPen;
++      var out={ pileType:gI? 'iab' : 'hpile',
+@@ -1227 +1228,2 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-          basis:'static analysis (Module 01): side and tip by the SPT method in cohesionless layers and the alpha-method in cohesive layers (10.7.3.8.6), phi per layer and component (Table 10.5.5.2.3-1); phi = phi*R_n/R_n (blended); uplift = side only' },
++          basis:gI? 'integral pile '+(g.sectKey||'')+', static analysis (Module 13, the Module 01 H-pile engine): side and tip by the SPT method in cohesionless layers and the alpha-method in cohesive layers (10.7.3.8.6), phi per layer and component (Table 10.5.5.2.3-1); phi = phi*R_n/R_n (blended); uplift = side only; depths below the bottom of the cap, toe = the required pile length (3.10.11.2)'+(g.topG>0? ', no side resistance above '+g.topG+' ft' : '')
++            : 'static analysis (Module 01): side and tip by the SPT method in cohesionless layers and the alpha-method in cohesive layers (10.7.3.8.6), phi per layer and component (Table 10.5.5.2.3-1); phi = phi*R_n/R_n (blended); uplift = side only' },
+@@ -1231 +1233 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-        var gov=null; (cases||[]).forEach(function(c){ if(!c || c.type==='service' || c.type==='tension' || !isNum(c.STL) || !(c.STL>0)) return;
++        var gov=null; if(!gI) (cases||[]).forEach(function(c){ if(!c || c.type==='service' || c.type==='tension' || !isNum(c.STL) || !(c.STL>0)) return;
+@@ -1232,0 +1235 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++        else if(isNum(g.STL) && g.STL>0){ var phI=drv.phiTab*drv.grpFac; gov={Rn:g.STL/phI, phi:phI, P:g.STL, name:'Strength I, integral pile P_u'}; }   // PDA-IAB: the factored gravity load per pile
+@@ -1238 +1241 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-          basis:'R_n required = max over the strength / extreme-event compression rows of P/phi_dyn (Extreme Event phi = 1.0, 10.5.5.3); R_ndr = R_n + the side resistance lost to scour (10.7.3.6)'+(drv.Rdd>0?' + the downdrag side resistance (CTDOT rule)':'')+'; R_ndr,EOD = R_ndr/f (10.7.3.4)' };
++          basis:(gI? 'R_n required = P_u/phi_dyn, P_u = the factored gravity load per pile (Strength I, integral pile)' : 'R_n required = max over the strength / extreme-event compression rows of P/phi_dyn (Extreme Event phi = 1.0, 10.5.5.3)')+'; R_ndr = R_n + the side resistance lost to scour (10.7.3.6)'+(drv.Rdd>0?' + the downdrag side resistance (CTDOT rule)':'')+'; R_ndr,EOD = R_ndr/f (10.7.3.4)' };
+@@ -1297,0 +1301 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    if(iab && !(r.iab && r.iab.geo)) warn.push('Geotechnical axial resistance not computed (integral panel, "Geotechnical axial resistance (Module 13)" off): R_n, phi, R_n,up and phi_up are not sent; the abutment keeps its own values.');   // PDA-IAB
+@@ -1308 +1312 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-      geotechnical:iab? null : geotech(I,r,LIVE.cases),
++      geotechnical:geotech(I,r,LIVE.cases),   // PDA-IAB: integral mode too (Module 13, when on)
+@@ -1317,0 +1322 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++    if(p.geotechnical && p.geotechnical.pileType==='iab') p.notes.push('Integral abutment: geotechnical R_n, R_n,up of the integral pile ('+(r.iab.geo.sectKey||'')+') by the H-pile static analysis of Module 13 on the soil profile (depths below the bottom of the cap), toe at the required pile length L = '+rn(r.iab.geo.toeG,2)+' ft below the cap; demand P_u = '+rn(r.iab.geo.STL,2)+' kip per pile (Strength I).');   // PDA-IAB
+@@ -2717,0 +2723,87 @@ const HP_DRIVE_METHODS = {
++/* PDA-IAB (2026-10-21): the H-pile static axial resistance (Module 01), the resistance determination method (PDA-M1),
++   the drivability and the minimum penetration (PDA-DR, PDA-MP), moved out of computeAll unchanged so that the
++   integral-abutment mode runs the same engine on its own section and pile length. The arguments are the values the
++   H-pile path used inline: section d, b_f (in), the toe and the top of soil contact (ft below the soil datum), the
++   design scour (ft), the factored compression P_u (STL, kip), the Extreme Event flag and F_y (ksi). */
++function hpGeoAxial(I, { d, bf, toe_ft, embedTop_ft, scour, STL, xPhi, Fy }) {
++  const embedLen_ft = toe_ft - embedTop_ft;                                 // soil contact length, head/grade -> toe (ft)
++  const geo = hpileGeoCapacity({
++    layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []),
++    d, bf,
++    embedTop: embedTop_ft, embedLen: embedLen_ft,
++    smallGroup: !!I.hpSmallGroup,
++    phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp,
++    phiTipClay: I.hpPhiTipClay,  // F47 (O5): optional saved field; missing -> DEFAULT_INPUTS 0.35 (PDA-D4)
++    scour,                       // PDA-D12: optional saved field; missing -> 0 (no scour)
++    nBasis: I.hpSptBasis         // PDA-D5: "N60" (C_N applied) | "N160"; old saves -> "N160" (mergeSavedInputs)
++  });
++  // PDA-M1 (2026-10-20): resistance determination method (AASHTO LRFD 10th Ed. 10.5.5.2.3, Table 10.5.5.2.3-1). With a
++  // field method (dynamic / load test / wave equation / driving formula) the number of piles comes from phi_dyn
++  // (C10.5.5.2.3): required nominal bearing R_n = P_u / phi_dyn; required nominal driving resistance (10.7.3.6)
++  // R_ndr = R_n + the side resistance lost to the design scour (static, unfactored, x method bias), and for the CTDOT
++  // owner rule (BDM "Ultimate Pile Capacity" = factored load / phi + scour + downdrag) + the side resistance above the
++  // neutral plane (input). AASHTO 10th Ed. 10.7.3.7: drag load = 0 at the geotechnical strength limit state (no downdrag
++  // term). The static check phi_stat R_n,stat >= P_u is then the pile-length estimate of C10.7.3.3-1 (bias), unchanged.
++  const drv = (() => {
++    const m = HP_DRIVE_METHODS[I.hpResMethod] || HP_DRIVE_METHODS.static;
++    if (!m.phi) return { method: "static", label: m.label };
++    const phiDyn = (xPhi ? 1.0 : m.phi) * (xPhi ? 1 : geo.grpFac);   // Extreme Event 1.0 (10.5.5.3); small group x 0.80
++    const Rn_req = STL / phiDyn;
++    let Rs_scour = 0;
++    if ((scour || 0) > 0) {
++      const g0 = hpileGeoCapacity({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), d, bf, embedTop: embedTop_ft, embedLen: embedLen_ft,
++        smallGroup: !!I.hpSmallGroup, phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp, phiTipClay: I.hpPhiTipClay, scour: 0, nBasis: I.hpSptBasis });
++      Rs_scour = Math.max(g0.Rs_comp - geo.Rs_comp, 0);
++    }
++    const bias = (I.hpScourBias > 0) ? I.hpScourBias : 1.0;
++    const own = I.hpDriveOwner || "aashto";
++    const Rdd = own === "ctdot" ? Math.max(I.hpRsDD || 0, 0) : 0;
++    return { method: I.hpResMethod, label: m.label, phiTab: m.phi, phiDyn, grpFac: geo.grpFac, xPhi, Rn_req, Rs_scour, bias, Rs_scour_b: bias * Rs_scour, own, Rdd,
++      Rndr: Rn_req + bias * Rs_scour + Rdd };
++  })();
++  // PDA-DR (2026-10-20): drivability, AASHTO LRFD 10th Ed. 10.7.8 (steel piles, Eq. 10.7.8-1: sigma_dr <= 0.9 phi_da f_y,
++  // phi_da = 1.00 per 6.5.4.2 "resistance during pile driving"). Driving stresses: entered from a wave equation analysis
++  // (10.7.8 requires one; the 10th Ed. gives no simplified estimate, and none is computed here). Set-up / relaxation
++  // (10.7.3.4): f = R_restrike / R_EOD (input; > 1 set-up, < 1 relaxation); the EOD criterion is R_ndr / f, with R_ndr
++  // verified by restrike (10.7.3.4.2, 10.7.3.4.3). Driving formulas (Gates, EN) are EOD methods whose phi already assumes
++  // set-up (C10.7.3.4.3): the factor is not applied to them. Hammer: the maximum driving resistance the proposed hammer
++  // can achieve (input, from the wave equation bearing graph) >= the EOD driving resistance (10.7.8: maximum driving
++  // resistance needed). 0 = not entered (no check).
++  const drive = (() => {
++    const phiDa = (I.hpPhiDa > 0) ? I.hpPhiDa : 1.00, FyD = Fy || 50, lim = 0.9 * phiDa * FyD;
++    const sC = (I.hpSigDrC > 0) ? I.hpSigDrC : 0, sT = (I.hpSigDrT > 0) ? I.hpSigDrT : 0;
++    const fsu = (I.hpSetupFactor > 0) ? I.hpSetupFactor : 1.0;
++    const formula = drv.method === "gates" || drv.method === "en";
++    const RndrEOD = drv.phiDyn ? (formula ? drv.Rndr : drv.Rndr / fsu) : null;
++    const Rh = (I.hpHammerR > 0) ? I.hpHammerR : 0;
++    const stressC = sC > 0 ? { s: sC, pass: sC <= lim + 1e-9 } : null, stressT = sT > 0 ? { s: sT, pass: sT <= lim + 1e-9 } : null;
++    // PDA-MP (2026-10-20): minimum penetration, AASHTO LRFD 10th Ed. 10.7.6: the deepest tip needed by the applicable
++    // requirements (entered as depths below grade, 0 = not applicable). The pile modelled (toe at solverLembed below grade)
++    // must reach it. Driving to it (10.7.8: maximum driving resistance needed to obtain the minimum penetration): the
++    // static nominal resistance at that depth with all soil present (no scour removed), R_n,stat(z_min), unfactored.
++    const MP_KEYS = [["settle", "settlement (service)"], ["defl", "lateral deflection (service)"], ["uplift", "uplift (strength)"], ["drag", "below soil causing drag loads"], ["scour", "below soil subject to scour"], ["fixity", "lateral fixity (strength)"], ["ee", "extreme event uplift / lateral"]];
++    const mpIn = (I.hpMinPen && typeof I.hpMinPen === "object") ? I.hpMinPen : {};
++    const mpItems = MP_KEYS.map(([k, l]) => ({ k, l, z: (mpIn[k] > 0) ? mpIn[k] : 0 })).filter(x => x.z > 0);
++    let minPen = null;
++    if (mpItems.length) {
++      const gov = mpItems.reduce((a, b) => (b.z > a.z ? b : a));
++      const zMin = gov.z, toeNow = toe_ft;
++      const gEl = (I.hpGradeEl != null && isFinite(I.hpGradeEl)) ? I.hpGradeEl : null;
++      const gMin = hpileGeoCapacity({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), d, bf, embedTop: embedTop_ft, embedLen: Math.max(zMin - embedTop_ft, 0),
++        smallGroup: !!I.hpSmallGroup, phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp, phiTipClay: I.hpPhiTipClay, scour: 0, nBasis: I.hpSptBasis });
++      const ctrlZ = Math.max(zMin, toeNow);
++      minPen = { items: mpItems, gov, zMin, toeNow, pass: toeNow >= zMin - 1e-9, gradeEl: gEl, tipElMin: gEl != null ? gEl - zMin : null, ctrlZ, tipElCtrl: gEl != null ? gEl - ctrlZ : null,
++        RdrMin: gMin.Rn_comp, ctrlSrc: toeNow >= zMin ? "pile toe modelled (bearing / length estimate)" : "minimum penetration (" + gov.l + ")" };
++    }
++    // maximum driving resistance needed (10.7.8): the larger of R_ndr,EOD and the resistance to reach the minimum penetration
++    const RdrMax = Math.max(RndrEOD != null ? RndrEOD : 0, minPen ? minPen.RdrMin : 0);
++    const hammer = (RdrMax > 0 && Rh > 0) ? { Rh, Rreq: RdrMax, src: (minPen && minPen.RdrMin > (RndrEOD || 0)) ? "minimum penetration" : "R_ndr,EOD", pass: Rh >= RdrMax - 1e-9 } : null;
++    // PDA-BC (2026-10-20): blow count from the wave equation at the driving criterion (blows/in), C10.7.8: above 10-15 bpi
++    // use with care. Limit input (default 10); 0 = not entered.
++    const bc = (I.hpBlowCount > 0) ? I.hpBlowCount : 0, bcLim = (I.hpBlowLimit > 0) ? I.hpBlowLimit : 10;
++    const blow = bc > 0 ? { n: bc, lim: bcLim, limOutside: bcLim > 15, pass: bc <= bcLim + 1e-9 } : null;
++    return { phiDa, Fy: FyD, lim, stressC, stressT, fsu, formula, RndrEOD, Rndr: drv.phiDyn ? drv.Rndr : null, hammer, minPen, RdrMax, blow,
++      pass: (!stressC || stressC.pass) && (!stressT || stressT.pass) && (!hammer || hammer.pass) && (!minPen || minPen.pass) && (!blow || blow.pass) };
++  })();
++  return { geo, drv, drive };
++}
+@@ -5182,10 +5274 @@ function computeAll(I, opts = {}) {
+-    const geo = hpileGeoCapacity({
+-      layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []),
+-      d: I.hpD, bf: I.hpBf,
+-      embedTop: embedTop_ft, embedLen: embedLen_ft,
+-      smallGroup: !!I.hpSmallGroup,
+-      phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp,
+-      phiTipClay: I.hpPhiTipClay,  // F47 (O5): optional saved field; missing -> DEFAULT_INPUTS 0.35 (PDA-D4)
+-      scour: I.scourDepth,         // PDA-D12: optional saved field; missing -> 0 (no scour)
+-      nBasis: I.hpSptBasis         // PDA-D5: "N60" (C_N applied) | "N160"; old saves -> "N160" (mergeSavedInputs)
+-    });
++    const { geo, drv, drive } = hpGeoAxial(I, { d: I.hpD, bf: I.hpBf, toe_ft, embedTop_ft, scour: I.scourDepth, STL, xPhi, Fy: I.hpFy });   // PDA-IAB: unchanged, see hpGeoAxial
+@@ -5221,68 +5303,0 @@ function computeAll(I, opts = {}) {
+-    // PDA-M1 (2026-10-20): resistance determination method (AASHTO LRFD 10th Ed. 10.5.5.2.3, Table 10.5.5.2.3-1). With a
+-    // field method (dynamic / load test / wave equation / driving formula) the number of piles comes from phi_dyn
+-    // (C10.5.5.2.3): required nominal bearing R_n = P_u / phi_dyn; required nominal driving resistance (10.7.3.6)
+-    // R_ndr = R_n + the side resistance lost to the design scour (static, unfactored, x method bias), and for the CTDOT
+-    // owner rule (BDM "Ultimate Pile Capacity" = factored load / phi + scour + downdrag) + the side resistance above the
+-    // neutral plane (input). AASHTO 10th Ed. 10.7.3.7: drag load = 0 at the geotechnical strength limit state (no downdrag
+-    // term). The static check phi_stat R_n,stat >= P_u is then the pile-length estimate of C10.7.3.3-1 (bias), unchanged.
+-    const drv = (() => {
+-      const m = HP_DRIVE_METHODS[I.hpResMethod] || HP_DRIVE_METHODS.static;
+-      if (!m.phi) return { method: "static", label: m.label };
+-      const phiDyn = (xPhi ? 1.0 : m.phi) * (xPhi ? 1 : geo.grpFac);   // Extreme Event 1.0 (10.5.5.3); small group x 0.80
+-      const Rn_req = STL / phiDyn;
+-      let Rs_scour = 0;
+-      if ((I.scourDepth || 0) > 0) {
+-        const g0 = hpileGeoCapacity({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), d: I.hpD, bf: I.hpBf, embedTop: embedTop_ft, embedLen: embedLen_ft,
+-          smallGroup: !!I.hpSmallGroup, phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp, phiTipClay: I.hpPhiTipClay, scour: 0, nBasis: I.hpSptBasis });
+-        Rs_scour = Math.max(g0.Rs_comp - geo.Rs_comp, 0);
+-      }
+-      const bias = (I.hpScourBias > 0) ? I.hpScourBias : 1.0;
+-      const own = I.hpDriveOwner || "aashto";
+-      const Rdd = own === "ctdot" ? Math.max(I.hpRsDD || 0, 0) : 0;
+-      return { method: I.hpResMethod, label: m.label, phiTab: m.phi, phiDyn, grpFac: geo.grpFac, xPhi, Rn_req, Rs_scour, bias, Rs_scour_b: bias * Rs_scour, own, Rdd,
+-        Rndr: Rn_req + bias * Rs_scour + Rdd };
+-    })();
+-    // PDA-DR (2026-10-20): drivability, AASHTO LRFD 10th Ed. 10.7.8 (steel piles, Eq. 10.7.8-1: sigma_dr <= 0.9 phi_da f_y,
+-    // phi_da = 1.00 per 6.5.4.2 "resistance during pile driving"). Driving stresses: entered from a wave equation analysis
+-    // (10.7.8 requires one; the 10th Ed. gives no simplified estimate, and none is computed here). Set-up / relaxation
+-    // (10.7.3.4): f = R_restrike / R_EOD (input; > 1 set-up, < 1 relaxation); the EOD criterion is R_ndr / f, with R_ndr
+-    // verified by restrike (10.7.3.4.2, 10.7.3.4.3). Driving formulas (Gates, EN) are EOD methods whose phi already assumes
+-    // set-up (C10.7.3.4.3): the factor is not applied to them. Hammer: the maximum driving resistance the proposed hammer
+-    // can achieve (input, from the wave equation bearing graph) >= the EOD driving resistance (10.7.8: maximum driving
+-    // resistance needed). 0 = not entered (no check).
+-    const drive = (() => {
+-      const phiDa = (I.hpPhiDa > 0) ? I.hpPhiDa : 1.00, FyD = I.hpFy || 50, lim = 0.9 * phiDa * FyD;
+-      const sC = (I.hpSigDrC > 0) ? I.hpSigDrC : 0, sT = (I.hpSigDrT > 0) ? I.hpSigDrT : 0;
+-      const fsu = (I.hpSetupFactor > 0) ? I.hpSetupFactor : 1.0;
+-      const formula = drv.method === "gates" || drv.method === "en";
+-      const RndrEOD = drv.phiDyn ? (formula ? drv.Rndr : drv.Rndr / fsu) : null;
+-      const Rh = (I.hpHammerR > 0) ? I.hpHammerR : 0;
+-      const stressC = sC > 0 ? { s: sC, pass: sC <= lim + 1e-9 } : null, stressT = sT > 0 ? { s: sT, pass: sT <= lim + 1e-9 } : null;
+-      // PDA-MP (2026-10-20): minimum penetration, AASHTO LRFD 10th Ed. 10.7.6: the deepest tip needed by the applicable
+-      // requirements (entered as depths below grade, 0 = not applicable). The pile modelled (toe at solverLembed below grade)
+-      // must reach it. Driving to it (10.7.8: maximum driving resistance needed to obtain the minimum penetration): the
+-      // static nominal resistance at that depth with all soil present (no scour removed), R_n,stat(z_min), unfactored.
+-      const MP_KEYS = [["settle", "settlement (service)"], ["defl", "lateral deflection (service)"], ["uplift", "uplift (strength)"], ["drag", "below soil causing drag loads"], ["scour", "below soil subject to scour"], ["fixity", "lateral fixity (strength)"], ["ee", "extreme event uplift / lateral"]];
+-      const mpIn = (I.hpMinPen && typeof I.hpMinPen === "object") ? I.hpMinPen : {};
+-      const mpItems = MP_KEYS.map(([k, l]) => ({ k, l, z: (mpIn[k] > 0) ? mpIn[k] : 0 })).filter(x => x.z > 0);
+-      let minPen = null;
+-      if (mpItems.length) {
+-        const gov = mpItems.reduce((a, b) => (b.z > a.z ? b : a));
+-        const zMin = gov.z, toeNow = toe_ft;
+-        const gEl = (I.hpGradeEl != null && isFinite(I.hpGradeEl)) ? I.hpGradeEl : null;
+-        const gMin = hpileGeoCapacity({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), d: I.hpD, bf: I.hpBf, embedTop: embedTop_ft, embedLen: Math.max(zMin - embedTop_ft, 0),
+-          smallGroup: !!I.hpSmallGroup, phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp, phiTipClay: I.hpPhiTipClay, scour: 0, nBasis: I.hpSptBasis });
+-        const ctrlZ = Math.max(zMin, toeNow);
+-        minPen = { items: mpItems, gov, zMin, toeNow, pass: toeNow >= zMin - 1e-9, gradeEl: gEl, tipElMin: gEl != null ? gEl - zMin : null, ctrlZ, tipElCtrl: gEl != null ? gEl - ctrlZ : null,
+-          RdrMin: gMin.Rn_comp, ctrlSrc: toeNow >= zMin ? "pile toe modelled (bearing / length estimate)" : "minimum penetration (" + gov.l + ")" };
+-      }
+-      // maximum driving resistance needed (10.7.8): the larger of R_ndr,EOD and the resistance to reach the minimum penetration
+-      const RdrMax = Math.max(RndrEOD != null ? RndrEOD : 0, minPen ? minPen.RdrMin : 0);
+-      const hammer = (RdrMax > 0 && Rh > 0) ? { Rh, Rreq: RdrMax, src: (minPen && minPen.RdrMin > (RndrEOD || 0)) ? "minimum penetration" : "R_ndr,EOD", pass: Rh >= RdrMax - 1e-9 } : null;
+-      // PDA-BC (2026-10-20): blow count from the wave equation at the driving criterion (blows/in), C10.7.8: above 10-15 bpi
+-      // use with care. Limit input (default 10); 0 = not entered.
+-      const bc = (I.hpBlowCount > 0) ? I.hpBlowCount : 0, bcLim = (I.hpBlowLimit > 0) ? I.hpBlowLimit : 10;
+-      const blow = bc > 0 ? { n: bc, lim: bcLim, limOutside: bcLim > 15, pass: bc <= bcLim + 1e-9 } : null;
+-      return { phiDa, Fy: FyD, lim, stressC, stressT, fsu, formula, RndrEOD, Rndr: drv.phiDyn ? drv.Rndr : null, hammer, minPen, RdrMax, blow,
+-        pass: (!stressC || stressC.pass) && (!stressT || stressT.pass) && (!hammer || hammer.pass) && (!minPen || minPen.pass) && (!blow || blow.pass) };
+-    })();
+@@ -5638,0 +5654,27 @@ function computeAll(I, opts = {}) {
++    // ---- PDA-IAB (2026-10-21): geotechnical axial resistance of the integral pile (Module 13, optional, I.iabGeoOn) ----
++    // The H-pile static engine of Module 01 (hpGeoAxial: side + tip, AASHTO LRFD 10th Ed. 10.7.3.8.6; phi per layer and
++    // component, Table 10.5.5.2.3-1; the PDA-M1 resistance determination method and the PDA-MP minimum penetration) on the
++    // soil profile, with the integral pile's own section (HP10X57 / HP12X84, box perimeter and plugged tip) and length:
++    // soil depths and the toe are measured below the pile head (bottom of the cap), as the Tier 2 p-y profile; toe = the
++    // required pile length L of 3.10.11.2 (max(L_geo, L_f + 5), the length Tier 2 models); no side resistance above
++    // iabGeoTop (pre-bored hole / sleeve, 0 = none) or above the Tier 2 scour depth. Demand: the factored gravity load per
++    // pile P_u above (Strength I). Uplift: resistance only (no uplift demand in this mode). Sent to the abutment calculator
++    // on pileResults (R_n, phi, R_n,up, phi_up). Off (the default): nothing is computed and no result changes.
++    if (I.iabGeoOn) {
++      const toeG = reqLength;
++      const topG = Math.min(Math.max(I.iabGeoTop || 0, 0), toeG);
++      const scourG = (I.iabTier2 && I.iabScourDepth > 0) ? I.iabScourDepth : 0;   // as the Tier 2 p-y profile and the soil drawing
++      const ga = hpGeoAxial(I, { d: sect.d, bf: sect.bf, toe_ft: toeG, embedTop_ft: topG, scour: scourG, STL: demand, xPhi: false, Fy: sect.Fy });
++      const comp_passG = ga.geo.phiRn_comp >= demand;
++      R.iab.geo = { ...ga.geo, STL: demand, Tu: 0, enableTension: false, comp_pass: comp_passG, up_pass: true, drv: ga.drv, drive: ga.drive,
++        pass: comp_passG && ga.drive.pass, toeG, topG, scourG, sectKey };
++      // as the H-pile path (F48): a cohesionless layer on the contact length or at the toe with no SPT N gets q_s = q_p = 0
++      const sl = (Array.isArray(I.soilLayers) ? I.soilLayers : []).slice().sort((a, b) => a.topDepth - b.topDepth), miss = [];
++      sl.forEach((ly, i) => {
++        const bot = (i + 1 < sl.length) ? sl[i + 1].topDepth : toeG;
++        const used = (Math.min(bot, toeG) - Math.max(ly.topDepth, topG) > 0) || ly === ga.geo.toeLayer;
++        if (used && !hpStaticIsClay(ly) && !(isFinite(ly.N60) && ly.N60 > 0)) miss.push("layer " + (i + 1) + " (" + (ly.staticType || ly.type || "sand") + ", top " + fmt(ly.topDepth, 1) + " ft)");
++      });
++      if (miss.length) (comp_passG ? inputNotes : inputErrors).push("Integral pile, geotechnical axial resistance (Module 13): enter SPT " + (I.hpSptBasis === "N160" ? "N₁,₆₀" : "N₆₀") + " for " + miss.join(", ") + " (Soil profile tab, static axial capacity). A cohesionless layer without N gets no side or tip resistance (qₛ = qₚ = 0), so R_n " + (ga.geo.phiRn_comp > 0 ? "omits that layer." : "is 0."));
++    }
++
+@@ -5774 +5816 @@ function computeAll(I, opts = {}) {
+-    R.allPass = R.iab ? R.iab.pass : false;
++    R.allPass = R.iab ? R.iab.pass && (!R.iab.geo || R.iab.geo.pass) : false;   // PDA-IAB: Module 13 when on
+@@ -6341 +6383 @@ function checkNoFor(name, pileType) {
+-  if (pileType === "iab") return /Tier 2/.test(n) ? "12" : "01";
++  if (pileType === "iab") return /Tier 2/.test(n) ? "12" : /^Geotech/.test(n) ? "13" : "01";   // PDA-IAB: 13
+@@ -6365 +6407 @@ function checkNoFor(name, pileType) {
+-const MODULE_ORDER = { "G": 5, "01": 10, "02": 20, "03": 30, "04": 40, "05": 50, "05b": 55, "06": 60, "07": 70, "08": 80, "09": 90, "10": 100, "11": 110, "12": 120 };
++const MODULE_ORDER = { "G": 5, "01": 10, "02": 20, "03": 30, "04": 40, "05": 50, "05b": 55, "06": 60, "07": 70, "08": 80, "09": 90, "10": 100, "11": 110, "12": 120, "13": 130 };   // PDA-IAB: 13 = integral pile, geotechnical axial
+@@ -7631,0 +7674,112 @@ function GfxRptFig({ caption, children }) {
++/* PDA-IAB (2026-10-21): the H-pile "Resistance determination method" inputs (PDA-M1 method and owner rule, PDA-DR drivability,
++   PDA-BC blow count, PDA-MP minimum penetration), moved out of the H-pile Pile Section panel unchanged so the integral-abutment
++   panel shows the same inputs (same saved keys). iab: labels give the integral datum (bottom of the cap). UI only. */
++function hpResMethodBlock(I, set, r, iab) {
++  return (/*#__PURE__*/React.createElement("div", { className: "col-span-2 rounded-sm border border-slate-200 p-2" },
++    /*#__PURE__*/React.createElement("div", { className: "text-[11px] text-[var(--blueprint)] font-medium mb-1" }, "Resistance determination method (Table 10.5.5.2.3-1)"),
++    /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[10.5px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white", value: I.hpResMethod || "static", onChange: e => set('hpResMethod', e.target.value) },
++      Object.keys(HP_DRIVE_METHODS).map(k => /*#__PURE__*/React.createElement("option", { key: k, value: k }, (HP_DRIVE_METHODS[k].phi ? "\u03c6dyn " + HP_DRIVE_METHODS[k].phi.toFixed(2) + " \u2014 " : "") + HP_DRIVE_METHODS[k].label))),
++    /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap items-center gap-1 mt-1.5 text-[10px] font-mono-tech" },
++      /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Owner rule:"),
++      [["aashto", "AASHTO", null], ["massdot", "MassDOT", null], ["ridot", "RIDOT", "slt_dyn"], ["ctdot", "CTDOT", "dyn_qc"]].map(([k, l, mth]) => /*#__PURE__*/React.createElement("button", { key: k, type: "button",
++        title: k === "ridot" ? "RIDOT BDM 10.5.6: dynamic testing on every pile-driving project (\u2265 1 production pile per substructure, \u2265 2 %) and a static load test per site condition \u2192 \u03c6dyn 0.80 (0.65 when the static load test is waived)." : k === "ctdot" ? "CTDOT BDM: test piles with dynamic monitoring; Ultimate Pile Capacity = factored load/\u03c6 + scour + downdrag (\u03c6 and the scour / downdrag resistances from the geotechnical report). Preset \u03c6dyn 0.65 \u2014 confirm." : k === "massdot" ? "MassDOT Bridge Manual: no rule beyond AASHTO for the driving resistance." : "AASHTO LRFD 10th Ed.",
++        onClick: () => { set('hpDriveOwner', k); if (mth) set('hpResMethod', mth); },
++        className: "px-2 py-0.5 rounded-sm border " + ((I.hpDriveOwner || "aashto") === k ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300") }, l))),
++    (I.hpResMethod && I.hpResMethod !== "static") && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mt-1.5" },
++      /*#__PURE__*/React.createElement(Field, { label: "Scour side bias", sub: "on the lost side resistance (C10.7.3.6)", value: I.hpScourBias != null ? I.hpScourBias : 1.0, step: 0.05, onChange: v => set('hpScourBias', (isFinite(v) && v > 0) ? v : 1.0) }),
++      (I.hpDriveOwner === "ctdot") && /*#__PURE__*/React.createElement(Field, { label: "Downdrag side resistance", sub: "above the neutral plane (CTDOT)", unit: "kip", value: I.hpRsDD || 0, onChange: v => set('hpRsDD', (isFinite(v) && v > 0) ? v : 0) }),
++      /*#__PURE__*/React.createElement(Field, { label: "Set-up factor f", sub: "R restrike / R EOD (10.7.3.4)", value: I.hpSetupFactor != null ? I.hpSetupFactor : 1.0, step: 0.05, onChange: v => set('hpSetupFactor', (isFinite(v) && v > 0) ? v : 1.0) }),
++      /*#__PURE__*/React.createElement(Field, { label: "Hammer capability", sub: "max driving resistance (WEAP); 0 = not entered", unit: "kip", value: I.hpHammerR || 0, onChange: v => set('hpHammerR', (isFinite(v) && v > 0) ? v : 0) })),
++    // PDA-DR (2026-10-20): driving stresses from a wave equation analysis (10.7.8)
++    /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mt-1.5" },
++      /*#__PURE__*/React.createElement(Field, { label: "\u03c3dr compression", sub: "WEAP max; 0 = not entered", unit: "ksi", value: I.hpSigDrC || 0, onChange: v => set('hpSigDrC', (isFinite(v) && v > 0) ? v : 0) }),
++      /*#__PURE__*/React.createElement(Field, { label: "\u03c3dr tension", sub: "WEAP max; 0 = not entered", unit: "ksi", value: I.hpSigDrT || 0, onChange: v => set('hpSigDrT', (isFinite(v) && v > 0) ? v : 0) }),
++      /*#__PURE__*/React.createElement(Field, { label: "\u03c6da", sub: "driving, 6.5.4.2", value: I.hpPhiDa != null ? I.hpPhiDa : 1.0, onChange: v => set('hpPhiDa', (isFinite(v) && v > 0) ? v : 1.0) }),
++      // PDA-BC (2026-10-20): blow count from the wave equation, C10.7.8
++      /*#__PURE__*/React.createElement(Field, { label: "Blow count", sub: "WEAP at the criterion; 0 = not entered", unit: "bl/in", value: I.hpBlowCount || 0, onChange: v => set('hpBlowCount', (isFinite(v) && v > 0) ? v : 0) }),
++      /*#__PURE__*/React.createElement(Field, { label: "Blow-count limit", sub: "C10.7.8: 10\u201315", unit: "bl/in", value: I.hpBlowLimit != null ? I.hpBlowLimit : 10, onChange: v => set('hpBlowLimit', (isFinite(v) && v > 0) ? v : 10) }),
++      /*#__PURE__*/React.createElement(Field, { label: iab ? "Bottom-of-cap elevation" : "Ground elevation", sub: iab ? "soil datum, for tip elevations (blank = depths)" : "for tip elevations (blank = depths)", unit: "ft", value: I.hpGradeEl != null ? I.hpGradeEl : "", onChange: v => set('hpGradeEl', isFinite(v) ? v : null) })),
++    // PDA-MP (2026-10-20): minimum penetration requirements, 10.7.6 (depth below grade, ft; 0 = not applicable)
++    /*#__PURE__*/React.createElement("div", { className: "mt-1.5" },
++      /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Minimum penetration requirements (AASHTO 10.7.6), depth below " + (iab ? "the bottom of the cap" : "grade") + ", ft (0 = n/a)"),
++      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-4 gap-1.5" },
++        [["settle", "Settlement"], ["defl", "Lat. deflection"], ["uplift", "Uplift"], ["drag", "Below drag soil"], ["scour", "Below scour"], ["fixity", "Lat. fixity"], ["ee", "Extreme event"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
++          /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: (I.hpMinPen && I.hpMinPen[k]) || 0,
++            onChange: e => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { [k]: Math.max(parseFloat(e.target.value) || 0, 0) })) }))),
++        !iab && (r.buckling && r.buckling.lateralFixity > 0) && /*#__PURE__*/React.createElement("button", { type: "button", className: "text-[9px] underline text-[var(--blueprint2)] self-end text-left",
++          title: "Depth to fixity from the lateral analysis (Module 02, moment zero crossing below M_max)",
++          onClick: () => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { fixity: +(+r.buckling.lateralFixity).toFixed(1) })) }, "fixity = z_fix " + fmt(r.buckling.lateralFixity, 1) + " ft (Module 02)"))))
++  );
++}
++/* PDA-IAB (2026-10-21): the worked body of the H-pile Module 01 (geotechnical axial, static), moved out of the module unchanged so
++   that Module 13 (integral pile) shows the same work. o: section d, b_f (in), the demand symbol and its decimals, the input panel
++   named in the driving-stress note, upRef = show the uplift resistance without an uplift demand. UI only. */
++function hpGeoModuleBody(I, g, o) {
++  return /*#__PURE__*/React.createElement("div", null,
++    /*#__PURE__*/React.createElement(Narr, null, "The nominal geotechnical axial resistance is the sum of side (skin) resistance developed along the embedded shaft and tip (end-bearing) resistance at the toe: ", /*#__PURE__*/React.createElement(RTex, { tex: "R_n=R_s+R_p" }), ". Side resistance is integrated layer by layer using the box perimeter of the H-section; tip resistance uses the plugged box area. Cohesionless layers use the Meyerhof SPT-method with the nondisplacement (H-pile) unit side resistance; cohesive layers use the \u03b1-method. Resistance factors are drawn from Table 10.5.5.2.3-1."),
++    /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "H-pile surface geometry", code: "AASHTO C10.7.3.8.6f \u00b7 box perimeter / area" }),
++    /*#__PURE__*/React.createElement(Calc, { label: "Box perimeter", eq: `p_{box}=2(d+b_f)=2(${fmt(o.d,2)}+${fmt(o.bf,2)})/12=${fmt(g.boxPerim_ft,3)}\\ \\text{ft}`, note: "side area per ft depth" }),
++    /*#__PURE__*/React.createElement(Calc, { label: "Box tip area", eq: `A_p=d\\,b_f=${fmt(o.d,2)}\\times ${fmt(o.bf,2)}/144=${fmt(g.boxArea_ft2,3)}\\ \\text{ft}^2`, note: "plugged section" }),
++    /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Side resistance by layer", code: "AASHTO 10.7.3.8.6a-4 \u00b7 R_s=q_sA_s" }),
++    /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-2" },
++      /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400 text-left" },
++        ["Layer", "z (ft)", "method", g.nCorr ? "\u03c3'v mid (ksf) \u00b7 C\u0304_N \u00d7 N60 = N1,60" : "N1,60", "qs (ksf)", "As (ft\u00b2)", "Rs (kip)", "\u03c6stat"].map(h => /*#__PURE__*/React.createElement("th", { key: h, className: "font-normal pb-1 pr-2" }, h)))),
++      /*#__PURE__*/React.createElement("tbody", null,
++        g.rows.map((row, k) => /*#__PURE__*/React.createElement("tr", { key: k, style: { borderTop: "1px solid #eef2f6" } },
++          /*#__PURE__*/React.createElement("td", { className: "pr-2 py-0.5" }, row.type),
++          /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.zTop, 1), "\u2013", fmt(row.zBot, 1)),
++          /*#__PURE__*/React.createElement("td", { className: "pr-2 text-slate-500" }, row.type === "clay" ? "\u03b1\u00b7Su" : "N1,60/50"),
++          /*#__PURE__*/React.createElement("td", { className: "pr-2" }, row.spt ? (g.nCorr ? fmt(row.spt.sv, 2) + " \u00b7 " + fmt(row.spt.CN, 3) + " \u00d7 " + fmt(row.spt.N, 0) + " = " + fmt(row.spt.N160, 1) : fmt(row.spt.N160, 1)) : "\u2014"),   // PDA-D5
++          /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.qs, 3)),
++          /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.As, 1)),
++          /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.Rs_layer, 1)),
++          /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.phi_stat, 2))))),),
++    g.zScour > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Design scour", eq: `z_{scour}=${fmt(g.zScour, 1)}\\ \\text{ft below ${o.upRef ? "the cap" : "grade"}: no side resistance above; } D_b \\text{ counted below}`, cite: "10.7.3.6" }),   // PDA-D12
++    g.nCorr && (() => { const r0 = g.rows.find(x => x.spt); return r0 ? /*#__PURE__*/React.createElement(Calc, { label: "SPT overburden correction (first sand row)", eq: `C_N(z)=0.77\\log_{10}\\dfrac{40}{\\sigma'_v(z)}\\le 2.0,\\ \\sigma'_v=\\sum\\gamma'_ih_i;\\ \\text{mid-depth: } C_N(${fmt(r0.spt.zMid, 2)})=0.77\\log_{10}\\dfrac{40}{${fmt(r0.spt.sv, 3)}}=${fmt(r0.spt.CNmid, 3)};\\ \\bar C_N=\\dfrac{1}{n}\\sum_{k=1}^{n}C_N(z_k)=${fmt(r0.spt.CN, 3)}\\ (n=${r0.spt.nSl});\\ N_{1,60}=\\bar C_NN_{60}=${fmt(r0.spt.CN, 3)}(${fmt(r0.spt.N, 0)})=${fmt(r0.spt.N160, 2)}`, note: "C\u0304_N = average of C_N at the mid-points of n equal slices (\u2264 1 ft) of each layer's contact length (table above); \u03b3 per layer (effective below the water table), top layer to grade.", cite: "Eqs. 10.4.6.2.4-1, -3" }) : null; })(),
++    /*#__PURE__*/React.createElement(Calc, { label: "Total side resistance", eq: `R_s=\\sum q_{s,i}A_{s,i}=${fmt(g.Rs_comp,1)}\\ \\text{kip}` }),
++    /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-1 leading-snug" }, "Sand/silt: ", /*#__PURE__*/React.createElement(RTex, { tex: "q_s=\\bar{N}_{160}/50" }), " (Eq. 10.7.3.8.6g-3, nondisplacement H-pile; N", /*#__PURE__*/React.createElement("sub", null, "1,60"), g.nCorr ? " = C_N N60 from the entered N60, 10.4.6.2.4" : " entered", "). Clay: ", /*#__PURE__*/React.createElement(RTex, { tex: "q_s=\\alpha S_u" }), " (Eq. 10.7.3.8.6b-1)."),
++    /*#__PURE__*/React.createElement(RptHeading, { n: "3", title: "Tip resistance", code: g.tipIsClay ? "AASHTO 10.7.3.8.6e" : "AASHTO 10.7.3.8.6g" }),
++    g.tipIsClay
++      ? /*#__PURE__*/React.createElement(Calc, { label: "Unit tip (clay)", eq: `q_p=9S_u=${fmt(g.qp,2)}\\ \\text{ksf}`, cite: "Eq. 10.7.3.8.6e-1" })
++      : /*#__PURE__*/React.createElement("div", null,
++          g.tipSpt && g.nCorr && /*#__PURE__*/React.createElement(Calc, { label: "N1,60 at the tip", eq: `\\sigma'_v(${fmt(g.tipSpt.z, 1)})=${fmt(g.tipSpt.sv, 3)}\\ \\text{ksf},\\ C_N=0.77\\log_{10}\\dfrac{40}{${fmt(g.tipSpt.sv, 3)}}=${fmt(g.tipSpt.CN, 3)},\\ N_{1,60}=${fmt(g.tipSpt.CN, 3)}(${fmt(g.tipSpt.N, 0)})=${fmt(g.tipSpt.N160, 2)}`, cite: "Eqs. 10.4.6.2.4-1, -3" }),   // PDA-D5
++          /*#__PURE__*/React.createElement(Calc, { label: "Unit tip (sand)", eq: g.tipSpt ? `q_p=\\dfrac{0.8\\,N_{1,60}D_b}{D}=\\dfrac{0.8(${fmt(g.tipSpt.N160, 2)})(${fmt(g.Db, 2)})}{${fmt(g.tipSpt.D, 3)}}=${fmt(g.tipSpt.qpRaw, 2)}\\le q_L` : `q_p=\\dfrac{0.8\\,N_{160}D_b}{D}\\le q_L`, result: `=${fmt(g.qp,2)}\\ \\text{ksf}`, cite: "Eq. 10.7.3.8.6g-1" }),
++          g.qL != null && /*#__PURE__*/React.createElement(Calc, { label: "Limiting tip", eq: g.tipSpt ? `q_L=${g.toeLayer && g.toeLayer.staticType === "silt" ? 6 : 8}N_{1,60}=${fmt(g.qL,1)}\\ \\text{ksf},\\quad D_b=${fmt(g.Db,2)}\\ \\text{ft}` : `q_L=${fmt(g.qL,0)}\\ \\text{ksf},\\quad D_b=${fmt(g.Db,1)}\\ \\text{ft}`, note: "8\u00d7N1,60 sand / 6\u00d7N1,60 silt" + (g.zScour > 0 ? "; D_b below the design scour depth" : "") })),
++    /*#__PURE__*/React.createElement(Calc, { label: "Tip resistance", eq: `R_p=q_pA_p=${fmt(g.qp,2)}\\times ${fmt(g.boxArea_ft2,3)}=${fmt(g.Rp,1)}\\ \\text{kip}`, cite: "Eq. 10.7.3.8.6a-3" }),
++    /*#__PURE__*/React.createElement(RptHeading, { n: "4", title: "Factored resistance & check", code: "AASHTO 10.7.3.8.6a" }),
++    /*#__PURE__*/React.createElement(Calc, { label: "Nominal resistance", eq: `R_n=R_s+R_p=${fmt(g.Rs_comp,1)}+${fmt(g.Rp,1)}=${fmt(g.Rn_comp,1)}\\ \\text{kip}` }),
++    /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}`, note: "\u03c6=" + fmt(g.PHI.sand_stat, 2) + " sand / " + fmt(g.PHI.clay_stat, 2) + " clay side / " + fmt(g.PHI.clay_tip, 2) + " clay tip" + (g.grpFac < 1 ? ", incl. \u00d70.80 small-group" : "") + "; tip \u03c6 used " + fmt(g.phi_tip_stat, 2) }),
++    /*#__PURE__*/React.createElement(RptCheck, { pass: g.comp_pass, eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}\\ ${g.comp_pass?"\\ge":"<"}\\ ${o.dl}=${fmt(g.STL,o.dlDec)}\\ \\text{kip}` }),
++    // PDA-M1 (2026-10-20): field method -> required nominal bearing and driving resistance
++    g.drv && g.drv.phiDyn && /*#__PURE__*/React.createElement("div", null,
++      /*#__PURE__*/React.createElement(RptHeading, { n: "4a", title: "Required driving resistance", code: "AASHTO 10.5.5.2.3 \u00b7 10.7.3.6 \u00b7 C10.7.3.3" }),
++      /*#__PURE__*/React.createElement(Narr, null, "Method: ", g.drv.label, ". The number of piles follows from \u03c6dyn of the field method (C10.5.5.2.3); the static check above is then the pile-length estimate of Eq. C10.7.3.3-1 (\u03c6dyn R_n = \u03c6stat R_n,stat, with R_n = P_u/\u03c6dyn)."),
++      /*#__PURE__*/React.createElement(Calc, { label: "\u03c6dyn", eq: g.drv.xPhi ? `\\phi_{dyn}=1.00\\ \\text{(Extreme Event, 10.5.5.3)}` : `\\phi_{dyn}=${fmt(g.drv.phiTab, 2)}${g.drv.grpFac < 1 ? `\\times 0.80=${fmt(g.drv.phiDyn, 3)}\\ \\text{(small group)}` : ""}`, cite: "Table 10.5.5.2.3-1" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Required nominal bearing", eq: `R_n=\\dfrac{P_u}{\\phi_{dyn}}=\\dfrac{${fmt(g.STL, 1)}}{${fmt(g.drv.phiDyn, 3)}}=${fmt(g.drv.Rn_req, 1)}\\ \\text{kip}` }),
++      g.drv.Rs_scour > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Side resistance lost to scour", eq: `R_{s,scour}=\\lambda_{bias}\\,(R_{s,no\\,scour}-R_s)=${fmt(g.drv.bias, 2)}(${fmt(g.drv.Rs_scour + g.Rs_comp, 1)}-${fmt(g.Rs_comp, 1)})=${fmt(g.drv.Rs_scour_b, 1)}\\ \\text{kip}`, note: "static analysis, unfactored, times the method bias (input)", cite: "10.7.3.6, C10.7.3.6" }),
++      g.drv.Rdd > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Downdrag side resistance (CTDOT)", eq: `R_{dd}=${fmt(g.drv.Rdd, 1)}\\ \\text{kip}`, note: "CTDOT BDM: Ultimate Pile Capacity = factored load/\u03c6 + scour + downdrag. AASHTO 10th Ed. 10.7.3.7 alone would take the drag load as zero at the geotechnical strength limit state.", cite: "CTDOT BDM" }),
++      /*#__PURE__*/React.createElement(RptCheck, { pass: true, eq: `R_{ndr}=R_n+R_{s,scour}${g.drv.Rdd > 0 ? "+R_{dd}" : ""}=${fmt(g.drv.Rn_req, 1)}+${fmt(g.drv.Rs_scour_b, 1)}${g.drv.Rdd > 0 ? "+" + fmt(g.drv.Rdd, 1) : ""}=${fmt(g.drv.Rndr, 1)}\\ \\text{kip (required nominal driving resistance)}` })),
++    // PDA-DR (2026-10-20): drivability, 10.7.8; set-up / relaxation, 10.7.3.4
++    g.drive && /*#__PURE__*/React.createElement("div", null,
++      /*#__PURE__*/React.createElement(RptHeading, { n: "4b", title: "Drivability", code: "AASHTO 10.7.8 \u00b7 10.7.3.4 \u00b7 \u03c6da 6.5.4.2" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Driving stress limit (steel)", eq: `\\sigma_{dr}\\le 0.9\\,\\phi_{da}f_y=0.9(${fmt(g.drive.phiDa, 2)})(${fmt(g.drive.Fy, 0)})=${fmt(g.drive.lim, 1)}\\ \\text{ksi}`, cite: "Eq. 10.7.8-1; \u03c6da = 1.00 (6.5.4.2)" }),
++      g.drive.stressC ? /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.stressC.pass, eq: `\\sigma_{dr,c}=${fmt(g.drive.stressC.s, 1)}\\ ${g.drive.stressC.pass ? "\\le" : ">"}\\ ${fmt(g.drive.lim, 1)}\\ \\text{ksi (wave equation, compression)}` })
++        : /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-700 mb-1" }, "Driving stresses not entered. 10.7.8 requires a wave equation analysis; enter its maximum compressive (and tensile) stress in the " + o.panel + ". The 10th Ed. gives no simplified estimate, and the tool does not compute one."),
++      g.drive.stressT && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.stressT.pass, eq: `\\sigma_{dr,t}=${fmt(g.drive.stressT.s, 1)}\\ ${g.drive.stressT.pass ? "\\le" : ">"}\\ ${fmt(g.drive.lim, 1)}\\ \\text{ksi (wave equation, tension)}` }),
++      g.drive.RndrEOD != null && /*#__PURE__*/React.createElement(Calc, { label: "Set-up / relaxation", eq: g.drive.formula ? `R_{ndr,EOD}=R_{ndr}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (driving formula: EOD method, \\phi\\text{ assumes set-up})}` : `f=\\dfrac{R_{restrike}}{R_{EOD}}=${fmt(g.drive.fsu, 2)};\\quad R_{ndr,EOD}=\\dfrac{R_{ndr}}{f}=\\dfrac{${fmt(g.drive.Rndr, 1)}}{${fmt(g.drive.fsu, 2)}}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip}`, note: g.drive.formula ? "C10.7.3.4.3." : (g.drive.fsu > 1 ? "Set-up: R_ndr to be verified by restrike (10.7.3.4.3)." : g.drive.fsu < 1 ? "Relaxation: restrike required (10.7.3.4.2)." : "No set-up or relaxation (f = 1.0)."), cite: "10.7.3.4" }),
++      // PDA-MP (2026-10-20): minimum penetration, 10.7.6
++      g.drive.minPen && /*#__PURE__*/React.createElement(Calc, { label: "Minimum penetration", eq: `z_{min}=\\max(${g.drive.minPen.items.map(x => fmt(x.z, 1)).join(",\\,")})=${fmt(g.drive.minPen.zMin, 1)}\\ \\text{ft}${g.drive.minPen.tipElMin != null ? `\\ (\\text{El. }${fmt(g.drive.minPen.gradeEl, 1)}-${fmt(g.drive.minPen.zMin, 1)}=${fmt(g.drive.minPen.tipElMin, 1)})` : ""}`, note: "Requirements entered (ft below " + (o.upRef ? "the cap" : "grade") + "): " + g.drive.minPen.items.map(x => x.l + " " + fmt(x.z, 1)).join("; ") + ". Governs: " + g.drive.minPen.gov.l + ".", cite: "10.7.6" }),
++      g.drive.minPen && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.minPen.pass, eq: `\\text{pile toe }${fmt(g.drive.minPen.toeNow, 1)}\\ ${g.drive.minPen.pass ? "\\ge" : "<"}\\ z_{min}=${fmt(g.drive.minPen.zMin, 1)}\\ \\text{ft};\\ \\text{controlling tip }${fmt(g.drive.minPen.ctrlZ, 1)}\\ \\text{ft}${g.drive.minPen.tipElCtrl != null ? `\\ (\\text{El. }${fmt(g.drive.minPen.tipElCtrl, 1)})` : ""}` }),
++      g.drive.minPen && /*#__PURE__*/React.createElement(Calc, { label: "Driving resistance to reach z_min", eq: `R_{n,stat}(z_{min})=${fmt(g.drive.minPen.RdrMin, 1)}\\ \\text{kip}`, note: "Static analysis (Module 01 method) to z_min with all soil present (scourable and drag-zone soil is driven through), unfactored.", cite: "10.7.8" }),
++      g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ \\max(R_{ndr,EOD},\\,R_{n,stat}(z_{min}))=${fmt(g.drive.hammer.Rreq, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` }),
++      // PDA-BC (2026-10-20): blow count, C10.7.8
++      g.drive.blow && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.blow.pass, eq: `N_{blow}=${fmt(g.drive.blow.n, 1)}\\ ${g.drive.blow.pass ? "\\le" : ">"}\\ ${fmt(g.drive.blow.lim, 1)}\\ \\text{blows/in (wave equation at the driving criterion; C10.7.8: 10\\text{\\textendash}15)}${g.drive.blow.limOutside ? "\\ \\text{limit above the C10.7.8 range}" : ""}` })),
++    (g.enableTension || o.upRef) && /*#__PURE__*/React.createElement("div", null,   // PDA-IAB: o.upRef = the integral pile (resistance, no demand)
++      /*#__PURE__*/React.createElement(RptHeading, { n: "5", title: "Uplift resistance", code: "\u03c6up=" + fmt(g.PHI.sand_up, 2) + " (Table 10.5.5.2.3-1)" }),
++      /*#__PURE__*/React.createElement(Narr, null, "In tension the tip is not credited; uplift is resisted by side resistance only, with a lower resistance factor reflecting the reduced reliability of side resistance in uplift."),
++      o.upRef && /*#__PURE__*/React.createElement(Calc, { label: "Nominal uplift", eq: `R_{n,up}=R_s=${fmt(g.Rn_up,1)}\\ \\text{kip}`, cite: "skin only" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Factored uplift", eq: `\\phi_{up}R_s=${fmt(g.phiRn_up,1)}\\ \\text{kip}`, cite: "skin only" }),
++      g.enableTension && /*#__PURE__*/React.createElement(RptCheck, { pass: g.up_pass, eq: `\\phi_{up}R_s=${fmt(g.phiRn_up,1)}\\ \\text{kip}\\ ${g.up_pass?"\\ge":"<"}\\ T_u=${fmt(g.Tu,0)}\\ \\text{kip}` })),
++    /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-700 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1 leading-snug mt-1" },
++      "\u26a0 Static analysis for length/capacity estimate. Field-verify nominal resistance via dynamic testing / driving criteria (\u03c6dyn, Table 10.5.5.2.3-1). Box-perimeter and plugged-tip assumptions per C10.7.3.8.6f \u2014 confirm plugging suits the section and soil. Sanity-check aid; independent PE review required."));
++}
+@@ -7635 +7789 @@ function SoilProfilePanel({ I, set, r, pyRes }) {
+-    e(Panel, { title: "Soil profile", sub: I.pileType === "iab" ? "layers for the Tier 2 nonlinear p-y check" : "layers used by the p-y analysis" + (I.pileType === "hpile" ? " and the static axial capacity" : "") },
++    e(Panel, { title: "Soil profile", sub: I.pileType === "iab" ? ((I.iabTier2 && I.iabNlSoilSource === "layered") ? "layers for the Tier 2 nonlinear p-y check" : "") + ((I.iabTier2 && I.iabNlSoilSource === "layered") && I.iabGeoOn ? " and " : "") + (I.iabGeoOn ? "layers for the geotechnical axial resistance (Module 13)" : "") + "; depths below the bottom of the cap" : "layers used by the p-y analysis" + (I.pileType === "hpile" ? " and the static axial capacity" : "") },
+@@ -9006,0 +9161,3 @@ const DEFAULT_INPUTS = {
++  // PDA-IAB (2026-10-21): geotechnical axial resistance of the integral pile (Module 13; optional saved fields, missing -> these)
++  iabGeoOn: false,          // compute R_n, R_n,up by the H-pile static engine on the soil profile (sent to the abutment calculator)
++  iabGeoTop: 0,             // depth below the bottom of the cap with no side resistance (pre-bored hole / sleeve), ft
+@@ -9802,0 +9960 @@ function rptModFor(name, pileType) {
++    if (/^Geotech/.test(L)) return ["13"];   // PDA-IAB
+@@ -10356,0 +10515,4 @@ function PrintReport({
++    if (b.geo) {   // PDA-IAB: Module 13
++      rows.push(["Geotechnical axial (tip + skin), integral pile", b.geo.phiRn_comp, "kip", b.geo.STL, b.geo.comp_pass, "AASHTO 10.7.3.8.6"]);
++      if (b.geo.drive && b.geo.drive.minPen) rows.push(["Geotechnical minimum penetration (toe vs z_min)", b.geo.drive.minPen.toeNow, "ft", b.geo.drive.minPen.zMin, b.geo.drive.minPen.pass, "AASHTO 10.7.6"]);
++    }
+@@ -10816 +10978,30 @@ function PrintReport({
+-              b.tier2.checkFlood && /*#__PURE__*/React.createElement(RptRow, { label: "Scour check flood: Pu \u2264 1.0\u00b7Pn (KL/r \u2264 120)", val: fmt(b.tier2.checkFlood.Pu, 1) + " \u2264 " + fmt(b.tier2.checkFlood.Pr, 1) + " kip", pass: b.tier2.checkFlood.pass })) : null);   // PDA-D2
++              b.tier2.checkFlood && /*#__PURE__*/React.createElement(RptRow, { label: "Scour check flood: Pu \u2264 1.0\u00b7Pn (KL/r \u2264 120)", val: fmt(b.tier2.checkFlood.Pu, 1) + " \u2264 " + fmt(b.tier2.checkFlood.Pr, 1) + " kip", pass: b.tier2.checkFlood.pass })) : null,
++            // PDA-IAB (2026-10-21): Module 13, geotechnical axial resistance of the integral pile (the Module 01 H-pile engine)
++            b.geo ? (() => { const g = b.geo, phiB = g.Rn_comp > 0 ? g.phiRn_comp / g.Rn_comp : null, phiU = g.Rn_up > 0 ? g.phiRn_up / g.Rn_up : null;
++              return /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "13", title: "Integral Pile — Geotechnical Axial Resistance", code: "AASHTO 10.7.3.8.6 · Table 10.5.5.2.3-1" }),
++        line("Section " + s.label + " (d = " + fmt(s.d, 2) + " in, bf = " + fmt(s.bf, 2) + " in); depths below the bottom of the pile cap (soil profile datum); toe at the required pile length L = " + fmt(g.toeG, 1) + " ft" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + "; demand Pu = " + fmt(g.STL, 2) + " kip per pile (Strength I)."),
++        /*#__PURE__*/React.createElement(RptSee, { items: [{ txt: "Pu", mods: ["01c"] }, { txt: "L", mods: ["01d"] }] }),
++        line("Box perimeter As = 2(d+bf) = " + fmt(g.boxPerim_ft, 3) + " ft/ft · box tip area Ap = " + fmt(g.boxArea_ft2, 3) + " ft²"),
++        /*#__PURE__*/React.createElement("table", { style: { borderCollapse: "collapse", width: "100%", margin: "4px 0" } },
++          /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Layer", "z (ft)", g.nCorr ? "σ'v mid (ksf) · C̄_N × N60 = N1,60" : "N1,60", "qs (ksf)", "As (ft²)", "Rs (kip)", "φ"].map((h, hi) => /*#__PURE__*/React.createElement("td", { key: hi, style: cellK }, h)))),
++          /*#__PURE__*/React.createElement("tbody", null, g.rows.map((row, k) => /*#__PURE__*/React.createElement("tr", { key: k },
++            /*#__PURE__*/React.createElement("td", { style: cell }, row.type),
++            /*#__PURE__*/React.createElement("td", { style: cell }, fmt(row.zTop, 1) + "–" + fmt(row.zBot, 1)),
++            /*#__PURE__*/React.createElement("td", { style: cell }, row.spt ? (g.nCorr ? fmt(row.spt.sv, 2) + " · " + fmt(row.spt.CN, 3) + " × " + fmt(row.spt.N, 0) + " = " + fmt(row.spt.N160, 1) : fmt(row.spt.N160, 1)) : "—"),   // PDA-D5
++            /*#__PURE__*/React.createElement("td", { style: cell }, fmt(row.qs, 3)),
++            /*#__PURE__*/React.createElement("td", { style: cell }, fmt(row.As, 1)),
++            /*#__PURE__*/React.createElement("td", { style: cell }, fmt(row.Rs_layer, 1)),
++            /*#__PURE__*/React.createElement("td", { style: cell }, fmt(row.phi_stat, 2))))) ),
++        g.zScour > 0 && line("Design scour (Tier 2) " + fmt(g.zScour, 1) + " ft below the cap: no side resistance above it; tip penetration Db counted below it (AASHTO LRFD 10th Ed. 10.7.3.6)."),   // PDA-D12
++        line(g.nCorr ? "SPT basis: N60 entered; N1,60 = C̄_N·N60, C_N = 0.77·log10(40/σ'v) ≤ 2.0, σ'v = Σγ'h; C̄_N = average over ≤ 1 ft slices of each layer's contact length; tip: C_N at the toe (10.4.6.2.4)." : "SPT basis: N1,60 entered (no correction applied)."),   // PDA-D5
++        g.tipSpt && line("Tip N1,60 = " + fmt(g.tipSpt.CN, 3) + " × " + fmt(g.tipSpt.N, 0) + " = " + fmt(g.tipSpt.N160, 2) + " (σ'v = " + fmt(g.tipSpt.sv, 3) + " ksf at " + fmt(g.tipSpt.z, 1) + " ft); qp = 0.8·N1,60·Db/D = 0.8(" + fmt(g.tipSpt.N160, 2) + ")(" + fmt(g.Db, 2) + ")/" + fmt(g.tipSpt.D, 3) + " = " + fmt(g.tipSpt.qpRaw, 2) + " ksf ≤ qL = " + fmt(g.qL, 1) + " ksf"),
++        line("Tip (" + g.tipModel + "): qp = " + fmt(g.qp, 2) + " ksf → Rp = " + fmt(g.Rp, 1) + " kip, φ tip = " + fmt(g.phi_tip_stat, 2) + (g.tipIsClay ? " (clay tip, Table 10.5.5.2.3-1)" : "")),
++        line("ΣRs = " + fmt(g.Rs_comp, 1) + " kip · Rn = Rs + Rp = " + fmt(g.Rn_comp, 1) + " kip"),
++        /*#__PURE__*/React.createElement(RptRow, { label: "Compression: φstat·Rn ≥ Pu" + (g.drv && g.drv.phiDyn ? " (pile-length estimate, Eq. C10.7.3.3-1)" : ""), val: fmt(g.phiRn_comp, 1) + " " + (g.comp_pass ? "≥" : "<") + " " + fmt(g.STL, 1) + " kip", pass: g.comp_pass }),
++        // PDA-M1: required driving resistance
++        g.drive && line("Drivability (10.7.8): σdr ≤ 0.9·φda·fy = 0.9 × " + fmt(g.drive.phiDa, 2) + " × " + fmt(g.drive.Fy, 0) + " = " + fmt(g.drive.lim, 1) + " ksi" + (g.drive.stressC ? "; WEAP compression " + fmt(g.drive.stressC.s, 1) + " ksi " + (g.drive.stressC.pass ? "OK" : "NG") : "; compression stress not entered") + (g.drive.stressT ? "; tension " + fmt(g.drive.stressT.s, 1) + " ksi " + (g.drive.stressT.pass ? "OK" : "NG") : "") + (g.drive.RndrEOD != null ? "; EOD criterion R_ndr,EOD = " + (g.drive.formula ? "R_ndr (driving formula, EOD) = " : "R_ndr/f = " + fmt(g.drive.Rndr, 1) + "/" + fmt(g.drive.fsu, 2) + " = ") + fmt(g.drive.RndrEOD, 1) + " kip (10.7.3.4)" + "" : "") + (g.drive.hammer ? "; hammer " + fmt(g.drive.hammer.Rh, 1) + " kip " + (g.drive.hammer.pass ? "≥" : "<") + " max driving resistance needed " + fmt(g.drive.hammer.Rreq, 1) + " kip (" + g.drive.hammer.src + ")" : "") + (g.drive.blow ? "; blow count " + fmt(g.drive.blow.n, 1) + " " + (g.drive.blow.pass ? "≤" : ">") + " " + fmt(g.drive.blow.lim, 1) + " blows/in (C10.7.8)" : "") + "."),   // PDA-DR, PDA-BC
++        g.drive && g.drive.minPen && line("Minimum penetration (10.7.6): " + g.drive.minPen.items.map(x => x.l + " " + fmt(x.z, 1) + " ft").join("; ") + " → z_min = " + fmt(g.drive.minPen.zMin, 1) + " ft (" + g.drive.minPen.gov.l + ")" + (g.drive.minPen.tipElMin != null ? ", tip El. " + fmt(g.drive.minPen.tipElMin, 1) : "") + "; pile toe modelled " + fmt(g.drive.minPen.toeNow, 1) + " ft " + (g.drive.minPen.pass ? "≥" : "<") + " z_min; controlling tip: " + fmt(g.drive.minPen.ctrlZ, 1) + " ft below the cap" + (g.drive.minPen.tipElCtrl != null ? " (El. " + fmt(g.drive.minPen.tipElCtrl, 1) + ")" : "") + ", " + g.drive.minPen.ctrlSrc + "; driving resistance to reach z_min R_n,stat = " + fmt(g.drive.minPen.RdrMin, 1) + " kip (no scour, unfactored)."),   // PDA-MP
++        g.drv && g.drv.phiDyn && line("Field method: " + g.drv.label + "; φdyn = " + fmt(g.drv.phiDyn, 3) + " (Table 10.5.5.2.3-1" + (g.drv.grpFac < 1 ? ", ×0.80 small group" : "") + (g.drv.xPhi ? "; Extreme Event 1.0" : "") + "). Rn = Pu/φdyn = " + fmt(g.STL, 1) + "/" + fmt(g.drv.phiDyn, 3) + " = " + fmt(g.drv.Rn_req, 1) + " kip; scour side lost " + fmt(g.drv.bias, 2) + "×" + fmt(g.drv.Rs_scour, 1) + " = " + fmt(g.drv.Rs_scour_b, 1) + " kip (10.7.3.6)" + (g.drv.Rdd > 0 ? "; downdrag side " + fmt(g.drv.Rdd, 1) + " kip (CTDOT BDM)" : "") + " → Rndr = " + fmt(g.drv.Rndr, 1) + " kip (required nominal driving resistance)."),
++        line("Uplift (side only): Rn,up = Rs = " + fmt(g.Rn_up, 1) + " kip; φup·Rs = " + fmt(g.phiRn_up, 1) + " kip (resistance only, no uplift demand in this mode)."),
++        line("Sent to the abutment calculator (pileResults; its panel I-0a, Tab 10 §10.4): Rn = " + fmt(g.Rn_comp, 1) + " kip, φ = φstat·Rn/Rn = " + fmt(g.phiRn_comp, 1) + "/" + fmt(g.Rn_comp, 1) + " = " + (phiB != null ? fmt(phiB, 4) : "—") + "; Rn,up = " + fmt(g.Rn_up, 1) + " kip, φup = " + fmt(g.phiRn_up, 1) + "/" + fmt(g.Rn_up, 1) + " = " + (phiU != null ? fmt(phiU, 4) : "—") + (g.drv && g.drv.phiDyn ? "; or the field method Rn = " + fmt(g.drv.Rn_req, 1) + " kip with φdyn = " + fmt(g.drv.phiDyn, 3) : "") + "."));
++            })() : null);   // PDA-D2
+@@ -12408,0 +12600,4 @@ function UtilizationDashboard({ r, I, pyRes }) {
++    if (b.geo) {   // PDA-IAB: Module 13
++      out.push(["Geotech axial (tip+skin)", b.geo.phiRn_comp, b.geo.STL, b.geo.comp_pass, "10.7.3.8.6"]);
++      if (b.geo.drive && b.geo.drive.minPen) out.push(["Geotech minimum penetration", b.geo.drive.minPen.toeNow, b.geo.drive.minPen.zMin, b.geo.drive.minPen.pass, "10.7.6"]);
++    }
+@@ -12529 +12724 @@ function moduleForCheck(label, pileType) {
+-  if (pileType === "iab") return /Tier 2/.test(L) ? "module-12" : "module-01";
++  if (pileType === "iab") return /Tier 2/.test(L) ? "module-12" : /^Geotech/.test(L) ? "module-13" : "module-01";   // PDA-IAB: 13
+@@ -14511 +14706 @@ function PyLayerTable({ I, set }) {
+-    I.pileType === "hpile" && /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" },
++    (I.pileType === "hpile" || (I.pileType === "iab" && I.iabGeoOn)) && /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" },   // PDA-IAB: also the integral pile (Module 13)
+@@ -17563,0 +17759,23 @@ function App() {
++    // PDA-IAB (2026-10-21): geotechnical axial resistance of the integral pile (Module 13), sent to the abutment calculator
++    /*#__PURE__*/React.createElement("div", { id: "iabGeoSec", className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 mt-4 pt-3 border-t border-slate-200" }, "Geotechnical axial resistance (optional, Module 13)"),
++    /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-2 text-[10px] text-slate-600 cursor-pointer mb-1" },
++      /*#__PURE__*/React.createElement("input", { type: "checkbox", id: "iabGeoOn", checked: !!I.iabGeoOn, onChange: e => set('iabGeoOn', e.target.checked) }),
++      /*#__PURE__*/React.createElement("span", null, "Compute Rₙ and Rₙ,up of the integral pile by the H-pile static analysis (side + tip, AASHTO 10.7.3.8.6) on the soil profile")),
++    /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-2 leading-snug" }, "Same engine and inputs as the driven H-pile Module 01, with this section (" + (I.iabSection === "HP12X84" ? "HP12×84" : "HP10×57") + "). The geotechnical Rₙ, φ, Rₙ,up and φup go to the abutment calculator with \"Send results to the abutment\" (its panel I-0a, Tab 10 §10.4). Off: nothing is computed or sent."),
++    I.iabGeoOn && /*#__PURE__*/React.createElement("div", { className: "mb-2" },
++      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-600 leading-snug mb-1.5 p-1.5 rounded-sm bg-slate-50 border border-slate-200" },
++        "Soil layers: ", /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => gotoSoilProfileTab(setRailTab), className: "underline text-[var(--blueprint2)]" }, "Soil profile tab →"),
++        " (static axial capacity: SPT N for sand / silt, Sᵤ and α for clay). In this mode every depth is measured below the bottom of the pile cap (the pile head), as the Tier 2 p-y profile. Pile toe = the required pile length L = max(Lₚgeo, Lᶠ + 5) = ",
++        /*#__PURE__*/React.createElement("b", null, r.iab ? fmt(r.iab.reqLength, 1) + " ft" : "—"), " below the cap (§3.10.11.2; enter the geotechnical length above to set a longer pile)",
++        (I.iabTier2 && I.iabScourDepth > 0) ? "; no side resistance above the Tier 2 scour depth " + fmt(I.iabScourDepth, 1) + " ft." : "."),
++      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2" },
++        /*#__PURE__*/React.createElement(Field, { label: "No side resistance above", sub: "pre-bored hole / sleeve, ft below the cap (0 = none)", unit: "ft", value: I.iabGeoTop || 0, onChange: v => set('iabGeoTop', (isFinite(v) && v > 0) ? v : 0) }),
++        /*#__PURE__*/React.createElement("div", null),
++        /*#__PURE__*/React.createElement(Field, { label: "φ geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
++        /*#__PURE__*/React.createElement(Field, { label: "φ geo clay", sub: "α side", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
++        /*#__PURE__*/React.createElement(Field, { label: "φ geo clay tip", sub: "9Su, α-method 0.35", value: I.hpPhiTipClay, onChange: v => set('hpPhiTipClay', v) }),
++        /*#__PURE__*/React.createElement(Field, { label: "φ uplift", sub: "SPT / α side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) }),
++        hpResMethodBlock(I, set, r, true)),
++      r.iab && r.iab.geo && /*#__PURE__*/React.createElement("div", { id: "iabGeoRes", className: "text-[9.5px] mt-1.5 leading-snug", style: { color: r.iab.geo.pass ? "#2f6f3e" : "#b23b3b" } },
++        (r.iab.geo.pass ? "✓ " : "✗ ") + "Rₙ = " + fmt(r.iab.geo.Rn_comp, 1) + " kip, φRₙ = " + fmt(r.iab.geo.phiRn_comp, 1) + " kip " + (r.iab.geo.comp_pass ? "≥" : "<") + " Pᵤ = " + fmt(r.iab.geo.STL, 1) + " kip; Rₙ,up = " + fmt(r.iab.geo.Rn_up, 1) + " kip, φRₙ,up = " + fmt(r.iab.geo.phiRn_up, 1) + " kip" + (r.iab.geo.drv && r.iab.geo.drv.phiDyn ? "; " + r.iab.geo.drv.label + ": required Rₙ = " + fmt(r.iab.geo.drv.Rn_req, 1) + " kip, Rₙdr = " + fmt(r.iab.geo.drv.Rndr, 1) + " kip" : "") + (r.iab.geo.drive && r.iab.geo.drive.minPen ? "; zₘᵢₙ = " + fmt(r.iab.geo.drive.minPen.zMin, 1) + " ft (" + (r.iab.geo.drive.minPen.pass ? "toe below it" : "toe ABOVE it") + ")" : "") + ".",
++        React.createElement(PdWorkedIn, { I: I, items: [{ mod: "13", txt: "Rₙ, φRₙ", title: "Integral Pile — Geotechnical Axial Resistance" }] }))),
+@@ -17862,34 +18080 @@ function App() {
+-    /*#__PURE__*/React.createElement("div", { className: "col-span-2 rounded-sm border border-slate-200 p-2" },
+-      /*#__PURE__*/React.createElement("div", { className: "text-[11px] text-[var(--blueprint)] font-medium mb-1" }, "Resistance determination method (Table 10.5.5.2.3-1)"),
+-      /*#__PURE__*/React.createElement("select", { className: "w-full font-mono-tech text-[10.5px] px-1.5 py-1 rounded-sm border border-slate-300 bg-white", value: I.hpResMethod || "static", onChange: e => set('hpResMethod', e.target.value) },
+-        Object.keys(HP_DRIVE_METHODS).map(k => /*#__PURE__*/React.createElement("option", { key: k, value: k }, (HP_DRIVE_METHODS[k].phi ? "\u03c6dyn " + HP_DRIVE_METHODS[k].phi.toFixed(2) + " \u2014 " : "") + HP_DRIVE_METHODS[k].label))),
+-      /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap items-center gap-1 mt-1.5 text-[10px] font-mono-tech" },
+-        /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Owner rule:"),
+-        [["aashto", "AASHTO", null], ["massdot", "MassDOT", null], ["ridot", "RIDOT", "slt_dyn"], ["ctdot", "CTDOT", "dyn_qc"]].map(([k, l, mth]) => /*#__PURE__*/React.createElement("button", { key: k, type: "button",
+-          title: k === "ridot" ? "RIDOT BDM 10.5.6: dynamic testing on every pile-driving project (\u2265 1 production pile per substructure, \u2265 2 %) and a static load test per site condition \u2192 \u03c6dyn 0.80 (0.65 when the static load test is waived)." : k === "ctdot" ? "CTDOT BDM: test piles with dynamic monitoring; Ultimate Pile Capacity = factored load/\u03c6 + scour + downdrag (\u03c6 and the scour / downdrag resistances from the geotechnical report). Preset \u03c6dyn 0.65 \u2014 confirm." : k === "massdot" ? "MassDOT Bridge Manual: no rule beyond AASHTO for the driving resistance." : "AASHTO LRFD 10th Ed.",
+-          onClick: () => { set('hpDriveOwner', k); if (mth) set('hpResMethod', mth); },
+-          className: "px-2 py-0.5 rounded-sm border " + ((I.hpDriveOwner || "aashto") === k ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300") }, l))),
+-      (I.hpResMethod && I.hpResMethod !== "static") && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mt-1.5" },
+-        /*#__PURE__*/React.createElement(Field, { label: "Scour side bias", sub: "on the lost side resistance (C10.7.3.6)", value: I.hpScourBias != null ? I.hpScourBias : 1.0, step: 0.05, onChange: v => set('hpScourBias', (isFinite(v) && v > 0) ? v : 1.0) }),
+-        (I.hpDriveOwner === "ctdot") && /*#__PURE__*/React.createElement(Field, { label: "Downdrag side resistance", sub: "above the neutral plane (CTDOT)", unit: "kip", value: I.hpRsDD || 0, onChange: v => set('hpRsDD', (isFinite(v) && v > 0) ? v : 0) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "Set-up factor f", sub: "R restrike / R EOD (10.7.3.4)", value: I.hpSetupFactor != null ? I.hpSetupFactor : 1.0, step: 0.05, onChange: v => set('hpSetupFactor', (isFinite(v) && v > 0) ? v : 1.0) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "Hammer capability", sub: "max driving resistance (WEAP); 0 = not entered", unit: "kip", value: I.hpHammerR || 0, onChange: v => set('hpHammerR', (isFinite(v) && v > 0) ? v : 0) })),
+-      // PDA-DR (2026-10-20): driving stresses from a wave equation analysis (10.7.8)
+-      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mt-1.5" },
+-        /*#__PURE__*/React.createElement(Field, { label: "\u03c3dr compression", sub: "WEAP max; 0 = not entered", unit: "ksi", value: I.hpSigDrC || 0, onChange: v => set('hpSigDrC', (isFinite(v) && v > 0) ? v : 0) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "\u03c3dr tension", sub: "WEAP max; 0 = not entered", unit: "ksi", value: I.hpSigDrT || 0, onChange: v => set('hpSigDrT', (isFinite(v) && v > 0) ? v : 0) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "\u03c6da", sub: "driving, 6.5.4.2", value: I.hpPhiDa != null ? I.hpPhiDa : 1.0, onChange: v => set('hpPhiDa', (isFinite(v) && v > 0) ? v : 1.0) }),
+-        // PDA-BC (2026-10-20): blow count from the wave equation, C10.7.8
+-        /*#__PURE__*/React.createElement(Field, { label: "Blow count", sub: "WEAP at the criterion; 0 = not entered", unit: "bl/in", value: I.hpBlowCount || 0, onChange: v => set('hpBlowCount', (isFinite(v) && v > 0) ? v : 0) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "Blow-count limit", sub: "C10.7.8: 10\u201315", unit: "bl/in", value: I.hpBlowLimit != null ? I.hpBlowLimit : 10, onChange: v => set('hpBlowLimit', (isFinite(v) && v > 0) ? v : 10) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "Ground elevation", sub: "for tip elevations (blank = depths)", unit: "ft", value: I.hpGradeEl != null ? I.hpGradeEl : "", onChange: v => set('hpGradeEl', isFinite(v) ? v : null) })),
+-      // PDA-MP (2026-10-20): minimum penetration requirements, 10.7.6 (depth below grade, ft; 0 = not applicable)
+-      /*#__PURE__*/React.createElement("div", { className: "mt-1.5" },
+-        /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Minimum penetration requirements (AASHTO 10.7.6), depth below grade, ft (0 = n/a)"),
+-        /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-4 gap-1.5" },
+-          [["settle", "Settlement"], ["defl", "Lat. deflection"], ["uplift", "Uplift"], ["drag", "Below drag soil"], ["scour", "Below scour"], ["fixity", "Lat. fixity"], ["ee", "Extreme event"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
+-            /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: (I.hpMinPen && I.hpMinPen[k]) || 0,
+-              onChange: e => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { [k]: Math.max(parseFloat(e.target.value) || 0, 0) })) }))),
+-          (r.buckling && r.buckling.lateralFixity > 0) && /*#__PURE__*/React.createElement("button", { type: "button", className: "text-[9px] underline text-[var(--blueprint2)] self-end text-left",
+-            title: "Depth to fixity from the lateral analysis (Module 02, moment zero crossing below M_max)",
+-            onClick: () => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { fixity: +(+r.buckling.lateralFixity).toFixed(1) })) }, "fixity = z_fix " + fmt(r.buckling.lateralFixity, 1) + " ft (Module 02)")))),
++    hpResMethodBlock(I, set, r, false),   // PDA-IAB: unchanged, see hpResMethodBlock
+@@ -17964 +18149 @@ function App() {
+-  }))), (I.pileType !== "iab" || (I.iabTier2 && I.iabNlSoilSource === "layered")) && React.createElement(SoilProfilePanel, { I: I, set: set, r: r, pyRes: pyRes }), (I.pileType !== "iab") && React.createElement(LoadsGroupPanel, { I: I, set: set, setI: setI, r: r, cases: cases, activeIdx: activeIdx,
++  }))), (I.pileType !== "iab" || (I.iabTier2 && I.iabNlSoilSource === "layered") || I.iabGeoOn) && React.createElement(SoilProfilePanel, { I: I, set: set, r: r, pyRes: pyRes }), (I.pileType !== "iab") && React.createElement(LoadsGroupPanel, { I: I, set: set, setI: setI, r: r, cases: cases, activeIdx: activeIdx,
+@@ -18609,0 +18795,19 @@ function App() {
++  // PDA-IAB (2026-10-21): Module 13, geotechnical axial resistance of the integral pile (the Module 01 H-pile engine and work)
++  I.pileType === "iab" && r.iab && r.iab.geo && /*#__PURE__*/React.createElement(Module, {
++    idx: "13",
++    title: "Integral Pile — Geotechnical Axial Resistance",
++    code: "AASHTO 10.7.3.8.6 · SPT-method (sand) / α-method (clay) · φ Table 10.5.5.2.3-1 · to the abutment calculator",
++    status: r.iab.geo.pass,
++    open: open.IG,
++    onToggle: () => setOpen(o => ({ ...o, IG: !o.IG }))
++  }, (() => {
++    const g = r.iab.geo, s = r.iab.sect, phiB = g.Rn_comp > 0 ? g.phiRn_comp / g.Rn_comp : null, phiU = g.Rn_up > 0 ? g.phiRn_up / g.Rn_up : null;
++    return /*#__PURE__*/React.createElement("div", null,
++      /*#__PURE__*/React.createElement(Narr, null, "Integral abutment pile " + s.label + " (d = " + fmt(s.d, 2) + " in, bᶠ = " + fmt(s.bf, 2) + " in). Depths are below the bottom of the pile cap (the pile head), the datum of the soil profile in this mode. The pile toe is at the required pile length L = " + fmt(g.toeG, 1) + " ft (§3.10.11.2)" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + (g.scourG > 0 ? "; design scour " + fmt(g.scourG, 1) + " ft (Tier 2)" : "") + ". The demand is the factored gravity load per pile Pᵤ (Strength I)."),
++      React.createElement(PdWorkedIn, { I: I, items: [{ mod: "01", txt: "Pᵤ, L", title: "Integral Abutment Pile — Simplified Method" }] }),
++      hpGeoModuleBody(I, g, { d: s.d, bf: s.bf, dl: "P_u", dlDec: 1, panel: "integral panel (Geotechnical axial resistance)", upRef: true }),
++      /*#__PURE__*/React.createElement(RptHeading, { n: "6", title: "Values sent to the abutment calculator", code: "pileResults · its panel I-0a, Tab 10 §10.4" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Compression", eq: phiB != null ? `R_n=${fmt(g.Rn_comp,1)}\\ \\text{kip},\\quad \\phi=\\dfrac{\\phi_{stat}R_n}{R_n}=\\dfrac{${fmt(g.phiRn_comp,1)}}{${fmt(g.Rn_comp,1)}}=${fmt(phiB,4)}` : `R_n=0\\ \\text{(not sent)}`, note: "blended φ of the static analysis (per layer and component)" }),
++      /*#__PURE__*/React.createElement(Calc, { label: "Uplift", eq: phiU != null ? `R_{n,up}=${fmt(g.Rn_up,1)}\\ \\text{kip},\\quad \\phi_{up}=\\dfrac{\\phi_{up}R_s}{R_{n,up}}=\\dfrac{${fmt(g.phiRn_up,1)}}{${fmt(g.Rn_up,1)}}=${fmt(phiU,4)}` : `R_{n,up}=0\\ \\text{(not sent)}`, note: "side resistance only" }),
++      g.drv && g.drv.phiDyn && /*#__PURE__*/React.createElement(Calc, { label: "Field method (choice in the abutment)", eq: `R_n=\\dfrac{P_u}{\\phi_{dyn}}=${fmt(g.drv.Rn_req,1)}\\ \\text{kip},\\quad \\phi_{dyn}=${fmt(g.drv.phiDyn,3)}`, note: "see 4a; the abutment's pull dialog offers the static or the field-method R_n" }));
++  })()),
+@@ -18618,67 +18822 @@ function App() {
+-    const g = r.hpileGeo;
+-    return /*#__PURE__*/React.createElement("div", null,
+-      /*#__PURE__*/React.createElement(Narr, null, "The nominal geotechnical axial resistance is the sum of side (skin) resistance developed along the embedded shaft and tip (end-bearing) resistance at the toe: ", /*#__PURE__*/React.createElement(RTex, { tex: "R_n=R_s+R_p" }), ". Side resistance is integrated layer by layer using the box perimeter of the H-section; tip resistance uses the plugged box area. Cohesionless layers use the Meyerhof SPT-method with the nondisplacement (H-pile) unit side resistance; cohesive layers use the \u03b1-method. Resistance factors are drawn from Table 10.5.5.2.3-1."),
+-      /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "H-pile surface geometry", code: "AASHTO C10.7.3.8.6f \u00b7 box perimeter / area" }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Box perimeter", eq: `p_{box}=2(d+b_f)=2(${fmt(I.hpD,2)}+${fmt(I.hpBf,2)})/12=${fmt(g.boxPerim_ft,3)}\\ \\text{ft}`, note: "side area per ft depth" }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Box tip area", eq: `A_p=d\\,b_f=${fmt(I.hpD,2)}\\times ${fmt(I.hpBf,2)}/144=${fmt(g.boxArea_ft2,3)}\\ \\text{ft}^2`, note: "plugged section" }),
+-      /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Side resistance by layer", code: "AASHTO 10.7.3.8.6a-4 \u00b7 R_s=q_sA_s" }),
+-      /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-2" },
+-        /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400 text-left" },
+-          ["Layer", "z (ft)", "method", g.nCorr ? "\u03c3'v mid (ksf) \u00b7 C\u0304_N \u00d7 N60 = N1,60" : "N1,60", "qs (ksf)", "As (ft\u00b2)", "Rs (kip)", "\u03c6stat"].map(h => /*#__PURE__*/React.createElement("th", { key: h, className: "font-normal pb-1 pr-2" }, h)))),
+-        /*#__PURE__*/React.createElement("tbody", null,
+-          g.rows.map((row, k) => /*#__PURE__*/React.createElement("tr", { key: k, style: { borderTop: "1px solid #eef2f6" } },
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2 py-0.5" }, row.type),
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.zTop, 1), "\u2013", fmt(row.zBot, 1)),
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2 text-slate-500" }, row.type === "clay" ? "\u03b1\u00b7Su" : "N1,60/50"),
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2" }, row.spt ? (g.nCorr ? fmt(row.spt.sv, 2) + " \u00b7 " + fmt(row.spt.CN, 3) + " \u00d7 " + fmt(row.spt.N, 0) + " = " + fmt(row.spt.N160, 1) : fmt(row.spt.N160, 1)) : "\u2014"),   // PDA-D5
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.qs, 3)),
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.As, 1)),
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.Rs_layer, 1)),
+-            /*#__PURE__*/React.createElement("td", { className: "pr-2" }, fmt(row.phi_stat, 2))))),),
+-      g.zScour > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Design scour", eq: `z_{scour}=${fmt(g.zScour, 1)}\\ \\text{ft below grade: no side resistance above; } D_b \\text{ counted below}`, cite: "10.7.3.6" }),   // PDA-D12
+-      g.nCorr && (() => { const r0 = g.rows.find(x => x.spt); return r0 ? /*#__PURE__*/React.createElement(Calc, { label: "SPT overburden correction (first sand row)", eq: `C_N(z)=0.77\\log_{10}\\dfrac{40}{\\sigma'_v(z)}\\le 2.0,\\ \\sigma'_v=\\sum\\gamma'_ih_i;\\ \\text{mid-depth: } C_N(${fmt(r0.spt.zMid, 2)})=0.77\\log_{10}\\dfrac{40}{${fmt(r0.spt.sv, 3)}}=${fmt(r0.spt.CNmid, 3)};\\ \\bar C_N=\\dfrac{1}{n}\\sum_{k=1}^{n}C_N(z_k)=${fmt(r0.spt.CN, 3)}\\ (n=${r0.spt.nSl});\\ N_{1,60}=\\bar C_NN_{60}=${fmt(r0.spt.CN, 3)}(${fmt(r0.spt.N, 0)})=${fmt(r0.spt.N160, 2)}`, note: "C\u0304_N = average of C_N at the mid-points of n equal slices (\u2264 1 ft) of each layer's contact length (table above); \u03b3 per layer (effective below the water table), top layer to grade.", cite: "Eqs. 10.4.6.2.4-1, -3" }) : null; })(),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Total side resistance", eq: `R_s=\\sum q_{s,i}A_{s,i}=${fmt(g.Rs_comp,1)}\\ \\text{kip}` }),
+-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-1 leading-snug" }, "Sand/silt: ", /*#__PURE__*/React.createElement(RTex, { tex: "q_s=\\bar{N}_{160}/50" }), " (Eq. 10.7.3.8.6g-3, nondisplacement H-pile; N", /*#__PURE__*/React.createElement("sub", null, "1,60"), g.nCorr ? " = C_N N60 from the entered N60, 10.4.6.2.4" : " entered", "). Clay: ", /*#__PURE__*/React.createElement(RTex, { tex: "q_s=\\alpha S_u" }), " (Eq. 10.7.3.8.6b-1)."),
+-      /*#__PURE__*/React.createElement(RptHeading, { n: "3", title: "Tip resistance", code: g.tipIsClay ? "AASHTO 10.7.3.8.6e" : "AASHTO 10.7.3.8.6g" }),
+-      g.tipIsClay
+-        ? /*#__PURE__*/React.createElement(Calc, { label: "Unit tip (clay)", eq: `q_p=9S_u=${fmt(g.qp,2)}\\ \\text{ksf}`, cite: "Eq. 10.7.3.8.6e-1" })
+-        : /*#__PURE__*/React.createElement("div", null,
+-            g.tipSpt && g.nCorr && /*#__PURE__*/React.createElement(Calc, { label: "N1,60 at the tip", eq: `\\sigma'_v(${fmt(g.tipSpt.z, 1)})=${fmt(g.tipSpt.sv, 3)}\\ \\text{ksf},\\ C_N=0.77\\log_{10}\\dfrac{40}{${fmt(g.tipSpt.sv, 3)}}=${fmt(g.tipSpt.CN, 3)},\\ N_{1,60}=${fmt(g.tipSpt.CN, 3)}(${fmt(g.tipSpt.N, 0)})=${fmt(g.tipSpt.N160, 2)}`, cite: "Eqs. 10.4.6.2.4-1, -3" }),   // PDA-D5
+-            /*#__PURE__*/React.createElement(Calc, { label: "Unit tip (sand)", eq: g.tipSpt ? `q_p=\\dfrac{0.8\\,N_{1,60}D_b}{D}=\\dfrac{0.8(${fmt(g.tipSpt.N160, 2)})(${fmt(g.Db, 2)})}{${fmt(g.tipSpt.D, 3)}}=${fmt(g.tipSpt.qpRaw, 2)}\\le q_L` : `q_p=\\dfrac{0.8\\,N_{160}D_b}{D}\\le q_L`, result: `=${fmt(g.qp,2)}\\ \\text{ksf}`, cite: "Eq. 10.7.3.8.6g-1" }),
+-            g.qL != null && /*#__PURE__*/React.createElement(Calc, { label: "Limiting tip", eq: g.tipSpt ? `q_L=${g.toeLayer && g.toeLayer.staticType === "silt" ? 6 : 8}N_{1,60}=${fmt(g.qL,1)}\\ \\text{ksf},\\quad D_b=${fmt(g.Db,2)}\\ \\text{ft}` : `q_L=${fmt(g.qL,0)}\\ \\text{ksf},\\quad D_b=${fmt(g.Db,1)}\\ \\text{ft}`, note: "8\u00d7N1,60 sand / 6\u00d7N1,60 silt" + (g.zScour > 0 ? "; D_b below the design scour depth" : "") })),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Tip resistance", eq: `R_p=q_pA_p=${fmt(g.qp,2)}\\times ${fmt(g.boxArea_ft2,3)}=${fmt(g.Rp,1)}\\ \\text{kip}`, cite: "Eq. 10.7.3.8.6a-3" }),
+-      /*#__PURE__*/React.createElement(RptHeading, { n: "4", title: "Factored resistance & check", code: "AASHTO 10.7.3.8.6a" }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Nominal resistance", eq: `R_n=R_s+R_p=${fmt(g.Rs_comp,1)}+${fmt(g.Rp,1)}=${fmt(g.Rn_comp,1)}\\ \\text{kip}` }),
+-      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}`, note: "\u03c6=" + fmt(g.PHI.sand_stat, 2) + " sand / " + fmt(g.PHI.clay_stat, 2) + " clay side / " + fmt(g.PHI.clay_tip, 2) + " clay tip" + (g.grpFac < 1 ? ", incl. \u00d70.80 small-group" : "") + "; tip \u03c6 used " + fmt(g.phi_tip_stat, 2) }),
+-      /*#__PURE__*/React.createElement(RptCheck, { pass: g.comp_pass, eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}\\ ${g.comp_pass?"\\ge":"<"}\\ STL=${fmt(g.STL,0)}\\ \\text{kip}` }),
+-      // PDA-M1 (2026-10-20): field method -> required nominal bearing and driving resistance
+-      g.drv && g.drv.phiDyn && /*#__PURE__*/React.createElement("div", null,
+-        /*#__PURE__*/React.createElement(RptHeading, { n: "4a", title: "Required driving resistance", code: "AASHTO 10.5.5.2.3 \u00b7 10.7.3.6 \u00b7 C10.7.3.3" }),
+-        /*#__PURE__*/React.createElement(Narr, null, "Method: ", g.drv.label, ". The number of piles follows from \u03c6dyn of the field method (C10.5.5.2.3); the static check above is then the pile-length estimate of Eq. C10.7.3.3-1 (\u03c6dyn R_n = \u03c6stat R_n,stat, with R_n = P_u/\u03c6dyn)."),
+-        /*#__PURE__*/React.createElement(Calc, { label: "\u03c6dyn", eq: g.drv.xPhi ? `\\phi_{dyn}=1.00\\ \\text{(Extreme Event, 10.5.5.3)}` : `\\phi_{dyn}=${fmt(g.drv.phiTab, 2)}${g.drv.grpFac < 1 ? `\\times 0.80=${fmt(g.drv.phiDyn, 3)}\\ \\text{(small group)}` : ""}`, cite: "Table 10.5.5.2.3-1" }),
+-        /*#__PURE__*/React.createElement(Calc, { label: "Required nominal bearing", eq: `R_n=\\dfrac{P_u}{\\phi_{dyn}}=\\dfrac{${fmt(g.STL, 1)}}{${fmt(g.drv.phiDyn, 3)}}=${fmt(g.drv.Rn_req, 1)}\\ \\text{kip}` }),
+-        g.drv.Rs_scour > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Side resistance lost to scour", eq: `R_{s,scour}=\\lambda_{bias}\\,(R_{s,no\\,scour}-R_s)=${fmt(g.drv.bias, 2)}(${fmt(g.drv.Rs_scour + g.Rs_comp, 1)}-${fmt(g.Rs_comp, 1)})=${fmt(g.drv.Rs_scour_b, 1)}\\ \\text{kip}`, note: "static analysis, unfactored, times the method bias (input)", cite: "10.7.3.6, C10.7.3.6" }),
+-        g.drv.Rdd > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Downdrag side resistance (CTDOT)", eq: `R_{dd}=${fmt(g.drv.Rdd, 1)}\\ \\text{kip}`, note: "CTDOT BDM: Ultimate Pile Capacity = factored load/\u03c6 + scour + downdrag. AASHTO 10th Ed. 10.7.3.7 alone would take the drag load as zero at the geotechnical strength limit state.", cite: "CTDOT BDM" }),
+-        /*#__PURE__*/React.createElement(RptCheck, { pass: true, eq: `R_{ndr}=R_n+R_{s,scour}${g.drv.Rdd > 0 ? "+R_{dd}" : ""}=${fmt(g.drv.Rn_req, 1)}+${fmt(g.drv.Rs_scour_b, 1)}${g.drv.Rdd > 0 ? "+" + fmt(g.drv.Rdd, 1) : ""}=${fmt(g.drv.Rndr, 1)}\\ \\text{kip (required nominal driving resistance)}` })),
+-      // PDA-DR (2026-10-20): drivability, 10.7.8; set-up / relaxation, 10.7.3.4
+-      g.drive && /*#__PURE__*/React.createElement("div", null,
+-        /*#__PURE__*/React.createElement(RptHeading, { n: "4b", title: "Drivability", code: "AASHTO 10.7.8 \u00b7 10.7.3.4 \u00b7 \u03c6da 6.5.4.2" }),
+-        /*#__PURE__*/React.createElement(Calc, { label: "Driving stress limit (steel)", eq: `\\sigma_{dr}\\le 0.9\\,\\phi_{da}f_y=0.9(${fmt(g.drive.phiDa, 2)})(${fmt(g.drive.Fy, 0)})=${fmt(g.drive.lim, 1)}\\ \\text{ksi}`, cite: "Eq. 10.7.8-1; \u03c6da = 1.00 (6.5.4.2)" }),
+-        g.drive.stressC ? /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.stressC.pass, eq: `\\sigma_{dr,c}=${fmt(g.drive.stressC.s, 1)}\\ ${g.drive.stressC.pass ? "\\le" : ">"}\\ ${fmt(g.drive.lim, 1)}\\ \\text{ksi (wave equation, compression)}` })
+-          : /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-700 mb-1" }, "Driving stresses not entered. 10.7.8 requires a wave equation analysis; enter its maximum compressive (and tensile) stress in the H-pile panel. The 10th Ed. gives no simplified estimate, and the tool does not compute one."),
+-        g.drive.stressT && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.stressT.pass, eq: `\\sigma_{dr,t}=${fmt(g.drive.stressT.s, 1)}\\ ${g.drive.stressT.pass ? "\\le" : ">"}\\ ${fmt(g.drive.lim, 1)}\\ \\text{ksi (wave equation, tension)}` }),
+-        g.drive.RndrEOD != null && /*#__PURE__*/React.createElement(Calc, { label: "Set-up / relaxation", eq: g.drive.formula ? `R_{ndr,EOD}=R_{ndr}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (driving formula: EOD method, \\phi\\text{ assumes set-up})}` : `f=\\dfrac{R_{restrike}}{R_{EOD}}=${fmt(g.drive.fsu, 2)};\\quad R_{ndr,EOD}=\\dfrac{R_{ndr}}{f}=\\dfrac{${fmt(g.drive.Rndr, 1)}}{${fmt(g.drive.fsu, 2)}}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip}`, note: g.drive.formula ? "C10.7.3.4.3." : (g.drive.fsu > 1 ? "Set-up: R_ndr to be verified by restrike (10.7.3.4.3)." : g.drive.fsu < 1 ? "Relaxation: restrike required (10.7.3.4.2)." : "No set-up or relaxation (f = 1.0)."), cite: "10.7.3.4" }),
+-        // PDA-MP (2026-10-20): minimum penetration, 10.7.6
+-        g.drive.minPen && /*#__PURE__*/React.createElement(Calc, { label: "Minimum penetration", eq: `z_{min}=\\max(${g.drive.minPen.items.map(x => fmt(x.z, 1)).join(",\\,")})=${fmt(g.drive.minPen.zMin, 1)}\\ \\text{ft}${g.drive.minPen.tipElMin != null ? `\\ (\\text{El. }${fmt(g.drive.minPen.gradeEl, 1)}-${fmt(g.drive.minPen.zMin, 1)}=${fmt(g.drive.minPen.tipElMin, 1)})` : ""}`, note: "Requirements entered (ft below grade): " + g.drive.minPen.items.map(x => x.l + " " + fmt(x.z, 1)).join("; ") + ". Governs: " + g.drive.minPen.gov.l + ".", cite: "10.7.6" }),
+-        g.drive.minPen && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.minPen.pass, eq: `\\text{pile toe }${fmt(g.drive.minPen.toeNow, 1)}\\ ${g.drive.minPen.pass ? "\\ge" : "<"}\\ z_{min}=${fmt(g.drive.minPen.zMin, 1)}\\ \\text{ft};\\ \\text{controlling tip }${fmt(g.drive.minPen.ctrlZ, 1)}\\ \\text{ft}${g.drive.minPen.tipElCtrl != null ? `\\ (\\text{El. }${fmt(g.drive.minPen.tipElCtrl, 1)})` : ""}` }),
+-        g.drive.minPen && /*#__PURE__*/React.createElement(Calc, { label: "Driving resistance to reach z_min", eq: `R_{n,stat}(z_{min})=${fmt(g.drive.minPen.RdrMin, 1)}\\ \\text{kip}`, note: "Static analysis (Module 01 method) to z_min with all soil present (scourable and drag-zone soil is driven through), unfactored.", cite: "10.7.8" }),
+-        g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ \\max(R_{ndr,EOD},\\,R_{n,stat}(z_{min}))=${fmt(g.drive.hammer.Rreq, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` }),
+-        // PDA-BC (2026-10-20): blow count, C10.7.8
+-        g.drive.blow && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.blow.pass, eq: `N_{blow}=${fmt(g.drive.blow.n, 1)}\\ ${g.drive.blow.pass ? "\\le" : ">"}\\ ${fmt(g.drive.blow.lim, 1)}\\ \\text{blows/in (wave equation at the driving criterion; C10.7.8: 10\\text{\\textendash}15)}${g.drive.blow.limOutside ? "\\ \\text{limit above the C10.7.8 range}" : ""}` })),
+-      g.enableTension && /*#__PURE__*/React.createElement("div", null,
+-        /*#__PURE__*/React.createElement(RptHeading, { n: "5", title: "Uplift resistance", code: "\u03c6up=" + fmt(g.PHI.sand_up, 2) + " (Table 10.5.5.2.3-1)" }),
+-        /*#__PURE__*/React.createElement(Narr, null, "In tension the tip is not credited; uplift is resisted by side resistance only, with a lower resistance factor reflecting the reduced reliability of side resistance in uplift."),
+-        /*#__PURE__*/React.createElement(Calc, { label: "Factored uplift", eq: `\\phi_{up}R_s=${fmt(g.phiRn_up,1)}\\ \\text{kip}`, cite: "skin only" }),
+-        /*#__PURE__*/React.createElement(RptCheck, { pass: g.up_pass, eq: `\\phi_{up}R_s=${fmt(g.phiRn_up,1)}\\ \\text{kip}\\ ${g.up_pass?"\\ge":"<"}\\ T_u=${fmt(g.Tu,0)}\\ \\text{kip}` })),
+-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-700 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1 leading-snug mt-1" },
+-        "\u26a0 Static analysis for length/capacity estimate. Field-verify nominal resistance via dynamic testing / driving criteria (\u03c6dyn, Table 10.5.5.2.3-1). Box-perimeter and plugged-tip assumptions per C10.7.3.8.6f \u2014 confirm plugging suits the section and soil. Sanity-check aid; independent PE review required."));
++    return hpGeoModuleBody(I, r.hpileGeo, { d: I.hpD, bf: I.hpBf, dl: "STL", dlDec: 0, panel: "H-pile panel", upRef: false });   // PDA-IAB: unchanged, see hpGeoModuleBody
+@@ -20958 +21096 @@ function outTabFor(el, pileType) {
+-  if (pileType === "iab") return idx === "12" ? "tier2" : "simp";
++  if (pileType === "iab") return idx === "12" ? "tier2" : idx === "13" ? "geo" : "simp";   // PDA-IAB: Module 13 on the Geotechnical tab
+```

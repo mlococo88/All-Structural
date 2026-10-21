@@ -14441,3 +14441,73 @@ index b8d5942..61e56be 100644
 - **Provision:** AASHTO LRFD 10th Ed. 11.6.5.2.1, 11.6.5.2.2, 11.6.5.1; APS-7.
 - **Check (integral, approach slab on, seismic on, A_s = 0.15, k_h ratio 0.5, R_DC + R_DW = 66.0 + 10.56 = 76.56 kip, F = 45.94 kip):** before F_EQ = min(0.075 × 76.56, 45.94) = 5.742 kip; after min(0.150 × 76.56, 45.94) = 11.484 kip. §10.5d: F_d 129.96 → 135.71 kip; MassDOT / RIDOT f = F_d/P_PE 0.1193 → 0.1246 (P_PE = 1089.3), wall case 2 M_u 4.201 → 4.386 kip-ft/ft (D/C 0.036 → 0.038); CTDOT (P_PE = 1403.3) 0.0926 → 0.0967.
 - **How verified:** `node tests/check-syntax.mjs` passes; Playwright, origin/main `c729c12` vs branch: conventional (with / without seismic), integral without seismic, integral AASHTO with seismic (no slab) and semi-integral MassDOT: `computeAll` identical; integral MassDOT / CTDOT / RIDOT with seismic and slab: only `apEE` and the §10.5d values above change.
+
+
+## 2026-10-21 — PR: claude/pile-iab-results — Pile Designer's integral-pile geotechnical resistance into panel I-0a (PDA-IAB) (PR link added after merge)
+
+Cross-tool connection in one PR (CLAUDE.md §7 exception): `Pile Designer.html` (fixlog/Pile Designer.md PDA-IAB: integral mode now computes and sends `geotechnical`) and HANDOFF.md §4.6, §4.10. Code sites tagged `PDA-IAB`. **No calculation change in this tool:** the §10.4 geotechnical check (ABR2) is unchanged; it now receives values.
+
+### PDA-IAB-a. Pull dialog: R_n choice for an integral abutment   [hand-off UI]
+- **Where:** `AbutPileResults` `render()`, anchor `if(conv||(g&&g.static)){   // PDA-IAB`.
+- **Before:** the "Geotechnical axial resistance" checkbox and the static / field-method radios were inside `if(conv)`, so an integral abutment imported with the defaults (field method when present) without a choice. **After:** shown also when the payload has `geotechnical.static` ("panel I-0a"); the p-y moment and D_f checkboxes stay conventional only. Conventional dialog HTML identical (checked).
+
+### PDA-IAB-b. plan(): integral pile compared with this abutment's piles   [warnings only]
+- **Where:** `plan()`, anchor `if(!conv&&g.pileType==="iab"){`.
+- **After:** warns when Pile Designer's section differs from `iab.sec`, or its toe (`geotechnical.static.toeDepth`, the required pile length below the cap) differs from `iab.Lpile` by > 0.05 ft; minimum-penetration note says "below the bottom of the cap" and "panel I-0a" for an integral pile. Label "Pile Designer Module 13" for the R_n item of an integral pile.
+
+### PDA-IAB-c. Record and panel I-0a   [display; saved record additive]
+- **Where:** `apply()` (`geo:` record, anchor `...(g.pileType==="iab"? { pileType:"iab", toe:g.static.toeDepth } : {}), field:`) and `panelHTML()` integral branch.
+- **After:** `S.pileRes.geo` gets the optional `pileType`, `toe` for an integral pile (absent otherwise: conventional record identical); panel I-0a lists the Pile Designer geotechnical values (toe, R_n, φ, R_n,up, φ_up, field method, imported choice or STALE, minimum penetration).
+
+### PDA-IAB-d. Tab 10 §10.4: source of R_n   [§6 link]
+- **Where:** §10.4 panel text, anchor `// PDA-IAB: source of R_n`.
+- **After:** when `iab.Rn` holds the imported value: "; here from Pile Designer Module 13, worked there (Pile Designer calculation report, section Integral Pile — Geotechnical Axial Resistance), pulled <date>" (Module 01 wording for an H-pile result); STALE: "Pile Designer values STALE, not used …". Calculation unchanged.
+
+### Check case (end to end, owner MassDOT, Integral, default project; Pile Designer per its PDA-IAB-3 hand check)
+- Before (nothing imported): `iab.Rn` 0 → §10.4 "NOT CHECKED".
+- After pull (static): `iab.Rn` = 449.017 kip, `iab.phiC` = 0.3072, `iab.RnUp` = 113.636 kip, `iab.phiUp` = 0.25 → P_u/(φ_c R_n) = 328.810/(0.3072 × 449.017 = 137.94) = 2.384 (NG). φ is sent rounded to 4 decimals (PXR), so φ_c R_n here is 137.94 vs Pile Designer's 137.93.
+- After pull (field method slt_dyn): `iab.Rn` = 411.014, `iab.phiC` = 0.80 → 328.810/(0.80 × 411.014) = 1.000 (by construction, as the dialog says). P_min = 133.26 kip (no uplift), so R_n,up is not used in this case.
+
+### How verified
+- Nothing imported, origin/main `deb5090` vs branch: `LAST_R`, the report text (time stamps normalized) and Tab 10 text identical for conv-AASHTO, int-MassDOT, int-AASHTO, int-CTDOT, conv-AASHTO pile, semi-MassDOT.
+- Conventional pull (Pile Designer H-pile payload with a field method and minimum penetration, static and field choice): dialog HTML, plan items, warnings, `S.piles`, `S.pileRes` and `LAST_R` (Input ID fingerprint aside, which includes the import time) identical to origin/main.
+- End to end with Pile Designer (fixlog/Pile Designer.md PDA-IAB, How verified); §10.4 typeset without KaTeX errors; report source line lists `iab.Rn`.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main `deb5090`):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index c180de7..10b01be 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -5587 +5587 @@ function renderTabIAB(R){
+-          "R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> from panel I-0a (geotechnical report or Pile Designer). P<sub>LL,far</sub> = the live-load share of the pile on the far side of the rigid-cap eccentricity (negative when the eccentricity lifts it).")
++          "R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> from panel I-0a (geotechnical report or Pile Designer)"+((q=>!q?"":q.stale?" (Pile Designer values STALE, not used: the check uses the values entered before the import)":"; here from Pile Designer "+((S.pileRes.geo&&S.pileRes.geo.pileType==="iab")?"Module 13, worked there (Pile Designer calculation report, section Integral Pile — Geotechnical Axial Resistance)":"Module 01, worked there (Pile Designer calculation report, section Geotechnical Axial Resistance — Tip + Skin)")+", "+esc(q.txt.replace(/^PD · from Pile Designer, /,"pulled ")))(pxrTagState("iab.Rn")))+". P<sub>LL,far</sub> = the live-load share of the pile on the far side of the rigid-cap eccentricity (negative when the eccentricity lifts it).")   // PDA-IAB: source of R_n
+@@ -10587 +10587 @@ document.addEventListener("DOMContentLoaded",init);
+-      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
++      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module "+(g.pileType==="iab"?"13":"01")+")","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
+@@ -10590 +10590,6 @@ document.addEventListener("DOMContentLoaded",init);
+-      if(g.minPen) warns.push("Minimum penetration (10.7.6, Pile Designer): z_min = "+f(g.minPen.zMin,1)+" ft below grade ("+(g.minPen.governs||"")+")"+(num(g.minPen.tipElMin)?", tip El. "+f(g.minPen.tipElMin,1):"")+"; controlling tip "+f(g.minPen.controllingTipDepth,1)+" ft"+(num(g.minPen.tipElControlling)?" (El. "+f(g.minPen.tipElControlling,1)+")":"")+". This calculator has no tip input: shown in panel I-7 and the report.");
++      if(!conv&&g.pileType==="iab"){   // PDA-IAB (2026-10-21): Pile Designer's integral pile (Module 13) against this abutment's piles (panel I-0a)
++        const ts=String((p.integral&&p.integral.section)||(sp.section&&sp.section.designation)||"").toUpperCase(), Lp=+S.iab.Lpile;
++        if(ts&&ts!==String(S.iab.sec||"").toUpperCase()) warns.push("Different section: Pile Designer computed R_n for "+ts+", this abutment has "+S.iab.sec+" (panel I-0a).");
++        if(num(g.static.toeDepth)&&Lp>0&&Math.abs(g.static.toeDepth-Lp)>0.05) warns.push("Pile length: Pile Designer's R_n is for the toe "+f(g.static.toeDepth,1)+" ft below the cap (its required pile length, MassDOT 3.10.11.2); this abutment's pile length below the cap is "+f(Lp,1)+" ft (panel I-0a). Set the same length (Pile Designer: geotechnical length) or check R_n for "+f(Lp,1)+" ft.");
++      }
++      if(g.minPen) warns.push("Minimum penetration (10.7.6, Pile Designer): z_min = "+f(g.minPen.zMin,1)+" ft below "+(g.pileType==="iab"?"the bottom of the cap":"grade")+" ("+(g.minPen.governs||"")+")"+(num(g.minPen.tipElMin)?", tip El. "+f(g.minPen.tipElMin,1):"")+"; controlling tip "+f(g.minPen.controllingTipDepth,1)+" ft"+(num(g.minPen.tipElControlling)?" (El. "+f(g.minPen.tipElControlling,1)+")":"")+". This calculator has no tip input: shown in panel "+(conv?"I-7":"I-0a")+" and the report.");
+@@ -10637,2 +10642,2 @@ document.addEventListener("DOMContentLoaded",init);
+-    if(conv){
+-      h+=ck("geo","Geotechnical axial resistance R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> (panel I-7)",!(g&&g.static));
++    if(conv||(g&&g.static)){   // PDA-IAB (2026-10-21): an integral abutment gets the same R_n choice (panel I-0a) when Pile Designer sends its Module 13
++      h+=ck("geo","Geotechnical axial resistance R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> (panel "+(conv?"I-7":"I-0a")+")",!(g&&g.static));
+@@ -10639,0 +10645,2 @@ document.addEventListener("DOMContentLoaded",init);
++    }
++    if(conv){
+@@ -10683 +10690 @@ document.addEventListener("DOMContentLoaded",init);
+-      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,
++      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", ...(g.pileType==="iab"? { pileType:"iab", toe:g.static.toeDepth } : {}), field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,   // PDA-IAB: pileType, toe (integral pile, ft below the cap)
+@@ -10704 +10711,3 @@ document.addEventListener("DOMContentLoaded",init);
+-    else if(s.integral){ const q=s.integral; h+=`<br>${esc(q.section)} (${esc(q.orient)}): gravity D/C ${f(q.dcr,3)}${num(q.interaction)?"; Tier 2 interaction "+f(q.interaction,3)+" (nonlinear "+f(q.interaction_nl,3)+"), M<sub>uy</sub> = "+f(q.Muy,1)+" (nonlinear "+f(q.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.Mux,1)+" kip-ft":""}.`; }
++    else if(s.integral){ const q=s.integral; h+=`<br>${esc(q.section)} (${esc(q.orient)}): gravity D/C ${f(q.dcr,3)}${num(q.interaction)?"; Tier 2 interaction "+f(q.interaction,3)+" (nonlinear "+f(q.interaction_nl,3)+"), M<sub>uy</sub> = "+f(q.Muy,1)+" (nonlinear "+f(q.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.Mux,1)+" kip-ft":""}.`;
++      if(s.geo) h+=`<br>Geotechnical (Pile Designer Module 13${num(s.geo.toe)?", toe "+f(s.geo.toe,1)+" ft below the cap":""}): static R<sub>n</sub> = ${f(s.geo.Rn,1)} kip, φ = ${f(s.geo.phi,3)}; R<sub>n,up</sub> = ${f(s.geo.RnUp,1)} kip, φ<sub>up</sub> = ${f(s.geo.phiUp,3)}${s.geo.field?"; field method "+esc(s.geo.field.label)+": required R<sub>n</sub> = "+f(s.geo.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(s.geo.field.phi,3)+", R<sub>ndr</sub> = "+f(s.geo.field.Rndr,1)+" kip":""}${s.choices&&s.choices.geo?" (imported"+(PXR_STALE?"; STALE, not used":"")+": "+(s.choices.rn==="field"?"field method":"static")+"; Tab 10 §10.4)":" (not imported)"}.`;   // PDA-IAB
++      if(s.geo&&s.geo.minPen) h+=`<br>Minimum penetration (10.7.6): z<sub>min</sub> = ${f(s.geo.minPen.zMin,1)} ft below the cap (${esc(s.geo.minPen.governs)})${num(s.geo.minPen.tipElMin)?", tip El. "+f(s.geo.minPen.tipElMin,1):""}; controlling tip ${f(s.geo.minPen.ctrl,1)} ft${num(s.geo.minPen.tipElCtrl)?" (El. "+f(s.geo.minPen.tipElCtrl,1)+")":""}.`; }
+```
