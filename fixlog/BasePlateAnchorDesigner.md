@@ -2142,3 +2142,47 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Open items:**
   - PROFIS's exact shear rule (hole condition, `ShearLoadDistributionType UpToFirstThreeRows`) is not documented in the repository, and the Hilti design guide was not reachable. The option implements an equal V/n share on every anchor. Confirm it against a PROFIS anchor-force table for a design where Case 2 governs.
   - The PROFIS export still writes the template `HoleCondition One` / `UpToFirstThreeRows`, whatever this option is.
+
+## 2026-10-21 — BP-E1: §17.6.2.1.2 reduced h_ef — s is the spacing across the member between opposite near edges, as Hilti PROFIS (Tier 2, calc change, MORE conservative where it changes)
+- **Engineer report (2026-10-21):** the tension-breakout h_ef did not match PROFIS. Reference files in `mlococo88/Hilti_Profis_References`:
+  - `Drafts_Wyoming Hill Stairs 3D - Top (h_eff check).pdf` (PROFIS 3.1.36);
+  - `Canopy · MIDAS MCT Generator (h_eff check).pdf` (this tool, embedded in the canopy app).
+- **Function / anchor:** `hefEffective()`, comment `BP-E1 (2026-10-21)`. The derivation row "s" in `tensionBreakoutGroup()` steps (anchor text `"anchor spacing "+he.sBasis`).
+- **Before:**
+  ```js
+  const s=Math.max(g.sx||0, g.sy||0);
+  ```
+- **After:**
+  ```js
+  const lim=1.5*hef, pairX=(g.ca_x_pos<lim && g.ca_x_neg<lim), pairY=(g.ca_y_pos<lim && g.ca_y_neg<lim);
+  const s=(pairX||pairY)? Math.max(pairX?(g.sx||0):0, pairY?(g.sy||0):0) : Math.max(g.sx||0, g.sy||0);
+  ```
+- **Problem:**
+  - h_ef′ = max(c_a,max/1.5, s/3). The tool took s as the larger group dimension in either direction.
+  - With anchors near three edges, PROFIS takes s across the member, between the two opposite edges that are both within 1.5h_ef. The spacing toward the single near edge is not used.
+  - With no opposite pair (a corner, reached only through `hefReduce` = forced), s is unchanged.
+- **Governing provision:** ACI 318-19 §17.6.2.1.2 (h_ef′ = max(c_a,max/1.5, s/3), s = maximum spacing between anchors within the group). The reading is PROFIS's, as derived from the reference files (see the evidence below).
+- **Check case (the reference design):**
+  - Inputs:
+    - ½ in F1554-55 heavy hex, h_ef = 10 in, 2 × 2 anchors at x = ±2.25, y = ±4 in, 10 × 12 × 0.5 in plate;
+    - grouted stand-off e_b = 0.5 in, f′c = 5 ksi, cracked, h = 16 in;
+    - edges c_−x = c_+x = 3.75, c_−y = 2.0, c_+y = 20 in (pedestal 12 × 30 in, plate offset y = −9 in);
+    - combination 75 F2-C1 · STR5 A-0: N = −0.793 kip, Mx = 4.828, My = −0.482 kip-ft.
+  - 1.5h_ef = 15 in. Near edges: −x, +x, −y (3). Opposite pair: x only. c_a,max = 3.75 in.
+  - Before: s = max(4.5, 8.0) = 8.0 in. h_ef′ = max(3.75/1.5, 8/3) = max(2.50, 2.67) = **2.667 in**. Then A_Nco = 64.0, A_Nc = 142.50, N_b = 7.390, ψ_ec,N = 0.860 × 0.615, ψ_ed,N = 0.850, N_cbg = 7.392, φN_cbg = 5.17 kip. DCR = 5.841 / 5.17 = **1.13**.
+  - After: s = 4.5 in (across the ±x edges). h_ef′ = max(2.50, 1.50) = **2.500 in**. Then A_Nco = 9 × 2.5² = 56.25, A_Nc = 133.13, N_b = 24√5000 × 2.5^1.5 = 6.708, ψ_ec,N = 0.852 × 0.599, ψ_ed,N = 0.860, N_cbg = 6.970, φN_cbg = 4.879 kip. DCR = 5.841 / 4.879 = **1.197**.
+  - PROFIS: h_ef = 2.500, A_Nc = 133.12, A_Nco = 56.25, ψ_ec1 0.852, ψ_ec2 0.599, ψ_ed 0.860, N_b 6.708, N_cbg 6.974, φN_cbg 4.881, **120 %**. The anchor tensions agree too: 0 / 0.115 / 2.792 / 2.934 vs PROFIS 0 / 0.117 / 2.791 / 2.933; N_ua = 5.841.
+  - Pryout: A_Nc (all) 168 → 159.00 and V_cpg 32.98 → 32.614 kip. PROFIS: 159.00, 32.614.
+- **Evidence for the rule:**
+  - The reference design: PROFIS 2.500 = c_a,max/1.5, so PROFIS did not use the 8 in spacing toward the single −y edge.
+  - struct2v1 (all four edges near): PROFIS 3.333 = s/3 with s = 10. Unchanged.
+  - msa3a (corner): 4.667. Unchanged.
+  - The 12 reference reports 1–12 (square 2 × 2 groups, equal edges): 6.667 and 6.000. Unchanged.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: every computed number for default, msa3a, struct2v1, struct2v2 and torqued is identical to main. The test reports DIFFERENT (exit 1) only because the derivation text changed: the new `hefEff.sBasis` field and the "s" row wording. Expected.
+  - Scratch headless script, not committed: the check case above, main vs branch, reproduces the canopy app's report (φN_cbg 5.17, DCR 1.13) on main and PROFIS on the branch.
+- **Other copies:** the Canopy MCT Generator embeds this file through `tools/sync-bpad.py`. It is re-synced there.
+- **Open items:**
+  - **Three or more anchors in a row:** s along a row is the outer-to-outer extent, as before, not the spacing between neighbouring anchors. No PROFIS file on hand separates the two readings.
+  - **Clipping vs `ca_override`:** `breakoutExtents()` clips A_Nc by the pedestal size and plate offset, not by `conc.ca_override` edge distances. A design that overrides the edges without a matching pedestal gets an A_Nc inconsistent with its c_a values. Not changed; raise with the engineer.
