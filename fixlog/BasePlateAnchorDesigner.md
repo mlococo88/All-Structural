@@ -2186,3 +2186,39 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Open items:**
   - **Three or more anchors in a row:** s along a row is the outer-to-outer extent, as before, not the spacing between neighbouring anchors. No PROFIS file on hand separates the two readings.
   - **Clipping vs `ca_override`:** `breakoutExtents()` clips A_Nc by the pedestal size and plate offset, not by `conc.ca_override` edge distances. A design that overrides the edges without a matching pedestal gets an A_Nc inconsistent with its c_a values. Not changed; raise with the engineer.
+
+## 2026-10-21 — BP-E2: A_Nc clipped by the overridden edge distances (Tier 2, calc change; only designs using "c_a override")
+- **Engineer instruction (2026-10-21):** issues found while matching PROFIS are to be fixed in this tool too. Raised as an open item in BP-E1.
+- **Function / anchor:** `breakoutExtents()`, comment `BP-E2, 2026-10-21`. It is used by tension breakout, pryout and the breakout drawing.
+- **Before:**
+  ```js
+  const x1=Math.max(ux1, -C.Bx/2 - pxo), x2=Math.min(ux2, C.Bx/2 - pxo);
+  const y1=Math.max(uy1, -C.By/2 - pyo), y2=Math.min(uy2, C.By/2 - pyo);
+  ```
+- **After:**
+  ```js
+  let ex1=-C.Bx/2 - pxo, ex2=C.Bx/2 - pxo, ey1=-C.By/2 - pyo, ey2=C.By/2 - pyo;
+  if(C.ca_override){ const G=anchorGeom();
+    ex1=G.xmin-G.ca_x_neg; ex2=G.xmax+G.ca_x_pos; ey1=G.ymin-G.ca_y_neg; ey2=G.ymax+G.ca_y_pos; }
+  const x1=Math.max(ux1, ex1), x2=Math.min(ux2, ex2);
+  const y1=Math.max(uy1, ey1), y2=Math.min(uy2, ey2);
+  ```
+- **Problem:**
+  - With "c_a override" on, ψ_ed,N, c_a,min, the §17.6.2.1.2 edge count and the shear checks used the four entered edge distances. The breakout area A_Nc (and pryout) was still clipped by the pedestal size and plate offset.
+  - A design whose pedestal did not match the entered edges got an A_Nc inconsistent with its own c_a values. It could be too large (unconservative) or too small.
+  - The edges are now measured from the outer anchors, as the override defines them. Without the override, nothing changes.
+- **Governing provision:** ACI 318-19 §17.6.2.1 and Fig. R17.6.2.1(b): A_Nc is limited by the member edges.
+- **Check case 1 (the BP-E1 reference design, entered with the override):**
+  - Inputs: edges 3.75 / 3.75 / 20 / 2.0 in, pedestal left at 30 × 40 in.
+  - Before: A_Nc = 146.25, N_cbg = 7.657 kip, DCR 1.09; pryout A_Nc 180, V_cpg 36.92 kip.
+  - After: A_Nc = 133.13, N_cbg = 6.970 kip, DCR 1.197; pryout A_Nc 159, V_cpg 32.614 kip.
+  - PROFIS: 133.12 / 6.974 / 120 % / 159.00 / 32.614.
+  - The same design with a matching 12 × 30 in pedestal and no override gives 133.13 both before and after.
+- **Check case 2 (built-in validation msa3a, override 7 / 21 / 6 / 20, pedestal 28 × 26 offset 7, 7):**
+  - A_Nc 420 → 756 = 28 × 27. φN_cbg 21.97 → 39.55 kip; PROFIS 38.08.
+  - Pryout φV_cpg 43.94 → 79.09 kip; PROFIS 76.16.
+  - The error goes from −42 % to +3.9 %.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: default, struct2v1, struct2v2 and torqued are `same`. msa3a is DIFFERENT only in A_Nc and the values derived from it (tension breakout, pryout, their DCRs and derivation text), as in check case 2.
+- **Open item:** msa3a is still +3.9 % from PROFIS. 38.08 kip corresponds to A_Nc = 728 = 28 × 26, i.e. one edge 1 in closer in y than entered. That case's source report is not in the repository, so the entered edges cannot be checked.
