@@ -18967,3 +18967,123 @@ index 682aa9e..6e4028a 100644
 -  if (pileType === "iab") return idx === "12" ? "tier2" : "simp";
 +  if (pileType === "iab") return idx === "12" ? "tier2" : idx === "13" ? "geo" : "simp";   // PDA-IAB: Module 13 on the Geotechnical tab
 ```
+
+
+## 2026-10-21 — PR: claude/pile-iab-length — Integral pile: designed length from the abutment, required ≤ designed, unrounded R_n / φ on pileResults (PDA-IAB2) (PR link added after merge)
+
+Engineer decisions after #399: (1) import the abutment's designed pile length, evaluate the geotechnical resistance at that toe, report the required length max(L_geo, L_f + 5) separately and check required ≤ designed; keep the length-mismatch warning only for a user override; (2) send φ unrounded so both tools agree exactly; (3) clay uplift φ 0.25 (Table 10.5.5.2.3-1, α-method uplift) stays. Cross-tool PR (CLAUDE.md §7 exception): `abutment_calculator.html` (fixlog/abutment_calculator.md PDA-IAB2), HANDOFF.md §4.6, §4.10. Code sites tagged `PDA-IAB2`.
+
+### PDA-IAB2-1. Designed pile length `iabLpile` (import, input)   [new optional input]
+- **Where:** `DEFAULT_INPUTS` (anchor `iabLpile: 0,`); foundation-load import, integral target, anchor `if(isNum(G.Lpile) && G.Lpile>0) set('iabLpile',G.Lpile,'Designed pile length below the cap','ft');`; integral panel input `id: "iabLpile"` under "Geotech length".
+- **Before:** `if(isNum(G.Lpile)) r.warn.push('Pile length below the cap in the abutment: '+G.Lpile+' ft (not an input here; compare with the required length in the results).');`
+- **After:** the import sets `iabLpile` = `integral.Lpile` (marked as imported, amber); editable; 0 = not entered.
+
+### PDA-IAB2-2. Required ≤ designed (MassDOT BM Part I 3.10.11.2)   [new check when a designed length is entered]
+- **Where:** `computeAll`, integral branch, anchor `const lenChk = Ldes > 0 ? { req: reqLength, des: Ldes, pass: reqLength <= Ldes + 1e-9 } : null;`; `R.iab.pass` gets `&& (!lenChk || lenChk.pass)`.
+- **Before:** `pass: (tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk) && embedChk.pass && (!spacingChk || spacingChk.pass),` (required length reported only). **After:** `... && (!lenChk || lenChk.pass),` with L_req = max(L_geo, L_f + 5) unchanged and L_designed = `iabLpile`. No designed length (every project saved before this PR): no check, unchanged.
+- **Show the work:** Module 01 §4 "Pile tip elevation & fixity": `L_req = … ≤ L_designed = …` (RptCheck); report 01d row "Designed pile length below the cap ≥ required (§3.10.11.2)"; summary rows "Designed pile length ≥ required" / "Pile length (required ≤ designed)" (→ 01d); panel line under the input.
+
+### PDA-IAB2-3. Module 13 toe = the designed length   [calculation change, integral mode with Module 13 on]
+- **Where:** anchor `const toeG = Ldes > 0 ? Ldes : reqLength;`.
+- **Before:** `const toeG = reqLength;` **After:** the designed length when entered, else the required length (as before); `toeSrc` "designed" | "required" shown in Module 13, the report and the panel.
+
+### PDA-IAB2-4. pileResults: unrounded R_n / φ; length fields   [hand-off]
+- **Where:** `PileResultsXfer`: new `function nr(v){ return isNum(v)? v : null; }`; `geotech()` static `Rn`, `phiRn`, `phi`, `RnUp`, `phiRnUp`, `phiUp` (H-pile, integral and micropile), `method.phiDyn`, `field.phi`, `field.RnReq` use `nr` (before `rn(…)` to 0.001 kip, φ `rn(…,4)`); integral `static.toeBasis`, `requiredLength`, `designedLength`; `integral.tier1.designedLength`, `lengthPass`.
+
+### Check cases
+- **Hand check, Module 13 at the designed toe** (HP12X84, clay 0–15 ft S_u 1.5 ksf α 0.7, sand N1,60 40 below, N1,60 basis, default φ; abutment MassDOT integral, L_pile = 30 ft; L_geo not entered, L_f = 22 ft):
+  - L_req = max(0, 22 + 5) = 27 ft ≤ L_designed = 30 ft → OK (before: not checked).
+  - Before (toe = L_req = 27 ft): R_s2 = 0.8(4.095)(12) = 39.312 kip; q_p = min(0.8(40)(12)/1.02417 = 374.94, 320) = 320 ksf, R_p = 335.380 kip; R_n = 64.496 + 39.312 + 335.380 = 439.189 kip; φR_n = 0.35(64.496) + 0.30(374.692) = 134.981 kip.
+  - After (toe = 30 ft): R_s2 = 0.8(4.095)(15) = 49.140 kip; q_p = min(468.67, 320) = 320 ksf; R_n = 449.0167 kip; φR_n = 137.92982 kip; φ = 0.30718194. Tool equal.
+  - Required > designed: L_geo = 35 → L_req = 35 > 30 → NG in Module 01 (overall status NG), abutment dialog warns.
+  - Override: `iabLpile` 32 → toe 32 ft, R_n = 64.496 + 0.8(4.095)(17) + 335.380 = 455.569 kip; the abutment warns (32 ≠ 30). With the imported 30 ft: no length warning.
+- **Unrounded φ:** sent φ = 0.3071819434330609, R_n = 449.0166944444444 → abutment φ_c R_n = 137.9298208333333 = Pile Designer φR_n exactly (before: 0.3072 × 449.017 = 137.9380).
+
+### How verified
+- `node tests/check-syntax.mjs`: pass.
+- `computeAll` and the pileResults payload on the 8 input sets of PDA-IAB vs origin/main `c04815d`: no difference apart from the new keys and 16 R_n / φ values now unrounded (each within the old rounding).
+- End to end (Playwright, one context; abutment MassDOT integral → Pile Designer import → Module 13 → send → abutment pull): `iabLpile` = 30 imported; required 27 ≤ 30; Module 13 = the hand check; abutment `iab.Rn` 449.0166944444444, `iab.phiC` 0.3071819434330609, φ_c R_n = Pile Designer φR_n exactly; §10.4 328.810/137.930 = 2.3839. Variants: override 32 ft (mismatch warning only here), L_geo 35 (required > designed warning, Module 01 NG).
+
+### Open items
+- The Tier 2 p-y model length and the soil drawing still use the required length (`reqLength`); not changed here.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `c04815d`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 6e4028a..60b8c05 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -999 +999 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-    if(isNum(G.Lpile)) r.warn.push('Pile length below the cap in the abutment: '+G.Lpile+' ft (not an input here; compare with the required length in the results).');
++    if(isNum(G.Lpile) && G.Lpile>0) set('iabLpile',G.Lpile,'Designed pile length below the cap','ft');   // PDA-IAB2: Module 13 toe; checked against the required length (3.10.11.2)
+@@ -1205,0 +1206 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
++  function nr(v){ return isNum(v)? v : null; }   // PDA-IAB2 (2026-10-21): the values the abutment imports (R_n, phi) are sent unrounded
+@@ -1226,2 +1227,2 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-        static:{ Rn:rn(g.Rn_comp), phiRn:rn(g.phiRn_comp), phi:rn(g.phiEff_comp,4), side:rn(g.Rs_comp), tip:rn(g.Rp), RnUp:rn(g.Rn_up), phiRnUp:rn(g.phiRn_up), phiUp:rn(g.phiEff_up,4),
+-          toeDepth:rn(g.toe), scour:rn(g.zScour), smallGroupFactor:rn(g.grpFac,3),
++        static:{ Rn:nr(g.Rn_comp), phiRn:nr(g.phiRn_comp), phi:nr(g.phiEff_comp), side:rn(g.Rs_comp), tip:rn(g.Rp), RnUp:nr(g.Rn_up), phiRnUp:nr(g.phiRn_up), phiUp:nr(g.phiEff_up),   // PDA-IAB2: unrounded (the receiver's phi*R_n = this tool's)
++          toeDepth:rn(g.toe), scour:rn(g.zScour), smallGroupFactor:rn(g.grpFac,3), ...(gI? { toeBasis:g.toeSrc, requiredLength:rn(r.iab.reqLength), designedLength:r.iab.Ldes>0? r.iab.Ldes : null } : {}),   // PDA-IAB2
+@@ -1230 +1231 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-        method:{ key:drv.method||'static', label:drv.label||'', phiDyn:isNum(drv.phiTab)? rn(drv.phiTab*drv.grpFac,4) : null },
++        method:{ key:drv.method||'static', label:drv.label||'', phiDyn:isNum(drv.phiTab)? drv.phiTab*drv.grpFac : null },
+@@ -1237,2 +1238,2 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-        out.field={ method:drv.method, label:drv.label, phiTab:drv.phiTab, grpFac:drv.grpFac, phi:rn(drv.phiTab*drv.grpFac,4), owner:drv.own||'aashto',
+-          RnReq:gov? rn(gov.Rn) : null, RnReqCase:gov? gov.name : null, RnReqP:gov? rn(gov.P) : null, RnReqPhi:gov? rn(gov.phi,4) : null,
++        out.field={ method:drv.method, label:drv.label, phiTab:drv.phiTab, grpFac:drv.grpFac, phi:drv.phiTab*drv.grpFac, owner:drv.own||'aashto',   // PDA-IAB2: unrounded
++          RnReq:gov? nr(gov.Rn) : null, RnReqCase:gov? gov.name : null, RnReqP:gov? rn(gov.P) : null, RnReqPhi:gov? rn(gov.phi,4) : null,
+@@ -1250 +1251 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-      return { pileType:'micropile', static:{ Rn:rn(r.geo.Pn_geo), phiRn:rn(r.geo.phiPn_geo), phi:rn(r.geo.phi_geo,4), RnUp:rn(t.Pn_up_bond), phiRnUp:rn(t.phiPn_up), phiUp:rn(t.phi_up,4),
++      return { pileType:'micropile', static:{ Rn:nr(r.geo.Pn_geo), phiRn:nr(r.geo.phiPn_geo), phi:nr(r.geo.phi_geo), RnUp:nr(t.Pn_up_bond), phiRnUp:nr(t.phiPn_up), phiUp:nr(t.phi_up),   // PDA-IAB2: unrounded
+@@ -1272 +1273 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+-      tier1:{ applicable:!!q.tier1Applicable, eligible:!!q.bcAllOk, PuCap:rn(q.Pu), demand:rn(q.demand), dcr:rn(q.dcr,4), pass:!!q.cap_pass, Lf:rn(q.Lf), reqLength:rn(q.reqLength),
++      tier1:{ applicable:!!q.tier1Applicable, eligible:!!q.bcAllOk, PuCap:rn(q.Pu), demand:rn(q.demand), dcr:rn(q.dcr,4), pass:!!q.cap_pass, Lf:rn(q.Lf), reqLength:rn(q.reqLength), designedLength:q.Ldes>0? q.Ldes : null, lengthPass:q.lenChk? !!q.lenChk.pass : null,   /* PDA-IAB2 */
+@@ -5619,0 +5621,4 @@ function computeAll(I, opts = {}) {
++    // PDA-IAB2 (2026-10-21): designed pile length below the cap (I.iabLpile, from the abutment or entered; 0 = not entered):
++    // MassDOT BM 3.10.11.2 check L_req = max(L_geo, L_f + 5) <= L_designed. Not entered: no check (as before).
++    const Ldes = (I.iabLpile > 0) ? I.iabLpile : 0;
++    const lenChk = Ldes > 0 ? { req: reqLength, des: Ldes, pass: reqLength <= Ldes + 1e-9 } : null;
+@@ -5650,2 +5655,2 @@ function computeAll(I, opts = {}) {
+-      pass: (tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk) && embedChk.pass && (!spacingChk || spacingChk.pass),   // PDA-D13, PDA-IS
+-      embedChk, spacingChk, iabRule
++      pass: (tier1Applicable ? (bcAllOk && cap_pass) : bcAllOk) && embedChk.pass && (!spacingChk || spacingChk.pass) && (!lenChk || lenChk.pass),   // PDA-D13, PDA-IS, PDA-IAB2
++      embedChk, spacingChk, iabRule, Ldes, lenChk
+@@ -5664 +5669 @@ function computeAll(I, opts = {}) {
+-      const toeG = reqLength;
++      const toeG = Ldes > 0 ? Ldes : reqLength;   // PDA-IAB2: the designed toe; not entered: the required length (PDA-IAB)
+@@ -5670 +5675 @@ function computeAll(I, opts = {}) {
+-        pass: comp_passG && ga.drive.pass, toeG, topG, scourG, sectKey };
++        pass: comp_passG && ga.drive.pass, toeG, toeSrc: Ldes > 0 ? "designed" : "required", topG, scourG, sectKey };
+@@ -9163,0 +9169 @@ const DEFAULT_INPUTS = {
++  iabLpile: 0,              // PDA-IAB2 (2026-10-21): designed pile length below the cap (ft; from the abutment's integral.Lpile); 0 = not entered
+@@ -9962 +9968 @@ function rptModFor(name, pileType) {
+-    if (/^Required pile length/.test(L)) return ["01d"];
++    if (/^Required pile length|^Designed pile length/.test(L)) return ["01d"];   // PDA-IAB2
+@@ -10513,0 +10520 @@ function PrintReport({
++    if (b.lenChk) rows.push(["Designed pile length \u2265 required", b.lenChk.des, "ft", b.lenChk.req, b.lenChk.pass, "\u00a73.10.11.2"]);   // PDA-IAB2
+@@ -10963,0 +10971 @@ function PrintReport({
++              b.lenChk && /*#__PURE__*/React.createElement(RptRow, { label: "Designed pile length below the cap \u2265 required (\u00a73.10.11.2)", val: fmt(b.lenChk.des, 1) + " " + (b.lenChk.pass ? "\u2265" : "<") + " " + fmt(b.lenChk.req, 1) + " ft", pass: b.lenChk.pass }),   // PDA-IAB2
+@@ -10982 +10990 @@ function PrintReport({
+-        line("Section " + s.label + " (d = " + fmt(s.d, 2) + " in, bf = " + fmt(s.bf, 2) + " in); depths below the bottom of the pile cap (soil profile datum); toe at the required pile length L = " + fmt(g.toeG, 1) + " ft" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + "; demand Pu = " + fmt(g.STL, 2) + " kip per pile (Strength I)."),
++        line("Section " + s.label + " (d = " + fmt(s.d, 2) + " in, bf = " + fmt(s.bf, 2) + " in); depths below the bottom of the pile cap (soil profile datum); toe at " + (g.toeSrc === "designed" ? "the designed pile length" : "the required pile length (no designed length entered)") + " L = " + fmt(g.toeG, 1) + " ft" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + "; demand Pu = " + fmt(g.STL, 2) + " kip per pile (Strength I)."),
+@@ -12598,0 +12607 @@ function UtilizationDashboard({ r, I, pyRes }) {
++    if (b.lenChk) out.push(["Pile length (required \u2264 designed)", b.lenChk.des, b.lenChk.req, b.lenChk.pass, "3.10.11.2"]);   // PDA-IAB2
+@@ -17693,0 +17703,7 @@ function App() {
++    // PDA-IAB2 (2026-10-21): designed pile length below the cap (from the abutment calculator); checked against the required length
++    /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2 items-end" },
++      /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Designed pile length below the cap ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(ft; 0 = not entered)")),
++        /*#__PURE__*/React.createElement("input", { type: "number", id: "iabLpile", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLpile'), title: PileFoundationXfer.mkTip(I, 'iabLpile'), value: I.iabLpile || 0, onChange: e => set('iabLpile', Math.max(parseFloat(e.target.value) || 0, 0)) })),
++      r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: !r.iab.lenChk ? "#64748b" : r.iab.lenChk.pass ? "#2f6f3e" : "#b23b3b" } },
++        r.iab.lenChk ? (r.iab.lenChk.pass ? "\u2713 " : "\u2717 ") + "required L = max(L_geo, L_f + 5) = " + fmt(r.iab.lenChk.req, 1) + " ft " + (r.iab.lenChk.pass ? "\u2264" : ">") + " designed " + fmt(r.iab.lenChk.des, 1) + " ft (\u00a73.10.11.2)" : "required L = " + fmt(r.iab.reqLength, 1) + " ft (no designed length: not checked)")),
+@@ -17768,2 +17784,2 @@ function App() {
+-        " (static axial capacity: SPT N for sand / silt, Sᵤ and α for clay). In this mode every depth is measured below the bottom of the pile cap (the pile head), as the Tier 2 p-y profile. Pile toe = the required pile length L = max(Lₚgeo, Lᶠ + 5) = ",
+-        /*#__PURE__*/React.createElement("b", null, r.iab ? fmt(r.iab.reqLength, 1) + " ft" : "—"), " below the cap (§3.10.11.2; enter the geotechnical length above to set a longer pile)",
++        " (static axial capacity: SPT N for sand / silt, Sᵤ and α for clay). In this mode every depth is measured below the bottom of the pile cap (the pile head), as the Tier 2 p-y profile. Pile toe = " + (I.iabLpile > 0 ? "the designed pile length L = " : "no designed length entered: the required pile length L = max(L_geo, L_f + 5) = "),   // PDA-IAB2
++        /*#__PURE__*/React.createElement("b", null, r.iab ? fmt(I.iabLpile > 0 ? I.iabLpile : r.iab.reqLength, 1) + " ft" : "—"), " below the cap" + (I.iabLpile > 0 ? " (required " + (r.iab ? fmt(r.iab.reqLength, 1) : "—") + " ft, \u00a73.10.11.2)" : " (\u00a73.10.11.2)"),
+@@ -18671,0 +18688 @@ function App() {
++      b.lenChk && /*#__PURE__*/React.createElement(RptCheck, { pass: b.lenChk.pass, eq: `L_{req}=${fmt(b.lenChk.req, 1)}\\ \\text{ft}\\ ${b.lenChk.pass ? "\\le" : ">"}\\ L_{designed}=${fmt(b.lenChk.des, 1)}\\ \\text{ft (below the cap; abutment calculator / entered)}` }),   // PDA-IAB2
+@@ -18806 +18823 @@ function App() {
+-      /*#__PURE__*/React.createElement(Narr, null, "Integral abutment pile " + s.label + " (d = " + fmt(s.d, 2) + " in, bᶠ = " + fmt(s.bf, 2) + " in). Depths are below the bottom of the pile cap (the pile head), the datum of the soil profile in this mode. The pile toe is at the required pile length L = " + fmt(g.toeG, 1) + " ft (§3.10.11.2)" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + (g.scourG > 0 ? "; design scour " + fmt(g.scourG, 1) + " ft (Tier 2)" : "") + ". The demand is the factored gravity load per pile Pᵤ (Strength I)."),
++      /*#__PURE__*/React.createElement(Narr, null, "Integral abutment pile " + s.label + " (d = " + fmt(s.d, 2) + " in, bᶠ = " + fmt(s.bf, 2) + " in). Depths are below the bottom of the pile cap (the pile head), the datum of the soil profile in this mode. The pile toe is at L = " + fmt(g.toeG, 1) + " ft (" + (g.toeSrc === "designed" ? "the designed pile length; required " + fmt(r.iab.reqLength, 1) + " ft, \u00a73.10.11.2, checked in Module 01" : "no designed length entered: the required length, \u00a73.10.11.2") + ")" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + (g.scourG > 0 ? "; design scour " + fmt(g.scourG, 1) + " ft (Tier 2)" : "") + ". The demand is the factored gravity load per pile Pᵤ (Strength I)."),
+```
