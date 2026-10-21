@@ -1310,8 +1310,9 @@ function anchorGeom(){
    ACI 318-19 §17.6.2.1.2 — effective embedment reduction.
    When anchors are located < 1.5·hef from THREE OR MORE edges, hef used in the
    breakout equations is limited to hef_eff = max(ca,max/1.5, s/3), where
-   ca,max = largest edge distance and s = max spacing between adjacent anchors
-   in the group near the edges. This prevents overestimating the breakout cone
+   ca,max = largest edge distance and s = the anchor spacing across the member
+   between two opposite edges within 1.5·hef (BP-E1, as Hilti PROFIS; the larger
+   spacing when no such pair exists). This prevents overestimating the breakout cone
    in a "tight" member (narrow pedestal). Returns the effective hef + narrative.
    --------------------------------------------------------------- */
 function hefEffective(){
@@ -1321,7 +1322,11 @@ function hefEffective(){
   const near=nearEdges.length;   /* # edges within 1.5 hef */
   /* ca,max for the reduction is the largest edge distance AMONG the close (controlling) edges */
   const caMax=nearEdges.length? Math.max(...nearEdges) : Math.max(...edges);
-  const s=Math.max(g.sx||0, g.sy||0);
+  /* BP-E1 (2026-10-21): s = the spacing ACROSS the member, between two opposite edges that are
+     both within 1.5·hef (as Hilti PROFIS); with no such pair (a corner), the larger spacing as before */
+  const lim=1.5*hef, pairX=(g.ca_x_pos<lim && g.ca_x_neg<lim), pairY=(g.ca_y_pos<lim && g.ca_y_neg<lim);
+  const s=(pairX||pairY)? Math.max(pairX?(g.sx||0):0, pairY?(g.sy||0):0) : Math.max(g.sx||0, g.sy||0);
+  const sBasis=(pairX||pairY)? ("across the member between the "+(pairX&&pairY?"±x and ±y":(pairX?"±x":"±y"))+" edges") : "largest spacing (no pair of opposite edges within 1.5·h_ef)";
   const forced = (S.conc && S.conc.hefReduce===true);
   const applies = (near>=3) || forced;
   let hefEff=hef, gov="full";
@@ -1331,7 +1336,7 @@ function hefEffective(){
     if(hefEff>hef) hefEff=hef;   /* never increases hef */
     gov = (byEdge>=byS)?"ca,max/1.5":"s/3";
   }
-  return {hef, hefEff, applies, forced, near, caMax, s, byEdge:caMax/1.5, byS:s/3, gov};
+  return {hef, hefEff, applies, forced, near, caMax, s, sBasis, byEdge:caMax/1.5, byS:s/3, gov};
 }
 
 /* ---------------------------------------------------------------
@@ -1646,7 +1651,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
         "h_{ef,eff}=\\max\\left(\\frac{c_{a,max}}{1.5},\\ \\frac{s}{3}\\right)=\\max\\left(\\frac{"+fmt(he.caMax,2)+"}{1.5},\\ \\frac{"+fmt(he.s,2)+"}{3}\\right)=\\max("+fmt(he.byEdge,2)+","+fmt(he.byS,2)+")="+fmt(he.hefEff,2)+"\\ \\text{in}"],
        vars:[["h_{ef,nom}",fmt(hefNom,2)+" in","nominal embedment (user input)"],
              ["c_{a,max}",fmt(he.caMax,2)+" in","largest edge distance"],
-             ["s",fmt(he.s,2)+" in","max spacing between adjacent anchors near edges"],
+             ["s",fmt(he.s,2)+" in","anchor spacing "+he.sBasis],
              ["note","","Anchors are within 1.5·h_ef of "+he.near+" edges (≥3). ACI 318-19 §17.6.2.1.2 limits h_ef used in the breakout equations to prevent overestimating the failure cone in a tight member. This reduces N_b, A_Nco, and (through A_Nc) the group breakout — and carries into pryout, which is derived from N_cbg. Governs by "+he.gov+"."]]}]:[]).concat([
       {title:"Projected areas & modification factors",ref:"§17.6.2.1",
        lines:[
