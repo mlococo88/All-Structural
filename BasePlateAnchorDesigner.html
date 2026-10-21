@@ -911,7 +911,8 @@ function defaultState(){
     shear:{ dist:"equal",     /* equal | frontrow — legacy demand split */
             weldedPlate:false,  /* anchors welded to a common plate (headed studs on an embed plate).
                                    Anchor rods through a base plate with nuts are NOT welded. */
-            caseOverride:"auto" },  /* auto | c1 | c2 | c3 — Fig. R17.7.2.1b case selection */
+            caseOverride:"auto",    /* auto | c1 | c2 | c3 — Fig. R17.7.2.1b case selection */
+            hiltiDist:false },      /* BP-H1 (2026-10-21): true = steel / lever-arm shear demand V/n on every anchor (Hilti PROFIS, rigid plate); false = the share of the governing breakout case (default) */
     /* tension reinforcement */
     tRebar:{ present:false, size:"#5", qty:4, grade:"gr60", dev_check:true,
              pieceType:"ustirrup",  /* bar | hairpin | ustirrup | closedtie — legs derived */
@@ -2447,12 +2448,17 @@ function computeAll(){
                    " the "+vc.edgeName+" edge")+
                  (vc.forced? " (forced)":"");
      }}
-    const Vu_per=Vfront;
+    /* BP-H1 (2026-10-21): Hilti PROFIS option — every anchor takes an equal share of the shear
+       for the per-anchor checks (steel, lever arm); the breakout case still sets nV and the
+       breakout row */
+    const hiltiDist=!!(S.shear&&S.shear.hiltiDist);
+    const Vu_per=hiltiDist? Vres/nTot : Vfront;
+    if(hiltiDist && Vres>1e-9) frontDesc="all "+nTot+" anchors, V/n (Hilti PROFIS option; concrete breakout: "+frontDesc+")";
     /* annotate each anchor with its shear share and components (PROFIS-style table) */
     const uxr=(Vres>1e-9)?cb.Vx/Vres:0, uyr=(Vres>1e-9)?cb.Vy/Vres:0;
     perAnchor.forEach((p,i)=>{
       p.n=i+1;
-      p.inFront = frontSet? !!frontSet[i] : true;
+      p.inFront = (frontSet && !hiltiDist)? !!frontSet[i] : true;
       p.V = p.inFront? Vu_per : 0;
       p.Vx = p.V*uxr; p.Vy = p.V*uyr;
     });
@@ -4385,6 +4391,12 @@ function buildInputPanel(){
        ["c3","Force Case 3 (full V on front row)"]],
       ()=>S.shear.caseOverride||"auto",v=>S.shear.caseOverride=v,o=>o[1],o=>o[0]),"",
       "Automatic follows the figure: s &lt; c_a1,1 \u2192 Case 3; s \u2265 c_a1,1 \u2192 both Case 1 and Case 2 evaluated and the WORST governs. Force a case only with justification \u2014 if the forced case is less conservative than the automatic one, the Shear Distribution tab flags it.");
+    /* BP-H1 (2026-10-21) */
+    body.appendChild(el("h3",null,"Shear on each anchor (steel and lever-arm checks)"));
+    fRow(body,"Anchor shear share",selInput(
+      [["case","Governing breakout case (default)"],["hilti","Hilti PROFIS: equal share V/n on every anchor"]],
+      ()=>S.shear.hiltiDist?"hilti":"case",v=>S.shear.hiltiDist=(v==="hilti"),o=>o[1],o=>o[0]),"",
+      "Default: each anchor's steel shear (and stand-off lever-arm bending) is checked for the share of the governing case above, e.g. V/2 per anchor of a 2-anchor rear row in Case 2. <b>Hilti PROFIS</b> treats the plate as rigid and shares the shear equally, V/n, for these checks. Concrete breakout and pryout are the same either way (the case above).");
     /* el(tag,cls,text) sets textContent, so markup must go through innerHTML */
     {const n=el("div","note");
      n.innerHTML="Every applicable case is worked in full on the <b>Shear Distribution</b> output tab, with the controlling one named.";
@@ -10472,6 +10484,14 @@ function buildVCaseTab(pg){
     body.appendChild(w);
     body.appendChild(el("div","note","Current setting: anchors are "+
       (S.shear.weldedPlate?"WELDED to a common plate (Case 2 only).":"NOT welded to a common plate (Cases 1/2/3 as geometry dictates).")));
+    /* BP-H1 (2026-10-21) */
+    {const h=el("div","note");
+     const nA=(anchorGeom().pts||[]).length;
+     h.innerHTML="<b>Shear on each anchor (steel and lever-arm checks):</b> "+(S.shear.hiltiDist
+       ? "<b>Hilti PROFIS option</b> — every anchor takes an equal share, V<sub>u,a</sub> = V/n = V/"+nA+
+         " (rigid plate). The case worked below still sets the concrete breakout and pryout."
+       : "the share of the controlling case worked below (default). Select <i>Hilti PROFIS: equal share V/n</i> under 6. Shear Distribution on the Input tab to check each anchor for V/n as PROFIS does.");
+     body.appendChild(h);}
     /* reference figure */
     figureBlock(body, AVC_FIG,
       "ACI 318-19 Fig. R17.7.2.1b — calculation of A_Vc for single and grouped anchors, showing Cases 1, 2 and 3",
