@@ -698,6 +698,10 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     out.lay=checkLayout(p.pileLayout,out.warn);
     out.pd=checkPileDesign(p.pileDesign,out.warn);
     out.iab=checkIntegral(p.integral,out.warn);
+    /* AXI (2026-10-21): a payload from an integral abutment (element.type "integralAbutment", or element.abutmentType "integral")
+       carries per-pile loads of the integral design, not footing / pile-cap resultants: only the integral-abutment target applies */
+    var el=p.element||{}; out.intSrc=el.type==='integralAbutment' || el.abutmentType==='integral';
+    if(out.intSrc && !out.iab) out.warn.push('This hand-off is from an integral abutment but carries no usable integral-abutment data: nothing can be imported.');
     return out;
   }
   function mapAxes(c,ax){
@@ -821,6 +825,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     var r={err:[],warn:[],changes:[],patch:{},rows:[],fields:{}};
     if(I.pileType==='iab' && o.target!=='iab') r.err.push('Integral-abutment mode takes the unfactored gravity load per pile (MassDOT simplified method), not foundation load cases. '+(chk.iab?'Pick the target "Integral-abutment mode".':'This hand-off has no integral-abutment data (abutment type not Integral, or an older payload). Switch the pile type to micropile or H-pile to import the cases.'));
     if(o.target==='iab' && !chk.iab) r.err.push('This hand-off has no integral-abutment data.');
+    if(chk.intSrc && o.target!=='iab') r.err.push('This hand-off is from an integral abutment: its cases are per-pile axial loads of the integral design (no footing or pile cap resultant; the lateral demand is the imposed thermal movement). Pick the target "Integral-abutment mode".');   // AXI
     if(o.target==='perpile' && !chk.pd) r.err.push('This hand-off has no per-pile governing loads.');
     if(o.ax.x.charAt(1)===o.ax.y.charAt(1)) r.err.push('Map pile x and y to different hand-off axes.');
     var picked=chk.cases.filter(function(c,j){ return o.sel[j]; });
