@@ -883,7 +883,8 @@ function defaultState(){
              head:"hvyhexhead",    /* default heavy hex head (engineer 2026-10-16, BP-D1; was "heavyhex" = standard hex) | heavyhex(hex) | hvyhexhead | sqhead | hvysqhead | stud | platewasher | plainrod */
              washer_od:3.0,        /* plate washer outside dimension (in), used if head=platewasher */
              washer_id:0,          /* washer hole diameter (0 → use d+1/8) */
-             futa_from_grade:true, futa:0 },
+             futa_from_grade:true, futa:0,
+             torqued:false },      /* BP-T1 (2026-10-21): anchor installation, false = untorqued (default; saves without the field are untorqued), true = torqued (ACI 318-19 Table 17.9.2a) */
     /* grout / stand-off — unified PROFIS-style type selector */
     grout:{ present:true, tg:1.0, fc_grout:5, taper:"1to1" },
     /* stand-off type: "none" | "noclamp" | "clamp" | "grout"  (matches PROFIS four types) */
@@ -1109,10 +1110,12 @@ const BPAD_CARDS={pbBend:["tabPlate","Base Plate Bending"],pbTear:["tabPlate","B
   coVB:["tabConc","Concrete Breakout — Shear"],coPry:["tabConc","Pryout"],
   anSteelT:["tabAnchor","Steel Strength — Tension"],anSteelV:["tabAnchor","Steel Strength — Shear"],anLevNut:["tabAnchor","Stand-off Bending"],
   anRodComp:["tabAnchor","Exposed Rod Compression"],anInt:["tabAnchor","Combined Tension–Shear Interaction"],
+  anInstall:["tabAnchor","Installation Limits — Spacing & Edge Distance"],
   trCap:["tabTRebar","Anchor Reinforcement — Tension"],trDev:["tabTRebar","Development Each Side of the Breakout Cone"],vrCap:["tabVRebar","Hairpin Shear Reinforcement"]};
 /* card for a check label (allChecks) or a capacity mode label (kind "T"/"V") */
 function bpadCardFor(label,kind){
   const l=String(label||"").toLowerCase();
+  if(/\(torqued\)/.test(l)) return "anInstall";   /* BP-T1 */
   if(/base plate bending/.test(l)) return "pbBend";
   if(/tearout/.test(l)) return "pbTear";
   if(/concrete bearing/.test(l)) return "coBrg";
@@ -4238,6 +4241,12 @@ function buildInputPanel(){
     fRow(body,"Head / bearing type",selInput(
       [["heavyhex","Hex head bolt"],["hvyhexhead","Heavy hex head bolt"],["sqhead","Square head bolt"],["hvysqhead","Heavy square bolt"],["stud","Welded headed stud (AWS D1.1 B)"],["platewasher","Plate washer"],["plainrod","Plain threaded rod (no head)"]],
       ()=>S.anchor.head,v=>S.anchor.head=v,o=>o[1],o=>o[0]),"");
+    /* BP-T1 (2026-10-21): torqued / untorqued, as in Hilti PROFIS (AnchorTorqueType) */
+    fRow(body,"Anchor installation",selInput([["untorqued","Untorqued"],["torqued","Torqued"]],
+      ()=>S.anchor.torqued?"torqued":"untorqued",v=>S.anchor.torqued=(v==="torqued"),o=>o[1],o=>o[0]),"");
+    body.appendChild(el("div","note",S.anchor.torqued
+      ? "Torqued: ACI 318-19 Table 17.9.2a requires anchor spacing \u2265 6d\u2090 and edge distance \u2265 6d\u2090. Both are checked (Summary; worked on the Anchor Bolts tab)."
+      : "Untorqued: ACI 318-19 Table 17.9.2a requires anchor spacing \u2265 4d\u2090; the edge distance is limited only by the specified cover (\u00a720.5.1.3). Select Torqued if the anchors will be pretensioned."));
     if(S.anchor.head==="platewasher"){
       fRow(body,"Plate washer size (□)",numInput(()=>S.anchor.washer_od,v=>S.anchor.washer_od=v,0.25),"in");
       fRow(body,"Washer hole dia. (0=auto)",numInput(()=>S.anchor.washer_id,v=>S.anchor.washer_id=v,0.0625),"in");
@@ -4911,6 +4920,12 @@ function buildOutput(){
 }
 function renderAllTex(){ /* eqBlock renders inline already */ }
 
+/* BP-T1 (2026-10-21): the §17.9 PASS/FAIL rows, torqued anchors only (untorqued spacing < 4dₐ blocks the output) */
+function installRows(){
+  const IL=installLimits(); if(!IL.tq) return [];
+  return [{label:"Anchor Spacing \u2265 6d\u2090 (torqued)",ref:"Table 17.9.2a",dcr:IL.sMin!=null?IL.dcrS:0,na:IL.sMin==null},
+          {label:"Edge Distance \u2265 6d\u2090 (torqued)",ref:"Table 17.9.2a",dcr:IL.dcrC}];
+}
 /* ---------------- collect all checks for dashboard ---------------- */
 function allChecks(){
   if(!CC) return [];
@@ -4944,6 +4959,8 @@ function allChecks(){
     push("int","Combined T–V Interaction","§17.8",it.dcr,"tabAnchor");
   });
   ["stT","po","tb","sfb","stV","sbk","pry","int"].forEach(k=>{ if(modes[k]) checks.push(modes[k]); });
+  /* BP-T1 (2026-10-21): torqued anchors — ACI 318-19 Table 17.9.2a minimum spacing and edge distance (6dₐ) */
+  installRows().forEach(r=>checks.push(Object.assign({combo:"\u2014",tab:"tabAnchor"},r)));
   /* rebar */
   if(S.tRebar.present){ const tr=tensionRebarCheck(CC);
     checks.push({label:"Anchor Reinf. Tension",ref:"§17.5.2.1.1",dcr:tr.dcr,combo:tr.gov,tab:"tabTRebar"});
@@ -5636,7 +5653,7 @@ function buildInputEcho(pg){
     const rows=[
       ["Plate", S.plate.B+"″ × "+S.plate.N+"″ × "+S.plate.t+"″, "+pgrade(S.plate.grade).name],
       ["Column", colDims().label+", ecc ("+S.plate.exc_x+", "+S.plate.exc_y+")″"],
-      ["Anchors", S.anchor.nx+"×"+S.anchor.ny+" of "+fmt(S.anchor.dia,3)+"″ "+agrade(S.anchor.grade).name+", hef="+S.anchor.hef+"″"],
+      ["Anchors", S.anchor.nx+"×"+S.anchor.ny+" of "+fmt(S.anchor.dia,3)+"″ "+agrade(S.anchor.grade).name+", hef="+S.anchor.hef+"″, "+(S.anchor.torqued?"torqued":"untorqued")],
       ["Grout", S.grout.present?(S.grout.tg+"″, f'c="+S.grout.fc_grout+" ksi, "+S.grout.taper):"none"],
       ["Concrete", "f'c="+S.conc.fc+" ksi, "+S.conc.Bx+"×"+S.conc.By+"×"+S.conc.H+"″, "+(S.conc.cracked?"cracked":"uncracked")],
       ["Shear distribution", "ACI Fig. R17.7.2.1b case selection ("+
@@ -5904,6 +5921,37 @@ function buildAnchorTab(pg){
       {load:it.dcr,cap:1.0,unit:"",dec:3,
        loadSym:"interaction value",capSym:"limit",
        basis:it.governingForm+" form governs; \u03b2N = "+fmt(it.rN,3)+", \u03b2V = "+fmt(it.rV,3)});
+  },pg);
+
+  /* BP-T1 (2026-10-21): ACI 318-19 §17.9 installation limits, worked (CLAUDE.md §6) */
+  mkSection("anInstall",SN()+"Installation Limits \u2014 Spacing & Edge Distance",body=>{
+    const IL=installLimits(), d=IL.da, pr=IL.pair, E=IL.edges;
+    body.appendChild(el("div","note","Anchor installation: "+(IL.tq?"TORQUED":"UNTORQUED")+" (input 2. Anchors). "+
+      "ACI 318-19 Table 17.9.2a, cast-in anchors: minimum spacing 4d\u2090 not torqued, 6d\u2090 torqued; "+
+      "minimum edge distance = specified cover (\u00a720.5.1.3) not torqued, 6d\u2090 torqued. These limits do not depend on the load combination."));
+    body.appendChild(eqBlock({title:"Minimum anchor spacing",ref:"ACI 318-19 \u00a717.9.2, Table 17.9.2a",
+      lines: IL.sMin==null ? ["\\text{Single anchor: no spacing limit applies.}"] : [
+        "s_{min}=\\min_{i\\ne j}\\sqrt{(x_j-x_i)^2+(y_j-y_i)^2}=\\sqrt{("+fmt(pr[1].x,3)+"-("+fmt(pr[0].x,3)+"))^2+("+fmt(pr[1].y,3)+"-("+fmt(pr[0].y,3)+"))^2}="+fmt(IL.sMin,3)+"\\ \\text{in}",
+        "s_{req}="+IL.kS+"\\,d_a="+IL.kS+"\\times"+fmt(d,3)+"="+fmt(IL.sReq,3)+"\\ \\text{in}\\quad(\\text{"+(IL.tq?"torqued":"not torqued")+"})",
+        "\\frac{s_{req}}{s_{min}}=\\frac{"+fmt(IL.sReq,3)+"}{"+fmt(IL.sMin,3)+"}="+fmt(IL.dcrS,3)+(IL.dcrS<=1.0001?"\\le1.0":">1.0")],
+      vars: IL.sMin==null ? [] : [["s_{min}",fmt(IL.sMin,3)+" in","least centre-to-centre distance; anchors at ("+fmt(pr[0].x,2)+", "+fmt(pr[0].y,2)+") and ("+fmt(pr[1].x,2)+", "+fmt(pr[1].y,2)+") in, plate-centre coordinates"],
+        ["d_a",fmt(d,3)+" in","anchor diameter"]]}));
+    if(IL.sMin!=null){
+      if(IL.tq) dcrBox(body,IL.dcrS,false,{load:IL.sReq,cap:IL.sMin,unit:"in",dec:3,loadSym:"s_req = 6d\u2090",capSym:"s_min",basis:"torqued, Table 17.9.2a"});
+      else body.appendChild(el("div","okBox","s_min = "+fmt(IL.sMin,3)+" in \u2265 4d\u2090 = "+fmt(IL.sReq,3)+" in \u2014 OK (not torqued; spacing below 4d\u2090 withholds all output)."+
+        (IL.sMin<6*d? " It is below 6d\u2090 = "+fmt(6*d,3)+" in, which would govern if the anchors were torqued." : "")));
+    }
+    body.appendChild(eqBlock({title:"Minimum edge distance",ref:"ACI 318-19 \u00a717.9.2, Table 17.9.2a",
+      lines:[
+        "c_{a,min}=\\min(c_{a,+x},\\,c_{a,-x},\\,c_{a,+y},\\,c_{a,-y})=\\min("+E.map(e=>fmt(e[1],3)).join(",\\,")+")="+fmt(IL.caMin,3)+"\\ \\text{in}",
+        IL.tq ? "c_{req}=6\\,d_a=6\\times"+fmt(d,3)+"="+fmt(IL.cReq,3)+"\\ \\text{in}\\quad(\\text{torqued})"
+              : "c_{req}=\\text{specified cover (Sec. 20.5.1.3), not torqued; not computed by this program}"]
+        .concat(IL.tq? ["\\frac{c_{req}}{c_{a,min}}=\\frac{"+fmt(IL.cReq,3)+"}{"+fmt(IL.caMin,3)+"}="+fmt(IL.dcrC,3)+(IL.dcrC<=1.0001?"\\le1.0":">1.0")] : []),
+      vars:[["c_{a,min}",fmt(IL.caMin,3)+" in","outermost anchor centre to the nearest concrete edge ("+IL.caEdge+" edge)"+(S.conc.ca_override?"; edge distances entered on the Concrete input":"")]]}));
+    if(IL.tq) dcrBox(body,IL.dcrC,false,{load:IL.cReq,cap:IL.caMin,unit:"in",dec:3,loadSym:"c_req = 6d\u2090",capSym:"c_a,min",basis:"torqued, Table 17.9.2a"});
+    else body.appendChild(el("div","note","Not torqued: confirm the specified concrete cover of \u00a720.5.1.3 at c_a,min = "+fmt(IL.caMin,3)+" in."+
+      (IL.caMin<6*d? " It is below 6d\u2090 = "+fmt(6*d,3)+" in, which would govern if the anchors were torqued." : "")));
+    body.appendChild(el("div","note","Not applied: \u00a717.9.3 (a smaller d\u2090\u2032 for untorqued anchors whose installation does not produce splitting forces; this program withholds output below 4d\u2090 instead) and \u00a717.9.4 (h_ef limit for post-installed expansion and undercut anchors; this program designs cast-in anchors only)."));
   },pg);
 }
 
@@ -9160,6 +9208,30 @@ function buildVisualTab(pg){
   },pg);
 }
 
+/* ---- ACI 318-19 §17.9 installation limits, cast-in anchors (BP-T1, 2026-10-21) ----
+   Table 17.9.2a (§17.9.2): minimum anchor spacing 4dₐ not torqued, 6dₐ torqued; minimum edge
+   distance = specified cover (§20.5.1.3) not torqued, 6dₐ torqued.
+   s_min  = least centre-to-centre distance between any two anchors (adjacent anchors, not the
+            extent of the group).
+   c_a,min = least distance from an anchor centre to a concrete edge (the four group edge distances).
+   §17.9.3 (smaller dₐ′ for untorqued anchors) is not used: spacing below 4dₐ blocks the output.
+   §17.9.4 (h_ef limit) applies to post-installed expansion and undercut anchors only, which this
+   tool does not design. */
+function installLimits(){
+  const A=S.anchor, g=anchorGeom(), da=A.dia, tq=!!A.torqued, pts=g.pts;
+  let sMin=Infinity, pair=null;
+  for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+    const d=Math.hypot(pts[j].x-pts[i].x, pts[j].y-pts[i].y);
+    if(d<sMin-1e-9){ sMin=d; pair=[pts[i],pts[j]]; } }
+  const edges=[["+x",g.ca_x_pos],["\u2212x",g.ca_x_neg],["+y",g.ca_y_pos],["\u2212y",g.ca_y_neg]];
+  const ce=edges.reduce((m,e)=>(e[1]<m[1])?e:m, edges[0]);
+  const kS=tq?6:4, sReq=kS*da, cReq=tq?6*da:null, has2=isFinite(sMin);
+  return {tq, da, kS, sReq, cReq, edges,
+    sMin:has2?sMin:null, pair, caMin:ce[1], caEdge:ce[0],
+    dcrS:has2? (sMin>0? sReq/sMin : Infinity) : null,
+    dcrC:tq? (ce[1]>0? cReq/ce[1] : Infinity) : null};
+}
+
 /* ---------------- VALIDATION ---------------- */
 let VALIDATION={errs:[],warns:[],blockers:[]};
 function validateInputs(){
@@ -9204,16 +9276,19 @@ function validateInputs(){
     msg:"Anchor edge distance places bolts outside the plate — check edge distances vs. plate size."});
   if(g.ca_x_pos<1.5*A.dia||g.ca_y_pos<1.5*A.dia) warns.push("Anchor edge distance to concrete is small; splitting/blowout may govern (§17.9).");
   if(standoffParams().hasStandoff && standoffParams().z>8*S.anchor.dia) warns.push("Exposed stand-off length exceeds 8·d; bending may govern and lateral stability should be verified.");
-  /* ---- ACI 318-19 §17.9 installation limits (cast-in) ---- */
-  { const sMin=Math.min(g.sx||1e9, g.sy||1e9);
-    if(isFinite(sMin) && sMin < 4*A.dia)
+  /* ---- ACI 318-19 §17.9 installation limits (cast-in), BP-T1 (2026-10-21) ----
+     Spacing below 4dₐ blocks the output (torqued or not). Torqued anchors: spacing and edge
+     distance below 6dₐ are FAIL rows on the Summary (allChecks), not warnings. Untorqued
+     anchors: the 6dₐ torqued limits are noted as warnings, so a design that will in fact be
+     torqued is not missed. */
+  { const IL=installLimits(), sMin=IL.sMin, caMin=IL.caMin;
+    if(sMin!=null && sMin < 4*A.dia)
       errs.push({block:true, code:"§17.9.2",
-        msg:"Anchor spacing "+fmt(sMin,2)+"″ is below the §17.9.2 minimum of 4·dₐ = "+fmt(4*A.dia,2)+"″ for untorqued cast-in anchors (6·dₐ if torqued)."});
-    else if(isFinite(sMin) && sMin < 6*A.dia)
-      warns.push("Anchor spacing "+fmt(sMin,2)+"″ satisfies the untorqued minimum (4·dₐ) but is below 6·dₐ = "+fmt(6*A.dia,2)+"″ — §17.9.2 requires 6·dₐ if the anchors will be torqued.");
-    const caMin=Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
-    if(caMin < 6*A.dia)
-      warns.push("Minimum edge distance "+fmt(caMin,2)+"″ is below 6·dₐ = "+fmt(6*A.dia,2)+"″ — acceptable untorqued if cover per §20.5.1.3 is met, but §17.9.3 requires ≥6·dₐ if the anchors will be torqued.");
+        msg:"Anchor spacing "+fmt(sMin,2)+"″ is below the ACI 318-19 Table 17.9.2a minimum of 4·dₐ = "+fmt(4*A.dia,2)+"″ for cast-in anchors ("+(IL.tq?"6·dₐ = "+fmt(6*A.dia,2)+"″ for the torqued anchors set here":"6·dₐ if torqued")+")."});
+    else if(!IL.tq && sMin!=null && sMin < 6*A.dia)
+      warns.push("Anchor spacing "+fmt(sMin,2)+"″ satisfies the untorqued minimum (4·dₐ) but is below 6·dₐ = "+fmt(6*A.dia,2)+"″. The anchors are set as untorqued; if they will be torqued, set Anchor installation = Torqued (Table 17.9.2a, §17.9.2, requires 6·dₐ).");
+    if(!IL.tq && caMin < 6*A.dia)
+      warns.push("Minimum edge distance "+fmt(caMin,2)+"″ is below 6·dₐ = "+fmt(6*A.dia,2)+"″. Acceptable for the untorqued anchors set here if the cover of §20.5.1.3 is met; if they will be torqued, set Anchor installation = Torqued (Table 17.9.2a, §17.9.2, requires ≥ 6·dₐ).");
     const headAllow = 1.0*A.dia;            /* heavy-hex head/nut height ≈ dₐ */
     const coverAllow = 0.75;                /* clear cover below the head */
     const Hmin = A.hef + headAllow + coverAllow;
@@ -9809,6 +9884,7 @@ function bpadResultRows(tabId, ci){
       const M=dcrMatrix(); const r=M && M.rows[ci];
       const map={stT:"tabAnchor",po:"tabAnchor",stV:"tabAnchor",so:"tabAnchor",int:"tabAnchor",tb:"tabConc",sfb:"tabConc",sbk:"tabConc",pry:"tabConc"};
       if(r) M.modes.forEach(m=>{ if(map[m.key]===tabId && r.dcr[m.key]!==undefined) rows.push([m.label,"ACI 318-19 "+m.ref,r.dcr[m.key]]); });
+      if(tabId==="tabAnchor") installRows().forEach(k=>rows.push([k.label,"ACI 318-19 "+k.ref,k.na?null:k.dcr]));   /* BP-T1 */
     }
   } else {
     allChecks().filter(k=>k.tab===tabId).forEach(k=>rows.push([k.label,k.ref,k.na?null:k.dcr,k.combo]));
@@ -11286,6 +11362,7 @@ function openProfisImport(){
       if(res.st.pedBx==null) missing.push("pedestal dimensions (no anchor coordinate table found)");
       if(!res.st.combos||!res.st.combos.length) missing.push("load combinations");
       if(res.st.plateB==null) missing.push("plate dimensions");
+      missing.push("anchor installation, torqued / untorqued (PROFIS reports do not print it; set it under 2. Anchors)");   /* BP-T1 */
       if(missing.length) host.appendChild(el("div","warnBox","Not found (your current values will be kept): "+missing.join("; ")+"."));
       host.appendChild(el("div","warnBox","Pedestal size and plate offset are DERIVED from the anchor edge distances — PROFIS does not state member plan dimensions directly. Verify them against your drawings after import."));
       apply.disabled=false;
@@ -12260,6 +12337,10 @@ function profisBuildPe(opts){
   row("Anchor layout",nx+" × "+ny+" = "+pts.length+" anchors; x = "+[...new Set(pts.map(p=>fmt(p.x,3)))].join(", ")+
       " in; y = "+[...new Set(pts.map(p=>fmt(p.y,3)))].join(", ")+" in",
       "AnchorLayoutId "+kid(al,"AnchorLayoutId").textContent+(lay?"":" (template)")+", "+pts.length+" explicit points (mm)", lay?"ok":"check");
+  /* BP-T1 (2026-10-21): AnchorTorqueType from the input (PROFIS values "Torqued" / "Untorqued",
+     confirmed in the engineer's re-saved files Drafts_Untitled (1)/(2).pe); IsReducedInstallTorque stays false */
+  setT(kid(al,"AnchorTorqueType"),A.torqued?"Torqued":"Untorqued");
+  row("Anchor installation",A.torqued?"Torqued":"Untorqued","AnchorTorqueType "+(A.torqued?"Torqued":"Untorqued"),"ok");
   if(!lay) verify.push("Anchor layout: no PROFIS layout ID is known for "+nx+" × "+ny+" anchors. The explicit anchor points are written with layout ID 8 (the 2 × 2 template) — check the anchor positions in PROFIS.");
   /* plate outline (CalculatedData; PROFIS recalculates it) */
   { const list=kid(cd,"AnchorPlatePoints"), proto=list.children[0].cloneNode(true);
@@ -12812,7 +12893,7 @@ manPart("p2","2. Input Reference",[
 {h3:"Grout and stand-off"},
 {p:"Four stand-off conditions are supported: none, no clamping, clamped, and grouted. They differ in α<sub>M</sub> (1.0 or 2.0), whether the 0.80 grout shear factor applies, and whether the bending check runs at all. An open (ungrouted) gap additionally suppresses concrete bearing and substitutes a rod compression and buckling check."},
 {h3:"Installation limits (§17.9)"},
-{p:"The program checks the cast-in installation limits of ACI 318-19 §17.9 and reports findings in the banner above the output tabs: minimum anchor spacing of 4d<sub>a</sub> (untorqued) or 6d<sub>a</sub> (torqued) per §17.9.2, edge distance relative to the 6d<sub>a</sub> torqued threshold of §17.9.3, and whether the member depth actually accommodates h<sub>ef</sub> plus the anchor head and cover &mdash; the quantity PROFIS reports as &ldquo;minimum thickness of the base material&rdquo;. Spacing below the untorqued minimum is treated as an error; the others as warnings, since they depend on installation details (torquing, cover) the program cannot see."},
+{p:"The program checks the cast-in installation limits of ACI 318-19 §17.9 and reports findings in the banner above the output tabs (torqued anchors: on the Summary): minimum anchor spacing of 4d<sub>a</sub> (untorqued) or 6d<sub>a</sub> (torqued) per §17.9.2, minimum edge distance of 6d<sub>a</sub> for torqued anchors (both in Table 17.9.2a), and whether the member depth actually accommodates h<sub>ef</sub> plus the anchor head and cover &mdash; the quantity PROFIS reports as &ldquo;minimum thickness of the base material&rdquo;. Select <b>Anchor installation</b> (Untorqued / Torqued, as in PROFIS) under 2. Anchors. Spacing below 4d<sub>a</sub> withholds the output. For torqued anchors, spacing and edge distance below 6d<sub>a</sub> are FAIL rows on the Summary, worked on the Anchor Bolts tab (Installation Limits). For untorqued anchors the edge distance is limited only by the specified cover (§20.5.1.3), which the program does not check; values below 6d<sub>a</sub> are noted as warnings in case the anchors will be torqued. The member-depth check is a warning."},
 {h3:"Reinforcement"},
 {p:"Tension or shear reinforcement, when present, substitutes a steel check on the bars for the corresponding concrete breakout check per §17.5.2.1 and raises &phi; to 0.75. The substitution is only credited once the geometry is verified and the detailing is confirmed — until then the concrete breakout check it would replace stays enforced, so a provisional layout cannot silently switch off breakout."},
 {p:"<b>Effectiveness is decided per leg from the geometry, not from the quantity you type.</b> A stirrup or tie contributes one leg per side at its true plan position; a hairpin two; a single bar one. Each leg is credited only if it (1) sits within the effective-placement zone of an anchor that is in tension &mdash; 0.5·h<sub>ef</sub> (reduced) in plan for tension bars, 0.5·c<sub>a1</sub> for shear hairpins, both hard limits; (2) actually crosses the assumed failure surface; and (3) is developed on both sides of that surface. &phi;N<sub>r</sub> (or &phi;V<sub>r</sub>) counts only the legs that pass all three &mdash; a leg on the compression side, or one wrapped too wide to reach its rod, earns nothing. The plan view colours each leg by verdict and, in the app, lets you click a leg to see which anchor credits it, the crossing, the development, and the reason it did or did not qualify."},
