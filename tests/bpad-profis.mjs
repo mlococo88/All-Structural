@@ -31,6 +31,8 @@ async function results(src) {
     const R = await p.evaluate(() => {
       const strip = o => JSON.parse(JSON.stringify(o, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v)));
       const cases = [['default', () => defaultState()]].concat(VALIDATION_CASES.map(c => [c.id, () => c.setup()]));
+      /* BP-T1 (2026-10-21): torqued anchors add the §17.9 spacing / edge-distance rows; pedestal 22 in → edge DCR 1.20 */
+      cases.push(['torqued', () => { const s = defaultState(); s.anchor.torqued = true; s.conc.Bx = 22; return s; }]);
       const out = {};
       for (const [id, mk] of cases) {
         S = mergeState(mk()); S.proj.date = '2026-01-01';
@@ -40,7 +42,10 @@ async function results(src) {
         const caps = CC.combos.map(c => { const cap = comboCapacities(CC, c); return strip(cap); });
         let rep = '';
         try { buildPrintReport(); const h = document.getElementById('printReport'); rep = h ? h.innerText : ''; if (h) h.innerHTML = ''; } catch (e) { rep = 'ERR ' + e; }
-        out[id] = { cc: strip(CC), gi, caps, validation: strip(VALIDATION), report: rep.replace(/\d{4}-\d\d-\d\d/g, '(date)') };
+        const checks = strip(allChecks());
+        /* the Installation Limits card (BP-T1) is a TOC line only; drop it so a ref older than BP-T1 can still be compared */
+        rep = rep.split('\n').filter(l => !/^\d+\.\d+\. Installation Limits — Spacing & Edge Distance$/.test(l.trim())).join('\n');
+        out[id] = { cc: strip(CC), gi, caps, checks, validation: strip(VALIDATION), report: rep.replace(/\d{4}-\d\d-\d\d/g, '(date)') };
       }
       return out;
     });
@@ -72,6 +77,7 @@ async function exportChecks(src) {
       s.col.custom = false; s.col.shapeType = 'HSS'; s.col.shape = 'HSS4X4';
       s.anchor.dia = 0.5; s.anchor.grade = 'f1554_36'; s.anchor.head = 'hvyhexhead'; s.anchor.hef = 10;
       s.anchor.nx = 2; s.anchor.ny = 2; s.anchor.edx = 1; s.anchor.edy = 2;          /* anchors at ±5, ±4 in */
+      s.anchor.torqued = true;                                                       /* example: AnchorTorqueType Torqued (BP-T1) */
       s.conc.H = 420; s.conc.fc = 4; s.conc.cracked = true;                          /* 10668 mm = 420 in */
       s.conc.Bx = 18; s.conc.By = 18; s.conc.plate_off_x = 0; s.conc.plate_off_y = 0; /* Edge* 228.6 mm = 9 in from the plate centre */
       s.grout.present = false; s.standoff.type = 'none';
@@ -104,7 +110,8 @@ async function exportChecks(src) {
       out.unknown = { wellFormed: !!fu, verify: ru.verify, rows: ru.rows.map(r => [r.item, r.ok, r.written]), fileName: ru.fileName,
         nCombos: fu && Object.keys(fu.m).filter(k => /LoadCombinationEntity(\[\d+\])?\/Id$/.test(k)).length, nAppCombos: S.combos.length,
         nPts: fu && Object.keys(fu.m).filter(k => /^ProjectDesignConcreteEntity\/AnchorLayout\/AnchorLayoutPoints\/AnchorLayoutPointEntity(\[\d+\])?\/X$/.test(k)).length,
-        fastener: fu && fu.m['ProjectDesignConcreteEntity/Anchor/FastenerId'] };
+        fastener: fu && fu.m['ProjectDesignConcreteEntity/Anchor/FastenerId'],
+        torque: fu && fu.m['ProjectDesignConcreteEntity/AnchorLayout/AnchorTorqueType'] };   /* untorqued design (default) */
       return out;
     }, { EXAMPLE, EX_IDS });
     /* 4. dialog + download */
@@ -131,6 +138,12 @@ for (const k of Object.keys(ra.R)) {
   console.log(`  ${k.padEnd(14)} ${hash(ra.R[k])} ${hash(rb.R[k])} ${d.length ? 'DIFFERENT' : 'same'}`);
   if (d.length) { fail = true; d.slice(0, 15).forEach(x => console.log('     ', JSON.stringify(x).slice(0, 300))); }
 }
+{ /* BP-T1: torqued, c_a,min = 5 in < 6dₐ = 6 in → Edge Distance row DCR 1.20 (FAIL); spacing 6/12 = 0.50 */
+  const ck = (rb.R.torqued && rb.R.torqued.checks) || [];
+  const e = ck.find(c => /^Edge Distance .*\(torqued\)$/.test(c.label)), s = ck.find(c => /^Anchor Spacing .*\(torqued\)$/.test(c.label));
+  const ok = e && Math.abs(e.dcr - 1.2) < 1e-9 && s && Math.abs(s.dcr - 0.5) < 1e-9;
+  console.log(`  torqued §17.9 rows (B): edge ${e ? e.dcr : '—'}, spacing ${s ? s.dcr : '—'} ${ok ? 'ok' : 'WRONG (expected 1.2 / 0.5)'}`);
+  if (!ok) fail = true; }
 const pe = x => x.filter(e => !/Failed to load resource|ERR_FAILED|net::/.test(e));
 console.log(`  console errors A ${pe(ra.errs).length}, B ${pe(rb.errs).length}`); pe(rb.errs).slice(0, 5).forEach(e => console.log('    B: ' + e));
 
@@ -158,12 +171,12 @@ console.log('  verify list:'); r.verify.forEach(v => console.log('   - ' + v));
 
 console.log('\n== 3. unknown catalog items');
 const u = r.unknown;
-console.log(`  well-formed ${u.wellFormed}; file ${u.fileName}; combos ${u.nCombos}/${u.nAppCombos}; anchor points ${u.nPts}; FastenerId ${u.fastener}`);
+console.log(`  well-formed ${u.wellFormed}; file ${u.fileName}; combos ${u.nCombos}/${u.nAppCombos}; anchor points ${u.nPts}; FastenerId ${u.fastener}; AnchorTorqueType ${u.torque}`);
 u.rows.forEach(x => console.log(`   [${x[1]}] ${x[0]}: ${x[2]}`));
 console.log('  verify list:'); u.verify.forEach(v => console.log('   - ' + v));
 const need = [/anchor 3\/4 in Hex head bolt, F1554 Gr\. 55/, /column profile W12X65/, /plate steel A572 Gr\. 50/, /no PROFIS layout ID is known for 3 × 2/, /Column orientation/, /Uncracked/, /Reinforcement (was written|is entered)/, /Seismic/, /Column offset/];
 const miss = need.filter(re => !u.verify.some(v => re.test(v)));
-if (miss.length || !u.wellFormed || u.nCombos !== u.nAppCombos || u.nPts !== 6) { fail = true; console.log('  MISSING: ' + miss.map(String).join(', ')); }
+if (miss.length || !u.wellFormed || u.nCombos !== u.nAppCombos || u.nPts !== 6 || u.torque !== 'Untorqued') { fail = true; console.log('  MISSING: ' + miss.map(String).join(', ')); }
 
 console.log('\n== 4. dialog and download');
 console.log(`  downloaded ${r.download.name} (${r.download.bytes} bytes), well-formed ${r.download.wellFormed}; screenshot ${path.join(OUT, 'export-dialog.png')}`);

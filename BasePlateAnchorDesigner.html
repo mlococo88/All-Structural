@@ -1008,8 +1008,11 @@ function loadAutosave(){
   return {ok:false,src:"defaults",name:""};
 }
 function mergeState(st){
+  /* BP-M1 (2026-10-21): d stays the untouched defaults. It was the same object as out, so
+     Object.assign(d,st) replaced d.anchor etc. by the saved groups before the merge below,
+     and a sub-field missing from an old save stayed undefined instead of taking its default. */
   const d=defaultState();
-  const out=Object.assign(d,st||{});
+  const out=Object.assign(defaultState(),st||{});
   /* BP-D1 migration (2026-10-16): the default head changed from standard hex ("heavyhex") to heavy hex.
      A saved project without a stored head was designed with the old default — keep it. */
   const oldHead = (st && st.anchor && typeof st.anchor==="object" && st.anchor.head===undefined) ? "heavyhex" : null;

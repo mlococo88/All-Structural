@@ -2042,3 +2042,53 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - **.pe import:** importing a PROFIS .pe file (which would carry AnchorTorqueType) does not exist; the import reads PDF reports only. Needs an engineer decision if wanted.
   - **§17.9.3:** for untorqued anchors that do not produce splitting forces, spacing or edge distance below Table 17.9.2a may be handled with a smaller d_a′. The tool blocks below 4d_a instead.
   - **`mergeState()`:** it does not deep-merge default sub-fields. `Object.assign(d, st)` replaces `d.anchor` before the merge loop, so a new field missing from an old save stays `undefined` rather than taking the default. This is harmless here (undefined = untorqued) but affects any future field whose default is not falsy. Not changed.
+
+## 2026-10-21 — BP-M1: `mergeState()` fills missing default sub-fields into old saves; PROFIS test updated for BP-T1 (Tier 1, no result change)
+- **Engineer decisions (2026-10-21, after BP-T1, PR #403):**
+  - No .pe import for now.
+  - §17.9.3 (smaller d_a′ for untorqued anchors that do not produce splitting forces) is **not applied**. Spacing below 4d_a keeps withholding the output. The Installation Limits card already says so ("Not applied: §17.9.3 …").
+- **Function / anchor:** `mergeState()`, comment `BP-M1 (2026-10-21)`.
+- **Before:**
+  ```js
+  const d=defaultState();
+  const out=Object.assign(d,st||{});
+  ```
+- **After:**
+  ```js
+  const d=defaultState();
+  const out=Object.assign(defaultState(),st||{});
+  ```
+- **Problem:**
+  - `out` and `d` were the same object. `Object.assign(d, st)` replaced `d.anchor`, `d.conc`, … with the saved groups before the merge loop `out[k]=Object.assign({}, d[k], st[k])` ran. So a sub-field missing from an old save stayed `undefined` instead of taking its default (e.g. `anchor.torqued` of BP-T1).
+  - The same aliasing made `out.print.sections=Object.assign(d.print.sections, …)` write into the saved `print.sections`. A save with `print` but without `print.sections` threw "Cannot convert undefined or null to object" on load.
+  - With `d` untouched, every object group is the defaults overlaid by the saved values, one level deep, as the loop always intended.
+  - The BP-D1 head migration still runs after the merge, so a save without `anchor.head` keeps `"heavyhex"`.
+- **Provision:** none. Results are unchanged for any save that has its fields (see below).
+- **Check case:**
+  - An old save without `anchor.torqued`: `mergeState(old).anchor.torqued` was undefined; it is now `false`. Both mean untorqued.
+  - A save without `print.sections`: the load threw before; it now loads with the default print sections.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` (origin/main 47f0405 vs working tree): every section is identical for default, msa3a, struct2v1, struct2v2 and the new torqued case. PASS.
+  - Scratch headless script, origin/main vs the branch. Every saved state below was run complete, then again with each default sub-field deleted in turn (793 states):
+    - the default design; msa3a, struct2v1 and struct2v2;
+    - a grouted stand-off with tension and shear rebar, torqued;
+    - a stand-off without clamping, lb units, elastic force model.
+  - Compared: `computeAll()`, every combination's capacities, `allChecks()`, the validation messages and the governing combination.
+  - Results:
+    - All 6 complete states are identical.
+    - A deleted field differs only for core inputs (plate B/N/t, column shape, anchor d/h_ef/n/edges, grout, stand-off z, f′c, pedestal size, cracked, rebar sizes and spacing). There main gets undefined (NaN or a blocking error) and the branch the default.
+    - `print.sections` also differs: main throws.
+    - Every one of those fields is in the first version of the tool in this repository (c58cb6d), so no real save lacks them.
+    - Only two default fields were added after c58cb6d, `plate.holeDia` and `anchor.torqued`. For both, undefined and the default give identical results.
+  - `mergeState()` does not change its argument (checked on both versions).
+- **tests/bpad-profis.mjs** (developer tooling only):
+  - Results identity:
+    - The readout now also compares `allChecks()`.
+    - New case `torqued`: the default design, torqued, with pedestal Bx = 22 in. On B it asserts Edge Distance DCR 1.20 and Anchor Spacing DCR 0.50.
+    - The report text drops the TOC line "n.k. Installation Limits — Spacing & Edge Distance" before comparing, so a ref older than BP-T1 can still be compared. All other lines are compared as before.
+  - Reproduction of `profis-example.pe`: the input is set to torqued, as in the example (`AnchorTorqueType` Torqued). The field now matches, leaving 7 known differences.
+  - Unknown-items export: checks that the default (untorqued) design writes `AnchorTorqueType` Untorqued.
+  - Still catches regressions. With `--a 23778ea` (before BP-T1), the four original cases are `same`, but the `torqued` case is DIFFERENT and the exit code is 1:
+    - checks go from 10 to 12 rows;
+    - one warning becomes a FAIL row.
