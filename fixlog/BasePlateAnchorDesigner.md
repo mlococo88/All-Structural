@@ -1956,3 +1956,89 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: every computed field is identical to main. Its `report` field reads only the front matter: the body sections are hidden off-screen, so `innerText` skips them. The "see §" lines were therefore checked in the generated PDF (pdftotext) instead.
   - Headless click test: the tab, combination and highlighted card are as stated above, with no console errors.
+
+## 2026-10-21 — BP-T1: anchor installation input (untorqued / torqued); ACI 318-19 §17.9 torqued limits as PASS/FAIL checks; PROFIS AnchorTorqueType (§4, Tier 2)
+- **Engineer request:** 2026-10-21, "add a torqued vs untorqued anchor input, as in Hilti PROFIS, where torqued adds the minimum edge distance requirement".
+- **Governing provision:** ACI 318-19 §17.9.2, Table 17.9.2a (cast-in anchors):
+  - minimum spacing: 4d_a not torqued, 6d_a torqued;
+  - minimum edge distance: specified cover per §20.5.1.3 not torqued, 6d_a torqued.
+  - §17.9.3 (smaller d_a′ for untorqued anchors that do not produce splitting forces): not used; spacing below 4d_a still withholds the output.
+  - §17.9.4 (h_ef ≤ greater of 2/3 h_a and h_a − 4 in.): applies to post-installed expansion and undercut anchors only. There is no h_ef / thickness limit for torqued cast-in anchors, so none is added.
+  - Post-installed anchors (Table 17.9.2a third column, Table 17.9.2b product c_min / s_min) are out of scope: the tool designs cast-in headed anchors only (User Manual, Scope).
+  - Citation corrected: the old untorqued warning cited "§17.9.3 requires ≥ 6·dₐ if torqued". In ACI 318-19 the 6d_a torqued edge distance is Table 17.9.2a under §17.9.2; §17.9.3 is the d_a′ provision.
+- **Saved data (CLAUDE.md §5):** one new optional field `S.anchor.torqued` (boolean, default `false`). No key or format changed.
+  - A save without the field reads as untorqued. `mergeState()` leaves it `undefined` (falsy), and every use is `!!A.torqued` or `A.torqued ? … : …`.
+  - Tested: an old save gives undefined, shown as Untorqued; a JSON round trip of a torqued state gives `true`.
+- **Input** (`buildInputPanel`, section "2. Anchors", anchor text `BP-T1 (2026-10-21): torqued / untorqued`): a new select, "Anchor installation", with options Untorqued / Torqued, placed after "Head / bearing type", plus a note that states the limits.
+- **New function `installLimits()`** (before `/* ---------------- VALIDATION`):
+  - s_min = least centre-to-centre distance between any two anchors;
+  - c_a,min = least of the four edge distances c_a,+x, c_a,−x, c_a,+y, c_a,−y from `anchorGeom()`;
+  - s_req = 4d_a (untorqued) or 6d_a (torqued); c_req = 6d_a (torqued only);
+  - DCR_s = s_req / s_min; DCR_c = c_req / c_a,min.
+- **New function `installRows()`** (before `allChecks()`): torqued only, two Summary rows, "Anchor Spacing ≥ 6dₐ (torqued)" and "Edge Distance ≥ 6dₐ (torqued)", ref "Table 17.9.2a", combination "—", tab Anchor Bolts. PASS if DCR ≤ 1.0001 (`statusOf`). They are added in `allChecks()` after the anchor modes, and in `bpadResultRows()` for the Anchor Bolts sections of the report ("Results — Anchor Bolts").
+- **New card** "Installation Limits — Spacing & Edge Distance" (`anInstall`): the last card of the Anchor Bolts tab (`buildAnchorTab`). It works s_min, s_req, c_a,min, c_req and the ratios (symbolic → values → result), shows a DCR box for each torqued check, and notes §17.9.3 and §17.9.4. `BPAD_CARDS.anInstall` was added, and `bpadCardFor` maps labels containing "(torqued)" to it, so the Summary chips and the "Worked in" column link to it; in the report the link reads "see §n.k".
+- **`validateInputs()`**, the §17.9 block. Before:
+  ```js
+  { const sMin=Math.min(g.sx||1e9, g.sy||1e9);
+    if(isFinite(sMin) && sMin < 4*A.dia)
+      errs.push({block:true, code:"§17.9.2", msg:"Anchor spacing … below the §17.9.2 minimum of 4·dₐ … for untorqued cast-in anchors (6·dₐ if torqued)."});
+    else if(isFinite(sMin) && sMin < 6*A.dia)
+      warns.push("Anchor spacing … below 6·dₐ … — §17.9.2 requires 6·dₐ if the anchors will be torqued.");
+    const caMin=Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
+    if(caMin < 6*A.dia)
+      warns.push("Minimum edge distance … — acceptable untorqued if cover per §20.5.1.3 is met, but §17.9.3 requires ≥6·dₐ if the anchors will be torqued.");
+  ```
+  After:
+  ```js
+  { const IL=installLimits(), sMin=IL.sMin, caMin=IL.caMin;
+    if(sMin!=null && sMin < 4*A.dia)
+      errs.push({block:true, code:"§17.9.2", msg:"Anchor spacing … below the ACI 318-19 Table 17.9.2a minimum of 4·dₐ … for cast-in anchors (…)."});
+    else if(!IL.tq && sMin!=null && sMin < 6*A.dia)
+      warns.push("Anchor spacing … below 6·dₐ … The anchors are set as untorqued; if they will be torqued, set Anchor installation = Torqued (Table 17.9.2a, §17.9.2, requires 6·dₐ).");
+    if(!IL.tq && caMin < 6*A.dia)
+      warns.push("Minimum edge distance … Acceptable for the untorqued anchors set here if the cover of §20.5.1.3 is met; if they will be torqued, set Anchor installation = Torqued (Table 17.9.2a, §17.9.2, requires ≥ 6·dₐ).");
+  ```
+  - Torqued: the two 6d_a warnings are replaced by the FAIL/PASS rows. Untorqued: they stay as warnings, reworded, so a design that will in fact be torqued is not missed.
+  - **Spacing measure changed** [check change] [MORE conservative]: s_min was the extent of the group along x or y (`g.sx`, `g.sy` = x_max − x_min), which is the spacing only for 2 anchors per row. It is now the least centre-to-centre distance (adjacent anchors), as §17.9.2 means. Grids of 2 × n are unchanged.
+- **PROFIS export** (`profisBuildPe`, after the anchor layout, anchor text `BP-T1 (2026-10-21): AnchorTorqueType`):
+  - `<AnchorTorqueType>` = "Torqued" or "Untorqued" from the input (was always "Torqued" from the template).
+  - The enum values are those in the engineer's re-saved files `Drafts_Untitled (1).pe` (Torqued) and `(2).pe` (Untorqued); `IsReducedInstallTorque` stays `false` in both.
+  - A new dialog row, "Anchor installation".
+  - A default design now exports "Untorqued".
+- **PROFIS import (PDF):** the PDF reports do not print the torque type. All 13 reports in `hilti_profis_references` show only "Maximum installation torque: -". So it cannot be read: the "Not found (your current values will be kept)" list now always names it, and the input is left as it is.
+  - The tool has no .pe import, so the export cannot be read back.
+- **Other text:**
+  - Input & Schematics echo, "Anchors" row: now ends with ", untorqued" or ", torqued".
+  - User Manual, "Installation limits (§17.9)" paragraph: describes the input and the checks.
+- **Built-in PROFIS cases (msa3a, struct2v1, struct2v2):** left untorqued (default). Their PROFIS source reports are not in the repository and the PDF reports do not state the torque type. Results are identical either way. Torqued, they would show:
+  - msa3a: spacing 6/14 = 0.43; edge 6/6 = 1.00 (c_a,+y = 6 in);
+  - struct2v1 and v2: spacing 4.5/5 = 0.90; edge 4.5/4.5 = 1.00.
+  - Both sit exactly at 6d_a, which is consistent with PROFIS's own torqued default (every PROFIS file on hand is Torqued). That is not proof, so they were not changed.
+- **Check case 1, torqued edge distance (FAIL):** the default design (1 in anchors, 2 × 2 at ±6 in, 18 × 18 in plate) with pedestal Bx = 22 in and Torqued.
+  - c_a,+x = c_a,−x = 22/2 − 6 = 5.000 in; c_a,±y = 30/2 − 6 = 9.000 in; c_a,min = 5.000 in.
+  - c_req = 6 × 1.000 = 6.000 in; DCR = 6.000 / 5.000 = 1.20, FAIL.
+  - Spacing: s_min = 12.000 in, s_req = 6.000 in, DCR = 0.50, PASS.
+  - Before: no check; only the warning "Minimum edge distance 5.00″ is below 6·dₐ …".
+  - Untorqued, the same design gives no rows and the reworded warning.
+- **Check case 2, torqued spacing (FAIL):** the default design with plate B = 14 in, 3 × 2 anchors, Torqued.
+  - Anchor x = −4, 0, +4 in; s_min = 4.000 in.
+  - s_req = 6.000 in; DCR = 1.50, FAIL. Edge: 6.000 / 9.000 = 0.67, PASS.
+- **Check case 3, spacing measure (untorqued):** the default design with plate B = 12 in, 3 × 2 anchors.
+  - Anchor x = −3, 0, +3 in.
+  - Before: s = extent = 6.00 in ≥ 6d_a, no message; output shown.
+  - After: s_min = 3.00 in < 4d_a = 4.00 in → blocking error "Anchor spacing 3.00″ is below the ACI 318-19 Table 17.9.2a minimum of 4·dₐ = 4.00″ …"; output withheld.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: on the default design and msa3a, struct2v1 and struct2v2, `computeAll()`, the governing combination, every capacity and the validation messages are identical to main. Only the report text differs (the new card).
+  - Its reproduction of `profis-example.pe` lists one new difference, `AnchorTorqueType` (example Torqued, export Untorqued), because the reproduction uses the default (untorqued) input. With Torqued set, the field matches.
+  - Scratch headless script, not committed:
+    - the Summary rows of all four cases on main equal the branch's untorqued rows;
+    - capacities and `computeAll()` are identical untorqued vs torqued for all four;
+    - check cases 1–3 as above;
+    - export writes Untorqued / Torqued, and the "Anchor installation" row is correct;
+    - reading `AnchorTorqueType` back from the exported XML gives the input value.
+  - Screenshots looked at: input row, Summary chips and table, and the Installation Limits card. No console errors.
+- **Open items:**
+  - **.pe import:** importing a PROFIS .pe file (which would carry AnchorTorqueType) does not exist; the import reads PDF reports only. Needs an engineer decision if wanted.
+  - **§17.9.3:** for untorqued anchors that do not produce splitting forces, spacing or edge distance below Table 17.9.2a may be handled with a smaller d_a′. The tool blocks below 4d_a instead.
+  - **`mergeState()`:** it does not deep-merge default sub-fields. `Object.assign(d, st)` replaces `d.anchor` before the merge loop, so a new field missing from an old save stays `undefined` rather than taking the default. This is harmless here (undefined = untorqued) but affects any future field whose default is not falsy. Not changed.
