@@ -5584,7 +5584,7 @@ function renderTabIAB(R){
           `P_u = ${P.ct?"P_g + R_T":"P_g"} = ${t(G.Pu,2)}\\ \\text{kip}${G.on?`\\,, \\quad \\varphi_cR_n = (${t(G.phiC,2)})(${t(G.Rn,1)}) = ${t(G.phiC*G.Rn,1)}\\ \\text{kip}`:"\\quad(R_n\\ \\text{not entered})"}`,
           `P_{min} = \\dfrac{\\eta_{min}(\\gamma_{DC,min}DC + \\gamma_{DW,min}DW)}{n} + \\min(0,\\ P_{LL,far})${G.RT?" - R_T":""} = \\dfrac{${t(G.etaMin,3)}(${t(G.gDCmin,2)}\\cdot${t(Q.DC,1)} + ${t(G.gDWmin,2)}\\cdot${t(Q.DW,1)})}{${P.n}} + ${t(Math.min(0,G.PllFar),2)}${G.RT?` - ${t(G.RT,2)}`:""} = ${t(G.Pmin,2)}\\ \\text{kip}${G.uplift?"\\ (\\text{uplift})":"\\ (\\text{no uplift})"}`,
           ...(G.ee?[`P_{EE} = \\dfrac{DC + DW}{n} + \\gamma_{EQ}LL\\ \\text{share} = ${t(G.ee.Pee,2)}\\ \\text{kip}${G.on?`\\,, \\quad \\varphi R_n = (${t(G.ee.phiE,2)})(${t(G.Rn,1)}) = ${t(G.ee.phiE*G.Rn,1)}\\ \\text{kip}`:""}`]:[])],
-          "R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> from panel I-0a (geotechnical report or Pile Designer). P<sub>LL,far</sub> = the live-load share of the pile on the far side of the rigid-cap eccentricity (negative when the eccentricity lifts it).")
+          "R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> from panel I-0a (geotechnical report or Pile Designer)"+((q=>!q?"":q.stale?" (Pile Designer values STALE, not used: the check uses the values entered before the import)":"; here from Pile Designer "+((S.pileRes.geo&&S.pileRes.geo.pileType==="iab")?"Module 13, worked there (Pile Designer calculation report, section Integral Pile — Geotechnical Axial Resistance)":"Module 01, worked there (Pile Designer calculation report, section Geotechnical Axial Resistance — Tip + Skin)")+", "+esc(q.txt.replace(/^PD · from Pile Designer, /,"pulled ")))(pxrTagState("iab.Rn")))+". P<sub>LL,far</sub> = the live-load share of the pile on the far side of the rigid-cap eccentricity (negative when the eccentricity lifts it).")   // PDA-IAB: source of R_n
           +(G.on? checkLine("Pile geotechnical axial",`\\dfrac{P_u}{\\varphi_cR_n} = \\dfrac{${t(G.Pu,1)}}{${t(G.phiC*G.Rn,1)}}`,G.dc) : `<div class="checkline fail"><span class="flagchip warn">NOT CHECKED</span><span>Enter R<sub>n</sub> and φ<sub>c</sub> of the piles (panel I-0a).</span></div>`)
           +(G.uplift? checkLine("Pile uplift",`\\dfrac{-P_{min}}{\\varphi_{up}R_{n,up}}`,G.dcUp) : "")
           +(G.ee&&G.on? checkLine("Pile geotechnical axial, Extreme Event I",`\\dfrac{P_{EE}}{\\varphi R_n} = \\dfrac{${t(G.ee.Pee,1)}}{${t(G.ee.phiE*G.Rn,1)}}`,G.ee.dc) : ""); } }
@@ -10584,10 +10584,15 @@ document.addEventListener("DOMContentLoaded",init);
         if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add(kp+"Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add(kp+"phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
           warns.push("Field method ("+g.field.label+"): R_n = the nominal resistance the piles are driven to (R_ndr = "+f(g.field.Rndr,1)+" kip with the scour"+(g.field.Rdd>0?" and downdrag":"")+" side resistance, EOD "+f(g.field.RndrEOD,1)+" kip). This abutment's check is then P/(φ_dyn·R_n) ≤ 1 by construction for the case that set R_n."); }
         else warns.push("Pile Designer has no required R_n for its field method (no compression case): R_n not imported.");
-      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module 01)","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
+      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module "+(g.pileType==="iab"?"13":"01")+")","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
       else warns.push("Pile Designer's static R_n is 0 (soil layers without SPT N or strength?): R_n is not imported.");
       if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
-      if(g.minPen) warns.push("Minimum penetration (10.7.6, Pile Designer): z_min = "+f(g.minPen.zMin,1)+" ft below grade ("+(g.minPen.governs||"")+")"+(num(g.minPen.tipElMin)?", tip El. "+f(g.minPen.tipElMin,1):"")+"; controlling tip "+f(g.minPen.controllingTipDepth,1)+" ft"+(num(g.minPen.tipElControlling)?" (El. "+f(g.minPen.tipElControlling,1)+")":"")+". This calculator has no tip input: shown in panel I-7 and the report.");
+      if(!conv&&g.pileType==="iab"){   // PDA-IAB (2026-10-21): Pile Designer's integral pile (Module 13) against this abutment's piles (panel I-0a)
+        const ts=String((p.integral&&p.integral.section)||(sp.section&&sp.section.designation)||"").toUpperCase(), Lp=+S.iab.Lpile;
+        if(ts&&ts!==String(S.iab.sec||"").toUpperCase()) warns.push("Different section: Pile Designer computed R_n for "+ts+", this abutment has "+S.iab.sec+" (panel I-0a).");
+        if(num(g.static.toeDepth)&&Lp>0&&Math.abs(g.static.toeDepth-Lp)>0.05) warns.push("Pile length: Pile Designer's R_n is for the toe "+f(g.static.toeDepth,1)+" ft below the cap (its required pile length, MassDOT 3.10.11.2); this abutment's pile length below the cap is "+f(Lp,1)+" ft (panel I-0a). Set the same length (Pile Designer: geotechnical length) or check R_n for "+f(Lp,1)+" ft.");
+      }
+      if(g.minPen) warns.push("Minimum penetration (10.7.6, Pile Designer): z_min = "+f(g.minPen.zMin,1)+" ft below "+(g.pileType==="iab"?"the bottom of the cap":"grade")+" ("+(g.minPen.governs||"")+")"+(num(g.minPen.tipElMin)?", tip El. "+f(g.minPen.tipElMin,1):"")+"; controlling tip "+f(g.minPen.controllingTipDepth,1)+" ft"+(num(g.minPen.tipElControlling)?" (El. "+f(g.minPen.tipElControlling,1)+")":"")+". This calculator has no tip input: shown in panel "+(conv?"I-7":"I-0a")+" and the report.");
     }
     if(conv&&pileB&&st.mom){
       rows.forEach(x=>{ if(!x.c) return; const c=x.c;
@@ -10634,9 +10639,11 @@ document.addEventListener("DOMContentLoaded",init);
     h+="<div class='"+(sl.level==="stale"||sl.level==="nomatch"?"pxr-stale":"")+"' id='pxr-dlg-stale'>"+esc(sl.msg)+"</div>";
     if(p.notes&&p.notes.length) h+="<details><summary>Sender notes ("+p.notes.length+")</summary><div style='color:#475569'>"+p.notes.map(n=>"• "+esc(n)).join("<br>")+"</div></details>";
     h+="<h4>Import</h4>";
-    if(conv){
-      h+=ck("geo","Geotechnical axial resistance R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> (panel I-7)",!(g&&g.static));
+    if(conv||(g&&g.static)){   // PDA-IAB (2026-10-21): an integral abutment gets the same R_n choice (panel I-0a) when Pile Designer sends its Module 13
+      h+=ck("geo","Geotechnical axial resistance R<sub>n</sub>, φ<sub>c</sub>, R<sub>n,up</sub>, φ<sub>up</sub> (panel "+(conv?"I-7":"I-0a")+")",!(g&&g.static));
       if(g&&g.field) h+="&nbsp;&nbsp;&nbsp;<label><input type='radio' name='pxr-rn' value='static'"+(st.rn==="static"?" checked":"")+"> static analysis (R<sub>n</sub> = "+f(g.static.Rn,1)+" kip, φ = "+f(g.static.phi,3)+")</label> <label><input type='radio' name='pxr-rn' value='field'"+(st.rn==="field"?" checked":"")+"> field method "+esc(g.field.label)+" (required R<sub>n</sub> = "+f(g.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(g.field.phi,3)+")</label><br>";
+    }
+    if(conv){
       h+=ck("mom","p-y pile moment per limit state, replacing the elastic (Matlock–Reese) estimate (Tab 4 §4.4b)");
       h+=ck("df","Depth to fixity D<sub>f</sub> (buckling length, panel I-7)",!(p.fixity&&num(p.fixity.Lf)&&p.fixity.Lf>0));
     }
@@ -10680,7 +10687,7 @@ document.addEventListener("DOMContentLoaded",init);
       stateAtImport:sl.level, casesRunAt:p.casesRunAt||null, fields, prev, byLS:pl.byLS,
       choices:{ geo:!!st.geo, rn:st.rn, mom:!!st.mom, df:!!st.df, iab:!!st.iab, im:st.im },
       pile:p.pile? { type:p.pile.type||"", designation:(p.pile.section&&p.pile.section.designation)||"", axis:p.pile.axis||null, head:p.pile.head||"", stickup:p.pile.stickup } : null,
-      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,
+      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", ...(g.pileType==="iab"? { pileType:"iab", toe:g.static.toeDepth } : {}), field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,   // PDA-IAB: pileType, toe (integral pile, ft below the cap)
         minPen:g.minPen? { zMin:g.minPen.zMin, governs:g.minPen.governs||"", tipElMin:g.minPen.tipElMin, ctrl:g.minPen.controllingTipDepth, tipElCtrl:g.minPen.tipElControlling } : null } : null,
       fixity:p.fixity? { Lf:p.fixity.Lf, method:p.fixity.method||"", Lf_davisson:p.fixity.Lf_davisson } : null,
       struct:p.structural? { phiPn:p.structural.phiPn, phiMn:p.structural.phiMn, phiVn:p.structural.phiVn, axis:p.structural.axis } : null,
@@ -10701,7 +10708,9 @@ document.addEventListener("DOMContentLoaded",init);
       if(s.geo&&s.geo.minPen) h+=`<br>Minimum penetration (10.7.6): z<sub>min</sub> = ${f(s.geo.minPen.zMin,1)} ft (${esc(s.geo.minPen.governs)})${num(s.geo.minPen.tipElMin)?", tip El. "+f(s.geo.minPen.tipElMin,1):""}; controlling tip ${f(s.geo.minPen.ctrl,1)} ft${num(s.geo.minPen.tipElCtrl)?" (El. "+f(s.geo.minPen.tipElCtrl,1)+")":""}.`;
       if(s.fixity) h+=`<br>Depth to fixity (buckling): ${f(s.fixity.Lf,2)} ft (${esc(s.fixity.method)})${s.choices&&s.choices.df?"":" (not imported)"}.`;
       if(s.struct) h+=`<br>Structural (Pile Designer, ${esc(s.struct.axis||"")} axis): φ<sub>c</sub>P<sub>n</sub> = ${f(s.struct.phiPn,1)} kip, φ<sub>f</sub>M<sub>n</sub> = ${f(s.struct.phiMn,1)} kip-ft.`; }
-    else if(s.integral){ const q=s.integral; h+=`<br>${esc(q.section)} (${esc(q.orient)}): gravity D/C ${f(q.dcr,3)}${num(q.interaction)?"; Tier 2 interaction "+f(q.interaction,3)+" (nonlinear "+f(q.interaction_nl,3)+"), M<sub>uy</sub> = "+f(q.Muy,1)+" (nonlinear "+f(q.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.Mux,1)+" kip-ft":""}.`; }
+    else if(s.integral){ const q=s.integral; h+=`<br>${esc(q.section)} (${esc(q.orient)}): gravity D/C ${f(q.dcr,3)}${num(q.interaction)?"; Tier 2 interaction "+f(q.interaction,3)+" (nonlinear "+f(q.interaction_nl,3)+"), M<sub>uy</sub> = "+f(q.Muy,1)+" (nonlinear "+f(q.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.Mux,1)+" kip-ft":""}.`;
+      if(s.geo) h+=`<br>Geotechnical (Pile Designer Module 13${num(s.geo.toe)?", toe "+f(s.geo.toe,1)+" ft below the cap":""}): static R<sub>n</sub> = ${f(s.geo.Rn,1)} kip, φ = ${f(s.geo.phi,3)}; R<sub>n,up</sub> = ${f(s.geo.RnUp,1)} kip, φ<sub>up</sub> = ${f(s.geo.phiUp,3)}${s.geo.field?"; field method "+esc(s.geo.field.label)+": required R<sub>n</sub> = "+f(s.geo.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(s.geo.field.phi,3)+", R<sub>ndr</sub> = "+f(s.geo.field.Rndr,1)+" kip":""}${s.choices&&s.choices.geo?" (imported"+(PXR_STALE?"; STALE, not used":"")+": "+(s.choices.rn==="field"?"field method":"static")+"; Tab 10 §10.4)":" (not imported)"}.`;   // PDA-IAB
+      if(s.geo&&s.geo.minPen) h+=`<br>Minimum penetration (10.7.6): z<sub>min</sub> = ${f(s.geo.minPen.zMin,1)} ft below the cap (${esc(s.geo.minPen.governs)})${num(s.geo.minPen.tipElMin)?", tip El. "+f(s.geo.minPen.tipElMin,1):""}; controlling tip ${f(s.geo.minPen.ctrl,1)} ft${num(s.geo.minPen.tipElCtrl)?" (El. "+f(s.geo.minPen.tipElCtrl,1)+")":""}.`; }
     h+=`<br><span class="pxr-stline" data-pxr-st="1"></span> <button type="button" class="mini-btn" data-pxr-clear="1">Clear Pile Designer results</button></div>`;
     return h;
   }
