@@ -5709,7 +5709,9 @@ function computeAll(I, opts = {}) {
       const EIy = 29000 * sect.Iy;                               // kip-in^2
       const EIx = 29000 * sect.Ix;                               // kip-in^2
       const scourD = Math.max(I.iabScourDepth || 0, 0);
-      const pileLen = Math.max(R.iab.reqLength, Lf + 5);
+      // PDA-IAB3 (2026-10-21): the designed pile length below the cap when entered (I.iabLpile, PDA-IAB2), else the required length
+      // max(L_geo, L_f + 5) (MassDOT 3.10.11.2) as before. Before: always the required length.
+      const pileLen = R.iab.Ldes > 0 ? R.iab.Ldes : Math.max(R.iab.reqLength, Lf + 5), pileLenSrc = R.iab.Ldes > 0 ? "designed" : "required";
 
       // Linear MassDOT-basis solve (weak-axis component only — matches the table derivation).
       let solved = null;
@@ -5784,7 +5786,7 @@ function computeAll(I, opts = {}) {
 
       R.iab.tier2 = {
         enabled: true, deltaT, deltaComputed, deltaSource: I.iabDeltaSource,
-        alpha, dTemp, kline, EIy, EIx, pileLen, scourD, hasScour,
+        alpha, dTemp, kline, EIy, EIx, pileLen, pileLenSrc, scourD, hasScour,   // PDA-IAB3: pileLenSrc
         orient, skew, dWeak, dStrong, skewRad,
         solved, solvedStrong, nl, nlStrong, Muy, Muy_nl, Mux, Mux_nl, theta_i, thetaWeak, thetaStrong, phi_c, Pr, Mry, Mrx, Zy_eff, Zx_eff,
         nlSoilSource, nlLayeredUsed, nlLayers, hasLayers, Dpy: Dpy_weak, Dpy_weak, Dpy_strong,
@@ -6614,7 +6616,7 @@ function PileElevation({
   if (I.pileType === "iab") {
     const b = r.iab;
     const Lf = b ? b.Lf : 20;
-    const pileLen = b ? b.reqLength : 30;
+    const pileLen = b ? (b.Ldes > 0 ? b.Ldes : b.reqLength) : 30;   // PDA-IAB3: designed length when entered
     const scour = (I.iabTier2 && I.iabScourDepth > 0) ? I.iabScourDepth : 0;
     const capH = 3, trench = 3, embed = 2;
     const totalDepth = pileLen + Math.max(3, pileLen * 0.08);
@@ -7165,7 +7167,7 @@ function soilProfileModel(I, r, pyRes) {
   const M = { cols: [], parts: [], marks: [], dims: [], notes: [], warn: null, kind: I.pileType };
   if (isIab) {
     const b = r.iab;
-    const pileLen = b ? b.reqLength : 30, Lf = b ? b.Lf : 20;
+    const pileLen = b ? (b.Ldes > 0 ? b.Ldes : b.reqLength) : 30, Lf = b ? b.Lf : 20;   // PDA-IAB3: designed length when entered
     const scour = (I.iabTier2 && I.iabScourDepth > 0) ? I.iabScourDepth : 0;
     M.top = -3; M.toe = pileLen; M.head = -2; M.capTop = -3; M.capBot = 0; M.Lf = Lf; M.scour = scour;
     if (b) {
@@ -10975,7 +10977,7 @@ function PrintReport({
             b.tier2 ? /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "12", title: "Tier 2 \u2014 \u03b4\u1d1b-Driven Modified Interaction", code: "\u00a73.10.11.3 \u00b7 \u03b8\u1d62 = " + fmt(b.tier2.theta_i, 2) }),
               line("Pile orientation: " + (b.tier2.orient === "biaxial" ? "biaxial at skew " + fmt(b.tier2.skew, 0) + "\u00b0 (MassDOT, webs \u2225 abutment) \u2014 \u03b4_weak = " + fmt(b.tier2.dWeak, 3) + " in, \u03b4_strong = " + fmt(b.tier2.dStrong, 3) + " in" : b.tier2.orient === "strong" ? "pure strong axis (bounding), \u03b4_strong = " + fmt(b.tier2.dStrong, 3) + " in" : "pure weak axis (CTDOT, weak \u2225 bridge longitudinal), \u03b4_weak = " + fmt(b.tier2.dWeak, 3) + " in")),
               line("Thermal head displacement \u03b4\u1d1b = " + fmt(b.tier2.deltaT, 3) + " in" + (b.tier2.deltaSource === "compute" ? " (\u00bd\u00b7\u03b1\u00b7\u0394T\u00b7L, \u03b3_TU = 1.0)" : " (direct)")),
-              line("Displacement-controlled p-y solve (fixed head, EIy = " + fmt(b.tier2.EIy / 1000, 0) + "k kip\u00b7in\u00b2, k_line = " + fmt(b.tier2.kline, 0) + " lb/in\u00b2" + (b.tier2.scourD > 0 ? ", scour " + fmt(b.tier2.scourD, 1) + " ft" : "") + ") \u2192 Muy = " + fmt(b.tier2.Muy, 1) + " kip\u00b7ft" + (b.tier2.Mux > 0 ? ", Mux = " + fmt(b.tier2.Mux, 1) + " kip\u00b7ft (strong-axis component)" : "")),
+              line("Displacement-controlled p-y solve (fixed head, EIy = " + fmt(b.tier2.EIy / 1000, 0) + "k kip\u00b7in\u00b2, k_line = " + fmt(b.tier2.kline, 0) + " lb/in\u00b2" + (b.tier2.scourD > 0 ? ", scour " + fmt(b.tier2.scourD, 1) + " ft" : "") + ", L = " + fmt(b.tier2.pileLen, 1) + " ft, " + (b.tier2.pileLenSrc === "designed" ? "designed" : "required") + " pile length) \u2192 Muy = " + fmt(b.tier2.Muy, 1) + " kip\u00b7ft" + (b.tier2.Mux > 0 ? ", Mux = " + fmt(b.tier2.Mux, 1) + " kip\u00b7ft (strong-axis component)" : "")),
               b.tier2.colScour   // PDA-D2: scour column (MassDOT 3.10.11.3)
                 ? line("Scour design flood, unbraced: L = Lu + Lf = " + fmt(b.tier2.colScour.Lu, 1) + " + " + fmt(b.tier2.colScour.Lf, 2) + " = " + fmt(b.tier2.colScour.L, 2) + " ft (Lf = " + (b.tier2.colScour.sand ? "1.8T, T = (EIw/nh)^0.2 = (" + fmt(b.tier2.colScour.EIw_ft, 0) + "/" + fmt(b.tier2.colScour.nh, 1) + ")^0.2 = " + fmt(b.tier2.colScour.T, 3) : "1.4R, R = (EIw/Es)^0.25 = (" + fmt(b.tier2.colScour.EIw_ft, 0) + "/" + fmt(b.tier2.colScour.Es, 1) + ")^0.25 = " + fmt(b.tier2.colScour.R, 3)) + " ft, C10.7.3.13.4); KL/ry = " + fmt(b.tier2.colScour.K, 2) + "(" + fmt(b.tier2.colScour.L, 2) + ")(12)/" + fmt(s.ry, 2) + " = " + fmt(b.tier2.colScour.KLr, 1) + "; Pe = " + fmt(b.tier2.colScour.Pe, 1) + " kip; Po/Pe = " + fmt(b.tier2.colScour.ratio, 3) + " \u2192 Pn = " + fmt(b.tier2.colScour.Pn, 1) + " kip (6.9.4.1.1); Pr = 0.70\u00b7Pn = " + fmt(b.tier2.Pr, 1) + " kip \u00b7 Mry = " + fmt(b.tier2.Mry, 1) + " \u00b7 Mrx = " + fmt(b.tier2.Mrx, 1) + " kip\u00b7ft (per AASHTO with scour: weak " + hpMnTxt(b.tier2.mnScourY) + "; strong " + hpMnTxt(b.tier2.mnScourX) + ")")
                 : line("Pr = \u03c6c\u00b7Fy\u00b7Ag = 0.70\u00b7" + fmt(s.Fy, 0) + "\u00b7" + fmt(s.Ag, 1) + " = " + fmt(b.tier2.Pr, 0) + " kip \u00b7 Mry = " + fmt(b.tier2.Mry, 1) + " \u00b7 Mrx = " + fmt(b.tier2.Mrx, 1) + " kip\u00b7ft"),
@@ -18709,6 +18711,7 @@ function App() {
       /*#__PURE__*/React.createElement(Narr, null, "The pile is modeled as a beam on an elastic foundation with the MassDOT constant subgrade modulus. The governing equation and boundary conditions of the displacement-controlled solve:"),
       /*#__PURE__*/React.createElement(Calc, { label: "Governing ODE", eq: `EI_y\\,\\dfrac{d^4y}{dz^4}+k_{line}\\,y=0`, note: "finite-difference, " + "300 nodes" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Boundary conditions", eq: `y(0)=\\delta_T,\\quad y'(0)=0\\ \\text{(fixed head)},\\quad M(L)=V(L)=0\\ \\text{(unrestrained toe)}` }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Pile length modeled", eq: `L=${fmt(t.pileLen, 1)}\\ \\text{ft below the cap}`, note: t.pileLenSrc === "designed" ? "the designed pile length (required " + fmt(r.iab.reqLength, 1) + " ft, Module 01 \u00a74)" : "the required pile length max(L_geo, L_f + 5), Module 01 \u00a74 (no designed length entered)" }),   // PDA-IAB3
       /*#__PURE__*/React.createElement(Calc, { label: "Weak-axis flexural stiffness", eq: `EI_y=E\\,I_y=29000\\times ${fmt(s.Iy, 0)}=${fmt(t.EIy / 1000, 0)}\\text{k}\\ \\text{kip}\\cdot\\text{in}^2` }),
       /*#__PURE__*/React.createElement(Calc, { label: "Subgrade line modulus", eq: `k_{line}=k\\,d=${fmt(b.soil.k, 0)}\\times ${fmt(s.d, 2)}=${fmt(t.kline, 0)}\\ \\text{lb/in}^2`, note: "soil bears on the section depth d (weak-axis translation is parallel to the flanges)" }),
       t.scourD > 0 && /*#__PURE__*/React.createElement(Calc, { label: "Scour / exposed depth", eq: `d_{scour}=${fmt(t.scourD, 1)}\\ \\text{ft (soil springs removed above this)}` }),
