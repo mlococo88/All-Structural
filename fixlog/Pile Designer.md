@@ -19087,3 +19087,62 @@ index 6e4028a..60b8c05 100644
 -      /*#__PURE__*/React.createElement(Narr, null, "Integral abutment pile " + s.label + " (d = " + fmt(s.d, 2) + " in, bᶠ = " + fmt(s.bf, 2) + " in). Depths are below the bottom of the pile cap (the pile head), the datum of the soil profile in this mode. The pile toe is at the required pile length L = " + fmt(g.toeG, 1) + " ft (§3.10.11.2)" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + (g.scourG > 0 ? "; design scour " + fmt(g.scourG, 1) + " ft (Tier 2)" : "") + ". The demand is the factored gravity load per pile Pᵤ (Strength I)."),
 +      /*#__PURE__*/React.createElement(Narr, null, "Integral abutment pile " + s.label + " (d = " + fmt(s.d, 2) + " in, bᶠ = " + fmt(s.bf, 2) + " in). Depths are below the bottom of the pile cap (the pile head), the datum of the soil profile in this mode. The pile toe is at L = " + fmt(g.toeG, 1) + " ft (" + (g.toeSrc === "designed" ? "the designed pile length; required " + fmt(r.iab.reqLength, 1) + " ft, \u00a73.10.11.2, checked in Module 01" : "no designed length entered: the required length, \u00a73.10.11.2") + ")" + (g.topG > 0 ? "; no side resistance above " + fmt(g.topG, 1) + " ft (pre-bored hole / sleeve)" : "") + (g.scourG > 0 ? "; design scour " + fmt(g.scourG, 1) + " ft (Tier 2)" : "") + ". The demand is the factored gravity load per pile Pᵤ (Strength I)."),
 ```
+
+
+## 2026-10-21 — PR: claude/pile-iab-t2len — Integral pile: Tier 2 p-y model and the soil drawing at the designed pile length (PDA-IAB3) (PR link added after merge)
+
+Engineer decision after #400: the Tier 2 p-y model length and the soil drawing use the designed pile length when one is entered (`iabLpile`, PDA-IAB2), else the required length. Pile Designer only. Code sites tagged `PDA-IAB3`.
+
+### PDA-IAB3-1. Tier 2 model length   [calculation change when a designed length is entered]
+- **Where:** `computeAll`, integral Tier 2, anchor `const pileLen = R.iab.Ldes > 0 ? R.iab.Ldes : Math.max(R.iab.reqLength, Lf + 5), pileLenSrc = R.iab.Ldes > 0 ? "designed" : "required";`.
+- **Before:** `const pileLen = Math.max(R.iab.reqLength, Lf + 5);` (= the required length max(L_geo, L_f + 5), MassDOT BM Part I 3.10.11.2). **After:** the designed length when entered, else as before. Used by the linear constant-k solves (weak and strong axis, `iabDispSolve`) and the nonlinear p-y solves (`iabNonlinearSolve`); `R.iab.tier2.pileLenSrc` added.
+- **Show the work:** Module 12 §2 "Pile length modeled: L = … ft below the cap" with its source (designed, with the required length and a pointer to Module 01 §4; or required); report Tier 2 line "…, L = 30.0 ft, designed pile length) → Muy = …".
+
+### PDA-IAB3-2. Soil / pile drawings   [display]
+- **Where:** the integral elevation (Plotly) and the soil-profile figure (`M.toe`), anchors `const pileLen = b ? (b.Ldes > 0 ? b.Ldes : b.reqLength) : 30;` and `const pileLen = b ? (b.Ldes > 0 ? b.Ldes : b.reqLength) : 30, Lf = b ? b.Lf : 20;`. Before: `b.reqLength`.
+
+### Before / after (HP12X84, MassDOT soil type 3, skew 15°, biaxial, δT = 0.5 in direct, DC 138.125, DW 13.76, LL 77.437 kip; L_req = max(0, 22 + 5) = 27 ft)
+| case | L before → after (ft) | M_uy | M_ux | M_uy,nl | M_ux,nl | interaction / nl |
+|---|---|---|---|---|---|---|
+| no designed length | 27 → 27 | 166.228 → 166.228 | 77.846 → 77.846 | 118.757 → 118.757 | 78.436 → 78.436 | 0.911 / 0.800 unchanged |
+| designed 30 | 27 → 30 | 166.228 → 166.227 | 77.846 → 77.846 | 118.757 → 118.756 | 78.436 → 78.434 | 0.911 / 0.800 |
+| designed 40 | 27 → 40 | 166.228 → 166.198 | 77.846 → 77.839 | 118.757 → 118.711 | 78.436 → 78.440 | 0.911 / 0.800 |
+| designed 20 (< required, Module 01 NG) | 27 → 20 | 166.228 → 166.231 | 77.846 → 77.074 | 118.757 → 118.766 | 78.436 → 78.452 | 0.911 → 0.909 / 0.800 |
+| designed 30, layered soil (nl) | 27 → 30 | 166.228 → 166.227 | 77.846 → 77.846 | 113.648 → 113.580 | 83.369 → 83.327 | 0.911 / 0.797 |
+| designed 30, scour 4 ft | 27 → 30 | 108.541 → 109.459 | 58.768 → 59.127 | 105.021 → 106.000 | 69.948 → 70.529 | 0.975 → 0.979 / 0.980 → 0.985 |
+(kip-ft.)
+
+- **Hand check (linear, weak axis):** the fixed-head pile with an imposed head displacement on a constant subgrade is long when βL > ~4: β = [k/(4EI)]^0.25 = [2.763 kip/in² / (4 × 6,177,000 kip-in²)]^0.25 = 0.01829 /in; βL = 0.01829 × 360 = 6.58 (30 ft), 5.92 (27 ft). Semi-infinite pile: M_0 = 2EIβ²δ = 2(6,177,000)(0.01829²)(0.4830)/12 = 166.27 kip-ft; tool 166.228 (27 ft), 166.227 (30 ft) (finite differences, 300 nodes). The length matters little here, as expected; it matters more with scour (shorter embedded length below the scour), see the table.
+
+### How verified
+- `node tests/check-syntax.mjs "Pile Designer.html"`: pass.
+- `computeAll` vs origin/main `5a1bf2e` without a designed length (Tier 2 linear and layered nonlinear): identical (apart from the new key `pileLenSrc`).
+- Module 12 and the report show the modelled length (Playwright), no KaTeX or console errors; the drawing tip at 30 ft.
+
+Diff (`Pile Designer.html`, `git diff -U0` against origin/main `5a1bf2e`, CR stripped):
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 60b8c05..9f7a88e 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -5712 +5712,3 @@ function computeAll(I, opts = {}) {
+-      const pileLen = Math.max(R.iab.reqLength, Lf + 5);
++      // PDA-IAB3 (2026-10-21): the designed pile length below the cap when entered (I.iabLpile, PDA-IAB2), else the required length
++      // max(L_geo, L_f + 5) (MassDOT 3.10.11.2) as before. Before: always the required length.
++      const pileLen = R.iab.Ldes > 0 ? R.iab.Ldes : Math.max(R.iab.reqLength, Lf + 5), pileLenSrc = R.iab.Ldes > 0 ? "designed" : "required";
+@@ -5787 +5789 @@ function computeAll(I, opts = {}) {
+-        alpha, dTemp, kline, EIy, EIx, pileLen, scourD, hasScour,
++        alpha, dTemp, kline, EIy, EIx, pileLen, pileLenSrc, scourD, hasScour,   // PDA-IAB3: pileLenSrc
+@@ -6617 +6619 @@ function PileElevation({
+-    const pileLen = b ? b.reqLength : 30;
++    const pileLen = b ? (b.Ldes > 0 ? b.Ldes : b.reqLength) : 30;   // PDA-IAB3: designed length when entered
+@@ -7168 +7170 @@ function soilProfileModel(I, r, pyRes) {
+-    const pileLen = b ? b.reqLength : 30, Lf = b ? b.Lf : 20;
++    const pileLen = b ? (b.Ldes > 0 ? b.Ldes : b.reqLength) : 30, Lf = b ? b.Lf : 20;   // PDA-IAB3: designed length when entered
+@@ -10978 +10980 @@ function PrintReport({
+-              line("Displacement-controlled p-y solve (fixed head, EIy = " + fmt(b.tier2.EIy / 1000, 0) + "k kip\u00b7in\u00b2, k_line = " + fmt(b.tier2.kline, 0) + " lb/in\u00b2" + (b.tier2.scourD > 0 ? ", scour " + fmt(b.tier2.scourD, 1) + " ft" : "") + ") \u2192 Muy = " + fmt(b.tier2.Muy, 1) + " kip\u00b7ft" + (b.tier2.Mux > 0 ? ", Mux = " + fmt(b.tier2.Mux, 1) + " kip\u00b7ft (strong-axis component)" : "")),
++              line("Displacement-controlled p-y solve (fixed head, EIy = " + fmt(b.tier2.EIy / 1000, 0) + "k kip\u00b7in\u00b2, k_line = " + fmt(b.tier2.kline, 0) + " lb/in\u00b2" + (b.tier2.scourD > 0 ? ", scour " + fmt(b.tier2.scourD, 1) + " ft" : "") + ", L = " + fmt(b.tier2.pileLen, 1) + " ft, " + (b.tier2.pileLenSrc === "designed" ? "designed" : "required") + " pile length) \u2192 Muy = " + fmt(b.tier2.Muy, 1) + " kip\u00b7ft" + (b.tier2.Mux > 0 ? ", Mux = " + fmt(b.tier2.Mux, 1) + " kip\u00b7ft (strong-axis component)" : "")),
+@@ -18711,0 +18714 @@ function App() {
++      /*#__PURE__*/React.createElement(Calc, { label: "Pile length modeled", eq: `L=${fmt(t.pileLen, 1)}\\ \\text{ft below the cap}`, note: t.pileLenSrc === "designed" ? "the designed pile length (required " + fmt(r.iab.reqLength, 1) + " ft, Module 01 \u00a74)" : "the required pile length max(L_geo, L_f + 5), Module 01 \u00a74 (no designed length entered)" }),   // PDA-IAB3
+```
