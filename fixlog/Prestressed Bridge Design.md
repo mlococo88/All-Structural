@@ -1933,3 +1933,128 @@ Owner manuals used (verified in the engineer's reference folder; cited, not repr
   - After: f_r = 0.24√4.0 = 0.24 × 2 = 0.480 ksi; S_bc = 20 231 in³; M_cr = 0.480 × 20 231 / 12 = 809.2 k-ft; 1.2 M_cr = **971.1 k-ft**.
 - **How verified:** `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: every case identical except owner_RIDOT_cont (sections `ps.R` and `ps.report` only: `own.contReq` and the report text above); the R values read back are f_r 0.480, S_bc 20 230.6, M_cr 809.23, required 971.07 k-ft. That case's baseline was re-recorded from this branch. `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** none.
+
+## 2026-10-22 — PR: claude/pbd-g-continuous (PBD-G: continuous analysis for simple spans made continuous, AASHTO LRFD 10th Ed. 5.12.3.3; restraint moments by C5.12.3.3.2; positive moment connection; service at interior supports; calculation change for designs with continuity on only; PR link added after merge)
+
+Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3, C5.12.3.3.5; 3.6.1.3.1; Table 3.4.1-3; 5.4.2.3; 5.9.3.4.3a/d. Designs with continuity off give identical results (see How verified).
+
+### PBD-G0. Engines (new plain-script block in `window.PBD`, anchor `/* ═══ Continuous analysis — PBD-G`)   [new code]
+- **Copy (CLAUDE.md §3):** `FE_CACHE`, `sgBeam`, `sgILGrid`, `sgLLRow`, `sgFatRow` are copied unchanged from `Steel Bridge Design.html` (its SBD-SHARED block: the line-girder FE model, influence lines, and the HL-93 and fatigue-truck envelopes). Copies: Steel Bridge Design.html and this file. `sgFatRow` is copied only because `sgBeam` calls it.
+- `PBD.threeMoment(spans, phiL, phiR)`: support moments from M(k−1)L(k−1) + 2M(k)(L(k−1)+L(k)) + M(k+1)L(k) = −6[phiR(k−1) + phiL(k)], with a tridiagonal solve.
+- `PBD.contFE(spans, s)`: does two things.
+  - A unit uniform load on all spans by the three-moment equation: M_w(x) = x(L−x)/2 + M_A(1−x/L) + M_B x/L, and V_w = L/2 − x + (M_B−M_A)/L.
+  - The HL-93 per lane with IM at every node of span s, from `sgBeam`. For negative moment it uses 90 % of two trucks plus the lane where M_w < 0 (3.6.1.3.1).
+- `PBD.restraint(o)`: M_g, M_deck and M_ps as if continuous; M_rc = δ1(M_g + M_ps) + δ2 M_deck; M_sh from the differential-shrinkage curvature; M_res = M_rc + M_sh.
+
+### PBD-G1. Composite-stage demands on the continuous unit (5.12.3.3.1)   [calc change, continuity on] [less conservative in the span, more conservative near the piers]
+- **Where:** in `computeAll`:
+  - anchor `const contOn=!!(inp.cont&&inp.cont.on);`;
+  - the channel definitions `const Mdc2_=…`, `const MLLmid=…`, `const MLLx=…`, `const VLLx=…`, `const MLLpos=…`, `const MLLneg=…`, `const VLLpos/VLLneg=…`;
+  - helper `contUnit(inp,L,ext)` before `computeAll`.
+- **Before** (continuity on, no MIDAS import): DC2, DW and LL on the simple span (`MofW(wBar,x)`, `llEnvAt(x)·DF_m`). The pier used two equal spans (`wL²/8`, `negMomentHL93(L)`).
+- **After:**
+  - Dead loads: `Mdc2_=(x)=>wBar*fe.Mw(x)*12` and `Mdw_=(x)=>wDW*fe.Mw(x)*12`; `Vdc2_` and `Vdw_` use `fe.Vw`.
+  - Live load: `MLLpos=(x)=>dfm*fe.at(x,'Mp')*12` and `MLLneg=(x)=>dfm*fe.at(x,'Mn')*12`; `VLLpos/neg` use `dfv`.
+  - The girder self-weight and DC1 stay on the simple span.
+  - Spans come from inputs `cont.spans` / `cont.span` (written by the bridge bar, `PBD.withSpans`), with this design's L in its own span.
+  - With fewer than two spans the unit is `[L, L]`, span 1 (the former pier assumption), with a warning.
+  - With an entered (manual) M_LL, the continuous HL-93 is used, with a warning.
+  - Imported MIDAS demands are unchanged (they already are the composite-stage analysis).
+- **Pier check (5.12.3.3.7)**, anchor `const cn=inp.cont, negLL=useFE?null:negMomentHL93(L);`:
+  - It uses the governing interior-support end of the span.
+  - `M_DC2 = −w_bar M_w`, `M_DW = −w_dw M_w`, `M_LL = −DF_m M_LL−/lane`, plus a negative restraint moment (G2).
+- The LL deflection keeps the simple-span estimate (`cam.MLLd`), and fatigue keeps `hl.Mfat`: continuity is not credited.
+- **Check case** (cont_restraint: BT-72, L = 120 ft, assumed spans 120/120, span 1; DF_m 0.7191):
+  - Midspan M_w = 60·60/2 − 1800·0.5 = 900 k-ft/klf (per-klf pier moment −120²/8 = −1800). M_DC2 = 0.30·900 = 270 k-ft (before 540); M_DW = 225 k-ft (before 450).
+  - Midspan LL/lane: 1.33·max(1497.2, 1172.5) + 864.0 = 2855.3 k-ft (before 3652.4). × 0.7191 = **2053.3 k-ft** (before 2626.6). Lane: 1152 − 576/2 = 864.
+  - M_u,mid = 1.25(3443.6 + 270) + 1.50(225) + 1.75(2053.3) = **8572.8 k-ft** (before 10 251.0). Flexure D/C 0.752 → 0.634, now governing at x = 54 ft.
+  - Pier LL/lane: max[1.33·max(809.4, 576.6) + 1151.9, 0.9(1.33·1617.7 + 1151.9)] = max[2228.4, 2973.1] = 2973.1. × 0.7191 = 2138.1 k-ft (before 2139.0).
+- **3-span check case** (cont_3span: spans 100/120/100, span 2):
+  - 560 M = −(100³ + 120³)/4 → M = −1217.9 k-ft/klf at both supports.
+  - M_w(60) = 1800 − 1217.9 = 582.1.
+  - LL/lane at midspan: 1.33·1206.7 + 658.3 = 2263.3; × 0.7191 = 1627.6 k-ft. Pier: 2445.1 × 0.7191 = 1758.4 k-ft.
+  - M_DC2 = 0.30·1217.9 = 365.4 k-ft; M_DW = 304.5 k-ft.
+
+### PBD-G2. Restraint moments (5.12.3.3.2–.4; C5.12.3.3.2; C5.12.3.3.3)   [calc change, continuity and restraint on] [replaces the PCA estimate]
+- **Where:** `computeAll`, anchor `let restr=null;` (before `// stress limits (5.9.2.3)`).
+- **Removed:** the old PCA block inside the continuity block (`// ---- Restraint moments (PCA method, PCI Journal 1969 / 5.12.3.3) ----`). It used coefficients 0.68 and 0.38 and a partial-restraint factor 0.5, and was reported only.
+- **Creep:**
+  - δ1 = E_c[ψb(tf,ti) − ψb(td,ti)] / (E_ci[1 + 0.7ψb(tf,td)]) and δ2 = E_c[ψb(tf,ti) − ψb(td,ti)] / (E_ci[1 + ψb(tf,td)]), Eqs. C5.12.3.3.2-1 and -2 as printed.
+  - M_g and M_deck: three-moment equation with φ = wL³/24.
+  - M_ps: the prestress at transfer as an imposed curvature, φ_A = −∫P_i e(1 − x/L)dx and φ_B = −∫P_i e x/L dx (Simpson's rule, 120 strips). Other spans are scaled by L_k/L.
+- **Differential shrinkage after continuity** (initial strain method):
+  - N_d = ε_ddf·A_d/A_tr·E_cd·A_d/(1 + 0.7ψ_d), with A_tr = A_d + A_s(n − 1) (Eq. C5.12.3.3.3-1; A_s = the deck rebar input).
+  - N_g = (ε_bif − ε_bid)E_c A_g/(1 + 0.7ψb(tf,td)).
+  - EIκ = N_d e_d − N_g e_g, and φ = EIκ L/2.
+- **Use (5.12.3.3.2):** M_res(x) varies linearly between the supports.
+  - `MrP = max(0, M_res)` is added (γ = 1.0, Table 3.4.1-3) to the Strength I M_u, the Service I top, the deck and the Service III bottom.
+  - `MrN = min(0, M_res)` is added to the pier M_u and to the negative-moment service fibers.
+  - The restraint shear (M_res,B − M_res,A)/L is added where it increases |V_u|.
+  - Without restraint every added term is exactly 0.
+- **Check case** (cont_restraint):
+  - δ1 = 5112(1.289 − 0.945)/(4749·1.5306) = 0.2419; δ2 = 0.2106.
+  - At the pier: M_g = −0.82559·1800 = −1486.1 k-ft; M_deck = −1.0875·1800 = −1957.5 k-ft.
+  - φ_ps = −193 737 k-ft², so 480 M_ps = 6·387 473 and M_ps = 4843.4 k-ft.
+  - M_rc = 0.2419(−1486.1 + 4843.4) + 0.2106(−1957.5) = **399.9 k-ft**.
+  - N_d = 716.2 kip, e_d = 20.31 in; N_g = 227.1 kip, e_g = 19.09 in. EIκ = (716.2·20.31 − 227.1·19.09)/12 = 850.9 k-ft. M_sh = −1.5·850.9 = **−1276.3 k-ft**.
+  - M_res = **−876.4 k-ft**. Before: PCA net +408.0, reported only.
+  - Pier M_u = 1.25·540 + 1.50·450 + 1.75·2138.1 + 876.4 = **5968.0 k-ft** (before 5093.3). With φM_n 5252.0, D/C 0.970 → **1.136 FAIL**.
+- **3-span check case** (cont_3span):
+  - M_ps: 560 M = 6(161 447 + 193 737) → 3805.5 k-ft. M_rc = 398.4 k-ft.
+  - M_sh: 560 M = −6·850.9(50 + 60) → −1002.9 k-ft. M_res = −604.4 k-ft.
+  - Pier M_u = 1.25·365.4 + 1.50·304.5 + 1.75·1758.4 + 604.4 = 4595.0 k-ft, D/C 0.875.
+
+### PBD-G3. Positive moment connection (5.12.3.3.8a; C5.12.3.3.5)   [new requirement / check]
+- **Where:** continuity block, anchor `const pends=[contU.s>1?0:null`.
+- **Method:**
+  - M = M_res + M_DC2 + M_DW + m_LL·M_LL+ at the interior-support end (service, γ = 1.0).
+  - T = 0.9M/(0.9h_c); A_s,req = T/36 ksi.
+  - New optional input `cont.AsPos`. When it is entered, the check "Pos. moment connection (5.12.3.3.8)" requires f_s = T/A_s,pos ≤ 36 ksi. When it is absent (as in old files) the requirement is reported only.
+- **Check case** (cont_3span, right support): M = −604.4 + (−365.4) + (−304.5) + 247.8 = −1026.4 k-ft ≤ 0, so there is no positive moment demand (T = 0).
+
+### PBD-G4. Service at interior supports (5.12.3.3.5)   [new checks]
+- **Where:** continuity block, anchor `const gp=grid.filter(r=>nearPierX(r.x));`. New station fields `s3TopN, s3BotN, s1BotN, s2BotN` (continuity on only).
+- **Top of girder, Service III with LL−:**
+  - The limit is Table 5.9.2.3.1b-1 with f′c: 0.24√f′c with the bonded-reinforcement option of Analysis Options, else 0.0948√f′c ≤ 0.2 ksi.
+  - The bonded steel T/min(0.5f_y, 30) is checked when `cont.AsTop` is entered.
+  - Alternative `cont.topRC`: the top is designed as RC at strength, i.e. the pier check.
+- **Bottom, Service I with LL−:** 0.45f′c / 0.60f′c (5.9.2.3.2a).
+- With continuity on, the former top-tension check "Srv tens (top)" (5.9.2.3.2b) keeps only the stations away from an interior support.
+- **Check case** (cont_3span, x = 0, left pier):
+  - f_top = 0 − 0 + 0 + (−8038 − 7253 + 0.80·(−21 101))/69 082 = −0.466 ksi, against −0.24√8.5 = −0.700 ksi → D/C 0.666.
+  - T = 87.6 kip → A_s ≥ 87.6/30 = 2.92 in², against 3.00 in² → D/C 0.974.
+  - Bottom at x = 3 ft: 3.673 ≤ 0.45·8.5 = 3.825 ksi → D/C 0.960.
+
+### PBD-G5. UI, report, payload   [display]
+- **Continuity card:** the continuous unit, the restraint table (support moments, δ1, δ2), the connection and top-of-girder inputs and results, and "Worked in" links.
+- **Flexure tab:** the pier card shows the FE values. **Diagrams:** a callout.
+- **Report:**
+  - New section "Continuous Analysis — LL + SIDL (LRFD 5.12.3.3)": model, three-moment equation, HL-93, restraint, connection, service.
+  - The pier section has an FE branch.
+  - The worked M_u (midspan), V_u and stresses show M_res when present, and the continuous or imported M_bar, M_dw and components.
+  - The LL deflection notes the simple-span estimate.
+- **Owner rule "where" text** for MassDOT/RIDOT `cont.restr`: "(PCA)" → "(C5.12.3.3.2)".
+- **superReactions:** with continuity, DC2 and DW are this span's end shears on the continuous unit, as in the MIDAS branch.
+- **Bridge model:**
+  - `PBD.withSpans` writes `cont.spans` / `cont.span` on bridge-level actions, in both modes.
+  - `PBD.migrate` takes a design's `cont.spans` as the bridge spans.
+  - New optional inputs `cont.spans`, `cont.span`, `cont.AsPos`, `cont.AsTop` and `cont.topRC`. They are absent from DEFAULTS and from old files, so no migration is needed: absent means the previous behaviour, or report only.
+
+### How verified
+- `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: the 31 non-continuity cases are identical in every section except owner_MassDOT_sw and owner_RIDOT. In those two, the report differs only in the relabelled "where" row of the restraint rule. These cases were re-recorded from this branch:
+  - the continuity cases (cont_restraint, midas_3span, midas_df0, owner_MassDOT_cont, owner_RIDOT_cont);
+  - the new cont_3span;
+  - those two owner cases.
+- **Engines in the page:** `computeAll(mergeInputs(fixture))` was run for every fixture on origin/main and on this branch. 31 fixtures are identical; the continuity fixtures differ as described above. The check-case values were read back from R.
+- **FE vs closed form:**
+  - Per-klf pier moment, 100/100: −1249.9 (FE, lumped loads) vs −1250 (three-moment).
+  - Pier LL: FE 2313.9 vs the former two-span enumeration 2315.7 k-ft/lane.
+  - 80/100/80: three-moment −821.74 vs FE −821.64.
+- **Browser:** every tab of cont_3span is free of KaTeX errors and page errors. Screenshots of the Continuity card, the pier card and the report section were checked.
+- `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
+
+### Open items (not changed)
+- 5.6.7 crack control of the deck reinforcement at the pier (5.12.3.3.5 applies it to the CIP deck) needs bar spacing and exposure inputs.
+- The load ratings (MBE) do not include the restraint moment (P, γ_P = 1.0).
+- Temperature-gradient (TG) restraint is not computed. Axial restraint forces are not computed (bearings are taken as free longitudinally).
+- The LL deflection and fatigue keep the simple-span estimates.
