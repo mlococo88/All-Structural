@@ -4161,3 +4161,52 @@ The basis line on the zone card and in the report's capacity table now works out
      Design & Rating view; GirderDetail no longer reads that record.)
   ```
 - **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.
+
+## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: the MCT no longer frames PS-Beam / Prestressed Bridge Design; the Design hand-off opens it in a new tab; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR link added after merge)
+
+### PBD-H1. PS-Beam overlay, its switch and `EMBED_META.psbeam` removed; Prestressed Bridge Design opens in a new tab   [UI / navigation] [no result change]
+- **Where:** `App` in index.html.
+  - `openEmbed`: anchor `const openEmbed=(app)=>{`. New `openPBD` just above it.
+  - `EMBED_META`: anchor `const EMBED_META={ lldf:`.
+  - `publishToDesign`: anchors `const targetName = 'Prestressed Bridge Design';`, `openPBD();\n      return false;` and `if(!silent) openPBD();`.
+  - Sidebar "Design Hand-off" button: anchor `{k:'psbeam',label:'Prestressed Bridge Design'`.
+  - Overlay header: anchor `{EMBED_META[embedApp].title}</span>`.
+- **Before:**
+  - `openEmbed('psbeam')` mounted `psbeam.html` (via `appPaths`) in the full-screen overlay `<iframe>`.
+  - `EMBED_META` had `psbeam:{title:'PS-Beam · Prestressed Concrete Girder Design',color:'#0e7490'}`.
+  - The overlay header had a switch `{['lldf','psbeam'].filter(a=>a!==embedApp).map(a=>(<button … onClick={()=>openEmbed(a)}>…{a==='lldf'?'LL & DL':'PS-Beam'} →</button>))}`.
+  - `publishToDesign` called `openEmbed(target)` / `openEmbed('psbeam')`.
+  - The sidebar button called `openEmbed(appId)` when locked, with the label "Prestressed Concrete Beam Design".
+- **After:**
+  - `const openPBD=()=>{ const file=appPath('psbeam'); let w=null; try{ w=window.open(encodeURI(file),'_blank'); }catch(e){} if(!w) alert('Pop-up blocked — …'); return !!w; };`
+  - `openEmbed` starts with `if(app==='psbeam'){ openPBD(); return; }`, so a framed sibling's request (LL & DL's button) gets a tab.
+  - `EMBED_META` = `{ lldf:{…} }` only, and the switch is gone (the overlay holds only LL & DL).
+  - `publishToDesign` and the sidebar button call `openPBD()`. The label is "Prestressed Bridge Design" and the tooltips say "in a new tab".
+- **Kept:**
+  - The `demands` hand-off: `BridgeHandoff.publish(buildPSBeamExport(…))`, `bridgeSuite.v1.demandsKind = 'psbeam'`, the lock and silent republish.
+  - The `psSection`, `capacity` and `geometryChanges` channels.
+  - The PS-Beam combos, the MCT psconc rating and the PS Service III rating.
+  - The LL & DL overlay and its health check.
+- **Why:** PLAN item 14. The design tool is now a bridge-level tool with its own project and title block, and works in its own tab.
+- **Check case:**
+  - With no MIDAS results: the button asks "No analysis demands to send yet … Open Prestressed Bridge Design anyway?". OK opens `Prestressed Bridge Design.html` in a new tab; the MCT stays on its step and no overlay or iframe is mounted.
+  - With demands published, the new tab shows "New analysis data available". Loading it gives 31 stations, span 1, continuity on (midas_3span payload). "Send capacity to MCT Rating" writes `bridgeSuite.v1.capacity` (producer PS-Beam, 189 stations). The MCT's AASHTO Rating step shows "Design capacity received — PS-Beam", and "Use for rating" adopts it.
+- **How verified:**
+  - `node tests/compare.mjs --tool page --file index.html` (origin/main vs branch): `page.storage` is the same. `page.text` differs only in the button label ("Prestressed Concrete Beam Design ↗" → "Prestressed Bridge Design ↗").
+  - Scratch script: the visible text of all 11 MCT steps, including the generated MCT, is identical between origin/main and the branch, apart from that label.
+  - Round trip MCT → Prestressed Bridge Design → MCT in one browser context (scratch Playwright): the check case above passes, with no page errors.
+  - LL & DL framed in the MCT: its "open PS" request opens a new tab.
+- **Other copies:** none (the shared blocks are under PBD-H2).
+
+### PBD-H2. Shared bootstrap blocks: default path of app `psbeam` and comments (byte-identical in index.html, lldf.html, Prestressed Bridge Design.html)   [default file name; comments] [no result change]
+- **Where:** the shared `appPaths` block, anchor `var DEF={mct:'index.html'`; the header comments of the beam-roster block (anchor `This block is byte-identical in index.html /`) and of the `appPaths` block (anchors `The three apps link to each other by bare file name` and `This block is byte-identical in index.html / Prestressed Bridge Design.html /`).
+- **Before:** `var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};`
+- **After:** `var DEF={mct:'index.html', psbeam:'Prestressed Bridge Design.html', lldf:'lldf.html'};`
+- **Comments, before → after:**
+  - "byte-identical in index.html / psbeam.html / lldf.html" becomes "index.html / Prestressed Bridge Design.html (psbeam.html until 2026-10-22) / lldf.html".
+  - "MCT embeds "psbeam.html" in an iframe" becomes "MCT frames "lldf.html" and opens "Prestressed Bridge Design.html" (app id psbeam; psbeam.html is its redirect page since 2026-10-22) in a new tab since 2026-10-22".
+  - The ST-Girder notes say that stgirder.html was removed on 2026-10-22.
+- **Why:** the default path is used only until a tool has recorded where it lives for the folder (`BridgeApps.register`). With the old default, a fresh folder reached the tool through the `psbeam.html` redirect page. App id `psbeam`, `NAMES.psbeam` ('PS-Beam'), every key and the record format are unchanged.
+- **Check case:** in a folder where nothing has been recorded, `BridgeApps.path('psbeam')` returns `'Prestressed Bridge Design.html'` (before: `'psbeam.html'`, which redirected).
+- **How verified:** the shared blocks were compared after the edit. The big `appPaths` block differs between the three files only in its `BridgeApps.boot('<app>')` line, as before. The beam-roster and BridgeXfer blocks are identical in all three, and the handoff blocks are identical in index.html and Prestressed Bridge Design.html. `node tests/check-syntax.mjs index.html lldf.html "Prestressed Bridge Design.html"`: all scripts pass.
+- **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
