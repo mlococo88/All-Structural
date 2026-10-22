@@ -25,6 +25,7 @@
 //   deck_handling  deck design and handling checks on       exterior        exterior girder (position fixed, overhang 3 ft)
 //   debond_harp    debonded rows + harped strands           next_skew       NEXT 36F, 30 deg skew
 //   midas_3span    3-span MIDAS demands payload, span 2      midas_df0       the same with the imported shear DF = 0
+//   cont_3span     continuity on, bridge spans 100/120/100 ft, span 2 (continuous analysis, restraint, connection and top steel entered; added 2026-10-22, PBD-G)
 // Sections read per case (after the tool has loaded and its autosave has settled):
 //   ps.inputs      the inputs the tool saved (psbeam.inputs.v1) after load (merge onto defaults, design-beam follow)
 //   ps.checks      every check of computeAll(inputs): name, value, limit, ratio, pass, location, units

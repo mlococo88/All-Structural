@@ -1945,8 +1945,10 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
   PBD.migrate = function (inp, mode) {
     var ext = extActive(inp), sp = ext ? extSpans(inp.external) : null;
     var n = Math.max(2, Math.round(num(inp.nGirders, 5)) || 2);
-    var spans = ext ? sp.map(function (q) { return q.len; }) : [num(inp.L, 0)];
+    var cs = (!ext && inp.cont && Array.isArray(inp.cont.spans)) ? inp.cont.spans.map(Number).filter(function (v) { return v > 0; }) : [];
+    var spans = ext ? sp.map(function (q) { return q.len; }) : (cs.length >= 2 ? cs : [num(inp.L, 0)]);
     var s = 1;
+    if (!ext && cs.length >= 2) { s = Math.min(Math.max(1, Math.round(+inp.cont.span) || 1), cs.length); spans[s - 1] = num(inp.L, 0); }
     if (ext) { var sel = inp.external._selSpan; s = sel && sel.idx ? Math.min(Math.max(1, +sel.idx), spans.length) : 1; }
     var m = /^\s*G\s*(\d+)/i.exec(String((inp.proj && inp.proj.girderId) || '')), g;
     if (m && +m[1] >= 1 && +m[1] <= n) g = +m[1];
@@ -1985,9 +1987,18 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
     o.proj = Object.assign({}, o.proj || {}, b.title, { girderId: PBD.girderLabel(b, g) });
     if (ext) { var sp = extSpans(o.external), q = sp[Math.min(s, sp.length) - 1]; if (q) { o.external = Object.assign({}, o.external, { _selSpan: q }); o.L = q.len; } }
     else o.L = b.spans[s - 1];
+    o = PBD.withSpans(o, b, s);
     o.S = b.S; o.nGirders = b.nGirders;
     var pos = PBD.isExt(b, g) ? 'exterior' : 'interior';   // a design already at this position keeps its loads as they are
     if (!o.loads || o.loads.pos !== pos) o.loads = Object.assign({}, o.loads, { pos: pos, posAuto: false });
+    return o;
+  };
+  /* PBD-G: the span arrangement of the bridge written into a design (inputs cont.spans, cont.span), read by computeAll
+     for the continuous analysis when continuity is on. Written on bridge-level actions only (cell, bridge bar), in both
+     modes: the spans are the bridge definition. A design with imported MIDAS demands keeps the imported spans. */
+  PBD.withSpans = function (inp, b, s) {
+    if (extActive(inp)) return inp;
+    var o = clone(inp); o.cont = Object.assign({}, o.cont || {}, { spans: b.spans.slice(), span: s });
     return o;
   };
   /* Open another girder × span cell. Returns { b, inp }: the model with the current design stored, and the
@@ -2005,6 +2016,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
       if (!stored) { inp.proj = Object.assign({}, inp.proj || {}, { girderId: PBD.girderLabel(n, g) });
         if (extActive(inp)) { var sp = extSpans(inp.external), q = sp[s - 1]; if (q) { inp.external = Object.assign({}, inp.external, { _selSpan: q }); inp.L = q.len; } } }
       inp.proj = Object.assign({}, inp.proj || {}, n.title);   // one title block for the bridge, in both modes
+      inp = PBD.withSpans(inp, n, s);
     }
     n.designs[PBD.key(g, s)] = clone(inp);
     return { b: n, inp: inp };
@@ -2018,11 +2030,239 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
     if (patch.S != null) n.S = Math.max(0, num(patch.S, n.S));
     if (patch.title) n.title = Object.assign({}, n.title, patch.title);
     n.sel = { g: Math.min(n.sel.g, n.nGirders), s: Math.min(n.sel.s, n.spans.length) };
-    var inp = n.mode === 'pl' ? PBD.applyBridge(n, cur, n.sel.g, n.sel.s) : cur;
+    var inp = n.mode === 'pl' ? PBD.applyBridge(n, cur, n.sel.g, n.sel.s) : (patch.spans ? PBD.withSpans(cur, n, n.sel.s) : cur);
     n.designs[PBD.key(n.sel.g, n.sel.s)] = clone(inp);
     return { b: n, inp: inp };
   };
   PBD.cells = function (b) { var out = []; for (var s = 1; s <= b.spans.length; s++) for (var g = 1; g <= b.nGirders; g++) out.push({ g: g, s: s, key: PBD.key(g, s), has: !!b.designs[PBD.key(g, s)] }); return out; };
+})();
+
+/* ═══ Continuous analysis — PBD-G (2026-10-22) ═══════════════════════════════════════════════════════════
+   Simple-span precast girders made continuous for loads applied after continuity (AASHTO LRFD 10th Ed. 5.12.3.3).
+   Plain JavaScript, no React; computeAll() calls these. Engines only: every value is worked in the report.
+   - COPY (CLAUDE.md §3, kept duplicated): FE_CACHE, sgBeam, sgILGrid, sgLLRow and sgFatRow below are copied unchanged
+     from Steel Bridge Design.html (its SBD-SHARED block: the line-girder FE model, influence lines, and the HL-93 and
+     fatigue-truck envelopes of 3.6.1). Copies: Steel Bridge Design.html (one copy, shared by its Preliminary sizing page
+     and its modules) and this file. sgFatRow is copied only because sgBeam calls it; this tool does not use its result.
+   - PBD.threeMoment: support moments of a prismatic continuous beam from the free end rotations of its spans.
+   - PBD.contFE: the composite-stage analysis of one span of the continuous unit (unit uniform load on all spans, and
+     the HL-93 envelopes per lane with IM at every node of the span).
+   - PBD.restraint: the restraint moments at the supports (C5.12.3.3.2: creep δ1(M_g + M_ps) + δ2 M_deck; differential
+     shrinkage of deck and girder after continuity by the initial strain method).
+   ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var PBD = window.PBD = window.PBD || {};
+/* Line-girder finite-element model (Euler-Bernoulli beam elements, banded Cholesky).
+   EI: optional per-element flexural stiffness (any consistent unit; only ratios matter for forces).
+   noLL: skip the live-load envelopes (dead-load stages). */
+const FE_CACHE = new Map();
+function sgBeam(spans, simple, EI, noLL) {
+  const key = spans.join(',') + (simple ? 'S' : 'C') + (EI ? ':' + Array.from(EI, v => v.toPrecision(6)).join('|') : '') + (noLL ? 'n' : '');
+  if (FE_CACHE.has(key)) return FE_CACHE.get(key);
+  const xs = [0], sup = [0];
+  spans.forEach(L => { const n = Math.max(8, Math.round(L)); const h = L / n, x0 = xs[xs.length - 1]; for (let k = 1; k <= n; k++) xs.push(x0 + k * h); sup.push(xs.length - 1); });
+  const N = xs.length, nd = 2 * N, hb = 3;
+  const u = Array.from({ length: nd }, () => new Float64Array(hb + 1)), ke = [];
+  for (let e = 0; e < N - 1; e++) {
+    const h = xs[e + 1] - xs[e], h2 = h * h, h3 = h2 * h;
+    const r = EI ? EI[e] : 1, k = [[12 / h3, 6 / h2, -12 / h3, 6 / h2], [6 / h2, 4 / h, -6 / h2, 2 / h], [-12 / h3, -6 / h2, 12 / h3, -6 / h2], [6 / h2, 2 / h, -6 / h2, 4 / h]].map(row => row.map(v => v * r));
+    ke.push(k); const d = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
+    for (let r = 0; r < 4; r++) for (let c = r; c < 4; c++) u[d[r]][d[c] - d[r]] += k[r][c];
+  }
+  const kmax = Math.max(...u.map(r => r[0])); sup.forEach(s => u[2 * s][0] += kmax * 1e9);                    // pinned supports (penalty)
+  for (let i = 0; i < nd; i++) {                            // banded Cholesky, A = U^T U
+    let s = u[i][0]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] ** 2;
+    u[i][0] = Math.sqrt(s);
+    for (let d = 1; d <= hb && i + d < nd; d++) { const j = i + d; let t = u[i][d]; for (let k = Math.max(0, j - hb); k < i; k++) t -= u[k][i - k] * u[k][j - k]; u[i][d] = t / u[i][0]; }
+  }
+  const y = new Float64Array(nd), x = new Float64Array(nd);
+  const solve = b => {
+    for (let i = 0; i < nd; i++) { let s = b[i]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] * y[k]; y[i] = s / u[i][0]; }
+    for (let i = nd - 1; i >= 0; i--) { let s = y[i]; for (let d = 1; d <= hb && i + d < nd; d++) s -= u[i][d] * x[i + d]; x[i] = s / u[i][0]; }
+    return x;
+  };
+  // ILM[i*N+j]: moment at node i (sagging +) for unit downward load at node j
+  // ILV[e*N+j]: shear in element e for unit downward load at node j
+  const ILM = new Float64Array(N * N), ILV = new Float64Array((N - 1) * N), b = new Float64Array(nd);
+  if (simple) {                                             // independent simple spans: closed-form influence lines
+    for (let k = 0; k < spans.length; k++) {
+      const a = xs[sup[k]], L = spans[k];
+      for (let i = sup[k]; i <= sup[k + 1]; i++) for (let j = sup[k]; j <= sup[k + 1]; j++) {
+        const x = xs[i] - a, xi = xs[j] - a; ILM[i * N + j] = xi <= x ? xi * (L - x) / L : x * (L - xi) / L;
+      }
+      for (let e = sup[k]; e < sup[k + 1]; e++) { const xm = (xs[e] + xs[e + 1]) / 2 - a;
+        for (let j = sup[k]; j <= sup[k + 1]; j++) { const xi = xs[j] - a; ILV[e * N + j] = xi > xm ? (L - xi) / L : -xi / L; } }
+    }
+  }
+  for (let j = 0; j < N && !simple; j++) {
+    b.fill(0); b[2 * j] = -1; const d = solve(b);
+    for (let e = 0; e < N - 1; e++) {
+      const k = ke[e], v0 = d[2 * e], t0 = d[2 * e + 1], v1 = d[2 * e + 2], t1 = d[2 * e + 3];
+      const f0 = k[0][0] * v0 + k[0][1] * t0 + k[0][2] * v1 + k[0][3] * t1;
+      const f1 = k[1][0] * v0 + k[1][1] * t0 + k[1][2] * v1 + k[1][3] * t1;
+      const f3 = k[3][0] * v0 + k[3][1] * t0 + k[3][2] * v1 + k[3][3] * t1;
+      ILM[(e + 1) * N + j] = f3; if (e === 0) ILM[j] = -f1;
+      ILV[e * N + j] = f0;
+    }
+  }
+  const trib = xs.map((_, j) => ((j < N - 1 ? xs[j + 1] - xs[j] : 0) + (j > 0 ? xs[j] - xs[j - 1] : 0)) / 2);
+  // 1-ft load grid, interpolation coefficients
+  const Ltot = xs[N - 1], G = Math.ceil(Ltot - 1e-9), gi = [];
+  for (let g = 0, e = 0; g <= G; g++) { const xg = Math.min(g, Ltot); while (e < N - 2 && xs[e + 1] < xg) e++; const t = (xg - xs[e]) / (xs[e + 1] - xs[e]); gi.push([e, Math.max(0, Math.min(1, t)), g <= Ltot + 1e-9]); }
+  const beam = { xs, sup, N, ILM, ILV, trib, G, gi, Ltot, spans, EI: EI || null };
+  if (noLL) { FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value); return beam; }
+  // live load envelopes per unit IL row (no DF), with IM on truck/tandem
+  const env = row => sgLLRow(beam, row);
+  beam.MLL = []; for (let i = 0; i < N; i++) beam.MLL.push(env(ILM.subarray(i * N, (i + 1) * N)));
+  beam.MF = []; for (let i = 0; i < N; i++) beam.MF.push(sgFatRow(beam, ILM.subarray(i * N, (i + 1) * N)));
+  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. LL9 (2026-10-14): exact section values, no envelope.
+  // Element e carries the section just right of its left node e, except an element that ends at a support (or the girder end), which
+  // carries the section just left of that support. VLLr / VFr: the section just right of node e for every element (station output).
+  const isSup = new Uint8Array(N); sup.forEach(s => isSup[s] = 1);
+  const sec = (e, m) => { const row = ILV.subarray(e * N, (e + 1) * N), c = { e, m }; return [sgLLRow(beam, row, c), sgFatRow(beam, row, c)]; };
+  beam.VLL = []; beam.VF = []; beam.VLLr = []; beam.VFr = [];
+  for (let e = 0; e < N - 1; e++) { const A = sec(e, e), S = isSup[e + 1] ? sec(e, e + 1) : A; beam.VLL.push(S[0]); beam.VF.push(S[1]); beam.VLLr.push(A[0]); beam.VFr.push(A[1]); }
+  FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value);
+  return beam;
+}
+/* Influence-line ordinates on the 1-ft load grid (beam.gi), zero-padded so the sweeps need no bounds checks.
+   cut (shear rows, LL2): { e, m } = the influence line of element e with its unit jump at node m (m = e: the section just right of
+   node e; m = e + 1: just left of node e+1). Smooth part S_j = row_j - [j > e]; a load beyond x_m adds 1. An axle exactly at x_m is
+   taken on the side that gives the extreme: vP (maxima) counts it beyond the section, vN (minima) before it. No cut: vP = vN = row.
+   f(a, up): the same ordinate at any position a, for an axle placed exactly at the section when x_m is not on the 1-ft grid. */
+function sgILGrid(beam, row, cut) {
+  const { G, gi, N, xs, Ltot } = beam, PAD = 96, n = G + 1 + 2 * PAD, src = cut ? Float64Array.from(row, (v, j) => v - (j > cut.e ? 1 : 0)) : row;
+  const c = cut ? xs[cut.m] : 0, vP = new Float64Array(n), vN = cut ? new Float64Array(n) : vP;
+  for (let g = 0; g <= G; g++) { const [e, t, on] = gi[g]; if (!on) continue; const s = src[e] * (1 - t) + src[e + 1] * t;
+    if (!cut) vP[g + PAD] = s; else { vP[g + PAD] = s + (g >= c - 1e-6 ? 1 : 0); vN[g + PAD] = s + (g > c + 1e-6 ? 1 : 0); } }
+  const f = (a, up) => { if (a < -1e-9 || a > Ltot + 1e-9) return 0; let lo = 0, hi = N - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (xs[md] <= a) lo = md; else hi = md; }
+    const t = Math.max(0, Math.min(1, (a - xs[lo]) / (xs[hi] - xs[lo]))), s = src[lo] * (1 - t) + src[hi] * t; return s + (up ? (a >= c - 1e-6 ? 1 : 0) : (a > c + 1e-6 ? 1 : 0)); };
+  return { PAD, vP, vN, src, c, f };
+}
+/* HL-93 envelopes of one influence line (per lane, no DF; truck and tandem stored without IM).
+   LL3 (2026-10-14), 3.6.1.3.1: axles that do not contribute to the extreme force effect are neglected, so a maximum sums only the
+   positive axle effects (P) and a minimum only the negative ones (M) (truck, tandem, and each truck of the 90% two-truck case).
+   The live load deflection rows (3.6.1.3.2) use the same rule (LL8, engineer's decision 2026-10-14). cut: shear rows (LL2), see sgILGrid. */
+function sgLLRow(beam, row, cut) {
+  const { G, trib, N, xs } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD;
+  const P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
+  let tMax = 0, tMin = 0, dMax = 0, dMin = 0, sMax = 14, sMin = 14;
+  for (let s = 14; s <= 30; s++) for (let q = -44 + PAD; q <= G + PAD; q++) {   // rear axle spacing 14 to 30 ft in 1-ft steps (3.6.1.2.2), both directions
+    const r1 = 32 * P[q] + 32 * P[q + s] + 8 * P[q + s + 14];       // front axle toward +x
+    const r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 14 + s];      // front axle toward -x
+    const n1 = 32 * M[q] + 32 * M[q + s] + 8 * M[q + s + 14], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 14 + s];
+    const hi = Math.max(r1, r2), lo = Math.min(n1, n2); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; }
+  }
+  for (let q = -4 + PAD; q <= G + PAD; q++) { dMax = Math.max(dMax, 25 * P[q] + 25 * P[q + 4]); dMin = Math.min(dMin, 25 * M[q] + 25 * M[q + 4]); }
+  if (cut) {   // an axle exactly at the section, on either side of the jump (needed when the section is not on the 1-ft grid)
+    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + ((up ? v > 0 : v < 0) ? v : 0); }, 0);
+    for (let s = 14; s <= 30; s++) for (const Q of [[[32, 0], [32, s], [8, s + 14]], [[8, 0], [32, 14], [32, 14 + s]]]) for (const [, o] of Q) {
+      const hi = sum(Q, I.c - o, true), lo = sum(Q, I.c - o, false); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; } }
+    for (const o of [0, 4]) { const Q = [[25, 0], [25, 4]]; dMax = Math.max(dMax, sum(Q, I.c - o, true)); dMin = Math.min(dMin, sum(Q, I.c - o, false)); }
+  }
+  // two design trucks (14 ft), min 50 ft between lead axle of one and rear axle of the other
+  let two = 0, twoX = 0;
+  for (const dir of [0, 1]) {
+    const tn = [], tp = []; for (let q = -28 + PAD; q <= G + PAD; q++) {
+      tn.push(dir ? 32 * M[q] + 32 * M[q + 14] + 8 * M[q + 28] : 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 28]);
+      tp.push(dir ? 32 * P[q] + 32 * P[q + 14] + 8 * P[q + 28] : 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 28]); }
+    let pm = Infinity, px = -Infinity;
+    for (let k = 0; k < tn.length; k++) { if (k - 78 >= 0) { pm = Math.min(pm, tn[k - 78]); px = Math.max(px, tp[k - 78]); } if (pm < Infinity) { two = Math.min(two, tn[k] + pm); twoX = Math.max(twoX, tp[k] + px); } }
+  }
+  let lp = 0, ln = 0;
+  if (!cut) for (let j = 0; j < N; j++) { const a = row[j] * trib[j] * 0.64; if (a > 0) lp += a; else ln += a; }
+  else for (let j = 0; j < N - 1; j++) {   // lane on a shear influence line: element by element, jump at node m, exact positive and negative parts
+    const h = xs[j + 1] - xs[j], k = j >= cut.m ? 1 : 0, a0 = I.src[j] + k, a1 = I.src[j + 1] + k;
+    if (a0 >= 0 && a1 >= 0) lp += 0.32 * h * (a0 + a1); else if (a0 <= 0 && a1 <= 0) ln += 0.32 * h * (a0 + a1);
+    else { const p = Math.max(a0, a1), m = Math.min(a0, a1), z = h / (p - m); lp += 0.32 * z * p * p; ln -= 0.32 * z * m * m; }
+  }
+  return { pos: 1.33 * Math.max(tMax, dMax) + lp, neg: 1.33 * Math.min(tMin, dMin) + ln, neg2: 0.9 * (1.33 * two + ln), pos2: 0.9 * (1.33 * twoX + lp), twoMax: twoX,
+           truckMax: tMax, truckMin: tMin, tanMax: dMax, tanMin: dMin, lanePos: lp, laneNeg: ln, twoMin: two, sMax, sMin };
+}
+
+/* fatigue truck (3.6.1.4.1): 8, 32, 32 kip at 14 ft and 30 ft, IM = 15%, one lane. LL1 (2026-10-14): "one design truck or axles
+   thereof", so axles that do not contribute to the extreme are neglected (as 3.6.1.3.1): a maximum sums only the positive axle
+   effects (P), a minimum only the negative ones (M). cut: shear rows (LL2), see sgILGrid. */
+function sgFatRow(beam, row, cut) {
+  const { G } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD, P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
+  let mx = 0, mn = 0;
+  for (let q = -44 + PAD; q <= G + PAD; q++) {
+    const r1 = 32 * P[q] + 32 * P[q + 30] + 8 * P[q + 44], r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 44];
+    const n1 = 32 * M[q] + 32 * M[q + 30] + 8 * M[q + 44], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 44];
+    mx = Math.max(mx, r1, r2); mn = Math.min(mn, n1, n2);
+  }
+  if (cut) for (const Q of [[[32, 0], [32, 30], [8, 44]], [[8, 0], [32, 14], [32, 44]]]) for (const [, o] of Q) {   // an axle exactly at the section
+    let hi = 0, lo = 0; for (const [w, o2] of Q) { const a = w * I.f(I.c - o + o2, true), b = w * I.f(I.c - o + o2, false); hi += a > 0 ? a : 0; lo += b < 0 ? b : 0; } mx = Math.max(mx, hi); mn = Math.min(mn, lo); }
+  return { max: 1.15 * mx, min: 1.15 * mn, rawMax: mx, rawMin: mn };
+}
+  /* ---- end of the copy from Steel Bridge Design.html ---- */
+  PBD.sgBeam = sgBeam; PBD.sgLLRow = sgLLRow;
+
+  /* Three-moment equation (Clapeyron), prismatic beam continuous over supports 0..n, end supports pinned (M = 0).
+     phiL[k], phiR[k]: EI × the free end rotations of span k as a simple span, + when the span sags (uniform load w:
+     w L³/24 at each end; imposed uniform curvature κ: EI κ L/2 at each end). For support k (span k−1 on its left, span k
+     on its right): M(k−1) L(k−1) + 2 M(k) (L(k−1) + L(k)) + M(k+1) L(k) = −6 [phiR(k−1) + phiL(k)].
+     Returns the support moments M[0..n] (+ = sagging), units of phi / length. */
+  PBD.threeMoment = function (spans, phiL, phiR) {
+    var n = spans.length, M = [], k, i;
+    for (k = 0; k <= n; k++) M.push(0);
+    if (n < 2) return M;
+    var m = n - 1, a = [], b = [], c = [], d = [];
+    for (k = 1; k <= m; k++) { a.push(spans[k - 1]); b.push(2 * (spans[k - 1] + spans[k])); c.push(spans[k]); d.push(-6 * (phiR[k - 1] + phiL[k])); }
+    for (i = 1; i < m; i++) { var w = a[i] / b[i - 1]; b[i] -= w * c[i - 1]; d[i] -= w * d[i - 1]; }   // tridiagonal (Thomas)
+    var x = []; x[m - 1] = d[m - 1] / b[m - 1];
+    for (i = m - 2; i >= 0; i--) x[i] = (d[i] - c[i] * x[i + 1]) / b[i];
+    for (k = 1; k <= m; k++) M[k] = x[k - 1];
+    return M;
+  };
+
+  /* Composite-stage analysis of span s (1-based) of the continuous unit `spans` (ft): constant EI (one composite girder
+     section in every span), pinned supports. Dead load: a unit uniform load (1 klf) on all spans, support moments by the
+     three-moment equation (M_A, M_B at the ends of span s), so M_w(x) = x(L − x)/2 + M_A(1 − x/L) + M_B x/L and
+     V_w(x) = L/2 − x + (M_B − M_A)/L (k-ft and kip per klf). Live load: sgBeam's influence lines and HL-93 envelopes per
+     lane with IM (3.6.1.2, 3.6.1.3; truck, tandem, lane; 90 % of two trucks plus the lane, 3.6.1.3.1, used for the
+     negative moment between the points of contraflexure of the uniform load on all spans, i.e. where M_w < 0).
+     Every node of the span is returned (about 1 ft apart); at(x, key) interpolates linearly. */
+  PBD.contFE = function (spans, s) {
+    var n = spans.length, beam = sgBeam(spans, false), L = spans[s - 1];
+    var i0 = beam.sup[s - 1], i1 = beam.sup[s], x0 = beam.xs[i0];
+    var phi = spans.map(function (Lk) { return Lk * Lk * Lk / 24; });
+    var Mw1 = PBD.threeMoment(spans, phi, phi), MA = Mw1[s - 1], MB = Mw1[s];
+    var nodes = [];
+    for (var i = i0; i <= i1; i++) {
+      var x = beam.xs[i] - x0, ll = beam.MLL[i], Mw = x * (L - x) / 2 + MA * (1 - x / L) + MB * x / L;
+      var two = Mw < 0 && ll.neg2 < ll.neg, v = i < i1 ? beam.VLLr[i] : beam.VLL[i - 1];   // shear just right of the node (just left at the right support)
+      nodes.push({ x: x, Mw: Mw, Vw: L / 2 - x + (MB - MA) / L, Mp: ll.pos, Mn: two ? ll.neg2 : ll.neg, two: two, Vp: v.pos, Vn: v.neg, ll: ll });
+    }
+    var at = function (x, key) {
+      if (x <= nodes[0].x) return nodes[0][key];
+      for (var j = 1; j < nodes.length; j++) if (x <= nodes[j].x + 1e-12) { var p = nodes[j - 1], q = nodes[j], t = (x - p.x) / Math.max(q.x - p.x, 1e-12); return p[key] + (q[key] - p[key]) * t; }
+      return nodes[nodes.length - 1][key];
+    };
+    var mid = nodes.reduce(function (b, q) { return Math.abs(q.x - L / 2) < Math.abs(b.x - L / 2) ? q : b; }, nodes[0]);
+    return { spans: spans.slice(), s: s, n: n, L: L, x0: x0, MA: MA, MB: MB, Mw1: Mw1, nodes: nodes, at: at, mid: mid,
+             Mw: function (x) { return x * (L - x) / 2 + MA * (1 - x / L) + MB * x / L; }, Vw: function (x) { return L / 2 - x + (MB - MA) / L; },
+             pierL: s > 1, pierR: s < n, endL: nodes[0], endR: nodes[nodes.length - 1], nEl: beam.N - 1 };
+  };
+
+  /* Restraint moments at the supports of the continuous unit (AASHTO LRFD 10th Ed. C5.12.3.3.2, initial strain method).
+     o: { spans (ft), s (this span), wg, wdk (klf: girder and deck weight on the non-composite girder), phiPsL, phiPsR (k-ft²:
+     −∫ P_i e (1 − x/L) dx and −∫ P_i e x/L dx over this span, the prestress as an imposed hogging curvature EIκ = −P_i e),
+     d1, d2 (δ1, δ2), kSh (k-ft: EIκ of the differential shrinkage after continuity, + sagging: N_d e_d − N_g e_g) }.
+     Every span of the unit is taken with this girder: w per foot as given; the prestress rotations scale with the span
+     length (the same profile in fractions of the span). Each part is the support moment of a continuous beam (k-ft, + =
+     sagging): M_g, M_dk (uniform load), M_ps (prestress), as if continuous when the load was applied; M_rc =
+     δ1 (M_g + M_ps) + δ2 M_dk; M_sh (differential shrinkage: imposed uniform curvature kSh / EI; EI-free). M_res = M_rc + M_sh. */
+  PBD.restraint = function (o) {
+    var sp = o.spans;
+    var uni = function (w) { var p = sp.map(function (L) { return w * L * L * L / 24; }); return PBD.threeMoment(sp, p, p); };
+    var Mg = uni(o.wg), Mdk = uni(o.wdk), Ls = sp[o.s - 1];
+    var Mps = PBD.threeMoment(sp, sp.map(function (L) { return o.phiPsL * L / Ls; }), sp.map(function (L) { return o.phiPsR * L / Ls; }));
+    var sh = sp.map(function (L) { return o.kSh * L / 2; }), Msh = PBD.threeMoment(sp, sh, sh);
+    var Mrc = Mg.map(function (v, k) { return o.d1 * (Mg[k] + Mps[k]) + o.d2 * Mdk[k]; });
+    return { Mg: Mg, Mdk: Mdk, Mps: Mps, Msh: Msh, Mrc: Mrc, Mres: Mrc.map(function (v, k) { return v + Msh[k]; }) };
+  };
 })();
 
 /* ═══ Owner (DOT) profile — PBD-E (2026-10-22) ════════════════════════════════════════════════════════════
@@ -2094,9 +2334,9 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
         text: '(LL+IM) deflection not greater than L/1000 for all bridges with sidewalks; without sidewalks preferably L/1000 and under no circumstances greater than L/800; applied to the typical interior beam only' },
       // ---- continuity (simple spans made continuous) ----
       { owner: 'MassDOT', id: 'cont.restr', kind: 'default', key: 'cont.restraint', value: false, lbl: 'Restraint moments (continuity)', show: 'Off: neglected', sec: '3.5.1.8',
-        where: 'Continuity card: restraint moments (PCA)', text: 'Simple-span prestressed beams made continuous for live load are designed per AASHTO 5.12.3.3; for the standard beams the design for end restraint moment can be neglected (bottom strands extended as detailed)' },
+        where: 'Continuity card: restraint moments (C5.12.3.3.2)', text: 'Simple-span prestressed beams made continuous for live load are designed per AASHTO 5.12.3.3; for the standard beams the design for end restraint moment can be neglected (bottom strands extended as detailed)' },
       { owner: 'RIDOT', id: 'cont.restr', kind: 'default', key: 'cont.restraint', value: false, lbl: 'Restraint moments (continuity)', show: 'Off: zero at a girder age of 90 days or more', sec: '5.6.3.3',
-        where: 'Continuity card: restraint moments (PCA)', text: 'With a minimum girder age of 90 days before the continuity diaphragms and deck are placed, the positive restraint moments from girder creep and shrinkage and deck slab shrinkage may be taken as zero; no restraint moment calculation is required' },
+        where: 'Continuity card: restraint moments (C5.12.3.3.2)', text: 'With a minimum girder age of 90 days before the continuity diaphragms and deck are placed, the positive restraint moments from girder creep and shrinkage and deck slab shrinkage may be taken as zero; no restraint moment calculation is required' },
       { owner: 'RIDOT', id: 'cont.age', kind: 'shall-check', nm: 'Girder age at continuity (RIDOT 5.6.3.3)', value: 90, sec: '5.6.3.3', where: 'Check "Girder age at continuity (RIDOT 5.6.3.3)" (continuity on): the deck / continuity age t_d of the Materials card',
         text: 'Minimum girder age before placing the continuity diaphragms and deck: 90 days, stated in the contract documents' },
       { owner: 'RIDOT', id: 'cont.pos', kind: 'report', value: 1.2, sec: '5.6.3.3', where: 'Owner requirements: the required φM_n of the positive moment connection (continuity on)',
@@ -3112,7 +3352,12 @@ function bxSuperRxPayload(inp,R){
   const label=(db&&db.label)?db.label:(String((inp.proj&&inp.proj.girderId)||'').trim()||(pos==='exterior'?'Exterior girder':'Interior girder'));
   const notes=['Single girder line: '+label+' ('+pos+') designed in PS-Beam. The values are for this one girder; Substructure Loading decides which girders they apply to.',
     'Unfactored. DC1 = girder self-weight '+R.wG.toFixed(3)+' klf + deck/haunch and other non-composite DC '+R.wDk.toFixed(3)+' klf'+(diaph.length?' + '+diaph.length+' diaphragm point load(s)':'')+', all on the non-composite girder. DC2 = barrier / SIDL. DW = wearing surface.'];
-  if(R.useExt&&inp.external){
+  if(R.fe&&R.fe.Vw){   // PBD-G: continuous unit (continuity on): DC2 and DW end shears of this span, + up
+    const sL=R.L, i=R.fe.s;
+    dc2=[R.wBar*R.fe.Vw(0),-R.wBar*R.fe.Vw(sL)]; dw=[R.wDW*R.fe.Vw(0),-R.wDW*R.fe.Vw(sL)];
+    ids=['Support '+i,'Support '+(i+1)]; span={index:i,length:+sL.toFixed(3)};
+    notes.push('Continuity on (span '+i+' of '+R.fe.n+', spans '+R.fe.spans.map(v=>(+v).toFixed(2)).join(', ')+' ft): DC2 and DW are the end shears of this span on the continuous unit, as reactions (+ up). At an interior pier they are this span\'s share only; add the share of the adjacent span. DC1 is computed by PS-Beam on the simple non-composite span (L = '+L.toFixed(2)+' ft).');
+  } else if(R.useExt&&inp.external){
     const ext=buildExternal({...inp.external,_selSpan:inp.external._selSpan},L,{pos:1,neg:1,v:1});
     if(!ext) return {error:'the imported MIDAS demands could not be read'};
     const sL=ext.spanLen, sel=ext.sel||{}, i=Math.max(1,+sel.idx||1), x0=+sel.x0||0;
@@ -3133,12 +3378,23 @@ function bxSuperRxPayload(inp,R){
   return {payload:{_schema:'bridge-super-reactions',schemaVersion:1,
     project:(window.BridgeXfer&&BridgeXfer.sharedProject())||{name:(inp.proj&&inp.proj.name)||'',bridgeId:''},
     units:{force:'kip',length:'ft'},factored:false,imIncluded:false,dfIncluded:false,perGirder:true,
-    girderLine:{label,position:pos,beamIndex:db?db.index:null,source:R.useExt?'PS-Beam DC1 + MIDAS DC2/DW':'PS-Beam simple span'},
+    girderLine:{label,position:pos,beamIndex:db?db.index:null,source:R.useExt?'PS-Beam DC1 + MIDAS DC2/DW':R.fe?'PS-Beam DC1 + continuous-unit DC2/DW':'PS-Beam simple span'},
     span,
     supports:ids.map((id,k)=>({id,x:r3(xs[k]),girders:[{label,position:pos,DC1:r3(dc1[k]),DC2:r3(dc2[k]),DW:r3(dw[k])}]})),
     liveLoad:live,notes}};
 }
 
+/* PBD-G: the continuous unit of a design with continuity on (5.12.3.3). Spans: the imported MIDAS member when demands are
+   imported; else inputs cont.spans / cont.span (written from the bridge bar), with this design's own L in its span; fewer
+   than two spans entered: two equal spans [L, L], this girder in span 1 (the assumption the pier check made before), flagged. */
+function contUnit(inp,L,ext){
+  if(ext){ const sp=externalSpans(inp.external), i=Math.max(1,+(ext.sel&&ext.sel.idx)||1);
+    return {spans:sp.map(q=>+q.len),s:Math.min(i,sp.length),src:'midas',assumed:false}; }
+  const c=inp.cont||{}, sp=Array.isArray(c.spans)?c.spans.map(Number).filter(v=>v>0):[];
+  if(sp.length>=2){ const s=Math.min(Math.max(1,Math.round(+c.span)||1),sp.length), out=sp.slice(); out[s-1]=+L;
+    return {spans:out,s,src:'bridge',assumed:false,Lbridge:sp[s-1]}; }
+  return {spans:[+L,+L],s:1,src:'assumed',assumed:true};
+}
 function computeAll(inp){
  try{
   const g=girderGross(inp);
@@ -3241,6 +3497,18 @@ function computeAll(inp){
       if(+sel.x1<x1s-1e-6) ends.push(`right end (x = ${fmt(+sel.x1,2)} ft)`);
       if(ends.length) warns.push(`MIDAS span ${sel.idx||'?'}: the ${ends.join(' and the ')} ${ends.length>1?'are interior piers':'is an interior pier'}. The import has one station per node there, so the DC2 / DW / LL shear at that end may belong to the adjacent span (MIDAS element end, opposite sign). Check the shear demands near ${ends.length>1?'those piers':'that pier'} and the reactions sent to Substructure Loading by hand.`); } }
 
+  // ---- PBD-G: continuity for the loads applied after continuity (AASHTO LRFD 10th Ed. 5.12.3.3.1): DC2, DW and LL+IM on
+  // the continuous unit (window.PBD.contFE: three-moment support moments for the uniform loads, FE influence lines and
+  // HL-93 envelopes for LL). The girder self-weight and DC1 stay on the simple non-composite span. Imported MIDAS demands,
+  // when present, are the composite-stage analysis and the FE analysis is not used.
+  const contOn=!!(inp.cont&&inp.cont.on);
+  const contU=contOn?contUnit(inp,L,useExt?ext:null):null;
+  const fe=(contOn&&!useExt&&window.PBD&&window.PBD.contFE)?window.PBD.contFE(contU.spans,contU.s):null;
+  const useFE=!!fe;
+  if(useFE&&contU.assumed) warns.push(`Continuity is on but the bridge has one span: two equal spans of ${fmt(L,1)} ft are assumed for the continuous analysis (this girder in span 1). Enter the spans of the continuous unit in the bridge bar.`);
+  if(useFE&&contU.src==='bridge'&&Math.abs(contU.Lbridge-L)>0.005) warns.push(`Continuous analysis: span ${contU.s} is ${fmt(contU.Lbridge,2)} ft in the bridge bar but this design's L = ${fmt(L,2)} ft; the design's L is used for span ${contU.s}.`);
+  if(useFE&&!inp.loads.llAuto) warns.push(`Continuity on: the live load is the built-in HL-93 on the continuous unit; the entered M_LL / V_LL (simple-span values) are not used.`);
+
   // component force-effect functions (kip-in moment, kip shear).
   // App always computes the NON-COMPOSITE loads on the bare girder: girder self-weight AND DC1
   // (deck + haunch + non-composite superimposed). These act before the deck cures, so they belong
@@ -3257,10 +3525,10 @@ function computeAll(inp){
   const Pdia=diaph.reduce((s,d)=>s+(+d.P),0);
   const Mdc1_=(x)=>MofW(wDk,x)+Mdia(x);              // non-composite DC1 (deck + haunch + diaphragms)
   const Vdc1_=(x)=>VofW(wDk,x)+Vdia(x);
-  const Mdc2_=useExt? ext.M_DC2 : (x)=>MofW(wBar,x);  // composite superimposed (barrier) — MIDAS if ext
-  const Vdc2_=useExt? ext.V_DC2 : (x)=>VofW(wBar,x);
-  const Mdw_ =useExt? ext.M_DW  : (x)=>MofW(wDW,x);   // wearing surface — MIDAS if ext
-  const Vdw_ =useExt? ext.V_DW  : (x)=>VofW(wDW,x);
+  const Mdc2_=useExt? ext.M_DC2 : useFE? (x)=>wBar*fe.Mw(x)*12 : (x)=>MofW(wBar,x);  // composite superimposed (barrier) — MIDAS if ext, continuous unit if useFE
+  const Vdc2_=useExt? ext.V_DC2 : useFE? (x)=>wBar*fe.Vw(x) : (x)=>VofW(wBar,x);
+  const Mdw_ =useExt? ext.M_DW  : useFE? (x)=>wDW*fe.Mw(x)*12 : (x)=>MofW(wDW,x);   // wearing surface — MIDAS if ext, continuous unit if useFE
+  const Vdw_ =useExt? ext.V_DW  : useFE? (x)=>wDW*fe.Vw(x) : (x)=>VofW(wDW,x);
 
   // Aggregate helpers matching the old Mof/Vof semantics used throughout the engine.
   // Channel functions (kip-in moment, kip shear), unambiguous (no value-based dispatch):
@@ -3279,8 +3547,10 @@ function computeAll(inp){
   const hl=hl93(L), df=distFactors(inp,g,cp);
   const dfm=inp.loads.dfAuto?df.dfm:+inp.loads.dfm;
   const dfv=inp.loads.dfAuto?df.dfv:+inp.loads.dfv;
-  const MLLmid = useExt? Math.abs(ext.M_LL(L/2))/12 : (inp.loads.llAuto? hl.M*dfm : +inp.loads.MLL);
-  const VLLsup = useExt? Math.max(Math.abs(ext.V_LLpos(0)),Math.abs(ext.V_LLneg(0))) : (inp.loads.llAuto? hl.V*dfv : +inp.loads.VLL);
+  // PBD-G (useFE): HL-93 on the continuous unit, per lane with IM (fe.at), × DF_m for moments and DF_v for shears.
+  const feM=(x)=>{const p=dfm*fe.at(x,'Mp')*12,n=dfm*fe.at(x,'Mn')*12;return Math.abs(p)>=Math.abs(n)?p:n;};
+  const MLLmid = useExt? Math.abs(ext.M_LL(L/2))/12 : useFE? Math.abs(feM(L/2))/12 : (inp.loads.llAuto? hl.M*dfm : +inp.loads.MLL);
+  const VLLsup = useExt? Math.max(Math.abs(ext.V_LLpos(0)),Math.abs(ext.V_LLneg(0))) : useFE? dfv*Math.max(Math.abs(fe.at(0,'Vp')),Math.abs(fe.at(0,'Vn'))) : (inp.loads.llAuto? hl.V*dfv : +inp.loads.VLL);
   const MLL=MLLmid;                       // kip-ft (governing positive LL moment near midspan)
   const VLL=VLLsup;                       // kip @ support
   // Built-in LL moment ENVELOPE (exact): the max moment at section x under a moving axle group
@@ -3301,19 +3571,19 @@ function computeAll(inp){
     [[0,25],[4,25]].forEach(([off])=>{ Md=Math.max(Md,Mof([[x-off,25],[x-off+4,25]])); });
     return 1.33*Math.max(Mt,Md)+0.64*x*(L-x)/2;
   };
-  const MLLx = useExt? ext.M_LL
+  const MLLx = useExt? ext.M_LL : useFE? feM
              : inp.loads.llAuto? (x)=>dfm*llEnvAt(x)*12            // exact envelope, kip-in
              : (x)=>MLL*12*4*x*(L-x)/(L*L);                        // manual MLL: parabola fallback
   // Built-in LL shear ENVELOPE magnitude: for a moving load on a simple span the max |shear| at a
   // section is produced by loading from the nearer support, giving VLL·(L−xm)/L where xm is the
   // distance from the NEARER support. This is symmetric (peaks at both supports, min at midspan),
   // unlike a one-directional ramp. Imported (MIDAS) shear already carries the true envelope.
-  const VLLx = useExt? ext.V_LL : (x)=>{const xm=Math.min(x,L-x); return VLL*(L-xm)/L;};
+  const VLLx = useExt? ext.V_LL : useFE? (x)=>dfv*Math.max(Math.abs(fe.at(x,'Vp')),Math.abs(fe.at(x,'Vn'))) : (x)=>{const xm=Math.min(x,L-x); return VLL*(L-xm)/L;};
   // LL envelope branches (kip-in moment, kip shear) for the diagrams tab
-  const MLLpos = useExt? ext.M_LLpos : inp.loads.llAuto? (x)=>dfm*llEnvAt(x)*12 : (x)=>MLL*12*4*x*(L-x)/(L*L);
-  const MLLneg = useExt? ext.M_LLneg : (x)=>0;
-  const VLLpos = useExt? ext.V_LLpos : (x)=>VLL*(1-x/L);
-  const VLLneg = useExt? ext.V_LLneg : (x)=>-VLL*(1-x/L);
+  const MLLpos = useExt? ext.M_LLpos : useFE? (x)=>dfm*fe.at(x,'Mp')*12 : inp.loads.llAuto? (x)=>dfm*llEnvAt(x)*12 : (x)=>MLL*12*4*x*(L-x)/(L*L);
+  const MLLneg = useExt? ext.M_LLneg : useFE? (x)=>dfm*fe.at(x,'Mn')*12 : (x)=>0;
+  const VLLpos = useExt? ext.V_LLpos : useFE? (x)=>dfv*fe.at(x,'Vp') : (x)=>VLL*(1-x/L);
+  const VLLneg = useExt? ext.V_LLneg : useFE? (x)=>dfv*fe.at(x,'Vn') : (x)=>-VLL*(1-x/L);
 
   // losses (at midspan, per standard practice)
   const lo=losses(inp,g,cp,ss,Mg(L/2));
@@ -3396,6 +3666,46 @@ function computeAll(inp){
     ref:{dfES,dfSR:lo.ref.dfSR,dfCR:lo.ref.dfCR,dfR1:lo.ref.dfR1,dfCD:refFin.dfCD,dfSD:lo.ref.dfSD,
          dfR2:refFin.dfR2,dfSS:refFin.dfSS,ecg,fcgpDen,yb:g.yb,Ig:IgS,Ag:AgS}};
 
+  // ---- PBD-G: restraint moments (AASHTO LRFD 10th Ed. 5.12.3.3.2; creep and deck shrinkage by C5.12.3.3.2, the initial
+  // strain method; material properties of 5.4.2.3 per 5.12.3.3.3, with the deck reinforcement per Eq. C5.12.3.3.3-1; age at
+  // continuity = t_d per 5.12.3.3.4). Support moments of the continuous unit (k-ft, + sagging); along this span
+  // M_r(x) = M_r,A (1 − x/L) + M_r,B x/L. Per 5.12.3.3.2 a combination includes M_r only where it increases the effect:
+  // MrP = max(0, M_r) in the positive-moment combinations, MrN = min(0, M_r) in the negative-moment ones; γ = 1.0 (CR, SH:
+  // Table 3.4.1-3, non-segmental). Temperature gradient (TG) is not computed. Every value is 0 without restraint.
+  let restr=null;
+  if(contOn&&inp.cont.restraint&&window.PBD&&window.PBD.restraint&&contU.spans.length>=2){
+    const rf=lo.ref, EcG=cp.Ecg, EciG=lo.Eci, dPsi=rf.psiBIF-rf.psiBID;
+    const d1=EcG*dPsi/(EciG*(1+0.7*rf.psiBDF)), d2=EcG*dPsi/(EciG*(1+rf.psiBDF));   // Eqs. C5.12.3.3.2-1, -2
+    // prestress at transfer (P_i = A_ps(x) f_pi, after elastic shortening) as the imposed hogging curvature EIκ = −P_i e;
+    // EI × the free end rotations of this span (Simpson's rule, 120 strips), k-ft²
+    const nS=120, hS=L/nS; let pL=0, pR=0;
+    for(let k=0;k<=nS;k++){ const x=k*hS, a=ss.at(x), Pe=a.Aps*fpi*a.e/12, wS=(k===0||k===nS)?1:(k%2?4:2); pL+=wS*Pe*(1-x/L); pR+=wS*Pe*x/L; }
+    pL*=-hS/3; pR*=-hS/3;
+    // differential shrinkage after continuity (initial strain method: each component shrinks freely, then is restored):
+    // deck (cast at t_d): ε_ddf of 5.4.2.3.3 as for the 5.9.3.4.3d gain, effective ε_ddf A_d / A_tr, A_tr = A_d + A_s (n − 1),
+    // n = E_s / E_c,deck (Eq. C5.12.3.3.3-1); N_d = ε_eff E_cd A_d / (1 + 0.7ψ_d) at the deck centroid, e_d above the composite
+    // centroid (sagging). Girder after t_d: ε_bdf = ε_bif − ε_bid (5.9.3.4.3a); N_g = ε_bdf E_c A_g / (1 + 0.7ψ_b(t_f,t_d)) at the
+    // girder centroid, e_g = y_bc − y_b below it (hogging). EIκ = N_d e_d − N_g e_g.
+    const mt=inp.mat, ddtR=mt.tfin-mt.td, ksdR=Math.max(1.45-0.13*mt.VS,1.0), khsdR=2.00-0.014*mt.H, khcdR=1.56-0.008*mt.H, kfdR=5/(1+mt.fcd), ktdR=ktdAASHTO(ddtR,mt.fcd);
+    const eDdf=ksdR*khsdR*kfdR*ktdR*0.48e-3, psiD=1.9*ksdR*khcdR*kfdR*ktdR;
+    const Ad=cp.beff*Math.max(+inp.ts,0), Es=29000, nR=Es/cp.Ecd, AsD=Math.max(+inp.cont.As||0,0), Atr=Ad+AsD*(nR-1);
+    const eEff=Atr>0? eDdf*Ad/Atr : 0, Nsh=eEff*cp.Ecd*Ad/(1+0.7*psiD), edIn=cp.hc-Math.max(+inp.ts,0)/2-cp.ybc;
+    const eBdf=Math.max(rf.eShIF-rf.eShID,0), Ngs=eBdf*EcG*g.A/(1+0.7*rf.psiBDF), egIn=cp.ybc-g.yb;
+    const kSh=(Nsh*edIn-Ngs*egIn)/12;                                  // k-ft, + sagging
+    const RR=window.PBD.restraint({spans:contU.spans,s:contU.s,wg:wG,wdk:wDk,phiPsL:pL,phiPsR:pR,d1,d2,kSh});
+    const iA=contU.s-1, iB=contU.s;
+    restr={d1,d2,dPsi,psiBIF:rf.psiBIF,psiBID:rf.psiBID,psiBDF:rf.psiBDF,EcG,EciG,fpi,pL,pR,eDdf,psiD,Ad,Es,nR,AsD,Atr,eEff,Nsh,edIn,
+      eShIF:rf.eShIF,eShID:rf.eShID,eBdf,Ngs,egIn,kSh,
+      spans:contU.spans,s:contU.s,td:+mt.td,ti:+mt.ti,tf:+mt.tfin,sup:RR,
+      A:{Mg:RR.Mg[iA],Mdk:RR.Mdk[iA],Mps:RR.Mps[iA],Mrc:RR.Mrc[iA],Msh:RR.Msh[iA],Mres:RR.Mres[iA]},
+      B:{Mg:RR.Mg[iB],Mdk:RR.Mdk[iB],Mps:RR.Mps[iB],Mrc:RR.Mrc[iB],Msh:RR.Msh[iB],Mres:RR.Mres[iB]},
+      MrL:RR.Mres[iA], MrR:RR.Mres[iB]};
+    if(+mt.td<28) warns.push(`Girder age at continuity t_d = ${fmt(+mt.td,0)} days is below 28 days: 5.12.3.3.1 applies even to spans designed as simple spans, and large positive restraint moments develop (C5.12.3.3.4).`);
+  }
+  const Mr=(x)=>restr? (restr.MrL*(1-x/L)+restr.MrR*x/L)*12 : 0;      // restraint moment, kip-in
+  const MrP=(x)=>restr? Math.max(0,Mr(x)) : 0, MrN=(x)=>restr? Math.min(0,Mr(x)) : 0;
+  const VrS=restr? (restr.MrR-restr.MrL)/L : 0;                      // restraint shear, kip (constant along the span)
+
   // stress limits (5.9.2.3)
   const m=inp.mat;
   // Release compression limit factor (Art. 5.9.2.3.1a, 10th Ed.: 0.65 f'ci for pretensioned members);
@@ -3440,13 +3750,21 @@ function computeAll(inp){
       relTop=Pi/g.A-Pi*e/g.St+Mg/g.St;
       relBot=Pi/g.A+Pi*e/g.Sb-Mg/g.Sb;
     }
-    const s1Top=Pe/g.A-Pe*e/g.St+(Mg+Mdk)/g.St+Msd/cp.Stg;            // perm only
+    const mrp=MrP(x);                                                 // PBD-G: positive restraint moment (0 without restraint)
+    const s1Top=Pe/g.A-Pe*e/g.St+(Mg+Mdk)/g.St+Msd/cp.Stg+mrp/cp.Stg;            // perm only
     const s2Top=s1Top+(mLL*Mll)/cp.Stg;                               // perm + LL (mLL: owner multiplier, 1 for AASHTO)
-    const s3Bot=Pe/g.A+Pe*e/g.Sb-(Mg+Mdk)/g.Sb-(Msd+inp.opt.gLLs3*(mLL*Mll))/cp.Sbc;
-    const dkC=(Msd)/cp.Std + (mLL*Mll)/cp.Std;  // deck: SIDL+LL on composite
-    const dkC1=Msd/cp.Std;
+    const s3Bot=Pe/g.A+Pe*e/g.Sb-(Mg+Mdk)/g.Sb-(Msd+mrp+inp.opt.gLLs3*(mLL*Mll))/cp.Sbc;
+    const dkC=(Msd)/cp.Std + (mLL*Mll)/cp.Std + mrp/cp.Std;  // deck: SIDL+LL on composite
+    const dkC1=Msd/cp.Std+mrp/cp.Std;
+    // PBD-G (continuity on): negative-moment fibers near interior supports (5.12.3.3.5): Service III top of girder with the
+    // negative LL envelope, Service I bottom (permanent; full) with it; MrN = negative restraint where it adds.
+    const negF=contOn? (()=>{ const Mn=MLLneg(x), mrn=MrN(x);
+      const s3TopN=Pe/g.A-Pe*e/g.St+(Mg+Mdk)/g.St+(Msd+mrn+inp.opt.gLLs3*(mLL*Mn))/cp.Stg;
+      const s1BotN=Pe/g.A+Pe*e/g.Sb-(Mg+Mdk)/g.Sb-(Msd+mrn)/cp.Sbc;
+      const s3BotN=Pe/g.A+Pe*e/g.Sb-(Mg+Mdk)/g.Sb-(Msd+mrn+inp.opt.gLLs3*(mLL*Mn))/cp.Sbc;
+      return {Mlln:Mn,mrn,s3TopN,s3BotN,s1BotN,s2BotN:s1BotN-(mLL*Mn)/cp.Sbc}; })() : null;
     return {x,e,Aps:a.Aps,Mg,Mdk,Msd,Mll,relTop,relBot,s1Top,s2Top,s3Bot,dkC,dkC1,
-            Mu:eta*(1.25*(Mg+Mdk+Mdc2(x))+1.5*Mdw(x)+1.75*(mLL*Mll))};
+            Mu:eta*(1.25*(Mg+Mdk+Mdc2(x))+1.5*Mdw(x)+1.75*(mLL*Mll)+mrp),...(restr?{mrp}:{}),...(negF||{})};
   };
   const grid=xs.map(stationStress);
   const worst=(key,fn)=>grid.reduce((b,r)=>fn(r[key],b[key])?r:b,grid[0]);
@@ -3469,7 +3787,10 @@ function computeAll(inp){
     return {fs, Ttop, Tbot, T:gov.T, x:gov.x, where:gov.where, AsReq, AsProv,
             ok:AsProv>=AsReq-1e-6, dc:AsReq>1e-9?(AsProv>0? AsReq/AsProv : 99):0};
   })();
-  const wS2T=worst('s2Top',(a,b)=>a<b);      // service TOP (full load), most tensile
+  // PBD-G: with continuity on, the stations of the half span next to an interior support are checked by 5.12.3.3.5 instead
+  const nearPierX=x=>contOn&&((contU.s>1&&x<=L/2+1e-9)||(contU.s<contU.spans.length&&x>=L/2-1e-9));
+  const gS2T=contOn? grid.filter(r=>!nearPierX(r.x)) : grid;
+  const wS2T=gS2T.length? gS2T.reduce((b,r)=>r.s2Top<b.s2Top?r:b,gS2T[0]) : null;      // service TOP (full load), most tensile
   const wDkC=worst('dkC',(a,b)=>a>b);
 
   // flexure along span — FULL span for the demand/capacity diagram (no mirroring; supports
@@ -3558,7 +3879,8 @@ function computeAll(inp){
     const a_=ss.at(x);
     const Ph=ss.AsHarp*fpe*clamp(Math.min(x,L-x)*12/ss.lt,0,1);
     const Vp=(Math.min(x,L-x)<ss.hp.frac*L && ss.nh>0)? Ph*ss.slope:0;
-    const Vu=eta*(Math.abs(1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x))+1.75*(mLL*VLLx(x)));  // |DL shear| + LL envelope (symmetric magnitude); η, mLL: owner (1 for AASHTO)
+    const vdl=1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x);                // PBD-G: + restraint shear VrS only where it increases |V| (5.12.3.3.2)
+    const Vu=eta*(Math.max(Math.abs(vdl),Math.abs(vdl+VrS))+1.75*(mLL*VLLx(x)));  // |DL shear| + LL envelope (symmetric magnitude); η, mLL: owner (1 for AASHTO)
     const Mu=Math.max(gr_.Mu,Math.abs(Vu-Vp)*dv);
     // f_po ramps linearly from 0 at the free end to 0.7f_pu at the end of the transfer length (5.7.3.4.2)
     const fpoX=fpo*clamp(Math.min(x,L-x)*12/ss.lt,0,1);
@@ -3617,7 +3939,8 @@ function computeAll(inp){
     const longOK=Tcap>=Tdem-1e-3;
     return {x,isBearing,dv,Vu,Vp,es,esRaw,esRecomp:esRaw<0,Act,beta,theta,Vc,VsReq,sReq,sMax,sMinR,sGov,sProv,Vs,Vn,
             Tdem,Tcap,fpsAvail,TsMild,longOK,cot,phiVn:phiV*Vn,stirReq,sMaxGov,spOK,
-            dc:Vu/(phiV*Vn),vu,vuMaxOK:Vu/phiV<=0.25*m.fc*g.bw*dv+Vp};
+            dc:Vu/(phiV*Vn),vu,vuMaxOK:Vu/phiV<=0.25*m.fc*g.bw*dv+Vp,
+            ...(contOn?{vc:{g:Vg(x),dc1:Vdc1(x),dc2:Vdc2(x),dw:Vdw(x),ll:VLLx(x),r:VrS,rIn:Math.abs(vdl+VrS)>Math.abs(vdl)}}:{})};   // PBD-G: components for the worked V_u
   });
   // Governing shear-capacity check starts at the critical section (d_v), NOT the bearing face —
   // the bearing row exists only for the 5.7.3.5 longitudinal tie (reduced demand there).
@@ -3633,7 +3956,8 @@ function computeAll(inp){
     const xm=Math.min(x,L-x);
     const Ph=ss.AsHarp*fpe*clamp(xm*12/ss.lt,0,1);
     const Vp=(xm<ss.hp.frac*L && ss.nh>0)? Ph*ss.slope:0;
-    const Vu=eta*(Math.abs(1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x))+1.75*(mLL*VLLx(x)));  // |DL shear| + LL envelope (symmetric magnitude); η, mLL: owner (1 for AASHTO)
+    const vdl=1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x);                // PBD-G: + restraint shear VrS only where it increases |V| (5.12.3.3.2)
+    const Vu=eta*(Math.max(Math.abs(vdl),Math.abs(vdl+VrS))+1.75*(mLL*VLLx(x)));  // |DL shear| + LL envelope (symmetric magnitude); η, mLL: owner (1 for AASHTO)
     const a_=ss.at(Math.max(xeff,ss.lt/12));
     const Apsx=Math.max(a_.Aps,1e-3);
     const Mu=Math.max(x0.Mu,Math.abs(Vu-Vp)*dv);
@@ -3795,6 +4119,7 @@ function computeAll(inp){
              dPS,dSW,dDK,dSD,dDia,
              dLL:5*(MLL*12)*Lin*Lin/(48*Ecf*IcC), llLim:Lin/(llOwnDen||800)};
   if(llOwnDen) cam.llDen=llOwnDen;
+  if(useFE){ cam.MLLd=inp.loads.llAuto? hl.M*dfm : +inp.loads.MLL; cam.dLL=5*(cam.MLLd*12)*Lin*Lin/(48*Ecf*IcC); }   // PBD-G: simple-span estimate
 
   // Fatigue I — bottom-fiber stress range in strand (LRFD 5.5.3)
   // Fatigue DF = single-lane interior DF without multiple-presence (÷1.2); IM = 1.15; Fatigue I load factor 1.75 (T.3.4.1-1, 2016+)
@@ -3847,9 +4172,9 @@ function computeAll(inp){
   // continuity for LL + SIDL: negative moment over the pier (optional)
   let cont=null;
   if(inp.cont&&inp.cont.on){
-    const cn=inp.cont, negLL=negMomentHL93(L);
-    // dead-load pier moments: from external demands at span ends if present, else 2-equal-span est.
-    let MDC2n, MDWn, MLLn, llSrc;
+    const cn=inp.cont, negLL=useFE?null:negMomentHL93(L);
+    // dead-load pier moments: from external demands at span ends if present; PBD-G: else the continuous unit (useFE)
+    let MDC2n, MDWn, MLLn, llSrc, pier=null;
     if(useExt){
       // most-negative end moment for each component over the selected span (k-ft, per girder)
       const endNeg=(fn)=>{const a=fn(0)/12,b=fn(L)/12; return Math.min(a,b);};
@@ -3857,10 +4182,18 @@ function computeAll(inp){
       MLLn=Math.abs(ext.pierNegM());                 // already DF & IM applied
       llSrc='MIDAS pier moment';
     }else{
-      MDC2n=wBar*L*L/8; MDWn=wDW*L*L/8;
-      MLLn=negLL.MLL*dfm; llSrc=negLL.gov;
+      // PBD-G: the interior-support end(s) of this span on the continuous unit; the end with the larger factored negative
+      // moment governs. M_DC2 = −w_bar M_w, M_DW = −w_DW M_w (M_w: three-moment, per klf), M_LL = −DF_m M_LL−/lane (HL-93 with
+      // IM, 90 % of two trucks plus the lane between the points of contraflexure, 3.6.1.3.1); a negative restraint moment adds.
+      const pe=[fe.pierL?{x:0,nd:fe.endL,side:'left'}:null, fe.pierR?{x:L,nd:fe.endR,side:'right'}:null].filter(Boolean).map(q=>{
+        const mdc2=-wBar*q.nd.Mw, mdw=-wDW*q.nd.Mw, mll=-dfm*q.nd.Mn, mrn=restr?Math.max(0,-(q.x===0?restr.MrL:restr.MrR)):0;
+        return {...q, MDC2n:mdc2, MDWn:mdw, MLLn:mll, Mrn:mrn, Mu:eta*(1.25*mdc2+1.5*mdw+1.75*(mLL*mll)+mrn)}; });
+      pier=pe.reduce((a,b)=>b.Mu>a.Mu?b:a);
+      MDC2n=pier.MDC2n; MDWn=pier.MDWn; MLLn=pier.MLLn; llSrc=pier.nd.two?'2 trucks, 0.9 factor':'single truck/tandem';
     }
-    const MuN=eta*(1.25*MDC2n+1.5*MDWn+1.75*(mLL*MLLn))*12;   // kip-in (η, mLL: owner, 1 for AASHTO)
+    // PBD-G: a negative restraint moment at the pier adds to the pier demand (5.12.3.3.2, γ = 1.0); 0 without restraint
+    const MrnPier = pier? pier.Mrn : (restr? Math.max(0,-Math.min(restr.MrL,restr.MrR)) : 0);
+    const MuN=eta*(1.25*MDC2n+1.5*MDWn+1.75*(mLL*MLLn)+MrnPier)*12;   // kip-in (η, mLL: owner, 1 for AASHTO)
     const As=+cn.As, fyr=+cn.fy, dN=cp.hc-(+cn.dTop);
     const b1g=clamp(0.85-0.05*(m.fc-4),0.65,0.85);
     const aN=As*fyr/(0.85*m.fc*g.bbf), cN=aN/b1g, tbf=g.isNext?g.next.ft:g.d[2];
@@ -3870,46 +4203,38 @@ function computeAll(inp){
     cont={negLL,MDC2n,MDWn,MLLn,MuN,As,fyr,dN,aN,cN,etN,phiN,MnN,phiMnN,b1g,tbf,llSrc,extPier:useExt,
           aOK:aN<=tbf,dc:MuN/phiMnN};
     if(!cont.aOK) warns.push(`Negative-moment compression block a = ${fmt(aN,1)}″ exceeds the bottom-flange thickness (${fmt(tbf,1)}″) — rectangular-block assumption is unconservative; refine.`);
+    cont.unit=contU;
+    if(useFE) cont.pier=pier;
+    if(restr){ cont.restr=restr; cont.MrnPier=MrnPier; }
 
-    // ---- Restraint moments (PCA method, PCI Journal 1969 / 5.12.3.3) ----
-    // When a precast girder is made continuous at age t_conn (= deck placement td), creep & shrinkage
-    // deformations that would have continued in the simple span are restrained, inducing a moment at
-    // the continuity connection. Sign: + = positive (sagging) restraint at the pier.
-    if(cn.restraint){
-      const Phi = lo.ref.psiBIF;                       // ultimate creep coefficient (AASHTO 5.4.2.3)
-      const tconn = m.td;                              // continuity established at deck placement
-      const PhiConn = lo.ref? (1.9*lo.ref.ks*lo.ref.khc*lo.ref.kf*Math.pow(m.ti,-0.118)*ktdAASHTO(m.tfin-tconn,m.fci)) : Phi;
-      // fraction of the restraint realized for loads present BEFORE continuity (PCA):
-      const cfBefore = Phi>1e-6? (1-Math.exp(-Phi))/Phi : 1;     // ~ (1-e^-Φ)/Φ
-      const develBefore = 1-Math.exp(-Phi);                       // (1-e^-Φ)
-      // Base continuity (pier) moments on the 2-equal-span system (k-in). PCA continuity coefficients:
-      // prestress restraint develops from camber growth (a fraction of the primary moment P·e),
-      // dead-load restraint is the simple-to-continuous redistribution of the DL moment. Both then
-      // develop through creep by (1-e^-Φ). Coefficients per PCA/PCI (1969), equal adjacent spans.
-      const cPS=0.68, cDL=0.38;
-      const Pe = ss.Aps*fpe*ss.eMid;                             // prestress primary moment, kip-in (+camber)
-      const Mps_cont  = cPS*Pe;                                  // prestress restraint base (sagging +)
-      const wDL = wG+wDk;                                        // non-composite DL on the girder (klf)
-      const Mdl_cont  = -cDL*(wDL*L*L/8)*12;                     // DL restraint base (hogging -)
-      // restraint contributions (k-in):
-      const Mps_cr = Mps_cont*develBefore;
-      const Mdl_cr = Mdl_cont*develBefore;
-      // Shrinkage restraint from differential deck/girder shrinkage (deck cast later shrinks against
-      // the girder, inducing hogging curvature at the pier). The restrained moment is relaxed by
-      // creep over the remaining life: M_sh = ε_diff·E_d·A_d·e_d / (1+0.7ψ) · (develBefore).
-      const ddt=m.tfin-m.td, kf=lo.ref.kf;
-      const eDeckSh = lo.ref.ks*(2.00-0.014*m.H)*kf*ktdAASHTO(ddt,m.fcd)*0.48e-3;  // deck free shrinkage
-      const Acd=cp.beff*(+inp.ts), edComp=cp.hc-(+inp.ts)/2-cp.ybc;                  // deck cg above comp. centroid
-      const Msh = -(eDeckSh*cp.Ecd*Acd*edComp)/(1+0.7*lo.ref.psiBDF)*cfBefore*0.5; // k-in (hogging -), gradually-applied strain relaxed by cf; 0.5 partial-restraint factor
-      const Mrestraint = Mps_cr + Mdl_cr + Msh;                   // net, k-in
-      // Cracking moment of the deck/connection region at the pier (positive restraint cracks the
-      // bottom of the continuity diaphragm). Use the girder modulus of rupture on the gross girder
-      // bottom (small section governs the positive-moment connection), per the PCA/PCI check.
-      const fr=0.24*Math.sqrt(m.fc);                              // modulus of rupture, ksi (5.4.2.6)
-      const McrPos = fr*g.Sb;                                     // k-in, girder bottom (positive cracking)
-      cont.restr={Phi,PhiConn,cfBefore,develBefore,Pe,Mps_cont,Mdl_cont,wDL,Mps_cr,Mdl_cr,Msh,
-                  Mrestraint,McrPos,eDeckSh,fr,tconn,
-                  net_kft:Mrestraint/12, Mcr_kft:McrPos/12};
+    // ---- PBD-G: positive moment connection at the interior support(s) (5.12.3.3.8a: stress in the positive moment
+    // continuity reinforcement ≤ 36.0 ksi). Service moment after continuity at the girder end (C5.12.3.3.2: M_res = M_rc +
+    // M_sh + M_SIDL; LL per 5.12.3.3.5): M = M_r + M_DC2 + M_DW + m_LL M_LL+ (γ = 1.0); tension T = 0.9 M / (0.9 h_c)
+    // (C5.12.3.3.5, h_c = composite depth; axial restraint forces not computed: bearings free longitudinally);
+    // A_s,req = T / 36 ksi. Checked when the connection steel A_s,pos is entered (cont.AsPos).
+    const pends=[contU.s>1?0:null, contU.s<contU.spans.length?L:null].filter(v=>v!=null);
+    const pc=pends.map(x=>{ const mr=restr?(x===0?restr.MrL:restr.MrR):0, mdc2=Mdc2(x)/12, mdw=Mdw(x)/12, mll=Math.max(0,MLLpos(x)/12);
+      return {x,mr,mdc2,mdw,mll,M:mr+mdc2+mdw+mLL*mll}; });
+    if(pc.length){ const q=pc.reduce((a,b)=>b.M>a.M?b:a), T=q.M>0? 0.9*q.M*12/(0.9*cp.hc) : 0, AsP=+cn.AsPos>0? +cn.AsPos : 0;
+      cont.conn={...q, hc:cp.hc, T, fsL:36, AsReq:T/36, AsProv:AsP, fs:AsP>0? T/AsP : null, dc:AsP>0? T/AsP/36 : null}; }
+
+    // ---- PBD-G: Service at interior supports (5.12.3.3.5), the stations of the half span next to an interior support:
+    // top of girder, Service III with the negative LL: tension limit of Table 5.9.2.3.1b-1 with f'c for f'ci (bonded
+    // reinforcement: 0.24√f'c; without: 0.0948√f'c ≤ 0.2 ksi; the Analysis Options bonded-reinforcement setting); or,
+    // alternatively (cont.topRC), designed as reinforced concrete at the strength limit state (the pier check above).
+    // Bottom fiber, Service I with the negative LL: compression limits of 5.9.2.3.2a (0.45 f'c permanent, 0.60 f'c full).
+    const gp=grid.filter(r=>nearPierX(r.x));
+    if(gp.length){
+      const bonded=!!inp.opt.relBondedReinf, topLim=bonded? 0.24*sqrt(m.fc) : Math.min(0.0948*sqrt(m.fc),0.2);
+      const wT=gp.reduce((b,r)=>r.s3TopN<b.s3TopN?r:b,gp[0]);
+      const rB=r=>Math.max(r.s1BotN/lim.srvC1, r.s2BotN/lim.srvC2);
+      const wB=gp.reduce((b,r)=>rB(r)>rB(b)?r:b,gp[0]), bPerm=wB.s1BotN/lim.srvC1>=wB.s2BotN/lim.srvC2;
+      const fsT=Math.min(0.5*(+inp.opt.relFy||60),30), Ttop=wT.s3TopN<0? releaseTensionForce(g,wT.s3TopN,wT.s3BotN) : 0;
+      // bonded reinforcement for the 0.24√f'c limit (Table 5.9.2.3.1b-1): the tension force of the uncracked girder at
+      // 0.5 f_y ≤ 30 ksi (f_y of the Analysis Options bonded steel); checked when the steel in the girder top near the
+      // interior support is entered (cont.AsTop), else reported
+      cont.svc={topRC:!!cn.topRC, bonded, topLim, wT, wB, bPerm, fBot:bPerm?wB.s1BotN:wB.s2BotN, limBot:bPerm?lim.srvC1:lim.srvC2, rBot:rB(wB),
+        fsT, Ttop, AsTop:Ttop/fsT, AsTopProv:+cn.AsTop>0? +cn.AsTop : 0};
     }
   }
 
@@ -4032,7 +4357,7 @@ function computeAll(inp){
     {n:'Release tens (+M, bot)',v:wRelBT.relBot,lim:-lim.relT,r:wRelBT.relBot<0? -wRelBT.relBot/lim.relT:0,loc:wRelBT.x,u:'ksi'},
     {n:'Srv comp (perm)',v:wS1.s1Top,lim:lim.srvC1,r:wS1.s1Top/lim.srvC1,loc:wS1.x,u:'ksi'},
     {n:'Srv comp (full)',v:wS2.s2Top,lim:lim.srvC2,r:wS2.s2Top/lim.srvC2,loc:wS2.x,u:'ksi'},
-    {n:'Srv tens (top)',v:wS2T.s2Top,lim:-lim.srvT,r:wS2T.s2Top<0? -wS2T.s2Top/lim.srvT:0,loc:wS2T.x,u:'ksi'},
+    ...(wS2T?[{n:'Srv tens (top)',v:wS2T.s2Top,lim:-lim.srvT,r:wS2T.s2Top<0? -wS2T.s2Top/lim.srvT:0,loc:wS2T.x,u:'ksi'}]:[]),
     {n:'Srv III tens',v:wS3.s3Bot,lim:-lim.srvT,r:wS3.s3Bot<0? -wS3.s3Bot/lim.srvT:0,loc:wS3.x,u:'ksi'},
     {n:'Deck comp',v:wDkC.dkC,lim:lim.dkC2,r:wDkC.dkC/lim.dkC2,loc:wDkC.x,u:'ksi'},
     {n:'Flexure',v:flexGov.Mu/12,lim:flexGov.phiMn/12,r:flexGov.r,loc:flexGov.x,u:'k-ft'},
@@ -4054,7 +4379,14 @@ function computeAll(inp){
   // Release-tension steel: only meaningful when the higher 0.24√f'ci limit is being claimed. It
   // verifies the provided bonded steel actually carries the concrete tensile force behind that limit.
   if(inp.opt.relBondedReinf) checks.push({n:'Release tens. steel (5.9.2.3.1b)',v:relSteel.AsReq,lim:relSteel.AsProv,r:relSteel.dc,loc:relSteel.x,u:'in²'});
-  if(cont) checks.push({n:'Neg flexure (pier)',v:cont.MuN/12,lim:cont.phiMnN/12,r:cont.dc,loc:L,u:'k-ft'});
+  if(cont) checks.push({n:'Neg flexure (pier)',v:cont.MuN/12,lim:cont.phiMnN/12,r:cont.dc,loc:cont.pier?cont.pier.x:L,u:'k-ft'});
+  // PBD-G: continuity checks at interior supports (5.12.3.3.5 Service; 5.12.3.3.8a positive moment connection)
+  if(cont&&cont.svc){ const v=cont.svc;
+    if(!v.topRC){ checks.push({n:'Srv III top tens (pier, 5.12.3.3.5)',v:v.wT.s3TopN,lim:-v.topLim,r:v.wT.s3TopN<0? -v.wT.s3TopN/v.topLim:0,loc:v.wT.x,u:'ksi'});
+      if(v.bonded&&v.Ttop>0&&v.AsTopProv>0) checks.push({n:'Top tens. steel (pier, 5.12.3.3.5)',v:v.AsTop,lim:v.AsTopProv,r:v.AsTop/v.AsTopProv,loc:v.wT.x,u:'in²'}); }
+    checks.push({n:'Srv comp (bot, −M, 5.12.3.3.5)',v:v.fBot,lim:v.limBot,r:v.rBot,loc:v.wB.x,u:'ksi'}); }
+  if(cont&&cont.conn&&cont.conn.AsProv>0&&cont.conn.T>0)
+    checks.push({n:'Pos. moment connection (5.12.3.3.8)',v:cont.conn.fs,lim:cont.conn.fsL,r:cont.conn.dc,loc:cont.conn.x,u:'ksi'});
   if(handling){
     const lf=handling.lift, hl_=handling.haul;
     const wLiftT=Math.min(lf.fMidTop,lf.fMidBot,lf.fSupTop,lf.fSupBot); // most tensile
@@ -4134,6 +4466,8 @@ function computeAll(inp){
             member:inp.external.member,liveLoadType:inp.external.liveLoadType,
             dfApplied:inp.external.distributionFactorApplied,imApplied:inp.external.impactApplied,
             DF:inp.external.distributionFactor,IM:inp.external.impactFactor}:null,
+          ...(useFE?{fe:{spans:fe.spans,s:fe.s,n:fe.n,L:fe.L,MA:fe.MA,MB:fe.MB,Mw1:fe.Mw1,pierL:fe.pierL,pierR:fe.pierR,nEl:fe.nEl,
+            mid:fe.mid,endL:fe.endL,endR:fe.endR,Mw:fe.Mw,Vw:fe.Vw}}:{}),
           checks:checksF,hl,df,dfm,dfv,MLL,VLL,
           wG,wDk,wBar,wDW,L,dfcd,phiV,cont,warns,fpbt,useT,Pdia,nDiaph:diaph.length,strandStages,stationStress,
           ...(ownR?{own:ownR}:{}),error:null};
@@ -4359,6 +4693,10 @@ const PSB_CK={
   'Confinement steel (5.9.4.4.2)':['LRFD 5.9.4.4.2','conf','anchorage','Confinement Reinforcement'],
   'Release tens. steel (5.9.2.3.1b)':['LRFD 5.9.2.3.1b','relst','anchorage','Release-Tension Bonded Steel'],
   'Neg flexure (pier)':['LRFD 5.12.3.3','neg','flexure','Negative Moment at Pier'],
+  'Srv III top tens (pier, 5.12.3.3.5)':['LRFD 5.12.3.3.5','cpsv','report','Continuous Analysis'],   // PBD-G
+  'Top tens. steel (pier, 5.12.3.3.5)':['LRFD 5.12.3.3.5','cpsv','report','Continuous Analysis'],
+  'Srv comp (bot, −M, 5.12.3.3.5)':['LRFD 5.12.3.3.5','cpsv','report','Continuous Analysis'],
+  'Pos. moment connection (5.12.3.3.8)':['LRFD 5.12.3.3.8a','cpos','report','Continuous Analysis'],
   'Fatigue I (strand)':['LRFD 5.5.3.3','fats','stresses','Fatigue I'],
   'Fatigue I (concrete, 5.5.3.1)':['LRFD 5.5.3.1','fatc','stresses','Fatigue I'],
   'LL deflection':['LRFD 2.5.2.6.2','lld','camber','Derivation — Camber'],
@@ -4375,6 +4713,9 @@ try{ ((window.PBD&&window.PBD.OWN_RULES)?window.PBD.OWN_RULES.rules:[]).forEach(
 /* PBD-E: the owner load rules in a worked combination: eS/eV open η[ (symbol / value), ec closes it, mS/mV the HL-93 design
    load multiplier before the live load (symbol / value). Every one is '' when the factor is 1 (AASHTO), so those equations
    read exactly as before. o = R.own, or a deck result's own. */
+/* PBD-G: the positive restraint moment term of a worked station (r.mrp, present only when restraint moments are computed):
+   mrS = the symbol, mrV = '+value' (k-in), mrA = the value to add (0 without restraint, so every equation reads as before). */
+const mrS=r=>(r&&r.mrp!=null)?'+M_{res}^+':'', mrV=r=>(r&&r.mrp!=null)?'+'+nx(r.mrp,0):'', mrA=r=>(r&&r.mrp!=null)?r.mrp:0;
 const ownTx=(o,k)=>{ if(!o) return ''; const e=o.eta!==1, m=o.mLL!==1;
   return k==='eS'?(e?'\\eta\\Big[':''):k==='eV'?(e?nx(o.eta,4)+'\\Big[':''):k==='ec'?(e?'\\Big]':''):k==='mS'?(m?'m_{LL}\\,':''):k==='mV'?(m?nx(o.mLL,2)+'\\cdot ':''):''; };
 /* PBD-E: an owner default input's marker after its note: "<owner> default" or "overrides <owner>: <value>" (none for AASHTO). */
@@ -5847,33 +6188,56 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
     <Card title="Continuity for LL + SIDL" refTag={ownSub(inp,'cont.on','LRFD 5.12.3.3 / 3.6.1.3.1')} fold
       right={<Seg opts={[{v:false,l:'OFF — SIMPLE SPAN'},{v:true,l:'ON'}]} v={inp.cont.on} set={v=>u('cont.on',v)}/>}>
       {inp.cont.on?<React.Fragment>
-        <SubH t="Negative-moment deck reinforcement" r="over the pier"/>
+        {/* PBD-G: the continuous unit (5.12.3.3), from the bridge bar or the imported MIDAS member */}
+        <SubH t="Continuous unit" r="LRFD 5.12.3.3 · spans from the bridge bar"/>
+        {!R.error&&R.cont&&R.cont.unit&&<div className="hint">{R.cont.unit.src==='midas'
+          ? <React.Fragment>Imported MIDAS member: spans {R.cont.unit.spans.map(v=>fmt(v,1)).join(', ')} ft; this girder in span <b>{R.cont.unit.s}</b>. DC2, DW and LL+IM are the imported demands.</React.Fragment>
+          : <React.Fragment>Spans <b>{R.cont.unit.spans.map(v=>fmt(v,1)).join(', ')} ft</b>{R.cont.unit.assumed?<b className="own-over"> (assumed: two equal spans; enter the spans in the bridge bar)</b>:' (bridge bar)'}; this girder in span <b>{R.cont.unit.s}</b>. DC2, DW and LL+IM act on the continuous unit (constant EI): support moments by the three-moment equation, HL-93 by FE influence lines (truck, tandem, lane; 90 % of two trucks + lane between the points of contraflexure, 3.6.1.3.1). Girder self-weight and DC1 stay on the simple span.</React.Fragment>}
+          {' '}<a className="wk-a" href="#" onClick={e=>{ e.preventDefault(); psbGoto('report','Continuous Analysis',null); }}>Worked in → Report · Continuous Analysis</a></div>}
+
+        <SubH t="Negative-moment deck reinforcement" r="over the pier · 5.12.3.3.7"/>
         <div className="frow rows">
           <Num l="Deck rebar A_s in b_eff" u="in²" v={inp.cont.As} set={v=>u('cont.As',v)} step={0.5}/>
           <Num l="Top of deck → bar CG" u="in" v={inp.cont.dTop} set={v=>u('cont.dTop',v)} step={0.25}/>
           <Num l="Rebar f_y" u="ksi" v={inp.cont.fy} set={v=>u('cont.fy',v)} step={5}/>
         </div>
-        {!R.error&&R.cont&&<div className="hint">Pier M_u = <b>{fmt(R.cont.MuN/12,0)} k-ft</b> vs φM_n = <b>{fmt(R.cont.phiMnN/12,0)} k-ft</b> (D/C = <b>{fmt(R.cont.dc,2)}</b>) · LL gov: {R.cont.negLL.gov} · details on the Flexure tab.</div>}
-        <div className="callout" style={{marginTop:8}}>Two <b>equal adjacent spans</b> assumed for the continuous pier moment (DC2 + DW: wL²/8; HL-93 by influence-line enumeration incl. the 3.6.1.3.1 two-truck case). Positive-moment design and shear remain on the simple-span basis (conservative for positive moment; check pier-region shear separately).</div>
+        {!R.error&&R.cont&&<div className="hint">Pier M_u = <b>{fmt(R.cont.MuN/12,0)} k-ft</b> vs φM_n = <b>{fmt(R.cont.phiMnN/12,0)} k-ft</b> (D/C = <b>{fmt(R.cont.dc,2)}</b>) · LL gov: {R.cont.llSrc}{R.cont.MrnPier>0?<span> · incl. negative restraint {fmt(R.cont.MrnPier,0)} k-ft</span>:null} · details on the Flexure tab.</div>}
 
-        <SubH t="Restraint moments — creep &amp; shrinkage" r="PCA method"/>
+        <SubH t="Restraint moments — creep &amp; shrinkage" r="LRFD 5.12.3.3.2 · C5.12.3.3.2"/>
         <div className="frow rows">
           <Fld l="Compute restraint moments" sub={ownSub(inp,'cont.restraint')}>
             <Seg opts={[{v:false,l:'OFF'},{v:true,l:'ON'}]} v={!!inp.cont.restraint} set={v=>u('cont.restraint',v)}/></Fld>
         </div>
-        {inp.cont.restraint&&R.cont.restr&&(()=>{const rr=R.cont.restr; return <React.Fragment>
+        {inp.cont.restraint&&!R.error&&R.cont&&R.cont.restr&&(()=>{const rr=R.cont.restr, A=rr.A, B=rr.B, f0=v=>fmt(v,0), ends=[['A',A,R.cont.unit.s>1],['B',B,R.cont.unit.s<R.cont.unit.spans.length]].filter(q=>q[2]); return <React.Fragment>
           <table className="eng" style={{marginTop:6}}>
-            <thead><tr><th>Component</th><th>Base M (k-ft)</th><th>Restraint M (k-ft)</th><th>Sense</th></tr></thead>
+            <thead><tr><th>Support moment (k-ft, + sagging)</th>{ends.map(q=><th key={q[0]}>{q[0]==='A'?'Left (span '+R.cont.unit.s+')':'Right (span '+R.cont.unit.s+')'}</th>)}</tr></thead>
             <tbody>
-              <tr><td>Prestress creep</td><td style={{textAlign:'right'}}>{fmt(rr.Mps_cont/12,0)}</td><td style={{textAlign:'right'}}>+{fmt(rr.Mps_cr/12,0)}</td><td>sagging (+)</td></tr>
-              <tr><td>Dead-load creep</td><td style={{textAlign:'right'}}>{fmt(rr.Mdl_cont/12,0)}</td><td style={{textAlign:'right'}}>{fmt(rr.Mdl_cr/12,0)}</td><td>hogging (−)</td></tr>
-              <tr><td>Differential shrinkage</td><td style={{textAlign:'right'}}>—</td><td style={{textAlign:'right'}}>{fmt(rr.Msh/12,0)}</td><td>hogging (−)</td></tr>
-              <tr style={{fontWeight:700,borderTop:'1.5px solid var(--line2)'}}><td>Net restraint moment</td><td></td><td style={{textAlign:'right'}}>{rr.net_kft>=0?'+':''}{fmt(rr.net_kft,0)}</td><td>{rr.net_kft>=0?'positive':'negative'}</td></tr>
+              <tr><td>M<sub>g</sub>: girder weight, as if continuous</td>{ends.map(q=><td key={q[0]} style={{textAlign:'right'}}>{f0(q[1].Mg)}</td>)}</tr>
+              <tr><td>M<sub>ps</sub>: prestress at transfer, as if continuous</td>{ends.map(q=><td key={q[0]} style={{textAlign:'right'}}>{f0(q[1].Mps)}</td>)}</tr>
+              <tr><td>M<sub>deck</sub>: deck weight, as if continuous</td>{ends.map(q=><td key={q[0]} style={{textAlign:'right'}}>{f0(q[1].Mdk)}</td>)}</tr>
+              <tr><td>M<sub>rc</sub> = δ<sub>1</sub>(M<sub>g</sub> + M<sub>ps</sub>) + δ<sub>2</sub>M<sub>deck</sub></td>{ends.map(q=><td key={q[0]} style={{textAlign:'right'}}>{f0(q[1].Mrc)}</td>)}</tr>
+              <tr><td>M<sub>sh</sub>: differential shrinkage</td>{ends.map(q=><td key={q[0]} style={{textAlign:'right'}}>{f0(q[1].Msh)}</td>)}</tr>
+              <tr style={{fontWeight:700,borderTop:'1.5px solid var(--line2)'}}><td>M<sub>res</sub> = M<sub>rc</sub> + M<sub>sh</sub></td>{ends.map(q=><td key={q[0]} style={{textAlign:'right'}}>{q[1].Mres>=0?'+':''}{f0(q[1].Mres)}</td>)}</tr>
             </tbody>
           </table>
-          <div className="hint" style={{marginTop:4}}>Φ (creep coeff.) = <b>{fmt(rr.Phi,3)}</b> · development (1−e<sup>−Φ</sup>) = <b>{fmt(rr.develBefore,3)}</b> · continuity factor (1−e<sup>−Φ</sup>)/Φ = <b>{fmt(rr.cfBefore,3)}</b> · M<sub>cr</sub> (girder bottom, +M) = <b>{fmt(rr.Mcr_kft,0)} k-ft</b>. {rr.net_kft>0? <React.Fragment>Net is <b>positive</b> ({fmt(rr.net_kft,0)} {'>'} 0) → a positive-moment connection is required at the diaphragm{rr.net_kft>rr.Mcr_kft?' and the restraint exceeds M_cr, so the connection will crack — design positive-moment reinforcement per 5.12.3.3':''}.</React.Fragment> : <React.Fragment>Net is <b>negative</b> → adds to the deck negative-moment demand at the pier; no positive-moment connection demand.</React.Fragment>}</div>
-          <div className="callout" style={{marginTop:8}}>PCA method (PCI Journal, 1969): restraint moments from time-dependent prestress camber, dead-load, and differential shrinkage after the girder is made continuous. Base continuity moments use the equal-adjacent-span idealization with PCA coefficients (prestress 0.68·Pe, DL 0.38·wL²/8); each develops through creep by (1−e<sup>−Φ</sup>). <b>Approximate and model-sensitive</b> — magnitudes depend strongly on the creep/shrinkage model and the connection age; verify against a time-step analysis for final design.</div>
+          <div className="hint" style={{marginTop:4}}>δ<sub>1</sub> = <b>{fmt(rr.d1,3)}</b>, δ<sub>2</sub> = <b>{fmt(rr.d2,3)}</b> (Eqs. C5.12.3.3.2-1, -2; age at continuity t<sub>d</sub> = {fmt(rr.td,0)} days, 5.12.3.3.4). Included in a combination only where it increases the effect (5.12.3.3.2, γ = 1.0): a positive M<sub>res</sub> adds to the span's positive moments, a negative one to the pier moment. Temperature gradient not computed. <a className="wk-a" href="#" onClick={e=>{ e.preventDefault(); psbGoto('report','Continuous Analysis',null); }}>Worked in → Report · Continuous Analysis</a></div>
         </React.Fragment>;})()}
+
+        <SubH t="Positive moment connection" r="LRFD 5.12.3.3.8a · f_s ≤ 36 ksi"/>
+        <div className="frow rows">
+          <Num l="Connection steel A_s,pos (blank: report the required area)" u="in²" v={inp.cont.AsPos==null?'':inp.cont.AsPos} set={v=>u('cont.AsPos',v)} step={0.1}/>
+        </div>
+        {!R.error&&R.cont&&R.cont.conn&&(()=>{const c=R.cont.conn; return <div className="hint">At the {c.x===0?'left':'right'} support: M = M<sub>res</sub> + M<sub>DC2</sub> + M<sub>DW</sub> + M<sub>LL+</sub> = {fmt(c.mr,0)} + ({fmt(c.mdc2,0)}) + ({fmt(c.mdw,0)}) + {fmt(c.mll,0)} = <b>{fmt(c.M,0)} k-ft</b>{c.M>0?<span>; T = 0.9M/(0.9h<sub>c</sub>) = <b>{fmt(c.T,1)} kip</b>, A<sub>s,req</sub> = T/36 = <b>{fmt(c.AsReq,2)} in²</b>{c.AsProv>0?<span>; f<sub>s</sub> = {fmt(c.fs,1)} ksi (D/C {fmt(c.dc,2)})</span>:null}</span>:<span>: no positive moment at the connection ({c.mr===0&&!R.cont.restr?'restraint not computed; ':''}detail the connection per 5.12.3.3.8 and the owner).</span>}</div>; })()}
+
+        <SubH t="Girder at interior supports" r="Service · LRFD 5.12.3.3.5"/>
+        <div className="frow rows">
+          <Fld l="Top of girder near interior supports">
+            <Seg opts={[{v:false,l:'STRESS LIMIT (T. 5.9.2.3.1b-1, f′c)'},{v:true,l:'RC AT STRENGTH'}]} v={!!inp.cont.topRC} set={v=>u('cont.topRC',v)}/></Fld>
+          {!inp.cont.topRC&&inp.opt.relBondedReinf&&<Num l="Bonded steel, girder top near the pier (blank: report)" u="in²" v={inp.cont.AsTop==null?'':inp.cont.AsTop} set={v=>u('cont.AsTop',v)} step={0.1}/>}
+        </div>
+        {!R.error&&R.cont&&R.cont.svc&&(()=>{const v=R.cont.svc; return <div className="hint">{v.topRC?<span>Top of girder designed as reinforced concrete at the strength limit state (the pier check above); the service tension limit does not apply there.</span>
+          :<span>Top, Service III with LL−: f = <b>{fmt(v.wT.s3TopN,3)} ksi</b> at x = {fmt(v.wT.x,1)} ft vs −{fmt(v.topLim,3)} ksi ({v.bonded?'0.24√f′c, bonded reinforcement (Analysis Options)':'0.0948√f′c ≤ 0.2'}){v.bonded&&v.Ttop>0?<span>; T = {fmt(v.Ttop,1)} kip → A<sub>s</sub> ≥ T/{fmt(v.fsT,0)} = <b>{fmt(v.AsTop,2)} in²</b></span>:null}.</span>}
+          {' '}Bottom, Service I with LL−: f = <b>{fmt(v.fBot,3)} ksi</b> at x = {fmt(v.wB.x,1)} ft vs {fmt(v.limBot,3)} ksi ({v.bPerm?'permanent, 0.45f′c':'full, 0.60f′c'}). <a className="wk-a" href="#" onClick={e=>{ e.preventDefault(); psbGoto('report','Continuous Analysis',null); }}>Worked in → Report</a></div>; })()}
       </React.Fragment>
       :<div className="hint">Girder treated as a simple span for all loads. Turn on to check the deck-reinforced negative-moment section over the pier when the span is made continuous for live load.</div>}
     </Card>
@@ -6619,16 +6983,16 @@ function StressTab({inp,R}){
           <ML s={Tx`f_{top}=\frac{P_i}{A_g}-\frac{P_i e}{S_t}+\frac{M_g}{S_t}=${nx(rRt.Aps*R.fpi/g.A,3)}-${nx(rRt.Aps*R.fpi*rRt.e/g.St,3)}+${nx(rRt.Mg/g.St,3)}=${nx(rRt.relTop,3)}\ge ${nx(-lim.relT,3)}\;${cf('Release tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Service I top, permanent loads @ x = ${fmt(cf('Srv comp (perm)').loc,1)} ft`}>
-          <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx(rS1.Msd/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le ${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}${mrS(rS1)}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx((rS1.Msd+mrA(rS1))/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le ${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Service I top, full load @ x = ${fmt(cf('Srv comp (full)').loc,1)} ft`}>
           <ML s={Tx`f=f_{perm}+\frac{${ownTx(R.own,'mS')}M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+${nx((R.own?R.own.mLL:1)*rS2.Mll/cp.Stg,3)}=${nx(rS2.s2Top,3)}\le ${nx(lim.srvC2,3)}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Service III bottom @ x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="T.3.4.1-4">
-          <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}${mrS(rS3)}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+mrA(rS3)+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Deck compression @ x = ${fmt(cf('Deck comp').loc,1)} ft`}>
-          <ML s={Tx`f=\frac{M_{sd}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le ${nx(lim.dkC2,3)}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`f=\frac{M_{sd}${mrS(rDk)}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}${mrV(rDk)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le ${nx(lim.dkC2,3)}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
       </Deriv>;})()}
     <Card title="Fatigue I — Strand Stress Range" refTag="LRFD 5.5.3">
@@ -6754,7 +7118,7 @@ function FlexTab({inp,R}){
 
     {(()=>{const g=R.g,cp=R.cp,m=inp.mat,fpu=+inp.str.fpu,ss=R.ss,ck=R.checks;
       const rMid=R.grid.reduce((b,r)=>Math.abs(r.x-L/2)<Math.abs(b.x-L/2)?r:b,R.grid[0]);
-      const Mbar=inp.loads.wBar*L*L/8*12, Mdw=inp.loads.wDW*L*L/8*12, PeMid=rMid.Aps*R.fpe;
+      const cM=(R.fe||R.useExt)&&R.fMid, Mbar=cM?R.fMid.mDC2*12:inp.loads.wBar*L*L/8*12, Mdw=cM?R.fMid.mDW*12:inp.loads.wDW*L*L/8*12, PeMid=rMid.Aps*R.fpe;   // PBD-G: continuous / imported midspan values
       return <Deriv title="Derivation — Strength I Flexure @ Midspan" refTag="LRFD 5.6.3">
         <VarTable rows={[
           ["f'_c","Girder concrete strength",+m.fc,'ksi'],
@@ -6776,7 +7140,7 @@ function FlexTab({inp,R}){
           ['M_cr','Cracking moment',R.Mcr/12,'k-ft'],
         ]}/>
         <Step d="Factored moment" r="T.3.4.1-1">
-          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50M_{dw}+1.75${ownTx(R.own,'mS')}M_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
+          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50M_{dw}+1.75${ownTx(R.own,'mS')}M_{LL}${mrS(rMid)}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${rMid.mrp!=null?'+'+nx(rMid.mrp/12,0):''}${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
         </Step>
         <Step d="Stress-block factor, depth & neutral axis" r="5.6.3.1.1 / 5.6.2.2">
           <ML s={Tx`\beta_1=0.85-0.05(f'_{cd}-4)=0.85-0.05(${nx(m.fcd,1)}-4)=${nx(f.b1,3)}\quad k=0.28\quad d_p=h_c-\bar y_{ps}=${nx(cp.hc,1)}-${nx(ss.cgsMid,2)}=${nx(f.dp,2)}\;\mathrm{in}`}/>
@@ -6806,17 +7170,28 @@ function FlexTab({inp,R}){
       </div>
     </CalcSec>
 
-    {R.cont&&<Card title="Negative Moment at Pier — Continuity for LL + SIDL" refTag="LRFD 5.12.3.3 · two equal spans">
+    {R.cont&&<Card title="Negative Moment at Pier — Continuity for LL + SIDL" refTag={R.cont.pier?'LRFD 5.12.3.3.7 · continuous unit':'LRFD 5.12.3.3 · two equal spans'}>
       <div className="cols" style={{paddingTop:0,gridTemplateColumns:'1fr 1fr'}}>
         <div>
-          <KV rows={[
+          {R.cont.pier?(()=>{ const pr=R.cont.pier, ll=pr.nd.ll; return <KV rows={[   /* PBD-G: the continuous unit (worked in the report, Continuous Analysis) */
+            ['Continuous unit: spans / this span',`${R.cont.unit.spans.map(v=>fmt(v,1)).join(', ')} ft / ${R.cont.unit.s}`,''],
+            ['Interior support',pr.side==='left'?'left end, x = 0':'right end, x = '+fmt(R.L,1)+' ft',''],
+            ['M_w per klf (three-moment)',fmt(pr.nd.Mw,1),'k-ft/klf'],
+            ['M DC2 = −w_bar·M_w',fmt(R.cont.MDC2n,0),'k-ft'],
+            ['M DW = −w_dw·M_w',fmt(R.cont.MDWn,0),'k-ft'],
+            ['LL/lane, no IM: 1 truck / tandem',`${fmt(-ll.truckMin,0)} / ${fmt(-ll.tanMin,0)}`,'k-ft'],
+            ['LL/lane, no IM: 2 trucks / lane',`${fmt(-ll.twoMin,0)} / ${fmt(-ll.laneNeg,0)}`,'k-ft'],
+            ['Governing LL+IM (× DF_m = '+fmt(R.dfm,3)+')',fmt(R.cont.MLLn,0),'k-ft'],
+            ...(R.cont.MrnPier>0?[['Negative restraint M_res (γ = 1.0)',fmt(R.cont.MrnPier,0),'k-ft']]:[]),
+            ['M_u = 1.25DC + 1.5DW + 1.75LL'+(R.cont.MrnPier>0?' + M_res':'')+(R.own&&(R.own.eta!==1||R.own.mLL!==1)?' (× η = '+fmt(R.own.eta,4)+', LL × '+fmt(R.own.mLL,2)+')':''),fmt(R.cont.MuN/12,0),'k-ft']]}/>; })()
+          :<KV rows={[
             ['M DC2 (barrier) = wL²/8',fmt(R.cont.MDC2n,0),'k-ft'],
             ['M DW = wL²/8',fmt(R.cont.MDWn,0),'k-ft'],
             ['LL/lane: 1 truck / tandem',`${fmt(R.cont.negLL.M1,0)} / ${fmt(R.cont.negLL.Mtd,0)}`,'k-ft'],
             ['LL/lane: 2 trucks (×0.9 w/ lane)',fmt(R.cont.negLL.M2,0),'k-ft'],
             ['LL/lane: lane load',fmt(R.cont.negLL.Mln,0),'k-ft'],
             ['Governing LL+IM (× DF_m = '+fmt(R.dfm,3)+')',fmt(R.cont.MLLn,0),'k-ft'],
-            ['M_u = 1.25DC + 1.5DW + 1.75LL'+(R.own&&(R.own.eta!==1||R.own.mLL!==1)?' (× η = '+fmt(R.own.eta,4)+', LL × '+fmt(R.own.mLL,2)+')':''),fmt(R.cont.MuN/12,0),'k-ft']]}/>
+            ['M_u = 1.25DC + 1.5DW + 1.75LL'+(R.cont.MrnPier>0?' + M_res':'')+(R.own&&(R.own.eta!==1||R.own.mLL!==1)?' (× η = '+fmt(R.own.eta,4)+', LL × '+fmt(R.own.mLL,2)+')':''),fmt(R.cont.MuN/12,0),'k-ft']]}/>}
         </div>
         <div>
           <KV rows={[
@@ -6829,15 +7204,26 @@ function FlexTab({inp,R}){
             ['M_u / φM_n',fmt(R.cont.dc,2),okPier?'PASS':'FAIL']]}/>
         </div>
       </div>
-      <div className="callout">Section: deck reinforcement in tension at d = h_c − {fmt(+inp.cont.dTop,1)}″, rectangular compression block in the girder bottom flange (girder f′c). Equal adjacent spans assumed; strand contribution near the pier (debonded/ineffective for negative bending) neglected. Positive-moment connection at the diaphragm and time-dependent restraint moments per 5.12.3.3 are not computed here.</div>
+      <div className="callout">Section: deck reinforcement in tension at d = h_c − {fmt(+inp.cont.dTop,1)}″, rectangular compression block in the girder bottom flange (girder f′c). {R.cont.pier?'Demands from the continuous unit (Report, Continuous Analysis)':R.useExt?'Demands from the imported MIDAS analysis':'Equal adjacent spans assumed'}; strand contribution near the pier (debonded/ineffective for negative bending) neglected. Restraint moments (5.12.3.3.2) {R.cont.restr?'computed: a negative one is added here':'not computed (restraint off)'}; positive moment connection (5.12.3.3.8a) on the Inputs tab, Continuity card, and in the report.</div>
       <div className="calcb" style={{padding:'8px 0 0'}}>
+        {R.cont.pier?(()=>{ const pr=R.cont.pier, ll=pr.nd.ll; return <React.Fragment>   {/* PBD-G */}
+        <Step d="Pier influence line & HL-93 (FE influence line of the support moment)" r="3.6.1.3.1">
+          <ML s={Tx`M_{1tr}=${nx(-ll.truckMin,0)},\;M_{td}=${nx(-ll.tanMin,0)},\;M_{2tr}=${nx(-ll.twoMin,0)},\;M_{ln}=${nx(-ll.laneNeg,0)}\;\mathrm{k\text{-}ft/lane}\;(\text{no IM})`}/>
+          <ML s={Tx`M_{LL/lane}=\max\big[1.33\max(M_{1tr},M_{td})+M_{ln},\;0.9(1.33M_{2tr}+M_{ln})\big]=\max\big[${nx(-ll.neg,0)},\;${nx(-ll.neg2,0)}\big]=${nx(-pr.nd.Mn,0)}\;(\text{${R.cont.llSrc}})`}/>
+        </Step>
+        <Step d="Factored pier demand">
+          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(-w_{bar}M_w)+1.50(-w_{dw}M_w)+1.75\,${ownTx(R.own,'mS')}M_{LL/lane}\,DF_m${R.cont.MrnPier>0?'+1.0\\,M_{res}^-':''}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${R.cont.MrnPier>0?'+'+nx(R.cont.MrnPier,0):''}${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
+          <WkLink it={[{l:'M_w, M_LL/lane, M_res',s:'cfe',tab:'report',card:'Continuous Analysis'}]}/>
+        </Step>
+        </React.Fragment>; })():<React.Fragment>
         <Step d="Pier influence line & negative live-load enumeration" r="3.6.1.3.1">
           <ML s={Tx`\eta(\xi)=-\frac{\xi(L^2-\xi^2)}{4L^2}\;\;\Rightarrow\;\;M_{1tr}=${nx(R.cont.negLL.M1,0)},\;M_{td}=${nx(R.cont.negLL.Mtd,0)},\;M_{2tr}=${nx(R.cont.negLL.M2,0)},\;M_{ln}=${nx(R.cont.negLL.Mln,0)}\;\mathrm{k\text{-}ft/lane}`}/>
           <ML s={Tx`M_{LL/lane}=\min\big[1.33\max(M_{1tr},M_{td})+M_{ln},\;0.9(1.33M_{2tr}+M_{ln})\big]=${nx(R.cont.negLL.MLL,0)}\;(\text{${R.cont.negLL.gov}})`}/>
         </Step>
         <Step d="Factored pier demand">
-          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25\frac{w_{bar}L^2}{8}+1.50\frac{w_{dw}L^2}{8}+1.75\,${ownTx(R.own,'mS')}M_{LL/lane}\,DF_m${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
+          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25\frac{w_{bar}L^2}{8}+1.50\frac{w_{dw}L^2}{8}+1.75\,${ownTx(R.own,'mS')}M_{LL/lane}\,DF_m${R.cont.MrnPier>0?'+1.0\\,M_{res}^-':''}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${R.cont.MrnPier>0?'+'+nx(R.cont.MrnPier,0):''}${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
         </Step>
+        </React.Fragment>}
         <Step d="Capacity — deck steel tension, bottom-flange compression" r="5.12.3.3">
           <ML s={Tx`a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(inp.mat.fc,1)})(${nx(R.g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}\;\text{N.G.}`}\qquad c=\frac{a}{\beta_1}=${nx(R.cont.cN,2)}\;\mathrm{in}`}/>
           <ML s={Tx`\phi=0.75+0.15\frac{\varepsilon_t-0.002}{0.003}\le0.9=${nx(R.cont.phiN,3)}\qquad \phi M_n=\phi A_s f_y\left(d-\frac a2\right)=${nx(R.cont.phiMnN/12,0)}\;\mathrm{k\text{-}ft}\qquad\frac{M_u}{\phi M_n}=${nx(R.cont.dc,3)}\;${okPier?'\\checkmark':'\\text{N.G.}'}`}/>
@@ -6923,7 +7309,7 @@ function ShearTab({inp,R}){
           <ML s={Tx`d_v=\max\left(d_p-\tfrac a2,\,0.9d_p,\,0.72h_c\right)=\max(${nx(fgN.dp-fgN.a/2,1)},\,${nx(0.9*fgN.dp,1)},\,${nx(0.72*cp.hc,1)})=${nx(sh0.dv,1)}\;\mathrm{in}`}/>
         </Step>
         <Step d="Factored shear & vertical prestress component">
-          <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(V_(R.wG),1)}+${nx(V_(R.wDk),1)}+${nx(V_(R.wBar),1)})+1.50(${nx(V_(R.wDW),1)})+1.75(${ownTx(R.own,'mV')}${nx(R.VLL*(1-shx/L),1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
+          <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}${sh0.vc&&sh0.vc.rIn?'+V_{res}':''}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(sh0.vc?sh0.vc.g:V_(R.wG),1)}+${nx(sh0.vc?sh0.vc.dc1:V_(R.wDk),1)}+${nx(sh0.vc?sh0.vc.dc2:V_(R.wBar),1)})+1.50(${nx(sh0.vc?sh0.vc.dw:V_(R.wDW),1)})${sh0.vc&&sh0.vc.rIn?'+('+nx(sh0.vc.r,1)+')':''}+1.75(${ownTx(R.own,'mV')}${nx(sh0.vc?sh0.vc.ll:R.VLL*(1-shx/L),1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
           <ML s={Tx`V_p=P_{harp}\,\text{slope}=${nx(sh0.Vp,1)}\;\mathrm{kip}`}/>
         </Step>
         <Step d="Longitudinal strain" r="Eq. 5.7.3.4.2-4" note={`M_u taken ≥ |V_u−V_p|·d_v; f_po = 0.7f_pu = ${fmt(fpo,0)} ksi`}>
@@ -7221,7 +7607,7 @@ function CamberTab({inp,R}){
         <Step d="Δ_LL — Live-load deflection check (serviceability)"
               r="LRFD 2.5.2.6.2"
               note="Optional deflection limit: the live load (with impact and distribution) on the composite section, compared against the L/800 span limit. Uses an equivalent-uniform-load approximation.">
-          <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_c I_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_c I_c}=\frac{5(${nx((c.MLLd!=null?c.MLLd:R.MLL)*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
       </Deriv>;})()}
     <Card title="Haunch / Screed & Beam-Seat Camber — Tenth Points" refTag="Δ_deck for haunch · Δ_seat for seats">
@@ -7637,6 +8023,8 @@ function DiagramsTab({inp,R,set}){
     :<React.Fragment>
     {R.useExt&&<div className="callout" style={{marginTop:0,marginBottom:12,borderColor:'var(--blue)',background:'#EEF4FF'}}>
       Diagrams reflect the imported MIDAS force effects over Span {R.ext.sel.idx} ({fmt(R.ext.spanLen,0)} ft). DC1/DC2/DW are the unfactored components; LL± are the envelope branches with DF &amp; IM already applied. Girder self-weight is computed and shown separately.</div>}
+    {R.fe&&<div className="callout" style={{marginTop:0,marginBottom:12,borderColor:'var(--blue)',background:'#EEF4FF'}}>   {/* PBD-G */}
+      Continuity on: DC2, DW and LL± act on the continuous unit (spans {R.fe.spans.map(v=>fmt(v,0)).join(', ')} ft, this girder in span {R.fe.s}); girder self-weight and DC1 on the simple span. LL± are the HL-93 envelopes with IM and DF. <a className="wk-a" href="#" onClick={e=>{ e.preventDefault(); psbGoto('report','Continuous Analysis',null); }}>Worked in → Report · Continuous Analysis</a></div>}
     <Card title="Moment Diagram" refTag="components & limit-state combinations · k-ft, sagging +">
       <Toggles series={Mseries} on={onM} tog={togM}/>
       <Fig data={mkData(Mseries,onM)} layout={{xaxis:{title:'x (ft)'},yaxis:{title:'moment (k-ft)'},height:420}} h={420}/>
@@ -7736,7 +8124,7 @@ function ReportTab({inp,R}){
   const ktdID=ktdAASHTO(m.td-m.ti,m.fci), ktdIF=ktdAASHTO(m.tfin-m.ti,m.fci),
         ktdDF=ktdAASHTO(m.tfin-m.td,m.fci), ktdK=12*(100-4*m.fci)/(m.fci+20);
   const gh=1.7-0.01*m.H, gst=5/(1+m.fci);
-  const Mbar=inp.loads.wBar*L*L/8*12, Mdw=inp.loads.wDW*L*L/8*12, MLLm=R.MLL*12;
+  const cM=(R.fe||R.useExt)&&R.fMid, Mbar=cM?R.fMid.mDC2*12:inp.loads.wBar*L*L/8*12, Mdw=cM?R.fMid.mDW*12:inp.loads.wDW*L*L/8*12, MLLm=R.MLL*12;   // PBD-G: continuous / imported midspan values
   const PeMid=rMid.Aps*R.fpe;
   /* shear components at critical section */
   const shx=sh0.x, V_=w=>w*(L/2-shx), Vg=V_(R.wG), Vdk=V_(R.wDk), Vbar=V_(R.wBar), Vdw=V_(R.wDW),
@@ -7772,7 +8160,7 @@ function ReportTab({inp,R}){
     return ()=>{ window.removeEventListener('beforeprint',on); window.removeEventListener('afterprint',off); psbrPrintMode(false); }; },[]);
   const p=inp.proj||{}, see={};
   const refs=[
-    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 3.6.1.4.1 (fatigue truck); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.3.2, 5.9.4.3.3 (development length, debonding); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3 (continuity)':'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
+    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 3.6.1.4.1 (fatigue truck); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.3.2, 5.9.4.3.3 (development length, debonding); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3'+(R.fe||R.cont.restr?' (continuity: 5.12.3.3.1, 5.12.3.3.2–.4 and C5.12.3.3.2, C5.12.3.3.3 restraint, 5.12.3.3.5, 5.12.3.3.7, 5.12.3.3.8a); Table 3.4.1-3':' (continuity)'):'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
     ['AASHTO MBE','Manual for Bridge Evaluation, Section 6A (LRFR): 6A.4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Eq. 6A.4.2.1-3, 6A.5.4.1, 6A.5.6 (HL-93 design-load rating). Edition not stated by the tool: verify.'],
     ['PCI','PCI Design Handbook: long-term camber multipliers. Edition not stated by the tool: verify.']];
   const {out,toc}=psbrNumber(<React.Fragment>
@@ -7979,7 +8367,8 @@ function ReportTab({inp,R}){
 
     {/* ============ DEAD & LIVE LOADS ============ */}
     <CalcSec title="Loads — Dead, HL-93 & Distribution">
-      <Step d="Midspan dead-load moments (simple span)">
+      <Step d={R.fe?'Midspan dead-load moments (girder and deck: simple span; barrier and wearing surface: continuous unit)':'Midspan dead-load moments (simple span)'}>
+        {R.fe&&<WkLink lead="Continuity on:" it={[{l:'M_bar, M_dw and the live load used in design (continuous unit)',s:'cfe',tab:'report',card:'Continuous Analysis'}]}/>}
         <ML s={Tx`M=\frac{wL^2}{8}:\quad M_g=\frac{${nx(R.wG,3)}(${nx(L,0)})^2}{8}=${nx(rMid.Mg/12,0)}\quad M_{dk}=\frac{${nx(R.wDk,3)}(${nx(L,0)})^2}{8}=${nx(rMid.Mdk/12,0)}\quad M_{bar}=${nx(Mbar/12,0)}\quad M_{dw}=${nx(Mdw/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
       <Step d="HL-93 design truck — midspan moment" r="LRFD 3.6.1.2.2" note="Enumerated moving-load envelope at midspan; for L ≥ 28 ft this equals the closed form shown.">
@@ -8052,8 +8441,8 @@ function ReportTab({inp,R}){
         <PsbRes R={R} names={['Release comp','Release tens']}/>
       </Step>}
       <Step d={`Service I — top fiber, permanent loads, x = ${fmt(cf('Srv comp (perm)').loc,1)} ft`} r="LRFD 5.9.2.3.2a" wk="ss1">
-        <ML s={Tx`P_e=${nx(rS1.Aps*R.fpe,0)}\;\mathrm{kip}\quad M_g=${nx(rS1.Mg,0)}\quad M_{dk}=${nx(rS1.Mdk,0)}\quad M_{sd}=${nx(rS1.Msd,0)}\;\mathrm{k\text{-}in}`}/>
-        <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx(rS1.Msd/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le 0.45f'_c=${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`P_e=${nx(rS1.Aps*R.fpe,0)}\;\mathrm{kip}\quad M_g=${nx(rS1.Mg,0)}\quad M_{dk}=${nx(rS1.Mdk,0)}\quad M_{sd}=${nx(rS1.Msd,0)}${rS1.mrp!=null?'\\quad M_{res}^+='+nx(rS1.mrp,0):''}\;\mathrm{k\text{-}in}`}/>
+        <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}${mrS(rS1)}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx((rS1.Msd+mrA(rS1))/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le 0.45f'_c=${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['Srv comp (perm)']}/>
       </Step>
       <Step d={`Service I — top fiber, full load, x = ${fmt(cf('Srv comp (full)').loc,1)} ft`} wk="ss2">
@@ -8061,12 +8450,12 @@ function ReportTab({inp,R}){
         <PsbRes R={R} names={['Srv comp (full)']}/>
       </Step>
       <Step d={`Service III — bottom fiber, x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="LRFD T.3.4.1-4" wk="ss3">
-        <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}`}/>
-        <ML s={Tx`f=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;\mathrm{ksi}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}${mrS(rS3)}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}`}/>
+        <ML s={Tx`f=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+mrA(rS3)+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;\mathrm{ksi}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['Srv III tens']}/>
       </Step>
       <Step d={`Deck compression, x = ${fmt(cf('Deck comp').loc,1)} ft`} wk="sdk">
-        <ML s={Tx`f=\frac{M_{sd}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le 0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`f=\frac{M_{sd}${mrS(rDk)}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}${mrV(rDk)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le 0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['Deck comp']}/>
       </Step>
       <Step d="Other fiber-stress checks (governing station of the 61-point grid)" r="LRFD 5.9.2.3.1b / 5.9.2.3.2b">
@@ -8079,7 +8468,7 @@ function ReportTab({inp,R}){
     {/* ============ STRENGTH FLEXURE ============ */}
     <CalcSec title="Strength I Flexure @ Midspan">
       <Step d="Factored moment" r="LRFD T.3.4.1-1">
-        <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50\,M_{dw}+1.75\,${ownTx(R.own,'mS')}M_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50\,M_{dw}+1.75\,${ownTx(R.own,'mS')}M_{LL}${mrS(rMid)}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${rMid.mrp!=null?'+'+nx(rMid.mrp/12,0):''}${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
       <Step d="Stress-block & neutral axis" r="LRFD 5.6.3.1.1 / 5.6.2.2">
         <ML s={Tx`\beta_1=0.85-0.05(f'_{cd}-4)=0.85-0.05(${nx(m.fcd,1)}-4)=${nx(f.b1,3)}\qquad k=0.28\;(\text{low-relax})\qquad d_p=h_c-\bar{y}_{ps}=${nx(cp.hc,1)}-${nx(ss.cgsMid,2)}=${nx(f.dp,2)}\;\mathrm{in}`}/>
@@ -8111,7 +8500,7 @@ function ReportTab({inp,R}){
         <ML s={Tx`d_v=\max\left(d_p-\tfrac{a}{2},\;0.9d_p,\;0.72h_c\right)=\max(${nx(fgN.dp-fgN.a/2,1)},\;${nx(0.9*fgN.dp,1)},\;${nx(0.72*cp.hc,1)})=${nx(sh0.dv,1)}\;\mathrm{in}`}/>
       </Step>
       <Step d="Factored shear" r="Strength I">
-        <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(Vg,1)}+${nx(Vdk,1)}+${nx(Vbar,1)})+1.50(${nx(Vdw,1)})+1.75(${ownTx(R.own,'mV')}${nx(Vll,1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
+        <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}${sh0.vc&&sh0.vc.rIn?'+V_{res}':''}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(sh0.vc?sh0.vc.g:Vg,1)}+${nx(sh0.vc?sh0.vc.dc1:Vdk,1)}+${nx(sh0.vc?sh0.vc.dc2:Vbar,1)})+1.50(${nx(sh0.vc?sh0.vc.dw:Vdw,1)})${sh0.vc&&sh0.vc.rIn?'+('+nx(sh0.vc.r,1)+')':''}+1.75(${ownTx(R.own,'mV')}${nx(sh0.vc?sh0.vc.ll:Vll,1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
         <ML s={Tx`V_p=P_{harp}\cdot\text{slope}=${nx(sh0.Vp,1)}\;\mathrm{kip}`}/>
       </Step>
       <Step d="Longitudinal strain" r="LRFD Eq. 5.7.3.4.2-4">
@@ -8161,7 +8550,64 @@ function ReportTab({inp,R}){
     </CalcSec>
 
     {/* ============ CONTINUITY ============ */}
+    {/* PBD-G: continuous analysis of the composite stage, restraint, positive moment connection, service at interior supports */}
+    {R.cont&&(R.fe||R.cont.restr||R.cont.conn||R.cont.svc)&&(()=>{ const fe=R.fe, un=R.cont.unit, rr=R.cont.restr, cn=R.cont.conn, sv=R.cont.svc, f0=v=>nx(v,0), f1=v=>nx(v,1);
+      const sup=un.spans.map((_,k)=>k).slice(1), Lsp=un.spans;
+      return <CalcSec title="Continuous Analysis — LL + SIDL (LRFD 5.12.3.3)" wk="cfe">
+      {fe&&<Step d="Continuous unit and model" r="LRFD 5.12.3.3.1, 4.6.2" wk="cfe0" note={un.assumed?'One span in the bridge bar: two equal spans are assumed (enter the spans of the continuous unit in the bridge bar).':null}>
+        <ML s={Tx`\text{spans }L_k=${Lsp.map(v=>f1(v)).join(',\\;')}\;\mathrm{ft};\;\text{this girder: span }${un.s}\;(L=${f1(R.L)}\;\mathrm{ft})`}/>
+        <div className="psbr-note">Simple-span girders made continuous for the loads applied after continuity (DC2, DW, LL+IM) on the composite section; girder self-weight and DC1 on the simple non-composite span. Constant EI in every span (this girder's composite section), pinned supports. Uniform loads: support moments by the three-moment equation. Live load: influence lines of the line-girder FE model ({fe.nEl} elements, about 1 ft), HL-93 per lane with IM = 33 % on the truck and tandem.</div>
+      </Step>}
+      {fe&&<Step d="SIDL: support moments per klf (three-moment equation)" wk="cfedl">
+        <ML s={Tx`M_{k-1}L_{k-1}+2M_k(L_{k-1}+L_k)+M_{k+1}L_k=-\tfrac{1}{4}\left(L_{k-1}^3+L_k^3\right)\;\;(w=1\;\mathrm{klf},\;M_0=M_n=0)`}/>
+        <ML s={Tx`${sup.map(k=>'M_{'+k+'}='+nx(fe.Mw1[k],1)).join(',\\;')}\;\mathrm{k\text{-}ft/klf}`}/>
+        <ML s={Tx`M_w(x)=\frac{x(L-x)}{2}+M_A\left(1-\frac{x}{L}\right)+M_B\frac{x}{L},\;M_A=${f1(fe.MA)},\;M_B=${f1(fe.MB)}\;\Rightarrow\;M_w(L/2)=${f1(fe.Mw(R.L/2))},\;\;V_w(0)=\frac{L}{2}+\frac{M_B-M_A}{L}=${nx(fe.Vw(0),2)}`}/>
+        <ML s={Tx`M_{DC2}=w_{bar}M_w,\;M_{DW}=w_{dw}M_w:\;\text{midspan }${nx(R.wBar,3)}(${f1(fe.Mw(R.L/2))})=${f0(R.wBar*fe.Mw(R.L/2))},\;${nx(R.wDW,3)}(${f1(fe.Mw(R.L/2))})=${f0(R.wDW*fe.Mw(R.L/2))}\;\mathrm{k\text{-}ft}`}/>
+      </Step>}
+      {fe&&(()=>{ const ll=fe.mid.ll; return <Step d={`HL-93 at midspan (x = ${fmt(fe.mid.x,1)} ft)`} r="LRFD 3.6.1.2, 3.6.1.3" wk="cfell">
+        <ML s={Tx`M_{tr}=${f0(ll.truckMax)},\;M_{td}=${f0(ll.tanMax)},\;M_{ln}=${f0(ll.lanePos)}\;\mathrm{k\text{-}ft/lane}\;(\text{FE influence line; no IM})`}/>
+        <ML s={Tx`M_{LL}^+=\left[1.33\max(M_{tr},M_{td})+M_{ln}\right]DF_m=\left[1.33(${f0(Math.max(ll.truckMax,ll.tanMax))})+${f0(ll.lanePos)}\right](${nx(R.dfm,4)})=${f0(R.MLL)}\;\mathrm{k\text{-}ft}`}/>
+        <div className="psbr-note">Every station uses its own envelope (positive and negative, × DF<sub>m</sub>; shear × DF<sub>v</sub>); the live load deflection and fatigue keep the simple-span estimates (continuity not credited).</div>
+        <WkLink lead="Values from:" it={[{l:'DF_m, DF_v',s:'dfll',tab:'report',card:'Loads — Dead, HL-93 & Distribution'}]}/>
+      </Step>; })()}
+      {rr&&<Step d="Restraint moments: creep (C5.12.3.3.2) and differential shrinkage (initial strain method)" r="LRFD 5.12.3.3.2–.4" wk="cres">
+        <ML s={Tx`\delta_1=\frac{E_c\left[\psi_b(t_f,t_i)-\psi_b(t_d,t_i)\right]}{E_{ci}\left[1+0.7\psi_b(t_f,t_d)\right]}=\frac{${f0(rr.EcG)}(${nx(rr.psiBIF,3)}-${nx(rr.psiBID,3)})}{${f0(rr.EciG)}(1+0.7\cdot${nx(rr.psiBDF,3)})}=${nx(rr.d1,4)}\qquad\delta_2=\frac{E_c\left[\psi_b(t_f,t_i)-\psi_b(t_d,t_i)\right]}{E_{ci}\left[1+\psi_b(t_f,t_d)\right]}=${nx(rr.d2,4)}`}/>
+        <div className="psbr-note">Eqs. C5.12.3.3.2-1 and -2 as printed; creep coefficients of 5.4.2.3.2 (Losses tab) with t<sub>i</sub> = {fmt(rr.ti,0)} d, continuity at deck placement t<sub>d</sub> = {fmt(rr.td,0)} d (5.12.3.3.4), t<sub>f</sub> = {fmt(rr.tf,0)} d.</div>
+        <ML s={Tx`\text{as if continuous: }M_g,\,M_{deck}:\;\phi=\frac{wL^3}{24};\quad M_{ps}:\;\phi_A=-\!\int_0^L\!P_i e\left(1-\tfrac{x}{L}\right)dx=${f0(rr.pL)},\;\phi_B=-\!\int_0^L\!P_i e\,\tfrac{x}{L}\,dx=${f0(rr.pR)}\;\mathrm{k\text{-}ft^2}`}/>
+        <ML s={Tx`P_i=A_{ps}(x)f_{pi},\;f_{pi}=${nx(rr.fpi,2)}\;\mathrm{ksi};\;\text{three-moment: }M_{k-1}L_{k-1}+2M_k(L_{k-1}+L_k)+M_{k+1}L_k=-6(\phi_{B,k-1}+\phi_{A,k})`}/>
+        {[['A',rr.A,un.s>1],['B',rr.B,un.s<un.spans.length]].filter(q=>q[2]).map(([k,q])=><ML key={k} s={Tx`\text{support }${k}:\;M_{rc}=\delta_1(M_g+M_{ps})+\delta_2M_{deck}=${nx(rr.d1,4)}(${f0(q.Mg)}+${f0(q.Mps)})+${nx(rr.d2,4)}(${f0(q.Mdk)})=${f0(q.Mrc)}\;\mathrm{k\text{-}ft}`}/>)}
+        <ML s={Tx`\varepsilon_{eff}=\varepsilon_{ddf}\frac{A_d}{A_d+A_s(n-1)}=${nx(rr.eDdf*1e6,1)}\times10^{-6}\frac{${f0(rr.Ad)}}{${f0(rr.Ad)}+${nx(rr.AsD,2)}(${nx(rr.nR,2)}-1)}=${nx(rr.eEff*1e6,1)}\times10^{-6}\quad N_d=\frac{\varepsilon_{eff}E_{cd}A_d}{1+0.7\psi_d}=${f1(rr.Nsh)}\;\mathrm{kip},\;e_d=${nx(rr.edIn,2)}\;\mathrm{in}`}/>
+        <ML s={Tx`\varepsilon_{bdf}=\varepsilon_{bif}-\varepsilon_{bid}=${nx(rr.eBdf*1e6,1)}\times10^{-6}\quad N_g=\frac{\varepsilon_{bdf}E_cA_g}{1+0.7\psi_b(t_f,t_d)}=${f1(rr.Ngs)}\;\mathrm{kip},\;e_g=y_{bc}-y_b=${nx(rr.egIn,2)}\;\mathrm{in}\quad EI\kappa=N_de_d-N_ge_g=${f0(rr.kSh)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_{sh}:\;\phi=EI\kappa\frac{L}{2}\;\text{in the three-moment equation}\;\Rightarrow\;${[['A',rr.A,un.s>1],['B',rr.B,un.s<un.spans.length]].filter(q=>q[2]).map(([k,q])=>'M_{sh,'+k+'}='+f0(q.Msh)+',\\;M_{res,'+k+'}=M_{rc}+M_{sh}='+f0(q.Mres)).join(';\\;')}\;\mathrm{k\text{-}ft}`}/>
+        <div className="psbr-note">Along the span M<sub>res</sub>(x) = M<sub>res,A</sub>(1 − x/L) + M<sub>res,B</sub> x/L, with γ = 1.0 (Table 3.4.1-3). Per 5.12.3.3.2 it is included only where it increases the effect: a positive value in the span's positive-moment combinations (Strength I M<sub>u</sub>, Service I top and deck, Service III bottom), a negative value at the pier (Strength I, Service at interior supports); its shear (M<sub>res,B</sub> − M<sub>res,A</sub>)/L = {nx((rr.MrR-rr.MrL)/R.L,2)} kip where it increases |V<sub>u</sub>|. Every span of the unit is taken with this girder. Temperature gradient is not computed.</div>
+        <WkLink lead="Values from:" it={[{l:'ψ_b, ε_bid, ε_bif',s:'pe',tab:'losses',card:'Derivation — Refined Long-Term Losses'},{l:'y_bc, S_bc',s:'scomp',tab:'section',card:'Derivation — Composite Section'}]}/>
+      </Step>}
+      {cn&&<Step d={`Positive moment connection at the ${cn.x===0?'left':'right'} support`} r="LRFD 5.12.3.3.8a, C5.12.3.3.5" wk="cpos">
+        <ML s={Tx`M=M_{res}+M_{DC2}+M_{DW}+${ownTx(R.own,'mS')}M_{LL}^+=${f0(cn.mr)}+(${f0(cn.mdc2)})+(${f0(cn.mdw)})+${ownTx(R.own,'mV')}${f0(cn.mll)}=${f0(cn.M)}\;\mathrm{k\text{-}ft}`}/>
+        {cn.M>0?<ML s={Tx`T=\frac{0.9M}{0.9h_c}=\frac{0.9(${f0(cn.M)})(12)}{0.9(${f1(cn.hc)})}=${f1(cn.T)}\;\mathrm{kip}\qquad A_{s,req}=\frac{T}{f_s}=\frac{${f1(cn.T)}}{36}=${nx(cn.AsReq,2)}\;\mathrm{in^2}${cn.AsProv>0?`\\qquad f_s=\\frac{T}{A_{s,pos}}=\\frac{${f1(cn.T)}}{${nx(cn.AsProv,2)}}=${f1(cn.fs)}\\le 36\\;\\mathrm{ksi}`:''}`}/>
+          :<div className="psbr-note">No positive moment at the connection{rr?'':' (restraint moments not computed)'}: detail the connection per 5.12.3.3.8 and the owner's requirements.</div>}
+        <div className="psbr-note">Service moment after continuity at the girder end, γ = 1.0; T with the 10 % reduction for cracking at the girder-diaphragm interface and the lever arm 0.9h<sub>c</sub> (h<sub>c</sub> = composite depth); axial restraint forces not computed (bearings free longitudinally). {cn.AsProv>0?'':'Enter A_s,pos on the Continuity card to check it.'}</div>
+        {cn.AsProv>0&&cn.T>0&&<PsbRes R={R} names={['Pos. moment connection (5.12.3.3.8)']}/>}
+      </Step>}
+      {sv&&<Step d="Girder at interior supports — Service" r="LRFD 5.12.3.3.5" wk="cpsv">
+        {sv.topRC?<div className="psbr-note">Top of girder near interior supports designed as reinforced concrete at the strength limit state (Negative Moment @ Pier); the service tension limits do not apply there.</div>
+        :<React.Fragment>
+          <ML s={Tx`f_{top}=\frac{P_e}{A_g}-\frac{P_ee}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}+M_{res}^-+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}^-}{S_{tg}}=${nx(sv.wT.Aps*R.fpe/g.A,3)}-${nx(sv.wT.Aps*R.fpe*sv.wT.e/g.St,3)}+${nx((sv.wT.Mg+sv.wT.Mdk)/g.St,3)}+\frac{${f0(sv.wT.Msd)}+(${f0(sv.wT.mrn)})+${nx(+inp.opt.gLLs3,2)}(${ownTx(R.own,'mV')}${f0(sv.wT.Mlln)})}{${f0(cp.Stg)}}=${nx(sv.wT.s3TopN,3)}\;\mathrm{ksi}`}/>
+          <ML s={Tx`\text{x = ${fmt(sv.wT.x,1)} ft; limit (Table 5.9.2.3.1b-1 with }f'_c):\;${sv.bonded?`0.24\\sqrt{f'_c}=0.24\\sqrt{${nx(+m.fc,2)}}`:`0.0948\\sqrt{f'_c}\\le0.2`}=${nx(sv.topLim,3)}\;\mathrm{ksi}`}/>
+          {sv.bonded&&sv.Ttop>0&&<ML s={Tx`T=${f1(sv.Ttop)}\;\mathrm{kip}\;(\text{uncracked girder})\qquad A_s\ge\frac{T}{\min(0.5f_y,30)}=\frac{${f1(sv.Ttop)}}{${nx(sv.fsT,0)}}=${nx(sv.AsTop,2)}\;\mathrm{in^2}${sv.AsTopProv>0?`\\;\\text{(provided }${nx(sv.AsTopProv,2)})`:'\\;\\text{(enter the provided steel on the Continuity card)}'}`}/>}
+          <PsbRes R={R} names={['Srv III top tens (pier, 5.12.3.3.5)','Top tens. steel (pier, 5.12.3.3.5)']}/>
+        </React.Fragment>}
+        <ML s={Tx`f_{bot}=\frac{P_e}{A_g}+\frac{P_ee}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+M_{res}^-${sv.bPerm?'':'+'+ownTx(R.own,'mS')+'M_{LL}^-'}}{S_{bc}}=${nx(sv.fBot,3)}\le${sv.bPerm?"0.45f'_c":"0.60f'_c"}=${nx(sv.limBot,3)}\;\mathrm{ksi}\;(x=${f1(sv.wB.x)}\;\mathrm{ft};\;M_{sd}=${f0(sv.wB.Msd)},\;M_{res}^-=${f0(sv.wB.mrn)},\;M_{LL}^-=${f0(sv.wB.Mlln)}\;\mathrm{k\text{-}in})`}/>
+        <PsbRes R={R} names={['Srv comp (bot, −M, 5.12.3.3.5)']}/>
+      </Step>}
+    </CalcSec>; })()}
     {R.cont&&<CalcSec title="Continuity for LL + SIDL — Negative Moment @ Pier">
+      {R.cont.pier?<Step d={`Factored pier moment per girder (${R.cont.pier.side} support of span ${R.cont.unit.s})`} r="LRFD 5.12.3.3.7, 3.6.1.3.1">
+        <ML s={Tx`M_{LL/lane}=\max\big[1.33\max(M_{1tr},M_{td})+M_{ln},\;0.9(1.33M_{2tr}+M_{ln})\big]=\max\big[1.33\max(${nx(-R.cont.pier.nd.ll.truckMin,0)},${nx(-R.cont.pier.nd.ll.tanMin,0)})+${nx(-R.cont.pier.nd.ll.laneNeg,0)},\;0.9(1.33(${nx(-R.cont.pier.nd.ll.twoMin,0)})+${nx(-R.cont.pier.nd.ll.laneNeg,0)})\big]=${nx(-R.cont.pier.nd.Mn,0)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_{DC2}=-w_{bar}M_w=-${nx(R.wBar,3)}(${nx(R.cont.pier.nd.Mw,1)})=${nx(R.cont.MDC2n,0)}\qquad M_{DW}=-${nx(R.wDW,3)}(${nx(R.cont.pier.nd.Mw,1)})=${nx(R.cont.MDWn,0)}\qquad M_{LL}=${nx(-R.cont.pier.nd.Mn,0)}(${nx(R.dfm,4)})=${nx(R.cont.MLLn,0)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_u=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${R.cont.MrnPier>0?'+'+nx(R.cont.MrnPier,0):''}${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
+        <WkLink lead="Values from:" it={[{l:'M_w, influence lines, M_res',s:'cfe',tab:'report',card:'Continuous Analysis'}]}/>
+      </Step>:<React.Fragment>
       <Step d="Pier-moment influence line — two equal spans" note="Unit load at ξ in either span; enumerated at 0.5-ft steps for trucks/tandem, both orientations; two-truck case with ≥ 50 ft between trucks per 3.6.1.3.1.">
         <ML s={Tx`\eta(\xi)=-\frac{\xi\,(L^2-\xi^2)}{4L^2}\;\;(0\le\xi\le L,\;\text{mirrored})\qquad M_{pier}=\sum P_i\,\eta(\xi_i)`}/>
       </Step>
@@ -8175,8 +8621,9 @@ function ReportTab({inp,R}){
       </Step>
       <Step d="Factored pier moment per girder">
         <ML s={Tx`M_{LL}=${nx(R.cont.negLL.MLL,0)}\,DF_m=${nx(R.cont.negLL.MLL,0)}(${nx(R.dfm,4)})=${nx(R.cont.MLLn,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_u=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_u=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${R.cont.MrnPier>0?'+'+nx(R.cont.MrnPier,0):''}${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
+      </React.Fragment>}
       <Step d="Negative-moment capacity (deck steel in tension, bottom flange in compression)" r="LRFD 5.12.3.3" wk="neg">
         <ML s={Tx`d=h_c-d_{top}=${nx(cp.hc,1)}-${nx(+inp.cont.dTop,2)}=${nx(R.cont.dN,1)}\;\mathrm{in}\qquad a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(m.fc,1)})(${nx(g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}=${nx(R.cont.tbf,1)}\;\text{N.G.}`}`}/>
         <ML s={Tx`c=\frac{a}{\beta_1}=\frac{${nx(R.cont.aN,2)}}{${nx(R.cont.b1g,3)}}=${nx(R.cont.cN,2)}\;\mathrm{in}\qquad\varepsilon_t=0.003\left(\frac{d}{c}-1\right)=${nx(R.cont.etN*1000,1)}\times10^{-3}\;\Rightarrow\;\phi=${nx(R.cont.phiN,3)}`}/>
@@ -8211,7 +8658,8 @@ function ReportTab({inp,R}){
         <ML s={Tx`\Delta_{final}=${nx(mu_.psF,2)}\Delta_{ps}-${nx(mu_.swF,2)}\Delta_{sw}-${nx(mu_.dkF,2)}\Delta_{dk}-${nx(mu_.sdF,2)}\Delta_{sd}=${nx(c.final,2)}\;\mathrm{in}`}/>
       </Step>
       <Step d="Live-load deflection (equivalent-UDL approximation)" r="LRFD 2.5.2.6.2" wk="lld">
-        <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_cI_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\;\mathrm{in}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=\frac{${nx(Lin,0)}}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        {c.MLLd!=null&&<div className="psbr-note">Continuity on: the simple-span HL-93 moment M<sub>LL</sub> = {fmt(c.MLLd,0)} k-ft is used (continuity not credited in the deflection estimate).</div>}
+        <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_cI_c}=\frac{5(${nx((c.MLLd!=null?c.MLLd:R.MLL)*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\;\mathrm{in}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=\frac{${nx(Lin,0)}}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['LL deflection']}/>
       </Step>
     </CalcSec>
