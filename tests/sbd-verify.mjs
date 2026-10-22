@@ -4,8 +4,10 @@
 //  2. saved data: a browser with GirderDetail (girderdetail_*), Preliminary sizing (plateline_*) and ST-Girder (stgirder.session, stgirder.ui.v1)
 //     data saved by the old files opens it unchanged in the merged tool, and the ST-Girder view shows the saved ST-Girder session;
 //  3. the view from the UI: the module tab opens it (first-open time to ST-Girder ready), the girder selector loads a girder; the live link (PR 2):
-//     in sync, girder kept per project, "GirderDetail changed — Update" banner, Update, the Design all summary and its links into the view; printing
+//     in sync, girder kept per project, "GirderDetail changed — Update" banner, Update, the Design all summary and its links into the view; one title
+//     block (PR 3): the project title block shown read-only in the view, ST-Girder's saved fields kept; printing
 //     (ST-Girder's Print button prints the frame, not the page; the top bar's Print report opens ST-Girder's Report tab; Ctrl+P prints the frame);
+//  one report (PR 3): a module's Print with Appendix A (ST-Girder's report, A.n numbering, see §A.n.k), the Girder report with its ST-Girder chapter;
 //  console errors of every page. Usage: node tests/sbd-verify.mjs [--file "Steel Bridge Design.html"]   Exit code 0 when every check passes.
 import fs from 'fs';
 import path from 'path';
@@ -75,6 +77,17 @@ seed['stgirder.session'] = stSess; seed['stgirder.ui.v1'] = JSON.stringify({ tab
     ok(da.rows >= da.n + 3 && /Inventory RF/.test(da.txt) && /G3 \(Interior\)/.test(da.txt), `Design all summary: ${da.n} checks and the load ratings of G3`);
     await p.click('#da-st a[data-stgo="rating"]'); await p.waitForTimeout(800);
     ok(await f.evaluate(() => { const t = document.querySelector('.tabs .tab.on'); return !!t && t.textContent.trim() === 'Rating'; }) && await p.evaluate(() => document.getElementById('da-modal').hidden && document.body.classList.contains('mod-st')), 'a rating in the summary opens the view at its Rating tab');
+    // SBD3 (PR 3): one title block. The project title block is shown read-only in the view (page fields, Report tab); ST-Girder's saved fields are kept
+    const proj0 = await f.evaluate(() => JSON.parse(localStorage.getItem('stgirder.session')).proj);
+    await p.evaluate(() => { Object.assign(P.tb, { no: 'PN-77', compBy: 'ENG-A', compDate: '2026-10-01', chkBy: 'CHK-B', chkDate: '2026-10-02' }); autosave(); });
+    await f.waitForFunction(() => [...document.querySelectorAll('.tb-grid input')].some(i => i.value === 'ENG-A'), null, { timeout: 20000 }).catch(() => {});
+    const tbIn = await f.evaluate(() => [...document.querySelectorAll('.tb-grid input')].map(i => [i.value, i.readOnly]));
+    ok(JSON.stringify(tbIn.filter(x => x[1]).map(x => x[0])) === JSON.stringify([await p.evaluate(() => P.tb.name), 'ENG-A', '2026-10-01', 'PN-77']) && tbIn.some(x => x[0] === 'G3 (Interior)' && !x[1]), 'page title block = project title block, read-only (Girder stays ST-Girder\'s): ' + JSON.stringify(tbIn));
+    await f.evaluate(() => [...document.querySelectorAll('.tabs .tab')].find(e => e.textContent.trim() === 'Report').click()); await p.waitForTimeout(1200);
+    const rtb = await f.evaluate(() => document.querySelector('.crv-tb').innerText.replace(/\s+/g, ' '));
+    ok(/PN-77/.test(rtb) && /ENG-A/.test(rtb) && /CHK-B/.test(rtb) && /2026-10-02/.test(rtb), 'Report tab title block from the project title block: ' + rtb);
+    await p.waitForTimeout(800);
+    ok(JSON.stringify(proj0) === JSON.stringify(await f.evaluate(() => JSON.parse(localStorage.getItem('stgirder.session')).proj)), 'ST-Girder\'s saved title-block fields unchanged: ' + JSON.stringify(proj0));
     // a message from another window is ignored (source check): post from the page itself to the frame's window with a forged payload
     const ign = await p.evaluate(async () => { const before = localStorage.getItem('stgirder.session');
       try { ST_FRAME.contentWindow.postMessage({ type: 'gd-st-pull', id: 999, payload: { _schema: 'stgirder-external-demands' } }, '*'); } catch (e) { }
@@ -92,6 +105,23 @@ seed['stgirder.session'] = stSess; seed['stgirder.ui.v1'] = JSON.stringify({ tab
     // back to a module
     await p.click('#mtab-gs'); await p.waitForTimeout(800);
     ok(await p.evaluate(() => !document.body.classList.contains('mod-st') && P.mod === 'gs' && getComputedStyle(document.getElementById('app')).display !== 'none'), 'module tab leaves the view');
+    // SBD3 (PR 3): one report. A module's Print with Appendix A (ST-Girder's report, numbered A.n, "see §A.n.k"), then the Girder report with its ST-Girder chapter
+    await p.click('#btn-print'); await p.waitForTimeout(500);
+    ok(await p.evaluate(() => !!document.getElementById('ro-st') && !document.getElementById('ro-st').checked), 'Print dialog offers Appendix A (off by default): ' + (await p.evaluate(() => { const e = document.getElementById('ro-st'); return e ? e.parentNode.textContent : 'none'; })));
+    await p.check('#ro-st'); const hp0 = await p.evaluate(() => window.__hostPrint); await p.click('#rpt-go');
+    await p.waitForFunction(n => window.__hostPrint > n, hp0, { timeout: 60000 }).catch(() => {});
+    const apx = await p.evaluate(() => { const h = document.getElementById('calc-rpt'), a = h.querySelector('.st-apx'), ids = [...h.querySelectorAll('[id]')].map(x => x.id);
+      return a ? { h1: [...a.querySelectorAll('h2.cr-h1')].map(x => x.textContent).filter(t => /^A\.\d/.test(t)).length, plain: [...a.querySelectorAll('h2.cr-h1, h3.cr-h2')].filter(x => /^\d/.test(x.textContent)).length, see: (a.innerHTML.match(/see §\d/g) || []).length, seeA: (a.innerHTML.match(/see §A\.\d/g) || []).length,
+        toc: /Appendix A\. Design & Rating/.test(h.querySelector('.cr-front .cr-toc').textContent), katex: a.querySelectorAll('.katex').length, dup: ids.length - new Set(ids).size, mj: a.querySelectorAll('mjx-container').length } : null; });
+    ok(apx && apx.h1 >= 5 && apx.plain === 0 && apx.see === 0 && apx.seeA > 0 && apx.toc && apx.katex > 0 && apx.dup === 0 && apx.mj === 0, 'Print report with Appendix A: ' + JSON.stringify(apx));
+    await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await p.click('#btn-grpt'); await p.waitForTimeout(500);
+    ok(await p.evaluate(() => !!document.getElementById('gr_c_st') && !document.getElementById('gr_c_st').checked), 'Girder report offers the ST-Girder chapter (off by default)');
+    await p.evaluate(() => { document.querySelectorAll('.gr-chaps input').forEach(i => i.checked = false); document.getElementById('gr_c_sa').checked = true; document.getElementById('gr_c_st').checked = true; document.getElementById('gr_g').value = '2'; });
+    await p.click('#gr_go'); await p.waitForFunction(() => window.GR_LAST && window.GR_LAST.g === 2, null, { timeout: 300000 }).catch(() => {});
+    const gr = await p.evaluate(() => { const h = document.getElementById('calc-rpt'), ids = [...h.querySelectorAll('[id]')].map(x => x.id), a = h.querySelector('.gr-chap .st-apx');
+      return { heads: [...h.querySelectorAll('.gr-chap-h')].map(x => x.textContent), dup: ids.length - new Set(ids).size, girder: a ? a.querySelector('.cr-cover').innerText.replace(/\s+/g, ' ') : '', badHref: a ? [...a.querySelectorAll('a[href^="#"]')].filter(x => !document.getElementById(x.getAttribute('href').slice(1))).length : -1, held: ST_STATE.ext && ST_STATE.ext.label }; });
+    ok(gr.heads.join('|') === 'Chapter 1. Structural analysis and stresses|Chapter 2. Design & Rating (ST-Girder)' && gr.dup === 0 && gr.badHref === 0 && /G2 \(Interior\)/.test(gr.girder) && /PN-77/.test(gr.girder) && gr.held === 'G2', 'Girder report G2 with the ST-Girder chapter: ' + JSON.stringify(gr));
     await p.click('#mtab-st'); await p.waitForTimeout(500);
     ok(await p.evaluate(() => document.body.classList.contains('mod-st') && document.querySelectorAll('iframe[name="gd-st"]').length === 1), 'reopening keeps the one frame (state kept)');
     const pm = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('girderdetail_autosave_v1')).data.mod; } catch (e) { return '?'; } });
