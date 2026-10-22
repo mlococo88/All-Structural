@@ -8531,8 +8531,11 @@ function hybridRh(sec,mat,el){
 }
 
 // Load-shedding factor Rb (6.10.1.10.2), generalized to either compression flange.
+// S2-2 (2026-10-22): with a GirderDetail hand-off in use (stHost, set by computeAll), Eq. 6.10.1.10.2-3 is GirderDetail's own rbFactor (host page);
+// the same expression, E = 29,000 ksi there, so it is used only when E_s is 29,000 ksi here. ST-Girder's code below is the path without a hand-off.
 function loadShedRbG(D,tw,bfc,tfc,Dc,Fyc,Es,compactWeb){
   if(compactWeb) return 1.0;
+  const H=stHost('rbFactor'); if(H&&Es===29000) return H(Dc,tw,bfc,tfc,Fyc).Rb;
   const lrw=5.7*sqrt(Es/Fyc);
   const twoDc_tw=2*Dc/tw;
   if(twoDc_tw<=lrw) return 1.0;
@@ -9223,10 +9226,21 @@ function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){
   return {Fnc:Math.min(FncFLB,FncLTB),FncFLB,FncLTB,lf,lpf,lrf,rt,Lp:Lp/12,Lr:Lr/12,Fyr:FyrV,Dc:DcV};
 }
 // Web bend-buckling resistance Fcrw, AASHTO 6.10.1.9.1.
-function webFcrw(D,tw,Dc,Fyc,Fyw,Es,Rh){
-  const k=9/Math.pow(Math.max(Dc/D,0.05),2);
-  return Math.min(0.9*Es*k/Math.pow(D/tw,2), Math.min(Rh*Fyc, Fyw/0.7));
+// S2-2 (2026-10-22): k = 7.2 when both edges of the web are in compression (6.10.1.9.1, AASHTO LRFD 10th Ed.; engineer decision 2026-10-22). Every D_c
+// passed here is the elastic web depth in compression from the neutral axis, limited to 0..D, so D_c = D means the neutral axis is outside the web on the
+// tension-flange side: both web edges in compression. With a GirderDetail hand-off in use (stHost), GirderDetail's own fcrw (host page; E = 29,000 ksi, so
+// only when E_s is 29,000 ksi here). webFcrwW: the same with k, the case and the source, for the worked derivations.
+function webFcrwW(D,tw,Dc,Fyc,Fyw,Es,Rh){
+  const both=Dc>=D, H=stHost('fcrw');
+  if(H&&Es===29000){ const r=H(D,tw,Math.max(Dc,1e-6),Rh,Fyc,Fyw,both); return {F:r.F,k:r.k,both,host:true}; }
+  const k=both? 7.2 : 9/Math.pow(Math.max(Dc/D,0.05),2);
+  return {F:Math.min(0.9*Es*k/Math.pow(D/tw,2), Math.min(Rh*Fyc, Fyw/0.7)),k,both,host:false};
 }
+function webFcrw(D,tw,Dc,Fyc,Fyw,Es,Rh){ return webFcrwW(D,tw,Dc,Fyc,Fyw,Es,Rh).F; }
+/* S2-2 (Steel Bridge Design stage 2, 2026-10-22): GirderDetail's own functions on the host page (this page runs in its frame, same origin), used by
+   loadShedRbG and webFcrw while computeAll works on a GirderDetail hand-off (ST_HOSTON); null otherwise or when the page is not in the host. */
+let ST_HOSTON=false;
+function stHost(fn){ if(!ST_HOSTON) return null; try{ const W=window.parent; if(W&&W!==window&&typeof W[fn]==='function') return W[fn]; }catch(e){} return null; }
 
 /* ===== AASHTO LRFD Table A4-1 — maximum live-load moments per unit width of deck =====
    Values are k-ft/ft. The published table ALREADY includes the multiple presence factors
@@ -9357,6 +9371,7 @@ function deckDesign(inp,F){
 /* ================= MASTER COMPUTE ================= */
 function computeAll(inp){
   inp=gdOverlay(inp);   // GDX (2026-10-19): GirderDetail's transferred inputs (same object, unchanged, without them)
+  ST_HOSTON=extFromGD(inp&&inp.external);   // S2-2: GirderDetail's R_b and F_crw functions while its hand-off is in use
   try{
     const sec=inp.sec, mat=inp.mat, deck0=inp.deck, geom=inp.geom;
     // GD49: the owner load rules of a GirderDetail import (identity otherwise): Strength I maximum factors and Service II LL factor
@@ -9400,7 +9415,8 @@ function computeAll(inp){
       const compactWeb_ = pl_.Dcp===0 || (2*pl_.Dcp/dims.tw)<=lambdaPw;
       const compact_ = compactWeb_ && (Fyf<=70) && (dims.D/dims.tw)<=150 && deck.deckOn;
       const Rh_=hybridRh(dims,matR,cN_);
-      const Rb_=loadShedRbG(dims.D,dims.tw,dims.bft,dims.tft,cN_.Dc,Fyc,Es,compactWeb_);
+      // S2-2: R_b = 1.0 for a composite section in positive flexure whose web satisfies 6.10.2.1.1 (D/t_w ≤ 150), 6.10.1.10.2 (10th Ed.), as GirderDetail
+      const RbPos1_=!!deck.deckOn&&dims.D/dims.tw<=150, Rb_=RbPos1_? 1.0 : loadShedRbG(dims.D,dims.tw,dims.bft,dims.tft,cN_.Dc,Fyc,Es,compactWeb_);
       const RbNeg_=loadShedRbG(dims.D,dims.tw,dims.bfb,dims.tfb,cr_.DcNeg,Fyc,Es,false);
       const Mn_ = compact_? ((pl_.Dp<=0.1*pl_.Dt)? pl_.Mp/12 : (pl_.Mp/12)*(1.07-0.7*pl_.Dp/pl_.Dt)) : null;
       const FncTop_=flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0,bare_.Dc,Fyw);   // constructibility (bare)
@@ -9413,7 +9429,7 @@ function computeAll(inp){
       const Iyc_=dims.tft*Math.pow(dims.bft,3)/12, Iyt_=dims.tfb*Math.pow(dims.bfb,3)/12;
       return {i, x0:i?rawSegs[i-1].xEnd:0, x1:s.xEnd, dims,
         bare:bare_, cN:cN_, c3N:c3N_, pl:pl_, cr:cr_,
-        compactWeb:compactWeb_, compact:compact_, Rh:Rh_, Rb:Rb_, RbNeg:RbNeg_,
+        compactWeb:compactWeb_, compact:compact_, Rh:Rh_, Rb:Rb_, RbPos1:RbPos1_, RbNeg:RbNeg_,
         Mn_kft:Mn_, FncTop:FncTop_, FncNeg:FncNeg_, FncBotBare:FncBotBare_,
         FncPos:FncPosNC_? FncPosNC_.Fnc : Rb_*Rh_*Fyc, FncPosNC:FncPosNC_, Fnt:Rh_*Fyf, Iyc:Iyc_, Iyt:Iyt_,
         ductOK:pl_.Dp<=0.42*pl_.Dt, wsw:bare_.A*0.490/144, ...(pl_.belowWeb?{oos:true}:{})};
@@ -9578,7 +9594,7 @@ function computeAll(inp){
         const r=Math.abs(f)/lim; if(r>s2Gov.r) s2Gov={r,x:st.x,si:st.si,tag,f,lim,st,s}; });
       if(s.neg.fB<0){                                   // −M region: web bend-buckling turns on
         const Fcrw=webFcrw(D,tw,sg.cr.DcNeg,Fyc,Fyw,Es,sg.Rh);
-        const r=Math.abs(s.neg.fB)/Fcrw; if(r>s2WebGov.r) s2WebGov={r,x:st.x,f:Math.abs(s.neg.fB),Fcrw};
+        const r=Math.abs(s.neg.fB)/Fcrw; if(r>s2WebGov.r) s2WebGov={r,x:st.x,f:Math.abs(s.neg.fB),Fcrw,si:st.si,Dc:sg.cr.DcNeg,Rh:sg.Rh};   // S2-2: si, D_c, R_h for the worked F_crw
       }
     });
     // stress display object (kept shape: governing positive-flexure station)
@@ -10145,7 +10161,7 @@ function computeAll(inp){
     if(useExt&&fatImp) warnings.fat.push('Fatigue from the imported fatigue envelopes ('+((inp.external&&inp.external.producer)||'import')+': fatigue truck, IM and single-lane fatigue distribution factors included): bottom-flange stress range = (M_FAT+ \u2212 M_FAT\u2212)/S_b on the short-term composite section for both signs (6.6.1.2.1; requires shear connectors throughout and the 6.10.1.7 deck reinforcement)'+(fatImpV?', web special fatigue and stud fatigue pitch from the imported fatigue shears':'; no fatigue shears imported, so the web special fatigue and stud pitch still use the fatigue truck on a simple span of L = '+fmt(Lft,1)+' ft')+'. The top flange and its attachments and the deck reinforcement at interior piers are not checked here.');
     else if(useExt) warnings.fat.push('Imported demands without fatigue envelopes: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
 
-    return {ok:true, sec, matR, deck, deckIn:deck0, lf:{...OWN,...LFc,plOn}, geom, beff, n, nRaw, nGD, EcGD:nGD&&+gdMat.Ec>0?+gdMat.Ec:null, EcDeck,
+    return {ok:true, sec, matR, deck, deckIn:deck0, lf:{...OWN,...LFc,plOn}, geom, beff, hostGD:ST_HOSTON, n, nRaw, nGD, EcGD:nGD&&+gdMat.Ec>0?+gdMat.Ec:null, EcDeck,
       bare, cN, c3N, pl, compact, compactWeb, compactMat, compactDtw, lambdaPw,
       Rh, Rb, ductOK, Iyc, Iyt, IycIyt, My_bareTop, My_bareBot,
       loads:Ld, hl:Ld.hl, df:Ld.df, dfm:Ld.dfm, dfv:Ld.dfv, MLL:Ld.MLL, VLL:Ld.VLL,
@@ -11076,9 +11092,10 @@ function secDerivs(R,si0,right){
       </Step>
       <Step d="Hybrid & load-shedding factors" r="6.10.1.10">
         {pl.belowWeb? <ML s={Tx`R_h=${nx(Rh,3)}\;(\text{${Rh>=0.999?'non-hybrid':'hybrid'}})\qquad R_b\text{: out of scope (uses the web compactness)}`}/>
-        : <ML s={Tx`R_h=${nx(Rh,3)}\;(\text{${Rh>=0.999?'non-hybrid':'hybrid'}})\qquad R_b=${nx(Rb,3)}\;(\text{${Rb>=0.999?'no web load-shedding':'web load-shedding active'}})`}/>}
+        : <ML s={Tx`R_h=${nx(Rh,3)}\;(\text{${Rh>=0.999?'non-hybrid':'hybrid'}})\qquad R_b=${nx(Rb,3)}\;${sg.RbPos1?'(\\text{composite, positive flexure, }D/t_w='+nx(sec.D/sec.tw,1)+'\\le 150\\text{: 6.10.1.10.2})':'(\\text{'+(Rb>=0.999?'no web load-shedding':'web load-shedding active')+'})'}`}/>}
+        {!pl.belowWeb&&!sg.RbPos1&&!compactWeb&&<ML s={Tx`\lambda_{rw}=5.7\sqrt{E/F_{yc}}=${nx(5.7*Math.sqrt(matR.Es/matR.Fyc),1)}\quad\frac{2D_c}{t_w}=${nx(2*cN.Dc/sec.tw,1)}\quad a_{wc}=\frac{2D_ct_w}{b_{fc}t_{fc}}=${nx(2*cN.Dc*sec.tw/(sg.dims.bft*sg.dims.tft),3)}\;\Rightarrow\;R_b=${2*cN.Dc/sec.tw<=5.7*Math.sqrt(matR.Es/matR.Fyc)?'1.0':'1-\\frac{a_{wc}}{1200+300a_{wc}}\left(\frac{2D_c}{t_w}-\lambda_{rw}\right)='+nx(Rb,3)}\;(\text{Eq. 6.10.1.10.2-3})`}/>}
         <DLinks items={[{to:'trans',seg:sgI(R,si),what:'D_c (short-term n section) used in R_b'}]}/>
-        <div className="mnote">R_h reduces flange resistance when the web yields before the flange (hybrid girders). R_b sheds load from a slender web in compression to the flanges. Both = 1.0 here when the web is compact and non-hybrid.</div>
+        <div className="mnote">R_h reduces flange resistance when the web yields before the flange (hybrid girders). R_b sheds load from a slender web in compression to the flanges. Both = 1.0 here when the web is compact and non-hybrid. R_b = 1.0 for a composite section in positive flexure whose web satisfies 6.10.2.1.1 (D/t_w ≤ 150), 6.10.1.10.2, as GirderDetail; otherwise Eq. 6.10.1.10.2-3{R.hostGD?' (GirderDetail’s own rbFactor, as the hand-off is in use)':''}.</div>
       </Step>
     </Deriv>
   );
@@ -11205,6 +11222,11 @@ function s2Deriv(R,psel,right){
       <ML s={Tx`\frac{f_{ServII}}{0.95R_hF_yf}=\frac{${nx(Math.abs(psel.bP),2)}}{${nx(psel.lim,2)}}=${nx(Math.abs(psel.bP)/psel.lim,3)}\;${Math.abs(psel.bP)<=psel.lim*1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">Top-flange Service II Σ at this station = {fmt(psel.tP,2)} ksi (compression). Sign convention: f_B + = bottom tension, f_T + = top compression. R_h = {fmt(psel.Rh,3)}. Flange lateral bending f_ℓ = 0 (straight girder).{R.hasNeg?' In −M regions the bottom-flange stress uses the cracked steel+rebar section (S_b,cr = '+fmt(psel.SbCr,0)+' in³).':''}</div>
       <DLinks items={[{to:'cls',seg:sgI(R,psel.si),what:'R_h'},...(R.hasNeg?[{to:'trans',seg:sgI(R,psel.si),what:'S_b,cr'}]:[])]}/>
+      {R.hasNeg&&st.s2WebGov&&st.s2WebGov.r>0&&st.s2WebGov.Dc!=null&&(()=>{ const g=st.s2WebGov, W=webFcrwW(R.sec.D,R.sec.tw,g.Dc,R.matR.Fyc,R.matR.Fyw,R.matR.Es,g.Rh);   // S2-2
+        return <React.Fragment><SG n="3">Web bend-buckling, −M (governing station x = {fmt(g.x,1)} ft, cracked section)</SG>
+          <ML s={Tx`k=${W.both?'7.2\\;(\\text{both web edges in compression})':'\\frac{9}{(D_c/D)^2}=\\frac{9}{('+nx(g.Dc,1)+'/'+nx(R.sec.D,1)+')^2}='+nx(W.k,2)}\qquad F_{crw}=\min\left(\frac{0.9Ek}{(D/t_w)^2},R_hF_{yc},\frac{F_{yw}}{0.7}\right)=${nx(g.Fcrw,1)}\;\text{ksi}`}/>
+          <ML s={Tx`\frac{f_c}{F_{crw}}=\frac{${nx(g.f,2)}}{${nx(g.Fcrw,1)}}=${nx(g.r,3)}\;${g.r<=1.0001?'\\checkmark':'\\text{N.G.}'}\quad(6.10.4.2.2,\;6.10.1.9.1)`}/>
+          <DLinks items={[{to:'segs',seg:sgI(R,g.si),what:'D_c (cracked section)'}]}/></React.Fragment>; })()}
     </Deriv>;
 }
 function StressTab({R}){
@@ -11730,6 +11752,8 @@ function constrWorkedDeriv(R,sel,right){ const c=R.constr;
       <ML s={Tx`L_b=${nx(c.Lb,0)}'\;,\;\;L_p=${nx(sel.Fnc.Lp,1)}'\;,\;\;L_r=${nx(sel.Fnc.Lr,1)}'\;,\;\;r_t=${nx(sel.Fnc.rt,2)}\text{ in}`}/>
       <ML s={Tx`\frac{f_{bu}}{F_{nc}}=${nx(sel.dcFLB,3)}\;${sel.dcFLB<=1.0001?'\\checkmark':'\\text{N.G.}'}\qquad\frac{f_{bu}}{R_hF_{yc}}=\frac{${nx(sel.region==='neg'?sel.fBot:sel.fTop,1)}}{${nx(sel.RhFyc,1)}}=${nx(sel.dcYield,3)}\;${sel.dcYield<=1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <SG n="3">Web bend-buckling & tension flange</SG>
+      {(()=>{ const W=webFcrwW(R.sec.D,R.sec.tw,sel.Dc,R.matR.Fyc,R.matR.Fyw,R.matR.Es,sel.Rh);   // S2-2: F_crw worked (6.10.1.9.1)
+        return <ML s={Tx`k=${W.both?'7.2\\;(\\text{both web edges in compression, }D_c=D)':'\\frac{9}{(D_c/D)^2}=\\frac{9}{('+nx(sel.Dc,1)+'/'+nx(R.sec.D,1)+')^2}='+nx(W.k,2)}\qquad F_{crw}=\min\left(\frac{0.9Ek}{(D/t_w)^2},R_hF_{yc},\frac{F_{yw}}{0.7}\right)=\min(${nx(0.9*R.matR.Es*W.k/Math.pow(R.sec.D/R.sec.tw,2),1)},${nx(sel.Rh*R.matR.Fyc,1)},${nx(R.matR.Fyw/0.7,1)})=${nx(sel.Fcrw,1)}\;\text{ksi}`}/>; })()}
       <ML s={Tx`\frac{f_{bu}}{F_{crw}}=\frac{${nx(sel.region==='neg'?sel.fBot:sel.fTop,1)}}{${nx(sel.Fcrw,1)}}=${nx(sel.dcWeb,3)}\;${sel.dcWeb<=1.0001?'\\checkmark':'\\text{N.G.}'}\qquad(D_c=${nx(sel.Dc,1)}\text{ in})`}/>
       <ML s={Tx`\text{tension flange: }\frac{f_{bu}}{R_hF_{yt}}=${nx(sel.dcTen,3)}\;${sel.dcTen<=1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <SG n="4">Construction shear</SG>
@@ -15852,7 +15876,9 @@ function gsGeWarn(loc, np, ls, nc) {
 }
 function ampFl(fl, fbu, Fyc, Lp, Lb, Cb, Rb, Fcr) { const req = Lb > 1.2 * Lp * Math.sqrt(Cb * Rb / Math.max(fbu / Fyc, 1e-9)); const AF = req ? (fbu < Fcr ? Math.max(0.85 / (1 - fbu / Fcr), 1) : Infinity) : 1; return { AF, fl: fl * AF, req }; }
 function rbFactor(Dc, tw, bfc, tfc, Fyc) { const lrw = 5.7 * Math.sqrt(ES / Fyc), lw = 2 * Dc / tw, awc = 2 * Dc * tw / (bfc * tfc); return { lrw, lw, awc, Rb: lw <= lrw ? 1 : Math.min(1, 1 - awc / (1200 + 300 * awc) * (lw - lrw)) }; }
-function fcrw(D, tw, Dc, Rh, Fyc, Fyw) { const k = 9 / (Dc / D) ** 2; return { k, F: Math.min(0.9 * ES * k / (D / tw) ** 2, Rh * Fyc, Fyw / 0.7) }; }
+// S2-2 (2026-10-22): k = 7.2 when both edges of the web are in compression (6.10.1.9.1, AASHTO LRFD 10th Ed.; engineer decision 2026-10-22): both = true from
+// the caller, or D_c > D (the elastic neutral axis outside the web on the tension-flange side). ST-Girder (frame) calls this too while it works on a hand-off.
+function fcrw(D, tw, Dc, Rh, Fyc, Fyw, both) { const b2 = both === true || Dc > D, k = b2 ? 7.2 : 9 / (Dc / D) ** 2; return { k, both: b2, F: Math.min(0.9 * ES * k / (D / tw) ** 2, Rh * Fyc, Fyw / 0.7) }; }
 
 GM.gs = {
 tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions', rptCombos: 'Section properties, loads, and stresses by stage', rptCap: 'Resistances (Appendices D6 and A6)' },
@@ -15986,7 +16012,7 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
       }
       // Service II
       const cS = pos ? -r.svc.top : -r.svc.bot, tS = pos ? r.svc.bot : r.svc.top; r.svcC = cS; r.svcT = tS;
-      const fcS = Math.max(cS, 0); r.DcS = fcS > 0 ? Math.max(fcS / (fcS + Math.abs(tS)) * d - (pos ? r.topT : r.botT), 0) : 0; r.webS = fcrw(r.D, r.tw, Math.max(r.DcS, 1e-6), r.Rh, pos ? Fyt : Fyb, Fyw);
+      const fcS = Math.max(cS, 0); r.DcS = fcS > 0 ? Math.max(fcS / (fcS + Math.abs(tS)) * d - (pos ? r.topT : r.botT), 0) : 0; r.webS = fcrw(r.D, r.tw, Math.max(r.DcS, 1e-6), r.Rh, pos ? Fyt : Fyb, Fyw, fcS > 0 && tS < 0);   // S2-2: tS < 0, the other flange also in compression: both web edges
       // constructibility (steel section)
       r.Mc = G.cdc * (r.MDCc !== '' && r.MDCc != null && isFinite(+r.MDCc) && r.MDCc !== 0 ? +r.MDCc : r.MDC1) + G.ccl * r.MCL; const up = r.Mc >= 0; r.con = { top: fAt(r.Mc, s, d), bot: fAt(r.Mc, s, 0), up };
       r.conC = up ? { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: Math.max(-r.con.top, 0) } : { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: Math.max(-r.con.bot, 0) };
@@ -16107,7 +16133,7 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
       R.rows.forEach(r => [['top', r.svc.top, R.Fyt, 0], ['bottom', r.svc.bot, R.Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = 0.95 * r.Rh * Fy; c.items.push(rc(`${L(r)}, ${f}`, [f2(a), f2(cap), f2(a / cap)], a, cap, fl > 0 ? T`|f_f| + \frac{f_\ell}{2} = ${f2(Math.abs(v))} + \frac{${f2(fl)}}{2} = ${f2(a)} \;${LE(a, cap)}\; 0.95(${f3(r.Rh)})(${f0(Fy)}) = ${f2(cap)}\ \text{ksi}` : T`|f_f| = ${f2(a)} \;${LE(a, cap)}\; 0.95(${f3(r.Rh)})(${f0(Fy)}) = ${f2(cap)}\ \text{ksi}`)); })); out.add(c); }
     { const c = { id: 'GS13', grp: SV, title: 'Permanent deformations: web bend-buckling', ref: 'AASHTO LRFD 6.10.4.2.2, Eq. 6.10.4.2.2-4; 6.10.1.9.1; D6.3.1', src: 'Code', sym: T`f_c \le F_{crw} = \frac{0.9Ek}{(D/t_w)^2}, \quad k = \frac{9}{(D_c/D)^2}`, cols: ['Location', 'f_c (ksi)', 'D_c (in)', 'F_crw (ksi)', 'Ratio'], items: [], note: 'Not required for composite sections in positive flexure with D/t_w ≤ 150. D_c is found from the accumulated Service II flange stresses (D6.3.1).' };
       R.rows.forEach(r => { if (r.pos && r.D / r.tw <= 150) return; const fcS = Math.max(r.svcC, 0); c.items.push(rc(L(r), [f2(fcS), f2(r.DcS), f2(r.webS.F), f2(fcS / r.webS.F)], fcS, r.webS.F,
-        T`D_c = \frac{${f2(fcS)}}{${f2(fcS)} + ${f2(Math.abs(r.svcT))}}(${f2(r.d)}) - t_{fc} = ${f2(r.DcS)},\ k = ${f2(r.webS.k)} \Rightarrow F_{crw} = ${f2(r.webS.F)} \;${GE(r.webS.F, fcS)}\; f_c = ${f2(fcS)}\ \text{ksi}`)); });
+        T`${r.webS.both ? T`f_t = ${f2(r.svcT)}\ \text{ksi (compression): both edges of the web in compression (6.10.1.9.1)},\ k = 7.2` : T`D_c = \frac{${f2(fcS)}}{${f2(fcS)} + ${f2(Math.abs(r.svcT))}}(${f2(r.d)}) - t_{fc} = ${f2(r.DcS)},\ k = \frac{9}{(D_c/D)^2} = ${f2(r.webS.k)}`} \Rightarrow F_{crw} = ${f2(r.webS.F)} \;${GE(r.webS.F, fcS)}\; f_c = ${f2(fcS)}\ \text{ksi}`)); });
       if (!c.items.length) c.naWhy = 'All locations are composite sections in positive flexure with D/t_w ≤ 150.'; out.add(c); }
     // constructibility
     { const c = { id: 'GS14', grp: CN, title: 'Deck placement: compression flange', ref: 'AASHTO LRFD 6.10.3.2.1, Eqs. 6.10.3.2.1-1 and -2', src: 'Code', sym: T`f_{bu} + f_\ell \le \phi_fR_hF_{yc}, \qquad f_{bu} + \tfrac{1}{3}f_\ell \le \phi_fF_{nc}`, cols: ['Location, check', 'Demand (ksi)', 'Limit (ksi)', 'Ratio'], items: [],
@@ -16120,7 +16146,7 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
         if (lt.npr && lt.npr.bw != null) c.items.push(gsGeWarn(`${L(r)}, ${r.conC.lab} flange`, lt.npr, 'deck placement', 3)); }); out.add(c); }
     { const c = { id: 'GS15', grp: CN, title: 'Deck placement: web bend-buckling and tension flange', ref: 'AASHTO LRFD 6.10.3.2.1-3, 6.10.3.2.2', src: 'Code', sym: T`f_{bu} \le \phi_fF_{crw}, \qquad f_{bu} + f_\ell \le \phi_fR_hF_{yt}`, cols: ['Location, check', 'Demand (ksi)', 'Limit (ksi)', 'Ratio'], items: [] };
       R.rows.forEach(r => { const f = r.conC.f, ft = r.conT.f + r.flC, ct = r.RhC * r.conT.Fy;
-        c.items.push(rc(`${L(r)}, web bend-buckling`, [f2(f), f2(r.webC.F), f2(f / r.webC.F)], f, r.webC.F, T`D_c = ${f2(r.DcC)},\ k = ${f2(r.webC.k)} \Rightarrow F_{crw} = ${f2(r.webC.F)} \;${GE(r.webC.F, f)}\; ${f2(f)}\ \text{ksi}`));
+        c.items.push(rc(`${L(r)}, web bend-buckling`, [f2(f), f2(r.webC.F), f2(f / r.webC.F)], f, r.webC.F, T`D_c = ${f2(r.DcC)},\ ${r.webC.both ? T`D_c > D\text{: both edges of the web in compression (6.10.1.9.1)},\ k = 7.2` : T`k = \frac{9}{(D_c/D)^2} = ${f2(r.webC.k)}`} \Rightarrow F_{crw} = ${f2(r.webC.F)} \;${GE(r.webC.F, f)}\; ${f2(f)}\ \text{ksi}`));
         c.items.push(rc(`${L(r)}, ${r.conT.lab} flange (tension)`, [f2(ft), f2(ct), f2(ft / ct)], ft, ct, T`${f2(r.conT.f)} + ${f2(r.flC)} = ${f2(ft)} \;${LE(ft, ct)}\; ${f2(ct)}\ \text{ksi}`)); }); out.add(c); }
     { const c = { id: 'GS16', grp: CN, title: 'Deck placement: web shear', ref: 'AASHTO LRFD 6.10.3.3, Eq. 6.10.3.3-1', src: 'Code', sym: T`V_u \le \phi_vV_{cr} = \phi_vCV_p`, cols: ['Location', 'V_u (kip)', 'φV_cr (kip)', 'Ratio'], items: [], note: 'Tension-field action is not permitted during construction.' };
       R.rows.forEach(r => c.items.push(rc(L(r), [f2(r.VuC), f2(r.sh.Vcr), f2(r.VuC / r.sh.Vcr)], r.VuC, r.sh.Vcr, T`V_u = ${f2(R.G.cdc)}(${f2(r.VDC1)}) + ${f2(R.G.ccl)}(${f2(r.VCL)}) = ${f2(r.VuC)} \;${LE(r.VuC, r.sh.Vcr)}\; ${f3(r.sh.C)}(${f2(r.sh.Vp)}) = ${f2(r.sh.Vcr)}\ \text{kip}`))); out.add(c); }
