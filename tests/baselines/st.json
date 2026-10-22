@@ -32,7 +32,7 @@
    }
   },
   "payload def15_AASHTO_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "558a88f5e8d4",
     "st.status": "5481e8d4d5aa",
@@ -51,18 +51,18 @@
     "st.tab.Diagrams": "fc82b3a115e0",
     "st.tab.Camber": "ac8351e037a5",
     "st.tab.Deck": "601d62581fe5",
-    "st.tab.Fatigue": "9ef37dcc931e",
+    "st.tab.Fatigue": "25e7782fb8e2",
     "st.tab.Stiffeners": "0f8347730784",
     "st.tab.Connectors": "21a6913ed716",
     "st.tab.Rating": "9f3663a2fed4",
     "st.tab.Optimize": "34e160b026e6",
     "st.tab.Nomenclature": "fd762f9985da",
-    "st.tab.Report": "7c8296f6bf51",
-    "st.report.all": "544e45ff8ba3"
+    "st.tab.Report": "8763765a6136",
+    "st.report.all": "88ecf2ea8657"
    }
   },
   "payload def15_AASHTO_G2_gdx": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "e78c4aa86d50",
     "st.status": "5481e8d4d5aa",
@@ -81,18 +81,18 @@
     "st.tab.Diagrams": "89d8fabb5bf8",
     "st.tab.Camber": "6ed36dbfaa46",
     "st.tab.Deck": "1a918008f6d1",
-    "st.tab.Fatigue": "992114778c2f",
+    "st.tab.Fatigue": "8791dd851034",
     "st.tab.Stiffeners": "9c0a48f9d611",
     "st.tab.Connectors": "0241757c3355",
     "st.tab.Rating": "ddac9e1f7166",
     "st.tab.Optimize": "46ec5f885f6d",
     "st.tab.Nomenclature": "202e1fcc5111",
-    "st.tab.Report": "22e5cf295884",
-    "st.report.all": "265f60360511"
+    "st.tab.Report": "8e1366469e60",
+    "st.report.all": "df7f34e38dd6"
    }
   },
   "payload def15_AASHTO_G2_loads": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "75aff3be90a5",
     "st.status": "5481e8d4d5aa",
@@ -111,18 +111,18 @@
     "st.tab.Diagrams": "a334b18efeac",
     "st.tab.Camber": "9bc016ca7dfb",
     "st.tab.Deck": "2baa65e53242",
-    "st.tab.Fatigue": "e7f743a5a841",
+    "st.tab.Fatigue": "7ff336f9ce70",
     "st.tab.Stiffeners": "8dddd548cd47",
     "st.tab.Connectors": "3511b34d5ae5",
     "st.tab.Rating": "f455f27d0be5",
     "st.tab.Optimize": "2a4c1682b922",
     "st.tab.Nomenclature": "d4489dfa651b",
-    "st.tab.Report": "bf6127c9e978",
-    "st.report.all": "dabe8e830c82"
+    "st.tab.Report": "6b9d7732e950",
+    "st.report.all": "e93b9fce9c6a"
    }
   },
   "payload def15_RIDOT_Iyes_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "eece61e035f0",
     "st.status": "ec45c76d6415",
@@ -141,18 +141,18 @@
     "st.tab.Diagrams": "5a16f41be9ed",
     "st.tab.Camber": "da6be824cbe2",
     "st.tab.Deck": "c8b551651933",
-    "st.tab.Fatigue": "15539919ee1a",
+    "st.tab.Fatigue": "3b4978feea17",
     "st.tab.Stiffeners": "6d6bf7444af2",
     "st.tab.Connectors": "dfa3fae5cbf5",
     "st.tab.Rating": "acd1819a2b3b",
     "st.tab.Optimize": "b2a30c7e9aa2",
     "st.tab.Nomenclature": "c244dcfa6732",
-    "st.tab.Report": "4ca0381b60da",
-    "st.report.all": "5c607113a891"
+    "st.tab.Report": "2ed6f8bc03a3",
+    "st.report.all": "6740feafdffb"
    }
   },
   "payload gd_builtin28_AASHTO_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "f2bdba47cebc",
     "st.status": "5481e8d4d5aa",
@@ -171,18 +171,18 @@
     "st.tab.Diagrams": "12967c1dedc3",
     "st.tab.Camber": "2b9b2974bb38",
     "st.tab.Deck": "8120fbd2c79c",
-    "st.tab.Fatigue": "a27ea4957d1c",
+    "st.tab.Fatigue": "2fff260a2834",
     "st.tab.Stiffeners": "645c8779f89e",
     "st.tab.Connectors": "da41b27f5d1a",
     "st.tab.Rating": "8063a3d0c98f",
     "st.tab.Optimize": "6bba299f5f73",
     "st.tab.Nomenclature": "04d90b010754",
-    "st.tab.Report": "a3b6bbf1f31b",
-    "st.report.all": "e5b279042b93"
+    "st.tab.Report": "7de850e71a99",
+    "st.report.all": "ba5d772d1651"
    }
   },
   "payload gd_builtin28_AASHTO_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "7189bac60fa6",
     "st.status": "5481e8d4d5aa",
@@ -201,18 +201,18 @@
     "st.tab.Diagrams": "3d2a21756c72",
     "st.tab.Camber": "b099e3291b56",
     "st.tab.Deck": "2a529609a891",
-    "st.tab.Fatigue": "6c5059234868",
+    "st.tab.Fatigue": "44d2516951c7",
     "st.tab.Stiffeners": "25e9be2b3d89",
     "st.tab.Connectors": "926e77802dcb",
     "st.tab.Rating": "344286d6b49f",
     "st.tab.Optimize": "52f4d90e5025",
     "st.tab.Nomenclature": "65a993bb8b1a",
-    "st.tab.Report": "fb513b106294",
-    "st.report.all": "66891cd560e5"
+    "st.tab.Report": "5303d8182802",
+    "st.report.all": "82efc3b0317a"
    }
   },
   "payload gd_builtin28_AASHTO_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d6be04a80119",
     "st.status": "5481e8d4d5aa",
@@ -231,18 +231,18 @@
     "st.tab.Diagrams": "99a57c849292",
     "st.tab.Camber": "ce9c3a327196",
     "st.tab.Deck": "796f164b29ec",
-    "st.tab.Fatigue": "4aa307d15d05",
+    "st.tab.Fatigue": "ef048f67461f",
     "st.tab.Stiffeners": "673bb4084f68",
     "st.tab.Connectors": "512a494fca51",
     "st.tab.Rating": "626b26c86057",
     "st.tab.Optimize": "cb0c257be40d",
     "st.tab.Nomenclature": "dc96b100c4ca",
-    "st.tab.Report": "c9a1b6a3609e",
-    "st.report.all": "898106e4b7cc"
+    "st.tab.Report": "b15c0995e0ba",
+    "st.report.all": "10e4033b4404"
    }
   },
   "payload gd_builtin28_AASHTO_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b3d47d0a17bd",
     "st.status": "5481e8d4d5aa",
@@ -261,18 +261,18 @@
     "st.tab.Diagrams": "665b38d5706a",
     "st.tab.Camber": "79da9eca80d2",
     "st.tab.Deck": "19ade3f5068b",
-    "st.tab.Fatigue": "f028e05548a8",
+    "st.tab.Fatigue": "3d5c22204ffd",
     "st.tab.Stiffeners": "61ba7fb02a4e",
     "st.tab.Connectors": "8514c7603371",
     "st.tab.Rating": "9309d4060e1b",
     "st.tab.Optimize": "c3b18164e946",
     "st.tab.Nomenclature": "ad2223653e35",
-    "st.tab.Report": "8bf9fc4cc88e",
-    "st.report.all": "b0316733d146"
+    "st.tab.Report": "d1741aa30f83",
+    "st.report.all": "2f16a1e0d74e"
    }
   },
   "payload gd_builtin28_AASHTO_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "555b755c7067",
     "st.status": "5481e8d4d5aa",
@@ -291,18 +291,18 @@
     "st.tab.Diagrams": "ea0dc22feffe",
     "st.tab.Camber": "650483c95a24",
     "st.tab.Deck": "9e98048134b2",
-    "st.tab.Fatigue": "74619dbd8a3c",
+    "st.tab.Fatigue": "0094cdcbca44",
     "st.tab.Stiffeners": "e472e43b527f",
     "st.tab.Connectors": "581a50ca1e22",
     "st.tab.Rating": "99e311f9235f",
     "st.tab.Optimize": "71dccd121e37",
     "st.tab.Nomenclature": "411d2c7efffd",
-    "st.tab.Report": "b57bcbc63bde",
-    "st.report.all": "f784bb15b66a"
+    "st.tab.Report": "0ff131de5431",
+    "st.report.all": "bed428d1e903"
    }
   },
   "payload gd_builtin28_CTDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d4f6aa8b4d2e",
     "st.status": "ed7322df82eb",
@@ -321,18 +321,18 @@
     "st.tab.Diagrams": "a5bf947b578a",
     "st.tab.Camber": "593bf5684624",
     "st.tab.Deck": "413c11f2478a",
-    "st.tab.Fatigue": "a1dc75284d53",
+    "st.tab.Fatigue": "deb5fb31f041",
     "st.tab.Stiffeners": "844bf499b44f",
     "st.tab.Connectors": "083523f0245e",
     "st.tab.Rating": "8e7f17d9d301",
     "st.tab.Optimize": "34906867c31c",
     "st.tab.Nomenclature": "dec8ac806714",
-    "st.tab.Report": "5a468b11769c",
-    "st.report.all": "df8b7252bf10"
+    "st.tab.Report": "22aa8dc29080",
+    "st.report.all": "29f29a4068ed"
    }
   },
   "payload gd_builtin28_CTDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "9ddf20f06f61",
     "st.status": "ed7322df82eb",
@@ -351,18 +351,18 @@
     "st.tab.Diagrams": "c82df06ab092",
     "st.tab.Camber": "953919624f4b",
     "st.tab.Deck": "54839d7d8eea",
-    "st.tab.Fatigue": "c1e04e74b337",
+    "st.tab.Fatigue": "67ee3a48f825",
     "st.tab.Stiffeners": "400cc656d07b",
     "st.tab.Connectors": "a4f6c99b2e44",
     "st.tab.Rating": "c33c95c6af72",
     "st.tab.Optimize": "89d1c37b2cf5",
     "st.tab.Nomenclature": "5a87d35ff308",
-    "st.tab.Report": "7bfbf8e7513f",
-    "st.report.all": "4aa3f9f2465f"
+    "st.tab.Report": "65bd56b44ab4",
+    "st.report.all": "fe1899a019cf"
    }
   },
   "payload gd_builtin28_CTDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "e9907f8fda39",
     "st.status": "ed7322df82eb",
@@ -381,18 +381,18 @@
     "st.tab.Diagrams": "c53fff642571",
     "st.tab.Camber": "1f2f2270a894",
     "st.tab.Deck": "a3f7c4cfe957",
-    "st.tab.Fatigue": "4e73bd728482",
+    "st.tab.Fatigue": "ee8e0cb2c184",
     "st.tab.Stiffeners": "3db879cb42be",
     "st.tab.Connectors": "36d3d442788a",
     "st.tab.Rating": "79c3ef62a456",
     "st.tab.Optimize": "87e4a1bd5768",
     "st.tab.Nomenclature": "9ac9b4c859cc",
-    "st.tab.Report": "bea13d754d56",
-    "st.report.all": "94811ab540fe"
+    "st.tab.Report": "7082ddfb515c",
+    "st.report.all": "d5fc029303bd"
    }
   },
   "payload gd_builtin28_CTDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ec6abaee2a31",
     "st.status": "ed7322df82eb",
@@ -411,18 +411,18 @@
     "st.tab.Diagrams": "fb8f3b4cdc97",
     "st.tab.Camber": "386063cdfc35",
     "st.tab.Deck": "bd2b302e0077",
-    "st.tab.Fatigue": "71cae8e81720",
+    "st.tab.Fatigue": "92f43ea48010",
     "st.tab.Stiffeners": "b56fc225aae1",
     "st.tab.Connectors": "e09fd8e90612",
     "st.tab.Rating": "70d39370bf08",
     "st.tab.Optimize": "5d78a17e88c9",
     "st.tab.Nomenclature": "b6d81b932ae7",
-    "st.tab.Report": "fd6daa0da760",
-    "st.report.all": "7b6380546120"
+    "st.tab.Report": "d52a173fd8c4",
+    "st.report.all": "3d2cf01c7374"
    }
   },
   "payload gd_builtin28_CTDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "16b20ef021ed",
     "st.status": "ed7322df82eb",
@@ -441,18 +441,18 @@
     "st.tab.Diagrams": "37d230762e27",
     "st.tab.Camber": "711e74026f4a",
     "st.tab.Deck": "1fd999a3700f",
-    "st.tab.Fatigue": "abe4dff66141",
+    "st.tab.Fatigue": "9999cd46e45b",
     "st.tab.Stiffeners": "1efa2a902f09",
     "st.tab.Connectors": "a7a2e3af1fa9",
     "st.tab.Rating": "aa39a68804ef",
     "st.tab.Optimize": "3c3a6148479f",
     "st.tab.Nomenclature": "cfd1acbc0c42",
-    "st.tab.Report": "e402d59530e5",
-    "st.report.all": "cc0e05ab7f57"
+    "st.tab.Report": "5493d78e4f0d",
+    "st.report.all": "34fa761ba9e8"
    }
   },
   "payload gd_builtin28_MassDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "67eccdcbacee",
     "st.status": "6096378939a3",
@@ -471,18 +471,18 @@
     "st.tab.Diagrams": "15692e7370b3",
     "st.tab.Camber": "4982acff3d2d",
     "st.tab.Deck": "0c2f60b59543",
-    "st.tab.Fatigue": "68aac795f775",
+    "st.tab.Fatigue": "7915daf886a1",
     "st.tab.Stiffeners": "136f92c1bc7a",
     "st.tab.Connectors": "7c29c61c6f5c",
     "st.tab.Rating": "eb2f2e7b1a39",
     "st.tab.Optimize": "7c10b3a962bf",
     "st.tab.Nomenclature": "e9999bfc503a",
-    "st.tab.Report": "93bfca3ac7d9",
-    "st.report.all": "75b44cd0201e"
+    "st.tab.Report": "33d952d4dc96",
+    "st.report.all": "1dfd8f256de1"
    }
   },
   "payload gd_builtin28_MassDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "87aa9efbfb05",
     "st.status": "6096378939a3",
@@ -501,18 +501,18 @@
     "st.tab.Diagrams": "1b8bb45164be",
     "st.tab.Camber": "a400aad30a62",
     "st.tab.Deck": "c414593e2607",
-    "st.tab.Fatigue": "2302faaf7c72",
+    "st.tab.Fatigue": "c9d6599045e3",
     "st.tab.Stiffeners": "19d9bc87aa50",
     "st.tab.Connectors": "dcbf17a1ed5e",
     "st.tab.Rating": "8c1a25b5a2cf",
     "st.tab.Optimize": "7f8905e99fd8",
     "st.tab.Nomenclature": "301dfa30ac54",
-    "st.tab.Report": "a95139a0569e",
-    "st.report.all": "b215c6cb717d"
+    "st.tab.Report": "7d975acd38ea",
+    "st.report.all": "c7f70b4b0944"
    }
   },
   "payload gd_builtin28_MassDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "312e8207d21a",
     "st.status": "6096378939a3",
@@ -531,18 +531,18 @@
     "st.tab.Diagrams": "24a97490158b",
     "st.tab.Camber": "042f207fadf7",
     "st.tab.Deck": "41ea793b9521",
-    "st.tab.Fatigue": "c0a488cda1e0",
+    "st.tab.Fatigue": "a9c63e185e02",
     "st.tab.Stiffeners": "284c6fec2b14",
     "st.tab.Connectors": "7ffe122ca377",
     "st.tab.Rating": "7447628a5a90",
     "st.tab.Optimize": "2b18459f62cc",
     "st.tab.Nomenclature": "1a86ff12e9fe",
-    "st.tab.Report": "1202dff605a3",
-    "st.report.all": "e1c8efb22918"
+    "st.tab.Report": "9c61a13aad2f",
+    "st.report.all": "e5bd277ef78c"
    }
   },
   "payload gd_builtin28_MassDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "92650b43c44e",
     "st.status": "6096378939a3",
@@ -561,18 +561,18 @@
     "st.tab.Diagrams": "f8e05b26cb93",
     "st.tab.Camber": "a414b8d8703e",
     "st.tab.Deck": "b8cefa2ac55a",
-    "st.tab.Fatigue": "f7df6a47350b",
+    "st.tab.Fatigue": "14ce4403b05f",
     "st.tab.Stiffeners": "8fbcf54c9a96",
     "st.tab.Connectors": "7afc80b19d21",
     "st.tab.Rating": "2f60c3d8fcf4",
     "st.tab.Optimize": "83159c492463",
     "st.tab.Nomenclature": "51f8f676b734",
-    "st.tab.Report": "bd3c0675e334",
-    "st.report.all": "073cffc91633"
+    "st.tab.Report": "6453bb47949c",
+    "st.report.all": "f06b1af63a83"
    }
   },
   "payload gd_builtin28_MassDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "f89f522855ff",
     "st.status": "6096378939a3",
@@ -591,18 +591,18 @@
     "st.tab.Diagrams": "a8948ebcebef",
     "st.tab.Camber": "825e107971d1",
     "st.tab.Deck": "4b2f6d192877",
-    "st.tab.Fatigue": "f8bb85f1dfb4",
+    "st.tab.Fatigue": "64b8d1e759b5",
     "st.tab.Stiffeners": "01cfb01e73a9",
     "st.tab.Connectors": "699c9d619d38",
     "st.tab.Rating": "9222ba0a4894",
     "st.tab.Optimize": "7c9eee87009a",
     "st.tab.Nomenclature": "e10a4b9c017a",
-    "st.tab.Report": "0ecb0c988436",
-    "st.report.all": "017dab490c13"
+    "st.tab.Report": "4bea74e6df4f",
+    "st.report.all": "b3ab1d10cd9c"
    }
   },
   "payload gd_builtin28_RIDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "e8d37a1af2bf",
     "st.status": "fc63f88f03f2",
@@ -621,18 +621,18 @@
     "st.tab.Diagrams": "2bd80de2b20d",
     "st.tab.Camber": "d758acee427a",
     "st.tab.Deck": "b8a3c70aacf2",
-    "st.tab.Fatigue": "0b6fd3c36de9",
+    "st.tab.Fatigue": "1065778971d0",
     "st.tab.Stiffeners": "a3c4086fd3ae",
     "st.tab.Connectors": "7ff97c665dcc",
     "st.tab.Rating": "812d64b63d86",
     "st.tab.Optimize": "9b26030baa20",
     "st.tab.Nomenclature": "4b914574d559",
-    "st.tab.Report": "7b16c9fa44eb",
-    "st.report.all": "cf6f2d3103d4"
+    "st.tab.Report": "707af6bb8936",
+    "st.report.all": "0f6182ea9b96"
    }
   },
   "payload gd_builtin28_RIDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b0f80bb3fa25",
     "st.status": "fc63f88f03f2",
@@ -651,18 +651,18 @@
     "st.tab.Diagrams": "067f941001d1",
     "st.tab.Camber": "08d3766ef2f5",
     "st.tab.Deck": "0d99d489339a",
-    "st.tab.Fatigue": "c4d84ddc503d",
+    "st.tab.Fatigue": "8f507d7ecedc",
     "st.tab.Stiffeners": "17e372c0539b",
     "st.tab.Connectors": "ef9ed66a4e11",
     "st.tab.Rating": "75a6976709b3",
     "st.tab.Optimize": "b567a7cf231c",
     "st.tab.Nomenclature": "115d1f2aaf0c",
-    "st.tab.Report": "0a5b42cc0f0e",
-    "st.report.all": "cb8a729d25d5"
+    "st.tab.Report": "b75a7b560ff8",
+    "st.report.all": "102778c982af"
    }
   },
   "payload gd_builtin28_RIDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b77086af53f1",
     "st.status": "fc63f88f03f2",
@@ -681,18 +681,18 @@
     "st.tab.Diagrams": "82b74e20e6a7",
     "st.tab.Camber": "7119bf1b28bf",
     "st.tab.Deck": "179ebcbd7683",
-    "st.tab.Fatigue": "a15d17725f2e",
+    "st.tab.Fatigue": "9bd906a7021e",
     "st.tab.Stiffeners": "b92d3ac11238",
     "st.tab.Connectors": "45c5a2c9bd7d",
     "st.tab.Rating": "34ebd859f995",
     "st.tab.Optimize": "5797a44058ec",
     "st.tab.Nomenclature": "7e4c388adf4e",
-    "st.tab.Report": "57b12cd2d9cc",
-    "st.report.all": "7e84467d6bff"
+    "st.tab.Report": "f3f292132309",
+    "st.report.all": "e6dde29ca18b"
    }
   },
   "payload gd_builtin28_RIDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "58c5f2e39a6b",
     "st.status": "fc63f88f03f2",
@@ -711,18 +711,18 @@
     "st.tab.Diagrams": "be51a5e49408",
     "st.tab.Camber": "a4724a4ad836",
     "st.tab.Deck": "3e1012722465",
-    "st.tab.Fatigue": "d91aa4f9b70d",
+    "st.tab.Fatigue": "90a72958c116",
     "st.tab.Stiffeners": "af57891e7fde",
     "st.tab.Connectors": "ff37a7cedc10",
     "st.tab.Rating": "937b5777ba1c",
     "st.tab.Optimize": "f1b5bfe86be1",
     "st.tab.Nomenclature": "a7b05fe18bc5",
-    "st.tab.Report": "da8263b1abad",
-    "st.report.all": "e237fa62ec11"
+    "st.tab.Report": "af095af42c09",
+    "st.report.all": "59493fa2a8ce"
    }
   },
   "payload gd_builtin28_RIDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "33885ebbf0d3",
     "st.status": "fc63f88f03f2",
@@ -741,18 +741,18 @@
     "st.tab.Diagrams": "ca176a2afb49",
     "st.tab.Camber": "cd3a17b93e35",
     "st.tab.Deck": "3c5397bb2ceb",
-    "st.tab.Fatigue": "69d65899425c",
+    "st.tab.Fatigue": "5108c13fa961",
     "st.tab.Stiffeners": "d06f5f8e7d85",
     "st.tab.Connectors": "d633f1577a51",
     "st.tab.Rating": "c4dc6bf052ee",
     "st.tab.Optimize": "276a09047f4a",
     "st.tab.Nomenclature": "66a878aee112",
-    "st.tab.Report": "af128259176f",
-    "st.report.all": "2e6b47deb557"
+    "st.tab.Report": "f44b3e5c239d",
+    "st.report.all": "92b082c2c035"
    }
   },
   "payload gd_builtin_AASHTO_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "930ed8bd65de",
     "st.status": "5481e8d4d5aa",
@@ -771,18 +771,18 @@
     "st.tab.Diagrams": "7f90ef638bfd",
     "st.tab.Camber": "c9486fe5c385",
     "st.tab.Deck": "6af2917cf6e5",
-    "st.tab.Fatigue": "39149fd24819",
+    "st.tab.Fatigue": "c0a87ad055b9",
     "st.tab.Stiffeners": "12bc9c0c62bf",
     "st.tab.Connectors": "7b219b77f23a",
     "st.tab.Rating": "297a950403ca",
     "st.tab.Optimize": "badf2e9fdba9",
     "st.tab.Nomenclature": "2411763da13f",
-    "st.tab.Report": "9de0464b8dd5",
-    "st.report.all": "98e2e97d5508"
+    "st.tab.Report": "f47e840c2751",
+    "st.report.all": "492b784f2745"
    }
   },
   "payload gd_builtin_AASHTO_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "e8f3763f37da",
     "st.status": "5481e8d4d5aa",
@@ -801,18 +801,18 @@
     "st.tab.Diagrams": "e7ec8baf7cad",
     "st.tab.Camber": "c10f51f04b74",
     "st.tab.Deck": "b63e935f4951",
-    "st.tab.Fatigue": "8ffc0b3a2c9a",
+    "st.tab.Fatigue": "30bc45c0b358",
     "st.tab.Stiffeners": "cdb4b661dbf4",
     "st.tab.Connectors": "9a12958b5301",
     "st.tab.Rating": "56bf28524e3c",
     "st.tab.Optimize": "c23e339a60a5",
     "st.tab.Nomenclature": "3146c5d83eac",
-    "st.tab.Report": "a728854b2ada",
-    "st.report.all": "fad913accb41"
+    "st.tab.Report": "1812cc88dcce",
+    "st.report.all": "d60175bbb0e4"
    }
   },
   "payload gd_builtin_AASHTO_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "f05db71fcb6d",
     "st.status": "5481e8d4d5aa",
@@ -831,18 +831,18 @@
     "st.tab.Diagrams": "b2e61df12cc3",
     "st.tab.Camber": "55bb76068787",
     "st.tab.Deck": "6832cd6d822d",
-    "st.tab.Fatigue": "14a841a15985",
+    "st.tab.Fatigue": "22b006a34cb2",
     "st.tab.Stiffeners": "b6f1953a7e37",
     "st.tab.Connectors": "8c083055c256",
     "st.tab.Rating": "d67afeec83c5",
     "st.tab.Optimize": "3e8e19c34fae",
     "st.tab.Nomenclature": "40cdebafb381",
-    "st.tab.Report": "04688f712274",
-    "st.report.all": "18c6648b7a9e"
+    "st.tab.Report": "e8cadf14edbc",
+    "st.report.all": "0cbc085f02c8"
    }
   },
   "payload gd_builtin_AASHTO_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "8638b899f011",
     "st.status": "5481e8d4d5aa",
@@ -861,18 +861,18 @@
     "st.tab.Diagrams": "047777b4e05c",
     "st.tab.Camber": "5b16ad1b2d89",
     "st.tab.Deck": "6bcee3aed7d8",
-    "st.tab.Fatigue": "bb8065d5ccdd",
+    "st.tab.Fatigue": "b384b3a49f04",
     "st.tab.Stiffeners": "444dc3bf8b49",
     "st.tab.Connectors": "71c26dcb1864",
     "st.tab.Rating": "1589bd4b5eea",
     "st.tab.Optimize": "42e29fe04164",
     "st.tab.Nomenclature": "40f753ca0e13",
-    "st.tab.Report": "63824aed5dbb",
-    "st.report.all": "2ffed9d2e79b"
+    "st.tab.Report": "0b85f02f86d1",
+    "st.report.all": "bcfce753acfa"
    }
   },
   "payload gd_builtin_AASHTO_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "0051a76af0c5",
     "st.status": "5481e8d4d5aa",
@@ -891,18 +891,18 @@
     "st.tab.Diagrams": "2336b6c04746",
     "st.tab.Camber": "f679c3d458f3",
     "st.tab.Deck": "d6b1e05af1ad",
-    "st.tab.Fatigue": "678cc6bda518",
+    "st.tab.Fatigue": "8b59a9428e9b",
     "st.tab.Stiffeners": "b86b3b2a1a5d",
     "st.tab.Connectors": "dadbd35fba1d",
     "st.tab.Rating": "64046a0a1f4b",
     "st.tab.Optimize": "bc552f2a20ae",
     "st.tab.Nomenclature": "36c850f76fba",
-    "st.tab.Report": "db5e52858a6c",
-    "st.report.all": "2048de9a42e5"
+    "st.tab.Report": "2aea4c022f87",
+    "st.report.all": "070ced2d5bd5"
    }
   },
   "payload gd_builtin_CTDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "5053cc5861dd",
     "st.status": "ed7322df82eb",
@@ -921,18 +921,18 @@
     "st.tab.Diagrams": "2021f39b5907",
     "st.tab.Camber": "e6d383c750fe",
     "st.tab.Deck": "2d9f7142cad8",
-    "st.tab.Fatigue": "5c8e75ae439d",
+    "st.tab.Fatigue": "278e8d1fa76e",
     "st.tab.Stiffeners": "bf4f5f72f07b",
     "st.tab.Connectors": "e42a2ba84da2",
     "st.tab.Rating": "bab229eaf0d0",
     "st.tab.Optimize": "66834c76d474",
     "st.tab.Nomenclature": "2d91569555f4",
-    "st.tab.Report": "8d9dd5b1c872",
-    "st.report.all": "84ab76a78021"
+    "st.tab.Report": "f2e0c5bd4bb5",
+    "st.report.all": "359ff7ee447b"
    }
   },
   "payload gd_builtin_CTDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "cd645b81f9a2",
     "st.status": "ed7322df82eb",
@@ -951,18 +951,18 @@
     "st.tab.Diagrams": "9499f7f18c38",
     "st.tab.Camber": "8a4986280e30",
     "st.tab.Deck": "f09a7df94e18",
-    "st.tab.Fatigue": "dcd2fcfeb22b",
+    "st.tab.Fatigue": "059ac941e3e9",
     "st.tab.Stiffeners": "f0393f38f3c7",
     "st.tab.Connectors": "d7e49c107aea",
     "st.tab.Rating": "183127755937",
     "st.tab.Optimize": "5b295897d737",
     "st.tab.Nomenclature": "8e2b34c4ba62",
-    "st.tab.Report": "1e39e2b22074",
-    "st.report.all": "ddd85cd7e73d"
+    "st.tab.Report": "b676d61bf3de",
+    "st.report.all": "90331448b28c"
    }
   },
   "payload gd_builtin_CTDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ad11aeda2b52",
     "st.status": "ed7322df82eb",
@@ -981,18 +981,18 @@
     "st.tab.Diagrams": "1685b4749431",
     "st.tab.Camber": "e0f6f06bc968",
     "st.tab.Deck": "c403f5b91f41",
-    "st.tab.Fatigue": "53aa395a4933",
+    "st.tab.Fatigue": "11997c57e788",
     "st.tab.Stiffeners": "0451499cf54f",
     "st.tab.Connectors": "bcc1e1ba267e",
     "st.tab.Rating": "7a684211a25b",
     "st.tab.Optimize": "609caead4af0",
     "st.tab.Nomenclature": "216589a075ce",
-    "st.tab.Report": "c5560569f882",
-    "st.report.all": "dc9472d09481"
+    "st.tab.Report": "7b8c517e9b77",
+    "st.report.all": "36dceb58a2e4"
    }
   },
   "payload gd_builtin_CTDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "82052455e37e",
     "st.status": "ed7322df82eb",
@@ -1011,18 +1011,18 @@
     "st.tab.Diagrams": "68c7cef0c2ed",
     "st.tab.Camber": "ec11b2ebe00b",
     "st.tab.Deck": "3da5c66106c3",
-    "st.tab.Fatigue": "7b403dcc7d07",
+    "st.tab.Fatigue": "aa9a24c42fe0",
     "st.tab.Stiffeners": "3a07c14f5e2d",
     "st.tab.Connectors": "4d47e0276684",
     "st.tab.Rating": "2b1f3791500e",
     "st.tab.Optimize": "035417ea780c",
     "st.tab.Nomenclature": "1deca3e36207",
-    "st.tab.Report": "b286b7e4aff6",
-    "st.report.all": "fda703d399a7"
+    "st.tab.Report": "1d00988aeee7",
+    "st.report.all": "f98074009d06"
    }
   },
   "payload gd_builtin_CTDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "8d193e4a96d7",
     "st.status": "ed7322df82eb",
@@ -1041,18 +1041,18 @@
     "st.tab.Diagrams": "8410349350c5",
     "st.tab.Camber": "c823a0ab0f86",
     "st.tab.Deck": "83adeffdfb7f",
-    "st.tab.Fatigue": "bae6100ce149",
+    "st.tab.Fatigue": "aceac34c69a6",
     "st.tab.Stiffeners": "8428633e80be",
     "st.tab.Connectors": "98950987df7a",
     "st.tab.Rating": "53fcc6f486c3",
     "st.tab.Optimize": "8265bc935c59",
     "st.tab.Nomenclature": "024a49558af5",
-    "st.tab.Report": "e21eeabbfcee",
-    "st.report.all": "d8b469692a46"
+    "st.tab.Report": "86f634c90a9d",
+    "st.report.all": "090a59ca33a4"
    }
   },
   "payload gd_builtin_MassDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "5df8812508d2",
     "st.status": "6096378939a3",
@@ -1071,18 +1071,18 @@
     "st.tab.Diagrams": "a302f0058517",
     "st.tab.Camber": "29bcf32bdcad",
     "st.tab.Deck": "d0e8fd5724a5",
-    "st.tab.Fatigue": "84b96a091a1a",
+    "st.tab.Fatigue": "ad0e3d3f491a",
     "st.tab.Stiffeners": "ee18869fa433",
     "st.tab.Connectors": "7fcfd5ac5d38",
     "st.tab.Rating": "9b77c6562378",
     "st.tab.Optimize": "70b428d78ea9",
     "st.tab.Nomenclature": "38beb91d324e",
-    "st.tab.Report": "73887e3cefc7",
-    "st.report.all": "4101a4b74ccc"
+    "st.tab.Report": "78dded0d2159",
+    "st.report.all": "5c42b90a36d4"
    }
   },
   "payload gd_builtin_MassDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "786c9b10dec4",
     "st.status": "6096378939a3",
@@ -1101,18 +1101,18 @@
     "st.tab.Diagrams": "3c412a7d1cd9",
     "st.tab.Camber": "e75df803b106",
     "st.tab.Deck": "9b730a147ed4",
-    "st.tab.Fatigue": "248a0818950a",
+    "st.tab.Fatigue": "568a88c3f0b1",
     "st.tab.Stiffeners": "efe3b3adba03",
     "st.tab.Connectors": "d13e72f594f8",
     "st.tab.Rating": "d0039e6719ab",
     "st.tab.Optimize": "b10e9e6d66b3",
     "st.tab.Nomenclature": "c746f04e0f3a",
-    "st.tab.Report": "9c07417135b1",
-    "st.report.all": "dea1a8de4a59"
+    "st.tab.Report": "8817fd7ae1bf",
+    "st.report.all": "5a945fd77429"
    }
   },
   "payload gd_builtin_MassDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "7722214ac94e",
     "st.status": "6096378939a3",
@@ -1131,18 +1131,18 @@
     "st.tab.Diagrams": "ee92d968f00f",
     "st.tab.Camber": "f9cb5e9f6353",
     "st.tab.Deck": "9adaecc5430e",
-    "st.tab.Fatigue": "3ac3e25728ca",
+    "st.tab.Fatigue": "979f9fc938db",
     "st.tab.Stiffeners": "6e6389355d3a",
     "st.tab.Connectors": "c1057732a53a",
     "st.tab.Rating": "6a0362d824dd",
     "st.tab.Optimize": "c2225bf6997d",
     "st.tab.Nomenclature": "d8f58fcb0b26",
-    "st.tab.Report": "b99e5f896073",
-    "st.report.all": "8f947a165e9b"
+    "st.tab.Report": "70cece055df3",
+    "st.report.all": "d82fe551f55c"
    }
   },
   "payload gd_builtin_MassDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ea1e13939618",
     "st.status": "6096378939a3",
@@ -1161,18 +1161,18 @@
     "st.tab.Diagrams": "6091f197cdbe",
     "st.tab.Camber": "26789d2af91a",
     "st.tab.Deck": "1c6752a34769",
-    "st.tab.Fatigue": "73de79110b77",
+    "st.tab.Fatigue": "10fc24755332",
     "st.tab.Stiffeners": "ad21b788108e",
     "st.tab.Connectors": "ffa5fe1d3e1e",
     "st.tab.Rating": "1228e35b3fd5",
     "st.tab.Optimize": "5568efaa71af",
     "st.tab.Nomenclature": "5d2f25de0488",
-    "st.tab.Report": "c332d96a1aa6",
-    "st.report.all": "df941f8ec56b"
+    "st.tab.Report": "dfce91b42d9e",
+    "st.report.all": "de0bccf2a62b"
    }
   },
   "payload gd_builtin_MassDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b2ea6525902e",
     "st.status": "6096378939a3",
@@ -1191,18 +1191,18 @@
     "st.tab.Diagrams": "5d22992c3f12",
     "st.tab.Camber": "da2d45d6bf7a",
     "st.tab.Deck": "e5d40448b281",
-    "st.tab.Fatigue": "a2e91c13eeca",
+    "st.tab.Fatigue": "9e8244590906",
     "st.tab.Stiffeners": "56e871e8a82e",
     "st.tab.Connectors": "b13408a3ebac",
     "st.tab.Rating": "c216561f4de1",
     "st.tab.Optimize": "a9cb9b0229b0",
     "st.tab.Nomenclature": "44c5639c1090",
-    "st.tab.Report": "1d0c4da400c8",
-    "st.report.all": "5732dad3f7c9"
+    "st.tab.Report": "99685749f008",
+    "st.report.all": "2d91777ebc7d"
    }
   },
   "payload gd_builtin_RIDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d159b7658662",
     "st.status": "fc63f88f03f2",
@@ -1221,18 +1221,18 @@
     "st.tab.Diagrams": "ace6daf54d0d",
     "st.tab.Camber": "251069f5944e",
     "st.tab.Deck": "de8b8772e520",
-    "st.tab.Fatigue": "1ac49de33b15",
+    "st.tab.Fatigue": "56576113e319",
     "st.tab.Stiffeners": "0ada63422632",
     "st.tab.Connectors": "9cf9f8cd94b1",
     "st.tab.Rating": "6f66ec0eb4c9",
     "st.tab.Optimize": "cfa220ebd290",
     "st.tab.Nomenclature": "437adf48d466",
-    "st.tab.Report": "fa50c5550098",
-    "st.report.all": "dc5256d79053"
+    "st.tab.Report": "49b9bff46e97",
+    "st.report.all": "78b743ad622c"
    }
   },
   "payload gd_builtin_RIDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ca3c20425fb5",
     "st.status": "fc63f88f03f2",
@@ -1251,18 +1251,18 @@
     "st.tab.Diagrams": "ac4b0deb0271",
     "st.tab.Camber": "44b6cc7c611c",
     "st.tab.Deck": "f0ac0292d9e9",
-    "st.tab.Fatigue": "b9e22c061cfe",
+    "st.tab.Fatigue": "12b7cf2348cb",
     "st.tab.Stiffeners": "58fc597a1a9a",
     "st.tab.Connectors": "04fef44ab41b",
     "st.tab.Rating": "bc080bf7439b",
     "st.tab.Optimize": "e78bd71273bb",
     "st.tab.Nomenclature": "0ce10bd3570d",
-    "st.tab.Report": "a237a31ede39",
-    "st.report.all": "fc8d2aea16c2"
+    "st.tab.Report": "0c79bfca9eb3",
+    "st.report.all": "85a527dd986b"
    }
   },
   "payload gd_builtin_RIDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "344e04662268",
     "st.status": "fc63f88f03f2",
@@ -1281,18 +1281,18 @@
     "st.tab.Diagrams": "c24ba76ffb94",
     "st.tab.Camber": "748cb2b61eda",
     "st.tab.Deck": "2e3f1080ff6f",
-    "st.tab.Fatigue": "be8bb1a6da67",
+    "st.tab.Fatigue": "f27a2be68336",
     "st.tab.Stiffeners": "4f4a3414e3fa",
     "st.tab.Connectors": "dd8baf95f1ef",
     "st.tab.Rating": "08b035bdb308",
     "st.tab.Optimize": "f260537a5bf2",
     "st.tab.Nomenclature": "01a1b8535eff",
-    "st.tab.Report": "3f202901c3e9",
-    "st.report.all": "767c7d91f135"
+    "st.tab.Report": "ae451fa948c2",
+    "st.report.all": "c6ab416f5581"
    }
   },
   "payload gd_builtin_RIDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ce137e154a58",
     "st.status": "fc63f88f03f2",
@@ -1311,18 +1311,18 @@
     "st.tab.Diagrams": "f5d15db4d19f",
     "st.tab.Camber": "7be58dc29477",
     "st.tab.Deck": "6a9f691f9d3e",
-    "st.tab.Fatigue": "85f939b8b5ad",
+    "st.tab.Fatigue": "c805e36a65ff",
     "st.tab.Stiffeners": "554ee200a0ca",
     "st.tab.Connectors": "0dd8df59a649",
     "st.tab.Rating": "c2978ea7e940",
     "st.tab.Optimize": "d89f2668678f",
     "st.tab.Nomenclature": "79160091152c",
-    "st.tab.Report": "8ee7fc67c039",
-    "st.report.all": "bb16ac49e2a8"
+    "st.tab.Report": "dc481034fb43",
+    "st.report.all": "fd15657ccdd5"
    }
   },
   "payload gd_builtin_RIDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d40596259056",
     "st.status": "fc63f88f03f2",
@@ -1341,18 +1341,18 @@
     "st.tab.Diagrams": "4aec3ae788e2",
     "st.tab.Camber": "1155f6756c48",
     "st.tab.Deck": "f1d1b266ba1d",
-    "st.tab.Fatigue": "0dd01d90b844",
+    "st.tab.Fatigue": "f6d5e66b37e3",
     "st.tab.Stiffeners": "af4d6ba9b1e5",
     "st.tab.Connectors": "263527a64a45",
     "st.tab.Rating": "f24258c0c683",
     "st.tab.Optimize": "0da511f6c49f",
     "st.tab.Nomenclature": "46410b97b3ec",
-    "st.tab.Report": "a3b5ad9ff237",
-    "st.report.all": "ba328bb00676"
+    "st.tab.Report": "d0d7f5db97bf",
+    "st.report.all": "5f1e1dced8a6"
    }
   },
   "payload gd_curb_AASHTO_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "7b8567d19b1f",
     "st.status": "5481e8d4d5aa",
@@ -1371,18 +1371,18 @@
     "st.tab.Diagrams": "062f14b8f29e",
     "st.tab.Camber": "208afa5b3578",
     "st.tab.Deck": "3161595d78a4",
-    "st.tab.Fatigue": "3847bbf057db",
+    "st.tab.Fatigue": "fa449c0c95b0",
     "st.tab.Stiffeners": "807abeed1f13",
     "st.tab.Connectors": "62864db30340",
     "st.tab.Rating": "e893d2399dc5",
     "st.tab.Optimize": "daa9eeb94f1f",
     "st.tab.Nomenclature": "ea7c14ec1243",
-    "st.tab.Report": "29a7f34bd085",
-    "st.report.all": "88576b1aeb58"
+    "st.tab.Report": "8823504b8f6c",
+    "st.report.all": "5389fa5284ad"
    }
   },
   "payload gd_curb_AASHTO_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "0cb6d7b9a5a8",
     "st.status": "5481e8d4d5aa",
@@ -1401,18 +1401,18 @@
     "st.tab.Diagrams": "27e0d4ac26bf",
     "st.tab.Camber": "c7c3cf88cf05",
     "st.tab.Deck": "31d4b429f492",
-    "st.tab.Fatigue": "8535343f2421",
+    "st.tab.Fatigue": "0813f44ad692",
     "st.tab.Stiffeners": "d1c4d51b93c6",
     "st.tab.Connectors": "f3f7bfa81075",
     "st.tab.Rating": "658ac4e5d075",
     "st.tab.Optimize": "5e0486d15d2b",
     "st.tab.Nomenclature": "f518835ae27c",
-    "st.tab.Report": "355fb0cf2e0b",
-    "st.report.all": "78eaf106c6d4"
+    "st.tab.Report": "dff25fa42b1c",
+    "st.report.all": "0ddbbc58d1e0"
    }
   },
   "payload gd_curb_AASHTO_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "9da3c50dfe66",
     "st.status": "5481e8d4d5aa",
@@ -1431,18 +1431,18 @@
     "st.tab.Diagrams": "4210069b079a",
     "st.tab.Camber": "30c888b881b8",
     "st.tab.Deck": "90c99326f433",
-    "st.tab.Fatigue": "eb8e443d7d17",
+    "st.tab.Fatigue": "a34cf3c1b28b",
     "st.tab.Stiffeners": "b53de1be9484",
     "st.tab.Connectors": "035e36743c97",
     "st.tab.Rating": "6563fa45bd05",
     "st.tab.Optimize": "a94ada94ee1a",
     "st.tab.Nomenclature": "b3cc5050a706",
-    "st.tab.Report": "3951d868aaf7",
-    "st.report.all": "5e476682f7c5"
+    "st.tab.Report": "630ab07d46ae",
+    "st.report.all": "11cbe92119fb"
    }
   },
   "payload gd_curb_AASHTO_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "8f26ae89eee4",
     "st.status": "5481e8d4d5aa",
@@ -1461,18 +1461,18 @@
     "st.tab.Diagrams": "66bc3bb61e0d",
     "st.tab.Camber": "f84b7638fba4",
     "st.tab.Deck": "a32652214cc9",
-    "st.tab.Fatigue": "9edf4210045d",
+    "st.tab.Fatigue": "72cf3fed4705",
     "st.tab.Stiffeners": "c35e95e66d57",
     "st.tab.Connectors": "399ca951a1ac",
     "st.tab.Rating": "973065dec395",
     "st.tab.Optimize": "ec8a19abf5a4",
     "st.tab.Nomenclature": "dfefa3485dc9",
-    "st.tab.Report": "d24f25c22ece",
-    "st.report.all": "de9bce5d82c4"
+    "st.tab.Report": "cc8337573a59",
+    "st.report.all": "c2cb191652b3"
    }
   },
   "payload gd_curb_AASHTO_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d4996eb2b757",
     "st.status": "5481e8d4d5aa",
@@ -1491,18 +1491,18 @@
     "st.tab.Diagrams": "326f02233289",
     "st.tab.Camber": "b56dc41fa54a",
     "st.tab.Deck": "c183d6d9a242",
-    "st.tab.Fatigue": "e3eb07df6c2b",
+    "st.tab.Fatigue": "339040f77809",
     "st.tab.Stiffeners": "74df829f9011",
     "st.tab.Connectors": "1888308ef9f0",
     "st.tab.Rating": "239f81d26751",
     "st.tab.Optimize": "d6d93fa87278",
     "st.tab.Nomenclature": "ceb04ba80274",
-    "st.tab.Report": "ad7d12510918",
-    "st.report.all": "1978abe856d2"
+    "st.tab.Report": "2ca18a2c948f",
+    "st.report.all": "a0693355eed4"
    }
   },
   "payload gd_curb_CTDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "8cdea8b53db9",
     "st.status": "ed7322df82eb",
@@ -1521,18 +1521,18 @@
     "st.tab.Diagrams": "21861a7235b7",
     "st.tab.Camber": "09921aeb8d33",
     "st.tab.Deck": "7f7afb47daf0",
-    "st.tab.Fatigue": "3e0465d57f40",
+    "st.tab.Fatigue": "04042e25cc08",
     "st.tab.Stiffeners": "41081bcca1bb",
     "st.tab.Connectors": "61b49e53770a",
     "st.tab.Rating": "89366bbc2356",
     "st.tab.Optimize": "63394a7bbe4c",
     "st.tab.Nomenclature": "9cce45165503",
-    "st.tab.Report": "176f06afd3cd",
-    "st.report.all": "f602212156fd"
+    "st.tab.Report": "d9559a0c7844",
+    "st.report.all": "b94238def1c8"
    }
   },
   "payload gd_curb_CTDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "cf8884a3c65f",
     "st.status": "ed7322df82eb",
@@ -1551,18 +1551,18 @@
     "st.tab.Diagrams": "6ebf5d3c9243",
     "st.tab.Camber": "46e7c45dc0cf",
     "st.tab.Deck": "00065435d5a0",
-    "st.tab.Fatigue": "b2deb2e0e94e",
+    "st.tab.Fatigue": "59b338f3ac1a",
     "st.tab.Stiffeners": "9dd893aad7a6",
     "st.tab.Connectors": "b343c6027ab6",
     "st.tab.Rating": "2831e5202bdb",
     "st.tab.Optimize": "9776c7ffa2e9",
     "st.tab.Nomenclature": "31c782bbc29d",
-    "st.tab.Report": "3271ff0bae97",
-    "st.report.all": "8c4c0954459c"
+    "st.tab.Report": "76db3017821b",
+    "st.report.all": "b24bb1cf659b"
    }
   },
   "payload gd_curb_CTDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "9fada43bb3f0",
     "st.status": "ed7322df82eb",
@@ -1581,18 +1581,18 @@
     "st.tab.Diagrams": "cd2143352750",
     "st.tab.Camber": "1ea38b87df36",
     "st.tab.Deck": "f10fa5aaf51e",
-    "st.tab.Fatigue": "d69224ab5549",
+    "st.tab.Fatigue": "e8972ca00461",
     "st.tab.Stiffeners": "20453869fee4",
     "st.tab.Connectors": "8f7b5ef2a204",
     "st.tab.Rating": "57ca886e9678",
     "st.tab.Optimize": "ada8c244a6b8",
     "st.tab.Nomenclature": "5e35ca463c92",
-    "st.tab.Report": "ea198d794ab7",
-    "st.report.all": "5bb4c6325014"
+    "st.tab.Report": "f8728498b365",
+    "st.report.all": "e030b59b3ea2"
    }
   },
   "payload gd_curb_CTDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "baa8601445f1",
     "st.status": "ed7322df82eb",
@@ -1611,18 +1611,18 @@
     "st.tab.Diagrams": "26adfdb24fde",
     "st.tab.Camber": "72c12b085d14",
     "st.tab.Deck": "1541e3a37e3d",
-    "st.tab.Fatigue": "dc0cde048244",
+    "st.tab.Fatigue": "9b91492fe87c",
     "st.tab.Stiffeners": "973f6e1dca72",
     "st.tab.Connectors": "4e726d2b97b3",
     "st.tab.Rating": "b159e2e5c495",
     "st.tab.Optimize": "a1c4a92d345b",
     "st.tab.Nomenclature": "89642a8e7fbb",
-    "st.tab.Report": "d428e684eba9",
-    "st.report.all": "c9e0ac8ea1c4"
+    "st.tab.Report": "179f0ba8ca79",
+    "st.report.all": "a24598650b87"
    }
   },
   "payload gd_curb_CTDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "9aec443ee203",
     "st.status": "ed7322df82eb",
@@ -1641,18 +1641,18 @@
     "st.tab.Diagrams": "17c3a35fbc27",
     "st.tab.Camber": "f997480c8a47",
     "st.tab.Deck": "be7ac157b7f8",
-    "st.tab.Fatigue": "3ede28ed4602",
+    "st.tab.Fatigue": "0e1b5fc1a549",
     "st.tab.Stiffeners": "0e5d7e2a6c6d",
     "st.tab.Connectors": "bb3899a77565",
     "st.tab.Rating": "f7ced021e8c3",
     "st.tab.Optimize": "a50837be751d",
     "st.tab.Nomenclature": "5640868b0ade",
-    "st.tab.Report": "870e6705a2cf",
-    "st.report.all": "07b166665ca5"
+    "st.tab.Report": "50900c4e9412",
+    "st.report.all": "e1cfb122bc5b"
    }
   },
   "payload gd_curb_MassDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "307cacb75297",
     "st.status": "6096378939a3",
@@ -1671,18 +1671,18 @@
     "st.tab.Diagrams": "ce1baddb056c",
     "st.tab.Camber": "a5e280efda78",
     "st.tab.Deck": "a79da3eb60d6",
-    "st.tab.Fatigue": "df01cfb7e9b4",
+    "st.tab.Fatigue": "b8e9acf5a59e",
     "st.tab.Stiffeners": "3213ec225943",
     "st.tab.Connectors": "43e51a5fc330",
     "st.tab.Rating": "26fbb5ca81ad",
     "st.tab.Optimize": "20f7c97407c0",
     "st.tab.Nomenclature": "db94126f7124",
-    "st.tab.Report": "550c5886be20",
-    "st.report.all": "78d9faedf34a"
+    "st.tab.Report": "3f046f66b895",
+    "st.report.all": "4ed4e9e530c8"
    }
   },
   "payload gd_curb_MassDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "08e84c8a1cb1",
     "st.status": "6096378939a3",
@@ -1701,18 +1701,18 @@
     "st.tab.Diagrams": "a3702a0e695a",
     "st.tab.Camber": "0e5085fb20d4",
     "st.tab.Deck": "40aee7efcdf6",
-    "st.tab.Fatigue": "1881dbc561f0",
+    "st.tab.Fatigue": "da2b1fb27e79",
     "st.tab.Stiffeners": "6f7f118d0d1c",
     "st.tab.Connectors": "d6f203b11e84",
     "st.tab.Rating": "84e2ec7a38c4",
     "st.tab.Optimize": "91f550a159b8",
     "st.tab.Nomenclature": "be85682106b4",
-    "st.tab.Report": "c727ba6de184",
-    "st.report.all": "964259eca08d"
+    "st.tab.Report": "7bdb0eaa1bff",
+    "st.report.all": "6d38a9b8fb53"
    }
   },
   "payload gd_curb_MassDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "0582b6903353",
     "st.status": "6096378939a3",
@@ -1731,18 +1731,18 @@
     "st.tab.Diagrams": "921c342d4cc2",
     "st.tab.Camber": "785b1424afac",
     "st.tab.Deck": "d71778bf3550",
-    "st.tab.Fatigue": "246b0ea25b3f",
+    "st.tab.Fatigue": "4117452a3bd9",
     "st.tab.Stiffeners": "7febd621c348",
     "st.tab.Connectors": "73ba52d7757d",
     "st.tab.Rating": "f245836fe1f3",
     "st.tab.Optimize": "5cdb57217a19",
     "st.tab.Nomenclature": "7fe046d46a53",
-    "st.tab.Report": "20a1fd5a21f2",
-    "st.report.all": "ef1412308eab"
+    "st.tab.Report": "6bbbaba9413b",
+    "st.report.all": "45069a39f614"
    }
   },
   "payload gd_curb_MassDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "33f7555145ec",
     "st.status": "6096378939a3",
@@ -1761,18 +1761,18 @@
     "st.tab.Diagrams": "370ba3c55f89",
     "st.tab.Camber": "fb10b0ea644f",
     "st.tab.Deck": "4b7e8c3f625d",
-    "st.tab.Fatigue": "2b01b435d076",
+    "st.tab.Fatigue": "066bf8849368",
     "st.tab.Stiffeners": "bae3e564d484",
     "st.tab.Connectors": "7b0e1830299a",
     "st.tab.Rating": "151b3eaccbcf",
     "st.tab.Optimize": "4f9a2dd89d32",
     "st.tab.Nomenclature": "4a26ef10e2a7",
-    "st.tab.Report": "7e2cb5983823",
-    "st.report.all": "eab4da7f1ad1"
+    "st.tab.Report": "bad90aa3fd20",
+    "st.report.all": "d37e9a1a3d78"
    }
   },
   "payload gd_curb_MassDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "3eaa51029cb0",
     "st.status": "6096378939a3",
@@ -1791,18 +1791,18 @@
     "st.tab.Diagrams": "a037e0908d07",
     "st.tab.Camber": "449e584f0ddb",
     "st.tab.Deck": "606f262b59ef",
-    "st.tab.Fatigue": "2d69d8d0e8fa",
+    "st.tab.Fatigue": "5d6888714e53",
     "st.tab.Stiffeners": "aac90371f18f",
     "st.tab.Connectors": "eca34a17b5a4",
     "st.tab.Rating": "ebf0b32d4170",
     "st.tab.Optimize": "d51360e38940",
     "st.tab.Nomenclature": "c6640ebe69d1",
-    "st.tab.Report": "78321ede0148",
-    "st.report.all": "9cf3e7cf51f9"
+    "st.tab.Report": "50b22acab88d",
+    "st.report.all": "503201efa991"
    }
   },
   "payload gd_curb_RIDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "89da026c5b41",
     "st.status": "fc63f88f03f2",
@@ -1821,18 +1821,18 @@
     "st.tab.Diagrams": "20783504cca7",
     "st.tab.Camber": "03b6269f7521",
     "st.tab.Deck": "026d4fe05198",
-    "st.tab.Fatigue": "5855ee6b4746",
+    "st.tab.Fatigue": "22d99fadddfe",
     "st.tab.Stiffeners": "5c1a06bfc8a1",
     "st.tab.Connectors": "617472fad383",
     "st.tab.Rating": "7e37a77b9268",
     "st.tab.Optimize": "d59bff721858",
     "st.tab.Nomenclature": "afc911a45d10",
-    "st.tab.Report": "b4d7c58fca53",
-    "st.report.all": "a31b8e520842"
+    "st.tab.Report": "68636ebdf3ea",
+    "st.report.all": "5e6773639514"
    }
   },
   "payload gd_curb_RIDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "fba3a8270ee6",
     "st.status": "fc63f88f03f2",
@@ -1851,18 +1851,18 @@
     "st.tab.Diagrams": "a550b870aefd",
     "st.tab.Camber": "83e11e785e2c",
     "st.tab.Deck": "797deab78e69",
-    "st.tab.Fatigue": "46ef252dee33",
+    "st.tab.Fatigue": "318dcc9b04bc",
     "st.tab.Stiffeners": "2839c126b1a4",
     "st.tab.Connectors": "66f992b12dfb",
     "st.tab.Rating": "1d0c099b80c6",
     "st.tab.Optimize": "84ba76972605",
     "st.tab.Nomenclature": "49120ad16333",
-    "st.tab.Report": "f61500947330",
-    "st.report.all": "5b0a8897983b"
+    "st.tab.Report": "7aff41195be8",
+    "st.report.all": "6ca9e7bce465"
    }
   },
   "payload gd_curb_RIDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "4298703ba2a4",
     "st.status": "fc63f88f03f2",
@@ -1881,18 +1881,18 @@
     "st.tab.Diagrams": "ec93c4c40486",
     "st.tab.Camber": "72a376c31826",
     "st.tab.Deck": "75ed63ab976f",
-    "st.tab.Fatigue": "381de20a1679",
+    "st.tab.Fatigue": "e7884c5a77a7",
     "st.tab.Stiffeners": "382a21719213",
     "st.tab.Connectors": "16e02a8a03df",
     "st.tab.Rating": "609384c8aa60",
     "st.tab.Optimize": "60e452ac7960",
     "st.tab.Nomenclature": "2ee30fb9f39b",
-    "st.tab.Report": "a624e6f2cf7b",
-    "st.report.all": "055f1176b208"
+    "st.tab.Report": "70a2b32670fb",
+    "st.report.all": "d237c17903ba"
    }
   },
   "payload gd_curb_RIDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "9b50d2cdb721",
     "st.status": "fc63f88f03f2",
@@ -1911,18 +1911,18 @@
     "st.tab.Diagrams": "b5fd41968238",
     "st.tab.Camber": "4515055fba66",
     "st.tab.Deck": "f0907990d57c",
-    "st.tab.Fatigue": "38e7db8af41f",
+    "st.tab.Fatigue": "e7ee400765a6",
     "st.tab.Stiffeners": "02817ac76cbd",
     "st.tab.Connectors": "8d0874afca8d",
     "st.tab.Rating": "e8354a6f315d",
     "st.tab.Optimize": "531c9e739e35",
     "st.tab.Nomenclature": "c91cd4535486",
-    "st.tab.Report": "8802cf79cc67",
-    "st.report.all": "827979399779"
+    "st.tab.Report": "adf45812c9e4",
+    "st.report.all": "81b5c5642c19"
    }
   },
   "payload gd_curb_RIDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "7945b8ad2942",
     "st.status": "fc63f88f03f2",
@@ -1941,18 +1941,18 @@
     "st.tab.Diagrams": "8d13e2fc66f6",
     "st.tab.Camber": "08a1bb1c8114",
     "st.tab.Deck": "94471ba54480",
-    "st.tab.Fatigue": "d7bc41513625",
+    "st.tab.Fatigue": "b8bcc25f2495",
     "st.tab.Stiffeners": "b59c69b6bb1a",
     "st.tab.Connectors": "0ec616a6f6b6",
     "st.tab.Rating": "dde73925840b",
     "st.tab.Optimize": "fbaccfe3337c",
     "st.tab.Nomenclature": "a5feb3da1408",
-    "st.tab.Report": "497a86d0167b",
-    "st.report.all": "b9eda5cc2af5"
+    "st.tab.Report": "0a70e6952a63",
+    "st.report.all": "c53d4db01614"
    }
   },
   "payload gd_util_AASHTO_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "93d49ba21df3",
     "st.status": "5481e8d4d5aa",
@@ -1971,18 +1971,18 @@
     "st.tab.Diagrams": "e3e9b9b54600",
     "st.tab.Camber": "c58b1f0d5a80",
     "st.tab.Deck": "f42eeb279f29",
-    "st.tab.Fatigue": "c25a7086366b",
+    "st.tab.Fatigue": "b600c277a406",
     "st.tab.Stiffeners": "6369cd038847",
     "st.tab.Connectors": "baa6d202ee2e",
     "st.tab.Rating": "d9a6fd70a476",
     "st.tab.Optimize": "b87e262f12f7",
     "st.tab.Nomenclature": "b65ad0782f8c",
-    "st.tab.Report": "6f45acb785cb",
-    "st.report.all": "f6448df876d0"
+    "st.tab.Report": "27430a7d4c9d",
+    "st.report.all": "0e16a158d791"
    }
   },
   "payload gd_util_AASHTO_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "6be7e2b828b7",
     "st.status": "5481e8d4d5aa",
@@ -2001,18 +2001,18 @@
     "st.tab.Diagrams": "57ee5e149f1b",
     "st.tab.Camber": "8a537d9bbb0f",
     "st.tab.Deck": "02122e51c01a",
-    "st.tab.Fatigue": "dc28f3487a26",
+    "st.tab.Fatigue": "a4d1e793303c",
     "st.tab.Stiffeners": "ce34234a6d5a",
     "st.tab.Connectors": "abcbb342d9c9",
     "st.tab.Rating": "c5046c24658e",
     "st.tab.Optimize": "3e21cafee223",
     "st.tab.Nomenclature": "d4eb9d2d9bba",
-    "st.tab.Report": "22a96e7f2aee",
-    "st.report.all": "c94753b1de48"
+    "st.tab.Report": "a96d24e89112",
+    "st.report.all": "a0244ff2cec2"
    }
   },
   "payload gd_util_AASHTO_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "47904e4744c7",
     "st.status": "5481e8d4d5aa",
@@ -2031,18 +2031,18 @@
     "st.tab.Diagrams": "15d2c29ca8c0",
     "st.tab.Camber": "f67668b781a2",
     "st.tab.Deck": "75c239630f43",
-    "st.tab.Fatigue": "e32f60a184a7",
+    "st.tab.Fatigue": "dc1c1095d847",
     "st.tab.Stiffeners": "f91c7c3ab4c0",
     "st.tab.Connectors": "a1d4eec56412",
     "st.tab.Rating": "74f14e5c3cd4",
     "st.tab.Optimize": "14174c303226",
     "st.tab.Nomenclature": "721f851b44d8",
-    "st.tab.Report": "0dd8226b4fac",
-    "st.report.all": "c3d2e8b3a66a"
+    "st.tab.Report": "90de2d9c8b2d",
+    "st.report.all": "fd70ed4759f9"
    }
   },
   "payload gd_util_AASHTO_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "7c95d1b3587a",
     "st.status": "5481e8d4d5aa",
@@ -2061,18 +2061,18 @@
     "st.tab.Diagrams": "7c858f006def",
     "st.tab.Camber": "67e05aea4ebc",
     "st.tab.Deck": "c6ec7f14c929",
-    "st.tab.Fatigue": "bbedc0202d39",
+    "st.tab.Fatigue": "a7b768457d70",
     "st.tab.Stiffeners": "7df806f0f2ed",
     "st.tab.Connectors": "5cd319dddaee",
     "st.tab.Rating": "c1da5d84d4c2",
     "st.tab.Optimize": "6ecf770a9567",
     "st.tab.Nomenclature": "c076e28405a6",
-    "st.tab.Report": "b4face94d32d",
-    "st.report.all": "91710cc72956"
+    "st.tab.Report": "3b64f72126e2",
+    "st.report.all": "18ea5fc9be94"
    }
   },
   "payload gd_util_AASHTO_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "afe9595668e4",
     "st.status": "5481e8d4d5aa",
@@ -2091,18 +2091,18 @@
     "st.tab.Diagrams": "51ead4a0871e",
     "st.tab.Camber": "79b77a9d0ad5",
     "st.tab.Deck": "1eff1f75613d",
-    "st.tab.Fatigue": "2438443e0c1c",
+    "st.tab.Fatigue": "6223061a574a",
     "st.tab.Stiffeners": "273824e727af",
     "st.tab.Connectors": "e5c0ebe395b4",
     "st.tab.Rating": "9f6319e63bea",
     "st.tab.Optimize": "c9565205a625",
     "st.tab.Nomenclature": "0f2464d4612f",
-    "st.tab.Report": "5e1f668f1203",
-    "st.report.all": "30c655ee129e"
+    "st.tab.Report": "307d32340fce",
+    "st.report.all": "462710667eb3"
    }
   },
   "payload gd_util_CTDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "f9db1c7c44ae",
     "st.status": "ed7322df82eb",
@@ -2121,18 +2121,18 @@
     "st.tab.Diagrams": "108b4ef19b64",
     "st.tab.Camber": "6e862ea8f294",
     "st.tab.Deck": "2c52f674fceb",
-    "st.tab.Fatigue": "568db3d2b411",
+    "st.tab.Fatigue": "1648d3bd743f",
     "st.tab.Stiffeners": "d1239413d85b",
     "st.tab.Connectors": "f77d371c1cc1",
     "st.tab.Rating": "47f702599b9e",
     "st.tab.Optimize": "c151670ae84c",
     "st.tab.Nomenclature": "13500a295827",
-    "st.tab.Report": "6161472257bb",
-    "st.report.all": "4fe79deeb94d"
+    "st.tab.Report": "e345adab2076",
+    "st.report.all": "7bd8f45b60e4"
    }
   },
   "payload gd_util_CTDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "41c53ee5141e",
     "st.status": "ed7322df82eb",
@@ -2151,18 +2151,18 @@
     "st.tab.Diagrams": "046095665a51",
     "st.tab.Camber": "4d47137a4548",
     "st.tab.Deck": "79787d66f6aa",
-    "st.tab.Fatigue": "43188fb2e3cf",
+    "st.tab.Fatigue": "cfaef876de02",
     "st.tab.Stiffeners": "7d083b915996",
     "st.tab.Connectors": "c52234e6e5b6",
     "st.tab.Rating": "85730b0ea8cf",
     "st.tab.Optimize": "2979ae065f3f",
     "st.tab.Nomenclature": "a5f57fd3f5b4",
-    "st.tab.Report": "ae7c25877817",
-    "st.report.all": "7e6ee658cca8"
+    "st.tab.Report": "44bbd155dac7",
+    "st.report.all": "7249b1146734"
    }
   },
   "payload gd_util_CTDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d75cf0b954b2",
     "st.status": "ed7322df82eb",
@@ -2181,18 +2181,18 @@
     "st.tab.Diagrams": "a9996eb4c84d",
     "st.tab.Camber": "54ac4a8a15ce",
     "st.tab.Deck": "3235bb4cbc7c",
-    "st.tab.Fatigue": "8287aec55c20",
+    "st.tab.Fatigue": "ba03421ea4bf",
     "st.tab.Stiffeners": "4b6fe3b648ff",
     "st.tab.Connectors": "40440dadd822",
     "st.tab.Rating": "b402136149d1",
     "st.tab.Optimize": "8f3adda98e53",
     "st.tab.Nomenclature": "4acaa9d7d4b6",
-    "st.tab.Report": "c0585e8fbbf2",
-    "st.report.all": "691c8c114114"
+    "st.tab.Report": "920ee0d80938",
+    "st.report.all": "0b62a113515c"
    }
   },
   "payload gd_util_CTDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "4bfe0448acd2",
     "st.status": "ed7322df82eb",
@@ -2211,18 +2211,18 @@
     "st.tab.Diagrams": "c0f4cefadaf4",
     "st.tab.Camber": "bb44874d7c5c",
     "st.tab.Deck": "b8acceeee15c",
-    "st.tab.Fatigue": "0c26ca4b0a60",
+    "st.tab.Fatigue": "a6829553e38f",
     "st.tab.Stiffeners": "bad431d84e7b",
     "st.tab.Connectors": "8cdb1299667f",
     "st.tab.Rating": "30776bd71aa5",
     "st.tab.Optimize": "52c38baaf507",
     "st.tab.Nomenclature": "bfaf1fa794b6",
-    "st.tab.Report": "b741103bfcfb",
-    "st.report.all": "3f4e076d0678"
+    "st.tab.Report": "46248572befa",
+    "st.report.all": "347427ab3733"
    }
   },
   "payload gd_util_CTDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "151d741a9715",
     "st.status": "ed7322df82eb",
@@ -2241,18 +2241,18 @@
     "st.tab.Diagrams": "ea7d897460dd",
     "st.tab.Camber": "8552576d4ef6",
     "st.tab.Deck": "9fb783a32f42",
-    "st.tab.Fatigue": "4095c9562390",
+    "st.tab.Fatigue": "e2a2f3a961fa",
     "st.tab.Stiffeners": "3fd2a4c6e7b6",
     "st.tab.Connectors": "8f4d6ceb5f64",
     "st.tab.Rating": "620cdb6940dc",
     "st.tab.Optimize": "accdaded1904",
     "st.tab.Nomenclature": "da14b77e2d49",
-    "st.tab.Report": "0531d0aa1d46",
-    "st.report.all": "b60209a50787"
+    "st.tab.Report": "ef80b8dc9f43",
+    "st.report.all": "4454445caa85"
    }
   },
   "payload gd_util_MassDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "9d08079b7691",
     "st.status": "6096378939a3",
@@ -2271,18 +2271,18 @@
     "st.tab.Diagrams": "26a9f85fc0f9",
     "st.tab.Camber": "3ae71fe0de5c",
     "st.tab.Deck": "125a813b14c7",
-    "st.tab.Fatigue": "bc1828a5d66b",
+    "st.tab.Fatigue": "39ef83322a43",
     "st.tab.Stiffeners": "9c6fe68a1da5",
     "st.tab.Connectors": "698bc78c5463",
     "st.tab.Rating": "1b6eb4478276",
     "st.tab.Optimize": "328a948fc6aa",
     "st.tab.Nomenclature": "4ff1f11a1e79",
-    "st.tab.Report": "47183b572cc2",
-    "st.report.all": "b736f11e315f"
+    "st.tab.Report": "746c33eb82d6",
+    "st.report.all": "b7b20142cc83"
    }
   },
   "payload gd_util_MassDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "86d4e2a813d8",
     "st.status": "6096378939a3",
@@ -2301,18 +2301,18 @@
     "st.tab.Diagrams": "06d1e248eb8c",
     "st.tab.Camber": "e8a9f7ce4033",
     "st.tab.Deck": "60d21fb82d6c",
-    "st.tab.Fatigue": "444dbff544e5",
+    "st.tab.Fatigue": "b86209009a53",
     "st.tab.Stiffeners": "d1d1485addba",
     "st.tab.Connectors": "1038ce6f9b78",
     "st.tab.Rating": "6b509d301a06",
     "st.tab.Optimize": "a19fb264beda",
     "st.tab.Nomenclature": "e7fc5ca9bc6d",
-    "st.tab.Report": "b2ea8f34df99",
-    "st.report.all": "30322d3bdbbd"
+    "st.tab.Report": "7652094929fa",
+    "st.report.all": "e448e7b1ba4c"
    }
   },
   "payload gd_util_MassDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "3cc55b20a3b7",
     "st.status": "6096378939a3",
@@ -2331,18 +2331,18 @@
     "st.tab.Diagrams": "fa1e34e7ad88",
     "st.tab.Camber": "1bd98b605dc1",
     "st.tab.Deck": "f4ddd566648f",
-    "st.tab.Fatigue": "09ada6335801",
+    "st.tab.Fatigue": "4079092d05c0",
     "st.tab.Stiffeners": "5d00cdd91057",
     "st.tab.Connectors": "c7fad7df6a05",
     "st.tab.Rating": "32724451b65c",
     "st.tab.Optimize": "ff84e89d9621",
     "st.tab.Nomenclature": "2656e6656af8",
-    "st.tab.Report": "ad000bbca42a",
-    "st.report.all": "882802ed4440"
+    "st.tab.Report": "8a07fc519dac",
+    "st.report.all": "ac8f70430128"
    }
   },
   "payload gd_util_MassDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ddb5a3f2f76d",
     "st.status": "6096378939a3",
@@ -2361,18 +2361,18 @@
     "st.tab.Diagrams": "d99cbdd268b3",
     "st.tab.Camber": "d2d0cba01feb",
     "st.tab.Deck": "70db509feb31",
-    "st.tab.Fatigue": "5b1c79baeec5",
+    "st.tab.Fatigue": "aecf14a58bce",
     "st.tab.Stiffeners": "a3588de8122e",
     "st.tab.Connectors": "73a3d9359fd8",
     "st.tab.Rating": "b1079a351fa8",
     "st.tab.Optimize": "48a8a0d13ff9",
     "st.tab.Nomenclature": "7ef7977091c4",
-    "st.tab.Report": "c1c0508e74ed",
-    "st.report.all": "7a2012f1c5fd"
+    "st.tab.Report": "d69e4634eab7",
+    "st.report.all": "992d0cf887e6"
    }
   },
   "payload gd_util_MassDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "52dcc5437099",
     "st.status": "6096378939a3",
@@ -2391,18 +2391,18 @@
     "st.tab.Diagrams": "3f1dba855eb9",
     "st.tab.Camber": "93ce9cb3a494",
     "st.tab.Deck": "3c9d57e3c0d9",
-    "st.tab.Fatigue": "2bf79f2d5598",
+    "st.tab.Fatigue": "2b1779196016",
     "st.tab.Stiffeners": "41d74541787e",
     "st.tab.Connectors": "4c149cb74704",
     "st.tab.Rating": "b00d173ab0e2",
     "st.tab.Optimize": "ded7b7394c11",
     "st.tab.Nomenclature": "f1a33a633085",
-    "st.tab.Report": "0b4ec45e2324",
-    "st.report.all": "07e4e4f4e25d"
+    "st.tab.Report": "416c673dc865",
+    "st.report.all": "4d0d06264e09"
    }
   },
   "payload gd_util_RIDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "21a39dc3143e",
     "st.status": "fc63f88f03f2",
@@ -2421,18 +2421,18 @@
     "st.tab.Diagrams": "a7a03366b9cc",
     "st.tab.Camber": "3c7397d6dfa2",
     "st.tab.Deck": "320dfacf3fb1",
-    "st.tab.Fatigue": "f07099fe3ec5",
+    "st.tab.Fatigue": "a0319f7fbf6f",
     "st.tab.Stiffeners": "ffcd7b8e9e4e",
     "st.tab.Connectors": "37a5e50c5cd3",
     "st.tab.Rating": "7b8a05df902f",
     "st.tab.Optimize": "fa7c4ecdc6a7",
     "st.tab.Nomenclature": "bbd332d32578",
-    "st.tab.Report": "86a52c940dd3",
-    "st.report.all": "55150aba83e4"
+    "st.tab.Report": "f564b62927ba",
+    "st.report.all": "93f278162c1e"
    }
   },
   "payload gd_util_RIDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "f549ac43625c",
     "st.status": "fc63f88f03f2",
@@ -2451,18 +2451,18 @@
     "st.tab.Diagrams": "46a627dfb610",
     "st.tab.Camber": "6fac52783129",
     "st.tab.Deck": "836625c88425",
-    "st.tab.Fatigue": "0e077fa48e36",
+    "st.tab.Fatigue": "aa29060e91d2",
     "st.tab.Stiffeners": "7adc5e50f575",
     "st.tab.Connectors": "f61cae8f8db5",
     "st.tab.Rating": "4188bdb287a9",
     "st.tab.Optimize": "9e65fb19ce54",
     "st.tab.Nomenclature": "718513f53868",
-    "st.tab.Report": "24b1089d565e",
-    "st.report.all": "634ba39ed33e"
+    "st.tab.Report": "27dbe7f3ad6a",
+    "st.report.all": "9fcb280d2b51"
    }
   },
   "payload gd_util_RIDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "19d146a1959f",
     "st.status": "fc63f88f03f2",
@@ -2481,18 +2481,18 @@
     "st.tab.Diagrams": "7851ee042f04",
     "st.tab.Camber": "ba2c176092db",
     "st.tab.Deck": "e73a77bb813b",
-    "st.tab.Fatigue": "64c488cef360",
+    "st.tab.Fatigue": "115157ccf0e5",
     "st.tab.Stiffeners": "b43952ed8457",
     "st.tab.Connectors": "0121bbb42be4",
     "st.tab.Rating": "451c604c5a19",
     "st.tab.Optimize": "f00a01125f07",
     "st.tab.Nomenclature": "acac67060f47",
-    "st.tab.Report": "0a572311ba70",
-    "st.report.all": "54621d3d95cf"
+    "st.tab.Report": "f725d78ab370",
+    "st.report.all": "06f44c69d70d"
    }
   },
   "payload gd_util_RIDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b6efe7cd4a72",
     "st.status": "fc63f88f03f2",
@@ -2511,18 +2511,18 @@
     "st.tab.Diagrams": "2f98b8f5c903",
     "st.tab.Camber": "47d3c905e997",
     "st.tab.Deck": "17dc3af2fc73",
-    "st.tab.Fatigue": "e51acacc90bf",
+    "st.tab.Fatigue": "25d7ed352dda",
     "st.tab.Stiffeners": "bf4884c5960a",
     "st.tab.Connectors": "d510feec9d79",
     "st.tab.Rating": "784545bc5e06",
     "st.tab.Optimize": "c35bbf753115",
     "st.tab.Nomenclature": "1fb9c29df4dd",
-    "st.tab.Report": "f70b03cdb856",
-    "st.report.all": "289383171710"
+    "st.tab.Report": "4a0283a2d8b6",
+    "st.report.all": "2531c82bd1a7"
    }
   },
   "payload gd_util_RIDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "55efde254e58",
     "st.status": "fc63f88f03f2",
@@ -2541,18 +2541,18 @@
     "st.tab.Diagrams": "947267cb14bd",
     "st.tab.Camber": "ed59b1bae307",
     "st.tab.Deck": "97ae1c15114a",
-    "st.tab.Fatigue": "60401885e035",
+    "st.tab.Fatigue": "e8ce19a5051a",
     "st.tab.Stiffeners": "0a62caec587c",
     "st.tab.Connectors": "e216097e9b46",
     "st.tab.Rating": "b545da2f2f0c",
     "st.tab.Optimize": "284005615cfd",
     "st.tab.Nomenclature": "a6c245736517",
-    "st.tab.Report": "745e4ccda731",
-    "st.report.all": "4300b198b251"
+    "st.tab.Report": "b38f24ec2b04",
+    "st.report.all": "8a268db53964"
    }
   },
   "payload gd_xsA_AASHTO_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ff37b57298c0",
     "st.status": "5481e8d4d5aa",
@@ -2571,18 +2571,18 @@
     "st.tab.Diagrams": "bcca06590a23",
     "st.tab.Camber": "6f6fa6e90d72",
     "st.tab.Deck": "50ac6fe6bf27",
-    "st.tab.Fatigue": "109ee38037de",
+    "st.tab.Fatigue": "dea9232b4a9c",
     "st.tab.Stiffeners": "b5de0556faec",
     "st.tab.Connectors": "af8a8fa4404d",
     "st.tab.Rating": "27ee81b839f1",
     "st.tab.Optimize": "23fd8291cbdb",
     "st.tab.Nomenclature": "01f4f1f2b367",
-    "st.tab.Report": "8f341651c2a4",
-    "st.report.all": "c3f25689f8cd"
+    "st.tab.Report": "a994640b9ea7",
+    "st.report.all": "a2f59fb892a1"
    }
   },
   "payload gd_xsA_AASHTO_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b049eb263a01",
     "st.status": "5481e8d4d5aa",
@@ -2601,18 +2601,18 @@
     "st.tab.Diagrams": "e18a446f169c",
     "st.tab.Camber": "2cd85de007c8",
     "st.tab.Deck": "fc57a2e40363",
-    "st.tab.Fatigue": "724d27eb97c1",
+    "st.tab.Fatigue": "1334040a9a3a",
     "st.tab.Stiffeners": "2211cf12b331",
     "st.tab.Connectors": "5c320a861ad6",
     "st.tab.Rating": "408becd3f968",
     "st.tab.Optimize": "2e06786acdd3",
     "st.tab.Nomenclature": "1a450e05e049",
-    "st.tab.Report": "999b3db9fb1c",
-    "st.report.all": "6473c29d7be2"
+    "st.tab.Report": "85be163786d2",
+    "st.report.all": "45f7a18016d5"
    }
   },
   "payload gd_xsA_AASHTO_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "76eb084b204b",
     "st.status": "5481e8d4d5aa",
@@ -2631,18 +2631,18 @@
     "st.tab.Diagrams": "8cd101cbe917",
     "st.tab.Camber": "2d6cbbccac55",
     "st.tab.Deck": "4e4809ee19a5",
-    "st.tab.Fatigue": "2f907ae7055f",
+    "st.tab.Fatigue": "23742436a3ec",
     "st.tab.Stiffeners": "ca732594efa4",
     "st.tab.Connectors": "947bdb1cdd27",
     "st.tab.Rating": "c9751fc72ea2",
     "st.tab.Optimize": "95c57a9ba8bf",
     "st.tab.Nomenclature": "386b8674cc7f",
-    "st.tab.Report": "5de47e5589b0",
-    "st.report.all": "563d079e11d4"
+    "st.tab.Report": "4054109a14f3",
+    "st.report.all": "70754a96e380"
    }
   },
   "payload gd_xsA_AASHTO_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "a251dbc0cdee",
     "st.status": "5481e8d4d5aa",
@@ -2661,18 +2661,18 @@
     "st.tab.Diagrams": "a15d8d2acc94",
     "st.tab.Camber": "eb9e6acfcd1b",
     "st.tab.Deck": "512c3e8c8586",
-    "st.tab.Fatigue": "0b3115358fc8",
+    "st.tab.Fatigue": "c3e0f4b8c48a",
     "st.tab.Stiffeners": "f3ac0c1d7c9b",
     "st.tab.Connectors": "cc3183221d19",
     "st.tab.Rating": "f1db2f0e8c9a",
     "st.tab.Optimize": "6899e7866e07",
     "st.tab.Nomenclature": "213abaff0f33",
-    "st.tab.Report": "adb74d99b249",
-    "st.report.all": "5cc33eaa40d9"
+    "st.tab.Report": "63ea7a060dc3",
+    "st.report.all": "dcaca8064071"
    }
   },
   "payload gd_xsA_AASHTO_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "af9094ab8674",
     "st.status": "5481e8d4d5aa",
@@ -2691,18 +2691,18 @@
     "st.tab.Diagrams": "86da2882b2d6",
     "st.tab.Camber": "f24dffdd3010",
     "st.tab.Deck": "04e16f0c1e30",
-    "st.tab.Fatigue": "db5054d6163f",
+    "st.tab.Fatigue": "f05286c64004",
     "st.tab.Stiffeners": "521cc5e3a060",
     "st.tab.Connectors": "388f3374dc11",
     "st.tab.Rating": "e31a241a38f3",
     "st.tab.Optimize": "d82290078bb3",
     "st.tab.Nomenclature": "33d59411cccd",
-    "st.tab.Report": "c6e1c7edbb06",
-    "st.report.all": "a2c6f378be24"
+    "st.tab.Report": "fe9a79492143",
+    "st.report.all": "9a2c9068caeb"
    }
   },
   "payload gd_xsA_CTDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "783c7f2ac51e",
     "st.status": "ed7322df82eb",
@@ -2721,18 +2721,18 @@
     "st.tab.Diagrams": "4bb68392643d",
     "st.tab.Camber": "c2d2da0335ad",
     "st.tab.Deck": "718ce70a1fea",
-    "st.tab.Fatigue": "a40709fc42e1",
+    "st.tab.Fatigue": "59aeea87a9e8",
     "st.tab.Stiffeners": "821daacea927",
     "st.tab.Connectors": "a5d3c0d9615a",
     "st.tab.Rating": "4fc0b2295617",
     "st.tab.Optimize": "80d49ee674be",
     "st.tab.Nomenclature": "e85507b7943e",
-    "st.tab.Report": "ea169cfccbbb",
-    "st.report.all": "da70d4a526c4"
+    "st.tab.Report": "28d337d9b69c",
+    "st.report.all": "b35927b655f2"
    }
   },
   "payload gd_xsA_CTDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "8dfd883c4069",
     "st.status": "ed7322df82eb",
@@ -2751,18 +2751,18 @@
     "st.tab.Diagrams": "06c33b661cf9",
     "st.tab.Camber": "429cefd0af4d",
     "st.tab.Deck": "6e1d5e5c69e0",
-    "st.tab.Fatigue": "da7e172e6f82",
+    "st.tab.Fatigue": "e44c28683257",
     "st.tab.Stiffeners": "b3f7e21fe972",
     "st.tab.Connectors": "a9e8d545f443",
     "st.tab.Rating": "e4280460393b",
     "st.tab.Optimize": "cb27edc88cbf",
     "st.tab.Nomenclature": "09f299a41456",
-    "st.tab.Report": "ea8c92ac00db",
-    "st.report.all": "b88e6b300b27"
+    "st.tab.Report": "fc954768a03c",
+    "st.report.all": "9febeaec9f6b"
    }
   },
   "payload gd_xsA_CTDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "56ab91faf299",
     "st.status": "ed7322df82eb",
@@ -2781,18 +2781,18 @@
     "st.tab.Diagrams": "d419a5feef80",
     "st.tab.Camber": "3930d9982919",
     "st.tab.Deck": "b9e404da8d1a",
-    "st.tab.Fatigue": "443fc493e434",
+    "st.tab.Fatigue": "fc0688e9a01d",
     "st.tab.Stiffeners": "3f5f2b521088",
     "st.tab.Connectors": "4c2806fce33e",
     "st.tab.Rating": "e452cb260d82",
     "st.tab.Optimize": "2a217d70c1e8",
     "st.tab.Nomenclature": "2031ffaf42cb",
-    "st.tab.Report": "0d471b05251d",
-    "st.report.all": "67ba6a5c2ca9"
+    "st.tab.Report": "936fd8b7cda0",
+    "st.report.all": "ce52fe883b1e"
    }
   },
   "payload gd_xsA_CTDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "99f6963b27a6",
     "st.status": "ed7322df82eb",
@@ -2811,18 +2811,18 @@
     "st.tab.Diagrams": "3d03cb37e7ee",
     "st.tab.Camber": "807d4407d8f9",
     "st.tab.Deck": "c59543fa4a7d",
-    "st.tab.Fatigue": "9e650230b79e",
+    "st.tab.Fatigue": "412e77bd6510",
     "st.tab.Stiffeners": "02258ca6ae43",
     "st.tab.Connectors": "a6e5741b169f",
     "st.tab.Rating": "1db2aa7bcf14",
     "st.tab.Optimize": "e54543420ab6",
     "st.tab.Nomenclature": "384eae651547",
-    "st.tab.Report": "914b17cd7751",
-    "st.report.all": "222506cd22f2"
+    "st.tab.Report": "4538789d89a2",
+    "st.report.all": "d5e4d6ebfa64"
    }
   },
   "payload gd_xsA_CTDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "a99cf65fb620",
     "st.status": "ed7322df82eb",
@@ -2841,18 +2841,18 @@
     "st.tab.Diagrams": "690b3a9de1b8",
     "st.tab.Camber": "8086e7a06d5d",
     "st.tab.Deck": "57681a9ff744",
-    "st.tab.Fatigue": "fc0b0f7ae538",
+    "st.tab.Fatigue": "8831869d279e",
     "st.tab.Stiffeners": "b458744e1b8c",
     "st.tab.Connectors": "3be46c3cf283",
     "st.tab.Rating": "2f840f0a757c",
     "st.tab.Optimize": "10783e90ba4c",
     "st.tab.Nomenclature": "2486fd2a362c",
-    "st.tab.Report": "101704ddfe31",
-    "st.report.all": "e6f3003177f7"
+    "st.tab.Report": "be7ad01b414c",
+    "st.report.all": "00b5d25aecd3"
    }
   },
   "payload gd_xsA_MassDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "cfad1ae21e96",
     "st.status": "6096378939a3",
@@ -2871,18 +2871,18 @@
     "st.tab.Diagrams": "d5a6d40c0106",
     "st.tab.Camber": "513f22cbcd99",
     "st.tab.Deck": "909685353ba8",
-    "st.tab.Fatigue": "32212661ac02",
+    "st.tab.Fatigue": "405b968c8b7d",
     "st.tab.Stiffeners": "8054cc8940c6",
     "st.tab.Connectors": "66de638c6ed3",
     "st.tab.Rating": "f4a154f89e66",
     "st.tab.Optimize": "087729bd1a89",
     "st.tab.Nomenclature": "f04411e7cadc",
-    "st.tab.Report": "7b25939ec0fd",
-    "st.report.all": "fd377f375aa0"
+    "st.tab.Report": "47090efa433c",
+    "st.report.all": "da04f9f633f1"
    }
   },
   "payload gd_xsA_MassDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "ee4939c6d293",
     "st.status": "6096378939a3",
@@ -2901,18 +2901,18 @@
     "st.tab.Diagrams": "76b41b502d4f",
     "st.tab.Camber": "1c78778cb047",
     "st.tab.Deck": "296e271acb93",
-    "st.tab.Fatigue": "b5fbc9527e37",
+    "st.tab.Fatigue": "21540c09030f",
     "st.tab.Stiffeners": "75e81f445844",
     "st.tab.Connectors": "0543d3f21c45",
     "st.tab.Rating": "1d260fb7ab82",
     "st.tab.Optimize": "c273976813a4",
     "st.tab.Nomenclature": "6666339b276a",
-    "st.tab.Report": "d81dc15a1356",
-    "st.report.all": "6199addc71f3"
+    "st.tab.Report": "40c753f076d9",
+    "st.report.all": "b662d8f43ba2"
    }
   },
   "payload gd_xsA_MassDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "d3c981d7272f",
     "st.status": "6096378939a3",
@@ -2931,18 +2931,18 @@
     "st.tab.Diagrams": "c9adf7ee6f73",
     "st.tab.Camber": "eec0b45fa861",
     "st.tab.Deck": "d0b004a450d2",
-    "st.tab.Fatigue": "55606751b880",
+    "st.tab.Fatigue": "dfca8974a5cb",
     "st.tab.Stiffeners": "46b04462c52d",
     "st.tab.Connectors": "4f400a0aaf7e",
     "st.tab.Rating": "6aa62dfaa20a",
     "st.tab.Optimize": "9cec76e47ebc",
     "st.tab.Nomenclature": "a2125db168e3",
-    "st.tab.Report": "540c2487ec49",
-    "st.report.all": "4e04de75705e"
+    "st.tab.Report": "c18cf69212b9",
+    "st.report.all": "667508ecf71e"
    }
   },
   "payload gd_xsA_MassDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "17b93d838726",
     "st.status": "6096378939a3",
@@ -2961,18 +2961,18 @@
     "st.tab.Diagrams": "a2a79d55354d",
     "st.tab.Camber": "a0356ea98496",
     "st.tab.Deck": "da5c6a2b3260",
-    "st.tab.Fatigue": "22f851a37908",
+    "st.tab.Fatigue": "972a350fb4c5",
     "st.tab.Stiffeners": "750f4666bbf2",
     "st.tab.Connectors": "785f317c9c9b",
     "st.tab.Rating": "b2e3917e9e98",
     "st.tab.Optimize": "fda81426aa82",
     "st.tab.Nomenclature": "5bd74728ec68",
-    "st.tab.Report": "e5d04b338cea",
-    "st.report.all": "13a42ea6e1cf"
+    "st.tab.Report": "e0fd8b720a33",
+    "st.report.all": "a0cc24893d6a"
    }
   },
   "payload gd_xsA_MassDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "3e168e8c883a",
     "st.status": "6096378939a3",
@@ -2991,18 +2991,18 @@
     "st.tab.Diagrams": "5323e7a1a1e8",
     "st.tab.Camber": "447b533d4e9a",
     "st.tab.Deck": "f51c3978c065",
-    "st.tab.Fatigue": "a0bad1639081",
+    "st.tab.Fatigue": "ff686a48ee0d",
     "st.tab.Stiffeners": "49375191fb15",
     "st.tab.Connectors": "3fd1887bb83b",
     "st.tab.Rating": "f50c8e4247ba",
     "st.tab.Optimize": "b05f283cc496",
     "st.tab.Nomenclature": "02311ef38444",
-    "st.tab.Report": "e9db6554a988",
-    "st.report.all": "2db1e44c1eea"
+    "st.tab.Report": "9958e87f9fbb",
+    "st.report.all": "a869d9b51528"
    }
   },
   "payload gd_xsA_RIDOT_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "962c9cf18f71",
     "st.status": "f25519589061",
@@ -3021,18 +3021,18 @@
     "st.tab.Diagrams": "b7164d27f918",
     "st.tab.Camber": "6f759b4b4f46",
     "st.tab.Deck": "6d59d0731ba8",
-    "st.tab.Fatigue": "96e384b290d4",
+    "st.tab.Fatigue": "ffd0b2fca0e9",
     "st.tab.Stiffeners": "4dabb1850b34",
     "st.tab.Connectors": "36c1256de66e",
     "st.tab.Rating": "b301931007a3",
     "st.tab.Optimize": "9c09c5c235c4",
     "st.tab.Nomenclature": "95b4ed21824e",
-    "st.tab.Report": "2e501cc22b1e",
-    "st.report.all": "b44c1e9d6e63"
+    "st.tab.Report": "941e206ede09",
+    "st.report.all": "db873cb7269f"
    }
   },
   "payload gd_xsA_RIDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "8ccdacd569a9",
     "st.status": "f25519589061",
@@ -3051,18 +3051,18 @@
     "st.tab.Diagrams": "054e4831c4ad",
     "st.tab.Camber": "acc224b2fb4c",
     "st.tab.Deck": "12134d96b067",
-    "st.tab.Fatigue": "7aa64002bfe1",
+    "st.tab.Fatigue": "2f57b5b79593",
     "st.tab.Stiffeners": "33a0435aaa57",
     "st.tab.Connectors": "eb5bfd595e8b",
     "st.tab.Rating": "047e2531882c",
     "st.tab.Optimize": "63299bfb34e9",
     "st.tab.Nomenclature": "69db2f31a56f",
-    "st.tab.Report": "c7fed5e279f2",
-    "st.report.all": "0c2686dad2a5"
+    "st.tab.Report": "72f77e6bb797",
+    "st.report.all": "cf95a93e7b85"
    }
   },
   "payload gd_xsA_RIDOT_G3": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "a536c2c2cd9c",
     "st.status": "fc63f88f03f2",
@@ -3081,18 +3081,18 @@
     "st.tab.Diagrams": "990289bae6fc",
     "st.tab.Camber": "eb5ed49b9664",
     "st.tab.Deck": "8caf8cfbbc08",
-    "st.tab.Fatigue": "5304cf6d9d34",
+    "st.tab.Fatigue": "89c8cae1f210",
     "st.tab.Stiffeners": "3a08b95a829e",
     "st.tab.Connectors": "fafe7d0ca8ec",
     "st.tab.Rating": "87b414a4ed1a",
     "st.tab.Optimize": "404adcbdd591",
     "st.tab.Nomenclature": "e5beb3a542ba",
-    "st.tab.Report": "12e5bdf18012",
-    "st.report.all": "fdacb4657b16"
+    "st.tab.Report": "c9b7ac6b0059",
+    "st.report.all": "05aebcf4b6f2"
    }
   },
   "payload gd_xsA_RIDOT_G4": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "44fc217795cf",
     "st.status": "fc63f88f03f2",
@@ -3111,18 +3111,18 @@
     "st.tab.Diagrams": "b02b95c165f8",
     "st.tab.Camber": "f064725af894",
     "st.tab.Deck": "3ad7af8a02a2",
-    "st.tab.Fatigue": "45d849636f22",
+    "st.tab.Fatigue": "d3d314a72bd6",
     "st.tab.Stiffeners": "7135957ed82c",
     "st.tab.Connectors": "409fce7490a4",
     "st.tab.Rating": "c725ff08cf4f",
     "st.tab.Optimize": "7075c8db439a",
     "st.tab.Nomenclature": "e452c136ec95",
-    "st.tab.Report": "b419e079b558",
-    "st.report.all": "887d72fb9d78"
+    "st.tab.Report": "bd94d7776231",
+    "st.report.all": "04a9d368806e"
    }
   },
   "payload gd_xsA_RIDOT_G5": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "159b0efe65f8",
     "st.status": "f25519589061",
@@ -3141,18 +3141,18 @@
     "st.tab.Diagrams": "0b4520f794b6",
     "st.tab.Camber": "356c8236c203",
     "st.tab.Deck": "d2306d2369c6",
-    "st.tab.Fatigue": "c45c3a375e86",
+    "st.tab.Fatigue": "3da88938255a",
     "st.tab.Stiffeners": "94c0a6ee4e99",
     "st.tab.Connectors": "3d7d392997c7",
     "st.tab.Rating": "7dadbf80d2a4",
     "st.tab.Optimize": "b52bd02521e4",
     "st.tab.Nomenclature": "df582bf9ffae",
-    "st.tab.Report": "8a79d4490e8a",
-    "st.report.all": "d37fc14af095"
+    "st.tab.Report": "99de1fbb93e7",
+    "st.report.all": "40a0b3d3aaa8"
    }
   },
   "payload util_MassDOT_G2": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "334d7e446847",
     "st.status": "6096378939a3",
@@ -3171,18 +3171,18 @@
     "st.tab.Diagrams": "3bc4485bb722",
     "st.tab.Camber": "e4e91207e580",
     "st.tab.Deck": "82b7f16f7cde",
-    "st.tab.Fatigue": "2c9caa119244",
+    "st.tab.Fatigue": "4eead9f7e1a5",
     "st.tab.Stiffeners": "607aaa47662a",
     "st.tab.Connectors": "7e0590ac8049",
     "st.tab.Rating": "b5b2913ef91e",
     "st.tab.Optimize": "77d2cd01debf",
     "st.tab.Nomenclature": "f2ed700f5ecb",
-    "st.tab.Report": "4ff4dc1e522a",
-    "st.report.all": "dfb9fadaf91a"
+    "st.tab.Report": "6b694c7ee990",
+    "st.report.all": "6ffadbcb0da5"
    }
   },
   "payload util_MassDOT_G2_gdx": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "b77d3f25a754",
     "st.status": "6096378939a3",
@@ -3201,18 +3201,18 @@
     "st.tab.Diagrams": "79af6d8415b1",
     "st.tab.Camber": "70f8bee2061e",
     "st.tab.Deck": "7062f68eb43d",
-    "st.tab.Fatigue": "da6f7f78c99e",
+    "st.tab.Fatigue": "152e29ef75a3",
     "st.tab.Stiffeners": "b00b24d3c9e5",
     "st.tab.Connectors": "c69c23b9e1bb",
     "st.tab.Rating": "112dbdb84c2e",
     "st.tab.Optimize": "fdaac93fa825",
     "st.tab.Nomenclature": "f3a5883cbc6b",
-    "st.tab.Report": "a3d043e905a5",
-    "st.report.all": "c32606567592"
+    "st.tab.Report": "e0300fd5873f",
+    "st.report.all": "05f437f97409"
    }
   },
   "payload util_MassDOT_G2_loads": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "95a34838e030",
     "st.status": "6096378939a3",
@@ -3231,18 +3231,18 @@
     "st.tab.Diagrams": "20472cfdd3ff",
     "st.tab.Camber": "8ee634c59c51",
     "st.tab.Deck": "867976a8480d",
-    "st.tab.Fatigue": "cc1ed50ccbde",
+    "st.tab.Fatigue": "1e51ce700b4a",
     "st.tab.Stiffeners": "0125363961f7",
     "st.tab.Connectors": "3de5a5cbc45b",
     "st.tab.Rating": "29bc8a143ff3",
     "st.tab.Optimize": "f26f19f732cc",
     "st.tab.Nomenclature": "8418ddb5ade3",
-    "st.tab.Report": "5b4b9f80895c",
-    "st.report.all": "3a90fd1652b9"
+    "st.tab.Report": "9d79bc04a999",
+    "st.report.all": "dc10013ec092"
    }
   },
   "payload xsA_RIDOT_Iyes_G1": {
-   "a": "origin/main (9684292):stgirder.html",
+   "a": "claude/sbd-s2-5-lldf-display (S2-5 branch run, B readouts)",
    "sections": {
     "st.session": "2c41758d4372",
     "st.status": "069d37628004",
@@ -3261,14 +3261,14 @@
     "st.tab.Diagrams": "3c8cd81b862a",
     "st.tab.Camber": "b24301e8cae1",
     "st.tab.Deck": "ca8e2c34491c",
-    "st.tab.Fatigue": "241f6cc1c889",
+    "st.tab.Fatigue": "340039315e1a",
     "st.tab.Stiffeners": "f646ceb930f1",
     "st.tab.Connectors": "d61c47cae392",
     "st.tab.Rating": "7435c982964b",
     "st.tab.Optimize": "581b462453d8",
     "st.tab.Nomenclature": "6e68e70f9362",
-    "st.tab.Report": "fa0c81615989",
-    "st.report.all": "c28dfc71c1ad"
+    "st.tab.Report": "69c5869c5cd3",
+    "st.report.all": "fb53caf6d107"
    }
   }
  },

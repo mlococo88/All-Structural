@@ -21238,6 +21238,11 @@ result is unchanged: `st.R`, `st.checks`, `st.rating` and every other section id
 
 **How verified:** `node tests/check-syntax.mjs "Steel Bridge Design.html"`; `tests/compare.mjs --tool st` (B against `tests/baselines/st.json`); a
 headless script that loads `gd_builtin_AASHTO_G2`, follows the Fatigue link (it opens the Loads sub-tab and shows the box) and clicks "Open LLDF and
-DLs →" (the host switches to the LLDF and DLs module).
+DLs →" (the host switches to the LLDF and DLs module). Full `--tool st --payload all` against `tests/baselines/st.json`: built-in identical; all
+108 payload cases differ in `st.tab.Fatigue`, `st.tab.Report` and `st.report.all` only (re-recorded from that run); every other section identical.
+`tests/st-span.mjs --target sbd` (gd_builtin_AASHTO_G2 and gd_xsA_RIDOT_G2, span 2): the same three sections differ, everything else identical.
 
 **Other copies:** none (`st-src` is ST-Girder's only copy).
+
+**Open items:** `tests/baselines/st_interior.json` is not re-recorded here (its `st.tab.Report` / `st.report.all` were already stale since SBD6; now
+`st.tab.Fatigue` too, display only). It is re-recorded at the next full st-span run (S2-6, which changes results).
