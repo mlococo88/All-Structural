@@ -21197,6 +21197,56 @@ block; the st baseline was recorded on the stand-alone page). Results in the PR 
 full st-span run (display only, above). `CLAUDE.md` §3 ("Since 2026-10-22, `stgirder.html` is also embedded verbatim …") and §7 (file names other tools link to, including
 `stgirder.html`) now describe the file as it was; CLAUDE.md is the engineer's rule file and was not changed by this PR. Suggested text in the PR.
 
+
+## 2026-10-22 — PR: claude/sbd-s2-5-lldf-display (S2-5, SBD stage 2 item 8: ST-Girder shows GirderDetail's live load distribution factors; display only; PR link added after merge)
+
+**No engineering result changes.** No formula, factor, unit, code reference, saved key or hand-off field was changed. With GirderDetail demands
+(`liveLoadPerGirder: true`, `girderDetail.df` present) ST-Girder already used no distribution factor of its own (the imported LL+IM and fatigue
+envelopes carry GirderDetail's); its own `distFactorsSteel` values were computed but not shown on that path. This PR shows GirderDetail's factors
+(per span g_M, g_V, fatigue g_M, g_V; per pier g_M) where the frame describes the live load and fatigue load, with links to where they are worked.
+Stand-alone ST-Girder (built-in analysis, MIDAS/MCT imports) is unchanged and keeps its own factors. Every change is inside `st-src`.
+
+### S2-5-a. Helpers and the Inputs box   [display]
+- **Where:** `st-src`, after `const GdFld=` (anchor: `<span className="gd-src">GD 🔒 · {src}</span></div>);`). **Added:** `gdDfOf(ext)` (validated
+  `girderDetail.df` of GirderDetail demands with `liveLoadPerGirder`; null otherwise), `gdDfSpan`, `gdDfWhere`, `gdDfGo`, `gdDfHost`, `gdDfRows`,
+  `GD_DF_HEAD`, component `GdDfBox` (id `stg-d-gddf`). Copy them from the PR diff (one block, 22 lines).
+- **Inputs tab, Loads, LL card** (anchor `Imported ±LL+IM is <b>per girder</b>`): the inline list "— factors used by GirderDetail: span 1 g_M = …"
+  is kept only when `gdDfOf` returns null (`…Array.isArray(extRaw.girderDetail.df.spans)&&!gdDfOf(extRaw)?…`); after that hint
+  `{extActive&&<GdDfBox ext={extRaw} sel={R&&R.ok&&R.ext&&R.ext.sel?R.ext.sel.idx:null}/>}` (table: span / pier, used for, g_M, g_V, g_fat,M, g_fat,V;
+  the selected span highlighted; "Open LLDF and DLs →" calls the host's `gdModGo('df')`, or `'sa'` for factors entered in Structural analysis).
+- **Derivation link target:** `DL_T` gets `gddf:{tab:'inputs',id:'stg-d-gddf',cr:'inp.gddf',l:'Inputs · Loads · Live load distribution factors from GirderDetail'}`.
+- **App, link scroll** (anchor `el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('dl-flash');`): before
+  `el.scrollIntoView(…); …,150);` after: when the target is inside a hidden Inputs sub-tab (`.stgInPane[hidden]`), its sub-tab button
+  (`stgInTab_<pane>`) is clicked first and the scroll runs 60 ms later (needed for any link to the Loads sub-tab; links elsewhere unchanged).
+
+### S2-5-b. Fatigue tab   [display]
+- `function fatCards(R,sel,right)` → `function fatCards(R,sel,right,ext)`; `FatigueTab({R})` → `FatigueTab({R,inp})`, which passes `inp&&inp.external`;
+  App `<FatigueTab R={R}/>` → `<FatigueTab R={R} inp={inp}/>`; report `fatCards(R,fa[i]||null)` → `fatCards(R,fa[i]||null,undefined,inp.external)`.
+- Step 4, imported branch: the callout ends with "GirderDetail’s single-lane fatigue distribution factors in span k: g_fat,M = …, g_fat,V = … (in the
+  envelopes; not applied again)." followed by `DLinks` to `gddf`. Web special fatigue note: "…single-lane fatigue DF included: GirderDetail’s g_fat,V = …
+  in span k)."
+
+### S2-5-c. Report   [display]
+- 2. Input parameters, after the "Imported demands" subsection: new subsection "Live load distribution factors (from GirderDetail, G#)"
+  (`sub(…)`, ref 4.6.2.2.2 · 4.6.2.2.3 · 3.6.1.4.3b, `tag(s,'inp.gddf')`), the same table and a note saying where the factors are worked. The
+  former one-line note "Factors used by GirderDetail: …" is printed only when `gdDfOf` is null.
+
+**Check case** (`tests/projects/st/gd_builtin_AASHTO_G1.json`, span 1): report 2.11 lists span 1 (selected) g_M 0.811, g_V 0.851, g_fat,M 0.658,
+g_fat,V 0.691; span 2 0.811 / 0.853 / 0.658 / 0.692; span 3 as span 1; piers 1 and 2 g_M 0.811 (the payload's `girderDetail.df`: 0.8105, 0.8508,
+0.6579, 0.6906, …, rounded to 3 places). Fatigue tab: "g_fat,M = 0.658, g_fat,V = 0.691"; the link reads "see §2.11" in the report. Every computed
+result is unchanged: `st.R`, `st.checks`, `st.rating` and every other section identical (see the PR for the run).
+
+**How verified:** `node tests/check-syntax.mjs "Steel Bridge Design.html"`; `tests/compare.mjs --tool st` (B against `tests/baselines/st.json`); a
+headless script that loads `gd_builtin_AASHTO_G2`, follows the Fatigue link (it opens the Loads sub-tab and shows the box) and clicks "Open LLDF and
+DLs →" (the host switches to the LLDF and DLs module). Full `--tool st --payload all` against `tests/baselines/st.json`: built-in identical; all
+108 payload cases differ in `st.tab.Fatigue`, `st.tab.Report` and `st.report.all` only (re-recorded from that run); every other section identical.
+`tests/st-span.mjs --target sbd` (gd_builtin_AASHTO_G2 and gd_xsA_RIDOT_G2, span 2): the same three sections differ, everything else identical.
+
+**Other copies:** none (`st-src` is ST-Girder's only copy).
+
+**Open items:** `tests/baselines/st_interior.json` is not re-recorded here (its `st.tab.Report` / `st.report.all` were already stale since SBD6; now
+`st.tab.Fatigue` too, display only). It is re-recorded at the next full st-span run (S2-6, which changes results).
+
 ## 2026-10-22 — PR: claude/sbd-s2-9-neg-flexure (S2-9: Stage 2 item 4, negative flexure: GirderDetail's Appendix A6 permission per 6.10.6.2.3, and ST-Girder's Neg flex / Neg tens checks from GirderDetail's GS7/GS8/GS9 through the hand-off; engineer decisions 2026-10-22; PR link added after merge)
 
 **Engineering results change (§4 callouts in the PR):**
