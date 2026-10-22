@@ -58,6 +58,20 @@ node tests/a610-prop.mjs      # the SBD-SHARED block and its placeholder in pl-s
 
 Both exit 0 when every check passes. The A610 references in `a610-prop.mjs` are the expressions as written before they were shared (main at cb584ac); never edit them to make the test pass.
 
+## ST-Girder on interior spans (`st-span.mjs`, added 2026-10-22)
+
+Every payload in `projects/st` is a whole 3-span girder (spans 110/140/110 ft), and ST-Girder applies a hand-off on span 1 (`gdAdopt` takes the first span and overwrites any `_selSpan` in the payload). Another span is chosen only with the "Span n" buttons on its Inputs tab (`pickSpan`). So `compare.mjs --tool st` covers end span 1 only, and the span cannot be put in a payload file. `st-span.mjs` applies a payload as `compare.mjs --tool st` does (publish, then `#gdpull`), clicks "Span n", waits until the saved session holds that span, and reads the same `st.*` sections. Each span runs in a fresh browser.
+
+```bash
+node tests/st-span.mjs                                         # every gd_* payload, spans 2 and 3, origin/main vs the working tree
+node tests/st-span.mjs --payload gd_xsA_RIDOT_G2 --span 2
+node tests/st-span.mjs --baseline tests/baselines/st_interior.json --b stgirder.html             # B only, against the baseline
+node tests/st-span.mjs --target sbd --baseline tests/baselines/st_interior.json                 # the merged tool's ST-Girder frame (gd-st)
+node tests/st-span.mjs --a origin/main --record-baseline tests/baselines/st_interior.json        # A only
+```
+
+Options: `--target st|sbd` (`sbd`: "Steel Bridge Design.html" opens the project, owner and girder named by the payload `gd_<project>_<owner>_G<n>`, `window.gdStOpen(n)` loads the frame, and the span button is clicked in the frame), `--payload` (names in `projects/st`, comma list, or `all` = every `gd_*` payload; default `all`), `--span` (default `2,3`), `--jobs` (default 2), `--timeout` (page default timeouts, ms; default 120000), `--tries` (attempts per span after a timeout or a closed browser; default 3), `--resume` (with `--record-baseline`: skip the spans already in the file), `--a`, `--b`, `--file`, `--baseline`, `--record-baseline`, `--out`, `--max-diffs`. Case names are `payload <name> / span <n>`. `baselines/st_interior.json` holds spans 2 and 3 of the 100 `gd_*` payloads (200 cases), recorded on `origin/main` `stgirder.html` (cb584ac and 0fc31d9, the same `stgirder.html`). The readout code is a copy of `compare.mjs`'s (the header of `st-span.mjs` lists it); keep the two in step.
+
 ## Base Plate & Anchor Designer: PROFIS export (`bpad-profis.mjs`)
 
 ```bash
