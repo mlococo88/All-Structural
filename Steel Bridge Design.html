@@ -8937,6 +8937,28 @@ const GdFld=({l,u,v,src,title})=>(
   <div className="fld"><label>{l}</label><div className="fwrap">
     <input value={v} readOnly className="gd-in" title={title||('Shown '+src+' while these demands are in use; ST-Girder’s own value is kept.')}/>
     {u&&<span className="unit">{u}</span>}</div><span className="gd-src">GD 🔒 · {src}</span></div>);
+/* S2-5 (2026-10-22, SBD stage 2 item 8): GirderDetail's live load distribution factors as sent with its demands (girderDetail.df: per span g_M, g_V and the
+   single-lane fatigue g_M, g_V; per pier g_M), shown in place of ST-Girder's own (distFactorsSteel) while those demands are in use. Display only: the
+   imported LL+IM and fatigue envelopes already contain them (liveLoadPerGirder), so no result reads these numbers. They are worked in Steel Bridge
+   Design, LLDF and DLs module (or entered in Structural analysis, df.source); gdDfGo opens that module in the host page. null when absent. */
+function gdDfOf(ext){ if(!extFromGD(ext)||!extPerGirderOf(ext)) return null; const d=ext.girderDetail.df; if(!d||!Array.isArray(d.spans)) return null;
+  const ok=v=>typeof v==='number'&&isFinite(v);
+  const spans=d.spans.filter(s=>s&&ok(s.span)&&ok(s.gM)&&ok(s.gV)).map(s=>({span:s.span,gM:s.gM,gV:s.gV,fatM:ok(s.fatM)?s.fatM:null,fatV:ok(s.fatV)?s.fatV:null}));
+  const piers=(Array.isArray(d.piers)?d.piers:[]).filter(p=>p&&ok(p.pier)&&ok(p.gM)).map(p=>({pier:p.pier,gM:p.gM}));
+  if(!spans.length) return null; const g=ext.girderDetail;
+  return {source:String(d.source||''),man:/manual/i.test(String(d.source||'')),label:g.label||((ext.member&&ext.member.key)||''),pos:g.position||'',spans,piers}; }
+function gdDfSpan(D,idx){ return D?(D.spans.find(s=>s.span===idx)||null):null; }
+function gdDfWhere(D){ return D&&D.man?'entered in Steel Bridge Design, Structural analysis (manual distribution factors)':'worked in Steel Bridge Design, LLDF and DLs module (report: Live Load and Dead Load Distribution; also listed in Structural analysis, distribution factors)'; }
+function gdDfGo(D){ try{ const H=window.GD_ST_HOST, W=window.parent; if(H&&H.embedded&&W&&W!==window&&typeof W.gdModGo==='function') W.gdModGo(D&&D.man?'sa':'df'); }catch(e){} }
+const gdDfHost=()=>{ try{ return !!(window.GD_ST_HOST&&GD_ST_HOST.embedded&&window.parent!==window&&typeof window.parent.gdModGo==='function'); }catch(e){ return false; } };
+function gdDfRows(D,sel){ const f=v=>v==null?'—':fmt(v,3);
+  return [...D.spans.map(s=>({_cls:s.span===sel?'tot':'',c:['Span '+s.span+(s.span===sel?' (selected)':''),'positive moment outside the pier regions; shear',f(s.gM),f(s.gV),f(s.fatM),f(s.fatV)]})),
+    ...D.piers.map(p=>({c:['Pier '+p.pier,'negative moment in the pier region',f(p.gM),'—','—','—']}))]; }
+const GD_DF_HEAD=['Region','Used for','g_M','g_V','g_fat,M (1 lane, no m)','g_fat,V (1 lane, no m)'];
+function GdDfBox({ext,sel}){ const D=gdDfOf(ext); if(!D) return null;
+  return <div id="stg-d-gddf" style={{marginBottom:8}}>
+    <div style={{fontSize:11.5,lineHeight:1.55,marginBottom:4}}><b>Live load distribution factors from GirderDetail ({D.label}{D.pos?', '+D.pos:''})</b>, already in the imported LL+IM and fatigue envelopes (not applied again here; ST-Girder’s own 4.6.2.2 factors are not used while these demands are in use). Multiple presence and the skew corrections are included in g_M and g_V; the fatigue factors are single-lane without the multiple presence factor (3.6.1.4.3b). {gdDfWhere(D).replace(/^./,c=>c.toUpperCase())}.{gdDfHost()&&<span> <button type="button" className="dl" onClick={()=>gdDfGo(D)}>Open {D.man?'Structural analysis':'LLDF and DLs'} →</button></span>}</div>
+    <Tbl head={GD_DF_HEAD} rows={gdDfRows(D,sel)}/></div>; }
 /* GDX (engineer decision 2026-10-19: "Whatever can be imported from GirderDetail should be", and the transferred inputs highlighted; HANDOFF.md 4.9).
    Active only for GirderDetail demands that carry girderDetail.loads (payloads from 2026-10-19 on); nothing for older payloads, MIDAS/MCT imports or the
    built-in analysis. gdXfer(ext).set = the inputs taken from GirderDetail (1:1 values only), applied by gdOverlay in computeAll, the report and the
@@ -10224,6 +10246,7 @@ const DL_T={
   shear:{tab:'shear',id:'stg-d-shear',cr:'shear.res',l:'Shear · Shear resistance'},
   s2:{tab:'stresses',id:'stg-d-s2',cr:'serv.s2',l:'Stresses · Service II buildup'},
   ut:{tab:'inputs',id:'stg-d-ut',cr:'inp.ut',l:'Inputs · MassDOT utilities'},   // GD54c
+  gddf:{tab:'inputs',id:'stg-d-gddf',cr:'inp.gddf',l:'Inputs · Loads · Live load distribution factors from GirderDetail'},   // S2-5
   fatn:{tab:'fatigue',id:'stg-d-fatn',cr:'fat.n',l:'Fatigue · Step 1 traffic and cycles'},
 };
 const sgI=(R,si)=>(R&&R.segP&&R.segP.length>1&&si!=null)? si : null;   // name a segment only when there are several
@@ -10686,7 +10709,8 @@ function InputsTab({inp,set,R}){
         <LG tag="LL" title="Live load + impact (per girder)" color={extActive?'#1C4FC4':'#B3261E'} note={extActive?'from imported envelope':'HL-93 · on short-term (n) composite'}/>
         {G('loads.NL')&&<div className="frow" style={{marginBottom:6}}><Num l="Design lanes N_L (live load deflection)" v={loads.NL} set={v=>S('loads.NL',v)} step={1} min={1} gd={G('loads.NL')}/></div>}
         {gL&&<div className="hint" style={{marginBottom:8}}><span className="gd-src" style={{display:'inline'}}>GD · Live load {gSrc}</span>: {gdLLText(gL).join('; ')}.{gOwnOf('number of design lanes N_L')?<span style={{color:'#9a3412'}}> Live load deflection (optional check) still uses ST-Girder’s own number of design lanes N_L = <b>{gOwnOf('number of design lanes N_L').ownT}</b>; GirderDetail used {gOwnOf('number of design lanes N_L').gdT}{gOwnOf('number of design lanes N_L').same?' (same)':''}. Not switched (engineer to decide).</span>:null}</div>}
-        {extActive&&extPerGirderOf(extRaw)&&<div className="hint" style={{marginBottom:8}}>Imported ±LL+IM is <b>per girder</b> ({extRaw.producer||'import'}: impact, distribution factors and multiple presence already included). The DF and multiple-presence multipliers are <b>not applied</b> to it{extRaw.girderDetail&&extRaw.girderDetail.df&&Array.isArray(extRaw.girderDetail.df.spans)?<span> — factors used by {extRaw.producer}: {extRaw.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(extRaw.girderDetail.df.piers||[]).length?'; '+extRaw.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}</span>:null}.</div>}
+        {extActive&&extPerGirderOf(extRaw)&&<div className="hint" style={{marginBottom:8}}>Imported ±LL+IM is <b>per girder</b> ({extRaw.producer||'import'}: impact, distribution factors and multiple presence already included). The DF and multiple-presence multipliers are <b>not applied</b> to it{extRaw.girderDetail&&extRaw.girderDetail.df&&Array.isArray(extRaw.girderDetail.df.spans)&&!gdDfOf(extRaw)?<span> — factors used by {extRaw.producer}: {extRaw.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(extRaw.girderDetail.df.piers||[]).length?'; '+extRaw.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}</span>:null}.</div>}
+        {extActive&&<GdDfBox ext={extRaw} sel={R&&R.ok&&R.ext&&R.ext.sel?R.ext.sel.idx:null}/>}
         {extActive&&!extPerGirderOf(extRaw)&&<React.Fragment>
           <div className="hint" style={{marginBottom:8}}>Imported ±LL envelopes with <b>impact already included</b>. Apply the distribution factor (per effect) and multiple presence below if not already in the envelope (1.0 = no adjustment).</div>
           <div className="frow">
@@ -11849,7 +11873,7 @@ function CamberTab({R}){
 
 /* Fatigue-tab step cards, shared by the Fatigue tab and the calculation-sheet report (display only; moved out of
    FatigueTab unchanged; sel = the station of Step 4, right = the tab's station picker). */
-function fatCards(R,sel,right){
+function fatCards(R,sel,right,ext){   // ext (S2-5): the imported demands (inp.external), for GirderDetail's fatigue distribution factors (display only)
   const f=R.fatigue, pass=f.fatDC<=1.0001;
   const cf=R.chartFat||[], fx=cf.map(p=>p.x);
   const x0=fx[0]||0, x1=fx[fx.length-1]||R.geom.L;
@@ -11910,8 +11934,9 @@ function fatCards(R,sel,right){
       {f.fatImp
       ? <React.Fragment>
       <div className="callout" style={{marginTop:0,marginBottom:10}}>
-        Imported fatigue envelopes: fatigue-truck moments of the continuous analysis, per girder, with IM and the single-lane fatigue distribution factor already included, unfactored. The range is the positive minus the negative moment; both act on the short-term composite section (6.6.1.2.1).
+        Imported fatigue envelopes: fatigue-truck moments of the continuous analysis, per girder, with IM and the single-lane fatigue distribution factor already included, unfactored. The range is the positive minus the negative moment; both act on the short-term composite section (6.6.1.2.1).{(()=>{ const D=gdDfOf(ext), q=D&&R.ext&&R.ext.sel?gdDfSpan(D,R.ext.sel.idx):null; return q&&q.fatM!=null?<span> GirderDetail’s single-lane fatigue distribution factors in span {q.span}: g<sub>fat,M</sub> = <b>{fmt(q.fatM,3)}</b>{q.fatV!=null?<span>, g<sub>fat,V</sub> = <b>{fmt(q.fatV,3)}</b></span>:null} (in the envelopes; not applied again).</span>:null; })()}
       </div>
+      {gdDfOf(ext)&&<DLinks items={[{to:'gddf',what:'fatigue distribution factors (GirderDetail)'}]}/>}
       <KV rows={[
         ['Location x', fmt(sel.x,1), 'ft'],
         ['Fatigue moment +M / −M', fmt(sel.fP,0)+' / '+fmt(sel.fN,0), 'k-ft (unfactored, IM and DF included)'],
@@ -11948,7 +11973,7 @@ function fatCards(R,sel,right){
       {(()=>{ const w=f.webFatGov;
         return <React.Fragment>
         {f.fatImpV
-          ? <div className="mnote" style={{marginTop:0}}>Fatigue shear V<sub>f,LL</sub> = the larger of |V<sub>fat</sub><sup>+</sup>| and |V<sub>fat</sub><sup>−</sup>| from the imported fatigue envelopes (per girder, IM and the single-lane fatigue DF included).</div>
+          ? <div className="mnote" style={{marginTop:0}}>Fatigue shear V<sub>f,LL</sub> = the larger of |V<sub>fat</sub><sup>+</sup>| and |V<sub>fat</sub><sup>−</sup>| from the imported fatigue envelopes (per girder, IM and the single-lane fatigue DF included{(()=>{ const D=gdDfOf(ext), q=D&&R.ext&&R.ext.sel?gdDfSpan(D,R.ext.sel.idx):null; return q&&q.fatV!=null?<span>: GirderDetail’s g<sub>fat,V</sub> = {fmt(q.fatV,3)} in span {q.span}</span>:null; })()}).</div>
           : <div className="mnote" style={{marginTop:0}}>Fatigue-truck shear uses the single-lane <b>shear</b> distribution factor {f.fatDfVSource} = <b>{fmt(f.dfFatV,3)}</b>, IM = 15%.</div>}
         <ML s={Tx`V_{u}=V_{perm}+1.75\,V_{f,LL}=${nx(w.Vperm||0,0)}+1.75\cdot${nx(w.Vll||0,0)}=${nx(w.Vf||0,0)}\;\text{kip}`}/>
         <ML s={Tx`\frac{V_{u}}{V_{cr}}=\frac{${nx(w.Vf||0,0)}}{${nx(f.Vcr,0)}}=${nx(w.r,3)}\;${webPass?'\\checkmark':'\\text{N.G.}'}\qquad(\text{at }x=${nx(w.x||0,1)}')`}/>
@@ -11962,7 +11987,7 @@ function fatCards(R,sel,right){
   );
   return {s1,s2,s3,s4,s5,web};
 }
-function FatigueTab({R}){
+function FatigueTab({R,inp}){
   if(!R.ok) return null;
   const f=R.fatigue, pass=f.fatDC<=1.0001;
   const cf=R.chartFat||[], fx=cf.map(p=>p.x);
@@ -11989,7 +12014,7 @@ function FatigueTab({R}){
         style={{fontFamily:'var(--mono)',fontSize:11,padding:'4px 8px',border:'1.5px solid var(--blue)',
           borderRadius:4,background:'#fff',color:'var(--ink)',maxWidth:240}}>
         {fcAll.map((p,i,a)=><option key={i} value={i}>{stnLabel(p,i,a)}</option>)}
-      </select>);   // step cards shared with the calculation-sheet report (display only)
+      </select>,inp&&inp.external);   // step cards shared with the calculation-sheet report (display only)
   return (<div>
     <StgWarn R={R} kind="fat"/>
     <div className="bigres">
@@ -12447,9 +12472,14 @@ function crModel(R,inp,o){
         ['Fatigue',R.fatigue.fatImp?'imported fatigue moments'+(R.fatigue.fatImpV?' and shears':''):'ST-Girder fatigue truck (simple span)'],
         ...(R.ut?[['Utilities (MassDOT)',[R.ut.hasUT?'existing M_UT, V_UT':'',R.ut.hasUF?'future allowance M_UF, V_UF':''].filter(Boolean).join('; ')+': their own loads on the steel section (see MassDOT utilities above)']]:[])]}/>
         {R.ext.swExcl&&R.ext.hasDC1&&<p className="cr-note"><SwContNote R={R}/></p>}
-        {pg&&e.girderDetail&&e.girderDetail.df&&Array.isArray(e.girderDetail.df.spans)&&<p className="cr-note">Factors used by {e.producer}: {e.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(e.girderDetail.df.piers||[]).length?'; '+e.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}.</p>}
+        {pg&&e.girderDetail&&e.girderDetail.df&&Array.isArray(e.girderDetail.df.spans)&&!gdDfOf(e)&&<p className="cr-note">Factors used by {e.producer}: {e.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(e.girderDetail.df.piers||[]).length?'; '+e.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}.</p>}
         {e.factored===true&&<p className="cr-note"><b>The import is flagged FACTORED; ST-Girder applies its own load factors.</b></p>}
-      </React.Fragment>); }
+      </React.Fragment>);
+      const gD=gdDfOf(e);   // S2-5: GirderDetail's distribution factors in place of ST-Girder's own (display only)
+      if(gD){ sub(s,'Live load distribution factors (from GirderDetail, '+gD.label+')','4.6.2.2.2 · 4.6.2.2.3 · 3.6.1.4.3b',<React.Fragment>
+        <CrT wide head={GD_DF_HEAD} rows={gdDfRows(gD,R.ext.sel.idx).map(r=>r.c)} gov={i=>i<gD.spans.length&&gD.spans[i].span===R.ext.sel.idx}/>
+        <p className="cr-note">The factors GirderDetail applied to girder {gD.label}{gD.pos?' ('+gD.pos+')':''}: they are already in the imported LL+IM and fatigue envelopes, so they are not applied again here, and ST-Girder’s own 4.6.2.2 factors are not used. Multiple presence and the skew corrections (4.6.2.2.2e, 4.6.2.2.3c) are in g_M and g_V; the fatigue factors are for one lane without the multiple presence factor (3.6.1.4.3b). Source: {gD.source||'GirderDetail'}; {gdDfWhere(gD)}. Highlighted: the selected span (span {R.ext.sel.idx}).</p>
+      </React.Fragment>); tag(s,'inp.gddf'); } }
   }
   // 3. Summary
   if(o.summary){ const allPass=R.checks.every(c=>c.pass);
@@ -12578,7 +12608,7 @@ function crModel(R,inp,o){
       if(sc[i]) sub(s,'Worked shear at the governing station (x = '+fmt(sc[i].x,1)+' ft)','6.10.9.2 · 6.10.9.3',<CrTab el={shearWorkedCard(R,sc[i])}/>);
       if(all) sub(s,'All stations','6.10.9 · kip',<CrT wide head={['x (ft)','Panel','V_u','φV_n','D/C']}
         rows={sc.map(q=>[fmt(q.x,2),q.isEnd?'end':(q.tensionField?'interior (TFA)':'interior'),fmt(q.Vu,1),fmt(q.phiVn,1),fmt(q.dc,3)])}/>); }
-    { const s=S('fat','Fatigue',{ref:'6.6.1 · 6.10.5.3'}), fa=R.fatigue.fatCalc||[], i=crNear(fa,R.fatigue.xGov), FC=fatCards(R,fa[i]||null);
+    { const s=S('fat','Fatigue',{ref:'6.6.1 · 6.10.5.3'}), fa=R.fatigue.fatCalc||[], i=crNear(fa,R.fatigue.xGov), FC=fatCards(R,fa[i]||null,undefined,inp.external);
       sub(s,'Fatigue traffic and number of stress cycles','3.6.1.4 · 6.6.1.2.5',<CrTab el={FC.s1}/>); tag(s,'fat.n');
       sub(s,'Fatigue I or Fatigue II','6.6.1.2.3',<CrTab el={FC.s2}/>);
       sub(s,'Detail category and nominal fatigue resistance','6.6.1.2.5',<CrTab el={FC.s3}/>);
@@ -12914,7 +12944,8 @@ function App(){
   useEffect(()=>{ const h=e=>{ const d=(e&&e.detail)||{}; if(!d.tab) return; setTab(d.tab); setGo({...d,n:Date.now()}); };
     window.addEventListener('stg-goto',h); return ()=>window.removeEventListener('stg-goto',h); },[]);
   useEffect(()=>{ if(!go) return; const t=setTimeout(()=>{ const el=document.getElementById(go.id); if(!el) return;
-      el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('dl-flash'); setTimeout(()=>el.classList.remove('dl-flash'),1400); },150);
+      const pn=el.closest&&el.closest('.stgInPane'), b=pn&&pn.hidden?document.getElementById('stgInTab_'+pn.getAttribute('data-pane')):null; if(b) b.click();   // S2-5: a card on a hidden Inputs sub-tab (Loads, …): show that sub-tab first
+      setTimeout(()=>{ el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('dl-flash'); setTimeout(()=>el.classList.remove('dl-flash'),1400); },b?60:0); },150);
     return ()=>clearTimeout(t); },[go]);
   const undoStack=useRef([]), redoStack=useRef([]);
   const [,setHist]=useState(0); const HMAX=50;
@@ -13168,7 +13199,7 @@ function App(){
         {tab==='diagrams'&&<DiagramsTab R={R} inp={inp} set={setInp}/>}
         {tab==='camber'&&<CamberTab R={R}/>}
         {tab==='deck'&&<DeckTab R={R} go={setTab}/>}
-        {tab==='fatigue'&&<FatigueTab R={R}/>}
+        {tab==='fatigue'&&<FatigueTab R={R} inp={inp}/>}
         {tab==='stiff'&&<StiffTab R={R}/>}
         {tab==='conn'&&<ConnTab R={R}/>}
         {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp}/>}

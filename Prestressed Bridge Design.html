@@ -478,9 +478,10 @@ a.wk-a:hover{text-decoration:underline}
        bridgeSuite.v1.designBeam — the selected beam. Whichever app writes it,
            the others follow: same tab through onChange(), other tabs through the
            browser's storage event.
-     This block is byte-identical in index.html / psbeam.html / lldf.html — edit
-     it in one place and copy it to the other two. (ST-Girder, stgirder.html, left
-     the suite on 2026-10-19 and no longer carries it.)
+     This block is byte-identical in index.html / Prestressed Bridge Design.html
+     (psbeam.html until 2026-10-22) / lldf.html — edit it in one place and copy it
+     to the other two. (ST-Girder left the suite on 2026-10-19; stgirder.html was
+     removed on 2026-10-22.)
      ═══════════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
@@ -735,8 +736,10 @@ var st=document.createElement('style'); st.textContent=css;
 /* ============================================================================
    SHARED APP PATHS  ·  bridgeSuite.v1.appPaths
    ----------------------------------------------------------------------------
-   The three apps link to each other by bare file name: MCT embeds "psbeam.html"
-   in an iframe, every app's back link points at "index.html". That works only while each file is named exactly what
+   The three apps link to each other by bare file name: MCT frames "lldf.html" and
+   opens "Prestressed Bridge Design.html" (app id psbeam; psbeam.html is its redirect
+   page since 2026-10-22) in a new tab since 2026-10-22, every app's back link points
+   at "index.html". That works only while each file is named exactly what
    the others expect. Rename one, keep a second download called
    "psbeam (1).html", or serve the folder from something that answers unknown
    paths with the index page, and a link lands on the wrong document -- or on a
@@ -754,15 +757,14 @@ var st=document.createElement('style'); st.textContent=css;
    MCT itself. Now a sighting only answers for the folder it was made in, and
    no app will ever resolve a sibling to its own file name.
 
-   This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
-   one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
-   keeps only a reduced app-path record of its own. Since 2026-10-22 ST-Girder
-   also runs inside Steel Bridge Design.html, GirderDetail's file, as its
-   Design & Rating view; GirderDetail no longer reads that record.)
+   This block is byte-identical in index.html / Prestressed Bridge Design.html /
+   lldf.html. Edit one, edit all three. (ST-Girder left the suite on 2026-10-19;
+   since 2026-10-22 it runs only inside Steel Bridge Design.html, GirderDetail's
+   file, as its Design & Rating view, and stgirder.html was removed.)
    ========================================================================== */
 (function(){
   var KEY='bridgeSuite.v1.appPaths';
-  var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};
+  var DEF={mct:'index.html', psbeam:'Prestressed Bridge Design.html', lldf:'lldf.html'};
   var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app
