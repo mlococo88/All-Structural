@@ -19223,7 +19223,8 @@ function gdScheduleRefresh(why) { const pm = gdPLmode(); if (std().autoRefresh =
    selected girder from the Structural analysis module.
    ===================================================================== */
 const GR_CHAPS = [['geo', 'Bridge and girder geometry'], ['df', 'Loads and live load distribution factors'], ['sa', 'Structural analysis and stresses'], ['gs', 'Girder section: Strength I, Service II, constructibility, fatigue'],
-  ['fa', 'Fatigue details'], ['splice', 'Field splices'], ['bstf', 'Bearing stiffeners'], ['ts', 'Transverse stiffeners and connection plates'], ['sc', 'Shear connectors'], ['cf', 'Cross-frames'], ['oh', 'Deck overhang (exterior girders)'], ['wt', 'Web-to-flange welds and transitions']];
+  ['fa', 'Fatigue details'], ['splice', 'Field splices'], ['bstf', 'Bearing stiffeners'], ['ts', 'Transverse stiffeners and connection plates'], ['sc', 'Shear connectors'], ['cf', 'Cross-frames'], ['oh', 'Deck overhang (exterior girders)'], ['wt', 'Web-to-flange welds and transitions'],
+  ['st', 'Design & Rating (ST-Girder): design check and load rating']];   // SBD3 (2026-10-22): ST-Girder's report of this girder, off unless chosen (it may load the girder into the view)
 Object.defineProperty(GR_CHAPS.find(c => c[0] === 'cf'), 1, { get: () => GM.cf.label });   // chapter name follows the bracing used ("Diaphragms" with the diaphragm; 2026-10-13)
 let GR_RUN = null;
 function girderReportStart() {
@@ -19232,7 +19233,8 @@ function girderReportStart() {
   daModal(`<h3>Girder report</h3><p>One calculation package for the selected girder. Every module is loaded with that girder's demands from the Structural analysis module (its distribution factors, dead loads, and effective width), and each chapter is the module's full worked report.${gdPLmode() ? ' Afterwards every module returns to the Preliminary sizing demands (Preliminary designer mode).' : ''}</p>
     <div class="ig"><label for="gr_g">Girder</label><select id="gr_g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}" ${i + 1 === sel ? 'selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
     <div class="ck-row" style="margin-top:10px"><input type="checkbox" id="gr_ad" ${P.ui.grAd ? 'checked' : ''}><label for="gr_ad">Re-run auto-design for this girder (otherwise the current plates, bolts, and welds are checked)</label></div>
-    <h4 style="margin:12px 0 4px">Chapters</h4><div class="gr-chaps">${GR_CHAPS.map(([k, l]) => `<div class="ck-row"><input type="checkbox" id="gr_c_${k}" ${ch[k] !== false ? 'checked' : ''}><label for="gr_c_${k}">${l}</label></div>`).join('')}</div>
+    <h4 style="margin:12px 0 4px">Chapters</h4><div class="gr-chaps">${GR_CHAPS.map(([k, l]) => `<div class="ck-row"><input type="checkbox" id="gr_c_${k}" ${(k === 'st' ? ch[k] === true : ch[k] !== false) ? 'checked' : ''}><label for="gr_c_${k}">${l}</label></div>`).join('')}</div>
+    <p class="note-p">Design &amp; Rating (ST-Girder): ST-Girder's report of this girder (the sections chosen on its Report tab). When the view holds another girder, or this girder as the modules gave it before, the girder is loaded into the view first, as Load girder (Undo in ST-Girder restores its inputs).</p>
     <button type="button" class="proj-btn proj-btn-primary" id="gr_go" style="margin-top:12px">Build and print</button>`);
 }
 document.addEventListener('click', e => {
@@ -19285,6 +19287,7 @@ async function girderReportRun(j) {
       if (mod === 'splice' && !(j.splices || []).length && spNoPL()) { add('Field splices', `<p class="cr-p"><b>Warning:</b> Field splices are "Included" on the Splice tab, but Preliminary sizing has no field splice, so no splice was designed or checked for this girder.</p>`, []); continue; }
       if (mod === 'splice') { for (const s of (j.splices || [])) { importInto('splice', () => spliceApply(j, s), j.srcLabel); const c = await grChapter('splice', k + 1, o, `G${g}: bolted field splice ${s.label.replace(/, G\d+$/, '')}`); add(`Field splice ${s.label}`, c.html, c.toc); } continue; }
       const c = await grChapter(mod, k + 1, o, `G${g}: ${lbl}`); add(lbl, c.html, c.toc); }
+    if (R.ch.st === true) { grMsg('Building: Design & Rating (ST-Girder)…'); await grTick(); const c = await stChapter(g, k + 1); add('Design & Rating (ST-Girder)', c.html, c.toc); if (c.katex) await stKatexCss(); }   // SBD3
     // assemble
     const mt = gdMeta(), today = new Date().toLocaleDateString();
     const cover = `<div class="gr-cover"><h1>Girder G${g} Calculation Package</h1><p class="gr-sub">${esc(mt.name || 'Project')}${mt.projNo ? ` (Project No. ${esc(mt.projNo)})` : ''}${mt.bridgeNo ? `, Bridge No. ${esc(mt.bridgeNo)}` : ''}</p>${mt.desc ? `<p class="gr-sub">${esc(mt.desc)}</p>` : ''}
@@ -19300,6 +19303,7 @@ async function girderReportRun(j) {
       svg.querySelectorAll('*').forEach(x => { ATT.forEach(at => { const v = x.getAttribute(at); if (v && v.includes(`url(#${old})`)) x.setAttribute(at, v.split(`url(#${old})`).join(`url(#${nw})`)); });
         ['href', 'xlink:href'].forEach(at => { if (x.getAttribute(at) === '#' + old) x.setAttribute(at, '#' + nw); }); }); }); });
     if (window.MathJax && MathJax.typesetPromise) { try { await MathJax.typesetPromise([host]); } catch (e) {} }
+    host.querySelectorAll('.st-apx').forEach(stFit);   // SBD3: ST-Girder's chapter
     let st = document.getElementById('cr-page'); if (!st) { st = document.createElement('style'); st.id = 'cr-page'; document.head.appendChild(st); }
     const subj0 = P.meta.subject; P.meta.subject = `Girder G${g} calculation package`; let css = crPageCSS(); P.meta.subject = subj0;
     css = css.replace(/@bottom-left \{ content: "[^"]*";/, `@bottom-left { content: "${crEsc(gdMeta().name || 'Project')}, Girder G${g} calculation package (GirderDetail)";`);
@@ -20321,6 +20325,7 @@ function crPageCSS() {
 async function printCalcReport(o) {
   await plotImages(document.getElementById('tab-drawings')); await plotImages(document.getElementById('tab-combos')); await plotImages(document.getElementById('tab-stress'));
   const host = $('#calc-rpt'); host.innerHTML = buildCalcReport(o);
+  if (o.st) { const a = stApxModule(); if (a.error) alert(`Design & Rating (ST-Girder) appendix not added: ${a.error}`); else { host.insertAdjacentHTML('beforeend', a.html); const t = host.querySelector('.cr-front .cr-toc'); if (t) t.insertAdjacentHTML('beforeend', a.toc); await stKatexCss(); stFit(host.querySelector('.st-apx')); } }   // SBD3
   flash('Preparing the report…');
   if (window.MathJax && MathJax.typesetPromise) { try { await MathJax.typesetPromise([host]); } catch (e) {} }
   let st = document.getElementById('cr-page'); if (!st) { st = document.createElement('style'); st.id = 'cr-page'; document.head.appendChild(st); }
@@ -21431,7 +21436,30 @@ const ST_SHIMS = [
   useEffect(()=>{ const H=window.GD_ST_HOST; if(!H||!H.embedded||window.parent===window) return; const to=self.origin==='null'?'*':self.origin;
     const ck=R.ok?R.checks.map(c=>({n:c.n,t:c.t||'',ref:c.ref||'',r:c.r,v:c.v,lim:c.lim,u:c.u||'',pass:!!c.pass,oos:!!c.oos,loc:c.loc})):[];
     const q=R.ok&&R.rating?R.rating:null, rt=q?{flexInv:q.flexInv,flexOpr:q.flexOpr,shearInv:q.shearInv,shearOpr:q.shearOpr,negInv:q.negInv,negOpr:q.negOpr,servInv:q.servInv,servOpr:q.servOpr,govInv:q.govInv,govOpr:q.govOpr}:null;
-    try{ window.parent.postMessage({type:'gd-st-state',ok:!!R.ok,err:R.ok?'':String(R.error||''),girderId:(inp.proj&&inp.proj.girderId)||'',checks:ck,rating:rt,pnaOOS:!!R.pnaOOS,ext:gdHeld},to); }catch(er){} },[R,gdHeld]);`]];
+    try{ window.parent.postMessage({type:'gd-st-state',ok:!!R.ok,err:R.ok?'':String(R.error||''),girderId:(inp.proj&&inp.proj.girderId)||'',checks:ck,rating:rt,pnaOOS:!!R.pnaOOS,ext:gdHeld},to); }catch(er){} },[R,gdHeld]);
+  /* SBD3 shim (2026-10-22): one title block. The host page's project title block ({ type: 'gd-st-tb', tb }) is shown in place of ST-Girder's
+     Project, Job No., By, Date, Checked by and Check date, read-only, on the page and in the report (screen and print); ST-Girder's own saved
+     values (inp.proj) are kept and never written. Girder and Description stay ST-Girder's. */
+  const [gdTb,setGdTb]=useState(null);
+  useEffect(()=>{ const H=window.GD_ST_HOST; if(!H||!H.embedded||window.parent===window) return;
+    const h=e=>{ if(e.source!==window.parent||e.origin!==self.origin) return; const d=e.data; if(d&&d.type==='gd-st-tb') setGdTb(d.tb&&typeof d.tb==='object'?d.tb:null); };
+    window.addEventListener('message',h); return ()=>window.removeEventListener('message',h); },[]);
+  const inpTb=useMemo(()=>gdTb&&window.gdTbInp?gdTbInp(inp,gdTb):inp,[inp,gdTb]);
+  window.GD_ST_TBON=!!gdTb; window.gdStCur=()=>({inp:inpRef.current, inpTb:gdTb&&window.gdTbInp?gdTbInp(inpRef.current,gdTb):inpRef.current});`],
+  /* SBD3 shims (2026-10-22): the Report tab and the page's title-block fields with the host's title block (display only), and the report as HTML */
+  [`        {tab==='report'&&<ReportTab R={R} inp={inp} set={setInp}/>}`, `        {tab==='report'&&<ReportTab R={R} inp={inpTb} set={setInp}/>}`],
+  [`  const fld=(k,l,ph)=><label className="crv-fld">{l}<input value={(inp.proj&&inp.proj[k])||''} placeholder={ph} onChange={e=>uP(k,e.target.value)}/></label>;`, `  const fld=(k,l,ph)=>{ const ro=!!window.GD_ST_TBON&&k!=='desc'; return <label className="crv-fld">{l}<input value={(inp.proj&&inp.proj[k])||''} placeholder={ph} readOnly={ro} title={ro?'From the project title block of Steel Bridge Design (edit it there: Title block, top bar)':undefined} onChange={e=>{ if(!ro) uP(k,e.target.value); }}/></label>; };`],
+  [`<span className="crv-fnote">Report title block. Project, Girder, By, Date and Job No. are the fields at the top of the page.</span>`, `<span className="crv-fnote">{window.GD_ST_TBON?'Report title block: Project, Job No., By, Date, Checked by and Check date are the project title block of Steel Bridge Design (Title block, top bar), shown here read-only. Girder and Description are ST-Girder\u2019s.':'Report title block. Project, Girder, By, Date and Job No. are the fields at the top of the page.'}</span>`],
+  [`            <input value={inp.proj[k]} onChange={e=>uP(k,e.target.value)}/></div>)}`, `            {gdTb&&k!=='girderId'?<input value={inpTb.proj[k]||''} readOnly title="From the project title block of Steel Bridge Design (edit it there: Title block, top bar). ST-Girder's own value is kept." style={{background:'var(--sidebar)'}}/>:<input value={inp.proj[k]} onChange={e=>uP(k,e.target.value)}/>}</div>)}`],
+  [`ReactDOM.createRoot(document.getElementById('root')).render(<App/>);`, `/* SBD3 shim (2026-10-22): ST-Girder's calculation report (CalcDoc, the Report tab's document, with the sections chosen there) as HTML for the
+   host page's Girder report and Print. computeAll of the current inputs; the host's title block as on the Report tab. Nothing is changed. */
+window.gdStReportHtml=function(opt){ opt=opt||{}; const cur=window.gdStCur?window.gdStCur():null; if(!cur||!cur.inp) return {error:'ST-Girder has not started'};
+  const R=computeAll(cur.inp); if(!R.ok) return {error:String(R.error||'input error')};
+  const inp=cur.inpTb, o={...crOpts(),...(opt.o||{})}, model=crModel(R,inp,o), div=document.createElement('div'), root=ReactDOM.createRoot(div);
+  ReactDOM.flushSync(()=>root.render(<CalcDoc R={R} inp={inp} o={o} idp={opt.idp||'stx-'} model={model}/>));
+  const html=div.innerHTML; root.unmount();
+  return {html, toc:model.map(s=>s.t), girderId:(inp.proj&&inp.proj.girderId)||''}; };
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);`]];
 function stSrc() { return document.getElementById('st-src').textContent.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'); }
 const stTo = () => self.origin === 'null' ? '*' : self.origin;
 const gdFromST = e => !!ST_FRAME && e.source === ST_FRAME.contentWindow && e.origin === self.origin;   // messages are accepted only from the ST-Girder frame
@@ -21443,7 +21471,7 @@ function stEnsure() {
   ST_SHIMS.forEach(([a, b]) => { src = src.split(a).join(b); });
   let file = ''; try { file = decodeURIComponent((location.pathname || '').split('/').pop() || ''); } catch (e) { file = ''; }
   const host = { embedded: true, host: 'Steel Bridge Design', file: file || 'Steel Bridge Design.html', href: String(location.href || '').split('#')[0].split('?')[0] };
-  const inj = `<script>window.GD_ST_HOST = ${JSON.stringify(host).replace(/</g, '\\u003c')};\nwindow.gdStSig = ${stSig.toString()};<\/script>`;   // SBD1: host info, before ST-Girder's scripts; SBD2: the hand-off signature (stSig)
+  const inj = `<script>window.GD_ST_HOST = ${JSON.stringify(host).replace(/</g, '\\u003c')};\nwindow.gdStSig = ${stSig.toString()};\nwindow.gdTbInp = ${stTbInp.toString()};<\/script>`;   // SBD1: host info, before ST-Girder's scripts; SBD2: the hand-off signature (stSig); SBD3: title block (stTbInp)
   ST_FRAME = document.createElement('iframe'); ST_FRAME.name = 'gd-st'; ST_FRAME.id = 'st-frame'; ST_FRAME.title = 'Design & Rating (ST-Girder)';
   ST_FRAME.srcdoc = src.replace(/<head>/i, h => h + inj); $('#st-frame-box').appendChild(ST_FRAME);
   return true;
@@ -21457,7 +21485,7 @@ function stPost(m) { if (ST_READY && ST_FRAME && ST_FRAME.contentWindow) ST_FRAM
 function stShow() {
   stBar(); stPos(); stEnsure();   // when the frame cannot be prepared, stEnsure says so in the bar
   if (!stShow.ro && window.ResizeObserver) { stShow.ro = new ResizeObserver(stPos); stShow.ro.observe($('#gd-top')); }
-  document.body.classList.add('mod-st'); stLinkSoon(0);   // SBD2
+  document.body.classList.add('mod-st'); stLinkSoon(0); stTbPost();   // SBD2, SBD3
   document.querySelectorAll('.mtab').forEach(b => { const on = b.dataset.mod === 'st'; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
 }
 function stHide() { if (!document.body.classList.contains('mod-st')) return; document.body.classList.remove('mod-st'); applyMod(); }
@@ -21475,10 +21503,10 @@ function stBar() {
   stLinkShow();
 }
 // send one girder's hand-off (already built and published) to the frame; resolves with the payload once ST-Girder has applied it
-function stSend(pay, addPL) {
+function stSend(pay, addPL, quiet) {   // quiet (SBD3): load without showing the view (Girder report)
   pay = JSON.parse(JSON.stringify(pay));   // exactly what a reader of the shared channel gets (stgirder.html's #gdpull path reads it back from storage)
   const g = pay.girderDetail && pay.girderDetail.girder; if (g) { P.ui.stG = g; P.ui.stPL = addPL !== false; autosave(); }   // SBD2: remembered per project
-  stShow(); if (!ST_FRAME) return Promise.reject(new Error('the ST-Girder frame is not available'));
+  if (quiet) stEnsure(); else stShow(); if (!ST_FRAME) return Promise.reject(new Error('the ST-Girder frame is not available'));
   const sel = $('#st-g'), cpl = $('#st-pl'); if (sel && g) sel.value = String(g); if (cpl && g) cpl.checked = addPL !== false;
   const id = ++ST_N; stMsg(`Loading ${pay.member.key} into ST-Girder…`);
   return new Promise((res, rej) => { ST_WAIT.set(id, { res, rej, payload: pay }); stPost({ type: 'gd-st-pull', id, payload: pay }); });
@@ -21523,7 +21551,7 @@ function stSelG() { const nb = stNb(), g = Math.round(nm(P && P.ui && P.ui.stG))
 function stSelPL() { return !(P && P.ui && P.ui.stPL === false); }
 const stViewOn = () => document.body.classList.contains('mod-st');
 function stLinkSoon(ms) { clearTimeout(ST_LT); ST_LT = setTimeout(() => { ST_LT = null; stLinkCheck(); }, ms == null ? 800 : ms); }
-function stOnSave() { try { if (ST_FRAME && stViewOn()) stLinkSoon(); } catch (e) { } }   // autosave can run before this code has been evaluated
+function stOnSave() { try { if (ST_FRAME) { stTbPost(); if (stViewOn()) stLinkSoon(); } } catch (e) { } }   // autosave can run before this code has been evaluated; SBD3: the title block
 function stLinkCheck() {
   if (!P) return ST_LINK;
   if (!ST_STATE) { ST_LINK = { st: ST_FRAME ? 'wait' : 'closed' }; stLinkShow(); return ST_LINK; }
@@ -21571,6 +21599,67 @@ function stDaHtml() {
     <table class="tbl st-da-t"><thead><tr><th>Check (governing location)</th><th>AASHTO LRFD</th><th class="right">D/C</th><th>Result</th></tr></thead><tbody>${ck.map(c => `<tr class="${c.pass ? '' : 'ng'}"><td class="lbl">${a(stTabOf(c.ref), c.n)}</td><td>${esc(c.ref)}</td><td class="n">${c.oos ? 'out of scope' : f(c.r)}</td><td>${c.oos ? 'not reported' : c.pass ? 'pass' : 'FAIL'}</td></tr>`).join('')}</tbody></table>
     ${R ? `<table class="tbl st-da-t"><thead><tr><th>Load rating, HL-93 (MBE 6A)</th><th class="right">Inventory RF</th><th class="right">Operating RF</th></tr></thead><tbody>${row('Flexure (+M)', R.flexInv, R.flexOpr)}${R.negInv != null ? row('Flexure (−M)', R.negInv, R.negOpr) : ''}${row('Shear', R.shearInv, R.shearOpr)}${R.servInv != null ? row('Service II', R.servInv, R.servOpr) : ''}<tr class="tot"><td>Governing</td><td class="n"><b>${f(R.govInv)}</b></td><td class="n"><b>${f(R.govOpr)}</b></td></tr></tbody></table>` : ''}`;
 }
+
+/* ---------- Design & Rating (ST-Girder): one title block, one report (SBD3, 2026-10-22; merge of GirderDetail and ST-Girder, PR 3) ----------
+   Title block: the project title block P.tb goes to the frame ({ type: 'gd-st-tb', tb }, after every saved change when it differs, and when the
+   view opens); ST-Girder shows it read-only in place of its own Project, Job No., By, Date, Checked by and Check date, on the page, on its Report
+   tab and in its printed header (stTbInp, SBD3 shim). ST-Girder's saved fields (inp.proj) are not changed; stgirder.html opened on its own shows them.
+   Report: ST-Girder's calculation report (its CalcDoc, the sections chosen on its Report tab) is taken from the frame as HTML (gdStReportHtml, SBD3
+   shim) and placed (a) in the Girder report as a chapter (Design & Rating (ST-Girder)), numbered inside the chapter as every other chapter, ids
+   prefixed per chapter, and (b) in a module's Print report as Appendix A, its sections numbered A.1, A.1.1 … and its "see §n.k" links reading
+   "see §A.n.k". ST-Girder's own CSS goes with it, scoped to the appendix (.st-apx, stApxCss), and KaTeX's style sheet (the same pinned URL as in
+   st-src) is added to this page when an appendix is printed. MathJax skips it (tex2jax_ignore). The frame's own Print is unchanged. Display only. */
+let ST_TBK = null, ST_APXCSS = null;
+function stTbInp(inp, t) { if (!t || !inp) return inp; const p = inp.proj || {};
+  return Object.assign({}, inp, { proj: Object.assign({}, p, { name: t.name || '', job: t.no || '', by: t.compBy || '', date: t.compDate || '', checkedBy: t.chkBy || '', chkDate: t.chkDate || '' }) }); }
+function stTbPost() { if (!ST_FRAME || !P) return; const tb = P.tb ? JSON.parse(JSON.stringify(P.tb)) : null, k = JSON.stringify(tb); if (k === ST_TBK) return; ST_TBK = k; stPost({ type: 'gd-st-tb', tb }); }
+// ST-Girder's own style rules (its inline <style>), every selector scoped to pre; :root, html, body and the document class .crdoc become pre itself
+// (the appendix sits inside this page's .crdoc report); @page and @import dropped
+function stSplitSel(t) { const out = []; let d = 0, cur = ''; for (const ch of t) { if (ch === '(' || ch === '[') d++; else if (ch === ')' || ch === ']') d--; if (ch === ',' && !d) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map(x => x.trim()).filter(Boolean); }
+function stScopeCss(rules, pre) { let out = '';
+  for (const r of rules) {
+    if (r.selectorText != null && r.style) out += stSplitSel(r.selectorText).map(x => /^(:root|html|body)$/.test(x) ? pre : /^(html|body)\b/.test(x) ? x.replace(/^(html|body)/, pre) : /^\.crdoc(?![\w-])/.test(x) ? x.replace(/^\.crdoc/, pre) : `${pre} ${x}`).join(', ') + `{${r.style.cssText}}\n`;
+    else if (r.media && r.cssRules) out += `@media ${r.media.mediaText}{${stScopeCss(r.cssRules, pre)}}\n`;
+    else if (r.conditionText != null && r.cssRules) out += `@supports ${r.conditionText}{${stScopeCss(r.cssRules, pre)}}\n`;
+    else if (/^@(font-face|keyframes)/.test(r.cssText)) out += r.cssText + '\n'; }
+  return out; }
+function stApxCss() { if (ST_APXCSS != null) return ST_APXCSS; let css = '';
+  try { [...ST_FRAME.contentDocument.styleSheets].forEach(sh => { if (!sh.ownerNode || sh.ownerNode.tagName !== 'STYLE') return; css += stScopeCss(sh.cssRules, '.st-apx'); }); } catch (e) { css = ''; }
+  return (ST_APXCSS = css); }
+function stApxStyle() { if (document.getElementById('st-apx-css')) return; const st = document.createElement('style'); st.id = 'st-apx-css'; st.textContent = stApxCss(); document.head.appendChild(st); }
+// KaTeX's style sheet for the appendix (the version and URL ST-Girder loads, st-src); resolves when loaded, or after 8 s
+function stKatexCss() { let l = document.getElementById('st-katex-css'); if (l && l.dataset.ok) return Promise.resolve();
+  if (!l) { l = document.createElement('link'); l.id = 'st-katex-css'; l.rel = 'stylesheet'; l.href = 'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'; document.head.appendChild(l); }
+  return new Promise(res => { const done = () => { l.dataset.ok = '1'; res(); }; l.addEventListener('load', done, { once: true }); l.addEventListener('error', () => res(), { once: true }); setTimeout(res, 8000); })
+    .then(() => document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 4000))]) : null); }
+// equations wider than the line shrunk to fit, as ST-Girder does before it prints (its crFit, run on the appendix in this page)
+function stFit(el) { try { if (el && ST_FRAME && ST_FRAME.contentWindow.crFit) ST_FRAME.contentWindow.crFit(el); } catch (e) { } }
+// the report HTML from the frame (it must be up)
+function stRptHtml(idp) { const W = ST_FRAME && ST_FRAME.contentWindow; if (!ST_READY || !W || typeof W.gdStReportHtml !== 'function') return { error: 'open Design & Rating (ST-Girder) first' };
+  try { return W.gdStReportHtml({ idp }); } catch (e) { return { error: e.message }; } }
+// numbering n, n.k and "see §n.k" -> pre + n …, in the HTML of ST-Girder's CalcDoc
+function stRenum(html, pre) {
+  return html.replace(/(<h2 class="cr-h1"[^>]*>)(\d+)\. /g, `$1${pre}$2. `).replace(/(<h3 class="cr-h2">)(\d+)\.(\d+)\. /g, `$1${pre}$2.$3. `)
+    .replace(/(<a href="#[^"]*"[^>]*>)(\d+)\.(?:(\d+)\.)? /g, (m, a, n, k) => `${a}${pre}${n}.${k ? k + '.' : ''} `).replace(/§(\d+(?:\.\d+)*)/g, `§${pre}$1`); }
+function stRptOpt() { const S = ST_STATE, e = S && S.ext; if (!S) return '';
+  const L = stLinkCheck(), bad = !S.ok ? 'ST-Girder has an input error' : '', note = !e ? 'ST-Girder\'s own inputs, no girder of this project loaded' : L.st === 'stale' ? 'GirderDetail changed since it was loaded: Update it in the view first' : L.st === 'other' ? `ST-Girder holds ${e.label}` : 'in sync';
+  return `<div class="ck-row" style="margin-top:6px"><input type="checkbox" id="ro-st" ${P.ui.rpt.st === true && !bad ? 'checked' : ''} ${bad ? 'disabled' : ''}><label for="ro-st">Appendix A: Design &amp; Rating (ST-Girder) report of ${esc(S.girderId || 'the girder')} as the view holds it (${esc(bad || note)})</label></div>`; }
+// a module's Print report: Appendix A
+function stApxModule() { const r = stRptHtml('stA-'); if (r.error) return r; stApxStyle();
+  const id = 'cr-sA', h = `<section class="cr-sec cr-break"><h2 class="cr-h1" id="${id}">Appendix A. Design &amp; Rating (ST-Girder): ${esc(r.girderId)}:</h2><p class="cr-p">ST-Girder's calculation (AASHTO LRFD design check and HL-93 load rating) of this girder, as the Design &amp; Rating (ST-Girder) view holds it: ${esc(stLinkText())} Its sections are numbered A.1, A.2 …</p></section>`;
+  return { html: h + `<div class="st-apx tex2jax_ignore">${stRenum(r.html, 'A.')}</div>`, toc: `<li><a href="#${id}" data-crjump="${id}">Appendix A. Design &amp; Rating (ST-Girder)</a><ol>${r.toc.map((t, i) => `<li>A.${i + 1}. ${esc(t)}</li>`).join('')}</ol></li>` }; }
+// the Girder report's chapter: girder g's hand-off as the modules give it now; loaded into the view first when the frame holds anything else
+async function stChapter(g, k) { const wait = (f, ms) => new Promise(res => { const t0 = Date.now(), iv = setInterval(() => { if (f() || Date.now() - t0 > ms) { clearInterval(iv); res(f()); } }, 200); });
+  const pl = stSelPL(), r = gdStPayload(g, pl); if (r.error) return { html: `<p class="cr-p">Not available: ${esc(r.error)}</p>`, toc: [] };
+  if (!stEnsure() || !(await wait(() => ST_READY && ST_STATE, 90000))) return { html: '<p class="cr-p">Not available: the Design &amp; Rating (ST-Girder) frame did not start.</p>', toc: [] };
+  const e = ST_STATE.ext, sig = stSig(r.payload);
+  if (!e || +e.girder !== g || e.sig !== sig) { grMsg(`Loading G${g} into Design & Rating (ST-Girder)…`);
+    let pay = r.payload; try { const w = window.BridgeXfer ? BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file) : null; if (w && w.payload) pay = w.payload; } catch (er) { }
+    try { await stSend(pay, pl, true); } catch (er) { return { html: `<p class="cr-p">Not available: G${g} was not loaded into ST-Girder (${esc(er.message)}).</p>`, toc: [] }; }
+    await wait(() => ST_STATE && ST_STATE.ext && ST_STATE.ext.sig === sig, 20000); }
+  const x = stRptHtml('stx-'); if (x.error) return { html: `<p class="cr-p">Not available: ${esc(x.error)}</p>`, toc: [] }; stApxStyle();
+  const P_ = `c${k}-`, html = x.html.replace(/ id="([^"]+)"/g, ` id="${P_}$1"`).replace(/url\(#([^)]+)\)/g, `url(#${P_}$1)`).replace(/href="#([^"]+)"/g, `href="#${P_}$1"`);   // ids unique to the chapter, as grChapter
+  return { html: `<div class="st-apx tex2jax_ignore">${html}</div>`, toc: x.toc, katex: true }; }
 function loadAllInbox(j) { return gdBg(() => loadAllInbox0(j)); }
 function loadAllInbox0(j) {
   const done = [];
@@ -21732,10 +21821,12 @@ function openReport() { if (document.body.classList.contains('mod-st')) { stRepo
   const r = P.ui.rpt; $('#rpt-opts').innerHTML = `<div class="ck-row"><input type="checkbox" checked disabled><label>Cover, references, table of contents, and objectives (always printed)</label></div>`
     + CR_OPTS.map(([k, l]) => `<div class="ck-row"><input type="checkbox" id="ro-${k}" ${r[k] !== false ? 'checked' : ''}><label for="ro-${k}">${l}</label></div>`).join('')
     + `<div class="ig" style="margin-top:10px"><label for="ro-detail">Level of detail in the checks</label><select id="ro-detail"><option value="full">Every item worked (full calculation)</option><option value="gov">Governing item worked, others tabulated</option></select></div>
+       ${stRptOpt()}
        <p class="note">The header uses the project title block at the top of the page (Project No., Computed/Checked by and dates) and the Subject on the Project tab. In the print dialog choose "Save as PDF", Letter, and turn off the browser's own headers and footers.</p>`;
   $('#ro-detail').value = r.detail || 'full'; if (r.manual === undefined) $('#ro-manual').checked = false; $('#rpt-modal').hidden = false; }
 function doPrint() {
-  const o = {}; CR_OPTS.forEach(([k]) => { o[k] = $('#ro-' + k).checked; P.ui.rpt[k] = o[k]; }); o.detail = $('#ro-detail').value; P.ui.rpt.detail = o.detail; autosave();
+  const o = {}; CR_OPTS.forEach(([k]) => { o[k] = $('#ro-' + k).checked; P.ui.rpt[k] = o[k]; }); o.detail = $('#ro-detail').value; P.ui.rpt.detail = o.detail;
+  const rst = document.getElementById('ro-st'); if (rst) { o.st = rst.checked && !rst.disabled; P.ui.rpt.st = rst.checked; } autosave();   // SBD3: Appendix A, ST-Girder's report
   $('#rpt-modal').hidden = true; printCalcReport(o);
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('printing'));

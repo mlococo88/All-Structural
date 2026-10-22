@@ -20806,3 +20806,149 @@ function stDaHtml() {
   "Shear" in the ratings → the view opens at ST-Girder's Rating tab.
 
 **Open items:** none.
+
+
+## 2026-10-22 — PR: claude/sbd-3-report (SBD3: merge of GirderDetail and ST-Girder, PR 3: one title block, one report; PR link added after merge)
+
+**No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed
+(one optional view field, `P.ui.rpt.st`, below). ST-Girder (`st-src`) is unchanged; its frame gets six more shims (display and report extract
+only; no input or result touched). **Display change in the view:** ST-Girder's title-block fields (Project, Job No., By, Date, Checked by, Check
+date) show the project title block, so in `tests/compare.mjs --tool sbd` the sections `G<n> st.tab.Report` and `G<n> st.report.all` differ from
+stgirder.html in exactly those lines (title block, cover line, 2.1 Project and girder); every other section is identical. Results in the PR.
+
+### SBD3-a. One title block   [display] [no result change]
+- **Frame shims** (`ST_SHIMS`): the SBD1/SBD2 App shim (fourth entry) now ends, after the SBD2 `gd-st-state` effect, with (exactly):
+  ```jsx
+  /* SBD3 shim (2026-10-22): one title block. The host page's project title block ({ type: 'gd-st-tb', tb }) is shown in place of ST-Girder's
+     Project, Job No., By, Date, Checked by and Check date, read-only, on the page and in the report (screen and print); ST-Girder's own saved
+     values (inp.proj) are kept and never written. Girder and Description stay ST-Girder's. */
+  const [gdTb,setGdTb]=useState(null);
+  useEffect(()=>{ const H=window.GD_ST_HOST; if(!H||!H.embedded||window.parent===window) return;
+    const h=e=>{ if(e.source!==window.parent||e.origin!==self.origin) return; const d=e.data; if(d&&d.type==='gd-st-tb') setGdTb(d.tb&&typeof d.tb==='object'?d.tb:null); };
+    window.addEventListener('message',h); return ()=>window.removeEventListener('message',h); },[]);
+  const inpTb=useMemo(()=>gdTb&&window.gdTbInp?gdTbInp(inp,gdTb):inp,[inp,gdTb]);
+  window.GD_ST_TBON=!!gdTb; window.gdStCur=()=>({inp:inpRef.current, inpTb:gdTb&&window.gdTbInp?gdTbInp(inpRef.current,gdTb):inpRef.current});
+  ```
+  and four entries follow it (with the report extract of SBD3-b), exactly:
+  ```js
+  /* SBD3 shims (2026-10-22): the Report tab and the page's title-block fields with the host's title block (display only), and the report as HTML */
+  [`        {tab==='report'&&<ReportTab R={R} inp={inp} set={setInp}/>}`, `        {tab==='report'&&<ReportTab R={R} inp={inpTb} set={setInp}/>}`],
+  [`  const fld=(k,l,ph)=><label className="crv-fld">{l}<input value={(inp.proj&&inp.proj[k])||''} placeholder={ph} onChange={e=>uP(k,e.target.value)}/></label>;`, `  const fld=(k,l,ph)=>{ const ro=!!window.GD_ST_TBON&&k!=='desc'; return <label className="crv-fld">{l}<input value={(inp.proj&&inp.proj[k])||''} placeholder={ph} readOnly={ro} title={ro?'From the project title block of Steel Bridge Design (edit it there: Title block, top bar)':undefined} onChange={e=>{ if(!ro) uP(k,e.target.value); }}/></label>; };`],
+  [`<span className="crv-fnote">Report title block. Project, Girder, By, Date and Job No. are the fields at the top of the page.</span>`, `<span className="crv-fnote">{window.GD_ST_TBON?'Report title block: Project, Job No., By, Date, Checked by and Check date are the project title block of Steel Bridge Design (Title block, top bar), shown here read-only. Girder and Description are ST-Girder\u2019s.':'Report title block. Project, Girder, By, Date and Job No. are the fields at the top of the page.'}</span>`],
+  [`            <input value={inp.proj[k]} onChange={e=>uP(k,e.target.value)}/></div>)}`, `            {gdTb&&k!=='girderId'?<input value={inpTb.proj[k]||''} readOnly title="From the project title block of Steel Bridge Design (edit it there: Title block, top bar). ST-Girder's own value is kept." style={{background:'var(--sidebar)'}}/>:<input value={inp.proj[k]} onChange={e=>uP(k,e.target.value)}/>}</div>)}`],
+  [`ReactDOM.createRoot(document.getElementById('root')).render(<App/>);`, `/* SBD3 shim (2026-10-22): ST-Girder's calculation report (CalcDoc, the Report tab's document, with the sections chosen there) as HTML for the
+   host page's Girder report and Print. computeAll of the current inputs; the host's title block as on the Report tab. Nothing is changed. */
+window.gdStReportHtml=function(opt){ opt=opt||{}; const cur=window.gdStCur?window.gdStCur():null; if(!cur||!cur.inp) return {error:'ST-Girder has not started'};
+  const R=computeAll(cur.inp); if(!R.ok) return {error:String(R.error||'input error')};
+  const inp=cur.inpTb, o={...crOpts(),...(opt.o||{})}, model=crModel(R,inp,o), div=document.createElement('div'), root=ReactDOM.createRoot(div);
+  ReactDOM.flushSync(()=>root.render(<CalcDoc R={R} inp={inp} o={o} idp={opt.idp||'stx-'} model={model}/>));
+  const html=div.innerHTML; root.unmount();
+  return {html, toc:model.map(s=>s.t), girderId:(inp.proj&&inp.proj.girderId)||''}; };
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);`]];
+  ```
+  Each anchor occurs once in stgirder.html (checked by `stEnsure()`, which refuses to build the frame otherwise). `st-src` itself is unchanged.
+- `stEnsure()`, the injected host script: `;\nwindow.gdStSig = ${stSig.toString()};<\/script>` → `;\nwindow.gdStSig = ${stSig.toString()};\nwindow.gdTbInp = ${stTbInp.toString()};<\/script>`.
+- `stOnSave()`: before `function stOnSave() { try { if (ST_FRAME && stViewOn()) stLinkSoon(); } catch (e) { } }`, after
+  `function stOnSave() { try { if (ST_FRAME) { stTbPost(); if (stViewOn()) stLinkSoon(); } } catch (e) { } }` (comment extended).
+  `stShow()`: `stLinkSoon(0);   // SBD2` → `stLinkSoon(0); stTbPost();   // SBD2, SBD3`.
+- Mapping (`stTbInp`): Project ← title block Project name; Job No. ← Project No.; By ← Computed by; Date ← Date (computed); Checked by ← Checked
+  by; Check date ← Checked date. Girder and Description stay ST-Girder's (girder-specific, as the modules' Subject). Empty title-block fields show
+  empty ("—"). ST-Girder's `stgirder.session` `proj` is never written; stgirder.html opened on its own shows its own fields.
+- **Check case:** xsA project, title block Project No. "PN-77", Computed by "ENG-A" 2026-10-01, Checked by "CHK-B" 2026-10-02 → the view's page
+  fields read the project name, ENG-A, 2026-10-01, PN-77 (read-only), Girder "G3 (Interior)" editable; Report tab title block "Project No PN-77 ·
+  Computed by ENG-A · Date 2026-10-01 · Description G3 (Interior), span 1 of 3, L = 110.0 ft · Checked by CHK-B · Date 2026-10-02";
+  `stgirder.session` `proj` = {"name":"SEEDED ST SESSION","girderId":"G3 (Interior)","by":"MLC",…} before and after.
+
+### SBD3-b. One report: ST-Girder's report in the Girder report and in Print   [new] [display only]
+- **Frame shim** `window.gdStReportHtml(opt)` (last entry of `ST_SHIMS`, above): ST-Girder's `CalcDoc` (the Report tab's document, with the
+  sections chosen there, `crOpts()`), of `computeAll` of the current inputs and the title block as on the Report tab, rendered to HTML.
+- **Host code**, inserted after `stDaHtml()` (end of SBD2), exactly:
+  ```js
+/* ---------- Design & Rating (ST-Girder): one title block, one report (SBD3, 2026-10-22; merge of GirderDetail and ST-Girder, PR 3) ----------
+   Title block: the project title block P.tb goes to the frame ({ type: 'gd-st-tb', tb }, after every saved change when it differs, and when the
+   view opens); ST-Girder shows it read-only in place of its own Project, Job No., By, Date, Checked by and Check date, on the page, on its Report
+   tab and in its printed header (stTbInp, SBD3 shim). ST-Girder's saved fields (inp.proj) are not changed; stgirder.html opened on its own shows them.
+   Report: ST-Girder's calculation report (its CalcDoc, the sections chosen on its Report tab) is taken from the frame as HTML (gdStReportHtml, SBD3
+   shim) and placed (a) in the Girder report as a chapter (Design & Rating (ST-Girder)), numbered inside the chapter as every other chapter, ids
+   prefixed per chapter, and (b) in a module's Print report as Appendix A, its sections numbered A.1, A.1.1 … and its "see §n.k" links reading
+   "see §A.n.k". ST-Girder's own CSS goes with it, scoped to the appendix (.st-apx, stApxCss), and KaTeX's style sheet (the same pinned URL as in
+   st-src) is added to this page when an appendix is printed. MathJax skips it (tex2jax_ignore). The frame's own Print is unchanged. Display only. */
+let ST_TBK = null, ST_APXCSS = null;
+function stTbInp(inp, t) { if (!t || !inp) return inp; const p = inp.proj || {};
+  return Object.assign({}, inp, { proj: Object.assign({}, p, { name: t.name || '', job: t.no || '', by: t.compBy || '', date: t.compDate || '', checkedBy: t.chkBy || '', chkDate: t.chkDate || '' }) }); }
+function stTbPost() { if (!ST_FRAME || !P) return; const tb = P.tb ? JSON.parse(JSON.stringify(P.tb)) : null, k = JSON.stringify(tb); if (k === ST_TBK) return; ST_TBK = k; stPost({ type: 'gd-st-tb', tb }); }
+// ST-Girder's own style rules (its inline <style>), every selector scoped to pre; :root, html, body and the document class .crdoc become pre itself
+// (the appendix sits inside this page's .crdoc report); @page and @import dropped
+function stSplitSel(t) { const out = []; let d = 0, cur = ''; for (const ch of t) { if (ch === '(' || ch === '[') d++; else if (ch === ')' || ch === ']') d--; if (ch === ',' && !d) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map(x => x.trim()).filter(Boolean); }
+function stScopeCss(rules, pre) { let out = '';
+  for (const r of rules) {
+    if (r.selectorText != null && r.style) out += stSplitSel(r.selectorText).map(x => /^(:root|html|body)$/.test(x) ? pre : /^(html|body)\b/.test(x) ? x.replace(/^(html|body)/, pre) : /^\.crdoc(?![\w-])/.test(x) ? x.replace(/^\.crdoc/, pre) : `${pre} ${x}`).join(', ') + `{${r.style.cssText}}\n`;
+    else if (r.media && r.cssRules) out += `@media ${r.media.mediaText}{${stScopeCss(r.cssRules, pre)}}\n`;
+    else if (r.conditionText != null && r.cssRules) out += `@supports ${r.conditionText}{${stScopeCss(r.cssRules, pre)}}\n`;
+    else if (/^@(font-face|keyframes)/.test(r.cssText)) out += r.cssText + '\n'; }
+  return out; }
+function stApxCss() { if (ST_APXCSS != null) return ST_APXCSS; let css = '';
+  try { [...ST_FRAME.contentDocument.styleSheets].forEach(sh => { if (!sh.ownerNode || sh.ownerNode.tagName !== 'STYLE') return; css += stScopeCss(sh.cssRules, '.st-apx'); }); } catch (e) { css = ''; }
+  return (ST_APXCSS = css); }
+function stApxStyle() { if (document.getElementById('st-apx-css')) return; const st = document.createElement('style'); st.id = 'st-apx-css'; st.textContent = stApxCss(); document.head.appendChild(st); }
+// KaTeX's style sheet for the appendix (the version and URL ST-Girder loads, st-src); resolves when loaded, or after 8 s
+function stKatexCss() { let l = document.getElementById('st-katex-css'); if (l && l.dataset.ok) return Promise.resolve();
+  if (!l) { l = document.createElement('link'); l.id = 'st-katex-css'; l.rel = 'stylesheet'; l.href = 'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'; document.head.appendChild(l); }
+  return new Promise(res => { const done = () => { l.dataset.ok = '1'; res(); }; l.addEventListener('load', done, { once: true }); l.addEventListener('error', () => res(), { once: true }); setTimeout(res, 8000); })
+    .then(() => document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 4000))]) : null); }
+// equations wider than the line shrunk to fit, as ST-Girder does before it prints (its crFit, run on the appendix in this page)
+function stFit(el) { try { if (el && ST_FRAME && ST_FRAME.contentWindow.crFit) ST_FRAME.contentWindow.crFit(el); } catch (e) { } }
+// the report HTML from the frame (it must be up)
+function stRptHtml(idp) { const W = ST_FRAME && ST_FRAME.contentWindow; if (!ST_READY || !W || typeof W.gdStReportHtml !== 'function') return { error: 'open Design & Rating (ST-Girder) first' };
+  try { return W.gdStReportHtml({ idp }); } catch (e) { return { error: e.message }; } }
+// numbering n, n.k and "see §n.k" -> pre + n …, in the HTML of ST-Girder's CalcDoc
+function stRenum(html, pre) {
+  return html.replace(/(<h2 class="cr-h1"[^>]*>)(\d+)\. /g, `$1${pre}$2. `).replace(/(<h3 class="cr-h2">)(\d+)\.(\d+)\. /g, `$1${pre}$2.$3. `)
+    .replace(/(<a href="#[^"]*"[^>]*>)(\d+)\.(?:(\d+)\.)? /g, (m, a, n, k) => `${a}${pre}${n}.${k ? k + '.' : ''} `).replace(/§(\d+(?:\.\d+)*)/g, `§${pre}$1`); }
+function stRptOpt() { const S = ST_STATE, e = S && S.ext; if (!S) return '';
+  const L = stLinkCheck(), bad = !S.ok ? 'ST-Girder has an input error' : '', note = !e ? 'ST-Girder\'s own inputs, no girder of this project loaded' : L.st === 'stale' ? 'GirderDetail changed since it was loaded: Update it in the view first' : L.st === 'other' ? `ST-Girder holds ${e.label}` : 'in sync';
+  return `<div class="ck-row" style="margin-top:6px"><input type="checkbox" id="ro-st" ${P.ui.rpt.st === true && !bad ? 'checked' : ''} ${bad ? 'disabled' : ''}><label for="ro-st">Appendix A: Design &amp; Rating (ST-Girder) report of ${esc(S.girderId || 'the girder')} as the view holds it (${esc(bad || note)})</label></div>`; }
+// a module's Print report: Appendix A
+function stApxModule() { const r = stRptHtml('stA-'); if (r.error) return r; stApxStyle();
+  const id = 'cr-sA', h = `<section class="cr-sec cr-break"><h2 class="cr-h1" id="${id}">Appendix A. Design &amp; Rating (ST-Girder): ${esc(r.girderId)}:</h2><p class="cr-p">ST-Girder's calculation (AASHTO LRFD design check and HL-93 load rating) of this girder, as the Design &amp; Rating (ST-Girder) view holds it: ${esc(stLinkText())} Its sections are numbered A.1, A.2 …</p></section>`;
+  return { html: h + `<div class="st-apx tex2jax_ignore">${stRenum(r.html, 'A.')}</div>`, toc: `<li><a href="#${id}" data-crjump="${id}">Appendix A. Design &amp; Rating (ST-Girder)</a><ol>${r.toc.map((t, i) => `<li>A.${i + 1}. ${esc(t)}</li>`).join('')}</ol></li>` }; }
+// the Girder report's chapter: girder g's hand-off as the modules give it now; loaded into the view first when the frame holds anything else
+async function stChapter(g, k) { const wait = (f, ms) => new Promise(res => { const t0 = Date.now(), iv = setInterval(() => { if (f() || Date.now() - t0 > ms) { clearInterval(iv); res(f()); } }, 200); });
+  const pl = stSelPL(), r = gdStPayload(g, pl); if (r.error) return { html: `<p class="cr-p">Not available: ${esc(r.error)}</p>`, toc: [] };
+  if (!stEnsure() || !(await wait(() => ST_READY && ST_STATE, 90000))) return { html: '<p class="cr-p">Not available: the Design &amp; Rating (ST-Girder) frame did not start.</p>', toc: [] };
+  const e = ST_STATE.ext, sig = stSig(r.payload);
+  if (!e || +e.girder !== g || e.sig !== sig) { grMsg(`Loading G${g} into Design & Rating (ST-Girder)…`);
+    let pay = r.payload; try { const w = window.BridgeXfer ? BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file) : null; if (w && w.payload) pay = w.payload; } catch (er) { }
+    try { await stSend(pay, pl, true); } catch (er) { return { html: `<p class="cr-p">Not available: G${g} was not loaded into ST-Girder (${esc(er.message)}).</p>`, toc: [] }; }
+    await wait(() => ST_STATE && ST_STATE.ext && ST_STATE.ext.sig === sig, 20000); }
+  const x = stRptHtml('stx-'); if (x.error) return { html: `<p class="cr-p">Not available: ${esc(x.error)}</p>`, toc: [] }; stApxStyle();
+  const P_ = `c${k}-`, html = x.html.replace(/ id="([^"]+)"/g, ` id="${P_}$1"`).replace(/url\(#([^)]+)\)/g, `url(#${P_}$1)`).replace(/href="#([^"]+)"/g, `href="#${P_}$1"`);   // ids unique to the chapter, as grChapter
+  return { html: `<div class="st-apx tex2jax_ignore">${html}</div>`, toc: x.toc, katex: true }; }
+  ```
+- `stSend(pay, addPL)` → `stSend(pay, addPL, quiet)`; its line `stShow(); if (!ST_FRAME) return …` → `if (quiet) stEnsure(); else stShow(); if (!ST_FRAME) return …`.
+- **Girder report:** `GR_CHAPS` gets a last entry `['st', 'Design & Rating (ST-Girder): design check and load rating']`; in `girderReportStart()`
+  the chapter checkbox is checked by `(k === 'st' ? ch[k] === true : ch[k] !== false)` (was `ch[k] !== false`: the new chapter is off unless chosen)
+  and a note follows the chapter list; in `girderReportRun()`, after the module chapters (anchor
+  `const c = await grChapter(mod, k + 1, o, `G${g}: ${lbl}`); add(lbl, c.html, c.toc); }`), added
+  `if (R.ch.st === true) { grMsg('Building: Design & Rating (ST-Girder)…'); await grTick(); const c = await stChapter(g, k + 1); add('Design & Rating (ST-Girder)', c.html, c.toc); if (c.katex) await stKatexCss(); }   // SBD3`
+  and after its MathJax typeset line `host.querySelectorAll('.st-apx').forEach(stFit);   // SBD3: ST-Girder's chapter`. The chapter is the
+  report's girder as the modules give it at that moment (`gdStPayload(g, pedestrian choice)`); when the view holds anything else it is loaded first
+  (published and applied as Load girder, without switching to the view). Numbering inside the chapter is ST-Girder's own (1., 1.1 …), as every other
+  chapter's; ids and links prefixed `c<k>-` as `grChapter` does.
+- **Print (module report):** `openReport()`: `${stRptOpt()}` before the note paragraph (an "Appendix A: Design & Rating (ST-Girder) report of …
+  as the view holds it (in sync | …)" checkbox, shown when the view has reported, disabled on an ST-Girder input error, off unless chosen; kept in
+  `P.ui.rpt.st`). `doPrint()`: after `o.detail = $('#ro-detail').value; P.ui.rpt.detail = o.detail;` the `autosave();` moved to the next line, after
+  `const rst = document.getElementById('ro-st'); if (rst) { o.st = rst.checked && !rst.disabled; P.ui.rpt.st = rst.checked; }`.
+  `printCalcReport()`: after `host.innerHTML = buildCalcReport(o);` added
+  `if (o.st) { const a = stApxModule(); if (a.error) alert(`Design & Rating (ST-Girder) appendix not added: ${a.error}`); else { host.insertAdjacentHTML('beforeend', a.html); const t = host.querySelector('.cr-front .cr-toc'); if (t) t.insertAdjacentHTML('beforeend', a.toc); await stKatexCss(); stFit(host.querySelector('.st-apx')); } }   // SBD3`
+  The appendix is numbered A.1, A.1.1 …, "see §n.k" reads "see §A.n.k" (`stRenum`), and the report's contents list gets "Appendix A".
+- Styles: ST-Girder's own inline style rules, scoped to `.st-apx` (`stApxCss`, in `<style id="st-apx-css">`), and KaTeX's style sheet
+  `https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css` (`<link id="st-katex-css">`, added on first use): the same library and pinned
+  version that ST-Girder (`st-src`) loads; no new library. MathJax does not process the appendix (`tex2jax_ignore`).
+- **Check case:** xsA, view holding G3 → Structural analysis, Print report, Appendix A on → the printed report ends with "Appendix A. Design &
+  Rating (ST-Girder): G3 (Interior)" and sections "A.1. Objectives", "A.2. Input parameters", "A.2.1. Project and girder" …; 28 links read
+  "see §A.n.k", none "see §n.k"; no duplicate id. Girder report G2 with chapters Structural analysis and Design & Rating (ST-Girder) → "Chapter 1.
+  Structural analysis and stresses", "Chapter 2. Design & Rating (ST-Girder)" (ST-Girder's cover "G2 (Interior) … Job PN-77"); the view now holds G2.
+  ST-Girder's own "Print this report" in the view prints the frame as before.
+
+**Open items:** none.
