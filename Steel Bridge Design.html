@@ -11642,7 +11642,7 @@ function ShearTab({R}){
     <Card title="Shear Demand vs Capacity" refTag="AASHTO 6.10.9 · Vu envelope vs φVn">
       <Fig h={360} data={[
         {x:sx,y:stns.map(p=>p.Vu),name:'Vu (Strength I, |envelope|)',fill:'tozeroy',fillcolor:'rgba(28,79,196,.06)',line:{color:'#1C4FC4',width:2.2}},
-        {x:sx,y:stns.map(p=>Math.abs(1.25*(p.V1+p.V2)+1.5*p.Vw)),name:'factored dead load |V|',line:{color:'#15803D',width:1.6,dash:'dot'}},
+        {x:sx,y:stns.map(p=>p.gV?Math.abs(p.gV[0]*p.V1+p.gV[1]*p.V2+p.gV[2]*p.Vw):Math.abs(1.25*(p.V1+p.V2)+1.5*p.Vw)),name:'factored dead load |V| (V_u direction)',line:{color:'#15803D',width:1.6,dash:'dot'}},
         hl(s.phiv*s.Vcr,'φVn end panel (C·Vp)','#B3261E'),
         ...(s.stiffened?[hl(s.phiv*s.VnInt,'φVn interior (tension field)','#0E7490','dot')]:[])]}
         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'shear (kip)',rangemode:'tozero'}}}/>
