@@ -2655,3 +2655,8 @@ Built-in validation model (Validation tab):
 - Saved data: no key, field or format changed (PARAMS keys and defaults unchanged).
 - **Other copies:** none.
 - **Open items:** the MBE article numbers keep their existing flags (φ<sub>cs</sub>: Table 6A.6.12.6.2-1 / 6A.6.12.6.9 "verify"); the printed MBE 3rd Ed. was not available to confirm them.
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1-a. Comment: GirderDetail's file name   [comment only]
+- Anchor `Gusset Plate Rating: user interface (layout and calc-sheet style follow GirderDetail,`: before `Steel Bridge Beam Modules.html)`, after `Steel Bridge Design.html)`. No code changed.

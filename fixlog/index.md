@@ -4135,3 +4135,29 @@ The basis line on the zone card and in the report's capacity table now works out
 - **Old saved zones** made from a rolled W shape (via "↓ From …" before this change) have no `rolled` field, so they are now treated as welded. That is conservative: the LTB Fyr drops to 0.5Fyc. Ticking "Rolled shape" restores 0.7Fyc. They are not migrated automatically, because the zone does not record where its plates came from.
 - **The 3.0 limit on Cb** is applied only together with Rm, because C6.10.8.2.3b states it right after the Rm definitions. Eq. 6.10.8.2.3b-1 itself has no limit and can reach 5.0 (MA = MB = MC = 0). **Engineer to confirm:** should the helper also cap Cb at 3.0 without Rm?
 - **The zone's single Cb** is used for both Mn⁺ and Mn⁻, as before. The helper says so on the card.
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1-a. `capFromST`: ST-Girder payloads from Steel Bridge Design   [hand-off] [no result change]
+- **Where:** `capFromST`, anchor `function capFromST(p){`.
+- **Before:** `function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html')); }`
+- **After:** (with a two-line comment above) `function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html'||/^ST-Girder\b/.test(String(p.producer||'')))); }`
+- **Why:** ST-Girder now also runs inside `Steel Bridge Design.html` (its Design & Rating view). There its `producerFile` default is the host file, the same file name GirderDetail's own payloads carry, so an ST-Girder payload is recognised by its producer: `'ST-Girder'` or, if a payload ever falls back to ST-Girder's page title (`BridgeXfer.stamp` default), a producer that starts with "ST-Girder". The file name alone never refuses a payload. ST-Girder publishes nothing today (DISC, 2026-10-19), so no current payload is affected.
+- **Check case:** `capFromST({producer:'ST-Girder', producerFile:'Steel Bridge Design.html'})` → true (before: true); `capFromST({producer:'ST-Girder | AASHTO LRFD Steel Plate Girder Design', producerFile:'Steel Bridge Design.html'})` → true (before: false); `capFromST({producer:'GirderDetail', producerFile:'Steel Bridge Design.html'})` → false (before: false); `capFromST({producer:'X', producerFile:'stgirder.html'})` → true (before: true).
+- **Other copies:** lldf.html `isST`, Bridge Substructure Loading.html `isST` (same rule).
+
+### SBD1-b. Shared bootstrap block comment (byte-identical in index.html, psbeam.html, lldf.html)   [comment only]
+- **Where:** the bootstrap block's header comment, anchor `This block is byte-identical in index.html / psbeam.html / lldf.html.`
+- **Before:**
+  ```
+     one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+     keeps only a reduced app-path record of its own, which GirderDetail reads.)
+  ```
+- **After:**
+  ```
+     one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+     keeps only a reduced app-path record of its own. Since 2026-10-22 ST-Girder
+     also runs inside Steel Bridge Design.html, GirderDetail's file, as its
+     Design & Rating view; GirderDetail no longer reads that record.)
+  ```
+- **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.

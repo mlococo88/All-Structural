@@ -1661,3 +1661,29 @@ index 219cc2c..a3e337e 100644
 -     PS-Beam, ST-Girder — reads the roster and follows the selected beam.
 +     PS-Beam — reads the roster and follows the selected beam.
 ```
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1-a. `isST`: ST-Girder payloads from Steel Bridge Design   [hand-off] [no result change]
+- **Where:** `isST`, anchor `function isST(g){`.
+- **Before:** `function isST(g){ return !!g&&(g.producer==='ST-Girder'||g.producerFile==='stgirder.html'); }`
+- **After:** (with a two-line comment above) `function isST(g){ return !!g&&(g.producer==='ST-Girder'||g.producerFile==='stgirder.html'||/^ST-Girder\b/.test(String(g.producer||''))); }`
+- **Why:** ST-Girder now also runs inside `Steel Bridge Design.html` (its Design & Rating view). There its `producerFile` default is the host file, the same file name GirderDetail's own payloads carry, so an ST-Girder payload is recognised by its producer: `'ST-Girder'` or, if a payload ever falls back to ST-Girder's page title (`BridgeXfer.stamp` default), a producer that starts with "ST-Girder". The file name alone never refuses a payload. ST-Girder publishes nothing today (DISC, 2026-10-19), so no current payload is affected.
+- **Check case:** `isST({producer:'ST-Girder', producerFile:'Steel Bridge Design.html'})` → true (before: true); `isST({producer:'ST-Girder | AASHTO LRFD Steel Plate Girder Design', producerFile:'Steel Bridge Design.html'})` → true (before: false); `isST({producer:'GirderDetail', producerFile:'Steel Bridge Design.html'})` → false (before: false); `isST({producer:'X', producerFile:'stgirder.html'})` → true (before: true).
+- **Other copies:** index.html `capFromST`, Bridge Substructure Loading.html `isST`.
+
+### SBD1-b. Shared bootstrap block comment (byte-identical in index.html, psbeam.html, lldf.html)   [comment only]
+- **Where:** the bootstrap block's header comment, anchor `This block is byte-identical in index.html / psbeam.html / lldf.html.`
+- **Before:**
+  ```
+     one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+     keeps only a reduced app-path record of its own, which GirderDetail reads.)
+  ```
+- **After:**
+  ```
+     one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+     keeps only a reduced app-path record of its own. Since 2026-10-22 ST-Girder
+     also runs inside Steel Bridge Design.html, GirderDetail's file, as its
+     Design & Rating view; GirderDetail no longer reads that record.)
+  ```
+- **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.

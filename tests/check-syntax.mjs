@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Syntax check of every inline script of a tool (Tier 0): classic scripts with `node --check`; text/babel (JSX) scripts transpiled
-// first with the offline Babel in tests/libs (same version the tools load); GirderDetail's embedded Preliminary sizing page
-// (<script type="text/plain" id="pl-src">, un-escaped as plSrc() does) is checked too. Usage: node tests/check-syntax.mjs <tool.html> [...]
+// first with the offline Babel in tests/libs (same version the tools load); GirderDetail's embedded Preliminary sizing page and (since 2026-10-22) ST-Girder page
+// (<script type="text/plain" id="pl-src"> / id="st-src", un-escaped as plSrc() / stSrc() do) is checked too. Usage: node tests/check-syntax.mjs <tool.html> [...]
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -18,7 +18,7 @@ function check(name, html) {
     const attrs = m[1], body = m[2];
     if (/\bsrc=/.test(attrs) || !body.trim()) continue;
     if (/type="text\/plain"/.test(attrs)) {
-      if (/id="pl-src"/.test(attrs)) check(name + ' > pl-src', body.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'));
+      if (/id="(pl|st)-src"/.test(attrs)) check(name + ' > ' + /id="(pl|st)-src"/.exec(attrs)[1] + '-src', body.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'));   // st-src: the embedded ST-Girder page (Steel Bridge Design, 2026-10-22)
       continue;
     }
     if (/type="(application\/json|importmap|text\/template)"/.test(attrs)) continue;

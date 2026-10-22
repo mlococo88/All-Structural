@@ -3303,7 +3303,7 @@ async function rxImport(file) {
 /* ---------- superstructure reactions hand-off (HANDOFF.md §4.4, channel superReactions) ----------
    Reactions tab: "Pull from PS-Beam / GirderDetail" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
    not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only): a payload from ST-Girder is
-   not listed, adopted or imported. GirderDetail (Steel Bridge Beam Modules) sends every girder of the bridge
+   not listed, adopted or imported. GirderDetail (Steel Bridge Design, formerly Steel Bridge Beam Modules) sends every girder of the bridge
    (optional field allGirders, SRX 2026-10-19): by default each source girder Gi goes to SubLoads girder Gi; its
    optional ownerRules are shown and recorded for information, never applied (SubLoads uses its own load factors).
    Nothing is applied on page load. The dialog shows the source and every cell it will overwrite, and
@@ -3313,7 +3313,9 @@ async function rxImport(file) {
 (function patchRxHandoff() {
   const CH = 'superReactions', SCH = 'bridge-super-reactions', RID = 'subloads';
   const BY = ['psbeam', 'mct', 'girderdetail'];
-  const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html');
+  // SBD1 (2026-10-22): ST-Girder also runs inside Steel Bridge Design.html (its Design & Rating view), whose GirderDetail payloads carry the same producerFile:
+  // a payload from ST-Girder there is recognized by its producer ('ST-Girder', or a default producer from ST-Girder's page title), never by that file name alone
+  const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html' || /^ST-Girder\b/.test(String(p.producer || '')));
   const ST_MSG = 'ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only).';
   /* the latest payload on the channel is new for SubLoads, and not ST-Girder's */
   const newOK = () => { if (!BX() || !BX().isNew(CH, RID)) return false; const r = BX().read(CH, SCH, 1); return !(r.ok && isST(r.payload)); };
@@ -3481,7 +3483,7 @@ async function rxImport(file) {
   }
   function pull() {
     const r = candidates();
-    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam, or in GirderDetail (Steel Bridge Beam Modules, Structural analysis), click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
+    if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam, or in GirderDetail (Steel Bridge Design, Structural analysis), click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
     openDialog(r.list, 'pull', r.errs);
     if (r.st.length) flash(stNote(r.st));
   }
