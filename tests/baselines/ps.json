@@ -2,7 +2,7 @@
  "tool": "ps",
  "cases": {
   "defaults": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "df1804284556",
     "ps.checks": "4c6a26d1549a",
@@ -31,11 +31,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "b3903ee2d450",
     "ps.report": "be9a84e23fa8",
-    "ps.pay.capacity": "3874df703d77"
+    "ps.pay.capacity": "608f0f048650"
    }
   },
   "approx_losses": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "ad45dfe7de73",
     "ps.checks": "e87798401861",
@@ -64,11 +64,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "2643e772481d",
     "ps.report": "ec9e461848c8",
-    "ps.pay.capacity": "dcff41a530e9"
+    "ps.pay.capacity": "f55849aada14"
    }
   },
   "cont_restraint": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "be9e486cc5e9",
     "ps.checks": "90e539f5571a",
@@ -97,11 +97,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "b3903ee2d450",
     "ps.report": "be7c19fd19a6",
-    "ps.pay.capacity": "c781fad38fc5"
+    "ps.pay.capacity": "656955ae6e5b"
    }
   },
   "debond_harp": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "8d61e2d0292a",
     "ps.checks": "d8a29b5890e3",
@@ -130,11 +130,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "d547a69b0719",
     "ps.report": "d2355f9b1ace",
-    "ps.pay.capacity": "668eec8faeb6"
+    "ps.pay.capacity": "1cfdf6bfa97d"
    }
   },
   "deck_handling": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "796328a91726",
     "ps.checks": "6d43a4b48aa5",
@@ -165,11 +165,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "b3903ee2d450",
     "ps.report": "b3c3f231cb67",
-    "ps.pay.capacity": "3874df703d77"
+    "ps.pay.capacity": "608f0f048650"
    }
   },
   "exterior": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "eb5376af51b2",
     "ps.checks": "d98ef1d4ea9d",
@@ -198,11 +198,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "6e2d87bc9ee2",
     "ps.report": "40b1f6554636",
-    "ps.pay.capacity": "993bbffec988"
+    "ps.pay.capacity": "4a637413e9dd"
    }
   },
   "midas_3span": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "894e3f0757a2",
     "ps.checks": "d417a78d0b8d",
@@ -231,11 +231,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "b63a4da78e77",
     "ps.report": "825c975254f7",
-    "ps.pay.capacity": "ac9372d76b7b"
+    "ps.pay.capacity": "5d886b593a7b"
    }
   },
   "midas_df0": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "11e89a2abaed",
     "ps.checks": "08016f86f693",
@@ -264,11 +264,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "613c15985021",
     "ps.report": "84ab73910e63",
-    "ps.pay.capacity": "c2948d5a106e"
+    "ps.pay.capacity": "31ed1efa5e5c"
    }
   },
   "next_skew": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "f07be920bec4",
     "ps.checks": "cfb2f2a1659a",
@@ -297,11 +297,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "f595baf63b7d",
     "ps.report": "bb971f765242",
-    "ps.pay.capacity": "77d0022ae44d"
+    "ps.pay.capacity": "0351d1c7506c"
    }
   },
   "shape_AASHTO_BIII_36_27in": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "9f1ec4f4bec3",
     "ps.checks": "9481bbb66a3e",
@@ -330,11 +330,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "f14d2fcd8f21",
     "ps.report": "325a03b59b81",
-    "ps.pay.capacity": "5ff6f14075f7"
+    "ps.pay.capacity": "82b74d1cab0c"
    }
   },
   "shape_AASHTO_BII_36_18in": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "8fb3bacb9a6f",
     "ps.checks": "78f47e2d084f",
@@ -363,11 +363,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "4a71b4895d14",
     "ps.report": "d0b624a97426",
-    "ps.pay.capacity": "f2d16b5b7a21"
+    "ps.pay.capacity": "fcae5b0de18f"
    }
   },
   "shape_AASHTO_BIV_48_33in": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "a25f6f386293",
     "ps.checks": "b5c8d59bb5e3",
@@ -396,11 +396,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "fb855d8e017c",
     "ps.report": "42b087cc2a10",
-    "ps.pay.capacity": "f1c57750f9c2"
+    "ps.pay.capacity": "6db80960bb10"
    }
   },
   "shape_AASHTO_BI_36_12in": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "d1801f0b9c08",
     "ps.checks": "02e5c249b81b",
@@ -429,11 +429,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "d39785bd47da",
     "ps.report": "3d7dfa6d482c",
-    "ps.pay.capacity": "6c7e73fb4e91"
+    "ps.pay.capacity": "6a8d08403531"
    }
   },
   "shape_AASHTO_Type_I": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "753c4d205906",
     "ps.checks": "3e78aef40178",
@@ -462,11 +462,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "218984054f02",
     "ps.report": "ced5d364fc4a",
-    "ps.pay.capacity": "4384acfe79ca"
+    "ps.pay.capacity": "7378de1f4f6a"
    }
   },
   "shape_AASHTO_Type_II": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "2c65a5350af4",
     "ps.checks": "9dbbc6c5be44",
@@ -495,11 +495,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "53097c3baa64",
     "ps.report": "dd0c336d0a9f",
-    "ps.pay.capacity": "4db9cb0026d6"
+    "ps.pay.capacity": "5ad593827f55"
    }
   },
   "shape_AASHTO_Type_III": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "93183fffaf8d",
     "ps.checks": "8cca0d4072de",
@@ -528,11 +528,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "69eaac24e7be",
     "ps.report": "4f05c0e88467",
-    "ps.pay.capacity": "f95a23597ed6"
+    "ps.pay.capacity": "ae00aba727d7"
    }
   },
   "shape_AASHTO_Type_IV": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "524740e7f02f",
     "ps.checks": "6ab3b8dc243d",
@@ -561,11 +561,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "f15c5bdef2ed",
     "ps.report": "a7699a894b23",
-    "ps.pay.capacity": "0931b4cb6316"
+    "ps.pay.capacity": "50102795cb16"
    }
   },
   "shape_AASHTO_Type_V": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "3612b5b11617",
     "ps.checks": "c456d0d7b7ad",
@@ -594,11 +594,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "3ee333e92e50",
     "ps.report": "bdd0c5b78ed2",
-    "ps.pay.capacity": "ee1a6e69f7b6"
+    "ps.pay.capacity": "52f351a23a25"
    }
   },
   "shape_AASHTO_Type_VI": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "12124c2ecd2c",
     "ps.checks": "b38f1125ed02",
@@ -627,11 +627,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "ab83b2fc4f30",
     "ps.report": "0d29f3f820b1",
-    "ps.pay.capacity": "b8e9b4849355"
+    "ps.pay.capacity": "ccc21bbb27b3"
    }
   },
   "shape_Custom": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "33b02966f1fe",
     "ps.checks": "cc8e696ce20f",
@@ -660,11 +660,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "b3903ee2d450",
     "ps.report": "3c4ed09b17ca",
-    "ps.pay.capacity": "53cc6afc738c"
+    "ps.pay.capacity": "0fa59c387120"
    }
   },
   "shape_Deck_slab_12_48_solid": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "6e16d92f6961",
     "ps.checks": "f36eb342a4a8",
@@ -693,11 +693,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "8ab8ab60ba59",
     "ps.report": "961ea0864e83",
-    "ps.pay.capacity": "7735e81909cf"
+    "ps.pay.capacity": "30bb1d19b75d"
    }
   },
   "shape_Deck_slab_18_48_solid": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "119ec0063510",
     "ps.checks": "6760f4d832ce",
@@ -726,11 +726,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "5aba716cdd9b",
     "ps.report": "56156cd61715",
-    "ps.pay.capacity": "b5abc0a41484"
+    "ps.pay.capacity": "2f442e618c7d"
    }
   },
   "shape_Deck_slab_21_48_voided": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "7311cfb66925",
     "ps.checks": "e84ef0ceeecc",
@@ -759,11 +759,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "490ab49e360d",
     "ps.report": "36d90a95c6c3",
-    "ps.pay.capacity": "5fe8d348a0e2"
+    "ps.pay.capacity": "59c3b1c628b8"
    }
   },
   "shape_Deck_slab_27_48_voided": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "f70f918e9fb5",
     "ps.checks": "973555edf9fa",
@@ -792,11 +792,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "49fa530b7a07",
     "ps.report": "a10a81f4496c",
-    "ps.pay.capacity": "ac4cc19a04fe"
+    "ps.pay.capacity": "eb98c2682a2b"
    }
   },
   "shape_NEXT_24F": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "be170137cd06",
     "ps.checks": "206bb60c4234",
@@ -825,11 +825,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "1e93c35d4d0d",
     "ps.report": "40a0392cfafd",
-    "ps.pay.capacity": "4e436e9eefad"
+    "ps.pay.capacity": "8068bb147bb9"
    }
   },
   "shape_NEXT_28F": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "32e970b13757",
     "ps.checks": "27ff6438a6d9",
@@ -858,11 +858,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "483f8ff64d83",
     "ps.report": "5a7f618ea6bc",
-    "ps.pay.capacity": "0cb08313ff5a"
+    "ps.pay.capacity": "84c5e5f7b60a"
    }
   },
   "shape_NEXT_32F": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "b27e2c7c45ca",
     "ps.checks": "5e03ad6983ec",
@@ -891,11 +891,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "3cee1e20b758",
     "ps.report": "8f62c2c454fc",
-    "ps.pay.capacity": "ae0859c3cd52"
+    "ps.pay.capacity": "befc4624cb4f"
    }
   },
   "shape_NEXT_36F": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "d053711e995e",
     "ps.checks": "2a5081d749c7",
@@ -924,11 +924,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "72143eef7422",
     "ps.report": "ee6c99965a15",
-    "ps.pay.capacity": "3c7b0d66a01d"
+    "ps.pay.capacity": "83b9c682f069"
    }
   },
   "shape_PCI_BT_54": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "6552aeae58ab",
     "ps.checks": "2a1e1d3a1162",
@@ -957,11 +957,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "dda45736c6e8",
     "ps.report": "b0b1dcf49618",
-    "ps.pay.capacity": "fc3cfaa1d830"
+    "ps.pay.capacity": "8f410ee99e0f"
    }
   },
   "shape_PCI_BT_63": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "68648da283e4",
     "ps.checks": "25cf3783d69b",
@@ -990,11 +990,11 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "042213d5da79",
     "ps.report": "053ea70ca536",
-    "ps.pay.capacity": "0871b4dcd0a2"
+    "ps.pay.capacity": "76c81250efe5"
    }
   },
   "shape_PCI_BT_72": {
-   "a": "origin/main (cb584ac):psbeam.html",
+   "a": "origin/main (cb584ac):psbeam.html; ps.pay.capacity: claude/pbd-0b-label",
    "sections": {
     "ps.inputs": "fcc793523b62",
     "ps.checks": "f9115e392636",
@@ -1023,7 +1023,7 @@
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "eeff6cbd4c66",
     "ps.report": "e79d8d5560f4",
-    "ps.pay.capacity": "11142387839d"
+    "ps.pay.capacity": "d15d94d62843"
    }
   }
  },

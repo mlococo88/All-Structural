@@ -1761,3 +1761,30 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
      Design & Rating view; GirderDetail no longer reads that record.)
   ```
 - **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.
+
+## 2026-10-22 — PR: claude/pbd-0b-label (PBD-B: capacity hand-off labels the flexure method actually used; display/label only, no computed value changed; PR link added after merge)
+
+### PBD-B1. Capacity payload `basis` / `phiFlex` text: approximate f_ps (5.6.3.1.1), not strain compatibility   [label only] [no result change]
+- **Where:** `App` → `publishCapacity` (the `bridge-design-capacity` payload, channel `bridgeSuite.v1.capacity`). Anchors: `phi:+fr.phi.toFixed(3), basis:`, `phiIncluded:true, phiFlex:`, `basis:'AASHTO LRFD`.
+- **Problem:** the payload said `basis:'strain-compat'` per station, `phiFlex:'per-station (strain-based 0.75–1.0)'` and "φMn per 5.6.3 strain compatibility", but `flexure()` computes f_ps with the approximate Eq. 5.6.3.1.1-1, f_ps = f_pu(1 − k c/d_p), c by Eq. 5.6.3.1.1-3 (flanged) or -4 (rectangular), with the strand force limited by development (5.9.4.3.2). No strain-compatibility analysis (5.6.3.2.5) is made. φ is the 5.5.4.2 value from the net tensile strain ε_t = 0.003(d_t/c − 1), which the old φ text described correctly but ambiguously.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 5.6.3.1.1 (Eqs. 5.6.3.1.1-1 to -4), 5.6.3.2, 5.9.4.3.2, 5.5.4.2.
+- **Before:**
+  ```js
+              phi:+fr.phi.toFixed(3), basis:'strain-compat'});
+  ...
+          phiIncluded:true, phiFlex:'per-station (strain-based 0.75–1.0)', phiShear:0.9,
+  ...
+          basis:'AASHTO LRFD — φMn per 5.6.3 strain compatibility with strand development along the transfer/development length; φVn per 5.7.3 MCFT general procedure with trial stirrups; −φMn = deck-reinforced continuity section at the pier (constant).',
+  ```
+- **After:**
+  ```js
+              phi:+fr.phi.toFixed(3), basis:'approx-fps'});   // f_ps by the approximate Eq. 5.6.3.1.1-1 (flexure()), not strain compatibility
+  ...
+          phiIncluded:true, phiFlex:'per-station: 0.75–1.0 from the net tensile strain εt (Art. 5.5.4.2), with c from the approximate fps method (Art. 5.6.3.1.1)', phiShear:0.9,
+  ...
+          basis:'AASHTO LRFD 10th Ed. — φMn per 5.6.3.2 with fps by the approximate Eq. 5.6.3.1.1-1 (c by Eq. 5.6.3.1.1-3 flanged / 5.6.3.1.1-4 rectangular; not a strain-compatibility analysis), strand force limited by development along the transfer/development length (5.9.4.3.2); φ per 5.5.4.2 from the net tensile strain; φVn per 5.7.3 MCFT general procedure with trial stirrups; −φMn = deck-reinforced continuity section at the pier (constant).',
+  ```
+- **Check case:** default project: every station's `phiMn_pos`, `phiMn_neg`, `phiVn`, `phi` unchanged (e.g. midspan φM_n and φ as on the Flexure tab); only the three strings above differ.
+- **Receivers:** MCT (index.html) stores the payload's top-level `basis` in the design capacity zone when it adopts the payload and shows it on the AASHTO Rating tab as "Basis: …" (zone card). It does not read the station `basis` or `phiFlex`. A zone adopted before this change keeps the old text until the capacity is sent again. index.html is not changed here.
+- **How verified:** `node tests/ps-compare.mjs` (origin/main vs this branch, all 31 cases): only `ps.pay.capacity` differs, and only in `basis`, `phiFlex` and the station `basis` strings; `tests/baselines/ps.json` updated for that section.
+- **Other copies:** none.
