@@ -13,7 +13,8 @@
 // Options: --a (default origin/main), --b (default the working-tree file), --file (default "Prestressed Bridge Design.html" when it is
 //   in the working tree, else psbeam.html), --project (comma list or "all"; default all), --jobs N (cases at a time; default 1 when A and B
 //   both run (two browsers), 2 with --baseline; at most 2 browsers on a shared machine), --max-diffs (default 25), --out (raw readouts),
-//   --settle ms (how long the inputs must stay unchanged after load; default 1500).
+//   --settle ms (how long the inputs must stay unchanged after load; default 1500), --retries N (a run that fails to load is
+//   started again up to N times; default 2).
 // Exit code: 0 all sections identical, 1 a difference, 2 an error (including console errors; "Failed to load resource" and Babel's
 // "code generator has deoptimised the styling" size note are not counted).
 //
@@ -38,8 +39,8 @@
 //   ps.storage     every localStorage key after load (before any tab is opened), values normalized
 // Normalized before comparing (volatile, or renamed by the Prestressed Bridge Design rename): ISO time stamps and dates, local date/time
 // text, millisecond time stamps under time-like keys, the file:// folder, the tool's own file name ("psbeam.html" and
-// "Prestressed Bridge Design.html" both read "(PS file)") and its display name ("PS-Girder", "PS-GIRDER" and "Prestressed Bridge Design"
-// all read "(PS tool)"), so the rename compares equal.
+// "Prestressed Bridge Design.html" both read "(PS file)") and its display name ("PS-Girder" and "Prestressed Bridge Design", in any letter case:
+// CSS upper-cases some headings) all read "(PS tool)"), so the rename compares equal.
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -71,7 +72,7 @@ function libFor(url) {
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf' };
 async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '' } = {}) {
   const { chromium } = await loadPlaywright();
-  const b = await chromium.launch({ executablePath: chromiumPath() });
+  const b = await chromium.launch({ executablePath: chromiumPath(), timeout: 600000 });
   const ctx = await b.newContext({ viewport: { width: vw, height: vh } });
   const blocked = new Set();
   await ctx.route('**/*', r => {
@@ -88,7 +89,7 @@ async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '' } = {}) {
   p.on('pageerror', e => errs.push('pageerror: ' + e.message.slice(0, 400)));
   p.on('dialog', async d => { dialogs.push(d.message().slice(0, 400)); await d.accept(); });
   if (ls) await p.addInitScript(o => { if (!sessionStorage.getItem('__seeded')) { sessionStorage.setItem('__seeded', '1'); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); } }, ls);
-  await p.goto('file://' + file + hash);
+  await p.goto('file://' + file + hash, { waitUntil: 'domcontentloaded', timeout: 300000 });   // patient: the machine may be shared
   return { b, ctx, p, errs, dialogs, blocked };
 }
 // "Prestressed Bridge Design.html" (working tree), "origin/main" (bare ref: the tool's file name), or "abc123:psbeam.html".
@@ -143,12 +144,12 @@ async function settledText(p, sel, max = 10000) {
 // the saved inputs, once the autosave has written them and they have stayed unchanged for SETTLE ms
 async function settledInputs(p) {
   const t0 = Date.now(); let last = null, since = Date.now();
-  while (Date.now() - t0 < 60000) {
+  while (Date.now() - t0 < 180000) {
     const s = await p.evaluate(k => localStorage.getItem(k), LS_KEY);
     if (s !== last) { last = s; since = Date.now(); } else if (s && Date.now() - since >= SETTLE) return JSON.parse(s);
     await p.waitForTimeout(200);
   }
-  throw new Error('the inputs were not saved within 60 s');
+  throw new Error('the inputs were not saved within 180 s');
 }
 const CONTENT = '.sheet-inner > .cols, .sheet-inner > .cols-full';
 async function clickTab(p, label) {
@@ -159,7 +160,7 @@ async function psRun(src, c) {
   const ls = c.seed ? { [LS_KEY]: fs.readFileSync(c.seed, 'utf8') } : undefined;
   const { b, p, errs, dialogs, blocked } = await openPage(src.file, { ls });
   try {
-    await p.waitForSelector('.tabs .tab, .callout.warn', { timeout: 60000 });
+    await p.waitForSelector('.tabs .tab, .callout.warn', { timeout: 300000 });
     const inp = await settledInputs(p);
     const R = {};
     R['ps.inputs'] = inp;
@@ -209,7 +210,7 @@ const normalize = R => JSON.parse(JSON.stringify(R)
   .replace(/(\\*"(?:ts|t|seenAt|savedAt|producedAt|updatedAt|at|time)\\*":)\d{12,}/g, '$10')
   .replace(/file:\/\/\/[^"\\]*\//g, 'file:///(dir)/')
   .replace(/Prestressed Bridge Design\.html|psbeam\.html/g, '(PS file)')
-  .replace(/Prestressed Bridge Design|PS-Girder|PS-GIRDER/g, '(PS tool)'));
+  .replace(/Prestressed Bridge Design|PS-Girder/gi, '(PS tool)'));   // any case: CSS text-transform upper-cases some headings in innerText
 
 const ALL = ['defaults', ...fs.readdirSync(PSDIR).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort()];
 const names = !args.project || args.project === 'all' ? ALL : String(args.project).split(',').map(s => s.trim()).filter(Boolean);
@@ -224,12 +225,15 @@ const record = REC ? (fs.existsSync(REC) ? JSON.parse(fs.readFileSync(REC, 'utf8
 const JOBS = Math.max(1, Math.round(+(args.jobs || (BASE ? 2 : 1))) || 1);
 console.log(`A: ${A.label}\nB: ${B.label}\ntool: ps   readouts saved in ${OUT}   jobs: ${Math.min(JOBS, cases.length)}\n`);
 let differ = false, failed = false;
+// --retries N (default 2): a run that fails to load (page crash, time-out on a busy machine) is started again, up to N more times
+const RETRIES = Math.max(0, Math.round(+(args.retries ?? 2)) || 0);
+async function retry(f) { for (let i = 0; ; i++) { try { return await f(); } catch (e) { if (i >= RETRIES) throw e; console.error(`(retry ${i + 1}: ${String(e.message).split('\n')[0]})`); } } }
 async function runCase(c) {
   const out = [], log = t => out.push(t), t0 = Date.now(); let cd = false, cf = false, rec = null;
   let ra, rb;
   try {
-    if (BASE) { const bc = baseline.cases[c.name]; if (!bc) throw new Error('case not in the baseline'); rb = await psRun(B, c); ra = { R: null, H: bc.sections, errs: [], dialogs: [], blocked: [] }; }
-    else [ra, rb] = await Promise.all([psRun(A, c), psRun(B, c)]);
+    if (BASE) { const bc = baseline.cases[c.name]; if (!bc) throw new Error('case not in the baseline'); rb = await retry(() => psRun(B, c)); ra = { R: null, H: bc.sections, errs: [], dialogs: [], blocked: [] }; }
+    else [ra, rb] = await Promise.all([retry(() => psRun(A, c)), retry(() => psRun(B, c))]);
   } catch (e) { log(`== ${c.name}: ERROR ${e.message}`); return { out, differ: false, failed: true, rec }; }
   if (ra.R) ra.R = normalize(ra.R); rb.R = normalize(rb.R);
   const tag = c.name.replace(/[^A-Za-z0-9_.-]+/g, '_');

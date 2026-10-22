@@ -30,7 +30,9 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 - When syncing a shared snippet, copy it into each file and **list in the PR
   description which tools contain it**.
 - Known shared snippets: the `bridgeSuite.v1.*` bootstrap/handoff code at the
-  top of `index.html`, `lldf.html` and `psbeam.html`, and the
+  top of `index.html`, `lldf.html` and `Prestressed Bridge Design.html`
+  (`psbeam.html` until 2026-10-22; the block's comments still say
+  "psbeam.html"), and the
   ACI rebar development-length app that is also embedded in
   `Concrete Beam Capacity.html`. See `AUDIT.md`. (`stgirder.html` no longer
   carries the bootstrap block: since 2026-10-19 it is connected to GirderDetail
@@ -88,7 +90,9 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 - Do not move, rename, or delete tool files unless asked. Other tools link to
   some of them by file name (`index.html`, `lldf.html`, `psbeam.html`,
   `stgirder.html`, `elastomeric_design_module.html`, `Steel Bridge Design.html`;
-  `Steel Bridge Beam Modules.html` is kept as a redirect page to it).
+  `Steel Bridge Beam Modules.html` is kept as a redirect page to it;
+  `Prestressed Bridge Design.html`, with `psbeam.html` kept as a redirect page
+  to it).
 
 ## 8. Fix log
 

@@ -1,4 +1,6 @@
-# Fix log — psbeam.html
+# Fix log — Prestressed Bridge Design.html (psbeam.html until 2026-10-22)
+
+**Renamed 2026-10-22** (PR claude/pbd-1-rename): this log was `fixlog/psbeam.md` and the tool was `psbeam.html`. Every entry before the rename entry (PBD-C, at the end) refers to `psbeam.html`; its anchors and code are unchanged in `Prestressed Bridge Design.html` unless a later entry says otherwise. `psbeam.html` is now a redirect page (PBD-C3).
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 5 (and 3.6 / 4.6.2.2); AASHTO MBE for rating (unchanged).
 
@@ -1787,4 +1789,37 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
 - **Check case:** default project: every station's `phiMn_pos`, `phiMn_neg`, `phiVn`, `phi` unchanged (e.g. midspan φM_n and φ as on the Flexure tab); only the three strings above differ.
 - **Receivers:** MCT (index.html) stores the payload's top-level `basis` in the design capacity zone when it adopts the payload and shows it on the AASHTO Rating tab as "Basis: …" (zone card). It does not read the station `basis` or `phiFlex`. A zone adopted before this change keeps the old text until the capacity is sent again. index.html is not changed here.
 - **How verified:** `node tests/ps-compare.mjs` (origin/main vs this branch, all 31 cases): only `ps.pay.capacity` differs, and only in `basis`, `phiFlex` and the station `basis` strings; `tests/baselines/ps.json` updated for that section.
+- **Other copies:** none.
+
+## 2026-10-22 — PR: claude/pbd-1-rename (PBD-C: psbeam.html renamed to Prestressed Bridge Design.html; redirect page with a data download at the old name; engineer decision 2026-10-22; no result change; PR link added after merge)
+
+### PBD-C1. File and log renamed   [rename] [no result change]
+- `psbeam.html` → `Prestressed Bridge Design.html` and `fixlog/psbeam.md` → `fixlog/Prestressed Bridge Design.md` (moved with git, content unchanged apart from the lines below).
+- Kept: app id `psbeam` (`BridgeApps.boot('psbeam')`, `LOCK_APP`, `APP_ID`, `PS_APP`, `superReactions.by.psbeam`), producer `'PS-Beam'`, every storage key (`psbeam.inputs.v1`, `psbeam.ui.v1`, `psbeam.projects.v1`, `psbeam.inputTab.v1`, `bridgeSuite.v1.*`) and every payload format.
+- The shared bootstrap blocks (CLAUDE.md §3) are not touched: they stay byte-identical with index.html and lldf.html. Their comments and the `appPaths` defaults (`DEF.psbeam:'psbeam.html'`, `NAMES.psbeam:'PS-Beam'`) still name psbeam.html. They change with index.html and lldf.html in the MCT-removal PR. Until then the redirect page serves that default path. Once the new file is opened, `BridgeApps.register('psbeam')` records `Prestressed Bridge Design.html` for its folder, and the links use that.
+
+### PBD-C2. Title, header and report name   [display only]
+- `<title>`: `PS-Girder | AASHTO LRFD Prestressed Beam Design` → `Prestressed Bridge Design | AASHTO LRFD Prestressed Girder Design`.
+- App header (`App`, anchor `<div><h1>`): `PS-Girder <span>/ AASHTO LRFD</span>` → `Prestressed Bridge Design <span>/ AASHTO LRFD</span>`.
+- Footer: `PS-GIRDER v2.65 · …` → `PRESTRESSED BRIDGE DESIGN v2.65 · …`.
+- Report cover (`ReportTab`, anchor `<section className="psbr-cover">`): `<h1>PS-Girder</h1>` → `<h1>Prestressed Bridge Design</h1>`. Printed page footer (`psbrPageCSS`, anchor `@bottom-left`): `(PS-Girder)` → `(Prestressed Bridge Design)`.
+- superReactions sender (`bxSendRx` / `bxExportRx`): `producerFile` changes from `'psbeam.html'` to `'Prestressed Bridge Design.html'`. Receivers do not read it, and `producer` stays `'PS-Beam'`. In the comment of the BXSuperRx glue block, "Only in psbeam.html" becomes "Only in this file (Prestressed Bridge Design.html, psbeam.html until 2026-10-22)".
+
+### PBD-C3. Redirect page `psbeam.html` with "Download my PS-Beam data (JSON)"   [new file] [saved data preserved]
+- Self-contained page with no library. It forwards with `location.replace('Prestressed%20Bridge%20Design.html' + search + hash)`.
+- Firefox and Safari keep the storage of each `file://` page separate. The design saved by the old psbeam.html (key `psbeam.inputs.v1`) therefore stays in this file's storage. The page stops and offers **Download my PS-Beam data (JSON)** when all four of these hold:
+  - that key holds a design;
+  - Prestressed Bridge Design has not registered itself in the same storage (`bridgeSuite.v1.appPaths` → `psbeam` → this folder's file is still `psbeam.html`);
+  - the page is not in a frame;
+  - the offer has not been shown before.
+- The download is `JSON.stringify(inputs, null, 1)`, with the file named the way Export JSON names it. This is exactly Export JSON's format, so Prestressed Bridge Design's **Import** reads it unchanged (`mergeInputs`).
+- Clicking Download or Open writes `psbeam.redirect.offered.v1` (the time), so the offer shows only once.
+- In every other case the page forwards at once: Chrome/Edge shared storage after the new file was opened, no saved design, or inside the MCT frame. Nothing is deleted.
+
+### How verified
+- `node tests/ps-compare.mjs --baseline tests/baselines/ps.json --b "Prestressed Bridge Design.html"`: all 31 cases, every section identical to the baseline (the harness normalizes the file name and the display name).
+- Redirect from the MCT: the MCT Generator (index.html) opens its PS-Beam frame through `appPaths` (default path `psbeam.html`), and the frame lands in Prestressed Bridge Design. Prestressed Bridge Design announces itself as `psbeam`, so the frame health is "ok". A `#hash` is kept.
+- Download: a storage holding a design, with no `appPaths` entry for the new file (as in Firefox), shows the offer. The downloaded file, imported into Prestressed Bridge Design, gives inputs identical to the saved ones. When the new file is already registered, or there is no saved design, the page forwards at once.
+- `node tests/check-syntax.mjs "Prestressed Bridge Design.html" psbeam.html`: all scripts pass.
+- Shared blocks: compared with origin/main's psbeam.html, the bytes are identical (the diff shows only the lines above).
 - **Other copies:** none.
