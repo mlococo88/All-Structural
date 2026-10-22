@@ -2058,3 +2058,18 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
 - The load ratings (MBE) do not include the restraint moment (P, γ_P = 1.0).
 - Temperature-gradient (TG) restraint is not computed. Axial restraint forces are not computed (bearings are taken as free longitudinally).
 - The LL deflection and fatigue keep the simple-span estimates.
+
+## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: the MCT opens this tool in a new tab instead of framing it; shared bootstrap blocks synced; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR link added after merge)
+
+### PBD-H2. Shared bootstrap blocks: default path of app `psbeam` and comments (byte-identical in index.html, lldf.html, Prestressed Bridge Design.html)   [default file name; comments] [no result change]
+- **Where:** the shared `appPaths` block, anchor `var DEF={mct:'index.html'`; the header comments of the beam-roster block (anchor `This block is byte-identical in index.html /`) and of the `appPaths` block (anchors `The three apps link to each other by bare file name` and `This block is byte-identical in index.html / Prestressed Bridge Design.html /`).
+- **Before:** `var DEF={mct:'index.html', psbeam:'psbeam.html', lldf:'lldf.html'};`
+- **After:** `var DEF={mct:'index.html', psbeam:'Prestressed Bridge Design.html', lldf:'lldf.html'};`
+- **Comments, before → after:**
+  - "byte-identical in index.html / psbeam.html / lldf.html" becomes "index.html / Prestressed Bridge Design.html (psbeam.html until 2026-10-22) / lldf.html".
+  - "MCT embeds "psbeam.html" in an iframe" becomes "MCT frames "lldf.html" and opens "Prestressed Bridge Design.html" (app id psbeam; psbeam.html is its redirect page since 2026-10-22) in a new tab since 2026-10-22".
+  - The ST-Girder notes say that stgirder.html was removed on 2026-10-22.
+- **Why:** the default path is used only until a tool has recorded where it lives for the folder (`BridgeApps.register`). With the old default, a fresh folder reached the tool through the `psbeam.html` redirect page. App id `psbeam`, `NAMES.psbeam` ('PS-Beam'), every key and the record format are unchanged.
+- **Check case:** in a folder where nothing has been recorded, `BridgeApps.path('psbeam')` returns `'Prestressed Bridge Design.html'` (before: `'psbeam.html'`, which redirected).
+- **How verified:** the shared blocks were compared after the edit. The big `appPaths` block differs between the three files only in its `BridgeApps.boot('<app>')` line, as before. The beam-roster and BridgeXfer blocks are identical in all three, and the handoff blocks are identical in index.html and Prestressed Bridge Design.html. `node tests/check-syntax.mjs index.html lldf.html "Prestressed Bridge Design.html"`: all scripts pass.
+- **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
