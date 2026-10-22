@@ -20952,3 +20952,191 @@ async function stChapter(g, k) { const wait = (f, ms) => new Promise(res => { co
   ST-Girder's own "Print this report" in the view prints the frame as before.
 
 **Open items:** none.
+
+
+## 2026-10-22 — PR: claude/sbd-4-refactor (SBD4: merge of GirderDetail and ST-Girder, PLAN steps 4 and 5 in one PR (engineer, 2026-10-22): one project file with migrations; efficiency: one FE engine copy, A610, frameBus, module registry, deriv(), dead code; PR link added after merge)
+
+**No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed. Code was moved or shared, never
+rewritten: the FE engine is the same text, character for character; the A610 functions are the same expressions (tests/a610-prop.mjs: 10,000
+random inputs each, bit-identical); the Checks tab and the Girder section's any-location worked calculations give the same HTML as main
+(compared character for character on the built-in project, every module). No saved key changed. The project file gains parts (below); the
+modules' part keeps GirderDetail's field. Full suite (milestone) results in the PR description.
+
+### SBD4-a. One FE engine copy, shared with Preliminary sizing (SBD-SHARED); dead code removed   [refactor] [no result change]
+- The line-girder FE engine (from `/* Line-girder finite-element model (Euler-Bernoulli beam elements, banded Cholesky).` to
+  `function feFatIM(e, imf) { … }`, with `const FE_CACHE = new Map();`) was in the page twice, identical: in `pl-src` (after its header
+  `Shared analysis engine (PlateLine and GirderDetail)`) and in this page's script (after `window.addEventListener('plotly-ready', …)`).
+- **This page:** that copy, its header comment and the unused `feCb` after it (its comment said "Not called in this page"; Preliminary sizing has
+  its own feCb, in use and unchanged) were removed from there; the engine now sits at the top of the main script (right after `<script>`, before
+  `GirderDetail: bolted field splice engine`) in the shared block:
+  ```js
+/* =====================================================================
+   SBD-SHARED-BEGIN (SBD4, 2026-10-22). Shared code of Steel Bridge Design: this page and the Preliminary sizing page (pl-src) run
+   this one copy. pl-src holds a placeholder comment line starting with @@SBD-SHARED@@ where its copy was; plShow() puts the text between
+   this begin line and the end marker comment there when it builds the Preliminary sizing frame (sbdShared). Nothing else may sit between
+   the two markers. The FE engine was moved here unchanged from both pages (they were identical, character for character).
+   ===================================================================== */
+/* A610: AASHTO LRFD 10th Ed. (2024) Article 6.10 expressions that were written out identically in more than one place, now one
+   copy each (proven identical: same operations in the same order; tests/a610-prop.mjs checks 10,000 random inputs for exact
+   equality with the expressions as written before). Functions are declared, so they exist before any code of the page runs. */
+/* Shear-buckling ratio C, Eq. 6.10.9.3.2-4 to -6: lam = D/tw, r = sqrt(E k / Fyw); C = 1 (lam <= 1.12 r), 1.12 r / lam (lam <= 1.40 r),
+   1.57 / lam^2 (E k / Fyw) otherwise */
+function A610_shearC(lam, r, E, k, Fyw) { return lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / Fyw); }
+/* Plastic shear force of the web, Eq. 6.10.9.2-2: Vp = 0.58 Fyw D tw */
+function A610_Vp(Fyw, D, tw) { return 0.58 * Fyw * D * tw; }
+/* the namespace A610.shearC, A610.Vp (the same functions; the declared names above can be called before this line has run) */
+var A610 = { shearC: A610_shearC, Vp: A610_Vp };
+/* Shared analysis engine (Preliminary sizing and the modules): line-girder FE model, influence lines, HL-93 and fatigue-truck
+   envelopes (AASHTO LRFD 3.6.1) */
+<the engine, unchanged>
+/* SBD-SHARED-END */
+  ```
+- **pl-src:** the engine was replaced by one line:
+  `/* @@SBD-SHARED@@ the line-girder FE engine and A610: inserted from Steel Bridge Design's SBD-SHARED block when its frame is built (plShow, SBD4) */`
+  (its header comment above it is kept).
+- After `plSrc()`, added (exactly):
+  ```js
+/* SBD4: the Preliminary sizing page with this page's shared code block (SBD-SHARED, at the top of this script) in place of its placeholder
+   line; null when the placeholder or the block is missing (the frame is then not built) */
+function sbdShared(src) { const B = 'SBD-SHARED-' + 'BEGIN', E = '/* SBD-SHARED-' + 'END */', PH = /^\/\* @@SBD-SHARED@@ .*\*\/$/m;
+  const me = [...document.scripts].map(x => x.text).find(t => t.includes(B) && t.includes(E)); if (!me || !PH.test(src)) return null;
+  const a = me.lastIndexOf('/* ====', me.indexOf(B)), b = me.indexOf(E) + E.length; const blk = me.slice(a, b);
+  return src.replace(PH, () => blk); }
+  ```
+  and in `plShow()`: `const src = plSrc();` → `const src = sbdShared(plSrc()); if (src == null) { console.error('Preliminary sizing: the shared code block (SBD-SHARED) could not be placed'); return; }   // SBD4`.
+- **Re-apply by hand:** cut the engine out of pl-src, put the placeholder line there, move this page's copy into the shared block as above,
+  delete the unused host `feCb` with its comment.
+
+### SBD4-b. A610: one copy of Art. 6.10 expressions written out more than once   [refactor] [no result change]
+- In the shared block (above), the functions `A610_shearC(lam, r, E, k, Fyw)` (shear-buckling ratio C, Eq. 6.10.9.3.2-4 to -6) and
+  `A610_Vp(Fyw, D, tw)` (Eq. 6.10.9.2-2), and `var A610 = { shearC, Vp }`. Exactly:
+  ```js
+/* A610: AASHTO LRFD 10th Ed. (2024) Article 6.10 expressions that were written out identically in more than one place, now one
+   copy each (proven identical: same operations in the same order; tests/a610-prop.mjs checks 10,000 random inputs for exact
+   equality with the expressions as written before). Functions are declared, so they exist before any code of the page runs. */
+/* Shear-buckling ratio C, Eq. 6.10.9.3.2-4 to -6: lam = D/tw, r = sqrt(E k / Fyw); C = 1 (lam <= 1.12 r), 1.12 r / lam (lam <= 1.40 r),
+   1.57 / lam^2 (E k / Fyw) otherwise */
+function A610_shearC(lam, r, E, k, Fyw) { return lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / Fyw); }
+/* Plastic shear force of the web, Eq. 6.10.9.2-2: Vp = 0.58 Fyw D tw */
+function A610_Vp(Fyw, D, tw) { return 0.58 * Fyw * D * tw; }
+/* the namespace A610.shearC, A610.Vp (the same functions; the declared names above can be called before this line has run) */
+var A610 = { shearC: A610_shearC, Vp: A610_Vp };
+  ```
+- Call sites (the expression before → after; each identical operation for operation):
+  - pl-src, web sizing `const size = (k, Vu, loc) =>`: `C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / FyW);` → `C = A610_shearC(lam, r, E, k, FyW);`
+  - pl-src, `tsVn()`: `const C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / Fyw), Vp = 0.58 * Fyw * D * tw,` → `const C = A610_shearC(lam, r, ES, k, Fyw), Vp = A610_Vp(Fyw, D, tw),`
+  - splice engine, web shear of the smaller section: `const Cv = lam <= 1.12 * r ? 1 : … (ES * k / FyW), Vp = 0.58 * FyW * D * tw;` → `const Cv = A610_shearC(lam, r, ES, k, FyW), Vp = A610_Vp(FyW, D, tw);`
+  - `webShear()`: `const C = lam <= 1.12 * r ? 1 : … (ES * k / Fyw), Vp = 0.58 * Fyw * D * tw;` → `const C = A610_shearC(lam, r, ES, k, Fyw), Vp = A610_Vp(Fyw, D, tw);`
+  Not changed: the cross-frame member web check (`r1 = 1.12 * Math.sqrt(...)`, written differently) and ST-Girder (verbatim stgirder.html).
+- **Check case (hand):** D = 66 in, tw = 0.5 in, Fyw = 50 ksi, unstiffened (k = 5): lam = 132, r = √(29000 × 5 / 50) = 53.85;
+  1.40 r = 75.39 < 132 → C = 1.57 / 132² × (29000 × 5 / 50) = 0.2613; Vp = 0.58 × 50 × 66 × 0.5 = 957.0 kip. Before and after: the same.
+- `tests/a610-prop.mjs` (new): checks the shared block and the placeholder, and A610 against the expressions as written before.
+
+### SBD4-c. frameBus: one message bus per embedded frame   [refactor] [no result change]
+- `gdPlPost()` and `gdPlFlush()` (before: their own bodies, posting to `PL_FRAME` with `'*'` when `dataset.ready` and `dataset.up`, else queueing
+  in `GD_PLQ`) are replaced by (exactly):
+  ```js
+/* SBD4 (2026-10-22): one message bus per embedded frame (Preliminary sizing, Design & Rating (ST-Girder)). frameBus(o): o.frame() the iframe
+   (or null), o.ready() whether it may receive now, o.to() the target origin, o.q the queue (kept while not ready, sent in order by flush()),
+   o.sameOrigin: from() also checks the message's origin. post(m) sends at once when ready and nothing is queued, else queues and flushes;
+   from(e) is true for a message from that frame only. Behaviour as the functions it replaces (gdPlPost/gdPlFlush, stPost, the ready flush). */
+function frameBus(o) { const q = o.q || [];
+  const bus = { q,
+    from: e => { const F = o.frame(); return !!F && e.source === F.contentWindow && (!o.sameOrigin || e.origin === self.origin); },
+    flush() { const F = o.frame(); if (!F || !F.contentWindow || !o.ready()) return; q.splice(0).forEach(m => F.contentWindow.postMessage(m, o.to())); },
+    post(m) { const F = o.frame(); if (F && F.contentWindow && o.ready() && !q.length) { F.contentWindow.postMessage(m, o.to()); return; } q.push(m); bus.flush(); } };
+  return bus; }
+const PL_BUS = frameBus({ frame: () => PL_FRAME, ready: () => !!(PL_FRAME && PL_FRAME.dataset.ready && PL_FRAME.dataset.up), to: () => '*', q: GD_PLQ });
+function gdPlPost(msg) { PL_BUS.post(msg); }
+function gdPlFlush() { PL_BUS.flush(); }
+  ```
+- Design & Rating (ST-Girder): after `let ST_FRAME = null, ST_READY = false, ST_Q = [], ST_N = 0;` added
+  `const ST_BUS = frameBus({ frame: () => ST_FRAME, ready: () => ST_READY, to: () => stTo(), q: ST_Q, sameOrigin: true });   // SBD4`;
+  `gdFromST` → `e => ST_BUS.from(e)`; the ready handler `ST_Q.splice(0).forEach(m => ST_FRAME.contentWindow.postMessage(m, stTo()));` → `ST_BUS.flush();`;
+  `stPost(m)` → `{ ST_BUS.post(m); }`. `gdFromPL` is unchanged.
+
+### SBD4-d. Module registry   [refactor] [no result change]
+- `gdModLabel` (before `const gdModLabel = k => k === 'splice' ? 'Field splice' : k === 'bstf' ? 'Bearing stiffeners' : GM[k] ? GM[k].label : k;`) now:
+  ```js
+/* SBD4 (2026-10-22): one registry of the parts of Steel Bridge Design, read over MODS and GM (nothing is copied): every module (its MODS entry
+   and its GM engine where it has one), the Preliminary sizing frame (module pl, frame PL_FRAME) and the Design & Rating (ST-Girder) view
+   (frame ST_FRAME; not a module). SBD_REG.get(id) -> { id, kind: 'module' | 'view', label, title, engine, frame }; SBD_REG.ids(); SBD_REG.label(id)
+   (the module labels used in messages, as gdModLabel gave them). */
+const SBD_REG = {
+  ids: () => [...Object.keys(MODS), 'st'],
+  label: k => k === 'splice' ? 'Field splice' : k === 'bstf' ? 'Bearing stiffeners' : GM[k] ? GM[k].label : k,
+  get(k) { if (k === 'st') return { id: 'st', kind: 'view', label: 'Design & Rating (ST-Girder)', title: 'steel plate girder design check and load rating (ST-Girder), AASHTO LRFD', engine: null, frame: () => ST_FRAME };
+    const M = MODS[k]; if (!M) return null; return { id: k, kind: 'module', label: k === 'pl' ? 'Preliminary sizing' : SBD_REG.label(k), title: M.title, engine: GM[k] || null, frame: k === 'pl' ? () => PL_FRAME : null }; } };
+const gdModLabel = k => SBD_REG.label(k);   // SBD4: from the registry (same labels)
+  ```
+
+### SBD4-e. deriv(): one helper for a check's worked-derivation head   [refactor] [no change to any output]
+- Added before `const eq = (title, ref, tex, where, cls = '') =>` (exactly):
+  ```js
+/* SBD4 (2026-10-22): one helper for the head of a check's worked derivation, used by the Checks tab and the Girder section module's
+   worked calculations (it was written out in both): the criterion (equation, symbolically, with its article), then the table of every
+   item with its values and status, or "Not applicable" with the reason. The worked steps (values substituted, result) follow it (eq). */
+function deriv(k) { return `<div class="eq-block"><div class="eq-title"><span>Criterion</span><span class="eq-ref">${esc(k.ref)}</span></div><div class="eq-math">\\[${k.sym}\\]</div></div>` + (!k.items.length ? `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>` : `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>`); }
+  ```
+- `renderChecks()` and `gsaCalc()`: each wrote the same criterion block, then `if (!k.items.length) b += <Not applicable>; else { b += <item table>; …worked steps… }`;
+  now `let b = deriv(k);` then `if (k.items.length) { …worked steps… }` (the worked steps unchanged).
+
+### SBD4-f. One project file, with versions   [new] [no result change]
+- `initProjects()`: Export JSON writes `sbdProjectFile()` (was `{ app: 'GirderDetail', v: 1, data: P }`); Import JSON tries
+  `sbdProjectImport(j, f.name)` after the PlateLine splice export and before GirderDetail's file (unchanged paths); the error text names every
+  file kind. Added before `/* ---------- PlateLine inbox ---------- */` (exactly):
+  ```js
+/* ---------- One project file (SBD4, 2026-10-22; merge of GirderDetail and ST-Girder, PLAN step 4) ----------
+   Export JSON writes every part of the project in one file:
+     { app: 'SteelBridgeDesign', v: 1, data: <the modules' project P, as GirderDetail's file>, name, pl: <Preliminary sizing's file
+       { app: 'PlateLine', v: 1, name, data }>, st: <ST-Girder's file { ...inputs, _schema: 'stgirder' }> }
+   The modules' part keeps GirderDetail's field (data), so an older copy of GirderDetail imports the file as its own (it reads data only).
+   Import JSON reads this file and every older one: GirderDetail's ({ app: 'GirderDetail', data }), Preliminary sizing's ({ app: 'PlateLine', data }),
+   ST-Girder's Export JSON ({ _schema: 'stgirder', ... }) and PlateLine's splice export (as before). A file of one part replaces that part only.
+   Versions: SBD_V is the current version of the file; SBD_MIG[v] converts a file of version v to v + 1 (none yet: v 1 is the first). A file of a
+   newer version than this copy knows is refused, nothing is changed. Saved keys are not changed: each part is loaded where it lives
+   (girderdetail_*, the Preliminary sizing frame / plateline_autosave_v1, ST-Girder's stgirder.session). */
+const SBD_V = 1, SBD_MIG = {};
+function sbdMigrate(j) { let v = Math.round(+j.v) || 1; if (v > SBD_V) return null; while (v < SBD_V) { j = SBD_MIG[v](j); v++; } return { ...j, v: SBD_V }; }
+function sbdPlPart() { let d = null, name = '';
+  try { if (PL_FRAME && PL_FRAME.dataset.up) { d = JSON.parse(JSON.stringify(PL_FRAME.contentWindow.eval('P'))); name = PL_FRAME.contentWindow.eval('CUR_NAME') || ''; } } catch (e) { d = null; }
+  if (!d) try { const a = JSON.parse(localStorage.getItem('plateline_autosave_v1') || 'null'); if (a && a.data) { d = a.data; name = a.name || ''; } } catch (e) { }
+  return d ? { app: 'PlateLine', v: 1, name, data: d } : null; }
+function sbdStPart() { let inp = null;
+  try { const c = ST_FRAME && ST_FRAME.contentWindow.gdStCur && ST_FRAME.contentWindow.gdStCur(); if (c && c.inp) inp = JSON.parse(JSON.stringify(c.inp)); } catch (e) { inp = null; }
+  if (!inp) try { inp = JSON.parse(localStorage.getItem('stgirder.session') || 'null'); } catch (e) { inp = null; }
+  return inp ? { ...inp, _schema: 'stgirder' } : null; }
+function sbdProjectFile() { return { app: 'SteelBridgeDesign', v: SBD_V, name: CUR || '', data: P, pl: sbdPlPart(), st: sbdStPart() }; }
+// Preliminary sizing's part: loaded in its frame (its own loadData), or saved for it to open with when the frame is not built yet
+function sbdPlLoad(f) { const d = f.data, name = f.name || '';
+  try { if (PL_FRAME && PL_FRAME.dataset.up && PL_FRAME.contentWindow.loadData) { PL_FRAME.contentWindow.loadData(d, name); return; } } catch (e) { }
+  try { localStorage.setItem('plateline_autosave_v1', JSON.stringify({ data: d, name, ts: Date.now() })); } catch (e) { }
+  if (PL_FRAME) { PL_FRAME.remove(); PL_FRAME = null; GD_PLUP = 0; } plEnsure(); }
+// ST-Girder's part: its session key, then the view's frame is built again (it opens with that session, as stgirder.html would)
+function sbdStLoad(inp) { const o = { ...inp }; delete o._schema;
+  if (ST_FRAME) { ST_FRAME.remove(); ST_FRAME = null; ST_READY = false; ST_Q.length = 0; ST_STATE = null; ST_TBK = null; ST_APXCSS = null; ST_FP = null; }
+  try { localStorage.setItem('stgirder.session', JSON.stringify(o)); } catch (e) { }
+  if (stViewOn()) stShow(); }
+// true when j is one of the files this function reads (and it has been loaded), false to let the caller try the older ones
+function sbdProjectImport(j, fname) {
+  if (j && j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) { flash(`${fname}: a newer Steel Bridge Design file (version ${j.v}) than this copy reads; nothing was changed.`, 'fail'); return true; }
+    const parts = ['the modules', m.pl ? 'Preliminary sizing' : '', m.st ? 'Design & Rating (ST-Girder)' : ''].filter(Boolean);
+    if (!confirm(`Open ${fname}? It replaces ${parts.join(', ')} with the file's project.`)) return true;
+    if (m.pl && m.pl.data) sbdPlLoad(m.pl); if (m.st) sbdStLoad(m.st); if (m.data) loadData(m.data, m.name || '');
+    flash(`Imported ${fname} (${parts.join(', ')}).`); return true; }
+  if (j && j.app === 'PlateLine' && j.data && j.data.girder) { if (!confirm(`Open ${fname} in Preliminary sizing? It replaces its project.`)) return true; sbdPlLoad(j); flash(`Imported ${fname} into Preliminary sizing.`); return true; }
+  if (j && j._schema === 'stgirder') { if (!confirm(`Open ${fname} in Design & Rating (ST-Girder)? It replaces ST-Girder's inputs.`)) return true; sbdStLoad(j); flash(`Imported ${fname} into Design & Rating (ST-Girder).`); return true; }
+  return false; }
+  ```
+- **Check case:** built-in project → Export JSON → the file has `app: "SteelBridgeDesign"`, `v: 1`, `data` (= the project P), `pl`
+  (`app: "PlateLine"`, its data), `st` (`_schema: "stgirder"`); change the Subject and ST-Girder's session, Import the file (OK) → both restored.
+  A file with `v: 99` is refused, nothing changed. A GirderDetail file still imports as before; an older GirderDetail copy imports the new file
+  (it reads `data`).
+
+**Baseline note:** `tests/baselines/gd.json`, case builtin / RIDOT, section `gd.project` re-recorded (02bb53abce82 → e6e33c02d746, the value main
+gives since 0072010, SBD1, and this branch gives too). The only values that differ from the PR 0 recording (9684292) are inside `_adUndo`, the
+auto-design undo snapshots (the inputs as they were before the last auto-design of the transverse and bearing stiffeners: e.g. stiffener
+t_p 0.375 vs 0.4375 before that pass); the project's inputs and every result are the same. Found by the PR 2 baseline recording; not caused here.
+
+**Open items:** ST-Girder's unused `LS_PROJ` / `LS_LAST` (inside `st-src`) are left for the cut-over PR, where `st-src` stops being a verbatim
+copy of stgirder.html.

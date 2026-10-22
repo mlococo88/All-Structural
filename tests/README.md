@@ -48,6 +48,16 @@ Options of `compare.mjs`: `--tool gd|st|sbd|page`, `--a` (default `origin/main`;
 
 A git ref is written with `git show` to `<tmp>/allstruct-tests/<sha>/` and opened from there (`file://`). Fetch first (`git fetch origin main`) so `origin/main` is current.
 
+## Steel Bridge Design: checks beyond compare.mjs (`sbd-verify.mjs`, `a610-prop.mjs`)
+
+```bash
+node tests/sbd-verify.mjs     # redirect, saved data, the Design & Rating (ST-Girder) view, live link and Update banner, Design all summary,
+                              # title block, Girder report chapter and Print appendix, one project file (export, import, versions)
+node tests/a610-prop.mjs      # the SBD-SHARED block and its placeholder in pl-src; A610 functions bit-identical to the expressions they replaced (10,000 random inputs each)
+```
+
+Both exit 0 when every check passes. The A610 references in `a610-prop.mjs` are the expressions as written before they were shared (main at cb584ac); never edit them to make the test pass.
+
 ## Base Plate & Anchor Designer: PROFIS export (`bpad-profis.mjs`)
 
 ```bash

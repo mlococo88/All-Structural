@@ -8,7 +8,7 @@
 //     block (PR 3): the project title block shown read-only in the view, ST-Girder's saved fields kept; printing
 //     (ST-Girder's Print button prints the frame, not the page; the top bar's Print report opens ST-Girder's Report tab; Ctrl+P prints the frame);
 //  one report (PR 3): a module's Print with Appendix A (ST-Girder's report, A.n numbering, see §A.n.k), the Girder report with its ST-Girder chapter;
-//  console errors of every page. Usage: node tests/sbd-verify.mjs [--file "Steel Bridge Design.html"]   Exit code 0 when every check passes.
+//  one project file (PR 4): export holds every part, read back, a newer version refused; console errors of every page. Usage: node tests/sbd-verify.mjs [--file "Steel Bridge Design.html"]   Exit code 0 when every check passes.
 import fs from 'fs';
 import path from 'path';
 import { REPO, HERE, openPage } from './lib.mjs';
@@ -126,8 +126,17 @@ seed['stgirder.session'] = stSess; seed['stgirder.ui.v1'] = JSON.stringify({ tab
     ok(await p.evaluate(() => document.body.classList.contains('mod-st') && document.querySelectorAll('iframe[name="gd-st"]').length === 1), 'reopening keeps the one frame (state kept)');
     const pm = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('girderdetail_autosave_v1')).data.mod; } catch (e) { return '?'; } });
     ok(pm !== 'st', 'the saved GirderDetail project never records the view as a module (mod = ' + pm + ')');
+    // SBD4: one project file (Export JSON / Import JSON): every part in one file, read back; older files and a newer version
+    const pf = await p.evaluate(() => { const j = JSON.parse(JSON.stringify(sbdProjectFile())); return { j, same: JSON.stringify(j.data) === JSON.stringify(P) }; });
+    ok(pf.j.app === 'SteelBridgeDesign' && pf.j.v === 1 && pf.same && pf.j.pl && pf.j.pl.app === 'PlateLine' && !!pf.j.pl.data.girder && pf.j.st && pf.j.st._schema === 'stgirder' && !!pf.j.st.proj,
+      'project file holds the modules (data = P), Preliminary sizing and ST-Girder: ' + JSON.stringify({ app: pf.j.app, v: pf.j.v, pl: pf.j.pl && pf.j.pl.app, st: pf.j.st && pf.j.st.proj && pf.j.st.proj.girderId }));
+    const rt = await p.evaluate(async j => { const subj = P.meta.subject; P.meta.subject = 'CHANGED'; localStorage.setItem('stgirder.session', JSON.stringify({ proj: { name: 'OTHER' } }));
+      const r = sbdProjectImport(j, 'test.json'); await new Promise(res => setTimeout(res, 1500));
+      return { r, subj: P.meta.subject === subj, st: JSON.parse(localStorage.getItem('stgirder.session')).proj.girderId === j.st.proj.girderId, newer: sbdProjectImport({ ...j, v: 99 }, 'new.json'), old: sbdProjectImport({ app: 'GirderDetail', v: 1, data: P }, 'old.json') }; }, pf.j);
+    ok(rt.r && rt.subj && rt.st && rt.newer && !rt.old, 'project file read back (modules and ST-Girder restored); a newer version refused; a GirderDetail file left to the older path: ' + JSON.stringify(rt));
+    await p.waitForTimeout(1500);
     const e = errsOf(o); ok(!e.length, 'console errors: ' + e.length + (e.length ? ' ' + JSON.stringify(e.slice(0, 3)) : ''));
-    ok(!o.dialogs.filter(d => !/^Load G3 into ST-Girder\?/.test(d)).length, 'dialogs: ' + JSON.stringify(o.dialogs.map(d => d.slice(0, 60))));
+    ok(!o.dialogs.filter(d => !/^Load G3 into ST-Girder\?|^Open test\.json\?/.test(d)).length, 'dialogs: ' + JSON.stringify(o.dialogs.map(d => d.slice(0, 60))));
   } finally { await o.b.close(); } }
 console.log(bad ? `\n${bad} check(s) failed` : '\nall checks pass');
 process.exit(bad ? 1 : 0);
