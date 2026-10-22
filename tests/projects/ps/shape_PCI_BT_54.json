@@ -1,0 +1,183 @@
+{
+ "proj": {
+  "name": "Shape check — PCI BT-54",
+  "girderId": "G3 (Interior)",
+  "by": "MLC",
+  "date": "2026-10-22",
+  "job": ""
+ },
+ "girder": "PCI BT-54",
+ "cust": {
+  "h": 72,
+  "A": 767,
+  "I": 545894,
+  "yb": 36.6,
+  "bw": 6,
+  "btf": 42,
+  "bbf": 26
+ },
+ "ovr": {
+  "on": false,
+  "A": "",
+  "I": "",
+  "yb": "",
+  "Sb": "",
+  "St": "",
+  "wsw": ""
+ },
+ "L": 95,
+ "S": 9,
+ "beffAuto": true,
+ "beff": 108,
+ "ts": 8,
+ "th": 2,
+ "tsSeparate": false,
+ "tsDL": 8,
+ "haunchInProps": false,
+ "nGirders": 5,
+ "mat": {
+  "fci": 6.8,
+  "fc": 8.5,
+  "fcd": 4,
+  "wc": 0.145,
+  "wcLoad": 0.155,
+  "wcd": 0.15,
+  "wcdLoad": 0.15,
+  "H": 70,
+  "VS": 3,
+  "ti": 1,
+  "td": 90,
+  "tfin": 20000
+ },
+ "str": {
+  "size": "0.6 in",
+  "fpu": 270,
+  "lowlax": true,
+  "jack": 0.75,
+  "Ep": 28500
+ },
+ "rows": [
+  {
+   "n": 10,
+   "y": 2,
+   "dbnd": 0,
+   "nd": 0
+  },
+  {
+   "n": 10,
+   "y": 4,
+   "dbnd": 0,
+   "nd": 0
+  },
+  {
+   "n": 8,
+   "y": 6,
+   "dbnd": 0,
+   "nd": 0
+  }
+ ],
+ "harp": {
+  "n": 8,
+  "yEnd": 48,
+  "yMid": 8,
+  "frac": 0.4
+ },
+ "loads": {
+  "wNC": 0.1,
+  "wBar": 0.3,
+  "wDW": 0.25,
+  "llAuto": true,
+  "MLL": 0,
+  "VLL": 0,
+  "dfm": 0,
+  "dfv": 0,
+  "dfAuto": true,
+  "pos": "interior",
+  "posAuto": true,
+  "de": 2,
+  "NL": 2,
+  "skew": 0,
+  "diaph": [],
+  "fatM": 0,
+  "extDFpos": 1,
+  "extDFneg": 1,
+  "extDFv": 1,
+  "extLLmpf": 1
+ },
+ "cont": {
+  "on": false,
+  "As": 16,
+  "dTop": 4.5,
+  "fy": 60,
+  "restraint": true
+ },
+ "rateVeh": [],
+ "handling": {
+  "on": false,
+  "aLift": 4,
+  "aHaul": 6,
+  "ei": 0.25,
+  "sweep": 0.000167,
+  "fr": 0,
+  "zo": 0,
+  "hr": 24,
+  "ag": 0.02,
+  "theta_i": 0.01,
+  "gFactor": 0
+ },
+ "deck": {
+  "on": false,
+  "method": "strip",
+  "oh": 3,
+  "fyd": 60,
+  "barTop": 0.31,
+  "barBot": 0.31,
+  "sTop": 6,
+  "sBot": 6,
+  "coverT": 2.5,
+  "coverB": 1,
+  "wsFut": 0.025,
+  "bBar": 18,
+  "wBar": 0.3,
+  "xnegAuto": true,
+  "xneg": 0
+ },
+ "opt": {
+  "lossMethod": "refined",
+  "relBondedReinf": true,
+  "corrosion": "normal",
+  "gLLs3": 0.8,
+  "dfpSS": 0,
+  "dfpSSauto": true,
+  "useTrans": false,
+  "stirAv": 0.4,
+  "fy": 60,
+  "sEnd": 6,
+  "endZoneLen": 0.25,
+  "sInt": 18,
+  "relAs": 0.62,
+  "relFy": 60,
+  "relCfac": 0.65,
+  "rtPhiC": 1,
+  "rtPhiS": 1,
+  "splitAv": 0.31,
+  "splitN": 12,
+  "splitFy": 60,
+  "confBar": 4,
+  "confS": 6,
+  "confN": 14,
+  "Lpad": 12,
+  "endOh": 0,
+  "longAsBot": 6,
+  "longFy": 60,
+  "mult": {
+   "psE": 1.8,
+   "swE": 1.85,
+   "psF": 2.2,
+   "swF": 2.4,
+   "dkF": 2.3,
+   "sdF": 3
+  }
+ },
+ "external": null
+}
