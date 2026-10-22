@@ -1823,3 +1823,33 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
 - `node tests/check-syntax.mjs "Prestressed Bridge Design.html" psbeam.html`: all scripts pass.
 - Shared blocks: compared with origin/main's psbeam.html, the bytes are identical (the diff shows only the lines above).
 - **Other copies:** none.
+
+## 2026-10-22 — PR: claude/pbd-2-shell (PBD-D: bridge shell — working modes, module registry, one title block, bridge model psbeam.bridge.v1 with migration, girder × span selector, project Save / Save as / Open / New; engineer decision 2026-10-22; no result change; PR link added after merge)
+
+### PBD-D1. Engines under `window.PBD` (new plain `<script>` block before the JSX)   [new code] [no result change]
+- **Where:** new block, anchor `/* ═══ Prestressed Bridge Design — bridge-level engines (window.PBD)`. Nothing in it computes an engineering value.
+- `PBD.MODS` (PBD_MODS, the module registry): `{id, label, grp, when?, modes?}` for every tab, same keys, labels and order as the former fixed `TABS` list. `when` keeps Handling and Deck shown only when they are on, as before. `PBD.mods(inp, mode)` filters it. Groups: Girder (Inputs … Anchorage Zone), Analysis (Diagrams, Camber), Details (Handling, Deck), Rating, Tools (Optimize, Compare), Report (Nomenclature, Report). No module is mode-specific yet.
+- Bridge model, key **`psbeam.bridge.v1`** (new; project slice **`psbeamBridge`** in `bridgeSuite.v1.projects`):
+  `{ v:1, mode:'pl'|'mod', title:{name,by,date,job}, spans:[ft…], nGirders, S, sel:{g,s}, designs:{'G<g>/S<s>': inputs}, projId, src }`.
+  - `PBD.migrate(inp)`: first open, built from the saved design (`psbeam.inputs.v1`), changing nothing in it. Spans: `[inp.L]`, or with imported MIDAS demands the member's spans (`externalSpans` rule, duplicated as `PBD.extSpans`) and the selected span `external._selSpan.idx`. Girders: `nGirders`, spacing `S`. Girder: the number in `proj.girderId` ("G3 (Interior)" → 3), else G1 for an exterior position, else G2. Title: `proj` name / by / date / job. Mode: Design modules when MIDAS demands are imported, else Preliminary designer (the Steel Bridge Design rule).
+  - The model is held in memory and **written only after a bridge-level action** (mode, girder × span, bridge bar, Save / Save as / Open / New). Opening a design therefore changes nothing that is stored. A stored model carries the project it belongs to (`projId`). When another shared project is open, that project's slice is used, or a model is built from its design.
+  - `PBD.fromInputs(b, inp)`: keeps the model in step with the design on screen (the cell's stored copy, the title; in Preliminary designer also the span of the cell, the spacing and the girder count; the imported spans). The inputs are never changed by it.
+  - `PBD.select(b, cur, g, s)`: stores the design on screen in its cell and opens another. The target is the cell's stored design, else a copy of the current one. In Preliminary designer the bridge values are applied (`PBD.applyBridge`: span length or imported span, spacing, girder count, position exterior for G1 and Gn else interior, with the design-beam follow turned off when the position changes, girder label, title). In Design modules a new cell gets only its girder label (and its imported span); the title block is shared in both modes.
+  - `PBD.edit(b, cur, patch)`: bridge bar edits (spans, girders, spacing). In Preliminary designer the open design follows; other cells follow when opened.
+- **psbeam.inputs.v1 is unchanged in key and format** and is still the design on screen; no key is deleted.
+
+### PBD-D2. UI (JSX)   [UI only] [no result change]
+- `PbdBridgeBar` (under the title block, outside the tabs): the working mode (Preliminary designer / Design modules, as in Steel Bridge Design), spans (ft, comma-separated; read-only with MIDAS demands), girders, spacing, and the girder × span selector ("Designing G3 (Interior) × Span 1 (120.0 ft)"; • = a stored design).
+- Tab strip: built from the registry, with the group names between the tabs (`.pbd-grp` labels; the `.tab` buttons, their labels and order are unchanged).
+- Title block: unchanged fields. It is the bridge's one title block: its values are kept in the model and written into every girder design that is opened.
+- Project buttons next to the project label: **Open…** (dialog listing the shared projects: name, saved, contents), **Save** (into the open project, else Save as), **Save as…** (uses the formerly unused `saveProjectAs`, plus the `psbeamBridge` slice), **New** (default design and a new bridge model; the open project stays saved; asks first). While a project is open the design (as before) and the model (debounced 400 ms, once written) are saved into it on every change. `adoptProject` also adopts the project's model (`pbdAdopt`).
+- CSS: `.pbd-*` rules appended to the style block.
+
+### Check case
+Default project, empty storage: the bar reads "Preliminary designer", spans 120, girders 5, spacing 9, "G3 (Interior) × Span 1 (120.0 ft)". No `psbeam.bridge.v1` is written until an action. Choosing G1: the design becomes "G1 (Exterior)", `loads.pos` exterior (design-beam follow off), L = 120, S = 9; returning to G3 restores the stored interior design exactly. Changing the spans to "100, 120" (Preliminary designer, span 1 open): L becomes 100 in the open design.
+
+### How verified
+- `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: all 31 cases, every section identical (inputs, checks, R, warnings, every tab's text, report, payloads, storage).
+- Scripted UI checks (scratch): migration values above; select / return round-trip identical; Save as → registry entry with slices `psbeam` and `psbeamBridge`; New → defaults; Open → the saved project's design and model; mode switch keeps the design; storage untouched until the first action; no console errors.
+- `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
+- **Other copies:** none (Steel Bridge Design's modes and module bar are a different implementation; only the behaviour is mirrored).

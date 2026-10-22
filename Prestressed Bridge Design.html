@@ -441,6 +441,26 @@ a.wk-a:hover{text-decoration:underline}
   cursor: pointer;
 }
 
+/* ---- PBD-D (2026-10-22): working mode, bridge bar, module groups, project buttons (UI only) ---- */
+.pbd-bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;border-bottom:1px solid var(--line);padding:9px 2px 9px}
+.pbd-mode{display:inline-flex;border:1.5px solid var(--ink)}
+.pbd-mode button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 12px;border:0;background:var(--sheet);color:var(--ink2);cursor:pointer;text-align:left;font-family:var(--sans)}
+.pbd-mode button+button{border-left:1.5px solid var(--ink)}
+.pbd-mode button b{font-size:12.5px;font-weight:700}
+.pbd-mode button span{font-size:10.5px;color:var(--ink2)}
+.pbd-mode button[aria-checked="true"]{background:var(--ink);color:#fff}
+.pbd-mode button[aria-checked="true"] span{color:rgba(255,255,255,.8)}
+.pbd-mode button[aria-checked="true"] b::before{content:'\25CF\00a0'}
+.pbd-f{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);color:var(--ink2)}
+.pbd-f input,.pbd-f select{font-family:var(--mono);font-size:12px;border:1.3px solid var(--line);padding:2px 4px;background:var(--sheet);color:var(--ink)}
+.pbd-f input{width:62px}
+.pbd-f input:disabled{background:var(--paper);color:var(--ink2)}
+.pbd-sel{margin-left:auto}
+.pbd-grp{align-self:center;font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink2);padding:0 2px 0 12px;margin-left:6px;border-left:1px solid var(--line)}
+.pbd-grp:first-child{border-left:none;padding-left:2px;margin-left:0}
+.pbd-open td{vertical-align:middle}
+@media (max-width:700px){.pbd-mode button span{display:none}.pbd-sel{margin-left:0}}
+
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite — shared DESIGN BEAM channel (v1)
@@ -1841,6 +1861,163 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
     return p;
   }
   window.BXSuperRx={ send:send, exportJSON:exportJSON, summary:summary, stamp:stamp };
+})();
+</script>
+<script>
+/* ═══ Prestressed Bridge Design — bridge-level engines (window.PBD) ═══════════════════════════════════
+   PBD-D (2026-10-22). Plain JavaScript, no React: the module registry, the bridge model and its
+   migration, and the girder × span cells. The UI (JSX, below) only calls these. Nothing here computes an
+   engineering value: every result still comes from computeAll() of the one design on screen.
+
+   Bridge model (key psbeam.bridge.v1; slice "psbeamBridge" of a shared Bridge Suite project):
+     { v:1, mode:'pl'|'mod', title:{name,by,date,job}, spans:[L1 ft, L2, …], nGirders, S (ft),
+       sel:{g,s}, designs:{ 'G<g>/S<s>': inputs, … }, src:{ migrated:ISO, from:'psbeam.inputs.v1' } }
+   - The design on screen is still psbeam.inputs.v1 (unchanged key and format). designs[] keeps the
+     inputs of every other girder × span cell the engineer has opened (and a copy of the active one).
+   - First open with no saved model: the model is built from the saved inputs (migrate), in memory. It is
+     written only when the engineer changes something at bridge level (mode, cell, bridge bar, project
+     save), so opening a design never changes what is stored. psbeam.inputs.v1 is never removed.
+   - Imported MIDAS demands (inputs.external): the spans are the imported member's spans and the span of
+     a cell is the imported span of the same number (the existing span selection, external._selSpan).
+   Modes (mirroring Steel Bridge Design):
+     'pl' Preliminary designer: the bridge model drives every girder design: span length, girder spacing,
+          number of girders, interior/exterior position and the title block are set from the bridge bar,
+          in the open design and in every cell opened later.
+     'mod' Design modules: the bridge model is the definition and the cell list only; each girder design
+          keeps its own span, spacing and position (enter them, or import its MIDAS demands).
+   ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var PBD = window.PBD = window.PBD || {};
+  var KEY = 'psbeam.bridge.v1', SLICE = 'psbeamBridge', V = 1;
+  PBD.KEY = KEY; PBD.SLICE = SLICE;
+  /* Module registry (PBD_MODS). id = the tab key, label = the tab text, grp = the module group shown in the
+     module bar, when(inp) = shown only when it returns true, modes = the working modes that show it. */
+  PBD.MODS = [
+    { id: 'inputs', label: 'Inputs', grp: 'Girder' },
+    { id: 'section', label: 'Section Props', grp: 'Girder' },
+    { id: 'losses', label: 'Losses', grp: 'Girder' },
+    { id: 'stresses', label: 'Stresses', grp: 'Girder' },
+    { id: 'flexure', label: 'Flexure', grp: 'Girder' },
+    { id: 'shear', label: 'Shear', grp: 'Girder' },
+    { id: 'anchorage', label: 'Anchorage Zone', grp: 'Girder' },
+    { id: 'diagrams', label: 'Diagrams', grp: 'Analysis' },
+    { id: 'camber', label: 'Camber', grp: 'Analysis' },
+    { id: 'handling', label: 'Handling', grp: 'Details', when: function (inp) { return !!(inp && inp.handling && inp.handling.on); } },
+    { id: 'deck', label: 'Deck', grp: 'Details', when: function (inp) { return !!(inp && inp.deck && inp.deck.on); } },
+    { id: 'rating', label: 'Rating', grp: 'Rating' },
+    { id: 'optimize', label: 'Optimize', grp: 'Tools' },
+    { id: 'compare', label: 'Compare', grp: 'Tools' },
+    { id: 'nomen', label: 'Nomenclature', grp: 'Report' },
+    { id: 'report', label: 'Report', grp: 'Report' }
+  ];
+  PBD.mods = function (inp, mode) {
+    return PBD.MODS.filter(function (m) { return (!m.when || m.when(inp)) && (!m.modes || m.modes.indexOf(mode) >= 0); });
+  };
+  PBD.MODES = { pl: { label: 'Preliminary designer', sub: 'The bridge drives every girder design' },
+                mod: { label: 'Design modules', sub: 'Bridge definition; each girder design keeps its own inputs' } };
+
+  function num(v, d) { var n = +v; return isFinite(n) ? n : d; }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function extActive(inp) { var e = inp && inp.external; return !!(e && e._schema === 'psbeam-external-demands' && Array.isArray(e.stations) && e.stations.length); }
+  /* The spans of an imported member, the same rule as externalSpans() in the design code (supports, else spans,
+     else the station range). Duplicated here so this block does not depend on the JSX. */
+  function extSpans(ext) {
+    var m = (ext && ext.member) || {};
+    if (Array.isArray(m.supports) && m.supports.length >= 2)
+      return m.supports.slice(0, -1).map(function (x0, i) { return { idx: i + 1, x0: x0, x1: m.supports[i + 1], len: +(m.supports[i + 1] - x0).toFixed(3) }; });
+    if (Array.isArray(m.spans) && m.spans.length) { var x = 0; return m.spans.map(function (len, i) { var o = { idx: i + 1, x0: x, x1: x + len, len: len }; x += len; return o; }); }
+    var xs = (ext.stations || []).map(function (s) { return s.x; }), x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    return [{ idx: 1, x0: x0, x1: x1, len: +(x1 - x0).toFixed(3) }];
+  }
+  PBD.extSpans = extSpans; PBD.extActive = extActive;
+  PBD.key = function (g, s) { return 'G' + g + '/S' + s; };
+  PBD.isExt = function (b, g) { return g === 1 || g === b.nGirders; };
+  PBD.girderLabel = function (b, g) { return 'G' + g + ' (' + (PBD.isExt(b, g) ? 'Exterior' : 'Interior') + ')'; };
+  function titleOf(inp) { var p = (inp && inp.proj) || {}; return { name: p.name || '', by: p.by || '', date: p.date || '', job: p.job || '' }; }
+
+  /* Build the bridge model from one saved design (first open). Changes nothing in the inputs. */
+  PBD.migrate = function (inp, mode) {
+    var ext = extActive(inp), sp = ext ? extSpans(inp.external) : null;
+    var n = Math.max(2, Math.round(num(inp.nGirders, 5)) || 2);
+    var spans = ext ? sp.map(function (q) { return q.len; }) : [num(inp.L, 0)];
+    var s = 1;
+    if (ext) { var sel = inp.external._selSpan; s = sel && sel.idx ? Math.min(Math.max(1, +sel.idx), spans.length) : 1; }
+    var m = /^\s*G\s*(\d+)/i.exec(String((inp.proj && inp.proj.girderId) || '')), g;
+    if (m && +m[1] >= 1 && +m[1] <= n) g = +m[1];
+    else g = (inp.loads && inp.loads.pos === 'exterior') ? 1 : Math.min(2, n);
+    var b = { v: V, mode: mode || (ext ? 'mod' : 'pl'), title: titleOf(inp), spans: spans, nGirders: n, S: num(inp.S, 0),
+      sel: { g: g, s: s }, designs: {}, src: { migrated: new Date().toISOString(), from: 'psbeam.inputs.v1' } };
+    b.designs[PBD.key(g, s)] = clone(inp);
+    return b;
+  };
+  /* A stored model, checked; null when absent or unreadable (then the caller migrates). */
+  PBD.valid = function (b) {
+    return !!(b && typeof b === 'object' && b.v === V && Array.isArray(b.spans) && b.spans.length && b.nGirders >= 1 && b.sel && b.designs && typeof b.designs === 'object');
+  };
+  PBD.load = function () { try { var b = JSON.parse(localStorage.getItem(KEY)); return PBD.valid(b) ? b : null; } catch (e) { return null; } };
+  PBD.save = function (b) { try { localStorage.setItem(KEY, JSON.stringify(b)); return true; } catch (e) { try { window.BridgeApps && window.BridgeApps.storageWarn('the bridge model', e); } catch (x) { } return false; } };
+  PBD.loaded = function (b) { return !!b; };
+
+  /* Keep the model in step with the design on screen (the engineer edits the inputs directly): the cell's
+     stored copy, and in Preliminary designer the bridge values the inputs carry (span of the cell, spacing,
+     girder count, title). Returns the same object when nothing changed. */
+  PBD.fromInputs = function (b, inp) {
+    var k = PBD.key(b.sel.g, b.sel.s), n = clone(b), ch = false;
+    if (JSON.stringify(b.designs[k]) !== JSON.stringify(inp)) { n.designs[k] = clone(inp); ch = true; }
+    var t = titleOf(inp); if (JSON.stringify(t) !== JSON.stringify(b.title)) { n.title = t; ch = true; }
+    if (b.mode === 'pl') {
+      if (!extActive(inp) && num(inp.L, 0) !== b.spans[b.sel.s - 1]) { n.spans[b.sel.s - 1] = num(inp.L, 0); ch = true; }
+      if (num(inp.S, 0) !== b.S) { n.S = num(inp.S, 0); ch = true; }
+      var ng = Math.max(2, Math.round(num(inp.nGirders, 5)) || 2); if (ng !== b.nGirders) { n.nGirders = ng; ch = true; if (n.sel.g > ng) n.sel.g = ng; }
+    }
+    if (extActive(inp)) { var sp = extSpans(inp.external).map(function (q) { return q.len; }); if (JSON.stringify(sp) !== JSON.stringify(b.spans)) { n.spans = sp; ch = true; } }
+    return ch ? n : b;
+  };
+  /* The bridge values written into a girder design (Preliminary designer). */
+  PBD.applyBridge = function (b, inp, g, s) {
+    var o = clone(inp), ext = extActive(o);
+    o.proj = Object.assign({}, o.proj || {}, b.title, { girderId: PBD.girderLabel(b, g) });
+    if (ext) { var sp = extSpans(o.external), q = sp[Math.min(s, sp.length) - 1]; if (q) { o.external = Object.assign({}, o.external, { _selSpan: q }); o.L = q.len; } }
+    else o.L = b.spans[s - 1];
+    o.S = b.S; o.nGirders = b.nGirders;
+    var pos = PBD.isExt(b, g) ? 'exterior' : 'interior';   // a design already at this position keeps its loads as they are
+    if (!o.loads || o.loads.pos !== pos) o.loads = Object.assign({}, o.loads, { pos: pos, posAuto: false });
+    return o;
+  };
+  /* Open another girder × span cell. Returns { b, inp }: the model with the current design stored, and the
+     inputs of the target cell (its stored design, else a copy of the current one), with the bridge values
+     applied in Preliminary designer and only the girder label / imported span in Design modules. */
+  PBD.select = function (b, cur, g, s) {
+    var n = clone(b); n.designs[PBD.key(b.sel.g, b.sel.s)] = clone(cur);
+    g = Math.min(Math.max(1, g), n.nGirders); s = Math.min(Math.max(1, s), n.spans.length);
+    n.sel = { g: g, s: s };
+    var base = n.designs[PBD.key(g, s)] ? clone(n.designs[PBD.key(g, s)]) : clone(cur);
+    var inp, stored = !!n.designs[PBD.key(g, s)];
+    if (n.mode === 'pl') inp = PBD.applyBridge(n, base, g, s);
+    else {   // Design modules: the cell keeps its own inputs; a new cell gets its girder label and, with imported demands, its span
+      inp = base;
+      if (!stored) { inp.proj = Object.assign({}, inp.proj || {}, { girderId: PBD.girderLabel(n, g) });
+        if (extActive(inp)) { var sp = extSpans(inp.external), q = sp[s - 1]; if (q) { inp.external = Object.assign({}, inp.external, { _selSpan: q }); inp.L = q.len; } } }
+      inp.proj = Object.assign({}, inp.proj || {}, n.title);   // one title block for the bridge, in both modes
+    }
+    n.designs[PBD.key(g, s)] = clone(inp);
+    return { b: n, inp: inp };
+  };
+  /* Edit the bridge (bridge bar). patch: { spans?, nGirders?, S?, title? }. In Preliminary designer the open
+     design follows; the stored designs of other cells follow when they are opened. */
+  PBD.edit = function (b, cur, patch) {
+    var n = clone(b);
+    if (patch.spans && !extActive(cur)) n.spans = patch.spans.map(function (v) { return Math.max(0, num(v, 0)); });
+    if (patch.nGirders != null) n.nGirders = Math.max(2, Math.round(num(patch.nGirders, n.nGirders)));
+    if (patch.S != null) n.S = Math.max(0, num(patch.S, n.S));
+    if (patch.title) n.title = Object.assign({}, n.title, patch.title);
+    n.sel = { g: Math.min(n.sel.g, n.nGirders), s: Math.min(n.sel.s, n.spans.length) };
+    var inp = n.mode === 'pl' ? PBD.applyBridge(n, cur, n.sel.g, n.sel.s) : cur;
+    n.designs[PBD.key(n.sel.g, n.sel.s)] = clone(inp);
+    return { b: n, inp: inp };
+  };
+  PBD.cells = function (b) { var out = []; for (var s = 1; s <= b.spans.length; s++) for (var g = 1; g <= b.nGirders; g++) out.push({ g: g, s: s, key: PBD.key(g, s), has: !!b.designs[PBD.key(g, s)] }); return out; };
 })();
 </script>
 <script type="text/babel" data-presets="env,react">
@@ -8142,6 +8319,62 @@ function BeamChip({nb,setBy}){
     </span>);
 }
 
+/* ═══ PBD-D (2026-10-22): working mode, bridge bar (girder × span) and project dialog ═══════════════════
+   UI only; the bridge model, its migration and the module registry are the engines in window.PBD (plain
+   script above). PBD_MODS is null when that block is missing, and the app then behaves as before. */
+const PBD_MODS=(window.PBD&&window.PBD.MODS)||null;
+function PbdBridgeBar({bridge,inp,onMode,onSelect,onEdit}){
+  const PB=window.PBD, b=bridge, ext=PB.extActive(inp);
+  const spKey=b.spans.join(',');
+  const [spTxt,setSpTxt]=useState(b.spans.join(', '));
+  useEffect(()=>{ setSpTxt(b.spans.join(', ')); },[spKey]);
+  const commitSpans=()=>{ const v=spTxt.split(/[,;\s]+/).filter(Boolean).map(Number);
+    if(v.length&&v.every(x=>isFinite(x)&&x>0)&&v.join(',')!==spKey) onEdit({spans:v}); else setSpTxt(b.spans.join(', ')); };
+  const has=(g,s)=>!!b.designs[PB.key(g,s)];
+  const gl=[...Array(b.nGirders)].map((_,i)=>i+1), sl=b.spans.map((_,i)=>i+1);
+  const tip={pl:'Preliminary designer: the bridge model drives every girder design. Span length, girder spacing, number of girders, interior / exterior position and the title block are set from this bar, in the open design and in each girder × span you open. Editing the span, spacing or girder count of the open design updates the bridge model.',
+    mod:'Design modules: the bridge model is the definition and the list of girder × span designs only. Each design keeps its own span, spacing and position (enter them, or import its MIDAS demands); the title block is shared.'};
+  return <div className="pbd-bar noprint">
+    <div className="pbd-mode" role="radiogroup" aria-label="Working mode">
+      {['pl','mod'].map(m=><button key={m} type="button" role="radio" aria-checked={b.mode===m} title={tip[m]}
+        onClick={()=>{ if(b.mode!==m) onMode(m); }}><b>{PB.MODES[m].label}</b><span>{PB.MODES[m].sub}</span></button>)}
+    </div>
+    <label className="pbd-f" title={ext?'Spans of the imported MIDAS member (from the demands file)':'Span lengths of the bridge, ft, separated by commas (one value per span)'}>Spans (ft)
+      <input style={{width:140}} value={spTxt} disabled={ext} onChange={e=>setSpTxt(e.target.value)} onBlur={commitSpans}
+        onKeyDown={e=>{ if(e.key==='Enter') e.currentTarget.blur(); }}/></label>
+    <label className="pbd-f" title="Number of girders in the cross-section">Girders
+      <input type="number" min={2} step={1} value={b.nGirders} onChange={e=>{ const n=Math.round(+e.target.value); if(n>=2&&n<=40) onEdit({nGirders:n}); }}/></label>
+    <label className="pbd-f" title="Girder spacing, ft">Spacing (ft)
+      <input type="number" min={0} step={0.25} value={b.S} onChange={e=>{ const v=+e.target.value; if(isFinite(v)&&v>0) onEdit({S:v}); }}/></label>
+    <span className="pbd-f pbd-sel" title="The girder and span designed on screen. Each girder × span keeps its own design (• = a design is stored); the one on screen is the app's saved design (psbeam.inputs.v1).">Designing
+      <select aria-label="Girder" value={b.sel.g} onChange={e=>onSelect(+e.target.value,b.sel.s)}>
+        {gl.map(g=><option key={g} value={g}>{PB.girderLabel(b,g)}{has(g,b.sel.s)?' •':''}</option>)}</select>
+      ×
+      <select aria-label="Span" value={b.sel.s} onChange={e=>onSelect(b.sel.g,+e.target.value)}>
+        {sl.map(s=><option key={s} value={s}>Span {s} ({fmt(+b.spans[s-1],1)} ft){has(b.sel.g,s)?' •':''}</option>)}</select>
+    </span>
+  </div>;
+}
+function PbdOpenDlg({cur,onOpen,onClose}){
+  const BPj=window.BridgeProjects, list=(BPj&&BPj.list())||[];
+  const what=a=>a==='psbeam'?'prestressed girder design':a==='psbeamBridge'?'bridge model':a==='mct'?'MCT model':a==='lldf'?'LL & DL':a;
+  return <div className="geom-modal-overlay" onClick={onClose}><div className="geom-modal" onClick={e=>e.stopPropagation()} style={{maxWidth:760}}>
+    <h2>Open a project</h2>
+    <div className="geom-select-all" style={{display:'block',fontSize:12,lineHeight:1.6,color:'#57534e'}}>
+      Projects saved in this browser (the shared Bridge Suite list). Opening one loads its prestressed girder design and bridge model; a project without a girder design keeps the design on screen as its first one.</div>
+    <div className="geom-modal-changes">
+      {list.length
+        ? <table className="eng pbd-open" style={{width:'100%'}}><thead><tr><th>Project</th><th>Saved</th><th>Contains</th><th></th></tr></thead>
+            <tbody>{list.map(p=><tr key={p.id}><td><b>{p.name}</b>{p.id===cur?' (open)':''}</td>
+              <td style={{fontFamily:'var(--mono)',fontSize:11}}>{String(p.savedAt||'').slice(0,16).replace('T',' ')}</td>
+              <td style={{fontSize:11.5}}>{(p.apps||[]).map(what).join(', ')||'—'}{p.hasDemands?', MIDAS demands':''}</td>
+              <td><button className="btn sm" onClick={()=>onOpen(p.id)}>Open</button></td></tr>)}</tbody></table>
+        : <div className="callout">No project is saved in this browser yet. Use Save as.</div>}
+    </div>
+    <div className="geom-modal-buttons"><button className="geom-modal-btn cancel" onClick={onClose}>Close</button></div>
+  </div></div>;
+}
+
 function App(){
   const canSave=useMemo(()=>lsAvailable(),[]);
   const [inp,setInpRaw]=useState(()=> canSave? (mergeInputs(loadSaved())||DEFAULTS) : DEFAULTS);
@@ -8183,6 +8416,52 @@ function App(){
     setHistTick(t=>t+1); };
   const R=useMemo(()=>computeAll(inp),[inp]);
   if(!R.error)R._set=setInp;
+  /* ── PBD-D: the bridge model (window.PBD; key psbeam.bridge.v1, project slice psbeamBridge) ──
+     Built from the saved design on first open, in memory: it is written only after a bridge-level action (mode,
+     girder × span, bridge bar, Save / Save as / Open / New), so opening a design changes nothing that is stored.
+     A stored model belongs to one project (projId): when another project is open, it is replaced. */
+  const PB=PBD_MODS?window.PBD:null;
+  const bridgeStored=useRef(false);
+  const [bridge,setBridgeRaw]=useState(()=>{ if(!PB) return null;
+    const st=canSave?PB.load():null, cur=(canSave&&BP())?BP().current():null;
+    if(st&&(st.projId||null)===(cur||null)){ bridgeStored.current=true; return st; }
+    if(st) bridgeStored.current=true;      // a stored model of another project: replaced by this one on the next save
+    try{ if(cur){ const bs=BP().getSlice(cur,PB.SLICE); if(PB.valid(bs)) return {...bs,projId:cur}; } }catch(e){}
+    return {...PB.migrate(inp),projId:cur||null}; });
+  const setBridge=(b,persist)=>{ if(persist) bridgeStored.current=true; setBridgeRaw(b); };
+  useEffect(()=>{ if(!PB) return; setBridgeRaw(b=>b?PB.fromInputs(b,inp):b); },[inp]);
+  const bridgeTimer=useRef();
+  useEffect(()=>{ if(!PB||!bridge||!canSave||!bridgeStored.current) return;
+    clearTimeout(bridgeTimer.current);
+    bridgeTimer.current=setTimeout(()=>{ PB.save(bridge);
+      try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)&&(bridge.projId||null)===cur) BP().saveSlice(cur,undefined,PB.SLICE,bridge); } }catch(e){} },400);
+    return ()=>clearTimeout(bridgeTimer.current); },[bridge]);
+  const pbdLoadInputs=(next)=>{ setBaseline(next.rows); setEditLog([]); setSelRow(null); setInp(next); };
+  const pbdMode=(m)=>{ let b={...bridge,mode:m}; if(m==='pl') b=PB.fromInputs(b,inp); setBridge(b,true); };   // the open design is kept as it is
+  const pbdSelect=(g,s)=>{ if(g===bridge.sel.g&&s===bridge.sel.s) return; const r=PB.select(bridge,inp,g,s); setBridge(r.b,true); pbdLoadInputs(r.inp); };
+  const pbdEdit=(patch)=>{ const r=PB.edit(bridge,inp,patch); setBridge(r.b,true); if(JSON.stringify(r.inp)!==JSON.stringify(inp)) setInp(r.inp); };
+  const pbdAdopt=(id,merged)=>{ if(!PB) return; let bs=null; try{ bs=BP().getSlice(id,PB.SLICE); }catch(e){}
+    setBridge(PB.valid(bs)?{...bs,projId:id}:{...PB.migrate(merged||inpRef.current),projId:id},bridgeStored.current); };
+  const [pbdOpen,setPbdOpen]=useState(false);
+  const projSaveAs=()=>{ if(!PB||!BP()||!canSave){ alert('Projects need browser storage, which is not available here. Use Export JSON.'); return; }
+    const name=window.prompt('Save this bridge (the design on screen, the bridge model and the stored girder designs) as a new project named:',
+      activeName||(inp.proj&&inp.proj.name)||'Untitled');
+    if(name==null) return; const nm=String(name).trim()||'Untitled';
+    const id=saveProjectAs(nm,inp); if(!id){ alert('Could not save: browser storage is not available or is full.'); return; }
+    const b={...bridge,projId:id}; BP().saveSlice(id,undefined,PB.SLICE,b);
+    saveLastProjId(id); setCurProjIdRaw(id); setActiveName(nm); setBridge(b,true); };
+  const projSave=()=>{ if(curProjId&&BP()&&BP().get(curProjId)){
+      if(!overwriteProject(curProjId,inp)){ alert('Could not save: browser storage is not available or is full.'); return; }
+      const b={...bridge,projId:curProjId}; BP().saveSlice(curProjId,undefined,PB.SLICE,b); setBridge(b,true);
+      if(BL&&BL.toast) BL.toast('Project saved',activeName||''); }
+    else projSaveAs(); };
+  const projOpen=(id)=>{ setPbdOpen(false); if(!BP()||!BP().get(id)) return; saveLastProjId(id); adoptProject(id); };
+  const projNew=()=>{ if(!window.confirm('Start a new bridge with the default design?\n\n'
+      +(curProjId?'The open project stays saved as it is. The new bridge is saved when you use Save as.':'The design on screen is not saved in a project; use Save as first to keep it (or Export JSON).')
+      +'\n\nContinue?')) return;
+    saveLastProjId(null); setCurProjIdRaw(null); setActiveName('');
+    const d=mergeInputs({...DEFAULTS,proj:{...DEFAULTS.proj,date:new Date().toISOString().slice(0,10)}});
+    pbdLoadInputs(d); setBridge({...PB.migrate(d,'pl'),projId:null},true); };
   // ── Follow the suite-wide design beam ──────────────────────────────────────
   //    While loads.posAuto is on, the interior/exterior position is taken from the
   //    beam selected in the header chip (its MassDOT classification decides which),
@@ -8473,6 +8752,7 @@ function App(){
     if(slice){ const merged=mergeInputs(slice); setBaseline(merged.rows); setEditLog([]); setInp(merged);
       try{ const dem=BP().getDemands(id); if(dem&&!merged.external&&window.BridgeHandoff) window.BridgeHandoff.publish(dem); }catch(e){}
     }
+    pbdAdopt(id, slice?mergeInputs(slice):inpRef.current);   // PBD-D: the project's bridge model (slice psbeamBridge), else built from its design
   };
   // Follow the active project when it's switched from another app (e.g. MCT loads a project).
   useEffect(()=>{ if(!canSave||!BP()) return;
@@ -8541,7 +8821,10 @@ function App(){
       setBaseline(merged.rows); setEditLog([]);
       setInp(merged);
     }catch(err){alert('Invalid file: '+err.message);}};rd.readAsText(f);};
-  const TABS=[['inputs','Inputs'],['section','Section Props'],['losses','Losses'],['stresses','Stresses'],
+  // PBD-D: the module registry (PBD_MODS, window.PBD.MODS) gives the modules, their groups and when each is shown; same keys,
+  // labels and order as the former fixed list (which is the fallback when the engine block is missing).
+  const TABS=PBD_MODS? window.PBD.mods(inp,(bridge&&bridge.mode)||'pl').map(m=>[m.id,m.label,m.grp])
+   :[['inputs','Inputs'],['section','Section Props'],['losses','Losses'],['stresses','Stresses'],
     ['flexure','Flexure'],['shear','Shear'],['anchorage','Anchorage Zone'],['diagrams','Diagrams'],['camber','Camber'],
     ...(inp.handling.on?[['handling','Handling']]:[]),
     ...(inp.deck.on?[['deck','Deck']]:[]),
@@ -8659,11 +8942,17 @@ function App(){
           {canSave&&<React.Fragment>
             <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
             <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink2)',whiteSpace:'nowrap'}}
-              title="The whole bridge is saved as one project, created and managed in the MCT app. PS-Beam autosaves its part into the active project — there is no separate PS-Beam save.">
+              title="The whole bridge is saved as one project of the shared Bridge Suite project list (the MCT app uses the same list). While a project is open, every change to this design and to the bridge model is saved into it. Save as starts a new project from what is on screen; Open lists the saved projects; New starts a new bridge.">
               {activeName
                 ? <span>◆ Project: <b style={{color:'var(--ink)'}}>{activeName}</b></span>
                 : <span>◇ No active project — session autosaved</span>}
             </span>
+            {PBD_MODS&&<React.Fragment>
+              <button className="btn sm ghost" onClick={()=>setPbdOpen(true)} title="Open a saved project (this design, the bridge model and the designs of its girders and spans)">Open…</button>
+              <button className="btn sm ghost" onClick={projSave} title={curProjId?'Save this design and the bridge model into the open project now (they are also saved on every change)':'Save this design and the bridge model as a new project'}>Save</button>
+              <button className="btn sm ghost" onClick={projSaveAs} title="Save this design and the bridge model as a new project with a name">Save as…</button>
+              <button className="btn sm ghost" onClick={projNew} title="Start a new bridge with the default design (the open project stays saved as it is)">New</button>
+            </React.Fragment>}
             <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           </React.Fragment>}
           <button className="btn sm ghost" onClick={()=>bridgeNav(null)} title="Back to the MIDAS/MCT analysis app">↩ MCT Analysis</button>
@@ -8678,6 +8967,8 @@ function App(){
         </div>
       </div>
     </div>
+    {PBD_MODS&&bridge&&<PbdBridgeBar bridge={bridge} inp={inp} onMode={pbdMode} onSelect={pbdSelect} onEdit={pbdEdit}/>}
+    {pbdOpen&&<PbdOpenDlg cur={curProjId} onOpen={projOpen} onClose={()=>setPbdOpen(false)}/>}
     <LockAutoSync inp={inp} set={setInp}/>
     {R.error?
       <div className="callout warn" style={{marginTop:14}}><b>Input error:</b> {R.error}. Check geometry and strand entries.</div>
@@ -8685,8 +8976,9 @@ function App(){
       <div className="statusband noprint"><span className="chip head">Design status</span>
         {R.checks.map((c,i)=><span key={i} className={'chip '+(c.pass?'p':'f')} title={`${fmt(Math.abs(c.v),2)} vs ${fmt(Math.abs(c.lim),2)} ${c.u} @ ${fmt(c.loc,1)} ft`}>{c.n} {fmt(c.r,2)}</span>)}
       </div>
-      <div className="tabs noprint">{TABS.map(([k,l])=>
-        <button key={k} className={'tab'+(tab===k?' on':'')} onClick={()=>setTab(k)}>{l}</button>)}</div>
+      <div className="tabs noprint">{TABS.map(([k,l,gp],i)=><React.Fragment key={k}>
+        {gp&&(i===0||TABS[i-1][2]!==gp)&&<span className="pbd-grp" aria-hidden="true">{gp}</span>}
+        <button className={'tab'+(tab===k?' on':'')} onClick={()=>setTab(k)}>{l}</button></React.Fragment>)}</div>
       {tab==='inputs'?
         <div className="cols">
           <div><InputsTab inp={inp} set={setInp} R={R} selRow={selRow} setSelRow={setSelRow} editedRows={editedRows} flashRow={flashRow} editLog={editLog} clearLog={clearLog} strandPick={strandPick}/></div>
