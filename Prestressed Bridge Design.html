@@ -4119,7 +4119,8 @@ function computeAll(inp){
     const rAge=rr('cont.age');
     if(rAge&&cont){ const td=+m.td; push(rAge,{v:td,lim:rAge.value,r:td>0?rAge.value/td:Infinity,loc:L,u:'days'}); }
     const rPos=rr('cont.pos');
-    if(rPos&&cont){ const frC=0.24*Math.sqrt(fc), Mcr=frC*g.Sb/12; contReq={fr:frC,Sb:g.Sb,Mcr,f:rPos.value,req:rPos.value*Mcr,cite:P_.ownCite(rPos)}; }
+    if(rPos&&cont){ // PBD-F: M_cr of the connection = f_r(diaphragm/deck concrete, 5.4.2.6) × composite S_bc (NCHRP 519 basis)
+      const fcdC=+inp.mat.fcd, frC=0.24*Math.sqrt(fcdC), Mcr=frC*cp.Sbc/12; contReq={fcd:fcdC,fr:frC,Sbc:cp.Sbc,Mcr,f:rPos.value,req:rPos.value*Mcr,cite:P_.ownCite(rPos)}; }
     const rSim=rr('cont.simple');
     if(rSim&&cont) warns.push(`${P_.ownCite(rSim)}: members of multi-span bridges are designed as simple spans with a continuous deck and no positive moment connection; continuity for live load is on in this design (your choice).`);
     ownR={owner:ownO,eta:OL.eta,etaD:OL.etaD,etaR:OL.etaR,etaI:OL.etaI,mLL:OL.mLL,hd,db,contReq,checks:oc,
@@ -8296,8 +8297,11 @@ function ReportTab({inp,R}){
           <ML s={Tx`t_d=${nx(+inp.mat.td,0)}\;\mathrm{days}\ge ${nx(ckRow('cont.age').lim,0)}\;\mathrm{days}`}/>
           <PsbRes R={R} names={[ckRow('cont.age').n]}/></Step>}
         {cr&&<Step d={'Positive moment connection ('+cr.cite+')'}>
-          <ML s={Tx`\phi M_{n,conn}\ge ${nx(cr.f,1)}\,M_{cr}=${nx(cr.f,1)}\,f_r S_b=${nx(cr.f,1)}(${nx(cr.fr,3)})(${nx(cr.Sb,0)})/12=${nx(cr.req,0)}\;\mathrm{k\text{-}ft}`}/>
-          <div className="psbr-note">M<sub>cr</sub> as the tool's positive cracking moment of the connection region (girder modulus of rupture 0.24√f′c on the gross girder S<sub>b</sub>, as in the restraint check). The positive moment connection is not designed by this tool; provide it with at least this resistance.</div></Step>}
+          <ML s={Tx`f_r=0.24\lambda\sqrt{f'_{c,d}}=0.24(1.0)\sqrt{${nx(cr.fcd,2)}}=${nx(cr.fr,3)}\;\mathrm{ksi}\;\;\text{(5.4.2.6; diaphragm cast with the deck)}`}/>
+          <ML s={Tx`M_{cr}=f_r\,S_{bc}=(${nx(cr.fr,3)})(${nx(cr.Sbc,0)})/12=${nx(cr.Mcr,1)}\;\mathrm{k\text{-}ft}`}/>
+          <ML s={Tx`\phi M_{n,conn}\ge ${nx(cr.f,1)}\,M_{cr}=${nx(cr.f,1)}(${nx(cr.Mcr,1)})=${nx(cr.req,0)}\;\mathrm{k\text{-}ft}`}/>
+          <WkLink lead="Values from:" it={[{l:'S_bc (composite, girder bottom fiber)',s:'scomp',tab:'section',card:'Derivation — Composite Section'}]}/>
+          <div className="psbr-note">The connection resists the moments applied after continuity (SIDL, live load, restraint) on the composite section at the diaphragm face. It cracks at the girder bottom fiber in the diaphragm concrete, which is cast with the deck, so M<sub>cr</sub> uses the deck/diaphragm f′c and the composite S<sub>bc</sub> (basis of the 1.2 M<sub>cr</sub> rule: NCHRP Report 519). Reported, not designed: provide the positive moment connection with at least this resistance.</div></Step>}
         {(R.warns||[]).some(w=>P.ownRules(o.owner).some(r=>w.indexOf(P.ownCite(r))===0))&&<Step d="Owner warnings">
           <ul className="warnlist">{R.warns.filter(w=>P.ownRules(o.owner).some(r=>w.indexOf(P.ownCite(r))===0)).map((w,i)=><li key={i}>{w}</li>)}</ul></Step>}
       </CalcSec>; })()}
@@ -8598,7 +8602,7 @@ function PbdOwnerCard({inp,R,set}){
       const k='eta'+r.id.slice(-1);
       return <label style={{display:'inline-flex',gap:6,alignItems:'center',cursor:'pointer'}}><input type="checkbox" checked={inp.opt[k]===true} onChange={e=>u('opt.'+k,e.target.checked)}/>
         {r.value.q}: η = {inp.opt[k]===true?fmt(r.value.f,2):'1.00'}</label>; }
-    if(r.kind==='report'){ const c=own&&own.contReq; return c?<span>φM<sub>n</sub> ≥ {fmt(c.f,1)} M<sub>cr</sub> = {fmt(c.f,1)} × {fmt(c.Mcr,0)} = <b>{fmt(c.req,0)} k-ft</b> (connection not designed here)</span>:<span style={{color:'var(--ink2)'}}>Continuity off</span>; }
+    if(r.kind==='report'){ const c=own&&own.contReq; return c?<span>φM<sub>n</sub> ≥ {fmt(c.f,1)} M<sub>cr</sub> = {fmt(c.f,1)} × f<sub>r</sub>S<sub>bc</sub> = {fmt(c.f,1)} × {fmt(c.fr,3)} × {fmt(c.Sbc,0)} / 12 = <b>{fmt(c.req,0)} k-ft</b> (f<sub>r</sub> = 0.24√f′c,deck; reported, not designed) <a className="wk-a" href="#" onClick={e=>{ e.preventDefault(); psbGoto('report','Owner Requirements',null); }}>→ Report · Owner Requirements</a></span>:<span style={{color:'var(--ink2)'}}>Continuity off</span>; }
     return null; };
   const rM=P.ownRule(o,'ld.mult'), rD=P.ownRule(o,'defl.ll');
   return <div className="pbd-own noprint">
