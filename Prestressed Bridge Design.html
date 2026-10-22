@@ -460,6 +460,11 @@ a.wk-a:hover{text-decoration:underline}
 .pbd-grp:first-child{border-left:none;padding-left:2px;margin-left:0}
 .pbd-open td{vertical-align:middle}
 @media (max-width:700px){.pbd-mode button span{display:none}.pbd-sel{margin-left:0}}
+/* PBD-E: owner selector, Owner Requirements card, owner default markers */
+.pbd-own{border-bottom:1px solid var(--line);padding:8px 2px 10px}
+.pbd-own-h{font-size:12.5px;margin-bottom:4px}
+.own-def{color:var(--cyan)}
+.own-over{color:var(--warn)}
 
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
@@ -2019,6 +2024,130 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
   };
   PBD.cells = function (b) { var out = []; for (var s = 1; s <= b.spans.length; s++) for (var g = 1; g <= b.nGirders; g++) out.push({ g: g, s: s, key: PBD.key(g, s), has: !!b.designs[PBD.key(g, s)] }); return out; };
 })();
+
+/* ═══ Owner (DOT) profile — PBD-E (2026-10-22) ════════════════════════════════════════════════════════════
+   OWN_RULES has the format of Steel Bridge Design's OWN_RULES (CLAUDE.md §3: copied, kept duplicated) and
+   ownRule() is the same function: the owner's rule with an id. Per rule: owner, id, kind ('default': an
+   input default — key = the input path, value, show = the value as shown, lbl = the input; 'shall-check': a
+   pass/fail check; 'should-warning': a warning; 'load': a load modifier — value.f, value.q = the question of
+   the owner's yes/no input, value.fixed = no input; 'report': a requirement reported, not designed), sec
+   (manual section), value, where (what applies it), text (a short paraphrase; no manual text reproduced).
+   The owner is bridge-level (inputs.owner, 'AASHTO' when absent) and AASHTO has no rule: every AASHTO result
+   is computed exactly as before.
+   ══════════════════════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var PBD = window.PBD = window.PBD || {};
+  PBD.OWN_LIST = ['RIDOT', 'MassDOT', 'CTDOT', 'AASHTO'];
+  var OWN_RULES = PBD.OWN_RULES = {
+    v: 1,
+    note: 'The MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to AASHTO LRFD 9th Ed. (the RIDOT BDM, April 2026, to the 10th Ed.); this tool applies AASHTO LRFD 10th Ed. (2024) with the owner rules on top.',
+    owners: {
+      RIDOT: { manual: 'RIDOT Bridge Design Manual (April 2026)', short: 'RIDOT BDM', aashto: '10th Ed.' },
+      MassDOT: { manual: 'MassDOT LRFD Bridge Manual, Part I (Hundredth Anniversary Ed.)', short: 'MassDOT Bridge Manual Part I', aashto: '9th Ed.' },
+      CTDOT: { manual: 'CTDOT Bridge and Roadway Structures Design Manual (BRSDM), Release 1', short: 'CTDOT BRSDM', aashto: '9th Ed.' },
+      AASHTO: { manual: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', short: 'AASHTO LRFD', aashto: '10th Ed.', none: true }
+    },
+    rules: [
+      // ---- Service III tension limit (input default: corrosion exposure) ----
+      { owner: 'RIDOT', id: 'srv.corr', kind: 'default', key: 'opt.corrosion', value: 'severe', lbl: 'Corrosion exposure (Service III tension limit)', show: 'Severe: 0.0948√f′c ≤ 0.3 ksi', sec: '5.6.2',
+        where: 'Service III tension limit: checks "Srv III tens" and "Srv tens (top)", Service III load rating', text: 'All new prestressed concrete beam designs comply with the AASHTO stress limits for severe corrosive conditions' },
+      { owner: 'CTDOT', id: 'srv.corr', kind: 'default', key: 'opt.corrosion', value: 'severe', lbl: 'Corrosion exposure (Service III tension limit)', show: 'Severe: 0.0948√f′c ≤ 0.3 ksi', sec: 'V2 5.9.2.3.1b',
+        where: 'Service III tension limit: checks "Srv III tens" and "Srv tens (top)", Service III load rating', text: 'Tensile stress limits at the Service III limit state after losses based on members subjected to severe corrosive conditions (de-icing materials)' },
+      { owner: 'MassDOT', id: 'srv.corr', kind: 'default', key: 'opt.corrosion', value: 'severe', lbl: 'Service III tension limit', show: '0.0948√f′c (severe exposure setting)', sec: '3.7.3.2',
+        where: 'Service III tension limit: checks "Srv III tens" and "Srv tens (top)", Service III load rating', text: 'No more than 0.0948√f′c ksi tension in the precompressed tensile zone at Service III after all losses; up to 0.19√f′c only when the next larger beam is the only way to reduce the tension and the structure depth is critical, and then with a Service III live load factor of 1.0' },
+      { owner: 'MassDOT', id: 'srv.relax', kind: 'should-warning', value: { gLL: 1.0 }, sec: '3.7.3.2',
+        where: 'Warning when the 0.19√f′c limit (moderate exposure) is used with a Service III live load factor other than 1.0', text: 'The 0.19√f′c tension limit is used with γLL = 1.0 for Service III' },
+      // ---- losses ----
+      { owner: 'RIDOT', id: 'mat.H', kind: 'default', key: 'mat.H', value: 80, lbl: 'Relative humidity H', show: '80 %', sec: '5.6.1',
+        where: 'Prestress losses (5.9.3), deck shrinkage gain, restraint moments', text: 'Prestress losses calculated with the AASHTO equations assuming a humidity of 80 percent' },
+      // ---- load rules ----
+      { owner: 'RIDOT', id: 'ld.mult', kind: 'default', key: 'opt.llMult', value: 1.2, lbl: 'Design load multiplier on HL-93 (LL+IM)', show: '1.2', sec: '3.4.1.2',
+        where: 'LL+IM at Strength I (flexure, shear, interface shear, longitudinal reinforcement, pier negative moment) and Service I / III (stresses, deck); not the live load deflection, fatigue or load rating', text: 'All bridges designed with a Design Load Multiplier of 1.2 at the Strength and Service limit states (HL-93 × multiplier); the live load for deflection checks and the design check load rating are without it' },
+      { owner: 'RIDOT', id: 'ld.etaD', kind: 'load', sec: '1.3.1', value: { f: 1.0, fixed: true }, where: 'Strength I load modifier η', text: 'η_D = 1.00 at all limit states; nonductile components and connections are not used' },
+      { owner: 'RIDOT', id: 'ld.etaR', kind: 'load', sec: '1.3.2', value: { f: 1.05, q: 'Nonredundant member (NSTM)' }, where: 'Strength I load modifier η', text: 'η_R = 1.05 for nonredundant members, Strength limit state; 1.00 for load-path redundant structures' },
+      { owner: 'RIDOT', id: 'ld.etaI', kind: 'load', sec: '1.3.3', value: { f: 1.05, q: 'ADT of 5000 or greater' }, where: 'Strength I load modifier η', text: 'η_I = 1.05 for bridges with an ADT of 5000 or greater, Strength limit state; 1.00 otherwise' },
+      { owner: 'MassDOT', id: 'ld.etaD', kind: 'load', sec: '3.1.4.4', value: { f: 1.05, q: 'Nonductile component or connection' }, where: 'Strength I load modifier η', text: 'η_D = 1.05 for nonductile components and connections; 1.0 for all others' },
+      { owner: 'MassDOT', id: 'ld.etaR', kind: 'load', sec: '3.1.4.4', value: { f: 1.05, q: 'Nonredundant member' }, where: 'Strength I load modifier η', text: 'η_R = 1.05 for nonredundant members; 1.0 for all others' },
+      { owner: 'MassDOT', id: 'ld.etaI', kind: 'load', sec: '3.1.4.4, 3.1.2', value: { f: 1.05, q: 'Critical or essential bridge (3.1.2)' }, where: 'Strength I load modifier η', text: 'η_I = 1.05 for critical or essential bridges; 1.0 for all others' },
+      { owner: 'CTDOT', id: 'ld.etaD', kind: 'load', sec: 'V2 1.3.3', value: { f: 1.05, q: 'Nonductile component or connection' }, where: 'Strength I load modifier η', text: 'η_D ≥ 1.05 for nonductile components and connections (1.05 used); 1.00 otherwise' },
+      { owner: 'CTDOT', id: 'ld.etaR', kind: 'load', sec: 'V2 1.3.4', value: { f: 1.05, q: 'Nonredundant member' }, where: 'Strength I load modifier η', text: 'η_R ≥ 1.05 for nonredundant members (1.05 used); 1.00 otherwise' },
+      { owner: 'CTDOT', id: 'ld.etaI', kind: 'load', sec: 'V2 1.3.5', value: { f: 1.05, q: 'Critical or essential bridge (on or over an NHS route or an emergency evacuation route)' }, where: 'Strength I load modifier η', text: 'η_I ≥ 1.05 for critical or essential bridges (1.05 used); 1.00 for all other bridges' },
+      // ---- strands ----
+      { owner: 'MassDOT', id: 'hd.max', kind: 'shall-check', nm: 'Hold-down force (MassDOT 3.7.2.2)', value: 0.75, sec: '3.7.2.2', where: 'Check "Hold-down force (MassDOT 3.7.2.2)" (draped strands only)',
+        text: 'Where draped strands are used, the total hold-down force of all draped strands for each beam shall not exceed 75% of the total beam weight' },
+      { owner: 'CTDOT', id: 'hd.max', kind: 'shall-check', nm: 'Hold-down force (CTDOT 5.9.1.6)', value: 0.75, sec: 'V2 5.9.1.6', where: 'Check "Hold-down force (CTDOT 5.9.1.6)" (draped strands only)',
+        text: 'The total hold-down force of all draped strands for each member shall not exceed 75% of the total weight of the member' },
+      { owner: 'CTDOT', id: 'db.max', kind: 'shall-check', nm: 'Debonded strands (CTDOT 5.9.4.3.3)', value: 0.25, sec: 'V2 5.9.4.3.3', where: 'Check "Debonded strands (CTDOT 5.9.4.3.3)" (when strands are debonded)',
+        text: 'No more than 25% of the total number of strands may be debonded' },
+      // ---- concrete strengths ----
+      { owner: 'RIDOT', id: 'fc.min', kind: 'shall-check', nm: 'Girder f′c (RIDOT 5.2.1)', value: { min: 5.0 }, sec: '5.2.1', where: 'Check "Girder f′c (RIDOT 5.2.1)"', text: 'Precast prestressed concrete: specified minimum compressive strength 5000 psi' },
+      { owner: 'RIDOT', id: 'fc.max', kind: 'should-warning', value: { max: 8.0 }, sec: '5.2.1', where: 'Warning above 8.0 ksi', text: 'Strengths up to 8000 psi may be specified; higher needs State Bridge Engineer approval' },
+      { owner: 'RIDOT', id: 'fci.max', kind: 'should-warning', value: { max: 0.70 }, sec: '5.6.1', where: 'Warning when f′ci > 0.70 f′c', text: 'Strength at transfer from the stress calculations, limited to approximately 70 percent of the final design strength' },
+      { owner: 'MassDOT', id: 'fci.max', kind: 'shall-check', nm: 'Release strength f′ci (MassDOT 3.7.2.1)', value: { max: 0.80 }, sec: '3.7.2.1', where: 'Check "Release strength f′ci (MassDOT 3.7.2.1)"', text: 'Release strengths greater than 0.8 f′c shall not be used' },
+      { owner: 'MassDOT', id: 'fc.std', kind: 'should-warning', value: { std: [6.5, 8.0], fci65: 4.5, next: { fc: 8.0, fci: 6.0 } }, sec: '3.7.2.1', where: 'Warnings on the girder f′c and f′ci',
+        text: 'Deck, box, NEBT and NEDBT beams: f′c 6500 psi (8000 psi only to avoid a deeper beam; other strengths discouraged), f′ci generally 4500 psi with 6500 psi; NEXT F and NEXT D beams: f′c 8000 psi, f′ci 6000 psi' },
+      { owner: 'CTDOT', id: 'fc.range', kind: 'shall-check', nm: 'Girder f′c (CTDOT 5.9.1.2)', value: { min: 6.0, max: 10.0 }, sec: 'V2 5.9.1.2', where: 'Check "Girder f′c (CTDOT 5.9.1.2)"', text: 'Design compressive strength of prestressed members between 6.0 and 10.0 ksi' },
+      { owner: 'CTDOT', id: 'fci.range', kind: 'shall-check', nm: 'Release strength f′ci (CTDOT 5.9.1.2)', value: { min: 0.70, max: 0.80, cap: 6.5 }, sec: 'V2 5.9.1.2', where: 'Check "Release strength f′ci (CTDOT 5.9.1.2)"', text: 'f′ci between 0.70 f′c and 0.80 f′c, and not greater than 6.5 ksi' },
+      // ---- live load deflection ----
+      { owner: 'MassDOT', id: 'defl.ll', kind: 'shall-check', value: { sw: 1000, max: 800, pref: 1000, intOnly: true }, sec: '3.5.6.1', where: 'Check "LL deflection" (interior girder): L/1000 with sidewalks, else L/800 and a warning above L/1000',
+        text: '(LL+IM) deflection not greater than L/1000 for all bridges with sidewalks; without sidewalks preferably L/1000 and under no circumstances greater than L/800; applied to the typical interior beam only' },
+      // ---- continuity (simple spans made continuous) ----
+      { owner: 'MassDOT', id: 'cont.restr', kind: 'default', key: 'cont.restraint', value: false, lbl: 'Restraint moments (continuity)', show: 'Off: neglected', sec: '3.5.1.8',
+        where: 'Continuity card: restraint moments (PCA)', text: 'Simple-span prestressed beams made continuous for live load are designed per AASHTO 5.12.3.3; for the standard beams the design for end restraint moment can be neglected (bottom strands extended as detailed)' },
+      { owner: 'RIDOT', id: 'cont.restr', kind: 'default', key: 'cont.restraint', value: false, lbl: 'Restraint moments (continuity)', show: 'Off: zero at a girder age of 90 days or more', sec: '5.6.3.3',
+        where: 'Continuity card: restraint moments (PCA)', text: 'With a minimum girder age of 90 days before the continuity diaphragms and deck are placed, the positive restraint moments from girder creep and shrinkage and deck slab shrinkage may be taken as zero; no restraint moment calculation is required' },
+      { owner: 'RIDOT', id: 'cont.age', kind: 'shall-check', nm: 'Girder age at continuity (RIDOT 5.6.3.3)', value: 90, sec: '5.6.3.3', where: 'Check "Girder age at continuity (RIDOT 5.6.3.3)" (continuity on): the deck / continuity age t_d of the Materials card',
+        text: 'Minimum girder age before placing the continuity diaphragms and deck: 90 days, stated in the contract documents' },
+      { owner: 'RIDOT', id: 'cont.pos', kind: 'report', value: 1.2, sec: '5.6.3.3', where: 'Owner requirements: the required φM_n of the positive moment connection (continuity on)',
+        text: 'A positive moment connection with factored resistance φM_n not less than 1.2 M_cr; the deck reinforcement resists the negative design moments at the strength limit state' },
+      { owner: 'CTDOT', id: 'cont.simple', kind: 'default', key: 'cont.on', value: false, lbl: 'Continuity for live load and SIDL', show: 'Off: simple spans with a continuous deck', sec: 'V2 5.12.1.1CT',
+        where: 'Continuity card', text: 'On multi-span structures of simple spans the deck is made continuous over the piers with no positive moment connection, wherever practical; the supporting members are designed as simple spans' }
+    ]
+  };
+  /* The owner's rule with this id (Steel Bridge Design's ownRule, same body). */
+  var ownRule = PBD.ownRule = function (o, id) { return (OWN_RULES ? OWN_RULES.rules.find(function (r) { return r.owner === o && r.id === id; }) : null) || null; };
+  PBD.ownRules = function (o) { return OWN_RULES.rules.filter(function (r) { return r.owner === o; }); };
+  PBD.ownCite = function (r) { return ((OWN_RULES.owners[r.owner] || {}).short || r.owner) + ' ' + r.sec; };
+  PBD.ownerOf = function (inp) { var o = inp && inp.owner; return OWN_RULES.owners[o] ? o : 'AASHTO'; };
+
+  function getK(o, k) { return k.split('.').reduce(function (a, p) { return a == null ? undefined : a[p]; }, o); }
+  function setK(o, k, v) { var ps = k.split('.'), t = o; for (var i = 0; i < ps.length - 1; i++) { t[ps[i]] = Object.assign({}, t[ps[i]] || {}); t = t[ps[i]]; } t[ps[ps.length - 1]] = v; }
+  function same(a, b) { return (typeof a === 'number' || typeof b === 'number') ? Math.abs(+a - +b) < 1e-9 : a === b; }
+  PBD.getK = getK;
+  /* Every input key an owner default can set. */
+  function defKeys() { var ks = []; OWN_RULES.rules.forEach(function (r) { if (r.kind === 'default' && ks.indexOf(r.key) < 0) ks.push(r.key); }); return ks; }
+  /* The value an input has by default under owner o: the owner's default, else the tool's default (DEF). */
+  PBD.ownDefault = function (o, key, DEF) { var r = OWN_RULES.rules.find(function (q) { return q.owner === o && q.kind === 'default' && q.key === key; }); return r ? r.value : getK(DEF, key); };
+  /* Change the owner. An input still at the previous owner's default (or the tool's default) is untouched and
+     takes the new owner's default; a value the engineer entered is kept (and flagged as an override).
+     The η questions are reset to "no" only where the new owner has no such question. Returns
+     { inp, set:[{key, from, to}], kept:[{key, value, own}] }. */
+  PBD.ownApply = function (inp, o, DEF) {
+    var prev = PBD.ownerOf(inp), out = JSON.parse(JSON.stringify(inp)), set = [], kept = [];
+    defKeys().forEach(function (k) {
+      var cur = getK(out, k), was = PBD.ownDefault(prev, k, DEF), to = PBD.ownDefault(o, k, DEF);
+      if (same(cur, was)) { if (!same(cur, to)) { setK(out, k, to); set.push({ key: k, from: cur, to: to }); } }
+      else if (!same(cur, to)) kept.push({ key: k, value: cur, own: to });
+    });
+    out.owner = o;
+    return { inp: out, set: set, kept: kept };
+  };
+  /* The owner's default inputs with their state on screen: [{ r, cur, own, over }] (over = the engineer's value). */
+  PBD.ownDefaults = function (inp) { var o = PBD.ownerOf(inp);
+    return OWN_RULES.rules.filter(function (r) { return r.owner === o && r.kind === 'default'; })
+      .map(function (r) { var cur = getK(inp, r.key); return { r: r, cur: cur, own: r.value, over: !same(cur, r.value) }; }); };
+  /* Load rules used by computeAll: η = η_D·η_R·η_I from the owner's questions (inputs opt.etaD/etaR/etaI, true
+     when answered yes; a fixed owner value applies always), and the HL-93 design load multiplier. AASHTO: 1, 1. */
+  PBD.ownLoads = function (inp) {
+    var o = PBD.ownerOf(inp), opt = (inp && inp.opt) || {}, e = { D: 1, R: 1, I: 1 };
+    ['D', 'R', 'I'].forEach(function (k) { var r = ownRule(o, 'ld.eta' + k); if (!r) return;
+      e[k] = r.value.fixed ? r.value.f : (opt['eta' + k] === true ? r.value.f : 1); });
+    var m = 1, rm = ownRule(o, 'ld.mult');
+    if (rm) { var v = opt.llMult; m = (v === '' || v == null || !isFinite(+v) || +v <= 0) ? rm.value : +v; }
+    return { owner: o, etaD: e.D, etaR: e.R, etaI: e.I, eta: e.D * e.R * e.I, mLL: m };
+  };
+})();
 </script>
 <script type="text/babel" data-presets="env,react">
 const {useState,useMemo,useEffect,useRef} = React;
@@ -2718,8 +2847,10 @@ function deckCalc(inp,g,cp){
   // live-load demand now comes straight from Table A4-1, not from a wheel on a strip.
   const SWpos=26+6.6*S, SWneg=48+3.0*S;          // in
   // ---- Strength I: DC 1.25, DW 1.50, LL+IM 1.75 ----
-  const Mu_pos=1.25*MDC_pos+1.50*MDW_pos+1.75*MLL_pos;
-  const Mu_neg=1.25*MDC_neg+1.50*MDW_neg+1.75*MLL_neg;
+  // PBD-E: owner η and HL-93 multiplier (1 and 1 for AASHTO; see computeAll)
+  const OLd=(window.PBD&&window.PBD.ownLoads)?window.PBD.ownLoads(inp):{eta:1,mLL:1}, etaD_=OLd.eta, mLLd=OLd.mLL;
+  const Mu_pos=etaD_*(1.25*MDC_pos+1.50*MDW_pos+1.75*(mLLd*MLL_pos));
+  const Mu_neg=etaD_*(1.25*MDC_neg+1.50*MDW_neg+1.75*(mLLd*MLL_neg));
   // capacity: bottom bars (positive), top bars (negative)
   const cap=(barA,sp,cover,Mu)=>{
     const As=(+sp>0)? barA*12/sp : 0;            // in^2/ft — spacing ≤ 0 is an input error: no steel credited (was ∞)
@@ -2748,13 +2879,14 @@ function deckCalc(inp,g,cp){
   const MohDW=wDLws*Math.pow(Math.max(oh-bBarF,0),2)/2;
   const MohDL=MohDC+MohDW;                        // combined, for reporting
   const MohLL=1.33*1.2*16*Xoh/(SWoh/12);          // IM 1.33, MPF 1.20, 16-kip wheel
-  const Mu_oh=1.25*MohDC+1.50*MohDW+1.75*Math.max(MohLL,0);
+  const Mu_oh=etaD_*(1.25*MohDC+1.50*MohDW+1.75*(mLLd*Math.max(MohLL,0)));
   const ohCap=cap(+D.barTop,+D.sTop,+D.coverT,Mu_oh);
   // distribution reinforcement (9.7.3.2): % of bottom = 220/sqrt(S) <= 67%
   const distPct=Math.min(220/Math.sqrt(S*12)*0+ 220/Math.sqrt(S),67); // S in ft per legacy; clamp
   return {wDLslab,wDLws,Ls,SWpos,SWneg,MDL_pos,MDL_neg,MLL_pos,MLL_neg,Mu_pos,Mu_neg,
           MDC_pos,MDC_neg,MDW_pos,MDW_neg,A4,xneg,xnegAuto,dsRule:dsAuto.rule,
-          pos,neg,oh,bBar,Pbar,Xoh,SWoh,MohDC,MohDW,MohDL,MohLL,Mu_oh,ohCap,distPct,fcd,fy,ts};
+          pos,neg,oh,bBar,Pbar,Xoh,SWoh,MohDC,MohDW,MohDL,MohLL,Mu_oh,ohCap,distPct,fcd,fy,ts,
+          ...((etaD_!==1||mLLd!==1)?{own:{eta:etaD_,mLL:mLLd}}:{})};
 }
 function distFactors(inp,g,cp){ // Type (k) I-girder, or NEXT double-tee; LRFD 4.6.2.2
   const S=inp.S, L=inp.L, ts=inp.ts, ld=inp.loads;
@@ -3014,6 +3146,12 @@ function computeAll(inp){
   const ss=strandSys(inp,g);
   const L=inp.L, Lin=L*12;
   const fpbt=inp.str.jack*inp.str.fpu;
+  // PBD-E: owner load rules (window.PBD.ownLoads): eta = η_D·η_R·η_I on Strength I (1.3.2.1) and the owner's HL-93 design
+  // load multiplier mLL on LL+IM at Strength I and Service I / III (RIDOT BDM 3.4.1.2), not on the live load deflection,
+  // fatigue or the load rating. AASHTO (and a file without the engine block): eta = mLL = 1, so every expression gives the
+  // result it gave before.
+  const OL=(window.PBD&&window.PBD.ownLoads)?window.PBD.ownLoads(inp):{owner:'AASHTO',etaD:1,etaR:1,etaI:1,eta:1,mLL:1};
+  const eta=OL.eta, mLL=OL.mLL, ownO=OL.owner;
 
   // input validation warnings (practice-of-construction checks)
   const warns=[];
@@ -3303,12 +3441,12 @@ function computeAll(inp){
       relBot=Pi/g.A+Pi*e/g.Sb-Mg/g.Sb;
     }
     const s1Top=Pe/g.A-Pe*e/g.St+(Mg+Mdk)/g.St+Msd/cp.Stg;            // perm only
-    const s2Top=s1Top+Mll/cp.Stg;                                     // perm + LL
-    const s3Bot=Pe/g.A+Pe*e/g.Sb-(Mg+Mdk)/g.Sb-(Msd+inp.opt.gLLs3*Mll)/cp.Sbc;
-    const dkC=(Msd)/cp.Std + Mll/cp.Std;  // deck: SIDL+LL on composite
+    const s2Top=s1Top+(mLL*Mll)/cp.Stg;                               // perm + LL (mLL: owner multiplier, 1 for AASHTO)
+    const s3Bot=Pe/g.A+Pe*e/g.Sb-(Mg+Mdk)/g.Sb-(Msd+inp.opt.gLLs3*(mLL*Mll))/cp.Sbc;
+    const dkC=(Msd)/cp.Std + (mLL*Mll)/cp.Std;  // deck: SIDL+LL on composite
     const dkC1=Msd/cp.Std;
     return {x,e,Aps:a.Aps,Mg,Mdk,Msd,Mll,relTop,relBot,s1Top,s2Top,s3Bot,dkC,dkC1,
-            Mu:1.25*(Mg+Mdk+Mdc2(x))+1.5*Mdw(x)+1.75*Mll};
+            Mu:eta*(1.25*(Mg+Mdk+Mdc2(x))+1.5*Mdw(x)+1.75*(mLL*Mll))};
   };
   const grid=xs.map(stationStress);
   const worst=(key,fn)=>grid.reduce((b,r)=>fn(r[key],b[key])?r:b,grid[0]);
@@ -3420,7 +3558,7 @@ function computeAll(inp){
     const a_=ss.at(x);
     const Ph=ss.AsHarp*fpe*clamp(Math.min(x,L-x)*12/ss.lt,0,1);
     const Vp=(Math.min(x,L-x)<ss.hp.frac*L && ss.nh>0)? Ph*ss.slope:0;
-    const Vu=Math.abs(1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x))+1.75*VLLx(x);  // |DL shear| + LL envelope (symmetric magnitude)
+    const Vu=eta*(Math.abs(1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x))+1.75*(mLL*VLLx(x)));  // |DL shear| + LL envelope (symmetric magnitude); η, mLL: owner (1 for AASHTO)
     const Mu=Math.max(gr_.Mu,Math.abs(Vu-Vp)*dv);
     // f_po ramps linearly from 0 at the free end to 0.7f_pu at the end of the transfer length (5.7.3.4.2)
     const fpoX=fpo*clamp(Math.min(x,L-x)*12/ss.lt,0,1);
@@ -3495,7 +3633,7 @@ function computeAll(inp){
     const xm=Math.min(x,L-x);
     const Ph=ss.AsHarp*fpe*clamp(xm*12/ss.lt,0,1);
     const Vp=(xm<ss.hp.frac*L && ss.nh>0)? Ph*ss.slope:0;
-    const Vu=Math.abs(1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x))+1.75*VLLx(x);  // |DL shear| + LL envelope (symmetric magnitude)
+    const Vu=eta*(Math.abs(1.25*(Vg(x)+Vdc1(x)+Vdc2(x))+1.5*Vdw(x))+1.75*(mLL*VLLx(x)));  // |DL shear| + LL envelope (symmetric magnitude); η, mLL: owner (1 for AASHTO)
     const a_=ss.at(Math.max(xeff,ss.lt/12));
     const Apsx=Math.max(a_.Aps,1e-3);
     const Mu=Math.max(x0.Mu,Math.abs(Vu-Vp)*dv);
@@ -3522,11 +3660,11 @@ function computeAll(inp){
     const vllp=VLLpos(x), vlln=VLLneg(x);
     const mDC=mg+mdc1+mdc2, vDC=vg+vdc1+vdc2;     // total DC (incl. girder self-wt)
     // moment combinations (envelope: use the LL branch that maximizes magnitude with same-sign DC)
-    const mStrI_p=1.25*mDC+1.5*mdw+1.75*mllp, mStrI_n=1.25*mDC+1.5*mdw+1.75*mlln;
-    const mSrvI_p=mDC+mdw+mllp,               mSrvI_n=mDC+mdw+mlln;
-    const mSrvIII_p=mDC+mdw+gLs3*mllp,        mSrvIII_n=mDC+mdw+gLs3*mlln;
-    const vStrI_p=1.25*vDC+1.5*vdw+1.75*vllp, vStrI_n=1.25*vDC+1.5*vdw+1.75*vlln;
-    const vSrvI_p=vDC+vdw+vllp,               vSrvI_n=vDC+vdw+vlln;
+    const mStrI_p=eta*(1.25*mDC+1.5*mdw+1.75*(mLL*mllp)), mStrI_n=eta*(1.25*mDC+1.5*mdw+1.75*(mLL*mlln));   // η, mLL: owner (1 for AASHTO)
+    const mSrvI_p=mDC+mdw+mLL*mllp,               mSrvI_n=mDC+mdw+mLL*mlln;
+    const mSrvIII_p=mDC+mdw+gLs3*(mLL*mllp),      mSrvIII_n=mDC+mdw+gLs3*(mLL*mlln);
+    const vStrI_p=eta*(1.25*vDC+1.5*vdw+1.75*(mLL*vllp)), vStrI_n=eta*(1.25*vDC+1.5*vdw+1.75*(mLL*vlln));
+    const vSrvI_p=vDC+vdw+mLL*vllp,               vSrvI_n=vDC+vdw+mLL*vlln;
     return {x,
       // moments
       M_g:mg, M_DC1:mdc1, M_DC2:mdc2, M_DW:mdw, M_DC:mDC, M_LLpos:mllp, M_LLneg:mlln,
@@ -3644,6 +3782,9 @@ function computeAll(inp){
     if(a>Lin/2) a=Lin-a;
     return s + P*a*(3*Lin*Lin-4*a*a)/(48*Ecf*Ig);
   },0);
+  // PBD-E: owner live load deflection limit (MassDOT Part I 3.5.6.1, typical interior beam: L/1000 with sidewalks, else L/800);
+  // 0 = the tool's L/800 as before (AASHTO 2.5.2.6.2)
+  const llOwnDen=(ownO==='MassDOT'&&window.PBD&&window.PBD.ownRule&&window.PBD.ownRule('MassDOT','defl.ll')&&!cp.extG)?(inp.opt.sidewalk===true?1000:800):0;
   const mu_=inp.opt.mult;
   const cam={rel:dPS-dSW, erect:mu_.psE*dPS-mu_.swE*dSW,
              afterDeck:mu_.psE*dPS-mu_.swE*dSW-dDK-dDia,
@@ -3652,7 +3793,8 @@ function computeAll(inp){
              seat:mu_.psE*dPS-mu_.swE*dSW-dDK-dDia-dSD,
              final:mu_.psF*dPS-mu_.swF*dSW-mu_.dkF*dDK-mu_.dkF*dDia-mu_.sdF*dSD,
              dPS,dSW,dDK,dSD,dDia,
-             dLL:5*(MLL*12)*Lin*Lin/(48*Ecf*IcC), llLim:Lin/800};
+             dLL:5*(MLL*12)*Lin*Lin/(48*Ecf*IcC), llLim:Lin/(llOwnDen||800)};
+  if(llOwnDen) cam.llDen=llOwnDen;
 
   // Fatigue I — bottom-fiber stress range in strand (LRFD 5.5.3)
   // Fatigue DF = single-lane interior DF without multiple-presence (÷1.2); IM = 1.15; Fatigue I load factor 1.75 (T.3.4.1-1, 2016+)
@@ -3686,7 +3828,7 @@ function computeAll(inp){
   const ftPermFat=PeM/g.A-PeM*ss.eMid/g.St+(Mg(L/2)+Mdc1(L/2))/g.St+(Mdc2(L/2)+Mdw(L/2))/cp.Stg;   // +comp
   const dftFat=1.75*Mfat1*12/cp.Stg;
   const fcTopFat=0.5*ftPermFat+dftFat;
-  const botPermFat=grid.reduce((b,r)=>{ const f=r.s3Bot+(+inp.opt.gLLs3||0)*r.Mll/cp.Sbc; return f>b.f?{f,x:r.x}:b; },{f:-Infinity,x:L/2});
+  const botPermFat=grid.reduce((b,r)=>{ const f=r.s3Bot+(+inp.opt.gLLs3||0)*(mLL*r.Mll)/cp.Sbc; return f>b.f?{f,x:r.x}:b; },{f:-Infinity,x:L/2});
   const fcBotFat=0.5*botPermFat.f;
   const fcFatLim=0.40*m.fc;
   const fcFatTop=fcTopFat>=fcBotFat;
@@ -3718,7 +3860,7 @@ function computeAll(inp){
       MDC2n=wBar*L*L/8; MDWn=wDW*L*L/8;
       MLLn=negLL.MLL*dfm; llSrc=negLL.gov;
     }
-    const MuN=(1.25*MDC2n+1.5*MDWn+1.75*MLLn)*12;   // kip-in
+    const MuN=eta*(1.25*MDC2n+1.5*MDWn+1.75*(mLL*MLLn))*12;   // kip-in (η, mLL: owner, 1 for AASHTO)
     const As=+cn.As, fyr=+cn.fy, dN=cp.hc-(+cn.dTop);
     const b1g=clamp(0.85-0.05*(m.fc-4),0.65,0.85);
     const aN=As*fyr/(0.85*m.fc*g.bbf), cN=aN/b1g, tbf=g.isNext?g.next.ft:g.d[2];
@@ -3926,6 +4068,63 @@ function computeAll(inp){
     checks.push({n:'Deck −M',v:deck.Mu_neg,lim:deck.neg.phiMn,r:deck.neg.dc,loc:0,u:'k-ft/ft'});
     checks.push({n:'Deck overhang',v:deck.Mu_oh,lim:deck.ohCap.phiMn,r:deck.ohCap.dc,loc:0,u:'k-ft/ft'});
   }
+  // ---- PBD-E: owner (DOT) checks, warnings and reported requirements (window.PBD.OWN_RULES). None for AASHTO. ----
+  let ownR=null;
+  if(ownO!=='AASHTO'&&window.PBD&&window.PBD.ownRule){
+    const P_=window.PBD, rr=id=>P_.ownRule(ownO,id), fc=+m.fc, fci=+m.fci, oc=[];
+    const push=(r,o)=>{ const c={n:r.nm,...o}; checks.push(c); oc.push({id:r.id,cite:P_.ownCite(r),...c}); };
+    // Hold-down force of all draped strands, at jacking (f_pbt): each strand bends at two hold-down points (one with the
+    // harp point at midspan), with a vertical force f_pbt·A_b·sin α at each, so the total is 2·n_h·f_pbt·A_b·sin α.
+    // Beam weight = w_sw over the girder length L + 2·(girder end beyond the bearing).
+    const rHd=rr('hd.max'); let hd=null;
+    if(rHd&&ss.nh>0){ const alpha=Math.atan(ss.slope), Fstr=fpbt*ss.st.Ab*Math.sin(alpha), Ftot=2*ss.nh*Fstr;
+      const Lg=L+2*(+inp.opt.endOh||0)/12, W=g.wsw*Lg, lim=rHd.value*W;
+      hd={nh:ss.nh,slope:ss.slope,alpha,Ab:ss.st.Ab,Fstr,Ftot,Lg,wsw:g.wsw,W,frac:rHd.value,lim};
+      push(rHd,{v:Ftot,lim,r:lim>0?Ftot/lim:Infinity,loc:ss.hp.frac*L,u:'kip'}); }
+    // Debonded strands, share of all strands
+    const rDb=rr('db.max'); let db=null;
+    if(rDb&&ss.Ndebond>0){ const pct=ss.Ndebond/Math.max(ss.Ntot,1); db={n:ss.Ndebond,N:ss.Ntot,pct,max:rDb.value};
+      push(rDb,{v:100*pct,lim:100*rDb.value,r:pct/rDb.value,loc:0,u:'%'}); }
+    // Concrete strengths (a minimum is checked as limit / value, a maximum as value / limit)
+    const rFcMin=rr('fc.min');
+    if(rFcMin) push(rFcMin,{v:fc,lim:rFcMin.value.min,r:fc>0?rFcMin.value.min/fc:Infinity,loc:0,u:'ksi'});
+    const rFcR=rr('fc.range');
+    if(rFcR){ const lo=rFcR.value.min, hi=rFcR.value.max, rLo=fc>0?lo/fc:Infinity, rHi=fc/hi;
+      push(rFcR,{v:fc,lim:rLo>=rHi?lo:hi,r:Math.max(rLo,rHi),loc:0,u:'ksi'}); }
+    const rFciM=rr('fci.max');
+    if(rFciM&&rFciM.kind==='shall-check') push(rFciM,{v:fci,lim:rFciM.value.max*fc,r:fc>0?fci/(rFciM.value.max*fc):Infinity,loc:0,u:'ksi'});
+    if(rFciM&&rFciM.kind==='should-warning'&&fci>rFciM.value.max*fc+1e-9)
+      warns.push(`${P_.ownCite(rFciM)}: release strength f′ci = ${fmt(fci,2)} ksi = ${fmt(fci/fc,2)} f′c is above about ${fmt(rFciM.value.max,2)} f′c = ${fmt(rFciM.value.max*fc,2)} ksi (strength at transfer from the stress calculations, limited to approximately 70% of f′c).`);
+    const rFciR=rr('fci.range');
+    if(rFciR){ const v=rFciR.value, b=[{lim:v.min*fc,r:fci>0?v.min*fc/fci:Infinity},{lim:v.max*fc,r:fc>0?fci/(v.max*fc):Infinity},{lim:v.cap,r:fci/v.cap}];
+      const gv=b.reduce((a,q)=>q.r>a.r?q:a,b[0]); push(rFciR,{v:fci,lim:gv.lim,r:gv.r,loc:0,u:'ksi'}); }
+    const rFcX=rr('fc.max');
+    if(rFcX&&fc>rFcX.value.max+1e-9) warns.push(`${P_.ownCite(rFcX)}: girder f′c = ${fmt(fc,2)} ksi is above ${fmt(rFcX.value.max,1)} ksi; a strength above 8000 psi needs State Bridge Engineer approval.`);
+    const rStd=rr('fc.std');
+    if(rStd){ const v=rStd.value;
+      if(g.isNext&&(Math.abs(fc-v.next.fc)>1e-9||Math.abs(fci-v.next.fci)>1e-9))
+        warns.push(`${P_.ownCite(rStd)}: NEXT beams are designed with f′c = ${fmt(v.next.fc,1)} ksi and f′ci = ${fmt(v.next.fci,1)} ksi (entered ${fmt(fc,2)} / ${fmt(fci,2)} ksi).`);
+      else if((g.isBox||g.isDeck)&&!v.std.some(s=>Math.abs(fc-s)<1e-9))
+        warns.push(`${P_.ownCite(rStd)}: deck and box beams are designed with f′c = 6.5 ksi (8.0 ksi only to avoid a deeper beam); other strengths are discouraged (entered ${fmt(fc,2)} ksi).`);
+      else if((g.isBox||g.isDeck)&&Math.abs(fc-6.5)<1e-9&&fci>v.fci65+1e-9)
+        warns.push(`${P_.ownCite(rStd)}: with f′c = 6.5 ksi, f′ci is generally ${fmt(v.fci65,1)} ksi; a higher release strength (up to 0.8 f′c) only if required by design (entered ${fmt(fci,2)} ksi).`); }
+    const rRel=rr('srv.relax');
+    if(rRel&&inp.opt.corrosion!=='severe'&&Math.abs((+inp.opt.gLLs3)-rRel.value.gLL)>1e-9)
+      warns.push(`${P_.ownCite(rRel)}: the 0.19√f′c tension limit (moderate exposure) is used with γLL = ${fmt(+inp.opt.gLLs3,2)} for Service III; MassDOT allows it (only when the next larger beam is the only alternative and the depth is critical) with γLL = 1.0.`);
+    // Live load deflection: limit set with cam (MassDOT 3.5.6.1); the preferred L/1000 without sidewalks is a warning
+    if(cam.llDen===800&&cam.dLL>Lin/1000+1e-12)
+      warns.push(`MassDOT Bridge Manual Part I 3.5.6.1: live load deflection ${fmt(cam.dLL,2)} in is above the preferred L/1000 = ${fmt(Lin/1000,2)} in (no sidewalk: L/800 = ${fmt(Lin/800,2)} in is the limit).`);
+    // Continuity
+    let contReq=null;
+    const rAge=rr('cont.age');
+    if(rAge&&cont){ const td=+m.td; push(rAge,{v:td,lim:rAge.value,r:td>0?rAge.value/td:Infinity,loc:L,u:'days'}); }
+    const rPos=rr('cont.pos');
+    if(rPos&&cont){ const frC=0.24*Math.sqrt(fc), Mcr=frC*g.Sb/12; contReq={fr:frC,Sb:g.Sb,Mcr,f:rPos.value,req:rPos.value*Mcr,cite:P_.ownCite(rPos)}; }
+    const rSim=rr('cont.simple');
+    if(rSim&&cont) warns.push(`${P_.ownCite(rSim)}: members of multi-span bridges are designed as simple spans with a continuous deck and no positive moment connection; continuity for live load is on in this design (your choice).`);
+    ownR={owner:ownO,eta:OL.eta,etaD:OL.etaD,etaR:OL.etaR,etaI:OL.etaI,mLL:OL.mLL,hd,db,contReq,checks:oc,
+          llDen:cam.llDen||null};
+  }
   const checksF=checks.map(c=>({...c,pass:c.r<=1.0001}));
 
   return {g,cp,ss,lo,refFin,LT,totalLoss,fpe,fpeGain,gains,fpi,pctLoss,lim,grid,flexGrid,flexFull,fMid,MuMid,shearDiag,diagrams,
@@ -3935,7 +4134,8 @@ function computeAll(inp){
             dfApplied:inp.external.distributionFactorApplied,imApplied:inp.external.impactApplied,
             DF:inp.external.distributionFactor,IM:inp.external.impactFactor}:null,
           checks:checksF,hl,df,dfm,dfv,MLL,VLL,
-          wG,wDk,wBar,wDW,L,dfcd,phiV,cont,warns,fpbt,useT,Pdia,nDiaph:diaph.length,strandStages,stationStress,error:null};
+          wG,wDk,wBar,wDW,L,dfcd,phiV,cont,warns,fpbt,useT,Pdia,nDiaph:diaph.length,strandStages,stationStress,
+          ...(ownR?{own:ownR}:{}),error:null};
  }catch(err){ return {error:err.message||String(err)}; }
 }
 
@@ -4169,6 +4369,17 @@ const PSB_CK={
   'Deck overhang':['LRFD 13 / 5.6.3','deck','deck','Overhang'],
 };
 const psbCkLink=n=>{ const c=PSB_CK[n]; return c&&c[1]?{l:n,s:c[1],tab:c[2],card:c[3]}:null; };
+/* PBD-E: owner checks (names from window.PBD.OWN_RULES) are worked in the report's Owner Requirements section. */
+try{ ((window.PBD&&window.PBD.OWN_RULES)?window.PBD.OWN_RULES.rules:[]).forEach(r=>{ if(r.nm) PSB_CK[r.nm]=[window.PBD.ownCite(r),'own','report','Owner Requirements']; }); }catch(e){}
+/* PBD-E: the owner load rules in a worked combination: eS/eV open η[ (symbol / value), ec closes it, mS/mV the HL-93 design
+   load multiplier before the live load (symbol / value). Every one is '' when the factor is 1 (AASHTO), so those equations
+   read exactly as before. o = R.own, or a deck result's own. */
+const ownTx=(o,k)=>{ if(!o) return ''; const e=o.eta!==1, m=o.mLL!==1;
+  return k==='eS'?(e?'\\eta\\Big[':''):k==='eV'?(e?nx(o.eta,4)+'\\Big[':''):k==='ec'?(e?'\\Big]':''):k==='mS'?(m?'m_{LL}\\,':''):k==='mV'?(m?nx(o.mLL,2)+'\\cdot ':''):''; };
+/* PBD-E: an owner default input's marker after its note: "<owner> default" or "overrides <owner>: <value>" (none for AASHTO). */
+const ownSub=(inp,key,base)=>{ const P=window.PBD; if(!P||!P.ownDefaults) return base; const d=P.ownDefaults(inp).find(q=>q.r.key===key); if(!d) return base;
+  const tag=d.over?<b className="own-over">overrides {P.ownCite(d.r)}: {d.r.show}</b>:<b className="own-def">{P.ownCite(d.r)} default</b>;
+  return base?<React.Fragment>{base} · {tag}</React.Fragment>:tag; };
 /* Result line(s) under a worked check: "<check>: D/C = x.xx (<ref>) PASS/FAIL", from R.checks (the same values as the
    Design Check Summary table and the status band). */
 const PsbRes=({R,names,note})=>(<React.Fragment>{names.map(n=>{ const c=R.checks.find(x=>x.n===n); if(!c) return null;
@@ -5342,7 +5553,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
       </div>
       <SubH t="Environment" r="creep &amp; shrinkage"/>
       <div className="frow rows">
-        <Num l="Relative humidity H" u="%" v={inp.mat.H} set={v=>u('mat.H',v)} step={5}/>
+        <Num l="Relative humidity H" u="%" v={inp.mat.H} set={v=>u('mat.H',v)} step={5} sub={ownSub(inp,'mat.H')}/>
         <Num l="Volume / surface ratio V/S" u="in" v={inp.mat.VS} set={v=>u('mat.VS',v)}/>
       </div>
       <SubH t="Concrete age at each stage" r="days after casting"/>
@@ -5632,7 +5843,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
       </React.Fragment>;})()}
     </Card>
 
-    <Card title="Continuity for LL + SIDL" refTag="LRFD 5.12.3.3 / 3.6.1.3.1" fold
+    <Card title="Continuity for LL + SIDL" refTag={ownSub(inp,'cont.on','LRFD 5.12.3.3 / 3.6.1.3.1')} fold
       right={<Seg opts={[{v:false,l:'OFF — SIMPLE SPAN'},{v:true,l:'ON'}]} v={inp.cont.on} set={v=>u('cont.on',v)}/>}>
       {inp.cont.on?<React.Fragment>
         <SubH t="Negative-moment deck reinforcement" r="over the pier"/>
@@ -5646,7 +5857,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
 
         <SubH t="Restraint moments — creep &amp; shrinkage" r="PCA method"/>
         <div className="frow rows">
-          <Fld l="Compute restraint moments">
+          <Fld l="Compute restraint moments" sub={ownSub(inp,'cont.restraint')}>
             <Seg opts={[{v:false,l:'OFF'},{v:true,l:'ON'}]} v={!!inp.cont.restraint} set={v=>u('cont.restraint',v)}/></Fld>
         </div>
         {inp.cont.restraint&&R.cont.restr&&(()=>{const rr=R.cont.restr; return <React.Fragment>
@@ -5745,7 +5956,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
              sub="1.0 only with refined losses (5.9.3.4) taking the elastic gain; 0.8 otherwise (Table 3.4.1-4)"/>
         <Num l="Release compression limit (× f′ci)" v={inp.opt.relCfac} set={v=>u('opt.relCfac',v)} step={0.05} min={0}
              sub="0.65 per Art. 5.9.2.3.1a (10th Ed.: 0.70 at component extremities where lateral bending (tilt, wind, transport) is included in the analysis); some owners require 0.60. Blank = 0.65"/>
-        <Fld l="Corrosion exposure" sub="sets the Service III tension limit (Table 5.9.2.3.2b-1, λ = 1.0): moderate 0.19√f′c ≤ 0.6 ksi; severe 0.0948√f′c ≤ 0.3 ksi">
+        <Fld l="Corrosion exposure" sub={ownSub(inp,'opt.corrosion',"sets the Service III tension limit (Table 5.9.2.3.2b-1, λ = 1.0): moderate 0.19√f′c ≤ 0.6 ksi; severe 0.0948√f′c ≤ 0.3 ksi")}>
           <Seg opts={[{v:'normal',l:'MODERATE'},{v:'severe',l:'SEVERE'}]} v={inp.opt.corrosion} set={v=>u('opt.corrosion',v)}/></Fld>
       </div>
       {!R.error&&inp.opt.dfpSSauto&&+inp.ts>0&&<div className="hint" style={{marginTop:2}}>Deck-shrinkage gain computed per 5.9.3.4.3d = <b>{fmt(R.gains.deckShrAuto,2)} ksi</b> (deck shrinks against the composite section, relieving strand stress). Switch to MANUAL to override.</div>}
@@ -6410,13 +6621,13 @@ function StressTab({inp,R}){
           <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx(rS1.Msd/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le ${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Service I top, full load @ x = ${fmt(cf('Srv comp (full)').loc,1)} ft`}>
-          <ML s={Tx`f=f_{perm}+\frac{M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+${nx(rS2.Mll/cp.Stg,3)}=${nx(rS2.s2Top,3)}\le ${nx(lim.srvC2,3)}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`f=f_{perm}+\frac{${ownTx(R.own,'mS')}M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+${nx((R.own?R.own.mLL:1)*rS2.Mll/cp.Stg,3)}=${nx(rS2.s2Top,3)}\le ${nx(lim.srvC2,3)}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Service III bottom @ x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="T.3.4.1-4">
-          <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}M_{LL}}{S_{bc}}=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*rS3.Mll)/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d={`Deck compression @ x = ${fmt(cf('Deck comp').loc,1)} ft`}>
-          <ML s={Tx`f=\frac{M_{sd}+M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le ${nx(lim.dkC2,3)}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`f=\frac{M_{sd}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le ${nx(lim.dkC2,3)}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
       </Deriv>;})()}
     <Card title="Fatigue I — Strand Stress Range" refTag="LRFD 5.5.3">
@@ -6480,9 +6691,10 @@ function FlexTab({inp,R}){
   // +Mu uses the positive LL branch; −Mu uses the negative LL branch (only meaningful w/ continuity).
   const dcF=(r)=>1.25*(r.mSW+r.mDC1+r.mDC2)+1.5*r.mDW;     // factored permanent (k-ft)
   if(vis.Mu){
-    traces.push({x:xs,y:fg.map(r=>dcF(r)+1.75*r.mLLpos),name:'+Mu (Strength I)',
+    const oE=R.own?R.own.eta:1, oM=R.own?R.own.mLL:1;   // PBD-E owner η and multiplier (1 for AASHTO)
+    traces.push({x:xs,y:fg.map(r=>oE*(dcF(r)+1.75*(oM*r.mLLpos))),name:'+Mu (Strength I)',
       line:{color:col.Mu,width:2.4},fill:'tozeroy',fillcolor:'rgba(28,79,196,.06)'});
-    if(R.cont) traces.push({x:xs,y:fg.map(r=>dcF(r)+1.75*r.mLLneg),name:'−Mu (Strength I)',
+    if(R.cont) traces.push({x:xs,y:fg.map(r=>oE*(dcF(r)+1.75*(oM*r.mLLneg))),name:'−Mu (Strength I)',
       line:{color:'#1C4FC4',width:2.4,dash:'dash'}});
   }
   // capacity lines
@@ -6563,7 +6775,7 @@ function FlexTab({inp,R}){
           ['M_cr','Cracking moment',R.Mcr/12,'k-ft'],
         ]}/>
         <Step d="Factored moment" r="T.3.4.1-1">
-          <ML s={Tx`M_u=1.25(M_g+M_{dk}+M_{bar})+1.50M_{dw}+1.75M_{LL}=1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${nx(R.MLL,0)})=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
+          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50M_{dw}+1.75${ownTx(R.own,'mS')}M_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
         </Step>
         <Step d="Stress-block factor, depth & neutral axis" r="5.6.3.1.1 / 5.6.2.2">
           <ML s={Tx`\beta_1=0.85-0.05(f'_{cd}-4)=0.85-0.05(${nx(m.fcd,1)}-4)=${nx(f.b1,3)}\quad k=0.28\quad d_p=h_c-\bar y_{ps}=${nx(cp.hc,1)}-${nx(ss.cgsMid,2)}=${nx(f.dp,2)}\;\mathrm{in}`}/>
@@ -6603,7 +6815,7 @@ function FlexTab({inp,R}){
             ['LL/lane: 2 trucks (×0.9 w/ lane)',fmt(R.cont.negLL.M2,0),'k-ft'],
             ['LL/lane: lane load',fmt(R.cont.negLL.Mln,0),'k-ft'],
             ['Governing LL+IM (× DF_m = '+fmt(R.dfm,3)+')',fmt(R.cont.MLLn,0),'k-ft'],
-            ['M_u = 1.25DC + 1.5DW + 1.75LL',fmt(R.cont.MuN/12,0),'k-ft']]}/>
+            ['M_u = 1.25DC + 1.5DW + 1.75LL'+(R.own&&(R.own.eta!==1||R.own.mLL!==1)?' (× η = '+fmt(R.own.eta,4)+', LL × '+fmt(R.own.mLL,2)+')':''),fmt(R.cont.MuN/12,0),'k-ft']]}/>
         </div>
         <div>
           <KV rows={[
@@ -6623,7 +6835,7 @@ function FlexTab({inp,R}){
           <ML s={Tx`M_{LL/lane}=\min\big[1.33\max(M_{1tr},M_{td})+M_{ln},\;0.9(1.33M_{2tr}+M_{ln})\big]=${nx(R.cont.negLL.MLL,0)}\;(\text{${R.cont.negLL.gov}})`}/>
         </Step>
         <Step d="Factored pier demand">
-          <ML s={Tx`M_u=1.25\frac{w_{bar}L^2}{8}+1.50\frac{w_{dw}L^2}{8}+1.75\,M_{LL/lane}\,DF_m=1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${nx(R.cont.MLLn,0)})=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
+          <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25\frac{w_{bar}L^2}{8}+1.50\frac{w_{dw}L^2}{8}+1.75\,${ownTx(R.own,'mS')}M_{LL/lane}\,DF_m${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
         </Step>
         <Step d="Capacity — deck steel tension, bottom-flange compression" r="5.12.3.3">
           <ML s={Tx`a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(inp.mat.fc,1)})(${nx(R.g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}\;\text{N.G.}`}\qquad c=\frac{a}{\beta_1}=${nx(R.cont.cN,2)}\;\mathrm{in}`}/>
@@ -6710,7 +6922,7 @@ function ShearTab({inp,R}){
           <ML s={Tx`d_v=\max\left(d_p-\tfrac a2,\,0.9d_p,\,0.72h_c\right)=\max(${nx(fgN.dp-fgN.a/2,1)},\,${nx(0.9*fgN.dp,1)},\,${nx(0.72*cp.hc,1)})=${nx(sh0.dv,1)}\;\mathrm{in}`}/>
         </Step>
         <Step d="Factored shear & vertical prestress component">
-          <ML s={Tx`V_u=1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}+1.75V_{LL}=1.25(${nx(V_(R.wG),1)}+${nx(V_(R.wDk),1)}+${nx(V_(R.wBar),1)})+1.50(${nx(V_(R.wDW),1)})+1.75(${nx(R.VLL*(1-shx/L),1)})=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
+          <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(V_(R.wG),1)}+${nx(V_(R.wDk),1)}+${nx(V_(R.wBar),1)})+1.50(${nx(V_(R.wDW),1)})+1.75(${ownTx(R.own,'mV')}${nx(R.VLL*(1-shx/L),1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
           <ML s={Tx`V_p=P_{harp}\,\text{slope}=${nx(sh0.Vp,1)}\;\mathrm{kip}`}/>
         </Step>
         <Step d="Longitudinal strain" r="Eq. 5.7.3.4.2-4" note={`M_u taken ≥ |V_u−V_p|·d_v; f_po = 0.7f_pu = ${fmt(fpo,0)} ksi`}>
@@ -6903,7 +7115,7 @@ function CamberTab({inp,R}){
       <div className="br" style={{outline:'2px solid var(--blue)',outlineOffset:-2}}><div className="l">At deck placement</div><div className="n">{fmt(c.afterDeck,2)}</div><div className="u">in {c.afterDeck>=0?'↑':'↓'} · haunch/screed</div></div>
       <div className="br" style={{outline:'2px solid #15803D',outlineOffset:-2}}><div className="l">Beam-seat camber</div><div className="n">{fmt(c.seat,2)}</div><div className="u">in {c.seat>=0?'↑':'↓'} · seat elev. (all DL, 1.0)</div></div>
       <div className="br"><div className="l">Final (net)</div><div className="n">{fmt(c.final,2)}</div><div className="u">in {c.final>=0?'↑':'↓'}</div></div>
-      <div className={'br '+(R.checks.find(c=>c.n==='LL deflection').pass?'p':'f')}><div className="l">LL deflection (est.)</div><div className="n">{fmt(c.dLL,2)}</div><div className="u">in vs L/800 = {fmt(c.llLim,2)} in</div></div>
+      <div className={'br '+(R.checks.find(c=>c.n==='LL deflection').pass?'p':'f')}><div className="l">LL deflection (est.)</div><div className="n">{fmt(c.dLL,2)}</div><div className="u">in vs L/{(R.own&&R.own.llDen)||800} = {fmt(c.llLim,2)} in</div></div>
     </div>
     <div className="cols" style={{paddingTop:0,gridTemplateColumns:'1fr 1fr'}}>
       <Card title="Elastic Components (Midspan)" refTag="E_ci for release · E_c thereafter">
@@ -7008,7 +7220,7 @@ function CamberTab({inp,R}){
         <Step d="Δ_LL — Live-load deflection check (serviceability)"
               r="LRFD 2.5.2.6.2"
               note="Optional deflection limit: the live load (with impact and distribution) on the composite section, compared against the L/800 span limit. Uses an equivalent-uniform-load approximation.">
-          <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_c I_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\le\frac{L}{800}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_c I_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
       </Deriv>;})()}
     <Card title="Haunch / Screed & Beam-Seat Camber — Tenth Points" refTag="Δ_deck for haunch · Δ_seat for seats">
@@ -7115,13 +7327,13 @@ function DeckTab({inp,R}){
           {D.A4.above?' Girder spacing exceeds the 15 ft upper bound of the table; the 15 ft row is used and a refined analysis is required.':''}</div>
       </Step>
       <Step d="Factored (Strength I: DC 1.25, DW 1.50, LL+IM 1.75)">
-        <ML s={Tx`M_{u,+}=1.25(${nx(D.MDC_pos,2)})+1.50(${nx(D.MDW_pos,2)})+1.75(${nx(D.MLL_pos,2)})=${nx(D.Mu_pos,2)}\;\mathrm{k\text{-}ft/ft}`}/>
-        <ML s={Tx`M_{u,-}=1.25(${nx(D.MDC_neg,2)})+1.50(${nx(D.MDW_neg,2)})+1.75(${nx(D.MLL_neg,2)})=${nx(D.Mu_neg,2)}\;\mathrm{k\text{-}ft/ft}`}/>
+        <ML s={Tx`M_{u,+}=${ownTx(D.own,'eV')}1.25(${nx(D.MDC_pos,2)})+1.50(${nx(D.MDW_pos,2)})+1.75(${ownTx(D.own,'mV')}${nx(D.MLL_pos,2)})${ownTx(D.own,'ec')}=${nx(D.Mu_pos,2)}\;\mathrm{k\text{-}ft/ft}`}/>
+        <ML s={Tx`M_{u,-}=${ownTx(D.own,'eV')}1.25(${nx(D.MDC_neg,2)})+1.50(${nx(D.MDW_neg,2)})+1.75(${ownTx(D.own,'mV')}${nx(D.MLL_neg,2)})${ownTx(D.own,'ec')}=${nx(D.Mu_neg,2)}\;\mathrm{k\text{-}ft/ft}`}/>
       </Step>
       <Step d="Overhang — wheel 1 ft clear of the railing face, on the 45+10X strip" r="T.4.6.2.1.3-1 / LRFD 13">
         <ML s={Tx`X=oh-\frac{b_{bar}}{12}-1.0=${nx(D.oh,2)}-${nx(D.bBar/12,2)}-1.0=${nx(D.Xoh,2)}\;\mathrm{ft}\qquad SW_{oh}=45.0+10.0X=${nx(D.SWoh,1)}\;\mathrm{in}`}/>
         <ML s={Tx`M_{LL+IM,oh}=\frac{(1.33)(1.20)(16)(${nx(D.Xoh,2)})}{${nx(D.SWoh,1)}/12}=${nx(D.MohLL,2)}\;\mathrm{k\text{-}ft/ft}`}/>
-        <ML s={Tx`M_{u,oh}=1.25(${nx(D.MohDC,2)})+1.50(${nx(D.MohDW,2)})+1.75(${nx(Math.max(D.MohLL,0),2)})=${nx(D.Mu_oh,2)}\;\mathrm{k\text{-}ft/ft}`}/>
+        <ML s={Tx`M_{u,oh}=${ownTx(D.own,'eV')}1.25(${nx(D.MohDC,2)})+1.50(${nx(D.MohDW,2)})+1.75(${ownTx(D.own,'mV')}${nx(Math.max(D.MohLL,0),2)})${ownTx(D.own,'ec')}=${nx(D.Mu_oh,2)}\;\mathrm{k\text{-}ft/ft}`}/>
       </Step>
     </Deriv>
     <div className="cols" style={{paddingTop:0,gridTemplateColumns:'1fr 1fr'}}>
@@ -7338,6 +7550,7 @@ function CompareTab({inp,R}){
 
 function DiagramsTab({inp,R,set}){
   const d=R.diagrams,L=R.L;
+  const oE7=R.own?R.own.eta:1, oM7=R.own?R.own.mLL:1;   // PBD-E owner η and multiplier for the imported-member view (1 for AASHTO)
   const xs=d.map(r=>r.x);
   // ── Span selector for imported (multi-span) demands: view any span or the whole beam ──
   const ext=inp.external;
@@ -7355,9 +7568,9 @@ function DiagramsTab({inp,R,set}){
     const a=k=>+s[k]||0; const mDC1=a('M_DC1'),mDC2=a('M_DC2'),mDW=a('M_DW'),mLp=a('M_LLpos'),mLn=a('M_LLneg');
     const vDC1=a('V_DC1'),vDC2=a('V_DC2'),vDW=a('V_DW'),vLp=a('V_LLpos'),vLn=a('V_LLneg');
     return {x:+s.x,M_DC1:mDC1,M_DC2:mDC2,M_DW:mDW,M_LLpos:mLp,M_LLneg:mLn,
-      M_StrI_pos:1.25*(mDC1+mDC2)+1.5*mDW+1.75*mLp,M_StrI_neg:1.25*(mDC1+mDC2)+1.5*mDW+1.75*mLn,
+      M_StrI_pos:oE7*(1.25*(mDC1+mDC2)+1.5*mDW+1.75*(oM7*mLp)),M_StrI_neg:oE7*(1.25*(mDC1+mDC2)+1.5*mDW+1.75*(oM7*mLn)),
       V_DC1:vDC1,V_DC2:vDC2,V_DW:vDW,V_LLpos:vLp,V_LLneg:vLn,
-      V_StrI_pos:1.25*(vDC1+vDC2)+1.5*vDW+1.75*vLp,V_StrI_neg:1.25*(vDC1+vDC2)+1.5*vDW+1.75*vLn};});
+      V_StrI_pos:oE7*(1.25*(vDC1+vDC2)+1.5*vDW+1.75*(oM7*vLp)),V_StrI_neg:oE7*(1.25*(vDC1+vDC2)+1.5*vDW+1.75*(oM7*vLn))};});
   const Mk=[['M_DC1','DC1 (non-comp)','#0E7490'],['M_DC2','DC2 (SIDL)','#0891B2','dot'],['M_DW','DW','#B45309','dot'],['M_LLpos','LL+ env','#1C4FC4'],['M_LLneg','LL− env','#7C3AED'],['M_StrI_pos','Strength I (+)','#B3261E'],['M_StrI_neg','Strength I (−)','#DC2626','dash']];
   const Vk=[['V_DC1','DC1','#0E7490'],['V_DC2','DC2','#0891B2','dot'],['V_DW','DW','#B45309','dot'],['V_LLpos','LL+ env','#1C4FC4'],['V_LLneg','LL− env','#7C3AED'],['V_StrI_pos','Strength I (+)','#B3261E'],['V_StrI_neg','Strength I (−)','#DC2626','dash']];
   const viewData=(rows,keys)=>keys.map(([k,l,c,dash])=>({x:rows.map(r=>r.x),y:rows.map(r=>r[k]||0),name:l,line:{color:c,width:dash?1.6:2.2,...(dash?{dash}:{})}}));
@@ -7843,16 +8056,16 @@ function ReportTab({inp,R}){
         <PsbRes R={R} names={['Srv comp (perm)']}/>
       </Step>
       <Step d={`Service I — top fiber, full load, x = ${fmt(cf('Srv comp (full)').loc,1)} ft`} wk="ss2">
-        <ML s={Tx`f=f_{perm}+\frac{M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+\frac{${nx(rS2.Mll,0)}}{${nx(cp.Stg,0)}}=${nx(rS2.s2Top,3)}\le 0.60f'_c=${nx(lim.srvC2,3)}\;\mathrm{ksi}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`f=f_{perm}+\frac{${ownTx(R.own,'mS')}M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+\frac{${ownTx(R.own,'mV')}${nx(rS2.Mll,0)}}{${nx(cp.Stg,0)}}=${nx(rS2.s2Top,3)}\le 0.60f'_c=${nx(lim.srvC2,3)}\;\mathrm{ksi}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['Srv comp (full)']}/>
       </Step>
       <Step d={`Service III — bottom fiber, x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="LRFD T.3.4.1-4" wk="ss3">
-        <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}M_{LL}}{S_{bc}}`}/>
-        <ML s={Tx`f=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*rS3.Mll)/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;\mathrm{ksi}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}`}/>
+        <ML s={Tx`f=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;\mathrm{ksi}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['Srv III tens']}/>
       </Step>
       <Step d={`Deck compression, x = ${fmt(cf('Deck comp').loc,1)} ft`} wk="sdk">
-        <ML s={Tx`f=\frac{M_{sd}+M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le 0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`f=\frac{M_{sd}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le 0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['Deck comp']}/>
       </Step>
       <Step d="Other fiber-stress checks (governing station of the 61-point grid)" r="LRFD 5.9.2.3.1b / 5.9.2.3.2b">
@@ -7865,7 +8078,7 @@ function ReportTab({inp,R}){
     {/* ============ STRENGTH FLEXURE ============ */}
     <CalcSec title="Strength I Flexure @ Midspan">
       <Step d="Factored moment" r="LRFD T.3.4.1-1">
-        <ML s={Tx`M_u=1.25(M_g+M_{dk}+M_{bar})+1.50\,M_{dw}+1.75\,M_{LL}=1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${nx(R.MLL,0)})=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50\,M_{dw}+1.75\,${ownTx(R.own,'mS')}M_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
       <Step d="Stress-block & neutral axis" r="LRFD 5.6.3.1.1 / 5.6.2.2">
         <ML s={Tx`\beta_1=0.85-0.05(f'_{cd}-4)=0.85-0.05(${nx(m.fcd,1)}-4)=${nx(f.b1,3)}\qquad k=0.28\;(\text{low-relax})\qquad d_p=h_c-\bar{y}_{ps}=${nx(cp.hc,1)}-${nx(ss.cgsMid,2)}=${nx(f.dp,2)}\;\mathrm{in}`}/>
@@ -7897,7 +8110,7 @@ function ReportTab({inp,R}){
         <ML s={Tx`d_v=\max\left(d_p-\tfrac{a}{2},\;0.9d_p,\;0.72h_c\right)=\max(${nx(fgN.dp-fgN.a/2,1)},\;${nx(0.9*fgN.dp,1)},\;${nx(0.72*cp.hc,1)})=${nx(sh0.dv,1)}\;\mathrm{in}`}/>
       </Step>
       <Step d="Factored shear" r="Strength I">
-        <ML s={Tx`V_u=1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}+1.75V_{LL}=1.25(${nx(Vg,1)}+${nx(Vdk,1)}+${nx(Vbar,1)})+1.50(${nx(Vdw,1)})+1.75(${nx(Vll,1)})=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
+        <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(Vg,1)}+${nx(Vdk,1)}+${nx(Vbar,1)})+1.50(${nx(Vdw,1)})+1.75(${ownTx(R.own,'mV')}${nx(Vll,1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
         <ML s={Tx`V_p=P_{harp}\cdot\text{slope}=${nx(sh0.Vp,1)}\;\mathrm{kip}`}/>
       </Step>
       <Step d="Longitudinal strain" r="LRFD Eq. 5.7.3.4.2-4">
@@ -7961,7 +8174,7 @@ function ReportTab({inp,R}){
       </Step>
       <Step d="Factored pier moment per girder">
         <ML s={Tx`M_{LL}=${nx(R.cont.negLL.MLL,0)}\,DF_m=${nx(R.cont.negLL.MLL,0)}(${nx(R.dfm,4)})=${nx(R.cont.MLLn,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_u=1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${nx(R.cont.MLLn,0)})=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
+        <ML s={Tx`M_u=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
       </Step>
       <Step d="Negative-moment capacity (deck steel in tension, bottom flange in compression)" r="LRFD 5.12.3.3" wk="neg">
         <ML s={Tx`d=h_c-d_{top}=${nx(cp.hc,1)}-${nx(+inp.cont.dTop,2)}=${nx(R.cont.dN,1)}\;\mathrm{in}\qquad a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(m.fc,1)})(${nx(g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}=${nx(R.cont.tbf,1)}\;\text{N.G.}`}`}/>
@@ -7997,7 +8210,7 @@ function ReportTab({inp,R}){
         <ML s={Tx`\Delta_{final}=${nx(mu_.psF,2)}\Delta_{ps}-${nx(mu_.swF,2)}\Delta_{sw}-${nx(mu_.dkF,2)}\Delta_{dk}-${nx(mu_.sdF,2)}\Delta_{sd}=${nx(c.final,2)}\;\mathrm{in}`}/>
       </Step>
       <Step d="Live-load deflection (equivalent-UDL approximation)" r="LRFD 2.5.2.6.2" wk="lld">
-        <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_cI_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\;\mathrm{in}\le\frac{L}{800}=\frac{${nx(Lin,0)}}{800}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_cI_c}=\frac{5(${nx(R.MLL*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\;\mathrm{in}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=\frac{${nx(Lin,0)}}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
         <PsbRes R={R} names={['LL deflection']}/>
       </Step>
     </CalcSec>
@@ -8047,6 +8260,47 @@ function ReportTab({inp,R}){
           fmt(r.Vc,1),fmt(r.Vs,1),fmt(r.Vn,1),fmt(r.dc,3)]}))}/>
       </div>
     </CalcSec>
+
+    {/* ============ PBD-E: OWNER REQUIREMENTS (owner other than AASHTO only; an AASHTO report is unchanged) ============ */}
+    {R.own&&(()=>{ const P=window.PBD, o=R.own, ow=P.OWN_RULES.owners[o.owner]||{}, defs=P.ownDefaults(inp), hd=o.hd, db=o.db, cr=o.contReq;
+      const KND={'default':'default','shall-check':'check','should-warning':'warning','load':'load rule','report':'requirement'};
+      const ckRow=id=>o.checks.find(c=>c.id===id);
+      return <CalcSec title="Owner Requirements">
+        <Step d={'Owner profile: '+(ow.manual||o.owner)} r={'AASHTO LRFD '+(ow.aashto||'')+' basis'} wk="own">
+          <div className="psbr-note">{P.OWN_RULES.note} The rules are paraphrased; see the manual for the text.</div>
+          <Tbl head={['Section','Requirement','Kind','Where applied']} rows={P.ownRules(o.owner).map(r=>({c:[r.sec,r.text,KND[r.kind]||r.kind,r.where||'']}))}/>
+        </Step>
+        {defs.length>0&&<Step d="Owner input defaults">
+          <Tbl head={['Input','Owner default','Value used','Status']} rows={defs.map(d=>({c:[d.r.lbl+' ('+P.ownCite(d.r)+')',d.r.show,d.cur===true?'on':d.cur===false?'off':String(d.cur),d.over?'overridden by the engineer':'owner default']}))}/>
+        </Step>}
+        <Step d="Load modifier and design load multiplier" r="LRFD 1.3.2.1; owner manual">
+          <ML s={Tx`\eta=\eta_D\,\eta_R\,\eta_I=${nx(o.etaD,2)}\times${nx(o.etaR,2)}\times${nx(o.etaI,2)}=${nx(o.eta,4)}\;\;(\text{Strength I})`}/>
+          <ML s={Tx`m_{LL}=${nx(o.mLL,2)}\;\;(\text{HL-93 LL+IM at Strength I and Service I / III; not the live load deflection, fatigue or load rating})`}/>
+          <div className="psbr-note">Strength I: M<sub>u</sub> = η[1.25 DC + 1.50 DW + 1.75 m<sub>LL</sub>(LL+IM)], and V<sub>u</sub> likewise; Service I and III: the LL+IM term × m<sub>LL</sub>. The worked flexure, shear, stress, pier and deck calculations above use these factors.</div>
+        </Step>
+        {hd&&<Step d={'Hold-down force of the draped strands ('+ckRow('hd.max').cite+')'}>
+          <ML s={Tx`F_{hd}=2\,n_h\,f_{pbt}A_b\sin\alpha=2(${hd.nh})(${nx(R.fpbt,1)})(${nx(hd.Ab,3)})\sin\left(\tan^{-1}${nx(hd.slope,4)}\right)=${nx(hd.Ftot,1)}\;\mathrm{kip}`}/>
+          <ML s={Tx`W=w_{sw}L_g=${nx(hd.wsw,4)}(${nx(hd.Lg,2)})=${nx(hd.W,1)}\;\mathrm{kip}\qquad ${nx(hd.frac,2)}\,W=${nx(hd.lim,1)}\;\mathrm{kip}`}/>
+          <div className="psbr-note">Each draped strand bends at two hold-down points (harp points at {fmt(R.ss.hp.frac,2)}L), with a vertical force f<sub>pbt</sub>A<sub>b</sub> sin α at each, at the jacking stress; L<sub>g</sub> = L + 2 × girder end beyond the bearing.</div>
+          <PsbRes R={R} names={[ckRow('hd.max').n]}/></Step>}
+        {db&&<Step d={'Debonded strands ('+ckRow('db.max').cite+')'}>
+          <ML s={Tx`\frac{n_{db}}{N}=\frac{${db.n}}{${db.N}}=${nx(100*db.pct,1)}\%\le ${nx(100*db.max,0)}\%`}/>
+          <PsbRes R={R} names={[ckRow('db.max').n]}/></Step>}
+        {o.checks.filter(c=>/^f(c|ci)\./.test(c.id)).map(c=><Step key={c.id} d={c.n}>
+          <ML s={c.id.indexOf('fci')===0?Tx`f'_{ci}=${nx(+inp.mat.fci,2)}\;\mathrm{ksi}=${nx((+inp.mat.fci)/(+inp.mat.fc),3)}\,f'_c\;\;(f'_c=${nx(+inp.mat.fc,2)}\;\mathrm{ksi});\;\text{governing limit }${nx(c.lim,2)}\;\mathrm{ksi}`:Tx`f'_c=${nx(+inp.mat.fc,2)}\;\mathrm{ksi};\;\text{governing limit }${nx(c.lim,2)}\;\mathrm{ksi}`}/>
+          <PsbRes R={R} names={[c.n]}/></Step>)}
+        {o.llDen&&<Step d={'Live load deflection limit (MassDOT Part I 3.5.6.1)'}>
+          <ML s={Tx`\Delta_{LL}=${nx(R.cam.dLL,2)}\;\mathrm{in}\le\frac{L}{${o.llDen}}=${nx(R.cam.llLim,2)}\;\mathrm{in}\;\;(${inp.opt.sidewalk===true?'\text{bridge with sidewalks}':'\text{no sidewalks; } L/1000\text{ preferred}'};\;\text{interior girder})`}/>
+          <PsbRes R={R} names={['LL deflection']}/></Step>}
+        {ckRow('cont.age')&&<Step d={ckRow('cont.age').n}>
+          <ML s={Tx`t_d=${nx(+inp.mat.td,0)}\;\mathrm{days}\ge ${nx(ckRow('cont.age').lim,0)}\;\mathrm{days}`}/>
+          <PsbRes R={R} names={[ckRow('cont.age').n]}/></Step>}
+        {cr&&<Step d={'Positive moment connection ('+cr.cite+')'}>
+          <ML s={Tx`\phi M_{n,conn}\ge ${nx(cr.f,1)}\,M_{cr}=${nx(cr.f,1)}\,f_r S_b=${nx(cr.f,1)}(${nx(cr.fr,3)})(${nx(cr.Sb,0)})/12=${nx(cr.req,0)}\;\mathrm{k\text{-}ft}`}/>
+          <div className="psbr-note">M<sub>cr</sub> as the tool's positive cracking moment of the connection region (girder modulus of rupture 0.24√f′c on the gross girder S<sub>b</sub>, as in the restraint check). The positive moment connection is not designed by this tool; provide it with at least this resistance.</div></Step>}
+        {(R.warns||[]).some(w=>P.ownRules(o.owner).some(r=>w.indexOf(P.ownCite(r))===0))&&<Step d="Owner warnings">
+          <ul className="warnlist">{R.warns.filter(w=>P.ownRules(o.owner).some(r=>w.indexOf(P.ownCite(r))===0)).map((w,i)=><li key={i}>{w}</li>)}</ul></Step>}
+      </CalcSec>; })()}
   </React.Fragment>,see);
 
   return(<PsbrSee.Provider value={see}><div className="psbr-root">
@@ -8323,7 +8577,50 @@ function BeamChip({nb,setBy}){
    UI only; the bridge model, its migration and the module registry are the engines in window.PBD (plain
    script above). PBD_MODS is null when that block is missing, and the app then behaves as before. */
 const PBD_MODS=(window.PBD&&window.PBD.MODS)||null;
-function PbdBridgeBar({bridge,inp,onMode,onSelect,onEdit}){
+/* ═══ PBD-E (2026-10-22): Owner Requirements card (UI; the rules, defaults and load rules are window.PBD engines) ═══
+   Lists every rule of the bridge owner with how it is applied here: input defaults (owner default, or "overrides" with
+   the engineer's value), checks with their worked values and D/C (the same R.checks rows as the status band), warnings,
+   load rules with the owner's yes/no questions (η) and the HL-93 design load multiplier, and reported requirements. */
+function PbdOwnerCard({inp,R,set}){
+  const P=window.PBD, o=P.ownerOf(inp), ow=P.OWN_RULES.owners[o]||{}, rules=P.ownRules(o), own=(R&&R.own)||null;
+  const K={'default':'Default (editable)','shall-check':'Check','should-warning':'Warning','load':'Load rule','report':'Requirement'};
+  const u=(path,v)=>set(p=>{ const q=JSON.parse(JSON.stringify(p)); const ks=path.split('.'); let t=q; ks.slice(0,-1).forEach(k=>{ t[k]=t[k]||{}; t=t[k]; }); t[ks[ks.length-1]]=v; return q; });
+  const ck=n=>(R&&!R.error&&R.checks)?R.checks.find(c=>c.n===n):null;
+  const val=v=>v===true?'on':v===false?'off':v===undefined?'(tool default)':String(v);
+  const applied=r=>{
+    if(r.kind==='default'){ const cur=P.getK(inp,r.key), over=String(cur)!==String(r.value);
+      return over?<span className="own-over">Overridden: your value {val(cur)} (owner: {r.show})</span>:<span className="own-def">Owner default: {r.show}</span>; }
+    if(r.kind==='shall-check'){ const c=r.nm?ck(r.nm):(r.id==='defl.ll'?ck('LL deflection'):null);
+      if(!c) return <span style={{color:'var(--ink2)'}}>Not applicable to this design{r.id==='hd.max'?' (no draped strands)':r.id==='db.max'?' (no debonded strands)':r.id==='cont.age'?' (continuity off)':''}</span>;
+      return <span className={c.pass?'own-def':'own-over'}>{fmt(Math.abs(c.v),2)} {c.u} vs {fmt(Math.abs(c.lim),2)} {c.u}: D/C = {fmt(c.r,2)} {c.pass?'PASS':'FAIL'}</span>; }
+    if(r.kind==='should-warning'){ const w=(R&&R.warns||[]).find(x=>x.indexOf(P.ownCite(r))===0); return w?<span className="own-over">Warning shown</span>:<span className="own-def">No warning</span>; }
+    if(r.kind==='load'){ if(r.value.fixed) return <span className="own-def">η = {fmt(r.value.f,2)} (fixed)</span>;
+      const k='eta'+r.id.slice(-1);
+      return <label style={{display:'inline-flex',gap:6,alignItems:'center',cursor:'pointer'}}><input type="checkbox" checked={inp.opt[k]===true} onChange={e=>u('opt.'+k,e.target.checked)}/>
+        {r.value.q}: η = {inp.opt[k]===true?fmt(r.value.f,2):'1.00'}</label>; }
+    if(r.kind==='report'){ const c=own&&own.contReq; return c?<span>φM<sub>n</sub> ≥ {fmt(c.f,1)} M<sub>cr</sub> = {fmt(c.f,1)} × {fmt(c.Mcr,0)} = <b>{fmt(c.req,0)} k-ft</b> (connection not designed here)</span>:<span style={{color:'var(--ink2)'}}>Continuity off</span>; }
+    return null; };
+  const rM=P.ownRule(o,'ld.mult'), rD=P.ownRule(o,'defl.ll');
+  return <div className="pbd-own noprint">
+    <div className="pbd-own-h"><b>Owner requirements</b> · {ow.manual||o}{o!=='AASHTO'?' (AASHTO LRFD '+(ow.aashto||'')+' basis)':''}</div>
+    {o==='AASHTO'
+      ? <div className="hint">AASHTO LRFD 10th Ed. (2024) with no owner rules: every input, factor and check is the tool's own (continuity restraint computed when on).</div>
+      : <React.Fragment>
+        <div className="hint">{P.OWN_RULES.note} An owner default sets an input only while it is untouched (when the owner is chosen); a value you enter is kept and marked "overrides". Checks are added to the design checks; each is worked in the report (Owner Requirements).</div>
+        <div className="frow" style={{gap:'6px 18px',margin:'6px 0'}}>
+          {rM&&<label className="pbd-f" title={rM.text}>HL-93 design load multiplier ({P.ownCite(rM)})
+            <input type="number" step={0.05} min={1} value={inp.opt.llMult==null?'':inp.opt.llMult} placeholder={String(rM.value)} onChange={e=>u('opt.llMult',e.target.value===''?'':+e.target.value)}/></label>}
+          {rD&&<label className="pbd-f" title={rD.text} style={{cursor:'pointer'}}><input type="checkbox" checked={inp.opt.sidewalk===true} onChange={e=>u('opt.sidewalk',e.target.checked)}/> Bridge with sidewalks ({P.ownCite(rD)})</label>}
+          {own&&<span className="pbd-f">Strength I load modifier η = η<sub>D</sub>·η<sub>R</sub>·η<sub>I</sub> = {fmt(own.etaD,2)} × {fmt(own.etaR,2)} × {fmt(own.etaI,2)} = <b>{fmt(own.eta,4)}</b>{rM?<span> · LL+IM × <b>{fmt(own.mLL,2)}</b></span>:null}</span>}
+        </div>
+        <table className="eng" style={{width:'100%'}}><thead><tr><th style={{width:'11%'}}>Section</th><th>Requirement (paraphrase)</th><th style={{width:'11%'}}>Kind</th><th style={{width:'31%'}}>Applied here</th></tr></thead>
+          <tbody>{rules.map((r,i)=><tr key={i}><td style={{fontFamily:'var(--mono)',fontSize:11}}>{r.sec}</td><td style={{fontSize:11.5}}>{r.text}{r.where?<div style={{color:'var(--ink2)',fontSize:10.5}}>{r.where}</div>:null}</td>
+            <td style={{fontSize:11}}>{K[r.kind]||r.kind}</td><td style={{fontSize:11.5}}>{applied(r)}</td></tr>)}</tbody></table>
+      </React.Fragment>}
+  </div>;
+}
+
+function PbdBridgeBar({bridge,inp,onMode,onSelect,onEdit,onOwner,ownOpen,setOwnOpen}){
   const PB=window.PBD, b=bridge, ext=PB.extActive(inp);
   const spKey=b.spans.join(',');
   const [spTxt,setSpTxt]=useState(b.spans.join(', '));
@@ -8346,6 +8643,9 @@ function PbdBridgeBar({bridge,inp,onMode,onSelect,onEdit}){
       <input type="number" min={2} step={1} value={b.nGirders} onChange={e=>{ const n=Math.round(+e.target.value); if(n>=2&&n<=40) onEdit({nGirders:n}); }}/></label>
     <label className="pbd-f" title="Girder spacing, ft">Spacing (ft)
       <input type="number" min={0} step={0.25} value={b.S} onChange={e=>{ const v=+e.target.value; if(isFinite(v)&&v>0) onEdit({S:v}); }}/></label>
+    <label className="pbd-f" title={'Bridge owner (DOT): owner rules on top of AASHTO LRFD 10th Ed. Choosing an owner sets its defaults in the inputs you have not changed; a value you entered is kept and marked.'}>Owner
+      <select aria-label="Owner" value={PB.ownerOf?PB.ownerOf(inp):'AASHTO'} onChange={e=>onOwner(e.target.value)}>{(PB.OWN_LIST||['AASHTO']).map(o=><option key={o} value={o}>{o}</option>)}</select>
+      <button type="button" className="btn sm ghost" onClick={()=>setOwnOpen(!ownOpen)} title="Owner requirements: rules, defaults, checks">{ownOpen?'Hide rules':'Rules'}</button></label>
     <span className="pbd-f pbd-sel" title="The girder and span designed on screen. Each girder × span keeps its own design (• = a design is stored); the one on screen is the app's saved design (psbeam.inputs.v1).">Designing
       <select aria-label="Girder" value={b.sel.g} onChange={e=>onSelect(+e.target.value,b.sel.s)}>
         {gl.map(g=><option key={g} value={g}>{PB.girderLabel(b,g)}{has(g,b.sel.s)?' •':''}</option>)}</select>
@@ -8438,7 +8738,14 @@ function App(){
     return ()=>clearTimeout(bridgeTimer.current); },[bridge]);
   const pbdLoadInputs=(next)=>{ setBaseline(next.rows); setEditLog([]); setSelRow(null); setInp(next); };
   const pbdMode=(m)=>{ let b={...bridge,mode:m}; if(m==='pl') b=PB.fromInputs(b,inp); setBridge(b,true); };   // the open design is kept as it is
-  const pbdSelect=(g,s)=>{ if(g===bridge.sel.g&&s===bridge.sel.s) return; const r=PB.select(bridge,inp,g,s); setBridge(r.b,true); pbdLoadInputs(r.inp); };
+  const pbdSelect=(g,s)=>{ if(g===bridge.sel.g&&s===bridge.sel.s) return; const r=PB.select(bridge,inp,g,s);
+    // PBD-E: the owner is bridge-level: a stored design of another owner takes this one (its untouched inputs take the defaults)
+    if(PB.ownerOf&&PB.ownerOf(r.inp)!==PB.ownerOf(inp)) r.inp=PB.ownApply(r.inp,PB.ownerOf(inp),DEFAULTS).inp;
+    setBridge(r.b,true); pbdLoadInputs(r.inp); };
+  const [ownOpen,setOwnOpen]=useState(false);
+  const pbdOwner=(o)=>{ if(!PB||!PB.ownApply||o===PB.ownerOf(inp)) return; const r=PB.ownApply(inp,o,DEFAULTS); setInp(r.inp); setOwnOpen(true);
+    const lab=k=>{ const q=PB.OWN_RULES.rules.find(x=>x.key===k); return q?q.lbl:k; }, v=x=>x===true?'on':x===false?'off':x===undefined?'tool default':String(x);
+    if(BL&&BL.toast) BL.toast('Owner: '+o,(r.set.length?'Set: '+r.set.map(q=>lab(q.key)+' '+v(q.from)+' → '+v(q.to)).join('; ')+'. ':'')+(r.kept.length?'Kept (your values): '+r.kept.map(q=>lab(q.key)+' '+v(q.value)).join('; ')+'.':'')); };
   const pbdEdit=(patch)=>{ const r=PB.edit(bridge,inp,patch); setBridge(r.b,true); if(JSON.stringify(r.inp)!==JSON.stringify(inp)) setInp(r.inp); };
   const pbdAdopt=(id,merged)=>{ if(!PB) return; let bs=null; try{ bs=BP().getSlice(id,PB.SLICE); }catch(e){}
     setBridge(PB.valid(bs)?{...bs,projId:id}:{...PB.migrate(merged||inpRef.current),projId:id},bridgeStored.current); };
@@ -8967,7 +9274,8 @@ function App(){
         </div>
       </div>
     </div>
-    {PBD_MODS&&bridge&&<PbdBridgeBar bridge={bridge} inp={inp} onMode={pbdMode} onSelect={pbdSelect} onEdit={pbdEdit}/>}
+    {PBD_MODS&&bridge&&<PbdBridgeBar bridge={bridge} inp={inp} onMode={pbdMode} onSelect={pbdSelect} onEdit={pbdEdit} onOwner={pbdOwner} ownOpen={ownOpen} setOwnOpen={setOwnOpen}/>}
+    {PBD_MODS&&ownOpen&&window.PBD.OWN_RULES&&<PbdOwnerCard inp={inp} R={R} set={setInp}/>}
     {pbdOpen&&<PbdOpenDlg cur={curProjId} onOpen={projOpen} onClose={()=>setPbdOpen(false)}/>}
     <LockAutoSync inp={inp} set={setInp}/>
     {R.error?

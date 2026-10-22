@@ -1853,3 +1853,62 @@ Default project, empty storage: the bar reads "Preliminary designer", spans 120,
 - Scripted UI checks (scratch): migration values above; select / return round-trip identical; Save as → registry entry with slices `psbeam` and `psbeamBridge`; New → defaults; Open → the saved project's design and model; mode switch keeps the design; storage untouched until the first action; no console errors.
 - `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** none (Steel Bridge Design's modes and module bar are a different implementation; only the behaviour is mirrored).
+
+## 2026-10-22 — PR: claude/pbd-3-owner (PBD-E: owner selector, Owner Requirements card, owner defaults and checks for RIDOT / MassDOT / CTDOT; engineer decisions 2026-10-22; calculation changes for those owners only, AASHTO unchanged; PR link added after merge)
+
+Owner manuals used (verified in the engineer's reference folder; cited, not reproduced): RIDOT Bridge Design Manual (April 2026), MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.), CTDOT BRSDM Release 1 (2024) Vol. 2. AASHTO LRFD 10th Ed. (2024) remains the basis. MassDOT and the CTDOT BRSDM are written to the 9th Ed.
+
+### PBD-E0. Framework   [new code] [AASHTO: no result change]
+- **Where:** `window.PBD` engine block, anchor `/* ═══ Owner (DOT) profile — PBD-E`. `PBD.OWN_RULES`, in the format of Steel Bridge Design's `OWN_RULES` (`v`, `note`, `owners` with the same four entries, `rules[]` with `owner, id, kind, sec, value, key/lbl/show` for defaults, `nm` for checks, `where`, `text`). `PBD.ownRule(o, id)` has the same body as Steel Bridge Design's `ownRule`. **Copies (CLAUDE.md §3):** Steel Bridge Design.html (GirderDetail `OWN_RULES`, Preliminary sizing `ownRule`), and this file. The rules themselves are prestressed-concrete rules and differ.
+- Owner = `inputs.owner` (absent = AASHTO, so no saved design and no AASHTO result changes). It is set in the bridge bar (Owner select, next to the working mode). The bridge is one owner: opening another girder × span gives that design the same owner.
+- `PBD.ownApply(inp, owner, DEFAULTS)`: an input still at the previous owner's default (or the tool's default) takes the new owner's default; a value the engineer entered is kept. Kept values are flagged "overrides <manual> <section>: <owner value>" next to the input (Materials: H; Analysis Options: corrosion exposure; continuity card title and restraint switch) and in the card. Changing the owner shows a notice listing what was set and what was kept.
+- `PBD.ownLoads(inp)`: η = η_D·η_R·η_I from the owner's yes/no questions (`opt.etaD/etaR/etaI`, default no → 1.00, as GirderDetail's GD46; RIDOT η_D fixed 1.00), and the HL-93 design load multiplier m_LL (`opt.llMult`; RIDOT only). For AASHTO both are 1, and every changed expression multiplies by exactly 1. The node comparison below shows that every AASHTO result is bit-identical.
+- **Owner Requirements card** ("Rules" button in the bridge bar): every rule of the owner with its section, a paraphrase, the kind, and how it is applied here (default and value used, check with values and D/C, warning, η questions, multiplier input, sidewalk question, reported requirement). **Report:** new last section "Owner Requirements" (owner other than AASHTO only), where every owner check, the η product and the multiplier are worked. The owner checks link there ("Worked in").
+- Worked equations with η or m_LL ≠ 1 show them, in the Flexure (M_u), Shear (V_u), Stresses (Service I / III, deck), pier negative moment, Deck (M_u+, M_u−, overhang) cards, the report, and the Strength I plots. The text is unchanged when the factors are 1.
+
+### PBD-E1. Service III tension limit: severe corrosive conditions (RIDOT BDM 5.6.2; CTDOT BRSDM V2 5.9.2.3.1b; MassDOT Part I 3.7.3.2)   [calc change, owner default] [more conservative]
+- **Rule:** default `opt.corrosion = 'severe'` → f_t = 0.0948√f′c ≤ 0.3 ksi (AASHTO Table 5.9.2.3.2b-1) instead of 0.19√f′c ≤ 0.6 ksi. MassDOT 3.7.3.2 gives 0.0948√f′c with no 0.3 ksi cap; the cap governs only above f′c = 10 ksi, outside MassDOT's 6.5 / 8.0 ksi mixes, so the severe setting is used. MassDOT's relaxed 0.19√f′c is allowed by overriding to moderate. A warning then asks for γ_LL = 1.0 at Service III (3.7.3.2) when it is not 1.0.
+- **Before / after (defaults fixture, f′c = 8.5 ksi):** f_t 0.19√8.5 = 0.5539 → 0.0948√8.5 = 0.2764 ksi. "Srv III tens" D/C 0.033 → 0.065 (f_b = −0.018 ksi). Service III rating RF (MBE 6A.5.4.1, same f_r) 1.430 → 1.207.
+- **Hand check:** √8.5 = 2.9155; 0.19 × 2.9155 = 0.554; 0.0948 × 2.9155 = 0.2764 ksi.
+
+### PBD-E2. Relative humidity H = 80 % (RIDOT BDM 5.6.1)   [calc change, owner default] [less conservative for losses]
+- **Rule:** default `mat.H = 80` (tool default 70). It enters γ_h = 1.7 − 0.01H (5.9.3.3), k_hc = 1.56 − 0.008H and k_hs = 2.00 − 0.014H (5.4.2.3).
+- **Before / after (defaults, refined losses):** total loss 47.818 → 45.833 ksi; f_pe 154.682 → 156.667 ksi; Srv III bottom −0.018 → 0.000 ksi (D/C 0.033 → 0.000); flexure unchanged (D/C 0.752).
+- **Hand check:** k_hs 2.00 − 0.98 = 1.02 → 2.00 − 1.12 = 0.88 (shrinkage × 0.863); k_hc 1.00 → 0.92.
+
+### PBD-E3. HL-93 design load multiplier 1.2 (RIDOT BDM 3.4.1.2)   [calc change, owner default] [more conservative]
+- **Rule:** LL+IM × m_LL at Strength I (flexure M_u, shear V_u, interface shear, longitudinal reinforcement 5.7.3.5, pier negative moment, deck M_u) and Service I / III (stresses, deck compression). Not applied to the live load deflection, fatigue or the HL-93 design-load rating (BDM 3.4.1.2: the design check rating is without the multiplier). The capacity hand-off to the MCT carries φM_n and φV_n; φV_n (MCFT) depends on the factored demand, so it follows the multiplier (and η) like the shear check. `opt.llMult`, default 1.2 for RIDOT, editable.
+- **Before → after (defaults, `M_u = 1.25DC + 1.50DW + 1.75 m_LL LL`):** M_u,mid 10 251.0 → 11 170.3 k-ft (flexure D/C 0.752 → 0.819). Shear D/C 0.721 → 0.976: V_u 241.2 → 270.6 kip. φV_n changes 334.6 → 277.2 kip because the MCFT ε_s and the governing station follow the larger demand. Srv comp (full) 2.316 → 2.407 ksi. Srv III bottom −0.018 → −0.267 ksi (D/C 0.033 → 0.483). Interface shear D/C 0.455 → 0.502. Long. reinf D/C 0.459 → 0.521. Unchanged: LL deflection 1.182 in, Fatigue I 4.416 ksi, RF_inv 1.737.
+- **Hand check (midspan):** 1.75 × 0.2 × M_LL = 0.35 × 2626.6 = 919.3 k-ft → 10 251.0 + 919.3 = 11 170.3 k-ft.
+
+### PBD-E4. Load modifier η (RIDOT BDM 1.3.1–1.3.3; MassDOT Part I 3.1.4.4; CTDOT BRSDM V2 1.3.3–1.3.5; AASHTO 1.3.2.1)   [calc change when answered yes] [more conservative]
+- **Rule:** Strength I effects × η = η_D·η_R·η_I. Each factor is 1.05 when its question is answered yes (nonductile; nonredundant; RIDOT ADT ≥ 5000, MassDOT critical/essential, CTDOT NHS/evacuation route); RIDOT η_D is fixed at 1.00. Default no (1.00), so choosing an owner changes nothing until a question is answered. The rating and Service are not multiplied.
+- **Before → after (defaults, all yes):** MassDOT/CTDOT η = 1.05³ = 1.157625: M_u 10 251.0 → 11 866.8 k-ft (flexure D/C 0.752 → 0.870), shear D/C 0.721 → 1.119 (FAIL). RIDOT η = 1.00 × 1.05 × 1.05 = 1.1025: M_u 11 301.7 k-ft, flexure D/C 0.829, shear D/C 0.972.
+- **Hand check:** 1.157625 × 10 251.0 = 11 866.8 k-ft.
+
+### PBD-E5. Hold-down force ≤ 75 % of the beam weight (MassDOT Part I 3.7.2.2; CTDOT BRSDM V2 5.9.1.6)   [new check] 
+- **Rule:** with draped strands, F_hd = 2 n_h f_pbt A_b sin α ≤ 0.75 W, W = w_sw (L + 2 × girder end beyond the bearing). Each draped strand bends at two hold-down points at the jacking stress, so the total is the sum over both points. The existing ≈ 4 kip/strand warning is kept.
+- **Values (defaults: n_h = 12, f_pbt = 202.5 ksi, A_b = 0.217 in², slope 52/576 = 0.09028, α = 0.09003 rad):** per strand per point 202.5 × 0.217 × sin α = 3.951 kip; F_hd = 2 × 12 × 3.951 = 94.82 kip; W = 0.82559 × 120 = 99.07 kip; 0.75 W = 74.30 kip → D/C 1.276 FAIL (MassDOT, CTDOT). Before: no such check.
+
+### PBD-E6. Debonded strands ≤ 25 % of all strands (CTDOT BRSDM V2 5.9.4.3.3, supplementing paragraph A)   [new check]
+- **Values (debond_harp fixture):** 6 of 42 = 14.3 % ≤ 25 % → D/C 0.571 PASS. Before: no such check (the AASHTO 45 % per row and other 5.9.4.3.3 warnings are unchanged).
+
+### PBD-E7. Concrete strengths   [new checks / warnings]
+- RIDOT BDM 5.2.1: f′c ≥ 5.0 ksi (check); f′c > 8.0 ksi needs approval (warning). RIDOT 5.6.1: f′ci limited to approximately 0.70 f′c (warning, "approximately").
+- MassDOT Part I 3.7.2.1: f′ci ≤ 0.80 f′c (check). Warnings: deck and box beams at f′c 6.5 ksi (8.0 ksi only to avoid a deeper beam), f′ci generally 4.5 ksi with 6.5 ksi; NEXT beams at f′c 8.0 / f′ci 6.0 ksi.
+- CTDOT BRSDM V2 5.9.1.2: 6.0 ≤ f′c ≤ 10.0 ksi; 0.70 f′c ≤ f′ci ≤ 0.80 f′c and f′ci ≤ 6.5 ksi (checks).
+- **Values (defaults f′c 8.5, f′ci 6.8 ksi = 0.80 f′c):** RIDOT f′c check D/C 0.588 PASS, warnings for f′ci 0.80 f′c > 0.70 f′c and for f′c > 8.0 ksi. MassDOT f′ci ≤ 6.80 ksi: D/C 1.000 PASS. CTDOT: f′c D/C 0.850 PASS; f′ci 6.8 > 6.5 ksi → D/C 1.046 FAIL.
+
+### PBD-E8. Live load deflection L/1000 with sidewalks (MassDOT Part I 3.5.6.1)   [calc change, MassDOT interior girder]
+- **Rule:** typical interior beam: L/1000 with sidewalks (question "Bridge with sidewalks", default no); without sidewalks the limit stays L/800, with a warning above the preferred L/1000. Exterior girder: the tool's L/800 as before. Same deflection (HL-93, no multiplier).
+- **Before / after (defaults, sidewalks yes):** limit 120 × 12 / 800 = 1.800 → 1440/1000 = 1.440 in; Δ_LL 1.182 in → D/C 0.657 → 0.821.
+
+### PBD-E9. Continuity (simple spans made continuous)   [owner defaults, check, requirement]
+- MassDOT Part I 3.5.1.8: default restraint moments off (neglected for the standard beams). RIDOT BDM 5.6.3.3: default restraint moments off (zero with a girder age ≥ 90 days), new check t_d ≥ 90 days, and the reported requirement φM_n,conn ≥ 1.2 M_cr of the positive moment connection. This tool does not design the connection. M_cr is taken as the tool's positive cracking moment of the connection region, f_r S_b with f_r = 0.24√f′c on the gross girder S_b, as in the restraint check. CTDOT BRSDM V2 5.12.1.1CT: default continuity off (simple spans with a continuous deck); a warning when it is turned on. AASHTO: computed as before.
+- **Before / after (cont_restraint fixture):** MassDOT and RIDOT net restraint moment +408.0 k-ft → not computed. The pier negative flexure check is unchanged (D/C 0.970), because the restraint moment is reported and does not enter it. RIDOT age check 90 ≥ 90 days PASS. RIDOT connection: 1.2 × 0.6997 × 14 915 / 12 = 1.2 × 869.7 = 1043.6 k-ft. CTDOT on this fixture: the engineer's continuity is kept (flagged override), with the warning.
+
+### How verified
+- Engines in node (scratch: the JSX transpiled with the offline Babel, computeAll of origin/main and of this branch). For all 31 fixtures (AASHTO), `JSON.stringify(computeAll(…))` is identical between origin/main and this branch.
+- `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: the 31 existing cases have every section identical. Six owner fixtures were added (`owner_RIDOT`, `owner_MassDOT_sw`, `owner_CTDOT_debond`, `owner_RIDOT_cont`, `owner_MassDOT_cont`, `owner_CTDOT_deck`). Their A run (origin/main, which ignores the owner) gives the "before" and B the "after", and their baseline is recorded from this branch.
+- UI script (scratch): owner select sets the defaults of untouched inputs and keeps entered values (flagged), the card lists the rules, η questions and multiplier change the results, switching back to AASHTO restores the defaults; no console errors.
+- `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
