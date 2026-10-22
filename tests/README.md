@@ -19,8 +19,19 @@ node tests/compare.mjs --tool gd
 node tests/compare.mjs --tool gd --project builtin,builtin28,xsA,curb --owner AASHTO,RIDOT,MassDOT,CTDOT
 node tests/compare.mjs --tool gd --project xsA --owner RIDOT --mode mod      # Design modules mode (button click)
 
-# ST-Girder: apply a GirderDetail hand-off payload (#gdpull, as "Send to ST-Girder" does) and compare every result
-node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1
+# ST-Girder: built-in example (no hand-off), then a GirderDetail hand-off payload applied (#gdpull, as "Send to ST-Girder" does); every result and the text of every tab
+node tests/compare.mjs --tool st --payload builtin,def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1
+node tests/compare.mjs --tool st --payload all                               # built-in + every payload in projects/st
+
+# Steel Bridge Design (merged tool, from PR 1 of the merge): its ST-Girder view (frame) for every girder vs stgirder.html with the same payloads
+node tests/compare.mjs --tool sbd --project builtin,xsA --owner AASHTO,RIDOT
+
+# Baselines: record A's section hashes (A = origin/main), later compare B against them without running A
+node tests/compare.mjs --tool gd --project builtin --owner AASHTO --record-baseline tests/baselines/gd.json
+node tests/compare.mjs --tool gd --project builtin --owner AASHTO --baseline tests/baselines/gd.json --b "Steel Bridge Design.html"
+
+# Regenerate the per-girder hand-off payloads in projects/st from GirderDetail (B) for the projects and owners of the run
+node tests/compare.mjs --tool gd --project builtin,builtin28,xsA,curb,util --owner AASHTO,RIDOT,MassDOT,CTDOT --save-st
 
 # Any tool: smoke load (console errors) + page text and localStorage after load
 node tests/compare.mjs --tool page --file lldf.html
@@ -33,7 +44,7 @@ node tests/compare.mjs --tool st --a origin/main --b /path/to/stgirder.html  # a
 node tests/check-syntax.mjs "Steel Bridge Beam Modules.html" stgirder.html
 ```
 
-Options of `compare.mjs`: `--tool gd|st|page`, `--a` (default `origin/main`), `--b` (default the working-tree file), `--file` (tool file; default per tool), `--project` (`builtin`, `builtin28` = built-in with all skews 28°, `xsA`, `curb`, or a path to a localStorage JSON), `--owner`, `--skew`, `--mode pl|mod`, `--payload` (name in `projects/st` or a path), `--quiet` (ms the project data must stay unchanged; default 8000), `--max-diffs` (values listed per section; default 25), `--out` (folder for the raw readouts; default `<tmp>/allstruct-tests/out`), `--wait` (page tool, ms).
+Options of `compare.mjs`: `--tool gd|st|sbd|page`, `--a` (default `origin/main`; for `sbd` the working-tree `stgirder.html`), `--b` (default the working-tree file), `--file` (tool file; default per tool), `--project` (`builtin`, `builtin28` = built-in with all skews 28°, `xsA`, `curb`, `util`, or a path to a localStorage JSON), `--owner`, `--skew`, `--mode pl|mod`, `--payload` (`builtin` = no hand-off, a name in `projects/st`, a path, or `all`; default `builtin,def15_AASHTO_G2`), `--quiet` (ms the project data must stay unchanged; default 8000), `--max-diffs` (values listed per section; default 25), `--out` (folder for the raw readouts; default `<tmp>/allstruct-tests/out`), `--wait` (page tool, ms), `--save-st [dir]` (gd: write B's per-girder payloads as `gd_<project>_<owner>_G<n>.json` to `projects/st` or `dir`), `--record-baseline FILE` (write A's section hashes per case), `--baseline FILE` (use those hashes as A; A is not run, so differing values are not listed: rerun with `--a <ref>` for them).
 
 A git ref is written with `git show` to `<tmp>/allstruct-tests/<sha>/` and opened from there (`file://`). Fetch first (`git fetch origin main`) so `origin/main` is current.
 
@@ -65,12 +76,17 @@ Each `same` case opens A (`--a`, default `origin/main`) and B (`--b`, default th
 
 For each case, one line per section with the hash of A and B and `same` or `DIFFERENT`, then for each different section the values that differ (path, A, B), then console errors, dialogs, blocked requests and how long the idle wait took. The exit code is 0 when every section is identical, 1 on a difference, 2 on an error (including console errors). Raw readouts (JSON) are saved in `--out`.
 
-Volatile values are normalized before comparing: ISO time stamps, millisecond time stamps under `ts`/`savedAt`/`producedAt`/`updatedAt`/`seenAt`-like keys, and the `file://` folder a page was opened from.
+Volatile values are normalized before comparing: ISO time stamps and dates (`2026-10-22`), local date/time text (`10/22/2026, 10:05:19 AM`), millisecond time stamps under `ts`/`savedAt`/`producedAt`/`updatedAt`/`seenAt`-like keys, the `file://` folder a page was opened from, and GirderDetail's file name (`Steel Bridge Beam Modules.html` and `Steel Bridge Design.html` both read `(GirderDetail file)`, so the rename of the merge compares equal).
+
+## Baselines (`baselines/`)
+
+`baselines/gd.json` (and `st.json`) hold the section hashes of every case of the standard matrix, recorded on `origin/main` (the commit is in each case's `a`) with `--record-baseline`. `--baseline FILE` compares B against them without running A. A case passes when every section hash is the same; the values are in the raw readouts of the recording run, not in the repository. Re-record after a change to the tool on main that is meant to change a result.
 
 ### Sections
 
-- **gd** (`Steel Bridge Beam Modules.html`): `gd.project` (GirderDetail project data without `ui`), `pl.project` (Preliminary sizing project data), `pl.checks` (every Preliminary sizing check item: location, status, ratio, cells), `pl.analysis` (envelopes, deflections, reactions per girder type), `mod.<id>` for df, sa, gs, cf, oh, fa, ts, sc, wt, bstf, splice (every check item after Get demands from Preliminary sizing for the detail modules), `sa.girder1` (Structural analysis of girder 1).
-- **st** (`stgirder.html`): `st.session` (the inputs after the hand-off was applied), `st.status`, `st.checks`, `st.rating`, `st.governing`, `st.sections`, `st.stations`.
+- **gd** (`Steel Bridge Beam Modules.html`): `gd.project` (GirderDetail project data without `ui`), `pl.project` (Preliminary sizing project data), `pl.checks` (every Preliminary sizing check item: location, status, ratio, cells), `pl.analysis` (envelopes, deflections, reactions per girder type), `gd.stPayloads` (the "Send to ST-Girder" payload of every girder, `gdStPayload(g, true)`), `mod.<id>` for df, sa, gs, cf, oh, fa, ts, sc, wt, bstf, splice (every check item after Get demands from Preliminary sizing for the detail modules), `rpt.<id>` (that module's calculation report as text lines, every section, every item worked: the Girder report options; plot images and MathJax rendering are not compared, the TeX source is), `sa.girder1` (Structural analysis of girder 1), `gd.dxf` (DXF export as built in the browser before Pyodide/ezdxf runs: the sheet list with scales, sheets not generated, title block cells, layers, entity count and a hash of every entity; and the R12 writer's sheet list, layers and entity count).
+- **st** (`stgirder.html`): `st.session` (the inputs after the hand-off was applied, or the built-in example), `st.status`, `st.checks`, `st.rating`, `st.governing`, `st.sections`, `st.stations`, `st.R` (the full computed state `computeAll(session)`, functions stripped), `st.tab.<tab>` (the visible text of every tab, as lines, once it stops changing), `st.report.all` (the Report tab with every section chip on and detail "every station tabulated").
+- **sbd** (merged tool vs `stgirder.html`): the **st** sections per girder, prefixed `G1 `, `G2 `, … B opens the case's project in the merged tool (as **gd**), then for each girder calls `window.gdStOpen(g)` (the "Design & Rating (ST-Girder)" view: sends `gdStPayload(g)` to the ST-Girder frame named `gd-st` by message and resolves with the payload once the frame applied it) and reads the frame. A opens `stgirder.html` once and applies the same payloads one after the other with `#gdpull` (G1, then G2, …, as the user does today with "Send to ST-Girder"). The time to open the ST view of each girder is printed (`B: ST view open … ms`).
 - **page**: `page.text`, `page.storage`.
 
 ## Waiting for GirderDetail to be idle
@@ -84,7 +100,8 @@ Opening a project can start automatic work: the bridge is published from Prelimi
 - `st/util_MassDOT_G2.json` (added 2026-10-15): the "Send to ST-Girder" payload of `gd/util.json`, girder G2, made by the branch claude/gd-st-utilities (GD54c): it carries `M_UT`/`V_UT`/`M_UF`/`V_UF` and `girderDetail.utilities`. Main's ST-Girder ignores the utility fields; the branch applies them (`--payload util_MassDOT_G2`).
 - `st/def15_AASHTO_G2_loads.json`, `st/util_MassDOT_G2_loads.json` (added 2026-10-19): the same two cases (built-in 15° under AASHTO, G2; `gd/util.json` under MassDOT, G2) sent by the branch claude/gd-stgirder-load-inputs (GDL): they also carry `girderDetail.loads`, the load inputs ST-Girder shows on its Inputs tab (display only). Main's ST-Girder ignores the field; every result is the same either way.
 - `st/def15_AASHTO_G2_gdx.json`, `st/util_MassDOT_G2_gdx.json` (added 2026-10-19): the same two cases sent by the branch claude/gd-stgirder-import-all (GDX): they also carry `girderDetail.details` (stiffeners, studs, fatigue). Updated 2026-10-19 by claude/gd-stgirder-gd70 (GD70): `details` now also has `rowsBy`, `supports` and `cyclesBy`, from which ST-Girder takes the governing d_o, bearing stiffener type, stud zone and n. ST-Girder takes the transferred inputs from them, so against a main older than GDX the constructibility, live load deflection, deck overhang, transverse stiffener, fatigue and stud fatigue checks differ (fixlog/stgirder.md GDX); the `_loads` payloads (loads, no details) change only the first three.
-- `st/*.json`: GirderDetail "Send to ST-Girder" payloads (`{ payload }`, channel `girderDemands`, HANDOFF.md §4.9), made by main at 4193ddc: built-in 15° under AASHTO, girder 2; built-in under RIDOT with η_I = yes, girder 2; xsA under RIDOT with η_I = yes, girder 1.
+- `st/gd_<project>_<owner>_G<n>.json` (added 2026-10-22, for the merge of GirderDetail and ST-Girder): the "Send to ST-Girder" payload of every girder of `builtin`, `builtin28`, `xsA`, `curb` and `util` under each owner (AASHTO, RIDOT, MassDOT, CTDOT), made by main at the commit in `baselines/gd.json` with `--save-st` (pedestrian load added to LL+IM, the checkbox default). `--tool st --payload all` runs them all.
+- `st/*.json` (the others): GirderDetail "Send to ST-Girder" payloads (`{ payload }`, channel `girderDemands`, HANDOFF.md §4.9), made by main at 4193ddc: built-in 15° under AASHTO, girder 2; built-in under RIDOT with η_I = yes, girder 2; xsA under RIDOT with η_I = yes, girder 1.
 
 None of these contain personal data; they are the tools' own examples.
 
