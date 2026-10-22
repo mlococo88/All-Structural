@@ -21140,3 +21140,59 @@ t_p 0.375 vs 0.4375 before that pass); the project's inputs and every result are
 
 **Open items:** ST-Girder's unused `LS_PROJ` / `LS_LAST` (inside `st-src`) are left for the cut-over PR, where `st-src` stops being a verbatim
 copy of stgirder.html.
+
+
+## 2026-10-22 — PR: claude/sbd-6-cutover (SBD6: merge of GirderDetail and ST-Girder, cut-over: stgirder.html removed (engineer decision), tools.html one card, docs, test kit; PR link added after merge)
+
+**No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed
+(ST-Girder's keys `stgirder.session`, `stgirder.ui.v1`, … stay: a session saved by the old file opens in the view). **Display changes:** help
+texts that named the old files (below); in `--tool gd`, section `rpt.sa` (the "Send to ST-Girder" note is printed in the Structural analysis report)
+re-recorded for every case; in `--tool st`, sections `st.tab.Report` and `st.report.all` re-recorded (since SBD3 the view shows the project title
+block; the st baseline was recorded on the stand-alone page). Results in the PR description.
+
+### SBD6-a. stgirder.html removed; tools.html one card   [cut-over]
+- `git rm stgirder.html`. Its code is the `st-src` block of this file (ST-Girder's only copy from now on); `fixlog/stgirder.md` has a retirement note.
+- `tools.html`, section Steel Bridge Design: the ST-Girder card (`<a class="card" href="stgirder.html" …>…</a>`) removed; the Steel Bridge Design
+  card's text: before "Includes PlateLine sizing and ST-Girder (Design &amp; Rating view).", after "Includes PlateLine sizing and ST-Girder: steel
+  plate girder design check and load rating (Design &amp; Rating view; stgirder.html was merged into it)."
+- Other tools keep recognising ST-Girder payloads by `producer` (index `capFromST`, lldf `isST`, Substructure Loading `isST`; their
+  `producerFile === 'stgirder.html'` alternative stays for payloads saved before). No other tool linked to the file.
+
+### SBD6-b. st-src: old file names, dead code   [text] [no result change]
+- `st-src` is no longer kept identical to a separate file (the HTML comment above it says so now: before "… Keep it identical to stgirder.html
+  (until that file is retired): copy the file in again rather than editing here.", after "… Edit ST-Girder here (keep the escaping; the shims in
+  ST_SHIMS must still find each anchor once)."; and its first line: "page source: stgirder.html stored verbatim, loaded into its frame by stShow()
+  (SBD1, 2026-10-22)" → "page source: ST-Girder's only copy since the cut-over (SBD6, 2026-10-22: stgirder.html removed; embedded since SBD1),
+  loaded into its frame by stShow()").
+- In `st-src` (ST-Girder's code):
+  - theme comment: "(copied from Steel Bridge Beam Modules.html, kept duplicated per CLAUDE.md §3)" → "(copied from GirderDetail, now the host page Steel Bridge Design.html, kept duplicated per CLAUDE.md §3)";
+  - `const LS_KEY='stgirder.session', LS_PROJ='stgirder.projects', LS_LAST='stgirder.lastproj';` → `const LS_KEY='stgirder.session';   // SBD6: the unused LS_PROJ ('stgirder.projects') and LS_LAST ('stgirder.lastproj') removed`
+    (neither name was used anywhere; the keys were never written);
+  - `importJSON` refusal text, `pullGD` "Nothing has been sent yet" text, the Pull from GirderDetail button title: "GirderDetail (Steel Bridge Beam Modules.html, …" → "GirderDetail (Steel Bridge Design.html, …" (three places).
+- Host texts: the Structural analysis note under Send to ST-Girder (also printed in its report, 2.5): before "… there, any girder can be loaded with
+  its girder selector. stgirder.html opened on its own can still use Pull from GirderDetail (same browser, same folder, Chrome or Edge) or the Export
+  hand-off (JSON) file with its Import.", after "… there, any girder can be loaded with its girder selector, and the Export hand-off (JSON) file loads
+  with ST-Girder's Import."; the message after Send to ST-Girder without opening the view: "… or click "Pull from GirderDetail" in stgirder.html." →
+  "… or click "Pull from GirderDetail" in it."; comments that named stgirder.html updated (SBD1 block, stSend, stLoad, sbdStLoad, SBD3 block).
+- **Check case:** Structural analysis, the Send to ST-Girder note ends "… and the Export hand-off (JSON) file loads with ST-Girder's Import."; the
+  view's Pull button title names "Steel Bridge Design.html"; every ST-Girder result as before (`--tool st`, `--tool sbd`).
+
+### SBD6-c. Test kit   [tests]
+- `tests/compare.mjs`: `--tool st` defaults to `Steel Bridge Design.html` and reads ST-Girder in its frame (`stRunFrame`: open the tool, wait until
+  idle, show the view, apply the payload with `stSend` (the same `gdAdopt` path), read the frame `gd-st`); a stand-alone `stgirder.html` given
+  with `--a`/`--b` (a ref) is still read as a page. `--tool sbd` compares with the last `stgirder.html` in the repository history by default.
+- `tests/README.md`: the st / sbd descriptions and examples; check-syntax example without stgirder.html.
+- `tests/st-span.mjs` (interior spans, added on main during this work): `--target` defaults to `sbd` (the frame) when `stgirder.html` is not in the
+  working tree. Its baseline `st_interior.json` (recorded on stgirder.html) is not re-recorded here: in frame mode its `st.tab.Report` and
+  `st.report.all` differ by the title block only (checked on 3 payloads × spans 2, 3); every other section is identical. Open item below.
+- `tests/baselines/gd.json` (`rpt.sa`, every case) and `tests/baselines/st.json` (`st.tab.Report`, `st.report.all`, every case) re-recorded from this
+  branch (display only, above).
+
+### SBD6-d. Documents
+- `HANDOFF.md` (§1 table, the rename and disconnect notes, §4.9: live link / title block / report / project file, cut-over), `AUDIT.md` (inventory
+  row, links, steel I-girder row, §3.12 note), `PENDING.md` (merge item: done; what stays open), `docs/AGENT_BRIEF.md` (check-syntax note),
+  `fixlog/stgirder.md` (retirement note).
+
+**Open items:** `tests/baselines/st_interior.json`: re-record `st.tab.Report` and `st.report.all` from the frame (`st-span.mjs --target sbd`) at the next
+full st-span run (display only, above). `CLAUDE.md` §3 ("Since 2026-10-22, `stgirder.html` is also embedded verbatim …") and §7 (file names other tools link to, including
+`stgirder.html`) now describe the file as it was; CLAUDE.md is the engineer's rule file and was not changed by this PR. Suggested text in the PR.

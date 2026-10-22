@@ -7832,9 +7832,9 @@ setTimeout(renderUndo, 0);
 </body>
 </html>
 </script>
-<!-- Design & Rating (ST-Girder) page source: stgirder.html stored verbatim, loaded into its frame by stShow() (SBD1, 2026-10-22). Same
+<!-- Design & Rating (ST-Girder) page source: ST-Girder's only copy since the cut-over (SBD6, 2026-10-22: stgirder.html removed; embedded since SBD1), loaded into its frame by stShow(). Same
      escaping rule as pl-src (see plSrc): inside this block a closing script tag is written with a backslash after the "<", and so is the
-     opener of an HTML comment. Keep it identical to stgirder.html (until that file is retired): copy the file in again rather than editing here. -->
+     opener of an HTML comment. Edit ST-Girder here (keep the escaping; the shims in ST_SHIMS must still find each anchor once). -->
 <script type="text/plain" id="st-src"><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7850,7 +7850,7 @@ setTimeout(renderUndo, 0);
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"><\/script>
 <style>
-/* Theme: GirderDetail "calc-pad" look (copied from Steel Bridge Beam Modules.html, kept duplicated per CLAUDE.md §3).
+/* Theme: GirderDetail "calc-pad" look (copied from GirderDetail, now the host page Steel Bridge Design.html, kept duplicated per CLAUDE.md §3).
    The ST-Girder token names (--paper, --ink, --ink2, --line ...) are kept because inline styles use them;
    their values now follow GirderDetail. Display only: no computation reads these. */
 :root{
@@ -12743,7 +12743,7 @@ function StubTab({phase,title,items}){
 }
 
 /* ================= PROJECT STORAGE ================= */
-const LS_KEY='stgirder.session', LS_PROJ='stgirder.projects', LS_LAST='stgirder.lastproj';
+const LS_KEY='stgirder.session';   // SBD6: the unused LS_PROJ ('stgirder.projects') and LS_LAST ('stgirder.lastproj') removed
 const UI_KEY='stgirder.ui.v1';
 /* Persistent UI-preference store, kept apart from the session/design data. View
    state a tab holds locally -- e.g. the Diagrams span view -- lives here so it
@@ -12949,7 +12949,7 @@ function App(){
       // Any other demands file (MCT Generator / MIDAS, PS-Beam or steel-beam envelope) is refused (DISC, engineer decision 2026-10-19).
       if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'||Array.isArray(p.stations)){
         alert('ST-Girder now takes demands only from GirderDetail; this file is from '+(p.producer||p.generatedBy||'another tool (MCT Generator / MIDAS)')+' and was not loaded. Nothing was changed.\n\n'
-          +'Send the girder from GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder) and use "Pull from GirderDetail", or import its "Export hand-off (JSON)" file. Without GirderDetail demands ST-Girder uses its built-in simple-span analysis.');
+          +'Send the girder from GirderDetail (Steel Bridge Design.html, Structural analysis: Send to ST-Girder) and use "Pull from GirderDetail", or import its "Export hand-off (JSON)" file. Without GirderDetail demands ST-Girder uses its built-in simple-span analysis.');
         return;
       }
       // An ST-Girder JSON file (Export JSON): data that came from the MCT Generator or LL & DL is cleared, as on open, and listed.
@@ -13045,7 +13045,7 @@ function App(){
   const pullGD=()=>{
     if(!window.BridgeXfer){ alert('The hand-off helper is not available in this browser.'); return; }
     const r=BridgeXfer.read(GD_CH,GD_SCHEMA,1);
-    if(r.error){ alert(r.empty?'Nothing has been sent yet. In GirderDetail (Steel Bridge Beam Modules.html), Structural analysis, click "Send to ST-Girder"; or save its "Export hand-off (JSON)" file and use Import here.':'Cannot use the GirderDetail hand-off: '+r.error); return; }
+    if(r.error){ alert(r.empty?'Nothing has been sent yet. In GirderDetail (Steel Bridge Design.html), Structural analysis, click "Send to ST-Girder"; or save its "Export hand-off (JSON)" file and use Import here.':'Cannot use the GirderDetail hand-off: '+r.error); return; }
     if(!extFromGD(r.payload)){ alert('The hand-off on this channel is not from GirderDetail.'); return; }
     gdAdopt(r.payload,'shared browser storage'); };
   /* OD1 (2026-10-13): GirderDetail's "Send to ST-Girder" can open this app in a new tab as stgirder.html#gdpull=<producedAt>.
@@ -13117,7 +13117,7 @@ function App(){
           <button className="btn sm ghost" onClick={undo} disabled={!undoStack.current.length} style={!undoStack.current.length?{opacity:.4}:{}}>↶ Undo</button>
           <button className="btn sm ghost" onClick={redo} disabled={!redoStack.current.length} style={!redoStack.current.length?{opacity:.4}:{}}>↷ Redo</button>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-          <button className="btn sm ghost" onClick={pullGD} title="Load the forces, plates and design inputs of one girder sent by GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder). Its hand-off file loads with Import.">⇩ Pull from GirderDetail{gdNew&&<span style={{color:'#ea580c'}}> ●</span>}</button>
+          <button className="btn sm ghost" onClick={pullGD} title="Load the forces, plates and design inputs of one girder sent by GirderDetail (Steel Bridge Design.html, Structural analysis: Send to ST-Girder). Its hand-off file loads with Import.">⇩ Pull from GirderDetail{gdNew&&<span style={{color:'#ea580c'}}> ●</span>}</button>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           <button className="btn sm" onClick={exportJSON}>Export JSON</button>
           <button className="btn sm" onClick={()=>fileRef.current.click()}>Import</button>
@@ -18060,7 +18060,7 @@ function gdStUi() {
   return `<div class="full" id="gd-st-box"><div class="ig"><label for="gd-st-g">Girder to send</label><select id="gd-st-g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}"${i + 1 === g0 ? ' selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
     <div class="ck-row"><input type="checkbox" id="gd-st-pl" checked><label for="gd-st-pl">Add the pedestrian load (when there is one) to LL+IM, as this tool does for its own design demands</label></div>
     <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (Pull from GirderDetail). Then offers to open the Design &amp; Rating (ST-Girder) view with this girder loaded">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
-    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears, and the MassDOT utilities as their own loads when there are any) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances (with the bridge owner's load rules, sent with the demands) and does not apply distribution factors again. After sending you can open the Design &amp; Rating (ST-Girder) view (Girder group of the module tabs) with this girder loaded; there, any girder can be loaded with its girder selector. stgirder.html opened on its own can still use Pull from GirderDetail (same browser, same folder, Chrome or Edge) or the Export hand-off (JSON) file with its Import.</p></div>`;
+    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears, and the MassDOT utilities as their own loads when there are any) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances (with the bridge owner's load rules, sent with the demands) and does not apply distribution factors again. After sending you can open the Design &amp; Rating (ST-Girder) view (Girder group of the module tabs) with this girder loaded; there, any girder can be loaded with its girder selector, and the Export hand-off (JSON) file loads with ST-Girder's Import.</p></div>`;
 }
 /* GDL (engineer request 2026-10-19; HANDOFF.md 4.9): the load INPUTS behind this girder's forces, optional field girderDetail.loads, so ST-Girder can show
    them on its Inputs tab in place of its own. Display data only: read from the same run R (GM.sa.compute) and its LLDF and DLs dead loads (R.DF.dead); every
@@ -18202,10 +18202,10 @@ document.addEventListener('click', e => { const t = e.target.closest && e.target
   if (w.error) { alert(`Could not send to ST-Girder: ${w.error}\n\nUse "Export hand-off (JSON)" and ST-Girder's Import instead.`); return; }
   const sent = `${r.payload.member.key} sent to ST-Girder (${r.payload.stations.length} stations).`, id = w.payload && w.payload.producedAt;
   // OD1 (2026-10-13), SBD1 (2026-10-22): offer to open the Design & Rating (ST-Girder) view with this girder loaded (was: stgirder.html in a new tab
-  // with #gdpull; the view's frame applies the same payload through the same gdAdopt path). The channel keeps the hand-off for stgirder.html's Pull.
+  // with #gdpull; the view's frame applies the same payload through the same gdAdopt path). The channel keeps the hand-off for ST-Girder's Pull (SBD6).
   if (id && confirm(`${sent}\n\nOpen Design & Rating (ST-Girder) now with this girder loaded? This replaces ST-Girder's current girder inputs (plates, materials, deck, bracing, skew, forces); Undo in ST-Girder restores them.`)) {
     const cpl = document.getElementById('gd-st-pl'); stSend(w.payload, cpl ? cpl.checked : true).catch(er => alert(`Could not load the girder into ST-Girder: ${er.message}`)); return; }
-  flash(`${sent} Open Design & Rating (ST-Girder) and load the girder there, or click "Pull from GirderDetail" in stgirder.html.`); });
+  flash(`${sent} Open Design & Rating (ST-Girder) and load the girder there, or click "Pull from GirderDetail" in it.`); });   // SBD6: stgirder.html removed
 /* ---------- Hand-off: "Send reactions to Substructure Loading" (HANDOFF.md §4.4, channel bridgeSuite.v1.superReactions, _schema bridge-super-reactions) ----------
    SRX (engineer decision 2026-10-19: steel girder reactions for Bridge Substructure Loading come from GirderDetail; ST-Girder no longer sends them).
    On click only: runs this module's analysis (GM.sa.compute, the same model settings) once for every girder G1…Gn and sends each girder's
@@ -20695,7 +20695,7 @@ function sbdPlLoad(f) { const d = f.data, name = f.name || '';
   try { if (PL_FRAME && PL_FRAME.dataset.up && PL_FRAME.contentWindow.loadData) { PL_FRAME.contentWindow.loadData(d, name); return; } } catch (e) { }
   try { localStorage.setItem('plateline_autosave_v1', JSON.stringify({ data: d, name, ts: Date.now() })); } catch (e) { }
   if (PL_FRAME) { PL_FRAME.remove(); PL_FRAME = null; GD_PLUP = 0; } plEnsure(); }
-// ST-Girder's part: its session key, then the view's frame is built again (it opens with that session, as stgirder.html would)
+// ST-Girder's part: its session key, then the view's frame is built again (it opens with that session)
 function sbdStLoad(inp) { const o = { ...inp }; delete o._schema;
   if (ST_FRAME) { ST_FRAME.remove(); ST_FRAME = null; ST_READY = false; ST_Q.length = 0; ST_STATE = null; ST_TBK = null; ST_APXCSS = null; ST_FP = null; }
   try { localStorage.setItem('stgirder.session', JSON.stringify(o)); } catch (e) { }
@@ -21262,7 +21262,7 @@ function plShow(bg) {
 }
 window.addEventListener('resize', () => { if (P && P.mod === 'pl') $('#pl-wrap').style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px'; });
 /* ---------- Design & Rating (ST-Girder), embedded (SBD1, 2026-10-22; merge of GirderDetail and ST-Girder, PR 1) ----------
-   ST-Girder (stgirder.html) is stored verbatim as plain text in <script type="text/plain" id="st-src"> (same escaping rule as pl-src, plSrc)
+   ST-Girder is stored as plain text in <script type="text/plain" id="st-src"> (same escaping rule as pl-src, plSrc); since the cut-over (SBD6) it is its only copy (stgirder.html removed)
    and loaded on first use into a srcdoc frame named "gd-st" (ST_FRAME), shown by the module tab "Design & Rating (ST-Girder)" in the Girder
    group. The view is not a module: P.mod and the saved project do not change when it is shown (body class mod-st only). A srcdoc frame has this
    page's origin, so ST-Girder reads and writes its own saved keys (stgirder.session, stgirder.ui.v1, stgirder.inputTab.v1, ...) exactly as the
@@ -21282,7 +21282,7 @@ const ST_SHIMS = [
   ["var h=String(location.href||'').split('#')[0].split('?')[0];", "var h=String((window.GD_ST_HOST&&GD_ST_HOST.href)||location.href||'').split('#')[0].split('?')[0];"],
   ["p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));", "p.producerFile = p.producerFile || producerFile || (window.GD_ST_HOST&&GD_ST_HOST.file) || decodeURIComponent((location.pathname.split('/').pop()||''));"],
   ["gdAdopt(r.payload,'opened from GirderDetail',true); },[gdPullReq]);", `gdAdopt(r.payload,'opened from GirderDetail',true); },[gdPullReq]);
-  /* SBD1 shim (added by Steel Bridge Design when it loads ST-Girder into its frame; not in stgirder.html): the hand-off by message from the host page */
+  /* SBD1 shim (added by Steel Bridge Design when it loads ST-Girder into its frame; not in st-src): the hand-off by message from the host page */
   const gdAdoptRef=useRef(null); gdAdoptRef.current=gdAdopt;
   const gdHostQ=useRef(null);
   useEffect(()=>{ const H=window.GD_ST_HOST; if(!H||!H.embedded||window.parent===window) return;
@@ -21372,14 +21372,14 @@ function stBar() {
 }
 // send one girder's hand-off (already built and published) to the frame; resolves with the payload once ST-Girder has applied it
 function stSend(pay, addPL, quiet) {   // quiet (SBD3): load without showing the view (Girder report)
-  pay = JSON.parse(JSON.stringify(pay));   // exactly what a reader of the shared channel gets (stgirder.html's #gdpull path reads it back from storage)
+  pay = JSON.parse(JSON.stringify(pay));   // exactly what a reader of the shared channel gets (the #gdpull path read it back from storage)
   const g = pay.girderDetail && pay.girderDetail.girder; if (g) { P.ui.stG = g; P.ui.stPL = addPL !== false; autosave(); }   // SBD2: remembered per project
   if (quiet) stEnsure(); else stShow(); if (!ST_FRAME) return Promise.reject(new Error('the ST-Girder frame is not available'));
   const sel = $('#st-g'), cpl = $('#st-pl'); if (sel && g) sel.value = String(g); if (cpl && g) cpl.checked = addPL !== false;
   const id = ++ST_N; stMsg(`Loading ${pay.member.key} into ST-Girder…`);
   return new Promise((res, rej) => { ST_WAIT.set(id, { res, rej, payload: pay }); stPost({ type: 'gd-st-pull', id, payload: pay }); });
 }
-// build girder g's hand-off (gdStPayload, as Send to ST-Girder), write it to the shared channel as before (stgirder.html's Pull still works), send it
+// build girder g's hand-off (gdStPayload, as Send to ST-Girder), write it to the shared channel as before (ST-Girder's Pull reads it), send it
 function stLoad(g, addPL) {
   const r = gdStPayload(g, addPL); if (r.error) return Promise.reject(new Error(`Structural analysis: ${r.error}`));
   let pay = r.payload; try { const w = window.BridgeXfer ? BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file) : null; if (w && w.payload) pay = w.payload; } catch (e) { }
@@ -21471,7 +21471,7 @@ function stDaHtml() {
 /* ---------- Design & Rating (ST-Girder): one title block, one report (SBD3, 2026-10-22; merge of GirderDetail and ST-Girder, PR 3) ----------
    Title block: the project title block P.tb goes to the frame ({ type: 'gd-st-tb', tb }, after every saved change when it differs, and when the
    view opens); ST-Girder shows it read-only in place of its own Project, Job No., By, Date, Checked by and Check date, on the page, on its Report
-   tab and in its printed header (stTbInp, SBD3 shim). ST-Girder's saved fields (inp.proj) are not changed; stgirder.html opened on its own shows them.
+   tab and in its printed header (stTbInp, SBD3 shim). ST-Girder's saved fields (inp.proj) are not changed.
    Report: ST-Girder's calculation report (its CalcDoc, the sections chosen on its Report tab) is taken from the frame as HTML (gdStReportHtml, SBD3
    shim) and placed (a) in the Girder report as a chapter (Design & Rating (ST-Girder)), numbered inside the chapter as every other chapter, ids
    prefixed per chapter, and (b) in a module's Print report as Appendix A, its sections numbered A.1, A.1.1 … and its "see §n.k" links reading
