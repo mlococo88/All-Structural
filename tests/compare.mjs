@@ -226,40 +226,49 @@ if (!RUN && TOOL !== 'sbd') { console.error('unknown --tool ' + TOOL + ' (gd, st
 if (BASE && TOOL === 'sbd') { console.error('--baseline does not apply to --tool sbd (A is stgirder.html)'); process.exit(2); }
 const baseline = BASE ? JSON.parse(fs.readFileSync(BASE, 'utf8')) : null;
 const record = REC ? (fs.existsSync(REC) ? JSON.parse(fs.readFileSync(REC, 'utf8')) : { tool: TOOL, cases: {} }) : null;
-
-console.log(`A: ${A.label}\nB: ${B.label}\ntool: ${TOOL}   readouts saved in ${OUT}\n`);
+// --jobs N (default: the number of CPUs): cases run N at a time, each in its own browsers; each case's report is printed whole, in case order
+const JOBS = Math.max(1, Math.round(+(args.jobs || os.cpus().length)) || 1);
+console.log(`A: ${A.label}\nB: ${B.label}\ntool: ${TOOL}   readouts saved in ${OUT}   jobs: ${Math.min(JOBS, cases.length)}\n`);
 let differ = false, failed = false;
-for (const c of cases) {
-  const t0 = Date.now();
+async function runCase(c) {
+  const out = [], log = t => out.push(t), t0 = Date.now(); let cd = false, cf = false, rec = null;
   let ra, rb;
   try {
     if (TOOL === 'sbd') { rb = await sbdRunB(B, c); ra = await sbdRunA(A, rb.pays); delete rb.pays; }
     else if (BASE) { rb = await RUN(B, c); const bc = baseline.cases[c.name]; if (!bc) throw new Error('case not in the baseline'); ra = { R: null, H: bc.sections, errs: [], dialogs: [], blocked: [], idle: [] }; }
     else [ra, rb] = await Promise.all([RUN(A, c), RUN(B, c)]);
-  } catch (e) { console.log(`== ${c.name}: ERROR ${e.message}`); failed = true; continue; }
+  } catch (e) { log(`== ${c.name}: ERROR ${e.message}`); return { out, differ: false, failed: true, rec }; }
   if (ra.R) ra.R = normalize(ra.R); rb.R = normalize(rb.R);
   const tag = c.name.replace(/[^A-Za-z0-9_.-]+/g, '_');
   if (ra.R) fs.writeFileSync(path.join(OUT, tag + '.A.json'), JSON.stringify(ra)); fs.writeFileSync(path.join(OUT, tag + '.B.json'), JSON.stringify(rb));
-  console.log(`== ${c.name}   (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+  log(`== ${c.name}   (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
   const HA = ra.H || Object.fromEntries(Object.keys(ra.R).map(s => [s, hash(ra.R[s] ?? null)]));
   const secs = [...new Set([...Object.keys(HA), ...Object.keys(rb.R)])], dl = [];
   for (const s of secs) {
     const ha = HA[s] || hash(null), hb = hash(rb.R[s] ?? null), same = ha === hb;
-    console.log(`  ${s.padEnd(14)} ${ha}  ${hb}  ${same ? 'same' : 'DIFFERENT'}`);
-    if (!same) { differ = true; if (ra.R) dl.push([s, diff(ra.R[s] ?? null, rb.R[s] ?? null)]); }
+    log(`  ${s.padEnd(14)} ${ha}  ${hb}  ${same ? 'same' : 'DIFFERENT'}`);
+    if (!same) { cd = true; if (ra.R) dl.push([s, diff(ra.R[s] ?? null, rb.R[s] ?? null)]); }
   }
-  if (!ra.R && differ) console.log('  (the baseline stores hashes only: run with --a <git ref> to list the values that differ)');
+  if (!ra.R && cd) log('  (the baseline stores hashes only: run with --a <git ref> to list the values that differ)');
   for (const [s, d] of dl) {
-    console.log(`  -- ${s}: ${d.length} value${d.length === 1 ? '' : 's'} differ${d.length > MAXD ? ` (first ${MAXD})` : ''}`);
-    for (const [k, a, b2] of d.slice(0, MAXD)) console.log(`     ${k}:  A ${JSON.stringify(a)?.slice(0, 140)}  |  B ${JSON.stringify(b2)?.slice(0, 140)}`);
+    log(`  -- ${s}: ${d.length} value${d.length === 1 ? '' : 's'} differ${d.length > MAXD ? ` (first ${MAXD})` : ''}`);
+    for (const [k, a, b2] of d.slice(0, MAXD)) log(`     ${k}:  A ${JSON.stringify(a)?.slice(0, 140)}  |  B ${JSON.stringify(b2)?.slice(0, 140)}`);
   }
   for (const [lab, r] of [['A', ra], ['B', rb]]) {
-    console.log(`  ${lab}: console errors ${r.errs.length}${r.errs.length ? ' ' + JSON.stringify(r.errs.slice(0, 3)) : ''}, dialogs ${r.dialogs.length}${r.dialogs.length ? ' ' + JSON.stringify(r.dialogs.slice(0, 2)) : ''}${r.blocked.length ? `, blocked ${r.blocked.length} (${r.blocked.slice(0, 2).join(', ')})` : ''}${r.idle.length ? ', idle: ' + r.idle[0] + (r.idle.length > 1 ? ` (+${r.idle.length - 1} waits)` : '') : ''}`);
-    if (r.errs.length) failed = true;
+    log(`  ${lab}: console errors ${r.errs.length}${r.errs.length ? ' ' + JSON.stringify(r.errs.slice(0, 3)) : ''}, dialogs ${r.dialogs.length}${r.dialogs.length ? ' ' + JSON.stringify(r.dialogs.slice(0, 2)) : ''}${r.blocked.length ? `, blocked ${r.blocked.length} (${r.blocked.slice(0, 2).join(', ')})` : ''}${r.idle.length ? ', idle: ' + r.idle[0] + (r.idle.length > 1 ? ` (+${r.idle.length - 1} waits)` : '') : ''}`);
+    if (r.errs.length) cf = true;
   }
-  if (TOOL === 'sbd' && rb.idle.length) console.log('  B: ' + rb.idle[rb.idle.length - 1]);
-  // --record-baseline FILE: keep A's section hashes (A = origin/main by default) for later runs with --baseline FILE
-  if (record && ra.R) { record.cases[c.name] = { a: A.label, sections: HA }; record.recorded = new Date().toISOString().slice(0, 10); fs.writeFileSync(REC, JSON.stringify(record, null, 1) + '\n'); }
+  if (TOOL === 'sbd' && rb.idle.length) log('  B: ' + rb.idle[rb.idle.length - 1]);
+  if (record && ra.R) rec = { a: A.label, sections: HA };
+  return { out, differ: cd, failed: cf, rec };
 }
+// a pool of JOBS workers over the cases; each result is printed (and recorded) in case order as soon as the cases before it are done
+const res = new Array(cases.length); let next = 0, shown = 0;
+function flush() {
+  while (shown < cases.length && res[shown]) { const r = res[shown], c = cases[shown++];
+    console.log(r.out.join('\n')); if (r.differ) differ = true; if (r.failed) failed = true;
+    // --record-baseline FILE: keep A's section hashes (A = origin/main by default) for later runs with --baseline FILE
+    if (record && r.rec) { record.cases[c.name] = r.rec; record.recorded = new Date().toISOString().slice(0, 10); fs.writeFileSync(REC, JSON.stringify(record, null, 1) + '\n'); } } }
+await Promise.all([...Array(Math.min(JOBS, cases.length))].map(async () => { while (next < cases.length) { const i = next++; res[i] = await runCase(cases[i]); flush(); } }));
 console.log(differ ? '\nRESULT: differences found' : failed ? '\nRESULT: identical results, but errors (see above)' : '\nRESULT: all sections identical');
 process.exit(differ ? 1 : failed ? 2 : 0);

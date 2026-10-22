@@ -2,7 +2,7 @@
  "tool": "gd",
  "cases": {
   "builtin / AASHTO": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "fad66a99b103",
     "pl.project": "6f839df755d7",
@@ -12,7 +12,7 @@
     "mod.df": "c607b04eb133",
     "rpt.df": "62fab35e5ce5",
     "mod.sa": "eed71e4ccbc7",
-    "rpt.sa": "177e04a54258",
+    "rpt.sa": "8f93d70e8707",
     "mod.gs": "2b7518ce1aec",
     "rpt.gs": "262c645cdcaa",
     "mod.cf": "91304433d375",
@@ -36,7 +36,7 @@
    }
   },
   "builtin / RIDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "02bb53abce82",
     "pl.project": "2cb1fe9e52d0",
@@ -46,7 +46,7 @@
     "mod.df": "a8a522fd81ff",
     "rpt.df": "12a668d156ac",
     "mod.sa": "483306fd38cf",
-    "rpt.sa": "e98d6cd9c16b",
+    "rpt.sa": "0f7bfb7eab83",
     "mod.gs": "b1ca6261da1f",
     "rpt.gs": "94927f3ce702",
     "mod.cf": "151243811fd2",
@@ -70,7 +70,7 @@
    }
   },
   "builtin / MassDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "e5af8eb9c616",
     "pl.project": "3e6e501a0459",
@@ -80,7 +80,7 @@
     "mod.df": "9a4ff48cef9a",
     "rpt.df": "864ed9835692",
     "mod.sa": "ab11f4a2b70b",
-    "rpt.sa": "784229d8c2e1",
+    "rpt.sa": "6954a9e14505",
     "mod.gs": "035a67c4953a",
     "rpt.gs": "82364cba1efb",
     "mod.cf": "91304433d375",
@@ -104,7 +104,7 @@
    }
   },
   "builtin / CTDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "3eecdcf7a33a",
     "pl.project": "03e9ea7f6941",
@@ -114,7 +114,7 @@
     "mod.df": "c607b04eb133",
     "rpt.df": "d0e438dca18b",
     "mod.sa": "c5373fe27183",
-    "rpt.sa": "6bb0f08091aa",
+    "rpt.sa": "c96fbdfae186",
     "mod.gs": "5d6257de2447",
     "rpt.gs": "77d905ef4b8d",
     "mod.cf": "731ac0d10f0f",
@@ -138,7 +138,7 @@
    }
   },
   "builtin28 / AASHTO": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "c05953f2a93f",
     "pl.project": "0e6a3f52f9c3",
@@ -148,7 +148,7 @@
     "mod.df": "2b18fc763def",
     "rpt.df": "7c1a6f44dcff",
     "mod.sa": "ab1bf761ba22",
-    "rpt.sa": "88f33c35bc08",
+    "rpt.sa": "b77f7f6fff37",
     "mod.gs": "e6276959642d",
     "rpt.gs": "389cf00e2ba7",
     "mod.cf": "39ec84c12a7c",
@@ -172,7 +172,7 @@
    }
   },
   "builtin28 / RIDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "c211def4cf0b",
     "pl.project": "538c7744720c",
@@ -182,7 +182,7 @@
     "mod.df": "c2f0490647ca",
     "rpt.df": "51d5dee03026",
     "mod.sa": "3eb6368abd33",
-    "rpt.sa": "3f0b2f2978d8",
+    "rpt.sa": "f607473fc6f2",
     "mod.gs": "13b982c8f7b3",
     "rpt.gs": "96bfffa36da8",
     "mod.cf": "fa3784fe571c",
@@ -206,7 +206,7 @@
    }
   },
   "builtin28 / MassDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "09c27ff765dc",
     "pl.project": "706101e3e5d1",
@@ -216,7 +216,7 @@
     "mod.df": "f53de9fdedf0",
     "rpt.df": "438552f34827",
     "mod.sa": "e4af9253f053",
-    "rpt.sa": "b2a4eab4f614",
+    "rpt.sa": "5ee616f8b7bd",
     "mod.gs": "86d1aea80336",
     "rpt.gs": "0db7e09f3391",
     "mod.cf": "39ec84c12a7c",
@@ -240,7 +240,7 @@
    }
   },
   "builtin28 / CTDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "2eb9e0dc7c7a",
     "pl.project": "ed4a5a5581e8",
@@ -250,7 +250,7 @@
     "mod.df": "2b18fc763def",
     "rpt.df": "7dfa9ea76ddb",
     "mod.sa": "462867440682",
-    "rpt.sa": "c5b0ebd44113",
+    "rpt.sa": "e1ad6e065f10",
     "mod.gs": "ad9710aa50ca",
     "rpt.gs": "60cc999f531d",
     "mod.cf": "a45cb426b623",
@@ -274,7 +274,7 @@
    }
   },
   "xsA / AASHTO": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "4fa65d13a256",
     "pl.project": "608cedf1d332",
@@ -284,7 +284,7 @@
     "mod.df": "f3f03276fb01",
     "rpt.df": "aafa3c9822cf",
     "mod.sa": "04c4ebe1ae64",
-    "rpt.sa": "897493adcbf6",
+    "rpt.sa": "d9e9f1c268c9",
     "mod.gs": "91dc5080c138",
     "rpt.gs": "6554eca478a0",
     "mod.cf": "91304433d375",
@@ -308,7 +308,7 @@
    }
   },
   "xsA / RIDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "9dd09487ab66",
     "pl.project": "518c8e9528b1",
@@ -318,7 +318,7 @@
     "mod.df": "440ab9af6fff",
     "rpt.df": "e8df92538af7",
     "mod.sa": "5fdd87aba2ac",
-    "rpt.sa": "5817213721fe",
+    "rpt.sa": "cacee419f78e",
     "mod.gs": "e205d6050742",
     "rpt.gs": "e43326e36315",
     "mod.cf": "151243811fd2",
@@ -342,7 +342,7 @@
    }
   },
   "xsA / MassDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "b034cd8ddf04",
     "pl.project": "5a8ed775edeb",
@@ -352,7 +352,7 @@
     "mod.df": "2c29ebf53dde",
     "rpt.df": "7ddeef0650dc",
     "mod.sa": "247123e7c6cd",
-    "rpt.sa": "730a4a2d20a4",
+    "rpt.sa": "9fe990c7c351",
     "mod.gs": "dc495f9621d0",
     "rpt.gs": "72412b53acf4",
     "mod.cf": "91304433d375",
@@ -376,7 +376,7 @@
    }
   },
   "xsA / CTDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "5e0c76c63c7c",
     "pl.project": "281e914b65ed",
@@ -386,7 +386,7 @@
     "mod.df": "f3f03276fb01",
     "rpt.df": "4c4110bff2ec",
     "mod.sa": "43a0864e474c",
-    "rpt.sa": "8db9e648daca",
+    "rpt.sa": "72e04ae2b5f6",
     "mod.gs": "4c70265efcf5",
     "rpt.gs": "81e37249ff83",
     "mod.cf": "731ac0d10f0f",
@@ -410,7 +410,7 @@
    }
   },
   "curb / AASHTO": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "c9aae7965730",
     "pl.project": "2dea4035e32a",
@@ -420,7 +420,7 @@
     "mod.df": "4dfd1f9deae2",
     "rpt.df": "5a6619d1d2ea",
     "mod.sa": "d6a7f8d09ce7",
-    "rpt.sa": "c9bd5d31db6a",
+    "rpt.sa": "04a0c76e04e9",
     "mod.gs": "6f17165abc89",
     "rpt.gs": "2691fb0c7341",
     "mod.cf": "91304433d375",
@@ -444,7 +444,7 @@
    }
   },
   "curb / RIDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "08f6d0ecb491",
     "pl.project": "111bddf97373",
@@ -454,7 +454,7 @@
     "mod.df": "26acc5d46d53",
     "rpt.df": "e5114b3bf5bb",
     "mod.sa": "936b678dd89e",
-    "rpt.sa": "03e32a55a8f4",
+    "rpt.sa": "b3f5acd02b0c",
     "mod.gs": "d930c7fefed7",
     "rpt.gs": "f7da882cc4f5",
     "mod.cf": "151243811fd2",
@@ -478,7 +478,7 @@
    }
   },
   "curb / MassDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "2c0316fbd541",
     "pl.project": "d548e05fa04c",
@@ -488,7 +488,7 @@
     "mod.df": "060126897b17",
     "rpt.df": "3e6a6dd0e77a",
     "mod.sa": "672999b87d76",
-    "rpt.sa": "d6898f54c9a4",
+    "rpt.sa": "3bf02d938365",
     "mod.gs": "df10c572cece",
     "rpt.gs": "dab41d9e7d90",
     "mod.cf": "91304433d375",
@@ -512,7 +512,7 @@
    }
   },
   "curb / CTDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "7829f8636685",
     "pl.project": "b6b1aa709943",
@@ -522,7 +522,7 @@
     "mod.df": "4dfd1f9deae2",
     "rpt.df": "0ab61453f6eb",
     "mod.sa": "e77a06a24ae3",
-    "rpt.sa": "ccee1739803d",
+    "rpt.sa": "4ebf76fb0ef3",
     "mod.gs": "57b9eb9a4a4d",
     "rpt.gs": "7f590fc2b958",
     "mod.cf": "731ac0d10f0f",
@@ -546,7 +546,7 @@
    }
   },
   "util / AASHTO": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "17b105624f94",
     "pl.project": "671586fad8ab",
@@ -556,7 +556,7 @@
     "mod.df": "c607b04eb133",
     "rpt.df": "174849a5bc08",
     "mod.sa": "eed71e4ccbc7",
-    "rpt.sa": "177e04a54258",
+    "rpt.sa": "8f93d70e8707",
     "mod.gs": "60aa913416e3",
     "rpt.gs": "74ebdd5f2653",
     "mod.cf": "91304433d375",
@@ -580,7 +580,7 @@
    }
   },
   "util / RIDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "31c430275acd",
     "pl.project": "780e76a278a0",
@@ -590,7 +590,7 @@
     "mod.df": "a8a522fd81ff",
     "rpt.df": "3bc1e2d4713d",
     "mod.sa": "483306fd38cf",
-    "rpt.sa": "e98d6cd9c16b",
+    "rpt.sa": "0f7bfb7eab83",
     "mod.gs": "8b0dc495300b",
     "rpt.gs": "678c0a261b5f",
     "mod.cf": "151243811fd2",
@@ -614,7 +614,7 @@
    }
   },
   "util / MassDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "3fcd5a0244cc",
     "pl.project": "6b65e59101e7",
@@ -624,7 +624,7 @@
     "mod.df": "9a4ff48cef9a",
     "rpt.df": "06609be755db",
     "mod.sa": "ab11f4a2b70b",
-    "rpt.sa": "784229d8c2e1",
+    "rpt.sa": "6954a9e14505",
     "mod.gs": "2dce7ea3c851",
     "rpt.gs": "6850a7e4b7e0",
     "mod.cf": "91304433d375",
@@ -648,7 +648,7 @@
    }
   },
   "util / CTDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
    "sections": {
     "gd.project": "e94ec5bea175",
     "pl.project": "128e4d9562d7",
@@ -658,7 +658,7 @@
     "mod.df": "c607b04eb133",
     "rpt.df": "926c592b65e7",
     "mod.sa": "c5373fe27183",
-    "rpt.sa": "6bb0f08091aa",
+    "rpt.sa": "c96fbdfae186",
     "mod.gs": "cbd65beb9bca",
     "rpt.gs": "13b57c33fdf9",
     "mod.cf": "731ac0d10f0f",
