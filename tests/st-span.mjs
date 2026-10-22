@@ -14,8 +14,8 @@
 // st.sections, st.stations, st.R, st.tab.<tab>, st.report.all). When compare.mjs's readout changes, copy the change here.
 //
 // Targets:
-//   --target st  (default): stgirder.html. Each span of each payload in a fresh browser: apply the payload, click "Span n", read.
-//   --target sbd: the ST-Girder frame of "Steel Bridge Design.html" (iframe named gd-st). The payload name gd_<project>_<owner>_G<n> gives
+//   --target st  (default while stgirder.html exists; since the cut-over, 2026-10-22, a stand-alone copy given with --a/--b): stgirder.html. Each span of each payload in a fresh browser: apply the payload, click "Span n", read.
+//   --target sbd (default since the cut-over): the ST-Girder frame of "Steel Bridge Design.html" (iframe named gd-st). The payload name gd_<project>_<owner>_G<n> gives
 //                 the project, owner and girder: the merged tool opens the project (as compare.mjs --tool gd), window.gdStOpen(n) sends
 //                 gdStPayload(n) to the frame, then the "Span n" button is clicked inside the frame. Only gd_* payloads.
 //
@@ -38,7 +38,7 @@ import { HERE, openPage, resolveFile, hash, diff } from './lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const TARGET = args.target || 'st';
+const TARGET = args.target || (fs.existsSync(path.join(HERE, '..', 'stgirder.html')) ? 'st' : 'sbd');   // stgirder.html was removed at the cut-over (2026-10-22): the frame by default
 if (!['st', 'sbd'].includes(TARGET)) { console.error('--target must be st or sbd'); process.exit(2); }
 const FILE = args.file || (TARGET === 'sbd' ? 'Steel Bridge Design.html' : 'stgirder.html');
 const BASE = args.baseline ? path.resolve(args.baseline) : null, REC = args['record-baseline'] ? path.resolve(args['record-baseline']) : null;

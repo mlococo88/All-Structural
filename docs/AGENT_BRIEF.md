@@ -26,7 +26,7 @@ Pick the lowest tier that honestly covers the change and state it in the PR body
 
 | Tier | When | What |
 |---|---|---|
-| 0 | Wording, labels, notes, citations (no computed value) | `node tests/check-syntax.mjs <tool>` (JSX transpiled for stgirder/psbeam/index) + one headless smoke load of the default project (no console errors): `node tests/compare.mjs --tool page --file <tool>` or `--tool gd` |
+| 0 | Wording, labels, notes, citations (no computed value) | `node tests/check-syntax.mjs <tool>` (JSX transpiled for psbeam/index and for ST-Girder inside Steel Bridge Design, st-src) + one headless smoke load of the default project (no console errors): `node tests/compare.mjs --tool page --file <tool>` or `--tool gd` |
 | 1 | Display-only features | Tier 0 + main vs branch result hashes on the built-in project only, one owner (AASHTO): `node tests/compare.mjs --tool gd` → `all sections identical`; one screenshot of the changed display |
 | 2 | A result change limited to ONE owner or ONE module | §4 callout + hand check; main vs branch on the built-in under the affected owner (both modes only if mode-specific) + ONE AASHTO project to prove nothing else moved; save/load once |
 | 3 | Shared code: loads, analysis, framing, L_b, section properties, demands/hand-offs, migrations | The full matrix: `--project builtin,builtin28,xsA,curb --owner AASHTO,RIDOT,MassDOT,CTDOT` (× `--mode pl` / `mod` where relevant), ST-Girder payloads (`--tool st`), saved data both directions |

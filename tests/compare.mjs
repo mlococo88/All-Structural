@@ -3,23 +3,29 @@
 // See tests/README.md. Examples:
 //   node tests/compare.mjs --tool gd                                   (origin/main vs the working tree, built-in project, AASHTO)
 //   node tests/compare.mjs --tool gd --project builtin,xsA --owner AASHTO,RIDOT
-//   node tests/compare.mjs --tool st --payload builtin,def15_AASHTO_G2 --a origin/main --b stgirder.html
-//   node tests/compare.mjs --tool sbd --project builtin --owner AASHTO  (merged tool's ST-Girder view vs stgirder.html, every girder)
+//   node tests/compare.mjs --tool st --payload builtin,def15_AASHTO_G2   (ST-Girder: the Design & Rating view of Steel Bridge Design.html)
+//   node tests/compare.mjs --tool sbd --project builtin --owner AASHTO  (merged tool's ST-Girder view vs the last stgirder.html in git history, every girder)
 //   node tests/compare.mjs --tool page --file lldf.html
 // Exit code: 0 all sections identical, 1 a difference, 2 an error.
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { HERE, openPage, resolveFile, hash, diff } from './lib.mjs';
+import { execFileSync } from 'child_process';
+import { HERE, REPO, openPage, resolveFile, hash, diff } from './lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const TOOL = args.tool || 'gd';
-// sbd: B is the merged tool (Steel Bridge Design.html, from PR 1 of the merge), A is stgirder.html
-const FILE = args.file || { gd: 'Steel Bridge Design.html', st: 'stgirder.html', sbd: 'Steel Bridge Design.html' }[TOOL];
+// sbd: B is the merged tool (Steel Bridge Design.html, from PR 1 of the merge), A is stgirder.html (removed at the cut-over, 2026-10-22: by default
+// the last copy in git history). st: ST-Girder; since the cut-over its only copy is the Design & Rating view of Steel Bridge Design.html, read in its frame
+// (a file that holds the st-src block); a stand-alone stgirder.html (a git ref or --a/--b path) is still read as a page.
+const FILE = args.file || { gd: 'Steel Bridge Design.html', st: 'Steel Bridge Design.html', sbd: 'Steel Bridge Design.html' }[TOOL];
+function lastStgirder() { if (fs.existsSync(path.join(REPO, 'stgirder.html'))) return 'stgirder.html';
+  const g = a => execFileSync('git', ['-C', REPO, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  const c = g(['rev-list', '-1', 'HEAD', '--', 'stgirder.html']); try { g(['cat-file', '-e', `${c}:stgirder.html`]); return `${c}:stgirder.html`; } catch (e) { return `${c}^:stgirder.html`; } }
 if (!FILE) { console.error('--file is required for --tool ' + TOOL); process.exit(2); }
 const BASE = args.baseline ? path.resolve(args.baseline) : null, REC = args['record-baseline'] ? path.resolve(args['record-baseline']) : null;
-const A = BASE ? { label: 'baseline ' + path.relative(process.cwd(), BASE), file: null } : TOOL === 'sbd' ? resolveFile(args.a || 'stgirder.html', 'stgirder.html') : resolveFile(args.a || 'origin/main', FILE);
+const A = BASE ? { label: 'baseline ' + path.relative(process.cwd(), BASE), file: null } : TOOL === 'sbd' ? resolveFile(args.a || lastStgirder(), 'stgirder.html') : resolveFile(args.a || 'origin/main', FILE);
 if (TOOL === 'sbd' && !args.b && !fs.existsSync(path.join(HERE, '..', FILE))) { console.error(`--tool sbd: ${FILE} is not in the working tree (the merged tool comes with PR 1 of the merge); pass --b <file>`); process.exit(2); }
 const B = resolveFile(args.b || FILE, FILE);
 const OUT = args.out || path.join(os.tmpdir(), 'allstruct-tests', 'out'); fs.mkdirSync(OUT, { recursive: true });
@@ -150,7 +156,25 @@ async function stApply(p, file, pay) {
   await p.waitForFunction(pa => { try { const s = JSON.parse(localStorage.getItem('stgirder.session')); return s && s.external && s.external.producedAt === pa; } catch (e) { return false; } }, pa, { timeout: 20000 });
   await p.waitForTimeout(800);
 }
+// the Design & Rating view of Steel Bridge Design (the cut-over's ST-Girder): open the tool (built-in project, idle, so the title block is in place),
+// show the view, apply the hand-off by message (stSend: the same gdAdopt path as #gdpull), read the frame named gd-st
+const stEmbedded = file => /<script type="text\/plain" id="st-src">/.test(fs.readFileSync(file, 'utf8'));
+async function stRunFrame(src, c) {
+  const { b, p, errs, dialogs, blocked } = await openPage(src.file);
+  try {
+    await p.waitForFunction(() => typeof P !== 'undefined' && P && typeof plEnsure === 'function' && typeof stShow === 'function', null, { timeout: 60000 });
+    await p.evaluate(() => plEnsure()); const idle = [await gdIdle(p)];
+    await p.evaluate(() => stShow()); await p.waitForFunction(() => ST_READY, null, { timeout: 90000 });
+    const f = p.frames().find(fr => fr.name() === 'gd-st'); await f.waitForSelector('.tabs .tab', { timeout: 60000 }); await p.waitForTimeout(1000);
+    if (c.payload !== 'builtin') { const pay = readPayload(c.payload); await p.evaluate(q => stSend(q), pay);
+      await f.waitForFunction(pa => { try { const s = JSON.parse(localStorage.getItem('stgirder.session')); return s && s.external && s.external.producedAt === pa; } catch (e) { return false; } }, pay.producedAt, { timeout: 20000 });
+      await p.waitForTimeout(800); }
+    const R = await stReadout(f);
+    return { R, errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: idle.map(x => x.via + ' ' + x.ms + ' ms') };
+  } finally { await b.close(); }
+}
 async function stRun(src, c) {
+  if (stEmbedded(src.file)) return stRunFrame(src, c);
   const { b, p, errs, dialogs, blocked } = await openPage(src.file);
   try {
     await p.waitForSelector('.tabs .tab', { timeout: 60000 }); await p.waitForTimeout(1000);

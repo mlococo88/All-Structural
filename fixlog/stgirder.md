@@ -1,5 +1,10 @@
 # Fix log — stgirder.html
 
+**Retired 2026-10-22 (cut-over of the Steel Bridge Design merge, SBD6; engineer decision).** `stgirder.html` was removed. ST-Girder's only copy is
+now the `<script type="text/plain" id="st-src">` block of `Steel Bridge Design.html` (its Design & Rating view); from SBD1 to SBD4 that block was a
+verbatim copy of this file. Changes to ST-Girder are recorded in `fixlog/Steel Bridge Design.md` from now on (SBD6 lists the first ones). To apply an
+entry below to the current code, apply it to the `st-src` text (closing script tags and comment openers are stored escaped, see SBD1-b).
+
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6 (and App. D6); AASHTO MBE for rating (unchanged).
 
 ## 2026-10-04 — PR: claude/fix-stgirder (PR link added after merge)
