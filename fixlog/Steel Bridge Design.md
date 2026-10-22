@@ -21198,7 +21198,7 @@ full st-span run (display only, above). `CLAUDE.md` §3 ("Since 2026-10-22, `stg
 `stgirder.html`) now describe the file as it was; CLAUDE.md is the engineer's rule file and was not changed by this PR. Suggested text in the PR.
 
 
-## 2026-10-22 — PR: claude/sbd-s2-5-lldf-display (S2-5, SBD stage 2 item 8: ST-Girder shows GirderDetail's live load distribution factors; display only; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-5-lldf-display (S2-5, SBD stage 2 item 8: ST-Girder shows GirderDetail's live load distribution factors; display only; PR #426, merged as e20282d)
 
 **No engineering result changes.** No formula, factor, unit, code reference, saved key or hand-off field was changed. With GirderDetail demands
 (`liveLoadPerGirder: true`, `girderDetail.df` present) ST-Girder already used no distribution factor of its own (the imported LL+IM and fatigue
@@ -21246,3 +21246,78 @@ DLs →" (the host switches to the LLDF and DLs module). Full `--tool st --paylo
 
 **Open items:** `tests/baselines/st_interior.json` is not re-recorded here (its `st.tab.Report` / `st.report.all` were already stale since SBD6; now
 `st.tab.Fatigue` too, display only). It is re-recorded at the next full st-span run (S2-6, which changes results).
+
+
+## 2026-10-22 — PR: claude/sbd-s2-6-studs-per-zone (S2-6, SBD stage 2 item 9: ST-Girder checks the studs per zone with GirderDetail's Shear connectors results; GirderDetail-demand results change; PR link added after merge)
+
+**Engineering result change (CLAUDE.md §4), GirderDetail demands only.** Engineer decision (stage 2): the GirderDetail method becomes the method. With a
+GirderDetail payload that carries the new field `girderDetail.details.studs.results`, ST-Girder's stud strength and stud fatigue checks are GirderDetail's
+per-zone / per-region results (its Shear connectors module, checks SC1, SC2, SC6) instead of ST-Girder's single-zone check. Stand-alone ST-Girder
+(built-in analysis, MIDAS/MCT imports) and GirderDetail payloads without the field keep the single-zone check exactly as before. Hand-off: one additive
+optional field (schemaVersion 1; HANDOFF.md 4.9). GirderDetail's own results are unchanged.
+
+### S2-6-a. Host: the module results in the hand-off   [hand-off, additive]
+- **Where:** new function `gdStStudRes()` before `function gdOwnerRulesData()` (anchor `/* GD49 (2026-10-15): the owner load rules as data`), and in
+  `gdStDetails()`, the `studs:` line. **Before:** `studs: sc.d ? { module: 'Shear connectors', d: …, zones: (sc.zones || []).map(z => ({ x1: r4(z.x1), x2: r4(z.x2), nr: nm(z.nr), p: r4(z.p) })) } : null,`
+  **After:** the same object plus `...(() => { const q = gdStStudRes(); return q ? { results: q } : {}; })()`.
+- `gdStStudRes()` runs `GM.sc.compute(P.sc)` and `GM.sc.checks(R)` (read only) and returns `{ source, d, Asc, Fu, QnE, Qn, QnEntered, phiSc, Qr, ZrI,
+  gamI, Ffat, n, fc, beff, ts, fatigue, zones:[…], regions:[…], gaps:[…] }`; per zone the module's `Vfr, I, Q, Aslab, lim, gam, Zr, nn, N, dFn, Vfat, Vsr,
+  preq` and SC1's ratio `r` and `ok`; per region `Pc, Ps, Pp, (Pnc, Pns), Pn, P, nreq, nprov, cov` and SC2's `r`, `ok`, and where studs are omitted over
+  the splice plates `lost, nnet` with SC6's `r6`, `ok6`. Numbers rounded to 1e-6. null when the module has input errors. Copy the function from the PR.
+
+### S2-6-b. ST-Girder (st-src): checks per zone   [calculation]
+- **Helpers** after `function GdDfBox` (S2-5): `gdStudResOf(ext)` (validated field), `gdStudSpan(q, sel)` (zones and regions overlapping the selected
+  span, x along the girder; local start `xl`; governing zone/region by ratio), `GdOpen` (on-screen link to a host module), `gdStudDeriv(R)` (the worked
+  card), `GdStudCards`.
+- **computeAll**, after `if(contStud) conn.strOK=contStud.gov.nProv>=contStud.gov.nReq;`: `{ const gdSC=useExt? gdStudSpan(gdStudResOf(inp.external), ext.sel) : null; if(gdSC) conn.gd=gdSC; }`.
+- **computeAll, checks.** Before:
+  ```js
+  if(contStud) checks.push({n:'Shear studs — strength (continuous, P = Pp + Pn, '+contStud.gov.end+' side)', t:'Studs str', …});
+  else checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
+  checks.push({n:'Shear studs — fatigue pitch', t:'Studs fat', v:pitch, lim:pReq, r:pitch/pReq, u:'in', ref:'6.10.10.2', loc:fatStud.x||0});
+  ```
+  After: `if(conn.gd){ … }` pushes one check per region `'Shear studs — strength, <region> (GirderDetail SC2[, P = Pp + Pn])'` (v = n_req, lim = n_prov,
+  r = SC2 ratio, ref 6.10.10.4 or 6.10.10.4.2), one per region with omitted studs `'… without the studs over the splice plates, <region> (GirderDetail SC6)'`
+  (lim = n_prov − n_omitted), one per zone `'Shear studs — fatigue pitch, <zone> (GirderDetail SC1)'` (v = p, lim = n Z_r/V_sr, r = SC1 ratio);
+  `else { <the three lines above, unchanged> }`. The single-zone quantities are still computed (conn.*), so the stand-alone path is untouched.
+- **Connectors tab** (`ConnTab`): with `conn.gd`, headline boxes for SC2 / SC6 / SC1 (governing ratio), the "What this check is" text, `<GdStudCards>`
+  and the unchanged detailing card; ST-Girder's own strength and fatigue derivations are not shown on this path. **Report**, Shear connectors: with
+  `conn.gd` one subsection "Strength and fatigue pitch per zone (from GirderDetail, span k)" in place of the two single-zone subsections.
+
+**Before / after (expressions):**
+- Before, fatigue (6.10.10.1.2, 6.10.10.2): one pitch p and one n per row (the zone of the span with the largest p/n, GD70), V_sr = γ·(V_+ − V_−)·Q/I at
+  the governing station of the span (short-term n section of ST-Girder's segment), γ and (ΔF)_n from ST-Girder's own Fatigue I/II crossover; p ≤ n Z_r / V_sr.
+- After, fatigue: per pitch zone (GirderDetail SC1): V_fat = γ V_f Q / I (V_f = the zone's largest unfactored fatigue-truck shear range of the governing
+  girder type; I, Q of the zone's plates, short-term composite with the module's b_eff and n), V_sr = √(V_fat² + F_fat²), Z_r = 7.0 A_sc (Fatigue I) or
+  (A/N)^(1/5) A_sc (Fatigue II, N = 365·Y·n·ADTT_SL with n from Table 6.6.1.2.5-1 over the zone), p ≤ n Z_r / V_sr.
+- Before, strength (6.10.10.4): n_prov = n_row·floor(12(L/2)/p) ≥ P/Q_r with P = min(0.85f′c b_eff t_s, steel); in a continuous span P = P_p + P_n from
+  the max +M station to each end, counted at the one pitch (6.10.10.4.2).
+- After, strength: per region (GirderDetail SC2): P = P_p (support to max +M) or P_p + P_n (max +M to an interior support), n_req = P/Q_r, n_prov = the
+  studs of the pitch zones over the region; SC6: n_prov − n_omitted ≥ n_req where studs are left out over the top flange splice plates.
+- Unchanged: Q_n = 0.70 A_sc F_u (Eq. 6.10.10.4.3-1), φ_sc = 1.00, Condition 9.2 constants (A = 1040×10⁸ ksi⁵, m = 5, (ΔF)_TH = 7.0 ksi).
+
+**Governing provisions:** AASHTO LRFD 10th Ed. (2024) Arts. 6.10.10.1.2 (Eq. 6.10.10.1.2-1), 6.10.10.2 (Eq. 6.10.10.2-1), 6.6.1.2.3 (Table 6.6.1.2.3-1,
+Condition 9.2), 6.6.1.2.5 (Eqs. 6.6.1.2.5-1, -2; Table 6.6.1.2.5-1), 6.10.10.4.1, 6.10.10.4.2, 6.10.10.4.3 (Eq. 6.10.10.4.3-1).
+
+**Check case** (`tests/projects/st/gd_builtin_AASHTO_G2.json`, regenerated by this PR; span 1, x = 0 to 110 ft):
+- Before (ST-Girder single zone): fatigue: n = 2, p = 9 in, x = 0 ft, V_+ − V_− = 42.505 + 5.882 = 48.387 kip, Fatigue II γ = 0.80, V_f = 38.71 kip,
+  Q = 1,781.3 in³, I = 108,933 in⁴ → V_sr = 38.71(1,781.3)/108,933 = 0.633 kip/in; (ΔF)_n = 4.311 ksi, Z_r = 4.311(0.6013) = 2.593 kip;
+  p_req = 2(2.593)/0.633 = 8.19 in < 9 in → ratio 1.10, **FAIL**. Strength: P_p = min(3,876, 3,187.5) = 3,187.5 kip; right end (pier) P_n = min(steel,
+  0.45(5)(114)(8) = 2,052) = 2,052 kip, P = 5,239.5 kip, n_req = 5,239.5/25.26 = 207.5 vs n_prov = 2·floor(66·12/9) = 176 → ratio 1.18, **FAIL**.
+- After (GirderDetail SC1, SC2, SC6): zone "Span 1, 0L to 0.1L" (4 @ 14 in): V_fat = 0.80(51.60)(1,658.87)/103,914 = 0.659 kip/in, V_sr = 0.659
+  (F_fat = 0), Fatigue II: (ΔF)_n = (1040×10⁸/46,537,500)^(1/5) = 4.676 ksi, Z_r = 4.676(0.60132) = 2.812 kip; p_max = 4(2.812)/0.659 = 17.07 in ≥ 14 in →
+  ratio 0.82, PASS (the governing zone of span 1). Region "Abut. 1 to max. positive, Span 1": P_p = min(0.85(5)(96)(8) = 3,264, 3,187.5) = 3,187.5 kip,
+  n_req = 3,187.5/25.255 = 126.21 ≤ 132 provided → 0.956, PASS. Region "Pier 1 to max. positive, Span 1": P_n = min(4,837.5, 0.45(5)(96)(8) = 1,728) =
+  1,728 kip, P = 4,915.5, n_req = 194.63 ≤ 246 → 0.791; SC6: 246 − 10 = 236 ≥ 194.63 → 0.825. All PASS.
+- Across the 100 regenerated `gd_*` payloads: before (single zone) strength fails 80, fatigue fails 80 (85 / 80 on all 108 payloads, as STAGE2); after
+  0 / 0 (largest SC2 ratio 0.983, largest SC1 ratio 0.999), equal to GirderDetail's own SC1/SC2 results (copied, not recomputed).
+
+**How verified:** see the PR (syntax, gd run with `--save-st`, full st and st-span runs, sbd-verify, a610-prop).
+
+**Other copies:** none.
+
+**Open items (engineer):** GirderDetail's Shear connectors module is one bridge-wide design: one set of pitch zones and regions, V_f of the girder type
+with the largest fatigue shear, and one b_eff (its own input; in the built-in project 96 in, the exterior girder's, while an interior girder's b_eff is
+114 in). Every girder's payload therefore carries the same results; for an interior girder Q and P_n use the module's b_eff. Built-in G2 with 114 in:
+P_n = min(4,837.5, 2,052) = 2,052 kip, n_req = 207.5 ≤ 246 (0.84, still PASS); Q/I about 2 % higher. Whether the module should check each girder
+type (or take the smallest Q-producing b_eff conservatively) is a GirderDetail question, not changed here.
