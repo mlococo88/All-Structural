@@ -14541,3 +14541,8 @@ index 10b01be..fd977fc 100644
 +        if(num(g.static.toeDepth)&&Lp>0&&Math.abs(g.static.toeDepth-Lp)>0.05) warns.push("Pile length: Pile Designer's R_n is for the toe "+f(g.static.toeDepth,1)+" ft below the cap ("+(g.static.toeBasis==="designed"?"its designed pile length, changed there after the import":"no designed length in Pile Designer: its required length max(L_geo, L_f + 5), MassDOT 3.10.11.2")+"); this abutment's pile length below the cap is "+f(Lp,1)+" ft (panel I-0a). Use the same designed length in Pile Designer or check R_n for "+f(Lp,1)+" ft.");   // PDA-IAB2: since the import sets Pile Designer's designed length, only a user override (or an older Pile Designer) reaches this
 +        const t1=p.integral&&p.integral.tier1; if(t1&&t1.lengthPass===false) warns.push("Pile Designer: required pile length max(L_geo, L_f + 5) = "+f(t1.reqLength,1)+" ft > the designed "+f(t1.designedLength,1)+" ft (MassDOT 3.10.11.2).");   // PDA-IAB2
 ```
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1-a. Comment: GirderDetail's file name   [comment only]
+- Anchor `Same pattern as the OWN_RULES table of`: before `Same pattern as the OWN_RULES table of Steel Bridge Beam Modules.html,`, after `Same pattern as the OWN_RULES table of Steel Bridge Design.html (GirderDetail),`. No code changed.

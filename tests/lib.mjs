@@ -59,16 +59,20 @@ export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '' } = {
   return { b, ctx, p, errs, dialogs, blocked };
 }
 
-// "Steel Bridge Beam Modules.html" (working tree), "origin/main" (bare ref: same file name as `tool`), or "abc123:stgirder.html"
+// "Steel Bridge Design.html" (working tree), "origin/main" (bare ref: same file name as `tool`), or "abc123:stgirder.html".
+// A git ref older than a file's rename is read under the file's previous name (RENAMED): GirderDetail was "Steel Bridge Beam Modules.html" until 2026-10-22.
+const RENAMED = { 'Steel Bridge Design.html': ['Steel Bridge Beam Modules.html'] };
 export function resolveFile(spec, tool) {
   const wt = path.resolve(REPO, spec);
   if (fs.existsSync(wt) && fs.statSync(wt).isFile()) { const rel = path.relative(REPO, wt); return { file: wt, label: rel.startsWith('..') ? wt : rel }; }
   const [ref, f] = spec.includes(':') ? [spec.slice(0, spec.indexOf(':')), spec.slice(spec.indexOf(':') + 1)] : [spec, tool];
   const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', ref], { encoding: 'utf8' }).trim();
-  const buf = execFileSync('git', ['-C', REPO, 'show', `${sha}:${f}`], { maxBuffer: 1 << 28 });
+  let buf = null, err = null, got = f;
+  for (const name of [f, ...(RENAMED[f] || [])]) { try { buf = execFileSync('git', ['-C', REPO, 'show', `${sha}:${name}`], { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] }); got = name; break; } catch (e) { err = err || e; } }
+  if (!buf) throw err;
   const dir = path.join(os.tmpdir(), 'allstruct-tests', sha); fs.mkdirSync(dir, { recursive: true });
   const out = path.join(dir, path.basename(f)); fs.writeFileSync(out, buf);
-  return { file: out, label: `${ref} (${sha}):${f}` };
+  return { file: out, label: `${ref} (${sha}):${got}` };
 }
 
 export const hash = v => crypto.createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex').slice(0, 12);

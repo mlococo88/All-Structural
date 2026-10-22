@@ -16,7 +16,7 @@ const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const TOOL = args.tool || 'gd';
 // sbd: B is the merged tool (Steel Bridge Design.html, from PR 1 of the merge), A is stgirder.html
-const FILE = args.file || { gd: 'Steel Bridge Beam Modules.html', st: 'stgirder.html', sbd: 'Steel Bridge Design.html' }[TOOL];
+const FILE = args.file || { gd: 'Steel Bridge Design.html', st: 'stgirder.html', sbd: 'Steel Bridge Design.html' }[TOOL];
 if (!FILE) { console.error('--file is required for --tool ' + TOOL); process.exit(2); }
 const BASE = args.baseline ? path.resolve(args.baseline) : null, REC = args['record-baseline'] ? path.resolve(args['record-baseline']) : null;
 const A = BASE ? { label: 'baseline ' + path.relative(process.cwd(), BASE), file: null } : TOOL === 'sbd' ? resolveFile(args.a || 'stgirder.html', 'stgirder.html') : resolveFile(args.a || 'origin/main', FILE);
@@ -145,7 +145,7 @@ async function stReadout(f) {
 const readPayload = name => JSON.parse(fs.readFileSync(fs.existsSync(name) ? name : path.join(STDIR, name + '.json'), 'utf8')).payload;
 // stgirder.html: apply a hand-off the way GirderDetail's "Send to ST-Girder" + "Open ST-Girder now" does (publish, then open with #gdpull=<producedAt>)
 async function stApply(p, file, pay) {
-  const pa = await p.evaluate(q => { BridgeXfer.publish('girderDemands', q, 'GirderDetail', 'Steel Bridge Beam Modules.html'); return JSON.parse(localStorage.getItem('bridgeSuite.v1.girderDemands')).producedAt; }, pay);
+  const pa = await p.evaluate(q => { BridgeXfer.publish('girderDemands', q, 'GirderDetail', 'Steel Bridge Design.html'); return JSON.parse(localStorage.getItem('bridgeSuite.v1.girderDemands')).producedAt; }, pay);
   await p.goto('file://' + file + '#gdpull=' + encodeURIComponent(pa)); await p.reload(); await p.waitForSelector('.tabs .tab, .callout.warn', { timeout: 60000 });
   await p.waitForFunction(pa => { try { const s = JSON.parse(localStorage.getItem('stgirder.session')); return s && s.external && s.external.producedAt === pa; } catch (e) { return false; } }, pa, { timeout: 20000 });
   await p.waitForTimeout(800);

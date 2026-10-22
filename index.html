@@ -322,7 +322,9 @@ var st=document.createElement('style'); st.textContent=css;
 
    This block is byte-identical in index.html / psbeam.html / lldf.html. Edit
    one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
-   keeps only a reduced app-path record of its own, which GirderDetail reads.)
+   keeps only a reduced app-path record of its own. Since 2026-10-22 ST-Girder
+   also runs inside Steel Bridge Design.html, GirderDetail's file, as its
+   Design & Rating view; GirderDetail no longer reads that record.)
    ========================================================================== */
 (function(){
   var KEY='bridgeSuite.v1.appPaths';
@@ -21113,7 +21115,9 @@ function EmbedTrouble({app,name,health,onUse,onClose}){
    them drops the table (the values entered then govern). Each conversion is listed in a notice kept in
    mct_stcap_notice_v1 until it is dismissed. Zones fed by PS-Beam are unchanged. */
 const MCT_STCAP_KEY='mct_stcap_notice_v1';
-function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html')); }
+// SBD1 (2026-10-22): ST-Girder also runs inside Steel Bridge Design.html (Design & Rating view), whose GirderDetail payloads carry the same producerFile:
+// recognized by its producer ('ST-Girder', or a default producer from ST-Girder's page title), never by that file name alone
+function capFromST(p){ return !!(p&&(p.producer==='ST-Girder'||p.producerFile==='stgirder.html'||/^ST-Girder\b/.test(String(p.producer||'')))); }
 function stCapRead(){ try{ const a=JSON.parse(localStorage.getItem(MCT_STCAP_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 function stCapAdd(notes){ if(!notes||!notes.length) return;
   try{ localStorage.setItem(MCT_STCAP_KEY,JSON.stringify(stCapRead().concat(notes))); }catch(e){}

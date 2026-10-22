@@ -867,7 +867,7 @@ function abutStrainLim(){ const fy=+S.mat.fy;
   const eTl=fy<=75? 0.005 : (fy>=100? 0.008 : 0.005+0.003*(fy-75)/25);
   return {eCl,eTl}; }
 /* ---------- Owner (state DOT) rules (OWNA, 2026-10-20) ----------
-   Same pattern as the OWN_RULES table of Steel Bridge Beam Modules.html, duplicated here on purpose (CLAUDE.md §3: no shared file).
+   Same pattern as the OWN_RULES table of Steel Bridge Design.html (GirderDetail), duplicated here on purpose (CLAUDE.md §3: no shared file).
    AASHTO LRFD 10th Ed. (2024) stays the calculation basis; an owner's rules are checked on top. Saved as S.own.owner: 'AASHTO'
    (default; an older project without the field opens as 'AASHTO' with identical results), 'MassDOT', 'RIDOT' or 'CTDOT'.
    Per rule: owner, id, kind ('shall-check': pass/fail; 'should-warning': a warning; 'advisory': the owner value shown beside the

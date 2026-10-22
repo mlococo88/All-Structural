@@ -1724,3 +1724,17 @@ index 6d5bece..2e97549 100644
 -  if (ab.length) rows.push(['Backfill', ab.join('; ') + `. Factors EH ${f2(nz(b.ehMax) || 1.5)}/${f2(nz(b.ehMin) || 0.9)}${P.units.some(u => u.type === 'abut' && u.earth && u.earth.method === 'atrest') ? ` (at rest ${f2(nz(b.ehAtMax) || 1.35)}/${f2(nz(b.ehAtMin) || 0.9)})` : ''}, EV ${f2(nz(b.evMax) || 1.35)}/${f2(nz(b.evMin) || 1)}, ES ${f2(nz(b.esMax) || 1.5)}/${f2(nz(b.esMin) || 0.75)}; Extreme Event I EH ${eqEHfixed() !== null ? `${f2(eqEHfixed())} (agency policy)` : 'γ<sub>p</sub> max/min (Table 3.4.1-1)'}`]);
 +  if (ab.length) rows.push(['Backfill', ab.join('; ') + `. Factors EH ${f2(nz(b.ehMax) || 1.5)}/${f2(nz(b.ehMin) || 0.9)}${P.units.some(u => u.type === 'abut' && u.earth && u.earth.method === 'atrest') ? ` (at rest ${f2(nz(b.ehAtMax) || 1.35)}/${f2(nz(b.ehAtMin) || 0.9)})` : ''}, EV ${f2(nz(b.evMax) || 1.35)}/${f2(nz(b.evMin) || 1)}, ES ${f2(nz(b.esMax) || 1.5)}/${f2(nz(b.esMin) || 0.75)}; Extreme Event I and II EH, EV, ES 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1)${eqEHfixed() !== null ? `, except Extreme Event I EH ${f2(eqEHfixed())} (agency policy)` : ''}`]);
 ```
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1-a. GirderDetail's file name in two texts   [text only]
+- Comment above the Reactions pull code: before `GirderDetail (Steel Bridge Beam Modules) sends every girder`, after `GirderDetail (Steel Bridge Design, formerly Steel Bridge Beam Modules) sends every girder`.
+- "Nothing sent yet" alert of Pull from PS-Beam / GirderDetail: before `In PS-Beam, or in GirderDetail (Steel Bridge Beam Modules, Structural analysis)`, after `In PS-Beam, or in GirderDetail (Steel Bridge Design, Structural analysis)`.
+
+### SBD1-b. `isST`: ST-Girder payloads from Steel Bridge Design   [hand-off] [no result change]
+- **Where:** Reactions pull code, anchor `const isST = p => !!p && (`.
+- **Before:** `const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html');`
+- **After:** (with a two-line comment above) `const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html' || /^ST-Girder\b/.test(String(p.producer || '')));`
+- **Why:** ST-Girder now also runs inside `Steel Bridge Design.html` (its Design & Rating view). There its `producerFile` default is the host file, the same file name GirderDetail's own payloads carry, so an ST-Girder payload is recognised by its producer: `'ST-Girder'` or, if a payload ever falls back to ST-Girder's page title (`BridgeXfer.stamp` default), a producer that starts with "ST-Girder". The file name alone never refuses a payload. ST-Girder publishes nothing today (DISC, 2026-10-19), so no current payload is affected. GirderDetail's superReactions payloads (`producer:'GirderDetail'`, `producerFile:'Steel Bridge Design.html'`) are accepted as before.
+- **Check case:** `isST({producer:'ST-Girder', producerFile:'Steel Bridge Design.html'})` → true (before: true); `isST({producer:'ST-Girder | AASHTO LRFD Steel Plate Girder Design', producerFile:'Steel Bridge Design.html'})` → true (before: false); `isST({producer:'GirderDetail', producerFile:'Steel Bridge Design.html'})` → false (before: false); `isST({producer:'X', producerFile:'stgirder.html'})` → true (before: true).
+- **Other copies:** index.html `capFromST`, lldf.html `isST`.

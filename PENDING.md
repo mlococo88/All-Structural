@@ -2,7 +2,7 @@
 
 One list of everything that is not finished or not yet verified by the engineer. Details and check cases are in `ENGINEER_CHECKS.md` (item IDs below) and the fix logs. Update this file in the same PR whenever an item is added or closed.
 
-Last updated: 2026-10-18 (deflection item removed: already decided, LL8).
+Last updated: 2026-10-22 (merge of GirderDetail and ST-Girder: PR 1 done, later steps listed in section 3).
 
 ## 1. Decisions for the engineer to verify (built with a default, results may depend on them)
 
@@ -46,6 +46,7 @@ Items marked "pending reference" in the owner rules panel. Add the documents to 
 - **Suggest: steel grade options** — needs grade-dependent unit prices first (GD66 (e)).
 - **MassDOT exterior sidewalk beam Case I / Case II** (3.5.3.11) — warning only today (GD63 (c)).
 - **Low-priority owner items** from the manual reviews (mostly information-only notes).
+- **Steel Bridge Design merge (GirderDetail + ST-Girder), after PR 1 (2026-10-22: file renamed, ST-Girder embedded as the Design & Rating view, no result change):** in-memory link with an "Update" banner when GirderDetail changes; one title block and combined report; one project file with migrations; de-duplication (FE engine, identical 6.10 functions only); cut-over (stgirder.html retired, tools.html one card; until then `st-src` must be kept identical to stgirder.html, whose help texts still name "Steel Bridge Beam Modules.html"). Calculation differences between the two tools stay as they are until decided item by item (separate §4 PRs).
 
 - **Abutment calculator — open items (review 2026-10-20, see scratchpad abrev2/review.md):**
   - Approach slab module — done 2026-10-20 (#391, fixlog APS: LS removal per MassDOT 3.3.1.3 / CTDOT CT11.1 / AASHTO 3.11.6.5, slab DC+HL-93 reaction on a backwall shelf, shelf corbel 5.8.4.2, integral sliding friction, slab one-way design, EE inertia). DOT rules: CTDOT 11.14CT 16 ft × 1.25 ft, skew ≤ 35° follows skew, required on State highways; MassDOT 3.10.4 / RIDOT 11.3.2 required with integral abutments, sliding at the abutment.

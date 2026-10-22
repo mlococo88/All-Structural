@@ -4302,3 +4302,14 @@ index e0b51e9..cc33aae 100644
 +      sub(s,'Fatigue pitch requirement','6.10.10.1.2 · 6.10.10.2',<CrTab el={connFatDeriv(R)}/>,ck('Studs fat'));
 +      sub(s,'Stud detailing','6.10.10.1 · 6.10.10.3',<CrTab el={connDetDeriv(R)}/>,ck('Studs h/d','Studs p lim','Studs s_t','Studs edge','Studs pen','Studs cover')); }
 ```
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1. No change to stgirder.html; embedded copy in Steel Bridge Design   [note]
+- `stgirder.html` is not changed in this PR (engineer decision 2026-10-22; it is to be retired in a later PR of the merge).
+- Its text is now also stored verbatim in `Steel Bridge Design.html` (`<script type="text/plain" id="st-src">`, fixlog/Steel Bridge Design.md SBD1-b) and
+  runs there in the Design & Rating (ST-Girder) view. Until stgirder.html is retired, **a change to stgirder.html must be copied into `st-src` in the
+  same PR** (CLAUDE.md §3), and the four text shims of `ST_SHIMS` (SBD1-c there) must still find their anchors exactly once: the appPaths
+  `selfFile`/`selfDir` lines, `BridgeXfer.stamp`'s `producerFile` line, and `gdAdopt(r.payload,'opened from GirderDetail',true); },[gdPullReq]);`.
+  If an anchor is missing the view does not load and says so (no silent fallback).
+- Same saved keys in both (`stgirder.session`, `stgirder.ui.v1`, `stgirder.inputTab.v1`, `stgirder.disconnect.v1`): one session for both copies.

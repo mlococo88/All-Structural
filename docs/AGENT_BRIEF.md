@@ -39,7 +39,7 @@ Run from the repo root (details in `tests/README.md`):
 
 ```bash
 git fetch origin main
-node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"
+node tests/check-syntax.mjs "Steel Bridge Design.html"
 node tests/compare.mjs --tool gd                                      # Tier 1
 node tests/compare.mjs --tool gd --project builtin,builtin28,xsA,curb --owner AASHTO,RIDOT,MassDOT,CTDOT   # Tier 3
 node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1
@@ -47,7 +47,7 @@ node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,x
 
 It uses the globally installed `playwright` package and `/opt/pw-browsers/chromium`. It downloads nothing and needs no network: libraries are routed to `tests/libs`. It prints per-section hashes and every value that differs. The exit code is 0 only when everything is identical and there are no console errors.
 
-## 5. GirderDetail architecture notes (`Steel Bridge Beam Modules.html`)
+## 5. GirderDetail architecture notes (`Steel Bridge Design.html`, named `Steel Bridge Beam Modules.html` until 2026-10-22)
 
 - **Two apps in one file.** GirderDetail (the main page) and **Preliminary sizing** (the PlateLine app). Preliminary sizing runs in an iframe whose `srcdoc` is built from the plain-text block `<script type="text/plain" id="pl-src">` (since 2026-10-15; before that, the one-line base64 string `PL_B64`). Edit the page in place. Inside the block, write closing script tags as `<\/script>` and HTML comment openers as `<\!--`; `plSrc()` removes that one backslash (fixlog PLSRC). The owner rules table (`OWN_RULES`) is injected into the frame as `window.GD_OWN_RULES` before its scripts run. Both apps have a global `P` (project), so check which frame you are in.
 - **Messages.** The frame and the main page talk by `postMessage`, and the main page accepts messages only from the frame (`gdFromPL`). Preliminary sizing publishes the **bridge record** (`gd-bridge`: geometry, girders, owner, load factors…, stored in GirderDetail `P.df.bridge`). GirderDetail sends model settings, fatigue, cross-frame weights, title block and mode (`gd-an`, `gd-xs`, `gd-dfx`, `gd-owner`, `gd-mode`, `gd-tb`). Demands come back as `gd-inbox` (stored in `girderdetail_inbox_v1`) and sections as `gd-gs`.
@@ -55,7 +55,7 @@ It uses the globally installed `playwright` package and `/opt/pw-browsers/chromi
 - **Settle / idle.** Projects saved before newer features (e.g. xsA) trigger an automatic refresh on open (bridge re-publish → demands → cross-frame auto-design → second pass). This takes 20–50 s. Never read results at fixed times. Use `window.gdIdle()` (resolves when nothing is in flight or pending, Preliminary sizing is ready and the project data has been stable for 8 s). The test kit does this for you.
 - **Owner rules infrastructure.** `OWN_RULES` (owners RIDOT, MassDOT, CTDOT; AASHTO = none) lists rows `{ owner, id, dv, kind: 'shall-check' | 'should-warning' | 'pending-reference', sec, value, where, text }`. Text is a short paraphrase: no manual text is reproduced. Lookups go through `gdOwnR(id)` in GirderDetail; Preliminary sizing has its own lookup. The owner is chosen in Preliminary sizing (or the header pill → `gd-owner`) and arrives with the bridge. Owner **defaults** move only untouched inputs, once per version: `OWN_DEF_V` in Preliminary sizing, `GD_DEF_V` and `P.ownDefG` in GirderDetail, rule field `dv`. Every owner change to a result is a §4 change and cites the manual section.
 - **Mode toggle** (`P.gdMode`). `'pl'` = "Preliminary designer": every module takes its demands from Preliminary sizing and is kept in sync (automatic refresh always on, sync note `#gd-sync`). `'mod'` = "Design modules": each module keeps its own demand source, as before. Older projects get a mode inferred on open (`gdModeInit`). Switching to `'pl'` with modules fed from elsewhere asks for confirmation.
-- **Hand-off to ST-Girder** (`girderDemands`, HANDOFF.md §4.9): "Send to ST-Girder" publishes one girder's line-girder results (`gdStPayload`) and opens `stgirder.html#gdpull=<producedAt>`, which applies them automatically.
+- **Hand-off to ST-Girder** (`girderDemands`, HANDOFF.md §4.9): "Send to ST-Girder" publishes one girder's line-girder results (`gdStPayload`) and offers to open the embedded **Design & Rating (ST-Girder)** view (`stgirder.html` verbatim in `<script type="text/plain" id="st-src">`, a srcdoc frame named `gd-st`), which applies them by message through ST-Girder's own `gdAdopt` (the `#gdpull` path; SBD1, 2026-10-22).
 
 ## 6. Pitfalls learned
 

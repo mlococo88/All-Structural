@@ -1743,3 +1743,21 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
 
 - **How verified (AE5, AE6):** `computeAll()` of origin/main (ee32a1c) and this branch on the same 9 inputs as AE1 (default, debond cases, γLL = 1.0): every result field, warnings included, identical. `node tests/check-syntax.mjs psbeam.html` passes.
 - **Other copies:** none.
+
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+
+### SBD1-a. Shared bootstrap block comment (byte-identical in index.html, psbeam.html, lldf.html)   [comment only]
+- **Where:** the bootstrap block's header comment, anchor `This block is byte-identical in index.html / psbeam.html / lldf.html.`
+- **Before:**
+  ```
+     one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+     keeps only a reduced app-path record of its own, which GirderDetail reads.)
+  ```
+- **After:**
+  ```
+     one, edit all three. (ST-Girder left the suite on 2026-10-19; stgirder.html
+     keeps only a reduced app-path record of its own. Since 2026-10-22 ST-Girder
+     also runs inside Steel Bridge Design.html, GirderDetail's file, as its
+     Design & Rating view; GirderDetail no longer reads that record.)
+  ```
+- **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.
