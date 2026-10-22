@@ -3167,198 +3167,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = { DEFAULT,
    Shared analysis engine (PlateLine and GirderDetail): line-girder FE model,
    influence lines, HL-93 and fatigue-truck envelopes (AASHTO LRFD 3.6.1)
    ===================================================================== */
-/* Line-girder finite-element model (Euler-Bernoulli beam elements, banded Cholesky).
-   EI: optional per-element flexural stiffness (any consistent unit; only ratios matter for forces).
-   noLL: skip the live-load envelopes (dead-load stages). */
-const FE_CACHE = new Map();
-function sgBeam(spans, simple, EI, noLL) {
-  const key = spans.join(',') + (simple ? 'S' : 'C') + (EI ? ':' + Array.from(EI, v => v.toPrecision(6)).join('|') : '') + (noLL ? 'n' : '');
-  if (FE_CACHE.has(key)) return FE_CACHE.get(key);
-  const xs = [0], sup = [0];
-  spans.forEach(L => { const n = Math.max(8, Math.round(L)); const h = L / n, x0 = xs[xs.length - 1]; for (let k = 1; k <= n; k++) xs.push(x0 + k * h); sup.push(xs.length - 1); });
-  const N = xs.length, nd = 2 * N, hb = 3;
-  const u = Array.from({ length: nd }, () => new Float64Array(hb + 1)), ke = [];
-  for (let e = 0; e < N - 1; e++) {
-    const h = xs[e + 1] - xs[e], h2 = h * h, h3 = h2 * h;
-    const r = EI ? EI[e] : 1, k = [[12 / h3, 6 / h2, -12 / h3, 6 / h2], [6 / h2, 4 / h, -6 / h2, 2 / h], [-12 / h3, -6 / h2, 12 / h3, -6 / h2], [6 / h2, 2 / h, -6 / h2, 4 / h]].map(row => row.map(v => v * r));
-    ke.push(k); const d = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
-    for (let r = 0; r < 4; r++) for (let c = r; c < 4; c++) u[d[r]][d[c] - d[r]] += k[r][c];
-  }
-  const kmax = Math.max(...u.map(r => r[0])); sup.forEach(s => u[2 * s][0] += kmax * 1e9);                    // pinned supports (penalty)
-  for (let i = 0; i < nd; i++) {                            // banded Cholesky, A = U^T U
-    let s = u[i][0]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] ** 2;
-    u[i][0] = Math.sqrt(s);
-    for (let d = 1; d <= hb && i + d < nd; d++) { const j = i + d; let t = u[i][d]; for (let k = Math.max(0, j - hb); k < i; k++) t -= u[k][i - k] * u[k][j - k]; u[i][d] = t / u[i][0]; }
-  }
-  const y = new Float64Array(nd), x = new Float64Array(nd);
-  const solve = b => {
-    for (let i = 0; i < nd; i++) { let s = b[i]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] * y[k]; y[i] = s / u[i][0]; }
-    for (let i = nd - 1; i >= 0; i--) { let s = y[i]; for (let d = 1; d <= hb && i + d < nd; d++) s -= u[i][d] * x[i + d]; x[i] = s / u[i][0]; }
-    return x;
-  };
-  // ILM[i*N+j]: moment at node i (sagging +) for unit downward load at node j
-  // ILV[e*N+j]: shear in element e for unit downward load at node j
-  const ILM = new Float64Array(N * N), ILV = new Float64Array((N - 1) * N), b = new Float64Array(nd);
-  if (simple) {                                             // independent simple spans: closed-form influence lines
-    for (let k = 0; k < spans.length; k++) {
-      const a = xs[sup[k]], L = spans[k];
-      for (let i = sup[k]; i <= sup[k + 1]; i++) for (let j = sup[k]; j <= sup[k + 1]; j++) {
-        const x = xs[i] - a, xi = xs[j] - a; ILM[i * N + j] = xi <= x ? xi * (L - x) / L : x * (L - xi) / L;
-      }
-      for (let e = sup[k]; e < sup[k + 1]; e++) { const xm = (xs[e] + xs[e + 1]) / 2 - a;
-        for (let j = sup[k]; j <= sup[k + 1]; j++) { const xi = xs[j] - a; ILV[e * N + j] = xi > xm ? (L - xi) / L : -xi / L; } }
-    }
-  }
-  for (let j = 0; j < N && !simple; j++) {
-    b.fill(0); b[2 * j] = -1; const d = solve(b);
-    for (let e = 0; e < N - 1; e++) {
-      const k = ke[e], v0 = d[2 * e], t0 = d[2 * e + 1], v1 = d[2 * e + 2], t1 = d[2 * e + 3];
-      const f0 = k[0][0] * v0 + k[0][1] * t0 + k[0][2] * v1 + k[0][3] * t1;
-      const f1 = k[1][0] * v0 + k[1][1] * t0 + k[1][2] * v1 + k[1][3] * t1;
-      const f3 = k[3][0] * v0 + k[3][1] * t0 + k[3][2] * v1 + k[3][3] * t1;
-      ILM[(e + 1) * N + j] = f3; if (e === 0) ILM[j] = -f1;
-      ILV[e * N + j] = f0;
-    }
-  }
-  const trib = xs.map((_, j) => ((j < N - 1 ? xs[j + 1] - xs[j] : 0) + (j > 0 ? xs[j] - xs[j - 1] : 0)) / 2);
-  // 1-ft load grid, interpolation coefficients
-  const Ltot = xs[N - 1], G = Math.ceil(Ltot - 1e-9), gi = [];
-  for (let g = 0, e = 0; g <= G; g++) { const xg = Math.min(g, Ltot); while (e < N - 2 && xs[e + 1] < xg) e++; const t = (xg - xs[e]) / (xs[e + 1] - xs[e]); gi.push([e, Math.max(0, Math.min(1, t)), g <= Ltot + 1e-9]); }
-  const beam = { xs, sup, N, ILM, ILV, trib, G, gi, Ltot, spans, EI: EI || null };
-  if (noLL) { FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value); return beam; }
-  // live load envelopes per unit IL row (no DF), with IM on truck/tandem
-  const env = row => sgLLRow(beam, row);
-  beam.MLL = []; for (let i = 0; i < N; i++) beam.MLL.push(env(ILM.subarray(i * N, (i + 1) * N)));
-  beam.MF = []; for (let i = 0; i < N; i++) beam.MF.push(sgFatRow(beam, ILM.subarray(i * N, (i + 1) * N)));
-  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. LL9 (2026-10-14): exact section values, no envelope.
-  // Element e carries the section just right of its left node e, except an element that ends at a support (or the girder end), which
-  // carries the section just left of that support. VLLr / VFr: the section just right of node e for every element (station output).
-  const isSup = new Uint8Array(N); sup.forEach(s => isSup[s] = 1);
-  const sec = (e, m) => { const row = ILV.subarray(e * N, (e + 1) * N), c = { e, m }; return [sgLLRow(beam, row, c), sgFatRow(beam, row, c)]; };
-  beam.VLL = []; beam.VF = []; beam.VLLr = []; beam.VFr = [];
-  for (let e = 0; e < N - 1; e++) { const A = sec(e, e), S = isSup[e + 1] ? sec(e, e + 1) : A; beam.VLL.push(S[0]); beam.VF.push(S[1]); beam.VLLr.push(A[0]); beam.VFr.push(A[1]); }
-  FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value);
-  return beam;
-}
-/* Influence-line ordinates on the 1-ft load grid (beam.gi), zero-padded so the sweeps need no bounds checks.
-   cut (shear rows, LL2): { e, m } = the influence line of element e with its unit jump at node m (m = e: the section just right of
-   node e; m = e + 1: just left of node e+1). Smooth part S_j = row_j - [j > e]; a load beyond x_m adds 1. An axle exactly at x_m is
-   taken on the side that gives the extreme: vP (maxima) counts it beyond the section, vN (minima) before it. No cut: vP = vN = row.
-   f(a, up): the same ordinate at any position a, for an axle placed exactly at the section when x_m is not on the 1-ft grid. */
-function sgILGrid(beam, row, cut) {
-  const { G, gi, N, xs, Ltot } = beam, PAD = 96, n = G + 1 + 2 * PAD, src = cut ? Float64Array.from(row, (v, j) => v - (j > cut.e ? 1 : 0)) : row;
-  const c = cut ? xs[cut.m] : 0, vP = new Float64Array(n), vN = cut ? new Float64Array(n) : vP;
-  for (let g = 0; g <= G; g++) { const [e, t, on] = gi[g]; if (!on) continue; const s = src[e] * (1 - t) + src[e + 1] * t;
-    if (!cut) vP[g + PAD] = s; else { vP[g + PAD] = s + (g >= c - 1e-6 ? 1 : 0); vN[g + PAD] = s + (g > c + 1e-6 ? 1 : 0); } }
-  const f = (a, up) => { if (a < -1e-9 || a > Ltot + 1e-9) return 0; let lo = 0, hi = N - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (xs[md] <= a) lo = md; else hi = md; }
-    const t = Math.max(0, Math.min(1, (a - xs[lo]) / (xs[hi] - xs[lo]))), s = src[lo] * (1 - t) + src[hi] * t; return s + (up ? (a >= c - 1e-6 ? 1 : 0) : (a > c + 1e-6 ? 1 : 0)); };
-  return { PAD, vP, vN, src, c, f };
-}
-/* HL-93 envelopes of one influence line (per lane, no DF; truck and tandem stored without IM).
-   LL3 (2026-10-14), 3.6.1.3.1: axles that do not contribute to the extreme force effect are neglected, so a maximum sums only the
-   positive axle effects (P) and a minimum only the negative ones (M) (truck, tandem, and each truck of the 90% two-truck case).
-   The live load deflection rows (3.6.1.3.2) use the same rule (LL8, engineer's decision 2026-10-14). cut: shear rows (LL2), see sgILGrid. */
-function sgLLRow(beam, row, cut) {
-  const { G, trib, N, xs } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD;
-  const P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
-  let tMax = 0, tMin = 0, dMax = 0, dMin = 0, sMax = 14, sMin = 14;
-  for (let s = 14; s <= 30; s++) for (let q = -44 + PAD; q <= G + PAD; q++) {   // rear axle spacing 14 to 30 ft in 1-ft steps (3.6.1.2.2), both directions
-    const r1 = 32 * P[q] + 32 * P[q + s] + 8 * P[q + s + 14];       // front axle toward +x
-    const r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 14 + s];      // front axle toward -x
-    const n1 = 32 * M[q] + 32 * M[q + s] + 8 * M[q + s + 14], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 14 + s];
-    const hi = Math.max(r1, r2), lo = Math.min(n1, n2); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; }
-  }
-  for (let q = -4 + PAD; q <= G + PAD; q++) { dMax = Math.max(dMax, 25 * P[q] + 25 * P[q + 4]); dMin = Math.min(dMin, 25 * M[q] + 25 * M[q + 4]); }
-  if (cut) {   // an axle exactly at the section, on either side of the jump (needed when the section is not on the 1-ft grid)
-    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + ((up ? v > 0 : v < 0) ? v : 0); }, 0);
-    for (let s = 14; s <= 30; s++) for (const Q of [[[32, 0], [32, s], [8, s + 14]], [[8, 0], [32, 14], [32, 14 + s]]]) for (const [, o] of Q) {
-      const hi = sum(Q, I.c - o, true), lo = sum(Q, I.c - o, false); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; } }
-    for (const o of [0, 4]) { const Q = [[25, 0], [25, 4]]; dMax = Math.max(dMax, sum(Q, I.c - o, true)); dMin = Math.min(dMin, sum(Q, I.c - o, false)); }
-  }
-  // two design trucks (14 ft), min 50 ft between lead axle of one and rear axle of the other
-  let two = 0, twoX = 0;
-  for (const dir of [0, 1]) {
-    const tn = [], tp = []; for (let q = -28 + PAD; q <= G + PAD; q++) {
-      tn.push(dir ? 32 * M[q] + 32 * M[q + 14] + 8 * M[q + 28] : 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 28]);
-      tp.push(dir ? 32 * P[q] + 32 * P[q + 14] + 8 * P[q + 28] : 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 28]); }
-    let pm = Infinity, px = -Infinity;
-    for (let k = 0; k < tn.length; k++) { if (k - 78 >= 0) { pm = Math.min(pm, tn[k - 78]); px = Math.max(px, tp[k - 78]); } if (pm < Infinity) { two = Math.min(two, tn[k] + pm); twoX = Math.max(twoX, tp[k] + px); } }
-  }
-  let lp = 0, ln = 0;
-  if (!cut) for (let j = 0; j < N; j++) { const a = row[j] * trib[j] * 0.64; if (a > 0) lp += a; else ln += a; }
-  else for (let j = 0; j < N - 1; j++) {   // lane on a shear influence line: element by element, jump at node m, exact positive and negative parts
-    const h = xs[j + 1] - xs[j], k = j >= cut.m ? 1 : 0, a0 = I.src[j] + k, a1 = I.src[j + 1] + k;
-    if (a0 >= 0 && a1 >= 0) lp += 0.32 * h * (a0 + a1); else if (a0 <= 0 && a1 <= 0) ln += 0.32 * h * (a0 + a1);
-    else { const p = Math.max(a0, a1), m = Math.min(a0, a1), z = h / (p - m); lp += 0.32 * z * p * p; ln -= 0.32 * z * m * m; }
-  }
-  return { pos: 1.33 * Math.max(tMax, dMax) + lp, neg: 1.33 * Math.min(tMin, dMin) + ln, neg2: 0.9 * (1.33 * two + ln), pos2: 0.9 * (1.33 * twoX + lp), twoMax: twoX,
-           truckMax: tMax, truckMin: tMin, tanMax: dMax, tanMin: dMin, lanePos: lp, laneNeg: ln, twoMin: two, sMax, sMin };
-}
-
-/* fatigue truck (3.6.1.4.1): 8, 32, 32 kip at 14 ft and 30 ft, IM = 15%, one lane. LL1 (2026-10-14): "one design truck or axles
-   thereof", so axles that do not contribute to the extreme are neglected (as 3.6.1.3.1): a maximum sums only the positive axle
-   effects (P), a minimum only the negative ones (M). cut: shear rows (LL2), see sgILGrid. */
-function sgFatRow(beam, row, cut) {
-  const { G } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD, P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
-  let mx = 0, mn = 0;
-  for (let q = -44 + PAD; q <= G + PAD; q++) {
-    const r1 = 32 * P[q] + 32 * P[q + 30] + 8 * P[q + 44], r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 44];
-    const n1 = 32 * M[q] + 32 * M[q + 30] + 8 * M[q + 44], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 44];
-    mx = Math.max(mx, r1, r2); mn = Math.min(mn, n1, n2);
-  }
-  if (cut) for (const Q of [[[32, 0], [32, 30], [8, 44]], [[8, 0], [32, 14], [32, 44]]]) for (const [, o] of Q) {   // an axle exactly at the section
-    let hi = 0, lo = 0; for (const [w, o2] of Q) { const a = w * I.f(I.c - o + o2, true), b = w * I.f(I.c - o + o2, false); hi += a > 0 ? a : 0; lo += b < 0 ? b : 0; } mx = Math.max(mx, hi); mn = Math.min(mn, lo); }
-  return { max: 1.15 * mx, min: 1.15 * mn, rawMax: mx, rawMin: mn };
-}
-
-
-/* Staged stiffness (DC1 on steel, DC2/DW on 3n, LL on n) with cracked composite zones.
-   SP(x) -> { Is, I3u, Inu, Icr } section moments of inertia at station x (in^4).
-   crack: '15' = 15% of the adjacent spans each side of interior supports; 'dl' = negative dead-load region (first pass uncracked).
-   w1: DC1 load per node (klf); wSD: DC2 + DW load (klf, scalar). */
-function feStages(b0, spans, cont, SP, crack, w1, wSD, llFrom) {
-  const N = b0.N, NE = N - 1, xs = b0.xs, sup = b0.sup, trib = b0.trib;
-  const Is = new Float64Array(NE), I3u = new Float64Array(NE), Inu = new Float64Array(NE), Icr = new Float64Array(NE);
-  for (let e = 0; e < NE; e++) { const q = SP((xs[e] + xs[e + 1]) / 2); Is[e] = q.Is; I3u[e] = q.I3u; Inu[e] = q.Inu; Icr[e] = q.Icr; }
-  const ck = new Uint8Array(NE);
-  if (cont && crack !== 'none') {   // 'none': concrete deck effective over the entire length for analysis (AASHTO LRFD 6.10.1.5)
-    if (crack === 'dl') {
-      const s0 = sgBeam(spans, false, Is, true), s3 = sgBeam(spans, false, I3u, true), M = new Float64Array(N);
-      for (let i = 0; i < N; i++) { let t = 0; const r = i * N; for (let j = 0; j < N; j++) t += (s0.ILM[r + j] * w1[j] + s3.ILM[r + j] * wSD) * trib[j]; M[i] = t; }
-      for (let e = 0; e < NE; e++) ck[e] = M[e] < 0 && M[e + 1] < 0 ? 1 : 0;
-    } else for (let k = 1; k < sup.length - 1; k++) { const xp = xs[sup[k]], a = 0.15 * spans[k - 1], c = 0.15 * spans[k];
-      for (let e = 0; e < NE; e++) { const xm = (xs[e] + xs[e + 1]) / 2; if (xm >= xp - a - 1e-9 && xm <= xp + c + 1e-9) ck[e] = 1; } }
-  }
-  const I3 = I3u.map((v, e) => ck[e] ? Icr[e] : v), In = Inu.map((v, e) => ck[e] ? Icr[e] : v);
-  return { Is, I3, In, I3u, Inu, Icr, crack: ck, mode: crack === 'dl' ? 'dl' : crack === 'none' ? 'none' : '15',
-    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF, VLLr: llFrom.VLLr, VFr: llFrom.VFr } : sgBeam(spans, !cont, In, false) };
-}
-/* built-in verification against closed-form and independent solutions */
-function feVerify() {
-  const out = [], chk = (name, got, exp, tol) => out.push({ name, got, exp, err: Math.abs(got - exp) / Math.abs(exp), ok: Math.abs(got - exp) / Math.abs(exp) < tol });
-  const Mw = (b, w) => { const N = b.N, M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < N; j++) s += b.ILM[i * N + j] * w * b.trib[j]; M[i] = s; } return M; };
-  const Rs = (b, w, k) => { const N = b.N, s = b.sup[k]; let r = 0; for (let j = 0; j < N; j++) r += ((s < N - 1 ? b.ILV[s * N + j] : 0) - (s > 0 ? b.ILV[(s - 1) * N + j] : 0) + (j === s ? 1 : 0)) * w * b.trib[j]; return r; };
-  const near = (b, x) => { let k = 0; b.xs.forEach((v, i) => { if (Math.abs(v - x) < Math.abs(b.xs[k] - x)) k = i; }); return k; };
-  const L = 100;
-  { const b = sgBeam([L, L], false, null, true), M = Mw(b, 1); chk('Two equal spans, uniform load: pier moment = wL²/8', -M[b.sup[1]], L * L / 8, 0.002); chk('Two equal spans: interior reaction = 1.25wL', Rs(b, 1, 1), 1.25 * L, 0.002); chk('Two equal spans: end reaction = 0.375wL', Rs(b, 1, 0), 0.375 * L, 0.002); chk('Two equal spans: maximum positive moment = 9wL²/128', Math.max(...M), 9 * L * L / 128, 0.003); }
-  { const EIf = x => Math.abs(x - L) <= 20 ? 3 : 1, b0 = sgBeam([L, L], false, null, true), EI = new Float64Array(b0.N - 1); for (let e = 0; e < b0.N - 1; e++) EI[e] = EIf((b0.xs[e] + b0.xs[e + 1]) / 2);
-    const b = sgBeam([L, L], false, EI, true), M = Mw(b, 1); let d10 = 0, d11 = 0; const h = 0.002; for (let x = h / 2; x < 2 * L; x += h) { const m0 = x * (2 * L - x) / 2, m1 = -(x < L ? x : 2 * L - x) / 2, ei = EIf(x); d10 += m0 * m1 / ei * h; d11 += m1 * m1 / ei * h; }
-    const R = -d10 / d11; chk('Pier region 3EI over 40 ft: interior reaction (flexibility method)', Rs(b, 1, 1), R, 0.002); chk('Pier region 3EI over 40 ft: pier moment (flexibility method)', M[b.sup[1]], L * L / 2 - R * L / 2, 0.002); }
-  { const b = sgBeam([L], true, null, false), x = 50, IL = q => q < 0 || q > L ? 0 : (q <= x ? q * (L - x) / L : x * (L - q) / L); let tr = 0, tn = 0, ft = 0;
-    for (let s = 14; s <= 30; s += 2) for (let q = -60; q <= L + 60; q += 0.1) tr = Math.max(tr, 32 * IL(q) + 32 * IL(q + s) + 8 * IL(q + s + 14), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 14 + s));
-    for (let q = -4; q <= L; q += 0.1) tn = Math.max(tn, 25 * IL(q) + 25 * IL(q + 4)); for (let q = -60; q <= L + 60; q += 0.1) ft = Math.max(ft, 32 * IL(q) + 32 * IL(q + 30) + 8 * IL(q + 44), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 44));
-    chk('HL-93, 100 ft simple span, midspan moment (brute-force sweep)', b.MLL[near(b, x)].pos, 1.33 * Math.max(tr, tn) + 0.64 * L * L / 8, 0.002); chk('Fatigue truck, 100 ft simple span, midspan moment', b.MF[near(b, x)].max, 1.15 * ft, 0.002);
-    chk('HL-93, 100 ft simple span, end shear (axle at the support, closed form)', feIM(b.VLL[0], 0.33).pos, 1.33 * (32 + 32 * (L - 14) / L + 8 * (L - 28) / L) + 0.64 * L / 2, 0.002); }
-  { const b = sgBeam([L, L], false, null, false), IL = a => { if (a < 0 || a > 2 * L) return 0; const t = a <= L ? a : 2 * L - a; return -t * (L * L - t * t) / (4 * L * L); };
-    const tk = q => Math.min(32 * IL(q) + 32 * IL(q + 14) + 8 * IL(q + 28), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 28)); let two = 0, lane = 0;
-    for (let q1 = -28; q1 <= 2 * L; q1 += 1) for (let q2 = q1 + 78; q2 <= 2 * L; q2 += 1) two = Math.min(two, tk(q1) + tk(q2)); for (let a = 0.01; a < 2 * L; a += 0.02) lane += Math.min(IL(a), 0) * 0.64 * 0.02;
-    chk('Two equal spans, pier moment, 90% of two trucks + lane (exact influence line)', b.MLL[b.sup[1]].neg2, 0.9 * (1.33 * two + lane), 0.006); }
-  return out;
-}
-
-/* dynamic load allowance applied to stored envelope components (truck/tandem IM, fatigue IM) */
-function feIM(e, im) { const k = 1 + im; return { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax }; }
-function feFatIM(e, imf) { const k = 1 + imf; return { max: k * e.rawMax, min: k * e.rawMin }; }
+/* @@SBD-SHARED@@ the line-girder FE engine and A610: inserted from Steel Bridge Design's SBD-SHARED block when its frame is built (plShow, SBD4) */
 
 /* Moment gradient modifier C_b over the prismatic unbraced segment xa..xb (AASHTO LRFD 10th Ed. (2024) 6.10.8.2.3b, Eq. 6.10.8.2.3b-1):
    C_b = 12.5 M_max / (2.5 M_max + 3 M_A + 4 M_B + 3 M_C)
@@ -3908,7 +3717,7 @@ function suggestLayout(P, opts = {}) {
       let tw = up(Math.max(L.minTw, D / (st ? SG_DTW_ST : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
       for (let g = 0; g < 80; g++) {
         lam = D / tw; const r = Math.sqrt(E * k / FyW);
-        C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / FyW);
+        C = A610_shearC(lam, r, E, k, FyW);
         Vn = C * 0.58 * FyW * D * tw;
         if (Vn >= Vu - 1e-9) break;
         tw += L.incTw;
@@ -5429,7 +5238,7 @@ const TS_DMIN = 1.0, TS_DLOW = 0.5, TS_TWSTEPS = 6, TS_PHIV = 1.0;   // d_o/D th
 // GirderDetail's webShear (Transverse stiffeners TS4), with the tension field optional
 function tsVn(D, tw, Fyw, dIn, end, rat, tfa) {
   const stiff = dIn > 0 && dIn <= (end ? 1.5 : 3) * D + 1e-9, k = stiff ? 5 + 5 / (dIn / D) ** 2 : 5, lam = D / tw, r = Math.sqrt(ES * k / Fyw);
-  const C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / Fyw), Vp = 0.58 * Fyw * D * tw, o = { k, C, Vp, lam, stiff, end: !!end, tfa: false, tf: 0, d: dIn };
+  const C = A610_shearC(lam, r, ES, k, Fyw), Vp = A610_Vp(Fyw, D, tw), o = { k, C, Vp, lam, stiff, end: !!end, tfa: false, tf: 0, d: dIn };
   if (!stiff) return { ...o, Vn: C * Vp, eq: '6.10.9.2-1' };
   if (end) return { ...o, Vn: C * Vp, eq: '6.10.9.3.3-1' };
   if (!tfa) return { ...o, Vn: C * Vp, eq: '6.10.9.3.2, V_cr = CV_p (no tension field)' };
@@ -13375,6 +13184,217 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </html></script>
 <script>
 /* =====================================================================
+   SBD-SHARED-BEGIN (SBD4, 2026-10-22). Shared code of Steel Bridge Design: this page and the Preliminary sizing page (pl-src) run
+   this one copy. pl-src holds a placeholder comment line starting with @@SBD-SHARED@@ where its copy was; plShow() puts the text between
+   this begin line and the end marker comment there when it builds the Preliminary sizing frame (sbdShared). Nothing else may sit between
+   the two markers. The FE engine was moved here unchanged from both pages (they were identical, character for character).
+   ===================================================================== */
+/* A610: AASHTO LRFD 10th Ed. (2024) Article 6.10 expressions that were written out identically in more than one place, now one
+   copy each (proven identical: same operations in the same order; tests/a610-prop.mjs checks 10,000 random inputs for exact
+   equality with the expressions as written before). Functions are declared, so they exist before any code of the page runs. */
+/* Shear-buckling ratio C, Eq. 6.10.9.3.2-4 to -6: lam = D/tw, r = sqrt(E k / Fyw); C = 1 (lam <= 1.12 r), 1.12 r / lam (lam <= 1.40 r),
+   1.57 / lam^2 (E k / Fyw) otherwise */
+function A610_shearC(lam, r, E, k, Fyw) { return lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / Fyw); }
+/* Plastic shear force of the web, Eq. 6.10.9.2-2: Vp = 0.58 Fyw D tw */
+function A610_Vp(Fyw, D, tw) { return 0.58 * Fyw * D * tw; }
+/* the namespace A610.shearC, A610.Vp (the same functions; the declared names above can be called before this line has run) */
+var A610 = { shearC: A610_shearC, Vp: A610_Vp };
+/* Shared analysis engine (Preliminary sizing and the modules): line-girder FE model, influence lines, HL-93 and fatigue-truck
+   envelopes (AASHTO LRFD 3.6.1) */
+/* Line-girder finite-element model (Euler-Bernoulli beam elements, banded Cholesky).
+   EI: optional per-element flexural stiffness (any consistent unit; only ratios matter for forces).
+   noLL: skip the live-load envelopes (dead-load stages). */
+const FE_CACHE = new Map();
+function sgBeam(spans, simple, EI, noLL) {
+  const key = spans.join(',') + (simple ? 'S' : 'C') + (EI ? ':' + Array.from(EI, v => v.toPrecision(6)).join('|') : '') + (noLL ? 'n' : '');
+  if (FE_CACHE.has(key)) return FE_CACHE.get(key);
+  const xs = [0], sup = [0];
+  spans.forEach(L => { const n = Math.max(8, Math.round(L)); const h = L / n, x0 = xs[xs.length - 1]; for (let k = 1; k <= n; k++) xs.push(x0 + k * h); sup.push(xs.length - 1); });
+  const N = xs.length, nd = 2 * N, hb = 3;
+  const u = Array.from({ length: nd }, () => new Float64Array(hb + 1)), ke = [];
+  for (let e = 0; e < N - 1; e++) {
+    const h = xs[e + 1] - xs[e], h2 = h * h, h3 = h2 * h;
+    const r = EI ? EI[e] : 1, k = [[12 / h3, 6 / h2, -12 / h3, 6 / h2], [6 / h2, 4 / h, -6 / h2, 2 / h], [-12 / h3, -6 / h2, 12 / h3, -6 / h2], [6 / h2, 2 / h, -6 / h2, 4 / h]].map(row => row.map(v => v * r));
+    ke.push(k); const d = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
+    for (let r = 0; r < 4; r++) for (let c = r; c < 4; c++) u[d[r]][d[c] - d[r]] += k[r][c];
+  }
+  const kmax = Math.max(...u.map(r => r[0])); sup.forEach(s => u[2 * s][0] += kmax * 1e9);                    // pinned supports (penalty)
+  for (let i = 0; i < nd; i++) {                            // banded Cholesky, A = U^T U
+    let s = u[i][0]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] ** 2;
+    u[i][0] = Math.sqrt(s);
+    for (let d = 1; d <= hb && i + d < nd; d++) { const j = i + d; let t = u[i][d]; for (let k = Math.max(0, j - hb); k < i; k++) t -= u[k][i - k] * u[k][j - k]; u[i][d] = t / u[i][0]; }
+  }
+  const y = new Float64Array(nd), x = new Float64Array(nd);
+  const solve = b => {
+    for (let i = 0; i < nd; i++) { let s = b[i]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] * y[k]; y[i] = s / u[i][0]; }
+    for (let i = nd - 1; i >= 0; i--) { let s = y[i]; for (let d = 1; d <= hb && i + d < nd; d++) s -= u[i][d] * x[i + d]; x[i] = s / u[i][0]; }
+    return x;
+  };
+  // ILM[i*N+j]: moment at node i (sagging +) for unit downward load at node j
+  // ILV[e*N+j]: shear in element e for unit downward load at node j
+  const ILM = new Float64Array(N * N), ILV = new Float64Array((N - 1) * N), b = new Float64Array(nd);
+  if (simple) {                                             // independent simple spans: closed-form influence lines
+    for (let k = 0; k < spans.length; k++) {
+      const a = xs[sup[k]], L = spans[k];
+      for (let i = sup[k]; i <= sup[k + 1]; i++) for (let j = sup[k]; j <= sup[k + 1]; j++) {
+        const x = xs[i] - a, xi = xs[j] - a; ILM[i * N + j] = xi <= x ? xi * (L - x) / L : x * (L - xi) / L;
+      }
+      for (let e = sup[k]; e < sup[k + 1]; e++) { const xm = (xs[e] + xs[e + 1]) / 2 - a;
+        for (let j = sup[k]; j <= sup[k + 1]; j++) { const xi = xs[j] - a; ILV[e * N + j] = xi > xm ? (L - xi) / L : -xi / L; } }
+    }
+  }
+  for (let j = 0; j < N && !simple; j++) {
+    b.fill(0); b[2 * j] = -1; const d = solve(b);
+    for (let e = 0; e < N - 1; e++) {
+      const k = ke[e], v0 = d[2 * e], t0 = d[2 * e + 1], v1 = d[2 * e + 2], t1 = d[2 * e + 3];
+      const f0 = k[0][0] * v0 + k[0][1] * t0 + k[0][2] * v1 + k[0][3] * t1;
+      const f1 = k[1][0] * v0 + k[1][1] * t0 + k[1][2] * v1 + k[1][3] * t1;
+      const f3 = k[3][0] * v0 + k[3][1] * t0 + k[3][2] * v1 + k[3][3] * t1;
+      ILM[(e + 1) * N + j] = f3; if (e === 0) ILM[j] = -f1;
+      ILV[e * N + j] = f0;
+    }
+  }
+  const trib = xs.map((_, j) => ((j < N - 1 ? xs[j + 1] - xs[j] : 0) + (j > 0 ? xs[j] - xs[j - 1] : 0)) / 2);
+  // 1-ft load grid, interpolation coefficients
+  const Ltot = xs[N - 1], G = Math.ceil(Ltot - 1e-9), gi = [];
+  for (let g = 0, e = 0; g <= G; g++) { const xg = Math.min(g, Ltot); while (e < N - 2 && xs[e + 1] < xg) e++; const t = (xg - xs[e]) / (xs[e + 1] - xs[e]); gi.push([e, Math.max(0, Math.min(1, t)), g <= Ltot + 1e-9]); }
+  const beam = { xs, sup, N, ILM, ILV, trib, G, gi, Ltot, spans, EI: EI || null };
+  if (noLL) { FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value); return beam; }
+  // live load envelopes per unit IL row (no DF), with IM on truck/tandem
+  const env = row => sgLLRow(beam, row);
+  beam.MLL = []; for (let i = 0; i < N; i++) beam.MLL.push(env(ILM.subarray(i * N, (i + 1) * N)));
+  beam.MF = []; for (let i = 0; i < N; i++) beam.MF.push(sgFatRow(beam, ILM.subarray(i * N, (i + 1) * N)));
+  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. LL9 (2026-10-14): exact section values, no envelope.
+  // Element e carries the section just right of its left node e, except an element that ends at a support (or the girder end), which
+  // carries the section just left of that support. VLLr / VFr: the section just right of node e for every element (station output).
+  const isSup = new Uint8Array(N); sup.forEach(s => isSup[s] = 1);
+  const sec = (e, m) => { const row = ILV.subarray(e * N, (e + 1) * N), c = { e, m }; return [sgLLRow(beam, row, c), sgFatRow(beam, row, c)]; };
+  beam.VLL = []; beam.VF = []; beam.VLLr = []; beam.VFr = [];
+  for (let e = 0; e < N - 1; e++) { const A = sec(e, e), S = isSup[e + 1] ? sec(e, e + 1) : A; beam.VLL.push(S[0]); beam.VF.push(S[1]); beam.VLLr.push(A[0]); beam.VFr.push(A[1]); }
+  FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value);
+  return beam;
+}
+/* Influence-line ordinates on the 1-ft load grid (beam.gi), zero-padded so the sweeps need no bounds checks.
+   cut (shear rows, LL2): { e, m } = the influence line of element e with its unit jump at node m (m = e: the section just right of
+   node e; m = e + 1: just left of node e+1). Smooth part S_j = row_j - [j > e]; a load beyond x_m adds 1. An axle exactly at x_m is
+   taken on the side that gives the extreme: vP (maxima) counts it beyond the section, vN (minima) before it. No cut: vP = vN = row.
+   f(a, up): the same ordinate at any position a, for an axle placed exactly at the section when x_m is not on the 1-ft grid. */
+function sgILGrid(beam, row, cut) {
+  const { G, gi, N, xs, Ltot } = beam, PAD = 96, n = G + 1 + 2 * PAD, src = cut ? Float64Array.from(row, (v, j) => v - (j > cut.e ? 1 : 0)) : row;
+  const c = cut ? xs[cut.m] : 0, vP = new Float64Array(n), vN = cut ? new Float64Array(n) : vP;
+  for (let g = 0; g <= G; g++) { const [e, t, on] = gi[g]; if (!on) continue; const s = src[e] * (1 - t) + src[e + 1] * t;
+    if (!cut) vP[g + PAD] = s; else { vP[g + PAD] = s + (g >= c - 1e-6 ? 1 : 0); vN[g + PAD] = s + (g > c + 1e-6 ? 1 : 0); } }
+  const f = (a, up) => { if (a < -1e-9 || a > Ltot + 1e-9) return 0; let lo = 0, hi = N - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (xs[md] <= a) lo = md; else hi = md; }
+    const t = Math.max(0, Math.min(1, (a - xs[lo]) / (xs[hi] - xs[lo]))), s = src[lo] * (1 - t) + src[hi] * t; return s + (up ? (a >= c - 1e-6 ? 1 : 0) : (a > c + 1e-6 ? 1 : 0)); };
+  return { PAD, vP, vN, src, c, f };
+}
+/* HL-93 envelopes of one influence line (per lane, no DF; truck and tandem stored without IM).
+   LL3 (2026-10-14), 3.6.1.3.1: axles that do not contribute to the extreme force effect are neglected, so a maximum sums only the
+   positive axle effects (P) and a minimum only the negative ones (M) (truck, tandem, and each truck of the 90% two-truck case).
+   The live load deflection rows (3.6.1.3.2) use the same rule (LL8, engineer's decision 2026-10-14). cut: shear rows (LL2), see sgILGrid. */
+function sgLLRow(beam, row, cut) {
+  const { G, trib, N, xs } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD;
+  const P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
+  let tMax = 0, tMin = 0, dMax = 0, dMin = 0, sMax = 14, sMin = 14;
+  for (let s = 14; s <= 30; s++) for (let q = -44 + PAD; q <= G + PAD; q++) {   // rear axle spacing 14 to 30 ft in 1-ft steps (3.6.1.2.2), both directions
+    const r1 = 32 * P[q] + 32 * P[q + s] + 8 * P[q + s + 14];       // front axle toward +x
+    const r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 14 + s];      // front axle toward -x
+    const n1 = 32 * M[q] + 32 * M[q + s] + 8 * M[q + s + 14], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 14 + s];
+    const hi = Math.max(r1, r2), lo = Math.min(n1, n2); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; }
+  }
+  for (let q = -4 + PAD; q <= G + PAD; q++) { dMax = Math.max(dMax, 25 * P[q] + 25 * P[q + 4]); dMin = Math.min(dMin, 25 * M[q] + 25 * M[q + 4]); }
+  if (cut) {   // an axle exactly at the section, on either side of the jump (needed when the section is not on the 1-ft grid)
+    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + ((up ? v > 0 : v < 0) ? v : 0); }, 0);
+    for (let s = 14; s <= 30; s++) for (const Q of [[[32, 0], [32, s], [8, s + 14]], [[8, 0], [32, 14], [32, 14 + s]]]) for (const [, o] of Q) {
+      const hi = sum(Q, I.c - o, true), lo = sum(Q, I.c - o, false); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; } }
+    for (const o of [0, 4]) { const Q = [[25, 0], [25, 4]]; dMax = Math.max(dMax, sum(Q, I.c - o, true)); dMin = Math.min(dMin, sum(Q, I.c - o, false)); }
+  }
+  // two design trucks (14 ft), min 50 ft between lead axle of one and rear axle of the other
+  let two = 0, twoX = 0;
+  for (const dir of [0, 1]) {
+    const tn = [], tp = []; for (let q = -28 + PAD; q <= G + PAD; q++) {
+      tn.push(dir ? 32 * M[q] + 32 * M[q + 14] + 8 * M[q + 28] : 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 28]);
+      tp.push(dir ? 32 * P[q] + 32 * P[q + 14] + 8 * P[q + 28] : 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 28]); }
+    let pm = Infinity, px = -Infinity;
+    for (let k = 0; k < tn.length; k++) { if (k - 78 >= 0) { pm = Math.min(pm, tn[k - 78]); px = Math.max(px, tp[k - 78]); } if (pm < Infinity) { two = Math.min(two, tn[k] + pm); twoX = Math.max(twoX, tp[k] + px); } }
+  }
+  let lp = 0, ln = 0;
+  if (!cut) for (let j = 0; j < N; j++) { const a = row[j] * trib[j] * 0.64; if (a > 0) lp += a; else ln += a; }
+  else for (let j = 0; j < N - 1; j++) {   // lane on a shear influence line: element by element, jump at node m, exact positive and negative parts
+    const h = xs[j + 1] - xs[j], k = j >= cut.m ? 1 : 0, a0 = I.src[j] + k, a1 = I.src[j + 1] + k;
+    if (a0 >= 0 && a1 >= 0) lp += 0.32 * h * (a0 + a1); else if (a0 <= 0 && a1 <= 0) ln += 0.32 * h * (a0 + a1);
+    else { const p = Math.max(a0, a1), m = Math.min(a0, a1), z = h / (p - m); lp += 0.32 * z * p * p; ln -= 0.32 * z * m * m; }
+  }
+  return { pos: 1.33 * Math.max(tMax, dMax) + lp, neg: 1.33 * Math.min(tMin, dMin) + ln, neg2: 0.9 * (1.33 * two + ln), pos2: 0.9 * (1.33 * twoX + lp), twoMax: twoX,
+           truckMax: tMax, truckMin: tMin, tanMax: dMax, tanMin: dMin, lanePos: lp, laneNeg: ln, twoMin: two, sMax, sMin };
+}
+
+/* fatigue truck (3.6.1.4.1): 8, 32, 32 kip at 14 ft and 30 ft, IM = 15%, one lane. LL1 (2026-10-14): "one design truck or axles
+   thereof", so axles that do not contribute to the extreme are neglected (as 3.6.1.3.1): a maximum sums only the positive axle
+   effects (P), a minimum only the negative ones (M). cut: shear rows (LL2), see sgILGrid. */
+function sgFatRow(beam, row, cut) {
+  const { G } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD, P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
+  let mx = 0, mn = 0;
+  for (let q = -44 + PAD; q <= G + PAD; q++) {
+    const r1 = 32 * P[q] + 32 * P[q + 30] + 8 * P[q + 44], r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 44];
+    const n1 = 32 * M[q] + 32 * M[q + 30] + 8 * M[q + 44], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 44];
+    mx = Math.max(mx, r1, r2); mn = Math.min(mn, n1, n2);
+  }
+  if (cut) for (const Q of [[[32, 0], [32, 30], [8, 44]], [[8, 0], [32, 14], [32, 44]]]) for (const [, o] of Q) {   // an axle exactly at the section
+    let hi = 0, lo = 0; for (const [w, o2] of Q) { const a = w * I.f(I.c - o + o2, true), b = w * I.f(I.c - o + o2, false); hi += a > 0 ? a : 0; lo += b < 0 ? b : 0; } mx = Math.max(mx, hi); mn = Math.min(mn, lo); }
+  return { max: 1.15 * mx, min: 1.15 * mn, rawMax: mx, rawMin: mn };
+}
+
+
+/* Staged stiffness (DC1 on steel, DC2/DW on 3n, LL on n) with cracked composite zones.
+   SP(x) -> { Is, I3u, Inu, Icr } section moments of inertia at station x (in^4).
+   crack: '15' = 15% of the adjacent spans each side of interior supports; 'dl' = negative dead-load region (first pass uncracked).
+   w1: DC1 load per node (klf); wSD: DC2 + DW load (klf, scalar). */
+function feStages(b0, spans, cont, SP, crack, w1, wSD, llFrom) {
+  const N = b0.N, NE = N - 1, xs = b0.xs, sup = b0.sup, trib = b0.trib;
+  const Is = new Float64Array(NE), I3u = new Float64Array(NE), Inu = new Float64Array(NE), Icr = new Float64Array(NE);
+  for (let e = 0; e < NE; e++) { const q = SP((xs[e] + xs[e + 1]) / 2); Is[e] = q.Is; I3u[e] = q.I3u; Inu[e] = q.Inu; Icr[e] = q.Icr; }
+  const ck = new Uint8Array(NE);
+  if (cont && crack !== 'none') {   // 'none': concrete deck effective over the entire length for analysis (AASHTO LRFD 6.10.1.5)
+    if (crack === 'dl') {
+      const s0 = sgBeam(spans, false, Is, true), s3 = sgBeam(spans, false, I3u, true), M = new Float64Array(N);
+      for (let i = 0; i < N; i++) { let t = 0; const r = i * N; for (let j = 0; j < N; j++) t += (s0.ILM[r + j] * w1[j] + s3.ILM[r + j] * wSD) * trib[j]; M[i] = t; }
+      for (let e = 0; e < NE; e++) ck[e] = M[e] < 0 && M[e + 1] < 0 ? 1 : 0;
+    } else for (let k = 1; k < sup.length - 1; k++) { const xp = xs[sup[k]], a = 0.15 * spans[k - 1], c = 0.15 * spans[k];
+      for (let e = 0; e < NE; e++) { const xm = (xs[e] + xs[e + 1]) / 2; if (xm >= xp - a - 1e-9 && xm <= xp + c + 1e-9) ck[e] = 1; } }
+  }
+  const I3 = I3u.map((v, e) => ck[e] ? Icr[e] : v), In = Inu.map((v, e) => ck[e] ? Icr[e] : v);
+  return { Is, I3, In, I3u, Inu, Icr, crack: ck, mode: crack === 'dl' ? 'dl' : crack === 'none' ? 'none' : '15',
+    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF, VLLr: llFrom.VLLr, VFr: llFrom.VFr } : sgBeam(spans, !cont, In, false) };
+}
+/* built-in verification against closed-form and independent solutions */
+function feVerify() {
+  const out = [], chk = (name, got, exp, tol) => out.push({ name, got, exp, err: Math.abs(got - exp) / Math.abs(exp), ok: Math.abs(got - exp) / Math.abs(exp) < tol });
+  const Mw = (b, w) => { const N = b.N, M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < N; j++) s += b.ILM[i * N + j] * w * b.trib[j]; M[i] = s; } return M; };
+  const Rs = (b, w, k) => { const N = b.N, s = b.sup[k]; let r = 0; for (let j = 0; j < N; j++) r += ((s < N - 1 ? b.ILV[s * N + j] : 0) - (s > 0 ? b.ILV[(s - 1) * N + j] : 0) + (j === s ? 1 : 0)) * w * b.trib[j]; return r; };
+  const near = (b, x) => { let k = 0; b.xs.forEach((v, i) => { if (Math.abs(v - x) < Math.abs(b.xs[k] - x)) k = i; }); return k; };
+  const L = 100;
+  { const b = sgBeam([L, L], false, null, true), M = Mw(b, 1); chk('Two equal spans, uniform load: pier moment = wL²/8', -M[b.sup[1]], L * L / 8, 0.002); chk('Two equal spans: interior reaction = 1.25wL', Rs(b, 1, 1), 1.25 * L, 0.002); chk('Two equal spans: end reaction = 0.375wL', Rs(b, 1, 0), 0.375 * L, 0.002); chk('Two equal spans: maximum positive moment = 9wL²/128', Math.max(...M), 9 * L * L / 128, 0.003); }
+  { const EIf = x => Math.abs(x - L) <= 20 ? 3 : 1, b0 = sgBeam([L, L], false, null, true), EI = new Float64Array(b0.N - 1); for (let e = 0; e < b0.N - 1; e++) EI[e] = EIf((b0.xs[e] + b0.xs[e + 1]) / 2);
+    const b = sgBeam([L, L], false, EI, true), M = Mw(b, 1); let d10 = 0, d11 = 0; const h = 0.002; for (let x = h / 2; x < 2 * L; x += h) { const m0 = x * (2 * L - x) / 2, m1 = -(x < L ? x : 2 * L - x) / 2, ei = EIf(x); d10 += m0 * m1 / ei * h; d11 += m1 * m1 / ei * h; }
+    const R = -d10 / d11; chk('Pier region 3EI over 40 ft: interior reaction (flexibility method)', Rs(b, 1, 1), R, 0.002); chk('Pier region 3EI over 40 ft: pier moment (flexibility method)', M[b.sup[1]], L * L / 2 - R * L / 2, 0.002); }
+  { const b = sgBeam([L], true, null, false), x = 50, IL = q => q < 0 || q > L ? 0 : (q <= x ? q * (L - x) / L : x * (L - q) / L); let tr = 0, tn = 0, ft = 0;
+    for (let s = 14; s <= 30; s += 2) for (let q = -60; q <= L + 60; q += 0.1) tr = Math.max(tr, 32 * IL(q) + 32 * IL(q + s) + 8 * IL(q + s + 14), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 14 + s));
+    for (let q = -4; q <= L; q += 0.1) tn = Math.max(tn, 25 * IL(q) + 25 * IL(q + 4)); for (let q = -60; q <= L + 60; q += 0.1) ft = Math.max(ft, 32 * IL(q) + 32 * IL(q + 30) + 8 * IL(q + 44), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 44));
+    chk('HL-93, 100 ft simple span, midspan moment (brute-force sweep)', b.MLL[near(b, x)].pos, 1.33 * Math.max(tr, tn) + 0.64 * L * L / 8, 0.002); chk('Fatigue truck, 100 ft simple span, midspan moment', b.MF[near(b, x)].max, 1.15 * ft, 0.002);
+    chk('HL-93, 100 ft simple span, end shear (axle at the support, closed form)', feIM(b.VLL[0], 0.33).pos, 1.33 * (32 + 32 * (L - 14) / L + 8 * (L - 28) / L) + 0.64 * L / 2, 0.002); }
+  { const b = sgBeam([L, L], false, null, false), IL = a => { if (a < 0 || a > 2 * L) return 0; const t = a <= L ? a : 2 * L - a; return -t * (L * L - t * t) / (4 * L * L); };
+    const tk = q => Math.min(32 * IL(q) + 32 * IL(q + 14) + 8 * IL(q + 28), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 28)); let two = 0, lane = 0;
+    for (let q1 = -28; q1 <= 2 * L; q1 += 1) for (let q2 = q1 + 78; q2 <= 2 * L; q2 += 1) two = Math.min(two, tk(q1) + tk(q2)); for (let a = 0.01; a < 2 * L; a += 0.02) lane += Math.min(IL(a), 0) * 0.64 * 0.02;
+    chk('Two equal spans, pier moment, 90% of two trucks + lane (exact influence line)', b.MLL[b.sup[1]].neg2, 0.9 * (1.33 * two + lane), 0.006); }
+  return out;
+}
+
+/* dynamic load allowance applied to stored envelope components (truck/tandem IM, fatigue IM) */
+function feIM(e, im) { const k = 1 + im; return { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax }; }
+function feFatIM(e, imf) { const k = 1 + imf; return { max: k * e.rawMax, min: k * e.rawMin }; }
+/* SBD-SHARED-END */
+/* =====================================================================
    GirderDetail: bolted field splice engine (AASHTO LRFD 10th Ed. 6.13.6.1.3; 8th Ed. 6.13.6.1.4 optional)
    Units: kip, in, ksi; input moments kip-ft
    ===================================================================== */
@@ -13513,7 +13533,7 @@ function gdCompute(P) {
 
   /* ---- web shear resistance of the smaller section ---- */
   const tw = sm.tw, FyW = gW.Fy, stiffW = S.web === 'stiffened' && num(S.do) <= 3 * D + 1e-9, k = stiffW ? 5 + 5 / (num(S.do) / D) ** 2 : 5, r = Math.sqrt(ES * k / FyW), lam = D / tw;
-  const Cv = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / FyW), Vp = 0.58 * FyW * D * tw;
+  const Cv = A610_shearC(lam, r, ES, k, FyW), Vp = A610_Vp(FyW, D, tw);
   let Vn, vnExpr;
   if (stiffW) {   // 6.10.9.1: interior panels with d_o > 3D are unstiffened
     const dD = num(S.do) / D, rat = 2 * D * tw / (sm.botB * sm.botT + sm.topB * sm.topT);
@@ -14605,7 +14625,7 @@ function numRows(rows, spec, lbl, errors) { return rows.map((r0, i) => { const r
     if (!isFinite(v) || v < min) errors.push(`${r.name}: "${spec.find(s => s[0] === k)[1].replace(/<[^>]+>/g, '')}" must be ${o && o.any ? 'a number' : min === 0 ? 'zero or positive' : 'positive'}.`); }); return r; }); }
 function webShear(D, tw, Fyw, doIn, flgA, end) {   // stiffened panel (6.10.9.1, 6.10.9.3.3): d_o <= 3D, or d_o <= 1.5D for an end panel; otherwise unstiffened (k = 5)
   const stiff = doIn > 0 && doIn <= (end ? 1.5 : 3) * D + 1e-9, k = stiff ? 5 + 5 / (doIn / D) ** 2 : 5, lam = D / tw, r = Math.sqrt(ES * k / Fyw);
-  const C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / Fyw), Vp = 0.58 * Fyw * D * tw;
+  const C = A610_shearC(lam, r, ES, k, Fyw), Vp = A610_Vp(Fyw, D, tw);
   let Vn, eqn, rat = 2 * D * tw / flgA;
   if (!stiff || end) { Vn = C * Vp; eqn = end && stiff ? '6.10.9.3.3-1' : '6.10.9.2-1'; }
   else { const dD = doIn / D; Vn = rat <= 2.5 ? Vp * (C + 0.87 * (1 - C) / Math.sqrt(1 + dD ** 2)) : Vp * (C + 0.87 * (1 - C) / (Math.sqrt(1 + dD ** 2) + dD)); eqn = rat <= 2.5 ? '6.10.9.3.2-2' : '6.10.9.3.2-8'; }
@@ -16416,9 +16436,8 @@ function gsaCalc(R, CK) {   // full worked calculations of every check (Checks t
   const el = $('#ga-calc'); if (!el || !GA.last || GA.last.O.CK !== CK) return;
   let h = '';
   GM.gs.groups.forEach(g => { const ks = CK.filter(k => k.grp === g); if (!ks.length) return; h += `<h3 class="grp-hd">${g}</h3>`;
-    ks.forEach(k => { let b = `<div class="eq-block"><div class="eq-title"><span>Criterion</span><span class="eq-ref">${esc(k.ref)}</span></div><div class="eq-math">\\[${k.sym}\\]</div></div>`;
-      if (!k.items.length) b += `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>`;
-      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>`;
+    ks.forEach(k => { let b = deriv(k);   // SBD4: criterion and item table (deriv)
+      if (k.items.length) {
         k.items.forEach((it, i) => { if (it.work) b += eq(`${sub(it.loc)}${i === k.gov && k.items.length > 1 ? ' (governs)' : ''}`, '', it.work, it.where, it.st === 'fail' ? 'eq-fail' : ''); }); }
       if (k.note) b += `<p class="note-p">${sub(k.note)}</p>`;
       h += card('ga-chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', b, `${srcTag(k.src)}${kBadge(k)}`); }); });
@@ -17552,219 +17571,6 @@ async function plotImages(root) {
 function plotSwapForPrint(node) { node.querySelectorAll('.pl-plot').forEach(el => { const im = FIGIMG.get(el.dataset.fig); const img = document.createElement('img'); img.className = 'pl-print'; img.alt = 'Chart'; if (im) img.src = im.url; el.replaceWith(img); }); }
 window.addEventListener('plotly-ready', () => renderPlots());
 let _plR = null; window.addEventListener('resize', () => { clearTimeout(_plR); _plR = setTimeout(() => document.querySelectorAll('.pl-plot[data-v]').forEach(el => { if (el.offsetParent !== null && window.Plotly) Plotly.Plots.resize(el); }), 150); });
-
-/* =====================================================================
-   Shared analysis engine (PlateLine and GirderDetail): line-girder FE model,
-   influence lines, HL-93 and fatigue-truck envelopes (AASHTO LRFD 3.6.1)
-   ===================================================================== */
-/* Line-girder finite-element model (Euler-Bernoulli beam elements, banded Cholesky).
-   EI: optional per-element flexural stiffness (any consistent unit; only ratios matter for forces).
-   noLL: skip the live-load envelopes (dead-load stages). */
-const FE_CACHE = new Map();
-function sgBeam(spans, simple, EI, noLL) {
-  const key = spans.join(',') + (simple ? 'S' : 'C') + (EI ? ':' + Array.from(EI, v => v.toPrecision(6)).join('|') : '') + (noLL ? 'n' : '');
-  if (FE_CACHE.has(key)) return FE_CACHE.get(key);
-  const xs = [0], sup = [0];
-  spans.forEach(L => { const n = Math.max(8, Math.round(L)); const h = L / n, x0 = xs[xs.length - 1]; for (let k = 1; k <= n; k++) xs.push(x0 + k * h); sup.push(xs.length - 1); });
-  const N = xs.length, nd = 2 * N, hb = 3;
-  const u = Array.from({ length: nd }, () => new Float64Array(hb + 1)), ke = [];
-  for (let e = 0; e < N - 1; e++) {
-    const h = xs[e + 1] - xs[e], h2 = h * h, h3 = h2 * h;
-    const r = EI ? EI[e] : 1, k = [[12 / h3, 6 / h2, -12 / h3, 6 / h2], [6 / h2, 4 / h, -6 / h2, 2 / h], [-12 / h3, -6 / h2, 12 / h3, -6 / h2], [6 / h2, 2 / h, -6 / h2, 4 / h]].map(row => row.map(v => v * r));
-    ke.push(k); const d = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
-    for (let r = 0; r < 4; r++) for (let c = r; c < 4; c++) u[d[r]][d[c] - d[r]] += k[r][c];
-  }
-  const kmax = Math.max(...u.map(r => r[0])); sup.forEach(s => u[2 * s][0] += kmax * 1e9);                    // pinned supports (penalty)
-  for (let i = 0; i < nd; i++) {                            // banded Cholesky, A = U^T U
-    let s = u[i][0]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] ** 2;
-    u[i][0] = Math.sqrt(s);
-    for (let d = 1; d <= hb && i + d < nd; d++) { const j = i + d; let t = u[i][d]; for (let k = Math.max(0, j - hb); k < i; k++) t -= u[k][i - k] * u[k][j - k]; u[i][d] = t / u[i][0]; }
-  }
-  const y = new Float64Array(nd), x = new Float64Array(nd);
-  const solve = b => {
-    for (let i = 0; i < nd; i++) { let s = b[i]; for (let k = Math.max(0, i - hb); k < i; k++) s -= u[k][i - k] * y[k]; y[i] = s / u[i][0]; }
-    for (let i = nd - 1; i >= 0; i--) { let s = y[i]; for (let d = 1; d <= hb && i + d < nd; d++) s -= u[i][d] * x[i + d]; x[i] = s / u[i][0]; }
-    return x;
-  };
-  // ILM[i*N+j]: moment at node i (sagging +) for unit downward load at node j
-  // ILV[e*N+j]: shear in element e for unit downward load at node j
-  const ILM = new Float64Array(N * N), ILV = new Float64Array((N - 1) * N), b = new Float64Array(nd);
-  if (simple) {                                             // independent simple spans: closed-form influence lines
-    for (let k = 0; k < spans.length; k++) {
-      const a = xs[sup[k]], L = spans[k];
-      for (let i = sup[k]; i <= sup[k + 1]; i++) for (let j = sup[k]; j <= sup[k + 1]; j++) {
-        const x = xs[i] - a, xi = xs[j] - a; ILM[i * N + j] = xi <= x ? xi * (L - x) / L : x * (L - xi) / L;
-      }
-      for (let e = sup[k]; e < sup[k + 1]; e++) { const xm = (xs[e] + xs[e + 1]) / 2 - a;
-        for (let j = sup[k]; j <= sup[k + 1]; j++) { const xi = xs[j] - a; ILV[e * N + j] = xi > xm ? (L - xi) / L : -xi / L; } }
-    }
-  }
-  for (let j = 0; j < N && !simple; j++) {
-    b.fill(0); b[2 * j] = -1; const d = solve(b);
-    for (let e = 0; e < N - 1; e++) {
-      const k = ke[e], v0 = d[2 * e], t0 = d[2 * e + 1], v1 = d[2 * e + 2], t1 = d[2 * e + 3];
-      const f0 = k[0][0] * v0 + k[0][1] * t0 + k[0][2] * v1 + k[0][3] * t1;
-      const f1 = k[1][0] * v0 + k[1][1] * t0 + k[1][2] * v1 + k[1][3] * t1;
-      const f3 = k[3][0] * v0 + k[3][1] * t0 + k[3][2] * v1 + k[3][3] * t1;
-      ILM[(e + 1) * N + j] = f3; if (e === 0) ILM[j] = -f1;
-      ILV[e * N + j] = f0;
-    }
-  }
-  const trib = xs.map((_, j) => ((j < N - 1 ? xs[j + 1] - xs[j] : 0) + (j > 0 ? xs[j] - xs[j - 1] : 0)) / 2);
-  // 1-ft load grid, interpolation coefficients
-  const Ltot = xs[N - 1], G = Math.ceil(Ltot - 1e-9), gi = [];
-  for (let g = 0, e = 0; g <= G; g++) { const xg = Math.min(g, Ltot); while (e < N - 2 && xs[e + 1] < xg) e++; const t = (xg - xs[e]) / (xs[e + 1] - xs[e]); gi.push([e, Math.max(0, Math.min(1, t)), g <= Ltot + 1e-9]); }
-  const beam = { xs, sup, N, ILM, ILV, trib, G, gi, Ltot, spans, EI: EI || null };
-  if (noLL) { FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value); return beam; }
-  // live load envelopes per unit IL row (no DF), with IM on truck/tandem
-  const env = row => sgLLRow(beam, row);
-  beam.MLL = []; for (let i = 0; i < N; i++) beam.MLL.push(env(ILM.subarray(i * N, (i + 1) * N)));
-  beam.MF = []; for (let i = 0; i < N; i++) beam.MF.push(sgFatRow(beam, ILM.subarray(i * N, (i + 1) * N)));
-  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. LL9 (2026-10-14): exact section values, no envelope.
-  // Element e carries the section just right of its left node e, except an element that ends at a support (or the girder end), which
-  // carries the section just left of that support. VLLr / VFr: the section just right of node e for every element (station output).
-  const isSup = new Uint8Array(N); sup.forEach(s => isSup[s] = 1);
-  const sec = (e, m) => { const row = ILV.subarray(e * N, (e + 1) * N), c = { e, m }; return [sgLLRow(beam, row, c), sgFatRow(beam, row, c)]; };
-  beam.VLL = []; beam.VF = []; beam.VLLr = []; beam.VFr = [];
-  for (let e = 0; e < N - 1; e++) { const A = sec(e, e), S = isSup[e + 1] ? sec(e, e + 1) : A; beam.VLL.push(S[0]); beam.VF.push(S[1]); beam.VLLr.push(A[0]); beam.VFr.push(A[1]); }
-  FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value);
-  return beam;
-}
-/* Influence-line ordinates on the 1-ft load grid (beam.gi), zero-padded so the sweeps need no bounds checks.
-   cut (shear rows, LL2): { e, m } = the influence line of element e with its unit jump at node m (m = e: the section just right of
-   node e; m = e + 1: just left of node e+1). Smooth part S_j = row_j - [j > e]; a load beyond x_m adds 1. An axle exactly at x_m is
-   taken on the side that gives the extreme: vP (maxima) counts it beyond the section, vN (minima) before it. No cut: vP = vN = row.
-   f(a, up): the same ordinate at any position a, for an axle placed exactly at the section when x_m is not on the 1-ft grid. */
-function sgILGrid(beam, row, cut) {
-  const { G, gi, N, xs, Ltot } = beam, PAD = 96, n = G + 1 + 2 * PAD, src = cut ? Float64Array.from(row, (v, j) => v - (j > cut.e ? 1 : 0)) : row;
-  const c = cut ? xs[cut.m] : 0, vP = new Float64Array(n), vN = cut ? new Float64Array(n) : vP;
-  for (let g = 0; g <= G; g++) { const [e, t, on] = gi[g]; if (!on) continue; const s = src[e] * (1 - t) + src[e + 1] * t;
-    if (!cut) vP[g + PAD] = s; else { vP[g + PAD] = s + (g >= c - 1e-6 ? 1 : 0); vN[g + PAD] = s + (g > c + 1e-6 ? 1 : 0); } }
-  const f = (a, up) => { if (a < -1e-9 || a > Ltot + 1e-9) return 0; let lo = 0, hi = N - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (xs[md] <= a) lo = md; else hi = md; }
-    const t = Math.max(0, Math.min(1, (a - xs[lo]) / (xs[hi] - xs[lo]))), s = src[lo] * (1 - t) + src[hi] * t; return s + (up ? (a >= c - 1e-6 ? 1 : 0) : (a > c + 1e-6 ? 1 : 0)); };
-  return { PAD, vP, vN, src, c, f };
-}
-/* HL-93 envelopes of one influence line (per lane, no DF; truck and tandem stored without IM).
-   LL3 (2026-10-14), 3.6.1.3.1: axles that do not contribute to the extreme force effect are neglected, so a maximum sums only the
-   positive axle effects (P) and a minimum only the negative ones (M) (truck, tandem, and each truck of the 90% two-truck case).
-   The live load deflection rows (3.6.1.3.2) use the same rule (LL8, engineer's decision 2026-10-14). cut: shear rows (LL2), see sgILGrid. */
-function sgLLRow(beam, row, cut) {
-  const { G, trib, N, xs } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD;
-  const P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
-  let tMax = 0, tMin = 0, dMax = 0, dMin = 0, sMax = 14, sMin = 14;
-  for (let s = 14; s <= 30; s++) for (let q = -44 + PAD; q <= G + PAD; q++) {   // rear axle spacing 14 to 30 ft in 1-ft steps (3.6.1.2.2), both directions
-    const r1 = 32 * P[q] + 32 * P[q + s] + 8 * P[q + s + 14];       // front axle toward +x
-    const r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 14 + s];      // front axle toward -x
-    const n1 = 32 * M[q] + 32 * M[q + s] + 8 * M[q + s + 14], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 14 + s];
-    const hi = Math.max(r1, r2), lo = Math.min(n1, n2); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; }
-  }
-  for (let q = -4 + PAD; q <= G + PAD; q++) { dMax = Math.max(dMax, 25 * P[q] + 25 * P[q + 4]); dMin = Math.min(dMin, 25 * M[q] + 25 * M[q + 4]); }
-  if (cut) {   // an axle exactly at the section, on either side of the jump (needed when the section is not on the 1-ft grid)
-    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + ((up ? v > 0 : v < 0) ? v : 0); }, 0);
-    for (let s = 14; s <= 30; s++) for (const Q of [[[32, 0], [32, s], [8, s + 14]], [[8, 0], [32, 14], [32, 14 + s]]]) for (const [, o] of Q) {
-      const hi = sum(Q, I.c - o, true), lo = sum(Q, I.c - o, false); if (hi > tMax) { tMax = hi; sMax = s; } if (lo < tMin) { tMin = lo; sMin = s; } }
-    for (const o of [0, 4]) { const Q = [[25, 0], [25, 4]]; dMax = Math.max(dMax, sum(Q, I.c - o, true)); dMin = Math.min(dMin, sum(Q, I.c - o, false)); }
-  }
-  // two design trucks (14 ft), min 50 ft between lead axle of one and rear axle of the other
-  let two = 0, twoX = 0;
-  for (const dir of [0, 1]) {
-    const tn = [], tp = []; for (let q = -28 + PAD; q <= G + PAD; q++) {
-      tn.push(dir ? 32 * M[q] + 32 * M[q + 14] + 8 * M[q + 28] : 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 28]);
-      tp.push(dir ? 32 * P[q] + 32 * P[q + 14] + 8 * P[q + 28] : 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 28]); }
-    let pm = Infinity, px = -Infinity;
-    for (let k = 0; k < tn.length; k++) { if (k - 78 >= 0) { pm = Math.min(pm, tn[k - 78]); px = Math.max(px, tp[k - 78]); } if (pm < Infinity) { two = Math.min(two, tn[k] + pm); twoX = Math.max(twoX, tp[k] + px); } }
-  }
-  let lp = 0, ln = 0;
-  if (!cut) for (let j = 0; j < N; j++) { const a = row[j] * trib[j] * 0.64; if (a > 0) lp += a; else ln += a; }
-  else for (let j = 0; j < N - 1; j++) {   // lane on a shear influence line: element by element, jump at node m, exact positive and negative parts
-    const h = xs[j + 1] - xs[j], k = j >= cut.m ? 1 : 0, a0 = I.src[j] + k, a1 = I.src[j + 1] + k;
-    if (a0 >= 0 && a1 >= 0) lp += 0.32 * h * (a0 + a1); else if (a0 <= 0 && a1 <= 0) ln += 0.32 * h * (a0 + a1);
-    else { const p = Math.max(a0, a1), m = Math.min(a0, a1), z = h / (p - m); lp += 0.32 * z * p * p; ln -= 0.32 * z * m * m; }
-  }
-  return { pos: 1.33 * Math.max(tMax, dMax) + lp, neg: 1.33 * Math.min(tMin, dMin) + ln, neg2: 0.9 * (1.33 * two + ln), pos2: 0.9 * (1.33 * twoX + lp), twoMax: twoX,
-           truckMax: tMax, truckMin: tMin, tanMax: dMax, tanMin: dMin, lanePos: lp, laneNeg: ln, twoMin: two, sMax, sMin };
-}
-
-/* fatigue truck (3.6.1.4.1): 8, 32, 32 kip at 14 ft and 30 ft, IM = 15%, one lane. LL1 (2026-10-14): "one design truck or axles
-   thereof", so axles that do not contribute to the extreme are neglected (as 3.6.1.3.1): a maximum sums only the positive axle
-   effects (P), a minimum only the negative ones (M). cut: shear rows (LL2), see sgILGrid. */
-function sgFatRow(beam, row, cut) {
-  const { G } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD, P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
-  let mx = 0, mn = 0;
-  for (let q = -44 + PAD; q <= G + PAD; q++) {
-    const r1 = 32 * P[q] + 32 * P[q + 30] + 8 * P[q + 44], r2 = 8 * P[q] + 32 * P[q + 14] + 32 * P[q + 44];
-    const n1 = 32 * M[q] + 32 * M[q + 30] + 8 * M[q + 44], n2 = 8 * M[q] + 32 * M[q + 14] + 32 * M[q + 44];
-    mx = Math.max(mx, r1, r2); mn = Math.min(mn, n1, n2);
-  }
-  if (cut) for (const Q of [[[32, 0], [32, 30], [8, 44]], [[8, 0], [32, 14], [32, 44]]]) for (const [, o] of Q) {   // an axle exactly at the section
-    let hi = 0, lo = 0; for (const [w, o2] of Q) { const a = w * I.f(I.c - o + o2, true), b = w * I.f(I.c - o + o2, false); hi += a > 0 ? a : 0; lo += b < 0 ? b : 0; } mx = Math.max(mx, hi); mn = Math.min(mn, lo); }
-  return { max: 1.15 * mx, min: 1.15 * mn, rawMax: mx, rawMin: mn };
-}
-
-
-/* Staged stiffness (DC1 on steel, DC2/DW on 3n, LL on n) with cracked composite zones.
-   SP(x) -> { Is, I3u, Inu, Icr } section moments of inertia at station x (in^4).
-   crack: '15' = 15% of the adjacent spans each side of interior supports; 'dl' = negative dead-load region (first pass uncracked).
-   w1: DC1 load per node (klf); wSD: DC2 + DW load (klf, scalar). */
-function feStages(b0, spans, cont, SP, crack, w1, wSD, llFrom) {
-  const N = b0.N, NE = N - 1, xs = b0.xs, sup = b0.sup, trib = b0.trib;
-  const Is = new Float64Array(NE), I3u = new Float64Array(NE), Inu = new Float64Array(NE), Icr = new Float64Array(NE);
-  for (let e = 0; e < NE; e++) { const q = SP((xs[e] + xs[e + 1]) / 2); Is[e] = q.Is; I3u[e] = q.I3u; Inu[e] = q.Inu; Icr[e] = q.Icr; }
-  const ck = new Uint8Array(NE);
-  if (cont && crack !== 'none') {   // 'none': concrete deck effective over the entire length for analysis (AASHTO LRFD 6.10.1.5)
-    if (crack === 'dl') {
-      const s0 = sgBeam(spans, false, Is, true), s3 = sgBeam(spans, false, I3u, true), M = new Float64Array(N);
-      for (let i = 0; i < N; i++) { let t = 0; const r = i * N; for (let j = 0; j < N; j++) t += (s0.ILM[r + j] * w1[j] + s3.ILM[r + j] * wSD) * trib[j]; M[i] = t; }
-      for (let e = 0; e < NE; e++) ck[e] = M[e] < 0 && M[e + 1] < 0 ? 1 : 0;
-    } else for (let k = 1; k < sup.length - 1; k++) { const xp = xs[sup[k]], a = 0.15 * spans[k - 1], c = 0.15 * spans[k];
-      for (let e = 0; e < NE; e++) { const xm = (xs[e] + xs[e + 1]) / 2; if (xm >= xp - a - 1e-9 && xm <= xp + c + 1e-9) ck[e] = 1; } }
-  }
-  const I3 = I3u.map((v, e) => ck[e] ? Icr[e] : v), In = Inu.map((v, e) => ck[e] ? Icr[e] : v);
-  return { Is, I3, In, I3u, Inu, Icr, crack: ck, mode: crack === 'dl' ? 'dl' : crack === 'none' ? 'none' : '15',
-    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF, VLLr: llFrom.VLLr, VFr: llFrom.VFr } : sgBeam(spans, !cont, In, false) };
-}
-/* built-in verification against closed-form and independent solutions */
-function feVerify() {
-  const out = [], chk = (name, got, exp, tol) => out.push({ name, got, exp, err: Math.abs(got - exp) / Math.abs(exp), ok: Math.abs(got - exp) / Math.abs(exp) < tol });
-  const Mw = (b, w) => { const N = b.N, M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < N; j++) s += b.ILM[i * N + j] * w * b.trib[j]; M[i] = s; } return M; };
-  const Rs = (b, w, k) => { const N = b.N, s = b.sup[k]; let r = 0; for (let j = 0; j < N; j++) r += ((s < N - 1 ? b.ILV[s * N + j] : 0) - (s > 0 ? b.ILV[(s - 1) * N + j] : 0) + (j === s ? 1 : 0)) * w * b.trib[j]; return r; };
-  const near = (b, x) => { let k = 0; b.xs.forEach((v, i) => { if (Math.abs(v - x) < Math.abs(b.xs[k] - x)) k = i; }); return k; };
-  const L = 100;
-  { const b = sgBeam([L, L], false, null, true), M = Mw(b, 1); chk('Two equal spans, uniform load: pier moment = wL²/8', -M[b.sup[1]], L * L / 8, 0.002); chk('Two equal spans: interior reaction = 1.25wL', Rs(b, 1, 1), 1.25 * L, 0.002); chk('Two equal spans: end reaction = 0.375wL', Rs(b, 1, 0), 0.375 * L, 0.002); chk('Two equal spans: maximum positive moment = 9wL²/128', Math.max(...M), 9 * L * L / 128, 0.003); }
-  { const EIf = x => Math.abs(x - L) <= 20 ? 3 : 1, b0 = sgBeam([L, L], false, null, true), EI = new Float64Array(b0.N - 1); for (let e = 0; e < b0.N - 1; e++) EI[e] = EIf((b0.xs[e] + b0.xs[e + 1]) / 2);
-    const b = sgBeam([L, L], false, EI, true), M = Mw(b, 1); let d10 = 0, d11 = 0; const h = 0.002; for (let x = h / 2; x < 2 * L; x += h) { const m0 = x * (2 * L - x) / 2, m1 = -(x < L ? x : 2 * L - x) / 2, ei = EIf(x); d10 += m0 * m1 / ei * h; d11 += m1 * m1 / ei * h; }
-    const R = -d10 / d11; chk('Pier region 3EI over 40 ft: interior reaction (flexibility method)', Rs(b, 1, 1), R, 0.002); chk('Pier region 3EI over 40 ft: pier moment (flexibility method)', M[b.sup[1]], L * L / 2 - R * L / 2, 0.002); }
-  { const b = sgBeam([L], true, null, false), x = 50, IL = q => q < 0 || q > L ? 0 : (q <= x ? q * (L - x) / L : x * (L - q) / L); let tr = 0, tn = 0, ft = 0;
-    for (let s = 14; s <= 30; s += 2) for (let q = -60; q <= L + 60; q += 0.1) tr = Math.max(tr, 32 * IL(q) + 32 * IL(q + s) + 8 * IL(q + s + 14), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 14 + s));
-    for (let q = -4; q <= L; q += 0.1) tn = Math.max(tn, 25 * IL(q) + 25 * IL(q + 4)); for (let q = -60; q <= L + 60; q += 0.1) ft = Math.max(ft, 32 * IL(q) + 32 * IL(q + 30) + 8 * IL(q + 44), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 44));
-    chk('HL-93, 100 ft simple span, midspan moment (brute-force sweep)', b.MLL[near(b, x)].pos, 1.33 * Math.max(tr, tn) + 0.64 * L * L / 8, 0.002); chk('Fatigue truck, 100 ft simple span, midspan moment', b.MF[near(b, x)].max, 1.15 * ft, 0.002);
-    chk('HL-93, 100 ft simple span, end shear (axle at the support, closed form)', feIM(b.VLL[0], 0.33).pos, 1.33 * (32 + 32 * (L - 14) / L + 8 * (L - 28) / L) + 0.64 * L / 2, 0.002); }
-  { const b = sgBeam([L, L], false, null, false), IL = a => { if (a < 0 || a > 2 * L) return 0; const t = a <= L ? a : 2 * L - a; return -t * (L * L - t * t) / (4 * L * L); };
-    const tk = q => Math.min(32 * IL(q) + 32 * IL(q + 14) + 8 * IL(q + 28), 8 * IL(q) + 32 * IL(q + 14) + 32 * IL(q + 28)); let two = 0, lane = 0;
-    for (let q1 = -28; q1 <= 2 * L; q1 += 1) for (let q2 = q1 + 78; q2 <= 2 * L; q2 += 1) two = Math.min(two, tk(q1) + tk(q2)); for (let a = 0.01; a < 2 * L; a += 0.02) lane += Math.min(IL(a), 0) * 0.64 * 0.02;
-    chk('Two equal spans, pier moment, 90% of two trucks + lane (exact influence line)', b.MLL[b.sup[1]].neg2, 0.9 * (1.33 * two + lane), 0.006); }
-  return out;
-}
-
-/* dynamic load allowance applied to stored envelope components (truck/tandem IM, fatigue IM) */
-function feIM(e, im) { const k = 1 + im; return { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax }; }
-function feFatIM(e, imf) { const k = 1 + imf; return { max: k * e.rawMax, min: k * e.rawMin }; }
-
-/* Moment gradient modifier C_b over the unbraced segment xa..xb (AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3b-1, adopted from AISC;
-   term definitions as in 6.10.8.2.3b). Not called in this page: Preliminary sizing (the pl-src page) has the copy in use, with the
-   nonprismatic treatment of 6.10.8.2.3c (feNpr, feGeA with App. D6.6.2 Method A, feGe; CB2, 2026-10-13):
-   C_b = 12.5 M_max / (2.5 M_max + 3 M_A + 4 M_B + 3 M_C)
-   M_max = largest moment producing compression in the flange considered; M_A, M_B, M_C = absolute values at the quarter
-   points of the envelope value producing the largest compression in the flange, or the smallest tension where the flange is
-   never in compression (the envelope array M passed is the one that does so for this flange). Moments are taken as zero only
-   where the flange is continuously braced next to the point, which does not apply to the flanges checked here.
-   sgn = +1 when positive moment compresses the flange (top), -1 when negative moment does (bottom). */
-function feCb(xs, M, xa, xb, sgn) {
-  const at = x => { let i = 0; while (i < xs.length - 2 && xs[i + 1] < x) i++; const t = Math.max(0, Math.min(1, (x - xs[i]) / (xs[i + 1] - xs[i]))); return M[i] * (1 - t) + M[i + 1] * t; };
-  let Mx = 0; for (let k = 0; k <= 40; k++) Mx = Math.max(Mx, sgn * at(xa + (xb - xa) * k / 40));
-  if (!(Mx > 0)) return 1; const q = f => Math.abs(at(xa + (xb - xa) * f));
-  return 12.5 * Mx / (2.5 * Mx + 3 * q(0.25) + 4 * q(0.5) + 3 * q(0.75));
-}
 
 /* =====================================================================
    GirderDetail: structural analysis (line girder, any girder of the bridge)
@@ -20682,6 +20488,10 @@ function applyCollapse() { setTimeout(() => renderPlots(), 0);
   $$('.tab-panel').forEach(tp => { let n = 0; tp.querySelectorAll(':scope .cc > .cc-hd .sec-no').forEach(s => s.textContent = (++n) + '. '); });
 }
 function whereTbl(rows) { if (!rows || !rows.length) return ''; return `<div class="eq-where"><div class="eq-where-hd">where</div><table>${rows.map(([s, d, v, u]) => `<tr><td class="wsym">${s}</td><td class="wdesc">${d}</td><td class="wval">${v}<span class="wunit">${u}</span></td></tr>`).join('')}</table></div>`; }
+/* SBD4 (2026-10-22): one helper for the head of a check's worked derivation, used by the Checks tab and the Girder section module's
+   worked calculations (it was written out in both): the criterion (equation, symbolically, with its article), then the table of every
+   item with its values and status, or "Not applicable" with the reason. The worked steps (values substituted, result) follow it (eq). */
+function deriv(k) { return `<div class="eq-block"><div class="eq-title"><span>Criterion</span><span class="eq-ref">${esc(k.ref)}</span></div><div class="eq-math">\\[${k.sym}\\]</div></div>` + (!k.items.length ? `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>` : `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>`); }
 const eq = (title, ref, tex, where, cls = '') => `<div class="eq-block ${cls}"><div class="eq-title"><span>${title}</span><span class="eq-ref">${ref || ''}</span></div><div class="eq-math">\\[${tex}\\]</div>${whereTbl(where)}</div>`;
 
 /* ---------- summary ---------- */
@@ -20790,9 +20600,8 @@ function renderChecks() {
   let h = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="checks">Expand all</button><button type="button" class="dg-btn" data-col="checks">Collapse all</button><button type="button" class="dg-btn" id="col-ok">Collapse all but failures</button></div>`;
   grps().forEach(g => { h += `<h3 class="grp-hd">${g}</h3>`;
     CK.filter(k => k.grp === g).forEach(k => { const gov = k.items[k.gov];
-      let b = `<div class="eq-block"><div class="eq-title"><span>Criterion</span><span class="eq-ref">${esc(k.ref)}</span></div><div class="eq-math">\\[${k.sym}\\]</div></div>`;
-      if (!k.items.length) b += `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>`;
-      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>`;
+      let b = deriv(k);   // SBD4: criterion and item table (deriv)
+      if (k.items.length) {
         b += eq(`Governing: ${sub(gov.loc)}`, '', gov.work, gov.where, gov.st === 'fail' ? 'eq-fail' : ''); }
       if (k.note) b += `<p class="note-p">${sub(k.note)}</p>`;
       h += card('chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${k.id}">Open the worked calculation in the report</a></p>` + b, `${srcTag(k.src)}${kBadge(k)}`); }); });
@@ -20855,11 +20664,52 @@ function initProjects() {
   $('#pb_saveas').onclick = () => { const n = prompt('Save project as:', P.meta.subject || ''); if (!n) return; const s = store(); if (s[n] && !confirm(`"${n}" exists. Overwrite it?`)) return; s[n] = clone(P); putStore(s); CUR = n; refreshList(); flash(`Saved "${n}".`); };
   $('#pb_open').onclick = () => { const n = $('#proj_list').value, s = store(); if (s[n]) { loadData(s[n], n); refreshList(); flash(`Opened "${n}".`); } };
   $('#pb_delete').onclick = () => { const n = $('#proj_list').value, s = store(); if (!s[n] || !confirm(`Delete "${n}"? This cannot be undone.`)) return; delete s[n]; putStore(s); if (CUR === n) CUR = ''; refreshList(); flash(`Deleted "${n}".`); };
-  $('#pb_export').onclick = () => { const b = new Blob([JSON.stringify({ app: 'GirderDetail', v: 1, data: P }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (P.meta.subject || (P.mod === 'bstf' ? 'bearing_stiffeners' : 'splice')).replace(/[^\w\-]+/g, '_') + '.json'; a.click(); };
+  $('#pb_export').onclick = () => { const b = new Blob([JSON.stringify(sbdProjectFile(), null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (P.meta.subject || (P.mod === 'bstf' ? 'bearing_stiffeners' : 'splice')).replace(/[^\w\-]+/g, '_') + '.json'; a.click(); };   // SBD4: one project file
   $('#pb_import').onclick = () => $('#pb_file').click();
-  $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (j.app === 'PlateLine-splices') { writeInbox(j); renderInbox(); flash('PlateLine data received; see Import from PlateLine.'); } else if (j.data && (j.data.sec || j.data.bs)) { loadData(j.data, ''); flash(`Imported ${f.name}.`); } else throw 0; } catch (e) { flash('That file is not a GirderDetail project or a PlateLine splice export.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
+  $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (j.app === 'PlateLine-splices') { writeInbox(j); renderInbox(); flash('PlateLine data received; see Import from PlateLine.'); } else if (sbdProjectImport(j, f.name)) { /* SBD4: one project file, or a file of one part */ } else if (j.data && (j.data.sec || j.data.bs)) { loadData(j.data, ''); flash(`Imported ${f.name}.`); } else throw 0; } catch (e) { flash('That file is not a Steel Bridge Design, GirderDetail, Preliminary sizing (PlateLine) or ST-Girder project, or a PlateLine splice export.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
   $('#pb_new').onclick = () => { if (confirm('Replace the current inputs with the built-in example?')) loadData(GD_FULL(), ''); };
 }
+/* ---------- One project file (SBD4, 2026-10-22; merge of GirderDetail and ST-Girder, PLAN step 4) ----------
+   Export JSON writes every part of the project in one file:
+     { app: 'SteelBridgeDesign', v: 1, data: <the modules' project P, as GirderDetail's file>, name, pl: <Preliminary sizing's file
+       { app: 'PlateLine', v: 1, name, data }>, st: <ST-Girder's file { ...inputs, _schema: 'stgirder' }> }
+   The modules' part keeps GirderDetail's field (data), so an older copy of GirderDetail imports the file as its own (it reads data only).
+   Import JSON reads this file and every older one: GirderDetail's ({ app: 'GirderDetail', data }), Preliminary sizing's ({ app: 'PlateLine', data }),
+   ST-Girder's Export JSON ({ _schema: 'stgirder', ... }) and PlateLine's splice export (as before). A file of one part replaces that part only.
+   Versions: SBD_V is the current version of the file; SBD_MIG[v] converts a file of version v to v + 1 (none yet: v 1 is the first). A file of a
+   newer version than this copy knows is refused, nothing is changed. Saved keys are not changed: each part is loaded where it lives
+   (girderdetail_*, the Preliminary sizing frame / plateline_autosave_v1, ST-Girder's stgirder.session). */
+const SBD_V = 1, SBD_MIG = {};
+function sbdMigrate(j) { let v = Math.round(+j.v) || 1; if (v > SBD_V) return null; while (v < SBD_V) { j = SBD_MIG[v](j); v++; } return { ...j, v: SBD_V }; }
+function sbdPlPart() { let d = null, name = '';
+  try { if (PL_FRAME && PL_FRAME.dataset.up) { d = JSON.parse(JSON.stringify(PL_FRAME.contentWindow.eval('P'))); name = PL_FRAME.contentWindow.eval('CUR_NAME') || ''; } } catch (e) { d = null; }
+  if (!d) try { const a = JSON.parse(localStorage.getItem('plateline_autosave_v1') || 'null'); if (a && a.data) { d = a.data; name = a.name || ''; } } catch (e) { }
+  return d ? { app: 'PlateLine', v: 1, name, data: d } : null; }
+function sbdStPart() { let inp = null;
+  try { const c = ST_FRAME && ST_FRAME.contentWindow.gdStCur && ST_FRAME.contentWindow.gdStCur(); if (c && c.inp) inp = JSON.parse(JSON.stringify(c.inp)); } catch (e) { inp = null; }
+  if (!inp) try { inp = JSON.parse(localStorage.getItem('stgirder.session') || 'null'); } catch (e) { inp = null; }
+  return inp ? { ...inp, _schema: 'stgirder' } : null; }
+function sbdProjectFile() { return { app: 'SteelBridgeDesign', v: SBD_V, name: CUR || '', data: P, pl: sbdPlPart(), st: sbdStPart() }; }
+// Preliminary sizing's part: loaded in its frame (its own loadData), or saved for it to open with when the frame is not built yet
+function sbdPlLoad(f) { const d = f.data, name = f.name || '';
+  try { if (PL_FRAME && PL_FRAME.dataset.up && PL_FRAME.contentWindow.loadData) { PL_FRAME.contentWindow.loadData(d, name); return; } } catch (e) { }
+  try { localStorage.setItem('plateline_autosave_v1', JSON.stringify({ data: d, name, ts: Date.now() })); } catch (e) { }
+  if (PL_FRAME) { PL_FRAME.remove(); PL_FRAME = null; GD_PLUP = 0; } plEnsure(); }
+// ST-Girder's part: its session key, then the view's frame is built again (it opens with that session, as stgirder.html would)
+function sbdStLoad(inp) { const o = { ...inp }; delete o._schema;
+  if (ST_FRAME) { ST_FRAME.remove(); ST_FRAME = null; ST_READY = false; ST_Q.length = 0; ST_STATE = null; ST_TBK = null; ST_APXCSS = null; ST_FP = null; }
+  try { localStorage.setItem('stgirder.session', JSON.stringify(o)); } catch (e) { }
+  if (stViewOn()) stShow(); }
+// true when j is one of the files this function reads (and it has been loaded), false to let the caller try the older ones
+function sbdProjectImport(j, fname) {
+  if (j && j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) { flash(`${fname}: a newer Steel Bridge Design file (version ${j.v}) than this copy reads; nothing was changed.`, 'fail'); return true; }
+    const parts = ['the modules', m.pl ? 'Preliminary sizing' : '', m.st ? 'Design & Rating (ST-Girder)' : ''].filter(Boolean);
+    if (!confirm(`Open ${fname}? It replaces ${parts.join(', ')} with the file's project.`)) return true;
+    if (m.pl && m.pl.data) sbdPlLoad(m.pl); if (m.st) sbdStLoad(m.st); if (m.data) loadData(m.data, m.name || '');
+    flash(`Imported ${fname} (${parts.join(', ')}).`); return true; }
+  if (j && j.app === 'PlateLine' && j.data && j.data.girder) { if (!confirm(`Open ${fname} in Preliminary sizing? It replaces its project.`)) return true; sbdPlLoad(j); flash(`Imported ${fname} into Preliminary sizing.`); return true; }
+  if (j && j._schema === 'stgirder') { if (!confirm(`Open ${fname} in Design & Rating (ST-Girder)? It replaces ST-Girder's inputs.`)) return true; sbdStLoad(j); flash(`Imported ${fname} into Design & Rating (ST-Girder).`); return true; }
+  return false; }
 /* ---------- PlateLine inbox ---------- */
 const readInbox = () => { try { return JSON.parse(localStorage.getItem(KEY_IN) || 'null'); } catch (e) { return null; } };
 const writeInbox = j => { try { localStorage.setItem(KEY_IN, JSON.stringify(j)); } catch (e) {} };
@@ -21377,18 +21227,35 @@ window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
    it is ready: its first status message (pl-status, posted after its first analysis) received, and the 2.5 s after its load event passed (dataset.ready).
    A request made while others wait joins the queue behind them, so an earlier request never arrives after a later one. */
 let GD_PLQ = [];
-function gdPlPost(msg) { if (PL_FRAME && PL_FRAME.contentWindow && PL_FRAME.dataset.ready && PL_FRAME.dataset.up && !GD_PLQ.length) { PL_FRAME.contentWindow.postMessage(msg, '*'); return; } GD_PLQ.push(msg); gdPlFlush(); }
-function gdPlFlush() { if (!PL_FRAME || !PL_FRAME.contentWindow || !PL_FRAME.dataset.ready || !PL_FRAME.dataset.up) return; GD_PLQ.splice(0).forEach(m => PL_FRAME.contentWindow.postMessage(m, '*')); }
+/* SBD4 (2026-10-22): one message bus per embedded frame (Preliminary sizing, Design & Rating (ST-Girder)). frameBus(o): o.frame() the iframe
+   (or null), o.ready() whether it may receive now, o.to() the target origin, o.q the queue (kept while not ready, sent in order by flush()),
+   o.sameOrigin: from() also checks the message's origin. post(m) sends at once when ready and nothing is queued, else queues and flushes;
+   from(e) is true for a message from that frame only. Behaviour as the functions it replaces (gdPlPost/gdPlFlush, stPost, the ready flush). */
+function frameBus(o) { const q = o.q || [];
+  const bus = { q,
+    from: e => { const F = o.frame(); return !!F && e.source === F.contentWindow && (!o.sameOrigin || e.origin === self.origin); },
+    flush() { const F = o.frame(); if (!F || !F.contentWindow || !o.ready()) return; q.splice(0).forEach(m => F.contentWindow.postMessage(m, o.to())); },
+    post(m) { const F = o.frame(); if (F && F.contentWindow && o.ready() && !q.length) { F.contentWindow.postMessage(m, o.to()); return; } q.push(m); bus.flush(); } };
+  return bus; }
+const PL_BUS = frameBus({ frame: () => PL_FRAME, ready: () => !!(PL_FRAME && PL_FRAME.dataset.ready && PL_FRAME.dataset.up), to: () => '*', q: GD_PLQ });
+function gdPlPost(msg) { PL_BUS.post(msg); }
+function gdPlFlush() { PL_BUS.flush(); }
 window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'pl-status' && !PL_FRAME.dataset.up) { PL_FRAME.dataset.up = '1'; gdPlFlush(); } });
 /* PLSRC (2026-10-15): the Preliminary sizing (PlateLine) page is stored as plain text in <script type="text/plain" id="pl-src"> above the main
    script (it was the base64 string PL_B64 before). So that nothing in the page can end that block early, every "<" followed by
    zero or more backslashes and then "/script" or "!--" (any case) is stored with one extra backslash after the "<" (a closing
    script tag is stored as "<\/script>"); plSrc() removes that one backslash again and returns the page exactly as it was. */
 function plSrc() { return document.getElementById('pl-src').textContent.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'); }
+/* SBD4: the Preliminary sizing page with this page's shared code block (SBD-SHARED, at the top of this script) in place of its placeholder
+   line; null when the placeholder or the block is missing (the frame is then not built) */
+function sbdShared(src) { const B = 'SBD-SHARED-' + 'BEGIN', E = '/* SBD-SHARED-' + 'END */', PH = /^\/\* @@SBD-SHARED@@ .*\*\/$/m;
+  const me = [...document.scripts].map(x => x.text).find(t => t.includes(B) && t.includes(E)); if (!me || !PH.test(src)) return null;
+  const a = me.lastIndexOf('/* ====', me.indexOf(B)), b = me.indexOf(E) + E.length; const blk = me.slice(a, b);
+  return src.replace(PH, () => blk); }
 function plShow(bg) {
   const w = $('#pl-wrap'); w.style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px';
   if (PL_FRAME) return;
-  const src = plSrc();
+  const src = sbdShared(plSrc()); if (src == null) { console.error('Preliminary sizing: the shared code block (SBD-SHARED) could not be placed'); return; }   // SBD4
   PL_FRAME = document.createElement('iframe'); PL_FRAME.id = 'pl-frame'; PL_FRAME.title = 'Preliminary sizing (PlateLine)'; PL_FRAME.addEventListener('load', () => setTimeout(() => { PL_FRAME.dataset.ready = '1'; gdPlFlush(); }, 2500));
   const own = `<script>window.GD_OWN_RULES = ${JSON.stringify(OWN_RULES).replace(/</g, '\\u003c')};<\/script>`;   // OWN1: the owner rules table, before Preliminary sizing's scripts
   PL_FRAME.srcdoc = src.replace(/<head>/i, h => h + own); w.appendChild(PL_FRAME);
@@ -21408,6 +21275,7 @@ window.addEventListener('resize', () => { if (P && P.mod === 'pl') $('#pl-wrap')
      result is the same as "Send to ST-Girder" + "Open ST-Girder now"; the frame answers { type: 'gd-st-applied', id, ok, producedAt } once the
      inputs are applied, and { type: 'gd-st-ready' } when it has started. Printing: ST-Girder's Print prints the frame (its own window.print). */
 let ST_FRAME = null, ST_READY = false, ST_Q = [], ST_N = 0;
+const ST_BUS = frameBus({ frame: () => ST_FRAME, ready: () => ST_READY, to: () => stTo(), q: ST_Q, sameOrigin: true });   // SBD4
 const ST_WAIT = new Map();   // message id -> { res, rej, payload }
 const ST_SHIMS = [
   ["var last=(location.pathname||'').split('/').pop()||'';", "var last=(window.GD_ST_HOST&&GD_ST_HOST.file)||(location.pathname||'').split('/').pop()||'';"],
@@ -21462,7 +21330,7 @@ window.gdStReportHtml=function(opt){ opt=opt||{}; const cur=window.gdStCur?windo
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);`]];
 function stSrc() { return document.getElementById('st-src').textContent.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'); }
 const stTo = () => self.origin === 'null' ? '*' : self.origin;
-const gdFromST = e => !!ST_FRAME && e.source === ST_FRAME.contentWindow && e.origin === self.origin;   // messages are accepted only from the ST-Girder frame
+const gdFromST = e => ST_BUS.from(e);   // messages are accepted only from the ST-Girder frame (same origin; SBD4: frameBus)
 function stPos() { const w = $('#st-wrap'); if (w) w.style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px'; }
 function stEnsure() {
   if (ST_FRAME) return true;
@@ -21477,10 +21345,10 @@ function stEnsure() {
   return true;
 }
 window.addEventListener('message', e => { if (!gdFromST(e) || !e.data) return; const d = e.data;
-  if (d.type === 'gd-st-ready') { ST_READY = true; ST_Q.splice(0).forEach(m => ST_FRAME.contentWindow.postMessage(m, stTo())); return; }
+  if (d.type === 'gd-st-ready') { ST_READY = true; ST_BUS.flush(); return; }
   if (d.type === 'gd-st-applied') { const w = ST_WAIT.get(d.id); if (!w) return; ST_WAIT.delete(d.id);
     if (d.ok) { stMsg(`${w.payload.member.key} loaded into ST-Girder.`); w.res(w.payload); } else { stMsg(`${w.payload.member.key} was not loaded: ${d.why}`, 'fail'); w.rej(new Error(d.why || 'not applied')); } } });
-function stPost(m) { if (ST_READY && ST_FRAME && ST_FRAME.contentWindow) ST_FRAME.contentWindow.postMessage(m, stTo()); else ST_Q.push(m); }
+function stPost(m) { ST_BUS.post(m); }
 // the view: shown over the modules (P.mod unchanged); the module tabs show it as selected
 function stShow() {
   stBar(); stPos(); stEnsure();   // when the frame cannot be prepared, stEnsure says so in the bar
@@ -21715,7 +21583,16 @@ window.addEventListener('message', e => {
 const GDM_MODES = ['pl', 'mod'], GDM_DEM = ['splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'];   // the modules that take demands
 const gdPLmode = () => !P || P.gdMode !== 'mod';
 const gdIsPLsrc = l => /^(Preliminary sizing|PlateLine)/.test(l || 'Preliminary sizing');
-const gdModLabel = k => k === 'splice' ? 'Field splice' : k === 'bstf' ? 'Bearing stiffeners' : GM[k] ? GM[k].label : k;
+/* SBD4 (2026-10-22): one registry of the parts of Steel Bridge Design, read over MODS and GM (nothing is copied): every module (its MODS entry
+   and its GM engine where it has one), the Preliminary sizing frame (module pl, frame PL_FRAME) and the Design & Rating (ST-Girder) view
+   (frame ST_FRAME; not a module). SBD_REG.get(id) -> { id, kind: 'module' | 'view', label, title, engine, frame }; SBD_REG.ids(); SBD_REG.label(id)
+   (the module labels used in messages, as gdModLabel gave them). */
+const SBD_REG = {
+  ids: () => [...Object.keys(MODS), 'st'],
+  label: k => k === 'splice' ? 'Field splice' : k === 'bstf' ? 'Bearing stiffeners' : GM[k] ? GM[k].label : k,
+  get(k) { if (k === 'st') return { id: 'st', kind: 'view', label: 'Design & Rating (ST-Girder)', title: 'steel plate girder design check and load rating (ST-Girder), AASHTO LRFD', engine: null, frame: () => ST_FRAME };
+    const M = MODS[k]; if (!M) return null; return { id: k, kind: 'module', label: k === 'pl' ? 'Preliminary sizing' : SBD_REG.label(k), title: M.title, engine: GM[k] || null, frame: k === 'pl' ? () => PL_FRAME : null }; } };
+const gdModLabel = k => SBD_REG.label(k);   // SBD4: from the registry (same labels)
 let GD_PLD = null, GD_PLST = null, GD_PLUP = 0, GD_MODE_WHY = null;   // GD_PLD: the last demand signature from Preliminary sizing { sig, u }
 const GD_SYNC = { n: 0, u: null, held: false };   // automatic updates in a row without a user change (at most 3: a cross-frame design that keeps changing the frame weights)
 function gdModeInfer(p) {

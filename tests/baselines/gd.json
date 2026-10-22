@@ -36,9 +36,9 @@
    }
   },
   "builtin / RIDOT": {
-   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html",
+   "a": "origin/main (9684292):Steel Bridge Beam Modules.html; rpt.sa: origin/main (0072010):Steel Bridge Design.html; gd.project: origin/main (0072010) (SBD4 note: only _adUndo, the auto-design undo snapshot, differs from 9684292)",
    "sections": {
-    "gd.project": "02bb53abce82",
+    "gd.project": "e6e33c02d746",
     "pl.project": "2cb1fe9e52d0",
     "pl.checks": "adda549a82e4",
     "pl.analysis": "0e4720a3e381",
