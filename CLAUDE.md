@@ -34,14 +34,11 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   (`psbeam.html` until 2026-10-22; the block's comments still say
   "psbeam.html"), and the
   ACI rebar development-length app that is also embedded in
-  `Concrete Beam Capacity.html`. See `AUDIT.md`. (`stgirder.html` no longer
-  carries the bootstrap block: since 2026-10-19 it is connected to GirderDetail
-  only and keeps a reduced, ST-Girder-only app-path record.)
-- Since 2026-10-22, `stgirder.html` is also embedded verbatim in
-  `Steel Bridge Design.html` (GirderDetail, renamed from
-  `Steel Bridge Beam Modules.html`) as the `st-src` block. Until `stgirder.html`
-  is retired, a change to it is copied into `st-src` in the same PR (escaped as
-  `pl-src`; `tests/check-syntax.mjs` checks both).
+  `Concrete Beam Capacity.html`. See `AUDIT.md`.
+- ST-Girder lives only inside `Steel Bridge Design.html` (GirderDetail, renamed
+  from `Steel Bridge Beam Modules.html`) as the `st-src` block; `stgirder.html`
+  was deleted at the cut-over (2026-10-22, #422). Edit ST-Girder in `st-src`
+  (escaped as `pl-src`; `tests/check-syntax.mjs` checks it).
 
 ## 4. Engineering calculations: change control
 
@@ -89,7 +86,7 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   renaming, or reorganizing.
 - Do not move, rename, or delete tool files unless asked. Other tools link to
   some of them by file name (`index.html`, `lldf.html`, `psbeam.html`,
-  `stgirder.html`, `elastomeric_design_module.html`, `Steel Bridge Design.html`;
+  `elastomeric_design_module.html`, `Steel Bridge Design.html`;
   `Steel Bridge Beam Modules.html` is kept as a redirect page to it;
   `Prestressed Bridge Design.html`, with `psbeam.html` kept as a redirect page
   to it).
