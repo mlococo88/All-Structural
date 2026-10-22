@@ -21196,3 +21196,276 @@ block; the st baseline was recorded on the stand-alone page). Results in the PR 
 **Open items:** `tests/baselines/st_interior.json`: re-record `st.tab.Report` and `st.report.all` from the frame (`st-span.mjs --target sbd`) at the next
 full st-span run (display only, above). `CLAUDE.md` §3 ("Since 2026-10-22, `stgirder.html` is also embedded verbatim …") and §7 (file names other tools link to, including
 `stgirder.html`) now describe the file as it was; CLAUDE.md is the engineer's rule file and was not changed by this PR. Suggested text in the PR.
+
+## 2026-10-22 — PR: claude/sbd-s2-9-neg-flexure (S2-9: Stage 2 item 4, negative flexure: GirderDetail's Appendix A6 permission per 6.10.6.2.3, and ST-Girder's Neg flex / Neg tens checks from GirderDetail's GS7/GS8/GS9 through the hand-off; engineer decisions 2026-10-22; PR link added after merge)
+
+**Engineering results change (§4 callouts in the PR):**
+1. GirderDetail, Girder section: Appendix A6 is permitted only where every testable condition of 6.10.6.2.3 (10th Ed.) holds (was: F_y of the
+   flanges, the web limit with c_rw = 5.7, I_yc/I_yt and the prismatic L_b only). New conditions: largest support skew ≤ 20°, straight bridge,
+   web F_yw ≤ 70 ksi, and the noncompact web limit with c_rw from Eqs. 6.10.6.2.3-4 and -5 (4.6 ≤ c_rw ≤ 5.7). More conservative (A6 is permitted
+   in fewer cases); no result of the test projects changes (A6 was already not permitted there, see S2-9-a).
+2. ST-Girder (Design & Rating view), with a GirderDetail hand-off that carries `girderDetail.checks.negFlex` (new, additive, HANDOFF.md §4.9):
+   the Neg flex and Neg tens checks are GirderDetail's Girder section checks of the span (GS7/GS8, Article 6.10.8, or GS9, Appendix A6) in place of
+   ST-Girder's own 6.10.8 check. Stand-alone use, other imports, older hand-offs and edited plates keep ST-Girder's own check exactly as before.
+
+No saved key or saved format changed; the hand-off gains one optional field (schemaVersion 1, additive; old payloads keep today's path).
+
+**Results changed (tests):** `--tool gd`, all 20 cases (5 projects × 4 owners): only `gd.stPayloads` (the new field) and `rpt.gs` (the A6.1
+applicability work and the A6 messages) differ; no check status or ratio of any module changes (`mod.gs` identical: Appendix A6 was not permitted
+at any negative-flexure location of the test projects before either, for the nonprismatic L_b). ST-Girder with the regenerated hand-offs (the 100
+`gd_*` girders, span 1): Neg flex fails 27 → 30 (pass → fail: builtin28 RIDOT G2, G3, G4; no fail → pass); Neg tens fails 8 → 2 (fail → pass: xsA
+AASHTO G1, G5; xsA MassDOT G1, G2, G4, G5); spans 2 and 3 the same counts. Ratio change −9.1 % to +13.4 % (compression), −4.3 % to −1.0 % (tension).
+The 8 older payloads of `tests/projects/st` (no field) keep ST-Girder's own check, unchanged.
+
+### S2-9-a. GirderDetail: Appendix A6 permission per 6.10.6.2.3 (10th Ed.)   [calc: permission] [engineer decision 2026-10-22]
+- **Problem:** `GM.gs.compute` permitted A6 when F_y (flanges) ≤ 70 ksi, 2D_c/t_w < 5.7√(E/F_yc), I_yc/I_yt ≥ 0.3 and the L_b is prismatic.
+  6.10.6.2.3 (and A6.1) also require a straight bridge with supports skewed no more than 20°, F_y ≤ 70 ksi for the web, and the noncompact web
+  limit is λ_rw = c_rw√(E/F_yc) with c_rw = 3.1 + 5.0/a_wc, 4.6 ≤ c_rw ≤ 5.7 (Eqs. 6.10.6.2.3-3 to -5). The skew condition was only listed for the
+  engineer. **More conservative** (A6 permitted in fewer cases; where it is not, Article 6.10.8 governs as before).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.6.2.3, Eqs. 6.10.6.2.3-1 to -5; Appendix A6.1 (Eqs. A6.1-1 to -5).
+- **Where:** GM.gs.compute, the Appendix A6 block (negative-flexure rows). Anchor: `const A6 = { Myc, Myt, My: Math.min(Myc, Myt), Iyc, Iyt, lrw, lw, why: [] };` (main line ≈ 15925).
+- **Before:**
+  ```
+          const A6 = { Myc, Myt, My: Math.min(Myc, Myt), Iyc, Iyt, lrw, lw, why: [] };
+          if (Math.max(Fyt, Fyb) > 70) A6.why.push('a flange has F_y > 70 ksi'); if (lw >= lrw) A6.why.push(`the web is slender (2D_c/t_w = ${f2(lw)} ≥ λ_rw = ${f2(lrw)})`); if (Iyc / Iyt < 0.3) A6.why.push(`I_yc/I_yt = ${f3(Iyc / Iyt)} < 0.3`);
+  ```
+- **After:**
+  ```
+          // S2-9 (2026-10-22, engineer decision): the testable conditions of 6.10.6.2.3 (10th Ed.; A6.1) for using Appendix A6. Supports skewed no more than 20° (the
+          // largest support skew of the bridge, Preliminary sizing); a straight bridge (not curved in Preliminary sizing); F_y ≤ 70 ksi for both flanges and the web;
+          // the web noncompact, 2D_c/t_w < λ_rw = c_rw√(E/F_yc) with c_rw = 3.1 + 5.0/a_wc, 4.6 ≤ c_rw ≤ 5.7, a_wc = 2D_ct_w/(b_fct_fc) (Eqs. 6.10.6.2.3-1, -3 to -5;
+          // was 5.7√(E/F_yc)); I_yc/I_yt ≥ 0.3 (Eq. -2). Not testable here, listed for the engineer: no holes in the tension flange, cross-frames in contiguous lines
+          // parallel to the supports, not kinked (chorded). lrw (5.7√(E/F_yc)) is unchanged for A6.2.2 below.
+          const brg = (P && P.df && P.df.bridge) || {}, skA = Array.isArray(brg.skews) ? brg.skews.map(v => Math.abs(+v || 0)) : [], skM = skA.length ? Math.max(...skA) : 0;
+          const awcP = 2 * Dc * r.tw / (r.botB * r.botT), crwP = awcP > 0 ? Math.min(Math.max(3.1 + 5.0 / awcP, 4.6), 5.7) : 5.7, lrwP = crwP * Math.sqrt(ES / Fyb);
+          const A6 = { Myc, Myt, My: Math.min(Myc, Myt), Iyc, Iyt, lrw, lw, awcP, crwP, lrwP, skM, curved: !!brg.curved, why: [] };
+          if (skM > 20) A6.why.push(`a support is skewed ${f0(skM)}° from normal (more than 20°)`); if (brg.curved) A6.why.push('the bridge is horizontally curved');
+          if (Math.max(Fyt, Fyb) > 70) A6.why.push('a flange has F_y > 70 ksi'); if (Fyw > 70) A6.why.push('the web has F_y > 70 ksi'); if (lw >= lrwP) A6.why.push(`the web is slender (2D_c/t_w = ${f2(lw)} ≥ λ_rw = ${f2(lrwP)}, c_rw = ${f3(crwP)})`); if (Iyc / Iyt < 0.3) A6.why.push(`I_yc/I_yt = ${f3(Iyc / Iyt)} < 0.3`);
+  ```
+- The A6 calculation itself (A6.2 to A6.4: `A6.lrw` = 5.7√(E/F_yc) in A6.2.2) is unchanged; see Open items.
+- **Display:** the Resistances tab card "Appendix A6.1: applicability" works every condition (skew, straight, F_y of both flanges and the web, a_wc,
+  c_rw, λ_rw, I_yc/I_yt); the "A6 permitted" note and the GS9 note list what is checked and what the engineer must confirm (no holes in the tension
+  flange, cross-frames in contiguous lines parallel to the supports, not kinked); the manual's Negative flexure paragraph.
+- **Where:** GM.gs.capacity, A6.1 applicability card and the cap-ok note. Anchor: `A(S('Appendix A6.1: applicability'), 'A6.1',` (main line ≈ 16263).
+- **Before:**
+  ```
+        A(S('Appendix A6.1: applicability'), 'A6.1', T`\begin{aligned}&F_{yc},\,F_{yt} = ${f0(R.Fyb)},\,${f0(R.Fyt)} ${Math.max(R.Fyt, R.Fyb) <= 70 ? '\\le' : '>'} 70\ \text{ksi}${yes(Math.max(R.Fyt, R.Fyb) <= 70)} \\ &\frac{2D_c}{t_w} = ${f2(a.lw)} ${a.lw < a.lrw ? '<' : '\\ge'} 5.7\sqrt{\frac{E}{F_{yc}}} = ${f2(a.lrw)}${yes(a.lw < a.lrw)} \quad \text{(Eq. A6.1-1)} \\ &\frac{I_{yc}}{I_{yt}} = \frac{${f2(a.Iyc)}}{${f2(a.Iyt)}} = ${f3(a.Iyc / a.Iyt)} ${a.Iyc / a.Iyt >= 0.3 ? '\\ge' : '<'} 0.3${yes(a.Iyc / a.Iyt >= 0.3)} \quad \text{(Eq. A6.1-2)}\end{aligned}`);
+        if (a.ok) E_.push(`<div class="cap-ok"><b>Appendix A6 is permitted for this section</b>${r.useA6 ? ' and is the method in use (GS9).' : ', but Article 6.10.8 was selected on the Materials and deck tab.'} Confirm the A6.1 conditions not checked here: a straight girder with supports skewed no more than 20° from normal.</div>` + blk.join(''));
+  ```
+- **After:**
+  ```
+        A(S('Appendix A6.1: applicability'), '6.10.6.2.3 and A6.1 (10th Ed.)', T`\begin{aligned}&\theta_{skew,max} = ${f0(a.skM)}^\circ ${a.skM <= 20 ? '\\le' : '>'} 20^\circ\ \text{(largest support skew, Preliminary sizing)}${yes(a.skM <= 20)} \\ &\text{${a.curved ? 'horizontally curved bridge' : 'straight bridge (not curved in Preliminary sizing)'}}${yes(!a.curved)} \\ &F_{yc},\,F_{yt},\,F_{yw} = ${f0(R.Fyb)},\,${f0(R.Fyt)},\,${f0(R.Fyw)} ${Math.max(R.Fyt, R.Fyb, R.Fyw) <= 70 ? '\\le' : '>'} 70\ \text{ksi}${yes(Math.max(R.Fyt, R.Fyb, R.Fyw) <= 70)} \\ &a_{wc} = \frac{2D_ct_w}{b_{fc}t_{fc}} = ${f3(a.awcP)}, \quad c_{rw} = 3.1 + \frac{5.0}{a_{wc}} = ${f3(a.crwP)}\ (4.6 \le c_{rw} \le 5.7) \quad \text{(Eqs. 6.10.6.2.3-4, -5)} \\ &\frac{2D_c}{t_w} = ${f2(a.lw)} ${a.lw < a.lrwP ? '<' : '\\ge'} \lambda_{rw} = c_{rw}\sqrt{\frac{E}{F_{yc}}} = ${f3(a.crwP)}\sqrt{\frac{${f0(ES)}}{${f0(R.Fyb)}}} = ${f2(a.lrwP)}${yes(a.lw < a.lrwP)} \quad \text{(Eqs. 6.10.6.2.3-1, -3)} \\ &\frac{I_{yc}}{I_{yt}} = \frac{${f2(a.Iyc)}}{${f2(a.Iyt)}} = ${f3(a.Iyc / a.Iyt)} ${a.Iyc / a.Iyt >= 0.3 ? '\\ge' : '<'} 0.3${yes(a.Iyc / a.Iyt >= 0.3)} \quad \text{(Eq. A6.1-2)}\end{aligned}`);
+        if (a.ok) E_.push(`<div class="cap-ok"><b>Appendix A6 is permitted for this section</b>${r.useA6 ? ' and is the method in use (GS9).' : ', but Article 6.10.8 was selected on the Materials and deck tab.'} Confirm the 6.10.6.2.3 (A6.1) conditions not checked here: no holes in the tension flange, intermediate cross-frames or diaphragms in contiguous lines parallel to the supports, and girders not kinked (chorded). Checked here: support skew no more than 20°, straight bridge, F<sub>y</sub> ≤ 70 ksi, noncompact web (Eq. 6.10.6.2.3-1 with c<sub>rw</sub>), I<sub>yc</sub>/I<sub>yt</sub> ≥ 0.3.</div>` + blk.join(''));
+  ```
+- **Where:** GM.gs.checks, GS9 note. Anchor: `note: 'Permitted for straight girders with F_y ≤ 70 ksi` (main line ≈ 16051).
+- **Before:**
+  ```
+          note: 'Permitted for straight girders with F_y ≤ 70 ksi, a compact or noncompact web (2D_c/t_w < 5.7√(E/F_yc)), and I_yc/I_yt ≥ 0.3; the skew and bracing conditions of A6.1 should also be confirmed. M_p uses the steel and both rebar layers with the concrete ignored. Where A6 is not permitted, 6.10.8 (GS7 and GS8) governs.' };
+  ```
+- **After:**
+  ```
+          note: 'Permitted (6.10.6.2.3, 10th Ed.) for a straight bridge with supports skewed no more than 20° from normal, F_y ≤ 70 ksi (flanges and web), a compact or noncompact web (2D_c/t_w < λ_rw = c_rw√(E/F_yc), 4.6 ≤ c_rw = 3.1 + 5.0/a_wc ≤ 5.7), and I_yc/I_yt ≥ 0.3, all checked here (Resistances tab, A6.1 applicability); confirm also no holes in the tension flange, cross-frames or diaphragms in contiguous lines parallel to the supports, and girders not kinked (chorded). M_p uses the steel and both rebar layers with the concrete ignored. Where A6 is not permitted, 6.10.8 (GS7 and GS8) governs.' };
+  ```
+- **Where:** MAN, Girder section manual, Negative flexure. Anchor: `A6 is used where permitted (F<sub>y</sub> ≤ 70 ksi` (main line ≈ 14567).
+- **Before:**
+  ```
+  <h3>Negative flexure</h3><p><b>Article 6.10.8</b> (always computed): f<sub>bu</sub> + f<sub>ℓ</sub>/3 ≤ φ<sub>f</sub>F<sub>nc</sub> with flange local buckling and lateral-torsional buckling (C<sub>b</sub>, R<sub>b</sub>, R<sub>h</sub>), and f<sub>bu</sub> ≤ φ<sub>f</sub>R<sub>h</sub>F<sub>yt</sub> for the tension flange. <b>Appendix A6</b> is worked in full on the Resistances tab (A6.1 applicability, A6.2 web plastification factors, A6.3.2 flange local buckling, A6.3.3 lateral-torsional buckling, A6.4 tension flange). Where A6.1 is not satisfied, a banner states which condition fails, the A6 work is marked for information only, and Article 6.10.8 governs. A6 is used where permitted (F<sub>y</sub> ≤ 70 ksi, 2D<sub>c</sub>/t<sub>w</sub> &lt; 5.7√(E/F<sub>yc</sub>), I<sub>yc</sub>/I<sub>yt</sub> ≥ 0.3): the web plastification factors</p>
+  ```
+- **After:**
+  ```
+  <h3>Negative flexure</h3><p><b>Article 6.10.8</b> (always computed): f<sub>bu</sub> + f<sub>ℓ</sub>/3 ≤ φ<sub>f</sub>F<sub>nc</sub> with flange local buckling and lateral-torsional buckling (C<sub>b</sub>, R<sub>b</sub>, R<sub>h</sub>), and f<sub>bu</sub> ≤ φ<sub>f</sub>R<sub>h</sub>F<sub>yt</sub> for the tension flange. <b>Appendix A6</b> is worked in full on the Resistances tab (A6.1 applicability, A6.2 web plastification factors, A6.3.2 flange local buckling, A6.3.3 lateral-torsional buckling, A6.4 tension flange). Where A6.1 is not satisfied, a banner states which condition fails, the A6 work is marked for information only, and Article 6.10.8 governs. A6 is used where 6.10.6.2.3 permits it (10th Ed.; since 2026-10-22, S2-9: largest support skew ≤ 20°, a straight bridge, F<sub>y</sub> ≤ 70 ksi for the flanges and the web, 2D<sub>c</sub>/t<sub>w</sub> &lt; λ<sub>rw</sub> = c<sub>rw</sub>√(E/F<sub>yc</sub>) with c<sub>rw</sub> = 3.1 + 5.0/a<sub>wc</sub> between 4.6 and 5.7, I<sub>yc</sub>/I<sub>yt</sub> ≥ 0.3; to be confirmed by the engineer: no holes in the tension flange, cross-frames in contiguous lines parallel to the supports, girders not kinked): the web plastification factors</p>
+  ```
+- **Check case (c_rw, worked by hand):** D = 60 in, t_w = 0.5625 in, compression flange 14 × 1.0 in, D_c = 35 in, F_yc = 50 ksi:
+  a_wc = 2(35)(0.5625)/(14 × 1.0) = 2.8125; c_rw = 3.1 + 5.0/2.8125 = 4.878; λ_rw = 4.878√(29,000/50) = 4.878(24.083) = 117.47;
+  2D_c/t_w = 70/0.5625 = 124.44. Before: 124.44 < 5.7(24.083) = 137.27, A6 permitted by this condition. After: 124.44 ≥ 117.47, slender web,
+  A6 not permitted, 6.10.8 governs.
+- **Check case (tool, built-in project, Pier 1, G2):** D_c = 30.61 in, 18 × 2 in bottom flange: a_wc = 2(30.61)(0.5625)/36 = 0.957, c_rw = 3.1 + 5.0/0.957
+  = 8.33 → 5.7, λ_rw = 137.27 (unchanged), 2D_c/t_w = 108.83 ✓; largest skew 15° ✓; A6 still not permitted (nonprismatic L_b), as before.
+  `builtin28` (all skews 28°): the card now reads "θ_skew,max = 28° > 20° ×" and the banner "Fails A6.1: a support is skewed 28° from normal
+  (more than 20°)", before the nonprismatic reason (result unchanged: A6 was not permitted before either).
+
+### S2-9-b. GirderDetail: its negative-flexure result in the ST-Girder hand-off   [new: hand-off field, additive] [cross-tool, HANDOFF.md §4.9]
+- `gdStNegFlex(g)` (new, after `gsaRun`): the Girder section rows of Check at any location (`gsaRows`) at every analysis node, both sides of each
+  flange or web change and of each interior support, kept where the row builder reads negative flexure (its rule Mup < −Mun at the nearest node,
+  with a one-node margin; the builder decides), run through `GM.gs.compute`/`GM.gs.checks` with this module's inputs (`gsaRun`). Per span the
+  governing compression-flange item (GS7, or GS9 compression flange where A6 is in use) and tension-flange item (GS8, or GS9 tension flange), with
+  the values its work shows. Needs Preliminary sizing loaded; otherwise `{ why }` and the hand-off goes without the field, with a notes line.
+- `window.gdStGoGsa(g, x)` (new): opens Girder section › Check at any location at girder g, station x (the link from ST-Girder's card).
+- `gdStPayload`: `p.girderDetail.checks = { negFlex }` when available.
+- **Where:** after gsaRun (Girder section: check at any location). Anchor: `function gsaRun(rows, oosExt) {` (main line ≈ 16360).
+- **Before:** nothing (inserted after the anchor).
+- **After:**
+  ```
+  /* S2-9 (2026-10-22; engineer decision: GirderDetail's method is the method): this module's negative-flexure result of girder g for the ST-Girder
+     hand-off (gdStPayload, girderDetail.checks.negFlex; HANDOFF.md 4.9, additive). Every location of the girder that Check at any location reads as
+     negative flexure, built and checked exactly as there (gsaRows, then GM.gs.compute and GM.gs.checks with this module's inputs): every analysis
+     node, both sides of each flange or web change, and both sides of each interior support. Only the checks of the method in use count: GS7
+     (compression flange) and GS8 (tension flange) for Article 6.10.8; GS9 (both flanges) where Appendix A6 is permitted (6.10.6.2.3) and selected.
+     Per span: the governing compression-flange and tension-flange item, with the values its work shows. Needs Preliminary sizing (its row builder);
+     without it, { why } and the hand-off goes without the field (ST-Girder then uses its own check, as before). */
+  function gdStNegFlex(g) {
+    const L0 = gsaPL(); if (L0.wait) return { why: 'Preliminary sizing was not loaded when the hand-off was built' }; if (L0.err) return { why: L0.err };
+    const key = JSON.stringify([P.sa, P.df]);
+    if (key !== GA.key || GA.AN !== L0.G.AN) { GA.key = key; GA.AN = L0.G.AN; GA.byG = {}; GA.plot = null; GA.plotKey = ''; GA.dflt = null; }   // the cache of gsaState
+    const S = GA.byG[g] = GA.byG[g] || gsaSA(g, L0.G); if (S.err) return { why: S.err };
+    const st = { ...L0, S }, list = [], add = q => { if (!list.some(o => Math.abs(o.x - q.x) < 0.005)) list.push(q); };
+    S.xs.forEach(x => gsaStations(S, x).forEach(add)); S.sup.slice(1, -1).forEach(v => add({ x: v + 0.01, side: 'right' }));
+    list.sort((a, b) => a.x - b.x);
+    // only the stations the row builder can read as negative flexure (its rule: Mup < −Mun at the nearest node); the nodes either side are kept as a margin
+    const ng = i => i >= 0 && i < S.xs.length && S.arr.Mup[i] < -S.arr.Mun[i] + 1e-6, near = x => { let i = 0; S.xs.forEach((v, q) => { if (Math.abs(v - x) < Math.abs(S.xs[i] - x)) i = q; }); return i; };
+    const cand = list.filter(q => { const i = near(q.x); return ng(i - 1) || ng(i) || ng(i + 1); }); list.length = 0; cand.forEach(q => list.push(q));
+    const B = list.length ? gsaRows(st, S, list) : { rows: [] }; if (!B) return { why: 'Preliminary sizing could not build the rows' };
+    const neg = B.rows.filter(r => { if (r.region !== 'neg') return false; const e = []; numRows([r], GS_SPEC, 'Location', e); return !e.length; });
+    const r4 = v => Math.round(v * 1e4) / 1e4, r3 = v => Math.round(v * 1e3) / 1e3, spOf = x => { let k = 0; while (k < S.sup.length - 2 && x > S.sup[k + 1] + 1e-9) k++; return k + 1; };
+    const sn = j => j === 0 ? 'Abut. 1' : j === S.sup.length - 1 ? 'Abut. 2' : `Pier ${j}`;
+    const where = x => { const j = S.sup.findIndex(v => Math.abs(v - x) < 0.0151); return j >= 0 ? `${x < S.sup[j] ? 'left' : 'right'} side of ${sn(j)}` : gsaLocTxt(S, x); };
+    const out = { source: `GirderDetail Girder section module, Check at any location (G${g}): GS7/GS8 (Article 6.10.8) or GS9 (Appendix A6, where 6.10.6.2.3 permits it and the method is "Appendix A6 where permitted")`,
+      method: P.gs.negM === '6108' ? '6.10.8 only' : 'A6 where permitted, else 6.10.8', locations: neg.length, spans: [] };
+    if (!neg.length) { out.spans = S.sup.slice(1).map((_, k) => ({ span: k + 1, comp: null, tens: null })); return out; }
+    const O = gsaRun(neg); if (O.err) return { why: `Girder section: ${O.err}` };
+    const R = O.R, rows = {}; R.rows.forEach(r => { rows[r.name] = r; });
+    const best = {};   // span -> { comp, tens }
+    O.CK.filter(c => c.id === 'GS7' || c.id === 'GS8' || c.id === 'GS9').forEach(c => c.items.forEach(it => {
+      if (it.st === 'na' || !isFinite(it.r) || / \(not the method in use\)$/.test(it.loc)) return;
+      const m = /^(@\d+)(?:, (nonprismatic L_b|compression flange|tension flange))?$/.exec(it.loc), r = m && rows[m[1]]; if (!r) return;
+      const kind = c.id === 'GS8' || m[2] === 'tension flange' ? 'tens' : 'comp', x = +neg[r.i].x, sp = spOf(x), b = best[sp] = best[sp] || {};
+      if (b[kind] && b[kind].r0 >= it.r) return;
+      const a = r.A6, sec = { D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT };
+      const a6 = { ok: !!a.ok, why: a.why.slice(), used: !!r.useA6, skM: r4(a.skM), crw: r4(a.crwP), lrw: r4(a.lrwP), lw: r4(a.lw), IycIyt: r4(a.Iyc / a.Iyt) };
+      const o = { r0: it.r, r: r4(it.r), id: c.id, method: r.useA6 ? 'A6' : '6.10.8', x: r3(x), where: where(x), status: it.st, Mu: r3(r.Mu), sec, Lb: r3(r.Lb), a6 };
+      if (c.id === 'GS7') { const lt = r.lt; Object.assign(o, { u: 'ksi', dem: r4(r.fbuC + r.am.fl / 3), cap: r4(lt.Fnc), fbu: r4(r.fbuC), fl: r4(r.am.fl), FLB: r4(lt.FLB), LTB: r4(lt.LTB), lf: r4(lt.lf), lpf: r4(lt.lpf), lrf: r4(lt.lrf), Fyr: r4(lt.Fyr), rt: r4(lt.rt), Lp: r4(lt.Lp), Lr: r4(lt.Lr), Lbin: r4(r.Lb * 12), Cb: r4(r.CbU), Rb: r4(r.Rb), Rh: r4(r.Rh), Dc: r4(r.Dc), npr: lt.npr ? lt.npr.kind : null }); }
+      else if (c.id === 'GS8') Object.assign(o, { u: 'ksi', dem: r4(Math.max(r.tF.f, 0)), cap: r4(r.Rh * R.Fyt), Rh: r4(r.Rh), Fyt: R.Fyt });
+      else if (kind === 'comp') Object.assign(o, { u: 'kip-ft', dem: r4(Math.abs(r.Mu) + a.am.fl * a.Sxc / 3 / 12), cap: r4(a.Mnc), fl: r4(a.am.fl), Sxc: r4(a.Sxc), Mp: r4(r.pl.Mp), Myc: r4(a.Myc), Myt: r4(a.Myt), Rpc: r4(a.Rpc), Rpt: r4(a.Rpt), MncF: r4(a.MncF), MncL: r4(a.MncL), webCompact: !!a.webCompact });
+      else Object.assign(o, { u: 'kip-ft', dem: r4(Math.abs(r.Mu)), cap: r4(a.Mnt), Myt: r4(a.Myt), Rpt: r4(a.Rpt) });
+      b[kind] = o; }));
+    out.spans = S.sup.slice(1).map((_, k) => { const b = best[k + 1] || {}, cl = o => { if (!o) return null; const { r0, ...q } = o; return q; }; return { span: k + 1, comp: cl(b.comp), tens: cl(b.tens) }; });
+    return out;
+  }
+  // S2-9: the link from ST-Girder's negative-flexure result to its derivation here (Girder section, Check at any location, girder g at station x)
+  window.gdStGoGsa = (g, x) => { try { const u = gsaUi(); u.g = Math.round(+g) || 1; u.x = +x; stHide(); setMod('gs'); setOTab('gsany'); gsaRefresh(); } catch (e) { console.error('gdStGoGsa: ' + e.message); } };
+  ```
+- **Where:** gdStPayload, before return. Anchor: `const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;` (main line ≈ 18191).
+- **Before:** nothing (inserted after the anchor).
+- **After:**
+  ```
+    // S2-9 (2026-10-22): GirderDetail's negative-flexure result per span (optional, additive; ST-Girder uses it in place of its own 6.10.8 check while its plates and F_y are the payload's)
+    const nf = gdStNegFlex(g); if (nf && !nf.why) p.girderDetail.checks = { negFlex: nf };
+    else if (nf) p.notes.push(`GirderDetail's negative-flexure result (girderDetail.checks.negFlex) is not included: ${nf.why}. ST-Girder uses its own Article 6.10.8 check.`);
+  ```
+
+### S2-9-c. ST-Girder: Neg flex and Neg tens from GirderDetail   [calc source] [engineer decision: GirderDetail's method is the method]
+- **Problem:** ST-Girder checked negative flexure by its own Article 6.10.8 only (prismatic L_b, C_b = 1.0, no f_ℓ, no Appendix A6, maximum load
+  factors), different from GirderDetail's GS7/GS9 for the same girder.
+- **Change:** in `computeAll`, `gdNeg` reads `girderDetail.checks.negFlex` of a GirderDetail hand-off; for the selected span, while ST-Girder's
+  plates (`zonesToSec` of the span, as SW-ED) and F_yf, F_yw equal the hand-off's, the Neg flex and Neg tens checks are GirderDetail's governing
+  items (value, limit, ratio; `ref` "… · GirderDetail GS7/GS8/GS9"; `loc` in span coordinates). ST-Girder's own 6.10.8 result (`R.neg`) is still
+  computed and shown for comparison. Without the field, with edited plates (and in the Optimize sweep), or with any other import: exactly as before.
+  The load rating (`negInv`) keeps ST-Girder's own F_nc (open item).
+- **Where:** computeAll, after the negative-region summary `neg`. Anchor: `const neg=hasNeg? {negBGov,negTGov,MunPeak,AsProv:(the next line, rebarOK: … : null;)` (main line ≈ 9665).
+- **Before:** nothing (inserted after the anchor).
+- **After:**
+  ```
+      /* S2-9 (2026-10-22; engineer decision: GirderDetail's method is the method; HANDOFF.md 4.9, girderDetail.checks.negFlex, additive): with a
+         GirderDetail hand-off that carries its negative-flexure result, the Neg flex and Neg tens checks are GirderDetail's Girder section checks of
+         this span (GS7 and GS8, Article 6.10.8; or GS9, Appendix A6 where 6.10.6.2.3 permits it and GirderDetail's method is "A6 where permitted"),
+         governing over every location GirderDetail reads as negative flexure, in place of this app's 6.10.8 check above (still computed, shown
+         as not used). Only while ST-Girder's plates and F_y are the hand-off's: edited plates, the Optimize sweep, other imports, older hand-offs and
+         the built-in analysis keep this app's own check exactly as before. The load rating (negInv) still uses this app's F_nc. */
+      const gdNeg=(()=>{ const e=inp.external, nf=useExt&&extFromGD(e)&&e.girderDetail.checks&&e.girderDetail.checks.negFlex;
+        if(!nf||!Array.isArray(nf.spans)) return null;
+        const sel=ext.sel||{}, si=+sel.idx||1, row=nf.spans.find(q=>q&&+q.span===si)||null, m0=e.girderDetail.materials||{};
+        const z=zonesToSec(e,sel,sec), same=(a,b)=>Math.abs((+a)-(+b))<=1e-9;
+        const plOK=!!z&&['D','tw','bft','tft','bfb','tfb'].every(k=>same(sec[k],z[k]))&&!!sec.useSegs===!!z.useSegs&&
+          (!z.useSegs||(Array.isArray(sec.segs)&&sec.segs.length===z.segs.length&&z.segs.every((g,i)=>['xEnd','bft','tft','bfb','tfb'].every(k=>same(sec.segs[i][k],g[k])))));
+        const fyOK=same(mat.Fyf,m0.Fyf)&&same(mat.Fyw,m0.Fyw), okRow=q=>!!q&&isFinite(+q.r)&&isFinite(+q.dem)&&isFinite(+q.cap)&&isFinite(+q.x);
+        const why=!row? 'GirderDetail sent no result for span '+si : !plOK? 'the plates differ from the hand-off' : !fyOK? 'F_y differs from the hand-off'
+          : !okRow(row.comp)? 'GirderDetail has no negative-flexure location in span '+si : '';
+        return {span:si, x0:+sel.x0||0, g:+e.girderDetail.girder||null, use:!why, why, method:nf.method||'', n:+nf.locations||0, comp:row&&okRow(row.comp)?row.comp:null, tens:row&&okRow(row.tens)?row.tens:null}; })();
+  ```
+- **Where:** computeAll, push remaining checks (Neg flex, Neg tens, 1% rebar). Anchor: `if(hasNeg){` (main line ≈ 10057).
+- **Before:**
+  ```
+      if(hasNeg){
+  ```
+- **After:**
+  ```
+      if(gdNeg&&gdNeg.use){   // S2-9: GirderDetail's GS7/GS8 or GS9 for this span (see gdNeg)
+        const c=gdNeg.comp, t=gdNeg.tens, a6=q=>q.method==='A6';
+        checks.push({n:'Neg flexure — bot flange ('+(a6(c)?'App. A6':'FLB/LTB')+')', t:'Neg flex', v:+c.dem, lim:+c.cap, r:+c.r, u:c.u||'ksi', ref:(a6(c)?'A6.3':'6.10.8.2')+' · GirderDetail '+c.id, loc:Math.round(((+c.x)-gdNeg.x0)*1000)/1000, gd:c.id});
+        if(t) checks.push({n:'Neg flexure — top flange (tension'+(a6(t)?', App. A6':'')+')', t:'Neg tens', v:+t.dem, lim:+t.cap, r:+t.r, u:t.u||'ksi', ref:(a6(t)?'A6.4':'6.10.8.3')+' · GirderDetail '+t.id, loc:Math.round(((+t.x)-gdNeg.x0)*1000)/1000, gd:t.id});
+        if(hasNeg) checks.push({n:'Long. deck reinf ≥ 1% (−M)', t:'1% rebar', v:neg.AsMin1pct, lim:neg.AsProv, r:neg.AsProv>0?neg.AsMin1pct/neg.AsProv:9, u:'in²', ref:'6.10.1.7', loc:negBGov.x||0});
+      }
+      else if(hasNeg){
+  ```
+- **Where:** computeAll, return object. Anchor: `checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{}),` (main line ≈ 10125).
+- **Before:**
+  ```
+        checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{}),
+  ```
+- **After:**
+  ```
+        checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{}), ...(gdNeg?{gdNeg}:{}),   // S2-9
+  ```
+- **Check case (tool, `gd_builtin_AASHTO_G2`, span 1, regenerated hand-off):** GirderDetail GS7 at 109.99 ft (left side of Pier 1), section 18 × 2
+  bottom flange, L_b = 22 ft (264 in), nonprismatic L_b (6.10.8.2.3c, C_b = 1.0): λ_f = 4.50 ≤ λ_pf = 9.15 → F_nc,FLB = 50.00 ksi; r_t = 4.747 in,
+  L_p = 125.76 in, L_r = 429.28 in, F_yr = 35 ksi → F_nc,LTB = [1 − (1 − 35/50)(264 − 125.76)/(429.28 − 125.76)](50) = [1 − 0.3(0.4555)](50) = 43.17 ksi;
+  f_bu = 38.59 ksi (GirderDetail's Strength I, load factors by sign) → 38.59/43.17 = **0.894** (before: ST-Girder's own 6.10.8, **0.909**).
+  Tension (GS8): 39.91/50.00 = **0.798** (before 0.808).
+- **Flip examples:** `gd_builtin28_RIDOT_G2` Neg flex 0.983 → **1.029** (f_bu 46.33 / F_nc 45.03 ksi, GS7 at 109.99 ft); `gd_xsA_MassDOT_G1` Neg tens 1.015 → **0.974** (48.70/50.00 ksi, GS8).
+
+### S2-9-d. ST-Girder: display, links   [display]
+- `gdNegBlock(R)` (new) at the top of the Flexure tab card "Negative flexure — pier region" (`flexNegCard`, also in the report): the GirderDetail
+  result with every value its work shows (FLB, LTB, f_bu + f_ℓ/3 ≤ φF_nc; tension; or the A6 values), the location, section, L_b, M_u and the A6
+  permission with reasons, the reference "Steel Bridge Design › Girder section › Check at any location, G# at x ft, GS7" (printed report) and a button
+  "open the derivation" (`gdStGoGsa`, screen only). When the field is present but not used, a note says why. Card tag names the method in use.
+- **Where:** |0];|before flexNegCard; flexNegCard's Card tag. Anchor: `function flexNegCard(R){ const ng=R.neg, b=ng.negBGov, sg=R.segP[b.si` (main line ≈ 11436).
+- **Before:**
+  ```
+        return <Card id="stg-d-flexneg" title="Negative flexure — pier region" refTag="AASHTO 6.10.8 · cracked section (steel + rebar, 6.10.1.1.1c)">
+  ```
+- **After:**
+  ```
+  /* S2-9 (2026-10-22): GirderDetail's negative-flexure result for this span (R.gdNeg, from the hand-off's girderDetail.checks.negFlex), with the values
+     its work shows, a link to the derivation in Steel Bridge Design (Girder section, Check at any location) and its reference for the printed report */
+  function gdNegBlock(R){ const G=R.gdNeg; if(!G) return null;
+    if(!G.use) return <div className="callout warn" style={{marginBottom:10}}><b>GirderDetail's negative-flexure result is not used here:</b> {G.why}. This app's own Article 6.10.8 check below applies (as in the stand-alone app).</div>;
+    const c=G.comp, t=G.tens, A=c.method==='A6', a6=c.a6||{}, xs=q=>fmt(q.x-G.x0,2)+' ft in this span ('+q.where+'; '+fmt(q.x,2)+' ft from Abut. 1)';
+    const canGo=(()=>{ try{ return window.parent!==window&&typeof window.parent.gdStGoGsa==='function'; }catch(e){ return false; } })();
+    const go=q=>{ try{ window.parent.gdStGoGsa(G.g,q.x); }catch(e){} };
+    const ref=q=>'Steel Bridge Design › Girder section › Check at any location, G'+(G.g||'?')+' at '+fmt(q.x,2)+' ft, '+q.id;
+    const ok=q=>q.r<=1.0001, bx=(q,l)=><div className={'br '+(ok(q)?'p':'f')}><div className="l">{l} · GirderDetail {q.id}</div><div className="n">{fmt(q.r,2)}</div><div className="u">{fmt(q.dem,A&&q.u==='kip-ft'?0:2)} / {fmt(q.cap,A&&q.u==='kip-ft'?0:2)} {q.u} @ {fmt(q.x-G.x0,1)} ft</div></div>;
+    return <div className="gd-neg">
+      <div className="callout" style={{marginBottom:10}}><b>Negative flexure from GirderDetail ({A?'Appendix A6':'Article 6.10.8'}, {c.id}{t?' and '+t.id:''}).</b> The checks of this span are GirderDetail's Girder section checks, governing over the {G.n} locations of the girder it reads as negative flexure (every analysis node, both sides of each section change and of each interior support), with its load factors, owner rules, unbraced lengths, C<sub>b</sub> and nonprismatic L<sub>b</sub> (6.10.8.2.3c). GirderDetail's method: {G.method}. Worked in full: {ref(c)}{canGo&&<span className="noprint"> · <button type="button" className="btn-link" onClick={()=>go(c)}>open the derivation</button></span>}.</div>
+      <div className="bigres">{bx(c,A?'Bot flange (comp.) M_u + f_ℓS_xc/3 / φM_nc':'Bot flange (comp.) (f_bu + f_ℓ/3) / φF_nc')}{t&&bx(t,A?'Top flange (tension) M_u / φR_ptM_yt':'Top flange (tension) f_bu / φR_hF_yt')}</div>
+      {!A&&<React.Fragment>
+        <ML s={Tx`\lambda_f=${nx(c.lf,2)},\;\lambda_{pf}=${nx(c.lpf,2)},\;\lambda_{rf}=${nx(c.lrf,2)}\;(F_{yr}=${nx(c.Fyr,2)}\text{ ksi})\;\Rightarrow\;F_{nc,FLB}=${nx(c.FLB,2)}\;\text{ksi}\qquad(6.10.8.2.2)`}/>
+        <ML s={Tx`r_t=${nx(c.rt,3)}\text{ in},\;L_p=${nx(c.Lp,1)}\text{ in},\;L_r=${nx(c.Lr,1)}\text{ in},\;L_b=${nx(c.Lbin,1)}\text{ in},\;C_b=${nx(c.Cb,2)},\;R_b=${nx(c.Rb,3)},\;R_h=${nx(c.Rh,3)},\;D_c=${nx(c.Dc,2)}\text{ in}\;\Rightarrow\;F_{nc,LTB}=${nx(c.LTB,2)}\;\text{ksi}\qquad(6.10.8.2.3${c.npr?'\\text{c, nonprismatic }L_b':''})`}/>
+        <ML s={Tx`f_{bu}+\tfrac{1}{3}f_\ell=${nx(c.fbu,2)}+\tfrac{1}{3}(${nx(c.fl,2)})=${nx(c.dem,2)}\;${ok(c)?'\\le':'>'}\;\phi_fF_{nc}=\min(${nx(c.FLB,2)},${nx(c.LTB,2)})=${nx(c.cap,2)}\;\text{ksi}\;\Rightarrow\;${nx(c.r,3)}\qquad(\text{at }x=${nx(c.x-G.x0,2)}\text{ ft})`}/>
+        {t&&<ML s={Tx`f_{bu}=${nx(t.dem,2)}\;${ok(t)?'\\le':'>'}\;\phi_fR_hF_{yt}=${nx(t.Rh,3)}(${nx(t.Fyt,0)})=${nx(t.cap,2)}\;\text{ksi}\;\Rightarrow\;${nx(t.r,3)}\qquad(6.10.8.3,\text{ at }x=${nx(t.x-G.x0,2)}\text{ ft})`}/>}
+      </React.Fragment>}
+      {A&&<React.Fragment>
+        <ML s={Tx`M_p=${nx(c.Mp,0)},\;M_{yc}=${nx(c.Myc,0)},\;M_{yt}=${nx(c.Myt,0)}\text{ kip-ft},\;R_{pc}=${nx(c.Rpc,3)}\;(\text{${c.webCompact?'compact':'noncompact'} web}),\;M_{nc,FLB}=${nx(c.MncF,0)},\;M_{nc,LTB}=${nx(c.MncL,0)}\text{ kip-ft}\qquad(\text{A6.2, A6.3})`}/>
+        <ML s={Tx`|M_u|+\tfrac{1}{3}f_\ell S_{xc}=${nx(Math.abs(c.Mu),0)}+\tfrac{1}{3}(${nx(c.fl,2)})(${nx(c.Sxc,0)})/12=${nx(c.dem,0)}\;${ok(c)?'\\le':'>'}\;\phi_fM_{nc}=${nx(c.cap,0)}\;\text{kip-ft}\;\Rightarrow\;${nx(c.r,3)}`}/>
+        {t&&<ML s={Tx`|M_u|=${nx(t.dem,0)}\;${ok(t)?'\\le':'>'}\;\phi_fR_{pt}M_{yt}=${nx(t.Rpt,3)}(${nx(t.Myt,0)})=${nx(t.cap,0)}\;\text{kip-ft}\;\Rightarrow\;${nx(t.r,3)}\qquad(\text{A6.4})`}/>}
+      </React.Fragment>}
+      <div className="hint">Compression flange governs at {xs(c)}{t?'; tension flange at '+xs(t):''}. Section there: web {fmt(c.sec.D,3)} × {fmt(c.sec.tw,4)} in, top flange {fmt(c.sec.topB,2)} × {fmt(c.sec.topT,3)} in, bottom flange {fmt(c.sec.botB,2)} × {fmt(c.sec.botT,3)} in; L<sub>b</sub> = {fmt(c.Lb,2)} ft; M<sub>u</sub> = {fmt(c.Mu,0)} k-ft (GirderDetail's Strength I, load factors by sign). Appendix A6 (6.10.6.2.3, 10th Ed.): {a6.ok?'permitted'+(a6.used?' and used':' (Article 6.10.8 selected in GirderDetail)'):'not permitted: '+(a6.why||[]).join('; ')} (largest support skew {fmt(a6.skM,0)}°, 2D<sub>c</sub>/t<sub>w</sub> = {fmt(a6.lw,2)} vs λ<sub>rw</sub> = {fmt(a6.lrw,2)} with c<sub>rw</sub> = {fmt(a6.crw,3)}, I<sub>yc</sub>/I<sub>yt</sub> = {fmt(a6.IycIyt,3)}). Not checked by either tool, to be confirmed by the engineer: no holes in the tension flange, cross-frames in contiguous lines parallel to the supports, girders not kinked (chorded). The load rating (Rating tab) still uses this app's F<sub>nc</sub>.</div>
+      <div className="hint" style={{marginTop:6}}><b>This app's own Article 6.10.8 check</b> (shown for comparison; not used while the plates and F<sub>y</sub> are GirderDetail's):</div>
+    </div>; }
+        return <Card id="stg-d-flexneg" title="Negative flexure — pier region" refTag={R.gdNeg&&R.gdNeg.use?'GirderDetail '+R.gdNeg.comp.id+(R.gdNeg.comp.method==='A6'?' · Appendix A6':' · AASHTO 6.10.8')+' (in use) · this app: 6.10.8, cracked section':'AASHTO 6.10.8 · cracked section (steel + rebar, 6.10.1.1.1c)'}>
+        {gdNegBlock(R)}
+  ```
+
+### S2-9-e. Documents and tests
+- `HANDOFF.md` §4.9: `girderDetail.checks.negFlex` in the shape and its paragraph.
+- `tests/baselines/gd.json`: `gd.stPayloads` and `rpt.gs` re-recorded for the 20 cases from this branch's run (hashes of the run's readouts;
+  every other section identical to the baseline; `builtin28 / RIDOT` `gd.project` differed once in the matrix run and was identical to main
+  and to the baseline in a rerun against origin/main, run-to-run variation, not this change).
+- `tests/projects/st/s29_builtin28_RIDOT_G2.json`, `s29_xsA_MassDOT_G1.json` (new): hand-offs with the field (this branch's `--save-st`), so
+  `--tool st` covers the GirderDetail path; `tests/baselines/st.json`: these two cases recorded. `tests/README.md`: the two files.
+
+**Open items (engineer):**
+- R_b (6.10.1.10.2, `rbFactor`) and Appendix A6.2.2 (`A6.lrw`) still use λ_rw = 5.7√(E/F_yc); the 10th Ed. defines λ_rw with c_rw (Eqs.
+  6.10.1.10.2-5 and A6.1-3/-4). Not changed here (R_b is item 6 of Stage 2; A6.2.2 is a resistance change). Only the A6 permission uses c_rw.
+- Not testable, listed for the engineer: holes in the tension flange; cross-frames in contiguous lines parallel to the supports; kinked (chorded)
+  girders (the model knows only "curved" from Preliminary sizing).
+- ST-Girder's load rating (−M, `negInv`) still uses its own F_nc (GS20 rating extension, Stage 2 Part 2).
