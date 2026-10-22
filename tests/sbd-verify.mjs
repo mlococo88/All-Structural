@@ -3,7 +3,8 @@
 //  1. redirect: "Steel Bridge Beam Modules.html#<hash>" forwards to "Steel Bridge Design.html#<hash>";
 //  2. saved data: a browser with GirderDetail (girderdetail_*), Preliminary sizing (plateline_*) and ST-Girder (stgirder.session, stgirder.ui.v1)
 //     data saved by the old files opens it unchanged in the merged tool, and the ST-Girder view shows the saved ST-Girder session;
-//  3. the view from the UI: the module tab opens it (first-open time to ST-Girder ready), the girder selector loads a girder, printing
+//  3. the view from the UI: the module tab opens it (first-open time to ST-Girder ready), the girder selector loads a girder; the live link (PR 2):
+//     in sync, girder kept per project, "GirderDetail changed — Update" banner, Update, the Design all summary and its links into the view; printing
 //     (ST-Girder's Print button prints the frame, not the page; the top bar's Print report opens ST-Girder's Report tab; Ctrl+P prints the frame);
 //  console errors of every page. Usage: node tests/sbd-verify.mjs [--file "Steel Bridge Design.html"]   Exit code 0 when every check passes.
 import fs from 'fs';
@@ -53,6 +54,27 @@ seed['stgirder.session'] = stSess; seed['stgirder.ui.v1'] = JSON.stringify({ tab
     const g3 = await f.evaluate(() => { const s = JSON.parse(localStorage.getItem('stgirder.session')); return { id: s.proj.girderId, file: s.external.producerFile, name: s.proj.name }; });
     ok(g3.id === 'G3 (Interior)' && g3.file === 'Steel Bridge Design.html', 'Load girder G3 from the selector: ' + JSON.stringify(g3));
     ok(/G3 loaded into ST-Girder/.test(await p.textContent('#st-msg')), 'bar message: ' + (await p.textContent('#st-msg')));
+    // SBD2 (PR 2): live link. In sync after the load; the girder remembered per project; a change that alters G3's hand-off shows the banner and
+    // applies nothing; one click on Update re-applies; the Design all summary shows the view's checks and ratings and links into the view
+    await p.waitForFunction(() => ST_LINK && ST_LINK.st === 'sync' && ST_LINK.g === 3, null, { timeout: 20000 }).catch(() => {});
+    ok(await p.evaluate(() => ST_LINK.st === 'sync' && /in sync/.test(document.getElementById('st-link').textContent)), 'link: G3 in sync after the load: ' + (await p.textContent('#st-link')));
+    ok(await p.evaluate(() => P.ui.stG === 3 && P.ui.stPL === true), 'selected girder kept in the project (P.ui.stG = 3, P.ui.stPL = true)');
+    const pa0 = await f.evaluate(() => JSON.parse(localStorage.getItem('stgirder.session')).external.producedAt);
+    await p.evaluate(() => { if (!P.tb) gdTbMigrate(true); P.tb.name = (P.tb.name || '') + ' (rev)'; autosave(); });   // the project name goes with the hand-off
+    await p.waitForFunction(() => ST_LINK.st === 'stale', null, { timeout: 20000 }).catch(() => {});
+    ok(await p.evaluate(() => /GirderDetail changed/.test(document.getElementById('st-link').textContent) && !!document.querySelector('#st-link [data-stupd]')), 'banner after a change: ' + (await p.textContent('#st-link')));
+    await p.waitForTimeout(1500);
+    ok(pa0 === await f.evaluate(() => JSON.parse(localStorage.getItem('stgirder.session')).external.producedAt), 'nothing re-applied automatically');
+    await p.click('#st-link [data-stupd]');
+    await p.waitForFunction(pa => { try { return JSON.parse(localStorage.getItem('stgirder.session')).external.producedAt !== pa; } catch (e) { return false; } }, pa0, { timeout: 20000 }).catch(() => {});
+    await p.waitForFunction(() => ST_LINK.st === 'sync', null, { timeout: 20000 }).catch(() => {});
+    const prj = await f.evaluate(() => JSON.parse(localStorage.getItem('stgirder.session')).external.project);
+    const prjN = typeof prj === 'string' ? prj : (prj && prj.name) || '';   // the hand-off's project (a string, HANDOFF.md §4.9)
+    ok(/\(rev\)$/.test(prjN) && await p.evaluate(() => ST_LINK.st === 'sync'), 'Update re-applies G3 in one click (project ' + JSON.stringify(prjN) + ', ' + (await p.textContent('#st-link')) + ')');
+    const da = await p.evaluate(() => { daModal(`<div id="da-st">${stDaHtml()}</div>`); const t = document.getElementById('da-st'); return { rows: t.querySelectorAll('.st-da-t tbody tr').length, txt: t.textContent, n: ST_STATE.checks.length }; });
+    ok(da.rows >= da.n + 3 && /Inventory RF/.test(da.txt) && /G3 \(Interior\)/.test(da.txt), `Design all summary: ${da.n} checks and the load ratings of G3`);
+    await p.click('#da-st a[data-stgo="rating"]'); await p.waitForTimeout(800);
+    ok(await f.evaluate(() => { const t = document.querySelector('.tabs .tab.on'); return !!t && t.textContent.trim() === 'Rating'; }) && await p.evaluate(() => document.getElementById('da-modal').hidden && document.body.classList.contains('mod-st')), 'a rating in the summary opens the view at its Rating tab');
     // a message from another window is ignored (source check): post from the page itself to the frame's window with a forged payload
     const ign = await p.evaluate(async () => { const before = localStorage.getItem('stgirder.session');
       try { ST_FRAME.contentWindow.postMessage({ type: 'gd-st-pull', id: 999, payload: { _schema: 'stgirder-external-demands' } }, '*'); } catch (e) { }

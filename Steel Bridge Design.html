@@ -821,6 +821,13 @@ body.mod-st #app, body.mod-st:not(.gd-sgp) #pl-wrap { display: none !important; 
 #st-bar select { font: inherit; padding: 3px 6px; }
 #st-bar .ck-row { margin: 0; display: inline-flex; align-items: center; gap: 4px; }
 #st-msg { color: var(--text-dim); }
+/* SBD2 (2026-10-22): link status of the view (#st-link) and its "GirderDetail changed — Update" banner; the view's results in Design all (#da-st) */
+#st-link { color: var(--text-dim); }
+#st-link.st-stale { color: var(--text); background: var(--warn-dim, #fdf3dc); border: 1px solid var(--warn, #9c6a0e); padding: 3px 8px; border-radius: 3px; }
+#st-link.st-sync { color: var(--pass, #2c7a4b); }
+#st-link button { font: inherit; margin: 0 4px; }
+#da-st .st-da-t td.n { text-align: right; font-variant-numeric: tabular-nums; }
+#da-st .st-da-t tr.ng td { color: var(--fail); }
 #st-frame-box { flex: 1; min-height: 0; }
 #st-frame-box iframe { width: 100%; height: 100%; border: 0; display: block; }
 @media print { body.mod-st * { visibility: hidden; } }
@@ -18391,7 +18398,7 @@ document.addEventListener('click', e => { const t = e.target.closest && e.target
   // OD1 (2026-10-13), SBD1 (2026-10-22): offer to open the Design & Rating (ST-Girder) view with this girder loaded (was: stgirder.html in a new tab
   // with #gdpull; the view's frame applies the same payload through the same gdAdopt path). The channel keeps the hand-off for stgirder.html's Pull.
   if (id && confirm(`${sent}\n\nOpen Design & Rating (ST-Girder) now with this girder loaded? This replaces ST-Girder's current girder inputs (plates, materials, deck, bracing, skew, forces); Undo in ST-Girder restores them.`)) {
-    stSend(w.payload).catch(er => alert(`Could not load the girder into ST-Girder: ${er.message}`)); return; }
+    const cpl = document.getElementById('gd-st-pl'); stSend(w.payload, cpl ? cpl.checked : true).catch(er => alert(`Could not load the girder into ST-Girder: ${er.message}`)); return; }
   flash(`${sent} Open Design & Rating (ST-Girder) and load the girder there, or click "Pull from GirderDetail" in stgirder.html.`); });
 /* ---------- Hand-off: "Send reactions to Substructure Loading" (HANDOFF.md §4.4, channel bridgeSuite.v1.superReactions, _schema bridge-super-reactions) ----------
    SRX (engineer decision 2026-10-19: steel girder reactions for Bridge Substructure Loading come from GirderDetail; ST-Girder no longer sends them).
@@ -19184,7 +19191,7 @@ function designAllRun0(j, quiet) {
     <h4>Quantities and costs</h4><table class="tbl"><thead><tr><th>Item</th><th class="right">Quantity</th><th class="right">Cost</th></tr></thead><tbody>${cost.map(c => `<tr><td class="lbl">${c.item}</td><td class="val">${c.unit === 'kip' ? f2(c.qn) : f0(c.qn)} ${c.unit}</td><td class="val">${money(c.c)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td></td><td class="val"><b>${money(total)}</b></td></tr></tbody></table>
     <p class="note-p">Girder steel and transitions use the Preliminary sizing unit costs; detail steel $${(+S.cDet).toFixed(2)}/lb, bolts $${(+S.cBolt).toFixed(2)} and studs $${(+S.cStud).toFixed(2)} each come from the owner standards (placeholders until replaced). ${single ? 'A single-girder analysis was applied to every girder.' : 'Interior and exterior designs are counted for their girders.'}</p>
     <h4>Redundancy (NSTM)</h4><p>${nb >= 4 ? `${nb} girders: load-path redundant; the girders are not nonredundant steel tension members (NSTM).` : nb === 3 ? '3 girders: NSTM designation of the girder tension zones is an owner decision, which a system-redundancy evaluation can support.' : `${nb} girders: the girder tension flanges and web tension zones are NSTM (10th Ed. 6.6.2): specify the NSTM Charpy requirements of Table 6.6.2.1-2 for the temperature zone, fabrication under the AASHTO/AWS D1.5 Clause 12 fracture control plan, and NSTM inspection.`}</p>
-    <h4>Geometry conflicts</h4>${conf.length ? `<ul>${conf.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : (splOn ? `<p>None found (${xfC.toLowerCase()}s clear of the splice plates and shop transitions; studs omitted over the splice plates with enough remaining).</p>` : `<p>None found (${xfC.toLowerCase()}s clear of the shop transitions).</p>`)}`);
+    <h4>Geometry conflicts</h4>${conf.length ? `<ul>${conf.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : (splOn ? `<p>None found (${xfC.toLowerCase()}s clear of the splice plates and shop transitions; studs omitted over the splice plates with enough remaining).</p>` : `<p>None found (${xfC.toLowerCase()}s clear of the shop transitions).</p>`)}<div id="da-st">${stDaHtml()}</div>`);
 }
 document.addEventListener('click', e => { if (e.target.id === 'btn-designall') designAllStart(); else if (e.target.id === 'da_close') document.getElementById('da-modal').hidden = true;
   else if (e.target.id === 'da_go') { const ds = document.getElementById('da_src'), v = ds ? ds.value : 'pl'; daModal('<h3>Design all</h3><p>Requesting demands…</p>'); getDemands(v, 'all'); } });
@@ -20827,7 +20834,7 @@ function setOTab(t) { setTimeout(() => renderPlots(), 0); if (t === 'report' && 
 function setITab(t) { P.ui.itab = t; $$('.itab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pane === t))); $$('.ipane').forEach(p => p.hidden = p.id !== 'ipane-' + t); autosave(); }
 function gotoCheck(id) { setOTab('checks'); delete P.ui.col['chk-' + id]; applyCollapse(); setTimeout(() => document.getElementById('chk-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }
 let asT = null;
-function autosave() { if (!LS) return; clearTimeout(asT); asT = setTimeout(() => { try { localStorage.setItem(KEY_AS, JSON.stringify({ data: P, name: CUR })); const d = $('#proj_autosave_dot'); if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = .25, 500); } gdAsState(true); } catch (e) { gdAsState(false); } }, 300); }
+function autosave() { stOnSave(); /* SBD2: the Design & Rating (ST-Girder) view's link */ if (!LS) return; clearTimeout(asT); asT = setTimeout(() => { try { localStorage.setItem(KEY_AS, JSON.stringify({ data: P, name: CUR })); const d = $('#proj_autosave_dot'); if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = .25, 500); } gdAsState(true); } catch (e) { gdAsState(false); } }, 300); }
 /* autosave failure is shown (dot and text in the Project tab, and one alert per session) instead of being swallowed */
 function gdAsState(ok) { if (ok === !gdAsState.bad) return; gdAsState.bad = !ok; const d = $('#proj_autosave_dot'), t = d && d.parentNode;
   if (d) { d.style.background = ok ? '' : 'var(--fail)'; d.style.opacity = ok ? .25 : 1; } if (t && t.lastChild && t.lastChild.nodeType === 3) t.lastChild.textContent = ok ? 'Autosaves and restores your last session' : 'Autosave failed: browser storage is full or blocked. Use Export JSON to keep your work.';
@@ -21416,7 +21423,15 @@ const ST_SHIMS = [
     window.addEventListener('message',h);
     try{ window.parent.postMessage({type:'gd-st-ready'},to); }catch(er){}
     return ()=>window.removeEventListener('message',h); },[]);
-  useEffect(()=>{ const q=gdHostQ.current; if(q&&inp.external&&inp.external.producedAt===q.pa){ gdHostQ.current=null; q.done(true); } },[inp,gdAuto]);`]];
+  useEffect(()=>{ const q=gdHostQ.current; if(q&&inp.external&&inp.external.producedAt===q.pa){ gdHostQ.current=null; q.done(true); } },[inp,gdAuto]);
+  /* SBD2 shim (2026-10-22): the view's state to the host page, read-only (the hand-off held, for the "GirderDetail changed — Update" banner,
+     and the results summary shown in Design all). Nothing here changes an input or a result. */
+  const gdHeld=useMemo(()=>{ const e=inp.external; if(!e||!extFromGD(e)) return null; const g=e.girderDetail||{};
+    return {producedAt:e.producedAt||'',label:g.label||'',girder:g.girder||null,key:(e.member&&e.member.key)||'',pl:e.pedestrianInLL===true,sig:window.gdStSig?gdStSig(e):''}; },[inp.external]);
+  useEffect(()=>{ const H=window.GD_ST_HOST; if(!H||!H.embedded||window.parent===window) return; const to=self.origin==='null'?'*':self.origin;
+    const ck=R.ok?R.checks.map(c=>({n:c.n,t:c.t||'',ref:c.ref||'',r:c.r,v:c.v,lim:c.lim,u:c.u||'',pass:!!c.pass,oos:!!c.oos,loc:c.loc})):[];
+    const q=R.ok&&R.rating?R.rating:null, rt=q?{flexInv:q.flexInv,flexOpr:q.flexOpr,shearInv:q.shearInv,shearOpr:q.shearOpr,negInv:q.negInv,negOpr:q.negOpr,servInv:q.servInv,servOpr:q.servOpr,govInv:q.govInv,govOpr:q.govOpr}:null;
+    try{ window.parent.postMessage({type:'gd-st-state',ok:!!R.ok,err:R.ok?'':String(R.error||''),girderId:(inp.proj&&inp.proj.girderId)||'',checks:ck,rating:rt,pnaOOS:!!R.pnaOOS,ext:gdHeld},to); }catch(er){} },[R,gdHeld]);`]];
 function stSrc() { return document.getElementById('st-src').textContent.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'); }
 const stTo = () => self.origin === 'null' ? '*' : self.origin;
 const gdFromST = e => !!ST_FRAME && e.source === ST_FRAME.contentWindow && e.origin === self.origin;   // messages are accepted only from the ST-Girder frame
@@ -21428,7 +21443,7 @@ function stEnsure() {
   ST_SHIMS.forEach(([a, b]) => { src = src.split(a).join(b); });
   let file = ''; try { file = decodeURIComponent((location.pathname || '').split('/').pop() || ''); } catch (e) { file = ''; }
   const host = { embedded: true, host: 'Steel Bridge Design', file: file || 'Steel Bridge Design.html', href: String(location.href || '').split('#')[0].split('?')[0] };
-  const inj = `<script>window.GD_ST_HOST = ${JSON.stringify(host).replace(/</g, '\\u003c')};<\/script>`;   // SBD1: host info, before ST-Girder's scripts
+  const inj = `<script>window.GD_ST_HOST = ${JSON.stringify(host).replace(/</g, '\\u003c')};\nwindow.gdStSig = ${stSig.toString()};<\/script>`;   // SBD1: host info, before ST-Girder's scripts; SBD2: the hand-off signature (stSig)
   ST_FRAME = document.createElement('iframe'); ST_FRAME.name = 'gd-st'; ST_FRAME.id = 'st-frame'; ST_FRAME.title = 'Design & Rating (ST-Girder)';
   ST_FRAME.srcdoc = src.replace(/<head>/i, h => h + inj); $('#st-frame-box').appendChild(ST_FRAME);
   return true;
@@ -21442,7 +21457,7 @@ function stPost(m) { if (ST_READY && ST_FRAME && ST_FRAME.contentWindow) ST_FRAM
 function stShow() {
   stBar(); stPos(); stEnsure();   // when the frame cannot be prepared, stEnsure says so in the bar
   if (!stShow.ro && window.ResizeObserver) { stShow.ro = new ResizeObserver(stPos); stShow.ro.observe($('#gd-top')); }
-  document.body.classList.add('mod-st');
+  document.body.classList.add('mod-st'); stLinkSoon(0);   // SBD2
   document.querySelectorAll('.mtab').forEach(b => { const on = b.dataset.mod === 'st'; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
 }
 function stHide() { if (!document.body.classList.contains('mod-st')) return; document.body.classList.remove('mod-st'); applyMod(); }
@@ -21450,19 +21465,21 @@ function gdModGo(m) { if (m === 'st') { stShow(); return; } stHide(); setMod(m);
 function stMsg(t, c) { const el = $('#st-msg'); if (!el) return; el.textContent = t; el.style.color = c === 'fail' ? 'var(--fail)' : 'var(--text-dim)'; }
 function stBar() {
   const el = $('#st-bar'), b = P && P.df && P.df.bridge, nb = b && b.ok ? b.nb : 0; if (!el) return;
-  const cur = $('#st-g') ? +$('#st-g').value : Math.round(nm(P && P.sa && P.sa.girder)) || 1, pl = $('#st-pl') ? $('#st-pl').checked : true;
+  const cur = stSelG(), pl = stSelPL();   // SBD2: the girder and the pedestrian choice remembered per project (P.ui.stG, P.ui.stPL)
   const msg = $('#st-msg') ? $('#st-msg').textContent : '';
   el.innerHTML = nb ? `<label for="st-g">Girder</label><select id="st-g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}"${i + 1 === Math.min(cur, nb) ? ' selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select>
     <button type="button" class="btn btn-primary" id="st-load" title="Send this girder's Structural analysis results (the same hand-off as Send to ST-Girder) to ST-Girder below; it replaces ST-Girder's current girder inputs (Undo there restores them)">Load girder into ST-Girder</button>
     <span class="ck-row"><input type="checkbox" id="st-pl"${pl ? ' checked' : ''}><label for="st-pl">Pedestrian load (if any) in LL+IM</label></span>
-    <span id="st-msg" role="status">${esc(msg || 'ST-Girder shows its own saved inputs until a girder is loaded.')}</span>`
+    <span id="st-msg" role="status">${esc(msg || 'ST-Girder shows its own saved inputs until a girder is loaded.')}</span><span id="st-link" role="status"></span>`
     : `<span id="st-msg" role="status">Define the complete bridge in Preliminary sizing first to load a girder. ST-Girder below shows its own saved inputs.</span>`;
+  stLinkShow();
 }
 // send one girder's hand-off (already built and published) to the frame; resolves with the payload once ST-Girder has applied it
-function stSend(pay) {
+function stSend(pay, addPL) {
   pay = JSON.parse(JSON.stringify(pay));   // exactly what a reader of the shared channel gets (stgirder.html's #gdpull path reads it back from storage)
+  const g = pay.girderDetail && pay.girderDetail.girder; if (g) { P.ui.stG = g; P.ui.stPL = addPL !== false; autosave(); }   // SBD2: remembered per project
   stShow(); if (!ST_FRAME) return Promise.reject(new Error('the ST-Girder frame is not available'));
-  const sel = $('#st-g'), g = pay.girderDetail && pay.girderDetail.girder; if (sel && g) sel.value = String(g);
+  const sel = $('#st-g'), cpl = $('#st-pl'); if (sel && g) sel.value = String(g); if (cpl && g) cpl.checked = addPL !== false;
   const id = ++ST_N; stMsg(`Loading ${pay.member.key} into ST-Girder…`);
   return new Promise((res, rej) => { ST_WAIT.set(id, { res, rej, payload: pay }); stPost({ type: 'gd-st-pull', id, payload: pay }); });
 }
@@ -21470,7 +21487,7 @@ function stSend(pay) {
 function stLoad(g, addPL) {
   const r = gdStPayload(g, addPL); if (r.error) return Promise.reject(new Error(`Structural analysis: ${r.error}`));
   let pay = r.payload; try { const w = window.BridgeXfer ? BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file) : null; if (w && w.payload) pay = w.payload; } catch (e) { }
-  return stSend(pay);
+  return stSend(pay, addPL);
 }
 /* window.gdStOpen(g): for test scripts and headless checks (tests/compare.mjs --tool sbd) and the same path as the view's Load button:
    opens the view, sends gdStPayload(g, true) to the frame named "gd-st", resolves with the payload sent once the frame has applied it. */
@@ -21486,6 +21503,74 @@ document.addEventListener('keydown', e => { if (!document.body.classList.contain
 // the top bar's Print report while the view is shown: ST-Girder's Report tab (its Print button prints the frame)
 function stReport() { if (!ST_FRAME || !ST_FRAME.contentWindow) return; try { const W = ST_FRAME.contentWindow; W.dispatchEvent(new W.CustomEvent('stg-goto', { detail: { tab: 'report' } })); } catch (e) { }
   stMsg('ST-Girder\'s Report tab: choose the sections, then Print there.'); }
+
+/* ---------- Design & Rating (ST-Girder): live link to the modules (SBD2, 2026-10-22; merge of GirderDetail and ST-Girder, PR 2) ----------
+   The frame reports its state after every computation ({ type: 'gd-st-state' }: the hand-off it holds, with its signature stSig, the results of
+   every check and the load ratings; SBD2 shim). The host compares the hand-off it would send now for the selected girder, gdStPayload(G, pedestrian
+   choice), with the one the frame holds (stSig: the payload without producedAt). When they differ, the bar shows "GirderDetail changed — Update";
+   one click sends the girder again (stLoad: published to the girderDemands channel and applied in the frame, as Load girder). Nothing is applied
+   automatically. The selected girder and the pedestrian choice are kept per project in P.ui.stG and P.ui.stPL (additive, view settings; older copies
+   ignore them). The check runs after a saved change (autosave → stOnSave, debounced) while the view is shown, when the view opens, when the frame
+   reports a new state, and for the Design all summary; it skips the hand-off build (gdStPayload, 0.3–0.8 s) when the project data, the girder, the
+   pedestrian choice and the hand-off held are all as at the last check (ST_FP). Display only: no input or result of either part changes. */
+let ST_STATE = null, ST_LINK = { st: 'wait' }, ST_FP = null, ST_LT = null;
+// the hand-off's signature: its JSON without producedAt (the send time) and the frame's _selSpan; a 32-bit FNV-1a and a 31-multiplier hash, with the length
+function stSig(p) { const s = JSON.stringify(p, (k, v) => k === 'producedAt' || k === '_selSpan' ? undefined : v) || ''; let a = 0x811c9dc5, b = 0;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = (Math.imul(b, 31) + c) | 0; }
+  return s.length + ':' + (a >>> 0).toString(16) + ':' + (b >>> 0).toString(16); }
+function stNb() { const b = P && P.df && P.df.bridge; return b && b.ok ? b.nb : 0; }
+function stSelG() { const nb = stNb(), g = Math.round(nm(P && P.ui && P.ui.stG)) || Math.round(nm(P && P.sa && P.sa.girder)) || 1; return nb ? Math.min(Math.max(1, g), nb) : g; }
+function stSelPL() { return !(P && P.ui && P.ui.stPL === false); }
+const stViewOn = () => document.body.classList.contains('mod-st');
+function stLinkSoon(ms) { clearTimeout(ST_LT); ST_LT = setTimeout(() => { ST_LT = null; stLinkCheck(); }, ms == null ? 800 : ms); }
+function stOnSave() { try { if (ST_FRAME && stViewOn()) stLinkSoon(); } catch (e) { } }   // autosave can run before this code has been evaluated
+function stLinkCheck() {
+  if (!P) return ST_LINK;
+  if (!ST_STATE) { ST_LINK = { st: ST_FRAME ? 'wait' : 'closed' }; stLinkShow(); return ST_LINK; }
+  const e = ST_STATE.ext, g = stSelG(), pl = stSelPL();
+  if (!e) { ST_LINK = { st: 'none', g }; stLinkShow(); return ST_LINK; }
+  if (+e.girder !== g) { ST_LINK = { st: 'other', g, held: e.label || ('G' + e.girder) }; stLinkShow(); return ST_LINK; }
+  if ((typeof GR_RUN !== 'undefined' && GR_RUN) || GD_RQ.size || GD_XF_T || GD_PLQ.length || GD_RF_T) { stLinkSoon(1500); return ST_LINK; }   // the modules are being updated: check once they are done
+  const fp = `${g}|${pl}|${e.sig}|${JSON.stringify(P, (k, v) => k === 'ui' ? undefined : v)}`;
+  if (!ST_FP || ST_FP.fp !== fp) { const r = gdStPayload(g, pl); ST_FP = { fp, st: r.error ? 'err' : stSig(r.payload) === e.sig ? 'sync' : 'stale', why: r.error || '' }; }
+  ST_LINK = { st: ST_FP.st, g, held: e.label || ('G' + g), why: ST_FP.why, pl }; stLinkShow(); return ST_LINK; }
+function stLinkText(L) { L = L || ST_LINK;
+  return L.st === 'sync' ? `ST-Girder holds G${L.g} as the modules give it now (in sync).`
+    : L.st === 'stale' ? `GirderDetail changed since G${L.g} was loaded into ST-Girder (demands, plates or design inputs).`
+    : L.st === 'other' ? `ST-Girder holds ${L.held}; G${L.g} is selected.`
+    : L.st === 'none' ? 'ST-Girder holds its own inputs (no girder of this project loaded).'
+    : L.st === 'err' ? `G${L.g}: the hand-off cannot be built (${L.why}).` : ''; }
+function stLinkShow() { const el = $('#st-link'); if (!el) return; const L = ST_LINK;
+  el.className = L.st === 'stale' ? 'st-stale' : L.st === 'sync' ? 'st-sync' : '';
+  el.innerHTML = L.st === 'stale' ? `<b>GirderDetail changed</b> — <button type="button" class="btn btn-primary" data-stupd="1" title="Send G${L.g} again (the same hand-off as Load girder); it replaces ST-Girder's girder inputs, Undo there restores them">Update</button> ${esc(stLinkText(L))}`
+    : esc(stLinkText(L)); }
+window.addEventListener('message', e => { if (!gdFromST(e) || !e.data || e.data.type !== 'gd-st-state') return;
+  ST_STATE = e.data; if (stViewOn()) stLinkSoon(200); const d = document.getElementById('da-st'); if (d) d.innerHTML = stDaHtml(); });
+document.addEventListener('change', e => { const id = e.target && e.target.id; if (id !== 'st-g' && id !== 'st-pl') return;
+  if (id === 'st-g') P.ui.stG = Math.round(+e.target.value) || 1; else P.ui.stPL = !!e.target.checked; autosave(); stLinkSoon(0); });
+document.addEventListener('click', e => { const u = e.target.closest && e.target.closest('[data-stupd]'); if (u) { const g = stSelG();
+    stLoad(g, stSelPL()).then(() => stLinkSoon(0)).catch(er => stMsg(er.message, 'fail')); return; }
+  const go = e.target.closest && e.target.closest('[data-stgo]'); if (!go) return; e.preventDefault();
+  const m = document.getElementById('da-modal'); if (m) m.hidden = true; stShow(); stGoTab(go.dataset.stgo); });
+// open a tab of the view (ST-Girder's own derivation-link event, stg-goto); a request made before the frame is up waits for it
+function stGoTab(tab) { if (!tab || !ST_FRAME) return; const send = () => { try { const W = ST_FRAME.contentWindow; W.dispatchEvent(new W.CustomEvent('stg-goto', { detail: { tab } })); } catch (er) { } };
+  if (ST_READY) send(); else { const t0 = Date.now(), iv = setInterval(() => { if (ST_READY || Date.now() - t0 > 60000) { clearInterval(iv); if (ST_READY) setTimeout(send, 300); } }, 250); } }
+// the ST-Girder tab where a check is worked, from its AASHTO LRFD article
+function stTabOf(ref) { const r = String(ref || '');
+  return /^6\.10\.2|^6\.10\.7\.3/.test(r) ? 'section' : /^6\.10\.3/.test(r) ? 'construct' : /^6\.10\.4|^2\.5\.2\.6/.test(r) ? 'stresses' : /^6\.10\.(7|8)|^6\.10\.1\.7/.test(r) ? 'flexure'
+    : /^6\.10\.9/.test(r) ? 'shear' : /^6\.6|^6\.10\.5/.test(r) ? 'fatigue' : /^6\.10\.11/.test(r) ? 'stiff' : /^6\.10\.10/.test(r) ? 'conn' : /^9\.|^13\./.test(r) ? 'deck' : 'report'; }
+// Design all: the view's results, read-only, each linked to the tab where it is worked
+function stDaHtml() {
+  const S = ST_STATE, f = v => v == null || !isFinite(v) ? '—' : (+v).toFixed(2), a = (tab, t) => `<a href="#" data-stgo="${tab}">${esc(t)}</a>`;
+  if (!S) return `<h4>Design &amp; Rating (ST-Girder)</h4><p>The view has not been opened in this session. ${a('inputs', 'Open Design & Rating (ST-Girder)')}</p>`;
+  const L = stLinkCheck(), e = S.ext;
+  const head = `<h4>Design &amp; Rating (ST-Girder): ${esc(S.girderId || '')}</h4><p class="note-p">Read-only, from the ${a('report', 'Design & Rating (ST-Girder) view')}: ${e ? `hand-off ${esc(e.key || e.label)}` : 'ST-Girder\'s own inputs (no girder of this project loaded)'}. ${esc(stLinkText(L))}${L.st === 'stale' ? ' <button type="button" data-stupd="1">Update</button>' : ''}</p>`;
+  if (!S.ok) return head + `<p><b style="color:var(--fail)">Input error in ST-Girder:</b> ${esc(S.err)}</p>`;
+  const ck = S.checks || [], nf = ck.filter(c => !c.pass).length, R = S.rating, row = (l, i, o) => `<tr><td class="lbl">${a('rating', l)}</td><td class="n">${f(i)}</td><td class="n">${f(o)}</td></tr>`;
+  return head + `<p>${ck.length} checks: ${ck.length - nf} pass, ${nf} do not pass.</p>
+    <table class="tbl st-da-t"><thead><tr><th>Check (governing location)</th><th>AASHTO LRFD</th><th class="right">D/C</th><th>Result</th></tr></thead><tbody>${ck.map(c => `<tr class="${c.pass ? '' : 'ng'}"><td class="lbl">${a(stTabOf(c.ref), c.n)}</td><td>${esc(c.ref)}</td><td class="n">${c.oos ? 'out of scope' : f(c.r)}</td><td>${c.oos ? 'not reported' : c.pass ? 'pass' : 'FAIL'}</td></tr>`).join('')}</tbody></table>
+    ${R ? `<table class="tbl st-da-t"><thead><tr><th>Load rating, HL-93 (MBE 6A)</th><th class="right">Inventory RF</th><th class="right">Operating RF</th></tr></thead><tbody>${row('Flexure (+M)', R.flexInv, R.flexOpr)}${R.negInv != null ? row('Flexure (−M)', R.negInv, R.negOpr) : ''}${row('Shear', R.shearInv, R.shearOpr)}${R.servInv != null ? row('Service II', R.servInv, R.servOpr) : ''}<tr class="tot"><td>Governing</td><td class="n"><b>${f(R.govInv)}</b></td><td class="n"><b>${f(R.govOpr)}</b></td></tr></tbody></table>` : ''}`;
+}
 function loadAllInbox(j) { return gdBg(() => loadAllInbox0(j)); }
 function loadAllInbox0(j) {
   const done = [];

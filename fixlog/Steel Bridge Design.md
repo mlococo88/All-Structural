@@ -20657,3 +20657,152 @@ function stReport() { if (!ST_FRAME || !ST_FRAME.contentWindow) return; try { co
 **Open items:** `stgirder.html` is unchanged (engineer decision 2026-10-22) and still names GirderDetail's file "Steel Bridge Beam Modules.html" in
 three help texts (also inside `st-src`); they go with the planned retirement of stgirder.html. The redirect page keeps old links and bookmarks working.
 
+
+
+## 2026-10-22 — PR: claude/sbd-2-link (SBD2: merge of GirderDetail and ST-Girder, PR 2: the Design & Rating (ST-Girder) view live-linked to the modules; PR link added after merge)
+
+**No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed
+(two optional view fields are added to the project's `ui` object, below). ST-Girder (`st-src`) is unchanged; its frame gets one more shim (state
+messages to the host, no input or result touched). Verified with `tests/compare.mjs` (`--tool gd` against `tests/baselines/gd.json`, `--tool sbd`)
+and `tests/sbd-verify.mjs`; results in the PR description.
+
+**Baseline note:** `tests/baselines/gd.json` section `rpt.sa` re-recorded for every case (20) on main at 0072010 (after SBD1), the only section
+SBD1 changed (the "Send to ST-Girder" note printed in the Structural analysis report, SBD1-d). Every other section of the recording run equals the
+PR 0 baseline.
+
+### SBD2-a. Frame shim: the view's state to the host   [new] [no result change]
+- **Where:** `ST_SHIMS`, the fourth entry (the SBD1 App shim); its replacement text now ends, after
+  `useEffect(()=>{ const q=gdHostQ.current; if(q&&inp.external&&inp.external.producedAt===q.pa){ gdHostQ.current=null; q.done(true); } },[inp,gdAuto]);`,
+  with (exactly):
+  ```jsx
+  /* SBD2 shim (2026-10-22): the view's state to the host page, read-only (the hand-off held, for the "GirderDetail changed — Update" banner,
+     and the results summary shown in Design all). Nothing here changes an input or a result. */
+  const gdHeld=useMemo(()=>{ const e=inp.external; if(!e||!extFromGD(e)) return null; const g=e.girderDetail||{};
+    return {producedAt:e.producedAt||'',label:g.label||'',girder:g.girder||null,key:(e.member&&e.member.key)||'',pl:e.pedestrianInLL===true,sig:window.gdStSig?gdStSig(e):''}; },[inp.external]);
+  useEffect(()=>{ const H=window.GD_ST_HOST; if(!H||!H.embedded||window.parent===window) return; const to=self.origin==='null'?'*':self.origin;
+    const ck=R.ok?R.checks.map(c=>({n:c.n,t:c.t||'',ref:c.ref||'',r:c.r,v:c.v,lim:c.lim,u:c.u||'',pass:!!c.pass,oos:!!c.oos,loc:c.loc})):[];
+    const q=R.ok&&R.rating?R.rating:null, rt=q?{flexInv:q.flexInv,flexOpr:q.flexOpr,shearInv:q.shearInv,shearOpr:q.shearOpr,negInv:q.negInv,negOpr:q.negOpr,servInv:q.servInv,servOpr:q.servOpr,govInv:q.govInv,govOpr:q.govOpr}:null;
+    try{ window.parent.postMessage({type:'gd-st-state',ok:!!R.ok,err:R.ok?'':String(R.error||''),girderId:(inp.proj&&inp.proj.girderId)||'',checks:ck,rating:rt,pnaOOS:!!R.pnaOOS,ext:gdHeld},to); }catch(er){} },[R,gdHeld]);
+  ```
+  The anchor is unchanged, so `stgirder.html` and the `st-src` text are unchanged.
+- `stEnsure()`, the injected host script: before
+  ``const inj = `<script>window.GD_ST_HOST = ${JSON.stringify(host).replace(/</g, '\\u003c')};<\/script>`;   // SBD1: host info, before ST-Girder's scripts``,
+  after
+  ``const inj = `<script>window.GD_ST_HOST = ${JSON.stringify(host).replace(/</g, '\\u003c')};\nwindow.gdStSig = ${stSig.toString()};<\/script>`;   // SBD1: host info, before ST-Girder's scripts; SBD2: the hand-off signature (stSig)``
+  (the frame computes the signature of the hand-off it holds with the host's own function text).
+
+### SBD2-b. Live link: "GirderDetail changed — Update" banner, girder kept per project   [new] [no result change]
+- **Host code**, inserted after `stReport()` (anchor: `  stMsg('ST-Girder\'s Report tab: choose the sections, then Print there.'); }`), exactly:
+  ```js
+/* ---------- Design & Rating (ST-Girder): live link to the modules (SBD2, 2026-10-22; merge of GirderDetail and ST-Girder, PR 2) ----------
+   The frame reports its state after every computation ({ type: 'gd-st-state' }: the hand-off it holds, with its signature stSig, the results of
+   every check and the load ratings; SBD2 shim). The host compares the hand-off it would send now for the selected girder, gdStPayload(G, pedestrian
+   choice), with the one the frame holds (stSig: the payload without producedAt). When they differ, the bar shows "GirderDetail changed — Update";
+   one click sends the girder again (stLoad: published to the girderDemands channel and applied in the frame, as Load girder). Nothing is applied
+   automatically. The selected girder and the pedestrian choice are kept per project in P.ui.stG and P.ui.stPL (additive, view settings; older copies
+   ignore them). The check runs after a saved change (autosave → stOnSave, debounced) while the view is shown, when the view opens, when the frame
+   reports a new state, and for the Design all summary; it skips the hand-off build (gdStPayload, 0.3–0.8 s) when the project data, the girder, the
+   pedestrian choice and the hand-off held are all as at the last check (ST_FP). Display only: no input or result of either part changes. */
+let ST_STATE = null, ST_LINK = { st: 'wait' }, ST_FP = null, ST_LT = null;
+// the hand-off's signature: its JSON without producedAt (the send time) and the frame's _selSpan; a 32-bit FNV-1a and a 31-multiplier hash, with the length
+function stSig(p) { const s = JSON.stringify(p, (k, v) => k === 'producedAt' || k === '_selSpan' ? undefined : v) || ''; let a = 0x811c9dc5, b = 0;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = (Math.imul(b, 31) + c) | 0; }
+  return s.length + ':' + (a >>> 0).toString(16) + ':' + (b >>> 0).toString(16); }
+function stNb() { const b = P && P.df && P.df.bridge; return b && b.ok ? b.nb : 0; }
+function stSelG() { const nb = stNb(), g = Math.round(nm(P && P.ui && P.ui.stG)) || Math.round(nm(P && P.sa && P.sa.girder)) || 1; return nb ? Math.min(Math.max(1, g), nb) : g; }
+function stSelPL() { return !(P && P.ui && P.ui.stPL === false); }
+const stViewOn = () => document.body.classList.contains('mod-st');
+function stLinkSoon(ms) { clearTimeout(ST_LT); ST_LT = setTimeout(() => { ST_LT = null; stLinkCheck(); }, ms == null ? 800 : ms); }
+function stOnSave() { try { if (ST_FRAME && stViewOn()) stLinkSoon(); } catch (e) { } }   // autosave can run before this code has been evaluated
+function stLinkCheck() {
+  if (!P) return ST_LINK;
+  if (!ST_STATE) { ST_LINK = { st: ST_FRAME ? 'wait' : 'closed' }; stLinkShow(); return ST_LINK; }
+  const e = ST_STATE.ext, g = stSelG(), pl = stSelPL();
+  if (!e) { ST_LINK = { st: 'none', g }; stLinkShow(); return ST_LINK; }
+  if (+e.girder !== g) { ST_LINK = { st: 'other', g, held: e.label || ('G' + e.girder) }; stLinkShow(); return ST_LINK; }
+  if ((typeof GR_RUN !== 'undefined' && GR_RUN) || GD_RQ.size || GD_XF_T || GD_PLQ.length || GD_RF_T) { stLinkSoon(1500); return ST_LINK; }   // the modules are being updated: check once they are done
+  const fp = `${g}|${pl}|${e.sig}|${JSON.stringify(P, (k, v) => k === 'ui' ? undefined : v)}`;
+  if (!ST_FP || ST_FP.fp !== fp) { const r = gdStPayload(g, pl); ST_FP = { fp, st: r.error ? 'err' : stSig(r.payload) === e.sig ? 'sync' : 'stale', why: r.error || '' }; }
+  ST_LINK = { st: ST_FP.st, g, held: e.label || ('G' + g), why: ST_FP.why, pl }; stLinkShow(); return ST_LINK; }
+function stLinkText(L) { L = L || ST_LINK;
+  return L.st === 'sync' ? `ST-Girder holds G${L.g} as the modules give it now (in sync).`
+    : L.st === 'stale' ? `GirderDetail changed since G${L.g} was loaded into ST-Girder (demands, plates or design inputs).`
+    : L.st === 'other' ? `ST-Girder holds ${L.held}; G${L.g} is selected.`
+    : L.st === 'none' ? 'ST-Girder holds its own inputs (no girder of this project loaded).'
+    : L.st === 'err' ? `G${L.g}: the hand-off cannot be built (${L.why}).` : ''; }
+function stLinkShow() { const el = $('#st-link'); if (!el) return; const L = ST_LINK;
+  el.className = L.st === 'stale' ? 'st-stale' : L.st === 'sync' ? 'st-sync' : '';
+  el.innerHTML = L.st === 'stale' ? `<b>GirderDetail changed</b> — <button type="button" class="btn btn-primary" data-stupd="1" title="Send G${L.g} again (the same hand-off as Load girder); it replaces ST-Girder's girder inputs, Undo there restores them">Update</button> ${esc(stLinkText(L))}`
+    : esc(stLinkText(L)); }
+window.addEventListener('message', e => { if (!gdFromST(e) || !e.data || e.data.type !== 'gd-st-state') return;
+  ST_STATE = e.data; if (stViewOn()) stLinkSoon(200); const d = document.getElementById('da-st'); if (d) d.innerHTML = stDaHtml(); });
+document.addEventListener('change', e => { const id = e.target && e.target.id; if (id !== 'st-g' && id !== 'st-pl') return;
+  if (id === 'st-g') P.ui.stG = Math.round(+e.target.value) || 1; else P.ui.stPL = !!e.target.checked; autosave(); stLinkSoon(0); });
+document.addEventListener('click', e => { const u = e.target.closest && e.target.closest('[data-stupd]'); if (u) { const g = stSelG();
+    stLoad(g, stSelPL()).then(() => stLinkSoon(0)).catch(er => stMsg(er.message, 'fail')); return; }
+  const go = e.target.closest && e.target.closest('[data-stgo]'); if (!go) return; e.preventDefault();
+  const m = document.getElementById('da-modal'); if (m) m.hidden = true; stShow(); stGoTab(go.dataset.stgo); });
+// open a tab of the view (ST-Girder's own derivation-link event, stg-goto); a request made before the frame is up waits for it
+function stGoTab(tab) { if (!tab || !ST_FRAME) return; const send = () => { try { const W = ST_FRAME.contentWindow; W.dispatchEvent(new W.CustomEvent('stg-goto', { detail: { tab } })); } catch (er) { } };
+  if (ST_READY) send(); else { const t0 = Date.now(), iv = setInterval(() => { if (ST_READY || Date.now() - t0 > 60000) { clearInterval(iv); if (ST_READY) setTimeout(send, 300); } }, 250); } }
+// the ST-Girder tab where a check is worked, from its AASHTO LRFD article
+function stTabOf(ref) { const r = String(ref || '');
+  return /^6\.10\.2|^6\.10\.7\.3/.test(r) ? 'section' : /^6\.10\.3/.test(r) ? 'construct' : /^6\.10\.4|^2\.5\.2\.6/.test(r) ? 'stresses' : /^6\.10\.(7|8)|^6\.10\.1\.7/.test(r) ? 'flexure'
+    : /^6\.10\.9/.test(r) ? 'shear' : /^6\.6|^6\.10\.5/.test(r) ? 'fatigue' : /^6\.10\.11/.test(r) ? 'stiff' : /^6\.10\.10/.test(r) ? 'conn' : /^9\.|^13\./.test(r) ? 'deck' : 'report'; }
+// Design all: the view's results, read-only, each linked to the tab where it is worked
+function stDaHtml() {
+  const S = ST_STATE, f = v => v == null || !isFinite(v) ? '—' : (+v).toFixed(2), a = (tab, t) => `<a href="#" data-stgo="${tab}">${esc(t)}</a>`;
+  if (!S) return `<h4>Design &amp; Rating (ST-Girder)</h4><p>The view has not been opened in this session. ${a('inputs', 'Open Design & Rating (ST-Girder)')}</p>`;
+  const L = stLinkCheck(), e = S.ext;
+  const head = `<h4>Design &amp; Rating (ST-Girder): ${esc(S.girderId || '')}</h4><p class="note-p">Read-only, from the ${a('report', 'Design & Rating (ST-Girder) view')}: ${e ? `hand-off ${esc(e.key || e.label)}` : 'ST-Girder\'s own inputs (no girder of this project loaded)'}. ${esc(stLinkText(L))}${L.st === 'stale' ? ' <button type="button" data-stupd="1">Update</button>' : ''}</p>`;
+  if (!S.ok) return head + `<p><b style="color:var(--fail)">Input error in ST-Girder:</b> ${esc(S.err)}</p>`;
+  const ck = S.checks || [], nf = ck.filter(c => !c.pass).length, R = S.rating, row = (l, i, o) => `<tr><td class="lbl">${a('rating', l)}</td><td class="n">${f(i)}</td><td class="n">${f(o)}</td></tr>`;
+  return head + `<p>${ck.length} checks: ${ck.length - nf} pass, ${nf} do not pass.</p>
+    <table class="tbl st-da-t"><thead><tr><th>Check (governing location)</th><th>AASHTO LRFD</th><th class="right">D/C</th><th>Result</th></tr></thead><tbody>${ck.map(c => `<tr class="${c.pass ? '' : 'ng'}"><td class="lbl">${a(stTabOf(c.ref), c.n)}</td><td>${esc(c.ref)}</td><td class="n">${c.oos ? 'out of scope' : f(c.r)}</td><td>${c.oos ? 'not reported' : c.pass ? 'pass' : 'FAIL'}</td></tr>`).join('')}</tbody></table>
+    ${R ? `<table class="tbl st-da-t"><thead><tr><th>Load rating, HL-93 (MBE 6A)</th><th class="right">Inventory RF</th><th class="right">Operating RF</th></tr></thead><tbody>${row('Flexure (+M)', R.flexInv, R.flexOpr)}${R.negInv != null ? row('Flexure (−M)', R.negInv, R.negOpr) : ''}${row('Shear', R.shearInv, R.shearOpr)}${R.servInv != null ? row('Service II', R.servInv, R.servOpr) : ''}<tr class="tot"><td>Governing</td><td class="n"><b>${f(R.govInv)}</b></td><td class="n"><b>${f(R.govOpr)}</b></td></tr></tbody></table>` : ''}`;
+}
+  ```
+- **CSS**, after `#st-msg { color: var(--text-dim); }`:
+  ```css
+/* SBD2 (2026-10-22): link status of the view (#st-link) and its "GirderDetail changed — Update" banner; the view's results in Design all (#da-st) */
+#st-link { color: var(--text-dim); }
+#st-link.st-stale { color: var(--text); background: var(--warn-dim, #fdf3dc); border: 1px solid var(--warn, #9c6a0e); padding: 3px 8px; border-radius: 3px; }
+#st-link.st-sync { color: var(--pass, #2c7a4b); }
+#st-link button { font: inherit; margin: 0 4px; }
+#da-st .st-da-t td.n { text-align: right; font-variant-numeric: tabular-nums; }
+#da-st .st-da-t tr.ng td { color: var(--fail); }
+  ```
+- `stBar()`: before
+  `const cur = $('#st-g') ? +$('#st-g').value : Math.round(nm(P && P.sa && P.sa.girder)) || 1, pl = $('#st-pl') ? $('#st-pl').checked : true;`,
+  after `const cur = stSelG(), pl = stSelPL();   // SBD2: …`; the bar's message span is followed by `<span id="st-link" role="status"></span>`, and
+  `stLinkShow();` is called at the end of the function.
+- `stSend(pay)` → `stSend(pay, addPL)`: before its `stShow();` line, added
+  `const g = pay.girderDetail && pay.girderDetail.girder; if (g) { P.ui.stG = g; P.ui.stPL = addPL !== false; autosave(); }   // SBD2: remembered per project`;
+  the next line, before `const sel = $('#st-g'), g = pay.girderDetail && pay.girderDetail.girder; if (sel && g) sel.value = String(g);`, after
+  `const sel = $('#st-g'), cpl = $('#st-pl'); if (sel && g) sel.value = String(g); if (cpl && g) cpl.checked = addPL !== false;`.
+  `stLoad(g, addPL)`: `return stSend(pay);` → `return stSend(pay, addPL);`.
+- Send to ST-Girder (`[data-gdst]` click handler): before `stSend(w.payload).catch(…`, after
+  `const cpl = document.getElementById('gd-st-pl'); stSend(w.payload, cpl ? cpl.checked : true).catch(…` (the pedestrian choice made there is kept).
+- `stShow()`: `document.body.classList.add('mod-st');` → `document.body.classList.add('mod-st'); stLinkSoon(0);   // SBD2`.
+- `autosave()`: before `function autosave() { if (!LS) return; …`, after
+  `function autosave() { stOnSave(); /* SBD2: the Design & Rating (ST-Girder) view's link */ if (!LS) return; …` (rest unchanged).
+- **Saved data:** `P.ui.stG` (girder number) and `P.ui.stPL` (true/false) are new optional fields of the project's `ui` object, written when a girder
+  is loaded into the view or chosen in its selector. A project without them opens with Structural analysis's girder and the pedestrian load included
+  (as before). Older copies ignore them. No key changes.
+- **Check case (built-in project, AASHTO):** Design & Rating (ST-Girder), Load G2 → the bar reads "ST-Girder holds G2 as the modules give it now (in
+  sync)". Change the title block's project name (it goes with the hand-off as `project`) → within about a second the bar shows "**GirderDetail
+  changed** — Update"; `stgirder.session`'s `external.producedAt` is unchanged (nothing applied). Click Update → the frame holds the new hand-off
+  (`external.project` = the new name) and the bar reads "in sync" again. Reload the page and open the view → G2 selected, "in sync" (the frame's saved
+  hand-off has the same signature).
+
+### SBD2-c. Design all: the view's results, read-only, linked into the view   [new] [display only]
+- `designAllRun0()`, the results dialog: after the Geometry conflicts paragraph (anchor: ``clear of the shop transitions).</p>`)}`);``) added
+  `<div id="da-st">${stDaHtml()}</div>` before the closing backtick. It lists every ST-Girder check of the girder the view holds (governing D/C
+  and result, AASHTO LRFD article as ST-Girder states it) and the HL-93 load ratings (Inventory / Operating: flexure +M, flexure −M, shear,
+  Service II, governing), with the link status; every row opens the view at the tab where it is worked (`stTabOf`); "Update" when the modules
+  changed. Values are those ST-Girder computes and shows (its `R.checks`, `R.rating`); nothing is recomputed in the host. The quiet run (Girder
+  report) does not show the dialog; `P.designAll` is unchanged.
+- **Check case:** xsA project, view with G3 loaded → Design all → "Design & Rating (ST-Girder): G3 (Interior)", 37 checks, ratings table; click
+  "Shear" in the ratings → the view opens at ST-Girder's Rating tab.
+
+**Open items:** none.
