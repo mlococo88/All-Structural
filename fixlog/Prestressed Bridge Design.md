@@ -1912,3 +1912,24 @@ Owner manuals used (verified in the engineer's reference folder; cited, not repr
 - `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: the 31 existing cases have every section identical. Six owner fixtures were added (`owner_RIDOT`, `owner_MassDOT_sw`, `owner_CTDOT_debond`, `owner_RIDOT_cont`, `owner_MassDOT_cont`, `owner_CTDOT_deck`). Their A run (origin/main, which ignores the owner) gives the "before" and B the "after", and their baseline is recorded from this branch.
 - UI script (scratch): owner select sets the defaults of untouched inputs and keeps entered values (flagged), the card lists the rules, η questions and multiplier change the results, switching back to AASHTO restores the defaults; no console errors.
 - `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
+
+## 2026-10-22 — PR: claude/pbd-f-conn-mcr (PBD-F: RIDOT positive moment connection, M_cr on the composite section with the deck/diaphragm modulus of rupture; engineer decision 2026-10-22; RIDOT result only, AASHTO and the other owners unchanged; PR link added after merge)
+
+### PBD-F1. M_cr of the positive moment connection (RIDOT BDM 5.6.3.3; AASHTO LRFD 10th Ed. 5.4.2.6; basis NCHRP Report 519)   [calc change, RIDOT, reported value] [less conservative]
+- **Where:** `computeAll`, owner block, anchor `const rPos=rr('cont.pos');`. Display: report section "Owner Requirements" (anchor `Positive moment connection ('+cr.cite+')`) and the Owner Requirements card (`PbdOwnerCard`, `if(r.kind==='report')`).
+- **Before:**
+  ```js
+  if(rPos&&cont){ const frC=0.24*Math.sqrt(fc), Mcr=frC*g.Sb/12; contReq={fr:frC,Sb:g.Sb,Mcr,f:rPos.value,req:rPos.value*Mcr,cite:P_.ownCite(rPos)}; }
+  ```
+- **After:**
+  ```js
+  if(rPos&&cont){ // PBD-F: M_cr of the connection = f_r(diaphragm/deck concrete, 5.4.2.6) × composite S_bc (NCHRP 519 basis)
+      const fcdC=+inp.mat.fcd, frC=0.24*Math.sqrt(fcdC), Mcr=frC*cp.Sbc/12; contReq={fcd:fcdC,fr:frC,Sbc:cp.Sbc,Mcr,f:rPos.value,req:rPos.value*Mcr,cite:P_.ownCite(rPos)}; }
+  ```
+- **Problem:** the connection resists moments applied after continuity (SIDL, live load, restraint) on the composite section at the diaphragm face. It cracks at the girder bottom fiber in the diaphragm concrete, which is cast with the deck. The former M_cr used the girder concrete (0.24√f′c,girder) on the non-composite gross girder S_b. Now M_cr = f_r S_bc with f_r = 0.24λ√f′c of the deck/diaphragm concrete (`mat.fcd`, λ = 1.0, normal weight), the basis of NCHRP Report 519 (Miller et al. 2004), the source of the 1.2 M_cr rule. Still "reported, not designed". Less conservative for the default deck concrete (f′c 4.0 ksi < 8.5 ksi), partly offset by S_bc > S_b.
+- **Report:** f_r, M_cr and φM_n ≥ 1.2 M_cr are each worked (symbolic → values → result), with a link to the S_bc derivation (Section Props, "Derivation — Composite Section"; report §"Composite section moduli"). The card shows the substituted values and links to Report · Owner Requirements.
+- **Check case (fixture owner_RIDOT_cont: PCI BT-72, L = 120 ft, f′c 8.5 ksi, deck f′c 4.0 ksi, continuity on):**
+  - Before: f_r = 0.24√8.5 = 0.6997 ksi; M_cr = 0.6997 × 14 915 / 12 = 869.7 k-ft; 1.2 M_cr = **1043.6 k-ft**.
+  - After: f_r = 0.24√4.0 = 0.24 × 2 = 0.480 ksi; S_bc = 20 231 in³; M_cr = 0.480 × 20 231 / 12 = 809.2 k-ft; 1.2 M_cr = **971.1 k-ft**.
+- **How verified:** `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: every case identical except owner_RIDOT_cont (sections `ps.R` and `ps.report` only: `own.contReq` and the report text above); the R values read back are f_r 0.480, S_bc 20 230.6, M_cr 809.23, required 971.07 k-ft. That case's baseline was re-recorded from this branch. `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
+- **Other copies:** none.

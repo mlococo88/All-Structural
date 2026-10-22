@@ -1126,11 +1126,11 @@
    }
   },
   "owner_RIDOT_cont": {
-   "a": "claude/pbd-3-owner (Prestressed Bridge Design.html, owner rules)",
+   "a": "claude/pbd-f-conn-mcr (Prestressed Bridge Design.html, RIDOT connection M_cr)",
    "sections": {
     "ps.inputs": "707627833c42",
     "ps.checks": "6ed8e3664f5c",
-    "ps.R": "d1ac32c7dead",
+    "ps.R": "557076ae2d1f",
     "ps.warnings": "ff3a51b55eba",
     "ps.pay.superRx": "6cbcd6186bdc",
     "ps.pay.psSection": "713b27d929af",
@@ -1154,7 +1154,7 @@
     "ps.tab.Optimize": "6a020f0c3669",
     "ps.tab.Compare": "f41b96021d9b",
     "ps.tab.Nomenclature": "844d2e009aeb",
-    "ps.report": "0579a5402e1d",
+    "ps.report": "4c1d7278963a",
     "ps.pay.capacity": "c88451e31393"
    }
   },
