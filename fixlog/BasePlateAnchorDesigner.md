@@ -2431,3 +2431,52 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and the export checks pass.
   - The tie and hairpin cases were run headless (origin/main against the working tree for the hairpins), with 0 page errors.
   - The plan and section were inspected in screenshots, and the print report builds.
+
+## 2026-10-23 — PR-1: Pedestal Reinforcement input; §10.7.6.1.6 ties-at-anchor-bolts check; pedestal vertical bars as tension anchor reinforcement; closed-tie shear uses the pedestal ties (Tier 2, new checks)
+- **Engineer request (2026-10-23):** add the pedestal tie check and the pedestal vertical bars, with the geometry entered once and the app deciding eligibility.
+- **New saved group `S.ped`.** It is additive: `mergeState` fills the defaults, so no migration is needed. Fields:
+  - `present`;
+  - `barSize`, `nX`, `nY` (bars per face, corners included);
+  - `tieSize`, `cover` (clear cover to the ties);
+  - `tieSets`, `tieTop`, `tieSpacing`;
+  - `barTop` (top of the vertical bars below the surface);
+  - `intoFooting`, `footExt`, `grade`.
+
+  New input section "7a. Pedestal Reinforcement".
+- **New functions:**
+  - `pedGeom()` places the perimeter bars at cover + tie Ø + bar Ø/2 from the faces, and the tie sets at tieTop + k·tieSpacing.
+  - `pedTieCheck()` runs the §10.7.6.1.6 check.
+  - `tRebarEff()` gives the effective tension-rebar inputs.
+- **§10.7.6.1.6 check:**
+  - Count the tie sets within 5 in of the top. Two are required for No. 4 or larger, three for No. 3; smaller than No. 3 fails.
+  - The ties must enclose every anchor: anchor centre + d_a/2 inside the tie's inside face.
+  - The ties must surround at least 4 longitudinal bars.
+  - DCR = n_req/n. It is ∞ if the ties do not enclose the anchors, are smaller than No. 3, or surround fewer than 4 bars.
+  - Shown as the Summary row "Pedestal Ties at Anchors" and as section 8 of the Concrete Embedment tab, with worked lines (§6).
+- **Tension piece type `pedbars`:**
+  - The legs are the pedestal bars at their true positions, and the bar size and grade come from `S.ped`.
+  - The bar top is H − barTop. The bar bottom is −footExt into the footing, or 0 if `intoFooting` is off.
+  - Every existing criterion applies unchanged: 0.5·h_ef placement, the GB-1 group surface, and development above and below.
+  - `tensionRebarIntercept` and `tensionRebarCheck` now read `tRebarEff()`. For any other piece type it returns `S.tRebar` unchanged.
+- **Shear `closedtie`:** when `S.ped.present`, the tie size, sets, top, spacing and cover come from `S.ped`. `shearRebarCheck` takes A_b from the intercept's bar.
+- **Display:**
+  - Input-summary lines for the tension and shear rebar and for the pedestal.
+  - The tie outline in the tension plan.
+  - In the elevation: bars running into the footing, clipped to the view; "bars continue … into the footing" in place of the ext-below dimension; the caption gives the bar count.
+- **Governing provision:**
+  - ACI 318-19 §10.7.6.1.6 (ties at anchor bolts in a column or pedestal).
+  - §17.5.2.1(a), R17.5.2.1 and Fig. R17.5.2.1a (vertical bars as anchor reinforcement).
+  - §25.4.2, §25.4.3 (ℓ_d, ℓ_dh).
+- **Check case:**
+  - Pedestal 24 × 24 × 58 in, h_ef = 18 in, default plate and anchors (2 × 2 at ±6 in), default combinations.
+  - S.ped: 8 #6 bars (nX = nY = 3) at ±9.125 in (2 + 0.5 + 0.375); #4 ties, cover 2 in, 3 sets with the top at 2 in (raised to cover + d_b/2 = 2.25) at 3 in; bars stop 3 in below the top, 24 in into the footing.
+  - **§10.7.6.1.6:** sets at 2.25, 5.25 and 8.25 in, so 1 is within 5 in against 2 required. DCR = 2.0, FAILS. The ties enclose the anchors and surround 8 bars.
+  - **Pedestal bars (hooked top), tension anchors at x = −6:**
+    - Bar (−9.125, −9.125): r = 4.42 ≤ 9.0, z_cross = 40 + 4.42/1.5 = 42.95, above 55 − 42.95 = 12.05 < ℓ_dh 15.54, so not counted.
+    - Bar (−9.125, 0): d_s = 3.13, above 12.92 < 15.54.
+    - Result: 0 of 8 counted, φN_r = 0. The substitution is not justified and Concrete Breakout (T) 0.450 stays.
+  - **Closed ties from the pedestal (#4, sets 2.25 / 5.25 / 8.25, c_a1 = 18):** 2 of 6 legs effective (set 3), φV_r = 18.0 kip, DCR 0.898.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: on all 5 built-in cases, cc, capacities, checks and validation are identical. Only `.report` differs, and a line diff shows the only new lines are the "8. Pedestal Ties at Anchor Bolts" heading in each concrete section (not checked when the pedestal reinforcement is not entered).
+  - The check case was run headless, with 0 page errors. The VT-1 tie case without S.ped is unchanged (φV_r 18.0, DCR 0.898).
