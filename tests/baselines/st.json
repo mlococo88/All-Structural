@@ -3272,7 +3272,7 @@
    }
   },
   "payload s29_builtin28_RIDOT_G2": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "claude/sbd-s2-9-neg-flexure (after S2-5, S2-9)",
    "sections": {
     "st.session": "18552f565aad",
     "st.status": "fc63f88f03f2",
@@ -3291,18 +3291,18 @@
     "st.tab.Diagrams": "72c3d4592575",
     "st.tab.Camber": "93da4d3488ca",
     "st.tab.Deck": "97a2efcaec67",
-    "st.tab.Fatigue": "a5a47e33d923",
+    "st.tab.Fatigue": "1e46c0a10011",
     "st.tab.Stiffeners": "6792c39d8a59",
     "st.tab.Connectors": "feb10d974a39",
     "st.tab.Rating": "e67649beb99a",
     "st.tab.Optimize": "ac778904ca0c",
     "st.tab.Nomenclature": "ade84fc62ee3",
-    "st.tab.Report": "f890c0b9bbaa",
-    "st.report.all": "61b3ab19bfbd"
+    "st.tab.Report": "d4c930f93815",
+    "st.report.all": "ad0290c5a40b"
    }
   },
   "payload s29_xsA_MassDOT_G1": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "claude/sbd-s2-9-neg-flexure (after S2-5, S2-9)",
    "sections": {
     "st.session": "be5ce3c990d2",
     "st.status": "6096378939a3",
@@ -3321,16 +3321,16 @@
     "st.tab.Diagrams": "b785320dbc1a",
     "st.tab.Camber": "2b8fec2f48ef",
     "st.tab.Deck": "31852daa2064",
-    "st.tab.Fatigue": "521af48b2e69",
+    "st.tab.Fatigue": "7ae0dfab6745",
     "st.tab.Stiffeners": "3f5db4e949d2",
     "st.tab.Connectors": "58243ae4ffa4",
     "st.tab.Rating": "739892fd97cd",
     "st.tab.Optimize": "b4261933c5b7",
     "st.tab.Nomenclature": "dfc2362bb3aa",
-    "st.tab.Report": "e7dfe28eb9c9",
-    "st.report.all": "ffdd6bc4916c"
+    "st.tab.Report": "c5b772e20f85",
+    "st.report.all": "2658a25e57f0"
    }
   }
  },
- "recorded": "2026-10-22"
+ "recorded": "2026-10-23"
 }
