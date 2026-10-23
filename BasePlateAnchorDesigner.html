@@ -6293,6 +6293,7 @@ function buildAnchorTab(pg){
   let sn=0; const SN=()=>(++sn)+". ";
   mkSection("anKey",SN()+"Anchor Layout & Resulting Forces",body=>{
     drawAnchorPlan(body,c);
+    drawForceMap(body,c);   /* GFX-C: forces, neutral axis and bearing block for this combination */
     anchorForceTable(body,c);
   },pg);
 
@@ -8317,6 +8318,109 @@ function drawAnchorPlan(body, c){
     txt(s,cx,H-6,"Click any anchor for its forces, capacities and DCRs.","lblTxt","middle",9,"#00427a");
   body.appendChild(svgWithControls(s));
 }
+
+/* ---- GFX-C (2026-10-23): ANCHOR FORCE MAP -----------------------------------
+   Plan of the plate for the selected combination: each anchor shaded by its
+   axial force (red = tension, green = compression, intensity ∝ |T_i| / max) and
+   labelled with it; the neutral axis; and the bearing stress block under the
+   plate. Every number is read from the combination as computeAll() left it:
+     T_i            c.perAnchor[i].t (+ tension)
+     neutral axis   c.na.plane: w(x,y) = a + b·x + c·y = 0 (rigid-plate solve)
+     bearing        under the plate σ = K_c·(−w) where w < 0 (naAnchorForces), so
+                    the shading runs linearly from 0 at the neutral axis to the
+                    peak c.na.smax; resultant c.na.C at (c.na.xc, c.na.yc)
+     no moment      uniform bearing, c.na.C over the plate; DG1 f_p = c.resX.q
+   Plate frame (anchor coordinates as the per-anchor table lists them). Display
+   only: nothing is recomputed beyond evaluating the solver's own plane for the
+   shading direction. */
+function drawForceMap(body,c){
+  if(!c||!c.perAnchor) return;
+  const P=S.plate, W=620, H=500, pad=70, Fu=forceUnit();
+  const sc=Math.min((W-2*pad)/P.B,(H-2*pad-60)/P.N);
+  const cx=W/2, cy=(H-60)/2+30, X=x=>cx+x*sc, Y=y=>cy-y*sc;
+  const s=svg(W,H), tag=makeTagPlacer();
+  const hx=P.B/2, hy=P.N/2;
+  rect(s,X(-hx),Y(hy),P.B*sc,P.N*sc,"#fbfaf6","#333",1.4);
+  /* bearing block */
+  const na=c.na, so=standoffParams(), openGap=!!(so.hasStandoff && !so.groutFilled);
+  let bearTxt="";
+  if(openGap){ bearTxt="open stand-off: no bearing under the plate (compression in the rods)"; }
+  else if(na && na.method==="na" && na.plane && na.C>1e-9){
+    const {a,b}=na.plane, cc=na.plane.c, w=(x,y)=>a+b*x+cc*y;
+    const corners=[[-hx,-hy],[hx,-hy],[hx,hy],[-hx,hy]];
+    /* compression polygon: corners with w < 0 plus the neutral-axis crossings of the edges */
+    const poly=[];
+    corners.forEach((p,i)=>{ const q=corners[(i+1)%4], wp=w(p[0],p[1]), wq=w(q[0],q[1]);
+      if(wp<0) poly.push(p);
+      if((wp<0)!==(wq<0) && Math.abs(wp-wq)>1e-15){ const t=wp/(wp-wq); poly.push([p[0]+t*(q[0]-p[0]),p[1]+t*(q[1]-p[1])]); } });
+    const pk=corners.reduce((m,p)=>w(p[0],p[1])<w(m[0],m[1])?p:m,corners[0]);
+    if(poly.length>=3){
+      /* gradient along −∇w: 0 on the neutral axis, the peak at the most compressed corner */
+      const g2=b*b+cc*cc, wPk=w(pk[0],pk[1]);
+      const foot=g2>1e-24? [pk[0]-wPk*b/g2, pk[1]-wPk*cc/g2] : pk;     /* projection of the peak corner on the NA */
+      const id="fmGrad"+(++drawForceMap.n);
+      const defs=s.querySelector("defs");
+      defs.insertAdjacentHTML("beforeend",'<linearGradient id="'+id+'" gradientUnits="userSpaceOnUse" x1="'+X(foot[0])+'" y1="'+Y(foot[1])+'" x2="'+X(pk[0])+'" y2="'+Y(pk[1])+'">'+
+        '<stop offset="0" stop-color="#1e7d32" stop-opacity="0.04"/><stop offset="1" stop-color="#1e7d32" stop-opacity="0.55"/></linearGradient>');
+      const pg=document.createElementNS(SVGNS,"polygon");
+      pg.setAttribute("points",poly.map(q=>X(q[0])+","+Y(q[1])).join(" "));
+      pg.setAttribute("fill","url(#"+id+")"); pg.setAttribute("stroke","#1e7d32"); pg.setAttribute("stroke-width","0.8");
+      tip(pg,"Bearing stress block: σ = K_c·(−w), 0 at the neutral axis to "+fmt(na.smax,3)+" ksi at the most compressed corner");
+      svgHost(s).appendChild(pg);
+      /* isostress lines at 25 / 50 / 75 % of the peak (labelled when they are at least 16 px apart) */
+      const isoGap=Math.abs(0.25*wPk)/Math.sqrt(Math.max(g2,1e-24))*sc;
+      [0.25,0.5,0.75].forEach(f=>{ const wv=f*wPk, pts=[];
+        corners.forEach((p,i)=>{ const q=corners[(i+1)%4], wp=w(p[0],p[1])-wv, wq=w(q[0],q[1])-wv;
+          if((wp<0)!==(wq<0) && Math.abs(wp-wq)>1e-15){ const t=wp/(wp-wq); pts.push([p[0]+t*(q[0]-p[0]),p[1]+t*(q[1]-p[1])]); } });
+        if(pts.length>=2){ line(s,X(pts[0][0]),Y(pts[0][1]),X(pts[1][0]),Y(pts[1][1]),"#1e7d32",0.6,"2 3");
+          if(isoGap>=16) tag(s,X((pts[0][0]+pts[1][0])/2),Y((pts[0][1]+pts[1][1])/2)-3,fmt(f*na.smax,2)+" ksi","lblTxt","middle",9,"#1e7d32"); } });
+      /* neutral axis */
+      const nl=[]; corners.forEach((p,i)=>{ const q=corners[(i+1)%4], wp=w(p[0],p[1]), wq=w(q[0],q[1]);
+        if((wp<0)!==(wq<0) && Math.abs(wp-wq)>1e-15){ const t=wp/(wp-wq); nl.push([p[0]+t*(q[0]-p[0]),p[1]+t*(q[1]-p[1])]); } });
+      if(nl.length>=2){ line(s,X(nl[0][0]),Y(nl[0][1]),X(nl[1][0]),Y(nl[1][1]),"#1e7d32",2,"7 4");
+        const e=(Math.abs(nl[1][0])>=hx-1e-6||Math.abs(nl[1][1])>=hy-1e-6)? nl[1] : nl[0];
+        tag(s,X(e[0])+(e[0]>=hx-1e-6?6:(e[0]<=-hx+1e-6?-6:0)),Y(e[1])+(e[1]>=hy-1e-6?-6:(e[1]<=-hy+1e-6?14:3)),"N.A.",null,e[0]>=hx-1e-6?"start":(e[0]<=-hx+1e-6?"end":"middle"),10,"#1e7d32"); }
+      /* peak and resultant */
+      circ(s,X(pk[0]),Y(pk[1]),3,"#1e7d32","#1e7d32",1);
+      tag(s,X(pk[0])+(pk[0]>0?-6:6),Y(pk[1])+(pk[1]>0?14:-6),"σ_max = "+fmt(na.smax,3)+" ksi","lblTxt",pk[0]>0?"end":"start",9.5,"#1e7d32");
+      const rc=circ(s,X(na.xc),Y(na.yc),5,"#fff","#1e7d32",1.6);
+      line(s,X(na.xc)-3.5,Y(na.yc)-3.5,X(na.xc)+3.5,Y(na.yc)+3.5,"#1e7d32",1.2); line(s,X(na.xc)-3.5,Y(na.yc)+3.5,X(na.xc)+3.5,Y(na.yc)-3.5,"#1e7d32",1.2);
+      tag(s,X(na.xc)+8,Y(na.yc)+4,"C = "+fF(na.C)+" "+Fu,"lblTxt","start",9.5,"#1e7d32");
+      bearTxt="bearing block from the neutral-axis solve: σ_max = "+fmt(na.smax,3)+" ksi, C = "+fF(na.C)+" "+Fu+" over "+fmt(na.Abear,1)+" in²";
+    }
+  } else if(na && na.method==="axial" && na.C>1e-9){
+    rect(s,X(-hx),Y(hy),P.B*sc,P.N*sc,"rgba(30,125,50,0.25)","#1e7d32",0.8);
+    const q=(c.resX&&c.resX.q)||0;
+    tag(s,cx,Y(-hy)-8,"uniform bearing, C = "+fF(na.C)+" "+Fu+(q>0?" (DG1 f_p = "+fmt(q,3)+" ksi)":""),"lblTxt","middle",9.5,"#1e7d32");
+    bearTxt="no moment: uniform bearing over the plate";
+  } else if(!na){
+    bearTxt="elastic bolt-group model: bearing per AISC DG1 on the Base Plate tab"+((c.resX&&c.resX.q)? " (f_p = "+fmt(Math.max(c.resX.q||0,(c.resY&&c.resY.q)||0),3)+" ksi)":"");
+  }
+  colPlanDraw(s,X,Y,sc,{fill:"rgba(58,110,165,.06)",stroke:"#9db4cc",sw:1,label:false});
+  /* anchors */
+  const tMax=Math.max(1e-9,...c.perAnchor.map(p=>Math.abs(p.t)));
+  const r=Math.max(9,Math.min(15,S.anchor.dia*sc*0.7));
+  c.perAnchor.forEach(p=>tag.reserve(X(p.x)-r,Y(p.y)-r,X(p.x)+r,Y(p.y)+r));
+  c.perAnchor.forEach(p=>{
+    const f=Math.min(1,Math.abs(p.t)/tMax), ten=p.t>1e-6, comp=p.t<-1e-6;
+    const fill=ten? "rgba(183,28,28,"+(0.12+0.78*f).toFixed(3)+")" : comp? "rgba(30,125,50,"+(0.12+0.78*f).toFixed(3)+")" : "#eeeeee";
+    const cr=circ(s,X(p.x),Y(p.y),r,fill,ten?"#7f0000":(comp?"#0b4d1a":"#777"),1.4);
+    tip(cr,"Anchor "+p.n+": "+(ten? "tension "+fF(p.t)+" "+Fu : comp? "compression "+fF(-p.t)+" "+Fu : "no axial force"));
+    txt(s,X(p.x),Y(p.y)+3.5,String(p.n),null,"middle",10,(f>0.55&&(ten||comp))?"#fff":"#111").setAttribute("font-weight","bold");
+    tag(s,X(p.x)+r+3,Y(p.y)-r+4,(ten?"T = ":comp?"C = ":"")+fF(Math.abs(p.t))+" "+Fu,"lblTxt","start",9.5,ten?"#7f0000":(comp?"#0b4d1a":"#555"));
+  });
+  /* scale bar */
+  const sx0=pad, sy0=H-44, sw=140;
+  for(let i=0;i<10;i++) rect(s,sx0+i*sw/10,sy0,sw/10,8,"rgba(183,28,28,"+(0.12+0.78*(i+0.5)/10).toFixed(3)+")","none",0);
+  rect(s,sx0,sy0,sw,8,"none","#555",0.6);
+  txt(s,sx0,sy0+20,"0","lblTxt","start",9,"#555"); txt(s,sx0+sw,sy0+20,"T = "+fF(tMax)+" "+Fu,"lblTxt","end",9,"#555");
+  txt(s,sx0+sw+10,sy0+8,"anchor tension (shade ∝ T_i)","lblTxt","start",9,"#555");
+  txt(s,cx,18,"ANCHOR FORCE MAP — combination "+c.name,"lblTxt","middle",10);
+  if(bearTxt) txt(s,cx,H-14,bearTxt,"lblTxt","middle",9,"#1e7d32");
+  txt(s,cx,33,"plate "+fmt(P.B,2)+" × "+fmt(P.N,2)+"″, anchor coordinates from the plate centre (x right, y up)","lblTxt","middle",9,"#555");
+  body.appendChild(svgWithControls(s));
+}
+drawForceMap.n=0;
 
 /* ---- per-anchor force table (PROFIS "Resulting anchor forces" style) ---- */
 function anchorForceTable(body, c){
