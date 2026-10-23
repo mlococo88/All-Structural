@@ -7320,10 +7320,24 @@ function svgEnableZoom(s){
 }
 
 /* Wrap an SVG in a container carrying zoom controls. Returns the wrapper. */
+/* GFX-C (2026-10-23): keep every upright label inside the drawing. A label whose
+   estimated box (≈0.5·font-size per character) crosses the left or right edge is
+   slid back inside; rotated labels are left alone. Run before the declutter. */
+function svgFitText(s){
+  const Wb=(s.__base&&s.__base.w)||0; if(!Wb) return;
+  (s.__texts||[]).forEach(o=>{ const t=o.el; if(!t||t.getAttribute("transform")) return;
+    const str=t.textContent||""; if(!str.trim()) return;
+    const w=str.length*(o.size||11)*0.5; if(w>Wb-8) return;
+    let x=parseFloat(t.getAttribute("x"))||0; const a=t.getAttribute("text-anchor")||"start";
+    const x1=(a==="middle")? x-w/2 : (a==="end")? x-w : x;
+    if(x1<4) x+=4-x1; else if(x1+w>Wb-4) x-=(x1+w)-(Wb-4); else return;
+    t.setAttribute("x",x); o.x=x; });
+}
 function svgWithControls(s){
   /* Single hook: every schematic finalises through here, so decluttering once
      at this point covers the plan, both elevations, the rebar plans and the
      hairpin plan without each one having to remember to ask. */
+  svgFitText(s);   /* GFX-C */
   svgDeclutterText(s);
   svgEnableZoom(s);
   const wrap=el("div","svgWrap");
@@ -7370,7 +7384,7 @@ function circ(s,x,y,r,fill,st,sw){ const c=document.createElementNS(SVGNS,"circl
   svgHost(s).appendChild(c); regStroke(s,c,sw||1.2,null); return c; }
 function txt(s,x,y,str,cls,anchor,size,color){ const t=document.createElementNS(SVGNS,"text");
   t.setAttribute("x",x);t.setAttribute("y",y); if(anchor)t.setAttribute("text-anchor",anchor);
-  const fsz=size||11;
+  const fsz=Math.max(size||11,9);   /* GFX-C (2026-10-23): no drawing text below 9 px, on screen or in print */
   t.setAttribute("font-size",fsz); t.setAttribute("font-family","Times New Roman"); if(cls)t.setAttribute("class",cls); if(color)t.setAttribute("fill",color);
   /* BUGFIX: labels are painted AFTER the invisible click targets, and in SVG a
      later element sits on top and swallows the pointer. Clicking directly on a
@@ -8969,7 +8983,11 @@ function drawHairpinPlan(body, cGov){
       line(s,XP(o0[0]),YP(o0[1]),XP(o1[0]),YP(o1[1]),"#1f4e79",0.9);
       [[o0,s0],[o1,s1]].forEach(([q,w])=>line(s,XP(q[0]),YP(q[1]),XP(w[0]),YP(w[1]),"#1f4e79",0.7,"2 2"));
       const mid=[(o0[0]+o1[0])/2,(o0[1]+o1[1])/2];
-      txt(s,XP(mid[0]),YP(mid[1])-4,"\u2265 \u2113_d = "+fmt(ic.reqBehind,1)+"\u2033","lblTxt","middle",8.5,"#1f4e79");
+      /* GFX-C: the label goes on the far side of the dimension line from the leg (it sat on the
+         leg when the outermost leg is on the −t side), through the collision-aware placer */
+      const sd=[XP(o0[0])-XP(s0[0]),YP(o0[1])-YP(s0[1])], sl=Math.hypot(sd[0],sd[1])||1;
+      const lx=XP(mid[0])+sd[0]/sl*10, ly=YP(mid[1])+sd[1]/sl*10+3;
+      vTag(s,lx,ly,"\u2265 \u2113_d = "+fmt(ic.reqBehind,1)+"\u2033","lblTxt",Math.abs(sd[0])>Math.abs(sd[1])? (sd[0]>0?"start":"end") : "middle",9,"#1f4e79");
     }
   }
 
@@ -9064,7 +9082,10 @@ function drawHairpinPlan(body, cGov){
     hit.appendChild(title);
     svgHost(s).appendChild(hit);
     /* piece/leg tag at the near (plane) end */
-    vTag(s,XP(sx)+4,YP(sy)-4,L.piece+L.leg,"lblTxt","start",6.5,"#333");
+    /* GFX-C: the tag goes past the BACK end of the leg (at the plane end it sat on the bends and the
+       other tags); 9 px */
+    {const dx=XP(ex)-XP(sx), dy=YP(ey)-YP(sy), dl=Math.hypot(dx,dy)||1, ux=dx/dl, uy=dy/dl;
+     vTag(s,XP(ex)+ux*5,YP(ey)+uy*5+(Math.abs(ux)>0.5?3:(uy>0?9:-2)),L.piece+L.leg,"lblTxt",Math.abs(ux)>0.5?(ux>0?"start":"end"):"middle",9,"#333");}
   });
 
   const vwrap=svgWithControls(s);
@@ -9330,7 +9351,7 @@ function drawRebar(body,kind,opt){
   const C=S.conc, A=S.anchor, g=anchorGeom();
   const R=(kind==="tension")?tRebarEff():S.vRebar;
   const rb=rebarOf(R.size);
-  const W=620,H=440,pad=80;
+  const W=620,H=480,pad=80;   /* GFX-C: 440 → 480, room for the captions at 9 px and above */
   /* GFX-B (2026-10-23): the tension elevation can be drawn along x (Section A-A,
      looking +y, x to the right) or along y (Section B-B, looking −x, y to the
      right), either with everything projected (cut = null, as before) or cut at
@@ -9445,7 +9466,15 @@ function drawRebar(body,kind,opt){
           txt(s,X(-half)-4,Yv(lz)+3,"breakout surface","lblTxt","end",8.5,"#b71c1c");
           line(s,X(-half)-3,Yv(lz),X(-half),Yv(lz),"#b71c1c",1);
         } else txt(s,X(L[0].x),topY-5,"breakout surface","lblTxt","middle",8.5,"#b71c1c");
-        if(xb>xa+1e-6) txt(s,X((xa+xb)/2),Yv(headZ)+24,"flat at the head plane across the anchors","lblTxt","middle",8,"#b71c1c");
+        /* GFX-C: the label sat across the bars just under the head plane; it now goes below the
+           bars (or below the pedestal when the bars run to the base) on a leader */
+        if(xb>xa+1e-6){
+          const icB=(typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
+          const zBot=icB? Math.max(icB.barBot,0) : headZ, room=Yv(0)-Yv(zBot);
+          const ly=(room>=26)? Yv(zBot)+16 : baseY+24, mx=X((xa+xb)/2);
+          line(s,mx,Yv(headZ)+2,mx,ly-10,"#b71c1c",0.7,"2 3");
+          txt(s,mx,ly,"flat at the head plane across the anchors","lblTxt","middle",9,"#b71c1c");
+        }
         /* ≈35° mark at the outer anchor on the right */
         const ax=X(xb), ay=Yv(headZ), rr=26;
         const arc=document.createElementNS(SVGNS,"path");
@@ -9608,8 +9637,12 @@ function drawRebar(body,kind,opt){
       });
       /* top-cover dimension so the stopped-short bar reads as deliberate */
       if(icDraw.bars.length){
-        const bx0=X(hc(icDraw.bars.find(b=>inCut(b))||icDraw.bars[0]));
-        dimV(s,Yv(C.H),Yv(barTopZ),bx0-14,"c_top = "+fmt(icDraw.topCover,2)+'\"');
+        /* GFX-C: on a third tier outside the right face (beside H and h_ef) when it fits; it sat
+           among the bars and the z-datum label */
+        const xT=X(spanPed/2)+72, lab="c_top = "+fmt(icDraw.topCover,2)+'\"';
+        if(xT+12+lab.length*5.4<W-4){ line(s,X(spanPed/2)+44,Yv(barTopZ),xT+4,Yv(barTopZ),"#00427a",0.6,"3 3");
+          dimV(s,Yv(C.H),Yv(barTopZ),xT,lab,xT+8); }
+        else { const bx0=X(hc(icDraw.bars.find(b=>inCut(b))||icDraw.bars[0])); dimV(s,Yv(C.H),Yv(barTopZ),bx0-14,lab); }
       }
     }
 
@@ -9620,7 +9653,7 @@ function drawRebar(body,kind,opt){
       if(icDraw && !R.isPed){
         dimV(s,Yv(headZ),Yv(icDraw.barBot),X(-halfPed)-16,"ext below head = "+fmt(icDraw.extBelow,1)+String.fromCharCode(34));
       } else if(icDraw && R.isPed && S.ped.intoFooting!==false){
-        txt(s,X(-halfPed)-6,baseY+12,"bars continue "+fmt(S.ped.footExt,0)+"″ into the footing","lblTxt","end",8,"#555");
+        txt(s,X(-halfPed)-6,baseY+12,"bars continue "+fmt(S.ped.footExt,0)+"″ into the footing","lblTxt","end",9,"#555");
       }
       /* bar spacing dim between the two innermost bars */
       if(drawnCut.length>1){
@@ -9636,16 +9669,16 @@ function drawRebar(body,kind,opt){
             (icDraw? (" ("+icDraw.nEff+" of "+icDraw.nBarsTotal+
                       " legs effective per §17.5.2.1.1)")
                    : " (§17.5.2.1.1)");
-    txt(s,cx,H-14,cap,"lblTxt","middle",10);
+    txt(s,cx,H-16,cap,"lblTxt","middle",10);
     /* SYMBOL LEGEND. A reviewer asked what the dots on this view meant \u2014 the
        drawing must say so itself rather than requiring the manual. Two distinct
        dot symbols appear here and they mean different things. */
     {const leg1 = bendIntoPage
         ? "solid dot at a bar end = the end bend runs IN/OUT of the page (legs separate in "+(R.orient||"y")+")"
         : "bar across the top = the end bend, lying in the page (legs separate in "+(axY?"y":"x")+")";
-     txt(s,cx,H-40,leg1,"lblTxt","middle",8,"#555");
-     txt(s,cx,H-29,"tick on a leg = where it crosses the breakout surface \u2014 green: effective \u00b7 red: not creditable \u00b7 grey: never reaches it",
-         "lblTxt","middle",8,"#555");}
+     txt(s,cx,H-45,leg1,"lblTxt","middle",9,"#555");
+     txt(s,cx,H-32,"tick on a leg = where it crosses the breakout surface \u2014 green: effective \u00b7 red: not creditable \u00b7 grey: never reaches it",
+         "lblTxt","middle",9,"#555");}
     if(dropped>0){
       /* count LEGS against legs — the old text compared dropped LEGS to the
          PIECE count and printed "4 of 2 bars" */
@@ -9653,7 +9686,7 @@ function drawRebar(body,kind,opt){
       const wmsg = dropped===nLegsAll
         ? "NONE of the "+nLegsAll+" legs fit inside cover at this gauge/spacing — nothing drawn."
         : dropped+" of "+nLegsAll+" legs violate cover or fall outside the concrete and are not shown.";
-      txt(s,cx,H-28,wmsg,"lblTxt","middle",9,"#b71c1c");
+      txt(s,cx,H-58,wmsg,"lblTxt","middle",9,"#b71c1c");   /* GFX-C: was on the legend line */
     }
     /* GFX-B: section title */
     txt(s,cx,16,(axY? "SECTION B-B \u2014 along y, looking \u2212x" : "SECTION A-A \u2014 along x, looking +y")+
@@ -9682,7 +9715,10 @@ function drawRebar(body,kind,opt){
       /* 0.5·c_a1 band from the top */
       const zLim=C.H-ic.nearLimit;
       line(s,X(-ic.halfSpanN),Yv(zLim),X(ic.halfSpanN),Yv(zLim),"#1f4e79",0.9,"4 3");
-      txt(s,X(-ic.halfSpanN)+4,Yv(zLim)+11,"0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ below the top","lblTxt","start",8,"#1f4e79");
+      /* GFX-C: set labels and the 0.5·c_a1 label share one collision-aware placer, outside
+         the left face (the 0.5·c_a1 label sat on a tie line); the z = H datum label is reserved */
+      const tgT=makeTagPlacer(), xF=X(-ic.halfSpanN);
+      tgT.reserve(xF-14-110,topY-8,xF-14,topY+5);
       const uF=ic.halfSpanN-ic.cover-ic.dev.db/2, uB=-uF;
       const sets=[...new Set(ic.legs.map(L=>L.piece))];
       sets.forEach(k=>{
@@ -9692,9 +9728,12 @@ function drawRebar(body,kind,opt){
         [uB,uF].forEach(u=>circ(s,X(u),Yv(zY),3,"#555","#333",1));
         if(L0.crossOK){ const xc=X(planeX+L0.xCross), yc=Yv(zY);
           line(s,xc-4,yc-4,xc+4,yc+4,"#b71c1c",1.5); line(s,xc-4,yc+4,xc+4,yc-4,"#b71c1c",1.5); }
-        txt(s,X(uB)-6,Yv(zY)+3,"set "+k+(eff?" ✓":" ✗"),"lblTxt","end",8,col);
+        tgT(s,Math.min(X(uB),xF)-6,Yv(zY)+3,"set "+k+(eff?" ✓":" ✗"),"lblTxt","end",9,col);
       });
-      dimV(s,Yv(C.H),Yv(C.H-ic.tieTop),X(uF)+16,"top set "+fmt(ic.tieTop,1)+'"');
+      tgT(s,xF-6,Yv(zLim)+3,"0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ below the top","lblTxt","end",9,"#1f4e79");
+      /* GFX-C: on the outer tier beside H and h_ef, label on a leader (it sat on the H dimension) */
+      {const xT=X(spanPed/2)+72; line(s,X(uF),Yv(C.H-ic.tieTop),xT+4,Yv(C.H-ic.tieTop),"#00427a",0.5,"2 2");
+       dimV(s,Yv(C.H),Yv(C.H-ic.tieTop),xT,"top set "+fmt(ic.tieTop,1)+'"',xT+8);}
     } else if(ic){
       const zTop=C.H-ic.zBelow;                       /* leg elevation */
       const planeX=ic.lead;                           /* failure plane, along the shear normal */
@@ -9710,7 +9749,7 @@ function drawRebar(body,kind,opt){
       wedge.setAttribute("stroke-dasharray","5 4");
       svgHost(s).appendChild(wedge);
       line(s,X(planeX),Yv(C.H),X(planeX),Yv(C.H-ic.bodyDepth),"#b71c1c",1.6);
-      txt(s,X(planeX)-4,Yv(C.H)-6,"failure plane","lblTxt","end",8.5,"#b71c1c");
+      txt(s,X(planeX)+4,Yv(C.H)-6,"failure plane","lblTxt","start",9,"#b71c1c");   /* GFX-C: right of the plane, clear of the "behind" dimension */
       txt(s,X((planeX+edgeX)/2),Yv(C.H-ic.bodyDepth/2)+4,"\u224835\u00b0 crack","lblTxt","middle",8,"#b71c1c");
       /* one line per DISTINCT leg depth — a vertically stacked group hairpin
          is several bars below one another in this view, each with its own
@@ -9734,14 +9773,18 @@ function drawRebar(body,kind,opt){
         }
       });
       const zTopFirst=C.H-zSet[0];
-      dimH(s,X(backX),X(planeX),Yv(zTopFirst)-14,
+      /* GFX-C: "behind" above the top face on extension lines (it sat on the rods); the depth and
+         stack dimensions take horizontal labels on leaders (the rotated depth label ran off the top) */
+      const yB=topY-16;
+      [backX,planeX].forEach(u=>line(s,X(u),Yv(zTopFirst),X(u),yB-4,"#00427a",0.5,"2 2"));
+      dimH(s,X(backX),X(planeX),yB,
         "behind = "+fmt(ic.availBehind,1)+'" (req '+fmt(ic.reqBehind,1)+'")');
       dimV(s,Yv(C.H),Yv(zTopFirst),X(backX)-16,"depth "+fmt(zSet[0],1)+'"'+
-        " \u2014 as small as cover allows");
+        " \u2014 as small as cover allows",X(backX)-24);
       if(zSet.length>1)
-        dimV(s,Yv(zTopFirst),Yv(C.H-zSet[1]),X(backX)-40,"stack "+fmt(zSet[1]-zSet[0],1)+'"');
+        dimV(s,Yv(zTopFirst),Yv(C.H-zSet[1]),X(backX)-40,"stack "+fmt(zSet[1]-zSet[0],1)+'"',X(backX)-48);
       if(ic.truncated){
-        txt(s,cx,H-28,"Leg truncated: "+fmt(ic.extBehind,1)+"\u2033 specified, only "+
+        txt(s,cx,H-58,"Leg truncated: "+fmt(ic.extBehind,1)+"\u2033 specified, only "+
           fmt(ic.roomBehind,1)+"\u2033 fits behind the plane.","lblTxt","middle",9,"#b71c1c");
       }
     }
@@ -9756,8 +9799,11 @@ function drawRebar(body,kind,opt){
         : R.qty+" piece"+(R.qty===1?"":"s")+"/leading anchor");
     if(ic) vcap+=" ("+ic.nEff+" of "+ic.nLegsTotal+" legs effective per \u00a717.5.2.1.2"+
       ((S.vRebar.engagesAnchor||(icV&&icV.isTie))?"":"; bend NOT confirmed to engage the rod")+")";
-    txt(s,cx,H-14,vcap,"lblTxt","middle",10);
-    if(icV) txt(s,cx,16,"SECTION A-A \u2014 along V, toward the "+icV.govEdge+" edge (loaded edge on the right); every anchor and leg projected","lblTxt","middle",10);   /* GFX-B */
+    /* GFX-C: the verdict on its own line (one line ran past both edges) */
+    const vcap2=vcap.match(/^(.*?) \((\d+ of .*)\)$/);
+    if(vcap2){ txt(s,cx,H-30,vcap2[1],"lblTxt","middle",10); txt(s,cx,H-16,"("+vcap2[2]+")","lblTxt","middle",9.5); }
+    else txt(s,cx,H-16,vcap,"lblTxt","middle",10);
+    if(icV) txt(s,cx,16,"SECTION A-A \u2014 along V toward the "+icV.govEdge+" edge (loaded edge right), projected","lblTxt","middle",10);   /* GFX-B */
   }
   /* ---- dimensions ----
      BUGFIX: h_ef was dimensioned Yv(headZ)..baseY, i.e. from the anchor head
@@ -9778,9 +9824,10 @@ function drawRebar(body,kind,opt){
   /* TR-H1: the cone springs from the head at the actual h_ef, so there is no separate
      reduced-apex tier; the breakout-only h_ef' is noted as text. */
   if(icHef&&icHef.hefReduced){
-    txt(s,X(spanPed/2)+72,topY-6,"breakout uses h_ef' = "+fmt(icHef.hefBreakout,1)+'" (§17.6.2.1.2, breakout eqs. only)',"lblTxt","middle",7.5,"#b45309");
+    /* GFX-C: under the title (it was centred on the third dimension tier and ran off the right edge) */
+    txt(s,cx,31,"breakout uses h_ef' = "+fmt(icHef.hefBreakout,1)+'" (§17.6.2.1.2, breakout eqs. only); the reinforcement check and this drawing use h_ef = '+fmt(hefPhys,1)+'"',"lblTxt","middle",9,"#b45309");
   }
-  axisTriad(s,pad-46,H-24,axY?"elevX":"elevY");
+  axisTriad(s,34,62,(kind==="tension"&&axY)?"elevX":"elevY");   /* GFX-C: top left (at the bottom its origin note ran into the caption) */
   body.appendChild(svgWithControls(s));
   return s.__rebarFit||null;
 }
