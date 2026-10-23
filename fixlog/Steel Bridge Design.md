@@ -21290,3 +21290,56 @@ item GirderDetail's method, AASHTO LRFD 10th Ed., becomes the method). This entr
   runs. The latter also closes the SBD6 / S2-5 open item (S2-0): it had been recorded on stgirder.html, so its Report and Fatigue tab sections were stale.
 - **Other copies:** none (stgirder.html was removed at the cut-over; GirderDetail's `modRatio` already does this).
 - **Open items:** none for this item. The stud checks themselves are stage 2 item 9 (separate PR).
+
+## 2026-10-22 — PR: claude/sbd-s2-2-rb-fcrw (S2-2: Steel Bridge Design stage 2, items 6 and 7: R_b and F_crw through GirderDetail's functions; k = 7.2 with both web edges in compression; engineer decisions 2026-10-22; PR link added after merge)
+
+No saved key or format changes. No result changes on the test payloads (listed in the PR); the changes act on sections the payloads do not have
+(composite +M with 2D_c/t_w > λ_rw; both web edges in compression).
+
+### S2-2a. R_b, composite section in positive flexure   [CALCULATION CHANGE — R_b = 1.0 where it was < 1.0; less conservative, per the specification]
+- **Where:** `st-src`, `computeAll`, flange segments (`segP`), anchor `const RbPos1_=`; `loadShedRbG` (anchor `function loadShedRbG(D,tw,bfc,tfc,Dc,Fyc,Es,compactWeb){`).
+- **Before:** `const Rb_=loadShedRbG(dims.D,dims.tw,dims.bft,dims.tft,cN_.Dc,Fyc,Es,compactWeb_);` (Eq. 6.10.1.10.2-3 with the elastic D_c of the n section, unless the web is compact).
+- **After:**
+  ```js
+  const RbPos1_=!!deck.deckOn&&dims.D/dims.tw<=150, Rb_=RbPos1_? 1.0 : loadShedRbG(dims.D,dims.tw,dims.bft,dims.tft,cN_.Dc,Fyc,Es,compactWeb_);
+  ```
+  (segment field `RbPos1` added). `loadShedRbG`, after `if(compactWeb) return 1.0;`:
+  `const H=stHost('rbFactor'); if(H&&Es===29000) return H(Dc,tw,bfc,tfc,Fyc).Rb;` — with a GirderDetail hand-off in use, Eq. 6.10.1.10.2-3 is
+  GirderDetail's own `rbFactor` (the same expression; GirderDetail's E is 29,000 ksi, so only then). Negative flexure (`RbNeg_`) is unchanged apart from that.
+- **Problem:** 6.10.1.10.2 sets R_b = 1.0 for a composite section in positive flexure whose web satisfies 6.10.2.1.1 (D/t_w ≤ 150). ST-Girder applied
+  Eq. 6.10.1.10.2-3 there; GirderDetail uses R_b = 1.0 (`GM.gs`, anchor `r.Rb = 1; r.FncP`).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.10.2 (first condition list; Eq. 6.10.1.10.2-3 otherwise), Art. 6.10.2.1.1.
+- **Display (§6):** Section Props → Classification & stability factors (and the report): "R_b = 1.000 (composite, positive flexure, D/t_w = 106.7 ≤ 150:
+  6.10.1.10.2)"; otherwise λ_rw, 2D_c/t_w, a_wc and Eq. 6.10.1.10.2-3 worked with values; the note says when GirderDetail's rbFactor is used.
+- **Check case (hand):** composite +M, D = 84 in, t_w = 0.5625 in (D/t_w = 149.3 ≤ 150), b_fc × t_fc = 14 × 0.75 in, D_c = 40 in, F_yc = 50 ksi:
+  λ_rw = 5.7√(29,000/50) = 137.3; 2D_c/t_w = 142.2; a_wc = 2(40)(0.5625)/10.5 = 4.286. Before: R_b = 1 − 4.286/(1,200 + 1,285.7)(142.2 − 137.3) = 0.9915.
+  After: R_b = 1.0. On the test payloads every segment already had R_b = 1.0 (2D_c/t_w ≤ λ_rw), so nothing changes there.
+
+### S2-2b. F_crw: k = 7.2 with both web edges in compression; GirderDetail's fcrw in ST-Girder   [CALCULATION CHANGE — host and st-src]
+- **Where (host):** `function fcrw(D, tw, Dc, Rh, Fyc, Fyw)` (GM.gs helpers) and its Service II caller (anchor `r.webS = fcrw(`); the GS report lines
+  (anchors `r.webS.both ? T` and `r.webC.both ? T`; the text is unchanged when the edges are not both in compression).
+- **Before (host):** `function fcrw(D, tw, Dc, Rh, Fyc, Fyw) { const k = 9 / (Dc / D) ** 2; return { k, F: … }; }`; Service II
+  `r.webS = fcrw(r.D, r.tw, Math.max(r.DcS, 1e-6), r.Rh, pos ? Fyt : Fyb, Fyw);`
+- **After (host):** `function fcrw(D, tw, Dc, Rh, Fyc, Fyw, both) { const b2 = both === true || Dc > D, k = b2 ? 7.2 : 9 / (Dc / D) ** 2; return { k, both: b2, F: … }; }`;
+  Service II passes `fcS > 0 && tS < 0` (the other flange also in compression). Constructibility (`r.webC`) is detected by D_c > D.
+- **Where (st-src):** `webFcrw` (anchor `function webFcrw(D,tw,Dc,Fyc,Fyw,Es,Rh){`), new `webFcrwW`, `stHost`, `ST_HOSTON` (set at the top of `computeAll`).
+- **Before (st-src):** `const k=9/Math.pow(Math.max(Dc/D,0.05),2); return Math.min(0.9*Es*k/Math.pow(D/tw,2), Math.min(Rh*Fyc, Fyw/0.7));`
+- **After (st-src):** `webFcrwW`: `both = Dc >= D` (every D_c passed is the elastic depth from the neutral axis limited to 0…D, so D_c = D means the axis is
+  outside the web on the tension side); with a GirderDetail hand-off (and E_s = 29,000) GirderDetail's `fcrw(D, tw, max(D_c, 1e-6), R_h, F_yc, F_yw, both)`,
+  else `k = both ? 7.2 : 9/max(D_c/D, 0.05)²` and the same min(…). `webFcrw` returns `webFcrwW(…).F` (call sites unchanged).
+- **Problem:** Eq. 6.10.1.9.1-2 gives k = 9/(D_c/D)², and the article sets k = 7.2 when both edges of the web are in compression; neither tool had the
+  7.2 case (STAGE2 item 7; engineer decision 2026-10-22: implement it).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.9.1, Eqs. 6.10.1.9.1-1 and -2; used by 6.10.3.2.1 (constructibility) and 6.10.4.2.2 (Service II).
+- **Displays (§6):** GirderDetail's GS report: "f_t = … ksi (compression): both edges of the web in compression (6.10.1.9.1), k = 7.2" (Service II)
+  or "D_c > D: both edges of the web in compression (6.10.1.9.1), k = 7.2" (constructibility) when that case occurs; otherwise the same text as before. ST-Girder: Constructibility worked card step 3 now works k and F_crw = min(0.9Ek/(D/t_w)², R_hF_yc, F_yw/0.7) with
+  values; the Service II derivation gains step 3, the −M web bend-buckling check at its governing station (k, F_crw, f_c/F_crw), linked to the cracked-section D_c.
+- **Check case (hand):** D = 60 in, t_w = 0.5 in (D/t_w = 120), F_yc = 50 ksi, R_h = 1, both edges in compression.
+  Before (ST, D_c clamped to D): k = 9 → F_crw = 0.9(29,000)(9)/120² = 16.31 ksi. After: k = 7.2 → 13.05 ksi.
+  GirderDetail Service II with f_c = 20 ksi and the other flange at −5 ksi (compression), d = 62 in, t_fc = 1 in: before D_c = 20/(20 + 5)(62) − 1 = 48.6 in,
+  k = 9/(48.6/60)² = 13.72, F_crw = 0.9(29,000)(13.72)/120² = 24.87 ksi; after k = 7.2, F_crw = 13.05 ksi.
+  On the test payloads no section has both web edges in compression: no result changes.
+- **How verified:** `tests/check-syntax.mjs`; `--tool gd` builtin/AASHTO, builtin28/MassDOT, util/CTDOT against `tests/baselines/gd.json`: every section identical except `gd.dxf` in builtin28/MassDOT and util/CTDOT, which differs from the recorded baseline on origin/main as well (util/CTDOT run A = origin/main vs B = this branch: all sections identical, the same `gd.dxf` hash on both); a stale baseline hash, not this change, not re-recorded here; `--tool st --payload all` (109) and `tests/st-span.mjs` (200): no check, rating, station or section value changes; `st.R` gains only `hostGD`, `segP[].RbPos1`, `stress.s2WebGov.{si, Dc, Rh}`; tab and report texts change by the new worked lines (Section Props, Constructibility, Stresses, Report); `tests/sbd-verify.mjs`, `tests/a610-prop.mjs` pass. Baselines `st.json` and `st_interior.json` re-recorded for those sections from the runs.
+- **Other copies:** Preliminary sizing (`pl-src`, `Fcrw` in its run of the 6.10 checks, anchor `const Fcrw = (Dc, tw) =>`) has its own k = 9/max(D_c/D, 0.05)²
+  and is not changed by this PR (open item).
+- **Open items:** (1) `pl-src` Fcrw: same 7.2 case to add if the engineer wants Preliminary sizing in step. (2) λ_rw: both tools use 5.7√(E/F_yc); the 10th Ed.
+  definition of λ_rw in Art. 6.10.1.10.2 uses c_rw√(E/F_yc), with the edge-condition coefficient c_rw from a_wc limited to 4.6 ≤ c_rw ≤ 5.7 — not changed here (raise with the engineer).
