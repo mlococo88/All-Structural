@@ -981,7 +981,8 @@ function defaultState(){
     detailCombo:0,
     /* UI */
     ui:{ tab:"tabInput", collapse:{}, units:"kip", momentUnits:"kip-in",
-         axialPositive:"tension" },
+         axialPositive:"tension",
+         layers3d:{ tRebar:true, vRebar:true, ped:true, breakout:true } },   /* GFX-A (2026-10-23): 3-D layer toggles added with the reinforcement layers; the older layers stay in S._vis3.show */
     /* units: "kip"|"lb". momentUnits: "kip-in"|"kip-ft"|"lb-in"|"lb-ft" — chosen
        INDEPENDENTLY of the force unit, because ft-kip and ft-lb are both common
        on drawings while forces are quoted in kip or lb. axialPositive: which way
@@ -1039,6 +1040,10 @@ function mergeState(st){
     }
   });
   out.ui.collapse=Object.assign({},(st&&st.ui&&st.ui.collapse)||{});
+  /* GFX-A (2026-10-23): 3-D reinforcement layers. Missing keys take the default (on). A save from before
+     GFX-A whose single 3-D "Rebar" layer was off keeps the tension legs and the breakout body off. */
+  out.ui.layers3d=Object.assign({},d.ui.layers3d,(st&&st.ui&&st.ui.layers3d)||{});
+  if(st && !(st.ui&&st.ui.layers3d) && st._vis3 && st._vis3.show && st._vis3.show.rebar===false){ out.ui.layers3d.tRebar=false; out.ui.layers3d.breakout=false; }
   out.print.sections=Object.assign(d.print.sections,(st&&st.print&&st.print.sections)||{});
   out.print.combos=(st&&st.print&&st.print.combos)||{};
   if(!Array.isArray(out.combos)||!out.combos.length) out.combos=defaultCombos();
@@ -8594,6 +8599,67 @@ function drawBreakout(body,c){
    is reported — the capacity check uses the full leg count, so a mismatch has
    to be visible rather than silently drawn to fit.
    ---------------------------------------------------------------------- */
+/* ---- GFX-A (2026-10-23): shear breakout body for the drawings ------------------
+   The governing breakout case projects its half-pyramid from the anchor row
+   selected as critical (Fig. R17.7.2.1b; Case 2 = the back row), with c_a1
+   measured from that row to the governing edge. shearBodyGeom() finds that row
+   from the results already computed — the row at c_a1 from the governing face
+   (shearRebarIntercept → comboCapacities), else the combination's critical-row
+   set-back (vCaseOffset, shearCases) — and returns it in the PEDESTAL frame
+   (plate offset applied). u = along the outward normal of the governing edge,
+   t = along that edge. Display only: nothing here feeds a check. */
+function shearBodyGeom(ic){
+  if(!ic || (!ic.nx && !ic.ny)) return null;
+  const C=S.conc, g=anchorGeom(), nx=ic.nx, ny=ic.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0;
+  const px=C.plate_off_x||0, py=C.plate_off_y||0, offN=nx*px+ny*py, offT=(nx!==0)? py : px;
+  const projN=p=>p.x*nx+p.y*ny, projT=p=>(nx!==0)? p.y : p.x;
+  const uE=(nx!==0)? C.Bx/2 : C.By/2, tE=(nx!==0)? C.By/2 : C.Bx/2;
+  const tol=0.05+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const rows=[...new Set(g.pts.map(p=>+projN(p).toFixed(4)))].sort((a,b)=>b-a);   /* leading row first */
+  const lead=rows[0];
+  let uRow=rows.find(u=>Math.abs(uE-(u+offN)-ic.ca1)<tol), byOffset=false;
+  if(uRow===undefined){
+    const cb=(CC&&CC.combos||[]).find(c=>c.name===ic.govCombo);
+    const want=lead-((cb&&cb.vCaseOffset)||0);
+    uRow=rows.reduce((m,u)=>Math.abs(u-want)<Math.abs(m-want)?u:m, lead); byOffset=true;
+  }
+  const ts=g.pts.filter(p=>Math.abs(projN(p)-uRow)<tol).map(p=>projT(p)+offT);
+  const tMin=Math.min(...ts), tMax=Math.max(...ts);
+  const rowIdx=rows.findIndex(u=>Math.abs(u-uRow)<1e-6);
+  return {nx,ny,tx,ty,uE,tE,uRef:uRow+offN,uLead:lead+offN,tMin,tMax,nRow:ts.length,ca1:ic.ca1,
+    caGeom:uE-(uRow+offN), back:rowIdx>0, rowIdx, nRows:rows.length, byOffset, edge:ic.govEdge,
+    P2:(u,t)=>[nx*u+tx*t, ny*u+ty*t]};
+}
+/* Clip a convex solid, given as a list of planar faces (each a list of [x,y,z]),
+   by axis-aligned half-spaces [axis, value, sign] (keeps sign·(p[axis]−value) ≥ 0).
+   A cut face gets its cap. Used to stop the drawn breakout bodies at the concrete. */
+function clipSolid3(faces,planes){
+  const hull2=(P,a,b)=>{ const Q=P.slice().sort((p,q)=>p[a]-q[a]||p[b]-q[b]);
+    const cr=(o,p,q)=>(p[a]-o[a])*(q[b]-o[b])-(p[b]-o[b])*(q[a]-o[a]);
+    const lo=[],up=[];
+    Q.forEach(q=>{ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],q)<=1e-12) lo.pop(); lo.push(q); });
+    Q.slice().reverse().forEach(q=>{ while(up.length>=2&&cr(up[up.length-2],up[up.length-1],q)<=1e-12) up.pop(); up.push(q); });
+    lo.pop(); up.pop(); return lo.concat(up); };
+  planes.forEach(([ax,val,sg])=>{
+    const inside=p=>sg*(p[ax]-val)>=-1e-9;
+    if(faces.every(f=>f.every(inside))) return;
+    const out=[], cap=[];
+    faces.forEach(f=>{
+      const r=[];
+      for(let i=0;i<f.length;i++){ const a=f[i], b=f[(i+1)%f.length], ia=inside(a), ib=inside(b);
+        if(ia) r.push(a);
+        if(ia!==ib){ const k=(val-a[ax])/(b[ax]-a[ax]); const q=[a[0]+k*(b[0]-a[0]),a[1]+k*(b[1]-a[1]),a[2]+k*(b[2]-a[2])]; q[ax]=val; r.push(q); } }
+      if(r.length>=3) out.push(r);
+      r.forEach(p=>{ if(Math.abs(p[ax]-val)<1e-7) cap.push(p); });
+    });
+    const o=[0,1,2].filter(k=>k!==ax);
+    const pts=cap.filter((p,i)=>cap.findIndex(q=>Math.abs(q[o[0]]-p[o[0]])<1e-6&&Math.abs(q[o[1]]-p[o[1]])<1e-6)===i);
+    if(pts.length>=3){ const h=hull2(pts,o[0],o[1]); if(h.length>=3) out.push(h); }
+    faces=out;
+  });
+  return faces;
+}
+
 function drawHairpinPlan(body, cGov){
   const C=S.conc, A=S.anchor, P=S.plate, g=anchorGeom(), R=S.vRebar, rb=rebarOf(R.size);
   const ic=shearRebarIntercept(CC);
@@ -8632,30 +8698,57 @@ function drawHairpinPlan(body, cGov){
        are the outer ones. */
     const leadTs=ic.leadTs && ic.leadTs.length? ic.leadTs
                  : [ic.legs.length? ic.legs.reduce((a,L)=>a+L.t,0)/ic.legs.length : 0];
-    const tMin=Math.min(...leadTs), tMax=Math.max(...leadTs);
-    const halfW=1.5*ic.ca1;
-    const perpPos=(nx!==0)? g.ca_y_pos : g.ca_x_pos;
-    const perpNeg=(nx!==0)? g.ca_y_neg : g.ca_x_neg;
-    const wLeft =Math.min(halfW, perpNeg);
-    const wRight=Math.min(halfW, perpPos);
-    const aN=ic.lead, eN=edgeN;
-    /* trapezoid: two rear corners at the leading-anchor plane (outer anchors),
-       two front corners at the edge face, splayed by wLeft/wRight */
-    const Q=[
-      [nx*aN+tx*tMin, ny*aN+ty*tMin],           /* rear, − side */
-      [nx*eN+tx*(tMin-wLeft), ny*eN+ty*(tMin-wLeft)],   /* edge, − side */
-      [nx*eN+tx*(tMax+wRight), ny*eN+ty*(tMax+wRight)], /* edge, + side */
-      [nx*aN+tx*tMax, ny*aN+ty*tMax]            /* rear, + side */
-    ];
-    const poly=document.createElementNS(SVGNS,"polygon");
-    poly.setAttribute("points",Q.map(q=>XP(q[0])+","+YP(q[1])).join(" "));
-    poly.setAttribute("fill","rgba(183,28,28,0.07)");
-    poly.setAttribute("stroke","#b71c1c");poly.setAttribute("stroke-width","1.1");
-    poly.setAttribute("stroke-dasharray","5 4");
-    svgHost(s).appendChild(poly);
-    /* the failure plane (rear boundary) through the leading anchors */
-    line(s,XP(nx*aN+tx*(tMin-wLeft)),YP(ny*aN+ty*(tMin-wLeft)),
-           XP(nx*aN+tx*(tMax+wRight)),YP(ny*aN+ty*(tMax+wRight)),"#b71c1c",1.6);
+    const aN=ic.lead;
+    /* GFX-A (2026-10-23): the body is projected from the REFERENCE row of the
+       governing breakout case (Fig. R17.7.2.1b — the back row when Case 2
+       governs), not always from the leading row; it opens 1.5·c_a1 beyond the
+       outer anchors of that row at the edge face and is CLIPPED to the
+       concrete (the splayed sides stop at the side faces and run along them),
+       instead of moving the front corners in. Drawn in the pedestal frame
+       (X, Y), from shearBodyGeom(). c_a1 is dimensioned from the reference row
+       to the governing edge. Display only. */
+    const sb=shearBodyGeom(ic);
+    if(sb){
+      const w=1.5*sb.ca1;
+      const Qf=[[...sb.P2(sb.uRef,sb.tMin),0],[...sb.P2(sb.uE,sb.tMin-w),0],[...sb.P2(sb.uE,sb.tMax+w),0],[...sb.P2(sb.uRef,sb.tMax),0]]
+        .filter((p,i,a)=>Math.hypot(p[0]-a[(i+1)%a.length][0],p[1]-a[(i+1)%a.length][1])>1e-9);
+      const Qc=clipSolid3([Qf],[[0,-C.Bx/2,1],[0,C.Bx/2,-1],[1,-C.By/2,1],[1,C.By/2,-1]])[0]||[];
+      const poly=document.createElementNS(SVGNS,"polygon");
+      poly.setAttribute("points",Qc.map(q=>X(q[0])+","+Y(q[1])).join(" "));
+      poly.setAttribute("fill","rgba(183,28,28,0.07)");
+      poly.setAttribute("stroke","#b71c1c");poly.setAttribute("stroke-width","1.1");
+      poly.setAttribute("stroke-dasharray","5 4");
+      svgHost(s).appendChild(poly);
+      /* the failure plane through the reference row, clipped to the concrete */
+      const tLo=Math.max(sb.tMin-w,-sb.tE), tHi=Math.min(sb.tMax+w,sb.tE);
+      const r0=sb.P2(sb.uRef,tLo), r1=sb.P2(sb.uRef,tHi);
+      line(s,X(r0[0]),Y(r0[1]),X(r1[0]),Y(r1[1]),"#b71c1c",1.6);
+      /* screen direction of +t (along the edge) and of +u (toward the edge) */
+      const o0=sb.P2(0,0), ot=sb.P2(0,1), ou=sb.P2(1,0);
+      const dts=[X(ot[0])-X(o0[0]),Y(ot[1])-Y(o0[1])], dus=[X(ou[0])-X(o0[0]),Y(ou[1])-Y(o0[1])];
+      const nrm=v=>{ const l=Math.hypot(v[0],v[1])||1; return [v[0]/l,v[1]/l]; };
+      const vt=nrm(dts), vu=nrm(dus);
+      /* reference-row label: a vertical row line is labelled below/above the pedestal at
+         its −t end; a horizontal one just above the line, inside, from its −t end */
+      const rl=sb.P2(sb.uRef,-sb.tE);
+      const rowTxt=(sb.nRows>1? (sb.back? "reference row: back row (Case 2)" : "reference row: front row") : "anchor row");
+      if(Math.abs(vt[0])>0.5){   /* horizontal row line: two short lines outside the side face */
+        const two=rowTxt.split(": "), ax=X(rl[0])-vt[0]*6, an=vt[0]>0?"end":"start";
+        vTag(s,ax,Y(rl[1])-2,two[0],"lblTxt",an,9,"#b71c1c");
+        if(two[1]) vTag(s,ax,Y(rl[1])+9,two[1],"lblTxt",an,9,"#b71c1c");
+      } else vTag(s,X(rl[0]),Y(rl[1])-vt[1]*14+3,rowTxt,"lblTxt","middle",9,"#b71c1c");
+      /* c_a1 dimension, reference row → governing face, outside the +t side face */
+      const dOff=16, e0=sb.P2(sb.uRef,sb.tE), e1=sb.P2(sb.uE,sb.tE);
+      const d0=[X(e0[0])+vt[0]*dOff, Y(e0[1])+vt[1]*dOff], d1=[X(e1[0])+vt[0]*dOff, Y(e1[1])+vt[1]*dOff];
+      const anc=sb.P2(sb.uRef,sb.tMax);
+      line(s,X(anc[0]),Y(anc[1]),d0[0]+vt[0]*4,d0[1]+vt[1]*4,"#00427a",0.6,"2 2");
+      line(s,d1[0]-vt[0]*dOff,d1[1]-vt[1]*dOff,d1[0]+vt[0]*4,d1[1]+vt[1]*4,"#00427a",0.6,"2 2");
+      line(s,d0[0],d0[1],d1[0],d1[1],"#00427a",1);
+      [d0,d1].forEach(q=>line(s,q[0]-vu[0]*4-vt[0]*4,q[1]-vu[1]*4-vt[1]*4,q[0]+vu[0]*4+vt[0]*4,q[1]+vu[1]*4+vt[1]*4,"#00427a",1));
+      const narrowTxt=(Math.abs(sb.caGeom-sb.ca1)>0.01)? " (§17.7.2.1.2 limit; row to edge "+fmt(sb.caGeom,2)+"″)" : "";
+      const lx=(d0[0]+d1[0])/2+vt[0]*10, ly=(d0[1]+d1[1])/2+vt[1]*10+3;
+      vTag(s,lx,ly,"c_a1 = "+fmt(sb.ca1,2)+"″"+narrowTxt,"dimTxt",Math.abs(vt[0])>0.5?(vt[0]>0?"start":"end"):"middle",9,"#00427a");
+    }
     /* the 0.5·c_a1 proximity band around EACH leading anchor's transverse pos */
     if(!ic.isTie) leadTs.forEach(tc=>{
       [-1,1].forEach(sg=>{
@@ -8696,11 +8789,21 @@ function drawHairpinPlan(body, cGov){
         line(s,XP(c[0])-5*tx,YP(c[1])+5*ty,XP(c[0])+5*tx,YP(c[1])-5*ty,"#b71c1c",1.6);
         line(s,XP(c[0])-5*ty,YP(c[1])-5*tx,XP(c[0])+5*ty,YP(c[1])+5*tx,"#b71c1c",1.6); }
     });
-    [uF,uB].forEach(u=>{ const a=P2(u,-tL), b=P2(u,tL); line(s,XP(a[0]),YP(a[1]),XP(b[0]),YP(b[1]),"#9e9e9e",2.2); });
+    /* GFX-A: the front and back legs (across V, never counted) solid dark grey and named */
+    /* labels outside the pedestal face, on a dotted leader (screen direction of +u = toward the edge) */
+    const o0=P2(0,0), o1=P2(1,0), vuL=Math.hypot(XP(o1[0])-XP(o0[0]),YP(o1[1])-YP(o0[1]))||1;
+    const vu=[(XP(o1[0])-XP(o0[0]))/vuL,(YP(o1[1])-YP(o0[1]))/vuL];
+    const sideAnchor=sg=>Math.abs(vu[0])>0.5? ((sg*vu[0]>0)?"start":"end") : "middle";
+    [[uF,"front leg",1],[uB,"back leg",-1]].forEach(([u,nm,sg])=>{ const a=P2(u,-tL), b=P2(u,tL);
+      line(s,XP(a[0]),YP(a[1]),XP(b[0]),YP(b[1]),"#616161",2.6);
+      const m=P2(u,0.55*tL), mx=XP(m[0]), my=YP(m[1]), gap=(ic.halfSpanN-Math.abs(u))*sc+10;
+      const lx=mx+sg*vu[0]*gap, ly=my+sg*vu[1]*gap;
+      line(s,mx,my,lx-sg*vu[0]*2,ly-sg*vu[1]*2,"#616161",0.7,"2 2");
+      vTag(s,lx,ly+(Math.abs(vu[0])>0.5? 3 : (sg*vu[1]>0? 11 : -4)),nm,"lblTxt",sideAnchor(sg),8.5,"#424242"); });
     [[uF,tL],[uF,-tL],[uB,tL],[uB,-tL]].forEach(([u,t])=>{ const c=P2(u,t); circ(s,XP(c[0]),YP(c[1]),3.2,"#555","#333",1); });
-    const lab=P2(uF,0);
-    txt(s,XP(lab[0])+(nx!==0? -nx*14:0),YP(lab[1])+(ny!==0? ny*14:0)+3,
-      ic.nEff+" of "+ic.nLegsTotal+" tie legs effective","lblTxt","middle",8.5,ic.nEff?"#1f7d32":"#b71c1c");
+    /* GFX-A: the count moved under the title (it sat on the front leg / the V arrow) */
+    txt(s,cx,33,ic.nEff+" of "+ic.nLegsTotal+" tie legs effective (legs parallel to V, "+ic.nSets+" set"+(ic.nSets===1?"":"s")+")",
+      "lblTxt","middle",9,ic.nEff?"#1f7d32":"#b71c1c");
   } else if(ic){
     const nx=ic.nx, ny=ic.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0;
     const byPiece={};
@@ -8760,7 +8863,7 @@ function drawHairpinPlan(body, cGov){
   if(ic){
     txt(s,cx,H-44,ic.isTie? "tie legs parallel to V: green = at least one set effective · red = none · grey = legs across V (not counted) · × = crossing (top set)"
       : "green = effective · red = not creditable · grey = outside the pedestal · dashed blue = 0.5·c_a1 band at each anchor","lblTxt","middle",8.5);
-    txt(s,cx,H-30,"shaded = shear breakout body toward the "+ic.govEdge+" edge (opening 1.5·c_a1 = "+fmt(1.5*ic.ca1,2)+"″ beyond each outer anchor)","lblTxt","middle",8.5);
+    txt(s,cx,H-30,"shaded = breakout body, reference row \u2192 "+ic.govEdge+" edge (1.5·c_a1 = "+fmt(1.5*ic.ca1,2)+"″ beyond its outer anchors), clipped to the concrete","lblTxt","middle",8.5);
   } else txt(s,cx,H-30,"no shear reinforcement defined","lblTxt","middle",8.5);
   if(ic && ic.nEff<ic.nLegsTotal){
     txt(s,cx,H-16,(ic.nLegsTotal-ic.nEff)+" of "+ic.nLegsTotal+" legs are not creditable — see the table above.",
@@ -9418,7 +9521,7 @@ function build3D(container){
   if(three3D){ cancelAnimationFrame(three3D.raf);
     if(three3D.renderer&&three3D.renderer.domElement&&three3D.renderer.domElement.parentNode) three3D.renderer.domElement.parentNode.removeChild(three3D.renderer.domElement);
     three3D=null; }
-  const W=container.clientWidth||760, H=520;
+  const W=container.clientWidth||760, H=640;   /* GFX-A: was 520 */
   if(!window.THREE){ container.appendChild(el("div","warnBox","3-D library still loading — reopen this section shortly.")); return; }
   /* NOTE: `A` is the anchor block. The dimension code below references A.hef;
      it was previously omitted from this destructure, which threw
@@ -9430,7 +9533,8 @@ function build3D(container){
   const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(W,H); container.appendChild(renderer.domElement);
   scene.add(new THREE.AmbientLight(0xffffff,0.75));
   const dl=new THREE.DirectionalLight(0xffffff,0.5); dl.position.set(1,1.5,1); scene.add(dl);
-  const groups={concrete:new THREE.Group(),grout:new THREE.Group(),plate:new THREE.Group(),anchors:new THREE.Group(),rebar:new THREE.Group(),loads:new THREE.Group(),axes:new THREE.Group(),dims:new THREE.Group()};
+  /* GFX-A: the single "rebar" group is split into tension rebar, shear rebar, pedestal reinforcement and breakout bodies (each its own layer) */
+  const groups={concrete:new THREE.Group(),grout:new THREE.Group(),plate:new THREE.Group(),anchors:new THREE.Group(),tRebar:new THREE.Group(),vRebar:new THREE.Group(),ped:new THREE.Group(),breakout:new THREE.Group(),loads:new THREE.Group(),axes:new THREE.Group(),dims:new THREE.Group()};
   Object.values(groups).forEach(gr=>scene.add(gr));
   const concMat=new THREE.MeshLambertMaterial({color:0xcfcabb,transparent:true,opacity:1});
   const groutMat=new THREE.MeshLambertMaterial({color:0xb8b2a0,transparent:true,opacity:1});
@@ -9480,86 +9584,153 @@ function build3D(container){
     const head=new THREE.Mesh(new THREE.CylinderGeometry(r*1.7,r*1.7,0.6,6),boltMat);
     setPos(head, p.x+pxo, p.y+pyo, C.H-S.anchor.hef); groups.anchors.add(head); });
 
-  /* ---- TENSION ANCHOR REINFORCEMENT ---------------------------------------
-     groups.rebar existed and had a "Rebar" layer toggle from the start, but
-     nothing was ever added to it — the toggle controlled an empty group. The
-     legs are drawn here from the SAME tensionRebarIntercept() result the
-     Tension Rebar tab reports, so the 3D cannot disagree with the table:
-       green  effective (crosses the cone within 1.5h_ef AND develops both sides)
-       red    crosses the cone but under-developed on at least one side
-       grey   outside the effective zone / outside the pedestal
-     Stirrup pieces get their connecting bends drawn, so a closed tie reads as
-     one piece with two legs rather than two unrelated bars. A small sphere
-     marks each leg's z_cross — the point development is measured either side
-     of — and the cone from the anchor head (actual h_ef, TR-H1) is shown as a
-     translucent wireframe so the geometry driving the verdicts is visible. */
-  (function drawRebar3D(){
-    if(!S.tRebar.present) return;
-    const ic=(typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
-    if(!ic||!ic.bars||!ic.bars.length) return;
-    const rb=ic.rb, rr=Math.max(rb.db/2, 0.12);
-    const COL={eff:0x1f7d32, bad:0xb71c1c, out:0x9e9e9e};
-    const matOf=b=> new THREE.MeshLambertMaterial({color: b.eff?COL.eff:(b.crosses?COL.bad:COL.out)});
-    /* rod between two engineering points */
-    function rod(a,bb,mat,rad){
-      const w1=new THREE.Vector3(...toW(a[0],a[1],a[2]));
-      const w2=new THREE.Vector3(...toW(bb[0],bb[1],bb[2]));
-      const dir=new THREE.Vector3().subVectors(w2,w1);
-      const len=dir.length(); if(len<1e-6) return;
-      const m=new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,len,10),mat);
-      m.position.copy(w1).add(w2).multiplyScalar(0.5);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
-      groups.rebar.add(m);
-    }
+  /* ---- REINFORCEMENT AND BREAKOUT BODIES (GFX-A, 2026-10-23) ---------------
+     Every bar is drawn from the SAME results the tabs report, so the 3-D cannot
+     disagree with the per-leg tables:
+       tRebar    tension legs, tensionRebarIntercept(): green = counted (crosses
+                 the surface within 0.5·h_ef and develops both sides), red =
+                 crosses but not counted, grey = never reaches the surface /
+                 outside the pedestal. A small sphere marks each leg's z_cross,
+                 the station development is measured either side of. Stirrup
+                 pieces get their connecting bends, so a U reads as one piece.
+       vRebar    shear legs, shearRebarIntercept(), at their depth: hairpins and
+                 bars as in the hairpin plan (green counted, red not counted,
+                 grey does not fit), the bend wrapping the rod toward the edge;
+                 closed ties per set: the two legs parallel to V by the verdict
+                 of that set, the legs across V grey; a sphere at each crossing.
+       ped       pedestal bars and ties, pedGeom(), blue-grey. When they ARE the
+                 tension bars (piece type "pedbars") or the shear ties (closed
+                 ties with the pedestal reinforcement entered) they are drawn
+                 coloured in that layer instead, not twice.
+       breakout  the GB-1 group breakout body (tension, red) and the shear
+                 breakout half-pyramid (orange) from the reference anchor row to
+                 the governing edge, both stopped at the concrete.
+     Plate-referenced items (anchors, stirrup and hairpin legs) are shifted by
+     the plate offset; pedestal-referenced items (pedestal bars, ties) are not —
+     the convention of the DXF export (DX-1). Display only. */
+  if(!CC){ try{ CC=computeAll(); }catch(e){} }
+  const rod=(gr,a,b,mat,rad)=>{
+    const w1=new THREE.Vector3(...toW(a[0],a[1],a[2])), w2=new THREE.Vector3(...toW(b[0],b[1],b[2]));
+    const dir=new THREE.Vector3().subVectors(w2,w1), len=dir.length(); if(len<1e-6) return;
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,len,10),mat);
+    m.position.copy(w1).add(w2).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+    gr.add(m);
+  };
+  const path3=(gr,pts,mat,rad,closed)=>{ for(let i=0;i+1<pts.length;i++) rod(gr,pts[i],pts[i+1],mat,rad);
+    if(closed&&pts.length>2) rod(gr,pts[pts.length-1],pts[0],mat,rad); };
+  const knot=(gr,p,mat,rad)=>{ const sp=new THREE.Mesh(new THREE.SphereGeometry(rad,10,8),mat); setPos(sp,p[0],p[1],p[2]); gr.add(sp); };
+  const RCOL={eff:0x1f7d32, bad:0xb71c1c, out:0x9e9e9e, mixed:0x8d6e00, ped:0x546e7a};
+  const lam=c=>new THREE.MeshLambertMaterial({color:c});
+  const icT=(S.tRebar.present&&typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
+  const icV=(S.vRebar.present&&typeof shearRebarIntercept==="function")? shearRebarIntercept(CC) : null;
+  const pg3=pedGeom();
+  const tIsPed=!!(icT && tRebarEff().isPed), vIsPed=!!(icV && icV.isTie && icV.usePed);
+
+  /* pedestal bars (into the footing when that option is on) and ties */
+  if(pg3.present){
+    const mP=lam(RCOL.ped);
+    const zb=(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, zt=C.H-Math.max(+S.ped.barTop||0,0);
+    if(!tIsPed) pg3.bars.forEach(b=>rod(groups.ped,[b.x,b.y,zb],[b.x,b.y,zt],mP,pg3.rbB.db/2));
+    if(!vIsPed) pg3.ties.forEach(z=>path3(groups.ped,[[-pg3.tieHx,-pg3.tieHy,C.H-z],[pg3.tieHx,-pg3.tieHy,C.H-z],
+      [pg3.tieHx,pg3.tieHy,C.H-z],[-pg3.tieHx,pg3.tieHy,C.H-z]],mP,pg3.rbT.db/2,true));
+  }
+
+  /* tension anchor reinforcement */
+  if(icT && icT.bars && icT.bars.length){
+    const rr=Math.max(icT.rb.db/2,0.12), dx=tIsPed?0:pxo, dy=tIsPed?0:pyo;
     const byPiece={};
-    ic.bars.forEach(b=>{ (byPiece[b.piece]=byPiece[b.piece]||[]).push(b); });
-    ic.bars.forEach(b=>{
-      const mat=matOf(b);
-      rod([b.x+pxo,b.y+pyo,ic.barBot],[b.x+pxo,b.y+pyo,ic.barTop],mat,rr);
-      if(b.crosses && b.zCross!==undefined){
-        const sp=new THREE.Mesh(new THREE.SphereGeometry(rr*2.2,10,8),
-          new THREE.MeshLambertMaterial({color: b.eff?COL.eff:COL.bad}));
-        setPos(sp, b.x+pxo, b.y+pyo, b.zCross); groups.rebar.add(sp);
-      }
-    });
-    /* connecting bends: a piece with two legs is one bar, bent top and/or bottom */
-    Object.values(byPiece).forEach(legs=>{
+    icT.bars.forEach(b=>{ (byPiece[b.piece]=byPiece[b.piece]||[]).push(b);
+      rod(groups.tRebar,[b.x+dx,b.y+dy,icT.barBot],[b.x+dx,b.y+dy,icT.barTop],lam(b.eff?RCOL.eff:(b.crosses?RCOL.bad:RCOL.out)),rr);
+      if(b.crosses && b.zCross!==undefined) knot(groups.tRebar,[b.x+dx,b.y+dy,b.zCross],lam(b.eff?RCOL.eff:RCOL.bad),rr*2.2); });
+    /* connecting bends: a piece with two legs is one bar, bent top and/or bottom. The
+       bottom connector only for a genuinely closed tie — a U-bar is open at the bottom. */
+    if(!tIsPed) Object.values(byPiece).forEach(legs=>{
       if(legs.length!==2) return;
-      const [a,bb]=legs;
-      const mat=new THREE.MeshLambertMaterial({color:(a.eff&&bb.eff)?COL.eff:((a.eff||bb.eff)?0x8d6e00:COL.out)});
-      if(ic.dev.hookTop) rod([a.x+pxo,a.y+pyo,ic.barTop],[bb.x+pxo,bb.y+pyo,ic.barTop],mat,rr);
-      /* bottom connector ONLY for a genuinely closed tie — a U-bar is open at
-         the bottom, so drawing a bottom bar made it read as a closed stirrup in
-         the 3D view (user report). Key off the piece type, not the generic hook
-         flag. */
-      if(S.tRebar.pieceType==="closedtie" && ic.dev.hookBot)
-        rod([a.x+pxo,a.y+pyo,ic.barBot],[bb.x+pxo,bb.y+pyo,ic.barBot],mat,rr);
+      const [a,bb]=legs, m=lam((a.eff&&bb.eff)?RCOL.eff:((a.eff||bb.eff)?RCOL.mixed:RCOL.out));
+      if(icT.dev.hookTop) rod(groups.tRebar,[a.x+dx,a.y+dy,icT.barTop],[bb.x+dx,bb.y+dy,icT.barTop],m,rr);
+      if(S.tRebar.pieceType==="closedtie" && icT.dev.hookBot) rod(groups.tRebar,[a.x+dx,a.y+dy,icT.barBot],[bb.x+dx,bb.y+dy,icT.barBot],m,rr);
     });
-    /* GB-1: ONE group breakout body from the heads (actual h_ef, TR-H1): flat
-       bottom across the tension anchors, 1:1.5 sides from the outer anchors,
-       stopped at the pedestal faces. Same geometry the check uses. */
-    (ic.hulls||[]).forEach(Hh=>{
-      const off=Hh.map(q=>({x:q.x+pxo,y:q.y+pyo}));
-      const ring=breakoutRing(off,1.5*ic.hef,{x0:-S.conc.Bx/2,x1:S.conc.Bx/2,y0:-S.conc.By/2,y1:S.conc.By/2},8);
-      const zH=ic.coneZ, zT=S.conc.H, V=[];
-      const P=(x,y,z)=>toW(x,y,z);
-      for(let j=0;j<ring.length-1;j++){
-        const a=ring[j], b=ring[j+1];
-        const a0=P(a.x0,a.y0,zH), b0=P(b.x0,b.y0,zH), a1=P(a.x,a.y,zH+a.dz), b1=P(b.x,b.y,zH+b.dz);
-        const a2=P(a.x,a.y,zT), b2=P(b.x,b.y,zT);
-        V.push(...a0,...a1,...b1, ...a0,...b1,...b0);
-        if(a.face||b.face) V.push(...a1,...a2,...b2, ...a1,...b2,...b1);
-      }
-      for(let i=1;i+1<off.length;i++) V.push(...P(off[0].x,off[0].y,zH),...P(off[i].x,off[i].y,zH),...P(off[i+1].x,off[i+1].y,zH));
-      const geo=new THREE.BufferGeometry();
-      geo.setAttribute("position",new THREE.Float32BufferAttribute(V,3));
-      groups.rebar.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xb71c1c,transparent:true,opacity:0.14,side:THREE.DoubleSide,depthWrite:false})));
-      const edge=(arr)=>{ const g2=new THREE.BufferGeometry().setFromPoints(arr.map(w=>new THREE.Vector3(w[0],w[1],w[2])));
-        groups.rebar.add(new THREE.Line(g2,new THREE.LineBasicMaterial({color:0xb71c1c,transparent:true,opacity:0.7}))); };
-      if(off.length>=2) edge(off.concat([off[0]]).map(q=>P(q.x,q.y,zH)));
-      edge(ring.map(q=>P(q.x,q.y,zH+q.dz)));
-    });
-  })();
+  }
+
+  /* shear anchor reinforcement */
+  if(icV && icV.legs && icV.legs.length && (icV.nx||icV.ny)){
+    const nx=icV.nx, ny=icV.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0;
+    const P2=(u,t)=>[nx*u+tx*t, ny*u+ty*t];
+    const rr=Math.max(icV.dev.db/2,0.12);
+    if(icV.isTie){
+      /* closed ties, pedestal frame; the crossing is in front of the reference anchors (plate frame + offset) */
+      const uF=icV.halfSpanN-icV.cover-icV.dev.db/2, tL=icV.tLeg, offN=nx*pxo+ny*pyo;
+      [...new Set(icV.legs.map(L=>L.piece))].forEach(k=>{
+        const Ls=icV.legs.filter(L=>L.piece===k), z=C.H-Ls[0].z;
+        [-1,1].forEach(sg=>{
+          const L=Ls.find(q=>(q.t>0)===(sg>0)), a=P2(-uF,sg*tL), b=P2(uF,sg*tL);
+          rod(groups.vRebar,[a[0],a[1],z],[b[0],b[1],z],lam(L&&L.eff?RCOL.eff:RCOL.bad),rr);
+          if(L&&L.crossOK){ const c=P2(icV.lead+offN+L.xCross,sg*tL); knot(groups.vRebar,[c[0],c[1],z],lam(L.eff?RCOL.eff:RCOL.bad),rr*2.2); }
+        });
+        [-uF,uF].forEach(u=>{ const a=P2(u,-tL), b=P2(u,tL); rod(groups.vRebar,[a[0],a[1],z],[b[0],b[1],z],lam(RCOL.out),rr); });
+      });
+    } else {
+      /* hairpins / bars: legs run back from the leading row; a hairpin's bend wraps the rod toward the edge */
+      const zOf=L=>C.H-(L.z!==undefined?L.z:icV.zBelow), byPiece={};
+      icV.legs.forEach(L=>{ (byPiece[L.piece]=byPiece[L.piece]||[]).push(L);
+        const z=zOf(L), s0=P2(icV.lead,L.t), e0=P2(icV.lead-icV.availBehind,L.t);
+        const m=lam(L.eff?RCOL.eff:(L.fits?RCOL.bad:RCOL.out));
+        rod(groups.vRebar,[s0[0]+pxo,s0[1]+pyo,z],[e0[0]+pxo,e0[1]+pyo,z],m,rr);
+        if(S.vRebar.hookEnd) rod(groups.vRebar,[e0[0]+pxo,e0[1]+pyo,z],[e0[0]+pxo,e0[1]+pyo,z-Math.max(2,3*icV.dev.db)],m,rr);
+      });
+      Object.values(byPiece).forEach(ls=>{
+        if(ls.length!==2) return;
+        const z=zOf(ls[0]), tc=(ls[0].t+ls[1].t)/2, rad=Math.abs(ls[1].t-ls[0].t)/2, pts=[];
+        for(let k=0;k<=12;k++){ const a=Math.PI*k/12, q=P2(icV.lead+rad*Math.sin(a), tc+(ls[0].t-tc)*Math.cos(a)); pts.push([q[0]+pxo,q[1]+pyo,z]); }
+        path3(groups.vRebar,pts,lam((ls[0].eff&&ls[1].eff)?RCOL.eff:RCOL.mixed),rr);
+      });
+    }
+  }
+
+  /* breakout bodies: translucent faces + solid outlines, stopped at the concrete */
+  const bodyMesh=(V,color,op)=>{ const geo=new THREE.BufferGeometry();
+    geo.setAttribute("position",new THREE.Float32BufferAttribute(V,3));
+    groups.breakout.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color,transparent:true,opacity:op,side:THREE.DoubleSide,depthWrite:false}))); };
+  const bodyEdge=(pts,color)=>{ const g2=new THREE.BufferGeometry().setFromPoints(pts.map(w=>new THREE.Vector3(w[0],w[1],w[2])));
+    groups.breakout.add(new THREE.Line(g2,new THREE.LineBasicMaterial({color}))); };
+  /* GB-1: ONE group breakout body from the heads (actual h_ef, TR-H1): flat bottom
+     across the tension anchors, 1:1.5 sides from the outer anchors, stopped at the
+     pedestal faces. Same geometry the check uses. */
+  if(icT) (icT.hulls||[]).forEach(Hh=>{
+    const off=Hh.map(q=>({x:q.x+pxo,y:q.y+pyo}));
+    const ring=breakoutRing(off,1.5*icT.hef,{x0:-S.conc.Bx/2,x1:S.conc.Bx/2,y0:-S.conc.By/2,y1:S.conc.By/2},8);
+    const zH=icT.coneZ, zT=S.conc.H, V=[], Vb=[];
+    const Pw=(x,y,z)=>toW(x,y,z);
+    for(let j=0;j<ring.length-1;j++){
+      const a=ring[j], b=ring[j+1];
+      const a0=Pw(a.x0,a.y0,zH), b0=Pw(b.x0,b.y0,zH), a1=Pw(a.x,a.y,zH+a.dz), b1=Pw(b.x,b.y,zH+b.dz);
+      const a2=Pw(a.x,a.y,zT), b2=Pw(b.x,b.y,zT);
+      V.push(...a0,...a1,...b1, ...a0,...b1,...b0);
+      if(a.face||b.face) V.push(...a1,...a2,...b2, ...a1,...b2,...b1);
+    }
+    for(let i=1;i+1<off.length;i++) Vb.push(...Pw(off[0].x,off[0].y,zH),...Pw(off[i].x,off[i].y,zH),...Pw(off[i+1].x,off[i+1].y,zH));
+    bodyMesh(V,0xb71c1c,0.24);
+    if(Vb.length) bodyMesh(Vb,0xb71c1c,0.45);                   /* the flat bottom across the anchors */
+    if(off.length>=2) bodyEdge(off.concat([off[0]]).map(q=>Pw(q.x,q.y,zH)),0x8e0000);
+    bodyEdge(ring.map(q=>Pw(q.x,q.y,zH+q.dz)),0x8e0000);
+  });
+  /* shear: half-pyramid from the reference row (Fig. R17.7.2.1b; the back row for Case 2)
+     to the governing edge, 1.5·c_a1 deep and 1.5·c_a1 beyond the outer anchors of the row */
+  const sb3=icV? shearBodyGeom(icV) : null;
+  if(sb3){
+    const d=Math.min(1.5*sb3.ca1,C.H), w=1.5*sb3.ca1, zT=C.H;
+    const Vq=(u,t,z)=>{ const q=sb3.P2(u,t); return [q[0],q[1],z]; };
+    const R1=Vq(sb3.uRef,sb3.tMin,zT), R2=Vq(sb3.uRef,sb3.tMax,zT), F1=Vq(sb3.uE,sb3.tMin-w,zT), F2=Vq(sb3.uE,sb3.tMax+w,zT);
+    const F1b=Vq(sb3.uE,sb3.tMin-w,zT-d), F2b=Vq(sb3.uE,sb3.tMax+w,zT-d);
+    const dedupe=f=>f.filter((p,i)=>{ const q=f[(i+1)%f.length]; return Math.hypot(p[0]-q[0],p[1]-q[1],p[2]-q[2])>1e-9; });
+    const faces=clipSolid3([[R1,F1,F2,R2],[F1,F2,F2b,F1b],[R1,R2,F2b,F1b],[R1,F1b,F1],[R2,F2,F2b]].map(dedupe).filter(f=>f.length>=3),
+      [[0,-C.Bx/2,1],[0,C.Bx/2,-1],[1,-C.By/2,1],[1,C.By/2,-1],[2,0,1]]);
+    const V=[];
+    faces.forEach(f=>{ const w0=toW(...f[0]); for(let i=1;i+1<f.length;i++) V.push(...w0,...toW(...f[i]),...toW(...f[i+1]));
+      bodyEdge(f.concat([f[0]]).map(p=>toW(...p)),0xa04000); });
+    bodyMesh(V,0xd35400,0.22);
+  }
 
   /* ---- text sprite label helper ---- */
   /* Sprite text label.
@@ -9870,7 +10041,41 @@ function build3D(container){
      made the 3D look like a different coordinate system from the schematics.
      rot.x = 30° is the conventional isometric elevation angle. */
   let ang=0,drag=false,lx=0,ly=0,rot={x:Math.PI/6,y:Math.PI/4},dist=maxDim;
-  cam.lookAt(0,lookY,0);
+  /* GFX-A: orbit target. fit() aims at the centre of what is drawn (visible layers)
+     and stands back just far enough that it fills ~90% of the view at the current
+     orbit angle: a sample of the drawn vertices is projected, the target panned to
+     centre them and the distance scaled (perspective size ∝ 1/distance, iterated).
+     The old fixed framing left the model in the middle third of the canvas. */
+  const target=new THREE.Vector3(0,lookY,0);
+  const place=()=>{ cam.position.set(target.x+Math.sin(rot.y)*Math.cos(rot.x)*dist,
+                                     target.y+Math.sin(rot.x)*dist,
+                                     target.z+Math.cos(rot.y)*Math.cos(rot.x)*dist);
+                    cam.lookAt(target); };
+  function fit(){
+    scene.updateMatrixWorld(true);
+    const box=new THREE.Box3(), pts=[], v=new THREE.Vector3();
+    Object.values(groups).forEach(gr=>{ if(!gr.visible) return; box.expandByObject(gr);
+      gr.traverse(o=>{ if(o.isSprite){ pts.push(o.getWorldPosition(new THREE.Vector3())); return; }
+        const pa=o.geometry&&o.geometry.attributes&&o.geometry.attributes.position; if(!pa) return;
+        const st=Math.max(1,Math.floor(pa.count/64));
+        for(let i=0;i<pa.count;i+=st) pts.push(v.fromBufferAttribute(pa,i).clone().applyMatrix4(o.matrixWorld)); }); });
+    if(box.isEmpty()||!pts.length) return;
+    box.getCenter(target);
+    dist=2*box.getSize(new THREE.Vector3()).length();
+    const th=Math.tan(42*Math.PI/360);
+    for(let it=0;it<10;it++){
+      place(); cam.updateMatrixWorld(true);
+      let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+      pts.forEach(p=>{ const q=p.clone().project(cam); if(q.z>1) return; x0=Math.min(x0,q.x); x1=Math.max(x1,q.x); y0=Math.min(y0,q.y); y1=Math.max(y1,q.y); });
+      if(!(x1>x0)) break;
+      const hh=th*dist, ww=hh*cam.aspect;   /* pan to centre, then scale the distance to fill ~90% */
+      target.addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld,0),(x0+x1)/2*ww)
+            .addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld,1),(y0+y1)/2*hh);
+      dist*=Math.max((x1-x0)/2,(y1-y0)/2)/0.9;
+    }
+    place();
+  }
+  cam.lookAt(target);
   renderer.domElement.addEventListener("mousedown",e=>{drag=true;lx=e.clientX;ly=e.clientY;});
   window.addEventListener("mouseup",()=>drag=false);
   renderer.domElement.addEventListener("mousemove",e=>{ if(!drag)return; rot.y+=(e.clientX-lx)*0.01; rot.x+=(e.clientY-ly)*0.01; lx=e.clientX;ly=e.clientY; });
@@ -9881,11 +10086,10 @@ function build3D(container){
        it silently overwrote the framing computed above, making that code dead.
        Orbit about the SAME point we look at, so the connection stays centred at
        every orbit angle. */
-    cam.position.set(Math.sin(rot.y)*Math.cos(rot.x)*dist,
-                     Math.sin(rot.x)*dist + lookY,
-                     Math.cos(rot.y)*Math.cos(rot.x)*dist);
-    cam.lookAt(0,lookY,0); renderer.render(scene,cam); }
-  three3D={renderer,scene,cam,groups,materials:{concrete:concMat,grout:groutMat,plate:plateMat},raf:0};
+    place(); renderer.render(scene,cam); }
+  three3D={renderer,scene,cam,groups,materials:{concrete:concMat,grout:groutMat,plate:plateMat},raf:0,
+    fit:()=>{ rot.x=Math.PI/6; rot.y=Math.PI/4; fit(); }};
+  fit();
   loop();
 }
 
@@ -9893,12 +10097,22 @@ function buildVisualTab(pg){
   mkSection("vis3D","1. 3-D Model",body=>{
     if(!S._vis3) S._vis3={show:{concrete:true,grout:true,plate:true,anchors:true,rebar:true,loads:true,axes:true,dims:true},op:{concrete:0.45,grout:1,plate:1}};   /* G1: concrete see-through by default so the anchors show */
     if(S._vis3.show.dims===undefined) S._vis3.show.dims=true;   /* added after first release */
-    const filt=el("div"); filt.style.cssText="display:flex;gap:12px;flex-wrap:wrap;margin:4px 0;";
-    [["concrete","Concrete"],["grout","Grout"],["plate","Plate/Col"],["anchors","Anchors"],["rebar","Rebar"],["loads","Loads"],["dims","Dimensions"],["axes","Axes"]].forEach(([k,label])=>{
+    /* GFX-A: layer toggles. The original layers keep their saved switches in S._vis3.show;
+       the reinforcement layers (split out of the old single "Rebar" layer) are saved in
+       S.ui.layers3d. Missing = on. */
+    if(!S.ui.layers3d) S.ui.layers3d={tRebar:true,vRebar:true,ped:true,breakout:true};
+    const L3=S.ui.layers3d;
+    const layerOn=k=>(k in L3)? L3[k]!==false : S._vis3.show[k]!==false;
+    const filt=el("div"); filt.style.cssText="display:flex;gap:12px;flex-wrap:wrap;margin:4px 0;align-items:center;";
+    [["concrete","Concrete"],["grout","Grout"],["plate","Plate/column"],["anchors","Anchors"],["tRebar","Tension rebar"],["vRebar","Shear rebar"],["ped","Pedestal reinforcement"],["breakout","Breakout bodies"],["loads","Loads"],["dims","Dimensions"],["axes","Axes"]].forEach(([k,label])=>{
       const lab=el("label"); lab.style.cssText="display:flex;gap:3px;align-items:center;font-size:10pt;";
-      const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=S._vis3.show[k]!==false;
-      cb.addEventListener("change",()=>{ S._vis3.show[k]=cb.checked; if(three3D&&three3D.groups[k])three3D.groups[k].visible=cb.checked; autosave(); });
+      const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=layerOn(k); cb.dataset.layer=k;
+      cb.addEventListener("change",()=>{ if(k in L3) L3[k]=cb.checked; else S._vis3.show[k]=cb.checked; if(three3D&&three3D.groups[k])three3D.groups[k].visible=cb.checked; autosave(); });
       lab.appendChild(cb); lab.appendChild(document.createTextNode(label)); filt.appendChild(lab); });
+    const fitB=el("button",null,"Fit view"); fitB.title="Re-centre and zoom to the visible layers";
+    fitB.style.cssText="font-size:10pt;padding:1px 8px;";
+    fitB.addEventListener("click",e=>{ e.preventDefault(); if(three3D&&three3D.fit) three3D.fit(); });
+    filt.appendChild(fitB);
     body.appendChild(filt);
     const trans=el("div"); trans.style.cssText="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0;";
     [["concrete","Concrete opacity"],["grout","Grout opacity"],["plate","Plate opacity"]].forEach(([k,label])=>{
@@ -9908,11 +10122,13 @@ function buildVisualTab(pg){
       sl.addEventListener("input",()=>{ S._vis3.op[k]=parseFloat(sl.value); if(three3D&&three3D.materials[k]){three3D.materials[k].opacity=parseFloat(sl.value);three3D.materials[k].transparent=true;} autosave(); });
       wrap.appendChild(sl); trans.appendChild(wrap); });
     body.appendChild(trans);
-    body.appendChild(el("div","note","Drag to orbit · scroll to zoom. Red = axial P, blue/green = shears Vx/Vy, purple/amber = moment vectors Mx/My (governing combo "+(S.combos[governingComboIndex()]||{}).name+"). Lower concrete opacity to see embedded anchors. The x-y-z triad sits at the pedestal corner."));
-    const holder=el("div"); holder.style.cssText="border:1px solid var(--ink);background:#fff;min-height:520px;"; body.appendChild(holder);
+    body.appendChild(el("div","note","Drag to orbit · scroll to zoom · Fit view re-centres. Red = axial P, blue/green = shears Vx/Vy, purple/amber = moment vectors Mx/My (governing combo "+(S.combos[governingComboIndex()]||{}).name+"). Lower concrete opacity to see embedded anchors. The x-y-z triad sits at the pedestal corner."));
+    body.appendChild(el("div","note","Reinforcement, coloured as in the plans and the per-leg tables: green = counted, red = not counted (crosses but is not developed, or is outside 0.5·h_ef / 0.5·c_a1, too deep, or clashes), grey = never reaches the failure surface, does not fit, or a closed-tie leg across V (not counted); a sphere marks where a leg crosses the failure surface. Blue-grey = pedestal bars and ties that are not themselves the anchor reinforcement. Breakout bodies: red = tension group surface (flat across the tension anchors, 1:1.5 from the outer ones); orange = shear half-pyramid from the reference anchor row to the governing edge. Both stop at the concrete faces."));
+    const holder=el("div"); holder.style.cssText="border:1px solid var(--ink);background:#fff;min-height:640px;"; body.appendChild(holder);
     setTimeout(()=>{ build3D(holder);
-      if(three3D){ Object.keys(S._vis3.show).forEach(k=>{ if(three3D.groups[k])three3D.groups[k].visible=S._vis3.show[k]!==false; });
-        ["concrete","grout","plate"].forEach(k=>{ if(three3D.materials[k]){three3D.materials[k].opacity=S._vis3.op[k];three3D.materials[k].transparent=true;} }); } },80);
+      if(three3D){ Object.keys(three3D.groups).forEach(k=>{ three3D.groups[k].visible=layerOn(k); });
+        ["concrete","grout","plate"].forEach(k=>{ if(three3D.materials[k]){three3D.materials[k].opacity=S._vis3.op[k];three3D.materials[k].transparent=true;} });
+        if(three3D.fit) three3D.fit(); } },80);
   },pg);
 
   mkSection("visDCR","2. Utilization by Check",body=>{

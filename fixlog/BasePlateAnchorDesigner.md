@@ -2515,3 +2515,46 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and the export checks pass.
   - 0 page errors.
+
+## 2026-10-23 — GFX-A: 3-D view with every reinforcement layer and both breakout bodies; shear plan clipped to the concrete, reference row and c_a1 (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics items 1 (3-D) and 6 (shear plan), approved with the other graphics items; done as the first of four PRs (GFX-A … GFX-D).
+- **Saved data (§5, additive):** `S.ui.layers3d = {tRebar, vRebar, ped, breakout}`, default all `true`, added to `defaultState()`.
+  - `mergeState` fills missing keys: `out.ui.layers3d=Object.assign({},d.ui.layers3d,(st&&st.ui&&st.ui.layers3d)||{})`.
+  - Migration: a save without `ui.layers3d` whose old single 3-D "Rebar" layer was off (`_vis3.show.rebar===false`) keeps the tension legs and the breakout body off (`tRebar = breakout = false`); that layer held exactly those two things.
+  - The existing switches and opacities stay where they were, in `S._vis3` (concrete, grout, plate, anchors, loads, dimensions, axes). Nothing is renamed or removed; the old `rebar` key is left in old saves and ignored.
+- **`build3D()` — anchor text `const groups={concrete:new THREE.Group()`:**
+  - Before: `…anchors:new THREE.Group(),rebar:new THREE.Group(),loads:…`.
+  - After: `…anchors:new THREE.Group(),tRebar:new THREE.Group(),vRebar:new THREE.Group(),ped:new THREE.Group(),breakout:new THREE.Group(),loads:…`.
+  - Canvas height `H=520` → `H=640`.
+- **`build3D()` — the block `(function drawRebar3D(){ … })();` (anchor text `/* ---- TENSION ANCHOR REINFORCEMENT`) is replaced by the block `/* ---- REINFORCEMENT AND BREAKOUT BODIES (GFX-A, 2026-10-23)`.** Helpers `rod`, `path3`, `knot` at build3D scope. It draws:
+  - **Pedestal reinforcement (`ped`)** from `pedGeom()`: the bars from −footExt (or 0) to H − barTop, and each tie set as a closed loop at the tie centreline (±tieHx, ±tieHy) at depth z_k. Blue-grey (0x546e7a). Not drawn here when the bars ARE the tension reinforcement (`tRebarEff().isPed`) or the ties ARE the shear ties (`icV.isTie && icV.usePed`): those are drawn coloured in their own layer, not twice.
+  - **Tension rebar (`tRebar`)** from `tensionRebarIntercept(CC)`, as before: green counted, red crosses but not counted, grey never reaches the surface; a sphere at z_cross; top bend for two-leg pieces, bottom bend only for a closed tie. Change: pedestal bars (`pedbars`) are no longer shifted by the plate offset (they are pedestal-referenced; the DXF export already did this).
+  - **Shear rebar (`vRebar`)** from `shearRebarIntercept(CC)`:
+    - hairpins and bars: each leg from the leading row back by `availBehind` at its depth z; colour as the hairpin plan (green `L.eff`, red `L.fits` but not counted, grey does not fit); a hairpin's bend as a half circle around the rod toward the edge (green if both legs count, else 0x8d6e00); the hook stub at the back end when `hookEnd`. Plate offset applied.
+    - closed ties: per set k at z_k, the two legs parallel to V coloured by that set's verdict, the legs across V grey, a sphere at each crossing (`lead + xCross`). Pedestal frame (no offset).
+  - **Breakout bodies (`breakout`):**
+    - the GB-1 tension body (same geometry as before: `breakoutRing` from `ic.hulls`, flat bottom at `coneZ`), now opacity 0.24 (was 0.14), the flat bottom filled at 0.45, outlines solid dark red;
+    - NEW: the shear breakout half-pyramid (orange, 0xd35400, opacity 0.22) from the reference row (below) to the governing edge: on the top face a trapezoid opening 1.5·c_a1 beyond the outer anchors of the row, on the edge face a band 1.5·c_a1 deep (limited to H), the failure surface between them; clipped to the pedestal by `clipSolid3()`.
+- **`build3D()` — framing (anchor text `let ang=0,drag=false`):** new `target`, `place()` and `fit()`. `fit()` projects a sample of the drawn vertices of the visible layers, pans the target to centre them and scales the distance until they fill ~90 % of the view (iterated). Before: aim at the plate top, distance from a fixed reach estimate; the model filled about the middle third. `three3D.fit()` resets the orbit to the isometric default and fits.
+- **`buildVisualTab()`:** the layer toggles are Concrete, Grout, Plate/column, Anchors, Tension rebar, Shear rebar, Pedestal reinforcement, Breakout bodies, Loads, Dimensions, Axes (before: … Anchors, Rebar, Loads …), plus a "Fit view" button. A second note gives the colour key. The toggles of the four new layers read and write `S.ui.layers3d`; the others `S._vis3.show` as before.
+- **New helpers before `drawHairpinPlan`:**
+  - `shearBodyGeom(ic)`: the reference row of the governing shear breakout case, in the pedestal frame — the anchor row at c_a1 from the governing face (c_a1 from `shearRebarIntercept` → `comboCapacities().sbk`); if no row matches (c_a1 limited by §17.7.2.1.2), the row at the combination's critical-row set-back `vCaseOffset`. Returns u (toward the edge) and t (along it) of the row, its outer anchors, the face, and whether it is the back row.
+  - `clipSolid3(faces, planes)`: clips a convex solid (list of planar faces) by axis-aligned half-spaces and caps the cut.
+- **`drawHairpinPlan()` — shear plan:**
+  - Breakout trapezoid. Before (anchor text `const halfW=1.5*ic.ca1;`): rear corners at the LEADING row, front corners at `edgeN` moved in to `min(1.5·c_a1, c_a2)`, drawn in the plate frame (`XP`, `YP`). After: rear corners at the REFERENCE row (`shearBodyGeom`), front corners 1.5·c_a1 beyond the row's outer anchors at the face, the polygon clipped to the pedestal (the splayed side stops at the side face and runs along it), drawn in the pedestal frame (`X`, `Y`).
+  - The failure-plane line is drawn through the reference row (was: the leading row), clipped to the concrete.
+  - New: label "reference row: back row (Case 2)" / "front row" / "anchor row", and a c_a1 dimension from the reference row to the governing face, outside the side face. Where §17.7.2.1.2 limits c_a1 the label also gives the geometric row-to-edge distance.
+  - Closed ties: the front and back legs (across V) solid dark grey 2.6 (were light grey 2.2), named "front leg" / "back leg" outside the pedestal on a dotted leader; the "n of m tie legs effective" count moved under the title (it sat on the front leg and the shear arrow).
+  - Legend line: "shaded = breakout body, reference row → +x edge (1.5·c_a1 = … beyond its outer anchors), clipped to the concrete".
+  - The 0.5·c_a1 bands, the hairpin legs and the ≥ ℓ_d note are unchanged (leading row, as the check places them).
+- **Governing provision:** none changed. The drawn shear body follows ACI 318-19 §17.7.2.1 and Fig. R17.7.2.1b (half-pyramid 1.5·c_a1 from the critical row; Case 2 = back row); the tension body GB-1 (Fig. R17.5.2.1a).
+- **Check case (display):**
+  - Pedestal 24 × 24 × 58, h_ef 18, S.ped #6 3 × 3, #4 ties cover 2, 3 sets at 2 (2.25) / 3; tension `pedbars`, shear `closedtie`. Shear to +x, c_a1 = 18 from the back row x = −6 (Case 2) to the face x = 12: the plan shows the body from x = −6, 27 in beyond y = ±6, clipped at y = ±12, and "c_a1 = 18.00″". 3-D: tie set 3 legs green, sets 1–2 red (table: 2 of 6, set 3), legs across V grey; the 8 pedestal bars coloured as tension legs (0 of 8 counted; 5 cross, 3 grey), no blue-grey duplicates.
+  - Default pedestal 30 × 30 × 36, 4 × 2 anchors (plate 24 × 18), U-stirrups qty 2, hairpins: c_a1 = 12 from the back row x = 3 (Case 2) to x = 15; the trapezoid reaches the ±15 side faces and runs along them; hairpin legs (0 of 8 counted) red with mixed bends.
+  - Shear toward −y with a plate offset x = 3 (2 × 3 anchors, group hairpin): reference row y = 0, c_a1 = 15, body clipped at x = ±15 in the pedestal frame.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same` (cc, capacities, checks, validation and the report text); export checks pass.
+  - The three test projects above, origin/main vs this branch: `computeAll()`, every combination's capacities, `allChecks()`, `VALIDATION`, `tensionRebarIntercept` and `shearRebarIntercept` identical; report text identical.
+  - Migration and toggles checked headless: an old save with `_vis3.show.rebar=false` loads with tension rebar and breakout off; a partial `layers3d` is filled; a toggle writes `S.ui.layers3d` and survives a rebuild.
+  - Screenshots of every changed view, 0 page errors.
