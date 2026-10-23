@@ -2558,3 +2558,64 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - The three test projects above, origin/main vs this branch: `computeAll()`, every combination's capacities, `allChecks()`, `VALIDATION`, `tensionRebarIntercept` and `shearRebarIntercept` identical; report text identical.
   - Migration and toggles checked headless: an old save with `_vis3.show.rebar=false` loads with tension rebar and breakout off; a partial `layers3d` is filled; a toggle writes `S.ui.layers3d` and survives a rebuild.
   - Screenshots of every changed view, 0 page errors.
+
+## 2026-10-23 — GFX-B: both orthogonal sections with a section-cut selector; plan dimensions; leg-to-anchor distances (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics items 2 (sections) and 3 (dimensions), the second of four PRs.
+- **Saved data (§5, additive):** `S.ui.secCut = {A:"all", B:"all"}` in `defaultState()`. `A` is the tension Section A-A, `B` is B-B. Each value is `"all"` (projected), or the coordinate of an anchor row. A missing or stale value reads as `"all"` (`bpCutOf`), so no migration is needed.
+- **New helpers before `drawRebar`:**
+  - `bpCutRows(ax)`: the distinct anchor coordinates along one axis, in the plate frame, as the rebar views draw them.
+  - `bpNearestRow(v, rows)`.
+  - `bpCutOf(key, rows)`.
+- **`drawRebar(body, kind, opt)` (anchor text `function drawRebar(body,kind`), tension only.** `opt = {axis:"x"|"y", cut:null|row}`. A call without `opt` draws exactly the view as before: A-A, projected.
+  - **Axis:** `hc()` / `oc()` read the in-page and out-of-page coordinate. `spanPed` is `C.By` for B-B. The anchors are the intercept's tension anchors, `anchorRestraint` (before: `rows[].xs`, which are x only). The legs, z_cross ticks and bends are drawn at `hc()`. Before, they were drawn at `.x`.
+  - **Bends:** `bendIntoPage = isPair && (axY? orient==="x" : orient==="y")`. Before: `orient==="y"`.
+  - **Cut:** an object is in the cut when its nearest anchor row is the chosen row. Objects outside the cut are drawn first, at opacity 0.2.
+    - The breakout surface is the true profile along the cut line: `z = min(coneZ + breakoutDist(P, hulls)/1.5, H)`, sampled in 160 steps. This is the same function the check uses.
+    - With no cut, the GB-1 silhouette is drawn as before.
+  - **Overlap order:** where legs superimpose in a projection, counted legs are drawn on top, then crossing legs, then the rest.
+  - **Pedestal reinforcement:** the pedestal ties, and the pedestal bars when they are not the tension legs, are drawn light grey (#8a9aa6).
+  - **Title:** a section title, e.g. "SECTION A-A — along x, looking +y — cut at the anchor row y = −6.00″ (others dimmed)". The axis triad is `elevX` for B-B.
+  - **Spacing dimension:** it now uses the distinct leg positions in the cut and is labelled with the distance drawn. Before, it took the middle two legs in list order, which could be the same position in two rows, and it was always labelled with the input spacing.
+- **Piece pairing (display fix):** the two legs of a 2-leg piece are now its two consecutive entries in the intercept's leg list. Piece numbers restart in every row, so keying by the number joined the pieces of different rows. The effect was:
+  - in the elevation, one wide U across the rows;
+  - in the plan, no stirrup outline;
+  - in the 3-D view, no bends.
+
+  Changed in `drawRebar`, `drawRebarPlan` (anchor text `(ic.bars||[]).forEach((b,i)=>`) and `build3D` (anchor text `icT.bars.forEach((b,i)=>`).
+- **`buildTRebarTab` → card "3. Rebar Layout":** two selectors are added, "Section A-A (along x) cut at" and "Section B-B (along y) cut at". Each offers "all anchors and legs, projected" or an anchor row. The card then draws A-A and B-B. The warning box still uses A-A's fit result, unchanged.
+- **Shear:**
+  - New `drawShearFace(body)`, Section B-B. It shows the governing edge face from outside, looking along V. It draws:
+    - the projected area A_Vc, with width × depth = A_Vc labelled from `comboCapacities().sbk`;
+    - the anchors, projected;
+    - every leg in section at its t and depth, coloured by its verdict;
+    - for ties, the front leg as a grey bar, the tie sets and the 0.5·c_a1 line;
+    - for hairpins, the 0.5·c_a1 bands.
+
+    It is added to the Shear Rebar tab under "Section B-B — the governing edge face".
+  - The existing shear section gets the title "SECTION A-A — along V, toward the +x edge …".
+  - The shear sections are projected and have no cut selector. B-B separates the legs that superimpose in A-A.
+- **Plan dimensions, new `bpPlanDims(s, o)` before `drawRebarPlan`:**
+  - A chain along x above the pedestal (face → anchor columns → face) and along y to its left. A label that would run into its neighbour is staggered one tier out.
+  - The plate B and N on a second tier.
+  - In the tension plan, the clear-cover envelope (dashed) and a "clear cover" dimension.
+  - The edge-distance labels use the values from `anchorGeom()` (ca_x_neg …, with the plate offset and a c_a override included; "(override)" is added when it is set). Spacings are the distances drawn.
+  - Tension plan labels: "c_a". Shear plan labels: "c_a2" to the faces along the governing edge, "c" to the others; c_a1 stays the GFX-A dimension from the reference row.
+  - `drawRebarPlan`: H 460 → 500, with the pedestal lowered. The chosen section cuts are marked A–A / B–B.
+  - `drawHairpinPlan`: H 470 → 520, with the pedestal lowered. Anchor circles are reserved in the label placer. The reference-row label for an edge along y now sits inside, clear of the anchors. The tie front/back-leg labels moved out beyond the dimension tiers.
+  - `makeTagPlacer()` gains `.reserve(x1, y1, x2, y2)`.
+- **Click panels:**
+  - **Tension leg:** new row "Distance to that anchor: Δx, Δy, r = √(Δx² + Δy²), and d_s to the flat bottom". The anchor is now taken from the intercept's own list of tension anchors (`anchorRestraint[nearIdx]`) and numbered as in the anchor key. Before, `nearIdx` indexed the governing combination's anchor list, which could name another anchor when the maximum-tension combination is a different one.
+  - **Shear leg:** new row "Distance to its anchor": the anchor number and coordinates, |t − t_a|, and for ties the crossing in front of the anchor and the depth.
+- **Governing provision:** none changed. The sections follow Fig. R17.5.2.1a (GB-1 surface) and §17.7.2.1.3 / Fig. R17.7.2.1b (A_Vc).
+- **Check case (display):**
+  - 4 × 2 anchors (x = −9, −3, 3, 9; y = ±6), pedestal 30 × 30 × 36, U-stirrups, qty 2, orient y.
+    - A-A cut at y = −6: the only tension anchor in that row, x = −9, is drawn full and x = −3, 3 are dimmed. The legs at x = −12 and −6 are full. The profile is a V from x = −9 at the head plane (z = 24), reaching the top at x = 9 (1.5 · 12 = 18 from the anchor) and the −x face at z = 26.
+    - B-B projected: four separate U's (before: one U from y = −8 to 8). The spacing dimension reads 8.00″ (legs at ±4).
+    - Plan chain: c_a 6.00, s 6.00 ×3, c_a 6.00 along x; c_a 9.00, s 12.00, c_a 9.00 along y; plate 24 × 18.
+  - The leg 1A panel reads: anchor 1 (−9, −6), Δx = −3.00, Δy = −2.00, r = 3.61″ (table r = 3.61). Tie set 1 leg A: anchor 1 (−6, −6), |t − t_a| = 3.75″, crossing 2.50″ in front at depth 2.50″.
+  - Pedestal case (24 × 24 × 58, closed ties): the B-B face shows A_Vc = 24.00 × 27.00 = 648.0 in² (sbk), set 3 green, sets 1–2 red.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included.
+  - On the three graphics test projects, origin/main vs this branch, every result is identical, including both intercepts and the report text.
+  - The panels were clicked headless. Screenshots were checked. 0 page errors.
