@@ -9375,7 +9375,12 @@ function computeAll(inp){
     // modular ratio
     const EcDeck=Ec(deck.fc, +deck0.wc);
     const nRaw=Es/EcDeck;
-    const n=Math.max(6, Math.round(nRaw));               // rounded per 6.10.1.1.1b (min 6)
+    /* S2-1 (Steel Bridge Design stage 2, 2026-10-22): n = E_s/E_c, Eq. 6.10.1.1.1b-1 (AASHTO LRFD 10th Ed.), not rounded and no minimum
+       (was max(6, round(E_s/E_c))). With a GirderDetail hand-off whose f'c, w_c and E_s are the inputs used here, GirderDetail's own n
+       (girderDetail.materials.n, its modular-ratio rule) is used, so both parts work with one n; otherwise n = E_s/E_c of these inputs. */
+    const gdMat=extFromGD(inp.external)&&inp.external.girderDetail.materials||null;
+    const nGD=gdMat&&+gdMat.n>0&&+gdMat.fc===deck.fc&&+gdMat.wc===+deck0.wc&&(!(+gdMat.Es>0)||+gdMat.Es===Es)? +gdMat.n : null;
+    const n=nGD||nRaw;
     /* ---------- flange segments (plate transitions along the span) ---------- */
     const Lft0=geom.L, Lb_in=geom.Lb*12;
     const lambdaPw=3.76*sqrt(Es/Fyc);
@@ -10140,7 +10145,7 @@ function computeAll(inp){
     if(useExt&&fatImp) warnings.fat.push('Fatigue from the imported fatigue envelopes ('+((inp.external&&inp.external.producer)||'import')+': fatigue truck, IM and single-lane fatigue distribution factors included): bottom-flange stress range = (M_FAT+ \u2212 M_FAT\u2212)/S_b on the short-term composite section for both signs (6.6.1.2.1; requires shear connectors throughout and the 6.10.1.7 deck reinforcement)'+(fatImpV?', web special fatigue and stud fatigue pitch from the imported fatigue shears':'; no fatigue shears imported, so the web special fatigue and stud pitch still use the fatigue truck on a simple span of L = '+fmt(Lft,1)+' ft')+'. The top flange and its attachments and the deck reinforcement at interior piers are not checked here.');
     else if(useExt) warnings.fat.push('Imported demands without fatigue envelopes: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
 
-    return {ok:true, sec, matR, deck, deckIn:deck0, lf:{...OWN,...LFc,plOn}, geom, beff, n, nRaw, EcDeck,
+    return {ok:true, sec, matR, deck, deckIn:deck0, lf:{...OWN,...LFc,plOn}, geom, beff, n, nRaw, nGD, EcGD:nGD&&+gdMat.Ec>0?+gdMat.Ec:null, EcDeck,
       bare, cN, c3N, pl, compact, compactWeb, compactMat, compactDtw, lambdaPw,
       Rh, Rb, ductOK, Iyc, Iyt, IycIyt, My_bareTop, My_bareBot,
       loads:Ld, hl:Ld.hl, df:Ld.df, dfm:Ld.dfm, dfv:Ld.dfv, MLL:Ld.MLL, VLL:Ld.VLL,
@@ -10845,8 +10850,8 @@ function spRows(R,g){
   const row=(lab,use,p,St,Sx)=>({lab,use,c:[fmt(p.A,1),fmt(p.ybar,2),fmt(p.I,0),fmt(p.Sb,0),fmt(St,0),Sx==null?'—':fmt(Sx,0)]});
   return [
     row('Bare steel','DC1 (noncomposite)',g.bare,g.bare.StSteel,null),
-    row('Long-term composite, 3n = '+(3*n),'DC2 + DW',g.c3N,g.c3N.StSteel,g.c3N.StDeckTr),
-    row('Short-term composite, n = '+n,'LL + IM',g.cN,g.cN.StSteel,g.cN.StDeckTr),
+    row('Long-term composite, 3n = '+fmt(3*n,3),'DC2 + DW',g.c3N,g.c3N.StSteel,g.c3N.StDeckTr),
+    row('Short-term composite, n = '+fmt(n,3),'LL + IM',g.cN,g.cN.StSteel,g.cN.StDeckTr),
     row('Cracked: steel + rebar (6.10.1.1.1c)','−M (DC2, DW, −LL) · '+(spAs(g)>0?'A_s = '+fmt(spAs(g),2)+' in² @ y = '+fmt(cr.yr,2)+' in':'no rebar included'),
       cr,cr.St,spAs(g)>0?cr.Srb:null)];
 }
@@ -10903,7 +10908,7 @@ function PropsAtX({R,inp}){
         ['Segment',(si+1)+' of '+Rx.segP.length+' · x = '+fmt(g.x0,1)+'–'+fmt(g.x1,1)+' ft'+(Rx.segP.length>1&&Math.abs(x-g.x1)<1e-9&&si<Rx.segP.length-1?' (at the splice: left segment, as the checks)':'')],
         ['Plates',spPlates(g)+' · web '+fmt(g.dims.D,2)+'×'+fmt(g.dims.tw,4)+' in'],
         ['Effective flange width b_eff',fmt(Rx.beff,1)+' in (constant along the span)'],
-        ['Modular ratio',(Rx.deck.deckOn?'n = '+Rx.n+' (E_s/E_c = '+fmt(Rx.nRaw,2)+'), 3n = '+(3*Rx.n):'— (deck not composite)')],
+        ['Modular ratio',(Rx.deck.deckOn?'n = '+fmt(Rx.n,3)+(Rx.nGD?' (GirderDetail\u2019s n; E_s/E_c here = '+fmt(Rx.nRaw,3)+')':' (E_s/E_c, not rounded)')+', 3n = '+fmt(3*Rx.n,3):'— (deck not composite)')],
         ['Plastic moment',g.oos? OOS_TXT+' (plastic neutral axis below the web, Table D6.1-1 / D6.3.2 do not cover it)' : fmt(g.pl.Mp/12,0)+' k-ft · D_p = '+fmt(g.pl.Dp,2)+' in · '+(g.compact?'compact':'noncompact')]]
         .map((r,i)=><React.Fragment key={i}><span className="k">{r[0]}</span><span className="dots"></span><span className="v">{r[1]}</span></React.Fragment>)}
     </div>
@@ -10935,19 +10940,20 @@ function secDerivs(R,si0,right){
         ['t_s','Structural deck thickness',deck.ts,'in'],["f'_c",'Deck concrete strength',deck.fc,'ksi'],
         ['E_s','Steel modulus',matR.Es,'ksi'],['E_c','Deck concrete modulus',EcDeck,'ksi'],
         ['b_eff','Effective deck width',beff,'in'],
-        ['n','Modular ratio E_s/E_c (rounded, min 6)',n,'—'],
+        ['n','Modular ratio E_s/E_c (Eq. 6.10.1.1.1b-1, not rounded)'+(R.nGD?'; GirderDetail\u2019s n':''),fmt(n,3),'—'],
       ]}/>
       <Step d="Modular ratio" r="6.10.1.1.1b">
-        <ML s={Tx`n=\frac{E_s}{E_c}=\frac{${nx(matR.Es,0)}}{${nx(EcDeck,0)}}=${nx(nRaw,2)}\;\rightarrow\;${n}\;(\text{rounded, }\ge 6)`}/>
+        <ML s={Tx`n=\frac{E_s}{E_c}=\frac{${nx(matR.Es,0)}}{${nx(EcDeck,1)}}=${nx(nRaw,3)}\;(\text{not rounded})`}/>
+        {R.nGD?<div className="mnote">n used = <b>{fmt(n,3)}</b>: GirderDetail’s modular ratio, sent with the hand-off (girderDetail.materials.n, from the same f′c, w_c and E_s; E_c = {fmt(R.EcGD,1)} ksi there), so ST-Girder and the GirderDetail modules use one n.</div>:null}
       </Step>
       <Step d="Transformed deck & section properties" r="transformed-area method">
-        <ML s={Tx`b_{tr}=\frac{b_{eff}}{n}=\frac{${nx(beff,1)}}{${n}}=${nx(beff/n,1)}\;\text{in}\qquad A_{deck,tr}=\frac{b_{eff}\,t_s}{n}=${nx(beff*deck.ts/n,1)}\;\text{in}^2`}/>
+        <ML s={Tx`b_{tr}=\frac{b_{eff}}{n}=\frac{${nx(beff,1)}}{${nx(n,3)}}=${nx(beff/n,1)}\;\text{in}\qquad A_{deck,tr}=\frac{b_{eff}\,t_s}{n}=${nx(beff*deck.ts/n,1)}\;\text{in}^2`}/>
         <ML s={Tx`\bar y=${nx(cN.ybar,2)}\;\text{in (from bottom)}\qquad I=${nx(cN.I,0)}\;\text{in}^4\qquad D_c=${nx(cN.Dc,1)}\;\text{in (web in comp.)}`}/>
         <ML s={Tx`S_{bot}=\frac{I}{\bar y}=${nx(cN.Sb,0)}\quad S_{top,st}=\frac{I}{h-\bar y}=${nx(cN.StSteel,0)}\;\text{in}^3`}/>
         <div className="mnote">The long-term (3n) section uses 3n in place of n to account for concrete creep under sustained SIDL; DC1 acts on the bare steel section before the deck cures.</div>
       </Step>
       <Step d="Long-term transformed section (3n)" r="transformed-area method">
-        <ML s={Tx`b_{tr}=\frac{b_{eff}}{3n}=\frac{${nx(beff,1)}}{${3*n}}=${nx(beff/(3*n),1)}\;\text{in}\qquad A_{deck,tr}=\frac{b_{eff}\,t_s}{3n}=${nx(beff*deck.ts/(3*n),1)}\;\text{in}^2`}/>
+        <ML s={Tx`b_{tr}=\frac{b_{eff}}{3n}=\frac{${nx(beff,1)}}{${nx(3*n,3)}}=${nx(beff/(3*n),1)}\;\text{in}\qquad A_{deck,tr}=\frac{b_{eff}\,t_s}{3n}=${nx(beff*deck.ts/(3*n),1)}\;\text{in}^2`}/>
         <ML s={Tx`\bar y=${nx(c3N.ybar,2)}\;\text{in}\qquad I=${nx(c3N.I,0)}\;\text{in}^4\qquad S_{bot}=${nx(c3N.Sb,0)}\quad S_{top,st}=${nx(c3N.StSteel,0)}\;\text{in}^3`}/>
       </Step>
       <Step d="Cracked section (steel + longitudinal deck reinforcement, concrete neglected)" r="parallel-axis theorem · AASHTO LRFD 6.10.1.1.1c">
@@ -11109,12 +11115,12 @@ function SectionTab({R,inp,go}){
       <Tbl head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr']}
         rows={[
           propRow('Bare steel (noncomposite)',bare),
-          propRow(`Short-term composite (n=${n})`,cN, cN.StDeckTr?fmt(cN.StDeckTr,0):'—'),
-          propRow(`Long-term composite (3n=${3*n})`,c3N, c3N.StDeckTr?fmt(c3N.StDeckTr,0):'—'),
+          propRow(`Short-term composite (n=${fmt(n,3)})`,cN, cN.StDeckTr?fmt(cN.StDeckTr,0):'—'),
+          propRow(`Long-term composite (3n=${fmt(3*n,3)})`,c3N, c3N.StDeckTr?fmt(c3N.StDeckTr,0):'—'),
         ]}/>
       <div className="hint">Bare-steel props resist noncomposite dead load (DC1: self-weight + wet deck).
         Long-term composite (3n) carries permanent SIDL (DC2 + DW); short-term composite (n) carries live load.
-        b_eff = <b>{fmt(beff,1)} in</b>. n = Es/Ec = {fmt(nRaw,2)} → <b>{n}</b> (rounded, 6.10.1.1.1b); Ec = {fmt(EcDeck,0)} ksi.
+        b_eff = <b>{fmt(beff,1)} in</b>. n = Es/Ec = {fmt(nRaw,3)}{R.nGD?<span> (n used = <b>{fmt(n,3)}</b>, GirderDetail’s; 6.10.1.1.1b)</span>:<span> (6.10.1.1.1b, not rounded)</span>}; Ec = {fmt(EcDeck,0)} ksi.
         These are the midspan segment's properties (also the Mp, classification and ductility cards above); every check uses the segment at its own station: see the table below.</div>
     </Card>
 
@@ -12413,7 +12419,7 @@ function crModel(R,inp,o){
       ['Tensile strength F_u',fmt(+mat.Fu,1),'ksi'+gm('mat.Fu')],['Steel modulus E_s',fmt(R.matR.Es,0),'ksi'+gm('mat.Es')],['Hybrid girder input',crYes(mat.hybrid),gm('mat.hybrid')],['Stiffener yield F_ys',fmt(R.bearing.Fys,1),'ksi'+gm('stiff.Fys')]]}/>);
     sub(s,'Deck and composite action','6.10.1.1 · 4.6.2.6',<CrKV rows={[['Composite deck',crYes(R.deck.deckOn),gm('deck.deckOn')],["Concrete f'_c",fmt(R.deck.fc,2),'ksi'+gm('deck.fc')],['Unit weight w_c',fmt(+dk.wc,3),'kcf'+gm('deck.wc')],
       ['Structural slab t_s',fmt(+dk.ts,2),'in'+gm('deck.ts')],...(dk.tsSeparate?[['Slab thickness for dead load',fmt(+dk.tsDL,2),'in'+gm('deck.tsDL')]]:[]),['Haunch',fmt(+dk.haunch,2),'in'+gm('deck.haunch')],
-      ['Effective width b_eff',fmt(R.beff,2),'in '+(dk.beffAuto?'(tributary width)':'(entered)')+gm('deck.beff')],['E_c (5.4.2.4)',fmt(R.EcDeck,0),'ksi'],['Modular ratio n (rounded, ≥ 6)',fmt(R.n,0)],
+      ['Effective width b_eff',fmt(R.beff,2),'in '+(dk.beffAuto?'(tributary width)':'(entered)')+gm('deck.beff')],['E_c (5.4.2.4)',fmt(R.EcDeck,0),'ksi'],['Modular ratio n = E_s/E_c (6.10.1.1.1b, not rounded'+(R.nGD?'; GirderDetail\u2019s n':'')+')',fmt(R.n,3)],
       ['Overhang (girder CL to deck edge)',fmt(+dk.oh,2),'ft'+gm('deck.oh')],['Longitudinal deck rebar A_s (−M section)',fmt(+inp.negM.As,2),'in²'+gm('negM.As')],['Rebar depth from top of slab',fmt(+inp.negM.dTop,2),'in'+gm('negM.dTop')],
       ...(R.deckD?[['Deck design: f_y / top bar / spacing',fmt(+dk.fyd,0)+' ksi / '+fmt(+dk.barTop,2)+' in² / '+fmt(+dk.sTop,2)+' in'],['Bottom bar / spacing',fmt(+dk.barBot,2)+' in² / '+fmt(+dk.sBot,2)+' in'],
         ['Cover top / bottom',fmt(+dk.coverT,2)+' / '+fmt(+dk.coverB,2),'in'],['Future wearing surface',fmt(+dk.wsFut,3),'ksf'+gm('deck.wsFut')],['Barrier base width / weight',fmt(+dk.bBar,1)+' in / '+fmt(+dk.wBar,3)+' klf',gm('deck.bBar','deck.wBar')]]:[])]}/>);
@@ -12498,9 +12504,9 @@ function crModel(R,inp,o){
     const mi=spMidIdx(R), gm=R.segP[mi], tags=spGovTags(R), ngs=R.hasNeg&&R.neg? (R.neg.negBGov.si||0) : null;
     sub(s,'Elastic section properties at midspan (segment '+(mi+1)+', x = '+fmt(gm.x0,1)+'–'+fmt(gm.x1,1)+' ft)','bare · 3n · n · cracked (6.10.1.1.1c)',<React.Fragment>
       <CrT wide head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr (in³)']}
-        rows={[pr('Bare steel (noncomposite)',R.bare),pr('Long-term composite (3n = '+(3*R.n)+')',R.c3N,R.c3N.StDeckTr?fmt(R.c3N.StDeckTr,0):'—'),pr('Short-term composite (n = '+R.n+')',R.cN,R.cN.StDeckTr?fmt(R.cN.StDeckTr,0):'—')]}/>
+        rows={[pr('Bare steel (noncomposite)',R.bare),pr('Long-term composite (3n = '+fmt(3*R.n,3)+')',R.c3N,R.c3N.StDeckTr?fmt(R.c3N.StDeckTr,0):'—'),pr('Short-term composite (n = '+fmt(R.n,3)+')',R.cN,R.cN.StDeckTr?fmt(R.cN.StDeckTr,0):'—')]}/>
       {R.hasNeg&&R.neg&&<CrKV rows={[['Cracked section (steel + deck rebar, governing −M segment '+(ngs+1)+(R.neg.negBGov.r>0?', x = '+fmt(R.neg.negBGov.x,1)+' ft':'')+'): I',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],['S bot / S top steel',fmt(R.neg.cr.Sb,0)+' / '+fmt(R.neg.cr.St,0),'in³'],['D_c web in compression (−M)',fmt(R.neg.cr.DcNeg,1),'in'],['Rebar A_s / 1% minimum (6.10.1.7)',fmt(R.neg.AsProv,2)+' / '+fmt(R.neg.AsMin1pct,2),'in²']]}/>}
-      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section (6.10.1.1.1c). b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,2)} → {R.n} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi. These are the midspan segment's properties; each check uses the segment at its own station (next table).</p>
+      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section (6.10.1.1.1c). b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,3)}{R.nGD?' (n used = '+fmt(R.n,3)+', GirderDetail\u2019s)':' (not rounded)'} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi. These are the midspan segment's properties; each check uses the segment at its own station (next table).</p>
     </React.Fragment>);
     sub(s,'Section properties by flange segment','bare · 3n · n · cracked (6.10.1.1.1c)',<React.Fragment>
       <table className="cr-tbl cr-wide cr-sp"><thead><tr><th>Segment</th><th>Section</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}<th>M_p (k-ft)</th><th>D_p (in)</th></tr></thead>

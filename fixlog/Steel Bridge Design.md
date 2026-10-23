@@ -21246,3 +21246,47 @@ DLs →" (the host switches to the LLDF and DLs module). Full `--tool st --paylo
 
 **Open items:** `tests/baselines/st_interior.json` is not re-recorded here (its `st.tab.Report` / `st.report.all` were already stale since SBD6; now
 `st.tab.Fatigue` too, display only). It is re-recorded at the next full st-span run (S2-6, which changes results).
+
+## 2026-10-22 — PR: claude/sbd-s2-1-nexact (S2-1: Steel Bridge Design stage 2, item 1: ST-Girder's modular ratio n = E_s/E_c exactly, as GirderDetail; engineer decision 2026-10-22; PR link added after merge)
+
+Stage 2 of Steel Bridge Design makes ST-Girder's checks (the Design & Rating view, `st-src`) match GirderDetail's (engineer decision 2026-10-22: in every
+item GirderDetail's method, AASHTO LRFD 10th Ed., becomes the method). This entry is item 1. No saved key or format changes; the hand-off is read as before
+(`girderDetail.materials.n` has been in every GirderDetail payload since GDX).
+
+### S2-1. Modular ratio n   [CALCULATION CHANGE — every composite section property; mostly less than ±1 % on results]
+- **Where:** `st-src`, `computeAll`, anchor `const nRaw=Es/EcDeck;` (about line 9355). Return object of `computeAll`, anchor `geom, beff, n, nRaw,`.
+- **Before:**
+  ```js
+  const n=Math.max(6, Math.round(nRaw));               // rounded per 6.10.1.1.1b (min 6)
+  ```
+- **After:**
+  ```js
+  const gdMat=extFromGD(inp.external)&&inp.external.girderDetail.materials||null;
+  const nGD=gdMat&&+gdMat.n>0&&+gdMat.fc===deck.fc&&+gdMat.wc===+deck0.wc&&(!(+gdMat.Es>0)||+gdMat.Es===Es)? +gdMat.n : null;
+  const n=nGD||nRaw;
+  ```
+  and the return object gains `nGD` and `EcGD` (GirderDetail's n and E_c when used, else null).
+- **What it does:** n = E_s/E_c, not rounded, no minimum. With a GirderDetail hand-off whose f′c, w_c and E_s are the inputs ST-Girder uses (the values
+  the hand-off wrote), ST-Girder uses GirderDetail's own n (`girderDetail.materials.n`, the n of its modular-ratio rule; 'exact' by default, sent rounded to
+  4 decimals), so both parts work with one n. Otherwise (no hand-off, or f′c, w_c or E_s changed in ST-Girder) n = E_s/E_c of ST-Girder's inputs.
+- **Problem:** ST-Girder rounded n to an integer with a minimum of 6, a carry-over from the n table of earlier editions. GirderDetail uses n = E_s/E_c.
+  Results move by less than about 1 % either way (n 6.315 instead of 6 makes the short-term section less stiff: S_b and I_n down, Q of the deck down).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.1.1b, Eq. 6.10.1.1.1b-1 (n = E/E_c); E_c per Art. 5.4.2.4, Eq. 5.4.2.4-1.
+- **Displays (§6):** the n derivation (Section Props, "Derivation — transformed sections", and the report) shows n = E_s/E_c = 29,000/4,592.2 = 6.315
+  (not rounded) and, with the hand-off, "n used = 6.315: GirderDetail's modular ratio … E_c = 4,592.2 ksi there". Every "n = 6", "3n = 18",
+  "(rounded, ≥ 6)" / "(rounded, min 6)" label is now n and 3n to 3 decimals (Section Props tables and note, the x picker, the report's Deck and
+  composite action table and its section-property tables).
+- **Check case (hand):** f′c = 5 ksi, w_c = 0.150 kcf, K1 = 1: E_c = 120,000(0.150²)(5^0.33) = 2,700 × 1.70083 = 4,592.2 ksi; n = 29,000/4,592.2 =
+  6.315. Before: max(6, round(6.315)) = 6. After: 6.315 (payload `gd_builtin28_AASHTO_G1`: `materials.n` = 6.315, f′c 5, w_c 0.15).
+  Deck transformed width (b_eff = 96 in, t_s = 8 in): before 96/6 = 16.00 in, after 96/6.315 = 15.20 in.
+  Stud fatigue pitch at the governing station, builtin28 AASHTO G1 (the tool's numbers): V_fat = 43.223 kip, Z_r = 2.5926 kip, n_row = 4, pitch 15 in.
+  Before: Q = (96·8/6)(13.186) = 1,687.8 in³, I = 105,097 in⁴, V_sr = 43.223(1,687.8)/105,097 = 0.6942 kip/in, p_req = 4(2.5926)/0.6942 = 14.94 in,
+  ratio 15/14.94 = 1.004 (fail). After: Q = (96·8/6.315)(13.640) = 1,658.9 in³, I = 103,914 in⁴, V_sr = 0.6900 kip/in, p_req = 15.03 in, ratio 0.998 (pass).
+- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (origin/main vs this branch, 109 cases) and
+  `tests/st-span.mjs` (all 200 interior spans): check ratios move −0.67 % to +1.17 % (flexure +M, LL deflection, fatigue, stud fatigue pitch), flexure RF
+  −0.40 % to +0.26 %; 4 pass/fail flips, all stud fatigue pitch 1.004 → 0.998 (builtin28 AASHTO and CTDOT, G1 and G5; span 1 and span 3); negative flexure,
+  shear and constructibility unchanged. `tests/sbd-verify.mjs`, `tests/a610-prop.mjs` pass. GirderDetail's own results (`--tool gd`) do not use `st-src`.
+- **Baselines:** `tests/baselines/st.json` (all 109 cases) and `tests/baselines/st_interior.json` (all 200 cases, every section) re-recorded from those
+  runs. The latter also closes the SBD6 / S2-5 open item (S2-0): it had been recorded on stgirder.html, so its Report and Fatigue tab sections were stale.
+- **Other copies:** none (stgirder.html was removed at the cut-over; GirderDetail's `modRatio` already does this).
+- **Open items:** none for this item. The stud checks themselves are stage 2 item 9 (separate PR).
