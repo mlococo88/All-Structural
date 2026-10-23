@@ -8728,11 +8728,15 @@ function drawHairpinPlan(body, cGov){
       const dts=[X(ot[0])-X(o0[0]),Y(ot[1])-Y(o0[1])], dus=[X(ou[0])-X(o0[0]),Y(ou[1])-Y(o0[1])];
       const nrm=v=>{ const l=Math.hypot(v[0],v[1])||1; return [v[0]/l,v[1]/l]; };
       const vt=nrm(dts), vu=nrm(dus);
-      /* reference-row label, outside the pedestal at the −t end */
+      /* reference-row label: a vertical row line is labelled below/above the pedestal at
+         its −t end; a horizontal one just above the line, inside, from its −t end */
       const rl=sb.P2(sb.uRef,-sb.tE);
-      const rlx=X(rl[0])-vt[0]*14, rly=Y(rl[1])-vt[1]*14+3;
       const rowTxt=(sb.nRows>1? (sb.back? "reference row: back row (Case 2)" : "reference row: front row") : "anchor row");
-      vTag(s,rlx,rly,rowTxt,"lblTxt",Math.abs(vt[0])>0.5?(vt[0]>0?"end":"start"):"middle",9,"#b71c1c");
+      if(Math.abs(vt[0])>0.5){   /* horizontal row line: two short lines outside the side face */
+        const two=rowTxt.split(": "), ax=X(rl[0])-vt[0]*6, an=vt[0]>0?"end":"start";
+        vTag(s,ax,Y(rl[1])-2,two[0],"lblTxt",an,9,"#b71c1c");
+        if(two[1]) vTag(s,ax,Y(rl[1])+9,two[1],"lblTxt",an,9,"#b71c1c");
+      } else vTag(s,X(rl[0]),Y(rl[1])-vt[1]*14+3,rowTxt,"lblTxt","middle",9,"#b71c1c");
       /* c_a1 dimension, reference row → governing face, outside the +t side face */
       const dOff=16, e0=sb.P2(sb.uRef,sb.tE), e1=sb.P2(sb.uE,sb.tE);
       const d0=[X(e0[0])+vt[0]*dOff, Y(e0[1])+vt[1]*dOff], d1=[X(e1[0])+vt[0]*dOff, Y(e1[1])+vt[1]*dOff];
@@ -8786,14 +8790,20 @@ function drawHairpinPlan(body, cGov){
         line(s,XP(c[0])-5*ty,YP(c[1])-5*tx,XP(c[0])+5*ty,YP(c[1])+5*tx,"#b71c1c",1.6); }
     });
     /* GFX-A: the front and back legs (across V, never counted) solid dark grey and named */
-    [[uF,"front leg"],[uB,"back leg"]].forEach(([u,nm])=>{ const a=P2(u,-tL), b=P2(u,tL);
+    /* labels outside the pedestal face, on a dotted leader (screen direction of +u = toward the edge) */
+    const o0=P2(0,0), o1=P2(1,0), vuL=Math.hypot(XP(o1[0])-XP(o0[0]),YP(o1[1])-YP(o0[1]))||1;
+    const vu=[(XP(o1[0])-XP(o0[0]))/vuL,(YP(o1[1])-YP(o0[1]))/vuL];
+    const sideAnchor=sg=>Math.abs(vu[0])>0.5? ((sg*vu[0]>0)?"start":"end") : "middle";
+    [[uF,"front leg",1],[uB,"back leg",-1]].forEach(([u,nm,sg])=>{ const a=P2(u,-tL), b=P2(u,tL);
       line(s,XP(a[0]),YP(a[1]),XP(b[0]),YP(b[1]),"#616161",2.6);
-      const m=P2(u-Math.sign(u)*0.6,-0.6*tL), inX=(nx!==0);
-      vTag(s,XP(m[0]),YP(m[1])+3,nm+" (across V, not counted)","lblTxt",inX?(u>0?"end":"start"):"middle",8,"#424242"); });
+      const m=P2(u,0.55*tL), mx=XP(m[0]), my=YP(m[1]), gap=(ic.halfSpanN-Math.abs(u))*sc+10;
+      const lx=mx+sg*vu[0]*gap, ly=my+sg*vu[1]*gap;
+      line(s,mx,my,lx-sg*vu[0]*2,ly-sg*vu[1]*2,"#616161",0.7,"2 2");
+      vTag(s,lx,ly+(Math.abs(vu[0])>0.5? 3 : (sg*vu[1]>0? 11 : -4)),nm,"lblTxt",sideAnchor(sg),8.5,"#424242"); });
     [[uF,tL],[uF,-tL],[uB,tL],[uB,-tL]].forEach(([u,t])=>{ const c=P2(u,t); circ(s,XP(c[0]),YP(c[1]),3.2,"#555","#333",1); });
-    const lab=P2(uF,0);
-    txt(s,XP(lab[0])+(nx!==0? -nx*14:0),YP(lab[1])+(ny!==0? ny*14:0)+3,
-      ic.nEff+" of "+ic.nLegsTotal+" tie legs effective","lblTxt","middle",8.5,ic.nEff?"#1f7d32":"#b71c1c");
+    /* GFX-A: the count moved under the title (it sat on the front leg / the V arrow) */
+    txt(s,cx,33,ic.nEff+" of "+ic.nLegsTotal+" tie legs effective (legs parallel to V, "+ic.nSets+" set"+(ic.nSets===1?"":"s")+")",
+      "lblTxt","middle",9,ic.nEff?"#1f7d32":"#b71c1c");
   } else if(ic){
     const nx=ic.nx, ny=ic.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0;
     const byPiece={};
@@ -10033,9 +10043,9 @@ function build3D(container){
   let ang=0,drag=false,lx=0,ly=0,rot={x:Math.PI/6,y:Math.PI/4},dist=maxDim;
   /* GFX-A: orbit target. fit() aims at the centre of what is drawn (visible layers)
      and stands back just far enough that it fills ~90% of the view at the current
-     orbit angle: the projected corners of the bounding box are measured and the
-     distance scaled (perspective size ∝ 1/distance, iterated). The old fixed
-     framing left the model in the middle third of the canvas. */
+     orbit angle: a sample of the drawn vertices is projected, the target panned to
+     centre them and the distance scaled (perspective size ∝ 1/distance, iterated).
+     The old fixed framing left the model in the middle third of the canvas. */
   const target=new THREE.Vector3(0,lookY,0);
   const place=()=>{ cam.position.set(target.x+Math.sin(rot.y)*Math.cos(rot.x)*dist,
                                      target.y+Math.sin(rot.x)*dist,
@@ -10043,18 +10053,27 @@ function build3D(container){
                     cam.lookAt(target); };
   function fit(){
     scene.updateMatrixWorld(true);
-    const box=new THREE.Box3();
-    Object.values(groups).forEach(gr=>{ if(gr.visible) box.expandByObject(gr); });
-    if(box.isEmpty()) return;
+    const box=new THREE.Box3(), pts=[], v=new THREE.Vector3();
+    Object.values(groups).forEach(gr=>{ if(!gr.visible) return; box.expandByObject(gr);
+      gr.traverse(o=>{ if(o.isSprite){ pts.push(o.getWorldPosition(new THREE.Vector3())); return; }
+        const pa=o.geometry&&o.geometry.attributes&&o.geometry.attributes.position; if(!pa) return;
+        const st=Math.max(1,Math.floor(pa.count/64));
+        for(let i=0;i<pa.count;i+=st) pts.push(v.fromBufferAttribute(pa,i).clone().applyMatrix4(o.matrixWorld)); }); });
+    if(box.isEmpty()||!pts.length) return;
     box.getCenter(target);
-    const cs=[]; for(let i=0;i<8;i++) cs.push(new THREE.Vector3(i&1?box.max.x:box.min.x, i&2?box.max.y:box.min.y, i&4?box.max.z:box.min.z));
     dist=2*box.getSize(new THREE.Vector3()).length();
-    for(let it=0;it<8;it++){
+    const th=Math.tan(42*Math.PI/360);
+    for(let it=0;it<10;it++){
       place(); cam.updateMatrixWorld(true);
-      let m=0; cs.forEach(c=>{ const v=c.clone().project(cam); m=Math.max(m,Math.abs(v.x),Math.abs(v.y)); });
-      if(!(m>1e-6)) break;
-      dist*=m/0.9;
+      let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+      pts.forEach(p=>{ const q=p.clone().project(cam); if(q.z>1) return; x0=Math.min(x0,q.x); x1=Math.max(x1,q.x); y0=Math.min(y0,q.y); y1=Math.max(y1,q.y); });
+      if(!(x1>x0)) break;
+      const hh=th*dist, ww=hh*cam.aspect;   /* pan to centre, then scale the distance to fill ~90% */
+      target.addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld,0),(x0+x1)/2*ww)
+            .addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld,1),(y0+y1)/2*hh);
+      dist*=Math.max((x1-x0)/2,(y1-y0)/2)/0.9;
     }
+    place();
   }
   cam.lookAt(target);
   renderer.domElement.addEventListener("mousedown",e=>{drag=true;lx=e.clientX;ly=e.clientY;});
