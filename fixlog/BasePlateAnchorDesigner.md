@@ -2619,3 +2619,49 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included.
   - On the three graphics test projects, origin/main vs this branch, every result is identical, including both intercepts and the report text.
   - The panels were clicked headless. Screenshots were checked. 0 page errors.
+
+## 2026-10-23 — GFX-C: anchor force map; labels through collision checks; 9 px minimum text size (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics items 4 (force map) and 5 (labels). This is the third of four PRs.
+- **Saved data:** none.
+- **New `drawForceMap(body, c)`**, placed before `anchorForceTable`. It is called in `buildAnchorTab`, card "Anchor Layout & Resulting Forces", between the anchor key and the force table. Anchor text: `drawForceMap(body,c);   /* GFX-C`. It draws a plan of the plate for the detailed (selected) combination:
+  - **Anchors:** each anchor is shaded by its axial force from `c.perAnchor[i].t` (red = tension, green = compression, intensity ∝ |T_i|/max) and labelled T = … / C = …. A tension scale bar is shown.
+  - **Neutral axis:** the line `w = a + b·x + c·y = 0` from `c.na.plane`.
+  - **Bearing stress block:** the compression polygon, shaded by a gradient from 0 on the neutral axis to the most compressed corner. This follows `naAnchorForces`: σ = K_c·(−w), linear in w. Isostress lines are drawn at 25 / 50 / 75 % of the peak, and labelled only when they are at least 16 px apart.
+  - **Peak and resultant:** the peak `c.na.smax` at that corner, and the resultant `c.na.C` at (`c.na.xc`, `c.na.yc`).
+  - **Other cases:**
+    - no moment: uniform bearing, `c.na.C`, with DG1 f_p = `c.resX.q`;
+    - open stand-off: "no bearing under the plate";
+    - elastic model: a note referring to DG1 on the Base Plate tab.
+  - **Not recomputed:** no force or stress. The solver's own plane is evaluated only to place the shading and the lines.
+- **`txt()`:** before, `const fsz=size||11;`. After, `const fsz=Math.max(size||11,9);`. No drawing text is below 9 px, on screen or in print.
+- **New `svgFitText(s)`**, called first in `svgWithControls`. An upright label whose estimated box (0.5·font-size per character) crosses the left or right edge is slid back inside.
+- **`drawRebar`:**
+  - H 440 → 480.
+  - Caption rows:
+    - tension: legend at H−45 and H−32, caption at H−16, the cover-warning line at H−58 (it shared the legend row);
+    - shear: the caption is split into the description at H−30 and the verdict at H−16 (one line ran past both edges).
+  - The axis triad moved to the top left (34, 62). At the bottom, its origin note ran into the caption.
+  - The "breakout uses h_ef' = …" note moved under the title. It was centred on the third dimension tier and ran off the right edge. It now also states the h_ef used by the check and the drawing.
+  - **c_top** moved to a third tier outside the right face, on a leader, when it fits. Otherwise it stays where it was. It sat among the bars and the z-datum label.
+  - **"flat at the head plane across the anchors"** moved below the bar bottoms, or below the pedestal when the bars run to the base, on a dotted leader. It sat across the bars.
+  - **Closed-tie section:** the set labels and "0.5·c_a1 = … below the top" go through one `makeTagPlacer` outside the left face, with the z = H label reserved. The 0.5·c_a1 label sat on a tie line. "top set" moved to the outer right tier; it sat on the H dimension.
+  - **Hairpin section:**
+    - "behind = …" moved above the top face, on extension lines;
+    - the depth and stack dimensions use horizontal labels on leaders (the rotated depth label ran off the top);
+    - "failure plane" moved right of the plane;
+    - the title was shortened (it ran under the zoom buttons).
+- **`drawHairpinPlan`:**
+  - The leg tags (6.5 → 9 px) go past the BACK end of each leg. At the plane end they sat on the bends and on each other.
+  - The "≥ ℓ_d" label goes on the far side of its dimension line from the leg, through the placer.
+- **Print report (`buildPrintReport`):** the PDF of the 4 × 2 U-stirrup / hairpin project was printed headless (Letter, print media; 50 pages) and the figure pages were rendered and inspected. No figure is clipped.
+- **Governing provision:** none changed.
+- **Check case (display):**
+  - Combination "Vy" (P = +10, Vx = 2, Vy = −15, Mx = 200 kip-in), plate 18 × 24, 2 × 3 anchors.
+  - The force map shows anchors 5 and 6 at T = 6.12 kip and 3 and 4 at T = 3.01 kip (the per-anchor table gives the same), and anchors 1 and 2 at 0.
+  - The neutral axis runs just above the bottom row. σ_max = 0.269 ksi and C = 8.25 kip over 60.5 in².
+  - Hand check: ΣT − C = 2(6.12 + 3.01) − 8.25 = 10.01 ≈ P = 10.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and `.report` is identical.
+  - On the three graphics test projects, every result and the report are identical.
+  - Every drawing was screenshotted (input plan and elevations, anchor key, force map, breakout, tension plan and sections, shear plan and sections) for the default, pedestal, 4 × 2 and −y shear projects, with 0 page errors.
