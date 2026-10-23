@@ -2895,7 +2895,7 @@ function plateTearout(combo){
    from the nearest tension anchor crosses that surface at
         z_cross = (H − h_ef) + r/1.5
    and the surface only EXISTS within r ≤ 1.5·h_ef. Note the CREDITING limit is
-   tighter: a leg is only effective within 0.5·h_ef (reduced) of a tension
+   tighter: a leg is only effective within 0.5·h_ef (actual h_ef) of a tension
    anchor (entry 71), the effective-placement zone; 1.5·h_ef is just where the
    prism exists. The bar must also extend past z_cross to actually intersect it.
    -------------------------------------------------------------------------- */
@@ -2979,7 +2979,7 @@ function rebarCompliance(body, kind, ctx){
       ref:"§17.5.2.1.1"});
     auto.push({ok: ic && ic.nEff>0 ? ic.nNear===ic.nEff : true,
       label:"Bars within the 0.5·h_ef effective zone of a tension anchor",
-      detail: ic? (ic.nEff+" of "+ic.nBarsTotal+" legs are effective; all effective legs lie within 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (reduced) of an anchor IN TENSION — enforced as a hard limit per R17.5.2.1, so legs farther out (or nearest a compression anchor) are excluded") : "—",
+      detail: ic? (ic.nEff+" of "+ic.nBarsTotal+" legs are effective; all effective legs lie within 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (actual h_ef) of an anchor IN TENSION — enforced as a hard limit per R17.5.2.1, so legs farther out (or nearest a compression anchor) are excluded") : "—",
       ref:"R17.5.2.1"});
     /* ABOVE / BELOW development rows. Per Fig. R17.5.2.1a the leg develops on
        both sides of the surface — ℓ_dh at a hooked/bent end, ℓ_d straight — with
@@ -3192,15 +3192,9 @@ function tensionDevLengths(Rin){
 function tensionRebarIntercept(cc){
   if(!S.tRebar.present) return null;
   const R=S.tRebar, rb=rebarOf(R.size), A=S.anchor, C=S.conc, g=anchorGeom();
-  /* Use the SAME effective embedment the tension-breakout check uses. When
-     §17.6.2.1.2 reduces h_ef (anchors near three or more edges), the breakout
-     surface ASSUMED IN DESIGN springs from that reduced depth with a 1.5·h_ef'
-     radius — and that is the surface the reinforcement must intercept and be
-     developed across. The previous version used the full h_ef here while the
-     breakout page used the reduced value: the same program was drawing two
-     different cones. (Physically the head sits at full depth; z_cross is
-     measured from the REDUCED depth because that is where the code's assumed
-     failure plane starts.) */
+  /* Embedment for the anchor-reinforcement check: the ACTUAL h_ef (TR-H1, below).
+     The §17.6.2.1.2 reduced h_ef' is a device of the breakout equations only; the
+     reinforcement restrains the physical failure surface from the anchor head. */
   const he=hefEffective();
   /* TWO distinct z-datums that were previously collapsed onto one:
        coneZ  = C.H − hef_eff   — apex of the ASSUMED failure surface. When
@@ -3213,9 +3207,15 @@ function tensionRebarIntercept(cc){
                 head 1.8″ too shallow whenever h_ef was reduced (user report:
                 10″ embed shown as if 6.2″, so the 8″-below-head region and the
                 6″ bar extension were drawn compressed and off-scale). */
-  const hef=he.hefEff, coneZ=C.H-hef, rMax=1.5*hef;
+  /* TR-H1 (2026-10-23, engineer): the §17.6.2.1.2 reduced h_ef' applies only to the
+     breakout equations (Eqs. 17.6.2.1.1 through 17.6.2.5.1). The anchor reinforcement
+     of §17.5.2.1 / R17.5.2.1 restrains the PHYSICAL failure surface, which starts at
+     the anchor head at the actual embedment. So this check uses the actual h_ef for
+     the cone apex, the 1.5·h_ef prism and the 0.5·h_ef placement zone; the reduced
+     value is kept (hefBreakout) only to state it next to the breakout check. */
+  const hef=he.hef, coneZ=C.H-hef, rMax=1.5*hef;
   const hefNom=he.hef, headZ=C.H-hefNom;
-  const hefReduced=(he.hefEff<he.hef-1e-9);
+  const hefReduced=(he.hefEff<he.hef-1e-9);   /* breakout uses h_ef' (not this check) */
   const cover=Math.max(R.cover||0,0);
   const topCover=Math.max((R.topCover!==undefined?R.topCover:R.cover)||0,0);
   const extBelow=Math.max(R.extBelow!==undefined?R.extBelow:8,0);
@@ -3411,7 +3411,7 @@ function tensionRebarIntercept(cc){
   /* Per-bar evaluation — the whole point of the rewrite:
        r        plan distance to the nearest anchor in tension
        zCross   depth of the ≈35° (1:1.5) cone surface at that distance,
-                zCross = coneZ + r/1.5, capped at the top surface (coneZ = reduced-hef apex)
+                zCross = coneZ + r/1.5, capped at the top surface (coneZ = anchor head, actual h_ef; TR-H1)
        above    development available ABOVE the surface = barTop − zCross
        below    development available BELOW the surface = zCross − barBot
      Requirements: straight ℓ_d above (the leg runs straight up through the
@@ -3450,7 +3450,7 @@ function tensionRebarIntercept(cc){
       pts.forEach((p,pi)=>{ const d=Math.hypot(b.x-p.x,b.y-p.y); if(d<r){ r=d; nearP=p; nearIdx=pi; } });
       /* §17.5.2.1.1 / R17.5.2.1 — anchor reinforcement is only effective when it
          is placed close to the anchor whose breakout it restrains. The EFFECTIVE
-         placement zone is 0.5·h_ef (reduced) in plan from a TENSION anchor, the
+         placement zone is 0.5·h_ef (actual h_ef, TR-H1) in plan from a TENSION anchor, the
          same limit Hilti PROFIS enforces and the tension analogue of the shear
          side's 0.5·c_a1. Beyond that the strut angle to engage the breakout body
          is too shallow to count. This is a HARD limit (user decision): a leg
@@ -3460,7 +3460,7 @@ function tensionRebarIntercept(cc){
          anchor is only credited if a genuine tension anchor lies within 0.5·h_ef
          — which fixes the lower-right leg that was being carried by a distant
          diagonal tension anchor across the compression zone. */
-      const rNearLimit=0.5*hef;                 /* hef is the REDUCED h_ef */
+      const rNearLimit=0.5*hef;                 /* hef is the ACTUAL h_ef (TR-H1) */
       const nearTens=r<=rNearLimit+1e-9;
       const anchorTension = nearP? (nearP.t||0) : 0;
       const zCross=Math.min(coneZ+r/1.5, C.H);
@@ -3538,7 +3538,7 @@ function tensionRebarIntercept(cc){
   let nEff=chosen.nEff, nOutside=chosen.nOutside, nNotFitting=chosen.nNotFitting,
       nDevFail=chosen.nDevFail, nCover=chosen.nCover, nOutPed=chosen.nOutPed;
 
-  /* Proximity is now the HARD effectiveness limit (0.5·h_ef reduced), so every
+  /* Proximity is now the HARD effectiveness limit (0.5·h_ef, actual h_ef), so every
      effective bar is within it by construction. nNear is retained for the
      compliance row, which now states the enforced limit rather than warning. */
   const rNear=0.5*hef;
@@ -3561,7 +3561,7 @@ function tensionRebarIntercept(cc){
     if(d>devDCR){ devDCR=d; devWorst=b; } });
 
   return {nWanted,nRows,nBarsTotal,nPieces,legsPer,gauge,orient:R.orient,
-          hefFull:he.hef, hefReduced, tMaxA, tMinA,
+          hefFull:he.hef, hefBreakout:he.hefEff, hefReduced, tMaxA, tMinA,
           layoutMode:R.layoutMode,pieceType:R.pieceType,nEff,nOutside,nNotFitting,nDevFail,nCover,nOutPed,
           rowWide,nInteriorUncredited,nLinesRowWide,
           rwAuto,rwAutoGauge,rwMaxCreditGauge,
@@ -3601,7 +3601,7 @@ function tensionRebarCheck(cc){
   /* ---- development, BOTH SIDES, FROM GEOMETRY -------------------------------
      Previously the available length was a USER INPUT (ld_avail / ld_below), a
      single global number. It is not an input: the ≈35° cone surface sits at
-       z_cross(r) = coneZ + r/1.5   (coneZ = C.H - hef_eff, the reduced-cone apex)
+       z_cross(r) = coneZ + r/1.5   (coneZ = C.H - h_ef, the anchor head at the actual embedment; TR-H1)
      at plan distance r from the nearest tension anchor, so each bar has its own
        available above = (H − top cover) − z_cross
        available below = z_cross − (headZ − extension below head)   (headZ = physical head, C.H - hef_nom)
@@ -4493,7 +4493,7 @@ function buildInputPanel(){
             : "Which plan direction the two legs of each piece are separated along. Set it to match how the stirrups sit on the drawing — it decides which leg lands near the tension anchors and which on the compression side.");
       if(!isRW)
         fRow(body,"Leg-to-leg width (gauge)",numInput(()=>S.tRebar.legGauge,v=>S.tRebar.legGauge=Math.max(0.5,v),0.5),"in",
-          "Clear width between the two legs of a stirrup/tie. Wider gauge pushes one leg toward the tension anchors and the other away — a leg outside 0.5·h_ef (reduced) of a tension anchor earns no credit.");
+          "Clear width between the two legs of a stirrup/tie. Wider gauge pushes one leg toward the tension anchors and the other away — a leg outside 0.5·h_ef (actual h_ef) of a tension anchor earns no credit.");
       fRow(body,"Layout",selInput(
         [{id:"perRow",nm:"Run alongside each tension row"},{id:"enclose",nm:"Enclosing the anchor group"},
          {id:"rowWide",nm:"Wide U per anchor row/column (auto-gauged)"}],
@@ -6082,7 +6082,7 @@ function ineffCauseBanner(body, kind, ic){
            "″ — a pedestal-width quantity that takes no account of h_ef, and that is what put these legs outside the zone. "+
            "Tick “Override auto gauge” and enter a gauge ≤ "+fmt(ic.rwMaxCreditGauge,2)+
            "″ (outer anchor span + h_ef = the widest creditable U), or switch to the per-row layout")
-        : ("move the bars within 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (reduced) of an anchor that is in tension, or extend the bar so the crossing lies within it")});
+        : ("move the bars within 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (actual h_ef) of an anchor that is in tension, or extend the bar so the crossing lies within it")});
     if(ic.nDevFail>0) causes.push({n:ic.nDevFail,
       head:"cross the cone but cannot develop on both sides (\u2113_d does not fit above and/or below the crossing)",
       fix:"hook or enclose an end (\u2113_dh = "+fmt(ic.dev&&ic.dev.ldh?ic.dev.ldh:0,2)+"\u2033 vs straight \u2113_d = "+fmt(ic.dev&&ic.dev.ld?ic.dev.ld:0,2)+"\u2033), extend the bar, or drop epoxy if not required"});
@@ -6151,8 +6151,8 @@ function buildTRebarTab(pg){
       "This figure is the authority for the two rules this tab enforces, and both are dimensioned on it. "+
       "<b>Placement:</b> the legs must lie within <b>0.5·h<sub>ef</sub></b> of the anchor in plan — the "+
       "“≤ 0.5h_ef” dimension at the bottom of each view. This program applies that limit to the "+
-      "§17.6.2.1.2 REDUCED h<sub>ef</sub>"+(ic.hefReduced? (", here "+fmt(ic.hef,2)+"″ rather than the nominal "+fmt(ic.hefFull,2)+"″") : "")+
-      ", because the reinforcement must intercept the failure surface assumed in design. "+
+      "ACTUAL h<sub>ef</sub> = "+fmt(ic.hef,2)+"″"+(ic.hefReduced? (" (the §17.6.2.1.2 reduced h<sub>ef</sub>′ = "+fmt(ic.hefBreakout,2)+"″ applies only to the breakout equations)") : "")+
+      ", because the reinforcement restrains the physical failure surface, which starts at the anchor head. "+
       "<b>Development:</b> each leg develops on BOTH sides of the breakout surface — <b>ℓ<sub>dh</sub></b> "+
       "at a hooked or bent end above, <b>ℓ<sub>d</sub></b> straight below. The §25.7.1.3(a) "+
       "“developed at the bend, zero length” stirrup allowance is NOT imported into Chapter 17: this "+
@@ -6199,16 +6199,16 @@ function buildTRebarTab(pg){
       body.appendChild(el("div","note",
         "§17.5.2.1.1 credits a bar only where it crosses the assumed failure surface, is "+
         "developed each side of it, AND is placed close enough to the anchor to restrain its "+
-        "breakout. The effective-placement zone is 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (reduced) in "+
+        "breakout. The effective-placement zone is 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (actual h_ef) in "+
         "plan from an anchor IN TENSION — the tension analogue of the shear side's 0.5·c_a1, and "+
         "the limit Hilti PROFIS enforces. A leg farther than that from every tension anchor — or "+
         "one whose nearest anchor is in compression — is NOT credited, even though the 1.5·h_ef = "+
         fmt(ic.rMax,2)+"″ breakout prism still physically exists out there. Distances below are "+
         "measured in plan from each bar to the nearest anchor in tension for combination "+ic.govCombo+"."+
         (ic.hefReduced?
-          " <b>h_ef is the REDUCED effective embedment, "+fmt(ic.hef,2)+"″ (from "+fmt(ic.hefFull,2)+
-          "″) per §17.6.2.1.2</b> — the same surface the tension-breakout check uses; the reinforcement "+
-          "must intercept the breakout surface assumed in design, not the full-depth cone." : "")));
+          " <b>h_ef here is the ACTUAL embedment, "+fmt(ic.hef,2)+"″.</b> The §17.6.2.1.2 reduced h_ef′ = "+
+          fmt(ic.hefBreakout,2)+"″ is used only in the breakout equations (Concrete Embedment tab); the anchor "+
+          "reinforcement restrains the physical failure surface, which starts at the anchor head (§17.5.2.1, R17.5.2.1)." : "")));
       if(ic.tMaxA>0 && ic.tMinA < 0.05*ic.tMaxA){
         const lw=el("div","warnBox");
         lw.innerHTML="<b>Limitation.</b> One or more anchors counted as \u201Cin tension\u201D carry under 5% of "+
@@ -8290,13 +8290,13 @@ function drawRebarPlan(body){
   rect(s,X(-C.Bx/2),Yp(C.By/2),C.Bx*sc,C.By*sc,"#eae7df","#555",1.2);
   rect(s,X(-S.plate.B/2),Yp(S.plate.N/2),S.plate.B*sc,S.plate.N*sc,"none","#888",1.0,"4 3");
   colPlanDraw(s,X,Yp,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
-  /* effective zones and anchors — the dashed circle is the 0.5·h_ef (REDUCED)
+  /* effective zones and anchors — the dashed circle is the 0.5·h_ef (actual h_ef, TR-H1)
      EFFECTIVE-PLACEMENT zone, the hard limit a leg must fall within to be
      credited (entry 71), NOT the 1.5·h_ef breakout prism. At 0.5·h_ef the circle
      is small enough to actually discriminate which legs qualify — the oversized
      1.5·h_ef circles covered the whole pedestal and read as decoration. Only
      TENSION anchors get a zone; compression anchors are drawn grey with none. */
-  const rZone=ic.rNear;                 /* 0.5 · reduced h_ef, from the check */
+  const rZone=ic.rNear;                 /* 0.5 · actual h_ef, from the check */
   const govC=CC.combos[governingComboIndex()>=0?governingComboIndex():0]||CC.combos[0];
   const tens=(govC&&govC.perAnchor)? govC.perAnchor : [];
   tens.forEach(p=>{
@@ -8384,7 +8384,7 @@ function drawRebarPlan(body){
   /* caption split across two lines — as one string it ran wider than the 620px
      viewport and was clipped at BOTH edges in the PDF export */
   txt(s,cx,H-25,"legs: green = effective · red = crosses cone but under-developed · grey = outside the zone / pedestal","lblTxt","middle",8);
-  txt(s,cx,H-13,"dashed green circle = 0.5·h_ef (reduced) around each tension anchor","lblTxt","middle",8);
+  txt(s,cx,H-13,"dashed green circle = 0.5·h_ef (actual embedment) around each tension anchor","lblTxt","middle",8);
   axisTriad(s,pad-40,H-40,"plan",26);
   const wrap=svgWithControls(s);
   body.appendChild(wrap);
@@ -8429,7 +8429,7 @@ function drawRebar(body,kind){
      hefNom while ONLY the cone apex/spread use the reduced value. Collapsing the
      two drew the head 1.8″ too shallow when h_ef was reduced (user report). */
   const icHef=(kind==="tension"&&typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
-  const hefCone=icHef? icHef.hef : A.hef;        /* reduced — cone only */
+  const hefCone=icHef? icHef.hef : A.hef;        /* = actual h_ef since TR-H1 (apex at the head) */
   const hefPhys=icHef? icHef.hefNom : A.hef;     /* actual embedment — head */
   const coneZ=C.H-hefCone;                        /* cone apex plane */
   const headZ=C.H-hefPhys;                        /* physical head plane */
@@ -8443,7 +8443,7 @@ function drawRebar(body,kind){
     line(s,X(axp),topY,X(axp),Yv(headZ),"#2b2b2b",Math.max(2.5,A.dia*sc*0.5));
     line(s,X(axp)-8,Yv(headZ),X(axp)+8,Yv(headZ),"#2b2b2b",4);
     if(noCone) return;   /* shear section: no tension cone (ACI Section A-A) */
-    /* cone springs from the (possibly shallower) reduced-hef apex */
+    /* cone springs from the anchor head (actual h_ef, TR-H1) */
     line(s,X(axp),Yv(coneZ),X(axp-spread),topY,"#b71c1c",1.4,"5 4");
     line(s,X(axp),Yv(coneZ),X(axp+spread),topY,"#b71c1c",1.4,"5 4");
   }
@@ -8718,10 +8718,10 @@ function drawRebar(body,kind){
   dimV(s,topY,Yv(headZ),X(spanPed/2)+44,"h_ef = "+fmt(hefPhys,1)+'" (embedment)');
   line(s,cx+8,Yv(headZ),X(spanPed/2)+44,Yv(headZ),"#00427a",0.6,"3 3");
   line(s,cx+8,topY,X(spanPed/2)+44,topY,"#00427a",0.6,"3 3");
+  /* TR-H1: the cone springs from the head at the actual h_ef, so there is no separate
+     reduced-apex tier; the breakout-only h_ef' is noted as text. */
   if(icHef&&icHef.hefReduced){
-    dimV(s,topY,Yv(coneZ),X(spanPed/2)+72,"h_ef,eff = "+fmt(hefCone,1)+'"');
-    line(s,cx+8,Yv(coneZ),X(spanPed/2)+72,Yv(coneZ),"#b45309",0.6,"3 3");
-    txt(s,X(spanPed/2)+72,Yv(coneZ)-6,"cone apex (§17.6.2.1.2)","lblTxt","middle",7.5,"#b45309");
+    txt(s,X(spanPed/2)+72,topY-6,"breakout uses h_ef' = "+fmt(icHef.hefBreakout,1)+'" (§17.6.2.1.2, breakout eqs. only)',"lblTxt","middle",7.5,"#b45309");
   }
   axisTriad(s,pad-46,H-24,"elevY");
   body.appendChild(svgWithControls(s));
@@ -8807,7 +8807,7 @@ function build3D(container){
      Stirrup pieces get their connecting bends drawn, so a closed tie reads as
      one piece with two legs rather than two unrelated bars. A small sphere
      marks each leg's z_cross — the point development is measured either side
-     of — and the reduced-h_ef cone (when §17.6.2.1.2 applies) is shown as a
+     of — and the cone from the anchor head (actual h_ef, TR-H1) is shown as a
      translucent wireframe so the geometry driving the verdicts is visible. */
   (function drawRebar3D(){
     if(!S.tRebar.present) return;
@@ -8851,13 +8851,13 @@ function build3D(container){
       if(S.tRebar.pieceType==="closedtie" && ic.dev.hookBot)
         rod([a.x+pxo,a.y+pyo,ic.barBot],[bb.x+pxo,bb.y+pyo,ic.barBot],mat,rr);
     });
-    /* the assumed breakout cone (reduced h_ef when §17.6.2.1.2 applies) */
+    /* the physical breakout cone from the head (actual h_ef, TR-H1) */
     const tp=(CC.combos[governingComboIndex()>=0?governingComboIndex():0]||CC.combos[0]);
     const tens=(tp&&tp.perAnchor)? tp.perAnchor.filter(q=>q.t>1e-9) : [];
     tens.forEach(q=>{
       const cone=new THREE.Mesh(new THREE.ConeGeometry(ic.rMax, ic.hef, 24, 1, true),
         new THREE.MeshBasicMaterial({color:0xb71c1c,wireframe:true,transparent:true,opacity:0.16}));
-      /* cone spans coneZ (reduced-hef apex) up to the surface; centre at
+      /* cone spans coneZ (the anchor head, actual h_ef) up to the surface; centre at
          coneZ + hef/2. Bars run to the PHYSICAL head (barBot references headZ),
          which is deeper, so the bar bottoms correctly sit below the cone apex. */
       setPos(cone, q.x+pxo, q.y+pyo, ic.coneZ+ic.hef/2);
@@ -12764,7 +12764,7 @@ manPart("p0","0. Read This First",[
  ["<b>A<sub>brg</sub> for the 1&Prime; heavy hex nut</b>","Bolt tables",
   "Published sources give 1.50 in&sup2; and 1.163 in&sup2; for the same nut. That is a 22% swing straight into pullout and side-face blowout, either of which can govern. Needs settling against one authority and documenting."],
  ["<b>Load-path tracing for reinforcement legs</b>","Anchor reinforcement",
-  "A leg is credited only when it lies within 0.5·h_ef (reduced) in plan of an anchor that is IN TENSION and crosses that anchor's breakout surface, developed both sides — a hard limit (the tension analogue of the shear side's 0.5·c_a1, matching Hilti PROFIS). This excludes a leg nearest a compression anchor, and a leg reaching only a distant tension anchor. What the program still does NOT do is trace which specific anchor's load each credited leg carries through a strut-and-tie model, so where several tension anchors sit within range it credits by proximity rather than by a resolved load path. The report flags any anchor counted as in tension that carries under 5% of the maximum, since a leg credited via a near-zero anchor may not reflect the real force path."],
+  "A leg is credited only when it lies within 0.5·h_ef (actual embedment) in plan of an anchor that is IN TENSION and crosses that anchor's breakout surface, developed both sides — a hard limit (the tension analogue of the shear side's 0.5·c_a1, matching Hilti PROFIS). This excludes a leg nearest a compression anchor, and a leg reaching only a distant tension anchor. What the program still does NOT do is trace which specific anchor's load each credited leg carries through a strut-and-tie model, so where several tension anchors sit within range it credits by proximity rather than by a resolved load path. The report flags any anchor counted as in tension that carries under 5% of the maximum, since a leg credited via a near-zero anchor may not reflect the real force path."],
  ["<b>Uncracked &psi; branch</b>","Validation",
   "All PROFIS comparisons to date are cracked-concrete cases, so the uncracked modification factors are exercised but not validated against an independent result."],
  ["<b>Asymmetric anchor groups</b>","Scope",
@@ -12930,7 +12930,7 @@ manPart("p2","2. Input Reference",[
 {p:"The program checks the cast-in installation limits of ACI 318-19 §17.9 and reports findings in the banner above the output tabs (torqued anchors: on the Summary): minimum anchor spacing of 4d<sub>a</sub> (untorqued) or 6d<sub>a</sub> (torqued) per §17.9.2, minimum edge distance of 6d<sub>a</sub> for torqued anchors (both in Table 17.9.2a), and whether the member depth actually accommodates h<sub>ef</sub> plus the anchor head and cover &mdash; the quantity PROFIS reports as &ldquo;minimum thickness of the base material&rdquo;. Select <b>Anchor installation</b> (Untorqued / Torqued, as in PROFIS) under 2. Anchors. Spacing below 4d<sub>a</sub> withholds the output. For torqued anchors, spacing and edge distance below 6d<sub>a</sub> are FAIL rows on the Summary, worked on the Anchor Bolts tab (Installation Limits). For untorqued anchors the edge distance is limited only by the specified cover (§20.5.1.3), which the program does not check; values below 6d<sub>a</sub> are noted as warnings in case the anchors will be torqued. The member-depth check is a warning."},
 {h3:"Reinforcement"},
 {p:"Tension or shear reinforcement, when present, substitutes a steel check on the bars for the corresponding concrete breakout check per §17.5.2.1 and raises &phi; to 0.75. The substitution is only credited once the geometry is verified and the detailing is confirmed — until then the concrete breakout check it would replace stays enforced, so a provisional layout cannot silently switch off breakout."},
-{p:"<b>Effectiveness is decided per leg from the geometry, not from the quantity you type.</b> A stirrup or tie contributes one leg per side at its true plan position; a hairpin two; a single bar one. Each leg is credited only if it (1) sits within the effective-placement zone of an anchor that is in tension &mdash; 0.5·h<sub>ef</sub> (reduced) in plan for tension bars, 0.5·c<sub>a1</sub> for shear hairpins, both hard limits; (2) actually crosses the assumed failure surface; and (3) is developed on both sides of that surface. &phi;N<sub>r</sub> (or &phi;V<sub>r</sub>) counts only the legs that pass all three &mdash; a leg on the compression side, or one wrapped too wide to reach its rod, earns nothing. The plan view colours each leg by verdict and, in the app, lets you click a leg to see which anchor credits it, the crossing, the development, and the reason it did or did not qualify."},
+{p:"<b>Effectiveness is decided per leg from the geometry, not from the quantity you type.</b> A stirrup or tie contributes one leg per side at its true plan position; a hairpin two; a single bar one. Each leg is credited only if it (1) sits within the effective-placement zone of an anchor that is in tension &mdash; 0.5·h<sub>ef</sub> (actual embedment) in plan for tension bars, 0.5·c<sub>a1</sub> for shear hairpins, both hard limits; (2) actually crosses the assumed failure surface; and (3) is developed on both sides of that surface. &phi;N<sub>r</sub> (or &phi;V<sub>r</sub>) counts only the legs that pass all three &mdash; a leg on the compression side, or one wrapped too wide to reach its rod, earns nothing. The plan view colours each leg by verdict and, in the app, lets you click a leg to see which anchor credits it, the crossing, the development, and the reason it did or did not qualify."},
 {p:"<b>Development is computed from the cone geometry, not entered.</b> Earlier versions asked for an &ldquo;available length&rdquo;, which is a claim rather than a fact and cannot be right for several bars at different distances at once. The top and bottom of each bar are fixed by the top cover and the extension below the anchor-head plane; the 35&deg; failure surface (the 1.5&middot;h<sub>ef</sub> projection) fixes where it crosses; and the length available above and below the crossing follows. Per <b>Fig. R17.5.2.1a</b> each side must develop &ell;<sub>dh</sub> at a hooked or bent end, or the full straight &ell;<sub>d</sub> at a straight end. A bend wrapping a longitudinal bar makes the end a standard hook (so &ell;<sub>dh</sub> applies) but does NOT reduce the requirement to zero &mdash; the §25.7.1.3(a) &ldquo;developed at the bend&rdquo; stirrup shortcut is not imported into Chapter 17, because the hook sits in a thin wedge above the cone against a free surface with no redistribution. End bends are taken from the piece type: a closed tie is bent top and bottom by geometry, a U-stirrup at the top. The only case reported as N/A is when no leg reaches the cone &mdash; then there is nothing to develop."},
 {p:"<b>Shear hairpins</b> are checked the same way against the shear breakout body: each leg must lie within 0.5&middot;c<sub>a1</sub> of a leading anchor, within the body depth (1.5&middot;c<sub>a1</sub> below the surface), and develop behind the failure plane &mdash; with the near side anchored by the bend engaging the rod, which is an explicit input because the program cannot confirm it. Hairpins may be placed at each leading anchor, or as one piece wrapping the whole leading row (its gauge auto-sized to the anchor span plus clearance, stacked vertically if needed); single bars may run across the group at a spacing and offset you set. The section view is cut along the shear direction, like ACI Fig. R17.5.2.1b(i)."},
 {note:"The program does not size, select, or lay out the reinforcement, and it cannot see the surrounding cage &mdash; whether a longitudinal bar is actually present inside a bend, whether the bars are deformed, or whether the detail is buildable. Those are attested on the §17.5.2.1 compliance list, which the engineer must complete; the substitution is not justified until every geometric item is satisfied and every detailing item confirmed."}
@@ -13332,7 +13332,7 @@ manPart("p4d","4D. Anchor Reinforcement",[
 {key:"Development available is <b>not an input</b>. Earlier versions asked the engineer for an ‘ℓ<sub>d</sub> available’ figure, which is a claim rather than a fact and cannot be right for several bars at different distances at once. The two inputs now are geometric: the top cover that stops the bar short of the surface, and the bar extension below the anchor-head plane."},
 {p:"A bar is credited only when the crossing lies <b>within the bar's own extent</b> — a cone that passes above the top of a bar never meets it, however close in plan — and when both the above and below lengths meet their requirements. Per <b>Fig. R17.5.2.1a</b> the requirement on each side is straight <b>ℓ<sub>d</sub></b> (§25.4.2.4) at a straight end, or <b>ℓ<sub>dh</sub></b> (§25.4.3) at a hooked or bent end. A bend wrapping a longitudinal bar makes the end a standard hook — so ℓ<sub>dh</sub> applies — but it does <b>not</b> reduce the requirement to zero."},
 {key:"<b>Why the §25.7.1.3(a) stirrup shortcut is NOT used here.</b> That clause &mdash; a stirrup hook enclosing a longitudinal bar is developed at the bend, no length required &mdash; is a deemed-to-satisfy detail validated for beam stirrups anchored in a confined core, where many stirrups cross a crack and redistribution is available. Chapter 17 deliberately does not import it: Fig. R17.5.2.1a dimensions ℓ<sub>dh</sub> above the breakout surface and ℓ<sub>d</sub> below even for hooked bars, because anchor reinforcement sits in a thin, shallow wedge above the cone against a free surface loaded in direct tension, with a discrete few bars and no redistribution. This program follows the FIGURE, not the narrative shortcut. The practical consequence is real: above the cone there is at most (h<sub>ef</sub> − cover) of leg &mdash; about 4 in at h<sub>ef</sub> = 6 in &mdash; which often will not accommodate ℓ<sub>dh</sub>, so ℓ<sub>dh</sub>-above frequently governs and drives deeper embedment, smaller bars, or longer legs. That is the correct outcome, not a program limitation."},
-{key:"<b>h<sub>ef</sub> is the effective embedment, not the nominal one.</b> Where §17.6.2.1.2 reduces h<sub>ef</sub> because the anchors sit near three or more edges, the failure surface assumed in design springs from the reduced depth — and that is the surface the reinforcement must intercept. The rebar pages use the same reduced value as the breakout page, and state the reduction when it applies."},
+{key:"<b>h<sub>ef</sub> here is the actual embedment.</b> Where §17.6.2.1.2 reduces h<sub>ef</sub> because the anchors sit near three or more edges, the reduced h<sub>ef</sub>′ is used only in the breakout equations (Eqs. 17.6.2.1.1 through 17.6.2.5.1). The anchor reinforcement restrains the physical failure surface, which starts at the anchor head, so the rebar pages use the actual h<sub>ef</sub> for the cone, the 1.5·h<sub>ef</sub> prism and the 0.5·h<sub>ef</sub> placement zone, and state the breakout-only h<sub>ef</sub>′ when it applies."},
 {h3:"The effective-placement zone — 0.5·h<sub>ef</sub>"},
 {p:"Crossing the surface is necessary but not sufficient. The surface exists anywhere within 1.5·h<sub>ef</sub> of an anchor, but a bar only <b>restrains</b> the breakout if it is placed close to the anchor — commentary R17.5.2.1 requires the reinforcement &ldquo;as close as practicable&rdquo;, and the effective zone in practice (and in Hilti PROFIS) is <b>0.5·h<sub>ef</sub></b>, using the reduced h<sub>ef</sub>. Beyond that the strut angle needed to engage the breakout body is too shallow to count."},
 {key:"This program treats 0.5·h<sub>ef</sub> from an anchor <b>in tension</b> as a HARD limit: a leg farther than that from every tension anchor is not credited, and a leg whose nearest anchor is in compression is not credited even if a distant tension anchor happens to lie within the 1.5·h<sub>ef</sub> prism. This is the tension analogue of the shear side's 0.5·c<sub>a1</sub>, and it is deliberately more conservative than the bare text of §17.5.2.1.1 — a commentary- and practice-derived limit, adopted as a hard exclusion."},
