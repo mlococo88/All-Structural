@@ -1,0 +1,8 @@
+# Prestressed Bridge Design (PBD) plan — 2026-10-22 (summary; full text in session transcript)
+Host psbeam.html as core (rename → "Prestressed Bridge Design.html", psbeam.html redirect stub + data download for Firefox/Safari).
+New engines as plain <script> window.PBD.*; UI in existing JSX. Keep psbeam.inputs.v1, producer 'PS-Beam', app id 'psbeam'; new keys psbeam.bridge.v1, slice psbeamBridge.
+Copy from SBD (list per §3): OWN_RULES/ownRule, title block, calc-report §-links, pure-JS R12 DXF writer, FE/HL-93 envelope, SRX every-girder superReactions. 3D stays Plotly.
+MCT (index.html) removal: iframe overlay + PS switch + EMBED_META.psbeam; sidebar button sends and opens PBD in new tab; keep demands/psSection/capacity/geometryChanges channels, PS-Beam combos, MCT psconc rating + PS Service III. Do after SBD's last index-touching PR.
+PRs: 0 tests(--tool ps) · 1 rename/stub · 2 shell(modes, registry, title block, bridge model, girder×span selector, project UI) · 3a owner framework · 3b owner defaults (§4) · 4 shapes NEBT/NEDBT/NEXT D/F/PCEF/spread box/deck-box (needs engineer sheets) + span/depth · 5 prelim+Suggest · 6 continuous analysis 5.12.3.3 + owner restraint rules · 7 design all + every-girder superReactions + bearings · 8 strain-compat flexure option · 9 PCI/Mast handling · 10 deck A13.4 + owner tables · 11 rating vehicle library + owner targets · 12 DXF + bridge 3D · 13 combined report · 14 MCT removal.
+~45–55 working days total; phase 1 = PRs 0–4, 6, 14.
+Issues found: capacity payload labelled 'strain-compat' but flexure() is approximate fps; PCA constants uncited; NEXT/box LLDF falls to type (k).
