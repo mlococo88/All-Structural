@@ -2314,3 +2314,39 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar), and the export checks pass.
   - The check cases were run headless on origin/main and the working tree, with the numbers above.
   - Tension Rebar elevation, plan and 3-D were inspected in screenshots (three.js served locally). The print report includes d_s, and there were 0 page errors.
+
+## 2026-10-23 — SUB-1: the §17.5.2.1(a) substitution no longer requires EVERY leg to be creditable (Tier 2, calc change)
+- **Engineer report (2026-10-23):** tension rebar was provided, yet the Summary still showed concrete breakout (T) failing.
+- **Function:** `rebarJustified("tension", cc)`. Anchor text: `if(ic.nEff<ic.nBarsTotal){`
+- **Before:** the substitution was justified only when all of these held:
+  - **every** leg was creditable (`ic.nEff===ic.nBarsTotal`);
+  - the worst *crossing* leg developed (`tr.devDCR<=1`);
+  - no leg was under-developed;
+  - the four detailing confirmations were ticked.
+
+  So a single leg outside the pedestal, beyond 0.5·h_ef or under-developed kept the breakout check on, even though φN_r already ignores such legs.
+- **After:**
+  - The substitution is justified when **at least one** leg is creditable (φN_r > 0) and the four confirmations are ticked.
+  - Legs that do not qualify are reported as advisory `notes`: they are not counted in φN_r and no longer block the substitution.
+  - `tensionRebarIntercept`: devDCR/devWorst are taken over the legs counted in φN_r (`devPool`); if no leg is counted, over all crossing legs. The "Rebar Development" row therefore reports the governing **credited** leg.
+  - Compliance panel:
+    - new blocking row "At least one leg is creditable (φN_r > 0)";
+    - "every leg creditable" and the above/below development rows are now advisory;
+    - the error text now says the breakout check is "still being enforced" (it wrongly said "skipped").
+  - Summary: when the substitution applies, a green note says that tension breakout and side-face blowout are not checked because the anchor reinforcement carries the force, and lists the uncounted legs.
+- **Governing provision:** ACI 318-19 §17.5.2.1(a): the design strength of the anchor reinforcement may be used instead of the concrete breakout strength. φN_r = φ·n_eff·A_b·f_y counts only legs that satisfy §17.5.2.1.1 and R17.5.2.1.
+- **Check case:** the TR-H1 case: h_ef = 18 in, H = 58 in, pedestal 24 × 24 in, 2 × 2 anchors at ±6 in, #5 U-stirrups, 16 legs, of which 8 are creditable.
+
+  | | Confirmations | Substitution | Concrete Breakout (T) row | Side-Face Blowout row |
+  |---|---|---|---|---|
+  | Before | not ticked | not justified | 0.42 | 0.072 |
+  | Before | all ticked | not justified ("8 bar(s) not creditable") | 0.42 | 0.072 |
+  | After | not ticked | not justified (the 4 confirmations) | 0.42 | 0.072 |
+  | After | all ticked | justified | removed | removed |
+
+  In every row: Anchor Reinf. Tension 0.048 (φN_r = 0.75 × 8 × 0.31 × 60 = 111.6 kip), Rebar Development 0.869, steel 0.145, pullout 0.114.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar), and the export checks pass.
+  - The check case above was run headless on origin/main and on the working tree, with 0 page errors.
+- **Open question for the engineer:** with the substitution, the tool also stops checking side-face blowout (§17.6.4); that behaviour predates this change. §17.5.2.1(a) speaks of the concrete breakout strength. Whether side-face blowout should stay checked is raised in the PR and not changed here.
