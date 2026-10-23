@@ -3007,20 +3007,28 @@ function rebarJustified(kind, cc){
   if(kind==="tension"){
     const ic=tensionRebarIntercept(cc), tr=tensionRebarCheck(cc);
     if(!ic||!tr) return {present:true, justified:false, reasons:["not evaluated"]};
+    /* SUB-1 (2026-10-23, engineer): §17.5.2.1(a) lets the design strength of the
+       anchor reinforcement be used INSTEAD of the concrete breakout strength. That
+       strength, φN_r, already counts only the legs that are creditable (within
+       0.5·h_ef, crossing the surface, developed both sides). Legs that do not
+       qualify are simply not counted, so they no longer block the substitution;
+       they are reported as advisory notes. φN_r is checked against N_ua in its own
+       row ("Anchor Reinf. Tension"). The substitution needs at least one
+       creditable leg (otherwise there is no reinforcement load path) and the
+       engineer's detailing confirmations. */
+    const notes=[];
     if(ic.nEff<ic.nBarsTotal){
-      /* name the specific dominant cause rather than the old catch-all
-         "outside the cone or under-developed", which hid a cover clash */
       const bits=[];
       if(ic.nCover>0)  bits.push(ic.nCover+" violate clear cover");
       if(ic.nOutPed>0) bits.push(ic.nOutPed+" outside the pedestal");
-      if(ic.nOutside>0)bits.push(ic.nOutside+" miss the breakout cone");
+      if(ic.nOutside>0)bits.push(ic.nOutside+" not within 0.5·h_ef of a tension anchor or miss the surface");
       if(ic.nDevFail>0)bits.push(ic.nDevFail+" under-developed");
-      reasons.push((ic.nBarsTotal-ic.nEff)+" bar(s) not creditable ("+
+      notes.push((ic.nBarsTotal-ic.nEff)+" of "+ic.nBarsTotal+" leg(s) not counted in φN_r ("+
         (bits.length? bits.join(", ") : "see the Tension Rebar tab")+")");
     }
-    if(tr.devDCR>1.0001) reasons.push("development inadequate on at least one side of the cone (worst bar DCR "+fmt(tr.devDCR,2)+")");
-    if(ic.nDevFail>0) reasons.push(ic.nDevFail+" bar(s) cross the cone but cannot develop both sides");
+    if(ic.nEff===0) reasons.push("no leg is creditable, so the reinforcement provides no tension load path");
     ["ack_deformed","ack_hooks","ack_tie","ack_devBelow"].forEach(k=>{ if(!R[k]) reasons.push("unconfirmed: "+k.replace("ack_","")); });
+    return {present:true, justified:reasons.length===0, reasons, notes};
   } else {
     /* Shear was previously gated ONLY on the engineer's attestations — the
        geometry was never examined, so a hairpin that never reached the failure
@@ -3055,8 +3063,12 @@ function rebarCompliance(body, kind, ctx){
 
   if(kind==="tension"){
     const ic=ctx;
-    auto.push({ok: ic && ic.nEff===ic.nBarsTotal,
-      label:"All bars cross the breakout cone",
+    auto.push({ok: !!ic && ic.nEff>0,
+      label:"At least one leg is creditable anchor reinforcement (φN_r > 0)",
+      detail: ic? (ic.nEff+" of "+ic.nBarsTotal+" legs are counted in φN_r") : "—",
+      ref:"§17.5.2.1(a)"});
+    auto.push({ok: ic && ic.nEff===ic.nBarsTotal, warnOnly:true,
+      label:"Every leg is creditable (legs that are not are simply not counted in φN_r)",
       detail: ic? (ic.nEff+" of "+ic.nBarsTotal+" legs ("+
         (ic.layoutMode==="enclose"
           ? ic.nPieces+" enclosing piece"+(ic.nPieces===1?"":"s")+" × "+ic.legsPer+" leg"+(ic.legsPer===1?"":"s")
@@ -3078,15 +3090,15 @@ function rebarCompliance(body, kind, ctx){
     const anyCross = !!(ic && ic.bars && ic.bars.some(b=>b.crosses));
     const aReqSym=(dvc&&(dvc.hookTop||dvc.enclOK))?"ℓ_dh":"ℓ_d";
     const bReqSym=(dvc&&(dvc.hookBot||dvc.enclBotOK))?"ℓ_dh":"ℓ_d";
-    auto.push({ok: ic && ic.devWorst && ic.devWorst.aOK,
+    auto.push({ok: ic && ic.devWorst && ic.devWorst.aOK, warnOnly:true,
       na: !anyCross,
-      label:"Developed ABOVE the failure surface (ℓ_dh hooked / ℓ_d straight, per Fig. R17.5.2.1a)",
+      label:"Developed ABOVE the failure surface — governing counted leg (ℓ_dh hooked / ℓ_d straight, per Fig. R17.5.2.1a)",
       detail: (!anyCross ? "N/A — no leg crosses the cone (see the row above)"
           : (ic&&ic.devWorst? ("worst bar: "+fmt(ic.devWorst.above,2)+"″ available above z_cross vs "+aReqSym+" = "+fmt(ic.reqAbove,2)+"″ required") : "—")),
       ref:"§25.4.3 / §25.4.2.4"});
-    auto.push({ok: ic && ic.devWorst && ic.devWorst.bOK,
+    auto.push({ok: ic && ic.devWorst && ic.devWorst.bOK, warnOnly:true,
       na: !anyCross,
-      label:"Developed BELOW the failure surface (ℓ_dh hooked / ℓ_d straight, per Fig. R17.5.2.1a)",
+      label:"Developed BELOW the failure surface — governing counted leg (ℓ_dh hooked / ℓ_d straight, per Fig. R17.5.2.1a)",
       detail: (!anyCross ? "N/A — no leg crosses the cone (see the row above)"
           : (ic&&ic.devWorst? ("worst bar: "+fmt(ic.devWorst.below,2)+"″ available below z_cross vs "+bReqSym+" = "+fmt(ic.reqBelow,2)+"″ required") : "—")),
       ref:"§17.5.2.1.1"});
@@ -3188,8 +3200,7 @@ function rebarCompliance(body, kind, ctx){
     b.innerHTML = parts.join(" and ")+". Until every item above is resolved, the "+
       "substitution of anchor reinforcement for the concrete breakout check is "+
       "<b>not justified under §17.5.2.1</b>. The reinforcement capacity shown on this "+
-      "tab is provisional, and the concrete breakout check it replaces is currently "+
-      "being skipped.";
+      "tab is provisional, and the concrete breakout check is still being enforced.";
     body.appendChild(b);
   } else {
     const b=el("div","okBox");
@@ -3644,7 +3655,12 @@ function tensionRebarIntercept(cc){
      the first crossing bar so the detail text and compliance rows have a bar to
      describe. */
   let devDCR=0, devWorst=null;
-  detail.forEach(b=>{ if(!b.crosses||b.r===null) return;
+  /* SUB-1: development is reported for the legs COUNTED in φN_r (the governing
+     credited leg). A crossing leg that cannot develop is not counted at all — it
+     is listed in the per-leg table — so it no longer drives the summary row.
+     With no credited leg, the worst crossing leg is reported (shows why). */
+  const devPool = detail.some(b=>b.eff)? detail.filter(b=>b.eff) : detail;
+  devPool.forEach(b=>{ if(!b.crosses||b.r===null) return;
     if(devWorst===null) devWorst=b;    /* seed with any crossing bar */
     const dA=(reqAbove<=0)? 0 : ((b.above<=0)? Infinity : reqAbove/b.above);
     const dB=(reqBelow<=0)? 0 : ((b.below<=0)? Infinity : reqBelow/b.below);
@@ -5576,6 +5592,13 @@ function buildSummary(pg){
   /* anchor-reinforcement substitution status */
   ["tension","shear"].forEach(k=>{
     const j=rebarJustified(k,CC);
+    if(k==="tension" && j.present && j.justified){
+      const b=el("div","okBox");
+      b.innerHTML="<b>Concrete breakout (tension) and side-face blowout are not checked:</b> the anchor reinforcement "+
+        "carries the breakout force per &sect;17.5.2.1(a) — see \"Anchor Reinf. Tension\" (&phi;N<sub>r</sub>) above."+
+        ((j.notes&&j.notes.length)? (" Note: "+j.notes.join("; ")+".") : "");
+      pg.appendChild(b);
+    }
     if(j.present && !j.justified){
       const b=el("div","warnBox");
       b.innerHTML="<b>"+(k==="tension"?"Tension":"Shear")+" anchor reinforcement is present but the "+
