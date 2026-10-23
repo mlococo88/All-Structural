@@ -937,6 +937,14 @@ function defaultState(){
                 credit is never taken silently. */
              ack_devBelow:false, ack_deformed:false, ack_tie:false, ack_hooks:false },
     /* shear reinforcement (hairpins) */
+    /* PR-1 (2026-10-23): pedestal reinforcement — longitudinal bars on the perimeter
+       and closed ties. Used by the §10.7.6.1.6 tie check, by the tension option
+       "pedestal vertical bars" and by the closed-tie shear option. */
+    ped:{ present:false, barSize:"#8", nX:3, nY:3,   /* bars per face along x / along y, corners included */
+          tieSize:"#4", cover:2.0,                    /* clear cover to the ties, in */
+          tieSets:3, tieTop:2.0, tieSpacing:3.0,      /* tie sets from the top: depth of the first (centreline) and c/c spacing, in */
+          barTop:3.0,                                 /* top of the longitudinal bars below the surface, in */
+          intoFooting:true, footExt:24.0, grade:"gr60" },  /* bars continue into the footing by footExt below the pedestal bottom */
     vRebar:{ present:false, size:"#4", qty:2, grade:"gr60",
              pieceType:"hairpin",   /* hairpin (2 legs) | bar (1 leg) | closedtie (VT-1: tie sets enclosing the anchor group) */
              tieSets:3,             /* VT-1 closed ties: number of tie sets */
@@ -1113,7 +1121,7 @@ function mkSection(id,title,builder,parent){
    In the calculation report the same link reads "see §n.k" (buildPrintReport rewrites it). ---- */
 const BPAD_TABNAME={tabInput:"Input & Schematics",tabSummary:"Summary",tabPlate:"Base Plate",tabAnchor:"Anchor Bolts",tabConc:"Concrete Embedment",tabVCase:"Shear Distribution",tabTRebar:"Tension Rebar",tabVRebar:"Shear Rebar"};
 const BPAD_CARDS={pbBend:["tabPlate","Base Plate Bending"],pbTear:["tabPlate","Bolt Bearing / Tearout in Plate"],
-  coBrg:["tabConc","Concrete Bearing"],coPull:["tabConc","Pullout"],coTB:["tabConc","Concrete Breakout — Tension"],coSFB:["tabConc","Side-Face Blowout"],
+  coBrg:["tabConc","Concrete Bearing"],coPedTie:["tabConc","Pedestal Ties at Anchor Bolts"],coPull:["tabConc","Pullout"],coTB:["tabConc","Concrete Breakout — Tension"],coSFB:["tabConc","Side-Face Blowout"],
   coVB:["tabConc","Concrete Breakout — Shear"],coPry:["tabConc","Pryout"],
   anSteelT:["tabAnchor","Steel Strength — Tension"],anSteelV:["tabAnchor","Steel Strength — Shear"],anLevNut:["tabAnchor","Stand-off Bending"],
   anRodComp:["tabAnchor","Exposed Rod Compression"],anInt:["tabAnchor","Combined Tension–Shear Interaction"],
@@ -1307,6 +1315,69 @@ function anchorGeom(){
   }
   return {pts,xmax,xmin,ymax,ymin,px,py,ca_x_pos,ca_x_neg,ca_y_pos,ca_y_neg,
     sx:(pts.length>1? (xmax-xmin):0), sy:(pts.length>1?(ymax-ymin):0)};
+}
+
+/* ---------------------------------------------------------------
+   PR-1 (2026-10-23): pedestal reinforcement geometry. Longitudinal bars on the
+   perimeter (nX per face along x on the ±y faces, nY per face along y on the
+   ±x faces, corners shared) at clear cover + tie Ø + bar Ø/2 from the faces;
+   ties at clear cover, sets at tieTop + k·tieSpacing below the surface.
+   Coordinates are pedestal-centred (the same frame the rebar checks use).
+   --------------------------------------------------------------- */
+function pedGeom(){
+  const P=S.ped||{}, C=S.conc;
+  if(!P.present) return {present:false};
+  const rbB=rebarOf(P.barSize), rbT=rebarOf(P.tieSize);
+  const cover=Math.max(+P.cover||0,0);
+  const offB=cover+rbT.db+rbB.db/2, offT=cover+rbT.db/2;
+  const hx=C.Bx/2-offB, hy=C.By/2-offB;
+  const nX=Math.max(2,Math.round(P.nX||2)), nY=Math.max(2,Math.round(P.nY||2));
+  const bars=[], key=new Set();
+  const add=(x,y)=>{ const k=x.toFixed(3)+","+y.toFixed(3); if(!key.has(k)){ key.add(k); bars.push({x,y}); } };
+  for(let i=0;i<nX;i++){ const x=-hx+2*hx*i/(nX-1); add(x,-hy); add(x,hy); }
+  for(let j=0;j<nY;j++){ const y=-hy+2*hy*j/(nY-1); add(-hx,y); add(hx,y); }
+  const nSets=Math.max(1,Math.round(P.tieSets||1));
+  const z0=Math.max(+P.tieTop||0, cover+rbT.db/2), dz=Math.max(+P.tieSpacing||3, rbT.db+1);
+  const ties=[]; for(let k=0;k<nSets;k++) ties.push(z0+k*dz);
+  return {present:true, rbB, rbT, cover, offB, offT, hx, hy, bars, ties, tieHx:C.Bx/2-offT, tieHy:C.By/2-offT};
+}
+/* PR-1: the tension-rebar inputs the checks use. With the piece type
+   "pedbars" the bars ARE the pedestal longitudinal bars: size, grade, cover and
+   top come from S.ped; the bottom is the footing extension (or the pedestal
+   bottom). Any other piece type returns S.tRebar unchanged. */
+function tRebarEff(){
+  const R=S.tRebar;
+  if(R.pieceType!=="pedbars" || !(S.ped&&S.ped.present)) return R;
+  const pg=pedGeom();
+  return Object.assign({},R,{size:S.ped.barSize, grade:S.ped.grade||R.grade, cover:pg.offB-pg.rbB.db/2,
+    topCover:Math.max(+S.ped.barTop||0,0), isPed:true, pedBars:pg.bars,
+    pedBot:(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0});
+}
+/* ACI 318-19 §10.7.6.1.6: anchor bolts in the top of a column or pedestal are
+   enclosed by transverse reinforcement that also surrounds at least four
+   longitudinal bars, distributed within 5 in. of the top, and consisting of at
+   least two No. 4 or three No. 3 bars. */
+function pedTieCheck(){
+  const pg=pedGeom();
+  if(!pg.present) return {na:true};
+  const g=anchorGeom(), A=S.anchor;
+  const top=pg.ties.filter(z=>z<=5.0+1e-9);
+  const dbT=pg.rbT.db, sizeOK=dbT>=0.375-1e-9;
+  const req=(dbT>=0.5-1e-9)? 2 : 3;
+  const xIn=pg.tieHx-dbT/2, yIn=pg.tieHy-dbT/2;     /* inside face of the tie */
+  const encl=g.pts.every(p=>Math.abs(p.x)+A.dia/2<=xIn+1e-9 && Math.abs(p.y)+A.dia/2<=yIn+1e-9);
+  const nBars=pg.bars.length, barsOK=nBars>=4;
+  const ok=sizeOK && encl && barsOK && top.length>=req;
+  const dcr=(!sizeOK||!encl||!barsOK)? Infinity : (top.length? req/top.length : Infinity);
+  return {na:false, ok, dcr, nTop:top.length, top, req, tieSize:S.ped.tieSize, dbT, sizeOK, encl, nBars, barsOK, ties:pg.ties, xIn, yIn,
+    steps:[{title:"Ties at anchor bolts in the top of a pedestal",ref:"ACI 318-19 §10.7.6.1.6",
+      lines:[
+        "\\text{tie sets within 5 in of the top: }"+(top.length? top.map(z=>fmt(z,2)).join(",\\ ")+"\\ \\text{in}" : "\\text{none}")+"\\ \\Rightarrow\\ n="+top.length,
+        "\\text{required: }"+(dbT>=0.5-1e-9? "\\ge 2\\ \\text{No. 4 or larger}" : "\\ge 3\\ \\text{No. 3}")+"\\ \\Rightarrow\\ "+top.length+(top.length>=req?"\\ge":"<")+req,
+        "\\text{ties enclose the anchors: inside face at }\\pm"+fmt(xIn,2)+"\\times\\pm"+fmt(yIn,2)+"\\ \\text{in}\\ \\Rightarrow\\ "+(encl?"\\text{yes}":"\\text{NO}"),
+        "\\text{longitudinal bars surrounded: }"+nBars+(barsOK?"\\ge 4":"<4"),
+        "\\text{DCR}=n_{req}/n="+(isFinite(dcr)?fmt(dcr,2):"\\infty")],
+      vars:[["\\text{tie}",S.ped.tieSize,"pedestal tie bar"],["c_c",fmt(pg.cover,2)+" in","clear cover to the ties"]]}]};
 }
 
 /* ---------------------------------------------------------------
@@ -3318,7 +3389,7 @@ function tensionDevLengths(Rin){
 
 function tensionRebarIntercept(cc){
   if(!S.tRebar.present) return null;
-  const R=S.tRebar, rb=rebarOf(R.size), A=S.anchor, C=S.conc, g=anchorGeom();
+  const R=tRebarEff(), rb=rebarOf(R.size), A=S.anchor, C=S.conc, g=anchorGeom();
   /* Embedment for the anchor-reinforcement check: the ACTUAL h_ef (TR-H1, below).
      The §17.6.2.1.2 reduced h_ef' is a device of the breakout equations only; the
      reinforcement restrains the physical failure surface from the anchor head. */
@@ -3348,7 +3419,7 @@ function tensionRebarIntercept(cc){
   const extBelow=Math.max(R.extBelow!==undefined?R.extBelow:8,0);
   const sp=Math.max(R.spacing||0, rb.db, 1.0);
   const nWanted=Math.max(1,Math.round(R.qty));      /* bars PER TENSION ROW */
-  const dev=tensionDevLengths();
+  const dev=tensionDevLengths(R);
 
   /* which anchors are in tension for the governing combination */
   let govC=null, Tmax=-1;
@@ -3380,7 +3451,7 @@ function tensionRebarIntercept(cc){
      bottom extended extBelow below the anchor-head plane. Both are geometry, not
      claims. */
   const barTop=C.H-topCover;
-  const barBot=Math.max(0, headZ-extBelow);
+  const barBot=R.isPed? R.pedBot : Math.max(0, headZ-extBelow);   /* PR-1: pedestal bars run to the footing */
 
   /* ---- STIRRUP PIECES → LEGS ------------------------------------------------
      The quantity input counts PIECES; legs are derived from the piece type
@@ -3399,7 +3470,7 @@ function tensionRebarIntercept(cc){
                  rows. Under moment only the tension-side leg of each piece can
                  be effective, which is precisely the situation this rework is
                  for. */
-  const legsPer = (R.pieceType==="bar"||R.pieceType==="hairpin")? 1 : 2;
+  const legsPer = (R.pieceType==="bar"||R.pieceType==="hairpin"||R.pieceType==="pedbars")? 1 : 2;
   const gauge = Math.max(R.legGauge||0, rb.db);
   const orientY = (R.orient!=="x");           /* legs separated along y by default */
   const yLim=C.By/2-cover-rb.db/2;
@@ -3451,6 +3522,11 @@ function tensionRebarIntercept(cc){
   function layoutPieces(){
     const legs=[];
     rwLines.length=0;
+    if(R.isPed){
+      /* PR-1: the pedestal longitudinal bars, each its own leg at its true position */
+      R.pedBars.forEach((b,i)=>legs.push({x:b.x,y:b.y,piece:i+1,leg:"—",fits:fitsAt(b.x,b.y)}));
+      return legs;
+    }
     if(rowWide){
       /* ---- U-BAR PER ANCHOR ROW/COLUMN (auto-wide) -------------------------
          One WIDE U-bar brackets the OUTER anchors of each line of tension
@@ -3713,10 +3789,10 @@ function tensionRebarIntercept(cc){
 
 function tensionRebarCheck(cc){
   if(!S.tRebar.present) return null;
-  const R=S.tRebar, rb=rebarOf(R.size), rg=rgrade(R.grade);
+  const R=tRebarEff(), rb=rebarOf(R.size), rg=rgrade(R.grade);
   const phi=0.75;   /* §17.5.2.1a develops anchor reinf; φ=0.75 (ductile) for the bars in tension */
   const ic=tensionRebarIntercept(cc);
-  const dev=ic? ic.dev : tensionDevLengths();
+  const dev=ic? ic.dev : tensionDevLengths(R);
   const fy=dev.fy, db=dev.db, fc=dev.fc;
   /* ---- CAPACITY FROM EFFECTIVE LEGS ONLY -----------------------------------
      φN_r counts ONLY the legs that qualify per §17.5.2.1.1 — crossing the cone
@@ -3922,9 +3998,14 @@ function shearRebarIntercept(cc){
                   x_c + (leading anchors → back face) − cover ≥ ℓ_dh
      φV_r = 0.75 · n_eff · A_b · f_y as for hairpins. */
   if(R.pieceType==="closedtie"){
-    const tLeg=halfSpanT-cover-dev.db/2;               /* side legs, bar centreline */
-    const nSets=Math.max(1,Math.round(R.tieSets||1));
-    const z0=Math.max(+R.tieTop||0, cover+dev.db/2), dz=Math.max(+R.tieSpacing||3, dev.db+1);
+    /* PR-1: with the pedestal reinforcement entered, the ties ARE the pedestal ties */
+    const usePed=!!(S.ped&&S.ped.present);
+    const Rt=usePed? Object.assign({},R,{size:S.ped.tieSize, cover:S.ped.cover, tieSets:S.ped.tieSets, tieTop:S.ped.tieTop, tieSpacing:S.ped.tieSpacing}) : R;
+    const coverT=Math.max(Rt.cover!==undefined?Rt.cover:2.0,0);
+    const devT=usePed? tensionDevLengths(Object.assign({},Rt,{cover:coverT})) : dev, rbT=rebarOf(Rt.size);
+    const tLeg=halfSpanT-coverT-devT.db/2;               /* side legs, bar centreline */
+    const nSets=Math.max(1,Math.round(Rt.tieSets||1));
+    const z0=Math.max(+Rt.tieTop||0, coverT+devT.db/2), dz=Math.max(+Rt.tieSpacing||3, devT.db+1);
     /* reference row = the anchors the governing breakout case uses: the row at
        c_a1 from the governing edge (the back row when Case 2 governs) */
     const uRef0=halfSpanN-ca1;
@@ -3939,27 +4020,27 @@ function shearRebarIntercept(cc){
       [{t:-tLeg,lab:"A"},{t:+tLeg,lab:"B"}].forEach(q=>{
         const dT=Math.max(0,tMin-q.t,q.t-tMax);
         const xc=Math.max(dT,z)/1.5;
-        const front=ca1-xc-cover, behind=xc+toBack-cover;
+        const front=ca1-xc-coverT, behind=xc+toBack-coverT;
         const L={piece:k+1, leg:q.lab, t:q.t, anchorT:(q.t<0?tMin:tMax), z, dT, xCross:xc,
           x:(nx!==0)? uRef*nx : q.t, y:(nx!==0)? q.t : uRef*ny, fits:true,
-          front, behind, reqFront:dev.ldh, reqBehind:dev.ldh};
+          front, behind, reqFront:devT.ldh, reqBehind:devT.ldh};
         L.nearOK=(z<=nearLimitT+1e-9);
         L.crossOK=(front>1e-9);
         L.depthOK=(z<=bodyDepthT+1e-9)&&L.crossOK;
-        L.frontOK=(front>1e-9); L.behindOK=(behind>=dev.ldh-1e-9);
+        L.frontOK=(front>1e-9); L.behindOK=(behind>=devT.ldh-1e-9);
         if(!L.nearOK){ nFarT++; L.eff=false;
           L.why="tie set at depth "+fmt(z,2)+"″ > 0.5·c_a1 = "+fmt(nearLimitT,2)+"″ (too far below the anchor)"; }
         else if(!L.crossOK){ nDeepT++; L.eff=false;
-          L.why="crosses the failure surface at "+fmt(xc,2)+"″ in front of the anchors, beyond the front corner (c_a1 − cover = "+fmt(ca1-cover,2)+"″)"; }
+          L.why="crosses the failure surface at "+fmt(xc,2)+"″ in front of the anchors, beyond the front corner (c_a1 − cover = "+fmt(ca1-coverT,2)+"″)"; }
         else if(!L.frontOK||!L.behindOK){ nDevT++; L.eff=false;
-          L.why="behind: "+fmt(behind,2)+"″ < ℓ_dh "+fmt(dev.ldh,2)+"″"; }
+          L.why="behind: "+fmt(behind,2)+"″ < ℓ_dh "+fmt(devT.ldh,2)+"″"; }
         else { L.eff=true; L.why=""; nEffT++; }
         legsT.push(L);
       });
     }
     const effL=legsT.filter(L=>L.eff), pool=effL.length? effL : legsT.filter(L=>L.crossOK);
     let devDCRT=0, gov=null;
-    pool.forEach(L=>{ const d=dev.ldh/Math.max(L.behind,1e-9); if(d>devDCRT){devDCRT=d;gov=L;} });
+    pool.forEach(L=>{ const d=devT.ldh/Math.max(L.behind,1e-9); if(d>devDCRT){devDCRT=d;gov=L;} });
     if(!pool.length) devDCRT=Infinity;
     return {legs:legsT,nLegsTotal:legsT.length,nEff:nEffT,nFar:nFarT,nDeep:nDeepT,nDev:nDevT,nNotFit:0,nClash:0,
       minClear:0,minCC:0,nPieces:nSets,legsPer:2,isTie:true,tLeg,tieTop:z0,tieSpacing:dz,nSets,
@@ -3967,11 +4048,11 @@ function shearRebarIntercept(cc){
       piecesPerAnchor:nSets,layoutMode:"tie",grpMode:false,gaugeAuto:2*tLeg,leadSpan:tMax-tMin,cTgrp:(tMin+tMax)/2,
       nStack:nSets,vSpacing:dz,tOffset:0,zMax:z0+(nSets-1)*dz,
       govEdge,ca1,nearLimit:nearLimitT,bodyDepth:bodyDepthT,zBelow:z0,depthOK:legsT.some(L=>L.depthOK),
-      availBehind:gov? gov.behind : 0,extBehind:gov? gov.behind : 0,roomBehind:toBack-cover,truncated:false,
-      availFront:gov? gov.front : 0,reqBehind:dev.ldh,reqFront:dev.ldh,engages:effL.length>0,devGov:gov,
-      dev,devDCR:devDCRT,rb,cover,gauge:2*tLeg,spacing:dz,
+      availBehind:gov? gov.behind : 0,extBehind:gov? gov.behind : 0,roomBehind:toBack-coverT,truncated:false,
+      availFront:gov? gov.front : 0,reqBehind:devT.ldh,reqFront:devT.ldh,engages:effL.length>0,devGov:gov,
+      dev:devT,devDCR:devDCRT,rb:rbT,cover:coverT,usePed,gauge:2*tLeg,spacing:dz,
       govCombo:govC.name,nx,ny,lead:uRef,halfSpanN,halfSpanT,
-      AsClaimed:legsT.length*rb.Ab,AsEffective:nEffT*rb.Ab};
+      AsClaimed:legsT.length*rbT.Ab,AsEffective:nEffT*rbT.Ab};
   }
 
   /* room behind the failure plane, inside the pedestal, less cover */
@@ -4126,9 +4207,10 @@ function shearRebarIntercept(cc){
 /* ---------------- SHEAR REBAR (hairpins) §17.5.2.1.2 ---------------- */
 function shearRebarCheck(cc){
   if(!S.vRebar.present) return null;
-  const R=S.vRebar, rb=rebarOf(R.size), rg=rgrade(R.grade);
+  const R=S.vRebar, rg=rgrade(R.grade);
   const phi=0.75;
   const ic=shearRebarIntercept(cc);
+  const rb=ic? ic.rb : rebarOf(R.size);      /* PR-1: pedestal ties may differ from S.vRebar.size */
   const fy=rgrade(R.grade).fy;
   /* EFFECTIVE legs only — same basis as the tension side (§17.5.2.1.1/.2 give
      no credit to a bar that does not reach the failure surface and develop). */
@@ -4682,6 +4764,47 @@ function buildInputPanel(){
         "tension; larger D increases it."));
   },P);
 
+  /* PR-1 (2026-10-23): pedestal reinforcement — entered once, used by the
+     §10.7.6.1.6 tie check, the "pedestal vertical bars" tension option and the
+     closed-tie shear option */
+  mkSection("inPed","7a. Pedestal Reinforcement",body=>{
+    body.appendChild(el("div","note",
+      "Longitudinal bars on the pedestal perimeter and the closed ties around them. Used for: the ACI 318-19 §10.7.6.1.6 "+
+      "check of ties at anchor bolts (Concrete Embedment tab, §8); the tension option <b>Pedestal vertical bars</b>; and the shear "+
+      "option <b>Closed ties enclosing the anchor group</b>. The app decides from this geometry which bars and ties are eligible."));
+    fRow(body,"Pedestal reinforcement entered",chkInput(()=>!!S.ped.present,v=>S.ped.present=v),"",
+      "Turn on to describe the pedestal's longitudinal bars and ties.");
+    if(!S.ped.present) return;
+    body.appendChild(el("h3",null,"Longitudinal bars"));
+    fRow(body,"Bar size",selInput(LIB.rebar,()=>S.ped.barSize,v=>S.ped.barSize=v,o=>o.size,o=>o.size),"","Pedestal vertical bars.");
+    fRow(body,"Bars per face along x (corners included)",numInput(()=>S.ped.nX,v=>S.ped.nX=Math.max(2,Math.round(v)),1),"",
+      "Bars on each of the two faces normal to y, spaced evenly between the corner bars.");
+    fRow(body,"Bars per face along y (corners included)",numInput(()=>S.ped.nY,v=>S.ped.nY=Math.max(2,Math.round(v)),1),"",
+      "Bars on each of the two faces normal to x.");
+    fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.ped.grade,v=>S.ped.grade=v,o=>o.name,o=>o.id),"","Yield of the longitudinal bars (used when they act as tension anchor reinforcement).");
+    fRow(body,"Top of bars below the surface",numInput(()=>S.ped.barTop,v=>S.ped.barTop=Math.max(0,v),0.25),"in",
+      "Where the vertical bars stop below the top of the pedestal. Sets the length above the breakout surface.");
+    fRow(body,"Bars continue into the footing",chkInput(()=>S.ped.intoFooting!==false,v=>S.ped.intoFooting=v),"",
+      "On = the bars run on below the pedestal (dowels into the footing), so the length below the breakout surface includes the extension below.");
+    if(S.ped.intoFooting!==false)
+      fRow(body,"Extension below the pedestal bottom",numInput(()=>S.ped.footExt,v=>S.ped.footExt=Math.max(0,v),1),"in",
+        "Embedment of the bars into the footing below the pedestal.");
+    body.appendChild(el("h3",null,"Ties"));
+    fRow(body,"Tie size",selInput(LIB.rebar,()=>S.ped.tieSize,v=>S.ped.tieSize=v,o=>o.size,o=>o.size),"","Closed ties around the longitudinal bars.");
+    fRow(body,"Clear cover to the ties",numInput(()=>S.ped.cover,v=>S.ped.cover=Math.max(0,v),0.25),"in","Side cover to the outside of the ties.");
+    fRow(body,"Number of tie sets near the top",numInput(()=>S.ped.tieSets,v=>S.ped.tieSets=Math.max(1,Math.round(v)),1),"",
+      "Tie sets counted from the top down (only the top sets matter for the anchor checks).");
+    fRow(body,"Depth of the top tie set",numInput(()=>S.ped.tieTop,v=>S.ped.tieTop=Math.max(0,v),0.25),"in","From the top surface to the centreline of the first tie.");
+    fRow(body,"Vertical spacing of tie sets",numInput(()=>S.ped.tieSpacing,v=>S.ped.tieSpacing=Math.max(1,v),0.25),"in","Centre-to-centre spacing between tie sets.");
+    const ptc=pedTieCheck();
+    if(!ptc.na){
+      const b=el("div",ptc.ok?"okBox":"errBox");
+      b.innerHTML="<b>§10.7.6.1.6:</b> "+ptc.nTop+" tie set(s) within 5 in of the top; "+ptc.req+" required ("+(ptc.dbT>=0.5-1e-9?"No. 4 or larger":"No. 3")+")"+
+        (ptc.encl?"; ties enclose the anchors":"; ties do NOT enclose every anchor")+"; "+ptc.nBars+" longitudinal bars"+(ptc.ok?" — OK.":" — NOT satisfied.");
+      body.appendChild(b);
+    }
+  },P);
+
   mkSection("inTRebar","8. Tension Reinforcement",body=>{
     body.appendChild(el("div","note",
       "Anchor reinforcement is vertical rebar (usually stirrups) detailed to catch the tension "+
@@ -4693,13 +4816,31 @@ function buildInputPanel(){
       "whether it is anchored each side). Each field notes what it drives."));
     fRow(body,"Tension rebar present",chkInput(()=>S.tRebar.present,v=>S.tRebar.present=v),"",
       "Turn on when the pedestal has vertical bars detailed to resist anchor tension. Off = rely on the plain concrete breakout capacity instead.");
+    if(S.tRebar.pieceType!=="pedbars")
     fRow(body,"Bar size",selInput(LIB.rebar,()=>S.tRebar.size,v=>S.tRebar.size=v,o=>o.size,o=>o.size),"",
       "Sets the bar area A_b (capacity φN_r = φ·n_eff·A_b·f_y) and diameter d_b (development length ℓ_d scales with d_b).");
     fRow(body,"Piece type",selInput(
       [{id:"bar",nm:"Single vertical bar (1 leg)"},{id:"hairpin",nm:"Hairpin (1 leg)"},
-       {id:"ustirrup",nm:"U-stirrup (2 legs)"},{id:"closedtie",nm:"Closed tie (2 legs)"}],
+       {id:"ustirrup",nm:"U-stirrup (2 legs)"},{id:"closedtie",nm:"Closed tie (2 legs)"},
+       {id:"pedbars",nm:"Pedestal vertical bars (from Pedestal Reinforcement)"}],
       ()=>S.tRebar.pieceType,v=>S.tRebar.pieceType=v,o=>o.nm,o=>o.id),"",
       "How many effective LEGS each piece gives and how they develop. A bar is one straight leg; a stirrup/tie gives two legs, each bent end developing in ℓ_dh above/below the breakout surface per Fig. R17.5.2.1a — the shorter hooked length is why stirrups are the usual detail, though ℓ_dh (not zero) is still required.");
+    if(S.tRebar.pieceType==="pedbars"){
+      /* PR-1: the pedestal longitudinal bars act as the anchor reinforcement */
+      if(!S.ped.present){
+        body.appendChild(el("div","errBox","Enter the bars under <b>7a. Pedestal Reinforcement</b> first — until then no bar is counted."));
+      } else {
+        const pg=pedGeom();
+        body.appendChild(el("div","note",
+          "The "+pg.bars.length+" "+S.ped.barSize+" pedestal bars (section 7a) are checked as anchor reinforcement, each at its true position: "+
+          "within 0.5·h_ef of an anchor in tension, crossing the group breakout surface, and developed above the crossing (to the bar top, "+
+          fmt(S.ped.barTop,2)+"″ below the surface) and below it ("+(S.ped.intoFooting!==false? "into the footing, "+fmt(S.ped.footExt,1)+"″ below the pedestal" : "to the pedestal bottom")+")."));
+      }
+      fRow(body,"Bars hooked at the top",chkInput(()=>!!S.tRebar.hookTop,v=>S.tRebar.hookTop=v),"",
+        "A standard hook at the top of the vertical bars develops the length above the breakout surface in ℓ_dh instead of straight ℓ_d.");
+      fRow(body,"Epoxy-coated",chkInput(()=>!!S.tRebar.epoxy,v=>S.tRebar.epoxy=v),"","Raises ℓ_d and ℓ_dh (ψ_e).");
+      return;
+    }
     {const lm=S.tRebar.layoutMode;
      const qlab=lm==="enclose"?"pieces":(lm==="rowWide"?"U-bars per anchor line":"pieces per tension row");
      const qhint=lm==="enclose"?"in the enclosing run":(lm==="rowWide"?"nested at each anchor row/column (“doubled” = 2), offset by one anchor diameter":"alongside each tension row");
@@ -4857,14 +4998,17 @@ function buildInputPanel(){
       "note what each one drives."));
     fRow(body,"Shear rebar present",chkInput(()=>S.vRebar.present,v=>S.vRebar.present=v),"",
       "Turn on when hairpins/ties are detailed to resist anchor shear. Off = rely on the plain concrete shear-breakout capacity.");
-    fRow(body,"Bar size",selInput(LIB.rebar,()=>S.vRebar.size,v=>S.vRebar.size=v,o=>o.size,o=>o.size),"",
+    if(!(S.vRebar.pieceType==="closedtie"&&S.ped.present)) fRow(body,"Bar size",selInput(LIB.rebar,()=>S.vRebar.size,v=>S.vRebar.size=v,o=>o.size,o=>o.size),"",
       "Sets bar area A_b (capacity φV_r = φ·n_eff·A_b·f_y) and diameter d_b (development length behind the plane scales with d_b).");
     fRow(body,"Piece type",selInput(
       [{id:"hairpin",nm:"Hairpin (2 legs)"},{id:"bar",nm:"Single bar (1 leg)"},{id:"closedtie",nm:"Closed ties enclosing the anchor group"}],
       ()=>S.vRebar.pieceType,v=>S.vRebar.pieceType=v,o=>o.nm,o=>o.id),"",
       "A hairpin is a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage; a single bar is one leg and needs its own near-side development. <b>Closed ties</b> (pedestal ties around all the anchors, ACI Fig. R17.5.2.1b): enter the tie geometry and the app decides which tie legs are eligible.");
     const vTie=(S.vRebar.pieceType==="closedtie");
-    if(vTie && S.vRebar.present){
+    if(vTie && S.vRebar.present && S.ped.present){
+      body.appendChild(el("div","note","<b>Closed ties:</b> the pedestal ties from <b>7a. Pedestal Reinforcement</b> are used ("+
+        S.ped.tieSize+", "+S.ped.tieSets+" sets from "+fmt(S.ped.tieTop,2)+"″ at "+fmt(S.ped.tieSpacing,2)+"″, cover "+fmt(S.ped.cover,2)+"″). Edit them there."));
+    } else if(vTie && S.vRebar.present){
       body.appendChild(el("h3",null,"Closed-tie geometry"));
       fRow(body,"Number of tie sets",numInput(()=>S.vRebar.tieSets,v=>S.vRebar.tieSets=Math.max(1,Math.round(v)),1),"",
         "Tie sets from the top down. Each set gives two legs parallel to the shear (one at each side face); the app checks each set at its own depth.");
@@ -5207,6 +5351,9 @@ function allChecks(){
   /* bearing */
   const brg=bearingCheck(CC);
   if(!brg.na) checks.push({label:"Concrete Bearing",ref:"§22.8",dcr:brg.dcr,combo:brg.gov,tab:"tabConc"});
+  /* PR-1: §10.7.6.1.6 ties at anchor bolts in a pedestal (when the pedestal reinforcement is entered) */
+  const ptc=pedTieCheck();
+  if(!ptc.na) checks.push({label:"Pedestal Ties at Anchors",ref:"§10.7.6.1.6",dcr:ptc.dcr,combo:"—",tab:"tabConc"});
   const soc=standoffCompressionCheck(CC);
   if(soc) checks.push({label:"Rod Compression (stand-off)",ref:"AISC E3",dcr:soc.dcr,combo:soc.gov,tab:"tabAnchor"});
   /* anchor: steel tension, steel shear, each concrete mode, interaction — enveloped */
@@ -5943,9 +6090,10 @@ function buildInputEcho(pg){
         (((S.shear.caseOverride||"auto")==="auto")?"automatic — worst case governs"
           :("forced "+({c1:"Case 1",c2:"Case 2",c3:"Case 3"})[S.shear.caseOverride]))+
         (S.shear.weldedPlate?"; welded to a common plate":"")+")"],
-      ["Tension rebar", S.tRebar.present?(S.tRebar.qty+"-"+S.tRebar.size+" "+rgrade(S.tRebar.grade).name+
-        (S.tRebar.centered===false? ", set-out offset ("+fmt(+S.tRebar.offX||0,2)+", "+fmt(+S.tRebar.offY||0,2)+")\u2033":"")):"none"],
-      ["Shear rebar", S.vRebar.present?(S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs"):"none"],
+      ["Tension rebar", !S.tRebar.present? "none" : (S.tRebar.pieceType==="pedbars")? ("pedestal vertical bars ("+(S.ped.present? pedGeom().bars.length+"-"+S.ped.barSize : "not entered")+")") : (S.tRebar.qty+"-"+S.tRebar.size+" "+rgrade(S.tRebar.grade).name+
+        (S.tRebar.centered===false? ", set-out offset ("+fmt(+S.tRebar.offX||0,2)+", "+fmt(+S.tRebar.offY||0,2)+")\u2033":""))],
+      ["Shear rebar", !S.vRebar.present? "none" : (S.vRebar.pieceType==="closedtie")? ("closed ties"+(S.ped.present? " (pedestal ties, "+S.ped.tieSize+")" : " ("+S.vRebar.size+")")) : (S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs")],
+      ["Pedestal reinforcement", S.ped.present? (pedGeom().bars.length+"-"+S.ped.barSize+" vertical, "+S.ped.tieSize+" ties: "+S.ped.tieSets+" sets from "+fmt(S.ped.tieTop,2)+"″ at "+fmt(S.ped.tieSpacing,2)+"″") : "not entered"],
       ["Stand-off", standoffParams().label+(standoffParams().hasStandoff?(", z="+fmt(standoffParams().z,2)+String.fromCharCode(34)):"")]
     ];
     const t=el("table","tbl"); rows.forEach(r=>{ const tr=el("tr");
@@ -6303,6 +6451,15 @@ function buildConcTab(pg){
        loadSym:"V_ua",capSym:"\u03c6V_cpg",
        basis:"ANCHOR GROUP \u2014 derived from the group breakout N_cbg (\u00a717.7.3)"}); },pg);
   mkSection("coBreakGeo","7. Breakout Geometry",body=>{ drawBreakout(body,c); },pg);
+  /* PR-1: §10.7.6.1.6 */
+  mkSection("coPedTie","8. Pedestal Ties at Anchor Bolts",body=>{
+    const ptc=pedTieCheck();
+    if(ptc.na){ body.appendChild(el("div","note","Not checked: enter the pedestal longitudinal bars and ties under <b>Pedestal Reinforcement</b> (Reinforcement inputs) to check ACI 318-19 §10.7.6.1.6.")); return; }
+    renderSteps(body,ptc.steps);
+    dcrBox(body,ptc.dcr,false,{load:ptc.req,cap:ptc.nTop,unit:"ties",loadSym:"n_req",capSym:"n (within 5 in)"});
+    if(!ptc.encl) body.appendChild(el("div","errBox","The ties do not enclose every anchor (anchor + rod radius outside the tie's inside face). Move the anchors inward or reduce the cover."));
+    if(!ptc.sizeOK) body.appendChild(el("div","errBox","Tie bars smaller than No. 3 do not satisfy §10.7.6.1.6."));
+  },pg);
 }
 
 /* ---- "WHY ARE THE BARS NOT EFFECTIVE?" banner -----------------------------
@@ -8614,6 +8771,8 @@ function drawRebarPlan(body){
   rect(s,X(-C.Bx/2),Yp(C.By/2),C.Bx*sc,C.By*sc,"#eae7df","#555",1.2);
   rect(s,X(-S.plate.B/2),Yp(S.plate.N/2),S.plate.B*sc,S.plate.N*sc,"none","#888",1.0,"4 3");
   colPlanDraw(s,X,Yp,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
+  /* PR-1: pedestal tie outline (grey) when the pedestal reinforcement is entered */
+  {const pg=pedGeom(); if(pg.present) rect(s,X(-pg.tieHx),Yp(pg.tieHy),2*pg.tieHx*sc,2*pg.tieHy*sc,"none","#8d8d8d",1.6);}
   /* GB-1: the group breakout surface in plan — its flat bottom (outline through
      the outer tension anchors, at the head plane) and where it leaves the
      concrete (1.5·h_ef out at the top face, or at the pedestal face first) */
@@ -8735,7 +8894,7 @@ function drawRebarPlan(body){
 
 function drawRebar(body,kind){
   const C=S.conc, A=S.anchor, g=anchorGeom();
-  const R=(kind==="tension")?S.tRebar:S.vRebar;
+  const R=(kind==="tension")?tRebarEff():S.vRebar;
   const rb=rebarOf(R.size);
   const W=620,H=440,pad=80;
   /* For the SHEAR section the cut runs ALONG the shear direction (the governing
@@ -8883,7 +9042,9 @@ function drawRebar(body,kind){
        by the top cover (the old sketch ran bars to z = C.H, i.e. sticking out at
        the surface), bottom at the modelled extension below the head. */
     const barTopZ = icDraw? icDraw.barTop : (C.H - Math.max(R.topCover||R.cover||0,0));
-    const hookZ   = icDraw? icDraw.barBot : Math.max(0, headZ - Math.max(3*rb.db, 2));
+    /* PR-1: pedestal bars may run below the pedestal into the footing — draw them
+       to just below the base, clipped to the view */
+    const hookZ   = icDraw? Math.max(icDraw.barBot, -0.2*pad/sc) : Math.max(0, headZ - Math.max(3*rb.db, 2));
     /* END BENDS IN ELEVATION — drawn according to WHICH WAY the bend actually
        runs relative to this view. The tension elevation looks along y, so x lies
        in the page:
@@ -8972,8 +9133,10 @@ function drawRebar(body,kind){
       /* the old dim here read the REMOVED ld_avail input (stale autosave values
          kept it alive). Dimension the modelled bar extension below the anchor
          head instead — that IS the input that sets the below-cone length. */
-      if(icDraw){
+      if(icDraw && !R.isPed){
         dimV(s,Yv(headZ),Yv(icDraw.barBot),X(-halfPed)-16,"ext below head = "+fmt(icDraw.extBelow,1)+String.fromCharCode(34));
+      } else if(icDraw && R.isPed && S.ped.intoFooting!==false){
+        txt(s,X(-halfPed)-6,baseY+12,"bars continue "+fmt(S.ped.footExt,0)+"″ into the footing","lblTxt","end",8,"#555");
       }
       /* bar spacing dim between the two innermost bars */
       if(drawn.length>1){
@@ -8985,7 +9148,7 @@ function drawRebar(body,kind){
     /* the caption previously asserted the bars were "crossing the cone,
        developed both sides" even when the intercept model credited none of
        them — state the actual effective count instead */
-    let cap="Tension anchor reinforcement — "+R.qty+"-"+R.size+
+    let cap="Tension anchor reinforcement — "+(R.isPed? ("pedestal bars "+R.pedBars.length+"-"+R.size) : (R.qty+"-"+R.size))+
             (icDraw? (" ("+icDraw.nEff+" of "+icDraw.nBarsTotal+
                       " legs effective per §17.5.2.1.1)")
                    : " (§17.5.2.1.1)");
