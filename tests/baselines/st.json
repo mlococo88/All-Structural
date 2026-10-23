@@ -2,7 +2,7 @@
  "tool": "st",
  "cases": {
   "built-in (no hand-off)": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "24a44d55a3cf",
     "st.status": "10b656121f06",
@@ -11,10 +11,10 @@
     "st.governing": "db8c287a6437",
     "st.sections": "95f38130a36d",
     "st.stations": "34700b54a980",
-    "st.R": "62ba59d02c34",
+    "st.R": "4d5c9c66407b",
     "st.tab.Inputs": "07d98d683990",
-    "st.tab.Section Props": "c5008f72c83a",
-    "st.tab.Constructibility": "ee7c46c9fad6",
+    "st.tab.Section Props": "380472ec67cc",
+    "st.tab.Constructibility": "abfd6364721c",
     "st.tab.Stresses": "b34f6cdcaa2b",
     "st.tab.Flexure": "d622df7223c8",
     "st.tab.Shear": "6e172b2351fb",
@@ -27,12 +27,12 @@
     "st.tab.Rating": "821efd3bd45b",
     "st.tab.Optimize": "1a8299e5b8ea",
     "st.tab.Nomenclature": "622d8fed6555",
-    "st.tab.Report": "378c93807012",
-    "st.report.all": "f4d382be33ee"
+    "st.tab.Report": "139c8d78d89f",
+    "st.report.all": "2a4e89483725"
    }
   },
   "payload def15_AASHTO_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "558a88f5e8d4",
     "st.status": "5481e8d4d5aa",
@@ -41,11 +41,11 @@
     "st.governing": "d87427167c25",
     "st.sections": "062a5189cd8a",
     "st.stations": "edadf0c4bbe8",
-    "st.R": "1c09bac70b8b",
+    "st.R": "092b5740a585",
     "st.tab.Inputs": "1f1aa3d62209",
-    "st.tab.Section Props": "8730edf0c5b3",
-    "st.tab.Constructibility": "d756d44cc0f9",
-    "st.tab.Stresses": "10d6a9a117e6",
+    "st.tab.Section Props": "83a5c57f93d9",
+    "st.tab.Constructibility": "6c29fbea77ab",
+    "st.tab.Stresses": "ae6ff29f717d",
     "st.tab.Flexure": "d3dba34c28b6",
     "st.tab.Shear": "f3483f690a37",
     "st.tab.Diagrams": "63ffa669b59d",
@@ -57,12 +57,12 @@
     "st.tab.Rating": "2503d22a6f9e",
     "st.tab.Optimize": "5fcb8938b65d",
     "st.tab.Nomenclature": "7ce9cb471d63",
-    "st.tab.Report": "30c85ab2ab82",
-    "st.report.all": "4938460de1be"
+    "st.tab.Report": "2e5014008c57",
+    "st.report.all": "99dac786c143"
    }
   },
   "payload def15_AASHTO_G2_gdx": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "e78c4aa86d50",
     "st.status": "5481e8d4d5aa",
@@ -71,11 +71,11 @@
     "st.governing": "567d1f896f3b",
     "st.sections": "ef6049d406bd",
     "st.stations": "b3589e8d669e",
-    "st.R": "7130b87d9df6",
+    "st.R": "979e127b086a",
     "st.tab.Inputs": "a86bf4afd549",
-    "st.tab.Section Props": "e79b5980c44c",
-    "st.tab.Constructibility": "96f59e4415d4",
-    "st.tab.Stresses": "963d9111a6c6",
+    "st.tab.Section Props": "11d5c9666d29",
+    "st.tab.Constructibility": "6a2e53a6a281",
+    "st.tab.Stresses": "381aae8c900a",
     "st.tab.Flexure": "3715a2e94ca7",
     "st.tab.Shear": "f46c6f33807d",
     "st.tab.Diagrams": "62272f209718",
@@ -87,12 +87,12 @@
     "st.tab.Rating": "4499a2708ba9",
     "st.tab.Optimize": "1e81c599087f",
     "st.tab.Nomenclature": "06e63c955021",
-    "st.tab.Report": "0e4214caea57",
-    "st.report.all": "e2d0cd717102"
+    "st.tab.Report": "2292500c0bd3",
+    "st.report.all": "df90a697a6c4"
    }
   },
   "payload def15_AASHTO_G2_loads": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "75aff3be90a5",
     "st.status": "5481e8d4d5aa",
@@ -101,11 +101,11 @@
     "st.governing": "567d1f896f3b",
     "st.sections": "ef6049d406bd",
     "st.stations": "b3589e8d669e",
-    "st.R": "81c36a62511f",
+    "st.R": "4547f8edd728",
     "st.tab.Inputs": "ef9500f5e281",
-    "st.tab.Section Props": "8d41d1be1b22",
-    "st.tab.Constructibility": "daf6cde6372c",
-    "st.tab.Stresses": "9518fe83908a",
+    "st.tab.Section Props": "44175fab3054",
+    "st.tab.Constructibility": "70b1d4413927",
+    "st.tab.Stresses": "8b426704b1aa",
     "st.tab.Flexure": "cc4aa7aafc85",
     "st.tab.Shear": "513e123b94e4",
     "st.tab.Diagrams": "a334b18efeac",
@@ -117,12 +117,12 @@
     "st.tab.Rating": "6312d98784d2",
     "st.tab.Optimize": "2a4c1682b922",
     "st.tab.Nomenclature": "d4489dfa651b",
-    "st.tab.Report": "f54cf99146eb",
-    "st.report.all": "fce359f1cdba"
+    "st.tab.Report": "c19dc4de16e0",
+    "st.report.all": "afa90af5be19"
    }
   },
   "payload def15_RIDOT_Iyes_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "eece61e035f0",
     "st.status": "ec45c76d6415",
@@ -131,11 +131,11 @@
     "st.governing": "424ffec72d1d",
     "st.sections": "7b126e05a27b",
     "st.stations": "51103a9a953b",
-    "st.R": "99cd6ba64885",
+    "st.R": "c3634ce2c6bf",
     "st.tab.Inputs": "82a4eb566784",
-    "st.tab.Section Props": "093230fd215d",
-    "st.tab.Constructibility": "cced891bf4cf",
-    "st.tab.Stresses": "4e107442e09c",
+    "st.tab.Section Props": "951f78067eb3",
+    "st.tab.Constructibility": "d9b8dc7c2f57",
+    "st.tab.Stresses": "ecf2b657cb96",
     "st.tab.Flexure": "7b63e6348cc2",
     "st.tab.Shear": "74fc61212be6",
     "st.tab.Diagrams": "5f251c23e577",
@@ -147,12 +147,12 @@
     "st.tab.Rating": "93648c04154b",
     "st.tab.Optimize": "437a236f5912",
     "st.tab.Nomenclature": "39441d532c7e",
-    "st.tab.Report": "933311f611f6",
-    "st.report.all": "de00df5ca0ef"
+    "st.tab.Report": "769e5e7ca237",
+    "st.report.all": "d06fe0653515"
    }
   },
   "payload gd_builtin28_AASHTO_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "f2bdba47cebc",
     "st.status": "5481e8d4d5aa",
@@ -161,11 +161,11 @@
     "st.governing": "973cc003e7be",
     "st.sections": "c53c62976041",
     "st.stations": "1e41251d5ce9",
-    "st.R": "767aa4cce9b1",
+    "st.R": "ee9fa2e58108",
     "st.tab.Inputs": "4f15116536c1",
-    "st.tab.Section Props": "3990fc71d56c",
-    "st.tab.Constructibility": "85e6b98f87a3",
-    "st.tab.Stresses": "c5ad8a4d04a0",
+    "st.tab.Section Props": "e80136212a38",
+    "st.tab.Constructibility": "857cfcec2989",
+    "st.tab.Stresses": "be898e3d0e55",
     "st.tab.Flexure": "0669f58e9126",
     "st.tab.Shear": "cea08be42120",
     "st.tab.Diagrams": "e355cd40459d",
@@ -177,12 +177,12 @@
     "st.tab.Rating": "af9bc125d587",
     "st.tab.Optimize": "c9fcb90c9d9c",
     "st.tab.Nomenclature": "8fc47290be4e",
-    "st.tab.Report": "39f0d980fc73",
-    "st.report.all": "71a5f89453ad"
+    "st.tab.Report": "2bff174f80b6",
+    "st.report.all": "3bf05c736013"
    }
   },
   "payload gd_builtin28_AASHTO_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "7189bac60fa6",
     "st.status": "5481e8d4d5aa",
@@ -191,11 +191,11 @@
     "st.governing": "bb04be8a89c6",
     "st.sections": "ef6049d406bd",
     "st.stations": "70159c047792",
-    "st.R": "05fa806623f6",
+    "st.R": "8d880422b193",
     "st.tab.Inputs": "1c609c3e31cc",
-    "st.tab.Section Props": "cd37f2408aec",
-    "st.tab.Constructibility": "372fbe4b12fb",
-    "st.tab.Stresses": "9801028a9cfc",
+    "st.tab.Section Props": "6a65ea6bd1a7",
+    "st.tab.Constructibility": "9b1d50a2b188",
+    "st.tab.Stresses": "68a822b78d96",
     "st.tab.Flexure": "b2108b68e617",
     "st.tab.Shear": "39f37923b8d6",
     "st.tab.Diagrams": "b2af468b2b39",
@@ -207,12 +207,12 @@
     "st.tab.Rating": "84ecfddcc062",
     "st.tab.Optimize": "2f92df5eda9d",
     "st.tab.Nomenclature": "7e5a7db22d68",
-    "st.tab.Report": "1bf6887980d9",
-    "st.report.all": "4aebd8bca7eb"
+    "st.tab.Report": "20d8543b11d2",
+    "st.report.all": "2bea3de0880d"
    }
   },
   "payload gd_builtin28_AASHTO_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d6be04a80119",
     "st.status": "5481e8d4d5aa",
@@ -221,11 +221,11 @@
     "st.governing": "e2e62d4dfd6d",
     "st.sections": "ef6049d406bd",
     "st.stations": "9333bd5a5823",
-    "st.R": "ecc3e5431875",
+    "st.R": "8807cba2abac",
     "st.tab.Inputs": "394c6d8be35a",
-    "st.tab.Section Props": "9c3ab93ae983",
-    "st.tab.Constructibility": "e675e7e2c3d9",
-    "st.tab.Stresses": "df735807a92c",
+    "st.tab.Section Props": "55dcb91cf670",
+    "st.tab.Constructibility": "73cba6d364c5",
+    "st.tab.Stresses": "1cdfe73e691d",
     "st.tab.Flexure": "730fa85380eb",
     "st.tab.Shear": "a7ebfff689d4",
     "st.tab.Diagrams": "d3c75517cf33",
@@ -237,12 +237,12 @@
     "st.tab.Rating": "59da7e9125e0",
     "st.tab.Optimize": "3f7579bc9238",
     "st.tab.Nomenclature": "644a15322d07",
-    "st.tab.Report": "92b663006a55",
-    "st.report.all": "58ad346aecff"
+    "st.tab.Report": "b325c0dae6c6",
+    "st.report.all": "5cf2dcbf52f3"
    }
   },
   "payload gd_builtin28_AASHTO_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b3d47d0a17bd",
     "st.status": "5481e8d4d5aa",
@@ -251,11 +251,11 @@
     "st.governing": "c82ad479165c",
     "st.sections": "ef6049d406bd",
     "st.stations": "86658f681a4b",
-    "st.R": "4306e7470012",
+    "st.R": "6589f562c4a2",
     "st.tab.Inputs": "0eca47d4c3f7",
-    "st.tab.Section Props": "7e6caee4eb2a",
-    "st.tab.Constructibility": "de3168f3ecd2",
-    "st.tab.Stresses": "e53e016a114a",
+    "st.tab.Section Props": "1d00d8c40b03",
+    "st.tab.Constructibility": "ef156e1eab8a",
+    "st.tab.Stresses": "2840774e8ae8",
     "st.tab.Flexure": "0b95c8e09690",
     "st.tab.Shear": "fd056b0aecd1",
     "st.tab.Diagrams": "2620509aa34a",
@@ -267,12 +267,12 @@
     "st.tab.Rating": "892bca67f87c",
     "st.tab.Optimize": "9568710791ef",
     "st.tab.Nomenclature": "6ec711ed5fe9",
-    "st.tab.Report": "d8bf8e08a699",
-    "st.report.all": "7d13ce3dd754"
+    "st.tab.Report": "e582f7b84309",
+    "st.report.all": "9fa70309a7ba"
    }
   },
   "payload gd_builtin28_AASHTO_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "555b755c7067",
     "st.status": "5481e8d4d5aa",
@@ -281,11 +281,11 @@
     "st.governing": "2467e35c4869",
     "st.sections": "c53c62976041",
     "st.stations": "418da0213c3d",
-    "st.R": "bcae3f35adc8",
+    "st.R": "eb253508feec",
     "st.tab.Inputs": "567293ac1d35",
-    "st.tab.Section Props": "160be6bb8128",
-    "st.tab.Constructibility": "07c908e137d8",
-    "st.tab.Stresses": "10d2520b6198",
+    "st.tab.Section Props": "8a1a483007e1",
+    "st.tab.Constructibility": "1457ff42b18a",
+    "st.tab.Stresses": "45a7b2adf643",
     "st.tab.Flexure": "4f6be0e863ad",
     "st.tab.Shear": "38b3e5251125",
     "st.tab.Diagrams": "542afaf9776c",
@@ -297,12 +297,12 @@
     "st.tab.Rating": "4b644ebc9d7b",
     "st.tab.Optimize": "8c91bb42a3a4",
     "st.tab.Nomenclature": "b18f7c9c8947",
-    "st.tab.Report": "b0b46288aab6",
-    "st.report.all": "e6c77bffa650"
+    "st.tab.Report": "f1467582e202",
+    "st.report.all": "a1b2ec4aab6b"
    }
   },
   "payload gd_builtin28_CTDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d4f6aa8b4d2e",
     "st.status": "ed7322df82eb",
@@ -311,11 +311,11 @@
     "st.governing": "10369a9744c0",
     "st.sections": "c53c62976041",
     "st.stations": "d06662ffac91",
-    "st.R": "d0fdd2ea07b2",
+    "st.R": "823a333b208c",
     "st.tab.Inputs": "380867ac7cc4",
-    "st.tab.Section Props": "fa9d2af61409",
-    "st.tab.Constructibility": "021a1ee61247",
-    "st.tab.Stresses": "e4acd61b8cc3",
+    "st.tab.Section Props": "58b0f685d61f",
+    "st.tab.Constructibility": "2b20e91c9b4a",
+    "st.tab.Stresses": "bbbd4803ce91",
     "st.tab.Flexure": "80a4d0e61180",
     "st.tab.Shear": "c4fbc901e117",
     "st.tab.Diagrams": "2c036de6d1cf",
@@ -327,12 +327,12 @@
     "st.tab.Rating": "ead00194873f",
     "st.tab.Optimize": "6d317375653e",
     "st.tab.Nomenclature": "aa302715d57a",
-    "st.tab.Report": "d254a5d8055b",
-    "st.report.all": "cc4960eec790"
+    "st.tab.Report": "fe80ed3f549a",
+    "st.report.all": "5c3755a15cb2"
    }
   },
   "payload gd_builtin28_CTDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "9ddf20f06f61",
     "st.status": "ed7322df82eb",
@@ -341,11 +341,11 @@
     "st.governing": "6d42f80abfeb",
     "st.sections": "ef6049d406bd",
     "st.stations": "a3f00a87341e",
-    "st.R": "68973c669593",
+    "st.R": "55fe3bd92396",
     "st.tab.Inputs": "8c5b0efc83f5",
-    "st.tab.Section Props": "f23231d5b962",
-    "st.tab.Constructibility": "dc134ee5574d",
-    "st.tab.Stresses": "de9d6271dd9b",
+    "st.tab.Section Props": "558e44c157d3",
+    "st.tab.Constructibility": "d592d9df560c",
+    "st.tab.Stresses": "33de534bb439",
     "st.tab.Flexure": "761656e997c2",
     "st.tab.Shear": "81408ba191d1",
     "st.tab.Diagrams": "dbee2e8cbcf4",
@@ -357,12 +357,12 @@
     "st.tab.Rating": "f2a99ce1338b",
     "st.tab.Optimize": "da0eac9a0a95",
     "st.tab.Nomenclature": "f6bddd1c3a87",
-    "st.tab.Report": "a72b799ea387",
-    "st.report.all": "7a91d6ec4bcd"
+    "st.tab.Report": "aaabdbcb6202",
+    "st.report.all": "8ffdf8fccc63"
    }
   },
   "payload gd_builtin28_CTDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "e9907f8fda39",
     "st.status": "ed7322df82eb",
@@ -371,11 +371,11 @@
     "st.governing": "db175fbacd69",
     "st.sections": "ef6049d406bd",
     "st.stations": "ae25eb2ef74d",
-    "st.R": "66d947f3f7a7",
+    "st.R": "e1ef0b8d094b",
     "st.tab.Inputs": "38241e5903b5",
-    "st.tab.Section Props": "22eb0f9ac2fa",
-    "st.tab.Constructibility": "aab81f6d4851",
-    "st.tab.Stresses": "77ce7c8ae06f",
+    "st.tab.Section Props": "5f511b90aa04",
+    "st.tab.Constructibility": "3c8acbe32c75",
+    "st.tab.Stresses": "d772df758667",
     "st.tab.Flexure": "342da560d61f",
     "st.tab.Shear": "e29c5e488a8c",
     "st.tab.Diagrams": "5c948660d44d",
@@ -387,12 +387,12 @@
     "st.tab.Rating": "06084bc5a8ed",
     "st.tab.Optimize": "b03597c82322",
     "st.tab.Nomenclature": "a35147cb896d",
-    "st.tab.Report": "470e7027d9cf",
-    "st.report.all": "ba36858bc1cd"
+    "st.tab.Report": "f4f606ec54fe",
+    "st.report.all": "8e7a9c7e0d58"
    }
   },
   "payload gd_builtin28_CTDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ec6abaee2a31",
     "st.status": "ed7322df82eb",
@@ -401,11 +401,11 @@
     "st.governing": "f015a5c71af5",
     "st.sections": "ef6049d406bd",
     "st.stations": "b497c2a1c322",
-    "st.R": "f99a72afff21",
+    "st.R": "08da7c3ff25e",
     "st.tab.Inputs": "b45f0d017edb",
-    "st.tab.Section Props": "1ee0f3fc938b",
-    "st.tab.Constructibility": "924f05e09edf",
-    "st.tab.Stresses": "d449d2e56960",
+    "st.tab.Section Props": "3e75ccc5dc26",
+    "st.tab.Constructibility": "25883ecdfe44",
+    "st.tab.Stresses": "d72cc0332832",
     "st.tab.Flexure": "a73ce994fc1c",
     "st.tab.Shear": "4cb4c4b48271",
     "st.tab.Diagrams": "64da7c691708",
@@ -417,12 +417,12 @@
     "st.tab.Rating": "eeb80e073c80",
     "st.tab.Optimize": "51e33a05588a",
     "st.tab.Nomenclature": "3552c2f44aa8",
-    "st.tab.Report": "7bb0ef88e8c4",
-    "st.report.all": "0f9718591e16"
+    "st.tab.Report": "c85400352d6b",
+    "st.report.all": "c4d589d7033f"
    }
   },
   "payload gd_builtin28_CTDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "16b20ef021ed",
     "st.status": "ed7322df82eb",
@@ -431,11 +431,11 @@
     "st.governing": "540f61ac0583",
     "st.sections": "c53c62976041",
     "st.stations": "6b52446f392f",
-    "st.R": "6a8ed08d01e5",
+    "st.R": "ca6a8f7d5b91",
     "st.tab.Inputs": "a88c3b62dd9a",
-    "st.tab.Section Props": "4ab4247ab997",
-    "st.tab.Constructibility": "7a50426c879f",
-    "st.tab.Stresses": "278dd4ad4cb3",
+    "st.tab.Section Props": "6a7c74be2260",
+    "st.tab.Constructibility": "bb3da00d49bc",
+    "st.tab.Stresses": "8feb61b1e448",
     "st.tab.Flexure": "03b42efd4ef6",
     "st.tab.Shear": "6b2efd4c26de",
     "st.tab.Diagrams": "7f2673f4d7c9",
@@ -447,12 +447,12 @@
     "st.tab.Rating": "7ea14444ae40",
     "st.tab.Optimize": "3564ea77d359",
     "st.tab.Nomenclature": "d35ad985b58e",
-    "st.tab.Report": "23193430c3d7",
-    "st.report.all": "bbacdfb540c4"
+    "st.tab.Report": "2a9c64424c94",
+    "st.report.all": "25cbafc132c8"
    }
   },
   "payload gd_builtin28_MassDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "67eccdcbacee",
     "st.status": "6096378939a3",
@@ -461,11 +461,11 @@
     "st.governing": "2ec2c862fce0",
     "st.sections": "218bc0b043a6",
     "st.stations": "d985c0817530",
-    "st.R": "e1208bf4150c",
+    "st.R": "c4db3a9e7aaf",
     "st.tab.Inputs": "cfbcf55cd783",
-    "st.tab.Section Props": "22539c3d690e",
-    "st.tab.Constructibility": "152852e6584b",
-    "st.tab.Stresses": "42087601ff42",
+    "st.tab.Section Props": "8e83e4629a06",
+    "st.tab.Constructibility": "4d0dc699e51f",
+    "st.tab.Stresses": "c476e955523f",
     "st.tab.Flexure": "43defcc60131",
     "st.tab.Shear": "b391f1691a97",
     "st.tab.Diagrams": "c059d47fd5ae",
@@ -477,12 +477,12 @@
     "st.tab.Rating": "cd2c1fded04c",
     "st.tab.Optimize": "4213ea85c1a0",
     "st.tab.Nomenclature": "9ff83977949d",
-    "st.tab.Report": "4948543b518a",
-    "st.report.all": "f02638bc26fb"
+    "st.tab.Report": "2cd192f03f32",
+    "st.report.all": "607f8fa76036"
    }
   },
   "payload gd_builtin28_MassDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "87aa9efbfb05",
     "st.status": "6096378939a3",
@@ -491,11 +491,11 @@
     "st.governing": "94ddc1bba81b",
     "st.sections": "83f7af10dda5",
     "st.stations": "1af9d9de1c29",
-    "st.R": "0a662e4fc7ec",
+    "st.R": "70ad8e4010fe",
     "st.tab.Inputs": "6ec6216ba8a1",
-    "st.tab.Section Props": "b5eca000db98",
-    "st.tab.Constructibility": "87ff997a8117",
-    "st.tab.Stresses": "9d452a9c97f9",
+    "st.tab.Section Props": "b3f947c7eb12",
+    "st.tab.Constructibility": "a9b1892eeadc",
+    "st.tab.Stresses": "90d87ff89643",
     "st.tab.Flexure": "16272e3dec2e",
     "st.tab.Shear": "dd2c2105c9fe",
     "st.tab.Diagrams": "1b8bb45164be",
@@ -507,12 +507,12 @@
     "st.tab.Rating": "bfc09c9935a3",
     "st.tab.Optimize": "7f8905e99fd8",
     "st.tab.Nomenclature": "301dfa30ac54",
-    "st.tab.Report": "4531e5a575db",
-    "st.report.all": "8dcd26e92e79"
+    "st.tab.Report": "82942ddcd5b7",
+    "st.report.all": "a517ee0d2f89"
    }
   },
   "payload gd_builtin28_MassDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "312e8207d21a",
     "st.status": "6096378939a3",
@@ -521,11 +521,11 @@
     "st.governing": "830718f2d4c9",
     "st.sections": "83f7af10dda5",
     "st.stations": "2b2d2aefde5e",
-    "st.R": "3f1f9d1183d4",
+    "st.R": "54d5da3be3e0",
     "st.tab.Inputs": "24a3beb0a10a",
-    "st.tab.Section Props": "92c1d8d3ee38",
-    "st.tab.Constructibility": "3bc85f672681",
-    "st.tab.Stresses": "cc09524e3566",
+    "st.tab.Section Props": "5951025dc3ac",
+    "st.tab.Constructibility": "0d8ecbb3457b",
+    "st.tab.Stresses": "28ae851c5b5f",
     "st.tab.Flexure": "95209a2ff72c",
     "st.tab.Shear": "2017725ae9b8",
     "st.tab.Diagrams": "24a97490158b",
@@ -537,12 +537,12 @@
     "st.tab.Rating": "d39588ddf2e0",
     "st.tab.Optimize": "2b18459f62cc",
     "st.tab.Nomenclature": "1a86ff12e9fe",
-    "st.tab.Report": "3de4f3d914b9",
-    "st.report.all": "632258942198"
+    "st.tab.Report": "ade3abd1cef9",
+    "st.report.all": "c88d41d0c94c"
    }
   },
   "payload gd_builtin28_MassDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "92650b43c44e",
     "st.status": "6096378939a3",
@@ -551,11 +551,11 @@
     "st.governing": "e9eb91a42dd6",
     "st.sections": "83f7af10dda5",
     "st.stations": "0118eacfe6fc",
-    "st.R": "c17596e51177",
+    "st.R": "9ab250e19b0f",
     "st.tab.Inputs": "18264a9e2de0",
-    "st.tab.Section Props": "b440ef2f732d",
-    "st.tab.Constructibility": "36efd61f3348",
-    "st.tab.Stresses": "dc03742569a1",
+    "st.tab.Section Props": "a8dc0dc6354d",
+    "st.tab.Constructibility": "6f014f92e4a4",
+    "st.tab.Stresses": "c22baeb8f268",
     "st.tab.Flexure": "886e459b6e2a",
     "st.tab.Shear": "8bf80bb7fcef",
     "st.tab.Diagrams": "f8e05b26cb93",
@@ -567,12 +567,12 @@
     "st.tab.Rating": "d2ecb583469a",
     "st.tab.Optimize": "83159c492463",
     "st.tab.Nomenclature": "51f8f676b734",
-    "st.tab.Report": "91afee67fd0b",
-    "st.report.all": "32d5a1f184f3"
+    "st.tab.Report": "37c3d2af3adb",
+    "st.report.all": "2856b6bf7592"
    }
   },
   "payload gd_builtin28_MassDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "f89f522855ff",
     "st.status": "6096378939a3",
@@ -581,11 +581,11 @@
     "st.governing": "ce8619554851",
     "st.sections": "218bc0b043a6",
     "st.stations": "4a058f53462b",
-    "st.R": "d5d7a9f2df2e",
+    "st.R": "00bb318b93d8",
     "st.tab.Inputs": "d9fe64de3093",
-    "st.tab.Section Props": "4d459c30a6c2",
-    "st.tab.Constructibility": "193ad34ee96e",
-    "st.tab.Stresses": "815869509a83",
+    "st.tab.Section Props": "af977cbd19e5",
+    "st.tab.Constructibility": "24ceb161e6ee",
+    "st.tab.Stresses": "5503130ff798",
     "st.tab.Flexure": "be3b59393875",
     "st.tab.Shear": "2dc97f9dc649",
     "st.tab.Diagrams": "86c8efbce669",
@@ -597,12 +597,12 @@
     "st.tab.Rating": "3e351fc2fa81",
     "st.tab.Optimize": "4fdcd9bb5e38",
     "st.tab.Nomenclature": "cd257f819d95",
-    "st.tab.Report": "2f11d45470c9",
-    "st.report.all": "a011fb08634f"
+    "st.tab.Report": "85326ad7c67b",
+    "st.report.all": "83e919d5703b"
    }
   },
   "payload gd_builtin28_RIDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "e8d37a1af2bf",
     "st.status": "fc63f88f03f2",
@@ -611,11 +611,11 @@
     "st.governing": "5fe8598861f8",
     "st.sections": "218bc0b043a6",
     "st.stations": "9016b3512ae9",
-    "st.R": "efc592066d90",
+    "st.R": "360bf397a94d",
     "st.tab.Inputs": "092698a91308",
-    "st.tab.Section Props": "f457b94824ad",
-    "st.tab.Constructibility": "a92ae5340c16",
-    "st.tab.Stresses": "d4ad92639cdf",
+    "st.tab.Section Props": "2108cb08ae63",
+    "st.tab.Constructibility": "525399399080",
+    "st.tab.Stresses": "fcb898c0e638",
     "st.tab.Flexure": "899b4c839ab7",
     "st.tab.Shear": "9174f85633a6",
     "st.tab.Diagrams": "949be9d1123e",
@@ -627,12 +627,12 @@
     "st.tab.Rating": "f1cf297a1482",
     "st.tab.Optimize": "42d100b6be7f",
     "st.tab.Nomenclature": "2a76376e8828",
-    "st.tab.Report": "15802b958284",
-    "st.report.all": "a02d9e7bf557"
+    "st.tab.Report": "5b70ce48e9d7",
+    "st.report.all": "069a49aba333"
    }
   },
   "payload gd_builtin28_RIDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b0f80bb3fa25",
     "st.status": "fc63f88f03f2",
@@ -641,11 +641,11 @@
     "st.governing": "6f3e0aa97c97",
     "st.sections": "83f7af10dda5",
     "st.stations": "5a76617cf5e8",
-    "st.R": "5d733b8d4b83",
+    "st.R": "e3ef102c5ef8",
     "st.tab.Inputs": "078bc2df5627",
-    "st.tab.Section Props": "e02a5343ed58",
-    "st.tab.Constructibility": "f59153daa611",
-    "st.tab.Stresses": "5b0703181ee1",
+    "st.tab.Section Props": "d9e0aae01660",
+    "st.tab.Constructibility": "559dbe85a20e",
+    "st.tab.Stresses": "4204c4f3fc70",
     "st.tab.Flexure": "323dbf0de906",
     "st.tab.Shear": "603830ecaa7c",
     "st.tab.Diagrams": "067f941001d1",
@@ -657,12 +657,12 @@
     "st.tab.Rating": "e183973926f6",
     "st.tab.Optimize": "b567a7cf231c",
     "st.tab.Nomenclature": "115d1f2aaf0c",
-    "st.tab.Report": "926e0405efd1",
-    "st.report.all": "6b00bd3731b5"
+    "st.tab.Report": "07fe6ec13d7b",
+    "st.report.all": "14a8c9b44999"
    }
   },
   "payload gd_builtin28_RIDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b77086af53f1",
     "st.status": "fc63f88f03f2",
@@ -671,11 +671,11 @@
     "st.governing": "069688712b76",
     "st.sections": "83f7af10dda5",
     "st.stations": "70ffb3569f4b",
-    "st.R": "f8538cd5ceaf",
+    "st.R": "4994028596a9",
     "st.tab.Inputs": "215c8175976b",
-    "st.tab.Section Props": "a734fff89544",
-    "st.tab.Constructibility": "dfe7870def69",
-    "st.tab.Stresses": "d762898b0d64",
+    "st.tab.Section Props": "9dc4283579ea",
+    "st.tab.Constructibility": "fe7643a20b46",
+    "st.tab.Stresses": "41171bb2dda2",
     "st.tab.Flexure": "db99327c9204",
     "st.tab.Shear": "47a4b1a718f1",
     "st.tab.Diagrams": "82b74e20e6a7",
@@ -687,12 +687,12 @@
     "st.tab.Rating": "5a90c3945118",
     "st.tab.Optimize": "5797a44058ec",
     "st.tab.Nomenclature": "7e4c388adf4e",
-    "st.tab.Report": "42b939fed3e7",
-    "st.report.all": "19a1775e5739"
+    "st.tab.Report": "4f61e4a58d77",
+    "st.report.all": "37ecf089f972"
    }
   },
   "payload gd_builtin28_RIDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "58c5f2e39a6b",
     "st.status": "fc63f88f03f2",
@@ -701,11 +701,11 @@
     "st.governing": "76c316a7c875",
     "st.sections": "83f7af10dda5",
     "st.stations": "6fd4c4407c4d",
-    "st.R": "9d9a71aa5044",
+    "st.R": "2cd9cce77351",
     "st.tab.Inputs": "48477d87d67d",
-    "st.tab.Section Props": "264780960151",
-    "st.tab.Constructibility": "7d042c137244",
-    "st.tab.Stresses": "717217adb268",
+    "st.tab.Section Props": "13c2ec94761a",
+    "st.tab.Constructibility": "8b5529c9a2e1",
+    "st.tab.Stresses": "c3ace3c809ea",
     "st.tab.Flexure": "3359739d437e",
     "st.tab.Shear": "cb91f09727de",
     "st.tab.Diagrams": "be51a5e49408",
@@ -717,12 +717,12 @@
     "st.tab.Rating": "701f6979ac49",
     "st.tab.Optimize": "f1b5bfe86be1",
     "st.tab.Nomenclature": "a7b05fe18bc5",
-    "st.tab.Report": "49d58c3e0c73",
-    "st.report.all": "1d1134fdbc67"
+    "st.tab.Report": "6561e7719694",
+    "st.report.all": "2288e9e3a7fc"
    }
   },
   "payload gd_builtin28_RIDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "33885ebbf0d3",
     "st.status": "fc63f88f03f2",
@@ -731,11 +731,11 @@
     "st.governing": "1c94fa49938d",
     "st.sections": "218bc0b043a6",
     "st.stations": "000ed4d56c68",
-    "st.R": "cf952d90330b",
+    "st.R": "9bfa0cb56307",
     "st.tab.Inputs": "7de116460e37",
-    "st.tab.Section Props": "450d986811b2",
-    "st.tab.Constructibility": "9e6c138f6807",
-    "st.tab.Stresses": "c84ae3039f06",
+    "st.tab.Section Props": "e2ddd7950a9f",
+    "st.tab.Constructibility": "a487c3b914e5",
+    "st.tab.Stresses": "bf63081f67c2",
     "st.tab.Flexure": "6a9f387a5443",
     "st.tab.Shear": "b632a9fb4c05",
     "st.tab.Diagrams": "24fe97b85e0c",
@@ -747,12 +747,12 @@
     "st.tab.Rating": "0fc98e16cced",
     "st.tab.Optimize": "015ddec96ad0",
     "st.tab.Nomenclature": "a9dc0065b5a4",
-    "st.tab.Report": "bbcd02c5ab81",
-    "st.report.all": "0e118dfda1ca"
+    "st.tab.Report": "fb922eca94f2",
+    "st.report.all": "beb8d1453776"
    }
   },
   "payload gd_builtin_AASHTO_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "930ed8bd65de",
     "st.status": "5481e8d4d5aa",
@@ -761,11 +761,11 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "f20e3e0489b6",
-    "st.R": "be1415e855c4",
+    "st.R": "2dbe7ed5f147",
     "st.tab.Inputs": "eb3c33d66d54",
-    "st.tab.Section Props": "96ed30e69934",
-    "st.tab.Constructibility": "ada14c803e68",
-    "st.tab.Stresses": "20b7f52d4d94",
+    "st.tab.Section Props": "704a09d82502",
+    "st.tab.Constructibility": "cacdc8cac4a0",
+    "st.tab.Stresses": "a6065b810a21",
     "st.tab.Flexure": "e79699304ca9",
     "st.tab.Shear": "3c8f54fa3fd5",
     "st.tab.Diagrams": "4d0b4319a907",
@@ -777,12 +777,12 @@
     "st.tab.Rating": "773eded5bc2f",
     "st.tab.Optimize": "7a6d46eb5483",
     "st.tab.Nomenclature": "987200d58c76",
-    "st.tab.Report": "81815b527c05",
-    "st.report.all": "1e8075fbf1af"
+    "st.tab.Report": "209c8af8d120",
+    "st.report.all": "fd6bb6b6d12f"
    }
   },
   "payload gd_builtin_AASHTO_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "e8f3763f37da",
     "st.status": "5481e8d4d5aa",
@@ -791,11 +791,11 @@
     "st.governing": "567d1f896f3b",
     "st.sections": "ef6049d406bd",
     "st.stations": "b3589e8d669e",
-    "st.R": "3fb7b6338018",
+    "st.R": "4f8f0f038a8c",
     "st.tab.Inputs": "bc3bbe0319d0",
-    "st.tab.Section Props": "0c1b0e54888a",
-    "st.tab.Constructibility": "e1dff1cf13cc",
-    "st.tab.Stresses": "4b9d9f008b9a",
+    "st.tab.Section Props": "8797e960783c",
+    "st.tab.Constructibility": "ec3512b9b39f",
+    "st.tab.Stresses": "a8206fae5227",
     "st.tab.Flexure": "e63d9683913c",
     "st.tab.Shear": "5724f1b9650f",
     "st.tab.Diagrams": "867c2e22fd3d",
@@ -807,12 +807,12 @@
     "st.tab.Rating": "5adc1860bfed",
     "st.tab.Optimize": "54f1a2c6777e",
     "st.tab.Nomenclature": "95b47cc358f0",
-    "st.tab.Report": "2e2b790adee6",
-    "st.report.all": "0489b79c6dcd"
+    "st.tab.Report": "694a6a668a58",
+    "st.report.all": "fae37d9b3114"
    }
   },
   "payload gd_builtin_AASHTO_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "f05db71fcb6d",
     "st.status": "5481e8d4d5aa",
@@ -821,11 +821,11 @@
     "st.governing": "a53aad12ac9b",
     "st.sections": "ef6049d406bd",
     "st.stations": "c9135360ba77",
-    "st.R": "71aa25786183",
+    "st.R": "55a4ecfaf395",
     "st.tab.Inputs": "52aa801ca7a4",
-    "st.tab.Section Props": "a32d240e2f08",
-    "st.tab.Constructibility": "faea4cf6f81d",
-    "st.tab.Stresses": "15404de8e580",
+    "st.tab.Section Props": "6834ef68563b",
+    "st.tab.Constructibility": "ba387a5f5802",
+    "st.tab.Stresses": "ab570a2a1f14",
     "st.tab.Flexure": "bd95e94fb951",
     "st.tab.Shear": "636822bb231e",
     "st.tab.Diagrams": "f24466a3a9d6",
@@ -837,12 +837,12 @@
     "st.tab.Rating": "49e715e1a838",
     "st.tab.Optimize": "daa03f758d77",
     "st.tab.Nomenclature": "3d86a359a130",
-    "st.tab.Report": "df8f469858ec",
-    "st.report.all": "1dc33f08f72c"
+    "st.tab.Report": "3e66c09e3f52",
+    "st.report.all": "5cab7cceeb5f"
    }
   },
   "payload gd_builtin_AASHTO_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "8638b899f011",
     "st.status": "5481e8d4d5aa",
@@ -851,11 +851,11 @@
     "st.governing": "567d1f896f3b",
     "st.sections": "ef6049d406bd",
     "st.stations": "b3589e8d669e",
-    "st.R": "3fb7b6338018",
+    "st.R": "4f8f0f038a8c",
     "st.tab.Inputs": "5f977f6bafc1",
-    "st.tab.Section Props": "1688a283fb91",
-    "st.tab.Constructibility": "0b521713b446",
-    "st.tab.Stresses": "d4772c46eb29",
+    "st.tab.Section Props": "09a77c4c64c9",
+    "st.tab.Constructibility": "678f405b8f31",
+    "st.tab.Stresses": "e1f55777e2d0",
     "st.tab.Flexure": "5cb99b598fe9",
     "st.tab.Shear": "c574326c2e97",
     "st.tab.Diagrams": "bde1c7fbe472",
@@ -867,12 +867,12 @@
     "st.tab.Rating": "3a6ae8c7c416",
     "st.tab.Optimize": "93fdaa4892cd",
     "st.tab.Nomenclature": "c7f09eaa2469",
-    "st.tab.Report": "96b4ab0ca5d8",
-    "st.report.all": "eae667637370"
+    "st.tab.Report": "b5c7fd2c617c",
+    "st.report.all": "58b167a6d339"
    }
   },
   "payload gd_builtin_AASHTO_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "0051a76af0c5",
     "st.status": "5481e8d4d5aa",
@@ -881,11 +881,11 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "f20e3e0489b6",
-    "st.R": "be1415e855c4",
+    "st.R": "2dbe7ed5f147",
     "st.tab.Inputs": "e1775199afa3",
-    "st.tab.Section Props": "9363161aac8c",
-    "st.tab.Constructibility": "8ebf3ae7e48c",
-    "st.tab.Stresses": "08164947f1ba",
+    "st.tab.Section Props": "1967d8efb581",
+    "st.tab.Constructibility": "bd0a32c245b0",
+    "st.tab.Stresses": "eba0e0982e4e",
     "st.tab.Flexure": "6acccb9dc1d0",
     "st.tab.Shear": "82f9f8e90f15",
     "st.tab.Diagrams": "66b637cf5d75",
@@ -897,12 +897,12 @@
     "st.tab.Rating": "73c035e371e3",
     "st.tab.Optimize": "10067c9c9b54",
     "st.tab.Nomenclature": "5c6527e71f80",
-    "st.tab.Report": "fd54f4ea3bc1",
-    "st.report.all": "a03dcb12a850"
+    "st.tab.Report": "5f715e6d4903",
+    "st.report.all": "da65826ec3e4"
    }
   },
   "payload gd_builtin_CTDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "5053cc5861dd",
     "st.status": "ed7322df82eb",
@@ -911,11 +911,11 @@
     "st.governing": "2d113b200b71",
     "st.sections": "c53c62976041",
     "st.stations": "21ae56a963e4",
-    "st.R": "d064b2117cc1",
+    "st.R": "d77b9783b8fa",
     "st.tab.Inputs": "f5eb372c1ded",
-    "st.tab.Section Props": "d79edaa41316",
-    "st.tab.Constructibility": "d6159a9c0186",
-    "st.tab.Stresses": "0b9af760d59f",
+    "st.tab.Section Props": "d48fa073eddf",
+    "st.tab.Constructibility": "8b6debfda846",
+    "st.tab.Stresses": "aa6932dce225",
     "st.tab.Flexure": "dc1f8dbd6412",
     "st.tab.Shear": "ea430664933c",
     "st.tab.Diagrams": "065c4588c8a1",
@@ -927,12 +927,12 @@
     "st.tab.Rating": "9ad9a4b0f90c",
     "st.tab.Optimize": "da9d42db3749",
     "st.tab.Nomenclature": "065efd6af084",
-    "st.tab.Report": "4c3ba38a7a5e",
-    "st.report.all": "9ec047c87fd4"
+    "st.tab.Report": "0145361014b7",
+    "st.report.all": "6a51ad16b862"
    }
   },
   "payload gd_builtin_CTDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "cd645b81f9a2",
     "st.status": "ed7322df82eb",
@@ -941,11 +941,11 @@
     "st.governing": "a53aad12ac9b",
     "st.sections": "ef6049d406bd",
     "st.stations": "c9135360ba77",
-    "st.R": "14e5a6e73c74",
+    "st.R": "5d2eb14ece52",
     "st.tab.Inputs": "51f7a12e3930",
-    "st.tab.Section Props": "df630d06e797",
-    "st.tab.Constructibility": "a7e0f9ed84bc",
-    "st.tab.Stresses": "839ca534f9e2",
+    "st.tab.Section Props": "bafa40c935db",
+    "st.tab.Constructibility": "5fe941a1c960",
+    "st.tab.Stresses": "75fc9e9646e6",
     "st.tab.Flexure": "8b9e912b7ca7",
     "st.tab.Shear": "4a29315d0aa2",
     "st.tab.Diagrams": "ce11e6431306",
@@ -957,12 +957,12 @@
     "st.tab.Rating": "f735fcaa9902",
     "st.tab.Optimize": "05a033f05d72",
     "st.tab.Nomenclature": "aad536bc591d",
-    "st.tab.Report": "ab10528a9825",
-    "st.report.all": "413d73aca6d1"
+    "st.tab.Report": "d6f6102572c0",
+    "st.report.all": "63a8213f34f3"
    }
   },
   "payload gd_builtin_CTDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ad11aeda2b52",
     "st.status": "ed7322df82eb",
@@ -971,11 +971,11 @@
     "st.governing": "a53aad12ac9b",
     "st.sections": "ef6049d406bd",
     "st.stations": "c9135360ba77",
-    "st.R": "14e5a6e73c74",
+    "st.R": "5d2eb14ece52",
     "st.tab.Inputs": "a92d27882cef",
-    "st.tab.Section Props": "11b0f7095df1",
-    "st.tab.Constructibility": "6e22208ab9a6",
-    "st.tab.Stresses": "34fcb893ce89",
+    "st.tab.Section Props": "83e8a14aa178",
+    "st.tab.Constructibility": "0b5200d39d02",
+    "st.tab.Stresses": "e6a7cd729f21",
     "st.tab.Flexure": "dd081ee12a71",
     "st.tab.Shear": "03ce3fe267e2",
     "st.tab.Diagrams": "41950995137b",
@@ -987,12 +987,12 @@
     "st.tab.Rating": "2170237c1a63",
     "st.tab.Optimize": "518cd6a16806",
     "st.tab.Nomenclature": "c8be2a431773",
-    "st.tab.Report": "34e32c4caab0",
-    "st.report.all": "9e9aa5ea4c20"
+    "st.tab.Report": "341702926400",
+    "st.report.all": "91cdf7ec74e6"
    }
   },
   "payload gd_builtin_CTDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "82052455e37e",
     "st.status": "ed7322df82eb",
@@ -1001,11 +1001,11 @@
     "st.governing": "a53aad12ac9b",
     "st.sections": "ef6049d406bd",
     "st.stations": "c9135360ba77",
-    "st.R": "14e5a6e73c74",
+    "st.R": "5d2eb14ece52",
     "st.tab.Inputs": "a2b83bd93a8e",
-    "st.tab.Section Props": "d152f039516d",
-    "st.tab.Constructibility": "38010e29fdaf",
-    "st.tab.Stresses": "6fbc932c9bfb",
+    "st.tab.Section Props": "8897ed434090",
+    "st.tab.Constructibility": "3957745fe36b",
+    "st.tab.Stresses": "7ac20c76c656",
     "st.tab.Flexure": "1579f593b0b8",
     "st.tab.Shear": "b7b42c554e91",
     "st.tab.Diagrams": "c69b5bd1e19a",
@@ -1017,12 +1017,12 @@
     "st.tab.Rating": "f0a615b67932",
     "st.tab.Optimize": "f17e33c91913",
     "st.tab.Nomenclature": "eadaf96b50d0",
-    "st.tab.Report": "6c216edca972",
-    "st.report.all": "9fd33a791044"
+    "st.tab.Report": "d795ab171e7d",
+    "st.report.all": "7aff0a3cbd46"
    }
   },
   "payload gd_builtin_CTDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "8d193e4a96d7",
     "st.status": "ed7322df82eb",
@@ -1031,11 +1031,11 @@
     "st.governing": "2d113b200b71",
     "st.sections": "c53c62976041",
     "st.stations": "21ae56a963e4",
-    "st.R": "d064b2117cc1",
+    "st.R": "d77b9783b8fa",
     "st.tab.Inputs": "54fdd3acc043",
-    "st.tab.Section Props": "0dfff72f0d8c",
-    "st.tab.Constructibility": "d265f71c63f1",
-    "st.tab.Stresses": "4f26ef873443",
+    "st.tab.Section Props": "64b55dd46a2c",
+    "st.tab.Constructibility": "b999f4b5aa0b",
+    "st.tab.Stresses": "c6256fb16674",
     "st.tab.Flexure": "0f6680b71b08",
     "st.tab.Shear": "ed76ffddbe68",
     "st.tab.Diagrams": "9dbbd664ff11",
@@ -1047,12 +1047,12 @@
     "st.tab.Rating": "c7120ffcd6fc",
     "st.tab.Optimize": "acb69480c330",
     "st.tab.Nomenclature": "77446ac89f02",
-    "st.tab.Report": "51102aa96f5b",
-    "st.report.all": "132ae3602c5c"
+    "st.tab.Report": "d722017d42a1",
+    "st.report.all": "4fbcde290379"
    }
   },
   "payload gd_builtin_MassDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "5df8812508d2",
     "st.status": "6096378939a3",
@@ -1061,11 +1061,11 @@
     "st.governing": "ea297d3c8f08",
     "st.sections": "218bc0b043a6",
     "st.stations": "091053edecc7",
-    "st.R": "aaa9ab23c086",
+    "st.R": "d2a31bd1d5ed",
     "st.tab.Inputs": "1ca5a8a20f7c",
-    "st.tab.Section Props": "1e52f2b80619",
-    "st.tab.Constructibility": "147acb04d57b",
-    "st.tab.Stresses": "d6f545703dea",
+    "st.tab.Section Props": "d8a6bff12c0f",
+    "st.tab.Constructibility": "90cf56b9aa02",
+    "st.tab.Stresses": "94733b4d8605",
     "st.tab.Flexure": "47abb6e5f469",
     "st.tab.Shear": "bf4a7274610a",
     "st.tab.Diagrams": "cffe3db8c2de",
@@ -1077,12 +1077,12 @@
     "st.tab.Rating": "4ce17d4fdb06",
     "st.tab.Optimize": "7e5dedf515e2",
     "st.tab.Nomenclature": "1bb193809c71",
-    "st.tab.Report": "935de2583c34",
-    "st.report.all": "a386f917392b"
+    "st.tab.Report": "357829397dd5",
+    "st.report.all": "246e29a59697"
    }
   },
   "payload gd_builtin_MassDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "786c9b10dec4",
     "st.status": "6096378939a3",
@@ -1091,11 +1091,11 @@
     "st.governing": "95431bd385d5",
     "st.sections": "83f7af10dda5",
     "st.stations": "f9b93c0d541c",
-    "st.R": "9ef9eeb22456",
+    "st.R": "aa465fffb10a",
     "st.tab.Inputs": "5e023a8d232b",
-    "st.tab.Section Props": "71e0037c5808",
-    "st.tab.Constructibility": "4ab1e190e20c",
-    "st.tab.Stresses": "cdbac42fb39d",
+    "st.tab.Section Props": "aae4d3b381cd",
+    "st.tab.Constructibility": "34f4f992a4de",
+    "st.tab.Stresses": "ae666e7a4140",
     "st.tab.Flexure": "f0f18b1986db",
     "st.tab.Shear": "4a13ad2b1e6a",
     "st.tab.Diagrams": "08fd0d0ecabc",
@@ -1107,12 +1107,12 @@
     "st.tab.Rating": "160b498f8733",
     "st.tab.Optimize": "aa73f73f1b0c",
     "st.tab.Nomenclature": "2f09fec8e6d1",
-    "st.tab.Report": "d5f54e7de0b9",
-    "st.report.all": "02177268a754"
+    "st.tab.Report": "4d1fe2276e6e",
+    "st.report.all": "cbec7c8b3a40"
    }
   },
   "payload gd_builtin_MassDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "7722214ac94e",
     "st.status": "6096378939a3",
@@ -1121,11 +1121,11 @@
     "st.governing": "ae0561cd6291",
     "st.sections": "83f7af10dda5",
     "st.stations": "1f0d61100ce6",
-    "st.R": "ddeb51faf872",
+    "st.R": "c789368230ca",
     "st.tab.Inputs": "fec4b8d7fc00",
-    "st.tab.Section Props": "456b54eaafb7",
-    "st.tab.Constructibility": "571830cc37a8",
-    "st.tab.Stresses": "a78f9f3a3710",
+    "st.tab.Section Props": "01c24b6d738b",
+    "st.tab.Constructibility": "b9cf69a802ca",
+    "st.tab.Stresses": "6878b5517068",
     "st.tab.Flexure": "5b7553376542",
     "st.tab.Shear": "5d2744e37de5",
     "st.tab.Diagrams": "f1d245e08472",
@@ -1137,12 +1137,12 @@
     "st.tab.Rating": "a3fe8cab8385",
     "st.tab.Optimize": "f8946b32d94b",
     "st.tab.Nomenclature": "3d990b87f907",
-    "st.tab.Report": "138847db6e39",
-    "st.report.all": "0e71f0331d6a"
+    "st.tab.Report": "705afae19237",
+    "st.report.all": "623e2137dc3f"
    }
   },
   "payload gd_builtin_MassDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ea1e13939618",
     "st.status": "6096378939a3",
@@ -1151,11 +1151,11 @@
     "st.governing": "95431bd385d5",
     "st.sections": "83f7af10dda5",
     "st.stations": "f9b93c0d541c",
-    "st.R": "9ef9eeb22456",
+    "st.R": "aa465fffb10a",
     "st.tab.Inputs": "1fd28f1974dc",
-    "st.tab.Section Props": "e092b627b291",
-    "st.tab.Constructibility": "dd5a09c48fc6",
-    "st.tab.Stresses": "e7ad388cbe08",
+    "st.tab.Section Props": "7526641d2561",
+    "st.tab.Constructibility": "d20edb8e8414",
+    "st.tab.Stresses": "73794e69c93a",
     "st.tab.Flexure": "5f444d09e9d7",
     "st.tab.Shear": "80e0ba2b58b5",
     "st.tab.Diagrams": "a26fdd9dc761",
@@ -1167,12 +1167,12 @@
     "st.tab.Rating": "0b9469d4ffad",
     "st.tab.Optimize": "f7ddc76514b6",
     "st.tab.Nomenclature": "ed7950b15520",
-    "st.tab.Report": "d6c7996ad822",
-    "st.report.all": "ddd295836d49"
+    "st.tab.Report": "9333ad91751e",
+    "st.report.all": "79d66f3d42ef"
    }
   },
   "payload gd_builtin_MassDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b2ea6525902e",
     "st.status": "6096378939a3",
@@ -1181,11 +1181,11 @@
     "st.governing": "ea297d3c8f08",
     "st.sections": "218bc0b043a6",
     "st.stations": "091053edecc7",
-    "st.R": "aaa9ab23c086",
+    "st.R": "d2a31bd1d5ed",
     "st.tab.Inputs": "bf46895ea9cc",
-    "st.tab.Section Props": "494e26453d8c",
-    "st.tab.Constructibility": "b5a4de6408de",
-    "st.tab.Stresses": "f076d8a63fd7",
+    "st.tab.Section Props": "7b9a26881dfc",
+    "st.tab.Constructibility": "b6f058cf8b75",
+    "st.tab.Stresses": "9944f1950d1d",
     "st.tab.Flexure": "39a910d7033f",
     "st.tab.Shear": "b69ff6f5a20c",
     "st.tab.Diagrams": "7f3bc0f5bbf9",
@@ -1197,12 +1197,12 @@
     "st.tab.Rating": "43e42829bf70",
     "st.tab.Optimize": "c9a340b96d12",
     "st.tab.Nomenclature": "0b7da75577e8",
-    "st.tab.Report": "c753bee4f7b6",
-    "st.report.all": "e4e735b576fe"
+    "st.tab.Report": "4377fbdc45d8",
+    "st.report.all": "699f26299a32"
    }
   },
   "payload gd_builtin_RIDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d159b7658662",
     "st.status": "fc63f88f03f2",
@@ -1211,11 +1211,11 @@
     "st.governing": "340ea00a4b3c",
     "st.sections": "218bc0b043a6",
     "st.stations": "7cefb77347dd",
-    "st.R": "bb48277bfac1",
+    "st.R": "1c9119877b11",
     "st.tab.Inputs": "88dcc4709e25",
-    "st.tab.Section Props": "424b8c94fb8b",
-    "st.tab.Constructibility": "7922965aa8b9",
-    "st.tab.Stresses": "b5bfb45ce2f6",
+    "st.tab.Section Props": "3ca01c4ffb63",
+    "st.tab.Constructibility": "94434c67fdcf",
+    "st.tab.Stresses": "2ac1e05d248d",
     "st.tab.Flexure": "18ed52069cde",
     "st.tab.Shear": "fc4ae8992b7f",
     "st.tab.Diagrams": "db44025e1bf1",
@@ -1227,12 +1227,12 @@
     "st.tab.Rating": "0196524e0db4",
     "st.tab.Optimize": "d2e0bedbd7a9",
     "st.tab.Nomenclature": "930b54f9d265",
-    "st.tab.Report": "3228b9b7ba2f",
-    "st.report.all": "ad6a7dfcc5e0"
+    "st.tab.Report": "79c14f323f5b",
+    "st.report.all": "fb08b4533a73"
    }
   },
   "payload gd_builtin_RIDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ca3c20425fb5",
     "st.status": "fc63f88f03f2",
@@ -1241,11 +1241,11 @@
     "st.governing": "dd090ea6fa4c",
     "st.sections": "83f7af10dda5",
     "st.stations": "0fa383d408f1",
-    "st.R": "d5ce5f372dbc",
+    "st.R": "ca22eb934045",
     "st.tab.Inputs": "8759644d16aa",
-    "st.tab.Section Props": "213be7f58894",
-    "st.tab.Constructibility": "ae43be31670b",
-    "st.tab.Stresses": "3edb6aadf5ce",
+    "st.tab.Section Props": "c9478020bea1",
+    "st.tab.Constructibility": "9d55c56d6be1",
+    "st.tab.Stresses": "84b4fb88ee77",
     "st.tab.Flexure": "745cf9677a88",
     "st.tab.Shear": "f6e26cb26377",
     "st.tab.Diagrams": "856950cbbe90",
@@ -1257,12 +1257,12 @@
     "st.tab.Rating": "d516afb09ed7",
     "st.tab.Optimize": "4aeea04247ec",
     "st.tab.Nomenclature": "4dbd6e5d796e",
-    "st.tab.Report": "636c7b4b1047",
-    "st.report.all": "3951dd58b0cd"
+    "st.tab.Report": "ee833751c82a",
+    "st.report.all": "9b69f292335b"
    }
   },
   "payload gd_builtin_RIDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "344e04662268",
     "st.status": "fc63f88f03f2",
@@ -1271,11 +1271,11 @@
     "st.governing": "dd090ea6fa4c",
     "st.sections": "83f7af10dda5",
     "st.stations": "0fa383d408f1",
-    "st.R": "d5ce5f372dbc",
+    "st.R": "ca22eb934045",
     "st.tab.Inputs": "f7564e9a2d72",
-    "st.tab.Section Props": "5aa60ccb9a10",
-    "st.tab.Constructibility": "f94646ecf4d8",
-    "st.tab.Stresses": "c0170cd7bcdc",
+    "st.tab.Section Props": "dd3262ffc8ee",
+    "st.tab.Constructibility": "cf1a35804113",
+    "st.tab.Stresses": "064066775fe5",
     "st.tab.Flexure": "d98a0a09bea3",
     "st.tab.Shear": "ce9ab648987b",
     "st.tab.Diagrams": "deaa341f28cf",
@@ -1287,12 +1287,12 @@
     "st.tab.Rating": "967c0bc3778d",
     "st.tab.Optimize": "9c3edfdd7d25",
     "st.tab.Nomenclature": "7a97c3d2693f",
-    "st.tab.Report": "a715456d7325",
-    "st.report.all": "1daed921e9b7"
+    "st.tab.Report": "b97b33ef2327",
+    "st.report.all": "b47d853f28dd"
    }
   },
   "payload gd_builtin_RIDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ce137e154a58",
     "st.status": "fc63f88f03f2",
@@ -1301,11 +1301,11 @@
     "st.governing": "dd090ea6fa4c",
     "st.sections": "83f7af10dda5",
     "st.stations": "0fa383d408f1",
-    "st.R": "d5ce5f372dbc",
+    "st.R": "ca22eb934045",
     "st.tab.Inputs": "a9433a2a0421",
-    "st.tab.Section Props": "2d4949606610",
-    "st.tab.Constructibility": "2cca75e6397f",
-    "st.tab.Stresses": "a450b08219b8",
+    "st.tab.Section Props": "9f3804301a36",
+    "st.tab.Constructibility": "e77b44680785",
+    "st.tab.Stresses": "ed27e6175778",
     "st.tab.Flexure": "ddc19a31297a",
     "st.tab.Shear": "c15f6563961c",
     "st.tab.Diagrams": "586aa052d950",
@@ -1317,12 +1317,12 @@
     "st.tab.Rating": "0a87ee1b1cc1",
     "st.tab.Optimize": "a4028c23ea61",
     "st.tab.Nomenclature": "fe5f4c597497",
-    "st.tab.Report": "a918071fed0d",
-    "st.report.all": "bb49989dc196"
+    "st.tab.Report": "abe5a894cac0",
+    "st.report.all": "532b65265e19"
    }
   },
   "payload gd_builtin_RIDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d40596259056",
     "st.status": "fc63f88f03f2",
@@ -1331,11 +1331,11 @@
     "st.governing": "340ea00a4b3c",
     "st.sections": "218bc0b043a6",
     "st.stations": "7cefb77347dd",
-    "st.R": "bb48277bfac1",
+    "st.R": "1c9119877b11",
     "st.tab.Inputs": "b5a02ea47784",
-    "st.tab.Section Props": "f0cf94e398cc",
-    "st.tab.Constructibility": "c4887785dec5",
-    "st.tab.Stresses": "4389f4a94e5e",
+    "st.tab.Section Props": "c8483aa115f1",
+    "st.tab.Constructibility": "c9ca6cfe28b8",
+    "st.tab.Stresses": "693bd01e76a4",
     "st.tab.Flexure": "482018fe5365",
     "st.tab.Shear": "feb12ca5c501",
     "st.tab.Diagrams": "233b929c0063",
@@ -1347,12 +1347,12 @@
     "st.tab.Rating": "2a14672a1c69",
     "st.tab.Optimize": "40cac1beb2cf",
     "st.tab.Nomenclature": "ad43cb102230",
-    "st.tab.Report": "b4525c114ce8",
-    "st.report.all": "afa1a3b5a156"
+    "st.tab.Report": "8d22bdba11fe",
+    "st.report.all": "dbc88875baae"
    }
   },
   "payload gd_curb_AASHTO_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "7b8567d19b1f",
     "st.status": "5481e8d4d5aa",
@@ -1361,11 +1361,11 @@
     "st.governing": "ed226151f1b4",
     "st.sections": "c53c62976041",
     "st.stations": "072d04f228f8",
-    "st.R": "257d798253de",
+    "st.R": "aacc61f677a1",
     "st.tab.Inputs": "69eb6d132219",
-    "st.tab.Section Props": "5d3b4434b971",
-    "st.tab.Constructibility": "cd104c733079",
-    "st.tab.Stresses": "16e589068541",
+    "st.tab.Section Props": "44bfcee3adb5",
+    "st.tab.Constructibility": "59c38eafa08c",
+    "st.tab.Stresses": "b8daa0d59354",
     "st.tab.Flexure": "5681b5ab3497",
     "st.tab.Shear": "77ec546ce65c",
     "st.tab.Diagrams": "4f7d7b5bf707",
@@ -1377,12 +1377,12 @@
     "st.tab.Rating": "c3911d5d6577",
     "st.tab.Optimize": "da4de79f8b4b",
     "st.tab.Nomenclature": "fa703eacd189",
-    "st.tab.Report": "c37ce5f98ec6",
-    "st.report.all": "19d91cdb8989"
+    "st.tab.Report": "4b735d58a166",
+    "st.report.all": "c23f91c653f1"
    }
   },
   "payload gd_curb_AASHTO_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "0cb6d7b9a5a8",
     "st.status": "5481e8d4d5aa",
@@ -1391,11 +1391,11 @@
     "st.governing": "ac0001387c55",
     "st.sections": "ef6049d406bd",
     "st.stations": "12c9b2e69f08",
-    "st.R": "73911e8f846a",
+    "st.R": "6a466622b123",
     "st.tab.Inputs": "24d29474ef5f",
-    "st.tab.Section Props": "5eb9ab3c6104",
-    "st.tab.Constructibility": "36002b271acd",
-    "st.tab.Stresses": "ec4e2f777060",
+    "st.tab.Section Props": "568efc3dcf82",
+    "st.tab.Constructibility": "703967901037",
+    "st.tab.Stresses": "745115bdbd75",
     "st.tab.Flexure": "0d2826bcf4d3",
     "st.tab.Shear": "8d3037052e7d",
     "st.tab.Diagrams": "a50a80632394",
@@ -1407,12 +1407,12 @@
     "st.tab.Rating": "378ea86e97af",
     "st.tab.Optimize": "726cb9c7d977",
     "st.tab.Nomenclature": "d2c056c0aab5",
-    "st.tab.Report": "ed0428d50f19",
-    "st.report.all": "e4255e5ba88c"
+    "st.tab.Report": "b3a5074e0dcb",
+    "st.report.all": "f9e14c847a20"
    }
   },
   "payload gd_curb_AASHTO_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "9da3c50dfe66",
     "st.status": "5481e8d4d5aa",
@@ -1421,11 +1421,11 @@
     "st.governing": "57a9b1d899be",
     "st.sections": "ef6049d406bd",
     "st.stations": "07520c8e7851",
-    "st.R": "75a627f52aa0",
+    "st.R": "e5eb6f8b0176",
     "st.tab.Inputs": "26eeba6f4382",
-    "st.tab.Section Props": "516fdb00b060",
-    "st.tab.Constructibility": "2c0164cf4d19",
-    "st.tab.Stresses": "70d41d8f130e",
+    "st.tab.Section Props": "f33131aafee7",
+    "st.tab.Constructibility": "40cc8c922438",
+    "st.tab.Stresses": "7dfdb3a2ae12",
     "st.tab.Flexure": "6d31908968dd",
     "st.tab.Shear": "cdf489149849",
     "st.tab.Diagrams": "92b848e4dfc4",
@@ -1437,12 +1437,12 @@
     "st.tab.Rating": "06855cd0891b",
     "st.tab.Optimize": "1d330bafc2ae",
     "st.tab.Nomenclature": "7d9470f9554e",
-    "st.tab.Report": "17ea7d1269e7",
-    "st.report.all": "cde7fde16c66"
+    "st.tab.Report": "fe17e75ce4cc",
+    "st.report.all": "eff56b181d68"
    }
   },
   "payload gd_curb_AASHTO_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "8f26ae89eee4",
     "st.status": "5481e8d4d5aa",
@@ -1451,11 +1451,11 @@
     "st.governing": "4ed2d6dc2ad2",
     "st.sections": "ef6049d406bd",
     "st.stations": "7e66923e7852",
-    "st.R": "fe52b38a872e",
+    "st.R": "614a77d1c6c8",
     "st.tab.Inputs": "5b5bdf675dd6",
-    "st.tab.Section Props": "38c4e18e1db3",
-    "st.tab.Constructibility": "13301ea5f884",
-    "st.tab.Stresses": "77c05eaec2bc",
+    "st.tab.Section Props": "89c91dc40850",
+    "st.tab.Constructibility": "d0bc0b72579b",
+    "st.tab.Stresses": "d33772033edc",
     "st.tab.Flexure": "0b0339055c12",
     "st.tab.Shear": "0cf961a1f499",
     "st.tab.Diagrams": "16d0f297f535",
@@ -1467,12 +1467,12 @@
     "st.tab.Rating": "539e56d71d35",
     "st.tab.Optimize": "44c1382a8341",
     "st.tab.Nomenclature": "075d0f609856",
-    "st.tab.Report": "b5de2025a25b",
-    "st.report.all": "f7af9ab82863"
+    "st.tab.Report": "e778ed2c7e94",
+    "st.report.all": "f68bec7fced3"
    }
   },
   "payload gd_curb_AASHTO_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d4996eb2b757",
     "st.status": "5481e8d4d5aa",
@@ -1481,11 +1481,11 @@
     "st.governing": "fb6e9caa1388",
     "st.sections": "c53c62976041",
     "st.stations": "3b8d3db68ccc",
-    "st.R": "3b23568cb1e0",
+    "st.R": "99b9ac2e824c",
     "st.tab.Inputs": "4183190624df",
-    "st.tab.Section Props": "025cb3cb71bb",
-    "st.tab.Constructibility": "71065e0287fb",
-    "st.tab.Stresses": "ddbb12fba549",
+    "st.tab.Section Props": "721d40a93114",
+    "st.tab.Constructibility": "a66f4e502c3a",
+    "st.tab.Stresses": "34c2d3d46ea2",
     "st.tab.Flexure": "25bd88951b72",
     "st.tab.Shear": "535335073099",
     "st.tab.Diagrams": "619fff928478",
@@ -1497,12 +1497,12 @@
     "st.tab.Rating": "437e77c7effa",
     "st.tab.Optimize": "cca42c13a601",
     "st.tab.Nomenclature": "b06163fd9a13",
-    "st.tab.Report": "a769d90e9850",
-    "st.report.all": "0e24b2ef05ee"
+    "st.tab.Report": "b8ff69f8362e",
+    "st.report.all": "5f97a2bc0890"
    }
   },
   "payload gd_curb_CTDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "8cdea8b53db9",
     "st.status": "ed7322df82eb",
@@ -1511,11 +1511,11 @@
     "st.governing": "396723ce14ad",
     "st.sections": "c53c62976041",
     "st.stations": "690ae7bbc20a",
-    "st.R": "a820c1cb7b16",
+    "st.R": "2fc6e86d575c",
     "st.tab.Inputs": "e24187bef452",
-    "st.tab.Section Props": "5a70e5b791ab",
-    "st.tab.Constructibility": "ce288a0888f8",
-    "st.tab.Stresses": "da66eed0359a",
+    "st.tab.Section Props": "271e85af423d",
+    "st.tab.Constructibility": "ada71a1ece25",
+    "st.tab.Stresses": "86b61102f484",
     "st.tab.Flexure": "9960023caacc",
     "st.tab.Shear": "91d96a0bcc5b",
     "st.tab.Diagrams": "a331d797b9e6",
@@ -1527,12 +1527,12 @@
     "st.tab.Rating": "02f8f95e6b72",
     "st.tab.Optimize": "c33cd52b52c9",
     "st.tab.Nomenclature": "1fc2b34b14c0",
-    "st.tab.Report": "6a64ec1cda9e",
-    "st.report.all": "b18f856405c3"
+    "st.tab.Report": "598784529417",
+    "st.report.all": "cdb052452dc0"
    }
   },
   "payload gd_curb_CTDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "cf8884a3c65f",
     "st.status": "ed7322df82eb",
@@ -1541,11 +1541,11 @@
     "st.governing": "57a9b1d899be",
     "st.sections": "ef6049d406bd",
     "st.stations": "07520c8e7851",
-    "st.R": "ba6385ef7c38",
+    "st.R": "6476a5d4b29a",
     "st.tab.Inputs": "af68c55663d7",
-    "st.tab.Section Props": "6ffc08c58226",
-    "st.tab.Constructibility": "6eb8a20beee0",
-    "st.tab.Stresses": "64392340c6c3",
+    "st.tab.Section Props": "1a9c17dcfefb",
+    "st.tab.Constructibility": "bb5eaf23038d",
+    "st.tab.Stresses": "5014fb155f30",
     "st.tab.Flexure": "da477acade77",
     "st.tab.Shear": "906f1b024aba",
     "st.tab.Diagrams": "3c48b6cdd2ae",
@@ -1557,12 +1557,12 @@
     "st.tab.Rating": "66a35f170e43",
     "st.tab.Optimize": "0890063c8b19",
     "st.tab.Nomenclature": "fc711a6ac9f2",
-    "st.tab.Report": "4598b19d590e",
-    "st.report.all": "97bd1222db74"
+    "st.tab.Report": "93ef2a5ea486",
+    "st.report.all": "16e38af3a289"
    }
   },
   "payload gd_curb_CTDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "9fada43bb3f0",
     "st.status": "ed7322df82eb",
@@ -1571,11 +1571,11 @@
     "st.governing": "57a9b1d899be",
     "st.sections": "ef6049d406bd",
     "st.stations": "07520c8e7851",
-    "st.R": "ba6385ef7c38",
+    "st.R": "6476a5d4b29a",
     "st.tab.Inputs": "d2c8920deef8",
-    "st.tab.Section Props": "6d58a7603d8c",
-    "st.tab.Constructibility": "6195722cce9a",
-    "st.tab.Stresses": "0c98c7db58a6",
+    "st.tab.Section Props": "724cee68197b",
+    "st.tab.Constructibility": "8293bca259af",
+    "st.tab.Stresses": "2db6e248baf8",
     "st.tab.Flexure": "1bd06e830c6f",
     "st.tab.Shear": "1286d1385aa6",
     "st.tab.Diagrams": "63e1a449a892",
@@ -1587,12 +1587,12 @@
     "st.tab.Rating": "3469ce97e698",
     "st.tab.Optimize": "e9da42c58494",
     "st.tab.Nomenclature": "c2cf6c68a58d",
-    "st.tab.Report": "8d4cf13667c9",
-    "st.report.all": "fbd82039c20b"
+    "st.tab.Report": "264c53e91c14",
+    "st.report.all": "18a91391bf6b"
    }
   },
   "payload gd_curb_CTDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "baa8601445f1",
     "st.status": "ed7322df82eb",
@@ -1601,11 +1601,11 @@
     "st.governing": "57a9b1d899be",
     "st.sections": "ef6049d406bd",
     "st.stations": "07520c8e7851",
-    "st.R": "ba6385ef7c38",
+    "st.R": "6476a5d4b29a",
     "st.tab.Inputs": "85637cc21fca",
-    "st.tab.Section Props": "4c1375e9d9c8",
-    "st.tab.Constructibility": "bd487db95ecd",
-    "st.tab.Stresses": "9eefa7d863fb",
+    "st.tab.Section Props": "55df744a00df",
+    "st.tab.Constructibility": "dd118f7284c6",
+    "st.tab.Stresses": "2783ac4307a2",
     "st.tab.Flexure": "b0d7ef4fccea",
     "st.tab.Shear": "a5a9cddb190f",
     "st.tab.Diagrams": "c5ea522b8d13",
@@ -1617,12 +1617,12 @@
     "st.tab.Rating": "a926488cd954",
     "st.tab.Optimize": "a457e2a1e5f7",
     "st.tab.Nomenclature": "68ce940f92b5",
-    "st.tab.Report": "e42b593d97fb",
-    "st.report.all": "bb2b594bcb92"
+    "st.tab.Report": "24e3ac90f55b",
+    "st.report.all": "fbf94bfe4927"
    }
   },
   "payload gd_curb_CTDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "9aec443ee203",
     "st.status": "ed7322df82eb",
@@ -1631,11 +1631,11 @@
     "st.governing": "a48a51f92d13",
     "st.sections": "c53c62976041",
     "st.stations": "cf0231d40fef",
-    "st.R": "fc0c735894a7",
+    "st.R": "bd684bfda9ad",
     "st.tab.Inputs": "6a55004cbe4b",
-    "st.tab.Section Props": "eb2b21eab413",
-    "st.tab.Constructibility": "22712b5e32da",
-    "st.tab.Stresses": "793394c0f4ec",
+    "st.tab.Section Props": "5954c26c9130",
+    "st.tab.Constructibility": "389eb2a0da5c",
+    "st.tab.Stresses": "cc5c2028b9e3",
     "st.tab.Flexure": "387df732b28b",
     "st.tab.Shear": "8a054bcadf78",
     "st.tab.Diagrams": "1e2b9727b7e8",
@@ -1647,12 +1647,12 @@
     "st.tab.Rating": "fcf51933f301",
     "st.tab.Optimize": "ca3e11517992",
     "st.tab.Nomenclature": "bedcc81ff945",
-    "st.tab.Report": "0125a830100f",
-    "st.report.all": "8c75ea971262"
+    "st.tab.Report": "0316a1e6769e",
+    "st.report.all": "a2884d619b23"
    }
   },
   "payload gd_curb_MassDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "307cacb75297",
     "st.status": "6096378939a3",
@@ -1661,11 +1661,11 @@
     "st.governing": "a5a55d890df4",
     "st.sections": "218bc0b043a6",
     "st.stations": "479d79f5ea68",
-    "st.R": "de5b21022630",
+    "st.R": "b06b8c2bb7e6",
     "st.tab.Inputs": "306fa69ec993",
-    "st.tab.Section Props": "bdaad71f0a49",
-    "st.tab.Constructibility": "8c7b16407a34",
-    "st.tab.Stresses": "3a8b3a734a9f",
+    "st.tab.Section Props": "039f302d1a80",
+    "st.tab.Constructibility": "5d4f528ad41a",
+    "st.tab.Stresses": "c954064a4c64",
     "st.tab.Flexure": "fd9b43ba4873",
     "st.tab.Shear": "9d78f37e78a4",
     "st.tab.Diagrams": "5b2f57da4557",
@@ -1677,12 +1677,12 @@
     "st.tab.Rating": "9fdd4bb966d7",
     "st.tab.Optimize": "aaed9771b325",
     "st.tab.Nomenclature": "26f45dab9897",
-    "st.tab.Report": "a59d78a1dcea",
-    "st.report.all": "b515b428ca03"
+    "st.tab.Report": "673a37e926da",
+    "st.report.all": "110b3450695a"
    }
   },
   "payload gd_curb_MassDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "08e84c8a1cb1",
     "st.status": "6096378939a3",
@@ -1691,11 +1691,11 @@
     "st.governing": "29b95eb224df",
     "st.sections": "83f7af10dda5",
     "st.stations": "1acb5850b3f4",
-    "st.R": "1ad1ffa15c05",
+    "st.R": "80d072346426",
     "st.tab.Inputs": "bad38c9ed57f",
-    "st.tab.Section Props": "6635a6b3aaa4",
-    "st.tab.Constructibility": "79261bfc1cda",
-    "st.tab.Stresses": "93dfccadb113",
+    "st.tab.Section Props": "7cd3cb6ab4fb",
+    "st.tab.Constructibility": "6e1244937919",
+    "st.tab.Stresses": "dd8086445f68",
     "st.tab.Flexure": "efc53e1d2285",
     "st.tab.Shear": "f838dd7dd914",
     "st.tab.Diagrams": "012c3bd70eb1",
@@ -1707,12 +1707,12 @@
     "st.tab.Rating": "912fecf2e62d",
     "st.tab.Optimize": "18a033a3ef9d",
     "st.tab.Nomenclature": "80e680080799",
-    "st.tab.Report": "5180cd5afbae",
-    "st.report.all": "8148a468bcc3"
+    "st.tab.Report": "72df830c8cbf",
+    "st.report.all": "b26ff5e87296"
    }
   },
   "payload gd_curb_MassDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "0582b6903353",
     "st.status": "6096378939a3",
@@ -1721,11 +1721,11 @@
     "st.governing": "4297f8c84da8",
     "st.sections": "83f7af10dda5",
     "st.stations": "9eae918dd18e",
-    "st.R": "ad1dce76d4a9",
+    "st.R": "dc722ea9150f",
     "st.tab.Inputs": "19ccf7c44c59",
-    "st.tab.Section Props": "eededc380b4f",
-    "st.tab.Constructibility": "2e1ce0272219",
-    "st.tab.Stresses": "d16ba6a975ee",
+    "st.tab.Section Props": "b273eae0035a",
+    "st.tab.Constructibility": "fc6ff05082d0",
+    "st.tab.Stresses": "f2a5332018f3",
     "st.tab.Flexure": "37e84ecbfd4d",
     "st.tab.Shear": "9ea5ebd59871",
     "st.tab.Diagrams": "d9852ec0cb5a",
@@ -1737,12 +1737,12 @@
     "st.tab.Rating": "5f33e84c7492",
     "st.tab.Optimize": "6b7278e4bf18",
     "st.tab.Nomenclature": "0bf861335bfc",
-    "st.tab.Report": "141bc785dda8",
-    "st.report.all": "4f2cbd502cb0"
+    "st.tab.Report": "750af0ede481",
+    "st.report.all": "75da7e2fd74e"
    }
   },
   "payload gd_curb_MassDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "33f7555145ec",
     "st.status": "6096378939a3",
@@ -1751,11 +1751,11 @@
     "st.governing": "81ca585a47d5",
     "st.sections": "83f7af10dda5",
     "st.stations": "6169bcd0a701",
-    "st.R": "437235932f9b",
+    "st.R": "4e3c5764dbf4",
     "st.tab.Inputs": "1bcb0632c0e4",
-    "st.tab.Section Props": "9e4f516ce8c6",
-    "st.tab.Constructibility": "9d823adf0375",
-    "st.tab.Stresses": "64a46dd35731",
+    "st.tab.Section Props": "1986740882c6",
+    "st.tab.Constructibility": "4e8f8642ecdd",
+    "st.tab.Stresses": "1da709a4c822",
     "st.tab.Flexure": "7f0edef53fe1",
     "st.tab.Shear": "7669e5a864bc",
     "st.tab.Diagrams": "679195f8bcda",
@@ -1767,12 +1767,12 @@
     "st.tab.Rating": "a9ab235c8468",
     "st.tab.Optimize": "b4bc2721b8c9",
     "st.tab.Nomenclature": "257b4a94db3f",
-    "st.tab.Report": "2b6a18fc7a69",
-    "st.report.all": "77c2aad02042"
+    "st.tab.Report": "c9ea7623b56c",
+    "st.report.all": "371723ce4879"
    }
   },
   "payload gd_curb_MassDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "3eaa51029cb0",
     "st.status": "6096378939a3",
@@ -1781,11 +1781,11 @@
     "st.governing": "294c9889d93d",
     "st.sections": "218bc0b043a6",
     "st.stations": "9c40d45ddfa2",
-    "st.R": "5d5a6eaebd13",
+    "st.R": "5773378b59e3",
     "st.tab.Inputs": "76de4eb36bec",
-    "st.tab.Section Props": "387b0e1b60fd",
-    "st.tab.Constructibility": "8216e4bf6917",
-    "st.tab.Stresses": "b91be2ed9479",
+    "st.tab.Section Props": "dfd55f73a1e5",
+    "st.tab.Constructibility": "46ad748306b3",
+    "st.tab.Stresses": "6ea64212a374",
     "st.tab.Flexure": "9626b1498c3d",
     "st.tab.Shear": "b93efdff57f2",
     "st.tab.Diagrams": "05eb4f30e641",
@@ -1797,12 +1797,12 @@
     "st.tab.Rating": "f580833ca0e0",
     "st.tab.Optimize": "ffa98e1fda1a",
     "st.tab.Nomenclature": "43f1b1a8fb71",
-    "st.tab.Report": "282a0d0b83fd",
-    "st.report.all": "9ba7f021fe24"
+    "st.tab.Report": "123b76cbd6af",
+    "st.report.all": "55337cdee27a"
    }
   },
   "payload gd_curb_RIDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "89da026c5b41",
     "st.status": "fc63f88f03f2",
@@ -1811,11 +1811,11 @@
     "st.governing": "9f214795e516",
     "st.sections": "218bc0b043a6",
     "st.stations": "6199fb3afab6",
-    "st.R": "a85aa8faf3fe",
+    "st.R": "46810c84cb8f",
     "st.tab.Inputs": "99ab941aa265",
-    "st.tab.Section Props": "8a5dcf4426d8",
-    "st.tab.Constructibility": "387fc096be38",
-    "st.tab.Stresses": "c12c1c1df9ee",
+    "st.tab.Section Props": "0359ef829745",
+    "st.tab.Constructibility": "c5f054344f5b",
+    "st.tab.Stresses": "46d311ffc20a",
     "st.tab.Flexure": "d8249300401b",
     "st.tab.Shear": "082c8d6aa3be",
     "st.tab.Diagrams": "04e602e6781e",
@@ -1827,12 +1827,12 @@
     "st.tab.Rating": "d4d18ce8c94c",
     "st.tab.Optimize": "3b361c3e3b64",
     "st.tab.Nomenclature": "81e537e6ecc9",
-    "st.tab.Report": "6a5768683639",
-    "st.report.all": "ecd6b85cd505"
+    "st.tab.Report": "93c712f74df1",
+    "st.report.all": "fbf980fa7d33"
    }
   },
   "payload gd_curb_RIDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "fba3a8270ee6",
     "st.status": "fc63f88f03f2",
@@ -1841,11 +1841,11 @@
     "st.governing": "73b3878ba6b5",
     "st.sections": "83f7af10dda5",
     "st.stations": "0c785014f883",
-    "st.R": "5aaa301e0f90",
+    "st.R": "42aad377d1d5",
     "st.tab.Inputs": "e417e5d21702",
-    "st.tab.Section Props": "7599624c3c52",
-    "st.tab.Constructibility": "9956d9c9d67c",
-    "st.tab.Stresses": "783d5f27e7f7",
+    "st.tab.Section Props": "896a87edd76f",
+    "st.tab.Constructibility": "cfcdc8ffe1dc",
+    "st.tab.Stresses": "3060719f5223",
     "st.tab.Flexure": "668cfc98e046",
     "st.tab.Shear": "0c34efeda763",
     "st.tab.Diagrams": "e0393e2c4b43",
@@ -1857,12 +1857,12 @@
     "st.tab.Rating": "508748ade210",
     "st.tab.Optimize": "6380c2732006",
     "st.tab.Nomenclature": "5234b640b5a8",
-    "st.tab.Report": "4d09189634db",
-    "st.report.all": "bb4fbe755f79"
+    "st.tab.Report": "5eaa0191e3d2",
+    "st.report.all": "05089501c10b"
    }
   },
   "payload gd_curb_RIDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "4298703ba2a4",
     "st.status": "fc63f88f03f2",
@@ -1871,11 +1871,11 @@
     "st.governing": "73b3878ba6b5",
     "st.sections": "83f7af10dda5",
     "st.stations": "0c785014f883",
-    "st.R": "5aaa301e0f90",
+    "st.R": "42aad377d1d5",
     "st.tab.Inputs": "86e1159a4097",
-    "st.tab.Section Props": "3debb02957a8",
-    "st.tab.Constructibility": "9a5daea9c85b",
-    "st.tab.Stresses": "84ace66abc0d",
+    "st.tab.Section Props": "96ad0adf8fa0",
+    "st.tab.Constructibility": "b0484e2cc726",
+    "st.tab.Stresses": "45d53fd3e5a3",
     "st.tab.Flexure": "343117c5f4aa",
     "st.tab.Shear": "d5e071af649c",
     "st.tab.Diagrams": "df24fbc98d39",
@@ -1887,12 +1887,12 @@
     "st.tab.Rating": "8ffc8504a510",
     "st.tab.Optimize": "1dd9cf501085",
     "st.tab.Nomenclature": "72e961707f40",
-    "st.tab.Report": "b32164ce8e2e",
-    "st.report.all": "c56636231aa2"
+    "st.tab.Report": "b200d3d660ce",
+    "st.report.all": "ff5409470dd3"
    }
   },
   "payload gd_curb_RIDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "9b50d2cdb721",
     "st.status": "fc63f88f03f2",
@@ -1901,11 +1901,11 @@
     "st.governing": "73b3878ba6b5",
     "st.sections": "83f7af10dda5",
     "st.stations": "0c785014f883",
-    "st.R": "5aaa301e0f90",
+    "st.R": "42aad377d1d5",
     "st.tab.Inputs": "7815ffe5a31c",
-    "st.tab.Section Props": "f4447376bf19",
-    "st.tab.Constructibility": "bc4ea949ddda",
-    "st.tab.Stresses": "5a2da5565807",
+    "st.tab.Section Props": "3189e92ab964",
+    "st.tab.Constructibility": "da7e764ff67d",
+    "st.tab.Stresses": "cd923d7eef93",
     "st.tab.Flexure": "c06b709a716a",
     "st.tab.Shear": "d77fb21387d9",
     "st.tab.Diagrams": "1c8ef513bcf2",
@@ -1917,12 +1917,12 @@
     "st.tab.Rating": "a6bdbae7489c",
     "st.tab.Optimize": "e36eb4c90216",
     "st.tab.Nomenclature": "04320af17dae",
-    "st.tab.Report": "cb3cb2ae3f44",
-    "st.report.all": "a38f9189be41"
+    "st.tab.Report": "56f1459c0b4c",
+    "st.report.all": "9e34c613b09d"
    }
   },
   "payload gd_curb_RIDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "7945b8ad2942",
     "st.status": "fc63f88f03f2",
@@ -1931,11 +1931,11 @@
     "st.governing": "d7b16ecf026d",
     "st.sections": "218bc0b043a6",
     "st.stations": "09902e9bf22d",
-    "st.R": "1a5a17dfc108",
+    "st.R": "eab9f6f27503",
     "st.tab.Inputs": "2982f94993e0",
-    "st.tab.Section Props": "18c35bba28e8",
-    "st.tab.Constructibility": "9d13fcc0afe7",
-    "st.tab.Stresses": "fe88250c59c8",
+    "st.tab.Section Props": "34de29f5744d",
+    "st.tab.Constructibility": "6f408eb07597",
+    "st.tab.Stresses": "37cf93f84a41",
     "st.tab.Flexure": "76c6a58c97ce",
     "st.tab.Shear": "ad55ae3be122",
     "st.tab.Diagrams": "d4391f2c257b",
@@ -1947,12 +1947,12 @@
     "st.tab.Rating": "23f8e62a3c3f",
     "st.tab.Optimize": "dc94d447d6ff",
     "st.tab.Nomenclature": "2df25be25e7c",
-    "st.tab.Report": "4272eb5b1656",
-    "st.report.all": "bd93a2f2b7ef"
+    "st.tab.Report": "2516fd6a5049",
+    "st.report.all": "9a093de80ed9"
    }
   },
   "payload gd_util_AASHTO_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "93d49ba21df3",
     "st.status": "5481e8d4d5aa",
@@ -1961,11 +1961,11 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "f20e3e0489b6",
-    "st.R": "37526540115e",
+    "st.R": "115cbdeafaed",
     "st.tab.Inputs": "b35611af7654",
-    "st.tab.Section Props": "701b23ac7b07",
-    "st.tab.Constructibility": "354b067f95b6",
-    "st.tab.Stresses": "40846fac5aaf",
+    "st.tab.Section Props": "b5566be35b38",
+    "st.tab.Constructibility": "25d917604d29",
+    "st.tab.Stresses": "4a3d4adbd867",
     "st.tab.Flexure": "e6ceb1759231",
     "st.tab.Shear": "7329e05b2b61",
     "st.tab.Diagrams": "dc179a9d09b0",
@@ -1977,12 +1977,12 @@
     "st.tab.Rating": "6a980d1119a3",
     "st.tab.Optimize": "b085fb338ada",
     "st.tab.Nomenclature": "fe445e430b77",
-    "st.tab.Report": "5389ececabdc",
-    "st.report.all": "e98a2c5c75d3"
+    "st.tab.Report": "7d702b0deef9",
+    "st.report.all": "aea31cab4b85"
    }
   },
   "payload gd_util_AASHTO_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "6be7e2b828b7",
     "st.status": "5481e8d4d5aa",
@@ -1991,11 +1991,11 @@
     "st.governing": "274200c2e713",
     "st.sections": "ef6049d406bd",
     "st.stations": "4f4c1ac13323",
-    "st.R": "6a76874047e7",
+    "st.R": "5406877a8d83",
     "st.tab.Inputs": "04f6a58140db",
-    "st.tab.Section Props": "b125c649f17c",
-    "st.tab.Constructibility": "8a573f921db9",
-    "st.tab.Stresses": "cb15f8f547db",
+    "st.tab.Section Props": "39803fca4a35",
+    "st.tab.Constructibility": "2d1e087565ee",
+    "st.tab.Stresses": "f5ee64b868ec",
     "st.tab.Flexure": "af1dcc07c784",
     "st.tab.Shear": "efef2e58966a",
     "st.tab.Diagrams": "8086bc2b8b10",
@@ -2007,12 +2007,12 @@
     "st.tab.Rating": "954d3d05ddf4",
     "st.tab.Optimize": "37339939d23b",
     "st.tab.Nomenclature": "a70354117842",
-    "st.tab.Report": "99e0198d275e",
-    "st.report.all": "310b4437a49d"
+    "st.tab.Report": "8b8930416b25",
+    "st.report.all": "92d2db3962bb"
    }
   },
   "payload gd_util_AASHTO_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "47904e4744c7",
     "st.status": "5481e8d4d5aa",
@@ -2021,11 +2021,11 @@
     "st.governing": "59653590851a",
     "st.sections": "ef6049d406bd",
     "st.stations": "3e7a7a7ff6ad",
-    "st.R": "59ffd75f1670",
+    "st.R": "1111dfa76a43",
     "st.tab.Inputs": "3ea8297d9fab",
-    "st.tab.Section Props": "be373e2a8209",
-    "st.tab.Constructibility": "913641ca6c87",
-    "st.tab.Stresses": "27f349622138",
+    "st.tab.Section Props": "6dccc212084c",
+    "st.tab.Constructibility": "98aa0b299761",
+    "st.tab.Stresses": "b79873088074",
     "st.tab.Flexure": "3d2311b23443",
     "st.tab.Shear": "930534b5c785",
     "st.tab.Diagrams": "0692d1625919",
@@ -2037,12 +2037,12 @@
     "st.tab.Rating": "b6d30c18ad7b",
     "st.tab.Optimize": "d115e15e55c2",
     "st.tab.Nomenclature": "a710002b1e69",
-    "st.tab.Report": "57bdbcfc6def",
-    "st.report.all": "65435891fca7"
+    "st.tab.Report": "a6a3d1b030b4",
+    "st.report.all": "8d30922c017f"
    }
   },
   "payload gd_util_AASHTO_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "7c95d1b3587a",
     "st.status": "5481e8d4d5aa",
@@ -2051,11 +2051,11 @@
     "st.governing": "567d1f896f3b",
     "st.sections": "ef6049d406bd",
     "st.stations": "b3589e8d669e",
-    "st.R": "277513b2e2a8",
+    "st.R": "95bedd4e947c",
     "st.tab.Inputs": "d51aa3553813",
-    "st.tab.Section Props": "777e88850a02",
-    "st.tab.Constructibility": "c3a53b5d98da",
-    "st.tab.Stresses": "fc8687ed53c5",
+    "st.tab.Section Props": "167538c73612",
+    "st.tab.Constructibility": "6b06304ef371",
+    "st.tab.Stresses": "81bfa3a89d04",
     "st.tab.Flexure": "775c1ba9951a",
     "st.tab.Shear": "6a78fe3787bc",
     "st.tab.Diagrams": "fcef028eb5bc",
@@ -2067,12 +2067,12 @@
     "st.tab.Rating": "1cacf8c36b12",
     "st.tab.Optimize": "6095867c0404",
     "st.tab.Nomenclature": "e163ff247997",
-    "st.tab.Report": "588d076a186b",
-    "st.report.all": "bb235b69b76e"
+    "st.tab.Report": "d4cdb7a71ec2",
+    "st.report.all": "1333ba1720eb"
    }
   },
   "payload gd_util_AASHTO_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "afe9595668e4",
     "st.status": "5481e8d4d5aa",
@@ -2081,11 +2081,11 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "f20e3e0489b6",
-    "st.R": "37526540115e",
+    "st.R": "115cbdeafaed",
     "st.tab.Inputs": "5254dd6ada4e",
-    "st.tab.Section Props": "77e667891c6d",
-    "st.tab.Constructibility": "0a8541add9f0",
-    "st.tab.Stresses": "54606662d756",
+    "st.tab.Section Props": "dcab48b9a093",
+    "st.tab.Constructibility": "39cf2738bf0b",
+    "st.tab.Stresses": "dc3df999dbcd",
     "st.tab.Flexure": "d378fb03c869",
     "st.tab.Shear": "5e2ca7b96640",
     "st.tab.Diagrams": "f11bfefcf90a",
@@ -2097,12 +2097,12 @@
     "st.tab.Rating": "0d17155cde79",
     "st.tab.Optimize": "3b8c65b5b175",
     "st.tab.Nomenclature": "43b4243ac3c2",
-    "st.tab.Report": "40767ff825ad",
-    "st.report.all": "d2fd04ab805e"
+    "st.tab.Report": "8e131d11510c",
+    "st.report.all": "ee9bae2af88c"
    }
   },
   "payload gd_util_CTDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "f9db1c7c44ae",
     "st.status": "ed7322df82eb",
@@ -2111,11 +2111,11 @@
     "st.governing": "2d113b200b71",
     "st.sections": "c53c62976041",
     "st.stations": "21ae56a963e4",
-    "st.R": "b5921a97c04d",
+    "st.R": "bfce5a9ef918",
     "st.tab.Inputs": "73d57cf2d368",
-    "st.tab.Section Props": "349370a24ef6",
-    "st.tab.Constructibility": "0066c538426d",
-    "st.tab.Stresses": "f0dbbd72f2d6",
+    "st.tab.Section Props": "234b8e389bb3",
+    "st.tab.Constructibility": "4733b0639f6f",
+    "st.tab.Stresses": "afbb408da7ad",
     "st.tab.Flexure": "3a6eabcf3d9a",
     "st.tab.Shear": "f4dacd53de8c",
     "st.tab.Diagrams": "2eb5525604ba",
@@ -2127,12 +2127,12 @@
     "st.tab.Rating": "aab0848576a3",
     "st.tab.Optimize": "88ceaa0fe0a3",
     "st.tab.Nomenclature": "fd07f46ad2c7",
-    "st.tab.Report": "4e7429436f29",
-    "st.report.all": "5d0b10426b7f"
+    "st.tab.Report": "19884e445cb7",
+    "st.report.all": "bded95b9979f"
    }
   },
   "payload gd_util_CTDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "41c53ee5141e",
     "st.status": "ed7322df82eb",
@@ -2141,11 +2141,11 @@
     "st.governing": "59653590851a",
     "st.sections": "ef6049d406bd",
     "st.stations": "3e7a7a7ff6ad",
-    "st.R": "ee5e11ed07f0",
+    "st.R": "f709f385579c",
     "st.tab.Inputs": "f539b635fb29",
-    "st.tab.Section Props": "234967ca826e",
-    "st.tab.Constructibility": "5fa03ea025af",
-    "st.tab.Stresses": "d6adfa8e8dc9",
+    "st.tab.Section Props": "36a9aaadcf9b",
+    "st.tab.Constructibility": "96437debb9c5",
+    "st.tab.Stresses": "87fd11d136bd",
     "st.tab.Flexure": "72d22ba5ecb9",
     "st.tab.Shear": "aa1259788fb7",
     "st.tab.Diagrams": "db7d9d00aa62",
@@ -2157,12 +2157,12 @@
     "st.tab.Rating": "90f0b9900ef6",
     "st.tab.Optimize": "536a079d6e5a",
     "st.tab.Nomenclature": "7ef89c8d7405",
-    "st.tab.Report": "781004b6ba3b",
-    "st.report.all": "ed7f966d280b"
+    "st.tab.Report": "b13ada937cf4",
+    "st.report.all": "9b901a3f5aa3"
    }
   },
   "payload gd_util_CTDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d75cf0b954b2",
     "st.status": "ed7322df82eb",
@@ -2171,11 +2171,11 @@
     "st.governing": "59653590851a",
     "st.sections": "ef6049d406bd",
     "st.stations": "3e7a7a7ff6ad",
-    "st.R": "ee5e11ed07f0",
+    "st.R": "f709f385579c",
     "st.tab.Inputs": "0e65ffcacb67",
-    "st.tab.Section Props": "eade7d58abf7",
-    "st.tab.Constructibility": "7f9492ffc0bd",
-    "st.tab.Stresses": "52a9415544e9",
+    "st.tab.Section Props": "4293b6ed64d1",
+    "st.tab.Constructibility": "85d53e7df659",
+    "st.tab.Stresses": "b04668637a55",
     "st.tab.Flexure": "16dc237e345f",
     "st.tab.Shear": "1d9b49d63ae8",
     "st.tab.Diagrams": "3db5c6757e2f",
@@ -2187,12 +2187,12 @@
     "st.tab.Rating": "be9bf19e4e1c",
     "st.tab.Optimize": "6ef6aef33ff6",
     "st.tab.Nomenclature": "ab854ae28d34",
-    "st.tab.Report": "59c3bbe7a18f",
-    "st.report.all": "1e17b254cc6b"
+    "st.tab.Report": "0ee684b6d950",
+    "st.report.all": "0d9d5dd96015"
    }
   },
   "payload gd_util_CTDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "4bfe0448acd2",
     "st.status": "ed7322df82eb",
@@ -2201,11 +2201,11 @@
     "st.governing": "a53aad12ac9b",
     "st.sections": "ef6049d406bd",
     "st.stations": "c9135360ba77",
-    "st.R": "663af7bf6e2f",
+    "st.R": "29539e768058",
     "st.tab.Inputs": "1899891ddca2",
-    "st.tab.Section Props": "bde90c4dcddc",
-    "st.tab.Constructibility": "cbbb1efa9de8",
-    "st.tab.Stresses": "6adf2ddbf07e",
+    "st.tab.Section Props": "55c8ee21dbaf",
+    "st.tab.Constructibility": "e4ce7198735f",
+    "st.tab.Stresses": "14301c486237",
     "st.tab.Flexure": "7ee3d9d78293",
     "st.tab.Shear": "50fd16c2266e",
     "st.tab.Diagrams": "99afd0e3abe7",
@@ -2217,12 +2217,12 @@
     "st.tab.Rating": "30b41060d8ce",
     "st.tab.Optimize": "1fe16916e051",
     "st.tab.Nomenclature": "7175db87de29",
-    "st.tab.Report": "005700cd564c",
-    "st.report.all": "f6278b1aea07"
+    "st.tab.Report": "b1160c9ab468",
+    "st.report.all": "8262e965a220"
    }
   },
   "payload gd_util_CTDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "151d741a9715",
     "st.status": "ed7322df82eb",
@@ -2231,11 +2231,11 @@
     "st.governing": "2d113b200b71",
     "st.sections": "c53c62976041",
     "st.stations": "21ae56a963e4",
-    "st.R": "b5921a97c04d",
+    "st.R": "bfce5a9ef918",
     "st.tab.Inputs": "f95d92647e87",
-    "st.tab.Section Props": "e3ad5210cd2b",
-    "st.tab.Constructibility": "301b2dc17707",
-    "st.tab.Stresses": "1aa610c9af9e",
+    "st.tab.Section Props": "ce88a082024e",
+    "st.tab.Constructibility": "4df71bb55099",
+    "st.tab.Stresses": "c0ca58e5903e",
     "st.tab.Flexure": "f7733171d223",
     "st.tab.Shear": "114e6016ff9d",
     "st.tab.Diagrams": "80dbdfcd4816",
@@ -2247,12 +2247,12 @@
     "st.tab.Rating": "7c33c3c31327",
     "st.tab.Optimize": "b729ed2c42ff",
     "st.tab.Nomenclature": "16144536ad6d",
-    "st.tab.Report": "ae2dc04227fa",
-    "st.report.all": "ebed8424e79d"
+    "st.tab.Report": "46cc29e5b0e0",
+    "st.report.all": "fdcd89c1fd08"
    }
   },
   "payload gd_util_MassDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "9d08079b7691",
     "st.status": "6096378939a3",
@@ -2261,11 +2261,11 @@
     "st.governing": "ea297d3c8f08",
     "st.sections": "218bc0b043a6",
     "st.stations": "091053edecc7",
-    "st.R": "78b3658e2d33",
+    "st.R": "4b8f985904dd",
     "st.tab.Inputs": "f468b6bad942",
-    "st.tab.Section Props": "c1912344f5e0",
-    "st.tab.Constructibility": "cbfb6a13d3a1",
-    "st.tab.Stresses": "a56fa2857d27",
+    "st.tab.Section Props": "d747c42d45a5",
+    "st.tab.Constructibility": "a286a657ef1b",
+    "st.tab.Stresses": "c9aaa9943d56",
     "st.tab.Flexure": "4790ecf20a5a",
     "st.tab.Shear": "6e4dbb7916b5",
     "st.tab.Diagrams": "04c87e654bf2",
@@ -2277,12 +2277,12 @@
     "st.tab.Rating": "282150bac27a",
     "st.tab.Optimize": "82e7e27a7161",
     "st.tab.Nomenclature": "da95c6eb4356",
-    "st.tab.Report": "edb3b048dbad",
-    "st.report.all": "d86117242bc7"
+    "st.tab.Report": "e33d71714a00",
+    "st.report.all": "49647dff3190"
    }
   },
   "payload gd_util_MassDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "86d4e2a813d8",
     "st.status": "6096378939a3",
@@ -2291,11 +2291,11 @@
     "st.governing": "3f3cc9e6753e",
     "st.sections": "83f7af10dda5",
     "st.stations": "5cb0dcfb99d2",
-    "st.R": "3f8a0b92f5c5",
+    "st.R": "47454bc3b3b8",
     "st.tab.Inputs": "fac8e9ffb957",
-    "st.tab.Section Props": "670dc5f3525b",
-    "st.tab.Constructibility": "1374f4e8cb57",
-    "st.tab.Stresses": "6df59c0ea8e4",
+    "st.tab.Section Props": "adfcd3064a24",
+    "st.tab.Constructibility": "75bc5a1ad80f",
+    "st.tab.Stresses": "88686f06aa05",
     "st.tab.Flexure": "c207d80b5aec",
     "st.tab.Shear": "27040a337668",
     "st.tab.Diagrams": "3bca7b8237bb",
@@ -2307,12 +2307,12 @@
     "st.tab.Rating": "e9699bd4ec22",
     "st.tab.Optimize": "b9eeeba7e199",
     "st.tab.Nomenclature": "691d1b9977f5",
-    "st.tab.Report": "e4bf8ea572b2",
-    "st.report.all": "f52c0a6d09ed"
+    "st.tab.Report": "5ab49de8ca65",
+    "st.report.all": "6cf450456b0b"
    }
   },
   "payload gd_util_MassDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "3cc55b20a3b7",
     "st.status": "6096378939a3",
@@ -2321,11 +2321,11 @@
     "st.governing": "7edcd94cfa1e",
     "st.sections": "83f7af10dda5",
     "st.stations": "3256df89ba53",
-    "st.R": "26892c5cef84",
+    "st.R": "0882305fe427",
     "st.tab.Inputs": "a0a8e6c1503c",
-    "st.tab.Section Props": "4d01ea291ec1",
-    "st.tab.Constructibility": "cf0f37ac0fec",
-    "st.tab.Stresses": "8536d5f73a31",
+    "st.tab.Section Props": "fe582b6793cd",
+    "st.tab.Constructibility": "e417bb1dea6e",
+    "st.tab.Stresses": "f74e715c1d9b",
     "st.tab.Flexure": "0212f2378636",
     "st.tab.Shear": "ab9108921b06",
     "st.tab.Diagrams": "72512e5c32d4",
@@ -2337,12 +2337,12 @@
     "st.tab.Rating": "51088ff860bf",
     "st.tab.Optimize": "b6d3806625bb",
     "st.tab.Nomenclature": "ed88929d00b7",
-    "st.tab.Report": "0b9caea45c93",
-    "st.report.all": "1273ab168b1d"
+    "st.tab.Report": "c83d927d8275",
+    "st.report.all": "d5f754e12073"
    }
   },
   "payload gd_util_MassDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ddb5a3f2f76d",
     "st.status": "6096378939a3",
@@ -2351,11 +2351,11 @@
     "st.governing": "95431bd385d5",
     "st.sections": "83f7af10dda5",
     "st.stations": "f9b93c0d541c",
-    "st.R": "3062c8cd9a8c",
+    "st.R": "93c635bca071",
     "st.tab.Inputs": "4d626dd61c83",
-    "st.tab.Section Props": "b8287905c99e",
-    "st.tab.Constructibility": "090edbc2de29",
-    "st.tab.Stresses": "f69996715cb8",
+    "st.tab.Section Props": "7fda1d564b06",
+    "st.tab.Constructibility": "75c46839f959",
+    "st.tab.Stresses": "e74aad9dcd4e",
     "st.tab.Flexure": "c97186120ac7",
     "st.tab.Shear": "36e51575d10b",
     "st.tab.Diagrams": "99461545e785",
@@ -2367,12 +2367,12 @@
     "st.tab.Rating": "4a24fe4b8213",
     "st.tab.Optimize": "35052d3d70c9",
     "st.tab.Nomenclature": "1bc84426e3ae",
-    "st.tab.Report": "1c7d4e3da962",
-    "st.report.all": "96b00fa4321f"
+    "st.tab.Report": "adc44429d8b0",
+    "st.report.all": "1663e42953d9"
    }
   },
   "payload gd_util_MassDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "52dcc5437099",
     "st.status": "6096378939a3",
@@ -2381,11 +2381,11 @@
     "st.governing": "ea297d3c8f08",
     "st.sections": "218bc0b043a6",
     "st.stations": "091053edecc7",
-    "st.R": "78b3658e2d33",
+    "st.R": "4b8f985904dd",
     "st.tab.Inputs": "6dd275075bc8",
-    "st.tab.Section Props": "7823abf5dd04",
-    "st.tab.Constructibility": "01dd4816152f",
-    "st.tab.Stresses": "e305a71195ce",
+    "st.tab.Section Props": "bac5d16afcb2",
+    "st.tab.Constructibility": "76dbeca216ad",
+    "st.tab.Stresses": "7e84f23890ff",
     "st.tab.Flexure": "fd6c91257a89",
     "st.tab.Shear": "12806e442e99",
     "st.tab.Diagrams": "e5353295e519",
@@ -2397,12 +2397,12 @@
     "st.tab.Rating": "d5e317b3cb66",
     "st.tab.Optimize": "ddeb66218764",
     "st.tab.Nomenclature": "9a6d1fc7128d",
-    "st.tab.Report": "750b4e2e80aa",
-    "st.report.all": "6b2602e1ad91"
+    "st.tab.Report": "55be60d114c6",
+    "st.report.all": "42ce3ae1e677"
    }
   },
   "payload gd_util_RIDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "21a39dc3143e",
     "st.status": "fc63f88f03f2",
@@ -2411,11 +2411,11 @@
     "st.governing": "340ea00a4b3c",
     "st.sections": "218bc0b043a6",
     "st.stations": "7cefb77347dd",
-    "st.R": "f6f03093957d",
+    "st.R": "4d313bd930d2",
     "st.tab.Inputs": "668b164259d5",
-    "st.tab.Section Props": "9bfba3e25c97",
-    "st.tab.Constructibility": "d9f931e9c263",
-    "st.tab.Stresses": "50d374459b62",
+    "st.tab.Section Props": "8c687c11d707",
+    "st.tab.Constructibility": "dcd10cbf3800",
+    "st.tab.Stresses": "2458518bdb10",
     "st.tab.Flexure": "69aafaf3acd8",
     "st.tab.Shear": "586db8d25280",
     "st.tab.Diagrams": "33c10d233350",
@@ -2427,12 +2427,12 @@
     "st.tab.Rating": "6ec96accb82a",
     "st.tab.Optimize": "62b6968a9ab9",
     "st.tab.Nomenclature": "7abb1d81940c",
-    "st.tab.Report": "3e1086afeaff",
-    "st.report.all": "69dc9679ff44"
+    "st.tab.Report": "8b7546d67421",
+    "st.report.all": "af2072e26cd9"
    }
   },
   "payload gd_util_RIDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "f549ac43625c",
     "st.status": "fc63f88f03f2",
@@ -2441,11 +2441,11 @@
     "st.governing": "6ff661425dd8",
     "st.sections": "83f7af10dda5",
     "st.stations": "68d7e00e245f",
-    "st.R": "8a6829c29041",
+    "st.R": "b5ede154f160",
     "st.tab.Inputs": "640bfc690b3c",
-    "st.tab.Section Props": "90204893327c",
-    "st.tab.Constructibility": "eca5d0843b5a",
-    "st.tab.Stresses": "2621a4eec044",
+    "st.tab.Section Props": "24912886dd7d",
+    "st.tab.Constructibility": "f68b382166d4",
+    "st.tab.Stresses": "0b4d646f3e6e",
     "st.tab.Flexure": "4bd875216155",
     "st.tab.Shear": "618b6b67923c",
     "st.tab.Diagrams": "0a3f4d922f03",
@@ -2457,12 +2457,12 @@
     "st.tab.Rating": "01ef542e1af3",
     "st.tab.Optimize": "3fba155e89f7",
     "st.tab.Nomenclature": "136461a5b53e",
-    "st.tab.Report": "ba64316a68a5",
-    "st.report.all": "149c8719a529"
+    "st.tab.Report": "28a7af2480eb",
+    "st.report.all": "15ea2f4fc5dc"
    }
   },
   "payload gd_util_RIDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "19d146a1959f",
     "st.status": "fc63f88f03f2",
@@ -2471,11 +2471,11 @@
     "st.governing": "6ff661425dd8",
     "st.sections": "83f7af10dda5",
     "st.stations": "68d7e00e245f",
-    "st.R": "8a6829c29041",
+    "st.R": "b5ede154f160",
     "st.tab.Inputs": "94405036247b",
-    "st.tab.Section Props": "c39146638f6f",
-    "st.tab.Constructibility": "4100bd418fad",
-    "st.tab.Stresses": "c8086a6e7832",
+    "st.tab.Section Props": "8494ef3e79fe",
+    "st.tab.Constructibility": "555433629d68",
+    "st.tab.Stresses": "efb4c8f58c47",
     "st.tab.Flexure": "3b9bfce47de6",
     "st.tab.Shear": "59a94ba7fc4c",
     "st.tab.Diagrams": "cc0e956b83bf",
@@ -2487,12 +2487,12 @@
     "st.tab.Rating": "2741fcc63f05",
     "st.tab.Optimize": "3138ed7f84d0",
     "st.tab.Nomenclature": "5f5fcdb04473",
-    "st.tab.Report": "9da25005b791",
-    "st.report.all": "4a5c932c360a"
+    "st.tab.Report": "e44e62ef9334",
+    "st.report.all": "c5996a07d103"
    }
   },
   "payload gd_util_RIDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b6efe7cd4a72",
     "st.status": "fc63f88f03f2",
@@ -2501,11 +2501,11 @@
     "st.governing": "dd090ea6fa4c",
     "st.sections": "83f7af10dda5",
     "st.stations": "0fa383d408f1",
-    "st.R": "2f3bfb6d3b28",
+    "st.R": "1c8acc9c93cf",
     "st.tab.Inputs": "bc20e4c43340",
-    "st.tab.Section Props": "85c4f516d56f",
-    "st.tab.Constructibility": "3bb475f614fc",
-    "st.tab.Stresses": "000eacaf0179",
+    "st.tab.Section Props": "0488a6cb43a2",
+    "st.tab.Constructibility": "b6a65ea1e26b",
+    "st.tab.Stresses": "a31cbc13a262",
     "st.tab.Flexure": "4ed18b19bfaa",
     "st.tab.Shear": "34e207dfb04a",
     "st.tab.Diagrams": "230ca725c78c",
@@ -2517,12 +2517,12 @@
     "st.tab.Rating": "adbdac87df5d",
     "st.tab.Optimize": "d004da2fb275",
     "st.tab.Nomenclature": "c42b575e22f7",
-    "st.tab.Report": "8ea8c1610534",
-    "st.report.all": "01b1755ff540"
+    "st.tab.Report": "4e63c7ea803a",
+    "st.report.all": "2c68db0faee8"
    }
   },
   "payload gd_util_RIDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "55efde254e58",
     "st.status": "fc63f88f03f2",
@@ -2531,11 +2531,11 @@
     "st.governing": "340ea00a4b3c",
     "st.sections": "218bc0b043a6",
     "st.stations": "7cefb77347dd",
-    "st.R": "f6f03093957d",
+    "st.R": "4d313bd930d2",
     "st.tab.Inputs": "20fd576e77fa",
-    "st.tab.Section Props": "5f3b234183ae",
-    "st.tab.Constructibility": "d080a06ba143",
-    "st.tab.Stresses": "14758dc4f758",
+    "st.tab.Section Props": "9d4695e6d297",
+    "st.tab.Constructibility": "722448e9fab7",
+    "st.tab.Stresses": "dac0b464aab4",
     "st.tab.Flexure": "00b03d87aecd",
     "st.tab.Shear": "9ed03b275f1e",
     "st.tab.Diagrams": "1aeacd10dd40",
@@ -2547,12 +2547,12 @@
     "st.tab.Rating": "5668464daa2c",
     "st.tab.Optimize": "9eb906238ebb",
     "st.tab.Nomenclature": "8990cde619f8",
-    "st.tab.Report": "f26b7db11584",
-    "st.report.all": "0f27a1159fb6"
+    "st.tab.Report": "060653da3d22",
+    "st.report.all": "12f25500d634"
    }
   },
   "payload gd_xsA_AASHTO_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ff37b57298c0",
     "st.status": "5481e8d4d5aa",
@@ -2561,11 +2561,11 @@
     "st.governing": "d0e9da8d5a5c",
     "st.sections": "c53c62976041",
     "st.stations": "350e76afef4a",
-    "st.R": "2ba91682af7b",
+    "st.R": "be88f3e87086",
     "st.tab.Inputs": "36e591d15e98",
-    "st.tab.Section Props": "95d9123e8727",
-    "st.tab.Constructibility": "84688d979437",
-    "st.tab.Stresses": "b7f64939d08a",
+    "st.tab.Section Props": "05278c70f3cb",
+    "st.tab.Constructibility": "eef44db89f20",
+    "st.tab.Stresses": "697341ec71b6",
     "st.tab.Flexure": "4e2d1ca89113",
     "st.tab.Shear": "d3b2ea26607e",
     "st.tab.Diagrams": "cbae501fad0a",
@@ -2577,12 +2577,12 @@
     "st.tab.Rating": "8f2a732061db",
     "st.tab.Optimize": "29491a507fd9",
     "st.tab.Nomenclature": "848595f20b4a",
-    "st.tab.Report": "35e0ba90c7f7",
-    "st.report.all": "947e1f70252c"
+    "st.tab.Report": "f11a874ca689",
+    "st.report.all": "acbca7ed156a"
    }
   },
   "payload gd_xsA_AASHTO_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b049eb263a01",
     "st.status": "5481e8d4d5aa",
@@ -2591,11 +2591,11 @@
     "st.governing": "88df91d77623",
     "st.sections": "ef6049d406bd",
     "st.stations": "70bbf1cdc3ae",
-    "st.R": "27455882fb96",
+    "st.R": "6a012470330d",
     "st.tab.Inputs": "601c30d206a0",
-    "st.tab.Section Props": "470952c9a691",
-    "st.tab.Constructibility": "9f4e849b75f4",
-    "st.tab.Stresses": "fb4334d255c7",
+    "st.tab.Section Props": "d14cec482829",
+    "st.tab.Constructibility": "71c655c40eed",
+    "st.tab.Stresses": "d7ef16d5f56a",
     "st.tab.Flexure": "b5f9e1f9888b",
     "st.tab.Shear": "acc1756a93d1",
     "st.tab.Diagrams": "2d558df47982",
@@ -2607,12 +2607,12 @@
     "st.tab.Rating": "fbc4875822b6",
     "st.tab.Optimize": "7ba62efde04a",
     "st.tab.Nomenclature": "50007ea47770",
-    "st.tab.Report": "693d71dc6036",
-    "st.report.all": "abd937e4b497"
+    "st.tab.Report": "867b2a381c31",
+    "st.report.all": "8053db3275cd"
    }
   },
   "payload gd_xsA_AASHTO_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "76eb084b204b",
     "st.status": "5481e8d4d5aa",
@@ -2621,11 +2621,11 @@
     "st.governing": "73bd6fe5cc94",
     "st.sections": "ef6049d406bd",
     "st.stations": "974558212bb2",
-    "st.R": "1122e864a048",
+    "st.R": "6a88d76b38fc",
     "st.tab.Inputs": "d188b49440ab",
-    "st.tab.Section Props": "c7d480931506",
-    "st.tab.Constructibility": "736519c37386",
-    "st.tab.Stresses": "322af9f37dfe",
+    "st.tab.Section Props": "5783693aa5a9",
+    "st.tab.Constructibility": "abb0e1a0a219",
+    "st.tab.Stresses": "2ca5b39c2e80",
     "st.tab.Flexure": "3acb7c8cee35",
     "st.tab.Shear": "48b7f22e49e2",
     "st.tab.Diagrams": "89ca5bfa2855",
@@ -2637,12 +2637,12 @@
     "st.tab.Rating": "3ac66f41a047",
     "st.tab.Optimize": "397f8e86be01",
     "st.tab.Nomenclature": "eb39e011ee66",
-    "st.tab.Report": "f6341e3c7e5b",
-    "st.report.all": "3c8f35922c71"
+    "st.tab.Report": "f9bd81e52c9b",
+    "st.report.all": "6f0202c424a2"
    }
   },
   "payload gd_xsA_AASHTO_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "a251dbc0cdee",
     "st.status": "5481e8d4d5aa",
@@ -2651,11 +2651,11 @@
     "st.governing": "dc9a9d05292a",
     "st.sections": "ef6049d406bd",
     "st.stations": "5096a9b26abb",
-    "st.R": "2d06b30671ff",
+    "st.R": "3606060ee62e",
     "st.tab.Inputs": "2f7f66b74a0c",
-    "st.tab.Section Props": "54b7acb6a968",
-    "st.tab.Constructibility": "4945d0f6d3cc",
-    "st.tab.Stresses": "5edfcca63ded",
+    "st.tab.Section Props": "190468dc1093",
+    "st.tab.Constructibility": "6638b47a2d31",
+    "st.tab.Stresses": "4ae785f4b6ee",
     "st.tab.Flexure": "1f5224cd238e",
     "st.tab.Shear": "de1a2af1f79f",
     "st.tab.Diagrams": "d2fea59c93cc",
@@ -2667,12 +2667,12 @@
     "st.tab.Rating": "ba4fa426fc46",
     "st.tab.Optimize": "d79c97727741",
     "st.tab.Nomenclature": "feb9b6274390",
-    "st.tab.Report": "3c6561e2cf32",
-    "st.report.all": "3005e2cbf84b"
+    "st.tab.Report": "6eeb8d5496d6",
+    "st.report.all": "f1094be74560"
    }
   },
   "payload gd_xsA_AASHTO_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "af9094ab8674",
     "st.status": "5481e8d4d5aa",
@@ -2681,11 +2681,11 @@
     "st.governing": "b0aadfca2ed4",
     "st.sections": "c53c62976041",
     "st.stations": "208650bf1ee4",
-    "st.R": "53345cae0238",
+    "st.R": "04a1b3e6f289",
     "st.tab.Inputs": "eaf61055e3c9",
-    "st.tab.Section Props": "255632a761c7",
-    "st.tab.Constructibility": "5da9044839da",
-    "st.tab.Stresses": "c473e3bd11ac",
+    "st.tab.Section Props": "b46197fab570",
+    "st.tab.Constructibility": "857d2f3d1c73",
+    "st.tab.Stresses": "42cdd859c4bc",
     "st.tab.Flexure": "d9b2be9003b5",
     "st.tab.Shear": "ddbe79413ab7",
     "st.tab.Diagrams": "2d181d7ac333",
@@ -2697,12 +2697,12 @@
     "st.tab.Rating": "40f78d31693f",
     "st.tab.Optimize": "7eae73f523a1",
     "st.tab.Nomenclature": "853763bd6185",
-    "st.tab.Report": "d16e2e6322cb",
-    "st.report.all": "f011c678acfb"
+    "st.tab.Report": "989e09e6c70d",
+    "st.report.all": "0c1fc28269dd"
    }
   },
   "payload gd_xsA_CTDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "783c7f2ac51e",
     "st.status": "ed7322df82eb",
@@ -2711,11 +2711,11 @@
     "st.governing": "054c4ebbff79",
     "st.sections": "c53c62976041",
     "st.stations": "2554d3db1af8",
-    "st.R": "6d522be4233a",
+    "st.R": "435f4e8a87a8",
     "st.tab.Inputs": "4171b52bb423",
-    "st.tab.Section Props": "4ce366515b30",
-    "st.tab.Constructibility": "3affad594c97",
-    "st.tab.Stresses": "1879befd03c1",
+    "st.tab.Section Props": "878d49ad0865",
+    "st.tab.Constructibility": "a882583d7b49",
+    "st.tab.Stresses": "e52a2b3e9593",
     "st.tab.Flexure": "3c7638123ed1",
     "st.tab.Shear": "48f9307f76c1",
     "st.tab.Diagrams": "d098a4d4eaca",
@@ -2727,12 +2727,12 @@
     "st.tab.Rating": "373c32ad7aeb",
     "st.tab.Optimize": "be6574c2a741",
     "st.tab.Nomenclature": "0a6e3264d7e8",
-    "st.tab.Report": "8825b7917da6",
-    "st.report.all": "8b7b94cb7ef5"
+    "st.tab.Report": "00076a5f0e65",
+    "st.report.all": "11b80e4e2262"
    }
   },
   "payload gd_xsA_CTDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "8dfd883c4069",
     "st.status": "ed7322df82eb",
@@ -2741,11 +2741,11 @@
     "st.governing": "bb89d3cabf12",
     "st.sections": "ef6049d406bd",
     "st.stations": "338560fc4294",
-    "st.R": "4ded6f87578e",
+    "st.R": "70868e11caae",
     "st.tab.Inputs": "edd905f0accf",
-    "st.tab.Section Props": "f77ed3b756df",
-    "st.tab.Constructibility": "742ea864034d",
-    "st.tab.Stresses": "6fb0fcbe0a69",
+    "st.tab.Section Props": "20fe41fbcabf",
+    "st.tab.Constructibility": "71c80567655b",
+    "st.tab.Stresses": "ea44e3862f04",
     "st.tab.Flexure": "c87ee8807bcb",
     "st.tab.Shear": "a935fc1ed77f",
     "st.tab.Diagrams": "1db9045b8101",
@@ -2757,12 +2757,12 @@
     "st.tab.Rating": "b5966831cea3",
     "st.tab.Optimize": "d09ba41565f6",
     "st.tab.Nomenclature": "6f0e20522aa0",
-    "st.tab.Report": "428c2062d9fc",
-    "st.report.all": "51b34010eeb5"
+    "st.tab.Report": "8992c927aae7",
+    "st.report.all": "a4296b88419f"
    }
   },
   "payload gd_xsA_CTDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "56ab91faf299",
     "st.status": "ed7322df82eb",
@@ -2771,11 +2771,11 @@
     "st.governing": "73bd6fe5cc94",
     "st.sections": "ef6049d406bd",
     "st.stations": "974558212bb2",
-    "st.R": "95ad54dfcbb2",
+    "st.R": "54036d89dcaf",
     "st.tab.Inputs": "e1f70728f204",
-    "st.tab.Section Props": "f7f9f23919c1",
-    "st.tab.Constructibility": "2ec0fd157d28",
-    "st.tab.Stresses": "656a6d03c839",
+    "st.tab.Section Props": "3fe7254a3aa2",
+    "st.tab.Constructibility": "869ec67751b2",
+    "st.tab.Stresses": "0d2829f84210",
     "st.tab.Flexure": "64a04cdb3a54",
     "st.tab.Shear": "00bc567bb098",
     "st.tab.Diagrams": "934b12661890",
@@ -2787,12 +2787,12 @@
     "st.tab.Rating": "d66a239c4ab5",
     "st.tab.Optimize": "fcda6b7c5e9b",
     "st.tab.Nomenclature": "01332d6240b8",
-    "st.tab.Report": "940449aa776d",
-    "st.report.all": "5d5477ad2229"
+    "st.tab.Report": "2eee6a08c0fd",
+    "st.report.all": "615aee144936"
    }
   },
   "payload gd_xsA_CTDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "99f6963b27a6",
     "st.status": "ed7322df82eb",
@@ -2801,11 +2801,11 @@
     "st.governing": "2419064de079",
     "st.sections": "ef6049d406bd",
     "st.stations": "afbfb6d95b81",
-    "st.R": "6cda61656d63",
+    "st.R": "0cbc3b001a83",
     "st.tab.Inputs": "e06633420bec",
-    "st.tab.Section Props": "3e67ded10813",
-    "st.tab.Constructibility": "2dd04c5e3f7e",
-    "st.tab.Stresses": "7d0b7eeba722",
+    "st.tab.Section Props": "905535baab25",
+    "st.tab.Constructibility": "1c778b3ba822",
+    "st.tab.Stresses": "ed15035284a4",
     "st.tab.Flexure": "afd801afb2ca",
     "st.tab.Shear": "c7e596035214",
     "st.tab.Diagrams": "ba8062d7f0c6",
@@ -2817,12 +2817,12 @@
     "st.tab.Rating": "792d0e884cfa",
     "st.tab.Optimize": "7bb253f3d026",
     "st.tab.Nomenclature": "2d865bf00d9e",
-    "st.tab.Report": "227f4d09df46",
-    "st.report.all": "6fd6ca10dbaf"
+    "st.tab.Report": "c71148b6be1b",
+    "st.report.all": "2a776b08d181"
    }
   },
   "payload gd_xsA_CTDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "a99cf65fb620",
     "st.status": "ed7322df82eb",
@@ -2831,11 +2831,11 @@
     "st.governing": "5687d52ed62e",
     "st.sections": "c53c62976041",
     "st.stations": "efb688ae0b62",
-    "st.R": "c8f020cfa95a",
+    "st.R": "d6a1debf4bc8",
     "st.tab.Inputs": "1f343dd759d8",
-    "st.tab.Section Props": "8e2a36b86635",
-    "st.tab.Constructibility": "7a65a0702605",
-    "st.tab.Stresses": "e8783612050d",
+    "st.tab.Section Props": "bd9556869624",
+    "st.tab.Constructibility": "3a4432be9c37",
+    "st.tab.Stresses": "1cb1281330ee",
     "st.tab.Flexure": "f20713e7f3e6",
     "st.tab.Shear": "b5194b621ab4",
     "st.tab.Diagrams": "fea0fcf4c1cb",
@@ -2847,12 +2847,12 @@
     "st.tab.Rating": "0d8dc47d6452",
     "st.tab.Optimize": "c64fbbeb4c60",
     "st.tab.Nomenclature": "19d4424d066b",
-    "st.tab.Report": "b1bafe70f16c",
-    "st.report.all": "85d6bcfa2653"
+    "st.tab.Report": "3d7276beff5c",
+    "st.report.all": "360ab973fcc4"
    }
   },
   "payload gd_xsA_MassDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "cfad1ae21e96",
     "st.status": "6096378939a3",
@@ -2861,11 +2861,11 @@
     "st.governing": "a3a78026e512",
     "st.sections": "218bc0b043a6",
     "st.stations": "1ac1b4727269",
-    "st.R": "e4575b2e8887",
+    "st.R": "222e0d22b862",
     "st.tab.Inputs": "bb2bb385d7cc",
-    "st.tab.Section Props": "91f5a4a5d340",
-    "st.tab.Constructibility": "35d11d82c444",
-    "st.tab.Stresses": "f9664c8ea2d2",
+    "st.tab.Section Props": "3962c7a4c4b3",
+    "st.tab.Constructibility": "ba3318659568",
+    "st.tab.Stresses": "10c50237d54d",
     "st.tab.Flexure": "5c87b35eb0bd",
     "st.tab.Shear": "3a7df0a98c90",
     "st.tab.Diagrams": "d5a6d40c0106",
@@ -2877,12 +2877,12 @@
     "st.tab.Rating": "57f9ae316c72",
     "st.tab.Optimize": "087729bd1a89",
     "st.tab.Nomenclature": "f04411e7cadc",
-    "st.tab.Report": "f72f3f8c587e",
-    "st.report.all": "e0d3e892297f"
+    "st.tab.Report": "6083e36440d5",
+    "st.report.all": "ec62c1c5e102"
    }
   },
   "payload gd_xsA_MassDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "ee4939c6d293",
     "st.status": "6096378939a3",
@@ -2891,11 +2891,11 @@
     "st.governing": "e1d78525c9cf",
     "st.sections": "83f7af10dda5",
     "st.stations": "e33e76930238",
-    "st.R": "65dea7515b8a",
+    "st.R": "580c79cffc30",
     "st.tab.Inputs": "2e83aad5d0b5",
-    "st.tab.Section Props": "257c0ddfee1b",
-    "st.tab.Constructibility": "53e35760ae6f",
-    "st.tab.Stresses": "9c66dc09567c",
+    "st.tab.Section Props": "a6da59b6100b",
+    "st.tab.Constructibility": "72d0ec0786fd",
+    "st.tab.Stresses": "7cd5c79b080c",
     "st.tab.Flexure": "c7e57aac812c",
     "st.tab.Shear": "737591f43853",
     "st.tab.Diagrams": "90aef9c1bb8a",
@@ -2907,12 +2907,12 @@
     "st.tab.Rating": "8d78270b6b34",
     "st.tab.Optimize": "f190ba32e6ec",
     "st.tab.Nomenclature": "719ad1072707",
-    "st.tab.Report": "d4013bbeca7f",
-    "st.report.all": "92f4b3a14999"
+    "st.tab.Report": "3abcc697284c",
+    "st.report.all": "9b5a0bd66fbb"
    }
   },
   "payload gd_xsA_MassDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "d3c981d7272f",
     "st.status": "6096378939a3",
@@ -2921,11 +2921,11 @@
     "st.governing": "41cebcc8e4c9",
     "st.sections": "83f7af10dda5",
     "st.stations": "062bb643bce9",
-    "st.R": "3cccbdacb226",
+    "st.R": "cdd0791ec78c",
     "st.tab.Inputs": "a686b5c92a83",
-    "st.tab.Section Props": "41b7d1497544",
-    "st.tab.Constructibility": "ea004e51b2a1",
-    "st.tab.Stresses": "49b22d9313ae",
+    "st.tab.Section Props": "cf71dbe0fd7a",
+    "st.tab.Constructibility": "d2243615c6e8",
+    "st.tab.Stresses": "3e47b5e1c04f",
     "st.tab.Flexure": "32a5ddd4d633",
     "st.tab.Shear": "f2b5b9525c06",
     "st.tab.Diagrams": "11416e2b4581",
@@ -2937,12 +2937,12 @@
     "st.tab.Rating": "e48189594f75",
     "st.tab.Optimize": "aaa5d7afbfac",
     "st.tab.Nomenclature": "5bf988dbffb2",
-    "st.tab.Report": "d73401de4bed",
-    "st.report.all": "bbc7aed40a6e"
+    "st.tab.Report": "8d02c090cc73",
+    "st.report.all": "662d2ddd7422"
    }
   },
   "payload gd_xsA_MassDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "17b93d838726",
     "st.status": "6096378939a3",
@@ -2951,11 +2951,11 @@
     "st.governing": "1ad04f36102c",
     "st.sections": "83f7af10dda5",
     "st.stations": "4987833038ec",
-    "st.R": "d001b01ddb9c",
+    "st.R": "d3bb90cb498d",
     "st.tab.Inputs": "bc5595803a10",
-    "st.tab.Section Props": "e1197c22c4a2",
-    "st.tab.Constructibility": "68a5e9248128",
-    "st.tab.Stresses": "730e8fdad085",
+    "st.tab.Section Props": "db98eb9d85b6",
+    "st.tab.Constructibility": "6c30779a0f94",
+    "st.tab.Stresses": "5138c60e58c9",
     "st.tab.Flexure": "61a265e6914d",
     "st.tab.Shear": "da39eef06c3c",
     "st.tab.Diagrams": "ff888a284f52",
@@ -2967,12 +2967,12 @@
     "st.tab.Rating": "44684069dbaf",
     "st.tab.Optimize": "52d31f11aee7",
     "st.tab.Nomenclature": "628cdc58ca82",
-    "st.tab.Report": "6c913b28750f",
-    "st.report.all": "d6943222778e"
+    "st.tab.Report": "f437e1306db8",
+    "st.report.all": "351cb7766b79"
    }
   },
   "payload gd_xsA_MassDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "3e168e8c883a",
     "st.status": "6096378939a3",
@@ -2981,11 +2981,11 @@
     "st.governing": "93c9a7113f18",
     "st.sections": "218bc0b043a6",
     "st.stations": "12789baf1ddb",
-    "st.R": "f08054e4b93e",
+    "st.R": "c3196f6fe19a",
     "st.tab.Inputs": "3210893caf3f",
-    "st.tab.Section Props": "4aefade01752",
-    "st.tab.Constructibility": "6513998ad93a",
-    "st.tab.Stresses": "f7d84822a91f",
+    "st.tab.Section Props": "b601b8dda6bb",
+    "st.tab.Constructibility": "189cd3732ccb",
+    "st.tab.Stresses": "d1f54ce02c6b",
     "st.tab.Flexure": "de076b2078a7",
     "st.tab.Shear": "e67e60f328fa",
     "st.tab.Diagrams": "5323e7a1a1e8",
@@ -2997,12 +2997,12 @@
     "st.tab.Rating": "26af609e85f0",
     "st.tab.Optimize": "b05f283cc496",
     "st.tab.Nomenclature": "02311ef38444",
-    "st.tab.Report": "e16f314eea16",
-    "st.report.all": "3767f7928520"
+    "st.tab.Report": "9956cb6b1c14",
+    "st.report.all": "90012cb48cd7"
    }
   },
   "payload gd_xsA_RIDOT_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "962c9cf18f71",
     "st.status": "f25519589061",
@@ -3011,11 +3011,11 @@
     "st.governing": "88695ee64cfe",
     "st.sections": "218bc0b043a6",
     "st.stations": "234017d7e8dc",
-    "st.R": "45450989f3c5",
+    "st.R": "ae0b77c98161",
     "st.tab.Inputs": "799705ea6ede",
-    "st.tab.Section Props": "cf26a54f45ee",
-    "st.tab.Constructibility": "42a7c88ed12c",
-    "st.tab.Stresses": "216ee338b904",
+    "st.tab.Section Props": "f46e125179f4",
+    "st.tab.Constructibility": "573ffbc2a56d",
+    "st.tab.Stresses": "5026b867365a",
     "st.tab.Flexure": "6cd0e3ea71b8",
     "st.tab.Shear": "16869239b12f",
     "st.tab.Diagrams": "b7164d27f918",
@@ -3027,12 +3027,12 @@
     "st.tab.Rating": "0b56ffc57d8c",
     "st.tab.Optimize": "9c09c5c235c4",
     "st.tab.Nomenclature": "95b4ed21824e",
-    "st.tab.Report": "8d805f683073",
-    "st.report.all": "8fb2d31ef7d7"
+    "st.tab.Report": "1231973edab4",
+    "st.report.all": "73160f6886f7"
    }
   },
   "payload gd_xsA_RIDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "8ccdacd569a9",
     "st.status": "f25519589061",
@@ -3041,11 +3041,11 @@
     "st.governing": "f46566d08f9e",
     "st.sections": "83f7af10dda5",
     "st.stations": "9514152d4ff6",
-    "st.R": "cfce2394155b",
+    "st.R": "c64135eabb80",
     "st.tab.Inputs": "4d8cbe2e4b63",
-    "st.tab.Section Props": "3d728b3b8bcf",
-    "st.tab.Constructibility": "00d9916e8a55",
-    "st.tab.Stresses": "0321ac3436c6",
+    "st.tab.Section Props": "cf413dde56ed",
+    "st.tab.Constructibility": "b77450010cf9",
+    "st.tab.Stresses": "2b00e433a09c",
     "st.tab.Flexure": "3147b365fd94",
     "st.tab.Shear": "4833f2da97a7",
     "st.tab.Diagrams": "d0c19eae564b",
@@ -3057,12 +3057,12 @@
     "st.tab.Rating": "d721f73f239f",
     "st.tab.Optimize": "f7c1813d3332",
     "st.tab.Nomenclature": "c7246efe2275",
-    "st.tab.Report": "5b20c9882be3",
-    "st.report.all": "b69179314175"
+    "st.tab.Report": "8ce7ce62137a",
+    "st.report.all": "3bb895b92a92"
    }
   },
   "payload gd_xsA_RIDOT_G3": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "a536c2c2cd9c",
     "st.status": "fc63f88f03f2",
@@ -3071,11 +3071,11 @@
     "st.governing": "abaf7f7b6e9e",
     "st.sections": "83f7af10dda5",
     "st.stations": "28c826154aa5",
-    "st.R": "5a13481a5580",
+    "st.R": "84e9e79f5fdd",
     "st.tab.Inputs": "1ef76c03249e",
-    "st.tab.Section Props": "205533daa5f2",
-    "st.tab.Constructibility": "0aa9e65d9b91",
-    "st.tab.Stresses": "e9115502d087",
+    "st.tab.Section Props": "379d91b7dc9e",
+    "st.tab.Constructibility": "46d7c7d9fe92",
+    "st.tab.Stresses": "3e20c37a1b5c",
     "st.tab.Flexure": "4bf599988703",
     "st.tab.Shear": "6165af1f45f6",
     "st.tab.Diagrams": "72bf9d6fcd2a",
@@ -3087,12 +3087,12 @@
     "st.tab.Rating": "9a8eb3791978",
     "st.tab.Optimize": "4ac8a8e940b2",
     "st.tab.Nomenclature": "e41b46aa3dd9",
-    "st.tab.Report": "9f00e8226fb4",
-    "st.report.all": "f5c6294273a1"
+    "st.tab.Report": "0d5dffd9ebc3",
+    "st.report.all": "e4c1f6a667e7"
    }
   },
   "payload gd_xsA_RIDOT_G4": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "44fc217795cf",
     "st.status": "fc63f88f03f2",
@@ -3101,11 +3101,11 @@
     "st.governing": "4de683b49b27",
     "st.sections": "83f7af10dda5",
     "st.stations": "d0d99b38daa5",
-    "st.R": "d307e1104e87",
+    "st.R": "a4ae85194b91",
     "st.tab.Inputs": "23042e6d2432",
-    "st.tab.Section Props": "b53b9ef7f0fc",
-    "st.tab.Constructibility": "3d4988582e4c",
-    "st.tab.Stresses": "1840dfdb0052",
+    "st.tab.Section Props": "c5ce72c11375",
+    "st.tab.Constructibility": "9d99870fb3f1",
+    "st.tab.Stresses": "cac970b15d1b",
     "st.tab.Flexure": "53c491c1e86d",
     "st.tab.Shear": "b9b4e83f6a4c",
     "st.tab.Diagrams": "204dc4646f4c",
@@ -3117,12 +3117,12 @@
     "st.tab.Rating": "f56353f693fa",
     "st.tab.Optimize": "c33ee40673ff",
     "st.tab.Nomenclature": "23af4beb83fc",
-    "st.tab.Report": "874351e7e5b1",
-    "st.report.all": "fecd375b4c7f"
+    "st.tab.Report": "351a5fad3df5",
+    "st.report.all": "2b9965c856c4"
    }
   },
   "payload gd_xsA_RIDOT_G5": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "159b0efe65f8",
     "st.status": "f25519589061",
@@ -3131,11 +3131,11 @@
     "st.governing": "ad4a67adf93b",
     "st.sections": "218bc0b043a6",
     "st.stations": "f8e1b8cc0289",
-    "st.R": "0a0dd08a031c",
+    "st.R": "d67220385e99",
     "st.tab.Inputs": "cc1f9a643d9c",
-    "st.tab.Section Props": "75e6e91aba8a",
-    "st.tab.Constructibility": "08cdf022ffea",
-    "st.tab.Stresses": "d068d4171985",
+    "st.tab.Section Props": "01c5c397306b",
+    "st.tab.Constructibility": "6b9b2e4cb748",
+    "st.tab.Stresses": "9f31654cbb0e",
     "st.tab.Flexure": "7838bb226e61",
     "st.tab.Shear": "d4b780dd19ea",
     "st.tab.Diagrams": "0b4520f794b6",
@@ -3147,12 +3147,12 @@
     "st.tab.Rating": "5891901dd4b3",
     "st.tab.Optimize": "b52bd02521e4",
     "st.tab.Nomenclature": "df582bf9ffae",
-    "st.tab.Report": "6b7838956f65",
-    "st.report.all": "43f6325b8f82"
+    "st.tab.Report": "fdb568741021",
+    "st.report.all": "d589c0d3acb7"
    }
   },
   "payload util_MassDOT_G2": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "334d7e446847",
     "st.status": "6096378939a3",
@@ -3161,11 +3161,11 @@
     "st.governing": "3f3cc9e6753e",
     "st.sections": "83f7af10dda5",
     "st.stations": "5cb0dcfb99d2",
-    "st.R": "e975c5cdb7b8",
+    "st.R": "25d49c865a17",
     "st.tab.Inputs": "568ab2e2c34e",
-    "st.tab.Section Props": "05b625467b97",
-    "st.tab.Constructibility": "f9b708df4d64",
-    "st.tab.Stresses": "ccb8a275e41e",
+    "st.tab.Section Props": "89f059dd9b44",
+    "st.tab.Constructibility": "f5a8e570734e",
+    "st.tab.Stresses": "4ef0e013dd70",
     "st.tab.Flexure": "feda421cfbb5",
     "st.tab.Shear": "fb1fa941aca6",
     "st.tab.Diagrams": "3bc4485bb722",
@@ -3177,12 +3177,12 @@
     "st.tab.Rating": "fdca0ccc6d57",
     "st.tab.Optimize": "77d2cd01debf",
     "st.tab.Nomenclature": "f2ed700f5ecb",
-    "st.tab.Report": "7c0524b8ba02",
-    "st.report.all": "348b1a3f0d3b"
+    "st.tab.Report": "cbbf928c4e43",
+    "st.report.all": "15bae8f4641b"
    }
   },
   "payload util_MassDOT_G2_gdx": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "b77d3f25a754",
     "st.status": "6096378939a3",
@@ -3191,11 +3191,11 @@
     "st.governing": "3f3cc9e6753e",
     "st.sections": "83f7af10dda5",
     "st.stations": "5cb0dcfb99d2",
-    "st.R": "39884fb73ff7",
+    "st.R": "b2776a65860f",
     "st.tab.Inputs": "295c1b00a90a",
-    "st.tab.Section Props": "8e0257e942bf",
-    "st.tab.Constructibility": "07bb90587a9e",
-    "st.tab.Stresses": "94dd9032a3a1",
+    "st.tab.Section Props": "9815ebeaf364",
+    "st.tab.Constructibility": "c5e0816cf71d",
+    "st.tab.Stresses": "33cc0552ade9",
     "st.tab.Flexure": "a46196408a7d",
     "st.tab.Shear": "defade5345d6",
     "st.tab.Diagrams": "79af6d8415b1",
@@ -3207,12 +3207,12 @@
     "st.tab.Rating": "37c01cf0ade4",
     "st.tab.Optimize": "fdaac93fa825",
     "st.tab.Nomenclature": "f3a5883cbc6b",
-    "st.tab.Report": "1a4f631e15b6",
-    "st.report.all": "7e8125b72ca2"
+    "st.tab.Report": "0febf76dc937",
+    "st.report.all": "9afd3fac4c1e"
    }
   },
   "payload util_MassDOT_G2_loads": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "95a34838e030",
     "st.status": "6096378939a3",
@@ -3221,11 +3221,11 @@
     "st.governing": "3f3cc9e6753e",
     "st.sections": "83f7af10dda5",
     "st.stations": "5cb0dcfb99d2",
-    "st.R": "9206ff73ff0a",
+    "st.R": "115ba55fe655",
     "st.tab.Inputs": "a4e7d28ee872",
-    "st.tab.Section Props": "1cc4647ccbbc",
-    "st.tab.Constructibility": "b7471223cbfb",
-    "st.tab.Stresses": "14fb1a6ddce7",
+    "st.tab.Section Props": "1b3338b780e3",
+    "st.tab.Constructibility": "28fec96b3751",
+    "st.tab.Stresses": "e59a7a52cd13",
     "st.tab.Flexure": "e4caa7102f9f",
     "st.tab.Shear": "baa7b6627ae8",
     "st.tab.Diagrams": "20472cfdd3ff",
@@ -3237,12 +3237,12 @@
     "st.tab.Rating": "d6cda3be20fe",
     "st.tab.Optimize": "f26f19f732cc",
     "st.tab.Nomenclature": "8418ddb5ade3",
-    "st.tab.Report": "b187d076f95f",
-    "st.report.all": "049e4679bb66"
+    "st.tab.Report": "33aff200dde5",
+    "st.report.all": "8f60a4312574"
    }
   },
   "payload xsA_RIDOT_Iyes_G1": {
-   "a": "claude/sbd-s2-1-nexact (S2-1, merged with origin/main 2722e53):Steel Bridge Design.html",
+   "a": "claude/sbd-s2-2-rb-fcrw (S2-2, on origin/main 164c21f):Steel Bridge Design.html",
    "sections": {
     "st.session": "2c41758d4372",
     "st.status": "069d37628004",
@@ -3251,11 +3251,11 @@
     "st.governing": "c12be076bbe6",
     "st.sections": "7f49077f8d74",
     "st.stations": "2c54257823bc",
-    "st.R": "7459683fd3d5",
+    "st.R": "2a5906c81761",
     "st.tab.Inputs": "479cc8e10ba0",
-    "st.tab.Section Props": "88e5bf43dd61",
-    "st.tab.Constructibility": "48d3abfdad4d",
-    "st.tab.Stresses": "af8c58c7c496",
+    "st.tab.Section Props": "afa0ae96ac8b",
+    "st.tab.Constructibility": "199cab87c821",
+    "st.tab.Stresses": "cff8793ae82e",
     "st.tab.Flexure": "db62724b2347",
     "st.tab.Shear": "e7121297533b",
     "st.tab.Diagrams": "bb0a295a7f51",
@@ -3267,8 +3267,8 @@
     "st.tab.Rating": "9e1093e5fefb",
     "st.tab.Optimize": "17e62fc52162",
     "st.tab.Nomenclature": "6d896e1f34bf",
-    "st.tab.Report": "1bd32fb41374",
-    "st.report.all": "1651de07d119"
+    "st.tab.Report": "bdd413f6edcc",
+    "st.report.all": "254ecdf45739"
    }
   }
  },
