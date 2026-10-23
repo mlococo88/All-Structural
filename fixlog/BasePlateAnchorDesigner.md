@@ -2222,3 +2222,46 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: default, struct2v1, struct2v2 and torqued are `same`. msa3a is DIFFERENT only in A_Nc and the values derived from it (tension breakout, pryout, their DCRs and derivation text), as in check case 2.
 - **Open item:** msa3a is still +3.9 % from PROFIS. 38.08 kip corresponds to A_Nc = 728 = 28 × 26, i.e. one edge 1 in closer in y than entered. That case's source report is not in the repository, so the entered edges cannot be checked.
+
+## 2026-10-23 — TR-H1: tension anchor reinforcement uses the actual h_ef; the §17.6.2.1.2 reduced h_ef′ stays in the breakout equations only (Tier 2, calc change, LESS conservative where it changes)
+- **Engineer decision (2026-10-23):** the reduced h_ef′ of §17.6.2.1.2 applies only to the breakout equations, not to the anchor-reinforcement check.
+- **Function:** `tensionRebarIntercept(cc)`. Anchor text: `const hef=he.hefEff, coneZ=C.H-hef, rMax=1.5*hef;`
+- **Before:**
+  ```js
+  const hef=he.hefEff, coneZ=C.H-hef, rMax=1.5*hef;
+  ```
+- **After:**
+  ```js
+  const hef=he.hef, coneZ=C.H-hef, rMax=1.5*hef;
+  ```
+  The return object also gets `hefBreakout:he.hefEff`, so the reduced value can still be stated.
+- **What changes:**
+  - Cone apex: was at the reduced depth H − h_ef′, now at the anchor head H − h_ef. The bar crossing is z_cross = coneZ + r/1.5.
+  - Breakout prism radius: 1.5·h_ef instead of 1.5·h_ef′.
+  - Effective-placement zone: 0.5·h_ef instead of 0.5·h_ef′.
+  - Display changes:
+    - the Tension Rebar notes and the User Manual state the actual h_ef, and state h_ef′ as breakout-only;
+    - the elevation's separate "h_ef,eff / cone apex" tier is replaced by a one-line note;
+    - the plan legend, the 3-D cone and the comments are updated.
+  - Not changed: `hefEffective()` and every breakout, pryout and side-face calculation still use h_ef′.
+- **Governing provision:**
+  - ACI 318-19 §17.6.2.1.2 limits h_ef in the breakout equations (Eqs. 17.6.2.1.1 through 17.6.2.5.1).
+  - §17.5.2.1(a) and R17.5.2.1 (Fig. R17.5.2.1a) govern anchor reinforcement. It is placed within 0.5·h_ef of the anchor and developed on both sides of the breakout surface, which starts at the anchor head.
+- **Check case:**
+  - Default project with h_ef = 18 in, H = 58 in, pedestal 24 × 24 in. The anchors are 2 × 2 at ±6 in, so c_a = 6 in on all 4 edges.
+  - Tension rebar on: #5 U-stirrups, 4 pieces per row, top cover 2 in, 30 in below the head.
+  - h_ef′ = max(c_a,max/1.5, s/3) = max(6/1.5, 12/3) = 4.0 in. It is unchanged and still used in the breakout check.
+  - Before (h_ef′ = 4):
+    - coneZ = 58 − 4 = 54 in; zone 0.5·4 = 2.0 in.
+    - The nearest legs are at r = √(3² + 2²) = 3.61 in > 2.0 in, so none is credited: 0 of 16 legs, φN_r = 0.
+  - After (h_ef = 18):
+    - coneZ = 58 − 18 = 40 in; zone 0.5·18 = 9.0 in.
+    - The legs at r = 3.61 in cross at z = 40 + 3.61/1.5 = 42.40 in.
+    - Above: 56 − 42.40 = 13.60 in ≥ ℓ_dh = 11.82 in.
+    - Below: 42.40 − 10 = 32.40 in ≥ ℓ_d = 14.23 in.
+    - 8 of 16 legs are credited (the other 8 fall outside the pedestal).
+    - A_s = 8 × 0.31 = 2.48 in²; φN_r = 0.75 × 2.48 × 60 = 111.6 kip; DCR = 5.33/111.6 = 0.05; development DCR 11.82/13.60 = 0.869.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: default, msa3a, struct2v1, struct2v2 and torqued are all `same` (none has tension rebar with a reduced h_ef). The PROFIS export checks pass.
+  - The check case was run headless against origin/main and the working tree, with the numbers above. Every tab and the print report render with 0 page errors.
