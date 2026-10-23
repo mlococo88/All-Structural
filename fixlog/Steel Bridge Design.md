@@ -21282,7 +21282,11 @@ item GirderDetail's method, AASHTO LRFD 10th Ed., becomes the method). This entr
   Stud fatigue pitch at the governing station, builtin28 AASHTO G1 (the tool's numbers): V_fat = 43.223 kip, Z_r = 2.5926 kip, n_row = 4, pitch 15 in.
   Before: Q = (96·8/6)(13.186) = 1,687.8 in³, I = 105,097 in⁴, V_sr = 43.223(1,687.8)/105,097 = 0.6942 kip/in, p_req = 4(2.5926)/0.6942 = 14.94 in,
   ratio 15/14.94 = 1.004 (fail). After: Q = (96·8/6.315)(13.640) = 1,658.9 in³, I = 103,914 in⁴, V_sr = 0.6900 kip/in, p_req = 15.03 in, ratio 0.998 (pass).
-- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (origin/main vs this branch) and `tests/st-span.mjs` (all 200
-  interior spans); the changed sections and the pass/fail flips are listed in the PR. GirderDetail's own results (`--tool gd`) do not use `st-src`.
+- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (origin/main vs this branch, 109 cases) and
+  `tests/st-span.mjs` (all 200 interior spans): check ratios move −0.67 % to +1.17 % (flexure +M, LL deflection, fatigue, stud fatigue pitch), flexure RF
+  −0.40 % to +0.26 %; 4 pass/fail flips, all stud fatigue pitch 1.004 → 0.998 (builtin28 AASHTO and CTDOT, G1 and G5; span 1 and span 3); negative flexure,
+  shear and constructibility unchanged. `tests/sbd-verify.mjs`, `tests/a610-prop.mjs` pass. GirderDetail's own results (`--tool gd`) do not use `st-src`.
+- **Baselines:** `tests/baselines/st.json` (all 109 cases) and `tests/baselines/st_interior.json` (all 200 cases, every section) re-recorded from those
+  runs. The latter also closes the SBD6 / S2-5 open item (S2-0): it had been recorded on stgirder.html, so its Report and Fatigue tab sections were stale.
 - **Other copies:** none (stgirder.html was removed at the cut-over; GirderDetail's `modRatio` already does this).
 - **Open items:** none for this item. The stud checks themselves are stage 2 item 9 (separate PR).
