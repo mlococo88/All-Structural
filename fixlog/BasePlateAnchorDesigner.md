@@ -2350,3 +2350,31 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar), and the export checks pass.
   - The check case above was run headless on origin/main and on the working tree, with 0 page errors.
 - **Open question for the engineer:** with the substitution, the tool also stops checking side-face blowout (§17.6.4); that behaviour predates this change. §17.5.2.1(a) speaks of the concrete breakout strength. Whether side-face blowout should stay checked is raised in the PR and not changed here.
+
+## 2026-10-23 — SFB-1: side-face blowout stays checked when anchor reinforcement replaces the tension breakout (Tier 2, calc change, MORE conservative where it changes)
+- **Engineer decision (2026-10-23):** §17.5.2.1(a) substitutes the anchor reinforcement for the concrete **breakout** strength only. Side-face blowout (§17.6.4), a separate failure at the head near an edge, stays checked.
+- **Functions and anchor text:**
+  - `comboCapacities`: tension-mode envelope, `if(!tSubst){` … `Side-face blowout (φNsb)`.
+  - `allChecks`: both the governing-mode envelope (`push("sfb",…)`) and the per-combination table (`put("sfb",…)`).
+  - The Strength Summary report rows: `Concrete Side-Face Blowout`.
+  - The Summary note.
+- **Before:**
+  ```js
+  if(!tSubst){ /* breakout */ ...; if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ...}); }
+  ```
+  With a justified substitution, side-face blowout was dropped from the envelope, from the §17.8 interaction, the Summary and the report.
+- **After:**
+  ```js
+  if(!tSubst){ /* breakout only */ }
+  if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ...});   // always
+  ```
+  The same split is made in `allChecks` (both places) and in the report rows. The Summary note now reads "Concrete breakout (tension) is not checked … Steel, pullout and side-face blowout are still checked."
+- **Governing provision:** ACI 318-19 §17.5.2.1(a) (anchor reinforcement instead of the concrete breakout strength) and §17.6.4 (side-face blowout).
+- **Check case:** the SUB-1 case with all four confirmations ticked, so the substitution is justified.
+  - Before: Side-Face Blowout row absent.
+  - After: Side-Face Blowout 0.072, the same value as without rebar.
+  - Unchanged: Breakout (T) absent, Anchor Reinf. Tension 0.048, steel 0.145, pullout 0.114, interaction 2.134.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar).
+  - The check case was run headless on origin/main and the working tree, with 0 page errors.

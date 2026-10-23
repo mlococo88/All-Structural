@@ -2688,10 +2688,13 @@ function comboCapacities(cc, combo){
     tensionModes.push({label:"Concrete breakout (φNcbg)", ref:"§17.6.2", per:"group",
       phiN:tb.phiNcbg, obj:tb,
       why:"A single breakout cone envelops the whole tension group; the anchors share one failure surface."});
-    if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ref:"§17.6.4", per:"group",
-      phiN:sfb.phiNsb, obj:sfb,
-      why:"Blowout is evaluated for the anchors near the edge acting together."});
   }
+  /* SFB-1 (2026-10-23, engineer): §17.5.2.1(a) substitutes the anchor reinforcement
+     for the concrete BREAKOUT strength only; side-face blowout (§17.6.4) is a
+     separate mode at the head and stays checked with or without anchor reinforcement. */
+  if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ref:"§17.6.4", per:"group",
+    phiN:sfb.phiNsb, obj:sfb,
+    why:"Blowout is evaluated for the anchors near the edge acting together."});
   /* plain rod with no head/nut and no JUSTIFIED anchor reinforcement → no
      cast-in tension load path (a provisional substitution is no load path) */
   if(plainRod && !tSubst){
@@ -5082,9 +5085,10 @@ function allChecks(){
     push("stT","Steel Tension","§17.6.1",(c.Tmax_anchor!==undefined?c.Tmax_anchor:c.Tu_per)/(cap.st.phi*cap.st.Nsa1),"tabAnchor");
     push("po","Pullout","§17.6.3",(c.Tmax_anchor!==undefined?c.Tmax_anchor:c.Tu_per)/cap.po.phiNpn,"tabAnchor");
     const _J=substitutionJustified(CC)||{t:{justified:false},v:{justified:false}};
-    if(!(S.tRebar.present && _J.t.justified)){
+    if(!(S.tRebar.present && _J.t.justified))
       push("tb","Concrete Breakout (T)","§17.6.2",c.Tu_group/cap.tb.phiNcbg,"tabConc");
-      if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb,"tabConc"); }
+    /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
+    if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb,"tabConc");
     push("stV","Steel Shear","§17.7.1",c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac),"tabAnchor");
     if(!(S.vRebar.present && _J.v.justified)) push("sbk","Concrete Breakout (V)","§17.7.2",c.Vres/cap.sbk.phiVcbg,"tabConc");
     push("pry","Pryout","§17.7.3",c.Vres/cap.pry.phiVcpg,"tabConc");
@@ -5124,10 +5128,10 @@ function dcrMatrix(){
     put("stT","Steel tension","§17.6.1", (c.Tmax_anchor!==undefined?c.Tmax_anchor:c.Tu_per)/(cap.st.phi*cap.st.Nsa1));
     if(!cap.po.na) put("po","Pullout","§17.6.3", (c.Tmax_anchor!==undefined?c.Tmax_anchor:c.Tu_per)/cap.po.phiNpn);
     const _J=substitutionJustified(CC)||{t:{justified:false},v:{justified:false}};
-    if(!(S.tRebar.present && _J.t.justified)){
+    if(!(S.tRebar.present && _J.t.justified))
       put("tb","Breakout (T)","§17.6.2", c.Tu_group/cap.tb.phiNcbg);
-      if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb);
-    }
+    /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
+    if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb);
     put("stV","Steel shear","§17.7.1", c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac));
     if(!(S.vRebar.present && _J.v.justified)) put("sbk","Breakout (V)","§17.7.2", c.Vres/cap.sbk.phiVcbg);
     put("pry","Pryout","§17.7.3", c.Vres/cap.pry.phiVcpg);
@@ -5594,8 +5598,9 @@ function buildSummary(pg){
     const j=rebarJustified(k,CC);
     if(k==="tension" && j.present && j.justified){
       const b=el("div","okBox");
-      b.innerHTML="<b>Concrete breakout (tension) and side-face blowout are not checked:</b> the anchor reinforcement "+
-        "carries the breakout force per &sect;17.5.2.1(a) — see \"Anchor Reinf. Tension\" (&phi;N<sub>r</sub>) above."+
+      b.innerHTML="<b>Concrete breakout (tension) is not checked:</b> the anchor reinforcement "+
+        "carries the breakout force per &sect;17.5.2.1(a) — see \"Anchor Reinf. Tension\" (&phi;N<sub>r</sub>) above. "+
+        "Steel, pullout and side-face blowout are still checked."+
         ((j.notes&&j.notes.length)? (" Note: "+j.notes.join("; ")+".") : "");
       pg.appendChild(b);
     }
@@ -7927,10 +7932,11 @@ function profisResultsTable(body, c, cap, which){
     if(!tJustified){
       rows.push({mode:"Concrete Breakout Failure", basis:"group",
         loadA:Tmax, capA:cap.tb.phiNcbg/nT, loadG:Tgrp, capG:cap.tb.phiNcbg});
-      if(!cap.sfb.na){ const Nedge=sfbEdgeDemand(c, CC? CC.g : anchorGeom());
-        rows.push({mode:"Concrete Side-Face Blowout", basis:"group",
-          loadA:Tmax, capA:cap.sfb.phiNsb/nT, loadG:Nedge, capG:cap.sfb.phiNsb}); }
     }
+    /* SFB-1: side-face blowout stays, with or without anchor reinforcement */
+    if(!cap.sfb.na){ const Nedge=sfbEdgeDemand(c, CC? CC.g : anchorGeom());
+      rows.push({mode:"Concrete Side-Face Blowout", basis:"group",
+        loadA:Tmax, capA:cap.sfb.phiNsb/nT, loadG:Nedge, capG:cap.sfb.phiNsb}); }
     if(S.tRebar.present){
       const tr=tensionRebarCheck(CC);
       rows.push({mode:"Anchor Reinforcement"+(tJustified?"":" (provisional)"), basis:"group",
