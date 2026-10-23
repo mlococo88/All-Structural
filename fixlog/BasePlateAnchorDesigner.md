@@ -2378,3 +2378,56 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs` passes.
   - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar).
   - The check case was run headless on origin/main and the working tree, with 0 page errors.
+
+## 2026-10-23 — VT-1: closed ties enclosing the anchor group as shear anchor reinforcement; eligibility decided per leg from the geometry (Tier 2, new capability + calc change for the shear substitution gate)
+- **Engineer request (2026-10-23):** a column pedestal with ties around all the anchors should count as shear anchor reinforcement. The engineer enters the geometry, and the app decides which ties are eligible.
+- **New piece type `closedtie`:** new fields in `S.vRebar`, all additive with defaults, so no migration is needed:
+  - `tieSets` (default 3);
+  - `tieTop` (2.5 in, the depth of the top set to the bar centreline);
+  - `tieSpacing` (3 in);
+  - existing fields reused: `cover`, `size`, `grade`, `epoxy`.
+- **Function:** `shearRebarIntercept(cc)`, new early branch `if(R.pieceType==="closedtie")`, inserted before "room behind the failure plane".
+- **Model:**
+  - The tie follows the pedestal outline at the cover. The legs that resist V are the two legs parallel to the shear, at t = ±(half-width − cover − d_b/2).
+  - The reference row is the anchor row the governing shear-breakout case uses, i.e. the row at c_a1 from the governing edge (the back row when Case 2 governs).
+  - For each tie set k (depth z) and side, a leg is effective only if all of these hold:
+    1. **Placement:** z ≤ 0.5·c_a1, applied to the depth of the tie set. This is the engineer's reading for enclosing ties.
+    2. **Crossing:** in front of the reference row, the shear breakout body has half-width and depth 1.5·x at distance x. A leg with lateral offset d_T (0 inside the span of the reference anchors) crosses the failure surface at x_c = max(d_T, z)/1.5, and must do so before the front corner: c_a1 − x_c − cover > 0.
+    3. **Edge-side anchorage:** the closed corner around a longitudinal bar anchors the front end. This is the same treatment as a hairpin bend around the rod, and it is confirmed in the attestations.
+    4. **Behind:** x_c + (reference row → back face) − cover ≥ ℓ_dh, because the back corner is a bend.
+  - φV_r = 0.75 · n_eff · A_b · f_y.
+- **Substitution gate:** shear now follows the same rule as SUB-1 on the tension side.
+  - `rebarJustified("shear")`: legs that do not qualify become advisory `notes`.
+  - Remaining blockers: no effective leg, a §25.2.1 clear-spacing clash, and the four confirmations.
+  - Removed as blockers (those legs are already not counted): "leg extension does not fit" and "bend engaging the rod not confirmed".
+  - In the compliance panel, the depth, behind and engages rows are advisory, and a new blocking row requires at least one creditable leg.
+- **Display:**
+  - Piece type option "Closed ties enclosing the anchor group", with inputs for the number of sets, the top-set depth, the vertical spacing, cover and epoxy. The hairpin-only inputs are hidden for ties.
+  - A per-leg table, with each criterion and its value.
+  - A worked derivation step (§6).
+  - A plan view (CLOSED-TIE PLAN) showing the tie outline, the side legs coloured by verdict, the legs across V in grey, and a × at each crossing.
+  - A section view showing each tie set with its verdict and crossing, plus the 0.5·c_a1 line.
+  - The Summary row "Anchor Reinf. Shear (ties)", and a green Summary note when it replaces the shear breakout. Steel shear and pryout are still checked.
+  - Tie-specific wording for the existing attestation keys (ack_bend, ack_perp, ack_devBoth), with no new keys.
+- **Governing provision:** ACI 318-19 §17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b (stirrups/ties enclosing the edge reinforcement); §25.4.3 (ℓ_dh).
+- **Check case:**
+  - Pedestal 24 × 24 × 36 in; default plate 18 × 18 with 2 × 2 anchors at ±6 in; default combinations (governing V = 16.16 kip).
+  - #4 closed ties: 3 sets, top at 2.5 in, spacing 3 in, cover 2 in; ℓ_dh = 8.46 in.
+  - The shear-breakout solve gives the +x edge with c_a1 = 18 in (Case 2, back row at x = −6), so 0.5·c_a1 = 9 in; t_leg = 9.75 in; d_T = 9.75 − 6 = 3.75 in.
+
+  | Set | z (in) | x_c = max(3.75, z)/1.5 (in) | Behind = x_c + 6 − 2 (in) | Result |
+  |---|---|---|---|---|
+  | 1 | 2.5 | 2.50 | 6.50 < 8.46 | not counted |
+  | 2 | 5.5 | 3.67 | 7.67 < 8.46 | not counted |
+  | 3 | 8.5 | 5.67 | 9.67 ≥ 8.46 | **effective**; front 18 − 5.67 − 2 = 10.33 > 0 |
+
+  - n_eff = 2; φV_r = 0.75 × 2 × 0.20 × 60 = 18.0 kip; DCR = 16.16/18.0 = 0.898.
+  - With the four confirmations ticked, the substitution is justified: Concrete Breakout (V) (1.454 with no reinforcement) is removed. Pryout 0.238 is unchanged.
+- **Hairpin regression (same pedestal, default hairpins):**
+  - φV_r 18.0, DCR 0.898 and n_eff 2 of 8 are unchanged.
+  - The gate reasons change only as described: the "not creditable" reason is now a note, the "bend not confirmed" blocker is gone, and the spacing clash still blocks.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and the export checks pass.
+  - The tie and hairpin cases were run headless (origin/main against the working tree for the hairpins), with 0 page errors.
+  - The plan and section were inspected in screenshots, and the print report builds.

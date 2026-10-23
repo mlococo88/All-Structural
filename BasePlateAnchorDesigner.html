@@ -938,7 +938,10 @@ function defaultState(){
              ack_devBelow:false, ack_deformed:false, ack_tie:false, ack_hooks:false },
     /* shear reinforcement (hairpins) */
     vRebar:{ present:false, size:"#4", qty:2, grade:"gr60",
-             pieceType:"hairpin",   /* hairpin (2 legs) | bar (1 leg) */
+             pieceType:"hairpin",   /* hairpin (2 legs) | bar (1 leg) | closedtie (VT-1: tie sets enclosing the anchor group) */
+             tieSets:3,             /* VT-1 closed ties: number of tie sets */
+             tieTop:2.5,            /* VT-1: depth of the first (top) tie set below the surface, to the bar centreline, in */
+             tieSpacing:3.0,        /* VT-1: vertical c/c spacing between tie sets, in */
              layoutMode:"perAnchor",/* perAnchor: pieces at each leading anchor | group: one set around/across the whole group */
              vStack:1,              /* GROUP hairpin: number of pieces stacked vertically */
              vSpacing:3.0,          /* GROUP hairpin: vertical c/c between stacked pieces, in */
@@ -3038,24 +3041,25 @@ function rebarJustified(kind, cc){
        surface could still switch off the concrete breakout check. It is now
        held to the same standard as the tension side. */
     const ic=shearRebarIntercept(cc);
+    const notes=[];
     if(!ic) reasons.push("not evaluated");
     else {
+      /* VT-1: as SUB-1 on the tension side, legs that do not qualify are simply
+         not counted in φV_r; they are advisory notes, not blockers */
       if(ic.nEff<ic.nLegsTotal){
         const bits=[];
         if(ic.nNotFit>0) bits.push(ic.nNotFit+" outside the pedestal/cover");
-        if(ic.nFar>0)    bits.push(ic.nFar+" beyond 0.5\u00b7c_a1");
-        if(ic.nDeep>0)   bits.push(ic.nDeep+" below the breakout body");
-        if(ic.nDev>0)    bits.push(ic.nDev+" under-developed behind the plane");
-        reasons.push((ic.nLegsTotal-ic.nEff)+" leg(s) not creditable ("+
+        if(ic.nFar>0)    bits.push(ic.nFar+(ic.isTie? " in tie sets deeper than 0.5\u00b7c_a1" : " beyond 0.5\u00b7c_a1"));
+        if(ic.nDeep>0)   bits.push(ic.nDeep+(ic.isTie? " do not cross the failure surface before the front corner" : " below the breakout body"));
+        if(ic.nDev>0)    bits.push(ic.nDev+" under-developed");
+        notes.push((ic.nLegsTotal-ic.nEff)+" of "+ic.nLegsTotal+" leg(s) not counted in φV_r ("+
           (bits.length? bits.join(", ") : "see the Shear Rebar tab")+")");
       }
       if(ic.nEff===0) reasons.push("no leg qualifies as anchor reinforcement");
-      if(ic.truncated && ic.availBehind<ic.reqBehind-1e-9)
-        reasons.push("leg extension does not fit behind the failure plane (only "+fmt(ic.roomBehind,2)+"″ available vs "+fmt(ic.reqBehind,2)+"″ required)");
       if(ic.nClash>0) reasons.push(ic.nClash+" leg(s) violate minimum clear spacing (§25.2.1)");
-      if(!ic.engages) reasons.push("bend engaging the anchor rod not confirmed — near-side anchorage unverified");
     }
     ["ack_deformed","ack_bend","ack_perp","ack_devBoth"].forEach(k=>{ if(!R[k]) reasons.push("unconfirmed: "+k.replace("ack_","")); });
+    return {present:true, justified:reasons.length===0, reasons, notes};
   }
   return {present:true, justified:reasons.length===0, reasons};
 }
@@ -3112,8 +3116,24 @@ function rebarCompliance(body, kind, ctx){
   } else {
     const vc=ctx||{};
     const vi=shearRebarIntercept(CC);
-    auto.push({ok: !!vi && vi.nEff===vi.nLegsTotal,
-      label:"All hairpin legs are creditable anchor reinforcement",
+    if(vi && vi.isTie){
+      /* VT-1: closed ties — eligibility decided per leg from the geometry */
+      const g0=vi.devGov;
+      auto.push({ok: vi.nEff>0, label:"At least one tie leg is creditable anchor reinforcement (φV_r > 0)",
+        detail: vi.nEff+" of "+vi.nLegsTotal+" legs ("+vi.nSets+" tie set"+(vi.nSets===1?"":"s")+" × 2 legs parallel to V) are counted in φV_r", ref:"§17.5.2.1(b)"});
+      auto.push({ok: vi.nEff===vi.nLegsTotal, warnOnly:true, label:"Every tie leg is creditable (legs that are not are simply not counted)",
+        detail: (vi.nLegsTotal-vi.nEff)+" leg(s) not counted — see the per-leg table", ref:"§17.5.2.1(b)"});
+      auto.push({ok: vi.nFar===0, warnOnly:true, label:"Tie sets within 0.5·c_a1 of the top surface (close to the anchor)",
+        detail: "first set at "+fmt(vi.tieTop,2)+"″, spacing "+fmt(vi.tieSpacing,2)+"″; limit 0.5·c_a1 = "+fmt(vi.nearLimit,2)+"″ (depth of the tie set — engineer's reading for enclosing ties)", ref:"R17.5.2.1(b)"});
+      auto.push({ok: !!g0 && g0.frontOK && g0.behindOK, na: !g0, label:"Governing counted leg: reaches the closed front corner (edge-side anchorage) and develops ℓ_dh behind the failure surface",
+        detail: g0? ("crossing "+fmt(g0.xCross,2)+"″ in front of the anchors; "+fmt(g0.front,2)+"″ on to the front corner; behind "+fmt(g0.behind,2)+"″ vs ℓ_dh = "+fmt(vi.dev.ldh,2)+"″") : "no leg crosses the failure surface", ref:"§25.4.3"});
+    } else {
+    auto.push({ok: !!vi && vi.nEff>0,
+      label:"At least one leg is creditable anchor reinforcement (φV_r > 0)",
+      detail: vi? (vi.nEff+" of "+vi.nLegsTotal+" legs are counted in φV_r") : "—",
+      ref:"§17.5.2.1(b)"});
+    auto.push({ok: !!vi && vi.nEff===vi.nLegsTotal, warnOnly:true,
+      label:"All hairpin legs are creditable anchor reinforcement (legs that are not are simply not counted)",
       detail: vi? (vi.nEff+" of "+vi.nLegsTotal+" legs ("+vi.nPieces+" piece"+(vi.nPieces===1?"":"s")+
         " × "+vi.legsPer+" leg"+(vi.legsPer===1?"":"s")+") are within 0.5·c_a1, inside the breakout body, and developed both sides") : "—",
       ref:"§17.5.2.1.2"});
@@ -3121,16 +3141,16 @@ function rebarCompliance(body, kind, ctx){
       label:"Legs placed close to the anchor",
       detail: vi? ((vi.nLegsTotal-vi.nFar)+" of "+vi.nLegsTotal+" legs within 0.5·c_a1 = "+fmt(vi.nearLimit,2)+"″ of a leading anchor") : "—",
       ref:"R17.5.2.1.2"});
-    auto.push({ok: !!vi && vi.depthOK,
+    auto.push({ok: !!vi && vi.depthOK, warnOnly:true,
       label:"Legs lie within the breakout body depth",
       detail: vi? ("leg depth "+fmt(vi.zBelow,2)+"″ vs 1.5·c_a1 = "+fmt(vi.bodyDepth,2)+"″") : "—",
       ref:"§17.7.2.1"});
-    auto.push({ok: !!vi && !vi.truncated && vi.availBehind>=vi.reqBehind-1e-9,
+    auto.push({ok: !!vi && !vi.truncated && vi.availBehind>=vi.reqBehind-1e-9, warnOnly:true,
       label:"Developed BEHIND the failure plane (computed from geometry)",
       detail: vi? (fmt(vi.availBehind,2)+"″ available vs "+fmt(vi.reqBehind,2)+"″ required"+
         (vi.truncated? " — the entered extension does not fit (room = "+fmt(vi.roomBehind,2)+"″)":"")) : "—",
       ref:"§25.4.2.4"});
-    auto.push({ok: !!vi && vi.engages,
+    auto.push({ok: !!vi && vi.engages, warnOnly:true,
       label:"Near-side anchorage: bend engages the anchor rod",
       detail: vi? (vi.engages? "confirmed in the inputs"
         : ("not confirmed — leg would need ℓ_d = "+fmt(vi.reqFront,2)+"″ within "+fmt(vi.availFront,2)+"″ to the edge")) : "—",
@@ -3139,10 +3159,17 @@ function rebarCompliance(body, kind, ctx){
       label:"Shear direction defined, legs oriented perpendicular to V",
       detail: vc.directional? "Oriented from the governing combination" : "No shear in the governing combination — orientation is a default, not a result",
       ref:"§17.5.2.1.2"});
+    }
     attest.push(["ack_deformed","Bars are deformed reinforcement","§20.2.1"]);
+    if(vi && vi.isTie){
+      attest.push(["ack_bend","Each tie corner encloses a longitudinal bar (the strut from the anchors bears on the corner bar at the loaded face)","R17.5.2.1(b)"]);
+      attest.push(["ack_perp","Ties are closed (135° seismic hooks or lapped) and enclose all the anchors","§25.7.2"]);
+      attest.push(["ack_devBoth","Tie legs are continuous around the corners on BOTH sides of the assumed crack","§17.5.2.1(b)"]);
+    } else {
     attest.push(["ack_bend","Hairpin is bent around the anchor shaft (or otherwise positively engages it)","§17.5.2.1.2"]);
     attest.push(["ack_perp","Legs are detailed perpendicular to the shear and on the side the crack opens toward","§17.5.2.1.2"]);
     attest.push(["ack_devBoth","Each leg is fully developed on BOTH sides of the assumed crack","§17.5.2.1.2"]);
+    }
   }
 
   body.appendChild(el("h3",null,"ACI §17.5.2.1 compliance"));
@@ -3875,6 +3902,78 @@ function shearRebarIntercept(cc){
   const lead=Math.max(...pts.map(projN));
   const leadPts=pts.filter(p=>Math.abs(projN(p)-lead)<1e-6+0.02*Math.max(g.sx||1,g.sy||1,1));
 
+  /* VT-1 (2026-10-23, engineer): CLOSED TIES enclosing the anchor group
+     (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b: stirrups/ties enclosing the edge
+     reinforcement). The legs that resist V are the two tie legs PARALLEL to the
+     shear (one at each side face). Per tie set k (depth z_k) and per side, the
+     app decides eligibility from the geometry:
+       placement  z_k ≤ 0.5·c_a1 (the "close to the anchor" limit, applied to the
+                  depth of the tie set; engineer's reading for enclosing ties)
+       crossing   the shear breakout body in front of the leading anchors has
+                  half-width and depth 1.5·x at distance x in front of them, so a
+                  leg at lateral offset d_T (0 within the leading-anchor span) and
+                  depth z crosses the failure surface at x_c = max(d_T, z)/1.5,
+                  and must do so before the front corner: x_c < c_a1 − cover
+       develop    edge side: the leg must reach the closed front corner beyond the
+                  crossing (c_a1 − x_c − cover > 0); the corner, wrapped around a
+                  longitudinal bar, anchors that end — the same treatment as a
+                  hairpin bend around the rod (confirmed in the attestations);
+                  behind: from the crossing to the back corner,
+                  x_c + (leading anchors → back face) − cover ≥ ℓ_dh
+     φV_r = 0.75 · n_eff · A_b · f_y as for hairpins. */
+  if(R.pieceType==="closedtie"){
+    const tLeg=halfSpanT-cover-dev.db/2;               /* side legs, bar centreline */
+    const nSets=Math.max(1,Math.round(R.tieSets||1));
+    const z0=Math.max(+R.tieTop||0, cover+dev.db/2), dz=Math.max(+R.tieSpacing||3, dev.db+1);
+    /* reference row = the anchors the governing breakout case uses: the row at
+       c_a1 from the governing edge (the back row when Case 2 governs) */
+    const uRef0=halfSpanN-ca1;
+    let refPts=pts.filter(p=>Math.abs(projN(p)-uRef0)<0.05+0.02*Math.max(g.sx||1,g.sy||1,1));
+    let uRef=uRef0; if(!refPts.length){ refPts=leadPts; uRef=lead; }
+    const tMin=Math.min(...refPts.map(projT)), tMax=Math.max(...refPts.map(projT));
+    const toBack=halfSpanN+uRef;                       /* reference anchors → back face */
+    const nearLimitT=0.5*ca1, bodyDepthT=1.5*ca1;
+    const legsT=[]; let nEffT=0,nFarT=0,nDeepT=0,nDevT=0;
+    for(let k=0;k<nSets;k++){
+      const z=z0+k*dz;
+      [{t:-tLeg,lab:"A"},{t:+tLeg,lab:"B"}].forEach(q=>{
+        const dT=Math.max(0,tMin-q.t,q.t-tMax);
+        const xc=Math.max(dT,z)/1.5;
+        const front=ca1-xc-cover, behind=xc+toBack-cover;
+        const L={piece:k+1, leg:q.lab, t:q.t, anchorT:(q.t<0?tMin:tMax), z, dT, xCross:xc,
+          x:(nx!==0)? uRef*nx : q.t, y:(nx!==0)? q.t : uRef*ny, fits:true,
+          front, behind, reqFront:dev.ldh, reqBehind:dev.ldh};
+        L.nearOK=(z<=nearLimitT+1e-9);
+        L.crossOK=(front>1e-9);
+        L.depthOK=(z<=bodyDepthT+1e-9)&&L.crossOK;
+        L.frontOK=(front>1e-9); L.behindOK=(behind>=dev.ldh-1e-9);
+        if(!L.nearOK){ nFarT++; L.eff=false;
+          L.why="tie set at depth "+fmt(z,2)+"″ > 0.5·c_a1 = "+fmt(nearLimitT,2)+"″ (too far below the anchor)"; }
+        else if(!L.crossOK){ nDeepT++; L.eff=false;
+          L.why="crosses the failure surface at "+fmt(xc,2)+"″ in front of the anchors, beyond the front corner (c_a1 − cover = "+fmt(ca1-cover,2)+"″)"; }
+        else if(!L.frontOK||!L.behindOK){ nDevT++; L.eff=false;
+          L.why="behind: "+fmt(behind,2)+"″ < ℓ_dh "+fmt(dev.ldh,2)+"″"; }
+        else { L.eff=true; L.why=""; nEffT++; }
+        legsT.push(L);
+      });
+    }
+    const effL=legsT.filter(L=>L.eff), pool=effL.length? effL : legsT.filter(L=>L.crossOK);
+    let devDCRT=0, gov=null;
+    pool.forEach(L=>{ const d=dev.ldh/Math.max(L.behind,1e-9); if(d>devDCRT){devDCRT=d;gov=L;} });
+    if(!pool.length) devDCRT=Infinity;
+    return {legs:legsT,nLegsTotal:legsT.length,nEff:nEffT,nFar:nFarT,nDeep:nDeepT,nDev:nDevT,nNotFit:0,nClash:0,
+      minClear:0,minCC:0,nPieces:nSets,legsPer:2,isTie:true,tLeg,tieTop:z0,tieSpacing:dz,nSets,
+      nLeadAnchors:refPts.length,leadTs:[...new Set(refPts.map(p=>+projT(p).toFixed(4)))].sort((a,b)=>a-b),
+      piecesPerAnchor:nSets,layoutMode:"tie",grpMode:false,gaugeAuto:2*tLeg,leadSpan:tMax-tMin,cTgrp:(tMin+tMax)/2,
+      nStack:nSets,vSpacing:dz,tOffset:0,zMax:z0+(nSets-1)*dz,
+      govEdge,ca1,nearLimit:nearLimitT,bodyDepth:bodyDepthT,zBelow:z0,depthOK:legsT.some(L=>L.depthOK),
+      availBehind:gov? gov.behind : 0,extBehind:gov? gov.behind : 0,roomBehind:toBack-cover,truncated:false,
+      availFront:gov? gov.front : 0,reqBehind:dev.ldh,reqFront:dev.ldh,engages:effL.length>0,devGov:gov,
+      dev,devDCR:devDCRT,rb,cover,gauge:2*tLeg,spacing:dz,
+      govCombo:govC.name,nx,ny,lead:uRef,halfSpanN,halfSpanT,
+      AsClaimed:legsT.length*rb.Ab,AsEffective:nEffT*rb.Ab};
+  }
+
   /* room behind the failure plane, inside the pedestal, less cover */
   const roomBehind=Math.max(0,(halfSpanN + lead) - cover);   /* lead is measured from the centre toward +n */
   const extBehind=Math.max(R.extBehind||0,0);
@@ -4054,12 +4153,14 @@ function shearRebarCheck(cc){
               "legs within 0.5c_{a1} of a leading anchor, inside the breakout body depth, and developed both sides; "+
               (nLegsTotal-nLegsEff)+" excluded"],
              ["\\text{pieces}",
+              (ic&&ic.isTie)? (String(ic.nSets)+"\\text{ closed tie sets} \\times 2\\text{ legs parallel to }V") :
               ic? (ic.grpMode
                     ? (R.pieceType==="hairpin"
                         ? String(ic.nStack)+"\\text{ group hairpin"+(ic.nStack===1?"":"s, stacked vertically")+"}"
                         : String(R.qty)+"\\text{ bars across the group}")
                     : String(R.qty)+" per anchor \\times "+ic.nLeadAnchors+"\\text{ leading anchor"+(ic.nLeadAnchors!==1?"s":"")+" = "+(ic.nPieces*ic.nLeadAnchors)+"}")
                 : String(R.qty),
+              (ic&&ic.isTie)? ("top set "+fmt(ic.tieTop,2)+"″ below the surface, sets at "+fmt(ic.tieSpacing,2)+"″; legs at ±"+fmt(ic.tLeg,2)+"″") :
               ic? (ic.grpMode
                     ? (R.pieceType==="hairpin"
                         ? "bend wraps the whole leading row — auto gauge "+fmt(ic.gauge,2)+"″"+(ic.nStack>1?", stacked at "+fmt(ic.vSpacing,2)+"″ vertical c/c":"")
@@ -4067,7 +4168,18 @@ function shearRebarCheck(cc){
                     : (R.pieceType==="hairpin"?"hairpins (2 legs each) ":"bars (1 leg each) ")+"set out at "+fmt(ic.spacing,2)+"″ c/c, each run centred on its leading anchor")
                 : ""],
              ["A_b",fmt(rb.Ab,2)+" in²",rb.name],["f_y",fmt(fy,0)+" ksi","rebar yield"]]}
-    ].concat(ic? [
+    ].concat((ic&&ic.isTie)? [
+      {title:"Closed ties — eligibility of each leg, from the geometry",ref:"R17.5.2.1(b), Fig. R17.5.2.1b; §25.4.3",
+       lines:[
+        "\\text{governing edge }"+ic.govEdge+",\\quad c_{a1}="+fmt(ic.ca1,2)+"\\ \\text{in},\\quad 0.5c_{a1}="+fmt(ic.nearLimit,2)+"\\ \\text{in},\\quad \\ell_{dh}="+fmt(ic.dev.ldh,2)+"\\ \\text{in}",
+        "\\text{placement: } z\\le 0.5c_{a1};\\quad \\text{crossing: } x_c=\\max(d_T,z)/1.5 < c_{a1}-c_c",
+        "\\text{edge side: } c_{a1}-x_c-c_c>0\\ \\text{(closed corner anchors)};\\quad \\text{behind: } x_c+d_{back}-c_c\\ge\\ell_{dh}",
+        (ic.devGov? ("\\text{governing counted leg (set "+ic.devGov.piece+", z="+fmt(ic.devGov.z,2)+"): } x_c=\\max("+fmt(ic.devGov.dT,2)+","+fmt(ic.devGov.z,2)+")/1.5="+fmt(ic.devGov.xCross,2)+
+          ",\\ \\text{edge }"+fmt(ic.ca1,2)+"-"+fmt(ic.devGov.xCross,2)+"-"+fmt(ic.cover,2)+"="+fmt(ic.devGov.front,2)+",\\ \\text{behind }"+fmt(ic.devGov.behind,2)+"\\ \\text{in}") : "\\text{no tie leg crosses the failure surface}"),
+        "n_{eff}="+ic.nEff+"\\ \\text{of }"+ic.nLegsTotal+"\\ \\text{legs (table on this tab)}"],
+       vars:[["d_T","in","lateral offset of the leg from the leading-anchor span (0 inside it)"],["c_c",fmt(ic.cover,2)+" in","clear cover to the tie"],
+             ["d_{back}",fmt(ic.roomBehind+ic.cover,2)+" in","leading anchors to the back face"]]}
+    ] : ic? [
       {title:"Failure surface, proximity and development — from the geometry",ref:"§17.5.2.1.2; R17.5.2.1.2; §25.4",
        lines:[
         "\\text{governing edge }"+ic.govEdge+",\\quad c_{a1}="+fmt(ic.ca1,2)+"\\ \\text{in}",
@@ -4748,15 +4860,34 @@ function buildInputPanel(){
     fRow(body,"Bar size",selInput(LIB.rebar,()=>S.vRebar.size,v=>S.vRebar.size=v,o=>o.size,o=>o.size),"",
       "Sets bar area A_b (capacity φV_r = φ·n_eff·A_b·f_y) and diameter d_b (development length behind the plane scales with d_b).");
     fRow(body,"Piece type",selInput(
-      [{id:"hairpin",nm:"Hairpin (2 legs)"},{id:"bar",nm:"Single bar (1 leg)"}],
+      [{id:"hairpin",nm:"Hairpin (2 legs)"},{id:"bar",nm:"Single bar (1 leg)"},{id:"closedtie",nm:"Closed ties enclosing the anchor group"}],
       ()=>S.vRebar.pieceType,v=>S.vRebar.pieceType=v,o=>o.nm,o=>o.id),"",
-      "A hairpin is a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage; a single bar is one leg and needs its own near-side development.");
-    fRow(body,"Layout",selInput(
+      "A hairpin is a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage; a single bar is one leg and needs its own near-side development. <b>Closed ties</b> (pedestal ties around all the anchors, ACI Fig. R17.5.2.1b): enter the tie geometry and the app decides which tie legs are eligible.");
+    const vTie=(S.vRebar.pieceType==="closedtie");
+    if(vTie && S.vRebar.present){
+      body.appendChild(el("h3",null,"Closed-tie geometry"));
+      fRow(body,"Number of tie sets",numInput(()=>S.vRebar.tieSets,v=>S.vRebar.tieSets=Math.max(1,Math.round(v)),1),"",
+        "Tie sets from the top down. Each set gives two legs parallel to the shear (one at each side face); the app checks each set at its own depth.");
+      fRow(body,"Depth of the top tie set",numInput(()=>S.vRebar.tieTop,v=>S.vRebar.tieTop=Math.max(0,v),0.25),"in",
+        "From the top surface to the centreline of the first (top) tie. Sets deeper than 0.5·c_a1 are not counted (too far below the anchor).");
+      fRow(body,"Vertical spacing of tie sets",numInput(()=>S.vRebar.tieSpacing,v=>S.vRebar.tieSpacing=Math.max(1,v),0.25),"in",
+        "Centre-to-centre vertical spacing between tie sets.");
+      fRow(body,"Clear cover to the ties",numInput(()=>S.vRebar.cover,v=>S.vRebar.cover=Math.max(0,v),0.25),"in",
+        "Side cover to the tie. The tie legs sit at the pedestal faces less this cover; it also limits the length on the edge side and behind the crossing.");
+      fRow(body,"Epoxy-coated",chkInput(()=>S.vRebar.epoxy,v=>S.vRebar.epoxy=v),"",
+        "Epoxy coating raises the required hook development ℓ_dh (ψ_e = 1.2).");
+      body.appendChild(el("div","note",
+        "The tie follows the pedestal outline. For each set and side the app checks: depth ≤ 0.5·c_a1; where the leg crosses the "+
+        "shear failure surface (x_c = max(lateral offset, depth)/1.5 in front of the leading anchors), before the closed front corner "+
+        "that anchors it; and ℓ_dh behind the surface (to the back corner). The result is listed leg by leg on the Shear Rebar tab."));
+    }
+    if(!vTie) fRow(body,"Layout",selInput(
       [{id:"perAnchor",nm:"At each leading anchor"},{id:"group",nm:"Around/across the whole group"}],
       ()=>S.vRebar.layoutMode||"perAnchor",v=>S.vRebar.layoutMode=v,o=>o.nm,o=>o.id),"",
       "<b>Per-anchor</b>: pieces at each edge-nearest anchor, each hairpin wrapping its own rod. <b>Group</b>: the ACI Fig R17.5.2.1b(i) detail — one hairpin whose bend wraps the WHOLE leading row (gauge auto-sized to the anchor span + rod Ø + bar Ø + ½″), or one run of bars across the group.");
     const vGrp=(S.vRebar.layoutMode==="group");
-    if(vGrp && S.vRebar.pieceType==="hairpin"){
+    if(vTie){ /* closed ties: geometry above */ }
+    else if(vGrp && S.vRebar.pieceType==="hairpin"){
       fRow(body,"Vertically stacked hairpins",numInput(()=>S.vRebar.vStack,v=>S.vRebar.vStack=Math.max(1,Math.round(v)),1),"",
         "Number of group hairpins stacked below one another (they coincide in plan). Each is checked at its own depth — pieces deeper than 1.5·c_a1 fall below the breakout body and earn nothing.");
       if((S.vRebar.vStack||1)>1)
@@ -4773,7 +4904,7 @@ function buildInputPanel(){
     }
     fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.vRebar.grade,v=>S.vRebar.grade=v,o=>o.name,o=>o.id),"",
       "Rebar yield f_y — drives capacity (φV_r ∝ f_y) and required development behind the plane.");
-    if(S.vRebar.present){
+    if(S.vRebar.present && !vTie){
       body.appendChild(el("h3",null,"Geometry"));
       if(!(S.vRebar.layoutMode==="group" && S.vRebar.pieceType==="hairpin"))
       fRow(body,"Piece spacing (c/c, along the edge)",numInput(()=>S.vRebar.spacing,v=>S.vRebar.spacing=Math.max(0.5,v),0.5),"in",
@@ -5104,7 +5235,7 @@ function allChecks(){
     checks.push({label:"Rebar Development",ref:"§25.4",dcr:tr.devDCR,combo:"—",tab:"tabTRebar",
       na:tr.devNA}); }   /* no bar crosses the cone → nothing to develop → N/A, not PASS 0.00 */
   if(S.vRebar.present){ const vr=shearRebarCheck(CC);
-    checks.push({label:"Hairpin Shear",ref:"§17.5.2.1.2",dcr:vr.dcr,combo:vr.gov,tab:"tabVRebar"}); }
+    checks.push({label:(S.vRebar.pieceType==="closedtie"?"Anchor Reinf. Shear (ties)":"Hairpin Shear"),ref:"§17.5.2.1.2",dcr:vr.dcr,combo:vr.gov,tab:"tabVRebar"}); }
   if(standoffParams().checkBending){ const ln=levelingNutCheck(CC);
     checks.push({label:"Stand-off Bending ("+ln.soLabel+")",ref:"PROFIS lever-arm",dcr:ln.dcr,combo:ln.gov,tab:"tabAnchor"}); }
   return checks;
@@ -5596,6 +5727,13 @@ function buildSummary(pg){
   /* anchor-reinforcement substitution status */
   ["tension","shear"].forEach(k=>{
     const j=rebarJustified(k,CC);
+    if(k==="shear" && j.present && j.justified){
+      const b=el("div","okBox");
+      b.innerHTML="<b>Concrete breakout (shear) is not checked:</b> the "+(S.vRebar.pieceType==="closedtie"?"closed ties carry":"anchor reinforcement carries")+
+        " the shear per &sect;17.5.2.1(b) — see \""+(S.vRebar.pieceType==="closedtie"?"Anchor Reinf. Shear (ties)":"Hairpin Shear")+"\" (&phi;V<sub>r</sub>) above. Steel shear and pryout are still checked."+
+        ((j.notes&&j.notes.length)? (" Note: "+j.notes.join("; ")+".") : "");
+      pg.appendChild(b);
+    }
     if(k==="tension" && j.present && j.justified){
       const b=el("div","okBox");
       b.innerHTML="<b>Concrete breakout (tension) is not checked:</b> the anchor reinforcement "+
@@ -6554,7 +6692,7 @@ function buildVRebarTab(pg){
          "as small as possible observing cover". Each leg sits gauge/2 from the
          rod, so gauge/2 > 0.5·c_a1 disqualifies EVERY leg before any other
          check — worth saying explicitly, with the number that fixes it. */
-      if(ic.legsPer===2 && !ic.grpMode && ic.gauge/2 > ic.nearLimit+1e-9){
+      if(!ic.isTie && ic.legsPer===2 && !ic.grpMode && ic.gauge/2 > ic.nearLimit+1e-9){
         const rbV=rebarOf(S.vRebar.size);
         const snug=S.anchor.dia+rbV.db+0.5;
         const w=el("div","errBox");
@@ -6573,6 +6711,40 @@ function buildVRebarTab(pg){
           "far face at "+fmt(ic.cover,2)+"″ cover. The check uses the length that physically fits.";
         body.appendChild(w);
       }
+      if(ic.isTie){
+        /* VT-1: closed-tie legs — one row per tie set and side, every criterion shown */
+        const tt=el("table","tbl");
+        {const h=el("tr");["Tie set","Side","depth z (in)","≤ 0.5·c_a1?","lateral offset d_T (in)",
+          "crossing x_c = max(d_T,z)/1.5 (in)","edge side avail (in)","behind avail (in)","ℓ_dh req (in)",
+          "Effective?","Note"].forEach(x=>h.appendChild(el("th",null,x)));tt.appendChild(h);}
+        ic.legs.forEach(L=>{
+          const tr=el("tr");
+          const mk=(v,ok)=>{ const c=el("td",null,v); if(ok!==undefined){ c.style.fontWeight="bold"; c.style.color=ok?"var(--pass)":"var(--fail)"; } return c; };
+          tr.appendChild(el("td",null,String(L.piece)));
+          tr.appendChild(el("td",null,L.leg+(L.t<0?" (−)":" (+)")));
+          tr.appendChild(el("td",null,fmt(L.z,2)));
+          tr.appendChild(mk(L.nearOK?"YES":"NO",L.nearOK));
+          tr.appendChild(el("td",null,fmt(L.dT,2)));
+          tr.appendChild(mk(fmt(L.xCross,2),L.crossOK));
+          tr.appendChild(mk(fmt(L.front,2),L.frontOK));
+          tr.appendChild(mk(fmt(L.behind,2),L.behindOK));
+          tr.appendChild(el("td",null,fmt(L.reqFront,2)));
+          const yn=el("td",null,L.eff?"YES":"NO"); yn.style.fontWeight="bold"; yn.style.color=L.eff?"var(--pass)":"var(--fail)";
+          tr.appendChild(yn); tr.appendChild(el("td","lft",L.why||""));
+          tt.appendChild(tr);
+        });
+        body.appendChild(tt);
+        body.appendChild(el("div","note",
+          "Closed ties enclosing the anchor group (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b). Governing edge "+ic.govEdge+
+          ", c_a1 = "+fmt(ic.ca1,2)+"″. The legs that resist V are the two tie legs parallel to the shear, at "+
+          "±"+fmt(ic.tLeg,2)+"″ from the centreline (cover "+fmt(ic.cover,2)+"″). For each tie set and side: "+
+          "(1) the set must be within 0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ of the top surface; "+
+          "(2) the breakout body in front of the leading anchors has half-width and depth 1.5·x at distance x, so the leg "+
+          "crosses the failure surface at x_c = max(d_T, z)/1.5 and must do so before the front corner (c_a1 − cover = "+
+          fmt(ic.ca1-ic.cover,2)+"″), where the closed corner around a longitudinal bar anchors it (as a hairpin bend around the rod); "+
+          "(3) it must develop ℓ_dh = "+fmt(ic.dev.ldh,2)+"″ behind the surface (from the crossing to the back corner). "+
+          "φV_r = 0.75 · n_eff · A_b · f_y counts only the effective legs."));
+      } else {
       const t=el("table","tbl");
       {const h=el("tr");["Piece","Leg","x (in)","y (in)","depth (in)","lateral offset (in)",
         "0.5·c_a1 (in)","within?","ℓ avail BEHIND (in)","ℓ req BEHIND (in)","behind OK?",
@@ -6610,6 +6782,7 @@ function buildVRebarTab(pg){
         "behind that plane is solid concrete. A leg is EFFECTIVE only if it is within the lateral limit, inside "+
         "the breakout body depth (1.5·c_a1 = "+fmt(ic.bodyDepth,2)+"″ vs leg depth "+fmt(ic.zBelow,2)+"″), and developed "+
         "on BOTH sides."));
+      }
       if(ic.nEff<ic.nLegsTotal){
         const w=el("div","warnBox");
         w.innerHTML="<b>"+(ic.nLegsTotal-ic.nEff)+" of "+ic.nLegsTotal+" legs do not qualify as anchor reinforcement.</b> "+
@@ -8212,7 +8385,7 @@ function drawHairpinPlan(body, cGov){
     line(s,XP(nx*aN+tx*(tMin-wLeft)),YP(ny*aN+ty*(tMin-wLeft)),
            XP(nx*aN+tx*(tMax+wRight)),YP(ny*aN+ty*(tMax+wRight)),"#b71c1c",1.6);
     /* the 0.5·c_a1 proximity band around EACH leading anchor's transverse pos */
-    leadTs.forEach(tc=>{
+    if(!ic.isTie) leadTs.forEach(tc=>{
       [-1,1].forEach(sg=>{
         const o=tc+sg*ic.nearLimit;
         line(s,XP(nx*aN+tx*o),YP(ny*aN+ty*o),
@@ -8233,7 +8406,30 @@ function drawHairpinPlan(body, cGov){
      was a straight bar ON the failure plane, which read as a staple floating on
      the anchor line rather than a hairpin around the rod. */
   const vLegHits=[];   /* {leg, sx,sy,ex,ey} collected for click targets + tags */
-  if(ic){
+  if(ic && ic.isTie){
+    /* VT-1: closed tie in plan — the outline at cover, the two legs parallel to V
+       coloured by verdict (green if any set is effective), the legs across V grey;
+       a red tick marks where each side leg crosses the failure surface (top set) */
+    const nx=ic.nx, ny=ic.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0;
+    const uF=ic.halfSpanN-ic.cover-ic.dev.db/2, uB=-uF, tL=ic.tLeg;
+    const P2=(u,t)=>[nx*u+tx*t, ny*u+ty*t];
+    const anyEff=sg=>ic.legs.some(L=>L.eff && (L.t>0)===(sg>0));
+    [-1,1].forEach(sg=>{
+      const a=P2(uB,sg*tL), b=P2(uF,sg*tL);
+      line(s,XP(a[0]),YP(a[1]),XP(b[0]),YP(b[1]),anyEff(sg)?"#1f7d32":"#b71c1c",2.8);
+      const Lt=ic.legs.find(L=>(L.t>0)===(sg>0));
+      if(Lt) vLegHits.push({L:Lt,sx:a[0],sy:a[1],ex:b[0],ey:b[1]});
+      const top=ic.legs.filter(L=>(L.t>0)===(sg>0)).sort((p,q)=>p.z-q.z)[0];
+      if(top && top.crossOK){ const c=P2(ic.lead+top.xCross,sg*tL);
+        line(s,XP(c[0])-5*tx,YP(c[1])+5*ty,XP(c[0])+5*tx,YP(c[1])-5*ty,"#b71c1c",1.6);
+        line(s,XP(c[0])-5*ty,YP(c[1])-5*tx,XP(c[0])+5*ty,YP(c[1])+5*tx,"#b71c1c",1.6); }
+    });
+    [uF,uB].forEach(u=>{ const a=P2(u,-tL), b=P2(u,tL); line(s,XP(a[0]),YP(a[1]),XP(b[0]),YP(b[1]),"#9e9e9e",2.2); });
+    [[uF,tL],[uF,-tL],[uB,tL],[uB,-tL]].forEach(([u,t])=>{ const c=P2(u,t); circ(s,XP(c[0]),YP(c[1]),3.2,"#555","#333",1); });
+    const lab=P2(uF,0);
+    txt(s,XP(lab[0])+(nx!==0? -nx*14:0),YP(lab[1])+(ny!==0? ny*14:0)+3,
+      ic.nEff+" of "+ic.nLegsTotal+" tie legs effective","lblTxt","middle",8.5,ic.nEff?"#1f7d32":"#b71c1c");
+  } else if(ic){
     const nx=ic.nx, ny=ic.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0;
     const byPiece={};
     ic.legs.forEach(L=>{ (byPiece[L.piece]=byPiece[L.piece]||[]).push(L); });
@@ -8287,10 +8483,11 @@ function drawHairpinPlan(body, cGov){
     txt(s,XP(0)-ux*10,YP(0)+uy*10+(Math.abs(ux)>0.3?4:(uy>0?14:-6)),"V = "+fF(Vres)+" "+forceUnit(),null,ux>0.3?"end":(ux<-0.3?"start":"middle"),10,"#1f4e79");
   }
 
-  txt(s,cx,18,"HAIRPIN PLAN — shear breakout body and leg verdicts"+(cGov?("  ·  combination "+cGov.name):""),"lblTxt","middle",10);
+  txt(s,cx,18,(ic&&ic.isTie?"CLOSED-TIE PLAN":"HAIRPIN PLAN")+" — shear breakout body and leg verdicts"+(cGov?("  ·  combination "+cGov.name):""),"lblTxt","middle",10);
   /* G1: legend split over two lines (it ran off both edges of the drawing) */
   if(ic){
-    txt(s,cx,H-44,"green = effective · red = not creditable · grey = outside the pedestal · dashed blue = 0.5·c_a1 band at each anchor","lblTxt","middle",8.5);
+    txt(s,cx,H-44,ic.isTie? "tie legs parallel to V: green = at least one set effective · red = none · grey = legs across V (not counted) · × = crossing (top set)"
+      : "green = effective · red = not creditable · grey = outside the pedestal · dashed blue = 0.5·c_a1 band at each anchor","lblTxt","middle",8.5);
     txt(s,cx,H-30,"shaded = shear breakout body toward the "+ic.govEdge+" edge (opening 1.5·c_a1 = "+fmt(1.5*ic.ca1,2)+"″ beyond each outer anchor)","lblTxt","middle",8.5);
   } else txt(s,cx,H-30,"no shear reinforcement defined","lblTxt","middle",8.5);
   if(ic && ic.nEff<ic.nLegsTotal){
@@ -8320,10 +8517,16 @@ function drawHairpinPlan(body, cGov){
       fmt(L.dT,2)+"″ (limit 0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″) "+(L.nearOK?"✓":"✗")]);
     if(L.z!==undefined) rows.push(["Depth below surface",
       fmt(L.z,2)+"″ (breakout body 1.5·c_a1 = "+fmt(ic.bodyDepth,2)+"″) "+(L.depthOK?"✓":"✗")]);
+    if(ic.isTie){
+      ic.legs.filter(M=>(M.t>0)===(L.t>0)).forEach(M=>rows.push(["Tie set "+M.piece+" (z = "+fmt(M.z,2)+"″)",
+        (M.eff?"EFFECTIVE":"not counted")+" — crossing "+fmt(M.xCross,2)+"″ in front of the anchors; edge side "+fmt(M.front,2)+
+        "″, behind "+fmt(M.behind,2)+"″ vs ℓ_dh "+fmt(M.reqFront,2)+"″"+(M.why?(" ("+M.why+")"):"")]));
+    } else {
     rows.push(["Develop behind the plane",
       fmt(ic.availBehind,2)+"″ available vs "+fmt(ic.reqBehind,2)+"″ required "+
       ((ic.availBehind>=ic.reqBehind-1e-9)?"✓":"✗")]);
     rows.push(["Edge-side anchorage", ic.engages?"bend engages the rod ✓":"NOT confirmed to engage the rod"]);
+    }
     let html="<div style='font-weight:bold;color:"+col+";margin-bottom:4px'>Piece "+L.piece+
       ", leg "+L.leg+" — "+status+"</div><table style='border-collapse:collapse'>";
     rows.forEach(([k,v])=>{ html+="<tr><td style='padding:1px 10px 1px 0;color:#666;vertical-align:top;white-space:nowrap'>"+k+
@@ -8814,7 +9017,35 @@ function drawRebar(body,kind){
        behind the plane, and the verdict colour — instead of the removed
        ld_avail input. */
     const ic=icV;
-    if(ic){
+    if(ic && ic.isTie){
+      /* VT-1: section along V — each tie set is seen as its side leg in profile,
+         running from the back corner to the front (loaded-edge) corner; the
+         corner bars are dots. A cross marks where each set crosses the failure
+         surface; colour = verdict of that set. */
+      const planeX=ic.lead, edgeX=ic.halfSpanN;
+      const wedge=document.createElementNS(SVGNS,"polygon");
+      wedge.setAttribute("points",[[planeX,C.H],[edgeX,C.H],[edgeX,C.H-Math.min(ic.bodyDepth,C.H)]].map(q=>X(q[0])+","+Yv(q[1])).join(" "));
+      wedge.setAttribute("fill","rgba(183,28,28,0.08)"); wedge.setAttribute("stroke","#b71c1c");
+      wedge.setAttribute("stroke-width","1.1"); wedge.setAttribute("stroke-dasharray","5 4");
+      svgHost(s).appendChild(wedge);
+      txt(s,X(planeX)-4,Yv(C.H)-6,"anchors (c_a1 = "+fmt(ic.ca1,1)+"″)","lblTxt","end",8.5,"#b71c1c");
+      /* 0.5·c_a1 band from the top */
+      const zLim=C.H-ic.nearLimit;
+      line(s,X(-ic.halfSpanN),Yv(zLim),X(ic.halfSpanN),Yv(zLim),"#1f4e79",0.9,"4 3");
+      txt(s,X(-ic.halfSpanN)+4,Yv(zLim)+11,"0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ below the top","lblTxt","start",8,"#1f4e79");
+      const uF=ic.halfSpanN-ic.cover-ic.dev.db/2, uB=-uF;
+      const sets=[...new Set(ic.legs.map(L=>L.piece))];
+      sets.forEach(k=>{
+        const Ls=ic.legs.filter(L=>L.piece===k), L0=Ls[0], eff=Ls.some(L=>L.eff);
+        const zY=C.H-L0.z, col=eff?"#1f7d32":"#b71c1c";
+        line(s,X(uB),Yv(zY),X(uF),Yv(zY),col,2.6);
+        [uB,uF].forEach(u=>circ(s,X(u),Yv(zY),3,"#555","#333",1));
+        if(L0.crossOK){ const xc=X(planeX+L0.xCross), yc=Yv(zY);
+          line(s,xc-4,yc-4,xc+4,yc+4,"#b71c1c",1.5); line(s,xc-4,yc+4,xc+4,yc-4,"#b71c1c",1.5); }
+        txt(s,X(uB)-6,Yv(zY)+3,"set "+k+(eff?" ✓":" ✗"),"lblTxt","end",8,col);
+      });
+      dimV(s,Yv(C.H),Yv(C.H-ic.tieTop),X(uF)+16,"top set "+fmt(ic.tieTop,1)+'"');
+    } else if(ic){
       const zTop=C.H-ic.zBelow;                       /* leg elevation */
       const planeX=ic.lead;                           /* failure plane, along the shear normal */
       const backX=planeX-ic.availBehind;
@@ -8867,14 +9098,14 @@ function drawRebar(body,kind){
     /* caption states the VERDICT, like the tension side — the old text asserted
        "legs engaging the anchor, developed each side" regardless of whether
        either was true, and called the piece count "legs" */
-    let vcap="Shear hairpin reinforcement \u2014 "+
+    let vcap=(icV&&icV.isTie)? ("Closed ties \u2014 "+icV.nSets+" set"+(icV.nSets===1?"":"s")+" at "+fmt(icV.tieSpacing,1)+"\u2033, top set "+fmt(icV.tieTop,1)+"\u2033 below the surface \u2014 ") : "Shear hairpin reinforcement \u2014 "+
       (icV&&icV.grpMode
         ? (S.vRebar.pieceType==="hairpin"
             ? icV.nStack+" group hairpin"+(icV.nStack===1?"":"s (stacked)")
             : R.qty+" bar"+(R.qty===1?"":"s")+" across the group")
         : R.qty+" piece"+(R.qty===1?"":"s")+"/leading anchor");
     if(ic) vcap+=" ("+ic.nEff+" of "+ic.nLegsTotal+" legs effective per \u00a717.5.2.1.2"+
-      (S.vRebar.engagesAnchor?"":"; bend NOT confirmed to engage the rod")+")";
+      ((S.vRebar.engagesAnchor||(icV&&icV.isTie))?"":"; bend NOT confirmed to engage the rod")+")";
     txt(s,cx,H-14,vcap,"lblTxt","middle",10);
   }
   /* ---- dimensions ----
