@@ -1307,6 +1307,92 @@ function anchorGeom(){
 }
 
 /* ---------------------------------------------------------------
+   GB-1 (2026-10-23, engineer): GROUP breakout surface for anchor reinforcement.
+   For a group whose cones overlap (anchor spacing < 3·h_ef, the same group
+   criterion as §17.6.2.1 / Fig. R17.6.2.1(b)), the failure body is ONE block:
+   flat at the head plane across the anchors, then rising at ≈35° (1:1.5) from
+   the OUTER anchors to the surface (Fig. R17.5.2.1a). In plan the flat bottom
+   is the convex hull of the anchor heads; at a plan point the surface depth is
+       z = z_head + d_s/1.5,   d_s = distance from the point to that hull (0 inside).
+   breakoutHulls() clusters the tension anchors (s < 3·h_ef, transitive) and
+   returns one hull per cluster; breakoutDist() is the smallest d_s.
+   --------------------------------------------------------------- */
+function breakoutHulls(pts,hef){
+  const P=(pts||[]).map(p=>({x:p.x,y:p.y})), n=P.length, lim=3*hef;
+  const lab=new Array(n).fill(-1); let k=0;
+  for(let i=0;i<n;i++){ if(lab[i]>=0) continue; const st=[i]; lab[i]=k;
+    while(st.length){ const a=st.pop();
+      for(let j=0;j<n;j++) if(lab[j]<0 && Math.hypot(P[a].x-P[j].x,P[a].y-P[j].y)<lim-1e-9){ lab[j]=k; st.push(j); } }
+    k++; }
+  const hulls=[];
+  for(let c=0;c<k;c++){
+    const Q=P.filter((_,i)=>lab[i]===c).sort((a,b)=>a.x-b.x||a.y-b.y)
+      .filter((q,i,a)=>i===0||Math.hypot(q.x-a[i-1].x,q.y-a[i-1].y)>1e-9);
+    if(Q.length<3){ hulls.push(Q); continue; }
+    const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
+    const lo=[],up=[];
+    Q.forEach(q=>{ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],q)<=1e-12) lo.pop(); lo.push(q); });
+    Q.slice().reverse().forEach(q=>{ while(up.length>=2&&cr(up[up.length-2],up[up.length-1],q)<=1e-12) up.pop(); up.push(q); });
+    lo.pop(); up.pop(); const H=lo.concat(up);
+    hulls.push(H.length? H : Q);
+  }
+  return hulls;
+}
+function breakoutDist(x,y,hulls){
+  const segD=(a,b)=>{ const vx=b.x-a.x, vy=b.y-a.y, L2=vx*vx+vy*vy;
+    const t=L2>0? Math.max(0,Math.min(1,((x-a.x)*vx+(y-a.y)*vy)/L2)) : 0;
+    return Math.hypot(x-(a.x+t*vx), y-(a.y+t*vy)); };
+  let best=Infinity;
+  (hulls||[]).forEach(H=>{
+    let d;
+    if(H.length===1) d=Math.hypot(x-H[0].x,y-H[0].y);
+    else if(H.length===2) d=segD(H[0],H[1]);
+    else {
+      let inside=true;
+      for(let i=0;i<H.length;i++){ const a=H[i], b=H[(i+1)%H.length];
+        if((b.x-a.x)*(y-a.y)-(b.y-a.y)*(x-a.x) < -1e-9){ inside=false; break; } }
+      d=inside? 0 : Math.min(...H.map((a,i)=>segD(a,H[(i+1)%H.length])));
+    }
+    if(d<best) best=d;
+  });
+  return best;
+}
+
+/* Ring of the group breakout surface for drawing (GB-1). For each outward plan
+   direction around the hull (arcs at the vertices), returns the head-plane point
+   (x0,y0), and the point where the 1:1.5 surface leaves the concrete: at the top
+   face (d = R = 1.5·h_ef) or, if a pedestal face comes first, on that face at
+   d = dmax and depth zHead + dmax/1.5. rect = {x0,x1,y0,y1} in the hull's frame. */
+function breakoutRing(H,R,rect,nArc){
+  const pts=[]; const n=H.length; nArc=nArc||10;
+  const nrm=(a,b)=>{ const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; return Math.atan2(-dx/L, dy/L); };
+  const dirs=[];
+  if(n===1){ for(let k=0;k<=4*nArc;k++) dirs.push({v:H[0],a:2*Math.PI*k/(4*nArc)}); }
+  else {
+    const E=n===2? [[H[0],H[1]],[H[1],H[0]]] : H.map((a,i)=>[a,H[(i+1)%n]]);
+    const V=n===2? [H[0],H[1]] : H;
+    const m=E.length;
+    for(let i=0;i<m;i++){
+      const a0=nrm(E[(i-1+m)%m][0],E[(i-1+m)%m][1]), a1=nrm(E[i][0],E[i][1]);
+      let sw=a1-a0; while(sw<0) sw+=2*Math.PI; while(sw>2*Math.PI) sw-=2*Math.PI;
+      const v=E[i][0], k=Math.max(1,Math.ceil(nArc*sw/(Math.PI/2)));
+      for(let j=0;j<=k;j++) dirs.push({v,a:a0+sw*j/k});
+    }
+    dirs.push(dirs[0]);
+  }
+  dirs.forEach(({v,a})=>{
+    const ux=Math.cos(a), uy=Math.sin(a);
+    let dmax=Infinity;
+    if(ux>1e-12) dmax=Math.min(dmax,(rect.x1-v.x)/ux); if(ux<-1e-12) dmax=Math.min(dmax,(rect.x0-v.x)/ux);
+    if(uy>1e-12) dmax=Math.min(dmax,(rect.y1-v.y)/uy); if(uy<-1e-12) dmax=Math.min(dmax,(rect.y0-v.y)/uy);
+    dmax=Math.max(0,dmax);
+    const d=Math.min(R,dmax);
+    pts.push({x0:v.x,y0:v.y,x:v.x+d*ux,y:v.y+d*uy,dz:d/1.5,face:d<R-1e-9});
+  });
+  return pts;
+}
+
+/* ---------------------------------------------------------------
    ACI 318-19 §17.6.2.1.2 — effective embedment reduction.
    When anchors are located < 1.5·hef from THREE OR MORE edges, hef used in the
    breakout equations is limited to hef_eff = max(ca,max/1.5, s/3), where
@@ -2893,7 +2979,7 @@ function plateTearout(combo){
    at the concrete face from each anchor, i.e. it opens from the anchor head at
    z = H − h_ef to radius 1.5·h_ef at z = H. A vertical bar at lateral distance r
    from the nearest tension anchor crosses that surface at
-        z_cross = (H − h_ef) + r/1.5
+        z_cross = (H − h_ef) + d_s/1.5   (d_s = distance to the group's flat bottom, GB-1)
    and the surface only EXISTS within r ≤ 1.5·h_ef. Note the CREDITING limit is
    tighter: a leg is only effective within 0.5·h_ef (actual h_ef) of a tension
    anchor (entry 71), the effective-placement zone; 1.5·h_ef is just where the
@@ -3230,6 +3316,9 @@ function tensionRebarIntercept(cc){
   const pts = tensPts.length? tensPts : g.pts;
   const tMaxA = tensPts.length? Math.max(...tensPts.map(p=>p.t||0)) : 0;
   const tMinA = tensPts.length? Math.min(...tensPts.map(p=>p.t||0)) : 0;
+  /* GB-1: one group breakout surface over the tension anchors (flat across the
+     anchors at the head plane, 1:1.5 outside the outer anchors) */
+  const hulls=breakoutHulls(pts, hef);
 
   /* ---- TENSION ROWS ---------------------------------------------------------
      Anchor reinforcement is detailed alongside each row of anchors in tension,
@@ -3411,7 +3500,8 @@ function tensionRebarIntercept(cc){
   /* Per-bar evaluation — the whole point of the rewrite:
        r        plan distance to the nearest anchor in tension
        zCross   depth of the ≈35° (1:1.5) cone surface at that distance,
-                zCross = coneZ + r/1.5, capped at the top surface (coneZ = anchor head, actual h_ef; TR-H1)
+                zCross = coneZ + d_s/1.5, capped at the top surface (coneZ = anchor head, actual h_ef; TR-H1;
+                d_s = plan distance to the group's flat bottom, GB-1)
        above    development available ABOVE the surface = barTop − zCross
        below    development available BELOW the surface = zCross − barBot
      Requirements: straight ℓ_d above (the leg runs straight up through the
@@ -3463,21 +3553,22 @@ function tensionRebarIntercept(cc){
       const rNearLimit=0.5*hef;                 /* hef is the ACTUAL h_ef (TR-H1) */
       const nearTens=r<=rNearLimit+1e-9;
       const anchorTension = nearP? (nearP.t||0) : 0;
-      const zCross=Math.min(coneZ+r/1.5, C.H);
-      if(!nearTens){ nOutside++; return {...b,r,zCross,crosses:false,nearIdx,anchorTension,
+      const dS=breakoutDist(b.x,b.y,hulls);     /* GB-1: plan distance to the flat bottom */
+      const zCross=Math.min(coneZ+dS/1.5, C.H);
+      if(!nearTens){ nOutside++; return {...b,r,dS,zCross,crosses:false,nearIdx,anchorTension,
         why:"r = "+fmt(r,2)+"″ from the nearest anchor in tension > 0.5·h_ef = "+fmt(rNearLimit,2)+"″ (not close enough to restrain its breakout)"}; }
       /* the bar only crosses the surface if the crossing lies WITHIN the bar's
          own extent — a cone that passes above the bar top (or below its bottom)
          never meets the bar, however close it is in plan */
       const inSpan=zCross<=barTop+1e-9 && zCross>=barBot-1e-9;
       const crosses=inSpan;   /* proximity already enforced by nearTens above */
-      if(!crosses){ nOutside++; return {...b,r,zCross,crosses:false,nearIdx,anchorTension,
+      if(!crosses){ nOutside++; return {...b,r,dS,zCross,crosses:false,nearIdx,anchorTension,
         why:"cone crosses at z = "+fmt(zCross,2)+"″, outside the bar ["+fmt(barBot,2)+", "+fmt(barTop,2)+"]″"}; }
       const above=barTop-zCross, below=zCross-barBot;
       const aOK=above>=reqAbove-1e-9, bOK=below>=reqBelow-1e-9;
       const eff=aOK&&bOK;
       if(eff){ nEff++; sumR+=r; cnt++; } else nDevFail++;
-      return {...b,r,zCross,above,below,aOK,bOK,crosses:true,eff,nearIdx,anchorTension,
+      return {...b,r,dS,zCross,above,below,aOK,bOK,crosses:true,eff,nearIdx,anchorTension,
         why: eff? "" :
           (!aOK? ("above: "+fmt(above,2)+"″ < "+fmt(reqAbove,2)+"″ req"):"")+
           (!aOK&&!bOK?"; ":"")+
@@ -3561,7 +3652,7 @@ function tensionRebarIntercept(cc){
     if(d>devDCR){ devDCR=d; devWorst=b; } });
 
   return {nWanted,nRows,nBarsTotal,nPieces,legsPer,gauge,orient:R.orient,
-          hefFull:he.hef, hefBreakout:he.hefEff, hefReduced, tMaxA, tMinA,
+          hefFull:he.hef, hefBreakout:he.hefEff, hefReduced, tMaxA, tMinA, hulls,
           layoutMode:R.layoutMode,pieceType:R.pieceType,nEff,nOutside,nNotFitting,nDevFail,nCover,nOutPed,
           rowWide,nInteriorUncredited,nLinesRowWide,
           rwAuto,rwAutoGauge,rwMaxCreditGauge,
@@ -3601,7 +3692,7 @@ function tensionRebarCheck(cc){
   /* ---- development, BOTH SIDES, FROM GEOMETRY -------------------------------
      Previously the available length was a USER INPUT (ld_avail / ld_below), a
      single global number. It is not an input: the ≈35° cone surface sits at
-       z_cross(r) = coneZ + r/1.5   (coneZ = C.H - h_ef, the anchor head at the actual embedment; TR-H1)
+       z_cross = coneZ + d_s/1.5   (coneZ = C.H - h_ef, the anchor head; d_s = distance to the group's flat bottom, GB-1)
      at plan distance r from the nearest tension anchor, so each bar has its own
        available above = (H − top cover) − z_cross
        available below = z_cross − (headZ − extension below head)   (headZ = physical head, C.H - hef_nom)
@@ -3681,8 +3772,8 @@ function tensionRebarCheck(cc){
     ] : []).concat(ic? [
       {title:"Development available — from the cone geometry, per bar",ref:"§17.5.2.1.1; ≈35° breakout surface (1:1.5)",
        lines:[
-        "z_{cross}(r)=z_{head}+r/1.5,\\quad \\text{above}=(H-c_{top})-z_{cross},\\quad \\text{below}=z_{cross}-(z_{head}-e_{below})",
-        (wb? ("\\text{worst bar: }r="+fmt(wb.r,2)+"\\text{ in}\\ \\Rightarrow\\ z_{cross}="+fmt(wb.zCross,2)+"\\text{ in}") : "\\text{no bar crosses the cone}"),
+        "z_{cross}=z_{head}+d_s/1.5,\\quad \\text{above}=(H-c_{top})-z_{cross},\\quad \\text{below}=z_{cross}-(z_{head}-e_{below})",
+        (wb? ("\\text{worst bar: }d_s="+fmt(wb.dS,2)+"\\text{ in}\\ \\Rightarrow\\ z_{cross}="+fmt(ic.coneZ,2)+"+"+fmt(wb.dS,2)+"/1.5="+fmt(wb.zCross,2)+"\\text{ in}") : "\\text{no bar crosses the cone}"),
         (wb? ("\\textbf{ABOVE the cone: }\\ \\text{available }"+fmt(wb.above,2)+"\\ \\text{in}\\quad\\text{vs}\\quad "+aSym+"="+fmt(reqAbove,2)+"\\ \\text{in}\\ \\Rightarrow\\ \\text{"+(wb.aOK?"OK":"FAILS")+"}") : ""),
         (wb? ("\\textbf{BELOW the cone: }\\ \\text{available }"+fmt(wb.below,2)+"\\ \\text{in}\\quad\\text{vs}\\quad "+bSym+"="+fmt(reqBelow,2)+"\\ \\text{in}\\ \\Rightarrow\\ \\text{"+(wb.bOK?"OK":"FAILS")+"}") : ""),
         "\\text{DCR}_{dev}=\\max\\left(\\frac{\\text{req above}}{\\text{avail above}},\\ \\frac{\\text{req below}}{\\text{avail below}}\\right)="+fmt(devDCR,2)+(wb? ("\\quad\\text{(governs: "+govSide+" the cone)}") : "")].filter(Boolean),
@@ -4550,7 +4641,7 @@ function buildInputPanel(){
       "These two lengths fix where the top and bottom of each bar sit in elevation. With the cone depth "+
       "they decide how much development length is AVAILABLE above and below the crossing point — what the "+
       "check compares against ℓ_d / ℓ_dh. They are geometry you set on the drawing, not a claimed length. "+
-      "(Development available is NOT a direct input: the 35° cone sits at z = z_head + r/1.5, so "+
+      "(Development available is NOT a direct input: the breakout surface sits at z = z_head + d_s/1.5 (d_s = plan distance to the flat bottom across the tension anchors), so "+
       "above = (H − top cover) − z_cross and below = z_cross − (z_head − extension); the worst bar governs.)"));
     fRow(body,"Top cover to bar end",numInput(()=>S.tRebar.topCover,v=>S.tRebar.topCover=v,0.25),"in",
       "How far the TOP of the bar stops below the concrete surface (bar top at z = H − cover). Sets the length available ABOVE the cone crossing.");
@@ -6253,7 +6344,7 @@ function buildTRebarTab(pg){
       ab.style.cssText="border-left:3px solid #1f4e79;padding-left:8px;margin:6px 0;line-height:1.45;";
       body.appendChild(ab);
       const t=el("table","tbl");
-      {const h=el("tr");["Piece","Leg","x (in)","y (in)","r (in)","z_cross (in)",
+      {const h=el("tr");["Piece","Leg","x (in)","y (in)","r (in)","d_s (in)","z_cross (in)",
         "ℓ avail ABOVE (in)","ℓ req ABOVE (in)","above OK?",
         "ℓ avail BELOW (in)","ℓ req BELOW (in)","below OK?",
         "worst DCR","Effective?","Note"]
@@ -6265,6 +6356,7 @@ function buildTRebarTab(pg){
         trr.appendChild(el("td",null,fmt(b.x,2)));
         trr.appendChild(el("td",null,fmt(b.y,2)));
         trr.appendChild(el("td",null,b.r===null?"—":fmt(b.r,2)));
+        trr.appendChild(el("td",null,b.dS===undefined?"—":fmt(b.dS,2)));
         trr.appendChild(el("td",null,b.zCross===undefined?"—":fmt(b.zCross,2)));
         /* development EACH SIDE, available and required in their own columns
            with the verdict spelled out — previously packed as "7.84 / 9.77" in
@@ -6298,7 +6390,7 @@ function buildTRebarTab(pg){
       });
       body.appendChild(el("div","note",
         "Elevations are measured UP from the BOTTOM of the member (z = 0 at the bottom, z = H at the top surface). "+
-        "z_cross = z_head + r/1.5 is where the assumed 35° surface meets the leg; the development available "+
+        "z_cross = z_head + d_s/1.5 is where the group breakout surface meets the leg: flat at the head plane across the tension anchors (d_s = 0 between them), rising at 35° (1:1.5) outside the outer anchors, d_s being the plan distance to that flat bottom. The development available "+
         "above it is (H \u2212 top cover) \u2212 z_cross and below it is z_cross \u2212 (z_head \u2212 extension). "+
         "Required lengths are the straight \u2113_d = "+fmt(ic.dev.ld,2)+"\u2033, the hook \u2113_dh = "+fmt(ic.dev.ldh,2)+
         "\u2033 where that end is hooked or bent. Per Fig. R17.5.2.1a BOTH sides carry a real requirement \u2014 "+
@@ -8290,6 +8382,23 @@ function drawRebarPlan(body){
   rect(s,X(-C.Bx/2),Yp(C.By/2),C.Bx*sc,C.By*sc,"#eae7df","#555",1.2);
   rect(s,X(-S.plate.B/2),Yp(S.plate.N/2),S.plate.B*sc,S.plate.N*sc,"none","#888",1.0,"4 3");
   colPlanDraw(s,X,Yp,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
+  /* GB-1: the group breakout surface in plan — its flat bottom (outline through
+     the outer tension anchors, at the head plane) and where it leaves the
+     concrete (1.5·h_ef out at the top face, or at the pedestal face first) */
+  (ic.hulls||[]).forEach(Hh=>{
+    const ring=breakoutRing(Hh,1.5*ic.hef,{x0:-C.Bx/2,x1:C.Bx/2,y0:-C.By/2,y1:C.By/2},8);
+    const out=document.createElementNS(SVGNS,"polygon");
+    out.setAttribute("points",ring.map(q=>X(q.x)+","+Yp(q.y)).join(" "));
+    out.setAttribute("fill","rgba(183,28,28,0.05)"); out.setAttribute("stroke","#b71c1c");
+    out.setAttribute("stroke-width","1"); out.setAttribute("stroke-dasharray","6 4");
+    svgHost(s).appendChild(out);
+    if(Hh.length>=2){
+      const fb=document.createElementNS(SVGNS,"polygon");
+      fb.setAttribute("points",Hh.map(q=>X(q.x)+","+Yp(q.y)).join(" "));
+      fb.setAttribute("fill","rgba(183,28,28,0.14)"); fb.setAttribute("stroke","#b71c1c"); fb.setAttribute("stroke-width","1.2");
+      svgHost(s).appendChild(fb);
+    }
+  });
   /* effective zones and anchors — the dashed circle is the 0.5·h_ef (actual h_ef, TR-H1)
      EFFECTIVE-PLACEMENT zone, the hard limit a leg must fall within to be
      credited (entry 71), NOT the 1.5·h_ef breakout prism. At 0.5·h_ef the circle
@@ -8305,7 +8414,7 @@ function drawRebarPlan(body){
       const c=document.createElementNS(SVGNS,"circle");
       c.setAttribute("cx",X(p.x)); c.setAttribute("cy",Yp(p.y));
       c.setAttribute("r",rZone*sc);
-      c.setAttribute("fill","rgba(31,125,50,0.07)"); c.setAttribute("stroke","#1f7d32");
+      c.setAttribute("fill","rgba(31,125,50,0.035)"); c.setAttribute("stroke","#1f7d32");
       c.setAttribute("stroke-width","1"); c.setAttribute("stroke-dasharray","4 3");
       svgHost(s).appendChild(c);
     }
@@ -8383,8 +8492,9 @@ function drawRebarPlan(body){
   txt(s,cx,18,"PLAN — anchor reinforcement vs the 0.5·h_ef effective zones (click a leg for details)","lblTxt","middle",11);
   /* caption split across two lines — as one string it ran wider than the 620px
      viewport and was clipped at BOTH edges in the PDF export */
-  txt(s,cx,H-25,"legs: green = effective · red = crosses cone but under-developed · grey = outside the zone / pedestal","lblTxt","middle",8);
-  txt(s,cx,H-13,"dashed green circle = 0.5·h_ef (actual embedment) around each tension anchor","lblTxt","middle",8);
+  txt(s,cx,H-37,"legs: green = effective · red = crosses but under-developed · grey = outside the zone / pedestal","lblTxt","middle",8);
+  txt(s,cx,H-25,"dashed green circle = 0.5·h_ef (actual embedment) around each tension anchor","lblTxt","middle",8);
+  txt(s,cx,H-13,"red: group breakout surface — shaded = flat bottom across the tension anchors · dashed = where it leaves the concrete","lblTxt","middle",8,"#b71c1c");
   axisTriad(s,pad-40,H-40,"plan",26);
   const wrap=svgWithControls(s);
   body.appendChild(wrap);
@@ -8454,8 +8564,44 @@ function drawRebar(body,kind){
       const xs=new Set(); icPre.rows.forEach(r=>r.xs.forEach(x=>xs.add(Math.round(x*100)/100)));
       anchorXs=[...xs].sort((a,b)=>a-b);
     }
-    anchorXs.forEach(a=>drawAnchorAt(a,false));
-    txt(s,X(anchorXs[anchorXs.length-1]+spread)+2,topY+12,"breakout cone","lblTxt","start",9,"#b71c1c");
+    /* GB-1: ONE breakout body per anchor group (Fig. R17.5.2.1a): flat at the
+       head plane between the outer tension anchors, rising at 1:1.5 (≈35°) from
+       the outer anchors, and stopped at the pedestal face where it reaches it
+       first. Drawn as a shaded body under the anchors. */
+    const half=spanPed/2;
+    const hullsE=(icPre&&icPre.hulls&&icPre.hulls.length)? icPre.hulls : [anchorXs.map(x=>({x,y:0}))];
+    hullsE.forEach((Hh,hi)=>{
+      const xa=Math.min(...Hh.map(q=>q.x)), xb=Math.max(...Hh.map(q=>q.x));
+      const side=(x0,dir)=>{ const room=dir<0? (x0+half) : (half-x0);
+        if(room>=spread-1e-9) return [{x:x0+dir*spread,z:C.H}];
+        return [{x:x0+dir*room,z:C.H},{x:x0+dir*room,z:headZ+room/1.5}]; };
+      const L=side(xa,-1), Rr=side(xb,+1);
+      const poly=[...L, {x:xa,z:headZ},{x:xb,z:headZ}, ...Rr.slice().reverse()];
+      const pg=document.createElementNS(SVGNS,"polygon");
+      pg.setAttribute("points",poly.map(q=>X(q.x)+","+Yv(q.z)).join(" "));
+      pg.setAttribute("fill","rgba(183,28,28,0.10)"); pg.setAttribute("stroke","none");
+      svgHost(s).appendChild(pg);
+      const surf=[L[L.length-1], {x:xa,z:headZ},{x:xb,z:headZ}, Rr[Rr.length-1]];
+      for(let i=0;i<surf.length-1;i++) line(s,X(surf[i].x),Yv(surf[i].z),X(surf[i+1].x),Yv(surf[i+1].z),"#b71c1c",1.6,"6 4");
+      if(hi===0){
+        if(L.length>1){   /* left side meets the pedestal face: label it there, outside */
+          const lz=L[1].z;
+          txt(s,X(-half)-4,Yv(lz)+3,"breakout surface","lblTxt","end",8.5,"#b71c1c");
+          line(s,X(-half)-3,Yv(lz),X(-half),Yv(lz),"#b71c1c",1);
+        } else txt(s,X(L[0].x),topY-5,"breakout surface","lblTxt","middle",8.5,"#b71c1c");
+        if(xb>xa+1e-6) txt(s,X((xa+xb)/2),Yv(headZ)+24,"flat at the head plane across the anchors","lblTxt","middle",8,"#b71c1c");
+        /* ≈35° mark at the outer anchor on the right */
+        const ax=X(xb), ay=Yv(headZ), rr=26;
+        const arc=document.createElementNS(SVGNS,"path");
+        const th=Math.atan(1/1.5);
+        arc.setAttribute("d","M "+(ax+rr)+" "+ay+" A "+rr+" "+rr+" 0 0 0 "+(ax+rr*Math.cos(th))+" "+(ay-rr*Math.sin(th)));
+        arc.setAttribute("fill","none"); arc.setAttribute("stroke","#b71c1c"); arc.setAttribute("stroke-width","1");
+        svgHost(s).appendChild(arc);
+        line(s,ax,ay,ax+rr+8,ay,"#b71c1c",0.7,"2 2");
+        txt(s,ax+rr+10,ay-4,"≈35°","lblTxt","start",8,"#b71c1c");
+      }
+    });
+    anchorXs.forEach(a=>drawAnchorAt(a,true));
   } else if(icV){
     /* shear: every anchor projected onto the shear normal (leading and trailing
        rows), loaded edge to the RIGHT — the axis this section is actually cut
@@ -8566,7 +8712,7 @@ function drawRebar(body,kind){
        measured EACH SIDE of. This was a filled r=3.2 disc, which read as a node
        or a second anchor head and drew the eye away from the geometry (user
        report). Replaced with a light dashed cross-tick on the bar centreline:
-       still per-leg (each leg crosses at its own z_cross = z_head + r/1.5) and
+       still per-leg (each leg crosses at its own z_cross = z_head + d_s/1.5) and
        still colour-coded by verdict, but it now reads as a station marker rather
        than a component. */
     if(icDraw && icDraw.bars){
@@ -8619,7 +8765,7 @@ function drawRebar(body,kind){
         ? "solid dot at a bar end = the end bend runs IN/OUT of the page (legs separate in "+(R.orient||"y")+")"
         : "bar across the top = the end bend, lying in the page (legs separate in x)";
      txt(s,cx,H-40,leg1,"lblTxt","middle",8,"#555");
-     txt(s,cx,H-29,"dashed cross-tick on a leg = where it crosses the breakout cone \u2014 green: effective  \u00b7  red: crosses but not creditable  \u00b7  grey leg: never reaches the cone",
+     txt(s,cx,H-29,"tick on a leg = where it crosses the breakout surface \u2014 green: effective \u00b7 red: not creditable \u00b7 grey: never reaches it",
          "lblTxt","middle",8,"#555");}
     if(dropped>0){
       /* count LEGS against legs — the old text compared dropped LEGS to the
@@ -8851,17 +8997,29 @@ function build3D(container){
       if(S.tRebar.pieceType==="closedtie" && ic.dev.hookBot)
         rod([a.x+pxo,a.y+pyo,ic.barBot],[bb.x+pxo,bb.y+pyo,ic.barBot],mat,rr);
     });
-    /* the physical breakout cone from the head (actual h_ef, TR-H1) */
-    const tp=(CC.combos[governingComboIndex()>=0?governingComboIndex():0]||CC.combos[0]);
-    const tens=(tp&&tp.perAnchor)? tp.perAnchor.filter(q=>q.t>1e-9) : [];
-    tens.forEach(q=>{
-      const cone=new THREE.Mesh(new THREE.ConeGeometry(ic.rMax, ic.hef, 24, 1, true),
-        new THREE.MeshBasicMaterial({color:0xb71c1c,wireframe:true,transparent:true,opacity:0.16}));
-      /* cone spans coneZ (the anchor head, actual h_ef) up to the surface; centre at
-         coneZ + hef/2. Bars run to the PHYSICAL head (barBot references headZ),
-         which is deeper, so the bar bottoms correctly sit below the cone apex. */
-      setPos(cone, q.x+pxo, q.y+pyo, ic.coneZ+ic.hef/2);
-      groups.rebar.add(cone);
+    /* GB-1: ONE group breakout body from the heads (actual h_ef, TR-H1): flat
+       bottom across the tension anchors, 1:1.5 sides from the outer anchors,
+       stopped at the pedestal faces. Same geometry the check uses. */
+    (ic.hulls||[]).forEach(Hh=>{
+      const off=Hh.map(q=>({x:q.x+pxo,y:q.y+pyo}));
+      const ring=breakoutRing(off,1.5*ic.hef,{x0:-S.conc.Bx/2,x1:S.conc.Bx/2,y0:-S.conc.By/2,y1:S.conc.By/2},8);
+      const zH=ic.coneZ, zT=S.conc.H, V=[];
+      const P=(x,y,z)=>toW(x,y,z);
+      for(let j=0;j<ring.length-1;j++){
+        const a=ring[j], b=ring[j+1];
+        const a0=P(a.x0,a.y0,zH), b0=P(b.x0,b.y0,zH), a1=P(a.x,a.y,zH+a.dz), b1=P(b.x,b.y,zH+b.dz);
+        const a2=P(a.x,a.y,zT), b2=P(b.x,b.y,zT);
+        V.push(...a0,...a1,...b1, ...a0,...b1,...b0);
+        if(a.face||b.face) V.push(...a1,...a2,...b2, ...a1,...b2,...b1);
+      }
+      for(let i=1;i+1<off.length;i++) V.push(...P(off[0].x,off[0].y,zH),...P(off[i].x,off[i].y,zH),...P(off[i+1].x,off[i+1].y,zH));
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute("position",new THREE.Float32BufferAttribute(V,3));
+      groups.rebar.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xb71c1c,transparent:true,opacity:0.14,side:THREE.DoubleSide,depthWrite:false})));
+      const edge=(arr)=>{ const g2=new THREE.BufferGeometry().setFromPoints(arr.map(w=>new THREE.Vector3(w[0],w[1],w[2])));
+        groups.rebar.add(new THREE.Line(g2,new THREE.LineBasicMaterial({color:0xb71c1c,transparent:true,opacity:0.7}))); };
+      if(off.length>=2) edge(off.concat([off[0]]).map(q=>P(q.x,q.y,zH)));
+      edge(ring.map(q=>P(q.x,q.y,zH+q.dz)));
     });
   })();
 
@@ -13324,8 +13482,8 @@ manPart("p4d","4D. Anchor Reinforcement",[
      "it must be <b>developed on BOTH sides</b> of that surface, in accordance with Chapter 25."]},
 
 {h:"4D.2 Tension — the cone, and where each bar crosses it"},
-{p:"The tension breakout surface springs from the anchor head and opens at roughly 35° (a 1:1.5 slope) to the concrete face. At a plan distance <i>r</i> from the nearest anchor in tension, that surface sits at depth"},
-{eq:"z_{cross}(r) = z_{head} + \\frac{r}{1.5}"},
+{p:"The tension breakout surface of a group is one block (Fig. R17.5.2.1a): flat at the anchor-head plane across the anchors in tension, then opening at roughly 35° (a 1:1.5 slope) from the OUTER anchors to the concrete face. Anchors closer than 3·h<sub>ef</sub> form one group. With <i>d<sub>s</sub></i> the plan distance from a leg to the flat bottom (the outline through the outer tension anchors; 0 inside it), the surface sits at"},
+{eq:"z_{cross} = z_{head} + \\frac{d_s}{1.5}"},
 {key:"<b>Elevation datum.</b> Every <i>z</i> in this program &mdash; z<sub>head</sub>, z<sub>cross</sub>, and H &mdash; is measured <b>upward from the BOTTOM of the concrete member</b>: z = 0 at the bottom, z = H at the top surface. So a reported z<sub>cross</sub> of 88.90 in on a 96 in pedestal sits about 7 in below the top, not 89 in below it. The elevation drawing carries ticks at z = 0 and z = H so the figures on the page can be reconciled against the member without guessing."},
 {p:"which makes the development available on each side of the surface a matter of geometry, not of engineering judgement:"},
 {eq:"\\text{above} = (H - c_{top}) - z_{cross}, \\qquad \\text{below} = z_{cross} - (z_{head} - e_{below})"},
@@ -13573,7 +13731,7 @@ manPart("pA","A. Notation & References",[
  ["\\phi","—","strength reduction factor"],
  ["z","in","ELEVATION DATUM: all z values are measured UP from the BOTTOM of the concrete member, so z = 0 is the member bottom and z = H is the top surface. Marked on the elevation drawings."],
  ["z_{head}","in","elevation of the anchor-head bearing plane, from which the breakout cone springs"],
- ["z_{cross}","in","elevation at which the &asymp;35&deg; breakout surface meets a reinforcement leg: z<sub>cross</sub> = z<sub>head</sub> + r/1.5, where r is the leg's plan distance from the nearest anchor in tension"]
+ ["z_{cross}","in","elevation at which the &asymp;35&deg; breakout surface meets a reinforcement leg: z<sub>cross</sub> = z<sub>head</sub> + d<sub>s</sub>/1.5, where d<sub>s</sub> is the leg's plan distance to the flat bottom of the group breakout surface (0 between the tension anchors in plan; the outline through the outer tension anchors)"]
 ]},
 
 {h:"A.2 Equation index"},
