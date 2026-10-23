@@ -2265,3 +2265,52 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs` passes.
   - `node tests/bpad-profis.mjs`: default, msa3a, struct2v1, struct2v2 and torqued are all `same` (none has tension rebar with a reduced h_ef). The PROFIS export checks pass.
   - The check case was run headless against origin/main and the working tree, with the numbers above. Every tab and the print report render with 0 page errors.
+
+## 2026-10-23 — GB-1: tension anchor reinforcement is checked against ONE group breakout surface (flat across the anchors, 35° from the outer anchors); graphics redrawn to match (Tier 2, calc change)
+- **Engineer request (2026-10-23):** for a group the breakout body is flat across the bottom between the anchors and rises at 35° only beyond the outer anchors (ACI 318-19 Fig. R17.5.2.1a). The tool used to put a 35° cone on each anchor separately.
+- **Function:** `tensionRebarIntercept(cc)`; new helpers `breakoutHulls(pts,hef)`, `breakoutDist(x,y,hulls)` and `breakoutRing(H,R,rect,nArc)`, placed above `hefEffective()`.
+  - Anchor text: `const zCross=Math.min(coneZ+r/1.5, C.H);`
+- **Before:**
+  ```js
+  const zCross=Math.min(coneZ+r/1.5, C.H);          // r = plan distance to the NEAREST tension anchor
+  ```
+- **After:**
+  ```js
+  const hulls=breakoutHulls(pts, hef);               // tension anchors, grouped where s < 3·h_ef; convex hull per group
+  ...
+  const dS=breakoutDist(b.x,b.y,hulls);              // plan distance to the flat bottom (0 inside the hull)
+  const zCross=Math.min(coneZ+dS/1.5, C.H);
+  ```
+  - The 0.5·h_ef placement limit still uses r, the distance to the nearest tension anchor (R17.5.2.1).
+- **Rule:**
+  - Anchors in tension closer than 3·h_ef form one group, transitively. This is the same overlap criterion as the group breakout of §17.6.2.1 and Fig. R17.6.2.1(b).
+  - The flat bottom is the convex hull of the group's anchor heads, at the head plane z_head = H − h_ef.
+  - The surface depth at a plan point is z = z_head + d_s/1.5, where d_s is the distance to that hull: 0 inside it, and 1:1.5 ≈ 35° outside it.
+  - A single anchor, or anchors 3·h_ef or more apart, still get their own cone.
+- **Governing provision:** ACI 318-19 §17.5.2.1(a), R17.5.2.1, Fig. R17.5.2.1a (the breakout body of a group), and §17.6.2.1 / Fig. R17.6.2.1(b) (group breakout, s < 3·h_ef).
+- **Display changes:**
+  - Per-leg table: new column d_s.
+  - The derivation line, the notes, the User Manual §4D.2 and the glossary entry z_cross now read z_cross = z_head + d_s/1.5.
+  - Elevation: one shaded breakout body per group, flat between the outer anchors, 35° sides with a ≈35° mark, stopped at the pedestal face. This replaces the criss-crossing cone per anchor.
+  - Plan: the flat bottom is shaded, and a dashed outline shows where the surface leaves the concrete. The 0.5·h_ef zones are lighter, and the caption is split into three lines.
+  - 3-D: one translucent group body, clipped at the pedestal faces, replaces the cone per anchor.
+- **Check case:**
+  - Plate 24 × 18 in; anchors 4 × 2 at x = ±3, ±9 and y = ±6; h_ef = 18 in; H = 58 in; pedestal 30 × 30 in; one combination P = +60 kip, so all 8 anchors are in tension.
+  - Tension rebar: #5 U-stirrups, 4 per row, s = 6 in, orient y, gauge 4 in, so the legs are at y = ±4 and ±8. Top cover 2 in, 30 in below the head.
+  - The hull is the rectangle x ∈ [−9, 9], y ∈ [−6, 6]; z_head = 40 in.
+  - Inner legs (y = ±4), between the anchor rows:
+
+    | | Before | After |
+    |---|---|---|
+    | Distance used | r = 2 | d_s = 0 |
+    | z_cross | 40 + 2/1.5 = 41.33 | 40.00 |
+    | Available above / below | 14.67 / 31.33 | 16.00 / 30.00 |
+
+  - Outer legs (y = ±8): d_s = r = 2, so they are unchanged at z_cross = 41.33.
+  - Totals are unchanged in this case: 16 of 16 legs effective, φN_r = 223.2 kip, development DCR 0.806 (outer legs govern). A leg between two anchor rows now has more length above the crossing and less below.
+  - Second case, a single row of 4 anchors (pedestal 40 × 20 in): the hull is the segment x ∈ [−9, 9], y = 0, and the legs at y = ±2 give d_s = 2, as before.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar), and the export checks pass.
+  - The check cases were run headless on origin/main and the working tree, with the numbers above.
+  - Tension Rebar elevation, plan and 3-D were inspected in screenshots (three.js served locally). The print report includes d_s, and there were 0 page errors.
