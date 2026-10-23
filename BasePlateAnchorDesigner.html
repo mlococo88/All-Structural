@@ -244,6 +244,7 @@
         <input type="file" id="fileRestoreAll" accept=".json" style="display:none">
         <button id="btnImportProfis">Import PROFIS PDF</button>
         <button id="btnExportProfis" title="Write this design as a Hilti PROFIS Engineering file (.pe), with a summary of what to check in PROFIS">Export to Hilti PROFIS (.pe)</button>
+        <button id="btnExportDxf" title="Plan and section of the base plate, anchors, pedestal and reinforcement as an ASCII DXF (R12), in inches">Export DXF</button>
         <button id="btnPrint" class="primary">Print / PDF Report</button>
       </div>
     </div>
@@ -1315,6 +1316,120 @@ function anchorGeom(){
   }
   return {pts,xmax,xmin,ymax,ymin,px,py,ca_x_pos,ca_x_neg,ca_y_pos,ca_y_neg,
     sx:(pts.length>1? (xmax-xmin):0), sy:(pts.length>1?(ymax-ymin):0)};
+}
+
+/* ---------------------------------------------------------------
+   DX-1 (2026-10-23): DXF export. ASCII DXF R12 (AC1009), CRLF, inches.
+   The writer (layers, LINE, POLYLINE, CIRCLE, TEXT, header/tables) is adapted
+   from Gusset Plate Rating.html GPDXF.write (duplicated per CLAUDE.md §3).
+   Drawing: PLAN at the origin (pedestal centre, +x right, +y up) and SECTION
+   along x (horizontal = x, vertical = z up from the pedestal bottom) to the
+   right of it. Geometry only; nothing here changes a calculation.
+   --------------------------------------------------------------- */
+function bpDxfWriter(){
+  const L=[], ent=[], bb=[Infinity,Infinity,-Infinity,-Infinity];
+  const f8=x=>{ let s=(Math.abs(x)<5e-9?0:x).toFixed(6); if(s.indexOf(".")>=0) s=s.replace(/0+$/,"").replace(/\.$/,""); return s==="-0"?"0":s; };
+  const grow=(x,y)=>{ if(!isFinite(x)||!isFinite(y)) return; bb[0]=Math.min(bb[0],x); bb[1]=Math.min(bb[1],y); bb[2]=Math.max(bb[2],x); bb[3]=Math.max(bb[3],y); };
+  const g=(c,v)=>ent.push(String(c).padStart(3),String(v));
+  const enc=t=>String(t==null?"":t).replace(/[\r\n\t]+/g," ").replace(/[^\x20-\x7e]/g,c=>"\\U+"+c.codePointAt(0).toString(16).toUpperCase().padStart(4,"0")).slice(0,250);
+  const W={
+    layer(name,col,lt){ if(!L.some(l=>l[0]===name)) L.push([name,col,lt||"CONTINUOUS"]); return name; },
+    line(ly,a,b){ g(0,"LINE"); g(8,ly); g(10,f8(a[0])); g(20,f8(a[1])); g(30,0); g(11,f8(b[0])); g(21,f8(b[1])); g(31,0); grow(a[0],a[1]); grow(b[0],b[1]); },
+    pline(ly,pts,closed){ g(0,"POLYLINE"); g(8,ly); g(66,1); g(10,0); g(20,0); g(30,0); g(70,closed===false?0:1);
+      pts.forEach(q=>{ g(0,"VERTEX"); g(8,ly); g(10,f8(q[0])); g(20,f8(q[1])); g(30,0); grow(q[0],q[1]); }); g(0,"SEQEND"); g(8,ly); },
+    rect(ly,x0,y0,x1,y1){ W.pline(ly,[[x0,y0],[x1,y0],[x1,y1],[x0,y1]],true); },
+    circle(ly,c,r){ g(0,"CIRCLE"); g(8,ly); g(10,f8(c[0])); g(20,f8(c[1])); g(30,0); g(40,f8(r)); grow(c[0]-r,c[1]-r); grow(c[0]+r,c[1]+r); },
+    text(ly,at,h,t){ g(0,"TEXT"); g(8,ly); g(10,f8(at[0])); g(20,f8(at[1])); g(30,0); g(40,f8(h)); g(1,enc(t)); grow(at[0],at[1]); grow(at[0]+0.62*h*String(t).length,at[1]+h); },
+    bbox(){ return bb.slice(); },
+    out(){
+      const o=[], h=(c,v)=>o.push(String(c).padStart(3),String(v));
+      h(0,"SECTION"); h(2,"HEADER"); h(9,"$ACADVER"); h(1,"AC1009"); h(9,"$INSBASE"); h(10,0); h(20,0); h(30,0);
+      h(9,"$EXTMIN"); h(10,f8(bb[0])); h(20,f8(bb[1])); h(30,0); h(9,"$EXTMAX"); h(10,f8(bb[2])); h(20,f8(bb[3])); h(30,0);
+      h(9,"$LTSCALE"); h(40,1); h(9,"$INSUNITS"); h(70,1); h(0,"ENDSEC");
+      h(0,"SECTION"); h(2,"TABLES");
+      h(0,"TABLE"); h(2,"LTYPE"); h(70,3);
+      h(0,"LTYPE"); h(2,"CONTINUOUS"); h(70,0); h(3,"Solid line"); h(72,65); h(73,0); h(40,0);
+      h(0,"LTYPE"); h(2,"DASHED"); h(70,0); h(3,"__ __ __ __"); h(72,65); h(73,2); h(40,0.75); h(49,0.5); h(49,-0.25);
+      h(0,"LTYPE"); h(2,"CENTER"); h(70,0); h(3,"____ _ ____ _"); h(72,65); h(73,4); h(40,2); h(49,1.25); h(49,-0.25); h(49,0.25); h(49,-0.25);
+      h(0,"ENDTAB");
+      h(0,"TABLE"); h(2,"LAYER"); h(70,L.length); L.forEach(([n,c,lt])=>{ h(0,"LAYER"); h(2,n); h(70,0); h(62,c); h(6,lt); }); h(0,"ENDTAB");
+      h(0,"TABLE"); h(2,"STYLE"); h(70,1); h(0,"STYLE"); h(2,"STANDARD"); h(70,0); h(40,0); h(41,1); h(50,0); h(71,0); h(42,0.2); h(3,"txt"); h(4,""); h(0,"ENDTAB");
+      h(0,"ENDSEC"); h(0,"SECTION"); h(2,"BLOCKS"); h(0,"ENDSEC");
+      h(0,"SECTION"); h(2,"ENTITIES"); o.push(...ent); h(0,"ENDSEC"); h(0,"EOF");
+      return o.join("\r\n")+"\r\n";
+    }
+  };
+  W.layer("0",7);
+  return W;
+}
+function bpExportDxf(){
+  if(!CC) CC=computeAll();
+  const C=S.conc, P=S.plate, A=S.anchor, g=anchorGeom(), warns=[];
+  const px=C.plate_off_x||0, py=C.plate_off_y||0, W=bpDxfWriter();
+  const LY={ped:W.layer("BP-PEDESTAL",7), plate:W.layer("BP-PLATE",4), col:W.layer("BP-COLUMN",5), anc:W.layer("BP-ANCHOR",1),
+    hole:W.layer("BP-HOLE",8,"DASHED"), brk:W.layer("BP-BREAKOUT",6,"DASHED"), pbar:W.layer("BP-PED-BARS",3), ptie:W.layer("BP-PED-TIES",3),
+    rt:W.layer("BP-REBAR-T",2), rtn:W.layer("BP-REBAR-T-NOTCOUNTED",8), rv:W.layer("BP-REBAR-V",30), rvn:W.layer("BP-REBAR-V-NOTCOUNTED",8),
+    txt:W.layer("BP-TEXT",7), cl:W.layer("BP-CENTER",1,"CENTER")};
+  const hs=anchorHoleDG1(anchorSpec(A.dia).d), dh=(P.holeDia>0)? P.holeDia : hs.dh;
+  const hx=C.Bx/2, hy=C.By/2, th=Math.max(0.6, Math.min(C.Bx,C.By)/40);
+  /* ---------------- PLAN ---------------- */
+  W.rect(LY.ped,-hx,-hy,hx,hy);
+  W.rect(LY.plate,px-P.B/2,py-P.N/2,px+P.B/2,py+P.N/2);
+  W.line(LY.cl,[-hx-2,0],[hx+2,0]); W.line(LY.cl,[0,-hy-2],[0,hy+2]);
+  { const k=colShape(), ex=px+(P.exc_x||0), ey=py+(P.exc_y||0);
+    if(k.kind==="round") W.circle(LY.col,[ex,ey],k.b/2);
+    else if(k.kind==="W"){ const b=k.b/2,d=k.d/2,tf=k.tf,tw=k.tw/2;
+      W.pline(LY.col,[[-b,d],[b,d],[b,d-tf],[tw,d-tf],[tw,-d+tf],[b,-d+tf],[b,-d],[-b,-d],[-b,-d+tf],[-tw,-d+tf],[-tw,d-tf],[-b,d-tf]].map(q=>[ex+q[0],ey+q[1]]),true); }
+    else W.rect(LY.col,ex-k.b/2,ey-k.d/2,ex+k.b/2,ey+k.d/2); }
+  g.pts.forEach((p,i)=>{ const c=[p.x+px,p.y+py]; W.circle(LY.anc,c,A.dia/2); W.circle(LY.hole,c,dh/2);
+    W.text(LY.txt,[c[0]+0.6*A.dia,c[1]+0.6*A.dia],th*0.8,String(i+1)); });
+  const pg=pedGeom();
+  if(pg.present){ pg.bars.forEach(b=>W.circle(LY.pbar,[b.x,b.y],pg.rbB.db/2)); W.rect(LY.ptie,-pg.tieHx,-pg.tieHy,pg.tieHx,pg.tieHy); }
+  const isPedT=(S.tRebar.pieceType==="pedbars");
+  const ic=S.tRebar.present? tensionRebarIntercept(CC) : null;
+  if(ic&&ic.bars) ic.bars.forEach(b=>{ if(!b.fits && b.r===null) return;
+    W.circle(b.eff?LY.rt:LY.rtn,[b.x+(isPedT?0:px),b.y+(isPedT?0:py)],(ic.dev&&ic.dev.db||0.625)/2*1.15); });
+  /* group breakout surface: flat bottom across the tension anchors, and where it leaves the concrete */
+  let hulls=ic? ic.hulls : null;
+  if(!hulls){ let govC=null,T=-1; (CC.combos||[]).forEach(c=>{ if(c.Tu_group>T){T=c.Tu_group;govC=c;} });
+    const tp=(govC&&govC.perAnchor)? govC.perAnchor.filter(p=>p.t>1e-9) : []; hulls=tp.length? breakoutHulls(tp,A.hef) : []; }
+  hulls.forEach(Hh=>{ const ring=breakoutRing(Hh,1.5*A.hef,{x0:-hx,x1:hx,y0:-hy,y1:hy},8); W.pline(LY.brk,ring.map(q=>[q.x,q.y]),true);
+    if(Hh.length>=3) W.pline(LY.brk,Hh.map(q=>[q.x,q.y]),true); else if(Hh.length===2) W.line(LY.brk,[Hh[0].x,Hh[0].y],[Hh[1].x,Hh[1].y]); });
+  const icV=S.vRebar.present? shearRebarIntercept(CC) : null;
+  if(icV){ const nx=icV.nx, ny=icV.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0, P2=(u,t)=>[nx*u+tx*t, ny*u+ty*t];
+    if(icV.isTie){ if(!pg.present){ const uF=icV.halfSpanN-icV.cover-icV.dev.db/2; W.pline(LY.rv,[P2(-uF,-icV.tLeg),P2(uF,-icV.tLeg),P2(uF,icV.tLeg),P2(-uF,icV.tLeg)],true); } }
+    else icV.legs.forEach(L=>{ const a=P2(icV.lead,L.t), b=P2(icV.lead-icV.availBehind,L.t); W.line(L.eff?LY.rv:LY.rvn,[a[0]+px,a[1]+py],[b[0]+px,b[1]+py]); }); }
+  W.text(LY.txt,[-hx,-hy-3*th],th*1.4,"PLAN");
+  W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+fmt(P.B,2)+" x "+fmt(P.N,2)+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
+  /* ---------------- SECTION along x ---------------- */
+  const ox=C.Bx+Math.max(24,C.Bx*0.6), X=x=>ox+x;
+  W.rect(LY.ped,X(-hx),0,X(hx),C.H);
+  const plateTop=C.H+P.t;
+  W.rect(LY.plate,X(px-P.B/2),C.H,X(px+P.B/2),plateTop);
+  { const k=colShape(), ex=px+(P.exc_x||0); W.rect(LY.col,X(ex-k.b/2),plateTop,X(ex+k.b/2),plateTop+12); }
+  const headZ=C.H-A.hef;
+  [...new Set(g.pts.map(p=>+(p.x+px).toFixed(4)))].forEach(x=>{ W.line(LY.anc,[X(x),plateTop+1.5*A.dia],[X(x),headZ]); W.line(LY.anc,[X(x)-0.8*A.dia,headZ],[X(x)+0.8*A.dia,headZ]); });
+  if(pg.present){
+    const zb=(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, zt=C.H-Math.max(+S.ped.barTop||0,0);
+    [...new Set(pg.bars.map(b=>+b.x.toFixed(4)))].forEach(x=>W.line(LY.pbar,[X(x),zb],[X(x),zt]));
+    pg.ties.forEach(z=>W.line(LY.ptie,[X(-pg.tieHx),C.H-z],[X(pg.tieHx),C.H-z]));
+    if(zb<0) warns.push("Pedestal bars are drawn "+fmt(-zb,1)+" in below the pedestal, into the footing.");
+  }
+  if(ic&&ic.bars&&!isPedT)
+    [...new Set(ic.bars.filter(b=>b.r!==null).map(b=>+(b.x+px).toFixed(4)))].forEach(x=>W.line(LY.rt,[X(x),ic.barBot],[X(x),ic.barTop]));
+  hulls.forEach(Hh=>{ const xa=Math.min(...Hh.map(q=>q.x)), xb=Math.max(...Hh.map(q=>q.x)), R=1.5*A.hef;
+    const side=(x0,dir)=>{ const room=dir<0?(x0+hx):(hx-x0); return room>=R? [[x0+dir*R,C.H]] : [[x0+dir*room,C.H],[x0+dir*room,headZ+room/1.5]]; };
+    const Lp=side(xa,-1), Rp=side(xb,1);
+    W.pline(LY.brk,[...Lp,[xa,headZ],[xb,headZ],...Rp.slice().reverse()].map(q=>[X(q[0]),q[1]]),false); });
+  W.text(LY.txt,[X(-hx),-3*th],th*1.4,"SECTION (along x, z up from the pedestal bottom)");
+  W.text(LY.txt,[X(-hx),-5*th],th*0.8,"H = "+fmt(C.H,2)+" in; anchor heads at z = "+fmt(headZ,2)+" in; breakout surface dashed (flat across the tension anchors, 1:1.5 outside)");
+  /* notes */
+  const bb=W.bbox(), y0=bb[1]-4*th;
+  ["BASE PLATE & ANCHOR DESIGNER - DXF EXPORT"+(S.proj.name?": "+S.proj.name:""),
+   "Units: inches. Plan origin = pedestal centre (+x right, +y up); section to the right, z up from the pedestal bottom.",
+   "Layers: BP-PEDESTAL, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-HOLE, BP-PED-BARS, BP-PED-TIES, BP-REBAR-T (counted) / -NOTCOUNTED, BP-REBAR-V / -NOTCOUNTED, BP-BREAKOUT, BP-CENTER, BP-TEXT.",
+   "Geometry for drafting only; the design checks are in the calculation report."].forEach((t,j)=>W.text(LY.txt,[bb[0],y0-j*1.8*th],j?th*0.8:th,t));
+  return {text:W.out(), warnings:warns};
 }
 
 /* ---------------------------------------------------------------
@@ -10815,6 +10930,13 @@ function wireHeader(){
   document.getElementById("btnPrint").addEventListener("click",openPrintSettings);
   { const b=document.getElementById("btnImportProfis"); if(b) b.addEventListener("click",openProfisImport); }
   { const b=document.getElementById("btnExportProfis"); if(b) b.addEventListener("click",openProfisExport); }
+  { const b=document.getElementById("btnExportDxf"); if(b) b.addEventListener("click",()=>{
+      try{ const r=bpExportDxf();
+        const blob=new Blob([r.text],{type:"application/dxf"});
+        const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+        a.download=(S.proj.name||"baseplate").replace(/[^\w.-]+/g,"_")+".dxf"; a.click();
+        if(r.warnings.length) alert("DXF written. Notes:\n- "+r.warnings.join("\n- "));
+      }catch(e){ alert("DXF export failed: "+e.message); } }); }
 }
 
 function init(){
@@ -13433,6 +13555,7 @@ manPart("p1","1. Using the Program",[
 ]}},
 {note:"Nothing is applied until you confirm. Anchor edge distances are imported as explicit overrides, so the anchorage checks reproduce the PROFIS geometry exactly even though the pedestal outline is inferred."},
 {h3:"Export to PROFIS (.pe)"},
+{p:"<b>Export DXF</b> writes an ASCII DXF (R12, inches) with a PLAN (pedestal, plate, column, anchors and holes, pedestal bars and ties, tension and shear reinforcement with counted and not-counted legs on separate layers, and the group breakout surface) and a SECTION along x (pedestal, plate, column stub, anchors with heads, bars, ties and the breakout surface). It opens in AutoCAD and MicroStation; layers are prefixed BP-. Geometry only: nothing is recalculated."},
 {p:"<b>Export to Hilti PROFIS (.pe)</b> writes the current design as a PROFIS Engineering design file, built on a template PROFIS file (US region, ACI 318-19, cast-in anchors). A dialog first shows every item exported, the value in this tool, the SI value written (PROFIS stores mm, N, N&middot;mm and MPa whatever its display units), and a list of what to check in PROFIS. The same list goes into the file's report notes. Exporting changes nothing in this tool."},
 {tbl:{head:["Exported","Notes"],rows:[
  ["Plate B &times; N &times; t","B &rarr; LengthA, N &rarr; LengthB (which PROFIS side is X is unconfirmed for a non-square plate)."],

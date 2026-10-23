@@ -2480,3 +2480,38 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: on all 5 built-in cases, cc, capacities, checks and validation are identical. Only `.report` differs, and a line diff shows the only new lines are the "8. Pedestal Ties at Anchor Bolts" heading in each concrete section (not checked when the pedestal reinforcement is not entered).
   - The check case was run headless, with 0 page errors. The VT-1 tie case without S.ped is unchanged (φV_r 18.0, DCR 0.898).
+
+## 2026-10-23 — DX-1: Export DXF (plan + section, R12, inches) (display/export only, no calculation change)
+- **Engineer request (2026-10-23):** a DXF export for drafting.
+- **New:**
+  - a header button "Export DXF" (`btnExportDxf`);
+  - `bpDxfWriter()`, an ASCII DXF R12 (AC1009) writer with CRLF line ends, layers, LINE, POLYLINE, CIRCLE and TEXT. It is adapted from `Gusset Plate Rating.html` GPDXF.write, duplicated per CLAUDE.md §3;
+  - `bpExportDxf()`, which builds the drawing.
+- **Content of the drawing:**
+  - **PLAN** at the pedestal centre:
+    - pedestal, plate, column (W outline, round or rectangle) and centrelines;
+    - anchors and DG1 oversized holes, numbered;
+    - pedestal bars and the tie outline;
+    - tension reinforcement legs, on separate layers for counted and not counted;
+    - shear hairpin legs, or the closed-tie outline;
+    - the group breakout surface: its flat bottom, and where it leaves the concrete.
+  - **SECTION** along x, to the right of the plan:
+    - pedestal, plate and a column stub;
+    - anchors with heads;
+    - pedestal bars, drawn into the footing when that option is on;
+    - tie sets and tension legs;
+    - the group breakout polyline, clipped at the pedestal faces.
+  - Notes listing the layers. All layers are prefixed BP-.
+  - Plate-referenced items (anchors, plate, column, stirrup and hairpin legs) are offset by the plate offset. Pedestal-referenced items (pedestal bars, ties) are not.
+- **Governing provision:** none (export only).
+- **Check case:** the default project, and the PR-1 pedestal case with U-stirrups and closed ties.
+  - Both files read back in ezdxf 1.4.4 with 0 audit errors and 0 fixes.
+  - Entity counts:
+    - default: POLYLINE 8, LINE 7, CIRCLE 8, TEXT 12;
+    - pedestal case: POLYLINE 9, LINE 15, CIRCLE 24, TEXT 12.
+  - Rendered through the ezdxf SVG backend and inspected.
+  - The button's download is named `Untitled.dxf`.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and the export checks pass.
+  - 0 page errors.
