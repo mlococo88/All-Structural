@@ -982,7 +982,8 @@ function defaultState(){
     /* UI */
     ui:{ tab:"tabInput", collapse:{}, units:"kip", momentUnits:"kip-in",
          axialPositive:"tension",
-         layers3d:{ tRebar:true, vRebar:true, ped:true, breakout:true } },   /* GFX-A (2026-10-23): 3-D layer toggles added with the reinforcement layers; the older layers stay in S._vis3.show */
+         layers3d:{ tRebar:true, vRebar:true, ped:true, breakout:true },
+         secCut:{ A:"all", B:"all" } },   /* GFX-B (2026-10-23): tension sections A-A / B-B, "all" = projected, or the anchor row coordinate */   /* GFX-A (2026-10-23): 3-D layer toggles added with the reinforcement layers; the older layers stay in S._vis3.show */
     /* units: "kip"|"lb". momentUnits: "kip-in"|"kip-ft"|"lb-in"|"lb-ft" — chosen
        INDEPENDENTLY of the force unit, because ft-kip and ft-lb are both common
        on drawings while forces are quoted in kip or lb. axialPositive: which way
@@ -6907,7 +6908,15 @@ function buildTRebarTab(pg){
   },pg);
   mkSection("trLayout","3. Rebar Layout",body=>{
     drawRebarPlan(body);
-    const fit=drawRebar(body,"tension");
+    /* GFX-B: both orthogonal sections, each projected or cut at one anchor row */
+    const rowsY=bpCutRows("y"), rowsX=bpCutRows("x");
+    const cutSel=(key,rows,ax)=>selInput(["all"].concat(rows),()=>{ const c=bpCutOf(key,rows); return c===null?"all":String(c); },
+      v=>{ (S.ui.secCut=S.ui.secCut||{})[key]=(v==="all")? "all" : +v; },
+      o=>o==="all"? "all anchors and legs, projected" : ax+" = "+fmt(o,2)+"\u2033 (anchor row)", o=>String(o));
+    fRow(body,"Section A-A (along x) cut at",cutSel("A",rowsY,"y"),"","Bars and anchors nearer the chosen row than any other row are drawn; the rest are dimmed.");
+    fRow(body,"Section B-B (along y) cut at",cutSel("B",rowsX,"x"),"");
+    const fit=drawRebar(body,"tension",{axis:"x",cut:bpCutOf("A",rowsY)});
+    drawRebar(body,"tension",{axis:"y",cut:bpCutOf("B",rowsX)});
     if(fit && fit.dropped>0){
       /* The old text always blamed the SPACING and mangled the limit ("would
          need to sit beyond ±xLim, but the half-width is …"), when for a 2-leg
@@ -7121,6 +7130,9 @@ function buildVRebarTab(pg){
     }
     body.appendChild(el("h3",null,"Section through the anchor"));
     drawRebar(body,"shear");
+    /* GFX-B: the orthogonal section, the governing edge face seen along V */
+    body.appendChild(el("h3",null,"Section B-B \u2014 the governing edge face"));
+    drawShearFace(body);
     rebarCompliance(body,"shear",fit);
   },pg);
 }
@@ -8663,10 +8675,10 @@ function clipSolid3(faces,planes){
 function drawHairpinPlan(body, cGov){
   const C=S.conc, A=S.anchor, P=S.plate, g=anchorGeom(), R=S.vRebar, rb=rebarOf(R.size);
   const ic=shearRebarIntercept(CC);
-  const W=620,H=470,pad=84;
+  const W=620,H=520,pad=84;   /* GFX-B: 470 → 520 and the pedestal lowered, room for the dimension tiers */
   const spanX=Math.max(P.B,C.Bx), spanY=Math.max(P.N,C.By);
-  const sc=Math.min((W-2*pad)/spanX,(H-2*pad)/spanY);
-  const cx=W/2, cy=H/2;
+  const sc=Math.min((W-2*pad)/spanX,(H-2*pad-50)/spanY);
+  const cx=W/2, cy=(H-50)/2+35;
   const s=svg(W,H);
   const px=C.plate_off_x||0, py=C.plate_off_y||0;
   const vTag=makeTagPlacer();        /* same collision-aware label placement as the tension plan */
@@ -8676,6 +8688,15 @@ function drawHairpinPlan(body, cGov){
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#fbfaf6","#333",1.3);
   colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
+  /* GFX-B: anchor spacings, edge distances (c_a2 to the faces along the governing edge),
+     plate size; labels keep off the anchor circles */
+  {const alongX=!!(ic && ic.ny!==0), lab=(v,perp)=>(perp?"c_a2 = ":"c = ")+fmt(v,2)+"\u2033";
+   bpPlanDims(s,{X,Y,xs:g.pts.map(p=>p.x+px),ys:g.pts.map(p=>p.y+py),fx0:-C.Bx/2,fx1:C.Bx/2,fy0:-C.By/2,fy1:C.By/2,
+     px0:px-P.B/2,px1:px+P.B/2,py0:py-P.N/2,py1:py+P.N/2,
+     cx0:lab(g.ca_x_neg,alongX&&!!ic), cx1:lab(g.ca_x_pos,alongX&&!!ic), cy0:lab(g.ca_y_neg,!alongX&&!!ic), cy1:lab(g.ca_y_pos,!alongX&&!!ic),
+     topOff:(ic && ic.nx!==0)? 34 : 14, cover:null});
+   const ar0=Math.max(5,Math.min(11,A.dia*sc*0.6));
+   g.pts.forEach(p=>vTag.reserve(XP(p.x)-ar0,YP(p.y)-ar0,XP(p.x)+ar0,YP(p.y)+ar0));}
 
   const Vx=(cGov&&cGov.raw)?cGov.raw.Vx:0, Vy=(cGov&&cGov.raw)?cGov.raw.Vy:0;
   const Vres=Math.hypot(Vx,Vy);
@@ -8732,10 +8753,8 @@ function drawHairpinPlan(body, cGov){
          its −t end; a horizontal one just above the line, inside, from its −t end */
       const rl=sb.P2(sb.uRef,-sb.tE);
       const rowTxt=(sb.nRows>1? (sb.back? "reference row: back row (Case 2)" : "reference row: front row") : "anchor row");
-      if(Math.abs(vt[0])>0.5){   /* horizontal row line: two short lines outside the side face */
-        const two=rowTxt.split(": "), ax=X(rl[0])-vt[0]*6, an=vt[0]>0?"end":"start";
-        vTag(s,ax,Y(rl[1])-2,two[0],"lblTxt",an,9,"#b71c1c");
-        if(two[1]) vTag(s,ax,Y(rl[1])+9,two[1],"lblTxt",an,9,"#b71c1c");
+      if(Math.abs(vt[0])>0.5){   /* horizontal row line: inside, from the −t face, clear of the anchors (GFX-B: the y dimensions are outside) */
+        vTag(s,X(rl[0])+vt[0]*4,Y(rl[1])+(vu[1]>0? -5 : 12),rowTxt,"lblTxt",vt[0]>0?"start":"end",9,"#b71c1c");
       } else vTag(s,X(rl[0]),Y(rl[1])-vt[1]*14+3,rowTxt,"lblTxt","middle",9,"#b71c1c");
       /* c_a1 dimension, reference row → governing face, outside the +t side face */
       const dOff=16, e0=sb.P2(sb.uRef,sb.tE), e1=sb.P2(sb.uE,sb.tE);
@@ -8796,7 +8815,7 @@ function drawHairpinPlan(body, cGov){
     const sideAnchor=sg=>Math.abs(vu[0])>0.5? ((sg*vu[0]>0)?"start":"end") : "middle";
     [[uF,"front leg",1],[uB,"back leg",-1]].forEach(([u,nm,sg])=>{ const a=P2(u,-tL), b=P2(u,tL);
       line(s,XP(a[0]),YP(a[1]),XP(b[0]),YP(b[1]),"#616161",2.6);
-      const m=P2(u,0.55*tL), mx=XP(m[0]), my=YP(m[1]), gap=(ic.halfSpanN-Math.abs(u))*sc+10;
+      const m=P2(u,0.55*tL), mx=XP(m[0]), my=YP(m[1]), gap=(ic.halfSpanN-Math.abs(u))*sc+56;   /* GFX-B: beyond the dimension tiers */
       const lx=mx+sg*vu[0]*gap, ly=my+sg*vu[1]*gap;
       line(s,mx,my,lx-sg*vu[0]*2,ly-sg*vu[1]*2,"#616161",0.7,"2 2");
       vTag(s,lx,ly+(Math.abs(vu[0])>0.5? 3 : (sg*vu[1]>0? 11 : -4)),nm,"lblTxt",sideAnchor(sg),8.5,"#424242"); });
@@ -8890,6 +8909,16 @@ function drawHairpinPlan(body, cGov){
     rows.push(["Plan position","("+fmt(L.x,2)+", "+fmt(L.y,2)+")″"]);
     if(L.dT!==undefined) rows.push(["Lateral offset to nearest leading anchor",
       fmt(L.dT,2)+"″ (limit 0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″) "+(L.nearOK?"✓":"✗")]);
+    /* GFX-B: the anchor the leg is set out on and the leg's distance to it (plate frame) */
+    if(L.anchorT!==undefined){
+      const pN=p=>p.x*ic.nx+p.y*ic.ny, pT=p=>(ic.nx!==0)? p.y : p.x;
+      const ai=g.pts.findIndex(p=>Math.abs(pN(p)-ic.lead)<0.05 && Math.abs(pT(p)-L.anchorT)<0.05);
+      const ap=ai>=0? g.pts[ai] : null;
+      rows.push(["Distance to its anchor", (ap? "anchor "+(ai+1)+" ("+fmt(ap.x,2)+", "+fmt(ap.y,2)+")″" : "the centre of the leading anchors (t = "+fmt(L.anchorT,2)+"″)")+
+        ": along the edge |t − t_a| = "+fmt(Math.abs(L.t-L.anchorT),2)+"″"+
+        (ic.isTie? "; the leg crosses the failure surface "+fmt(L.xCross,2)+"″ in front of that anchor, at depth "+fmt(L.z,2)+"″"
+                 : "; the leg starts at the anchor's row and runs "+fmt(ic.availBehind,2)+"″ back from it, at depth "+fmt(L.z!==undefined?L.z:ic.zBelow,2)+"″")]);
+    }
     if(L.z!==undefined) rows.push(["Depth below surface",
       fmt(L.z,2)+"″ (breakout body 1.5·c_a1 = "+fmt(ic.bodyDepth,2)+"″) "+(L.depthOK?"✓":"✗")]);
     if(ic.isTie){
@@ -8957,7 +8986,7 @@ function drawHairpinPlan(body, cGov){
 function makeTagPlacer(){
   const placed=[];
   const hit=(a,b)=> !(a.x2<b.x1||b.x2<a.x1||a.y2<b.y1||b.y2<a.y1);
-  return function(s,x,y,text,cls,anchor,size,color){
+  const f=function(s,x,y,text,cls,anchor,size,color){
     const w=String(text).length*size*0.60, h=size*1.05;
     const ladder=[0,-1,1,-2,2,-3,3,-4,4].map(k=>k*(size*1.15));
     for(let i=0;i<ladder.length;i++){
@@ -8973,21 +9002,86 @@ function makeTagPlacer(){
     }
     return txt(s,x,y,text,cls,anchor,size,color);   /* all blocked — draw anyway, never drop */
   };
+  /* GFX-B: keep labels off a drawn symbol (an anchor circle, say): reserve its box */
+  f.reserve=(x1,y1,x2,y2)=>{ placed.push({x1,y1,x2,y2}); };
+  return f;
+}
+
+/* GFX-B (2026-10-23): plan dimensions for the rebar plans. A chain along x above the
+   pedestal (face → anchor columns → face) and along y to its left (face → anchor rows
+   → face), the plate size on a second tier, and the clear cover to the bars at one
+   corner. The edge-distance values are those the calculation uses (anchorGeom: plate
+   offset and any c_a override included); spacings are the distances drawn.
+   o = {X, Y, xs, ys (anchor coordinates, drawn frame), fx0, fx1, fy0, fy1 (faces),
+        px0, px1, py0, py1 (plate), cx0, cx1, cy0, cy1 (edge labels -x, +x, -y, +y),
+        topOff, cover (clear cover, in) | null}. Display only. */
+function bpPlanDims(s,o){
+  const X=o.X, Y=o.Y, uniq=a=>[...new Set(a.map(v=>+v.toFixed(4)))].sort((p,q)=>p-q);
+  const xs=uniq(o.xs), ys=uniq(o.ys), DC="#00427a", FS=9;
+  const halo=t=>{ t.setAttribute("paint-order","stroke"); t.setAttribute("stroke","#fff"); t.setAttribute("stroke-width","3"); return t; };
+  const wOf=str=>String(str).length*FS*0.55;
+  const yTop=Y(o.fy1)-(o.topOff||14), xLeft=X(o.fx0)-16;
+  /* a chain of dimensions; a label that would run into its neighbour is staggered one tier out */
+  function chainH(pts,y,labOf){
+    let lastR=-1e9;
+    for(let i=0;i+1<pts.length;i++){ if(pts[i+1]-pts[i]<1e-6) continue;
+      const a=X(pts[i]), b=X(pts[i+1]), lab=labOf(i), w=wOf(lab), m=(a+b)/2;
+      line(s,a,y,b,y,DC,1); [a,b].forEach(q=>line(s,q-3,y+3,q+3,y-3,DC,1));
+      const up=(m-w/2<lastR+3);
+      line(s,a,y+4,a,y-(up?13:4),DC,0.5);
+      halo(txt(s,m,y-3-(up?11:0),lab,"dimTxt","middle",FS,DC));
+      if(!up) lastR=m+w/2; }
+  }
+  function chainV(pts,x,labOf){
+    let lastT=1e9;
+    for(let i=0;i+1<pts.length;i++){ if(pts[i+1]-pts[i]<1e-6) continue;
+      const a=Y(pts[i]), b=Y(pts[i+1]), lab=labOf(i), w=wOf(lab), m=(a+b)/2;
+      line(s,x,a,x,b,DC,1); [a,b].forEach(q=>line(s,x-3,q+3,x+3,q-3,DC,1));
+      const out=(m+w/2>lastT-3), lx=x-3-(out?11:0);
+      const t=halo(txt(s,lx,m,lab,"dimTxt","middle",FS,DC)); t.setAttribute("transform","rotate(-90 "+lx+" "+m+")");
+      if(!out) lastT=m-w/2; }
+  }
+  const ch=[o.fx0].concat(xs,[o.fx1]);
+  chainH(ch,yTop,i=>(i===0)? o.cx0 : (i===ch.length-2)? o.cx1 : "s = "+fmt(ch[i+1]-ch[i],2)+"″");
+  chainH([o.px0,o.px1],yTop-28,()=>"plate B = "+fmt(o.px1-o.px0,2)+"″");
+  const cv=[o.fy0].concat(ys,[o.fy1]);
+  chainV(cv,xLeft,i=>(i===0)? o.cy0 : (i===cv.length-2)? o.cy1 : "s = "+fmt(cv[i+1]-cv[i],2)+"″");
+  chainV([o.py0,o.py1],xLeft-28,()=>"plate N = "+fmt(o.py1-o.py0,2)+"″");
+  if(o.cover!=null && o.cover>0){
+    /* cover envelope (dashed) and its dimension at the lower-right corner */
+    const c=o.cover;
+    rect(s,X(o.fx0+c),Y(o.fy1-c),(o.fx1-o.fx0-2*c)*(X(1)-X(0)),(o.fy1-o.fy0-2*c)*(Y(0)-Y(1)),"none","#9e9e9e",0.7,"2 3");
+    const yb=Y(o.fy0)+12;
+    line(s,X(o.fx1-c),Y(o.fy0),X(o.fx1-c),yb+4,DC,0.6,"2 2");
+    line(s,X(o.fx1-c),yb,X(o.fx1),yb,DC,1); [X(o.fx1-c),X(o.fx1)].forEach(q=>line(s,q-3,yb+3,q+3,yb-3,DC,1));
+    halo(txt(s,X(o.fx1)+4,yb+4,"clear cover "+fmt(c,2)+"″","dimTxt","start",FS,DC));
+  }
 }
 
 function drawRebarPlan(body){
   const C=S.conc, A=S.anchor, R=S.tRebar;
   const ic=(typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
   if(!ic) return;
-  const W=620,H=460,pad=70;
-  const sc=Math.min((W-2*pad)/C.Bx,(H-2*pad-30)/C.By);
-  const cx=W/2, cy=(H-30)/2+10;
+  const W=620,H=500,pad=70;   /* GFX-B: 460 → 500 and the pedestal lowered, room for the dimension tiers */
+  const sc=Math.min((W-2*pad)/C.Bx,(H-2*pad-60)/C.By);
+  const cx=W/2, cy=(H-60)/2+25;
   const X=x=>cx+x*sc, Yp=y=>cy-y*sc;
   const s=svg(W,H);
   const tag=makeTagPlacer();
   /* pedestal + plate */
   rect(s,X(-C.Bx/2),Yp(C.By/2),C.Bx*sc,C.By*sc,"#eae7df","#555",1.2);
   rect(s,X(-S.plate.B/2),Yp(S.plate.N/2),S.plate.B*sc,S.plate.N*sc,"none","#888",1.0,"4 3");
+  /* GFX-B: anchor spacings, edge distances to each face, plate size, clear cover */
+  {const g=anchorGeom(), ov=S.conc.ca_override? " (override)" : "", Re=tRebarEff();
+   bpPlanDims(s,{X,Y:Yp,xs:g.pts.map(p=>p.x),ys:g.pts.map(p=>p.y),fx0:-C.Bx/2,fx1:C.Bx/2,fy0:-C.By/2,fy1:C.By/2,
+     px0:-S.plate.B/2,px1:S.plate.B/2,py0:-S.plate.N/2,py1:S.plate.N/2,
+     cx0:"c_a = "+fmt(g.ca_x_neg,2)+"\u2033"+ov, cx1:"c_a = "+fmt(g.ca_x_pos,2)+"\u2033"+ov,
+     cy0:"c_a = "+fmt(g.ca_y_neg,2)+"\u2033"+ov, cy1:"c_a = "+fmt(g.ca_y_pos,2)+"\u2033"+ov,
+     topOff:14, cover:Math.max(+Re.cover||0,0)});
+   /* the section cuts chosen below the plan */
+   const cA=bpCutOf("A",bpCutRows("y")), cB=bpCutOf("B",bpCutRows("x"));
+   if(cA!==null){ line(s,X(-C.Bx/2)-6,Yp(cA),X(C.Bx/2)+6,Yp(cA),"#6a1b9a",1,"10 3 2 3"); txt(s,X(C.Bx/2)+8,Yp(cA)+3,"A\u2013A","lblTxt","start",10,"#6a1b9a"); }
+   if(cB!==null){ line(s,X(cB),Yp(C.By/2)+6-12,X(cB),Yp(-C.By/2)+6,"#6a1b9a",1,"10 3 2 3"); txt(s,X(cB),Yp(-C.By/2)+28,"B\u2013B","lblTxt","middle",10,"#6a1b9a"); }}
   colPlanDraw(s,X,Yp,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
   /* PR-1: pedestal tie outline (grey) when the pedestal reinforcement is entered */
   {const pg=pedGeom(); if(pg.present) rect(s,X(-pg.tieHx),Yp(pg.tieHy),2*pg.tieHx*sc,2*pg.tieHy*sc,"none","#8d8d8d",1.6);}
@@ -9036,7 +9130,8 @@ function drawRebarPlan(body){
   });
   /* stirrup outlines: connect the two legs of each piece */
   const byPiece={};
-  (ic.bars||[]).forEach(b=>{ (byPiece[b.piece]=byPiece[b.piece]||[]).push(b); });
+  /* GFX-B: pair the two consecutive legs of a piece (piece numbers restart in every row) */
+  (ic.bars||[]).forEach((b,i)=>{ const k=(ic.legsPer===2)? Math.floor(i/2) : b.piece; (byPiece[k]=byPiece[k]||[]).push(b); });
   Object.values(byPiece).forEach(legs=>{
     if(legs.length===2){
       line(s,X(legs[0].x),Yp(legs[0].y),X(legs[1].x),Yp(legs[1].y),"#1f7d32",1.6,"2 3");
@@ -9056,14 +9151,21 @@ function drawRebarPlan(body){
   function showLeg(b){
     const col=b.eff?"#1f7d32":(b.crosses?"#b71c1c":(b.fits===false?"#999":"#b71c1c"));
     const status=b.eff?"EFFECTIVE":"NOT CREDITABLE";
-    const anchor = (b.nearIdx!==undefined && b.nearIdx>=0 && tensById[b.nearIdx])? tensById[b.nearIdx] : null;
+    /* GFX-B: the anchor is the one the intercept measured r to (its own list of tension
+       anchors, anchorRestraint, same order as nearIdx), numbered as in the anchor key */
+    const ar=(b.nearIdx!==undefined && b.nearIdx>=0 && ic.anchorRestraint && ic.anchorRestraint[b.nearIdx])? ic.anchorRestraint[b.nearIdx] : null;
+    const anchor = ar? ar : ((b.nearIdx!==undefined && b.nearIdx>=0 && tensById[b.nearIdx])? tensById[b.nearIdx] : null);
+    const aNo = anchor? anchorGeom().pts.findIndex(p=>Math.abs(p.x-anchor.x)<1e-6&&Math.abs(p.y-anchor.y)<1e-6)+1 : 0;
     const rows=[];
     rows.push(["Piece / leg", "piece "+b.piece+", leg "+b.leg]);
     rows.push(["Plan position", "("+fmt(b.x,2)+", "+fmt(b.y,2)+")″"]);
     if(b.r!==null && b.r!==undefined){
       rows.push(["Nearest tension anchor",
-        (anchor? "("+fmt(anchor.x,2)+", "+fmt(anchor.y,2)+")″ carrying "+fmt(anchor.t,2)+" kip":"—")+
+        (anchor? (aNo>0?"anchor "+aNo+" ":"")+"("+fmt(anchor.x,2)+", "+fmt(anchor.y,2)+")″ carrying "+fmt(anchor.t,2)+" kip":"—")+
         " · r = "+fmt(b.r,2)+"″ (limit 0.5·h_ef = "+fmt(rZone,2)+"″)"]);
+      if(anchor) rows.push(["Distance to that anchor",
+        "Δx = "+fmt(b.x-anchor.x,2)+"″, Δy = "+fmt(b.y-anchor.y,2)+"″, r = √(Δx² + Δy²) = "+fmt(b.r,2)+"″"+
+        (b.dS!==undefined? "; to the flat bottom of the breakout surface d_s = "+fmt(b.dS,2)+"″" : "")]);
     } else {
       rows.push(["Placement", b.why||"outside the pedestal / cover"]);
     }
@@ -9110,11 +9212,34 @@ function drawRebarPlan(body){
   body.appendChild(panel);
 }
 
-function drawRebar(body,kind){
+/* GFX-B (2026-10-23): section cuts. The anchor rows of one plan axis (distinct anchor
+   coordinates, plate frame, as the rebar views draw them) and the row nearest a value. */
+function bpCutRows(ax){
+  return [...new Set(anchorGeom().pts.map(p=>+(ax==="x"? p.x : p.y).toFixed(4)))].sort((a,b)=>a-b);
+}
+function bpNearestRow(v,rows){ return rows.reduce((m,r)=>Math.abs(r-v)<Math.abs(m-v)?r:m, rows[0]); }
+function bpCutOf(key,rows){
+  const c=S.ui.secCut||{}, v=c[key];
+  return (v===undefined||v===null||v==="all"||!rows.some(r=>Math.abs(r-(+v))<1e-6))? null : +v;
+}
+function drawRebar(body,kind,opt){
   const C=S.conc, A=S.anchor, g=anchorGeom();
   const R=(kind==="tension")?tRebarEff():S.vRebar;
   const rb=rebarOf(R.size);
   const W=620,H=440,pad=80;
+  /* GFX-B (2026-10-23): the tension elevation can be drawn along x (Section A-A,
+     looking +y, x to the right) or along y (Section B-B, looking −x, y to the
+     right), either with everything projected (cut = null, as before) or cut at
+     one anchor row of the other axis: then only what is nearer that row than any
+     other row (anchors, legs, ties) is drawn full strength, the rest dimmed, and
+     the breakout surface is the true profile along the cut line. Display only. */
+  opt=opt||{};
+  const axY=(kind==="tension" && opt.axis==="y");
+  const hc=o=>axY? o.y : o.x, oc=o=>axY? o.x : o.y;          /* in-page / out-of-page coordinate */
+  const cutRows=(kind==="tension")? bpCutRows(axY?"x":"y") : [];
+  const cut=(kind==="tension" && opt.cut!=null && cutRows.length)? opt.cut : null;
+  const inCut=o=>cut===null || Math.abs(bpNearestRow(oc(o),cutRows)-cut)<1e-6;
+  const DIM=0.2, dimIf=(el,o)=>{ if(el && !inCut(o)) el.setAttribute("opacity",DIM); return el; };
   /* For the SHEAR section the cut runs ALONG the shear direction (the governing
      edge's normal), like ACI Fig R17.5.2.1b(i) Section A-A — so the horizontal
      axis is the shear normal (loaded edge on the right), the span is the
@@ -9124,7 +9249,7 @@ function drawRebar(body,kind){
      drew a schematic anchor at 0 complete with the tension cone (user report:
      "the shear graphic doesn't look right — see the ACI figures"). */
   const icV=(kind==="shear"&&typeof shearRebarIntercept==="function")? shearRebarIntercept(CC) : null;
-  const spanPed=(kind==="shear"&&icV)? icV.halfSpanN*2 : C.Bx, totalH=C.H;
+  const spanPed=(kind==="shear"&&icV)? icV.halfSpanN*2 : (axY? C.By : C.Bx), totalH=C.H;
   const sc=Math.min((W-2*pad)/spanPed,(H-2*pad)/totalH);
   const cx=W/2, baseY=H-pad, topY=baseY-C.H*sc;
   const s=svg(W,H);
@@ -9157,10 +9282,11 @@ function drawRebar(body,kind){
      the section plane) with a cone from EACH head — the previous single centred
      anchor was wrong for any real group and made the bar distances unreadable.
      The shear branch keeps the single schematic anchor. */
-  function drawAnchorAt(axp,noCone){
+  function drawAnchorAt(axp,noCone,faint){
     /* rod runs the full ACTUAL embedment to the physical head */
-    line(s,X(axp),topY,X(axp),Yv(headZ),"#2b2b2b",Math.max(2.5,A.dia*sc*0.5));
-    line(s,X(axp)-8,Yv(headZ),X(axp)+8,Yv(headZ),"#2b2b2b",4);
+    const r1=line(s,X(axp),topY,X(axp),Yv(headZ),"#2b2b2b",Math.max(2.5,A.dia*sc*0.5));
+    const r2=line(s,X(axp)-8,Yv(headZ),X(axp)+8,Yv(headZ),"#2b2b2b",4);
+    if(faint){ r1.setAttribute("opacity",DIM); r2.setAttribute("opacity",DIM); }
     if(noCone) return;   /* shear section: no tension cone (ACI Section A-A) */
     /* cone springs from the anchor head (actual h_ef, TR-H1) */
     line(s,X(axp),Yv(coneZ),X(axp-spread),topY,"#b71c1c",1.4,"5 4");
@@ -9169,18 +9295,35 @@ function drawRebar(body,kind){
   let anchorXs=[0];
   if(kind==="tension"){
     const icPre=(typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
-    if(icPre && icPre.rows && icPre.rows.length){
-      const xs=new Set(); icPre.rows.forEach(r=>r.xs.forEach(x=>xs.add(Math.round(x*100)/100)));
-      anchorXs=[...xs].sort((a,b)=>a-b);
-    }
+    /* GFX-B: the tension anchors from the intercept (x, y of each anchor in tension) */
+    const tAnch=(icPre && icPre.anchorRestraint && icPre.anchorRestraint.length)? icPre.anchorRestraint : [];
+    if(tAnch.length) anchorXs=[...new Set(tAnch.map(a=>Math.round(hc(a)*100)/100))].sort((a,b)=>a-b);
     /* GB-1: ONE breakout body per anchor group (Fig. R17.5.2.1a): flat at the
        head plane between the outer tension anchors, rising at 1:1.5 (≈35°) from
        the outer anchors, and stopped at the pedestal face where it reaches it
        first. Drawn as a shaded body under the anchors. */
     const half=spanPed/2;
-    const hullsE=(icPre&&icPre.hulls&&icPre.hulls.length)? icPre.hulls : [anchorXs.map(x=>({x,y:0}))];
-    hullsE.forEach((Hh,hi)=>{
-      const xa=Math.min(...Hh.map(q=>q.x)), xb=Math.max(...Hh.map(q=>q.x));
+    const hullsE=(icPre&&icPre.hulls&&icPre.hulls.length)? icPre.hulls : [anchorXs.map(x=>axY?({x:0,y:x}):({x,y:0}))];
+    if(cut!==null){
+      /* GFX-B: true profile of the group surface along the cut line, z = z_head + d_s/1.5
+         (d_s = plan distance to the flat bottom, breakoutDist — the same function the check
+         uses), capped at the top; it leaves through a side face where it reaches one */
+      const N=160, prof=[];
+      for(let i=0;i<=N;i++){ const h=-half+2*half*i/N, P=axY? {x:cut,y:h} : {x:h,y:cut};
+        prof.push({x:h, z:Math.min(coneZ+breakoutDist(P.x,P.y,icPre?icPre.hulls:hullsE)/1.5, C.H)}); }
+      if(prof.some(q=>q.z<C.H-1e-6)){
+        const pg=document.createElementNS(SVGNS,"polygon");
+        pg.setAttribute("points",[{x:-half,z:C.H}].concat(prof,[{x:half,z:C.H}]).map(q=>X(q.x)+","+Yv(q.z)).join(" "));
+        pg.setAttribute("fill","rgba(183,28,28,0.10)"); pg.setAttribute("stroke","none");
+        svgHost(s).appendChild(pg);
+        for(let i=0;i<N;i++) if(prof[i].z<C.H-1e-6||prof[i+1].z<C.H-1e-6)
+          line(s,X(prof[i].x),Yv(prof[i].z),X(prof[i+1].x),Yv(prof[i+1].z),"#b71c1c",1.6);
+        const lo=prof.reduce((m,q)=>q.z<m.z?q:m,prof[0]);
+        txt(s,X(-half)-4,Yv(prof[0].z<C.H-1e-6? prof[0].z : C.H-0.35*(C.H-lo.z))+3,"breakout surface at "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033","lblTxt","end",8.5,"#b71c1c");
+      } else txt(s,cx,topY-6,"the breakout surface does not reach this cut","lblTxt","middle",8.5,"#b71c1c");
+    }
+    if(cut===null) hullsE.forEach((Hh,hi)=>{
+      const xa=Math.min(...Hh.map(q=>hc(q))), xb=Math.max(...Hh.map(q=>hc(q)));
       const side=(x0,dir)=>{ const room=dir<0? (x0+half) : (half-x0);
         if(room>=spread-1e-9) return [{x:x0+dir*spread,z:C.H}];
         return [{x:x0+dir*room,z:C.H},{x:x0+dir*room,z:headZ+room/1.5}]; };
@@ -9210,7 +9353,9 @@ function drawRebar(body,kind){
         txt(s,ax+rr+10,ay-4,"≈35°","lblTxt","start",8,"#b71c1c");
       }
     });
-    anchorXs.forEach(a=>drawAnchorAt(a,true));
+    if(cut===null || !tAnch.length) anchorXs.forEach(a=>drawAnchorAt(a,true));
+    else { const full=new Set(tAnch.filter(a=>inCut(a)).map(a=>Math.round(hc(a)*100)/100));
+      anchorXs.forEach(a=>drawAnchorAt(a,true,!full.has(a))); }
   } else if(icV){
     /* shear: every anchor projected onto the shear normal (leading and trailing
        rows), loaded edge to the RIGHT — the axis this section is actually cut
@@ -9252,8 +9397,9 @@ function drawRebar(body,kind){
        different rows overlap in this projection — noted in the caption */
     const legObjs = (icDraw && icDraw.bars && icDraw.bars.length)? icDraw.bars
       : Array.from({length:nWanted},(_,i)=>({x:(i-(nWanted-1)/2)*sp,fits:true,eff:true}));
-    const drawnLegs = legObjs.filter(o=>Math.abs(o.x)<=xLim+1e-9);
-    const drawn = drawnLegs.map(o=>o.x);
+    const drawnLegs = legObjs.filter(o=>Math.abs(hc(o))<=xLim+1e-9);
+    const drawn = drawnLegs.map(o=>hc(o));
+    const drawnCut = [...new Set(drawnLegs.filter(o=>inCut(o)).map(o=>+hc(o).toFixed(4)))].sort((a,b)=>a-b);   /* GFX-B: distinct leg positions in the cut */
     const dropped = legObjs.length-drawnLegs.length;
 
     /* vertical extent FROM THE INTERCEPT MODEL: top stopped short of the surface
@@ -9277,28 +9423,39 @@ function drawRebar(body,kind){
        single-leg piece (bar / hairpin) has no pair and no orient-defined bend
        direction, so it keeps a schematic stub. */
     const isPair = (R.pieceType==="closedtie"||R.pieceType==="ustirrup");
-    const bendIntoPage = isPair && (R.orient==="y");
+    const bendIntoPage = isPair && (axY? R.orient==="x" : R.orient==="y");   /* GFX-B: depends on the view */
+    /* GFX-B: pedestal ties and (when they are not the tension legs) pedestal bars, light grey */
+    {const pg=pedGeom();
+     if(pg.present){
+       const tH=axY? pg.tieHy : pg.tieHx;
+       pg.ties.forEach(z=>line(s,X(-tH),Yv(C.H-z),X(tH),Yv(C.H-z),"#8a9aa6",1.6));
+       if(!R.isPed){ const zb=Math.max((S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, -0.2*pad/sc), zt=C.H-Math.max(+S.ped.barTop||0,0);
+         pg.bars.forEach(b=>line(s,X(hc(b)),Yv(zt),X(hc(b)),Yv(zb),"#8a9aa6",1.4)); }
+     }}
     const drawHookBot = icDraw? icDraw.dev.hookBot : (R.hookBot||R.hooked);
     const drawHookTop = icDraw? icDraw.dev.hookTop : R.hookTop;
-    drawnLegs.forEach(L=>{
-      const o=L.x, bx=X(o);
+    /* GFX-B: legs outside the cut are drawn first (underneath) and dimmed; where legs
+       superimpose in the projection, counted legs are drawn on top, then crossing ones */
+    const vRank=L=>(inCut(L)?10:0)+(L.eff?2:(L.crosses?1:0));
+    drawnLegs.slice().sort((a,b)=>vRank(a)-vRank(b)).forEach(L=>{
+      const o=hc(L), bx=X(o);
       const col = L.eff? "#1f7d32" : (L.crosses? "#b71c1c" : "#999");
-      line(s,bx,Yv(barTopZ),bx,Yv(hookZ),col,2.4);
+      dimIf(line(s,bx,Yv(barTopZ),bx,Yv(hookZ),col,2.4),L);
       if(!isPair){
         if(drawHookBot){
           const dir = (o<0)? +1 : -1;
-          line(s,bx,Yv(hookZ),bx+dir*Math.max(6,3*rb.db*sc),Yv(hookZ),col,2.4);
+          dimIf(line(s,bx,Yv(hookZ),bx+dir*Math.max(6,3*rb.db*sc),Yv(hookZ),col,2.4),L);
         }
         if(drawHookTop){
           const dir = (o<0)? +1 : -1;
-          line(s,bx,Yv(barTopZ),bx+dir*Math.max(6,3*rb.db*sc),Yv(barTopZ),col,2.4);
+          dimIf(line(s,bx,Yv(barTopZ),bx+dir*Math.max(6,3*rb.db*sc),Yv(barTopZ),col,2.4),L);
         }
       } else if(bendIntoPage){
         /* bend runs in/out of the page → project it as a dot on the centreline */
         const dot=(z)=>{ const cc=document.createElementNS(SVGNS,"circle");
           cc.setAttribute("cx",bx); cc.setAttribute("cy",Yv(z));
           cc.setAttribute("r",Math.max(2.0,1.25*rb.db*sc));
-          cc.setAttribute("fill",col); cc.setAttribute("class","bendDot");
+          cc.setAttribute("fill",col); cc.setAttribute("class","bendDot"); dimIf(cc,L);
           svgHost(s).appendChild(cc); };
         if(drawHookTop) dot(barTopZ);
         if(drawHookBot) dot(hookZ);
@@ -9308,15 +9465,19 @@ function drawRebar(body,kind){
        tie) so it reads as ONE U / tie rather than two bars wearing stubs */
     if(isPair && !bendIntoPage){
       const byPiece={};
-      drawnLegs.forEach(L=>{ if(L.piece===undefined) return;
-        (byPiece[L.piece]=byPiece[L.piece]||[]).push(L); });
+      /* GFX-B: a piece is its two consecutive legs (A, B) in the intercept's list — piece
+         numbers restart in every row, so keying by the number alone joined the pieces of
+         different rows into one wide U */
+      const pairOf=new Map(); (icDraw&&icDraw.bars||[]).forEach((b,i)=>pairOf.set(b,Math.floor(i/2)));
+      drawnLegs.forEach(L=>{ if(L.piece===undefined) return; const k=pairOf.has(L)? pairOf.get(L) : L.piece;
+        (byPiece[k]=byPiece[k]||[]).push(L); });
       Object.keys(byPiece).forEach(k=>{
         const gset=byPiece[k]; if(gset.length<2) return;
-        const xs=gset.map(L=>L.x).sort((a,b)=>a-b);
+        const xs=gset.map(L=>hc(L)).sort((a,b)=>a-b);
         const col = gset.every(L=>L.eff)? "#1f7d32"
                   : (gset.some(L=>L.crosses)? "#b71c1c" : "#999");
-        if(drawHookTop) line(s,X(xs[0]),Yv(barTopZ),X(xs[xs.length-1]),Yv(barTopZ),col,2.4);
-        if(drawHookBot) line(s,X(xs[0]),Yv(hookZ),X(xs[xs.length-1]),Yv(hookZ),col,2.4);
+        if(drawHookTop) dimIf(line(s,X(xs[0]),Yv(barTopZ),X(xs[xs.length-1]),Yv(barTopZ),col,2.4),gset[0]);
+        if(drawHookBot) dimIf(line(s,X(xs[0]),Yv(hookZ),X(xs[xs.length-1]),Yv(hookZ),col,2.4),gset[0]);
       });
     }
     /* Mark where each bar crosses its nearest cone \u2014 the station development is
@@ -9329,7 +9490,8 @@ function drawRebar(body,kind){
     if(icDraw && icDraw.bars){
       icDraw.bars.forEach(b=>{
         if(!b.crosses || b.zCross===undefined) return;
-        const bx=X(b.x), by=Yv(b.zCross);
+        if(Math.abs(hc(b))>xLim+1e-9) return;
+        const bx=X(hc(b)), by=Yv(b.zCross);
         const col=b.eff?"#1f7d32":"#b71c1c";
         const halfW=Math.max(6,1.9*rb.db*sc);
         const t=document.createElementNS(SVGNS,"line");
@@ -9337,12 +9499,12 @@ function drawRebar(body,kind){
         t.setAttribute("x2",bx+halfW); t.setAttribute("y2",by);
         t.setAttribute("stroke",col); t.setAttribute("stroke-width",1.4);
         t.setAttribute("stroke-dasharray","2.5,2");
-        t.setAttribute("class","coneCross");
+        t.setAttribute("class","coneCross"); dimIf(t,b);
         svgHost(s).appendChild(t);
       });
       /* top-cover dimension so the stopped-short bar reads as deliberate */
       if(icDraw.bars.length){
-        const bx0=X(icDraw.bars[0].x);
+        const bx0=X(hc(icDraw.bars.find(b=>inCut(b))||icDraw.bars[0]));
         dimV(s,Yv(C.H),Yv(barTopZ),bx0-14,"c_top = "+fmt(icDraw.topCover,2)+'\"');
       }
     }
@@ -9357,9 +9519,9 @@ function drawRebar(body,kind){
         txt(s,X(-halfPed)-6,baseY+12,"bars continue "+fmt(S.ped.footExt,0)+"″ into the footing","lblTxt","end",8,"#555");
       }
       /* bar spacing dim between the two innermost bars */
-      if(drawn.length>1){
-        const a=drawn[Math.floor(drawn.length/2)-1], b=drawn[Math.floor(drawn.length/2)];
-        dimH(s,X(a),X(b),Yv(C.H)-16,"s = "+fmt(sp,1)+'"');
+      if(drawnCut.length>1){
+        const a=drawnCut[Math.floor(drawnCut.length/2)-1], b=drawnCut[Math.floor(drawnCut.length/2)];
+        dimH(s,X(a),X(b),Yv(C.H)-16,(Math.abs((b-a)-sp)<0.01? "s = " : "")+fmt(b-a,2)+'"');   /* GFX-B: the distance drawn (was always the input spacing) */
       }
     }
 
@@ -9376,7 +9538,7 @@ function drawRebar(body,kind){
        dot symbols appear here and they mean different things. */
     {const leg1 = bendIntoPage
         ? "solid dot at a bar end = the end bend runs IN/OUT of the page (legs separate in "+(R.orient||"y")+")"
-        : "bar across the top = the end bend, lying in the page (legs separate in x)";
+        : "bar across the top = the end bend, lying in the page (legs separate in "+(axY?"y":"x")+")";
      txt(s,cx,H-40,leg1,"lblTxt","middle",8,"#555");
      txt(s,cx,H-29,"tick on a leg = where it crosses the breakout surface \u2014 green: effective \u00b7 red: not creditable \u00b7 grey: never reaches it",
          "lblTxt","middle",8,"#555");}
@@ -9389,6 +9551,9 @@ function drawRebar(body,kind){
         : dropped+" of "+nLegsAll+" legs violate cover or fall outside the concrete and are not shown.";
       txt(s,cx,H-28,wmsg,"lblTxt","middle",9,"#b71c1c");
     }
+    /* GFX-B: section title */
+    txt(s,cx,16,(axY? "SECTION B-B \u2014 along y, looking \u2212x" : "SECTION A-A \u2014 along x, looking +y")+
+      (cut===null? " \u2014 all anchors and legs projected" : " \u2014 cut at the anchor row "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033 (others dimmed)"),"lblTxt","middle",10);
     /* expose for the caller so it can warn in text as well */
     s.__rebarFit={nWanted,nDrawn:drawn.length,dropped,spacing:sp,cover,xLim};
   } else {
@@ -9488,6 +9653,7 @@ function drawRebar(body,kind){
     if(ic) vcap+=" ("+ic.nEff+" of "+ic.nLegsTotal+" legs effective per \u00a717.5.2.1.2"+
       ((S.vRebar.engagesAnchor||(icV&&icV.isTie))?"":"; bend NOT confirmed to engage the rod")+")";
     txt(s,cx,H-14,vcap,"lblTxt","middle",10);
+    if(icV) txt(s,cx,16,"SECTION A-A \u2014 along V, toward the "+icV.govEdge+" edge (loaded edge on the right); every anchor and leg projected","lblTxt","middle",10);   /* GFX-B */
   }
   /* ---- dimensions ----
      BUGFIX: h_ef was dimensioned Yv(headZ)..baseY, i.e. from the anchor head
@@ -9510,10 +9676,81 @@ function drawRebar(body,kind){
   if(icHef&&icHef.hefReduced){
     txt(s,X(spanPed/2)+72,topY-6,"breakout uses h_ef' = "+fmt(icHef.hefBreakout,1)+'" (§17.6.2.1.2, breakout eqs. only)',"lblTxt","middle",7.5,"#b45309");
   }
-  axisTriad(s,pad-46,H-24,"elevY");
+  axisTriad(s,pad-46,H-24,axY?"elevX":"elevY");
   body.appendChild(svgWithControls(s));
   return s.__rebarFit||null;
 }
+/* GFX-B (2026-10-23): shear Section B-B — the governing edge face seen from outside,
+   looking along V (t = along the edge, horizontal; z up). Shows the projected area
+   A_Vc of the governing breakout (width and depth as comboCapacities().sbk states
+   them), the anchors projected, and every shear leg in section at its t and depth,
+   coloured by its verdict from shearRebarIntercept(). Section A-A (drawRebar
+   "shear") is the cut along V. Display only. */
+function drawShearFace(body){
+  const ic=(typeof shearRebarIntercept==="function")? shearRebarIntercept(CC) : null;
+  const sb=ic? shearBodyGeom(ic) : null;
+  if(!ic||!sb) return;
+  const C=S.conc, g=anchorGeom();
+  const cb=(CC.combos||[]).find(c=>c.name===ic.govCombo)||CC.combos[0];
+  const sbk=comboCapacities(CC,cb).sbk;
+  const W=620,H=440,pad=80;
+  const sc=Math.min((W-2*pad)/(2*sb.tE),(H-2*pad)/C.H);
+  const cx=W/2, baseY=H-pad, topY=baseY-C.H*sc;
+  /* viewer outside the governing face: +t is to the right for the +x and −y faces */
+  const sg=(sb.nx>0||sb.ny<0)? 1 : -1, tName=(sb.nx!==0)? "y" : "x";
+  const T=t=>cx+sg*t*sc, Z=z=>baseY-z*sc;
+  const s=svg(W,H), tag=makeTagPlacer();
+  const offT=(sb.nx!==0)? (C.plate_off_y||0) : (C.plate_off_x||0);
+  const projT=p=>((sb.nx!==0)? p.y : p.x)+offT;
+  rect(s,Math.min(T(-sb.tE),T(sb.tE)),topY,2*sb.tE*sc,C.H*sc,"#eae7df","#555",1.2);
+  /* projected area A_Vc on this face: the anchors' extent along the edge + 1.5·c_a1 each
+     side, stopped at the side faces, by min(1.5·c_a1, h_a) deep */
+  const ts=g.pts.map(projT), lo=Math.max(Math.min(...ts)-1.5*sb.ca1,-sb.tE), hi=Math.min(Math.max(...ts)+1.5*sb.ca1,sb.tE);
+  const dep=Math.min(1.5*sb.ca1,C.H);
+  const ar=rect(s,Math.min(T(lo),T(hi)),Z(C.H),Math.abs(T(hi)-T(lo)),dep*sc,"rgba(211,84,0,0.13)","#d35400",1.2,"6 4");
+  tip(ar,"Projected area A_Vc of the governing shear breakout (ACI 318-19 §17.7.2.1.3)");
+  txt(s,cx,Z(C.H-dep)+14,"A_Vc = "+fmt(sbk.width,2)+" × "+fmt(sbk.depth,2)+" = "+fmt(sbk.AVc,1)+" in²"+(sbk.AVc<sbk.width*sbk.depth-0.05?" (limited to n·A_Vc0)":""),"lblTxt","middle",9,"#a04000");
+  dimH(s,Math.min(T(lo),T(hi)),Math.max(T(lo),T(hi)),topY-14,"width = "+fmt(sbk.width,2)+"″");
+  dimV(s,Z(C.H),Z(C.H-dep),Math.max(T(sb.tE),T(-sb.tE))+18,"1.5·c_a1 = "+fmt(dep,2)+"″",Math.max(T(sb.tE),T(-sb.tE))+26);
+  /* anchors, projected (the reference row in front) */
+  const headZ=C.H-S.anchor.hef;
+  [...new Set(ts.map(t=>+t.toFixed(3)))].forEach(t=>{
+    line(s,T(t),topY,T(t),Z(headZ),"#2b2b2b",Math.max(2.5,S.anchor.dia*sc*0.5));
+    line(s,T(t)-8,Z(headZ),T(t)+8,Z(headZ),"#2b2b2b",4); });
+  const rb=ic.rb, rd=Math.max(3,rb.db*sc*0.6);
+  const colOf=L=>L.eff?"#1f7d32":(L.fits!==false?"#b71c1c":"#999");
+  if(ic.isTie){
+    /* 0.5·c_a1 placement limit below the top; per set the front leg (across V, nearest
+       the viewer) as a grey bar and the two legs parallel to V in section */
+    line(s,Math.min(T(-sb.tE),T(sb.tE)),Z(C.H-ic.nearLimit),Math.max(T(-sb.tE),T(sb.tE)),Z(C.H-ic.nearLimit),"#1f4e79",0.9,"4 3");
+    const xL=Math.min(T(-sb.tE),T(sb.tE));
+    [...new Set(ic.legs.map(L=>L.piece))].forEach(k=>{
+      const Ls=ic.legs.filter(L=>L.piece===k), z=C.H-Ls[0].z;
+      line(s,T(-ic.tLeg),Z(z),T(ic.tLeg),Z(z),"#616161",2.2);
+      Ls.forEach(L=>circ(s,T(L.t),Z(z),rd,colOf(L),"#333",0.8));
+      tag(s,xL-6,Z(z)+3,"set "+k,"lblTxt","end",9,Ls.some(L=>L.eff)?"#1f7d32":"#b71c1c");
+    });
+    tag(s,xL-6,Z(C.H-ic.nearLimit)+3,"0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″","lblTxt","end",9,"#1f4e79");
+  } else {
+    /* the 0.5·c_a1 band either side of each leading anchor, and every leg in section */
+    const bands=[...new Set(ic.legs.map(L=>+((L.anchorT||0)+offT).toFixed(3)))];
+    bands.forEach(t=>[-1,1].forEach(q=>{ const tt=t+q*ic.nearLimit; if(Math.abs(tt)>sb.tE) return;
+      line(s,T(tt),topY,T(tt),Z(C.H-1.5*ic.ca1>0? C.H-Math.min(1.5*ic.ca1,C.H) : 0),"#1f4e79",0.8,"3 3"); }));
+    ic.legs.forEach(L=>{ const z=C.H-(L.z!==undefined?L.z:ic.zBelow);
+      circ(s,T(L.t+offT),Z(z),rd,colOf(L),"#333",0.8);
+      tag(s,T(L.t+offT)+rd+2,Z(z)+rd+9,L.piece+L.leg,"lblTxt","start",9,"#333"); });
+    const z0=C.H-(ic.legs.length? Math.min(...ic.legs.map(L=>L.z!==undefined?L.z:ic.zBelow)) : ic.zBelow);
+    dimV(s,Z(C.H),Z(z0),Math.min(T(-sb.tE),T(sb.tE))-16,"depth "+fmt(C.H-z0,2)+"″",Math.min(T(-sb.tE),T(sb.tE))-22);
+  }
+  txt(s,cx,16,"SECTION B-B — the "+sb.edge+" face, looking along V: A_Vc and the shear legs in section","lblTxt","middle",10);
+  if(sg>0) txt(s,T(sb.tE),baseY+14,"+"+tName+" →","lblTxt","end",9,"#555");
+  else txt(s,T(sb.tE),baseY+14,"← +"+tName,"lblTxt","start",9,"#555");
+  txt(s,cx,H-30,ic.isTie? "dots = tie legs parallel to V (green counted, red not) · grey bar = the front leg across V (not counted)"
+                       : "dots = legs in section (green counted, red not creditable, grey does not fit) · dashed blue = 0.5·c_a1 band at each leading anchor","lblTxt","middle",9,"#555");
+  txt(s,cx,H-16,"shaded = projected area A_Vc of the governing breakout ("+(sb.back?"Case 2, back row":"reference row")+", c_a1 = "+fmt(sb.ca1,2)+"″)","lblTxt","middle",9,"#a04000");
+  body.appendChild(svgWithControls(s));
+}
+
 
 /* ---------------- 3D VIEW ---------------- */
 let three3D=null;
@@ -9640,7 +9877,7 @@ function build3D(container){
   if(icT && icT.bars && icT.bars.length){
     const rr=Math.max(icT.rb.db/2,0.12), dx=tIsPed?0:pxo, dy=tIsPed?0:pyo;
     const byPiece={};
-    icT.bars.forEach(b=>{ (byPiece[b.piece]=byPiece[b.piece]||[]).push(b);
+    icT.bars.forEach((b,i)=>{ const pk=(icT.legsPer===2)? Math.floor(i/2) : b.piece; (byPiece[pk]=byPiece[pk]||[]).push(b);   /* GFX-B: consecutive legs = one piece */
       rod(groups.tRebar,[b.x+dx,b.y+dy,icT.barBot],[b.x+dx,b.y+dy,icT.barTop],lam(b.eff?RCOL.eff:(b.crosses?RCOL.bad:RCOL.out)),rr);
       if(b.crosses && b.zCross!==undefined) knot(groups.tRebar,[b.x+dx,b.y+dy,b.zCross],lam(b.eff?RCOL.eff:RCOL.bad),rr*2.2); });
     /* connecting bends: a piece with two legs is one bar, bent top and/or bottom. The
