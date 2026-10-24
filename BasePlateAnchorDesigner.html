@@ -223,13 +223,39 @@
   .crdoc svg{max-width:100%;height:auto;}
   .crdoc .fRow{margin:2pt 0;} .crdoc .fRow label{min-width:2.15in;}
   /* the Report tab's viewer: tool bar and a page-like document */
-  .crv-bar{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px;padding:8px 10px;background:var(--paper);border:1px solid var(--color-border);border-radius:6px;font-family:var(--font-ui);font-size:9.5pt;}
+  .crv-bar{position:sticky;top:var(--crv-bar-top,0px);z-index:9;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px;padding:8px 10px;background:var(--paper);border:1px solid var(--color-border);border-radius:6px;font-family:var(--font-ui);font-size:9.5pt;}
   .crv-bar .crv-sp{flex:1;} .crv-bar label{display:inline-flex;align-items:center;gap:5px;}
   .crv-doc{display:block;max-width:8.5in;margin:0 auto;padding:0.5in 0.65in 0.8in;border:1px solid var(--color-border);box-shadow:0 1px 3px rgba(0,0,0,.08);}
   .crv-doc .cr-cover{min-height:0;display:block;padding:0 0 14pt;margin:0 0 16pt;border-bottom:1pt solid #000;break-after:auto;}
   .crv-doc .cr-front{margin-bottom:12pt;}
   .crv-doc a{cursor:pointer;} .crv-doc a:hover{text-decoration:underline;}
   .crv-doc .cr-flash{animation:wkflash 1.4s ease-out;}
+  /* RPT-3 (2026-10-24): report viewer with a navigation tree — the Gusset Plate Rating pattern
+     ("Report tab viewer": .crv-bar / .crv-body / .crv-toc / .crv-doc / .cr-closed), duplicated here per
+     CLAUDE.md §3. Sticky positions are inside the output column's scroll container (LAY-1). */
+  .crv-tog{display:flex;flex-wrap:wrap;gap:6px;}
+  .crv-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid var(--color-border);border-radius:5px;background:var(--slate-100,#f1f5f9);cursor:pointer;font-size:9pt;}
+  .crv-chip:has(input:checked){background:#e2e8f0;border-color:#64748b;}
+  .crv-body{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start;overflow-x:clip;}
+  .crv-body>.crv-doc{min-width:0;width:100%;box-sizing:border-box;}
+  .crv-doc .eqLine{overflow-x:auto;overflow-y:hidden;} .crv-doc table{max-width:100%;}   /* wide equations scroll in their own box; the column never scrolls sideways */
+  .crv-toc{position:sticky;top:var(--crv-top,70px);max-height:var(--crv-tocmax,60vh);overflow:auto;overscroll-behavior:contain;background:var(--paper);border:1px solid var(--color-border);border-radius:6px;padding:8px 4px;scrollbar-width:thin;font-family:var(--font-ui);}
+  .crv-toc a{display:block;padding:3px 10px;border-left:2px solid transparent;color:#475569;text-decoration:none;font-size:9pt;line-height:1.35;cursor:pointer;}
+  .crv-toc a.crv-l1{font-weight:600;color:var(--color-fg,#0f172a);margin-top:6px;font-size:9.5pt;}
+  .crv-toc a.crv-l2{padding-left:22px;font-size:8.7pt;}
+  .crv-toc a:hover{color:var(--color-primary);} .crv-toc a.on{color:var(--color-primary);border-left-color:var(--color-primary);background:#e8eef7;}
+  .crv-doc .cr-h1,.crv-doc .sec,.crv-doc .cr-bn{scroll-margin-top:calc(var(--crv-top,70px) + 6px);}
+  .crv-doc .cr-sec>.cr-h1,.crv-doc .sec>.secHead{cursor:pointer;}
+  .crv-doc .cr-sec>.cr-h1::after,.crv-doc .sec>.secHead .secTitle::after{content:"\25BE";display:inline-block;margin-left:6pt;font-size:9pt;color:#777;text-decoration:none;}
+  .crv-doc .cr-sec.cr-closed>.cr-h1::after,.crv-doc .sec.cr-closed>.secHead .secTitle::after{content:"\25B8";}
+  .crv-doc .cr-front .cr-h1::after{content:none;} .crv-doc .cr-front .cr-h1{cursor:default;}
+  .crv-doc .cr-sec.cr-closed>:not(.cr-h1){display:none;}
+  .crv-doc .sec.cr-closed>.secBody{display:none!important;}
+  @media screen and (max-width:1100px){
+    .crv-body{grid-template-columns:minmax(0,1fr);}
+    .crv-toc{position:static;max-height:240px;}
+  }
+  a.rptJ{font-size:8.5pt;color:#64748b;margin-left:6px;text-decoration:none;cursor:pointer;white-space:nowrap;display:inline-block;} a.rptJ:hover{text-decoration:underline;}
   #valBox{margin:6px 0 0;}
   .valErr{background:#fdecea;border-left:4px solid var(--fail);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
   .valWarn{background:#fef7e6;border-left:4px solid var(--warn);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
@@ -1285,6 +1311,7 @@ function bpadWorkedIn(parent,items){   /* items: [{card, ci, txt}] */
   const links=items.map(o=>bpadLink(o.card,o.ci,o.txt)).filter(Boolean); if(!links.length) return null;
   const d=el("div","wkLink"); d.appendChild(document.createTextNode("Worked in: "));
   links.forEach((a,i)=>{ if(i) d.appendChild(document.createTextNode(" · ")); d.appendChild(a); });
+  {const j=(typeof bpadRptJ==="function")? bpadRptJ(items[0].card,items[0].ci) : null; if(j) d.appendChild(j);}   /* RPT-3 */
   parent.appendChild(d); return d;
 }
 function bpadGoto(tab,card,ci){
@@ -5721,32 +5748,101 @@ function renderAllTex(){ /* eqBlock renders inline already */ }
    into this tab (one source with Print / PDF), each time the tab is drawn, i.e. on opening it and on
    every input change while it is open. Table-of-contents and "Basis" links scroll within the document;
    "see §n.k" links jump to the tab and card where the value is worked (the global a.wkA handler). */
-let bpRptTimer=0;
+/* RPT-3 (2026-10-24): the viewer of Gusset Plate Rating's Report tab (renderReportTab / crSizeBar /
+   crJump), duplicated per CLAUDE.md §3: sticky tool bar (chapter chips, Detail Sheet appendix, combinations,
+   Expand / Collapse all, Print), a sticky navigation tree beside the sheet with scroll-spy, collapsible
+   chapters and cards (state kept for the session), and "§ in report" jumps from the other tabs. */
+let bpRptTimer=0, BP_RPT_PENDING=null, bpCrSpy=null;
+const BP_RPT_CLOSED=new Set();
+function bpCrScroller(){ const op=document.getElementById("outputPanel"); return (op && /auto|scroll/.test(getComputedStyle(op).overflowY))? op : null; }
+function bpCrKey(box){ return box.classList.contains("cr-sec")? ((box.querySelector(":scope>.cr-h1")||{}).id||"") : (box.id||""); }
+function bpCrSizeBar(pg){
+  const sc=bpCrScroller(), tb=document.getElementById("tabBar"), bar=pg.querySelector(".crv-bar");
+  const top=(sc && tb)? tb.offsetHeight : 0, crv=top+(bar? bar.offsetHeight : 0)+10;
+  pg.style.setProperty("--crv-bar-top",top+"px"); pg.style.setProperty("--crv-top",crv+"px");
+  pg.style.setProperty("--crv-tocmax",Math.max(200,(sc? sc.clientHeight : window.innerHeight)-crv-16)+"px");
+}
+function bpCrJump(doc,id){
+  const t=doc.querySelector('[id="'+id+'"]'); if(!t) return false;
+  let p=t.closest(".cr-closed"); while(p){ p.classList.remove("cr-closed"); BP_RPT_CLOSED.delete(bpCrKey(p)); p=p.parentElement&&p.parentElement.closest(".cr-closed"); }
+  const box=t.classList.contains("cr-h1")? t.closest(".cr-sec") : t;
+  if(box && box.classList.contains("cr-closed")){ box.classList.remove("cr-closed"); BP_RPT_CLOSED.delete(bpCrKey(box)); }
+  t.scrollIntoView({behavior:"smooth",block:"start"}); t.classList.add("cr-flash"); setTimeout(()=>t.classList.remove("cr-flash"),1400);
+  return true;
+}
+function bpCrSpyOff(){ if(bpCrSpy){ bpCrSpy.tgt.removeEventListener("scroll",bpCrSpy.fn); bpCrSpy=null; } }
+function bpCrSpyOn(pg,doc,nav){
+  bpCrSpyOff();
+  const sc=bpCrScroller(), tgt=sc||window; let raf=0;
+  const fn=()=>{ if(raf) return; raf=requestAnimationFrame(()=>{ raf=0; if(!doc.isConnected){ bpCrSpyOff(); return; }
+    const lim=(sc? sc.getBoundingClientRect().top : 0)+parseFloat(getComputedStyle(pg).getPropertyValue("--crv-top")||"70")+8;
+    let cur=null; for(const a of nav.querySelectorAll("a[data-crjump]")){ const h=doc.querySelector('[id="'+a.dataset.crjump+'"]');
+      if(!h || !h.offsetParent) continue; if(h.getBoundingClientRect().top<=lim) cur=a; else break; }
+    nav.querySelectorAll("a.on").forEach(a=>{ if(a!==cur) a.classList.remove("on"); });
+    if(cur && !cur.classList.contains("on")){ cur.classList.add("on");
+      const nr=nav.getBoundingClientRect(), cr=cur.getBoundingClientRect();
+      if(cr.top<nr.top || cr.bottom>nr.bottom) nav.scrollTop+=cr.top-nr.top-nav.clientHeight/3; } }); };
+  tgt.addEventListener("scroll",fn,{passive:true}); bpCrSpy={tgt,fn}; fn();
+}
 function buildReportTab(pg){
   const bar=el("div","crv-bar");
-  const pb=el("button","primary","Print / PDF");
-  pb.addEventListener("click",()=>{ buildPrintReport(); bpadApplyPageCSS(true); setTimeout(()=>window.print(),120); });
-  bar.appendChild(pb);
-  const lab=el("label"); const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(S.print.sections.tabDetail===true);
+  /* chapter chips: the report sections (the "Report contents" settings), the Detail Sheet appendix on its own */
+  const tog=el("div","crv-tog"); tog.setAttribute("role","group"); tog.setAttribute("aria-label","Report chapters");
+  TABS().forEach(([id,label])=>{ if(id==="tabVisual"||id==="tabReport"||id==="tabDetail") return;
+    const optIn=(id==="tabValidation"||id==="tabManual");
+    const lab=el("label","crv-chip"); const cb=document.createElement("input"); cb.type="checkbox";
+    cb.checked=optIn? S.print.sections[id]===true : S.print.sections[id]!==false;
+    cb.addEventListener("change",()=>{ S.print.sections[id]=cb.checked; autosave(); buildOutput(); });
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(label+(optIn?" (appendix)":""))); tog.appendChild(lab); });
+  bar.appendChild(tog);
+  const lab=el("label","crv-chip"); const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(S.print.sections.tabDetail===true);
   cb.addEventListener("change",()=>{ S.print.sections.tabDetail=cb.checked; autosave(); buildOutput(); });
   lab.appendChild(cb); lab.appendChild(document.createTextNode("Include Detail Sheet appendix")); bar.appendChild(lab);
+  const cs=document.createElement("select"); [["all","Every combination worked"],["gov","Governing combination only"]].forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; cs.appendChild(o); });
+  cs.value=(S.print.combos.all!==false)? "all" : "gov"; cs.addEventListener("change",()=>{ S.print.combos.all=(cs.value==="all"); autosave(); buildOutput(); });
+  bar.appendChild(cs);
   bar.appendChild(el("span","crv-sp"));
-  const ps=el("button",null,"Report contents…"); ps.title="Sections and combinations included (the same settings as Print / PDF)";
-  ps.addEventListener("click",openPrintSettings); bar.appendChild(ps);
-  bar.appendChild(el("span","note",(S.print.combos.all!==false)? "Every combination worked" : "Governing combination worked"));
+  const ex=el("button",null,"Expand all"), co=el("button",null,"Collapse all"), pb=el("button","primary","Print this report");
+  bar.appendChild(ex); bar.appendChild(co); bar.appendChild(pb);
+  pb.addEventListener("click",()=>{ buildPrintReport(); bpadApplyPageCSS(true); setTimeout(()=>window.print(),120); });   /* one builder, printed without the bar or tree */
   pg.appendChild(bar);
-  const doc=el("article","crdoc crv-doc"); pg.appendChild(doc);
-  /* building the whole sheet takes about a second: debounce it so typing stays responsive */
+  const body=el("div","crv-body"), nav=el("nav","crv-toc"), doc=el("article","crdoc crv-doc");
+  nav.setAttribute("aria-label","Report contents"); body.appendChild(nav); body.appendChild(doc); pg.appendChild(body);
   doc.appendChild(el("div","note","Building the calculation sheet…"));
+  ex.addEventListener("click",()=>{ BP_RPT_CLOSED.clear(); doc.querySelectorAll(".cr-closed").forEach(x=>x.classList.remove("cr-closed")); });
+  co.addEventListener("click",()=>{ doc.querySelectorAll(".cr-sec").forEach(x=>{ if(x.closest(".cr-front")||!x.querySelector(":scope>.cr-h1")) return; x.classList.add("cr-closed"); BP_RPT_CLOSED.add(bpCrKey(x)); }); });
+  requestAnimationFrame(()=>bpCrSizeBar(pg));
+  /* building the whole sheet takes about a second: debounce it so typing stays responsive */
   clearTimeout(bpRptTimer);
   bpRptTimer=setTimeout(()=>{ if(!doc.isConnected || S.ui.tab!=="tabReport") return;
-    const op=document.getElementById("outputPanel"), keep=op? op.scrollTop : 0;
-    buildPrintReport(doc); if(op) op.scrollTop=keep; doc.dataset.ready="1"; },250);
-  doc.addEventListener("click",e=>{ const a=e.target.closest("a"); if(!a || a.classList.contains("wkA")) return;
-    const h=a.getAttribute("href")||""; if(h.charAt(0)!=="#") return; e.preventDefault();
-    const t=doc.querySelector('[id="'+h.slice(1)+'"]'); if(!t) return;
-    t.scrollIntoView({behavior:"smooth",block:"start"}); t.classList.add("cr-flash"); setTimeout(()=>t.classList.remove("cr-flash"),1400); });
+    const sc=bpCrScroller(), keep=sc? sc.scrollTop : 0;
+    buildPrintReport(doc);
+    const toc=window.BPAD_TOC||[]; nav.innerHTML="";
+    toc.forEach(t=>{ const a=el("a","crv-l1",t.n+". "+t.t); a.href="#"+t.id; a.dataset.crjump=t.id; nav.appendChild(a);
+      t.subs.forEach((q,k)=>{ const b=el("a","crv-l2",t.n+"."+(k+1)+" "+q.t); b.href="#"+q.id; b.dataset.crjump=q.id; nav.appendChild(b); }); });
+    doc.querySelectorAll(".cr-sec,.sec").forEach(x=>{ const k=bpCrKey(x); if(k && BP_RPT_CLOSED.has(k)) x.classList.add("cr-closed"); });
+    if(sc) sc.scrollTop=keep;
+    bpCrSizeBar(pg); bpCrSpyOn(pg,doc,nav);
+    if(BP_RPT_PENDING){ const [tb,ci,card]=BP_RPT_PENDING.split("|"); BP_RPT_PENDING=null;
+      const m=window.BPAD_CARDMAP||{}, hit=m[tb+"|"+ci+"|"+card]||m[tb+"||"+card]||m[tb+"|"+(window.BPAD_GI)+"|"+card];
+      if(hit) bpCrJump(doc,hit.id); }
+    doc.dataset.ready="1"; },250);
+  nav.addEventListener("click",e=>{ const a=e.target.closest("a[data-crjump]"); if(!a) return; e.preventDefault(); bpCrJump(doc,a.dataset.crjump); });
+  doc.addEventListener("click",e=>{
+    const a=e.target.closest("a");
+    if(a){ if(a.classList.contains("wkA")) return;   /* "see §n.k": to the tab where it is worked (global handler) */
+      const h=a.getAttribute("href")||""; if(h.charAt(0)!=="#") return; e.preventDefault(); bpCrJump(doc,h.slice(1)); return; }
+    const hd=e.target.closest(".cr-sec>.cr-h1, .sec>.secHead"); if(!hd || hd.closest(".cr-front")) return;
+    const box=hd.classList.contains("cr-h1")? hd.closest(".cr-sec") : hd.closest(".sec"); if(!box) return;
+    box.classList.toggle("cr-closed"); const k=bpCrKey(box); if(box.classList.contains("cr-closed")) BP_RPT_CLOSED.add(k); else BP_RPT_CLOSED.delete(k); });
 }
+window.addEventListener("resize",()=>{ const pg=document.getElementById("page_tabReport"); if(pg && pg.classList.contains("active")) bpCrSizeBar(pg); });
+/* "§ in report": from any other tab, open the Report tab at the section where a card is worked (Gusset's data-rptjump) */
+function bpadRptJ(card,ci){ const cd=BPAD_CARDS[card]; if(!cd) return null;
+  const a=el("a","rptJ","§ in report"); a.href="#"; a.dataset.rptjump=cd[0]+"|"+(ci!=null?ci:"")+"|"+card;
+  a.title="Open the Report tab at the section where this is worked"; return a; }
+document.addEventListener("click",e=>{ const a=e.target.closest&&e.target.closest("a.rptJ"); if(!a || a.closest(".crdoc")) return;
+  e.preventDefault(); BP_RPT_PENDING=a.dataset.rptjump; S.ui.tab="tabReport"; autosave(); buildTabs(); });
 
 /* BP-T1 (2026-10-21): the §17.9 PASS/FAIL rows, torqued anchors only (untorqued spacing < 4dₐ blocks the output) */
 function installRows(){
@@ -6343,7 +6439,7 @@ function buildSummary(pg){
     checks.forEach(c=>{ const tr=el("tr"); const st=statusOf(c.dcr,c.na);
       [c.label,c.ref,c.combo||"—",c.na?"N/A":fmtDCR(c.dcr),st.toUpperCase()].forEach((v,idx)=>{
         const td=el("td",idx===0?"lft":null,String(v)); if(idx===4){td.style.color=st==="fail"?"var(--fail)":st==="pass"?"var(--pass)":"#777";td.style.fontWeight="bold";} tr.appendChild(td); });
-      const tdl=el("td","lft"); const a=bpadLink(bpadCardFor(c.label),bpadComboIndex(c.combo)); if(a) tdl.appendChild(a); tr.appendChild(tdl);   /* D11 */
+      const tdl=el("td","lft"); const a=bpadLink(bpadCardFor(c.label),bpadComboIndex(c.combo)); if(a){ tdl.appendChild(a); const j=bpadRptJ(bpadCardFor(c.label),bpadComboIndex(c.combo)); if(j) tdl.appendChild(j); } tr.appendChild(tdl);   /* D11; RPT-3 */
       t.appendChild(tr); });
     body.appendChild(t);
   },pg);
@@ -12003,7 +12099,7 @@ function bpadResultBlock(rows){
    chrome, keeps every worked equation, value, result, drawing and §-link. */
 function bpRptPolishTab(id,root){
   root.removeAttribute("id");   /* the clone must not carry the live page's id */
-  root.querySelectorAll(".svgTools,.bpCutCtl,.noPrint,#dash,.chip").forEach(e=>e.remove());
+  root.querySelectorAll(".svgTools,.bpCutCtl,.noPrint,#dash,.chip,a.rptJ").forEach(e=>e.remove());
   root.querySelectorAll(".fRow").forEach(r=>{ const lab=r.querySelector("label"); if(lab && /^\s*Detailed combination/.test(lab.textContent)) r.remove(); });
   root.querySelectorAll("div,p").forEach(d=>{ if(d.isConnected && d.querySelectorAll("div,table,svg").length===0 && /^\s*Click any\b/.test(d.textContent) && d.textContent.length<140) d.remove(); });
   root.querySelectorAll("svg text").forEach(t=>{ if(/^\s*click any\b/i.test(t.textContent)) t.remove(); });   /* on-screen hints drawn in the figures */
@@ -12187,7 +12283,7 @@ function buildPrintReport(target){
   holder.appendChild(front); holder.appendChild(bodyEl);
   /* disclaimer (always) */
   holder.appendChild(el("div","foot","This calculation must be reviewed and sealed by a licensed professional engineer. Results depend on the accuracy of the inputs and modeling assumptions stated herein. Concrete provisions per ACI 318-19 Chapter 17 (cast-in headed anchors); base plate flexure per AISC Design Guide 1. Combined tension–shear pass/fail per ACI 318-19 §17.8: both the 5/3 parabolic and the trilinear forms are permitted, both are computed, and the MORE CONSERVATIVE governs. Hilti PROFIS prints whichever is more favourable, so a PROFIS report may show a lower interaction value on identical numbers."));
-  window.BPAD_TOC=toc;
+  window.BPAD_TOC=toc; window.BPAD_CARDMAP=cardMap; window.BPAD_GI=gi;   /* RPT-3: "§ in report" jumps */
   S.ui.tab=savedTab; S.detailCombo=savedCombo;
   S.ui.printing=false;
 }
