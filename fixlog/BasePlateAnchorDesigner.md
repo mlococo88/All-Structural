@@ -2724,3 +2724,78 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - With the report option ticked, the report ends with "Appendix: Detail Sheet".
   - 0 page errors.
 - **Open item:** for a design without reinforcement the sheet shows the input plan and both elevations. Those views are 900 px wide and have no compact version, so on the page their text is about 4 px. Options: a compact plan and elevations, or a full-width plan on the sheet.
+
+## 2026-10-24 — HP-1: hairpins / shear bars are measured from the reference anchor row of the governing breakout case (Tier 2, calc change, MORE conservative where it changes)
+- **Engineer request (2026-10-24):** approved after GFX-A showed the mismatch.
+- **Problem.** In `shearRebarIntercept`, the hairpin / bar branch (not the closed-tie branch) used the leading row (`lead`) for two things:
+  - the failure plane that the development "behind" is measured from;
+  - the 0.5·c_a1 placement test.
+
+  But `ca1` comes from the governing shear-breakout case. When Case 2 governs (Fig. R17.7.2.1b, the back row), the failure surface starts at the back row, c_a1 from the edge. So the leg length behind the leading row was credited as development behind a plane it may not even reach.
+- **Where:** `shearRebarIntercept`, non-tie branch.
+  - Anchor text before: `/* room behind the failure plane, inside the pedestal, less cover */`.
+  - Anchor text after: `/* HP-1 (2026-10-24, engineer)`.
+- **Before:**
+  ```js
+  const roomBehind=Math.max(0,(halfSpanN + lead) - cover);
+  const extBehind=Math.max(R.extBehind||0,0);
+  const availBehind=Math.min(extBehind, roomBehind);
+  …
+  L.dT=Math.min(...leadPts.map(p=>Math.abs(projT(p)-L.t)));
+  ```
+- **After** (the same reference row as the VT-1 tie branch):
+  ```js
+  const tolRef=0.05+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const uRef0H=halfSpanN-ca1;
+  let refPtsH=pts.filter(p=>Math.abs(projN(p)-uRef0H)<tolRef), uRefH=uRef0H;
+  const refIsLead=(!refPtsH.length || Math.abs(uRef0H-lead)<tolRef);
+  if(refIsLead){ refPtsH=leadPts; uRefH=lead; }
+  const roomBehind=Math.max(0,(halfSpanN + lead) - cover);
+  const extBehind=Math.max(R.extBehind||0,0);
+  const legLen=Math.min(extBehind, roomBehind);
+  const legEnd=lead-legLen;
+  const availBehind=refIsLead? legLen : (uRefH-legEnd);
+  …
+  L.dT=Math.min(...refPtsH.map(p=>Math.abs(projT(p)-L.t)));
+  ```
+- **What changes and what doesn't:**
+  - The legs stay where they are detailed: they start at the leading row and wrap its anchors.
+  - Development behind the plane is now the length of leg behind the reference plane. A leg that ends at or in front of the plane does not cross the failure surface and is not counted. Its reason reads "the leg ends … the failure plane through the reference row".
+  - The lateral 0.5·c_a1 offset is measured to the reference-row anchors.
+  - Edge-side anchorage is unchanged: the bend engaging the rod, or ℓ_d within c_a1 − cover.
+  - `devDCR = reqBehind/availBehind` is unchanged in form; it is ∞ when availBehind ≤ 0.
+  - New return fields: `uRef`, `refIsLead`, `refTs`, `legLen`, `legEnd`.
+- **Show the work:** `shearRebarCheck`, step "Failure surface, proximity and development", gains lines when the reference row is not the leading row:
+  - u_ref = h/2 − c_a1;
+  - u_end = u_lead − min(ℓ_ext, room);
+  - available behind = u_ref − u_end;
+  - the lateral limit is measured to the reference-row anchors.
+- **Drawings:**
+  - Legs are drawn with their length `legLen`, from their own row: DXF, the hairpin plan, the shear section, the 3-D view, and the Detail Sheet schedule length. Before, they were drawn with `availBehind`.
+  - The section draws the failure plane and wedge at `uRef`, and the "behind" dimension from the leg end to that plane. When the legs end in front of it, the section says so.
+  - The hairpin plan draws the 0.5·c_a1 bands around the reference-row anchors, and the ≥ ℓ_d dimension from the reference plane.
+- **Governing provision:**
+  - ACI 318-19 §17.5.2.1(b) and R17.5.2.1(b): anchor reinforcement for shear must be developed on both sides of the breakout surface and placed close to the anchor.
+  - §17.7.2.1 and Fig. R17.7.2.1b, Case 2: the failure surface is projected from the critical anchor row, with c_a1 measured from it.
+- **Check case:** pedestal 30 × 30 × 36, plate 24 × 18, 4 × 2 anchors (x = −9, −3, 3, 9; y = ±6), #4 hairpins, 2 per leading anchor, depth 3, ext_behind 12, default combinations.
+  - The governing shear combination is 0.9D+1.0W, V = 16.155 kip toward +x. Case 2 governs: the reference row is x = 3, c_a1 = 15 − 3 = 12. The leading row is x = 9.
+  - **(a) As entered (bend not marked as engaging the rod):**
+    - Before: available behind = min(12, 15 + 9 − 2 = 22) = 12 ≥ ℓ_d = 12. Every leg still fails on the edge side (10 < 12). 0 of 8, φV_r = 0, DCR ∞.
+    - After: u_end = 9 − 12 = −3, available behind = 3 − (−3) = 6 < 12. 0 of 8, φV_r = 0, DCR ∞.
+    - The shear breakout is unchanged: Condition B, φ = 0.70, φV_cbg = 11.732 kip, DCR 1.377.
+  - **(b) Same design with the bend engaging the rod:**
+    - Before: 4 of 8 legs (the other 4 clash, §25.2.1). φV_r = 0.75 × 4 × 0.20 × 60 = 36.0 kip, DCR = 16.155/36.0 = 0.449. The intercept passes, so Condition A applies: φ = 0.75, φV_cbg = 12.570 kip, Concrete Breakout (V) DCR 1.285, interaction 1.563.
+    - After: available behind 6 < 12, so 0 of 8, φV_r = 0, DCR ∞. Condition B: φ = 0.70, φV_cbg = 11.732 kip (= 12.570 × 0.70/0.75), Concrete Breakout (V) DCR 1.377, interaction 1.748.
+  - **(c) As (b) with ext_behind = 18:** the legs end at 9 − 18 = −9, available behind = 3 + 9 = 12 ≥ 12. 4 of 8, φV_r = 36.0, DCR 0.449, unchanged from before.
+  - **(d) Default project with hairpins and the bend engaging:** 2 × 2 at ±6, pedestal 30, Case 2, c_a1 = 21 from x = −6.
+    - Before: 4 of 8, φV_r 36.0, DCR 0.449; Condition A, φV_cbg 15.371, Concrete Breakout (V) DCR 1.051.
+    - After: the legs (6 → −6) end exactly at the reference plane: 0 of 8, DCR ∞. Condition B, φV_cbg 14.346, Concrete Breakout (V) DCR 1.126.
+- **Regression:**
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included. None of them has shear reinforcement.
+  - On the three graphics test projects, everything is identical except the shear intercept of the 4 × 2 project (case (a) above; nothing downstream changes).
+  - A sweep of 112 hairpin / bar designs (7 anchor grids × 4 pedestals × 4 load sets; hairpin and bar; per anchor and group; bend engaging on and off; hooked end; ext 12/18/30; welded plate), origin/main vs this branch:
+    - every one of the 54 designs whose reference row is the leading row (Cases 1 and 3, single row) gives identical intercept, check, capacities and `allChecks`;
+    - all 58 Case 2 designs change in `availBehind`; some also in n_eff, DCR and Condition A, as above.
+- **Open items:**
+  - The reference-row search uses `halfSpanN − ca1` in the plate frame without the plate offset, exactly as the VT-1 tie branch does. With a plate offset it misses the row and falls back to the leading row, which is the old behaviour for hairpins. The same applies when c_a1 is limited by §17.7.2.1.2. Both branches would need the offset-aware row (as `shearBodyGeom` finds it for the drawings) to fix this; that needs a decision.
+  - Edge-side anchorage (c) is still checked from the leading row with c_a1 − cover, as instructed.
