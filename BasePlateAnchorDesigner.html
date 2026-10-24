@@ -1414,7 +1414,7 @@ function bpExportDxf(){
   const icV=S.vRebar.present? shearRebarIntercept(CC) : null;
   if(icV){ const nx=icV.nx, ny=icV.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0, P2=(u,t)=>[nx*u+tx*t, ny*u+ty*t];
     if(icV.isTie){ if(!pg.present){ const uF=icV.halfSpanN-icV.cover-icV.dev.db/2; W.pline(LY.rv,[P2(-uF,-icV.tLeg),P2(uF,-icV.tLeg),P2(uF,icV.tLeg),P2(-uF,icV.tLeg)],true); } }
-    else icV.legs.forEach(L=>{ const a=P2(icV.lead,L.t), b=P2(icV.lead-icV.availBehind,L.t); W.line(L.eff?LY.rv:LY.rvn,[a[0]+px,a[1]+py],[b[0]+px,b[1]+py]); }); }
+    else icV.legs.forEach(L=>{ const a=P2(icV.lead,L.t), b=P2(icV.lead-(icV.legLen!==undefined? icV.legLen : icV.availBehind),L.t);   /* HP-1: the leg length, from its own row */ W.line(L.eff?LY.rv:LY.rvn,[a[0]+px,a[1]+py],[b[0]+px,b[1]+py]); }); }
   W.text(LY.txt,[-hx,-hy-3*th],th*1.4,"PLAN");
   W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+fmt(P.B,2)+" x "+fmt(P.N,2)+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
   /* ---------------- SECTION along x ---------------- */
@@ -4186,10 +4186,28 @@ function shearRebarIntercept(cc){
       AsClaimed:legsT.length*rbT.Ab,AsEffective:nEffT*rbT.Ab};
   }
 
-  /* room behind the failure plane, inside the pedestal, less cover */
+  /* HP-1 (2026-10-24, engineer): the failure surface of the governing breakout case starts
+     at its REFERENCE row — the row at c_a1 from the governing edge (Fig. R17.7.2.1b; the back
+     row when Case 2 governs), found as in the closed-tie branch (VT-1): u_ref = halfSpanN − c_a1,
+     falling back to the leading row when no anchor lies on it. The hairpins stay where they
+     are detailed (wrapping the anchors of the leading row); what changes is
+       - placement: the lateral offset d_T is measured to the reference-row anchors, and
+       - development behind: the length of leg that extends BEHIND the reference plane,
+             available behind = u_ref − u_end,   u_end = u_lead − min(ext_behind, room behind),
+         a leg that ends in front of the plane does not cross the failure surface.
+     With the leading row as the reference (Cases 1 and 3, single row) every value is the
+     same as before. */
+  const tolRef=0.05+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const uRef0H=halfSpanN-ca1;
+  let refPtsH=pts.filter(p=>Math.abs(projN(p)-uRef0H)<tolRef), uRefH=uRef0H;
+  const refIsLead=(!refPtsH.length || Math.abs(uRef0H-lead)<tolRef);
+  if(refIsLead){ refPtsH=leadPts; uRefH=lead; }
+  /* room behind the leading row (where the legs start), inside the pedestal, less cover */
   const roomBehind=Math.max(0,(halfSpanN + lead) - cover);   /* lead is measured from the centre toward +n */
   const extBehind=Math.max(R.extBehind||0,0);
-  const availBehind=Math.min(extBehind, roomBehind);
+  const legLen=Math.min(extBehind, roomBehind);                /* leg length behind its own (leading) row */
+  const legEnd=lead-legLen;                                     /* u of the back end of the legs */
+  const availBehind=refIsLead? legLen : (uRefH-legEnd);        /* HP-1: behind the REFERENCE plane (≤ 0: does not cross) */
   const truncated=(extBehind>roomBehind+1e-9);
   const availFront=Math.max(0, ca1-cover);
 
@@ -4276,7 +4294,7 @@ function shearRebarIntercept(cc){
      differ), so the breakout-body depth test is per-leg */
   let nEff=0,nFar=0,nDeep=0,nDev=0,nNotFit=0;
   legs.forEach(L=>{
-    L.dT=Math.min(...leadPts.map(p=>Math.abs(projT(p)-L.t)));
+    L.dT=Math.min(...refPtsH.map(p=>Math.abs(projT(p)-L.t)));   /* HP-1: to the reference-row anchors */
     L.nearOK=(L.dT<=nearLimit+1e-9);
     L.depthOK=((L.z!==undefined?L.z:zBelow)<=bodyDepth+1e-9);
     L.behind=availBehind; L.reqBehind=reqBehind;
@@ -4290,7 +4308,8 @@ function shearRebarIntercept(cc){
     if(!L.depthOK){ nDeep++; L.eff=false;
       L.why="depth "+fmt(L.z!==undefined?L.z:zBelow,2)+"″ > 1.5·c_a1 = "+fmt(bodyDepth,2)+"″ — below the breakout body"; return; }
     if(!L.behindOK || !L.frontOK){ nDev++; L.eff=false;
-      L.why=(!L.behindOK? ("behind: "+fmt(availBehind,2)+"″ < "+fmt(reqBehind,2)+"″ req"):"")+
+      L.why=(!L.behindOK? (availBehind<=1e-9? ((availBehind<-1e-9? "the leg ends "+fmt(-availBehind,2)+"″ in front of" : "the leg ends at")+" the failure plane through the reference row (it does not cross the failure surface)")
+                                              : ("behind: "+fmt(availBehind,2)+"″ < "+fmt(reqBehind,2)+"″ req")):"")+
             (!L.behindOK&&!L.frontOK? "; ":"")+
             (!L.frontOK? ("edge side: "+fmt(availFront,2)+"″ < "+fmt(reqFront,2)+"″ req and the bend does not engage the rod"):"");
       return; }
@@ -4329,6 +4348,7 @@ function shearRebarIntercept(cc){
           zMax:legs.reduce((m,L)=>Math.max(m,L.z!==undefined?L.z:zBelow),0),
           govEdge,ca1,nearLimit,bodyDepth,zBelow,depthOK,
           availBehind,extBehind,roomBehind,truncated,availFront,
+          uRef:uRefH,refIsLead,refTs:[...new Set(refPtsH.map(p=>+projT(p).toFixed(4)))].sort((a,b)=>a-b),legLen,legEnd,   /* HP-1 */
           reqBehind,reqFront,engages,dev,devDCR,rb,cover,
           gauge:(grpMode&&R.pieceType==="hairpin")?gaugeAuto:gauge,spacing:sp,
           govCombo:govC.name,nx,ny,lead,halfSpanN,halfSpanT,
@@ -4397,7 +4417,12 @@ function shearRebarCheck(cc){
        lines:[
         "\\text{governing edge }"+ic.govEdge+",\\quad c_{a1}="+fmt(ic.ca1,2)+"\\ \\text{in}",
         "\\text{lateral limit }0.5c_{a1}="+fmt(ic.nearLimit,2)+"\\ \\text{in},\\quad \\text{body depth }1.5c_{a1}="+fmt(ic.bodyDepth,2)+"\\ \\text{in vs leg depth }"+fmt(ic.zBelow,2)+"\\ \\text{in}",
-        "\\text{behind the failure plane: available }"+fmt(ic.availBehind,2)+"\\ \\text{in vs required }"+fmt(ic.reqBehind,2)+"\\ \\text{in}"],
+        "\\text{behind the failure plane: available }"+fmt(ic.availBehind,2)+"\\ \\text{in vs required }"+fmt(ic.reqBehind,2)+"\\ \\text{in}"]
+        .concat(ic.refIsLead? [] : [   /* HP-1 (2026-10-24): the failure plane is at the reference row of the governing case */
+          "\\text{reference row (Case 2): }u_{ref}=\\tfrac{h}{2}-c_{a1}="+fmt(ic.halfSpanN,2)+"-"+fmt(ic.ca1,2)+"="+fmt(ic.uRef,2)+"\\ \\text{in;\\ legs start at the leading row }u_{lead}="+fmt(ic.lead,2)+"\\ \\text{in}",
+          "u_{end}=u_{lead}-\\min(\\ell_{ext},\\ \\text{room})="+fmt(ic.lead,2)+"-\\min("+fmt(ic.extBehind,2)+",\\ "+fmt(ic.roomBehind,2)+")="+fmt(ic.legEnd,2)+"\\ \\text{in}",
+          "\\text{available behind}=u_{ref}-u_{end}="+fmt(ic.uRef,2)+"-("+fmt(ic.legEnd,2)+")="+fmt(ic.availBehind,2)+"\\ \\text{in}"+(ic.availBehind<=1e-9? "\\ \\Rightarrow\\ \\text{the legs end in front of the failure surface: not counted}" : ""),
+          "\\text{lateral limit measured to the reference-row anchors}"]),
        vars:[["\\ell_d",fmt(dev.ld,2)+" in","straight development §25.4.2.4"],
              ["\\ell_{dh}",fmt(dev.ldh,2)+" in","standard hook §25.4.3"+(R.hookEnd?" — applies at the back end":" (not used: no hook specified)")],
              ["\\text{room behind}",fmt(ic.roomBehind,2)+" in",
@@ -8498,7 +8523,8 @@ function bpRebarSchedule(){
       Object.values(by).forEach(P=>{
         const gauge=P.length===2? Math.abs(P[1].t-P[0].t) : 0;
         const shape=P.length===2? "hairpin (legs "+fmt(gauge,2)+"″ apart)" : "straight bar"+(S.vRebar.hookEnd?", hooked end":"");
-        const len=P.length===2? 2*icV.availBehind+Math.PI*gauge/2 : icV.availBehind;
+        const lg=(icV.legLen!==undefined? icV.legLen : icV.availBehind);   /* HP-1: the leg length (availBehind is now measured from the reference plane) */
+        const len=P.length===2? 2*lg+Math.PI*gauge/2 : lg;
         const nE=P.filter(L=>L.eff).length, key=shape+"|"+len.toFixed(2)+"|"+stat(P.length,nE);
         (groups[key]=groups[key]||{shape,len,n:0,cnt:stat(P.length,nE)}).n++;
       });
@@ -9041,11 +9067,14 @@ function drawHairpinPlan(body, cGov, opt){
       vTag(s,lx,ly,"c_a1 = "+fmt(sb.ca1,2)+"″"+narrowTxt,"dimTxt",Math.abs(vt[0])>0.5?(vt[0]>0?"start":"end"):"middle",9,"#00427a");
     }
     /* the 0.5·c_a1 proximity band around EACH leading anchor's transverse pos */
-    if(!ic.isTie) leadTs.forEach(tc=>{
+    /* HP-1: the 0.5·c_a1 band is around the anchors of the REFERENCE row (the lateral
+       offset is measured to them), drawn along the legs */
+    const legL=(ic.legLen!==undefined? ic.legLen : ic.availBehind);
+    if(!ic.isTie) (ic.refTs&&ic.refTs.length? ic.refTs : leadTs).forEach(tc=>{
       [-1,1].forEach(sg=>{
         const o=tc+sg*ic.nearLimit;
         line(s,XP(nx*aN+tx*o),YP(ny*aN+ty*o),
-               XP(nx*(aN-ic.availBehind)+tx*o),YP(ny*(aN-ic.availBehind)+ty*o),
+               XP(nx*(aN-legL)+tx*o),YP(ny*(aN-legL)+ty*o),
                "#1f4e79",0.9,"3 3");
       });
     });
@@ -9102,7 +9131,8 @@ function drawHairpinPlan(body, cGov, opt){
     ic.legs.forEach(L=>{
       const col=L.eff?"#1f7d32":(L.fits?"#b71c1c":"#999");
       const sx=nx*ic.lead+tx*L.t, sy=ny*ic.lead+ty*L.t;
-      const ex=sx-nx*ic.availBehind, ey=sy-ny*ic.availBehind;
+      const lgL=(ic.legLen!==undefined? ic.legLen : ic.availBehind);   /* HP-1: drawn length = the leg length */
+      const ex=sx-nx*lgL, ey=sy-ny*lgL;
       line(s,XP(sx),YP(sy),XP(ex),YP(ey),col,2.6);
       /* hooked back end, drawn as a short stub perpendicular to the leg */
       if(S.vRebar.hookEnd){
@@ -9130,7 +9160,8 @@ function drawHairpinPlan(body, cGov, opt){
        exactly like the ACI plan figure */
     if(ic.legs.length){
       const Lo=ic.legs.reduce((m,L)=>Math.abs(L.t)>Math.abs(m.t)?L:m,ic.legs[0]);
-      const s0=[nx*ic.lead+tx*Lo.t, ny*ic.lead+ty*Lo.t];
+      const uP=(ic.uRef!==undefined? ic.uRef : ic.lead);   /* HP-1: measured from the failure plane through the reference row */
+      const s0=[nx*uP+tx*Lo.t, ny*uP+ty*Lo.t];
       const s1=[s0[0]-nx*ic.reqBehind, s0[1]-ny*ic.reqBehind];
       const off= (Lo.t>=0? 1 : -1) * 0.9;             /* offset the dim off the bar */
       const o0=[s0[0]+tx*off, s0[1]+ty*off], o1=[s1[0]+tx*off, s1[1]+ty*off];
@@ -9194,7 +9225,8 @@ function drawHairpinPlan(body, cGov, opt){
       rows.push(["Distance to its anchor", (ap? "anchor "+(ai+1)+" ("+fmt(ap.x,2)+", "+fmt(ap.y,2)+")″" : "the centre of the leading anchors (t = "+fmt(L.anchorT,2)+"″)")+
         ": along the edge |t − t_a| = "+fmt(Math.abs(L.t-L.anchorT),2)+"″"+
         (ic.isTie? "; the leg crosses the failure surface "+fmt(L.xCross,2)+"″ in front of that anchor, at depth "+fmt(L.z,2)+"″"
-                 : "; the leg starts at the anchor's row and runs "+fmt(ic.availBehind,2)+"″ back from it, at depth "+fmt(L.z!==undefined?L.z:ic.zBelow,2)+"″")]);
+                 : "; the leg starts at the anchor's row and runs "+fmt(ic.legLen!==undefined?ic.legLen:ic.availBehind,2)+"″ back from it, at depth "+fmt(L.z!==undefined?L.z:ic.zBelow,2)+"″"+
+                   (ic.refIsLead===false? "; "+fmt(ic.availBehind,2)+"″ of it lies behind the failure plane through the reference row (HP-1)" : ""))]);
     }
     if(L.z!==undefined) rows.push(["Depth below surface",
       fmt(L.z,2)+"″ (breakout body 1.5·c_a1 = "+fmt(ic.bodyDepth,2)+"″) "+(L.depthOK?"✓":"✗")]);
@@ -9247,7 +9279,7 @@ function drawHairpinPlan(body, cGov, opt){
   body.appendChild(vwrap);
   body.appendChild(vpanel);
   return {nLegs:ic?ic.nLegsTotal:R.qty, drawn:ic?(ic.nLegsTotal-ic.nNotFit):0,
-          shortfall:ic?ic.nNotFit:0, legLen:ic?ic.availBehind:0, Vres,
+          shortfall:ic?ic.nNotFit:0, legLen:ic?(ic.legLen!==undefined?ic.legLen:ic.availBehind):0, Vres,
           directional:(Vres>1e-9), truncated:(ic&&ic.truncated)?1:0,
           minL:ic?ic.roomBehind:0};
 }
@@ -9898,8 +9930,10 @@ function drawRebar(body,kind,opt){
        dimV(s,Yv(C.H),Yv(C.H-ic.tieTop),xT,"top set "+fmt(ic.tieTop,1)+'"',xT+8);}
     } else if(ic){
       const zTop=C.H-ic.zBelow;                       /* leg elevation */
-      const planeX=ic.lead;                           /* failure plane, along the shear normal */
-      const backX=planeX-ic.availBehind;
+      /* HP-1: the failure plane is at the reference row of the governing case; the legs start
+         at their own (leading) row and run back by their length */
+      const legX=ic.lead, planeX=(ic.uRef!==undefined? ic.uRef : ic.lead);   /* failure plane, along the shear normal */
+      const backX=legX-(ic.legLen!==undefined? ic.legLen : ic.availBehind);
       /* breakout body: from the plane to the edge, 1.5c_a1 deep (the ≈35°
          crack of ACI Fig R17.5.2.1b(i) Section A-A) */
       const edgeX=ic.halfSpanN;
@@ -9922,11 +9956,11 @@ function drawRebar(body,kind,opt){
         const allE=at.every(L=>L.eff), anyE=at.some(L=>L.eff);
         const ck=allE?"#1f7d32":(anyE?"#8d6e00":"#b71c1c");
         const zY=C.H-zk;
-        line(s,X(planeX),Yv(zY),X(backX),Yv(zY),ck,2.6);
+        line(s,X(legX),Yv(zY),X(backX),Yv(zY),ck,2.6);
         if(S.vRebar.engagesAnchor && S.vRebar.pieceType==="hairpin"){
           const p=document.createElementNS(SVGNS,"path");
           const r=Math.min(Math.max(4,(ic.gauge/2)*sc), 18);
-          p.setAttribute("d","M "+X(planeX)+" "+Yv(zY)+" a "+r+" "+r+" 0 0 1 "+r+" "+r);
+          p.setAttribute("d","M "+X(legX)+" "+Yv(zY)+" a "+r+" "+r+" 0 0 1 "+r+" "+r);
           p.setAttribute("fill","none"); p.setAttribute("stroke",ck); p.setAttribute("stroke-width","2.6");
           svgHost(s).appendChild(p);
         }
@@ -9939,8 +9973,9 @@ function drawRebar(body,kind,opt){
          stack dimensions take horizontal labels on leaders (the rotated depth label ran off the top) */
       const yB=topY-16;
       [backX,planeX].forEach(u=>line(s,X(u),Yv(zTopFirst),X(u),yB-4,"#00427a",0.5,"2 2"));
-      dimH(s,X(backX),X(planeX),yB,
+      if(planeX>backX+1e-6) dimH(s,X(backX),X(planeX),yB,
         "behind = "+fmt(ic.availBehind,1)+'" (req '+fmt(ic.reqBehind,1)+'")');
+      else txt(s,X(backX),yB-3,"the legs end in front of the failure plane","lblTxt","middle",9,"#b71c1c");   /* HP-1 */
       dimV(s,Yv(C.H),Yv(zTopFirst),X(backX)-16,"depth "+fmt(zSet[0],1)+'"'+
         " \u2014 as small as cover allows",X(backX)-24);
       if(zSet.length>1)
@@ -10227,7 +10262,7 @@ function build3D(container){
       /* hairpins / bars: legs run back from the leading row; a hairpin's bend wraps the rod toward the edge */
       const zOf=L=>C.H-(L.z!==undefined?L.z:icV.zBelow), byPiece={};
       icV.legs.forEach(L=>{ (byPiece[L.piece]=byPiece[L.piece]||[]).push(L);
-        const z=zOf(L), s0=P2(icV.lead,L.t), e0=P2(icV.lead-icV.availBehind,L.t);
+        const z=zOf(L), s0=P2(icV.lead,L.t), e0=P2(icV.lead-(icV.legLen!==undefined? icV.legLen : icV.availBehind),L.t);   /* HP-1: the leg length */
         const m=lam(L.eff?RCOL.eff:(L.fits?RCOL.bad:RCOL.out));
         rod(groups.vRebar,[s0[0]+pxo,s0[1]+pyo,z],[e0[0]+pxo,e0[1]+pyo,z],m,rr);
         if(S.vRebar.hookEnd) rod(groups.vRebar,[e0[0]+pxo,e0[1]+pyo,z],[e0[0]+pxo,e0[1]+pyo,z-Math.max(2,3*icV.dev.db)],m,rr);
