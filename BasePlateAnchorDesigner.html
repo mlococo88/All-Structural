@@ -206,6 +206,13 @@
   .bpSheet table.tbl{font-size:8.5pt;margin:2px 0;}
   .bpSheet table.tbl th,.bpSheet table.tbl td{padding:1px 3px;}
   .bpSheetNote{font-size:8pt;font-style:italic;color:#444;margin:2px 0;}
+  /* GFX-G: section-cut controls */
+  .bpCutCtl{margin:6px 0;padding:4px 8px;border:1px solid var(--line);background:#faf8f3;}
+  .bpCutRow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:3px 0;font-size:10pt;}
+  .bpCutLab{min-width:210px;}
+  .bpCutRow input[type=range]{width:180px;}
+  .bpCutSnap{font-size:9pt;padding:1px 6px;border:1px solid var(--line);background:#fff;cursor:pointer;}
+  .bpCutSnap.on{background:#6a1b9a;color:#fff;border-color:#6a1b9a;}
   @media print{
     .svgTools{display:none !important;}
     #hdr{background:#fff !important;color:var(--ink) !important;border-bottom:2px solid var(--ink);}
@@ -1411,7 +1418,9 @@ function bpExportDxf(){
   const LY={ped:W.layer("BP-PEDESTAL",7), plate:W.layer("BP-PLATE",4), col:W.layer("BP-COLUMN",5), anc:W.layer("BP-ANCHOR",1),
     hole:W.layer("BP-HOLE",8,"DASHED"), brk:W.layer("BP-BREAKOUT",6,"DASHED"), pbar:W.layer("BP-PED-BARS",3), ptie:W.layer("BP-PED-TIES",3),
     rt:W.layer("BP-REBAR-T",2), rtn:W.layer("BP-REBAR-T-NOTCOUNTED",8), rv:W.layer("BP-REBAR-V",30), rvn:W.layer("BP-REBAR-V-NOTCOUNTED",8),
-    txt:W.layer("BP-TEXT",7), cl:W.layer("BP-CENTER",1,"CENTER")};
+    txt:W.layer("BP-TEXT",7), cl:W.layer("BP-CENTER",1,"CENTER"),
+    sec:W.layer("BP-SECTION",6,"CENTER"), bey:W.layer("BP-SECTION-BEYOND",8)};   /* GFX-G: cut lines; what lies beyond the cut */
+  const cutA=bpCutOf("A"), cutB=bpCutOf("B");   /* GFX-G: the current section cuts (rebar-view frame; the plan adds the plate offset) */
   const hs=anchorHoleDG1(anchorSpec(A.dia).d), dh=(P.holeDia>0)? P.holeDia : hs.dh;
   const hx=C.Bx/2, hy=C.By/2, th=Math.max(0.6, Math.min(C.Bx,C.By)/40);
   /* ---------------- PLAN ---------------- */
@@ -1441,6 +1450,11 @@ function bpExportDxf(){
   if(icV){ const nx=icV.nx, ny=icV.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0, P2=(u,t)=>[nx*u+tx*t, ny*u+ty*t];
     if(icV.isTie){ if(!pg.present){ const uF=icV.halfSpanN-icV.cover-icV.dev.db/2; W.pline(LY.rv,[P2(-uF,-icV.tLeg),P2(uF,-icV.tLeg),P2(uF,icV.tLeg),P2(-uF,icV.tLeg)],true); } }
     else icV.legs.forEach(L=>{ const a=P2((icV.legStart!==undefined? icV.legStart : icV.lead),L.t), b=P2((icV.legEnd!==undefined? icV.legEnd : icV.lead-icV.availBehind),L.t);   /* HP-1 / VR-1: the leg from its start (set-out) to its end */ W.line(L.eff?LY.rv:LY.rvn,[a[0]+px,a[1]+py],[b[0]+px,b[1]+py]); }); }
+  /* GFX-G: section cut lines with their letters and view arrows (A-A looks toward +y, B-B toward -x) */
+  if(cutA!==null){ const y=cutA+py, a=th*0.9; W.line(LY.sec,[-hx-3*th,y],[hx+3*th,y]);
+    [-hx-3*th,hx+3*th].forEach(x=>{ W.pline(LY.sec,[[x-a/2,y+a*0.4],[x+a/2,y+a*0.4],[x,y+a*1.4]],true); W.text(LY.sec,[x-a*0.35,y-a*1.6],th,"A"); }); }
+  if(cutB!==null){ const x=cutB+px, a=th*0.9; W.line(LY.sec,[x,-hy-3*th],[x,hy+3*th]);
+    [-hy-3*th,hy+3*th].forEach(y=>{ W.pline(LY.sec,[[x-a*0.4,y-a/2],[x-a*0.4,y+a/2],[x-a*1.4,y]],true); W.text(LY.sec,[x+a*0.5,y-a*0.35],th,"B"); }); }
   W.text(LY.txt,[-hx,-hy-3*th],th*1.4,"PLAN");
   W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+fmt(P.B,2)+" x "+fmt(P.N,2)+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
   /* ---------------- SECTION along x ---------------- */
@@ -1450,26 +1464,40 @@ function bpExportDxf(){
   W.rect(LY.plate,X(px-P.B/2),C.H,X(px+P.B/2),plateTop);
   { const k=colShape(), ex=px+(P.exc_x||0); W.rect(LY.col,X(ex-k.b/2),plateTop,X(ex+k.b/2),plateTop+12); }
   const headZ=C.H-A.hef;
-  [...new Set(g.pts.map(p=>+(p.x+px).toFixed(4)))].forEach(x=>{ W.line(LY.anc,[X(x),plateTop+1.5*A.dia],[X(x),headZ]); W.line(LY.anc,[X(x)-0.8*A.dia,headZ],[X(x)+0.8*A.dia,headZ]); });
+  /* GFX-G: with a cut (Section A-A at y = cutA, looking +y) each item by its state: in the plane on its
+     own layer, beyond it on BP-SECTION-BEYOND, in front of it left out */
+  const stA=(y,tol)=>bpCutState(y,cutA,tol,1), lyOf=(st,ly)=>(st==="beyond")? LY.bey : ly;
+  { const seen=new Set();
+    g.pts.forEach(p=>{ const st=stA(p.y,A.dia/2+0.05); if(st==="front") return; const x=+(p.x+px).toFixed(4), ly=lyOf(st,LY.anc), k=x+"|"+ly; if(seen.has(k)) return; seen.add(k);
+      W.line(ly,[X(x),plateTop+1.5*A.dia],[X(x),headZ]); W.line(ly,[X(x)-0.8*A.dia,headZ],[X(x)+0.8*A.dia,headZ]); }); }
   if(pg.present){
     const zb=(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, zt=C.H-Math.max(+S.ped.barTop||0,0);
-    [...new Set(pg.bars.map(b=>+b.x.toFixed(4)))].forEach(x=>W.line(LY.pbar,[X(x),zb],[X(x),zt]));
-    pg.ties.forEach(z=>W.line(LY.ptie,[X(-pg.tieHx),C.H-z],[X(pg.tieHx),C.H-z]));
+    { const seen=new Set(); pg.bars.forEach(b=>{ const st=stA(b.y,pg.rbB.db/2+0.05); if(st==="front") return; const x=+b.x.toFixed(4), ly=lyOf(st,LY.pbar), k=x+"|"+ly; if(seen.has(k)) return; seen.add(k);
+      W.line(ly,[X(x),zb],[X(x),zt]); }); }
+    if(cutA===null) pg.ties.forEach(z=>W.line(LY.ptie,[X(-pg.tieHx),C.H-z],[X(pg.tieHx),C.H-z]));
+    else pg.ties.forEach(z=>[-pg.tieHy,pg.tieHy].forEach(o=>{ const st=stA(o,pg.rbT.db/2+0.05); if(st!=="front") W.line(lyOf(st,LY.ptie),[X(-pg.tieHx),C.H-z],[X(pg.tieHx),C.H-z]); }));
     if(zb<0) warns.push("Pedestal bars are drawn "+fmt(-zb,1)+" in below the pedestal, into the footing.");
   }
-  if(ic&&ic.bars&&!isPedT)
-    [...new Set(ic.bars.filter(b=>b.r!==null).map(b=>+(b.x+px).toFixed(4)))].forEach(x=>W.line(LY.rt,[X(x),ic.barBot],[X(x),ic.barTop]));
-  hulls.forEach(Hh=>{ const xa=Math.min(...Hh.map(q=>q.x)), xb=Math.max(...Hh.map(q=>q.x)), R=1.5*A.hef;
+  if(ic&&ic.bars&&!isPedT){ const seen=new Set(), tol=(ic.dev&&ic.dev.db||0.625)/2+0.05;
+    ic.bars.filter(b=>b.r!==null).forEach(b=>{ const st=stA(b.y,tol); if(st==="front") return; const x=+(b.x+px).toFixed(4), ly=lyOf(st,LY.rt), k=x+"|"+ly; if(seen.has(k)) return; seen.add(k);
+      W.line(ly,[X(x),ic.barBot],[X(x),ic.barTop]); }); }
+  if(cutA!==null){   /* GFX-G: the true profile of the group surface in the cut plane, z = z_head + d_s/1.5 (as on screen) */
+    const N=160, prof=[]; for(let i=0;i<=N;i++){ const x=-hx+2*hx*i/N; prof.push([x,Math.min(headZ+(hulls.length? breakoutDist(x,cutA,hulls) : Infinity)/1.5,C.H)]); }
+    let run=[]; const flush=()=>{ if(run.length>1) W.pline(LY.brk,run.map(q=>[X(q[0]),q[1]]),false); run=[]; };
+    prof.forEach((q,i)=>{ const under=q[1]<C.H-1e-6||(i>0&&prof[i-1][1]<C.H-1e-6)||(i<N&&prof[i+1][1]<C.H-1e-6); if(under) run.push(q); else flush(); }); flush();
+    if(!prof.some(q=>q[1]<C.H-1e-6)) warns.push("Section A-A at y = "+fmt(cutA,2)+" in does not reach the tension breakout surface.");
+  } else hulls.forEach(Hh=>{ const xa=Math.min(...Hh.map(q=>q.x)), xb=Math.max(...Hh.map(q=>q.x)), R=1.5*A.hef;
     const side=(x0,dir)=>{ const room=dir<0?(x0+hx):(hx-x0); return room>=R? [[x0+dir*R,C.H]] : [[x0+dir*room,C.H],[x0+dir*room,headZ+room/1.5]]; };
     const Lp=side(xa,-1), Rp=side(xb,1);
     W.pline(LY.brk,[...Lp,[xa,headZ],[xb,headZ],...Rp.slice().reverse()].map(q=>[X(q[0]),q[1]]),false); });
-  W.text(LY.txt,[X(-hx),-3*th],th*1.4,"SECTION (along x, z up from the pedestal bottom)");
+  W.text(LY.txt,[X(-hx),-3*th],th*1.4,(cutA===null)? "SECTION A-A (along x, projected; z up from the pedestal bottom)" : "SECTION A-A at y = "+fmt(cutA,2)+" in, looking +y (z up from the pedestal bottom)");
   W.text(LY.txt,[X(-hx),-5*th],th*0.8,"H = "+fmt(C.H,2)+" in; anchor heads at z = "+fmt(headZ,2)+" in; breakout surface dashed (flat across the tension anchors, 1:1.5 outside)");
   /* notes */
   const bb=W.bbox(), y0=bb[1]-4*th;
   ["BASE PLATE & ANCHOR DESIGNER - DXF EXPORT"+(S.proj.name?": "+S.proj.name:""),
    "Units: inches. Plan origin = pedestal centre (+x right, +y up); section to the right, z up from the pedestal bottom.",
-   "Layers: BP-PEDESTAL, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-HOLE, BP-PED-BARS, BP-PED-TIES, BP-REBAR-T (counted) / -NOTCOUNTED, BP-REBAR-V / -NOTCOUNTED, BP-BREAKOUT, BP-CENTER, BP-TEXT.",
+   "Layers: BP-PEDESTAL, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-HOLE, BP-PED-BARS, BP-PED-TIES, BP-REBAR-T (counted) / -NOTCOUNTED, BP-REBAR-V / -NOTCOUNTED, BP-BREAKOUT, BP-CENTER, BP-SECTION (cut lines), BP-SECTION-BEYOND (beyond the cut), BP-TEXT.",
+   (cutA===null&&cutB===null)? "Section cuts: projected (all anchors and bars)." : "Section cuts (as set in the tool): "+(cutA===null? "A-A projected" : "A-A at y = "+fmt(cutA,2)+" in")+"; "+(cutB===null? "B-B projected" : "B-B at x = "+fmt(cutB,2)+" in")+". The DXF section is A-A.",
    "Geometry for drafting only; the design checks are in the calculation report."].forEach((t,j)=>W.text(LY.txt,[bb[0],y0-j*1.8*th],j?th*0.8:th,t));
   return {text:W.out(), warnings:warns};
 }
@@ -7071,14 +7099,10 @@ function buildTRebarTab(pg){
   mkSection("trLayout","3. Rebar Layout",body=>{
     drawRebarPlan(body);
     /* GFX-B: both orthogonal sections, each projected or cut at one anchor row */
-    const rowsY=bpCutRows("y"), rowsX=bpCutRows("x");
-    const cutSel=(key,rows,ax)=>selInput(["all"].concat(rows),()=>{ const c=bpCutOf(key,rows); return c===null?"all":String(c); },
-      v=>{ (S.ui.secCut=S.ui.secCut||{})[key]=(v==="all")? "all" : +v; },
-      o=>o==="all"? "all anchors and legs, projected" : ax+" = "+fmt(o,2)+"\u2033 (anchor row)", o=>String(o));
-    fRow(body,"Section A-A (along x) cut at",cutSel("A",rowsY,"y"),"","Bars and anchors nearer the chosen row than any other row are drawn; the rest are dimmed.");
-    fRow(body,"Section B-B (along y) cut at",cutSel("B",rowsX,"x"),"");
-    const fit=drawRebar(body,"tension",{axis:"x",cut:bpCutOf("A",rowsY)});
-    drawRebar(body,"tension",{axis:"y",cut:bpCutOf("B",rowsX)});
+    /* GFX-G: cuts at any position (slider / number / snap, or drag on the plan); the sections follow live */
+    bpCutControls(body);
+    const fit=bpCutSection(body,c=>drawRebar(c,"tension",{axis:"x",cut:bpCutOf("A")})).ret;
+    bpCutSection(body,c=>drawRebar(c,"tension",{axis:"y",cut:bpCutOf("B")}));
     if(fit && fit.dropped>0){
       /* The old text always blamed the SPACING and mangled the limit ("would
          need to sit beyond ±xLim, but the half-width is …"), when for a 2-leg
@@ -7290,11 +7314,15 @@ function buildVRebarTab(pg){
         "enlarge the pedestal.";
       body.appendChild(w);
     }
+    /* GFX-G: the shear sections follow the same cuts: the section along V is cut along the edge
+       (A-A for a ±x edge, B-B for a ±y edge), the edge-face section along the normal */
+    const icK=shearRebarIntercept(CC), kV=(icK && icK.bodyNx===0 && icK.bodyNy!==0)? "B" : "A", kF=(kV==="A")? "B" : "A";
+    bpCutControls(body);
     body.appendChild(el("h3",null,"Section through the anchor"));
-    drawRebar(body,"shear");
+    bpCutSection(body,c=>drawRebar(c,"shear",{cut:bpCutOf(kV)}));
     /* GFX-B: the orthogonal section, the governing edge face seen along V */
-    body.appendChild(el("h3",null,"Section B-B \u2014 the governing edge face"));
-    drawShearFace(body);
+    body.appendChild(el("h3",null,"Section "+kF+"-"+kF+" \u2014 the governing edge face"));
+    bpCutSection(body,c=>drawShearFace(c,{cut:bpCutOf(kF)}));
     rebarCompliance(body,"shear",fit);
   },pg);
 }
@@ -8740,13 +8768,14 @@ function buildDetailTab(pg){
   if(S.tRebar.present){
     figs="tension";
     drawRebarPlan(cell(),{compact:true});
-    drawRebar(cell(),"tension",{axis:"x",cut:bpCutOf("A",bpCutRows("y")),compact:true});
-    drawRebar(cell(),"tension",{axis:"y",cut:bpCutOf("B",bpCutRows("x")),compact:true});
+    bpCutSection(cell(),c=>drawRebar(c,"tension",{axis:"x",cut:bpCutOf("A"),compact:true}));   /* GFX-G: follow the cuts */
+    bpCutSection(cell(),c=>drawRebar(c,"tension",{axis:"y",cut:bpCutOf("B"),compact:true}));
   } else if(S.vRebar.present){
     figs="shear";
     drawHairpinPlan(cell(),null,{compact:true});
-    drawRebar(cell(),"shear",{compact:true});
-    drawShearFace(cell(),{compact:true});
+    const icK=shearRebarIntercept(CC), kV=(icK && icK.bodyNx===0 && icK.bodyNy!==0)? "B" : "A", kF=(kV==="A")? "B" : "A";   /* GFX-G */
+    bpCutSection(cell(),c=>drawRebar(c,"shear",{compact:true,cut:bpCutOf(kV)}));
+    bpCutSection(cell(),c=>drawShearFace(c,{compact:true,cut:bpCutOf(kF)}));
   } else {
     figs="plate";
     /* GFX-F: the plan across the full page width, the two elevations below it, at the size
@@ -8794,7 +8823,8 @@ function buildDetailTab(pg){
     const b=el("button","primary noPrint","Print this sheet (one page)");
     b.addEventListener("click",()=>bpPrintSheet());
     pg.insertBefore(b,sheet);
-    pg.insertBefore(el("div","note noPrint","One letter page: the plan, both sections (cut as chosen on the Tension Rebar tab), the rebar schedule and the check summary. The full calculation report is under Print / PDF Report."),sheet);
+    pg.insertBefore(el("div","note noPrint","One letter page: the plan, both sections (at the cuts below, or drag the A\u2013A / B\u2013B lines on the plan), the rebar schedule and the check summary. The full calculation report is under Print / PDF Report."),sheet);
+    if(figs!=="plate"){ const cc=el("div"); bpCutControls(cc); pg.insertBefore(cc,sheet); }   /* GFX-G */
   }
 }
 function bpPrintSheet(){
@@ -9380,7 +9410,8 @@ function drawHairpinPlan(body, cGov, opt){
 
   txt(s,cx,18,(ic&&ic.isTie?"CLOSED-TIE PLAN":"HAIRPIN PLAN")+(cmp? "" : " — shear breakout body and leg verdicts"+(cGov?("  ·  combination "+cGov.name):"")),"lblTxt","middle",10);
   if(ic && ic.wrongEdge) txt(s,cx,33,"legs detailed toward the "+ic.legEdge+" face; the governing breakout is toward "+String(ic.govEdge).replace(/\s*\(parallel\)$/,"")+": not counted","lblTxt","middle",9,"#b71c1c");   /* VR-1 */
-  if(cmp){ body.appendChild(svgWithControls(s)); return null; }
+  const cutMapV={X:XP,Y:YP,toX:sx=>(sx-cx)/sc-px,toY:sy=>(cy-sy)/sc-py};   /* GFX-G: plate frame (+ offset), as this plan */
+  if(cmp){ bpPlanCutLines(s,cutMapV); body.appendChild(svgWithControls(s)); return null; }
   /* G1: legend split over two lines (it ran off both edges of the drawing) */
   if(ic){
     txt(s,cx,H-44,ic.isTie? "tie legs parallel to V: green = at least one set effective · red = none · grey = legs across V (not counted) · × = crossing (top set)"
@@ -9470,6 +9501,7 @@ function drawHairpinPlan(body, cGov, opt){
      vTag(s,XP(ex)+ux*5,YP(ey)+uy*5+(Math.abs(ux)>0.5?3:(uy>0?9:-2)),L.piece+L.leg,"lblTxt",Math.abs(ux)>0.5?(ux>0?"start":"end"):"middle",9,"#333");}
   });
 
+  bpPlanCutLines(s,cutMapV);   /* GFX-G */
   const vwrap=svgWithControls(s);
   body.appendChild(vwrap);
   body.appendChild(vpanel);
@@ -9587,10 +9619,7 @@ function drawRebarPlan(body,opt){
      cx0:"c_a = "+fmt(g.ca_x_neg,2)+"\u2033"+ov, cx1:"c_a = "+fmt(g.ca_x_pos,2)+"\u2033"+ov,
      cy0:"c_a = "+fmt(g.ca_y_neg,2)+"\u2033"+ov, cy1:"c_a = "+fmt(g.ca_y_pos,2)+"\u2033"+ov,
      topOff:14, cover:Math.max(+Re.cover||0,0), noPlate:cmp});
-   /* the section cuts chosen below the plan */
-   const cA=bpCutOf("A",bpCutRows("y")), cB=bpCutOf("B",bpCutRows("x"));
-   if(cA!==null){ line(s,X(-C.Bx/2)-6,Yp(cA),X(C.Bx/2)+6,Yp(cA),"#6a1b9a",1,"10 3 2 3"); txt(s,X(C.Bx/2)+8,Yp(cA)+3,"A\u2013A","lblTxt","start",10,"#6a1b9a"); }
-   if(cB!==null){ line(s,X(cB),Yp(C.By/2)+6-12,X(cB),Yp(-C.By/2)+6,"#6a1b9a",1,"10 3 2 3"); txt(s,X(cB),Yp(-C.By/2)+28,"B\u2013B","lblTxt","middle",10,"#6a1b9a"); }}
+   /* GFX-G: the section cut lines are drawn last (bpPlanCutLines, draggable) */}
   colPlanDraw(s,X,Yp,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
   /* PR-1: pedestal tie outline (grey) when the pedestal reinforcement is entered */
   {const pg=pedGeom(); if(pg.present) rect(s,X(-pg.tieHx),Yp(pg.tieHy),2*pg.tieHx*sc,2*pg.tieHy*sc,"none","#8d8d8d",1.6);}
@@ -9709,7 +9738,8 @@ function drawRebarPlan(body,opt){
     /* piece/leg tag */
     tag(s,X(b.x)-6,Yp(b.y)+3,b.piece+b.leg,"lblTxt","end",6.5,"#333");
   });
-  if(cmp){ txt(s,cx,14,"PLAN \u2014 tension anchor reinforcement","lblTxt","middle",10); axisTriad(s,22,H-28,"plan",22); body.appendChild(svgWithControls(s)); return; }
+  const cutMap={X,Y:Yp,toX:sx=>(sx-cx)/sc,toY:sy=>(cy-sy)/sc};   /* GFX-G: plate frame, as this plan */
+  if(cmp){ txt(s,cx,14,"PLAN \u2014 tension anchor reinforcement","lblTxt","middle",10); axisTriad(s,22,H-28,"plan",22); bpPlanCutLines(s,cutMap); body.appendChild(svgWithControls(s)); return; }
   txt(s,cx,18,"PLAN — anchor reinforcement vs the 0.5·h_ef effective zones (click a leg for details)","lblTxt","middle",11);
   /* caption split across two lines — as one string it ran wider than the 620px
      viewport and was clipped at BOTH edges in the PDF export */
@@ -9717,6 +9747,7 @@ function drawRebarPlan(body,opt){
   txt(s,cx,H-25,"dashed green circle = 0.5·h_ef (actual embedment) around each tension anchor","lblTxt","middle",8);
   txt(s,cx,H-13,"red: group breakout surface — shaded = flat bottom across the tension anchors · dashed = where it leaves the concrete","lblTxt","middle",8,"#b71c1c");
   axisTriad(s,pad-40,H-40,"plan",26);
+  bpPlanCutLines(s,cutMap);   /* GFX-G */
   const wrap=svgWithControls(s);
   body.appendChild(wrap);
   body.appendChild(panel);
@@ -9728,10 +9759,115 @@ function bpCutRows(ax){
   return [...new Set(anchorGeom().pts.map(p=>+(ax==="x"? p.x : p.y).toFixed(4)))].sort((a,b)=>a-b);
 }
 function bpNearestRow(v,rows){ return rows.reduce((m,r)=>Math.abs(r-v)<Math.abs(m-v)?r:m, rows[0]); }
-function bpCutOf(key,rows){
-  const c=S.ui.secCut||{}, v=c[key];
-  return (v===undefined||v===null||v==="all"||!rows.some(r=>Math.abs(r-(+v))<1e-6))? null : +v;
+/* GFX-G (2026-10-24): a cut may sit at ANY position (S.ui.secCut.A = y of Section A-A,
+   .B = x of Section B-B, plate frame; "all" = projected). Saved row values from GFX-B are
+   positions too, so they read unchanged (no migration). The `rows` argument is ignored. */
+function bpCutOf(key){
+  const v=(S.ui.secCut||{})[key];
+  if(v===undefined||v===null||v==="all"||v==="") return null;
+  const n=+v; return isFinite(n)? n : null;
 }
+/* where an object lies relative to a cut plane: "cut" (the plane passes through it, |d| ≤ tol),
+   "beyond" (on the far side, seen in elevation — drawn lighter) or "front" (removed by the cut).
+   sg = +1 when the viewer looks toward +coordinate, −1 when looking toward −coordinate. */
+function bpCutState(v,cut,tol,sg){
+  if(cut===null||cut===undefined) return "cut";
+  const d=v-cut; if(Math.abs(d)<=tol+1e-9) return "cut";
+  return (sg*d>0)? "beyond" : "front";
+}
+/* ---- GFX-G (2026-10-24): movable section cuts ---------------------------------
+   One pair of cuts for every view (the tension and shear sections on their tabs and on
+   the Detail Sheet): S.ui.secCut.A = y of Section A-A (along x), .B = x of Section B-B
+   (along y), plate frame, or "all" (projected). Sections drawn through bpCutSection()
+   re-draw themselves when a cut moves; plans carry draggable cut lines (pointer events,
+   so mouse, pen and touch); bpCutControls() gives a slider, a number field and snap
+   buttons per cut. Display only. */
+function bpCutExtent(key){   /* plate-frame range a cut can take: the pedestal (offset ignored, as the rebar views) */
+  const C=S.conc; return key==="A"? C.By/2 : C.Bx/2;
+}
+function bpSetCut(key,v){
+  S.ui.secCut=S.ui.secCut||{};
+  S.ui.secCut[key]=(v===null||v==="all"||v===undefined||!isFinite(+v))? "all" : Math.round((+v)*100)/100;
+}
+function bpCutSection(body,draw){
+  const c=el("div","bpCutSec"); body.appendChild(c);
+  let ret=null; c.__redraw=()=>{ c.innerHTML=""; ret=draw(c); return ret; };
+  c.__redraw(); return {el:c, ret};
+}
+let bpCutRaf=0;
+function bpCutsLive(){
+  if(bpCutRaf) return;
+  bpCutRaf=requestAnimationFrame(()=>{ bpCutRaf=0;
+    document.querySelectorAll(".bpCutSec").forEach(c=>{ if(c.__redraw && c.isConnected) c.__redraw(); });
+    document.querySelectorAll("svg").forEach(sv=>{ (sv.__cutLines||[]).forEach(f=>f()); });
+    document.querySelectorAll("input.bpCutNum").forEach(i=>{ if(document.activeElement!==i){ const v=bpCutOf(i.dataset.key); i.value=(v===null)? "" : v; } });
+    document.querySelectorAll("input.bpCutRange").forEach(i=>{ const v=bpCutOf(i.dataset.key); if(document.activeElement!==i) i.value=(v===null)? 0 : v; });
+  });
+}
+/* cut lines on a plan. o = {X, Y (plate-frame → svg), toX, toY (svg → plate frame)} */
+function bpPlanCutLines(s,o){
+  const C=S.conc, NS=SVGNS, col="#6a1b9a";
+  const rows={A:bpCutRows("y"), B:bpCutRows("x")};
+  ["A","B"].forEach(key=>{
+    const g=document.createElementNS(NS,"g"); g.setAttribute("class","bpCutLine"); svgHost(s).appendChild(g);
+    const hz=(key==="A");   /* A: horizontal line at y (Section A-A looks toward +y); B: vertical at x (looks toward −x) */
+    const ext=bpCutExtent(key), oth=hz? C.Bx/2 : C.By/2;
+    const mk=(tag,attrs)=>{ const e=document.createElementNS(NS,tag); Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); g.appendChild(e); return e; };
+    const ln=mk("line",{stroke:col,"stroke-width":1.4,"stroke-dasharray":"12 3 2 3"});
+    const ends=[0,1].map(()=>({c:mk("circle",{r:8,fill:"#fff",stroke:col,"stroke-width":1.4}), t:mk("text",{"font-size":10,"font-family":"Times New Roman","text-anchor":"middle",fill:col,"font-weight":"bold"}),
+      a:mk("path",{fill:col})}));
+    ends.forEach(e=>{ e.t.textContent=key; e.t.style.pointerEvents="none"; });
+    const hit=mk("line",{stroke:"rgba(0,0,0,0)","stroke-width":16}); hit.style.cursor=hz? "ns-resize" : "ew-resize"; hit.style.touchAction="none";
+    const ttl=document.createElementNS(NS,"title"); hit.appendChild(ttl);
+    const place=()=>{
+      const v=bpCutOf(key), on=(v!==null), pos=on? v : 0;
+      g.setAttribute("opacity",on? 1 : 0.35);
+      let x1,y1,x2,y2;
+      if(hz){ x1=o.X(-oth)-18; x2=o.X(oth)+18; y1=y2=o.Y(pos); } else { y1=o.Y(oth)-18; y2=o.Y(-oth)+18; x1=x2=o.X(pos); }
+      [ln,hit].forEach(l=>{ l.setAttribute("x1",x1); l.setAttribute("y1",y1); l.setAttribute("x2",x2); l.setAttribute("y2",y2); });
+      [[x1,y1],[x2,y2]].forEach(([x,y],i)=>{ const e=ends[i]; e.c.setAttribute("cx",x); e.c.setAttribute("cy",y); e.t.setAttribute("x",x); e.t.setAttribute("y",y+3.5);
+        /* view arrow: A-A looks toward +y (up on the plan), B-B toward −x (left) */
+        const d=hz? `M ${x-4} ${y-9} L ${x+4} ${y-9} L ${x} ${y-16} Z` : `M ${x-9} ${y-4} L ${x-9} ${y+4} L ${x-16} ${y} Z`;
+        e.a.setAttribute("d",d); });
+      ttl.textContent=on? ("Section "+key+"-"+key+" at "+(hz?"y":"x")+" = "+fmt(v,2)+"″ — drag to move") : ("Section "+key+"-"+key+": projected — drag to cut it at a position");
+    };
+    place(); (s.__cutLines=s.__cutLines||[]).push(place);
+    let drag=null;
+    hit.addEventListener("pointerdown",ev=>{ ev.stopPropagation(); ev.preventDefault(); drag={id:ev.pointerId}; try{ hit.setPointerCapture(ev.pointerId); }catch(e){} });
+    hit.addEventListener("pointermove",ev=>{ if(!drag) return; ev.stopPropagation(); ev.preventDefault();
+      const p=svgPtFromEvent(s,ev); let v=hz? o.toY(p.y) : o.toX(p.x);
+      v=Math.max(-ext,Math.min(ext,v));
+      const snapTol=Math.abs(6/((hz? o.Y(1)-o.Y(0) : o.X(1)-o.X(0))||1));
+      const r=rows[key].find(q=>Math.abs(q-v)<=snapTol); if(r!==undefined) v=r;   /* snap to an anchor row within 6 px */
+      bpSetCut(key,v); bpCutsLive(); });
+    const end=ev=>{ if(!drag) return; ev.stopPropagation(); try{ hit.releasePointerCapture(drag.id); }catch(e){} drag=null; autosave(); setTimeout(()=>refreshAll(),0); };
+    hit.addEventListener("pointerup",end); hit.addEventListener("pointercancel",end);
+    hit.addEventListener("click",ev=>ev.stopPropagation());
+  });
+}
+/* slider + number field + snap buttons for both cuts */
+function bpCutControls(body){
+  if(S.ui&&S.ui.printing) return;
+  const box=el("div","bpCutCtl"); body.appendChild(box);
+  box.appendChild(el("div","note","Section cuts: drag the A–A / B–B lines on the plan, or set them here. A cut shows what the plane passes through; what lies beyond it is drawn lighter. The same cuts are used on the Tension Rebar, Shear Rebar and Detail Sheet tabs, in the printed sheet and in the DXF."));
+  [["A","Section A-A (along x) at y =","y"],["B","Section B-B (along y) at x =","x"]].forEach(([key,lab,ax])=>{
+    const row=el("div","bpCutRow"); box.appendChild(row);
+    row.appendChild(el("span","bpCutLab",lab));
+    const ext=bpCutExtent(key), v=bpCutOf(key);
+    const rg=document.createElement("input"); rg.type="range"; rg.min=-ext; rg.max=ext; rg.step=0.25; rg.value=(v===null)? 0 : v; rg.className="bpCutRange"; rg.dataset.key=key;
+    rg.addEventListener("input",()=>{ bpSetCut(key,+rg.value); bpCutsLive(); });
+    rg.addEventListener("change",()=>{ autosave(); refreshAll(); });
+    const nm=document.createElement("input"); nm.type="number"; nm.step=0.25; nm.className="bpCutNum"; nm.dataset.key=key; nm.value=(v===null)? "" : v; nm.placeholder="all";
+    nm.style.width="70px";
+    nm.addEventListener("change",()=>{ const t=nm.value.trim(); bpSetCut(key,t===""? "all" : Math.max(-ext,Math.min(ext,+t))); autosave(); refreshAll(); });
+    row.appendChild(rg); row.appendChild(nm); row.appendChild(el("span","unit","in"));
+    const btn=(txt,val)=>{ const b=el("button","bpCutSnap",txt); b.addEventListener("click",e=>{ e.preventDefault(); bpSetCut(key,val); autosave(); refreshAll(); });
+      if((val==="all" && v===null) || (val!=="all" && v!==null && Math.abs(v-val)<1e-6)) b.classList.add("on"); row.appendChild(b); };
+    btn("all (projected)","all");
+    bpCutRows(ax).forEach(r=>btn(ax+" = "+fmt(r,2),r));
+  });
+}
+
 function drawRebar(body,kind,opt){
   const C=S.conc, A=S.anchor, g=anchorGeom();
   const R=(kind==="tension")?tRebarEff():S.vRebar;
@@ -9748,10 +9884,14 @@ function drawRebar(body,kind,opt){
   const cmpTxt=(fn)=>{ if(!cmp) fn(); };   /* GFX-D: legend / caption rows are skipped on the detail sheet */
   const axY=(kind==="tension" && opt.axis==="y");
   const hc=o=>axY? o.y : o.x, oc=o=>axY? o.x : o.y;          /* in-page / out-of-page coordinate */
-  const cutRows=(kind==="tension")? bpCutRows(axY?"x":"y") : [];
-  const cut=(kind==="tension" && opt.cut!=null && cutRows.length)? opt.cut : null;
-  const inCut=o=>cut===null || Math.abs(bpNearestRow(oc(o),cutRows)-cut)<1e-6;
-  const DIM=0.2, dimIf=(el,o)=>{ if(el && !inCut(o)) el.setAttribute("opacity",DIM); return el; };
+  /* GFX-G: a true section. A-A looks toward +y, B-B toward −x; what the cut plane passes
+     through is drawn full, what lies beyond it lighter, what lies in front of it is removed */
+  const cut=(kind==="tension" && opt.cut!=null && isFinite(+opt.cut))? +opt.cut : null;
+  const cSg=axY? -1 : 1, legTol=rb.db/2+0.05, ancTol=A.dia/2+0.05;
+  const stateOf=(o,tol)=>bpCutState(oc(o),cut,tol===undefined? legTol : tol,cSg);
+  const inCut=o=>stateOf(o)==="cut";
+  const DIM=0.25, dimIf=(el,o,tol)=>{ if(!el) return el; const st=stateOf(o,tol);
+    if(st==="beyond") el.setAttribute("opacity",DIM); else if(st==="front") el.remove(); return el; };
   /* For the SHEAR section the cut runs ALONG the shear direction (the governing
      edge's normal), like ACI Fig R17.5.2.1b(i) Section A-A — so the horizontal
      axis is the shear normal (loaded edge on the right), the span is the
@@ -9762,6 +9902,19 @@ function drawRebar(body,kind,opt){
      "the shear graphic doesn't look right — see the ACI figures"). */
   const icV=(kind==="shear"&&typeof shearRebarIntercept==="function")? shearRebarIntercept(CC) : null;
   const spanPed=(kind==="shear"&&icV)? icV.halfSpanN*2 : (axY? C.By : C.Bx), totalH=C.H;
+  /* GFX-G: the shear section along V cut at a position t along the edge (plate frame): the
+     view looks toward +t when the loaded edge is +x or −y, toward −t otherwise */
+  const vcut=(kind==="shear" && icV && opt && opt.cut!=null && isFinite(+opt.cut))? +opt.cut : null;
+  const vSg=icV? ((icV.nx===1||icV.ny===-1)? 1 : -1) : 1, tOf=p=>(icV&&icV.nx!==0)? p.y : p.x;
+  const vState=(t,tol)=>bpCutState(t,vcut,tol,vSg);
+  /* body of the governing breakout in the plane of the cut: the side faces splay 1:1.5 from
+     the reference row, so at lateral offset d_T it starts d_T/1.5 in front of the row and is
+     1.5·(u − u_ref) deep (the uncut view is d_T = 0) */
+  const bodyAt=(planeX,edgeX,refTs,depthAtEdge)=>{
+    if(vcut===null) return [[planeX,C.H],[edgeX,C.H],[edgeX,C.H-Math.min(depthAtEdge,C.H)]];
+    const tL=Math.min(...refTs), tH=Math.max(...refTs), dT=Math.max(0,tL-vcut,vcut-tH), u0=planeX+dT/1.5;
+    if(u0>=edgeX-1e-6) return null;
+    return [[u0,C.H],[edgeX,C.H],[edgeX,C.H-Math.min(1.5*(edgeX-planeX),C.H)],[u0,C.H-Math.min(1.5*(u0-planeX),C.H)]]; };
   const sc=Math.min((W-2*pad)/spanPed,(H-2*pad)/totalH);
   const cx=W/2, baseY=H-pad, topY=baseY-C.H*sc;
   const s=svg(W,H);
@@ -9874,16 +10027,24 @@ function drawRebar(body,kind,opt){
       }
     });
     if(cut===null || !tAnch.length) anchorXs.forEach(a=>drawAnchorAt(a,true));
-    else { const full=new Set(tAnch.filter(a=>inCut(a)).map(a=>Math.round(hc(a)*100)/100));
-      anchorXs.forEach(a=>drawAnchorAt(a,true,!full.has(a))); }
+    else {   /* GFX-G: each anchor by its own state; beyond first (underneath), front ones removed */
+      const st=tAnch.map(a=>({h:hc(a),st:stateOf(a,ancTol)}));
+      st.filter(q=>q.st==="beyond").forEach(q=>drawAnchorAt(q.h,true,true));
+      st.filter(q=>q.st==="cut").forEach(q=>drawAnchorAt(q.h,true,false)); }
   } else if(icV){
     /* shear: every anchor projected onto the shear normal (leading and trailing
        rows), loaded edge to the RIGHT — the axis this section is actually cut
        along. Rods only; the shear crack is drawn in the block below. */
     const g2=anchorGeom();
     const proj=p=> p.x*icV.nx + p.y*icV.ny;
-    const us=[...new Set(g2.pts.map(p=>Math.round(proj(p)*100)/100))].sort((a,b)=>a-b);
-    us.forEach(u=>drawAnchorAt(u,true));
+    if(vcut===null){
+      const us=[...new Set(g2.pts.map(p=>Math.round(proj(p)*100)/100))].sort((a,b)=>a-b);
+      us.forEach(u=>drawAnchorAt(u,true));
+    } else {   /* GFX-G */
+      const st=g2.pts.map(p=>({u:proj(p),st:vState(tOf(p),A.dia/2+0.05)}));
+      st.filter(q=>q.st==="beyond").forEach(q=>drawAnchorAt(q.u,true,true));
+      st.filter(q=>q.st==="cut").forEach(q=>drawAnchorAt(q.u,true,false));
+    }
   } else {
     drawAnchorAt(0,true);
   }
@@ -9947,10 +10108,14 @@ function drawRebar(body,kind,opt){
     /* GFX-B: pedestal ties and (when they are not the tension legs) pedestal bars, light grey */
     {const pg=pedGeom();
      if(pg.present){
-       const tH=axY? pg.tieHy : pg.tieHx;
-       pg.ties.forEach(z=>line(s,X(-tH),Yv(C.H-z),X(tH),Yv(C.H-z),"#8a9aa6",1.6));
+       const tH=axY? pg.tieHy : pg.tieHx, tO=axY? pg.tieHx : pg.tieHy, tTol=pg.rbT.db/2+0.05;
+       if(cut===null) pg.ties.forEach(z=>line(s,X(-tH),Yv(C.H-z),X(tH),Yv(C.H-z),"#8a9aa6",1.6));
+       else pg.ties.forEach(z=>{   /* GFX-G: the two tie legs parallel to the section by state; the others cut (dots) */
+         [-tO,tO].forEach(o=>{ const st=bpCutState(o,cut,tTol,cSg); if(st==="front") return;
+           const l=line(s,X(-tH),Yv(C.H-z),X(tH),Yv(C.H-z),"#8a9aa6",1.6); if(st==="beyond") l.setAttribute("opacity",DIM); });
+         if(Math.abs(cut)<=tO+tTol) [-tH,tH].forEach(h=>circ(s,X(h),Yv(C.H-z),2.2,"#8a9aa6","#6d7b86",0.8)); });
        if(!R.isPed){ const zb=Math.max((S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, -0.2*pad/sc), zt=C.H-Math.max(+S.ped.barTop||0,0);
-         pg.bars.forEach(b=>line(s,X(hc(b)),Yv(zt),X(hc(b)),Yv(zb),"#8a9aa6",1.4)); }
+         pg.bars.forEach(b=>dimIf(line(s,X(hc(b)),Yv(zt),X(hc(b)),Yv(zb),"#8a9aa6",1.4),b,pg.rbB.db/2+0.05)); }
      }}
     const drawHookBot = icDraw? icDraw.dev.hookBot : (R.hookBot||R.hooked);
     const drawHookTop = icDraw? icDraw.dev.hookTop : R.hookTop;
@@ -10079,7 +10244,7 @@ function drawRebar(body,kind,opt){
     /* GFX-B: section title */
     if(cmp) txt(s,cx,14,(axY? "SECTION B-B (along y)" : "SECTION A-A (along x)")+(cut===null? ", projected" : ", cut "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033"),"lblTxt","middle",10);
     else txt(s,cx,16,(axY? "SECTION B-B \u2014 along y, looking \u2212x" : "SECTION A-A \u2014 along x, looking +y")+
-      (cut===null? " \u2014 all anchors and legs projected" : " \u2014 cut at the anchor row "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033 (others dimmed)"),"lblTxt","middle",10);
+      (cut===null? " \u2014 all anchors and legs projected" : " \u2014 cut at "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033 (beyond: lighter)"),"lblTxt","middle",10);
     /* expose for the caller so it can warn in text as well */
     s.__rebarFit={nWanted,nDrawn:drawn.length,dropped,spacing:sp,cover,xLim};
   } else {
@@ -10095,11 +10260,12 @@ function drawRebar(body,kind,opt){
          corner bars are dots. A cross marks where each set crosses the failure
          surface; colour = verdict of that set. */
       const planeX=ic.lead, edgeX=ic.halfSpanN;
-      const wedge=document.createElementNS(SVGNS,"polygon");
-      wedge.setAttribute("points",[[planeX,C.H],[edgeX,C.H],[edgeX,C.H-Math.min(ic.bodyDepth,C.H)]].map(q=>X(q[0])+","+Yv(q[1])).join(" "));
+      const wq=bodyAt(planeX,edgeX,ic.leadTs||[0],ic.bodyDepth);   /* GFX-G: the body in the cut plane */
+      if(wq){ const wedge=document.createElementNS(SVGNS,"polygon");
+      wedge.setAttribute("points",wq.map(q=>X(q[0])+","+Yv(q[1])).join(" "));
       wedge.setAttribute("fill","rgba(183,28,28,0.08)"); wedge.setAttribute("stroke","#b71c1c");
       wedge.setAttribute("stroke-width","1.1"); wedge.setAttribute("stroke-dasharray","5 4");
-      svgHost(s).appendChild(wedge);
+      svgHost(s).appendChild(wedge); } else txt(s,X(edgeX)-4,Yv(C.H)+14,"the cut misses the breakout body","lblTxt","end",9,"#b71c1c");
       txt(s,X(planeX)-4,Yv(C.H)-6,"anchors (c_a1 = "+fmt(ic.ca1,1)+"″)","lblTxt","end",8.5,"#b71c1c");
       /* 0.5·c_a1 band from the top */
       const zLim=C.H-ic.nearLimit;
@@ -10113,8 +10279,10 @@ function drawRebar(body,kind,opt){
       sets.forEach(k=>{
         const Ls=ic.legs.filter(L=>L.piece===k), L0=Ls[0], eff=Ls.some(L=>L.eff);
         const zY=C.H-L0.z, col=eff?"#1f7d32":"#b71c1c";
-        line(s,X(uB),Yv(zY),X(uF),Yv(zY),col,2.6);
-        [uB,uF].forEach(u=>circ(s,X(u),Yv(zY),3,"#555","#333",1));
+        if(vcut===null) line(s,X(uB),Yv(zY),X(uF),Yv(zY),col,2.6);
+        else [-ic.tLeg,ic.tLeg].forEach(t=>{ const st=vState(t,ic.dev.db/2+0.05); if(st==="front") return;   /* GFX-G: each side leg by its state */
+          const Lk=Ls.find(L=>(L.t>0)===(t>0)), l=line(s,X(uB),Yv(zY),X(uF),Yv(zY),(Lk&&Lk.eff)?"#1f7d32":"#b71c1c",2.6); if(st==="beyond") l.setAttribute("opacity",0.25); });
+        if(vcut===null || Math.abs(vcut)<=ic.tLeg+ic.dev.db/2) [uB,uF].forEach(u=>circ(s,X(u),Yv(zY),3,"#555","#333",1));
         if(L0.crossOK){ const xc=X(planeX+L0.xCross), yc=Yv(zY);
           line(s,xc-4,yc-4,xc+4,yc+4,"#b71c1c",1.5); line(s,xc-4,yc+4,xc+4,yc-4,"#b71c1c",1.5); }
         tgT(s,Math.min(X(uB),xF)-6,Yv(zY)+3,"set "+k+(eff?" ✓":" ✗"),"lblTxt","end",9,col);
@@ -10132,13 +10300,13 @@ function drawRebar(body,kind,opt){
       /* breakout body: from the plane to the edge, 1.5c_a1 deep (the ≈35°
          crack of ACI Fig R17.5.2.1b(i) Section A-A) */
       const edgeX=ic.halfSpanN;
-      const wedge=document.createElementNS(SVGNS,"polygon");
-      wedge.setAttribute("points",[[planeX,C.H],[edgeX,C.H],[edgeX,C.H-ic.bodyDepth]]
-        .map(q=>X(q[0])+","+Yv(q[1])).join(" "));
+      const wq=bodyAt(planeX,edgeX,(ic.refTs&&ic.refTs.length)? ic.refTs : (ic.leadTs||[0]),ic.bodyDepth);   /* GFX-G */
+      if(wq){ const wedge=document.createElementNS(SVGNS,"polygon");
+      wedge.setAttribute("points",wq.map(q=>X(q[0])+","+Yv(q[1])).join(" "));
       wedge.setAttribute("fill","rgba(183,28,28,0.08)");
       wedge.setAttribute("stroke","#b71c1c");wedge.setAttribute("stroke-width","1.1");
       wedge.setAttribute("stroke-dasharray","5 4");
-      svgHost(s).appendChild(wedge);
+      svgHost(s).appendChild(wedge); } else txt(s,X(edgeX)-4,Yv(C.H)+14,"the cut misses the breakout body","lblTxt","end",9,"#b71c1c");
       line(s,X(planeX),Yv(C.H),X(planeX),Yv(C.H-ic.bodyDepth),"#b71c1c",1.6);
       txt(s,X(planeX)+4,Yv(C.H)-6,"failure plane","lblTxt","start",9,"#b71c1c");   /* GFX-C: right of the plane, clear of the "behind" dimension */
       txt(s,X((planeX+edgeX)/2),Yv(C.H-ic.bodyDepth/2)+4,"\u224835\u00b0 crack","lblTxt","middle",8,"#b71c1c");
@@ -10147,10 +10315,18 @@ function drawRebar(body,kind,opt){
          verdict colour */
       const zSet=[...new Set(ic.legs.map(L=>+(L.z!==undefined?L.z:ic.zBelow).toFixed(3)))].sort((a,b)=>a-b);
       zSet.forEach(zk=>{
-        const at=ic.legs.filter(L=>Math.abs((L.z!==undefined?L.z:ic.zBelow)-zk)<1e-6);
+        const atAll=ic.legs.filter(L=>Math.abs((L.z!==undefined?L.z:ic.zBelow)-zk)<1e-6);
+        /* GFX-G: in a cut, the legs the plane passes through are drawn full, legs beyond lighter */
+        const stL=L=>vState(L.t,rb.db/2+0.05);
+        const atCut=atAll.filter(L=>stL(L)==="cut"), atBey=atAll.filter(L=>stL(L)==="beyond");
+        const at=(vcut===null)? atAll : (atCut.length? atCut : atBey);
+        if(!at.length) return;
         const allE=at.every(L=>L.eff), anyE=at.some(L=>L.eff);
         const ck=allE?"#1f7d32":(anyE?"#8d6e00":"#b71c1c");
         const zY=C.H-zk;
+        const fade=(vcut!==null && !atCut.length), gS=document.createElementNS(SVGNS,"g"); if(fade) gS.setAttribute("opacity",0.25);
+        svgHost(s).appendChild(gS); const host0=s.__content; s.__content=gS;
+        if(vcut!==null && atCut.length && atBey.length){ const lb=line(s,X(legX),Yv(zY),X(backX),Yv(zY),"#b71c1c",2.6); lb.setAttribute("opacity",0.25); }
         line(s,X(legX),Yv(zY),X(backX),Yv(zY),ck,2.6);
         if(S.vRebar.engagesAnchor && S.vRebar.pieceType==="hairpin"){
           const p=document.createElementNS(SVGNS,"path");
@@ -10162,6 +10338,7 @@ function drawRebar(body,kind,opt){
         if(S.vRebar.hookEnd){
           line(s,X(backX),Yv(zY),X(backX),Yv(zY-Math.max(2,3*rb.db)),ck,2.6);
         }
+        s.__content=host0;
       });
       const zTopFirst=C.H-zSet[0];
       /* GFX-C: "behind" above the top face on extension lines (it sat on the rods); the depth and
@@ -10197,7 +10374,8 @@ function drawRebar(body,kind,opt){
     else if(vcap2){ txt(s,cx,H-30,vcap2[1],"lblTxt","middle",10); txt(s,cx,H-16,"("+vcap2[2]+")","lblTxt","middle",9.5); }
     else txt(s,cx,H-16,vcap,"lblTxt","middle",10);
     if(icV && icV.wrongEdge) txt(s,cx,cmp?28:31,"legs toward the "+icV.legEdge+" face; the governing breakout is toward "+String(icV.govEdge).replace(/\s*\(parallel\)$/,"")+": not counted","lblTxt","middle",9,"#b71c1c");   /* VR-1 */
-    if(icV) txt(s,cx,cmp?14:16,cmp? "SECTION A-A (along V)" : "SECTION A-A \u2014 along V toward the "+icV.govEdge+" edge (loaded edge right), projected","lblTxt","middle",10);   /* GFX-B */
+    {const vT=(vcut===null)? "" : (icV&&icV.nx!==0? "y" : "x")+" = "+fmt(vcut,2)+"\u2033";   /* GFX-G: the cut position */
+    if(icV) txt(s,cx,cmp?14:16,cmp? "SECTION "+(icV.nx!==0?"A-A":"B-B")+" (along V)"+(vT? ", cut "+vT : ", projected") : "SECTION "+(icV.nx!==0?"A-A":"B-B")+" \u2014 along V toward the "+icV.govEdge+" edge (loaded edge right), "+(vT? "cut at "+vT+" (beyond: lighter)" : "projected"),"lblTxt","middle",10);}   /* GFX-B */
   }
   /* ---- dimensions ----
      BUGFIX: h_ef was dimensioned Yv(headZ)..baseY, i.e. from the anchor head
@@ -10248,21 +10426,43 @@ function drawShearFace(body,opt){
   const s=svg(W,H), tag=makeTagPlacer();
   const offT=(sb.nx!==0)? (C.plate_off_y||0) : (C.plate_off_x||0);
   const projT=p=>((sb.nx!==0)? p.y : p.x)+offT;
+  /* GFX-G: cut at a position along the shear normal (opt.cut: x for a ±x edge, y for a ±y
+     edge, plate frame). The viewer is outside the governing face looking back (−u): what
+     lies at smaller u is beyond (lighter), what lies between the cut and the face is removed */
+  const offN=sb.nx*(C.plate_off_x||0)+sb.ny*(C.plate_off_y||0);
+  const fcut=(opt && opt.cut!=null && isFinite(+opt.cut))? (sb.nx!==0? sb.nx : sb.ny)*(+opt.cut)+offN : null;
+  const uSt=(u,tol)=>bpCutState(u,fcut,tol,-1);
+  const projU=p=>p.x*sb.nx+p.y*sb.ny+offN;
   rect(s,Math.min(T(-sb.tE),T(sb.tE)),topY,2*sb.tE*sc,C.H*sc,"#eae7df","#555",1.2);
   /* projected area A_Vc on this face: the anchors' extent along the edge + 1.5·c_a1 each
      side, stopped at the side faces, by min(1.5·c_a1, h_a) deep */
-  const ts=g.pts.map(projT), lo=Math.max(Math.min(...ts)-1.5*sb.ca1,-sb.tE), hi=Math.min(Math.max(...ts)+1.5*sb.ca1,sb.tE);
-  const dep=Math.min(1.5*sb.ca1,C.H);
+  const ts=g.pts.map(projT);
+  let dep=Math.min(1.5*sb.ca1,C.H);
+  if(fcut===null){
+  const lo=Math.max(Math.min(...ts)-1.5*sb.ca1,-sb.tE), hi=Math.min(Math.max(...ts)+1.5*sb.ca1,sb.tE);
   const ar=rect(s,Math.min(T(lo),T(hi)),Z(C.H),Math.abs(T(hi)-T(lo)),dep*sc,"rgba(211,84,0,0.13)","#d35400",1.2,"6 4");
   tip(ar,"Projected area A_Vc of the governing shear breakout (ACI 318-19 §17.7.2.1.3)");
   txt(s,cx,Z(C.H-dep)+14,"A_Vc = "+fmt(sbk.width,2)+" × "+fmt(sbk.depth,2)+" = "+fmt(sbk.AVc,1)+" in²"+(sbk.AVc<sbk.width*sbk.depth-0.05?" (limited to n·A_Vc0)":""),"lblTxt","middle",9,"#a04000");
   dimH(s,Math.min(T(lo),T(hi)),Math.max(T(lo),T(hi)),topY-14,"width = "+fmt(sbk.width,2)+"″");
   dimV(s,Z(C.H),Z(C.H-dep),Math.max(T(sb.tE),T(-sb.tE))+18,"1.5·c_a1 = "+fmt(dep,2)+"″",Math.max(T(sb.tE),T(-sb.tE))+26);
-  /* anchors, projected (the reference row in front) */
+  } else {
+    /* GFX-G: the breakout body in the cut plane — d = u_cut − u_ref in front of the reference
+       row it spreads 1.5·d beyond the row's outer anchors and is 1.5·d deep */
+    const d=fcut-sb.uRef;
+    if(d>1e-6){ dep=Math.min(1.5*d,C.H);
+      const lo=Math.max(sb.tMin-1.5*d,-sb.tE), hi=Math.min(sb.tMax+1.5*d,sb.tE);
+      rect(s,Math.min(T(lo),T(hi)),Z(C.H),Math.abs(T(hi)-T(lo)),dep*sc,"rgba(211,84,0,0.13)","#d35400",1.2,"6 4");
+      txt(s,cx,Z(C.H-dep)+14,"breakout body in the cut: "+fmt(hi-lo,2)+" × "+fmt(dep,2)+"″ ("+fmt(d,2)+"″ in front of the reference row)","lblTxt","middle",9,"#a04000");
+    } else txt(s,cx,Z(C.H)+16,"the cut is behind the reference row: no breakout body here","lblTxt","middle",9,"#a04000");
+  }
+  /* anchors, projected (the reference row in front); GFX-G: in a cut by their state */
   const headZ=C.H-S.anchor.hef;
-  [...new Set(ts.map(t=>+t.toFixed(3)))].forEach(t=>{
+  if(fcut===null) [...new Set(ts.map(t=>+t.toFixed(3)))].forEach(t=>{
     line(s,T(t),topY,T(t),Z(headZ),"#2b2b2b",Math.max(2.5,S.anchor.dia*sc*0.5));
     line(s,T(t)-8,Z(headZ),T(t)+8,Z(headZ),"#2b2b2b",4); });
+  else g.pts.map(p=>({t:projT(p),st:uSt(projU(p),S.anchor.dia/2+0.05)})).sort((a,b)=>(a.st==="cut")-(b.st==="cut")).forEach(q=>{ if(q.st==="front") return;
+    const l1=line(s,T(q.t),topY,T(q.t),Z(headZ),"#2b2b2b",Math.max(2.5,S.anchor.dia*sc*0.5)), l2=line(s,T(q.t)-8,Z(headZ),T(q.t)+8,Z(headZ),"#2b2b2b",4);
+    if(q.st==="beyond"){ l1.setAttribute("opacity",0.25); l2.setAttribute("opacity",0.25); } });
   const rb=ic.rb, rd=Math.max(3,rb.db*sc*0.6);
   const colOf=L=>L.eff?"#1f7d32":(L.fits!==false?"#b71c1c":"#999");
   if(ic.isTie){
@@ -10272,8 +10472,9 @@ function drawShearFace(body,opt){
     const xL=Math.min(T(-sb.tE),T(sb.tE));
     [...new Set(ic.legs.map(L=>L.piece))].forEach(k=>{
       const Ls=ic.legs.filter(L=>L.piece===k), z=C.H-Ls[0].z;
-      line(s,T(-ic.tLeg),Z(z),T(ic.tLeg),Z(z),"#616161",2.2);
-      Ls.forEach(L=>circ(s,T(L.t),Z(z),rd,colOf(L),"#333",0.8));
+      const uFt=ic.halfSpanN-ic.cover-ic.dev.db/2, fst=uSt(uFt,ic.dev.db/2+0.05);   /* GFX-G: the front leg by its state */
+      if(fst!=="front"){ const l=line(s,T(-ic.tLeg),Z(z),T(ic.tLeg),Z(z),"#616161",2.2); if(fst==="beyond") l.setAttribute("opacity",0.25); }
+      if(fcut===null || Math.abs(fcut)<=uFt+ic.dev.db/2) Ls.forEach(L=>circ(s,T(L.t),Z(z),rd,colOf(L),"#333",0.8));
       tag(s,xL-6,Z(z)+3,"set "+k,"lblTxt","end",9,Ls.some(L=>L.eff)?"#1f7d32":"#b71c1c");
     });
     tag(s,xL-6,Z(C.H-ic.nearLimit)+3,"0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″","lblTxt","end",9,"#1f4e79");
@@ -10285,13 +10486,17 @@ function drawShearFace(body,opt){
     const bands=[...new Set(ic.legs.map(L=>+((L.anchorT||0)+offT).toFixed(3)))];
     bands.forEach(t=>[-1,1].forEach(q=>{ const tt=t+q*ic.nearLimit; if(Math.abs(tt)>sb.tE) return;
       line(s,T(tt),topY,T(tt),Z(C.H-1.5*ic.ca1>0? C.H-Math.min(1.5*ic.ca1,C.H) : 0),"#1f4e79",0.8,"3 3"); }));
-    ic.legs.forEach(L=>{ const z=C.H-(L.z!==undefined?L.z:ic.zBelow);
-      circ(s,T(L.t+offT),Z(z),rd,colOf(L),"#333",0.8);
+    const lS=(ic.legStart!==undefined? ic.legStart : ic.lead)+offN, lE=(ic.legEnd!==undefined? ic.legEnd : ic.lead-ic.availBehind)+offN, lTol=rb.db/2+0.05;
+    const legSt=(fcut===null)? "cut" : (fcut>=lE-lTol && fcut<=lS+lTol)? "cut" : (fcut>lS? "beyond" : "front");   /* GFX-G */
+    if(legSt!=="front") ic.legs.forEach(L=>{ const z=C.H-(L.z!==undefined?L.z:ic.zBelow);
+      const cl=circ(s,T(L.t+offT),Z(z),rd,colOf(L),"#333",0.8); if(legSt==="beyond") cl.setAttribute("opacity",0.25);
       tag(s,T(L.t+offT)+rd+2,Z(z)+rd+9,L.piece+L.leg,"lblTxt","start",9,"#333"); });
     const z0=C.H-(ic.legs.length? Math.min(...ic.legs.map(L=>L.z!==undefined?L.z:ic.zBelow)) : ic.zBelow);
     dimV(s,Z(C.H),Z(z0),Math.min(T(-sb.tE),T(sb.tE))-16,"depth "+fmt(C.H-z0,2)+"″",Math.min(T(-sb.tE),T(sb.tE))-22);
   }
-  txt(s,cx,16,cmp? "SECTION B-B (the "+sb.edge+" face)" : "SECTION B-B \u2014 the "+sb.edge+" face, looking along V: A_Vc and the shear legs in section","lblTxt","middle",10);
+  const cutTxt=(fcut===null)? "" : " at "+(sb.nx!==0?"x":"y")+" = "+fmt(+opt.cut,2)+"\u2033";   /* GFX-G */
+  const fL=(sb.nx!==0)? "B-B" : "A-A";   /* GFX-G: the letter of the cut this section follows */
+  txt(s,cx,16,cmp? "SECTION "+fL+" (the "+sb.edge+" face)"+cutTxt : "SECTION "+fL+" \u2014 the "+sb.edge+" face, looking along V"+(fcut===null? ": A_Vc and the shear legs in section" : cutTxt+" (beyond: lighter)"),"lblTxt","middle",10);
   if(cmp){ body.appendChild(svgWithControls(s)); return; }
   if(sg>0) txt(s,T(sb.tE),baseY+14,"+"+tName+" →","lblTxt","end",9,"#555");
   else txt(s,T(sb.tE),baseY+14,"← +"+tName,"lblTxt","start",9,"#555");
