@@ -956,7 +956,8 @@ function defaultState(){
           tieSets:3, tieTop:2.0, tieSpacing:3.0,      /* tie sets from the top: depth of the first (centreline) and c/c spacing, in */
           barTop:3.0,                                 /* top of the longitudinal bars below the surface, in */
           intoFooting:true, footExt:24.0, grade:"gr60",   /* bars continue into the footing by footExt below the pedestal bottom */
-          tieGrade:null },   /* VR-1 (2026-10-24): grade of the pedestal ties; null = the grade used before VR-1 (the Shear Rebar grade) */
+          tieGrade:null,     /* VR-1 (2026-10-24): grade of the pedestal ties; null = the longitudinal-bar grade (VR-2: a closed-tie save gets the Shear Rebar grade on load) */
+          barsUnconfirmed:false },   /* VR-2 (2026-10-24): set when the ties were moved here from Shear Reinforcement on load; the bars are defaults until edited */
     vRebar:{ present:false, size:"#4", qty:2, grade:"gr60",
              pieceType:"hairpin",   /* hairpin (2 legs) | bar (1 leg) | closedtie (VT-1: tie sets enclosing the anchor group) */
              tieSets:3,             /* VT-1 closed ties: number of tie sets */
@@ -1068,6 +1069,22 @@ function mergeState(st){
   out.print.combos=(st&&st.print&&st.print.combos)||{};
   if(!Array.isArray(out.combos)||!out.combos.length) out.combos=defaultCombos();
   if(oldHead) out.anchor.head=oldHead;
+  /* VR-2 migration (2026-10-24): closed ties are defined only in 7a (S.ped). A save whose shear
+     reinforcement is closed ties but has no pedestal reinforcement entered kept the tie geometry
+     in S.vRebar: copy it to S.ped (cover 2.0 in when none was saved, as the check used), turn the
+     pedestal reinforcement on and flag its longitudinal bars as defaults to confirm. The old
+     S.vRebar tie fields stay in the save, unused. A closed-tie save without a tie grade keeps the
+     Shear Rebar grade it was checked with (VR-1: null meant the Shear Rebar grade). Only saves made
+     before VR-2 are migrated: they have no ped.barsUnconfirmed (every later save has it). */
+  const sv=st&&st.vRebar, sp=st&&st.ped, preVR2=!(sp && typeof sp==="object" && ("barsUnconfirmed" in sp));
+  if(preVR2 && sv && sv.pieceType==="closedtie"){
+    if(!(sp&&sp.present)){
+      out.ped.tieSize=out.vRebar.size; out.ped.tieSets=out.vRebar.tieSets; out.ped.tieTop=out.vRebar.tieTop; out.ped.tieSpacing=out.vRebar.tieSpacing;
+      out.ped.cover=(sv.cover!==undefined)? sv.cover : 2.0;
+      out.ped.present=true; out.ped.barsUnconfirmed=true;
+    }
+    if(out.ped.tieGrade==null) out.ped.tieGrade=out.vRebar.grade;
+  }
   return out;
 }
 function getProjects(){ try{return JSON.parse(lsGet(LS_PROJ)||"{}");}catch(e){return{};} }
@@ -1487,7 +1504,7 @@ function pedGeom(){
    bottom). Any other piece type returns S.tRebar unchanged. */
 function tRebarEff(){
   const R=S.tRebar;
-  if(R.pieceType!=="pedbars" || !(S.ped&&S.ped.present)) return R;
+  if(R.pieceType!=="pedbars" || !(S.ped&&S.ped.present) || S.ped.barsUnconfirmed) return R;   /* VR-2: not until the bars are confirmed */
   const pg=pedGeom();
   return Object.assign({},R,{size:S.ped.barSize, grade:S.ped.grade||R.grade, cover:pg.offB-pg.rbB.db/2,
     topCover:Math.max(+S.ped.barTop||0,0), isPed:true, pedBars:pg.bars,
@@ -1500,6 +1517,7 @@ function tRebarEff(){
 function pedTieCheck(){
   const pg=pedGeom();
   if(!pg.present) return {na:true};
+  if(S.ped.barsUnconfirmed) return {na:true, unconfirmed:true};   /* VR-2: the bars are defaults until confirmed in 7a */
   const g=anchorGeom(), A=S.anchor;
   const top=pg.ties.filter(z=>z<=5.0+1e-9);
   const dbT=pg.rbT.db, sizeOK=dbT>=0.375-1e-9;
@@ -4146,12 +4164,14 @@ function shearRebarIntercept(cc){
                   x_c + (leading anchors → back face) − cover ≥ ℓ_dh
      φV_r = 0.75 · n_eff · A_b · f_y as for hairpins. */
   if(R.pieceType==="closedtie"){
-    /* PR-1: with the pedestal reinforcement entered, the ties ARE the pedestal ties */
-    const usePed=!!(S.ped&&S.ped.present);
-    const Rt=usePed? Object.assign({},R,{size:S.ped.tieSize, cover:S.ped.cover, tieSets:S.ped.tieSets, tieTop:S.ped.tieTop, tieSpacing:S.ped.tieSpacing,
-      grade:S.ped.tieGrade||R.grade}) : R;   /* VR-1: the pedestal tie grade (null = as before VR-1) */
+    /* PR-1: the ties ARE the pedestal ties. VR-2 (2026-10-24): they are defined only in 7a, so the
+       geometry, size and grade come only from S.ped; until the pedestal reinforcement is entered no
+       leg is counted (the old S.vRebar tie fields are no longer read; mergeState moves them) */
+    const P=S.ped||{}, usePed=!!P.present;
+    const Rt=Object.assign({},R,{size:P.tieSize, cover:P.cover, tieSets:P.tieSets, tieTop:P.tieTop, tieSpacing:P.tieSpacing,
+      grade:P.tieGrade||P.grade});
     const coverT=Math.max(Rt.cover!==undefined?Rt.cover:2.0,0);
-    const devT=usePed? tensionDevLengths(Object.assign({},Rt,{cover:coverT})) : dev, rbT=rebarOf(Rt.size);
+    const devT=tensionDevLengths(Object.assign({},Rt,{cover:coverT})), rbT=rebarOf(Rt.size);
     const tLeg=halfSpanT-coverT-devT.db/2;               /* side legs, bar centreline */
     const nSets=Math.max(1,Math.round(Rt.tieSets||1));
     const z0=Math.max(+Rt.tieTop||0, coverT+devT.db/2), dz=Math.max(+Rt.tieSpacing||3, devT.db+1);
@@ -4177,7 +4197,8 @@ function shearRebarIntercept(cc){
         L.crossOK=(front>1e-9);
         L.depthOK=(z<=bodyDepthT+1e-9)&&L.crossOK;
         L.frontOK=(front>1e-9); L.behindOK=(behind>=devT.ldh-1e-9);
-        if(!L.nearOK){ nFarT++; L.eff=false;
+        if(!usePed){ L.eff=false; L.why="pedestal ties not entered (7a. Pedestal Reinforcement): no leg is counted"; }   /* VR-2 */
+        else if(!L.nearOK){ nFarT++; L.eff=false;
           L.why="tie set at depth "+fmt(z,2)+"″ > 0.5·c_a1 = "+fmt(nearLimitT,2)+"″ (too far below the anchor)"; }
         else if(!L.crossOK){ nDeepT++; L.eff=false;
           L.why="crosses the failure surface at "+fmt(xc,2)+"″ in front of the anchors, beyond the front corner (c_a1 − cover = "+fmt(ca1-coverT,2)+"″)"; }
@@ -4187,7 +4208,7 @@ function shearRebarIntercept(cc){
         legsT.push(L);
       });
     }
-    const effL=legsT.filter(L=>L.eff), pool=effL.length? effL : legsT.filter(L=>L.crossOK);
+    const effL=legsT.filter(L=>L.eff), pool=effL.length? effL : legsT.filter(L=>L.crossOK&&usePed);
     let devDCRT=0, gov=null;
     pool.forEach(L=>{ const d=devT.ldh/Math.max(L.behind,1e-9); if(d>devDCRT){devDCRT=d;gov=L;} });
     if(!pool.length) devDCRT=Infinity;
@@ -4199,7 +4220,7 @@ function shearRebarIntercept(cc){
       govEdge,ca1,nearLimit:nearLimitT,bodyDepth:bodyDepthT,zBelow:z0,depthOK:legsT.some(L=>L.depthOK),
       availBehind:gov? gov.behind : 0,extBehind:gov? gov.behind : 0,roomBehind:toBack-coverT,truncated:false,
       availFront:gov? gov.front : 0,reqBehind:devT.ldh,reqFront:devT.ldh,engages:effL.length>0,devGov:gov,
-      dev:devT,devDCR:devDCRT,rb:rbT,cover:coverT,usePed,gauge:2*tLeg,spacing:dz,
+      dev:devT,devDCR:devDCRT,rb:rbT,cover:coverT,usePed,notEntered:!usePed,gauge:2*tLeg,spacing:dz,
       govCombo:govC.name,nx,ny,lead:uRef,halfSpanN,halfSpanT,
       AsClaimed:legsT.length*rbT.Ab,AsEffective:nEffT*rbT.Ab};
   }
@@ -4395,7 +4416,7 @@ function shearRebarCheck(cc){
   const phi=0.75;
   const ic=shearRebarIntercept(cc);
   const rb=ic? ic.rb : rebarOf(R.size);      /* PR-1: pedestal ties may differ from S.vRebar.size */
-  const fy=rgrade((ic&&ic.isTie&&ic.usePed&&S.ped.tieGrade)? S.ped.tieGrade : R.grade).fy;   /* VR-1: pedestal tie grade */
+  const fy=rgrade((ic&&ic.isTie)? (S.ped.tieGrade||S.ped.grade) : R.grade).fy;   /* VR-1: pedestal tie grade; VR-2: ties read S.ped only */
   /* EFFECTIVE legs only — same basis as the tension side (§17.5.2.1.1/.2 give
      no credit to a bar that does not reach the failure surface and develop). */
   const nLegsTotal=ic? ic.nLegsTotal : R.qty;
@@ -4964,28 +4985,40 @@ function buildInputPanel(){
     fRow(body,"Pedestal reinforcement entered",chkInput(()=>!!S.ped.present,v=>S.ped.present=v),"",
       "Turn on to describe the pedestal's longitudinal bars and ties.");
     if(!S.ped.present) return;
+    /* VR-2 (2026-10-24): ties moved here from Shear Reinforcement on load; the bars are defaults
+       until any bar field is edited (or confirmed as shown) */
+    const cb=()=>{ S.ped.barsUnconfirmed=false; };
+    if(S.ped.barsUnconfirmed){
+      const w=el("div","errBox"); w.innerHTML="<b>"+BP_PED_UNCONF+"</b> Until then the §10.7.6.1.6 tie check is not made and the bars are not used as tension anchor reinforcement. Editing any bar field below confirms them.";
+      const ok=el("button",null,"The bars are as shown \u2014 confirm"); ok.style.marginTop="4px";
+      ok.addEventListener("click",e=>{ e.preventDefault(); cb(); autosave(); refreshAll(); });
+      const d=el("div"); d.appendChild(ok); w.appendChild(d); body.appendChild(w);
+    }
     body.appendChild(el("h3",null,"Longitudinal bars"));
-    fRow(body,"Bar size",selInput(LIB.rebar,()=>S.ped.barSize,v=>S.ped.barSize=v,o=>o.size,o=>o.size),"","Pedestal vertical bars.");
-    fRow(body,"Bars per face along x (corners included)",numInput(()=>S.ped.nX,v=>S.ped.nX=Math.max(2,Math.round(v)),1),"",
+    fRow(body,"Bar size",selInput(LIB.rebar,()=>S.ped.barSize,v=>{ S.ped.barSize=v; cb(); },o=>o.size,o=>o.size),"","Pedestal vertical bars.");
+    fRow(body,"Bars per face along x (corners included)",numInput(()=>S.ped.nX,v=>{ S.ped.nX=Math.max(2,Math.round(v)); cb(); },1),"",
       "Bars on each of the two faces normal to y, spaced evenly between the corner bars.");
-    fRow(body,"Bars per face along y (corners included)",numInput(()=>S.ped.nY,v=>S.ped.nY=Math.max(2,Math.round(v)),1),"",
+    fRow(body,"Bars per face along y (corners included)",numInput(()=>S.ped.nY,v=>{ S.ped.nY=Math.max(2,Math.round(v)); cb(); },1),"",
       "Bars on each of the two faces normal to x.");
-    fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.ped.grade,v=>S.ped.grade=v,o=>o.name,o=>o.id),"","Yield of the longitudinal bars (used when they act as tension anchor reinforcement).");
-    fRow(body,"Top of bars below the surface",numInput(()=>S.ped.barTop,v=>S.ped.barTop=Math.max(0,v),0.25),"in",
+    fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.ped.grade,v=>{ S.ped.grade=v; cb(); },o=>o.name,o=>o.id),"","Yield of the longitudinal bars (used when they act as tension anchor reinforcement).");
+    fRow(body,"Top of bars below the surface",numInput(()=>S.ped.barTop,v=>{ S.ped.barTop=Math.max(0,v); cb(); },0.25),"in",
       "Where the vertical bars stop below the top of the pedestal. Sets the length above the breakout surface.");
-    fRow(body,"Bars continue into the footing",chkInput(()=>S.ped.intoFooting!==false,v=>S.ped.intoFooting=v),"",
+    fRow(body,"Bars continue into the footing",chkInput(()=>S.ped.intoFooting!==false,v=>{ S.ped.intoFooting=v; cb(); }),"",
       "On = the bars run on below the pedestal (dowels into the footing), so the length below the breakout surface includes the extension below.");
     if(S.ped.intoFooting!==false)
-      fRow(body,"Extension below the pedestal bottom",numInput(()=>S.ped.footExt,v=>S.ped.footExt=Math.max(0,v),1),"in",
+      fRow(body,"Extension below the pedestal bottom",numInput(()=>S.ped.footExt,v=>{ S.ped.footExt=Math.max(0,v); cb(); },1),"in",
         "Embedment of the bars into the footing below the pedestal.");
     body.appendChild(el("h3",null,"Ties"));
     fRow(body,"Tie size",selInput(LIB.rebar,()=>S.ped.tieSize,v=>S.ped.tieSize=v,o=>o.size,o=>o.size),"","Closed ties around the longitudinal bars.");
+    fRow(body,"Tie grade",selInput(LIB.rebarGrades,()=>S.ped.tieGrade||S.ped.grade,v=>S.ped.tieGrade=v,o=>o.name,o=>o.id),"",
+      "Yield strength of the ties: f_y in φV_r and in ℓ_dh when the ties are the shear anchor reinforcement (closed-tie option, section 9). Until set, the longitudinal-bar grade.");   /* VR-2: moved here from section 9 (VR-1) */
     fRow(body,"Clear cover to the ties",numInput(()=>S.ped.cover,v=>S.ped.cover=Math.max(0,v),0.25),"in","Side cover to the outside of the ties.");
     fRow(body,"Number of tie sets near the top",numInput(()=>S.ped.tieSets,v=>S.ped.tieSets=Math.max(1,Math.round(v)),1),"",
       "Tie sets counted from the top down (only the top sets matter for the anchor checks).");
     fRow(body,"Depth of the top tie set",numInput(()=>S.ped.tieTop,v=>S.ped.tieTop=Math.max(0,v),0.25),"in","From the top surface to the centreline of the first tie.");
     fRow(body,"Vertical spacing of tie sets",numInput(()=>S.ped.tieSpacing,v=>S.ped.tieSpacing=Math.max(1,v),0.25),"in","Centre-to-centre spacing between tie sets.");
     const ptc=pedTieCheck();
+    if(ptc.unconfirmed) body.appendChild(el("div","note","§10.7.6.1.6: checked once the longitudinal bars are confirmed (above)."));   /* VR-2 */
     if(!ptc.na){
       const b=el("div",ptc.ok?"okBox":"errBox");
       b.innerHTML="<b>§10.7.6.1.6:</b> "+ptc.nTop+" tie set(s) within 5 in of the top; "+ptc.req+" required ("+(ptc.dbT>=0.5-1e-9?"No. 4 or larger":"No. 3")+")"+
@@ -5016,9 +5049,8 @@ function buildInputPanel(){
       "How many effective LEGS each piece gives and how they develop. A bar is one straight leg; a stirrup/tie gives two legs, each bent end developing in ℓ_dh above/below the breakout surface per Fig. R17.5.2.1a — the shorter hooked length is why stirrups are the usual detail, though ℓ_dh (not zero) is still required.");
     if(S.tRebar.pieceType==="pedbars"){
       /* PR-1: the pedestal longitudinal bars act as the anchor reinforcement */
-      if(!S.ped.present){
-        body.appendChild(el("div","errBox","Enter the bars under <b>7a. Pedestal Reinforcement</b> first — until then no bar is counted."));
-      } else {
+      bpPedLink(body,"bars");   /* VR-2: read-only summary + edit button (the bars are entered only in 7a) */
+      if(S.ped.present && !S.ped.barsUnconfirmed){
         const pg=pedGeom();
         body.appendChild(el("div","note",
           "The "+pg.bars.length+" "+S.ped.barSize+" pedestal bars (section 7a) are checked as anchor reinforcement, each at its true position: "+
@@ -5187,38 +5219,18 @@ function buildInputPanel(){
       "note what each one drives."));
     fRow(body,"Shear rebar present",chkInput(()=>S.vRebar.present,v=>S.vRebar.present=v),"",
       "Turn on when hairpins/ties are detailed to resist anchor shear. Off = rely on the plain concrete shear-breakout capacity.");
-    if(!(S.vRebar.pieceType==="closedtie"&&S.ped.present)) fRow(body,"Bar size",selInput(LIB.rebar,()=>S.vRebar.size,v=>S.vRebar.size=v,o=>o.size,o=>o.size),"",
+    if(S.vRebar.pieceType!=="closedtie") fRow(body,"Bar size",selInput(LIB.rebar,()=>S.vRebar.size,v=>S.vRebar.size=v,o=>o.size,o=>o.size),"",
       "Sets bar area A_b (capacity φV_r = φ·n_eff·A_b·f_y) and diameter d_b (development length behind the plane scales with d_b).");
     fRow(body,"Piece type",selInput(
       [{id:"hairpin",nm:"Hairpin (2 legs)"},{id:"bar",nm:"Single bar (1 leg)"},{id:"closedtie",nm:"Closed ties enclosing the anchor group"}],
       ()=>S.vRebar.pieceType,v=>S.vRebar.pieceType=v,o=>o.nm,o=>o.id),"",
-      "A hairpin is a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage; a single bar is one leg and needs its own near-side development. <b>Closed ties</b> (pedestal ties around all the anchors, ACI Fig. R17.5.2.1b): enter the tie geometry and the app decides which tie legs are eligible.");
+      "A hairpin is a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage; a single bar is one leg and needs its own near-side development. <b>Closed ties</b> (pedestal ties around all the anchors, ACI Fig. R17.5.2.1b): the ties are entered in <b>7a. Pedestal Reinforcement</b> and the app decides which tie legs are eligible.");
     const vTie=(S.vRebar.pieceType==="closedtie");
-    if(vTie && S.vRebar.present && S.ped.present){
-      /* VR-1 (2026-10-24): the tie geometry is editable here; it is the same data as 7a (S.ped) */
-      body.appendChild(el("h3",null,"Closed-tie geometry (the pedestal ties)"));
-      body.appendChild(el("div","note","These are the pedestal ties of <b>7a. Pedestal Reinforcement</b>: editing them here changes them there too (entered once)."));
-      fRow(body,"Tie size",selInput(LIB.rebar,()=>S.ped.tieSize,v=>S.ped.tieSize=v,o=>o.size,o=>o.size),"",
-        "Bar size of the pedestal ties; A_b and d_b of every tie leg.");
-      fRow(body,"Tie grade",selInput(LIB.rebarGrades,()=>S.ped.tieGrade||S.vRebar.grade,v=>S.ped.tieGrade=v,o=>o.name,o=>o.id),"",
-        "Yield strength of the ties (f_y in φV_r and in ℓ_dh). Saved with the pedestal reinforcement; until it is set, the grade previously entered for the shear reinforcement is used.");
-      fRow(body,"Number of tie sets",numInput(()=>S.ped.tieSets,v=>S.ped.tieSets=Math.max(1,Math.round(v)),1),"",
-        "Tie sets from the top down. Each set gives two legs parallel to the shear; the app checks each set at its own depth.");
-      fRow(body,"Depth of the top tie set",numInput(()=>S.ped.tieTop,v=>S.ped.tieTop=Math.max(0,v),0.25),"in",
-        "From the top surface to the centreline of the first tie (raised to cover + d_b/2 if smaller). Sets deeper than 0.5·c_a1 are not counted.");
-      fRow(body,"Vertical spacing of tie sets",numInput(()=>S.ped.tieSpacing,v=>S.ped.tieSpacing=Math.max(1,v),0.25),"in","Centre-to-centre spacing between tie sets.");
-      fRow(body,"Clear cover to the ties",numInput(()=>S.ped.cover,v=>S.ped.cover=Math.max(0,v),0.25),"in",
-        "Side cover to the ties (also sets the position of the pedestal bars).");
-    } else if(vTie && S.vRebar.present){
-      body.appendChild(el("h3",null,"Closed-tie geometry"));
-      fRow(body,"Number of tie sets",numInput(()=>S.vRebar.tieSets,v=>S.vRebar.tieSets=Math.max(1,Math.round(v)),1),"",
-        "Tie sets from the top down. Each set gives two legs parallel to the shear (one at each side face); the app checks each set at its own depth.");
-      fRow(body,"Depth of the top tie set",numInput(()=>S.vRebar.tieTop,v=>S.vRebar.tieTop=Math.max(0,v),0.25),"in",
-        "From the top surface to the centreline of the first (top) tie. Sets deeper than 0.5·c_a1 are not counted (too far below the anchor).");
-      fRow(body,"Vertical spacing of tie sets",numInput(()=>S.vRebar.tieSpacing,v=>S.vRebar.tieSpacing=Math.max(1,v),0.25),"in",
-        "Centre-to-centre vertical spacing between tie sets.");
-      fRow(body,"Clear cover to the ties",numInput(()=>S.vRebar.cover,v=>S.vRebar.cover=Math.max(0,v),0.25),"in",
-        "Side cover to the tie. The tie legs sit at the pedestal faces less this cover; it also limits the length on the edge side and behind the crossing.");
+    if(vTie && S.vRebar.present){
+      /* VR-2 (2026-10-24): the ties are the pedestal ties, defined only in 7a; here a read-only
+         summary and a button to 7a (VR-1 showed the tie inputs here as well) */
+      body.appendChild(el("h3",null,"Closed ties (the pedestal ties)"));
+      bpPedLink(body,"ties");
       fRow(body,"Epoxy-coated",chkInput(()=>S.vRebar.epoxy,v=>S.vRebar.epoxy=v),"",
         "Epoxy coating raises the required hook development ℓ_dh (ψ_e = 1.2).");
       body.appendChild(el("div","note",
@@ -5257,7 +5269,7 @@ function buildInputPanel(){
         fRow(body,"Run centre offset along the edge",numInput(()=>S.vRebar.tOffset,v=>S.vRebar.tOffset=v,0.25),"in",
           "Shifts the whole run along the edge from the leading-group centreline. 0 = centred on the group. Bars further than 0.5·c_a1 from a leading anchor earn no credit — the check will show it.");
     }
-    if(!(vTie && S.ped.present)) fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.vRebar.grade,v=>S.vRebar.grade=v,o=>o.name,o=>o.id),"",
+    if(!vTie) fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.vRebar.grade,v=>S.vRebar.grade=v,o=>o.name,o=>o.id),"",
       "Rebar yield f_y — drives capacity (φV_r ∝ f_y) and required development behind the plane.");
     if(S.vRebar.present && !vTie){
       body.appendChild(el("h3",null,"Geometry"));
@@ -5444,6 +5456,36 @@ function bpadInTabKey(e){
 function bpadShowInTabOf(node){
   const pn=node&&node.closest&&node.closest(".bpadInPane");
   if(pn&&pn.hidden) bpadSetInTab(pn.id.replace("bpadInPane_",""),false);
+}
+/* VR-2 (2026-10-24): the pedestal bars and ties are entered only in 7a. Other sections show a
+   read-only summary and a button that opens 7a (input tab switched, section expanded, scrolled to). */
+function bpadGoInSec(id){
+  const sec=document.getElementById(id); if(!sec) return;
+  const pn=sec.closest(".bpadInPane"); if(pn) bpadSetInTab(pn.id.replace("bpadInPane_",""),true);
+  if(sec.classList.contains("collapsed")){ sec.classList.remove("collapsed"); S.ui.collapse[id]=false; autosave(); }
+  sec.scrollIntoView({block:"start"});
+  sec.classList.remove("wkFlash"); void sec.offsetWidth; sec.classList.add("wkFlash");
+}
+const BP_PED_UNCONF="Pedestal ties were moved here from Shear Reinforcement; the longitudinal bars are defaults — confirm them.";
+function bpPedTieSummary(){
+  const P=S.ped, gr=LIB.rebarGrades.find(o=>o.id===(P.tieGrade||P.grade)), n=Math.max(1,Math.round(P.tieSets||1));
+  return P.tieSize+" ties"+(gr? " ("+gr.name+")" : "")+", "+n+" set"+(n===1?"":"s")+" from "+fmt(+P.tieTop,2)+"\u2033 at "+fmt(+P.tieSpacing,2)+"\u2033, cover "+fmt(+P.cover,2)+"\u2033";
+}
+function bpPedBarSummary(){
+  const P=S.ped, gr=LIB.rebarGrades.find(o=>o.id===P.grade);
+  return pedGeom().bars.length+"-"+P.barSize+(gr? " ("+gr.name+")" : "")+" vertical bars ("+Math.max(2,Math.round(P.nX||2))+" per face along x, "+Math.max(2,Math.round(P.nY||2))+" along y), top "+
+    fmt(+P.barTop,2)+"\u2033 below the surface, "+((P.intoFooting!==false)? fmt(+P.footExt,1)+"\u2033 into the footing" : "ending at the pedestal bottom");
+}
+function bpPedLink(body,what){   /* what: "ties" | "bars" */
+  const P=S.ped, on=!!P.present, unc=on && what==="bars" && P.barsUnconfirmed;
+  const box=el("div",(!on||unc)? "errBox" : "note");
+  box.innerHTML=on? ("<b>"+(what==="ties"? "Pedestal ties" : "Pedestal bars")+" (from 7a. Pedestal Reinforcement):</b> "+(what==="ties"? bpPedTieSummary() : bpPedBarSummary())+"."+
+      (unc? "<br><b>"+BP_PED_UNCONF+"</b> No bar is counted until they are confirmed." : ""))
+    : (what==="ties"? "<b>No pedestal ties entered.</b> No tie leg is counted until the ties are entered in <b>7a. Pedestal Reinforcement</b>."
+                    : "<b>No pedestal bars entered.</b> No bar is counted until the bars are entered in <b>7a. Pedestal Reinforcement</b>.");
+  const b=el("button",null,on? "Edit in Pedestal Reinforcement \u2197" : (what==="ties"? "Enter pedestal ties in 7a \u2197" : "Enter pedestal bars in 7a \u2197"));
+  b.className="bpPedLinkBtn"; b.style.marginTop="4px"; b.addEventListener("click",e=>{ e.preventDefault(); bpadGoInSec("inPed"); });
+  const d=el("div"); d.appendChild(b); box.appendChild(d); body.appendChild(box);
 }
 /* input errors from validateInputs() (the red messages above the output),
    mapped to the section holding the input they name */
@@ -6079,6 +6121,10 @@ function buildCompare(pg){
 
 function buildSummary(pg){
   comboSelector(pg);
+  if(S.ped && S.ped.present && S.ped.barsUnconfirmed){   /* VR-2 */
+    const w=el("div","errBox noPrint"); w.innerHTML="<b>"+BP_PED_UNCONF+"</b> ";
+    const b=el("button",null,"Open 7a. Pedestal Reinforcement \u2197"); b.addEventListener("click",e=>{ e.preventDefault(); bpadGoInSec("inPed"); });
+    w.appendChild(b); pg.appendChild(w); }
   const dash=el("div"); dash.id="dash"; pg.appendChild(dash);
   const checks=allChecks();
   checks.forEach(c=>{
@@ -6328,7 +6374,7 @@ function buildInputEcho(pg){
         (S.shear.weldedPlate?"; welded to a common plate":"")+")"],
       ["Tension rebar", !S.tRebar.present? "none" : (S.tRebar.pieceType==="pedbars")? ("pedestal vertical bars ("+(S.ped.present? pedGeom().bars.length+"-"+S.ped.barSize : "not entered")+")") : (S.tRebar.qty+"-"+S.tRebar.size+" "+rgrade(S.tRebar.grade).name+
         (S.tRebar.centered===false? ", set-out offset ("+fmt(+S.tRebar.offX||0,2)+", "+fmt(+S.tRebar.offY||0,2)+")\u2033":""))],
-      ["Shear rebar", !S.vRebar.present? "none" : (S.vRebar.pieceType==="closedtie")? ("closed ties"+(S.ped.present? " (pedestal ties, "+S.ped.tieSize+")" : " ("+S.vRebar.size+")")) : (S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs")],
+      ["Shear rebar", !S.vRebar.present? "none" : (S.vRebar.pieceType==="closedtie")? ("closed ties"+(S.ped.present? " (pedestal ties, "+S.ped.tieSize+")" : " (pedestal ties not entered: none counted)")) : (S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs")],
       ["Pedestal reinforcement", S.ped.present? (pedGeom().bars.length+"-"+S.ped.barSize+" vertical, "+S.ped.tieSize+" ties: "+S.ped.tieSets+" sets from "+fmt(S.ped.tieTop,2)+"″ at "+fmt(S.ped.tieSpacing,2)+"″") : "not entered"],
       ["Stand-off", standoffParams().label+(standoffParams().hasStandoff?(", z="+fmt(standoffParams().z,2)+String.fromCharCode(34)):"")]
     ];
@@ -8650,7 +8696,7 @@ function bpRebarSchedule(){
     });
     let k=0; Object.values(groups).forEach(G=>add("T"+(++k),Rt.size,G.n,G.shape,G.len,G.cnt,"tension anchor reinforcement (§17.5.2.1.1)"));
   }
-  if(icV && icV.legs && icV.legs.length){
+  if(icV && icV.legs && icV.legs.length && !icV.notEntered){   /* VR-2: no ties until 7a is entered */
     if(icV.isTie){
       const uF=icV.halfSpanN-icV.cover-icV.dev.db/2, tL=icV.tLeg, per=4*uF+4*tL;
       const sets=[...new Set(icV.legs.map(L=>L.piece))];
@@ -8675,7 +8721,7 @@ function bpRebarSchedule(){
   }
   if(pg.present){
     const zb=(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, zt=C.H-Math.max(+S.ped.barTop||0,0);
-    if(!tIsPed) add("P1",S.ped.barSize,pg.bars.length,"pedestal vertical bar",zt-zb,"—","pedestal longitudinal bars (not anchor reinforcement)");
+    if(!tIsPed) add("P1",S.ped.barSize,pg.bars.length,"pedestal vertical bar",zt-zb,"—","pedestal longitudinal bars (not anchor reinforcement)"+(S.ped.barsUnconfirmed? "; defaults, to confirm in 7a" : ""));   /* VR-2 */
     if(!vIsPed) add("P2",S.ped.tieSize,pg.ties.length,"closed tie "+fmt(2*pg.tieHx,2)+" × "+fmt(2*pg.tieHy,2)+"″",4*pg.tieHx+4*pg.tieHy,"—","pedestal ties (§10.7.6.1.6)");
   }
   return rows;
