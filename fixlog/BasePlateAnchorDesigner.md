@@ -3010,3 +3010,26 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/bpad-profis.mjs`: 5 of 5 `same`.
   - Test projects vs origin/main: default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin identical. The closed-tie project built from fresh defaults without S.ped changes as called out above (DCR 0.90 → ∞).
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes; 0 page errors.
+
+## 2026-10-24 — GFX-G: movable section cuts — A-A and B-B at any position, dragged on the plans (mouse and touch), sections show what the cut passes through; DXF uses the cuts (display / export only, no calculation change)
+- **Engineer request (2026-10-24):** "The detail sheet has section cuts. These should be dynamic and let the user move the section cut. The cuts should be shown on the plan view as well."
+- **Saved data (§5):** `S.ui.secCut = {A, B}` is kept (GFX-B). A = y of Section A-A (along x), B = x of Section B-B (along y), rebar-view frame, or "all" (projected). GFX-B stored "all" or an anchor-row coordinate; both read unchanged as positions, so no conversion is needed. New values are rounded to 0.01 in.
+- **Helpers** (anchor text `/* ---- GFX-G (2026-10-24): movable section cuts`, before `drawRebar`):
+  - `bpCutOf(key)`: the cut position or null ("all"). The old `rows` snap argument is ignored.
+  - `bpCutState(v,cut,tol,sg)`: "cut" (|v − cut| ≤ tol), "beyond" (on the far side for a viewer looking toward sg) or "front" (removed).
+  - `bpCutExtent`, `bpSetCut`, `bpCutSection(body,draw)` (a section container that redraws itself), `bpCutsLive()` (one requestAnimationFrame redraw of every section, cut line and cut input), `bpPlanCutLines(s,map)` (draggable lines), `bpCutControls(body)` (slider, number field, "all (projected)" and one snap button per anchor row; not drawn when printing).
+- **Cut lines on the plans:** the Detail Sheet plan, the Tension Rebar plan (`drawRebarPlan`, the GFX-B static markers removed) and the Shear Rebar plan (`drawHairpinPlan`, plate offset included). Dash-dot purple line, circled A / B at both ends and view arrows (A-A looks +y, B-B looks −x). Dragging uses pointer events with pointer capture (mouse, pen and touch; `touch-action:none` on the 16 px hit line), snaps to an anchor row within 6 px, redraws the sections live, and saves and refreshes on release. Projected cuts are drawn faded at 0.
+- **Sections (what the cut passes through; beyond at 0.25 opacity; in front removed):**
+  - Tension A-A / B-B (`drawRebar` "tension"): anchors (tol d/2 + 0.05), tension legs (tol d_b/2 + 0.05), pedestal ties and bars by state; breakout surface as its true profile in the cut plane (z = z_head + d_s/1.5, GFX-B).
+  - Shear along V (`drawRebar` "shear"): cut along the edge (A for a ±x edge, B for a ±y edge); anchors, tie legs and hairpin legs by state; the breakout body in the cut plane (`bodyAt`: side faces splay 1:1.5 from the reference row, so at lateral offset d_T it starts d_T/1.5 in front of the row). Title shows the cut.
+  - Edge-face section (`drawShearFace`): cut along the shear normal (the other letter); breakout body at the cut, d = u_cut − u_ref, width tMax − tMin + 3d and depth 1.5d; anchors and legs by state. The section letter follows the cut (B-B for a ±x edge, A-A for a ±y edge).
+- **Tabs:** Tension Rebar, Shear Rebar and the Detail Sheet all use the same two cuts, with the controls above the sections (Detail Sheet: above the sheet; not printed). The printed Detail Sheet and the printed report draw the current cuts.
+- **DXF (`bpExportDxf`):** new layers `BP-SECTION` (colour 6, CENTER: cut lines with A / B and view arrows on the plan) and `BP-SECTION-BEYOND` (colour 8: anchors, bars and ties beyond the cut). The DXF section is A-A: at y = cut when set (items in front left out, breakout surface as the true profile), projected otherwise. The notes list both cuts.
+- **Governing provision:** none; display and export only.
+- **Check case:** 32 × 32 × 48 pedestal, 4 × 2 anchors at x = ±3, ±9 and y = ±9, cut A at y = 4.24″: the A-A section shows no anchor in the plane (rows at ±9 are 4.76″ away), the y = +9 row beyond (lighter), the y = −9 row removed; the breakout profile at y = 4.24 is the projected profile (inside the group hull). Dragging B to within 6 px of x = 9 snaps to 9.00.
+- **Tests:**
+  - Mouse drag (Playwright mouse) and touch drag (CDP touch events in a touch context → pointer events) of both lines on the Detail Sheet, Tension Rebar and Shear Rebar plans: `S.ui.secCut` follows during the drag, the section titles change before release (live), the value is saved on release. 6 of 6 tabs × modes OK, 0 page errors.
+  - DXF: BP-SECTION and BP-SECTION-BEYOND present; section titled "SECTION A-A at y = 4.24 in".
+  - Detail Sheet printed to PDF with cuts A = 3, B = −3 for five projects: 1 page each.
+  - `node tests/bpad-profis.mjs`: 5 of 5 `same`. Test projects vs origin/main (default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin, closed ties without S.ped): computeAll, capacities, checks, validation, intercepts and report identical.
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
