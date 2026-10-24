@@ -8489,7 +8489,7 @@ function bpRebarSchedule(){
       const sets=[...new Set(icV.legs.map(L=>L.piece))];
       const effSets=sets.filter(k=>icV.legs.some(L=>L.piece===k&&L.eff)).length;
       if(effSets) add("V1",vIsPed?S.ped.tieSize:S.vRebar.size,effSets,"closed tie "+fmt(2*uF,2)+" × "+fmt(2*tL,2)+"″",per,
-        "legs parallel to V counted","shear anchor reinforcement (§17.5.2.1.2)"+(vIsPed?"; these are pedestal ties":""));
+        "counted","shear anchor reinforcement (§17.5.2.1.2)"+(vIsPed?"; these are pedestal ties":""));
       if(sets.length-effSets) add(effSets?"V2":"V1",vIsPed?S.ped.tieSize:S.vRebar.size,sets.length-effSets,"closed tie "+fmt(2*uF,2)+" × "+fmt(2*tL,2)+"″",per,
         "not counted","shear anchor reinforcement (§17.5.2.1.2)"+(vIsPed?"; these are pedestal ties":""));
     } else {
