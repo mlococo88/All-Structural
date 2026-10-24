@@ -2838,3 +2838,17 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - On the three graphics test projects, every result and the report are identical.
   - The sheet printed alone to PDF (Letter, print media) is 1 page for all 5 test projects: default, pedestal, 4 × 2, −y shear, closed ties only.
   - 0 page errors.
+
+## 2026-10-24 — UI-1: "7a. Pedestal Reinforcement" moved from the Distribution input tab to the Reinforcement tab (display only)
+- **Problem:** PR-1 added the input section `inPed` but did not add it to `BPAD_IN_SEC`. Unmapped sections stay with the section before them, so it appeared under Distribution.
+- **Anchor text:** `inTRebar:'reinf',inVRebar:'reinf',`
+- **Before:**
+  ```js
+  inTRebar:'reinf',inVRebar:'reinf',
+  ```
+- **After:**
+  ```js
+  inPed:'reinf',inTRebar:'reinf',inVRebar:'reinf',
+  ```
+- **Governing provision:** none (layout).
+- **Check:** in the headless page, the Distribution pane holds `inShear,inForceModel` and the Reinforcement pane holds `inPed,inTRebar,inVRebar`. No result changes.
