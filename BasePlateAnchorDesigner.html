@@ -10731,10 +10731,24 @@ function build3D(container){
     place();
   }
   cam.lookAt(target);
-  renderer.domElement.addEventListener("mousedown",e=>{drag=true;lx=e.clientX;ly=e.clientY;});
-  window.addEventListener("mouseup",()=>drag=false);
-  renderer.domElement.addEventListener("mousemove",e=>{ if(!drag)return; rot.y+=(e.clientX-lx)*0.01; rot.x+=(e.clientY-ly)*0.01; lx=e.clientX;ly=e.clientY; });
-  renderer.domElement.addEventListener("wheel",e=>{e.preventDefault(); dist*=(1+e.deltaY*0.001); },{passive:false});
+  /* T3D-1 (2026-10-24): pointer events (mouse, touch, pen) instead of mouse-only
+     events, so the view orbits on a tablet: one finger/button drags to orbit, two
+     fingers pinch to zoom; touch-action:none stops the page scrolling instead. */
+  const cvs=renderer.domElement, ptrs=new Map(); let pinch0=0, dist0=dist;
+  cvs.style.touchAction="none";
+  const pinchLen=()=>{ const v=[...ptrs.values()]; return Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y); };
+  cvs.addEventListener("pointerdown",e=>{ ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{ cvs.setPointerCapture(e.pointerId); }catch(_){}
+    if(ptrs.size===1){ drag=true; lx=e.clientX; ly=e.clientY; }
+    else if(ptrs.size===2){ drag=false; pinch0=pinchLen(); dist0=dist; } e.preventDefault(); });
+  cvs.addEventListener("pointermove",e=>{ if(!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===2 && pinch0>0){ const d=pinchLen(); if(d>0) dist=dist0*pinch0/d; }
+    else if(drag){ rot.y+=(e.clientX-lx)*0.01; rot.x+=(e.clientY-ly)*0.01; lx=e.clientX; ly=e.clientY; }
+    e.preventDefault(); });
+  const endPtr=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0=0;
+    if(ptrs.size===1){ const v=[...ptrs.values()][0]; drag=true; lx=v.x; ly=v.y; } else if(!ptrs.size) drag=false; };
+  ["pointerup","pointercancel","pointerleave"].forEach(t=>cvs.addEventListener(t,endPtr));
+  cvs.addEventListener("wheel",e=>{e.preventDefault(); dist*=(1+e.deltaY*0.001); },{passive:false});
   function loop(){ three3D.raf=requestAnimationFrame(loop);
     /* BUGFIX: this used to add C.H/2 as the orbit height while lookAt() aimed at
        lookY, so the camera orbited about one point and pointed at another — and
