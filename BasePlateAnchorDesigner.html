@@ -234,6 +234,7 @@
     .sec,.tabPage{page-break-inside:auto;}
     .eqBlock{page-break-inside:avoid;}
     #printReport h2{page-break-after:avoid;}
+    #printReport h3{page-break-after:avoid;break-after:avoid;}   /* RPT-1: a figure heading stays with its figure */
   }
 </style>
 </head>
@@ -1138,16 +1139,27 @@ function el(tag,cls,txt){ const e=document.createElement(tag); if(cls)e.classNam
 function tex(elm,src,disp){ if(window.katex){ try{ katex.render(src,elm,{throwOnError:false,displayMode:!!disp}); return; }catch(e){} } elm.textContent=src; }
 
 /* Equation block: title, ref, symbolic/substituted/result lines, variable defs */
+/* RPT-1 (2026-10-24): plain-text fields (a step's reference, a variable's value and description) are
+   shown as text, not typeset; any TeX left in them (\psi_{ec,N}, h_{ef} \ge, \Rightarrow ...) printed raw.
+   This turns the fragments into the same Unicode the rest of the text uses. */
+function bpPlainTex(t){
+  t=String(t==null?"":t);
+  if(!/\\[a-zA-Z]|[_^]\{|\\[ ,;:]/.test(t)) return t;
+  return t.replace(/\\text\{([^}]*)\}/g,"$1").replace(/\\Rightarrow/g,"\u21d2").replace(/\\geq?(?![a-z])/g,"\u2265").replace(/\\leq?(?![a-z])/g,"\u2264")
+    .replace(/\\times/g,"\u00d7").replace(/\\cdot/g,"\u00b7").replace(/\\phi/g,"\u03c6").replace(/\\psi/g,"\u03c8").replace(/\\lambda/g,"\u03bb")
+    .replace(/\\ell/g,"\u2113").replace(/\\infty/g,"\u221e").replace(/\\qquad|\\quad/g," ").replace(/\\[ ,;:]/g," ")
+    .replace(/_\{([^}]*)\}/g,"_$1").replace(/\^\{([^}]*)\}/g,"^$1");
+}
 function eqBlock(opts){
   const wrap=el("div","eqBlock");
   const t=el("div","eqTitle"); t.textContent=opts.title||"";
-  if(opts.ref){ const r=el("span","eqRef"); r.textContent="["+opts.ref+"]"; t.appendChild(r); }
+  if(opts.ref){ const r=el("span","eqRef"); r.textContent="["+bpPlainTex(opts.ref)+"]"; t.appendChild(r); }   /* RPT-1 */
   wrap.appendChild(t);
   (opts.lines||[]).forEach(src=>{ const l=el("div","eqLine"); tex(l,src,true); wrap.appendChild(l); });
   if(opts.vars && opts.vars.length){
     const v=el("div","varList");
     opts.vars.forEach(vd=>{ const row=el("div"); const sym=el("span"); tex(sym,vd[0],false);
-      row.appendChild(sym); row.appendChild(document.createTextNode(" = "+vd[1]+(vd[2]?" \u2014 "+vd[2]:""))); v.appendChild(row); });
+      row.appendChild(sym); row.appendChild(document.createTextNode(" = "+bpPlainTex(vd[1])+(vd[2]?" \u2014 "+bpPlainTex(vd[2]):""))); v.appendChild(row); });   /* RPT-1 */
     wrap.appendChild(v);
   }
   return wrap;
@@ -1176,11 +1188,13 @@ const BPAD_CARDS={pbBend:["tabPlate","Base Plate Bending"],pbTear:["tabPlate","B
   anSteelT:["tabAnchor","Steel Strength — Tension"],anSteelV:["tabAnchor","Steel Strength — Shear"],anLevNut:["tabAnchor","Stand-off Bending"],
   anRodComp:["tabAnchor","Exposed Rod Compression"],anInt:["tabAnchor","Combined Tension–Shear Interaction"],
   anInstall:["tabAnchor","Installation Limits — Spacing & Edge Distance"],
-  trCap:["tabTRebar","Anchor Reinforcement — Tension"],trDev:["tabTRebar","Development Each Side of the Breakout Cone"],vrCap:["tabVRebar","Hairpin Shear Reinforcement"]};
+  trCap:["tabTRebar","Anchor Reinforcement — Tension"],trDev:["tabTRebar","Development Each Side of the Breakout Cone"],
+  get vrCap(){ return ["tabVRebar",(S.vRebar&&S.vRebar.pieceType==="closedtie")? "Closed-Tie Shear Reinforcement" : "Hairpin Shear Reinforcement"]; }};   /* RPT-1 */
 /* card for a check label (allChecks) or a capacity mode label (kind "T"/"V") */
 function bpadCardFor(label,kind){
   const l=String(label||"").toLowerCase();
   if(/\(torqued\)/.test(l)) return "anInstall";   /* BP-T1 */
+  if(/pedestal ties/.test(l)) return "coPedTie";   /* RPT-1: "Pedestal Ties at Anchors" → §10.7.6.1.6 card */
   if(/base plate bending/.test(l)) return "pbBend";
   if(/tearout/.test(l)) return "pbTear";
   if(/concrete bearing/.test(l)) return "coBrg";
@@ -1189,7 +1203,7 @@ function bpadCardFor(label,kind){
   if(/interaction/.test(l)) return "anInt";
   if(/development/.test(l)) return "trDev";
   if(/hairpin/.test(l)) return "vrCap";
-  if(/reinf/.test(l)) return (kind==="V")? "vrCap" : "trCap";
+  if(/reinf/.test(l)) return (kind==="V"||/shear/.test(l))? "vrCap" : "trCap";   /* RPT-1: "Anchor Reinf. Shear (ties)" linked to the tension card */
   if(/pullout/.test(l)) return "coPull";
   if(/side-face/.test(l)) return "coSFB";
   if(/pryout/.test(l)) return "coPry";
@@ -4052,7 +4066,7 @@ function tensionRebarCheck(cc){
         "\\phi N_r="+fmt(phi)+"\\times("+nLegsEff+"\\times"+fmt(rb.Ab,2)+")\\times"+fmt(fy,0)+"="+fmt(phiNr,2)+"\\ \\text{kip}",
         "\\text{DCR}=N_{ua}/\\phi N_r="+fmt(Tmax,2)+"/"+fmt(phiNr,2)+"="+(isFinite(dcr)?fmt(dcr,2):"\\infty")],
        vars:[["n_{eff}",String(nLegsEff)+" of "+String(nLegsTotal)+" legs",
-              "only legs crossing the cone within 1.5h_{ef} of a tension anchor AND developed both sides are counted; "+
+              "only legs crossing the cone within 1.5·h_ef of a tension anchor AND developed both sides are counted; "+   /* RPT-1: plain text */
               (nLegsTotal-nLegsEff)+" leg(s) excluded"],
              ["\\text{pieces}",String(R.qty)+(ic? (ic.layoutMode==="enclose"?"":" per row") : ""),
               (ic? ic.pieceType : "")+" ("+(ic? ic.legsPer:1)+" leg"+((ic&&ic.legsPer>1)?"s":"")+" each), "+
@@ -4459,21 +4473,23 @@ function shearRebarCheck(cc){
   return {phi,As,AsClaimed,fy,phiVr,Vmax,gov,dcr,rb,ic,
     nLegsTotal,nLegsEff,qtyPieces:R.qty,devDCR:ic?ic.devDCR:Infinity,
     steps:[
-      {title:"Anchor reinforcement — shear (hairpins), EFFECTIVE legs only",ref:"ACI 318-19 §17.5.2.1.2",
+      {title:(ic&&ic.isTie)? "Anchor reinforcement — shear (closed ties), EFFECTIVE legs only" : "Anchor reinforcement — shear (hairpins), EFFECTIVE legs only",
+       ref:(ic&&ic.isTie)? "ACI 318-19 §17.5.2.1(b), R17.5.2.1(b)" : "ACI 318-19 §17.5.2.1.2",   /* RPT-1 */
        lines:[
         "\\phi V_r=\\phi\\,A_{s,eff}\\,f_y=\\phi\\,(n_{eff}A_b)f_y",
         "\\phi V_r="+fmt(phi)+"\\times("+nLegsEff+"\\times"+fmt(rb.Ab,2)+")\\times"+fmt(fy,0)+"="+fmt(phiVr,2)+"\\ \\text{kip}",
         "\\text{DCR}=V_{ua}/\\phi V_r="+fmt(Vmax,2)+"/"+fmt(phiVr,2)+"="+(isFinite(dcr)?fmt(dcr,2):"\\infty")],
        vars:[["n_{eff}",String(nLegsEff)+" of "+String(nLegsTotal)+" legs",
-              "legs within 0.5c_{a1} of a leading anchor, inside the breakout body depth, and developed both sides; "+
-              (nLegsTotal-nLegsEff)+" excluded"],
+              ((ic&&ic.isTie)? "tie legs in sets within 0.5·c_a1 of the top, crossing the failure surface before the front corner, and developed behind it; "
+                             : "legs within 0.5·c_a1 of a leading anchor, inside the breakout body depth, and developed both sides; ")+
+              (nLegsTotal-nLegsEff)+" excluded"],   /* RPT-1: plain text, no LaTeX */
              ["\\text{pieces}",
-              (ic&&ic.isTie)? (String(ic.nSets)+"\\text{ closed tie sets} \\times 2\\text{ legs parallel to }V") :
+              (ic&&ic.isTie)? (String(ic.nSets)+" closed tie sets × 2 legs parallel to V = "+(2*ic.nSets)+" legs") :   /* RPT-1: plain text */
               ic? (ic.grpMode
                     ? (R.pieceType==="hairpin"
-                        ? String(ic.nStack)+"\\text{ group hairpin"+(ic.nStack===1?"":"s, stacked vertically")+"}"
-                        : String(R.qty)+"\\text{ bars across the group}")
-                    : String(R.qty)+" per anchor \\times "+ic.nLeadAnchors+"\\text{ leading anchor"+(ic.nLeadAnchors!==1?"s":"")+" = "+(ic.nPieces*ic.nLeadAnchors)+"}")
+                        ? String(ic.nStack)+" group hairpin"+(ic.nStack===1?"":"s, stacked vertically")
+                        : String(R.qty)+" bars across the group")
+                    : String(R.qty)+" per anchor × "+ic.nLeadAnchors+" leading anchor"+(ic.nLeadAnchors!==1?"s":"")+" = "+(ic.nPieces*ic.nLeadAnchors))   /* RPT-1: plain text */
                 : String(R.qty),
               (ic&&ic.isTie)? ("top set "+fmt(ic.tieTop,2)+"″ below the surface, sets at "+fmt(ic.tieSpacing,2)+"″; legs at ±"+fmt(ic.tLeg,2)+"″") :
               ic? (ic.grpMode
@@ -4489,10 +4505,10 @@ function shearRebarCheck(cc){
         "\\text{governing edge }"+ic.govEdge+",\\quad c_{a1}="+fmt(ic.ca1,2)+"\\ \\text{in},\\quad 0.5c_{a1}="+fmt(ic.nearLimit,2)+"\\ \\text{in},\\quad \\ell_{dh}="+fmt(ic.dev.ldh,2)+"\\ \\text{in}",
         "\\text{placement: } z\\le 0.5c_{a1};\\quad \\text{crossing: } x_c=\\max(d_T,z)/1.5 < c_{a1}-c_c",
         "\\text{edge side: } c_{a1}-x_c-c_c>0\\ \\text{(closed corner anchors)};\\quad \\text{behind: } x_c+d_{back}-c_c\\ge\\ell_{dh}",
-        (ic.devGov? ("\\text{governing counted leg (set "+ic.devGov.piece+", z="+fmt(ic.devGov.z,2)+"): } x_c=\\max("+fmt(ic.devGov.dT,2)+","+fmt(ic.devGov.z,2)+")/1.5="+fmt(ic.devGov.xCross,2)+
-          ",\\ \\text{edge }"+fmt(ic.ca1,2)+"-"+fmt(ic.devGov.xCross,2)+"-"+fmt(ic.cover,2)+"="+fmt(ic.devGov.front,2)+",\\ \\text{behind }"+fmt(ic.devGov.behind,2)+"\\ \\text{in}") : "\\text{no tie leg crosses the failure surface}"),
-        "n_{eff}="+ic.nEff+"\\ \\text{of }"+ic.nLegsTotal+"\\ \\text{legs (table on this tab)}"],
-       vars:[["d_T","in","lateral offset of the leg from the leading-anchor span (0 inside it)"],["c_c",fmt(ic.cover,2)+" in","clear cover to the tie"],
+        (ic.devGov? ("\\text{governing counted leg (set "+ic.devGov.piece+", z="+fmt(ic.devGov.z,2)+"): } x_c=\\max("+fmt(ic.devGov.dT,2)+","+fmt(ic.devGov.z,2)+")/1.5="+fmt(ic.devGov.xCross,2)+"\\ \\text{in}") : "\\text{no tie leg crosses the failure surface}"),
+        ic.devGov? ("\\text{edge side }c_{a1}-x_c-c_c="+fmt(ic.ca1,2)+"-"+fmt(ic.devGov.xCross,2)+"-"+fmt(ic.cover,2)+"="+fmt(ic.devGov.front,2)+"\\ \\text{in},\\quad \\text{behind }"+fmt(ic.devGov.behind,2)+"\\ \\text{in}\\ge\\ell_{dh}="+fmt(ic.dev.ldh,2)+"\\ \\text{in}") : null,   /* RPT-1: split (it ran off the page) */
+        "n_{eff}="+ic.nEff+"\\ \\text{of }"+ic.nLegsTotal+"\\ \\text{legs (table on this tab)}"].filter(Boolean),
+       vars:[["d_T",(ic.devGov? fmt(ic.devGov.dT,2)+" in (governing counted leg)" : (ic.legs.length? fmt(ic.legs[0].dT,2)+" in" : "—")),"lateral offset of the leg from the reference-row anchor span (0 inside it)"],   /* RPT-1: the value */["c_c",fmt(ic.cover,2)+" in","clear cover to the tie"],
              ["d_{back}",fmt(ic.roomBehind+ic.cover,2)+" in","leading anchors to the back face"]]}
     ] : ic? [
       {title:"Failure surface, proximity and development — from the geometry",ref:"§17.5.2.1.2; R17.5.2.1.2; §25.4",
@@ -5585,7 +5601,7 @@ function comboSelector(parent){
   if(S.detailCombo>=CC.combos.length) S.detailCombo=0;
   const govI=governingComboIndex();
   const sel=selInput(CC.combos.map((c,i)=>i),()=>S.detailCombo,
-    v=>{S.detailCombo=parseInt(v);autosave();buildOutput();},
+    v=>{S.detailCombo=parseInt(v);S.ui.detailComboSet=true;autosave();buildOutput();},   /* RPT-1: the engineer chose it (the report then uses it and says so) */
     i=>CC.combos[i].name+(i===govI?"  (governing overall)":""),i=>String(i));
   fRow(parent,"Detailed combination",sel,"");
 }
@@ -5688,7 +5704,7 @@ function allChecks(){
     checks.push({label:"Rebar Development",ref:"§25.4",dcr:tr.devDCR,combo:"—",tab:"tabTRebar",
       na:tr.devNA}); }   /* no bar crosses the cone → nothing to develop → N/A, not PASS 0.00 */
   if(S.vRebar.present){ const vr=shearRebarCheck(CC);
-    checks.push({label:(S.vRebar.pieceType==="closedtie"?"Anchor Reinf. Shear (ties)":"Hairpin Shear"),ref:"§17.5.2.1.2",dcr:vr.dcr,combo:vr.gov,tab:"tabVRebar"}); }
+    checks.push({label:(S.vRebar.pieceType==="closedtie"?"Anchor Reinf. Shear (ties)":"Hairpin Shear"),ref:(S.vRebar.pieceType==="closedtie"?"§17.5.2.1(b)":"§17.5.2.1.2"),dcr:vr.dcr,combo:vr.gov,tab:"tabVRebar"}); }   /* RPT-1: closed ties cite §17.5.2.1(b) */
   if(standoffParams().checkBending){ const ln=levelingNutCheck(CC);
     checks.push({label:"Stand-off Bending ("+ln.soLabel+")",ref:"PROFIS lever-arm",dcr:ln.dcr,combo:ln.gov,tab:"tabAnchor"}); }
   return checks;
@@ -6211,12 +6227,12 @@ function buildSummary(pg){
   });
   /* hairpins: fewer legs effective than claimed (BP-O8 / N4). The Condition A
      rule is unchanged (≥ 1 effective leg); this only makes the shortfall visible. */
-  if(S.vRebar.present){
+  if(S.vRebar.present && !rebarJustified("shear",CC).justified){   /* RPT-1: when the substitution is justified the green note above already lists the uncounted legs */
     const ic=shearRebarIntercept(CC);
     if(ic && ic.nLegsTotal>0 && ic.nEff<ic.nLegsTotal){
       const b=el("div","warnBox");
-      b.innerHTML="<b>Shear hairpins: only "+ic.nEff+" of "+ic.nLegsTotal+" claimed legs are effective</b> "+
-        "(&sect;17.5.2.1.2 — position, depth, development or spacing; see the Shear Rebar tab). "+
+      b.innerHTML="<b>Shear "+(ic.isTie?"closed ties":"hairpins")+": only "+ic.nEff+" of "+ic.nLegsTotal+" claimed legs are effective</b> "+
+        "(&sect;"+(ic.isTie?"17.5.2.1(b), R17.5.2.1(b) — tie-set depth, crossing or development":"17.5.2.1.2 — position, depth, development or spacing")+"; see the Shear Rebar tab). "+
         "&phi;V<sub>r</sub> counts the effective legs only. "+
         (ic.nEff>0
           ? "Condition A (&phi; = 0.75, Table 17.5.3) is still applied to shear breakout because at least one leg is effective — confirm the detail is acceptable with the reduced number of legs."
@@ -6253,7 +6269,8 @@ function buildSummary(pg){
     const Fu=forceUnit(), uf=forceFactor();
 
     /* --- anchor force table --- */
-    body.appendChild(el("h3",null,"Anchor forces \u2014 combination \u201C"+c.name+"\u201D"));
+    {const giS=governingComboIndex(), ciS=CC.combos.indexOf(c);   /* RPT-1: say which combination and why */
+     body.appendChild(el("h3",null,"Anchor forces \u2014 combination \u201C"+c.name+"\u201D"+(ciS===giS? " (governing overall)" : (S.ui.detailComboSet? " (detail combination selected by the engineer; governing overall: "+CC.combos[giS].name+")" : ""))));}
     const t1=el("table","tbl"); const h1=el("tr");
     ["Anchor","x (\u2033)","y (\u2033)","Tension ("+Fu+")","Shear ("+Fu+")",
      "V_x ("+Fu+")","V_y ("+Fu+")","Note"].forEach(h=>h1.appendChild(el("th",null,h)));
@@ -6292,7 +6309,9 @@ function buildSummary(pg){
        numbers quietly disagree across the two tables. */
     if(cap.nT!==nTshown){
       const w=el("div","note");
-      w.innerHTML="<b>Note:</b> "+nTshown+" anchors carry tension in the distribution above, but the "+
+      if(nTshown===0) w.innerHTML="<b>Note:</b> no anchor carries tension in this combination, so every tension check below has zero demand. "+   /* RPT-1 */
+        "The group tension capacities are still listed; they are computed on n = "+cap.nT+" anchor"+(cap.nT===1?"":"s")+", the tension-side count the capacity model resolves from the force model.";
+      else w.innerHTML="<b>Note:</b> "+nTshown+" anchors carry tension in the distribution above, but the "+
         "group capacities are scaled on n = "+cap.nT+". The counts differ because the capacity model "+
         "uses the resolved tension-side count from the force model, which can drop an anchor carrying "+
         "a negligible share. The group DEMAND (\u03a3 = "+fmt(c.Tu_group*uf,2)+" "+Fu+") always includes "+
@@ -6403,7 +6422,7 @@ function buildInputEcho(pg){
       ["Tension rebar", !S.tRebar.present? "none" : (S.tRebar.pieceType==="pedbars")? ("pedestal vertical bars ("+(S.ped.present? pedGeom().bars.length+"-"+S.ped.barSize : "not entered")+")") : (S.tRebar.qty+"-"+S.tRebar.size+" "+rgrade(S.tRebar.grade).name+
         (S.tRebar.centered===false? ", set-out offset ("+fmt(+S.tRebar.offX||0,2)+", "+fmt(+S.tRebar.offY||0,2)+")\u2033":""))],
       ["Shear rebar", !S.vRebar.present? "none" : (S.vRebar.pieceType==="closedtie")? ("closed ties"+(S.ped.present? " (pedestal ties, "+S.ped.tieSize+")" : " (pedestal ties not entered: none counted)")) : (S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs")],
-      ["Pedestal reinforcement", S.ped.present? (pedGeom().bars.length+"-"+S.ped.barSize+" vertical, "+S.ped.tieSize+" ties: "+S.ped.tieSets+" sets from "+fmt(S.ped.tieTop,2)+"″ at "+fmt(S.ped.tieSpacing,2)+"″") : "not entered"],
+      ["Pedestal reinforcement", S.ped.present? (pedGeom().bars.length+"-"+S.ped.barSize+" vertical, "+S.ped.tieSize+" ties: "+S.ped.tieSets+" sets from "+fmt(pedGeom().ties[0],2)+"″"+(pedGeom().ties[0]>(+S.ped.tieTop||0)+1e-9? " (raised to cover + d_b/2; entered "+fmt(S.ped.tieTop,2)+"″)" : "")+" at "+fmt(S.ped.tieSpacing,2)+"″")   /* RPT-1: the depth actually used */ : "not entered"],
       ["Stand-off", standoffParams().label+(standoffParams().hasStandoff?(", z="+fmt(standoffParams().z,2)+String.fromCharCode(34)):"")]
     ];
     const t=el("table","tbl"); rows.forEach(r=>{ const tr=el("tr");
@@ -6505,10 +6524,10 @@ function buildAnchorTab(pg){
       const pm=(c.perAnchor||[]).reduce((m,p)=>(!m||p.t>m.t)?p:m,null)||{x:0,y:0,t:0};
       const cb=c.raw;
       body.appendChild(eqBlock({title:"Per-anchor force — open stand-off: elastic bolt group (no bearing block, rods carry compression)",ref:"rigid plate, matches Hilti PROFIS",
-        lines:[
-          "T_i=\frac{P}{n}+\frac{M_x\,y_i}{\sum y^2}-\frac{M_y\,x_i}{\sum x^2}\quad(+\ \text{tension})",
-          "T_{u,max}=\frac{"+fmt(cb.P,2)+"}{"+c.nAll+"}+\frac{"+fmt(cb.Mx,1)+"\times("+fmt(pm.y,2)+")}{"+fmt(c.Iyy,2)+"}-\frac{"+fmt(cb.My,1)+"\times("+fmt(pm.x,2)+")}{"+fmt(c.Ixx,2)+"}="+fmt(Math.max(pm.t,0),2)+"\ \text{kip}",
-          "N_{ua}=\sum_{T_i>0} T_i="+fmt(c.Tu_group,2)+"\ \text{kip (group, "+nTd+" anchors in tension)}"],
+        lines:[   /* RPT-1: the lines below had single backslashes ("\f", "\t" became control characters), so KaTeX printed them raw */
+          "T_i=\\frac{P}{n}+\\frac{M_x\\,y_i}{\\sum y^2}-\\frac{M_y\\,x_i}{\\sum x^2}\\quad(+\\ \\text{tension})",
+          "T_{u,max}=\\frac{"+fmt(cb.P,2)+"}{"+c.nAll+"}+\\frac{"+fmt(cb.Mx,1)+"\\times("+fmt(pm.y,2)+")}{"+fmt(c.Iyy,2)+"}-\\frac{"+fmt(cb.My,1)+"\\times("+fmt(pm.x,2)+")}{"+fmt(c.Ixx,2)+"}="+fmt(Math.max(pm.t,0),2)+"\\ \\text{kip}",
+          "N_{ua}=\\sum_{T_i>0} T_i="+fmt(c.Tu_group,2)+"\\ \\text{kip (group, "+nTd+" anchors in tension)}"],
         vars:[["T_{u,max}",fmt(Math.max(pm.t,0),2)+" k","governs steel tension & pullout"],
               ["N_{ua}",fmt(c.Tu_group,2)+" k","governs concrete breakout"],
               ["T_i<0","—","compression carried by the rods; see the rod compression check"]]}));
@@ -6753,7 +6772,9 @@ function buildConcTab(pg){
          basis:"ANCHOR GROUP \u2014 one breakout wedge at the governing edge (\u00a717.7.2)"}); },pg);
   } else {
     mkSection("coVBna","5. Concrete Breakout — Shear",body=>{
-      body.appendChild(el("div","warnBox","Shear anchor reinforcement is present and the \u00a717.5.2.1.2 substitution is justified: concrete breakout in shear is replaced by the hairpin steel check (see Shear Rebar tab)."));
+      body.appendChild(el("div","warnBox",(S.vRebar.pieceType==="closedtie")?   /* RPT-1: ties are not hairpins */
+        "Shear anchor reinforcement is present and the \u00a717.5.2.1(b) substitution is justified: concrete breakout in shear is replaced by the closed-tie steel check (see Shear Rebar tab)." :
+        "Shear anchor reinforcement is present and the \u00a717.5.2.1.2 substitution is justified: concrete breakout in shear is replaced by the hairpin steel check (see Shear Rebar tab)."));
     },pg);
   }
   mkSection("coPry","6. Pryout",body=>{ renderSteps(body,cap.pry.steps);
@@ -6811,6 +6832,18 @@ function ineffCauseBanner(body, kind, ic){
     if(ic.nDevFail>0) causes.push({n:ic.nDevFail,
       head:"cross the cone but cannot develop on both sides (\u2113_d does not fit above and/or below the crossing)",
       fix:"hook or enclose an end (\u2113_dh = "+fmt(ic.dev&&ic.dev.ldh?ic.dev.ldh:0,2)+"\u2033 vs straight \u2113_d = "+fmt(ic.dev&&ic.dev.ld?ic.dev.ld:0,2)+"\u2033), extend the bar, or drop epoxy if not required"});
+  } else if(ic.isTie){   /* RPT-1: closed ties — name the criterion that failed */
+    const sets=[...new Set(ic.legs.filter(L=>!L.nearOK).map(L=>L.piece))];
+    if(ic.notEntered) causes.push({n:total, head:"belong to pedestal ties that are not entered (7a. Pedestal Reinforcement)", fix:"enter the pedestal ties in 7a"});
+    if(ic.nFar>0) causes.push({n:ic.nFar,
+      head:"are in tie set"+(sets.length===1?" ":"s ")+sets.join(", ")+", deeper than 0.5·c_a1 = "+fmt(ic.nearLimit,2)+"\u2033 below the top surface (R17.5.2.1(b))",
+      fix:"move the top sets up / tighten the tie spacing so more sets lie within "+fmt(ic.nearLimit,2)+"\u2033 of the top (top set now "+fmt(ic.tieTop,2)+"\u2033, spacing "+fmt(ic.tieSpacing,2)+"\u2033)"});
+    if(ic.nDeep>0) causes.push({n:ic.nDeep,
+      head:"cross the failure surface beyond the closed front corner (x_c = max(d_T, z)/1.5 ≥ c_a1 − cover = "+fmt(ic.ca1-ic.cover,2)+"\u2033)",
+      fix:"raise those tie sets — the crossing moves toward the anchors as z decreases"});
+    if(ic.nDev>0) causes.push({n:ic.nDev,
+      head:"cannot develop ℓ_dh = "+fmt(ic.dev&&ic.dev.ldh?ic.dev.ldh:0,2)+"\u2033 behind the crossing (to the back corner)",
+      fix:"use a smaller tie bar or a larger pedestal, or drop epoxy if not required"});
   } else {
     const nearLimit=ic.nearLimit;
     if(ic.nNotFit>0) causes.push({n:ic.nNotFit,
@@ -7130,6 +7163,9 @@ function buildTRebarTab(pg){
     }
   },pg);
 }
+/* RPT-1 (2026-10-24): the combination that governs the shear-reinforcement check — the largest
+   resultant shear, as shearRebarIntercept / shearRebarCheck take it (first one on a tie) */
+function bpShearGovCombo(){ if(!CC||!CC.combos) return null; let g=null,V=-1; CC.combos.forEach(c=>{ if(c.Vres>V){V=c.Vres;g=c;} }); return g; }
 function buildVRebarTab(pg){
   const vr=shearRebarCheck(CC);
   /* same guard as buildTRebarTab — null when no shear rebar is defined */
@@ -7142,12 +7178,13 @@ function buildVRebarTab(pg){
     },pg);
     return;
   }
-  mkSection("vrCap","1. Hairpin Shear Reinforcement",body=>{ renderSteps(body,vr.steps); dcrBox(body,vr.dcr,false,
+  const isTieV=!!(vr.ic && vr.ic.isTie);   /* RPT-1: closed ties are not hairpins */
+  mkSection("vrCap",isTieV? "1. Closed-Tie Shear Reinforcement" : "1. Hairpin Shear Reinforcement",body=>{ renderSteps(body,vr.steps); dcrBox(body,vr.dcr,false,
     {load:vr.Vmax*forceFactor(),cap:vr.phiVr*forceFactor(),unit:forceUnit(),
-     loadSym:"V_ua",capSym:"\u03c6V_r",basis:"hairpin reinforcement, "+vr.gov});
+     loadSym:"V_ua",capSym:"\u03c6V_r",basis:(isTieV? "closed-tie reinforcement §17.5.2.1(b), " : "hairpin reinforcement, ")+vr.gov});
     const ic=vr.ic;
     ineffCauseBanner(body,"shear",ic);
-    figureBlock(body, SHEAR_HAIRPIN_FIG,
+    if(!isTieV) figureBlock(body, SHEAR_HAIRPIN_FIG,
       "Design detail — application of hairpin reinforcement to concrete edges for shear load: plan, angled-leg option, and cross-section",
       "<b>Figure — application of hairpin reinforcement to concrete edges for shear load</b>, "+
       "illustrating §17.5.2.1.2 in plan, in the angled-leg variant, and in section. "+
@@ -7276,14 +7313,18 @@ function buildVRebarTab(pg){
       }
     }
   },pg);
-  mkSection("vrLayout","2. Hairpin Layout",body=>{
-    const cGov=(CC&&CC.combos)?CC.combos[governingComboIndex()]:null;
+  mkSection("vrLayout",isTieV? "2. Closed-Tie Layout" : "2. Hairpin Layout",body=>{
+    /* RPT-1: the plan shows the combination that governs THIS check (largest resultant shear, as the intercept) */
+    const cGov=bpShearGovCombo();
     const fit=drawHairpinPlan(body,cGov);
-    body.appendChild(el("div","note",
-      "A hairpin is a DIRECTIONAL detail: §17.5.2.1.2 credits the bar only where its legs "+
+    body.appendChild(el("div","note",isTieV?
+      ("Closed ties enclosing the anchor group (§17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b): the two tie legs parallel to the shear "+
+       "resultant of the governing combination"+(cGov?" ("+cGov.name+")":"")+" resist it where they cross the breakout surface; the legs across V are not counted. "+
+       "The plan shows the tie outline and each leg's verdict; the sections below are cut along V and through the governing edge face.") :
+      ("A hairpin is a DIRECTIONAL detail: §17.5.2.1.2 credits the bar only where its legs "+
       "cross the crack that opens toward the loaded edge, which means the legs must run "+
       "perpendicular to the shear resultant. The plan above orients them from the governing "+
-      "combination’s V. The elevation below is a section through the same detail."));
+      "combination’s V"+(cGov?" ("+cGov.name+")":"")+". The elevation below is a section through the same detail.")));
     if(fit && !fit.directional){
       const w=el("div","warnBox");
       w.innerHTML="<b>No shear in the governing combination</b>, so there is no direction to "+
@@ -7318,7 +7359,7 @@ function buildVRebarTab(pg){
        (A-A for a ±x edge, B-B for a ±y edge), the edge-face section along the normal */
     const icK=shearRebarIntercept(CC), kV=(icK && icK.bodyNx===0 && icK.bodyNy!==0)? "B" : "A", kF=(kV==="A")? "B" : "A";
     bpCutControls(body);
-    body.appendChild(el("h3",null,"Section through the anchor"));
+    body.appendChild(el("h3",null,"Section along V"));   /* RPT-1 */
     bpCutSection(body,c=>drawRebar(c,"shear",{cut:bpCutOf(kV)}));
     /* GFX-B: the orthogonal section, the governing edge face seen along V */
     body.appendChild(el("h3",null,"Section "+kF+"-"+kF+" \u2014 the governing edge face"));
@@ -7645,7 +7686,7 @@ function momentArc(s,cx,cy,r,a0,a1,color,label){
   return p;
 }
 /* coordinate-axis triad. mode "plan": x right, y up. "elevX": y right(into page shown as horiz), z up. "elevY": x right, z up. */
-function axisTriad(s,ox,oy,mode,L){
+function axisTriad(s,ox,oy,mode,L,noteAbove){
   L=L||34;
   const lab=(mode==="plan")?["x","y"]:(mode==="elevX")?["y","z"]:["x","z"];
   /* horizontal axis (right) */
@@ -7654,7 +7695,8 @@ function axisTriad(s,ox,oy,mode,L){
   arrow(s,ox,oy,ox,oy-L,"#111","arrAxis",1.6); txt(s,ox,oy-L-4,lab[1],null,"middle",11,"#111");
   circ(s,ox,oy,2.2,"#111","#111");
   /* origin note */
-  txt(s,ox+4,oy+14,"origin @ plate ¢","lblTxt","start",9,"#555");
+  if(noteAbove) txt(s,ox+L+16,oy+3,"origin @ plate ¢","lblTxt","start",9,"#555");   /* RPT-1: beside the x axis (it was cut off at the bottom) */
+  else txt(s,ox+4,oy+14,"origin @ plate ¢","lblTxt","start",9,"#555");
 }
 
 function drawPlan(body){
@@ -9414,15 +9456,17 @@ function drawHairpinPlan(body, cGov, opt){
   if(cmp){ bpPlanCutLines(s,cutMapV); body.appendChild(svgWithControls(s)); return null; }
   /* G1: legend split over two lines (it ran off both edges of the drawing) */
   if(ic){
-    txt(s,cx,H-44,ic.isTie? "tie legs parallel to V: green = at least one set effective · red = none · grey = legs across V (not counted) · × = crossing (top set)"
-      : "green = effective · red = not creditable · grey = outside the pedestal · dashed blue = 0.5·c_a1 band at each anchor","lblTxt","middle",8.5);
+    if(ic.isTie){   /* RPT-1: two lines (one ran off the left edge in print) */
+      txt(s,cx,H-56,"tie legs parallel to V: green = at least one set effective · red = none","lblTxt","middle",8.5);
+      txt(s,cx,H-44,"grey = legs across V (not counted) · × = crossing (top set)","lblTxt","middle",8.5);
+    } else txt(s,cx,H-44,"green = effective · red = not creditable · grey = outside the pedestal · dashed blue = 0.5·c_a1 band at each anchor","lblTxt","middle",8.5);
     txt(s,cx,H-30,"shaded = breakout body, reference row \u2192 "+ic.govEdge+" edge (1.5·c_a1 = "+fmt(1.5*ic.ca1,2)+"″ beyond its outer anchors), clipped to the concrete","lblTxt","middle",8.5);
   } else txt(s,cx,H-30,"no shear reinforcement defined","lblTxt","middle",8.5);
   if(ic && ic.nEff<ic.nLegsTotal){
     txt(s,cx,H-16,(ic.nLegsTotal-ic.nEff)+" of "+ic.nLegsTotal+" legs are not creditable — see the table above.",
       "lblTxt","middle",9,"#b71c1c");
   }
-  axisTriad(s,pad-46,H-18,"plan",28);
+  axisTriad(s,22,62,"plan",22,true);   /* RPT-1: top-left (the origin note was cut off at the bottom) */
 
   /* ---- CLICK-TO-INSPECT (mirrors the tension plan) --------------------------
      Shear legs are LINES, not dots, so each gets an invisible wide hit-line on
@@ -9434,7 +9478,7 @@ function drawHairpinPlan(body, cGov, opt){
   vpanel.style.cssText="margin:8px auto 0;max-width:"+W+"px;border:1px solid var(--line,#ccc);"+
     "border-radius:6px;padding:10px 12px;font-size:9.5pt;line-height:1.5;background:#fafafa;"+
     "min-height:1.5em;color:#333;";
-  vpanel.innerHTML="<i>Click any hairpin leg in the plan above to see its details.</i>";
+  vpanel.innerHTML="<i>Click any "+(ic&&ic.isTie?"tie":"hairpin")+" leg in the plan above to see its details.</i>";   /* RPT-1 */
   function showVLeg(L){
     const col=L.eff?"#1f7d32":(L.fits?"#b71c1c":"#999");
     const status=L.eff?"EFFECTIVE":"NOT CREDITABLE";
@@ -9740,13 +9784,13 @@ function drawRebarPlan(body,opt){
   });
   const cutMap={X,Y:Yp,toX:sx=>(sx-cx)/sc,toY:sy=>(cy-sy)/sc};   /* GFX-G: plate frame, as this plan */
   if(cmp){ txt(s,cx,14,"PLAN \u2014 tension anchor reinforcement","lblTxt","middle",10); axisTriad(s,22,H-28,"plan",22); bpPlanCutLines(s,cutMap); body.appendChild(svgWithControls(s)); return; }
-  txt(s,cx,18,"PLAN — anchor reinforcement vs the 0.5·h_ef effective zones (click a leg for details)","lblTxt","middle",11);
+  txt(s,cx,18,"PLAN — anchor reinforcement vs the 0.5·h_ef effective zones"+(ic&&ic.govCombo&&ic.govCombo!=="—"? " · combination "+ic.govCombo : "")+(S.ui.printing? "" : " (click a leg for details)"),"lblTxt","middle",11);   /* RPT-1 */
   /* caption split across two lines — as one string it ran wider than the 620px
      viewport and was clipped at BOTH edges in the PDF export */
   txt(s,cx,H-37,"legs: green = effective · red = crosses but under-developed · grey = outside the zone / pedestal","lblTxt","middle",8);
   txt(s,cx,H-25,"dashed green circle = 0.5·h_ef (actual embedment) around each tension anchor","lblTxt","middle",8);
   txt(s,cx,H-13,"red: group breakout surface — shaded = flat bottom across the tension anchors · dashed = where it leaves the concrete","lblTxt","middle",8,"#b71c1c");
-  axisTriad(s,pad-40,H-40,"plan",26);
+  axisTriad(s,22,62,"plan",22,true);   /* RPT-1: top-left (at the bottom its origin note overlapped the caption) */
   bpPlanCutLines(s,cutMap);   /* GFX-G */
   const wrap=svgWithControls(s);
   body.appendChild(wrap);
@@ -10009,11 +10053,10 @@ function drawRebar(body,kind,opt){
         /* GFX-C: the label sat across the bars just under the head plane; it now goes below the
            bars (or below the pedestal when the bars run to the base) on a leader */
         if(xb>xa+1e-6){
-          const icB=(typeof tensionRebarIntercept==="function")? tensionRebarIntercept(CC) : null;
-          const zBot=icB? Math.max(icB.barBot,0) : headZ, room=Yv(0)-Yv(zBot);
-          const ly=(room>=26)? Yv(zBot)+16 : baseY+24, mx=X((xa+xb)/2);
-          line(s,mx,Yv(headZ)+2,mx,ly-10,"#b71c1c",0.7,"2 3");
-          txt(s,mx,ly,"flat at the head plane across the anchors","lblTxt","middle",9,"#b71c1c");
+          /* RPT-1: at the head plane itself (it was placed below the bars, at the pedestal bottom), on a white ground */
+          const mx=X((xa+xb)/2), ly=Yv(headZ)+13, lab="flat at the head plane across the anchors", tw=lab.length*4.4+6;
+          rect(s,mx-tw/2,ly-9,tw,12,"rgba(255,255,255,0.88)","none",0);
+          txt(s,mx,ly,lab,"lblTxt","middle",9,"#b71c1c");
         }
         /* ≈35° mark at the outer anchor on the right */
         const ax=X(xb), ay=Yv(headZ), rr=26;
@@ -10244,7 +10287,8 @@ function drawRebar(body,kind,opt){
     /* GFX-B: section title */
     if(cmp) txt(s,cx,14,(axY? "SECTION B-B (along y)" : "SECTION A-A (along x)")+(cut===null? ", projected" : ", cut "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033"),"lblTxt","middle",10);
     else txt(s,cx,16,(axY? "SECTION B-B \u2014 along y, looking \u2212x" : "SECTION A-A \u2014 along x, looking +y")+
-      (cut===null? " \u2014 all anchors and legs projected" : " \u2014 cut at "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033 (beyond: lighter)"),"lblTxt","middle",10);
+      (cut===null? " \u2014 all anchors and legs projected" : " \u2014 cut at "+(axY?"x":"y")+" = "+fmt(cut,2)+"\u2033 (beyond: lighter)")+
+      ((icT0=>icT0&&icT0.govCombo&&icT0.govCombo!=="—"? " \u00b7 combination "+icT0.govCombo : "")(tensionRebarIntercept(CC))),"lblTxt","middle",10);   /* RPT-1 */
     /* expose for the caller so it can warn in text as well */
     s.__rebarFit={nWanted,nDrawn:drawn.length,dropped,spacing:sp,cover,xLim};
   } else {
@@ -10290,7 +10334,7 @@ function drawRebar(body,kind,opt){
       tgT(s,xF-6,Yv(zLim)+3,"0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ below the top","lblTxt","end",9,"#1f4e79");
       /* GFX-C: on the outer tier beside H and h_ef, label on a leader (it sat on the H dimension) */
       {const xT=X(spanPed/2)+72; line(s,X(uF),Yv(C.H-ic.tieTop),xT+4,Yv(C.H-ic.tieTop),"#00427a",0.5,"2 2");
-       dimV(s,Yv(C.H),Yv(C.H-ic.tieTop),xT,"top set "+fmt(ic.tieTop,1)+'"',xT+8);}
+       dimV(s,Yv(C.H),Yv(C.H-ic.tieTop),xT,"top set "+fmt(ic.tieTop,2)+'"',xT+8);}   /* RPT-1: 2 decimals (2.25, not 2.3) */
     } else if(ic){
       const zTop=C.H-ic.zBelow;                       /* leg elevation */
       /* HP-1: the failure plane is at the reference row of the governing case; the legs start
@@ -10360,13 +10404,13 @@ function drawRebar(body,kind,opt){
     /* caption states the VERDICT, like the tension side — the old text asserted
        "legs engaging the anchor, developed each side" regardless of whether
        either was true, and called the piece count "legs" */
-    let vcap=(icV&&icV.isTie)? ("Closed ties \u2014 "+icV.nSets+" set"+(icV.nSets===1?"":"s")+" at "+fmt(icV.tieSpacing,1)+"\u2033, top set "+fmt(icV.tieTop,1)+"\u2033 below the surface \u2014 ") : "Shear hairpin reinforcement \u2014 "+
+    let vcap=(icV&&icV.isTie)? ("Closed ties \u2014 "+icV.nSets+" set"+(icV.nSets===1?"":"s")+" at "+fmt(icV.tieSpacing,2)+"\u2033, top set "+fmt(icV.tieTop,2)+"\u2033 below the surface \u2014 ") :   /* RPT-1: 2 decimals */ "Shear hairpin reinforcement \u2014 "+
       (icV&&icV.grpMode
         ? (S.vRebar.pieceType==="hairpin"
             ? icV.nStack+" group hairpin"+(icV.nStack===1?"":"s (stacked)")
             : R.qty+" bar"+(R.qty===1?"":"s")+" across the group")
         : R.qty+" piece"+(R.qty===1?"":"s")+"/leading anchor");
-    if(ic) vcap+=" ("+ic.nEff+" of "+ic.nLegsTotal+" legs effective per \u00a717.5.2.1.2"+
+    if(ic) vcap+=" ("+ic.nEff+" of "+ic.nLegsTotal+" legs effective per \u00a7"+((icV&&icV.isTie)? "17.5.2.1(b)" : "17.5.2.1.2")+
       ((S.vRebar.engagesAnchor||(icV&&icV.isTie))?"":"; bend NOT confirmed to engage the rod")+")";
     /* GFX-C: the verdict on its own line (one line ran past both edges) */
     const vcap2=vcap.match(/^(.*?) \((\d+ of .*)\)$/);
@@ -10375,7 +10419,7 @@ function drawRebar(body,kind,opt){
     else txt(s,cx,H-16,vcap,"lblTxt","middle",10);
     if(icV && icV.wrongEdge) txt(s,cx,cmp?28:31,"legs toward the "+icV.legEdge+" face; the governing breakout is toward "+String(icV.govEdge).replace(/\s*\(parallel\)$/,"")+": not counted","lblTxt","middle",9,"#b71c1c");   /* VR-1 */
     {const vT=(vcut===null)? "" : (icV&&icV.nx!==0? "y" : "x")+" = "+fmt(vcut,2)+"\u2033";   /* GFX-G: the cut position */
-    if(icV) txt(s,cx,cmp?14:16,cmp? "SECTION "+(icV.nx!==0?"A-A":"B-B")+" (along V)"+(vT? ", cut "+vT : ", projected") : "SECTION "+(icV.nx!==0?"A-A":"B-B")+" \u2014 along V toward the "+icV.govEdge+" edge (loaded edge right), "+(vT? "cut at "+vT+" (beyond: lighter)" : "projected"),"lblTxt","middle",10);}   /* GFX-B */
+    if(icV) txt(s,cx,cmp?14:16,cmp? "SECTION "+(icV.nx!==0?"A-A":"B-B")+" (along V)"+(vT? ", cut "+vT : ", projected") : "SECTION "+(icV.nx!==0?"A-A":"B-B")+" \u2014 along V toward the "+icV.govEdge+" edge (loaded edge right), "+(vT? "cut at "+vT+" (beyond: lighter)" : "projected")+(icV.govCombo? " \u00b7 combination "+icV.govCombo : ""),"lblTxt","middle",10);}   /* RPT-1: + combination */   /* GFX-B */
   }
   /* ---- dimensions ----
      BUGFIX: h_ef was dimensioned Yv(headZ)..baseY, i.e. from the anchor head
@@ -10399,7 +10443,8 @@ function drawRebar(body,kind,opt){
     /* GFX-C: under the title (it was centred on the third dimension tier and ran off the right edge) */
     txt(s,cx,31,"breakout uses h_ef' = "+fmt(icHef.hefBreakout,1)+'" (§17.6.2.1.2, breakout eqs. only); the reinforcement check and this drawing use h_ef = '+fmt(hefPhys,1)+'"',"lblTxt","middle",9,"#b45309");
   }
-  if(!cmp) axisTriad(s,34,62,(kind==="tension"&&axY)?"elevX":"elevY");   /* GFX-D: the sheet titles name the axis */   /* GFX-C: top left (at the bottom its origin note ran into the caption) */
+  if(!cmp && kind==="shear") axisTriad(s,30,H-62,"elevY",28);   /* RPT-1: bottom-left (top-left it overlapped the 0.5·c_a1 label) */
+  else if(!cmp) axisTriad(s,34,62,(kind==="tension"&&axY)?"elevX":"elevY");   /* GFX-D: the sheet titles name the axis */   /* GFX-C: top left (at the bottom its origin note ran into the caption) */
   body.appendChild(svgWithControls(s));
   return s.__rebarFit||null;
 }
@@ -10496,7 +10541,7 @@ function drawShearFace(body,opt){
   }
   const cutTxt=(fcut===null)? "" : " at "+(sb.nx!==0?"x":"y")+" = "+fmt(+opt.cut,2)+"\u2033";   /* GFX-G */
   const fL=(sb.nx!==0)? "B-B" : "A-A";   /* GFX-G: the letter of the cut this section follows */
-  txt(s,cx,16,cmp? "SECTION "+fL+" (the "+sb.edge+" face)"+cutTxt : "SECTION "+fL+" \u2014 the "+sb.edge+" face, looking along V"+(fcut===null? ": A_Vc and the shear legs in section" : cutTxt+" (beyond: lighter)"),"lblTxt","middle",10);
+  txt(s,cx,16,cmp? "SECTION "+fL+" (the "+sb.edge+" face)"+cutTxt : "SECTION "+fL+(cb? " \u00b7 combination "+cb.name : "")+" \u2014 the "+sb.edge+" face, looking along V"+(fcut===null? ": A_Vc and the shear legs in section" : cutTxt+" (beyond: lighter)"),"lblTxt","middle",10);
   if(cmp){ body.appendChild(svgWithControls(s)); return; }
   if(sg>0) txt(s,T(sb.tE),baseY+14,"+"+tName+" →","lblTxt","end",9,"#555");
   else txt(s,T(sb.tE),baseY+14,"← +"+tName,"lblTxt","start",9,"#555");
@@ -11699,7 +11744,7 @@ function openComboGenerator(){
     if(!gen.length){ alert("Nothing to apply — no combinations generated."); return; }
     if(!confirm("This replaces all "+S.combos.length+" existing combination(s) with "+
                 gen.length+" generated one(s). Continue?")) return;
-    S.combos=gen; S.detailCombo=0;
+    S.combos=gen; S.detailCombo=0; S.ui.detailComboSet=false;   /* RPT-1 */
     autosave(); overlay.remove(); buildTabs();
   });
   foot.appendChild(cancel); foot.appendChild(apply); box.appendChild(foot);
@@ -11805,7 +11850,7 @@ function openPrintSettings(){
 const BPAD_REFS=[
   ["ACI 318-19","Building Code Requirements for Structural Concrete — Ch. 17 (anchoring), §22.8 (bearing), Ch. 25 (development)"],
   ["AISC DG1","AISC Design Guide 1, Base Plate and Anchor Rod Design, 2nd Ed. (plate bending, bearing)"],
-  ["AISC 360","Specification for Structural Steel Buildings — §J3.10 (bolt bearing / tearout), §E3 (rod compression); edition: verify"],
+  ["AISC 360-16","Specification for Structural Steel Buildings, 2016 — §J3.10 (bolt bearing / tearout, Eq. J3-6a/J3-6c), §E3 (rod compression)"],   /* RPT-1: the equations follow 360-16 */
   ["ASCE 7-22","Minimum Design Loads — §2.3 (LRFD load combinations, when generated in this tool)"],
   ["Hilti PROFIS","PROFIS Engineering stand-off lever-arm method (anchor bending with stand-off), as reproduced in this tool"]];
 function bpadPageCSS(){
@@ -11934,6 +11979,7 @@ function buildPrintReport(){
       });
     } else {
       S.ui.tab=id;
+      S.detailCombo=S.ui.detailComboSet? savedCombo : gi;   /* RPT-1: the governing combination unless the engineer selected one (the Summary then says so) */
       const rr=(id==="tabTRebar"||id==="tabVRebar")? bpadResultRows(id,null) : null;
       addSection((BPAD_OPTIN[id]?"Appendix: ":"")+label, renderTab(id), rr, null, {tab:id});
     }
@@ -15678,7 +15724,7 @@ manPart("pA","A. Notation & References",[
       var c=SL.cases[slot]=SL.cases[slot]||{P:0,Vx:0,Vy:0,Mx:0,My:0};
       Object.keys(r.slots[slot]).forEach(function(k){ c[k]=r.slots[slot][k]; });
     });
-    if(o.regen && r.combos){ S.combos=r.combos; S.detailCombo=0; }
+    if(o.regen && r.combos){ S.combos=r.combos; S.detailCombo=0; S.ui.detailComboSet=false; }   /* RPT-1 */
     if(!S.bxSrc || typeof S.bxSrc!=='object') S.bxSrc={};
     var s=chk.sups[o.sup];
     S.bxSrc.memberReactions={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',
