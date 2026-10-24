@@ -2852,3 +2852,20 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   ```
 - **Governing provision:** none (layout).
 - **Check:** in the headless page, the Distribution pane holds `inShear,inForceModel` and the Reinforcement pane holds `inPed,inTRebar,inVRebar`. No result changes.
+
+## 2026-10-24 — T3D-1: 3-D view orbits and zooms on touch screens (display only)
+- **Engineer report (2026-10-24):** on a tablet the 3-D view would not orbit.
+- **Cause:** the view listened only to `mousedown`/`mousemove`/`mouseup` and `wheel`. Touch input does not produce those as drags, and the page scrolled instead.
+- **Anchor text:** `renderer.domElement.addEventListener("mousedown",e=>{drag=true;lx=e.clientX;ly=e.clientY;});`
+- **Before:** mouse-only listeners (mousedown / window mouseup / mousemove) plus wheel.
+- **After:**
+  - Pointer events (`pointerdown`/`pointermove`/`pointerup`/`pointercancel`/`pointerleave`) with pointer capture, covering mouse, touch and pen.
+  - One pointer orbits, at the same rate (0.01 rad/px). Two pointers pinch-zoom: `dist = dist0 · pinch0 / pinch`.
+  - `touch-action:none` on the canvas.
+  - The wheel zoom is unchanged.
+- **Governing provision:** none (UI).
+- **Check:** headless Chromium with `hasTouch` and CDP touch events.
+  - A one-finger drag moved the camera from (84.71, 134.08, −18.56) to (5.66, 160.82, −43.32).
+  - A two-finger spread zoomed the camera distance from 166.6 to 81.0.
+  - Mouse drag still orbits.
+  - 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
