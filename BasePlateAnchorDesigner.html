@@ -155,39 +155,81 @@
   .chkRow.sub{margin-left:22px;font-size:10pt;color:#333;}
   /* print */
   #printReport{position:absolute;left:-100000px;top:0;width:850px;display:block;}
-  #printReport .rptTitle{font-size:15pt;font-weight:bold;text-align:center;margin:0 0 2px;}
-  #printReport .rptSub{text-align:center;font-style:italic;font-size:10pt;margin:0 0 10px;}
-  #printReport .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid var(--ink);padding:6px 8px;font-size:10pt;margin-bottom:10px;}
-  #printReport h2{font-size:13pt;border-bottom:1px solid var(--ink);margin:14px 0 6px;}
-  #printReport h3{font-size:11pt;margin:10px 0 4px;}
-  #printReport .foot{margin-top:16px;border-top:1px solid var(--ink);padding-top:6px;font-size:9pt;font-style:italic;color:#444;}
+  .crdoc .rptTitle{font-size:15pt;font-weight:bold;text-align:center;margin:0 0 2px;}
+  .crdoc .rptSub{text-align:center;font-style:italic;font-size:10pt;margin:0 0 10px;}
+  .crdoc .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid var(--ink);padding:6px 8px;font-size:10pt;margin-bottom:10px;}
+  .crdoc h2{font-size:13pt;border-bottom:1px solid var(--ink);margin:14px 0 6px;}
+  .crdoc h3{font-size:11pt;margin:10px 0 4px;}
+  .crdoc .foot{margin-top:16px;border-top:1px solid var(--ink);padding-top:6px;font-size:9pt;font-style:italic;color:#444;}
   /* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
-  #printReport.crdoc{background:#fff;color:#000;font:11pt/1.35 "Times New Roman",Times,serif;}
-  #printReport.crdoc a{color:#000;text-decoration:none;}
-  #printReport .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
-  #printReport .cr-cover-t{text-align:center;margin-bottom:28pt;}
-  #printReport .cr-cover .rptHdrGrid{box-sizing:border-box;width:100%;}
-  #printReport .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;}
-  #printReport .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
-  #printReport .cr-cover .cr-cover-p{font-weight:400;}
-  #printReport .cr-front{break-after:page;}
-  #printReport .cr-break{break-before:page;}
-  #printReport h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid;}
-  #printReport .cr-front h2.cr-h1{margin-top:10pt;}
-  #printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt;} #printReport .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top;}
-  #printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0;} #printReport .cr-toc>li{margin:3pt 0;} #printReport .cr-toc ol{padding-left:18pt;font-size:10.5pt;}
-  #printReport .cr-p{margin:0 0 7pt;} #printReport .cr-small{font-size:9.5pt;margin-top:18pt;}
-  #printReport .secTitle{font:700 11pt "Times New Roman",Times,serif;}
-  #printReport .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;}
-  #printReport .cr-line{display:grid;grid-template-columns:2.4in 1fr 0.9in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;}
-  #printReport .cr-res{border-top:0.6pt solid #000;}
-  #printReport .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
-  #printReport .cr-r{text-align:right;} #printReport .cr-st-fail{text-decoration:underline;}
-  #printReport .cr-refi{font-size:9pt;font-style:italic;}
-  #printReport .caret{display:none;}
+  .crdoc{background:#fff;color:#000;font:11pt/1.35 "Times New Roman",Times,serif;}
+  .crdoc a{color:#000;text-decoration:none;}
+  .crdoc .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
+  .crdoc .cr-cover-t{text-align:center;margin-bottom:28pt;}
+  .crdoc .cr-cover .rptHdrGrid{box-sizing:border-box;width:100%;}
+  .crdoc .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;}
+  .crdoc .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
+  .crdoc .cr-cover .cr-cover-p{font-weight:400;}
+  .crdoc .cr-front{break-after:page;}
+  .crdoc .cr-break{break-before:page;}
+  .crdoc h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid;}
+  .crdoc .cr-front h2.cr-h1{margin-top:10pt;}
+  .crdoc .cr-refs{border-collapse:collapse;margin:0 0 14pt;} .crdoc .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top;}
+  .crdoc .cr-toc,.crdoc .cr-toc ol{list-style:none;margin:0;padding:0;} .crdoc .cr-toc>li{margin:3pt 0;} .crdoc .cr-toc ol{padding-left:18pt;font-size:10.5pt;}
+  .crdoc .cr-p{margin:0 0 7pt;} .crdoc .cr-small{font-size:9.5pt;margin-top:18pt;}
+  .crdoc .secTitle{font:700 11pt "Times New Roman",Times,serif;}
+  .crdoc .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;}
+  .crdoc .cr-line{display:grid;grid-template-columns:2.4in 1fr 0.9in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;}
+  .crdoc .cr-res{border-top:0.6pt solid #000;}
+  .crdoc .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
+  .crdoc .cr-r{text-align:right;} .crdoc .cr-st-fail{text-decoration:underline;}
+  .crdoc .cr-refi{font-size:9pt;font-style:italic;}
+  .crdoc .caret{display:none;}
   .wkLink{font-size:9pt;color:#555;margin:2px 0 8px;} a.wkA{color:var(--accent,#1f4e79);text-decoration:none;cursor:pointer;} a.wkA:hover{text-decoration:underline;}
   .sec.wkFlash{animation:wkflash 1.4s ease-out;} @keyframes wkflash{from{background:#dde9f6;}to{background:transparent;}}
-  #printReport a.wkA{color:#000;font-style:italic;}
+  .crdoc a.wkA{color:#000;font-style:italic;}
+  /* RPT-2 (2026-10-24): the calculation sheet reads like Gusset Plate Rating's — no app chrome (cards, shaded
+     heads, coloured boxes), numbered headings with a colon, worked items as "title + reference | equations",
+     a "where" table of the variables, a D/C result line, numbered notes, captioned figures, Times throughout.
+     Scoped to .crdoc: the same document is the printed report (#printReport) and the Report tab. */
+  .crdoc{background:#fff;color:#000;font:11pt/1.35 "Times New Roman",Times,serif;}
+  .crdoc .tabPage{display:block;}
+  .crdoc .sec{border:0;border-radius:0;background:none;box-shadow:none;margin:0 0 6pt;overflow:visible;}
+  .crdoc .sec>.secHead{display:flex;background:none;border:0;padding:0;margin:14pt 0 6pt;cursor:default;break-after:avoid;}
+  .crdoc .sec>.secBody,.crdoc .sec.collapsed>.secBody{display:block;padding:0;}
+  .crdoc .secTitle{font:700 11pt "Times New Roman",Times,serif;text-transform:none;letter-spacing:0;color:#000;margin:0;}
+  .crdoc .eqBlock{display:grid;grid-template-columns:2.15in minmax(0,1fr);column-gap:12pt;border:0;margin:0;padding:5pt 0 3pt;border-top:0.4pt solid #bbb;break-inside:avoid;}
+  .crdoc .eqTitle{grid-column:1;grid-row:1 / span 40;font:400 11pt "Times New Roman",Times,serif;}
+  .crdoc .eqRef{display:block;margin:2pt 0 0;font-size:9pt;font-style:italic;color:#000;}
+  .crdoc .eqLine{grid-column:2;margin:1pt 0;font-size:10.5pt;overflow:visible;}
+  .crdoc .eqLine .katex-display{margin:2pt 0;text-align:left;} .crdoc .eqLine .katex-display>.katex{text-align:left;}
+  .crdoc .varList,.crdoc .cr-where{grid-column:1 / -1;margin:2pt 0 4pt 0.5in;font-size:9.5pt;color:#000;}
+  .crdoc .cr-whereHd{font-style:italic;margin:0 0 1pt;}
+  .crdoc table.cr-wtab{border-collapse:collapse;} .crdoc .cr-wtab td{border:0;padding:1pt 10pt 1pt 0;vertical-align:top;font-size:9.5pt;}
+  .crdoc .cr-wtab td.cr-wsym{white-space:nowrap;} .crdoc .cr-wtab td.cr-wval{white-space:nowrap;text-align:right;}
+  .crdoc table.tbl{border-collapse:collapse;margin:6pt 0 8pt;font-size:9.5pt;}
+  .crdoc .tbl th,.crdoc .tbl td{border:0.6pt solid #000;padding:2pt 5pt;background:none;color:#000;font-family:"Times New Roman",Times,serif;}
+  .crdoc .tbl th{background:#e9e9e9;font-weight:700;text-align:center;} .crdoc .tbl tr{break-inside:avoid;}
+  .crdoc .tbl tr.gov td{font-weight:700;background:none;}
+  .crdoc .tbl td,.crdoc .tbl th{color:#000!important;background-color:transparent;} .crdoc .tbl th{background:#e9e9e9!important;}
+  .crdoc .sec>.secHead .caret{display:none;}
+  .crdoc .note{font-size:9.5pt;font-style:italic;color:#000;margin:3pt 0 8pt 0.25in;}
+  .crdoc .cr-noteBox{font-size:9.5pt;margin:4pt 0 8pt 0.25in;color:#000;}
+  .crdoc .cr-notes{margin:6pt 0 8pt 0;font-size:9.5pt;} .crdoc .cr-notes>div{margin:0 0 4pt 0.25in;}
+  .crdoc .cr-notesHd{font:700 10.5pt "Times New Roman",Times,serif;margin:10pt 0 4pt;}
+  .crdoc .cr-val{font-style:italic;}
+  .crdoc .cr-cap{font-size:9.5pt;font-style:italic;margin:3pt 0 10pt;text-align:center;break-before:avoid;page-break-before:avoid;}
+  .crdoc .cr-bn{margin:0 0 8pt;font-size:10pt;} .crdoc .cr-bn .cr-bnh{font-weight:700;}
+  .crdoc svg{max-width:100%;height:auto;}
+  .crdoc .fRow{margin:2pt 0;} .crdoc .fRow label{min-width:2.15in;}
+  /* the Report tab's viewer: tool bar and a page-like document */
+  .crv-bar{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px;padding:8px 10px;background:var(--paper);border:1px solid var(--color-border);border-radius:6px;font-family:var(--font-ui);font-size:9.5pt;}
+  .crv-bar .crv-sp{flex:1;} .crv-bar label{display:inline-flex;align-items:center;gap:5px;}
+  .crv-doc{display:block;max-width:8.5in;margin:0 auto;padding:0.5in 0.65in 0.8in;border:1px solid var(--color-border);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .crv-doc .cr-cover{min-height:0;display:block;padding:0 0 14pt;margin:0 0 16pt;border-bottom:1pt solid #000;break-after:auto;}
+  .crv-doc .cr-front{margin-bottom:12pt;}
+  .crv-doc a{cursor:pointer;} .crv-doc a:hover{text-decoration:underline;}
+  .crv-doc .cr-flash{animation:wkflash 1.4s ease-out;}
   #valBox{margin:6px 0 0;}
   .valErr{background:#fdecea;border-left:4px solid var(--fail);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
   .valWarn{background:#fef7e6;border-left:4px solid var(--warn);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
@@ -1171,7 +1213,13 @@ function eqBlock(opts){
   if(opts.ref){ const r=el("span","eqRef"); r.textContent="["+bpPlainTex(opts.ref)+"]"; t.appendChild(r); }   /* RPT-1 */
   wrap.appendChild(t);
   (opts.lines||[]).forEach(src=>{ const l=el("div","eqLine"); tex(l,src,true); wrap.appendChild(l); });
-  if(opts.vars && opts.vars.length){
+  if(opts.vars && opts.vars.length && S.ui && S.ui.printing){   /* RPT-2: report — "where" table (symbol | description | value), as Gusset */
+    const wh=el("div","cr-where"); wh.appendChild(el("div","cr-whereHd","where"));
+    const tb=el("table","cr-wtab");
+    opts.vars.forEach(vd=>{ const tr=el("tr"); const a=el("td","cr-wsym"); tex(a,vd[0],false); tr.appendChild(a);
+      tr.appendChild(el("td","cr-wdesc",bpPlainTex(vd[2]||""))); tr.appendChild(el("td","cr-wval",bpPlainTex(vd[1]))); tb.appendChild(tr); });
+    wh.appendChild(tb); wrap.appendChild(wh);
+  } else if(opts.vars && opts.vars.length){
     const v=el("div","varList");
     opts.vars.forEach(vd=>{ const row=el("div"); const sym=el("span"); tex(sym,vd[0],false);
       row.appendChild(sym); row.appendChild(document.createTextNode(" = "+bpPlainTex(vd[1])+(vd[2]?" \u2014 "+bpPlainTex(vd[2]):""))); v.appendChild(row); });   /* RPT-1 */
@@ -5590,6 +5638,7 @@ function TABS(){
   if(S.tRebar.present) t.push(["tabTRebar","Tension Rebar"]);
   if(S.vRebar.present) t.push(["tabVRebar","Shear Rebar"]);
   t.push(["tabDetail","Detail Sheet"]);   /* GFX-D */
+  t.push(["tabReport","Report"]);   /* RPT-2: the calculation sheet on screen (same builder as Print / PDF) */
   t.push(["tabVisual","3-D & Visuals"]);
   t.push(["tabValidation","Validation"]);
   t.push(["tabManual","User Manual"]);
@@ -5660,6 +5709,7 @@ function buildOutput(){
     case "tabTRebar":  buildTRebarTab(pg); break;
     case "tabVRebar":  buildVRebarTab(pg); break;
     case "tabDetail":  buildDetailTab(pg); break;   /* GFX-D */
+    case "tabReport":  buildReportTab(pg); break;   /* RPT-2 */
     case "tabVisual":  buildVisualTab(pg); break;
     case "tabValidation": buildValidationTab(pg); break;
     case "tabManual": buildManualTab(pg); break;
@@ -5667,6 +5717,36 @@ function buildOutput(){
   if(window.katex) renderAllTex(pg);
 }
 function renderAllTex(){ /* eqBlock renders inline already */ }
+/* RPT-2 (2026-10-24): Report tab — the calculation sheet on screen. It is built by buildPrintReport()
+   into this tab (one source with Print / PDF), each time the tab is drawn, i.e. on opening it and on
+   every input change while it is open. Table-of-contents and "Basis" links scroll within the document;
+   "see §n.k" links jump to the tab and card where the value is worked (the global a.wkA handler). */
+let bpRptTimer=0;
+function buildReportTab(pg){
+  const bar=el("div","crv-bar");
+  const pb=el("button","primary","Print / PDF");
+  pb.addEventListener("click",()=>{ buildPrintReport(); bpadApplyPageCSS(true); setTimeout(()=>window.print(),120); });
+  bar.appendChild(pb);
+  const lab=el("label"); const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(S.print.sections.tabDetail===true);
+  cb.addEventListener("change",()=>{ S.print.sections.tabDetail=cb.checked; autosave(); buildOutput(); });
+  lab.appendChild(cb); lab.appendChild(document.createTextNode("Include Detail Sheet appendix")); bar.appendChild(lab);
+  bar.appendChild(el("span","crv-sp"));
+  const ps=el("button",null,"Report contents…"); ps.title="Sections and combinations included (the same settings as Print / PDF)";
+  ps.addEventListener("click",openPrintSettings); bar.appendChild(ps);
+  bar.appendChild(el("span","note",(S.print.combos.all!==false)? "Every combination worked" : "Governing combination worked"));
+  pg.appendChild(bar);
+  const doc=el("article","crdoc crv-doc"); pg.appendChild(doc);
+  /* building the whole sheet takes about a second: debounce it so typing stays responsive */
+  doc.appendChild(el("div","note","Building the calculation sheet…"));
+  clearTimeout(bpRptTimer);
+  bpRptTimer=setTimeout(()=>{ if(!doc.isConnected || S.ui.tab!=="tabReport") return;
+    const op=document.getElementById("outputPanel"), keep=op? op.scrollTop : 0;
+    buildPrintReport(doc); if(op) op.scrollTop=keep; doc.dataset.ready="1"; },250);
+  doc.addEventListener("click",e=>{ const a=e.target.closest("a"); if(!a || a.classList.contains("wkA")) return;
+    const h=a.getAttribute("href")||""; if(h.charAt(0)!=="#") return; e.preventDefault();
+    const t=doc.querySelector('[id="'+h.slice(1)+'"]'); if(!t) return;
+    t.scrollIntoView({behavior:"smooth",block:"start"}); t.classList.add("cr-flash"); setTimeout(()=>t.classList.remove("cr-flash"),1400); });
+}
 
 /* BP-T1 (2026-10-21): the §17.9 PASS/FAIL rows, torqued anchors only (untorqued spacing < 4dₐ blocks the output) */
 function installRows(){
@@ -6199,7 +6279,7 @@ function buildSummary(pg){
   /* overall */
   const worst=checks.reduce((m,c)=>{ const v=isNaN(c.dcr)?Infinity:c.dcr; return (!c.na&&v>m)?v:m; },0);
   const box=el("div",worst>1?"errBox":"okBox",
-    worst>1? "One or more checks FAIL — maximum DCR = "+fmtDCR(worst)+". See red chips."
+    worst>1? "One or more checks FAIL — maximum DCR = "+fmtDCR(worst)+(S.ui.printing? ". See the table above." : ". See red chips.")   /* RPT-2: the report has no chips */
            : "All checks pass — maximum DCR = "+fmtDCR(worst)+".");
   pg.appendChild(box);
 
@@ -6405,7 +6485,8 @@ function renderSteps(body,steps){ (steps||[]).forEach(s=>body.appendChild(eqBloc
    because for several ACI modes the demand basis is the thing most easily got
    wrong. */
 function dcrBox(body,dcr,na,d){ const st=statusOf(dcr,na);
-  const box=el("div",st==="fail"?"errBox":st==="na"?"warnBox":"okBox");
+  const box=el("div",(st==="fail"?"errBox":st==="na"?"warnBox":"okBox")+" dcrBox");   /* RPT-2: the report turns it into a result line */
+  box.dataset.st=st; box.dataset.dcr=na? "" : String(dcr);
   if(na){ box.textContent="Not applicable."; body.appendChild(box); return; }
   const verdict="DCR = "+fmtDCR(dcr)+" — "+(st==="fail"?"FAILS":"OK");
   if(!d || !isFinite(d.load) || !isFinite(d.cap)){ box.textContent=verdict; body.appendChild(box); return; }
@@ -7963,7 +8044,7 @@ function drawPlan(body){
 
   /* coordinate triad — lower-left */
   axisTriad(s,pad-40,H-pad+50,"plan");
-  txt(s,cx,H-10,"PLAN — click any dimension to edit it (c_a dims override the concrete edge distance)","lblTxt","middle",10);
+  txt(s,cx,H-10,(S.ui.printing? "PLAN" : "PLAN — click any dimension to edit it (c_a dims override the concrete edge distance)"),"lblTxt","middle",10);
   txt(s,cx,H-1,"Gap dimensions (c_a, e_x, e_y) ask which element should move before applying the change.","lblTxt","middle",8,"#8a6d1f");
   if(S.conc.ca_override){
     const bn=txt(s,cx,26,"\u26a0 c_a OVERRIDES ACTIVE — edge distances are pinned at the entered values; editing plate/pedestal/spacing does NOT change them. Click a c_a dimension and enter 0 to release a side.","lblTxt","middle",10,"#b45309");
@@ -11775,7 +11856,7 @@ function openPrintSettings(){
   tabs.forEach(([id,label])=>{
     const row=el("div","chkRow"); const cb=document.createElement("input"); cb.type="checkbox";
     const optIn=(id==="tabValidation"||id==="tabManual"||id==="tabDetail");   /* D11: appendices, off unless ticked (GFX-D: the detail sheet too) */
-    if(id==="tabVisual") return;                              /* 3-D is never printed */
+    if(id==="tabVisual"||id==="tabReport") return;            /* 3-D is never printed; the Report tab is the document itself (RPT-2) */
     cb.checked=optIn? S.print.sections[id]===true : S.print.sections[id]!==false; cb.addEventListener("change",()=>{S.print.sections[id]=cb.checked;autosave();});
     row.appendChild(cb); row.appendChild(document.createTextNode(label+(optIn?" (appendix)":""))); box.appendChild(row);
   });
@@ -11825,7 +11906,7 @@ function openPrintSettings(){
     const nC=(CC&&CC.combos)?CC.combos.length:0;
     const perComboIds=["tabPlate","tabAnchor","tabConc"];
     const nPerCombo=perComboIds.filter(id=>S.print.sections[id]!==false && TABS().some(t=>t[0]===id)).length;
-    const nOther=TABS().filter(([id])=>id!=="tabVisual" && ((id==="tabValidation"||id==="tabManual"||id==="tabDetail")? S.print.sections[id]===true : S.print.sections[id]!==false) && perComboIds.indexOf(id)<0).length;
+    const nOther=TABS().filter(([id])=>id!=="tabVisual" && id!=="tabReport" && ((id==="tabValidation"||id==="tabManual"||id==="tabDetail")? S.print.sections[id]===true : S.print.sections[id]!==false) && perComboIds.indexOf(id)<0).length;
     let nRendered=(S.print.combos.all!==false)? nC : 1;
     let nCollapsed=0;
     if(S.print.collapseIdentical!==false && CC && CC.combos && (S.print.combos.all!==false)){
@@ -11916,9 +11997,69 @@ function bpadResultBlock(rows){
   });
   return box;
 }
-function buildPrintReport(){
-  const holder=document.getElementById("printReport"); holder.innerHTML="";
-  holder.className="crdoc";
+/* RPT-2 (2026-10-24): the calculation sheet as Gusset Plate Rating prints it. One builder: with no
+   argument it fills #printReport (Print / PDF); the Report tab passes its own container and shows the
+   same document on screen. Polishing (bpRptPolishTab / bpRptPolishDoc) strips the app's controls and
+   chrome, keeps every worked equation, value, result, drawing and §-link. */
+function bpRptPolishTab(id,root){
+  root.removeAttribute("id");   /* the clone must not carry the live page's id */
+  root.querySelectorAll(".svgTools,.bpCutCtl,.noPrint,#dash,.chip").forEach(e=>e.remove());
+  root.querySelectorAll(".fRow").forEach(r=>{ const lab=r.querySelector("label"); if(lab && /^\s*Detailed combination/.test(lab.textContent)) r.remove(); });
+  root.querySelectorAll("div,p").forEach(d=>{ if(d.isConnected && d.querySelectorAll("div,table,svg").length===0 && /^\s*Click any\b/.test(d.textContent) && d.textContent.length<140) d.remove(); });
+  root.querySelectorAll("svg text").forEach(t=>{ if(/^\s*click any\b/i.test(t.textContent)) t.remove(); });   /* on-screen hints drawn in the figures */
+  if(id==="tabSummary"){
+    const dg=root.querySelector('[data-secid="sumDiag"],#sumDiag'); if(dg) dg.remove();   /* "Why is this failing?" — interactive */
+    const cmp=root.querySelector('[data-secid="sumCompare"],#sumCompare');
+    if(cmp){ const t=cmp.querySelector("table.tbl");
+      if(!(S.snapshots&&S.snapshots.length) || !t) cmp.remove();
+      else { const b=cmp.querySelector(".secBody"); b.innerHTML=""; b.appendChild(t); b.appendChild(el("div","note","Saved designs, re-analysed with the current program: D/C of each check.")); } }
+    /* the governing D/C table first; the banners under it as numbered notes; no chip list */
+    const tbl=root.querySelector('[data-secid="sumTable"],#sumTable');
+    const boxes=[...root.children].filter(c=>/\b(errBox|warnBox|okBox|note)\b/.test(c.className||""));
+    if(tbl){ root.insertBefore(tbl,root.firstChild);
+      if(boxes.length){ const nb=tbl.querySelector(".secBody")||tbl; nb.appendChild(el("div","cr-notesHd","Notes"));
+        const wrap=el("div","cr-notes"); boxes.forEach((b,i)=>{ const d=el("div"); d.innerHTML="<b>Note "+(i+1)+".</b> "+b.innerHTML; wrap.appendChild(d); b.remove(); });
+        nb.appendChild(wrap); } }
+  }
+  /* controls → their value as static text; buttons out */
+  root.querySelectorAll("select").forEach(x=>{ const o=x.options[x.selectedIndex]; x.replaceWith(el("span","cr-val",o? o.textContent : "")); });
+  root.querySelectorAll("input").forEach(x=>{ if(x.type==="checkbox"||x.type==="radio") x.replaceWith(el("span","cr-val",x.hasAttribute("checked")? "\u2612" : "\u2610"));
+    else if(/^(range|file|hidden|button|submit)$/.test(x.type)) x.remove(); else x.replaceWith(el("span","cr-val",x.getAttribute("value")||"")); });
+  root.querySelectorAll("textarea").forEach(x=>x.replaceWith(el("span","cr-val",x.value||x.textContent||"")));
+  root.querySelectorAll("button").forEach(x=>x.remove());
+}
+function bpRptPolishDoc(bodyEl,addSection){
+  /* D/C boxes → result lines */
+  bodyEl.querySelectorAll(".dcrBox").forEach(b=>{
+    const st=b.dataset.st, dcr=b.dataset.dcr===""? null : +b.dataset.dcr, det=b.children[1]? b.children[1].textContent.trim() : "";
+    const line=el("div","cr-results"); const r=el("div","cr-line cr-res");
+    r.appendChild(el("div","cr-d","Result:"));
+    const m=el("div","cr-m"); m.innerHTML=(st==="na"? "not applicable" : "D/C = <b>"+(dcr===null? "n/a" : fmtDCR(dcr))+"</b>")+(det? " <span class='cr-refi'>("+det.replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+")</span>" : "");
+    r.appendChild(m); const v=el("div","cr-r"+(st==="fail"?" cr-st-fail":"")); v.innerHTML="<b>"+(st==="na"?"N/A":st==="fail"?"FAIL":"PASS")+"</b>"; r.appendChild(v);
+    line.appendChild(r); b.replaceWith(line); });
+  /* coloured banners → compact notes */
+  bodyEl.querySelectorAll(".errBox,.warnBox,.okBox,.valErr,.valWarn").forEach(b=>{ const d=el("div","cr-noteBox"); d.innerHTML="<b>Note:</b> "+b.innerHTML; b.replaceWith(d); });
+  /* figures: a numbered caption under each drawing */
+  let nf=0;
+  bodyEl.querySelectorAll("svg").forEach(sv=>{ if(sv.closest(".katex,.cr-cap")) return;
+    const vb=(sv.getAttribute("viewBox")||"").trim().split(/\s+/).map(Number); if(!(vb[2]>=250)) return;
+    const t=[...sv.querySelectorAll("text")].find(x=>(+x.getAttribute("y")||99)<=40 && x.textContent.trim().length>6);
+    const cap=el("p","cr-cap","Figure "+(++nf)+(t? " \u2014 "+t.textContent.trim() : ""));
+    const par=sv.parentElement, anchor=(par && !par.classList.contains("secBody") && par.children.length<=2)? par : sv;
+    anchor.parentNode.insertBefore(cap,anchor.nextSibling); });
+  /* long background prose → the "Notes / basis" appendix, a one-line pointer left in place */
+  const longs=[...bodyEl.querySelectorAll(".note")].filter(n=>n.textContent.length>450 && !n.querySelector("table,svg,.katex"));
+  if(longs.length){
+    const app=el("div");
+    longs.forEach((n,i)=>{ const id="crp-basis-"+(i+1), txt=n.textContent.trim(), first=(txt.match(/^.{20,110}?[.:;](\s|$)/)||[txt.slice(0,90)+"…"])[0].trim();
+      const item=el("div","cr-bn"); item.id=id; item.innerHTML="<span class='cr-bnh'>B."+(i+1)+"</span> "+n.innerHTML; app.appendChild(item);
+      const ptr=el("p","note"); ptr.innerHTML="Basis: <a href='#"+id+"'>see Note B."+(i+1)+"</a> \u2014 "+first.replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c])); n.replaceWith(ptr); });
+    addSection("Notes / basis", app, null);
+  }
+}
+function buildPrintReport(target){
+  const holder=target||document.getElementById("printReport"); holder.innerHTML="";
+  holder.className=target? "crdoc crv-doc" : "crdoc";
   S.ui.printing=true;   /* interactive controls render as static marks in the PDF */
   const tabs=TABS();
   const savedTab=S.ui.tab, savedCombo=S.detailCombo;
@@ -11932,7 +12073,7 @@ function buildPrintReport(){
   function addSection(title, content, resRows, xrefHtml, meta){
     const n=secNum++, id="crp-"+n, sec=el("section","cr-sec"+(n>1?" cr-break":""));
     meta=meta||{}; if(meta.tab) sec.dataset.tab=meta.tab; if(meta.ci!=null) sec.dataset.ci=meta.ci;
-    const h=el("h2","cr-h1",n+". "+title); h.id=id; sec.appendChild(h);
+    const h=el("h2","cr-h1",n+". "+title+":"); h.id=id; sec.appendChild(h);   /* RPT-2: "n. TITLE:" as Gusset */
     const subs=[];
     if(xrefHtml){ const p=el("div","cr-p"); p.innerHTML=xrefHtml; sec.appendChild(p); }
     if(content){
@@ -11942,7 +12083,7 @@ function buildPrintReport(){
         if(meta.tab && sc.id) cardMap[meta.tab+"|"+(meta.ci!=null?meta.ci:"")+"|"+sc.id]={num:n+"."+(k+1),id:sid};
         sc.id=sid; sc.removeAttribute("data-secid");
         const tt=t.textContent.replace(/^\s*\d+\.\s*/,"");   /* the tab's own card number is replaced by n.k */
-        subs.push({t:tt, id:sid}); t.textContent=n+"."+(k+1)+" "+tt;
+        subs.push({t:tt, id:sid}); t.textContent=n+"."+(k+1)+". "+tt+":";   /* RPT-2 */
       });
       sec.appendChild(content);
     }
@@ -11960,11 +12101,12 @@ function buildPrintReport(){
        over (the combination picker otherwise printed the FIRST combination in every section) */
     tmp.querySelectorAll("select").forEach(sl=>[...sl.options].forEach(o=>{ if(o.selected) o.setAttribute("selected",""); else o.removeAttribute("selected"); }));
     tmp.querySelectorAll("input").forEach(ip=>{ if(ip.type==="checkbox"||ip.type==="radio"){ if(ip.checked) ip.setAttribute("checked",""); else ip.removeAttribute("checked"); } else ip.setAttribute("value",ip.value); });
-    const cl=tmp.cloneNode(true); host.remove(); return cl;
+    const cl=tmp.cloneNode(true); host.remove(); bpRptPolishTab(id,cl); return cl;   /* RPT-2 */
   }
 
   const BPAD_OPTIN={tabValidation:1,tabManual:1,tabDetail:1};   /* D11: appendices print only when ticked (GFX-D: the detail sheet too) */
   tabs.forEach(([id,label])=>{
+    if(id==="tabReport") return;   /* RPT-2: the Report tab IS this document */
     if(S.print.sections[id]===false) return;
     if(BPAD_OPTIN[id] && S.print.sections[id]!==true) return;
     if(id==="tabVisual") return; /* skip live 3D in print */
@@ -12001,6 +12143,7 @@ function buildPrintReport(){
   });
   /* assumptions */
   if(S.assume.trim()){ const p=el("div"); p.style.whiteSpace="pre-wrap"; p.textContent=S.assume; addSection("Engineering Assumptions", p, null); }
+  bpRptPolishDoc(bodyEl,addSection);   /* RPT-2 */
 
   /* D11 links: "→ Tab · Card" becomes "see §n.k" (the same combination's section; else the governing one) */
   bodyEl.querySelectorAll("a.wkA").forEach(a=>{
