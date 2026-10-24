@@ -2883,3 +2883,74 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - Camera (1.10, 79.72, −14.33) before an input edit; (1.10, 79.72, −14.33) after it, unchanged.
   - Fit view → (78.03, 103.86, 79.38), the default framing.
   - 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+
+## 2026-10-24 — VR-1: every geometric property of the shear reinforcement enterable; automatic values stay the defaults (Tier 2, new inputs; default results unchanged)
+- **Engineer request (2026-10-24):** "The shear rebar is not allowing some input. I thought I would be able to define all the geometry." The app still decides eligibility.
+- **Saved data (§5, all additive; the defaults reproduce the automatic layout, so no migration is needed):**
+  - `S.vRebar.edgeSel` = "auto": the face the legs are detailed toward ("+x" / "-x" / "+y" / "-y").
+  - `S.vRebar.setOut` = 0: plan set-out of the bend (leg start) from the anchor row, + toward the edge.
+  - `S.vRebar.lenMode` = "ext": "ext" = `extBehind` behind the leading anchor row (as before); "total" = `legTotal`.
+  - `S.vRebar.legTotal` = 0: the total straight leg length from the bend. Choosing "total" prefills extBehind + setOut.
+  - `S.vRebar.gaugeOverride` = false, `gaugeGrp` = 0: the group-hairpin gauge override.
+  - `S.vRebar.tOffsetHp` = 0: the group-hairpin run offset along the edge. This is a new field; it is not `tOffset`, so saves with a group-bar offset are unaffected.
+  - `S.vRebar.vDepths` = "": custom depths of stacked group hairpins (comma list, top down).
+  - `S.ped.tieGrade` = null: the pedestal tie grade. null means the grade used before VR-1, i.e. the Shear Rebar grade, so every existing save keeps its f_y.
+- **`shearRebarIntercept`, hairpin / bar branch.** Anchor text: `/* VR-1: hairpins / bars may be detailed toward a chosen face`.
+  - **Leg edge.** `nx, ny` come from the chosen face (`legEdge`), else the governing edge. `bodyNx, bodyNy` stay the governing edge; `shearBodyGeom` now uses them.
+  - **Chosen face ≠ the governing edge** (`wrongEdge`). The reference row is not searched, and every leg is "not counted". The reason reads: "detailed toward the +y face; the governing shear breakout is toward the +x edge, so the leg does not cross its failure surface (not counted)". Counter `nWrongEdge`. The input panel shows the same in a red box.
+  - **Leg position and length.**
+    ```js
+    legStart = lead + setOut;
+    extBehind = (lenMode==="total") ? max(legTotal − setOut, 0) : max(R.extBehind, 0);
+    ```
+    `legLen = min(extBehind, roomBehind)` and `legEnd = lead − legLen` are unchanged. HP-1's "available behind" (u_ref − u_end) is unchanged.
+  - **Set-out behind the plane.** A negative set-out that puts the leg start behind the failure plane means the leg does not cross it. It is not counted (counter `nNoCross`); this test only runs for setOut < 0.
+  - **Group hairpin:**
+    - gauge = `max(gaugeGrp, d_b)` when overridden, else the automatic gauge as before;
+    - legs at `cTgrp + tOffsetHp ± gauge/2`;
+    - stacked depths from `vDepths` where given, else depth + k·vSpacing.
+  - **New return fields:** `legStart`, `setOut`, `lenMode`, `legTotal` (start → end), `wrongEdge`, `legEdge`, `bodyNx`, `bodyNy`, `nWrongEdge`, `nNoCross`, `gaugeOverride`, `tOffsetHp`.
+- **Closed tie with `S.ped`.**
+  - The Rt object adds `grade: S.ped.tieGrade||R.grade` (used in ℓ_dh).
+  - `shearRebarCheck`: `fy = rgrade(isTie && usePed && S.ped.tieGrade ? S.ped.tieGrade : R.grade).fy`.
+- **Inputs (`buildInputPanel`, shear reinforcement):**
+  - **Closed tie with `S.ped`.** Before: a note, plus Piece type and Grade. After: tie size, tie grade, sets, top depth, spacing and cover, inline. They write to `S.ped`, with a note that they are shared with 7a. The Shear Rebar "Grade" row is hidden.
+  - **Group hairpin.**
+    - The vertical spacing is always shown (before: only when the stack is > 1).
+    - New: custom stacked depths (text), a gauge override (checkbox + value; the note gives both the entered and the automatic gauge), and a run offset.
+  - **All hairpin and bar types.** New:
+    - "Detail the legs toward" (auto / face);
+    - "Set-out of the bend from the anchor row";
+    - "Leg length given as" (extension / total), with the field for the chosen definition and a note giving the derived values: start, length behind the row, total, and the part behind the failure plane.
+
+    The old label "Leg extension behind the failure plane" now reads "Leg extension behind the leading anchor row". That is what it always measured; since HP-1 the failure plane can be the back row.
+- **Drawings use the new geometry.** Legs run from `legStart` to `legEnd` in:
+  - DXF (`bpExportDxf`);
+  - the hairpin plan (legs and bends);
+  - the shear section A-A;
+  - the 3-D view (legs and bends);
+  - the Detail Sheet schedule length (start → end).
+
+  The breakout body is drawn for the governing edge (`bodyNx`/`bodyNy`). When the legs are detailed toward another face, the hairpin plan and section A-A carry a red line, and section B-B (the governing face) says the legs do not cross it.
+- **Not done:** the optional "per-anchor custom" mode (tick which anchors get hairpins). Done cleanly it needs a per-anchor list in the saved data, keyed to anchor numbers that change when the grid changes; left for a decision.
+- **Governing provision:** none changed. Eligibility is still decided by §17.5.2.1(b), R17.5.2.1(b) and HP-1.
+- **Check case (new inputs).** Pedestal 36 × 36 × 36, default 2 × 2 anchors (±6), V = 15 kip toward +x; Case 2, so the reference row is x = −6 and c_a1 = 24.
+  - **Group hairpin**, gauge 10 entered, offset 2, 2 stacked, depths "3, 8": legs at t = 2 ± 5 = −3 / 7 and z = 3 / 8.
+  - **Per-anchor**, total 20, set-out +1:
+    - start 6 + 1 = 7;
+    - behind the row 20 − 1 = 19 (room 18 + 6 − 2 = 22), so the end is 6 − 19 = −13;
+    - behind the failure plane −6 − (−13) = 7 < ℓ_d 12, so not counted.
+  - **Toward +y:** 0 of 8, with the wrong-edge reason.
+  - **Closed ties (24 × 24 × 58 pedestal, #4 pedestal ties):**
+    - tie grade null: f_y 60, 2 legs, φV_r 18.0;
+    - tie grade 75: f_y 75; ℓ_dh grows, so 0 legs. Each change follows from the input.
+- **Regression (defaults):**
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included.
+  - Test projects, origin/main vs this branch: `computeAll`, capacities, `allChecks`, `VALIDATION`, both intercepts (new fields excluded) and the report are identical for:
+    - the default project;
+    - the pedestal + `pedbars` + closed-tie project;
+    - the 4 × 2 U-stirrup / hairpin project;
+    - a group-hairpin project (2 stacked, engaging, ext 30);
+    - a closed-tie project without `S.ped`.
+  - The HP-1 sweep of 112 hairpin / bar designs: 112 of 112 identical.
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes. 0 page errors.
