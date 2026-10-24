@@ -8483,6 +8483,70 @@ drawForceMap.n=0;
    Schedule lengths are centreline lengths of the straight segments and bends as
    drawn (hooks and bend allowances not added), from the same geometry the checks
    use; "counted" is the per-leg verdict of the check. Display only. */
+/* ---- GFX-F (2026-10-24): compact plan and elevations for the Detail Sheet when no
+   reinforcement is entered. The input-tab drawings (drawPlan / drawElevation) are
+   900 px wide with click-to-edit lanes; scaled onto the page their text fell to
+   ≈4 px. These draw the same geometry at the size they print (plan 700 px, full
+   page width; elevations 348 px, half width), text ≥ 9 px: pedestal, plate,
+   column, anchors, the edge-distance / spacing chains (bpPlanDims) and the
+   vertical stack. Display only; values from anchorGeom(), colShape(), S. */
+function drawSheetPlan(body){
+  const P=S.plate, C=S.conc, A=S.anchor, g=anchorGeom();
+  const W=700, H=320, pad=72;
+  const px=C.plate_off_x||0, py=C.plate_off_y||0;
+  const sc=Math.min((W-2*pad)/C.Bx,(H-2*pad+10)/C.By);
+  const cx=W/2+10, cy=H/2+18, X=x=>cx+x*sc, Y=y=>cy-y*sc, XP=x=>X(x+px), YP=y=>Y(y+py);
+  const s=svg(W,H);
+  rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
+  rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#f6f4ee","#333",1.6);
+  colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.10)",stroke:"#9db4cc",sw:1,label:false});
+  const ar=Math.max(5,Math.min(11,A.dia*sc*0.6));
+  g.pts.forEach((p,i)=>{ circ(s,XP(p.x),YP(p.y),ar,"#fff","#000",1.4); txt(s,XP(p.x),YP(p.y)+3.4,String(i+1),null,"middle",9,"#111"); });
+  const ov=C.ca_override? " (override)" : "";
+  bpPlanDims(s,{X,Y,xs:g.pts.map(p=>p.x+px),ys:g.pts.map(p=>p.y+py),fx0:-C.Bx/2,fx1:C.Bx/2,fy0:-C.By/2,fy1:C.By/2,
+    px0:px-P.B/2,px1:px+P.B/2,py0:py-P.N/2,py1:py+P.N/2,
+    cx0:"c_a = "+fmt(g.ca_x_neg,2)+"″"+ov, cx1:"c_a = "+fmt(g.ca_x_pos,2)+"″"+ov,
+    cy0:"c_a = "+fmt(g.ca_y_neg,2)+"″"+ov, cy1:"c_a = "+fmt(g.ca_y_pos,2)+"″"+ov, topOff:14, cover:null});
+  /* pedestal size on the right and below */
+  dimV(s,Y(C.By/2),Y(-C.By/2),X(C.Bx/2)+16,"By = "+fmt(C.By,2)+"″",X(C.Bx/2)+24);
+  dimH(s,X(-C.Bx/2),X(C.Bx/2),Y(-C.By/2)+18,"Bx = "+fmt(C.Bx,2)+"″");
+  txt(s,X(C.Bx/2)+40,Y(C.By/2)+12,colDims().label||"","lblTxt","start",9,"#3a6ea5");
+  txt(s,cx,14,"PLAN — pedestal, plate, column and anchors","lblTxt","middle",10);
+  axisTriad(s,22,H-30,"plan",22);
+  body.appendChild(svgWithControls(s));
+}
+function drawSheetElev(body,view){
+  const P=S.plate, C=S.conc, A=S.anchor, G=S.grout, g=anchorGeom(), k=colShape();
+  const W=348, H=270, pad=52;
+  const alongX=(view==="y");                      /* looking along y: x across the page */
+  const span=alongX? C.Bx : C.By, pw=alongX? P.B : P.N, off=alongX? (C.plate_off_x||0) : (C.plate_off_y||0);
+  const ecc=alongX? (P.exc_x||0) : (P.exc_y||0), cw=alongX? k.b : k.d;
+  const tg=G.present? G.tg : 0, so=standoffParams(), gap=(so.hasStandoff && !so.groutFilled)? standoffClearGap() : 0;
+  const stub=Math.max(4,0.25*C.H), top=C.H+tg+gap+P.t+stub;
+  const sc=Math.min((W-2*pad)/Math.max(span,pw),(H-2*pad+20)/top);
+  const cx=W/2, base=H-pad+6, X=h=>cx+h*sc, Z=z=>base-z*sc;
+  const s=svg(W,H);
+  rect(s,X(-span/2),Z(C.H),span*sc,C.H*sc,"#eae7df","#555",1.2);
+  if(tg>0) rect(s,X(off-pw/2),Z(C.H+tg),pw*sc,tg*sc,"#cfc9b8","#777",0.8);
+  const zP=C.H+tg+gap;
+  rect(s,X(off-pw/2),Z(zP+P.t),pw*sc,P.t*sc,"#8a8a8a","#333",1);
+  rect(s,X(off+ecc-cw/2),Z(zP+P.t+stub),cw*sc,stub*sc,"rgba(58,110,165,.25)","#3a6ea5",1);
+  const hs=[...new Set(g.pts.map(p=>+((alongX? p.x : p.y)+off).toFixed(3)))];
+  const zHead=C.H-A.hef;
+  hs.forEach(h=>{ line(s,X(h),Z(zP+P.t+Math.max(1,1.5*A.dia)),X(h),Z(zHead),"#2b2b2b",Math.max(2,A.dia*sc*0.5));
+    line(s,X(h)-6,Z(zHead),X(h)+6,Z(zHead),"#2b2b2b",3.5); });
+  const xr=X(span/2);
+  dimV(s,Z(C.H),Z(0),xr+12,"H = "+fmt(C.H,2)+"″",xr+18);
+  dimV(s,Z(C.H),Z(zHead),xr+34,"h_ef = "+fmt(A.hef,2)+"″",xr+40);
+  line(s,X(Math.max(...hs)),Z(zHead),xr+38,Z(zHead),"#00427a",0.5,"2 2");
+  const xl=X(-span/2);
+  dimV(s,Z(zP),Z(zP+P.t),Math.min(xl,X(off-pw/2))-10,"t_p = "+fmt(P.t,2)+"″",Math.min(xl,X(off-pw/2))-16);
+  if(tg>0) dimV(s,Z(C.H),Z(C.H+tg),Math.min(xl,X(off-pw/2))-30,"grout "+fmt(tg,2)+"″",Math.min(xl,X(off-pw/2))-36);
+  dimH(s,X(-span/2),X(span/2),Z(0)+16,(alongX?"Bx = ":"By = ")+fmt(span,2)+"″");
+  txt(s,cx,14,"ELEVATION — looking along "+view+" ("+(alongX?"x":"y")+" across)","lblTxt","middle",10);
+  body.appendChild(svgWithControls(s));
+}
+
 function bpRebarSchedule(){
   const rows=[], C=S.conc, pg=pedGeom();
   const stat=(n,nE)=> nE===n? "counted" : (nE===0? "not counted" : nE+" of "+n+" legs counted");
@@ -8561,14 +8625,17 @@ function buildDetailTab(pg){
     drawShearFace(cell(),{compact:true});
   } else {
     figs="plate";
-    drawPlan(cell()); drawElevation(cell(),"x"); drawElevation(cell(),"y");
+    /* GFX-F: the plan across the full page width, the two elevations below it, at the size
+       they print (the input-tab drawings scaled onto the page printed at ≈4 px) */
+    const cp=cell(); cp.style.gridColumn="1 / span 2"; drawSheetPlan(cp);
+    drawSheetElev(cell(),"y"); drawSheetElev(cell(),"x");
   }
   /* rebar schedule in the fourth cell */
   const sc=cell(); sc.classList.add("bpSheetTbl");
-  sc.appendChild(el("div","bpSheetH","Rebar schedule"));
+  if(figs==="plate") sc.style.gridColumn="1 / span 2";   /* GFX-F */
   const rows=bpRebarSchedule();
-  if(!rows.length) sc.appendChild(el("div","note","No reinforcement entered."));
-  else {
+  sc.appendChild(el("div","bpSheetH","Rebar schedule"+(rows.length? "" : ": no reinforcement entered.")));   /* GFX-F: one line when empty */
+  if(rows.length){
     const t=el("table","tbl"); const tr0=el("tr");
     ["Mark","Size","Qty","Shape","Length ≈ (in)","Counted"].forEach(h=>tr0.appendChild(el("th",null,h))); t.appendChild(tr0);
     rows.forEach(r=>{ const tr=el("tr"); tr.title=r.note;
