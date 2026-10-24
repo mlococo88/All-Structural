@@ -2932,6 +2932,7 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - the Detail Sheet schedule length (start → end).
 
   The breakout body is drawn for the governing edge (`bodyNx`/`bodyNy`). When the legs are detailed toward another face, the hairpin plan and section A-A carry a red line, and section B-B (the governing face) says the legs do not cross it.
+- **Superseded by VR-2 (2026-10-24):** the inline tie inputs in the shear section (and the VT-1 tie inputs in `S.vRebar`) duplicated 7a, so the ties could be defined in two places. VR-2 makes 7a the only place: the shear section shows a read-only summary and an "Edit in Pedestal Reinforcement" button, the Tie grade input moved to 7a, and the closed-tie check reads `S.ped` only. See the VR-2 entry below.
 - **Not done:** the optional "per-anchor custom" mode (tick which anchors get hairpins). Done cleanly it needs a per-anchor list in the saved data, keyed to anchor numbers that change when the grid changes; left for a decision.
 - **Governing provision:** none changed. Eligibility is still decided by §17.5.2.1(b), R17.5.2.1(b) and HP-1.
 - **Check case (new inputs).** Pedestal 36 × 36 × 36, default 2 × 2 anchors (±6), V = 15 kip toward +x; Case 2, so the reference row is x = −6 and c_a1 = 24.
@@ -2954,3 +2955,58 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
     - a closed-tie project without `S.ped`.
   - The HP-1 sweep of 112 hairpin / bar designs: 112 of 112 identical.
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes. 0 page errors.
+
+## 2026-10-24 — VR-2: pedestal ties defined in one place only (7a); closed-tie shear reads S.ped only; migration of older closed-tie saves (Tier 2, input source change; saved results unchanged)
+- **Engineer request (2026-10-24):** "Now it seems I can define the ties in the pedestal in two places … How can we avoid this duplication?" The ties are defined only in **7a. Pedestal Reinforcement**.
+- **Saved data (§5).**
+  - New field `S.ped.barsUnconfirmed` = false (additive).
+  - **Migration in `mergeState`** (anchor text `/* VR-2 migration (2026-10-24)`). Applies only to saves made before VR-2, recognised by `st.ped` having no `barsUnconfirmed` key (every later save has it):
+    ```js
+    if(preVR2 && sv && sv.pieceType==="closedtie"){
+      if(!(sp&&sp.present)){
+        out.ped.tieSize=out.vRebar.size; out.ped.tieSets=out.vRebar.tieSets; out.ped.tieTop=out.vRebar.tieTop; out.ped.tieSpacing=out.vRebar.tieSpacing;
+        out.ped.cover=(sv.cover!==undefined)? sv.cover : 2.0;   // the check used 2.0 when no cover was saved
+        out.ped.present=true; out.ped.barsUnconfirmed=true;
+      }
+      if(out.ped.tieGrade==null) out.ped.tieGrade=out.vRebar.grade;   // VR-1: null meant the Shear Rebar grade
+    }
+    ```
+    The old `S.vRebar` tie fields (`size`, `tieSets`, `tieTop`, `tieSpacing`, `cover`) stay in the save, unused by closed ties.
+  - **While `barsUnconfirmed`:** red box in 7a and on the Summary: "Pedestal ties were moved here from Shear Reinforcement; the longitudinal bars are defaults — confirm them." Editing any bar field (size, bars per face x / y, grade, top, into footing, extension) or the button "The bars are as shown — confirm" clears it. Until then:
+    - `pedTieCheck()` returns `{na:true, unconfirmed:true}` (the §10.7.6.1.6 check is not made, exactly as before migration when no pedestal reinforcement was entered);
+    - `tRebarEff()` does not use the pedestal bars as tension anchor reinforcement (as before migration);
+    - the rebar schedule marks the pedestal bars "defaults, to confirm in 7a".
+- **`shearRebarIntercept`, closed-tie branch.** Anchor text `/* PR-1: the ties ARE the pedestal ties. VR-2`.
+  - Before:
+    ```js
+    const usePed=!!(S.ped&&S.ped.present);
+    const Rt=usePed? Object.assign({},R,{size:S.ped.tieSize, cover:S.ped.cover, tieSets:S.ped.tieSets, tieTop:S.ped.tieTop, tieSpacing:S.ped.tieSpacing,
+      grade:S.ped.tieGrade||R.grade}) : R;
+    const devT=usePed? tensionDevLengths(Object.assign({},Rt,{cover:coverT})) : dev, rbT=rebarOf(Rt.size);
+    ```
+  - After:
+    ```js
+    const P=S.ped||{}, usePed=!!P.present;
+    const Rt=Object.assign({},R,{size:P.tieSize, cover:P.cover, tieSets:P.tieSets, tieTop:P.tieTop, tieSpacing:P.tieSpacing,
+      grade:P.tieGrade||P.grade});
+    const devT=tensionDevLengths(Object.assign({},Rt,{cover:coverT})), rbT=rebarOf(Rt.size);
+    ...
+    if(!usePed){ L.eff=false; L.why="pedestal ties not entered (7a. Pedestal Reinforcement): no leg is counted"; }
+    ```
+    and the development pool is empty when `!usePed` (`devDCR` = ∞). New return field `notEntered`.
+  - Epoxy, K_tr and the hook factors of the ties still come from `S.vRebar` (they have no 7a input; the "Epoxy-coated" row stays in the shear section for ties).
+- **`shearRebarCheck`.** Before: `fy = rgrade(isTie && usePed && S.ped.tieGrade ? S.ped.tieGrade : R.grade).fy`. After: `fy = rgrade(isTie ? (S.ped.tieGrade||S.ped.grade) : R.grade).fy`.
+- **Behaviour change, called out (§4):** a closed-tie design with no pedestal reinforcement entered, built in the session (or saved after VR-2), now counts **no** tie leg (φV_r = 0, DCR ∞; the concrete breakout check stays) instead of using the `S.vRebar` tie fields. No existing save changes: those are migrated as above. Governing provision unchanged: ACI 318-19 §17.5.2.1(b), R17.5.2.1(b) (closed ties as shear anchor reinforcement), §10.7.6.1.6.
+- **Inputs.**
+  - Shear section (9), piece type closed ties: no tie inputs and no Bar size / Grade rows. A read-only line, e.g. "Pedestal ties (from 7a. Pedestal Reinforcement): #4 ties (Gr. 60), 3 sets from 2.25″ at 3.00″, cover 2.00″", and a button "Edit in Pedestal Reinforcement ↗" (`bpadGoInSec("inPed")`: switches the input tab, expands 7a, scrolls to it). With 7a not entered: red box "No pedestal ties entered. No tie leg is counted …" and the button "Enter pedestal ties in 7a ↗".
+  - Tension section (8), piece type pedestal vertical bars: the same read-only summary of the bars + button (the hooked-top and epoxy rows stay; they are not 7a fields).
+  - 7a: new "Tie grade" row (moved from section 9; null shows the bar grade).
+  - Report input summary: closed ties without 7a read "pedestal ties not entered: none counted".
+- **Check case (migration), a project saved on main at b270d90 (before VR-1):** pedestal 24 × 24 × 58, h_ef 18, default 2 × 2 anchors, shear rebar closed ties #4 Gr. 40, 3 sets from 2.25″ at 3″, cover 2″, U-stirrups for tension.
+  - Before (old version): 6 legs counted, φV_r = 0.75 · 6 · 0.20 · 40 = 36.0 kip, DCR 0.449.
+  - After loading in this version: S.ped = #4, 3 sets, 2.25, 3.0, cover 2.0, tie grade Gr. 40, present, bars unconfirmed; 6 legs, φV_r 36.0 kip, DCR 0.449. Identical.
+- **Regression.**
+  - Six projects saved on main at b270d90 (closed ties #4 Gr. 60 with no cover saved; #5 Gr. 40 4 sets cover 1.5 epoxy; 4 × 2 anchors #3 cover 3; #4 Gr. 40 with U-stirrups; S.ped entered + closed ties + Shear Rebar Gr. 40 and no tie grade; a hairpin project) were loaded in this version through the tool's start-up path (autosave). `computeAll`, capacities, `allChecks`, `VALIDATION`, both intercepts, `shearRebarCheck` and the printed report are identical for all six.
+  - `node tests/bpad-profis.mjs`: 5 of 5 `same`.
+  - Test projects vs origin/main: default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin identical. The closed-tie project built from fresh defaults without S.ped changes as called out above (DCR 0.90 → ∞).
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes; 0 page errors.
