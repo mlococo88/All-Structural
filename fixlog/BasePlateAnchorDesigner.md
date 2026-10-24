@@ -2869,3 +2869,17 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - A two-finger spread zoomed the camera distance from 166.6 to 81.0.
   - Mouse drag still orbits.
   - 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+
+## 2026-10-24 — CAM-1: the 3-D camera keeps its position when an input changes (display only)
+- **Engineer report (2026-10-24):** every input change reset the 3-D camera.
+- **Cause:** each input change rebuilds the 3-D view. `build3D` called `fit()`, and the Visuals tab then called `three3D.fit()` again 80 ms later. Both re-framed the default isometric view.
+- **After:**
+  - `place()` stores the camera in the session variable `bpad3dView` (orbit angles, distance, target). It is not saved data.
+  - On a rebuild, `build3D` restores that camera instead of calling `fit()`, and the Visuals tab calls `three3D.fit()` only on the first build.
+  - "Fit view" still resets the camera to the isometric view and re-frames it.
+- **Anchor text:** `fit:()=>{ rot.x=Math.PI/6; rot.y=Math.PI/4; fit(); }};` and `if(three3D.fit) three3D.fit(); } },80);`
+- **Governing provision:** none (UI).
+- **Check:** headless, with a touch orbit and pinch.
+  - Camera (1.10, 79.72, −14.33) before an input edit; (1.10, 79.72, −14.33) after it, unchanged.
+  - Fit view → (78.03, 103.86, 79.38), the default framing.
+  - 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
