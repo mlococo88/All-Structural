@@ -2799,3 +2799,42 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Open items:**
   - The reference-row search uses `halfSpanN − ca1` in the plate frame without the plate offset, exactly as the VT-1 tie branch does. With a plate offset it misses the row and falls back to the leading row, which is the old behaviour for hairpins. The same applies when c_a1 is limited by §17.7.2.1.2. Both branches would need the offset-aware row (as `shearBodyGeom` finds it for the drawings) to fix this; that needs a decision.
   - Edge-side anchorage (c) is still checked from the leading row with c_a1 − cover, as instructed.
+
+## 2026-10-24 — GFX-F: Detail Sheet without reinforcement — full-width plan and compact elevations at print size (display only, no calculation change)
+- **Engineer request (2026-10-24):** this is the GFX-D open item.
+  - With no reinforcement, the sheet used the input-tab drawings (`drawPlan`, `drawElevation`). They are 900 px wide, so on the page their text printed at about 4 px.
+  - The request: put the plan across the full width with the elevations below it, so the text prints at 9 px or more.
+- **New functions,** placed before `bpRebarSchedule`:
+  - `drawSheetPlan(body)`, 700 × 320. It draws:
+    - pedestal, plate, column footprint and the numbered anchors;
+    - the `bpPlanDims` chains: c_a to each face from `anchorGeom()` (plate offset and override included), anchor spacings, and plate B / N;
+    - By and Bx;
+    - the column name.
+  - `drawSheetElev(body, view)`, 348 × 270. It draws:
+    - pedestal, grout, plate (above an open stand-off gap when there is one), and a column stub with the column width in that view;
+    - the anchors to the head at H − h_ef;
+    - H, h_ef, t_p, the grout thickness, and Bx or By.
+  - Both are drawn at the size they print: the full page width (7.3 in = 700 px) and half of it. No text is below 9 px.
+- **`buildDetailTab`, branch with no reinforcement.**
+  - Before:
+    ```js
+    drawPlan(cell()); drawElevation(cell(),"x"); drawElevation(cell(),"y");
+    ```
+  - After:
+    ```js
+    const cp=cell(); cp.style.gridColumn="1 / span 2"; drawSheetPlan(cp);
+    drawSheetElev(cell(),"y"); drawSheetElev(cell(),"x");
+    ```
+  - The schedule cell spans both columns. When there is no reinforcement, the schedule is one line: "Rebar schedule: no reinforcement entered."
+- **Unchanged:** the input-tab drawings and the sheets with reinforcement.
+- **Governing provision:** none.
+- **Check case:** the default project (no reinforcement).
+  - The sheet prints on one page.
+  - Plan: c_a = 9.00 to every face, s = 12.00 both ways, plate 18 × 18, Bx = By = 30.
+  - Elevations: H = 36.00, h_ef = 12.00, t_p = 1.50, grout 1.00.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, report included.
+  - On the three graphics test projects, every result and the report are identical.
+  - The sheet printed alone to PDF (Letter, print media) is 1 page for all 5 test projects: default, pedestal, 4 × 2, −y shear, closed ties only.
+  - 0 page errors.
