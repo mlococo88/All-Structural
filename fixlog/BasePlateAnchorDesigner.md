@@ -3059,3 +3059,22 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **8. Small items.** Input summary: "#4 ties: 3 sets from 2.25″ (raised to cover + d_b/2; entered 2.00″)". Table 2.2 note when no anchor carries tension: "no anchor carries tension in this combination … computed on n = 4 anchors …". References: before "AISC 360 … edition: verify", after "AISC 360-16 … §J3.10 (Eq. J3-6a/J3-6c), §E3" (§4 callout: the tool's φR_n = φ·min(1.2 l_c t F_u, 2.4 d t F_u) is 360-16 J3-6c / J3-6a; no value changes — W: 0.75 · min(1.2·1.97·1.75·58, 2.4·1.25·1.75·58) = 179.85 kip both).
 - Print CSS: `#printReport h3{break-after:avoid}` (a figure heading stays with its figure).
 - **Regression.** `node tests/bpad-profis.mjs`: every computed result identical; only `.report` differs, by the AISC 360-16 reference row (5 cases, 2 lines each). Test projects vs origin/main (default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin, closed ties without S.ped): computeAll, capacities, checks (except the closed-tie `ref` text), validation, intercepts identical. W report printed to PDF (49 pages) and its text diffed against main: only the corrected text listed above. `node tests/check-syntax.mjs` passes; 0 page errors.
+
+## 2026-10-24 — LAY-1: one scroll per column — the page no longer scrolls; input and output columns scroll on their own; narrow screens stack (display only)
+- **Engineer request (2026-10-24):** "The input window should be able to scroll, and so should the output, but not the whole app. There are too many scroll options right now."
+- **Audit before (headless, project W):**
+  - Desktop 1500 × 1000 and tablet landscape 1180 × 820: `#inputPanel` and `#outputPanel` scroll vertically, as intended, **and the page itself scrolls** on the Shear Rebar tab (scroll height 1123 / 1000; 1169 / 820). The cause: absolutely positioned content inside the columns (KaTeX's hidden MathML spans, the SVG zoom-tool bars `.svgTools`) had no positioned ancestor, so its containing block was the page and it sized the document.
+  - Tablet portrait 820 × 1180: the same, plus a 33 % input column 270 px wide, wide tables and `.eqLine` boxes scrolling horizontally.
+  - No section, card or table had its own vertical scrolling (`max-height` is only on `.modalBox`, a dialog).
+- **CSS (anchor `/* LAY-1 (2026-10-24)`):**
+  - `#app{height:100vh;height:100dvh}`; `html,body{overflow:hidden}`.
+  - `#inputPanel`, `#outputPanel`: `position:relative` (the containing block for that absolute content), `overscroll-behavior:contain`, `-webkit-overflow-scrolling:touch`; `#outputPanel{min-width:0}`.
+  - `@media screen and (max-width:899.98px)`: the columns stack (`#main{flex-direction:column}`), neither scrolls on its own (`overflow:visible`), `html,body` scroll as one page, `#app{height:auto}`. Breakpoint 900 px: tablet landscape (1180) keeps two columns; portrait (820) and phones stack.
+  - Print CSS unchanged; it already releases `html,body` and `#app` (`height:auto; overflow:visible !important`), and the screen-only media query does not apply to print.
+- **Kept:** the output tab bar (`#tabBar`, sticky at the top of the output column), the input tab bar, remembered input sub-tab and the column scroll positions across refreshes (`ipTop` / `opTop`), the 3-D view, the draggable section cuts (GFX-G drag test re-run, mouse and touch 6 / 6 OK), the print report.
+- **Verify (after):**
+  - Every output tab at 1500 × 1000 and 1180 × 820: `document.scrollingElement.scrollHeight` = the viewport height (1000 / 1000, 820 / 820); the only vertical scrolling elements are `#inputPanel` and `#outputPanel`. One `.eqLine` (a long equation on the Anchor Bolts tab at 1180) scrolls horizontally in its own box.
+  - 820 × 1180: no element scrolls; the page scrolls as one.
+  - Programmatic scroll: desktop input 0 → 134 (its end), output 0 → 1200, page stays 0; the header and output tab bar do not move. Tablet landscape: input 300, output 1200, page 0.
+  - Report printed to PDF (W project): 49 pages, as before the change.
+  - `node tests/bpad-profis.mjs` 5 / 5 `same`; `node tests/check-syntax.mjs` passes; 0 page errors.

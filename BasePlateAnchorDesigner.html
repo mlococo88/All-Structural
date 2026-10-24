@@ -32,7 +32,12 @@
   *{box-sizing:border-box;}
   html,body{height:100%;margin:0;}
   body{ font-family:"Times New Roman", Times, serif; font-size:10pt; color:var(--ink); background:#efede8; }
-  #app{max-width:1500px;margin:0 auto;height:100vh;display:flex;flex-direction:column;background:var(--paper);box-shadow:0 0 12px rgba(0,0,0,.12);}
+  #app{max-width:1500px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--paper);box-shadow:0 0 12px rgba(0,0,0,.12);}
+  /* LAY-1 (2026-10-24): the app fills the viewport and the page itself does not scroll; the input and
+     output columns are the only two vertical scrolling regions. position:relative makes each column the
+     containing block of its absolutely positioned content (KaTeX's hidden MathML, the SVG zoom tools),
+     which otherwise sized the PAGE and gave it a second scrollbar. */
+  html,body{overflow:hidden;}
   #hdr{flex:0 0 auto;border-bottom:3px solid var(--navy-900);padding:9px 14px 8px;background:var(--color-primary);color:#fff;z-index:20;}
   #hdr .titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
   #hdr h1{font-size:15pt;margin:0;letter-spacing:.4px;font-family:var(--font-ui);font-weight:600;color:#fff;}
@@ -46,7 +51,7 @@
   #projGrid label, #hdr .projLbl{color:#C7D4E4;font-family:var(--font-ui);font-size:8.5pt;}
   #hdrBtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
   #main{flex:1 1 auto;display:flex;min-height:0;}
-  #inputPanel{flex:0 0 33%;max-width:33%;border-right:1px solid var(--color-border);overflow-y:auto;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
+  #inputPanel{flex:0 0 33%;max-width:33%;border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
   /* input panel tabs (bpadInputTabs) — same button-tab look as the output #tabBar */
   #bpadInTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
   #bpadInTabs .bpadInTab{display:inline-flex;align-items:center;border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;font-family:var(--font-ui);padding:5px 10px;background:var(--slate-100);color:#475569;}
@@ -56,7 +61,17 @@
   .bpadInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
   .bpadInTab.has-err .bpadInDot{display:inline-block;}
   .bpadInTab[hidden],.bpadInPane[hidden]{display:none!important;}
-  #outputPanel{flex:1 1 67%;overflow-y:auto;padding:0 16px 80px;background:var(--paper);}
+  #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}   /* LAY-1 */
+  /* LAY-1: narrow screens (portrait tablet, phone; below 900 px) stack the two columns and the page
+     scrolls as one; neither column scrolls on its own, so there is still no nested vertical scrolling */
+  @media screen and (max-width:899.98px){
+    html,body{overflow:visible;height:auto;}
+    #app{height:auto;min-height:100vh;}
+    #main{flex-direction:column;}
+    #inputPanel{flex:none;max-width:none;border-right:none;border-bottom:2px solid var(--ink);overflow:visible;padding-bottom:16px;}
+    #outputPanel{flex:none;overflow:visible;}
+    #bpadInTabs{top:0;}
+  }
   h2.secTitle{font-size:12pt;margin:0;}
   h3{font-size:11pt;margin:10px 0 4px;}
   .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
