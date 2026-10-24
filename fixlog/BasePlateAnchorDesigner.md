@@ -2665,3 +2665,62 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and `.report` is identical.
   - On the three graphics test projects, every result and the report are identical.
   - Every drawing was screenshotted (input plan and elevations, anchor key, force map, breakout, tension plan and sections, shear plan and sections) for the default, pedestal, 4 × 2 and −y shear projects, with 0 page errors.
+
+## 2026-10-23 — GFX-D: Detail Sheet tab — one printable page with plan, both sections, rebar schedule and check summary (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics item 7. This is the last of four PRs.
+- **Saved data:** no new key. `S.print.sections.tabDetail` is written only when the report option is ticked. It is opt-in like the appendices: a missing key means the sheet is not in the calculation report.
+- **New tab "Detail Sheet" (`tabDetail`):**
+  - **Where it is wired:** `TABS()` adds it after the rebar tabs; `buildOutput` and `buildOutputInto` call `buildDetailTab`.
+  - **Print settings:** in `openPrintSettings` (the `optIn` test, and the `est()` count) and `BPAD_OPTIN` in `buildPrintReport`, it is an appendix that prints only when ticked. The default calculation report is unchanged.
+- **New `buildDetailTab(pg)`.** The tab shows a header line (project, pedestal, f′c, plate, anchors, h_ef) and a 2 × 2 grid:
+  - **Figures in three cells,** using the compact versions of the existing drawing functions:
+    - with tension reinforcement: `drawRebarPlan`, then `drawRebar` A-A and B-B, with the cuts chosen on the Tension Rebar tab;
+    - otherwise, with shear reinforcement: `drawHairpinPlan`, the shear `drawRebar` and `drawShearFace`;
+    - otherwise: `drawPlan` and `drawElevation` x and y, at full drawing size (see the open item).
+  - **The rebar schedule in the fourth cell.**
+  - **Below the grid, a check summary** from `allChecks()`: label, reference, D/C and status, in two columns.
+- **"Print this sheet (one page)" button.** It calls `bpPrintSheet()`, which:
+  - copies the sheet into `#printReport`;
+  - applies the report page CSS (`bpadApplyPageCSS`): letter portrait with the title-block header;
+  - prints.
+- **New `bpRebarSchedule()`.** It builds one row per mark, size, shape, length and verdict. The columns are mark, size, quantity, shape, approximate length and counted / not counted.
+  - **Lengths:** the centreline lengths of the straight segments and bends as drawn, from the same geometry the checks use. Hooks and bend allowances are not added.
+    - U-stirrup: 2·(bar top − bar bottom) + gauge (top bend when hooked at the top).
+    - Closed stirrup: 2·leg + 2·gauge.
+    - Straight bar or pedestal bar: the leg.
+    - Hairpin: 2·available behind + π·gauge/2.
+    - Closed tie: 2·(2u_F) + 2·(2t_L).
+    - Pedestal bar: (H − barTop) + footExt.
+    - Pedestal tie: 4·tieHx + 4·tieHy.
+  - **Counted:** from the per-leg verdicts. A piece is counted when all its legs are counted. A tie set is counted when its legs parallel to V are counted.
+  - **Pedestal rows:** pedestal bars and ties are listed as P1 / P2 unless they are themselves the tension bars or the shear ties.
+- **Compact option** (`opt.compact`, detail sheet only):
+  - **Canvas sizes:**
+    - `drawRebarPlan(body,opt)`: 380 × 320;
+    - `drawRebar(body,kind,opt)`: 380 × 320, pad 56;
+    - `drawHairpinPlan(body,cGov,opt)`: 380 × 320;
+    - `drawShearFace(body,opt)`: 380 × 320, pad 56.
+  - **Left out:** the captions, legends and click panels (the sheet's notes replace them).
+  - **Titles:** shortened.
+  - **Axis triad:** dropped from the sections; their titles name the axis.
+  - **`bpPlanDims`:** new `o.noPlate`, which leaves out the plate tier (the header gives the plate size).
+  - **No compact option:** the full-size views are drawn exactly as before.
+- **CSS:** `.bpSheet` (max-width 7.3 in), `.bpSheetHd`, `.bpSheetGrid`, `.bpSheetCell`, `.bpSheetH`, `.bpSheetNote`, and the sheet table sizes (8.5 pt).
+- **Governing provision:** none changed.
+- **Check case (display):**
+  - **Pedestal 24 × 24 × 58, `pedbars`, closed ties:**
+    - T1: #6 × 8, pedestal vertical bar 79.0 in (55 − (−24)), not counted. The table gives 0 of 8.
+    - V1: #4 × 1, closed tie 19.50 × 19.50, 78.0 in (2·(2·9.75)·2), counted (set 3).
+    - V2: #4 × 2, closed tie, not counted. The table gives 2 of 6 legs (set 3).
+  - **4 × 2 anchors with U-stirrups and hairpins:**
+    - T1: #5 × 4, U-stirrup 40.0 in (2·(34 − 16) + 4).
+    - V1: #4 × 4, hairpin 30.3 in (2·12 + π·4/2).
+    - Both not counted.
+  - **One page:** the sheet printed alone to PDF (Letter, print media) is 1 page for all 5 test projects (default, pedestal, 4 × 2, −y shear, closed ties only).
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included. The sheet is opt-in, so the default report is unchanged.
+  - On the three graphics test projects, every result and the report are identical.
+  - With the report option ticked, the report ends with "Appendix: Detail Sheet".
+  - 0 page errors.
+- **Open item:** for a design without reinforcement the sheet shows the input plan and both elevations. Those views are 900 px wide and have no compact version, so on the page their text is about 4 px. Options: a compact plan and elevations, or a full-width plan on the sheet.
