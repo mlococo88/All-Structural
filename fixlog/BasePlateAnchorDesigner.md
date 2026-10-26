@@ -2222,3 +2222,885 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: default, struct2v1, struct2v2 and torqued are `same`. msa3a is DIFFERENT only in A_Nc and the values derived from it (tension breakout, pryout, their DCRs and derivation text), as in check case 2.
 - **Open item:** msa3a is still +3.9 % from PROFIS. 38.08 kip corresponds to A_Nc = 728 = 28 × 26, i.e. one edge 1 in closer in y than entered. That case's source report is not in the repository, so the entered edges cannot be checked.
+
+## 2026-10-23 — TR-H1: tension anchor reinforcement uses the actual h_ef; the §17.6.2.1.2 reduced h_ef′ stays in the breakout equations only (Tier 2, calc change, LESS conservative where it changes)
+- **Engineer decision (2026-10-23):** the reduced h_ef′ of §17.6.2.1.2 applies only to the breakout equations, not to the anchor-reinforcement check.
+- **Function:** `tensionRebarIntercept(cc)`. Anchor text: `const hef=he.hefEff, coneZ=C.H-hef, rMax=1.5*hef;`
+- **Before:**
+  ```js
+  const hef=he.hefEff, coneZ=C.H-hef, rMax=1.5*hef;
+  ```
+- **After:**
+  ```js
+  const hef=he.hef, coneZ=C.H-hef, rMax=1.5*hef;
+  ```
+  The return object also gets `hefBreakout:he.hefEff`, so the reduced value can still be stated.
+- **What changes:**
+  - Cone apex: was at the reduced depth H − h_ef′, now at the anchor head H − h_ef. The bar crossing is z_cross = coneZ + r/1.5.
+  - Breakout prism radius: 1.5·h_ef instead of 1.5·h_ef′.
+  - Effective-placement zone: 0.5·h_ef instead of 0.5·h_ef′.
+  - Display changes:
+    - the Tension Rebar notes and the User Manual state the actual h_ef, and state h_ef′ as breakout-only;
+    - the elevation's separate "h_ef,eff / cone apex" tier is replaced by a one-line note;
+    - the plan legend, the 3-D cone and the comments are updated.
+  - Not changed: `hefEffective()` and every breakout, pryout and side-face calculation still use h_ef′.
+- **Governing provision:**
+  - ACI 318-19 §17.6.2.1.2 limits h_ef in the breakout equations (Eqs. 17.6.2.1.1 through 17.6.2.5.1).
+  - §17.5.2.1(a) and R17.5.2.1 (Fig. R17.5.2.1a) govern anchor reinforcement. It is placed within 0.5·h_ef of the anchor and developed on both sides of the breakout surface, which starts at the anchor head.
+- **Check case:**
+  - Default project with h_ef = 18 in, H = 58 in, pedestal 24 × 24 in. The anchors are 2 × 2 at ±6 in, so c_a = 6 in on all 4 edges.
+  - Tension rebar on: #5 U-stirrups, 4 pieces per row, top cover 2 in, 30 in below the head.
+  - h_ef′ = max(c_a,max/1.5, s/3) = max(6/1.5, 12/3) = 4.0 in. It is unchanged and still used in the breakout check.
+  - Before (h_ef′ = 4):
+    - coneZ = 58 − 4 = 54 in; zone 0.5·4 = 2.0 in.
+    - The nearest legs are at r = √(3² + 2²) = 3.61 in > 2.0 in, so none is credited: 0 of 16 legs, φN_r = 0.
+  - After (h_ef = 18):
+    - coneZ = 58 − 18 = 40 in; zone 0.5·18 = 9.0 in.
+    - The legs at r = 3.61 in cross at z = 40 + 3.61/1.5 = 42.40 in.
+    - Above: 56 − 42.40 = 13.60 in ≥ ℓ_dh = 11.82 in.
+    - Below: 42.40 − 10 = 32.40 in ≥ ℓ_d = 14.23 in.
+    - 8 of 16 legs are credited (the other 8 fall outside the pedestal).
+    - A_s = 8 × 0.31 = 2.48 in²; φN_r = 0.75 × 2.48 × 60 = 111.6 kip; DCR = 5.33/111.6 = 0.05; development DCR 11.82/13.60 = 0.869.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: default, msa3a, struct2v1, struct2v2 and torqued are all `same` (none has tension rebar with a reduced h_ef). The PROFIS export checks pass.
+  - The check case was run headless against origin/main and the working tree, with the numbers above. Every tab and the print report render with 0 page errors.
+
+## 2026-10-23 — GB-1: tension anchor reinforcement is checked against ONE group breakout surface (flat across the anchors, 35° from the outer anchors); graphics redrawn to match (Tier 2, calc change)
+- **Engineer request (2026-10-23):** for a group the breakout body is flat across the bottom between the anchors and rises at 35° only beyond the outer anchors (ACI 318-19 Fig. R17.5.2.1a). The tool used to put a 35° cone on each anchor separately.
+- **Function:** `tensionRebarIntercept(cc)`; new helpers `breakoutHulls(pts,hef)`, `breakoutDist(x,y,hulls)` and `breakoutRing(H,R,rect,nArc)`, placed above `hefEffective()`.
+  - Anchor text: `const zCross=Math.min(coneZ+r/1.5, C.H);`
+- **Before:**
+  ```js
+  const zCross=Math.min(coneZ+r/1.5, C.H);          // r = plan distance to the NEAREST tension anchor
+  ```
+- **After:**
+  ```js
+  const hulls=breakoutHulls(pts, hef);               // tension anchors, grouped where s < 3·h_ef; convex hull per group
+  ...
+  const dS=breakoutDist(b.x,b.y,hulls);              // plan distance to the flat bottom (0 inside the hull)
+  const zCross=Math.min(coneZ+dS/1.5, C.H);
+  ```
+  - The 0.5·h_ef placement limit still uses r, the distance to the nearest tension anchor (R17.5.2.1).
+- **Rule:**
+  - Anchors in tension closer than 3·h_ef form one group, transitively. This is the same overlap criterion as the group breakout of §17.6.2.1 and Fig. R17.6.2.1(b).
+  - The flat bottom is the convex hull of the group's anchor heads, at the head plane z_head = H − h_ef.
+  - The surface depth at a plan point is z = z_head + d_s/1.5, where d_s is the distance to that hull: 0 inside it, and 1:1.5 ≈ 35° outside it.
+  - A single anchor, or anchors 3·h_ef or more apart, still get their own cone.
+- **Governing provision:** ACI 318-19 §17.5.2.1(a), R17.5.2.1, Fig. R17.5.2.1a (the breakout body of a group), and §17.6.2.1 / Fig. R17.6.2.1(b) (group breakout, s < 3·h_ef).
+- **Display changes:**
+  - Per-leg table: new column d_s.
+  - The derivation line, the notes, the User Manual §4D.2 and the glossary entry z_cross now read z_cross = z_head + d_s/1.5.
+  - Elevation: one shaded breakout body per group, flat between the outer anchors, 35° sides with a ≈35° mark, stopped at the pedestal face. This replaces the criss-crossing cone per anchor.
+  - Plan: the flat bottom is shaded, and a dashed outline shows where the surface leaves the concrete. The 0.5·h_ef zones are lighter, and the caption is split into three lines.
+  - 3-D: one translucent group body, clipped at the pedestal faces, replaces the cone per anchor.
+- **Check case:**
+  - Plate 24 × 18 in; anchors 4 × 2 at x = ±3, ±9 and y = ±6; h_ef = 18 in; H = 58 in; pedestal 30 × 30 in; one combination P = +60 kip, so all 8 anchors are in tension.
+  - Tension rebar: #5 U-stirrups, 4 per row, s = 6 in, orient y, gauge 4 in, so the legs are at y = ±4 and ±8. Top cover 2 in, 30 in below the head.
+  - The hull is the rectangle x ∈ [−9, 9], y ∈ [−6, 6]; z_head = 40 in.
+  - Inner legs (y = ±4), between the anchor rows:
+
+    | | Before | After |
+    |---|---|---|
+    | Distance used | r = 2 | d_s = 0 |
+    | z_cross | 40 + 2/1.5 = 41.33 | 40.00 |
+    | Available above / below | 14.67 / 31.33 | 16.00 / 30.00 |
+
+  - Outer legs (y = ±8): d_s = r = 2, so they are unchanged at z_cross = 41.33.
+  - Totals are unchanged in this case: 16 of 16 legs effective, φN_r = 223.2 kip, development DCR 0.806 (outer legs govern). A leg between two anchor rows now has more length above the crossing and less below.
+  - Second case, a single row of 4 anchors (pedestal 40 × 20 in): the hull is the segment x ∈ [−9, 9], y = 0, and the legs at y = ±2 give d_s = 2, as before.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar), and the export checks pass.
+  - The check cases were run headless on origin/main and the working tree, with the numbers above.
+  - Tension Rebar elevation, plan and 3-D were inspected in screenshots (three.js served locally). The print report includes d_s, and there were 0 page errors.
+
+## 2026-10-23 — SUB-1: the §17.5.2.1(a) substitution no longer requires EVERY leg to be creditable (Tier 2, calc change)
+- **Engineer report (2026-10-23):** tension rebar was provided, yet the Summary still showed concrete breakout (T) failing.
+- **Function:** `rebarJustified("tension", cc)`. Anchor text: `if(ic.nEff<ic.nBarsTotal){`
+- **Before:** the substitution was justified only when all of these held:
+  - **every** leg was creditable (`ic.nEff===ic.nBarsTotal`);
+  - the worst *crossing* leg developed (`tr.devDCR<=1`);
+  - no leg was under-developed;
+  - the four detailing confirmations were ticked.
+
+  So a single leg outside the pedestal, beyond 0.5·h_ef or under-developed kept the breakout check on, even though φN_r already ignores such legs.
+- **After:**
+  - The substitution is justified when **at least one** leg is creditable (φN_r > 0) and the four confirmations are ticked.
+  - Legs that do not qualify are reported as advisory `notes`: they are not counted in φN_r and no longer block the substitution.
+  - `tensionRebarIntercept`: devDCR/devWorst are taken over the legs counted in φN_r (`devPool`); if no leg is counted, over all crossing legs. The "Rebar Development" row therefore reports the governing **credited** leg.
+  - Compliance panel:
+    - new blocking row "At least one leg is creditable (φN_r > 0)";
+    - "every leg creditable" and the above/below development rows are now advisory;
+    - the error text now says the breakout check is "still being enforced" (it wrongly said "skipped").
+  - Summary: when the substitution applies, a green note says that tension breakout and side-face blowout are not checked because the anchor reinforcement carries the force, and lists the uncounted legs.
+- **Governing provision:** ACI 318-19 §17.5.2.1(a): the design strength of the anchor reinforcement may be used instead of the concrete breakout strength. φN_r = φ·n_eff·A_b·f_y counts only legs that satisfy §17.5.2.1.1 and R17.5.2.1.
+- **Check case:** the TR-H1 case: h_ef = 18 in, H = 58 in, pedestal 24 × 24 in, 2 × 2 anchors at ±6 in, #5 U-stirrups, 16 legs, of which 8 are creditable.
+
+  | | Confirmations | Substitution | Concrete Breakout (T) row | Side-Face Blowout row |
+  |---|---|---|---|---|
+  | Before | not ticked | not justified | 0.42 | 0.072 |
+  | Before | all ticked | not justified ("8 bar(s) not creditable") | 0.42 | 0.072 |
+  | After | not ticked | not justified (the 4 confirmations) | 0.42 | 0.072 |
+  | After | all ticked | justified | removed | removed |
+
+  In every row: Anchor Reinf. Tension 0.048 (φN_r = 0.75 × 8 × 0.31 × 60 = 111.6 kip), Rebar Development 0.869, steel 0.145, pullout 0.114.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar), and the export checks pass.
+  - The check case above was run headless on origin/main and on the working tree, with 0 page errors.
+- **Open question for the engineer:** with the substitution, the tool also stops checking side-face blowout (§17.6.4); that behaviour predates this change. §17.5.2.1(a) speaks of the concrete breakout strength. Whether side-face blowout should stay checked is raised in the PR and not changed here.
+
+## 2026-10-23 — SFB-1: side-face blowout stays checked when anchor reinforcement replaces the tension breakout (Tier 2, calc change, MORE conservative where it changes)
+- **Engineer decision (2026-10-23):** §17.5.2.1(a) substitutes the anchor reinforcement for the concrete **breakout** strength only. Side-face blowout (§17.6.4), a separate failure at the head near an edge, stays checked.
+- **Functions and anchor text:**
+  - `comboCapacities`: tension-mode envelope, `if(!tSubst){` … `Side-face blowout (φNsb)`.
+  - `allChecks`: both the governing-mode envelope (`push("sfb",…)`) and the per-combination table (`put("sfb",…)`).
+  - The Strength Summary report rows: `Concrete Side-Face Blowout`.
+  - The Summary note.
+- **Before:**
+  ```js
+  if(!tSubst){ /* breakout */ ...; if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ...}); }
+  ```
+  With a justified substitution, side-face blowout was dropped from the envelope, from the §17.8 interaction, the Summary and the report.
+- **After:**
+  ```js
+  if(!tSubst){ /* breakout only */ }
+  if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ...});   // always
+  ```
+  The same split is made in `allChecks` (both places) and in the report rows. The Summary note now reads "Concrete breakout (tension) is not checked … Steel, pullout and side-face blowout are still checked."
+- **Governing provision:** ACI 318-19 §17.5.2.1(a) (anchor reinforcement instead of the concrete breakout strength) and §17.6.4 (side-face blowout).
+- **Check case:** the SUB-1 case with all four confirmations ticked, so the substitution is justified.
+  - Before: Side-Face Blowout row absent.
+  - After: Side-Face Blowout 0.072, the same value as without rebar.
+  - Unchanged: Breakout (T) absent, Anchor Reinf. Tension 0.048, steel 0.145, pullout 0.114, interaction 2.134.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same` (none has tension rebar).
+  - The check case was run headless on origin/main and the working tree, with 0 page errors.
+
+## 2026-10-23 — VT-1: closed ties enclosing the anchor group as shear anchor reinforcement; eligibility decided per leg from the geometry (Tier 2, new capability + calc change for the shear substitution gate)
+- **Engineer request (2026-10-23):** a column pedestal with ties around all the anchors should count as shear anchor reinforcement. The engineer enters the geometry, and the app decides which ties are eligible.
+- **New piece type `closedtie`:** new fields in `S.vRebar`, all additive with defaults, so no migration is needed:
+  - `tieSets` (default 3);
+  - `tieTop` (2.5 in, the depth of the top set to the bar centreline);
+  - `tieSpacing` (3 in);
+  - existing fields reused: `cover`, `size`, `grade`, `epoxy`.
+- **Function:** `shearRebarIntercept(cc)`, new early branch `if(R.pieceType==="closedtie")`, inserted before "room behind the failure plane".
+- **Model:**
+  - The tie follows the pedestal outline at the cover. The legs that resist V are the two legs parallel to the shear, at t = ±(half-width − cover − d_b/2).
+  - The reference row is the anchor row the governing shear-breakout case uses, i.e. the row at c_a1 from the governing edge (the back row when Case 2 governs).
+  - For each tie set k (depth z) and side, a leg is effective only if all of these hold:
+    1. **Placement:** z ≤ 0.5·c_a1, applied to the depth of the tie set. This is the engineer's reading for enclosing ties.
+    2. **Crossing:** in front of the reference row, the shear breakout body has half-width and depth 1.5·x at distance x. A leg with lateral offset d_T (0 inside the span of the reference anchors) crosses the failure surface at x_c = max(d_T, z)/1.5, and must do so before the front corner: c_a1 − x_c − cover > 0.
+    3. **Edge-side anchorage:** the closed corner around a longitudinal bar anchors the front end. This is the same treatment as a hairpin bend around the rod, and it is confirmed in the attestations.
+    4. **Behind:** x_c + (reference row → back face) − cover ≥ ℓ_dh, because the back corner is a bend.
+  - φV_r = 0.75 · n_eff · A_b · f_y.
+- **Substitution gate:** shear now follows the same rule as SUB-1 on the tension side.
+  - `rebarJustified("shear")`: legs that do not qualify become advisory `notes`.
+  - Remaining blockers: no effective leg, a §25.2.1 clear-spacing clash, and the four confirmations.
+  - Removed as blockers (those legs are already not counted): "leg extension does not fit" and "bend engaging the rod not confirmed".
+  - In the compliance panel, the depth, behind and engages rows are advisory, and a new blocking row requires at least one creditable leg.
+- **Display:**
+  - Piece type option "Closed ties enclosing the anchor group", with inputs for the number of sets, the top-set depth, the vertical spacing, cover and epoxy. The hairpin-only inputs are hidden for ties.
+  - A per-leg table, with each criterion and its value.
+  - A worked derivation step (§6).
+  - A plan view (CLOSED-TIE PLAN) showing the tie outline, the side legs coloured by verdict, the legs across V in grey, and a × at each crossing.
+  - A section view showing each tie set with its verdict and crossing, plus the 0.5·c_a1 line.
+  - The Summary row "Anchor Reinf. Shear (ties)", and a green Summary note when it replaces the shear breakout. Steel shear and pryout are still checked.
+  - Tie-specific wording for the existing attestation keys (ack_bend, ack_perp, ack_devBoth), with no new keys.
+- **Governing provision:** ACI 318-19 §17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b (stirrups/ties enclosing the edge reinforcement); §25.4.3 (ℓ_dh).
+- **Check case:**
+  - Pedestal 24 × 24 × 36 in; default plate 18 × 18 with 2 × 2 anchors at ±6 in; default combinations (governing V = 16.16 kip).
+  - #4 closed ties: 3 sets, top at 2.5 in, spacing 3 in, cover 2 in; ℓ_dh = 8.46 in.
+  - The shear-breakout solve gives the +x edge with c_a1 = 18 in (Case 2, back row at x = −6), so 0.5·c_a1 = 9 in; t_leg = 9.75 in; d_T = 9.75 − 6 = 3.75 in.
+
+  | Set | z (in) | x_c = max(3.75, z)/1.5 (in) | Behind = x_c + 6 − 2 (in) | Result |
+  |---|---|---|---|---|
+  | 1 | 2.5 | 2.50 | 6.50 < 8.46 | not counted |
+  | 2 | 5.5 | 3.67 | 7.67 < 8.46 | not counted |
+  | 3 | 8.5 | 5.67 | 9.67 ≥ 8.46 | **effective**; front 18 − 5.67 − 2 = 10.33 > 0 |
+
+  - n_eff = 2; φV_r = 0.75 × 2 × 0.20 × 60 = 18.0 kip; DCR = 16.16/18.0 = 0.898.
+  - With the four confirmations ticked, the substitution is justified: Concrete Breakout (V) (1.454 with no reinforcement) is removed. Pryout 0.238 is unchanged.
+- **Hairpin regression (same pedestal, default hairpins):**
+  - φV_r 18.0, DCR 0.898 and n_eff 2 of 8 are unchanged.
+  - The gate reasons change only as described: the "not creditable" reason is now a note, the "bend not confirmed" blocker is gone, and the spacing clash still blocks.
+- **Verification:**
+  - `node tests/check-syntax.mjs` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and the export checks pass.
+  - The tie and hairpin cases were run headless (origin/main against the working tree for the hairpins), with 0 page errors.
+  - The plan and section were inspected in screenshots, and the print report builds.
+
+## 2026-10-23 — PR-1: Pedestal Reinforcement input; §10.7.6.1.6 ties-at-anchor-bolts check; pedestal vertical bars as tension anchor reinforcement; closed-tie shear uses the pedestal ties (Tier 2, new checks)
+- **Engineer request (2026-10-23):** add the pedestal tie check and the pedestal vertical bars, with the geometry entered once and the app deciding eligibility.
+- **New saved group `S.ped`.** It is additive: `mergeState` fills the defaults, so no migration is needed. Fields:
+  - `present`;
+  - `barSize`, `nX`, `nY` (bars per face, corners included);
+  - `tieSize`, `cover` (clear cover to the ties);
+  - `tieSets`, `tieTop`, `tieSpacing`;
+  - `barTop` (top of the vertical bars below the surface);
+  - `intoFooting`, `footExt`, `grade`.
+
+  New input section "7a. Pedestal Reinforcement".
+- **New functions:**
+  - `pedGeom()` places the perimeter bars at cover + tie Ø + bar Ø/2 from the faces, and the tie sets at tieTop + k·tieSpacing.
+  - `pedTieCheck()` runs the §10.7.6.1.6 check.
+  - `tRebarEff()` gives the effective tension-rebar inputs.
+- **§10.7.6.1.6 check:**
+  - Count the tie sets within 5 in of the top. Two are required for No. 4 or larger, three for No. 3; smaller than No. 3 fails.
+  - The ties must enclose every anchor: anchor centre + d_a/2 inside the tie's inside face.
+  - The ties must surround at least 4 longitudinal bars.
+  - DCR = n_req/n. It is ∞ if the ties do not enclose the anchors, are smaller than No. 3, or surround fewer than 4 bars.
+  - Shown as the Summary row "Pedestal Ties at Anchors" and as section 8 of the Concrete Embedment tab, with worked lines (§6).
+- **Tension piece type `pedbars`:**
+  - The legs are the pedestal bars at their true positions, and the bar size and grade come from `S.ped`.
+  - The bar top is H − barTop. The bar bottom is −footExt into the footing, or 0 if `intoFooting` is off.
+  - Every existing criterion applies unchanged: 0.5·h_ef placement, the GB-1 group surface, and development above and below.
+  - `tensionRebarIntercept` and `tensionRebarCheck` now read `tRebarEff()`. For any other piece type it returns `S.tRebar` unchanged.
+- **Shear `closedtie`:** when `S.ped.present`, the tie size, sets, top, spacing and cover come from `S.ped`. `shearRebarCheck` takes A_b from the intercept's bar.
+- **Display:**
+  - Input-summary lines for the tension and shear rebar and for the pedestal.
+  - The tie outline in the tension plan.
+  - In the elevation: bars running into the footing, clipped to the view; "bars continue … into the footing" in place of the ext-below dimension; the caption gives the bar count.
+- **Governing provision:**
+  - ACI 318-19 §10.7.6.1.6 (ties at anchor bolts in a column or pedestal).
+  - §17.5.2.1(a), R17.5.2.1 and Fig. R17.5.2.1a (vertical bars as anchor reinforcement).
+  - §25.4.2, §25.4.3 (ℓ_d, ℓ_dh).
+- **Check case:**
+  - Pedestal 24 × 24 × 58 in, h_ef = 18 in, default plate and anchors (2 × 2 at ±6 in), default combinations.
+  - S.ped: 8 #6 bars (nX = nY = 3) at ±9.125 in (2 + 0.5 + 0.375); #4 ties, cover 2 in, 3 sets with the top at 2 in (raised to cover + d_b/2 = 2.25) at 3 in; bars stop 3 in below the top, 24 in into the footing.
+  - **§10.7.6.1.6:** sets at 2.25, 5.25 and 8.25 in, so 1 is within 5 in against 2 required. DCR = 2.0, FAILS. The ties enclose the anchors and surround 8 bars.
+  - **Pedestal bars (hooked top), tension anchors at x = −6:**
+    - Bar (−9.125, −9.125): r = 4.42 ≤ 9.0, z_cross = 40 + 4.42/1.5 = 42.95, above 55 − 42.95 = 12.05 < ℓ_dh 15.54, so not counted.
+    - Bar (−9.125, 0): d_s = 3.13, above 12.92 < 15.54.
+    - Result: 0 of 8 counted, φN_r = 0. The substitution is not justified and Concrete Breakout (T) 0.450 stays.
+  - **Closed ties from the pedestal (#4, sets 2.25 / 5.25 / 8.25, c_a1 = 18):** 2 of 6 legs effective (set 3), φV_r = 18.0 kip, DCR 0.898.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: on all 5 built-in cases, cc, capacities, checks and validation are identical. Only `.report` differs, and a line diff shows the only new lines are the "8. Pedestal Ties at Anchor Bolts" heading in each concrete section (not checked when the pedestal reinforcement is not entered).
+  - The check case was run headless, with 0 page errors. The VT-1 tie case without S.ped is unchanged (φV_r 18.0, DCR 0.898).
+
+## 2026-10-23 — DX-1: Export DXF (plan + section, R12, inches) (display/export only, no calculation change)
+- **Engineer request (2026-10-23):** a DXF export for drafting.
+- **New:**
+  - a header button "Export DXF" (`btnExportDxf`);
+  - `bpDxfWriter()`, an ASCII DXF R12 (AC1009) writer with CRLF line ends, layers, LINE, POLYLINE, CIRCLE and TEXT. It is adapted from `Gusset Plate Rating.html` GPDXF.write, duplicated per CLAUDE.md §3;
+  - `bpExportDxf()`, which builds the drawing.
+- **Content of the drawing:**
+  - **PLAN** at the pedestal centre:
+    - pedestal, plate, column (W outline, round or rectangle) and centrelines;
+    - anchors and DG1 oversized holes, numbered;
+    - pedestal bars and the tie outline;
+    - tension reinforcement legs, on separate layers for counted and not counted;
+    - shear hairpin legs, or the closed-tie outline;
+    - the group breakout surface: its flat bottom, and where it leaves the concrete.
+  - **SECTION** along x, to the right of the plan:
+    - pedestal, plate and a column stub;
+    - anchors with heads;
+    - pedestal bars, drawn into the footing when that option is on;
+    - tie sets and tension legs;
+    - the group breakout polyline, clipped at the pedestal faces.
+  - Notes listing the layers. All layers are prefixed BP-.
+  - Plate-referenced items (anchors, plate, column, stirrup and hairpin legs) are offset by the plate offset. Pedestal-referenced items (pedestal bars, ties) are not.
+- **Governing provision:** none (export only).
+- **Check case:** the default project, and the PR-1 pedestal case with U-stirrups and closed ties.
+  - Both files read back in ezdxf 1.4.4 with 0 audit errors and 0 fixes.
+  - Entity counts:
+    - default: POLYLINE 8, LINE 7, CIRCLE 8, TEXT 12;
+    - pedestal case: POLYLINE 9, LINE 15, CIRCLE 24, TEXT 12.
+  - Rendered through the ezdxf SVG backend and inspected.
+  - The button's download is named `Untitled.dxf`.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and the export checks pass.
+  - 0 page errors.
+
+## 2026-10-23 — GFX-A: 3-D view with every reinforcement layer and both breakout bodies; shear plan clipped to the concrete, reference row and c_a1 (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics items 1 (3-D) and 6 (shear plan), approved with the other graphics items; done as the first of four PRs (GFX-A … GFX-D).
+- **Saved data (§5, additive):** `S.ui.layers3d = {tRebar, vRebar, ped, breakout}`, default all `true`, added to `defaultState()`.
+  - `mergeState` fills missing keys: `out.ui.layers3d=Object.assign({},d.ui.layers3d,(st&&st.ui&&st.ui.layers3d)||{})`.
+  - Migration: a save without `ui.layers3d` whose old single 3-D "Rebar" layer was off (`_vis3.show.rebar===false`) keeps the tension legs and the breakout body off (`tRebar = breakout = false`); that layer held exactly those two things.
+  - The existing switches and opacities stay where they were, in `S._vis3` (concrete, grout, plate, anchors, loads, dimensions, axes). Nothing is renamed or removed; the old `rebar` key is left in old saves and ignored.
+- **`build3D()` — anchor text `const groups={concrete:new THREE.Group()`:**
+  - Before: `…anchors:new THREE.Group(),rebar:new THREE.Group(),loads:…`.
+  - After: `…anchors:new THREE.Group(),tRebar:new THREE.Group(),vRebar:new THREE.Group(),ped:new THREE.Group(),breakout:new THREE.Group(),loads:…`.
+  - Canvas height `H=520` → `H=640`.
+- **`build3D()` — the block `(function drawRebar3D(){ … })();` (anchor text `/* ---- TENSION ANCHOR REINFORCEMENT`) is replaced by the block `/* ---- REINFORCEMENT AND BREAKOUT BODIES (GFX-A, 2026-10-23)`.** Helpers `rod`, `path3`, `knot` at build3D scope. It draws:
+  - **Pedestal reinforcement (`ped`)** from `pedGeom()`: the bars from −footExt (or 0) to H − barTop, and each tie set as a closed loop at the tie centreline (±tieHx, ±tieHy) at depth z_k. Blue-grey (0x546e7a). Not drawn here when the bars ARE the tension reinforcement (`tRebarEff().isPed`) or the ties ARE the shear ties (`icV.isTie && icV.usePed`): those are drawn coloured in their own layer, not twice.
+  - **Tension rebar (`tRebar`)** from `tensionRebarIntercept(CC)`, as before: green counted, red crosses but not counted, grey never reaches the surface; a sphere at z_cross; top bend for two-leg pieces, bottom bend only for a closed tie. Change: pedestal bars (`pedbars`) are no longer shifted by the plate offset (they are pedestal-referenced; the DXF export already did this).
+  - **Shear rebar (`vRebar`)** from `shearRebarIntercept(CC)`:
+    - hairpins and bars: each leg from the leading row back by `availBehind` at its depth z; colour as the hairpin plan (green `L.eff`, red `L.fits` but not counted, grey does not fit); a hairpin's bend as a half circle around the rod toward the edge (green if both legs count, else 0x8d6e00); the hook stub at the back end when `hookEnd`. Plate offset applied.
+    - closed ties: per set k at z_k, the two legs parallel to V coloured by that set's verdict, the legs across V grey, a sphere at each crossing (`lead + xCross`). Pedestal frame (no offset).
+  - **Breakout bodies (`breakout`):**
+    - the GB-1 tension body (same geometry as before: `breakoutRing` from `ic.hulls`, flat bottom at `coneZ`), now opacity 0.24 (was 0.14), the flat bottom filled at 0.45, outlines solid dark red;
+    - NEW: the shear breakout half-pyramid (orange, 0xd35400, opacity 0.22) from the reference row (below) to the governing edge: on the top face a trapezoid opening 1.5·c_a1 beyond the outer anchors of the row, on the edge face a band 1.5·c_a1 deep (limited to H), the failure surface between them; clipped to the pedestal by `clipSolid3()`.
+- **`build3D()` — framing (anchor text `let ang=0,drag=false`):** new `target`, `place()` and `fit()`. `fit()` projects a sample of the drawn vertices of the visible layers, pans the target to centre them and scales the distance until they fill ~90 % of the view (iterated). Before: aim at the plate top, distance from a fixed reach estimate; the model filled about the middle third. `three3D.fit()` resets the orbit to the isometric default and fits.
+- **`buildVisualTab()`:** the layer toggles are Concrete, Grout, Plate/column, Anchors, Tension rebar, Shear rebar, Pedestal reinforcement, Breakout bodies, Loads, Dimensions, Axes (before: … Anchors, Rebar, Loads …), plus a "Fit view" button. A second note gives the colour key. The toggles of the four new layers read and write `S.ui.layers3d`; the others `S._vis3.show` as before.
+- **New helpers before `drawHairpinPlan`:**
+  - `shearBodyGeom(ic)`: the reference row of the governing shear breakout case, in the pedestal frame — the anchor row at c_a1 from the governing face (c_a1 from `shearRebarIntercept` → `comboCapacities().sbk`); if no row matches (c_a1 limited by §17.7.2.1.2), the row at the combination's critical-row set-back `vCaseOffset`. Returns u (toward the edge) and t (along it) of the row, its outer anchors, the face, and whether it is the back row.
+  - `clipSolid3(faces, planes)`: clips a convex solid (list of planar faces) by axis-aligned half-spaces and caps the cut.
+- **`drawHairpinPlan()` — shear plan:**
+  - Breakout trapezoid. Before (anchor text `const halfW=1.5*ic.ca1;`): rear corners at the LEADING row, front corners at `edgeN` moved in to `min(1.5·c_a1, c_a2)`, drawn in the plate frame (`XP`, `YP`). After: rear corners at the REFERENCE row (`shearBodyGeom`), front corners 1.5·c_a1 beyond the row's outer anchors at the face, the polygon clipped to the pedestal (the splayed side stops at the side face and runs along it), drawn in the pedestal frame (`X`, `Y`).
+  - The failure-plane line is drawn through the reference row (was: the leading row), clipped to the concrete.
+  - New: label "reference row: back row (Case 2)" / "front row" / "anchor row", and a c_a1 dimension from the reference row to the governing face, outside the side face. Where §17.7.2.1.2 limits c_a1 the label also gives the geometric row-to-edge distance.
+  - Closed ties: the front and back legs (across V) solid dark grey 2.6 (were light grey 2.2), named "front leg" / "back leg" outside the pedestal on a dotted leader; the "n of m tie legs effective" count moved under the title (it sat on the front leg and the shear arrow).
+  - Legend line: "shaded = breakout body, reference row → +x edge (1.5·c_a1 = … beyond its outer anchors), clipped to the concrete".
+  - The 0.5·c_a1 bands, the hairpin legs and the ≥ ℓ_d note are unchanged (leading row, as the check places them).
+- **Governing provision:** none changed. The drawn shear body follows ACI 318-19 §17.7.2.1 and Fig. R17.7.2.1b (half-pyramid 1.5·c_a1 from the critical row; Case 2 = back row); the tension body GB-1 (Fig. R17.5.2.1a).
+- **Check case (display):**
+  - Pedestal 24 × 24 × 58, h_ef 18, S.ped #6 3 × 3, #4 ties cover 2, 3 sets at 2 (2.25) / 3; tension `pedbars`, shear `closedtie`. Shear to +x, c_a1 = 18 from the back row x = −6 (Case 2) to the face x = 12: the plan shows the body from x = −6, 27 in beyond y = ±6, clipped at y = ±12, and "c_a1 = 18.00″". 3-D: tie set 3 legs green, sets 1–2 red (table: 2 of 6, set 3), legs across V grey; the 8 pedestal bars coloured as tension legs (0 of 8 counted; 5 cross, 3 grey), no blue-grey duplicates.
+  - Default pedestal 30 × 30 × 36, 4 × 2 anchors (plate 24 × 18), U-stirrups qty 2, hairpins: c_a1 = 12 from the back row x = 3 (Case 2) to x = 15; the trapezoid reaches the ±15 side faces and runs along them; hairpin legs (0 of 8 counted) red with mixed bends.
+  - Shear toward −y with a plate offset x = 3 (2 × 3 anchors, group hairpin): reference row y = 0, c_a1 = 15, body clipped at x = ±15 in the pedestal frame.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same` (cc, capacities, checks, validation and the report text); export checks pass.
+  - The three test projects above, origin/main vs this branch: `computeAll()`, every combination's capacities, `allChecks()`, `VALIDATION`, `tensionRebarIntercept` and `shearRebarIntercept` identical; report text identical.
+  - Migration and toggles checked headless: an old save with `_vis3.show.rebar=false` loads with tension rebar and breakout off; a partial `layers3d` is filled; a toggle writes `S.ui.layers3d` and survives a rebuild.
+  - Screenshots of every changed view, 0 page errors.
+
+## 2026-10-23 — GFX-B: both orthogonal sections with a section-cut selector; plan dimensions; leg-to-anchor distances (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics items 2 (sections) and 3 (dimensions), the second of four PRs.
+- **Saved data (§5, additive):** `S.ui.secCut = {A:"all", B:"all"}` in `defaultState()`. `A` is the tension Section A-A, `B` is B-B. Each value is `"all"` (projected), or the coordinate of an anchor row. A missing or stale value reads as `"all"` (`bpCutOf`), so no migration is needed.
+- **New helpers before `drawRebar`:**
+  - `bpCutRows(ax)`: the distinct anchor coordinates along one axis, in the plate frame, as the rebar views draw them.
+  - `bpNearestRow(v, rows)`.
+  - `bpCutOf(key, rows)`.
+- **`drawRebar(body, kind, opt)` (anchor text `function drawRebar(body,kind`), tension only.** `opt = {axis:"x"|"y", cut:null|row}`. A call without `opt` draws exactly the view as before: A-A, projected.
+  - **Axis:** `hc()` / `oc()` read the in-page and out-of-page coordinate. `spanPed` is `C.By` for B-B. The anchors are the intercept's tension anchors, `anchorRestraint` (before: `rows[].xs`, which are x only). The legs, z_cross ticks and bends are drawn at `hc()`. Before, they were drawn at `.x`.
+  - **Bends:** `bendIntoPage = isPair && (axY? orient==="x" : orient==="y")`. Before: `orient==="y"`.
+  - **Cut:** an object is in the cut when its nearest anchor row is the chosen row. Objects outside the cut are drawn first, at opacity 0.2.
+    - The breakout surface is the true profile along the cut line: `z = min(coneZ + breakoutDist(P, hulls)/1.5, H)`, sampled in 160 steps. This is the same function the check uses.
+    - With no cut, the GB-1 silhouette is drawn as before.
+  - **Overlap order:** where legs superimpose in a projection, counted legs are drawn on top, then crossing legs, then the rest.
+  - **Pedestal reinforcement:** the pedestal ties, and the pedestal bars when they are not the tension legs, are drawn light grey (#8a9aa6).
+  - **Title:** a section title, e.g. "SECTION A-A — along x, looking +y — cut at the anchor row y = −6.00″ (others dimmed)". The axis triad is `elevX` for B-B.
+  - **Spacing dimension:** it now uses the distinct leg positions in the cut and is labelled with the distance drawn. Before, it took the middle two legs in list order, which could be the same position in two rows, and it was always labelled with the input spacing.
+- **Piece pairing (display fix):** the two legs of a 2-leg piece are now its two consecutive entries in the intercept's leg list. Piece numbers restart in every row, so keying by the number joined the pieces of different rows. The effect was:
+  - in the elevation, one wide U across the rows;
+  - in the plan, no stirrup outline;
+  - in the 3-D view, no bends.
+
+  Changed in `drawRebar`, `drawRebarPlan` (anchor text `(ic.bars||[]).forEach((b,i)=>`) and `build3D` (anchor text `icT.bars.forEach((b,i)=>`).
+- **`buildTRebarTab` → card "3. Rebar Layout":** two selectors are added, "Section A-A (along x) cut at" and "Section B-B (along y) cut at". Each offers "all anchors and legs, projected" or an anchor row. The card then draws A-A and B-B. The warning box still uses A-A's fit result, unchanged.
+- **Shear:**
+  - New `drawShearFace(body)`, Section B-B. It shows the governing edge face from outside, looking along V. It draws:
+    - the projected area A_Vc, with width × depth = A_Vc labelled from `comboCapacities().sbk`;
+    - the anchors, projected;
+    - every leg in section at its t and depth, coloured by its verdict;
+    - for ties, the front leg as a grey bar, the tie sets and the 0.5·c_a1 line;
+    - for hairpins, the 0.5·c_a1 bands.
+
+    It is added to the Shear Rebar tab under "Section B-B — the governing edge face".
+  - The existing shear section gets the title "SECTION A-A — along V, toward the +x edge …".
+  - The shear sections are projected and have no cut selector. B-B separates the legs that superimpose in A-A.
+- **Plan dimensions, new `bpPlanDims(s, o)` before `drawRebarPlan`:**
+  - A chain along x above the pedestal (face → anchor columns → face) and along y to its left. A label that would run into its neighbour is staggered one tier out.
+  - The plate B and N on a second tier.
+  - In the tension plan, the clear-cover envelope (dashed) and a "clear cover" dimension.
+  - The edge-distance labels use the values from `anchorGeom()` (ca_x_neg …, with the plate offset and a c_a override included; "(override)" is added when it is set). Spacings are the distances drawn.
+  - Tension plan labels: "c_a". Shear plan labels: "c_a2" to the faces along the governing edge, "c" to the others; c_a1 stays the GFX-A dimension from the reference row.
+  - `drawRebarPlan`: H 460 → 500, with the pedestal lowered. The chosen section cuts are marked A–A / B–B.
+  - `drawHairpinPlan`: H 470 → 520, with the pedestal lowered. Anchor circles are reserved in the label placer. The reference-row label for an edge along y now sits inside, clear of the anchors. The tie front/back-leg labels moved out beyond the dimension tiers.
+  - `makeTagPlacer()` gains `.reserve(x1, y1, x2, y2)`.
+- **Click panels:**
+  - **Tension leg:** new row "Distance to that anchor: Δx, Δy, r = √(Δx² + Δy²), and d_s to the flat bottom". The anchor is now taken from the intercept's own list of tension anchors (`anchorRestraint[nearIdx]`) and numbered as in the anchor key. Before, `nearIdx` indexed the governing combination's anchor list, which could name another anchor when the maximum-tension combination is a different one.
+  - **Shear leg:** new row "Distance to its anchor": the anchor number and coordinates, |t − t_a|, and for ties the crossing in front of the anchor and the depth.
+- **Governing provision:** none changed. The sections follow Fig. R17.5.2.1a (GB-1 surface) and §17.7.2.1.3 / Fig. R17.7.2.1b (A_Vc).
+- **Check case (display):**
+  - 4 × 2 anchors (x = −9, −3, 3, 9; y = ±6), pedestal 30 × 30 × 36, U-stirrups, qty 2, orient y.
+    - A-A cut at y = −6: the only tension anchor in that row, x = −9, is drawn full and x = −3, 3 are dimmed. The legs at x = −12 and −6 are full. The profile is a V from x = −9 at the head plane (z = 24), reaching the top at x = 9 (1.5 · 12 = 18 from the anchor) and the −x face at z = 26.
+    - B-B projected: four separate U's (before: one U from y = −8 to 8). The spacing dimension reads 8.00″ (legs at ±4).
+    - Plan chain: c_a 6.00, s 6.00 ×3, c_a 6.00 along x; c_a 9.00, s 12.00, c_a 9.00 along y; plate 24 × 18.
+  - The leg 1A panel reads: anchor 1 (−9, −6), Δx = −3.00, Δy = −2.00, r = 3.61″ (table r = 3.61). Tie set 1 leg A: anchor 1 (−6, −6), |t − t_a| = 3.75″, crossing 2.50″ in front at depth 2.50″.
+  - Pedestal case (24 × 24 × 58, closed ties): the B-B face shows A_Vc = 24.00 × 27.00 = 648.0 in² (sbk), set 3 green, sets 1–2 red.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included.
+  - On the three graphics test projects, origin/main vs this branch, every result is identical, including both intercepts and the report text.
+  - The panels were clicked headless. Screenshots were checked. 0 page errors.
+
+## 2026-10-23 — GFX-C: anchor force map; labels through collision checks; 9 px minimum text size (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics items 4 (force map) and 5 (labels). This is the third of four PRs.
+- **Saved data:** none.
+- **New `drawForceMap(body, c)`**, placed before `anchorForceTable`. It is called in `buildAnchorTab`, card "Anchor Layout & Resulting Forces", between the anchor key and the force table. Anchor text: `drawForceMap(body,c);   /* GFX-C`. It draws a plan of the plate for the detailed (selected) combination:
+  - **Anchors:** each anchor is shaded by its axial force from `c.perAnchor[i].t` (red = tension, green = compression, intensity ∝ |T_i|/max) and labelled T = … / C = …. A tension scale bar is shown.
+  - **Neutral axis:** the line `w = a + b·x + c·y = 0` from `c.na.plane`.
+  - **Bearing stress block:** the compression polygon, shaded by a gradient from 0 on the neutral axis to the most compressed corner. This follows `naAnchorForces`: σ = K_c·(−w), linear in w. Isostress lines are drawn at 25 / 50 / 75 % of the peak, and labelled only when they are at least 16 px apart.
+  - **Peak and resultant:** the peak `c.na.smax` at that corner, and the resultant `c.na.C` at (`c.na.xc`, `c.na.yc`).
+  - **Other cases:**
+    - no moment: uniform bearing, `c.na.C`, with DG1 f_p = `c.resX.q`;
+    - open stand-off: "no bearing under the plate";
+    - elastic model: a note referring to DG1 on the Base Plate tab.
+  - **Not recomputed:** no force or stress. The solver's own plane is evaluated only to place the shading and the lines.
+- **`txt()`:** before, `const fsz=size||11;`. After, `const fsz=Math.max(size||11,9);`. No drawing text is below 9 px, on screen or in print.
+- **New `svgFitText(s)`**, called first in `svgWithControls`. An upright label whose estimated box (0.5·font-size per character) crosses the left or right edge is slid back inside.
+- **`drawRebar`:**
+  - H 440 → 480.
+  - Caption rows:
+    - tension: legend at H−45 and H−32, caption at H−16, the cover-warning line at H−58 (it shared the legend row);
+    - shear: the caption is split into the description at H−30 and the verdict at H−16 (one line ran past both edges).
+  - The axis triad moved to the top left (34, 62). At the bottom, its origin note ran into the caption.
+  - The "breakout uses h_ef' = …" note moved under the title. It was centred on the third dimension tier and ran off the right edge. It now also states the h_ef used by the check and the drawing.
+  - **c_top** moved to a third tier outside the right face, on a leader, when it fits. Otherwise it stays where it was. It sat among the bars and the z-datum label.
+  - **"flat at the head plane across the anchors"** moved below the bar bottoms, or below the pedestal when the bars run to the base, on a dotted leader. It sat across the bars.
+  - **Closed-tie section:** the set labels and "0.5·c_a1 = … below the top" go through one `makeTagPlacer` outside the left face, with the z = H label reserved. The 0.5·c_a1 label sat on a tie line. "top set" moved to the outer right tier; it sat on the H dimension.
+  - **Hairpin section:**
+    - "behind = …" moved above the top face, on extension lines;
+    - the depth and stack dimensions use horizontal labels on leaders (the rotated depth label ran off the top);
+    - "failure plane" moved right of the plane;
+    - the title was shortened (it ran under the zoom buttons).
+- **`drawHairpinPlan`:**
+  - The leg tags (6.5 → 9 px) go past the BACK end of each leg. At the plane end they sat on the bends and on each other.
+  - The "≥ ℓ_d" label goes on the far side of its dimension line from the leg, through the placer.
+- **Print report (`buildPrintReport`):** the PDF of the 4 × 2 U-stirrup / hairpin project was printed headless (Letter, print media; 50 pages) and the figure pages were rendered and inspected. No figure is clipped.
+- **Governing provision:** none changed.
+- **Check case (display):**
+  - Combination "Vy" (P = +10, Vx = 2, Vy = −15, Mx = 200 kip-in), plate 18 × 24, 2 × 3 anchors.
+  - The force map shows anchors 5 and 6 at T = 6.12 kip and 3 and 4 at T = 3.01 kip (the per-anchor table gives the same), and anchors 1 and 2 at 0.
+  - The neutral axis runs just above the bottom row. σ_max = 0.269 ksi and C = 8.25 kip over 60.5 in².
+  - Hand check: ΣT − C = 2(6.12 + 3.01) − 8.25 = 10.01 ≈ P = 10.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, and `.report` is identical.
+  - On the three graphics test projects, every result and the report are identical.
+  - Every drawing was screenshotted (input plan and elevations, anchor key, force map, breakout, tension plan and sections, shear plan and sections) for the default, pedestal, 4 × 2 and −y shear projects, with 0 page errors.
+
+## 2026-10-23 — GFX-D: Detail Sheet tab — one printable page with plan, both sections, rebar schedule and check summary (display only, no calculation change)
+- **Engineer request (2026-10-23):** graphics item 7. This is the last of four PRs.
+- **Saved data:** no new key. `S.print.sections.tabDetail` is written only when the report option is ticked. It is opt-in like the appendices: a missing key means the sheet is not in the calculation report.
+- **New tab "Detail Sheet" (`tabDetail`):**
+  - **Where it is wired:** `TABS()` adds it after the rebar tabs; `buildOutput` and `buildOutputInto` call `buildDetailTab`.
+  - **Print settings:** in `openPrintSettings` (the `optIn` test, and the `est()` count) and `BPAD_OPTIN` in `buildPrintReport`, it is an appendix that prints only when ticked. The default calculation report is unchanged.
+- **New `buildDetailTab(pg)`.** The tab shows a header line (project, pedestal, f′c, plate, anchors, h_ef) and a 2 × 2 grid:
+  - **Figures in three cells,** using the compact versions of the existing drawing functions:
+    - with tension reinforcement: `drawRebarPlan`, then `drawRebar` A-A and B-B, with the cuts chosen on the Tension Rebar tab;
+    - otherwise, with shear reinforcement: `drawHairpinPlan`, the shear `drawRebar` and `drawShearFace`;
+    - otherwise: `drawPlan` and `drawElevation` x and y, at full drawing size (see the open item).
+  - **The rebar schedule in the fourth cell.**
+  - **Below the grid, a check summary** from `allChecks()`: label, reference, D/C and status, in two columns.
+- **"Print this sheet (one page)" button.** It calls `bpPrintSheet()`, which:
+  - copies the sheet into `#printReport`;
+  - applies the report page CSS (`bpadApplyPageCSS`): letter portrait with the title-block header;
+  - prints.
+- **New `bpRebarSchedule()`.** It builds one row per mark, size, shape, length and verdict. The columns are mark, size, quantity, shape, approximate length and counted / not counted.
+  - **Lengths:** the centreline lengths of the straight segments and bends as drawn, from the same geometry the checks use. Hooks and bend allowances are not added.
+    - U-stirrup: 2·(bar top − bar bottom) + gauge (top bend when hooked at the top).
+    - Closed stirrup: 2·leg + 2·gauge.
+    - Straight bar or pedestal bar: the leg.
+    - Hairpin: 2·available behind + π·gauge/2.
+    - Closed tie: 2·(2u_F) + 2·(2t_L).
+    - Pedestal bar: (H − barTop) + footExt.
+    - Pedestal tie: 4·tieHx + 4·tieHy.
+  - **Counted:** from the per-leg verdicts. A piece is counted when all its legs are counted. A tie set is counted when its legs parallel to V are counted.
+  - **Pedestal rows:** pedestal bars and ties are listed as P1 / P2 unless they are themselves the tension bars or the shear ties.
+- **Compact option** (`opt.compact`, detail sheet only):
+  - **Canvas sizes:**
+    - `drawRebarPlan(body,opt)`: 380 × 320;
+    - `drawRebar(body,kind,opt)`: 380 × 320, pad 56;
+    - `drawHairpinPlan(body,cGov,opt)`: 380 × 320;
+    - `drawShearFace(body,opt)`: 380 × 320, pad 56.
+  - **Left out:** the captions, legends and click panels (the sheet's notes replace them).
+  - **Titles:** shortened.
+  - **Axis triad:** dropped from the sections; their titles name the axis.
+  - **`bpPlanDims`:** new `o.noPlate`, which leaves out the plate tier (the header gives the plate size).
+  - **No compact option:** the full-size views are drawn exactly as before.
+- **CSS:** `.bpSheet` (max-width 7.3 in), `.bpSheetHd`, `.bpSheetGrid`, `.bpSheetCell`, `.bpSheetH`, `.bpSheetNote`, and the sheet table sizes (8.5 pt).
+- **Governing provision:** none changed.
+- **Check case (display):**
+  - **Pedestal 24 × 24 × 58, `pedbars`, closed ties:**
+    - T1: #6 × 8, pedestal vertical bar 79.0 in (55 − (−24)), not counted. The table gives 0 of 8.
+    - V1: #4 × 1, closed tie 19.50 × 19.50, 78.0 in (2·(2·9.75)·2), counted (set 3).
+    - V2: #4 × 2, closed tie, not counted. The table gives 2 of 6 legs (set 3).
+  - **4 × 2 anchors with U-stirrups and hairpins:**
+    - T1: #5 × 4, U-stirrup 40.0 in (2·(34 − 16) + 4).
+    - V1: #4 × 4, hairpin 30.3 in (2·12 + π·4/2).
+    - Both not counted.
+  - **One page:** the sheet printed alone to PDF (Letter, print media) is 1 page for all 5 test projects (default, pedestal, 4 × 2, −y shear, closed ties only).
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included. The sheet is opt-in, so the default report is unchanged.
+  - On the three graphics test projects, every result and the report are identical.
+  - With the report option ticked, the report ends with "Appendix: Detail Sheet".
+  - 0 page errors.
+- **Open item:** for a design without reinforcement the sheet shows the input plan and both elevations. Those views are 900 px wide and have no compact version, so on the page their text is about 4 px. Options: a compact plan and elevations, or a full-width plan on the sheet.
+
+## 2026-10-24 — HP-1: hairpins / shear bars are measured from the reference anchor row of the governing breakout case (Tier 2, calc change, MORE conservative where it changes)
+- **Engineer request (2026-10-24):** approved after GFX-A showed the mismatch.
+- **Problem.** In `shearRebarIntercept`, the hairpin / bar branch (not the closed-tie branch) used the leading row (`lead`) for two things:
+  - the failure plane that the development "behind" is measured from;
+  - the 0.5·c_a1 placement test.
+
+  But `ca1` comes from the governing shear-breakout case. When Case 2 governs (Fig. R17.7.2.1b, the back row), the failure surface starts at the back row, c_a1 from the edge. So the leg length behind the leading row was credited as development behind a plane it may not even reach.
+- **Where:** `shearRebarIntercept`, non-tie branch.
+  - Anchor text before: `/* room behind the failure plane, inside the pedestal, less cover */`.
+  - Anchor text after: `/* HP-1 (2026-10-24, engineer)`.
+- **Before:**
+  ```js
+  const roomBehind=Math.max(0,(halfSpanN + lead) - cover);
+  const extBehind=Math.max(R.extBehind||0,0);
+  const availBehind=Math.min(extBehind, roomBehind);
+  …
+  L.dT=Math.min(...leadPts.map(p=>Math.abs(projT(p)-L.t)));
+  ```
+- **After** (the same reference row as the VT-1 tie branch):
+  ```js
+  const tolRef=0.05+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const uRef0H=halfSpanN-ca1;
+  let refPtsH=pts.filter(p=>Math.abs(projN(p)-uRef0H)<tolRef), uRefH=uRef0H;
+  const refIsLead=(!refPtsH.length || Math.abs(uRef0H-lead)<tolRef);
+  if(refIsLead){ refPtsH=leadPts; uRefH=lead; }
+  const roomBehind=Math.max(0,(halfSpanN + lead) - cover);
+  const extBehind=Math.max(R.extBehind||0,0);
+  const legLen=Math.min(extBehind, roomBehind);
+  const legEnd=lead-legLen;
+  const availBehind=refIsLead? legLen : (uRefH-legEnd);
+  …
+  L.dT=Math.min(...refPtsH.map(p=>Math.abs(projT(p)-L.t)));
+  ```
+- **What changes and what doesn't:**
+  - The legs stay where they are detailed: they start at the leading row and wrap its anchors.
+  - Development behind the plane is now the length of leg behind the reference plane. A leg that ends at or in front of the plane does not cross the failure surface and is not counted. Its reason reads "the leg ends … the failure plane through the reference row".
+  - The lateral 0.5·c_a1 offset is measured to the reference-row anchors.
+  - Edge-side anchorage is unchanged: the bend engaging the rod, or ℓ_d within c_a1 − cover.
+  - `devDCR = reqBehind/availBehind` is unchanged in form; it is ∞ when availBehind ≤ 0.
+  - New return fields: `uRef`, `refIsLead`, `refTs`, `legLen`, `legEnd`.
+- **Show the work:** `shearRebarCheck`, step "Failure surface, proximity and development", gains lines when the reference row is not the leading row:
+  - u_ref = h/2 − c_a1;
+  - u_end = u_lead − min(ℓ_ext, room);
+  - available behind = u_ref − u_end;
+  - the lateral limit is measured to the reference-row anchors.
+- **Drawings:**
+  - Legs are drawn with their length `legLen`, from their own row: DXF, the hairpin plan, the shear section, the 3-D view, and the Detail Sheet schedule length. Before, they were drawn with `availBehind`.
+  - The section draws the failure plane and wedge at `uRef`, and the "behind" dimension from the leg end to that plane. When the legs end in front of it, the section says so.
+  - The hairpin plan draws the 0.5·c_a1 bands around the reference-row anchors, and the ≥ ℓ_d dimension from the reference plane.
+- **Governing provision:**
+  - ACI 318-19 §17.5.2.1(b) and R17.5.2.1(b): anchor reinforcement for shear must be developed on both sides of the breakout surface and placed close to the anchor.
+  - §17.7.2.1 and Fig. R17.7.2.1b, Case 2: the failure surface is projected from the critical anchor row, with c_a1 measured from it.
+- **Check case:** pedestal 30 × 30 × 36, plate 24 × 18, 4 × 2 anchors (x = −9, −3, 3, 9; y = ±6), #4 hairpins, 2 per leading anchor, depth 3, ext_behind 12, default combinations.
+  - The governing shear combination is 0.9D+1.0W, V = 16.155 kip toward +x. Case 2 governs: the reference row is x = 3, c_a1 = 15 − 3 = 12. The leading row is x = 9.
+  - **(a) As entered (bend not marked as engaging the rod):**
+    - Before: available behind = min(12, 15 + 9 − 2 = 22) = 12 ≥ ℓ_d = 12. Every leg still fails on the edge side (10 < 12). 0 of 8, φV_r = 0, DCR ∞.
+    - After: u_end = 9 − 12 = −3, available behind = 3 − (−3) = 6 < 12. 0 of 8, φV_r = 0, DCR ∞.
+    - The shear breakout is unchanged: Condition B, φ = 0.70, φV_cbg = 11.732 kip, DCR 1.377.
+  - **(b) Same design with the bend engaging the rod:**
+    - Before: 4 of 8 legs (the other 4 clash, §25.2.1). φV_r = 0.75 × 4 × 0.20 × 60 = 36.0 kip, DCR = 16.155/36.0 = 0.449. The intercept passes, so Condition A applies: φ = 0.75, φV_cbg = 12.570 kip, Concrete Breakout (V) DCR 1.285, interaction 1.563.
+    - After: available behind 6 < 12, so 0 of 8, φV_r = 0, DCR ∞. Condition B: φ = 0.70, φV_cbg = 11.732 kip (= 12.570 × 0.70/0.75), Concrete Breakout (V) DCR 1.377, interaction 1.748.
+  - **(c) As (b) with ext_behind = 18:** the legs end at 9 − 18 = −9, available behind = 3 + 9 = 12 ≥ 12. 4 of 8, φV_r = 36.0, DCR 0.449, unchanged from before.
+  - **(d) Default project with hairpins and the bend engaging:** 2 × 2 at ±6, pedestal 30, Case 2, c_a1 = 21 from x = −6.
+    - Before: 4 of 8, φV_r 36.0, DCR 0.449; Condition A, φV_cbg 15.371, Concrete Breakout (V) DCR 1.051.
+    - After: the legs (6 → −6) end exactly at the reference plane: 0 of 8, DCR ∞. Condition B, φV_cbg 14.346, Concrete Breakout (V) DCR 1.126.
+- **Regression:**
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included. None of them has shear reinforcement.
+  - On the three graphics test projects, everything is identical except the shear intercept of the 4 × 2 project (case (a) above; nothing downstream changes).
+  - A sweep of 112 hairpin / bar designs (7 anchor grids × 4 pedestals × 4 load sets; hairpin and bar; per anchor and group; bend engaging on and off; hooked end; ext 12/18/30; welded plate), origin/main vs this branch:
+    - every one of the 54 designs whose reference row is the leading row (Cases 1 and 3, single row) gives identical intercept, check, capacities and `allChecks`;
+    - all 58 Case 2 designs change in `availBehind`; some also in n_eff, DCR and Condition A, as above.
+- **Open items:**
+  - The reference-row search uses `halfSpanN − ca1` in the plate frame without the plate offset, exactly as the VT-1 tie branch does. With a plate offset it misses the row and falls back to the leading row, which is the old behaviour for hairpins. The same applies when c_a1 is limited by §17.7.2.1.2. Both branches would need the offset-aware row (as `shearBodyGeom` finds it for the drawings) to fix this; that needs a decision.
+  - Edge-side anchorage (c) is still checked from the leading row with c_a1 − cover, as instructed.
+
+## 2026-10-24 — GFX-F: Detail Sheet without reinforcement — full-width plan and compact elevations at print size (display only, no calculation change)
+- **Engineer request (2026-10-24):** this is the GFX-D open item.
+  - With no reinforcement, the sheet used the input-tab drawings (`drawPlan`, `drawElevation`). They are 900 px wide, so on the page their text printed at about 4 px.
+  - The request: put the plan across the full width with the elevations below it, so the text prints at 9 px or more.
+- **New functions,** placed before `bpRebarSchedule`:
+  - `drawSheetPlan(body)`, 700 × 320. It draws:
+    - pedestal, plate, column footprint and the numbered anchors;
+    - the `bpPlanDims` chains: c_a to each face from `anchorGeom()` (plate offset and override included), anchor spacings, and plate B / N;
+    - By and Bx;
+    - the column name.
+  - `drawSheetElev(body, view)`, 348 × 270. It draws:
+    - pedestal, grout, plate (above an open stand-off gap when there is one), and a column stub with the column width in that view;
+    - the anchors to the head at H − h_ef;
+    - H, h_ef, t_p, the grout thickness, and Bx or By.
+  - Both are drawn at the size they print: the full page width (7.3 in = 700 px) and half of it. No text is below 9 px.
+- **`buildDetailTab`, branch with no reinforcement.**
+  - Before:
+    ```js
+    drawPlan(cell()); drawElevation(cell(),"x"); drawElevation(cell(),"y");
+    ```
+  - After:
+    ```js
+    const cp=cell(); cp.style.gridColumn="1 / span 2"; drawSheetPlan(cp);
+    drawSheetElev(cell(),"y"); drawSheetElev(cell(),"x");
+    ```
+  - The schedule cell spans both columns. When there is no reinforcement, the schedule is one line: "Rebar schedule: no reinforcement entered."
+- **Unchanged:** the input-tab drawings and the sheets with reinforcement.
+- **Governing provision:** none.
+- **Check case:** the default project (no reinforcement).
+  - The sheet prints on one page.
+  - Plan: c_a = 9.00 to every face, s = 12.00 both ways, plate 18 × 18, Bx = By = 30.
+  - Elevations: H = 36.00, h_ef = 12.00, t_p = 1.50, grout 1.00.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases are `same`, report included.
+  - On the three graphics test projects, every result and the report are identical.
+  - The sheet printed alone to PDF (Letter, print media) is 1 page for all 5 test projects: default, pedestal, 4 × 2, −y shear, closed ties only.
+  - 0 page errors.
+
+## 2026-10-24 — UI-1: "7a. Pedestal Reinforcement" moved from the Distribution input tab to the Reinforcement tab (display only)
+- **Problem:** PR-1 added the input section `inPed` but did not add it to `BPAD_IN_SEC`. Unmapped sections stay with the section before them, so it appeared under Distribution.
+- **Anchor text:** `inTRebar:'reinf',inVRebar:'reinf',`
+- **Before:**
+  ```js
+  inTRebar:'reinf',inVRebar:'reinf',
+  ```
+- **After:**
+  ```js
+  inPed:'reinf',inTRebar:'reinf',inVRebar:'reinf',
+  ```
+- **Governing provision:** none (layout).
+- **Check:** in the headless page, the Distribution pane holds `inShear,inForceModel` and the Reinforcement pane holds `inPed,inTRebar,inVRebar`. No result changes.
+
+## 2026-10-24 — T3D-1: 3-D view orbits and zooms on touch screens (display only)
+- **Engineer report (2026-10-24):** on a tablet the 3-D view would not orbit.
+- **Cause:** the view listened only to `mousedown`/`mousemove`/`mouseup` and `wheel`. Touch input does not produce those as drags, and the page scrolled instead.
+- **Anchor text:** `renderer.domElement.addEventListener("mousedown",e=>{drag=true;lx=e.clientX;ly=e.clientY;});`
+- **Before:** mouse-only listeners (mousedown / window mouseup / mousemove) plus wheel.
+- **After:**
+  - Pointer events (`pointerdown`/`pointermove`/`pointerup`/`pointercancel`/`pointerleave`) with pointer capture, covering mouse, touch and pen.
+  - One pointer orbits, at the same rate (0.01 rad/px). Two pointers pinch-zoom: `dist = dist0 · pinch0 / pinch`.
+  - `touch-action:none` on the canvas.
+  - The wheel zoom is unchanged.
+- **Governing provision:** none (UI).
+- **Check:** headless Chromium with `hasTouch` and CDP touch events.
+  - A one-finger drag moved the camera from (84.71, 134.08, −18.56) to (5.66, 160.82, −43.32).
+  - A two-finger spread zoomed the camera distance from 166.6 to 81.0.
+  - Mouse drag still orbits.
+  - 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+
+## 2026-10-24 — CAM-1: the 3-D camera keeps its position when an input changes (display only)
+- **Engineer report (2026-10-24):** every input change reset the 3-D camera.
+- **Cause:** each input change rebuilds the 3-D view. `build3D` called `fit()`, and the Visuals tab then called `three3D.fit()` again 80 ms later. Both re-framed the default isometric view.
+- **After:**
+  - `place()` stores the camera in the session variable `bpad3dView` (orbit angles, distance, target). It is not saved data.
+  - On a rebuild, `build3D` restores that camera instead of calling `fit()`, and the Visuals tab calls `three3D.fit()` only on the first build.
+  - "Fit view" still resets the camera to the isometric view and re-frames it.
+- **Anchor text:** `fit:()=>{ rot.x=Math.PI/6; rot.y=Math.PI/4; fit(); }};` and `if(three3D.fit) three3D.fit(); } },80);`
+- **Governing provision:** none (UI).
+- **Check:** headless, with a touch orbit and pinch.
+  - Camera (1.10, 79.72, −14.33) before an input edit; (1.10, 79.72, −14.33) after it, unchanged.
+  - Fit view → (78.03, 103.86, 79.38), the default framing.
+  - 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+
+## 2026-10-24 — VR-1: every geometric property of the shear reinforcement enterable; automatic values stay the defaults (Tier 2, new inputs; default results unchanged)
+- **Engineer request (2026-10-24):** "The shear rebar is not allowing some input. I thought I would be able to define all the geometry." The app still decides eligibility.
+- **Saved data (§5, all additive; the defaults reproduce the automatic layout, so no migration is needed):**
+  - `S.vRebar.edgeSel` = "auto": the face the legs are detailed toward ("+x" / "-x" / "+y" / "-y").
+  - `S.vRebar.setOut` = 0: plan set-out of the bend (leg start) from the anchor row, + toward the edge.
+  - `S.vRebar.lenMode` = "ext": "ext" = `extBehind` behind the leading anchor row (as before); "total" = `legTotal`.
+  - `S.vRebar.legTotal` = 0: the total straight leg length from the bend. Choosing "total" prefills extBehind + setOut.
+  - `S.vRebar.gaugeOverride` = false, `gaugeGrp` = 0: the group-hairpin gauge override.
+  - `S.vRebar.tOffsetHp` = 0: the group-hairpin run offset along the edge. This is a new field; it is not `tOffset`, so saves with a group-bar offset are unaffected.
+  - `S.vRebar.vDepths` = "": custom depths of stacked group hairpins (comma list, top down).
+  - `S.ped.tieGrade` = null: the pedestal tie grade. null means the grade used before VR-1, i.e. the Shear Rebar grade, so every existing save keeps its f_y.
+- **`shearRebarIntercept`, hairpin / bar branch.** Anchor text: `/* VR-1: hairpins / bars may be detailed toward a chosen face`.
+  - **Leg edge.** `nx, ny` come from the chosen face (`legEdge`), else the governing edge. `bodyNx, bodyNy` stay the governing edge; `shearBodyGeom` now uses them.
+  - **Chosen face ≠ the governing edge** (`wrongEdge`). The reference row is not searched, and every leg is "not counted". The reason reads: "detailed toward the +y face; the governing shear breakout is toward the +x edge, so the leg does not cross its failure surface (not counted)". Counter `nWrongEdge`. The input panel shows the same in a red box.
+  - **Leg position and length.**
+    ```js
+    legStart = lead + setOut;
+    extBehind = (lenMode==="total") ? max(legTotal − setOut, 0) : max(R.extBehind, 0);
+    ```
+    `legLen = min(extBehind, roomBehind)` and `legEnd = lead − legLen` are unchanged. HP-1's "available behind" (u_ref − u_end) is unchanged.
+  - **Set-out behind the plane.** A negative set-out that puts the leg start behind the failure plane means the leg does not cross it. It is not counted (counter `nNoCross`); this test only runs for setOut < 0.
+  - **Group hairpin:**
+    - gauge = `max(gaugeGrp, d_b)` when overridden, else the automatic gauge as before;
+    - legs at `cTgrp + tOffsetHp ± gauge/2`;
+    - stacked depths from `vDepths` where given, else depth + k·vSpacing.
+  - **New return fields:** `legStart`, `setOut`, `lenMode`, `legTotal` (start → end), `wrongEdge`, `legEdge`, `bodyNx`, `bodyNy`, `nWrongEdge`, `nNoCross`, `gaugeOverride`, `tOffsetHp`.
+- **Closed tie with `S.ped`.**
+  - The Rt object adds `grade: S.ped.tieGrade||R.grade` (used in ℓ_dh).
+  - `shearRebarCheck`: `fy = rgrade(isTie && usePed && S.ped.tieGrade ? S.ped.tieGrade : R.grade).fy`.
+- **Inputs (`buildInputPanel`, shear reinforcement):**
+  - **Closed tie with `S.ped`.** Before: a note, plus Piece type and Grade. After: tie size, tie grade, sets, top depth, spacing and cover, inline. They write to `S.ped`, with a note that they are shared with 7a. The Shear Rebar "Grade" row is hidden.
+  - **Group hairpin.**
+    - The vertical spacing is always shown (before: only when the stack is > 1).
+    - New: custom stacked depths (text), a gauge override (checkbox + value; the note gives both the entered and the automatic gauge), and a run offset.
+  - **All hairpin and bar types.** New:
+    - "Detail the legs toward" (auto / face);
+    - "Set-out of the bend from the anchor row";
+    - "Leg length given as" (extension / total), with the field for the chosen definition and a note giving the derived values: start, length behind the row, total, and the part behind the failure plane.
+
+    The old label "Leg extension behind the failure plane" now reads "Leg extension behind the leading anchor row". That is what it always measured; since HP-1 the failure plane can be the back row.
+- **Drawings use the new geometry.** Legs run from `legStart` to `legEnd` in:
+  - DXF (`bpExportDxf`);
+  - the hairpin plan (legs and bends);
+  - the shear section A-A;
+  - the 3-D view (legs and bends);
+  - the Detail Sheet schedule length (start → end).
+
+  The breakout body is drawn for the governing edge (`bodyNx`/`bodyNy`). When the legs are detailed toward another face, the hairpin plan and section A-A carry a red line, and section B-B (the governing face) says the legs do not cross it.
+- **Superseded by VR-2 (2026-10-24):** the inline tie inputs in the shear section (and the VT-1 tie inputs in `S.vRebar`) duplicated 7a, so the ties could be defined in two places. VR-2 makes 7a the only place: the shear section shows a read-only summary and an "Edit in Pedestal Reinforcement" button, the Tie grade input moved to 7a, and the closed-tie check reads `S.ped` only. See the VR-2 entry below.
+- **Not done:** the optional "per-anchor custom" mode (tick which anchors get hairpins). Done cleanly it needs a per-anchor list in the saved data, keyed to anchor numbers that change when the grid changes; left for a decision.
+- **Governing provision:** none changed. Eligibility is still decided by §17.5.2.1(b), R17.5.2.1(b) and HP-1.
+- **Check case (new inputs).** Pedestal 36 × 36 × 36, default 2 × 2 anchors (±6), V = 15 kip toward +x; Case 2, so the reference row is x = −6 and c_a1 = 24.
+  - **Group hairpin**, gauge 10 entered, offset 2, 2 stacked, depths "3, 8": legs at t = 2 ± 5 = −3 / 7 and z = 3 / 8.
+  - **Per-anchor**, total 20, set-out +1:
+    - start 6 + 1 = 7;
+    - behind the row 20 − 1 = 19 (room 18 + 6 − 2 = 22), so the end is 6 − 19 = −13;
+    - behind the failure plane −6 − (−13) = 7 < ℓ_d 12, so not counted.
+  - **Toward +y:** 0 of 8, with the wrong-edge reason.
+  - **Closed ties (24 × 24 × 58 pedestal, #4 pedestal ties):**
+    - tie grade null: f_y 60, 2 legs, φV_r 18.0;
+    - tie grade 75: f_y 75; ℓ_dh grows, so 0 legs. Each change follows from the input.
+- **Regression (defaults):**
+  - `node tests/bpad-profis.mjs`: all 5 built-in cases `same`, report included.
+  - Test projects, origin/main vs this branch: `computeAll`, capacities, `allChecks`, `VALIDATION`, both intercepts (new fields excluded) and the report are identical for:
+    - the default project;
+    - the pedestal + `pedbars` + closed-tie project;
+    - the 4 × 2 U-stirrup / hairpin project;
+    - a group-hairpin project (2 stacked, engaging, ext 30);
+    - a closed-tie project without `S.ped`.
+  - The HP-1 sweep of 112 hairpin / bar designs: 112 of 112 identical.
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes. 0 page errors.
+
+## 2026-10-24 — VR-2: pedestal ties defined in one place only (7a); closed-tie shear reads S.ped only; migration of older closed-tie saves (Tier 2, input source change; saved results unchanged)
+- **Engineer request (2026-10-24):** "Now it seems I can define the ties in the pedestal in two places … How can we avoid this duplication?" The ties are defined only in **7a. Pedestal Reinforcement**.
+- **Saved data (§5).**
+  - New field `S.ped.barsUnconfirmed` = false (additive).
+  - **Migration in `mergeState`** (anchor text `/* VR-2 migration (2026-10-24)`). Applies only to saves made before VR-2, recognised by `st.ped` having no `barsUnconfirmed` key (every later save has it):
+    ```js
+    if(preVR2 && sv && sv.pieceType==="closedtie"){
+      if(!(sp&&sp.present)){
+        out.ped.tieSize=out.vRebar.size; out.ped.tieSets=out.vRebar.tieSets; out.ped.tieTop=out.vRebar.tieTop; out.ped.tieSpacing=out.vRebar.tieSpacing;
+        out.ped.cover=(sv.cover!==undefined)? sv.cover : 2.0;   // the check used 2.0 when no cover was saved
+        out.ped.present=true; out.ped.barsUnconfirmed=true;
+      }
+      if(out.ped.tieGrade==null) out.ped.tieGrade=out.vRebar.grade;   // VR-1: null meant the Shear Rebar grade
+    }
+    ```
+    The old `S.vRebar` tie fields (`size`, `tieSets`, `tieTop`, `tieSpacing`, `cover`) stay in the save, unused by closed ties.
+  - **While `barsUnconfirmed`:** red box in 7a and on the Summary: "Pedestal ties were moved here from Shear Reinforcement; the longitudinal bars are defaults — confirm them." Editing any bar field (size, bars per face x / y, grade, top, into footing, extension) or the button "The bars are as shown — confirm" clears it. Until then:
+    - `pedTieCheck()` returns `{na:true, unconfirmed:true}` (the §10.7.6.1.6 check is not made, exactly as before migration when no pedestal reinforcement was entered);
+    - `tRebarEff()` does not use the pedestal bars as tension anchor reinforcement (as before migration);
+    - the rebar schedule marks the pedestal bars "defaults, to confirm in 7a".
+- **`shearRebarIntercept`, closed-tie branch.** Anchor text `/* PR-1: the ties ARE the pedestal ties. VR-2`.
+  - Before:
+    ```js
+    const usePed=!!(S.ped&&S.ped.present);
+    const Rt=usePed? Object.assign({},R,{size:S.ped.tieSize, cover:S.ped.cover, tieSets:S.ped.tieSets, tieTop:S.ped.tieTop, tieSpacing:S.ped.tieSpacing,
+      grade:S.ped.tieGrade||R.grade}) : R;
+    const devT=usePed? tensionDevLengths(Object.assign({},Rt,{cover:coverT})) : dev, rbT=rebarOf(Rt.size);
+    ```
+  - After:
+    ```js
+    const P=S.ped||{}, usePed=!!P.present;
+    const Rt=Object.assign({},R,{size:P.tieSize, cover:P.cover, tieSets:P.tieSets, tieTop:P.tieTop, tieSpacing:P.tieSpacing,
+      grade:P.tieGrade||P.grade});
+    const devT=tensionDevLengths(Object.assign({},Rt,{cover:coverT})), rbT=rebarOf(Rt.size);
+    ...
+    if(!usePed){ L.eff=false; L.why="pedestal ties not entered (7a. Pedestal Reinforcement): no leg is counted"; }
+    ```
+    and the development pool is empty when `!usePed` (`devDCR` = ∞). New return field `notEntered`.
+  - Epoxy, K_tr and the hook factors of the ties still come from `S.vRebar` (they have no 7a input; the "Epoxy-coated" row stays in the shear section for ties).
+- **`shearRebarCheck`.** Before: `fy = rgrade(isTie && usePed && S.ped.tieGrade ? S.ped.tieGrade : R.grade).fy`. After: `fy = rgrade(isTie ? (S.ped.tieGrade||S.ped.grade) : R.grade).fy`.
+- **Behaviour change, called out (§4):** a closed-tie design with no pedestal reinforcement entered, built in the session (or saved after VR-2), now counts **no** tie leg (φV_r = 0, DCR ∞; the concrete breakout check stays) instead of using the `S.vRebar` tie fields. No existing save changes: those are migrated as above. Governing provision unchanged: ACI 318-19 §17.5.2.1(b), R17.5.2.1(b) (closed ties as shear anchor reinforcement), §10.7.6.1.6.
+- **Inputs.**
+  - Shear section (9), piece type closed ties: no tie inputs and no Bar size / Grade rows. A read-only line, e.g. "Pedestal ties (from 7a. Pedestal Reinforcement): #4 ties (Gr. 60), 3 sets from 2.25″ at 3.00″, cover 2.00″", and a button "Edit in Pedestal Reinforcement ↗" (`bpadGoInSec("inPed")`: switches the input tab, expands 7a, scrolls to it). With 7a not entered: red box "No pedestal ties entered. No tie leg is counted …" and the button "Enter pedestal ties in 7a ↗".
+  - Tension section (8), piece type pedestal vertical bars: the same read-only summary of the bars + button (the hooked-top and epoxy rows stay; they are not 7a fields).
+  - 7a: new "Tie grade" row (moved from section 9; null shows the bar grade).
+  - Report input summary: closed ties without 7a read "pedestal ties not entered: none counted".
+- **Check case (migration), a project saved on main at b270d90 (before VR-1):** pedestal 24 × 24 × 58, h_ef 18, default 2 × 2 anchors, shear rebar closed ties #4 Gr. 40, 3 sets from 2.25″ at 3″, cover 2″, U-stirrups for tension.
+  - Before (old version): 6 legs counted, φV_r = 0.75 · 6 · 0.20 · 40 = 36.0 kip, DCR 0.449.
+  - After loading in this version: S.ped = #4, 3 sets, 2.25, 3.0, cover 2.0, tie grade Gr. 40, present, bars unconfirmed; 6 legs, φV_r 36.0 kip, DCR 0.449. Identical.
+- **Regression.**
+  - Six projects saved on main at b270d90 (closed ties #4 Gr. 60 with no cover saved; #5 Gr. 40 4 sets cover 1.5 epoxy; 4 × 2 anchors #3 cover 3; #4 Gr. 40 with U-stirrups; S.ped entered + closed ties + Shear Rebar Gr. 40 and no tie grade; a hairpin project) were loaded in this version through the tool's start-up path (autosave). `computeAll`, capacities, `allChecks`, `VALIDATION`, both intercepts, `shearRebarCheck` and the printed report are identical for all six.
+  - `node tests/bpad-profis.mjs`: 5 of 5 `same`.
+  - Test projects vs origin/main: default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin identical. The closed-tie project built from fresh defaults without S.ped changes as called out above (DCR 0.90 → ∞).
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes; 0 page errors.
+
+## 2026-10-24 — GFX-G: movable section cuts — A-A and B-B at any position, dragged on the plans (mouse and touch), sections show what the cut passes through; DXF uses the cuts (display / export only, no calculation change)
+- **Engineer request (2026-10-24):** "The detail sheet has section cuts. These should be dynamic and let the user move the section cut. The cuts should be shown on the plan view as well."
+- **Saved data (§5):** `S.ui.secCut = {A, B}` is kept (GFX-B). A = y of Section A-A (along x), B = x of Section B-B (along y), rebar-view frame, or "all" (projected). GFX-B stored "all" or an anchor-row coordinate; both read unchanged as positions, so no conversion is needed. New values are rounded to 0.01 in.
+- **Helpers** (anchor text `/* ---- GFX-G (2026-10-24): movable section cuts`, before `drawRebar`):
+  - `bpCutOf(key)`: the cut position or null ("all"). The old `rows` snap argument is ignored.
+  - `bpCutState(v,cut,tol,sg)`: "cut" (|v − cut| ≤ tol), "beyond" (on the far side for a viewer looking toward sg) or "front" (removed).
+  - `bpCutExtent`, `bpSetCut`, `bpCutSection(body,draw)` (a section container that redraws itself), `bpCutsLive()` (one requestAnimationFrame redraw of every section, cut line and cut input), `bpPlanCutLines(s,map)` (draggable lines), `bpCutControls(body)` (slider, number field, "all (projected)" and one snap button per anchor row; not drawn when printing).
+- **Cut lines on the plans:** the Detail Sheet plan, the Tension Rebar plan (`drawRebarPlan`, the GFX-B static markers removed) and the Shear Rebar plan (`drawHairpinPlan`, plate offset included). Dash-dot purple line, circled A / B at both ends and view arrows (A-A looks +y, B-B looks −x). Dragging uses pointer events with pointer capture (mouse, pen and touch; `touch-action:none` on the 16 px hit line), snaps to an anchor row within 6 px, redraws the sections live, and saves and refreshes on release. Projected cuts are drawn faded at 0.
+- **Sections (what the cut passes through; beyond at 0.25 opacity; in front removed):**
+  - Tension A-A / B-B (`drawRebar` "tension"): anchors (tol d/2 + 0.05), tension legs (tol d_b/2 + 0.05), pedestal ties and bars by state; breakout surface as its true profile in the cut plane (z = z_head + d_s/1.5, GFX-B).
+  - Shear along V (`drawRebar` "shear"): cut along the edge (A for a ±x edge, B for a ±y edge); anchors, tie legs and hairpin legs by state; the breakout body in the cut plane (`bodyAt`: side faces splay 1:1.5 from the reference row, so at lateral offset d_T it starts d_T/1.5 in front of the row). Title shows the cut.
+  - Edge-face section (`drawShearFace`): cut along the shear normal (the other letter); breakout body at the cut, d = u_cut − u_ref, width tMax − tMin + 3d and depth 1.5d; anchors and legs by state. The section letter follows the cut (B-B for a ±x edge, A-A for a ±y edge).
+- **Tabs:** Tension Rebar, Shear Rebar and the Detail Sheet all use the same two cuts, with the controls above the sections (Detail Sheet: above the sheet; not printed). The printed Detail Sheet and the printed report draw the current cuts.
+- **DXF (`bpExportDxf`):** new layers `BP-SECTION` (colour 6, CENTER: cut lines with A / B and view arrows on the plan) and `BP-SECTION-BEYOND` (colour 8: anchors, bars and ties beyond the cut). The DXF section is A-A: at y = cut when set (items in front left out, breakout surface as the true profile), projected otherwise. The notes list both cuts.
+- **Governing provision:** none; display and export only.
+- **Check case:** 32 × 32 × 48 pedestal, 4 × 2 anchors at x = ±3, ±9 and y = ±9, cut A at y = 4.24″: the A-A section shows no anchor in the plane (rows at ±9 are 4.76″ away), the y = +9 row beyond (lighter), the y = −9 row removed; the breakout profile at y = 4.24 is the projected profile (inside the group hull). Dragging B to within 6 px of x = 9 snaps to 9.00.
+- **Tests:**
+  - Mouse drag (Playwright mouse) and touch drag (CDP touch events in a touch context → pointer events) of both lines on the Detail Sheet, Tension Rebar and Shear Rebar plans: `S.ui.secCut` follows during the drag, the section titles change before release (live), the value is saved on release. 6 of 6 tabs × modes OK, 0 page errors.
+  - DXF: BP-SECTION and BP-SECTION-BEYOND present; section titled "SECTION A-A at y = 4.24 in".
+  - Detail Sheet printed to PDF with cuts A = 3, B = −3 for five projects: 1 page each.
+  - `node tests/bpad-profis.mjs`: 5 of 5 `same`. Test projects vs origin/main (default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin, closed ties without S.ped): computeAll, capacities, checks, validation, intercepts and report identical.
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+
+## 2026-10-24 — RPT-1: report and display corrections from a printed project (closed-tie wording and references, raw TeX, clipped labels, combination statements, links) (display / report only; no result changes)
+- **Source:** the engineer printed a real project's report; the coordinator listed the defects. Test project (the engineer's, "W"): pedestal 32 × 32 × 48, f′c 5, plate 24 × 24 × 1.75, W12X65, 4 × 2 anchors 1.25″ F1554 Gr. 55 at 6 / 18, h_ef 14, 2″ grout; combos 1.2D+1.6L (P −120, Vx 8, My 240 kip-in), 1.2D+1.0W (P −70, Vx 15, Vy 6, Mx 180, My 300), 0.9D+1.0W (P −40, Vx 15, Vy 6, Mx 420, My 300); S.ped 20-#8 (6 × 6), #4 ties 3 sets from 2.0 at 3.0; 4-#6 U-stirrups enclosing; closed ties with the four acknowledgements ticked.
+- **1. Summary.** The "Shear hairpins: only N of M claimed legs are effective … Condition A still applied" box is shown only when the §17.5.2.1 substitution is NOT justified (`if(S.vRebar.present && !rebarJustified("shear",CC).justified)`); the green "breakout (shear) not checked" note already lists the uncounted legs. For ties it reads "Shear closed ties" and cites §17.5.2.1(b), R17.5.2.1(b). The Concrete Embedment note "replaced by the hairpin steel check" reads "closed-tie steel check (§17.5.2.1(b))" for ties.
+- **2. Shear Rebar section, closed ties:**
+  - card titles "1. Closed-Tie Shear Reinforcement", "2. Closed-Tie Layout" (hairpins unchanged); `BPAD_CARDS.vrCap` is a getter returning the same title;
+  - step title "Anchor reinforcement — shear (closed ties)"; reference before `ACI 318-19 §17.5.2.1.2`, after `ACI 318-19 §17.5.2.1(b), R17.5.2.1(b)` (ties only);
+  - `allChecks` ref for "Anchor Reinf. Shear (ties)": before `§17.5.2.1.2`, after `§17.5.2.1(b)` — this is the Results line, the Summary chip and table;
+  - "Why only N of M legs" (`ineffCauseBanner`) has a tie branch naming the failed criterion: "4 legs are in tie sets 2, 3, deeper than 0.5·c_a1 = 3.50″ below the top surface (R17.5.2.1(b)). Fix: move the top sets up / tighten the tie spacing …"; crossing beyond the front corner; ℓ_dh behind; ties not entered (VR-2);
+  - 8.2 intro text is tie-specific; "Section through the anchor" → "Section along V"; the hairpin design-detail figure is not shown for ties (it illustrates hairpins); "Click any tie leg".
+  - **Code-reference change (§4 callout):** governing provision for closed ties as shear anchor reinforcement, ACI 318-19 §17.5.2.1(b) with commentary R17.5.2.1(b) and Fig. R17.5.2.1b (unchanged edition). Check case W: D/C = V_ua / φV_r = 16.16 / 18.00 = 0.90 before and after; only the cited article changes.
+- **3. Raw TeX in plain text.**
+  - `shearRebarCheck` vars: "pieces = 3 closed tie sets × 2 legs parallel to V = 6 legs" (was `3\text{ closed tie sets} \times 2\text{ legs parallel to }V`); hairpin/bar pieces likewise; n_eff description "0.5·c_a1"; tension n_eff description "1.5·h_ef"; d_T now shows the governing counted leg's value ("4.75 in (governing counted leg)", was "d_T = in").
+  - New `bpPlainTex()` applied in `eqBlock` to a step's reference and every variable's value and description (\text{}, \ge, \le, \Rightarrow, \times, \cdot, \phi, \psi, \ell, \infty, _{…}, ^{…}). Fixed by it: "\psi_{ec,N}", "\phi per Table 17.5.3", "h_{ef} \ge 2.5 in \Rightarrow k_{cp}", "K_{tr}".
+  - Open stand-off elastic bolt-group equations (Anchor Bolts tab): the three lines had single backslashes ("\frac" became a form feed + "rac", "\times" a tab), so KaTeX printed them raw; backslashes doubled. Same expressions.
+  - Scan: every output tab on screen for three projects (default, W, a group-hairpin project) and the printed report: no text outside KaTeX contains TeX.
+- **4. Clipping.** The "governing counted leg" worked line is split in two (x_c; edge side and behind ≥ ℓ_dh). The closed-tie plan legend is two lines. `axisTriad(…, noteAbove)` puts "origin @ plate ¢" beside the x axis; the tension and shear plans place the triad top-left (it was cut off at the bottom / overlapped the caption).
+- **5. Labels.** Tension section: "flat at the head plane across the anchors" sits at the head plane on a white ground (it was at the pedestal bottom). Shear section along V: triad bottom-left (it overlapped "0.5·c_a1 = 3.50″ below the top"). "top set 2.25″" and the caption "3 sets at 3.00″, top set 2.25″" use 2 decimals (were 2.3″ / 3.0″).
+- **6. Combinations.**
+  - The closed-tie / hairpin plan shows the combination that governs the shear check (`bpShearGovCombo()`: largest V_res, as `shearRebarIntercept`), was the overall governing one (0.9D+1.0W vs the check's 1.2D+1.0W).
+  - Titles state the combination: tension plan and sections (tension intercept's combination), shear section along V and edge-face section (shear intercept's).
+  - Printed report: the non-per-combination sections (Summary, rebar tabs, …) use the governing combination for table 2.2 unless the engineer picked a detail combination on screen (new `S.ui.detailComboSet`, set by the selector, cleared when combinations are regenerated; additive). Table 2.2 heading: "(governing overall)" or "(detail combination selected by the engineer; governing overall: …)".
+- **7. Links.** `bpadCardFor`: "Pedestal Ties at Anchors" → card coPedTie ("see §5.8"); "Anchor Reinf. Shear (ties)" → vrCap (it linked to the tension card, "see §7.1"; now "see §8.1").
+- **8. Small items.** Input summary: "#4 ties: 3 sets from 2.25″ (raised to cover + d_b/2; entered 2.00″)". Table 2.2 note when no anchor carries tension: "no anchor carries tension in this combination … computed on n = 4 anchors …". References: before "AISC 360 … edition: verify", after "AISC 360-16 … §J3.10 (Eq. J3-6a/J3-6c), §E3" (§4 callout: the tool's φR_n = φ·min(1.2 l_c t F_u, 2.4 d t F_u) is 360-16 J3-6c / J3-6a; no value changes — W: 0.75 · min(1.2·1.97·1.75·58, 2.4·1.25·1.75·58) = 179.85 kip both).
+- Print CSS: `#printReport h3{break-after:avoid}` (a figure heading stays with its figure).
+- **Regression.** `node tests/bpad-profis.mjs`: every computed result identical; only `.report` differs, by the AISC 360-16 reference row (5 cases, 2 lines each). Test projects vs origin/main (default, pedestal + pedbars + closed ties, 4 × 2 U-stirrup / hairpin, group hairpin, closed ties without S.ped): computeAll, capacities, checks (except the closed-tie `ref` text), validation, intercepts identical. W report printed to PDF (49 pages) and its text diffed against main: only the corrected text listed above. `node tests/check-syntax.mjs` passes; 0 page errors.
+
+## 2026-10-24 — LAY-1: one scroll per column — the page no longer scrolls; input and output columns scroll on their own; narrow screens stack (display only)
+- **Engineer request (2026-10-24):** "The input window should be able to scroll, and so should the output, but not the whole app. There are too many scroll options right now."
+- **Audit before (headless, project W):**
+  - Desktop 1500 × 1000 and tablet landscape 1180 × 820: `#inputPanel` and `#outputPanel` scroll vertically, as intended, **and the page itself scrolls** on the Shear Rebar tab (scroll height 1123 / 1000; 1169 / 820). The cause: absolutely positioned content inside the columns (KaTeX's hidden MathML spans, the SVG zoom-tool bars `.svgTools`) had no positioned ancestor, so its containing block was the page and it sized the document.
+  - Tablet portrait 820 × 1180: the same, plus a 33 % input column 270 px wide, wide tables and `.eqLine` boxes scrolling horizontally.
+  - No section, card or table had its own vertical scrolling (`max-height` is only on `.modalBox`, a dialog).
+- **CSS (anchor `/* LAY-1 (2026-10-24)`):**
+  - `#app{height:100vh;height:100dvh}`; `html,body{overflow:hidden}`.
+  - `#inputPanel`, `#outputPanel`: `position:relative` (the containing block for that absolute content), `overscroll-behavior:contain`, `-webkit-overflow-scrolling:touch`; `#outputPanel{min-width:0}`.
+  - `@media screen and (max-width:899.98px)`: the columns stack (`#main{flex-direction:column}`), neither scrolls on its own (`overflow:visible`), `html,body` scroll as one page, `#app{height:auto}`. Breakpoint 900 px: tablet landscape (1180) keeps two columns; portrait (820) and phones stack.
+  - Print CSS unchanged; it already releases `html,body` and `#app` (`height:auto; overflow:visible !important`), and the screen-only media query does not apply to print.
+- **Kept:** the output tab bar (`#tabBar`, sticky at the top of the output column), the input tab bar, remembered input sub-tab and the column scroll positions across refreshes (`ipTop` / `opTop`), the 3-D view, the draggable section cuts (GFX-G drag test re-run, mouse and touch 6 / 6 OK), the print report.
+- **Verify (after):**
+  - Every output tab at 1500 × 1000 and 1180 × 820: `document.scrollingElement.scrollHeight` = the viewport height (1000 / 1000, 820 / 820); the only vertical scrolling elements are `#inputPanel` and `#outputPanel`. One `.eqLine` (a long equation on the Anchor Bolts tab at 1180) scrolls horizontally in its own box.
+  - 820 × 1180: no element scrolls; the page scrolls as one.
+  - Programmatic scroll: desktop input 0 → 134 (its end), output 0 → 1200, page stays 0; the header and output tab bar do not move. Tablet landscape: input 300, output 1200, page 0.
+  - Report printed to PDF (W project): 49 pages, as before the change.
+  - `node tests/bpad-profis.mjs` 5 / 5 `same`; `node tests/check-syntax.mjs` passes; 0 page errors.
+
+## 2026-10-24 — RPT-2: the calculation report reads like Gusset Plate Rating's; Report output tab (same builder as Print / PDF) (display / report only)
+- **Engineer:** the report "doesn't look like the Gusset plate app's report" (the D11 standard) and "was also supposed to be part of the app's output", not PDF-only.
+- **Template:** `Gusset Plate Rating.html`, default project, printed headless (56 pages): cover; references + table of contents; "n. TITLE:" underlined section heads; "n.k. Title:" sub-heads; each worked item as a title with its reference in italics on the left and the equations (symbolic, substituted, result) on the right, then a "where" table (symbol, description, value); a result line with D/C and PASS/FAIL; Times, black, plain ruled tables with grey heads; figure captions.
+- **Builder (`buildPrintReport(target)`, anchor text `/* RPT-2 (2026-10-24): the calculation sheet as Gusset`):** one function fills `#printReport` (Print / PDF) or the Report tab's container. New helpers:
+  - `bpRptPolishTab(id, clone)` (each tab before it is numbered): removes `.svgTools`, `.bpCutCtl`, `.noPrint`, the chip list `#dash`, the "Detailed combination" row, "Click any … leg" panels and SVG click hints; the Summary's "Why is this failing?" (`sumDiag`) is dropped and "Design Comparison" (`sumCompare`) is dropped unless saved designs exist (then only its D/C table); the governing D/C table moves first and the Summary banners follow it as "Notes — Note 1. …"; every remaining select / input / textarea becomes its value as static text (checkboxes ☒ / ☐), every button is removed.
+  - `bpRptPolishDoc(body, addSection)`: each `dcrBox` (now classed `dcrBox`, with `data-st` / `data-dcr`) becomes a result line "Result: D/C = 0.57 (demand ÷ capacity …) PASS"; coloured boxes become "Note: …"; each drawing gets "Figure n — <its title>"; explanatory notes longer than 450 characters move to a new last section "Notes / basis" (B.1, B.2 …), with "Basis: see Note B.n — <first sentence>" left in place.
+  - Headings: "n. Title:" and "n.k. Title:"; the TOC and every "see §n.k" link are numbered after the removals, so they resolve.
+  - `eqBlock`: while the report is built (`S.ui.printing`) the variables are a "where" table (`.cr-where`), not "sym = value — description" lines (same symbols, values and descriptions).
+  - CSS: the report rules are scoped to `.crdoc` (was `#printReport`), so the same document styles print and the tab; new rules strip the app chrome (cards, shaded heads, coloured boxes and status colours) and lay out the worked items.
+- **Report tab (`tabReport`, `buildReportTab`):** after Detail Sheet. Tool bar: "Print / PDF" (builds `#printReport` with the same builder and prints), "Include Detail Sheet appendix" (`S.print.sections.tabDetail`, the existing opt-in), "Report contents…" (the existing print settings). The document is rebuilt each time the tab is drawn (opening it, and every input change while open), debounced 250 ms (about 1.1–1.7 s to build). Table-of-contents and Basis links scroll within the document; "see §n.k" links jump to the tab and card where the value is worked (the existing `a.wkA` handler). Never printed as a section of itself; excluded from the print-settings list and size estimate.
+- **Saved data:** none added.
+- **Results:** `node tests/bpad-profis.mjs` — every computed field identical; only `.report` differs (by design). Test projects vs origin/main: computeAll, capacities, checks, validation, intercepts identical.
+- **Report text, main → RPT-2 (pdftotext of the printed PDFs):** removed — the chip list (its D/C values remain in the table), "Detailed combination" selector text, "Why is this failing?" (+ "Run diagnostic"), "Design Comparison" (input, buttons, "No saved designs yet"), "See red chips", on-screen click hints; added — heading colons, "Figure n — …" captions, "Note n." labels, "Result: D/C = …" lines, "Notes / basis" with B.n entries and "Basis: see Note B.n" pointers. Engineer's test project (governing combination): 49 → 35 pages; default project (every combination): 70 → 46 pages.
+- **Checks:** Report tab text equals the printed report text (default, W, group-hairpin projects); no input / select / button in the document; 0 page errors; no raw TeX in plain text; `node tests/check-syntax.mjs` passes.
+
+## 2026-10-24 — RPT-3: Report tab with the Gusset navigation tree — sticky tool bar, tree with scroll-spy, collapsible chapters and sections, "§ in report" jumps (display only)
+- **Engineer:** "The report you added for the base plate and anchor bolts app doesn't have the navigation tree."
+- **Pattern copied (CLAUDE.md §3, kept duplicated):** `Gusset Plate Rating.html`, CSS "/* ===== Report tab viewer ===== */" (`.crv-bar`, `.crv-body`, `.crv-toc`, `.crv-doc`, `.cr-closed`) and JS `renderReportTab` / `crSizeBar` / `crJump` (its `CR_CLOSED` set and `data-rptjump`). Here: CSS after `.crv-doc .cr-flash` (anchor `/* RPT-3 (2026-10-24): report viewer`), JS `bpCrScroller`, `bpCrKey`, `bpCrSizeBar`, `bpCrJump`, `bpCrSpyOn/Off`, `buildReportTab`, `bpadRptJ`, `BP_RPT_CLOSED`, `BP_RPT_PENDING`.
+- **Tool bar (sticky under the output tab bar):** chapter chips (the "Report contents" sections; Validation / User Manual as appendices), "Include Detail Sheet appendix", every / governing combination, Expand all, Collapse all, Print this report.
+- **Body:** a sticky tree (250 px) beside the sheet (8.5 in max). Level 1 = numbered chapters, level 2 = numbered sections, from the same table of contents as the report. A click scrolls the output column to the heading and flashes it; the current section is highlighted while scrolling (scroll-spy on the output column, or the page when the columns stack); the tree scrolls on its own. ≤ 1100 px: the tree stacks above the sheet, 240 px high.
+- **Collapsible:** a chapter heading or a section heading toggles it (▾ / ▸); the state is kept for the session (also across rebuilds when an input changes); a jump opens any collapsed parent first.
+- **LAY-1:** the page still does not scroll (1000 / 1000, 820 / 820); sticky positions are measured inside the output column (`--crv-bar-top` = the tab bar, `--crv-top` = tab bar + tool bar). The sheet column is clipped sideways (`overflow-x:clip`), wide equations scroll in their own box, so the column never scrolls horizontally.
+- **"§ in report" links:** each "Worked in" line and the Summary table's "Worked in" column carry a "§ in report" link (`a.rptJ`, `data-rptjump="tab|ci|card"`) that opens the Report tab at the section where that card is worked (`window.BPAD_CARDMAP`, set by `buildPrintReport`). Inside the report, "see §n.k" still goes to the source tab. The report itself never carries the "§ in report" links.
+- **Print:** unchanged — `buildPrintReport()` into `#printReport`, no bar, no tree, nothing collapsed. The printed PDF of the engineer's test project is identical to main's (35 pages, `pdftotext` equal).
+- **Checks (1500 × 1000 mouse, 1180 × 820 touch):** tree entries equal the report headings 1:1 (9 chapters, 39 sections); a tree jump puts the heading just under the tool bar and the tree highlights it; scroll-spy follows; heading tap collapses / expands; Collapse all closes 9 chapters, a jump into one opens it, the rest stay closed after a rebuild, Expand all clears them; "§ in report" from the Summary opens the Report tab at §5.1; "see §3.2" in the report goes to Base Plate; output column never scrolls sideways; 0 page errors. `node tests/bpad-profis.mjs` 5 / 5 `same`; `node tests/check-syntax.mjs` passes.
