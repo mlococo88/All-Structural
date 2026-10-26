@@ -3270,7 +3270,67 @@
     "st.tab.Report": "bdd413f6edcc",
     "st.report.all": "254ecdf45739"
    }
+  },
+  "payload s29_builtin28_RIDOT_G2": {
+   "a": "claude/sbd-s2-9-neg-flexure (after S2-1)",
+   "sections": {
+    "st.session": "18552f565aad",
+    "st.status": "fc63f88f03f2",
+    "st.checks": "21a190ddcac2",
+    "st.rating": "29342b7be203",
+    "st.governing": "6f3e0aa97c97",
+    "st.sections": "83f7af10dda5",
+    "st.stations": "5a76617cf5e8",
+    "st.R": "0153961a70f0",
+    "st.tab.Inputs": "fabf2955bfa4",
+    "st.tab.Section Props": "24e3d95858f2",
+    "st.tab.Constructibility": "6c00b2baed42",
+    "st.tab.Stresses": "6342306c0b54",
+    "st.tab.Flexure": "947118c8bd52",
+    "st.tab.Shear": "c4b920763639",
+    "st.tab.Diagrams": "72c3d4592575",
+    "st.tab.Camber": "d0158e97a106",
+    "st.tab.Deck": "97a2efcaec67",
+    "st.tab.Fatigue": "c555bc9a98fb",
+    "st.tab.Stiffeners": "6792c39d8a59",
+    "st.tab.Connectors": "991aabd1ce35",
+    "st.tab.Rating": "6cc2bf5538e1",
+    "st.tab.Optimize": "ac778904ca0c",
+    "st.tab.Nomenclature": "ade84fc62ee3",
+    "st.tab.Report": "d90a198d9e47",
+    "st.report.all": "e1a2c6fa46e6"
+   }
+  },
+  "payload s29_xsA_MassDOT_G1": {
+   "a": "claude/sbd-s2-9-neg-flexure (after S2-1)",
+   "sections": {
+    "st.session": "be5ce3c990d2",
+    "st.status": "6096378939a3",
+    "st.checks": "5d9ccdad2fcf",
+    "st.rating": "8fa432c04f4a",
+    "st.governing": "a3a78026e512",
+    "st.sections": "218bc0b043a6",
+    "st.stations": "1ac1b4727269",
+    "st.R": "d8548536fc2a",
+    "st.tab.Inputs": "cf875795e451",
+    "st.tab.Section Props": "20a788761318",
+    "st.tab.Constructibility": "40ad5dbddb16",
+    "st.tab.Stresses": "94882e883f09",
+    "st.tab.Flexure": "6993d3827720",
+    "st.tab.Shear": "6622a02464c3",
+    "st.tab.Diagrams": "b785320dbc1a",
+    "st.tab.Camber": "ceb0a3c44238",
+    "st.tab.Deck": "31852daa2064",
+    "st.tab.Fatigue": "2540849ac3b5",
+    "st.tab.Stiffeners": "3f5db4e949d2",
+    "st.tab.Connectors": "c25d6d5f7565",
+    "st.tab.Rating": "182ed0a56fc4",
+    "st.tab.Optimize": "b4261933c5b7",
+    "st.tab.Nomenclature": "dfc2362bb3aa",
+    "st.tab.Report": "ddbc12a6517b",
+    "st.report.all": "0b38e17a1175"
+   }
   }
  },
- "recorded": "2026-10-23"
+ "recorded": "2026-10-26"
 }
