@@ -21449,6 +21449,11 @@ No saved key or format changes.
   k = 5 + 5/(60/60)² = 10; D/t_w = 106.7 > 1.40√(29,000·10/50) = 106.6, so C = 1.57/(106.7)²(29,000·10/50) = 0.800; V_p = 0.58(50)(60)(0.5625) = 978.8 kip;
   2Dt_w/(b_fc t_fc + b_ft t_ft) ≤ 2.5 → V_n = 978.8[0.800 + 0.87(1 − 0.800)/√2] = 903.5 kip (GirderDetail GS11 shows 903.55). Before: φV_n = V_cr = 783.3 kip.
   Payload `gd_xsA_AASHTO_G2`, span 2 (both ends at piers): V_u = 486.2 kip at x = 0; before 486.2/783.3 = 0.621, after 486.2/903.5 = 0.538; shear RF_inv 2.13 → 2.59.
-- **How verified:** see the PR.
+- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (109 cases, compared with S2-3's readouts): Strength shear
+  ratio −13.31 % to 0.00 % in 108 cases (the built-in simple span unchanged: both ends are abutments), largest ratio 0.621 → 0.594 (now the built-in);
+  shear RF_inv up to +21.6 %; 0 pass/fail flips; nothing else changes. `tests/st-span.mjs` on gd_builtin_AASHTO_G2, gd_xsA_RIDOT_G2, gd_util_AASHTO_G2
+  (spans 2 and 3): shear ratio −13.3 % in all 6 (e.g. builtin G2 span 2 0.513 → 0.444; GirderDetail GS pier 0.445), shear RF_inv +20 %, the end-panel
+  spacing check no longer listed on span 2 (both ends at piers), 0 flips. `--tool gd` subset, `tests/sbd-verify.mjs`: see the PR. Subset tested; the
+  full suite runs at the end of stage 2. Baselines re-recorded for the cases run (st.json 109, st_interior.json 6).
 - **Other copies:** none.
 - **Open items:** item 3b above (engineer: should GirderDetail send the stiffener layout along the span, so each panel's d_o can be used?).
