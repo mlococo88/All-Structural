@@ -170,7 +170,8 @@ async function stRunFrame(src, c) {
       await f.waitForFunction(pa => { try { const s = JSON.parse(localStorage.getItem('stgirder.session')); return s && s.external && s.external.producedAt === pa; } catch (e) { return false; } }, pay.producedAt, { timeout: 20000 });
       await p.waitForTimeout(800); }
     const R = await stReadout(f);
-    return { R, errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: idle.map(x => x.via + ' ' + x.ms + ' ms') };
+// Babel's "[BABEL] Note: The code generator has deoptimised the styling of ... as it exceeds the max of 500KB" is informational (output whitespace only, not the code): not counted as a console error (2026-10-27)
+    return { R, errs: errs.filter(e => !/^Failed to load resource|has deoptimised the styling of/.test(e)), dialogs, blocked: [...blocked], idle: idle.map(x => x.via + ' ' + x.ms + ' ms') };
   } finally { await b.close(); }
 }
 async function stRun(src, c) {
@@ -180,7 +181,7 @@ async function stRun(src, c) {
     await p.waitForSelector('.tabs .tab', { timeout: 60000 }); await p.waitForTimeout(1000);
     if (c.payload !== 'builtin') await stApply(p, src.file, readPayload(c.payload));
     const R = await stReadout(p.mainFrame());
-    return { R, errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: [] };
+    return { R, errs: errs.filter(e => !/^Failed to load resource|has deoptimised the styling of/.test(e)), dialogs, blocked: [...blocked], idle: [] };
   } finally { await b.close(); }
 }
 
@@ -201,7 +202,7 @@ async function sbdRunB(src, c) {
       await f.waitForTimeout(800);
       for (const [k, v] of Object.entries(await stReadout(f))) R[`G${g} ${k}`] = v;
     }
-    return { R, pays, errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: [...idle.map(x => x.via + ' ' + x.ms + ' ms'), 'ST view open ' + ms.join(', ') + ' ms'] };
+    return { R, pays, errs: errs.filter(e => !/^Failed to load resource|has deoptimised the styling of/.test(e)), dialogs, blocked: [...blocked], idle: [...idle.map(x => x.via + ' ' + x.ms + ' ms'), 'ST view open ' + ms.join(', ') + ' ms'] };
   } finally { await b.close(); }
 }
 async function sbdRunA(src, pays) {
@@ -210,7 +211,7 @@ async function sbdRunA(src, pays) {
     await p.waitForSelector('.tabs .tab', { timeout: 60000 }); await p.waitForTimeout(1000);
     const R = {};
     for (const [g, pay] of Object.entries(pays)) { await stApply(p, src.file, pay); for (const [k, v] of Object.entries(await stReadout(p.mainFrame()))) R[`${g} ${k}`] = v; }
-    return { R, errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: [] };
+    return { R, errs: errs.filter(e => !/^Failed to load resource|has deoptimised the styling of/.test(e)), dialogs, blocked: [...blocked], idle: [] };
   } finally { await b.close(); }
 }
 

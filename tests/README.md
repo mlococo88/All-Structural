@@ -150,6 +150,7 @@ Each folder has the package's `LICENSE`. Not included: Pyodide and ezdxf (Girder
 
 ## Notes
 
+- Console errors: "Failed to load resource" and Babel's "… has deoptimised the styling of … as it exceeds the max of 500KB" note (ST-Girder's script is over 500 KB since stage 2; the note concerns output whitespace only, not the code) are not counted (compare.mjs, st-span.mjs, sbd-verify.mjs; 2026-10-27).
 - Results are compared exactly (no rounding). A pure refactor must give `all sections identical`. A deliberate result change shows up as the listed values. Put those in the PR's §4 callout with a hand check.
 - Running A and B in parallel roughly doubles CPU load. GirderDetail cases take about 2 min each; with `--jobs` (default: one case per CPU) a matrix takes about as long as its slowest cases. Use `--jobs 1` on a slow machine if idle waits time out.
 - Never commit licensed references (owner manuals, AASHTO text) here or anywhere in the repo.
