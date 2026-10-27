@@ -3330,6 +3330,66 @@
     "st.tab.Report": "104f73d1c801",
     "st.report.all": "0a24f3fe241e"
    }
+  },
+  "payload s28_builtin_AASHTO_G1": {
+   "a": "claude/sbd-s2-8-constr (S2-8)",
+   "sections": {
+    "st.session": "c3e1e92601bc",
+    "st.status": "d87103ac02cb",
+    "st.checks": "23325b52a5e6",
+    "st.rating": "651799e52d39",
+    "st.governing": "64a56e789ecb",
+    "st.sections": "c53c62976041",
+    "st.stations": "86663f20e9d1",
+    "st.R": "7b662044ba72",
+    "st.tab.Inputs": "4da7d53753ac",
+    "st.tab.Section Props": "65978ac530f0",
+    "st.tab.Constructibility": "2ab06088f997",
+    "st.tab.Stresses": "868458590735",
+    "st.tab.Flexure": "cfe77aba7498",
+    "st.tab.Shear": "a56469e2ef5c",
+    "st.tab.Diagrams": "2eb71e9d675c",
+    "st.tab.Camber": "83dc8059918e",
+    "st.tab.Deck": "e393e0af80c9",
+    "st.tab.Fatigue": "0181520730cc",
+    "st.tab.Stiffeners": "79f76af0a810",
+    "st.tab.Connectors": "8e507fa94273",
+    "st.tab.Rating": "99aa1a068093",
+    "st.tab.Optimize": "e19d914d8104",
+    "st.tab.Nomenclature": "55bb07df4e6a",
+    "st.tab.Report": "8f7ea68d3844",
+    "st.report.all": "48005e7447e2"
+   }
+  },
+  "payload s28_builtin_AASHTO_G2": {
+   "a": "claude/sbd-s2-8-constr (S2-8)",
+   "sections": {
+    "st.session": "3cda5f8a9c97",
+    "st.status": "d87103ac02cb",
+    "st.checks": "bee29d936088",
+    "st.rating": "5d55f576d580",
+    "st.governing": "6b8c0306b265",
+    "st.sections": "ef6049d406bd",
+    "st.stations": "df751c44c90c",
+    "st.R": "ceaa4da8a7db",
+    "st.tab.Inputs": "02f6ea13215f",
+    "st.tab.Section Props": "4f4acdcf50b5",
+    "st.tab.Constructibility": "1f9a24b415d1",
+    "st.tab.Stresses": "63eab9e69af6",
+    "st.tab.Flexure": "bd6d112acd63",
+    "st.tab.Shear": "a94b50c38d4c",
+    "st.tab.Diagrams": "48595340ed73",
+    "st.tab.Camber": "b8e3b27c538d",
+    "st.tab.Deck": "464ada3eaf4a",
+    "st.tab.Fatigue": "12c6a6da7cf1",
+    "st.tab.Stiffeners": "30f50f7d35c2",
+    "st.tab.Connectors": "5ccd110d8936",
+    "st.tab.Rating": "bf30f8f0d369",
+    "st.tab.Optimize": "386f2f3b62a8",
+    "st.tab.Nomenclature": "84a87b207a27",
+    "st.tab.Report": "5a50fe71686c",
+    "st.report.all": "79569402310f"
+   }
   }
  },
  "recorded": "2026-10-27"
