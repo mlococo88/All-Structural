@@ -8964,6 +8964,53 @@ function GdDfBox({ext,sel}){ const D=gdDfOf(ext); if(!D) return null;
   return <div id="stg-d-gddf" style={{marginBottom:8}}>
     <div style={{fontSize:11.5,lineHeight:1.55,marginBottom:4}}><b>Live load distribution factors from GirderDetail ({D.label}{D.pos?', '+D.pos:''})</b>, already in the imported LL+IM and fatigue envelopes (not applied again here; ST-Girder’s own 4.6.2.2 factors are not used while these demands are in use). Multiple presence and the skew corrections are included in g_M and g_V; the fatigue factors are single-lane without the multiple presence factor (3.6.1.4.3b). {gdDfWhere(D).replace(/^./,c=>c.toUpperCase())}.{gdDfHost()&&<span> <button type="button" className="dl" onClick={()=>gdDfGo(D)}>Open {D.man?'Structural analysis':'LLDF and DLs'} →</button></span>}</div>
     <Tbl head={GD_DF_HEAD} rows={gdDfRows(D,sel)}/></div>; }
+/* S2-6 (2026-10-22, SBD stage 2 item 9): GirderDetail's shear connector results per pitch zone and strength region (girderDetail.details.studs.results:
+   its Shear connectors module, checks SC1 fatigue pitch, SC2 number of connectors for strength, SC6 strength with the studs omitted over the field splice
+   plates), sent with its demands. While those demands are in use ST-Girder checks the studs with these, per zone and per region, for the zones and regions
+   that overlap the selected span (x along the whole girder, from the payload); its own single-zone check (one pitch, one n, the strength count over the
+   half-span) stays for the stand-alone cases: built-in analysis, MIDAS/MCT imports and GirderDetail payloads sent before this field existed. */
+function gdStudResOf(ext){ if(!extFromGD(ext)) return null; const d=ext.girderDetail.details, q=d&&d.studs&&d.studs.results;
+  if(!q||!Array.isArray(q.zones)||!Array.isArray(q.regions)||!q.zones.length) return null;
+  const ok=v=>typeof v==='number'&&isFinite(v);
+  if(!q.zones.every(z=>z&&ok(z.x1)&&ok(z.x2)&&ok(z.p)&&ok(z.nr)&&ok(z.r)&&ok(z.Zr)&&ok(z.Vsr))) return null;
+  if(!q.regions.every(r=>r&&ok(r.x1)&&ok(r.x2)&&ok(r.P)&&ok(r.nreq)&&ok(r.nprov)&&ok(r.r))) return null;
+  if(!ok(q.Qr)||!ok(q.Asc)) return null; return q; }
+// the zones and regions of the selected span (sel = the imported span: x0, x1 along the girder); xl = local start, from the span's left support
+function gdStudSpan(q,sel){ if(!q||!sel) return null; const x0=+sel.x0||0, x1=isFinite(+sel.x1)?+sel.x1:Infinity, on=a=>Math.min(a.x2,x1)-Math.max(a.x1,x0)>1e-6;
+  const loc=a=>Math.max(a.x1,x0)-x0, zones=q.zones.filter(on).map(z=>({...z,xl:loc(z)})), regions=q.regions.filter(on).map(r=>({...r,xl:loc(r)}));
+  if(!zones.length) return null;
+  const gov=(a,k)=>a.reduce((g,o)=>!g||o[k]>g[k]?o:g,null);
+  return {q,idx:sel.idx,x0,x1,zones,regions,sc6:regions.filter(r=>r.lost>0&&isFinite(r.r6)),gaps:(q.gaps||[]).filter(g=>g&&g.b>x0&&g.a<x1),
+    gZ:gov(zones,'r'),gR:regions.length?gov(regions,'r'):null}; }
+// an in-app link to a module of the host page (Steel Bridge Design), on screen only (not in the report)
+function GdOpen({mod,label}){ const rc=React.useContext(CrRefCtx); if(rc||!gdDfHost()) return null;
+  return <button type="button" className="dl noprint" onClick={()=>{ try{ window.parent.gdModGo(mod); }catch(e){} }}>{label}</button>; }
+// the worked results (Connectors tab and report); arrays, not fragments, so the report groups each step (CrTab)
+function gdStudDeriv(R){ const G=R.conn&&R.conn.gd; if(!G) return null; const q=G.q, f2=v=>fmt(v,2), ckm=ok=>ok?'\\checkmark':'\\text{N.G.}';
+  const zx=a=>fmt(a.x1,1)+' to '+fmt(a.x2,1), tn=t=>String(t).replace(/[\\{}$&#%_^~]/g,' ');
+  return <Deriv id="stg-d-gdsc" title={'Shear connectors from GirderDetail, span '+G.idx+' (SC1 fatigue pitch per zone, SC2 strength per region'+(G.sc6.length?', SC6 splice plates':'')+')'} refTag="6.10.10.1.2 · 6.10.10.2 · 6.10.10.4">
+      <div className="mnote" style={{marginTop:0}}>GirderDetail’s results ({q.source}), sent with its demands. ST-Girder checks the studs with them, per zone and per region, in place of its own single-zone check (one pitch, one n, the studs over the half-span), which is used only without these demands. The zones and regions overlapping span {G.idx} (x = {fmt(G.x0,1)} to {fmt(G.x1,1)} ft along the girder, from Abutment 1) are listed. Worked in GirderDetail’s Shear connectors module (report: Shear Connector Design, checks SC1, SC2{G.sc6.length?', SC6':''}). <GdOpen mod="sc" label="Open Shear connectors →"/></div>
+      <SG n="1">Stud resistances (one stud)</SG>
+      <ML s={Tx`A_{sc}=\frac{\pi d^2}{4}=\frac{\pi(${nx(q.d,3)})^2}{4}=${nx(q.Asc,4)}\;\text{in}^2\qquad Q_n=0.70A_{sc}F_u=0.70(${nx(q.Asc,4)})(${nx(q.Fu,0)})=${nx(q.QnE,2)}\;\text{kip}\quad(\text{Eq. 6.10.10.4.3-1})`}/>
+      <ML s={Tx`Q_r=\phi_{sc}Q_n=${nx(q.phiSc,2)}(${nx(q.Qn,2)})=${nx(q.Qr,2)}\;\text{kip}\quad(\text{Eq. 6.10.10.4.1-1})${q.QnEntered?'\\quad(Q_n\\text{ entered in GirderDetail})':''}\qquad Z_{r,I}=(\Delta F)_{TH}A_{sc}=7.0(${nx(q.Asc,4)})=${nx(q.ZrI,2)}\;\text{kip}`}/>
+      <div className="mnote">Fatigue limit state per zone ({q.fatigue}). Fatigue II: Z<sub>r</sub> = (ΔF)<sub>n</sub>A<sub>sc</sub>, (ΔF)<sub>n</sub> = (A/N)<sup>1/5</sup>, A = 1040×10⁸ ksi⁵ (Condition 9.2, Table 6.6.1.2.3-1), N = 365·Y·n·(ADTT)<sub>SL</sub>, n per Table 6.6.1.2.5-1 over the zone. Short-term composite section, n = {fmt(q.n,2)}, b<sub>eff</sub> = {fmt(q.beff,2)} in, t<sub>s</sub> = {fmt(q.ts,2)} in; F<sub>fat</sub> = {fmt(q.Ffat,2)} kip/in.</div>
+      <SG n="2">Fatigue pitch per zone, SC1 (Eqs. 6.10.10.1.2-1, 6.10.10.2-1)</SG>
+      <Tbl head={['Zone','x (ft)','Studs × pitch','V_f (kip)','I (in⁴)','Q (in³)','Limit state, γ','Z_r (kip)','V_sr (kip/in)','p_max = nZ_r/V_sr (in)','p / p_max','Status']}
+        rows={G.zones.map(z=>({_cls:z===G.gZ?'tot':'',c:[z.name,zx(z),z.nr+' @ '+f2(z.p)+' in',f2(z.Vfr),fmt(z.I,0),f2(z.Q),'Fatigue '+z.lim+', '+f2(z.gam),f2(z.Zr),fmt(z.Vsr,3),z.preq==null?'—':f2(z.preq),{v:f2(z.r),cls:z.ok?'ok':'no'},PF(z.ok)]}))}/>
+      {G.zones.map((z,i)=><ML key={'z'+i} s={Tx`\text{${tn(z.name)}:}\;V_{fat}=\frac{\gamma V_fQ}{I}=\frac{${nx(z.gam,2)}(${nx(z.Vfr,2)})(${nx(z.Q,2)})}{${nx(z.I,0)}}=${nx(z.Vfat,3)},\;V_{sr}=\sqrt{V_{fat}^2+F_{fat}^2}=${nx(z.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}},\;\frac{nZ_r}{V_{sr}}=\frac{${z.nr}(${nx(z.Zr,2)})}{${nx(z.Vsr,3)}}=${z.preq==null?'\\infty':nx(z.preq,2)}\;\text{in}\;${z.ok?'\\ge':'<'}\;p=${nx(z.p,2)}\;\text{in}\;${ckm(z.ok)}`}/>)}
+      {G.regions.length>0&&[
+        <SG key="s3" n="3">Number of connectors for strength per region, SC2 (6.10.10.4)</SG>,
+        <Tbl key="t3" head={['Region','x (ft)','P_p = min(0.85f′c·b_s·t_s, steel) (kip)','P_n (kip)','P = P_p + P_n (kip)','n_req = P/Q_r','n_prov','n_req / n_prov','Status']}
+          rows={G.regions.map(r=>({_cls:r===G.gR?'tot':'',c:[r.name+(r.kind==='pier'?' (to an interior support)':''),zx(r),f2(r.Pp),r.kind==='pier'?f2(r.Pn):'0 (support to max. +M)',f2(r.P),f2(r.nreq),fmt(r.nprov,0),{v:f2(r.r),cls:r.ok?'ok':'no'},PF(r.ok)]}))}/>,
+        ...G.regions.map((r,i)=><ML key={'r'+i} s={Tx`\text{${tn(r.name)}:}\;P_p=\min(${nx(r.Pc,0)},\;${nx(r.Ps,0)})=${nx(r.Pp,1)}${r.kind==='pier'?`,\;P_n=\\min(${nx(r.Pns,0)},\;${nx(r.Pnc,0)})=${nx(r.Pn,1)}`:''}\;\text{kip},\;n=\frac{P}{Q_r}=\frac{${nx(r.P,1)}}{${nx(q.Qr,2)}}=${nx(r.nreq,2)}\;${r.ok?'\\le':'>'}\;${nx(r.nprov,0)}\;\text{provided}\;${ckm(r.ok)}`}/>),
+        <div key="n3" className="mnote">P<sub>p</sub> = min(0.85f′<sub>c</sub>b<sub>s</sub>t<sub>s</sub>, F<sub>yw</sub>Dt<sub>w</sub> + F<sub>yt</sub>b<sub>t</sub>t<sub>t</sub> + F<sub>yc</sub>b<sub>c</sub>t<sub>c</sub>) at the point of maximum positive moment; P<sub>n</sub> = min(F<sub>yw</sub>Dt<sub>w</sub> + F<sub>yt</sub>b<sub>t</sub>t<sub>t</sub> + F<sub>yc</sub>b<sub>c</sub>t<sub>c</sub>, 0.45f′<sub>c</sub>b<sub>s</sub>t<sub>s</sub>) at the interior support (6.10.10.4.2; straight girder, F<sub>p</sub> = 0); f′<sub>c</sub> = {fmt(q.fc,2)} ksi. n<sub>prov</sub> = the studs of the pitch zones over the region.</div>]}
+      {G.sc6.length>0&&[
+        <SG key="s4" n="4">Strength with the studs omitted over the field splice plates, SC6</SG>,
+        <Tbl key="t4" head={['Region','Omitted','Remaining n','n_req','Ratio','Status']} rows={G.sc6.map(r=>({c:[r.name,fmt(r.lost,0),fmt(r.nnet,0),f2(r.nreq),{v:f2(r.r6),cls:r.ok6?'ok':'no'},PF(r.ok6)]}))}/>,
+        <div key="n4" className="mnote">No studs over the top flange splice plates{G.gaps.length?' ('+G.gaps.map(g=>fmt(g.a,2)+' to '+fmt(g.b,2)+' ft').join('; ')+')':''}; each region’s count is rechecked without them: n<sub>prov</sub> − n<sub>omitted</sub> ≥ n<sub>req</sub>.</div>]}
+      <div className="mnote">The stud detailing checks (h/d, pitch limits, spacing, edge distance, penetration, cover) stay ST-Girder’s.</div>
+    </Deriv>; }
+function GdStudCards({R}){ return gdStudDeriv(R); }
 /* GDX (engineer decision 2026-10-19: "Whatever can be imported from GirderDetail should be", and the transferred inputs highlighted; HANDOFF.md 4.9).
    Active only for GirderDetail demands that carry girderDetail.loads (payloads from 2026-10-19 on); nothing for older payloads, MIDAS/MCT imports or the
    built-in analysis. gdXfer(ext).set = the inputs taken from GirderDetail (1:1 values only), applied by gdOverlay in computeAll, the report and the
@@ -10071,6 +10118,9 @@ function computeAll(inp){
     const conn={Asc,Qn,Qr,Pshear,nReq,nProv,strOK:nProv>=nReq,Zr,Vsr,pReq,pitch,pitchOK:pitch<=pReq,nRow,
                 Vfat,VfatU,gammaFat:gammaFatSC,fatInf:fatInfSC,studD:+inp.conn.studD,studH:+inp.conn.studH,SC92,adttSLcrossSC,recFatISC,FnSC,FnSCII,Fustud,phisc,Qslab,Icomp:fatStud.Icomp,dfFatV,Vtr:Ld.hl.Vtr,fatStud,contStud,yDeckNA,fatImpV};
     if(contStud) conn.strOK=contStud.gov.nProv>=contStud.gov.nReq;
+    // S2-6 (2026-10-22): GirderDetail's per-zone stud results for the selected span (gdStudResOf); with them the studs are checked per zone and region below
+    // in place of the single-zone check above (still computed; checked only in the stand-alone cases)
+    { const gdSC=useExt? gdStudSpan(gdStudResOf(inp.external), ext.sel) : null; if(gdSC) conn.gd=gdSC; }
     /* A10b (2026-10-19): stud detailing per AASHTO LRFD 10th Ed. 6.10.10.1 (as far as ST-Girder has the data).
        - h/d >= 5.0 normal weight, 7.0 lightweight (6.10.10.1.1); lightweight taken as deck w_c <= 0.135 kcf (5.2 density limit).
        - pitch: 4d <= p <= 48 in (D >= 24 in) or 24 in (D < 24 in) (6.10.10.1.2); the one pitch ST-Girder checks.
@@ -10182,9 +10232,14 @@ function computeAll(inp){
     if(stiffened&&(abutL||abutR)) checks.push({n:'End-panel stiffener spacing d_o ≤ 1.5D', t:'End panel', v:doRaw, lim:doEndMax, r:doRaw/doEndMax, u:'in', ref:'6.10.9.3.3', loc:0});
     checks.push({n:'Bearing stiffener', t:'Brg stiff', v:VuPeak, lim:Math.min(RsbN,phic*Pn), r:VuPeak/Math.min(RsbN,phic*Pn), u:'kip', ref:'6.10.11.2', loc:0});
     checks.push({n:'Bearing stiffener width b_b ≤ 0.48t_b√(E/F_ys)', t:'Brg bb', v:bb, lim:bbMax, r:bb/Math.max(bbMax,1e-6), u:'in', ref:'6.10.11.2.2', loc:0});
+    if(conn.gd){ const G=conn.gd, lx=a=>Math.min(Math.max(a.xl,0),Lft);   // S2-6: GirderDetail SC2 / SC6 / SC1, one check per region and per zone of this span
+      G.regions.forEach(r=>checks.push({n:'Shear studs — strength, '+r.name+' (GirderDetail SC2'+(r.kind==='pier'?', P = Pp + Pn':'')+')', t:'Studs str', v:r.nreq, lim:r.nprov, r:r.r, u:'#', ref:r.kind==='pier'?'6.10.10.4.2':'6.10.10.4', loc:lx(r)}));
+      G.sc6.forEach(r=>checks.push({n:'Shear studs — strength without the studs over the splice plates, '+r.name+' (GirderDetail SC6)', t:'Studs str', v:r.nreq, lim:r.nnet, r:r.r6, u:'#', ref:'6.10.10.4', loc:lx(r)}));
+      G.zones.forEach(z=>checks.push({n:'Shear studs — fatigue pitch, '+z.name+' (GirderDetail SC1)', t:'Studs fat', v:z.p, lim:z.preq==null?Infinity:z.preq, r:z.r, u:'in', ref:'6.10.10.2', loc:lx(z)})); }
+    else {
     if(contStud) checks.push({n:'Shear studs — strength (continuous, P = Pp + Pn, '+contStud.gov.end+' side)', t:'Studs str', v:contStud.gov.nReq, lim:contStud.gov.nProv, r:contStud.gov.r, u:'#', ref:'6.10.10.4.2', loc:contStud.gov.end==='left'?0:Lft});
     else checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
-    checks.push({n:'Shear studs — fatigue pitch', t:'Studs fat', v:pitch, lim:pReq, r:pitch/pReq, u:'in', ref:'6.10.10.2', loc:fatStud.x||0});
+    checks.push({n:'Shear studs — fatigue pitch', t:'Studs fat', v:pitch, lim:pReq, r:pitch/pReq, u:'in', ref:'6.10.10.2', loc:fatStud.x||0}); }
     { const dt=conn.det;   // A10b: stud detailing (6.10.10.1)
       checks.push({n:'Shear studs — h/d ≥ '+fmt(dt.hdLim,1), t:'Studs h/d', v:dt.hd, lim:dt.hdLim, r:dt.rHd, u:'—', ref:'6.10.10.1.1', loc:0});
       checks.push({n:'Shear studs — pitch 4d ≤ p ≤ '+fmt(dt.pMax,0)+' in', t:'Studs p lim', v:pitch, lim:dt.rP===dt.pMin/Math.max(pitch,1e-9)?dt.pMin:dt.pMax, r:dt.rP, u:'in', ref:'6.10.10.1.2', loc:0});
@@ -12336,6 +12391,20 @@ function studReminders(R){ const t=R.conn.det, out=[];
 function ConnTab({R}){
   if(!R.ok) return null;
   const c=R.conn;
+  if(c.gd){ const G=c.gd, sr=G.gR, sz=G.gZ, okA=a=>a.every(o=>o.ok), s6=G.sc6.reduce((g,o)=>!g||o.r6>g.r6?o:g,null);   // S2-6: GirderDetail's per-zone results
+    return (<div>
+    <StgWarn R={R} kind="fat"/>
+    <div className="bigres">
+      {sr&&<div className={'br '+(okA(G.regions)?'p':'f')}><div className="l">Studs — strength (GirderDetail SC2)</div><div className="n">{fmt(sr.r,2)}</div><div className="u">{sr.name}: {fmt(sr.nreq,1)} req / {fmt(sr.nprov,0)} prov</div></div>}
+      {s6&&<div className={'br '+(G.sc6.every(o=>o.ok6)?'p':'f')}><div className="l">Studs — splice plates (SC6)</div><div className="n">{fmt(s6.r6,2)}</div><div className="u">{s6.name}</div></div>}
+      <div className={'br '+(okA(G.zones)?'p':'f')}><div className="l">Studs — fatigue pitch (GirderDetail SC1)</div><div className="n">{fmt(sz.r,2)}</div><div className="u">{sz.name}: {fmt(sz.p,1)} / {sz.preq==null?'—':fmt(sz.preq,1)} in</div></div>
+    </div>
+    <Card title="What this check is" refTag="AASHTO 6.10.10 · composite action">
+      <div className="hint">Welded stud shear connectors transfer the horizontal shear between the steel girder and the concrete deck so they act compositely. Two independent requirements: a <b>strength</b> requirement (6.10.10.4) — enough studs between the maximum-moment section and the support (and, in a continuous girder, between the maximum-moment section and the interior support) — and a <b>fatigue</b> requirement (6.10.10.1.2, 6.10.10.2) that limits the pitch of each zone by the shear range of the fatigue truck. With GirderDetail’s demands both are GirderDetail’s, per pitch zone and per region (below).</div>
+    </Card>
+    <GdStudCards R={R}/>
+    {connDetDeriv(R)}
+  </div>); }
   return (<div>
     <StgWarn R={R} kind="fat"/>
     <div className="bigres">
@@ -12758,8 +12827,9 @@ function crModel(R,inp,o){
       else sub(s,'Transverse intermediate stiffener','6.10.11.1',<p className="cr-p">Not checked: the web is unstiffened for shear (no transverse stiffeners, or d_o &gt; 3D).</p>);
       sub(s,'Bearing stiffener (at support)','6.10.11.2',<CrTab el={stiffBearDeriv(R)}/>,ck('Brg stiff','Brg bb')); }
     { const s=S('conn','Shear connectors',{ref:'6.10.10'});
-      sub(s,'Stud resistance and strength requirement','6.10.10.4',<CrTab el={connStrDeriv(R)}/>,ck('Studs str'));
-      sub(s,'Fatigue pitch requirement','6.10.10.1.2 · 6.10.10.2',<CrTab el={connFatDeriv(R)}/>,ck('Studs fat'));
+      if(R.conn.gd) sub(s,'Strength and fatigue pitch per zone (from GirderDetail, span '+R.conn.gd.idx+')','6.10.10.1.2 · 6.10.10.2 · 6.10.10.4',<CrTab el={gdStudDeriv(R)}/>,ck('Studs str','Studs fat'));   // S2-6
+      else { sub(s,'Stud resistance and strength requirement','6.10.10.4',<CrTab el={connStrDeriv(R)}/>,ck('Studs str'));
+      sub(s,'Fatigue pitch requirement','6.10.10.1.2 · 6.10.10.2',<CrTab el={connFatDeriv(R)}/>,ck('Studs fat')); }
       sub(s,'Stud detailing','6.10.10.1 · 6.10.10.3',<CrTab el={connDetDeriv(R)}/>,ck('Studs h/d','Studs p lim','Studs s_t','Studs edge','Studs pen','Studs cover')); }
     if(R.deckD){ const s=S('deck','Deck design (transverse)',{ref:'4.6.2.1 · 9.7.3'});
       const d=R.deckD;
@@ -18344,9 +18414,32 @@ function gdStDetails() {
         rowsBy: rowsA.map(r => ({ name: r.name, span: spanOf(r.name), pos: posOf(r.name), do1: r4(r.do1), do2: r4(r.do2), end: r.end === 'yes' })) } : null,
       bearingStiffeners: bs.types ? { module: 'Bearing stiffeners', grade: bs.gS, Fy: Fy(bs.gS), types: Object.entries(bs.types).map(([k, t]) => ({ type: k, name: t.name, pairs: nm(t.np), bt: r4(t.bt), tp: r4(t.tp), clip: r4(t.c) })),
         supports: (bs.rows || []).map(r => ({ name: r.name, type: r.type, pos: posOf(r.name) })) } : null,
-      studs: sc.d ? { module: 'Shear connectors', d: r4(sc.d), h: r4(sc.h), Fu: r4(sc.Fu), transverseSpacing: r4(sc.st), zones: (sc.zones || []).map(z => ({ x1: r4(z.x1), x2: r4(z.x2), nr: nm(z.nr), p: r4(z.p) })) } : null,
+      studs: sc.d ? { module: 'Shear connectors', d: r4(sc.d), h: r4(sc.h), Fu: r4(sc.Fu), transverseSpacing: r4(sc.st), zones: (sc.zones || []).map(z => ({ x1: r4(z.x1), x2: r4(z.x2), nr: nm(z.nr), p: r4(z.p) })),
+        ...(() => { const q = gdStStudRes(); return q ? { results: q } : {}; })() } : null,   // S2-6: the module's results (additive)
       fatigue: ADTT > 0 ? { module: 'Fatigue; Girder section (flange details)', ADTT: r4(ADTT), adttBasis: 'one direction', p: r4(p), ADTTsl: r4(p * ADTT), life: nm(fa.life), limit: fa.limit || 'auto', catTop: gs.catT || null, catBot: gs.catB || null, cycles: uniq((fa.rows || []).map(r => nm(r.n))),
         cyclesBy: (fa.rows || []).map(r => ({ name: r.name, pos: posOf(r.name), n: nm(r.n) })).filter(r => r.n > 0) } : null };
+  } catch (e) { return null; }
+}
+/* S2-6 (2026-10-22, SBD stage 2 item 9; HANDOFF.md 4.9): the Shear connectors module's results as it computes them now from its own inputs (P.sc):
+   SC1 fatigue pitch per pitch zone, SC2 number of connectors for strength per region, SC6 the strength count with the studs omitted over the top flange
+   field splice plates. Sent as girderDetail.details.studs.results (additive; schemaVersion 1) so ST-Girder shows and checks the studs per zone as this
+   module does, in place of its single-zone check. Statuses and ratios are the module's own (GM.sc.checks). null when the module has input errors.
+   Read only: nothing here changes an input or a result of this tool. */
+function gdStStudRes() {
+  try {
+    if (!P.sc) return null; const R = GM.sc.compute(P.sc); if (!R || (R.errors && R.errors.length)) return null;
+    const C = GM.sc.checks(R), ck = id => C.find(c => c.id === id) || { items: [] }, v = x => typeof x === 'number' && isFinite(x) ? Math.round(x * 1e6) / 1e6 : null;
+    const c1 = ck('SC1'), c2 = ck('SC2'), i6 = ck('SC6').items.slice(R.gaps.length); let k6 = 0;
+    return { source: 'GirderDetail Shear connectors module (checks SC1, SC2 and SC6), bridge-wide: one set of pitch zones and strength regions for the girders',
+      d: v(R.d), Asc: v(R.Asc), Fu: v(R.Fu), QnE: v(R.QnE), Qn: v(R.Qn), QnEntered: R.Qn10 > 0, phiSc: v(R.phiSc), Qr: v(R.Qr), ZrI: v(R.Zr), gamI: v(R.gf), Ffat: v(R.Ffat),
+      n: v(R.MR.n), fc: v(R.fc), beff: v(R.dk.beff), ts: v(R.dk.ts), fatigue: gdFatTxt(gdFatSet()),
+      zones: R.zones.map((z, i) => { const it = c1.items[i] || {}, q = z.fat;
+        return { name: z.name, x1: v(z.x1), x2: v(z.x2), nr: z.nr, p: v(z.p), Vfr: v(z.Vfr), I: v(z.I), Q: v(z.Q), Aslab: v(z.Aslab), lim: q.lim, gam: v(q.gam), Zr: v(z.Zr),
+          nn: v(q.nn), N: v(q.N), dFn: v(q.dFn), Vfat: v(z.Vfat), Vsr: v(z.Vsr), preq: v(z.preq), r: v(it.r), ok: it.st === 'pass' }; }),
+      regions: R.regions.map((r, i) => { const it = c2.items[i] || {}, o = { name: r.name, kind: r.kind, x1: v(r.x1), x2: v(r.x2), Pc: v(r.Pc), Ps: v(r.Ps), Pp: v(r.Pp),
+          ...(r.kind === 'pier' ? { Pnc: v(r.Pnc), Pns: v(r.Pns) } : {}), Pn: v(r.Pn), P: v(r.P), nreq: v(r.nreq), nprov: r.nprov, cov: v(r.cov), r: v(it.r), ok: it.st === 'pass' };
+        if (r.lost > 0) { const j = i6[k6++] || {}; Object.assign(o, { lost: r.lost, nnet: r.nnet, r6: v(j.r), ok6: j.st === 'pass' }); } return o; }),
+      gaps: R.gaps.map(g => ({ x: v(g.x), a: v(g.a), b: v(g.b) })) };
   } catch (e) { return null; }
 }
 /* GD49 (2026-10-15): the owner load rules as data (optional field ownerRules of the girderDemands hand-off, §4.9), null when the bridge publishes no
