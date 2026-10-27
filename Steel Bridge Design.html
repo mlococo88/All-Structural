@@ -8790,7 +8790,6 @@ function gdNoteLines(ext){
     src:'Source: '+(ext.source||'GirderDetail')+(ext.project?' · '+ext.project:'')+(ext.producedAt?' · produced '+new Date(ext.producedAt).toLocaleString():'')+'.',
     diffs:['C_b = 1.0 and one unbraced length L_b for the whole span (GirderDetail: C_b and L_b per location)',
       'no Appendix A6 (web plastification) for negative flexure',
-      'shear without tension-field action (end-panel V_cr basis)',
       ...(ext.ownerRules?['the owner load rules GirderDetail sends with the demands (η, design load multiplier, haunch 0 in properties) are applied here']:[])],
     tbc:'Known differences to be confirmed by the engineer.'};
 }
@@ -9791,7 +9790,6 @@ function computeAll(inp){
       VnInt = propTF<=2.5? Vp*(Cv+0.87*(1-Cv)/r) : Vp*(Cv+0.87*(1-Cv)/(r+doSpc/D)); }
     else VnInt=Vcr;
     const stVGov=stations.reduce((b,st)=>st.Vu>b.Vu?st:b,stations[0]);
-    const shearDC=VuPeak/(phiv*Vcr);
     // per-station shear worked-calc data (end panels adjacent to the supports cannot develop
     // a tension field → Vn = C·Vp; interior stiffened panels use the tension-field Vn,int).
     const endPanelLen = stiffened? doSpc/12 : Infinity;   // ft, first panel in from each support
@@ -9800,13 +9798,27 @@ function computeAll(inp){
     // interior panels' tension fields.
     const doEndMax = 1.5*D;
     const endSpcOK = !stiffened || doRaw<=doEndMax*1.0001;
+    /* S2-4 (Steel Bridge Design stage 2, 2026-10-22; engineer decision: GirderDetail's method): the end-panel limit V_n = V_cr (6.10.9.3.3) applies only to
+       the panels next to a simple support, i.e. an abutment (C6.10.9.3.3; AASHTO LRFD 10th Ed.). A panel next to an interior pier is an interior panel and
+       may use the tension field (6.10.9.3.2, Eq. 6.10.9.3.2-2 or -8). Was: both span ends treated as end panels, and the check V_u,peak / φV_cr wherever the
+       peak was. Now the check is the largest V_u / φV_n over the stations, each with its own V_n. With a GirderDetail hand-off in use, V_n at each station is
+       GirderDetail's own webShear (host page; that station's flanges for 2Dt_w/(b_fc t_fc + b_ft t_ft), an end panel unstiffened when d_o > 1.5D, as
+       GirderDetail; E = 29,000 ksi there, so only when E_s is 29,000 ksi here); otherwise ST-Girder's V_cr / V_n,int as before. One d_o for every panel
+       (the largest GirderDetail spacing in the span, GD70), as before. abutL / abutR: the span's left / right end is an end of the member (abutment). */
+    const spE=useExt? externalSpans(inp.external) : [], selE=useExt? (ext.sel||{}) : null;
+    const abutL=!useExt||!spE.length||(+selE.x0||0)<=spE[0].x0+1e-3, abutR=!useExt||!spE.length||!isFinite(+selE.x1)||(+selE.x1)>=spE[spE.length-1].x1-1e-3;
+    const Hws=Es===29000? stHost('webShear') : null;
     const shearCalc = stations.map(st=>{
-      const isEnd = (st.x<=endPanelLen+1e-6) || (st.x>=Lft-endPanelLen-1e-6);
-      const Vn = isEnd? Vcr : VnInt;
-      return {x:st.x, Vu:st.Vu, V1:st.V1, V2:st.V2, Vw:st.Vw, Vl:st.Vl, gV:st.gV, VuSg:st.VuSg,
-        isEnd, tensionField:(!isEnd&&stiffened), Vn, phiVn:phiv*Vn, dc:st.Vu/(phiv*Vn)};
+      const isEnd = (abutL&&st.x<=endPanelLen+1e-6) || (abutR&&st.x>=Lft-endPanelLen-1e-6);
+      let Vn, w=null;
+      if(Hws){ const g=segP[st.si].dims; w=Hws(D,tw,Fyw,stiffTrans?doRaw:0,g.bft*g.tft+g.bfb*g.tfb,isEnd); Vn=w.Vn; }
+      else Vn = isEnd? Vcr : VnInt;
+      return {x:st.x, Vu:st.Vu, V1:st.V1, V2:st.V2, Vw:st.Vw, Vl:st.Vl, gV:st.gV, VuSg:st.VuSg, si:st.si,
+        isEnd, tensionField:w? (w.stiff&&!isEnd) : (!isEnd&&stiffened), Vn, phiVn:phiv*Vn, dc:st.Vu/(phiv*Vn),
+        ...(w?{ws:{k:w.k,C:w.C,Vp:w.Vp,Vcr:w.Vcr,eqn:w.eqn,rat:w.rat,stiff:w.stiff}}:{})};
     });
-    const shearR={phiv,Vp,Cv,kShear,Vcr,VnInt,stiffened,doSpc,propTF,VuPeak,dtw,slim1,slim2,xGov:stVGov.x,
+    const shGov=shearCalc.reduce((b,q)=>q.dc>b.dc?q:b,shearCalc[0]), shearDC=shGov.dc;
+    const shearR={phiv,Vp,Cv,kShear,Vcr,VnInt,stiffened,doSpc,propTF,VuPeak,dtw,slim1,slim2,xGov:shGov.x,xVuPeak:stVGov.x,gov:shGov,abutL,abutR,host:!!Hws,
       endPanelLen,Es,Fyw,D,tw,
       stiffTrans,doRaw,doOver3D,doMax3D,doEndMax,endSpcOK};
 
@@ -10132,17 +10144,18 @@ function computeAll(inp){
     if(!flexRow) flexRow={inv:99,opr:99,cap:null,basis:sgPos.compact?'Mp':'stress',x:stPos.x,MDC:stPos.M1+stPos.M2,MDW:stPos.Mw,MLL:stPos.Ml};
     const capM=flexRow.cap;
     const MDC=flexRow.MDC, MDWr=flexRow.MDW, MLLr=flexRow.MLL, utR=UTon? {flexRowUT:flexRow.MUT||0, flexRowUF:flexRow.MUF||0} : {};   // GD54c
-    // Shear: φcφs·φv·Vcr (end-panel basis, unchanged) against the demand at each station; lowest RF.
+    // Shear: φcφs·φv·V_n of each station (S2-4: the same V_n as the design check: V_cr in an end panel at an abutment, tension field elsewhere; was V_cr
+    // everywhere) against the demand at that station; lowest RF.
     let shRow=null;
-    stations.forEach(st=>{ let dc=Math.abs(st.V1+st.V2), dw=Math.abs(st.Vw), uT=0, uF=0; const ll=Math.abs(st.Vl);
+    stations.forEach((st,i)=>{ let dc=Math.abs(st.V1+st.V2), dw=Math.abs(st.Vw), uT=0, uF=0; const ll=Math.abs(st.Vl), Vn=shearCalc[i].Vn, cV=phiCS*phiv*Vn;
       if(UTon){ const sg=(st.V1+st.V2+st.Vw)>=0?1:-1; uT=Math.max(sg*st.Vut,0); uF=Math.max(sg*st.Vuf,0); dc+=uF; dw+=uT; }   // GD54c: where they add (rating default)
-      const inv=rf(phiCS*phiv*Vcr,dc,dw,ll,1.75);
-      if(!shRow||inv<shRow.inv) shRow={inv,opr:rf(phiCS*phiv*Vcr,dc,dw,ll,1.35),x:st.x,VDC:dc,VDW:dw,VLL:ll,...(UTon?{VUT:uT,VUF:uF}:{})}; });
+      const inv=rf(cV,dc,dw,ll,1.75);
+      if(!shRow||inv<shRow.inv) shRow={inv,opr:rf(cV,dc,dw,ll,1.35),x:st.x,VDC:dc,VDW:dw,VLL:ll,capV:cV,Vn,isEnd:shearCalc[i].isEnd,tf:shearCalc[i].tensionField,...(UTon?{VUT:uT,VUF:uF}:{})}; });
     const VDC=shRow.VDC, VDWr=shRow.VDW, VLLr=shRow.VLL;
     const rating={
       flexInv:flexRow.inv, flexOpr:flexRow.opr, flexX:flexRow.x, flexBasis:flexRow.basis,
       shearInv:shRow.inv, shearOpr:shRow.opr, shearX:shRow.x,
-      capM,capV:phiCS*phiv*Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr,phiC,phiS,phiCS,phiCSfloor,...utR};
+      capM,capV:shRow.capV,shearVn:shRow.Vn,shearEnd:shRow.isEnd,shearTF:shRow.tf,MDC,MDWr,MLLr,VDC,VDWr,VLLr,phiC,phiS,phiCS,phiCSfloor,...utR};
     if(hasNeg&&negBGov.r>0){ const stN=stations.reduce((b,st)=>st.Mun<b.Mun?st:b,stations[0]);
       const sgN=segP[stN.si];
       const fPerm=stageF(stN,1.25,1.25,1.5,0,false,'R').neg.fB;   // factored permanent, compression (−); GD54c: the utilities where they add
@@ -10194,8 +10207,8 @@ function computeAll(inp){
       // 6.10.11.1.2 projecting width: lower bound max(2+D/30, bf/4), upper bound 16tp
       checks.push({n:'Transverse stiffener width b_t ≥ min', t:'Stiff bt min', v:tStiff.btMin, lim:tStiff.bt, r:tStiff.btMin/Math.max(tStiff.bt,1e-6), u:'in', ref:'6.10.11.1.2', loc:0});
       checks.push({n:'Transverse stiffener width b_t ≤ 16t_p', t:'Stiff bt max', v:tStiff.bt, lim:tStiff.btMax, r:tStiff.bt/Math.max(tStiff.btMax,1e-6), u:'in', ref:'6.10.11.1.2', loc:0}); }
-    // 6.10.9.3.3 end-panel stiffener spacing d_o ≤ 1.5D (only when the web is treated as stiffened)
-    if(stiffened) checks.push({n:'End-panel stiffener spacing d_o ≤ 1.5D', t:'End panel', v:doRaw, lim:doEndMax, r:doRaw/doEndMax, u:'in', ref:'6.10.9.3.3', loc:0});
+    // 6.10.9.3.3 end-panel stiffener spacing d_o ≤ 1.5D (only when the web is treated as stiffened; S2-4: and this span has an end panel, at an abutment)
+    if(stiffened&&(abutL||abutR)) checks.push({n:'End-panel stiffener spacing d_o ≤ 1.5D', t:'End panel', v:doRaw, lim:doEndMax, r:doRaw/doEndMax, u:'in', ref:'6.10.9.3.3', loc:0});
     checks.push({n:'Bearing stiffener', t:'Brg stiff', v:VuPeak, lim:Math.min(RsbN,phic*Pn), r:VuPeak/Math.min(RsbN,phic*Pn), u:'kip', ref:'6.10.11.2', loc:0});
     checks.push({n:'Bearing stiffener width b_b ≤ 0.48t_b√(E/F_ys)', t:'Brg bb', v:bb, lim:bbMax, r:bb/Math.max(bbMax,1e-6), u:'in', ref:'6.10.11.2.2', loc:0});
     if(contStud) checks.push({n:'Shear studs — strength (continuous, P = Pp + Pn, '+contStud.gov.end+' side)', t:'Studs str', v:contStud.gov.nReq, lim:contStud.gov.nProv, r:contStud.gov.r, u:'#', ref:'6.10.10.4.2', loc:contStud.gov.end==='left'?0:Lft});
@@ -10221,7 +10234,7 @@ function computeAll(inp){
     checks.push({n:'Strength flexure (+M)', t:'Flexure', v:sgPos.compact?stations[stations.findIndex(s=>s.x===posGov.x)]?.Mu||MuPeak:(posGov.fGov??flex.fbuBot), lim:sgPos.compact?phif*MnGov:phif*(posGov.FGov??sgPos.Fnt), r:posGov.r, u:sgPos.compact?'k-ft':'ksi', ref:'6.10.7', loc:posGov.x||Lft/2});
     // 6.10.7.3 applies to every COMPOSITE section in positive flexure, compact or noncompact.
     if(deck.deckOn) checks.push({n:'Ductility Dp≤0.42Dt', t:'Ductility', v:sgPos.pl.Dp, lim:0.42*sgPos.pl.Dt, r:sgPos.pl.Dp/(0.42*sgPos.pl.Dt), u:'in', ref:'6.10.7.3', loc:posGov.x||Lft/2});
-    checks.push({n:'Strength shear', t:'Shear', v:VuPeak, lim:phiv*Vcr, r:shearDC, u:'kip', ref:'6.10.9', loc:shearR.xGov});
+    checks.push({n:'Strength shear', t:'Shear', v:shGov.Vu, lim:shGov.phiVn, r:shearDC, u:'kip', ref:'6.10.9', loc:shGov.x});   // S2-4: the largest V_u/φV_n
 
     // PNA-OOS: no result for the checks that use M_p / D_p / D_cp — Strength I +M flexure (M_p, or R_b from D_cp on the
     // stress basis) and ductility (D_p) — nor for the +M and governing load ratings. They read OUT OF SCOPE (pass false).
@@ -11685,13 +11698,14 @@ function FlexTab({R}){
 
 /* Shear-tab worked calculations, shared by the Shear tab and the calculation-sheet report (display only;
    moved out of ShearTab unchanged). */
-function shearResCard(R){ const s=R.shearR, dc=s.VuPeak/(s.phiv*s.Vcr), pass=dc<=1.0001;
+function shearResCard(R){ const s=R.shearR, g=s.gov||{}, dc=g.dc, pass=dc<=1.0001;   // S2-4: the station with the largest V_u/φV_n
   return (    <Card id="stg-d-shear" title="Shear resistance" refTag="AASHTO 6.10.9">
       <ML s={Tx`V_p=0.58F_{yw}Dt_w=${nx(s.Vp,0)}\;\text{kip}\qquad k=${s.stiffened?Tx`5+\frac{5}{(d_o/D)^2}=${nx(s.kShear,2)}`:'5'}`}/>
       <ML s={Tx`\frac{D}{t_w}=${nx(s.dtw,1)}\;\;\text{vs}\;\;1.12\sqrt{\tfrac{Ek}{F_{yw}}}=${nx(s.slim1,1)},\;\;1.40\sqrt{\tfrac{Ek}{F_{yw}}}=${nx(s.slim2,1)}\;\Rightarrow\;C=${nx(s.Cv,3)}`}/>
       <ML s={Tx`V_n=CV_p=${nx(s.Vcr,0)}\;\text{kip (end panel)}${s.stiffened?Tx`\qquad V_{n,int}=${nx(s.VnInt,0)}\;\text{kip (tension field)}`:''}`}/>
-      <ML s={Tx`\frac{V_u}{\phi_v V_n}=\frac{${nx(s.VuPeak,0)}}{${nx(s.phiv*s.Vcr,0)}}=${nx(dc,3)}\;${pass?'\\checkmark':'\\text{N.G.}'}`}/>
-      <div className="hint">The support panel is checked <b>without</b> tension-field action (end-panel rule 6.10.9.3.3, V_n = C·V_p), since the anchor panel cannot develop a tension field. Interior stiffened panels develop tension-field action (6.10.9.3.2), giving the higher V_n,int shown{s.stiffened?' — valid because 2Dt_w/(A_fc+A_ft) = '+fmt(s.propTF,2)+(s.propTF<=2.5?' ≤ 2.5':' > 2.5 (alt. form used)'):''}. φ_v = 1.0. Add or tighten transverse stiffeners (Stiffeners tab) to raise capacity.</div>
+      {s.host&&<div className="mnote">With the GirderDetail hand-off, V_n at each station is GirderDetail’s own web shear resistance (that station’s flanges in 2Dt_w/(b_fc t_fc + b_ft t_ft); an end panel with d_o &gt; 1.5D counts as unstiffened, k = 5). The governing station’s values are worked in the next card.</div>}
+      <ML s={Tx`\text{governing: }x=${nx(g.x,1)}'\;(${g.isEnd?'\\text{end panel at an abutment}':g.tensionField?'\\text{interior panel, tension field}':'\\text{unstiffened}'})\qquad\frac{V_u}{\phi_v V_n}=\frac{${nx(g.Vu,0)}}{${nx(g.phiVn,0)}}=${nx(dc,3)}\;${pass?'\\checkmark':'\\text{N.G.}'}`}/>
+      <div className="hint">Only a panel next to an <b>abutment</b> (simple support) is an end panel, checked <b>without</b> tension-field action (6.10.9.3.3, V_n = C·V_p; C6.10.9.3.3), since the anchor panel cannot develop a tension field{s.abutL&&s.abutR?'':s.abutL||s.abutR?' (this span: the '+(s.abutL?'left':'right')+' end only)':' (this span has none: both ends are interior piers)'}. Every other stiffened panel, including those next to an interior pier, develops tension-field action (6.10.9.3.2), giving the higher V_n,int shown{s.stiffened?' — valid because 2Dt_w/(A_fc+A_ft) = '+fmt(s.propTF,2)+(s.propTF<=2.5?' ≤ 2.5':' > 2.5 (alt. form used)'):''}. φ_v = 1.0. Add or tighten transverse stiffeners (Stiffeners tab) to raise capacity.</div>
       <div className="mnote">Two spacing limits gate all of this. <b>6.10.9.1</b>: if d<sub>o</sub> &gt; 3D = {fmt(s.doMax3D,0)} in the web counts as unstiffened — k = 5 and no tension field anywhere. <b>6.10.9.3.3</b>: the end panel itself is limited to d<sub>o</sub> ≤ 1.5D = {fmt(s.doEndMax,0)} in. Current d<sub>o</sub> = {s.stiffTrans?fmt(s.doRaw,0)+' in':'— (unstiffened web)'}{s.stiffTrans?(s.doOver3D?' → over 3D':(s.endSpcOK?' → both limits satisfied ✓':' → over the 1.5D end-panel limit')):''}.</div>
     </Card>);
 }
@@ -11700,25 +11714,33 @@ function shearWorkedCard(R,scSel,right){ const s=R.shearR, Fyw=R.matR.Fyw, pass2
         refTag="pick any station — end-panel vs tension-field"
         right={right}>
         <div className="callout" style={{marginTop:0,marginBottom:12}}>
-          Station <b>x = {fmt(scSel.x,1)} ft</b> — {scSel.isEnd? 'end panel adjacent to a support: no tension field, Vₙ = C·Vₚ (6.10.9.3.3)':(s.stiffened?'interior stiffened panel: tension-field action allowed (6.10.9.3.2)':'unstiffened web: Vₙ = C·Vₚ')}. The web (D, t_w) is prismatic, so V_p and C are constant along the span; the panel classification and the demand V_u vary with location.
+          Station <b>x = {fmt(scSel.x,1)} ft</b> — {scSel.isEnd? 'end panel adjacent to an abutment (simple support): no tension field, Vₙ = C·Vₚ (6.10.9.3.3)':(s.stiffened?'interior stiffened panel: tension-field action allowed (6.10.9.3.2)':'unstiffened web: Vₙ = C·Vₚ')}. The web (D, t_w) is prismatic, so V_p and C are constant along the span; the panel classification and the demand V_u vary with location.
         </div>
         <div className="bigres" style={{marginBottom:10}}>
           <div className={'br '+(pass2?'p':'f')}><div className="l">V_u / φV_n</div><div className="n">{fmt(scSel.dc,2)}</div><div className="u">{fmt(scSel.Vu,0)} / {fmt(scSel.phiVn,0)} kip</div></div>
           <div className="br"><div className="l">Panel type</div><div className="n" style={{fontSize:15}}>{scSel.isEnd?'End':'Interior'}</div><div className="u">{scSel.tensionField?'tension field':'C·Vp'}</div></div>
         </div>
         <ML s={Tx`V_p=0.58F_{yw}Dt_w=0.58\cdot${nx(Fyw,0)}\cdot${nx(s.D,1)}\cdot${nx(s.tw,3)}=${nx(s.Vp,0)}\;\text{kip}`}/>
+        {scSel.ws? <React.Fragment>
+          <ML s={Tx`k=${scSel.ws.stiff?'5+\\frac{5}{(d_o/D)^2}='+nx(scSel.ws.k,2):'5\\;(\\text{'+(scSel.isEnd?'end panel, }d_o>1.5D':'unstiffened, }d_o>3D')+'\\text{)}'}\qquad\frac{D}{t_w}=${nx(s.dtw,1)}\;\Rightarrow\;C=${nx(scSel.ws.C,3)}\quad(\text{Eqs. 6.10.9.3.2-4 to -6})`}/>
+          {scSel.isEnd||!scSel.ws.stiff
+            ? <ML s={Tx`V_n=CV_p=${nx(scSel.ws.C,3)}\cdot${nx(scSel.ws.Vp,0)}=${nx(scSel.Vn,0)}\;\text{kip (Eq. ${scSel.ws.eqn})}`}/>
+            : <ML s={Tx`\frac{2Dt_w}{b_{fc}t_{fc}+b_{ft}t_{ft}}=${nx(scSel.ws.rat,2)}\;${scSel.ws.rat<=2.5?'\\le':'>'}\;2.5\;\Rightarrow\;V_n=V_p\!\left(C+\dfrac{0.87(1-C)}{${scSel.ws.rat<=2.5?'\\sqrt{1+(d_o/D)^2}':'\\sqrt{1+(d_o/D)^2}+d_o/D'}}\right)=${nx(scSel.Vn,0)}\;\text{kip (Eq. ${scSel.ws.eqn})}`}/>}
+          <div className="mnote">GirderDetail’s web shear resistance (the hand-off is in use), with this station’s flanges (segment {(scSel.si||0)+1}) and d_o = {fmt(s.doRaw,0)} in.</div>
+        </React.Fragment> : <React.Fragment>
         <ML s={Tx`\frac{D}{t_w}=${nx(s.dtw,1)}\;\;\text{vs}\;\;1.12\sqrt{\tfrac{Ek}{F_{yw}}}=${nx(s.slim1,1)},\;1.40\sqrt{\tfrac{Ek}{F_{yw}}}=${nx(s.slim2,1)}\;\Rightarrow\;C=${nx(s.Cv,3)}\quad(k=${nx(s.kShear,2)})`}/>
         {scSel.isEnd
           ? <ML s={Tx`V_n=CV_p=${nx(s.Cv,3)}\cdot${nx(s.Vp,0)}=${nx(s.Vcr,0)}\;\text{kip (end panel)}`}/>
           : <ML s={Tx`V_n=V_p\!\left(C+\dfrac{0.87(1-C)}{\sqrt{1+(d_o/D)^2}}\right)=${nx(s.VnInt,0)}\;\text{kip (tension field)}`}/>}
+        </React.Fragment>}
         <ML s={Tx`\frac{V_u}{\phi_vV_n}=\frac{${nx(scSel.Vu,0)}}{${nx(scSel.phiVn,0)}}=${nx(scSel.dc,3)}\;${pass2?'\\checkmark':'\\text{N.G.}'}`}/>
         <DLinks items={[{to:'venv',what:'V_u'}]}/>
-      <div className="mnote">V_u is the Strength I factored shear envelope at this station: the larger of the two directions of γ_DC1 V_DC1 + γ_DC2 V_DC2 + γ_DW V_DW + {lfP(lfS(R).gLL,'1.75')} V_LL, with γ_DC = {lfP(lfS(R).gDC,'1.25')} / {lfP(lfS(R).gDCn,'0.90')} and γ_DW = {lfP(lfS(R).gDW,'1.50')} / {lfP(lfS(R).gDWn,'0.65')} (maximum where the load adds, minimum where it relieves; 3.4.1) and the LL+IM shear of that direction{R.useExt?'':' (|V_LL| in both directions with ST-Girder’s own analysis)'}; here γ = {fmt(scSel.gV?scSel.gV[0]:NaN,3)}, {fmt(scSel.gV?scSel.gV[1]:NaN,3)}, {fmt(scSel.gV?scSel.gV[2]:NaN,3)} (LL with DF and impact{lfS(R).on?'; owner load rules'+(lfS(R).plOn?', LL+IM = (LL+IM+PL) − PL + PL/m':''):''}). φ_v = 1.0.{s.stiffened?' End-panel length taken as the first stiffener spacing d_o = '+fmt(s.doSpc,0)+' in from each support.':''}</div>
+      <div className="mnote">V_u is the Strength I factored shear envelope at this station: the larger of the two directions of γ_DC1 V_DC1 + γ_DC2 V_DC2 + γ_DW V_DW + {lfP(lfS(R).gLL,'1.75')} V_LL, with γ_DC = {lfP(lfS(R).gDC,'1.25')} / {lfP(lfS(R).gDCn,'0.90')} and γ_DW = {lfP(lfS(R).gDW,'1.50')} / {lfP(lfS(R).gDWn,'0.65')} (maximum where the load adds, minimum where it relieves; 3.4.1) and the LL+IM shear of that direction{R.useExt?'':' (|V_LL| in both directions with ST-Girder’s own analysis)'}; here γ = {fmt(scSel.gV?scSel.gV[0]:NaN,3)}, {fmt(scSel.gV?scSel.gV[1]:NaN,3)}, {fmt(scSel.gV?scSel.gV[2]:NaN,3)} (LL with DF and impact{lfS(R).on?'; owner load rules'+(lfS(R).plOn?', LL+IM = (LL+IM+PL) − PL + PL/m':''):''}). φ_v = 1.0.{s.stiffened?' End-panel length taken as the first stiffener spacing d_o = '+fmt(s.doSpc,0)+' in from each abutment (only).':''}</div>
       </Card>;
 }
 function ShearTab({R}){
   if(!R.ok) return null;
-  const s=R.shearR, dc=s.VuPeak/(s.phiv*s.Vcr), pass=dc<=1.0001;
+  const s=R.shearR, g=s.gov||{}, dc=g.dc, pass=dc<=1.0001;   // S2-4: the governing station (largest V_u/φV_n)
   const stns=R.stations, sx=stns.map(p=>p.x);
   const x0=sx[0]||0, x1=sx[sx.length-1]||R.geom.L;
   const hl=(y,name,color,dash)=>({x:[x0,x1],y:[y,y],name,mode:'lines',line:{color,width:2,dash:dash||'dash'}});
@@ -11735,7 +11757,7 @@ function ShearTab({R}){
     return 'x = '+x.toFixed(1)+' ft  ·  '+t.join(', '); };
   return (<div>
     <div className="bigres">
-      <div className={'br '+(pass?'p':'f')}><div className="l">Vu / φVn (support)</div><div className="n">{fmt(dc,2)}</div><div className="u">{fmt(s.VuPeak,0)} / {fmt(s.phiv*s.Vcr,0)} kip</div></div>
+      <div className={'br '+(pass?'p':'f')}><div className="l">Vu / φVn (governing)</div><div className="n">{fmt(dc,2)}</div><div className="u">{fmt(g.Vu,0)} / {fmt(g.phiVn,0)} kip</div></div>
       <div className="br"><div className="l">Vp = 0.58FywDtw</div><div className="n">{fmt(s.Vp,0)}</div><div className="u">kip · C = {fmt(s.Cv,3)}</div></div>
       <div className={'br '+(s.doOver3D||!s.endSpcOK?'f':'')}><div className="l">Web D/tw</div><div className="n">{fmt(s.dtw,0)}</div><div className="u">{s.stiffened?'stiffened @ '+fmt(s.doSpc,0)+'″':(s.doOver3D?'d_o > 3D → treated unstiffened':'unstiffened')}</div></div>
     </div>
@@ -11745,10 +11767,9 @@ function ShearTab({R}){
       <Fig h={360} data={[
         {x:sx,y:stns.map(p=>p.Vu),name:'Vu (Strength I, |envelope|)',fill:'tozeroy',fillcolor:'rgba(28,79,196,.06)',line:{color:'#1C4FC4',width:2.2}},
         {x:sx,y:stns.map(p=>p.gV?Math.abs(p.gV[0]*p.V1+p.gV[1]*p.V2+p.gV[2]*p.Vw):Math.abs(1.25*(p.V1+p.V2)+1.5*p.Vw)),name:'factored dead load |V| (V_u direction)',line:{color:'#15803D',width:1.6,dash:'dot'}},
-        hl(s.phiv*s.Vcr,'φVn end panel (C·Vp)','#B3261E'),
-        ...(s.stiffened?[hl(s.phiv*s.VnInt,'φVn interior (tension field)','#0E7490','dot')]:[])]}
+        {x:sx,y:scAll.map(q=>q.phiVn),name:'φVn at each station (end panel at an abutment: C·Vp; else tension field)',line:{color:'#B3261E',width:2,shape:'hv'}}]}
         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'shear (kip)',rangemode:'tozero'}}}/>
-      <div className="callout">The V<sub>u</sub> envelope (factored, LL with DF and impact) is checked against the end-panel resistance C·V<sub>p</sub> everywhere — conservative, since interior stiffened panels may use the tension-field value shown dotted. Governing V<sub>u</sub> = <b>{fmt(s.VuPeak,0)} kip</b> at <b>{fmt(s.xGov,1)} ft</b> (D/C = <b>{fmt(dc,2)}</b>). If the end panel governs your design, tighten the first stiffener spacing d<sub>o</sub> to raise C.</div>
+      <div className="callout">The V<sub>u</sub> envelope (factored, LL with DF and impact) is checked station by station against φV<sub>n</sub> of its panel: C·V<sub>p</sub> in an end panel next to an abutment (6.10.9.3.3), the tension-field value in every other stiffened panel, including those next to an interior pier (6.10.9.3.2). Governing: V<sub>u</sub> = <b>{fmt(g.Vu,0)} kip</b> at <b>{fmt(g.x,1)} ft</b> against φV<sub>n</sub> = {fmt(g.phiVn,0)} kip (D/C = <b>{fmt(dc,2)}</b>); peak V<sub>u</sub> = {fmt(s.VuPeak,0)} kip at {fmt(s.xVuPeak,1)} ft. If an end panel governs, tighten the first stiffener spacing d<sub>o</sub> to raise C.</div>
     </Card>
     {shearResCard(R)}
     {scSel&&shearWorkedCard(R,scSel,<select value={selV} onChange={e=>setSelV(+e.target.value)}
@@ -12655,7 +12676,7 @@ function crModel(R,inp,o){
         ['Plastic moment Mp',R.pl.belowWeb?OOS_TXT:fmt(R.pl.Mp/12,0),R.pl.belowWeb?'':'k-ft'],
         R.flex.oos? ['φMn flexure',OOS_TXT,''] : [R.flex.compact?'φMn flexure':'φMn flexure (stress-basis equivalent, φf·min(Fnc·S_t, Fnt·S_b))',fmt(R.flex.phiMnRep,0),'k-ft'],
         ['Peak Mu (Strength I)',fmt(R.flex.MuPeak,0),'k-ft'],
-        ['φVn end panel',fmt(R.shearR.Vcr,0),'kip'],
+        ['φVn at the governing shear station',fmt(R.shearR.gov.phiVn,0),'kip (x = '+fmt(R.shearR.gov.x,1)+' ft, '+(R.shearR.gov.isEnd?'end panel at an abutment':R.shearR.gov.tensionField?'tension field':'C·Vp')+')'],
         ['Peak Vu',fmt(R.shearR.VuPeak,0),'kip'],
         ['Service II bottom flange',fmt(R.stress.fBot.serv2,1),'ksi'],
         ['Total DL camber (max)',fmt(R.camber.camTotMax,2),'in at x = '+fmt(R.camber.xTot,1)+' ft'],
@@ -12817,7 +12838,7 @@ function crModel(R,inp,o){
     if(r.negInv!==undefined) sub(s,'Flexure, negative moment (x = '+fmt(r.negX,1)+' ft)','MBE 6A.4.2 · 6.10.8',<div className="cr-tab"><ML s={Tx`RF=\frac{\phi_c\phi_s\phi_fF_{nc}-\left|f_{DC+DW,factored}\right|}{\gamma_{LL}f_{LL}}\;\Rightarrow\;RF_{Inv}=${nx(r.negInv,2)},\;RF_{Opr}=${nx(r.negOpr,2)}`}/>
       <div className="mnote">Bottom flange in compression at the station of the largest −M_u, cracked section for LL.</div></div>);
     sub(s,'Shear (x = '+fmt(r.shearX,1)+' ft)','MBE 6A.4.2 · 6.10.9',<div className="cr-tab"><ML s={rfL('Inv',r.capV,r.VDC,r.VDWr,r.VLLr,'1.75',r.shearInv,1)}/><ML s={rfL('Opr',r.capV,r.VDC,r.VDWr,r.VLLr,'1.35',r.shearOpr,1)}/>
-      <div className="mnote">C = φ_cφ_sφ_v V_cr (end-panel basis, kip); DC, DW and LL+IM are |V| at x = {fmt(r.shearX,1)} ft.</div></div>);
+      <div className="mnote">C = φ_cφ_sφ_v V_n at x = {fmt(r.shearX,1)} ft, the V_n of the design check there (V_n = {fmt(r.shearVn,1)} kip: {r.shearEnd?'end panel at an abutment, V_cr':r.shearTF?'tension field, 6.10.9.3.2':'C·V_p'}; Shear tab), kip; DC, DW and LL+IM are |V| at that station.</div></div>);
     if(r.servInv!==undefined) sub(s,'Service II (x = '+fmt(r.serv.x,1)+' ft, '+r.serv.tag+')','MBE 6A.6.4.2.2',<div className="cr-tab">
       <ML s={Tx`RF_{Inv}=\frac{f_R-f_D}{1.30\,f_{LL}}=\frac{${nx(r.serv.fR,2)}-(${nx(r.serv.fD,2)})}{1.30(${nx(r.serv.fLL,2)})}=${nx(r.servInv,2)}\qquad RF_{Opr}=\frac{f_R-f_D}{1.00\,f_{LL}}=${nx(r.servOpr,2)}`}/>
       <div className="mnote">f_R = {fmt(R.stress.s2Coef,2)}R_hF_yf; f_D = unfactored dead-load stress in the direction of f_LL (ksi).</div></div>);

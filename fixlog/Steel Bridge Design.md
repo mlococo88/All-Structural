@@ -21676,3 +21676,63 @@ The 8 older payloads of `tests/projects/st` (no field) keep ST-Girder's own chec
 - Not testable, listed for the engineer: holes in the tension flange; cross-frames in contiguous lines parallel to the supports; kinked (chorded)
   girders (the model knows only "curved" from Preliminary sizing).
 - ST-Girder's load rating (−M, `negInv`) still uses its own F_nc (GS20 rating extension, Stage 2 Part 2).
+
+## 2026-10-22 — PR: claude/sbd-s2-4-shear (S2-4: Steel Bridge Design stage 2, item 3a and 3c: ST-Girder's shear with tension-field action in interior and pier panels, the V_cr limit only in end panels at abutments, and the shear rating on the same V_n, as GirderDetail; engineer decision 2026-10-22; PR link added after merge)
+
+No saved key or format changes.
+
+### S2-4. Strength I shear per station; end panels only at abutments; rating on the same V_n   [CALCULATION CHANGE — shear ratio and shear RF]
+- **Where (st-src):** `computeAll`, Strength shear (anchor `const shearCalc = stations.map(st=>{`), the check row (anchor `checks.push({n:'Strength shear'`),
+  the end-panel spacing check (anchor `if(stiffened&&(abutL||abutR))`), the rating's shear row (anchor `let shRow=null;`); displays `shearResCard`,
+  `ShearTab`, `shearWorkedCard`, the report summary and rating notes; `gdNoteLines`.
+- **Before:**
+  ```js
+  const shearDC=VuPeak/(phiv*Vcr);
+  const isEnd = (st.x<=endPanelLen+1e-6) || (st.x>=Lft-endPanelLen-1e-6);
+  const Vn = isEnd? Vcr : VnInt;
+  checks.push({n:'Strength shear', t:'Shear', v:VuPeak, lim:phiv*Vcr, r:shearDC, …, loc:shearR.xGov});
+  const inv=rf(phiCS*phiv*Vcr,dc,dw,ll,1.75);   // rating, every station
+  ```
+- **After:**
+  ```js
+  const spE=useExt? externalSpans(inp.external) : [], selE=useExt? (ext.sel||{}) : null;
+  const abutL=!useExt||!spE.length||(+selE.x0||0)<=spE[0].x0+1e-3, abutR=!useExt||!spE.length||!isFinite(+selE.x1)||(+selE.x1)>=spE[spE.length-1].x1-1e-3;
+  const Hws=Es===29000? stHost('webShear') : null;
+  const isEnd = (abutL&&st.x<=endPanelLen+1e-6) || (abutR&&st.x>=Lft-endPanelLen-1e-6);
+  if(Hws){ const g=segP[st.si].dims; w=Hws(D,tw,Fyw,stiffTrans?doRaw:0,g.bft*g.tft+g.bfb*g.tfb,isEnd); Vn=w.Vn; } else Vn = isEnd? Vcr : VnInt;
+  const shGov=shearCalc.reduce((b,q)=>q.dc>b.dc?q:b,shearCalc[0]), shearDC=shGov.dc;
+  checks.push({n:'Strength shear', t:'Shear', v:shGov.Vu, lim:shGov.phiVn, r:shearDC, …, loc:shGov.x});
+  const cV=phiCS*phiv*shearCalc[i].Vn; const inv=rf(cV,dc,dw,ll,1.75);   // rating, station i
+  ```
+  `shearR` gains `gov`, `xVuPeak`, `abutL`, `abutR`, `host` (`xGov` is now the governing station of V_u/φV_n); the rating gains `shearVn`, `shearEnd`,
+  `shearTF` (and `capV` is that station's capacity). The end-panel spacing check (d_o ≤ 1.5D) is listed only when the span has an abutment end.
+- **Problem:** ST-Girder limited the whole span to the end-panel resistance V_cr = C·V_p (the check divided the peak V_u by φV_cr) and treated the panels
+  at both span ends as end panels, including those next to an interior pier; its rating used V_cr everywhere. 6.10.9.3.3 limits V_n to V_cr only in end
+  panels, which C6.10.9.3.3 identifies as the panels next to simple supports; interior stiffened panels (d_o ≤ 3D) may use the tension field (6.10.9.3.2).
+  GirderDetail (`webShear`) sets the end-panel flag only at abutments. More accurate; at piers less conservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.9.1, 6.10.9.3.2 (Eqs. 6.10.9.3.2-2 and -8; C from Eqs. 6.10.9.3.2-4 to -6),
+  6.10.9.3.3 (Eq. 6.10.9.3.3-1) with C6.10.9.3.3; MBE 6A.4.2 (rating capacity φ_cφ_sφV_n).
+- **With a GirderDetail hand-off:** V_n at each station is GirderDetail's `webShear` (host page): that station's flanges in 2Dt_w/(b_fc t_fc + b_ft t_ft),
+  and an end panel with d_o > 1.5D counts as unstiffened (k = 5), as GirderDetail. Without one: ST-Girder's V_cr / V_n,int as before (for ST-Girder's own
+  simple span both ends are abutments, so nothing changes there).
+- **Item 3b (d_o per station from `rowsBy`) not done:** `girderDetail.details.transverseStiffener.rowsBy` gives, per span and girder position, only the two
+  panels next to each support ("first stiffener from …", d_o1 and d_o2) and an end flag; it does not give where each spacing applies along the span or the
+  spacing between them, so a d_o per station cannot be read from it without assumptions. One d_o (the largest in the span, GD70) is kept.
+- **Displays (§6):** Shear tab (governing ratio and station, φV_n per station in the chart, the governing panel type), the worked shear card (with the hand-off:
+  k, C, 2Dt_w/(b_fc t_fc + b_ft t_ft), V_n and the equation of that station from GirderDetail's webShear), "Shear resistance" card, report summary
+  (φV_n at the governing station), rating note (C = φ_cφ_sφ_vV_n at the rating station, panel type).
+- **Check case (hand):** D = 60 in, t_w = 0.5625 in, F_yw = 50 ksi, d_o = 60 in, interior panel next to Pier 1 (builtin and xsA girders):
+  k = 5 + 5/(60/60)² = 10; D/t_w = 106.7 > 1.40√(29,000·10/50) = 106.6, so C = 1.57/(106.7)²(29,000·10/50) = 0.800; V_p = 0.58(50)(60)(0.5625) = 978.8 kip;
+  2Dt_w/(b_fc t_fc + b_ft t_ft) ≤ 2.5 → V_n = 978.8[0.800 + 0.87(1 − 0.800)/√2] = 903.5 kip (GirderDetail GS11 shows 903.55). Before: φV_n = V_cr = 783.3 kip.
+  Payload `gd_xsA_AASHTO_G2`, span 2 (both ends at piers): V_u = 486.2 kip at x = 0; before 486.2/783.3 = 0.621, after 486.2/903.5 = 0.538; shear RF_inv 2.13 → 2.59.
+- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (109 cases, compared with S2-3's readouts): Strength shear
+  ratio −13.31 % to 0.00 % in 108 cases (the built-in simple span unchanged: both ends are abutments), largest ratio 0.621 → 0.594 (now the built-in);
+  shear RF_inv up to +21.6 %; 0 pass/fail flips; nothing else changes. `tests/st-span.mjs` on gd_builtin_AASHTO_G2, gd_xsA_RIDOT_G2, gd_util_AASHTO_G2
+  (spans 2 and 3): shear ratio −13.3 % in all 6 (e.g. builtin G2 span 2 0.513 → 0.444; GirderDetail GS pier 0.445), shear RF_inv +20 %, the end-panel
+  spacing check no longer listed on span 2 (both ends at piers), 0 flips. After merging origin/main (S2-9, negative flexure), the st subset (every girder
+  of builtin and util under AASHTO, and gd_xsA_RIDOT_G2; A = origin/main, B = this branch) and the same 6 spans were run again: the same shear
+  changes (−13.31 % to 0.00 %, RF_inv up to +20.3 %), nothing else, 0 flips. `--tool gd` subset (builtin/AASHTO, builtin28/MassDOT, util/CTDOT): every
+  section identical except `gd.dxf`, whose hash varies from run to run (no host change in this PR). `tests/sbd-verify.mjs` passes. Subset tested; the
+  full suite runs at the end of stage 2. Baselines re-recorded for the cases run on the merged file only (st.json 11 cases, st_interior.json 6).
+- **Other copies:** none.
+- **Open items:** item 3b above (engineer: should GirderDetail send the stiffener layout along the span, so each panel's d_o can be used?).
