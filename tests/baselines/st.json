@@ -2,7 +2,7 @@
  "tool": "st",
  "cases": {
   "built-in (no hand-off)": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "24a44d55a3cf",
     "st.status": "7668fce1a42b",
@@ -11,7 +11,7 @@
     "st.governing": "db8c287a6437",
     "st.sections": "95f38130a36d",
     "st.stations": "03def5441297",
-    "st.R": "c3165fd78e49",
+    "st.R": "579aede3d2f8",
     "st.tab.Inputs": "07d98d683990",
     "st.tab.Section Props": "380472ec67cc",
     "st.tab.Constructibility": "abfd6364721c",
@@ -752,7 +752,7 @@
    }
   },
   "payload gd_builtin_AASHTO_G1": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "73291a83e15e",
     "st.status": "d87103ac02cb",
@@ -761,7 +761,7 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "86663f20e9d1",
-    "st.R": "b88c68c4f24b",
+    "st.R": "00d78c2019da",
     "st.tab.Inputs": "b0f86e4f1e9d",
     "st.tab.Section Props": "c0c3b7c6bf16",
     "st.tab.Constructibility": "b75d2348b8a8",
@@ -782,7 +782,7 @@
    }
   },
   "payload gd_builtin_AASHTO_G2": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "d773a7215806",
     "st.status": "d87103ac02cb",
@@ -791,7 +791,7 @@
     "st.governing": "6b8c0306b265",
     "st.sections": "ef6049d406bd",
     "st.stations": "df751c44c90c",
-    "st.R": "7fa4911b8907",
+    "st.R": "4f4cd791b88c",
     "st.tab.Inputs": "ee4d93bd8c94",
     "st.tab.Section Props": "1b6baa094289",
     "st.tab.Constructibility": "d082142fdb00",
@@ -812,7 +812,7 @@
    }
   },
   "payload gd_builtin_AASHTO_G3": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "a5cdf51b3791",
     "st.status": "d87103ac02cb",
@@ -821,7 +821,7 @@
     "st.governing": "676429c48d29",
     "st.sections": "ef6049d406bd",
     "st.stations": "9ba6c345aa98",
-    "st.R": "dd24dea00042",
+    "st.R": "59d71e18afd0",
     "st.tab.Inputs": "f92db7bda511",
     "st.tab.Section Props": "5780f6ba6f5e",
     "st.tab.Constructibility": "4204ea874b01",
@@ -842,7 +842,7 @@
    }
   },
   "payload gd_builtin_AASHTO_G4": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "ebd411f5cc57",
     "st.status": "d87103ac02cb",
@@ -851,7 +851,7 @@
     "st.governing": "6b8c0306b265",
     "st.sections": "ef6049d406bd",
     "st.stations": "df751c44c90c",
-    "st.R": "7fa4911b8907",
+    "st.R": "4f4cd791b88c",
     "st.tab.Inputs": "d6e775470795",
     "st.tab.Section Props": "02fe789a807c",
     "st.tab.Constructibility": "598d2692d62f",
@@ -872,7 +872,7 @@
    }
   },
   "payload gd_builtin_AASHTO_G5": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "80a285ecab31",
     "st.status": "d87103ac02cb",
@@ -881,7 +881,7 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "86663f20e9d1",
-    "st.R": "b88c68c4f24b",
+    "st.R": "00d78c2019da",
     "st.tab.Inputs": "d06fd659f499",
     "st.tab.Section Props": "8507be5d2b75",
     "st.tab.Constructibility": "4713e5a5d63e",
@@ -1952,7 +1952,7 @@
    }
   },
   "payload gd_util_AASHTO_G1": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "f48018f194fc",
     "st.status": "d87103ac02cb",
@@ -1961,7 +1961,7 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "86663f20e9d1",
-    "st.R": "41deca5deaf4",
+    "st.R": "e57df643b243",
     "st.tab.Inputs": "d72239d8a269",
     "st.tab.Section Props": "a1d1305e8b38",
     "st.tab.Constructibility": "a9c784ca0065",
@@ -1982,7 +1982,7 @@
    }
   },
   "payload gd_util_AASHTO_G2": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "3eff19fd4a8d",
     "st.status": "d87103ac02cb",
@@ -1991,7 +1991,7 @@
     "st.governing": "0b349bc5cb02",
     "st.sections": "ef6049d406bd",
     "st.stations": "9b1e07c87583",
-    "st.R": "c2b04e6228e0",
+    "st.R": "700f6a5469a6",
     "st.tab.Inputs": "ced973edba94",
     "st.tab.Section Props": "9943b48eaafd",
     "st.tab.Constructibility": "f6793934d7e1",
@@ -2012,7 +2012,7 @@
    }
   },
   "payload gd_util_AASHTO_G3": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "5edb78f75965",
     "st.status": "d87103ac02cb",
@@ -2021,7 +2021,7 @@
     "st.governing": "b3440f1ac2f5",
     "st.sections": "ef6049d406bd",
     "st.stations": "015b270fd4a2",
-    "st.R": "06368f17a54c",
+    "st.R": "906ed1e30fef",
     "st.tab.Inputs": "aea96dbdf970",
     "st.tab.Section Props": "2e05fc9fc5fe",
     "st.tab.Constructibility": "fef9dd451f0c",
@@ -2042,7 +2042,7 @@
    }
   },
   "payload gd_util_AASHTO_G4": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "ebc182d22e19",
     "st.status": "d87103ac02cb",
@@ -2051,7 +2051,7 @@
     "st.governing": "6b8c0306b265",
     "st.sections": "ef6049d406bd",
     "st.stations": "df751c44c90c",
-    "st.R": "124a84c6e4b0",
+    "st.R": "88025d7bbf0b",
     "st.tab.Inputs": "5188a92fb0e7",
     "st.tab.Section Props": "af3ee02c27c2",
     "st.tab.Constructibility": "f6cd0f5e7ed7",
@@ -2072,7 +2072,7 @@
    }
   },
   "payload gd_util_AASHTO_G5": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "1fad40bbce6f",
     "st.status": "d87103ac02cb",
@@ -2081,7 +2081,7 @@
     "st.governing": "64a56e789ecb",
     "st.sections": "c53c62976041",
     "st.stations": "86663f20e9d1",
-    "st.R": "41deca5deaf4",
+    "st.R": "e57df643b243",
     "st.tab.Inputs": "bae829c8d51c",
     "st.tab.Section Props": "a1bf68129b17",
     "st.tab.Constructibility": "2700c21b7298",
@@ -3032,7 +3032,7 @@
    }
   },
   "payload gd_xsA_RIDOT_G2": {
-   "a": "claude/sbd-s2-6-studs-per-zone (S2-6 subset run after S2-4, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "8ec14e03b454",
     "st.status": "2100030105ca",
@@ -3041,7 +3041,7 @@
     "st.governing": "f46566d08f9e",
     "st.sections": "83f7af10dda5",
     "st.stations": "f636c074eabb",
-    "st.R": "d35ccf03e3f1",
+    "st.R": "dee0d93b6245",
     "st.tab.Inputs": "eaf225dc486c",
     "st.tab.Section Props": "7d20c351282b",
     "st.tab.Constructibility": "440b3a66618b",
@@ -3272,63 +3272,63 @@
    }
   },
   "payload s29_builtin28_RIDOT_G2": {
-   "a": "claude/sbd-s2-9-neg-flexure (after S2-3)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "18552f565aad",
     "st.status": "d7abf1fff6b3",
-    "st.checks": "17d3d428e3e6",
-    "st.rating": "29342b7be203",
+    "st.checks": "5bb11595a731",
+    "st.rating": "657b1b599b4c",
     "st.governing": "c9267ff19710",
     "st.sections": "83f7af10dda5",
     "st.stations": "5d795c3b05f5",
-    "st.R": "36857585f80e",
-    "st.tab.Inputs": "75aa69909f12",
-    "st.tab.Section Props": "e0ef8e927cdd",
-    "st.tab.Constructibility": "eaf87deaecdb",
-    "st.tab.Stresses": "d0d2f4fd32f4",
-    "st.tab.Flexure": "ab7f2d17049e",
-    "st.tab.Shear": "f8f3a1b8309b",
-    "st.tab.Diagrams": "d89f523ffa44",
-    "st.tab.Camber": "985f40d02335",
-    "st.tab.Deck": "e577476ac64a",
-    "st.tab.Fatigue": "ca97a353747d",
-    "st.tab.Stiffeners": "28252e2c4500",
-    "st.tab.Connectors": "1159b1487e11",
-    "st.tab.Rating": "12d0fff8472c",
-    "st.tab.Optimize": "b66e6a46650c",
-    "st.tab.Nomenclature": "c10e562acfb0",
-    "st.tab.Report": "ee9643c5d833",
-    "st.report.all": "aadf2e3aaa95"
+    "st.R": "093eebbc8d1e",
+    "st.tab.Inputs": "b50c8fb75d96",
+    "st.tab.Section Props": "bcee408551cc",
+    "st.tab.Constructibility": "2edbfca85e57",
+    "st.tab.Stresses": "c511fd1e0073",
+    "st.tab.Flexure": "2f6f7b7fbb1f",
+    "st.tab.Shear": "04cfea06c3be",
+    "st.tab.Diagrams": "24a19d636843",
+    "st.tab.Camber": "ee13f02d3ab7",
+    "st.tab.Deck": "fa4a5194fe21",
+    "st.tab.Fatigue": "5fd2ac914383",
+    "st.tab.Stiffeners": "fc2325c4a1ef",
+    "st.tab.Connectors": "f874e951f53c",
+    "st.tab.Rating": "227131c8e368",
+    "st.tab.Optimize": "310f8453beb3",
+    "st.tab.Nomenclature": "b7fba7f349ba",
+    "st.tab.Report": "81cdc00588e6",
+    "st.report.all": "e6a2565fe6a3"
    }
   },
   "payload s29_xsA_MassDOT_G1": {
-   "a": "claude/sbd-s2-9-neg-flexure (after S2-3)",
+   "a": "claude/sbd-s2-8-constr (S2-8, merged with main 92f690b)",
    "sections": {
     "st.session": "be5ce3c990d2",
     "st.status": "e68ad7e2fabc",
-    "st.checks": "5d9ccdad2fcf",
-    "st.rating": "8fa432c04f4a",
+    "st.checks": "9c009eb45206",
+    "st.rating": "e6e22f5240f7",
     "st.governing": "a3a78026e512",
     "st.sections": "218bc0b043a6",
     "st.stations": "ab08dd81988b",
-    "st.R": "9e19cc9670f4",
-    "st.tab.Inputs": "140813958836",
-    "st.tab.Section Props": "e544f3fb995f",
-    "st.tab.Constructibility": "2be35c3f61c5",
-    "st.tab.Stresses": "a8109f5e58f8",
-    "st.tab.Flexure": "6ec8d4f82477",
-    "st.tab.Shear": "b062dbe57621",
-    "st.tab.Diagrams": "e6d5d59f64bc",
-    "st.tab.Camber": "43c4fa4e315b",
-    "st.tab.Deck": "120609bc6d5c",
-    "st.tab.Fatigue": "81b941b99370",
-    "st.tab.Stiffeners": "3c8d055c37cf",
-    "st.tab.Connectors": "898db3772690",
-    "st.tab.Rating": "dd94b4f8e28f",
-    "st.tab.Optimize": "02de20e34f3f",
-    "st.tab.Nomenclature": "dc65629104bb",
-    "st.tab.Report": "8915aa16b84a",
-    "st.report.all": "d871ca17f415"
+    "st.R": "89285a3d6607",
+    "st.tab.Inputs": "ef1334217545",
+    "st.tab.Section Props": "89a12e361910",
+    "st.tab.Constructibility": "fbf108ae30b7",
+    "st.tab.Stresses": "b14f3c46a50d",
+    "st.tab.Flexure": "3b319fbedc78",
+    "st.tab.Shear": "636109e9920a",
+    "st.tab.Diagrams": "e035e5ed76ee",
+    "st.tab.Camber": "c1b9030caf94",
+    "st.tab.Deck": "d967620769d3",
+    "st.tab.Fatigue": "b742926d1e30",
+    "st.tab.Stiffeners": "1788f513248a",
+    "st.tab.Connectors": "28c35272b26e",
+    "st.tab.Rating": "793c94b23336",
+    "st.tab.Optimize": "3469e8fb6d1f",
+    "st.tab.Nomenclature": "fb5471180bee",
+    "st.tab.Report": "104f73d1c801",
+    "st.report.all": "0a24f3fe241e"
    }
   }
  },
