@@ -1,19 +1,15 @@
-# Resume: Steel Bridge Design stage 2 (paused 2026-10-27 19:35 UTC)
+# Resume: Steel Bridge Design stage 2 (all 9 items merged 2026-10-27 21:55 UTC)
 
 Engineer's trigger phrase: "continue with the steel bridge design app".
 
 ## Done (on main)
-S2-1 n exact (#428), S2-2 R_b/F_crw + k = 7.2 (#429), S2-3 load factors by sign (#453), S2-4 shear TFA (#455), S2-5 LLDF display (#426), S2-6 studs per zone (#456, 92f690b), S2-9 neg flexure / A6 (#454, 2d4ee31). Merge PRs #410-#414, cut-over #422.
-Test-only: Babel ">500KB deoptimised styling" note filtered in compare/st-span/sbd-verify (landed with S2-6).
+S2-1 #428, S2-2 #429, S2-3 #453, S2-4 #455, S2-5 #426, S2-6 #456, S2-7 #457, S2-8 #458 (b9bee9a), S2-9 #454. Each tested on the subset only.
 
-## Remaining, in this order (branches on origin)
-1. S2-8 constructibility: `claude/sbd-s2-8-constr` @ 4e0e13e. **Unconservative today** (builtin G2 pier-1 bottom flange 0.353 ST vs 0.421 GD GS14).
-   - Merge origin/main (take main's Babel filter; drop the branch's duplicate commit 4e0e13e if it conflicts).
-   - st subset showed st.checks/st.rating diffs in 2-3 of 14 cases: run the subset against origin/main first (`--a origin/main`) to confirm they are stale S2-3/S2-4 baselines, not S2-8.
-   - Then re-record gd.stPayloads (3 gd cases), st subset, 2 `s28_*` cases, 6 interior cases; fixlog via agentC/mkfix28.py drafts (scratchpad, may be gone: rewrite from the branch diff); PR + merge.
-   - gdConBlock was shortened after the last test run: re-test.
-2. S2-7 LL deflection + camber: `claude/sbd-s2-7-defl-camber` @ 2fa53ea (on 92f690b, before S2-9 payloads). Merge main, regenerate gd_* payloads with --save-st, subset, re-record, PR with fixlog §4 draft. Preview: no LL flips; 10 MassDOT exterior girders lose LL check (GD SA3 na); builtin G2 delta 0.704 -> 0.500 in vs 1.650.
-3. Final full suite: re-record tests/baselines/st.json and st_interior.json fully (S2-3/S2-4 left stale cases); re-run sbd-verify. gd.dxf hash changes daily (date in revision table): fix the test to mask the date, not the tool.
+## Remaining
+1. Full suite, then re-record tests/baselines/{st,st_interior,gd}.json from runs (S2-3/S2-4 left stale cases; only subset cases are current).
+2. Regenerate all 100 gd_* payloads with --save-st (only builtin/AASHTO, util/AASHTO, xsA/RIDOT carry S2-9 negFlex and S2-8 constr fields).
+3. gd.dxf hash changes daily (run date in the DXF revision table): mask the date in the test, not the tool.
+4. Review the shortened gdConBlock (S2-8) rendered text once.
 
 ## Open engineer questions (not blocking)
 1. Should GD send the full stiffener layout (ST uses one d_o per span from rowsBy)?
