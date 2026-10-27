@@ -16,8 +16,7 @@ import { REPO, HERE, openPage } from './lib.mjs';
 const av = process.argv.slice(2), fi = av.indexOf('--file');
 const FILE = path.resolve(REPO, fi >= 0 ? av[fi + 1] : 'Steel Bridge Design.html'), OLD = path.join(path.dirname(FILE), 'Steel Bridge Beam Modules.html');
 let bad = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) bad++; };
-// Babel's "[BABEL] Note: The code generator has deoptimised the styling of ... as it exceeds the max of 500KB" is informational (output whitespace only, not the code): not counted as a console error (2026-10-27)
-const errsOf = o => o.errs.filter(e => !/^Failed to load resource|has deoptimised the styling of/.test(e));
+const errsOf = o => o.errs.filter(e => !/^Failed to load resource|^\[BABEL\] Note: The code generator has deoptimised/.test(e));
 
 // 1. redirect with a hash (and a query)
 { const o = await openPage(OLD, { hash: '#gdtest=1&x=%20y' });
