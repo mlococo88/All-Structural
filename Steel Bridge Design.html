@@ -9015,6 +9015,48 @@ function gdStudDeriv(R){ const G=R.conn&&R.conn.gd; if(!G) return null; const q=
       <div className="mnote">The stud detailing checks (h/d, pitch limits, spacing, edge distance, penetration, cover) stay ST-Girder’s.</div>
     </Deriv>; }
 function GdStudCards({R}){ return gdStudDeriv(R); }
+/* S2-7 (2026-10-22, SBD stage 2 item 10): GirderDetail's live load deflection and dead load deflections (camber), sent with its demands
+   (girderDetail.deflection.ll: Structural analysis check SA3 per span; stations D_DC1steel, D_DC1wet, D_DC2DW, D_UT: the camber table of that module,
+   in, downward +). While those demands are in use ST-Girder checks the live load deflection of the selected span with GirderDetail's Δ, limit and
+   status, and shows GirderDetail's dead load deflections as the camber; its own simple-span Δ_LL and its double integration of the camber stay as
+   cross-checks (and are the method in the stand-alone cases: built-in analysis, MIDAS/MCT imports, older GirderDetail payloads). */
+function gdLLOf(ext,sel){ if(!extFromGD(ext)||!sel) return null; const q=ext.girderDetail.deflection, L=q&&q.ll; if(!L||!Array.isArray(L.spans)) return null;
+  const ok=v=>typeof v==='number'&&isFinite(v), d=L.spans.find(o=>o&&o.span===sel.idx);
+  if(!d||!ok(d.d)||!ok(d.lim)||!(d.lim>0)||!ok(d.x)||!['pass','warn','fail','na'].includes(d.status)) return null;
+  return {...d,xl:d.x-(+sel.x0||0),title:String(L.title||''),ref:String(L.ref||''),method:String(L.method||''),ratio:ok(d.ratio)?d.ratio:Math.round((+sel.len||((+sel.x1)-(+sel.x0)))*12/d.lim)}; }
+// the dead load deflections of the selected span (the imported stations of this span, x from its left support), downward +; null without the fields
+function gdCamOf(ext,shape){ if(!ext||!ext.slice) return null; const sl=ext.slice.filter(s=>s.D_DC1steel!==undefined&&s.D_DC1wet!==undefined&&s.D_DC2DW!==undefined);
+  if(sl.length<2||sl.length!==ext.slice.length||!sl.every(s=>isFinite(+s.D_DC1steel)&&isFinite(+s.D_DC1wet)&&isFinite(+s.D_DC2DW))) return null;
+  const hasUT=sl.some(s=>s.D_UT!==undefined), x=sl.map(s=>s.xr), steel=sl.map(s=>+s.D_DC1steel), wet=sl.map(s=>+s.D_DC1wet), sd=sl.map(s=>+s.D_DC2DW), ut=hasUT?sl.map(s=>+s.D_UT||0):null;
+  const tot=x.map((_,i)=>steel[i]+wet[i]+sd[i]+(ut?ut[i]:0));
+  const X=shape.x, at=(arr,xx)=>{ if(xx<=X[0]) return arr[0]; for(let i=1;i<X.length;i++) if(xx<=X[i]+1e-9){ const t=(xx-X[i-1])/Math.max(X[i]-X[i-1],1e-9); return arr[i-1]+(arr[i]-arr[i-1])*t; } return arr[arr.length-1]; };
+  const stTot=x.map(xx=>-at(shape.tot,xx)), am=a=>a.reduce((j,v,i)=>Math.abs(v)>Math.abs(a[j])?i:j,0), j=am(tot), k=am(stTot);
+  return {x,steel,wet,sd,ut,tot,stTot,totMax:tot[j],xTot:x[j],stMax:stTot[k],xSt:x[k]}; }
+function GdLLNote({R}){ const st=R.stress, g=st.gdLL; if(!g) return null; const okL=g.d<=g.lim*1.0001;
+  return <React.Fragment>
+    <ML s={Tx`\Delta_{LL}=g_\Delta\max(\Delta_{truck},\;0.25\Delta_{truck}+\Delta_{lane})=${nx(g.gD,3)}\max(${nx(g.dT,3)},\;${nx(g.dL,3)})=${nx(g.d,3)}\;\text{in}\;${okL?'\\le':'>'}\;\frac{L}{${g.ratio}}=${nx(g.lim,3)}\;\text{in}\;${g.status==='na'?'\\text{(reported)}':okL?'\\checkmark':'\\text{N.G.}'}\quad(x=${nx(g.x,2)}\;\text{ft along the girder})`}/>
+    <div className="mnote">GirderDetail, Structural analysis check SA3 ({g.title}{g.ref?'; '+g.ref:''}), span {g.span}: {g.method}. Status there: <b>{g.status==='na'?'reported only (the owner applies the limit to the typical interior beam)':g.status==='warn'?'exceeds the optional or preferred limit (warning)':g.status}</b>.{g.status==='na'?' Not entered as a check here.':''} ST-Girder’s own simple-span value: Δ_LL = {fmt(st.dLL,3)} in vs L/800 = {fmt(st.dLim,3)} in (cross-check, {fmt(g.d>0?100*(st.dLL/g.d-1):0,0)}% {st.dLL>=g.d?'higher':'lower'}). <GdOpen mod="sa" label="Open Structural analysis →"/></div>
+  </React.Fragment>; }
+function gdCamRows(R){ const G=R.camber.gd, L=R.geom.L, sh=R.camber.shape, X=G.x;
+  const at=(arr,xx)=>{ if(xx<=X[0]) return arr[0]; for(let i=1;i<X.length;i++) if(xx<=X[i]+1e-9){ const t=(xx-X[i-1])/Math.max(X[i]-X[i-1],1e-9); return arr[i-1]+(arr[i]-arr[i-1])*t; } return arr[arr.length-1]; };
+  const pts=[]; for(let i=0;i<=10;i++) pts.push({x:L*i/10,lab:(i/10).toFixed(1)+'L'});
+  sh.splices.forEach(xx=>{ if(!pts.some(p=>Math.abs(p.x-xx)<0.05)) pts.push({x:xx,lab:'flange transition'}); }); pts.sort((a,b)=>a.x-b.x);
+  const z=v=>Math.abs(v)<5e-4?0:v, f3=v=>fmt(z(v),3);
+  const head=['Location','x (ft)','Steel (in)','Deck, haunch, SIP, other DC1 (in)','DC2 + DW (in)',...(G.ut?['Existing utilities (in)']:[]),'Total, GirderDetail (in)','ST-Girder integration (in)','Difference (in)'];
+  const rows=pts.map(p=>{ const t=at(G.tot,p.x), c=at(G.stTot,p.x); return {c:[p.lab,fmt(p.x,2),f3(at(G.steel,p.x)),f3(at(G.wet,p.x)),f3(at(G.sd,p.x)),...(G.ut?[f3(at(G.ut,p.x))]:[]),{v:<b>{f3(t)}</b>},f3(c),f3(c-t)]}; });
+  rows.push({_cls:'tot',c:[{v:<b>Maximum</b>},'','','','',...(G.ut?['']:[]),{v:<span><b>{fmt(G.totMax,3)}</b> @ {fmt(G.xTot,1)} ft</span>},{v:<span>{fmt(G.stMax,3)} @ {fmt(G.xSt,1)} ft</span>},fmt(G.stMax-G.totMax,3)]});
+  return {head,rows}; }
+function gdCamDeriv(R){ const G=R.camber&&R.camber.gd; if(!G) return null; const T=gdCamRows(R), sel=R.ext&&R.ext.sel;
+  return <Deriv id="stg-d-gdcam" title={'Dead-load deflection and camber from GirderDetail'+(sel&&sel.idx?', span '+sel.idx:'')} refTag="Structural analysis · virtual work · staged sections">
+      <div className="mnote" style={{marginTop:0}}>GirderDetail’s dead load deflections of this girder at its analysis nodes in this span (Structural analysis, the camber table: virtual work on the whole continuous girder; steel and the rest of DC1 on the steel section, DC2 + DW on the long-term composite section{G.ut?', existing utilities on the steel section (the future allowance is not in the camber)':''}). Camber = upward offset equal to the total. ST-Girder’s own double integration over this span (below) is a cross-check. <GdOpen mod="sa" label="Open Structural analysis →"/></div>
+      <ML s={Tx`\Delta_{total}=\Delta_{steel}+\Delta_{DC1,wet}+\Delta_{DC2+DW}${G.ut?'+\\Delta_{UT}':''}\qquad\Delta_{total,max}=${nx(G.totMax,3)}\;\text{in at }x=${nx(G.xTot,1)}\;\text{ft}\qquad\text{ST-Girder: }${nx(G.stMax,3)}\;\text{in at }x=${nx(G.xSt,1)}\;\text{ft}\;(${nx(G.totMax>0?100*(G.stMax/G.totMax-1):0,1)}\%)`}/>
+      <Fig h={300} data={[{x:G.x,y:G.steel.map(v=>-v),name:'Steel',mode:'lines',line:{color:'#6B7280',width:1.8,dash:'dot'}},{x:G.x,y:G.wet.map(v=>-v),name:'Deck, haunch, SIP, other DC1',mode:'lines',line:{color:'#15803D',width:1.8}},
+        {x:G.x,y:G.sd.map(v=>-v),name:'DC2 + DW',mode:'lines',line:{color:'#0E7490',width:1.8}},...(G.ut?[{x:G.x,y:G.ut.map(v=>-v),name:'Existing utilities',mode:'lines',line:{color:'#0f766e',width:1.6}}]:[]),
+        {x:G.x,y:G.tot.map(v=>-v),name:'Total (GirderDetail)',mode:'lines',line:{color:'#16212E',width:2.6}},{x:G.x,y:G.stTot.map(v=>-v),name:'Total, ST-Girder integration (cross-check)',mode:'lines',line:{color:'#B3261E',width:1.6,dash:'dash'}}]}
+        layout={{yaxis:{title:'Δ (in), downward −'},xaxis:{title:'x (ft)'},legend:{orientation:'h',y:1.22,font:{size:10}},margin:{l:52,r:14,t:34,b:38}}}/>
+      <Tbl head={T.head} rows={T.rows}/>
+      <div className="hint" style={{marginTop:6}}>Downward dead-load deflection, in (+ = down) = camber (upward offset) to fabricate, at tenth points{R.camber.shape.splices.length?' and flange transitions':''}, interpolated between GirderDetail’s nodes. The two methods differ in the section stiffness along the girder (GirderDetail: the staged continuous model; ST-Girder: its segment I over this span) and in the modular ratio.</div>
+    </Deriv>; }
 /* GDX (engineer decision 2026-10-19: "Whatever can be imported from GirderDetail should be", and the transferred inputs highlighted; HANDOFF.md 4.9).
    Active only for GirderDetail demands that carry girderDetail.loads (payloads from 2026-10-19 on); nothing for older payloads, MIDAS/MCT imports or the
    built-in analysis. gdXfer(ext).set = the inputs taken from GirderDetail (1:1 values only), applied by gdOverlay in computeAll, the report and the
@@ -9696,12 +9738,14 @@ function computeAll(inp){
     const NLc=clamp(Math.round(+inp.loads.NL||1),1,4), mpf=[1.2,1.0,0.85,0.65][NLc-1];
     const dfDefl=mpf*NLc/Math.max(+geom.nGirders,1);
     const dLL=dfDefl*Math.max(dTruck,0.25*dTruck+dLane), dLim=Lin/800;
+    const gdLL=useExt? gdLLOf(inp.external,ext.sel) : null;   // S2-7: GirderDetail's live load deflection of this span (check SA3); ST-Girder's dLL stays as the cross-check
     const stress={fTop,fBot,fServLim,s2Coef,s2Composite,s2CoefLabel,dLL,dLim,dfDefl,dTruck,dLane,
-      Mdc1:stMaxPos.M1, Msid:stMaxPos.M2+stMaxPos.Mw, Mll:stMaxPos.Ml, s2Gov, s2WebGov, xGov:stMaxPos.x};
+      Mdc1:stMaxPos.M1, Msid:stMaxPos.M2+stMaxPos.Mw, Mll:stMaxPos.Ml, s2Gov, s2WebGov, xGov:stMaxPos.x, ...(gdLL?{gdLL}:{})};
 
     checks.push({n:'Service II flange ('+ (s2Gov.tag||'') +')', t:'SrvII', v:Math.abs(s2Gov.f||0), lim:s2Gov.lim||1, r:s2Gov.r, u:'ksi', ref:'6.10.4.2.2', loc:s2Gov.x||0});
     if(hasNeg&&s2WebGov.r>0) checks.push({n:'Service II web bend-buckle (−M)', t:'SrvII web', v:s2WebGov.f, lim:s2WebGov.Fcrw, r:s2WebGov.r, u:'ksi', ref:'6.10.4.2.2', loc:s2WebGov.x});
-    checks.push({n:'LL deflection ≤ L/800', t:'LL defl', v:dLL, lim:dLim, r:dLL/dLim, u:'in', ref:'2.5.2.6.2', loc:Lft/2});
+    if(gdLL){ if(gdLL.status!=='na') checks.push({n:'LL deflection ≤ L/'+gdLL.ratio+' (GirderDetail SA3)', t:'LL defl', v:gdLL.d, lim:gdLL.lim, r:gdLL.d/gdLL.lim, u:'in', ref:'2.5.2.6.2', loc:clamp(gdLL.xl,0,Lft)}); }   // 'na': the owner rule applies to the typical interior beam only (reported, not checked)
+    else checks.push({n:'LL deflection ≤ L/800', t:'LL defl', v:dLL, lim:dLim, r:dLL/dLim, u:'in', ref:'2.5.2.6.2', loc:Lft/2});
 
     /* ---------- Strength I flexure (6.10.7 positive · 6.10.8 negative) ---------- */
     const phif=1.0;
@@ -9965,6 +10009,7 @@ function computeAll(inp){
       splices:segP.filter(g=>g.x1>0.05&&g.x1<Lft-0.05).map(g=>g.x1)};
     camber.xDC1=camSt[argMax(shDC1)].x; camber.xTot=camSt[argMax(shTot)].x;   // CF3: locations of the maxima (headline)
     camber.camTotMax=Math.max(...shTot.map(Math.abs));    // largest per-station total (vs camTot = sum of the stage maxima)
+    { const gc=useExt? gdCamOf(ext,camber.shape) : null; if(gc) camber.gd=gc; }   // S2-7: GirderDetail's dead load deflections (the camber); the integration above is the cross-check
 
     /* ---------- Fatigue (load-induced, 6.6.1 / 6.10.5) — fully worked ---------- */
     // Detail-category constants A (ksi³) and constant-amplitude fatigue threshold (ΔF)TH (ksi),
@@ -11406,7 +11451,8 @@ function StressTab({R}){
     <div className="bigres">
       <div className={'br '+(botPass?'p':'f')}><div className="l">Service II — bottom flange</div><div className="n">{fmt(st.fBot.serv2,1)}</div><div className="u">ksi vs {fmt(st.fServLim,1)} · {fmt(st.s2Coef,2)}RhFyf</div></div>
       <div className={'br '+(topPass?'p':'f')}><div className="l">Service II — top flange</div><div className="n">{fmt(st.fTop.serv2,1)}</div><div className="u">ksi vs {fmt(st.fServLim,1)}</div></div>
-      <div className={'br '+(defPass?'p':'f')}><div className="l">LL deflection</div><div className="n">{fmt(st.dLL,2)}</div><div className="u">in vs L/800 = {fmt(st.dLim,2)}</div></div>
+      {st.gdLL? <div className={'br '+(st.gdLL.status==='na'?'':st.gdLL.d<=st.gdLL.lim*1.0001?'p':'f')}><div className="l">LL deflection (GirderDetail)</div><div className="n">{fmt(st.gdLL.d,2)}</div><div className="u">in vs L/{st.gdLL.ratio} = {fmt(st.gdLL.lim,2)}{st.gdLL.status==='na'?' · reported':''}</div></div>
+      : <div className={'br '+(defPass?'p':'f')}><div className="l">LL deflection</div><div className="n">{fmt(st.dLL,2)}</div><div className="u">in vs L/800 = {fmt(st.dLim,2)}</div></div>}
     </div>
 
     <Card title="What Service II checks" refTag="AASHTO 6.10.4.2.2 · permanent-deformation control">
@@ -11455,8 +11501,9 @@ function StressTab({R}){
         rows={[row('Top flange (comp.)',st.fTop),row('Bottom flange (tens.)',st.fBot)]}/>
       <div className="hint">Stress accumulates on the section active at each stage: <b>DC1</b> (self-weight + wet deck) on bare steel, <b>DC2 + DW</b> on the long-term (3n) composite, <b>LL+IM</b> on the short-term (n) composite. Service II factors live load by <b>{lfP(lfS(R).gS2,'1.30')}</b> (Table 3.4.1-1{lfS(R).m!==1?'; 1.30 × the owner multiplier m':''}). Both flanges are limited to <b>{fmt(st.s2Coef,2)} R_h F_yf = {fmt(st.fServLim,1)} ksi</b> — 0.95 for a composite section, 0.80 for both flanges of a noncomposite one (6.10.4.2.2){st.s2Composite?'':', which is the case here because the deck is switched off'}. The bottom (tension) flange, farthest from the high composite neutral axis, typically governs. Flange lateral bending f_ℓ is taken as 0 for this straight girder (the check adds f_ℓ/2 to the bottom flange when present).</div>
     </Card>
-    <Card title="Live-load deflection" refTag="2.5.2.6.2 (optional)">
-      <div className="hint">Δ_truck(incl. IM) = <b>{fmt(st.dTruck,3)} in</b> · Δ_lane = <b>{fmt(st.dLane,3)} in</b> · deflection DF (all lanes ÷ girders) = <b>{fmt(st.dfDefl,3)}</b> → Δ_LL = <b>{fmt(st.dLL,3)} in</b> vs L/800 = <b>{fmt(st.dLim,3)} in</b> ({defPass?'OK':'N.G.'}). Optional criterion; taken as the larger of the design truck alone or 25% truck + lane, on the short-term composite I = {fmt(R.cN.I,0)} in⁴.</div>
+    <Card title="Live-load deflection" refTag={st.gdLL?(st.gdLL.ref||'2.5.2.6.2'):'2.5.2.6.2 (optional)'}>
+      {st.gdLL&&<GdLLNote R={R}/>}
+      <div className="hint">{st.gdLL?<b>Cross-check, ST-Girder’s own estimate (simple span L, midspan I): </b>:null}Δ_truck(incl. IM) = <b>{fmt(st.dTruck,3)} in</b> · Δ_lane = <b>{fmt(st.dLane,3)} in</b> · deflection DF (all lanes ÷ girders) = <b>{fmt(st.dfDefl,3)}</b> → Δ_LL = <b>{fmt(st.dLL,3)} in</b> vs L/800 = <b>{fmt(st.dLim,3)} in</b> ({defPass?'OK':'N.G.'}). Optional criterion; taken as the larger of the design truck alone or 25% truck + lane, on the short-term composite I = {fmt(R.cN.I,0)} in⁴.</div>
       <DLinks items={[{to:'trans',seg:sgI(R,spMidIdx(R)),what:'I (short-term n, midspan segment)'}]}/>
     </Card>
   </div>);
@@ -12066,8 +12113,8 @@ function CamberBreakdown({R,fig}){
 }
 
 /* Camber derivation, shared by the Camber tab and the calculation-sheet report (display only; moved out of CamberTab unchanged). */
-function camberDeriv(R){ const cm=R.camber;
-  return (    <Deriv title="Dead-load deflection & camber" refTag="stage-correct sections · double integration">
+function camberDeriv(R,xc){ const cm=R.camber;   // xc (S2-7): shown as the cross-check of GirderDetail's camber
+  return (    <Deriv title={xc?'Cross-check: ST-Girder’s dead-load deflection by double integration over this span':'Dead-load deflection & camber'} refTag="stage-correct sections · double integration">
       <VarTable title="Variables — camber" rows={[
         ['L','Span length',R.geom.L,'ft'],['E_s','Steel modulus',R.matR.Es,'ksi'],
         ['I_bare','Bare-steel inertia (midspan)',R.bare.I,'in⁴'],
@@ -12093,6 +12140,17 @@ function camberDeriv(R){ const cm=R.camber;
 function CamberTab({R}){
   if(!R.ok) return null;
   const cm=R.camber;
+  if(cm.gd) return (<div>
+    <div className="bigres">
+      <div className="br"><div className="l">Total DL camber (max, GirderDetail)</div><div className="n">{fmt(cm.gd.totMax,2)}</div><div className="u">in ↑ offset · at x = {fmt(cm.gd.xTot,1)} ft</div></div>
+      <div className="br"><div className="l">ST-Girder integration (cross-check)</div><div className="n">{fmt(cm.camTotMax,2)}</div><div className="u">in · at x = {fmt(cm.xTot,1)} ft</div></div>
+    </div>
+    <Card title="What camber is" refTag="dead-load deflection offset">
+      <div className="hint">Steel girders are fabricated with a built-in upward curvature (<b>camber</b>) equal and opposite to the dead-load deflection, so the finished bridge sits on the intended profile grade. With GirderDetail’s demands the camber is GirderDetail’s (its continuous staged model, below); ST-Girder’s own stage-by-stage integration over this span follows as a cross-check.</div>
+    </Card>
+    {gdCamDeriv(R)}
+    {camberDeriv(R,true)}
+  </div>);
   return (<div>
     <div className="bigres">
       <div className="br"><div className="l">Total DL camber (max)</div><div className="n">{fmt(cm.camTotMax,2)}</div><div className="u">in ↑ offset · at x = {fmt(cm.xTot,1)} ft</div></div>
@@ -12743,7 +12801,7 @@ function crModel(R,inp,o){
         ['φVn at the governing shear station',fmt(R.shearR.gov.phiVn,0),'kip (x = '+fmt(R.shearR.gov.x,1)+' ft, '+(R.shearR.gov.isEnd?'end panel at an abutment':R.shearR.gov.tensionField?'tension field':'C·Vp')+')'],
         ['Peak Vu',fmt(R.shearR.VuPeak,0),'kip'],
         ['Service II bottom flange',fmt(R.stress.fBot.serv2,1),'ksi'],
-        ['Total DL camber (max)',fmt(R.camber.camTotMax,2),'in at x = '+fmt(R.camber.xTot,1)+' ft'],
+        R.camber.gd? ['Total DL camber (max, GirderDetail)',fmt(R.camber.gd.totMax,2),'in at x = '+fmt(R.camber.gd.xTot,1)+' ft (ST-Girder cross-check '+fmt(R.camber.camTotMax,2)+' in)'] : ['Total DL camber (max)',fmt(R.camber.camTotMax,2),'in at x = '+fmt(R.camber.xTot,1)+' ft'],
         ['Inventory / Operating RF',R.rating.oos?OOS_TXT:fmt(R.rating.govInv,2)+' / '+fmt(R.rating.govOpr,2),''],
       ]}/>
       <p className="cr-p cr-concl"><b>{allPass?'All limit-state checks pass.':'One or more checks fail — see the table above.'}</b> {R.checks.length} checks, {R.checks.filter(c=>c.pass).length} pass.{R.pnaOOS?<b> Not all checks pass: {R.checks.filter(c=>c.oos).length} check(s) are OUT OF SCOPE because the plastic neutral axis falls below the web (see 1. Objectives).</b>:null} Design aid only — independent verification by a licensed engineer is required.</p>
@@ -12847,10 +12905,11 @@ function crModel(R,inp,o){
         rows={cc.map(q=>[fmt(q.x,2),q.region==='neg'?'−M':'+M',fmt(q.Mc,0),fmt(q.Vc,1),fmt(q.region==='neg'?q.fBot:q.fTop,2),fmt(q.Fnc.Fnc,1),fmt(q.dcFLB,3),fmt(q.dcYield,3),fmt(q.dcWeb,3),fmt(q.dcTen,3),fmt(q.dcV,3)])}/>); }
     { const s=S('serv','Service II and live-load deflection',{ref:'6.10.4 · 2.5.2.6.2'}), st2=R.stress, ch=R.chartS2||[], i=crNear(ch,st2.s2Gov?st2.s2Gov.x:L/2);
       sub(s,'Service II flange stresses at the governing station (x = '+fmt(ch[i]?ch[i].x:0,1)+' ft)','6.10.4.2.2',ch[i]?<CrTab el={s2Deriv(R,ch[i])}/>:null,ck('SrvII','SrvII web')); tag(s,'serv.s2');
-      sub(s,'Live-load deflection (optional criterion)','2.5.2.6.2',<div className="cr-tab">
+      if(st2.gdLL) sub(s,'Live-load deflection (from GirderDetail, span '+st2.gdLL.span+')',st2.gdLL.ref||'2.5.2.6.2',<div className="cr-tab"><GdLLNote R={R}/></div>,ck('LL defl'));   // S2-7
+      sub(s,st2.gdLL?'Live-load deflection, cross-check (ST-Girder’s simple-span estimate)':'Live-load deflection (optional criterion)','2.5.2.6.2',<div className="cr-tab">
         <ML s={Tx`\Delta_{truck}=${nx(st2.dTruck,3)}\;\text{in (incl. IM)}\qquad\Delta_{lane}=${nx(st2.dLane,3)}\;\text{in}\qquad DF=\frac{m\,N_L}{N_b}=${nx(st2.dfDefl,3)}`}/>
         <ML s={Tx`\Delta_{LL}=DF\cdot\max(\Delta_{truck},\;0.25\Delta_{truck}+\Delta_{lane})=${nx(st2.dLL,3)}\;\text{in}\;\le\;\frac{L}{800}=${nx(st2.dLim,3)}\;\text{in}\;${st2.dLL<=st2.dLim?'\\checkmark':'\\text{N.G.}'}`}/>
-        <div className="mnote">Design truck at midspan and the lane load on the short-term composite I = {fmt(R.cN.I,0)} in⁴ (midspan segment); all design lanes loaded and distributed equally to the girders.</div></div>,ck('LL defl'));
+        <div className="mnote">Design truck at midspan and the lane load on the short-term composite I = {fmt(R.cN.I,0)} in⁴ (midspan segment); all design lanes loaded and distributed equally to the girders.{st2.gdLL?' Shown for comparison only: the check above uses GirderDetail’s value.':''}</div></div>,st2.gdLL?[]:ck('LL defl'));
       if(all) sub(s,'All stations','6.10.4.2.2 · ksi',<CrT wide head={['x (ft)','f_bot (+LL)','f_top (+LL)','f_bot (−LL)','f_top (−LL)','Limit']}
         rows={ch.map(q=>[fmt(q.x,2),fmt(q.bP,2),fmt(q.tP,2),fmt(q.bN,2),fmt(q.tN,2),fmt(q.lim,2)])}/>); }
     { const s=S('flex','Strength I flexure',{ref:'6.10.7 · 6.10.8'}), fc=R.flexCalc||[], i=crNear(fc,(R.flex.oos?R.stress.xGov:(R.flex.gov&&R.flex.gov.x))||0);
@@ -12922,7 +12981,8 @@ function crModel(R,inp,o){
   }
   // 15. Camber
   if(o.camber){ const s=S('camber','Camber (dead-load deflection)',{ref:'stage sections · double integration'});
-    sub(s,'Dead-load deflection and camber','DC1 bare · DC2, DW 3n',<CrTab el={camberDeriv(R)}/>); }
+    if(R.camber.gd) sub(s,'Dead-load deflection and camber (from GirderDetail)','Structural analysis · staged sections',<CrTab el={gdCamDeriv(R)}/>);   // S2-7
+    sub(s,R.camber.gd?'Cross-check: ST-Girder’s double integration over this span':'Dead-load deflection and camber','DC1 bare · DC2, DW 3n',<CrTab el={camberDeriv(R)}/>); }
   // 16. Drawings
   if(o.drawing){ S('drawing','Drawings',{brk:true,body:<div className="cr-fig">
     <div className="cr-figbox"><CrossSection R={R}/></div><p className="cap">Cross-section at midspan (midspan flange segment), deck and haunch to scale.</p>
@@ -18533,6 +18593,20 @@ function gdStDetails() {
         cyclesBy: (fa.rows || []).map(r => ({ name: r.name, pos: posOf(r.name), n: nm(r.n) })).filter(r => r.n > 0) } : null };
   } catch (e) { return null; }
 }
+/* S2-7 (2026-10-22, SBD stage 2 item 10; HANDOFF.md 4.9): this girder's live load deflection as Structural analysis checks it (SA3: the largest
+   g_Δ·max(Δ_truck, 0.25Δ_truck + Δ_lane) per span from the influence lines of the staged model, the limit L/x of the module or the owner rule, and the
+   check status: pass, warn (the optional AASHTO criterion or an owner's preferred limit exceeded) or na (owner rule for the typical interior beam only:
+   reported), and a description of the dead load deflections sent per station (D_DC1steel, D_DC1wet, D_DC2DW, D_UT). Read only. */
+function gdStDefl(R) {
+  try {
+    const C = GM.sa.checks(R).find(c => c.id === 'SA3'); if (!C || !Array.isArray(R.lld)) return null; const v = x => typeof x === 'number' && isFinite(x) ? Math.round(x * 1e4) / 1e4 : null;
+    const spans = R.lld.map((d, k) => { const it = C.items[k] || {}, lim = it.r > 0 ? d.d / it.r : d.lim;
+      return { span: d.k + 1, x: v(d.x), d: v(d.d), dT: v(d.dT), dL: v(d.dL), gD: v(d.gD), lim: v(lim), ratio: lim > 0 ? Math.round(d.Ls * 12 / lim) : null, status: it.st || 'na' }; });
+    return { source: 'GirderDetail Structural analysis (check SA3; dead load deflections of the camber table)',
+      ll: { title: C.title, ref: C.ref, method: 'all lanes loaded and all girders deflecting equally (g_Δ from the LLDF and DLs module), HL-93 design truck with IM or 25% of it plus the lane load, short-term composite section with the cracked zones, influence lines of the staged continuous model', spans },
+      camber: { fields: ['D_DC1steel', 'D_DC1wet', 'D_DC2DW', ...(R.dU ? ['D_UT'] : [])], units: 'in, downward +', method: 'virtual work on the whole continuous girder: steel and DC1 on the steel section, DC2 + DW on the long-term (3n) composite section, cracked zones where the module uses them; existing utilities on the steel section (the future allowance is not in the camber)' } };
+  } catch (e) { return null; }
+}
 /* S2-6 (2026-10-22, SBD stage 2 item 9; HANDOFF.md 4.9): the Shear connectors module's results as it computes them now from its own inputs (P.sc):
    SC1 fatigue pitch per pitch zone, SC2 number of connectors for strength per region, SC6 the strength count with the studs omitted over the top flange
    field splice plates. Sent as girderDetail.details.studs.results (additive; schemaVersion 1) so ST-Girder shows and checks the studs per zone as this
@@ -18587,6 +18661,9 @@ function gdStPayload(g, addPL) {
     // M_UT/V_UT existing utilities, M_UF/V_UF future utility allowance, unfactored, on the steel (noncomposite) section, shears in the schema's sign convention
     if (R.MUT) Object.assign(o, { M_UT: r3(R.MUT[i]), V_UT: r3(-R.VUT[e]) });
     if (R.MUF) Object.assign(o, { M_UF: r3(R.MUF[i]), V_UF: r3(-R.VUF[e]) });
+    // S2-7 (2026-10-22, HANDOFF.md 4.9, optional): dead load deflections at this node (in, downward +), as the camber table of this module: steel (with the
+    // cross-frames), deck/haunch/SIP and other DC1 (both on the steel section), DC2 + DW (long-term composite), existing utilities (steel section) only when present
+    Object.assign(o, { D_DC1steel: r4(R.dS[i]), D_DC1wet: r4(R.dDk[i]), D_DC2DW: r4(R.dSD[i]), ...(R.dU ? { D_UT: r4(R.dU[i]) } : {}) });
     // S2-8 (2026-10-22; HANDOFF.md 4.9, optional, additive): the construction live load on the continuous girder (M_CL/V_CL, unfactored; shear in this schema's convention)
     // and, where Structural analysis has a deck-placement sequence (SA7), the noncomposite deck-placement moment envelope M_DCc (as Girder section's rows take it)
     Object.assign(o, { M_CL: r3(R.MCL[i]), V_CL: r3(-R.VCL[e]), ...(MDCc ? { M_DCc: r3(MDCc[i]) } : {}) });
@@ -18631,6 +18708,7 @@ function gdStPayload(g, addPL) {
         future: R.MUF ? { w: r4(R.wUF), strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0, camber: false, deckPlacement: false } : null } } : {}) } };
   const ldIn = gdStLoads(R, pl); if (ldIn) p.girderDetail.loads = ldIn;   // GDL (2026-10-19): the load inputs of this girder (optional, display in ST-Girder)
   const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;   // GDX (2026-10-19): the detail-module inputs (optional; ST-Girder imports the 1:1 ones)
+  const dfl = gdStDefl(R); if (dfl) p.girderDetail.deflection = dfl;   // S2-7 (2026-10-22): live load deflection per span (check SA3) and what the camber is (optional)
   // S2-9 (2026-10-22): GirderDetail's negative-flexure result per span (optional, additive; ST-Girder uses it in place of its own 6.10.8 check while its plates and F_y are the payload's)
   const nf = gdStNegFlex(g); if (nf && !nf.why) p.girderDetail.checks = { negFlex: nf };
   else if (nf) p.notes.push(`GirderDetail's negative-flexure result (girderDetail.checks.negFlex) is not included: ${nf.why}. ST-Girder uses its own Article 6.10.8 check.`);
