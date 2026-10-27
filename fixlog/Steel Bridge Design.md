@@ -21469,7 +21469,7 @@ Condition 9.2), 6.6.1.2.5 (Eqs. 6.6.1.2.5-1, -2; Table 6.6.1.2.5-1), 6.10.10.4.1
 - Across the 100 regenerated `gd_*` payloads: before (single zone, main after S2-1/S2-2) strength fails 80, fatigue fails 76 (85 / 76 on all 108 payloads; STAGE2 had 85 / 80 before S2-1); after
   0 / 0 (largest SC2 ratio 0.983, largest SC1 ratio 0.999), equal to GirderDetail's own SC1/SC2 results (copied, not recomputed).
 
-**How verified:** see the PR (syntax, gd run with `--save-st`, full st and st-span runs, sbd-verify, a610-prop).
+**How verified:** see the PR: subset tested (gd 3 cases, st 12 cases, st-span 3 payloads × spans 2, 3, sbd-verify, a610-prop, syntax); the 100 payloads were regenerated with `--save-st`; full suite runs at the end of stage 2.
 
 **Other copies:** none.
 
