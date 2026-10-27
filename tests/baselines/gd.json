@@ -2,13 +2,13 @@
  "tool": "gd",
  "cases": {
   "builtin / AASHTO": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9); gd.stPayloads: claude/sbd-s2-6-studs-per-zone (S2-6, B readouts); gd.stPayloads: claude/sbd-s2-7-defl-camber (S2-7, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8)",
    "sections": {
     "gd.project": "fad66a99b103",
     "pl.project": "6f839df755d7",
     "pl.checks": "9378dfe9cb51",
     "pl.analysis": "05d6b949a809",
-    "gd.stPayloads": "b50d259ee275",
+    "gd.stPayloads": "46dd2a831f6f",
     "mod.df": "c607b04eb133",
     "rpt.df": "62fab35e5ce5",
     "mod.sa": "eed71e4ccbc7",
@@ -206,13 +206,13 @@
    }
   },
   "builtin28 / MassDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9); gd.stPayloads: claude/sbd-s2-6-studs-per-zone (S2-6, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8)",
    "sections": {
     "gd.project": "09c27ff765dc",
     "pl.project": "706101e3e5d1",
     "pl.checks": "7464743625db",
     "pl.analysis": "ad52e57dc467",
-    "gd.stPayloads": "a638368de94d",
+    "gd.stPayloads": "93ae4362d963",
     "mod.df": "f53de9fdedf0",
     "rpt.df": "438552f34827",
     "mod.sa": "e4af9253f053",
@@ -648,13 +648,13 @@
    }
   },
   "util / CTDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9); gd.stPayloads: claude/sbd-s2-6-studs-per-zone (S2-6, B readouts)",
+   "a": "claude/sbd-s2-8-constr (S2-8)",
    "sections": {
     "gd.project": "e94ec5bea175",
     "pl.project": "128e4d9562d7",
     "pl.checks": "f307d6e22e88",
     "pl.analysis": "21c13b58a7d3",
-    "gd.stPayloads": "b052c0e38532",
+    "gd.stPayloads": "f38e9eac169f",
     "mod.df": "c607b04eb133",
     "rpt.df": "926c592b65e7",
     "mod.sa": "c5373fe27183",
