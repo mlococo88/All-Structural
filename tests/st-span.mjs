@@ -141,7 +141,7 @@ async function stSpan(src, c, n) {
     await p.waitForSelector('.tabs .tab', { timeout: 60000 }); await p.waitForTimeout(1000);
     await stApply(p, src.file, readPayload(c.payload));
     await pickSpan(p.mainFrame(), n);
-    return { R: await stReadout(p.mainFrame()), errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: [] };
+    return { R: await stReadout(p.mainFrame()), errs: errs.filter(e => !/^Failed to load resource|^\[BABEL\] Note: The code generator has deoptimised/.test(e)), dialogs, blocked: [...blocked], idle: [] };
   } finally { await b.close(); }
 }
 async function sbdSpan(src, c, n) {
@@ -156,7 +156,7 @@ async function sbdSpan(src, c, n) {
     await f.waitForFunction(pa => { try { const s = JSON.parse(localStorage.getItem('stgirder.session')); return s && s.external && s.external.producedAt === pa; } catch (e) { return false; } }, pay.producedAt, { timeout: 20000 });
     await f.waitForTimeout(800);
     await pickSpan(f, n);
-    return { R: await stReadout(f), errs: errs.filter(e => !/^Failed to load resource/.test(e)), dialogs, blocked: [...blocked], idle: idle.map(x => x.via + ' ' + x.ms + ' ms') };
+    return { R: await stReadout(f), errs: errs.filter(e => !/^Failed to load resource|^\[BABEL\] Note: The code generator has deoptimised/.test(e)), dialogs, blocked: [...blocked], idle: idle.map(x => x.via + ' ' + x.ms + ' ms') };
   } finally { await b.close(); }
 }
 // every asked span of one payload, one after the other: { R: { span: readout }, errs, dialogs, blocked, idle } (messages of all spans together)

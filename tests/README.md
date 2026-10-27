@@ -99,7 +99,7 @@ Each `same` case opens A (`--a`, default `origin/main`) and B (`--b`, default th
 
 ## Output
 
-For each case, one line per section with the hash of A and B and `same` or `DIFFERENT`, then for each different section the values that differ (path, A, B), then console errors, dialogs, blocked requests and how long the idle wait took. The exit code is 0 when every section is identical, 1 on a difference, 2 on an error (including console errors). Raw readouts (JSON) are saved in `--out`.
+For each case, one line per section with the hash of A and B and `same` or `DIFFERENT`, then for each different section the values that differ (path, A, B), then console errors, dialogs, blocked requests and how long the idle wait took. The exit code is 0 when every section is identical, 1 on a difference, 2 on an error (including console errors). Not counted as console errors: "Failed to load resource" and Babel's size note "[BABEL] Note: The code generator has deoptimised the styling …" (ST-Girder's JSX script passed 500 KB with SBD stage 2, S2-6; the note concerns only the formatting of Babel's output; `compare.mjs`, `st-span.mjs`, `sbd-verify.mjs`, as `ps-compare.mjs` already did). Raw readouts (JSON) are saved in `--out`.
 
 Volatile values are normalized before comparing: ISO time stamps and dates (`2026-10-22`), local date/time text (`10/22/2026, 10:05:19 AM`), millisecond time stamps under `ts`/`savedAt`/`producedAt`/`updatedAt`/`seenAt`-like keys, the `file://` folder a page was opened from, and GirderDetail's file name (`Steel Bridge Beam Modules.html` and `Steel Bridge Design.html` both read `(GirderDetail file)`, so the rename of the merge compares equal).
 
