@@ -21816,3 +21816,66 @@ with the largest fatigue shear, and one b_eff (its own input; in the built-in pr
 114 in). Every girder's payload therefore carries the same results; for an interior girder Q and P_n use the module's b_eff. Built-in G2 with 114 in:
 P_n = min(4,837.5, 2,052) = 2,052 kip, n_req = 207.5 ≤ 246 (0.84, still PASS); Q/I about 2 % higher. Whether the module should check each girder
 type (or take the smallest Q-producing b_eff conservatively) is a GirderDetail question, not changed here.
+
+
+## 2026-10-23 — PR: claude/sbd-s2-7-defl-camber (S2-7, SBD stage 2 item 10: live load deflection and camber from GirderDetail's Structural analysis; GirderDetail-demand results change; PR link added after merge)
+
+**Engineering result change (CLAUDE.md §4), GirderDetail demands only.** Engineer decision (stage 2): the GirderDetail method becomes the method. With
+a GirderDetail payload carrying the new fields, ST-Girder's live load deflection check of the selected span is GirderDetail's check SA3 (Δ, limit and
+status), and its camber is GirderDetail's dead load deflections per station; ST-Girder's own simple-span Δ_LL and its double integration stay as
+cross-checks (shown next to them). Stand-alone ST-Girder (built-in analysis, MIDAS/MCT imports) and payloads without the fields are unchanged.
+Hand-off: additive optional fields (schemaVersion 1; HANDOFF.md 4.9). GirderDetail's own results are unchanged.
+
+### S2-7-a. Host: the fields   [hand-off, additive]
+- `gdStPayload`, station builder `row(…)` (anchor `if (R.MUF) Object.assign(o, { M_UF: r3(R.MUF[i]), V_UF: r3(-R.VUF[e]) });`): added
+  `Object.assign(o, { D_DC1steel: r4(R.dS[i]), D_DC1wet: r4(R.dDk[i]), D_DC2DW: r4(R.dSD[i]), ...(R.dU ? { D_UT: r4(R.dU[i]) } : {}) });` (in, downward +:
+  the Structural analysis camber table at the node).
+- After `const dtIn = gdStDetails(); …`: `const dfl = gdStDefl(R); if (dfl) p.girderDetail.deflection = dfl;`. New function `gdStDefl(R)` (before the S2-6
+  `gdStStudRes`): runs `GM.sa.checks(R)` (read only), takes check SA3 and `R.lld`, and returns `{ source, ll: { title, ref, method, spans: [{ span, x, d,
+  dT, dL, gD, lim, ratio, status }] }, camber: { fields, units, method } }`; `lim = d / r` of the SA3 item (the module's or the owner's L/x), `ratio =
+  round(12L/lim)`, `status` = the item's pass / warn / fail / na (na: an owner rule for the typical interior beam, reported for an exterior girder).
+
+### S2-7-b. ST-Girder (st-src)   [calculation]
+- Helpers after `GdStudCards` (S2-6): `gdLLOf(ext, sel)` (the selected span's SA3 entry, validated), `gdCamOf(ext, shape)` (the span's stations with the
+  `D_…` fields: steel, wet, DC2 + DW, UT, total; ST-Girder's own total interpolated at the same x for the cross-check), `GdLLNote`, `gdCamRows`,
+  `gdCamDeriv` (card id `stg-d-gdcam`).
+- **computeAll, Service II / deflection.** Before:
+  `checks.push({n:'LL deflection ≤ L/800', t:'LL defl', v:dLL, lim:dLim, r:dLL/dLim, u:'in', ref:'2.5.2.6.2', loc:Lft/2});`
+  After: `const gdLL=useExt? gdLLOf(inp.external,ext.sel) : null;` (also stored as `stress.gdLL`), then
+  `if(gdLL){ if(gdLL.status!=='na') checks.push({n:'LL deflection ≤ L/'+gdLL.ratio+' (GirderDetail SA3)', t:'LL defl', v:gdLL.d, lim:gdLL.lim, r:gdLL.d/gdLL.lim, u:'in', ref:'2.5.2.6.2', loc:clamp(gdLL.xl,0,Lft)}); } else <the line above>`.
+- **computeAll, camber**, after `camber.camTotMax=…`: `{ const gc=useExt? gdCamOf(ext,camber.shape) : null; if(gc) camber.gd=gc; }`.
+- **Display:** Stresses tab headline and Live-load deflection card (GirderDetail's Δ worked: g_Δ·max(Δ_truck, 0.25Δ_truck + Δ_lane) vs L/x, with ST-Girder's
+  own value as the cross-check); Camber tab (headline = GirderDetail's maximum, the GirderDetail card with plot and table and a column "ST-Girder
+  integration" and the difference, then ST-Girder's derivation titled as the cross-check: `camberDeriv(R,xc)`); report 7.2 (GirderDetail subsection,
+  then the cross-check subsection without the check line), camber section (GirderDetail subsection + cross-check), summary row "Total DL camber (max,
+  GirderDetail)" with the cross-check value.
+
+**Before / after (expressions):**
+- Live load deflection, before: Δ_LL = (m·N_L/N_b)·max(Δ_truck, 0.25Δ_truck + Δ_lane), Δ_truck = 1.33·Σ P·a(3L² − 4a²)/(48EI) with the axles at midspan of
+  a simple span L, Δ_lane = 5wL⁴/(384EI), I = short-term composite of the midspan segment; limit L/800 always.
+  After: Δ_LL = g_Δ·max(Δ_truck, 0.25Δ_truck + Δ_lane) at the station of the span with the largest value, from the influence lines of GirderDetail's staged
+  continuous model (short-term composite with its cracked zones); limit = Structural analysis' L/x or the owner's mandatory limit (RIDOT BDM 2.4.2.6,
+  MassDOT Part I 3.5.6.1: L/1000 with sidewalks or pedestrians); not checked where the owner limits it to the typical interior beam (MassDOT, exterior
+  girder: reported).
+- Camber, before: double integration of M/(EI) over the span with ST-Girder's segment I (bare steel for DC1, 3n for DC2, DW).
+  After: GirderDetail's virtual-work deflections of the whole continuous girder (steel and the rest of DC1 on the steel section, DC2 + DW on the long-term
+  composite of the staged model, existing utilities on the steel section).
+
+**Governing provisions:** AASHTO LRFD 10th Ed. (2024) Arts. 2.5.2.6.2 and 3.6.1.3.2 (live load deflection, optional criterion), 3.6.1.1.2 (multiple
+presence in g_Δ); owner manuals as cited by SA3 (RIDOT BDM 2.4.2.6; MassDOT LRFD Bridge Manual Part I 3.5.6.1); camber: C6.10.1.2 / 6.7.2 (staged sections).
+
+**Check case** (`tests/projects/st/gd_builtin_AASHTO_G2.json`, regenerated by this PR; span 1, L = 110 ft, AASHTO):
+- Before: Δ_truck = 1.381 in, Δ_lane = 0.667 in, g = 0.85·3/5 = 0.51 → Δ_LL = 0.51·max(1.381, 0.25(1.381) + 0.667 = 1.012) = 0.704 in ≤ L/800 = 110(12)/800
+  = 1.650 in → 0.43, PASS.
+- After: GirderDetail SA3, span 1 at x = 52 ft: Δ_LL = 0.51·max(0.981, 0.764) = 0.500 in ≤ 1.650 in → 0.30, PASS. ST-Girder's 0.704 in shown as the
+  cross-check (+41 %).
+- Camber, before: ST-Girder total 1.602 in at x = 44.5 ft (DC1 1.376 + DC2 0.123 + DW 0.102). After: GirderDetail at x = 44 ft: steel 0.2354 + deck,
+  haunch, SIP, other DC1 1.1408 + DC2 + DW 0.2292 = 1.605 in (maximum); cross-check 1.602 in (−0.2 %).
+- Across the 100 regenerated `gd_*` payloads: no live load deflection pass/fail flip; the owner L/1000 limit applies in 10 cases (xsA under RIDOT and
+  MassDOT): GirderDetail's Δ ≤ 0.434 in vs 1.32 in, and ST-Girder's own Δ would also pass (largest 0.611 in, 0.46 of L/1000); 10 MassDOT exterior girders
+  (G1, G5 of every project) have status na: the check is not entered there (it was a pass before). ST-Girder's Δ is 1.405 to 1.410 times GirderDetail's;
+  camber ST-Girder vs GirderDetail −0.15 % to −0.63 %.
+
+**How verified:** subset tested (see the PR); full suite runs at the end of stage 2.
+
+**Other copies:** none.
