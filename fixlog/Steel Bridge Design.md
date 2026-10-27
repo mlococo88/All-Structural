@@ -21666,6 +21666,9 @@ The 8 older payloads of `tests/projects/st` (no field) keep ST-Girder's own chec
   and to the baseline in a rerun against origin/main, run-to-run variation, not this change).
 - `tests/projects/st/s29_builtin28_RIDOT_G2.json`, `s29_xsA_MassDOT_G1.json` (new): hand-offs with the field (this branch's `--save-st`), so
   `--tool st` covers the GirderDetail path; `tests/baselines/st.json`: these two cases recorded. `tests/README.md`: the two files.
+- `tests/baselines/st_interior.json`: `gd_builtin_AASHTO_G3`, `gd_xsA_RIDOT_G2`, `gd_builtin28_RIDOT_G2`, spans 2 and 3, re-recorded from this branch's
+  run (`st-span.mjs --target sbd`: the view loads the live hand-off, with the field). Subset tested (engineer's test policy 2026-10-27); the other
+  interior cases are re-recorded at the end-of-stage-2 full run.
 
 **Open items (engineer):**
 - R_b (6.10.1.10.2, `rbFactor`) and Appendix A6.2.2 (`A6.lrw`) still use λ_rw = 5.7√(E/F_yc); the 10th Ed. defines λ_rw with c_rw (Eqs.
