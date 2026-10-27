@@ -21391,6 +21391,12 @@ No saved key or format changes.
   Before: −M_u = 1.3125(843.62 + 165.30) + 1.575(136.91) + 2.205(−684.44) = 1,324.21 + 215.64 − 1,509.19 = +30.65 k-ft (no negative demand).
   After: 0.90/1.05 = 0.8571, 0.65/1.05 = 0.6190: −M_u = 0.8571(1,008.92) + 0.6190(136.91) − 1,509.19 = 864.79 + 84.75 − 1,509.19 = −559.65 k-ft.
   +M_u at the same station is unchanged (5,470.42 k-ft; every permanent load adds).
-- **How verified:** see the PR (changed sections and counts, every flip listed).
+- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (109 cases, compared with S2-2's readouts): station M_u, −M_u and
+  V_u change in all 109 (V_u at 108; the largest change xsA RIDOT G1 at the pier x = 110 ft, +M_u case −5,091.5 → −2,788.3 k-ft, the negative dead load
+  now at its minimum factor); 108 cases gain a negative design moment (−M_u from ≥ −1 to < −1 k-ft) at some station; no governing check ratio or rating
+  changes (Strength flexure +M, shear and bearing stiffener differ in the last floating-point digit only, from the changed order of the sum); 0 pass/fail
+  flips. `tests/st-span.mjs` on 20 interior spans (10 payloads × spans 2, 3): stations change, no check ratio or rating changes, 0 flips.
+  `tests/baselines/st.json` re-recorded from the run (`st.status` gains the minimum factors, `st.stations`, `st.R`, texts; `st.checks`/`st.governing`
+  in 40 cases by the last digit). `tests/baselines/st_interior.json` is re-recorded with S2-4's full interior run.
 - **Other copies:** none in ST-Girder; GirderDetail already uses this rule.
 - **Open items:** the LRFR rating keeps γ_DC = 1.25, γ_DW = 1.50 on |V| and the staged stresses (MBE, not this item).
