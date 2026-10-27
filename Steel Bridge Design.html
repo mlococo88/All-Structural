@@ -8601,7 +8601,11 @@ function buildExternal(ext, L, llf){
   // GD54c (2026-10-15): MassDOT utilities as their own loads (GirderDetail, optional): M_UT/V_UT existing utilities, M_UF/V_UF future utility
   // allowance; unfactored, on the steel (noncomposite) section; shears in the same MIDAS sign convention, negated like the other dead-load shears
   const hasUT=slice.some(s=>s.M_UT!==undefined), hasUF=slice.some(s=>s.M_UF!==undefined);
-  return { spanLen, slice, sel, hasDC1, hasDC1split, swExcl, hasFat, hasFatV, hasPL, hasUT, hasUF,
+  // S2-8 (2026-10-22): GirderDetail's construction live load on the continuous girder (M_CL/V_CL) and deck-placement sequence envelope (M_DCc), optional;
+  // shears in the same MIDAS sign convention, negated like the other dead-load shears
+  const hasCL=slice.some(s=>s.M_CL!==undefined), hasDCc=slice.some(s=>s.M_DCc!==undefined);
+  return { spanLen, slice, sel, hasDC1, hasDC1split, swExcl, hasFat, hasFatV, hasPL, hasUT, hasUF, hasCL, hasDCc,
+    M_CL:(x)=>interp('M_CL',x), V_CL:(x)=>-interp('V_CL',x), M_DCc:(x)=>interp('M_DCc',x),
     M_UT:(x)=>interp('M_UT',x), V_UT:(x)=>-interp('V_UT',x), M_UF:(x)=>interp('M_UF',x), V_UF:(x)=>-interp('V_UF',x),
     M_PLpos:(x)=>interp('M_PLpos',x)*fPos, M_PLneg:(x)=>interp('M_PLneg',x)*fNeg,
     V_PLq:(x)=>{const p=interp('V_LLpos',x)*fV,n=interp('V_LLneg',x)*fV; return Math.abs(p)>=Math.abs(n)? Math.sign(p)*interp('V_PLpos',x)*fV : Math.sign(n)*interp('V_PLneg',x)*fV;},
@@ -9748,14 +9752,16 @@ function computeAll(inp){
        governing over every location GirderDetail reads as negative flexure, in place of this app's 6.10.8 check above (still computed, shown
        as not used). Only while ST-Girder's plates and F_y are the hand-off's: edited plates, the Optimize sweep, other imports, older hand-offs and
        the built-in analysis keep this app's own check exactly as before. The load rating (negInv) still uses this app's F_nc. */
-    const gdNeg=(()=>{ const e=inp.external, nf=useExt&&extFromGD(e)&&e.girderDetail.checks&&e.girderDetail.checks.negFlex;
-      if(!nf||!Array.isArray(nf.spans)) return null;
-      const sel=ext.sel||{}, si=+sel.idx||1, row=nf.spans.find(q=>q&&+q.span===si)||null, m0=e.girderDetail.materials||{};
-      const z=zonesToSec(e,sel,sec), same=(a,b)=>Math.abs((+a)-(+b))<=1e-9;
+    // S2-8: the condition shared by GirderDetail's check results (negFlex, constr): this span's plates and F_y are the hand-off's ('' = yes, else why not)
+    const gdSameWhy=e=>{ const sel=ext.sel||{}, m0=e.girderDetail.materials||{}, z=zonesToSec(e,sel,sec), same=(a,b)=>Math.abs((+a)-(+b))<=1e-9;
       const plOK=!!z&&['D','tw','bft','tft','bfb','tfb'].every(k=>same(sec[k],z[k]))&&!!sec.useSegs===!!z.useSegs&&
         (!z.useSegs||(Array.isArray(sec.segs)&&sec.segs.length===z.segs.length&&z.segs.every((g,i)=>['xEnd','bft','tft','bfb','tfb'].every(k=>same(sec.segs[i][k],g[k])))));
-      const fyOK=same(mat.Fyf,m0.Fyf)&&same(mat.Fyw,m0.Fyw), okRow=q=>!!q&&isFinite(+q.r)&&isFinite(+q.dem)&&isFinite(+q.cap)&&isFinite(+q.x);
-      const why=!row? 'GirderDetail sent no result for span '+si : !plOK? 'the plates differ from the hand-off' : !fyOK? 'F_y differs from the hand-off'
+      return !plOK? 'the plates differ from the hand-off' : !(same(mat.Fyf,m0.Fyf)&&same(mat.Fyw,m0.Fyw))? 'F_y differs from the hand-off' : ''; };
+    const gdNeg=(()=>{ const e=inp.external, nf=useExt&&extFromGD(e)&&e.girderDetail.checks&&e.girderDetail.checks.negFlex;
+      if(!nf||!Array.isArray(nf.spans)) return null;
+      const sel=ext.sel||{}, si=+sel.idx||1, row=nf.spans.find(q=>q&&+q.span===si)||null;
+      const okRow=q=>!!q&&isFinite(+q.r)&&isFinite(+q.dem)&&isFinite(+q.cap)&&isFinite(+q.x), sw=row? gdSameWhy(e) : '';
+      const why=!row? 'GirderDetail sent no result for span '+si : sw? sw
         : !okRow(row.comp)? 'GirderDetail has no negative-flexure location in span '+si : '';
       return {span:si, x0:+sel.x0||0, g:+e.girderDetail.girder||null, use:!why, why, method:nf.method||'', n:+nf.locations||0, comp:row&&okRow(row.comp)?row.comp:null, tens:row&&okRow(row.tens)?row.tens:null}; })();
 
@@ -9810,9 +9816,13 @@ function computeAll(inp){
     const constrCalc=[];                                // per-station worked-calc data (Constructibility location picker)
     stations.forEach(st=>{ const sg=segP[st.si];
       const M1c=(useExt&&ext.hasDC1)? ext.M_DC1(st.x)+(ext.swExcl? swM(st.x):0) : simpleM(Ld.wDC1,st.x)+diaM(st.x);
-      const Mc=1.25*M1c + 1.5*simpleM(wConstr,st.x);    // construction live on the erected span
+      // S2-8 (2026-10-22; engineer decision: GirderDetail's method): with GirderDetail's M_CL/V_CL (construction live load on the continuous girder) and,
+      // where sent, M_DCc (deck-placement sequence envelope, 6.10.3.4.1), M_c = 1.25·M_DCc + 1.5·M_CL and V_c = |1.25·V_DC1| + 1.5·|V_CL| as GirderDetail's
+      // Girder section (GS14 to GS16); without them as before: 1.25·M_DC1 + 1.5·w·x(L − x)/2 on the simple span
+      const cCL=useExt&&ext.hasCL&&ext.hasDC1, M1s=cCL&&ext.hasDCc? ext.M_DCc(st.x)+(ext.swExcl? swM(st.x):0) : M1c;
+      const Mc=1.25*M1s + 1.5*(cCL? ext.M_CL(st.x) : simpleM(wConstr,st.x));    // construction live on the erected span (S2-8: or continuous, from GirderDetail)
       const V1c=(useExt&&ext.hasDC1)? ext.V_DC1(st.x)+(ext.swExcl? swV(st.x):0) : simpleV(Ld.wDC1,st.x)+diaV(st.x);
-      const Vc=Math.abs(1.25*V1c)+1.5*Math.abs(simpleV(wConstr,st.x));
+      const Vc=Math.abs(1.25*V1c)+1.5*Math.abs(cCL? ext.V_CL(st.x) : simpleV(wConstr,st.x));
       VcUmax=Math.max(VcUmax,Vc);
       let cc;
       if(Mc>=0){                                        // top flange compression (bare)
@@ -9841,7 +9851,19 @@ function computeAll(inp){
     const constr={McU:0,VcU:VcUmax,fbuTopC:cGov.fbuTopC,fbuBotC:cGov.fbuBotC||0,
       FncC:cGov.FncC||sgC.FncTop,FcrwC:cGov.FcrwC||0,RhFyc:sgC.Rh*Fyc,RhFyt:sgC.Rh*Fyf,
       VcrC:Vcr,wConstr,DcBare:sgC.bare.Dc,xGov:cGov.x||0,cNegGov:cNegGov.r>0?cNegGov:null,cTenGov,
-      Lb:geom.Lb,constrCalc};
+      Lb:geom.Lb,constrCalc,
+      contCL:!!(useExt&&ext.hasCL&&ext.hasDC1), seqDC:!!(useExt&&ext.hasCL&&ext.hasDC1&&ext.hasDCc)};   // S2-8: GirderDetail's construction loads used (continuous CL; sequence envelope)
+    /* S2-8 (2026-10-22; engineer decision: GirderDetail's method is the method; HANDOFF.md 4.9, girderDetail.checks.constr, additive): with a GirderDetail
+       hand-off that carries its deck-placement result, the constructibility checks are GirderDetail's for this span: GS14 (compression flange yielding
+       and flexural resistance) and GS15 (web bend-buckling), governing over the locations where M_c compresses the top flange (Cnstr FLB) and the bottom
+       flange (Cnstr −M); GS15 tension flange (Cnstr yld); GS16 shear (Cnstr V); for an exterior girder also the Deck overhang checks OH1 to OH4 (Cnstr OH)
+       and OH5 (Cnstr fℓ), with the bracket f_ℓ. Only while the plates and F_y are the hand-off's (as gdNeg); otherwise this app's own check above. */
+    const gdCon=(()=>{ const e=inp.external, cn=useExt&&extFromGD(e)&&e.girderDetail.checks&&e.girderDetail.checks.constr;
+      if(!cn||!Array.isArray(cn.spans)) return null;
+      const sel=ext.sel||{}, si=+sel.idx||1, row=cn.spans.find(q=>q&&+q.span===si)||null, okq=q=>!!q&&isFinite(+q.r)&&isFinite(+q.dem)&&isFinite(+q.cap)&&isFinite(+q.x);
+      const sw=row? gdSameWhy(e) : '', why=!row? 'GirderDetail sent no result for span '+si : sw? sw : !['top','bot','tens','shear'].some(k=>okq(row[k]))? 'GirderDetail has no deck-placement location in span '+si : '';
+      const pick={}; ['top','bot','tens','shear','oh','ohfl'].forEach(k=>{ pick[k]=row&&okq(row[k])? row[k] : null; });
+      return {span:si, x0:+sel.x0||0, g:+e.girderDetail.girder||null, use:!why, why, n:+cn.locations||0, gam:cn.gam||null, seq:!!cn.seq, oh:cn.oh||null, ...pick}; })();
 
     /* ---------- Camber — numeric double integration (handles segments & continuous M) ---------- */
     // CF1 (2026-10-13): camber-only fine station set (the checks keep `stations`): about 0.5 ft spacing (at least L/20),
@@ -10144,10 +10166,17 @@ function computeAll(inp){
     rating.govOpr=Math.min(rating.flexOpr,rating.shearOpr,rating.negOpr??99,rating.servOpr??99);
 
     /* ---------- push remaining checks ---------- */
-    checks.push({n:'Constr. comp flange (FLB/LTB/web)', t:'Cnstr FLB', v:constr.fbuTopC, lim:constr.FncC.Fnc, r:cGov.r, u:'ksi', ref:'6.10.3.2.1', loc:constr.xGov});
-    checks.push({n:'Constr. tension flange', t:'Cnstr yld', v:cTenGov.f||0, lim:sgC.Rh*Fyf, r:cTenGov.r, u:'ksi', ref:'6.10.3.2.2', loc:cTenGov.x||0});
-    if(cNegGov.r>0) checks.push({n:'Constr. −M bot flange (FLB/LTB/web)', t:'Cnstr −M', v:cNegGov.fbu, lim:cNegGov.Fnc.Fnc, r:cNegGov.r, u:'ksi', ref:'6.10.3.2.1', loc:cNegGov.x});
-    checks.push({n:'Constr. shear', t:'Cnstr V', v:VcUmax, lim:Vcr, r:VcUmax/Vcr, u:'kip', ref:'6.10.3.3', loc:0});
+    if(gdCon&&gdCon.use){   // S2-8: GirderDetail's GS14 to GS16 (and OH1 to OH5, exterior girder) for this span (see gdCon)
+      const q2=(q,n,t,ref)=>{ if(q) checks.push({n, t, v:+q.dem, lim:+q.cap, r:+q.r, u:q.u||'ksi', ref:ref+' · GirderDetail '+q.id, loc:Math.round(((+q.x)-gdCon.x0)*1000)/1000, gd:q.id}); };
+      q2(gdCon.top,'Constr. comp flange (FLB/LTB/web)','Cnstr FLB','6.10.3.2.1'); q2(gdCon.tens,'Constr. tension flange','Cnstr yld','6.10.3.2.2');
+      q2(gdCon.bot,'Constr. −M bot flange (FLB/LTB/web)','Cnstr −M','6.10.3.2.1'); q2(gdCon.shear,'Constr. shear','Cnstr V','6.10.3.3');
+      q2(gdCon.oh,'Constr. deck overhang brackets (flanges + f_ℓ, web)','Cnstr OH','6.10.3.2 · C6.10.3.4'); q2(gdCon.ohfl,'Constr. overhang f_ℓ ≤ 0.6F_y','Cnstr fℓ','6.10.1.6');
+    } else {
+      checks.push({n:'Constr. comp flange (FLB/LTB/web)', t:'Cnstr FLB', v:constr.fbuTopC, lim:constr.FncC.Fnc, r:cGov.r, u:'ksi', ref:'6.10.3.2.1', loc:constr.xGov});
+      checks.push({n:'Constr. tension flange', t:'Cnstr yld', v:cTenGov.f||0, lim:sgC.Rh*Fyf, r:cTenGov.r, u:'ksi', ref:'6.10.3.2.2', loc:cTenGov.x||0});
+      if(cNegGov.r>0) checks.push({n:'Constr. −M bot flange (FLB/LTB/web)', t:'Cnstr −M', v:cNegGov.fbu, lim:cNegGov.Fnc.Fnc, r:cNegGov.r, u:'ksi', ref:'6.10.3.2.1', loc:cNegGov.x});
+      checks.push({n:'Constr. shear', t:'Cnstr V', v:VcUmax, lim:Vcr, r:VcUmax/Vcr, u:'kip', ref:'6.10.3.3', loc:0});
+    }
     checks.push({n:'Fatigue — '+inp.fatigue.category+' detail', t:'Fatigue', v:gammaFat*dfRange, lim:FnFat, r:gammaFat*dfRange/FnFat, u:'ksi', ref:'6.6.1', loc:fatGov.x||Lft/2});
     checks.push({n:'Special fatigue — web (Vu≤Vcr)', t:'Fat web', v:webFatGov.Vf||0, lim:Vcr, r:webFatGov.r, u:'kip', ref:'6.10.5.3', loc:webFatGov.x||0});
     if(gdNeg&&gdNeg.use){   // S2-9: GirderDetail's GS7/GS8 or GS9 for this span (see gdNeg)
@@ -10224,7 +10253,7 @@ function computeAll(inp){
       segP, stations, useExt, ext, hasNeg, neg,
       stress, diag, flex, shearR, constr, camber, fatigue, tStiff, bearing, conn, rating, deckD,
       chartS2, chartFlex, chartFat, flexCalc, shearCalc, warnings,
-      checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{}), ...(gdNeg?{gdNeg}:{}),   // S2-9
+      checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{}), ...(gdNeg?{gdNeg}:{}), ...(gdCon?{gdCon}:{}),   // S2-9, S2-8
       ...(UTon?{ut:{hasUT:ext.hasUT, hasUF:ext.hasUF, F:UF_, info:((inp.external.girderDetail||{}).utilities)||null}}:{})};   // GD54c
   }catch(e){ return {ok:false, error:e.message}; }
 }
@@ -11843,6 +11872,33 @@ function constrWorkedDeriv(R,sel,right){ const c=R.constr;
       <ML s={Tx`\frac{V_c}{V_{cr}}=\frac{${nx(sel.Vc,0)}}{${nx(c.VcrC,0)}}=${nx(sel.dcV,3)}\;${sel.dcV<=1.0001?'\\checkmark':'\\text{N.G.}'}\quad(\text{no tension field, 6.10.3.3})`}/>
     </Deriv>);
 }
+/* S2-8 (2026-10-22): GirderDetail's deck-placement result for this span (R.gdCon, from the hand-off's girderDetail.checks.constr), with the values its
+   work shows, links to the derivation in Steel Bridge Design (Girder section, Check at any location; Deck overhang module) and the printed reference */
+function gdConBlock(R){ const G=R.gdCon, c=R.constr; if(!G) return c&&c.contCL? <div className="callout" style={{marginBottom:10}}>Construction loads from GirderDetail: M_c = 1.25·{c.seqDC?'M_DCc (deck-placement sequence envelope)':'M_DC1'} + 1.5·M_CL (continuous construction live load), V_c = |1.25·V_DC1| + 1.5·|V_CL| (in place of the simple-span 1.5·w·x(L − x)/2).</div> : null;
+  if(!G.use) return <div className="callout warn" style={{marginBottom:10}}><b>GirderDetail's deck-placement result is not used here:</b> {G.why}. This app's own constructibility check below applies{c.contCL?', with GirderDetail’s construction loads (M_DCc, M_CL)':''}.</div>;
+  const canGo=(()=>{ try{ return window.parent!==window&&typeof window.parent.gdStGoGsa==='function'; }catch(e){ return false; } })();
+  const go=q=>{ try{ window.parent.gdStGoGsa(G.g,q.x); }catch(e){} }, goOh=()=>{ try{ window.parent.gdModGo('oh'); }catch(e){} };   // the host's module switch (as S2-5's gdDfGo)
+  const ok=q=>q.r<=1.0001, xs=q=>fmt(q.x-G.x0,2)+' ft ('+q.where+')', flg=q=>q.flange==='bottom'?'bottom':'top';
+  const KIND={yield:'flange yielding, Eq. 6.10.3.2.1-1',buckling:'flexural resistance, Eq. 6.10.3.2.1-2',web:'web bend-buckling, Eq. 6.10.3.2.1-3',tension:'tension flange, 6.10.3.2.2',shear:'web shear, Eq. 6.10.3.3-1',fl:'f_ℓ limit, Eq. 6.10.1.6-1'};
+  const tex=q=>{ const L=ok(q)?'\\le':'>';
+    if(q.kind==='yield') return Tx`f_{bu}+f_\ell=${nx(q.f!=null?q.f:q.fbu,2)}+${nx(q.fl,2)}=${nx(q.dem,2)}\;${L}\;\phi_fR_hF_{y}=${nx(q.cap,2)}\;\text{ksi}\;\Rightarrow\;${nx(q.r,3)}`;
+    if(q.kind==='buckling') return Tx`f_{bu}+\tfrac{1}{3}f_\ell=${nx(q.f!=null?q.f:q.fbu,2)}+\tfrac{1}{3}(${nx(q.fl,2)})=${nx(q.dem,2)}\;${L}\;\phi_fF_{nc}=\min(${nx(q.FLB,2)},${nx(q.LTB,2)})=${nx(q.cap,2)}\;\text{ksi}\;\Rightarrow\;${nx(q.r,3)}`;
+    if(q.kind==='web') return Tx`f_{bu}=${nx(q.f!=null?q.f:q.fbu,2)}\;${L}\;\phi_fF_{crw}=${nx(q.cap,2)}\;\text{ksi}\;(k=${nx(q.k,2)}${q.Dc!=null?Tx`,\;D_c=${nx(q.Dc,2)}\text{ in}`:''})\;\Rightarrow\;${nx(q.r,3)}`;
+    if(q.kind==='tension') return Tx`f_{bu}+f_\ell=${nx(q.f!=null?q.f:q.fbu,2)}+${nx(q.fl,2)}=${nx(q.dem,2)}\;${L}\;\phi_fR_hF_{yt}=${nx(q.cap,2)}\;\text{ksi}\;\Rightarrow\;${nx(q.r,3)}`;
+    if(q.kind==='shear') return Tx`V_u=${nx(q.gDC,2)}(${nx(q.VDC1,1)})+${nx(q.gCL,2)}(${nx(q.VCL,1)})=${nx(q.dem,1)}\;${L}\;\phi_vV_{cr}=C V_p=${nx(q.C,3)}(${nx(q.Vp,1)})=${nx(q.cap,1)}\;\text{kip}\;\Rightarrow\;${nx(q.r,3)}`;
+    return Tx`f_\ell=${nx(q.fl,2)}\;${L}\;0.6F_{y}=${nx(q.cap,2)}\;\text{ksi}\;\Rightarrow\;${nx(q.r,3)}`; };
+  const rows=[['Compression top flange (Cnstr FLB)',G.top],['Compression bottom flange (Cnstr −M)',G.bot],['Tension flange (Cnstr yld)',G.tens],['Shear (Cnstr V)',G.shear],['Deck overhang brackets (Cnstr OH)',G.oh],['Overhang f_ℓ (Cnstr fℓ)',G.ohfl]].filter(q=>q[1]);
+  return <div className="gd-con">
+    <div className="callout" style={{marginBottom:10}}><b>Constructibility from GirderDetail (deck placement, GS14 to GS16{G.oh||G.ohfl?'; Deck overhang OH1 to OH5':''}).</b> The checks of this span are GirderDetail's, governing over the {G.n} locations of the girder (every analysis node, both sides of each section change and of each interior support): M_c = {G.gam?nx(G.gam.dc,2):'1.25'}·{G.seq?'M_DCc (the deck-placement sequence envelope, 6.10.3.4.1)':'M_DC1'} + {G.gam?nx(G.gam.cl,2):'1.50'}·M_CL (construction live load on the continuous girder), steel section, R_b = 1.0, the deck-placement unbraced length and C_b from the framing, nonprismatic L_b (6.10.8.2.3c){G.oh||G.ohfl?'; for this exterior girder also the overhang bracket forces, f_ℓ from F = P·a/h_b (C6.10.3.4), amplified per 6.10.1.6':''}. Worked in full: Steel Bridge Design › Girder section › Check at any location, G{G.g||'?'} at the stations below, GS14 to GS16{G.oh||G.ohfl?'; Deck overhang module (bracket and load inputs)':''}.{canGo&&<span className="noprint"> · {rows.filter(q=>q[1].id&&/^GS/.test(q[1].id)).slice(0,1).map((q,i)=><button key={i} type="button" className="btn-link" onClick={()=>go(q[1])}>open the governing derivation</button>)}{(G.oh||G.ohfl)&&<span> · <button type="button" className="btn-link" onClick={goOh}>open the Deck overhang module</button></span>}</span>}</div>
+    <div className="bigres">{rows.slice(0,4).map(([l,q],i)=><div key={i} className={'br '+(ok(q)?'p':'f')}><div className="l">{l} · {q.id}</div><div className="n">{fmt(q.r,2)}</div><div className="u">{fmt(q.dem,2)} / {fmt(q.cap,2)} {q.u} @ {fmt(q.x-G.x0,1)} ft</div></div>)}</div>
+    {rows.map(([l,q],i)=><React.Fragment key={i}>
+      <div className="hint" style={{marginTop:6}}><b>{l}</b>: GirderDetail {q.id}, {KIND[q.kind]||q.kind}{q.flange?', '+flg(q)+' flange':''}, at {xs(q)}; section: web {fmt(q.sec.D,3)} × {fmt(q.sec.tw,4)} in, top flange {fmt(q.sec.topB,2)} × {fmt(q.sec.topT,3)} in, bottom flange {fmt(q.sec.botB,2)} × {fmt(q.sec.botT,3)} in{/^OH/.test(q.id)?<span>; M_u = {fmt(q.Mu,0)} k-ft (γ_DC M_DC1 + γ M_CL, M_DC1 = {fmt(q.MDC1,0)}, M_CL = {fmt(q.MCL,0)}), L_b = {fmt(q.Lb,2)} ft{q.AF>1?', f_ℓ amplification '+fmt(q.AF,3):''}</span>:q.kind==='shear'?null:<span>; M_c = {fmt(q.Mc,0)} k-ft (M_DCc = {fmt(q.MDCc,0)}, M_CL = {fmt(q.MCL,0)}), L_b = {fmt(q.LbC,2)} ft</span>}.</div>
+      {q.kind==='buckling'&&q.rt!=null&&<ML s={Tx`r_t=${nx(q.rt,3)}\text{ in},\;L_p=${nx(q.Lp,1)}\text{ in},\;L_r=${nx(q.Lr,1)}\text{ in},\;L_b=${nx(q.Lbin,1)}\text{ in},\;C_b=${nx(q.Cb,2)}\;\Rightarrow\;F_{nc,LTB}=${nx(q.LTB,2)},\;F_{nc,FLB}=${nx(q.FLB,2)}\;\text{ksi}${q.npr?'\\;(\\text{nonprismatic }L_b\\text{, 6.10.8.2.3c})':''}`}/>}
+      <ML s={tex(q)}/>
+    </React.Fragment>)}
+    {(G.oh||G.ohfl)&&R.gdCon.oh&&R.gdCon.oh.inputs&&(()=>{ const I=R.gdCon.oh.inputs, q=G.oh||G.ohfl; return <ML s={Tx`\text{brackets: }a=${nx(I.a,1)},\;h_b=${nx(I.hb,1)}\text{ in},\;F_\ell=w_u\frac{a}{h_b}=${nx(I.wu,3)}\frac{${nx(I.a,1)}}{${nx(I.hb,1)}}=${nx(I.Fl,3)}\text{ kip/ft},\;P_\ell=${nx(I.Pl,2)}\text{ kip}\;\Rightarrow\;M_\ell=\frac{F_\ell L_b^2}{12}+\frac{P_\ell L_b}{8}=${nx(q.Ml,1)}\text{ kip-in}\qquad(\text{C6.10.3.4})`}/>; })()}
+    <div className="hint" style={{marginTop:6}}><b>This app's own constructibility check</b> (shown for comparison; not used while the plates and F<sub>y</sub> are GirderDetail's){c.contCL?', with GirderDetail’s construction loads (M_c = 1.25·'+(c.seqDC?'M_DCc':'M_DC1')+' + 1.5·M_CL)':''}:</div>
+  </div>; }
 function ConstructTab({R}){
   if(!R.ok) return null;
   const c=R.constr;
@@ -11860,6 +11916,7 @@ function ConstructTab({R}){
     return 'x = '+x.toFixed(1)+' ft  ·  '+t.join(', '); };
   return (<div>
     <StgWarn R={R} kind="fl"/>
+    {gdConBlock(R)}
     <div className="bigres">
       <div className={'br '+(fPass&&yPass&&wPass?'p':'f')}><div className="l">Top flange (constr.)</div><div className="n">{fmt(c.fbuTopC,1)}</div><div className="u">ksi · Fnc = {fmt(c.FncC.Fnc,1)}</div></div>
       <div className={'br '+(vPass?'p':'f')}><div className="l">Construction shear</div><div className="n">{fmt(c.VcU/c.VcrC,2)}</div><div className="u">{fmt(c.VcU,0)} / {fmt(c.VcrC,0)} kip</div></div>
@@ -12699,7 +12756,8 @@ function crModel(R,inp,o){
   // 6 – 13. Limit states, worked
   if(o.checks){
     { const s=S('constr','Constructibility',{ref:'6.10.3'}), c=R.constr, cc=c.constrCalc||[], i=crNear(cc,c.xGov);
-      sub(s,'Worked check at the governing station (x = '+fmt(cc[i]?cc[i].x:0,1)+' ft)','6.10.3 · bare steel · wet deck',cc[i]?<CrTab el={constrWorkedDeriv(R,cc[i])}/>:null,ck('Cnstr FLB','Cnstr yld','Cnstr −M','Cnstr V'));
+      if(R.gdCon||c.contCL) sub(s,R.gdCon&&R.gdCon.use?'Deck placement from GirderDetail (in use)':'Construction loads from GirderDetail',R.gdCon&&R.gdCon.use?'GS14 to GS16'+(R.gdCon.oh||R.gdCon.ohfl?' · OH1 to OH5':''):'6.10.3.4.1',<CrTab el={gdConBlock(R)}/>,R.gdCon&&R.gdCon.use?ck('Cnstr FLB','Cnstr yld','Cnstr −M','Cnstr V','Cnstr OH','Cnstr fℓ'):null);   // S2-8
+      sub(s,'Worked check at the governing station (x = '+fmt(cc[i]?cc[i].x:0,1)+' ft)'+(R.gdCon&&R.gdCon.use?' — this app\u2019s own check, not used':''),'6.10.3 · bare steel · wet deck',cc[i]?<CrTab el={constrWorkedDeriv(R,cc[i])}/>:null,R.gdCon&&R.gdCon.use?null:ck('Cnstr FLB','Cnstr yld','Cnstr −M','Cnstr V'));
       if(all) sub(s,'All stations','6.10.3.2 · 6.10.3.3',<CrT wide head={['x (ft)','Region','M_c (k-ft)','V_c (kip)','f_bu (ksi)','F_nc','FLB/LTB','Yield','Web','Tension','Shear']}
         rows={cc.map(q=>[fmt(q.x,2),q.region==='neg'?'−M':'+M',fmt(q.Mc,0),fmt(q.Vc,1),fmt(q.region==='neg'?q.fBot:q.fTop,2),fmt(q.Fnc.Fnc,1),fmt(q.dcFLB,3),fmt(q.dcYield,3),fmt(q.dcWeb,3),fmt(q.dcTen,3),fmt(q.dcV,3)])}/>); }
     { const s=S('serv','Service II and live-load deflection',{ref:'6.10.4 · 2.5.2.6.2'}), st2=R.stress, ch=R.chartS2||[], i=crNear(ch,st2.s2Gov?st2.s2Gov.x:L/2);
@@ -16522,6 +16580,24 @@ function gsaRows(st, S, list, names) {   // Girder section rows at the stations 
   return { rows, gen: dx.gs.gen };
 }
 function gsaRun(rows, oosExt) { const p = { ...P.gs, rows: rows.map(r => ({ ...r })), ...(oosExt && oosExt.length ? { oosExt } : {}) }, R = GM.gs.compute(p); return R.errors.length ? { err: R.errors[0], R } : { R, CK: GM.gs.checks(R) }; }
+/* S2-8 (2026-10-22): the Girder section rows of Check at any location at every station of girder g (every analysis node, both sides of each flange or web
+   change and of each interior support; rows with an input error left out, as the ratio plot), run once through GM.gs.compute/GM.gs.checks for the
+   hand-off's GirderDetail results (negFlex, constr); kept until an input changes. Needs Preliminary sizing (its row builder). */
+function gdStRun(g) {
+  const L0 = gsaPL(); if (L0.wait) return { why: 'Preliminary sizing was not loaded when the hand-off was built' }; if (L0.err) return { why: L0.err };
+  const key = JSON.stringify([P.sa, P.df]);
+  if (key !== GA.key || GA.AN !== L0.G.AN) { GA.key = key; GA.AN = L0.G.AN; GA.byG = {}; GA.plot = null; GA.plotKey = ''; GA.dflt = null; }   // the cache of gsaState
+  const S = GA.byG[g] = GA.byG[g] || gsaSA(g, L0.G); if (S.err) return { why: S.err };
+  const k2 = `${GA.key}|${g}|${JSON.stringify([P.gs, P.oh])}`; if (GA.stRun && GA.stRun.k === k2 && GA.stRun.AN === L0.G.AN && GA.stRun.S === S) return GA.stRun.v;
+  const st = { ...L0, S }, list = [], add = q => { if (!list.some(o => Math.abs(o.x - q.x) < 0.005)) list.push(q); };
+  S.xs.forEach(x => gsaStations(S, x).forEach(add)); S.sup.slice(1, -1).forEach(v => add({ x: v + 0.01, side: 'right' }));
+  list.sort((a, b) => a.x - b.x);
+  const B = gsaRows(st, S, list); let v;
+  if (!B) v = { why: 'Preliminary sizing could not build the rows' };
+  else { const ok = B.rows.filter(r => { const e = []; numRows([r], GS_SPEC, 'Location', e); return !e.length; }), O = ok.length ? gsaRun(ok) : null;
+    v = !ok.length ? { why: 'no Girder section row without an input error' } : O.err ? { why: `Girder section: ${O.err}` } : { S, ok, O }; }
+  GA.stRun = { k: k2, AN: L0.G.AN, S, v }; return v;
+}
 /* S2-9 (2026-10-22; engineer decision: GirderDetail's method is the method): this module's negative-flexure result of girder g for the ST-Girder
    hand-off (gdStPayload, girderDetail.checks.negFlex; HANDOFF.md 4.9, additive). Every location of the girder that Check at any location reads as
    negative flexure, built and checked exactly as there (gsaRows, then GM.gs.compute and GM.gs.checks with this module's inputs): every analysis
@@ -16530,31 +16606,20 @@ function gsaRun(rows, oosExt) { const p = { ...P.gs, rows: rows.map(r => ({ ...r
    Per span: the governing compression-flange and tension-flange item, with the values its work shows. Needs Preliminary sizing (its row builder);
    without it, { why } and the hand-off goes without the field (ST-Girder then uses its own check, as before). */
 function gdStNegFlex(g) {
-  const L0 = gsaPL(); if (L0.wait) return { why: 'Preliminary sizing was not loaded when the hand-off was built' }; if (L0.err) return { why: L0.err };
-  const key = JSON.stringify([P.sa, P.df]);
-  if (key !== GA.key || GA.AN !== L0.G.AN) { GA.key = key; GA.AN = L0.G.AN; GA.byG = {}; GA.plot = null; GA.plotKey = ''; GA.dflt = null; }   // the cache of gsaState
-  const S = GA.byG[g] = GA.byG[g] || gsaSA(g, L0.G); if (S.err) return { why: S.err };
-  const st = { ...L0, S }, list = [], add = q => { if (!list.some(o => Math.abs(o.x - q.x) < 0.005)) list.push(q); };
-  S.xs.forEach(x => gsaStations(S, x).forEach(add)); S.sup.slice(1, -1).forEach(v => add({ x: v + 0.01, side: 'right' }));
-  list.sort((a, b) => a.x - b.x);
-  // only the stations the row builder can read as negative flexure (its rule: Mup < −Mun at the nearest node); the nodes either side are kept as a margin
-  const ng = i => i >= 0 && i < S.xs.length && S.arr.Mup[i] < -S.arr.Mun[i] + 1e-6, near = x => { let i = 0; S.xs.forEach((v, q) => { if (Math.abs(v - x) < Math.abs(S.xs[i] - x)) i = q; }); return i; };
-  const cand = list.filter(q => { const i = near(q.x); return ng(i - 1) || ng(i) || ng(i + 1); }); list.length = 0; cand.forEach(q => list.push(q));
-  const B = list.length ? gsaRows(st, S, list) : { rows: [] }; if (!B) return { why: 'Preliminary sizing could not build the rows' };
-  const neg = B.rows.filter(r => { if (r.region !== 'neg') return false; const e = []; numRows([r], GS_SPEC, 'Location', e); return !e.length; });
+  const A = gdStRun(g); if (A.why) return { why: A.why };   // S2-8: the shared rows (was: its own rows at the stations the builder can read as negative flexure; same rows and results)
+  const S = A.S, neg = A.ok.filter(r => r.region === 'neg');
   const r4 = v => Math.round(v * 1e4) / 1e4, r3 = v => Math.round(v * 1e3) / 1e3, spOf = x => { let k = 0; while (k < S.sup.length - 2 && x > S.sup[k + 1] + 1e-9) k++; return k + 1; };
   const sn = j => j === 0 ? 'Abut. 1' : j === S.sup.length - 1 ? 'Abut. 2' : `Pier ${j}`;
   const where = x => { const j = S.sup.findIndex(v => Math.abs(v - x) < 0.0151); return j >= 0 ? `${x < S.sup[j] ? 'left' : 'right'} side of ${sn(j)}` : gsaLocTxt(S, x); };
   const out = { source: `GirderDetail Girder section module, Check at any location (G${g}): GS7/GS8 (Article 6.10.8) or GS9 (Appendix A6, where 6.10.6.2.3 permits it and the method is "Appendix A6 where permitted")`,
     method: P.gs.negM === '6108' ? '6.10.8 only' : 'A6 where permitted, else 6.10.8', locations: neg.length, spans: [] };
   if (!neg.length) { out.spans = S.sup.slice(1).map((_, k) => ({ span: k + 1, comp: null, tens: null })); return out; }
-  const O = gsaRun(neg); if (O.err) return { why: `Girder section: ${O.err}` };
-  const R = O.R, rows = {}; R.rows.forEach(r => { rows[r.name] = r; });
+  const O = A.O, R = O.R, rows = {}; R.rows.forEach(r => { if (r.region === 'neg') rows[r.name] = r; });
   const best = {};   // span -> { comp, tens }
   O.CK.filter(c => c.id === 'GS7' || c.id === 'GS8' || c.id === 'GS9').forEach(c => c.items.forEach(it => {
     if (it.st === 'na' || !isFinite(it.r) || / \(not the method in use\)$/.test(it.loc)) return;
     const m = /^(@\d+)(?:, (nonprismatic L_b|compression flange|tension flange))?$/.exec(it.loc), r = m && rows[m[1]]; if (!r) return;
-    const kind = c.id === 'GS8' || m[2] === 'tension flange' ? 'tens' : 'comp', x = +neg[r.i].x, sp = spOf(x), b = best[sp] = best[sp] || {};
+    const kind = c.id === 'GS8' || m[2] === 'tension flange' ? 'tens' : 'comp', x = +A.ok[r.i].x, sp = spOf(x), b = best[sp] = best[sp] || {};
     if (b[kind] && b[kind].r0 >= it.r) return;
     const a = r.A6, sec = { D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT };
     const a6 = { ok: !!a.ok, why: a.why.slice(), used: !!r.useA6, skM: r4(a.skM), crw: r4(a.crwP), lrw: r4(a.lrwP), lw: r4(a.lw), IycIyt: r4(a.Iyc / a.Iyt) };
@@ -16566,6 +16631,59 @@ function gdStNegFlex(g) {
     b[kind] = o; }));
   out.spans = S.sup.slice(1).map((_, k) => { const b = best[k + 1] || {}, cl = o => { if (!o) return null; const { r0, ...q } = o; return q; }; return { span: k + 1, comp: cl(b.comp), tens: cl(b.tens) }; });
   return out;
+}
+/* S2-8 (2026-10-22; engineer decision: GirderDetail's method is the method): this module's deck-placement (constructibility) result of girder g for
+   the ST-Girder hand-off (girderDetail.checks.constr; HANDOFF.md 4.9, additive). GS14 (compression flange: yielding, Eq. 6.10.3.2.1-1, and flexural
+   resistance, Eq. -2), GS15 (web bend-buckling, Eq. -3; tension flange, 6.10.3.2.2) and GS16 (web shear, 6.10.3.3) at every location of Check at any
+   location (every analysis node, both sides of each flange or web change and of each interior support), built and checked as there (gsaRows,
+   GM.gs.compute, GM.gs.checks): M_c = γ_DC M_DCc (the deck-placement sequence envelope, SA7) + γ M_CL (the construction live load on the continuous
+   girder). Per span the governing item of each group: compression top flange, compression bottom flange, tension flange, shear. For an exterior
+   girder also the Deck overhang module's checks (OH1 to OH5: f_ℓ from the overhang brackets, C6.10.3.4) with the module's bracket and load inputs,
+   at this girder's largest deck-placement moment of each span (1.25 M_DC1 + 1.5 M_CL, as Preliminary sizing places the module's rows), with the
+   section, the deck-placement L_b, M_DC1 and M_CL of the Girder section row there. Needs Preliminary sizing (its row builder); without it { why }. */
+function gdStConstr(g) {
+  const A = gdStRun(g); if (A.why) return { why: A.why };
+  const { S, ok, O } = A;
+  const r4 = v => Math.round(v * 1e4) / 1e4, r3 = v => Math.round(v * 1e3) / 1e3, spOf = x => { let k = 0; while (k < S.sup.length - 2 && x > S.sup[k + 1] + 1e-9) k++; return k + 1; };
+  const sn = j => j === 0 ? 'Abut. 1' : j === S.sup.length - 1 ? 'Abut. 2' : `Pier ${j}`;
+  const where = x => { const j = S.sup.findIndex(v => Math.abs(v - x) < 0.0151); return j >= 0 ? `${x < S.sup[j] ? 'left' : 'right'} side of ${sn(j)}` : gsaLocTxt(S, x); };
+  const R = O.R, rows = {}; R.rows.forEach(r => { rows[r.name] = r; });
+  const best = {}, put = (sp, k, o) => { const b = best[sp] = best[sp] || {}; if (!b[k] || b[k].r0 < o.r0) b[k] = o; };
+  const base = (r, it, id, kind) => { const x = +ok[r.i].x; return { r0: it.r, r: r4(it.r), id, kind, x: r3(x), where: where(x), status: it.st, Mc: r3(r.Mc), MDCc: r3(r.MDCc !== '' && r.MDCc != null && isFinite(+r.MDCc) && +r.MDCc !== 0 ? +r.MDCc : r.MDC1), MDC1: r3(r.MDC1), MCL: r3(r.MCL),
+    sec: { D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT }, LbC: r3(r.LbC) }; };
+  O.CK.filter(c => c.id === 'GS14' || c.id === 'GS15' || c.id === 'GS16').forEach(c => c.items.forEach(it => {
+    if (it.st === 'na' || !isFinite(it.r)) return;
+    const m = /^(@\d+)(?:, (top|bottom) flange, (yielding|buckling)|, (web bend-buckling)|, (top|bottom) flange \(tension\))?$/.exec(it.loc), r = m && rows[m[1]]; if (!r) return;
+    const sp = spOf(+ok[r.i].x), cf = r.conC.lab === 'top' ? 'top' : 'bot', f = r.conC.f;
+    if (c.id === 'GS16') put(sp, 'shear', { ...base(r, it, c.id, 'shear'), u: 'kip', dem: r4(r.VuC), cap: r4(r.sh.Vcr), VDC1: r3(r.VDC1), VCL: r3(r.VCL), C: r4(r.sh.C), Vp: r4(r.sh.Vp), gDC: R.G.cdc, gCL: R.G.ccl });
+    else if (m[5]) put(sp, 'tens', { ...base(r, it, c.id, 'tension'), u: 'ksi', flange: r.conT.lab, dem: r4(r.conT.f + r.flC), cap: r4(r.RhC * r.conT.Fy), f: r4(r.conT.f), fl: r4(r.flC), Rh: r4(r.RhC), Fy: r.conT.Fy });
+    else if (m[4]) put(sp, cf, { ...base(r, it, c.id, 'web'), u: 'ksi', flange: r.conC.lab, dem: r4(f), cap: r4(r.webC.F), f: r4(f), Dc: r4(r.DcC), k: r4(r.webC.k) });
+    else if (m[3] === 'yielding') put(sp, cf, { ...base(r, it, c.id, 'yield'), u: 'ksi', flange: r.conC.lab, dem: r4(f + r.amC.fl), cap: r4(r.RhC * r.conC.Fy), f: r4(f), fl: r4(r.amC.fl), Rh: r4(r.RhC), Fy: r.conC.Fy });
+    else if (m[3] === 'buckling') { const lt = r.ltC; put(sp, cf, { ...base(r, it, c.id, 'buckling'), u: 'ksi', flange: r.conC.lab, dem: r4(f + r.amC.fl / 3), cap: r4(lt.Fnc), f: r4(f), fl: r4(r.amC.fl), FLB: r4(lt.FLB), LTB: r4(lt.LTB), rt: r4(lt.rt), Lp: r4(lt.Lp), Lr: r4(lt.Lr), Lbin: r4(r.LbC * 12), Cb: r4(r.CbCu), npr: lt.npr ? lt.npr.kind : null }); } }));
+  // Deck overhang module (exterior girders): one row per span at the largest deck-placement moment, as Preliminary sizing places the module's rows
+  let oh = null;
+  if (S.ext) { const ohRows = [];
+    S.sup.slice(1).forEach((x1, k) => { const x0 = S.sup[k]; let im = -1; S.xs.forEach((x, i) => { if (x > x0 && x < x1 && (im < 0 || S.arr.Mc[i] > S.arr.Mc[im])) im = i; }); if (im < 0) return;
+      const xm = S.xs[im], r = ok.reduce((b, q) => Math.abs(+q.x - xm) < Math.abs(+b.x - xm) ? q : b, ok[0]);
+      ohRows.push({ name: `@span${k + 1}`, D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT, Lb: r.LbC, MDC1: r.MDC1, MCL: r.MCL, _x: +r.x }); });
+    const RO = GM.oh.compute({ ...P.oh, rows: ohRows.map(({ _x, ...q }) => q) });
+    if (RO.errors && RO.errors.length) oh = { why: `Deck overhang: ${RO.errors[0]}` };
+    else { const CO = GM.oh.checks(RO), byN = {}; RO.rows.forEach(r => { byN[r.name] = r; });
+      CO.filter(c => /^OH[1-5]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.st === 'na' || !isFinite(it.r)) return; const m = /^@span(\d+)/.exec(it.loc), r = m && byN[`@span${m[1]}`]; if (!r) return;
+        const x = ohRows.find(q => q.name === r.name)._x, kind = { OH1: 'yield', OH2: 'buckling', OH3: 'web', OH4: 'tension', OH5: 'fl' }[c.id], fl = /, (top|bottom) flange$/.exec(it.loc);
+        const o = { r0: it.r, r: r4(it.r), id: c.id, kind, x: r3(x), where: where(x), status: it.st, Mu: r3(r.Mu), MDC1: r3(r.MDC1), MCL: r3(r.MCL), Lb: r3(r.Lb), sec: { D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT }, u: 'ksi',
+          flange: c.id === 'OH5' ? (fl ? fl[1] : '') : c.id === 'OH4' ? r.tf.lab : r.c.lab, AF: r4(r.AF), Ml: r4(r.Ml) };
+        if (c.id === 'OH1') Object.assign(o, { dem: r4(r.fbu + r.c.fl), cap: r4(RO.Rh * RO.Fyf), fbu: r4(r.fbu), fl: r4(r.c.fl) });
+        else if (c.id === 'OH2') Object.assign(o, { dem: r4(r.fbu + r.c.fl / 3), cap: r4(r.Fnc), fbu: r4(r.fbu), fl: r4(r.c.fl), FLB: r4(r.FncF), LTB: r4(r.FncL) });
+        else if (c.id === 'OH3') Object.assign(o, { dem: r4(r.fbu), cap: r4(r.Fcrw), fbu: r4(r.fbu), k: r4(r.k) });
+        else if (c.id === 'OH4') Object.assign(o, { dem: r4(Math.max(r.tf.f, 0) + r.tf.fl), cap: r4(RO.Rh * RO.Fyf), fbu: r4(Math.max(r.tf.f, 0)), fl: r4(r.tf.fl) });
+        else { const fq = o.flange === 'bottom' ? (r.c.lab === 'bottom' ? r.c : r.tf) : (r.c.lab === 'top' ? r.c : r.tf); Object.assign(o, { dem: r4(fq.fl), cap: r4(0.6 * RO.Fyf), fl: r4(fq.fl) }); }
+        put(+m[1], c.id === 'OH5' ? 'ohfl' : 'oh', o); }));
+      oh = { inputs: { a: RO.p.a, hb: RO.p.hb, Fl: r4(RO.Fl), Pl: r4(RO.Pl), wu: r4(RO.wu), Rh: RO.Rh, Cb: RO.Cb, gDC: RO.gd, gCL: RO.gc, Fy: RO.Fyf } }; } }
+  const cl = o => { if (!o) return null; const { r0, ...q } = o; return q; };
+  return { source: `GirderDetail Girder section module, Check at any location (G${g}): GS14, GS15, GS16 (deck placement)${S.ext ? '; Deck overhang module: OH1 to OH5' : ''}`,
+    gam: { dc: R.G.cdc, cl: R.G.ccl }, seq: !!(S.arr.MDCc), locations: ok.length, ...(oh ? { oh } : {}),
+    spans: S.sup.slice(1).map((_, k) => { const b = best[k + 1] || {}; return { span: k + 1, top: cl(b.top), bot: cl(b.bot), tens: cl(b.tens), shear: cl(b.shear), ...(S.ext ? { oh: cl(b.oh), ohfl: cl(b.ohfl) } : {}) }; }) };
 }
 // S2-9: the link from ST-Girder's negative-flexure result to its derivation here (Girder section, Check at any location, girder g at station x)
 window.gdStGoGsa = (g, x) => { try { const u = gsaUi(); u.g = Math.round(+g) || 1; u.x = +x; stHide(); setMod('gs'); setOTab('gsany'); gsaRefresh(); } catch (e) { console.error('gdStGoGsa: ' + e.message); } };
@@ -18348,6 +18466,7 @@ function gdStPayload(g, addPL) {
   // shears: the section just right of a node (LL9: exact section values; the node next to a support uses R.vSec(e, true)); at an interior support
   // one station 0.001 ft each side (just left: the element ending there; just right: the next element); at the girder end, just left.
   // Sign: the schema's MIDAS convention (gravity shear negative at the left end of a span) = minus this tool's shear; ST-Girder negates it back.
+  const SQ = saSeq(R), MDCc = SQ ? Array.from(R.MDC1).map((v, i) => v >= 0 ? Math.max(v, SQ.envP[i]) : Math.min(v, SQ.envN[i])) : null;   // S2-8: as gsaSA's arr.MDCc
   const stations = [], row = (i, e, dx, rt) => { const v = rt ? R.vSec(e, true) : { Lp: R.LVp[e], Ln: R.LVn[e], Pp: R.PVp[e], Pn: R.PVn[e], Fp: R.FVp[e], Fn: R.FVn[e] }, pv = k => pl ? v[k] : 0, o = { x: r3(xs[i] + dx),
       M_DC1: r3(R.MDC1[i]), V_DC1: r3(-R.VDC1[e]), M_DC2: r3(R.MDC2[i]), V_DC2: r3(-R.VDC2[e]), M_DW: r3(R.MDW[i]), V_DW: r3(-R.VDW[e]),
       M_LLpos: r3(R.LLp[i] + a(R.PLp, i)), M_LLneg: r3(R.LLn[i] + a(R.PLn, i)), V_LLpos: r3(-(v.Ln + pv('Pn'))), V_LLneg: r3(-(v.Lp + pv('Pp'))),
@@ -18359,6 +18478,9 @@ function gdStPayload(g, addPL) {
     // M_UT/V_UT existing utilities, M_UF/V_UF future utility allowance, unfactored, on the steel (noncomposite) section, shears in the schema's sign convention
     if (R.MUT) Object.assign(o, { M_UT: r3(R.MUT[i]), V_UT: r3(-R.VUT[e]) });
     if (R.MUF) Object.assign(o, { M_UF: r3(R.MUF[i]), V_UF: r3(-R.VUF[e]) });
+    // S2-8 (2026-10-22; HANDOFF.md 4.9, optional, additive): the construction live load on the continuous girder (M_CL/V_CL, unfactored; shear in this schema's convention)
+    // and, where Structural analysis has a deck-placement sequence (SA7), the noncomposite deck-placement moment envelope M_DCc (as Girder section's rows take it)
+    Object.assign(o, { M_CL: r3(R.MCL[i]), V_CL: r3(-R.VCL[e]), ...(MDCc ? { M_DCc: r3(MDCc[i]) } : {}) });
     stations.push(o); };
   for (let i = 0; i < N; i++) { if (i > 0 && i < N - 1 && sup.includes(i)) { row(i, i - 1, -0.001); row(i, i, 0.001); } else row(i, Math.min(i, N - 2), 0, i < N - 1 && sup.includes(i + 1)); }
   const PL_ = b.plates, cuts = [...new Set([...PL_.top, ...PL_.bot, ...PL_.web].flatMap(r => [r.x0, r.x1]))].sort((p, q) => p - q), zones = [];
@@ -18376,7 +18498,7 @@ function gdStPayload(g, addPL) {
     `Fatigue (M_FAT, V_FAT) = fatigue truck (3.6.1.4.1) with IM ${f0(R.imf * 100)}% and the single-lane fatigue distribution factors (no multiple presence), unfactored (gamma not applied). Range = positive minus negative.`,
     hasPL ? (pl ? 'The pedestrian load is ADDED to LL+IM (as GirderDetail does for its own design demands); M_PL/V_PL give it separately.' : 'The pedestrian load is NOT in LL+IM; M_PL/V_PL give it separately.') : 'No pedestrian load.',
     'Moments sagging positive. Shears in the MIDAS convention of this schema (negative at the left end of a span under gravity load). Shear at a node is the element just right of it; at each interior support there is one station 0.001 ft either side.',
-    'Not sent as forces: construction live load (its input is listed in girderDetail.loads), deck placement sequence, wind and flange lateral bending.',
+    `Construction live load: M_CL/V_CL on the continuous girder, unfactored (its input is listed in girderDetail.loads). ${MDCc ? 'Deck placement sequence: M_DCc = the noncomposite deck-placement moment envelope of the pour sequence (Structural analysis, SA7); M_DC1 stays the whole deck at once.' : 'No deck placement sequence in Structural analysis: M_DCc not sent (M_DC1 = the whole deck at once).'} Not sent as forces: wind and flange lateral bending (GirderDetail\'s own constructibility and deck overhang results, with the bracket f_ℓ, are in girderDetail.checks.constr).`,   // S2-8 (was: not sent: construction live load, deck placement sequence)
     ...(R.wUT || R.wUF ? [`Utilities (OWN16, GD54b/GD54c; MassDOT 3.5.5.2, 3.5.5.4) sent as their own loads on the steel (noncomposite) section, unfactored: ${R.MUT ? `M_UT/V_UT = existing utilities ${(R.wUT || 0).toFixed(3)} klf (DW factors: Strength 1.50 where they add, 0.65 where they relieve, with eta; Service 1.0; in the camber)` : 'no existing utilities on this girder'}; ${R.MUF ? `M_UF/V_UF = future utility allowance ${(R.wUF || 0).toFixed(3)} klf (Strength 1.25 where it adds, 0 where it relieves, with eta; Service 1.0 where it adds, 0 where it relieves; not in the camber)` : 'no future utility allowance on this girder'}. Neither is at deck placement (constructibility). M_DC1/V_DC1 do not include them.`] : []),
     ...(() => { const L = gdLF(); return gdLFid(L) ? [] : [`Owner load rules of ${L.o} (OWN6–OWN8), applied in GirderDetail's own checks, are NOT in these unfactored forces: ${[L.m !== 1 ? `design load multiplier ${L.m} on HL-93 LL+IM at the Strength and Service limit states (not on the pedestrian load)` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (1/eta on the minimum factors)` : '', L.h0 ? 'haunch taken as 0 in composite section properties (deck.haunch is the haunch as entered; the forces come from an analysis with the haunch at 0 in the composite stiffness)' : ''].filter(Boolean).join('; ')}. They are sent in ownerRules; ST-Girder applies them to its own checks.`]; })()];   // OWN6–OWN8; GD49: also sent as data (ownerRules)
   // GD49 (engineer decision 2026-10-15; HANDOFF.md §4.9): the owner rules as data, optional field ownerRules, whenever the bridge publishes its load rules (bridge.lf).
@@ -18403,6 +18525,9 @@ function gdStPayload(g, addPL) {
   // S2-9 (2026-10-22): GirderDetail's negative-flexure result per span (optional, additive; ST-Girder uses it in place of its own 6.10.8 check while its plates and F_y are the payload's)
   const nf = gdStNegFlex(g); if (nf && !nf.why) p.girderDetail.checks = { negFlex: nf };
   else if (nf) p.notes.push(`GirderDetail's negative-flexure result (girderDetail.checks.negFlex) is not included: ${nf.why}. ST-Girder uses its own Article 6.10.8 check.`);
+  // S2-8 (2026-10-22): GirderDetail's deck-placement result per span (optional, additive; ST-Girder uses it in place of its own constructibility check while its plates and F_y are the payload's)
+  const cn = gdStConstr(g); if (cn && !cn.why) p.girderDetail.checks = { ...(p.girderDetail.checks || {}), constr: cn };
+  else if (cn) p.notes.push(`GirderDetail's deck-placement result (girderDetail.checks.constr) is not included: ${cn.why}. ST-Girder uses its own constructibility check, with M_DCc and M_CL where sent.`);
   return { ok: true, payload: p };
 }
 function gdStGet() { const s = document.getElementById('gd-st-g'), c = document.getElementById('gd-st-pl'); return gdStPayload(Math.round(nm(s ? s.value : P.sa.girder)) || 1, c ? c.checked : true); }
