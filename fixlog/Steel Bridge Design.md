@@ -21729,7 +21729,10 @@ No saved key or format changes.
   ratio −13.31 % to 0.00 % in 108 cases (the built-in simple span unchanged: both ends are abutments), largest ratio 0.621 → 0.594 (now the built-in);
   shear RF_inv up to +21.6 %; 0 pass/fail flips; nothing else changes. `tests/st-span.mjs` on gd_builtin_AASHTO_G2, gd_xsA_RIDOT_G2, gd_util_AASHTO_G2
   (spans 2 and 3): shear ratio −13.3 % in all 6 (e.g. builtin G2 span 2 0.513 → 0.444; GirderDetail GS pier 0.445), shear RF_inv +20 %, the end-panel
-  spacing check no longer listed on span 2 (both ends at piers), 0 flips. `--tool gd` subset, `tests/sbd-verify.mjs`: see the PR. Subset tested; the
-  full suite runs at the end of stage 2. Baselines re-recorded for the cases run (st.json 109, st_interior.json 6).
+  spacing check no longer listed on span 2 (both ends at piers), 0 flips. After merging origin/main (S2-9, negative flexure), the st subset (every girder
+  of builtin and util under AASHTO, and gd_xsA_RIDOT_G2; A = origin/main, B = this branch) and the same 6 spans were run again: the same shear
+  changes (−13.31 % to 0.00 %, RF_inv up to +20.3 %), nothing else, 0 flips. `--tool gd` subset (builtin/AASHTO, builtin28/MassDOT, util/CTDOT): every
+  section identical except `gd.dxf`, whose hash varies from run to run (no host change in this PR). `tests/sbd-verify.mjs` passes. Subset tested; the
+  full suite runs at the end of stage 2. Baselines re-recorded for the cases run on the merged file only (st.json 11 cases, st_interior.json 6).
 - **Other copies:** none.
 - **Open items:** item 3b above (engineer: should GirderDetail send the stiffener layout along the span, so each panel's d_o can be used?).
