@@ -21876,6 +21876,6 @@ presence in g_Δ); owner manuals as cited by SA3 (RIDOT BDM 2.4.2.6; MassDOT LRF
   (G1, G5 of every project) have status na: the check is not entered there (it was a pass before). ST-Girder's Δ is 1.405 to 1.410 times GirderDetail's;
   camber ST-Girder vs GirderDetail −0.15 % to −0.63 %.
 
-**How verified:** see the PR.
+**How verified:** subset tested (see the PR); full suite runs at the end of stage 2.
 
 **Other copies:** none.
