@@ -8613,6 +8613,7 @@ function buildExternal(ext, L, llf){
     M_DW :(x)=>interp('M_DW',x),  V_DW :(x)=>-interp('V_DW',x),
     M_LLpos:(x)=>interp('M_LLpos',x)*fPos, M_LLneg:(x)=>interp('M_LLneg',x)*fNeg,
     V_LLpos:(x)=>-interp('V_LLneg',x)*fV, V_LLneg:(x)=>-interp('V_LLpos',x)*fV,
+    V_PLpos:(x)=>-interp('V_PLneg',x)*fV, V_PLneg:(x)=>-interp('V_PLpos',x)*fV,   // S2-3: the pedestrian part of V_LLpos / V_LLneg (app convention)
     V_LL:(x)=>{const p=interp('V_LLpos',x)*fV,n=interp('V_LLneg',x)*fV;return Math.max(Math.abs(p),Math.abs(n));},
     llFac:{pos:fPos,neg:fNeg,v:fV} };
 }
@@ -8786,7 +8787,7 @@ function gdNoteLines(ext){
     diffs:['C_b = 1.0 and one unbraced length L_b for the whole span (GirderDetail: C_b and L_b per location)',
       'no Appendix A6 (web plastification) for negative flexure',
       'shear without tension-field action (end-panel V_cr basis)',
-      'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)'+(ext.ownerRules?'; the owner load rules GirderDetail sends with the demands (η, design load multiplier, haunch 0 in properties) are applied to them here':'')],
+      ...(ext.ownerRules?['the owner load rules GirderDetail sends with the demands (η, design load multiplier, haunch 0 in properties) are applied here']:[])],
     tbc:'Known differences to be confirmed by the engineer.'};
 }
 /* Owner load rules from GirderDetail (GD49, engineer decision 2026-10-15; HANDOFF.md §4.9, optional field ownerRules). GirderDetail applies the bridge
@@ -8808,7 +8809,9 @@ function ownLFOf(ext){ const r=ext&&extFromGD(ext)&&ext.ownerRules; if(!r||typeo
     rt:t&&+t.rf>0? +t.rf : null, rtFat:t&&+t.fatigue>0? +t.fatigue : null, rtKind:t?String(t.kind||''):'',
     cite:{m:String(lm.cite||''), eta:String(E.cite||''), h:String(r.haunchCite||''), rt:t?String(t.cite||''):''}}; }
 // the girder-check load factors of a rule set: Strength I maximum (DC, DW, LL) and Service II LL
-function lfFac(L){ return {gDC:1.25*L.eta, gDW:1.5*L.eta, gLL:1.75*L.eta*L.m, gS2:1.30*L.m}; }
+function lfFac(L){ return {gDC:1.25*L.eta, gDW:1.5*L.eta, gLL:1.75*L.eta*L.m, gS2:1.30*L.m, gDCn:0.90*L.etaN, gDWn:0.65*L.etaN}; }   // S2-3: gDCn, gDWn = Strength I minimum factors 0.90/η, 0.65/η (Table 3.4.1-2, Eq. 1.3.2.1-3)
+// S2-3 (2026-10-22): the factor of one permanent load for the effect of sign s1 (+1, −1): maximum where it adds (s1·M ≥ 0), minimum where it relieves (3.4.1), as GirderDetail's gF
+const lfBy=(M,mx,mn,s1)=>s1*M>=0? mx : mn;
 const lfS=R=>(R&&R.lf)||{...LF_ST,...lfFac(LF_ST),plOn:false};
 // Edition statement ("follow the owner", engineer decision 2026-10-19; same basis as GirderDetail's OWN_RULES): ST-Girder computes to
 // AASHTO LRFD 10th Ed. (2024); with an owner from GirderDetail its rules are on top, and the edition the owner's manual is written to is named.
@@ -8822,8 +8825,8 @@ const llD=(v,q,m)=>q&&m!==1? v-q+q/m : v;
 // the owner rules in words (banner, Inputs tab, report 1 and 2)
 function ownLines(R){ const L=R&&R.lf; if(!L||!L.on) return null; const f3=v=>fmt(v,3), out=[];
   out.push(L.m!==1? 'Design load multiplier m = '+fmt(L.m,2)+' on HL-93 LL+IM at Strength I and Service II'+(L.cite.m?' ('+L.cite.m+')':'')+'; not on the live-load deflection, fatigue, constructibility or the load rating'+(L.plOn?'; not on the pedestrian load: LL+IM used = (LL+IM+PL) − PL + PL/m':'')+'.' : 'No design load multiplier (m = 1).');
-  out.push('Load modifier η = η_D·η_R·η_I = '+fmt(L.eD,2)+' × '+fmt(L.eR,2)+' × '+fmt(L.eI,2)+' = '+f3(L.pr)+(L.cite.eta?' ('+L.cite.eta+')':'')+': Strength I maximum load factors × η = '+f3(L.eta)+' (AASHTO LRFD 1.3.2.1; Eq. 1.3.2.1-2 with η ≥ 0.95). The minimum factors × 1/η = '+f3(L.etaN)+' do not arise: ST-Girder uses maximum factors only. Service II, fatigue, constructibility and the rating: η = 1.');
-  out.push('Factors used: Strength I γ_DC = 1.25η = '+f3(L.gDC)+', γ_DW = 1.50η = '+f3(L.gDW)+', γ_LL = 1.75ηm = '+f3(L.gLL)+'; Service II γ_LL = 1.30m = '+f3(L.gS2)+'.');
+  out.push('Load modifier η = η_D·η_R·η_I = '+fmt(L.eD,2)+' × '+fmt(L.eR,2)+' × '+fmt(L.eI,2)+' = '+f3(L.pr)+(L.cite.eta?' ('+L.cite.eta+')':'')+': Strength I maximum load factors × η = '+f3(L.eta)+' (AASHTO LRFD 1.3.2.1; Eq. 1.3.2.1-2 with η ≥ 0.95). Strength I minimum load factors × 1/η = '+f3(L.etaN)+' (Eq. 1.3.2.1-3), used for each permanent load where it relieves the effect checked (3.4.1). Service II, fatigue, constructibility and the rating: η = 1.');
+  out.push('Factors used: Strength I γ_DC = 1.25η = '+f3(L.gDC)+' (0.90/η = '+f3(L.gDCn)+' where it relieves), γ_DW = 1.50η = '+f3(L.gDW)+' (0.65/η = '+f3(L.gDWn)+' where it relieves), γ_LL = 1.75ηm = '+f3(L.gLL)+'; Service II γ_LL = 1.30m = '+f3(L.gS2)+'.');
   out.push(L.h0? 'Haunch taken as 0 in every composite section property (elastic n and 3n sections, cracked section, M_p)'+(L.cite.h?' ('+L.cite.h+')':'')+'; its weight is in the imported DC1; the drawing shows the haunch as entered.' : 'Haunch in the composite section properties as entered.');
   if(R.deckD) out.push('Transverse deck design (Deck tab): Strength I M_u = '+lfP(R.deckD.gDC,'1.25')+' M_DC + '+lfP(R.deckD.gDW,'1.50')+' M_DW + '+lfP(R.deckD.gLL,'1.75')+' M_LL+IM (1.25η, 1.50η, 1.75ηm) for the interior bays (Table A4-1) and the overhang wheel load; the deck has no Service check in this tool.');
   if(L.rt) out.push('Design rating target: HL-93 inventory RF ≥ '+fmt(L.rt,2)+(L.rtFat?' (fatigue '+fmt(L.rtFat,2)+')':'')+(L.cite.rt?' ('+L.cite.rt+')':'')+'; checked on the Rating tab, reported only (no resizing).');
@@ -8849,7 +8852,7 @@ function utLines(R){ const U=R&&R.ok&&R.ut; if(!U) return null; const f3=v=>fmt(
 function utTxM(R,q,sg){ const U=R&&R.ut; if(!U||q.Mut==null) return {sym:'',val:''}; const F=U.F.U;
   return {sym:(U.hasUT?'+\\gamma_{UT}M_{UT}':'')+(U.hasUF?'+\\gamma_{UF}M_{UF}':''),
     val:(U.hasUT?'+'+nx(utG(q.Mut,sg,F.t,F.tn),3)+'('+nx(q.Mut,0)+')':'')+(U.hasUF?'+'+nx(utG(q.Muf,sg,F.f,F.fn),3)+'('+nx(q.Muf,0)+')':'')}; }
-function utTxV(R,q){ const U=R&&R.ut; if(!U||q.Vut==null) return {sym:'',val:''}; const F=U.F.U, sg=(q.Vd+q.uV)>=0?1:-1;
+function utTxV(R,q){ const U=R&&R.ut; if(!U||q.Vut==null) return {sym:'',val:''}; const F=U.F.U, sg=q.VuSg!=null? q.VuSg : (q.Vd+q.uV)>=0?1:-1;   // S2-3: the direction of V_u
   return {sym:(U.hasUT?'+\\gamma_{UT}V_{UT}':'')+(U.hasUF?'+\\gamma_{UF}V_{UF}':''),
     val:(U.hasUT?'+'+nx(utG(q.Vut,sg,F.t,F.tn),3)+'('+nx(q.Vut,1)+')':'')+(U.hasUF?'+'+nx(utG(q.Vuf,sg,F.f,F.fn),3)+'('+nx(q.Vuf,1)+')':'')}; }
 function UtBanner({R}){ const ls=utLines(R); if(!ls) return null;
@@ -9375,7 +9378,7 @@ function computeAll(inp){
   try{
     const sec=inp.sec, mat=inp.mat, deck0=inp.deck, geom=inp.geom;
     // GD49: the owner load rules of a GirderDetail import (identity otherwise): Strength I maximum factors and Service II LL factor
-    const OWN=ownLFOf(inp.external), LFc=lfFac(OWN), gDC=LFc.gDC, gDW=LFc.gDW, gLL=LFc.gLL, gS2=LFc.gS2;
+    const OWN=ownLFOf(inp.external), LFc=lfFac(OWN), gDC=LFc.gDC, gDW=LFc.gDW, gLL=LFc.gLL, gS2=LFc.gS2, gDCn=LFc.gDCn, gDWn=LFc.gDWn;
     // resolve grades
     const Fyf=+mat.Fyf, Fyw=+mat.Fyw, Es=+mat.Es||29000, Fyc=Fyf, Fyt=Fyf;
     const matR={...mat,Fyf,Fyw,Es,Fyc,Fyt};
@@ -9532,18 +9535,29 @@ function computeAll(inp){
       // GD49: owner factors (1.25, 1.50, 1.75 without owner rules); MlD, MlnD, VlD: LL+IM with the pedestrian part taken without m (GD45; = Ml, Mln, Vl otherwise)
       const qM=plOn&&Ml>0? ext.M_PLpos(x):0, qMn=plOn&&Mln<0? ext.M_PLneg(x):0, qV=plOn? ext.V_PLq(x):0;
       const MlD=plOn? llD(Ml,qM,OWN.m):Ml, MlnD=plOn? llD(Mln,qMn,OWN.m):Mln, VlD=plOn? llD(Math.abs(Vl),qV,OWN.m):Vl;
-      const Mu =gDC*(M1+M2)+gDW*Mw+gLL*MlD;            // factored, +LL case
-      const Mun=gDC*(M1+M2)+gDW*Mw+gLL*MlnD;           // factored, −LL case
-      if(!UTon){ const Vu=Math.abs(gDC*(V1+V2)+gDW*Vw)+gLL*Math.abs(VlD);
-      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu,Mun,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{})}; }
+      /* S2-3 (Steel Bridge Design stage 2, 2026-10-22; engineer decision: GirderDetail's method): Strength I with each permanent load (DC1, DC2, DW)
+         at its maximum factor where it adds to the effect checked and its minimum factor where it relieves it (AASHTO LRFD 10th Ed. 3.4.1, Table 3.4.1-2:
+         DC 1.25/0.90, DW 1.50/0.65; × η and × 1/η under the owner rules, 1.3.2.1), as GirderDetail (gSet). Was: the maximum factors on every load.
+         gMp, gMn: the factors {DC1, DC2, DW} of +M_u and −M_u. Shear: V_u in each direction (s = +1, −1) with the factors chosen for that direction and the
+         LL+IM shear of that direction (an import's V_LL+ / V_LL−; ST-Girder's own analysis: |V_LL| both ways, as before); V_u = the larger, VuSg its direction. */
+      const gMp=[lfBy(M1,gDC,gDCn,1),lfBy(M2,gDC,gDCn,1),lfBy(Mw,gDW,gDWn,1)], gMn=[lfBy(M1,gDC,gDCn,-1),lfBy(M2,gDC,gDCn,-1),lfBy(Mw,gDW,gDWn,-1)];
+      const Mu =gMp[0]*M1+gMp[1]*M2+gMp[2]*Mw+gLL*MlD;     // factored, +LL case
+      const Mun=gMn[0]*M1+gMn[1]*M2+gMn[2]*Mw+gLL*MlnD;    // factored, −LL case
+      const VlP=useExt? Math.max(ext.V_LLpos(x),0) : Math.abs(Vl), VlN=useExt? Math.min(ext.V_LLneg(x),0) : -Math.abs(Vl);
+      const VlDP=plOn? llD(VlP,ext.V_PLpos(x),OWN.m) : VlP, VlDN=plOn? llD(VlN,ext.V_PLneg(x),OWN.m) : VlN;   // GD45: the pedestrian part without m
+      const gVp=[lfBy(V1,gDC,gDCn,1),lfBy(V2,gDC,gDCn,1),lfBy(Vw,gDW,gDWn,1)], gVn=[lfBy(V1,gDC,gDCn,-1),lfBy(V2,gDC,gDCn,-1),lfBy(Vw,gDW,gDWn,-1)];
+      const VdP=gVp[0]*V1+gVp[1]*V2+gVp[2]*Vw, VdN=gVn[0]*V1+gVn[1]*V2+gVn[2]*Vw;   // factored permanent shear, each direction (signed)
+      if(!UTon){ const vP=VdP+gLL*VlDP, vN=-(VdN+gLL*VlDN), VuSg=vP>=vN?1:-1, Vu=Math.max(vP,vN);
+      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu,Mun,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{}),gMp,gMn,VuSg,gV:VuSg>0?gVp:gVn,VlS:VuSg>0?VlDP:VlDN,VlS0:VuSg>0?VlP:VlN,...(plOn?{qVS:VuSg>0?ext.V_PLpos(x):ext.V_PLneg(x)}:{})}; }
       // GD54c: the utilities, factor by sign (+M_u case: a positive utility moment adds; −M_u case: a negative one adds);
-      // shear: the worse direction of the factored dead load + utilities (without utilities this is |V_D| exactly), plus γ_LL|V_LL|
+      // shear (S2-3): each direction with its own permanent factors, utility factors and LL+IM shear; the larger governs
       const Mut=ext.M_UT(x), Muf=ext.M_UF(x), Vut=ext.V_UT(x), Vuf=ext.V_UF(x), q={Mut,Muf};
-      const uP=uSum(q,1,'U'), uN=uSum(q,-1,'U'), Vd=gDC*(V1+V2)+gDW*Vw, F=UF_.U;
-      const vDir=sg=>sg*(Vd+uFac(Vut,sg,F.t,F.tn)*Vut+uFac(Vuf,sg,F.f,F.fn)*Vuf), vP=vDir(1), vN=vDir(-1), vSg=vP>=vN?1:-1;
-      const uV=vSg*Math.max(vP,vN)-Vd;                  // the factored utility shear in the governing direction (signed, app convention)
-      const Vu=Math.max(vP,vN)+gLL*Math.abs(VlD);
-      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu:Mu+uP,Mun:Mun+uN,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{}),Mut,Muf,Vut,Vuf,uP,uN,uV,Vd};
+      const uP=uSum(q,1,'U'), uN=uSum(q,-1,'U'), F=UF_.U;
+      const uVd=sg=>uFac(Vut,sg,F.t,F.tn)*Vut+uFac(Vuf,sg,F.f,F.fn)*Vuf;
+      const vP=VdP+uVd(1)+gLL*VlDP, vN=-(VdN+uVd(-1)+gLL*VlDN), VuSg=vP>=vN?1:-1;
+      const uV=uVd(VuSg), Vd=VuSg>0?VdP:VdN;            // the factored utility shear and permanent shear in the governing direction (signed, app convention)
+      const Vu=Math.max(vP,vN);
+      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu:Mu+uP,Mun:Mun+uN,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{}),Mut,Muf,Vut,Vuf,uP,uN,uV,Vd,gMp,gMn,VuSg,gV:VuSg>0?gVp:gVn,VlS:VuSg>0?VlDP:VlDN,VlS0:VuSg>0?VlP:VlN,...(plOn?{qVS:VuSg>0?ext.V_PLpos(x):ext.V_PLneg(x)}:{})};
     });
     const diag=stations;
     const MuPeak=Math.max(...stations.map(d=>d.Mu)), VuPeak=Math.max(...stations.map(d=>d.Vu));
@@ -9553,6 +9567,7 @@ function computeAll(inp){
     // staged flange stresses at a station (kip-ft in → ksi). Sign: fB + = bottom tension; fT + = top compression.
     // Section per component: DC1 → bare; others → composite (3n / n) when M ≥ 0, cracked (steel+rebar) when M < 0.
     const stageF=(st,g1,g2,gw,gll,des,uk)=>{   // des (GD49): the owner combinations' LL+IM (MlD, MlnD; = Ml, Mln without a pedestrian part); uk (GD54c): the utility factor set
+      if(uk==='U') return stageFU(st,gll,des);   // S2-3: Strength I, each permanent load by sign per case (below)
       const sg=segP[st.si];
       const one=(M,kind)=>{ let Sb,St;
         if(kind==='dc1'){ Sb=sg.bare.Sb; St=sg.bare.StSteel; }
@@ -9568,6 +9583,25 @@ function computeAll(inp){
       return { pos:{fB:dc.fB+d2.fB+dw.fB+lp.fB, fT:dc.fT+d2.fT+dw.fT+lp.fT},
                neg:{fB:dc.fB+d2.fB+dw.fB+ln.fB, fT:dc.fT+d2.fT+dw.fT+ln.fT},
                parts:{dc,d2,dw,lp,ln} };
+    };
+    /* S2-3 (2026-10-22): Strength I staged stresses (every stageF call with the utility set 'U' had g1 = g2 = γ_DC, gw = γ_DW): the +M case (pos) with the
+       factors of +M_u (st.gMp) and the −M case (neg) with those of −M_u (st.gMn), each permanent load at its maximum or minimum factor by sign (3.4.1).
+       parts = the +M case's components; partsN = the −M case's. */
+    const stageFU=(st,gll,des)=>{
+      const sg=segP[st.si];
+      const one=(M,kind)=>{ let Sb,St;
+        if(kind==='dc1'){ Sb=sg.bare.Sb; St=sg.bare.StSteel; }
+        else if(M>=0){ const s=kind==='ll'?sg.cN:sg.c3N; Sb=s.Sb; St=s.StSteel; }
+        else { Sb=sg.cr.Sb; St=sg.cr.St; }
+        return {fB:M*12/Sb, fT:M*12/St}; };
+      const gp=st.gMp, gn=st.gMn;
+      const dc=one(gp[0]*st.M1,'dc1'), d2=one(gp[1]*st.M2,'lt'), dw=one(gp[2]*st.Mw,'lt');
+      const dcN=one(gn[0]*st.M1,'dc1'), d2N=one(gn[1]*st.M2,'lt'), dwN=one(gn[2]*st.Mw,'lt');
+      const lp=one(gll*(des?st.MlD:st.Ml),'ll'), ln=one(gll*(des?st.MlnD:st.Mln),'ll');
+      const up=UTon? one(uSum(st,1,'U'),'dc1') : {fB:0,fT:0}, un=UTon? one(uSum(st,-1,'U'),'dc1') : {fB:0,fT:0};
+      return { pos:{fB:dc.fB+d2.fB+dw.fB+lp.fB+up.fB, fT:dc.fT+d2.fT+dw.fT+lp.fT+up.fT},
+               neg:{fB:dcN.fB+d2N.fB+dwN.fB+ln.fB+un.fB, fT:dcN.fT+d2N.fT+dwN.fT+ln.fT+un.fT},
+               parts:{dc,d2,dw,lp,ln,...(UTon?{up,un}:{})}, partsN:{dc:dcN,d2:d2N,dw:dwN} };
     };
 
     /* ---------- Service II (6.10.4.2.2) — governing station, both flanges, both LL cases ---------- */
@@ -9632,7 +9666,7 @@ function computeAll(inp){
     //   My = MD1 + MD2 + MAD,  MAD = S_n·(Fyf − f_D1 − f_D2) for each flange, lesser flange governs.
     const contSpan = useExt && hasNeg;
     const yieldMy=(st,sg)=>{
-      const MD1=UTon? gDC*st.M1+st.uP : gDC*st.M1, MD2=gDC*st.M2+gDW*st.Mw;   // k-ft, factored permanent (GD49: × η under the owner rules; GD54c: + the factored utilities, steel section)
+      const MD1=UTon? st.gMp[0]*st.M1+st.uP : st.gMp[0]*st.M1, MD2=st.gMp[1]*st.M2+st.gMp[2]*st.Mw;   // k-ft, factored permanent (GD49: × η under the owner rules; GD54c: + the factored utilities, steel section; S2-3: the factors of +M_u)
       const fd=stageF(st,gDC,gDC,gDW,0,false,'U').pos;            // ksi, fB tension+, fT compression+
       const MADb=sg.cN.Sb*(Fyf-fd.fB)/12, MADt=sg.cN.StSteel*(Fyf-fd.fT)/12;
       const MyB=MD1+MD2+MADb, MyT=MD1+MD2+MADt;
@@ -9747,7 +9781,7 @@ function computeAll(inp){
     const shearCalc = stations.map(st=>{
       const isEnd = (st.x<=endPanelLen+1e-6) || (st.x>=Lft-endPanelLen-1e-6);
       const Vn = isEnd? Vcr : VnInt;
-      return {x:st.x, Vu:st.Vu, V1:st.V1, V2:st.V2, Vw:st.Vw, Vl:st.Vl,
+      return {x:st.x, Vu:st.Vu, V1:st.V1, V2:st.V2, Vw:st.Vw, Vl:st.Vl, gV:st.gV, VuSg:st.VuSg,
         isEnd, tensionField:(!isEnd&&stiffened), Vn, phiVn:phiv*Vn, dc:st.Vu/(phiv*Vn)};
     });
     const shearR={phiv,Vp,Cv,kShear,Vcr,VnInt,stiffened,doSpc,propTF,VuPeak,dtw,slim1,slim2,xGov:stVGov.x,
@@ -11332,7 +11366,7 @@ function DiagramsTab({R,inp,set}){
     const U=R.ut&&R.ut.F.U, ut=a('M_UT'), uf=a('M_UF'), vt=a('V_UT'), vf=a('V_UF'), sv=(v1+v2+vw)>=0?1:-1;
     const uM=sg=>U? utG(ut,sg,U.t,U.tn)*ut+utG(uf,sg,U.f,U.fn)*uf : 0, uVv=U? utG(vt,sv,U.t,U.tn)*vt+utG(vf,sv,U.f,U.fn)*vf : 0;
     return {x:+s.x,M1:m1,M2:m2,Mw:mw,Mlp:mlp,Mln:mln,
-      Mup:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mlp,'M_PLpos')+uM(1),Mun:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mln,'M_PLneg')+uM(-1),
+      Mup:lfBy(m1,F.gDC,F.gDCn,1)*m1+lfBy(m2,F.gDC,F.gDCn,1)*m2+lfBy(mw,F.gDW,F.gDWn,1)*mw+F.gLL*d(mlp,'M_PLpos')+uM(1),Mun:lfBy(m1,F.gDC,F.gDCn,-1)*m1+lfBy(m2,F.gDC,F.gDCn,-1)*m2+lfBy(mw,F.gDW,F.gDWn,-1)*mw+F.gLL*d(mln,'M_PLneg')+uM(-1),   // S2-3: by sign
       V1:v1,V2:v2,Vw:vw,Vlp:vlp,Vln:vln,
       Vup:F.gDC*(v1+v2)+F.gDW*vw+F.gLL*d(vlp,'V_PLpos')+uVv};});
   const lnR=(rows,k,name,color,dash)=>({x:rows.map(r=>r.x),y:rows.map(r=>r[k]||0),name,mode:'lines',line:{color,width:2,dash:dash||'solid'}});
@@ -11563,7 +11597,7 @@ function FlexTab({R}){
           {fcAll.map((fc,i,a)=><option key={i} value={i}>{stnLabel(fc,i,a)}</option>)}
         </select>)}
     {flexPosCard(R)}
-    <Card title="Strength I flange stresses" refTag="staged · 1.25DC + 1.50DW + 1.75LL">
+    <Card title="Strength I flange stresses" refTag="staged · γ_DC, γ_DW max/min by sign (3.4.1) + γ_LL LL">
       <KV rows={[['Peak +M_u',fmt(f.MuPeak,0),'k-ft'],['Governing station',fmt(f.gov&&f.gov.x||0,1),'ft'],
         ['f_bu top flange',fmt(f.fbuTop,1),'ksi'],['f_bu bottom flange',fmt(f.fbuBot,1),'ksi']]}/>
     </Card>
@@ -11601,7 +11635,7 @@ function shearWorkedCard(R,scSel,right){ const s=R.shearR, Fyw=R.matR.Fyw, pass2
           : <ML s={Tx`V_n=V_p\!\left(C+\dfrac{0.87(1-C)}{\sqrt{1+(d_o/D)^2}}\right)=${nx(s.VnInt,0)}\;\text{kip (tension field)}`}/>}
         <ML s={Tx`\frac{V_u}{\phi_vV_n}=\frac{${nx(scSel.Vu,0)}}{${nx(scSel.phiVn,0)}}=${nx(scSel.dc,3)}\;${pass2?'\\checkmark':'\\text{N.G.}'}`}/>
         <DLinks items={[{to:'venv',what:'V_u'}]}/>
-      <div className="mnote">V_u is the Strength I factored shear envelope at this station: |{lfP(lfS(R).gDC,'1.25')}(V_DC1+V_DC2)+{lfP(lfS(R).gDW,'1.50')} V_DW| + {lfP(lfS(R).gLL,'1.75')}|V_LL| (LL with DF and impact{lfS(R).on?'; owner load rules'+(lfS(R).plOn?', LL+IM = (LL+IM+PL) − PL + PL/m':''):''}). φ_v = 1.0.{s.stiffened?' End-panel length taken as the first stiffener spacing d_o = '+fmt(s.doSpc,0)+' in from each support.':''}</div>
+      <div className="mnote">V_u is the Strength I factored shear envelope at this station: the larger of the two directions of γ_DC1 V_DC1 + γ_DC2 V_DC2 + γ_DW V_DW + {lfP(lfS(R).gLL,'1.75')} V_LL, with γ_DC = {lfP(lfS(R).gDC,'1.25')} / {lfP(lfS(R).gDCn,'0.90')} and γ_DW = {lfP(lfS(R).gDW,'1.50')} / {lfP(lfS(R).gDWn,'0.65')} (maximum where the load adds, minimum where it relieves; 3.4.1) and the LL+IM shear of that direction{R.useExt?'':' (|V_LL| in both directions with ST-Girder’s own analysis)'}; here γ = {fmt(scSel.gV?scSel.gV[0]:NaN,3)}, {fmt(scSel.gV?scSel.gV[1]:NaN,3)}, {fmt(scSel.gV?scSel.gV[2]:NaN,3)} (LL with DF and impact{lfS(R).on?'; owner load rules'+(lfS(R).plOn?', LL+IM = (LL+IM+PL) − PL + PL/m':''):''}). φ_v = 1.0.{s.stiffened?' End-panel length taken as the first stiffener spacing d_o = '+fmt(s.doSpc,0)+' in from each support.':''}</div>
       </Card>;
 }
 function ShearTab({R}){
@@ -11632,7 +11666,7 @@ function ShearTab({R}){
     <Card title="Shear Demand vs Capacity" refTag="AASHTO 6.10.9 · Vu envelope vs φVn">
       <Fig h={360} data={[
         {x:sx,y:stns.map(p=>p.Vu),name:'Vu (Strength I, |envelope|)',fill:'tozeroy',fillcolor:'rgba(28,79,196,.06)',line:{color:'#1C4FC4',width:2.2}},
-        {x:sx,y:stns.map(p=>Math.abs(1.25*(p.V1+p.V2)+1.5*p.Vw)),name:'factored dead load |V|',line:{color:'#15803D',width:1.6,dash:'dot'}},
+        {x:sx,y:stns.map(p=>p.gV?Math.abs(p.gV[0]*p.V1+p.gV[1]*p.V2+p.gV[2]*p.Vw):Math.abs(1.25*(p.V1+p.V2)+1.5*p.Vw)),name:'factored dead load |V| (V_u direction)',line:{color:'#15803D',width:1.6,dash:'dot'}},
         hl(s.phiv*s.Vcr,'φVn end panel (C·Vp)','#B3261E'),
         ...(s.stiffened?[hl(s.phiv*s.VnInt,'φVn interior (tension field)','#0E7490','dot')]:[])]}
         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'shear (kip)',rangemode:'tozero'}}}/>
@@ -12473,6 +12507,7 @@ function crModel(R,inp,o){
       sub(s,'Owner load rules (from GirderDetail)',(L.cite.m||L.cite.eta||'AASHTO LRFD 1.3.2.1')+' · Table 3.4.1-1',<React.Fragment><div className="cr-tab">
         <ML s={Tx`\eta=\max(\eta_D\eta_R\eta_I,\;0.95)=\max(${nx(L.eD,2)}\cdot${nx(L.eR,2)}\cdot${nx(L.eI,2)},\;0.95)=${nx(L.eta,3)}\qquad m=${nx(L.m,2)}`}/>
         <ML s={Tx`\text{Strength I: }\gamma_{DC}=1.25\eta=${nx(L.gDC,3)},\quad\gamma_{DW}=1.50\eta=${nx(L.gDW,3)},\quad\gamma_{LL}=1.75\eta m=1.75(${nx(L.eta,3)})(${nx(L.m,2)})=${nx(L.gLL,3)}`}/>
+        <ML s={Tx`\text{Strength I minimum (where a permanent load relieves the effect, 3.4.1): }\gamma_{DC,min}=\frac{0.90}{\eta}\to0.90(${nx(L.etaN,3)})=${nx(L.gDCn,3)},\quad\gamma_{DW,min}=0.65(${nx(L.etaN,3)})=${nx(L.gDWn,3)}\quad(\text{Eq. 1.3.2.1-3})`}/>
         <ML s={Tx`\text{Service II: }\gamma_{LL}=1.30m=1.30(${nx(L.m,2)})=${nx(L.gS2,3)}`}/>
         {L.plOn&&<ML s={Tx`(LL+IM)_{used}=(LL+IM+PL)-PL+\frac{PL}{m}\quad\Rightarrow\quad\gamma_{LL}(LL+IM)_{used}=1.75\eta\,m(LL+IM)+1.75\eta\,PL`}/>}
         <ML s={Tx`\text{haunch in composite properties: }${L.h0?'0\;\text{(owner rule; entered '+nx(+dk.haunch,2)+'\;\text{in})}':nx(+dk.haunch,2)+'\;\text{in (as entered)}'}`}/></div>
@@ -12571,21 +12606,28 @@ function crModel(R,inp,o){
       <div className="mnote">Type (a)/(k) steel I-girder with concrete deck, LRFD 4.6.2.2 (multiple presence included in the formulas; the lever rule includes m = 1.2). Along the span the live-load moment and shear envelopes are the HL-93 influence-line values at each station times DF_m and DF_v.</div></div>);
     const sM=at((R.flex.oos?R.stress.xGov:(R.flex.gov&&R.flex.gov.x))||L/2), sV=at(R.shearR.xGov||0);
     const OL=R.lf&&R.lf.on? R.lf : null;   // GD49: the owner load rules (the AASHTO factors 1.25, 1.50, 1.75, 1.30 exactly as before without them)
+    /* S2-3 (2026-10-22): the factors each station used (maximum where a permanent load adds to the effect, minimum where it relieves it, 3.4.1), worked with
+       their values; V_u in the governing direction (VuSg) with the LL+IM shear of that direction (VlS). Shared by both variants below. */
+    const sN=R.hasNeg? R.stations.reduce((b,q)=>q.Mun<b.Mun?q:b,R.stations[0]) : null, uMn=sN? utTxM(R,sN,-1) : null, gx=v=>nx(v,3), gLLx=gx(lfS(R).gLL);
+    const lcMV=<React.Fragment>
+      <ML s={Tx`M_u=\gamma_{DC1}M_{DC1}+\gamma_{DC2}M_{DC2}+\gamma_{DW}M_{DW}+\gamma_{LL}M_{LL+IM}${utTxM(R,sM,1).sym}=${gx(sM.gMp[0])}(${nx(sM.M1,0)})+${gx(sM.gMp[1])}(${nx(sM.M2,0)})+${gx(sM.gMp[2])}(${nx(sM.Mw,0)})+${gLLx}(${nx(sM.MlD,0)})${utTxM(R,sM,1).val}=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
+      {sN&&<ML s={Tx`-M_u=\gamma_{DC1}M_{DC1}+\gamma_{DC2}M_{DC2}+\gamma_{DW}M_{DW}+\gamma_{LL}M^{-}_{LL+IM}${uMn.sym}=${gx(sN.gMn[0])}(${nx(sN.M1,0)})+${gx(sN.gMn[1])}(${nx(sN.M2,0)})+${gx(sN.gMn[2])}(${nx(sN.Mw,0)})+${gLLx}(${nx(sN.MlnD,0)})${uMn.val}=${nx(sN.Mun,0)}\;\text{k-ft}\quad(x=${nx(sN.x,1)}')`}/>}
+      <ML s={Tx`V_u=\left|\gamma_{DC1}V_{DC1}+\gamma_{DC2}V_{DC2}+\gamma_{DW}V_{DW}${utTxV(R,sV).sym}+\gamma_{LL}V^{${sV.VuSg>0?'+':'-'}}_{LL+IM}\right|=\left|${gx(sV.gV[0])}(${nx(sV.V1,1)})+${gx(sV.gV[1])}(${nx(sV.V2,1)})+${gx(sV.gV[2])}(${nx(sV.Vw,1)})${utTxV(R,sV).val}+${gLLx}(${nx(sV.VlS,1)})\right|=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+      <div className="mnote">γ_DC = {lfP(lfS(R).gDC,'1.25')} / {lfP(lfS(R).gDCn,'0.90')}, γ_DW = {lfP(lfS(R).gDW,'1.50')} / {lfP(lfS(R).gDWn,'0.65')} (maximum where the load adds to the effect, minimum where it relieves it; 3.4.1, Table 3.4.1-2{lfS(R).on?'; × η and × 1/η, owner load rules':''}). V_u is the larger of the two directions; the LL+IM shear is that direction's envelope{R.useExt?' (V_LL+ or V_LL− of the import)':' (ST-Girder’s analysis: |V_LL| in both directions)'}.</div>
+    </React.Fragment>;
     const uM=utTxM(R,sM,1), uV=utTxV(R,sV), uS=R.ut?'+M_{UT}+M_{UF}\\;(\\text{steel section; }M_{UF}\\text{ only where it adds})':'';   // GD54c: '' without utilities
     if(!OL) sub(s,'Load combinations','Table 3.4.1-1',<div className="cr-tab">
-      <ML s={Tx`M_u=1.25(M_{DC1}+M_{DC2})+1.50M_{DW}+1.75M_{LL+IM}${uM.sym}=1.25(${nx(sM.M1,0)}+${nx(sM.M2,0)})+1.50(${nx(sM.Mw,0)})+1.75(${nx(sM.Ml,0)})${uM.val}=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
-      <ML s={Tx`V_u=\left|1.25(V_{DC1}+V_{DC2})+1.50V_{DW}${uV.sym}\right|+1.75\left|V_{LL+IM}\right|=\left|1.25(${nx(sV.V1,1)}+${nx(sV.V2,1)})+1.50(${nx(sV.Vw,1)})${uV.val}\right|+1.75(${nx(Math.abs(sV.Vl),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+      {lcMV}
       <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30M_{LL+IM}${uS}\;\text{(stresses accumulated on the stage sections)}`}/>
       {R.ut&&<div className="mnote">MassDOT utilities from GirderDetail as their own loads (factors in 2. Input parameters, MassDOT utilities): each utility factor by whether it adds to the effect checked; V_u in the worse direction.</div>}
-      <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
+      <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Each permanent load at its maximum factor where it adds to the effect and its minimum factor where it relieves it (3.4.1, Table 3.4.1-2; S2-3); V_u in the direction that governs, with the LL+IM shear of that direction.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
     else sub(s,'Load combinations (owner load rules of '+OL.o+')','Table 3.4.1-1 · 1.3.2.1',<div className="cr-tab">
-      {OL.plOn&&<ML s={Tx`M_{LL+IM,used}=M_{LL+IM+PL}-M_{PL}+\frac{M_{PL}}{m}=${nx(sM.Ml,1)}-${nx(sM.qM||0,1)}+\frac{${nx(sM.qM||0,1)}}{${nx(OL.m,2)}}=${nx(sM.MlD,1)}\;\text{k-ft}\qquad V_{LL+IM,used}=${nx(Math.abs(sV.Vl),1)}-${nx(sV.qV||0,1)}+\frac{${nx(sV.qV||0,1)}}{${nx(OL.m,2)}}=${nx(Math.abs(sV.VlD),1)}\;\text{kip}`}/>}
-      <ML s={Tx`M_u=1.25\eta(M_{DC1}+M_{DC2})+1.50\eta M_{DW}+1.75\eta m\,M_{LL+IM}${uM.sym}=${nx(OL.gDC,3)}(${nx(sM.M1,0)}+${nx(sM.M2,0)})+${nx(OL.gDW,3)}(${nx(sM.Mw,0)})+${nx(OL.gLL,3)}(${nx(sM.MlD,0)})${uM.val}=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
-      <ML s={Tx`V_u=\left|1.25\eta(V_{DC1}+V_{DC2})+1.50\eta V_{DW}${uV.sym}\right|+1.75\eta m\left|V_{LL+IM}\right|=\left|${nx(OL.gDC,3)}(${nx(sV.V1,1)}+${nx(sV.V2,1)})+${nx(OL.gDW,3)}(${nx(sV.Vw,1)})${uV.val}\right|+${nx(OL.gLL,3)}(${nx(Math.abs(sV.VlD),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+      {OL.plOn&&<ML s={Tx`M_{LL+IM,used}=M_{LL+IM+PL}-M_{PL}+\frac{M_{PL}}{m}=${nx(sM.Ml,1)}-${nx(sM.qM||0,1)}+\frac{${nx(sM.qM||0,1)}}{${nx(OL.m,2)}}=${nx(sM.MlD,1)}\;\text{k-ft}\qquad V^{${sV.VuSg>0?'+':'-'}}_{LL+IM,used}=${nx(sV.VlS0,1)}-(${nx(sV.qVS||0,1)})+\frac{${nx(sV.qVS||0,1)}}{${nx(OL.m,2)}}=${nx(sV.VlS,1)}\;\text{kip}`}/>}
+      {lcMV}
       <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30m\,M_{LL+IM}${uS}=M_{DC1}+M_{DC2}+M_{DW}+${nx(OL.gS2,3)}M_{LL+IM}${uS}\;\text{(stresses accumulated on the stage sections)}`}/>
       {R.ut&&<div className="mnote">MassDOT utilities from GirderDetail as their own loads (factors in 2. Input parameters, MassDOT utilities): each utility factor by whether it adds to the effect checked; V_u in the worse direction.</div>}
       <div className="mnote">Owner load rules of {OL.o} from GirderDetail (factors worked in 2. Input parameters, Owner load rules): η = {fmt(OL.eta,3)} on the Strength I maximum factors, design load multiplier m = {fmt(OL.m,2)} on HL-93 LL+IM at Strength I and Service II{OL.plOn?' (not on the pedestrian load PL)':''}. Live-load deflection, fatigue, constructibility and the load rating use neither η nor m.</div>
-      <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
+      <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Each permanent load at its maximum factor where it adds to the effect and its minimum factor where it relieves it (3.4.1, Table 3.4.1-2; S2-3); V_u in the direction that governs, with the LL+IM shear of that direction.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
     const locs=[]; const add=(lab,x)=>{ if(x==null||!isFinite(x)) return; const i=crNear(stn,x); const e=locs.find(l=>l.i===i); if(e) e.lab+=', '+lab; else locs.push({i,lab}); };
     add('left support',0); add('midspan',L/2); add('right support',L); add('governing +M',R.flex.gov&&R.flex.gov.x);
     if(R.hasNeg&&R.neg) add('governing −M',R.neg.negBGov.x); add('governing shear',R.shearR.xGov); add('Service II',R.stress.s2Gov&&R.stress.s2Gov.x);
@@ -12697,7 +12739,7 @@ function crModel(R,inp,o){
     <h3>Method</h3><ul className="cr-ul">
       <li>Stresses accumulate by construction stage on the section active at each stage: DC1 (self-weight, wet deck, added DC1) on the bare steel; DC2 and DW on the long-term composite (3n); live load on the short-term composite (n); in −M regions the cracked steel + longitudinal rebar section (concrete neglected; 6.10.1.1.1c).</li>
       <li>Stations: the span tenth-and-twentieth points plus both sides of every flange transition; each check is evaluated at every station with that station’s plates and demands, and the worst ratio is reported with its location.</li>
-      <li>Strength I = {lfP(lfS(R).gDC,'1.25')} DC + {lfP(lfS(R).gDW,'1.50')} DW + {lfP(lfS(R).gLL,'1.75')} (LL+IM); Service II = DC + DW + {lfP(lfS(R).gS2,'1.30')} (LL+IM){lfS(R).on?' (owner load rules from GirderDetail, see 2. Input parameters)':''}; constructibility = 1.25 DC + 1.50 construction live load; maximum load factors only. φ_f = φ_v = 1.0, φ_sc = 0.85.</li>
+      <li>Strength I = {lfP(lfS(R).gDC,'1.25')} DC + {lfP(lfS(R).gDW,'1.50')} DW + {lfP(lfS(R).gLL,'1.75')} (LL+IM), with {lfP(lfS(R).gDCn,'0.90')} DC and {lfP(lfS(R).gDWn,'0.65')} DW where a permanent load relieves the effect (3.4.1); Service II = DC + DW + {lfP(lfS(R).gS2,'1.30')} (LL+IM){lfS(R).on?' (owner load rules from GirderDetail, see 2. Input parameters)':''}; constructibility = 1.25 DC + 1.50 construction live load; maximum load factors only. φ_f = φ_v = 1.0, φ_sc = 0.85.</li>
       <li>Positive flexure: compact composite sections on the plastic moment (6.10.7.1, with the ductility reduction and, in continuous spans, 1.3R_hM_y); noncompact or noncomposite sections on the flange stresses (6.10.7.2, 6.10.8). Negative flexure: bottom flange F_nc = min(FLB, LTB) over L_b with C_b = 1.0 (6.10.8.2). Shear: end-panel C·V_p everywhere (conservative), tension field shown for interior panels.</li>
       <li>Camber: double integration of M/(E·I) on a fine station set on the stage sections (DC1 bare, DC2 and DW 3n).</li>
       <li>Sign convention: moments sagging +; stresses f_B + = bottom tension, f_T + = top compression; deflections + down.</li>

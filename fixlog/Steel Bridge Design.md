@@ -21343,3 +21343,60 @@ No saved key or format changes. No result changes on the test payloads (listed i
   and is not changed by this PR (open item).
 - **Open items:** (1) `pl-src` Fcrw: same 7.2 case to add if the engineer wants Preliminary sizing in step. (2) λ_rw: both tools use 5.7√(E/F_yc); the 10th Ed.
   definition of λ_rw in Art. 6.10.1.10.2 uses c_rw√(E/F_yc), with the edge-condition coefficient c_rw from a_wc limited to 4.6 ≤ c_rw ≤ 5.7 — not changed here (raise with the engineer).
+
+## 2026-10-22 — PR: claude/sbd-s2-3-loadfactors (S2-3: Steel Bridge Design stage 2, item 2: ST-Girder's Strength I load factors chosen maximum or minimum by sign, V_LL by direction, as GirderDetail; engineer decision 2026-10-22; PR link added after merge)
+
+No saved key or format changes.
+
+### S2-3. Strength I permanent-load factors by sign; shear by direction   [CALCULATION CHANGE — station M_u, −M_u, V_u and the Strength I staged stresses]
+- **Where (st-src):** `lfFac` (anchor `function lfFac(L){`) and new `lfBy`; `computeAll`: the factor line (anchor `const OWN=ownLFOf(inp.external), LFc=lfFac(OWN)`),
+  the stations (anchor `const Mu =gMp[0]*M1`), `stageF` (anchor `if(uk==='U') return stageFU(st,gll,des);`) and new `stageFU`, `yieldMy` (anchor
+  `const MD1=UTon? st.gMp[0]*st.M1`); `buildExternal` (new `V_PLpos`/`V_PLneg`); `utTxV`; `ownLines`, `gdNoteLines`; displays listed below.
+- **Before:**
+  ```js
+  const Mu =gDC*(M1+M2)+gDW*Mw+gLL*MlD;            // factored, +LL case
+  const Mun=gDC*(M1+M2)+gDW*Mw+gLL*MlnD;           // factored, −LL case
+  if(!UTon){ const Vu=Math.abs(gDC*(V1+V2)+gDW*Vw)+gLL*Math.abs(VlD); … }
+  // utilities: Vd=gDC*(V1+V2)+gDW*Vw; vDir=sg=>sg*(Vd+…utilities…); Vu=Math.max(vP,vN)+gLL*Math.abs(VlD);
+  ```
+  and every Strength I `stageF(st,gDC,gDC,gDW,…,'U')` with the maximum factors for both the +M and the −M case; `yieldMy` M_D1 = γ_DC M_DC1, M_D2 = γ_DC M_DC2 + γ_DW M_DW.
+- **After:**
+  ```js
+  function lfFac(L){ return {gDC:1.25*L.eta, gDW:1.5*L.eta, gLL:1.75*L.eta*L.m, gS2:1.30*L.m, gDCn:0.90*L.etaN, gDWn:0.65*L.etaN}; }
+  const lfBy=(M,mx,mn,s1)=>s1*M>=0? mx : mn;
+  const gMp=[lfBy(M1,gDC,gDCn,1),lfBy(M2,gDC,gDCn,1),lfBy(Mw,gDW,gDWn,1)], gMn=[lfBy(M1,gDC,gDCn,-1),lfBy(M2,gDC,gDCn,-1),lfBy(Mw,gDW,gDWn,-1)];
+  const Mu =gMp[0]*M1+gMp[1]*M2+gMp[2]*Mw+gLL*MlD;
+  const Mun=gMn[0]*M1+gMn[1]*M2+gMn[2]*Mw+gLL*MlnD;
+  const VlP=useExt? Math.max(ext.V_LLpos(x),0) : Math.abs(Vl), VlN=useExt? Math.min(ext.V_LLneg(x),0) : -Math.abs(Vl);
+  const VlDP=plOn? llD(VlP,ext.V_PLpos(x),OWN.m) : VlP, VlDN=plOn? llD(VlN,ext.V_PLneg(x),OWN.m) : VlN;
+  const gVp=[…by sign +1 on V1, V2, Vw…], gVn=[…−1…], VdP=gVp·V, VdN=gVn·V;
+  if(!UTon){ const vP=VdP+gLL*VlDP, vN=-(VdN+gLL*VlDN), VuSg=vP>=vN?1:-1, Vu=Math.max(vP,vN); … }
+  // utilities: vP=VdP+uVd(1)+gLL*VlDP, vN=-(VdN+uVd(-1)+gLL*VlDN); uV, Vd in the governing direction
+  ```
+  Stations also carry `gMp`, `gMn`, `VuSg`, `gV`, `VlS`, `VlS0` (and `qVS` with a pedestrian part). Every Strength I `stageF` call (utility set `'U'`)
+  goes to `stageFU`: the +M case with the factors of +M_u and the −M case with those of −M_u (`partsN` = the −M components). `yieldMy` uses the +M_u factors.
+- **Problem:** ST-Girder applied the maximum factors (1.25 DC, 1.50 DW) to every permanent load whatever its sign, so a dead load that relieves the effect
+  was over-weighted: unconservative for −M_u where the permanent load is positive (moment reversal near the inflection points). GirderDetail chooses each
+  load's factor by sign (`gSet`, anchor `gF = (M, mx, mn, s1) => s1 * M >= 0 ? mx : mn`). V_u used the larger of |V_LL+| and |V_LL−| with the
+  dead-load shear of either sign; now each direction is combined with its own LL+IM shear.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.4.1 (load factors chosen for the extreme force effect), Table 3.4.1-2 (DC 1.25/0.90,
+  DW 1.50/0.65); Art. 1.3.2.1, Eqs. 1.3.2.1-2 and -3 (η on the maximum factors, 1/η on the minimum factors, owner rules).
+- **Stand-alone path (no hand-off):** the same factor rule; the LL+IM shear is |V_LL| in both directions (ST-Girder's own analysis), as before.
+- **Displays (§6):** report "Load combinations" (both variants): M_u, −M_u (when the span has −M) and V_u worked with the factor of each load at the
+  station and the direction of V_u; the factors 1.25/0.90 and 1.50/0.65 (× η, × 1/η) stated; the owner-rules block works γ_DC,min = 0.90/η and γ_DW,min = 0.65/η;
+  Shear tab note (the factors at the selected station); the owner-rules text no longer says the minimum factors do not arise; the "Known differences"
+  banner no longer lists fixed maximum load factors; Diagrams for other spans use the same rule; the Strength I flange stress card's tag.
+- **Check case (hand), payload `def15_RIDOT_Iyes_G2` (RIDOT, η = 1.05, m = 1.2), x = 55 ft:** M_DC1 = 843.62, M_DC2 = 165.30, M_DW = 136.91,
+  M_LL− = −684.44 k-ft; γ_LL = 1.75(1.05)(1.2) = 2.205.
+  Before: −M_u = 1.3125(843.62 + 165.30) + 1.575(136.91) + 2.205(−684.44) = 1,324.21 + 215.64 − 1,509.19 = +30.65 k-ft (no negative demand).
+  After: 0.90/1.05 = 0.8571, 0.65/1.05 = 0.6190: −M_u = 0.8571(1,008.92) + 0.6190(136.91) − 1,509.19 = 864.79 + 84.75 − 1,509.19 = −559.65 k-ft.
+  +M_u at the same station is unchanged (5,470.42 k-ft; every permanent load adds).
+- **How verified:** `tests/check-syntax.mjs`; `tests/compare.mjs --tool st --payload all` (109 cases, compared with S2-2's readouts): station M_u, −M_u and
+  V_u change in all 109 (V_u at 108; the largest change xsA RIDOT G1 at the pier x = 110 ft, +M_u case −5,091.5 → −2,788.3 k-ft, the negative dead load
+  now at its minimum factor); 108 cases gain a negative design moment (−M_u from ≥ −1 to < −1 k-ft) at some station; no governing check ratio or rating
+  changes (Strength flexure +M, shear and bearing stiffener differ in the last floating-point digit only, from the changed order of the sum); 0 pass/fail
+  flips. `tests/st-span.mjs` on 20 interior spans (10 payloads × spans 2, 3): stations change, no check ratio or rating changes, 0 flips.
+  `tests/baselines/st.json` re-recorded from the run (`st.status` gains the minimum factors, `st.stations`, `st.R`, texts; `st.checks`/`st.governing`
+  in 40 cases by the last digit). `tests/baselines/st_interior.json` is re-recorded with S2-4's full interior run.
+- **Other copies:** none in ST-Girder; GirderDetail already uses this rule.
+- **Open items:** the LRFR rating keeps γ_DC = 1.25, γ_DW = 1.50 on |V| and the staged stresses (MBE, not this item).
