@@ -6,10 +6,9 @@ Engineer's trigger phrase: "continue with the steel bridge design app".
 S2-1 #428, S2-2 #429, S2-3 #453, S2-4 #455, S2-5 #426, S2-6 #456, S2-7 #457, S2-8 #458 (b9bee9a), S2-9 #454. Each tested on the subset only.
 
 ## Remaining
-1. Full suite, then re-record tests/baselines/{st,st_interior,gd}.json from runs (S2-3/S2-4 left stale cases; only subset cases are current).
-2. Regenerate all 100 gd_* payloads with --save-st (only builtin/AASHTO, util/AASHTO, xsA/RIDOT carry S2-9 negFlex and S2-8 constr fields).
-3. gd.dxf hash changes daily (run date in the DXF revision table): mask the date in the test, not the tool.
-4. Review the shortened gdConBlock (S2-8) rendered text once.
+- Full suite done and baselines re-recorded: #459 (1c8ac0c, 2026-10-28). Stage 2 complete.
+- gd.dxf hash changes daily (run date in the DXF): mask the date in the test, not the tool.
+- Review the shortened gdConBlock (S2-8) rendered text once.
 
 ## Open engineer questions (not blocking)
 1. Should GD send the full stiffener layout (ST uses one d_o per span from rowsBy)?
