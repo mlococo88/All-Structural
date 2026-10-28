@@ -36,13 +36,13 @@
    }
   },
   "builtin / RIDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
-    "gd.project": "e6e33c02d746",
+    "gd.project": "02bb53abce82",
     "pl.project": "2cb1fe9e52d0",
     "pl.checks": "adda549a82e4",
     "pl.analysis": "0e4720a3e381",
-    "gd.stPayloads": "6ee62ec844c8",
+    "gd.stPayloads": "8cc4813d67e1",
     "mod.df": "a8a522fd81ff",
     "rpt.df": "12a668d156ac",
     "mod.sa": "483306fd38cf",
@@ -70,13 +70,13 @@
    }
   },
   "builtin / MassDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "e5af8eb9c616",
     "pl.project": "3e6e501a0459",
     "pl.checks": "c890e6a269a2",
     "pl.analysis": "cd49fcb8f46f",
-    "gd.stPayloads": "d332546a7df1",
+    "gd.stPayloads": "2c1d10e1dae3",
     "mod.df": "9a4ff48cef9a",
     "rpt.df": "864ed9835692",
     "mod.sa": "ab11f4a2b70b",
@@ -104,13 +104,13 @@
    }
   },
   "builtin / CTDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "3eecdcf7a33a",
     "pl.project": "03e9ea7f6941",
     "pl.checks": "91fc16c4de4a",
     "pl.analysis": "b251e33f7fc5",
-    "gd.stPayloads": "177c07190fe3",
+    "gd.stPayloads": "ae3b5ae92749",
     "mod.df": "c607b04eb133",
     "rpt.df": "d0e438dca18b",
     "mod.sa": "c5373fe27183",
@@ -138,13 +138,13 @@
    }
   },
   "builtin28 / AASHTO": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "c05953f2a93f",
     "pl.project": "0e6a3f52f9c3",
     "pl.checks": "34f52f7388af",
     "pl.analysis": "8684eef03ff0",
-    "gd.stPayloads": "5a6b823e1dc3",
+    "gd.stPayloads": "46080a300f52",
     "mod.df": "2b18fc763def",
     "rpt.df": "7c1a6f44dcff",
     "mod.sa": "ab1bf761ba22",
@@ -172,13 +172,13 @@
    }
   },
   "builtin28 / RIDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "c211def4cf0b",
     "pl.project": "538c7744720c",
     "pl.checks": "0f707cb44bba",
     "pl.analysis": "b3e5621278b7",
-    "gd.stPayloads": "99ed2f6c6bf5",
+    "gd.stPayloads": "8c2f5996487c",
     "mod.df": "c2f0490647ca",
     "rpt.df": "51d5dee03026",
     "mod.sa": "3eb6368abd33",
@@ -240,13 +240,13 @@
    }
   },
   "builtin28 / CTDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "2eb9e0dc7c7a",
     "pl.project": "ed4a5a5581e8",
     "pl.checks": "d24ce9616831",
     "pl.analysis": "1dd9209def35",
-    "gd.stPayloads": "6bb1560ab823",
+    "gd.stPayloads": "e46be84f3953",
     "mod.df": "2b18fc763def",
     "rpt.df": "7dfa9ea76ddb",
     "mod.sa": "462867440682",
@@ -274,13 +274,13 @@
    }
   },
   "xsA / AASHTO": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "4fa65d13a256",
     "pl.project": "608cedf1d332",
     "pl.checks": "0f0295728583",
     "pl.analysis": "b00586fd54ac",
-    "gd.stPayloads": "d3e3a8873627",
+    "gd.stPayloads": "fef5cb395f04",
     "mod.df": "f3f03276fb01",
     "rpt.df": "aafa3c9822cf",
     "mod.sa": "04c4ebe1ae64",
@@ -308,13 +308,13 @@
    }
   },
   "xsA / RIDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9); gd.stPayloads: claude/sbd-s2-7-defl-camber (S2-7, B readouts)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "9dd09487ab66",
     "pl.project": "518c8e9528b1",
     "pl.checks": "c850682b770a",
     "pl.analysis": "7d25373a35e5",
-    "gd.stPayloads": "c015801a3265",
+    "gd.stPayloads": "474f00ae919e",
     "mod.df": "440ab9af6fff",
     "rpt.df": "e8df92538af7",
     "mod.sa": "5fdd87aba2ac",
@@ -342,13 +342,13 @@
    }
   },
   "xsA / MassDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
-    "gd.project": "b034cd8ddf04",
+    "gd.project": "cde9fe10a912",
     "pl.project": "5a8ed775edeb",
     "pl.checks": "19f02828b3c5",
     "pl.analysis": "4bec2d659472",
-    "gd.stPayloads": "1d26fd76107e",
+    "gd.stPayloads": "6a4be16feacc",
     "mod.df": "2c29ebf53dde",
     "rpt.df": "7ddeef0650dc",
     "mod.sa": "247123e7c6cd",
@@ -376,13 +376,13 @@
    }
   },
   "xsA / CTDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "5e0c76c63c7c",
     "pl.project": "281e914b65ed",
     "pl.checks": "b945e77995de",
     "pl.analysis": "21de6f6bd8dc",
-    "gd.stPayloads": "badeb50131d7",
+    "gd.stPayloads": "e4ff50a95fb9",
     "mod.df": "f3f03276fb01",
     "rpt.df": "4c4110bff2ec",
     "mod.sa": "43a0864e474c",
@@ -410,13 +410,13 @@
    }
   },
   "curb / AASHTO": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "c9aae7965730",
     "pl.project": "2dea4035e32a",
     "pl.checks": "a0b521d8c799",
     "pl.analysis": "cbffb5f050df",
-    "gd.stPayloads": "18530d96e2a6",
+    "gd.stPayloads": "97dba8d5128c",
     "mod.df": "4dfd1f9deae2",
     "rpt.df": "5a6619d1d2ea",
     "mod.sa": "d6a7f8d09ce7",
@@ -444,13 +444,13 @@
    }
   },
   "curb / RIDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "08f6d0ecb491",
     "pl.project": "111bddf97373",
     "pl.checks": "ee99ce97440b",
     "pl.analysis": "48ae53d1c0d3",
-    "gd.stPayloads": "d4d0df5dcfef",
+    "gd.stPayloads": "8edffcf48d3e",
     "mod.df": "26acc5d46d53",
     "rpt.df": "e5114b3bf5bb",
     "mod.sa": "936b678dd89e",
@@ -478,13 +478,13 @@
    }
   },
   "curb / MassDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "2c0316fbd541",
     "pl.project": "d548e05fa04c",
     "pl.checks": "12996949a3ed",
     "pl.analysis": "916aba0fdc1c",
-    "gd.stPayloads": "a082f039cccd",
+    "gd.stPayloads": "649083ed78e6",
     "mod.df": "060126897b17",
     "rpt.df": "3e6a6dd0e77a",
     "mod.sa": "672999b87d76",
@@ -512,13 +512,13 @@
    }
   },
   "curb / CTDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "7829f8636685",
     "pl.project": "b6b1aa709943",
     "pl.checks": "14a6ddae5d7f",
     "pl.analysis": "263cafff61c9",
-    "gd.stPayloads": "619a188426a0",
+    "gd.stPayloads": "b65b0fbfb9d2",
     "mod.df": "4dfd1f9deae2",
     "rpt.df": "0ab61453f6eb",
     "mod.sa": "e77a06a24ae3",
@@ -546,13 +546,13 @@
    }
   },
   "util / AASHTO": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9); gd.stPayloads: claude/sbd-s2-7-defl-camber (S2-7, B readouts)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "17b105624f94",
     "pl.project": "671586fad8ab",
     "pl.checks": "c0d67a2d012f",
     "pl.analysis": "19952d619ad4",
-    "gd.stPayloads": "23159d9dff22",
+    "gd.stPayloads": "939027706b4e",
     "mod.df": "c607b04eb133",
     "rpt.df": "174849a5bc08",
     "mod.sa": "eed71e4ccbc7",
@@ -580,13 +580,13 @@
    }
   },
   "util / RIDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "31c430275acd",
     "pl.project": "780e76a278a0",
     "pl.checks": "8554bbe2ac16",
     "pl.analysis": "4b22428545d9",
-    "gd.stPayloads": "41ab50d9a9fb",
+    "gd.stPayloads": "0fe8155fbbf4",
     "mod.df": "a8a522fd81ff",
     "rpt.df": "3bc1e2d4713d",
     "mod.sa": "483306fd38cf",
@@ -614,13 +614,13 @@
    }
   },
   "util / MassDOT": {
-   "a": "claude/sbd-s2-9-neg-flexure (working tree, S2-9)",
+   "a": "b9bee9a (full suite 2026-10-28)",
    "sections": {
     "gd.project": "3fcd5a0244cc",
     "pl.project": "6b65e59101e7",
     "pl.checks": "f4f4bc8e3b06",
     "pl.analysis": "e733704c5c91",
-    "gd.stPayloads": "bc749f5ca540",
+    "gd.stPayloads": "4e88ba125e8f",
     "mod.df": "9a4ff48cef9a",
     "rpt.df": "06609be755db",
     "mod.sa": "ab11f4a2b70b",
@@ -682,5 +682,5 @@
    }
   }
  },
- "recorded": "2026-10-27"
+ "recorded": "2026-10-28"
 }
