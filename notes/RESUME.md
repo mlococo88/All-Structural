@@ -10,6 +10,9 @@ S2-1 #428, S2-2 #429, S2-3 #453, S2-4 #455, S2-5 #426, S2-6 #456, S2-7 #457, S2-
 - gd.dxf hash changes daily (run date in the DXF): mask the date in the test, not the tool.
 - Review the shortened gdConBlock (S2-8) rendered text once.
 
+## Pending (engineer, 2026-10-28): Stage 2 Parts 2-3, not started
+Port ST-only features natively into GD (deck slab, LRFR Inv/Op rating, Optimize, camber, nomenclature, girder sheets), then retire the ST frame (drop React/Babel/KaTeX, ~500 KB). About 16-22 PRs. Plan: notes/STAGE2.md Part 2 and Part 3. Needs engineer decisions first: ST stand-alone mode, MIDAS/MCT import, sign-off on the rating changes. Do after the report-tab work.
+
 ## Open engineer questions (not blocking)
 1. Should GD send the full stiffener layout (ST uses one d_o per span from rowsBy)?
 2. Should Preliminary sizing (pl-src) also get the k = 7.2 F_crw case?
