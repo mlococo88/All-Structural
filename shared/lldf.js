@@ -19,7 +19,8 @@
    computeBridge(p) → { geo, Kg, skew, members: [memberDF(...) per girder] }; throws on inputErrors(p).
    Building blocks: geometry(p), skewFactors(p,geo,Kg), memberDF(p,geo,Kg,skew,j), leverConfig(p,geo,j,N), leverAll(p,geo,j),
    leverMulti(p,geo,j), rigidMethod(p,geo,side), empiricalInterior(Kg,L,ts,S,simple), leverContribution(pos,Nb,j,u), designL(spans,region),
-   momentSkewNoReduction(thA,thB) (4.6.2.2.2e per span; added for apps/steel-bridge, not used by lldf.html).
+   momentSkewNoReduction(thA,thB), momentSkewNoReductionPier(thPrev,thPier,thNext) (4.6.2.2.2e per span and per pier region;
+   added for apps/steel-bridge, not used by lldf.html).
    Loaded by: lldf.html, apps/steel-bridge/index.html (adapter apps/steel-bridge/engine/lldf.js). */
 (function(){
 "use strict";
@@ -129,6 +130,11 @@ function girderU(p,geo){ return geo.pos.map(x=>p.OL+x); }  // girder CL position
    Added 2026-10-29 for apps/steel-bridge; lldf.html does not call it (it takes the moment θ as entered, or from Bridge
    Geometry's skewDetail.moment), so its results are unchanged. To switch the rule (e.g. to the whole bridge), change only this. */
 function momentSkewNoReduction(thA,thB){ return Math.abs(thA-thB)>10+1e-9; }
+/* The same rule for a pier (negative-moment) region at support line i (engineer's decision 2026-10-29): no moment skew reduction
+   if EITHER adjacent span's two support lines differ by more than 10° (thPrev = support i − 1, thPier = support i, thNext = i + 1;
+   a missing neighbour counts as no span on that side). */
+function momentSkewNoReductionPier(thPrev,thPier,thNext){
+  return (thPrev!=null&&momentSkewNoReduction(thPrev,thPier))||(thNext!=null&&momentSkewNoReduction(thPier,thNext)); }
 
 function skewFactors(p,geo,Kg){
   /* th = skew for the moment reduction (Table 4.6.2.2.2e-1); thV = skew for the shear correction
@@ -418,5 +424,5 @@ const KG_SIMPLE={m:1.02,c1:1.03,v:0.97};   // Table 4.6.2.2.1-3, type (a): (Kg/1
 
 window.SharedLLDF={multiplePresence,RANGES,BEAM_SLAB,BOX,BOXR,SPREADR,CELLR,FAMILY,KG_SIMPLE,designL,spreadDF,multicellDF,geometry,
   memberType,memberSpacing,girderU,skewFactors,boxDF,empiricalInterior,leverContribution,truckGap,leverConfig,leverAll,leverMulti,
-  rigidMethod,memberDF,inputErrors,computeBridge,momentSkewNoReduction};
+  rigidMethod,memberDF,inputErrors,computeBridge,momentSkewNoReduction,momentSkewNoReductionPier};
 })();

@@ -250,7 +250,7 @@
     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier;
     const ll = llFaces(b, p.dl, xs, fL, fR);
     const base = { Nb, spacings, OL: b.ohL, OR: b.ohR, rL: ll.L.r, rR: ll.R.r, fL, fR, ts: b.tsDeck, gap: nm(p.gap), simple: p.kg === 'simple' };
-    const DF = window.SBDLldf.compute({ ...base, haunchP: hP, n: MR.n, kg: p.kg, skewV: p.skewV, extMin: p.extMin, regions: b.regions,
+    const DF = window.SBDLldf.compute({ ...base, haunchP: hP, n: MR.n, kg: p.kg, skewV: p.skewV, extMin: p.extMin, regions: b.regions, skews: b.skews,
       haunchNote: lf.h0 ? `Haunch taken as 0 in the composite properties (${lf.cite && lf.cite.h ? lf.cite.h : lf.o}; owner rule OWN8); its weight stays in DC1.` : '' });
     const regions = DF.regions, g0 = regions[0].geo, lo = p.loadOverrides && typeof p.loadOverrides === 'object' ? p.loadOverrides : null;
     if (lo) Object.entries(lo).forEach(([id, o]) => { if (!o || typeof o !== 'object') return; if (o.x != null && !(isFinite(o.x) && o.x >= 0 && o.x <= g0.Wdeck + 1e-9)) errors.push(`Override of "${id}": x must be from 0 to the deck width ${f2(g0.Wdeck)} ft.`); if (o.plf != null && !(isFinite(o.plf) && o.plf >= 0)) errors.push(`Override of "${id}": the line load must be zero or positive.`); });

@@ -4,7 +4,7 @@
 //    catalog presets, continuous regions, input errors) through the page's engine before the move and shared/lldf.js + the
 //    page's remaining code after it, and compares SHA-256 hashes of every output.
 // 2. Hand checks of the four places where the steel-bridge app now follows lldf.html instead of GirderDetail (engineer's decision
-//    2026-10-29, fixlog/steel-bridge.md SB2-O15), with the arithmetic in the comments.
+//    2026-10-29, fixlog/steel-bridge.md SB2-O19), with the arithmetic in the comments.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -81,4 +81,21 @@ test('item 4, lever rule at the exact kink / end positions: overhangs 3.3 ft, G5
   // g_M is governed by the rigid section (0.8126, unchanged); g_fat,M = max(0.795789, 0.639158)/1.2 = 0.663158 (before 0.652632).
   const r = variant('builtin_AASHTO', b => { b.ohL = 3.3; b.ohR = 3.3; }), m = r.regions[0].members[4];
   c(m.lever1.wheels[0], 35.1, 'position'); c(m.lever1.df, 0.795789, 'lever, one lane'); c(m.fatM, 0.663158, 'g_fat,M'); c(m.gM, 0.812632, 'g_M (rigid)');
+});
+
+test('pier rule (4.6.2.2.2e, engineer 2026-10-29): skews 40 / 52 / 52 / 40°: pier 1 (span 1 differs by 12°) gets no reduction: G2 g_M 0.6279 → 0.7109', () => {
+  // Built-in bridge, pier 1 region: L = (110 + 140)/2 = 125 ft, K_g = 1,438,270 in⁴, S = 9.5 ft, t_s = 8 in, support line 1 at 52°.
+  // Span 1 support lines 40° / 52° differ by 12° > 10°; span 2 52° / 52° by 0°. Either adjacent span over 10° → no reduction at pier 1.
+  // Interior two-lane equation: K_g/(12Lt_s³) = 1,438,270/(12 × 125 × 512) = 1.872748, ^0.1 = 1.064751;
+  //   0.075 + (9.5/9.5)^0.6 (9.5/125)^0.2 (1.064751) = 0.075 + 0.597258 × 1.064751 = 0.710932.
+  // With the reduction (GirderDetail until its follow-up PR): c_1 = 0.25(1.872748)^0.25(9.5/125)^0.5 = 0.25 × 1.169822 × 0.275681 = 0.080624;
+  //   r_M = 1 − 0.080624(tan 52°)^1.5 = 1 − 0.080624 × 1.448071 = 0.883251; g_M = 0.710932 × 0.883251 = 0.627932.
+  // After: r_M = 1, g_M = 0.710932. Span 2 (52° / 52°) keeps its reduction (r_M = 0.903885).
+  const r = variant('builtin_AASHTO', b => { const sk = [40, 52, 52, 40]; b.skews = sk; b.regions.forEach(q => { if (q.kind === 'span') { q.skA = sk[q.i]; q.skB = sk[q.i + 1]; } else q.skA = q.skB = sk[q.i]; }); });
+  const p1 = r.regions.find(q => q.id === 'p1'), s1 = r.regions.find(q => q.id === 's1');
+  assert.equal(p1.sk.noRed, true); assert.equal(p1.sk.scfM, 1); c(p1.sk.dTh, 12, '|Δθ|');
+  c(p1.members[1].gM, 0.710932, 'pier 1 G2 g_M'); c(p1.members[1].gM * 0.883251, 0.627932, 'with the reduction (before)', 5e-6);
+  assert.equal(s1.sk.noRed, false); c(s1.sk.scfM, 0.903885, 'span 2 r_M');
+  assert.equal(SL.momentSkewNoReductionPier(40, 52, 52), true); assert.equal(SL.momentSkewNoReductionPier(45, 52, 52), false); assert.equal(SL.momentSkewNoReductionPier(null, 52, 70), true);
+  assert.ok(p1.steps.some(s => s.id === 'df.p1.noRed'));
 });

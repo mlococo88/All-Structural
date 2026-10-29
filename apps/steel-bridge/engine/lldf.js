@@ -8,9 +8,9 @@
    the app and its tests use, and writes the worked steps (shared/steps.js format). What stays here, as GirderDetail has it
    (Steel Bridge Design.html, LLDF and DLs module): K_g per region (KgOf, the length-weighted option), the region list (bridgeDef),
    the shear-skew option for exterior girders only, the exterior "not less than interior" policy, negative skews read as no skew
-   (open item SB2-O19), the range checks (DF1).
+   (open item SB2-O23), the range checks (DF1).
 
-   Engineer's decision 2026-10-29 (SB2-O15): the factors follow lldf.html where GirderDetail differed: (1) exterior fatigue
+   Engineer's decision 2026-10-29 (SB2-O19): the factors follow lldf.html where GirderDetail differed: (1) exterior fatigue
    factor = max(one-lane lever rule, one-lane rigid cross-section)/1.2 (4.6.2.2.2d); (2) no moment skew reduction for a span
    whose two support lines differ by more than 10° (4.6.2.2.2e, per span: SharedLLDF.momentSkewNoReduction); (3) with S > 16 ft
    or N_b = 3 the multi-lane lever rule is the governing of 2 … N_L trucks (leverMulti); (4) the lever rule also tests the exact
@@ -57,13 +57,18 @@
   const typeOf = (p, j) => (j === 0 || j === p.Nb - 1) ? 'ext' : 'int';
   const spacingOf = (p, j) => j === 0 ? p.spacings[0] : j === p.Nb - 1 ? p.spacings[p.spacings.length - 1] : (p.spacings[j - 1] + p.spacings[j]) / 2;
 
-  /* momentSkew(skA, skB): the region's skews for Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1 from its two support lines (deg, signed).
-     Moment: the smaller skew (GirderDetail), none when the two support lines differ by more than 10° (4.6.2.2.2e, per span,
-     engineer's decision 2026-10-29: SharedLLDF.momentSkewNoReduction); shear: the larger. A negative value counts as no skew,
-     as GirderDetail (open item SB2-O19; lldf.html reads |θ|). Pier regions have skA = skB (one support line). */
-  function momentSkew(skA, skB) {
-    const thMin = Math.min(skA, skB), thMax = Math.max(skA, skB), noRed = SL().momentSkewNoReduction(skA, skB);
-    return { thMin, noRed, dTh: Math.abs(skA - skB), thM: noRed ? 0 : Math.max(0, thMin), thV: Math.max(0, thMax) };
+  /* momentSkew(rg, skews): the region's skews for Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1 (deg, signed). Moment: the smaller skew of the
+     region's support lines (GirderDetail), none (4.6.2.2.2e, engineer's decisions 2026-10-29) for a span whose two support lines
+     differ by more than 10° (SharedLLDF.momentSkewNoReduction) and for a pier region if either adjacent span's two support lines do
+     (SharedLLDF.momentSkewNoReductionPier; skews: every support line of the bridge); shear: the larger. A negative value counts as no
+     skew, as GirderDetail (open item SB2-O23; lldf.html reads |θ|). */
+  function momentSkew(rg, skews) {
+    const skA = rg.skA, skB = rg.skB, thMin = Math.min(skA, skB), thMax = Math.max(skA, skB), K = Array.isArray(skews) ? skews.map(v => +v || 0) : null;
+    let noRed, dTh;
+    if (rg.kind === 'sup' && K && K.length > rg.i) { const pv = rg.i > 0 ? K[rg.i - 1] : null, nx = rg.i + 1 < K.length ? K[rg.i + 1] : null, pr = K[rg.i];
+      noRed = SL().momentSkewNoReductionPier(pv, pr, nx); dTh = Math.max(pv != null ? Math.abs(pr - pv) : 0, nx != null ? Math.abs(nx - pr) : 0); }
+    else { noRed = SL().momentSkewNoReduction(skA, skB); dTh = Math.abs(skA - skB); }
+    return { thMin, noRed, dTh, thM: noRed ? 0 : Math.max(0, thMin), thV: Math.max(0, thMax) };
   }
   /* skew(p, geo, Kg): SharedLLDF.skewFactors (beam-slab rows: moment reduction 30° ≤ θ ≤ 60° (θ > 60°: 60°), shear correction).
      p.thM, p.thV from momentSkew. Returns SharedLLDF's object plus thM, thV, tanM, noRed, dTh, thMin. */
@@ -73,8 +78,8 @@
   }
   function skewSteps(w, p, sk, Kg) {
     const kt = p.simple ? `${SIMPLE.c1}` : `\\left(\\frac{${g0(Kg)}}{12(${n2(p.L)})(${n2(p.ts)})^{3}}\\right)^{0.25}`;
-    if (sk.noRed) w.add({ id: 'noRed', label: 'Support lines of this span differ by more than 10°: no moment skew reduction', sym: '|\\theta_{A} - \\theta_{B}|', eq: '', sub: '', value: sk.dTh, unit: '^{\\circ}', d: 2, ref: `${ED} Art. 4.6.2.2.2e`,
-      note: `The smaller skew θ = ${n2(sk.thMin)}° is not used for the moment (engineer's decision 2026-10-29: per span).` });
+    if (sk.noRed) w.add({ id: 'noRed', label: p.pier ? 'An adjacent span\'s support lines differ by more than 10°: no moment skew reduction for this pier region' : 'Support lines of this span differ by more than 10°: no moment skew reduction', sym: '|\\theta_{A} - \\theta_{B}|', eq: '', sub: '', value: sk.dTh, unit: '^{\\circ}', d: 2, ref: `${ED} Art. 4.6.2.2.2e`,
+      note: `The smaller skew θ = ${n2(sk.thMin)}° is not used for the moment (engineer's decisions 2026-10-29: per span; a pier region if either adjacent span differs).` });
     if (Math.min(sk.thM, 60) >= 30) {
       w.add({ id: 'c1', label: 'Skew coefficient c_1 for moment', sym: 'c_{1}', eq: '0.25\\left(\\frac{K_{g}}{12Lt_{s}^{3}}\\right)^{0.25}\\left(\\frac{S}{L}\\right)^{0.5}', sub: `0.25${kt}\\left(\\frac{${n3(p.geoSavg)}}{${n2(p.L)}}\\right)^{0.5}`, value: sk.c1, unit: '', d: 4, ref: `${ED} Table 4.6.2.2.2e-1` });
       w.add({ id: 'scfM', label: 'Skew reduction factor for moment', sym: 'r_{M}', eq: '1 - c_{1}(\\tan\\theta)^{1.5}', sub: `1 - ${n4(sk.c1)}(\\tan ${n2(Math.min(sk.thM, 60))}^{\\circ})^{1.5}`, value: sk.scfM, unit: '', d: 4, ref: `${ED} Table 4.6.2.2.2e-1`, note: sk.thM > 60 ? 'θ > 60°: θ = 60° used.' : '' });
@@ -196,7 +201,7 @@
   /* compute(input): every region (span and pier) and every girder.
      input: { Nb, spacings [ft], OL, OR, rL, rR (ft), ts (structural slab, in), haunchP (haunch in the composite properties, in),
               n (modular ratio), gap (ft, ≥ 4), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: 'yes' | 'no',
-              regions: [{ id, kind: 'span' | 'sup', label, L (ft), skA, skB (support skews, deg), sec: plates { D, tw, topB, topT, botB, botT },
+              skews (deg, every support line, for the pier rule of 4.6.2.2.2e), regions: [{ id, i, kind: 'span' | 'sup', label, L (ft), skA, skB (support skews, deg), sec: plates { D, tw, topB, topT, botB, botT },
                           segs: [{ L, sec }] (the plate pieces of the region, for kg 'avg') }] }
      Returns { geo, regions: [{ …region, s, eg, Kg, KgAvg, pp, geo, sk, members, lever, mD, gDef, steps }], steps (geometry) }. */
   function compute(q) {
@@ -205,13 +210,13 @@
     const regions = q.regions.map(rg => {
       const s = steelOf(rg.sec), k0 = KgOf(s), eg = k0.eg; let Kgv = k0.Kg, KgAvg = null;
       if (rg.segs && rg.segs.length) { const Lt = sum(rg.segs.map(x => x.L)); KgAvg = { parts: rg.segs.map(x => ({ L: x.L, sec: x.sec, Kg: KgOf(steelOf(x.sec)).Kg })), Lt }; KgAvg.Kg = sum(KgAvg.parts.map(x => x.L * x.Kg)) / Lt; if (q.kg === 'avg') Kgv = KgAvg.Kg; }
-      const ms = momentSkew(rg.skA, rg.skB), pp = { ...base, L: rg.L, skewM: Math.min(rg.skA, rg.skB), skewV: Math.max(rg.skA, rg.skB), ...ms }, geo = geometry(pp), sk = skew(pp, geo, Kgv);   // ms: 4.6.2.2.2e per span
+      const ms = momentSkew(rg, q.skews), pp = { ...base, L: rg.L, skewM: Math.min(rg.skA, rg.skB), skewV: Math.max(rg.skA, rg.skB), ...ms }, geo = geometry(pp), sk = skew(pp, geo, Kgv);   // ms: 4.6.2.2.2e per span / pier
       const w = St().work('df.' + rg.id);
       w.add({ id: 'eg', label: `${rg.label}: distance between the centers of gravity of the girder and the deck`, sym: 'e_{g}', eq: '(d - \\bar{y}) + h + \\frac{t_{s}}{2}', sub: `(${n3(s.d)} - ${n3(s.yb)}) + ${n2(q.haunchP)} + \\frac{${n2(q.ts)}}{2}`, value: eg, unit: 'in', d: 3, ref: `${ED} Art. 4.6.2.2.1`, note: q.haunchNote || '' });
       w.add({ id: 'Kg0', label: `${rg.label}: longitudinal stiffness parameter at the region's section`, sym: 'K_{g}', eq: 'n(I + Ae_{g}^{2})', sub: `${n3(q.n)}(${g0(s.I)} + ${n2(s.A)}(${n3(eg)})^{2})`, value: k0.Kg, unit: 'in^{4}', d: 0, ref: `${ED} Eq. 4.6.2.2.1-1` });
       if (KgAvg) w.add({ id: 'KgAvg', label: `${rg.label}: length-weighted K_g of the plate pieces`, sym: 'K_{g,avg}', eq: '\\frac{\\sum L_{i}K_{g,i}}{\\sum L_{i}}', sub: `\\frac{${KgAvg.parts.map(x => `${n2(x.L)}(${g0(x.Kg)})`).join(' + ')}}{${n2(KgAvg.Lt)}}`, value: KgAvg.Kg, unit: 'in^{4}', d: 0, ref: `${ED} Art. 4.6.2.2.1` });
       w.add({ id: 'Kg', label: `${rg.label}: K_g used`, sym: 'K_{g}', eq: q.kg === 'avg' && KgAvg ? 'K_{g,avg}' : 'K_{g}', sub: '', value: Kgv, unit: 'in^{4}', d: 0, note: q.kg === 'simple' ? 'Simplified K_g terms of Table 4.6.2.2.1-3 used in the equations.' : '' });
-      skewSteps(w, { ...pp, geoSavg: geo.Savg }, sk, Kgv);
+      skewSteps(w, { ...pp, geoSavg: geo.Savg, pier: rg.kind === 'sup' }, sk, Kgv);
       const members = []; for (let j = 0; j < q.Nb; j++) { const mw = St().work(`df.${rg.id}.G${j + 1}`);
         members.push(member(pp, geo, Kgv, q.skewV === 'ext' && typeOf(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk, j, mw)); members[j].steps = mw.steps; }
       if (q.extMin === 'yes') { const ints = members.filter(m => m.type === 'int'); if (ints.length) { const iM = Math.max(...ints.map(m => m.gM)), iV = Math.max(...ints.map(m => m.gV));

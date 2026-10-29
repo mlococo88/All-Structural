@@ -195,7 +195,7 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - The functions remain in `Steel Bridge Design.html` (unchanged). `lldf.html` (the reference LLDF tool) is unchanged.
 ### Open items
 - SB2-O2 closed: OWN8 applied in the section properties and K_g (the haunch weight stays in DC1).
-- SB2-O6. GirderDetail (ported as is) and `lldf.html` differ (CLAUDE.md §4/§9, not changed): (a) exterior fatigue factor:
+- SB2-O19 (was SB2-O6). GirderDetail (ported as is) and `lldf.html` differ (CLAUDE.md §4/§9, not changed): (a) exterior fatigue factor:
   GirderDetail = one-lane lever rule / 1.2; `lldf.html` = max(lever rule, one-lane rigid cross-section) / 1.2 (4.6.2.2.2d).
   (AUDIT.md says lldf lacks the floor; it now has it and GirderDetail does not.) On the recorded inputs the rigid value
   exceeds the lever rule for 40 of 200 exterior girder-regions (every xsA one, all owners; sidewalk fences move the traffic face in):
@@ -203,12 +203,12 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   the trucks on a 0.25 ft grid; `lldf.html` also tests the exact kink positions. (c) S > 16 ft and N_b = 3: GirderDetail's
   multi-lane lever rule is two trucks; `lldf.html` the governing of 2 … N_L trucks. (d) Moment skew: GirderDetail the
   smaller support skew; `lldf.html` none when adjacent supports differ by more than 10°. Engineer to decide which governs.
-- SB2-O7. Cross-frame and diaphragm weights (GirderDetail DC1 point loads from its Cross-frames module) are not in this
+- SB2-O20 (was SB2-O7). Cross-frame and diaphragm weights (GirderDetail DC1 point loads from its Cross-frames module) are not in this
   version's DC1; they come with the cross-frames module.
-- SB2-O8. LLDF regions take the section at mid-span; GirderDetail takes it at the station of the largest positive moment of
+- SB2-O21 (was SB2-O8). LLDF regions take the section at mid-span; GirderDetail takes it at the station of the largest positive moment of
   Preliminary sizing's analysis (`regions(…, x)` accepts it once the analysis module exists). Same plate segment in every
   recorded case.
-- SB2-O9. Owner defaults are applied by a button (the user's values are otherwise kept); GirderDetail moves untouched inputs
+- SB2-O22 (was SB2-O9). Owner defaults are applied by a button (the user's values are otherwise kept); GirderDetail moves untouched inputs
   automatically when the owner changes (OWN14). Confirm the wanted behaviour.
 
 ## 2026-10-29 — PR: sbd2-flexure-noncomposite — flexure of noncomposite girders (SB2-O7 of the sbd2-flexure entry; new behaviour)
@@ -322,3 +322,173 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - `Steel Bridge Design.html` (GirderDetail): the same change made by #470 (another PR).
 ### Open items
 - SB2-O6 (flexure entry) closed.
+
+## 2026-10-29 — PR: sbd2-shear-stiffeners — web shear, transverse and bearing stiffeners, stiffener layout (new files)
+### Where
+- `engine/shear.js` (new, `window.SBDShear`): ported from `Steel Bridge Design.html`: `webShear` (anchor `function webShear(`),
+  `A610_shearC`, `A610_Vp` (anchor `function A610_shearC(`); Preliminary sizing's `tsVn` (anchor `function tsVn(`, in `pl-src`); the shear
+  lines of GirderDetail's Girder section `compute` (anchor `GM.gs = {`: `r.Vu =`, `r.VuP =`, `r.VuC =`, `r.sh = webShear(`, `r.VuF =`) and
+  the checks GS11 (6.10.9), GS16 (6.10.3.3), GS18 (6.10.5.3); the Strength I shear per element of Preliminary sizing's analysis
+  (`VuE`, minimum factors where a permanent load relieves). New: `location(L, prj)` (checks with value, capacity, ratio, 10th Ed. ref, and
+  worked steps), `panels(pans, opt)` (every panel of a layout: tsVn, the largest V_u in the panel, the thinnest web and the largest
+  2Dt_w/(b_fc t_fc + b_ft t_ft) in it, as Preliminary sizing's `tsEvalBay`), `demands(pl)` and `fromPayload(pl)` (hand-off shears).
+- `engine/stiffeners.js` (new, `window.SBDStiffeners`): GirderDetail's Transverse stiffeners module (anchor `GM.ts = {`: `compute`,
+  `checks`: TS1–TS8, CP1, CP2, with `TS_ROWSPEC`, `numRows`, `parseDim`, `wMinFor`), Bearing stiffeners (anchors `function bsCompute(P)`,
+  `function bsChecks(R)`: BS1–BS7), Preliminary sizing's layout (`tsBaysOf`, `tsBayX`, `tsPanels`, `tsGirderBays`). Operation for operation;
+  the TeX `work` lines replaced by worked steps (`transverseSteps`, `bearingSteps`). New: `stiffenerRows` (a Transverse stiffeners row for
+  every intermediate stiffener and connection plate of a girder's layout), `framesDefault` (cross-frames evenly ≤ L_b per span, until
+  the framing module exists).
+- `engine/model.js` (additive): optional `stiffeners` { layout: web, mode 'uniform' | 'bays', doRatio, bays [{ g, a, b, n, e0, e1 }]
+  (Preliminary sizing's framing.stiff / doMode / doRatio / bays.list), frames { Lb, at }; transverse { gS, Fexx, types A/B }; bearing
+  { gS, Fexx, ed, types A/B } }, `defaultStiffeners()` (GirderDetail's built-in types), validation. Schema stays version 1; a project
+  saved without it reads the defaults.
+- `ui/shear.js` (new, `window.SBDShearUI`): input tab "Stiffeners" (layout, per-bay table of the selected girder with a button that
+  fills it from the uniform d_o/D, plate types) and output tab "Shear & stiffeners" (governing ratio of each group; every panel; every
+  station GS11/GS16/GS18; every stiffener and connection plate TS1–TS8/CP1; every bearing BS1–BS7; the worked steps of the selected
+  row, each governing item linked to its step).
+- `index.html`: three script tags, the input tab, the output tab button and its dispatch line, the input click hook.
+### Saved data (CLAUDE.md §5)
+- No new key. `sbd2.project.current` gains the optional `stiffeners` (additive); `sbd2.ui.otab` may be `'shear'`, `itab` `'stf'`.
+  The Shear tab's demand choice and file are not saved.
+### Governing provisions (AASHTO LRFD 10th Ed. (2024); all as GirderDetail has them, none changed)
+- Shear 6.10.9: stiffened panel d_o ≤ 3D (interior), ≤ 1.5D (end) 6.10.9.1, else unstiffened k = 5, V_n = CV_p Eq. 6.10.9.2-1; C Eqs.
+  6.10.9.3.2-4 to -6, k Eq. -7, V_p Eq. -3; interior panels with tension field Eq. 6.10.9.3.2-2 (2Dt_w/(b_fc t_fc + b_ft t_ft) ≤ 2.5,
+  Eq. -1) or -8; end panels V_n = CV_p Eq. 6.10.9.3.3-1, only next to an abutment or any bearing of a simple span (S2-4, #455; pier panels
+  are interior panels); V_u the largest in the panel 6.10.9.3.1; φ_v = 1.0. Deck placement 6.10.3.3. Special fatigue 6.10.5.3 (interior
+  panels of stiffened webs; permanent + 1.75 V_fat).
+- Transverse stiffeners 6.10.11.1: b_t Eqs. 6.10.11.1.2-1, -2; I_t Eqs. 6.10.11.1.3-1, -2 (smaller where no panel has V_u > φ_vV_cr,
+  GD33), -7, -8 with ρ_w, J Eq. -3, ρ_t Eq. -5, F_crs Eq. -6; weld cutoff 6.10.11.1.1; welds Table 6.13.3.4-1, Eq. 6.13.3.2.4b-1;
+  connection plates 6.6.1.3.1 (20 kip); fatigue Category C′ Table 6.6.1.2.3-1 (CTDOT Category C).
+- Bearing stiffeners 6.10.11.2: b_t Eq. 6.10.11.2.2-1; (R_sb)_r = φ_b 1.4A_pnF_ys Eqs. 6.10.11.2.3-1, -2 (φ_b 1.0); effective column
+  6.10.11.2.4 (9t_w strips, F_yw/F_ys when F_yw < F_ys, KL = 0.75D), P_n Eqs. 6.9.4.1.1-1, -2, P_e Eq. 6.9.4.1.2-1, P_r = 0.95P_n
+  Eq. 6.9.2.1-1; welds to the web Eq. 6.13.3.2.4b-1 (φ_e2 0.80), minimum weld; width and flange connection 6.10.11.2.1; owner minimum
+  thickness (CTDOT 3/4 in, RIDOT 7/16 in).
+- Load factors Table 3.4.1-1 (shears as magnitudes: maximum factors), owner η and m (OWN6/OWN7), m not on the pedestrian load (GD45).
+### Check case
+- GS11, built-in Pier 1 (60 × 9/16 web, 18 × 1 1/2 / 18 × 2 flanges, d_o 90 in, interior): k 7.2222, C 0.578018, V_p 978.75, Eq. -2,
+  V_n 765.05 kip; V_u 344.00 kip, ratio 0.4496. GS18: 221.25 ≤ V_cr 565.73 kip. As an end panel: V_n = CV_p = 565.73 kip.
+- TS3, built-in row 1 (6 × 1/2 plate, d_o 60/60): I_t 36.0, J 0.5, I_t1 5.3394, F_crs 50, ρ_t 1.0, I_t2 23.195 in⁴; no panel V_u > φ_vV_cr:
+  I_req = min = 5.3394 in⁴ (Eq. -1). BS2/BS3, built-in Abut. 1 (one pair 7 × 7/8, clip 1): R_u 267.5, A_pn 10.5 in², (R_sb)_r 735.0 kip;
+  A 18.4375 in², I 225.333 in⁴, KL/r 12.872, P_e 31,849, P_o 921.875, P_n 910.77, P_r 865.24 kip. Arithmetic in
+  `tests/engine/shear.test.mjs` and `stiffeners.test.mjs`.
+- Before: none (new app). GirderDetail's values for the same inputs are identical (below).
+### How verified
+- `tests/engine/record-stiffeners.mjs` (the loads PR's recorder pattern) recorded GirderDetail's P.ts, P.bs, P.gs (as Preliminary sizing
+  sends them, auto-designed) and Preliminary sizing's layout of every girder, from `Steel Bridge Design.html` in headless Chromium, for the
+  5 projects × 4 owners of the 100 `gd_*` payloads, uniform d_o/D and a per-bay layout (40 files, `tests/projects/sbd2-stiff/`).
+- `tests/engine/stiffeners.test.mjs`: GirderDetail's GM.ts / bsCompute / bsChecks in Node = the browser (40,200 values, 0 differ); this
+  engine = GirderDetail on the 40 inputs + 260 variations (pairs, connection plates only, wide/narrow/unstiffened panels, F_yw < F_ys, thin
+  web with tension field, no panel shears, fatigue, utilities, small plates; 2 and 3 bearing pairs, fillet/CJP connection, short end,
+  slender column) + the built-in inputs: 720 stiffener rows, 320 bearings, 325,460 values and 50,713 check items (location, status,
+  ratio), all identical (largest difference 0); layout: 200 girders, 16,870 panels identical to tsGirderBays / tsPanels.
+- `tests/engine/shear.test.mjs`: GS11/GS16/GS18 on the 720 recorded Girder section rows (owner factors, web panel shears): Node = browser,
+  engine = GirderDetail, 0 differ; every station of the 100 payloads + the built-in rows (and d_o = 0, 1.5D, 3D without end panel, 3.2D
+  on the G1 payloads): 181 cases, 65,342 locations, 0 differ; tsVn = GirderDetail's tsVn = webShear on 40,320 panel cases.
+- One headless load of `apps/steel-bridge/index.html`: Stiffeners tab (d_o/D edit, per-bay fill, per-bay mode), Shear & stiffeners tab
+  with the example and with a hand-off file (363 stations, 80 panels, 79 stiffener rows, 4 bearings), row selection and § links; 0 console
+  errors; only `sbd2.*` keys; no horizontal scroll at 800 px.
+### Other copies
+- `parseDim` / `nm` are duplicated in `engine/loads.js` and `engine/stiffeners.js` (CLAUDE.md §3). The ported functions remain in
+  `Steel Bridge Design.html` (unchanged).
+### Open items
+- SB2-O15. Uniform spacing: GirderDetail's Transverse stiffeners and Girder section rows take every panel as d_o = (d_o/D)·D, while its
+  drawings and per-bay mode place ⌈L/d_o⌉ − 1 stiffeners evenly in each bay (panels ≤ d_o). This app checks the panels of the layout
+  (tsGirderBays) in both modes (the task: the full layout). Panels are never wider than GirderDetail's d_o, so the shear resistance is
+  never lower than GirderDetail's; I_t1 (J from the smaller d_o) can be larger. Accepted by the engineer (2026-10-29): the layout panels are checked.
+- SB2-O16. Bearing reactions from a hand-off file: the payload has no reactions; DC/DW are the jump in shear, LL+IM the sum of the shear
+  envelopes on both sides (an upper bound: built-in G2 pier 268.3 kip vs GirderDetail's reaction envelope 225.9 kip for the interior
+  girder, +19 %). Accepted as an interim by the engineer (2026-10-29). The analysis module will supply the real support reactions
+  (reaction envelopes), and the bearing stiffener check will be wired to them then.
+- SB2-O17. Cross-frames: no framing module yet; they are placed evenly at most L_b apart in each span (normal to the girders, no skew
+  stagger), so the bays differ from GirderDetail's framing on skewed bridges. Bearings at the support stations (no per-girder skew offset).
+  Deferred to the cross-frame PR (engineer, 2026-10-29).
+- SB2-O18. Not ported here: the auto-design of stiffener plates (GirderDetail AD.ts / AD.bstf), Suggest's per-bay design (tsDesignBay), the
+  Fatigue module's CP2 stress range (Δf = 0 in rows from the layout until the fatigue PR), the uncoated weathering steel sacrificial
+  thickness (engine supports `env.ws`; the model has no weathering input yet), the stiffener drawings and 3D. Deferred to the cross-frame and design-helper PRs (engineer, 2026-10-29).
+
+
+## 2026-10-29 — PR: shared-lldf — distribution factors from shared/lldf.js (lldf.html's engine); the four SB2-O19 items follow lldf.html (engineer's decision 2026-10-29)
+### Where
+- `engine/lldf.js` (`window.SBDLldf`) is now a thin adapter on `shared/lldf.js` (`window.SharedLLDF`, moved out of `lldf.html` in the
+  same PR; fixlog/shared-lldf.md). `lp(p)` maps a region (N_b, bays, overhangs, traffic faces, L, t_s, truck gap, simplified K_g, moment
+  and shear skew) to SharedLLDF's input (type 'a'); `geometry`, `skew`, `emp`, `leverC`, `lever`, `leverAll`, new `leverMulti`, `rigid`,
+  `member` call `SharedLLDF.geometry`, `skewFactors`, `empiricalInterior`, `leverContribution`, `leverConfig`, `leverAll`, `leverMulti`,
+  `rigidMethod`, `memberDF` and map the results back to the same fields (r.mom1 … shr2, gM, gV, fatM, fatV, method, emp, lever1, eM, eV,
+  mE, vE, rig, alt, de0, de) plus new `rig1`, `fat1`, `fatOneM`, `fatOneV`. Kept in the adapter as before: K_g per region (KgOf, the
+  length-weighted option), `regions` (bridgeDef), the shear skew on exterior girders only, the exterior "not less than interior" policy,
+  the range checks, GirderDetail's method labels, and every worked step.
+- New `momentSkew(rg, skews)` (anchor `function momentSkew(rg, skews)`): the region's moment θ = 0 when the 4.6.2.2.2e rule applies, else
+  max(0, min(skA, skB)); shear θ = max(0, max(skA, skB)). Span region: `SharedLLDF.momentSkewNoReduction(skA, skB)` (its own two support
+  lines differ by more than 10°). Pier region at support line i: `SharedLLDF.momentSkewNoReductionPier(θ_i−1, θ_i, θ_i+1)` (either adjacent
+  span's two support lines differ by more than 10°), from `skews` (every support line; `engine/loads.js` now passes `skews: b.skews` to
+  `SBDLldf.compute`, its only change). The `max(0, …)` keeps GirderDetail's reading of a negative skew (no skew; SharedLLDF reads |θ|):
+  SB2-O23. The rules are in one place: `momentSkewNoReduction` / `momentSkewNoReductionPier` in shared/lldf.js.
+- Worked steps: new `df.<region>.noRed` (support lines differ by more than 10°: |θ_A − θ_B|, Art. 4.6.2.2.2e); `scfM` / `c1` use the moment θ
+  after the rule; exterior girders: new `fat1` (max(g_lever,1, g_rigid,1), Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1) and `fatM` / `fatV` =
+  g_1 r / 1.2 (before: g_M,1 / 1.2 with the note "As GirderDetail … open item SB2-O6"); the multi-lane lever-rule steps (`lev2`) name the
+  governing number of trucks.
+- `engine/lldf.js` header rewritten (it listed the four differences). `index.html`: `<script src="../../shared/lldf.js">` before
+  `engine/lldf.js`. `engine/loads.js` unchanged.
+- Tests: `tests/engine/loads.test.mjs` loads shared/lldf.js; five new variations (one per item, and the pier rule) in the GirderDetail
+  parity; the temporary DFL1 expected-difference set added by #472 is removed. One expected-difference set remains, for the pier rule only
+  (`PIER_RULE_PENDING`: r_M, c_1 and the moment factors of a pier region whose rule applies; 88 values, in the two skew variations), until
+  GirderDetail gets the pier rule in its follow-up PR, which removes it. `tests/projects/sbd2-loads/xsA_*.json` re-recorded
+  (GirderDetail's browser values after #472; only the 80 item-1 fatigue values changed). New `tests/engine/lldf.test.mjs` (hash harness,
+  hand checks of the four items) and `tests/engine/lldf-hash.mjs`.
+### Saved data (CLAUDE.md §5)
+- None. No key, model field or format change.
+### Governing provisions (AASHTO LRFD 10th Ed. (2024)) — calculation change for this app (engineer's decision 2026-10-29, SB2-O19)
+1. Exterior fatigue, Art. 4.6.2.2.2d (the exterior factor not less than the rigid cross-section value) with C3.6.1.1.2 / Art. 3.6.1.4.3b.
+   Before: g_fat = g_lever,1 r / 1.2. After: g_fat = max(g_lever,1, g_rigid,1) r / 1.2, g_rigid,1 = 1.2(1/N_b + X_ext e/Σx²) (Eq. C4.6.2.2.2d-1).
+2. Moment skew, Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1. Before: r_M with θ = the smaller support skew of the region. After: r_M = 1.0 for a
+   span whose two support lines differ by more than 10°, and for a pier region when either adjacent span's two support lines do;
+   otherwise unchanged (engineer's decisions 2026-10-29: per span; piers by their adjacent spans).
+3. S > 16 ft (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1: lever rule) and N_b = 3 (the tables' N_b = 3 rows), Table 3.6.1.1.2-1. Before: the
+   multi-lane lever rule = 2 trucks, m = 1.0. After: the governing of N = 2 … N_L trucks, each with its m.
+4. Lever rule (Art. 4.6.2.2.1, C4.6.2.2.1). Before: trucks moved on a 0.25 ft grid. After: also every position where a wheel line is over
+   a girder line (the kinks of R(s)) and the end of travel; R(s) is piecewise linear, so its maximum is found exactly.
+### Check cases (arithmetic in `tests/engine/lldf.test.mjs`)
+1. xsA (any owner), span 1, G1: d_e = 3.25 − 5.5 = −2.25 ft; lever, one truck at 7.5 / 13.5 ft: R = 0.5(12.75 − 7.5)/9.5 = 0.276316,
+   g = 0.331579; rigid one lane: e = 19 − 2.25 − 5 = 11.75 ft, R = 1/5 + 19(11.75)/902.5 = 0.447368, g = 0.536842.
+   g_fat,M before 0.331579/1.2 = **0.2763**, after 0.536842/1.2 = **0.4474**; g_fat,V (r_V 1.049681) 0.2900 → 0.4696.
+2. Built-in bridge, support skews 20 / 35 / 35 / 50°, span 3 (35° / 50°, differ by 15°), G2: c_1 = 0.25(1.287167)^0.25(9.5/110)^0.5 =
+   0.078255, r_M = 1 − 0.078255(tan 35°)^1.5 = 0.954148; g_M before 0.703391 × 0.954148 = **0.6711**, after 0.703391 × 1 = **0.7034**.
+   Span 2 (35° / 35°) keeps the reduction; piers 1 and 2 (adjacent span 1, resp. 3, differs by 15°) lose it.
+   Pier rule, skews 40 / 52 / 52 / 40°, pier 1 (L = 125 ft, K_g = 1,438,270 in⁴), G2: interior equation 0.710932; c_1 = 0.25(1.872748)^0.25
+   (9.5/125)^0.5 = 0.080624, r_M = 1 − 0.080624(tan 52°)^1.5 = 0.883251; g_M before 0.710932 × 0.883251 = **0.6279**, after **0.7109**
+   (span 1 differs by 12° > 10°; span 2 by 0°).
+3. Built-in bridge with N_b = 4 at 18 ft, overhangs 4 ft (N_L = 4), G2: 2 trucks (wheels 12, 18, 22, 28 ft) R = 0.5(8 + 14 + 18 + 12)/18
+   = 1.444444, m 1.00 → **1.4444** (before); 3 trucks (6 … 32 ft) R = 0.5(2 + 8 + 12 + 18 + 14 + 8)/18 = 1.722222, m 0.85 → **1.4639**
+   (after; 4 trucks 1.1917). g_M and g_V of G2 / G3 +1.3 %.
+4. Built-in bridge with 3.3 ft overhangs, G5, one truck: end of travel s = 44.6 − 1.5 − 2 − 6 = 35.1 ft (the grid stops at 35.0 ft):
+   R before 0.5(3.2 + 9.2)/9.5 = 0.652632 (g **0.7832**), after 0.5(3.3 + 9.3)/9.5 = 0.663158 (g **0.7958**); g_fat,M 0.6526 → 0.6632; g_M
+   unchanged (rigid 0.8126 governs).
+### Changed values on the recorded inputs (`tests/projects/sbd2-loads/`, 20 project/owner inputs, 5 regions × 5 girders)
+- g_fat,M: 40 of 500 changed; g_fat,V: 40 of 500 (item 1: G1 and G5 of the 4 xsA inputs, every region; all higher). Unchanged: one- and
+  multi-lane moment and shear factors (500 each), g_M, g_V, methods (500 each), r_M, r_V (100 each), the 1,400 lever-rule trials (R and
+  position). Items 2–4 do not occur in the recorded inputs (equal skews; N_b = 5, S = 9.5 ft; the grid hits every peak); the four
+  variations above exercise them.
+### How verified
+- `tests/engine/lldf.test.mjs`: shared/lldf.js = lldf.html's engine before the move (1,592 cases, 11,135 outputs, identical hashes); hand checks 1–4.
+- GirderDetail parity (`tests/engine/loads.test.mjs`) against "Steel Bridge Design.html" after #472 (the same four changes, per-span skew):
+  20 recorded inputs + 28 variations (5 new), 33,032 values (every K_g, skew factor, one- and multi-lane factor, g_M, g_V, fatigue factor,
+  method, lever-rule trial and rigid-section value): identical except the 88 pier-rule values above (GirderDetail keeps the pier
+  reduction until its follow-up PR). Before #472 merged, the same comparison showed exactly the four items (140 item 1, 22 item 2, 40
+  item 3, 120 item 4 on the inputs and variations) and nothing else. GirderDetail in Node = the re-recorded browser values. The 100
+  payloads (the 15 xsA AASHTO / MassDOT / CTDOT files re-saved from GirderDetail after #472, as #472 did for RIDOT): girderDetail.df and
+  .loads to 4 decimals, 0 differ.
+- `node tests/engine/run.mjs`: every test passes. Headless loads of `lldf.html` (before/after, same values, 0 console errors) and
+  `apps/steel-bridge/index.html` (Loads & LLDF tab, 0 console errors).
+### Other copies
+- `Steel Bridge Design.html` (GirderDetail): the same four changes in its own code (#472). `lldf.html`: the reference (engine now in
+  shared/lldf.js, unchanged results).
+### Open items
+- SB2-O19 closed (the four GirderDetail / lldf.html differences of the sbd2-loads-lldf entry; engineer's decision 2026-10-29).
+- SB2-O23. Negative skews: GirderDetail (and this app) read a negative support skew as no skew (no moment reduction, no shear
+  correction); lldf.html uses |θ| (its LLDF-OH2). Kept as GirderDetail; engineer to decide (the model accepts −90° … 90°).
+- SB2-O24. Pier rule (decided 2026-10-29: a pier region loses the reduction if either adjacent span differs by more than 10°): in this app
+  now; GirderDetail gets it in the follow-up PR on "Steel Bridge Design.html", which removes `PIER_RULE_PENDING` from loads.test.mjs.
+- SB2-O25. lldf.html takes the moment θ as entered for the selected design region, or from Bridge Geometry's `skewDetail.moment`, which is
+  bridge-wide (0 when any two adjacent supports differ by more than 10°). Per span maps onto lldf.html as: for a span region, enter 0 when
+  that span's own two support lines differ by more than 10°, else the smaller of them. lldf.html and Bridge Geometry are unchanged here
+  (one tool per PR); aligning Bridge Geometry's hand-off with the per-span rule is a separate change.
