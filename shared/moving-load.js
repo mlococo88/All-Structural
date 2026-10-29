@@ -14,7 +14,10 @@
                            vehicles: preset table used for m.secondary}. Defaults: 'span', 100, true, SharedVehicles.
    deflection(R, opt)      LL deflection envelope at the 1/20 points from analyze() result R.
                            opt: {mode:'lrfd'|'veh', DF, useIM}.
-   absScan(R, analyzeFn)   absolute maxima per span (extra output sections; analyzeFn defaults to analyze). */
+   absScan(R, analyzeFn)   absolute maxima per span (extra output sections; analyzeFn defaults to analyze).
+   staticAnalysis(spec)    dead-load / uniform-load analysis of the same variable-EI beam, any number of spans
+                           (added 2026-10-29): moments, shears, reactions and deflections at stations. See its header.
+   camber(stages, opt)     dead-load deflection per stage and their sum (camber ordinates), from staticAnalysis. */
 (function(){
 function props(s,dk){
   const d=s.tb+s.D+s.tt;
@@ -315,7 +318,7 @@ function analyze(m,opt){
   else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
 
   // Engine check: unit uniform load on all spans
-  const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns], L1=m.spans[0];
+  const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns]||['n/a','n/a'], L1=m.spans[0];   // 5+ spans: no tabulated theory value (2026-10-29)
   const mChk=ns>1?mKey[supNodes[1]]:rows.find(r=>r.k===0&&r.t===10).mi;
   const rA=effs.findIndex(ef=>ef.t==='R'&&ef.q===0);
   let sumR=0; effs.forEach((ef,ei)=>{if(ef.t==='R')sumR+=DER[ei].end;});
@@ -429,5 +432,83 @@ function absScan(R,analyzeFn){
   if(keys.size){const R3=analyze({...m,scanKeys:[...keys],scanM:[...keys]});all=all.concat(items(R3).filter(o=>o.ef.scan));}
   return {all,inSpan,fac,nn:R.nn};
 }
-window.SharedMovingLoad={props,luDecomp,luSolve,analyze,deflection,absScan};
+
+/* staticAnalysis(spec): linear static analysis of a continuous (or simple-span) beam with variable EI, any number of spans.
+   Same beam elements, stiffness (EI = E*I/144 kip-ft^2), segment rule and LU solver as analyze(); loads are applied exactly
+   (consistent fixed-end forces for uniform loads, point loads at nodes), so results at nodes are exact for the given EI.
+   spec: { spans: [ft], E: ksi, segs: [{len (ft; last = remainder), I (in^4)}] (as m.segs) or sb: [[x0, x1, I]],
+           simple: true = independent simple spans (default false = continuous over interior supports),
+           loads: { w: kips/ft over the whole length, dist: [[x0, x1, w]] partial uniform loads, P: [[x, P]] point loads }
+                  (downward positive), stations: [ft] (default: the 1/20 points of each span), hmax: max element (ft, default Lt/240) }
+   returns { x, M (kip-ft, sagging +), VL / VR (kips, just left / right of the station; V = sum of forces to the left, up +),
+             defl (in, downward +), R (kips per support, upward +), sup, Lt, nn } */
+function staticAnalysis(spec){
+  const spans=spec.spans.map(Number), ns=spans.length;
+  if(!ns||spans.some(l=>!(l>0))) throw new Error('Every span length must be a number greater than 0.');
+  if(!(spec.E>0)) throw new Error('E must be greater than 0 (ksi).');
+  const sup=[0]; spans.forEach(l=>sup.push(sup[sup.length-1]+l)); const Lt=sup[ns];
+  let sb=spec.sb;
+  if(!sb){sb=[];let c=0;spec.segs.forEach((s,i)=>{const last=i===spec.segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c));sb.push([c,c+len,s.I]);c+=len;});}
+  const ld=spec.loads||{}, dist=(ld.dist||[]).map(d=>[+d[0],+d[1],+d[2]]), pts=(ld.P||[]).map(p=>[+p[0],+p[1]]);
+  if(ld.w) dist.push([0,Lt,+ld.w]);
+  let st=spec.stations;
+  if(!st){st=[];spans.forEach((l,k)=>{for(let t=0;t<=20;t++)st.push(sup[k]+l*t/20);});}
+  st=st.map(Number).filter(v=>v>=-1e-9&&v<=Lt+1e-9).sort((a,b)=>a-b).filter((v,i,a)=>!i||v-a[i-1]>1e-6);
+  if(spec.simple&&ns>1){   // independent simple spans: each span alone, results joined (VL from the left span, VR from the right one)
+    const parts=spans.map((L,k)=>{const a=sup[k],b=sup[k+1],cl=(x0,x1)=>[Math.max(a,x0)-a,Math.min(b,x1)-a];
+      const sbk=sb.map(q=>[...cl(q[0],q[1]),q[2]]).filter(q=>q[1]-q[0]>1e-9);
+      return staticAnalysis({spans:[L],E:spec.E,sb:sbk.length?sbk:[[0,L,Iof(sb,(a+b)/2)]],hmax:spec.hmax||Lt/240,
+        loads:{dist:dist.map(d=>[...cl(d[0],d[1]),d[2]]).filter(d=>d[1]-d[0]>1e-9),P:pts.filter(p=>p[0]>=a-1e-9&&p[0]<=b+1e-9&&(k===ns-1||p[0]<b-1e-9)).map(p=>[p[0]-a,p[1]])},
+        stations:st.filter(v=>v>=a-1e-6&&v<=b+1e-6).map(v=>Math.min(L,Math.max(0,v-a)))});});
+    const out={x:st,M:[],VL:[],VR:[],defl:[],R:Array(ns+1).fill(0),sup,Lt,nn:0,simple:true};
+    parts.forEach((q,k)=>{out.R[k]+=q.R[0];out.R[k+1]+=q.R[1];out.nn+=q.nn;});
+    st.forEach(v=>{let k=0;while(k<ns-1&&v>sup[k+1]+1e-6)k++;const q=parts[k],i=q.x.findIndex(u=>Math.abs(u+sup[k]-v)<1e-6);
+      const atR=k<ns-1&&Math.abs(v-sup[k+1])<1e-6, r=atR?parts[k+1]:null;
+      out.M.push(q.M[i]);out.VL.push(q.VL[i]);out.VR.push(r?r.VR[0]:q.VR[i]);out.defl.push(q.defl[i]);});
+    return out;
+  }
+  // Mesh: supports, stations, segment and load boundaries, point loads; then subdivided to hmax
+  const key=[...sup,...st]; sb.forEach(b=>key.push(b[0],b[1])); dist.forEach(d=>key.push(d[0],d[1])); pts.forEach(p=>key.push(p[0]));
+  const ks=[]; key.filter(v=>v>=-1e-9&&v<=Lt+1e-9).sort((a,b)=>a-b).forEach(v=>{if(!ks.length||v-ks[ks.length-1]>1e-6)ks.push(v);});
+  const hmax=spec.hmax||Lt/240, x=[ks[0]];
+  for(let i=1;i<ks.length;i++){const a=ks[i-1],b=ks[i],n=Math.max(1,Math.ceil((b-a)/hmax-1e-9));for(let j=1;j<=n;j++)x.push(a+(b-a)*j/n);}
+  const nn=x.length, nd=2*nn;
+  const idxOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return Math.abs(x[lo]-v)<=Math.abs(x[hi]-v)?lo:hi;};
+  const K=new Float64Array(nd*nd), ek=[], el=[], wE=new Float64Array(nn-1), FEF=new Float64Array(4*(nn-1));
+  for(let e=0;e<nn-1;e++){
+    const l=x[e+1]-x[e], xm=(x[e]+x[e+1])/2, k=spec.E*Iof(sb,xm)/144/(l*l*l); ek.push(k); el.push(l);
+    const M=[[12,6*l,-12,6*l],[6*l,4*l*l,-6*l,2*l*l],[-12,-6*l,12,-6*l],[6*l,2*l*l,-6*l,4*l*l]], D=[2*e,2*e+1,2*e+2,2*e+3];
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)K[D[a]*nd+D[b]]+=k*M[a][b];
+    let w=0; dist.forEach(d=>{if(xm>d[0]&&xm<d[1])w+=d[2];}); wE[e]=w;
+    if(w){FEF[4*e]=w*l/2;FEF[4*e+1]=w*l*l/12;FEF[4*e+2]=w*l/2;FEF[4*e+3]=-w*l*l/12;}
+  }
+  const F=new Float64Array(nd); for(let e=0;e<nn-1;e++)for(let q=0;q<4;q++)F[2*e+q]-=FEF[4*e+q];
+  pts.forEach(p=>{F[2*idxOf(p[0])]-=p[1];});
+  const supNodes=sup.map(idxOf), isSup=new Uint8Array(nd); supNodes.forEach(i=>isSup[2*i]=1);
+  const free=[]; for(let d=0;d<nd;d++) if(!isSup[d])free.push(d);
+  const nf=free.length, A=new Float64Array(nf*nf), bb=new Float64Array(nf);
+  for(let i=0;i<nf;i++){const r=free[i]*nd;for(let j=0;j<nf;j++)A[i*nf+j]=K[r+free[j]];bb[i]=F[free[i]];}
+  luDecomp(A,nf); const y=luSolve(A,nf,bb), d=new Float64Array(nd); for(let i=0;i<nf;i++)d[free[i]]=y[i];
+  const f1=new Float64Array(nn-1), m1=new Float64Array(nn-1);
+  for(let e=0;e<nn-1;e++){const l=el[e],k=ek[e],v1=d[2*e],t1=d[2*e+1],v2=d[2*e+2],t2=d[2*e+3];
+    f1[e]=k*(12*v1+6*l*t1-12*v2+6*l*t2)+FEF[4*e]; m1[e]=k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)+FEF[4*e+1];}
+  const R=supNodes.map(sn=>{const r=2*sn;let s=0;for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++)s+=K[r*nd+cc]*d[cc];return s-F[r];});
+  const out={x:st,M:[],VL:[],VR:[],defl:[],R,sup,Lt,nn};
+  st.forEach(v=>{const i=idxOf(v);
+    const mR=i<nn-1?-m1[i]:null, l=i>0?el[i-1]:0, w=i>0?wE[i-1]:0;
+    const vL=i>0?f1[i-1]-w*l:0, mL=i>0?-m1[i-1]+f1[i-1]*l-w*l*l/2:null;
+    out.M.push(mR!=null?mR:mL); out.VL.push(vL); out.VR.push(i<nn-1?f1[i]:0); out.defl.push(-12*d[2*i]);});
+  return out;
+}
+function Iof(sb,xx){for(const b of sb)if(xx>=b[0]&&xx<b[1])return b[2];return sb[sb.length-1][2];}
+
+/* camber(stages, opt): dead-load deflection of each stage (each a staticAnalysis spec with its own EI and loads, e.g. DC1
+   on the steel section, DC2 + DW on the long-term composite section) and their sum at the same stations; the camber
+   ordinate is the total downward deflection (in). opt.stations overrides each stage's stations.
+   returns { x, stages: [defl arrays (in, down +)], total } */
+function camber(stages, opt){
+  const st=opt&&opt.stations, runs=stages.map(s=>staticAnalysis(st?{...s,stations:st}:s)), x=runs[0].x;
+  return {x, stages:runs.map(r=>r.defl), total:x.map((_,i)=>runs.reduce((a,r)=>a+r.defl[i],0))};
+}
+window.SharedMovingLoad={props,luDecomp,luSolve,analyze,deflection,absScan,staticAnalysis,camber};
 })();
