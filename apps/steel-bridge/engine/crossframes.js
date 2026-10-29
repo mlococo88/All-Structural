@@ -449,7 +449,7 @@
     p.Lb = L && !L.errors.length ? r2(FRM.lbMax(L.FR, L.FR.girders.map(g => g.i), L.m.sup)) : 25; src.Lb = L && !L.errors.length ? 'the largest unbraced length on any girder (framing)' : 'no framing: 25 ft';
     const A = opt.A && !(opt.A.errors && opt.A.errors.length) ? opt.A : null;
     let xM = sup[0] + (sup[1] - sup[0]) / 2, Mu = +c.sb.Mu;
-    if (A && A.st && A.st.DC1) { const xs = A.xs, Mc = xs.map((_, i) => 1.25 * A.st.DC1.M[i] + 1.5 * (A.st.CL ? A.st.CL.M[i] : 0)); let iMx = 0; Mc.forEach((v, i) => { if (v > Mc[iMx]) iMx = i; }); xM = xs[iMx];
+    if (A && A.st && A.st.DC1) { const xs = A.x, Mc = xs.map((_, i) => 1.25 * A.st.DC1.M[i] + 1.5 * (A.st.CL ? A.st.CL.M[i] : 0)); let iMx = 0; Mc.forEach((v, i) => { if (v > Mc[iMx]) iMx = i; }); xM = xs[iMx];
       if (c.sb.Mu === '' || c.sb.Mu == null) { Mu = r1(Mc[iMx]); src.Mu = `analysis: 1.25M_DC1 + 1.5M_CL at x = ${xM.toFixed(1)} ft`; } }
     if (!(isFinite(Mu))) { Mu = DEF.sb.Mu; src.Mu = 'no analysis: GirderDetail built-in value'; } else if (!src.Mu) src.Mu = 'entered';
     let k = 0; while (k < sup.length - 2 && sup[k + 1] < xM) k++;
