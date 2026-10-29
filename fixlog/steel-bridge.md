@@ -478,7 +478,8 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   payloads (the 15 xsA AASHTO / MassDOT / CTDOT files re-saved from GirderDetail after #472, as #472 did for RIDOT): girderDetail.df and
   .loads to 4 decimals, 0 differ. The re-saved payloads differ from the old ones only in producedAt, girderDetail.df.spans[].fatM / fatV
   (18 values, G1 and G5) and the fatigue envelopes of G1 / G5 at every station (M_FATpos/neg, V_FATpos/neg), all item 1.
-- `tests/engine/analysis.test.mjs` (#469, merged meanwhile) loads shared/lldf.js before engine/lldf.js (its loads-module path test).
+- `tests/engine/analysis.test.mjs` (#469) and `tests/engine/fatigue.test.mjs` (#474), merged meanwhile, load shared/lldf.js before engine/lldf.js
+  (their loads-module path tests), as index.html does.
 - `node tests/engine/run.mjs`: every test passes. Headless loads of `lldf.html` (before/after, same values, 0 console errors) and
   `apps/steel-bridge/index.html` (Loads & LLDF tab, 0 console errors).
 ### Other copies
