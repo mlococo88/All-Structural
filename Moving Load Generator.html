@@ -267,30 +267,15 @@ tr.pier td{background:#f8fafc;font-weight:600}
 </main>
 </div>
 
+<script src="shared/vehicles.js"></script>
+<script src="shared/moving-load.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const num=(id,d)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?d:v;};
 const sp=(load,arr)=>arr.map(s=>[load,s]);
 
-// ═══════════ PRESETS (defaults only — every rule is editable in the UI) ═══════════
-const E80=[[40,0],[80,8],[80,5],[80,5],[80,5],[52,9],[52,5],[52,6],[52,5],[40,8],[80,8],[80,5],[80,5],[80,5],[52,9],[52,5],[52,6],[52,5]];
-const NOV={k:0,min:0,max:0}, NOUDL={mode:'none',w:0,gap:0,trunc:false};
-const NOSL={on:false,w:0.64,PM:18,PV:26}, SL20={on:true,w:0.64,PM:18,PV:26};   // AASHTO Std. Spec. 17th Ed. Fig. 3.7.6B (H20-44 / HS20-44 lane loading)
-const HW=(label,axles,o={})=>Object.assign({label,axles,udl:{mode:'lane',w:0.64,gap:0,trunc:false},vary:NOV,neglect:true,secondary:'',multi:{on:false,scale:0.9,hmin:50,fixed:14},imp:{method:'const',val:1.33,onUdl:false},stdLane:NOSL},o);
-const RL=(label,axles,w,gap,o={})=>Object.assign({label,axles,udl:{mode:w>0?'trail':'none',w,gap,trunc:false},vary:NOV,neglect:false,secondary:'',multi:{on:false,scale:1,hmin:50,fixed:0},imp:{method:'arema',val:1,onUdl:true}},o);
-const P={
-  'HL93-Truck':HW('HL-93 Design Truck',[[8,0],[32,14],[32,14]],{vary:{k:3,min:14,max:30},secondary:'HL93-Tandem',multi:{on:true,scale:0.9,hmin:50,fixed:14}}),
-  'HL93-Tandem':HW('HL-93 Design Tandem',[[25,0],[25,4]]),
-  'HS20':HW('HS20 Truck + Std. Spec. lane loading',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false},stdLane:SL20}),
-  'H20':HW('H20 Truck + Std. Spec. lane loading',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false},stdLane:SL20}),
-  'E80':RL('AREMA Cooper E80',E80,8,5,{secondary:'E80-Alt'}),
-  'E80-Alt':RL('Cooper E80 Alternate (4 × 100k)',sp(100,[0,5,6,5]),0,0),
-  'F40PH':RL('F40PH Locomotive (280K)',sp(70,[0,9,24,9,14.17,9,24,9]),2,7),
-  'HSP46':RL('HSP-46 Locomotive (296K)',sp(73.75,[0,9.33,35.67,9.33,16.67,9.33,35.67,9.33]),2,8.33),
-  '286K':RL('286K Rail Car (×3)',sp(71.5,[0,5.67,19.58,5.67,6.67,5.67,19.58,5.67,6.67,5.67,19.58,5.67]),0,0),
-  '315K':RL('315K CSX Rail Car (×3)',sp(78.75,[0,6,35.67,6,7.5,6,35.67,6,7.5,6,35.67,6]),0,0),
-  'ES44AC':RL('ES44AC Locomotive (315K)',sp(72,[0,6.58,6.58,33.08,6.58,6.58,13.75,6.58,6.58,33.08,6.58,6.58]),6,5)
-};
+// ═══════════ PRESETS: shared/vehicles.js (defaults only — every rule is editable in the UI) ═══════════
+const VEH=SharedVehicles.build(), P=VEH.presets, NOSL=VEH.NOSL;
 
 let axles=[], segs=[{len:0,bt:16,tt:1,D:54,tw:0.5625,bb:18,tb:1.5,Io:0}], RES=null, timer=null;
 
@@ -343,21 +328,8 @@ function syncVis(){
 
 // ═══════════ SECTION PROPERTIES (uncracked, short-term n) ═══════════
 function deckRead(){return {comp:$('comp').checked,n:Math.max(1,num('dn',8)),beff:num('dbeff',96),ts:num('dts',8),th:Math.max(0,num('dth',0)),inclH:$('dinc').checked};}
-function props(s,dk){
-  const d=s.tb+s.D+s.tt;
-  const parts=[[s.bb*s.tb,s.tb/2,s.bb*s.tb**3/12],[s.tw*s.D,s.tb+s.D/2,s.tw*s.D**3/12],[s.bt*s.tt,s.tb+s.D+s.tt/2,s.bt*s.tt**3/12]];
-  let top=d;
-  if(dk.comp){
-    if(dk.inclH&&dk.th>0) parts.push([s.bt*dk.th/dk.n,d+dk.th/2,s.bt/dk.n*dk.th**3/12]);
-    parts.push([dk.beff*dk.ts/dk.n,d+dk.th+dk.ts/2,dk.beff/dk.n*dk.ts**3/12]);
-    top=d+dk.th+dk.ts;
-  }
-  const A=parts.reduce((a,p)=>a+p[0],0);
-  if(!(A>0)) return {A:0,yb:0,I:0,Sbs:0,Sts:0,Sdk:null};
-  const yb=parts.reduce((a,p)=>a+p[0]*p[1],0)/A;
-  const I=parts.reduce((a,p)=>a+p[2]+p[0]*(p[1]-yb)**2,0);
-  return {A,yb,I,Sbs:I/yb,Sts:I/(d-yb),Sdk:dk.comp?dk.n*I/(top-yb):null};
-}
+// Section properties, linear algebra and the analysis engine: shared/moving-load.js
+function props(s,dk){return SharedMovingLoad.props(s,dk);}   // wrapped further below (haunch measured to the web)
 const SF=['len','bt','tt','D','tw','bb','tb','Io'];
 function totalL(){let t=0;for(let i=0;i<+$('nSpans').value;i++)t+=Math.max(1,num('L'+i,100));return t;}
 function renderSegs(){
@@ -403,345 +375,12 @@ function readModel(){
 }
 
 // ═══════════ LINEAR ALGEBRA ═══════════
-function luDecomp(A,n){
-  for(let k=0;k<n;k++){const akk=A[k*n+k],rk=k*n;
-    for(let i=k+1;i<n;i++){const ri=i*n,f=A[ri+k]/akk;if(f===0)continue;A[ri+k]=f;for(let j=k+1;j<n;j++)A[ri+j]-=f*A[rk+j];}}
-}
-function luSolve(A,n,b){
-  const y=Float64Array.from(b);
-  for(let i=0;i<n;i++){let s=y[i];const ri=i*n;for(let j=0;j<i;j++)s-=A[ri+j]*y[j];y[i]=s;}
-  for(let i=n-1;i>=0;i--){let s=y[i];const ri=i*n;for(let j=i+1;j<n;j++)s-=A[ri+j]*y[j];y[i]=s/A[ri+i];}
-  return y;
-}
+function luDecomp(A,n){return SharedMovingLoad.luDecomp(A,n);}
+function luSolve(A,n,b){return SharedMovingLoad.luSolve(A,n,b);}
 
 // ═══════════ ANALYSIS ENGINE ═══════════
 function analyze(m){
-  if(isNaN(m.E)) throw new Error('E steel is blank or not a number. Enter E in ksi.');
-  if(!(m.E>0)) throw new Error(`E steel = ${m.E} ksi. E must be greater than 0 (the stiffness matrix is singular otherwise).`);
-  if(m.spans.some(l=>isNaN(l))) throw new Error(`Every span length must be a number greater than 0; span ${m.spans.findIndex(l=>isNaN(l))+1} is blank or not a number.`);
-  if(!m.spans.length||m.spans.some(l=>!(l>0))) throw new Error('Every span length must be greater than 0.');
-  if(m.stdLane&&![m.stdLane.w,m.stdLane.PM,m.stdLane.PV].every(v=>isFinite(v)&&v>=0)) throw new Error('Std. Spec. lane loading: w, P moment and P shear must be numbers ≥ 0.');
-  const ns=m.spans.length, sup=[0]; m.spans.forEach(l=>sup.push(sup[sup.length-1]+l)); const Lt=sup[ns];
-  // Segment bounds
-  const sb=[]; let c=0;
-  m.segs.forEach((s,i)=>{const last=i===m.segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c));sb.push([c,c+len,s.I]);c+=len;});
-  // Mesh: supports, 1/20 points of each span, segment transitions, then subdivide
-  const key=[...sup]; m.spans.forEach((l,k)=>{for(let t=1;t<20;t++)key.push(sup[k]+l*t/20);});
-  sb.forEach(b=>{if(b[1]>1e-6&&b[1]<Lt-1e-6)key.push(b[1]);});
-  if(m.scanKeys)m.scanKeys.forEach(v=>{if(v>1e-6&&v<Lt-1e-6)key.push(v);}); // absolute-maximum refinement pass only
-  key.sort((a,b)=>a-b); const ks=[]; key.forEach(v=>{if(!ks.length||v-ks[ks.length-1]>1e-6)ks.push(v);});
-  const hmax=Lt/240, x=[ks[0]];
-  for(let i=1;i<ks.length;i++){const a=ks[i-1],b=ks[i],n=Math.max(1,Math.ceil((b-a)/hmax-1e-9));for(let j=1;j<=n;j++)x.push(a+(b-a)*j/n);}
-  const nn=x.length, nd=2*nn;
-  const idxOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return Math.abs(x[lo]-v)<=Math.abs(x[hi]-v)?lo:hi;};
-  const Iat=xx=>{for(const b of sb)if(xx>=b[0]&&xx<b[1])return b[2];return sb[sb.length-1][2];};
-
-  // Global stiffness (v up, θ CCW), EI in kip-ft²
-  const K=new Float64Array(nd*nd), ek=[], el=[];
-  for(let e=0;e<nn-1;e++){
-    const l=x[e+1]-x[e], k=m.E*Iat((x[e]+x[e+1])/2)/144/(l*l*l); ek.push(k); el.push(l);
-    const M=[[12,6*l,-12,6*l],[6*l,4*l*l,-6*l,2*l*l],[-12,-6*l,12,-6*l],[6*l,2*l*l,-6*l,4*l*l]], D=[2*e,2*e+1,2*e+2,2*e+3];
-    for(let a=0;a<4;a++)for(let b=0;b<4;b++)K[D[a]*nd+D[b]]+=k*M[a][b];
-  }
-  const supNodes=sup.map(idxOf), isSup=new Uint8Array(nd); supNodes.forEach(i=>isSup[2*i]=1);
-  const fmap=new Int32Array(nd).fill(-1), free=[];
-  for(let d=0;d<nd;d++) if(!isSup[d]){fmap[d]=free.length;free.push(d);}
-  const nf=free.length, A=new Float64Array(nf*nf);
-  for(let i=0;i<nf;i++){const r=free[i]*nd;for(let j=0;j<nf;j++)A[i*nf+j]=K[r+free[j]];}
-  luDecomp(A,nf);
-
-  // Output effects and table rows (1/20 points of each span)
-  const effs=[], mKey={}, vKey={}, rows=[];
-  for(let k=0;k<ns;k++){const L=m.spans[k],a=sup[k];
-    for(let t=0;t<=20;t++){const i=idxOf(a+L*t/20);
-      let mi=mKey[i];
-      if(mi===undefined){mi=mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:t===20&&k<ns-1?[k,k+1]:[k]});}
-      const elx=t===20?i-1:i;
-      let vi=vKey[elx];
-      if(vi===undefined){vi=vKey[elx]=effs.length;effs.push({t:'V',el:elx,cutL:t!==20,x:x[i],spans:[k]});}
-      rows.push({k,t,x:x[i],mi,vi});
-    }}
-  // Plate transitions (segment boundaries) as additional output sections
-  const trans=[];
-  sb.forEach(b=>{const xb=b[1];if(xb<=1e-6||xb>=Lt-1e-6||sup.some(s=>Math.abs(s-xb)<1e-6))return;
-    const i=idxOf(xb);let k=0;while(k<ns-1&&xb>sup[k+1]-1e-9)k++;
-    let mi=mKey[i],isNew=false;if(mi===undefined){mi=mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:[k]});isNew=true;}
-    let vi=vKey[i];if(vi===undefined){vi=vKey[i]=effs.length;effs.push({t:'V',el:i,cutL:true,x:x[i],spans:[k]});isNew=true;}
-    if(isNew)rows.push({k,t:20*(x[i]-sup[k])/m.spans[k],x:x[i],mi,vi,tr:true});
-    trans.push({x:x[i],k,mi,vi});});
-  rows.sort((a,b)=>a.k-b.k||a.x-b.x); rows.trans=trans;
-  sup.forEach((s,q)=>effs.push({t:'R',node:supNodes[q],q,x:s,spans:q===0?[0]:q===ns?[ns-1]:[q-1,q],interior:q>0&&q<ns}));
-  // Absolute-maximum scan passes only (m.scanM / m.scanV / m.scanKeys; never set for the reported envelope results):
-  // extra M sections at the mesh nodes nearest the m.scanM positions, and V just right of every node (m.scanV).
-  if(m.scanM||m.scanV){const spanAt=v=>{let k=0;while(k<ns-1&&v>sup[k+1]-1e-9)k++;return k;};
-    (m.scanM||[]).forEach(v=>{const i=idxOf(v);if(mKey[i]!==undefined||supNodes.includes(i))return;
-      mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:[spanAt(x[i])],scan:true});});
-    if(m.scanV)for(let e=0;e<nn-1;e++){if(vKey[e]!==undefined)continue;
-      vKey[e]=effs.length;effs.push({t:'V',el:e,cutL:true,x:x[e],spans:[spanAt((x[e]+x[e+1])/2)],scan:true});}}
-
-  // Influence lines: unit downward load at every node
-  const IL=effs.map(()=>new Float64Array(nn)), d=new Float64Array(nd), b=new Float64Array(nf);
-  for(let j=0;j<nn;j++){
-    const sq=supNodes.indexOf(j);
-    if(sq>=0){effs.forEach((ef,ei)=>{if(ef.t==='R'&&ef.q===sq)IL[ei][j]=1;});continue;}
-    b.fill(0); b[fmap[2*j]]=-1;
-    const y=luSolve(A,nf,b); d.fill(0); for(let i=0;i<nf;i++)d[free[i]]=y[i];
-    effs.forEach((ef,ei)=>{
-      let v=0;
-      if(ef.t==='M'){
-        const e=ef.node<nn-1?ef.node:ef.node-1,l=el[e],k=ek[e],v1=d[2*e],t1=d[2*e+1],v2=d[2*e+2],t2=d[2*e+3];
-        v=ef.node<nn-1? -k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2) : k*(6*l*v1+2*l*l*t1-6*l*v2+4*l*l*t2);
-      } else if(ef.t==='V'){
-        const e=ef.el,l=el[e],k=ek[e];
-        v=k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3]);
-      } else {
-        const r=2*ef.node; for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++) v+=K[r*nd+cc]*d[cc];
-      }
-      IL[ei][j]=v;
-    });
-  }
-  // Shear IL has a unit jump at the cut: adjust the element containing the cut
-  const ends=(ei,j)=>{const f=IL[ei],ef=effs[ei];let a=f[j],bb=f[j+1];if(ef.t==='V'&&j===ef.el){if(ef.cutL)a+=1;else bb-=1;}return [a,bb];};
-
-  // Integrals for uniform loads: cumulative, patterned (+/−), prefix/suffix extremes
-  const DER=effs.map((ef,ei)=>{
-    const CI=new Float64Array(nn); let lp=0,ln=0;
-    for(let j=0;j<nn-1;j++){const h=x[j+1]-x[j],[a,bb]=ends(ei,j);CI[j+1]=CI[j]+(a+bb)/2*h;
-      if(a>=0&&bb>=0)lp+=(a+bb)/2*h; else if(a<=0&&bb<=0)ln+=(a+bb)/2*h;
-      else{const t=a/(a-bb),A1=a*t*h/2,A2=bb*(1-t)*h/2;if(a>0){lp+=A1;ln+=A2;}else{ln+=A1;lp+=A2;}}}
-    const pmin=new Float64Array(nn),pmax=new Float64Array(nn),smin=new Float64Array(nn),smax=new Float64Array(nn);
-    pmin[0]=pmax[0]=CI[0]; for(let j=1;j<nn;j++){pmin[j]=Math.min(pmin[j-1],CI[j]);pmax[j]=Math.max(pmax[j-1],CI[j]);}
-    smin[nn-1]=smax[nn-1]=CI[nn-1]; for(let j=nn-2;j>=0;j--){smin[j]=Math.min(smin[j+1],CI[j]);smax[j]=Math.max(smax[j+1],CI[j]);}
-    return {CI,lp,ln,pmin,pmax,smin,smax,end:CI[nn-1]};
-  });
-  effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&DER[ei].end<-1e-9*Lt*Lt;});
-
-  // Impact per effect
-  // AASHTO Std. Spec. 17th Ed. 3.8.2.1: I = 50/(L+125) <= 0.30; L per 3.8.2.2 (isMax: + effect, else − effect)
-  const stdL=(ef,isMax)=>{const S=m.spans,k=ef.spans[0];
-    if(ef.t==='V'){const a=sup[k],b=sup[k+1];return isMax?b-ef.x:ef.x-a;}
-    if(ef.t==='M'&&!isMax&&ns>1){if(ef.spans.length>1)return (S[ef.spans[0]]+S[ef.spans[1]])/2;
-      const q=k===0?1:k===ns-1?ns-1:(ef.x-sup[k]<=sup[k+1]-ef.x?k:k+1);return (S[q-1]+S[q])/2;}
-    return ef.spans.reduce((a,s)=>a+S[s],0)/ef.spans.length;};
-  const imOf=(ef,isMax=true)=>{if(m.imp.method==='std')return 1+Math.min(0.30,50/(Math.max(0,stdL(ef,isMax))+125));
-    if(m.imp.method==='const')return m.imp.val;
-    const Lb=$('aLb')?$('aLb').value:'span';
-    const L=Lb==='user'?Math.max(1,num('aL',100)):Lb==='max'?Math.max(...m.spans):Lb==='total'?m.spans.reduce((a,b)=>a+b,0):ef.spans.reduce((a,s)=>a+m.spans[s],0)/ef.spans.length;
-    const I=100/m.imp.S+(L<80?40-3*L*L/1600:16+600/(L-30));
-    return 1+(m.imp.bal?0.9:1)*I/100;};
-  const imArr=effs.map(ef=>imOf(ef,true)), imMinArr=effs.map((ef,i)=>m.imp.method==='std'?imOf(ef,false):imArr[i]);
-  const dfOf=(ef,v)=>ef.t==='M'?(v<0&&m.dfNeg>0?m.dfNeg:Math.max(...ef.spans.map(s=>m.dfM[s]))):ef.t==='V'?m.dfV[ef.spans[0]]:Math.max(...ef.spans.map(s=>m.dfV[s]));
-
-  // Independent uniform load (lane patterned, or full length) — constant per effect
-  const uw=(m.udl.mode==='lane'||m.udl.mode==='full')?m.udl.w:0;
-  const laneMax=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].lp:uf*uw*DER[ei].end;});
-  const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imMinArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
-
-  const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));
-
-  // Axle standing exactly at a shear cut (the unit jump in the V influence line): the envelope is the limit of the
-  // axle approaching from either side, so count it with the left-side ordinate or the right-side ordinate, whichever
-  // gives the larger value for the maximum and the smaller for the minimum. Returns [vMin,vMax], or null if not at the cut.
-  const vJump=(cutEl,cutL,f,xp,P)=>{const c=cutL?cutEl:cutEl+1;if(Math.abs(xp-x[c])>1e-6)return null;
-    const oL=cutL?f[c]:f[c]-1,u=P*oL,w=P*(oL+1);return [Math.min(u,w),Math.max(u,w)];};
-  const cfgs=[];function sweep(cfg){cfgs.push(cfg);
-    const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
-    const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA),XP=new Float64Array(nA);
-    const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL,imMinArr[ei]]);});
-    const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
-    for(const dir of m.dirs){
-      for(let p=-ext;p<=Lt+ext+1e-9;p+=m.step){
-        let any=false;
-        for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];
-          if(xp<-1e-9||xp>Lt+1e-9){on[a]=0;continue;}
-          on[a]=1;any=true;XP[a]=xp;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
-        let sc=null;
-        if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else{if(s0<Lt)sc=Math.max(s0,0);}}
-        if(!any&&sc===null)continue;
-        let jc=0,tc=0; if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
-        for(const [ei,dMax,dMin,im,cutEl,cutL,imn] of act){
-          const f=IL[ei]; let tot=0,ps=0,ng=0,totN=0;
-          for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
-            if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
-            const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);
-            if(cutEl>=0){const vj=vJump(cutEl,cutL,f,XP[a],cfg.loads[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
-            tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
-          const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:totN;
-          let uMax=0,uMin=0;
-          if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;
-            if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
-            else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
-            uMax*=tr.w;uMin*=tr.w;}
-          const uf=m.imp.onUdl?im:1, ufn=m.imp.onUdl?imn:1;
-          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]);
-          const r=res[ei];
-          if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG=gov(cfg,p,dir,on);}
-          if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG=gov(cfg,p,dir,on);}
-        }
-      }
-    }
-    // Shear: also place each axle exactly at the cut (the IL jump), so the limit from either side is always evaluated
-    for(const dir of m.dirs)for(const [ei,dMax,dMin,,cutEl,cutL] of act){if(cutEl<0)continue;const xc=x[cutL?cutEl:cutEl+1];
-      for(let a=0;a<nA;a++)refineAt(cfg,xc+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}
-  }
-  const gov=(cfg,p,dir,on)=>({lab:cfg.lab,p,dir,pos:cfg.offs.map(o=>p-dir*o).filter((_,a)=>on[a])});
-  const mk=(ax,vk,sv)=>{const offs=[0],loads=[ax[0][0]];for(let i=1;i<ax.length;i++){offs.push(offs[i-1]+(i+1===vk&&sv!=null?sv:ax[i][1]));loads.push(ax[i][0]);}return {offs,loads};};
-  const rng=(a,bb,s)=>{const r=[];for(let v=a;v<=bb+1e-9;v+=s)r.push(+v.toFixed(3));if(!r.length||r[r.length-1]<bb-1e-9)r.push(bb);return r;};
-  const all=()=>[1,1], trail=m.udl.mode==='trail'&&m.udl.w>0?{w:m.udl.w,gap:m.udl.gap,trunc:m.udl.trunc}:null;
-  const varOK=m.vK>=2&&m.vK<=m.axles.length&&m.vMax>=m.vMin;
-  const base=m.axles.filter(a=>a[0]>0).length===m.axles.length?m.axles:m.axles.map(a=>[Math.max(0,a[0]),a[1]]);
-
-  // Case 1: primary vehicle (with variable spacing)
-  (varOK?rng(m.vMin,m.vMax,m.hStep):[null]).forEach(sv=>{
-    const v=mk(base,varOK?m.vK:0,sv);
-    sweep({...v,trail,scale:1,lab:m.short+(sv!=null?` s=${sv}`:''),sel:all});
-  });
-  // Case 2: secondary vehicle (lane/uniform applies; trailing load does not)
-  if(m.secondary&&P[m.secondary]){const v=mk(P[m.secondary].axles,0,null);sweep({...v,trail:null,scale:1,lab:m.secondary,sel:all});}
-  // Case 3: multi-vehicle (negative moment in contraflexure zones + interior reactions)
-  if(m.multi&&ns>1){
-    const v=mk(base,varOK?m.vK:0,varOK&&m.mFixed>0?m.mFixed:null), Lv=v.offs[v.offs.length-1];
-    const Hmax=Math.min(Lt,2*Math.max(...m.spans));
-    rng(m.mHmin,Math.max(m.mHmin,Hmax),m.hStep).forEach(H=>{
-      const offs=[...v.offs,...v.offs.map(o=>o+Lv+H)], loads=[...v.loads,...v.loads];
-      sweep({offs,loads,trail,scale:m.mScale,lab:`${m.mScale}×2 ${m.short} H=${H}`,sel:ef=>[ef.t==='R'&&ef.interior,ef.t==='M'&&ef.neg]});
-    });
-  }
-
-  // Warnings
-  // ── Refinement: spacing/headway at 0.5 ft, then each governing position at 0.1 ft ──
-  function refineAt(cfg,p,dir,list){   // function declaration (hoisted): also used by sweep() for the shear-jump positions
-    const nA=cfg.offs.length,Lv=cfg.offs[nA-1],tr=cfg.trail,J=[],T=[],Pa=[],pos=[];
-    for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;
-      let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=xp)lo=md;else hi=md;}
-      J.push(lo);T.push(Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo]))));Pa.push(cfg.loads[a]);pos.push(xp);}
-    let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
-    if(!J.length&&sc===null)return;
-    let jc=0,tc=0;if(sc!==null){let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=sc)lo=md;else hi=md;}jc=lo;tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
-    list.forEach(([ei,dMax,dMin])=>{
-      const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0,totN=0;
-      for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
-        const v=Pa[a]*(fa+(fb-fa)*T[a]);
-        if(cutEl>=0){const vj=vJump(cutEl,ef.cutL,f,pos[a],Pa[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
-        tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
-      const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:totN;let uMax=0,uMin=0;
-      if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;
-        if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
-        else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
-        uMax*=tr.w;uMin*=tr.w;}
-      const uf=m.imp.onUdl?im:1,ufn=m.imp.onUdl?imn:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]),r=res[ei];
-      if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG={lab:cfg.lab,p,dir,pos:[...pos]};}
-      if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG={lab:cfg.lab,p,dir,pos:[...pos]};}
-    });
-  }
-  if(!$('refineChk')||$('refineChk').checked){
-    const have={};cfgs.forEach(c=>have[c.lab]=1);
-    const newS=new Set(),newH=new Set();
-    res.forEach(r=>[r.maxG,r.minG].forEach(g=>{if(!g)return;
-      const s=g.lab.match(/ s=([\d.]+)$/),h=g.lab.match(/ H=([\d.]+)$/);
-      for(let dd=-m.hStep+0.5;dd<m.hStep-1e-9;dd+=0.5){if(Math.abs(dd)<1e-9)continue;
-        if(s&&varOK){const v=+(+s[1]+dd).toFixed(2);if(v>=m.vMin-1e-9&&v<=m.vMax+1e-9)newS.add(v);}
-        if(h){const v=+(+h[1]+dd).toFixed(2);if(v>=m.mHmin-1e-9)newH.add(v);}}}));
-    newS.forEach(sv=>{const lab=`${m.short} s=${sv}`;if(!have[lab])sweep({...mk(base,m.vK,sv),trail,scale:1,lab,sel:all});});
-    if(m.multi&&ns>1&&newH.size){
-      const v=mk(base,varOK?m.vK:0,varOK&&m.mFixed>0?m.mFixed:null),Lv=v.offs[v.offs.length-1];
-      newH.forEach(H=>{const lab=`${m.mScale}×2 ${m.short} H=${H}`;if(have[lab])return;
-        sweep({offs:[...v.offs,...v.offs.map(o=>o+Lv+H)],loads:[...v.loads,...v.loads],trail,scale:m.mScale,lab,sel:ef=>[ef.t==='R'&&ef.interior,ef.t==='M'&&ef.neg]});});
-    }
-    const byLab={};cfgs.forEach(c=>byLab[c.lab]=c);
-    res.forEach((r,ei)=>[[r.maxG,true],[r.minG,false]].forEach(([g,isMax])=>{if(!g)return;const c=byLab[g.lab];if(!c)return;
-      const p0=g.p,dr=g.dir,list=[[ei,isMax,!isMax]];
-      for(let q=-m.step;q<=m.step+1e-9;q+=0.1)refineAt(c,+(p0+q).toFixed(3),dr,list);}));
-  }
-
-  // ── AASHTO Std. Spec. lane loading, separate case enveloped with the truck (17th Ed. 3.7.1.1, Fig. 3.7.6B, 3.11.3; impact 3.8.1) ──
-  // max = I+(w*positive IL area + P*max ordinate); min = I-(w*negative IL area + P*min ordinate [+ P*min ordinate in one other span, negative moment, 2+ spans])
-  if(m.stdLane){const SL=m.stdLane;
-    effs.forEach((ef,ei)=>{
-      const P1=ef.t==='M'?SL.PM:SL.PV, D=DER[ei], spMin=m.spans.map(()=>[0,0]);
-      let hi=0,xh=0,lo=0,xl=0,kl=-1,k=0;
-      for(let j=0;j<nn-1;j++){const [a,bb]=ends(ei,j),xm=(x[j]+x[j+1])/2;while(k<ns-1&&xm>sup[k+1])k++;
-        [[a,x[j]],[bb,x[j+1]]].forEach(([v,xv])=>{if(v>hi){hi=v;xh=xv;}if(v<lo){lo=v;xl=xv;kl=k;}if(v<spMin[k][0])spMin[k]=[v,xv];});}
-      let lo2=0,x2=null;
-      if(ef.t==='M'&&ns>1&&kl>=0)spMin.forEach(([v,xv],s)=>{if(s!==kl&&v<lo2){lo2=v;x2=xv;}});
-      const vMax=imArr[ei]*(SL.w*D.lp+P1*hi), vMin=imMinArr[ei]*(SL.w*D.ln+P1*(lo+lo2)), r=res[ei];
-      const lab=`Std. lane ${P1}k`;
-      if(vMax>r.max+1e-9){r.max=vMax;r.maxG={lab,p:xh,dir:1,pos:[xh],lane:true};}
-      if(vMin<r.min-1e-9){r.min=vMin;r.minG={lab:x2!=null?`Std. lane 2×${P1}k`:lab,p:xl,dir:1,pos:x2!=null?[xl,x2]:[xl],lane:true};}
-    });
-  }
-
-  const warn=[]; let segSum=0; m.segs.slice(0,-1).forEach(s=>segSum+=s.len);
-  if(m.segs.length>1&&segSum>=Lt) warn.push('Segment lengths reach or exceed the girder length, so the last segment has zero length.');
-  if(m.segs.some(s=>s.bad)) warn.push('A segment has invalid geometry (zero area or I); a placeholder stiffness was used.');
-  if(m.vK>0&&!(m.vK>=2&&m.vK<=m.axles.length)) warn.push(`Variable spacing axle # must be between 2 and ${m.axles.length}; variable spacing was ignored.`);
-  if(m.vK>=2&&m.vMax<m.vMin) warn.push('Variable spacing maximum is less than the minimum; variable spacing was ignored.');
-  if(m.multi&&ns<2) warn.push('The multi-vehicle case needs at least two spans and is inactive for a single span.');
-  if(m.udl.mode!=='none'&&!(m.udl.w>0)) warn.push('A uniform load mode is selected but w = 0.');
-  if([...m.dfM,...m.dfV].some(v=>!(v>0))) warn.push('One or more distribution factors are zero or blank.');
-  if(m.imp.method==='const'&&m.imp.val<1) warn.push('The impact multiplier is below 1.0.');
-  if(m.axles.some(a=>!(a[0]>0))) warn.push('One or more axles have zero or negative load.');
-  if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9,fd=m.fatDF;
-    if(fd&&!m.rail)warn.push(`LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle (moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}); they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2). LLF = ${ll}: use γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);
-    else warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}${m.rail?'':' Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.'}`);}
-  if(m.stdLane)warn.push(`Std. Spec. lane loading (${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment) is checked as a separate case and enveloped with the vehicle, with impact. Where it governs, the case reads "Std. lane" and "@" is the concentrated-load position.`);
-  else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
-
-  // Engine check: unit uniform load on all spans
-  const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns], L1=m.spans[0];
-  const mChk=ns>1?mKey[supNodes[1]]:rows.find(r=>r.k===0&&r.t===10).mi;
-  const rA=effs.findIndex(ef=>ef.t==='R'&&ef.q===0);
-  let sumR=0; effs.forEach((ef,ei)=>{if(ef.t==='R')sumR+=DER[ei].end;});
-  const check=`<div>Mesh: ${nn} nodes, ${nn-1} elements (max element ≈ ${hmax.toFixed(2)} ft). Influence lines from ${nn} unit-load solutions.</div>
-    <div>Unit uniform load on all spans, L = span 1:</div>
-    <div>• ${ns>1?'M at first interior support':'M at midspan'} = <b>${(DER[mChk].end/(L1*L1)).toFixed(4)} wL²</b> (equal spans, uniform section theory: ${th[0]} wL²)</div>
-    <div>• R_A = <b>${(DER[rA].end/L1).toFixed(4)} wL</b> (theory: ${th[1]} wL)</div>
-    <div>• ΣR / wL_total = <b>${(sumR/Lt).toFixed(4)}</b> (must equal 1.0000)</div>
-    <div class="hint">Theory values apply only when spans are equal and the section is uniform. Influence lines are exact at nodes and interpolated linearly between them.</div>`;
-
-  // ── Step-mode solver: actual loads on the girder (exact for the given EI) ──
-  const elOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
-  const spanOfX=v=>{for(let k=0;k<ns;k++)if(v<=sup[k+1]+1e-9)return k;return ns-1;};
-  function solveOne(pl,uW){
-    const FEF=new Float64Array(4*(nn-1)), eP=Array.from({length:nn-1},()=>[]);
-    pl.forEach(([xp,Pk])=>{if(!Pk)return;const e=elOf(xp),L=el[e],a=Math.min(L,Math.max(0,xp-x[e])),bq=L-a;eP[e].push([a,Pk]);
-      FEF[4*e]+=Pk*bq*bq*(3*a+bq)/L**3;FEF[4*e+1]+=Pk*a*bq*bq/(L*L);FEF[4*e+2]+=Pk*a*a*(a+3*bq)/L**3;FEF[4*e+3]-=Pk*a*a*bq/(L*L);});
-    if(uW)for(let e=0;e<nn-1;e++){const w=uW[e];if(!w)continue;const L=el[e];FEF[4*e]+=w*L/2;FEF[4*e+1]+=w*L*L/12;FEF[4*e+2]+=w*L/2;FEF[4*e+3]-=w*L*L/12;}
-    const F=new Float64Array(nd);for(let e=0;e<nn-1;e++)for(let q=0;q<4;q++)F[2*e+q]-=FEF[4*e+q];
-    const bb=new Float64Array(nf);for(let i=0;i<nf;i++)bb[i]=F[free[i]];
-    const y=luSolve(A,nf,bb),dd=new Float64Array(nd);for(let i=0;i<nf;i++)dd[free[i]]=y[i];
-    const f1=new Float64Array(nn-1),m1=new Float64Array(nn-1);
-    for(let e=0;e<nn-1;e++){const l=el[e],k=ek[e],v1=dd[2*e],t1=dd[2*e+1],v2=dd[2*e+2],t2=dd[2*e+3];
-      f1[e]=k*(12*v1+6*l*t1-12*v2+6*l*t2)+FEF[4*e];m1[e]=k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)+FEF[4*e+1];}
-    const rx=supNodes.map(sn=>{const r=2*sn;let s=0;for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++)s+=K[r*nd+cc]*dd[cc];return s-F[r];});
-    return {f1,m1,eP,uW,rx};
-  }
-  // Returns sampled M and V (axle part and uniform part separately, so impact can be applied per span)
-  function stepSolve(pl,ul){
-    const ulPts=[],uW=new Float64Array(nn-1);
-    ul.forEach(([a,bq,w])=>{if(!(w>0)||bq<=a)return;for(let e=elOf(a);e<nn-1&&x[e]<bq;e++){const s0=Math.max(a,x[e]),s1=Math.min(bq,x[e+1]);if(s1-s0<=1e-9)continue;if(s1-s0>=el[e]-1e-6)uW[e]+=w;else ulPts.push([(s0+s1)/2,w*(s1-s0)]);}});
-    const S1=solveOne(pl,null),S2=solveOne(ulPts,uW);
-    const ev=(S,e,s,inc)=>{let V=S.f1[e],M=-S.m1[e]+S.f1[e]*s;
-      for(const [a,Pk] of S.eP[e]){if(a<s-1e-9||(inc&&a<=s+1e-9)){V-=Pk;M-=Pk*(s-a);}}
-      if(S.uW){const w=S.uW[e];V-=w*s;M-=w*s*s/2;}return [M,V];};
-    const out=[];
-    for(let e=0;e<nn-1;e++){const L=el[e],ks=new Set([0,L]);
-      [S1,S2].forEach(S=>S.eP[e].forEach(([a])=>{if(a>1e-9&&a<L-1e-9)ks.add(a);}));
-      const sp=spanOfX(x[e]+L/2);
-      [...ks].sort((p,q)=>p-q).forEach(s=>{const vs=s<=1e-9?[true]:s>=L-1e-9?[false]:[false,true];
-        vs.forEach(inc=>{const [Ma,Va]=ev(S1,e,s,inc),[Mu,Vu]=ev(S2,e,s,inc);out.push([x[e]+s,Ma,Mu,Va,Vu,sp]);});});}
-    return {pts:out,rAx:S1.rx,rU:S2.rx};
-  }
-  function stepCase(cs,sv,H){
-    if(cs==='s'&&m.secondary&&P[m.secondary]){const v=mk(P[m.secondary].axles,0,null);return {...v,trail:null,scale:1};}
-    if(cs==='m'){const v=mk(base,varOK?m.vK:0,varOK?(sv!=null?sv:(m.mFixed>0?m.mFixed:null)):null),Lv=v.offs[v.offs.length-1],h=H!=null?H:m.mHmin;
-      return {offs:[...v.offs,...v.offs.map(o=>o+Lv+h)],loads:[...v.loads,...v.loads],trail,scale:m.mScale};}
-    const v=mk(base,varOK?m.vK:0,varOK?(sv!=null?sv:m.vMin):null);return {...v,trail,scale:1};
-  }
-  const imSpan=m.spans.map((_,k)=>imOf({spans:[k]}));
-  const effR=effs.filter(ef=>ef.t==='R'), imR=effs.map((ef,i)=>ef.t==='R'?imArr[i]:null).filter(v=>v!==null);
-
-  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn};
+  return SharedMovingLoad.analyze(m,{Lb:$('aLb')?$('aLb').value:'span',aL:num('aL',100),refine:!$('refineChk')||$('refineChk').checked,vehicles:P});
 }
 
 // ═══════════ PLOTTING ═══════════
@@ -941,7 +580,7 @@ function drawVehicle(){
 const _render2=render; render=function(){_render2();drawVehicle();};
 
 // ═══════════ ADDED UI: fatigue preset, LLF option, AREMA L basis, deflection card ═══════════
-P['Fatigue']=HW('LRFD Fatigue Truck (30 ft)',[[8,0],[32,14],[32,30]],{udl:NOUDL,imp:{method:'const',val:1.15,onUdl:false}});
+P['Fatigue']=VEH.fatigue;
 $('lls').options[0].text='Strength I / Fatigue I (1.75)';
 $('lls').options[4].insertAdjacentHTML('beforebegin','<option value="0.80">Service III / Fatigue II (0.80)</option>');
 {const hn=$('impAF').querySelector('.hint');if(hn)hn.textContent='I% = 100/S + [40 − 3L²/1600 for L < 80 ft, else 16 + 600/(L − 30)]. Choose how L is defined below. With "span containing section", pier sections and interior reactions use the mean of the adjacent spans. Confirm the basis against the current AREMA Ch. 15 for your structure.';}
@@ -964,43 +603,7 @@ $('stepCard').insertAdjacentHTML('afterend',`<div class="card" id="deflCard">
 // ═══════════ LIVE LOAD DEFLECTION ═══════════
 let DEF=null;
 function deflAnalyze(){
-  const R=RES,m=R.m,{x,nn,Lt,A,nf,fmap,supNodes}=R;
-  const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
-  // Sections = the 1/20 points; deflection IL by Maxwell's reciprocal theorem (inches)
-  const secs=[],seen={};
-  R.rows.forEach(r=>{const i=R.effs[r.mi].node;if(seen[i]===undefined){seen[i]=secs.length;secs.push({node:i,x:x[i],k:r.k});}});
-  const G=secs.map(s=>{const g=new Float64Array(nn);if(supNodes.includes(s.node))return g;
-    const b=new Float64Array(nf);b[fmap[2*s.node]]=-1;const y=luSolve(A,nf,b);
-    for(let j=0;j<nn;j++){const f=fmap[2*j];g[j]=f>=0?12*y[f]:0;}return g;});
-  const D=G.map(g=>{const CI=new Float64Array(nn);let lp=0,ln=0;
-    for(let j=0;j<nn-1;j++){const h=x[j+1]-x[j],a=g[j],b=g[j+1];CI[j+1]=CI[j]+(a+b)/2*h;
-      if(a>=0&&b>=0)lp+=(a+b)/2*h;else if(a<=0&&b<=0)ln+=(a+b)/2*h;else{const t=a/(a-b),A1=a*t*h/2,A2=b*(1-t)*h/2;if(a>0){lp+=A1;ln+=A2;}else{ln+=A1;lp+=A2;}}}
-    return {CI,lp,ln,end:CI[nn-1]};});
-  const mode=$('dCase').value,DF=num('dDF',1),useIM=$('dIM').checked,im=secs.map(s=>useIM?R.imSpan[s.k]:1);
-  const laneOn=m.udl.w>0&&(m.udl.mode==='lane'||m.udl.mode==='full');
-  const svs=[];if(R.varOK){for(let v=m.vMin;v<=m.vMax+1e-9;v+=m.hStep)svs.push(+v.toFixed(3));if(svs[svs.length-1]<m.vMax-1e-9)svs.push(m.vMax);}else svs.push(null);
-  const cases=[];
-  svs.forEach(sv=>{const c=R.stepCase('p',sv,null),lab=m.short+(sv!=null?` s=${sv}`:'');
-    if(mode==='lrfd'){cases.push({c,aS:1,lane:false,trail:null,lab});if(laneOn)cases.push({c,aS:0.25,lane:true,trail:null,lab:`25% ${lab} + lane`});}
-    else cases.push({c,aS:1,lane:laneOn,trail:c.trail,lab});});
-  const res=secs.map(()=>({dn:0,dnG:null,up:0,upG:null}));
-  cases.forEach(cc=>{
-    const offs=cc.c.offs,loads=cc.c.loads,nA=offs.length,Lv=offs[nA-1],tr=cc.trail,ext=Lv+(tr?tr.gap:0)+m.step;
-    for(const dir of m.dirs)for(let p=-ext;p<=Lt+ext+1e-9;p+=m.step){
-      const J=[],T=[],Pl=[];
-      for(let a=0;a<nA;a++){const xp=p-dir*offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;const j=loc(xp);J.push(j);T.push(Math.min(1,Math.max(0,(xp-x[j])/(x[j+1]-x[j]))));Pl.push(loads[a]);}
-      let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
-      if(!J.length&&sc===null)continue;
-      let jc=0,tc=0;if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
-      secs.forEach((s,si)=>{const g=G[si];let v=0;for(let a=0;a<J.length;a++){const j=J[a];v+=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);}v*=im[si]*cc.aS;
-        const uf=m.imp.onUdl&&useIM?im[si]:1;let uDn=0,uUp=0;
-        if(sc!==null){const Dd=D[si],CIs=Dd.CI[jc]+(Dd.CI[jc+1]-Dd.CI[jc])*tc,u=(dir>0?CIs:Dd.end-CIs)*tr.w*uf;uDn=uUp=u;}
-        if(cc.lane){const w=m.udl.w*uf;uDn+=m.udl.mode==='lane'?w*D[si].ln:w*D[si].end;uUp+=m.udl.mode==='lane'?w*D[si].lp:w*D[si].end;}
-        const vd=DF*(v+uDn),vu=DF*(v+uUp),r=res[si];
-        if(vd<r.dn-1e-12){r.dn=vd;r.dnG={lab:cc.lab,p,dir};}
-        if(vu>r.up+1e-12){r.up=vu;r.upG={lab:cc.lab,p,dir};}});
-    }});
-  return {secs,res};
+  return SharedMovingLoad.deflection(RES,{mode:$('dCase').value,DF:num('dDF',1),useIM:$('dIM').checked});
 }
 function drawDefl(){
   if(!RES||!DEF)return;const R=RES,m=R.m,{secs,res}=DEF;
@@ -1574,24 +1177,7 @@ $('envB').closest('.card').insertAdjacentHTML('afterend',`<div class="card" id="
   <div class="tw"><table><thead><tr><th>Span</th><th>Result</th><th>Value</th><th>x (ft)</th><th>Location</th><th>Governing case / vehicle position</th></tr></thead><tbody id="absB"></tbody></table></div>
   <p class="hint" style="padding:8px 14px">Found with the same moving-load engine and vehicle cases as the envelope, by adding output sections at every analysis node between the twentieth points (moment at each node, shear just right of each node), then re-solving with mesh points every 0.1 ft around each moment maximum. Rows are in addition to the envelope table above, which is unchanged. Shown on screen only; not in the CSV or the printed report.</p></div>`);
 let absTimer=null;
-function absScan(R){
-  const m=R.m,ns=m.spans.length,sup=R.sup,X=R.x;
-  const items=RR=>RR.effs.map((ef,ei)=>({ef,r:RR.res[ei],dfOf:RR.dfOf})).filter(o=>o.ef.t!=='R');
-  const inSpan=(o,k)=>o.ef.t==='M'?o.ef.x>=sup[k]-1e-6&&o.ef.x<=sup[k+1]+1e-6:o.ef.spans[0]===k;
-  const fac=(o,v,f)=>f?m.llf*o.dfOf(o.ef,v)*v:v;
-  // Pass 1: same mesh, M at every analysis node and V just right of every node
-  const R2=analyze({...m,scanM:[...X],scanV:true});
-  let all=[...items(R),...items(R2)];
-  // Pass 2: mesh points every 0.1 ft within one element length of each +M / −M candidate (factored and unfactored picks)
-  const keys=new Set();
-  for(let k=0;k<ns;k++)[false,true].forEach(f=>[true,false].forEach(isMax=>{let b=null;
-    all.forEach(o=>{if(o.ef.t!=='M'||!inSpan(o,k))return;const v=fac(o,isMax?o.r.max:o.r.min,f);if(!b||(isMax?v>b.v:v<b.v))b={v,x:o.ef.x};});
-    if(!b||Math.abs(b.v)<1e-9||b.x<=sup[k]+1e-6||b.x>=sup[k+1]-1e-6)return;
-    let i=0;while(i<X.length-1&&X[i+1]<=b.x+1e-9)i++;const h=Math.max(X[i]-(X[i-1]!=null?X[i-1]:X[i]),(X[i+1]!=null?X[i+1]:X[i])-X[i])+1e-9;
-    for(let j=Math.ceil((b.x-h)*10);j<=Math.floor((b.x+h)*10);j++){const v=+(j/10).toFixed(1);if(v>sup[k]+1e-6&&v<sup[k+1]-1e-6)keys.add(v);}}));
-  if(keys.size){const R3=analyze({...m,scanKeys:[...keys],scanM:[...keys]});all=all.concat(items(R3).filter(o=>o.ef.scan));}
-  return {all,inSpan,fac,nn:R.nn};
-}
+function absScan(R){return SharedMovingLoad.absScan(R,analyze);}   // analyze = the page's current (wrapped) analyze
 function absPaint(){
   const R=RES; if(!R)return;
   const A=R.abs,view=$('viewMode').value,f=view==='f',m=R.m,ns=m.spans.length,sup=R.sup;
