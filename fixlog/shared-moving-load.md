@@ -1,6 +1,6 @@
 # Fix log — shared/moving-load.js (window.SharedMovingLoad)
 
-Continuous-beam moving-load engine. Loaded by: `Moving Load Generator.html`.
+Continuous-beam moving-load engine. Loaded by: `Moving Load Generator.html`, `apps/steel-bridge/index.html` (from 2026-10-29).
 Tests: `node tests/engine/run.mjs moving-load` (parity with the original page code at b3dbddb).
 
 ## 2026-10-29 — PR: pilot-moving-load — created by moving the engine out of Moving Load Generator.html (refactor, no result change)
@@ -85,4 +85,34 @@ Tests: `node tests/engine/run.mjs moving-load` (parity with the original page co
 - None. Moving Load Generator.html gets no UI for this; its `readModel()` does not set `simple`.
 ### Open items
 - SML-O2 closed (analyze has a simple-span mode).
-- SML-O4. Engineer to confirm: in simple-span mode, should the 90 % two-truck case apply to the summed pier reaction (as implemented, per the 3.6.1.3.1 text), or should it be off for simple-span bridges in this office's practice? The pier reaction is the pier load per girder line, not one bearing. Each bearing's reaction equals the adjacent span's end reaction, which is the shear next to the support.
+- SML-O4 (closed 2026-10-29, engineer: keep it on; see the sbd2-analysis entry below). Engineer to confirm: in simple-span mode, should the 90 % two-truck case apply to the summed pier reaction (as implemented, per the 3.6.1.3.1 text), or should it be off for simple-span bridges in this office's practice? The pier reaction is the pier load per girder line, not one bearing. Each bearing's reaction equals the adjacent span's end reaction, which is the shear next to the support.
+
+## 2026-10-29 — PR: sbd2-analysis — `m.negX` option (added; existing results unchanged); SML-O4 closed
+### Where
+- `analyze(m,opt)`, the multi-vehicle gate. Anchor `effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&`.
+  - Before: `effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&DER[ei].end<-1e-9*Lt*Lt;});`
+  - After: `effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&(DER[ei].end<-1e-9*Lt*Lt||!!(m.negX&&m.negX.some(r=>ef.x>=r[0]-1e-6&&ef.x<=r[1]+1e-6)));});`
+  - New optional model field `m.negX`: x ranges `[[x0,x1],…]` (ft). M sections in them also take the multi-vehicle case
+    (90 % of two trucks + lane) for the minimum. Absent: `x||false` is `x`, so the gate and every result are as before.
+  - Header comment: one paragraph on `m.negX`.
+- Why: Steel Bridge's analysis (`apps/steel-bridge/engine/analysis.js`) mirrors GirderDetail's LL5 rule (2026-10-14): the
+  two-truck region is the negative-moment influence-line region united with the negative permanent-load moment region
+  around each pier. Without `negX` the shared engine gave up to 2.6 % less negative LL moment at the few nodes between the
+  two region ends (e.g. gd_builtin_AASHTO_G2, x = 79 ft: −992.7 vs GirderDetail −1042.4 kip-ft). With it: 0.005 %.
+- Loaded by now also `apps/steel-bridge/index.html` (engine `apps/steel-bridge/engine/analysis.js`).
+### Governing provision
+- No formula, factor or unit changed. AASHTO LRFD 10th Ed. 3.6.1.3.1 (90 % of two design trucks + 90 % lane for negative
+  moment between points of contraflexure under a uniform load on all spans, and for interior pier reactions).
+### Check case
+- Existing callers (Moving Load Generator): `node tests/engine/run.mjs moving-load simple static`: the 35 parity cases
+  still hash identically to the original page; all tests pass (no result change).
+- `negX`: gd_builtin_AASHTO_G2, staged stiffness, HL-93 per lane, g_M 0.7034 (span 1): M_LL− at x = 79 ft −992.7 kip-ft
+  (influence-line gate only) → −1042.34 kip-ft with `negX` = [[79, 142], [218, 281]] (the pier regions; payload −1042.385).
+### How verified
+- `tests/engine/analysis.test.mjs` (100 payloads and GirderDetail's own functions; see `fixlog/steel-bridge.md`).
+### Other copies
+- None.
+### Open items
+- SML-O4 closed. The engineer decided on 2026-10-29: in simple-span mode the 90 % two-truck case stays on for the summed
+  pier reactions (as implemented in #464). Test: `tests/engine/analysis.test.mjs` "SML-O4" (two simple spans 60 + 110 ft:
+  pier R = 154.122 kips per lane, the two-truck case governs; pier moment 0).

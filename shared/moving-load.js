@@ -17,6 +17,8 @@
                            Simple: span effects come from that span only; interior support reactions are the left +
                            right span reactions summed; the multi-vehicle case is still gated to M with a negative
                            influence-line total (none in simple spans) and interior reactions (3.6.1.3.1).
+                           m.negX: optional [[x0,x1],…] (ft): M sections in these ranges also take the multi-vehicle
+                           case for the minimum (added 2026-10-29 for Steel Bridge: GirderDetail's LL5 region).
    deflection(R, opt)      LL deflection envelope at the 1/20 points from analyze() result R.
                            opt: {mode:'lrfd'|'veh', DF, useIM}.
    absScan(R, analyzeFn)   absolute maxima per span (extra output sections; analyzeFn defaults to analyze).
@@ -152,7 +154,9 @@ function analyze(m,opt){
     smin[nn-1]=smax[nn-1]=CI[nn-1]; for(let j=nn-2;j>=0;j--){smin[j]=Math.min(smin[j+1],CI[j]);smax[j]=Math.max(smax[j+1],CI[j]);}
     return {CI,lp,ln,pmin,pmax,smin,smax,end:CI[nn-1]};
   });
-  effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&DER[ei].end<-1e-9*Lt*Lt;});
+  // m.negX (2026-10-29, optional): extra x ranges [[x0,x1],…] (ft) whose M sections also take the multi-vehicle case for the minimum
+  // (GirderDetail LL5: the negative permanent-load moment region around the piers). Absent: the influence-line rule alone, unchanged.
+  effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&(DER[ei].end<-1e-9*Lt*Lt||!!(m.negX&&m.negX.some(r=>ef.x>=r[0]-1e-6&&ef.x<=r[1]+1e-6)));});
 
   // Impact per effect
   // AASHTO Std. Spec. 17th Ed. 3.8.2.1: I = 50/(L+125) <= 0.30; L per 3.8.2.2 (isMax: + effect, else − effect)

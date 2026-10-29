@@ -44,6 +44,13 @@
                                  flanges), c (clip), Fcp (kip, connection plate force) } } },
                    bearing: { gS, Fexx, ed (in, bearing ℄ to the girder end at the abutments), types: { A (abutments), B (piers):
                               { name, np (pairs), bt, tp, c, sp (pair spacing), w, conn: 'milled' | 'cjp' | 'fillet' } } } }
+     -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
+     analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
+                  steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
+     girders[i].line: the cross-section girder (0-based, of xs.nb) whose loads and factors this plate girder takes
+                  (absent: the first exterior girder for position 'exterior', else the first interior girder)
+     girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
+                  gV, fatM, fatV, gDef }: entered values, used where the loads module gives none (CL and xf: the module has none yet)
    } */
 (function () {
   'use strict';
