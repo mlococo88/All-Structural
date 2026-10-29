@@ -84,22 +84,9 @@ function pairs(o, g) {
     P(t + 'ovr', JSON.stringify(m.ovr || null), JSON.stringify(L.ovr || null)); (L.r || []).forEach((v, i) => P(t + 'r' + i, m.r[i], v)); });
   return out;
 }
-/* Expected differences from GirderDetail: ONLY the pier-region skew rule of 4.6.2.2.2e (engineer's decision 2026-10-29, after #472: a pier
-   region loses the moment skew reduction if either adjacent span's two support lines differ by more than 10°). This app has it
-   (SharedLLDF.momentSkewNoReductionPier); GirderDetail gets it in the follow-up PR on "Steel Bridge Design.html", which REMOVES this
-   set (PIER_RULE_PENDING = false, then delete). Accepted: r_M, c_1 and the moment factors (one- and multi-lane, g_M, fatigue moment,
-   method) of a pier region whose rule applies. Everything else must be identical (the four SB2-O19 items are in GirderDetail since #472). */
-const PIER_RULE_PENDING = true;
-export function expectedItem(o, k) {
-  if (!PIER_RULE_PENDING) return 0;
-  const m = /^(p\d+)\.(?:G(\d+)\.)?(.+)$/.exec(k); if (!m) return 0;
-  const rg = o.regions.find(r => r.id === m[1]); if (!rg || rg.kind !== 'sup' || !rg.sk.noRed) return 0;
-  return (!m[2] ? /^(scfM|c1)$/ : /^(mom1|mom2|gM|fatM|method)$/).test(m[3]) ? 'pier' : 0;
-}
 function compare(name, o, g, acc) {
   for (const [k, a, b] of pairs(o, g)) {
     acc.n++;
-    if (acc.exp && !(a === b || (typeof a === 'number' && isNaN(a) && isNaN(b)))) { const it = expectedItem(o, k); if (it) { acc.exp[it] = (acc.exp[it] || 0) + 1; acc.expList.push(`${name} ${k}: ${a} vs ${b} (${it})`); continue; } }
     if (typeof a === 'number' && typeof b === 'number') { const rel = Math.abs(a - b) / Math.max(1, Math.abs(b)); if (rel > acc.worst.rel) acc.worst = { rel, name, k, a, b }; if (!(a === b || (isNaN(a) && isNaN(b)))) acc.diffs.push(`${name} ${k}: ${a} vs ${b}`); }
     else if (a !== b) acc.diffs.push(`${name} ${k}: ${a} vs ${b}`);
   }
@@ -135,7 +122,7 @@ export function variants() {
   add('owner haunch rule (OWN8) with a 3 in haunch', (df, b) => { b.haunch = 3; b.lf = { ...b.lf, h0: true }; });
   add('truck gap 6 ft', df => { df.gap = 6; });
   add('overhangs 5.5 ft, 7 girders at 7 ft (one-lane lever rule governs)', (df, b) => { b.nb = 7; b.S = 7; b.bays = [7, 7, 7, 7, 7, 7]; b.ohL = 5.5; b.ohR = 5.5; });
-  // the four SB2-O19 items (lldf.html's rules; GirderDetail has them since #472), and the pier skew rule
+  // the four SB2-O19 items (lldf.html's rules, GirderDetail #472) and the pier skew rule (GirderDetail DFL5)
   add('SB2-O19 item 2: support skews 20 / 35 / 35 / 50° (spans 1 and 3 differ by 15° > 10°: no moment reduction there)', (df, b) => { const sk = [20, 35, 35, 50]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
   add('pier rule: support skews 40 / 52 / 52 / 40° (piers 1 and 2: an adjacent span differs by 12°)', (df, b) => { const sk = [40, 52, 52, 40]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
   add('SB2-O19 item 3: N_b = 3 at 14 ft, overhangs 6 ft (3 lanes; 2 trucks still govern)', (df, b) => { b.nb = 3; b.S = 14; b.bays = [14, 14]; b.ohL = 6; b.ohR = 6; });
@@ -162,11 +149,10 @@ test('LLDF and dead loads: GirderDetail in Node reproduces GirderDetail in the b
   console.log(`       ${fixtures.length} inputs, ${n} values: ${n - nb} bit-identical, ${nb} differ by round-off (largest relative ${worst.toExponential(2)})`);
 });
 
-test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs + variations; identical except the pier skew rule (until GirderDetail has it)', () => {
-  const G = gdDf(), acc = { n: 0, diffs: [], worst: { rel: 0 }, exp: {}, expList: [] }, cases = [...fixtures.map(fx => ({ name: `${fx.project}/${fx.owner}`, df: fx.df })), ...variants()];
+test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs + variations; identical', () => {
+  const G = gdDf(), acc = { n: 0, diffs: [], worst: { rel: 0 } }, cases = [...fixtures.map(fx => ({ name: `${fx.project}/${fx.owner}`, df: fx.df })), ...variants()];
   for (const c of cases) compare(c.name, ours(c.df), G.run(c.df), acc);
-  console.log(`       ${cases.length} module inputs (${fixtures.length} recorded, ${cases.length - fixtures.length} variations), ${acc.n} values compared; ${acc.diffs.length} differ outside the expected set; expected (pier skew rule, until GirderDetail has it): ${acc.exp.pier || 0}`);
-  if (process.env.DF_DIFFS) console.log(acc.expList.concat(acc.diffs).join('\n'));
+  console.log(`       ${cases.length} module inputs (${fixtures.length} recorded, ${cases.length - fixtures.length} variations), ${acc.n} values compared; ${acc.diffs.length} differ; largest relative difference ${acc.worst.rel}`);
   assert.deepEqual(acc.diffs.slice(0, 20), []);
 });
 
