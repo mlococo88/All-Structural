@@ -43,7 +43,16 @@
                                  { name, role: 'int' | 'cp', sides: '1' | '2', bt, tp, w (weld to web), gap (weld cutoff), wf (weld to
                                  flanges), c (clip), Fcp (kip, connection plate force) } } },
                    bearing: { gS, Fexx, ed (in, bearing ℄ to the girder end at the abutments), types: { A (abutments), B (piers):
-                              { name, np (pairs), bt, tp, c, sp (pair spacing), w, conn: 'milled' | 'cjp' | 'fillet' } } } }
+                              { name, np (pairs), bt, tp, c, sp (pair spacing), w, conn: 'milled' | 'cjp' | 'fillet' } } } },
+     -- added 2026-10-29 (fatigue and studs PR), optional: a version 1 project without them reads as defaultFatigue() / defaultStuds() --
+     fatigue:   { limit: 'auto' | 'I' | 'II', ADTT (one direction, trucks/day), p (lane fraction), life (years), gam: { fI, fII },
+                  catT, catB (detail category of the top / bottom flange for GS17: 'A' … "E'"), negSec: 'cracked' | 'uncracked',
+                  dist: { cp: 'yes' | 'no' | 'na', lat: 'yes' | 'no', latLoc: 'flange' | 'web', latStiff: 'yes' | 'no', latDist (in), latBf (in), skew: 'yes' | 'no' } },
+     studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I),
+                  skew: 'auto' | 'yes' | 'no' (F_fat = F_rc/w on skewed > 20° or curved bridges; auto: from the support skews), Frc (kip), wv (in),
+                  splX ('82, 145': field splice stations, ft), splL (top splice plate length, ft), splC (clearance at each plate end, in),
+                  beffMode: 'bridge' (GirderDetail: one b_eff for every girder, the largest-fatigue-shear girder's) | 'girder' (each girder its own),
+                  zones: [ { x1, x2 (ft), nr (studs per row), p (pitch, in) } ] (empty: the hand-off file's zones) },
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
@@ -74,7 +83,9 @@
         { x0: 0, x1: 88, ...pos }, { x0: 88, x1: 128, ...neg }, { x0: 128, x1: 232, ...pos }, { x0: 232, x1: 272, ...neg }, { x0: 272, x1: 360, ...pos }] }],
       ownerRules: { owner: 'AASHTO', eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } },
       xs: defaultXs({ spans: { lengths: [110, 140, 110] } }),
-      stiffeners: defaultStiffeners()
+      stiffeners: defaultStiffeners(),
+      fatigue: defaultFatigue(),
+      studs: defaultStuds()
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
@@ -93,6 +104,15 @@
       transverse: { gS: '50W', Fexx: 70, types: { A: { name: 'Intermediate stiffener', role: 'int', sides: '1', bt: 6, tp: 0.5, w: 0.25, gap: 2.75, wf: 0.3125, c: 1, Fcp: 20 },
         B: { name: 'Connection plate', role: 'cp', sides: '1', bt: 6, tp: 0.5, w: 0.25, gap: 2.75, wf: 0.3125, c: 1, Fcp: 20 } } },
       bearing: { gS: '50W', Fexx: 70, ed: 9, types: { A: { name: 'Abutment', np: 1, bt: 7, tp: 0.875, c: 1, sp: 12, w: 0.3125, conn: 'milled' }, B: { name: 'Pier', np: 2, bt: 8, tp: 1, c: 1, sp: 12, w: 0.3125, conn: 'milled' } } } };
+  }
+  /* defaultFatigue(): GirderDetail's built-in Fatigue settings (GM.fa.def), Category B flanges (Girder section GM.gs.def catT, catB) */
+  function defaultFatigue() {
+    return { limit: 'auto', ADTT: 2000, p: 0.85, life: 75, gam: { fI: 1.75, fII: 0.80 }, catT: 'B', catB: 'B', negSec: 'cracked',
+      dist: { cp: 'yes', lat: 'no', latLoc: 'web', latStiff: 'yes', latDist: 10, latBf: 16, skew: 'no' } };
+  }
+  /* defaultStuds(): GirderDetail's built-in Shear connectors studs (GM.sc.def: 7/8 × 6 in, 4 in across, F_u 60 ksi, γ 1.75, F_rc 25 kip, w 48 in) */
+  function defaultStuds() {
+    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'bridge', zones: [] };
   }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
@@ -180,6 +200,19 @@
       [['transverse', ['bt', 'tp', 'w']], ['bearing', ['bt', 'tp', 'w']]].forEach(([k, req]) => { const q = S[k] || {}; if (!GRADES[q.gS]) E(`${sp}.${k}.gS`, `Unknown steel grade "${q.gS}".`); pos(q.Fexx, `${sp}.${k}.Fexx`, 'F_EXX');
         ['A', 'B'].forEach(t => { const ty = (q.types || {})[t]; if (!ty) { E(`${sp}.${k}.types.${t}`, `Type ${t} is missing.`); return; } req.forEach(f => pos(ty[f], `${sp}.${k}.types.${t}.${f}`, `Type ${t} ${f}`)); }); });
       nn((S.bearing || {}).ed, `${sp}.bearing.ed`, 'Distance to the girder end'); }
+    // added 2026-10-29 (fatigue and studs PR): the optional fatigue and stud inputs
+    if (p.fatigue != null) { const F = p.fatigue || {}, CATS = ['A', 'B', "B'", 'C', "C'", 'D', 'E', "E'"];
+      if (!['auto', 'I', 'II'].includes(F.limit)) E('fatigue.limit', 'Fatigue limit state: choose by ADTT, Fatigue I or Fatigue II.');
+      pos(F.ADTT, 'fatigue.ADTT', 'ADTT'); if (!(isNum(F.p) && F.p > 0 && F.p <= 1)) E('fatigue.p', 'Lane fraction p must be more than 0 and at most 1.0.');
+      pos(F.life, 'fatigue.life', 'Design life'); pos((F.gam || {}).fI, 'fatigue.gam.fI', 'γ Fatigue I'); pos((F.gam || {}).fII, 'fatigue.gam.fII', 'γ Fatigue II');
+      ['catT', 'catB'].forEach(k => { if (!CATS.includes(F[k])) E(`fatigue.${k}`, 'Choose a detail category.'); }); }
+    if (p.studs != null) { const Q = p.studs || {};
+      if (![0.75, 0.875, 1].includes(+Q.d)) E('studs.d', 'Stud diameter: 3/4, 7/8 or 1 in.');
+      pos(Q.h, 'studs.h', 'Stud height'); pos(Q.st, 'studs.st', 'Transverse spacing'); pos(Q.Fu, 'studs.Fu', 'Stud F_u'); nn(Q.Qn10, 'studs.Qn10', 'Q_n entered');
+      pos(Q.gamFat, 'studs.gamFat', 'γ Fatigue I'); pos(Q.Frc, 'studs.Frc', 'F_rc'); pos(Q.wv, 'studs.wv', 'w'); nn(Q.splL, 'studs.splL', 'Splice plate length'); nn(Q.splC, 'studs.splC', 'Clearance');
+      if (!['bridge', 'girder'].includes(Q.beffMode)) E('studs.beffMode', 'b_eff for the studs: bridge-wide or per girder.');
+      if (!Array.isArray(Q.zones)) E('studs.zones', 'Pitch zones must be a list.');
+      else Q.zones.forEach((z, i) => { if (!(isNum(z.x1) && isNum(z.x2) && z.x2 > z.x1 && Number.isInteger(z.nr) && z.nr >= 1 && isNum(z.p) && z.p > 0)) E(`studs.zones.${i}`, `Zone ${i + 1}: from < to, a whole number of studs per row and a positive pitch.`); }); }
     return { errors, warnings };
   }
 
@@ -243,5 +276,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
