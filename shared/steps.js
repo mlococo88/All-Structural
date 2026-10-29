@@ -104,14 +104,18 @@
   const unitTeX = u => String(u == null ? '' : u).replace(/[A-Za-z][A-Za-z\-\/. ]*/g, (m, at, all) => at > 0 && all[at - 1] === '\\' ? m : `\\text{${m}}`);
   const toHTML = s => { const t = String(s == null ? '' : s), K = kx(); return K && t ? K.renderToString(t, KATEX_OPT) : render(t, true); };
   const toText = s => render(String(s == null ? '' : s), false);
-  /* line(step, html): the one-line rendering  sym = eq = sub = value unit */
+  /* line(step, html): the one-line rendering  sym = eq = sub = value unit
+     With KaTeX, sym, eq and sub are set in display style (full-size fractions) and a numeric value with its unit is set by
+     KaTeX too (same digits as fmt), so the whole line is in one typeface; a string value stays as it is. */
   function line(s, html) {
-    const R = html ? toHTML : toText, parts = [];
+    const K = html ? kx() : null, D = t => K.renderToString('\\displaystyle ' + t, KATEX_OPT);
+    const R = K ? D : html ? toHTML : toText, parts = [];
     if (s.sym) parts.push(R(s.sym));
     if (s.eq) parts.push(R(s.eq));
     if (s.sub && s.sub !== s.eq) parts.push(R(s.sub));
     const v = typeof s.value === 'number' ? fmt(s.value, s.d) : s.value == null ? '' : String(s.value);
-    if (v !== '') parts.push(v + (s.unit ? (html ? '&nbsp;' : ' ') + (html && kx() ? toHTML(unitTeX(s.unit)) : R(s.unit)) : ''));
+    if (v !== '' && K && typeof s.value === 'number') parts.push(K.renderToString(v + (s.unit ? '\\;' + unitTeX(s.unit) : ''), KATEX_OPT));
+    else if (v !== '') parts.push(v + (s.unit ? (html ? '&nbsp;' : ' ') + (K ? toHTML(unitTeX(s.unit)) : R(s.unit)) : ''));
     return parts.join(' = ');
   }
 

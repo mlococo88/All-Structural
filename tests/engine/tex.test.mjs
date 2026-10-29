@@ -11,8 +11,8 @@ import { loadShared, test, ROOT, stepTex } from './harness.mjs';
 const katex = createRequire(import.meta.url)(path.join(ROOT, 'tests/libs/katex@0.16.9/dist/katex.min.js'));
 const W = loadShared('units.js', 'steps.js');
 
-// what the page hands to KaTeX: sym, eq and sub as they are; a unit through SharedSteps.unitTeX
-const src = (t, field) => field === 'unit' ? W.SharedSteps.unitTeX(t) : t;
+// what SharedSteps.line hands to KaTeX: sym, eq and sub in display style; a unit through SharedSteps.unitTeX after the value
+const src = (t, field) => field === 'unit' ? '0.00\\;' + W.SharedSteps.unitTeX(t) : '\\displaystyle ' + t;
 // the page's options (SharedSteps.katexOpt), but throwing; strict: 'error' also fails a string KaTeX would only warn about (e.g. a non-ASCII character in math mode)
 const parse = t => katex.renderToString(t, { ...W.SharedSteps.katexOpt, throwOnError: true, strict: 'error' });
 
@@ -31,4 +31,17 @@ test('KaTeX: every step string from the engine tests parses (no parse errors)', 
   }
   console.log(`       ${stepTex.size} distinct step strings (digits folded) parsed with KaTeX ${katex.version}`);
   assert.equal(bad.length, 0, `${bad.length} step string(s) KaTeX cannot parse:\n       ${bad.slice(0, 40).join('\n       ')}`);
+});
+
+test('SharedSteps.line: KaTeX when window.katex exists, the built-in renderer when not; toText unchanged', () => {
+  const s = { id: 'sec.s.Sb', label: 'Section modulus, bottom of steel', sym: 'S_{bot}', eq: '\\frac{I}{\\bar{y}}', sub: '\\frac{51{,}050}{33.535}', value: 51050 / 33.535, unit: 'in^{3}', d: 0 };
+  const plain = W.SharedSteps.line(s, true);
+  assert.ok(plain.includes('st-frac') && !plain.includes('katex'), plain);
+  const K = loadShared('units.js', 'steps.js'); K.katex = katex;   // the page with KaTeX loaded
+  const h = K.SharedSteps.line(s, true);
+  assert.ok(h.includes('class="katex"') && !h.includes('katex-error') && !h.includes('st-frac'), h);
+  assert.ok(K.SharedSteps.line({ ...s, value: 'yes', unit: '' }, true).endsWith(' = yes'));
+  // the plain-text report is the same with or without KaTeX: 51050 / 33.535 = 1522.29 -> "1522"
+  assert.equal(K.SharedSteps.line(s, false), 'S_(bot) = I/ȳ = (51,050)/33.535 = 1522 in^3');
+  assert.equal(W.SharedSteps.line(s, false), K.SharedSteps.line(s, false));
 });
