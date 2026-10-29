@@ -98,7 +98,7 @@
     const tsC = TS && !TS.errors.length ? SB.transverseChecks(TS) : null, bsC = !BS.errors.length ? SB.bearingChecks(BS) : null;
     // governing ratio of each list
     const govCk = (C, rowIdx) => { let b = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!b || it.r > b.r)) b = { c, it, i: rowIdx(it) }; })); return b; };
-    const tsRowOf = it => TS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)), bsRowOf = it => BS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`));
+    const tsRowOf = it => TS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)), bsRowOf = it => { const k = BS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)); if (k >= 0) return k; const m = /^Type (\w+),/.exec(it.loc); return m ? Math.max(0, BS.rows.findIndex(r => r.type === m[1])) : 0; };   // BS1 is per stiffener type: its first bearing
     const stGov = stations.reduce((b, r) => (r.gov && (!b || r.gov.ratio > b.gov.ratio) ? r : b), null);
     return { gm, D, Fyw, G, lf, bays, panels, stations, stGov, TS, tsC, tsGov: tsC ? govCk(tsC, tsRowOf) : null, BS, bsC, bsGov: bsC ? govCk(bsC, bsRowOf) : null,
       what: pl ? `${esc(S.plName)}: ${pl.stations.length} stations, ${gm.sup.length - 1} span(s), G${gm.gNo}; plates and shears from the file; the project's stiffener layout and plates.` : `Example: GirderDetail's built-in shears (Girder section, Transverse stiffeners and Bearing stiffeners rows) with this project's plates (${esc((P.girders[g] || {}).label || '')}) and stiffener inputs. Load a hand-off file for the shear in every panel.` };
