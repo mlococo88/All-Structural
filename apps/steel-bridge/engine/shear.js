@@ -193,7 +193,16 @@
     const mx = (ids, arr) => Math.max(0, ...ids.map(i => Math.abs(arr[i])));
     const pack = ids => ({ DC1: mx(ids, VDC1), DC2: mx(ids, VDC2), DW: mx(ids, VDW), LL: Math.max(mx(ids, Vp), mx(ids, Vn)), UT: mx(ids, VUT), UF: mx(ids, VUF), CL: mx(ids, VCL), f: mx(ids, Vf) });
     const zAt = x => { const z = zones.find(q => x >= q.startX - 1e-9 && x < q.endX) || zones[zones.length - 1]; return { D: z.web.depth, tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness }; };
-    return { xs, VuE, at: x => pack(idx(x - 0.011, x + 0.011)), inPanel: (p, q) => pack(idx(Math.min(p, q), Math.max(p, q))), vu: (p, q) => Math.max(0, ...idx(p, q).map(i => VuE[i])), zAt, G };
+    /* reaction(x, side): the support reaction at x from the shears on both sides (the nearest station within 0.02 ft left and right of x;
+       side 'L' / 'R' at the girder ends: one side only). DC1, DC2, DW, UT, UF: the jump V(left) − V(right). LL+IM: V_LL,pos(left) −
+       V_LL,neg(right), the sum of the two shear envelopes, an UPPER BOUND of the LL+IM reaction envelope (the two maxima come from
+       different truck positions); GirderDetail takes the reaction envelope of its analysis (bearingExport, b.llMax). */
+    const near = (a, b) => { let k = -1; xs.forEach((x, i) => { if (x >= a - 1e-9 && x <= b + 1e-9 && (k < 0 || Math.abs(x - (a + b) / 2) < Math.abs(xs[k] - (a + b) / 2))) k = i; }); return k; };
+    const reaction = x => { let l = near(x - 0.02, x - 1e-6), r = near(x + 1e-6, x + 0.02); const v = (A, i) => i >= 0 ? A[i] : 0;
+      if (r < 0 && l < 0 && xs.length) { if (x <= xs[0] + 1e-6) r = 0; else if (x >= xs[xs.length - 1] - 1e-6) l = xs.length - 1; }   // a station at the girder end itself
+      const jump = A => v(A, l) - v(A, r);
+      return { DC1: jump(VDC1), DC2: jump(VDC2), DW: jump(VDW), UT: jump(VUT), UF: jump(VUF), LL: Math.max(0, v(Vp, l)) - Math.min(0, v(Vn, r)), left: l >= 0, right: r >= 0 }; };
+    return { xs, VuE, at: x => pack(idx(x - 0.011, x + 0.011)), inPanel: (p, q) => pack(idx(Math.min(p, q), Math.max(p, q))), vu: (p, q) => Math.max(0, ...idx(p, q).map(i => VuE[i])), zAt, reaction, G };
   }
 
   /* fromPayload(pl, opt): the stations of the payload as shear locations (every payload station, 0.01 ft inside the girder ends and
