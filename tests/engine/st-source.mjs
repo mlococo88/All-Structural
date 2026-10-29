@@ -82,6 +82,13 @@ export function stEngine() {
 }
 export const stSession = p => stEngine().session(p);
 export const stCompute = inp => stEngine().compute(inp);
+/* stSpan(session, k): the session after the "Span n" button of span k + 1 (0-based k) is clicked on the Inputs tab (ST-Girder's pickSpan:
+   the hand-off's span k selected, L = its length, plates from section.zones) */
+export function stSpan(s, k) {
+  const c = stEngine().ctx, ext = s.external, sp = c.externalSpans(ext)[k]; if (!sp) return null;
+  const secNew = c.zonesToSec(ext, sp, s.sec);
+  return { ...s, external: { ...ext, _selSpan: sp }, geom: { ...s.geom, L: sp.len }, ...(secNew ? { sec: secNew } : {}) };
+}
 /* stTrace(session): computeAll(session) with the rating trace: { R, rt: { flex, shear, neg, serv } } (see TR above) */
 export function stTrace(inp) {
   const E = stEngine(), rt = { flex: [], shear: [], neg: [], serv: [] };

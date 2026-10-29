@@ -63,6 +63,8 @@
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)
+     -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
+     rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
    } */
 (function () {
   'use strict';
@@ -117,6 +119,8 @@
   function defaultStuds() {
     return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'bridge', zones: [] };
   }
+  /* defaultRating(): the load rating inputs (ST-Girder's defaults, rate: { phiC: 1.0, phiS: 1.0 }) */
+  function defaultRating() { return { phiC: 1.0, phiS: 1.0 }; }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
   const isNum = v => typeof v === 'number' && isFinite(v);
@@ -216,6 +220,9 @@
       if (!['bridge', 'girder'].includes(Q.beffMode)) E('studs.beffMode', 'b_eff for the studs: bridge-wide or per girder.');
       if (!Array.isArray(Q.zones)) E('studs.zones', 'Pitch zones must be a list.');
       else Q.zones.forEach((z, i) => { if (!(isNum(z.x1) && isNum(z.x2) && z.x2 > z.x1 && Number.isInteger(z.nr) && z.nr >= 1 && isNum(z.p) && z.p > 0)) E(`studs.zones.${i}`, `Zone ${i + 1}: from < to, a whole number of studs per row and a positive pitch.`); }); }
+    // added 2026-10-29 (load rating PR): the optional rating factors
+    if (p.rating != null) { const Q = p.rating || {};
+      [['phiC', 'Condition factor φ_c'], ['phiS', 'System factor φ_s']].forEach(([k, t]) => { if (!(isNum(Q[k]) && Q[k] > 0 && Q[k] <= 1)) E(`rating.${k}`, `${t} must be more than 0 and at most 1.0.`); }); }
     return { errors, warnings };
   }
 
@@ -279,5 +286,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultRating, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

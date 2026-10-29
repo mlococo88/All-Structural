@@ -92,6 +92,9 @@
 
   /* where it adds (GD54c): a utility effect counts only when it acts as the live load does (no relief) */
   const adds = v => Math.max(+v || 0, 0);
+  /* flA(am): the amplified f_ℓ of the design check (SBDFlexure.ampFl). With f_ℓ = 0 it is 0 even where f_bu ≥ F_cr (the amplification
+     0 × ∞ is NaN there); with f_ℓ > 0 and f_bu ≥ F_cr the amplification is unbounded (Infinity: the RF is −∞, shown). */
+  const flA = am => !am ? 0 : isFinite(am.fl) ? am.fl : (am.AF === Infinity && !(am.fl > 0) && !(am.fl < 0)) ? 0 : Infinity;
 
   /* ---------- flexure, Strength I ---------- */
   /* flexure(r, opt): r = SBDFlexure.location result (unfactored demands: r.factored false); opt = { G: factors(), phi: phi() }.
@@ -142,15 +145,15 @@
     // negative flexure (composite), or noncomposite in either region: the method in use
     const cf = r.pos ? 'top' : 'bot', tf = r.pos ? 'bot' : 'top';
     if (r.useA6) {
-      const a = r.A6, Fc = a.am.fl * a.Sxc / 3 / 12, Ft = r.nc ? r.tF.fl * a.Sxt / 3 / 12 : 0;
+      const a = r.A6, Fc = flA(a.am) * a.Sxc / 3 / 12, Ft = r.nc ? r.tF.fl * a.Sxt / 3 / 12 : 0;
       out.push(make({ ...base, key: 'a6c', kind: 'flex', title: `${r.pos ? 'Positive' : 'Negative'} flexure, App. A6: compression flange (moment basis)`, ref: `${ED} Eq. A6.1.1-1`, ...mParts,
         Rn: a.Mnc, RnSym: 'M_{nc}', RnLabel: 'App. A6 compression-flange flexural resistance', RnRef: `${ED} Art. A6.3`, RnStep: 'fx.a6.Mnc', RnTab: 'flexure',
-        F: Fc, Fsym: '\\frac{1}{3}f_{\\ell}S_{xc}', Fsub: Fc ? `\\frac{1}{3}(${n2(a.am.fl)})\\frac{${g1(a.Sxc)}}{12}` : '' }, G, ph));
+        F: Fc, Fsym: '\\frac{1}{3}f_{\\ell}S_{xc}', Fsub: Fc ? `\\frac{1}{3}(${n2(flA(a.am))})\\frac{${g1(a.Sxc)}}{12}` : '' }, G, ph));
       out.push(make({ ...base, key: 'a6t', kind: 'flex', title: `${r.pos ? 'Positive' : 'Negative'} flexure, App. A6: tension flange (moment basis)`, ref: `${ED} Eq. A6.1.2-1`, ...mParts,
         Rn: a.Mnt, RnSym: 'R_{pt}M_{yt}', RnLabel: 'App. A6 tension-flange flexural resistance', RnRef: `${ED} Art. A6.4`, RnStep: 'fx.a6t.ok', RnTab: 'flexure',
         F: Ft, Fsym: '\\frac{1}{3}f_{\\ell}S_{xt}', Fsub: Ft ? `\\frac{1}{3}(${n2(r.tF.fl)})\\frac{${g1(a.Sxt)}}{12}` : '' }, G, ph));
     } else {
-      out.push(stressRow('fnc', cf, r.lt.Fnc, 'F_{nc}', 'Nominal compression-flange flexural resistance, min(FLB, LTB)', `${ED} Arts. 6.10.8.2.2, 6.10.8.2.3`, 'fx.Fnc', r.am.fl / 3, '\\frac{1}{3}f_{\\ell}', '', '',
+      out.push(stressRow('fnc', cf, r.lt.Fnc, 'F_{nc}', 'Nominal compression-flange flexural resistance, min(FLB, LTB)', `${ED} Arts. 6.10.8.2.2, 6.10.8.2.3`, 'fx.Fnc', flA(r.am) / 3, '\\frac{1}{3}f_{\\ell}', '', '',
         `${r.pos ? 'Positive' : 'Negative'} flexure, 6.10.8: compression flange (stress basis)`, `${ED} Eq. 6.10.8.1.1-1`));
       out.push(stressRow('fnt', tf, r.Rh * r.tF.Fy, 'F_{nt} = R_{h}F_{yt}', 'Nominal tension-flange flexural resistance', `${ED} Eq. 6.10.8.3-1`, 'fx.fnt.ok', r.nc ? (r.tF.fl || 0) / 3 : 0, '\\frac{1}{3}f_{\\ell}', '', '',
         `${r.pos ? 'Positive' : 'Negative'} flexure, 6.10.8: tension flange (stress basis)`, `${ED} Eq. 6.10.8.1.${r.nc ? 2 : 3}-1`));
@@ -198,15 +201,46 @@
   }
 
   /* ---------- shear, Strength I ---------- */
-  /* shear(r, opt): r = SBDShear.location result (magnitudes, kip). C = φ_c φ_s φ_v V_n (the panel's V_n: V_cr in an end panel, tension
-     field elsewhere when stiffened), DC = V_DC1 + V_DC2 + V_UF, DW = V_DW + V_UT, LL = V_LL+IM at the location. */
+  /* shear(r, opt): r = SBDShear.location result (its V_n: V_cr in an end panel, the tension field elsewhere when stiffened);
+     opt = { G, phi, cases }. C = φ_c φ_s φ_v V_n. cases (shearCases): the demands at the location in each direction of shear, each
+     component as it acts in that direction (≥ 0: a permanent load that relieves is taken as 0, no relief); the lowest RF governs.
+     Without cases: the location's magnitudes (DC = V_DC1 + V_DC2 + V_UF, DW = V_DW + V_UT, LL = the larger LL+IM envelope). */
   function shear(r, opt) {
     const G = factors(opt && opt.G), ph = (opt && opt.phi) || phi();
-    return make({ key: 'v', kind: 'shear', name: r.name, x: r.x, lim: 'Strength I', useCS: true, phiR: 1.0, basis: 'V', unit: 'kip', title: 'Shear', ref: `${ED} Art. 6.10.9`,
+    const cases = (opt && opt.cases && opt.cases.length) ? opt.cases : [{ dir: 0, DC1: r.VDC1, DC2: r.VDC2, DW: r.VDW, UT: r.VUT || 0, UF: r.VUF || 0, LL: r.VLL }];
+    const ut = cases.some(c => c.UT || c.UF);
+    const rows = cases.map(c => make({ key: 'v', kind: 'shear', name: r.name, x: r.x, lim: 'Strength I', useCS: true, phiR: 1.0, basis: 'V', unit: 'kip', title: 'Shear', ref: `${ED} Art. 6.10.9`, dir: c.dir,
       Rn: r.sh.Vn, RnSym: 'V_{n}', RnLabel: `Nominal shear resistance (Eq. ${r.sh.eqn}${r.end ? ', end panel' : ''})`, RnRef: `${ED} Art. 6.10.9`, RnStep: 'sh.pan.Vn', RnTab: 'shear',
-      DC: r.VDC1 + r.VDC2 + (r.VUF || 0), DW: r.VDW + (r.VUT || 0), LL: r.VLL, DCsym: 'V_{DC}', DWsym: 'V_{DW}', LLsym: 'V_{LL+IM}',
-      DCeq: `V_{DC1} + V_{DC2}${r.ut ? ' + V_{UF}' : ''}`, DCsub: `${g1(r.VDC1)} + ${g1(r.VDC2)}${r.ut ? ` + ${g1(r.VUF)}` : ''}`, DWeq: r.ut ? 'V_{DW} + V_{UT}' : '', DWsub: r.ut ? `${g1(r.VDW)} + ${g1(r.VUT)}` : '',
-      LLnote: 'The larger of the positive and negative LL+IM shear envelopes at the location (magnitude).' }, G, ph);
+      DC: c.DC1 + c.DC2 + c.UF, DW: c.DW + c.UT, LL: c.LL, DCsym: 'V_{DC}', DWsym: 'V_{DW}', LLsym: 'V_{LL+IM}',
+      DCeq: `V_{DC1} + V_{DC2}${ut ? ' + V_{UF}' : ''}`, DCsub: `${g1(c.DC1)} + ${g1(c.DC2)}${ut ? ` + ${g1(c.UF)}` : ''}`, DWeq: ut ? 'V_{DW} + V_{UT}' : '', DWsub: ut ? `${g1(c.DW)} + ${g1(c.UT)}` : '',
+      DCnote: c.dir ? `Shear in the ${c.dir > 0 ? 'positive' : 'negative'} direction${c.st != null ? ` (station x = ${n3(c.st)} ft)` : ''}: each permanent load as it acts in that direction; one that relieves it is taken as 0 (no relief).` : 'Magnitudes at the location.',
+      LLnote: c.dir ? 'The LL+IM shear envelope of the same direction.' : 'The larger of the positive and negative LL+IM shear envelopes at the location (magnitude).' }, G, ph));
+    return rows.reduce((b, q) => (!b || q.inv < b.inv ? q : b), null);
+  }
+  /* shearCases(pl): the shear demands of a hand-off-shaped object (schema stgirder-external-demands, or this app's analysis in that shape)
+     by direction. Returns at(x): for every station within 0.011 ft of x on the same side of every support (else the nearest station on
+     that side), and each direction d = ±1 (the payload's sign convention): DC1, DC2 = d V_DC1, d V_DC2 when d(V_DC1 + V_DC2) > 0, else 0;
+     DW, UT, UF = max(d V, 0); LL = V_LL,pos (d = +1) or −V_LL,neg (d = −1), plus V_PL when the payload gives the pedestrian load
+     separately and not in LL (pedestrianInLL not true). */
+  function shearCases(pl) {
+    const S = (pl && pl.stations) || [], sup = ((pl && pl.member) || {}).supports || [], ped = !!pl && pl.pedestrianInLL === true, v = (s, k) => +s[k] || 0;
+    const across = (a, b) => sup.some(q => (a - q) * (b - q) < -1e-12);
+    return x => {
+      let ids = S.filter(s => Math.abs(s.x - x) <= 0.011 + 1e-9 && !across(s.x, x));
+      if (!ids.length) { const side = S.filter(s => !across(s.x, x)); if (side.length) ids = [side.reduce((b, s) => (Math.abs(s.x - x) < Math.abs(b.x - x) ? s : b))]; }
+      const out = [];
+      ids.forEach(s => [1, -1].forEach(d => {
+        const on = d * (v(s, 'V_DC1') + v(s, 'V_DC2')) > 0;
+        const LL = d > 0 ? Math.max(v(s, 'V_LLpos') + (ped ? 0 : v(s, 'V_PLpos')), 0) : Math.max(-(v(s, 'V_LLneg') + (ped ? 0 : v(s, 'V_PLneg'))), 0);
+        out.push({ dir: d, st: +s.x, DC1: on ? d * v(s, 'V_DC1') : 0, DC2: on ? d * v(s, 'V_DC2') : 0, DW: Math.max(d * v(s, 'V_DW'), 0), UT: Math.max(d * v(s, 'V_UT'), 0), UF: Math.max(d * v(s, 'V_UF'), 0), LL }); }));
+      return out; };
+  }
+  /* noDoublePL(pl): the payload for engine/flexure.js and engine/shear.js fromPayload, which add M_PL / V_PL to M_LL / V_LL: when
+     pedestrianInLL is true the LL envelopes already include the pedestrian load (HANDOFF.md §4.9), so the M_PL / V_PL fields are left out
+     (a copy; the payload itself is not changed). */
+  function noDoublePL(pl) {
+    if (!pl || pl.pedestrianInLL !== true) return pl;
+    return { ...pl, stations: (pl.stations || []).map(s => { const o = { ...s }; ['M_PLpos', 'M_PLneg', 'V_PLpos', 'V_PLneg'].forEach(k => delete o[k]); return o; }) };
   }
 
   /* ---------- fatigue (GS20): RF = 1/ratio of the flange stress range check GS17 ---------- */
@@ -239,5 +273,5 @@
     return res;
   }
 
-  window.SBDRating = { MBE, factors, phi, rf, kAt, flexure, service, shear, fatigue, target, girder };
+  window.SBDRating = { MBE, factors, phi, rf, kAt, flexure, service, shear, shearCases, noDoublePL, fatigue, target, girder };
 })();
