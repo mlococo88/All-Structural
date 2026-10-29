@@ -296,8 +296,9 @@
     for (let k = 1; k < bp.length; k++) if (bp[k] > s0 + 1e-6 && bp[k - 1] < s1 - 1e-6) mx = Math.max(mx, bp[k] - bp[k - 1]); return mx; }));
 
   /* ================= the project model (new) ================= */
-  /* DEF: framing settings of a new project: Preliminary sizing's built-in framing (P.framing) and limits (spliceClear, tol), no field splices */
-  const DEF = { spacing: 25, spPier: '', pierLen: '', orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, spliceClear: 2, tol: 0.5, splices: [] };
+  /* DEF: framing settings of a new project: Preliminary sizing's built-in framing (P.framing) and limits (spliceClear, tol; flSkI, flSkE, flSkG: the
+     skew f_ℓ below), no field splices */
+  const DEF = { spacing: 25, spPier: '', pierLen: '', orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, spliceClear: 2, tol: 0.5, splices: [], flSkI: 10, flSkE: 7.5, flSkG: 1.25 };
   const isNum = v => typeof v === 'number' && isFinite(v);
   const numList = v => (Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,;\s]+/)).map(Number).filter(x => isFinite(x)).sort((a, b) => a - b);
   /* settings(P): project.framing with the defaults filled in (null when the project has no framing block) */
@@ -362,5 +363,26 @@
       lenOf: (a, b) => toG(FR, line, sup, b) - toG(FR, line, sup, a) };
   }
 
-  window.SBDFraming = { DEF, settings, modelOf, layout, compute, girderBraces, lineOf, plPierSp, plPierLen, plOwnXf, plXfDef, braceG, toG, toX, lbMax };
+  /* forGirder(P, sel, sup): the brace points of one girder for demands whose supports are sup (ft): sel = { gi } (plate girder of P) or
+     { line } (cross-section girder, 0-based: a hand-off file's girder). null when P has no framing, the layout has errors, or the supports
+     differ from the project's (another bridge: the caller keeps its own brace points). */
+  function forGirder(P, sel, sup) {
+    const L = compute(P); if (!L || L.errors.length) return null;
+    const ps = L.m.sup; if (sup && (sup.length !== ps.length || sup.some((v, k) => Math.abs(v - ps[k]) > 0.01))) return null;
+    if (sel && sel.line != null) { if (!(sel.line >= 0 && sel.line < L.FR.girders.length)) return null; const Q = { ...P, girders: [{ ...(P.girders[0] || {}), line: sel.line }] }; return girderBraces(Q, 0, L); }
+    return girderBraces(P, (sel && sel.gi) || 0, L);
+  }
+  /* flSkew(skews, ext, F): flange lateral bending from skew in lieu of a refined analysis (AASHTO LRFD C6.10.1), as Preliminary sizing sends it
+     to GirderDetail's Girder section rows (anchor `flange lateral bending from skew in lieu of a refined analysis`): where any support is skewed
+     more than 20°, f_ℓ = γ(10 ksi interior, 7.5 ksi exterior girders), γ = 1.25 (settings flSkI, flSkE, flSkG), rounded to 0.01 ksi; else 0.
+     GirderDetail uses the same value for Strength I and Service II (SB2-O11). Returns { fl, skMax, steps }. */
+  function flSkew(skews, ext, F) {
+    F = F || DEF; const num = v => (v === '' || v == null ? NaN : +v), skM = Math.max(...(skews || [0]).map(v => Math.abs(v))), gI = num(F.flSkI) || 10, gE = num(F.flSkE) || 7.5, gG = num(F.flSkG) || 1.25;
+    const f0 = ext ? gE : gI, fl = skM > 20 + 1e-9 ? +(gG * f0).toFixed(2) : 0, w = St().work('flsk');
+    w.add({ id: 'fl', label: `Flange lateral bending from skew, ${ext ? 'exterior' : 'interior'} girder (largest support skew ${n2(skM)}° ${skM > 20 + 1e-9 ? '> 20°' : '≤ 20°: none'})`, sym: 'f_{\ell}', eq: skM > 20 + 1e-9 ? '\gamma f_{\ell,skew}' : '0', sub: skM > 20 + 1e-9 ? `${n2(gG)}(${n2(f0)})` : '', value: fl, unit: 'ksi', d: 2, ref: `${ED} C6.10.1`,
+      note: 'In lieu of a refined analysis: 10 ksi interior, 7.5 ksi exterior girders (unfactored), times the load factor; the same value is used at Service II (GirderDetail; SB2-O11).' });
+    return { fl, skMax: skM, steps: w.steps };
+  }
+
+  window.SBDFraming = { DEF, settings, modelOf, layout, compute, girderBraces, forGirder, flSkew, lineOf, plPierSp, plPierLen, plOwnXf, plXfDef, braceG, toG, toX, lbMax };
 })();

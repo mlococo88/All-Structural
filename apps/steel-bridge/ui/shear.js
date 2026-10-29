@@ -39,7 +39,7 @@
     return h.card('Stiffener layout (6.10.9.1)', `${h.sel('stiffeners.layout.web', 'Web', [['stiffened', 'Stiffened (transverse stiffeners)'], ['unstiffened', 'Unstiffened (connection plates only)']])}
         ${h.sel('stiffeners.layout.mode', 'Stiffener spacing', [['uniform', 'Uniform d_o/D in every bay'], ['bays', 'Per cross-frame bay (table below)']])}${h.num('stiffeners.layout.doRatio', 'd<sub>o</sub>/D (uniform; bays without an entry)', '')}
         ${h.num('stiffeners.layout.frames.Lb', 'Intermediate cross-frames at most', 'ft apart')}
-        <p class="note">A bay is the girder between consecutive bearings and intermediate cross-frames; the connection plates at the cross-frames act as stiffeners. Uniform: in each bay ⌈L/(d<sub>o</sub>/D·D)⌉ − 1 stiffeners, evenly spaced (Preliminary sizing). End panels (next to an abutment, or any bearing of a simple span) use V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3); pier panels are interior panels with tension-field action (S2-4). Cross-frames are placed evenly in each span until the framing module exists.</p>`)
+        <p class="note">A bay is the girder between consecutive bearings and intermediate cross-frames; the connection plates at the cross-frames act as stiffeners. Uniform: in each bay ⌈L/(d<sub>o</sub>/D·D)⌉ − 1 stiffeners, evenly spaced (Preliminary sizing). End panels (next to an abutment, or any bearing of a simple span) use V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3); pier panels are interior panels with tension-field action (S2-4). Cross-frames: this girder's own frames from the Framing tab (engine/framing.js; mapped to the analysis stations proportionally within each span); without framing, evenly at most the spacing below in each span.</p>`)
       + h.card(`Per-bay stiffeners, ${esc((P.girders[g] || {}).label || 'G' + (g + 1))}`, `${bays.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Bay (ft)</th><th>n</th><th>e<sub>0</sub> (in)</th><th>e<sub>1</sub> (in)</th></tr></thead><tbody>
           ${bays.map(([q, i]) => `<tr><td>${fmt(q.a, 2)}–${fmt(q.b, 2)}</td>${['n', 'e0', 'e1'].map(k => `<td><input type="number" step="${k === 'n' ? 1 : 'any'}" data-path="stiffeners.layout.bays.${i}.${k}" data-kind="num" value="${esc(q[k] == null ? '' : q[k])}" aria-label="bay ${i + 1} ${k}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="note">No per-bay entries for this girder.</p>'}
         <button type="button" id="stf_fill">${bays.length ? 'Reset' : 'Set'} this girder's bays from the uniform d<sub>o</sub>/D</button>
@@ -51,14 +51,18 @@
         <p class="note">Stiffeners normal to the web, on both sides, full depth.</p>`);
   }
   /* the layout's geometry for girder g: supports, cross-frames, plates (from the model, or from a hand-off file) */
+  /* the intermediate cross-frame stations of one girder: the project's framing (SB2-O17; a hand-off file only when its supports are this
+     project's, girder sel.line), else the stations entered, else evenly at most L_b in each span */
+  function framesOf(P, sel, sup, ly) { const FRM = window.SBDFraming, b = FRM && P.framing ? FRM.forGirder(P, sel, sup) : null;
+    return b ? b.ints : (ly.frames && ly.frames.at) || window.SBDStiffeners.framesDefault(sup, (ly.frames && ly.frames.Lb) || 25); }
   function geom(P, g, pl) {
     const st = ensure(P), SB = window.SBDStiffeners, ly = st.layout;
     if (pl) { const sup = (pl.member || {}).supports || [], zones = (pl.section || {}).zones || [], dem = window.SBDShear.demands(pl);
-      return { sup, cont: sup.length > 2, zAt: dem.zAt, chg: zones.slice(0, -1).map(z => z.endX), D: Math.max(...zones.map(z => z.web.depth)), gNo: +((pl.girderDetail || {}).girder) || g + 1, dem, frames: (ly.frames && ly.frames.at) || SB.framesDefault(sup, (ly.frames && ly.frames.Lb) || 25) }; }
+      return { sup, cont: sup.length > 2, zAt: dem.zAt, chg: zones.slice(0, -1).map(z => z.endX), D: Math.max(...zones.map(z => z.web.depth)), gNo: +((pl.girderDetail || {}).girder) || g + 1, dem, frames: framesOf(P, { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 }, sup, ly) }; }
     const sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
     const G = P.girders[g] || P.girders[0], segAt = x => G.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || G.segments[G.segments.length - 1];
     return { sup, cont: P.spans.continuity === 'continuous' && sup.length > 2, zAt: x => { const s = segAt(x); return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }; },
-      chg: G.segments.slice(0, -1).map(s => s.x1), D: Math.max(...G.segments.map(s => s.D)), gNo: g + 1, dem: null, frames: (ly.frames && ly.frames.at) || SB.framesDefault(sup, (ly.frames && ly.frames.Lb) || 25) };
+      chg: G.segments.slice(0, -1).map(s => s.x1), D: Math.max(...G.segments.map(s => s.D)), gNo: g + 1, dem: null, frames: framesOf(P, { gi: g }, sup, ly) };
   }
   function onClick(e, P, ui) {
     if (e.target.id !== 'stf_fill') return false;

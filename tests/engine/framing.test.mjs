@@ -148,3 +148,29 @@ test('Hand check: 35° skew, normal frames, first frame offset e = max(clear, 4b
   // on every girder the first intermediate frame is at least e from its own bearing
   R.FR.girders.forEach(g => { const f = g.pts.filter(q => q.f.type === 'int').map(q => q.s).sort((a, b) => a - b); assert.ok(f[0] >= 3 - 1e-9 && 100 - f[f.length - 1] >= 3 - 1e-9); });
 });
+
+test('Per-girder brace points = the recorded stiffener layout of Preliminary sizing in the browser (sbd2-stiff: bearings and cross-frames of every girder)', () => {
+  let n = 0;
+  for (const f of fs.readdirSync(path.join(ROOT, 'tests/projects/sbd2-stiff')).filter(q => q.endsWith('.json') && !q.includes('_bays')).sort()) {
+    const rec = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/projects/sbd2-stiff', f), 'utf8')), [pr, ow] = f.replace('.json', '').split('_');
+    const P = plProject(pr, ow); P.framing = { ...P.framing, ...rec.layout.framing };
+    const r = plRun(P), R = FRM.compute(sbd2Of(P, r.m));
+    rec.layout.girders.forEach((g, i) => { const G = R.FR.girders[i];
+      same(J(G.bear), g.bear, `${f} G${i + 1} bearings`); same(J(G.pts.filter(q => q.f.type === 'int').map(q => q.s)), g.ints, `${f} G${i + 1} cross-frames`); n++; });
+  }
+  assert.ok(n >= 100, `${n} girders`);
+});
+
+test('forGirder / girderBraces: analysis stations, the girder\'s own lengths, supports must match (unequal skews, staggered); skew f_l', () => {
+  const { DEF } = pl(), P = J(DEF); P.limits.dot = 'AASHTO'; P.bridge.skews = [10, 30, 30, 45]; P.framing.arrange = 'staggered';
+  const r = plRun(P), p = sbd2Of(P, r.m), sup = [0, 110, 250, 360];
+  const b = FRM.forGirder(p, { line: 0 }, sup), L = FRM.compute(p), g = L.FR.girders[0];
+  // every own station maps into its span and back
+  b.own.forEach((s, j) => assert.ok(Math.abs(FRM.toG(L.FR, 0, sup, b.braces[j]) - s) < 1e-9));
+  // a span's analysis length 110 ft maps to the girder's own span length B[1] − B[0]
+  assert.ok(Math.abs(b.lenOf(0, 110) - (g.bear[1] - g.bear[0])) < 1e-9);
+  assert.equal(FRM.forGirder(p, { line: 0 }, [0, 100, 250, 360]), null, 'other supports: null');
+  assert.equal(FRM.forGirder({ ...p, framing: undefined }, { gi: 0 }, sup), null, 'no framing: null');
+  // skew f_l (C6.10.1): 45° > 20°: exterior 1.25(7.5) = 9.375 → 9.38 ksi (rounded to 0.01 as Preliminary sizing), interior 1.25(10) = 12.5 ksi
+  assert.equal(FRM.flSkew(P.bridge.skews, true).fl, 9.38); assert.equal(FRM.flSkew(P.bridge.skews, false).fl, 12.5); assert.equal(FRM.flSkew([15, 20], false).fl, 0);
+});

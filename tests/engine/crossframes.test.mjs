@@ -173,3 +173,20 @@ test('Hand check: weight of one interior X-frame in DC1 (S = 9.5 ft, h = 48 in, 
   const ref = (114 * 2 * 3.609375 + 2 * Math.sqrt(15300) * 3.609375) * 0.2836 / 1000 * 1.1;
   assert.ok(Math.abs(Wf - ref) < 1e-15 && Math.abs(Wf - 0.535284) < 1e-5);
 });
+
+test('Analysis takes the cross-frame point loads of the framing (SB2-A6): source, count, total, equilibrium; explicit girder loads still win', () => {
+  const W2 = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), ENG('lldf.js'), ENG('loads.js'), ENG('flexure.js'), ENG('framing.js'), ENG('crossframes.js'), ENG('analysis.js'));
+  const P = W2.SBDModel.defaultProject(); P.xs.skews = [28, 28, 28, 28];
+  const AN = W2.SBDAnalysis, R = AN.analyzeGirder(P, 0, { ll: false }), LD = AN.loadsOf(P, P.girders[0], AN.moduleOf(P, 0));
+  const X = W2.SBDCrossframes.pointLoads(P, 0);
+  assert.equal(LD.src.xf, 'module'); assert.equal(LD.xf.length, X.pts.length); assert.ok(X.pts.length > 10);
+  assert.ok(Math.abs(LD.xf.reduce((a, q) => a + q.P, 0) - X.tot) < 1e-12);
+  // ΣR = steel + cross-frames. Within 1e-5 relative: the shared engine (shared/moving-load.js staticAnalysis) meshes a point load 0.006 ft from a
+  // station (217.994 ft) as a very short element and loses 1e-4 of that load in ΣR (0.75 lb of 102.66 kip here); reported, not changed (SB2-X1).
+  const wsTot = R.segs.reduce((a, s, i) => a + R.wSteel[i] * (s.x1 - s.x0), 0), sR = R.st.DC1steel.R.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sR - wsTot - X.tot) / (wsTot + X.tot) < 1e-5, `ΣR ${sR} vs ${wsTot + X.tot}`);
+  assert.equal(X.line, 1, 'the plate girder takes cross-section girder G2 (interior): frames on both sides, W/2 each');
+  const P2 = JSON.parse(JSON.stringify(P)); P2.girders[0].loads = { DC1wet: 1, DC2: 0.2, DW: 0.2, xf: [{ x: 50, P: 1 }] };
+  assert.equal(AN.loadsOf(P2, P2.girders[0], null).src.xf, 'girder');
+  P.crossframes.weight.mode = 'off'; assert.equal(AN.loadsOf(P, P.girders[0], null).src.xf, 'none');
+});
