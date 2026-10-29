@@ -156,7 +156,7 @@ test('parity with GirderDetail: every field splice of the 100 hand-off payloads,
       if (fi % 5 === 0) { const q = clone(s.p); q.sec.code = '8'; cmpSplice(q, PS.owner, `${where} 8th Ed.`); }
       });
   });
-  report(`${payloads.length} payloads, ${nSp} splices; ${nAuto} auto-designed: ${nOk} pass every check, ${nFail} do not${nFail ? ': ' + JSON.stringify(fails) : ''})`, t0);
+  report(`${payloads.length} payloads, ${nSp} splices; ${nAuto} auto-designed: ${nOk} pass every check, ${nFail} do not${nFail ? ': ' + JSON.stringify(fails) : ''}`, t0);
   assert.ok(nSp >= 300, `only ${nSp} splices found`);
   assertNoDiff();
 });
@@ -166,7 +166,7 @@ test('the app path: splices of a payload project from engine/analysis.js (girder
   const t0 = Date.now(), A = W.SBDAnalysis, keys = ['MDC1', 'MDC2', 'MDW', 'MLLp', 'MLLn', 'MCL', 'VDC1', 'VDC2', 'VDW', 'VLL', 'VCL', 'dMp', 'dMn'], big = {}; let n = 0, nPass = 0;
   payloads.filter((f, i) => i === 0 || /xsA_AASHTO_G1|util_MassDOT_G2/.test(f)).forEach(f => {
     const pl = readPayload(f), PS = payloadSplices(pl), P = projectFromPayload(pl);
-    P.ownerRules = { owner: PS.owner, eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } }; P.splices = { ...W.SBDModel.defaultSplices(), x: PS.list.map(s => s.x) };
+    P.ownerRules = { owner: PS.owner, eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } }; P.splices = W.SBDModel.defaultSplices(); P.framing = { ...W.SBDModel.defaultFraming(), splices: PS.list.map(s => s.x) };
     const AR = A.analyzeGirder(P, 0); assert.deepEqual([...(AR.errors || [])], [], f);
     const G = S.girder(P, 0, AR, { env: { owner: PS.owner, lf: PS.lf, minPlate: PS.minPlate } });
     assert.deepEqual([...G.errors], [], f);

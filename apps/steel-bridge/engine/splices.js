@@ -782,12 +782,14 @@
   }
 
   /* ---------- the splices of a girder of an sbd2 project ---------- */
-  /* settings(P): P.splices with GirderDetail's module defaults filled in. P.splices = { x: [ft, …], code, bolts, gam, clr, Rh, aT, aB, prs,
+  /* settings(P): P.splices with GirderDetail's module defaults filled in; x = the field splice stations P.framing.splices (one list, shared with
+     the Framing tab). P.splices = { code, bolts, gam, clr, Rh, aT, aB, prs,
      gP (splice plate grade; blank = the flange grade), auto: true | false (auto-design the plates and bolts of every splice; false: the
      entered plates), plates: [ { x, top, bot, web } ] (entered, per station) } */
   function settings(P) {
     const s = (P && P.splices) || {}, d = clone(DEF);
-    return { x: Array.isArray(s.x) ? s.x.map(Number).filter(v => isFinite(v)) : [], code: s.code === '8' ? '8' : '10', bolts: { ...d.bolts, ...(s.bolts || {}) }, gam: { ...d.gam, ...(s.gam || {}) }, clr: { ...d.clr, ...(s.clr || {}) },
+    const fx = P && P.framing && Array.isArray(P.framing.splices) ? P.framing.splices : [];
+    return { x: fx.map(Number).filter(v => isFinite(v)), code: s.code === '8' ? '8' : '10', bolts: { ...d.bolts, ...(s.bolts || {}) }, gam: { ...d.gam, ...(s.gam || {}) }, clr: { ...d.clr, ...(s.clr || {}) },
       prs: s.prs === 'yes' ? 'yes' : 'no', gP: s.gP || '', auto: s.auto !== false, plates: Array.isArray(s.plates) ? s.plates : [] };
   }
   /* inputsAt(P, gi, AR, x, opt): the splice inputs (p, as GirderDetail's module receives them from spliceExport) for the splice at x of girder gi.

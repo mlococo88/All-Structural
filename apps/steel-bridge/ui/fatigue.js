@@ -110,7 +110,8 @@
     const env = { owner: own.owner, lf, fat: { set, B } };
     // ---- fatigue details (FA1–FA7)
     const pg = pl ? pl.girderDetail || {} : null, dk = pg ? pg.deck || {} : null, pm = pg ? pg.materials || {} : null;
-    const frames = (P.stiffeners && P.stiffeners.layout && P.stiffeners.layout.frames && P.stiffeners.layout.frames.at) || SB.framesDefault(sup, (P.stiffeners && P.stiffeners.layout && P.stiffeners.layout.frames && P.stiffeners.layout.frames.Lb) || 25);
+    const FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, pl && pl._schema !== 'sbd2-analysis' ? { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 } : { gi: g }, sup) : null;   // the project's framing (SB2-O17)
+    const frames = frB ? frB.ints : (P.stiffeners && P.stiffeners.layout && P.stiffeners.layout.frames && P.stiffeners.layout.frames.at) || SB.framesDefault(sup, (P.stiffeners && P.stiffeners.layout && P.stiffeners.layout.frames && P.stiffeners.layout.frames.Lb) || 25);
     const splX = String(Q.splX || '').split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0);
     const plSpl = pl ? (((pg.details || {}).studs || {}).results || {}).gaps || [] : [];
     const rows = pl ? FA.detailsFromPayload(pl, { frames, stiffened: !P.stiffeners || P.stiffeners.layout.web !== 'unstiffened', splices: splX.length ? splX : plSpl.map(q => q.x) }) : JSON.parse(JSON.stringify(FA.DEFAULT.rows));
@@ -120,7 +121,7 @@
     const FR = FA.compute(faIn, { owner: own.owner, lf }), FC = FR.errors.length ? null : FA.checks(FR);
     // ---- GS17 (file only): every station GirderDetail checks
     let gs17 = null;
-    if (pl) { const d = FX.fromPayload(pl, { owner: own.owner }), Gr = FX.girder(d.locs, d.prj, { supports: d.supports });
+    if (pl) { const d = FX.fromPayload(pl, { owner: own.owner, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) }), Gr = FX.girder(d.locs, d.prj, { supports: d.supports });
       gs17 = Gr.rows.map(r => ({ r, o: FA.flange(r, { set, B, catT: F.catT, catB: F.catB }) })); }
     // ---- studs (SC1–SC7)
     let scIn, scEnv = env;

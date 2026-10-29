@@ -2,7 +2,7 @@
    engine/splices.js (bolted field splices, AASHTO LRFD 10th Ed. 6.13.6.1). Classic script; needs SharedSteps, SharedUnits, SBDModel,
    SBDOwners, SBDSections, SBDStiffeners, SBDAnalysis, SBDSplices.
 
-   Inputs (saved in the project, P.splices; engine/model.js): the field splice stations (every girder), the bolts, the edition of the
+   Inputs (saved in the project, P.splices; engine/model.js): the field splice stations (P.framing.splices, shared with the Framing tab), the bolts, the edition of the
    design forces, the load factors and clearances, auto-design on or off, and entered plates per station (and girder).
    Output: for the girder chosen on the Girders tab, each splice: the demands at the splice from this project's analysis
    (engine/analysis.js; the Analysis tab), the auto-designed (or entered) plates and bolts, every check TF1–TF6, BF1–BF6, MT1, WS1–WS5,
@@ -34,7 +34,7 @@
   function inputs(P, h) {
     ensure(P); const Q = P.splices, gr = Object.keys(window.SBDModel.GRADES).map(k => [k, k]);
     const yn = [['incl', 'Included'], ['excl', 'Neglected']];
-    let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc((Q.x || []).join(', '))}" style="width:200px"><span class="unit">ft from the left end, comma separated</span></div>
+    let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc(((P.framing || {}).splices || []).join(', '))}" style="width:200px"><span class="unit">ft from the left end, comma separated (also on the Framing tab)</span></div>
       <p class="note">AASHTO LRFD 6.13.6.1.1: at or near the points of permanent-load contraflexure in continuous spans. Each splice is designed for the section on each side (0.01 ft left and right of the station) and the demands of this project's analysis there.</p>`)
       + h.card('Design basis', `${h.sel('splices.code', 'Design forces', [['10', 'AASHTO LRFD 10th Ed. (P_fy, flange couple, V_r)'], ['8', '8th Ed. method (controlling / noncontrolling flange, V_uw)']])}
         ${h.sel('splices.auto', 'Plates and bolts', [['true', 'Auto-design each splice (fewest bolts, then least plate)'], ['false', 'Entered below (per station)']])}
@@ -59,7 +59,7 @@
   }
   function onChange(el, P) {
     if (el.dataset.kind !== 'splx') return false;
-    ensure(P); P.splices.x = el.value.split(/[,;\s]+/).filter(Boolean).map(Number); return true;
+    ensure(P); if (!P.framing) P.framing = window.SBDModel.defaultFraming(); P.framing.splices = el.value.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b); return true;
   }
   function onClick(e, P) {
     const d = e.target.closest && e.target.closest('[data-spldel]'); if (!d) return false;
@@ -79,7 +79,7 @@
     S.err = ''; S.R = null;
     const P = ensure(ctx.P), g = ctx.g || 0, AN = window.SBDAnalysis;
     try {
-      if (!(P.splices.x || []).length) { S.err = 'No field splice stations: enter them on the Splices tab.'; S.key = key(ctx); return; }
+      if (!((P.framing || {}).splices || []).length) { S.err = 'No field splice stations: enter them on the Splices tab.'; S.key = key(ctx); return; }
       const AR = AN.analyzeGirder(P, g);
       if (AR.errors && AR.errors.length) { S.err = 'Analysis: ' + AR.errors.join(' '); S.key = key(ctx); return; }
       const env = envOf(P), G = SP().girder(P, g, AR, { env });
@@ -97,7 +97,7 @@
     css();
     const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx);
     let h = `<section class="sec"><div class="secHead">Field splices (bolted, AASHTO LRFD 10th Ed. 6.13.6.1)</div><div class="secBody">
-      <p class="note">${esc(g.label || g.id)}: splices at ${(P.splices.x || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices tab). Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule). Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
+      <p class="note">${esc(g.label || g.id)}: splices at ${((P.framing || {}).splices || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices or Framing tab). Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule). Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Splice results are out of date: inputs changed or nothing calculated yet. The auto-design takes a few seconds per splice.</span><button type="button" class="primary" id="sp_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {

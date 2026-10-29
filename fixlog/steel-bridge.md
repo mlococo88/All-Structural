@@ -766,6 +766,118 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - None.
 ### Open items
 - None.
+## 2026-10-29 — PR: sbd2-crossframes — framing layout and cross-frames (engine/framing.js, engine/crossframes.js, Framing and Cross-frames tabs; new files)
+### Where
+- `engine/framing.js` (new, `window.SBDFraming`): Preliminary sizing's `framingLayout(P, m)` copied line for line from the page text
+  (`<script type="text/plain" id="pl-src">`, anchor `function framingLayout(P, m) {`) as `layout(P, m)`, with `plPierSp`, `plPierLen`, `FL_MEMO`,
+  `plOwnXf` (owner rule xf.orient read from `window.SBDOwners`, GirderDetail's OWN_RULES verbatim) and `plXfDef` (the frame list GirderDetail's
+  DC1 point loads use). Per span: parallel to the skew (both supports ≤ 20°) or normal; contiguous, staggered or (RIDOT) stepped; the first frame
+  e = max(clear, 4b_f, 0.4s) from the obtuse bearing at a support skewed > 20° (C6.7.4.2.1); corner frames; end frames on the bearing lines;
+  grid shifts and extra frames to clear field splices and shop transitions; pier-region spacing. Per girder (anchors `const brOf = {}, braceG`,
+  `const toG =`, `const toX =`, `const lbMax =`): `braceG` (own brace stations), `toG`/`toX` (analysis station ↔ girder's own station,
+  proportional within the span), `lbMax`. New: `modelOf(P)` (the layout inputs from an sbd2 project: spans, xs.nb/bays/skews, framing
+  settings and field splices, every girder's plate changes as flange/web transitions), `compute(P)` (layout + worked steps `fr.*`),
+  `girderBraces(P, gi)` / `forGirder(P, sel, sup)` (a girder's brace points as analysis stations, its intermediate frames, `lenOf(a, b)` = its own
+  length), `flSkew(skews, ext, F)` (f_ℓ from skew, below; steps `flsk.fl`).
+- `engine/crossframes.js` (new, `window.SBDCrossframes`): GirderDetail's Cross-frames module `GM.cf` (anchor `GM.cf = {`): `def`, `compute(p)`
+  (truss model by direct stiffness: unit bottom-flange load with the top chord held by the deck, unit torsional brace moment; wind P_Z, W, F_w with
+  γ_WS = 1.0η (OWN7); stability bracing M_br, β_br, β_sec, β_g, β_T, β_T,req; member demands T_u, C_u per combination; single-angle (KL/r)_eff,
+  Q, P_e, P_n, P_r; φP_y, A_n, U, φP_u; ℓ/r_z; bolt shear and bearing; gage/edge; fatigue γΔf) and `checks(R)` (CF1–CF11), `cfDiaChecks`
+  (CFD, CFE: anchor `function cfDiaChecks(`), `cfDiaSec`, `cfDiaOn`, `cfDiaGap`, `cfDiaEnd`, `cfTypeRec`, `cfTsCP`, `cfCPsize`, `cfBsCP`, `cfCP`,
+  `cfDiaFit`, `angleProps`, `ANGLES`, `CF_MEM`, `CF_CH`, `CF_DIA`, `BOLT`, `FUB`, `PHI`; the XF1 weight `gdXfW` → `xfW`, `gdXfModel` → `xfModel(set, c)`,
+  `gdXfPts` → `xfPts(b, X)`. Arithmetic copied operation for operation; GirderDetail's page state (P.ts, P.bs, P.df.bridge, gdLF, gdOwnR) is
+  passed in `env`. TeX work lines replaced by steps `cf.*`, `cf.cfd.*`, `cf.cfe.*`. New: `defaults()`, `inputsOf(P, { L, A, gi })` (the
+  geometry Preliminary sizing sends to GirderDetail, anchor `const cf = { S: r2(m.S * 12)`: S, h = round(max(D − 8, 0.75D)), d, L_b = the
+  largest unbraced length on any girder, primary by skew > 20°; stability bracing span = the span of the largest 1.25M_DC1 + 1.5M_CL, its
+  length, the fewest intermediate frames on any girder in it, the plates there), `envOf(P)`, `pointLoads(P, gi)` (DC1 point loads of the
+  plate girder's cross-section line).
+- `engine/analysis.js` `loadsOf` (anchor `// cross-frame point loads (XF1)`): xf point loads = explicit `girder.loads.xf`, else (project has
+  `framing`, framing.js and crossframes.js loaded) `SBDCrossframes.pointLoads`, else `girder.loadsManual.xf`. `o.src.xf = 'module'`, `o.xfInfo`.
+- `engine/flexure.js` `bracing()`: optional `opt.lenOf(a, b)` (the girder's own unbraced length, as Preliminary sizing's L = p1 − p0 in own
+  stations; default b − a, i.e. unchanged); `fromPayload` passes `opt.lenOf`. Before: `const L = p1 - p0`; after: `const L = opt.lenOf ? opt.lenOf(p0, p1) : p1 - p0`.
+- `engine/model.js`: optional `framing` and `crossframes` blocks (`defaultFraming()`, `defaultCrossframes()`, validation); `defaultProject()` has both.
+- `ui/framing.js` (new, `window.SBDFramingUI`): input tab "Framing" (layout settings, field splices, plan sketch as plain SVG: girders, support
+  lines, end and intermediate frames, splices; skew f_ℓ; members, connections, wind, stability bracing, refined-analysis forces, diaphragm, DC1
+  weight) and output tab "Cross-frames" (governing ratio, framing per span and per girder with the plan, f_ℓ and DC1 point loads, CF/CFD/CFE
+  table, truss member forces, worked steps, § links).
+- `ui/flexure.js` (file source): brace points from the project's framing when the file's supports are the project's (girder = the file's
+  girder), and f_ℓ = the value entered, else the skew f_ℓ from the file's skews and position. Also fixed: the file branch's `return` was on the
+  same line after a `//` comment, so a hand-off file fell through to the example demands (UI only; no calculation changed).
+- `ui/shear.js` (`framesOf`), `ui/fatigue.js` (frames and GS17 braces): the project's framing first, then the stations entered, then evenly ≤ L_b.
+- `ui/analysis.js`: the dead-load card says where the cross-frame point loads come from (link to the Framing tab).
+- `engine/constructibility.js` `fromAnalysis` (merged from main during this PR): `opt.braces` used when given (before: always the stiffener-layout
+  frames); `ui/constructibility.js` passes the framing's brace points (project, or a file of this bridge). Unchanged without framing.
+- `index.html`: three script tags, the input tab `fr`, the output tab `cf`, `tabOf`, change/redraw hooks, a `data-goto` link handler.
+- `engine/lldf.js` step `df.s<i>.noRed` (merged from main, DFL5): unit `^{\circ}` → `deg` (display only). KaTeX cannot render a superscript
+  after the unit spacing, so tests/engine/tex.test.mjs failed on main after #476 and #478 crossed; no value changed.
+- Tests: `tests/engine/framing.test.mjs`, `tests/engine/crossframes.test.mjs`, loader `tests/engine/pl-source.mjs` (Preliminary sizing's own code
+  from pl-src in a Node vm). No new recording: the 20 `tests/projects/sbd2-fat` and 40 `tests/projects/sbd2-stiff` recordings have the framing
+  inputs (Preliminary sizing projects from the seeds), the frame lists (P.df.bridge.xf), the per-girder layouts and P.cf / P.ts / P.bs.
+### Saved data (CLAUDE.md §5)
+- No new key. New optional project fields `framing` and `crossframes` in `sbd2.project.current` and the export file. A project saved without
+  them reads unchanged until the Framing tab is drawn: the page then adds the defaults (as the other input tabs do), so its analysis gains
+  the cross-frame point loads (GirderDetail XF1: on by default, engineer's decision 2026-10-13). Delete nothing; the entered `loadsManual.xf`
+  is kept and used when the project has no framing.
+### Governing provisions (AASHTO LRFD 10th Ed. (2024); all as GirderDetail / Preliminary sizing have them, none changed)
+- Layout 6.7.4.2.1, C6.7.4.2.1; owner rule xf.orient (RIDOT BDM 6.4.3, CTDOT BRSDM V2 6.7.4.2).
+- Wind 3.8.1.2.1 (Eq. 3.8.1.2.1-1), 4.6.2.7.1; γ_WS 1.0η (Table 3.4.1-1, 1.3.2.1). Stability bracing 6.7.4.2.2 (Eqs. 6.7.4.2.2-14, -15), C4.6.3.3.4.
+- Members 6.9.4.4 (Eqs. 6.9.4.4-1, -2), 6.9.4.1.1, 6.9.4.1.2, 6.9.4.2.2, 6.8.2.1, Table 6.8.2.2-1, 6.8.3, 6.9.3, 6.8.4; bolts 6.13.2.7, 6.13.2.9,
+  6.13.2.6, Table 6.13.2.6.6-1; fatigue 6.6.1.2, Table 3.4.1-1 (×0.65). Diaphragms 6.7.4.2, 6.10.8, 6.10.9.2, 6.13.2, 3.4.3.1. Owner OWN34–OWN37.
+- f_ℓ from skew C6.10.1 (10 ksi interior, 7.5 ksi exterior, × 1.25). DC1 cross-frame weight: GirderDetail XF1/XF2 (490 pcf, +10 %).
+### Check case (tests: hand checks)
+- Built-in cross-frame (GM.cf.def: X, S = 114, h = 48 in, L5x5x3/8, F_y 36): A = 5(0.375) + 4.625(0.375) = 3.609375 in²; diagonal
+  ℓ = √(114² + 48²) = 123.693 in; b/t = 13.333 > 0.45√(29,000/36) = 12.772 → Q = 1.34 − 0.76(13.333)√(36/29,000) = 0.98298; wind Strength III
+  P_Z = 2.56e-6(130²)(1.3) = 0.0562432 ksf, W = 0.0562432(62.5/12)/2 = 0.146467 kip/ft, F_w = 3.6617 kip; Strength V F_w = 1.3867 kip; bolt shear
+  2(0.80)(0.45)(0.6013)(120) = 51.952 kip; I_yc = 256, I_yt = 384 in⁴, h_o = 60.9375 in.
+- One X-frame in DC1 (S = 9.5 ft): (114(2 × 3.609375) + 2(123.693)(3.609375))(0.2836/1000)(1.10) = 0.53528 kip, W/2 = 0.26764 kip per girder.
+- Layout: built-in 110-140-110 ft at 15°, s = 25 ft: parallel, 4 / 5 / 4 frames per bay at 22 / 23.333 / 22 ft; largest L_b 23.334 ft
+  (brace points rounded to 0.001 ft). Single 100 ft span, 4 girders at 10 ft, 35°: normal; T = 100 − 2(15)tan 35° = 78.994 ft; after Preliminary
+  sizing's 8 passes e = max(3, 4(16/12), 0.4s) = 8.315 ft, s = (78.994 − 2(8.315))/3 = 20.788 ft. Skew f_ℓ at 45°: exterior 1.25(7.5) = 9.38 ksi,
+  interior 12.5 ksi; ≤ 20°: 0.
+- Before: none (new modules).
+### How verified
+- Preliminary sizing in Node (pl-src) = Preliminary sizing in the browser: the frame lists recorded in the 20 sbd2-fat projects (identical), and
+  the bearings and cross-frame stations of every girder in the sbd2-stiff layouts (identical).
+- `layout` = `framingLayout` on 1,320 layouts (the 20 recorded projects × 66 variations: skews 0° to 50°, unequal, negative; contiguous /
+  staggered / stepped; automatic / normal / parallel; spacing; pier-region spacing; splice clearance; stagger minimum; 4 owners): 99,594 frames,
+  2,666,613 values, largest difference 0. `modelOf` from an sbd2 project = Preliminary sizing on its own project (exact).
+- `compute`/`checks` = `GM.cf.compute`/`GM.cf.checks` on 2,041 cases (60 recorded states × 34 variations + built-in: types, sizes, LLV and custom
+  angles, bolts, user forces, fatigue, stability bracing on/off/not full, wind, primary, shallow girders, every diaphragm shape, end diaphragms with
+  jacking): 793,205 values and 58,248 check items (ratio and status), largest relative difference 0.
+- Weight: `xfModel`/`xfPts` = `gdXfModel`/`gdXfPts` on the recorded frame lists, 6 weight settings × cross-frame/diaphragm: 27,480 point loads
+  identical. Analysis takes them (src 'module'); explicit girder loads still win; equilibrium within 1e-5 (SB2-X1).
+- Flexure, shear, stiffener, fatigue and analysis parity tests unchanged and passing (they run `fromPayload` without framing, or explicit loads).
+- `node tests/engine/run.mjs` (full suite); one headless load of `apps/steel-bridge/index.html`: Framing tab plan, Cross-frames tab, Analysis,
+  Shear, Fatigue and Flexure tabs; 0 console errors; no horizontal scroll; only `sbd2.*` keys written.
+### Other copies
+- None. GirderDetail and Preliminary sizing keep their own functions until the switch-over. `lineOf` is repeated in engine/framing.js (also
+  engine/analysis.js).
+### Decisions (engineer's rule of 2026-10-29: decide by AASHTO 10th Ed. and accuracy, record the reasoning)
+- SB2-O9 / SB2-O17 (closed). Brace points and cross-frame bays come from the framing whenever the project has one: Flexure (file of this
+  bridge: same supports; the file's girder), Shear & stiffeners and Fatigue (project, or a file of this bridge). A girder's own stations are mapped
+  to the analysis stations proportionally within each span (Preliminary sizing's toX), and the unbraced length is the girder's own (lenOf),
+  as Preliminary sizing's row builder; exact where the girder's span equals the analysis span (equal skews at both ends of a span). A file of
+  another bridge keeps the evenly spaced points (reported on the tab).
+- SB2-A6 (cross-frame part, closed). Cross-frame weights go into DC1 as GirderDetail XF1: the plate girder's cross-section line, W/2 per frame
+  per girder at its own stations, on the steel section. The pedestrian load and the construction live load from a module stay open (SB2-A6).
+- SB2-O11 (decided). f_ℓ comes from skew in lieu of a refined analysis (C6.10.1), as Preliminary sizing sends it: 1.25 × (10 ksi interior,
+  7.5 ksi exterior) where any support is skewed more than 20°; the same value at Service II (GirderDetail). Kept: the C6.10.1 values are one
+  unfactored total with no split by load; Service II factors are 1.0 on DC and 1.3 on LL, so the composite factor lies between 1.0 and 1.3 and
+  1.25 is not materially conservative. GirderDetail derives no f_ℓ from wind (its flexure is Strength I only), so none is fed. The top-flange
+  f_ℓ of a noncomposite girder (wind, overhang brackets) stays an input.
+- SB2-O13 (decided, scope). Per-flange C_b: the bottom flange in negative regions from the Strength I envelope over the framing's unbraced
+  segment (unchanged); the top flange of a noncomposite girder in positive regions keeps C_b = 1.0 (permitted by 6.10.8.2.3, conservative).
+  The both-flange LTB of a monosymmetric noncomposite section in reverse curvature stays with the flexure module (not changed here).
+- SB2-C1. The stability-bracing span is the span of the largest 1.25M_DC1 + 1.5M_CL of this plate girder's analysis (Preliminary sizing: the
+  interior girder type's envelope). Kept: the girder being designed; for the interior girder it is the same quantity.
+### Open items
+- SB2-X1. `shared/moving-load.js` staticAnalysis meshes a point load within ~0.01 ft of a station as a very short element; the solve then
+  loses up to ~1e-4 of that load in ΣR (28° skew built-in: a frame at 217.994 ft next to the 218 ft station; ΣR short by 0.75 lb of 102.66 kip,
+  the Analysis tab's DC1 equilibrium step then shows "not met"). Not changed here (shared file); suggested fix: merge a point load within
+  1e-3 × h of a mesh node into that node.
+- SB2-X2. Not ported: Preliminary sizing's framing checks (`framingChecks`: X1–X4 and the owner skew warnings), Suggest's cross-frame
+  auto-design, the cross-frame/diaphragm drawings and DXF. The layout records the splice conflicts it could not clear (Cross-frames tab).
+
 
 ## 2026-10-29 — PR: sbd2-splices — bolted field splices, AASHTO LRFD 10th Ed. 6.13.6.1 (engine/splices.js, Splices and Field splices tabs)
 ### Where
@@ -778,8 +890,8 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   (`checks()` items each carry a step `sp.<check>.<k>`; `steps(R)` works the section, combinations, V_r, P_fy, M_r, bolt and plate
   resistances, the web bolt group).
 - New `apps/steel-bridge/ui/splices.js` (`window.SBDSplicesUI`): the Splices input tab and the Field splices output tab.
-- `engine/model.js`: optional `splices` field (header, `defaultSplices()`, `validate`; the default project has GirderDetail's example
-  stations 82, 145, 215, 278 ft). Absent in a saved project = `defaultSplices()` (no stations). No key or saved format changed.
+- `engine/model.js`: optional `splices` field (header, `defaultSplices()`, `validate`). The stations are `framing.splices` (the framing PR's
+  field, one list for both modules; the Splices tab edits the same list). Absent in a saved project = `defaultSplices()`. No key or saved format changed.
 - `apps/steel-bridge/index.html`: two script tags, the Splices input tab, the Field splices output tab, the change / click hooks, the
   error-tab mapping (`splices.*` → Splices) and `splices.auto` in the redraw list.
 - New `tests/engine/splices.test.mjs`.
