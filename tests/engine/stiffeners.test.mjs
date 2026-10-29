@@ -196,3 +196,13 @@ test('hand checks: transverse stiffener TS3 and bearing stiffener BS2/BS3 (Girde
   // a worked line renders with the substituted values
   const s = SB.bearingSteps(B, b).find(q => q.id === 'bs0.Rsb'); assert.equal(W.SharedSteps.line(s, false), '(R_(sb))_r = φ_b(1.4)A_(pn)F_(ys) = 1.0(1.4)(10.500)(50.00) = 735.00 kip');
 });
+
+test('model: the optional stiffener inputs (additive; a project without them still reads)', () => {
+  const M = loadShared('units.js', 'steps.js', ENG('model.js')).SBDModel, p = M.defaultProject();
+  assert.equal(JSON.stringify(M.validate(p).errors.map(e => e.path)), "[]");
+  const q = clone(p); delete q.stiffeners; assert.equal(JSON.stringify(M.validate(q).errors.map(e => e.path)), "[]", 'a version 1 project saved before this PR');
+  const r = clone(p); r.stiffeners.layout.mode = 'x'; r.stiffeners.layout.bays = [{ g: 1, a: 10, b: 5, n: 2 }]; r.stiffeners.bearing.types.B.tp = 0;
+  assert.equal(JSON.stringify(M.validate(r).errors.map(e => e.path)), JSON.stringify(['stiffeners.layout.mode', 'stiffeners.layout.bays.0', 'stiffeners.bearing.types.B.tp']));
+  assert.equal(JSON.stringify(M.defaultStiffeners().transverse.types), JSON.stringify(SB.TS_DEFAULT.types), 'model defaults = GirderDetail GM.ts.def types');
+  assert.equal(JSON.stringify(M.defaultStiffeners().bearing.types), JSON.stringify(SB.BS_DEFAULT.types), 'model defaults = GirderDetail BS_DEFAULT types');
+});
