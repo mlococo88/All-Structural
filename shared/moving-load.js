@@ -327,8 +327,8 @@ function analyze(m,opt){
   else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
 
   // Engine check: unit uniform load on all spans
-  let th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns]||['n/a','n/a'], L1=m.spans[0];
-  if(m.simple&&ns>1)th=[0,0.5];   // independent simple spans: M over the support 0, R_A = wL/2   // 5+ spans: no tabulated theory value (2026-10-29)
+  let th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns]||['n/a','n/a'], L1=m.spans[0];   // 5+ spans: no tabulated theory value (2026-10-29)
+  if(m.simple&&ns>1)th=[0,0.5];   // independent simple spans (2026-10-29): M over the support 0, R_A = wL/2
   const mChk=ns>1?mKey[supNodes[1]]:rows.find(r=>r.k===0&&r.t===10).mi;
   const rA=effs.findIndex(ef=>ef.t==='R'&&ef.q===0);
   let sumR=0; effs.forEach((ef,ei)=>{if(ef.t==='R')sumR+=DER[ei].end;});
