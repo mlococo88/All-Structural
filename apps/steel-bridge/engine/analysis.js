@@ -282,14 +282,14 @@
       const a = R.supIdx[k], b = R.supIdx[k + 1]; let im = a; for (let i = a; i <= b; i++) if (R.st.DC1.M[i] > R.st.DC1.M[im]) im = i;
       w.add({ id: `M.DC1.s${k + 1}`, label: `Largest DC1 moment, span ${k + 1}, at x = ${n2(x[im])} ft`, sym: 'M_{DC1}', eq: 'M_{steel} + M_{wet}', sub: `${n1(R.st.DC1steel.M[im])} + ${n1(R.st.DC1wet.M[im])}`, value: R.st.DC1.M[im], unit: kft, d: 1, ref: `${ED} Art. 4.5.2.2, 4.6.2`, note: 'Stiffness method on I_s (shared beam engine).' });
       if (R.ll) { let ip = a; for (let i = a; i <= b; i++) if (R.ll.Mpos[i] > R.ll.Mpos[ip]) ip = i;
-        w.add({ id: `M.LL.s${k + 1}`, label: `Largest LL+IM moment, span ${k + 1}, at x = ${n2(x[ip])} ft`, sym: 'M_{LL+IM}', eq: 'g_{M}M_{HL93}', sub: `${n3(R.ll.gM[ip])}(${n1(R.ll.perLane.Mmax[ip])})`, value: R.ll.Mpos[ip], unit: kft, d: 1,
+        w.add({ id: `M.LL.s${k + 1}`, label: `Largest LL+IM moment, span ${k + 1}, at x = ${n2(x[ip])} ft`, sym: 'M_{LL+IM}', eq: 'g_{M}\\,M_{HL93}', sub: `${n3(R.ll.gM[ip])}(${n1(R.ll.perLane.Mmax[ip])})`, value: R.ll.Mpos[ip], unit: kft, d: 1,
           ref: `${ED} Art. 3.6.1.3.1, 3.6.2.1, 4.6.2.2`, note: `Per lane: design truck (rear spacing 14–30 ft) or tandem, with IM ${S.im} %, + lane 0.64 klf without IM.` }); }
     }
     for (let k = 1; k < R.spans.length; k++) { const i = R.supIdx[k];
       w.add({ id: `M.perm.p${k}`, label: `Permanent-load moments at pier ${k} (x = ${n2(x[i])} ft)`, sym: 'M_{DC1} + M_{DC2} + M_{DW}', eq: '', sub: `${n1(R.st.DC1.M[i])} + ${n1(R.st.DC2.M[i])} + ${n1(R.st.DW.M[i])}`, value: R.st.DC1.M[i] + R.st.DC2.M[i] + R.st.DW.M[i], unit: kft, d: 1, ref: `${ED} Art. 4.6.2` });
-      if (R.ll) w.add({ id: `M.LL.p${k}`, label: `Negative LL+IM moment at pier ${k}`, sym: 'M_{LL+IM}^{-}', eq: 'g_{M}M_{HL93}^{-}', sub: `${n3(R.ll.gM[i])}(${n1(R.ll.perLane.Mmin[i])})`, value: R.ll.Mneg[i], unit: kft, d: 1,
+      if (R.ll) w.add({ id: `M.LL.p${k}`, label: `Negative LL+IM moment at pier ${k}`, sym: 'M_{LL+IM}^{-}', eq: 'g_{M}\\,M_{HL93}^{-}', sub: `${n3(R.ll.gM[i])}(${n1(R.ll.perLane.Mmin[i])})`, value: R.ll.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2`, note: R.ll.perLane.twoM[i] ? 'Includes 90 % of two design trucks (headway ≥ 50 ft) + 90 % of the lane load (negative-moment influence line).' : '' }); }
-    if (R.llR) R.llR.forEach(r => w.add({ id: `R.LL.${r.k}`, label: `LL+IM reaction, support ${r.k + 1}`, sym: 'R_{LL+IM}', eq: 'g_{V}R_{HL93}', sub: `${n3(r.gV)}(${n2(r.perLane.max)})`, value: r.max, unit: kip, d: 2,
+    if (R.llR) R.llR.forEach(r => w.add({ id: `R.LL.${r.k}`, label: `LL+IM reaction, support ${r.k + 1}`, sym: 'R_{LL+IM}', eq: 'g_{V}\\,R_{HL93}', sub: `${n3(r.gV)}(${n2(r.perLane.max)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2.3a`, note: (r.two ? '90 % of two trucks + lane governs (interior support). ' : '') + 'g_V = the larger of the adjacent spans.' }));
     if (R.lld) R.lld.forEach(q => {
       w.add({ id: `defl.lim${q.k + 1}`, label: `LL deflection limit, span ${q.k + 1}`, sym: '\\Delta_{lim}', eq: `\\frac{12L}{${q.ratio}}`, sub: `\\frac{12(${n2(q.L)})}{${q.ratio}}`, value: q.lim, unit: 'in', d: 3, ref: `${ED} Art. 2.5.2.6.2` });

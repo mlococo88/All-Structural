@@ -53,3 +53,59 @@ export function projectFromPayload(p, o = {}) {
       df: { spans: g.df.spans.map(s => ({ gM: s.gM, gV: s.gV, fatM: s.fatM, fatV: s.fatV })), piers: g.df.piers.map(q => ({ gM: q.gM })), gDef: g.loads.liveLoad.deflectionDF, source: 'hand-off payload' } }]
   };
 }
+
+// ---------- comparison ----------
+// Each quantity: [name, ours (per node), reference (per node)]; the difference is reported as the largest |ours − ref| and
+// that divided by the largest |ref| of the quantity on the girder (rel). Nodes are GirderDetail's grid (stations = nodes).
+// skip: node indices left out of the LL moments (where the pier regions differ, see analysis.test.mjs). The pedestrian load
+// (M_PL, V_PL: in LL+IM in the payloads of bridges with sidewalks) is taken out of LL+IM: the new engine has no pedestrian load yet.
+export function pairsPayload(R, p, G, skip) {
+  const A = G.at, N = G.N, L = k => A.map(a => a.L[k] || 0), Rr = k => A.map((a, i) => (i === N - 1 ? a.L : a.R)[k] || 0), sub = (a, b) => a.map((v, i) => v - b[i]);
+  const out = [
+    ['M_DC1steel', R.st.DC1steel.M, L('M_DC1steel')], ['M_DC1wet', R.st.DC1wet.M, L('M_DC1wet')], ['M_DC1', R.st.DC1.M, L('M_DC1')], ['M_DC2', R.st.DC2.M, L('M_DC2')],
+    ['M_DW', R.st.DW.M, L('M_DW')], ['M_CL', R.st.CL.M, L('M_CL')],
+    ['V_DC1', R.x.map((_, i) => i === N - 1 ? R.st.DC1.VL[i] : R.st.DC1.VR[i]), Rr('V_DC1').map(v => -v)], ['V_DC2', R.x.map((_, i) => i === N - 1 ? R.st.DC2.VL[i] : R.st.DC2.VR[i]), Rr('V_DC2').map(v => -v)],
+    ['V_DW', R.x.map((_, i) => i === N - 1 ? R.st.DW.VL[i] : R.st.DW.VR[i]), Rr('V_DW').map(v => -v)], ['V_CL', R.x.map((_, i) => i === N - 1 ? R.st.CL.VL[i] : R.st.CL.VR[i]), Rr('V_CL').map(v => -v)],
+    ['V_DC1 left of piers', G.sup.slice(1, -1).map(i => R.st.DC1.VL[i]), G.sup.slice(1, -1).map(i => -A[i].L.V_DC1)],
+    ['D_DC1steel', R.camber.steel, L('D_DC1steel')], ['D_DC1wet', R.camber.wet, L('D_DC1wet')], ['D_DC2DW', R.camber.sd, L('D_DC2DW')]];
+  if (R.seq) out.push(['M_DCc', R.seq.MDCc, L('M_DCc')]);
+  if (R.ll) {
+    const ll = R.ll, ft = R.fat;
+    out.push(['M_LLpos', ll.Mpos, sub(L('M_LLpos'), L('M_PLpos')), skip], ['M_LLneg', ll.Mneg, sub(L('M_LLneg'), L('M_PLneg')), skip], ['M_FATpos', ft.Mpos, L('M_FATpos')], ['M_FATneg', ft.Mneg, L('M_FATneg')]);
+    const v = (o, s) => R.x.map((_, i) => i === N - 1 ? o['VL' + s][i] : o['VR' + s][i]);
+    out.push(['V_LL max', v(ll, 'pos'), sub(Rr('V_LLneg'), Rr('V_PLneg')).map(x => -x)], ['V_LL min', v(ll, 'neg'), sub(Rr('V_LLpos'), Rr('V_PLpos')).map(x => -x)],
+      ['V_FAT max', v(ft, 'pos'), Rr('V_FATneg').map(x => -x)], ['V_FAT min', v(ft, 'neg'), Rr('V_FATpos').map(x => -x)],
+      ['V_LL max left of piers', G.sup.slice(1, -1).map(i => ll.VLpos[i]), G.sup.slice(1, -1).map(i => -(A[i].L.V_LLneg - (A[i].L.V_PLneg || 0)))],
+      ['V_LL min left of piers', G.sup.slice(1, -1).map(i => ll.VLneg[i]), G.sup.slice(1, -1).map(i => -(A[i].L.V_LLpos - (A[i].L.V_PLpos || 0)))],
+      ['LL deflection per span', R.lld.map(q => q.d), p.girderDetail.deflection.ll.spans.map(s => s.d)]);
+  }
+  return out;
+}
+export function pairsGD(R, D, skip) {
+  const N = D.N, sp = D.sup, vr = (o, k) => R.x.map((_, i) => i === N - 1 ? o.VL[i] : o.VR[i]), ge = arr => R.x.map((_, i) => arr[Math.min(i, N - 2)]);
+  const out = [
+    ['M_DC1steel', R.st.DC1steel.M, D.MS], ['M_DC1wet', R.st.DC1wet.M, D.MDk], ['M_DC2', R.st.DC2.M, D.MDC2], ['M_DW', R.st.DW.M, D.MDW], ['M_CL', R.st.CL.M, D.MCL],
+    ['V_DC1', vr(R.st.DC1), ge(D.VDC1)], ['V_DC2', vr(R.st.DC2), ge(D.VDC2)], ['V_DW', vr(R.st.DW), ge(D.VDW)],
+    ['R_DC1', R.st.DC1.R, D.reac.map(r => r.DC1)], ['R_DC2', R.st.DC2.R, D.reac.map(r => r.DC2)], ['R_DW', R.st.DW.R, D.reac.map(r => r.DW)], ['R_CL', R.st.CL.R, D.reac.map(r => r.CL)],
+    ['D_DC1steel', R.camber.steel, D.dS], ['D_DC1wet', R.camber.wet, D.dDk], ['D_DC2DW', R.camber.sd, D.dSD]];
+  if (D.MDCc && R.seq) out.push(['M_DCc', R.seq.MDCc, D.MDCc]);
+  if (R.ll) {
+    const vs = R.x.map((_, i) => i === N - 1 ? D.vSec(N - 2, false) : D.vSec(i, true)), ll = R.ll, ft = R.fat;
+    const v = (o, s) => R.x.map((_, i) => i === N - 1 ? o['VL' + s][i] : o['VR' + s][i]);
+    out.push(['M_LLpos', ll.Mpos, D.LLp, skip], ['M_LLneg', ll.Mneg, D.LLn, skip], ['M_FATpos', ft.Mpos, D.FMp], ['M_FATneg', ft.Mneg, D.FMn],
+      ['V_LL max', v(ll, 'pos'), vs.map(q => q.Lp)], ['V_LL min', v(ll, 'neg'), vs.map(q => q.Ln)], ['V_FAT max', v(ft, 'pos'), vs.map(q => q.Fp)], ['V_FAT min', v(ft, 'neg'), vs.map(q => q.Fn)],
+      ['R_LL max', R.llR.map(r => r.max), D.reac.map(r => r.llMax)], ['R_LL min', R.llR.map(r => r.min), D.reac.map(r => r.llMin)],
+      ['LL deflection per span', R.lld.map(q => q.d), D.lld.map(q => q.d)]);
+  }
+  return out;
+}
+// statistics over pairs: { name: { abs, rel, at, ours, ref, file } } keeping the largest rel per name
+export function diffStats(pairs, stats, file, xs) {
+  for (const [name, a, b, skip] of pairs) {
+    let sc = 0; b.forEach(v => { sc = Math.max(sc, Math.abs(v)); });
+    let mx = 0, at = -1; a.forEach((v, i) => { if (skip && skip.has(i)) return; const d = Math.abs(v - b[i]); if (!(d <= mx)) { mx = d; at = i; } });
+    const rel = sc > 0 ? mx / sc : mx, s = stats[name];
+    if (!s || rel > s.rel || Number.isNaN(rel)) stats[name] = { abs: mx, rel, at: xs && at >= 0 && xs.length === a.length ? xs[at] : at, ours: a[at], ref: b[at], file, scale: sc };
+  }
+  return stats;
+}

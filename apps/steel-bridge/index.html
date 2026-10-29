@@ -10,6 +10,10 @@
 <script src="../../shared/steps.js"></script>
 <script src="engine/model.js"></script>
 <script src="engine/sections.js"></script>
+<script src="../../shared/vehicles.js"></script>
+<script src="../../shared/moving-load.js"></script>
+<script src="engine/analysis.js"></script>
+<script src="ui/analysis.js"></script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
   :root{
@@ -118,7 +122,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -220,6 +224,9 @@
   const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${ST.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
   const wk = (id, txt) => `<a class="wk" href="#st-${id}">${txt || 'see work'}</a>`;
   function drawOut() {
+    document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String((ui.otab || 'sec') === b.dataset.otab)));
+    if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis card (ui/analysis.js)
+    $('out').onchange = null; $('out').onclick = null;
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
@@ -241,6 +248,7 @@
     }
     $('out').innerHTML = h;
   }
+  $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); drawOut(); });
   $('out').addEventListener('click', e => { if (e.target.id === 'bCalc') calc(); });
   $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } });
 

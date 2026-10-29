@@ -22,7 +22,13 @@
                   rebarInPositiveMp: false (App. D6.1: count the deck rebar in the positive plastic moment) },
      girders:   [ { id, label, position: 'interior' | 'exterior', beff (in),
                     segments: [ { x0, x1 (ft from the left end), D, tw, topB, topT, botB, botT (in) } ] } ]
-   } */
+   }
+   Optional fields read by engine/analysis.js (added 2026-10-29; absent = the defaults there, so older files read unchanged):
+     analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom,
+                  steelAllowPct (%), haunchInStiffness }
+     girders[i].loads / .df              dead loads (klf, cross-frame points { x, P }) and distribution factors per girder,
+                                         filled by the loads module (engine/lldf.js, a later PR)
+     girders[i].loadsManual / .dfManual  the same entered by hand, used where .loads / .df give no value */
 (function () {
   'use strict';
   const SCHEMA = 'sbd2.project', VERSION = 1;
