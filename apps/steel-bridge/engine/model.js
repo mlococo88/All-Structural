@@ -32,7 +32,18 @@
                   overlays: [ { name, mode, psf, thk, gam } ], sip (psf), allow (steel detail allowance, %),
                   extra: [ { name, cat: 'DC1'|'DC2'|'DW'|'PL'|'UT'|'UF', x (ft), plf (klf), dist: 'auto'|'pilecap'|'equal'|'two' } ],
                   overrides: { loadId: { x, plf, dist } }, beamClass: { index: class }, dlMethod: 'massdot' | 'aashto' | 'ridot',
-                  lldf: { gap (ft), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: true | false } }
+                  lldf: { gap (ft), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: true | false } },
+     -- added 2026-10-29 (shear and stiffeners PR), optional: a version 1 project without it reads as defaultStiffeners() --
+     stiffeners: { layout: { web: 'stiffened' | 'unstiffened', mode: 'uniform' | 'bays', doRatio (uniform d_o/D),
+                             bays: [ { g (girder number, 1-based), a, b (ft, the bay between bearings / cross-frames), n (intermediate
+                                     stiffeners in the bay), e0, e1 (in, optional: an end stiffener at that distance from a / b) } ],
+                             frames: { Lb (ft): intermediate cross-frames evenly in each span at most L_b apart, until the framing
+                                       module exists; at: [ft, …] (optional: the stations themselves, every girder) } },
+                   transverse: { gS (grade), Fexx (ksi), types: { A (intermediate stiffener), B (connection plate):
+                                 { name, role: 'int' | 'cp', sides: '1' | '2', bt, tp, w (weld to web), gap (weld cutoff), wf (weld to
+                                 flanges), c (clip), Fcp (kip, connection plate force) } } },
+                   bearing: { gS, Fexx, ed (in, bearing ℄ to the girder end at the abutments), types: { A (abutments), B (piers):
+                              { name, np (pairs), bt, tp, c, sp (pair spacing), w, conn: 'milled' | 'cjp' | 'fillet' } } } }
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
@@ -62,7 +73,8 @@
       girders: [{ id: 'G1', label: 'G1', position: 'interior', beff: 114, segments: [
         { x0: 0, x1: 88, ...pos }, { x0: 88, x1: 128, ...neg }, { x0: 128, x1: 232, ...pos }, { x0: 232, x1: 272, ...neg }, { x0: 272, x1: 360, ...pos }] }],
       ownerRules: { owner: 'AASHTO', eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } },
-      xs: defaultXs({ spans: { lengths: [110, 140, 110] } })
+      xs: defaultXs({ spans: { lengths: [110, 140, 110] } }),
+      stiffeners: defaultStiffeners()
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
@@ -73,6 +85,14 @@
       sidewalks: { L: { w: 0, t: 8, fence: null, fenceX: null }, R: { w: 0, t: 8, fence: null, fenceX: null }, ped: 0 }, median: { w: 0, t: 8, joint: false }, wcA: null,
       ws: { mode: 'psf', psf: 25, thk: null, gam: null }, overlays: [], sip: 15, allow: 5, extra: [], overrides: {}, beamClass: {}, dlMethod: 'massdot',
       lldf: { gap: 4, kg: 'max', skewV: 'all', extMin: false } };
+  }
+  /* defaultStiffeners(): GirderDetail's built-in stiffener inputs (Preliminary sizing framing: stiffened web, uniform d_o = 1.0D, cross-frames
+     at most 25 ft apart; Transverse stiffeners GM.ts.def types; Bearing stiffeners BS_DEFAULT types, 9 in to the girder end) */
+  function defaultStiffeners() {
+    return { layout: { web: 'stiffened', mode: 'uniform', doRatio: 1.0, bays: [], frames: { Lb: 25 } },
+      transverse: { gS: '50W', Fexx: 70, types: { A: { name: 'Intermediate stiffener', role: 'int', sides: '1', bt: 6, tp: 0.5, w: 0.25, gap: 2.75, wf: 0.3125, c: 1, Fcp: 20 },
+        B: { name: 'Connection plate', role: 'cp', sides: '1', bt: 6, tp: 0.5, w: 0.25, gap: 2.75, wf: 0.3125, c: 1, Fcp: 20 } } },
+      bearing: { gS: '50W', Fexx: 70, ed: 9, types: { A: { name: 'Abutment', np: 1, bt: 7, tp: 0.875, c: 1, sp: 12, w: 0.3125, conn: 'milled' }, B: { name: 'Pier', np: 2, bt: 8, tp: 1, c: 1, sp: 12, w: 0.3125, conn: 'milled' } } } };
   }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
@@ -148,6 +168,18 @@
       if (!['max', 'avg', 'simple'].includes(ll.kg)) E(`${xp}.lldf.kg`, 'Choose how K_g is taken.');
       if (!Array.isArray(x.extra)) E(`${xp}.extra`, 'Added loads must be a list.');
       if (isNum(x.nb) && x.nb === 3) W(`${xp}.nb`, 'N_b = 3: the special rules of Tables 4.6.2.2.2b-1 and 4.6.2.2.3a-1 apply (lever rule).'); }
+    // added 2026-10-29 (shear and stiffeners PR): the optional stiffener inputs
+    if (p.stiffeners != null) { const S = p.stiffeners || {}, ly = S.layout || {}, sp = 'stiffeners';
+      if (!['stiffened', 'unstiffened'].includes(ly.web)) E(`${sp}.layout.web`, 'Web: choose stiffened or unstiffened.');
+      if (!['uniform', 'bays'].includes(ly.mode)) E(`${sp}.layout.mode`, 'Stiffener spacing: choose uniform or per bay.');
+      pos(ly.doRatio, `${sp}.layout.doRatio`, 'd_o/D');
+      if (!Array.isArray(ly.bays)) E(`${sp}.layout.bays`, 'Per-bay stiffeners must be a list.');
+      else ly.bays.forEach((q, i) => { if (!(isNum(q.a) && isNum(q.b) && q.b > q.a && Number.isInteger(q.g) && q.g >= 1 && Number.isInteger(q.n) && q.n >= 0)) E(`${sp}.layout.bays.${i}`, `Bay ${i + 1}: girder, a < b and a whole number of stiffeners are required.`);
+        ['e0', 'e1'].forEach(k => { if (q[k] != null && !Number.isNaN(q[k]) && !(isNum(q[k]) && q[k] >= 0)) E(`${sp}.layout.bays.${i}.${k}`, `Bay ${i + 1}: ${k} must be zero or positive.`); }); });
+      const fr = ly.frames || {}; if (!(isNum(fr.Lb) && fr.Lb > 0) && !Array.isArray(fr.at)) E(`${sp}.layout.frames.Lb`, 'Cross-frame spacing L_b must be a positive number.');
+      [['transverse', ['bt', 'tp', 'w']], ['bearing', ['bt', 'tp', 'w']]].forEach(([k, req]) => { const q = S[k] || {}; if (!GRADES[q.gS]) E(`${sp}.${k}.gS`, `Unknown steel grade "${q.gS}".`); pos(q.Fexx, `${sp}.${k}.Fexx`, 'F_EXX');
+        ['A', 'B'].forEach(t => { const ty = (q.types || {})[t]; if (!ty) { E(`${sp}.${k}.types.${t}`, `Type ${t} is missing.`); return; } req.forEach(f => pos(ty[f], `${sp}.${k}.types.${t}.${f}`, `Type ${t} ${f}`)); }); });
+      nn((S.bearing || {}).ed, `${sp}.bearing.ed`, 'Distance to the girder end'); }
     return { errors, warnings };
   }
 
@@ -211,5 +243,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
