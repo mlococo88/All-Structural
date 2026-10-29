@@ -22208,3 +22208,81 @@ F_nc,LTB = 43.95 ksi (r_t = 5.048 in, L_p = 133.7, L_r = 456.5, L_b = 264 in, C_
 - `HANDOFF.md` §4.9: stations `M_CL`, `V_CL`, `M_DCc` and `girderDetail.checks.constr`. Tests: `tests/projects/st/s28_builtin_AASHTO_G1.json`, `s28_builtin_AASHTO_G2.json` (hand-offs with the fields); baselines re-recorded only for the subset cases run.
 
 **Open items:** no `V_DCc` (GirderDetail GS16 uses V_DC1); the OH1–OH5 results sent are per girder at its largest 1.25·M_DC1 + 1.5·M_CL per span with the module's inputs, and can differ from the Deck overhang module's own rows.
+
+## 2026-10-29 — PR: claude/sbd-crw-web-limit (CRW: web limit λ_rw = c_rw√(E/F_yc), AASHTO LRFD 10th Ed., in R_b and Appendix A6; engineer decision 2026-10-29; PR link added after merge)
+
+No saved key or saved format changes. No hand-off field changes (`girderDetail.checks.negFlex.lrw`/`crw` already carried S2-9's c_rw value).
+
+### CRW. λ_rw = c_rw√(E/F_yc) with 4.6 ≤ c_rw = 3.1 + 5.0/a_wc ≤ 5.7 everywhere the tool used 5.7√(E/F_yc)   [CALCULATION CHANGE — R_b, A6.2.2 R_pc/R_pt; more conservative (c_rw ≤ 5.7, so λ_rw can only drop)]
+- **Problem:** the 10th Ed. web limit is λ_rw = c_rw√(E/F_yc), c_rw from a_wc between 4.6 and 5.7. S2-9 (#454) applied it only to the A6 permission (6.10.6.2.3);
+  R_b (host, ST-Girder, Preliminary sizing) and Appendix A6.2.2 still used 5.7√(E/F_yc) (S2-2 open item 2). c_rw < 5.7 only where a_wc > 5.0/2.6 = 1.923
+  (c_rw = 4.6 for a_wc ≥ 3.333), i.e. a thin or narrow compression flange relative to the web in compression.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.10.2, Eq. 6.10.1.10.2-5 (R_b) with c_rw from Eq. 6.10.1.10.2-8; Appendix A6.1, Eqs. A6.1-3 and
+  A6.1-4 (λ_rw, c_rw; used by A6.2.2); Art. 6.10.6.2.3, Eqs. 6.10.6.2.3-3 to -5 (S2-9's expression, reused).
+- **Before (every place):** λ_rw = 5.7√(E/F_yc). **After:** λ_rw = c_rw√(E/F_yc), c_rw = min(max(3.1 + 5.0/a_wc, 4.6), 5.7), a_wc = 2D_ct_w/(b_fct_fc); a_wc ≤ 0 (no D_c) → 5.7.
+- **Places changed (all in `Steel Bridge Design.html`):**
+  1. Host GM helpers, `rbFactor` (anchor `function rbFactor(Dc, tw, bfc, tfc, Fyc) {`), plus new `crwOf` above it.
+     Before:
+     ```js
+     function rbFactor(Dc, tw, bfc, tfc, Fyc) { const lrw = 5.7 * Math.sqrt(ES / Fyc), lw = 2 * Dc / tw, awc = 2 * Dc * tw / (bfc * tfc); return { lrw, lw, awc, Rb: lw <= lrw ? 1 : Math.min(1, 1 - awc / (1200 + 300 * awc) * (lw - lrw)) }; }
+     ```
+     After:
+     ```js
+     function crwOf(awc) { return awc > 0 ? Math.min(Math.max(3.1 + 5.0 / awc, 4.6), 5.7) : 5.7; }
+     function rbFactor(Dc, tw, bfc, tfc, Fyc) { const lw = 2 * Dc / tw, awc = 2 * Dc * tw / (bfc * tfc), crw = crwOf(awc), lrw = crw * Math.sqrt(ES / Fyc); return { lrw, crw, Fyc, lw, awc, Rb: lw <= lrw ? 1 : Math.min(1, 1 - awc / (1200 + 300 * awc) * (lw - lrw)) }; }
+     ```
+     Callers (unchanged): `GM.gs.compute` negative-flexure rows (anchor `const RB = rbFactor(Dc, r.tw, r.botB, r.botT, Fyb)`), the governing section of a
+     nonprismatic L_b (anchor `RB = rbFactor(Dc, q.tw, q.botB, q.botT, X.Fyb)`), and ST-Girder's `loadShedRbG` through `stHost('rbFactor')` with a hand-off.
+  2. Host `GM.gs.compute`, Appendix A6 block (anchor `// Appendix A6`): `lrw` (A6.2.2 λ_rw in λ_pw(D_c) ≤ λ_rw and R_pc/R_pt) now = S2-9's `lrwP`.
+     Before: `… Iyt = r.topT * r.topB ** 3 / 12, lrw = 5.7 * Math.sqrt(ES / Fyb), lw = 2 * Dc / r.tw;` and
+     `const awcP = 2 * Dc * r.tw / (r.botB * r.botT), crwP = awcP > 0 ? Math.min(Math.max(3.1 + 5.0 / awcP, 4.6), 5.7) : 5.7, lrwP = crwP * Math.sqrt(ES / Fyb);`
+     After: `… Iyt = r.topT * r.topB ** 3 / 12, lw = 2 * Dc / r.tw;` and
+     `const awcP = 2 * Dc * r.tw / (r.botB * r.botT), crwP = crwOf(awcP), lrwP = crwP * Math.sqrt(ES / Fyb), lrw = lrwP;`
+     (comment line `lrw (5.7√(E/F_yc)) is unchanged for A6.2.2 below.` replaced by the CRW note). `A6.lrw` now equals `A6.lrwP`.
+  3. ST-Girder (`st-src`), `loadShedRbG` (anchor `function loadShedRbG(D,tw,bfc,tfc,Dc,Fyc,Es,compactWeb){`), the path without a hand-off (or E_s ≠ 29,000), plus new `crwG`.
+     Before:
+     ```js
+       const lrw=5.7*sqrt(Es/Fyc);
+       const twoDc_tw=2*Dc/tw;
+       if(twoDc_tw<=lrw) return 1.0;
+       const awc=2*Dc*tw/Math.max(bfc*tfc,1e-6);
+     ```
+     After:
+     ```js
+     function crwG(awc){ return awc>0? Math.min(Math.max(3.1+5.0/awc,4.6),5.7) : 5.7; }   // above loadShedRbG
+       const awc=2*Dc*tw/Math.max(bfc*tfc,1e-6);
+       const lrw=crwG(awc)*sqrt(Es/Fyc);
+       const twoDc_tw=2*Dc/tw;
+       if(twoDc_tw<=lrw) return 1.0;
+     ```
+  4. Preliminary sizing (`pl-src`), `suggestLayout` → `RbOf` (anchor `const RbOf = (bf, tf, Dc, tw, Rb1) => {`).
+     Before: `{ const lrw = 5.7 * rt3; if (Rb1 || !(2 * Dc / tw > lrw)) return 1; const awc = Math.min(2 * Dc * tw / (bf * tf), 10); return 1 - …`
+     After: `{ if (Rb1) return 1; const awc = Math.min(2 * Dc * tw / (bf * tf), 10), lrw = (awc > 0 ? Math.min(Math.max(3.1 + 5.0 / awc, 4.6), 5.7) : 5.7) * rt3; if (!(2 * Dc / tw > lrw)) return 1; return 1 - …`
+     (the existing cap a_wc ≤ 10 does not affect c_rw: c_rw = 4.6 for every a_wc ≥ 3.333).
+  5. Preliminary sizing (`pl-src`), `detailExport` → `rbN` (anchor `const rbN = (s, gt) => {`).
+     Before: `{ const lrw = 5.7 * Math.sqrt(ES / m.FyF), Dc = crk(s, gt).Dc; if (!(2 * Dc / s.tw > lrw)) return 1; const awc = Math.min(2 * Dc * s.tw / (s.botB * s.botT), 10); return 1 - …`
+     After: `{ const Dc = crk(s, gt).Dc, awc = Math.min(2 * Dc * s.tw / (s.botB * s.botT), 10), lrw = (awc > 0 ? Math.min(Math.max(3.1 + 5.0 / awc, 4.6), 5.7) : 5.7) * Math.sqrt(ES / m.FyF); if (!(2 * Dc / s.tw > lrw)) return 1; return 1 - …`
+- **Displays (§6):** host `GM.gs.capacity`, card "Web load-shedding factor" (anchor `add(S('Web load-shedding factor'), '6.10.1.10.2',`): works a_wc, c_rw (Eq. 6.10.1.10.2-8),
+  λ_rw = c_rw√(29,000/F_yc) with values, then R_b (Eq. 6.10.1.10.2-5). Card "Appendix A6.2: web plastification factors", noncompact branch: adds
+  `λ_rw = c_rw√(E/F_yc) = … (A6.1 card; Eqs. A6.1-3, -4)` after λ_w. ST-Girder `secDerivs`, step "Hybrid & load-shedding factors": the λ_rw line works a_wc, c_rw,
+  λ_rw, 2D_c/t_w and R_b (Eq. 6.10.1.10.2-5; was "λ_rw = 5.7√(E/F_yc)" and "Eq. 6.10.1.10.2-3"); its note says "Eq. 6.10.1.10.2-5 with λ_rw = c_rw√(E/F_yc) (10th Ed.)".
+- **Left unchanged (5.7 is not the λ_rw web limit, or already c_rw):** the 3.76√(E/F_yc) compact-web limits; S2-9's A6.1 card and GS9 note (already c_rw); the
+  manual text (already c_rw); `girderDetail.checks.negFlex` (already sends `crw`, `lrw` = lrwP).
+- **Check case 1 (built-in project, G2 = interior girder, Pier 1, Girder section):** b_fc × t_fc = 18 × 2.000 in, t_w = 0.5625 in, D_c = 30.79 in (steel + rebar),
+  F_yc = 50 ksi. a_wc = 2(30.79)(0.5625)/(18 × 2.0) = 0.962; 3.1 + 5.0/0.962 = 8.30 → c_rw = 5.7 (upper limit); λ_rw = 5.7√(29,000/50) = 5.7(24.083) = 137.27
+  before and after; 2D_c/t_w = 109.48 < 137.27 → R_b = 1.0 before and after. GS7 (6.10.8): f_bu = 38.61 ksi vs φ_fF_nc = 43.17 ksi → ratio 0.894 before and after.
+  A6.2.2: λ_rw = 137.27 before and after (A6 not used here: nonprismatic L_b). No result changes on the test projects (every a_wc there is ≤ 1.923).
+- **Check case 2 (hand, where c_rw governs):** D_c = 36 in, t_w = 0.5625 in, b_fc × t_fc = 12 × 0.75 in, F_yc = 50 ksi, R_h = 1, f_bu = 45 ksi, F_nc at R_bR_hF_yc.
+  a_wc = 2(36)(0.5625)/9.0 = 4.500; 3.1 + 5.0/4.5 = 4.211 → c_rw = 4.6; 2D_c/t_w = 128.00.
+  Before: λ_rw = 137.27 ≥ 128.00 → R_b = 1.0, F_nc = 50.00 ksi, ratio 45/50 = 0.900.
+  After: λ_rw = 4.6(24.083) = 110.78 < 128.00 → R_b = 1 − 4.5/(1,200 + 1,350)(128.00 − 110.78) = 1 − 0.0017647(17.22) = 0.9696, F_nc = 48.48 ksi, ratio 0.928.
+- **How verified:** `node tests/check-syntax.mjs "Steel Bridge Design.html"` (all pass). `tests/compare.mjs --tool gd --a origin/main` builtin/AASHTO,
+  builtin28/MassDOT, util/CTDOT: only `rpt.gs` differs (24 lines each: the R_b card and the A6.2 card text); `mod.gs`, `pl.checks`, `gd.stPayloads` and every
+  other module identical (builtin/AASHTO `gd.project` differed in key order only, 0 values; see the PR). `--tool st --a origin/main` builtin + gd_util_AASHTO_G1…G5
+  + gd_xsA_RIDOT_G2: `st.checks`, `st.rating`, `st.governing`, `st.R`, `st.stations` identical; `st.tab.Section Props`, `st.tab.Report`, `st.report.all` differ by the
+  worked λ_rw line; `st.tab.Optimize` (bottom-flange sweep, trial sizes only) changes in 15 rows over the 6 hand-off cases (thin trial flanges, e.g. gd_util_AASHTO_G2
+  t_fb = 0.500 in flexure D/C 1.54 → 1.60), 0 pass/fail flips. `tests/sbd-verify.mjs` all pass. Baselines `gd.json` (`rpt.gs`) and `st.json` (the four sections above)
+  re-recorded for these cases only.
+- **Other copies:** none (ST-Girder's own copy is `loadShedRbG`; GirderDetail and Preliminary sizing changed here).
+- **Open items:** Preliminary sizing caps a_wc at 10 in R_b (`Math.min(…, 10)`) and the host does not; not changed (no effect on c_rw; raise if wanted). The
+  `st_interior.json` baseline is not re-recorded (not run).
