@@ -33,14 +33,17 @@ export function gdBlock(startAnchor, endAnchor) {
 }
 
 // Run fn(ctx); on "X is not defined" add X's declaration from the page and retry.
-export function gdRun(ctx, fn, loaded) {
+// tag (optional): marks the scripts of one context (source comment and file name), so that V8 does not share their compiled
+// code with another context's copy of the same declaration (observed: GirderDetail's steelProps, run hot in gdAnalysis's
+// context first, then threw "sum is not defined" in gdGirderSection's context even after sum was added there).
+export function gdRun(ctx, fn, loaded, tag = '') {
   for (let k = 0; k < 400; k++) {
     try { return fn(ctx); }
     catch (e) {
       const m = /^(\w+) is not defined/.exec((e && e.message) || '');
       if (!m || loaded.has(m[1])) throw e;
       const d = gdDecl(m[1]); if (!d) throw new Error(`GirderDetail declaration not found: ${m[1]}`);
-      loaded.add(m[1]); vm.runInContext(d, ctx, { filename: `Steel Bridge Design.html (${m[1]})` });
+      loaded.add(m[1]); vm.runInContext(tag ? `/*${tag}*/` + d : d, ctx, { filename: `Steel Bridge Design.html (${m[1]})${tag ? ' ' + tag : ''}` });
     }
   }
   throw new Error('too many missing declarations');
@@ -77,10 +80,10 @@ export function gdAnalysis() {
   const ctx = { console }; vm.createContext(ctx);
   vm.runInContext('var P = { df: { bridge: {} } }; var GM = {}; var gdHP = v => v;', ctx);
   const loaded = new Set(['gdHP']);
-  GA = { ctx, loaded, run: fn => gdRun(ctx, fn, loaded) };
+  GA = { ctx, loaded, run: fn => gdRun(ctx, fn, loaded, 'SA') };
   // constants first: a function that has run does not see a const added to the context later (see the warm-up note above)
   ['FE_CACHE', 'f0', 'sgBeam', 'feStages', 'feIM', 'feFatIM', 'sgLLRow', 'sgFatRow', 'steelProps', 'saComp', 'saCracked', 'saStage', 'saSec', 'saSeq']
-    .forEach(name => gdRun(ctx, c => vm.runInContext(name, c), loaded));   // function declarations become properties of ctx
+    .forEach(name => gdRun(ctx, c => vm.runInContext(name, c), loaded, 'SA'));   // function declarations become properties of ctx
   // warm-up (see gdGirderSection): every function the tests use runs once on a small continuous girder
   GA.run(c => {
     const s = { D: 60, tw: 0.5, topB: 16, topT: 1, botB: 16, botT: 1 }, b0 = c.sgBeam([40, 50], false), N = b0.N;
