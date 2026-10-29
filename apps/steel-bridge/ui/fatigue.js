@@ -19,7 +19,7 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: 'example', pl: null, plName: '', R: null, key: '', err: '', sel: null };
+  const S = { src: 'analysis', pl: null, plName: '', R: null, key: '', err: '', sel: null };
   const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const CATS = ['A', 'B', "B'", 'C', "C'", 'D', 'E', "E'"], ct = c => String(c).replace(/'/g, '′');
 
@@ -55,11 +55,53 @@
     return false;
   }
 
+  /* ---------- demands from this app's analysis (engine/analysis.js) ---------- */
+  /* fromAnalysis(P, gi): the analysis of girder gi as a hand-off-shaped object (stations, supports, plate zones, deck, materials), so the
+     same paths as a file run on it. Shears are magnitudes here (the sign is not used by these checks). Without pitch zones in the project,
+     the zones and strength regions are made the way Preliminary sizing makes them for GirderDetail (detailExport): each span in tenths;
+     per zone n_r = max(2, min(4, ⌊(b_tf − 2 − d)/4⌋ + 1)), V_f the largest fatigue shear range (V_FAT,pos − V_FAT,neg) of the stations in
+     the zone, pitch p = max(6d, min(24, ⌊2 p_req⌋/2)) with p_req = n_rZ_r/(1.75V_fQ/I), Z_r = 7.0A_sc (Fatigue I); regions from each
+     support to the point of maximum Strength I positive moment of the span. b_eff for the studs: the first exterior girder's of the project
+     (GirderDetail: the girder type with the largest fatigue shear range, usually the exterior), or this girder's. */
+  function fromAnalysis(P, gi) {
+    const AN = window.SBDAnalysis, FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, M = window.SBDModel;
+    if (!AN) return { err: 'The analysis module is not loaded.' };
+    let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
+    if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
+    if (!R.fat || !R.ll) return { err: 'Analysis: no live load results.' };
+    const g = P.girders[gi], xs = R.x, st = R.st, f = R.fat, ll = R.ll, A = (o, i) => (o ? o.M[i] : 0);
+    const stations = xs.map((x, i) => ({ x, M_DC1: st.DC1.M[i], M_DC2: st.DC2.M[i], M_DW: st.DW.M[i], M_LLpos: ll.Mpos[i], M_LLneg: ll.Mneg[i], M_UT: A(st.UT, i), M_UF: A(st.UF, i),
+      M_FATpos: f.Mpos[i], M_FATneg: f.Mneg[i], V_DC1: Math.abs(st.DC1.VR[i]), V_DC2: Math.abs(st.DC2.VR[i]), V_DW: Math.abs(st.DW.VR[i]),
+      V_FATpos: Math.max(f.VRpos[i], f.VLpos[i]), V_FATneg: Math.min(f.VRneg[i], f.VLneg[i]) }));
+    const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
+    const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
+    const pl = { _schema: 'sbd2-analysis', stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
+      ownerRules: { owner: (P.ownerRules || {}).owner || 'AASHTO', haunchInProperties: !h0 },
+      girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
+        deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
+        skew: { bySupport: ((P.xs || {}).skews || []).slice(), max: Math.max(0, ...((P.xs || {}).skews || []).map(Math.abs)) }, details: {} } };
+    // studs: the project's zones (build() takes them over), or Preliminary sizing's auto zones and regions
+    const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
+    const n = window.SBDSections.modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
+    const vRng = (a, b) => Math.max(0, ...stations.filter(s => s.x >= a - 1e-9 && s.x <= b + 1e-9).map(s => s.V_FATpos - s.V_FATneg));
+    const zs = [], qz = [];
+    R.spans.forEach((L, k) => { const x0 = R.sup[k]; for (let z = 0; z < 10; z++) { const a = x0 + z * L / 10, b = a + L / 10, s = segAt((a + b) / 2), S = FA.secSet(s.D, s, { ts: d.ts, hh: h0 ? 0 : d.haunch, beff: beffB, n, Ar: 0, dr: 0 }), c = S.cn, Qs = beffB * d.ts / n * (S.ySlab - c.yb);
+      const nr = Math.max(2, Math.min(4, Math.floor((s.topB - 2 - dd) / 4) + 1)), vr = r1(vRng(a, b)), preq = vr > 0 ? nr * Zr / (1.75 * vr * Qs / c.I) : 48, p = Math.max(6 * dd, Math.min(24, Math.floor(preq * 2) / 2));
+      zs.push({ x1: r2(a), x2: r2(b), nr, p }); qz.push({ name: `Span ${k + 1}, ${z / 10}L to ${(z + 1) / 10}L`, Vfr: vr }); } });
+    const G = FX.factors(), Mup = stations.map(s => FX.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: s.M_LLpos, LLn: s.M_LLneg, UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
+    const regions = []; R.spans.forEach((L, k) => { const x0 = R.sup[k]; let xm = x0 + L / 2, mx = -Infinity; stations.forEach((s, i) => { if (s.x > x0 && s.x < x0 + L && Mup[i] > mx) { mx = Mup[i]; xm = s.x; } });
+      [[x0, k], [x0 + L, k + 1]].forEach(([xs0, ks]) => regions.push({ name: `${supN(ks)} to max. positive, Span ${k + 1}`, kind: ks > 0 && ks < ns && R.cont ? 'pier' : 'end', x1: r2(Math.min(xs0, xm)), x2: r2(Math.max(xs0, xm)) })); });
+    pl.girderDetail.details.studs = { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: Q.gamFat, QnEntered: false } };
+    pl.girderDetail.details.fatigue = { ADTT: P.fatigue.ADTT, p: P.fatigue.p, life: P.fatigue.life, limit: P.fatigue.limit };
+    return { pl, R };
+  }
+
   /* ---------- calculation ---------- */
   function build(ctx) {
     const P = ensure(ctx.P), M = window.SBDModel, OW = window.SBDOwners, FA = window.SBDFatigue, SC = window.SBDStuds, FX = window.SBDFlexure, SB = window.SBDStiffeners, g = ctx.g || 0;
-    const pl = ctx.pl !== undefined ? ctx.pl : S.src === 'file' ? S.pl : null;
+    let pl = ctx.pl !== undefined ? ctx.pl : S.src === 'file' ? S.pl : null;
     if (ctx.pl === undefined && S.src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
+    if (ctx.pl === undefined && S.src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
     const F = P.fatigue, Q = P.studs, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0);
     const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0];
     let sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
@@ -100,7 +142,8 @@
     const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if (isFinite(it.r) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || it.r > b.it.r)) b = { c, it, i }; })); return b; };
     const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || it.r > b.it.r) b = { it, i }; }); return b; }, null) : null;
     return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
-      what: pl ? `${esc(S.plName)}: ${(pl.stations || []).length} stations, ${sup.length - 1} span(s), ${esc((pg || {}).label || '')}; fatigue moments and shears, plates and deck from the file; the stud zones and regions GirderDetail sends${(Q.zones || []).length ? ' (pitch zones from this project)' : ''}; this project's fatigue settings and studs.`
+      what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
+        : pl ? `${esc(S.plName)}: ${(pl.stations || []).length} stations, ${sup.length - 1} span(s), ${esc((pg || {}).label || '')}; fatigue moments and shears, plates and deck from the file; the stud zones and regions GirderDetail sends${(Q.zones || []).length ? ' (pitch zones from this project)' : ''}; this project's fatigue settings and studs.`
         : 'Example: GirderDetail\'s built-in Fatigue details and Shear connectors zones and regions, with this project\'s fatigue settings, studs, deck and materials. GS17 at every station needs a hand-off file.' };
   }
   const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
@@ -117,7 +160,7 @@
     css();
     const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     let h = `<section class="sec"><div class="secHead">Fatigue &amp; studs: demands</div><div class="secBody">
-      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('example', 'Example (GirderDetail built-in details and zones)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
+      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', S.src)}${opt('example', 'Example (GirderDetail built-in details and zones)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
       ${S.src === 'file' ? `<div class="fRow"><label for="fa_file">File</label><input type="file" id="fa_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">Fatigue moments and shears are the unfactored fatigue truck with IM and the single-lane distribution factor (3.6.1.4); γ is applied here (Fatigue I or II, Table 3.4.1-1). Inputs: the Fatigue &amp; studs input tab.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Fatigue results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fa_calc">Calculate</button></div>`;

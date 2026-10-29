@@ -19,6 +19,10 @@
 <script src="engine/shear.js"></script>
 <script src="engine/stiffeners.js"></script>
 <script src="ui/shear.js"></script>
+<script src="../../shared/vehicles.js"></script>
+<script src="../../shared/moving-load.js"></script>
+<script src="engine/analysis.js"></script>
+<script src="ui/analysis.js"></script>
 <script src="engine/fatigue.js"></script>
 <script src="engine/studs.js"></script>
 <script src="ui/fatigue.js"></script>
@@ -130,7 +134,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -242,8 +246,10 @@
   const wk = (id, txt) => `<a class="wk" href="#st-${id}">${txt || 'see work'}</a>`;
   function drawOut() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
+    $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g }); return; }   // Flexure tab (ui/flexure.js)
     if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g }); return; }   // Shear & stiffeners tab (ui/shear.js)
+    if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
     if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g }); return; }   // Fatigue & studs tab (ui/fatigue.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
