@@ -565,12 +565,15 @@
      sides, ±0.01 ft, of each plate change and interior support; 0.01 ft inside the ends), each with its unfactored moments
      (linear between the payload stations), plates, region (Strength I max ≥ |min| at the nearest station: positive) and, from
      bracing(), L_b, C_b and the nonprismatic data with brace points every ≤ L_b in each span (the payload has the cross-frame
-     spacing, not the stations). opt: { G, Lb (ft), braces, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl }. n = E_s/E_c exact from f′c, w_c,
+     spacing, not the stations). opt: { G, Lb (ft), braces, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl, owner (the payload's
+     owner, which the payload does not state: with window.SBDOwners loaded, OWN8 takes the haunch as 0 in every section property
+     for RIDOT and MassDOT, as the Section properties tab and GirderDetail gdHP do) }. n = E_s/E_c exact from f′c, w_c,
      K_1 = 1 (the payload's n is the same, rounded); the deck rebar A_r is one layer at slab mid-depth (as the payload states it). Returns { prj, locs, env, supports, braces }. */
   function fromPayload(pl, opt) {
     opt = opt || {};
     const g = pl.girderDetail || {}, m = g.materials || {}, dk = g.deck || {}, S = pl.stations || [], zones = (pl.section || {}).zones || [], sup = (pl.member || {}).supports || [];
     const G = factors(opt.G), Lend = sup[sup.length - 1];
+    const OW = opt.owner && window.SBDOwners ? window.SBDOwners : null, lfO = OW ? OW.loadFactors(opt.owner, {}, 0) : null, hP = OW ? OW.haunchInProps(dk.haunch, lfO) : dk.haunch;   // OWN8
     const xs = S.map(s => s.x), arr = k => S.map(s => +s[k] || 0);
     const env = { xs, MDC1: arr('M_DC1'), MDC2: arr('M_DC2'), MDW: arr('M_DW'), Mp: S.map(s => (+s.M_LLpos || 0) + (+s.M_PLpos || 0)), Mn: S.map(s => (+s.M_LLneg || 0) + (+s.M_PLneg || 0)),
       MUT: arr('M_UT'), MUF: arr('M_UF'), MfP: arr('M_FATpos'), MfN: arr('M_FATneg') };
@@ -584,7 +587,7 @@
     (opt.xs || xs).forEach(x => stations(x).forEach(add)); sup.slice(1, -1).forEach(v => add(v + 0.01)); list.sort((a, b) => a - b);
     const Lb = opt.Lb != null ? opt.Lb : (g.bracing && g.bracing.Lb) || 25;
     const braces = opt.braces || (() => { const b = []; sup.slice(0, -1).forEach((x0, k) => { const x1 = sup[k + 1], n = Math.max(1, Math.ceil((x1 - x0) / Lb - 1e-9)); for (let j = 0; j < n; j++) b.push(x0 + (x1 - x0) * j / n); }); b.push(Lend); return b; })();
-    const top = (dk.Ar || 0), deck = { ts: dk.ts, tdeck: dk.ts + 0.5, haunch: dk.haunch, rebar: opt.rebar || { top: { A: top, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } } };
+    const top = (dk.Ar || 0), deck = { ts: dk.ts, tdeck: dk.ts + 0.5, haunch: hP, rebar: opt.rebar || { top: { A: top, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } } };
     const Fy = { Fyt: +m.Fyf || 50, Fyb: +m.Fyf || 50, Fyw: +m.Fyw || 50, Fyr: 60, fc: +m.fc };
     const prj = { deck, mat: Fy, n: SEC().modularRatio(+m.fc, +m.wc || 0.15, 1, 'exact').n, wc: +m.wc || 0.15, rebarInPositive: false, G, a6: { method: 'auto', skews: ((g.skew || {}).bySupport || []).slice(), curved: false } };
     const cont = sup.length > 2;
@@ -593,12 +596,12 @@
       let region = env.Mup[i] >= -env.Mun[i] ? 'pos' : 'neg';
       if (region === 'neg' && Math.max(Math.abs(env.Mup[i]), Math.abs(env.Mun[i])) < 1e-3) region = 'pos';
       const at = A => feAt(xs, A, x);
-      const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: dk.haunch, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl });
+      const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: hP, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl });
       const npr = br.npr ? { kind: br.npr, b: br.lbB, t: br.lbT, K: br.lbK, geA: br.geA || null, gov: br.nprG || null, Ir: br.lbIr, why: br.nprWhy } : null;
       return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, npr, seg: br.seg, cbParts: br.cbParts,
         M: { DC1: at(env.MDC1), DC2: at(env.MDC2), DW: at(env.MDW), LLp: Math.max(0, at(env.Mp)), LLn: Math.min(0, at(env.Mn)), UT: at(env.MUT), UF: at(env.MUF), FATp: at(env.MfP), FATn: at(env.MfN) } };
     });
-    return { prj, locs, env, supports: sup, braces, Lb };
+    return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
 
   window.SBDFlexure = { ES, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };

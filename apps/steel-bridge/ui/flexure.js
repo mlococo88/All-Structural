@@ -32,16 +32,19 @@
     const P = ctx.P, M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, g = P.girders[ctx.g] || P.girders[0], SEC = window.SBDSections, FX = window.SBDFlexure;
     if (S.src === 'file') {
       if (!S.pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-      const F = FX.fromPayload(S.pl, { fl: S.fl }); F.prj.a6.method = S.method; return { prj: F.prj, locs: F.locs, supports: F.supports, what: `${esc(S.plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> from its cross-frame spacing ${fmt(F.Lb, 2)} ft.` };
+      const F = FX.fromPayload(S.pl, { fl: S.fl });   // the payload's haunch as stated (the file does not say its owner) F.prj.a6.method = S.method; return { prj: F.prj, locs: F.locs, supports: F.supports, what: `${esc(S.plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> from its cross-frame spacing ${fmt(F.Lb, 2)} ft.` };
     }
-    const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule);
+    // owner rules as the Section properties tab (index.html calc()): OWN8 haunch 0 in the section properties, OWN17 w_c for E_c
+    const OW = window.SBDOwners, own = P.ownerRules || {}, lf = OW ? OW.loadFactors(own.owner, own.eta, P.xs && P.xs.nb) : null, hP = OW ? OW.haunchInProps(d.haunch, lf) : d.haunch;
+    const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
     const nc = d.composite === false;   // noncomposite: 6.10.8 / App. A6 in both regions, steel section alone (engine/flexure.js)
-    const prj = { deck: { composite: !nc, ts: d.ts, tdeck: d.tdeck, haunch: d.haunch, rebar: d.rebar }, mat: { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc },
+    const prj = { deck: { composite: !nc, ts: d.ts, tdeck: d.tdeck, haunch: hP, rebar: d.rebar }, mat: { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc },
       n: nr.n, rebarInPositive: !!d.rebarInPositiveMp, G: FX.factors(), a6: { method: S.method, skews: [S.skew], curved: false } };
     const segAt = x => g.segments.find(s => x >= s.x0 && x < s.x1) || g.segments[g.segments.length - 1];
     const cont = P.spans.continuity === 'continuous' && P.spans.lengths.length > 1;
     const locs = EX.filter(e => cont || e.region === 'pos').map(e => { const s = segAt(e.x); return { name: e.name, x: e.x, region: e.region, cont, plates: { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, beff: g.beff, Lb: S.Lb, Cb: S.Cb, fl: S.fl, flT: nc ? S.flT : 0, M: e.M }; });
     return { prj, locs, supports: null, what: `Example demands: GirderDetail's built-in Girder section moments, on ${esc(g.label || g.id)} (its plates at x = 44 and 109.99 ft). L<sub>b</sub> = ${fmt(S.Lb, 2)} ft, C<sub>b</sub> = ${fmt(S.Cb, 2)} as entered.`
+      + (lf && lf.h0 && !nc ? ` Haunch taken as 0 in the section properties (${esc(lf.cite.h)}; owner rule OWN8), as on the Section properties tab.` : '')
       + (nc ? ' <b>Noncomposite girder:</b> every load on the steel section alone, no deck rebar; 6.10.8 or App. A6 (6.10.6.2.3) in both regions, top flange in compression in positive flexure; Service II Eq. 6.10.4.2.2-3.' : '') };
   }
   function calc(ctx) {
