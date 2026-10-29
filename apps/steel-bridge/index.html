@@ -23,6 +23,9 @@
 <script src="../../shared/moving-load.js"></script>
 <script src="engine/analysis.js"></script>
 <script src="ui/analysis.js"></script>
+<script src="engine/fatigue.js"></script>
+<script src="engine/studs.js"></script>
+<script src="ui/fatigue.js"></script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
   :root{
@@ -131,7 +134,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -156,7 +159,7 @@
   const sel = (path, label, opts, cur) => `<div class="fRow"><label for="i_${path}">${label}</label><select id="i_${path}" data-path="${path}" data-kind="sel">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(cur !== undefined ? cur : get(path)) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   const grades = Object.keys(M.GRADES).map(k => [k, `${k} (F_y ${M.GRADES[k].Fy} ksi)`]);
-  const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates'], ['xs', 'Cross-section & loads'], ['stf', 'Stiffeners']];
+  const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates'], ['xs', 'Cross-section & loads'], ['stf', 'Stiffeners'], ['fs', 'Fatigue & studs']];
   function panes() {
     const g = P.girders[ui.g] || P.girders[0];
     return {
@@ -176,11 +179,12 @@
           ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
       xs: UL.inputs(P, { num, sel, card, esc }),
-      stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui)
+      stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
+      fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui)
     };
   }
   function drawInputs() {
-    UL.ensure(P); window.SBDShearUI.ensure(P);
+    UL.ensure(P); window.SBDShearUI.ensure(P); window.SBDFatigueUI.ensure(P);
     $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
@@ -190,7 +194,7 @@
     const v = M.validate(P), bad = new Set(v.errors.map(e => e.path));
     document.querySelectorAll('#inPanes [data-path]').forEach(el => el.classList.toggle('bad', bad.has(el.dataset.path)));
     const $s = $('i_spans'); if ($s) $s.classList.toggle('bad', [...bad].some(p => p.startsWith('spans.lengths')));
-    const tabOf = p => p.startsWith('stiffeners') ? 'stf' : p.startsWith('xs') || p.startsWith('ownerRules') || p === 'materials.concrete.wcE' ? 'xs' : p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
+    const tabOf = p => p.startsWith('fatigue') || p.startsWith('studs') ? 'fs' : p.startsWith('stiffeners') ? 'stf' : p.startsWith('xs') || p.startsWith('ownerRules') || p === 'materials.concrete.wcE' ? 'xs' : p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
     const errTabs = new Set(v.errors.map(e => tabOf(e.path)));
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.classList.toggle('has-err', errTabs.has(b.dataset.itab)));
     return v;
@@ -209,6 +213,7 @@
   $('inPanes').addEventListener('click', e => {
     if (UL.onClick(e, P)) { changed(true); return; }
     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }
+    if (window.SBDFatigueUI.onClick(e, P, ui)) { changed(true); return; }
     const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
     if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
     if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
@@ -245,6 +250,7 @@
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g }); return; }   // Flexure tab (ui/flexure.js)
     if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g }); return; }   // Shear & stiffeners tab (ui/shear.js)
     if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
+    if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g }); return; }   // Fatigue & studs tab (ui/fatigue.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
