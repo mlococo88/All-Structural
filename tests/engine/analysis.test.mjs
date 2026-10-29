@@ -170,7 +170,7 @@ test('parity with GirderDetail\'s functions: the built-in project (no loads ente
 });
 
 test('loads module path (engine/loads.js, engine/lldf.js): the default project takes its dead loads and factors from there', () => {
-  const W2 = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), ENG('lldf.js'), ENG('loads.js'), ENG('analysis.js'));
+  const W2 = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), 'lldf.js', ENG('lldf.js'), ENG('loads.js'), ENG('analysis.js'));
   const P = W2.SBDModel.defaultProject(), R = W2.SBDAnalysis.analyzeGirder(P, 0, { ll: false }), LDm = W2.SBDLoads;
   const { b, p } = LDm.fromModel(P, { girder: 0 }), C = LDm.compute(b, p), G = LDm.girder(C, 1);
   assert.deepEqual([...R.errors], []); assert.equal(R.line, 1, 'interior plate girder: cross-section girder G2');
