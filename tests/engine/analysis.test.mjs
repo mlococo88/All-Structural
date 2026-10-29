@@ -156,7 +156,8 @@ test('parity with GirderDetail\'s functions: cracked zones \'15\' and \'dl\' (6.
     const S = {}, f = sample[1 % sample.length], { G, R, D, skip } = run(f, { crack });
     assert.ok(R.crack.length >= 2, `${crack}: cracked zones`);
     const ck = []; for (let e = 0; e < D.N - 1; e++) if (D.crack[e]) { const l = ck[ck.length - 1]; if (l && Math.abs(l[1] - D.xs[e]) < 1e-9) l[1] = D.xs[e + 1]; else ck.push([D.xs[e], D.xs[e + 1]]); }
-    assert.deepEqual(R.crack.map(q => q.map(v => +v.toFixed(6))), ck.map(q => q.map(v => +v.toFixed(6))), `${crack}: same zones`);
+    assert.equal(JSON.stringify(R.crack.map(q => q.map(v => +v.toFixed(6)))), JSON.stringify(ck.map(q => q.map(v => +v.toFixed(6)))), `${crack}: same zones`);
+    console.log(`       cracked '${crack}', ${f}: zones ${JSON.stringify(ck)} ft (same as GirderDetail's feStages)`);
     regionCheck(f, R, D, skip); diffStats(pairsGD(R, D, skip), S, f, G.xs); check(S, BOUND_G, `cracked '${crack}', ${f}`);
   }
 });
