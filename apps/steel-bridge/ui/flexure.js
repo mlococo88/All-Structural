@@ -32,7 +32,13 @@
     const P = ctx.P, M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, g = P.girders[ctx.g] || P.girders[0], SEC = window.SBDSections, FX = window.SBDFlexure;
     if (S.src === 'file') {
       if (!S.pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-      const F = FX.fromPayload(S.pl, { fl: S.fl });   // the payload's haunch as stated (the file does not say its owner) F.prj.a6.method = S.method; return { prj: F.prj, locs: F.locs, supports: F.supports, what: `${esc(S.plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> from its cross-frame spacing ${fmt(F.Lb, 2)} ft.` };
+      // brace points: this project's framing when the file is of this bridge (its supports), girder = the file's girder (SB2-O9); else every ≤ L_b
+      // f_ℓ: the value entered, else from the file's skews as GirderDetail takes it (C6.10.1: 1.25 × 10 / 7.5 ksi where a support is skewed > 20°)
+      const pl = S.pl, gd = pl.girderDetail || {}, FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, { line: (+gd.girder || 1) - 1 }, (pl.member || {}).supports) : null;
+      const flS = FRM ? FRM.flSkew((gd.skew || {}).bySupport || [0], gd.position === 'exterior', P.framing) : { fl: 0 }, fl = S.fl > 0 ? S.fl : flS.fl;
+      const F = FX.fromPayload(pl, { fl, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });   // the payload's haunch as stated (the file does not say its owner)
+      F.prj.a6.method = S.method;
+      return { prj: F.prj, locs: F.locs, supports: F.supports, what: `${esc(S.plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; f<sub>ℓ</sub> = ${fmt(fl, 2)} ksi ${S.fl > 0 ? 'as entered' : `from skew (C6.10.1; largest skew ${fmt(flS.skMax, 1)}°)`}.` };
     }
     // owner rules as the Section properties tab (index.html calc()): OWN8 haunch 0 in the section properties, OWN17 w_c for E_c
     const OW = window.SBDOwners, own = P.ownerRules || {}, lf = OW ? OW.loadFactors(own.owner, own.eta, P.xs && P.xs.nb) : null, hP = OW ? OW.haunchInProps(d.haunch, lf) : d.haunch;
@@ -67,7 +73,7 @@
         : `<div class="fRow"><label for="fx_Lb">L<sub>b</sub>, ${nc ? 'both flanges' : 'bottom flange'}</label><input type="number" step="any" id="fx_Lb" value="${S.Lb}"><span class="unit">ft</span></div>
            <div class="fRow"><label for="fx_Cb">C<sub>b</sub></label><input type="number" step="any" id="fx_Cb" value="${S.Cb}"><span class="unit"></span></div>
            <div class="fRow"><label for="fx_skew">Largest support skew</label><input type="number" step="any" id="fx_skew" value="${S.skew}"><span class="unit">° (6.10.6.2.3)</span></div>`}
-      <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, bottom flange (first order)</label><input type="number" step="any" id="fx_fl" value="${S.fl}"><span class="unit">ksi</span></div>
+      <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, bottom flange (first order; 0 with a file: from skew, C6.10.1)</label><input type="number" step="any" id="fx_fl" value="${S.fl}"><span class="unit">ksi</span></div>
       ${nc ? `<div class="fRow"><label for="fx_flT">f<sub>ℓ</sub>, top flange (first order)</label><input type="number" step="any" id="fx_flT" value="${S.flT}"><span class="unit">ksi (noncomposite)</span></div>` : ''}
       <div class="fRow"><label for="fx_m">${nc ? 'Flexure (noncomposite)' : 'Negative flexure'}</label><select id="fx_m">${opt('auto', 'Appendix A6 where permitted, else 6.10.8', S.method)}${opt('6108', '6.10.8 only', S.method)}</select></div>
       <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Choices here are not saved.</p>
