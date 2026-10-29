@@ -58,7 +58,7 @@
     const sx = v => l + (v - X0) / (X1 - X0) * (W - l - r), sy = v => t + (hi - (o.invert ? -v : v)) / (hi - lo) * (H - t - b);
     const tick = (a, b_, n) => { const raw = (b_ - a) / n, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p, s = (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p, out = []; for (let v = Math.ceil(a / s) * s; v <= b_ + 1e-9; v += s) out.push(+v.toFixed(10)); return out; };
     let g = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(o.title)}" style="max-width:${W}px;display:block;font-family:var(--font-ui);font-size:10px">`;
-    tick(lo, hi, 5).forEach(v => { const y = sy(o.invert ? -v : v); g += `<line x1="${l}" x2="${W - r}" y1="${y}" y2="${y}" stroke="#E4E7EB"/><text x="${l - 4}" y="${y + 3}" text-anchor="end" fill="#475569">${f(v, Math.abs(v) < 10 ? 2 : 0)}</text>`; });
+    tick(lo, hi, 5).forEach(v => { const y = sy(o.invert ? -v : v); g += `<line x1="${l}" x2="${W - r}" y1="${y}" y2="${y}" stroke="#E4E7EB"/><text x="${l - 4}" y="${y + 3}" text-anchor="end" fill="#475569">${f(o.invert ? -v : v, Math.abs(v) < 10 ? 2 : 0)}</text>`; });
     (o.sup || []).forEach(v => { const X = sx(v); g += `<line x1="${X}" x2="${X}" y1="${t}" y2="${H - b}" stroke="#94A3B8" stroke-dasharray="3 3"/>`; });
     tick(X0, X1, 8).forEach(v => { g += `<text x="${sx(v)}" y="${H - b + 13}" text-anchor="middle" fill="#475569">${f(v, 0)}</text>`; });
     g += `<line x1="${l}" x2="${W - r}" y1="${sy(0)}" y2="${sy(0)}" stroke="#0F172A" stroke-width="0.8"/>`;

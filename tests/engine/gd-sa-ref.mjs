@@ -54,6 +54,6 @@ export function gdSA(P, gi, n) {   // n: the modular ratio (as the new engine's,
     const plates = { D: g.segments[0].D, top: g.segments.map(s => ({ x0: s.x0, x1: s.x1, b: s.topB, t: s.topT })), bot: g.segments.map(s => ({ x0: s.x0, x1: s.x1, b: s.botB, t: s.botT })), web: g.segments.map(s => ({ x0: s.x0, x1: s.x1, t: s.tw })) };
     const SQ = cont ? c.saSeq({ p: { seqOn: A.seq || 'on', seqMod: A.seqMod || 'n', seqCustom: A.seqCustom || '' }, cont, xs, trib, spans, n, beff, b: { tsDeck: ts, haunch: hh, plates, fc: P.materials.concrete.fc }, F, MDC1, wSX, wDeck }) : null;
     const MDCc = SQ ? Array.from(MDC1).map((v, i) => v >= 0 ? Math.max(v, SQ.envP[i]) : Math.min(v, SQ.envN[i])) : null;
-    return { xs: Array.from(xs), N, sup: Array.from(sup), region, tw2, crack: F.crack, MS, MDk, MDC1, MDC2, MDW, MCL, VDC1, VDC2, VDW, VS, VCL, LLp, LLn, FMp, FMn, vSec, VLL: bN.VLL, reac, dS, dDk, dSD, lld, SQ, MDCc, n };
+    return { xs: Array.from(xs), N, sup: Array.from(sup), region, tw2, crack: F.crack, Mperm, MS, MDk, MDC1, MDC2, MDW, MCL, VDC1, VDC2, VDW, VS, VCL, LLp, LLn, FMp, FMn, vSec, VLL: bN.VLL, reac, dS, dDk, dSD, lld, SQ, MDCc, n };
   });
 }

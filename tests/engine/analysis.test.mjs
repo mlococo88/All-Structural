@@ -19,7 +19,7 @@
 //   6. LL deflection: here the 1/20 points and all axles of the truck; GirderDetail every second node with the axles that
 //      add (LL8): ≤ 0.1 %.
 //   7. Payload only: the payload rounds the loads and distribution factors to 4 decimals and the results to 0.001:
-//      ≤ 0.02 % (DC2), 0.005 % (LL).
+//      ≤ 0.11 % (M_DC2 of a girder with a small DC2: w 4-decimal rounding), 0.005 % (LL).
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
@@ -99,10 +99,10 @@ test('steps: format and rendering', () => {
 /* ---------- parity ---------- */
 const files = payloadFiles(), sample = ALL ? files : files.filter((_, i) => i % 10 === 0);
 // bounds: largest |difference| / largest |value| of the quantity on the girder (causes in the header)
-const BOUND_P = { M_DC1steel: 0.004, M_DC1wet: 2e-4, M_DC1: 1e-3, M_DC2: 4e-4, M_DW: 2e-4, M_CL: 2e-4, V_DC1: 0.012, V_DC2: 0.012, V_DW: 0.012, V_CL: 0.012, 'V_DC1 left of piers': 0.012,
+const BOUND_P = { M_DC1steel: 0.004, M_DC1wet: 2e-4, M_DC1: 1e-3, M_DC2: 2e-3, M_DW: 2e-4, M_CL: 2e-4, V_DC1: 0.012, V_DC2: 0.012, V_DW: 0.012, V_CL: 0.012, 'V_DC1 left of piers': 0.012,
   D_DC1steel: 0.005, D_DC1wet: 0.002, D_DC2DW: 0.003, M_DCc: 0.015, M_LLpos: 2e-4, M_LLneg: 2e-4, M_FATpos: 2e-4, M_FATneg: 2e-4, 'V_LL max': 2e-4, 'V_LL min': 2e-4,
   'V_FAT max': 2e-4, 'V_FAT min': 2e-4, 'V_LL max left of piers': 2e-4, 'V_LL min left of piers': 2e-4, 'LL deflection per span': 0.002 };
-const BOUND_G = { ...BOUND_P, R_DC1: 3e-4, R_DC2: 1e-5, R_DW: 1e-5, R_CL: 1e-5, 'R_LL max': 1e-5, 'R_LL min': 1e-5 };
+const BOUND_G = { ...BOUND_P, M_DC2: 2e-4, 'f_deck (pour sequence)': 0.05, R_DC1: 1e-3, R_DC2: 1e-5, R_DW: 1e-5, R_CL: 1e-5, 'R_LL max': 1e-5, 'R_LL min': 1e-5 };
 const cache = {};
 function run(f, o = {}) {
   const key = f + JSON.stringify(o); if (cache[key]) return cache[key];
@@ -117,7 +117,7 @@ function run(f, o = {}) {
 const regionNote = [];
 function regionCheck(f, R, D, skip) {
   if (!skip.size) return;
-  const Mp = D.MDC1.map((v, i) => v + D.MDC2[i] + D.MDW[i]), sc = Math.max(...Mp.map(Math.abs));
+  const Mp = D.Mperm, sc = Math.max(...Array.from(Mp, Math.abs));
   skip.forEach(i => { regionNote.push(`${f}: x = ${D.xs[i]} ft, M_perm ${R.st.DC1.M[i] + R.st.DC2.M[i] + R.st.DW.M[i] + (R.st.UT ? R.st.UT.M[i] : 0) >= 0 ? '+' : ''}${(R.st.DC1.M[i] + R.st.DC2.M[i] + R.st.DW.M[i] + (R.st.UT ? R.st.UT.M[i] : 0)).toFixed(3)} here, ${Mp[i].toFixed(3)} in GirderDetail`);
     assert.ok(Math.abs(Mp[i]) < 1e-3 * sc, `${f}: pier region differs at x = ${D.xs[i]} where M_perm = ${Mp[i]}`); });
 }

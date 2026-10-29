@@ -88,7 +88,7 @@ export function pairsGD(R, D, skip) {
     ['V_DC1', vr(R.st.DC1), ge(D.VDC1)], ['V_DC2', vr(R.st.DC2), ge(D.VDC2)], ['V_DW', vr(R.st.DW), ge(D.VDW)],
     ['R_DC1', R.st.DC1.R, D.reac.map(r => r.DC1)], ['R_DC2', R.st.DC2.R, D.reac.map(r => r.DC2)], ['R_DW', R.st.DW.R, D.reac.map(r => r.DW)], ['R_CL', R.st.CL.R, D.reac.map(r => r.CL)],
     ['D_DC1steel', R.camber.steel, D.dS], ['D_DC1wet', R.camber.wet, D.dDk], ['D_DC2DW', R.camber.sd, D.dSD]];
-  if (D.MDCc && R.seq) out.push(['M_DCc', R.seq.MDCc, D.MDCc]);
+  if (D.MDCc && R.seq) out.push(['M_DCc', R.seq.MDCc, D.MDCc], ['f_deck (pour sequence)', R.seq.fdk, D.SQ.fdk]);
   if (R.ll) {
     const vs = R.x.map((_, i) => i === N - 1 ? D.vSec(N - 2, false) : D.vSec(i, true)), ll = R.ll, ft = R.fat;
     const v = (o, s) => R.x.map((_, i) => i === N - 1 ? o['VL' + s][i] : o['VR' + s][i]);
