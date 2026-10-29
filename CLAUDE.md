@@ -1,19 +1,30 @@
 # CLAUDE.md — Standing rules for this repository
 
-This repo is a collection of single-file HTML structural/bridge engineering
-tools. They are used by a licensed PE for real design work. **Accuracy and
+This repo is a collection of HTML structural/bridge engineering tools. They are used by a licensed PE for real design work. **Accuracy and
 stability matter more than code elegance.**
 
 See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 `HANDOFF.md` for how tools pass data to each other.
 
-## 1. Single-file, no-install architecture
+## 1. No-install architecture (single-file rule removed by the engineer, 2026-10-29)
 
-- Every tool must stay a **single, self-contained HTML file**.
-- No build step, no npm, no bundlers, no transpile step, no splitting into
-  separate JS/CSS files, and no shared library files.
-- Tools must run by **double-clicking** the file on a locked-down work laptop
-  with no install rights (opened via `file://`).
+- A tool may be one HTML file or a folder of plain HTML/JS/CSS files
+  (`apps/<tool>/`), and tools may load shared files from `shared/`. Split or
+  share code where it makes tools cheaper to change and test; small or stable
+  tools can stay single files.
+- No build step, no npm, no bundlers, no transpile step: the files in the repo
+  are what runs.
+- Tools must still run by **double-clicking** on a locked-down work laptop with
+  no install rights (opened via `file://`, from a copy of the whole repo
+  folder). Because of `file://`:
+  - load code with classic `<script src="relative/path.js">` tags: no
+    JavaScript modules (`type="module"`/`import`), which browsers block from
+    `file://`;
+  - no `fetch`/XHR of local files: put data (tables, shapes, vehicles) in
+    `.js` files;
+  - use relative paths only.
+- Shared files use one global namespace per file (e.g. `window.SharedUnits`),
+  never loose globals.
 
 ## 2. External libraries
 
@@ -23,13 +34,17 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 - Pin exact versions in CDN URLs when you touch a tag. Don't change a
   library version unless the task asks for it.
 
-## 3. Duplicated code stays duplicated
+## 3. Shared code
 
-- If code is duplicated across tools, **keep it duplicated**. Do not extract it
-  into a shared file.
-- When syncing a shared snippet, copy it into each file and **list in the PR
-  description which tools contain it**.
-- Known shared snippets: the `bridgeSuite.v1.*` bootstrap/handoff code at the
+- Logic used by more than one tool belongs once in `shared/`, tested in Node
+  where it is calculation code (`tests/`).
+- A PR that changes a shared file runs the tests of **every tool that loads
+  it** and **lists those tools in the PR description**. A shared file's
+  computed results fall under §4 like any tool's.
+- Moving existing duplicated code into `shared/` is planned work (see the
+  rebuild plan), not a drive-by change. Until a snippet is moved, keep its
+  copies in step and list in the PR which tools contain it.
+- Known duplicated snippets not yet moved: the `bridgeSuite.v1.*` bootstrap/handoff code at the
   top of `index.html`, `lldf.html` and `Prestressed Bridge Design.html`
   (`psbeam.html` until 2026-10-22), and the
   ACI rebar development-length app that is also embedded in
@@ -80,10 +95,12 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 
 ## 7. Scope of changes
 
-- **One tool per PR** unless the engineer says otherwise. Exception (approved 2026-10-04): a cross-tool connection (see `HANDOFF.md`) may change the sending and receiving tools in one PR.
+- **One tool per PR** unless the engineer says otherwise. Exceptions: a cross-tool connection (see `HANDOFF.md`, approved 2026-10-04) may change the sending and receiving tools in one PR; a change to a shared file may include the tools that load it (2026-10-29).
 - Keep diffs minimal and focused on the task. No drive-by reformatting,
   renaming, or reorganizing.
-- Do not move, rename, or delete tool files unless asked. Other tools link to
+- Do not move, rename, or delete tool files unless asked. When a tool moves
+  into `apps/<tool>/`, its old file name stays as a small redirect page.
+  Other tools link to
   some of them by file name (`index.html`, `lldf.html`, `psbeam.html`,
   `elastomeric_design_module.html`, `Steel Bridge Design.html`;
   `Steel Bridge Beam Modules.html` is kept as a redirect page to it;
@@ -92,7 +109,7 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 
 ## 8. Fix log
 
-- Every change to a tool is recorded in `fixlog/<tool file name without .html>.md`, in the same PR. See `fixlog/README.md` for the entry format.
+- Every change to a tool is recorded in `fixlog/<tool file name without .html>.md` (for a folder tool, `fixlog/<folder name>.md`; for a shared file, `fixlog/shared-<file name without .js>.md`), in the same PR. See `fixlog/README.md` for the entry format.
 - Each entry must contain enough to re-apply the fix by hand: the function, anchor text, the exact before/after code, the governing provision, and a check case.
 
 ## 9. When unsure, ask
