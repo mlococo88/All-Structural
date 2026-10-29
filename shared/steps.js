@@ -18,10 +18,11 @@
        ok     optional: true / false for a test step (a condition met or not); undefined otherwise
    It renders as:  label:  sym = eq = sub = value unit   (ref)
 
-   Equation notation (eq, sub, sym, unit): a small TeX subset, so that one renderer can show it now and KaTeX could
-   later without changing any engine: _{…} subscript, ^{…} superscript, \frac{a}{b}, \bar{x}, \sqrt{x}, \text{…},
+   Equation notation (eq, sub, sym, unit): a small TeX subset that is also valid KaTeX, so that the built-in renderer and
+   KaTeX (toHTML, when the page has loaded it; 2026-10-29) show the same strings: _{…} subscript, ^{…} superscript, \frac{a}{b}, \bar{x}, \sqrt{x}, \text{…},
    Greek letters (\gamma, \phi, \lambda, \beta, \rho, …), \sum, \cdot, \times, \le, \ge, \lt, \gt, \ne, \pm, \minus,
-   \prime, '\,' (thin space). Nothing else. toHTML() and toText() render it without any library. */
+   \prime, '\,' (thin space). Nothing else. toText() renders it without any library; toHTML() with KaTeX when window.katex
+   exists, else without (see below). tests/engine/tex.test.mjs parses every step string of the engine tests with KaTeX. */
 (function () {
   'use strict';
   const fmt = (x, d) => {
@@ -93,7 +94,15 @@
     }
     return out;
   }
-  const toHTML = s => render(String(s == null ? '' : s), true);
+  /* KaTeX (approved 2026-10-29): when the page has loaded it (window.katex), toHTML renders with it; otherwise (offline, CDN
+     blocked) with the built-in renderer above, so the steps always show. toText (plain-text report) never uses it.
+     \minus is the subset's own macro (KaTeX has none): it is given to KaTeX as a minus sign. */
+  const KATEX_OPT = { throwOnError: false, strict: 'ignore', macros: { '\\minus': '-' } };
+  const kx = () => (typeof window !== 'undefined' && window.katex && typeof window.katex.renderToString === 'function') ? window.katex : null;
+  /* unitTeX(u): a unit as KaTeX source, its words upright ('kip-ft' -> '\text{kip-ft}', 'in^{2}' -> '\text{in}^{2}'); the built-in
+     renderer shows units as typed, so this is used for KaTeX only. */
+  const unitTeX = u => String(u == null ? '' : u).replace(/[A-Za-z][A-Za-z\-\/. ]*/g, (m, at, all) => at > 0 && all[at - 1] === '\\' ? m : `\\text{${m}}`);
+  const toHTML = s => { const t = String(s == null ? '' : s), K = kx(); return K && t ? K.renderToString(t, KATEX_OPT) : render(t, true); };
   const toText = s => render(String(s == null ? '' : s), false);
   /* line(step, html): the one-line rendering  sym = eq = sub = value unit */
   function line(s, html) {
@@ -102,9 +111,9 @@
     if (s.eq) parts.push(R(s.eq));
     if (s.sub && s.sub !== s.eq) parts.push(R(s.sub));
     const v = typeof s.value === 'number' ? fmt(s.value, s.d) : s.value == null ? '' : String(s.value);
-    if (v !== '') parts.push(v + (s.unit ? (html ? '&nbsp;' : ' ') + R(s.unit) : ''));
+    if (v !== '') parts.push(v + (s.unit ? (html ? '&nbsp;' : ' ') + (html && kx() ? toHTML(unitTeX(s.unit)) : R(s.unit)) : ''));
     return parts.join(' = ');
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line };
+  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT };
 })();

@@ -63,8 +63,13 @@ It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the 
 
 - **Notation** of `sym`, `eq`, `sub`, `unit`: a small TeX subset — `_{…}`, `^{…}`, `\frac{a}{b}`, `\bar{x}`,
   `\sqrt{x}`, `\text{…}`, Greek letters, `\sum`, `\cdot`, `\times`, `\le`, `\ge`, `\lt`, `\gt`,
-  `\prime`, `\,`. `SharedSteps.toHTML()` and `toText()` render it with no library; KaTeX could render the
-  same strings later without changing any engine.
+  `\prime`, `\,`. Every string must also be valid KaTeX (`\minus` is the one subset-only macro; it is given to
+  KaTeX as a macro for `-`). `SharedSteps.toHTML()` renders with KaTeX (`katex.renderToString`, `throwOnError: false`,
+  options `SharedSteps.katexOpt`) when the page has loaded it (`window.katex`; `apps/steel-bridge/index.html` loads
+  KaTeX 0.16.9 from cdnjs), and with the built-in renderer otherwise (offline, CDN blocked), so the steps always show.
+  Units go to KaTeX through `SharedSteps.unitTeX()` (words upright: `in^{2}` → `\text{in}^{2}`). `toText()` (the
+  plain-text report) never uses KaTeX. `tests/engine/tex.test.mjs` parses every step string the engine tests make with
+  KaTeX (the copy in `tests/libs`).
 - **Collecting:** `const w = SharedSteps.work('sec.s'); const A = w.add({ id: 'A', … , value });` stores
   the step (id `sec.s.A`) and returns its value, so the value used downstream is the value shown.
   Results carry `steps: w.steps`; a composite result concatenates its parts' steps in order.
