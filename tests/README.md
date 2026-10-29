@@ -2,6 +2,8 @@
 
 The tools stay single, self-contained HTML files with no build step and no npm (CLAUDE.md §1). Nothing in this folder is loaded by any tool. It exists so that a change can be checked the same way every time: open a tool headless, offline, on two versions (usually `origin/main` and the working tree), wait until it has finished its automatic work, and compare every computed result.
 
+**Engine tests (Node only, no browser):** `node tests/engine/run.mjs` loads the classic scripts in `shared/` into a Node `vm` context and runs every `tests/engine/*.test.mjs` (add a name fragment to run some: `node tests/engine/run.mjs moving-load`). See `shared/README.md`.
+
 ## Requirements
 
 - Node 18 or later (tested on Node 22).
