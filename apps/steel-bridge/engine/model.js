@@ -51,7 +51,8 @@
      studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I),
                   skew: 'auto' | 'yes' | 'no' (F_fat = F_rc/w on skewed > 20° or curved bridges; auto: from the support skews), Frc (kip), wv (in),
                   splX ('82, 145': field splice stations, ft), splL (top splice plate length, ft), splC (clearance at each plate end, in),
-                  beffMode: 'bridge' (GirderDetail: one b_eff for every girder, the largest-fatigue-shear girder's) | 'girder' (each girder its own),
+                  beffMode: 'girder' (each girder its own, AASHTO 6.10.10; the default from 2026-10-29, SB2-F1) | 'bridge' (GirderDetail: one b_eff
+                            for every girder, the largest-fatigue-shear girder's; kept for parity; a stored project keeps its value),
                   zones: [ { x1, x2 (ft), nr (studs per row), p (pitch, in) } ] (empty: the hand-off file's zones) },
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
@@ -115,7 +116,7 @@
   }
   /* defaultStuds(): GirderDetail's built-in Shear connectors studs (GM.sc.def: 7/8 × 6 in, 4 in across, F_u 60 ksi, γ 1.75, F_rc 25 kip, w 48 in) */
   function defaultStuds() {
-    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'bridge', zones: [] };
+    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'girder', zones: [] };   // beffMode 'girder' by default from 2026-10-29 (SB2-F1)
   }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
