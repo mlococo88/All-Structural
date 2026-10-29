@@ -47,7 +47,7 @@ Loaded by: `apps/steel-bridge/index.html` (and its engine). Tests: `node tests/e
   - `line(s, true)` without KaTeX: as before (`st-frac` spans). With KaTeX: KaTeX spans (`class="katex"`), no `katex-error`.
 ### How verified
 - `tests/engine/tex.test.mjs` (new; runs last): every step string the engine tests make (sections, flexure incl. noncomposite, loads,
-  LLDF, owners, shear, stiffeners, analysis, fatigue, studs; on tests/projects/sbd2-*, the 100 tests/projects/st/gd_*.json payloads and the built-in project;
+  LLDF, owners, shear, stiffeners, analysis, fatigue, studs, constructibility; on tests/projects/sbd2-*, the 100 tests/projects/st/gd_*.json payloads and the built-in project;
   recorded by `tests/engine/harness.mjs`, digits folded) parsed by KaTeX 0.16.9 (`tests/libs`, the version the page pins) with
   `strict: 'error'`: 0 parse errors. One step string needed a change (engine/fatigue.js FA6, `_` inside `\text{}`; see
   `fixlog/steel-bridge.md`, same PR). Also the line() check case above.
