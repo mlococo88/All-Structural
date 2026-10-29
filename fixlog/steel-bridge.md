@@ -808,6 +808,8 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - `engine/constructibility.js` `fromAnalysis` (merged from main during this PR): `opt.braces` used when given (before: always the stiffener-layout
   frames); `ui/constructibility.js` passes the framing's brace points (project, or a file of this bridge). Unchanged without framing.
 - `index.html`: three script tags, the input tab `fr`, the output tab `cf`, `tabOf`, change/redraw hooks, a `data-goto` link handler.
+- `engine/lldf.js` step `df.s<i>.noRed` (merged from main, DFL5): unit `^{\circ}` → `deg` (display only). KaTeX cannot render a superscript
+  after the unit spacing, so tests/engine/tex.test.mjs failed on main after #476 and #478 crossed; no value changed.
 - Tests: `tests/engine/framing.test.mjs`, `tests/engine/crossframes.test.mjs`, loader `tests/engine/pl-source.mjs` (Preliminary sizing's own code
   from pl-src in a Node vm). No new recording: the 20 `tests/projects/sbd2-fat` and 40 `tests/projects/sbd2-stiff` recordings have the framing
   inputs (Preliminary sizing projects from the seeds), the frame lists (P.df.bridge.xf), the per-girder layouts and P.cf / P.ts / P.bs.

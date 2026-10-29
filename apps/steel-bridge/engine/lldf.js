@@ -78,7 +78,7 @@
   }
   function skewSteps(w, p, sk, Kg) {
     const kt = p.simple ? `${SIMPLE.c1}` : `\\left(\\frac{${g0(Kg)}}{12(${n2(p.L)})(${n2(p.ts)})^{3}}\\right)^{0.25}`;
-    if (sk.noRed) w.add({ id: 'noRed', label: p.pier ? 'An adjacent span\'s support lines differ by more than 10°: no moment skew reduction for this pier region' : 'Support lines of this span differ by more than 10°: no moment skew reduction', sym: '|\\theta_{A} - \\theta_{B}|', eq: '', sub: '', value: sk.dTh, unit: '^{\\circ}', d: 2, ref: `${ED} Art. 4.6.2.2.2e`,
+    if (sk.noRed) w.add({ id: 'noRed', label: p.pier ? 'An adjacent span\'s support lines differ by more than 10°: no moment skew reduction for this pier region' : 'Support lines of this span differ by more than 10°: no moment skew reduction', sym: '|\\theta_{A} - \\theta_{B}|', eq: '', sub: '', value: sk.dTh, unit: 'deg', d: 2, ref: `${ED} Art. 4.6.2.2.2e`,
       note: `The smaller skew θ = ${n2(sk.thMin)}° is not used for the moment (engineer's decisions 2026-10-29: per span; a pier region if either adjacent span differs).` });
     if (Math.min(sk.thM, 60) >= 30) {
       w.add({ id: 'c1', label: 'Skew coefficient c_1 for moment', sym: 'c_{1}', eq: '0.25\\left(\\frac{K_{g}}{12Lt_{s}^{3}}\\right)^{0.25}\\left(\\frac{S}{L}\\right)^{0.5}', sub: `0.25${kt}\\left(\\frac{${n3(p.geoSavg)}}{${n2(p.L)}}\\right)^{0.5}`, value: sk.c1, unit: '', d: 4, ref: `${ED} Table 4.6.2.2.2e-1` });
