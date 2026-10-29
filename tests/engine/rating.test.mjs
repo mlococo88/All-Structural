@@ -56,7 +56,7 @@ function formulaParity(name, s) {
 test('rating formula and factors = ST-Girder on the 100 payloads, every span (every station, every check, Inventory and Operating)', () => {
   let n = 0, k = 0;
   payloads.forEach(f => { const pl = load(f), s = stSession(pl); assert.ok(s, f); for (let j = 0; j < pl.member.supports.length - 1; j++) { n += formulaParity(`${f} span ${j + 1}`, stSpan(s, j)).n; k++; } });
-  assert.equal(k, 300); assert.ok(n > 60000, `${n} ratings compared`);
+  assert.equal(k, 300); assert.ok(n > 60000, `${n} ratings compared`); console.log(`       ${n} ST-Girder ratings (300 spans) recomputed from ST-Girder's own C, DC, DW, LL+IM: all equal`);
 });
 test('rating formula = ST-Girder: φ_c φ_s (0.95 × 0.85 → the 0.85 floor; 0.95 × 1.0) and noncompact sections (stress basis)', () => {
   const pl = load('gd_builtin28_AASHTO_G1.json'), s0 = stSession(pl);
