@@ -40,16 +40,18 @@
       let F, what;
       if (S.src === 'file') {
         if (!S.pl) { S.err = 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).'; S.key = key(ctx); return; }
-        F = C.fromPayload(S.pl, { flC: S.flC });
-        what = `${esc(S.plName)}: ${F.locs.length} stations; plates and materials from the file; M<sub>DCc</sub>${F.locs.some(L => L.M.DCc !== 0) ? ' (GirderDetail\'s pour sequence)' : ' not in the file (M<sub>DC1</sub> used)'}, M<sub>CL</sub>, V<sub>DC1</sub>, V<sub>CL</sub> from the file; L<sub>b</sub> from its cross-frame spacing ${fmt(F.Lb, 2)} ft.`;
+        const gdF = S.pl.girderDetail || {}, frF = window.SBDFraming && P.framing ? window.SBDFraming.forGirder(P, { line: (+gdF.girder || 1) - 1 }, (S.pl.member || {}).supports) : null;   // this bridge's framing (SB2-O9)
+        F = C.fromPayload(S.pl, { flC: S.flC, ...(frF ? { braces: frF.braces } : {}) });
+        what = `${esc(S.plName)}: ${F.locs.length} stations; plates and materials from the file; M<sub>DCc</sub>${F.locs.some(L => L.M.DCc !== 0) ? ' (GirderDetail\'s pour sequence)' : ' not in the file (M<sub>DC1</sub> used)'}, M<sub>CL</sub>, V<sub>DC1</sub>, V<sub>CL</sub> from the file; L<sub>b</sub> ${frF ? "from this project's framing (Cross-frames tab)" : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft`}.`;
       } else {
         const AR = window.SBDAnalysis.analyzeGirder(P, ctx.g, { ll: false });
         if (AR.errors && AR.errors.length) { S.err = 'Analysis: ' + AR.errors.join(' '); S.key = key(ctx); return; }
-        F = C.fromAnalysis(P, ctx.g, AR, { flC: S.flC, oh: ohInputs(P) });
+        const frA = window.SBDFraming && P.framing ? window.SBDFraming.forGirder(P, { gi: ctx.g }, null) : null;   // the project's framing (SB2-O9)
+        F = C.fromAnalysis(P, ctx.g, AR, { flC: S.flC, oh: ohInputs(P), ...(frA ? { braces: frA.braces } : {}) });
         const g = P.girders[ctx.g];
         what = `${esc(g.label || g.id)}: ${F.locs.length} locations from this project's analysis (dead loads; <a href="#" data-gotab="an">Analysis tab</a>): M<sub>DC1</sub>, V<sub>DC1</sub> (steel and the whole wet deck), `
           + (F.seq ? 'M<sub>DCc</sub> = the noncomposite envelope of the deck placement sequence (an.seq.MDCc)' : 'no pour sequence (simple spans, noncomposite, or the sequence off): M<sub>DC1</sub>')
-          + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart; stiffener panels from the Stiffeners tab.`
+          + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: ${frA ? "bearings and this girder's cross-frames from the Framing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab.`
           + (AR.warnings && AR.warnings.length ? `<br>${AR.warnings.map(esc).join('<br>')}` : '');
       }
       const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });

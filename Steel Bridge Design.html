@@ -17601,7 +17601,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
     const regions = b.regions.map(rg => {
       const s = steelProps(rg.sec.D, rg.sec), k0 = KgOf(s), eg = k0.eg; let Kg = k0.Kg, KgAvg = null;
       if (rg.segs && rg.segs.length) { const Lt = sum(rg.segs.map(q => q.L)); KgAvg = { parts: rg.segs.map(q => ({ L: q.L, sec: q.sec, Kg: KgOf(steelProps(q.sec.D, q.sec)).Kg })), Lt }; KgAvg.Kg = sum(KgAvg.parts.map(q => q.L * q.Kg)) / Lt; if (p.kg === 'avg') Kg = KgAvg.Kg; }
-      const pp = { ...base, L: rg.L, skewM: Math.min(rg.skA, rg.skB), skewV: Math.max(rg.skA, rg.skB), skAdj: dfSkAdj(rg) }, geo = dfGeometry(pp), sk = dfSkew(pp, geo, Kg);
+      const pp = { ...base, L: rg.L, skewM: Math.min(Math.abs(rg.skA), Math.abs(rg.skB)), skewV: Math.max(Math.abs(rg.skA), Math.abs(rg.skB)), skAdj: dfSkAdj(rg) }, geo = dfGeometry(pp), sk = dfSkew(pp, geo, Kg);   // DFL6 (SB2-O23): the skew angle θ of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1 is |θ| (a negative skew was read as no skew); skAdj stays signed (the angle between the two support lines)
       const members = []; for (let j = 0; j < Nb; j++) members.push(dfMember(pp, geo, Kg, p.skewV === 'ext' && dfType(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk, j));
       if (p.extMin === 'yes') { const ints = members.filter(m => m.type === 'int'); if (ints.length) { const iM = Math.max(...ints.map(m => m.gM)), iV = Math.max(...ints.map(m => m.gV));
         members.filter(m => m.type === 'ext').forEach(m => { if (iM > m.gM) { m.gM = iM; m.policyM = true; } if (iV > m.gV) { m.gV = iV; m.policyV = true; } if (m.policyM || m.policyV) m.method += ', raised to interior (policy)'; }); } }

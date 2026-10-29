@@ -7,8 +7,8 @@
    maps the app's regions (span and pier, K_g from the girder's plates) to SharedLLDF's input, maps the results back to the fields
    the app and its tests use, and writes the worked steps (shared/steps.js format). What stays here, as GirderDetail has it
    (Steel Bridge Design.html, LLDF and DLs module): K_g per region (KgOf, the length-weighted option), the region list (bridgeDef),
-   the shear-skew option for exterior girders only, the exterior "not less than interior" policy, negative skews read as no skew
-   (open item SB2-O23), the range checks (DF1).
+   the shear-skew option for exterior girders only, the exterior "not less than interior" policy, the range checks (DF1).
+   Skew θ in the tables is |θ| (SB2-O23, 2026-10-29; GirderDetail DFL6, as lldf.html).
 
    Engineer's decision 2026-10-29 (SB2-O19): the factors follow lldf.html where GirderDetail differed: (1) exterior fatigue
    factor = max(one-lane lever rule, one-lane rigid cross-section)/1.2 (4.6.2.2.2d); (2) no moment skew reduction for a span
@@ -60,15 +60,16 @@
   /* momentSkew(rg, skews): the region's skews for Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1 (deg, signed). Moment: the smaller skew of the
      region's support lines (GirderDetail), none (4.6.2.2.2e, engineer's decisions 2026-10-29) for a span whose two support lines
      differ by more than 10° (SharedLLDF.momentSkewNoReduction) and for a pier region if either adjacent span's two support lines do
-     (SharedLLDF.momentSkewNoReductionPier; skews: every support line of the bridge); shear: the larger. A negative value counts as no
-     skew, as GirderDetail (open item SB2-O23; lldf.html reads |θ|). */
+     (SharedLLDF.momentSkewNoReductionPier; skews: every support line of the bridge); shear: the larger. The tables' θ is |θ| (the sign
+     only gives the direction; SB2-O23, engineer's decision 2026-10-29, as lldf.html and GirderDetail DFL6); the 10° rule compares the
+     signed skews (the angle between the two support lines). */
   function momentSkew(rg, skews) {
-    const skA = rg.skA, skB = rg.skB, thMin = Math.min(skA, skB), thMax = Math.max(skA, skB), K = Array.isArray(skews) ? skews.map(v => +v || 0) : null;
+    const skA = rg.skA, skB = rg.skB, thMin = Math.min(Math.abs(skA), Math.abs(skB)), thMax = Math.max(Math.abs(skA), Math.abs(skB)), K = Array.isArray(skews) ? skews.map(v => +v || 0) : null;
     let noRed, dTh;
     if (rg.kind === 'sup' && K && K.length > rg.i) { const pv = rg.i > 0 ? K[rg.i - 1] : null, nx = rg.i + 1 < K.length ? K[rg.i + 1] : null, pr = K[rg.i];
       noRed = SL().momentSkewNoReductionPier(pv, pr, nx); dTh = Math.max(pv != null ? Math.abs(pr - pv) : 0, nx != null ? Math.abs(nx - pr) : 0); }
     else { noRed = SL().momentSkewNoReduction(skA, skB); dTh = Math.abs(skA - skB); }
-    return { thMin, noRed, dTh, thM: noRed ? 0 : Math.max(0, thMin), thV: Math.max(0, thMax) };
+    return { thMin, noRed, dTh, thM: noRed ? 0 : thMin, thV: thMax };
   }
   /* skew(p, geo, Kg): SharedLLDF.skewFactors (beam-slab rows: moment reduction 30° ≤ θ ≤ 60° (θ > 60°: 60°), shear correction).
      p.thM, p.thV from momentSkew. Returns SharedLLDF's object plus thM, thV, tanM, noRed, dTh, thMin. */
@@ -78,7 +79,7 @@
   }
   function skewSteps(w, p, sk, Kg) {
     const kt = p.simple ? `${SIMPLE.c1}` : `\\left(\\frac{${g0(Kg)}}{12(${n2(p.L)})(${n2(p.ts)})^{3}}\\right)^{0.25}`;
-    if (sk.noRed) w.add({ id: 'noRed', label: p.pier ? 'An adjacent span\'s support lines differ by more than 10°: no moment skew reduction for this pier region' : 'Support lines of this span differ by more than 10°: no moment skew reduction', sym: '|\\theta_{A} - \\theta_{B}|', eq: '', sub: '', value: sk.dTh, unit: '^{\\circ}', d: 2, ref: `${ED} Art. 4.6.2.2.2e`,
+    if (sk.noRed) w.add({ id: 'noRed', label: p.pier ? 'An adjacent span\'s support lines differ by more than 10°: no moment skew reduction for this pier region' : 'Support lines of this span differ by more than 10°: no moment skew reduction', sym: '|\\theta_{A} - \\theta_{B}|', eq: '', sub: '', value: sk.dTh, unit: 'deg', d: 2, ref: `${ED} Art. 4.6.2.2.2e`,
       note: `The smaller skew θ = ${n2(sk.thMin)}° is not used for the moment (engineer's decisions 2026-10-29: per span; a pier region if either adjacent span differs).` });
     if (Math.min(sk.thM, 60) >= 30) {
       w.add({ id: 'c1', label: 'Skew coefficient c_1 for moment', sym: 'c_{1}', eq: '0.25\\left(\\frac{K_{g}}{12Lt_{s}^{3}}\\right)^{0.25}\\left(\\frac{S}{L}\\right)^{0.5}', sub: `0.25${kt}\\left(\\frac{${n3(p.geoSavg)}}{${n2(p.L)}}\\right)^{0.5}`, value: sk.c1, unit: '', d: 4, ref: `${ED} Table 4.6.2.2.2e-1` });
@@ -210,7 +211,7 @@
     const regions = q.regions.map(rg => {
       const s = steelOf(rg.sec), k0 = KgOf(s), eg = k0.eg; let Kgv = k0.Kg, KgAvg = null;
       if (rg.segs && rg.segs.length) { const Lt = sum(rg.segs.map(x => x.L)); KgAvg = { parts: rg.segs.map(x => ({ L: x.L, sec: x.sec, Kg: KgOf(steelOf(x.sec)).Kg })), Lt }; KgAvg.Kg = sum(KgAvg.parts.map(x => x.L * x.Kg)) / Lt; if (q.kg === 'avg') Kgv = KgAvg.Kg; }
-      const ms = momentSkew(rg, q.skews), pp = { ...base, L: rg.L, skewM: Math.min(rg.skA, rg.skB), skewV: Math.max(rg.skA, rg.skB), ...ms }, geo = geometry(pp), sk = skew(pp, geo, Kgv);   // ms: 4.6.2.2.2e per span / pier
+      const ms = momentSkew(rg, q.skews), pp = { ...base, L: rg.L, skewM: ms.thMin, skewV: ms.thV, ...ms }, geo = geometry(pp), sk = skew(pp, geo, Kgv);   // ms: 4.6.2.2.2e per span / pier
       const w = St().work('df.' + rg.id);
       w.add({ id: 'eg', label: `${rg.label}: distance between the centers of gravity of the girder and the deck`, sym: 'e_{g}', eq: '(d - \\bar{y}) + h + \\frac{t_{s}}{2}', sub: `(${n3(s.d)} - ${n3(s.yb)}) + ${n2(q.haunchP)} + \\frac{${n2(q.ts)}}{2}`, value: eg, unit: 'in', d: 3, ref: `${ED} Art. 4.6.2.2.1`, note: q.haunchNote || '' });
       w.add({ id: 'Kg0', label: `${rg.label}: longitudinal stiffness parameter at the region's section`, sym: 'K_{g}', eq: 'n(I + Ae_{g}^{2})', sub: `${n3(q.n)}(${g0(s.I)} + ${n2(s.A)}(${n3(eg)})^{2})`, value: k0.Kg, unit: 'in^{4}', d: 0, ref: `${ED} Eq. 4.6.2.2.1-1` });

@@ -54,6 +54,15 @@
                   beffMode: 'girder' (each girder its own, AASHTO 6.10.10; the default from 2026-10-29, SB2-F1) | 'bridge' (GirderDetail: one b_eff
                             for every girder, the largest-fatigue-shear girder's; kept for parity; a stored project keeps its value),
                   zones: [ { x1, x2 (ft), nr (studs per row), p (pitch, in) } ] (empty: the hand-off file's zones) },
+     -- added 2026-10-29 (framing and cross-frames PR), optional: a version 1 project without them has no framing (the evenly spaced brace
+        points of before) and reads the cross-frames as defaultCrossframes() --
+     framing:   { spacing (s, ft), spPier (s_p near interior supports, ft; '' = none), pierLen (ft; '' = 0.25 L), orient: 'auto' | 'parallel' | 'normal',
+                  arrange: 'contiguous' | 'staggered' | 'stepped', supClear (ft), stagMin (ft), spliceClear (ft), tol (ft), splices: [ft] (field splices),
+                  flSkI, flSkE (ksi), flSkG (skew f_ℓ, C6.10.1) } (engine/framing.js)
+     crossframes: { type: 'X' | 'Kb' | 'Kt', h (in; '' = from D), dMinXF (in), gA, gG, primary: 'auto' | 'yes' | 'no', dia: { on, shape, d, bf, tf, tw, gr, nb, pitch,
+                  ecc, end, Rj, aj, eShape, eNb }, wind: { V, Kz, G, Cd }, mem: { top, bot, diag: { sec, b1, b2, t } }, conn: { d, gr, thr, n, s, e, tg },
+                  user: { StrI, Con, Fat: { top, bot, diag } (kip) }, fatCat, sb: { on, full: 'auto' | 'yes' | 'no', Mu (kip-ft; '' = from the analysis), Cb,
+                  bs, tsp }, weight: { mode: 'auto' | 'ovr' | 'off', allow (%), Wi, We (kip per frame) } } (engine/crossframes.js)
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
@@ -89,7 +98,9 @@
       xs: defaultXs({ spans: { lengths: [110, 140, 110] } }),
       stiffeners: defaultStiffeners(),
       fatigue: defaultFatigue(),
-      studs: defaultStuds()
+      studs: defaultStuds(),
+      framing: defaultFraming(),
+      crossframes: defaultCrossframes()
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
@@ -115,6 +126,21 @@
       dist: { cp: 'yes', lat: 'no', latLoc: 'web', latStiff: 'yes', latDist: 10, latBf: 16, skew: 'no' } };
   }
   /* defaultStuds(): GirderDetail's built-in Shear connectors studs (GM.sc.def: 7/8 × 6 in, 4 in across, F_u 60 ksi, γ 1.75, F_rc 25 kip, w 48 in) */
+  /* defaultFraming(): Preliminary sizing's built-in framing (cross-frames at most 25 ft apart, automatic orientation, contiguous, 3 ft clear of
+     the bearings, 4 ft least stagger) and limits (2 ft splice clearance, 0.5 ft transition tolerance, skew f_ℓ 10 / 7.5 ksi × 1.25), and its
+     built-in field splices (82, 145, 215, 278 ft, for the built-in 110-140-110 ft spans) */
+  function defaultFraming() {
+    return { spacing: 25, spPier: '', pierLen: '', orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, spliceClear: 2, tol: 0.5, splices: [82, 145, 215, 278], flSkI: 10, flSkE: 7.5, flSkG: 1.25 };
+  }
+  /* defaultCrossframes(): GirderDetail's built-in Cross-frames inputs (GM.cf.def: X-frame, L5x5x3/8 angles of grade 36, gussets grade 50, two
+     7/8 in A325 bolts per end, 130 mph wind, stability bracing checked), the geometry from the project, the weight in DC1 from the member sizes
+     + 10 % (XF1, XF2) */
+  function defaultCrossframes() {
+    const A = () => ({ sec: 'L5x5x3/8', b1: 5, b2: 5, t: 0.375 }), Z = () => ({ top: 0, bot: 0, diag: 0 });
+    return { type: 'X', h: '', dMinXF: 48, gA: '36', gG: '50', primary: 'auto', dia: { on: 'no', shape: 'W21x44', d: 20.7, bf: 6.5, tf: 0.45, tw: 0.35, gr: '50', nb: 4, pitch: 3, ecc: 3.5, end: 'no', Rj: 0, aj: 12, P: 0 },
+      wind: { V: 130, Kz: 1.0, G: 1.0, Cd: 1.3 }, mem: { top: A(), bot: A(), diag: A() }, conn: { d: '0.875', gr: 'A325', thr: 'incl', n: 2, s: 3, e: 1.5, tg: 0.5 },
+      user: { StrI: Z(), Con: Z(), Fat: Z() }, fatCat: 'B', sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } };
+  }
   function defaultStuds() {
     return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'girder', zones: [] };   // beffMode 'girder' by default from 2026-10-29 (SB2-F1)
   }
@@ -217,6 +243,20 @@
       if (!['bridge', 'girder'].includes(Q.beffMode)) E('studs.beffMode', 'b_eff for the studs: bridge-wide or per girder.');
       if (!Array.isArray(Q.zones)) E('studs.zones', 'Pitch zones must be a list.');
       else Q.zones.forEach((z, i) => { if (!(isNum(z.x1) && isNum(z.x2) && z.x2 > z.x1 && Number.isInteger(z.nr) && z.nr >= 1 && isNum(z.p) && z.p > 0)) E(`studs.zones.${i}`, `Zone ${i + 1}: from < to, a whole number of studs per row and a positive pitch.`); }); }
+    // added 2026-10-29 (framing and cross-frames PR)
+    if (p.framing != null) { const F = p.framing || {}, fp = 'framing';
+      pos(F.spacing, `${fp}.spacing`, 'Cross-frame spacing');
+      ['supClear', 'stagMin', 'spliceClear', 'tol'].forEach(k => nn(F[k], `${fp}.${k}`, `Framing ${k}`));
+      if (F.spPier !== '' && F.spPier != null && !(isNum(F.spPier) && F.spPier > 0)) E(`${fp}.spPier`, 'Spacing near interior supports must be positive (or blank).');
+      if (F.pierLen !== '' && F.pierLen != null && !(isNum(F.pierLen) && F.pierLen > 0)) E(`${fp}.pierLen`, 'Pier region length must be positive (or blank).');
+      if (!['auto', 'parallel', 'normal'].includes(F.orient)) E(`${fp}.orient`, 'Orientation: automatic, parallel or normal.');
+      if (!['contiguous', 'staggered', 'stepped'].includes(F.arrange)) E(`${fp}.arrange`, 'Arrangement: contiguous, staggered or stepped.');
+      if (!Array.isArray(F.splices) || !F.splices.every(v => isNum(v) && v > 0 && v < total)) E(`${fp}.splices`, `Field splices: stations between 0 and ${total} ft.`); }
+    if (p.crossframes != null) { const C = p.crossframes || {}, cp = 'crossframes';
+      if (!['X', 'Kb', 'Kt'].includes(C.type)) E(`${cp}.type`, 'Cross-frame type: X, K (bottom) or K (top).');
+      if (C.h !== '' && C.h != null && !(isNum(C.h) && C.h > 0)) E(`${cp}.h`, 'Chord work-point depth must be positive (or blank).');
+      ['V', 'Kz', 'G', 'Cd'].forEach(k => nn((C.wind || {})[k], `${cp}.wind.${k}`, `Wind ${k}`));
+      if (C.sb && C.sb.Mu !== '' && C.sb.Mu != null && !isNum(C.sb.Mu)) E(`${cp}.sb.Mu`, 'Deck-placement M_u must be a number (or blank: from the analysis).'); }
     return { errors, warnings };
   }
 
@@ -280,5 +320,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

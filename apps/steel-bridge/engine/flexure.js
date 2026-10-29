@@ -146,7 +146,8 @@
      env = { xs, MDC1, MDC2, MDW, Mn (LL+IM negative), Mun (Strength I minimum), MUT, MUF } at the analysis stations;
      opt = { impl (optional: the fe* functions to use, for the parity test), braces: [ft] (bearings and cross-frames), L (girder length), region, secAt(x) -> plates, D, beff, ts, haunch,
              Ar (total deck rebar within beff) and yr (its height above the top of the slab bottom: ts/2 for one layer at mid-depth),
-             FyF (flange F_y), G }.
+             FyF (flange F_y), G, lenOf (optional, added with the framing PR: lenOf(a, b) = the girder's own length between analysis stations a and b,
+             SBDFraming.girderBraces; Preliminary sizing's L = p1 − p0 in the girder's own stations; default b − a) }.
      Returns the row fields { Lb, Cb, lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprG, seg: { xa, xb }, cbParts }. */
   function bracing(x, env, opt) {
     const I = opt.impl || {}, feCb_ = I.feCb || feCb, feNpr_ = I.feNpr || feNpr, feGe_ = I.feGe || feGe, feGeA_ = I.feGeA || feGeA, feGov_ = I.feGov || feGov, feAt_ = I.feAt || feAt;
@@ -172,7 +173,7 @@
     const geSeg = (np, p0, p1, LbIn, rtF, fF) => { const ks = []; for (let k = 0; k < N; k++) if (xs[k] >= p0 - 1e-6 && xs[k] <= p1 + 1e-6) ks.push(k);
       const A = feGeA_(np.pcs, np.tr, p0, p1, LbIn, opt.D, xs, rtF, fF), mA = !!(A && A.ok); return { A, mA, G: mA ? A : feGe_(np.pcs, LbIn, rtF, fF, ks) }; };
     const rtS = q => crk(q).rt, fS = (q, k) => fBotN(q, k), byGe = (u, v) => u.ge && v.ge && u.ge.G && v.ge.G ? u.ge.G.g - v.ge.G.g : null;
-    const cand = segs.map(([p0, p1]) => { const L = p1 - p0, Cb = region === 'neg' ? feCb_(xs, env.Mun, p0, p1, -1) : 1, np = region === 'neg' ? feNpr_(p0, p1, secAt, q => -feAt_(xs, env.Mun, q)) : null;
+    const cand = segs.map(([p0, p1]) => { const L = opt.lenOf ? opt.lenOf(p0, p1) : p1 - p0, Cb = region === 'neg' ? feCb_(xs, env.Mun, p0, p1, -1) : 1, np = region === 'neg' ? feNpr_(p0, p1, secAt, q => -feAt_(xs, env.Mun, q)) : null;
       return { xa: p0, xb: p1, L, np, Cb: np && np.kind === 'ge' ? 1 : Cb, ge: np && np.kind === 'ge' ? geSeg(np, p0, p1, L * 12, rtS, fS) : null }; })
       .sort((u, v) => byGe(u, v) ?? v.L / v.Cb - u.L / u.Cb)[0] || { xa: 0, xb: Lend, L: Lend, Cb: 1, np: null };
     const np = cand.np;
@@ -543,7 +544,8 @@
      sides, ±0.01 ft, of each plate change and interior support; 0.01 ft inside the ends), each with its unfactored moments
      (linear between the payload stations), plates, region (Strength I max ≥ |min| at the nearest station: positive) and, from
      bracing(), L_b, C_b and the nonprismatic data with brace points every ≤ L_b in each span (the payload has the cross-frame
-     spacing, not the stations). opt: { G, Lb (ft), braces, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl, owner (the payload's
+     spacing, not the stations; with a project that has framing, the caller passes that girder's own brace points: braces and lenOf from
+     SBDFraming.forGirder, SB2-O9). opt: { G, Lb (ft), braces, lenOf, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl, owner (the payload's
      owner, which the payload does not state: with window.SBDOwners loaded, OWN8 takes the haunch as 0 in every section property
      for RIDOT and MassDOT, as the Section properties tab and GirderDetail gdHP do) }. n = E_s/E_c exact from f′c, w_c,
      K_1 = 1 (the payload's n is the same, rounded); the deck rebar A_r is one layer at slab mid-depth (as the payload states it). Returns { prj, locs, env, supports, braces }. */
@@ -574,7 +576,7 @@
       let region = env.Mup[i] >= -env.Mun[i] ? 'pos' : 'neg';
       if (region === 'neg' && Math.max(Math.abs(env.Mup[i]), Math.abs(env.Mun[i])) < 1e-3) region = 'pos';
       const at = A => feAt(xs, A, x);
-      const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: hP, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl });
+      const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: hP, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl, lenOf: opt.lenOf });
       const npr = br.npr ? { kind: br.npr, b: br.lbB, t: br.lbT, K: br.lbK, geA: br.geA || null, gov: br.nprG || null, Ir: br.lbIr, why: br.nprWhy } : null;
       return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, npr, seg: br.seg, cbParts: br.cbParts,
         M: { DC1: at(env.MDC1), DC2: at(env.MDC2), DW: at(env.MDW), LLp: Math.max(0, at(env.Mp)), LLn: Math.min(0, at(env.Mn)), UT: at(env.MUT), UF: at(env.MUF), FATp: at(env.MfP), FATn: at(env.MfN) } };

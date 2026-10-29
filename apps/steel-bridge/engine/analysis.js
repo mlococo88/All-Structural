@@ -52,7 +52,9 @@
         { girder })) and SBDLoads.girder(result, line): DC1 (deck, haunch, SIP, DC1 rows), DC2, DW, UT, UF, the detail allowance
         xs.allow, and per region the factors gM, gV, fatM, fatV and gDef (spans 's<i>', piers 'p<k>')
      3. girder.loadsManual / girder.dfManual, entered: the same load fields; { gM, gMpier, gV, fatM, fatV, gDef } for every span
-     The construction live load (CL) and the cross-frame point loads (xf) are not in the loads module yet: 1 or 3 only.
+     The construction live load (CL) is not in the loads module yet: 1 or 3 only. The cross-frame point loads (xf): 1, else, when the project
+     has framing and engine/framing.js and engine/crossframes.js are loaded, every frame of the layout on this girder's cross-section line
+     (SBDCrossframes.pointLoads: GirderDetail's XF1 weight, W/2 per girder at its own stations), else 3.
      Nothing entered: loads 0 and factors 1 (per lane), with a warning. */
 (function () {
   'use strict';
@@ -98,8 +100,12 @@
       if (A && isNum(A[k])) { o[k] = A[k]; o.src[k] = 'girder'; } else if (M && isNum(fromM[k])) { o[k] = fromM[k]; o.src[k] = 'module'; }
       else if (B && isNum(B[k])) { o[k] = B[k]; o.src[k] = 'manual'; } else { o[k] = 0; o.src[k] = 'none'; } });
     o.PL = M && isNum(M.PL) ? M.PL : 0;
-    const xf = A && Array.isArray(A.xf) ? A.xf : B && Array.isArray(B.xf) ? B.xf : [];
-    o.xf = xf.filter(q => q && isNum(q.x) && isNum(q.P)).map(q => ({ x: q.x, P: q.P })); o.src.xf = A && Array.isArray(A.xf) ? 'girder' : B && Array.isArray(B.xf) ? 'manual' : 'none';
+    // cross-frame point loads (XF1): explicit girder loads, else the framing and cross-frame weight (engine/framing.js, engine/crossframes.js;
+    // added 2026-10-29 with the cross-frames PR, SB2-A6), else entered
+    const CFm = !(A && Array.isArray(A.xf)) && P.framing && window.SBDCrossframes && window.SBDFraming ? window.SBDCrossframes.pointLoads(P, (P.girders || []).indexOf(g)) : null;
+    const xf = A && Array.isArray(A.xf) ? A.xf : CFm ? CFm.pts : B && Array.isArray(B.xf) ? B.xf : [];
+    o.xf = xf.filter(q => q && isNum(q.x) && isNum(q.P)).map(q => ({ x: q.x, P: q.P })); o.src.xf = A && Array.isArray(A.xf) ? 'girder' : CFm ? 'module' : B && Array.isArray(B.xf) ? 'manual' : 'none';
+    if (CFm) o.xfInfo = { line: CFm.line, tot: CFm.tot, n: CFm.pts.length, kind: CFm.X.kind, allow: CFm.X.allow };
     o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
     o.source = A ? (A.source || 'girder loads') : M ? `loads module, cross-section girder G${mod.j + 1}` : B ? 'entered (manual)' : 'none entered';
     return o;
