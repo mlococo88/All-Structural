@@ -66,3 +66,31 @@ export function gdGirderSection() {
   [{}, { gT: 'HPS70W', gB: 'HPS70W' }, { rebarMp: 'incl' }, { nRule: 'round' }].forEach(o => GS.compute({ ...def(), ...o }, { base: true }));
   return GS;
 }
+
+// gdAnalysis() (added 2026-10-29 for tests/engine/analysis.test.mjs): GirderDetail's Structural analysis functions (sgBeam,
+// feStages, sgLLRow, sgFatRow, feIM, feFatIM, saComp, saCracked, saStage, saSec, saSeq, steelProps, …) in their own vm
+// context, each declaration pulled in on first use (as above). gdHP (owner rule OWN8: haunch 0 in the composite properties)
+// is supplied as the identity: the caller passes the haunch to count. run(fn) calls fn(ctx) with the retry on missing names.
+let GA = null;
+export function gdAnalysis() {
+  if (GA) return GA;
+  const ctx = { console }; vm.createContext(ctx);
+  vm.runInContext('var P = { df: { bridge: {} } }; var GM = {}; var gdHP = v => v;', ctx);
+  const loaded = new Set(['gdHP']);
+  GA = { ctx, loaded, run: fn => gdRun(ctx, fn, loaded) };
+  // constants first: a function that has run does not see a const added to the context later (see the warm-up note above)
+  ['FE_CACHE', 'f0', 'sgBeam', 'feStages', 'feIM', 'feFatIM', 'sgLLRow', 'sgFatRow', 'steelProps', 'saComp', 'saCracked', 'saStage', 'saSec', 'saSeq']
+    .forEach(name => gdRun(ctx, c => vm.runInContext(name, c), loaded));   // function declarations become properties of ctx
+  // warm-up (see gdGirderSection): every function the tests use runs once on a small continuous girder
+  GA.run(c => {
+    const s = { D: 60, tw: 0.5, topB: 16, topT: 1, botB: 16, botT: 1 }, b0 = c.sgBeam([40, 50], false), N = b0.N;
+    const SP = () => ({ Is: c.steelProps(60, s).I, I3u: c.saComp(s, 96, 24, 8, 2), Inu: c.saComp(s, 96, 8, 8, 2), Icr: c.saCracked(s, 6, 8, 2) });
+    ['none', '15', 'dl'].forEach(k => c.feStages(b0, [40, 50], true, SP, k, new Float64Array(N).fill(1), 0.5));
+    const F = c.feStages(b0, [40, 50], true, SP, 'none', new Float64Array(N).fill(1), 0.5);
+    c.feIM(F.bN.MLL[5], 0.33); c.feFatIM(F.bN.MF[5], 0.15); c.sgLLRow(F.bN, F.bN.ILM.subarray(0, N)); c.saStage(s, 'c', 96, 8, 8, 2);
+    const pl = { D: 60, top: [{ x0: 0, x1: 90, b: 16, t: 1 }], bot: [{ x0: 0, x1: 90, b: 16, t: 1 }], web: [{ x0: 0, x1: 90, t: 0.5 }] }; c.saSec(pl, 10);
+    const M = new Float64Array(N).map((_, i) => Math.sin(i / 7) * 100);
+    c.saSeq({ p: { seqOn: 'on', seqMod: 'n', seqCustom: '' }, cont: true, xs: b0.xs, trib: b0.trib, spans: [40, 50], n: 8, beff: 96, b: { tsDeck: 8, haunch: 2, plates: pl, fc: 4 }, F, MDC1: M, wSX: new Float64Array(N).fill(0.2), wDeck: 1 });
+  });
+  return GA;
+}
