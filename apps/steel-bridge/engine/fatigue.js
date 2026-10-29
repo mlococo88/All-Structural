@@ -259,7 +259,7 @@
       w.add({ id: 'dfe', label: 'Effective stress range', sym: '(\\Delta f)_{eff}', eq: 'R_{s}\\Delta f', sub: `${n2(r.ev.Rs)}(${n2(r.df)})`, value: r.ev.dfe, unit: 'ksi', d: 2, ref: 'AASHTO MBE 7.2.2' });
       w.add({ id: 'inf', label: 'Infinite life (FA5)', sym: '(\\Delta f)_{max} = 2(\\Delta f)_{eff} \\le (\\Delta F)_{TH}', eq: '', sub: `2(${n2(r.ev.dfe)}) = ${n2(r.ev.dfmax)} ${lt[r.ev.inf]} ${n2(r.th)}`, value: r.ev.dfmax / r.th, unit: '', d: 3, ref: 'AASHTO MBE 7.2.4', ok: r.ev.inf });
       if (!r.ev.inf) { const q = r.ev.lives[V.level];
-        w.add({ id: 'life', label: `Remaining fatigue life, ${V.level} level (FA6)`, sym: 'Y - a', eq: '\\frac{\\log\\left[\\frac{R_{R}Ag}{365n(ADTT)_{SL}(\\Delta f)_{eff}^{3}(1+g)^{a-1}} + 1\\right]}{\\log(1+g)} - a', sub: q ? `${isFinite(q.Y) ? n2(q.Y) : '\\infty'} - ${n0(r.ev.a)}` : '\\text{R_R not entered}', value: q ? q.rem : NaN, unit: '\\text{years}', d: 1, ref: 'AASHTO MBE 7.2.5', ok: q ? q.rem >= V.target : undefined, note: `Required ${n0(V.target)} years; present ADTT_SL ${n0(V.ADTT)}, g = ${n2(V.g)}%/yr, a = ${n0(r.ev.a)} years.` }); } }
+        w.add({ id: 'life', label: `Remaining fatigue life, ${V.level} level (FA6)`, sym: 'Y - a', eq: '\\frac{\\log\\left[\\frac{R_{R}Ag}{365n(ADTT)_{SL}(\\Delta f)_{eff}^{3}(1+g)^{a-1}} + 1\\right]}{\\log(1+g)} - a', sub: q ? `${isFinite(q.Y) ? n2(q.Y) : '\\infty'} - ${n0(r.ev.a)}` : 'R_{R}\\ \\text{not entered}', value: q ? q.rem : NaN, unit: '\\text{years}', d: 1, ref: 'AASHTO MBE 7.2.5', ok: q ? q.rem >= V.target : undefined, note: `Required ${n0(V.target)} years; present ADTT_SL ${n0(V.ADTT)}, g = ${n2(V.g)}%/yr, a = ${n0(r.ev.a)} years.` }); } }
     return w.steps;
   }
 
