@@ -80,10 +80,10 @@ function compare(name, o, g, acc) {
     else if (a !== b) acc.diffs.push(`${name} ${k}: ${a} vs ${b}`);
   }
 }
-const ours = df => LD.compute(df.bridge, df);
+export const ours = df => LD.compute(df.bridge, df);
 
 /* ---------- variations of the recorded inputs (branch coverage) ---------- */
-function variants() {
+export function variants() {
   const base = fixtures.find(f => f.project === 'builtin' && f.owner === 'AASHTO'), rid = fixtures.find(f => f.project === 'builtin' && f.owner === 'RIDOT');
   if (!base) return [];
   const V = [], add = (name, fn, src) => { const df = clone((src || base).df); fn(df, df.bridge); V.push({ name, df }); };
@@ -110,21 +110,26 @@ function variants() {
   add('sacrificial 0.5 in, w_c for E_c 0.145 (CTDOT OWN17)', (df, b) => { b.tsac = 0.5; b.wcE = 0.145; });
   add('owner haunch rule (OWN8) with a 3 in haunch', (df, b) => { b.haunch = 3; b.lf = { ...b.lf, h0: true }; });
   add('truck gap 6 ft', df => { df.gap = 6; });
+  add('overhangs 5.5 ft, 7 girders at 7 ft (one-lane lever rule governs)', (df, b) => { b.nb = 7; b.S = 7; b.bays = [7, 7, 7, 7, 7, 7]; b.ohL = 5.5; b.ohR = 5.5; });
   add('input errors', df => { df.gap = 3; df.dl.swL = -1; df.extra = [{ name: 'Bad', cat: 'DC2', x: -1, plf: 'x', dist: 'auto' }]; });
   return V;
 }
 
 test('LLDF and dead loads: GirderDetail in Node reproduces GirderDetail in the browser (recorded), 20 project/owner inputs', () => {
+  // Node's and Chromium's Math.pow may differ in the last bit (different V8 builds), so this step allows round-off (1e-14 relative)
+  // and reports how many values were not bit-identical; the parity test below compares this engine with GirderDetail in the SAME
+  // Node run and requires identity.
   assert.equal(fixtures.length, 20, 'expected 20 recorded inputs in tests/projects/sbd2-loads (node tests/engine/record-loads.mjs)');
-  const G = gdDf(); let n = 0;
+  const G = gdDf(); let n = 0, nb = 0, worst = 0;
+  const eq = (a, b, what) => { n++; if (typeof b === 'number') { if (a !== b) { nb++; const r = Math.abs(a - b) / Math.max(1, Math.abs(b)); worst = Math.max(worst, r); assert.ok(r < 1e-14, `${what}: ${a} vs ${b}`); } } else assert.equal(a, b, what); };
   for (const fx of fixtures) {
-    const R = G.run(fx.df), r = fx.gd;
-    assert.deepEqual([...R.errors], r.errors || [], `${fx.project}/${fx.owner}: errors`);
-    R.regions.forEach((rg, k) => { assert.equal(rg.Kg, r.regions[k].Kg); rg.members.forEach((m, j) => { assert.deepEqual([m.gM, m.gV, m.fatM, m.fatV, m.method], r.regions[k].members[j], `${fx.project}/${fx.owner} ${rg.id} G${j + 1}`); n++; }); });
-    ['dc1', 'dc2', 'dw', 'pl'].forEach(k => assert.deepEqual(Array.from(R.dead[k]), r.dead[k], `${fx.project}/${fx.owner} dead ${k}`));
-    assert.deepEqual(R.dead.per.map(L => [L.id, L.cat, L.dist, L.x, L.plf, Array.from(L.r)]), r.dead.per);
+    const R = G.run(fx.df), r = fx.gd, t = `${fx.project}/${fx.owner}`;
+    assert.deepEqual([...R.errors], r.errors || [], `${t}: errors`);
+    R.regions.forEach((rg, k) => { eq(rg.Kg, r.regions[k].Kg, `${t} ${rg.id} Kg`); rg.members.forEach((m, j) => [m.gM, m.gV, m.fatM, m.fatV, m.method].forEach((v, i) => eq(v, r.regions[k].members[j][i], `${t} ${rg.id} G${j + 1} #${i}`))); });
+    ['dc1', 'dc2', 'dw', 'pl'].forEach(k => R.dead[k].forEach((v, i) => eq(v, r.dead[k][i], `${t} dead ${k}${i}`)));
+    R.dead.per.forEach((L, k) => { const q = r.dead.per[k]; [L.id, L.cat, L.dist, L.x, L.plf].forEach((v, i) => eq(v, q[i], `${t} ${L.id} #${i}`)); L.r.forEach((v, i) => eq(v, q[5][i], `${t} ${L.id} r${i}`)); });
   }
-  console.log(`       ${fixtures.length} inputs, ${n} girder-regions: identical`);
+  console.log(`       ${fixtures.length} inputs, ${n} values: ${n - nb} bit-identical, ${nb} differ by round-off (largest relative ${worst.toExponential(2)})`);
 });
 
 test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs + variations; identical', () => {
