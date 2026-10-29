@@ -23,7 +23,7 @@ import vm from 'node:vm';
 import { loadShared, test, ROOT } from './harness.mjs';
 import { gdGirderSection, gdRun } from './gd-source.mjs';
 
-const W = loadShared('units.js', 'steps.js', path.join(ROOT, 'apps/steel-bridge/engine/sections.js'), path.join(ROOT, 'apps/steel-bridge/engine/flexure.js'));
+const W = loadShared('units.js', 'steps.js', path.join(ROOT, 'apps/steel-bridge/engine/sections.js'), path.join(ROOT, 'apps/steel-bridge/engine/owners.js'), path.join(ROOT, 'apps/steel-bridge/engine/flexure.js'));
 const FX = W.SBDFlexure, SEC = W.SBDSections, STEPS = W.SharedSteps;
 const close = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${what}: ${a} vs ${b}`);
 const DIR = path.join(ROOT, 'tests/projects/st');
@@ -178,17 +178,20 @@ test('A6 permission flips with skew as merged in S2-9: builtin28 (28°) never pe
   }
   // the stored hand-off (girderDetail.checks.negFlex, GirderDetail's own run): its A6 values at the governing stations agree with this engine
   let n = 0;
-  for (const f of payloads.filter(f => /_AASHTO_/.test(f))) {   // owner rules change the section elsewhere (MassDOT OWN8: haunch 0)
+  const byOwner = {};
+  for (const f of payloads) {   // every owner: GirderDetail stored these with its owner rules (OWN8: RIDOT/MassDOT haunch 0); the owner is in the file name
+    const owner = (/_(AASHTO|RIDOT|MassDOT|CTDOT)(_|\.)/.exec(f) || [])[1] || 'AASHTO';
     const pl = readP(f), nf = pl.girderDetail.checks && pl.girderDetail.checks.negFlex; if (!nf) continue;
-    const F = FX.fromPayload(pl, { rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } } });   // the Girder section module's own rebar (its default), not the payload's A_r
+    const F = FX.fromPayload(pl, { rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } }, owner });   // the Girder section module's own rebar (its default), not the payload's A_r
     for (const sp of nf.spans) for (const o of [sp.comp, sp.tens]) { if (!o) continue;
       const L = { ...F.locs[0], name: 'x', x: o.x, region: 'neg', plates: o.sec, npr: null, Lb: o.Lb, Cb: 1 }, r = FX.location(L, F.prj), a = o.a6;
       close(r.A6.skM, a.skM, 1e-9, `${f} skM`); close(r.A6.crwP, a.crw, 1e-4, `${f} crw`); close(r.A6.lrwP, a.lrw, 1e-5, `${f} lrw`); close(r.A6.lw, a.lw, 1e-5, `${f} lw`); close(r.A6.Iyc / r.A6.Iyt, a.IycIyt, 1e-4, `${f} Iyc/Iyt`);
       assert.equal(r.A6.why.some(s => /skewed/.test(s)), a.why.some(s => /skewed/.test(s)), `${f} skew reason`);
       assert.equal(r.A6.why.some(s => /slender/.test(s)), a.why.some(s => /slender/.test(s)), `${f} slender web reason`);
-      n++; }
+      n++; byOwner[owner] = (byOwner[owner] || 0) + 1; }
   }
-  assert.ok(n >= 100, `${n} stored governing items`);
+  console.log('       stored governing items by owner: ' + Object.entries(byOwner).map(([k, v]) => `${k} ${v}`).join(', '));
+  assert.ok(n >= 400, `${n} stored governing items`); assert.ok(byOwner.MassDOT > 0 && byOwner.RIDOT > 0, 'OWN8 owners covered');
 });
 
 test('bracing(): L_b, C_b and nonprismatic data with Preliminary sizing\'s own fe* functions: identical', () => {
