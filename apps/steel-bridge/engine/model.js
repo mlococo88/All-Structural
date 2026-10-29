@@ -21,7 +21,18 @@
                            bot: { A, c (centroid above bottom of slab) } },
                   rebarInPositiveMp: false (App. D6.1: count the deck rebar in the positive plastic moment) },
      girders:   [ { id, label, position: 'interior' | 'exterior', beff (in),
-                    segments: [ { x0, x1 (ft from the left end), D, tw, topB, topT, botB, botT (in) } ] } ]
+                    segments: [ { x0, x1 (ft from the left end), D, tw, topB, topT, botB, botT (in) } ] } ],
+     -- added 2026-10-29 (loads PR), optional: a version 1 project without them reads as defaultXs() and owner AASHTO --
+     materials.concrete.wcE: unit weight for E_c only (kcf; blank = w_c; CTDOT BRSDM V2 5.4.2.4),
+     ownerRules: { owner: 'AASHTO' | 'RIDOT' | 'MassDOT' | 'CTDOT', eta: { D: 'yes'|'no', R: 'auto'|'yes'|'no', I: 'yes'|'no', eD, eR, eI } },
+     xs:        { nb (girders in the cross-section), bays: [ft, nb − 1], ohL, ohR (overhang, girder ℄ to deck edge, ft),
+                  skews: [deg, one per support line], edges: { L, R: { type: 'barrier' | 'curb', bw (ft), bwt (klf), cw, ch (in), rw (klf),
+                  rp, rf (ft; rf null = rp), face (ft; null = derived) } }, sidewalks: { L, R: { w (ft), t (in), fence (klf), fenceX (ft) }, ped (psf) },
+                  median: { w (ft), t (in), joint }, wcA (appurtenance concrete, kcf; null = w_c), ws: { mode: 'psf' | 'thk', psf, thk (in), gam (kcf) },
+                  overlays: [ { name, mode, psf, thk, gam } ], sip (psf), allow (steel detail allowance, %),
+                  extra: [ { name, cat: 'DC1'|'DC2'|'DW'|'PL'|'UT'|'UF', x (ft), plf (klf), dist: 'auto'|'pilecap'|'equal'|'two' } ],
+                  overrides: { loadId: { x, plf, dist } }, beamClass: { index: class }, dlMethod: 'massdot' | 'aashto' | 'ridot',
+                  lldf: { gap (ft), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: true | false } }
    } */
 (function () {
   'use strict';
@@ -42,9 +53,21 @@
       materials: { steel: { top: '50W', bot: '50W', web: '50W' }, Es: 29000, concrete: { fc: 4, wc: 0.150, K1: 1.0, nRule: 'exact' }, rebar: { Fyr: 60 } },
       deck: { composite: true, ts: 8, tdeck: 8.5, haunch: 2, rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } }, rebarInPositiveMp: false },
       girders: [{ id: 'G1', label: 'G1', position: 'interior', beff: 114, segments: [
-        { x0: 0, x1: 88, ...pos }, { x0: 88, x1: 128, ...neg }, { x0: 128, x1: 232, ...pos }, { x0: 232, x1: 272, ...neg }, { x0: 272, x1: 360, ...pos }] }]
+        { x0: 0, x1: 88, ...pos }, { x0: 88, x1: 128, ...neg }, { x0: 128, x1: 232, ...pos }, { x0: 232, x1: 272, ...neg }, { x0: 272, x1: 360, ...pos }] }],
+      ownerRules: { owner: 'AASHTO', eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } },
+      xs: defaultXs({ spans: { lengths: [110, 140, 110] } })
     };
   }
+  /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
+     wearing surface, 15 psf SIP forms, 5% detail allowance, MassDOT 3.5.3 distribution), unskewed, one skew per support of p's spans. */
+  function defaultXs(p) {
+    const ns = ((p && p.spans && p.spans.lengths) || [0]).length + 1, bar = () => ({ type: 'barrier', bw: 1.5, bwt: 0.4, cw: 12, ch: 10, rw: 0.05, rp: 0.5, rf: null, face: null });
+    return { nb: 5, bays: [9.5, 9.5, 9.5, 9.5], ohL: 3.25, ohR: 3.25, skews: new Array(ns).fill(0), edges: { L: bar(), R: bar() },
+      sidewalks: { L: { w: 0, t: 8, fence: null, fenceX: null }, R: { w: 0, t: 8, fence: null, fenceX: null }, ped: 0 }, median: { w: 0, t: 8, joint: false }, wcA: null,
+      ws: { mode: 'psf', psf: 25, thk: null, gam: null }, overlays: [], sip: 15, allow: 5, extra: [], overrides: {}, beamClass: {}, dlMethod: 'massdot',
+      lldf: { gap: 4, kg: 'max', skewV: 'all', extMin: false } };
+  }
+  const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
   const isNum = v => typeof v === 'number' && isFinite(v);
   /* validate(p): { errors: [{ path, msg }], warnings: [{ path, msg }] }. Errors stop the calculation; warnings do not. */
@@ -95,6 +118,29 @@
       const last = S[S.length - 1];
       if (last && isNum(last.x1) && total > 0 && Math.abs(last.x1 - total) > 1e-6) E(`${gp}.segments`, `${g.label || g.id}: the segments end at ${last.x1} ft; the girder is ${total} ft long.`);
     });
+    // added 2026-10-29 (loads PR): the optional owner rules and cross-section
+    if (c.wcE != null && c.wcE !== '' && !(isNum(c.wcE) && c.wcE > 0)) E('materials.concrete.wcE', 'w_c for E_c must be positive (or blank for w_c).');
+    if (p.ownerRules != null) { const o = p.ownerRules || {};
+      if (!OWNERS.includes(o.owner)) E('ownerRules.owner', `Owner must be one of ${OWNERS.join(', ')}.`);
+      const e = o.eta || {}; ['eD', 'eR', 'eI'].forEach(k => { if (e[k] != null && !(isNum(e[k]) && e[k] > 0)) E(`ownerRules.eta.${k}`, `η factor ${k} must be positive.`); }); }
+    if (p.xs != null) { const x = p.xs || {}, xp = 'xs';
+      if (!(Number.isInteger(x.nb) && x.nb >= 2)) E(`${xp}.nb`, 'Enter at least two girders (a whole number).');
+      const B = Array.isArray(x.bays) ? x.bays : [];
+      if (Number.isInteger(x.nb) && B.length !== x.nb - 1) E(`${xp}.bays`, `Enter ${x.nb - 1} girder spacings (one per bay); ${B.length} entered.`);
+      B.forEach((v, i) => { if (!(isNum(v) && v > 0)) E(`${xp}.bays`, `Girder spacing ${i + 1} must be a positive number.`); });
+      nn(x.ohL, `${xp}.ohL`, 'Left overhang'); nn(x.ohR, `${xp}.ohR`, 'Right overhang');
+      const K = Array.isArray(x.skews) ? x.skews : [];
+      if (K.length !== L.length + 1) E(`${xp}.skews`, `Enter ${L.length + 1} support skews (one per support line); ${K.length} entered.`);
+      K.forEach((v, i) => { if (!(isNum(v) && Math.abs(v) < 90)) E(`${xp}.skews`, `Skew ${i + 1} must be a number of degrees between −90 and 90.`); });
+      ['L', 'R'].forEach(sd => { const q = (x.edges || {})[sd]; if (!q || !['barrier', 'curb'].includes(q.type)) E(`${xp}.edges.${sd}.type`, `${sd === 'L' ? 'Left' : 'Right'} deck edge: choose a barrier or a curb and railing.`); });
+      if (!['psf', 'thk'].includes((x.ws || {}).mode)) E(`${xp}.ws.mode`, 'Wearing surface: enter it as psf or as thickness × unit weight.');
+      else if (x.ws.mode === 'psf') nn(x.ws.psf, `${xp}.ws.psf`, 'Wearing surface weight');
+      nn(x.sip, `${xp}.sip`, 'SIP form weight'); nn(x.allow, `${xp}.allow`, 'Steel detail allowance');
+      if (!['massdot', 'aashto', 'ridot'].includes(x.dlMethod)) E(`${xp}.dlMethod`, 'Choose a dead load distribution method.');
+      const ll = x.lldf || {}; if (!(isNum(ll.gap) && ll.gap >= 4)) E(`${xp}.lldf.gap`, 'Gap between adjacent trucks must be at least 4 ft.');
+      if (!['max', 'avg', 'simple'].includes(ll.kg)) E(`${xp}.lldf.kg`, 'Choose how K_g is taken.');
+      if (!Array.isArray(x.extra)) E(`${xp}.extra`, 'Added loads must be a list.');
+      if (isNum(x.nb) && x.nb === 3) W(`${xp}.nb`, 'N_b = 3: the special rules of Tables 4.6.2.2.2b-1 and 4.6.2.2.3a-1 apply (lever rule).'); }
     return { errors, warnings };
   }
 
@@ -158,5 +204,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, defaultProject, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
