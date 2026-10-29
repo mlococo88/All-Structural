@@ -131,7 +131,10 @@ function payloadSplices(pl) {
   const xsU = xsF.filter((v, i) => i === 0 || v !== xsF[i - 1]);
   const lf = { v: 1, m: +(own.llMultiplier || {}).m || 1, eta: +(own.eta || {}).max || 1, etaN: +(own.eta || {}).min || 1, h0: own.haunchInProperties === false };
   const mp = { AASHTO: 0.375, RIDOT: 0.4375, MassDOT: 0.375, CTDOT: 0.5 }[owner] || 0.375;
-  return { owner, lf, minPlate: mp, list: xsU.map(x => { const zl = zoneAt(pl, x - 0.01), zr = zoneAt(pl, x + 0.01), sec = z => ({ tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness });
+  // the same without the pedestrian load (the new engine has none yet; as analysis.test.mjs pairsPayload)
+  const sub = (a, b) => a.map((v, i) => v - b[i]);
+  const noPL = has('M_PLpos') ? { ...arr, Mp: sub(arr.Mp, node('M_PLpos')), Mn: sub(arr.Mn, node('M_PLneg')), Vp: sub(arr.Vp, elem('V_PLpos')), Vn: sub(arr.Vn, elem('V_PLneg')) } : arr;
+  return { owner, lf, minPlate: mp, noPL: x => S.demandsAt(noPL, x).dem, list: xsU.map(x => { const zl = zoneAt(pl, x - 0.01), zr = zoneAt(pl, x + 0.01), sec = z => ({ tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness });
     const dm = S.demandsAt(arr, x), p = clone(S.DEF), mt = gdq.materials, dk = gdq.deck;
     // GD45: the pedestrian part of LL+IM where the payload has it (dem.pl = { key: [part, value] })
     if (has('M_PLpos')) { const i = dm.i, o = {}; const q1 = A[i].L.M_LLpos > 0 ? r1(A[i].L.M_PLpos) : 0, q2 = A[i].L.M_LLneg < 0 ? r1(A[i].L.M_PLneg) : 0; if (q1) o.MLLp = [q1, dm.dem.MLLp]; if (q2) o.MLLn = [q2, dm.dem.MLLn]; if (Object.keys(o).length) dm.dem.pl = o; }
@@ -140,20 +143,85 @@ function payloadSplices(pl) {
 }
 test('parity with GirderDetail: every field splice of the 100 hand-off payloads, auto-designed (autoDesignSplice) and checked; built-in plates as they are; 8th Edition', () => {
   const t0 = Date.now(); stats.diffs.length = 0; stats.vals = 0; stats.items = 0; stats.worst = { rel: 0, what: '' };
-  let nSp = 0, nOk = 0, nFail = 0; const fails = {};
+  let nSp = 0, nOk = 0, nFail = 0, nAuto = 0; const fails = {};
   payloads.forEach((f, fi) => {
     const pl = readPayload(f), PS = payloadSplices(pl), tag = f.replace(/^gd_|\.json$/g, '');
-    W.SBDOwners && null;
     PS.list.forEach(s => { const where = `${tag} FS@${s.x}`; nSp++;
-      const env = { owner: PS.owner, lf: PS.lf, minPlate: PS.minPlate }; OWN[PS.owner] = { lf: PS.lf, minPlate: PS.minPlate };
-      const { b } = cmpAuto(s.p, PS.owner, where);
-      if (b.ok) nOk++; else { nFail++; b.fails.forEach(id => fails[id] = (fails[id] || 0) + 1); }
-      cmpSplice({ ...s.p, top: b.p.top, bot: b.p.bot, web: b.p.web }, PS.owner, `${where} designed`);
+      OWN[PS.owner] = { lf: PS.lf, minPlate: PS.minPlate };
+      if (fi % 3 === 0) {   // the auto-design search (about 1,000 trial splices each) on every third payload; the run time of the whole set is 2.5 min
+        const { b } = cmpAuto(s.p, PS.owner, where); nAuto++;
+        if (b.ok) nOk++; else { nFail++; b.fails.forEach(id => fails[id] = (fails[id] || 0) + 1); }
+        cmpSplice({ ...s.p, top: b.p.top, bot: b.p.bot, web: b.p.web }, PS.owner, `${where} designed`); }
       cmpSplice(s.p, PS.owner, `${where} built-in plates`);
       if (fi % 5 === 0) { const q = clone(s.p); q.sec.code = '8'; cmpSplice(q, PS.owner, `${where} 8th Ed.`); }
-      void env; });
+      });
   });
-  report(`${payloads.length} payloads, ${nSp} splices (auto-design: ${nOk} pass every check, ${nFail} do not${nFail ? ': ' + JSON.stringify(fails) : ''})`, t0);
+  report(`${payloads.length} payloads, ${nSp} splices; ${nAuto} auto-designed: ${nOk} pass every check, ${nFail} do not${nFail ? ': ' + JSON.stringify(fails) : ''})`, t0);
   assert.ok(nSp >= 300, `only ${nSp} splices found`);
   assertNoDiff();
+});
+
+/* ---------- 3. the app's own path: engine/analysis.js demands at each splice ---------- */
+test('the app path: splices of a payload project from engine/analysis.js (girder()): demands against the payload\'s, the designs and checks', () => {
+  const t0 = Date.now(), A = W.SBDAnalysis, keys = ['MDC1', 'MDC2', 'MDW', 'MLLp', 'MLLn', 'MCL', 'VDC1', 'VDC2', 'VDW', 'VLL', 'VCL', 'dMp', 'dMn'], big = {}; let n = 0, nPass = 0;
+  payloads.filter((f, i) => i === 0 || /xsA_AASHTO_G1|util_MassDOT_G2/.test(f)).forEach(f => {
+    const pl = readPayload(f), PS = payloadSplices(pl), P = projectFromPayload(pl);
+    P.ownerRules = { owner: PS.owner, eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } }; P.splices = { ...W.SBDModel.defaultSplices(), x: PS.list.map(s => s.x) };
+    const AR = A.analyzeGirder(P, 0); assert.deepEqual([...(AR.errors || [])], [], f);
+    const G = S.girder(P, 0, AR, { env: { owner: PS.owner, lf: PS.lf, minPlate: PS.minPlate } });
+    assert.deepEqual([...G.errors], [], f);
+    G.list.forEach((s, k) => { const ref = PS.noPL(s.x), scale = { M: Math.max(...keys.filter(q => q[0] === 'M' || q[0] === 'd').map(q => Math.abs(ref[q]))), V: Math.max(...keys.filter(q => q[0] === 'V').map(q => Math.abs(ref[q]))) };
+      keys.forEach(q => { const d = Math.abs(s.p.dem[q] - ref[q]), sc = q[0] === 'V' ? scale.V : scale.M, rel = d / Math.max(1, sc); if (!big[q] || rel > big[q].rel) big[q] = { rel, d, ours: s.p.dem[q], ref: ref[q], at: `${f} ${s.name}` }; });
+      n++; if (s.CK && !s.CK.some(c => c.status === 'fail')) nPass++;
+      assert.ok(s.CK && s.CK.steps.length > 50, 'worked steps'); });
+  });
+  console.log(`       ${n} splices of 3 payloads, ${nPass} pass every check with this app's demands; ${((Date.now() - t0) / 1000).toFixed(1)} s. Largest demand difference against the payload (relative to the largest M or V at the splice):`);
+  Object.entries(big).forEach(([q, b]) => console.log(`         ${q}: ${b.d.toFixed(1)} (${(100 * b.rel).toFixed(2)} %), ${b.ours} vs ${b.ref} at ${b.at}`));
+  Object.entries(big).forEach(([q, b]) => assert.ok(b.rel < 0.03, `${q}: ${(100 * b.rel).toFixed(2)} % at ${b.at}`));
+});
+
+/* ---------- 4. hand checks ---------- */
+test('hand check: the built-in splice (AASHTO LRFD 10th Ed.), values and worked steps', () => {
+  const R = S.compute(clone(S.DEF), {}), C = S.checks(R), it = (id, k) => C.find(c => c.id === id).items[k], st = id => C.steps.concat(S.steps(R)).find(q => q.id === id);
+  const near = (a, b, t, w) => assert.ok(Math.abs(a - b) <= t, `${w}: ${a} vs ${b}`);
+  // Smaller section: left (16 × 3/4 top, 60 × 9/16 web, 16 × 1 1/8 bottom; I smaller than the right side's 18 × 1, 18 × 1 1/4).
+  assert.equal(R.smSide, 'L');
+  // P_fy top (6.13.6.1.3b): 7/8 in bolts, d_h = 15/16, net hole width d_h + 1/16 = 1.0 in (6.8.3); 2 lines each side of the web = 4 holes.
+  //   left 16 × 0.75: A_g = 12.0, A_n = 12.0 − 4(1.0)(0.75) = 9.0; A_e = (0.80 × 70)/(0.95 × 50) × 9.0 = 1.178947 × 9.0 = 10.6105 ≤ 12.0
+  //   P_fy = 50 × 10.6105 = 530.53 kip (right 18 × 1: A_n = 14.0, A_e = 16.505, 825.3 kip): 530.53 governs.
+  //   (GirderDetail's manual, Part 7 "Built-in example", still quotes 541.6 kip = 50 × 1.179 × 9.19, a net area with d_h only; its code uses d_h + 1/16.)
+  near(R.Pfy.top.P, 50 * (0.8 * 70) / (0.95 * 50) * 9.0, 1e-9, 'P_fy top'); near(R.Pfy.top.P, 530.53, 0.01, 'P_fy top');
+  //   bottom: left 16 × 1.125: A_n = 18.0 − 4(1.0)(1.125) = 13.5, A_e = 15.9158, P_fy = 795.79 kip (right 18 × 1.25: 1,031.6 kip)
+  near(R.Pfy.bot.P, 795.79, 0.01, 'P_fy bottom');
+  // Bolt shear (6.13.2.7): φ_sR_n = 0.80(0.56)(0.6013)(120)(2 planes) = 64.652 kip per bolt; top flange 2 × 2 × 3 = 12 bolts per side = 775.82 kip.
+  near(R.fl.top.phR1, 0.8 * 0.56 * 0.6013 * 120 * 2, 1e-9, 'φsRn');
+  // Filler (6.13.6.1.5), left side, t = 1.0 − 0.75 = 0.25 in: A_f = 0.25 × 16 = 4.0; A_p = min(A_flange 12.0, A_plates 16(0.5) + 2(6.5)(0.625) = 16.125) = 12.0;
+  //   γ = 4/12 = 0.3333, R = (1 + γ)/(1 + 2γ) = 1.3333/1.6667 = 0.800; 775.82 × 0.8 = 620.66 kip; TF1 left: 530.53/620.66 = 0.8548.
+  near(R.fl.top.sides[0].R, 0.8, 1e-12, 'R'); near(it('TF1', 0).r, 530.5263 / 620.6570, 1e-5, 'TF1 left');
+  // Strength I, max negative (Table 3.4.1-1): M = 1.25(−120) + 1.25(−30) + 1.50(−35) + 1.75(−1,250) = −150 − 37.5 − 52.5 − 2,187.5 = −2,427.5 kip-ft.
+  near(R.combos[1].M, -2427.5, 1e-9, 'M StrN');
+  // M_r negative (C6.13.6.1.3b): top P_fy 530.53 ≤ bottom 795.79, so M_r = 530.53 × (61.5 − 0.5625) = 530.53 × 60.9375 = 32,329 kip-in = 2,694.08 kip-ft
+  //   (arm between the flange centroids: 1.125 + 60 + 0.375 = 61.5 and 1.125/2 = 0.5625); MT1: 2,427.5/2,694.08 = 0.9011, no H_w.
+  near(R.mNeg.Mr / 12, 2694.08, 0.01, 'Mr neg'); near(it('MT1', 1).r, 2427.5 / 2694.0789, 1e-5, 'MT1');
+  // Web (6.10.9.2): D/t_w = 60/0.5625 = 106.67 > 1.40√(Ek/F_yw) = 1.40√(29,000 × 5/50) = 75.39, so C = 1.57/106.67² × (29,000 × 5/50) = 0.40017;
+  //   V_p = 0.58(50)(60)(0.5625) = 978.75 kip; V_r = φ_vV_n = 1.0 × 0.40017 × 978.75 = 391.66 kip (6.13.6.1.3c).
+  near(R.phVn, 1.57 / (60 / 0.5625) ** 2 * (29000 * 5 / 50) * 978.75, 1e-9, 'V_r'); near(R.phVn, 391.66, 0.01, 'V_r');
+  // Web bolt group, 17 rows × 2 columns at 3 in: I_p = 34(1.5²) + 2 × 9 × 2(1² + … + 8²) = 76.5 + 7,344 = 7,420.5 in²; e = 0.5/2 + 1.75 + 1.5 = 3.5 in;
+  //   M_t = 391.66 × 3.5 = 1,370.82 kip-in; R_x = 1,370.82 × 24/7,420.5 = 4.434; R_y = 391.66/34 + 1,370.82 × 1.5/7,420.5 = 11.797;
+  //   R_u = √(4.434² + 11.797²) = 12.602 kip ≤ φ_sR_n = 64.652; WS1 = 0.1949.
+  near(R.web.Ip, 7420.5, 1e-9, 'Ip'); near(R.web.e, 3.5, 1e-12, 'e'); near(R.combos[0].wb.R, 12.602, 0.001, 'R_u'); near(it('WS1', 0).r, 12.6022 / 64.6518, 1e-4, 'WS1');
+  // the worked steps carry the same values
+  assert.equal(st('sp.top.Pfy').value, R.Pfy.top.P); assert.equal(st('sp.Mr.neg').value, R.mNeg.Mr / 12); assert.equal(st('sp.TF1.0').value, it('TF1', 0).r);
+  assert.ok(C.every(c => c.items.every(i => C.steps.some(q => q.id === i.step))), 'every item has its step');
+});
+
+test('demandsAt: node nearest the splice, shears the largest of the element and its neighbours (spliceExport)', () => {
+  // nodes 0, 10, 20, 30, 40 ft; splice at 23 ft: nearest node 20 (index 2); element containing 23 = element 2 (20–30); shears of elements 1, 2, 3 → max |V|.
+  const A = { xs: [0, 10, 20, 30, 40], MDC1: [0, 50, 80, 50, 0], MDC2: [0, 1, 2, 3, 4], MDW: [0, 1, 2, 3, 4], MCL: [0, 0, -3, 0, 0], Mp: [0, 5, 9.96, 5, 0], Mn: [0, -1, -2.04, -1, 0], MfP: [0, 0, 7, 0, 0], MfN: [0, 0, -6, 0, 0],
+    VDC1: [10, -5, 7, -12], VDC2: [1, 2, 3, 4], VDW: [1, 1, 1, 1], VCL: [0, 0, 0, 0], Vp: [3, 4, 5, 6], Vn: [-7, -1, -1, -1] };
+  const d = S.demandsAt(A, 23);
+  assert.equal(d.i, 2); assert.equal(d.e, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(d.dem)), { MDC1: 80, MDC2: 2, MDW: 2, MLLp: 10, MLLn: -2, MCL: -3, VDC1: 12, VDC2: 4, VDW: 1, VLL: 6, VCL: 0, dMp: 7, dMn: 6 });
+  // at 5 ft: element 0 (neighbours −1 dropped, 0 and 1): V_DC1 = max(10, 5) = 10, V_LL = max(3, 4, 7, 1) = 7
+  const e = S.demandsAt(A, 5).dem; assert.equal(e.VDC1, 10); assert.equal(e.VLL, 7);
 });

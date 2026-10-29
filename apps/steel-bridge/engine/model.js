@@ -63,6 +63,14 @@
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)
+     -- added 2026-10-29 (field splices PR), optional, read by engine/splices.js (absent = defaultSplices(): no field splices) --
+     splices:   { x: [ft, …] (field splice stations, every girder), code: '10' | '8' (AASHTO LRFD edition of the design forces),
+                  bolts: { d: '0.875' | '1' | '1.125', gr: 'A325' | 'A490', thr: 'excl' | 'incl', cls: 'A' | 'B', prep: 'drilled' | 'punched',
+                           edge: 'cut' | 'sh', gap (in), long: 'flange' | 'both', eccS, eccV: 'incl' | 'excl', minLines, c1 (in; '' = table),
+                           stitch: 'req' | 'adv' },
+                  gam: { dcMax, dcMin, dwMax, dwMin, llS, llSv, fat, dc1C, clC }, clr: { cw, cv (in) }, prs: 'yes' | 'no', gP (plate grade; '' = flange),
+                  auto: true | false (auto-design the plates and bolts of each splice), plates: [ { x, g (girder index; absent = every girder),
+                  top, bot: { nl, g, g0, nr, s, ef, ep, bo, to, inner, bi, ti }, web: { h, t, nr, sv, nc, sh, ew, ewp } } ] (entered plates) }
    } */
 (function () {
   'use strict';
@@ -88,7 +96,8 @@
       xs: defaultXs({ spans: { lengths: [110, 140, 110] } }),
       stiffeners: defaultStiffeners(),
       fatigue: defaultFatigue(),
-      studs: defaultStuds()
+      studs: defaultStuds(),
+      splices: { ...defaultSplices(), x: [82, 145, 215, 278] }
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
@@ -116,6 +125,11 @@
   /* defaultStuds(): GirderDetail's built-in Shear connectors studs (GM.sc.def: 7/8 × 6 in, 4 in across, F_u 60 ksi, γ 1.75, F_rc 25 kip, w 48 in) */
   function defaultStuds() {
     return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'bridge', zones: [] };
+  }
+  /* defaultSplices(): GirderDetail's built-in Field splice settings (GD_DEFAULT bolts, load factors, clearances), no stations, auto-design on */
+  function defaultSplices() {
+    return { x: [], code: '10', bolts: { d: '0.875', gr: 'A325', thr: 'excl', cls: 'B', prep: 'drilled', edge: 'cut', gap: 0.5, long: 'flange', eccS: 'incl', eccV: 'excl', minLines: 2, c1: '', stitch: 'req' },
+      gam: { dcMax: 1.25, dcMin: 0.90, dwMax: 1.50, dwMin: 0.65, llS: 1.75, llSv: 1.30, fat: 1.75, dc1C: 1.25, clC: 1.50 }, clr: { cw: 0.5, cv: 1.5 }, prs: 'no', gP: '', auto: true, plates: [] };
   }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
@@ -216,6 +230,18 @@
       if (!['bridge', 'girder'].includes(Q.beffMode)) E('studs.beffMode', 'b_eff for the studs: bridge-wide or per girder.');
       if (!Array.isArray(Q.zones)) E('studs.zones', 'Pitch zones must be a list.');
       else Q.zones.forEach((z, i) => { if (!(isNum(z.x1) && isNum(z.x2) && z.x2 > z.x1 && Number.isInteger(z.nr) && z.nr >= 1 && isNum(z.p) && z.p > 0)) E(`studs.zones.${i}`, `Zone ${i + 1}: from < to, a whole number of studs per row and a positive pitch.`); }); }
+    // added 2026-10-29 (field splices PR): the optional field splice inputs
+    if (p.splices != null) { const Q = p.splices || {}, B = Q.bolts || {}, Lt = ((p.spans || {}).lengths || []).reduce((a, b) => a + (+b || 0), 0);
+      if (!Array.isArray(Q.x)) E('splices.x', 'Field splice stations must be a list.');
+      else Q.x.forEach((x, i) => { if (!(isNum(x) && x > 0 && x < Lt)) E('splices.x', `Field splice ${i + 1}: the station must lie between 0 and ${Lt} ft.`); else if (i && !(x > Q.x[i - 1])) E('splices.x', 'Field splice stations must increase.'); });
+      if (!['0.875', '1', '1.125'].includes(String(B.d))) E('splices.bolts.d', 'Bolt diameter: 7/8, 1 or 1 1/8 in.');
+      if (!['A325', 'A490'].includes(B.gr)) E('splices.bolts.gr', 'Bolt grade: A325 or A490.');
+      nn(B.gap, 'splices.bolts.gap', 'Gap between girder ends');
+      if (!(Number.isInteger(+B.minLines) && +B.minLines >= 1)) E('splices.bolts.minLines', 'Minimum bolt lines: a whole number of at least 1.');
+      Object.entries(Q.gam || {}).forEach(([k, v]) => pos(v, `splices.gam.${k}`, `Load factor ${k}`));
+      Object.entries(Q.clr || {}).forEach(([k, v]) => nn(v, `splices.clr.${k}`, `Clearance ${k}`));
+      if (!['10', '8'].includes(String(Q.code))) E('splices.code', 'Edition: 10th or 8th.');
+      if (Q.plates != null && !Array.isArray(Q.plates)) E('splices.plates', 'Entered splice plates must be a list.'); }
     return { errors, warnings };
   }
 
@@ -279,5 +305,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultSplices, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
