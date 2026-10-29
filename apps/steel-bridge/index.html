@@ -12,6 +12,10 @@
 <script src="engine/sections.js"></script>
 <script src="engine/flexure.js"></script>
 <script src="ui/flexure.js"></script>
+<script src="engine/owners.js"></script>
+<script src="engine/lldf.js"></script>
+<script src="engine/loads.js"></script>
+<script src="ui/loads.js"></script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
   :root{
@@ -120,7 +124,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -128,13 +132,13 @@
 <script>
 (function () {
   'use strict';
-  const M = window.SBDModel, SEC = window.SBDSections, ST = window.SharedSteps, U = window.SharedUnits;
+  const M = window.SBDModel, SEC = window.SBDSections, ST = window.SharedSteps, U = window.SharedUnits, UL = window.SBDUiLoads, OWN = window.SBDOwners;
   const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = (() => { try { const k = '__sbd2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
   const memStore = { getItem: () => null, setItem: () => {} };
   const L = M.load(store || memStore);
   let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
-  let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos' };
+  let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos', otab: 'sec', lg: 0, lr: 0 };
   try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* default tabs */ }
   const saveUi = () => { try { store && store.setItem(M.KEYS.ui, JSON.stringify(ui)); } catch (e) { /* not kept */ } };
 
@@ -145,7 +149,7 @@
   const sel = (path, label, opts, cur) => `<div class="fRow"><label for="i_${path}">${label}</label><select id="i_${path}" data-path="${path}" data-kind="sel">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(cur !== undefined ? cur : get(path)) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   const grades = Object.keys(M.GRADES).map(k => [k, `${k} (F_y ${M.GRADES[k].Fy} ksi)`]);
-  const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates']];
+  const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates'], ['xs', 'Cross-section & loads']];
   function panes() {
     const g = P.girders[ui.g] || P.girders[0];
     return {
@@ -163,10 +167,12 @@
           ${sel(`girders.${ui.g}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${num(`girders.${ui.g}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}`)
         + card('Plate segments (from the left end)', `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
           ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
-          </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`)
+          </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
+      xs: UL.inputs(P, { num, sel, card, esc })
     };
   }
   function drawInputs() {
+    UL.ensure(P);
     $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
@@ -176,7 +182,7 @@
     const v = M.validate(P), bad = new Set(v.errors.map(e => e.path));
     document.querySelectorAll('#inPanes [data-path]').forEach(el => el.classList.toggle('bad', bad.has(el.dataset.path)));
     const $s = $('i_spans'); if ($s) $s.classList.toggle('bad', [...bad].some(p => p.startsWith('spans.lengths')));
-    const tabOf = p => p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
+    const tabOf = p => p.startsWith('xs') || p.startsWith('ownerRules') || p === 'materials.concrete.wcE' ? 'xs' : p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
     const errTabs = new Set(v.errors.map(e => tabOf(e.path)));
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.classList.toggle('has-err', errTabs.has(b.dataset.itab)));
     return v;
@@ -185,13 +191,15 @@
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.id === 'i__g') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
+    if (UL.onChange(el, P)) { changed(true); return; }
     if (el.dataset.kind === 'spans') { P.spans.lengths = el.value.split(/[,;\s]+/).filter(Boolean).map(Number); }
     else if (el.dataset.path) { const k = el.dataset.kind, v = el.value;
       set(el.dataset.path, k === 'num' ? (v === '' ? NaN : Number(v)) : k === 'sel' ? (v === 'true' ? true : v === 'false' ? false : v) : v); }
     else return;
-    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || ''));
+    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode))/.test(el.dataset.path || ''));
   });
   $('inPanes').addEventListener('click', e => {
+    if (UL.onClick(e, P)) { changed(true); return; }
     const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
     if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
     if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
@@ -212,11 +220,12 @@
   function calc() {
     const v = markErrors(); if (v.errors.length) { R = { errors: v.errors }; stale = false; drawOut(); return; }
     const g = P.girders[ui.g], s = g.segments[ui.seg] || g.segments[0], G = M.GRADES, m = P.materials, d = P.deck;
-    const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule);
+    const lf = OWN.loadFactors(P.ownerRules.owner, P.ownerRules.eta, P.xs.nb);   // owner rules: OWN8 haunch, OWN17 w_c for E_c
+    const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
     const plates = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT };
-    const deck = { composite: d.composite, ts: d.ts, haunch: d.haunch, beff: g.beff, rebar: d.rebar };
+    const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff: g.beff, rebar: d.rebar };
     const mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
-    R = { g, s, nr, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings };
+    R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(P, ui.g) };
     stale = false; drawOut();
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${ST.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
@@ -227,6 +236,7 @@
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
+    if (ui.otab === 'loads') { $('out').innerHTML = h + UL.output(R && !stale && !R.errors ? R.loads : null, ui, R && !stale && R.errors); return; }
     h += `<div class="fRow"><label>Location</label><span>${esc(g ? g.label || g.id : '')}, segment ${ui.seg + 1}${s ? ` (x = ${U.fmt(s.x0, 2)} to ${U.fmt(s.x1, 2)} ft)` : ''}</span></div>
       <div class="fRow"><label for="o_region">Flexure region</label><select id="o_region"><option value="pos"${ui.region === 'pos' ? ' selected' : ''}>Positive (top flange in compression)</option><option value="neg"${ui.region === 'neg' ? ' selected' : ''}>Negative (bottom flange in compression)</option></select></div>`;
     if (R && R.errors) h += `<div class="alert err"><b>Input errors.</b><ul>${R.errors.map(e => `<li>${esc(e.msg)}</li>`).join('')}</ul></div>`;
@@ -240,14 +250,15 @@
         ${c.region === 'pos' && c.Dp != null ? kv('D<sub>t</sub> / D<sub>p</sub>', `${U.fmt(c.Dt, 3)} / ${U.fmt(c.Dp, 3)} in`, 'pl.pos.Dp') : ''}${c.region === 'neg' ? kv('D<sub>c</sub> (steel + rebar)', U.fmt(c.Dc, 3) + ' in', 'dc.steelrebar.bot.Dc') : ''}
         ${kv('D<sub>c</sub> steel, top / bottom in comp.', `${U.fmt(c.DcSteel.top, 3)} / ${U.fmt(c.DcSteel.bot, 3)} in`, 'dc.steel.top.Dc')}${kv('R<sub>h</sub>', U.fmt(c.Rh, 3), c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')}</div>
         ${c.pl.below ? '<div class="alert err">The plastic neutral axis falls below the web: outside Table D6.1-1 and D6.3.2 (see the work).</div>' : ''}
+        ${R.lf.h0 ? `<div class="alert">Haunch taken as 0 in the composite properties (${esc(R.lf.cite.h)}; owner rule): see the Loads &amp; LLDF tab. Its weight stays in DC1.</div>` : ''}${R.nr.wc !== P.materials.concrete.wc ? `<div class="alert">E<sub>c</sub> from w<sub>c</sub> = ${U.fmt(R.nr.wc, 3)} kcf (w<sub>c</sub> for E<sub>c</sub>, Cross-section &amp; loads tab).</div>` : ''}
         ${R.warnings.length ? `<div class="alert">${R.warnings.map(w => esc(w.msg)).join('<br>')}</div>` : ''}`);
       h += card('Worked steps', `<p class="note">Each value above links here (§). AASHTO LRFD 10th Ed. (2024). y is measured up from the bottom of the steel.</p>${stepsHtml(R.nr.steps.concat(c.steps))}`);
     }
     $('out').innerHTML = h;
   }
+  $('out').addEventListener('click', e => { if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
+  $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } else if (UL.onOutChange(e, ui)) { saveUi(); drawOut(); } });
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); drawOut(); });
-  $('out').addEventListener('click', e => { if (e.target.id === 'bCalc') calc(); });
-  $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } });
 
   /* ---------- header ---------- */
   $('bNew').addEventListener('click', () => { if (!confirm('Start a new project? The current one is replaced (export it first to keep it).')) return; P = M.defaultProject(); ui.g = 0; ui.seg = 0; autosave = true; changed(true); });
