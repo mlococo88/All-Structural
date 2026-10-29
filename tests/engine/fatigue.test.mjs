@@ -249,3 +249,15 @@ test('model: the optional fatigue and studs inputs (additive; a project without 
   assert.equal(JSON.stringify(M.validate(r).errors.map(e => e.path)), JSON.stringify(['fatigue.limit', 'fatigue.ADTT', 'studs.beffMode', 'studs.zones.0']));
   assert.equal(M.defaultStuds().beffMode, 'bridge', 'b_eff per girder is off by default');
 });
+
+test('ui/fatigue.js build(): the example and a hand-off file (no exception; the GirderDetail stud results unchanged with no project zones)', () => {
+  const E = f => path.join(ROOT, 'apps/steel-bridge', f);
+  const U = loadShared('units.js', 'steps.js', E('engine/model.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/fatigue.js'), E('engine/studs.js'), E('ui/fatigue.js'));
+  const P = U.SBDModel.defaultProject(), R = U.SBDFatigueUI.build({ P, g: 0, pl: null });
+  assert.equal(R.err, undefined); assert.equal(R.FR.errors.length + R.SR.errors.length, 0); assert.equal(R.FR.rows.length, 4); assert.equal(R.gs17, null);
+  const pl = JSON.parse(fs.readFileSync(path.join(DIR, 'gd_builtin_AASHTO_G2.json'), 'utf8')).payload, q = pl.girderDetail.details.studs.results;
+  P.studs.h = 5; P.studs.st = 3.5;   // the payload's studs (Preliminary sizing's), so the SC1/SC2 ratios are GirderDetail's
+  const R2 = U.SBDFatigueUI.build({ P, g: 0, pl });
+  assert.equal(R2.FR.errors.length + R2.SR.errors.length, 0); assert.ok(R2.gs17.length > 100 && R2.FR.rows.length > 10);
+  const c1 = R2.SCC.find(c => c.id === 'SC1').items; q.zones.forEach((z, i) => assert.ok(Math.abs(c1[i].r - z.r) < 1e-6, `zone ${i}`));
+});
