@@ -49,7 +49,7 @@ test('hand check: noncomposite simple-span plate girder, positive flexure (14 ×
   //   GS9 compression: M_u = 2220 ≤ 2249.41 -> ratio 0.98693. Tension: 2220 ≤ R_ptM_yt = 2833.33 -> 0.78353.
   // Service II: M_s = 600 + 100 + 80 + 1.30(700) = 1690; f_f = 1690(12)/606.807 = 33.421 ksi ≤ 0.80R_hF_yf = 40 -> 0.83552 (Eq. 6.10.4.2.2-3).
   //   Web (Eq. -4): D_c = 18, k = 9/(18/36)² = 36, F_crw = 0.9(29000)(36)/72² = 181.25 -> min(R_hF_yc = 50, 50/0.7) = 50; 33.421/50.
-  // Constructibility (information): f_bu + f_ℓ = 43.902 ≤ 50 (0.87804); web not slender -> Eq. 6.10.3.2.1-3 not checked; tension 43.902 ≤ 50.
+  // Constructibility (6.10.3): not in flexure since SB2-O10 (2026-10-29): engine/constructibility.js, construction-stage loads.
   const prj = { deck: { composite: false, ts: 8, tdeck: 8.5, haunch: 2, rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } } }, mat: { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 }, n: 8, G: FX.factors(), a6: { method: 'auto', skews: [0] } };
   const L = { name: 'A', region: 'pos', cont: false, plates: { D: 36, tw: 0.5, topB: 14, topT: 1, botB: 14, botT: 1 }, beff: 0, Lb: 20, Cb: 1, fl: 0, flT: 0,
     M: { DC1: 600, DC2: 100, DW: 80, LLp: 700, LLn: 0, FATp: 0, FATn: 0 } };
@@ -69,7 +69,7 @@ test('hand check: noncomposite simple-span plate girder, positive flexure (14 ×
   close(ck(r, 'GS12', 'svt').ratio, 0.83552099, 1e-7, 'Service II top'); close(ck(r, 'GS12', 'svt').capacity, 40, 1e-12, '0.80R_hF_yf');
   close(ck(r, 'GS13', 'web').capacity, 50, 1e-12, 'F_crw'); close(r.webS.k, 36, 1e-9, 'k');
   assert.ok(!ck(r, 'GS5', 'duct').inUse && !ck(r, 'GS6', 'mn').inUse, 'GS5/GS6 n/a for noncomposite');
-  const cy = ck(r, 'CN', 'cnY'); close(cy.ratio, 43.901931 / 50, 1e-7, 'constructibility'); assert.equal(cy.inUse, false); assert.ok(!isFinite(ck(r, 'CN', 'cnW').ratio));
+  assert.ok(!r.checks.some(c => c.id === 'CN'), 'no constructibility items in flexure (SB2-O10)');
   assert.match(STEPS.line(r.steps.find(s => s.id === 'fx.a6c.ok'), false), /≤ 2249\.41/);
 });
 
@@ -97,8 +97,7 @@ test('hand check: noncomposite negative flexure, slender web (top 18 × 1.5, web
   // Service II: M_s = −900 − 150 − 120 + 1.30(−800) = −2210; bottom 2210(12)/1189.766 = 22.2901 + 4/2 = 24.2901 ≤ 0.80(50) = 40 -> 0.60725;
   //   top 2210(12)/1725.902 = 15.3659 + 2/2 = 16.3659 -> 0.40915. Web: k = 9/(35.99628/60)² = 25.0052,
   //   F_crw = 0.9(29000)(25.0052)/(137.143)² = 34.6995 ksi; f_c = 22.2901 -> 0.64237.
-  // Constructibility (information): f_bu + f_ℓ = 29.1738 + 5.0147 = 34.1886 ≤ 50; slender web -> f_bu = 29.1738 ≤ F_crw = 34.6995 (0.84075);
-  //   tension 20.1112 + 2 = 22.1112 ≤ 50.
+  // Constructibility (6.10.3): engine/constructibility.js (SB2-O10).
   const prj = { deck: { composite: false, ts: 8, tdeck: 8.5, haunch: 2, rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } } }, mat: { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 }, n: 8, G: FX.factors(), a6: { method: 'auto', skews: [0] } };
   const L = { name: 'B', region: 'neg', cont: true, plates: { D: 60, tw: 0.4375, topB: 18, topT: 1.5, botB: 14, botT: 1 }, beff: 100, Lb: 18, Cb: 1.3, fl: 4, flT: 2,
     M: { DC1: -900, DC2: -150, DW: -120, LLp: 150, LLn: -800, FATp: 0, FATn: 0 } };
@@ -112,7 +111,7 @@ test('hand check: noncomposite negative flexure, slender web (top 18 × 1.5, web
   close(ck(r, 'GS10', 'fl').demand, 5.0147488, 1e-7, 'GS10 bottom'); close(ck(r, 'GS10', 'flT').demand, 2, 1e-12, 'GS10 top');
   close(ck(r, 'GS12', 'svb').ratio, 0.60725248, 1e-7, 'Service II bottom'); close(ck(r, 'GS12', 'svt').ratio, 0.40914697, 1e-7, 'Service II top');
   close(r.webS.F, 34.699549, 1e-7, 'F_crw'); close(ck(r, 'GS13', 'web').ratio, 0.64237432, 1e-7, 'GS13');
-  close(ck(r, 'CN', 'cnY').demand, 34.188555, 1e-7, 'cnY'); close(ck(r, 'CN', 'cnW').ratio, 0.84075462, 1e-7, 'cnW'); close(ck(r, 'CN', 'cnT').demand, 22.111224, 1e-7, 'cnT');
+  assert.ok(!r.checks.some(c => c.id === 'CN') && !r.steps.some(s => /^fx\.cn\./.test(s.id)), 'no constructibility items or steps in flexure (SB2-O10)');
   assert.equal(r.gov.id, 'GS7');   // GS7 0.64506 > GS13 0.64237 (before SB2-O6: GS13 governed, GS7 0.63760)
 });
 
