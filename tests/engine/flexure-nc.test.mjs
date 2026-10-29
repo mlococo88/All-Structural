@@ -81,37 +81,39 @@ test('hand check: noncomposite negative flexure, slender web (top 18 × 1.5, web
   //   I = 44,016.92 in⁴; S_bot = I/ȳ = 1189.766, S_top = I/(62.5 − 36.99628) = 1725.902 in³.
   // M_u = 1.25(−900) + 1.25(−150) + 1.50(−120) + 1.75(−800) = −1125 − 187.5 − 180 − 1400 = −2892.5 kip-ft.
   //   f_bu (bottom, compression) = 2892.5(12)/1189.766 = 29.1738 ksi; tension (top) = 2892.5(12)/1725.902 = 20.1112 ksi.
-  // D_c = ȳ − t_b = 35.99628 in; 2D_c/t_w = 164.554 > λ_rw = 137.274 (R_b); a_wc = 2(35.99628)(0.4375)/(14·1) = 2.24977;
-  //   R_b = 1 − 2.24977/(1200 + 300(2.24977))(164.554 − 137.274) = 1 − 0.0011999(27.280) = 0.96727.
-  // A6 (6.10.6.2.3): c_rw = 3.1 + 5.0/2.24977 = 5.3225, λ_rw = 5.3225(24.0832) = 128.182 ≤ 164.554 -> slender web: not permitted; 6.10.8.
+  // D_c = ȳ − t_b = 35.99628 in; 2D_c/t_w = 164.554; a_wc = 2(35.99628)(0.4375)/(14·1) = 2.24977; c_rw = 3.1 + 5.0/2.24977 = 5.3225
+  //   (4.6 ≤ c_rw ≤ 5.7); λ_rw = 5.3225√(29000/50) = 5.3225(24.0832) = 128.182 (Eqs. 6.10.1.10.2-5, -8; SB2-O6, 2026-10-29);
+  //   R_b = 1 − 2.24977/(1200 + 300(2.24977))(164.554 − 128.182) = 1 − 0.0011999(36.373) = 0.95636.
+  //   (Before SB2-O6, λ_rw = 5.7√(E/F_yc) = 137.274: R_b = 1 − 0.0011999(27.280) = 0.96727, F_nc = 48.363, GS7 0.63760.)
+  // A6 (6.10.6.2.3): λ_rw = 128.182 ≤ 164.554 -> slender web: not permitted; 6.10.8.
   //   I_yc/I_yt = 1(14)³/(1.5(18)³) = 2744/8748 = 0.3137.
-  // FLB: λ_f = 7 ≤ 9.152 -> F_nc,FLB = R_bR_hF_yc = 0.96727(50) = 48.363 ksi.
+  // FLB: λ_f = 7 ≤ 9.152 -> F_nc,FLB = R_bR_hF_yc = 0.95636(50) = 47.818 ksi.
   // LTB: r_t = 14/√(12(1 + 35.99628(0.4375)/(3·14·1))) = 3.44661 in; L_p = 1.1(3.44661)(24.0832) = 91.306 in; L_r = π(3.44661)(28.7849) = 311.679 in;
-  //   L_b = 216 in: C_b[1 − 0.3(216 − 91.306)/(311.679 − 91.306)]R_bR_hF_yc = 1.3(0.83026)(48.363) > 48.363 -> F_nc,LTB = 48.363.
-  // f_ℓ amplification (6.10.1.6): F_cr = 1.3(0.96727)π²(29000)/(216/3.44661)² = 91.6355 ksi; limit 1.2L_p√(C_bR_b/(f_bu/F_yc))
-  //   = 1.2(91.306)√(1.3(0.96727)/(29.1738/50)) = 160.847 in < 216 -> AF = 0.85/(1 − 29.1738/91.6355) = 1.24701 -> f_ℓ = 4.98803 ksi.
-  // GS7: 29.1738 + 4.98803/3 = 30.8365 ≤ 48.363 -> 0.63760.  GS8 (Eq. 6.10.8.1.2-1): 20.1112 + 2/3 = 20.7779 ≤ R_hF_yt = 50 -> 0.41556.
-  // GS10: bottom 4.98803 ≤ 30, top 2 ≤ 30.
+  //   L_b = 216 in: C_b[1 − 0.3(216 − 91.306)/(311.679 − 91.306)]R_bR_hF_yc = 1.3(0.83026)(47.818) > 47.818 -> F_nc,LTB = 47.818.
+  // f_ℓ amplification (6.10.1.6): F_cr = 1.3(0.95636)π²(29000)/(216/3.44661)² = 90.6019 ksi; limit 1.2L_p√(C_bR_b/(f_bu/F_yc))
+  //   = 1.2(91.306)√(1.3(0.95636)/(29.1738/50)) = 159.937 in < 216 -> AF = 0.85/(1 − 29.1738/90.6019) = 1.25369 -> f_ℓ = 5.01475 ksi.
+  // GS7: 29.1738 + 5.01475/3 = 30.8454 ≤ 47.818 -> 0.64506.  GS8 (Eq. 6.10.8.1.2-1): 20.1112 + 2/3 = 20.7779 ≤ R_hF_yt = 50 -> 0.41556.
+  // GS10: bottom 5.01475 ≤ 30, top 2 ≤ 30.
   // Service II: M_s = −900 − 150 − 120 + 1.30(−800) = −2210; bottom 2210(12)/1189.766 = 22.2901 + 4/2 = 24.2901 ≤ 0.80(50) = 40 -> 0.60725;
   //   top 2210(12)/1725.902 = 15.3659 + 2/2 = 16.3659 -> 0.40915. Web: k = 9/(35.99628/60)² = 25.0052,
   //   F_crw = 0.9(29000)(25.0052)/(137.143)² = 34.6995 ksi; f_c = 22.2901 -> 0.64237.
-  // Constructibility (information): f_bu + f_ℓ = 29.1738 + 4.9880 = 34.1618 ≤ 50; slender web -> f_bu = 29.1738 ≤ F_crw = 34.6995 (0.84075);
+  // Constructibility (information): f_bu + f_ℓ = 29.1738 + 5.0147 = 34.1886 ≤ 50; slender web -> f_bu = 29.1738 ≤ F_crw = 34.6995 (0.84075);
   //   tension 20.1112 + 2 = 22.1112 ≤ 50.
   const prj = { deck: { composite: false, ts: 8, tdeck: 8.5, haunch: 2, rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } } }, mat: { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 }, n: 8, G: FX.factors(), a6: { method: 'auto', skews: [0] } };
   const L = { name: 'B', region: 'neg', cont: true, plates: { D: 60, tw: 0.4375, topB: 18, topT: 1.5, botB: 14, botT: 1 }, beff: 100, Lb: 18, Cb: 1.3, fl: 4, flT: 2,
     M: { DC1: -900, DC2: -150, DW: -120, LLp: 150, LLn: -800, FATp: 0, FATn: 0 } };
   const r = FX.location(L, prj);
   close(r.card.cr.yb, 36.996283, 1e-7, 'ȳ (no rebar)'); close(r.Mu, -2892.5, 1e-12, 'M_u'); close(r.fbuC, 29.173806, 1e-7, 'f_bu'); close(r.tF.f, 20.111224, 1e-7, 'f_t');
-  close(r.Dc, 35.996283, 1e-7, 'D_c'); close(r.Rb, 0.96726586, 1e-7, 'R_b');
+  close(r.Dc, 35.996283, 1e-7, 'D_c'); close(r.Rb, 0.9563555, 1e-7, 'R_b'); close(r.rb.lrw, 128.18161, 1e-7, 'λ_rw (R_b, c_rw)');
   assert.equal(r.A6.ok, false); assert.equal(r.useA6, false); close(r.A6.lrwP, 128.18161, 1e-7, 'λ_rw (A6)'); assert.ok(r.A6.why.some(s => /slender/.test(s)));
-  close(r.lt.FLB, 48.363293, 1e-7, 'F_nc,FLB'); close(r.lt.rt, 3.4466103, 1e-7, 'r_t'); close(r.lt.LTB, 48.363293, 1e-7, 'F_nc,LTB');
-  close(r.lt.Fcr, 91.635512, 1e-7, 'F_cr'); close(r.am.AF, 1.247007, 1e-6, 'AF'); close(r.am.fl, 4.9880281, 1e-7, 'f_ℓ amplified');
-  close(ck(r, 'GS7', 'fnc').ratio, 0.63760096, 1e-7, 'GS7'); close(ck(r, 'GS8', 'fnt').ratio, 0.4155578, 1e-7, 'GS8');
-  close(ck(r, 'GS10', 'fl').demand, 4.9880281, 1e-7, 'GS10 bottom'); close(ck(r, 'GS10', 'flT').demand, 2, 1e-12, 'GS10 top');
+  close(r.lt.FLB, 47.817775, 1e-7, 'F_nc,FLB'); close(r.lt.rt, 3.4466103, 1e-7, 'r_t'); close(r.lt.LTB, 47.817775, 1e-7, 'F_nc,LTB');
+  close(r.lt.Fcr, 90.601901, 1e-7, 'F_cr'); close(r.am.AF, 1.2536872, 1e-6, 'AF'); close(r.am.fl, 5.0147488, 1e-7, 'f_ℓ amplified');
+  close(ck(r, 'GS7', 'fnc').ratio, 0.64506115, 1e-7, 'GS7'); close(ck(r, 'GS8', 'fnt').ratio, 0.4155578, 1e-7, 'GS8');
+  close(ck(r, 'GS10', 'fl').demand, 5.0147488, 1e-7, 'GS10 bottom'); close(ck(r, 'GS10', 'flT').demand, 2, 1e-12, 'GS10 top');
   close(ck(r, 'GS12', 'svb').ratio, 0.60725248, 1e-7, 'Service II bottom'); close(ck(r, 'GS12', 'svt').ratio, 0.40914697, 1e-7, 'Service II top');
   close(r.webS.F, 34.699549, 1e-7, 'F_crw'); close(ck(r, 'GS13', 'web').ratio, 0.64237432, 1e-7, 'GS13');
-  close(ck(r, 'CN', 'cnY').demand, 34.161834, 1e-7, 'cnY'); close(ck(r, 'CN', 'cnW').ratio, 0.84075462, 1e-7, 'cnW'); close(ck(r, 'CN', 'cnT').demand, 22.111224, 1e-7, 'cnT');
-  assert.equal(r.gov.id, 'GS13');
+  close(ck(r, 'CN', 'cnY').demand, 34.188555, 1e-7, 'cnY'); close(ck(r, 'CN', 'cnW').ratio, 0.84075462, 1e-7, 'cnW'); close(ck(r, 'CN', 'cnT').demand, 22.111224, 1e-7, 'cnT');
+  assert.equal(r.gov.id, 'GS7');   // GS7 0.64506 > GS13 0.64237 (before SB2-O6: GS13 governed, GS7 0.63760)
 });
 
 /* ---------- consistency 1: noncomposite negative = the existing negative path, steel section with no rebar ---------- */
