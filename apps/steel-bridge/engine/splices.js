@@ -816,7 +816,7 @@
     p.sec = { ...p.sec, D: sc.L.D, gF: ms.top || '50W', gW: ms.web || '50W', gP: S.gP || ms.top || '50W', L: pick(sc.L), R: pick(sc.R), Rh, ts: d.ts, hh: d.haunch, beff: g.beff, Ar, dr, web, do: dO,
       fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule, code: S.code, Fyr: (m.rebar || {}).Fyr || 60, prs: S.prs, same: { top: false, web: false, bot: false } };
     p.dem = dm.dem; p.gam = S.gam; p.bolts = S.bolts; p.clr = S.clr;
-    const own = S.plates.find(q => Math.abs(+q.x - x) < 1e-6);
+    const own = S.plates.find(q => q && Math.abs(+q.x - x) < 1e-6 && (q.g == null || +q.g === gi));
     if (own) ['top', 'bot', 'web'].forEach(k => { if (own[k]) p[k] = { ...p[k], ...own[k] }; });
     return { p, dm, warn, own: !!own };
   }
@@ -842,7 +842,7 @@
   /* ---------- drawing (plan of the flange splice and elevation of the web splice; simple) ---------- */
   function svg(R) {
     if (!R || R.errors && R.errors.length) return '';
-    const W = R.web, F = R.fl.bot, k = 9, pad = 24, gap = R.gap;
+    const W = R.web, F = R.fl.bot, k = 5, pad = 24, gap = R.gap;
     const Lw = 2 * (W.ew + (W.ncw - 1) * W.sh + W.ewp) + gap, Lf = F.Lpl, L = Math.max(Lw, Lf) + 8, H = R.D;
     const wid = (L * k + 2 * pad), ht = (H * k + 2 * pad), cx = wid / 2, y0 = pad, s = v => v * k;
     let h = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${wid.toFixed(0)} ${ht.toFixed(0)}" style="max-width:100%;height:auto;font-family:sans-serif" role="img" aria-label="Web splice elevation">`;
