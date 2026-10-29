@@ -144,7 +144,7 @@ test('hand check 2: composite, same steel, b_eff 96 in, t_s 8 in, haunch 2 in, n
   close(c.yb, 8450 / 158, 1e-12, 'ȳ'); close(c.I, 38770 + 2 / 3 + 512 + 62 * 96 / 158 * 37 ** 2, 1e-12, 'I');
   close(c.I, 90854.11, 1e-7, 'I (rounded)'); close(c.St, 10664.8, 1e-5, 'S top'); close(c.Sb, 1698.8, 1e-4, 'S bot');
   // long-term, 3n = 24: A_d = 96(8)/24 = 32 in², A = 94 in², ȳ = (1922 + 32·68)/94 = 4098/94 = 43.5957 in
-  // I = 38,770.667 + 512/3 + 62·32/94 (37)² = 38,770.667 + 170.667 + 28,894.30 = 67,835.6 in⁴
+  // I = 38,770.667 + 512/3 + 62·32/94 (37)² = 38,770.667 + 170.667 + 28,894.64 = 67,835.97 in⁴
   const c3 = SEC.composite(p, deck, 8, 3);
   close(c3.A, 94, 1e-12, 'A (3n)'); close(c3.yb, 4098 / 94, 1e-12, 'ȳ (3n)'); close(c3.I, 38770 + 2 / 3 + 512 / 3 + 62 * 32 / 94 * 37 ** 2, 1e-12, 'I (3n)');
   // Plastic moment, positive flexure, Table D6.1-1, f'c = 4 ksi, F_y = 50, rebar not counted:
@@ -154,7 +154,7 @@ test('hand check 2: composite, same steel, b_eff 96 in, t_s 8 in, haunch 2 in, n
   // y_p = 62 − 0.3055 = 61.6945 in; arms: d_s = 68 − 61.6945 = 6.3055, d_w = 61.6945 − 31 = 30.6945, d_t = 61.6945 − 0.5 = 61.1945
   // M_p = P_c/(2t_c)[Ȳ² + (t_c − Ȳ)²] + P_s d_s + P_w d_w + P_t d_t
   //     = 400[0.09333 + 0.48233] + 2611.2(6.3055) + 1500(30.6945) + 800(61.1945)
-  //     = 230.26 + 16,465.0 + 46,041.8 + 48,955.6 = 111,692.7 kip-in = 9307.7 kip-ft
+  //     = 230.26 + 16,465.0 + 46,041.8 + 48,955.6 = 111,692.5 kip-in = 9307.7 kip-ft
   // D_cp = 0 (Case II), D_t = 62 + 2 + 8 = 72 in, D_p = 72 − 61.6945 = 10.3055 in
   const pl = SEC.plastic(p, deck, { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 }, { region: 'pos' });
   assert.equal(pl.cs, 'II'); close(pl.Yb, 0.3055, 1e-12, 'Ȳ'); close(pl.yp, 61.6945, 1e-12, 'y_p');
