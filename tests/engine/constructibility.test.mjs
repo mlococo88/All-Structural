@@ -254,6 +254,20 @@ test('fromAnalysis(): the project path (analysis, cross-frames, stiffener panels
   G.oh.rows.forEach(r => { const ids = new Set(r.steps.map(s => s.id)); r.checks.forEach(c => assert.ok(ids.has(c.step), c.step)); });
 });
 
+test('bracingC(): L_b,C, C_b,C and nprC with Preliminary sizing\'s own fe* functions: identical', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8'), ctx = {}; vm.createContext(ctx); let code = 'const ES = 29000;\n';
+  for (const n of ['feCb', 'feAt', 'feNpr', 'feGe', 'feGeA', 'feGov']) { const a = html.indexOf(`\nfunction ${n}(`); assert.ok(a > 0, n); const b = html.indexOf('\n}\n', a); code += html.slice(a + 1, b + 3); }
+  vm.runInContext(code + 'this.FE = { feCb, feAt, feNpr, feGe, feGeA, feGov };', ctx, { filename: 'Steel Bridge Design.html (fe*)' });
+  let n = 0; const kinds = {};
+  for (const f of payloads.filter(f => /_AASHTO_G[12]\.json$/.test(f))) {
+    const pl = readPayload(f), A = C.fromPayload(pl), B = C.fromPayload(pl, { impl: ctx.FE });
+    A.locs.forEach((L, i) => { const q = B.locs[i]; n++; kinds[L.nprC ? L.nprC.kind : 'pris'] = (kinds[L.nprC ? L.nprC.kind : 'pris'] || 0) + 1;
+      assert.equal(JSON.stringify([L.LbC, L.CbC, L.nprC]), JSON.stringify([q.LbC, q.CbC, q.nprC]), `${f} ${L.name}`); });
+  }
+  console.log(`       ${n} locations; ${Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  assert.ok(kinds.ge > 100);
+});
+
 /* ---------- hand checks ---------- */
 test('hand check: deck placement on a doubly symmetric steel I (GS14, GS15, GS16)', () => {
   // Steel I: flanges 16 × 1, web 60 × 1/2, F_y 50 (A = 62 in², ȳ = 31 in, I = 38,770.667 in⁴, d = 62 in; sections.test.mjs hand check 1).
