@@ -125,6 +125,10 @@ export function variants() {
   // the four SB2-O19 items (lldf.html's rules, GirderDetail #472) and the pier skew rule (GirderDetail DFL5)
   add('SB2-O19 item 2: support skews 20 / 35 / 35 / 50° (spans 1 and 3 differ by 15° > 10°: no moment reduction there)', (df, b) => { const sk = [20, 35, 35, 50]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
   add('pier rule: support skews 40 / 52 / 52 / 40° (piers 1 and 2: an adjacent span differs by 12°)', (df, b) => { const sk = [40, 52, 52, 40]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
+  // SB2-O23 / GirderDetail DFL6: the tables' θ is |θ|; the 10° rule compares the signed skews
+  add('SB2-O23: support skews −30° at every line (moment reduction and shear correction with θ = 30°)', (df, b) => { const sk = [-30, -30, -30, -30]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
+  add('SB2-O23: support skews −40 / −45 / −38 / −65° (mixed with the 10° rule and θ > 60°)', (df, b) => { const sk = [-40, -45, -38, -65]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
+  add('SB2-O23: support skews −35 / 35 / 35 / −35° (signs differ: spans 1 and 3 lines 70° apart, no moment reduction; span 2 keeps it)', (df, b) => { const sk = [-35, 35, 35, -35]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
   add('SB2-O19 item 3: N_b = 3 at 14 ft, overhangs 6 ft (3 lanes; 2 trucks still govern)', (df, b) => { b.nb = 3; b.S = 14; b.bays = [14, 14]; b.ohL = 6; b.ohR = 6; });
   add('SB2-O19 item 3: N_b = 4 at 18 ft (S > 16 ft), overhangs 4 ft', (df, b) => { b.nb = 4; b.S = 18; b.bays = [18, 18, 18]; b.ohL = 4; b.ohR = 4; });
   add('SB2-O19 item 4: overhangs 3.3 ft (lever-rule peak between the 0.25 ft grid points)', (df, b) => { b.ohL = 3.3; b.ohR = 3.3; });
@@ -228,6 +232,23 @@ test('hand check: interior girder moment and shear factors, S = 9.5 ft, L = 110 
   // 3 lanes 0.85 (3/5 + 19 × 11.25/902.5) = 0.85 × 0.836842 = 0.711316. Governing 0.810526 (the payload's G1 g_M 0.8105).
   const g1 = s0.members[0]; c(g1.lever1.R, 0.657895, 'lever R'); c(g1.lever1.df, 0.789474, 'lever g'); c(g1.rig.g, 0.810526, 'rigid'); c(g1.gM, 0.810526, 'G1 g_M');
   c(g1.fatM, 0.789474 / 1.2, 'G1 fatigue: max(lever 0.789474, rigid one lane 0.637895) / 1.2 (4.6.2.2.2d; the lever rule governs here)');
+});
+
+test('hand check SB2-O23: support skews −30° / −30°, interior G2, span 1 (θ = |θ| = 30°; before: read as no skew)', () => {
+  // Same section as above: S = 9.5 ft, L = 110 ft, t_s = 8 in, K_g = 869,918.955 in⁴; 12 L t_s³ / K_g = 675,840 / 869,918.955 = 0.776900.
+  // Shear (Table 4.6.2.2.3c-1): r_V = 1 + 0.20 (0.776900)^0.3 tan 30° = 1 + 0.20 × 0.927064 × 0.577350 = 1.107048 (before: 1.0).
+  //   g_V,1 = 0.74 × 1.107048 = 0.819216; g_V,2 = 0.917993 × 1.107048 = 1.016263; g_V = 1.016263 (before 0.917993, +10.7 %).
+  // Moment (Table 4.6.2.2.2e-1, θ = 30°, both lines −30°: no 10° change): c_1 = 0.25 (1.287167)^0.25 (9.5/110)^0.5
+  //   = 0.25 × 1.065145 × 0.293877 = 0.078255; r_M = 1 − 0.078255 (tan 30°)^1.5 = 1 − 0.078255 × 0.438691 = 0.965670 (before: 1.0).
+  //   g_M = 0.703391 × 0.965670 = 0.679243 (before 0.703391).
+  const v = variants().find(q => q.name.startsWith('SB2-O23: support skews −30°')), r = ours(v.df), s0 = r.regions[0], g2 = s0.members[1];
+  const c = (a, b, w) => assert.ok(Math.abs(a - b) < 2e-6, `${w}: ${a} vs ${b}`);
+  c(s0.sk.scfV, 1.107048, 'r_V'); c(g2.r.shr1, 0.819216, 'g_V,1'); c(g2.r.shr2, 1.016263, 'g_V,2'); c(g2.gV, 1.016263, 'g_V');
+  c(s0.sk.c1, 0.078255, 'c_1'); c(s0.sk.scfM, 0.965670, 'r_M'); c(g2.gM, 0.679243, 'g_M');
+  // the 10° rule compares the signed skews: −35 / 35 / 35 / −35°, span 1's lines are 70° apart: no moment reduction; span 2 keeps it
+  const w = ours(variants().find(q => q.name.startsWith('SB2-O23: support skews −35')).df);
+  assert.equal(w.regions[0].sk.noRed, true); assert.equal(w.regions[0].sk.scfM, 1); assert.equal(w.regions[1].sk.noRed, false); assert.ok(w.regions[1].sk.scfM < 1);
+  assert.ok(w.regions[0].sk.scfV > 1, 'shear correction with |θ| = 35°');
 });
 
 test('owner rules: load factors (η, m, h0) and OWN8 haunch', () => {
