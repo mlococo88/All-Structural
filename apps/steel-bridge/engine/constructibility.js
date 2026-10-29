@@ -353,7 +353,7 @@
     const env = { xs, MDC1: st.DC1.M, MCL: st.CL.M, ...(MDCc ? { MDCc } : {}) };
     const ly = (P.stiffeners || {}).layout || {}, fr = ly.frames || {}, SB = window.SBDStiffeners;
     const ints = Array.isArray(fr.at) ? fr.at.map(Number) : SB ? SB.framesDefault(sup, +fr.Lb || 25) : [];
-    const braces = [...sup, ...ints];
+    const braces = opt && opt.braces ? opt.braces : [...sup, ...ints];   // opt.braces: the project's framing (engine/framing.js forGirder; SB2-O9)
     const D = Math.max(...segs.map(s => s.D)), cont = AR.cont;
     const pans = SB ? SB.girderBays(ly, D, sup, cont, sup, ints, gi + 1).flatMap(SB.bayPanels) : [];
     const panelAt = x => pans.find(q => x >= q.p - 1e-9 && x <= q.q + 1e-9) || null;
