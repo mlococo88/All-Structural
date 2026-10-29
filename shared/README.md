@@ -35,3 +35,38 @@ Plan: `docs/REBUILD_PLAN.md` (§3). Rules: `CLAUDE.md` §1, §3, §7, §8.
 |---|---|---|
 | `vehicles.js` | `window.SharedVehicles` | `Moving Load Generator.html` |
 | `moving-load.js` | `window.SharedMovingLoad` | `Moving Load Generator.html` |
+| `units.js` | `window.SharedUnits` | `apps/steel-bridge/index.html` |
+| `steps.js` | `window.SharedSteps` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/sections.js`) |
+
+## Worked steps (`steps.js`)
+
+Every engine function returns its values **and** the steps that work them out; the screen, the printed
+report and the tests render those same steps (`docs/REBUILD_PLAN.md` §5, CLAUDE.md §6 "show the work").
+
+A step is a plain object:
+
+| Field | Meaning |
+|---|---|
+| `id` | Stable key, unique within one result, dotted (`sec.cn.yb`). In-app links (`#st-<id>`) and the report's "see §x.y" point to it. Never reuse an id for a different quantity. |
+| `label` | What the step finds, in words. |
+| `sym` | Symbol of the result. |
+| `eq` | The equation in symbols (right-hand side). |
+| `sub` | The same with the values substituted, numbers already formatted. |
+| `value` | The result at full precision (a number), or a string for a non-numeric outcome (a case, yes/no). Never rounded. |
+| `unit` | Unit of `value` (`in`, `in^{2}`, `kip-ft`, or empty). |
+| `d` | Decimals to display `value` with (display only). |
+| `ref` | Code reference with edition, e.g. `AASHTO LRFD 10th Ed. Eq. 6.10.1.10.1-1`; empty if none. |
+| `note` | Optional remark (condition, why a case applies, a scope flag). |
+| `ok` | Optional, for a test step: `true` / `false`. |
+
+It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the label.
+
+- **Notation** of `sym`, `eq`, `sub`, `unit`: a small TeX subset — `_{…}`, `^{…}`, `\frac{a}{b}`, `\bar{x}`,
+  `\sqrt{x}`, `\text{…}`, Greek letters, `\sum`, `\cdot`, `\times`, `\le`, `\ge`, `\lt`, `\gt`,
+  `\prime`, `\,`. `SharedSteps.toHTML()` and `toText()` render it with no library; KaTeX could render the
+  same strings later without changing any engine.
+- **Collecting:** `const w = SharedSteps.work('sec.s'); const A = w.add({ id: 'A', … , value });` stores
+  the step (id `sec.s.A`) and returns its value, so the value used downstream is the value shown.
+  Results carry `steps: w.steps`; a composite result concatenates its parts' steps in order.
+- **Formatting substitutions:** `SharedSteps.n(x, d)` (fixed decimals), `SharedSteps.g(x, d)` (thousands grouped).
+- **Tests** compare `value`s, not strings; a hand-check test may also check a rendered line.
