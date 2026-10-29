@@ -591,6 +591,10 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   `.steps li{break-inside:avoid;}`, KaTeX colours printed exactly, fraction and overline rules in black at least 1 px.
 - Rendering is in `shared/steps.js` (`toHTML`, `line`; see `fixlog/shared-units.md`, same PR). The Section properties, Flexure, Analysis, Fatigue & studs,
   Loads & LLDF and Shear & stiffeners tabs all render their steps with `SharedSteps.line(s, true)`, so all six use KaTeX; no UI file changed.
+- `engine/fatigue.js`, FA6 remaining-life step (anchor `id: 'life', label: \`Remaining fatigue life`), the `sub` shown when R_R is not
+  entered: the only step string that KaTeX could not parse (`_` inside `\text{}`).
+  Before: `'\\text{R_R not entered}'`. After: `'R_{R}\\ \\text{not entered}'`. Display text only: `value` (NaN) and `ok` unchanged;
+  `toText` gives "R_R not entered" before and after; on screen, R with subscript R.
 ### Problem
 - New behaviour: steps typeset with KaTeX. Offline or with the CDN blocked, the steps use the built-in renderer as before.
 ### Governing provision
