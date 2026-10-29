@@ -261,7 +261,7 @@ test('ui/fatigue.js build(): the example and a hand-off file (no exception; the 
   assert.equal(R2.FR.errors.length + R2.SR.errors.length, 0); assert.ok(R2.gs17.length > 100 && R2.FR.rows.length > 10);
   const c1 = R2.SCC.find(c => c.id === 'SC1').items; q.zones.forEach((z, i) => assert.ok(Math.abs(c1[i].r - z.r) < 1e-6, `zone ${i}`));
   // this project's analysis (engine/analysis.js): the default demand source of the tab
-  const UA = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), E('engine/lldf.js'), E('engine/loads.js'), E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/analysis.js'), E('engine/fatigue.js'), E('engine/studs.js'), E('ui/fatigue.js'));
+  const UA = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), 'lldf.js', E('engine/lldf.js'), E('engine/loads.js'), E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/analysis.js'), E('engine/fatigue.js'), E('engine/studs.js'), E('ui/fatigue.js'));
   const R3 = UA.SBDFatigueUI.build({ P: UA.SBDModel.defaultProject(), g: 0 });
   assert.equal(R3.err, undefined); assert.equal(R3.FR.errors.length + R3.SR.errors.length, 0); assert.equal(R3.SR.zones.length, 30); assert.equal(R3.SR.regions.length, 6); assert.ok(R3.gs17.length > 300 && R3.g17.it.r > 0);
 });

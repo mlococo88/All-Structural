@@ -35,10 +35,11 @@
    6.10.8 (F_nc, FLB 6.10.8.2.2, LTB 6.10.8.2.3; F_nt 6.10.8.3 with f_bu + f_l/3, Eq. 6.10.8.1.2-1) or App. A6 where 6.10.6.2.3
    permits it (A6.1.1, A6.1.2 with f_l); the compression flange is the top flange in positive flexure, the bottom flange in
    negative flexure. loc.flT (ksi): first-order lateral bending of the top flange (noncomposite only; loc.fl stays the bottom
-   flange). Service II 6.10.4.2.2 Eq. -3 (both flanges, 0.80R_hF_yf) and Eq. -4; f_l ≤ 0.6F_yf for both flanges; the
-   constructibility flexure checks 6.10.3.2.1-1, -3 and 6.10.3.2.2-1 at the Strength I stresses as information (id CN, not
-   in the governing ratio; open item). Not available for noncomposite: the nonprismatic 'ge' unbraced length in positive
-   flexure (throws). */
+   flange). Service II 6.10.4.2.2 Eq. -3 (both flanges, 0.80R_hF_yf) and Eq. -4; f_l ≤ 0.6F_yf for both flanges. Not
+   available for noncomposite: the nonprismatic 'ge' unbraced length in positive flexure (throws).
+   Constructibility (6.10.3) is not here: engine/constructibility.js checks it with the construction-stage loads (deck placement
+   M_DCc and the construction live load; engineer's decision SB2-O10, 2026-10-29). The information items CN (6.10.3.2.1-1, -3 and
+   6.10.3.2.2-1 at the Strength I stresses, never in the governing ratio) were removed then. */
 (function () {
   'use strict';
   const ES = 29000, ED = 'AASHTO LRFD 10th Ed.';
@@ -319,7 +320,7 @@
     const minR = !nc && Art + Arb >= 0.01 * r.beff * dk.tdeck - 1e-9; r.fatNegSec = nc ? s : minR ? cn : cr; r.minR = minR; const fatPos = nc ? s : cn;   // noncomposite: the steel section
     const MfP = F && F.fat ? num(F.fat.p) : num(M.FATp), MfN = F && F.fat ? num(F.fat.n) : num(M.FATn), gf = F && F.fat ? 1 : G.fat; r.MfP = MfP; r.MfN = MfN; r.gfat = gf;
     r.dfT = gf * (Math.abs(fAt(MfP, fatPos, d)) + Math.abs(fAt(MfN, r.fatNegSec, d))); r.dfB = gf * (Math.abs(fAt(MfP, fatPos, 0)) + Math.abs(fAt(MfN, r.fatNegSec, 0)));
-    r.prjFyw = Fyw; r.checks = checksOf(r, prj);
+    r.checks = checksOf(r, prj);
     let stp = null;   // the worked steps, built when first read (a girder has hundreds of locations; the page shows one at a time)
     Object.defineProperty(r, 'steps', { enumerable: true, get() { return stp || (stp = worked(r, prj)); } });
     const inUse = r.checks.filter(c => c.inUse && isFinite(c.ratio));
@@ -346,22 +347,6 @@
     const c = { lab: r.cF.lab, fl: r.am.fl, Fy: r.cF.Fy }, t = { lab: r.tF.lab, fl: r.tF.fl, Fy: r.tF.Fy };
     return [r.pos ? t : c, r.pos ? c : t].map((q, k) => ({ ...q, key: k ? 'flT' : 'fl', st: k ? 'flimT' : 'flim' }));   // bottom flange first (key fl), then top (flT)
   }
-  /* cnItems(r): noncomposite, the constructibility flexure checks of 6.10.3.2 on the same (steel) section, at the Strength I
-     stresses (information: the construction-stage loads are the constructibility module's; open item SB2-O10).
-     6.10.3.2.1-1 f_bu + f_l ≤ φ_fR_hF_yc (not checked for a slender web with f_l = 0); 6.10.3.2.1-3 f_bu ≤ φ_fF_crw (slender
-     webs only: 2D_c/t_w ≥ λ_rw of Eq. 6.10.6.2.3-1); 6.10.3.2.2-1 f_bu + f_l ≤ φ_fR_hF_yt. Eq. 6.10.3.2.1-2 (F_nc with R_b = 1)
-     is not repeated: F_nc with R_b ≤ 1 at Strength I (GS7) is the same or lower for the same stresses. */
-  function cnItems(r) {
-    const a = r.A6, slender = a.lw >= a.lrwP, fc = r.fbuC, flc = r.am.fl, ft = Math.max(r.tF.f, 0), flt = r.tF.fl, o = [];
-    r.cn = { slender, web: fcrw(r.D, r.tw, Math.max(r.Dc, 1e-6), r.Rh, r.cF.Fy, r.prjFyw, false) };
-    if (slender && !(flc > 0)) o.push({ key: 'cnY', title: 'Constructibility, compression flange yielding', ref: `${ED} Eq. 6.10.3.2.1-1`, na: 'Not checked: slender web with f_ℓ = 0 (6.10.3.2.1).', step: 'fx.cn.Y' });
-    else o.push({ key: 'cnY', title: 'Constructibility (Strength I stresses), compression flange, f_bu + f_ℓ ≤ φ_fR_hF_yc', ref: `${ED} Eq. 6.10.3.2.1-1`, demand: fc + flc, capacity: r.Rh * r.cF.Fy, step: 'fx.cn.Y' });
-    if (!slender) o.push({ key: 'cnW', title: 'Constructibility, web bend-buckling', ref: `${ED} Eq. 6.10.3.2.1-3`, na: 'Not checked: compact or noncompact web (6.10.3.2.1).', step: 'fx.cn.W' });
-    else o.push({ key: 'cnW', title: 'Constructibility (Strength I stresses), web bend-buckling, f_bu ≤ φ_fF_crw', ref: `${ED} Eq. 6.10.3.2.1-3; 6.10.1.9.1`, demand: fc, capacity: r.cn.web.F, step: 'fx.cn.W' });
-    o.push({ key: 'cnT', title: 'Constructibility (Strength I stresses), tension flange, f_bu + f_ℓ ≤ φ_fR_hF_yt', ref: `${ED} Eq. 6.10.3.2.2-1`, demand: ft + flt, capacity: r.Rh * r.tF.Fy, step: 'fx.cn.T' });
-    return o;
-  }
-
   /* ---------- checks: value, capacity, ratio, reference ---------- */
   const ck = (o) => ({ ratio: o.demand / o.capacity, ok: o.capacity >= o.demand - 1e-9, inUse: true, ...o });
   function checksOf(r, prj) {
@@ -402,8 +387,6 @@
       out.push(ck({ id: 'GS12', key: 'sv' + f[0], title: `Service II, ${f} flange, ${fl > 0 ? 'f_f + f_ℓ/2' : 'f_f'} ≤ 0.95R_hF_yf`, ref: `${ED} Eq. 6.10.4.2.2-${f === 'top' ? 1 : 2}`, demand: Math.abs(v) + fl / 2, capacity: 0.95 * r.Rh * Fy, unit: 'ksi', step: `fx.sv${f[0]}.ok` })); });
     if (!(r.p7 && r.D / r.tw <= 150)) { const fcS = Math.max(r.svcC, 0); out.push(ck({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling, f_c ≤ F_crw', ref: `${ED} Eq. 6.10.4.2.2-4; 6.10.1.9.1`, demand: fcS, capacity: r.webS.F, unit: 'ksi', step: 'fx.web.ok' })); }
     else out.push({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling', ref: `${ED} Art. 6.10.4.2.2`, na: 'Not required: composite section in positive flexure with D/t_w ≤ 150.', inUse: false, ratio: NaN, step: 'fx.web.na' });
-    if (nc) cnItems(r).forEach(q => out.push(q.na ? { id: 'CN', key: q.key, title: q.title, ref: q.ref, na: q.na, inUse: false, info: true, ratio: NaN, step: q.step }
-      : ck({ id: 'CN', key: q.key, title: q.title, ref: q.ref, demand: q.demand, capacity: q.capacity, unit: 'ksi', inUse: false, info: true, step: q.step })));
     if (!r.factored) out.push({ id: 'GS19', key: 'rev', title: 'Moment reversal under Strength I', ref: `${ED} Art. 3.4.1, Table 3.4.1-2`, demand: r.Mrev, capacity: r.Mu, ratio: NaN, ok: !r.rev, inUse: false, unit: 'kip-ft',
       na: r.rev ? `The opposite extreme M_u = ${r.Mrev.toFixed(1)} kip-ft changes sign: also check this section in ${r.pos ? 'negative' : 'positive'} flexure.` : 'No reversal.', step: 'fx.rev' });
     return out;
@@ -531,16 +514,6 @@
         w.add({ id: 'Fcrw', label: 'Nominal web bend-buckling resistance', sym: 'F_{crw}', eq: '\\frac{0.9Ek}{(D/t_{w})^{2}} \\le \\min(R_{h}F_{yc}, \\frac{F_{yw}}{0.7}),\\ k = ' + (r.webS.both ? '7.2' : '\\frac{9}{(D_{c}/D)^{2}}'), sub: `k = ${n2(r.webS.k)};\\ \\frac{0.9(29{,}000)(${n2(r.webS.k)})}{(${n2(r.D / r.tw)})^{2}} = ${n2(r.webS.Fe)}`, value: r.webS.F, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.1.9.1-1, -2` });
         w.add({ id: 'web.ok', label: 'Service II web bend-buckling', sym: 'f_{c}', eq: '\\le F_{crw}', sub: `${n2(fcS)} \\le ${n2(r.webS.F)}`, value: okv(fcS, r.webS.F), unit: '', ref: `${ED} Eq. 6.10.4.2.2-4`, ok: fcS <= r.webS.F + 1e-9 });
       } else w.add({ id: 'web.na', label: 'Web bend-buckling at Service II not required (composite, positive flexure, D/t_w ≤ 150)', sym: '\\frac{D}{t_{w}}', eq: '', sub: '', value: r.D / r.tw, unit: '', d: 2, ref: `${ED} Art. 6.10.4.2.2` }); }
-    // noncomposite: constructibility flexure checks at the Strength I stresses (information)
-    if (nc) { const c = r.cn, a = r.A6, cf = r.cF, tf = r.tF, nt = 'Information, not in the governing ratio: evaluated at the Strength I stresses of this noncomposite section (the construction-stage loads, 3.4.2, are the constructibility module\'s).';
-      const fc = r.fbuC, flc = r.am.fl, ft = Math.max(tf.f, 0), cy = r.Rh * cf.Fy, cT = r.Rh * tf.Fy;
-      w.add({ id: 'cn.slender', label: 'Web slenderness for constructibility', sym: '\\frac{2D_{c}}{t_{w}}', eq: '\\ge \\lambda_{rw}\\ (slender)', sub: `${n2(a.lw)}\\ ${c.slender ? '\\ge' : '\\lt'}\\ ${n2(a.lrwP)}`, value: c.slender ? 'slender' : 'compact or noncompact', unit: '', ref: `${ED} Art. 6.10.3.2.1; Eq. 6.10.6.2.3-1`, note: 'λ_rw = c_rw√(E/F_yc) as the App. A6 permission (fx.a6.crw).' });
-      if (c.slender && !(flc > 0)) w.add({ id: 'cn.Y', label: 'Constructibility, compression flange yielding: not checked (slender web, f_ℓ = 0)', sym: '', eq: '', sub: '', value: 'n/a', unit: '', ref: `${ED} Art. 6.10.3.2.1` });
-      else w.add({ id: 'cn.Y', label: `Constructibility, ${cf.lab} (compression) flange, at the Strength I stresses`, sym: 'f_{bu} + f_{\\ell}', eq: '\\le \\phi_{f}R_{h}F_{yc}', sub: `${n2(fc)} + ${n2(flc)} = ${n2(fc + flc)} \\le ${n3(r.Rh)}(${n2(cf.Fy)}) = ${n2(cy)}`, value: okv(fc + flc, cy), unit: '', ref: `${ED} Eq. 6.10.3.2.1-1`, ok: fc + flc <= cy + 1e-9, note: nt });
-      if (!c.slender) w.add({ id: 'cn.W', label: 'Constructibility, web bend-buckling: not checked (compact or noncompact web)', sym: '', eq: '', sub: '', value: 'n/a', unit: '', ref: `${ED} Art. 6.10.3.2.1` });
-      else w.add({ id: 'cn.W', label: 'Constructibility, web bend-buckling, at the Strength I stresses', sym: 'f_{bu}', eq: '\\le \\phi_{f}F_{crw},\\ F_{crw} = \\frac{0.9Ek}{(D/t_{w})^{2}} \\le \\min(R_{h}F_{yc}, \\frac{F_{yw}}{0.7}),\\ k = \\frac{9}{(D_{c}/D)^{2}}', sub: `k = ${n2(c.web.k)};\\ ${n2(fc)} \\le ${n2(c.web.F)}`, value: okv(fc, c.web.F), unit: '', ref: `${ED} Eq. 6.10.3.2.1-3; Eqs. 6.10.1.9.1-1, -2`, ok: fc <= c.web.F + 1e-9, note: nt + ' D_c: fx.Dc.' });
-      w.add({ id: 'cn.T', label: `Constructibility, ${tf.lab} (tension) flange, at the Strength I stresses`, sym: 'f_{bu} + f_{\\ell}', eq: '\\le \\phi_{f}R_{h}F_{yt}', sub: `${n2(ft)} + ${n2(tf.fl)} = ${n2(ft + tf.fl)} \\le ${n3(r.Rh)}(${n2(tf.Fy)}) = ${n2(cT)}`, value: okv(ft + tf.fl, cT), unit: '', ref: `${ED} Eq. 6.10.3.2.2-1`, ok: ft + tf.fl <= cT + 1e-9, note: nt + ' Eq. 6.10.3.2.1-2 (F_nc with R_b = 1.0) is not repeated: GS7 uses R_b ≤ 1.0 with the same stresses.' });
-    }
     // Fatigue I stress ranges
     [['T', 'top', r.d, r.dfT], ['B', 'bottom', 0, r.dfB]].forEach(([k, f, y, v]) => w.add({ id: `fat${k}`, label: nc ? `Fatigue I stress range, ${f} of steel (noncomposite: steel section)` : `Fatigue I stress range, ${f} of steel (positive on n, negative on ${r.minR ? 'n: 6.6.1.2.1 rebar ≥ 1%' : 'steel + rebar'})`, sym: `(\\Delta f)_{${f}}`, eq: '\\gamma(|f(M_{fat}^{+})| + |f(M_{fat}^{-})|)',
       sub: `${n2(r.gfat)}(|f(${n2(r.MfP)})| + |f(${n2(r.MfN)})|)`, value: v, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2.1, 6.10.1.1.1c`, note: 'Resistance (ΔF)_n: the fatigue module.' }));

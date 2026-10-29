@@ -195,7 +195,7 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - The functions remain in `Steel Bridge Design.html` (unchanged). `lldf.html` (the reference LLDF tool) is unchanged.
 ### Open items
 - SB2-O2 closed: OWN8 applied in the section properties and K_g (the haunch weight stays in DC1).
-- SB2-O6. GirderDetail (ported as is) and `lldf.html` differ (CLAUDE.md §4/§9, not changed): (a) exterior fatigue factor:
+- SB2-O19 (was SB2-O6). GirderDetail (ported as is) and `lldf.html` differ (CLAUDE.md §4/§9, not changed): (a) exterior fatigue factor:
   GirderDetail = one-lane lever rule / 1.2; `lldf.html` = max(lever rule, one-lane rigid cross-section) / 1.2 (4.6.2.2.2d).
   (AUDIT.md says lldf lacks the floor; it now has it and GirderDetail does not.) On the recorded inputs the rigid value
   exceeds the lever rule for 40 of 200 exterior girder-regions (every xsA one, all owners; sidewalk fences move the traffic face in):
@@ -203,12 +203,12 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   the trucks on a 0.25 ft grid; `lldf.html` also tests the exact kink positions. (c) S > 16 ft and N_b = 3: GirderDetail's
   multi-lane lever rule is two trucks; `lldf.html` the governing of 2 … N_L trucks. (d) Moment skew: GirderDetail the
   smaller support skew; `lldf.html` none when adjacent supports differ by more than 10°. Engineer to decide which governs.
-- SB2-O7. Cross-frame and diaphragm weights (GirderDetail DC1 point loads from its Cross-frames module) are not in this
+- SB2-O20 (was SB2-O7). Cross-frame and diaphragm weights (GirderDetail DC1 point loads from its Cross-frames module) are not in this
   version's DC1; they come with the cross-frames module.
-- SB2-O8. LLDF regions take the section at mid-span; GirderDetail takes it at the station of the largest positive moment of
+- SB2-O21 (was SB2-O8). LLDF regions take the section at mid-span; GirderDetail takes it at the station of the largest positive moment of
   Preliminary sizing's analysis (`regions(…, x)` accepts it once the analysis module exists). Same plate segment in every
   recorded case.
-- SB2-O9. Owner defaults are applied by a button (the user's values are otherwise kept); GirderDetail moves untouched inputs
+- SB2-O22 (was SB2-O9). Owner defaults are applied by a button (the user's values are otherwise kept); GirderDetail moves untouched inputs
   automatically when the owner changes (OWN14). Confirm the wanted behaviour.
 
 ## 2026-10-29 — PR: sbd2-flexure-noncomposite — flexure of noncomposite girders (SB2-O7 of the sbd2-flexure entry; new behaviour)
@@ -406,6 +406,96 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   Fatigue module's CP2 stress range (Δf = 0 in rows from the layout until the fatigue PR), the uncoated weathering steel sacrificial
   thickness (engine supports `env.ws`; the model has no weathering input yet), the stiffener drawings and 3D. Deferred to the cross-frame and design-helper PRs (engineer, 2026-10-29).
 
+
+## 2026-10-29 — PR: shared-lldf — distribution factors from shared/lldf.js (lldf.html's engine); the four SB2-O19 items follow lldf.html (engineer's decision 2026-10-29)
+### Where
+- `engine/lldf.js` (`window.SBDLldf`) is now a thin adapter on `shared/lldf.js` (`window.SharedLLDF`, moved out of `lldf.html` in the
+  same PR; fixlog/shared-lldf.md). `lp(p)` maps a region (N_b, bays, overhangs, traffic faces, L, t_s, truck gap, simplified K_g, moment
+  and shear skew) to SharedLLDF's input (type 'a'); `geometry`, `skew`, `emp`, `leverC`, `lever`, `leverAll`, new `leverMulti`, `rigid`,
+  `member` call `SharedLLDF.geometry`, `skewFactors`, `empiricalInterior`, `leverContribution`, `leverConfig`, `leverAll`, `leverMulti`,
+  `rigidMethod`, `memberDF` and map the results back to the same fields (r.mom1 … shr2, gM, gV, fatM, fatV, method, emp, lever1, eM, eV,
+  mE, vE, rig, alt, de0, de) plus new `rig1`, `fat1`, `fatOneM`, `fatOneV`. Kept in the adapter as before: K_g per region (KgOf, the
+  length-weighted option), `regions` (bridgeDef), the shear skew on exterior girders only, the exterior "not less than interior" policy,
+  the range checks, GirderDetail's method labels, and every worked step.
+- New `momentSkew(rg, skews)` (anchor `function momentSkew(rg, skews)`): the region's moment θ = 0 when the 4.6.2.2.2e rule applies, else
+  max(0, min(skA, skB)); shear θ = max(0, max(skA, skB)). Span region: `SharedLLDF.momentSkewNoReduction(skA, skB)` (its own two support
+  lines differ by more than 10°). Pier region at support line i: `SharedLLDF.momentSkewNoReductionPier(θ_i−1, θ_i, θ_i+1)` (either adjacent
+  span's two support lines differ by more than 10°), from `skews` (every support line; `engine/loads.js` now passes `skews: b.skews` to
+  `SBDLldf.compute`, its only change). The `max(0, …)` keeps GirderDetail's reading of a negative skew (no skew; SharedLLDF reads |θ|):
+  SB2-O23. The rules are in one place: `momentSkewNoReduction` / `momentSkewNoReductionPier` in shared/lldf.js.
+- Worked steps: new `df.<region>.noRed` (support lines differ by more than 10°: |θ_A − θ_B|, Art. 4.6.2.2.2e); `scfM` / `c1` use the moment θ
+  after the rule; exterior girders: new `fat1` (max(g_lever,1, g_rigid,1), Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1) and `fatM` / `fatV` =
+  g_1 r / 1.2 (before: g_M,1 / 1.2 with the note "As GirderDetail … open item SB2-O6"); the multi-lane lever-rule steps (`lev2`) name the
+  governing number of trucks.
+- `engine/lldf.js` header rewritten (it listed the four differences). `index.html`: `<script src="../../shared/lldf.js">` before
+  `engine/lldf.js`. `engine/loads.js` unchanged.
+- Tests: `tests/engine/loads.test.mjs` loads shared/lldf.js; five new variations (one per item, and the pier rule) in the GirderDetail
+  parity; the temporary DFL1 expected-difference set added by #472 is removed. One expected-difference set remains, for the pier rule only
+  (`PIER_RULE_PENDING`: r_M, c_1 and the moment factors of a pier region whose rule applies; 88 values, in the two skew variations), until
+  GirderDetail gets the pier rule in its follow-up PR, which removes it. `tests/projects/sbd2-loads/xsA_*.json` re-recorded
+  (GirderDetail's browser values after #472; only the 80 item-1 fatigue values changed). New `tests/engine/lldf.test.mjs` (hash harness,
+  hand checks of the four items) and `tests/engine/lldf-hash.mjs`.
+### Saved data (CLAUDE.md §5)
+- None. No key, model field or format change.
+### Governing provisions (AASHTO LRFD 10th Ed. (2024)) — calculation change for this app (engineer's decision 2026-10-29, SB2-O19)
+1. Exterior fatigue, Art. 4.6.2.2.2d (the exterior factor not less than the rigid cross-section value) with C3.6.1.1.2 / Art. 3.6.1.4.3b.
+   Before: g_fat = g_lever,1 r / 1.2. After: g_fat = max(g_lever,1, g_rigid,1) r / 1.2, g_rigid,1 = 1.2(1/N_b + X_ext e/Σx²) (Eq. C4.6.2.2.2d-1).
+2. Moment skew, Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1. Before: r_M with θ = the smaller support skew of the region. After: r_M = 1.0 for a
+   span whose two support lines differ by more than 10°, and for a pier region when either adjacent span's two support lines do;
+   otherwise unchanged (engineer's decisions 2026-10-29: per span; piers by their adjacent spans).
+3. S > 16 ft (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1: lever rule) and N_b = 3 (the tables' N_b = 3 rows), Table 3.6.1.1.2-1. Before: the
+   multi-lane lever rule = 2 trucks, m = 1.0. After: the governing of N = 2 … N_L trucks, each with its m.
+4. Lever rule (Art. 4.6.2.2.1, C4.6.2.2.1). Before: trucks moved on a 0.25 ft grid. After: also every position where a wheel line is over
+   a girder line (the kinks of R(s)) and the end of travel; R(s) is piecewise linear, so its maximum is found exactly.
+### Check cases (arithmetic in `tests/engine/lldf.test.mjs`)
+1. xsA (any owner), span 1, G1: d_e = 3.25 − 5.5 = −2.25 ft; lever, one truck at 7.5 / 13.5 ft: R = 0.5(12.75 − 7.5)/9.5 = 0.276316,
+   g = 0.331579; rigid one lane: e = 19 − 2.25 − 5 = 11.75 ft, R = 1/5 + 19(11.75)/902.5 = 0.447368, g = 0.536842.
+   g_fat,M before 0.331579/1.2 = **0.2763**, after 0.536842/1.2 = **0.4474**; g_fat,V (r_V 1.049681) 0.2900 → 0.4696.
+2. Built-in bridge, support skews 20 / 35 / 35 / 50°, span 3 (35° / 50°, differ by 15°), G2: c_1 = 0.25(1.287167)^0.25(9.5/110)^0.5 =
+   0.078255, r_M = 1 − 0.078255(tan 35°)^1.5 = 0.954148; g_M before 0.703391 × 0.954148 = **0.6711**, after 0.703391 × 1 = **0.7034**.
+   Span 2 (35° / 35°) keeps the reduction; piers 1 and 2 (adjacent span 1, resp. 3, differs by 15°) lose it.
+   Pier rule, skews 40 / 52 / 52 / 40°, pier 1 (L = 125 ft, K_g = 1,438,270 in⁴), G2: interior equation 0.710932; c_1 = 0.25(1.872748)^0.25
+   (9.5/125)^0.5 = 0.080624, r_M = 1 − 0.080624(tan 52°)^1.5 = 0.883251; g_M before 0.710932 × 0.883251 = **0.6279**, after **0.7109**
+   (span 1 differs by 12° > 10°; span 2 by 0°).
+3. Built-in bridge with N_b = 4 at 18 ft, overhangs 4 ft (N_L = 4), G2: 2 trucks (wheels 12, 18, 22, 28 ft) R = 0.5(8 + 14 + 18 + 12)/18
+   = 1.444444, m 1.00 → **1.4444** (before); 3 trucks (6 … 32 ft) R = 0.5(2 + 8 + 12 + 18 + 14 + 8)/18 = 1.722222, m 0.85 → **1.4639**
+   (after; 4 trucks 1.1917). g_M and g_V of G2 / G3 +1.3 %.
+4. Built-in bridge with 3.3 ft overhangs, G5, one truck: end of travel s = 44.6 − 1.5 − 2 − 6 = 35.1 ft (the grid stops at 35.0 ft):
+   R before 0.5(3.2 + 9.2)/9.5 = 0.652632 (g **0.7832**), after 0.5(3.3 + 9.3)/9.5 = 0.663158 (g **0.7958**); g_fat,M 0.6526 → 0.6632; g_M
+   unchanged (rigid 0.8126 governs).
+### Changed values on the recorded inputs (`tests/projects/sbd2-loads/`, 20 project/owner inputs, 5 regions × 5 girders)
+- g_fat,M: 40 of 500 changed; g_fat,V: 40 of 500 (item 1: G1 and G5 of the 4 xsA inputs, every region; all higher). Unchanged: one- and
+  multi-lane moment and shear factors (500 each), g_M, g_V, methods (500 each), r_M, r_V (100 each), the 1,400 lever-rule trials (R and
+  position). Items 2–4 do not occur in the recorded inputs (equal skews; N_b = 5, S = 9.5 ft; the grid hits every peak); the four
+  variations above exercise them.
+### How verified
+- `tests/engine/lldf.test.mjs`: shared/lldf.js = lldf.html's engine before the move (1,592 cases, 11,135 outputs, identical hashes); hand checks 1–4.
+- GirderDetail parity (`tests/engine/loads.test.mjs`) against "Steel Bridge Design.html" after #472 (the same four changes, per-span skew):
+  20 recorded inputs + 28 variations (5 new), 33,032 values (every K_g, skew factor, one- and multi-lane factor, g_M, g_V, fatigue factor,
+  method, lever-rule trial and rigid-section value): identical except the 88 pier-rule values above (GirderDetail keeps the pier
+  reduction until its follow-up PR). Before #472 merged, the same comparison showed exactly the four items (140 item 1, 22 item 2, 40
+  item 3, 120 item 4 on the inputs and variations) and nothing else. GirderDetail in Node = the re-recorded browser values. The 100
+  payloads (the 15 xsA AASHTO / MassDOT / CTDOT files re-saved from GirderDetail after #472, as #472 did for RIDOT): girderDetail.df and
+  .loads to 4 decimals, 0 differ. The re-saved payloads differ from the old ones only in producedAt, girderDetail.df.spans[].fatM / fatV
+  (18 values, G1 and G5) and the fatigue envelopes of G1 / G5 at every station (M_FATpos/neg, V_FATpos/neg), all item 1.
+- `tests/engine/analysis.test.mjs` (#469) and `tests/engine/fatigue.test.mjs` (#474), merged meanwhile, load shared/lldf.js before engine/lldf.js
+  (their loads-module path tests), as index.html does.
+- `node tests/engine/run.mjs`: every test passes. Headless loads of `lldf.html` (before/after, same values, 0 console errors) and
+  `apps/steel-bridge/index.html` (Loads & LLDF tab, 0 console errors).
+### Other copies
+- `Steel Bridge Design.html` (GirderDetail): the same four changes in its own code (#472). `lldf.html`: the reference (engine now in
+  shared/lldf.js, unchanged results).
+### Open items
+- SB2-O19 closed (the four GirderDetail / lldf.html differences of the sbd2-loads-lldf entry; engineer's decision 2026-10-29).
+- SB2-O23. Negative skews: GirderDetail (and this app) read a negative support skew as no skew (no moment reduction, no shear
+  correction); lldf.html uses |θ| (its LLDF-OH2). Kept as GirderDetail; engineer to decide (the model accepts −90° … 90°).
+- SB2-O24. Pier rule (decided 2026-10-29: a pier region loses the reduction if either adjacent span differs by more than 10°): in this app
+  now; GirderDetail gets it in the follow-up PR on "Steel Bridge Design.html", which removes `PIER_RULE_PENDING` from loads.test.mjs.
+- SB2-O25. lldf.html takes the moment θ as entered for the selected design region, or from Bridge Geometry's `skewDetail.moment`, which is
+  bridge-wide (0 when any two adjacent supports differ by more than 10°). Per span maps onto lldf.html as: for a span region, enter 0 when
+  that span's own two support lines differ by more than 10°, else the smaller of them. lldf.html and Bridge Geometry are unchanged here
+  (one tool per PR); aligning Bridge Geometry's hand-off with the per-span rule is a separate change.
+
 ## 2026-10-29 — PR: sbd2-analysis — structural analysis (engine/analysis.js, Analysis tab; new files)
 ### Where
 - `engine/analysis.js` (new, `window.SBDAnalysis`): `analyzeGirder(project, gi, opt)` connects the shared beam engine
@@ -581,6 +671,70 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - SB2-F4. With a file, the stud inputs (d, h, s_t, F_u, γ, F_rc, w) are this project's, not the file's. Kept: the project is
   what is being designed; the parity test sets them to the file's values and reproduces GirderDetail's ratios exactly.
 
+## 2026-10-29 — PR: sbd2-constructibility — constructibility during deck placement, 6.10.3 (engine/constructibility.js, Constructibility tab; SB2-O10)
+### Where
+- `engine/constructibility.js` (new, `window.SBDConstr`): ported from `Steel Bridge Design.html`, arithmetic copied operation for operation:
+  GirderDetail Girder section `GM.gs.compute` (anchor `// constructibility (steel section)` to `r.VuC = G.cdc * r.VDC1 + G.ccl * r.VCL;`, with the
+  nonprismatic block anchor `// nonprismatic deck-placement unbraced length (CB2`) and `GM.gs.checks` GS14, GS15, GS16; `gsGov` kinds 'Ct'/'Cb' (`gsGovC`);
+  Preliminary sizing `gsRow` deck-placement L_b,C / C_b,C / nprC (anchor `// C_b for deck placement (CB1`; `bracingC`); the hand-off `gdStConstr`
+  (governing item per span: compression top flange, compression bottom flange, tension flange, shear; overhang rows at the largest
+  1.25M_DC1 + 1.5M_CL of each span, `ohRowsAt`); the Deck overhang module `GM.oh.compute` / `GM.oh.checks` OH1–OH5 (`ohLoads`, `overhang`).
+  Reuses `SBDFlexure.ltbFnc/ampFl/fcrw/fe*`, `SBDShear.webShear/panelSteps`, `SBDSections.steelCore/hybrid`. New: `location`, `girder`,
+  `fromPayload` (hand-off with M_DCc, M_CL; S2-8), `fromAnalysis` (this app's analysis: st.DC1, st.CL, seq.MDCc; braces = bearings + cross-frames
+  of `P.stiffeners.layout.frames`; d_o and end panel from `SBDStiffeners.girderBays/bayPanels`). Worked steps `cn.*` and `oh.*`.
+- `ui/constructibility.js` (new, `window.SBDConstrUI`): the Constructibility tab: source (this project: runs `analyzeGirder(P, g, { ll: false })`;
+  or a hand-off file), f_ℓ during deck placement, overhang bracket inputs (exterior girder, saved), span summary (top / bottom compression,
+  tension, shear, OH1–OH4, OH5) with click-through, per-location table, checks with § links, worked steps; overhang rows with their steps.
+- `engine/flexure.js` (SB2-O10, engineer's decision): the information items CN removed (`cnItems`, the CN lines in `checksOf`, the `fx.cn.*`
+  steps, `r.prjFyw`); header comment says where constructibility is. `ui/flexure.js`: the "(information, not in the governing ratio)" label
+  removed; a note links to the Constructibility tab. `tests/engine/flexure-nc.test.mjs`: the CN asserts replaced by "no CN item / step".
+- `index.html`: two script tags, the Constructibility tab button, one dispatch line. `engine/model.js`: header comment (`constr.oh`).
+### Saved data (CLAUDE.md §5)
+- No new key. New optional project field `constr.oh` (bracket inputs; absent = GirderDetail's Deck overhang defaults), saved in
+  `sbd2.project.current` and the export file. Old projects read unchanged.
+### Governing provisions (AASHTO LRFD 10th Ed. (2024); all as GirderDetail has them, none changed)
+- 3.4.2.1: M_c = 1.25M_DCc + 1.50M_CL, V_u = 1.25V_DC1 + 1.50V_CL (GirderDetail gam.cdc, gam.ccl); M_DCc = the pour-sequence envelope
+  (6.10.3.4.1), M_DC1 where none. Steel section 6.10.1.1.1a; D_c D6.3.1; R_h 6.10.1.10.1; φ_f = φ_v = 1.0.
+- GS14: Eq. 6.10.3.2.1-1 (applied to every web, conservative, as GirderDetail) and Eq. -2 with F_nc of 6.10.8.2.2 / 6.10.8.2.3 (R_b = 1.0),
+  C_b,C Eq. 6.10.8.2.3b-1 from the deck-placement moments, nonprismatic 6.10.8.2.3c (C_b = 1.0, γ_e by App. D6.6.2 Method A or the bound);
+  f_ℓ amplification Eqs. 6.10.1.6-4, -5. GS15: Eq. 6.10.3.2.1-3 (F_crw 6.10.1.9.1), Eq. 6.10.3.2.2-1. GS16: Eq. 6.10.3.3-1 (V_cr = CV_p).
+- OH1–OH5: C6.10.3.4 (F_ℓ = w_u a/h_b, P_ℓ = γP_fm a/h_b, M_ℓ = F_ℓL_b²/12 + P_ℓL_b/8), Eqs. 6.10.3.2.1-1, -2, -3, 6.10.3.2.2-1, 6.10.1.6-1.
+### Check case (tests/engine/constructibility.test.mjs, arithmetic in the comments)
+- Steel I 16 × 1 / 60 × 1/2 / 16 × 1, F_y 50, M_DC1 1000, M_DCc 1100, M_CL 100, L_b 20 ft, C_b 1: M_c = 1525 kip-ft, f_top = −14.6322 ksi, D_c = 30,
+  r_t = 4.031621, L_p = 106.8037, L_r = 364.5814 in, F_nc,LTB = 42.24935: GS14 0.292644 / 0.346329 (governs), GS15 web (F_crw = 50) 0.292644,
+  tension 0.292644; V_u = 1.25(50) + 1.5(5) = 70, unstiffened C = 0.316181, V_cr = 275.0771: GS16 0.254474.
+- Overhang (GirderDetail's Deck overhang defaults and row): w_u = 0.8165625 klf, F_ℓ = 0.544375 klf, P_ℓ = 3.0 kip, M_u = 2395 kip-ft,
+  M_ℓ = 400.3857 kip-in, f_ℓ1 top 12.51205 ksi; OH1 0.94222, OH2 0.84967, OH3 0.51636, OH4 0.59960, OH5 0.70977 / 0.27805 (= GM.oh).
+- Before: none in the new app (flexure showed CN information items at the Strength I stresses; removed).
+### How verified
+- GirderDetail's own `GM.gs` / `GM.oh` run in Node (gd-source.mjs pattern), same inputs to both, all identical (largest relative difference 0):
+  (1) the recorded Preliminary-sizing rows (tests/projects/sbd2-stiff, 40 inputs, as recorded and with M_DCc ≠ M_DC1, f_ℓ 3 ksi, V_CL × 2):
+  1,440 rows (940 nonprismatic 'ge'), 7,200 GS14–GS16 items, 64,740 values; Node = browser for V_uC. (2) Every Check-at-any-location station of the
+  100 gd_*.json payloads with the payload's M_DCc and M_CL fed in (+ f_ℓ 4 on the G1 payloads): 120 cases, 44,520 locations, 222,600 items;
+  OH1–OH5 at the overhang rows of every exterior girder: 720 items. (3) `bracingC` with Preliminary sizing's own fe*: identical on 3,710 locations.
+- Stored hand-off `girderDetail.checks.constr` recomputed from its stored inputs: 1,200 GS14–GS16 governing items and 240 OH items within the payload
+  rounding (largest 0.03 kip on a V_cr recomputed from the rounded C). Governing location per span and group equal to GirderDetail's at 606 of 1,200;
+  the others: 246 L_b,C / C_b,C differ (payload brace points every ≤ L_b vs GirderDetail's own framing, SB2-O9), 348 M_c differs ≤ 0.2 % at the
+  same station (payload moments interpolated linearly vs GirderDetail's own analysis there); none other. Overhang rows at GirderDetail's station in every span.
+- With this app's own pour sequence (engine/analysis.js) in place of the payload's M_DCc, all 100 payloads, 37,100 locations: ΔM_DCc ≤ 0.05 % of
+  max at 12,220, 0.05–0.5 % at 20,178, > 0.5 % at 4,702 (all within 0.3L of a pier): SB2-A1, largest 1.04 % (gd_builtin28_MassDOT_G4, x = 250.01:
+  GirderDetail −2452.4, this app −2426.0 kip-ft); every ratio change is exactly 1.25ΔM_DCc through M_c (asserted); shear, L_b,C, C_b,C unchanged;
+  largest ratio change 0.0040 (0.4308 → 0.4268, tension flange). The engineer's decision: the new app keeps its exact pour loads.
+- Flexure unchanged by the CN removal: origin/main vs this branch, every payload composite and noncomposite, 74,200 locations, 655,912 check ratios
+  and governing items: 0 differ. Flexure GirderDetail parity re-run: identical (113 cases, 2,128,487 values). Full suite passes.
+- Headless load of apps/steel-bridge/index.html: Constructibility tab (project: 367 locations; hand-off file: OH section), Flexure → Constructibility
+  link, 0 console errors, only `sbd2.ui` written, no horizontal scroll at 800 px.
+### Other copies
+- None. GirderDetail keeps its own modules until the switch-over.
+### Decisions (made here, per the engineer's rule of 2026-10-29)
+- SB2-O10 closed: constructibility only in this module with the construction-stage loads; a noncomposite girder is checked the same way (steel section,
+  M_DC1 + construction LL; no pour sequence), as GirderDetail.
+- Shear V_DC1, V_CL on the project path: the exact station shear (VL left of a station, VR right of it), consistent with SB2-A3.
+- f_ℓ in GS14/GS15: an entered first-order value (default 0, as Preliminary sizing sends flC = 0); the bracket f_ℓ is checked in OH1–OH5 only, as GirderDetail.
+### Open items
+- SB2-C1. Display only: engine/flexure.js step `fx.Mu` writes `γ` and a positive moment without parentheses (`1.251450.00`); values are right.
+  Not changed here (one module per PR); to fix in the next flexure PR.
+- SB2-C2. Overhang inputs: no "Fill from cross-section" (GirderDetail XS11) yet; the defaults are GirderDetail's planning values.
 ## 2026-10-29 — PR: sbd2-crossframes — framing layout and cross-frames (engine/framing.js, engine/crossframes.js, Framing and Cross-frames tabs; new files)
 ### Where
 - `engine/framing.js` (new, `window.SBDFraming`): Preliminary sizing's `framingLayout(P, m)` copied line for line from the page text
@@ -620,6 +774,8 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   same line after a `//` comment, so a hand-off file fell through to the example demands (UI only; no calculation changed).
 - `ui/shear.js` (`framesOf`), `ui/fatigue.js` (frames and GS17 braces): the project's framing first, then the stations entered, then evenly ≤ L_b.
 - `ui/analysis.js`: the dead-load card says where the cross-frame point loads come from (link to the Framing tab).
+- `engine/constructibility.js` `fromAnalysis` (merged from main during this PR): `opt.braces` used when given (before: always the stiffener-layout
+  frames); `ui/constructibility.js` passes the framing's brace points (project, or a file of this bridge). Unchanged without framing.
 - `index.html`: three script tags, the input tab `fr`, the output tab `cf`, `tabOf`, change/redraw hooks, a `data-goto` link handler.
 - Tests: `tests/engine/framing.test.mjs`, `tests/engine/crossframes.test.mjs`, loader `tests/engine/pl-source.mjs` (Preliminary sizing's own code
   from pl-src in a Node vm). No new recording: the 20 `tests/projects/sbd2-fat` and 40 `tests/projects/sbd2-stiff` recordings have the framing

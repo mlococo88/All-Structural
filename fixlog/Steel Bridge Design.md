@@ -22287,7 +22287,7 @@ No saved key or saved format changes. No hand-off field changes (`girderDetail.c
 - **Open items:** Preliminary sizing caps a_wc at 10 in R_b (`Math.min(…, 10)`) and the host does not; not changed (no effect on c_rw; raise if wanted). The
   `st_interior.json` baseline is not re-recorded (not run).
 
-## 2026-10-29 — PR: claude/sbd-df-lldf (DFL: GirderDetail's LLDF and DLs module and Preliminary sizing follow `lldf.html` in the four places of SB2-O6; engineer decision 2026-10-29; PR link added after merge)
+## 2026-10-29 — PR: claude/sbd-df-lldf (DFL: GirderDetail's LLDF and DLs module and Preliminary sizing follow `lldf.html` in the four places of SB2-O6 (of the sbd2-loads-lldf entry in fixlog/steel-bridge.md, renumbered SB2-O19 on 2026-10-29); engineer decision 2026-10-29; PR link added after merge)
 
 No saved key changes. Additive field in the GirderDetail → Preliminary sizing factors (`P.dfx`, message `gd-dfx`, stored in Preliminary sizing's project): `span[i].ext.fat1`, `span[i].ext.fat1V`, `pier[k].ext.fat1`
 (the exterior one-lane fatigue basis with skew and m = 1.2). A project saved before this change has no such field: Preliminary sizing then uses `lev`/`levV` as before until GirderDetail sends the factors again (it does on open).
@@ -22354,7 +22354,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 
 ### Other copies
 - `lldf.html`: the reference, unchanged. ST-Girder (`st-src`) has its own LLDF for its built-in example (`max(lever, rigid1)` already for fatigue); not changed. With a hand-off it uses GirderDetail's factors (the payload's `fatM`/`fatV` change).
-- `apps/steel-bridge/engine/lldf.js` (the rebuild, a separate tool) is GirderDetail's port as before this change (its header lists the four differences as SB2-O6). Not changed here (one tool per PR).
+- `apps/steel-bridge/engine/lldf.js` (the rebuild, a separate tool) is GirderDetail's port as before this change (its header lists the four differences as SB2-O6, renumbered SB2-O19). Not changed here (one tool per PR).
 
 ### Open items
 - DFL2 is per span (engineer decision 2026-10-29). A pier region (negative moment, L = average of the adjacent spans) has one support line, so the 10° test does not remove its reduction even where an adjacent span's supports differ by more than 10°. Confirm, or say if a pier region should also take its adjacent spans' support lines. `lldf.html` with Bridge Geometry applies the test over the whole bridge.
