@@ -31,6 +31,7 @@ const LD = W.SBDLoads, LL = W.SBDLldf, OW = W.SBDOwners, M = W.SBDModel;
 const FIX = path.join(ROOT, 'tests/projects/sbd2-loads');
 const fixtures = fs.existsSync(FIX) ? fs.readdirSync(FIX).filter(f => f.endsWith('.json')).sort().map(f => JSON.parse(fs.readFileSync(path.join(FIX, f), 'utf8'))) : [];
 const clone = o => JSON.parse(JSON.stringify(o));
+const K_A2 = 490 / 144 / 3.4;   // SB2-A2 (2026-10-29): girder steel at 490/144 = 3.4028 lb/ft per in², GirderDetail (SA_PLF) 3.4: +0.0817 %
 
 /* ---------- GirderDetail's GM.df in Node ---------- */
 let GD = null;
@@ -209,7 +210,7 @@ test('the 100 gd_*.json hand-off payloads: girderDetail.df and girderDetail.load
     const at = (l, x) => l.find(q => x >= q.x0 - 1e-9 && x <= q.x1 + 1e-9) || l[l.length - 1];
     const segs = cuts.slice(0, -1).map((x0, i) => { const x1 = cuts[i + 1], x = (x0 + x1) / 2, t = at(b.plates.top, x), bo = at(b.plates.bot, x); return { x0, x1, D: b.plates.D, tw: at(b.plates.web, x).t, topB: t.b, topT: t.t, botB: bo.b, botT: bo.t }; }).filter(s => s.x1 - s.x0 > 1e-6);
     const sw = LD.steelWeight(segs, b.allow), st = comp('steel');
-    near(sw.min, st.wMin, `${f} steel wMin`); near(sw.max, st.wMax, `${f} steel wMax`); const rel = Math.abs(sw.avg - st.w) / st.w; worstSt = Math.max(worstSt, rel); if (rel > 0.002) bad.push(`${f} steel average ${sw.avg} vs ${st.w}`);
+    near(sw.min, st.wMin * K_A2, `${f} steel wMin`); near(sw.max, st.wMax * K_A2, `${f} steel wMax`); const rel = Math.abs(sw.avg - st.w * K_A2) / st.w;  /* SB2-A2: × 490/144/3.4 */ worstSt = Math.max(worstSt, rel); if (rel > 0.002) bad.push(`${f} steel average ${sw.avg} vs ${st.w}`);
   }
   console.log(`       ${payloads.length} payloads, ${nv} values: ${bad.length} differ; ${nd} DFL1 differences as expected; steel self-weight average largest relative difference ${worstSt.toExponential(2)} (node-weighted vs segment-weighted)`);
   assert.deepEqual(bad.slice(0, 20), []);

@@ -162,6 +162,11 @@
   const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   const grades = Object.keys(M.GRADES).map(k => [k, `${k} (F_y ${M.GRADES[k].Fy} ksi)`]);
   const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates'], ['xs', 'Cross-section & loads'], ['stf', 'Stiffeners'], ['fs', 'Fatigue & studs']];
+  // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
+  // engine/analysis.js lineOf: the first exterior girder G1 for position 'exterior', else the first interior girder G2)
+  const lineSel = g => { const nb = P.xs ? Math.round(P.xs.nb) : 0; if (!(nb > 0)) return '';
+    const auto = window.SBDAnalysis ? window.SBDAnalysis.lineOf(P, { position: g.position }) : (g.position === 'exterior' || nb < 3 ? 0 : 1), cur = Number.isInteger(g.line) && g.line >= 0 && g.line < nb ? g.line : '';
+    return `<div class="fRow"><label for="i_line">Loads from cross-section girder</label><select id="i_line" data-kind="line">${[['', `Automatic (G${auto + 1})`], ...[...Array(nb)].map((_, j) => [j, `G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}`])].map(([v, t]) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="unit">dead loads and LLDF (Loads &amp; LLDF tab)</span></div>`; };
   function panes() {
     const g = P.girders[ui.g] || P.girders[0];
     return {
@@ -176,7 +181,7 @@
           ${num('deck.rebar.bot.A', 'Bottom layer A<sub>rb</sub> (per girder)', 'in²')}${num('deck.rebar.bot.c', 'Bottom layer, centroid above bottom of slab', 'in')}
           ${sel('deck.rebarInPositiveMp', 'Deck rebar in positive M<sub>p</sub>', [['false', 'Exclude (default)'], ['true', 'Include (App. D6.1)']])}`),
       gird: card('Girder', `${sel('_g', 'Girder', P.girders.map((q, i) => [i, q.label || q.id]), ui.g)}${num(`girders.${ui.g}.label`, 'Label', '', { text: true })}
-          ${sel(`girders.${ui.g}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${num(`girders.${ui.g}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}`)
+          ${sel(`girders.${ui.g}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${lineSel(g)}${num(`girders.${ui.g}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}`)
         + card('Plate segments (from the left end)', `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
           ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
@@ -206,6 +211,7 @@
     const el = e.target;
     if (el.id === 'i__g') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
     if (UL.onChange(el, P)) { changed(true); return; }
+    if (el.dataset.kind === 'line') { const g = P.girders[ui.g]; if (el.value === '') delete g.line; else g.line = Number(el.value); changed(false); return; }   // SB2-A7
     if (el.dataset.kind === 'spans') { P.spans.lengths = el.value.split(/[,;\s]+/).filter(Boolean).map(Number); }
     else if (el.dataset.path) { const k = el.dataset.kind, v = el.value;
       set(el.dataset.path, k === 'num' ? (v === '' ? NaN : Number(v)) : k === 'sel' ? (v === 'true' ? true : v === 'false' ? false : v) : v); }
@@ -265,11 +271,12 @@
       const c = R.c, row = (nm, q, id) => q ? `<tr><td class="lft">${nm}</td><td>${U.fmt(q.A, 2)}</td><td>${U.fmt(q.yb, 3)}</td><td>${U.fmtInt(q.I)}</td><td>${U.fmtInt(q.St)}</td><td>${U.fmtInt(q.Sb)}</td><td>${wk(id + '.I')}</td></tr>` : '';
       const kv = (k, v, id) => `<div><span>${k}</span><span>${v}${id ? ' ' + wk(id, '§') : ''}</span></div>`;
       h += card('Section properties', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th>A (in²)</th><th>ȳ from bottom (in)</th><th>I (in⁴)</th><th>S top of steel (in³)</th><th>S bottom (in³)</th><th></th></tr></thead><tbody>
-        ${row('Steel', c.s, 'sec.s')}${row('Long-term 3n', c.c3, 'sec.c3')}${row('Short-term n', c.cn, 'sec.cn')}${row('Steel + rebar', c.cr, 'sec.cr')}</tbody></table></div>
+        ${row('Steel', c.s, 'sec.s')}${row('Long-term 3n', c.c3, 'sec.c3')}${row('Short-term n', c.cn, 'sec.cn')}${c.comp ? row('Steel + rebar', c.cr, 'sec.cr') : ''}</tbody></table></div>
+        ${c.comp ? '' : '<p class="note">Noncomposite girder: the steel section alone, no deck and no deck reinforcement in any property or in M<sub>p</sub> (6.10.1.1.1a), as on the Flexure tab.</p>'}
         <div class="kv">${kv('n', U.fmt(R.nr.n, 3), 'n.n')}${kv('d (steel)', U.fmt(c.s.d, 3) + ' in', 'sec.s.d')}${kv(`M<sub>p</sub> (${c.region === 'pos' ? 'positive' : 'negative'})`, U.fmt(c.Mp, 1) + ' kip-ft', `pl.${c.region}.Mp`)}
         ${kv('PNA y<sub>p</sub> from bottom', U.fmt(c.yp, 3) + ' in', `pl.${c.region}.yp`)}${kv('D6.1 case', esc(c.pl.cs), '')}${kv('D<sub>cp</sub>', U.fmt(c.Dcp, 3) + ' in', `pl.${c.region}.Dcp`)}
-        ${c.region === 'pos' && c.Dp != null ? kv('D<sub>t</sub> / D<sub>p</sub>', `${U.fmt(c.Dt, 3)} / ${U.fmt(c.Dp, 3)} in`, 'pl.pos.Dp') : ''}${c.region === 'neg' ? kv('D<sub>c</sub> (steel + rebar)', U.fmt(c.Dc, 3) + ' in', 'dc.steelrebar.bot.Dc') : ''}
-        ${kv('D<sub>c</sub> steel, top / bottom in comp.', `${U.fmt(c.DcSteel.top, 3)} / ${U.fmt(c.DcSteel.bot, 3)} in`, 'dc.steel.top.Dc')}${kv('R<sub>h</sub>', U.fmt(c.Rh, 3), c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')}</div>
+        ${c.region === 'pos' && c.Dp != null ? kv('D<sub>t</sub> / D<sub>p</sub>', `${U.fmt(c.Dt, 3)} / ${U.fmt(c.Dp, 3)} in`, 'pl.pos.Dp') : ''}${c.region === 'neg' && c.comp ? kv('D<sub>c</sub> (steel + rebar)', U.fmt(c.Dc, 3) + ' in', 'dc.steelrebar.bot.Dc') : ''}
+        ${kv('D<sub>c</sub> steel, top / bottom in comp.', `${U.fmt(c.DcSteel.top, 3)} / ${U.fmt(c.DcSteel.bot, 3)} in`, 'dc.steel.top.Dc')}${kv('R<sub>h</sub>', U.fmt(c.Rh, 3), !c.comp ? 'rh.s.Rh' : c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')}</div>
         ${c.pl.below ? '<div class="alert err">The plastic neutral axis falls below the web: outside Table D6.1-1 and D6.3.2 (see the work).</div>' : ''}
         ${R.lf.h0 ? `<div class="alert">Haunch taken as 0 in the composite properties (${esc(R.lf.cite.h)}; owner rule): see the Loads &amp; LLDF tab. Its weight stays in DC1.</div>` : ''}${R.nr.wc !== P.materials.concrete.wc ? `<div class="alert">E<sub>c</sub> from w<sub>c</sub> = ${U.fmt(R.nr.wc, 3)} kcf (w<sub>c</sub> for E<sub>c</sub>, Cross-section &amp; loads tab).</div>` : ''}
         ${R.warnings.length ? `<div class="alert">${R.warnings.map(w => esc(w.msg)).join('<br>')}</div>` : ''}`);

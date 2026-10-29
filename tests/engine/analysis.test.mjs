@@ -43,22 +43,26 @@ function proj(spans, cont, extra = {}) {
   return P;
 }
 
-test('hand check 1: two equal spans 100 ft, girder steel only (w = 62 in² × 3.4 lb/ft/in² = 0.2108 klf)', () => {
+test('hand check 1: two equal spans 100 ft, girder steel only (w = 62 in² × 490/144 lb/ft/in² = 0.210972 klf; SB2-A2)', () => {
   const R = AN.analyzeGirder(proj([100, 100], true), 0, { ll: false });
   assert.deepEqual([...R.errors], []);
-  // w_s = A_s (3.4)(1 + 0)/1000 = 62 × 3.4 / 1000 = 0.2108 klf
-  close(R.wSteel[0], 0.2108, 1e-12, 'w_s');
-  const i = x => R.x.findIndex(v => Math.abs(v - x) < 1e-9);
-  // pier moment −wL²/8 = −0.2108 × 100² / 8 = −263.5 kip-ft; reactions 0.375wL = 7.905, 1.25wL = 26.35 kips
-  close(R.st.DC1steel.M[i(100)], -263.5, 1e-9, 'M pier'); close(R.st.DC1steel.R[0], 7.905, 1e-9, 'R_A'); close(R.st.DC1steel.R[1], 26.35, 1e-9, 'R_B');
-  // shear just left of the pier −0.625wL = −13.175 kips; just right +13.175
-  close(R.st.DC1steel.VL[i(100)], -13.175, 1e-9, 'V left of pier'); close(R.st.DC1steel.VR[i(100)], 13.175, 1e-9, 'V right of pier');
+  // w_s = A_s (490/144)(1 + 0)/1000 = 62 × 3.402778 / 1000 = 0.2109722 klf (before SB2-A2: 62 × 3.4 / 1000 = 0.2108)
+  close(R.wSteel[0], 62 * 490 / 144 / 1000, 1e-15, 'w_s'); close(R.wSteel[0], 0.2109722, 1e-7, 'w_s (rounded)');
+  const w = 62 * 490 / 144 / 1000, i = x => R.x.findIndex(v => Math.abs(v - x) < 1e-9);
+  // pier moment −wL²/8 = −0.2109722 × 100² / 8 = −263.7153 kip-ft; reactions 0.375wL = 7.911458, 1.25wL = 26.37153 kips
+  close(R.st.DC1steel.M[i(100)], -w * 1e4 / 8, 1e-9, 'M pier'); close(R.st.DC1steel.M[i(100)], -263.7153, 1e-4, 'M pier (rounded)');
+  close(R.st.DC1steel.R[0], 0.375 * w * 100, 1e-9, 'R_A'); close(R.st.DC1steel.R[1], 1.25 * w * 100, 1e-9, 'R_B'); close(R.st.DC1steel.R[0], 7.911458, 1e-6, 'R_A (rounded)');
+  // shear just left of the pier −0.625wL = −13.18576 kips; just right +13.18576
+  close(R.st.DC1steel.VL[i(100)], -0.625 * w * 100, 1e-9, 'V left of pier'); close(R.st.DC1steel.VR[i(100)], 13.185764, 1e-6, 'V right of pier');
   // deflection at x = L/2 (each span a propped cantilever): wL⁴/(192 EI); EI = 29,000 × 38,770.667 / 144 = 7,807,982 kip-ft²
-  //   = 0.2108 × 100⁴ / (192 × 7,807,982) = 0.0140619 ft = 0.168743 in
+  //   = 0.2109722 × 100⁴ / (192 × 7,807,982) = 0.0140730 ft = 0.168875 in
   const EI = 29000 * (38770 + 2 / 3) / 144;
-  close(R.camber.steel[i(50)], 12 * 0.2108 * 1e8 / (192 * EI), 1e-7, 'deflection at L/2'); close(R.camber.steel[i(50)], 0.168743, 1e-5, 'deflection (rounded)');
-  // the statics step: ΣR = Σ w ℓ = 0.2108 × 200 = 42.16 kips
-  const s = R.steps.find(q => q.id === 'an.eq.DC1steel'); close(s.value, 42.16, 1e-9, 'ΣR'); assert.equal(s.ok, true);
+  close(R.camber.steel[i(50)], 12 * w * 1e8 / (192 * EI), 1e-7, 'deflection at L/2'); close(R.camber.steel[i(50)], 0.168875, 1e-5, 'deflection (rounded)');
+  // the statics step: ΣR = Σ w ℓ = 0.2109722 × 200 = 42.19444 kips
+  const s = R.steps.find(q => q.id === 'an.eq.DC1steel'); close(s.value, 42.194444, 1e-6, 'ΣR'); assert.equal(s.ok, true);
+  // GirderDetail's 3.4 (opt.steelPlf, parity tests): w = 0.2108, ΣR = 42.16; the ratio is 490/144/3.4 = 1.000817 (+0.0817 %)
+  const R0 = AN.analyzeGirder(proj([100, 100], true), 0, { ll: false, steelPlf: 3.4 });
+  close(R0.wSteel[0], 0.2108, 1e-12, 'w_s at 3.4'); close(R.st.DC1steel.M[i(100)] / R0.st.DC1steel.M[i(100)], 490 / 144 / 3.4, 1e-12, 'ratio');
 });
 
 test('hand check 2: single span 60 ft, HL-93 with g_M = 0.5, g_V = 0.8 (closed forms of tests/engine/simple-span.test.mjs)', () => {
@@ -106,7 +110,7 @@ const BOUND_G = { ...BOUND_P, M_DC2: 2e-4, 'f_deck (pour sequence)': 0.05, R_DC1
 const cache = {};
 function run(f, o = {}) {
   const key = f + JSON.stringify(o); if (cache[key]) return cache[key];
-  const p = readPayload(f), P = projectFromPayload(p, o), G = gdNodes(p), R = AN.analyzeGirder(P, 0, { ll: o.ll !== false });
+  const p = readPayload(f), P = projectFromPayload(p, o), G = gdNodes(p), R = AN.analyzeGirder(P, 0, { ll: o.ll !== false, steelPlf: 3.4 });   // GirderDetail's SA_PLF 3.4 (SB2-A2: the app uses 490/144; see the SB2-A2 test)
   assert.deepEqual([...R.errors], [], f);
   const D = gdSA(P, 0, R.n), skip = new Set(); R.region.forEach((r, i) => { if (r !== D.region[i]) skip.add(i); });
   return (cache[key] = { p, P, G, R, D, skip });
@@ -151,6 +155,25 @@ test('cause check (difference 2): GirderDetail\'s lumped node loads through the 
   assert.ok(mx / sc < 1e-7);
 });
 
+test('SB2-A2: steel at 490/144 = 3.4028 lb/ft per in² (GirderDetail 3.4): only the girder-steel load changes, by 490/144/3.4 = 1.000817', () => {
+  // Expected difference, nothing else: w_s × 1.000817; the girder-steel part of DC1 (M, V, R, deflection) × 1.000817; the cross-frame
+  // point loads, the wet deck, DC2, DW, construction LL unchanged. M_steel(3.4) = M(3.4) − M(steel 0) (the cross-frame part).
+  const k = 490 / 144 / 3.4; let worst = 0, dc1 = 0, dc1At = '', st = 0;
+  sample.forEach(f => {
+    const P = projectFromPayload(readPayload(f)), A = AN.analyzeGirder(P, 0, { ll: false, steelPlf: 3.4 }), B = AN.analyzeGirder(P, 0, { ll: false }), Z = AN.analyzeGirder(P, 0, { ll: false, steelPlf: 0 });
+    B.wSteel.forEach((w, i) => close(w / A.wSteel[i], k, 1e-14, `${f} w_s`));
+    const sc = Math.max(...A.st.DC1steel.M.map(Math.abs));
+    for (const q of ['M', 'VL', 'VR', 'defl', 'R']) A.st.DC1steel[q].forEach((a, i) => { const e = a + (k - 1) * (a - Z.st.DC1steel[q][i]), d = Math.abs(B.st.DC1steel[q][i] - e);
+      worst = Math.max(worst, d / Math.max(1, Math.abs(q === 'M' ? sc : a))); });
+    for (const s1 of ['DC1wet', 'DC2', 'DW', 'CL']) for (const q of ['M', 'VR', 'R']) assert.deepEqual(Array.from(B.st[s1][q]), Array.from(A.st[s1][q]), `${f} ${s1} ${q} unchanged`);
+    assert.deepEqual(Array.from(B.region), Array.from(A.region), `${f} pier regions unchanged`);
+    A.st.DC1.M.forEach((a, i) => { if (Math.abs(a) > 0.5 * Math.max(...A.st.DC1.M.map(Math.abs))) { const r = B.st.DC1.M[i] / a - 1; if (r > dc1) { dc1 = r; dc1At = `${f} x = ${A.x[i].toFixed(1)}`; } } });
+    A.st.DC1steel.M.forEach((a, i) => { const z = Z.st.DC1steel.M[i]; if (Math.abs(a - z) > 1e-6 * sc) st = Math.max(st, (B.st.DC1steel.M[i] - z) / (a - z) - 1); });
+  });
+  console.log(`       ${sample.length} payloads (dead loads): girder-steel moment × ${(1 + st).toFixed(6)} (expected ${k.toFixed(6)}); largest M_DC1 rise ${(100 * dc1).toFixed(4)} % (${dc1At}); other stages identical; residual ${worst.toExponential(2)}`);
+  assert.ok(worst < 1e-9, 'only the steel part changes, linearly'); assert.ok(Math.abs(st - (k - 1)) < 1e-9); assert.ok(dc1 > 0 && dc1 <= k - 1 + 1e-12);
+});
+
 test('parity with GirderDetail\'s functions: cracked zones \'15\' and \'dl\' (6.10.1.5), dead and live load', () => {
   for (const crack of ['15', 'dl']) {
     const S = {}, f = sample[1 % sample.length], { G, R, D, skip } = run(f, { crack });
@@ -163,7 +186,7 @@ test('parity with GirderDetail\'s functions: cracked zones \'15\' and \'dl\' (6.
 });
 
 test('parity with GirderDetail\'s functions: the built-in project (no loads entered: girder steel only, g = 1)', () => {
-  const P = W.SBDModel.defaultProject(), R = AN.analyzeGirder(P, 0, {}), D = gdSA(P, 0, R.n), S = {};
+  const P = W.SBDModel.defaultProject(), R = AN.analyzeGirder(P, 0, { steelPlf: 3.4 }), D = gdSA(P, 0, R.n), S = {};   // GirderDetail's 3.4 (SB2-A2)
   assert.deepEqual([...R.errors], []); assert.ok(R.warnings.length >= 2, 'warns: no loads, no factors');
   diffStats(pairsGD(R, D), S, 'built-in', D.xs);
   check(S, { ...BOUND_G, M_DCc: 0.03 }, 'built-in project');

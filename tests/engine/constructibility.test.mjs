@@ -219,7 +219,7 @@ test('this app\'s pour sequence (engine/analysis.js) in place of the payload\'s 
   const ALL = !!process.env.SBD_CN_ALL, list = ALL ? payloads : payloads.filter((f, i) => i % 10 === 0), t0 = Date.now();
   let nLoc = 0, worstM = { rel: 0 }, worstR = { d: 0 }; const hist = { '≤ 0.05 %': 0, '0.05–0.5 %': 0, '> 0.5 %': 0 }, nearPier = { in: 0, out: 0 };
   for (const f of list) {
-    const pl = readPayload(f), P = projectFromPayload(pl), AR = AN.analyzeGirder(P, 0, { ll: false });
+    const pl = readPayload(f), P = projectFromPayload(pl), AR = AN.analyzeGirder(P, 0, { ll: false, steelPlf: 3.4 });   // GirderDetail's steel 3.4 lb/ft/in², so only SB2-A1 shows (SB2-A2: analysis.test.mjs)
     assert.deepEqual([...AR.errors], [], f); if (!AR.seq) continue;
     // the payload with M_DCc replaced by this app's (linear between this app's stations, which are GirderDetail's nodes); everything else the payload's
     const pl2 = clone(pl); pl2.stations.forEach(s => { if (s.M_DCc !== undefined) s.M_DCc = FX.feAt(AR.x, AR.seq.MDCc, s.x); });

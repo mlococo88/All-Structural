@@ -15,14 +15,15 @@
      (6.10.1.5). Cracked zones: 'none' (GirderDetail's default, the deck effective over the whole length, 6.10.1.5),
      '15' (15 % of each adjacent span either side of each interior support) or 'dl' (where the moment of DC1 on I_s plus
      DC2 + DW on uncracked I_3n is negative at both ends of a grid element). Continuous girders only.
-   - DC1 = girder steel (plates × 3.4 lb/ft per in² × (1 + detail allowance), GirderDetail SA_PLF) + cross-frame point
+   - DC1 = girder steel (plates × 490/144 = 3.4028 lb/ft per in² × (1 + detail allowance); GirderDetail SA_PLF: 3.4, SB2-A2) + cross-frame point
      loads (XF1) + the wet deck rows (deck, haunch, SIP, other DC1) — all on I_s. Construction LL (M_CL) on I_s. Existing
      (UT) and future (UF) utilities on I_s (OWN16).
    - LL: HL-93 per lane with IM on truck and tandem (3.6.1.2, 3.6.2.1), 90 % of two trucks + lane for negative moment and
      interior reactions (3.6.1.3.1); fatigue truck with IM_f (3.6.1.4.1). The distribution factor per station: the pier
      factor g_M in the region of negative permanent-load moment around each interior support, the span factor elsewhere;
      g_V of the span of the element; reactions the larger g_V of the adjacent spans; fatigue g's of the span.
-   - LL deflection (SA3, 2.5.2.6.2): g_Δ max(Δ_truck(1 + IM), 0.25 Δ_truck(1 + IM) + Δ_lane) ≤ L/limit, per span.
+   - LL deflection (SA3, 2.5.2.6.2): g_Δ max(Δ_truck(1 + IM), 0.25 Δ_truck(1 + IM) + Δ_lane) ≤ L/limit, per span; truck axles that
+     do not add neglected (LL8, SB2-A4); the limit from the owner rule OWN19 where there is one (deflOwner, SB2-A5).
    - camber: dead-load deflection per stage (steel, wet deck, DC2 + DW, existing utilities) and the total.
    - deck placement sequence (SA7, 6.10.3.4.1): pours from the sign of M_DC1 (positive regions first, then negative)
      or a custom list; each pour's wet deck on the girder with the earlier pours composite (n or 3n, uncracked);
@@ -57,7 +58,7 @@
   'use strict';
   const ED = 'AASHTO LRFD 10th Ed.';
   const ML = () => window.SharedMovingLoad, SEC = () => window.SBDSections, St = () => window.SharedSteps, VEH = () => window.SharedVehicles;
-  const STEEL_PLF = 3.4;   // lb/ft per in² of steel (GirderDetail SA_PLF; 490 pcf / 144 = 3.403)
+  const STEEL_PLF = 490 / 144;   // lb/ft per in² of steel: 490 pcf / 144 = 3.4028 (Table 3.5.1-1; SB2-A2, 2026-10-29: GirderDetail's SA_PLF is 3.4)
   const DEF = { im: 33, imf: 15, crack: 'none', deflLimit: 800, seq: 'on', seqMod: 'n', seqCustom: '', steelAllowPct: 5, haunchInStiffness: null };
   const isNum = v => typeof v === 'number' && isFinite(v);
   const n1 = x => St().n(x, 1), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g0 = x => St().g(x, 0);
@@ -127,6 +128,20 @@
       src: Object.keys(Mn).some(k => isNum(Mn[k])) ? 'entered (manual)' : 'none entered: 1.0 (per lane)', manual: true };
   }
 
+  /* deflOwner(project, g, settings): the owner's live load deflection rule (OWN19, engine/owners.js 'defl.ll'; GirderDetail SA3 and
+     Preliminary sizing A1, mandatory): RIDOT BDM 2.4.2.6 L/800, L/1000 with pedestrians; MassDOT 3.5.6.1 L/1000 with sidewalks, without
+     them L/800 and preferably L/1000 (a warning), applied to the typical interior beam only (an exterior cross-section girder is
+     reported, not checked). Sidewalk or pedestrians: a sidewalk in the cross-section (xs.sidewalks.L or .R width > 0; GirderDetail:
+     its LLDF and DLs sidewalks). The entered L/… (analysis.deflLimit) governs where stricter (rq = max). null for AASHTO and CTDOT
+     (no rule: the entered L/…, 2.5.2.6.2 optional criterion). Returns { rule, cite, sw, req, uR, rq, pref, rep, line, ext } */
+  function deflOwner(P, g, S) {
+    const O = window.SBDOwners, own = P.ownerRules && P.ownerRules.owner, r = O && own ? O.rule(own, 'defl.ll') : null; if (!r) return null;
+    const xs = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), sw = (xs && xs.sidewalks) || {}, on = ['L', 'R'].some(k => sw[k] && +sw[k].w > 0);
+    const v = r.value, req = on ? v.ped : v.veh, uR = +S.deflLimit > 0 ? +S.deflLimit : 0, rq = Math.max(req, uR), pref = !on && v.pref ? Math.max(v.pref, rq) : 0;
+    const nb = xs ? Math.round(xs.nb) : 0, j = lineOf(P, g), ext = j === 0 || j === nb - 1;
+    return { rule: r, cite: O.cite(r), sw: on, req, uR, rq, pref, rep: !!(v.intOnly && ext), line: j, ext };
+  }
+
   /* sbOf(segs, Ikey, crackIv, IcrKey): stiffness intervals [[x0, x1, I]] for staticAnalysis / analyze: each plate segment's
      I (Ikey), with the cracked intervals given I_cr */
   function sbOf(segs, key, crack) {
@@ -143,7 +158,8 @@
   const spanOfX = (sup, x) => { for (let k = 0; k < sup.length - 1; k++) if (x <= sup[k + 1] + 1e-9) return k; return sup.length - 2; };
 
   /* analyzeGirder(project, gi, opt): the analysis of girder gi. opt.stations overrides the station grid (tests);
-     opt.ll = false skips the live loads (dead loads, camber and the pour sequence only). Returns the result described at
+     opt.ll = false skips the live loads (dead loads, camber and the pour sequence only); opt.steelPlf (tests only): the steel
+     weight in lb/ft per in² (GirderDetail's 3.4 for the parity tests; default STEEL_PLF = 490/144). Returns the result described at
      the end of this function, or { errors }. */
   function analyzeGirder(P, gi, opt) {
     opt = opt || {};
@@ -175,7 +191,7 @@
     if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors.`);
     if (LD.PL > 0) warnings.push(`Pedestrian load ${n3(LD.PL)} klf on this girder (loads module): not in this analysis yet; add it to LL+IM by hand where it applies (3.6.1.6).`);
     if (LD.src.CL === 'none') warnings.push('Construction live load not entered (Analysis settings): M_CL is 0.');
-    const allow = LD.steelAllowPct, wSteel = segs.map(s => s.As * STEEL_PLF / 1000 * (1 + allow / 100));
+    const allow = LD.steelAllowPct, plf = isNum(opt.steelPlf) ? opt.steelPlf : STEEL_PLF, wSteel = segs.map(s => s.As * plf / 1000 * (1 + allow / 100));
     const distSteel = segs.map((s, i) => [s.x0, s.x1, wSteel[i]]);
     const xfP = LD.xf.map(q => [q.x, q.P]);
     const SA = (sb, loads, stations) => ML().staticAnalysis({ spans, E, sb, simple: !cont, loads, stations: stations || xs });
@@ -256,12 +272,15 @@
       fat.VRpos = f.VRmax.map((v, i) => fat.gVR[i] * v); fat.VRneg = f.VRmin.map((v, i) => fat.gVR[i] * v);
       fat.VLpos = f.VLmax.map((v, i) => fat.gVL[i] * v); fat.VLneg = f.VLmin.map((v, i) => fat.gVL[i] * v);
       llR = h.R.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns), gV = Math.max(...adj.map(i => DF.spans[i].gV)); return { k, gV, max: gV * r.max, min: gV * r.min, perLane: r, two: r.two }; });
-      // LL deflection (SA3): shared deflection() at the 1/20 points, truck with IM or 25 % of it + lane, per lane; × g_Δ of the span
-      const DL = ML().deflection(RH, { mode: 'lrfd', DF: 1, useIM: true });
+      // LL deflection (SA3): shared deflection() at the 1/20 points, truck with IM or 25 % of it + lane, per lane; × g_Δ of the span.
+      // Truck axles that do not add to the deflection sought are neglected (3.6.1.3.1; GirderDetail LL8; SB2-A4, 2026-10-29: neglect).
+      // The limit: the owner rule (OWN19, deflOwner) or the entered L/… (2.5.2.6.2, optional criterion).
+      const DL = ML().deflection(RH, { mode: 'lrfd', DF: 1, useIM: true, neglect: true }), OW = deflOwner(P, g, S), rq = OW ? OW.rq : S.deflLimit;
       lld = spans.map((L, k) => { let best = null;
         DL.secs.forEach((s, si) => { if (s.k !== k) return; const v = -DL.res[si].dn; if (!best || v > best.raw) best = { x: s.x, raw: v, lab: DL.res[si].dnG ? DL.res[si].dnG.lab : '' }; });
-        const gD = DF.spans[k].gDef, dd = best ? best.raw * gD : 0, lim = L * 12 / S.deflLimit;
-        return { k, L, x: best ? best.x : null, perLane: best ? best.raw : 0, case: best ? best.lab : '', gD, d: dd, lim, ratio: S.deflLimit, ok: dd <= lim + 1e-9 }; });
+        const gD = DF.spans[k].gDef, dd = best ? best.raw * gD : 0, lim = L * 12 / rq, limP = OW && OW.pref ? L * 12 / OW.pref : 0, ok = dd <= lim + 1e-9;
+        const status = OW && OW.rep ? 'na' : !ok ? 'fail' : limP && dd > limP + 1e-9 ? 'warn' : 'pass';
+        return { k, L, x: best ? best.x : null, perLane: best ? best.raw : 0, case: best ? best.lab : '', gD, d: dd, lim, ratio: rq, pref: OW ? OW.pref : 0, limP, ok, status, own: OW }; });
     }
 
     // deck placement sequence (saSeq): continuous girders, composite deck
@@ -290,7 +309,7 @@
         MDCc: Array.from(MD).map((v, i) => v >= 0 ? Math.max(v, eP[i]) : Math.min(v, eN[i])) };
     }
 
-    const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
+    const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
       st, camber, ll, fat, llR, lld, seq };
     R.steps = steps(R);
     return R;
@@ -302,8 +321,8 @@
     const w = St().work('an'), S = R.settings, L = R.loads, kip = 'kip', kft = 'kip-ft';
     w.add({ id: 'n', label: 'Modular ratio (for the composite stiffness)', sym: 'n', eq: '\\frac{E_{s}}{E_{c}}', sub: '', value: R.n, unit: '', d: 3, ref: `${ED} Art. 6.10.1.1.1b`, note: 'Worked in Section properties (n).' });
     R.segs.forEach((s, i) => {
-      w.add({ id: `wst${i}`, label: `Girder steel weight, segment ${i + 1} (${n1(s.x0)}–${n1(s.x1)} ft)`, sym: 'w_{s}', eq: 'A_{s}(3.4\\,\\text{lb/ft/in}^{2})(1 + a)/1000', sub: `${n2(s.As)}(3.4)(1 + ${n2(L.steelAllowPct / 100)})/1000`, value: R.wSteel[i], unit: 'klf', d: 4,
-        ref: `${ED} Table 3.5.1-1 (steel 0.490 kcf)`, note: 'a = detail allowance for stiffeners, connection plates and splices. 3.4 lb/ft per in² is GirderDetail\'s rounding of 490/144 = 3.403.' });
+      w.add({ id: `wst${i}`, label: `Girder steel weight, segment ${i + 1} (${n1(s.x0)}–${n1(s.x1)} ft)`, sym: 'w_{s}', eq: 'A_{s}(\\frac{490}{144}\\,\\text{lb/ft/in}^{2})(1 + a)/1000', sub: `${n2(s.As)}(${St().n(R.plf, 4)})(1 + ${n2(L.steelAllowPct / 100)})/1000`, value: R.wSteel[i], unit: 'klf', d: 4,
+        ref: `${ED} Table 3.5.1-1 (steel 0.490 kcf)`, note: 'a = detail allowance for stiffeners, connection plates and splices. Steel 490 pcf: 490/144 = 3.4028 lb/ft per in² of plate (GirderDetail rounds it to 3.4).' });
       w.add({ id: `I${i}`, label: `Stiffness, segment ${i + 1}: I_s / I_3n / I_n / I_cr`, sym: 'I', eq: 'I_{s},\\ I_{3n},\\ I_{n},\\ I_{cr}', sub: `${g0(s.Is)},\\ ${g0(s.I3u)},\\ ${g0(s.Inu)},\\ ${g0(s.Icr)}`, value: s.Inu, unit: 'in^{4}', d: 0,
         ref: `${ED} Art. 6.10.1.1.1, 6.10.1.5`, note: 'DC1 on I_s, DC2 and DW on I_3n, LL on I_n; I_cr (steel + longitudinal reinforcement) replaces I_3n and I_n in the cracked zones. Worked in Section properties.' });
     });
@@ -331,10 +350,13 @@
         ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2`, note: R.ll.perLane.twoM[i] ? 'Includes 90 % of two design trucks (headway ≥ 50 ft) + 90 % of the lane load (negative-moment influence line).' : '' }); }
     if (R.llR) R.llR.forEach(r => w.add({ id: `R.LL.${r.k}`, label: `LL+IM reaction, support ${r.k + 1}`, sym: 'R_{LL+IM}', eq: 'g_{V}\\,R_{HL93}', sub: `${n3(r.gV)}(${n2(r.perLane.max)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2.3a`, note: (r.two ? '90 % of two trucks + lane governs (interior support). ' : '') + 'g_V = the larger of the adjacent spans.' }));
-    if (R.lld) R.lld.forEach(q => {
-      w.add({ id: `defl.lim${q.k + 1}`, label: `LL deflection limit, span ${q.k + 1}`, sym: '\\Delta_{lim}', eq: `\\frac{12L}{${q.ratio}}`, sub: `\\frac{12(${n2(q.L)})}{${q.ratio}}`, value: q.lim, unit: 'in', d: 3, ref: `${ED} Art. 2.5.2.6.2` });
+    if (R.lld) R.lld.forEach(q => { const O = q.own;
+      w.add({ id: `defl.lim${q.k + 1}`, label: `LL deflection limit, span ${q.k + 1}${O ? ` (${O.cite}, mandatory)` : ''}`, sym: '\\Delta_{lim}', eq: `\\frac{12L}{${q.ratio}}`, sub: `\\frac{12(${n2(q.L)})}{${q.ratio}}`, value: q.lim, unit: 'in', d: 3,
+        ref: O ? `${O.cite}; ${ED} Art. 2.5.2.6.2` : `${ED} Art. 2.5.2.6.2`, note: O ? `${O.cite}: ${O.rule.text}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (cross-section sidewalks), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.${O.rep ? ` Applied to the typical interior beam only: this plate girder takes cross-section girder G${O.line + 1} (exterior), so it is reported, not checked.` : ''}` : 'Optional criterion (2.5.2.6.2): the L/… entered under Analysis settings.' });
+      if (q.limP) w.add({ id: `defl.pref${q.k + 1}`, label: `LL deflection, preferred limit, span ${q.k + 1} (${O.cite})`, sym: '\\Delta_{pref}', eq: `\\frac{12L}{${q.pref}}`, sub: `\\frac{12(${n2(q.L)})}{${q.pref}}`, value: q.limP, unit: 'in', d: 3,
+        ref: `${O.cite}`, ok: q.status !== 'warn', note: q.status === 'warn' ? 'Exceeded: a warning (preferably L/' + q.pref + ').' : '' });
       w.add({ id: `defl.LL${q.k + 1}`, label: `LL deflection, span ${q.k + 1}, at x = ${n2(q.x)} ft`, sym: '\\Delta_{LL}', eq: 'g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})', sub: `${n3(q.gD)}(${n3(q.perLane)})`, value: q.d, unit: 'in', d: 3,
-        ref: `${ED} Art. 2.5.2.6.2, 3.6.1.3.2`, ok: q.ok, note: `${q.ok ? '≤' : '>'} Δ_lim = ${n3(q.lim)} in. Governing per-lane case: ${q.case || '—'}. All lanes loaded, all girders deflecting equally (g_Δ).` }); });
+        ref: `${ED} Art. 2.5.2.6.2, 3.6.1.3.2`, ok: q.status === 'na' ? undefined : q.ok, note: `${q.ok ? '≤' : '>'} Δ_lim = ${n3(q.lim)} in${q.status === 'na' ? ' (reported, not checked: exterior girder under the owner rule)' : ''}. Governing per-lane case: ${q.case || '—'}. All lanes loaded, all girders deflecting equally (g_Δ). Truck axles that do not add to the deflection are neglected (3.6.1.3.1).` }); });
     for (let k = 0; k < R.spans.length; k++) { const a = R.supIdx[k], b = R.supIdx[k + 1]; let i = a; for (let j = a; j <= b; j++) if (R.camber.total[j] > R.camber.total[i]) i = j; const c = R.camber;
       w.add({ id: `camber.s${k + 1}`, label: `Dead-load deflection (camber), span ${k + 1}, at x = ${n2(x[i])} ft`, sym: '\\Delta_{DL}', eq: '\\Delta_{steel} + \\Delta_{wet} + \\Delta_{DC2+DW}' + (c.ut ? ' + \\Delta_{UT}' : ''),
         sub: `${n3(c.steel[i])} + ${n3(c.wet[i])} + ${n3(c.sd[i])}` + (c.ut ? ` + ${n3(c.ut[i])}` : ''), value: c.total[i], unit: 'in', d: 3, ref: `${ED} Art. 6.7.2`, note: 'Steel and wet deck on I_s, DC2 + DW on I_3n (cracked zones as used). Downward positive.' }); }
@@ -348,5 +370,5 @@
     return w.steps;
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder };
+  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder };
 })();

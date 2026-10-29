@@ -306,12 +306,15 @@
   function card(p, deck, mat, n, opt) {
     opt = opt || {};
     const pos = opt.region !== 'neg', comp = deck.composite !== false;
-    const s = steel(p), c3 = comp ? composite(p, deck, n, 3) : null, cn = comp ? composite(p, deck, n, 1) : null, cr = withRebar(p, deck);
-    const pl = plastic(p, comp ? deck : { ...deck, beff: 0 }, mat, { region: pos ? 'pos' : 'neg', rebarInPositive: !!opt.rebarInPositive });
-    const dcS = { top: dc(p, s, 'top', 'steel'), bot: dc(p, s, 'bot', 'steel') }, dcR = dc(p, cr, 'bot', 'steel + rebar');
-    const rh = hybrid(p, pos ? (cn || s) : cr, mat, pos ? 'cn' : 'cr'), rhS = hybrid(p, s, mat, 's');
-    const steps = [].concat(s.steps, c3 ? c3.steps : [], cn ? cn.steps : [], cr.steps, pl.steps, dcS.top.steps, dcS.bot.steps, dcR.steps, rh.steps, rhS.steps);
-    return { region: pos ? 'pos' : 'neg', s, c3, cn, cr, pl, Dc: pos ? null : dcR.Dc, DcSteel: { top: dcS.top.Dc, bot: dcS.bot.Dc }, DcRebar: dcR.Dc,
+    // noncomposite (SB2-O12, 2026-10-29): no deck and no deck rebar anywhere, as engine/flexure.js (6.10.1.1.1a: the steel section alone);
+    // cr is then the steel section, R_h and D_c the steel section's, and the card lists no rebar steps
+    const dk = comp ? deck : { ...deck, beff: 0, rebar: {} };
+    const s = steel(p), c3 = comp ? composite(p, dk, n, 3) : null, cn = comp ? composite(p, dk, n, 1) : null, cr = withRebar(p, dk);
+    const pl = plastic(p, dk, mat, { region: pos ? 'pos' : 'neg', rebarInPositive: !!opt.rebarInPositive });
+    const dcS = { top: dc(p, s, 'top', 'steel'), bot: dc(p, s, 'bot', 'steel') }, dcR = comp ? dc(p, cr, 'bot', 'steel + rebar') : dcS.bot;
+    const rhS = hybrid(p, s, mat, 's'), rh = comp ? hybrid(p, pos ? (cn || s) : cr, mat, pos ? 'cn' : 'cr') : rhS;
+    const steps = [].concat(s.steps, c3 ? c3.steps : [], cn ? cn.steps : [], comp ? cr.steps : [], pl.steps, dcS.top.steps, dcS.bot.steps, comp ? dcR.steps : [], comp ? rh.steps : [], rhS.steps);
+    return { region: pos ? 'pos' : 'neg', comp, s, c3, cn, cr, pl, Dc: pos ? null : dcR.Dc, DcSteel: { top: dcS.top.Dc, bot: dcS.bot.Dc }, DcRebar: dcR.Dc,
       Rh: rh.Rh, RhSteel: rhS.Rh, Dt: pl.Dt, Dp: pl.Dp, Dcp: pl.Dcp, Mp: pl.Mp, yp: pl.yp, steps };
   }
 

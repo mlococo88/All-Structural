@@ -46,6 +46,7 @@
   const St = () => window.SharedSteps, SEC = () => window.SBDSections;
   const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), n4 = x => St().n(x, 4), g0 = x => St().g(x, 0), g1 = x => St().g(x, 1);
   const pa = x => (x < 0 ? `(${n2(x)})` : n2(x));
+  const pp = x => `(${n2(x)})`;   // a factor times a moment: always in parentheses, 1.25(1450.00) (SB2-C1, display only)
   const r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2), r3 = v => +(+v).toFixed(3);
 
   /* ---------- load factors ---------- */
@@ -376,7 +377,7 @@
       else { const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12;
         out.push(ck({ id: 'GS9', key: 'a6c', title: 'App. A6, compression flange, M_u + f_ℓS_xc/3 ≤ φ_fM_nc', ref: `${ED} Eq. A6.1.1-1`, demand: demC, capacity: a.Mnc, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6c.ok' }));
         if (nc) out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange (discretely braced), M_u + f_ℓS_xt/3 ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.2-1, A6.4`, demand: Mu + r.tF.fl * a.Sxt / 3 / 12, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' }));
-        else out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange, M_u ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.2-1, A6.4`, demand: Mu, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' })); }
+        else out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange (continuously braced by the deck), M_u ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.4-1, A6.4`, demand: Mu, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' })); }
     }
     if (nc) flLims(r).forEach(q => { if (q.fl > 0) out.push(ck({ id: 'GS10', key: q.key, title: `Flange lateral bending, ${q.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: q.fl, capacity: 0.6 * q.Fy, unit: 'ksi', step: `fx.${q.st}.ok` })); });
     else { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) out.push(ck({ id: 'GS10', key: 'fl', title: 'Flange lateral bending, f_ℓ ≤ 0.6F_yf', ref: `${ED} Eq. 6.10.1.6-1`, demand: fS, capacity: 0.6 * Fyb, unit: 'ksi', step: 'fx.flim.ok' })); }
@@ -402,8 +403,8 @@
         w.add({ id: 'gam.' + k, label: `γ_p for ${k}: maximum where it adds to the ${pos ? 'positive' : 'negative'} moment, minimum where it relieves it`, sym: `\\gamma_{${k}}`, eq: '', sub: `M_{${k}} = ${n2(Mm)}\\text{ kip-ft}`, value: r.gm[k], unit: '', d: 2, ref: tbl }));
       if (r.ut) [['UT', r.MUT], ['UF', r.MUF]].forEach(([k, Mm]) => w.add({ id: 'gam.' + k, label: `γ for ${k === 'UT' ? 'existing utilities (DW factors)' : 'future utility allowance (γ_DC max, 0 min)'}`, sym: `\\gamma_{${k}}`, eq: '', sub: `M_{${k}} = ${n2(Mm)}`, value: r.gm[k], unit: '', d: 2, ref: tbl }));
       w.add({ id: 'Mu', label: 'Strength I factored moment', sym: 'M_{u}', eq: '\\gamma_{DC1}M_{DC1} + \\gamma_{DC2}M_{DC2} + \\gamma_{DW}M_{DW} + 1.75M_{LL+IM}' + (r.ut ? ' + \\gamma_{UT}M_{UT} + \\gamma_{UF}M_{UF}' : ''),
-        sub: `${n2(r.gm.DC1)}${pa(r.MDC1)} + ${n2(r.gm.DC2)}${pa(r.MDC2)} + ${n2(r.gm.DW)}${pa(r.MDW)} + ${n2(G.ll)}${pa(r.MLL)}` + (r.ut ? ` + ${n2(r.gm.UT)}${pa(r.MUT)} + ${n2(r.gm.UF)}${pa(r.MUF)}` : ''), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
-      w.add({ id: 'Ms', label: 'Service II moment', sym: 'M_{s}', eq: 'M_{DC1} + M_{DC2} + M_{DW} + 1.30M_{LL+IM}', sub: `${pa(r.MDC1)} + ${pa(r.MDC2)} + ${pa(r.MDW)} + ${n2(G.sll)}${pa(r.MLL)}` + (r.ut ? ` + ${pa(r.MUT)} + ${r.svU}${pa(r.MUF)}` : ''), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
+        sub: `${n2(r.gm.DC1)}${pp(r.MDC1)} + ${n2(r.gm.DC2)}${pp(r.MDC2)} + ${n2(r.gm.DW)}${pp(r.MDW)} + ${n2(G.ll)}${pp(r.MLL)}` + (r.ut ? ` + ${n2(r.gm.UT)}${pp(r.MUT)} + ${n2(r.gm.UF)}${pp(r.MUF)}` : ''), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
+      w.add({ id: 'Ms', label: 'Service II moment', sym: 'M_{s}', eq: 'M_{DC1} + M_{DC2} + M_{DW} + 1.30M_{LL+IM}', sub: `${pa(r.MDC1)} + ${pa(r.MDC2)} + ${pa(r.MDW)} + ${n2(G.sll)}${pp(r.MLL)}` + (r.ut ? ` + ${pa(r.MUT)} + ${r.svU}${pp(r.MUF)}` : ''), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
     } else {
       w.add({ id: 'Mu', label: 'Strength I factored moment (factored demands as given)', sym: 'M_{u}', eq: '\\sum M_{u,i}', sub: ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => pa(r.fA[k])).join(' + '), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
       w.add({ id: 'Ms', label: 'Service II moment (factored demands as given)', sym: 'M_{s}', eq: '\\sum M_{s,i}', sub: ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => pa(r.fB[k])).join(' + '), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
@@ -498,7 +499,7 @@
         const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12, demT = Mu + (nc ? r.tF.fl * a.Sxt / 3 / 12 : 0);
         w.add({ id: 'a6c.ok', label: 'App. A6, compression flange', sym: 'M_{u} + \\frac{1}{3}f_{\\ell}S_{xc}', eq: '\\le \\phi_{f}M_{nc}', sub: `${n2(Mu)} + \\frac{1}{3}(${n2(a.am.fl)})\\frac{${g0(a.Sxc)}}{12} = ${n2(demC)} \\le ${n2(a.Mnc)}`, value: okv(demC, a.Mnc), unit: '', ref: `${ED} Eq. A6.1.1-1`, ok: demC <= a.Mnc + 1e-9 });
         if (nc) w.add({ id: 'a6t.ok', label: 'App. A6, tension flange (discretely braced)', sym: 'M_{u} + \\frac{1}{3}f_{\\ell}S_{xt}', eq: '\\le \\phi_{f}R_{pt}M_{yt}', sub: `${n2(Mu)} + \\frac{1}{3}(${n2(r.tF.fl)})\\frac{${g0(a.Sxt)}}{12} = ${n2(demT)} \\le ${n3(a.Rpt)}(${n2(a.Myt)}) = ${n2(a.Mnt)}`, value: okv(demT, a.Mnt), unit: '', ref: `${ED} Eq. A6.1.2-1, A6.4-1`, ok: demT <= a.Mnt + 1e-9 });
-        else w.add({ id: 'a6t.ok', label: 'App. A6, tension flange', sym: 'M_{u}', eq: '\\le \\phi_{f}R_{pt}M_{yt}', sub: `${n2(Mu)} \\le ${n3(a.Rpt)}(${n2(a.Myt)}) = ${n2(a.Mnt)}`, value: okv(Mu, a.Mnt), unit: '', ref: `${ED} Eq. A6.1.2-1`, ok: Mu <= a.Mnt + 1e-9 });
+        else w.add({ id: 'a6t.ok', label: 'App. A6, tension flange (continuously braced by the deck)', sym: 'M_{u}', eq: '\\le \\phi_{f}R_{pt}M_{yt}', sub: `${n2(Mu)} \\le ${n3(a.Rpt)}(${n2(a.Myt)}) = ${n2(a.Mnt)}`, value: okv(Mu, a.Mnt), unit: '', ref: `${ED} Eq. A6.1.4-1`, ok: Mu <= a.Mnt + 1e-9 });
       }
     }
     if (nc) flLims(r).forEach(q => { if (q.fl > 0) w.add({ id: `${q.st}.ok`, label: `Flange lateral bending limit, ${q.lab} flange`, sym: 'f_{\\ell}', eq: '\\le 0.6F_{yf}', sub: `${n2(q.fl)} \\le 0.6(${n2(q.Fy)})`, value: okv(q.fl, 0.6 * q.Fy), unit: '', ref: `${ED} Eq. 6.10.1.6-1`, ok: q.fl <= 0.6 * q.Fy + 1e-9 }); });
