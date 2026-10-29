@@ -209,3 +209,27 @@ test('loads module path (engine/loads.js, engine/lldf.js): the default project t
   assert.equal(R2.line, 0); assert.equal(R2.loads.DC2, LDm.girder(LDm.compute(M2.b, M2.p), 0).DC2);
   assert.equal(R2.h0, !!W2.SBDOwners.loadFactors('MassDOT', {}, P.xs.nb).h0, 'OWN8 from the owner rules');
 });
+
+test('SB2-A5: owner live load deflection limits (OWN19, engine/owners.js defl.ll), as GirderDetail SA3', () => {
+  const W3 = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), ENG('analysis.js'));
+  const A3 = W3.SBDAnalysis, P = W3.SBDModel.defaultProject(), S = A3.settings(P), g = P.girders[0];   // interior plate girder: cross-section G2
+  const own = o => { P.ownerRules = { owner: o, eta: {} }; return A3.deflOwner(P, g, A3.settings(P)); };
+  assert.equal(own('AASHTO'), null); assert.equal(own('CTDOT'), null);   // no owner rule: the entered L/… (2.5.2.6.2, optional)
+  // RIDOT BDM 2.4.2.6: vehicular only L/800; with pedestrians L/1000
+  let o = own('RIDOT'); assert.equal(o.rq, 800); assert.equal(o.pref, 0); assert.equal(o.rep, false);
+  // MassDOT 3.5.6.1: no sidewalk L/800, preferably L/1000; interior beam only
+  o = own('MassDOT'); assert.equal(o.rq, 800); assert.equal(o.pref, 1000); assert.equal(o.rep, false); assert.equal(o.line, 1);
+  g.line = 0; o = own('MassDOT'); assert.equal(o.rep, true, 'exterior cross-section girder: reported, not checked'); delete g.line;
+  P.xs.sidewalks.L.w = 6; o = own('MassDOT'); assert.equal(o.rq, 1000); assert.equal(o.pref, 0); o = own('RIDOT'); assert.equal(o.rq, 1000);
+  // an entered L/1200 is stricter and governs: rq = max(1000, 1200)
+  P.analysis = { ...(P.analysis || {}), deflLimit: 1200 }; o = own('RIDOT'); assert.equal(o.rq, 1200); assert.equal(S.deflLimit, 800);
+  // GirderDetail's SA3 status in the payloads: MassDOT exterior 'na', interior 'pass'; RIDOT exterior 'pass'; limit L/800: span 1 (110 ft) 1.65 in
+  for (const f of ['gd_builtin_MassDOT_G1.json', 'gd_builtin_MassDOT_G2.json', 'gd_builtin_RIDOT_G1.json']) {
+    const p = readPayload(f), Q = projectFromPayload(p); Q.ownerRules = { owner: p.ownerRules.owner, eta: {} };
+    const R = A3.analyzeGirder(Q, 0), sp = p.girderDetail.deflection.ll.spans;   // A3: owners.js loaded
+    R.lld.forEach((q, k) => { assert.equal(q.status, sp[k].status, `${f} span ${k + 1} status`); assert.equal(q.ratio, sp[k].ratio); close(q.lim, sp[k].lim, 0.005, `${f} limit`);
+      assert.ok(Math.abs(q.d - sp[k].d) <= 0.002 * sp[k].d + 0.0006, `${f} span ${k + 1}: Δ ${q.d} vs ${sp[k].d}`); });
+    const st = R.steps.find(s => s.id === 'an.defl.lim1'); assert.match(st.ref, p.ownerRules.owner === 'MassDOT' ? /3\.5\.6\.1/ : /2\.4\.2\.6/);
+    console.log(`       ${f}: ${R.lld.map(q => `span ${q.k + 1} Δ ${q.d.toFixed(4)} (GirderDetail ${sp[q.k].d}) ≤ L/${q.ratio} = ${q.lim.toFixed(3)} in: ${q.status}`).join('; ')}`);
+  }
+});

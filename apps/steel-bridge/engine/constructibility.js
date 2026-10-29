@@ -186,6 +186,27 @@
      w_c (kcf), forms qForm (ksf), screed rail, railing, walkway (klf), construction LL qCL (ksf) over bCL (in), finishing machine Pfm (kip
      per bracket); R_h, C_b of the module; γ_DC, γ construction. */
   const OH_DEF = { Rh: 1.0, Cb: 1.0, gam: { dc: 1.25, cl: 1.50 }, a: 36, hb: 54, wOH: 30, tOH: 9, wc: 0.150, qForm: 0.010, wScreed: 0.085, wRail: 0.025, wWalk: 0.125, qCL: 0.020, bCL: 30, Pfm: 3.0 };
+  /* ohFill(project, gi): "Fill from cross-section" (GirderDetail XS11, SB2-C2; a button with a confirmation, never automatic): the bracket
+     deck geometry from the Cross-section & loads inputs. Deck width carried by the brackets w_OH = 12·overhang − b_tf/2 (in, to 0.01; the
+     overhang from the exterior girder centerline to the deck edge, the side with the larger overhang, left when equal; b_tf the narrowest
+     top flange of this girder: the widest deck strip outside the flange), overhang deck thickness t_OH = the total deck thickness
+     (deck.tdeck: the structural slab plus the integral wearing surface, all placed on the brackets; GirderDetail takes t_s, its bridge
+     data having no wearing thickness), w_c = the deck concrete unit weight. Returns { vals: { wOH, tOH, wc }, sd, oh, bf, why, steps } or { err }. */
+  function ohFill(P, gi) {
+    const xs = P.xs, g = P.girders[gi], d = P.deck || {}, c = (P.materials || {}).concrete || {};
+    if (!xs || !(xs.ohL >= 0) || !(xs.ohR >= 0)) return { err: 'No cross-section: enter the overhangs on the Cross-section & loads tab.' };
+    if (!g || !g.segments || !g.segments.length) return { err: 'No girder plates.' };
+    const sd = +xs.ohR > +xs.ohL + 1e-9 ? 'R' : 'L', oh = sd === 'L' ? +xs.ohL : +xs.ohR, bf = Math.min(...g.segments.map(s => +s.topB));
+    const raw = Math.max(oh * 12 - bf / 2, 0), wOH = Math.round(raw * 100) / 100, tOH = +d.tdeck > 0 ? +d.tdeck : +d.ts, wc = +c.wc;
+    const w = St().work('oh.fill'), side = sd === 'L' ? 'left' : 'right';
+    w.add({ id: 'wOH', label: `Deck width carried by the brackets (${side} overhang ${n2(oh)} ft, narrowest top flange ${n2(bf)} in)`, sym: 'w_{OH}', eq: '12\\,OH - \\frac{b_{tf}}{2}', sub: `12(${n2(oh)}) - \\frac{${n2(bf)}}{2}`, value: wOH, unit: 'in', d: 2,
+      ref: 'C6.10.3.4', note: 'Overhang: exterior girder centerline to the deck edge (Cross-section & loads tab), the larger side. Rounded to 0.01 in.' });
+    w.add({ id: 'tOH', label: 'Overhang deck thickness (total deck thickness)', sym: 't_{OH}', eq: 't_{deck}', sub: '', value: tOH, unit: 'in', d: 2, note: 'Structural slab and integral wearing surface, all placed on the brackets; no overhang thickening in the project data.' });
+    w.add({ id: 'wc', label: 'Deck concrete unit weight', sym: 'w_{c}', eq: '', sub: '', value: wc, unit: 'kcf', d: 3, ref: 'Table 3.5.1-1' });
+    const why = { wOH: `${side} overhang ${n2(oh)} ft × 12 − ${n2(bf)}/2 in (the narrowest top flange)`, tOH: 'the total deck thickness (slab + integral wearing surface)', wc: 'the deck concrete unit weight' };
+    return { vals: { wOH, tOH, wc }, sd, oh, bf, why, steps: w.steps };
+  }
+
   /* ohLoads(p): the factored bracket load w_u (klf), its horizontal flange force F_ℓ = w_u a/h_b (klf) and the finishing machine
      P_ℓ = γ P_fm a/h_b (kip) (GM.oh.compute). p.loads = { wu, Fl, Pl } gives them directly (a hand-off's stored values). */
   function ohLoads(p) {
@@ -369,5 +390,5 @@
     return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc };
   }
 
-  window.SBDConstr = { ES, OH_DEF, factors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
+  window.SBDConstr = { ES, OH_DEF, ohFill, factors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
 })();
