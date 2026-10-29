@@ -22209,7 +22209,7 @@ F_nc,LTB = 43.95 ksi (r_t = 5.048 in, L_p = 133.7, L_r = 456.5, L_b = 264 in, C_
 
 **Open items:** no `V_DCc` (GirderDetail GS16 uses V_DC1); the OH1–OH5 results sent are per girder at its largest 1.25·M_DC1 + 1.5·M_CL per span with the module's inputs, and can differ from the Deck overhang module's own rows.
 
-## 2026-10-29 — PR: claude/sbd-crw-web-limit (CRW: web limit λ_rw = c_rw√(E/F_yc), AASHTO LRFD 10th Ed., in R_b and Appendix A6; engineer decision 2026-10-29; PR link added after merge)
+## 2026-10-29 — PR: claude/sbd-crw-web-limit, #470 (CRW: web limit λ_rw = c_rw√(E/F_yc), AASHTO LRFD 10th Ed., in R_b and Appendix A6; engineer decision 2026-10-29)
 
 No saved key or saved format changes. No hand-off field changes (`girderDetail.checks.negFlex.lrw`/`crw` already carried S2-9's c_rw value).
 
