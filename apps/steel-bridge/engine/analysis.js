@@ -39,21 +39,28 @@
 
    Inputs read from the project (engine/model.js), all optional, with defaults:
      project.analysis = { im: 33, imf: 15 (%), crack: 'none' | '15' | 'dl', deflLimit: 800 (L/…), seq: 'on' | 'off',
-                          seqMod: 'n' | '3n', seqCustom: 'a-b, c-d' (ft), steelAllowPct: 5, haunchInStiffness: true }
-     girder.df        distribution factors from the loads PR (engine/lldf.js), lanes per girder:
-                      { spans: [{ gM, gV, fatM, fatV, gDef? }], piers: [{ gM }], gDef, source }
-     girder.dfManual  fallback, entered: { gM, gV, fatM, fatV, gMpier, gDef } (one value for every span; blank = 1)
-     girder.loads     dead loads per girder from the loads PR: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }],
-                      steelAllowPct, source }
-     girder.loadsManual  fallback, entered: the same fields (blank = 0). */
+                          seqMod: 'n' | '3n', seqCustom: 'a-b, c-d' (ft), steelAllowPct: 5 (when xs.allow is not available),
+                          haunchInStiffness: true | false (absent: the owner rule OWN8, SBDOwners.loadFactors().h0) }
+     girder.line      the cross-section girder (0-based) whose loads and factors this plate girder takes; absent: the first
+                      exterior girder (position 'exterior') or the first interior girder
+   Dead loads and distribution factors, in this order of precedence:
+     1. girder.loads / girder.df: explicit values per girder (an imported hand-off; the parity tests)
+          loads { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }], steelAllowPct, source }
+          df    { spans: [{ gM, gV, fatM, fatV, gDef? }], piers: [{ gM }], gDef, source }
+     2. the loads module (engine/loads.js + engine/lldf.js, window.SBDLoads): SBDLoads.compute(SBDLoads.fromModel(project,
+        { girder })) and SBDLoads.girder(result, line): DC1 (deck, haunch, SIP, DC1 rows), DC2, DW, UT, UF, the detail allowance
+        xs.allow, and per region the factors gM, gV, fatM, fatV and gDef (spans 's<i>', piers 'p<k>')
+     3. girder.loadsManual / girder.dfManual, entered: the same load fields; { gM, gMpier, gV, fatM, fatV, gDef } for every span
+     The construction live load (CL) and the cross-frame point loads (xf) are not in the loads module yet: 1 or 3 only.
+     Nothing entered: loads 0 and factors 1 (per lane), with a warning. */
 (function () {
   'use strict';
   const ED = 'AASHTO LRFD 10th Ed.';
   const ML = () => window.SharedMovingLoad, SEC = () => window.SBDSections, St = () => window.SharedSteps, VEH = () => window.SharedVehicles;
   const STEEL_PLF = 3.4;   // lb/ft per in² of steel (GirderDetail SA_PLF; 490 pcf / 144 = 3.403)
-  const DEF = { im: 33, imf: 15, crack: 'none', deflLimit: 800, seq: 'on', seqMod: 'n', seqCustom: '', steelAllowPct: 5, haunchInStiffness: true };
+  const DEF = { im: 33, imf: 15, crack: 'none', deflLimit: 800, seq: 'on', seqMod: 'n', seqCustom: '', steelAllowPct: 5, haunchInStiffness: null };
   const isNum = v => typeof v === 'number' && isFinite(v);
-  const n1 = x => St().n(x, 1), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g0 = x => St().g(x, 0), g1 = x => St().g(x, 1);
+  const n1 = x => St().n(x, 1), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g0 = x => St().g(x, 0);
 
   /* grid(spans): GirderDetail's node grid (sgBeam): each span in max(8, round(L)) equal parts. { xs, sup (node indices) } */
   function grid(spans) {
@@ -65,28 +72,55 @@
   /* settings(project): project.analysis with the defaults filled in */
   function settings(P) { const a = (P && P.analysis) || {}, o = {}; for (const k in DEF) o[k] = a[k] !== undefined && a[k] !== null && a[k] !== '' ? a[k] : DEF[k]; return o; }
 
-  /* loadsOf(project, g): the girder's dead loads, from girder.loads (loads PR), else girder.loadsManual, else 0.
-     { DC1wet, DC2, DW, CL, UT, UF, xf, steelAllowPct, src: { field: 'loads' | 'manual' | 'none' } } */
-  function loadsOf(P, g) {
-    const A = g.loads || null, B = g.loadsManual || null, o = { src: {} };
+  /* lineOf(project, g): the cross-section girder of plate girder g (see the header) */
+  function lineOf(P, g) {
+    const xs = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), nb = xs ? Math.round(xs.nb) : 0;
+    if (isNum(g.line) && g.line >= 0 && g.line < nb) return Math.round(g.line);
+    return g.position === 'exterior' || nb < 3 ? 0 : 1;
+  }
+  /* moduleOf(project, gi): the loads module's result for girder gi, or null (module not loaded) or { errors } */
+  function moduleOf(P, gi) {
+    const LD = window.SBDLoads; if (!LD || !window.SBDLldf || !window.SBDOwners || !window.SBDModel) return null;
+    try {
+      const { b, p } = LD.fromModel(P, { girder: gi }), R = LD.compute(b, p);
+      if (R.errors && R.errors.length) return { errors: R.errors };
+      const j = lineOf(P, P.girders[gi]); return { j, G: LD.girder(R, j), R, allow: b.allow, lf: R.lf };
+    } catch (e) { return { errors: [e.message] }; }
+  }
+
+  /* loadsOf(project, g, mod): the girder's dead loads (precedence in the header).
+     { DC1wet, DC2, DW, CL, UT, UF, PL, xf, steelAllowPct, src: { field: 'girder' | 'module' | 'manual' | 'none' }, source } */
+  function loadsOf(P, g, mod) {
+    const A = g.loads || null, M = mod && mod.G ? mod.G : null, B = g.loadsManual || null, o = { src: {} };
+    const fromM = { DC1wet: M && M.DC1, DC2: M && M.DC2, DW: M && M.DW, UT: M && M.UT, UF: M && M.UF };
     ['DC1wet', 'DC2', 'DW', 'CL', 'UT', 'UF'].forEach(k => {
-      if (A && isNum(A[k])) { o[k] = A[k]; o.src[k] = 'loads'; } else if (B && isNum(B[k])) { o[k] = B[k]; o.src[k] = 'manual'; } else { o[k] = 0; o.src[k] = 'none'; } });
+      if (A && isNum(A[k])) { o[k] = A[k]; o.src[k] = 'girder'; } else if (M && isNum(fromM[k])) { o[k] = fromM[k]; o.src[k] = 'module'; }
+      else if (B && isNum(B[k])) { o[k] = B[k]; o.src[k] = 'manual'; } else { o[k] = 0; o.src[k] = 'none'; } });
+    o.PL = M && isNum(M.PL) ? M.PL : 0;
     const xf = A && Array.isArray(A.xf) ? A.xf : B && Array.isArray(B.xf) ? B.xf : [];
-    o.xf = xf.filter(q => q && isNum(q.x) && isNum(q.P)).map(q => ({ x: q.x, P: q.P })); o.src.xf = A && Array.isArray(A.xf) ? 'loads' : B && Array.isArray(B.xf) ? 'manual' : 'none';
-    const al = A && isNum(A.steelAllowPct) ? A.steelAllowPct : B && isNum(B.steelAllowPct) ? B.steelAllowPct : settings(P).steelAllowPct;
-    o.steelAllowPct = al; o.source = A && A.source ? A.source : A ? 'loads' : B ? 'entered (manual)' : 'none entered';
+    o.xf = xf.filter(q => q && isNum(q.x) && isNum(q.P)).map(q => ({ x: q.x, P: q.P })); o.src.xf = A && Array.isArray(A.xf) ? 'girder' : B && Array.isArray(B.xf) ? 'manual' : 'none';
+    o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
+    o.source = A ? (A.source || 'girder loads') : M ? `loads module, cross-section girder G${mod.j + 1}` : B ? 'entered (manual)' : 'none entered';
     return o;
   }
-  /* dfOf(project, g, ns): distribution factors per span and pier. From girder.df (loads PR, engine/lldf.js), else girder.dfManual,
-     else 1 (per lane). { spans: [{ gM, gV, fatM, fatV, gDef }], piers: [{ gM }], src } */
-  function dfOf(P, g, ns) {
+  /* dfOf(project, g, ns, mod): distribution factors per span and pier (precedence in the header).
+     { spans: [{ gM, gV, fatM, fatV, gDef }], piers: [{ gM }], src, manual } */
+  function dfOf(P, g, ns, mod) {
     const D = g.df && Array.isArray(g.df.spans) && g.df.spans.length >= ns ? g.df : null, Mn = g.dfManual || {};
     const man = k => isNum(Mn[k]) && Mn[k] > 0 ? Mn[k] : 1;
     if (D) {
       const gDef = isNum(D.gDef) ? D.gDef : man('gDef');
       const spans = D.spans.slice(0, ns).map(s => ({ gM: s.gM, gV: s.gV, fatM: s.fatM, fatV: s.fatV, gDef: isNum(s.gDef) ? s.gDef : gDef }));
       const piers = [...Array(Math.max(0, ns - 1))].map((_, k) => { const q = (D.piers || [])[k]; return { gM: q && isNum(q.gM) ? q.gM : spans[k].gM }; });
-      return { spans, piers, src: D.source || 'loads', manual: false };
+      return { spans, piers, src: D.source || 'girder factors', manual: false };
+    }
+    if (mod && mod.R && mod.R.regions) {
+      const rg = id => mod.R.regions.find(r => r.id === id), j = mod.j;
+      if ([...Array(ns)].every((_, i) => rg('s' + i))) {
+        const spans = [...Array(ns)].map((_, i) => { const r = rg('s' + i), m = r.members[j]; return { gM: m.gM, gV: m.gV, fatM: m.fatM, fatV: m.fatV, gDef: r.gDef }; });
+        const piers = [...Array(Math.max(0, ns - 1))].map((_, k) => { const r = rg('p' + (k + 1)); return { gM: r ? r.members[j].gM : spans[k].gM }; });
+        return { spans, piers, src: `loads module (LLDF), cross-section girder G${j + 1}`, manual: false };
+      }
     }
     const sp = { gM: man('gM'), gV: man('gV'), fatM: man('fatM'), fatV: man('fatV'), gDef: man('gDef') };
     return { spans: [...Array(ns)].map(() => ({ ...sp })), piers: [...Array(Math.max(0, ns - 1))].map(() => ({ gM: isNum(Mn.gMpier) && Mn.gMpier > 0 ? Mn.gMpier : sp.gM })),
@@ -126,15 +160,21 @@
 
     // section stiffness per plate segment (engine/sections.js; GirderDetail saComp / saCracked / steelProps)
     const m = P.materials, d = P.deck, comp = d.composite !== false;
-    const nr = SEC().modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule), n = nr.n;
-    const deckS = { ts: d.ts, haunch: S.haunchInStiffness === false ? 0 : d.haunch, beff: g.beff, rebar: d.rebar };
+    const nr = SEC().modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule), n = nr.n;   // OWN17: w_c for E_c
+    const mod = g.loads && g.df ? null : moduleOf(P, gi);
+    const own = window.SBDOwners && P.ownerRules ? window.SBDOwners.loadFactors(P.ownerRules.owner, P.ownerRules.eta, (P.xs || {}).nb) : null;
+    const h0 = typeof S.haunchInStiffness === 'boolean' ? !S.haunchInStiffness : !!(own && own.h0);   // OWN8: haunch 0 in the composite stiffness
+    const deckS = { ts: d.ts, haunch: h0 ? 0 : d.haunch, beff: g.beff, rebar: d.rebar };
     const segs = g.segments.map(s => { const p = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, st = SEC().steelCore(p);
       const c3 = comp ? SEC().composite(p, deckS, n, 3) : null, cn = comp ? SEC().composite(p, deckS, n, 1) : null, cr = SEC().withRebar(p, deckS);
       return { x0: s.x0, x1: s.x1, p, As: st.A, Is: st.I, I3u: c3 ? c3.I : st.I, Inu: cn ? cn.I : st.I, Icr: comp ? cr.I : st.I, c3, cn }; });
 
-    const LD = loadsOf(P, g), DF = dfOf(P, g, ns), warnings = [];
-    if (LD.source === 'none entered') warnings.push('No dead loads for this girder yet (the loads module is not in this version): DC1 wet deck, DC2, DW and construction LL are 0 unless entered under Analysis settings. Only the girder steel is computed here.');
-    if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors entered.`);
+    const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod), warnings = [];
+    if (mod && mod.errors) warnings.push(`Loads module: ${mod.errors[0]} The entered loads and factors are used.`);
+    if (LD.source === 'none entered') warnings.push('No dead loads for this girder: DC1 wet deck, DC2, DW and construction LL are 0 unless entered under Analysis settings. Only the girder steel is computed here.');
+    if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors.`);
+    if (LD.PL > 0) warnings.push(`Pedestrian load ${n3(LD.PL)} klf on this girder (loads module): not in this analysis yet; add it to LL+IM by hand where it applies (3.6.1.6).`);
+    if (LD.src.CL === 'none') warnings.push('Construction live load not entered (Analysis settings): M_CL is 0.');
     const allow = LD.steelAllowPct, wSteel = segs.map(s => s.As * STEEL_PLF / 1000 * (1 + allow / 100));
     const distSteel = segs.map((s, i) => [s.x0, s.x1, wSteel[i]]);
     const xfP = LD.xf.map(q => [q.x, q.P]);
@@ -250,7 +290,7 @@
         MDCc: Array.from(MD).map((v, i) => v >= 0 ? Math.max(v, eP[i]) : Math.min(v, eN[i])) };
     }
 
-    const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
+    const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
       st, camber, ll, fat, llR, lld, seq };
     R.steps = steps(R);
     return R;
@@ -275,7 +315,7 @@
     w.add({ id: 'eq.DC1steel', label: 'Equilibrium, DC1 girder steel and cross-frames: ΣR = Σw_s ℓ + ΣP', sym: '\\sum R', eq: '\\sum w_{s}\\ell + \\sum P_{xf}', sub: `${n2(wsTot)} + ${n2(xfTot)}`, value: tot('DC1steel'), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot('DC1steel') - wsTot - xfTot) <= 1e-6 * Math.max(1, wsTot + xfTot) });
     [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other DC1)', 'w_{DC1}'], ['DC2', 'DC2', 'w_{DC2}'], ['DW', 'DW', 'w_{DW}'], ['CL', 'construction live load', 'w_{CL}']].forEach(([k, t, sy]) => {
       const a = L[k] * R.Lt; w.add({ id: 'eq.' + k, label: `Equilibrium, ${t}: ΣR = wL`, sym: '\\sum R', eq: `${sy}L`, sub: `${St().n(L[k], 4)}(${n2(R.Lt)})`, value: tot(k), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot(k) - a) <= 1e-6 * Math.max(1, a),
-        note: `w = ${St().n(L[k], 4)} klf (${L.src[k] === 'loads' ? 'loads module' : L.src[k] === 'manual' ? 'entered' : 'none entered'}).` }); });
+        note: `w = ${St().n(L[k], 4)} klf (${{ girder: 'girder loads', module: 'loads module', manual: 'entered', none: 'none entered' }[L.src[k]]}).` }); });
     // key moments per span and pier
     const x = R.x, at = (arr, i) => arr[i];
     for (let k = 0; k < R.spans.length; k++) {
@@ -308,5 +348,5 @@
     return w.steps;
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, loadsOf, dfOf, sbOf, analyzeGirder };
+  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder };
 })();

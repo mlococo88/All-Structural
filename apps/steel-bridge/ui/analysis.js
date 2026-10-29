@@ -18,8 +18,10 @@
   function settingsHtml(P, gi) {
     const S = AN().settings(P), g = P.girders[gi], Lm = g.loadsManual || {}, Dm = g.dfManual || {};
     const num = (scope, k, label, unit, v) => `<div class="fRow"><label for="an_${scope}_${k}">${label}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${v == null || v === '' || Number.isNaN(v) ? '' : esc(v)}"><span class="unit">${unit}</span></div>`;
-    const sel = (k, label, opts) => `<div class="fRow"><label for="an_a_${k}">${label}</label><select id="an_a_${k}" data-an="a" data-k="${k}">${opts.map(([v, t]) => `<option value="${v}"${String(S[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
-    const LD = AN().loadsOf(P, g), DF = AN().dfOf(P, g, P.spans.lengths.length);
+    const sel = (k, label, opts) => `<div class="fRow"><label for="an_a_${k}">${label}</label><select id="an_a_${k}" data-an="a" data-k="${k}">${opts.map(([v, t]) => `<option value="${v}"${String(S[k] == null ? '' : S[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
+    const mod = g.loads && g.df ? null : AN().moduleOf(P, gi), LD = AN().loadsOf(P, g, mod), DF = AN().dfOf(P, g, P.spans.lengths.length, mod);
+    const nb = P.xs ? Math.round(P.xs.nb) : 0, line = AN().lineOf(P, g);
+    const lineSel = nb > 0 ? `<div class="fRow"><label for="an_g_line">Cross-section girder (loads, factors)</label><select id="an_g_line" data-an="g" data-k="line">${[...Array(nb)].map((_, j) => `<option value="${j}"${j === line ? ' selected' : ''}>G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}</option>`).join('')}</select></div>` : '';
     return card('Analysis settings', `
       ${num('a', 'im', 'IM, truck and tandem', '% (Table 3.6.2.1-1)', S.im)}${num('a', 'imf', 'IM, fatigue truck', '%', S.imf)}
       ${sel('crack', 'Cracked zones (6.10.1.5)', [['none', 'None: deck effective over the whole length'], ['15', '15 % of the spans either side of each pier'], ['dl', 'Negative dead-load moment region']])}
@@ -27,19 +29,20 @@
       ${sel('seq', 'Deck placement sequence (6.10.3.4.1)', [['on', 'On'], ['off', 'Off']])}${sel('seqMod', 'Hardened pours act with', [['n', 'n'], ['3n', '3n']])}
       <div class="fRow"><label for="an_a_seqCustom">Pours (optional)</label><input type="text" id="an_a_seqCustom" data-an="a" data-k="seqCustom" value="${esc(S.seqCustom)}" style="width:180px"><span class="unit">ft, e.g. 0-80, 140-220 (blank: automatic)</span></div>
       ${num('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}
-      ${sel('haunchInStiffness', 'Haunch in the composite stiffness', [['true', 'Yes'], ['false', 'No (owner rule)']])}`)
-      + card(`Dead loads, girder ${esc(g.label || g.id)}`, `<p class="note">Source: <b>${esc(LD.source)}</b>. ${g.loads ? 'The loads module fills these; the values below are used only where it gives none.' : 'The loads module is not in this version: enter the loads per girder (klf).'}</p>
+      ${sel('haunchInStiffness', 'Haunch in the composite stiffness', [['', 'As the owner rule (OWN8)'], ['true', 'Yes'], ['false', 'No']])}`)
+      + card(`Dead loads, girder ${esc(g.label || g.id)}`, `${lineSel}<p class="note">Source: <b>${esc(LD.source)}</b>${LD.src.DC2 === 'module' ? ' (worked on the Loads &amp; LLDF tab)' : ''}. The values entered below are used only where the loads module gives none; the construction live load and the cross-frame point loads are entered here (not in the loads module yet).</p>
       ${num('l', 'DC1wet', 'DC1 wet deck (deck, haunch, SIP, other)', 'klf', Lm.DC1wet)}${num('l', 'DC2', 'DC2 (barriers, curbs, …)', 'klf', Lm.DC2)}${num('l', 'DW', 'DW (wearing surface, utilities)', 'klf', Lm.DW)}
       ${num('l', 'CL', 'Construction live load', 'klf', Lm.CL)}${num('l', 'UT', 'Existing utilities (steel section)', 'klf', Lm.UT)}
       <div class="fRow"><label for="an_l_xf">Cross-frame point loads</label><input type="text" id="an_l_xf" data-an="l" data-k="xf" value="${esc((Lm.xf || []).map(q => `${q.x}:${q.P}`).join(', '))}" style="width:180px"><span class="unit">x:P (ft:kip), comma separated</span></div>`)
-      + card(`Live load distribution factors, girder ${esc(g.label || g.id)}`, `<p class="note">Source: <b>${esc(DF.src)}</b> (lanes per girder, multiple presence included; fatigue: one lane ÷ 1.2, 3.6.1.4.3b). ${g.df ? 'From the LLDF module; the values below are not used.' : 'One value for every span; blank = 1.'}</p>
+      + card(`Live load distribution factors, girder ${esc(g.label || g.id)}`, `<p class="note">Source: <b>${esc(DF.src)}</b> (lanes per girder, multiple presence included; fatigue: one lane ÷ 1.2, 3.6.1.4.3b). ${DF.manual ? 'One value for every span; blank = 1.' : 'Worked on the Loads &amp; LLDF tab; the values below are used only when the loads module gives none.'}</p>
       ${num('d', 'gM', 'g moment (spans)', '', Dm.gM)}${num('d', 'gMpier', 'g moment (pier regions)', 'blank = spans', Dm.gMpier)}${num('d', 'gV', 'g shear', '', Dm.gV)}
       ${num('d', 'fatM', 'g fatigue moment', '', Dm.fatM)}${num('d', 'fatV', 'g fatigue shear', '', Dm.fatV)}${num('d', 'gDef', 'g deflection (all lanes, all girders)', '', Dm.gDef)}`);
   }
   function onInput(e, ctx) {
     const el = e.target, sc = el.dataset.an, k = el.dataset.k; if (!sc) return;
     const P = ctx.P, g = P.girders[ctx.gi];
-    if (sc === 'a') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
+    if (sc === 'a') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v === '' ? null : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
+    else if (sc === 'g') { g.line = Number(el.value); }
     else if (sc === 'l') { g.loadsManual = g.loadsManual || {};
       if (k === 'xf') g.loadsManual.xf = el.value.split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split(':').map(Number)).filter(q => q.length === 2 && q.every(isFinite)).map(([x, P_]) => ({ x, P: P_ }));
       else g.loadsManual[k] = el.value === '' ? null : Number(el.value); }

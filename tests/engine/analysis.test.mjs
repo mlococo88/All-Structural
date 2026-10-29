@@ -168,3 +168,21 @@ test('parity with GirderDetail\'s functions: the built-in project (no loads ente
   diffStats(pairsGD(R, D), S, 'built-in', D.xs);
   check(S, { ...BOUND_G, M_DCc: 0.03 }, 'built-in project');
 });
+
+test('loads module path (engine/loads.js, engine/lldf.js): the default project takes its dead loads and factors from there', () => {
+  const W2 = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), ENG('lldf.js'), ENG('loads.js'), ENG('analysis.js'));
+  const P = W2.SBDModel.defaultProject(), R = W2.SBDAnalysis.analyzeGirder(P, 0, { ll: false }), LDm = W2.SBDLoads;
+  const { b, p } = LDm.fromModel(P, { girder: 0 }), C = LDm.compute(b, p), G = LDm.girder(C, 1);
+  assert.deepEqual([...R.errors], []); assert.equal(R.line, 1, 'interior plate girder: cross-section girder G2');
+  for (const [k, v] of [['DC1wet', G.DC1], ['DC2', G.DC2], ['DW', G.DW]]) { assert.equal(R.loads[k], v, k); assert.equal(R.loads.src[k], 'module', k); }
+  assert.equal(R.loads.steelAllowPct, b.allow);
+  const rg = id => C.regions.find(r => r.id === id);
+  R.spans.forEach((_, i) => { const m = rg('s' + i).members[1]; assert.equal(R.df.spans[i].gM, m.gM); assert.equal(R.df.spans[i].gV, m.gV); assert.equal(R.df.spans[i].fatM, m.fatM); assert.equal(R.df.spans[i].gDef, rg('s' + i).gDef); });
+  R.df.piers.forEach((q, k) => assert.equal(q.gM, rg('p' + (k + 1)).members[1].gM));
+  console.log(`       default project, G2: DC1 ${G.DC1.toFixed(4)}, DC2 ${G.DC2.toFixed(4)}, DW ${G.DW.toFixed(4)} klf; span 1 g_M ${R.df.spans[0].gM.toFixed(4)}, pier 1 g_M ${R.df.piers[0].gM.toFixed(4)}; M_DC1 at pier 1 ${R.st.DC1.M[R.supIdx[1]].toFixed(1)} kip-ft`);
+  // an explicit cross-section girder, and an owner whose rule OWN8 takes the haunch as 0 in the stiffness (MassDOT)
+  P.girders[0].line = 0; P.ownerRules = { owner: 'MassDOT', eta: {} };
+  const R2 = W2.SBDAnalysis.analyzeGirder(P, 0, { ll: false }), M2 = LDm.fromModel(P, { girder: 0 });
+  assert.equal(R2.line, 0); assert.equal(R2.loads.DC2, LDm.girder(LDm.compute(M2.b, M2.p), 0).DC2);
+  assert.equal(R2.h0, !!W2.SBDOwners.loadFactors('MassDOT', {}, P.xs.nb).h0, 'OWN8 from the owner rules');
+});
