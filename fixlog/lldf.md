@@ -1702,3 +1702,37 @@ index 219cc2c..a3e337e 100644
 - **Check case:** in a folder where nothing has been recorded, `BridgeApps.path('psbeam')` returns `'Prestressed Bridge Design.html'` (before: `'psbeam.html'`, which redirected).
 - **How verified:** the shared blocks were compared after the edit. The big `appPaths` block differs between the three files only in its `BridgeApps.boot('<app>')` line, as before. The beam-roster and BridgeXfer blocks are identical in all three, and the handoff blocks are identical in index.html and Prestressed Bridge Design.html. `node tests/check-syntax.mjs index.html lldf.html "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
+
+
+## 2026-10-29 — PR: shared-lldf (the calculation engine moved to shared/lldf.js; refactor, no result change; PR link added after merge)
+- **Where:** the inline engine script (anchor `/* ---------- formatting helpers ---------- */`).
+  - Before: the functions `multiplePresence` … `memberDF` (anchor `function multiplePresence(nLanes){`, ~350 lines) and `inputErrors`,
+    `computeBridge` (anchor `function computeBridge(p){`) were defined here.
+  - After: they are in `shared/lldf.js` (window.SharedLLDF), loaded by `<script src="shared/lldf.js"></script>` just before this script.
+    In their place: `const {multiplePresence,RANGES,BEAM_SLAB,BOX,BOXR,SPREADR,CELLR,FAMILY,designL,spreadDF,multicellDF,geometry,
+    memberType,memberSpacing,girderU,skewFactors,boxDF,empiricalInterior,leverContribution,leverConfig,leverAll,leverMulti,rigidMethod,
+    memberDF,inputErrors}=SharedLLDF;` so every other script of the page calls the same names. `bridgeWarnings` stays here unchanged
+    (page text; reads `BridgeLocks` and `nFromFc`). `computeBridge(p)` is now
+    `const R=SharedLLDF.computeBridge(p); return {geo:R.geo,Kg:R.Kg,skew:R.skew,members:R.members,warnings:bridgeWarnings(p,R.geo,R.Kg)};`
+    (the same object and key order as before).
+  - `truckGap(t)` read `state.truckGaps`; the shared `truckGap(p,t)` reads `p.truckGaps`, so `readInputs()` (anchor
+    `Nb:state.spacings.length+1,spacings:state.spacings.slice(),`) adds `truckGaps:state.truckGaps` (the same array object, so the
+    values read at call time are the ones the page used before). Not saved: `serialize()` picks its fields explicitly and is unchanged.
+  - To re-apply by hand: copy shared/lldf.js next to lldf.html, add the script tag, replace the function block by the destructuring line,
+    replace `computeBridge` as above, add `truckGaps` to `readInputs()`.
+- **Problem:** the same engine is needed by the new Steel Bridge app (apps/steel-bridge), which must not copy it (docs/REBUILD_PLAN.md §3).
+- **Governing provision:** none changed (AASHTO LRFD 10th Ed. (2024), Art. 4.6.2.2, 4.6.2.3, 3.6.1.1, as before).
+- **Check case:** the defaults (type k, AASHTO IV, 5 girders at 9.75 ft, L 120 ft): every girder's g_M, g_V, fatigue factors, the
+  lever-rule figure and the worked steps are the same before and after (below).
+- **How verified:** `tests/engine/lldf-hash.mjs` (in `tests/engine/lldf.test.mjs`): the page's engine before the move (de72d9e) and after,
+  1,592 input cases (defaults, every catalog preset, a grid over types a/e/k with N_b = 3, S > 16 ft, skews and shear skews, truck gaps,
+  every girder type f, g, b/c, d, slab, continuous regions, input errors), 11,135 outputs including 92,802 KaTeX steps: identical SHA-256.
+  Headless, the page before and after: defaults, steel N_b = 3 with 40° skew, S = 18 ft with 6 ft truck gaps, exterior girder selected —
+  the summary table, steps and notes are the same text; 0 console errors; the same localStorage keys and values (`bridgeSuite.v1.*`
+  hand-off keys and `lldf_*`; timestamps aside). The `bridgeSuite.v1.*` code is not touched.
+- **Other copies:** shared/lldf.js is also loaded by apps/steel-bridge/index.html (fixlog/shared-lldf.md, fixlog/steel-bridge.md).
+- **Open items:** LLDF-SH1. The steel-bridge app applies the 4.6.2.2.2e skew rule per span and per pier region from the support skews
+  (engineer's decisions 2026-10-29). This page takes the moment θ as entered for the selected region, or Bridge Geometry's
+  `skewDetail.moment` (bridge-wide: 0 when any adjacent supports differ by more than 10°). Per span maps onto this page as: for a span
+  region enter 0 when that span's two support lines differ by more than 10°, else the smaller skew; for a pier region 0 when either
+  adjacent span does. Not changed here; aligning Bridge Geometry's hand-off is a separate change.

@@ -22287,7 +22287,7 @@ No saved key or saved format changes. No hand-off field changes (`girderDetail.c
 - **Open items:** Preliminary sizing caps a_wc at 10 in R_b (`Math.min(…, 10)`) and the host does not; not changed (no effect on c_rw; raise if wanted). The
   `st_interior.json` baseline is not re-recorded (not run).
 
-## 2026-10-29 — PR: claude/sbd-df-lldf (DFL: GirderDetail's LLDF and DLs module and Preliminary sizing follow `lldf.html` in the four places of SB2-O6; engineer decision 2026-10-29; PR link added after merge)
+## 2026-10-29 — PR: claude/sbd-df-lldf (DFL: GirderDetail's LLDF and DLs module and Preliminary sizing follow `lldf.html` in the four places of SB2-O6 (of the sbd2-loads-lldf entry in fixlog/steel-bridge.md, renumbered SB2-O19 on 2026-10-29); engineer decision 2026-10-29; PR link added after merge)
 
 No saved key changes. Additive field in the GirderDetail → Preliminary sizing factors (`P.dfx`, message `gd-dfx`, stored in Preliminary sizing's project): `span[i].ext.fat1`, `span[i].ext.fat1V`, `pier[k].ext.fat1`
 (the exterior one-lane fatigue basis with skew and m = 1.2). A project saved before this change has no such field: Preliminary sizing then uses `lev`/`levV` as before until GirderDetail sends the factors again (it does on open).
@@ -22354,7 +22354,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 
 ### Other copies
 - `lldf.html`: the reference, unchanged. ST-Girder (`st-src`) has its own LLDF for its built-in example (`max(lever, rigid1)` already for fatigue); not changed. With a hand-off it uses GirderDetail's factors (the payload's `fatM`/`fatV` change).
-- `apps/steel-bridge/engine/lldf.js` (the rebuild, a separate tool) is GirderDetail's port as before this change (its header lists the four differences as SB2-O6). Not changed here (one tool per PR).
+- `apps/steel-bridge/engine/lldf.js` (the rebuild, a separate tool) is GirderDetail's port as before this change (its header lists the four differences as SB2-O6, renumbered SB2-O19). Not changed here (one tool per PR).
 
 ### Open items
 - DFL2 is per span (engineer decision 2026-10-29). A pier region (negative moment, L = average of the adjacent spans) has one support line, so the 10° test does not remove its reduction even where an adjacent span's supports differ by more than 10°. Confirm, or say if a pier region should also take its adjacent spans' support lines. `lldf.html` with Bridge Geometry applies the test over the whole bridge.
@@ -22472,3 +22472,40 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 -  const pier = R.b.spans.slice(1).map((_, k) => { const rg = R.regions.find(r => r.id === 'p' + (k + 1)); if (!rg) return null; const i = grp(rg, 'int'), e = grp(rg, 'ext'); return { int: { mM: i.mM, m1: i.m1 }, ext: { mM: e.mM, lev: e.lev } }; });
 +  const pier = R.b.spans.slice(1).map((_, k) => { const rg = R.regions.find(r => r.id === 'p' + (k + 1)); if (!rg) return null; const i = grp(rg, 'int'), e = grp(rg, 'ext'); return { int: { mM: i.mM, m1: i.m1 }, ext: { mM: e.mM, lev: e.lev, fat1: e.fat1 } }; });
 ```
+
+
+## 2026-10-29 — PR: claude/sbd-df-pier (DFL5: pier regions lose the moment skew reduction when either adjacent span's support lines differ by more than 10°; engineer decision 2026-10-29; PR link added after merge)
+### DFL5. Moment skew reduction in a pier region (4.6.2.2.2e)   [CALCULATION CHANGE — continuous skewed bridges with a skew change > 10° in a span next to a pier; more conservative]
+- **Problem:** DFL2 (#472) applied 4.6.2.2.2e per span: a span region compares its own two support lines. A pier (negative-moment) region has
+  one support line (skA = skB), so it always kept its reduction. The engineer decided (2026-10-29) that a pier region loses the reduction when
+  either adjacent span's two support lines differ by more than 10°. Same rule as the rebuild (`shared/lldf.js` `momentSkewNoReductionPier`,
+  #477), so the two agree exactly again.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1.
+- **Where:** LLDF and DLs module, `GM.df.compute`.
+  - Before the regions loop (anchor `const regions = b.regions.map(rg => {` in `GM.df`), added:
+    `const skL = Array.isArray(b.skews) ? b.skews.map(v => +v || 0) : [];`
+    `const dfSkAdj = rg => rg.kind === 'sup' && skL.length > rg.i ? Math.max(rg.i > 0 ? Math.abs(skL[rg.i] - skL[rg.i - 1]) : 0, rg.i + 1 < skL.length ? Math.abs(skL[rg.i + 1] - skL[rg.i]) : 0) : Math.abs(rg.skA - rg.skB);`
+  - Region `pp` — before: `skAdj: Math.abs(rg.skA - rg.skB)`; after: `skAdj: dfSkAdj(rg)`. `dfSkew` is unchanged (`noRed = p.skAdj > 10 + 1e-9`);
+    its comment now describes both region kinds.
+  - Displays: the region note (anchor `Skew: ${rg.sk.noRed ?`) and the "Skew corrections" derivation step say "an adjacent span's supports differ
+    by …°" for a pier region ("the span's supports" for a span, as before); the manual's Skew paragraph adds "or in a pier region when either
+    adjacent span's do".
+- **Before / after:** pier region i: r_M = 1 − c₁(tan θ)^1.5 with θ = θ_i (30° ≤ θ ≤ 60°) → r_M = 1.0 if max(|θ_i − θ_i−1|, |θ_i+1 − θ_i|) > 10°,
+  otherwise as before. Spans unchanged.
+- **Check case (Node, the recorded builtin/AASHTO inputs with support skews 40 / 52 / 52 / 40°):** pier 1 (L = 125 ft, K_g = 1,438,270 in⁴,
+  S = 9.5 ft, t_s = 8 in), G2 interior. Two-lane equation 0.075 + (9.5/125)^0.2 (1.872748)^0.1 = 0.710932. Span 1's supports differ by 12° > 10°
+  (span 2: 0°). Before: c₁ = 0.25(1.872748)^0.25 (9.5/125)^0.5 = 0.080624, r_M = 1 − 0.080624(tan 52°)^1.5 = 0.883251, g_M = **0.6279**
+  (0.627932). After: r_M = 1, g_M = **0.7109** (0.710932); one-lane 0.4247 → 0.4809, g_fat,M 0.3539 → 0.4007. Pier 2 is the same by symmetry.
+  With skews 52 / 52 / 52 / 52 nothing changes.
+- **How verified (Node, gd-source.mjs pattern; no browser compare, per the engineer's speed rules):**
+  - `tests/engine/loads.test.mjs`: GirderDetail's `GM.df.compute` against the rebuild engine on the 20 recorded inputs and 28 variations.
+    33,032 values identical (largest difference 0). Before this change the same comparison differed in exactly 88 values: r_M, c₁ and the
+    moment factors of the pier regions of the two skew variations (20/35/35/50 and 40/52/52/40). So patched vs origin/main changes exactly
+    those 88 values; the rebuild's temporary expected-difference set (`PIER_RULE_PENDING`) is removed.
+  - The 20 recorded inputs (equal skews) and the 100 payloads: no change (0 differ).
+  - One page load (flock): 0 console errors; `GM.df.compute` on the page's bridge with skews 40/52/52/40 gives no moment reduction in
+    spans 1 and 3 and both pier regions, and the reduction in span 2.
+- **Other copies:** `shared/lldf.js` `momentSkewNoReductionPier` and the rebuild adapter `apps/steel-bridge/engine/lldf.js` `momentSkew`
+  (#477, same rule). `lldf.html` takes the moment θ as entered (fixlog/lldf.md LLDF-SH1).
+- **Saved data:** none changed.
+- **Open items:** none new.
