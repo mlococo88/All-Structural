@@ -26,7 +26,7 @@
 (function () {
   'use strict';
   const SCHEMA = 'sbd2.project', VERSION = 1;
-  const KEYS = { current: 'sbd2.project.current', backup: 'sbd2.project.unreadable.' };   // backup + ISO time
+  const KEYS = { current: 'sbd2.project.current', backup: 'sbd2.project.unreadable.', ui: 'sbd2.ui' };   // backup + ISO time; ui: the page's tab choices
   // steel grades: F_y, F_u (ksi), as GirderDetail's GD_GR (ASTM A709)
   const GRADES = { '36': { Fy: 36, Fu: 58 }, '50': { Fy: 50, Fu: 65 }, '50W': { Fy: 50, Fu: 70 }, 'HPS50W': { Fy: 50, Fu: 70 }, 'HPS70W': { Fy: 70, Fu: 85 } };
 

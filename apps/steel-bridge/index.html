@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steel Bridge Design (new, in development)</title>
+<!-- Steel Bridge Design, rebuild (docs/REBUILD_PLAN.md §5). Plain HTML/JS/CSS, classic scripts, opens from file://.
+     Engine: engine/*.js (no DOM). Shared: ../../shared/*.js. Saved data: localStorage keys sbd2.* only (engine/model.js). -->
+<script src="../../shared/units.js"></script>
+<script src="../../shared/steps.js"></script>
+<script src="engine/model.js"></script>
+<script src="engine/sections.js"></script>
+<style>
+  /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
+  :root{
+    --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
+    --green-600:#059669; --red-600:#DC2626; --amber-700:#B45309;
+    --slate-50:#F8FAFC; --slate-100:#F1F3F5; --slate-200:#E4E7EB; --slate-400:#94A3B8; --slate-900:#0F172A;
+    --color-primary:var(--navy-800); --color-secondary:var(--blue-600); --color-ring:var(--blue-600);
+    --color-bg:var(--slate-50); --color-surface:#ffffff; --color-border:var(--slate-200); --color-fg:var(--slate-900);
+    --ink:var(--slate-900); --paper:#ffffff; --line:var(--slate-200); --accent:var(--navy-800); --pass:var(--green-600); --fail:var(--red-600); --warn:var(--amber-700);
+    --font-ui:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; --font-doc:"Times New Roman",Times,serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efede8;}
+  #app{max-width:1500px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--paper);box-shadow:0 0 12px rgba(0,0,0,.12);}
+  html,body{overflow:hidden;}
+  #hdr{flex:0 0 auto;border-bottom:3px solid var(--navy-900);padding:9px 14px 8px;background:var(--color-primary);color:#fff;z-index:20;}
+  #hdr .titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+  #hdr h1{font-size:15pt;margin:0;letter-spacing:.4px;font-family:var(--font-ui);font-weight:600;color:#fff;}
+  #hdr .byline{font-size:9pt;color:#C7D4E4;margin-top:1px;font-family:var(--font-ui);}
+  #hdrBtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
+  #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
+  #main{flex:1 1 auto;display:flex;min-height:0;}
+  #inputPanel{flex:0 0 33%;max-width:33%;border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
+  #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}
+  @media screen and (max-width:899.98px){
+    html,body{overflow:visible;height:auto;}
+    #app{height:auto;min-height:100vh;}
+    #main{flex-direction:column;}
+    #inputPanel{flex:none;max-width:none;border-right:none;border-bottom:2px solid var(--ink);overflow:visible;padding-bottom:16px;}
+    #outputPanel{flex:none;overflow:visible;}
+    .inTabs{top:0;}
+  }
+  .inTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+  .inTabs button,#tabBar button{border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;font-family:var(--font-ui);padding:5px 10px;background:var(--slate-100);color:#475569;}
+  .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
+  .inDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;}
+  .inTabs button.has-err .inDot{display:inline-block;}
+  #tabBar{position:sticky;top:0;background:var(--paper);z-index:10;display:flex;gap:2px;border-bottom:2px solid var(--ink);padding:8px 0 0;flex-wrap:wrap;}
+  .pane[hidden]{display:none!important;}
+  .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+  .sec>.secHead{padding:6px 9px;background:var(--slate-100);border-bottom:1px solid var(--color-border);font-family:var(--font-ui);font-size:8.5pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155;}
+  .sec>.secBody{padding:8px 10px;}
+  .fRow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap;}
+  .fRow label{min-width:170px;font-size:10pt;}
+  input[type=number],input[type=text],select{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;width:110px;background:#fff;color:var(--color-fg);}
+  input:focus-visible,select:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.25);}
+  input.bad{border-color:var(--fail);background:#FEF2F2;}
+  .unit{color:#555;font-size:10pt;}
+  button{font-family:var(--font-ui);font-size:9.5pt;padding:4px 11px;border:1px solid var(--color-border);border-radius:4px;background:var(--color-surface);color:var(--color-fg);cursor:pointer;}
+  button:hover{background:var(--slate-100);border-color:var(--slate-400);}
+  #hdrBtns button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
+  #hdrBtns button:hover{background:rgba(255,255,255,.18);}
+  button.primary{background:var(--color-secondary);color:#fff;border-color:var(--color-secondary);}
+  table.tbl{border-collapse:collapse;width:100%;font-size:10pt;margin:6px 0;}
+  table.tbl th,table.tbl td{border:1px solid var(--line);padding:3px 5px;text-align:center;}
+  table.tbl th{background:#f1efe9;font-weight:bold;}
+  table.tbl td.lft,table.tbl th.lft{text-align:left;}
+  table.tbl td input{width:62px;font-size:9pt;padding:1px 3px;text-align:right;}
+  table.tbl tr.sel{background:#eef4fb;}
+  .tscroll{overflow-x:auto;}
+  /* this app */
+  .note{font-size:9pt;color:#475569;margin:4px 0;}
+  .alert{border:1px solid var(--color-border);border-left:4px solid var(--warn);background:#FFFBEB;padding:6px 9px;margin:8px 0;font-family:var(--font-ui);font-size:9pt;}
+  .alert.err{border-left-color:var(--fail);background:#FEF2F2;}
+  .stale{display:flex;align-items:center;gap:10px;}
+  .alert[hidden]{display:none;}
+  .steps{list-style:none;padding:0;margin:4px 0;}
+  .steps li{padding:3px 0;border-bottom:1px dotted var(--line);}
+  .steps li:target{background:#FFF7D6;}
+  .steps .lbl{font-family:var(--font-ui);font-size:8.5pt;color:#475569;}
+  .steps .ref{font-family:var(--font-ui);font-size:8pt;color:#64748b;margin-left:6px;}
+  .steps .nt{font-family:var(--font-ui);font-size:8.5pt;color:var(--warn);}
+  .steps .no{color:#94A3B8;}
+  .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;}
+  .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;}
+  .st-frac>.st-den{padding:0 2px;}
+  .st-bar{text-decoration:overline;}
+  a.wk{font-family:var(--font-ui);font-size:8.5pt;}
+  .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin:6px 0;}
+  .kv div{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:2px 0;}
+  @media print{ #hdrBtns,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;} }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hdr">
+    <div class="titleRow">
+      <div>
+        <h1>Steel Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
+        <div class="byline">AASHTO LRFD 10th Ed. (2024) · <span id="projName"></span></div>
+        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
+      </div>
+      <div id="hdrBtns">
+        <button type="button" id="bNew">New</button>
+        <button type="button" id="bImport">Import JSON…</button>
+        <button type="button" id="bExport">Export JSON</button>
+        <input type="file" id="fImport" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </header>
+  <div id="main">
+    <aside id="inputPanel">
+      <div class="inTabs" role="tablist" id="inTabs"></div>
+      <div id="inPanes"></div>
+    </aside>
+    <main id="outputPanel">
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button></div>
+      <div id="out"></div>
+    </main>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  const M = window.SBDModel, SEC = window.SBDSections, ST = window.SharedSteps, U = window.SharedUnits;
+  const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const store = (() => { try { const k = '__sbd2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
+  const memStore = { getItem: () => null, setItem: () => {} };
+  const L = M.load(store || memStore);
+  let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
+  let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos' };
+  try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* default tabs */ }
+  const saveUi = () => { try { store && store.setItem(M.KEYS.ui, JSON.stringify(ui)); } catch (e) { /* not kept */ } };
+
+  /* ---------- inputs ---------- */
+  const get = path => path.split('.').reduce((o, k) => o == null ? o : o[k], P);
+  const set = (path, v) => { const ks = path.split('.'), last = ks.pop(), o = ks.reduce((a, k) => a[k], P); o[last] = v; };
+  const num = (path, label, unit, o) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="${o && o.text ? 'text' : 'number'}" step="any" id="i_${path}" data-path="${path}" data-kind="${o && o.text ? 'text' : 'num'}" value="${esc(get(path))}"><span class="unit">${unit || ''}</span></div>`;
+  const sel = (path, label, opts, cur) => `<div class="fRow"><label for="i_${path}">${label}</label><select id="i_${path}" data-path="${path}" data-kind="sel">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(cur !== undefined ? cur : get(path)) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
+  const grades = Object.keys(M.GRADES).map(k => [k, `${k} (F_y ${M.GRADES[k].Fy} ksi)`]);
+  const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates']];
+  function panes() {
+    const g = P.girders[ui.g] || P.girders[0];
+    return {
+      proj: card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')),
+      spans: card('Spans', `${sel('spans.continuity', 'Continuity', [['continuous', 'Continuous'], ['simple', 'Simple spans']])}
+        <div class="fRow"><label for="i_spans">Span lengths</label><input type="text" id="i_spans" data-kind="spans" value="${esc(P.spans.lengths.join(', '))}" style="width:180px"><span class="unit">ft, comma separated</span></div>
+        <p class="note">Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`),
+      mat: card('Steel (ASTM A709)', `${sel('materials.steel.top', 'Top flange', grades)}${sel('materials.steel.bot', 'Bottom flange', grades)}${sel('materials.steel.web', 'Web', grades)}${num('materials.Es', 'E<sub>s</sub>', 'ksi')}`)
+        + card('Deck concrete and reinforcement', `${sel('deck.composite', 'Composite', [['true', 'Yes'], ['false', 'No (noncomposite)']])}${num('materials.concrete.fc', 'f′<sub>c</sub>', 'ksi')}${num('materials.concrete.wc', 'w<sub>c</sub>', 'kcf')}${num('materials.concrete.K1', 'K<sub>1</sub>', '')}
+          ${sel('materials.concrete.nRule', 'Modular ratio n', [['exact', 'Exact (E_s/E_c)'], ['round', 'Rounded to an integer']])}${num('deck.ts', 'Structural slab t<sub>s</sub>', 'in')}${num('deck.tdeck', 'Total deck thickness', 'in')}${num('deck.haunch', 'Haunch', 'in')}
+          ${num('materials.rebar.Fyr', 'Rebar F<sub>yr</sub>', 'ksi')}${num('deck.rebar.top.A', 'Top layer A<sub>rt</sub> (per girder)', 'in²')}${num('deck.rebar.top.c', 'Top layer, centroid below top of slab', 'in')}
+          ${num('deck.rebar.bot.A', 'Bottom layer A<sub>rb</sub> (per girder)', 'in²')}${num('deck.rebar.bot.c', 'Bottom layer, centroid above bottom of slab', 'in')}
+          ${sel('deck.rebarInPositiveMp', 'Deck rebar in positive M<sub>p</sub>', [['false', 'Exclude (default)'], ['true', 'Include (App. D6.1)']])}`),
+      gird: card('Girder', `${sel('_g', 'Girder', P.girders.map((q, i) => [i, q.label || q.id]), ui.g)}${num(`girders.${ui.g}.label`, 'Label', '', { text: true })}
+          ${sel(`girders.${ui.g}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${num(`girders.${ui.g}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}`)
+        + card('Plate segments (from the left end)', `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
+          ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
+          </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`)
+    };
+  }
+  function drawInputs() {
+    $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
+    const p = panes();
+    $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
+    markErrors();
+  }
+  function markErrors() {
+    const v = M.validate(P), bad = new Set(v.errors.map(e => e.path));
+    document.querySelectorAll('#inPanes [data-path]').forEach(el => el.classList.toggle('bad', bad.has(el.dataset.path)));
+    const $s = $('i_spans'); if ($s) $s.classList.toggle('bad', [...bad].some(p => p.startsWith('spans.lengths')));
+    const tabOf = p => p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
+    const errTabs = new Set(v.errors.map(e => tabOf(e.path)));
+    document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.classList.toggle('has-err', errTabs.has(b.dataset.itab)));
+    return v;
+  }
+  $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
+  $('inPanes').addEventListener('change', e => {
+    const el = e.target;
+    if (el.id === 'i__g') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
+    if (el.dataset.kind === 'spans') { P.spans.lengths = el.value.split(/[,;\s]+/).filter(Boolean).map(Number); }
+    else if (el.dataset.path) { const k = el.dataset.kind, v = el.value;
+      set(el.dataset.path, k === 'num' ? (v === '' ? NaN : Number(v)) : k === 'sel' ? (v === 'true' ? true : v === 'false' ? false : v) : v); }
+    else return;
+    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || ''));
+  });
+  $('inPanes').addEventListener('click', e => {
+    const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
+    if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
+    if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
+    if (e.target.id === 'bAddSeg') { const S = P.girders[ui.g].segments, last = S[S.length - 1], tot = P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), mid = (last.x0 + last.x1) / 2;
+      S.splice(S.length - 1, 1, { ...last, x1: mid }, { ...last, x0: mid, x1: last.x1 > 0 ? last.x1 : tot }); changed(true); }
+  });
+  function changed(redraw) {
+    // keep the segments contiguous: each x0 is the x1 before it
+    P.girders.forEach(g => g.segments.forEach((s, i) => { if (i) s.x0 = g.segments[i - 1].x1; }));
+    if (autosave) M.save(store || memStore, P);
+    $('projName').textContent = P.project.name || '';
+    if (redraw) drawInputs(); else markErrors();
+    markStale();
+  }
+
+  /* ---------- results ---------- */
+  function markStale() { stale = true; drawOut(); }
+  function calc() {
+    const v = markErrors(); if (v.errors.length) { R = { errors: v.errors }; stale = false; drawOut(); return; }
+    const g = P.girders[ui.g], s = g.segments[ui.seg] || g.segments[0], G = M.GRADES, m = P.materials, d = P.deck;
+    const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule);
+    const plates = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT };
+    const deck = { composite: d.composite, ts: d.ts, haunch: d.haunch, beff: g.beff, rebar: d.rebar };
+    const mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
+    R = { g, s, nr, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings };
+    stale = false; drawOut();
+  }
+  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${ST.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const wk = (id, txt) => `<a class="wk" href="#st-${id}">${txt || 'see work'}</a>`;
+  function drawOut() {
+    const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
+    let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
+    if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
+    h += `<div class="fRow"><label>Location</label><span>${esc(g ? g.label || g.id : '')}, segment ${ui.seg + 1}${s ? ` (x = ${U.fmt(s.x0, 2)} to ${U.fmt(s.x1, 2)} ft)` : ''}</span></div>
+      <div class="fRow"><label for="o_region">Flexure region</label><select id="o_region"><option value="pos"${ui.region === 'pos' ? ' selected' : ''}>Positive (top flange in compression)</option><option value="neg"${ui.region === 'neg' ? ' selected' : ''}>Negative (bottom flange in compression)</option></select></div>`;
+    if (R && R.errors) h += `<div class="alert err"><b>Input errors.</b><ul>${R.errors.map(e => `<li>${esc(e.msg)}</li>`).join('')}</ul></div>`;
+    else if (R && !stale) {
+      const c = R.c, row = (nm, q, id) => q ? `<tr><td class="lft">${nm}</td><td>${U.fmt(q.A, 2)}</td><td>${U.fmt(q.yb, 3)}</td><td>${U.fmtInt(q.I)}</td><td>${U.fmtInt(q.St)}</td><td>${U.fmtInt(q.Sb)}</td><td>${wk(id + '.I')}</td></tr>` : '';
+      const kv = (k, v, id) => `<div><span>${k}</span><span>${v}${id ? ' ' + wk(id, '§') : ''}</span></div>`;
+      h += card('Section properties', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th>A (in²)</th><th>ȳ from bottom (in)</th><th>I (in⁴)</th><th>S top of steel (in³)</th><th>S bottom (in³)</th><th></th></tr></thead><tbody>
+        ${row('Steel', c.s, 'sec.s')}${row('Long-term 3n', c.c3, 'sec.c3')}${row('Short-term n', c.cn, 'sec.cn')}${row('Steel + rebar', c.cr, 'sec.cr')}</tbody></table></div>
+        <div class="kv">${kv('n', U.fmt(R.nr.n, 3), 'n.n')}${kv('d (steel)', U.fmt(c.s.d, 3) + ' in', 'sec.s.d')}${kv(`M<sub>p</sub> (${c.region === 'pos' ? 'positive' : 'negative'})`, U.fmt(c.Mp, 1) + ' kip-ft', `pl.${c.region}.Mp`)}
+        ${kv('PNA y<sub>p</sub> from bottom', U.fmt(c.yp, 3) + ' in', `pl.${c.region}.yp`)}${kv('D6.1 case', esc(c.pl.cs), '')}${kv('D<sub>cp</sub>', U.fmt(c.Dcp, 3) + ' in', `pl.${c.region}.Dcp`)}
+        ${c.region === 'pos' && c.Dp != null ? kv('D<sub>t</sub> / D<sub>p</sub>', `${U.fmt(c.Dt, 3)} / ${U.fmt(c.Dp, 3)} in`, 'pl.pos.Dp') : ''}${c.region === 'neg' ? kv('D<sub>c</sub> (steel + rebar)', U.fmt(c.Dc, 3) + ' in', 'dc.steelrebar.bot.Dc') : ''}
+        ${kv('D<sub>c</sub> steel, top / bottom in comp.', `${U.fmt(c.DcSteel.top, 3)} / ${U.fmt(c.DcSteel.bot, 3)} in`, 'dc.steel.top.Dc')}${kv('R<sub>h</sub>', U.fmt(c.Rh, 3), c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')}</div>
+        ${c.pl.below ? '<div class="alert err">The plastic neutral axis falls below the web: outside Table D6.1-1 and D6.3.2 (see the work).</div>' : ''}
+        ${R.warnings.length ? `<div class="alert">${R.warnings.map(w => esc(w.msg)).join('<br>')}</div>` : ''}`);
+      h += card('Worked steps', `<p class="note">Each value above links here (§). AASHTO LRFD 10th Ed. (2024). y is measured up from the bottom of the steel.</p>${stepsHtml(R.nr.steps.concat(c.steps))}`);
+    }
+    $('out').innerHTML = h;
+  }
+  $('out').addEventListener('click', e => { if (e.target.id === 'bCalc') calc(); });
+  $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } });
+
+  /* ---------- header ---------- */
+  $('bNew').addEventListener('click', () => { if (!confirm('Start a new project? The current one is replaced (export it first to keep it).')) return; P = M.defaultProject(); ui.g = 0; ui.seg = 0; autosave = true; changed(true); });
+  $('bExport').addEventListener('click', () => {
+    const a = document.createElement('a'), name = (P.project.name || 'steel-bridge').replace(/[^\w.-]+/g, '_');
+    a.href = URL.createObjectURL(new Blob([M.exportJSON(P)], { type: 'application/json' })); a.download = name + '.sbd2.json'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  });
+  $('bImport').addEventListener('click', () => $('fImport').click());
+  $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+    rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
+      if (!r.ok) { alert(r.error); return; } P = r.project; ui.g = 0; ui.seg = 0; autosave = true; changed(true); };
+    rd.readAsText(f); });
+
+  $('projName').textContent = P.project.name || '';
+  drawInputs(); calc();
+})();
+</script>
+</body>
+</html>

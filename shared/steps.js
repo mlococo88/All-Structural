@@ -78,7 +78,7 @@
         const m = /^\\([A-Za-z]+|.)/.exec(src.slice(i)); i += m[0].length; const cmd = m[1];
         if (cmd === 'frac') { const a = render(group(), html), b = render(group(), html);
           out += html ? `<span class="st-frac"><span class="st-num">${a}</span><span class="st-den">${b}</span></span>` : `${atom(a) ? a : '(' + a + ')'}/${atom(b) ? b : '(' + b + ')'}`; }
-        else if (cmd === 'bar') { const a = render(group(), html); out += a.length === 1 ? (a + '\u0304').normalize('NFC') : (html ? `<span class="st-bar">${a}</span>` : 'bar(' + a + ')'); }
+        else if (cmd === 'bar') { const a = render(group(), html); out += html ? `<span class="st-bar">${a}</span>` : a.length === 1 ? (a + '\u0304').normalize('NFC') : 'bar(' + a + ')'; }   // HTML: an overline (CSS .st-bar), whatever the font has
         else if (cmd === 'sqrt') { const a = render(group(), html); out += '√' + (html ? `<span class="st-bar">${a}</span>` : '(' + a + ')'); }
         else if (cmd === 'text') { const a = group(); out += html ? esc(a) : a; }
         else if (cmd === ',' || cmd === ' ' || cmd === ';') out += html ? '&thinsp;' : ' ';
