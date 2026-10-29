@@ -93,7 +93,10 @@ function runAll(ctx, C) {
   }
   return out;
 }
-const hash = o => crypto.createHash('sha256').update(JSON.stringify(o)).digest('hex');
+// Read-only outputs added to SharedLLDF after the move (for apps/steel-bridge's worked steps); not part of the page's results, so
+// left out of the hash: rigidMethod's ecc (the lane eccentricities it already computed).
+export const ADDED = ['ecc'];
+const hash = o => crypto.createHash('sha256').update(JSON.stringify(o, (k, v) => ADDED.includes(k) ? undefined : v)).digest('hex');
 
 export function run(rev = BASE_REV) {
   const oldHtml = execFileSync('git', ['show', `${rev}:lldf.html`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });

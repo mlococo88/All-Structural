@@ -26,7 +26,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 import { gdBlock, gdDecl } from './gd-source.mjs';
 
 const ENG = f => path.join(ROOT, 'apps/steel-bridge/engine', f);
-const W = loadShared('units.js', 'steps.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), ENG('lldf.js'), ENG('loads.js'));
+const W = loadShared('units.js', 'steps.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), 'lldf.js', ENG('lldf.js'), ENG('loads.js'));
 const LD = W.SBDLoads, LL = W.SBDLldf, OW = W.SBDOwners, M = W.SBDModel;
 const FIX = path.join(ROOT, 'tests/projects/sbd2-loads');
 const fixtures = fs.existsSync(FIX) ? fs.readdirSync(FIX).filter(f => f.endsWith('.json')).sort().map(f => JSON.parse(fs.readFileSync(path.join(FIX, f), 'utf8'))) : [];
@@ -84,9 +84,31 @@ function pairs(o, g) {
     P(t + 'ovr', JSON.stringify(m.ovr || null), JSON.stringify(L.ovr || null)); (L.r || []).forEach((v, i) => P(t + 'r' + i, m.r[i], v)); });
   return out;
 }
+/* Expected differences from GirderDetail (engineer's decision 2026-10-29, SB2-O15: the factors follow lldf.html through
+   shared/lldf.js; GirderDetail gets the same four changes in its own PR, #472, after which this set goes and exact parity is
+   required again). A difference is accepted only if it is one of these four, on a value the item changes:
+   1. exterior fatigue: g_fat,M / g_fat,V of an exterior girder whose one-lane rigid cross-section exceeds its one-lane lever rule;
+   2. moment skew: a span whose support lines differ by more than 10° (no reduction): r_M, c_1 and the moment factors of the span;
+   3. S > 16 ft or N_b = 3: a girder whose multi-lane lever rule governs with 3 or more trucks: its multi-lane and governing factors;
+   4. lever-rule kinks: a girder whose governing truck position of some lever-rule case is off the 0.25 ft grid: that case's R and
+      position and the girder's factors that use it.
+   Everything else must be identical. */
+const offGrid = (o, L) => L && Math.abs(((L.wheels[0] - (o.base.rL + 2)) / 0.25) - Math.round((L.wheels[0] - (o.base.rL + 2)) / 0.25)) > 1e-6;
+export function expectedItem(o, k) {
+  const m = /^([sp]\d+)\.(?:G(\d+)\.)?(.+)$/.exec(k); if (!m) return 0;
+  const rg = o.regions.find(r => r.id === m[1]); if (!rg) return 0;
+  const mb = m[2] ? rg.members[+m[2] - 1] : null, key = m[3];
+  if (mb && mb.type === 'ext' && /^fat[MV]$/.test(key) && mb.rig1 > (mb.lever1 ? mb.lever1.df : 0) + 1e-9) return 1;
+  if (rg.sk.noRed && (!mb ? /^(scfM|c1)$/.test(key) : /^(mom1|mom2|gM|fatM|method)$/.test(key))) return 2;
+  if (mb && mb.alt && mb.alt.l2 && mb.alt.l2.N > 2 && /^(mom2|shr2|gM|gV|mE|vE|method)$/.test(key)) return 3;
+  if (mb && (rg.lever[mb.j].cfgs.some(c => offGrid(o, c)) || [mb.lever1, mb.alt && mb.alt.l1, mb.alt && mb.alt.l2].some(c => offGrid(o, c)))
+    && /^(lever\d+\.R|lever\d+\.s|lever1\.R|lever1\.w0|mom1|mom2|shr1|shr2|gM|gV|fatM|fatV|mE|vE|method)$/.test(key)) return 4;
+  return 0;
+}
 function compare(name, o, g, acc) {
   for (const [k, a, b] of pairs(o, g)) {
     acc.n++;
+    if (acc.exp && !(a === b || (typeof a === 'number' && isNaN(a) && isNaN(b)))) { const it = expectedItem(o, k); if (it) { acc.exp[it] = (acc.exp[it] || 0) + 1; acc.expList.push(`${name} ${k}: ${a} vs ${b} (item ${it})`); continue; } }
     if (typeof a === 'number' && typeof b === 'number') { const rel = Math.abs(a - b) / Math.max(1, Math.abs(b)); if (rel > acc.worst.rel) acc.worst = { rel, name, k, a, b }; if (!(a === b || (isNaN(a) && isNaN(b)))) acc.diffs.push(`${name} ${k}: ${a} vs ${b}`); }
     else if (a !== b) acc.diffs.push(`${name} ${k}: ${a} vs ${b}`);
   }
@@ -122,6 +144,11 @@ export function variants() {
   add('owner haunch rule (OWN8) with a 3 in haunch', (df, b) => { b.haunch = 3; b.lf = { ...b.lf, h0: true }; });
   add('truck gap 6 ft', df => { df.gap = 6; });
   add('overhangs 5.5 ft, 7 girders at 7 ft (one-lane lever rule governs)', (df, b) => { b.nb = 7; b.S = 7; b.bays = [7, 7, 7, 7, 7, 7]; b.ohL = 5.5; b.ohR = 5.5; });
+  // the four SB2-O15 items (expected differences until GirderDetail has them, #472)
+  add('SB2-O15 item 2: support skews 20 / 35 / 35 / 50° (spans 1 and 3 differ by 15° > 10°: no moment reduction there)', (df, b) => { const sk = [20, 35, 35, 50]; b.skews = sk; b.regions.forEach(r => { if (r.kind === 'span') { r.skA = sk[r.i]; r.skB = sk[r.i + 1]; } else r.skA = r.skB = sk[r.i]; }); });
+  add('SB2-O15 item 3: N_b = 3 at 14 ft, overhangs 6 ft (3 lanes)', (df, b) => { b.nb = 3; b.S = 14; b.bays = [14, 14]; b.ohL = 6; b.ohR = 6; });
+  add('SB2-O15 item 3: N_b = 4 at 18 ft (S > 16 ft), overhangs 4 ft', (df, b) => { b.nb = 4; b.S = 18; b.bays = [18, 18, 18]; b.ohL = 4; b.ohR = 4; });
+  add('SB2-O15 item 4: overhangs 3.3 ft (lever-rule peak between the 0.25 ft grid points)', (df, b) => { b.ohL = 3.3; b.ohR = 3.3; });
   add('input errors', df => { df.gap = 3; df.dl.swL = -1; df.extra = [{ name: 'Bad', cat: 'DC2', x: -1, plf: 'x', dist: 'auto' }]; });
   return V;
 }
@@ -143,10 +170,11 @@ test('LLDF and dead loads: GirderDetail in Node reproduces GirderDetail in the b
   console.log(`       ${fixtures.length} inputs, ${n} values: ${n - nb} bit-identical, ${nb} differ by round-off (largest relative ${worst.toExponential(2)})`);
 });
 
-test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs + variations; identical', () => {
-  const G = gdDf(), acc = { n: 0, diffs: [], worst: { rel: 0 } }, cases = [...fixtures.map(fx => ({ name: `${fx.project}/${fx.owner}`, df: fx.df })), ...variants()];
+test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs + variations; identical except the expected set (SB2-O15)', () => {
+  const G = gdDf(), acc = { n: 0, diffs: [], worst: { rel: 0 }, exp: {}, expList: [] }, cases = [...fixtures.map(fx => ({ name: `${fx.project}/${fx.owner}`, df: fx.df })), ...variants()];
   for (const c of cases) compare(c.name, ours(c.df), G.run(c.df), acc);
-  console.log(`       ${cases.length} module inputs (${fixtures.length} recorded, ${cases.length - fixtures.length} variations), ${acc.n} values compared; ${acc.diffs.length} differ; largest relative difference ${acc.worst.rel}`);
+  console.log(`       ${cases.length} module inputs (${fixtures.length} recorded, ${cases.length - fixtures.length} variations), ${acc.n} values compared; ${acc.diffs.length} differ outside the expected set; expected (SB2-O15) item 1: ${acc.exp[1] || 0}, item 2: ${acc.exp[2] || 0}, item 3: ${acc.exp[3] || 0}, item 4: ${acc.exp[4] || 0}`);
+  if (process.env.DF_DIFFS) console.log(acc.expList.concat(acc.diffs).join('\n'));
   assert.deepEqual(acc.diffs.slice(0, 20), []);
 });
 
@@ -154,14 +182,16 @@ test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs 
 const STD = path.join(ROOT, 'tests/projects/st');
 const payloads = fs.readdirSync(STD).filter(f => /^gd_.*\.json$/.test(f)).sort();
 test('the 100 gd_*.json hand-off payloads: girderDetail.df and girderDetail.loads reproduced to their 4 decimals', () => {
-  const byKey = Object.fromEntries(fixtures.map(fx => [`${fx.project}_${fx.owner}`, fx])), R = {}, bad = []; let nv = 0, worstSt = 0;
+  const byKey = Object.fromEntries(fixtures.map(fx => [`${fx.project}_${fx.owner}`, fx])), R = {}, bad = []; let nv = 0, worstSt = 0, nExp = 0;
   const near = (a, b, what, tol = 0.5e-4 + 1e-9) => { nv++; if (!(Math.abs(a - b) <= tol)) bad.push(`${what}: ${a} vs ${b}`); };
   for (const f of payloads) {
     const m = /^gd_(\w+?)_(AASHTO|RIDOT|MassDOT|CTDOT)_G(\d+)\.json$/.exec(f), fx = byKey[`${m[1]}_${m[2]}`], j = +m[3] - 1;
     const g = JSON.parse(fs.readFileSync(path.join(STD, f), 'utf8')).payload.girderDetail, k = `${m[1]}_${m[2]}`;
     const r = R[k] || (R[k] = ours(fx.df)); assert.deepEqual([...r.errors], [], f);
     const spans = r.regions.filter(q => q.kind === 'span'), piers = r.regions.filter(q => q.kind === 'sup');
-    g.df.spans.forEach((s, i) => ['gM', 'gV', 'fatM', 'fatV'].forEach(q => near(spans[i].members[j][q], s[q], `${f} span ${i + 1} ${q}`)));
+    g.df.spans.forEach((s, i) => ['gM', 'gV', 'fatM', 'fatV'].forEach(q => { const mb = spans[i].members[j];
+      if (/^fat/.test(q) && !(Math.abs(mb[q] - s[q]) <= 0.5e-4 + 1e-9) && expectedItem(r, `${spans[i].id}.G${j + 1}.${q}`) === 1) { nExp++; nv++; return; }   // SB2-O15 item 1 (until #472)
+      near(mb[q], s[q], `${f} span ${i + 1} ${q}`); }));
     g.df.piers.forEach((s, i) => near(piers[i].members[j].gM, s.gM, `${f} pier ${i + 1} gM`));
     const L = g.loads, D = r.dead, gi = LD.girder(r, j), comp = id => L.components.find(c => c.id === id);
     near(D.deck[j], comp('deck').w, `${f} deck`); near(D.trib[j], comp('deck').width, `${f} deck width`); near(D.haunch[j], comp('haunch').w, `${f} haunch`); near(D.sip[j], comp('sip').w, `${f} sip`);
@@ -177,7 +207,7 @@ test('the 100 gd_*.json hand-off payloads: girderDetail.df and girderDetail.load
     const sw = LD.steelWeight(segs, b.allow), st = comp('steel');
     near(sw.min, st.wMin, `${f} steel wMin`); near(sw.max, st.wMax, `${f} steel wMax`); const rel = Math.abs(sw.avg - st.w) / st.w; worstSt = Math.max(worstSt, rel); if (rel > 0.002) bad.push(`${f} steel average ${sw.avg} vs ${st.w}`);
   }
-  console.log(`       ${payloads.length} payloads, ${nv} values: ${bad.length} differ; steel self-weight average largest relative difference ${worstSt.toExponential(2)} (node-weighted vs segment-weighted)`);
+  console.log(`       ${payloads.length} payloads, ${nv} values: ${bad.length} differ, ${nExp} expected (SB2-O15 item 1, exterior fatigue); steel self-weight average largest relative difference ${worstSt.toExponential(2)} (node-weighted vs segment-weighted)`);
   assert.deepEqual(bad.slice(0, 20), []);
 });
 

@@ -4,6 +4,7 @@
      - truckGap(p,t) reads the gaps between adjacent trucks from p.truckGaps (the page passed its state.truckGaps);
      - computeBridge(p) returns { geo, Kg, skew, members }; lldf.html adds its warnings (bridgeWarnings stays in the page:
        it is page text and reads the page's lock state);
+     - one read-only output added: rigidMethod returns ecc (the lane eccentricities it already computed);
      - an option p.kgSimple (true = the simplified K_g terms of Table 4.6.2.2.1-3, type (a)), used by apps/steel-bridge;
        lldf.html never sets it, so its results are unchanged.
    Results are bit-identical to the page's before the move (hash harness, fixlog/shared-lldf.md).
@@ -246,7 +247,7 @@ function rigidMethod(p,geo,side){
     const R=n/Nb+(Xext*sumE)/sumX2, g=m*R;
     trials.push({n,m,sumE,R,g}); if(g>best.g) best={g,m,sumE,R,nLoaded:n};
   }
-  return {g:best.g,m:best.m,nLoaded:best.nLoaded,sumE:best.sumE,R:best.R,Xext,sumX2,trials,de,side};
+  return {g:best.g,m:best.m,nLoaded:best.nLoaded,sumE:best.sumE,R:best.R,Xext,sumX2,trials,de,side,ecc};   // ecc: added 2026-10-29 (read-only output, the lane eccentricities, for apps/steel-bridge's worked steps)
 }
 
 /* ---- per-member design distribution factors ---- */
