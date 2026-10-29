@@ -164,7 +164,7 @@
     const fBotN = (s, k) => { const M1 = env.MDC1[k], M2 = env.MDC2[k], Mw = env.MDW[k], gd = M1 + M2 <= 0 ? G.dc : G.dcMin, gw = Mw <= 0 ? G.dw : G.dwMin, p = crk(s);
       const uT = env.MUT ? env.MUT[k] : 0, uF = env.MUF ? env.MUF[k] : 0, Mu1 = (uT <= 0 ? G.dw : G.dwMin) * uT + (uF <= 0 ? G.dc : 0) * uF;
       return -((gd * M1 + Mu1) * 12 / p.Ss + (gd * M2 + gw * Mw + G.ll * env.Mn[k]) * 12 / p.Scr); };
-    const rbN = s => { const lrw = 5.7 * Math.sqrt(ES / opt.FyF), Dc = crk(s).Dc; if (!(2 * Dc / s.tw > lrw)) return 1; const awc = Math.min(2 * Dc * s.tw / (s.botB * s.botT), 10); return 1 - awc / (1200 + 300 * awc) * (2 * Dc / s.tw - lrw); };
+    const rbN = s => { const Dc = crk(s).Dc, aw0 = 2 * Dc * s.tw / (s.botB * s.botT), lrw = crwOf(aw0) * Math.sqrt(ES / opt.FyF); if (!(2 * Dc / s.tw > lrw)) return 1; const awc = Math.min(aw0, 10); return 1 - awc / (1200 + 300 * awc) * (2 * Dc / s.tw - lrw); };   // λ_rw with c_rw (SB2-O6)
     const govRec = gv => { if (!gv) return ''; const at = A => A[gv.i] * (1 - gv.t) + A[gv.i + 1] * gv.t, o = { x: r2(gv.x), topB: gv.s.topB, topT: gv.s.topT, botB: gv.s.botB, botT: gv.s.botT, tw: gv.s.tw };
       [['MDC1', 'MDC1'], ['MDC2', 'MDC2'], ['MDW', 'MDW'], ['MLL', 'Mn'], ['MUT', 'MUT'], ['MUF', 'MUF']].forEach(([k, a]) => { if (env[a]) o[k] = r1(at(env[a])); }); return o; };
     const geSeg = (np, p0, p1, LbIn, rtF, fF) => { const ks = []; for (let k = 0; k < N; k++) if (xs[k] >= p0 - 1e-6 && xs[k] <= p1 + 1e-6) ks.push(k);
@@ -186,8 +186,12 @@
   }
 
   /* ---------- resistances (GirderDetail's functions) ---------- */
-  /* rbFactor: R_b, 6.10.1.10.2 (Eq. 6.10.1.10.2-3), λ_rw = 5.7√(E/F_yc) as GirderDetail (see the open item in the fix log). */
-  function rbFactor(Dc, tw, bfc, tfc, Fyc) { const lrw = 5.7 * Math.sqrt(ES / Fyc), lw = 2 * Dc / tw, awc = 2 * Dc * tw / (bfc * tfc); return { lrw, lw, awc, Rb: lw <= lrw ? 1 : Math.min(1, 1 - awc / (1200 + 300 * awc) * (lw - lrw)) }; }
+  /* crwOf(awc): c_rw = 3.1 + 5.0/a_wc, 4.6 ≤ c_rw ≤ 5.7 (5.7 where a_wc ≤ 0): the function of the A6 permission (S2-9, Eq. 6.10.6.2.3-5),
+     used everywhere λ_rw = c_rw√(E/F_yc) appears (engineer's decision 2026-10-29, SB2-O6): R_b (Eqs. 6.10.1.10.2-5, -8) and App. A6
+     (Eqs. A6.1-3, -4; A6.2.2). Before: R_b and A6.2.2 used λ_rw = 5.7√(E/F_yc). */
+  function crwOf(awc) { return awc > 0 ? Math.min(Math.max(3.1 + 5.0 / awc, 4.6), 5.7) : 5.7; }
+  /* rbFactor: R_b, 6.10.1.10.2 (Eq. 6.10.1.10.2-3), λ_rw = c_rw√(E/F_yc) (Eq. 6.10.1.10.2-5, c_rw Eq. -8), a_wc = 2D_ct_w/(b_fct_fc). */
+  function rbFactor(Dc, tw, bfc, tfc, Fyc) { const lw = 2 * Dc / tw, awc = 2 * Dc * tw / (bfc * tfc), crw = crwOf(awc), lrw = crw * Math.sqrt(ES / Fyc); return { lrw, crw, lw, awc, Rb: lw <= lrw ? 1 : Math.min(1, 1 - awc / (1200 + 300 * awc) * (lw - lrw)) }; }
   /* ltbFnc: F_nc, 6.10.8.2.2 (FLB) and 6.10.8.2.3 (LTB, Eqs. a-1 to a-5, b-2, b-3); o.rt optional (Eq. c-3). */
   function ltbFnc(o) {
     const Fyr = Math.max(Math.min(0.7 * o.Fyc, o.Fyw), 0.5 * o.Fyc), lf = o.bfc / (2 * o.tfc), lpf = 0.38 * Math.sqrt(ES / o.Fyc), lrf = 0.56 * Math.sqrt(ES / Fyr), cap = o.Rb * o.Rh * o.Fyc;
@@ -279,9 +283,9 @@
       if (r.lt.npr) { r.lt.npr.Ir = +N0.Ir > 0 ? +N0.Ir : null; r.lt.npr.why = typeof N0.why === 'string' ? N0.why : ''; }
       r.fbuC = Math.max(r.cF.f, 0); r.am = ampFl(r.cF.fl, r.fbuC, Fyc, r.lt.Lp, r.Lb * 12, r.CbU, r.Rb, r.lt.Fcr);
       // Appendix A6 and its permission, 6.10.6.2.3 (S2-9)
-      const Myc = pos ? r.yT.My : r.yB.My, Myt = pos ? r.yB.My : r.yT.My, Iyc = tfc * bfc ** 3 / 12, Iyt = tft * bft ** 3 / 12, lrw = 5.7 * Math.sqrt(ES / Fyc), lw = 2 * Dc / r.tw;
+      const Myc = pos ? r.yT.My : r.yB.My, Myt = pos ? r.yB.My : r.yT.My, Iyc = tfc * bfc ** 3 / 12, Iyt = tft * bft ** 3 / 12, lw = 2 * Dc / r.tw;
       const brg = prj.a6 || {}, skA = Array.isArray(brg.skews) ? brg.skews.map(v => Math.abs(+v || 0)) : [], skM = skA.length ? Math.max(...skA) : 0;
-      const awcP = 2 * Dc * r.tw / (bfc * tfc), crwP = awcP > 0 ? Math.min(Math.max(3.1 + 5.0 / awcP, 4.6), 5.7) : 5.7, lrwP = crwP * Math.sqrt(ES / Fyc);
+      const awcP = 2 * Dc * r.tw / (bfc * tfc), crwP = crwOf(awcP), lrwP = crwP * Math.sqrt(ES / Fyc), lrw = lrwP;   // App. A6 λ_rw (Eqs. A6.1-3, -4) = the permission's (SB2-O6)
       const A6 = { Myc, Myt, My: Math.min(Myc, Myt), Iyc, Iyt, lrw, lw, awcP, crwP, lrwP, skM, curved: !!brg.curved, why: [], cond: {} };
       A6.cond = { skew: !(skM > 20), straight: !brg.curved, FyF: !(Math.max(Fyt, Fyb) > 70), FyW: !(Fyw > 70), web: !(lw >= lrwP), Iy: !(Iyc / Iyt < 0.3), prism: !r.lt.npr };
       if (skM > 20) A6.why.push(`a support is skewed ${skM.toFixed(0)}° from normal (more than 20°)`); if (brg.curved) A6.why.push('the bridge is horizontally curved');
@@ -467,8 +471,8 @@
       if (nc) w.add({ id: 'Dc', label: 'Depth of the web in compression (steel section, noncomposite)', sym: 'D_{c}', eq: pos ? '(d - t_{t}) - \\bar{y}_{s}' : '\\bar{y}_{s} - t_{b}', sub: pos ? `(${n3(r.d)} - ${n4(r.topT)}) - ${n3(r.card.s.yb)}` : `${n3(r.card.s.yb)} - ${n4(r.botT)}`, value: r.Dc, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
       else w.add({ id: 'Dc', label: 'Depth of the web in compression (steel + rebar section)', sym: 'D_{c}', eq: '\\bar{y}_{cr} - t_{b}', sub: `${n3(r.card.cr.yb)} - ${n4(r.botT)}`, value: r.Dc, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
       w.add({ id: 'Rb', label: 'Web load-shedding factor', sym: 'R_{b}', eq: rb.lw <= rb.lrw ? '1.0\\ (\\frac{2D_{c}}{t_{w}} \\le \\lambda_{rw})' : '1 - \\frac{a_{wc}}{1200 + 300a_{wc}}(\\frac{2D_{c}}{t_{w}} - \\lambda_{rw})',
-        sub: `\\frac{2D_{c}}{t_{w}} = ${n2(rb.lw)},\\ \\lambda_{rw} = 5.7\\sqrt{\\frac{E}{F_{yc}}} = ${n2(rb.lrw)},\\ a_{wc} = ${n3(rb.awc)}`, value: r.Rb, unit: '', d: 3, ref: `${ED} Eq. 6.10.1.10.2-3`,
-        note: 'λ_rw = 5.7√(E/F_yc) as GirderDetail (open question: the 10th Ed. λ_rw of 6.10.1.10.2 / 6.10.6.2.3 uses c_rw).' });
+        sub: `\\frac{2D_{c}}{t_{w}} = ${n2(rb.lw)},\\ a_{wc} = ${n3(rb.awc)},\\ c_{rw} = 3.1 + \\frac{5.0}{a_{wc}} = ${n3(rb.crw)}\\ (4.6 \\le c_{rw} \\le 5.7),\\ \\lambda_{rw} = c_{rw}\\sqrt{\\frac{E}{F_{yc}}} = ${n2(rb.lrw)}`, value: r.Rb, unit: '', d: 3, ref: `${ED} Eqs. 6.10.1.10.2-3, -5, -8`,
+        note: 'λ_rw = c_rw√(E/F_yc) (engineer\'s decision 2026-10-29, SB2-O6; GirderDetail used 5.7√(E/F_yc)).' });
       w.add({ id: 'Fyr', label: 'Compression-flange stress at the onset of nominal yielding', sym: 'F_{yr}', eq: '\\min(0.7F_{yc}, F_{yw}) \\ge 0.5F_{yc}', sub: `\\min(0.7(${n2(Fyc)}), ${n2(Fyw)})`, value: lt.Fyr, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.8.2.2` });
       w.add({ id: 'FLB', label: 'Flange local buckling resistance', sym: 'F_{nc,FLB}', eq: lt.lf <= lt.lpf ? 'R_{b}R_{h}F_{yc}\\ (\\lambda_{f} \\le \\lambda_{pf})' : '[1 - (1 - \\frac{F_{yr}}{R_{h}F_{yc}})\\frac{\\lambda_{f} - \\lambda_{pf}}{\\lambda_{rf} - \\lambda_{pf}}]R_{b}R_{h}F_{yc}',
         sub: `\\lambda_{f} = \\frac{${n2(cF.b)}}{2(${n4(cF.t)})} = ${n2(lt.lf)},\\ \\lambda_{pf} = ${n2(lt.lpf)},\\ \\lambda_{rf} = ${n2(lt.lrf)};\\ R_{b}R_{h}F_{yc} = ${n3(r.Rb)}(${n3(r.Rh)})(${n2(Fyc)})`, value: lt.FLB, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.8.2.2-1 to -5` });
@@ -506,7 +510,7 @@
         note: (a.ok ? '' : a.why.join('; ') + '. ') + 'Not testable here, for the engineer: no holes in the tension flange, cross-frames in contiguous lines parallel to the supports, girders not kinked.' });
       if (a.ok) {
         w.add({ id: 'a6.Rpc', label: `Web plastification factors (${a.webCompact ? 'compact' : 'noncompact'} web; λ_pw(Dcp) = ${n2(a.lpDcp)})`, sym: 'R_{pc}', eq: a.webCompact ? '\\frac{M_{p}}{M_{yc}}' : '[1 - (1 - \\frac{R_{h}M_{yc}}{M_{p}})\\frac{\\lambda_{w} - \\lambda_{pw(D_{c})}}{\\lambda_{rw} - \\lambda_{pw(D_{c})}}]\\frac{M_{p}}{M_{yc}}',
-          sub: `M_{p} = ${g1(r.pl.Mp)},\\ M_{yc} = ${g1(a.Myc)},\\ M_{yt} = ${g1(a.Myt)}`, value: a.Rpc, unit: '', d: 3, ref: `${ED} Eqs. A6.2.1-4, A6.2.2-4, -5`, note: `R_pt = ${n3(a.Rpt)}; λ_rw of A6.2.2 = 5.7√(E/F_yc) = ${n2(a.lrw)} (as GirderDetail).` });
+          sub: `M_{p} = ${g1(r.pl.Mp)},\\ M_{yc} = ${g1(a.Myc)},\\ M_{yt} = ${g1(a.Myt)}`, value: a.Rpc, unit: '', d: 3, ref: `${ED} Eqs. A6.2.1-4, A6.2.2-4, -5`, note: `R_pt = ${n3(a.Rpt)}; λ_rw of A6.2.2 = c_rw√(E/F_yc) = ${n2(a.lrw)} (Eqs. A6.1-3, -4; SB2-O6).` });
         w.add({ id: 'a6.Mnc', label: 'App. A6 compression-flange resistance', sym: 'M_{nc}', eq: '\\min(M_{nc,FLB}, M_{nc,LTB})', sub: `\\min(${g1(a.MncF)}, ${g1(a.MncL)});\\ L_{p} = ${n2(a.Lp)},\\ L_{r} = ${n2(a.Lr)}\\text{ in},\\ J = ${n2(a.J)},\\ F_{yr} = ${n2(a.FyrA)}`, value: a.Mnc, unit: 'kip-ft', d: 1, ref: `${ED} Eqs. A6.3.2-1, -2; A6.3.3-1 to -9` });
         const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12, demT = Mu + (nc ? r.tF.fl * a.Sxt / 3 / 12 : 0);
         w.add({ id: 'a6c.ok', label: 'App. A6, compression flange', sym: 'M_{u} + \\frac{1}{3}f_{\\ell}S_{xc}', eq: '\\le \\phi_{f}M_{nc}', sub: `${n2(Mu)} + \\frac{1}{3}(${n2(a.am.fl)})\\frac{${g0(a.Sxc)}}{12} = ${n2(demC)} \\le ${n2(a.Mnc)}`, value: okv(demC, a.Mnc), unit: '', ref: `${ED} Eq. A6.1.1-1`, ok: demC <= a.Mnc + 1e-9 });
@@ -604,5 +608,5 @@
     return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
 
-  window.SBDFlexure = { ES, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
+  window.SBDFlexure = { ES, crwOf, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
 })();
