@@ -47,3 +47,42 @@ Tests: `node tests/engine/run.mjs moving-load` (parity with the original page co
 ### Open items
 - SML-O2. `analyze` has no simple-span (non-continuous) mode; `staticAnalysis` has one. Needed before Steel Bridge's simple-span projects use the shared LL envelopes.
 - SML-O3. GirderDetail's cracked-section zones, staged EI and cross-frame point loads are inputs the caller builds (EI per segment, point loads); the shared engine does not derive them.
+
+## 2026-10-29 — PR: moving-load-simple-span — simple-span mode for the LL envelopes (`m.simple`; option added, existing results unchanged)
+### Where
+- `analyze(m,opt)`. New model flag `m.simple` (true = independent simple spans). Absent or false: every edited line takes its old branch, so the arithmetic is the same as before.
+  - Before `// Global stiffness (v up, θ CCW), EI in kip-ft²`, added: `const hng=new Uint8Array(Math.max(0,nn-1)); if(m.simple&&ns>1)for(let q=1;q<ns;q++)hng[idxOf(sup[q])]=1;`. This marks the element that starts at each interior support.
+  - Element matrix: before `const M=[[12,6*l,-12,6*l],…]`; after `const M=hng[e]?[[3,0,-3,3*l],[0,0,0,0],[-3,0,3,-3*l],[3*l,0,-3*l,3*l*l]]:[[12,6*l,-12,6*l],…]`. A hinged element is a pinned-fixed beam element: its start rotation is released by static condensation, so no moment crosses the support.
+  - Moment influence line: before `v=ef.node<nn-1? -k*(6*l*v1+…+2*l*l*t2) : …`; after `v=ef.node<nn-1? (hng[e]?0:-k*(6*l*v1+…+2*l*l*t2)) : …`.
+  - Shear influence line: before `v=k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3]);`; after `v=hng[e]?k*(3*d[2*e]-3*d[2*e+2]+3*l*d[2*e+3]):k*(12*d[2*e]+…);`.
+  - Step solver `solveOne`: after the uniform-load FEF line, added the pinned-fixed fixed-end forces for hinged elements: `if(m.simple&&ns>1)for(…){if(!hng[e])continue;const L=el[e],m0=FEF[4*e+1];FEF[4*e]-=1.5*m0/L;FEF[4*e+2]+=1.5*m0/L;FEF[4*e+3]-=m0/2;FEF[4*e+1]=0;}`. Check: uniform w gives 3wL/8, 0, 5wL/8, −wL²/8. End-force recovery: added `if(hng[e]){f1[e]=k*(3*v1-3*v2+3*l*t2)+FEF[4*e];m1[e]=FEF[4*e+1];continue;}`.
+  - Engine-check text: `const th=` → `let th=`, plus `if(m.simple&&ns>1)th=[0,0.5];`. With equal simple spans, M over the support is 0 and R_A is wL/2.
+  - Warning (simple spans, 2+ spans only): explains that each span is independent, that an interior reaction is the left span plus the right span, and that the multi-vehicle case applies to those reactions only.
+- Reactions keep the assembled-K row (the band `r-4…r+6` still holds every coupling). So an interior support reaction is the left-span reaction plus the right-span reaction.
+- No other function changed. `deflection`, `absScan` and the impact, DF and lane code work from the influence lines and solver above. `absScan` passes `m` on, so `m.simple` carries through. `staticAnalysis` keeps its own `simple` option from #463.
+### The 90 % two-truck case (LRFD 10th Ed. 3.6.1.3.1)
+- The gate is unchanged: `sel:ef=>[ef.t==='R'&&ef.interior, ef.t==='M'&&ef.neg]`, with `ef.neg` = M whose influence-line total < 0.
+- Simple spans: no M section has a negative influence line (the support moment is exactly 0), so the case never reaches moments. It still reaches the interior pier reactions (summed left and right). That follows the article text: "reaction at interior piers". End reactions, M and V are identical with the multi-vehicle case on or off (test).
+### Governing provision
+- No formula, factor or unit changed for existing callers. Simple-span mode uses linear elastic beam theory with a moment release. Loads: LRFD 10th Ed. 3.6.1.2 (HL-93), 3.6.1.3.1 (90 % two trucks), 3.6.1.4 (fatigue), and 3.6.2 (IM), as the engine already had them.
+### Check case (tests/engine/simple-span.test.mjs; IM 1.33 on the truck, lane 0.64 klf without IM, per lane, DF 1)
+- Midspan M = 1.33(18L − 280) + wL²/8. L 60: 1064.00 + 288 = 1352.00 kip-ft. L 110: 2261.00 + 968 = 3229.00 kip-ft. The engine gives the same values.
+- End V = 1.33(72 − 672/L) + wL/2. L 60: 80.864 + 19.2 = 100.064 kips. L 110: 87.635 + 35.2 = 122.835 kips. The engine gives the same values.
+- Absolute maximum M (truck + lane, middle axle at x*, L − 2x* = 446.88/(95.76 + 0.32L)):
+  - L 60: x* 28.056 ft, 1359.238 kip-ft. Engine 1359.234 (0.1 ft scan grid).
+  - L 110: x* 53.294 ft, 3232.466 kip-ft. Engine 3232.466.
+- Two simple spans 60 + 110: pier M = 0.
+  - Pier R with one truck: 1.33(32 + 32·96/110 + 8·46/60) + 0.64·85 = 142.261 kips.
+  - Pier R with 90 % of two trucks (headway 50 ft): 0.9[1.33(60.800 + 27.055) + 54.4] = 154.122 kips. This governs. Before the change, simple spans were not available, so there is no "before" value.
+### How verified
+- `node tests/engine/run.mjs`: all tests pass. The 35 Moving Load Generator parity cases still hash identically to the original page, which shows no result change for existing callers.
+- A 3-span simple girder (60/110/75) was compared with three 1-span runs, for HL-93 (two-truck case on) and for the fatigue truck:
+  - M and V at every 1/20 point, end reactions, and step solver: equal within 1e-7 relative (1e-6 for the step solver).
+  - Deflection envelope: within 0.2 %. The meshes differ (Lt/240 vs L/240) and the deflection influence line is cubic between nodes.
+  - Each pier reaction is at least each adjacent span's own reaction.
+- `simple:false` and absent give the same output. On one span, `simple:true` gives the same output as without it.
+### Other copies
+- None. Moving Load Generator.html gets no UI for this; its `readModel()` does not set `simple`.
+### Open items
+- SML-O2 closed (analyze has a simple-span mode).
+- SML-O4. Engineer to confirm: in simple-span mode, should the 90 % two-truck case apply to the summed pier reaction (as implemented, per the 3.6.1.3.1 text), or should it be off for simple-span bridges in this office's practice? The pier reaction is the pier load per girder line, not one bearing. Each bearing's reaction equals the adjacent span's end reaction, which is the shear next to the support.

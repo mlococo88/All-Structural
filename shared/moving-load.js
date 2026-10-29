@@ -12,6 +12,11 @@
                            loading), impact (const / Std. Spec. 3.8.2 / AREMA), step solver. m = the page's model
                            (readModel()). opt: {Lb:'span'|'max'|'total'|'user', aL: user L (ft), refine: bool,
                            vehicles: preset table used for m.secondary}. Defaults: 'span', 100, true, SharedVehicles.
+                           m.simple: true = independent simple spans (moment release at every interior support;
+                           added 2026-10-29). Default (absent/false): continuous over the interior supports, unchanged.
+                           Simple: span effects come from that span only; interior support reactions are the left +
+                           right span reactions summed; the multi-vehicle case is still gated to M with a negative
+                           influence-line total (none in simple spans) and interior reactions (3.6.1.3.1).
    deflection(R, opt)      LL deflection envelope at the 1/20 points from analyze() result R.
                            opt: {mode:'lrfd'|'veh', DF, useIM}.
    absScan(R, analyzeFn)   absolute maxima per span (extra output sections; analyzeFn defaults to analyze).
@@ -66,11 +71,14 @@ function analyze(m,opt){
   const idxOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return Math.abs(x[lo]-v)<=Math.abs(x[hi]-v)?lo:hi;};
   const Iat=xx=>{for(const b of sb)if(xx>=b[0]&&xx<b[1])return b[2];return sb[sb.length-1][2];};
 
+  // Simple spans (m.simple, 2026-10-29): the element starting at each interior support has its start rotation released
+  // (pinned-fixed element, rotation condensed out), so no moment passes the support. hng[e]=1 marks those elements.
+  const hng=new Uint8Array(Math.max(0,nn-1)); if(m.simple&&ns>1)for(let q=1;q<ns;q++)hng[idxOf(sup[q])]=1;
   // Global stiffness (v up, θ CCW), EI in kip-ft²
   const K=new Float64Array(nd*nd), ek=[], el=[];
   for(let e=0;e<nn-1;e++){
     const l=x[e+1]-x[e], k=m.E*Iat((x[e]+x[e+1])/2)/144/(l*l*l); ek.push(k); el.push(l);
-    const M=[[12,6*l,-12,6*l],[6*l,4*l*l,-6*l,2*l*l],[-12,-6*l,12,-6*l],[6*l,2*l*l,-6*l,4*l*l]], D=[2*e,2*e+1,2*e+2,2*e+3];
+    const M=hng[e]?[[3,0,-3,3*l],[0,0,0,0],[-3,0,3,-3*l],[3*l,0,-3*l,3*l*l]]:[[12,6*l,-12,6*l],[6*l,4*l*l,-6*l,2*l*l],[-12,-6*l,12,-6*l],[6*l,2*l*l,-6*l,4*l*l]], D=[2*e,2*e+1,2*e+2,2*e+3];
     for(let a=0;a<4;a++)for(let b=0;b<4;b++)K[D[a]*nd+D[b]]+=k*M[a][b];
   }
   const supNodes=sup.map(idxOf), isSup=new Uint8Array(nd); supNodes.forEach(i=>isSup[2*i]=1);
@@ -120,10 +128,10 @@ function analyze(m,opt){
       let v=0;
       if(ef.t==='M'){
         const e=ef.node<nn-1?ef.node:ef.node-1,l=el[e],k=ek[e],v1=d[2*e],t1=d[2*e+1],v2=d[2*e+2],t2=d[2*e+3];
-        v=ef.node<nn-1? -k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2) : k*(6*l*v1+2*l*l*t1-6*l*v2+4*l*l*t2);
+        v=ef.node<nn-1? (hng[e]?0:-k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)) : k*(6*l*v1+2*l*l*t1-6*l*v2+4*l*l*t2);
       } else if(ef.t==='V'){
         const e=ef.el,l=el[e],k=ek[e];
-        v=k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3]);
+        v=hng[e]?k*(3*d[2*e]-3*d[2*e+2]+3*l*d[2*e+3]):k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3]);
       } else {
         const r=2*ef.node; for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++) v+=K[r*nd+cc]*d[cc];
       }
@@ -307,6 +315,7 @@ function analyze(m,opt){
   if(m.vK>0&&!(m.vK>=2&&m.vK<=m.axles.length)) warn.push(`Variable spacing axle # must be between 2 and ${m.axles.length}; variable spacing was ignored.`);
   if(m.vK>=2&&m.vMax<m.vMin) warn.push('Variable spacing maximum is less than the minimum; variable spacing was ignored.');
   if(m.multi&&ns<2) warn.push('The multi-vehicle case needs at least two spans and is inactive for a single span.');
+  if(m.simple&&ns>1) warn.push('Simple spans: each span is analysed as an independent simple span (no moment over the interior supports). An interior support reaction is the left-span plus right-span reaction (pier load per girder line). The multi-vehicle case applies to these interior reactions only (LRFD 3.6.1.3.1); there is no negative moment.');
   if(m.udl.mode!=='none'&&!(m.udl.w>0)) warn.push('A uniform load mode is selected but w = 0.');
   if([...m.dfM,...m.dfV].some(v=>!(v>0))) warn.push('One or more distribution factors are zero or blank.');
   if(m.imp.method==='const'&&m.imp.val<1) warn.push('The impact multiplier is below 1.0.');
@@ -318,7 +327,8 @@ function analyze(m,opt){
   else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
 
   // Engine check: unit uniform load on all spans
-  const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns]||['n/a','n/a'], L1=m.spans[0];   // 5+ spans: no tabulated theory value (2026-10-29)
+  let th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns]||['n/a','n/a'], L1=m.spans[0];   // 5+ spans: no tabulated theory value (2026-10-29)
+  if(m.simple&&ns>1)th=[0,0.5];   // independent simple spans (2026-10-29): M over the support 0, R_A = wL/2
   const mChk=ns>1?mKey[supNodes[1]]:rows.find(r=>r.k===0&&r.t===10).mi;
   const rA=effs.findIndex(ef=>ef.t==='R'&&ef.q===0);
   let sumR=0; effs.forEach((ef,ei)=>{if(ef.t==='R')sumR+=DER[ei].end;});
@@ -337,11 +347,14 @@ function analyze(m,opt){
     pl.forEach(([xp,Pk])=>{if(!Pk)return;const e=elOf(xp),L=el[e],a=Math.min(L,Math.max(0,xp-x[e])),bq=L-a;eP[e].push([a,Pk]);
       FEF[4*e]+=Pk*bq*bq*(3*a+bq)/L**3;FEF[4*e+1]+=Pk*a*bq*bq/(L*L);FEF[4*e+2]+=Pk*a*a*(a+3*bq)/L**3;FEF[4*e+3]-=Pk*a*a*bq/(L*L);});
     if(uW)for(let e=0;e<nn-1;e++){const w=uW[e];if(!w)continue;const L=el[e];FEF[4*e]+=w*L/2;FEF[4*e+1]+=w*L*L/12;FEF[4*e+2]+=w*L/2;FEF[4*e+3]-=w*L*L/12;}
+    if(m.simple&&ns>1)for(let e=0;e<nn-1;e++){if(!hng[e])continue;const L=el[e],m0=FEF[4*e+1];   // released start: pinned-fixed fixed-end forces
+      FEF[4*e]-=1.5*m0/L;FEF[4*e+2]+=1.5*m0/L;FEF[4*e+3]-=m0/2;FEF[4*e+1]=0;}
     const F=new Float64Array(nd);for(let e=0;e<nn-1;e++)for(let q=0;q<4;q++)F[2*e+q]-=FEF[4*e+q];
     const bb=new Float64Array(nf);for(let i=0;i<nf;i++)bb[i]=F[free[i]];
     const y=luSolve(A,nf,bb),dd=new Float64Array(nd);for(let i=0;i<nf;i++)dd[free[i]]=y[i];
     const f1=new Float64Array(nn-1),m1=new Float64Array(nn-1);
     for(let e=0;e<nn-1;e++){const l=el[e],k=ek[e],v1=dd[2*e],t1=dd[2*e+1],v2=dd[2*e+2],t2=dd[2*e+3];
+      if(hng[e]){f1[e]=k*(3*v1-3*v2+3*l*t2)+FEF[4*e];m1[e]=FEF[4*e+1];continue;}
       f1[e]=k*(12*v1+6*l*t1-12*v2+6*l*t2)+FEF[4*e];m1[e]=k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)+FEF[4*e+1];}
     const rx=supNodes.map(sn=>{const r=2*sn;let s=0;for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++)s+=K[r*nd+cc]*dd[cc];return s-F[r];});
     return {f1,m1,eP,uW,rx};
