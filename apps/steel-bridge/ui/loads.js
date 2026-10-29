@@ -83,18 +83,20 @@
   /* ---------- results ---------- */
   function calc(P, gi) {
     ensure(P);
-    const g = P.girders[gi] || P.girders[0], { b, p } = LD().fromModel(P, { girder: P.girders.indexOf(g) }), R = LD().compute(b, p);
-    if (R.errors.length) return { errors: R.errors };
-    R.steel = LD().steelWeight(g.segments, b.allow, g.id); R.girderLabel = g.label || g.id; R.girderId = g.id; R.ranges = window.SBDLldf.ranges(R, b.tsDeck, b.nb);
-    return R;
+    try {
+      const g = P.girders[gi] || P.girders[0], { b, p } = LD().fromModel(P, { girder: P.girders.indexOf(g) }), R = LD().compute(b, p);
+      if (R.errors.length) return { errors: R.errors };
+      R.steel = LD().steelWeight(g.segments, b.allow, g.id); R.girderLabel = g.label || g.id; R.girderId = g.id; R.ranges = window.SBDLldf.ranges(R, b.tsDeck, b.nb);
+      return R;
+    } catch (e) { return { errors: [`The loads could not be computed: ${e.message}`] }; }
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
-  const wk = (id, t) => `<a class="wk" href="#st-${esc(id)}">${t || '§'}</a>`;
+  const wk = (id, t, sel) => `<a class="wk" href="#st-${esc(id)}"${sel && sel.lg != null ? ` data-lg="${sel.lg}"` : ''}${sel && sel.lr != null ? ` data-lr="${sel.lr}"` : ''}>${t || '§'}</a>`;
   const card = (t, b) => `<section class="sec"><div class="secHead">${t}</div><div class="secBody">${b}</div></section>`;
   function output(R, ui, errors) {
     if (errors && errors.length) return `<div class="alert err"><b>Input errors.</b><ul>${errors.map(e => `<li>${esc(e.msg || e)}</li>`).join('')}</ul></div>`;
     if (!R) return '';
-    if (R.errors) return `<div class="alert err"><b>Loads.</b><ul>${R.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`;
+    if (R.errors && R.errors.length) return `<div class="alert err"><b>Loads.</b><ul>${R.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`;
     const N = R.dead.N, lg = Math.min(ui.lg || 0, N - 1), lr = Math.min(ui.lr || 0, R.regions.length - 1), g = `G${lg + 1}`, rg = R.regions[lr], L = R.lf;
     let h = `<div class="fRow"><label for="o_lg">Girder</label><select id="o_lg">${R.dead.cls.map((c, i) => `<option value="${i}"${i === lg ? ' selected' : ''}>G${i + 1} (${esc(LD().CLS[c] || c)})</option>`).join('')}</select>
       <label for="o_lr" style="min-width:0;margin-left:12px">Region</label><select id="o_lr">${R.regions.map((q, i) => `<option value="${i}"${i === lr ? ' selected' : ''}>${esc(q.label)}</option>`).join('')}</select></div>`;
@@ -102,13 +104,13 @@
     h += card('Owner load rules', `<div class="kv"><div><span>Owner</span><span>${esc(L.o || 'AASHTO')}</span></div><div><span>η (max. Strength factors)</span><span>${f(L.eta, 3)} ${wk('own.eta')}</span></div><div><span>η (min. Strength factors)</span><span>${f(L.etaN, 3)} ${wk('own.etaN')}</span></div>
       <div><span>Design load multiplier m</span><span>${f(L.m, 2)} ${wk('own.m')}</span></div><div><span>Haunch in section properties</span><span>${L.h0 ? '0 (owner rule)' : 'as entered'} ${wk('own.h0')}</span></div></div>
       <p class="note">m and η apply to the factored demands of later modules; the haunch rule applies here (K<sub>g</sub>) and to the section properties.</p>`);
-    const D = R.dead, row = i => `<tr${i === lg ? ' class="sel"' : ''}><td class="lft">G${i + 1}</td><td class="lft">${esc(LD().CLS[D.cls[i]] || D.cls[i])}</td><td>${f(D.deck[i], 4)}</td><td>${f(D.haunch[i], 4)}</td><td>${f(D.sip[i], 4)}</td><td>${f(D.dc1[i], 4)} ${wk(`dl.G${i + 1}.DC1`)}</td><td>${f(D.dc2[i], 4)} ${wk(`dl.G${i + 1}.DC2`)}</td><td>${f(D.dw[i], 4)} ${wk(`dl.G${i + 1}.DW`)}</td>${D.pl.some(v => v) ? `<td>${f(D.pl[i], 4)}</td>` : ''}${D.ut ? `<td>${f(D.ut[i], 4)}</td><td>${f(D.uf[i], 4)}</td>` : ''}</tr>`;
+    const D = R.dead, row = i => `<tr${i === lg ? ' class="sel"' : ''}><td class="lft">G${i + 1}</td><td class="lft">${esc(LD().CLS[D.cls[i]] || D.cls[i])}</td><td>${f(D.deck[i], 4)}</td><td>${f(D.haunch[i], 4)}</td><td>${f(D.sip[i], 4)}</td><td>${f(D.dc1[i], 4)} ${wk(`dl.G${i + 1}.DC1`, '', { lg: i })}</td><td>${f(D.dc2[i], 4)} ${wk(`dl.G${i + 1}.DC2`, '', { lg: i })}</td><td>${f(D.dw[i], 4)} ${wk(`dl.G${i + 1}.DW`, '', { lg: i })}</td>${D.pl.some(v => v) ? `<td>${f(D.pl[i], 4)}</td>` : ''}${D.ut ? `<td>${f(D.ut[i], 4)}</td><td>${f(D.uf[i], 4)}</td>` : ''}</tr>`;
     h += card(`Dead loads per girder (klf), ${esc(LD().METHODS[D.method])}`, `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder</th><th class="lft">Class</th><th>Deck</th><th>Haunch</th><th>SIP</th><th>DC1</th><th>DC2</th><th>DW</th>${D.pl.some(v => v) ? '<th>PL</th>' : ''}${D.ut ? '<th>UT</th><th>UF</th>' : ''}</tr></thead><tbody>${Array.from({ length: N }, (_, i) => row(i)).join('')}</tbody></table></div>
       <div class="kv"><div><span>Girder steel, ${esc(R.girderLabel)} (average)</span><span>${f(R.steel.avg, 4)} klf ${wk(`dl.steel.${R.girderId}.avg`)}</span></div>
       <div><span>Steel range along the girder</span><span>${f(R.steel.min, 4)} to ${f(R.steel.max, 4)} klf</span></div><div><span>Deck width</span><span>${f(D.Wd, 2)} ft</span></div><div><span>Live-load faces L / R</span><span>${f(R.ll.L.r, 2)} / ${f(R.ll.R.r, 2)} ft ${wk('xs.rL')}</span></div></div>
       <p class="note">DC1 excludes the girder self-weight (separate, per plate segment) and the cross-frames (not in this version; GirderDetail adds them as point loads from its Cross-frames module). Line loads: ${D.per.map(q => `${esc(q.desc)} ${f(q.plf, 4)} klf at x = ${f(q.x, 2)} ft (${esc(q.cat)}, ${esc(LD().DIST[q.dist] || q.dist)}) ${wk('dl.load.' + q.id)}`).join('; ') || 'none'}.</p>`);
-    const geo = R.regions[0].geo, rows = R.regions.map(q => q.members.map((m, j) => `<tr${j === lg && q === rg ? ' class="sel"' : ''}><td class="lft">${esc(q.label)}</td><td class="lft">${esc(m.label)} (${m.type === 'ext' ? 'ext.' : 'int.'})</td><td>${f(m.gM, 4)}${q === rg ? ' ' + wk(`df.${q.id}.G${j + 1}.gM`) : ''}</td><td>${q.kind === 'span' ? f(m.gV, 4) : '—'}</td><td>${f(m.fatM, 4)}</td><td>${q.kind === 'span' ? f(m.fatV, 4) : '—'}</td><td class="lft">${esc(m.method)}</td></tr>`).join('')).join('');
-    h += card('Live-load distribution factors (lanes per girder)', `<div class="kv"><div><span>Design lanes N<sub>L</sub></span><span>${geo.NL} ${wk('df.geo.NL')}</span></div><div><span>Roadway</span><span>${f(geo.roadway, 2)} ft ${wk('df.geo.w')}</span></div><div><span>d<sub>e</sub> left / right</span><span>${f(geo.deL, 2)} / ${f(geo.deR, 2)} ft ${wk('df.geo.deL')}</span></div><div><span>Deflection factor</span><span>${f(R.regions[0].gDef, 4)} ${wk(`df.${R.regions[0].id}.gDef`)}</span></div></div>
+    const geo = R.regions[0].geo, rows = R.regions.map((q, k) => q.members.map((m, j) => `<tr${j === lg && q === rg ? ' class="sel"' : ''}><td class="lft">${esc(q.label)}</td><td class="lft">${esc(m.label)} (${m.type === 'ext' ? 'ext.' : 'int.'})</td><td>${f(m.gM, 4)} ${wk(`df.${q.id}.G${j + 1}.gM`, '', { lg: j, lr: k })}</td><td>${q.kind === 'span' ? f(m.gV, 4) : '—'}</td><td>${f(m.fatM, 4)}</td><td>${q.kind === 'span' ? f(m.fatV, 4) : '—'}</td><td class="lft">${esc(m.method)}</td></tr>`).join('')).join('');
+    h += card('Live-load distribution factors (lanes per girder)', `<div class="kv"><div><span>Design lanes N<sub>L</sub></span><span>${geo.NL} ${wk('df.geo.NL')}</span></div><div><span>Roadway</span><span>${f(geo.roadway, 2)} ft ${wk('df.geo.w')}</span></div><div><span>d<sub>e</sub> left / right</span><span>${f(geo.deL, 2)} / ${f(geo.deR, 2)} ft ${wk('df.geo.deL')}</span></div><div><span>Deflection factor</span><span>${f(R.regions[0].gDef, 4)} ${wk(`df.${R.regions[0].id}.gDef`, '', { lr: 0 })}</span></div></div>
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Region</th><th class="lft">Girder</th><th>g<sub>M</sub></th><th>g<sub>V</sub></th><th>g<sub>fat,M</sub></th><th>g<sub>fat,V</sub></th><th class="lft">Method</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="note">Span regions: positive moment and shear (L = span); pier regions: negative moment and interior reactions (L = average of the adjacent spans). Fatigue: one lane, multiple presence 1.2 removed.</p>
       ${R.ranges.filter(q => !q.ok).length ? `<div class="alert">Outside the range of applicability (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1): ${R.ranges.filter(q => !q.ok).map(q => `${esc(q.region)} ${esc(q.name)} = ${f(q.value, q.key === 'Kg' ? 0 : 2)}`).join('; ')}.</div>` : ''}`);
@@ -116,7 +118,10 @@
     h += card(`Worked steps: ${g}, ${esc(rg.label)}`, `<p class="note">AASHTO LRFD 10th Ed. (2024). Distances from the left deck edge.</p>${stepsHtml([...ownSteps, ...R.steps, ...deadG, ...R.steel.steps, ...rg.steps, ...rg.members[lg].steps])}`);
     return h;
   }
+  /* onOutClick(e, ui): a link to the steps of another girder or region selects it; returns the step element id to show, or null */
+  function onOutClick(e, ui) { const a = e.target.closest('a.wk[data-lg], a.wk[data-lr]'); if (!a) return null; e.preventDefault();
+    if (a.dataset.lg != null) ui.lg = +a.dataset.lg; if (a.dataset.lr != null) ui.lr = +a.dataset.lr; return a.getAttribute('href').slice(1); }
   function onOutChange(e, ui) { if (e.target.id === 'o_lg') { ui.lg = +e.target.value; return true; } if (e.target.id === 'o_lr') { ui.lr = +e.target.value; return true; } return false; }
 
-  window.SBDUiLoads = { ensure, inputs, onChange, onClick, calc, output, onOutChange };
+  window.SBDUiLoads = { ensure, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
 })();

@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { loadShared, test, ROOT } from './harness.mjs';
-import { gdBlock, gdRun, gdDecl } from './gd-source.mjs';
+import { gdBlock, gdDecl } from './gd-source.mjs';
 
 const ENG = f => path.join(ROOT, 'apps/steel-bridge/engine', f);
 const W = loadShared('units.js', 'steps.js', ENG('model.js'), ENG('sections.js'), ENG('owners.js'), ENG('lldf.js'), ENG('loads.js'));
@@ -34,21 +34,32 @@ const clone = o => JSON.parse(JSON.stringify(o));
 
 /* ---------- GirderDetail's GM.df in Node ---------- */
 let GD = null;
+// Declarations are loaded with a trailing comment of this test, so that V8 does not reuse code compiled for the same text in another
+// vm context (sections.test.mjs's): code compiled where a const was not yet declared kept throwing "ES is not defined" there.
+const TAG = '\n// loads.test.mjs';
+function run(ctx, fn, loaded) {   // gd-source.mjs gdRun, with the tagged declarations
+  for (let k = 0; k < 400; k++) {
+    try { return fn(ctx); }
+    catch (e) { const m = /^(\w+) is not defined/.exec((e && e.message) || ''); if (!m || loaded.has(m[1])) throw e;
+      const d = gdDecl(m[1]); if (!d) throw new Error(`GirderDetail declaration not found: ${m[1]}`); loaded.add(m[1]); vm.runInContext(d + TAG, ctx, { filename: `Steel Bridge Design.html (${m[1]})` }); }
+  }
+  throw new Error('too many missing declarations');
+}
 function gdDf() {
   if (GD) return GD;
   const ctx = { console }; vm.createContext(ctx);
   vm.runInContext('var P = { df: { bridge: null } }; var GM = {};', ctx);
-  const loaded = new Set(), lit = gdBlock('GM.df = {', '\n};\n') + '\n};';
+  const loaded = new Set(), lit = gdBlock('GM.df = {', '\n};\n') + '\n};' + TAG;
   // every declaration GM.df.compute reads, loaded before any call (a function V8 optimizes inside the lever-rule loop does not
-  // see a const added to the context afterwards: see gd-source.mjs); gdRun adds any other on demand
+  // see a const added to the context afterwards: see gd-source.mjs); run() adds any other on demand
   ['ES', 'sum', 'f2', 'f3', 'parseDim', 'nm', 'numRows', 'modRatio', 'steelProps', 'LF_ONE', 'gdLF', 'gdHP', 'DF_MPF', 'DF_RNG', 'DF_CLS', 'DF_SIMPLE', 'DF_DIST',
     'dfGeometry', 'dfType', 'dfSpacing', 'dfSkew', 'dfEmp', 'dfLeverC', 'dfLever', 'dfLeverAll', 'dfRigid', 'dfMember', 'dfEdges', 'dfDead', 'dfOpt', 'dfXsIn',
-    'DF_EDGE_K', 'DF_EDGE_LBL', 'dfEdgeIn', 'dfBridgeEff', 'dfLLFace'].forEach(k => { const d = gdDecl(k); if (d && !loaded.has(k)) { loaded.add(k); vm.runInContext(d, ctx, { filename: `Steel Bridge Design.html (${k})` }); } });
-  gdRun(ctx, c => vm.runInContext(lit, c, { filename: 'Steel Bridge Design.html (GM.df)' }), loaded);
-  const run = df => { ctx.P = { df: clone(df) }; return gdRun(ctx, c => c.GM.df.compute(c.P.df), loaded); };
-  GD = { ctx, run };
-  // warm-up (see gd-source.mjs): every path used below runs once before the comparisons, so each declaration is loaded first
-  fixtures.forEach(fx => run(fx.df)); variants().forEach(v => run(v.df));
+    'DF_EDGE_K', 'DF_EDGE_LBL', 'dfEdgeIn', 'dfBridgeEff', 'dfLLFace'].forEach(k => { const d = gdDecl(k); if (d && !loaded.has(k)) { loaded.add(k); vm.runInContext(d + TAG, ctx, { filename: `Steel Bridge Design.html (${k})` }); } });
+  run(ctx, c => vm.runInContext(lit, c, { filename: 'Steel Bridge Design.html (GM.df)' }), loaded);
+  const go = df => { ctx.P = { df: clone(df) }; return run(ctx, c => c.GM.df.compute(c.P.df), loaded); };
+  GD = { ctx, run: go };
+  // warm-up: every path used below runs once before the comparisons
+  fixtures.forEach(fx => go(fx.df)); variants().forEach(v => go(v.df));
   return GD;
 }
 
