@@ -27,7 +27,18 @@
              fl (ksi, first-order lateral bending of the bottom flange, Strength I), Lb (ft), Cb,
              npr: optional nonprismatic data (unbraced(); or entered): { kind: 'simp' | 'ge', b, t, K, geA, gov, Ir, why } }
      prj = { deck: { ts, tdeck, haunch, rebar: { top: { A, c }, bot: { A, c } } }, mat: { Fyt, Fyb, Fyw, Fyr, fc }, n,
-             rebarInPositive, G: factors(), a6: { method: 'auto' | '6108', skews: [deg], curved } } */
+             rebarInPositive, G: factors(), a6: { method: 'auto' | '6108', skews: [deg], curved } }
+
+   Noncomposite girders (prj.deck.composite === false; added 2026-10-29, SB2-O7, engineer's decision of that date): every load
+   on the steel section alone (6.10.1.1.1a), no deck and no deck rebar in any section property or in M_p (the noncomposite M_p
+   and D_cp of engine/sections.js, SB2-O1, approved); M_y by D6.2.1; in both regions the compression flange is discretely braced:
+   6.10.8 (F_nc, FLB 6.10.8.2.2, LTB 6.10.8.2.3; F_nt 6.10.8.3 with f_bu + f_l/3, Eq. 6.10.8.1.2-1) or App. A6 where 6.10.6.2.3
+   permits it (A6.1.1, A6.1.2 with f_l); the compression flange is the top flange in positive flexure, the bottom flange in
+   negative flexure. loc.flT (ksi): first-order lateral bending of the top flange (noncomposite only; loc.fl stays the bottom
+   flange). Service II 6.10.4.2.2 Eq. -3 (both flanges, 0.80R_hF_yf) and Eq. -4; f_l ≤ 0.6F_yf for both flanges; the
+   constructibility flexure checks 6.10.3.2.1-1, -3 and 6.10.3.2.2-1 at the Strength I stresses as information (id CN, not
+   in the governing ratio; open item). Not available for noncomposite: the nonprismatic 'ge' unbraced length in positive
+   flexure (throws). */
 (function () {
   'use strict';
   const ES = 29000, ED = 'AASHTO LRFD 10th Ed.';
@@ -193,18 +204,19 @@
   /* ---------- one location ---------- */
   function location(L, prj, cache) {
     const S = SEC(), G = factors(prj.G), pos = L.region === 'pos', p = L.plates, mat = prj.mat, Fyt = mat.Fyt, Fyb = mat.Fyb, Fyw = mat.Fyw;
-    const dk = prj.deck, ts = dk.ts, hh = dk.haunch, rb = dk.rebar || {}, Art = (rb.top && rb.top.A) || 0, Arb = (rb.bot && rb.bot.A) || 0, crt = (rb.top && rb.top.c) || 0, crb = (rb.bot && rb.bot.c) || 0;
+    const dk = prj.deck, nc = dk.composite === false, ts = dk.ts, hh = dk.haunch, rb = nc ? {} : (dk.rebar || {}), Art = (rb.top && rb.top.A) || 0, Arb = (rb.bot && rb.bot.A) || 0, crt = (rb.top && rb.top.c) || 0, crb = (rb.bot && rb.bot.c) || 0;
     // the section card (engine/sections.js) depends only on the section, deck, materials and region: one per distinct section in a girder
-    const ckey = cache && JSON.stringify([p.D, p.tw, p.topB, p.topT, p.botB, p.botT, L.beff, pos]);
-    const card = (cache && cache.get(ckey)) || S.card(p, { ts, haunch: hh, beff: L.beff, rebar: rb }, mat, prj.n, { region: pos ? 'pos' : 'neg', rebarInPositive: !!prj.rebarInPositive });
+    const ckey = cache && JSON.stringify([p.D, p.tw, p.topB, p.topT, p.botB, p.botT, L.beff, pos, nc]);
+    // noncomposite: no c3/cn, no deck in M_p, no deck rebar (6.10.1.1.1a: the steel section alone)
+    const card = (cache && cache.get(ckey)) || S.card(p, { ts, haunch: hh, beff: L.beff, rebar: rb, ...(nc ? { composite: false } : {}) }, mat, prj.n, { region: pos ? 'pos' : 'neg', rebarInPositive: !!prj.rebarInPositive });
     if (cache) cache.set(ckey, card);
     const s = card.s, c3 = card.c3, cn = card.cn, cr = card.cr, d = s.d;
     const r = { name: L.name, x: L.x, region: pos ? 'pos' : 'neg', pos, cont: L.cont !== false, D: p.D, tw: p.tw, topB: p.topB, topT: p.topT, botB: p.botB, botT: p.botT, beff: L.beff, d, Dt: card.Dt,
-      Lb: +L.Lb, Cb: +L.Cb, fl: +L.fl || 0, seg: L.seg || null, cbParts: L.cbParts || null, card, G };
+      Lb: +L.Lb, Cb: +L.Cb, fl: +L.fl || 0, nc, p7: pos && !nc, flT: nc ? (+L.flT || 0) : 0, seg: L.seg || null, cbParts: L.cbParts || null, card, G };
     const M = L.M || {}, num = v => +v || 0;
     const MDC1 = num(M.DC1), MDC2 = num(M.DC2), MDW = num(M.DW), MLLp = num(M.LLp), MLLn = num(M.LLn), MUT = num(M.UT), MUF = num(M.UF);
     Object.assign(r, { MDC1, MDC2, MDW, MLLp, MLLn, MUT, MUF, ut: !!(MUT || MUF) });
-    const secs = pos ? { DC1: s, DC2: c3, DW: c3, LL: cn } : { DC1: s, DC2: cr, DW: cr, LL: cr };
+    const secs = nc ? { DC1: s, DC2: s, DW: s, LL: s } : pos ? { DC1: s, DC2: c3, DW: c3, LL: cn } : { DC1: s, DC2: cr, DW: cr, LL: cr };
     const fAt = (Mm, sec, y) => -Mm * 12 * (y - sec.yb) / sec.I;
     const st = (Mm, sec) => ({ M: Mm, sec, top: fAt(Mm, sec, d), bot: fAt(Mm, sec, 0) });
     const MLL = pos ? MLLp : MLLn; r.MLL = MLL;
@@ -228,28 +240,34 @@
       r.Mu = A.DC1 + A.DC2 + A.DW + A.LL + A.UT + A.UF; r.Ms = B.DC1 + B.DC2 + B.DW + B.LL + B.UT + B.UF; r.Mrev = null; r.rev = false;
       r.MD1 = A.DC1 + A.UT + A.UF; r.MD2 = A.DC2 + A.DW;
     }
-    r.cF = pos ? { lab: 'top', b: p.topB, t: p.topT, Fy: Fyt, f: -r.str.top } : { lab: 'bottom', b: p.botB, t: p.botT, Fy: Fyb, f: -r.str.bot };
-    r.tF = pos ? { lab: 'bottom', b: p.botB, t: p.botT, Fy: Fyb, f: r.str.bot } : { lab: 'top', b: p.topB, t: p.topT, Fy: Fyt, f: r.str.top };
+    // compression and tension flange; fl: their first-order lateral bending (composite: the bottom flange only)
+    r.cF = pos ? { lab: 'top', b: p.topB, t: p.topT, Fy: Fyt, f: -r.str.top, fl: r.flT } : { lab: 'bottom', b: p.botB, t: p.botT, Fy: Fyb, f: -r.str.bot, fl: r.fl };
+    r.tF = pos ? { lab: 'bottom', b: p.botB, t: p.botT, Fy: Fyb, f: r.str.bot, fl: r.fl } : { lab: 'top', b: p.topB, t: p.topT, Fy: Fyt, f: r.str.top, fl: r.flT };
     r.Rh = card.Rh;
     // yield moments, D6.2.2 / D6.2.3
     const MD1 = r.MD1, MD2 = r.MD2, Sx = (sec, y) => sec.I / Math.abs(y - sec.yb), long = pos ? c3 : cr, short = pos ? cn : cr;
     const yld = (y, Fy) => { const S1 = Sx(s, y), S2 = Sx(long, y), S3 = Sx(short, y), MAD = S3 * (Fy - sg * MD1 * 12 / S1 - sg * MD2 * 12 / S2) / 12; return { S1, S2, S3, MAD, My: sg * MD1 + sg * MD2 + MAD, Fy }; };
-    r.yT = yld(d, Fyt); r.yB = yld(0, Fyb);
+    // noncomposite: D6.2.1, M_y = F_yS_x of the steel section, each flange
+    const ymNc = (y, Fy) => { const S1 = Sx(s, y); return { S1, My: Fy * S1 / 12, Fy, nc: true }; };
+    r.yT = nc ? ymNc(d, Fyt) : yld(d, Fyt); r.yB = nc ? ymNc(0, Fyb) : yld(0, Fyb);
     r.pl = card.pl; r.Dcp = card.Dcp; r.below = !!card.pl.below;
     const yp = r.pl.yp;
-    if (pos) {
+    if (r.p7) {
       r.Dp = r.Dt - yp; r.My = Math.min(r.yT.My, r.yB.My); r.Sxt = r.yB.My * 12 / Fyb;
       r.cmp = { Fy: Fyt <= 70 && Fyb <= 70, Dtw: r.D / r.tw <= 150, web: 2 * r.Dcp / r.tw <= 3.76 * Math.sqrt(ES / Fyt), lim: 3.76 * Math.sqrt(ES / Fyt) };
       r.compact = r.cmp.Fy && r.cmp.Dtw && r.cmp.web;
       r.Mn0 = r.Dp <= 0.1 * r.Dt ? r.pl.Mp : r.pl.Mp * (1.07 - 0.7 * r.Dp / r.Dt); r.cap13 = r.cont ? 1.3 * r.Rh * r.My : Infinity; r.Mn = Math.min(r.Mn0, r.cap13);
       r.Rb = 1; r.FncP = r.Rb * r.Rh * Fyt;
     } else {
-      const Dc = Math.max(cr.yb - r.botT, 0); r.Dc = Dc; const RB = rbFactor(Dc, r.tw, r.botB, r.botT, Fyb); r.Rb = RB.Rb; r.rb = RB;
-      r.lt = ltbFnc({ bfc: r.botB, tfc: r.botT, Dc, tw: r.tw, Lb: r.Lb * 12, Cb: r.Cb, Rb: r.Rb, Rh: r.Rh, Fyc: Fyb, Fyw });
+      // compression flange c, tension flange t: composite negative and noncomposite negative: bottom / top; noncomposite positive: top / bottom
+      const bfc = r.cF.b, tfc = r.cF.t, Fyc = r.cF.Fy, bft = r.tF.b, tft = r.tF.t, FyT = r.tF.Fy;
+      const Dc = nc ? Math.max(pos ? (d - r.topT) - s.yb : s.yb - r.botT, 0) : Math.max(cr.yb - r.botT, 0); r.Dc = Dc; const RB = rbFactor(Dc, r.tw, bfc, tfc, Fyc); r.Rb = RB.Rb; r.rb = RB;
+      r.lt = ltbFnc({ bfc, tfc, Dc, tw: r.tw, Lb: r.Lb * 12, Cb: r.Cb, Rb: r.Rb, Rh: r.Rh, Fyc, Fyw });
       r.lt0 = r.lt;
-      const N0 = L.npr || {}, lbB = +N0.b || 0, lbT = +N0.t || 0, nk = lbB > 0 && lbT > 0 ? (N0.kind === 'simp' || N0.kind === 'ge' ? N0.kind : lbB * lbT < r.botB * r.botT - 1e-6 ? 'ge' : '') : '';
+      const N0 = L.npr || {}, lbB = +N0.b || 0, lbT = +N0.t || 0, nk = lbB > 0 && lbT > 0 ? (N0.kind === 'simp' || N0.kind === 'ge' ? N0.kind : lbB * lbT < bfc * tfc - 1e-6 ? 'ge' : '') : '';
+      if (nk === 'ge' && pos) throw new Error(`${L.name}: nonprismatic unbraced length (6.10.8.2.3c, γ_e) of a noncomposite girder in positive flexure is not available`);
       r.CbU = r.Cb;
-      if (nk === 'simp') { const m = ltbFnc({ bfc: lbB, tfc: lbT, Dc, tw: r.tw, Lb: r.Lb * 12, Cb: r.Cb, Rb: r.Rb, Rh: r.Rh, Fyc: Fyb, Fyw });
+      if (nk === 'simp') { const m = ltbFnc({ bfc: lbB, tfc: lbT, Dc, tw: r.tw, Lb: r.Lb * 12, Cb: r.Cb, Rb: r.Rb, Rh: r.Rh, Fyc, Fyw });
         r.lt = { ...r.lt, rt: m.rt, Lp: m.Lp, Lr: m.Lr, Fcr: m.Fcr, LTB: m.LTB, Fnc: Math.min(r.lt.FLB, m.LTB), npr: { kind: 'simp', b: lbB, t: lbT } }; }
       else if (nk === 'ge') { const sS = S.steelCore({ ...p, botB: lbB, botT: lbT }), dS = sS.d; let crS = sS; if (Art > 0) crS = S.addPart(crS, Art, dS + hh + ts - crt, 0); if (Arb > 0) crS = S.addPart(crS, Arb, dS + hh + crb, 0);
         const fS = -(r.gm.DC1 * fAt(MDC1, sS, 0) + (r.ut ? fAt(r.gm.UT * MUT + r.gm.UF * MUF, sS, 0) : 0) + (r.gm.DC2 * MDC2 + r.gm.DW * MDW + G.ll * MLL) * 12 * crS.yb / crS.I), DcS = Math.max(crS.yb - lbT, 0), rtS = lbB / Math.sqrt(12 * (1 + DcS * r.tw / (3 * lbB * lbT)));
@@ -259,11 +277,11 @@
         const m = ltbFnc({ bfc: r.botB, tfc: r.botT, Dc, tw: r.tw, Lb: Lbi, Cb: 1, Rb: gv ? gv.Rb : r.Rb, Rh: gv ? gv.Rh : r.Rh, Fyc: Fyb, Fyw, rt: rtE }); r.CbU = 1;
         r.lt = { ...r.lt, rt: m.rt, Lp: m.Lp, Lr: m.Lr, Fcr: m.Fcr, LTB: m.LTB, Fnc: Math.min(r.lt.FLB, m.LTB), ltbCap: m.cap, npr: { kind: 'ge', b: lbB, t: lbT, K, fS, DcS, rtS, FeS, ge, fbu, gv, Fe, rtE, A: gA, bw: gR && typeof gR === 'object' && gR.m === 'bound' ? String(gR.why || '') : null } }; }
       if (r.lt.npr) { r.lt.npr.Ir = +N0.Ir > 0 ? +N0.Ir : null; r.lt.npr.why = typeof N0.why === 'string' ? N0.why : ''; }
-      r.fbuC = Math.max(r.cF.f, 0); r.am = ampFl(r.fl, r.fbuC, Fyb, r.lt.Lp, r.Lb * 12, r.CbU, r.Rb, r.lt.Fcr);
+      r.fbuC = Math.max(r.cF.f, 0); r.am = ampFl(r.cF.fl, r.fbuC, Fyc, r.lt.Lp, r.Lb * 12, r.CbU, r.Rb, r.lt.Fcr);
       // Appendix A6 and its permission, 6.10.6.2.3 (S2-9)
-      const Myc = r.yB.My, Myt = r.yT.My, Iyc = r.botT * r.botB ** 3 / 12, Iyt = r.topT * r.topB ** 3 / 12, lrw = 5.7 * Math.sqrt(ES / Fyb), lw = 2 * Dc / r.tw;
+      const Myc = pos ? r.yT.My : r.yB.My, Myt = pos ? r.yB.My : r.yT.My, Iyc = tfc * bfc ** 3 / 12, Iyt = tft * bft ** 3 / 12, lrw = 5.7 * Math.sqrt(ES / Fyc), lw = 2 * Dc / r.tw;
       const brg = prj.a6 || {}, skA = Array.isArray(brg.skews) ? brg.skews.map(v => Math.abs(+v || 0)) : [], skM = skA.length ? Math.max(...skA) : 0;
-      const awcP = 2 * Dc * r.tw / (r.botB * r.botT), crwP = awcP > 0 ? Math.min(Math.max(3.1 + 5.0 / awcP, 4.6), 5.7) : 5.7, lrwP = crwP * Math.sqrt(ES / Fyb);
+      const awcP = 2 * Dc * r.tw / (bfc * tfc), crwP = awcP > 0 ? Math.min(Math.max(3.1 + 5.0 / awcP, 4.6), 5.7) : 5.7, lrwP = crwP * Math.sqrt(ES / Fyc);
       const A6 = { Myc, Myt, My: Math.min(Myc, Myt), Iyc, Iyt, lrw, lw, awcP, crwP, lrwP, skM, curved: !!brg.curved, why: [], cond: {} };
       A6.cond = { skew: !(skM > 20), straight: !brg.curved, FyF: !(Math.max(Fyt, Fyb) > 70), FyW: !(Fyw > 70), web: !(lw >= lrwP), Iy: !(Iyc / Iyt < 0.3), prism: !r.lt.npr };
       if (skM > 20) A6.why.push(`a support is skewed ${skM.toFixed(0)}° from normal (more than 20°)`); if (brg.curved) A6.why.push('the bridge is horizontally curved');
@@ -271,32 +289,32 @@
       if (lw >= lrwP) A6.why.push(`the web is slender (2D_c/t_w = ${lw.toFixed(2)} ≥ λ_rw = ${lrwP.toFixed(2)}, c_rw = ${crwP.toFixed(3)})`); if (Iyc / Iyt < 0.3) A6.why.push(`I_yc/I_yt = ${(Iyc / Iyt).toFixed(3)} < 0.3`);
       if (r.lt.npr) A6.why.push(r.lt.npr.kind === 'simp' ? 'the unbraced length is nonprismatic (the simplification of 6.10.8.2.3c is used): Appendix A6 is not used, and 6.10.8 governs (conservative)' : 'the unbraced length is nonprismatic (6.10.8.2.3c): Appendix A6 is not used, and 6.10.8 with C_b = 1.0 and F_e = γ_e f_bu governs');
       A6.ok = !A6.why.length;
-      const Mp = r.pl.Mp, lpDcp = Math.min(Math.sqrt(ES / Fyb) / (0.54 * Mp / (r.Rh * A6.My) - 0.09) ** 2, lrw * (r.Dcp / Math.max(Dc, 1e-9))); A6.lpDcp = lpDcp;
+      const Mp = r.pl.Mp, lpDcp = Math.min(Math.sqrt(ES / Fyc) / (0.54 * Mp / (r.Rh * A6.My) - 0.09) ** 2, lrw * (r.Dcp / Math.max(Dc, 1e-9))); A6.lpDcp = lpDcp;
       A6.webCompact = 2 * r.Dcp / r.tw <= lpDcp;
       if (A6.webCompact) { A6.Rpc = Mp / Myc; A6.Rpt = Mp / Myt; }
       else { const lpDc = Math.min(lpDcp * Dc / Math.max(r.Dcp, 1e-9), lrw); A6.lpDc = lpDc; const q = (lw - lpDc) / (lrw - lpDc); A6.q = q;
         A6.Rpc = Math.min((1 - (1 - r.Rh * Myc / Mp) * q) * Mp / Myc, Mp / Myc); A6.Rpt = Math.min((1 - (1 - r.Rh * Myt / Mp) * q) * Mp / Myt, Mp / Myt); }
-      const Sxc = Myc * 12 / Fyb, Sxt = Myt * 12 / Fyt, h = r.D + (r.topT + r.botT) / 2;
+      const Sxc = Myc * 12 / Fyc, Sxt = Myt * 12 / FyT, h = r.D + (r.topT + r.botT) / 2;
       const J = r.D * r.tw ** 3 / 3 + r.botB * r.botT ** 3 / 3 * (1 - 0.63 * r.botT / r.botB) + r.topB * r.topT ** 3 / 3 * (1 - 0.63 * r.topT / r.topB);
-      const FyrA = Math.max(Math.min(0.7 * Fyb, r.Rh * Fyt * Sxt / Sxc, Fyw), 0.5 * Fyb), kc = Math.min(Math.max(4 / Math.sqrt(r.D / r.tw), 0.35), 0.76);
-      const lf = r.botB / (2 * r.botT), lpf = 0.38 * Math.sqrt(ES / Fyb), lrf = 0.95 * Math.sqrt(ES * kc / FyrA), RM = A6.Rpc * Myc;
+      const FyrA = Math.max(Math.min(0.7 * Fyc, r.Rh * FyT * Sxt / Sxc, Fyw), 0.5 * Fyc), kc = Math.min(Math.max(4 / Math.sqrt(r.D / r.tw), 0.35), 0.76);
+      const lf = bfc / (2 * tfc), lpf = 0.38 * Math.sqrt(ES / Fyc), lrf = 0.95 * Math.sqrt(ES * kc / FyrA), RM = A6.Rpc * Myc;
       const MncF = lf <= lpf ? RM : (1 - (1 - FyrA * Sxc / 12 / RM) * (lf - lpf) / (lrf - lpf)) * RM;
-      const rt = r.botB / Math.sqrt(12 * (1 + Dc * r.tw / (3 * r.botB * r.botT))), Lp = 1.1 * rt * Math.sqrt(ES / Fyb), Lb = r.Lb * 12;
+      const rt = bfc / Math.sqrt(12 * (1 + Dc * r.tw / (3 * bfc * tfc))), Lp = 1.1 * rt * Math.sqrt(ES / Fyc), Lb = r.Lb * 12;
       const Lr = 1.95 * rt * ES / FyrA * Math.sqrt(J / (Sxc * h)) * Math.sqrt(1 + Math.sqrt(1 + 6.76 * (FyrA / ES * Sxc * h / J) ** 2));
       const FcrA = r.Cb * Math.PI ** 2 * ES / (Lb / rt) ** 2 * Math.sqrt(1 + 0.078 * J / (Sxc * h) * (Lb / rt) ** 2);
       const MncL = Lb <= Lp ? RM : Lb <= Lr ? Math.min(r.Cb * (1 - (1 - FyrA * Sxc / 12 / RM) * (Lb - Lp) / (Lr - Lp)) * RM, RM) : Math.min(FcrA * Sxc / 12, RM);
       Object.assign(A6, { Sxc, Sxt, h, J, FyrA, kc, lf, lpf, lrf, RM, MncF, rt, Lp, Lr, FcrA, MncL, Mnc: Math.min(MncF, MncL), Mnt: A6.Rpt * Myt });
-      A6.am = ampFl(r.fl, r.fbuC, Fyb, Lp, Lb, r.Cb, r.Rb, r.lt.Fcr); r.A6 = A6;
+      A6.am = ampFl(r.cF.fl, r.fbuC, Fyc, Lp, Lb, r.Cb, r.Rb, r.lt.Fcr); r.A6 = A6;
       r.useA6 = (!brg.method || brg.method === 'auto') && A6.ok;
     }
     // Service II, D_c from the Service II stresses (D6.3.1), F_crw
     const cS = pos ? -r.svc.top : -r.svc.bot, tS = pos ? r.svc.bot : r.svc.top; r.svcC = cS; r.svcT = tS;
     const fcS = Math.max(cS, 0); r.DcS = fcS > 0 ? Math.max(fcS / (fcS + Math.abs(tS)) * d - (pos ? r.topT : r.botT), 0) : 0; r.webS = fcrw(r.D, r.tw, Math.max(r.DcS, 1e-6), r.Rh, pos ? Fyt : Fyb, Fyw, fcS > 0 && tS < 0);
     // Fatigue I stress ranges (top and bottom of steel); the resistance is the fatigue module's
-    const minR = Art + Arb >= 0.01 * r.beff * dk.tdeck - 1e-9; r.fatNegSec = minR ? cn : cr; r.minR = minR;
+    const minR = !nc && Art + Arb >= 0.01 * r.beff * dk.tdeck - 1e-9; r.fatNegSec = nc ? s : minR ? cn : cr; r.minR = minR; const fatPos = nc ? s : cn;   // noncomposite: the steel section
     const MfP = F && F.fat ? num(F.fat.p) : num(M.FATp), MfN = F && F.fat ? num(F.fat.n) : num(M.FATn), gf = F && F.fat ? 1 : G.fat; r.MfP = MfP; r.MfN = MfN; r.gfat = gf;
-    r.dfT = gf * (Math.abs(fAt(MfP, cn, d)) + Math.abs(fAt(MfN, r.fatNegSec, d))); r.dfB = gf * (Math.abs(fAt(MfP, cn, 0)) + Math.abs(fAt(MfN, r.fatNegSec, 0)));
-    r.checks = checksOf(r, prj);
+    r.dfT = gf * (Math.abs(fAt(MfP, fatPos, d)) + Math.abs(fAt(MfN, r.fatNegSec, d))); r.dfB = gf * (Math.abs(fAt(MfP, fatPos, 0)) + Math.abs(fAt(MfN, r.fatNegSec, 0)));
+    r.prjFyw = Fyw; r.checks = checksOf(r, prj);
     let stp = null;   // the worked steps, built when first read (a girder has hundreds of locations; the page shows one at a time)
     Object.defineProperty(r, 'steps', { enumerable: true, get() { return stp || (stp = worked(r, prj)); } });
     const inUse = r.checks.filter(c => c.inUse && isFinite(c.ratio));
@@ -317,11 +335,33 @@
     return { kind: 'S', x, q, M1, M2, Mw, ML, g1, g2, gw, gll: G.ll, Mu1, Mu2, gu1, gu2, Ss: s.I / s.yb, Scr: cr.I / cr.yb, f, Dc, Rb: RB.Rb, Rh };
   }
 
+  /* flLims(r): noncomposite, f_l ≤ 0.6F_yf for each flange (6.10.1.6): the compression flange's f_l amplified (Eq. 6.10.1.6-4,
+     6.10.8 L_p, as the composite negative path), the tension flange's first-order. */
+  function flLims(r) {
+    const c = { lab: r.cF.lab, fl: r.am.fl, Fy: r.cF.Fy }, t = { lab: r.tF.lab, fl: r.tF.fl, Fy: r.tF.Fy };
+    return [r.pos ? t : c, r.pos ? c : t].map((q, k) => ({ ...q, key: k ? 'flT' : 'fl', st: k ? 'flimT' : 'flim' }));   // bottom flange first (key fl), then top (flT)
+  }
+  /* cnItems(r): noncomposite, the constructibility flexure checks of 6.10.3.2 on the same (steel) section, at the Strength I
+     stresses (information: the construction-stage loads are the constructibility module's; open item SB2-O10).
+     6.10.3.2.1-1 f_bu + f_l ≤ φ_fR_hF_yc (not checked for a slender web with f_l = 0); 6.10.3.2.1-3 f_bu ≤ φ_fF_crw (slender
+     webs only: 2D_c/t_w ≥ λ_rw of Eq. 6.10.6.2.3-1); 6.10.3.2.2-1 f_bu + f_l ≤ φ_fR_hF_yt. Eq. 6.10.3.2.1-2 (F_nc with R_b = 1)
+     is not repeated: F_nc with R_b ≤ 1 at Strength I (GS7) is the same or lower for the same stresses. */
+  function cnItems(r) {
+    const a = r.A6, slender = a.lw >= a.lrwP, fc = r.fbuC, flc = r.am.fl, ft = Math.max(r.tF.f, 0), flt = r.tF.fl, o = [];
+    r.cn = { slender, web: fcrw(r.D, r.tw, Math.max(r.Dc, 1e-6), r.Rh, r.cF.Fy, r.prjFyw, false) };
+    if (slender && !(flc > 0)) o.push({ key: 'cnY', title: 'Constructibility, compression flange yielding', ref: `${ED} Eq. 6.10.3.2.1-1`, na: 'Not checked: slender web with f_ℓ = 0 (6.10.3.2.1).', step: 'fx.cn.Y' });
+    else o.push({ key: 'cnY', title: 'Constructibility (Strength I stresses), compression flange, f_bu + f_ℓ ≤ φ_fR_hF_yc', ref: `${ED} Eq. 6.10.3.2.1-1`, demand: fc + flc, capacity: r.Rh * r.cF.Fy, step: 'fx.cn.Y' });
+    if (!slender) o.push({ key: 'cnW', title: 'Constructibility, web bend-buckling', ref: `${ED} Eq. 6.10.3.2.1-3`, na: 'Not checked: compact or noncompact web (6.10.3.2.1).', step: 'fx.cn.W' });
+    else o.push({ key: 'cnW', title: 'Constructibility (Strength I stresses), web bend-buckling, f_bu ≤ φ_fF_crw', ref: `${ED} Eq. 6.10.3.2.1-3; 6.10.1.9.1`, demand: fc, capacity: r.cn.web.F, step: 'fx.cn.W' });
+    o.push({ key: 'cnT', title: 'Constructibility (Strength I stresses), tension flange, f_bu + f_ℓ ≤ φ_fR_hF_yt', ref: `${ED} Eq. 6.10.3.2.2-1`, demand: ft + flt, capacity: r.Rh * r.tF.Fy, step: 'fx.cn.T' });
+    return o;
+  }
+
   /* ---------- checks: value, capacity, ratio, reference ---------- */
   const ck = (o) => ({ ratio: o.demand / o.capacity, ok: o.capacity >= o.demand - 1e-9, inUse: true, ...o });
   function checksOf(r, prj) {
-    const out = [], Fyt = prj.mat.Fyt, Fyb = prj.mat.Fyb;
-    if (r.pos) {
+    const out = [], Fyt = prj.mat.Fyt, Fyb = prj.mat.Fyb, nc = r.nc;
+    if (r.p7) {
       if (r.below) {
         out.push({ id: 'GS5', key: 'duct', title: 'Ductility', ref: `${ED} Art. 6.10.7.3`, na: 'The plastic neutral axis falls below the web: outside Table D6.1-1; M_p, D_p, D_cp and compactness are not reported.', inUse: false, ratio: NaN, step: 'pl.pos.yp' });
         out.push({ id: 'GS6', key: 'mn', title: 'Positive flexure resistance', ref: `${ED} Art. 6.10.7.1, 6.10.7.2`, na: 'Out of scope (PNA below the web).', inUse: false, ratio: NaN, step: 'pl.pos.yp' });
@@ -334,20 +374,31 @@
           out.push(ck({ id: 'GS6', key: 'ncT', title: 'Noncompact, tension flange, f_bu + f_ℓ/3 ≤ φ_fR_hF_yt', ref: `${ED} Eq. 6.10.7.2.1-2`, demand: ft, capacity: capT, unit: 'ksi', step: 'fx.ncT.ok' })); }
       }
     } else {
+      if (nc && r.pos) {   // noncomposite in positive flexure: 6.10.7 is for composite sections; 6.10.6.2.3 sends it to 6.10.8 or App. A6
+        out.push({ id: 'GS5', key: 'duct', title: 'Ductility', ref: `${ED} Art. 6.10.7.3`, na: 'Not applicable: noncomposite section (6.10.7.3 is for composite sections in positive flexure).', inUse: false, ratio: NaN, step: 'fx.nc' });
+        out.push({ id: 'GS6', key: 'mn', title: 'Positive flexure resistance (6.10.7)', ref: `${ED} Art. 6.10.6.2.3`, na: 'Not applicable: noncomposite section. Checked by 6.10.8 (GS7, GS8) or App. A6 (GS9), top flange in compression (6.10.6.2.3).', inUse: false, ratio: NaN, step: 'fx.nc' });
+      }
       const a = r.A6, lt = r.lt, dem = r.fbuC + r.am.fl / 3;
       out.push(ck({ id: 'GS7', key: 'fnc', title: 'Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc', ref: `${ED} Eq. 6.10.8.1.1-1; 6.10.8.2.2, 6.10.8.2.3`, demand: dem, capacity: lt.Fnc, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnc.ok' }));
-      const f = Math.max(r.tF.f, 0), cap = r.Rh * Fyt;
-      out.push(ck({ id: 'GS8', key: 'fnt', title: 'Tension flange, f_bu ≤ φ_fF_nt', ref: `${ED} Eq. 6.10.8.1.3-1; 6.10.8.3`, demand: f, capacity: cap, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnt.ok' }));
+      const f = Math.max(r.tF.f, 0), cap = r.Rh * r.tF.Fy;
+      if (nc) out.push(ck({ id: 'GS8', key: 'fnt', title: 'Tension flange (discretely braced), f_bu + f_ℓ/3 ≤ φ_fF_nt', ref: `${ED} Eq. 6.10.8.1.2-1; 6.10.8.3`, demand: f + r.tF.fl / 3, capacity: cap, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnt.ok' }));
+      else out.push(ck({ id: 'GS8', key: 'fnt', title: 'Tension flange, f_bu ≤ φ_fF_nt', ref: `${ED} Eq. 6.10.8.1.3-1; 6.10.8.3`, demand: f, capacity: cap, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnt.ok' }));
       if (!a.ok) out.push({ id: 'GS9', key: 'a6', title: 'Appendix A6', ref: `${ED} Art. 6.10.6.2.3`, na: 'Appendix A6 is not permitted: ' + a.why.join('; '), inUse: false, ratio: NaN, step: 'fx.a6.ok' });
       else { const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12;
         out.push(ck({ id: 'GS9', key: 'a6c', title: 'App. A6, compression flange, M_u + f_ℓS_xc/3 ≤ φ_fM_nc', ref: `${ED} Eq. A6.1.1-1`, demand: demC, capacity: a.Mnc, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6c.ok' }));
-        out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange, M_u ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.2-1, A6.4`, demand: Mu, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' })); }
+        if (nc) out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange (discretely braced), M_u + f_ℓS_xt/3 ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.2-1, A6.4`, demand: Mu + r.tF.fl * a.Sxt / 3 / 12, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' }));
+        else out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange, M_u ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.2-1, A6.4`, demand: Mu, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' })); }
     }
-    { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) out.push(ck({ id: 'GS10', key: 'fl', title: 'Flange lateral bending, f_ℓ ≤ 0.6F_yf', ref: `${ED} Eq. 6.10.1.6-1`, demand: fS, capacity: 0.6 * Fyb, unit: 'ksi', step: 'fx.flim.ok' })); }
-    [['top', r.svc.top, Fyt, 0], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {
+    if (nc) flLims(r).forEach(q => { if (q.fl > 0) out.push(ck({ id: 'GS10', key: q.key, title: `Flange lateral bending, ${q.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: q.fl, capacity: 0.6 * q.Fy, unit: 'ksi', step: `fx.${q.st}.ok` })); });
+    else { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) out.push(ck({ id: 'GS10', key: 'fl', title: 'Flange lateral bending, f_ℓ ≤ 0.6F_yf', ref: `${ED} Eq. 6.10.1.6-1`, demand: fS, capacity: 0.6 * Fyb, unit: 'ksi', step: 'fx.flim.ok' })); }
+    if (nc) [['top', r.svc.top, Fyt, Math.max(r.flT, 0)], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {   // noncomposite: both flanges, Eq. 6.10.4.2.2-3
+      out.push(ck({ id: 'GS12', key: 'sv' + f[0], title: `Service II, ${f} flange (noncomposite), ${fl > 0 ? 'f_f + f_ℓ/2' : 'f_f'} ≤ 0.80R_hF_yf`, ref: `${ED} Eq. 6.10.4.2.2-3`, demand: Math.abs(v) + fl / 2, capacity: 0.80 * r.Rh * Fy, unit: 'ksi', step: `fx.sv${f[0]}.ok` })); });
+    else [['top', r.svc.top, Fyt, 0], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {
       out.push(ck({ id: 'GS12', key: 'sv' + f[0], title: `Service II, ${f} flange, ${fl > 0 ? 'f_f + f_ℓ/2' : 'f_f'} ≤ 0.95R_hF_yf`, ref: `${ED} Eq. 6.10.4.2.2-${f === 'top' ? 1 : 2}`, demand: Math.abs(v) + fl / 2, capacity: 0.95 * r.Rh * Fy, unit: 'ksi', step: `fx.sv${f[0]}.ok` })); });
-    if (!(r.pos && r.D / r.tw <= 150)) { const fcS = Math.max(r.svcC, 0); out.push(ck({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling, f_c ≤ F_crw', ref: `${ED} Eq. 6.10.4.2.2-4; 6.10.1.9.1`, demand: fcS, capacity: r.webS.F, unit: 'ksi', step: 'fx.web.ok' })); }
+    if (!(r.p7 && r.D / r.tw <= 150)) { const fcS = Math.max(r.svcC, 0); out.push(ck({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling, f_c ≤ F_crw', ref: `${ED} Eq. 6.10.4.2.2-4; 6.10.1.9.1`, demand: fcS, capacity: r.webS.F, unit: 'ksi', step: 'fx.web.ok' })); }
     else out.push({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling', ref: `${ED} Art. 6.10.4.2.2`, na: 'Not required: composite section in positive flexure with D/t_w ≤ 150.', inUse: false, ratio: NaN, step: 'fx.web.na' });
+    if (nc) cnItems(r).forEach(q => out.push(q.na ? { id: 'CN', key: q.key, title: q.title, ref: q.ref, na: q.na, inUse: false, info: true, ratio: NaN, step: q.step }
+      : ck({ id: 'CN', key: q.key, title: q.title, ref: q.ref, demand: q.demand, capacity: q.capacity, unit: 'ksi', inUse: false, info: true, step: q.step })));
     if (!r.factored) out.push({ id: 'GS19', key: 'rev', title: 'Moment reversal under Strength I', ref: `${ED} Art. 3.4.1, Table 3.4.1-2`, demand: r.Mrev, capacity: r.Mu, ratio: NaN, ok: !r.rev, inUse: false, unit: 'kip-ft',
       na: r.rev ? `The opposite extreme M_u = ${r.Mrev.toFixed(1)} kip-ft changes sign: also check this section in ${r.pos ? 'negative' : 'positive'} flexure.` : 'No reversal.', step: 'fx.rev' });
     return out;
@@ -356,7 +407,7 @@
   /* ---------- worked steps ---------- */
   function worked(r, prj) {
     const w = St().work('fx'), G = r.G, pos = r.pos, Fyt = prj.mat.Fyt, Fyb = prj.mat.Fyb, Fyw = prj.mat.Fyw, c = r.card, tbl = `${ED} Tables 3.4.1-1, 3.4.1-2`;
-    const sec = pos ? { DC1: 'steel', DC2: '3n', DW: '3n', LL: 'n' } : { DC1: 'steel', DC2: 'steel + rebar', DW: 'steel + rebar', LL: 'steel + rebar' };
+    const nc = r.nc, sec = nc ? { DC1: 'steel', DC2: 'steel', DW: 'steel', LL: 'steel' } : pos ? { DC1: 'steel', DC2: '3n', DW: '3n', LL: 'n' } : { DC1: 'steel', DC2: 'steel + rebar', DW: 'steel + rebar', LL: 'steel + rebar' };
     const okv = (dem, cap) => cap >= dem - 1e-9 ? 'OK' : 'NG';
     // load factors and moments
     if (!r.factored) {
@@ -376,17 +427,21 @@
       const parts = ['DC1', 'DC2', 'DW', 'LL'].concat(r.ut ? ['UT', 'UF'] : []), gm = k => r.factored ? 1 : k === 'LL' ? G.ll : r.gm[k];
       w.add({ id: `str.${f}`, label: `Strength I stress, ${f === 'top' ? 'top' : 'bottom'} of steel, each load on its stage section (tension +)`, sym: `f_{${f}}`, eq: '\\sum \\gamma_{i}\\frac{-M_{i}(y - \\bar{y}_{i})}{I_{i}}',
         sub: parts.map(k => `${n2(gm(k))}(${n2(sfx(k)[f])})`).join(' + '), value: r.str[f], unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.1.1.1a, 6.10.1.1.1b, 6.10.1.1.1c`,
-        note: `Sections: DC1 ${sec.DC1}, DC2 and DW ${sec.DC2}, LL+IM ${sec.LL}${r.ut ? ', utilities steel' : ''} (y = ${f === 'top' ? n3(r.d) : '0'} in).` }); });
+        note: nc ? `Noncomposite: every load on the steel section (6.10.1.1.1a) (y = ${f === 'top' ? n3(r.d) : '0'} in).` : `Sections: DC1 ${sec.DC1}, DC2 and DW ${sec.DC2}, LL+IM ${sec.LL}${r.ut ? ', utilities steel' : ''} (y = ${f === 'top' ? n3(r.d) : '0'} in).` }); });
     ['top', 'bot'].forEach(f => w.add({ id: `svc.${f}`, label: `Service II stress, ${f === 'top' ? 'top' : 'bottom'} of steel (tension +)`, sym: `f_{f,${f}}`, eq: r.factored ? '\\sum f_{s,i}' : 'f_{DC1} + f_{DC2} + f_{DW} + 1.30f_{LL+IM}',
       sub: r.factored ? ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => n2(r.stgS[k][f])).join(' + ') : `${n2(r.stg.DC1[f])} + ${n2(r.stg.DC2[f])} + ${n2(r.stg.DW[f])} + ${n2(G.sll)}(${n2(r.stg.LL[f])})` + (r.ut ? ` + ${n2(r.stg.UT[f])} + ${r.svU}(${n2(r.stg.UF[f])})` : ''),
       value: r.svc[f], unit: 'ksi', d: 2, ref: tbl }));
-    // yield moments, D6.2.2 / D6.2.3
-    [['T', r.yT, 'top', Fyt], ['B', r.yB, 'bottom', Fyb]].forEach(([k, y, f, Fy]) => w.add({ id: `My${k}`, label: `Yield moment, ${f} flange (M_AD from the remaining stress)`, sym: `M_{y,${f}}`,
+    // yield moments, D6.2.1 (noncomposite) / D6.2.2 / D6.2.3
+    if (nc) [['T', r.yT, 'top', Fyt, 'S_{top}'], ['B', r.yB, 'bottom', Fyb, 'S_{bot}']].forEach(([k, y, f, Fy, Ss]) => w.add({ id: `My${k}`, label: `Yield moment, ${f} flange (noncomposite: steel section)`, sym: `M_{y,${f}}`,
+      eq: `\\frac{F_{y}${Ss}}{12}`, sub: `\\frac{${n2(Fy)}(${g0(y.S1)})}{12}`, value: y.My, unit: 'kip-ft', d: 1, ref: `${ED} App. D6.2.1`, note: `S of the steel section: see ${k === 'T' ? 'sec.s.St' : 'sec.s.Sb'}.` }));
+    else [['T', r.yT, 'top', Fyt], ['B', r.yB, 'bottom', Fyb]].forEach(([k, y, f, Fy]) => w.add({ id: `My${k}`, label: `Yield moment, ${f} flange (M_AD from the remaining stress)`, sym: `M_{y,${f}}`,
       eq: pos ? 'M_{D1} + M_{D2} + M_{AD},\\ M_{AD} = S_{n}(F_{y} - \\frac{M_{D1}}{S_{NC}} - \\frac{M_{D2}}{S_{LT}})' : '|M_{D1}| + |M_{D2}| + M_{AD},\\ M_{AD} = S_{cr}(F_{y} - \\frac{|M_{D1}|}{S_{NC}} - \\frac{|M_{D2}|}{S_{cr}})',
       sub: `${n2(Math.abs(r.MD1))} + ${n2(Math.abs(r.MD2))} + \\frac{${g0(y.S3)}}{12}(${n2(Fy)} - \\frac{${n2(Math.abs(r.MD1))}(12)}{${g0(y.S1)}} - \\frac{${n2(Math.abs(r.MD2))}(12)}{${g0(y.S2)}})`, value: y.My, unit: 'kip-ft', d: 1,
       ref: `${ED} App. ${pos ? 'D6.2.2' : 'D6.2.3'}`, note: `M_AD = ${n2(y.MAD)} kip-ft; M_D1, M_D2 the factored permanent moments on the steel and long-term sections.` }));
     w.add({ id: 'Rh', label: 'Hybrid factor (worked on the section card)', sym: 'R_{h}', eq: '', sub: '', value: r.Rh, unit: '', d: 3, ref: `${ED} Art. 6.10.1.10.1`, note: `See ${pos ? 'rh.cn.Rh' : 'rh.cr.Rh'}.` });
-    if (pos) {
+    if (nc) w.add({ id: 'nc', label: 'Noncomposite section: the compression flange is discretely braced in both regions', sym: '', eq: '', sub: '', value: `${r.cF.lab} flange in compression`, unit: '',
+      ref: `${ED} Art. 6.10.6.2.3, 6.10.8.1`, note: `6.10.7 is for composite sections in positive flexure. ${pos ? 'Positive' : 'Negative'} flexure: 6.10.8, or App. A6 where 6.10.6.2.3 permits it. M_p and D_cp: the steel section alone (pl.${pos ? 'pos' : 'neg'}), no deck and no deck rebar.` });
+    if (r.p7) {
       if (!r.below) {
         w.add({ id: 'Dp', label: 'Distance from the top of the deck to the PNA', sym: 'D_{p}', eq: 'D_{t} - y_{p}', sub: `${n3(r.Dt)} - ${n3(r.pl.yp)}`, value: r.Dp, unit: 'in', d: 3, ref: `${ED} Art. 6.10.7.1.2` });
         w.add({ id: 'duct.ok', label: 'Ductility', sym: 'D_{p}', eq: '\\le 0.42D_{t}', sub: `${n3(r.Dp)} \\le 0.42(${n3(r.Dt)}) = ${n3(0.42 * r.Dt)}`, value: okv(r.Dp, 0.42 * r.Dt), unit: '', ref: `${ED} Eq. 6.10.7.3-1`, ok: r.Dp <= 0.42 * r.Dt + 1e-9 });
@@ -408,15 +463,16 @@
         }
       }
     } else {
-      const lt = r.lt, rb = r.rb, np = lt.npr;
-      w.add({ id: 'Dc', label: 'Depth of the web in compression (steel + rebar section)', sym: 'D_{c}', eq: '\\bar{y}_{cr} - t_{b}', sub: `${n3(r.card.cr.yb)} - ${n4(r.botT)}`, value: r.Dc, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
+      const lt = r.lt, rb = r.rb, np = lt.npr, cF = r.cF, Fyc = cF.Fy, lab = cF.lab;
+      if (nc) w.add({ id: 'Dc', label: 'Depth of the web in compression (steel section, noncomposite)', sym: 'D_{c}', eq: pos ? '(d - t_{t}) - \\bar{y}_{s}' : '\\bar{y}_{s} - t_{b}', sub: pos ? `(${n3(r.d)} - ${n4(r.topT)}) - ${n3(r.card.s.yb)}` : `${n3(r.card.s.yb)} - ${n4(r.botT)}`, value: r.Dc, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
+      else w.add({ id: 'Dc', label: 'Depth of the web in compression (steel + rebar section)', sym: 'D_{c}', eq: '\\bar{y}_{cr} - t_{b}', sub: `${n3(r.card.cr.yb)} - ${n4(r.botT)}`, value: r.Dc, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
       w.add({ id: 'Rb', label: 'Web load-shedding factor', sym: 'R_{b}', eq: rb.lw <= rb.lrw ? '1.0\\ (\\frac{2D_{c}}{t_{w}} \\le \\lambda_{rw})' : '1 - \\frac{a_{wc}}{1200 + 300a_{wc}}(\\frac{2D_{c}}{t_{w}} - \\lambda_{rw})',
         sub: `\\frac{2D_{c}}{t_{w}} = ${n2(rb.lw)},\\ \\lambda_{rw} = 5.7\\sqrt{\\frac{E}{F_{yc}}} = ${n2(rb.lrw)},\\ a_{wc} = ${n3(rb.awc)}`, value: r.Rb, unit: '', d: 3, ref: `${ED} Eq. 6.10.1.10.2-3`,
         note: 'λ_rw = 5.7√(E/F_yc) as GirderDetail (open question: the 10th Ed. λ_rw of 6.10.1.10.2 / 6.10.6.2.3 uses c_rw).' });
-      w.add({ id: 'Fyr', label: 'Compression-flange stress at the onset of nominal yielding', sym: 'F_{yr}', eq: '\\min(0.7F_{yc}, F_{yw}) \\ge 0.5F_{yc}', sub: `\\min(0.7(${n2(Fyb)}), ${n2(Fyw)})`, value: lt.Fyr, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.8.2.2` });
+      w.add({ id: 'Fyr', label: 'Compression-flange stress at the onset of nominal yielding', sym: 'F_{yr}', eq: '\\min(0.7F_{yc}, F_{yw}) \\ge 0.5F_{yc}', sub: `\\min(0.7(${n2(Fyc)}), ${n2(Fyw)})`, value: lt.Fyr, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.8.2.2` });
       w.add({ id: 'FLB', label: 'Flange local buckling resistance', sym: 'F_{nc,FLB}', eq: lt.lf <= lt.lpf ? 'R_{b}R_{h}F_{yc}\\ (\\lambda_{f} \\le \\lambda_{pf})' : '[1 - (1 - \\frac{F_{yr}}{R_{h}F_{yc}})\\frac{\\lambda_{f} - \\lambda_{pf}}{\\lambda_{rf} - \\lambda_{pf}}]R_{b}R_{h}F_{yc}',
-        sub: `\\lambda_{f} = \\frac{${n2(r.botB)}}{2(${n4(r.botT)})} = ${n2(lt.lf)},\\ \\lambda_{pf} = ${n2(lt.lpf)},\\ \\lambda_{rf} = ${n2(lt.lrf)};\\ R_{b}R_{h}F_{yc} = ${n3(r.Rb)}(${n3(r.Rh)})(${n2(Fyb)})`, value: lt.FLB, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.8.2.2-1 to -5` });
-      if (r.cbParts) w.add({ id: 'Cb', label: 'Moment gradient modifier from the Strength I envelope over the unbraced segment', sym: 'C_{b}', eq: '\\frac{12.5M_{max}}{2.5M_{max} + 3M_{A} + 4M_{B} + 3M_{C}}',
+        sub: `\\lambda_{f} = \\frac{${n2(cF.b)}}{2(${n4(cF.t)})} = ${n2(lt.lf)},\\ \\lambda_{pf} = ${n2(lt.lpf)},\\ \\lambda_{rf} = ${n2(lt.lrf)};\\ R_{b}R_{h}F_{yc} = ${n3(r.Rb)}(${n3(r.Rh)})(${n2(Fyc)})`, value: lt.FLB, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.8.2.2-1 to -5` });
+      if (r.cbParts && !nc) w.add({ id: 'Cb', label: 'Moment gradient modifier from the Strength I envelope over the unbraced segment', sym: 'C_{b}', eq: '\\frac{12.5M_{max}}{2.5M_{max} + 3M_{A} + 4M_{B} + 3M_{C}}',
         sub: `\\frac{12.5(${n2(r.cbParts.Mx)})}{2.5(${n2(r.cbParts.Mx)}) + 3(${n2(r.cbParts.MA)}) + 4(${n2(r.cbParts.MB)}) + 3(${n2(r.cbParts.MC)})}`, value: r.Cb, unit: '', d: 3, ref: `${ED} Eq. 6.10.8.2.3b-1`, note: r.seg ? `Unbraced segment ${n2(r.seg.xa)} to ${n2(r.seg.xb)} ft; C_b as stored in the row (3 decimals).` : '' });
       else w.add({ id: 'Cb', label: 'Moment gradient modifier (input)', sym: 'C_{b}', eq: '', sub: '', value: r.CbU, unit: '', d: 3, ref: `${ED} Art. 6.10.8.2.3${np && np.kind === 'ge' ? 'c, Eq. 6.10.8.2.3c-1' : 'b'}` });
       if (np && np.kind === 'ge') {
@@ -425,20 +481,22 @@
         w.add({ id: 'npr.Fe', label: 'Elastic LTB stress and equivalent r_t', sym: 'F_{e}', eq: '\\gamma_{e}f_{bu},\\ r_{t} = \\frac{L_{b}}{\\pi}\\sqrt{\\frac{F_{e}}{E}}', sub: `${np.ge != null ? n4(np.ge) : 'n/a'}(${n2(np.fbu)})`, value: np.Fe, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.8.2.3c-2, -3`, note: `r_t = ${n3(np.rtE)} in.` });
       } else if (np && np.kind === 'simp') w.add({ id: 'npr.simp', label: 'Nonprismatic unbraced length, simplification of 6.10.8.2.3c: prismatic with the larger section\'s compression flange', sym: 'b_{fc} \\times t_{fc}', eq: '', sub: `${n3(np.b)} \\times ${n3(np.t)}`, value: '', unit: 'in', ref: `${ED} Art. 6.10.8.2.3c` });
       w.add({ id: 'rt', label: 'Effective radius of gyration for LTB', sym: 'r_{t}', eq: np && np.kind === 'ge' ? '\\frac{L_{b}}{\\pi}\\sqrt{\\frac{F_{e}}{E}}' : '\\frac{b_{fc}}{\\sqrt{12(1 + \\frac{D_{c}t_{w}}{3b_{fc}t_{fc}})}}',
-        sub: np && np.kind === 'ge' ? `\\frac{${n2(r.Lb * 12)}}{\\pi}\\sqrt{\\frac{${n2(np.Fe)}}{29{,}000}}` : `\\frac{${n2(np ? np.b : r.botB)}}{\\sqrt{12(1 + \\frac{${n3(r.Dc)}(${n4(r.tw)})}{3(${n2(np ? np.b : r.botB)})(${n4(np ? np.t : r.botT)})})}}`, value: lt.rt, unit: 'in', d: 3, ref: `${ED} Eq. 6.10.8.2.3${np && np.kind === 'ge' ? 'c-3' : 'b-3'}` });
-      w.add({ id: 'Lp', label: 'Limiting unbraced length, L_p', sym: 'L_{p}', eq: '1.1r_{t}\\sqrt{\\frac{E}{F_{yc}}}', sub: `1.1(${n3(lt.rt)})\\sqrt{\\frac{29{,}000}{${n2(Fyb)}}}`, value: lt.Lp, unit: 'in', d: 2, ref: `${ED} Eq. 6.10.8.2.3a-4` });
+        sub: np && np.kind === 'ge' ? `\\frac{${n2(r.Lb * 12)}}{\\pi}\\sqrt{\\frac{${n2(np.Fe)}}{29{,}000}}` : `\\frac{${n2(np ? np.b : cF.b)}}{\\sqrt{12(1 + \\frac{${n3(r.Dc)}(${n4(r.tw)})}{3(${n2(np ? np.b : cF.b)})(${n4(np ? np.t : cF.t)})})}}`, value: lt.rt, unit: 'in', d: 3, ref: `${ED} Eq. 6.10.8.2.3${np && np.kind === 'ge' ? 'c-3' : 'b-3'}` });
+      w.add({ id: 'Lp', label: 'Limiting unbraced length, L_p', sym: 'L_{p}', eq: '1.1r_{t}\\sqrt{\\frac{E}{F_{yc}}}', sub: `1.1(${n3(lt.rt)})\\sqrt{\\frac{29{,}000}{${n2(Fyc)}}}`, value: lt.Lp, unit: 'in', d: 2, ref: `${ED} Eq. 6.10.8.2.3a-4` });
       w.add({ id: 'Lr', label: 'Limiting unbraced length, L_r', sym: 'L_{r}', eq: '\\pi r_{t}\\sqrt{\\frac{E}{F_{yr}}}', sub: `\\pi(${n3(lt.rt)})\\sqrt{\\frac{29{,}000}{${n2(lt.Fyr)}}}`, value: lt.Lr, unit: 'in', d: 2, ref: `${ED} Eq. 6.10.8.2.3a-5` });
-      const Lbi = r.Lb * 12, cap = r.Rb * r.Rh * Fyb, ltbCap = lt.ltbCap != null ? lt.ltbCap : cap;
+      const Lbi = r.Lb * 12, cap = r.Rb * r.Rh * Fyc, ltbCap = lt.ltbCap != null ? lt.ltbCap : cap;
       w.add({ id: 'LTB', label: 'Lateral-torsional buckling resistance', sym: 'F_{nc,LTB}', eq: Lbi <= lt.Lp ? 'R_{b}R_{h}F_{yc}\\ (L_{b} \\le L_{p})' : Lbi <= lt.Lr ? 'C_{b}[1 - (1 - \\frac{F_{yr}}{R_{h}F_{yc}})\\frac{L_{b} - L_{p}}{L_{r} - L_{p}}]R_{b}R_{h}F_{yc} \\le R_{b}R_{h}F_{yc}' : 'F_{cr} = \\frac{C_{b}R_{b}\\pi^{2}E}{(L_{b}/r_{t})^{2}} \\le R_{b}R_{h}F_{yc}',
         sub: `L_{b} = ${n2(Lbi)}\\text{ in},\\ C_{b} = ${n3(r.CbU)};\\ R_{b}R_{h}F_{yc} = ${n2(ltbCap)}` + (Lbi > lt.Lr ? `;\\ F_{cr} = ${n2(lt.Fcr)}` : ''), value: lt.LTB, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.8.2.3a-1 to -3, -8` });
       w.add({ id: 'Fnc', label: 'Nominal compression-flange flexural resistance', sym: 'F_{nc}', eq: '\\min(F_{nc,FLB}, F_{nc,LTB})', sub: `\\min(${n2(lt.FLB)}, ${n2(lt.LTB)})`, value: lt.Fnc, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.8.1.1` });
-      w.add({ id: 'fbu', label: 'Strength I compression-flange stress (bottom flange)', sym: 'f_{bu}', eq: '-f_{bot} \\ge 0', sub: `-(${n2(r.str.bot)})`, value: r.fbuC, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.1.6` });
+      w.add({ id: 'fbu', label: `Strength I compression-flange stress (${lab} flange)`, sym: 'f_{bu}', eq: pos ? '-f_{top} \\ge 0' : '-f_{bot} \\ge 0', sub: `-(${n2(pos ? r.str.top : r.str.bot)})`, value: r.fbuC, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.1.6` });
       w.add({ id: 'fl', label: 'Lateral bending stress, amplified where required', sym: 'f_{\\ell}', eq: r.am.req ? '\\frac{0.85}{1 - f_{bu}/F_{cr}}f_{\\ell1} \\ge f_{\\ell1}' : 'f_{\\ell1}\\ (L_{b} \\le 1.2L_{p}\\sqrt{C_{b}R_{b}/(f_{bu}/F_{yc})})',
-        sub: r.am.req ? `${isFinite(r.am.AF) ? n3(r.am.AF) : '\\infty'}(${n2(r.fl)})` : `${n2(r.fl)};\\ ${n2(Lbi)} \\le ${n2(r.am.lim)}`, value: r.am.fl, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.1.6-4, -5` });
+        sub: r.am.req ? `${isFinite(r.am.AF) ? n3(r.am.AF) : '\\infty'}(${n2(cF.fl)})` : `${n2(cF.fl)};\\ ${n2(Lbi)} \\le ${n2(r.am.lim)}`, value: r.am.fl, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.1.6-4, -5`,
+        ...(nc ? { note: `Compression (${lab}) flange. Tension (${r.tF.lab}) flange: f_ℓ = ${n2(r.tF.fl)} ksi, first order (not amplified).` } : {}) });
       const dem = r.fbuC + r.am.fl / 3;
       w.add({ id: 'fnc.ok', label: `Strength I, compression flange (6.10.8)${r.useA6 ? ' — not the method in use (Appendix A6 governs)' : ''}`, sym: 'f_{bu} + \\frac{1}{3}f_{\\ell}', eq: '\\le \\phi_{f}F_{nc}', sub: `${n2(r.fbuC)} + \\frac{${n2(r.am.fl)}}{3} = ${n2(dem)} \\le ${n2(lt.Fnc)}`, value: okv(dem, lt.Fnc), unit: '', ref: `${ED} Eq. 6.10.8.1.1-1`, ok: dem <= lt.Fnc + 1e-9 });
-      const f = Math.max(r.tF.f, 0), capT = r.Rh * Fyt;
-      w.add({ id: 'fnt.ok', label: 'Strength I, tension flange (6.10.8)', sym: 'f_{bu}', eq: '\\le \\phi_{f}R_{h}F_{yt}', sub: `${n2(f)} \\le ${n3(r.Rh)}(${n2(Fyt)}) = ${n2(capT)}`, value: okv(f, capT), unit: '', ref: `${ED} Eq. 6.10.8.1.3-1, 6.10.8.3-1`, ok: f <= capT + 1e-9 });
+      const f = Math.max(r.tF.f, 0), capT = r.Rh * r.tF.Fy;
+      if (nc) { const ft = f + r.tF.fl / 3; w.add({ id: 'fnt.ok', label: `Strength I, tension flange (${r.tF.lab}; discretely braced, 6.10.8)`, sym: 'f_{bu} + \\frac{1}{3}f_{\\ell}', eq: '\\le \\phi_{f}F_{nt} = \\phi_{f}R_{h}F_{yt}', sub: `${n2(f)} + \\frac{${n2(r.tF.fl)}}{3} = ${n2(ft)} \\le ${n3(r.Rh)}(${n2(r.tF.Fy)}) = ${n2(capT)}`, value: okv(ft, capT), unit: '', ref: `${ED} Eq. 6.10.8.1.2-1, 6.10.8.3-1`, ok: ft <= capT + 1e-9 }); }
+      else w.add({ id: 'fnt.ok', label: 'Strength I, tension flange (6.10.8)', sym: 'f_{bu}', eq: '\\le \\phi_{f}R_{h}F_{yt}', sub: `${n2(f)} \\le ${n3(r.Rh)}(${n2(Fyt)}) = ${n2(capT)}`, value: okv(f, capT), unit: '', ref: `${ED} Eq. 6.10.8.1.3-1, 6.10.8.3-1`, ok: f <= capT + 1e-9 });
       // Appendix A6
       const a = r.A6, C = a.cond;
       w.add({ id: 'a6.crw', label: 'Web slenderness limit for App. A6 (c_rw from a_wc)', sym: '\\lambda_{rw}', eq: 'c_{rw}\\sqrt{\\frac{E}{F_{yc}}},\\ c_{rw} = 3.1 + \\frac{5.0}{a_{wc}}\\ (4.6 \\le c_{rw} \\le 5.7),\\ a_{wc} = \\frac{2D_{c}t_{w}}{b_{fc}t_{fc}}',
@@ -450,23 +508,36 @@
         w.add({ id: 'a6.Rpc', label: `Web plastification factors (${a.webCompact ? 'compact' : 'noncompact'} web; λ_pw(Dcp) = ${n2(a.lpDcp)})`, sym: 'R_{pc}', eq: a.webCompact ? '\\frac{M_{p}}{M_{yc}}' : '[1 - (1 - \\frac{R_{h}M_{yc}}{M_{p}})\\frac{\\lambda_{w} - \\lambda_{pw(D_{c})}}{\\lambda_{rw} - \\lambda_{pw(D_{c})}}]\\frac{M_{p}}{M_{yc}}',
           sub: `M_{p} = ${g1(r.pl.Mp)},\\ M_{yc} = ${g1(a.Myc)},\\ M_{yt} = ${g1(a.Myt)}`, value: a.Rpc, unit: '', d: 3, ref: `${ED} Eqs. A6.2.1-4, A6.2.2-4, -5`, note: `R_pt = ${n3(a.Rpt)}; λ_rw of A6.2.2 = 5.7√(E/F_yc) = ${n2(a.lrw)} (as GirderDetail).` });
         w.add({ id: 'a6.Mnc', label: 'App. A6 compression-flange resistance', sym: 'M_{nc}', eq: '\\min(M_{nc,FLB}, M_{nc,LTB})', sub: `\\min(${g1(a.MncF)}, ${g1(a.MncL)});\\ L_{p} = ${n2(a.Lp)},\\ L_{r} = ${n2(a.Lr)}\\text{ in},\\ J = ${n2(a.J)},\\ F_{yr} = ${n2(a.FyrA)}`, value: a.Mnc, unit: 'kip-ft', d: 1, ref: `${ED} Eqs. A6.3.2-1, -2; A6.3.3-1 to -9` });
-        const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12;
+        const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12, demT = Mu + (nc ? r.tF.fl * a.Sxt / 3 / 12 : 0);
         w.add({ id: 'a6c.ok', label: 'App. A6, compression flange', sym: 'M_{u} + \\frac{1}{3}f_{\\ell}S_{xc}', eq: '\\le \\phi_{f}M_{nc}', sub: `${n2(Mu)} + \\frac{1}{3}(${n2(a.am.fl)})\\frac{${g0(a.Sxc)}}{12} = ${n2(demC)} \\le ${n2(a.Mnc)}`, value: okv(demC, a.Mnc), unit: '', ref: `${ED} Eq. A6.1.1-1`, ok: demC <= a.Mnc + 1e-9 });
-        w.add({ id: 'a6t.ok', label: 'App. A6, tension flange', sym: 'M_{u}', eq: '\\le \\phi_{f}R_{pt}M_{yt}', sub: `${n2(Mu)} \\le ${n3(a.Rpt)}(${n2(a.Myt)}) = ${n2(a.Mnt)}`, value: okv(Mu, a.Mnt), unit: '', ref: `${ED} Eq. A6.1.2-1`, ok: Mu <= a.Mnt + 1e-9 });
+        if (nc) w.add({ id: 'a6t.ok', label: 'App. A6, tension flange (discretely braced)', sym: 'M_{u} + \\frac{1}{3}f_{\\ell}S_{xt}', eq: '\\le \\phi_{f}R_{pt}M_{yt}', sub: `${n2(Mu)} + \\frac{1}{3}(${n2(r.tF.fl)})\\frac{${g0(a.Sxt)}}{12} = ${n2(demT)} \\le ${n3(a.Rpt)}(${n2(a.Myt)}) = ${n2(a.Mnt)}`, value: okv(demT, a.Mnt), unit: '', ref: `${ED} Eq. A6.1.2-1, A6.4-1`, ok: demT <= a.Mnt + 1e-9 });
+        else w.add({ id: 'a6t.ok', label: 'App. A6, tension flange', sym: 'M_{u}', eq: '\\le \\phi_{f}R_{pt}M_{yt}', sub: `${n2(Mu)} \\le ${n3(a.Rpt)}(${n2(a.Myt)}) = ${n2(a.Mnt)}`, value: okv(Mu, a.Mnt), unit: '', ref: `${ED} Eq. A6.1.2-1`, ok: Mu <= a.Mnt + 1e-9 });
       }
     }
-    { const fS = pos ? r.fl : r.am.fl; if (fS > 0) w.add({ id: 'flim.ok', label: 'Flange lateral bending limit', sym: 'f_{\\ell}', eq: '\\le 0.6F_{yf}', sub: `${n2(fS)} \\le 0.6(${n2(Fyb)})`, value: okv(fS, 0.6 * Fyb), unit: '', ref: `${ED} Eq. 6.10.1.6-1`, ok: fS <= 0.6 * Fyb + 1e-9 }); }
+    if (nc) flLims(r).forEach(q => { if (q.fl > 0) w.add({ id: `${q.st}.ok`, label: `Flange lateral bending limit, ${q.lab} flange`, sym: 'f_{\\ell}', eq: '\\le 0.6F_{yf}', sub: `${n2(q.fl)} \\le 0.6(${n2(q.Fy)})`, value: okv(q.fl, 0.6 * q.Fy), unit: '', ref: `${ED} Eq. 6.10.1.6-1`, ok: q.fl <= 0.6 * q.Fy + 1e-9 }); });
+    else { const fS = pos ? r.fl : r.am.fl; if (fS > 0) w.add({ id: 'flim.ok', label: 'Flange lateral bending limit', sym: 'f_{\\ell}', eq: '\\le 0.6F_{yf}', sub: `${n2(fS)} \\le 0.6(${n2(Fyb)})`, value: okv(fS, 0.6 * Fyb), unit: '', ref: `${ED} Eq. 6.10.1.6-1`, ok: fS <= 0.6 * Fyb + 1e-9 }); }
     // Service II
-    [['t', 'top', r.svc.top, Fyt, 0], ['b', 'bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([k, f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = 0.95 * r.Rh * Fy;
-      w.add({ id: `sv${k}.ok`, label: `Service II permanent deformations, ${f} flange`, sym: fl > 0 ? '|f_{f}| + \\frac{f_{\\ell}}{2}' : '|f_{f}|', eq: '\\le 0.95R_{h}F_{yf}', sub: `${fl > 0 ? `${n2(Math.abs(v))} + \\frac{${n2(fl)}}{2} = ${n2(a)}` : n2(a)} \\le 0.95(${n3(r.Rh)})(${n2(Fy)}) = ${n2(cap)}`, value: okv(a, cap), unit: '', ref: `${ED} Eq. 6.10.4.2.2-${k === 't' ? 1 : 2}`, ok: a <= cap + 1e-9 }); });
+    const kS = nc ? 0.80 : 0.95;   // noncomposite: both flanges, Eq. 6.10.4.2.2-3
+    [['t', 'top', r.svc.top, Fyt, nc ? Math.max(r.flT, 0) : 0], ['b', 'bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([k, f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = kS * r.Rh * Fy;
+      w.add({ id: `sv${k}.ok`, label: `Service II permanent deformations, ${f} flange${nc ? ' (noncomposite)' : ''}`, sym: fl > 0 ? '|f_{f}| + \\frac{f_{\\ell}}{2}' : '|f_{f}|', eq: `\\le ${n2(kS)}R_{h}F_{yf}`, sub: `${fl > 0 ? `${n2(Math.abs(v))} + \\frac{${n2(fl)}}{2} = ${n2(a)}` : n2(a)} \\le ${n2(kS)}(${n3(r.Rh)})(${n2(Fy)}) = ${n2(cap)}`, value: okv(a, cap), unit: '', ref: `${ED} Eq. 6.10.4.2.2-${nc ? 3 : k === 't' ? 1 : 2}`, ok: a <= cap + 1e-9 }); });
     { const fcS = Math.max(r.svcC, 0);
-      w.add({ id: 'DcS', label: `Depth of the web in compression from the Service II stresses${pos ? ' (composite, positive flexure)' : ''}`, sym: 'D_{c}', eq: '\\frac{f_{c}}{f_{c} + |f_{t}|}d - t_{fc} \\ge 0', sub: `\\frac{${n2(fcS)}}{${n2(fcS)} + ${n2(Math.abs(r.svcT))}}(${n3(r.d)}) - ${n4(pos ? r.topT : r.botT)}`, value: r.DcS, unit: 'in', d: 3, ref: `${ED} App. D6.3.1, Eq. D6.3.1-1` });
-      if (!(pos && r.D / r.tw <= 150)) {
+      w.add({ id: 'DcS', label: `Depth of the web in compression from the Service II stresses${nc ? ' (noncomposite: the elastic D_c of the steel section)' : pos ? ' (composite, positive flexure)' : ''}`, sym: 'D_{c}', eq: '\\frac{f_{c}}{f_{c} + |f_{t}|}d - t_{fc} \\ge 0', sub: `\\frac{${n2(fcS)}}{${n2(fcS)} + ${n2(Math.abs(r.svcT))}}(${n3(r.d)}) - ${n4(pos ? r.topT : r.botT)}`, value: r.DcS, unit: 'in', d: 3, ref: `${ED} App. D6.3.1, Eq. D6.3.1-1` });
+      if (!(r.p7 && r.D / r.tw <= 150)) {
         w.add({ id: 'Fcrw', label: 'Nominal web bend-buckling resistance', sym: 'F_{crw}', eq: '\\frac{0.9Ek}{(D/t_{w})^{2}} \\le \\min(R_{h}F_{yc}, \\frac{F_{yw}}{0.7}),\\ k = ' + (r.webS.both ? '7.2' : '\\frac{9}{(D_{c}/D)^{2}}'), sub: `k = ${n2(r.webS.k)};\\ \\frac{0.9(29{,}000)(${n2(r.webS.k)})}{(${n2(r.D / r.tw)})^{2}} = ${n2(r.webS.Fe)}`, value: r.webS.F, unit: 'ksi', d: 2, ref: `${ED} Eqs. 6.10.1.9.1-1, -2` });
         w.add({ id: 'web.ok', label: 'Service II web bend-buckling', sym: 'f_{c}', eq: '\\le F_{crw}', sub: `${n2(fcS)} \\le ${n2(r.webS.F)}`, value: okv(fcS, r.webS.F), unit: '', ref: `${ED} Eq. 6.10.4.2.2-4`, ok: fcS <= r.webS.F + 1e-9 });
       } else w.add({ id: 'web.na', label: 'Web bend-buckling at Service II not required (composite, positive flexure, D/t_w ≤ 150)', sym: '\\frac{D}{t_{w}}', eq: '', sub: '', value: r.D / r.tw, unit: '', d: 2, ref: `${ED} Art. 6.10.4.2.2` }); }
+    // noncomposite: constructibility flexure checks at the Strength I stresses (information)
+    if (nc) { const c = r.cn, a = r.A6, cf = r.cF, tf = r.tF, nt = 'Information, not in the governing ratio: evaluated at the Strength I stresses of this noncomposite section (the construction-stage loads, 3.4.2, are the constructibility module\'s).';
+      const fc = r.fbuC, flc = r.am.fl, ft = Math.max(tf.f, 0), cy = r.Rh * cf.Fy, cT = r.Rh * tf.Fy;
+      w.add({ id: 'cn.slender', label: 'Web slenderness for constructibility', sym: '\\frac{2D_{c}}{t_{w}}', eq: '\\ge \\lambda_{rw}\\ (slender)', sub: `${n2(a.lw)}\\ ${c.slender ? '\\ge' : '\\lt'}\\ ${n2(a.lrwP)}`, value: c.slender ? 'slender' : 'compact or noncompact', unit: '', ref: `${ED} Art. 6.10.3.2.1; Eq. 6.10.6.2.3-1`, note: 'λ_rw = c_rw√(E/F_yc) as the App. A6 permission (fx.a6.crw).' });
+      if (c.slender && !(flc > 0)) w.add({ id: 'cn.Y', label: 'Constructibility, compression flange yielding: not checked (slender web, f_ℓ = 0)', sym: '', eq: '', sub: '', value: 'n/a', unit: '', ref: `${ED} Art. 6.10.3.2.1` });
+      else w.add({ id: 'cn.Y', label: `Constructibility, ${cf.lab} (compression) flange, at the Strength I stresses`, sym: 'f_{bu} + f_{\\ell}', eq: '\\le \\phi_{f}R_{h}F_{yc}', sub: `${n2(fc)} + ${n2(flc)} = ${n2(fc + flc)} \\le ${n3(r.Rh)}(${n2(cf.Fy)}) = ${n2(cy)}`, value: okv(fc + flc, cy), unit: '', ref: `${ED} Eq. 6.10.3.2.1-1`, ok: fc + flc <= cy + 1e-9, note: nt });
+      if (!c.slender) w.add({ id: 'cn.W', label: 'Constructibility, web bend-buckling: not checked (compact or noncompact web)', sym: '', eq: '', sub: '', value: 'n/a', unit: '', ref: `${ED} Art. 6.10.3.2.1` });
+      else w.add({ id: 'cn.W', label: 'Constructibility, web bend-buckling, at the Strength I stresses', sym: 'f_{bu}', eq: '\\le \\phi_{f}F_{crw},\\ F_{crw} = \\frac{0.9Ek}{(D/t_{w})^{2}} \\le \\min(R_{h}F_{yc}, \\frac{F_{yw}}{0.7}),\\ k = \\frac{9}{(D_{c}/D)^{2}}', sub: `k = ${n2(c.web.k)};\\ ${n2(fc)} \\le ${n2(c.web.F)}`, value: okv(fc, c.web.F), unit: '', ref: `${ED} Eq. 6.10.3.2.1-3; Eqs. 6.10.1.9.1-1, -2`, ok: fc <= c.web.F + 1e-9, note: nt + ' D_c: fx.Dc.' });
+      w.add({ id: 'cn.T', label: `Constructibility, ${tf.lab} (tension) flange, at the Strength I stresses`, sym: 'f_{bu} + f_{\\ell}', eq: '\\le \\phi_{f}R_{h}F_{yt}', sub: `${n2(ft)} + ${n2(tf.fl)} = ${n2(ft + tf.fl)} \\le ${n3(r.Rh)}(${n2(tf.Fy)}) = ${n2(cT)}`, value: okv(ft + tf.fl, cT), unit: '', ref: `${ED} Eq. 6.10.3.2.2-1`, ok: ft + tf.fl <= cT + 1e-9, note: nt + ' Eq. 6.10.3.2.1-2 (F_nc with R_b = 1.0) is not repeated: GS7 uses R_b ≤ 1.0 with the same stresses.' });
+    }
     // Fatigue I stress ranges
-    [['T', 'top', r.d, r.dfT], ['B', 'bottom', 0, r.dfB]].forEach(([k, f, y, v]) => w.add({ id: `fat${k}`, label: `Fatigue I stress range, ${f} of steel (positive on n, negative on ${r.minR ? 'n: 6.6.1.2.1 rebar ≥ 1%' : 'steel + rebar'})`, sym: `(\\Delta f)_{${f}}`, eq: '\\gamma(|f(M_{fat}^{+})| + |f(M_{fat}^{-})|)',
+    [['T', 'top', r.d, r.dfT], ['B', 'bottom', 0, r.dfB]].forEach(([k, f, y, v]) => w.add({ id: `fat${k}`, label: nc ? `Fatigue I stress range, ${f} of steel (noncomposite: steel section)` : `Fatigue I stress range, ${f} of steel (positive on n, negative on ${r.minR ? 'n: 6.6.1.2.1 rebar ≥ 1%' : 'steel + rebar'})`, sym: `(\\Delta f)_{${f}}`, eq: '\\gamma(|f(M_{fat}^{+})| + |f(M_{fat}^{-})|)',
       sub: `${n2(r.gfat)}(|f(${n2(r.MfP)})| + |f(${n2(r.MfN)})|)`, value: v, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2.1, 6.10.1.1.1c`, note: 'Resistance (ΔF)_n: the fatigue module.' }));
     if (!r.factored) w.add({ id: 'rev', label: 'Strength I opposite extreme (moment reversal)', sym: 'M_{u,opp}', eq: '\\gamma_{p}M_{DC1} + \\gamma_{p}M_{DC2} + \\gamma_{p}M_{DW} + 1.75M_{LL,opp}', sub: `${n2(r.gmO.DC1)}${pa(r.MDC1)} + ${n2(r.gmO.DC2)}${pa(r.MDC2)} + ${n2(r.gmO.DW)}${pa(r.MDW)} + ${n2(G.ll)}${pa(r.MLLo)}`,
       value: r.Mrev, unit: 'kip-ft', d: 1, ref: tbl, note: r.rev ? `Reverses: also check this section in ${pos ? 'negative' : 'positive'} flexure.` : 'Same sign as M_u: no reversal.', ok: !r.rev });
@@ -494,12 +565,15 @@
      sides, ±0.01 ft, of each plate change and interior support; 0.01 ft inside the ends), each with its unfactored moments
      (linear between the payload stations), plates, region (Strength I max ≥ |min| at the nearest station: positive) and, from
      bracing(), L_b, C_b and the nonprismatic data with brace points every ≤ L_b in each span (the payload has the cross-frame
-     spacing, not the stations). opt: { G, Lb (ft), braces, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl }. n = E_s/E_c exact from f′c, w_c,
+     spacing, not the stations). opt: { G, Lb (ft), braces, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl, owner (the payload's
+     owner, which the payload does not state: with window.SBDOwners loaded, OWN8 takes the haunch as 0 in every section property
+     for RIDOT and MassDOT, as the Section properties tab and GirderDetail gdHP do) }. n = E_s/E_c exact from f′c, w_c,
      K_1 = 1 (the payload's n is the same, rounded); the deck rebar A_r is one layer at slab mid-depth (as the payload states it). Returns { prj, locs, env, supports, braces }. */
   function fromPayload(pl, opt) {
     opt = opt || {};
     const g = pl.girderDetail || {}, m = g.materials || {}, dk = g.deck || {}, S = pl.stations || [], zones = (pl.section || {}).zones || [], sup = (pl.member || {}).supports || [];
     const G = factors(opt.G), Lend = sup[sup.length - 1];
+    const OW = opt.owner && window.SBDOwners ? window.SBDOwners : null, lfO = OW ? OW.loadFactors(opt.owner, {}, 0) : null, hP = OW ? OW.haunchInProps(dk.haunch, lfO) : dk.haunch;   // OWN8
     const xs = S.map(s => s.x), arr = k => S.map(s => +s[k] || 0);
     const env = { xs, MDC1: arr('M_DC1'), MDC2: arr('M_DC2'), MDW: arr('M_DW'), Mp: S.map(s => (+s.M_LLpos || 0) + (+s.M_PLpos || 0)), Mn: S.map(s => (+s.M_LLneg || 0) + (+s.M_PLneg || 0)),
       MUT: arr('M_UT'), MUF: arr('M_UF'), MfP: arr('M_FATpos'), MfN: arr('M_FATneg') };
@@ -513,7 +587,7 @@
     (opt.xs || xs).forEach(x => stations(x).forEach(add)); sup.slice(1, -1).forEach(v => add(v + 0.01)); list.sort((a, b) => a - b);
     const Lb = opt.Lb != null ? opt.Lb : (g.bracing && g.bracing.Lb) || 25;
     const braces = opt.braces || (() => { const b = []; sup.slice(0, -1).forEach((x0, k) => { const x1 = sup[k + 1], n = Math.max(1, Math.ceil((x1 - x0) / Lb - 1e-9)); for (let j = 0; j < n; j++) b.push(x0 + (x1 - x0) * j / n); }); b.push(Lend); return b; })();
-    const top = (dk.Ar || 0), deck = { ts: dk.ts, tdeck: dk.ts + 0.5, haunch: dk.haunch, rebar: opt.rebar || { top: { A: top, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } } };
+    const top = (dk.Ar || 0), deck = { ts: dk.ts, tdeck: dk.ts + 0.5, haunch: hP, rebar: opt.rebar || { top: { A: top, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } } };
     const Fy = { Fyt: +m.Fyf || 50, Fyb: +m.Fyf || 50, Fyw: +m.Fyw || 50, Fyr: 60, fc: +m.fc };
     const prj = { deck, mat: Fy, n: SEC().modularRatio(+m.fc, +m.wc || 0.15, 1, 'exact').n, wc: +m.wc || 0.15, rebarInPositive: false, G, a6: { method: 'auto', skews: ((g.skew || {}).bySupport || []).slice(), curved: false } };
     const cont = sup.length > 2;
@@ -522,12 +596,12 @@
       let region = env.Mup[i] >= -env.Mun[i] ? 'pos' : 'neg';
       if (region === 'neg' && Math.max(Math.abs(env.Mup[i]), Math.abs(env.Mun[i])) < 1e-3) region = 'pos';
       const at = A => feAt(xs, A, x);
-      const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: dk.haunch, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl });
+      const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: hP, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl });
       const npr = br.npr ? { kind: br.npr, b: br.lbB, t: br.lbT, K: br.lbK, geA: br.geA || null, gov: br.nprG || null, Ir: br.lbIr, why: br.nprWhy } : null;
       return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, npr, seg: br.seg, cbParts: br.cbParts,
         M: { DC1: at(env.MDC1), DC2: at(env.MDC2), DW: at(env.MDW), LLp: Math.max(0, at(env.Mp)), LLn: Math.min(0, at(env.Mn)), UT: at(env.MUT), UF: at(env.MUF), FATp: at(env.MfP), FATn: at(env.MfN) } };
     });
-    return { prj, locs, env, supports: sup, braces, Lb };
+    return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
 
   window.SBDFlexure = { ES, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
