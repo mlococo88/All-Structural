@@ -6,6 +6,10 @@
 <title>Steel Bridge Design (new, in development)</title>
 <!-- Steel Bridge Design, rebuild (docs/REBUILD_PLAN.md §5). Plain HTML/JS/CSS, classic scripts, opens from file://.
      Engine: engine/*.js (no DOM). Shared: ../../shared/*.js. Saved data: localStorage keys sbd2.* only (engine/model.js). -->
+<!-- KaTeX for the worked-step equations (shared/steps.js toHTML; approved 2026-10-29). Same pinned version and URL as GirderDetail
+     ("Steel Bridge Design.html"). Without it (offline, CDN blocked) the steps use the built-in renderer. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="../../shared/units.js"></script>
 <script src="../../shared/steps.js"></script>
 <script src="engine/model.js"></script>
@@ -111,10 +115,13 @@
   .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;}
   .st-frac>.st-den{padding:0 2px;}
   .st-bar{text-decoration:overline;}
+  .steps .katex{font-size:1.08em;} .steps .lbl{margin-bottom:3px;}
+  .steps .katex .katex-error{color:var(--fail);}
   a.wk{font-family:var(--font-ui);font-size:8.5pt;}
   .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin:6px 0;}
   .kv div{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:2px 0;}
-  @media print{ #hdrBtns,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;} }
+  @media print{ #hdrBtns,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+    .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
 </style>
 </head>
 <body>

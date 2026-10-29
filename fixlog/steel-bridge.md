@@ -491,6 +491,7 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   correction); lldf.html uses |θ| (its LLDF-OH2). Kept as GirderDetail; engineer to decide (the model accepts −90° … 90°).
 - SB2-O24. Pier rule (decided 2026-10-29: a pier region loses the reduction if either adjacent span differs by more than 10°): in this app
   now; GirderDetail gets it in the follow-up PR on "Steel Bridge Design.html", which removes `PIER_RULE_PENDING` from loads.test.mjs.
+  Done in claude/sbd-df-pier (DFL5, fixlog/Steel Bridge Design.md): `PIER_RULE_PENDING` removed, the DF parity is exact (33,032 values).
 - SB2-O25. lldf.html takes the moment θ as entered for the selected design region, or from Bridge Geometry's `skewDetail.moment`, which is
   bridge-wide (0 when any two adjacent supports differ by more than 10°). Per span maps onto lldf.html as: for a span region, enter 0 when
   that span's own two support lines differ by more than 10°, else the smaller of them. lldf.html and Bridge Geometry are unchanged here
@@ -735,6 +736,36 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - SB2-C1. Display only: engine/flexure.js step `fx.Mu` writes `γ` and a positive moment without parentheses (`1.251450.00`); values are right.
   Not changed here (one module per PR); to fix in the next flexure PR.
 - SB2-C2. Overhang inputs: no "Fill from cross-section" (GirderDetail XS11) yet; the defaults are GirderDetail's planning values.
+
+## 2026-10-29 — PR: sbd2-katex — worked steps rendered with KaTeX (engineer's approval 2026-10-29)
+### Where
+- `apps/steel-bridge/index.html`, `<head>`, before `<script src="../../shared/units.js">`: KaTeX 0.16.9 from cdnjs, the same pinned
+  version and URLs as GirderDetail (`Steel Bridge Design.html`, anchor `KaTeX/0.16.9/katex.min.css`):
+  `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">`,
+  `<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>`.
+- CSS after `.st-bar{…}`: `.steps .katex{font-size:1.08em;} .steps .lbl{margin-bottom:3px;}` (room for display-style fractions), `.steps .katex .katex-error{color:var(--fail);}`; in `@media print`:
+  `.steps li{break-inside:avoid;}`, KaTeX colours printed exactly, fraction and overline rules in black at least 1 px.
+- Rendering is in `shared/steps.js` (`toHTML`, `line`; see `fixlog/shared-units.md`, same PR). The Section properties, Flexure, Analysis, Fatigue & studs, Constructibility,
+  Loads & LLDF and Shear & stiffeners tabs all render their steps with `SharedSteps.line(s, true)`, so all seven use KaTeX; no UI file changed.
+- `engine/fatigue.js`, FA6 remaining-life step (anchor `id: 'life', label: \`Remaining fatigue life`), the `sub` shown when R_R is not
+  entered: the only step string that KaTeX could not parse (`_` inside `\text{}`).
+  Before: `'\\text{R_R not entered}'`. After: `'R_{R}\\ \\text{not entered}'`. Display text only: `value` (NaN) and `ok` unchanged;
+  `toText` gives "R_R not entered" before and after; on screen, R with subscript R.
+### Problem
+- New behaviour: steps typeset with KaTeX. Offline or with the CDN blocked, the steps use the built-in renderer as before.
+### Governing provision
+- None (display only). No value, formula, factor, unit or reference changed; no saved-data key changed.
+### Check case
+- Section properties tab, built-in project: `S_bot = I/ȳ = 51,050/33.535 = 1522 in³` shown with a KaTeX fraction; same digits as before.
+### How verified
+- `node tests/engine/run.mjs`: all pass, including `tex.test.mjs` (every engine step string parses in KaTeX).
+- Headless load (tests/lib.mjs, KaTeX served from tests/libs): see the PR description for the counts per tab (KaTeX spans,
+  `.katex-error` = 0, console errors = 0), print emulation (0 `.katex-error`, fraction rules visible) and the same tabs with KaTeX blocked
+  (built-in renderer, steps shown; the only console errors are the two blocked KaTeX requests).
+### Other copies
+- None.
+### Open items
+- None.
 ## 2026-10-29 — PR: sbd2-crossframes — framing layout and cross-frames (engine/framing.js, engine/crossframes.js, Framing and Cross-frames tabs; new files)
 ### Where
 - `engine/framing.js` (new, `window.SBDFraming`): Preliminary sizing's `framingLayout(P, m)` copied line for line from the page text
