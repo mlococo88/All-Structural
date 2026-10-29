@@ -645,3 +645,133 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - SB2-C1. Display only: engine/flexure.js step `fx.Mu` writes `γ` and a positive moment without parentheses (`1.251450.00`); values are right.
   Not changed here (one module per PR); to fix in the next flexure PR.
 - SB2-C2. Overhang inputs: no "Fill from cross-section" (GirderDetail XS11) yet; the defaults are GirderDetail's planning values.
+
+## 2026-10-29 — PR: sbd2-cleanup-decisions — engineer's and lead's decisions on open items (SB2-A2, A4, A5, A7, O12, O14, F1, O16, C1, C2)
+All ten items were decided by the engineer or the lead (2026-10-29); this PR implements them. Each one below: where, before / after,
+provision, check case. Closes SB2-A2, SB2-A4, SB2-A5, SB2-A7, SB2-O12, SB2-O14, SB2-F1, SB2-O16, SB2-C1, SB2-C2.
+
+### SB2-A2. Girder steel at 490/144 = 3.4028 lb/ft per in² (calculation change)
+- Where: `engine/loads.js` anchor `const STEEL_PLF =` (`steelWeight` uses it; its step `dl.steel.w<k>` now shows 3.4028);
+  `engine/analysis.js` anchor `const STEEL_PLF =` and in `analyzeGirder` anchor `const allow = LD.steelAllowPct, plf =` (step `an.wst<i>`).
+- Before: `const STEEL_PLF = 3.4;` (GirderDetail SA_PLF). After: `const STEEL_PLF = 490 / 144;` (3.402778).
+  `analyzeGirder(P, gi, { steelPlf })` (new, tests only): another value, GirderDetail's 3.4 for the parity tests. Result field `R.plf`.
+- Why: Table 3.5.1-1 steel 0.490 kcf; 490 pcf / 144 in²/ft² = 3.4028 lb/ft per in² exactly; 3.4 was GirderDetail's rounding (0.08 % low).
+- Governing provision: AASHTO LRFD 10th Ed. Table 3.5.1-1 (DC, 3.5.1).
+- Check case: (1) steel I 16 × 1 / 60 × 1/2 / 16 × 1, A = 62 in², allowance 0, two spans 100 ft: w = 62(3.4)/1000 = 0.2108 → 62(490/144)/1000 = 0.210972 klf;
+  M_pier = −wL²/8 = −263.50 → −263.715 kip-ft; R_B = 1.25wL = 26.350 → 26.372 kips; Δ(L/2) = wL⁴/(192EI) = 0.168743 → 0.168875 in. (2) The app's default project,
+  segment 1 A = 63.75 in², allowance 5 %: w = 63.75(3.4)(1.05)/1000 = 0.2275875 → 63.75(3.402778)(1.05)/1000 = 0.2277734 klf; M_DC1 at pier 1
+  −2498.49 → −2498.84 kip-ft (+0.014 %; its girder-steel part −425.146 → −425.494, +0.0817 %); largest span 1 M_DC1 1052.61 → 1052.75 (+0.014 %).
+  DC1 rises by 0.0817 % of its girder-steel part; DC1 as a whole by less (0.014–0.018 %), since the wet deck is most of it.
+- Tests (expect this difference and nothing else): the parity runs with GirderDetail pass `steelPlf: 3.4` (unchanged results); new test
+  "SB2-A2" in analysis.test.mjs: on the 10 sample payloads the girder-steel part of DC1 (M, V, R, deflection) × 490/144/3.4 = 1.000817
+  exactly (residual 9.5e-10), the wet deck, DC2, DW, construction LL and the pier regions identical; largest M_DC1 rise 0.0175 %.
+  loads.test.mjs: the payload's steel w_min, w_max, average × 490/144/3.4. constructibility.test.mjs (SB2-A1 test): `steelPlf: 3.4`.
+
+### SB2-A4. LL deflection: truck axles that do not add are neglected (GirderDetail LL8)
+- Where: `engine/analysis.js` `analyzeGirder`, anchor `const DL = ML().deflection(RH, { mode: 'lrfd', DF: 1, useIM: true, neglect: true })`;
+  `shared/moving-load.js` `deflection()` (new option `opt.neglect`, off by default; see fixlog/shared-moving-load.md).
+- Before: `ML().deflection(RH, { mode: 'lrfd', DF: 1, useIM: true })` (every axle on the bridge summed). After: `neglect: true`: the downward
+  value sums only the downward axle effects (GirderDetail sgLLRow: P = positive ordinates only, used by its lld rows, LL8 2026-10-14).
+- Governing provision: AASHTO LRFD 10th Ed. Art. 3.6.1.3.1 (axles that do not contribute to the extreme force effect neglected), 3.6.1.3.2, 2.5.2.6.2.
+- Check case: three spans 20 + 20 + 20 ft, HL-93 truck per lane with IM 33 %: largest downward Δ 0.00301 → 0.00305 in; 22 of 61 sections larger
+  (tests/engine/moving-load.test.mjs). On the 100 gd_* payloads (spans 60 ft and longer) no span changes (a truck can stand with every axle
+  adding); the remaining LL-deflection difference to GirderDetail, ≤ 0.11 %, is the stations read (the 1/20 points here, every second node
+  there). Not more conservative or less: larger or equal deflection.
+
+### SB2-A5. Owner live load deflection limits (OWN19)
+- Where: `engine/analysis.js` new `deflOwner(P, g, S)` (exported) and `analyzeGirder` anchor `const status = OW && OW.rep ? 'na'`; steps
+  `an.defl.lim<k>` (cites the owner), new `an.defl.pref<k>`; `ui/analysis.js` LL deflection card (owner, limit, preferred limit, status).
+- Before: limit L/`analysis.deflLimit` (default 800) for every owner. After (as GirderDetail SA3 / Preliminary sizing A1): RIDOT BDM 2.4.2.6
+  L/800, L/1000 with pedestrians; MassDOT 3.5.6.1 L/1000 with sidewalks, without them L/800 and preferably L/1000 (exceeding the preferred
+  limit is a warning), applied to the typical interior beam only (a plate girder that takes an exterior cross-section girder is reported,
+  not checked: status 'na'). Sidewalk or pedestrians: a sidewalk on the Cross-section & loads tab (xs.sidewalks.L/R.w > 0). The entered
+  L/… governs where stricter (rq = max(owner, entered)). AASHTO, CTDOT: the entered L/… (2.5.2.6.2, optional), unchanged.
+- Decision (engineer's rule): the sidewalk test is the cross-section's, as GirderDetail's default 'auto'; GirderDetail's Limits-tab override
+  (swOwn) has no input here yet.
+- Governing provision: AASHTO LRFD 10th Ed. Art. 2.5.2.6.2; RIDOT BDM 2.4.2.6; MassDOT LRFD Bridge Manual Part I 3.5.6.1 (engine/owners.js 'defl.ll').
+- Check case: default project (interior plate girder, cross-section G2): MassDOT, no sidewalk: L/800, preferred L/1000; span 1 (110 ft)
+  Δ_lim = 12(110)/800 = 1.650 in, preferred 12(110)/1000 = 1.320 in. Sidewalk 6 ft: L/1000 = 1.320 in (MassDOT and RIDOT). Entered L/1200: RIDOT
+  uses 1200. g.line = 0 (exterior) under MassDOT: reported only. Payloads gd_builtin_MassDOT_G1 / G2, gd_builtin_RIDOT_G1: status per span
+  na / pass / pass, limit 1.65 in, = GirderDetail's stored SA3 status and limit.
+
+### SB2-A7. Selector: the cross-section girder each plate girder takes its loads from
+- Where: `index.html` Girders & plates tab, anchor `const lineSel = g =>` (select `#i_line`, data-kind 'line'; change handler anchor
+  `if (el.dataset.kind === 'line')`). The Analysis tab's own selector (ui/analysis.js `an_g_line`) is unchanged.
+- Before: only on the Analysis tab. After: also on the Girders & plates tab, with "Automatic (G…)" = no `girders[i].line` (the defaults
+  unchanged: engine/analysis.js `lineOf`, G1 for an exterior plate girder, else G2). Saved data: the existing optional field `girders[i].line`;
+  "Automatic" deletes it. No calculation change.
+
+### SB2-O12. Section properties card of a noncomposite girder: no deck, no rebar
+- Where: `engine/sections.js` `card()`, anchor `const dk = comp ? deck : { ...deck, beff: 0, rebar: {} };`; `index.html` Section properties card
+  (anchors `${c.comp ? row('Steel + rebar'`, `c.region === 'neg' && c.comp`, `!c.comp ? 'rh.s.Rh'`).
+- Before: for composite = false the card computed and showed the steel + rebar section, negative M_p with the deck rebar, D_c and R_h of the
+  steel + rebar section. After: the steel section only (as engine/flexure.js, which already passed rebar {}): no Steel + rebar row, M_p without
+  rebar, D_c and R_h of the steel section; a note says so. card() returns `comp`.
+- Governing provision: AASHTO LRFD 10th Ed. Art. 6.10.1.1.1a (noncomposite: the steel section alone). Display of the card only; flexure unchanged
+  (flexure-nc.test.mjs passes unchanged: its card had rebar {} before).
+- Check case: 18 × 1.5 / 60 × 9/16 / 18 × 2, deck 8 in, A_r 6.6 + 3.2 in², noncomposite: before negative M_p included 9.8 in² of rebar at F_yr 60;
+  after M_p, y_p, D_cp, R_h, D_c = those of the steel section (A = 96.75 in²), equal to flexure's card (sections.test.mjs SB2-O12).
+
+### SB2-O14. Citation: composite tension flange, App. A6 (text only)
+- Where: `engine/flexure.js` checks, anchor `title: 'App. A6, tension flange (continuously braced by the deck), M_u ≤ φ_fR_ptM_yt'` and the step
+  `a6t.ok` (composite branch).
+- Before: `ref: Eq. A6.1.2-1, A6.4` / step `Eq. A6.1.2-1`, title "App. A6, tension flange". After: `Eq. A6.1.4-1, A6.4` / `Eq. A6.1.4-1`,
+  "(continuously braced by the deck)". The check itself is unchanged: M_u ≤ φ_fR_ptM_yt (A6.1.4-1 is the same inequality without f_ℓ).
+- Governing provision: AASHTO LRFD 10th Ed. App. A6.1.4 (continuously braced tension flanges) in place of A6.1.2 (discretely braced). The
+  noncomposite path keeps A6.1.2-1 (discretely braced, with f_ℓ).
+- Check case: stocky-web negative-flexure section (36 × 3/4 web, 18 × 1.5 / 18 × 2 flanges, composite): the a6t item and step cite A6.1.4-1;
+  ratios unchanged (flexure parity test on the 100 payloads unchanged).
+
+### SB2-F1. Studs: each girder's own b_eff by default
+- Where: `engine/model.js` `defaultStuds()` anchor `beffMode: 'girder'`; `ui/fatigue.js` the b_eff selector (per girder listed first) and notes;
+  `engine/studs.js` header. Engine defaults unchanged: `compute()` / `fromPayload()` without beffMode = bridge-wide (GirderDetail), for the parity tests.
+- Before: `beffMode: 'bridge'` (one b_eff for every girder, the largest-fatigue-shear girder's; GirderDetail). After: `'girder'` for a new project.
+  Saved data: a stored project keeps the value it has (an explicit 'bridge' stays 'bridge'; the option can be changed on the Fatigue & studs tab).
+- Why: AASHTO LRFD 10th Ed. Art. 6.10.10.1.2 takes Q and I of the girder's own short-term composite section, 6.10.10.4.2 its own b_eff in P_1p (4.6.2.6).
+- Check case (GirderDetail built-in project, AASHTO payloads; tests/engine/studs.test.mjs SB2-F1): interior G2–G4 b_eff 96 → 114 in, largest SC1
+  ratio 0.8746 → 0.8915 (p_max up to 3.03 % lower); SC2 0.9938 unchanged (P_2p, the steel, governs); G1, G5 unchanged; no pass/fail change.
+  The app's own default project (one interior girder, b_eff 114 in) is unchanged (its bridge-wide b_eff is also 114 in).
+
+### SB2-O16. Bearing stiffeners take the analysis support reactions
+- Where: `ui/shear.js` new `fromAnalysis(P, gi)` (exported) and source "This project's analysis (Analysis tab)" on the Shear & stiffeners tab;
+  `build()` anchor `const rxn = pl && Array.isArray(pl.reactions)`; the bearing note.
+- Before: only the example rows or a hand-off file; reactions DC/DW = the jump in shear, LL+IM = V_LL,pos(left) − V_LL,neg(right) (an upper bound).
+  After: with the analysis source, R_DC1, R_DC2, R_DW (R_UT, R_UF) = the support reactions of engine/analysis.js (st.*.R[k]) and R_LL+IM = the
+  reaction envelope g_V R_HL93 (llR[k].max, the larger g_V of the adjacent spans; step an.R.LL.k). The file path is unchanged (still the upper bound:
+  the hand-off file has no reactions). The analysis stations go in as a hand-off-shaped object in the file's sign (MIDAS), two stations 0.005 ft
+  either side of each interior support. The default source stays "Example".
+- Governing provision: AASHTO LRFD 10th Ed. Art. 6.10.11.2 (bearing stiffeners), 3.4.1 (R_u = 1.25(R_DC1 + R_DC2) + 1.50R_DW + 1.75R_LL+IM), 3.6.1.3.1.
+- Check case (the app's default project, interior G2 factors; tests/engine/stiffeners.test.mjs SB2-O16): pier 1 R_LL+IM 255.4 (shear sum) → 215.3 kip
+  (reaction envelope; the upper bound was +18.6 %), R_u 786.3 → 716.2 kip; abutments 107.8 → 107.8 kip (one side only). DC reactions = the jump in
+  shear to the 0.005 ft offset (< 2 %).
+
+### SB2-C1. Worked step fx.Mu: parentheses (display only)
+- Where: `engine/flexure.js`, new `const pp = x => \`(${n2(x)})\`` next to `const pa =`; steps `fx.Mu` and the products in `fx.Ms`.
+- Before: `${n2(r.gm.DC1)}${pa(r.MDC1)}` → "1.251450.00" for a positive moment. After: `${n2(r.gm.DC1)}${pp(r.MDC1)}` → "1.25(1450.00)". Values unchanged.
+- Check case: Span 1 (M_DC1 1450, M_DC2 210, M_DW 240, M_LL 1650): "1.25(1450.00) + 1.25(210.00) + 1.50(240.00) + 1.75(1650.00) = 5322.5 kip-ft".
+
+### SB2-C2. "Fill from cross-section" for the overhang bracket inputs (GirderDetail XS11)
+- Where: `engine/constructibility.js` new `ohFill(P, gi)` (steps `oh.fill.*`); `ui/constructibility.js` button `#cn_oh_fill` (confirmation, never automatic).
+- What it fills: w_OH = 12·overhang − b_tf/2 (in, to 0.01; the larger overhang, left when equal; b_tf the narrowest top flange of the girder),
+  t_OH = the total deck thickness, w_c = the deck concrete unit weight. The other bracket inputs stay.
+- Decision (engineer's rule, accuracy): t_OH = the total deck thickness (deck.tdeck: slab + integral wearing surface, all placed on the brackets)
+  where GirderDetail fills t_s (its bridge data has no wearing thickness); the loads module also weighs the deck at t_s + t_sac.
+- Governing provision: AASHTO LRFD 10th Ed. C6.10.3.4 (overhang bracket loads); Table 3.5.1-1 (w_c).
+- Check case: default project: overhang 3.25 ft, top flange 16 in: w_OH = 12(3.25) − 16/2 = 31.00 in; t_OH = 8.5 in; w_c = 0.150 kcf. Right overhang
+  3.6 ft: 12(3.6) − 8 = 35.20 in. Saved data: writes the existing optional field `constr.oh` only when the button is confirmed.
+
+### Saved data (CLAUDE.md §5)
+- No key or format changed. New project defaults only: `studs.beffMode` 'girder' (SB2-F1). `girders[i].line` (existing field) can now also be
+  set on the Girders & plates tab; `constr.oh` (existing) can be filled by the button.
+### How verified
+- `node tests/engine/run.mjs` (full suite). New or changed tests: analysis (hand check 1 at 490/144, SB2-A2 difference test, SB2-A5), loads (steel × 1.000817),
+  constructibility (SB2-A1 test at GirderDetail's 3.4, SB2-C2), moving-load (deflection neglect), sections (SB2-O12), flexure (SB2-C1, SB2-O14),
+  fatigue and studs (SB2-F1), stiffeners (SB2-O16). Flexure and flexure-nc GirderDetail parity unchanged.
+- Headless load of apps/steel-bridge/index.html: 0 console errors (see the PR).
+### Other copies
+- `shared/moving-load.js` `deflection()` option: see fixlog/shared-moving-load.md. The old `Steel Bridge Design.html` is unchanged.
+### Open items
+- SB2-A8. LL deflection stations: the shared `deflection()` reads the 1/20 points of each span, GirderDetail every second analysis node; ≤ 0.11 %
+  (here lower). Denser stations would need an option in shared/moving-load.js.
+- SB2-A9. OWN19 sidewalk test: GirderDetail's Limits-tab override (sidewalk yes/no, Preliminary sizing `limits.sidewalk`) has no input here; the
+  cross-section's sidewalks decide.
