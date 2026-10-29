@@ -1203,3 +1203,34 @@ Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V�
 - D11-O2. **Deflection ratio column** (δ / (L/N) with ✓/✗) is kept as the tool had it; under the slim scope you may prefer it shown without ✓/✗.
 - D11-O3. **Absolute Maxima per Span** stays on screen only (AM1); it is not in the report (it would need extra analyze passes per vehicle, 1–3.5 s each).
 - D11-O4. The IM split (truck × IM, lane without IM) is inside the per-lane envelope value and is not decomposed in the factoring lines; the tool does not hold the components separately.
+
+## 2026-10-29 — PR: pilot-moving-load — engine moved to shared/moving-load.js and shared/vehicles.js (rebuild pilot, Phase 1; refactor, no result change)
+### What moved (page keeps its file name, UI, inputs and saved data)
+- The page now loads `<script src="shared/vehicles.js">` and `<script src="shared/moving-load.js">` just before its first inline `<script>` (anchor `const $=id=>document.getElementById(id);`). The repo folder must be copied whole; the page alone no longer works.
+- **Presets** (anchor before: `const E80=[[40,0],[80,8]`, through the closing `};` of `const P={`): replaced by
+  `const VEH=SharedVehicles.build(), P=VEH.presets, NOSL=VEH.NOSL;`. `P['Fatigue']=HW('LRFD Fatigue Truck (30 ft)',…)` became `P['Fatigue']=VEH.fatigue;` (same place, so the preset order is unchanged).
+- **`props`, `luDecomp`, `luSolve`:** bodies moved; the page keeps one-line function declarations that call `SharedMovingLoad.*` (declarations, because the page wraps `props` later: `const _props=props; props=function…`).
+- **`analyze(m)`:** body moved to `SharedMovingLoad.analyze(m,opt)`. The page keeps
+  `function analyze(m){ return SharedMovingLoad.analyze(m,{Lb:$('aLb')?$('aLb').value:'span',aL:num('aL',100),refine:!$('refineChk')||$('refineChk').checked,vehicles:P}); }`
+  — these are the only DOM reads the old body made (`$('aLb')`, `num('aL',100)`, `$('refineChk')`) plus the global preset table `P` (secondary vehicle, step case). The later wrappers (`var _an=analyze; analyze=function…` for the LL&DL pull warnings) are unchanged.
+- **`deflAnalyze()`:** body moved to `SharedMovingLoad.deflection(R,opt)`; the page keeps `function deflAnalyze(){ return SharedMovingLoad.deflection(RES,{mode:$('dCase').value,DF:num('dDF',1),useIM:$('dIM').checked}); }` (the rail-DF / stiffness wrapper below it is unchanged).
+- **`absScan(R)`:** body moved to `SharedMovingLoad.absScan(R,analyzeFn)`; the page keeps `function absScan(R){return SharedMovingLoad.absScan(R,analyze);}` so the scan still runs through the page's current (wrapped) `analyze`.
+- To re-apply by hand: copy the old bodies into the shared files exactly, replacing only the DOM reads listed above with `opt.Lb`, `opt.aL`, `opt.refine!==false`, `opt.vehicles`, `opt.mode`, `opt.DF`, `opt.useIM`.
+
+### Governing provision
+- None changed. No formula, factor, unit, vehicle or code reference was changed (CLAUDE.md §4).
+
+### Check case
+- Default page (2 spans 100/100, HL-93, DF/LLF defaults): headline results before and after: +M 3932.2 kip-ft, −M −4049.2 kip-ft, ±V 227.7 kips, reaction 365.4 kips (factored), identical.
+- 2 spans 100/120, HL-93 truck (unfactored per lane with impact): max +M 2850.258 kip-ft, max −M −2673.561 kip-ft, max |V| 138.148 kips, max R 223.225 kips — identical to the last bit before and after.
+
+### How verified
+- `node tests/engine/run.mjs moving-load`: 35 cases (1–4 spans, 1 and 3 segments and an Io override, all 12 vehicles, every impact method and AREMA L basis, lane/full/trailing uniform loads, Std. Spec. lane loading, secondary and multi-vehicle cases, refine off, finer steps, warnings, deflection modes). For each case the whole output (envelopes with governing positions, influence lines, effects/rows, warnings, engine check, step solver, deflection envelope, absolute-maximum scan) hashes identically (SHA-256 of canonical JSON) to the output of the ORIGINAL inline functions taken from b3dbddb; 4 cases are also compared value by value live against the original functions. **Bit-identical.**
+- `node tests/compare.mjs --tool page --file "Moving Load Generator.html"` (headless Chromium): console errors 0 before and after; `page.storage` same; `page.text` identical apart from the "Solved in … ms" time.
+- `node tests/check-syntax.mjs "Moving Load Generator.html"`: all scripts pass.
+
+### Other copies
+- None. Vehicle data in `index.html` and `Stone Masonry Arch Load Rating.html` is separate and was not touched.
+
+### Open items (not changed)
+- PL-O1. The engine-check block in `analyze` indexes theory values for 1–4 spans only (`{1:…,4:…}[ns]`); 5+ spans would throw there. The page allows 1–4 spans, so nothing changes today; see `fixlog/shared-moving-load.md`.

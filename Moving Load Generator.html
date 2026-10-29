@@ -329,7 +329,7 @@ function syncVis(){
 // ═══════════ SECTION PROPERTIES (uncracked, short-term n) ═══════════
 function deckRead(){return {comp:$('comp').checked,n:Math.max(1,num('dn',8)),beff:num('dbeff',96),ts:num('dts',8),th:Math.max(0,num('dth',0)),inclH:$('dinc').checked};}
 // Section properties, linear algebra and the analysis engine: shared/moving-load.js
-const props=SharedMovingLoad.props;
+function props(s,dk){return SharedMovingLoad.props(s,dk);}   // wrapped further below (haunch measured to the web)
 const SF=['len','bt','tt','D','tw','bb','tb','Io'];
 function totalL(){let t=0;for(let i=0;i<+$('nSpans').value;i++)t+=Math.max(1,num('L'+i,100));return t;}
 function renderSegs(){
@@ -375,7 +375,8 @@ function readModel(){
 }
 
 // ═══════════ LINEAR ALGEBRA ═══════════
-const luDecomp=SharedMovingLoad.luDecomp, luSolve=SharedMovingLoad.luSolve;
+function luDecomp(A,n){return SharedMovingLoad.luDecomp(A,n);}
+function luSolve(A,n,b){return SharedMovingLoad.luSolve(A,n,b);}
 
 // ═══════════ ANALYSIS ENGINE ═══════════
 function analyze(m){

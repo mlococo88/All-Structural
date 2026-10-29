@@ -33,4 +33,5 @@ Plan: `docs/REBUILD_PLAN.md` (§3). Rules: `CLAUDE.md` §1, §3, §7, §8.
 
 | File | Namespace | Loaded by |
 |---|---|---|
-| (none yet) | | |
+| `vehicles.js` | `window.SharedVehicles` | `Moving Load Generator.html` |
+| `moving-load.js` | `window.SharedMovingLoad` | `Moving Load Generator.html` |
