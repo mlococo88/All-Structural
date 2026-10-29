@@ -562,16 +562,21 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - `node tests/engine/run.mjs` (full suite); headless smoke test of `apps/steel-bridge/index.html` (Fatigue & studs tabs, analysis source).
 ### Other copies
 - None. GirderDetail keeps its own Fatigue and Shear connectors modules until the switch-over.
-### Open items
-- SB2-F1 (carried over, not changed). GirderDetail's Shear connectors module has one set of zones and regions for the bridge with ONE
-  b_eff (Preliminary sizing sends the girder type with the largest fatigue shear range, on the built-in project the exterior, 96 in).
-  Mirrored by default. Option b_eff per girder (`studs.beffMode: 'girder'`, off): on the built-in project (AASHTO payloads) the interior
-  girders G2–G4 go 96 → 114 in: largest SC1 ratio 0.8746 → 0.8915 (p_max up to 3.03 % lower), SC2 unchanged 0.9938 (P_p = P_2p, the
-  steel, governs), no status changes; G1, G5 (exterior) unchanged. Which is wanted?
-- SB2-F2. V_f of a pitch zone: GirderDetail takes Preliminary sizing's element range of the governing girder type; with this app's
-  analysis (or zones entered on a file) it is the largest V_FAT,pos − V_FAT,neg of the girder's own stations in the zone.
-- SB2-F3. The fatigue detail list from a file or the analysis (`detailsFromPayload`) uses Preliminary sizing's kinds and rules on the
-  girder's own station demands (moments linear between stations) and the cross-frames of the stiffener layout; Preliminary sizing
-  uses its own analysis elements. Not parity-tested; review the list.
-- SB2-F4. With a file, the stud inputs (d, h, s_t, F_u, γ, F_rc, w) are this project's (default 7/8 × 6, 4 in), not the file's
-  (Preliminary sizing's 7/8 × 5, 3.5 in): the results equal GirderDetail's only when they are set to the file's values.
+### Decisions (engineer's rule of 2026-10-29: decide by AASHTO 10th Ed. and accuracy, record the reasoning)
+- SB2-F1. Bridge-wide b_eff for the studs. GirderDetail's Shear connectors module has one set of zones and regions for the bridge
+  with ONE b_eff (Preliminary sizing sends the girder type with the largest fatigue shear range; on the built-in project the
+  exterior, 96 in). Decision: mirrored by default, as this PR's task requires for parity; the option `studs.beffMode: 'girder'`
+  (each girder its own b_eff) is provided, off. Reasoning: AASHTO 6.10.10.1.2 takes Q and I of the girder's own short-term
+  composite section, and 6.10.10.4.2 its own b_eff in P_1p (4.6.2.6), so the per-girder value is the accurate one; the
+  bridge-wide value is an envelope simplification. Measured on the built-in project (AASHTO payloads): interior G2–G4 b_eff
+  96 → 114 in, largest SC1 ratio 0.8746 → 0.8915 (p_max up to 3.03 % lower, i.e. the bridge-wide value is slightly
+  unconservative for the interior girders in fatigue), SC2 unchanged 0.9938 (P_2p, the steel, governs), no pass/fail change;
+  G1, G5 unchanged. Recommendation for the switch-over: turn the option on (a one-line default change in `defaultStuds()`).
+- SB2-F2. V_f of a pitch zone with this app's analysis (or zones entered on a file): the largest V_FAT,pos − V_FAT,neg of the
+  girder's own stations in the zone. Kept: 6.10.10.1.2 defines V_f as the vertical shear force range of the girder under the
+  fatigue load; GirderDetail's governing-type element range is an envelope of the same quantity.
+- SB2-F3. The fatigue detail list from a file or the analysis (`detailsFromPayload`) uses Preliminary sizing's kinds and rules
+  on the girder's own station demands and the cross-frames of the stiffener layout. Kept: same detail kinds and categories as
+  Preliminary sizing; the demands are the girder's own (more accurate than the type envelope). Not parity-tested by construction.
+- SB2-F4. With a file, the stud inputs (d, h, s_t, F_u, γ, F_rc, w) are this project's, not the file's. Kept: the project is
+  what is being designed; the parity test sets them to the file's values and reproduces GirderDetail's ratios exactly.
