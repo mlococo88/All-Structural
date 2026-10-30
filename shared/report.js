@@ -85,7 +85,7 @@
   }
   /* a step note may name another step as "§<step id>" (engine/shear.js "See §pan.Vn.", engine/rating.js "see §fx.Mn"): it becomes a
      cross-reference to that step in item.see (the scope that holds the other work, when given) or else in the item's own scope */
-  const SEE = /§([A-Za-z][\w.]*\w)/g;
+  const SEE = /§([A-Za-z](?:[\w.]*\w)?)/g;
   const seeKey = (doc, it, id) => {
     const a = it.see ? keyOf(it.see, id) : null; if (a && doc.index.has(a)) return a;
     if (doc.index.has(keyOf(it.scope, id))) return keyOf(it.scope, id);

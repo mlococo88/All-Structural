@@ -4,7 +4,7 @@
    step that works it ("see §x.y"). Nothing is calculated here; ratios and values are those the modules return.
 
    model(bundle, opt) -> report model; opt = { detail: 'gov' (the governing location of each check group, default) | 'all' (every
-   station, worked steps opened on demand), include: { key: true } (default all) }.
+   station, worked steps opened on demand), include: { key: false } to leave a section out (default all) }.
    Section keys (SECTIONS, in the workflow order; the summary is put first):
      sum   Summary of governing ratios (links to each check)     proj  Project and owner        loads Cross-section, loads and LLDF
      an    Analysis                                               sec   Section properties       flex  Flexure
@@ -152,7 +152,7 @@
   function checksTbl(r, sc) {
     return tbl(['Check', 'Demand', 'Capacity', 'Ratio', ED], r.checks.map(c => isFinite(c.ratio)
       ? { cells: [`${c.id} ${tt(c.title)}${c.inUse === false ? ' (not the method in use)' : ''}`, { t: `${f(c.demand, 2)} ${c.unit || ''}`, n: true }, { t: `${f(c.capacity, 2)} ${c.unit || ''}`, n: true }, { ...R3(c.ratio, c.step ? K(sc, c.step) : null), cls: c.inUse === false ? '' : rc(c.ratio) }, String(c.ref || '').replace(ED.replace(' (2024)', '') + ' ', '')], cls: r.gov === c ? 'gov' : '' }
-      : [`${c.id} ${tt(c.title)}`, { t: c.na || 'n/a', cls: 'na', span: 3 }, String(c.ref || '').replace('AASHTO LRFD 10th Ed. ', '')]));
+      : [`${c.id} ${tt(c.title)}`, c.na ? { t: c.na, cls: 'na', span: 3 } : { t: 'not evaluated (ratio not a number)', cls: 'ng', span: 3 }, String(c.ref || '').replace('AASHTO LRFD 10th Ed. ', '')]));
   }
   function flex(B, X) {
     const Gr = B.flex, rows = Gr.rows, sup = B.sup, all = X.detail === 'all', subs = [];
@@ -166,6 +166,11 @@
       Gr.oos ? note('A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported there.', true) : null,
       tbl(['Location', 'x (ft)', 'Region', 'Method', 'Governing check', 'Ratio'], shown.map(r => ({ cells: [r.name, N(r.x, 2), r.pos ? 'positive' : 'negative', r.p7 ? '' : r.useA6 ? 'App. A6' : '6.10.8',
         r.gov ? `${r.gov.id} ${tt(r.gov.title)}` : '', r.gov ? R3(r.gov.ratio, K(scOf(r), r.gov.step)) : '—'], cls: r === Gr.gov ? 'gov' : '' })))]));
+    // a check the engine could not evaluate (ratio not a number, no n/a reason): listed, never silently dropped (SB2-R2: GS7 where
+    // f_bu ≥ F_cr with f_ℓ = 0)
+    const nan = rows.flatMap(r => r.checks.filter(c => c.inUse !== false && !isFinite(c.ratio) && !c.na).map(c => ({ r, c })));
+    if (nan.length) { const t = `Not evaluated (ratio not a number) at ${nan.length} location check(s): ${[...new Set(nan.map(q => q.c.id))].join(', ')} at x = ${nan.slice(0, 12).map(q => f(q.r.x, 2)).join(', ')}${nan.length > 12 ? ', …' : ''} ft. The governing ratio above excludes them: review these locations on the Flexure and Rating tabs.`;
+      subs[0].items.splice(1, 0, note(t, true)); X.warn.push('Flexure: ' + t); }
     const one = r => [checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
     const detailed = all ? (Gr.gov ? [Gr.gov] : []) : govRows;
@@ -354,9 +359,10 @@
     const errs = Object.entries(B.err).filter(([k]) => built.includes(k) || k === 'all');
     const top = X.gov.filter(q => q.rf == null && isFinite(q.r)).reduce((a, q) => (!a || q.r > a.r ? q : a), null);
     return { title: 'Summary of governing ratios', subs: [sub('gov', `Girder ${gName(B.girder)}: governing demand / capacity of each check group`, [
-      note(`Each ratio links to the step that works it (§). Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : "this project's analysis"}. ${ED}.`),
+      note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc}) [[${top.key}]].`) : null,
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], rows, { wide: true }),
+      ...X.warn.map(w => note(w, true)),
       errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null])] };
   }
 
@@ -364,8 +370,8 @@
   const NEED = { loads: 'loads', an: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
-    const inc = opt.include || null, on = k => !inc || !!inc[k], X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [] };
-    const P = B.P, p = P.project || {}, secs = [], built = [];
+    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [] };
+    const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
     const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, rt: B.rating };
     SECTIONS.forEach(([k, label]) => {
       if (k === 'sum') return;
@@ -373,15 +379,27 @@
       if (k === 'proj') { if (want) secs.push({ id: k, ...proj(B, X) }); return; }
       if (k === 'spl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Field splices', subs: [sub('n', 'Not in this report', [note('Field splices are designed from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:spl|Field splices tab]].')])] }); return; }
       if (!dataOf[k]) { if (want) { built.push(k); secs.push({ id: k, title: label, subs: [sub('n', 'Not available', [note(B.err[k] || B.err[NEED[k]] || B.err.all || 'Not calculated.', true)])] }); } return; }
-      // the summary links to every module's governing check: build each module (its section is dropped if not chosen)
-      if (!want && !on('sum')) return;
+      // every module is built (the summary links to its governing check; references into it are found below); a section not chosen is dropped
       const g0 = X.gov.length, h0 = new Set(X.have.keys());
       let s; try { s = BUILD[k](B, X); } catch (e) { s = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
       if (want) { built.push(k); secs.push({ id: k, ...s }); return; }
       // not chosen: its summary rows stay, without a link (their work is not in this report); later sections do not link into it
       X.gov.slice(g0).forEach(q => { q.key = null; q.loc += ' (section not included)'; });
       [...X.have.keys()].forEach(r => { if (!h0.has(r)) X.have.delete(r); });
+      dropped.push(s);
     });
+    // references from the sections shown into a section left out: the link is removed and the text says where the work is
+    if (dropped.length) {
+      const gone = new Set(); dropped.forEach(s => s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'steps') it.steps.forEach(t => gone.add(K(it.scope, t.id))); })));
+      const keep = new Set(); secs.forEach(s => s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'steps') it.steps.forEach(t => keep.add(K(it.scope, t.id))); })));
+      const out = k => gone.has(k) && !keep.has(k), fixT = t => typeof t === 'string' ? t.replace(/\[\[([^\]|]+)\]\]/g, (m, k) => (out(k) ? '(section not included)' : m)) : t;
+      const fixC = c => { if (c && typeof c === 'object') { const o = { ...c, t: fixT(c.t) }; if (out(o.key)) o.key = null; return o; } return fixT(c); };
+      secs.forEach(s => { s.note = fixT(s.note); s.subs.forEach(q => { q.items = q.items.map(it => {
+        if (it.type === 'note') return { ...it, text: fixT(it.text) };
+        if (it.type === 'kv') return { ...it, rows: it.rows.map(r => [fixT(r[0]), fixT(r[1]), out(r[2]) ? null : r[2]]) };
+        if (it.type === 'table') return { ...it, rows: it.rows.map(r => Array.isArray(r) ? r.map(fixC) : { ...r, cells: r.cells.map(fixC) }) };
+        return it; }); }); });
+    }
     if (on('sum')) secs.unshift({ id: 'sum', ...summary(B, X, built) });
     const girder = B.girder;
     return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,

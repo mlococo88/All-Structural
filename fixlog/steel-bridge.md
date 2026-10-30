@@ -1180,3 +1180,61 @@ provision, check case. Closes SB2-A2, SB2-A4, SB2-A5, SB2-A7, SB2-O12, SB2-O14, 
   (here lower). Denser stations would need an option in shared/moving-load.js.
 - SB2-A9. OWN19 sidewalk test: GirderDetail's Limits-tab override (sidewalk yes/no, Preliminary sizing `limits.sidewalk`) has no input here; the
   cross-section's sidewalks decide.
+
+## 2026-10-30 — PR: sb2-report — the Report tab: calculation report in the shared viewer (report/data.js, report/builders.js, ui/report.js)
+### Where
+- New `apps/steel-bridge/report/data.js` (`window.SBDReportData.compute(P, g, { src, pl, plName })`): each module's result from the same
+  function its own tab calls, with the same inputs (loads `SBDUiLoads.calc`; analysis `SBDAnalysis.analyzeGirder`; section cards as
+  index.html `calc()`, every plate segment, positive region and, where the segment touches a pier, negative; flexure: with this project's
+  analysis the flexure of `SBDRatingUI.build` (the Rating tab's locations), with a hand-off file `SBDFlexureUI.build`; shear, fatigue
+  `SBDShearUI.build` / `SBDFatigueUI.build` with source 'analysis' or the file; constructibility as `ui/constructibility.js calc()` with
+  f_ℓ during deck placement 0 (the tab's default; not saved); framing `SBDFramingUI.build`; splices `SBDSplices.girder` (this project's
+  analysis only); rating `SBDRatingUI.build`). The full analysis runs once per report: `analyzeGirder` is memoised for the duration of
+  `compute()` (key girder + options), restored after.
+- New `apps/steel-bridge/report/builders.js` (`window.SBDReportBuild.model(bundle, { detail, include })`): the report model in the workflow
+  order — Summary of governing ratios (first; each row links to the step of its check), Project and owner, Cross-section/loads/LLDF, Analysis
+  (SVG moment and shear diagrams, reactions, SA3, SA7; with a file: its station demands), Section properties, Flexure, Shear and stiffeners,
+  Fatigue and studs, Constructibility, Framing and cross-frames (framing plan SVG), Field splices (drawings), Load rating. Detail 'gov': the
+  governing location of each check group (flexure: of each span and region; constructibility: of each span) worked; 'all': every station,
+  its steps opened on demand. Rating capacities are linked to the Flexure section's location when that section shows the same location
+  object, else worked in the Rating section ("Capacities used by the rating"). Sections not chosen are still built for the summary; their
+  rows lose the link and references into them become "(section not included)".
+- New `apps/steel-bridge/ui/report.js` (`window.SBDReportUI.render`): chips per section (as ST-Girder's report), Detail, Demands (this
+  project's analysis or a hand-off file), Build report / Rebuild, out-of-date notice; the viewer's Print report button. The chips and detail
+  are kept in the page's UI state (`ui.rpt` inside the existing key `sbd2.ui`; additive, no project data); the source and file are not saved.
+- `index.html`: four script tags (`../../shared/report.js`, `report/data.js`, `report/builders.js`, `ui/report.js`), the Report tab button
+  (`data-otab="rpt"`) and its branch in `drawOut()` (anchor `if (ui.otab === 'rpt')`).
+- `ui/flexure.js`: `inputs(ctx)` reads `ctx.src`, `ctx.pl`, `ctx.plName`, `ctx.fl`, `ctx.method` when given (else the tab's own state, as
+  before), returns `fl`, `flS`, `frB`; new exported `build(ctx)` (anchor `function build(ctx) {`). `ui/shear.js`, `ui/fatigue.js` `build()`:
+  `const src = ctx.src || S.src` (anchor `ctx.src: the demand source chosen by the caller`). The tabs call them as before: no change.
+- `engine/stiffeners.js` (SB2-R1): the TS5 spacing-limit step id `p1.st` / `p2.st` → `p1.lim` / `p2.lim` (anchors `id: \`p${i + 1}.lim\``,
+  `step: \`ts${r.i}.p${i + 1}.lim\``). Before, it repeated the id of `SH.panelSteps`' "stiffened or unstiffened panel" step in the same list
+  (shared/README.md: never reuse an id), so the TS5 item's § link went to the wrong step. Display id only; values unchanged.
+### Problem
+- New: the in-app Report tab (docs/REBUILD_PLAN.md §5 "the in-app Report tab with a navigation tree"; engineer: part of the app's output,
+  not PDF-only, formatted as the Gusset Plate Rating report).
+### Governing provision
+- None changed. Every value and step is the modules' own (AASHTO LRFD 10th Ed. 2024; MBE for the rating). CLAUDE.md §6 (show the work and
+  link to it): every value in the report is a worked step or a link to one ("see §x.y" in print).
+### Check case
+- Built-in project, G1, this project's analysis, detail 'gov': 12 sections, 62 subsections, 2,825 worked steps, 461 references, all
+  resolved. Summary: SA3 0.334 (span 2), Flexure GS7 0.980 at x = 114.00 ft, panel shear 0.435, GS11 0.437, TS1 0.667, BS1 0.692, FA1 0.706,
+  GS17 0.501, SC2 0.959, GS14 0.787 at x = 77 ft, CF3 0.904, splice BF4 0.997 (FS1), Inventory RF 0.739 / Operating 0.957 (negative flexure,
+  x = 110.01 ft) — the same numbers (same objects) as each tab. Detail 'all': 74,519 steps, 7,477 references, all resolved.
+- 5 payloads (gd_builtin28_AASHTO_G1, gd_xsA_CTDOT_G1, gd_util_MassDOT_G3, gd_curb_RIDOT_G5, gd_builtin_AASHTO_G2), both details: every
+  reference resolves; no NaN / undefined in the text.
+### How verified
+- `node tests/engine/run.mjs` (new `tests/engine/report.test.mjs`: the viewer on a hand-made model; the full report of the built-in project
+  and the 5 payloads, both details: no unresolved reference, no duplicate anchor, every "§x.y" a subsection, no NaN / undefined / [object in
+  the text, every `$…$` parses in KaTeX, the summary's values are the modules' values, the memoised analysis is unchanged by the modules (JSON
+  equal to a fresh run), sections left out leave no dangling link).
+- `node tests/smoke/steel-bridge-report.mjs` (headless Chromium): 0 console errors, 0 `.katex-error`, links, collapse, search, every-station
+  mode, print emulation (260 Letter pages for the built-in project, governing detail).
+### Other copies
+- None.
+### Open items
+- SB2-R2 (known, engine fix pending in engine/flexure.js, another PR): at 10 pier locations of the built-in project GS7 is not evaluated
+  (f_bu ≥ F_cr with f_ℓ = 0 gives 0 × ∞ = NaN in `ampFl`). The report does not hide it: the Flexure section and the summary list the locations
+  ("Not evaluated (ratio not a number)"), and their checks table shows "not evaluated". `tests/engine/report.test.mjs` allows that one step
+  (`KNOWN_NAN = fx.fl`) only together with that notice; remove it from the set when the engine fix lands.
+- The report covers the girder selected on the Girders & plates tab; a report of every girder at once is not offered.
