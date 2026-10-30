@@ -21,7 +21,7 @@
    Equation notation (eq, sub, sym, unit): a small TeX subset that is also valid KaTeX, so that the built-in renderer and
    KaTeX (toHTML, when the page has loaded it; 2026-10-29) show the same strings: _{…} subscript, ^{…} superscript, \frac{a}{b}, \bar{x}, \sqrt{x}, \text{…},
    Greek letters (\gamma, \phi, \lambda, \beta, \rho, …), \sum, \cdot, \times, \le, \ge, \lt, \gt, \ne, \pm, \minus,
-   \prime, '\,' (thin space). Nothing else. toText() renders it without any library; toHTML() with KaTeX when window.katex
+   \prime, \ell, \tan, \circ (30^{\circ} -> 30°), '\,' (thin space). Nothing else. toText() renders it without any library; toHTML() with KaTeX when window.katex
    exists, else without (see below). tests/engine/tex.test.mjs parses every step string of the engine tests with KaTeX. */
 (function () {
   'use strict';
@@ -60,7 +60,8 @@
   /* ---------- rendering of the equation notation ---------- */
   const SYM = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', epsilon: 'ε', eta: 'η', theta: 'θ', lambda: 'λ', mu: 'μ', pi: 'π',
     rho: 'ρ', sigma: 'σ', Sigma: 'Σ', tau: 'τ', phi: 'φ', psi: 'ψ', omega: 'ω', chi: 'χ', sum: 'Σ', cdot: '·', times: '×', le: '≤', ge: '≥',
-    lt: '<', gt: '>', ne: '≠', pm: '±', minus: '−', prime: '′', infty: '∞', to: '→', approx: '≈', ldots: '…', max: 'max', min: 'min' };
+    lt: '<', gt: '>', ne: '≠', pm: '±', minus: '−', prime: '′', infty: '∞', to: '→', approx: '≈', ldots: '…', max: 'max', min: 'min',
+    ell: 'ℓ', tan: 'tan', circ: '°' };   // ell, tan, circ: added 2026-10-29 (the engines' \ell, \tan θ, 30^{\circ}); before, the words "ell", "tan", "circ"
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   function render(src, html) {
     let i = 0;
@@ -85,9 +86,11 @@
         else if (cmd === ',' || cmd === ' ' || cmd === ';') out += html ? '&thinsp;' : ' ';
         else if (cmd === '{' || cmd === '}' || cmd === '%' || cmd === '_') out += cmd;
         else if (cmd === 'left' || cmd === 'right') { /* the bracket that follows is printed as is */ }
+        else if (cmd === 'tan') { out += SYM.tan; if (/^[A-Za-z\\{]/.test(src.slice(i))) out += html ? '&thinsp;' : ' '; }   // \tan\theta -> 'tan θ' (as KaTeX spaces an operator)
         else out += SYM[cmd] != null ? SYM[cmd] : cmd;
       } else if (c === '_' || c === '^') {
         i++; const a = render(group(), html);
+        if (c === '^' && a === '°') { out += '°'; continue; }   // 30^{\circ} -> '30°' (a degree sign, not a raised '°')
         out += html ? (c === '_' ? `<sub>${a}</sub>` : `<sup>${a}</sup>`) : (c === '_' ? '_' : '^') + (a.length > 1 ? '(' + a + ')' : a);
       } else if (c === '{' ) { out += render(group(), html); }
       else { out += html ? esc(c) : c; i++; }
