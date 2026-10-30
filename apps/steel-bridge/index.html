@@ -38,6 +38,8 @@
 <script src="ui/constructibility.js"></script>
 <script src="engine/splices.js"></script>
 <script src="ui/splices.js"></script>
+<script src="engine/autodesign.js"></script>
+<script src="ui/autodesign.js"></script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
   :root{
@@ -149,7 +151,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -273,6 +275,7 @@
     if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g }); return; }   // Fatigue & studs tab (ui/fatigue.js)
     if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P, g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)
     if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P, g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
+    if (ui.otab === 'ad') { window.SBDAutoDesignUI.render($('out'), { P, g: ui.g, changed: r => changed(r) }); return; }   // Auto design tab (ui/autodesign.js)
     if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;

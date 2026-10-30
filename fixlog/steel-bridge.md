@@ -972,3 +972,73 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   this port, use d_h + 1/16 in (6.8.3): 530.53 kip. Manual text only; not changed here (old file).
 - Not ported (GirderDetail UI aids): "Suggest splice" (location from contraflexure and bolt-size cost comparison), the locks of the
   auto-design, the DXF and 3D views of the splice.
+
+
+## 2026-10-30 — PR: sbd2-autodesign-1 — Auto design: engine and basic tab (engine/autodesign.js, Auto design tab; new files)
+### Where
+- New `apps/steel-bridge/engine/autodesign.js` (`window.SBDAutoDesign`): Auto design, which replaces Preliminary sizing's Suggest
+  (quick suggestion, Full design `suggestFull`), its Alternatives study and ST-Girder's Optimize (`OptimizeTab`) in the new app.
+  Modes New design / Refine current design / Check one change; objectives lightest steel / shallowest depth / lowest cost (price list:
+  $/lb, $ per flange transition, field splice, intermediate stiffener). Functions: `settings`, `layoutOf`, `segmentsOf`, `projectWith`,
+  `lineWeight`, `costOf`, `proportions` (6.10.2 and the depth rule, as steps), `boltFitWidth` (DT10), `payloadOf` (a copy of
+  ui/fatigue.js `fromAnalysis`, the analysis passed in), `evaluate` (screen / full), `sizeFlanges` (Preliminary sizing `sizeFlanges`
+  on required areas at the check locations), `design`, `trim`, `run` (generator), `runChunked`, `apply`, `undo`.
+- New `apps/steel-bridge/ui/autodesign.js` (`window.SBDAutoDesignUI`): the Auto design output tab (inputs, Run / Stop with progress,
+  ranked list, plates and worked steps of a candidate, Apply, one-step Undo, the dropped and blocked lists).
+- `engine/model.js`: header only (the optional `autodesign` field). `apps/steel-bridge/index.html`: two script tags, the tab button,
+  the drawOut hook. No storage key or saved format changed; `P.autodesign` is optional (absent = the defaults).
+- New tests: `tests/engine/autodesign.test.mjs`, `autodesign-parity.mjs` (parity run), `record-autodesign-legacy.mjs` (legacy runs in
+  Node), `ad-fixture.mjs`, `legacy-closure.mjs` (loads a legacy function with every top-level declaration it names, before running it),
+  `st-source.mjs` (ST-Girder's page text, `stDecl`, `stAdopt`: gdCheck and gdAdopt of "Pull from GirderDetail").
+  Recorded results: `tests/projects/sbd2-autodesign/`.
+### Problem
+- New module (docs/REBUILD_PLAN.md §5: "Preliminary sizing, Suggest and Optimize run on the same engine"; Auto design spec approved 2026-10-29).
+### Governing provision
+- No new check: every check is the module's own (AASHTO LRFD 10th Ed. (2024): 6.10.1–6.10.9, 6.10.3, 6.10.4, 6.10.5, 6.10.7, 6.10.8,
+  App. A6, 6.6.1.2, 6.10.10, 6.10.11, 6.7.4, 6.13.6.1). Sizing rules, worked as steps on each candidate: 6.10.2.1.1 (D/t_w ≤ 150),
+  6.10.2.2 (b_f/2t_f ≤ 12, b_f ≥ D/6, t_f ≥ 1.1t_w, 0.1 ≤ I_yc/I_yt ≤ 10), Table 2.5.2.6.3-1 (minimum depth 0.027L continuous /
+  0.033L simple, the optional criterion Preliminary sizing applies), 4.6.2.6.1 (b_eff = tributary width when the girder count changes).
+  Owner plate rules (engine/owners.js, OWN14): def.minTw, def.minTf, def.minBf, def.incD, def.incBf, def.thk, def.sLo; flange.weld
+  (MassDOT 1300 lb, RIDOT 800 lb minimum saving per transition), flange.sizes (MassDOT ≤ 3 sizes between bolted splices), spl.ovs
+  (CTDOT 2 in edge distance in the bolt-fit width).
+- No formula, factor, unit or code reference of any module changed.
+### Check case (hand, in tests/engine/autodesign.test.mjs)
+- Layout 100 ft, D = 60, t_w = 1/2, top 16 × 1, bottom 18 × 1 1/2, 5 girders: A = 16 + 27 + 30 = 73 in²;
+  W_line = 73 × 490/144 × 100 = 24,840.3 lb; W = 124,201.4 lb; cost with 4 stiffeners = 3.00(124,201.4) + 5(150)(4) = $375,604.
+- 6.10.2: D/t_w = 120 (0.800 of 150); b/2t = 8.0 / 6.0; D/6 = 10 ≤ 16; 1.1t_w = 0.55 ≤ 1; I_yc/I_yt = 341.33/729.0 = 0.468;
+  depth 0.033(100)(12) = 39.6 ≤ 62.5 in.
+- Bolt fit (7/8 in bolts, t_w 9/16, web splice plate 1/2, c_w 1/2, C_1 1.5, g 3 in): AASHTO e_min 1.125: g0 = ⌈2.406⌉¼ = 2.5,
+  two lines 2(2.5 + 3 + 1.125) = 13.25 in; CTDOT edge 2 in: g0 = ⌈3.281⌉¼ = 3.5, two lines 2(3.5 + 3 + 2) = 17.0 in (> 16 in: the DT10
+  note, SB2-SP7), one line 2(3.5 + 2) = 11.0 in.
+### How verified
+- See "Parity" below and `node tests/engine/run.mjs autodesign`. The full-check payload equals the Fatigue & studs tab's own (every
+  FA, SC and GS17 ratio identical).
+### Other copies
+- `payloadOf` is a copy of ui/fatigue.js `fromAnalysis` (the analysis passed in instead of run again); the test compares them.
+### Decisions (made here, per the engineer's rule of 2026-10-29)
+- SB2-AD1. Splice bolt fit (DT10) is a sizing constraint: the flange of each field piece next to a splice is at least the bolt-fit width
+  of `splices.bolts.minLines` gage lines (the formula of engine/splices.js autoDesign `needB`, the owner's edge distance). Where that
+  rule raised a width, the same design is also sized with one gage line each side of the web (splices.bolts.minLines = 1 on Apply), and
+  the objective picks (lightest steel: usually one line, since the splice plates are not in the girder weight; lowest cost: the same,
+  as the price list has no splice-plate term). Recorded as the engineer asked (task note of 2026-10-30).
+- SB2-AD2. Screen live load: the per-lane live-load envelopes (the moving-load run, 5 to 8 s a girder) are taken from one run on the
+  current stiffness for every screened trial; the distribution factors, dead loads and every check are each trial's own. The full check
+  of a finalist runs the live load on its own stiffness. Accuracy is kept by the full check (a finalist that fails drops out).
+- SB2-AD3. Flexure in Auto design runs on this app's analysis through engine/flexure.js `fromPayload` (the path the Fatigue tab uses for
+  GS17), with the project's deck rebar (two layers), modular ratio (w_c for E_c, K_1, the n rule), grades and f_ℓ from the skew
+  (C6.10.1, as the Flexure tab's file path); the Flexure tab itself still runs the example or a hand-off file.
+- SB2-AD4. One layout for every plate girder of the project (Suggest's "envelope"), checked girder by girder.
+- SB2-AD5. A new girder count spaces the girders equally over the same out-to-out girder width and sets b_eff to the tributary width
+  (4.6.2.6.1); the overhangs are kept.
+- SB2-AD6. Blocked designs: a finalist whose every failing check also fails in the current design (module and check id; detail inputs
+  the plates do not change, e.g. CTDOT CF11 bolts per cross-frame member end, splice end distances DT4) is listed apart as "blocked by
+  detail checks", never as a passing candidate, with those checks named.
+- SB2-AD7. Required areas are carried at the check locations themselves (both sides of a plate change), so a zone's resizing uses only
+  its own side's ratios. Area update per trial: A f(r), f = min(1.02r, 1.35) above 1, max(r/0.97, 0.8) below (Preliminary sizing's Full
+  design). Fatigue details FA1 are in the screen (they depend on the flange areas).
+### Open items
+- SB2-AD8. engine/splices.js autoDesign keeps the default end distances e_f, e_p (1.75 in) under CTDOT's 2 in edge rule (DT4 fails on
+  every auto-designed CTDOT splice, as in GirderDetail); and the built-in cross-frame connection has 2 bolts per member end against
+  CTDOT's 4 (CF11). Both block every Auto design candidate of a CTDOT project until the detail inputs change. Engineer to decide whether
+  the splice auto-design should set the end distances to the owner's edge distance.
+- PR 2: side-by-side compare, locks, the full price-list editor, links from the governing check into the module's steps.
