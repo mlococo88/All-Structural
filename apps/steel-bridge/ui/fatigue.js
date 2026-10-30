@@ -189,6 +189,7 @@
       rd.readAsText(f); });
     host.querySelectorAll('.fx-list').forEach(el => el.addEventListener('click', e => { const tr = e.target.closest('[data-fa]'); if (!tr) return; const [k, i] = tr.dataset.fa.split(':'); S.sel = { k, i: +i }; redraw(); }));
     host.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const [k, i, id] = a.dataset.go.split(':'); S.sel = { k, i: +i }; redraw(); const t = host.querySelector('#st-' + (id || '').replace(/[^\w.-]/g, '')); if (t) t.scrollIntoView({ block: 'center' }); }));
+    if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.fatigue(host, ctx, S.R, S.sel, v => { S.sel = v; redraw(); });   // the graphics (ui/tabgraphics-b.js): a click selects the same row
   }
   function defaultSel(R) {
     const c = [];
@@ -214,6 +215,7 @@
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
       ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
       ${R.FR.errors.length ? `<div class="alert err">Fatigue: ${R.FR.errors.map(esc).join('; ')}</div>` : ''}${R.SR.errors.length ? `<div class="alert err">Shear connectors: ${R.SR.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
+    h += `<section class="sec"><div class="secHead">Fatigue &amp; studs: graphics</div><div class="secBody"><div data-gfxb="fatigue"></div><div data-gfxb="fatigue-chart"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // fatigue details
     if (!R.FR.errors.length) { const C = R.FC, ck = id => C.find(c => c.id === id);
       h += `<section class="sec"><div class="secHead">Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)</div><div class="secBody"><p class="note">ADTT<sub>SL</sub> = ${fmt(R.FR.ADTTSL, 0)} trucks/day. Each detail: Fatigue I where ADTT<sub>SL</sub> is at least its infinite-life equivalent, else Fatigue II. Exempt: net compression under the permanent loads (FA2).</p>

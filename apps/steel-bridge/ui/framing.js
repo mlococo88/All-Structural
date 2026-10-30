@@ -100,6 +100,7 @@
       <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk('cf.dg')}</span></div><div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
       <div><span>Deck placement M<sub>u</sub></span><span>${fmt(+I.p.sb.Mu, 1)} kip-ft</span></div><div><span>Stability span L, frames n</span><span>${fmt(I.p.sb.L, 2)} ft, ${I.p.sb.n}</span></div>${R.W ? `<div><span>F<sub>w</sub> Strength III / V</span><span>${fmt(R.W.III.Fw, 2)} / ${fmt(R.W.V.Fw, 2)} kip ${wk('cf.wIII.Fw')}</span></div>` : ''}</div>
       <p class="note">M<sub>u</sub>: ${esc(I.src.Mu || '')}; ${esc(I.src.sb || '')}.</p></div></section>`;
+    h += `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
     h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L)}
       <div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th>Skew θ (°)</th><th class="lft">Orientation</th><th>Frames</th><th>Spacing (ft)</th><th>Conflicts</th><th></th></tr></thead><tbody>
@@ -136,6 +137,7 @@
     css(); const key = JSON.stringify([ctx.P, ctx.g]);
     if (key !== S.key) { S.key = key; try { S.R = build(ctx); } catch (e) { S.R = { err: 'Calculation error: ' + (e && e.message) }; } }
     host.innerHTML = S.R.err ? `<div class="alert err">${esc(S.R.err)}</div>` : results(S.R);
+    if (!S.R.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.crossframe(host, ctx, S.R);   // the cross-frame elevation (ui/tabgraphics-b.js)
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 

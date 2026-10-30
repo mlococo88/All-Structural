@@ -107,6 +107,7 @@
       rd.readAsText(f); });
     on('wt_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = defaultSel(R); } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
     host.querySelectorAll('[data-wt]').forEach(tr => tr.addEventListener('click', () => { const [k, i] = tr.dataset.wt.split(':'); S.sel = { k, i: +i }; redraw(); const t = host.querySelector('#wt-steps'); if (t) t.scrollIntoView({ block: 'start' }); }));
+    if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.welds(host, ctx, S.R, S.sel, v => { S.sel = v; redraw(); });   // the graphics (ui/tabgraphics-b.js): a click selects the same row
   }
   function defaultSel(R) {
     let b = null; R.C.forEach(c => c.items.forEach(it => { const r = typeof it.r === 'number' ? it.r : null; if (r == null || !it.step) return; if (!b || r > b.r) b = { r, step: it.step }; }));
@@ -120,6 +121,7 @@
       <p class="note">${B.what || ''}</p><p class="note">n = ${fmt(R.MR.n, 3)}; b<sub>eff</sub> = ${fmt(R.dk.beff, 2)} in; F<sub>u</sub> of the web ${fmt(R.Fuw, 0)} ksi; γ<sub>DC</sub> ${fmt(R.g.dc, 3)}, γ<sub>DW</sub> ${fmt(R.g.dw, 3)}, γ<sub>LL</sub> ${fmt(R.g.ll, 3)}${R.env.eta !== 1 || R.env.m !== 1 ? ` (× η ${fmt(R.env.eta, 3)}${R.env.m !== 1 ? `, m ${fmt(R.env.m, 2)}` : ''})` : ''}, γ<sub>fat</sub> ${fmt(R.g.fat, 2)}${R.env.h0 ? '; haunch 0 in the composite properties (owner rule)' : ''}.</p>
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Check</th><th class="lft">Governing location</th><th>Ratio</th><th class="lft">Reference</th></tr></thead><tbody>${govRows}</tbody></table></div>
       ${C.filter(c => !c.items.length).map(c => `<p class="note">${esc(c.id)} ${esc(c.title)}: ${esc(c.naWhy)}</p>`).join('')}</div></section>`;
+    h += `<section class="sec"><div class="secHead">Welds: graphics</div><div class="secBody"><div data-gfxb="welds"></div><div data-gfxb="weld-detail"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     h += `<section class="sec"><div class="secHead">Flange-to-web welds (FW1–FW4): ${R.fw.length} locations</div><div class="secBody"><p class="note">Click a row for its work.</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Location</th><th>w (in)</th><th>v<sub>u</sub> top / bottom (kip/in)</th><th>R<sub>r</sub> (kip/in)</th><th>FW1</th><th>FW2</th><th>FW3</th><th>FW4</th></tr></thead><tbody>
       ${R.fw.map((r, i) => { const f1 = ck('FW1').items.slice(2 * i, 2 * i + 2), f2 = ck('FW2').items[i], f3 = ck('FW3').items.filter(it => it.step && it.step.startsWith(`wf${r.i}.`)), f4 = ck('FW4').items.slice(2 * i, 2 * i + 2), mx = a => a.reduce((s, it) => it.r > s ? it.r : s, -Infinity);
