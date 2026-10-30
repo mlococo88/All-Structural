@@ -22549,3 +22549,54 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
   skew input to 0 … 60° and gets the largest |θ| from GirderDetail's hand-off (unchanged).
 - **Saved data:** none changed (skews are stored as entered, signed).
 - **Open items:** none new.
+
+## 2026-10-30 — PR: claude/sbd-gs-ampfl (SB2-R2: flange lateral bending amplification, 6.10.1.6; f_ℓ = 0 no longer gives NaN, f_bu ≥ F_cr with f_ℓ > 0 fails with its reason; NaN guard in the check list and the summary; PR link added after merge)
+- **Problem:** `ampFl` (GirderDetail Girder section) returns f_ℓ·AF with AF = ∞ where Eq. 6.10.1.6-4 applies and f_bu ≥ F_cr. With f_ℓ = 0 this
+  is 0 × ∞ = NaN: GS7 (and GS9 compression flange, GS14) get ratio NaN. `rc` marks the item failing, but its ratio prints "—" and the
+  summary's governing ratio (`gmSummary`, Check at any location `gsaShow`) drops it (`isFinite` filter), so the overstress does not show as
+  the governing ratio. With f_ℓ > 0 the ratio is ∞, also dropped from the governing ratio, with no reason given. The overhang bracket module
+  (`GM.oh.compute`, OH1/OH2/OH5) has the same arithmetic inline. Fix: less hidden, more conservative display; no capacity or demand formula changed.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.6, Eq. 6.10.1.6-4 (f_ℓ = (0.85/(1 − f_bu/F_cr)) f_ℓ1 ≥ f_ℓ1) and -5
+  (F_cr); the checks that use the amplified f_ℓ: 6.10.8.1.1 (Eq. 6.10.8.1.1-1, GS7), A6.1.1 (GS9), 6.10.1.6-1 (GS10), 6.10.3.2.1 (Eqs. -1, -2;
+  GS14, OH1, OH2), 6.10.1.6-1 (OH5).
+- **Decision (engineer's rule of 2026-10-29, decided here):** f_ℓ = 0 → the amplified f_ℓ is 0 (Eq. 6.10.1.6-4 multiplies f_ℓ1; nothing to
+  amplify). f_ℓ > 0 with f_bu ≥ F_cr → the amplification is undefined: the compression flange is beyond elastic lateral-torsional buckling under
+  the first-order f_ℓ. The check is NG with ratio ∞ and the status "NG: f_bu ≥ F_cr, amplification undefined (6.10.1.6)"; it governs.
+- **Where / before / after:**
+  - `function ampFl(` — before: `return { AF, fl: fl * AF, req };` after: `return { AF, fl: fl === 0 ? 0 : fl * AF, req, und: AF === Infinity && fl !== 0 };`
+  - New `function ampNG(it, am, fbu, Fcr)` after it: when `am.und`, the item gets `r = Infinity`, `st = 'fail'`, `ampUndef = true`, the ratio
+    cell "NG: f_bu ≥ F_cr, amplification undefined (6.10.1.6)", "∞" for the demand cell, and the work line f_bu = … ≥ F_cr = … (Eq. 6.10.1.6-4
+    undefined). Wrapped around the items: GS7 (`c.items.push(sel(ampNG(rc(np ?`, with `r.am, r.fbuC, lt.Fcr`), GS9 compression flange
+    (`a.am, r.fbuC, r.lt.Fcr`), GS10 Strength I bottom flange (`r.pos ? null : r.am`) and deck placement (`r.amC, r.conC.f, r.ltC.Fcr`), GS14
+    yielding and buckling (`r.amC, f, lt.Fcr`), OH1, OH2, OH5 compression flange (`r, r.fbu, r.Fcr`).
+  - `GM.oh.compute`, anchor `r.AF = r.ampReq ?` — before: `c.fl = c.fl1 * r.AF;` after: `c.fl = c.fl1 === 0 ? 0 : c.fl1 * r.AF; … r.und = r.AF === Infinity && c.fl1 !== 0;`
+  - `function ckNew(` (every GirderDetail module): NaN guard — an item with a NaN ratio (not na) is marked `nanErr`, does not pass (pass → fail;
+    a "not the method in use" warning stays a warning), its ratio cell reads "error: ratio is NaN"; within a check NaN and ∞ rank above every
+    finite ratio (`gvR`; before `(it.r ?? -1) >` skipped NaN).
+  - New `function gsGovern(CK)` (before `function gmSummary(`): the summary's governing item; a failing item with a non-finite ratio governs.
+    Before (in `gmSummary` and `gsaShow`): `.filter(x => x.it.r !== undefined && isFinite(x.it.r)).sort((a, b) => b.it.r - a.it.r)[0]`.
+    Display `gvTxt`: "∞ (NG)" for an undefined amplification, "error (NaN)" for NaN, else f2 (the summary table cell too, before "—").
+- **Check case (hand):** built-in bridge, G1, this rebuild app's analysis (the case in fixlog/steel-bridge.md SB2-R2), x = 109.99 ft (Pier 1):
+  18 × 1.5 top, 60 × 0.5625 web, 18 × 2 bottom flange; F_yc = 50 ksi; M_u = −8,256.77 kip-ft; f_ℓ = 0.
+  - f_bu = 39.667 ksi (bottom flange, Strength I). Nonprismatic L_b = 23.33 ft (6.10.8.2.3c, section change 16 × 1.125 at 5.33 ft): C_b = 1.0,
+    γ_e = 0.88119, f_bu,gov = 39.683 ksi → F_e = 0.88119 × 39.683 = 34.968 ksi = F_cr = F_nc,LTB; F_nc,FLB = 50; F_nc = 34.968 ksi.
+  - 6.10.1.6: L_b = 279.96 in > 1.2L_p√(C_bR_b/(f_bu/F_yc)) = 1.2(81.976)√(1/(39.667/50)) = 98.372 × 1.12271 = 110.44 in → Eq. -4 applies;
+    f_bu/F_cr = 39.667/34.968 = 1.1344 ≥ 1 → AF undefined (∞).
+  - Before: f_ℓ = 0 × ∞ = NaN; GS7 = (39.667 + NaN/3)/34.968 = NaN: ratio "—" (status fail), summary governing ratio 0.989 (GS4, x = 80 ft).
+  - After: f_ℓ = 0; GS7 = (39.667 + 0/3)/34.968 = **1.134 NG**, governs (summary: GS7 1.134 at x = 249.99 ft, the symmetric pier).
+  - With f_ℓ = 7.5 ksi at the same row: before GS7 and GS10 ratio ∞ printed "—", summary 0.989; after GS7 / GS10 "NG: f_bu ≥ F_cr, amplification
+    undefined (6.10.1.6)", summary "∞ (NG)" GS7.
+  - Overhang brackets (GM.oh built-in rows with L_b = 120 ft: f_bu 25.82 ≥ F_cr 1.94 ksi, f_ℓ1 261.8 ksi): OH1/OH2/OH5 fail with the reason (before: "—").
+- **How verified (Node, gd-source.mjs pattern, patched file vs origin/main c0f55df; no browser compare per the speed rules):** GirderDetail's
+  `GM.gs.compute` + `checks` at every station of the 100 tests/projects/st/gd_*.json payloads, each also with f_ℓ = 7.5 ksi (200 cases), plus the
+  built-in project from the rebuild app's analysis (f_ℓ 0 and 7.5): 1,715,953 check items compared. The 100 payloads (GirderDetail's own demands; the
+  20 project/owner combinations of the recordings tests/projects/sbd2-loads, 5 girders each): **0 changes**. Built-in project, rebuild analysis:
+  10 GS7 items NaN → 1.134 (status fail before and after; no status flip); summary governing ratio 0.989 → 1.134 (GS7); with f_ℓ 7.5, 10 GS7 + 10 GS10
+  items keep ratio ∞ / fail and now carry the reason; summary 0.989 → ∞ (NG). `node tests/engine/run.mjs` passes; `tests/check-syntax.mjs` passes;
+  one page load (flock): 0 console errors.
+- **Pedestrian load (SB2-R1) in this file:** not double-counted. ST-Girder (`st-src`) takes the hand-off LL+IM as is; with `pedestrianInLL:true`
+  it only removes m from the pedestrian part (`llD = v − q + q/m`, GD45); GirderDetail uses its own analysis. No change.
+- **Other copies:** the rebuild app `apps/steel-bridge/engine/flexure.js` `ampFl` and `engine/constructibility.js` (next PR, fixlog/steel-bridge.md).
+- **Saved data:** none changed. The hand-off export (`girderDetail.checks`) writes the same fields; a value that was NaN is now 0 (f_ℓ = 0) or ∞ (null in JSON, as before).
+- **Open items:** the bearing stiffener (`bsRenderSummary`) and field splice (`renderSummary`) summaries sort without an isFinite filter; no NaN
+  path was found in their checks, and the ckNew guard now marks any NaN item there as an error. Not changed.
