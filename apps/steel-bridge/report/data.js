@@ -4,22 +4,28 @@
      loads        ui/loads.js calc(P, g)                                   (Loads & LLDF tab)
      analysis     engine/analysis.js analyzeGirder(P, g)                   (Analysis tab)
      sections     engine/sections.js card() per plate segment, as index.html calc() (Section properties tab)
-     flexure      ui/flexure.js build() (the Flexure tab): this app's analysis (its "This project's analysis" source, f_ℓ = 0, Appendix A6
-                  where permitted; since 2026-10-30, report wiring PR: before, the flexure of ui/rating.js build()), or the hand-off file. With
-                  the analysis its locations and capacities equal the Rating tab's (checked here, flexSame; tests/engine/report-wiring.test.mjs):
-                  the rating's capacity links then point at the Flexure section's locations
+     flexure      ui/flexure.js build() (the Flexure tab): this app's analysis (its "This project's analysis" source, Appendix A6 where
+                  permitted; since 2026-10-30, report wiring PR: before, the flexure of ui/rating.js build()), or the hand-off file. f_ℓ and
+                  the brace points are the tab's (paths PR, 2026-10-30: f_ℓ entered on the Flexure tab, else from skew, C6.10.1; the
+                  Framing tab's brace points; engine/framing.js design; before: f_ℓ = 0). Since the paths PR the rating's flexure IS this
+                  module's build (ui/rating.js), so with the analysis the report takes the rating's result (flexSame, checked here) and
+                  the rating's capacity links point at the Flexure section's locations
      shear        ui/shear.js build() with the demand source 'analysis' or the file (Shear & stiffeners tab)
      fatigue      ui/fatigue.js build() likewise (Fatigue & studs tab)
-     constr       engine/constructibility.js fromAnalysis / fromPayload + girder(), as ui/constructibility.js calc() (Constructibility tab),
-                  f_ℓ during deck placement P.constr.flC (saved with the project since 2026-10-30; absent = 0)
+     constr       ui/constructibility.js build() (Constructibility tab; since the paths PR, 2026-10-30: before, a copy of its calc() here),
+                  f_ℓ during deck placement P.constr.flC (saved with the project since 2026-10-30), else from skew (C6.10.1; paths PR)
      framing      ui/framing.js build() (Cross-frames tab)
      splices      engine/splices.js girder() on the analysis, as ui/splices.js calc() (Field splices tab); this app's analysis only
      rating       ui/rating.js build() (Rating tab)
+     welds        ui/welds.js build() (Welds tab; added 2026-10-30, paths PR), this app's analysis or the hand-off file
    The full analysis (live load, a few seconds) is run once and shared by the modules for this build (analyzeGirder is memoised for
    the duration of compute(), keyed by girder and options; the modules only read its result: tests/engine/report.test.mjs checks it).
    Since 2026-10-30 (report wiring PR, every-girder report) the memo is kept between builds: analysis(P, gi, o) caches each girder's
    analysis by the project's state (its JSON without the rating factors, which the analysis does not read), girder and options, so a
    girder's report after the every-girder summary (or a rebuild) does not run its analysis again; any change to the project is a new key.
+   install() (added 2026-10-30, paths PR; called once by index.html) puts every caller of SBDAnalysis.analyzeGirder through that cache:
+   the output tabs (Analysis, Flexure, Shear, Fatigue, Constructibility, Cross-frames, Splices, Rating, Welds) and the report share one
+   analysis per project state, girder and options, so switching tabs does not run the analysis again.
 
    compute(P, g, opt) -> bundle; opt = { src: 'analysis' (default) | 'file', pl (hand-off payload, src 'file'), plName, want: { key: true }
    (the sections to compute; default all) }. Each module's failure is caught and reported in bundle.err[key]; the rest still build. */
@@ -29,12 +35,18 @@
   /* the analysis cache (LRU, at most 2 entries per girder + 4): key = project state | girder | options */
   const CACHE = new Map();
   const pkOf = P => JSON.stringify({ ...P, rating: undefined });   // the rating factors (P.rating) are not read by the analysis
+  let RAW = null;   // engine/analysis.js analyzeGirder itself, once install() has put the cache in front of it
   function analysis(P, gi, o, pk, orig) {
-    const AN = W().SBDAnalysis, run = orig || AN.analyzeGirder, k = (pk || pkOf(P)) + '|' + gi + '|' + JSON.stringify(o || {});
+    const AN = W().SBDAnalysis, run = orig || RAW || AN.analyzeGirder, k = (pk || pkOf(P)) + '|' + gi + '|' + JSON.stringify(o || {});
     if (CACHE.has(k)) { const v = CACHE.get(k); CACHE.delete(k); CACHE.set(k, v); return v; }
     const v = run(P, gi, o); CACHE.set(k, v);
     const max = 2 * ((P.girders || []).length || 1) + 4; while (CACHE.size > max) CACHE.delete(CACHE.keys().next().value);
     return v;
+  }
+  /* install(): every call of SBDAnalysis.analyzeGirder goes through the cache (once; returns false when already installed or no engine) */
+  function install() {
+    const AN = W().SBDAnalysis; if (!AN || RAW) return false;
+    RAW = AN.analyzeGirder; const cached = (P, gi, o) => analysis(P, gi, o, null, RAW); cached.cached = true; AN.analyzeGirder = cached; return true;
   }
   function compute(P, g, opt) {
     opt = opt || {}; g = g || 0;
@@ -43,7 +55,7 @@
     if (src === 'file' && !pl) { B.err.all = 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).'; return B; }
     const AN = W().SBDAnalysis, orig = AN && AN.analyzeGirder, memo = new Map();
     const pk = AN ? pkOf(P) : '';
-    if (AN) AN.analyzeGirder = (P_, gi, o) => { if (P_ !== P) return orig(P_, gi, o); const k = gi + '|' + JSON.stringify(o || {}); if (!memo.has(k)) memo.set(k, analysis(P_, gi, o, pk, orig)); return memo.get(k); };
+    if (AN) AN.analyzeGirder = (P_, gi, o) => { if (P_ !== P) return orig(P_, gi, o); const k = gi + '|' + JSON.stringify(o || {}); if (!memo.has(k)) memo.set(k, analysis(P_, gi, o, pk, RAW || orig)); return memo.get(k); };
     B.memo = memo;
     const run = (k, f) => { const t0 = Date.now(); try { const r = f(); if (r && r.err) { B.err[k] = r.err; return null; } return r; } catch (e) { B.err[k] = 'Calculation error: ' + (e && e.message); return null; } finally { B.t[k] = Date.now() - t0; } };
     try {
@@ -52,15 +64,18 @@
       if (src === 'analysis' && (on('an') || on('spl') || on('flex') || on('rt') || on('shear') || on('fat') || on('sum'))) B.an = run('an', () => { const A = AN.analyzeGirder(P, g); return A.errors && A.errors.length ? { err: 'Analysis: ' + A.errors.map(e => e.msg || e).join(' ') } : A; });
       if (on('sec')) B.sec = run('sec', () => sections(P, g, B.an ? B.an.sup : pl ? (pl.member || {}).supports : sup0));
       if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
-      if (on('flex') || on('sum')) B.flex = src === 'file' ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'file', pl, plName: B.plName, fl: 0, method: 'auto' }))
-        : run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'analysis', fl: 0, method: 'auto' }));
+      // flexure: the Flexure module (f_ℓ and brace points as the tab: engine/framing.js design); with the analysis the rating's flexure is
+      // that module's build already (ui/rating.js, paths PR): the same object, not built twice
+      if (on('flex') || on('sum')) B.flex = src === 'file' ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'file', pl, plName: B.plName, method: 'auto' }))
+        : run('flex', () => (B.rating && B.rating.flex ? B.rating.flex : W().SBDFlexureUI.build({ P, g, src: 'analysis', method: 'auto' })));
       if (src === 'analysis' && B.flex && B.rating) B.flexSame = linkRating(B.rating, B.flex);
       if (on('shear') || on('sum')) B.shear = run('shear', () => W().SBDShearUI.build(src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
       if (on('fat') || on('sum')) B.fat = run('fat', () => W().SBDFatigueUI.build(src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
-      if (on('cn') || on('sum')) B.cn = run('cn', () => constr(P, g, pl));
+      if (on('cn') || on('sum')) B.cn = run('cn', () => W().SBDConstrUI.build(src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'project' }));
       if (on('frm') || on('sum')) B.frm = run('frm', () => W().SBDFramingUI.build({ P, g }));
       if ((on('spl') || on('sum')) && src === 'analysis') B.spl = run('spl', () => { if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
         if (!B.an) return { err: B.err.an || 'No analysis.' }; return W().SBDSplices.girder(P, g, B.an, { env: W().SBDSplicesUI.envOf(P) }); });
+      if (on('wd') || on('sum')) B.wd = run('wd', () => W().SBDWeldsUI.build(src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'analysis' }));
     } finally { if (AN) AN.analyzeGirder = orig; }
     B.sup = B.an ? B.an.sup : pl ? ((pl.member || {}).supports || []).map(Number) : null;
     return B;
@@ -100,18 +115,5 @@
     return { nr, lf, cards };
   }
 
-  /* constructibility, as ui/constructibility.js calc() (f_ℓ during deck placement: the project's P.constr.flC, absent = 0) */
-  function constr(P, g, pl) {
-    const C = W().SBDConstr, FRM = W().SBDFraming, flC = (v => (isFinite(v) ? v : 0))(P.constr && +P.constr.flC);
-    let F;
-    if (pl) { const gdF = pl.girderDetail || {}, frF = FRM && P.framing ? FRM.forGirder(P, { line: (+gdF.girder || 1) - 1 }, (pl.member || {}).supports) : null;
-      F = C.fromPayload(pl, { flC, ...(frF ? { braces: frF.braces } : {}) }); }
-    else { const AR = W().SBDAnalysis.analyzeGirder(P, g, { ll: false }); if (AR.errors && AR.errors.length) return { err: 'Analysis: ' + AR.errors.join(' ') };
-      const frA = FRM && P.framing ? FRM.forGirder(P, { gi: g }, null) : null;
-      F = C.fromAnalysis(P, g, AR, { flC, oh: { ...C.OH_DEF, ...((P.constr && P.constr.oh) || {}) }, ...(frA ? { braces: frA.braces } : {}) }); F.AR = AR; F.frA = frA; }
-    const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });
-    return { ...R, F, ext: F.ext };
-  }
-
-  window.SBDReportData = { compute, analysis, sameFlex, cache: CACHE };
+  window.SBDReportData = { compute, analysis, install, sameFlex, cache: CACHE };
 })();

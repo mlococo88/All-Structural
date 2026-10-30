@@ -9,14 +9,15 @@
      sum   Summary of governing ratios (links to each check)     proj  Project and owner        loads Cross-section, loads and LLDF
      an    Analysis                                               sec   Section properties       flex  Flexure
      shear Shear and stiffeners                                   fat   Fatigue and studs        cn    Constructibility (deck placement)
-     frm   Framing and cross-frames                               spl   Field splices            rt    Load rating
+     frm   Framing and cross-frames                               spl   Field splices            wd    Welds (added 2026-10-30)
+     rt    Load rating
    Step anchors: key = scope + '/' + step id (shared/report.js); scope '' for the lists that appear once (loads, analysis, framing,
    owner rules), else one scope per location ('flex@12', 'sh.st@3', 'spl@0', …). */
 (function () {
   'use strict';
   const U = () => window.SharedUnits, f = (x, d) => U().fmt(x, d);
   const SECTIONS = [['sum', 'Summary'], ['proj', 'Project & owner'], ['loads', 'Cross-section & loads'], ['an', 'Analysis'], ['sec', 'Section properties'], ['flex', 'Flexure'],
-    ['shear', 'Shear & stiffeners'], ['fat', 'Fatigue & studs'], ['cn', 'Constructibility'], ['frm', 'Framing & cross-frames'], ['spl', 'Splices'], ['rt', 'Rating']];
+    ['shear', 'Shear & stiffeners'], ['fat', 'Fatigue & studs'], ['cn', 'Constructibility'], ['frm', 'Framing & cross-frames'], ['spl', 'Splices'], ['wd', 'Welds'], ['rt', 'Rating']];
   const K = (scope, id) => (scope ? scope + '/' + id : String(id));
   const rc = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'ng' : r >= 0.9 ? 'hi' : 'ok';
   const okT = r => !isFinite(r) ? '—' : r > 1 + 1e-9 ? 'NG' : 'OK';
@@ -35,6 +36,11 @@
   const ED = 'AASHTO LRFD 10th Ed. (2024)';
   const spanOf = (sup, x) => { if (!sup || sup.length < 2 || x == null) return 1; let k = 0; while (k < sup.length - 2 && x > sup[k + 1] + 1e-9) k++; return k + 1; };
   const gName = g => g ? g.label || g.id : '';
+  /* f_ℓ of a module and where it comes from (engine/framing.js design: entered, else from skew, C6.10.1; paths PR 2026-10-30); the skew
+     value links to its step in the Framing section when that section works the same value */
+  const flNote = (B, D, tab) => !D ? '' : D.flSrc === 'entered' ? `$f_{\\ell}$ = ${f(D.fl, 2)} ksi as entered on the ${tab}`
+    : `$f_{\\ell}$ from skew (C6.10.1, in lieu of a refined analysis): largest support skew ${f(D.flS.skMax, 1)}°${D.flS.skMax > 20 + 1e-9 ? ` > 20°, $f_{\\ell}$ = ${D.flS.steps[0].sub} = ${f(D.fl, 2)} ksi` : ' ≤ 20°, $f_{\\ell}$ = 0'}${B.frm && B.frm.fl && B.frm.fl.fl === D.fl && B.frm.fl.skMax === D.flS.skMax ? ' [[flsk.fl]]' : ''}`;
+  const brNote = Gr => Gr.frB ? `the brace points of the Framing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : 'the cross-frame stations of the stiffener layout (the project has no framing)';
 
   /* ---------- 2. project and owner ---------- */
   function proj(B, X) {
@@ -162,7 +168,7 @@
     const shown = all ? rows : govRows;
     shown.forEach(r => X.have.set(r, scOf(r)));
     subs.push(sub('res', all ? 'Results at every location' : 'Governing location of each span and region', [
-      note(B.src === 'file' ? fromHtml(Gr.what) : `This project's analysis, as the [[tab:flex|Flexure tab]] with that source (f$_{\\ell}$ = 0, Appendix A6 where permitted): Strength I, Service II and Fatigue I flexure (engine/flexure.js) at every analysis station, with the project's plates, deck, materials and the cross-frame stations of the stiffener layout; the same locations and capacities as rated on the [[tab:rt|Rating tab]]${B.flexSame === false ? ' (here they differ from the rating\'s: its capacities are worked in the Load rating section)' : ''}. Load factors Tables 3.4.1-1, -2; $\\phi_{f}$ = 1.0.`),
+      note(B.src === 'file' ? fromHtml(Gr.what) : `This project's analysis, as the [[tab:flex|Flexure tab]] with that source (Appendix A6 where permitted): Strength I, Service II and Fatigue I flexure (engine/flexure.js) at every analysis station, with the project's plates, deck, materials and ${brNote(Gr)}; ${flNote(B, Gr.D, '[[tab:flex|Flexure tab]]')}; the same locations and capacities as rated on the [[tab:rt|Rating tab]]${B.flexSame === false ? ' (here they differ from the rating\'s: its capacities are worked in the Load rating section)' : ''}. Load factors Tables 3.4.1-1, -2; $\\phi_{f}$ = 1.0.`),
       Gr.oos ? note('A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported there.', true) : null,
       tbl(['Location', 'x (ft)', 'Region', 'Method', 'Governing check', 'Ratio'], shown.map(r => ({ cells: [r.name, N(r.x, 2), r.pos ? 'positive' : 'negative', r.p7 ? '' : r.useA6 ? 'App. A6' : '6.10.8',
         r.gov ? `${r.gov.id} ${tt(r.gov.title)}` : '', r.gov ? R3(r.gov.ratio, K(scOf(r), r.gov.step)) : '—'], cls: r === Gr.gov ? 'gov' : '' })))]));
@@ -256,7 +262,7 @@
     const ga = R.govAll;
     if (ga) X.gov.push({ mod: 'Constructibility', grp: 'Constructibility (deck placement)', check: `${ga.check.id} ${tt(ga.check.title)}`, loc: `x = ${f(ga.row.x, 2)} ft`, r: ga.ratio, key: keyOf(ga) });
     const wh = B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gName(B.girder)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
-    subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = 1.25$M_{DCc}$ + 1.50$M_{CL}$, $V_{u}$ = 1.25$V_{DC1}$ + 1.50$V_{CL}$ on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; $f_{\\ell}$ during deck placement 0 (the [[tab:cn|Constructibility tab]]'s default).`),
+    subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = 1.25$M_{DCc}$ + 1.50$M_{CL}$, $V_{u}$ = 1.25$V_{DC1}$ + 1.50$V_{CL}$ on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; ${R.D ? flNote(B, R.D, '[[tab:cn|Constructibility tab]]').replace('$f_{\\ell}$', '$f_{\\ell}$ during deck placement') : ''}.`),
       tbl(['Span', 'Top flange in compression', 'Bottom flange in compression', 'Tension flange', 'Shear (GS16)', ...(R.oh ? ['Overhang OH1–OH4', 'OH5'] : [])], R.spans.map(s => [String(s.span), cell(s.top), cell(s.bot), cell(s.tens), cell(s.shear), ...(R.oh ? [cell(s.oh), cell(s.ohfl)] : [])])),
       R.oh && R.oh.errors && R.oh.errors.length ? note('Overhang brackets: ' + R.oh.errors.join(' '), true) : null]));
     if (all) subs.push(sub('all', 'Results at every location', [tbl(['Location', 'x (ft)', '$M_{c}$ (kip-ft)', 'Flange in compression', 'Governing check', 'Ratio'], rows.map(r => ({ cells: [r.name, N(r.x, 2), N(r.Mc, 1), r.conC.lab, `${r.gov.id} ${tt(r.gov.title)}`, R3(r.gov.ratio, K(sc(r), r.gov.step))], cls: r === R.gov ? 'gov' : '' })))]));
@@ -321,7 +327,37 @@
     return { title: 'Field splices (bolted, 6.13.6.1)', subs };
   }
 
-  /* ---------- 12. load rating ---------- */
+  /* ---------- 12. welds (added 2026-10-30, paths PR): ui/welds.js build(), the Welds tab's result ---------- */
+  function wd(B, X) {
+    const Bw = B.wd, R = Bw.R, C = Bw.C, all = X.detail === 'all', subs = [], WT = window.SBDWelds, STT = { pass: 'OK', fail: 'NG', warn: 'Warning', adv: 'Advisory', na: 'n/a' };
+    // a check item's location: its step id is wf<i>.… (flange-to-web weld location i) or wt<i>.… (shop transition i); one scope per location
+    const locOf = it => { const m = /^w([ft])(\d+)\./.exec((it && it.step) || ''); return m ? { k: m[1] === 'f' ? 'fw' : 'tr', i: +m[2] } : null; };
+    const scOf = q => `wd@${q.k}${q.i}`, keyOf = it => { const q = locOf(it); return q ? K(scOf(q), it.step) : null; };
+    const num = it => typeof it.r === 'number' && isFinite(it.r);
+    // governing rows: the flange-to-web welds (FW1–FW4) and the shop transitions (TR1–TR4), the largest ratio of each
+    const gv = ids => { let b = null; C.filter(c => ids.test(c.id)).forEach(c => c.items.forEach(it => { if (num(it) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
+    const bad = ids => C.filter(c => ids.test(c.id)).flatMap(c => c.items.filter(it => !num(it) && (it.st === 'fail' || it.st === 'warn')).map(it => ({ c, it })));
+    const sel = new Set();
+    [[/^FW/, 'Welds: flange-to-web (FW1–FW4)'], [/^TR/, 'Welds: shop flange transitions (TR1–TR4)']].forEach(([ids, grp]) => { const q = gv(ids); if (!q) return;
+      const L = locOf(q.it); if (L) sel.add(scOf(L));
+      X.gov.push({ mod: 'Welds', grp, check: `${q.c.id} ${tt(q.c.title)}`, loc: q.it.loc, r: q.it.r, key: keyOf(q.it), ...(q.it.st === 'warn' ? { status: 'warn' } : {}) });
+      bad(ids).forEach(z => X.warn.push(`Welds: ${z.c.id} ${z.it.loc}: ${STT[z.it.st] || z.it.st}.`)); });
+    subs.push(sub('gov', `Governing checks, ${gName(Bw.g)}`, [note(`${fromHtml(Bw.what)} Two fillet welds per flange; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section. $\\gamma_{DC}$ ${f(R.g.dc, 3)}, $\\gamma_{DW}$ ${f(R.g.dw, 3)}, $\\gamma_{LL}$ ${f(R.g.ll, 3)}, $\\gamma_{fat}$ ${f(R.g.fat, 2)}; n = ${f(R.MR.n, 3)}. As on the [[tab:wt|Welds tab]]. ${ED}.`),
+      tbl(['Check', 'Governing location', 'Ratio', 'Status', 'Reference'], C.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
+        return it ? [`${c.id} ${tt(c.title)}`, it.loc, num(it) ? R3(it.r, keyOf(it)) : { t: '—', key: keyOf(it) }, STT[it.st] || it.st, String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')] : [`${c.id} ${tt(c.title)}`, { t: c.naWhy || 'n/a', cls: 'na' }, '—', 'n/a', String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')]; }))]));
+    subs.push(sub('fw', `Flange-to-web welds: ${R.fw.length} locations`, [tbl(['Location', 'w (in)', '$v_{u}$ top / bottom (kip/in)', '$R_{r}$ (kip/in)'], R.fw.map(r => ({ cells: [r.name, f(r.w, 4), `${f(r.vuT, 3)} / ${f(r.vuB, 3)}`, N(r.Rw, 3)], cls: sel.has(scOf({ k: 'fw', i: r.i })) ? 'gov' : '' })))]));
+    if (R.tr.length) subs.push(sub('tr', `Shop flange transitions: ${R.tr.length}`, [tbl(['Transition', 'Plates (in)', 'Cat.', 'γ(Δf) (ksi)'], R.tr.map(r => ({ cells: [r.name, `${f(r.b1, 2)} × ${f(r.t1, 4)} to ${f(r.b2, 2)} × ${f(r.t2, 4)}`, r.cat, N(r.df, 2)], cls: sel.has(scOf({ k: 'tr', i: r.i })) ? 'gov' : '' })))]));
+    // worked steps: the governing locations open; with 'all', every other location on demand (each location's own scope)
+    const locs = [...R.fw.map(r => ({ k: 'fw', i: r.i, name: r.name })), ...R.tr.map(r => ({ k: 'tr', i: r.i, name: r.name }))];
+    locs.filter(q => sel.has(scOf(q))).forEach(q => subs.push(sub(scOf(q), `${q.name} (governing)`, [steps(scOf(q), WT.steps(R, q.k, q.i), { title: 'Worked steps' })])));
+    // every item's step that a table links to must be worked here: the governing locations, then (all, or the links of the governing table) the rest on demand
+    const need = new Set(C.map(c => (c.gov >= 0 ? locOf(c.items[c.gov]) : null)).filter(Boolean).map(scOf));
+    const rest = locs.filter(q => !sel.has(scOf(q)) && (all || need.has(scOf(q))));
+    if (rest.length) subs.push(sub('every', all ? 'Every other location' : 'Other governing locations of single checks', rest.map(q => steps(scOf(q), WT.steps(R, q.k, q.i), { lazy: true, title: q.name }))));
+    return { title: 'Welds (flange-to-web, shop transitions)', subs };
+  }
+
+  /* ---------- 13. load rating ---------- */
   const GRP = [['flexP', 'Flexure, positive (Strength I)'], ['flexN', 'Flexure, negative (Strength I)'], ['shear', 'Shear (Strength I)'], ['svc', 'Service II (permanent deformation)'], ['fat', 'Fatigue (owner target only)']];
   function rt(B, X) {
     const R = B.rating, s = R.sum, all = X.detail === 'all', subs = [], rk = q => 'rt@' + R.rows.indexOf(q), rfStep = q => (q.steps.find(t => /(^|\.)inv$/.test(t.id)) || q.steps[q.steps.length - 1] || {}).id;
@@ -366,13 +402,13 @@
       errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null])] };
   }
 
-  const BUILD = { proj, loads, an, sec, flex, shear, fat, cn, frm, spl, rt };
-  const NEED = { loads: 'loads', an: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', rt: 'rating' };
+  const BUILD = { proj, loads, an, sec, flex, shear, fat, cn, frm, spl, wd, rt };
+  const NEED = { loads: 'loads', an: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [] };
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
-    const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, rt: B.rating };
+    const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, rt: B.rating };
     SECTIONS.forEach(([k, label]) => {
       if (k === 'sum') return;
       const want = on(k);
