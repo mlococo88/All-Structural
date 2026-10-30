@@ -77,19 +77,20 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
       assert.equal(P.deck.ts, gd.deck.ts); assert.equal(P.deck.haunch, gd.deck.haunch); assert.equal(P.materials.concrete.fc, gd.materials.fc, where);
       // analysis and flexure: G1 (exterior) and G2 (interior); G3-G5 repeat them (symmetric bridges, one plate layout); about 9 s a girder
       if (gi > 1) continue;
-      const A = RT.fromAnalysis(P, gi); assert.ok(!A.err, A.err); const S = A.pl.stations, Sg = pl.stations, PLp = Sg.some(s => s.M_PLpos) && pl.pedestrianInLL;
-      QA.forEach(([k, kg]) => { const val = s => (+s[kg] || 0) - (PLp && /LL/.test(k) ? (+s[kg.replace('LL', 'PL')] || 0) : 0);
-        const ref = Sg.map(val), ours = S.map(s => s[k]), sc = Math.max(...ref.map(Math.abs));
+      // LL+IM includes the pedestrian load in both (GirderDetail's hand-off: pedestrianInLL; this app: SBDAnalysis.llPL, sb-ped-owner PR), and M_PL alone
+      const A = RT.fromAnalysis(P, gi); assert.ok(!A.err, A.err); const S = A.pl.stations, Sg = pl.stations;
+      assert.equal(!!A.pl.pedestrianInLL, !!(pl.pedestrianInLL && Sg.some(s => s.M_PLpos || s.M_PLneg)), `${where} pedestrianInLL`);
+      [...QA, ...(A.pl.pedestrianInLL ? [['M_PLpos', 'M_PLpos'], ['M_PLneg', 'M_PLneg']] : [])].forEach(([k, kg]) => { const val = s => +s[kg] || 0;
+        const ref = Sg.map(val), ours = S.map(s => s[k] || 0), sc = Math.max(...ref.map(Math.abs));
         note(k + ' max', ext(ours, Math.max), ext(ref, Math.max), where, sc); note(k + ' min', ext(ours, Math.min), ext(ref, Math.min), where, sc); });
       // negative flexure per span (GS7/GS9 compression, GS8 tension), as the Flexure tab on a file, on this app's analysis
       const nf = gd.checks && gd.checks.negFlex; if (!nf) continue;
       const sup = A.pl.member.supports, frB = FRM.forGirder(P, { gi }, sup), flS = FRM.flSkew(P.xs.skews, g.position === 'exterior', P.framing);
-      // the owner's load factors as GirderDetail's Girder section applies them (OWN6/OWN7: γ_DC, γ_DW × η, γ_LL × η·m, Service II LL × m):
-      // engine/flexure.js does not apply the owner rules yet (its header, "Not ported"), so the test gives them
-      const lf = U.SBDOwners.loadFactors(ow, P.ownerRules.eta, P.xs.nb), G0 = FX.factors();
-      const F = FX.fromPayload(A.pl, { fl: flS.fl, owner: ow, rebar: P.deck.rebar, braces: frB.braces, lenOf: frB.lenOf,
-        G: { dc: G0.dc * lf.eta, dw: G0.dw * lf.eta, dcMin: G0.dcMin * lf.etaN, dwMin: G0.dwMin * lf.etaN, ll: G0.ll * lf.eta * lf.m, sll: G0.sll * lf.m } }), G = FX.girder(F.locs, F.prj, { supports: F.supports });
-      // xsA has sidewalks with a pedestrian load, which GirderDetail adds to LL+IM; this app's analysis has no pedestrian load yet (its warning): apart
+      // the owner's load rules as the Flexure tab applies them (sb-ped-owner PR: engine/flexure.js factorsOwner, OWN6/OWN7, and m kept off the
+      // pedestrian part, GD45), as GirderDetail's Girder section
+      const lf = U.SBDOwners.loadFactors(ow, P.ownerRules.eta, P.xs.nb);
+      const F = FX.fromPayload(A.pl, { fl: flS.fl, owner: ow, rebar: P.deck.rebar, braces: frB.braces, lenOf: frB.lenOf, lf }), G = FX.girder(F.locs, F.prj, { supports: F.supports });
+      // xsA (sidewalks with a pedestrian load) listed apart
       const sfx = pr === 'xsA' ? ' [xsA, pedestrian]' : '';
       for (const sp of nf.spans) { const a = sup[sp.span - 1], b = sup[sp.span];
         const rows = G.rows.filter(q => q.region === 'neg' && q.x >= a - 1e-6 && q.x <= b + 1e-6), mx = ids => Math.max(0, ...rows.flatMap(q => q.checks.filter(c => ids.includes(c.id) && c.inUse && isFinite(c.ratio)).map(c => c.ratio)));
@@ -107,13 +108,13 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
 //   diagonals: 2.80 kip on builtin G1); this app weighs the frame its Cross-frames module checks (the imported GirderDetail Cross-frames inputs: X-frame,
 //   L5x5x3/8 × 3: 4.73 kip), and the girder steel at 490/144 lb/ft per in² (SB2-A2, +0.08 % of the steel part). Largest 0.76 % (builtin AASHTO G2).
 // - M_DC2, M_DW ≤ 0.05 %: round-off of the hand-off (0.001 kip-ft) and the station grids (largest 0.006 %).
-// - LL+IM and fatigue moments ≤ 0.01 % (the pedestrian part of the hand-off taken out: this app has no pedestrian load yet).
+// - LL+IM (pedestrian load included on both sides since the sb-ped-owner PR), M_PL and fatigue moments ≤ 0.01 %.
 // - negative flexure ≤ 0.5 %: the M_DC1 above through f_bu, and C_b / L_b from this app's framing (largest 0.32 %, builtin CTDOT G2 span 1).
-// - xsA (sidewalks, 75 psf pedestrian load): ≤ 12 %: GirderDetail adds the pedestrian load to LL+IM; this app's analysis does not have it yet
-//   (engine/analysis.js warns). Largest 10.4 % (xsA RIDOT G1, 1.040 vs 1.160).
+// - xsA (sidewalks, 75 psf pedestrian load): ≤ 0.5 %, as the others (sb-ped-owner PR: the pedestrian load in the analysis and the owner η, m in
+//   engine/flexure.js; before: up to 10.4 %, xsA RIDOT G1, 1.040 vs 1.160).
 const BOUNDS = [['M_DC1 max', 0.01], ['M_DC1 min', 0.01], ...['M_DC2', 'M_DW'].flatMap(k => [[k + ' max', 5e-4], [k + ' min', 5e-4]]),
-  ...['M_LLpos', 'M_LLneg', 'M_FATpos', 'M_FATneg'].flatMap(k => [[k + ' max', 1e-4], [k + ' min', 1e-4]]),
-  ['negFlex comp. flange (GS7/GS9)', 0.005], ['negFlex tens. flange (GS8)', 0.005], ['negFlex comp. flange (GS7/GS9) [xsA, pedestrian]', 0.12], ['negFlex tens. flange (GS8) [xsA, pedestrian]', 0.12]];
+  ...['M_LLpos', 'M_LLneg', 'M_FATpos', 'M_FATneg', 'M_PLpos', 'M_PLneg'].flatMap(k => [[k + ' max', 1e-4], [k + ' min', 1e-4]]),
+  ['negFlex comp. flange (GS7/GS9)', 0.005], ['negFlex tens. flange (GS8)', 0.005], ['negFlex comp. flange (GS7/GS9) [xsA, pedestrian]', 0.005], ['negFlex tens. flange (GS8) [xsA, pedestrian]', 0.005]];
 
 test('nothing dropped: every leaf of the old parts is mapped or kept under legacy.unmapped; the import summary lists it', () => {
   for (const pr of PROJECTS) { const r = LG.importLegacy(sbdFile(pr, 'RIDOT')), P = r.project, U0 = P.legacy.unmapped;

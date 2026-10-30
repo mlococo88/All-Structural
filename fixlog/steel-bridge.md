@@ -1717,6 +1717,109 @@ Display and export only: no engineering formula, factor, unit or reference chang
 - Paper-space layouts (one layout per sheet with a viewport) need a DXF R2000+ writer in shared/dxf.js (SB2-DW6).
 - Flange-stress plots along the girder and the jacking / seismic reaction columns would be new calculations here (SB2-DW8, DW9).
 
+## 2026-10-30 — PR: sb-ped-owner — pedestrian load in the analysis, counted once in every module; owner η and m in Flexure (gaps found by the import PR #493)
+### Where
+- `engine/analysis.js`
+  - `loadsOf()`: before `o.PL = M && isNum(M.PL) ? M.PL : 0;` (read only for a warning). After: explicit `girder.loads.PL`, else the loads
+    module's share, else `loadsManual.PL`; `o.src.PL`.
+  - `analyzeGirder()`, live-load block: `pick(R, get)` takes an optional effect getter. New, after `llR = …`: when `LD.PL > 0`, `area(ei)`
+    integrates each effect's influence line (`RH.IL` / `RH.ends`, the HL-93 run's mesh, live-load stiffness) over its positive and
+    negative parts, as `shared/moving-load.js` does for the lane load; `ped = { w, Mpos, Mneg, VRpos, VRneg, VLpos, VLneg, R }` = w_PL × the
+    areas. Result field `pl: ped` (null without a pedestrian load). `R.ll` stays HL-93 only.
+  - The warning "Pedestrian load … not in this analysis yet" removed.
+  - `steps()`: new `M.PL.s<k>`, `M.PL.p<k>`, `M.LLPL.p<k>` (LL+IM + PL at the pier, as the modules use it), `R.PL.<k>`.
+  - New `llPL(R)` (exported): LL+IM + PL per station and reaction, the pedestrian load once, with `pl: R.pl`.
+- Every module that takes this app's analysis now builds LL+IM from `llPL` and carries the pedestrian part:
+  - `ui/rating.js fromAnalysis` (Rating and Flexure): `M_LL…`, `V_LL…` include PL; `M_PL…`, `V_PL…` its part; `pedestrianInLL: true`
+    (GirderDetail's hand-off format: SB2-R1 keeps flexure and shear from adding it again).
+  - `ui/shear.js fromAnalysis`: the same for the stations; `reactions[k].LL` = R_LL+IM + R_PL, `reactions[k].PL`; bearing rows
+    `pl: { RLL: [R_PL, R_LL] }`; web-panel shears `pl.VLLp`.
+  - `ui/fatigue.js fromAnalysis`: LL+IM + PL only in the Strength I envelope that places the stud regions; M_FAT, V_FAT unchanged (no PL).
+  - `ui/welds.js input`: `V.L/R.LL` from LL+IM + PL, `V.L/R.PL` its part (the welds engine tags `row.pl`).
+  - `engine/splices.js arraysFromAnalysis`: Mp, Mn, Vp, Vn from `llPL`; `PMp, PMn, PVp, PVn` its part; `demandsAt` builds
+    `dem.pl = { MLLp, MLLn, VLL: [part, value] }` as Preliminary sizing's spliceExport (GD45).
+  - Constructibility and cross-frames use `analyzeGirder(…, { ll: false })`: no live load, so no PL (deck placement, Table 3.4.1-1 / 3.4.2.1).
+  - LL deflection (`R.lld`): HL-93 only (2.5.2.6.2), as GirderDetail SA3.
+- `engine/shear.js demands()`: `Qp, Qn` = V_PLpos / V_PLneg (the pedestrian part, in LL or added); `pack()` returns `plLL` (the part of the
+  largest |V_LL|, GirderDetail V_PLq); `VuE` keeps m off it; `reaction()` returns `PL`; `fromPayload` sets `loc.pl = { VLL: [plLL, LL] }`.
+  `worked()`: step `pl.VLL` / `pl.VLLp`.
+- `engine/stiffeners.js`: `stiffenerRows` rows carry `pl: { VLL, VLLb, VLLc }`; `transverseSteps` / `bearingSteps` show the adjustment.
+- `engine/welds.js demandsFromPayload`: with `pedestrianInLL` the pedestrian part is now tagged too (before: 0, so m was applied to it).
+- `engine/flexure.js`
+  - New `factorsOwner(lf, over)` (exported): GirderDetail `gdOwnM(OWN_K.gs)`.
+  - `location()`: before `MLLp = num(M.LLp), MLLn = num(M.LLn)`; after `plU('LLp', …)`, `plU('LLn', …)`: with `loc.pl` and m ≠ 1,
+    `v − q + q/m` (GirderDetail gdPLe), recorded in `r.plAdj`. `worked()`: steps `own.ll`, `own.sll`, `pl.LLp` / `pl.LLn`.
+  - `fromPayload(pl, opt)`: `opt.lf` → `G = factorsOwner(opt.lf, opt.G)`; the Strength I envelope (C_b, region) and `fBotN` take LL+IM with
+    m off M_PL (`env.MnE`, as GirderDetail's row builder); locations get `pl: { LLp, LLn }` from M_PLpos / M_PLneg.
+- `ui/flexure.js`: analysis source passes `A.pl` as it is (not `noDoublePL`) with `lf`; file source takes the file's `ownerRules`
+  (eta.max, eta.min, llMultiplier.m); example source `G = factorsOwner(lf)`. Note line on the tab.
+- `ui/fatigue.js`: `fromAnalysis` exported (for the single-count test).
+- `engine/sheets.js` (drawing set, #492; coordinator request): `env(A)` → `env(A, P)`. Before: `G = FX.factors()` and `ll = A.ll`. After:
+  `G = FX.factorsOwner(SBDOwners.loadFactors(owner, eta, nb))`; LL+IM from `SBDAnalysis.llPL(A)` (pedestrian load once), with m off the
+  pedestrian part for the combinations (`v − q + q/m`); the unfactored LL+IM columns show LL+IM + PL. The diagram title states η and m
+  when they are not 1. Callers `gelev` and `diag` pass `C.P`. `tests/engine/sheets.test.mjs` recomputes the envelope the same way
+  (γ η (m LL + PL)), with the util RIDOT payload run under RIDOT rules (m = 1.2) and the xsA payload with its pedestrian load.
+- `tests/engine/splices.test.mjs` app path: compared with the payload's demands including the pedestrian load (was: taken out).
+- `engine/autodesign.js` (#494, merged meanwhile) `payloadOf`: the same change as `ui/fatigue.js fromAnalysis` (it is its copy:
+  `llPL`, `M_PL…`, `pedestrianInLL`), and its flexure `fromPayload` call passes `lf` (owner η, m) as the Flexure tab. Auto design's
+  candidates are checked with the same demands and factors as the tabs.
+
+### Problem (both unconservative)
+1. The analysis had no pedestrian load. On bridges with sidewalks every Strength and Service demand lacked it: negative flexure up to
+   10.4 % lower than GirderDetail's (xsA RIDOT G1 span 3, 1.040 vs 1.160).
+2. `engine/flexure.js` did not apply the owner load modifier η or the design load multiplier m (OWN6/OWN7). RIDOT (m = 1.2) Flexure ratios
+   were lower than GirderDetail's. Shear, stiffeners, bearings, splices, welds and cross-frames already applied them (each checked against
+   OWN_K: splice, bstf, ts, wt, gs); but where the demand carried a pedestrian part, m was applied to it too (more conservative than
+   GirderDetail) or the part was missing.
+
+### Governing provisions (AASHTO LRFD 10th Ed.)
+- 3.6.1.6 pedestrian load (the loads module's 75 psf × walkable width, distributed to the girders); applied simultaneously with the vehicular
+  live load, no IM (3.6.2.1 applies to vehicles); Table 3.4.1-1: PL takes the LL factor at Strength I, Service I, Service II; not in
+  Fatigue I/II (fatigue truck only, 3.6.1.4.1) nor in deck placement (3.4.2.1); not in the LL deflection (2.5.2.6.2: the vehicular load).
+- 1.3.2.1 (Eq. 1.3.2.1-2, -3): η on the maximum Strength factors, 1/η on the minimum ones; η = 1 at Service and Fatigue.
+- Owner multiplier m (RIDOT BDM 3.4.1.2, OWN6): on HL-93 LL+IM at Strength I and Service (I, II); not on PL (GirderDetail GD45, engineer
+  decision 2026-10-15), fatigue, deck placement, LL deflection or the load rating.
+- Load rating (MBE): unchanged: GirderDetail's GS20 rates with AASHTO factors without η or m, and with PL in LL+IM (its hand-off's
+  `pedestrianInLL`); this app's rating keeps that (`noDoublePL`, no `lf`).
+
+### Formulas (before → after)
+- M_PL(x) = w_PL ∫(+ part of the M influence line), and the − part for the minimum (V_PL, R_PL alike). Before: none.
+- Strength I, LL term: before 1.75 M_LL+IM (flexure; shear already 1.75ηm V_LL+IM). After 1.75ηm M_LL+IM + 1.75η M_PL, written as
+  1.75ηm (M_LL+IM+PL − M_PL + M_PL/m). Service II: 1.30m M_LL+IM + 1.30 M_PL. DC, DW: × η (max), × 1/η (min).
+
+### Check case (hand): xsA RIDOT G1, pier 1, x = 109.99 ft (this app's analysis; RIDOT m = 1.2, η = 1.0)
+- M_DC1 = −2030.40, M_DC2 = −1243.04, M_DW = −640.84 kip-ft; HL-93 M_LL+IM = −2047.93 (g_M 0.6421 × −3190.48 per lane, at 110.00);
+  w_PL = 0.31974 klf on G1; M_PL = −623.29 kip-ft.
+- Before: M_u = 1.25(−2030.40) + 1.25(−1243.04) + 1.50(−640.84) + 1.75(−2047.93) = −2538.00 − 1553.79 − 961.25 − 3583.88 = −8636.93 kip-ft;
+  GS7 (compression flange) 41.565/43.263 = 0.961; GS8 0.848.
+- After: M_LL+IM+PL = −2047.93 − 623.29 = −2671.22; used = −2671.22 + 623.29 − 623.29/1.2 = −2567.34; γ_LL = 1.75(1.0)(1.2) = 2.10;
+  M_u = −5053.05 + 2.10(−2567.34) = −5053.05 − 5391.41 = −10444.46 kip-ft (= −5053.05 + 2.10(−2047.93) + 1.75(−623.29)).
+  GS7 50.107/43.328 = 1.157 (GirderDetail 1.160); GS8 50.511/50.000 = 1.010. A pass → fail flip: the point of the fix.
+- Synthetic version in `tests/engine/ped-owner.test.mjs` (M_u −7875.0 → −9082.5 kip-ft).
+
+### How verified
+- `tests/engine/analysis.test.mjs`: PL against the payloads (M_PL ±, V_PL ±) and against GirderDetail's own `plRow` / `vSec` (added to
+  `gd-sa-ref.mjs`), the sample now includes gd_xsA_RIDOT_G1. All 18 payloads with a pedestrian load (scratch run): against GirderDetail's
+  functions M_PL 0.004 %, V_PL 0.0001 %, R_PL 0.0006 % (exact vs lumped loads, difference 1); against the payloads 0.21 % (xsA RIDOT G2:
+  w_PL rounded to 0.0178 klf in the payload, difference 7).
+- `tests/engine/legacy.test.mjs` (the 20 recorded projects, G1–G5, this app's analysis, the Flexure tab's own owner path): LL+IM including PL
+  0.000 %, M_PL 0.001 %; negative flexure xsA 0.31 % / 0.26 % (before 10.4 % / 9.6 %), others 0.26 % / 0.32 % (the M_DC1 cross-frame
+  difference, unchanged). RIDOT ratios agree including m. Bounds for xsA tightened from 12 % to 0.5 %.
+- New `tests/engine/ped-owner.test.mjs`: single count across flexure, rating, shear, bearing reactions, splices, welds, fatigue/studs (none),
+  constructibility/cross-frames (no live load), LL deflection (HL-93 only); η, m and the PL part in flexure, shear, transverse and bearing
+  stiffeners, welds, splice demands; the hand check.
+- Changed ratios and flips: see the PR description (before = the files at 6097439, after = this PR; 20 projects, G1 and G2, every module).
+
+### Decision (engineer, 2026-10-30): cross-frame weight on import
+- Keep the actual Cross-frames members (the frame the Cross-frames module checks) for the DC1 point loads. Preliminary sizing's suggested
+  frame is not mapped. More accurate; the 0.76 % M_DC1 difference to GirderDetail stays as documented (import entry).
+
+### Saved data (CLAUDE.md §5)
+- No key or format changed. New optional `girder.loads.PL` / `loadsManual.PL` (klf), read only when present.
+
+### Other copies
+- None (GirderDetail unchanged).
+
 ## 2026-10-30 — PR: sb2-dwg-panzoom — Drawings tab: pan and zoom in the sheet preview (engineer's request)
 Display only: no computed value changes.
 ### Where

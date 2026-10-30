@@ -137,6 +137,9 @@
   function worked(r) {
     const w = St().work('sh'), G = r.G, Fyw = r.Fyw, tbl = `${ED} Tables 3.4.1-1, 3.4.1-2`;
     const utT = (s, k) => r.ut ? ` + ${n2(G.dw)}(${n2(r['VUT' + s])})_{UT} + ${n2(G.dc)}(${n2(r['VUF' + s])})_{UF}` : '';
+    // GD45 (sb-ped-owner PR): the pedestrian part of V_LL+IM without the owner multiplier m
+    (r.plAdj || []).forEach(a => w.add({ id: 'pl.' + a.k, label: `${a.k === 'VLLp' ? 'Largest LL+IM shear in the web panel' : 'LL+IM shear'} used: m not on the pedestrian part`, sym: 'V_{LL+IM,used}', eq: 'V_{LL+IM+PL} - V_{PL} + \\frac{V_{PL}}{m}',
+      sub: `${n2(a.v0)} - ${n2(a.q)} + \\frac{${n2(a.q)}}{${n2(G.m)}}`, value: a.v, unit: 'kip', d: 2, ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'So that γ_LL ηm × it = γ_LL ηm V_LL+IM + γ_LL η V_PL (GirderDetail GD45). V_PL: Analysis tab.' }));
     w.add({ id: 'Vu', label: 'Strength I shear at the location', sym: 'V_{u}', eq: `\\gamma_{DC}(V_{DC1} + V_{DC2}) + \\gamma_{DW}V_{DW} + \\gamma_{LL}V_{LL+IM}${r.ut ? ' + \\gamma_{DW}V_{UT} + \\gamma_{DC}V_{UF}' : ''}`,
       sub: `${n2(G.dc)}(${n2(r.VDC1)} + ${n2(r.VDC2)}) + ${n2(G.dw)}(${n2(r.VDW)}) + ${n3(G.ll)}(${n2(r.VLL)})${utT('')}`, value: r.Vu, unit: 'kip', d: 2, ref: tbl, note: 'Shears are magnitudes: the maximum load factors.' });
     if (r.VuP != null) {
@@ -190,12 +193,16 @@
     const VDC1 = A('V_DC1'), VDC2 = A('V_DC2'), VDW = A('V_DW'), plIn = pl.pedestrianInLL === true,   // SB2-R1: with pedestrianInLL the LL+IM already includes it (HANDOFF.md §4.9)
       Vp = S.map(s => (+s.V_LLpos || 0) + (plIn ? 0 : +s.V_PLpos || 0)), Vn = S.map(s => (+s.V_LLneg || 0) + (plIn ? 0 : +s.V_PLneg || 0));
     const VUT = A('V_UT'), VUF = A('V_UF'), VCL = A('V_CL'), Vf = S.map(s => Math.max(Math.abs(+s.V_FATpos || 0), Math.abs(+s.V_FATneg || 0)));
+    // the pedestrian part of Vp / Vn (in it, or added above; sb-ped-owner PR): the owner multiplier m is kept off it (GD45, GirderDetail V_PLq)
+    const Qp = A('V_PLpos'), Qn = A('V_PLneg'), mO = +G.m > 0 ? +G.m : 1;
     const gDCn = G.dcMin, gDWn = G.dwMin;
     const VuE = xs.map((_, e) => { const VDC = VDC1[e] + VDC2[e], vf = s => (s * VDC >= 0 ? G.dc : gDCn) * VDC + (s * VDW[e] >= 0 ? G.dw : gDWn) * VDW[e] + (s * VUT[e] >= 0 ? G.dw : gDWn) * VUT[e] + (s * VUF[e] >= 0 ? G.dc * VUF[e] : 0);
-      return Math.max(Math.abs(vf(1) + G.ll * Vp[e]), Math.abs(vf(-1) + G.ll * Vn[e])); });
+      return Math.max(Math.abs(vf(1) + G.ll * (Vp[e] - Qp[e] + Qp[e] / mO)), Math.abs(vf(-1) + G.ll * (Vn[e] - Qn[e] + Qn[e] / mO))); });
     const idx = (a, b) => { const out = []; xs.forEach((x, i) => { if (x >= a - 1e-9 && x <= b + 1e-9) out.push(i); }); if (!out.length) { let i = 0; const m = (a + b) / 2; xs.forEach((x, j) => { if (Math.abs(x - m) < Math.abs(xs[i] - m)) i = j; }); out.push(i); } return out; };
     const mx = (ids, arr) => Math.max(0, ...ids.map(i => Math.abs(arr[i])));
-    const pack = ids => ({ DC1: mx(ids, VDC1), DC2: mx(ids, VDC2), DW: mx(ids, VDW), LL: Math.max(mx(ids, Vp), mx(ids, Vn)), UT: mx(ids, VUT), UF: mx(ids, VUF), CL: mx(ids, VCL), f: mx(ids, Vf) });
+    // plLL: the pedestrian part of LL (that of the station and envelope giving the largest |V_LL+IM|, as GirderDetail V_PLq), 0 without one
+    const plOf = ids => { let b = -1, q = 0; ids.forEach(i => [[Vp, Qp], [Vn, Qn]].forEach(([V, Q]) => { const v = Math.abs(V[i]); if (v > b) { b = v; q = Math.sign(V[i]) * Q[i]; } })); return Math.abs(q) > 1e-12 ? q : 0; };
+    const pack = ids => ({ DC1: mx(ids, VDC1), DC2: mx(ids, VDC2), DW: mx(ids, VDW), LL: Math.max(mx(ids, Vp), mx(ids, Vn)), UT: mx(ids, VUT), UF: mx(ids, VUF), CL: mx(ids, VCL), f: mx(ids, Vf), plLL: plOf(ids) });
     const zAt = x => { const z = zones.find(q => x >= q.startX - 1e-9 && x < q.endX) || zones[zones.length - 1]; return { D: z.web.depth, tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness }; };
     /* reaction(x, side): the support reaction at x from the shears on both sides (the nearest station within 0.02 ft left and right of x;
        side 'L' / 'R' at the girder ends: one side only). DC1, DC2, DW, UT, UF: the jump V(left) − V(right). LL+IM: V_LL,pos(left) −
@@ -205,7 +212,7 @@
     const reaction = x => { let l = near(x - 0.02, x - 1e-6), r = near(x + 1e-6, x + 0.02); const v = (A, i) => i >= 0 ? A[i] : 0;
       if (r < 0 && l < 0 && xs.length) { if (x <= xs[0] + 1e-6) r = 0; else if (x >= xs[xs.length - 1] - 1e-6) l = xs.length - 1; }   // a station at the girder end itself
       const jump = A => v(A, l) - v(A, r);
-      return { DC1: jump(VDC1), DC2: jump(VDC2), DW: jump(VDW), UT: jump(VUT), UF: jump(VUF), LL: Math.max(0, v(Vp, l)) - Math.min(0, v(Vn, r)), left: l >= 0, right: r >= 0 }; };
+      return { DC1: jump(VDC1), DC2: jump(VDC2), DW: jump(VDW), UT: jump(VUT), UF: jump(VUF), LL: Math.max(0, v(Vp, l)) - Math.min(0, v(Vn, r)), PL: (v(Vp, l) > 0 ? v(Qp, l) : 0) - (v(Vn, r) < 0 ? v(Qn, r) : 0), left: l >= 0, right: r >= 0 }; };
     return { xs, VuE, at: x => pack(idx(x - 0.011, x + 0.011)), inPanel: (p, q) => pack(idx(Math.min(p, q), Math.max(p, q))), vu: (p, q) => Math.max(0, ...idx(p, q).map(i => VuE[i])), zAt, reaction, G };
   }
 
@@ -221,7 +228,7 @@
     dem.xs.forEach(x => { const sp = sup.find(v => Math.abs(v - x) < 0.011); add(sp != null ? (sp < 0.02 ? 0.01 : sp > Lend - 0.02 ? Lend - 0.01 : sp - 0.01) : Math.min(Math.max(x, 0.01), Lend - 0.01)); });
     sup.slice(1, -1).forEach(v => add(v + 0.01)); list.sort((a, b) => a - b);
     const ends = cont ? [sup[0], sup[sup.length - 1]] : sup;
-    const locs = list.map(x => ({ name: `x = ${x.toFixed(2)} ft`, x, plates: dem.zAt(x), do: doIn, end: doIn > 0 && ends.some(s => Math.abs(x - s) <= doFt + 1e-6), V: dem.at(x) }));
+    const locs = list.map(x => { const V = dem.at(x); return { name: `x = ${x.toFixed(2)} ft`, x, plates: dem.zAt(x), do: doIn, end: doIn > 0 && ends.some(s => Math.abs(x - s) <= doFt + 1e-6), V, ...(V.plLL ? { pl: { VLL: [V.plLL, V.LL] } } : {}) }; });   // pl: GD45
     return { prj: { mat: { Fyw: +m.Fyw || 50 }, G }, locs, dem, doIn };
   }
 

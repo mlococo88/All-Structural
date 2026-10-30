@@ -159,6 +159,7 @@
   /* transverseSteps(R, r): the worked steps of one row of transverse(). */
   function transverseSteps(R, r) {
     const w = St().work('ts' + r.i), t = r.t, g = R.g, Fyw = R.Fyw, Fys = R.Fys, tbl = `${ED} Tables 3.4.1-1, 3.4.1-2`, okS = (a, b) => ge(b, a);
+    (r.plAdj || []).forEach(a => w.add({ id: 'pl.' + a.k, label: `${a.k} used: the owner multiplier m not on the pedestrian part`, sym: 'V_{LL+IM}', eq: 'v - q_{PL} + \\frac{q_{PL}}{m}', sub: `${n2(a.v0)} - ${n2(a.q)} + \\frac{${n2(a.q)}}{${n2(a.q / (a.v - a.v0 + a.q))}}`, value: a.v, unit: 'kip', d: 2, ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'GirderDetail GD45: γ_LL ηm × it = γ_LL ηm (LL+IM) + γ_LL η PL (sb-ped-owner PR).' }));
     w.add({ id: 'bmin', label: 'Minimum projecting width (TS1)', sym: 'b_{t} \\ge 2.0 + \\frac{D}{30}', eq: '', sub: `${n2(t.bt)} ${okS(2 + r.D / 30, t.bt) ? '\\ge' : '\\lt'} 2.0 + \\frac{${n2(r.D)}}{30} = ${n2(2 + r.D / 30)}`, value: (2 + r.D / 30) / t.bt, unit: '', d: 3, ref: `${ED} Eq. 6.10.11.1.2-1`, ok: okS(2 + r.D / 30, t.bt) });
     w.add({ id: 'bmax', label: 'Projecting width, upper limit (TS2)', sym: 'b_{t} \\le 16t_{p}', eq: '', sub: `${n2(t.bt)} ${okS(t.bt, 16 * t.tp) ? '\\le' : '\\gt'} 16(${n4(t.tp)}) = ${n2(16 * t.tp)}`, value: t.bt / (16 * t.tp), unit: '', d: 3, ref: `${ED} Eq. 6.10.11.1.2-2`, ok: okS(t.bt, 16 * t.tp), note: t.ws ? `t_p is the design thickness ${frac(t.tpF)} − ${frac(t.ws)} in (sacrificial, uncoated weathering steel).` : '' });
     w.add({ id: 'bf4', label: 'Projecting width, lower limit (TS2)', sym: 'b_{t} \\ge \\frac{b_{f}}{4}', eq: '', sub: `${n2(t.bt)} ${okS(r.bfw / 4, t.bt) ? '\\ge' : '\\lt'} \\frac{${n2(r.bfw)}}{4} = ${n2(r.bfw / 4)}`, value: r.bfw / 4 / t.bt, unit: '', d: 3, ref: `${ED} Eq. 6.10.11.1.2-2`, ok: okS(r.bfw / 4, t.bt), note: 'b_f: the widest compression flange within the field section.' });
@@ -285,6 +286,7 @@
   /* bearingSteps(R, r): the worked steps of one bearing (with its stiffener type's BS1). */
   function bearingSteps(R, r) {
     const t = R.types[r.type], w = St().work('bs' + r.i), g = R.g, okS = (d, c) => ge(c, d), tbl = `${ED} Tables 3.4.1-1, 3.4.1-2`;
+    (r.plAdj || []).forEach(a => w.add({ id: 'pl.' + a.k, label: `${a.k} used: the owner multiplier m not on the pedestrian part`, sym: 'R_{LL+IM}', eq: 'v - q_{PL} + \\frac{q_{PL}}{m}', sub: `${n2(a.v0)} - ${n2(a.q)} + \\frac{${n2(a.q)}}{${n2(a.q / (a.v - a.v0 + a.q))}}`, value: a.v, unit: 'kip', d: 2, ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'GirderDetail GD45: γ_LL ηm × it = γ_LL ηm (LL+IM) + γ_LL η PL (sb-ped-owner PR).' }));
     const wt = St().work('bsT' + t.k), lim = 0.48 * t.tp * R.rootE;
     wt.add({ id: 'b', label: `Type ${t.k}: projecting width (BS1)`, sym: 'b_{t} \\le 0.48t_{p}\\sqrt{\\frac{E}{F_{ys}}}', eq: '', sub: `${n2(t.bt)} ${okS(t.bt, lim) ? '\\le' : '\\gt'} 0.48(${n4(t.tp)})\\sqrt{\\frac{29{,}000}{${n2(R.Fys)}}} = ${n2(lim)}`, value: t.bt / lim, unit: '', d: 3, ref: `${ED} Eq. 6.10.11.2.2-1`, ok: okS(t.bt, lim), note: 'Prevents local buckling of the plates, so the column check uses Q = 1.' });
     w.take(wt.steps);
@@ -364,7 +366,8 @@
       rows.push({ name: `${opt.label ? opt.label + ', ' : ''}${typ === 'A' ? 'stiffener' : 'connection plate'} at ${x.toFixed(2)} ft`, x, type: typ, D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT,
         bfw: opt.bfw ? opt.bfw(x) : Math.max(s.topB, s.botB), end: P1.end ? 'yes' : 'no', do1: P1.d, do2: P2.d, VDC1: v.DC1, VDC2: v.DC2, VDW: v.DW, VLL: v.LL, df: 0,
         VDC1b: b.DC1, VDC2b: b.DC2, VDWb: b.DW, VLLb: b.LL, VDC1c: c.DC1, VDC2c: c.DC2, VDWc: c.DW, VLLc: c.LL,
-        ...((v.UT || v.UF || b.UT || b.UF || c.UT || c.UF) ? { ut: { VUT: v.UT, VUF: v.UF, VUTb: b.UT, VUFb: b.UF, VUTc: c.UT, VUFc: c.UF } } : {}) }); }
+        ...((v.UT || v.UF || b.UT || b.UF || c.UT || c.UF) ? { ut: { VUT: v.UT, VUF: v.UF, VUTb: b.UT, VUFb: b.UF, VUTc: c.UT, VUFc: c.UF } } : {}),
+        ...((v.plLL || b.plLL || c.plLL) ? { pl: { ...(v.plLL ? { VLL: [v.plLL, v.LL] } : {}), ...(b.plLL ? { VLLb: [b.plLL, b.LL] } : {}), ...(c.plLL ? { VLLc: [c.plLL, c.LL] } : {}) } } : {}) }); }   // GD45: pedestrian parts (sb-ped-owner PR)
     return rows;
   }
 

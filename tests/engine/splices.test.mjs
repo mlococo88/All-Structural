@@ -134,7 +134,7 @@ function payloadSplices(pl) {
   // the same without the pedestrian load (the new engine has none yet; as analysis.test.mjs pairsPayload)
   const sub = (a, b) => a.map((v, i) => v - b[i]);
   const noPL = has('M_PLpos') ? { ...arr, Mp: sub(arr.Mp, node('M_PLpos')), Mn: sub(arr.Mn, node('M_PLneg')), Vp: sub(arr.Vp, elem('V_PLpos')), Vn: sub(arr.Vn, elem('V_PLneg')) } : arr;
-  return { owner, lf, minPlate: mp, noPL: x => S.demandsAt(noPL, x).dem, list: xsU.map(x => { const zl = zoneAt(pl, x - 0.01), zr = zoneAt(pl, x + 0.01), sec = z => ({ tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness });
+  return { owner, lf, minPlate: mp, noPL: x => S.demandsAt(noPL, x).dem, withPL: x => S.demandsAt(arr, x).dem, list: xsU.map(x => { const zl = zoneAt(pl, x - 0.01), zr = zoneAt(pl, x + 0.01), sec = z => ({ tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness });
     const dm = S.demandsAt(arr, x), p = clone(S.DEF), mt = gdq.materials, dk = gdq.deck;
     // GD45: the pedestrian part of LL+IM where the payload has it (dem.pl = { key: [part, value] })
     if (has('M_PLpos')) { const i = dm.i, o = {}; const q1 = A[i].L.M_LLpos > 0 ? r1(A[i].L.M_PLpos) : 0, q2 = A[i].L.M_LLneg < 0 ? r1(A[i].L.M_PLneg) : 0; if (q1) o.MLLp = [q1, dm.dem.MLLp]; if (q2) o.MLLn = [q2, dm.dem.MLLn]; if (Object.keys(o).length) dm.dem.pl = o; }
@@ -170,7 +170,8 @@ test('the app path: splices of a payload project from engine/analysis.js (girder
     const AR = A.analyzeGirder(P, 0); assert.deepEqual([...(AR.errors || [])], [], f);
     const G = S.girder(P, 0, AR, { env: { owner: PS.owner, lf: PS.lf, minPlate: PS.minPlate } });
     assert.deepEqual([...G.errors], [], f);
-    G.list.forEach((s, k) => { const ref = PS.noPL(s.x), scale = { M: Math.max(...keys.filter(q => q[0] === 'M' || q[0] === 'd').map(q => Math.abs(ref[q]))), V: Math.max(...keys.filter(q => q[0] === 'V').map(q => Math.abs(ref[q]))) };
+    G.list.forEach((s, k) => { const ref = PS.withPL(s.x),   // with the pedestrian load: the analysis has it since the sb-ped-owner PR
+      scale = { M: Math.max(...keys.filter(q => q[0] === 'M' || q[0] === 'd').map(q => Math.abs(ref[q]))), V: Math.max(...keys.filter(q => q[0] === 'V').map(q => Math.abs(ref[q]))) };
       keys.forEach(q => { const d = Math.abs(s.p.dem[q] - ref[q]), sc = q[0] === 'V' ? scale.V : scale.M, rel = d / Math.max(1, sc); if (!big[q] || rel > big[q].rel) big[q] = { rel, d, ours: s.p.dem[q], ref: ref[q], at: `${f} ${s.name}` }; });
       n++; if (s.CK && !s.CK.some(c => c.status === 'fail')) nPass++;
       assert.ok(s.CK && s.CK.steps.length > 50, 'worked steps'); });

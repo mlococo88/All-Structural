@@ -76,13 +76,15 @@
     let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
     if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
     if (!R.fat || !R.ll) return { err: 'Analysis: no live load results.' };
-    const g = P.girders[gi], xs = R.x, st = R.st, f = R.fat, ll = R.ll, A = (o, i) => (o ? o.M[i] : 0);
+    // LL+IM: with the pedestrian load added once (SBDAnalysis.llPL; sb-ped-owner PR). Here only the Strength I envelope that places the stud
+    // regions uses it; every fatigue check takes the fatigue truck alone (M_FAT, V_FAT: no pedestrian load, 3.6.1.4 / Table 3.4.1-1)
+    const g = P.girders[gi], xs = R.x, st = R.st, f = R.fat, ll = AN.llPL ? AN.llPL(R) : R.ll, q = R.pl, A = (o, i) => (o ? o.M[i] : 0);
     const stations = xs.map((x, i) => ({ x, M_DC1: st.DC1.M[i], M_DC2: st.DC2.M[i], M_DW: st.DW.M[i], M_LLpos: ll.Mpos[i], M_LLneg: ll.Mneg[i], M_UT: A(st.UT, i), M_UF: A(st.UF, i),
       M_FATpos: f.Mpos[i], M_FATneg: f.Mneg[i], V_DC1: Math.abs(st.DC1.VR[i]), V_DC2: Math.abs(st.DC2.VR[i]), V_DW: Math.abs(st.DW.VR[i]),
-      V_FATpos: Math.max(f.VRpos[i], f.VLpos[i]), V_FATneg: Math.min(f.VRneg[i], f.VLneg[i]) }));
+      V_FATpos: Math.max(f.VRpos[i], f.VLpos[i]), V_FATneg: Math.min(f.VRneg[i], f.VLneg[i]), ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
     const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
-    const pl = { _schema: 'sbd2-analysis', stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
+    const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
       ownerRules: { owner: (P.ownerRules || {}).owner || 'AASHTO', haunchInProperties: !h0 },
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
         deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
@@ -245,5 +247,5 @@
     return h;
   }
 
-  window.SBDFatigueUI = { ensure, inputs, onClick, render, build };
+  window.SBDFatigueUI = { ensure, inputs, onClick, render, build, fromAnalysis };
 })();

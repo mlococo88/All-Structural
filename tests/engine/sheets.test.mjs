@@ -44,7 +44,9 @@ const inSheet = (R, B, s) => R.entities.slice(s.i0, s.i1);
 const of = (es, layer, type) => es.filter(e => e.layer === layer && (!type || e.type === type));
 const box = e => { const xs = e.verts.map(v => v[0]), ys = e.verts.map(v => v[1]); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; };
 /* Strength I envelope recomputed here (AASHTO LRFD 10th Ed. Table 3.4.1-1: γ_DC 1.25 / 0.90, γ_DW 1.50 / 0.65, γ_LL 1.75; Table 3.4.1-2) */
-const strI = (dc, dw, ll, max) => (max ? (dc >= 0 ? 1.25 : 0.90) : (dc <= 0 ? 1.25 : 0.90)) * dc + (max ? (dw >= 0 ? 1.5 : 0.65) : (dw <= 0 ? 1.5 : 0.65)) * dw + 1.75 * ll;
+// sb-ped-owner PR: with the owner's η (max × η, min × 1/η) and LL+IM written as γ_LL η (m(LL+IM) + PL): the pedestrian load once, m not on it
+const strI = (dc, dw, ll, max, o) => { o = o || { eta: 1, etaN: 1, m: 1, pl: 0 }; const e = o.eta, n = o.etaN;
+  return (max ? (dc >= 0 ? 1.25 * e : 0.90 * n) : (dc <= 0 ? 1.25 * e : 0.90 * n)) * dc + (max ? (dw >= 0 ? 1.5 * e : 0.65 * n) : (dw <= 0 ? 1.5 * e : 0.65 * n)) * dw + 1.75 * e * (o.m * ll + o.pl); };
 
 function checkSet(P, name) {
   const G = DW.model(P); assert.deepEqual(J(G.errors), [], name);
@@ -88,7 +90,8 @@ function checkSet(P, name) {
     // Strength I moment envelope (max solid, min hidden) and the camber diagram of this girder against the analysis
     const A = RS.pg[g.pg].an, st = A.st, ll = A.ll, ax = of(es, 'S-DIAG-AXIS', 'LINE')[0], y0 = +ax.get(20), ms = of(es, 'S-DIAG-STR', 'POLYLINE');
     assert.equal(ms.length, 2, `${name}: ${g.label} envelope lines`);
-    const Mp = A.x.map((_, i) => strI(st.DC1.M[i] + st.DC2.M[i], st.DW.M[i], ll.Mpos[i], true)), Mn = A.x.map((_, i) => strI(st.DC1.M[i] + st.DC2.M[i], st.DW.M[i], ll.Mneg[i], false));
+    const own = P.ownerRules, lf = own ? W.SBDOwners.loadFactors(own.owner, own.eta, P.xs.nb) : { eta: 1, etaN: 1, m: 1 }, q = A.pl, oo = (i, k) => ({ eta: lf.eta, etaN: lf.etaN, m: lf.m, pl: q ? q[k][i] : 0 });
+    const Mp = A.x.map((_, i) => strI(st.DC1.M[i] + st.DC2.M[i], st.DW.M[i], ll.Mpos[i], true, oo(i, 'Mpos'))), Mn = A.x.map((_, i) => strI(st.DC1.M[i] + st.DC2.M[i], st.DW.M[i], ll.Mneg[i], false, oo(i, 'Mneg')));
     const mx = Math.max(...Mp.map(Math.abs), ...Mn.map(Math.abs)), vs = 1.1 * s.k / mx;
     [[ms[0], Mp], [ms[1], Mn]].forEach(([pl_, Mv]) => { assert.equal(pl_.verts.length, A.x.length); pl_.verts.forEach((p, i) => { assert.ok(track(Math.abs(p[0] - (x0 + FRM.toG(G.FR, g.i, G.sup, A.x[i]) * 12))) < 1e-5, 'envelope x');
       const d = Math.abs((p[1] - y0) / vs - Mv[i]); assert.ok(d <= 1e-6 * mx, `${name}: ${g.label} M_u at ${A.x[i]}: ${(p[1] - y0) / vs} vs ${Mv[i]}`); }); stats.env += A.x.length; });
@@ -122,6 +125,7 @@ const PAY = [
 test('Sheets: five hand-off payloads (each with its own cross-section), every sheet against the model and the results', () => {
   for (const [f, o] of PAY) {
     const P = projectFromPayload(readPayload(f));
+    if (/RIDOT/.test(f)) P.ownerRules = { owner: 'RIDOT', eta: { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 } };   // m = 1.2 on the envelope (sb-ped-owner PR)
     P.xs = M.defaultXs(P); Object.assign(P.xs, { nb: o.nb, bays: o.bays, skews: o.skews });
     P.framing = { ...M.defaultFraming(), splices: o.spl }; P.stiffeners = M.defaultStiffeners(); P.crossframes = M.defaultCrossframes();
     P.studs = { ...M.defaultStuds(), zones: [{ x1: 0, x2: 30, nr: 3, p: 9 }, { x1: 30, x2: 360, nr: 3, p: 12 }] };

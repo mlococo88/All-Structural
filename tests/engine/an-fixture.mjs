@@ -49,7 +49,7 @@ export function projectFromPayload(p, o = {}) {
       haunchInStiffness: p.ownerRules.haunchInProperties !== false },
     girders: [{ id: g.label, label: g.label, position: g.position, beff: dk.beff,
       segments: p.section.zones.map(z => ({ x0: z.startX, x1: z.endX, D: z.web.depth, tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness })),
-      loads: { DC1wet: T.DC1wet, DC2: T.DC2, DW: T.DW, CL: g.loads.construction ? g.loads.construction.w : 0, UT: T.UT || 0, UF: T.UF || 0, xf, steelAllowPct: allow, source: 'hand-off payload' },
+      loads: { DC1wet: T.DC1wet, DC2: T.DC2, DW: T.DW, CL: g.loads.construction ? g.loads.construction.w : 0, UT: T.UT || 0, UF: T.UF || 0, PL: T.PL || 0, xf, steelAllowPct: allow, source: 'hand-off payload' },
       df: { spans: g.df.spans.map(s => ({ gM: s.gM, gV: s.gV, fatM: s.fatM, fatV: s.fatV })), piers: g.df.piers.map(q => ({ gM: q.gM })), gDef: g.loads.liveLoad.deflectionDF, source: 'hand-off payload' } }]
   };
 }
@@ -58,7 +58,8 @@ export function projectFromPayload(p, o = {}) {
 // Each quantity: [name, ours (per node), reference (per node)]; the difference is reported as the largest |ours − ref| and
 // that divided by the largest |ref| of the quantity on the girder (rel). Nodes are GirderDetail's grid (stations = nodes).
 // skip: node indices left out of the LL moments (where the pier regions differ, see analysis.test.mjs). The pedestrian load
-// (M_PL, V_PL: in LL+IM in the payloads of bridges with sidewalks) is taken out of LL+IM: the new engine has no pedestrian load yet.
+// (M_PL, V_PL: in LL+IM in the payloads of bridges with sidewalks) is taken out of LL+IM, since R.ll is HL-93 only, and compared on
+// its own with R.pl (added 2026-10-30, sb-ped-owner PR: before, the engine had no pedestrian load).
 export function pairsPayload(R, p, G, skip) {
   const A = G.at, N = G.N, L = k => A.map(a => a.L[k] || 0), Rr = k => A.map((a, i) => (i === N - 1 ? a.L : a.R)[k] || 0), sub = (a, b) => a.map((v, i) => v - b[i]);
   const out = [
@@ -78,6 +79,7 @@ export function pairsPayload(R, p, G, skip) {
       ['V_LL max left of piers', G.sup.slice(1, -1).map(i => ll.VLpos[i]), G.sup.slice(1, -1).map(i => -(A[i].L.V_LLneg - (A[i].L.V_PLneg || 0)))],
       ['V_LL min left of piers', G.sup.slice(1, -1).map(i => ll.VLneg[i]), G.sup.slice(1, -1).map(i => -(A[i].L.V_LLpos - (A[i].L.V_PLpos || 0)))],
       ['LL deflection per span', R.lld.map(q => q.d), p.girderDetail.deflection.ll.spans.map(s => s.d)]);
+    if (R.pl) out.push(['M_PLpos', R.pl.Mpos, L('M_PLpos')], ['M_PLneg', R.pl.Mneg, L('M_PLneg')], ['V_PL max', v(R.pl, 'pos'), Rr('V_PLneg').map(x => -x)], ['V_PL min', v(R.pl, 'neg'), Rr('V_PLpos').map(x => -x)]);
   }
   return out;
 }
@@ -96,6 +98,8 @@ export function pairsGD(R, D, skip) {
       ['V_LL max', v(ll, 'pos'), vs.map(q => q.Lp)], ['V_LL min', v(ll, 'neg'), vs.map(q => q.Ln)], ['V_FAT max', v(ft, 'pos'), vs.map(q => q.Fp)], ['V_FAT min', v(ft, 'neg'), vs.map(q => q.Fn)],
       ['R_LL max', R.llR.map(r => r.max), D.reac.map(r => r.llMax)], ['R_LL min', R.llR.map(r => r.min), D.reac.map(r => r.llMin)],
       ['LL deflection per span', R.lld.map(q => q.d), D.lld.map(q => q.d)]);
+    if (R.pl) out.push(['M_PLpos', R.pl.Mpos, D.PLp], ['M_PLneg', R.pl.Mneg, D.PLn], ['V_PL max', v(R.pl, 'pos'), vs.map(q => q.Pp)], ['V_PL min', v(R.pl, 'neg'), vs.map(q => q.Pn)],
+      ['R_PL max', R.pl.R.map(r => r.max), D.reac.map(r => r.Pp)], ['R_PL min', R.pl.R.map(r => r.min), D.reac.map(r => r.Pn)]);
   }
   return out;
 }

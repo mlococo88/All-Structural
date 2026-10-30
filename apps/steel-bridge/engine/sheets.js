@@ -69,17 +69,23 @@
   /* tenth points of each span on the analysis stations (centerline spans) */
   const tenths = sup => { const out = []; for (let k = 0; k < sup.length - 1; k++) for (let q = 0; q <= 10; q++) { if (k > 0 && q === 0) continue; out.push({ k, q, x: sup[k] + q / 10 * (sup[k + 1] - sup[k]) }); } return out; };
   const ptName = t => `SPAN ${t.k + 1} ${t.q === 0 ? '0.0L' : t.q === 10 ? '1.0L' : '0.' + t.q + 'L'}`;
-  /* the envelopes of an analysis result A (engine/analysis.js): Strength I with engine/flexure.js envelopeStrI and factors() (the Flexure
-     tab's combination, AASHTO LRFD 10th Ed. Table 3.4.1-1), applied to moments and to the shears just left and right of each station */
-  function env(A) {
-    const FX = window.SBDFlexure, G = FX.factors(), st = A.st, ll = A.ll, N = A.x.length, z = A.x.map(() => 0), u = o => (o ? o : null);
+  /* the envelopes of an analysis result A (engine/analysis.js): Strength I with engine/flexure.js envelopeStrI and the Flexure tab's factors
+     (AASHTO LRFD 10th Ed. Table 3.4.1-1), applied to moments and to the shears just left and right of each station. sb-ped-owner PR
+     (2026-10-30): with the project P, the owner load rules η, m (OWN6/OWN7, factorsOwner, as engine/flexure.js and GirderDetail) and LL+IM
+     with the pedestrian load once (SBDAnalysis.llPL), m kept off the pedestrian part (GD45: LL + PL − PL + PL/m). */
+  function env(A, P) {
+    const FX = window.SBDFlexure, OW = window.SBDOwners, own = (P && P.ownerRules) || null, lf = OW && own ? OW.loadFactors(own.owner, own.eta, ((P.xs || {}).nb) || 0) : null;
+    const G = lf && FX.factorsOwner ? FX.factorsOwner(lf) : FX.factors(), st = A.st, N = A.x.length, z = A.x.map(() => 0), u = o => (o ? o : null);
+    const Lq = A.ll && window.SBDAnalysis && window.SBDAnalysis.llPL ? window.SBDAnalysis.llPL(A) : A.ll, Q = Lq && Lq.pl, mO = +G.m > 0 ? +G.m : 1;
+    const ll = !Lq ? null : !Q || mO === 1 ? Lq : Object.fromEntries(['Mpos', 'Mneg', 'VLpos', 'VLneg', 'VRpos', 'VRneg'].map(k => [k, Lq[k].map((v, i) => v - Q[k][i] + Q[k][i] / mO)]));
     const comb = (i, k, LLp, LLn) => FX.envelopeStrI({ DC1: st.DC1[k][i], DC2: st.DC2[k][i], DW: st.DW[k][i], LLp, LLn, UT: u(st.UT) ? st.UT[k][i] : 0, UF: u(st.UF) ? st.UF[k][i] : 0 }, G);
     const M = A.x.map((_, i) => comb(i, 'M', ll ? ll.Mpos[i] : 0, ll ? ll.Mneg[i] : 0));
     const VL = A.x.map((_, i) => comb(i, 'VL', ll ? ll.VLpos[i] : 0, ll ? ll.VLneg[i] : 0)), VR = A.x.map((_, i) => comb(i, 'VR', ll ? ll.VRpos[i] : 0, ll ? ll.VRneg[i] : 0));
     const two = a => A.x.flatMap((_, i) => [a.L[i], a.R[i]]), xv = A.x.flatMap(x => [x, x]);
     const V = { x: xv, DC: two({ L: st.DC1.VL.map((v, i) => v + st.DC2.VL[i]), R: st.DC1.VR.map((v, i) => v + st.DC2.VR[i]) }), DW: two({ L: st.DW.VL, R: st.DW.VR }),
-      LLp: ll ? two({ L: ll.VLpos, R: ll.VRpos }) : xv.map(() => 0), LLn: ll ? two({ L: ll.VLneg, R: ll.VRneg }) : xv.map(() => 0), Sx: two({ L: VL.map(q => q.max), R: VR.map(q => q.max) }), Sn: two({ L: VL.map(q => q.min), R: VR.map(q => q.min) }) };
-    return { x: A.x, N, G, Mp: M.map(q => q.max), Mn: M.map(q => q.min), MDC1: st.DC1.M, MSD: st.DC2.M.map((v, i) => v + st.DW.M[i]), LLp: ll ? ll.Mpos : z, LLn: ll ? ll.Mneg : z,
+      LLp: Lq ? two({ L: Lq.VLpos, R: Lq.VRpos }) : xv.map(() => 0), LLn: Lq ? two({ L: Lq.VLneg, R: Lq.VRneg }) : xv.map(() => 0), Sx: two({ L: VL.map(q => q.max), R: VR.map(q => q.max) }), Sn: two({ L: VL.map(q => q.min), R: VR.map(q => q.min) }) };
+    return { x: A.x, N, G, Mp: M.map(q => q.max), Mn: M.map(q => q.min), MDC1: st.DC1.M, MSD: st.DC2.M.map((v, i) => v + st.DW.M[i]), LLp: Lq ? Lq.Mpos : z, LLn: Lq ? Lq.Mneg : z,   // unfactored LL+IM (+ PL) as shown; ll: the m-adjusted values the combinations use
+     
       FMp: A.fat ? A.fat.Mpos : z, FMn: A.fat ? A.fat.Mneg : z, MSv: A.x.map((_, i) => st.DC1.M[i] + st.DC2.M[i] + st.DW.M[i] + G.sll * (ll ? ll.Mpos[i] : 0)), MSvN: A.x.map((_, i) => st.DC1.M[i] + st.DC2.M[i] + st.DW.M[i] + G.sll * (ll ? ll.Mneg[i] : 0)), V };
   }
 
@@ -166,7 +172,7 @@
     const r = resOf(C, g), A = r && r.an;
     if (!A) { D.text(ly.t, 0, y, h, 'MOMENT ENVELOPE AND CAMBER: RESULTS NOT CALCULATED (DRAWINGS TAB, CALCULATE RESULTS).'); return; }
     // Strength I moment envelope of this girder (its plate girder's analysis at the girder's own stations)
-    if (A.ll) { const E = env(A), xs = A.x.map(x => toOwn(G, gi, x)), mx = Math.max(1e-6, ...E.Mp.map(Math.abs), ...E.Mn.map(Math.abs)), vs = 1.1 * D.k / mx, y0 = y - 1.4 * D.k - 2 * h;
+    if (A.ll) { const E = env(A, C.P), xs = A.x.map(x => toOwn(G, gi, x)), mx = Math.max(1e-6, ...E.Mp.map(Math.abs), ...E.Mn.map(Math.abs)), vs = 1.1 * D.k / mx, y0 = y - 1.4 * D.k - 2 * h;
       D.line(ly.a, X(xs[0]), y0, X(xs[xs.length - 1]), y0); D.pline(ly.m, xs.map((x, i) => [X(x), y0 + E.Mp[i] * vs]), false); D.pline(ly.m, xs.map((x, i) => [X(x), y0 + E.Mn[i] * vs]), false, D.ltype('HIDDEN'));
       tenths(A.sup).forEach(t => { const v = at(A.x, E.Mp, t.x); if (Math.abs(v) > 1) D.text(ly.t, X(toOwn(G, gi, t.x)), y0 + v * vs + 0.3 * h, h * 0.6, f0(v), 1); });
       A.sup.slice(1, -1).forEach(sx => { const v = at(A.x, E.Mn, sx); if (Math.abs(v) > 1) D.text(ly.t, X(toOwn(G, gi, sx)), y0 + v * vs - 1.1 * h, h * 0.6, f0(v), 1); });
@@ -251,11 +257,11 @@
   }
   const lab = (D, l, xs, ys, y0, vs, idx, fmt) => { const h = D.h; idx.forEach(i => { const v = ys[i]; if (!(Math.abs(v) > 1e-6)) return; D.text(l, xs[i] * 12, y0 + v * vs + (v >= 0 ? 0.3 : -1.1) * h, h * 0.6, fmt(v), 1); }); };
   function diag(D, C) {
-    const A = C.A, E = env(A), h = D.h, k = D.k, gap = 3.4 * k, xs = A.x, sup = A.sup, near = x => xs.reduce((b, q, i) => Math.abs(q - x) < Math.abs(xs[b] - x) ? i : b, 0), t10 = tenths(sup).map(t => near(t.x));
+    const A = C.A, E = env(A, C.P), h = D.h, k = D.k, gap = 3.4 * k, xs = A.x, sup = A.sup, near = x => xs.reduce((b, q, i) => Math.abs(q - x) < Math.abs(xs[b] - x) ? i : b, 0), t10 = tenths(sup).map(t => near(t.x));
     const L = { dc: D.layer('DIAG-DC', 7), dw: D.layer('DIAG-DW', 3), ll: D.layer('DIAG-LL', 4), st: D.layer('DIAG-STR', 1), t: D.layer('ANNO-TEXT', 7) };
     const key = (yy, s) => D.text(L.t, xs[xs.length - 1] * 12, yy + 1.25 * k + 0.5 * h, h * 0.7, s, 2); let y = 0;
     const pm = plot(D, L.dc, y, xs, [{ ys: E.MDC1, l: L.dc }, { ys: E.MSD, l: L.dw }, { ys: E.LLp, l: L.ll }, { ys: E.LLn, l: L.ll, lt: 'HIDDEN' }, { ys: E.Mp, l: L.st }, { ys: E.Mn, l: L.st, lt: 'HIDDEN' }],
-      `${C.name} MOMENT ENVELOPES: DC1, DC2 + DW, LL+IM (+/-), STRENGTH I (MAX/MIN)`, 'KIP-FT', sup);
+      `${C.name} MOMENT ENVELOPES: DC1, DC2 + DW, LL+IM${A.pl ? ' + PL' : ''} (+/-), STRENGTH I (MAX/MIN)${E.G.own && (E.G.own.eta !== 1 || E.G.own.m !== 1) ? ` WITH ETA = ${E.G.own.eta.toFixed(3)}, M = ${E.G.own.m.toFixed(2)} (NOT ON PL)` : ''}`, 'KIP-FT', sup);
     key(y, 'WHITE DC1 / GREEN DC2+DW / CYAN LL+IM / RED STRENGTH I (DASHED = MIN.)'); lab(D, L.t, xs, E.Mp, y, pm.vs, t10, f0); lab(D, L.t, xs, E.Mn, y, pm.vs, sup.map(near), f0);
     y -= gap; const V = E.V, vi = [];
     sup.forEach(s => { const i = near(s); if (i > 0) vi.push(2 * i); if (i < xs.length - 1) vi.push(2 * i + 1); });

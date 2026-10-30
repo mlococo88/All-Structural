@@ -92,16 +92,17 @@
     let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
     if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
     if (!R.ll || !R.fat || !R.llR) return { err: 'Analysis: no live load results.' };
-    const g = P.girders[gi], st = R.st, ll = R.ll, ft = R.fat, N = R.x.length, z = o => (o ? o : null);
+    // LL+IM with the pedestrian load added once (SBDAnalysis.llPL), V_PL its part (pedestrianInLL, as GirderDetail's hand-off; sb-ped-owner PR)
+    const g = P.girders[gi], st = R.st, ll = AN.llPL ? AN.llPL(R) : R.ll, q = R.pl, ft = R.fat, N = R.x.length, z = o => (o ? o : null);
     // the hand-off (MIDAS) sign, opposite to this app's: V = −V_app, and the positive envelope is −(the app's negative one)
     const at = (i, side) => { const k = side === 'L' ? 'VL' : 'VR', o = q => q ? -q[k][i] : 0;
       return { V_DC1: -st.DC1[k][i], V_DC2: -st.DC2[k][i], V_DW: -st.DW[k][i], V_UT: o(z(st.UT)), V_UF: o(z(st.UF)), V_CL: -st.CL[k][i],
-        V_LLpos: -ll[k + 'neg'][i], V_LLneg: -ll[k + 'pos'][i], V_FATpos: -ft[k + 'neg'][i], V_FATneg: -ft[k + 'pos'][i] }; };
+        V_LLpos: -ll[k + 'neg'][i], V_LLneg: -ll[k + 'pos'][i], V_FATpos: -ft[k + 'neg'][i], V_FATneg: -ft[k + 'pos'][i], ...(q ? { V_PLpos: -q[k + 'neg'][i], V_PLneg: -q[k + 'pos'][i] } : {}) }; };
     const inner = new Set(R.supIdx.slice(1, -1)), stations = [];
     R.x.forEach((x, i) => { if (inner.has(i)) { stations.push({ x: x - 0.005, ...at(i, 'L') }, { x: x + 0.005, ...at(i, 'R') }); } else stations.push({ x, ...at(i, i === N - 1 ? 'L' : 'R') }); });
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
-    const reactions = R.sup.map((_, k) => ({ DC1: st.DC1.R[k], DC2: st.DC2.R[k], DW: st.DW.R[k], UT: st.UT ? st.UT.R[k] : 0, UF: st.UF ? st.UF.R[k] : 0, LL: R.llR[k].max, gV: R.llR[k].gV, LLlane: R.llR[k].perLane.max }));
-    const pl = { _schema: 'sbd2-analysis', stations, reactions, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
+    const reactions = R.sup.map((_, k) => ({ DC1: st.DC1.R[k], DC2: st.DC2.R[k], DW: st.DW.R[k], UT: st.UT ? st.UT.R[k] : 0, UF: st.UF ? st.UF.R[k] : 0, LL: R.llR[k].max + (q ? q.R[k].max : 0), PL: q ? q.R[k].max : 0, gV: R.llR[k].gV, LLlane: R.llR[k].perLane.max }));
+    const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, reactions, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyw: M.GRADES[P.materials.steel.web].Fy } } };
     return { pl, R };
   }
@@ -125,7 +126,9 @@
     let locs;
     if (pl) locs = SH.fromPayload(pl, { G }).locs;
     else locs = EX.filter(e => gm.cont || e.x < gm.sup[1]).map(e => ({ name: e.name, x: e.x, plates: gm.zAt(e.x), V: e.V }));
-    locs = locs.map(L => { const q = panAt(L.x), on = ly.web !== 'unstiffened'; return { ...L, do: q && on ? q.d : 0, end: !!(q && q.end && on), Vpan: q && gm.dem ? gm.dem.inPanel(q.p, q.q) : null, pan: q ? q.i : null }; });
+    locs = locs.map(L => { const q = panAt(L.x), on = ly.web !== 'unstiffened', Vp = q && gm.dem ? gm.dem.inPanel(q.p, q.q) : null;
+      const plT = { ...(L.pl || {}), ...(Vp && Vp.plLL ? { VLLp: [Vp.plLL, Vp.LL] } : {}) };   // GD45: the pedestrian part of the panel's V_LL+IM (sb-ped-owner PR)
+      return { ...L, do: q && on ? q.d : 0, end: !!(q && q.end && on), Vpan: Vp, pan: q ? q.i : null, ...(Object.keys(plT).length ? { pl: plT } : {}) }; });
     const stations = locs.map(L => { const r = SH.location(L, { mat: { Fyw }, G }); r.pan = L.pan; return r; });
     // transverse stiffeners: every intermediate stiffener and connection plate of the layout (file), GirderDetail's built-in rows (example)
     const tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
@@ -137,7 +140,7 @@
     const rxn = pl && Array.isArray(pl.reactions) && pl.reactions.length === gm.sup.length ? pl.reactions : null;
     if (gm.dem) bsRows = gm.sup.map((x, k) => { const end = k === 0 || k === gm.sup.length - 1 || !gm.cont, s = gm.zAt(Math.min(Math.max(x + (k === gm.sup.length - 1 ? -0.01 : 0.01), 0), gm.sup[gm.sup.length - 1])), R = rxn ? rxn[k] : gm.dem.reaction(x);
       return { name: `${k === 0 ? 'Abut. 1' : k === gm.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}, G${gm.gNo}`, type: end ? 'A' : 'B', tw: s.tw, bft: s.topB, bfb: s.botB, tfb: s.botT, ed: end ? st.bearing.ed : 0,
-        RDC1: R.DC1, RDC2: R.DC2, RDW: R.DW, RLL: R.LL, ...(R.UT || R.UF ? { ut: { VUT: R.UT, VUF: R.UF } } : {}) }; });
+        RDC1: R.DC1, RDC2: R.DC2, RDW: R.DW, RLL: R.LL, ...(R.UT || R.UF ? { ut: { VUT: R.UT, VUF: R.UF } } : {}), ...(R.PL ? { pl: { RLL: [R.PL, R.LL] } } : {}) }; });   // GD45: R_PL part (sb-ped-owner PR)
     else bsRows = JSON.parse(JSON.stringify(SB.BS_DEFAULT.rows));
     const BS = SB.bearing({ D, gW: P.materials.steel.web, gS: st.bearing.gS, Fexx: st.bearing.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75 }, types: st.bearing.types, rows: bsRows }, env);
     const tsC = TS && !TS.errors.length ? SB.transverseChecks(TS) : null, bsC = !BS.errors.length ? SB.bearingChecks(BS) : null;
