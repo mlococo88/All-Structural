@@ -83,6 +83,11 @@
                   gam: { dcMax, dcMin, dwMax, dwMin, llS, llSv, fat, dc1C, clC }, clr: { cw, cv (in) }, prs: 'yes' | 'no', gP (plate grade; '' = flange),
                   auto: true | false (auto-design the plates and bolts of each splice), plates: [ { x, g (girder index; absent = every girder),
                   top, bot: { nl, g, g0, nr, s, ef, ep, bo, to, inner, bi, ti }, web: { h, t, nr, sv, nc, sh, ew, ewp } } ] (entered plates) }
+     -- added 2026-10-30 (Auto design PR), optional, read by engine/autodesign.js (absent = its DEF) --
+     autodesign: { mode: 'new' | 'refine' | 'check', objective: 'weight' | 'depth' | 'cost', topN, cost: { steel ($/lb), trans, splice, stiff ($ each) },
+                  limits: { Dmin, Dmax, Dinc, twInc, tfInc, bfInc, twMin, tfMin, bfMin, tfMax, thkRatio, areaRatio, maxTrans, minSeg, lbRatio, topConst, maxDb,
+                  depthRule, sLo, sHi } ('' = the owner's or Preliminary sizing's default), nbList (text), change: { nb, D },
+                  undo: { girders, xs, framing, splices } (the design before the last Apply; one-step undo), applied: { at, nb, D, w } }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
      -- added 2026-10-30 (legacy import PR), optional, written only by an import of an old project (engine/legacy.js) --
