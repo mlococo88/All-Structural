@@ -30,6 +30,10 @@
        D.mark(), D.bbox(i0, i1), D.move(i0, dx, dy)
        D.toDXF(opt) -> the DXF text (opt.ltscale: $LTSCALE, default 1)
      SharedDxf.toSVG(D, opt) -> '<svg ...>' of entities opt.i0..opt.i1 (default all); opt: { width, pad, bg, cls, title }
+     SharedDxf.viewer(host, svg, opt) (browser) the SVG in host with pan and zoom by its viewBox: wheel about the cursor, drag, pinch,
+                             double-click / double-tap to fit, on-canvas + / - / Fit; returns { level, set, zoom, fit }
+     SharedDxf.viewer(host, svg, opt) (browser) the SVG in host with pan and zoom by its viewBox: wheel about the cursor, drag, pinch,
+                             double-click / double-tap to fit, on-canvas + / - / Fit; returns { level, set, zoom, fit }
      SharedDxf.str(s)        text as DXF R12 accepts it (degree %%d, diameter %%c, x for ×, CL for ℄, HTML tags removed)
      SharedDxf.frac(v, den), fmtIn(inch), fmtFtIn(inch)   9/16 (nearest 1/16 by default), 1 1/8", 12'-4 1/2" (nearest 1/8 in)
      SharedDxf.parse(text)   -> { pairs, sections, tables, blocks, entities } (tests; any DXF this writer makes)
@@ -198,6 +202,51 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${+W.toFixed(3)} ${+H.toFixed(3)}"${w}${opt.cls ? ` class="${opt.cls}"` : ''} font-family="Arial, Helvetica, sans-serif" preserveAspectRatio="xMidYMid meet">${opt.title ? `<title>${esc(opt.title)}</title>` : ''}${opt.bg ? `<rect width="100%" height="100%" fill="${opt.bg}"/>` : ''}${parts.join('')}</svg>`;
   }
 
+  /* ---------- interactive preview (browser): pan and zoom of a toSVG() drawing ---------- */
+  /* viewer(host, svg, opt) puts the SVG string svg in host with navigation by its viewBox (text stays vector at any zoom):
+     wheel zooms about the cursor (the page does not scroll while the wheel is over the drawing; at fit the wheel zooms in), drag pans
+     (left or middle button; one finger), two-finger pinch zooms and pans, double-click / double-tap fits; on-canvas +, − and Fit buttons.
+     opt: { height (CSS, default '70vh'), level (initial zoom, 1 = fit), max (default 64), onchange(level) }.
+     Returns { level(), set(level) (about the center), zoom(f, clientX, clientY), fit(), el (the svg), box }. */
+  function viewer(host, svg, opt) {
+    opt = opt || {}; const MAX = opt.max || 64, MIN = 0.5;
+    host.innerHTML = `<div class="sdx-view" style="position:relative;overflow:hidden;height:${opt.height || '70vh'};touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;background:#fff">${svg}`
+      + '<div class="sdx-btns" style="position:absolute;right:6px;top:6px;display:flex;gap:4px">'
+      + ['+', '−', 'Fit'].map((t, i) => `<button type="button" data-sdx="${['in', 'out', 'fit'][i]}" aria-label="${['Zoom in', 'Zoom out', 'Zoom to fit'][i]}" style="min-width:30px;height:28px;padding:0 6px;font:600 13px system-ui,sans-serif;background:rgba(255,255,255,.92);border:1px solid #9aa4b2;border-radius:4px;cursor:pointer">${t}</button>`).join('') + '</div></div>';
+    const box = host.firstElementChild, el = box.querySelector('svg');
+    const v0 = (el.getAttribute('viewBox') || '0 0 10 10').split(/[\s,]+/).map(Number), v = v0.slice();
+    el.setAttribute('preserveAspectRatio', 'xMidYMid meet'); el.style.width = '100%'; el.style.height = '100%'; el.style.display = 'block';
+    const apply = () => { el.setAttribute('viewBox', v.map(q => +q.toFixed(4)).join(' ')); if (opt.onchange) opt.onchange(level()); };
+    const level = () => v0[2] / v[2];
+    /* drawing units per screen pixel, and the drawing point under client (x, y) (xMidYMid meet) */
+    const geo = () => { const r = el.getBoundingClientRect(), k = Math.max(v[2] / (r.width || 1), v[3] / (r.height || 1)); return { r, k, ox: v[0] - (r.width * k - v[2]) / 2, oy: v[1] - (r.height * k - v[3]) / 2 }; };
+    const at = (cx, cy) => { const g = geo(); return [g.ox + (cx - g.r.left) * g.k, g.oy + (cy - g.r.top) * g.k]; };
+    function zoom(f, cx, cy) {
+      const L = level(), f2 = Math.max(MIN / L, Math.min(MAX / L, f)); if (Math.abs(f2 - 1) < 1e-9) return;
+      const p = cx == null ? [v[0] + v[2] / 2, v[1] + v[3] / 2] : at(cx, cy);
+      v[0] = p[0] - (p[0] - v[0]) / f2; v[1] = p[1] - (p[1] - v[1]) / f2; v[2] /= f2; v[3] /= f2; apply();
+    }
+    const fit = () => { for (let i = 0; i < 4; i++) v[i] = v0[i]; apply(); };
+    const set = L => { if (!(L > 0)) return; if (Math.abs(L - 1) < 1e-9) { fit(); return; } zoom(L / level()); };
+    const pan = (dx, dy) => { const k = geo().k; v[0] -= dx * k; v[1] -= dy * k; apply(); };
+    el.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(-Math.max(-300, Math.min(300, e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY)) * 0.0015), e.clientX, e.clientY); }, { passive: false });
+    box.addEventListener('wheel', e => e.preventDefault(), { passive: false });
+    const P = new Map(); let last = null, tap = 0;
+    el.addEventListener('pointerdown', e => { if (e.button !== 0 && e.button !== 1) return; e.preventDefault(); el.setPointerCapture && el.setPointerCapture(e.pointerId); P.set(e.pointerId, [e.clientX, e.clientY]); last = null; box.style.cursor = 'grabbing';
+      if (e.pointerType === 'touch' && P.size === 1) { const t = Date.now(); if (t - tap < 300) { fit(); tap = 0; } else tap = t; } });
+    el.addEventListener('pointermove', e => { if (!P.has(e.pointerId)) return; const q = P.get(e.pointerId), dx = e.clientX - q[0], dy = e.clientY - q[1];
+      if (P.size === 1) { P.set(e.pointerId, [e.clientX, e.clientY]); pan(dx, dy); return; }
+      P.set(e.pointerId, [e.clientX, e.clientY]); const [a, b] = [...P.values()], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (last) { pan(m[0] - last.m[0], m[1] - last.m[1]); if (last.d > 0 && d > 0) zoom(d / last.d, m[0], m[1]); } last = { m, d }; });
+    const up = e => { P.delete(e.pointerId); last = null; if (!P.size) box.style.cursor = 'grab'; };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    el.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
+    el.addEventListener('dblclick', e => { e.preventDefault(); fit(); });
+    box.querySelectorAll('[data-sdx]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.sdx; if (k === 'fit') fit(); else zoom(k === 'in' ? 1.5 : 1 / 1.5); }));
+    if (opt.level && opt.level !== 1) requestAnimationFrame(() => set(opt.level));
+    return { level, set, zoom, fit, el, box };
+  }
+
   /* ---------- reading back (tests, self-checks) ---------- */
   function parse(text) {
     const ln = String(text).split(/\r?\n/); if (ln[ln.length - 1] === '') ln.pop();
@@ -256,5 +305,5 @@
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
 
-  window.SharedDxf = { drawing, toSVG, str, frac, fmtIn, fmtFtIn, num, dimGeo, bbox, parse, validate, download, ACI };
+  window.SharedDxf = { drawing, toSVG, viewer, str, frac, fmtIn, fmtFtIn, num, dimGeo, bbox, parse, validate, download, ACI };
 })();
