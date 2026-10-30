@@ -90,7 +90,7 @@
   function quantities(G, RS) {
     const P = G.P, T = ((G.stf || {}).transverse || {}).types || {}, Bt = ((G.stf || {}).bearing || {}).types || {}, rows = [], welds = [];
     let lb = 0, nCp = 0, nSt = 0, nBs = 0, nSpl = 0, nBolt = 0, nStud = 0, okBolt = true;
-    const fw = new Map(), add = (k, w, lines, L) => { const key = `${k}|${w}`, q = fw.get(key) || { k, w, lines, L: 0 }; q.L += L; fw.set(key, q); };
+    const fw = new Map(), add = (k, w, lines, L) => { const key = `${k}|${w}`, q = fw.get(key) || { k, w, lines, L: 0 }; q.L += lines * L; fw.set(key, q); };   // L: total weld length (lines x welded length), in
     const zonesOf = g => (P.studs && P.studs.zones && P.studs.zones.length) ? P.studs.zones : ((resOf({ RS }, g) || {}).fat || {}).SR ? resOf({ RS }, g).fat.SR.zones : [];
     G.girders.forEach(g => {
       g.segs.forEach(s => { const L = (s.s1 - s.s0) * 12; lb += L * (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * GAM; add('FLANGE-TO-WEB FILLET WELDS (2 PER FLANGE)', fwSize(P, s), 4, L); });
