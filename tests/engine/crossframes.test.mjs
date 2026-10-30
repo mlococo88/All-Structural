@@ -181,10 +181,10 @@ test('Analysis takes the cross-frame point loads of the framing (SB2-A6): source
   const X = W2.SBDCrossframes.pointLoads(P, 0);
   assert.equal(LD.src.xf, 'module'); assert.equal(LD.xf.length, X.pts.length); assert.ok(X.pts.length > 10);
   assert.ok(Math.abs(LD.xf.reduce((a, q) => a + q.P, 0) - X.tot) < 1e-12);
-  // ΣR = steel + cross-frames. Within 1e-5 relative: the shared engine (shared/moving-load.js staticAnalysis) meshes a point load 0.006 ft from a
-  // station (217.994 ft) as a very short element and loses 1e-4 of that load in ΣR (0.75 lb of 102.66 kip here); reported, not changed (SB2-X1).
+  // ΣR = steel + cross-frames, within 1e-7 relative (round-off). Before SB2-X1 was fixed (shared/moving-load.js staticAnalysis: a point load
+  // 0.006 ft from the 218 ft station was meshed as a very short element) ΣR was 0.75 lb short of 102.66 kip (7.3e-6); now 2.4e-9.
   const wsTot = R.segs.reduce((a, s, i) => a + R.wSteel[i] * (s.x1 - s.x0), 0), sR = R.st.DC1steel.R.reduce((a, b) => a + b, 0);
-  assert.ok(Math.abs(sR - wsTot - X.tot) / (wsTot + X.tot) < 1e-5, `ΣR ${sR} vs ${wsTot + X.tot}`);
+  assert.ok(Math.abs(sR - wsTot - X.tot) / (wsTot + X.tot) < 1e-7, `ΣR ${sR} vs ${wsTot + X.tot}`);
   assert.equal(X.line, 1, 'the plate girder takes cross-section girder G2 (interior): frames on both sides, W/2 each');
   const P2 = JSON.parse(JSON.stringify(P)); P2.girders[0].loads = { DC1wet: 1, DC2: 0.2, DW: 0.2, xf: [{ x: 50, P: 1 }] };
   assert.equal(AN.loadsOf(P2, P2.girders[0], null).src.xf, 'girder');

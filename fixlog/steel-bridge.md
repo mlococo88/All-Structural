@@ -874,7 +874,8 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - SB2-X1. `shared/moving-load.js` staticAnalysis meshes a point load within ~0.01 ft of a station as a very short element; the solve then
   loses up to ~1e-4 of that load in ΣR (28° skew built-in: a frame at 217.994 ft next to the 218 ft station; ΣR short by 0.75 lb of 102.66 kip,
   the Analysis tab's DC1 equilibrium step then shows "not met"). Not changed here (shared file); suggested fix: merge a point load within
-  1e-3 × h of a mesh node into that node.
+  1e-3 × h of a mesh node into that node. Closed 2026-10-29 (sb2-x1-pointload, fixlog/shared-moving-load.md): a point load within
+  0.05 h_max of a node is applied inside its element with exact fixed-end forces; ΣR now within round-off (28° built-in: 2.4e-9).
 - SB2-X2. Not ported: Preliminary sizing's framing checks (`framingChecks`: X1–X4 and the owner skew warnings), Suggest's cross-frame
   auto-design, the cross-frame/diaphragm drawings and DXF. The layout records the splice conflicts it could not clear (Cross-frames tab).
 

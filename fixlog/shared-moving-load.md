@@ -116,3 +116,62 @@ Tests: `node tests/engine/run.mjs moving-load` (parity with the original page co
 - SML-O4 closed. The engineer decided on 2026-10-29: in simple-span mode the 90 % two-truck case stays on for the summed
   pier reactions (as implemented in #464). Test: `tests/engine/analysis.test.mjs` "SML-O4" (two simple spans 60 + 110 ft:
   pier R = 154.122 kips per lane, the two-truck case governs; pier moment 0).
+
+## 2026-10-29 — PR: sb2-x1-pointload — staticAnalysis: a point load next to a mesh node is applied inside its element (SB2-X1; equilibrium fix; Moving Load Generator unchanged)
+Loaded by: `Moving Load Generator.html` (does not call `staticAnalysis`; its results are unchanged) and `apps/steel-bridge/index.html`
+(engine `apps/steel-bridge/engine/analysis.js`: dead-load stages, camber, cross-frame point loads).
+### Problem
+- `staticAnalysis` made every point load a mesh node. A load closer than ~0.01 ft to another node (a station, support, plate or load
+  boundary) made a very short element. Its stiffness grows as 1/l³, so the dense LU solve, which has no pivoting, loses accuracy for the
+  whole beam.
+  - Steel Bridge, 28° skew built-in: a frame at 217.994 ft, 0.006 ft from the 218 ft station, made ΣR 0.75 lb short of 102.66 kip. The
+    Analysis tab's DC1 equilibrium step read "not met".
+  - Check beam (below), ΣR − ΣP: 6.6e-3 kips at 0.005 ft, 0.31 kips at 0.001 ft, −62 kips at 1e-4 ft.
+### Where
+- `staticAnalysis`, mesh (anchor `// Mesh: supports, stations, segment and load boundaries, point loads`).
+  - Before: `… dist.forEach(d=>key.push(d[0],d[1])); pts.forEach(p=>key.push(p[0]));` and `const hmax=spec.hmax||Lt/240, x=[ks[0]];`
+  - After: `const hmax=spec.hmax||Lt/240, tolP=0.05*hmax, inP=[];`
+    `pts.forEach(p=>{const dm=Math.min(...key.map(v=>Math.abs(v-p[0])));if(dm>1e-6&&dm<tolP&&p[0]>0&&p[0]<Lt)inP.push(p);else key.push(p[0]);});`
+    and `const x=[ks[0]];`
+  - What this does: a point load more than 1e-6 ft but less than 0.05 h_max from an earlier key does not become a node. Every other point
+    load is a key as before.
+- Fixed-end forces (anchor `const F=new Float64Array(nd);`): each `inP` load adds its exact beam fixed-end forces to its element's `FEF`.
+  - P at a from the element start, b = l − a: R1 = P b²(3a+b)/l³, M1 = P a b²/l², R2 = P a²(a+3b)/l³, M2 = −P a² b/l².
+  - The nodal load is skipped for these loads: `pts.forEach(p=>{if(!inP.includes(p))F[2*idxOf(p[0])]-=p[1];});`
+- Station output: `vL` / `mL` from the element to the left now subtract an `inP` load inside that element: `vL −= P`, `mL −= P(l − a)`.
+### Engineer's decision (2026-10-29) and reasoning
+- The load keeps its exact position. This is more accurate than snapping it to the node, which would move it up to 0.05 h_max.
+- Fixed-end forces are exact for the beam element, so nodal displacements, M, V and R stay exact for the given EI, the same as for loads
+  at nodes.
+- The 0.05 h_max bound limits the stiffness ratio of neighbouring elements to about 8,000. At 0.1 ft (0.07 h_max, still meshed as a node)
+  the check beam's ΣR error is 2e-7 kips. That is round-off.
+### Governing provision
+- None changed. This is statics and linear beam theory, with no AASHTO formula, factor or unit involved.
+### Check case (`tests/engine/static.test.mjs`, "SB2-X1")
+- Simple span 100 ft, EI = 29000 × 10000/144, w = 1 klf, P = 10 kips at 49.995 ft (0.005 ft from the 50 ft station):
+  - R_A = 50 + 10(50.005)/100 = 55.0005, R_B = 54.9995, ΣR = 110
+  - M(50) = 1250 + 10(49.995)(50)/100 = 1499.975 kip-ft
+  - V(50) = 55.0005 − 50 − 10 = −4.9995 kips
+  - The engine matches all of these to 1e-7 relative. That is the same round-off as w alone (1.6e-8).
+- 110 + 140 + 110 ft, I 60000 / 120000 / 60000 in⁴, w = 1.2 klf, P = 1 kip at 222 − d ft:
+  - ΣR − 433 before the fix: 6.6e-3 (d = 0.005 ft), 0.31 (0.001), −62 (1e-4) kips.
+  - After: ≤ 2.1e-9 kips for every d.
+  - M(222) tends continuously to the value with the load at the node (−16.285742 kip-ft).
+### How verified
+- `node tests/engine/run.mjs moving-load`: the 35 Moving Load Generator cases hash identically. `analyze` is untouched, and the page does
+  not call `staticAnalysis`.
+- `static`, `simple`, `analysis`, `crossframes`, `girderdetail`: all pass. GirderDetail parity of the dead-load and uniform analyses is
+  unchanged in the printed maxima.
+- Where no point load lies within (1e-6 ft, 0.05 h_max) of a key, the mesh, the loads and the code path are the same as before, so results
+  are bit-identical.
+- Steel Bridge default project, ΣR of DC1 steel + cross-frames, relative error before → after:
+  - 0°: 5.6e-10 → 5.6e-10
+  - 15°: unchanged
+  - 28°: −7.3e-6 → −2.4e-9
+  - 45°: −9.7e-8 → −1.2e-8
+- `tests/engine/crossframes.test.mjs`: the ΣR tolerance is tightened from 1e-5 to 1e-7.
+- One headless load of apps/steel-bridge/index.html, 28° skew, Analysis run: the equilibrium step shows no "not met", 0 console errors.
+### Other copies
+- None. Moving Load Generator uses `analyze`, which has its own mesh (influence lines, loads at nodes) and is not affected.
+### Open items
+- SB2-X1 closed (fixlog/steel-bridge.md).
