@@ -30,3 +30,5 @@ For PR2:
 - add Rating and Welds to the full check.
 
 Decision SB2-AD8 (lead, 2026-10-30): the splice auto-design uses the owner's edge distance for end distances (CTDOT 2 in); Auto design treats cross-frame bolt count (CF11) as a sizing rule. Implement in PR2.
+- Consistency PR #497 merged. Auto design PR2 must also take f_ℓ and brace points from `SBDFraming.design` (it currently uses f_ℓ = 0 during deck placement).
+- Open UI item: allow an explicit f_ℓ = 0 override on skewed bridges. Today 0 means "none entered".
