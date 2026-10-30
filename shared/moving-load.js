@@ -489,9 +489,15 @@ function staticAnalysis(spec){
     return out;
   }
   // Mesh: supports, stations, segment and load boundaries, point loads; then subdivided to hmax
-  const key=[...sup,...st]; sb.forEach(b=>key.push(b[0],b[1])); dist.forEach(d=>key.push(d[0],d[1])); pts.forEach(p=>key.push(p[0]));
+  const key=[...sup,...st]; sb.forEach(b=>key.push(b[0],b[1])); dist.forEach(d=>key.push(d[0],d[1]));
+  /* SB2-X1 (2026-10-29): a point load closer than tolP = 0.05 hmax (but more than 1e-6 ft) to another mesh key is not made a node:
+     the very short element it would create (stiffness ∝ 1/l³) ill-conditions the solve (ΣR off by ~1e-4 of the loads at 0.01 ft).
+     It is applied inside its element with the exact fixed-end forces instead (inP), so its position is kept exactly. Every other
+     point load is a node as before (results unchanged where no point load is that close to a key). */
+  const hmax=spec.hmax||Lt/240, tolP=0.05*hmax, inP=[];
+  pts.forEach(p=>{const dm=Math.min(...key.map(v=>Math.abs(v-p[0])));if(dm>1e-6&&dm<tolP&&p[0]>0&&p[0]<Lt)inP.push(p);else key.push(p[0]);});
   const ks=[]; key.filter(v=>v>=-1e-9&&v<=Lt+1e-9).sort((a,b)=>a-b).forEach(v=>{if(!ks.length||v-ks[ks.length-1]>1e-6)ks.push(v);});
-  const hmax=spec.hmax||Lt/240, x=[ks[0]];
+  const x=[ks[0]];
   for(let i=1;i<ks.length;i++){const a=ks[i-1],b=ks[i],n=Math.max(1,Math.ceil((b-a)/hmax-1e-9));for(let j=1;j<=n;j++)x.push(a+(b-a)*j/n);}
   const nn=x.length, nd=2*nn;
   const idxOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return Math.abs(x[lo]-v)<=Math.abs(x[hi]-v)?lo:hi;};
@@ -503,8 +509,12 @@ function staticAnalysis(spec){
     let w=0; dist.forEach(d=>{if(xm>d[0]&&xm<d[1])w+=d[2];}); wE[e]=w;
     if(w){FEF[4*e]=w*l/2;FEF[4*e+1]=w*l*l/12;FEF[4*e+2]=w*l/2;FEF[4*e+3]=-w*l*l/12;}
   }
+  // inP (SB2-X1): fixed-end forces of a point load P at a from the start of element e (b = l − a), added to the element's FEF:
+  // R1 = P b²(3a + b)/l³, M1 = P a b²/l², R2 = P a²(a + 3b)/l³, M2 = −P a² b/l² (exact for the beam element; ΣR = P)
+  const eP=inP.map(p=>{let e=0;while(e<nn-2&&x[e+1]<=p[0])e++;const l=el[e],a=p[0]-x[e],b=l-a,P=p[1];
+    FEF[4*e]+=P*b*b*(3*a+b)/(l*l*l);FEF[4*e+1]+=P*a*b*b/(l*l);FEF[4*e+2]+=P*a*a*(a+3*b)/(l*l*l);FEF[4*e+3]-=P*a*a*b/(l*l);return {e,a,P};});
   const F=new Float64Array(nd); for(let e=0;e<nn-1;e++)for(let q=0;q<4;q++)F[2*e+q]-=FEF[4*e+q];
-  pts.forEach(p=>{F[2*idxOf(p[0])]-=p[1];});
+  pts.forEach(p=>{if(!inP.includes(p))F[2*idxOf(p[0])]-=p[1];});
   const supNodes=sup.map(idxOf), isSup=new Uint8Array(nd); supNodes.forEach(i=>isSup[2*i]=1);
   const free=[]; for(let d=0;d<nd;d++) if(!isSup[d])free.push(d);
   const nf=free.length, A=new Float64Array(nf*nf), bb=new Float64Array(nf);
@@ -517,7 +527,8 @@ function staticAnalysis(spec){
   const out={x:st,M:[],VL:[],VR:[],defl:[],R,sup,Lt,nn};
   st.forEach(v=>{const i=idxOf(v);
     const mR=i<nn-1?-m1[i]:null, l=i>0?el[i-1]:0, w=i>0?wE[i-1]:0;
-    const vL=i>0?f1[i-1]-w*l:0, mL=i>0?-m1[i-1]+f1[i-1]*l-w*l*l/2:null;
+    let vL=i>0?f1[i-1]-w*l:0, mL=i>0?-m1[i-1]+f1[i-1]*l-w*l*l/2:null;
+    eP.forEach(q=>{if(i>0&&q.e===i-1){vL-=q.P;mL-=q.P*(l-q.a);}});   // SB2-X1: a point load inside the element to the left
     out.M.push(mR!=null?mR:mL); out.VL.push(vL); out.VR.push(i<nn-1?f1[i]:0); out.defl.push(-12*d[2*i]);});
   return out;
 }
