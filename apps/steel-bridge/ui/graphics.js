@@ -31,7 +31,7 @@
          C = { D, X(x), Y(y), pick(px, py) -> x, plot: [x0, y0, x1, y1], h, bottom }.
      G.mark(E, label, value) -> adds the selected-station layer (SEL) to E's drawing: used when the graphic is built for a given selection
      G.mount(el, build, opts) -> H: draws a graphic into el with a title, a Download DXF button, the zoom / pan viewer and a legend note.
-         build() returns { D, title, file, note, pick(x, y) -> value, selMark(value) -> { x, y0, y1, label }, readout(value) -> text }.
+         build() returns { D, title, file, note, pick(x, y) -> value, selMark(value) -> { x, y0, y1, segs: [[y0, y1] ...] (optional: one line per band), label }, readout(value) -> text }.
          opts: { key (keeps the zoom and pan across re-draws of the same view), height, selected, onSelect(value), onHover(value), print note }.
          Clicking (not dragging) a location calls opts.onSelect(pick(x, y)); H.select(value) moves the highlight without rebuilding
          (live overlay, not in the DXF); hovering shows readout(value) (mouse only).
@@ -143,7 +143,7 @@
     // span dimensions
     let low = yB - bmax - 4.6 * h;
     sup.slice(1).forEach((x, k) => D.dimH(ly.d, X(sup[k]), X(x), low, low + 1.0 * h, `SPAN ${k + 1} = <>`));
-    low -= 3.2 * h;
+    low -= 3.2 * h; let axisY = low;
     // stations axis: ticks at a nice step, grid ticks on the GRID layer
     if (opts.axis !== false) {
       const st = niceStep(L1 - L0, 10), t0 = Math.ceil(L0 / st - 1e-9) * st; D.line(ly.axis, X(L0), low, X(L1), low);
@@ -151,14 +151,17 @@
         D.line(ly.grid, X(t), low, X(t), yB - bmax - 0.2 * h, D.ltype('DASHED')); }
       D.text(ly.t, X(L1), low - 3.2 * h, h * 0.8, 'STATION, FT (FROM CL BRG. ABUT. 1)', 2); low -= 5.4 * h;
     }
-    let lowEdge = low;
+    let lowEdge = low; const elTop = E.yTop;   // the elevation band of the selected-station line: from the stations axis up to the top of the elevation
+    E.bands = [];   // the plot bands [y0, y1] added under the elevation (E.band): the selected-station line is drawn in these, not through the tables and legends between them
+    E.band = (y0, y1) => { if (fin(y0) && fin(y1)) E.bands.push([Math.min(y0, y1), Math.max(y0, y1)]); };
     E.alloc = height => { const top = lowEdge - 0.6 * h; lowEdge = top - height; return top; };
     E.pick = (x, y) => Math.max(L0, Math.min(L1, x / 12));
     // title and subtitle above everything drawn (E.yTop); the subtitle is wrapped to the width of the girder
     E.title = (t, sub) => { const nch = Math.max(30, Math.floor(len / (0.8 * h * 0.6))), ls = sub ? wrap(sub, nch) : [], y0 = E.yTop + 4.2 * h;
       ls.forEach((q, i) => D.text(ly.t, X(L0), y0 + (ls.length - 1 - i) * 1.1 * h, h * 0.8, q)); D.text(ly.t, X(L0), y0 + ls.length * 1.1 * h + 0.4 * h, h * 1.3, t); };
     let selLow = null; E.freeze = () => { selLow = lowEdge; };   // the selected-station line runs down to here (not through tables drawn under the diagrams)
-    E.selMark = ft => ({ x: X(ft), y0: selLow != null ? selLow : lowEdge, y1: E.yTop + 2.4 * h, label: `STA ${nf(ft, 1)} FT` });
+    E.selMark = ft => { const top = elTop + 1.7 * h, segs = [[axisY, top], ...E.bands.map(b => [b[0] - 0.3 * h, b[1] + 0.3 * h])];
+      return { x: X(ft), y0: Math.min(...segs.map(q => q[0])), y1: top, segs, label: `STA ${nf(ft, 1)} FT` }; };
     return E;
   }
 
@@ -198,7 +201,7 @@
   /* the selected-station layer in the drawing itself (for a graphic built for a given selection) */
   function mark(E, label, ft) {
     if (!E || !E.D || !fin(ft)) return; const m = E.selMark(ft), D = E.D, l = E.ly.sel;
-    D.line(l, m.x, m.y0, m.x, m.y1); D.pline(l, [[m.x, m.y1 - 0.4 * E.h], [m.x - 0.5 * E.h, m.y1 + 0.3 * E.h], [m.x + 0.5 * E.h, m.y1 + 0.3 * E.h]], true);
+    (m.segs || [[m.y0, m.y1]]).forEach(q => D.line(l, m.x, q[0], m.x, q[1])); D.pline(l, [[m.x, m.y1 - 0.4 * E.h], [m.x - 0.5 * E.h, m.y1 + 0.3 * E.h], [m.x + 0.5 * E.h, m.y1 + 0.3 * E.h]], true);
     D.text(l, m.x + 0.8 * E.h, m.y1 + 0.2 * E.h, E.h * 0.9, label || m.label);
   }
 
@@ -263,7 +266,8 @@
     const st = document.createElement('style'); st.id = 'sbg-css';
     st.textContent = `.sbg{margin:0 0 10px;} .sbg-bar{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin:2px 0 4px;font-family:var(--font-ui,Arial,sans-serif);font-size:9pt;}
       .sbg-bar b{font-size:10pt;} .sbg-read{flex:1 1 200px;color:#17212b;min-height:1.2em;} .sbg-box{border:1px solid var(--line,#c8d0da);background:#fff;} .sbg-note{font-size:8.5pt;color:#556;margin:2px 0 0;}
-      .sbg-sel{pointer-events:none;} @media print{.sbg-box .sdx-view{height:auto!important;overflow:visible!important} .sdx-btns,.sbg-bar button{display:none!important} .sbg{break-inside:avoid} .sbg-box{border-color:#999}}`;
+      .sbg-sel{pointer-events:none;} .sbg-hint{display:none;font-size:8.5pt;color:#556;margin:2px 0 0;font-family:var(--font-ui,Arial,sans-serif);} @media (max-width:700px){.sbg-hint{display:block;}}
+      @media print{.sbg-hint{display:none!important} .sbg-box .sdx-view{height:auto!important;overflow:visible!important} .sdx-btns,.sbg-bar button{display:none!important} .sbg{break-inside:avoid} .sbg-box{border-color:#999}}`;
     document.head.appendChild(st);
   }
   /* measureFit(svg): [x, y, w, h], the viewBox that holds exactly what the SVG draws (the browser's own getBBox, text as drawn) plus a margin of 1.5 % of the long
@@ -301,7 +305,7 @@
     try { g = build(); } catch (e) { el.innerHTML = `<div class="alert err">The graphic could not be drawn: ${esc(e.message)}</div>`; return null; }
     if (!g || !g.D || (g.errors && g.errors.length)) { el.innerHTML = `<div class="note">${esc(g && g.errors ? g.errors.join(' ') : 'No graphic.')}</div>`; return null; }
     const D = g.D, b = D.bbox(), pad = 0.02 * Math.max(b[2] - b[0], b[3] - b[1]), ox = b[0] - pad, oy = b[3] + pad;   // toSVG's mapping
-    el.innerHTML = `<div class="sbg"><div class="sbg-bar"><b>${esc(g.title || '')}</b><span class="sbg-read" aria-live="polite"></span><button type="button" data-sbg="dxf">Download DXF</button></div><div class="sbg-box"></div>${g.note ? `<p class="sbg-note">${esc(g.note)}</p>` : ''}</div>`;
+    el.innerHTML = `<div class="sbg"><div class="sbg-bar"><b>${esc(g.title || '')}</b><span class="sbg-read" aria-live="polite"></span><button type="button" data-sbg="dxf">Download DXF</button></div><div class="sbg-box"></div><p class="sbg-hint">Pinch or double-tap to zoom; drag to pan.</p>${g.note ? `<p class="sbg-note">${esc(g.note)}</p>` : ''}</div>`;
     const read = el.querySelector('.sbg-read'), box = el.querySelector('.sbg-box');
     const H = { graphic: g, dxf: () => D.toDXF({ ltscale: 1 }) };
     let svg = X_().toSVG(D, { title: g.title }); const mobile = window.innerWidth < 700;
@@ -321,14 +325,22 @@
           px = (t[0] - v0[0] / f) / (1 - 1 / f), py = (t[1] - v0[1] / f) / (1 - 1 / f);
         VW.zoom(f, r.left + (px - gx) / k, r.top + (py - gy) / k); }
     } catch (e) { /* the view is just fit */ } }
+    // phone width: start at a reading scale (the smaller text of the figure at 9 px or more, at most 8 x), at the top left of the drawing, and pan from there; the desktop view
+    // and the print are unchanged (the full view is restored for printing)
+    if (mobile && !(kp && kp.base === base && kp.vb !== base)) { try {
+      const v0 = base.split(/\s+/).map(Number), r = sv.getBoundingClientRect(), fs = [...sv.querySelectorAll('text')].map(t => +t.getAttribute('font-size')).filter(q => q > 0).sort((a, b) => a - b);
+      if (r.width > 0 && r.height > 0 && fs.length) { const k = Math.max(v0[2] / r.width, v0[3] / r.height), f = Math.min(8, 9 * k / fs[Math.floor(fs.length * 0.15)]);
+        if (f > 1.05) { VW.zoom(f, r.left, r.top); const bv = sv.getAttribute('viewBox'); H.phoneView = bv;
+          let cur = null; window.addEventListener('beforeprint', () => { if (sv.isConnected) { cur = sv.getAttribute('viewBox'); sv.setAttribute('viewBox', base); } }); window.addEventListener('afterprint', () => { if (sv.isConnected && cur) sv.setAttribute('viewBox', cur); }); } }
+    } catch (e) { /* the view is just fit */ } }
     new MutationObserver(save).observe(sv, { attributes: true, attributeFilter: ['viewBox'] });
     // selected-station overlay (live, not in the DXF)
     const ov = document.createElementNS(ns, 'g'); ov.setAttribute('class', 'sbg-sel'); sv.appendChild(ov);
     const sw = Math.max(b[2] - b[0], b[3] - b[1]) / 1500;
     H.select = v => {
       ov.innerHTML = ''; if (v == null || !g.selMark) return; const m = g.selMark(v); if (!m || !fin(m.x)) return;
-      const X = m.x - ox, y0 = oy - m.y0, y1 = oy - m.y1, e = (t, a) => { const n = document.createElementNS(ns, t); Object.keys(a).forEach(k => n.setAttribute(k, a[k])); return n; };
-      ov.appendChild(e('line', { x1: X, x2: X, y1: y0, y2: y1, stroke: '#1f4fc4', 'stroke-width': sw * 3, 'stroke-opacity': 0.75 }));
+      const X = m.x - ox, y1 = oy - m.y1, e = (t, a) => { const n = document.createElementNS(ns, t); Object.keys(a).forEach(k => n.setAttribute(k, a[k])); return n; };
+      (m.segs || [[m.y0, m.y1]]).forEach(q => ov.appendChild(e('line', { x1: X, x2: X, y1: oy - q[0], y2: oy - q[1], stroke: '#1f4fc4', 'stroke-width': sw * 3, 'stroke-opacity': 0.75 })));
       if (m.label) { const t = e('text', { x: X + sw * 8, y: y1 - sw * 4, 'font-size': (D.h || 2) * 0.9, fill: '#1f4fc4', 'font-weight': 700 }); t.textContent = m.label; ov.appendChild(t); }
     };
     if (opts.selected != null) H.select(opts.selected);

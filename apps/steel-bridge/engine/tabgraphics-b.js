@@ -110,9 +110,12 @@
     opt = opt || {}; const gi0 = opt.gi != null ? opt.gi : Math.max(0, (R.gm.gNo || 1) - 1), { D, L, G, F } = frame(P, { gi: Math.min(gi0, P.girders.length - 1) }), h = F.h, X = F.X, reg = [], sel = opt.sel || {};
     const has = R.gm.dem, rows = R.panels.rows, gov = R.panels.gov;
     // the panels: colour by ratio (or the plain panel width and d_o where there is no shear envelope); values on the notable ones
+    // the colour fill is drawn once per run of neighbouring panels of the same colour class and web depth (one outline and a light hatch, not an outline and hatch per panel: many narrow
+    // panels made a dense wall of lines behind the web text); the panels keep their own text, selection and click regions below
+    if (has) { const dep = q => Math.min(F.Dw(q.p + 1e-6), F.Dw(q.q - 1e-6)); let run = null; const flush = () => { if (run) ratioFill(D, L, run.r, X(run.p), F.yB, X(run.q), F.yB + run.d, Math.min((X(run.q) - X(run.p) + run.d) / 4, 1.5 * run.d)); run = null; };
+      rows.forEach(q => { const d = dep(q), c = rcls(q.r); if (run && run.c === c && Math.abs(run.d - d) < 1e-6 && Math.abs(run.q - q.p) < 1e-6) run.q = q.q; else { flush(); run = { p: q.p, q: q.q, d, c, r: q.r }; } }); flush(); }
     rows.forEach(q => { const a = X(q.p), b = X(q.q), d = Math.min(F.Dw(q.p + 1e-6), F.Dw(q.q - 1e-6)), r = has ? q.r : NaN, hh = h * Math.min(0.9, (b - a) * 0.5 / (h * 1.2));
       const show = has && (rcls(r) !== 'ok' || q === gov);
-      if (has) ratioFill(D, L, r, a, F.yB, b, F.yB + d, Math.max(d / 3, (b - a) / 2));
       if (show && hh > 0.35 * h) fitText(D, L.t, (a + b) / 2, F.yB + d * 0.2, b - a, d * 0.4, f2(r), hh);
       if (sel.k === 'pan' && sel.i === q.i) D.rect(L.sel, a - 0.12 * h, F.yB - 0.12 * h, b + 0.12 * h, F.yB + d + 0.12 * h);
       reg.push({ k: 'pan', i: q.i, x0: a, y0: F.yB, x1: b, y1: F.yB + d, lab: `PANEL ${f2(q.p)}-${f2(q.q)} FT${q.end ? ' (END)' : ''}, d_o = ${f2(q.d)} IN${has ? `, V_u/PHI V_n = ${f3(q.r)}` : ''}` }); });
@@ -134,8 +137,11 @@
     // the stations: a strip of cells coloured by each station's governing ratio (click: that station)
     const rowTop = F.alloc(10 * h), yS = rowTop - 3 * h, st = R.stations, xs = st.map(s => s.x);
     D.text(L.t, 0, rowTop - 0.6 * h, h * 0.8, 'STATIONS (GS11, GS16, GS18): GOVERNING RATIO AT EACH');
+    { let run = null; const flush = () => { if (run) { const l = L[run.c]; D.rect(l, X(run.a), yS, X(run.b), yS + 1.6 * h); if (run.c !== 'na') hatch(D, l, X(run.a), yS, X(run.b), yS + 1.6 * h, 1.2 * h); } run = null; };   // one cell per run of the same colour class
+      st.forEach((s, i) => { const x = xs[i], a = Math.max(0, i ? (xs[i - 1] + x) / 2 : x - 0.5), b = Math.min(G.L, i < st.length - 1 ? (x + xs[i + 1]) / 2 : x + 0.5), c = rcls(s.gov ? s.gov.ratio : NaN); if (b <= a) return;
+        if (run && run.c === c && Math.abs(run.b - a) < 1e-6) run.b = b; else { flush(); run = { a, b, c }; } }); flush(); }
     st.forEach((s, i) => { const x = xs[i], a = i ? (xs[i - 1] + x) / 2 : x - 0.5, b = i < st.length - 1 ? (x + xs[i + 1]) / 2 : x + 0.5, r = s.gov ? s.gov.ratio : NaN, a1 = Math.max(0, a), b1 = Math.min(G.L, b);
-      if (b1 <= a1) return; D.rect(L[rcls(r)], X(a1), yS, X(b1), yS + 1.6 * h); if (rcls(r) !== 'na') hatch(D, L[rcls(r)], X(a1), yS, X(b1), yS + 1.6 * h, 0.4 * h);
+      if (b1 <= a1) return;
       if (sel.k === 'loc' && sel.i === i) D.rect(L.sel, X(a1) - 0.1 * h, yS - 0.3 * h, X(b1) + 0.1 * h, yS + 1.9 * h);
       reg.push({ k: 'loc', i, x0: X(a1), y0: yS - 0.3 * h, x1: X(b1), y1: yS + 1.9 * h, lab: `${up(s.name)}${s.gov ? `, ${s.gov.id} ${f3(s.gov.ratio)}` : ''}` }); });
     if (R.stGov) { const x = X(R.stGov.x != null ? R.stGov.x : xs[st.indexOf(R.stGov)]); D.line(L.gov, x, yS - 0.3 * h, x, yS - 2.2 * h); D.text(L.gov, x, yS - 4 * h, h * 0.8, `${R.stGov.gov.id} ${f3(R.stGov.gov.ratio)}`, 1); }
