@@ -17,7 +17,8 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: 'analysis', pl: null, plName: '', R: null, key: '', err: '', sel: 0 };
+  const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: 0 };   // src null: the default, this app's analysis (no example here)
+  const srcOf = () => S.src || 'analysis';
   const PHI_C = [[1.00, 'Good or satisfactory (1.00)'], [0.95, 'Fair (0.95)'], [0.85, 'Poor (0.85)']];
   const PHI_S = [[1.00, 'All other girder bridges and slab bridges (1.00)'], [0.85, 'Welded members in two-girder, truss or arch bridges (0.85)'], [0.90, 'Riveted members in two-girder, truss or arch bridges (0.90)'],
     [0.85, 'Three-girder bridges, girder spacing ≤ 6 ft (0.85)'], [0.95, 'Four-girder bridges, girder spacing ≤ 4 ft (0.95)'], [0.85, 'Floorbeams > 12 ft apart, noncontinuous stringers (0.85)'], [1.00, 'Redundant stringer subsystems between floorbeams (1.00)']];
@@ -57,7 +58,7 @@
   /* ---------- calculation ---------- */
   function build(ctx) {
     const P = ctx.P, M = window.SBDModel, OW = window.SBDOwners, FX = window.SBDFlexure, SH = window.SBDShear, RT = window.SBDRating, SB = window.SBDStiffeners, g = ctx.g || 0;
-    const rt = ensure(P), src = ctx.src || S.src;
+    const rt = ensure(P), src = ctx.src || srcOf();
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
@@ -90,7 +91,7 @@
       : `${esc(S.plName || 'hand-off')}: ${pl.stations.length} stations, ${sup.length - 1} span(s), G${esc((pl.girderDetail || {}).girder || '')}; plates, deck and bracing from the file, the project's stiffener layout.${pl.pedestrianInLL === true ? ' The pedestrian load is in its LL+IM (pedestrianInLL): not added again.' : ''}`;
     return { rows, sum, cap, ph, G, own, T, what, flex: Gr, shear: SHR, pl };
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(), S.plName]);
 
   /* ---------- output tab ---------- */
   function css() {
@@ -107,11 +108,13 @@
     const P = ctx.P, rt = ensure(P), stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const phc = PHI_C.some(([v]) => v === +rt.phiC) ? +rt.phiC : 'other', phs = PHI_S.findIndex(([v]) => v === +rt.phiS);
     const phsSel = phs < 0 ? -1 : S.phsI != null && PHI_S[S.phsI] && PHI_S[S.phsI][0] === +rt.phiS ? S.phsI : phs;   // φ_s repeats a value: the row chosen
-    let h = `<section class="sec"><div class="secHead">Load rating: factors and demands</div><div class="secBody">
+    const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis, gl = P.girders[ctx.g] || P.girders[0] || {};
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(), auto: !S.src, rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: gl.label || gl.id, plName: S.plName }) : '')
+      + `<section class="sec"><div class="secHead">Load rating: factors and demands</div><div class="secBody">
       <div class="fRow"><label for="rt_phiC">Condition factor φ<sub>c</sub></label><select id="rt_phiC">${PHI_C.map(([v, t]) => opt(v, t, phc)).join('')}${phc === 'other' ? opt('other', `Entered (${fmt(rt.phiC, 2)})`, 'other') : ''}</select><span class="unit">MBE Table 6A.4.2.3-1</span></div>
       <div class="fRow"><label for="rt_phiS">System factor φ<sub>s</sub></label><select id="rt_phiS">${PHI_S.map(([v, t], i) => opt(i, t, phsSel)).join('')}${phs < 0 ? opt(-1, `Entered (${fmt(rt.phiS, 2)})`, -1) : ''}</select><span class="unit">MBE Table 6A.4.2.4-1</span></div>
-      <div class="fRow"><label for="rt_src">Demands</label><select id="rt_src">${opt('analysis', "This app's analysis (Analysis tab)", S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
-      ${S.src === 'file' ? `<div class="fRow"><label for="rt_file">File</label><input type="file" id="rt_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+      <div class="fRow"><label for="rt_src">Demands</label><select id="rt_src">${opt('analysis', "This app's analysis (Analysis tab)", srcOf())}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf())}</select></div>
+      ${srcOf() === 'file' ? `<div class="fRow"><label for="rt_file">File</label><input type="file" id="rt_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">LRFR design-load rating, HL-93 (MBE 6A.4.2): RF = (C − γ<sub>DC</sub>DC − γ<sub>DW</sub>DW ± γ<sub>P</sub>P)/(γ<sub>LL</sub>(LL+IM)), C = φ<sub>c</sub>φ<sub>s</sub>φR<sub>n</sub> with φ<sub>c</sub>φ<sub>s</sub> ≥ 0.85.
         Strength I: γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, γ<sub>LL</sub> 1.75 Inventory, 1.35 Operating; Service II: γ<sub>D</sub> 1.00, γ<sub>LL</sub> 1.30 / 1.00 (Table 6A.4.2.2-1). No owner η or design load multiplier (GirderDetail GS20).
         Capacities from the <a href="#" data-gotab="flex">Flexure</a> and <a href="#" data-gotab="shear">Shear &amp; stiffeners</a> modules (AASHTO LRFD 10th Ed.). φ<sub>c</sub>, φ<sub>s</sub> are saved with the project; the demand choice is not. Legal and permit vehicles are not rated.</p></div></section>`;
