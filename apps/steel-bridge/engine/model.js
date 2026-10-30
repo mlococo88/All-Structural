@@ -80,6 +80,8 @@
                   gam: { dcMax, dcMin, dwMax, dwMin, llS, llSv, fat, dc1C, clC }, clr: { cw, cv (in) }, prs: 'yes' | 'no', gP (plate grade; '' = flange),
                   auto: true | false (auto-design the plates and bolts of each splice), plates: [ { x, g (girder index; absent = every girder),
                   top, bot: { nl, g, g0, nr, s, ef, ep, bo, to, inner, bi, ti }, web: { h, t, nr, sv, nc, sh, ew, ewp } } ] (entered plates) }
+     -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
+     rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
    } */
 (function () {
   'use strict';
@@ -157,6 +159,8 @@
     return { code: '10', bolts: { d: '0.875', gr: 'A325', thr: 'excl', cls: 'B', prep: 'drilled', edge: 'cut', gap: 0.5, long: 'flange', eccS: 'incl', eccV: 'excl', minLines: 2, c1: '', stitch: 'req' },
       gam: { dcMax: 1.25, dcMin: 0.90, dwMax: 1.50, dwMin: 0.65, llS: 1.75, llSv: 1.30, fat: 1.75, dc1C: 1.25, clC: 1.50 }, clr: { cw: 0.5, cv: 1.5 }, prs: 'no', gP: '', auto: true, plates: [] };
   }
+  /* defaultRating(): the load rating inputs (ST-Girder's defaults, rate: { phiC: 1.0, phiS: 1.0 }) */
+  function defaultRating() { return { phiC: 1.0, phiS: 1.0 }; }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
   const isNum = v => typeof v === 'number' && isFinite(v);
@@ -280,6 +284,9 @@
       Object.entries(Q.clr || {}).forEach(([k, v]) => nn(v, `splices.clr.${k}`, `Clearance ${k}`));
       if (!['10', '8'].includes(String(Q.code))) E('splices.code', 'Edition: 10th or 8th.');
       if (Q.plates != null && !Array.isArray(Q.plates)) E('splices.plates', 'Entered splice plates must be a list.'); }
+    // added 2026-10-29 (load rating PR): the optional rating factors
+    if (p.rating != null) { const Q = p.rating || {};
+      [['phiC', 'Condition factor φ_c'], ['phiS', 'System factor φ_s']].forEach(([k, t]) => { if (!(isNum(Q[k]) && Q[k] > 0 && Q[k] <= 1)) E(`rating.${k}`, `${t} must be more than 0 and at most 1.0.`); }); }
     return { errors, warnings };
   }
 
@@ -343,5 +350,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
