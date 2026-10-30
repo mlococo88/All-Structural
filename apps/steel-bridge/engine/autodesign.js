@@ -286,6 +286,8 @@
       let b = opt && opt.bFix ? opt.bFix[f][k] : up(Math.max(lim.bfMin, D / 6, len * 12 / lim.lbRatio, Math.sqrt(12 * A)), lim.bfInc);
       while (A / b > lim.tfMax + 1e-9 && b < 42) b += lim.bfInc; BW[f].push(b); }));
     if (spl.length && opt && opt.bSpl) ['top', 'bot'].forEach(f => BW[f].forEach((b, k) => { const nearSpl = spl.some(x => Math.abs(x - pcs[k].x0) < 1e-6 || Math.abs(x - pcs[k].x1) < 1e-6); if (nearSpl && b < up(opt.bSpl, lim.bfInc) - 1e-9) { BW[f][k] = up(opt.bSpl, lim.bfInc); out.boltRaised = true; } }));
+    // bearing stiffeners (BS6, 6.10.11.2.1): b_t ≤ (b_f,min − t_w)/2 at each bearing, so both flanges of a piece over a bearing at least 2b_t + t_w
+    if (opt && opt.bBrg) pcs.forEach((p, k) => { const need = opt.bBrg(p, web[k].tw); if (need > 0) ['top', 'bot'].forEach(f => { if (BW[f][k] < up(need, lim.bfInc) - 1e-9) BW[f][k] = up(need, lim.bfInc); }); });
     if (lim.topConst) { const bm = Math.max(...BW.top); BW.top = BW.top.map(() => bm); }
     if (lim.maxDb > 0) ['top', 'bot'].forEach(f => { for (let it = 0; it < 50; it++) { let ch = false; for (let k = 0; k < pcs.length - 1; k++) { const a = BW[f][k], b = BW[f][k + 1];
       if (a - b > lim.maxDb + 1e-9) { BW[f][k + 1] = up(a - lim.maxDb, lim.bfInc); ch = true; } else if (b - a > lim.maxDb + 1e-9) { BW[f][k] = up(b - lim.maxDb, lim.bfInc); ch = true; } } if (!ch) break; } });
@@ -350,6 +352,12 @@
     return [nb0 - 1, nb0, nb0 + 1].filter(n => n >= 3 && (n === nb0 || (W / (n - 1) >= S.lim.sLo - 1e-9 && W / (n - 1) <= S.lim.sHi + 1e-9)));
   }
 
+  /* brgWidth(P): (piece, t_w) → the flange width the bearing stiffeners of the supports in that piece need (BS6: 2b_t + t_w; type A at the
+     abutments and simple-span ends, B at the piers, as ui/shear.js assigns them); 0 without bearing stiffener inputs */
+  function brgWidth(P) {
+    const T = ((P.stiffeners || {}).bearing || {}).types || {}, sup = supsOf(P), n = sup.length - 1, cont = P.spans.continuity !== 'simple' && n > 1;
+    return (p, tw) => Math.max(0, ...sup.map((x, k) => { if (x < p.x0 - 1e-6 || x > p.x1 + 1e-6) return 0; const end = k === 0 || k === n || !cont, t = T[end ? 'A' : 'B']; return t && +t.bt > 0 ? 2 * +t.bt + tw : 0; }));
+  }
   /* design(P, S, base, ctx): the ratio-driven sizing of one girder count and depth (generator; each yield is one screen trial).
      base: { nb, D, refine (keep zones), minLines (1 for the single-gage-line variant, else null) }. Returns the converged layout and its screen. */
   function* design(P, S, base, ctx) {
@@ -358,10 +366,10 @@
     let web = L0.web.map(p => ({ ...p, tw: up(Math.max(lim.twMin, D / 150, base.refine ? p.tw : Math.min(p.tw, D / 150 + 0.25)), lim.twInc) }));
     // starting areas: the current plates, scaled by the lever arm (D0 / D) for a new depth
     let req = reqInit(L0, xs, L0.D / D);
-    const mk = () => { const bS = spl.length ? Math.max(...web.map(p => boltFitWidth(P, p.tw, nl))) : 0, F = sizeFlanges(D, web, spl, Lt, req, S, { bSpl: bS, zones: base.refine ? { top: L0.top, bot: L0.bot } : null });
+    const mk = () => { const bS = spl.length ? Math.max(...web.map(p => boltFitWidth(P, p.tw, nl))) : 0, F = sizeFlanges(D, web, spl, Lt, req, S, { bSpl: bS, bBrg: brgWidth(P), zones: base.refine ? { top: L0.top, bot: L0.bot } : null });
       return { nb: base.nb, D, spl: spl.slice(), web: web.map(p => ({ x0: p.x0, x1: p.x1, tw: p.tw })), top: F.top, bot: F.bot, minLines: base.minLines || null, boltRaised: F.boltRaised }; };
     let L = mk(), E = null, best = null, prev = '', stall = 0;
-    for (let it = 0; it < (ctx.maxIt || 10); it++) {
+    for (let it = 0; it < (base.maxIt || ctx.maxIt || 10); it++) {
       const Q = projectWith(P, L), pr = proportions(L, Q, S);
       E = evaluate(Q, { level: 'screen', ctx }); if (ctx.trace) ctx.trace.push({ it, L: clone(L), ratio: E.ratio, gov: E.gov });
       yield { msg: `N_b = ${L.nb}, D = ${D} in${base.minLines === 1 ? ', 1 gage line' : ''}: trial ${it + 1}, governing ${E.gov ? E.gov.r.toFixed(3) : '—'}` };
@@ -416,21 +424,22 @@
     const nl0 = minLinesOf(P), lines = [null], oneLine = !!(P.framing && (P.framing.splices || []).length && nl0 > 1);   // the 1-gage-line variant: added after a design whose splice widths the bolt fit raised
     if (S.mode === 'refine') jobs = lines.map(ml => ({ nb: L0.nb, D: L0.D, refine: true, minLines: ml }));
     else if (S.mode === 'check') { const nb = +S.change.nb >= 2 ? Math.round(+S.change.nb) : L0.nb, D = +S.change.D > 0 ? +S.change.D : L0.D; jobs = lines.map(ml => ({ nb, D, refine: nb === L0.nb, minLines: ml })); }
-    else { const DL = depthList(P, S, L0); nbList(P, S).forEach(nb => DL.coarse.forEach(D => lines.forEach(ml => jobs.push({ nb, D, minLines: ml, coarse: true })))); ctx.DL = DL; }
+    else { const DL = depthList(P, S, L0); nbList(P, S).forEach(nb => DL.coarse.forEach(D => lines.forEach(ml => jobs.push({ nb, D, minLines: ml, coarse: true, maxIt: 5 })))); ctx.DL = DL; }
     const done = new Map(), total = () => jobs.length + 1; let k = 0;
-    const runJob = function* (j) { const id = JSON.stringify([j.nb, j.D, j.minLines, !!j.refine]); if (done.has(id)) return done.get(id);
-      let r = yield* design(P, S, j, ctx); if (r.pass && opt.trimTries !== 0) r = yield* trim(P, S, r, ctx, opt.trimTries || 6);
+    const runJob = function* (j) { const id = JSON.stringify([j.nb, j.D, j.minLines, !!j.refine, !!j.coarse]); if (done.has(id)) return done.get(id);
+      let r = yield* design(P, S, j, ctx); if (r.pass && !j.coarse && opt.trimTries !== 0) r = yield* trim(P, S, r, ctx, opt.trimTries || 6);
       const res = { job: j, L: r.L, E: r.E, pass: r.pass, cost: costOf(r.L, S, r.E ? r.E.nStiff : 0) }; done.set(id, res); out.push(res);
       return res; };
     for (let i = 0; i < jobs.length; i++) { const j = jobs[i]; const it = runJob(j); let s; while (!(s = it.next()).done) yield { f: 0.05 + 0.6 * (k + i / jobs.length) / Math.max(1, total()), msg: s.value.msg }; }
     if (S.mode === 'new' && ctx.DL) {   // around the best depth of each girder count: every depth increment within half a coarse step
       const extra = []; nbList(P, S).forEach(nb => { const ok = out.filter(o => o.pass && o.job.nb === nb).sort((a, b) => key(a) - key(b))[0]; if (!ok) return;
+        extra.push({ nb, D: ok.L.D, minLines: null });   // the best coarse depth again, sized fully and trimmed
         for (let D = ok.L.D - ctx.DL.step / 2; D <= ok.L.D + ctx.DL.step / 2 + 1e-9; D += Math.max(ctx.DL.inc, ctx.DL.step / 4)) { const Dr = r4(up(D, ctx.DL.inc)); if (Dr >= ctx.DL.lo - 1e-9 && Dr <= ctx.DL.hi + 1e-9) lines.forEach(ml => extra.push({ nb, D: Dr, minLines: ml })); } });
       for (let i = 0; i < extra.length; i++) { const it = runJob(extra[i]); let s; while (!(s = it.next()).done) yield { f: 0.45 + 0.25 * i / Math.max(1, extra.length), msg: s.value.msg }; }
     }
     // the 1-gage-line variant of the best designs whose splice flange widths the bolt fit raised (DT10): the objective then picks
-    if (oneLine) { const best = out.filter(o => o.pass && o.L.boltRaised && o.job.minLines == null).sort((a, b) => key(a) - key(b)).slice(0, 3);
-      for (let i = 0; i < best.length; i++) { const it = runJob({ ...best[i].job, minLines: 1, coarse: false }); let s; while (!(s = it.next()).done) yield { f: 0.68, msg: s.value.msg }; } }
+    if (oneLine) { const best = out.filter(o => o.pass && o.L.boltRaised && o.job.minLines == null).sort((a, b) => key(a) - key(b)).slice(0, 2);
+      for (let i = 0; i < best.length; i++) { const it = runJob({ ...best[i].job, minLines: 1, coarse: false, maxIt: null }); let s; while (!(s = it.next()).done) yield { f: 0.68, msg: s.value.msg }; } }
     // stage 2: full checks, best first, until topN pass
     const seen = new Set(), pool = out.filter(o => o.pass).sort((a, b) => key(a) - key(b)).filter(o => { const s = sigOf(o.L); if (seen.has(s)) return false; seen.add(s); return true; });
     const cands = [], rejected = [], blocked = []; let curFull = null;

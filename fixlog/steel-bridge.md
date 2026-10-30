@@ -1033,6 +1033,11 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - SB2-AD6. Blocked designs: a finalist whose every failing check also fails in the current design (module and check id; detail inputs
   the plates do not change, e.g. CTDOT CF11 bolts per cross-frame member end, splice end distances DT4) is listed apart as "blocked by
   detail checks", never as a passing candidate, with those checks named.
+- SB2-AD9. Bearing stiffener fit (BS6, 6.10.11.2.1: b_t ≤ (b_f,min − t_w)/2) is a sizing rule: the flanges of a field piece over a bearing are at
+  least 2b_t + t_w (the Stiffeners tab's bearing types: A at the abutments and simple-span ends, B at the piers). Without it the lighter
+  designs failed BS6 on the full check (found on the recorded projects; Preliminary sizing's Full design fails it the same way).
+- SB2-AD10. A finalist that fails a plate-controlled check on the full check (flexure, shear, constructibility, GS17, FA1, BS6, splice DT3/DT7/
+  DT10) is resized from where it is, with the screen's live load re-run on its own stiffness, and checked again (up to twice).
 - SB2-AD7. Required areas are carried at the check locations themselves (both sides of a plate change), so a zone's resizing uses only
   its own side's ratios. Area update per trial: A f(r), f = min(1.02r, 1.35) above 1, max(r/0.97, 0.8) below (Preliminary sizing's Full
   design). Fatigue details FA1 are in the screen (they depend on the flange areas).
