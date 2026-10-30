@@ -926,7 +926,8 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   section), LL+IM at 0.01 ft from the pier (−0.03 %); Service II and positive flexure, the location 0.01 ft inside the support / moments interpolated
   (GirderDetail's Check at any location); shear identical: ST-Girder already has GirderDetail's V_n (S2-4, #455), so the +18–22 % expected from the
   tension field does not appear against today's ST-Girder.
-- Built-in project, this app's analysis: Inventory 0.752 / Operating 0.975 (6.10.8 compression flange at the piers; see SB2-R2).
+- Built-in project, this app's analysis: Inventory 0.752 / Operating 0.975 in the Node test (its engine files), 0.74 / 0.96 on the page after the
+  merge of #479 (framing, loaded by the page); 6.10.8 compression flange at the piers; see SB2-R2.
 - Headless load of apps/steel-bridge/index.html: Rating tab, Calculate, a shear row, φ_c changed (saved, results stale, recalculated): 0 console errors.
 ### Other copies
 - None. ST-Girder and GirderDetail keep their own ratings until the switch-over.
