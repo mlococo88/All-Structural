@@ -2189,3 +2189,44 @@ A viewport resize does not change anything: it was reproduced to be the visit of
 ### Open items (need the engineer)
 - Constructibility: the first "pour" `0.0 TO 1.0 FT` (pour 4) is not a display artefact. `engine/analysis.js` (deck placement sequence, `reg.push` at the sign change of `MD[i]`) splits the girder where the sign of M_DC1 changes; at the abutment M_DC1(0) = -1.6e-11 kip-ft (round-off, should be 0), which is "negative", so [0, 1 ft] becomes a negative-moment pour placed after the positive pours (order 1, 5, 2, 6, 3 on the picture is the same effect). The values drawn are the engine's (the sequence table lists them). Whether GirderDetail has the same 1-ft pour was not compared (calculation, left unchanged per CLAUDE.md section 4); suggested fix: treat |M| below a small tolerance as zero in the sign test. Needs the engineer's decision.
 - The Loads & LLDF dimension extension lines run from the deck up to the chain dimension through the traffic-face note; thin lines through text, not text over text.
+
+## 2026-10-30 — PR: sb2-pour-sign — deck placement sequence: the sign of M_DC1 with a round-off tolerance (no sliver pour at an abutment)
+Calculation change (CLAUDE.md §4): the pour limits and order of the deck placement sequence, and through them M_DCc and the GS14/GS15 constructibility ratios. No formula, factor, unit, code reference or saved-data format changes. Closes the open item of sb2-gfx-polish ("pour 4" 0.0 to 1.0 ft).
+### Where
+- `apps/steel-bridge/engine/analysis.js`, new function `pourRegions(xs, MD)` (above `analyzeGirder`, exported as `SBDAnalysis.pourRegions` for the tests), called from the deck placement sequence block of `analyzeGirder` (anchor `else pours = pourRegions(xs, MD);`, ~line 325).
+- Before (in `analyzeGirder`):
+```js
+      else { const reg = []; let s = 0; for (let i = 1; i < N; i++) if (Math.sign(MD[i] || 1e-9) !== Math.sign(MD[i - 1] || 1e-9) || i === N - 1) { reg.push({ a: xs[s], b: xs[i], pos: MD[Math.floor((s + i) / 2)] >= 0 }); s = i; }
+        pours = [...reg.filter(r => r.pos), ...reg.filter(r => !r.pos)].map(r => ({ a: r.a, b: r.b })); }
+```
+- After:
+```js
+      else pours = pourRegions(xs, MD);
+  …
+  function pourRegions(xs, MD) {
+    const N = xs.length, tol = 1e-6 * Array.from(MD).reduce((a, v) => Math.max(a, Math.abs(v)), 0), sg = v => v < -tol ? -1 : 1, reg = []; let s = 0;
+    for (let i = 1; i < N; i++) if (sg(MD[i]) !== sg(MD[i - 1]) || i === N - 1) { reg.push({ a: xs[s], b: xs[i], pos: sg(MD[Math.floor((s + i) / 2)]) > 0 }); s = i; }
+    return [...reg.filter(r => r.pos), ...reg.filter(r => !r.pos)].map(r => ({ a: r.a, b: r.b }));
+  }
+```
+### Problem
+The pours are the regions of one sign of M_DC1 (deck at once), positive regions first, then negative (Art. 6.10.3.4.1; SA7). At an abutment M_DC1 is 0 in theory, but the beam solution gives round-off of either sign (built-in project G1: M_DC1(0) = −1.597e-11 kip-ft). `Math.sign(−1.6e-11)` is −1, so [0, 1 ft] became a negative-moment "pour" cast after the positive pours, and the first pour started at 1 ft. Effect: in the first pour the girder carried 1 ft less wet deck at the end of span 1 (M_DCc there slightly low, unconservative by up to 0.023 % of the largest M_DCc), and the sequence table and drawing showed a 1-ft pour that does not exist.
+### Decision (rule chosen)
+- |M_DC1| ≤ 1e-6 × max |M_DC1| of the girder counts as zero, and zero counts as positive, which is what an exact 0 already did (`MD[i] || 1e-9`). One relative tolerance, no minimum pour length: a minimum length would also merge short real pours (a short negative region over a short end span is real) and needs a length to be chosen; the relative tolerance only touches values that are round-off. 1e-6 is 2,500 times smaller than any real node moment met next to a sign change in the 141 girders (built-in G1: 2.5e-3 kip-ft against |M_DC1| ≥ 13.2 kip-ft at the nodes next to the contraflexure points) and far above round-off (1e-11).
+- A real contraflexure point splits exactly as before (the region boundaries are still the first node of the new sign). A node within the tolerance of zero at a contraflexure point joins the positive side, as an exact zero always did.
+- Custom pour lists (`seqCustom`) are unchanged.
+- GirderDetail (`saSeq` in "Steel Bridge Design.html") has the same code and the same sliver on every payload (its M_DC1(0) is a negative round-off, e.g. −3.3e-12); it is not changed here (old file, one tool per PR). With the same tolerance rule applied to GirderDetail's own M_DC1, its pours equal this app's on 101 of 101 (built-in + 100 payloads). Suggested follow-up: the same one-line rule in GirderDetail's `saSeq`.
+### Governing provision
+AASHTO LRFD 10th Ed. Art. 6.10.3.4.1 (deck placement: the moments of the sequence of casting) and C6.10.3.4.1. Unchanged; only the region test.
+### Check case (built-in project, G1, spans 110 + 140 + 110 ft, nodes every 1 ft, DC1wet = 1.16521 klf, max |M_DC1| = 2498.84 kip-ft, tolerance 2.499e-3 kip-ft)
+- M_DC1 at the splitting stations: x = 0: −1.597e-11 (round-off, now "zero"), x = 1: +53.460; x = 77: +40.571, x = 78: −13.228; x = 143: −20.426, x = 144: +30.418; x = 216: +30.418, x = 217: −20.426; x = 282: −13.228, x = 283: +40.571; x = 360: −6.1e-12.
+- Before: pours in order 1-78, 144-217, 283-360, 0-1, 78-144, 217-283 ft (6 pours; pour 4 is the sliver).
+- After: 0-78, 144-217, 283-360, 78-144, 217-283 ft (5 pours). The contraflexure splits (78, 144, 217, 283) are unchanged.
+- M_DCc at x = 1 ft: before 59.457, after 60.033 kip-ft (the largest change on the girder, +0.576 kip-ft = 0.023 % of max). Hand check: pour 1 now carries the wet deck on 0-1 ft; on the noncomposite span 1 (simple-span estimate) R_A = w a (L − a/2)/L = 1.16521 × 1 × 109.5/110 = 1.15991 kips, ΔM(1) = R_A × 1 − w × 1 × 0.5 = 1.15991 − 0.58260 = 0.577 kip-ft (engine 0.576; the difference is the continuity over the pier). Largest deck tension 0.17597 → 0.17600 ksi (φf_r = 0.432 ksi).
+### How verified (Node)
+- Census, before (origin/main `analysis.js`) vs after, all girders, `ll: false`: built-in (2 girders) + 100 payloads + 20 recorded projects (2 girders each) = 141 girders, all with a pour sequence. Sliver end pour before: 45 girders (the 0-1 ft pour at the left abutment, every time; the sign of the round-off decides, so the other 96 had none); after: 0. No other pour changed (the 96 others identical). 11,642 M_DCc node values changed, largest 0.023 % of max |M_DCc| (built-in G1, x = 1 ft).
+- GirderDetail (`gdSA`, its own `saSeq`, built-in steel only + 100 payloads): GirderDetail has the sliver on 101 of 101; this app's pours equal GirderDetail's except the sliver (equal to GirderDetail's pours with the same tolerance rule on its own M_DC1) on 101 of 101. The analysis parity bound on M_DCc (SB2-A1, GirderDetail's double-counted boundary node) passes unchanged.
+- Downstream (Auto design `evaluate`, level 'full', every module, every girder: built-in + 20 recorded projects): 220,137 check ratios; 44,078 changed, all GS14/GS15 (GS16 and every other module identical); largest change 1.66e-4 (built-in G1, GS14 at x = 1 ft, 0.01733 → 0.01750); no pass/fail flip, no change of the governing check or ratio of any project. The report, the Analysis card and the Constructibility graphic's sequence table list `seq.pours` (one pour fewer); no drawing sheet shows the pour sequence.
+- Tests: `tests/engine/analysis.test.mjs` "sb2-pour-sign" (−1e-11 and −1.6e-11 at the ends: no sliver; exact 0 and +1e-11 the same; −1e-3 at an end still splits; a real contraflexure node within the tolerance joins the positive side like an exact 0). `tests/smoke/steel-bridge-report.mjs`: 13 report sections (load rating added earlier), test only.
+### Open items
+- GirderDetail `saSeq` keeps the sliver pour (see Decision); its hand-off M_DCc includes it (≤ 0.023 % of max).
