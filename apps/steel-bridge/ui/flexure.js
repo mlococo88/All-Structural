@@ -1,9 +1,13 @@
 /* apps/steel-bridge/ui/flexure.js — the Flexure output tab (window.SBDFlexureUI): girder flexure, Strength I and Service II,
    at every location, from engine/flexure.js. Classic script; needs SharedSteps, SharedUnits, SBDSections, SBDFlexure.
 
-   Demands (until the analysis module lands): either
-     - "Example": GirderDetail's built-in Girder section moments at two locations (max. positive in span 1, pier 1), on the
-       selected girder of this project (its plates at those stations, its deck and materials); or
+   Demands: one of
+     - "This project's analysis" (added 2026-10-30, report wiring PR; the default when the project is complete, SBDAnalysis.ready):
+       engine/analysis.js for this girder at every analysis station, put in the shape of a hand-off by ui/rating.js fromAnalysis, with
+       the project's plates, deck, materials and the stiffener layout's cross-frames (L_b), exactly as the Rating tab takes its flexure
+       capacities (tests/engine/report-wiring.test.mjs: equal); f_ℓ as entered (0: none, as the Rating tab);
+     - "Example" (the default while the project is not complete): GirderDetail's built-in Girder section moments at two locations
+       (max. positive in span 1, pier 1), on the selected girder of this project (its plates at those stations, its deck and materials); or
      - a hand-off file (schema stgirder-external-demands, GirderDetail → ST-Girder): its stations, plates and deck, every
        station GirderDetail's "Check at any location" checks.
    Nothing here is saved: the choices live in memory for this page view; the project file is not changed.
@@ -12,8 +16,11 @@
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const S = { src: 'example', pl: null, plName: '', Lb: 20, Cb: 1, fl: 0, flT: 0, skew: 0, method: 'auto', R: null, key: '', sel: null, err: '' };
+  const S = { src: null, pl: null, plName: '', Lb: 20, Cb: 1, fl: 0, flT: 0, skew: 0, method: 'auto', R: null, key: '', sel: null, err: '' };
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
+  /* the demand source: the one chosen (S.src), else the default: this project's analysis when the project is complete, else the example */
+  const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
+  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
   // GirderDetail's built-in Girder section rows (GM.gs.def.rows), unfactored, kip-ft
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, region: 'pos', M: { DC1: 1450, DC2: 210, DW: 240, LLp: 1650, LLn: -400, UT: 0, UF: 0, FATp: 620, FATn: -150 } },
     { name: 'Pier 1', x: 109.99, region: 'neg', M: { DC1: -2300, DC2: -330, DW: -380, LLp: 250, LLn: -2400, UT: 0, UF: 0, FATp: 120, FATn: -520 } }];
@@ -33,7 +40,7 @@
   function inputs(ctx) {
     const P = ctx.P, M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, g = P.girders[ctx.g] || P.girders[0], SEC = window.SBDSections, FX = window.SBDFlexure;
     // ctx.src / ctx.pl / ctx.plName / ctx.fl / ctx.method: the caller's choices (the Report tab, build()), else the tab's own (S)
-    const src = ctx.src || S.src, plIn = ctx.pl !== undefined ? ctx.pl : S.pl, plName = ctx.plName != null ? ctx.plName : S.plName, flIn = ctx.fl != null ? ctx.fl : S.fl, meth = ctx.method || S.method;
+    const src = ctx.src || srcOf(ctx), plIn = ctx.pl !== undefined ? ctx.pl : S.pl, plName = ctx.plName != null ? ctx.plName : S.plName, flIn = ctx.fl != null ? ctx.fl : S.fl, meth = ctx.method || S.method;
     if (src === 'file') {
       if (!plIn) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
       // brace points: this project's framing when the file is of this bridge (its supports), girder = the file's girder (SB2-O9); else every ≤ L_b
@@ -43,6 +50,25 @@
       const F = FX.fromPayload(pl, { fl, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });   // the payload's haunch as stated (the file does not say its owner)
       F.prj.a6.method = meth;
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS, frB, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; f<sub>ℓ</sub> = ${fmt(fl, 2)} ksi ${flIn > 0 ? 'as entered' : `from skew (C6.10.1; largest skew ${fmt(flS.skMax, 1)}°)`}.` };
+    }
+    if (src === 'analysis') {
+      // as ui/rating.js build() with this app's analysis (the Rating tab's flexure capacities): the same payload, options and project overrides
+      const RUI = window.SBDRatingUI, RT = window.SBDRating, OW = window.SBDOwners, gi = P.girders[ctx.g] ? ctx.g : 0;
+      if (!RUI || !RUI.fromAnalysis) return { err: 'ui/rating.js is not loaded (it puts the analysis in the shape of a hand-off).' };
+      const A = RUI.fromAnalysis(P, gi); if (A.err) return { err: A.err };
+      const plR = RT ? RT.noDoublePL(A.pl) : A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO';
+      const fr = ((P.stiffeners || {}).layout || {}).frames || {}, fopt = { owner: own, rebar: d.rebar };
+      if (Array.isArray(fr.at) && fr.at.length) fopt.braces = [...new Set([...sup, ...fr.at.map(Number)])].sort((a, b) => a - b); else fopt.Lb = +fr.Lb || 25;
+      if (flIn > 0) fopt.fl = flIn;   // as entered; 0 = none (the Rating tab: 0)
+      const F = FX.fromPayload(plR, fopt), lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
+      F.prj.mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
+      F.prj.deck = { composite: d.composite !== false, ts: d.ts, tdeck: d.tdeck, haunch: OW.haunchInProps(d.haunch, lf), rebar: d.rebar };
+      F.prj.n = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule).n;
+      F.prj.rebarInPositive = !!d.rebarInPositiveMp;
+      F.prj.a6.method = meth;
+      const AR = A.R, flA = flIn > 0 ? flIn : 0;
+      return { prj: F.prj, locs: F.locs, supports: F.supports, fl: flA, flS: null, frB: null,
+        what: `This project's analysis of ${esc(P.girders[gi].label || P.girders[gi].id)} (Analysis tab: settings, loads, factors): ${F.locs.length} locations on ${plR.stations.length} stations, ${sup.length - 1} span(s); the project's plates, deck and materials; L<sub>b</sub>, C<sub>b</sub> from the cross-frames of the stiffener layout (${fopt.braces ? `${fopt.braces.length} brace points` : `L<sub>b</sub> = ${fmt(fopt.Lb, 2)} ft`}); f<sub>ℓ</sub> = ${fmt(flA, 2)} ksi ${flIn > 0 ? 'as entered' : '(none entered; the Rating tab takes 0)'}. The same locations and capacities as the Rating tab.${AR && AR.warnings && AR.warnings.length ? '<br>' + AR.warnings.map(esc).join('<br>') : ''}` };
     }
     // owner rules as the Section properties tab (index.html calc()): OWN8 haunch 0 in the section properties, OWN17 w_c for E_c
     const OW = window.SBDOwners, own = P.ownerRules || {}, lf = OW ? OW.loadFactors(own.owner, own.eta, P.xs && P.xs.nb) : null, hP = OW ? OW.haunchInProps(d.haunch, lf) : d.haunch;
@@ -64,7 +90,7 @@
     catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName, S.Lb, S.Cb, S.fl, S.flT, S.skew, S.method]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx), S.plName, S.Lb, S.Cb, S.fl, S.flT, S.skew, S.method]);
   /* build(ctx): the tab's calculation without the page (the Report tab): ctx = { P, g, src, pl, plName, fl, method } (each optional,
      else the tab's own choice); returns engine/flexure.js girder() { rows, gov, … } plus { prj, what, fl, flS, frB } or { err }. */
   function build(ctx) {
@@ -74,16 +100,18 @@
 
   function render(host, ctx) {
     css();
-    const stale = !S.R || S.key !== key(ctx);
-    const nc = ctx.P.deck.composite === false && S.src !== 'file';
+    const stale = !S.R || S.key !== key(ctx), src = srcOf(ctx), rd = rdOf(ctx);
+    const nc = ctx.P.deck.composite === false && src === 'example';
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
-    let h = `<section class="sec"><div class="secHead">Flexure: demands and options</div><div class="secBody">
-      <div class="fRow"><label for="fx_src">Demands</label><select id="fx_src">${opt('example', 'Example (GirderDetail built-in moments)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
-      ${S.src === 'file' ? `<div class="fRow"><label for="fx_file">File</label><input type="file" id="fx_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>`
-        : `<div class="fRow"><label for="fx_Lb">L<sub>b</sub>, ${nc ? 'both flanges' : 'bottom flange'}</label><input type="number" step="any" id="fx_Lb" value="${S.Lb}"><span class="unit">ft</span></div>
+    const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {};
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd, g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in moments at two locations' }) : '')
+      + `<section class="sec"><div class="secHead">Flexure: demands and options</div><div class="secBody">
+      <div class="fRow"><label for="fx_src">Demands</label><select id="fx_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in moments)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      ${src === 'file' ? `<div class="fRow"><label for="fx_file">File</label><input type="file" id="fx_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>`
+        : src === 'analysis' ? '' : `<div class="fRow"><label for="fx_Lb">L<sub>b</sub>, ${nc ? 'both flanges' : 'bottom flange'}</label><input type="number" step="any" id="fx_Lb" value="${S.Lb}"><span class="unit">ft</span></div>
            <div class="fRow"><label for="fx_Cb">C<sub>b</sub></label><input type="number" step="any" id="fx_Cb" value="${S.Cb}"><span class="unit"></span></div>
            <div class="fRow"><label for="fx_skew">Largest support skew</label><input type="number" step="any" id="fx_skew" value="${S.skew}"><span class="unit">° (6.10.6.2.3)</span></div>`}
-      <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, bottom flange (first order; 0 with a file: from skew, C6.10.1)</label><input type="number" step="any" id="fx_fl" value="${S.fl}"><span class="unit">ksi</span></div>
+      <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, bottom flange (first order; 0 with a file: from skew, C6.10.1; 0 with the analysis: none, as the Rating tab)</label><input type="number" step="any" id="fx_fl" value="${S.fl}"><span class="unit">ksi</span></div>
       ${nc ? `<div class="fRow"><label for="fx_flT">f<sub>ℓ</sub>, top flange (first order)</label><input type="number" step="any" id="fx_flT" value="${S.flT}"><span class="unit">ksi (noncomposite)</span></div>` : ''}
       <div class="fRow"><label for="fx_m">${nc ? 'Flexure (noncomposite)' : 'Negative flexure'}</label><select id="fx_m">${opt('auto', 'Appendix A6 where permitted, else 6.10.8', S.method)}${opt('6108', '6.10.8 only', S.method)}</select></div>
       <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Choices here are not saved.</p>

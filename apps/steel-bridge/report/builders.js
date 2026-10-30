@@ -121,7 +121,7 @@
       sup.map((v, k) => [`${k === 0 ? 'Abut. 1' : k === sup.length - 1 ? 'Abut. 2' : 'Pier ' + k} (x = ${f(v, 1)} ft)`, N(rr(k, s.DC1), 2), N(rr(k, s.DC2), 2), N(rr(k, s.DW), 2), N(rr(k, s.CL), 2),
         ...(ll ? [{ ...N(A.llR[k].max, 2), key: 'an.R.LL.' + k }, N(A.llR[k].min, 2)] : [])])),
       note(`Statics: ${['DC1steel', 'DC1wet', 'DC2', 'DW', 'CL'].map(k => `${k} [[an.eq.${k}]]`).join(', ')}.${ll ? ' LL+IM: the reaction envelope × the larger $g_{V}$ of the adjacent spans; 90 % of two trucks + lane at interior supports (3.6.1.3.1).' : ''}`)]));
-    if (A.lld) { X.gov.push(...A.lld.map(q => ({ mod: 'Analysis', check: 'SA3 LL deflection, $\\Delta_{LL}$ ≤ L/' + q.ratio, loc: `span ${q.k + 1}, x = ${f(q.x, 1)} ft`, r: q.d / q.lim, key: 'an.defl.LL' + (q.k + 1), status: q.status })).filter(q => q.status !== 'na').sort((a, b) => b.r - a.r).slice(0, 1));
+    if (A.lld) { X.gov.push(...A.lld.map(q => ({ mod: 'Analysis', check: 'SA3 LL deflection, $\\Delta_{LL}$ ≤ L/' + q.ratio, loc: `span ${q.k + 1}, x = ${f(q.x, 1)} ft`, r: q.d / q.lim, key: 'an.defl.LL' + (q.k + 1), status: q.status, grp: 'Analysis: SA3 live-load deflection' })).filter(q => q.status !== 'na').sort((a, b) => b.r - a.r).slice(0, 1));
       subs.push(sub('d', 'Live load deflection (SA3, 2.5.2.6.2)', [tbl(['Span', 'x (ft)', '$\\Delta_{LL}$ (in)', 'Limit (in)', 'Ratio', 'Status'], A.lld.map(q => [String(q.k + 1), N(q.x, 1), { ...N(q.d, 3), key: 'an.defl.LL' + (q.k + 1) }, { ...N(q.lim, 3), key: 'an.defl.lim' + (q.k + 1) },
         { ...R3(q.d / q.lim), t: f(q.d / q.lim, 2) }, { pass: 'OK', fail: 'Exceeds', warn: 'Exceeds the preferred limit', na: 'Reported (exterior)' }[q.status] || q.status]))])); }
     if (A.seq) { const Q = A.seq;
@@ -162,7 +162,7 @@
     const shown = all ? rows : govRows;
     shown.forEach(r => X.have.set(r, scOf(r)));
     subs.push(sub('res', all ? 'Results at every location' : 'Governing location of each span and region', [
-      note(B.src === 'file' ? fromHtml(Gr.what) : `This project's analysis: Strength I, Service II and Fatigue I flexure (engine/flexure.js) at every analysis station, with the project's plates, deck, materials and the cross-frame stations of the stiffener layout, as rated on the [[tab:rt|Rating tab]]. Load factors Tables 3.4.1-1, -2; $\\phi_{f}$ = 1.0.`),
+      note(B.src === 'file' ? fromHtml(Gr.what) : `This project's analysis, as the [[tab:flex|Flexure tab]] with that source (f$_{\\ell}$ = 0, Appendix A6 where permitted): Strength I, Service II and Fatigue I flexure (engine/flexure.js) at every analysis station, with the project's plates, deck, materials and the cross-frame stations of the stiffener layout; the same locations and capacities as rated on the [[tab:rt|Rating tab]]${B.flexSame === false ? ' (here they differ from the rating\'s: its capacities are worked in the Load rating section)' : ''}. Load factors Tables 3.4.1-1, -2; $\\phi_{f}$ = 1.0.`),
       Gr.oos ? note('A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported there.', true) : null,
       tbl(['Location', 'x (ft)', 'Region', 'Method', 'Governing check', 'Ratio'], shown.map(r => ({ cells: [r.name, N(r.x, 2), r.pos ? 'positive' : 'negative', r.p7 ? '' : r.useA6 ? 'App. A6' : '6.10.8',
         r.gov ? `${r.gov.id} ${tt(r.gov.title)}` : '', r.gov ? R3(r.gov.ratio, K(scOf(r), r.gov.step)) : '—'], cls: r === Gr.gov ? 'gov' : '' })))]));
@@ -176,7 +176,7 @@
     const detailed = all ? (Gr.gov ? [Gr.gov] : []) : govRows;
     detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), steps(scOf(r), r.steps, { title: 'Worked steps (flexure, then the section properties of this location)' })])));
     if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => steps(scOf(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
-    if (Gr.gov) X.gov.push({ mod: 'Flexure', check: `${Gr.gov.gov.id} ${tt(Gr.gov.gov.title)}`, loc: /x = /.test(Gr.gov.name) ? Gr.gov.name : `${Gr.gov.name}, x = ${f(Gr.gov.x, 2)} ft`, r: Gr.gov.gov.ratio, key: K(scOf(Gr.gov), Gr.gov.gov.step) });
+    if (Gr.gov) X.gov.push({ mod: 'Flexure', grp: 'Flexure (Strength I, Service II, Fatigue I)', check: `${Gr.gov.gov.id} ${tt(Gr.gov.gov.title)}`, loc: /x = /.test(Gr.gov.name) ? Gr.gov.name : `${Gr.gov.name}, x = ${f(Gr.gov.x, 2)} ft`, r: Gr.gov.gov.ratio, key: K(scOf(Gr.gov), Gr.gov.gov.step) });
     return { title: 'Flexure', subs };
   }
 
@@ -188,7 +188,7 @@
     if (R.stGov) gl.push({ g: 'Stations', it: `${R.stGov.name}: ${R.stGov.gov.id} ${tt(R.stGov.gov.title)}`, r: R.stGov.gov.ratio, key: K(sk(R.stations.indexOf(R.stGov)), R.stGov.gov.step) });
     if (R.tsGov) gl.push({ g: 'Transverse stiffeners', it: `${R.tsGov.it.loc}: ${R.tsGov.c.id} ${tt(R.tsGov.c.title)}`, r: R.tsGov.it.r, key: K(tk(R.tsGov.i), R.tsGov.it.step) });
     if (R.bsGov) gl.push({ g: 'Bearing stiffeners', it: `${R.bsGov.it.loc}: ${R.bsGov.c.id} ${tt(R.bsGov.c.title)}`, r: R.bsGov.it.r, key: K(bk(R.bsGov.i), R.bsGov.it.step) });
-    gl.forEach(q => X.gov.push({ mod: 'Shear & stiffeners', check: q.it, loc: q.g, r: q.r, key: q.key }));
+    gl.forEach(q => X.gov.push({ mod: 'Shear & stiffeners', grp: 'Shear & stiffeners: ' + q.g, check: q.it, loc: q.g, r: q.r, key: q.key }));
     subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), note('Strength I $\\gamma_{DC}$ 1.25, $\\gamma_{DW}$ 1.50, LL+IM 1.75 (with the owner\'s η and m); special fatigue loading 6.10.5.3; deck placement 1.25$V_{DC1}$ + 1.50$V_{CL}$; $\\phi_{v}$ = 1.0. As on the [[tab:shear|Shear & stiffeners tab]].'),
       tbl(['Group', 'Governing item', 'Ratio'], gl.map(q => [q.g, q.it, R3(q.r, q.key)])),
       R.TS && R.TS.errors && R.TS.errors.length ? note('Transverse stiffeners: ' + R.TS.errors.join('; '), true) : null, R.BS.errors && R.BS.errors.length ? note('Bearing stiffeners: ' + R.BS.errors.join('; '), true) : null]));
@@ -225,7 +225,7 @@
     if (R.faGov) gl.push({ g: 'Fatigue details', it: `${R.faGov.it.loc}: ${R.faGov.c.id} ${R.faGov.c.title}`, r: R.faGov.it.r, key: K(fk(faI), R.faGov.it.step) });
     if (R.g17) gl.push({ g: 'Flanges, every station', it: `${R.g17.it.loc}: GS17 flange stress range (Category ${R.g17.it.cat}, Fatigue ${R.g17.it.lim})`, r: R.g17.it.r, key: K(gk(R.g17.i), R.g17.it.step) });
     if (R.scGov) gl.push({ g: 'Studs', it: `${R.scGov.it.loc}: ${R.scGov.c.id} ${R.scGov.c.title}`, r: R.scGov.it.r, key: K('sc', R.scGov.it.step) });
-    gl.forEach(q => X.gov.push({ mod: 'Fatigue & studs', check: q.it, loc: q.g, r: q.r, key: q.key }));
+    gl.forEach(q => X.gov.push({ mod: 'Fatigue & studs', grp: 'Fatigue & studs: ' + q.g, check: q.it, loc: q.g, r: q.r, key: q.key }));
     subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), note(FA.setText(R.set) + '. As on the [[tab:fat|Fatigue & studs tab]].'), tbl(['Group', 'Governing item', 'Ratio'], gl.map(q => [q.g, q.it, R3(q.r, q.key)])),
       R.FR.errors.length ? note('Fatigue: ' + R.FR.errors.join('; '), true) : null, R.SR.errors.length ? note('Shear connectors: ' + R.SR.errors.join('; '), true) : null]));
     if (!R.FR.errors.length) { const rows = R.FR.rows, sel = all ? rows.map((r, i) => i) : faI >= 0 ? [faI] : [];
@@ -254,7 +254,7 @@
     const shown = all ? rows : rows.filter(r => gset.has(r));
     const cell = o => !o ? '—' : { ...R3(o.ratio, keyOf(o)), t: `${f(o.ratio, 3)} (${o.row.conC ? '' : o.check.id + ', '}${f(o.row.x, 2)} ft)` };
     const ga = R.govAll;
-    if (ga) X.gov.push({ mod: 'Constructibility', check: `${ga.check.id} ${tt(ga.check.title)}`, loc: `x = ${f(ga.row.x, 2)} ft`, r: ga.ratio, key: keyOf(ga) });
+    if (ga) X.gov.push({ mod: 'Constructibility', grp: 'Constructibility (deck placement)', check: `${ga.check.id} ${tt(ga.check.title)}`, loc: `x = ${f(ga.row.x, 2)} ft`, r: ga.ratio, key: keyOf(ga) });
     const wh = B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gName(B.girder)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
     subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = 1.25$M_{DCc}$ + 1.50$M_{CL}$, $V_{u}$ = 1.25$V_{DC1}$ + 1.50$V_{CL}$ on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; $f_{\\ell}$ during deck placement 0 (the [[tab:cn|Constructibility tab]]'s default).`),
       tbl(['Span', 'Top flange in compression', 'Bottom flange in compression', 'Tension flange', 'Shear (GS16)', ...(R.oh ? ['Overhang OH1–OH4', 'OH5'] : [])], R.spans.map(s => [String(s.span), cell(s.top), cell(s.bot), cell(s.tens), cell(s.shear), ...(R.oh ? [cell(s.oh), cell(s.ohfl)] : [])])),
@@ -277,7 +277,7 @@
     let gov = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!gov || it.r > gov.it.r)) gov = { c, it }; }));
     const svg = window.SBDFramingUI && window.SBDFramingUI.plan ? window.SBDFramingUI.plan(L) : '';
     const work = [...L.steps, ...fl.steps, ...(R.steps || [])], ids = new Set(work.map(t => t.id)), lk = id => (id && ids.has(id) ? id : null);   // an item's step, where the work has it
-    if (gov) X.gov.push({ mod: 'Cross-frames', check: `${gov.c.id} ${gov.c.title}`, loc: gov.it.loc, r: gov.it.r, key: lk(gov.it.step) });
+    if (gov) X.gov.push({ mod: 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${gov.c.title}`, loc: gov.it.loc, r: gov.it.r, key: lk(gov.it.step) });
     subs.push(sub('pl', 'Framing plan (6.7.4.2.1)', [svg ? { type: 'figure', svg, caption: 'Plan: girders, bearing lines, cross-frames and field splices' } : null,
       tbl(['Span', 'Skew θ (°)', 'Orientation', 'Frames', 'Spacing (ft)'], FR.orient.map(o => [String(o.k + 1), N(o.th, 2), o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : o.arr}` : 'parallel to the skew', String(o.n), { ...N(o.s, 3), key: `fr.k${o.k}.s` }])),
       tbl(['Girder', 'Intermediate frames', 'Largest $L_{b}$ (ft)', 'Brace points (ft)'], L.girders.map(g => ({ cells: [`G${g.i + 1}`, String(g.nInt), { ...N(g.lb, 2), key: `fr.g${g.i}.lb` }, g.braces.map(v => f(v, 2)).join(', ')], cls: g.i === line ? 'gov' : '' }))),
@@ -299,7 +299,7 @@
     const strGov = CK => { let b = null; (CK || []).filter(c => /^(TF|BF)[1245]$|^WS[1245]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.r != null && isFinite(it.r) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
     // summary: the splice with the largest strength ratio
     const sg = G.list.reduce((b, s, k) => { const q = strGov(s.CK); return q && (!b || q.it.r > b.q.it.r) ? { s, q, k } : b; }, null);
-    if (sg) X.gov.push({ mod: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${sg.q.it.loc}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
+    if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${sg.q.it.loc}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
     subs.push(sub('list', `Splices of ${gName(B.girder)}`, [note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
       G.errors.length ? note(G.errors.join(' '), true) : null,
       tbl(['Splice', 'Plates and bolts', 'Governing', 'Ratio', 'Largest strength ratio', 'Status'], G.list.map((s, k) => { const fl = s.R && s.R.fl, gv = s.gov, q = strGov(s.CK), bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
@@ -329,8 +329,8 @@
       if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = steps(sc, r.steps || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
       return { sc, item }; };
     const gi = s.gov.inv, go = s.gov.opr, rf = v => !isFinite(v) ? '—' : f(v, 2), rcls = v => !isFinite(v) ? '' : v < 1 - 1e-9 ? 'ng' : v < 1.1 ? 'hi' : 'ok';
-    if (gi) X.gov.push({ mod: 'Rating', check: `Inventory RF, ${tt(gi.title)}`, loc: gi.name, rf: gi.inv, key: K(rk(gi), rfStep(gi)) });
-    if (go) X.gov.push({ mod: 'Rating', check: `Operating RF, ${tt(go.title)}`, loc: go.name, rf: go.opr, key: K(rk(go), rfStep(go)) });
+    if (gi) X.gov.push({ mod: 'Rating', grp: 'Rating: Inventory RF', check: `Inventory RF, ${tt(gi.title)}`, loc: gi.name, rf: gi.inv, key: K(rk(gi), rfStep(gi)) });
+    if (go) X.gov.push({ mod: 'Rating', grp: 'Rating: Operating RF', check: `Operating RF, ${tt(go.title)}`, loc: go.name, rf: go.opr, key: K(rk(go), rfStep(go)) });
     const sel = [...new Set([gi, go, ...GRP.map(([k]) => s.by[k])].filter(q => q && !q.oos))];
     subs.push(sub('gov', 'Governing rating factors (HL-93 design load)', [note(`${fromHtml(R.what)} LRFR (MBE 6A.4.2): RF = (C − $\\gamma_{DC}$DC − $\\gamma_{DW}$DW ± $\\gamma_{P}$P)/($\\gamma_{LL}$(LL+IM)), C = $\\phi_{c}\\phi_{s}\\phi R_{n}$ with $\\phi_{c}\\phi_{s}$ ≥ 0.85; Strength I $\\gamma_{LL}$ 1.75 Inventory, 1.35 Operating; Service II 1.30 / 1.00 (Table 6A.4.2.2-1). $\\phi_{c}$ = ${f(B.P.rating ? B.P.rating.phiC : 1, 2)}, $\\phi_{s}$ = ${f(B.P.rating ? B.P.rating.phiS : 1, 2)}. As on the [[tab:rt|Rating tab]].`),
       R.ph.floor ? note(`$\\phi_{c}\\phi_{s}$ = ${f(R.ph.prod, 3)} < 0.85: 0.85 is used at the Strength limit state (MBE Eq. 6A.4.2.1-3).`, true) : null,
@@ -408,5 +408,47 @@
       sections: secs, gov: X.gov };
   }
 
-  window.SBDReportBuild = { SECTIONS, model };
+  /* ---------- every girder at once (added 2026-10-30, report wiring PR) ---------- */
+  /* govRows(B): one girder's summary rows (model(B).gov: each check group's governing ratio or RF, the modules' own values), as plain data */
+  function govRows(B) {
+    const M = model(B, { detail: 'gov' });
+    return { rows: M.gov.map(q => ({ grp: q.grp || q.mod, mod: q.mod, check: q.check, loc: q.loc, r: q.r, rf: q.rf, status: q.status })), err: { ...B.err } };
+  }
+  /* allModel(P, list, opt): the report of every girder: per check group the governing ratio (or RF) of each girder, the controlling
+     girder of the group (largest ratio; smallest RF) marked, and the girder that controls the whole bridge; then each girder's governing
+     rows. list = [{ gi, label, rows, err }] (govRows of each girder). Nothing is calculated: the values are each girder's summary values. */
+  function allModel(P, list, opt) {
+    opt = opt || {};
+    const p = P.project || {}, grps = [];
+    list.forEach(G => (G.rows || []).forEach(q => { if (!grps.includes(q.grp)) grps.push(q.grp); }));
+    const isRF = gp => list.some(G => (G.rows || []).some(q => q.grp === gp && q.rf != null));
+    const val = q => (q ? (q.rf != null ? q.rf : q.r) : NaN);
+    const ctl = gp => { let b = null; const rf = isRF(gp); list.forEach(G => { const q = (G.rows || []).find(z => z.grp === gp), v = val(q); if (!isFinite(v)) return; if (!b || (rf ? v < b.v : v > b.v)) b = { G, v }; }); return b; };
+    const C = new Map(grps.map(gp => [gp, ctl(gp)]));
+    // the controlling girder of the bridge: the largest demand / capacity ratio of any check (rating factors listed apart)
+    let top = null; list.forEach(G => (G.rows || []).forEach(q => { if (q.rf == null && isFinite(q.r) && (!top || q.r > top.q.r)) top = { G, q }; }));
+    let low = null; list.forEach(G => (G.rows || []).forEach(q => { if (q.rf != null && isFinite(q.rf) && (!low || q.rf < low.q.rf)) low = { G, q }; }));
+    const head = ['Check group', ...list.map(G => G === (top && top.G) ? `${G.label} (controls)` : G.label), 'Controlling girder'];
+    const cell = (G, gp) => { const q = (G.rows || []).find(z => z.grp === gp); if (!q) return { t: '—', cls: 'na' }; const c = C.get(gp), mk = c && c.G === G && list.length > 1 ? ' ◆' : '';
+      if (q.rf != null) return { t: (isFinite(q.rf) ? f(q.rf, 2) : '—') + mk, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok' };
+      return { t: (isFinite(q.r) ? f(q.r, 3) : '—') + mk, n: true, cls: rc(q.r) }; };
+    const rows = grps.map(gp => { const c = C.get(gp); return { cells: [gp, ...list.map(G => cell(G, gp)), c ? `${c.G.label} (${isRF(gp) ? 'RF ' + f(c.v, 2) : f(c.v, 3)})` : '—'], cls: c && !isRF(gp) && c.v > 1 + 1e-9 ? 'gov' : '' }; });
+    const errs = list.filter(G => G.err && Object.keys(G.err).length);
+    const subs = [sub('tbl', 'Governing ratio of each check group, every girder', [
+      note(`Each cell is the governing demand / capacity ratio of that check group on that girder (OK ≤ 1.0), or its rating factor RF (OK ≥ 1.0), from the girder's own calculation report (Report tab, scope "Selected girder", where each value is worked). ◆ marks the controlling girder of each group (the largest ratio, the smallest RF). Demands: this project's analysis of each girder. ${ED}.`),
+      top ? note(`Controlling girder: ${top.G.label}, largest ratio ${f(top.q.r, 3)} (${top.q.mod}, ${top.q.check}, ${top.q.loc}).`, top.q.r > 1 + 1e-9) : null,
+      low ? note(`Lowest rating factor: ${low.G.label}, ${low.q.check.replace(/,.*$/, '')} ${f(low.q.rf, 2)} (${low.q.loc}).`, low.q.rf < 1 - 1e-9) : null,
+      tbl(head, rows, { wide: true }),
+      errs.length ? note('Not in this summary: ' + errs.map(G => `${G.label}: ${Object.entries(G.err).map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]} ${v}`).join('; ')}`).join(' | '), true) : null])];
+    const per = list.map((G, k) => sub('g' + k, `Girder ${G.label}${top && G === top.G ? ' (controls)' : ''}`, [
+      tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], (G.rows || []).map(q => q.rf != null
+        ? [q.mod, q.check, q.loc, { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok' }, isFinite(q.rf) ? (q.rf >= 1 - 1e-9 ? 'OK' : 'RF < 1') : '—']
+        : { cells: [q.mod, q.check, q.loc, R3(q.r), q.status === 'warn' ? 'Warning' : okT(q.r)], cls: q.r > 1 + 1e-9 ? 'gov' : '' }), { wide: true })]));
+    return { title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
+      info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', p.owner]],
+      head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nEvery girder`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
+      sections: [{ id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }], top, low, ctl: C };
+  }
+
+  window.SBDReportBuild = { SECTIONS, model, govRows, allModel };
 })();

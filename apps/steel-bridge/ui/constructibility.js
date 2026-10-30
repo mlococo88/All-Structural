@@ -9,14 +9,17 @@
      - a hand-off file (schema stgirder-external-demands, GirderDetail → ST-Girder, with M_DCc and M_CL: S2-8): its stations.
    Overhang brackets (exterior girder): GirderDetail's Deck overhang module inputs, saved in the project (P.constr.oh) for the
    project source; the hand-off file brings its own stored bracket loads.
-   The demand source and f_ℓ live in memory for this page view.
+   f_ℓ during deck placement is saved in the project (P.constr.flC, ksi; added 2026-10-30, report wiring PR; absent = 0, the old default)
+   and used by the Report tab. The demand source lives in memory for this page view (default: this project; the line at the top of the
+   tab names the source in use).
 
    render(host, ctx): ctx = { P (project), g (girder index), changed() (an input written to the project) } */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: 'project', pl: null, plName: '', flC: 0, R: null, key: '', sel: null, ohSel: 0, err: '', busy: false };
+  const S = { src: null, pl: null, plName: '', R: null, key: '', sel: null, ohSel: 0, err: '', busy: false };
+  const srcOf = () => S.src || 'project';   // src null: the default, this project (no example on this tab)
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
   const cls = r => Number.isNaN(r) || r === Infinity ? 'cn-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'cn-ng' : r >= 0.9 ? 'cn-hi' : 'cn-ok';
   /* SB2-R2: the ratio of a check as shown; a non-finite ratio that is not "not applicable" carries its reason (c.ng: NG or error) */
@@ -33,23 +36,25 @@
     document.head.appendChild(st);
   }
   const ohInputs = P => ({ ...window.SBDConstr.OH_DEF, ...((P.constr && P.constr.oh) || {}) });
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName, S.flC]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(), S.plName]);   // f_ℓ is in ctx.P (P.constr.flC)
+  /* f_ℓ during deck placement (first order, ksi): saved in the project, P.constr.flC (absent or not a number: 0) */
+  const flOf = P => { const v = P.constr && +P.constr.flC; return isFinite(v) ? v : 0; };
 
   function calc(ctx) {
     S.err = ''; S.R = null; S.sel = null; S.ohSel = 0;
     const P = ctx.P, C = window.SBDConstr;
     try {
       let F, what;
-      if (S.src === 'file') {
+      if (srcOf() === 'file') {
         if (!S.pl) { S.err = 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).'; S.key = key(ctx); return; }
         const gdF = S.pl.girderDetail || {}, frF = window.SBDFraming && P.framing ? window.SBDFraming.forGirder(P, { line: (+gdF.girder || 1) - 1 }, (S.pl.member || {}).supports) : null;   // this bridge's framing (SB2-O9)
-        F = C.fromPayload(S.pl, { flC: S.flC, ...(frF ? { braces: frF.braces } : {}) });
+        F = C.fromPayload(S.pl, { flC: flOf(P), ...(frF ? { braces: frF.braces } : {}) });
         what = `${esc(S.plName)}: ${F.locs.length} stations; plates and materials from the file; M<sub>DCc</sub>${F.locs.some(L => L.M.DCc !== 0) ? ' (GirderDetail\'s pour sequence)' : ' not in the file (M<sub>DC1</sub> used)'}, M<sub>CL</sub>, V<sub>DC1</sub>, V<sub>CL</sub> from the file; L<sub>b</sub> ${frF ? "from this project's framing (Cross-frames tab)" : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft`}.`;
       } else {
         const AR = window.SBDAnalysis.analyzeGirder(P, ctx.g, { ll: false });
         if (AR.errors && AR.errors.length) { S.err = 'Analysis: ' + AR.errors.join(' '); S.key = key(ctx); return; }
         const frA = window.SBDFraming && P.framing ? window.SBDFraming.forGirder(P, { gi: ctx.g }, null) : null;   // the project's framing (SB2-O9)
-        F = C.fromAnalysis(P, ctx.g, AR, { flC: S.flC, oh: ohInputs(P), ...(frA ? { braces: frA.braces } : {}) });
+        F = C.fromAnalysis(P, ctx.g, AR, { flC: flOf(P), oh: ohInputs(P), ...(frA ? { braces: frA.braces } : {}) });
         const g = P.girders[ctx.g];
         what = `${esc(g.label || g.id)}: ${F.locs.length} locations from this project's analysis (dead loads; <a href="#" data-gotab="an">Analysis tab</a>): M<sub>DC1</sub>, V<sub>DC1</sub> (steel and the whole wet deck), `
           + (F.seq ? 'M<sub>DCc</sub> = the noncomposite envelope of the deck placement sequence (an.seq.MDCc)' : 'no pour sequence (simple spans, noncomposite, or the sequence off): M<sub>DC1</sub>')
@@ -57,7 +62,7 @@
           + (AR.warnings && AR.warnings.length ? `<br>${AR.warnings.map(esc).join('<br>')}` : '');
       }
       const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });
-      S.R = { ...R, what, ext: F.ext, src: S.src };
+      S.R = { ...R, what, ext: F.ext, src: srcOf() };
       S.sel = R.gov ? R.rows.indexOf(R.gov) : 0;
     } catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
@@ -69,12 +74,14 @@
 
   function render(host, ctx) {
     css();
-    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = S.src === 'file' ? null : g.position === 'exterior', oh = ohInputs(P);
+    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = srcOf() === 'file' ? null : g.position === 'exterior', oh = ohInputs(P);
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
-    let h = `<section class="sec"><div class="secHead">Constructibility (deck placement): demands and options</div><div class="secBody">
-      <div class="fRow"><label for="cn_src">Demands</label><select id="cn_src">${opt('project', 'This project (analysis, pour sequence)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
-      ${S.src === 'file' ? `<div class="fRow"><label for="cn_file">File</label><input type="file" id="cn_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
-      <div class="fRow"><label for="cn_flC">f<sub>ℓ</sub> during deck placement (first order)</label><input type="number" step="any" id="cn_flC" value="${S.flC}"><span class="unit">ksi (GS14, GS15)</span></div>
+    const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis;
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(), auto: !S.src, rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: g.label || g.id, plName: S.plName }) : '')
+      + `<section class="sec"><div class="secHead">Constructibility (deck placement): demands and options</div><div class="secBody">
+      <div class="fRow"><label for="cn_src">Demands</label><select id="cn_src">${opt('project', 'This project (analysis, pour sequence)', srcOf())}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf())}</select></div>
+      ${srcOf() === 'file' ? `<div class="fRow"><label for="cn_file">File</label><input type="file" id="cn_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+      <div class="fRow"><label for="cn_flC">f<sub>ℓ</sub> during deck placement (first order)</label><input type="number" step="any" id="cn_flC" value="${flOf(P)}"><span class="unit">ksi (GS14, GS15; saved with the project)</span></div>
       <p class="note">M<sub>c</sub> = 1.25M<sub>DCc</sub> + 1.50M<sub>CL</sub> and V<sub>u</sub> = 1.25V<sub>DC1</sub> + 1.50V<sub>CL</sub> on the noncomposite steel section (AASHTO LRFD 10th Ed. 3.4.2.1, 6.10.3.4.1); φ<sub>f</sub> = φ<sub>v</sub> = 1.0.
       GS14: Eqs. 6.10.3.2.1-1, -2 (F<sub>nc</sub> from 6.10.8.2 with R<sub>b</sub> = 1.0); GS15: Eq. 6.10.3.2.1-3 and 6.10.3.2.2-1; GS16: Eq. 6.10.3.3-1.${ext ? ' Exterior girder: OH1–OH5 with the overhang bracket loads below (C6.10.3.4).' : ''} The demand source and f<sub>ℓ</sub> are not saved.</p></div></section>`;
     if (ext) h += `<section class="sec"><div class="secHead">Overhang brackets, exterior girder (saved with the project)</div><div class="secBody">
@@ -115,7 +122,7 @@
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
     on('#cn_src', 'change', e => { S.src = e.target.value; redraw(); });
-    on('#cn_flC', 'change', e => { const v = Number(e.target.value); if (isFinite(v)) S.flC = v; redraw(); });
+    on('#cn_flC', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; P.constr.flC = v; if (ctx.changed) ctx.changed(); else redraw(); });
     on('[data-oh]', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; P.constr.oh = { ...ohInputs(P), ...(P.constr.oh || {}), [e.target.dataset.oh]: v }; if (ctx.changed) ctx.changed(); else redraw(); });
     on('[data-ohg]', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; const o = { ...ohInputs(P), ...(P.constr.oh || {}) }; o.gam = { ...o.gam, [e.target.dataset.ohg]: v }; P.constr.oh = o; if (ctx.changed) ctx.changed(); else redraw(); });
     on('#cn_calc', 'click', () => { calc(ctx); redraw(); });

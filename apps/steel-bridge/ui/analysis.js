@@ -129,5 +129,15 @@
     el.onclick = e => { if (e.target.id !== 'anCalc') return; busy = true; draw(el, ctx);
       setTimeout(() => { try { res = AN().analyzeGirder(P, gi); } catch (err) { res = { errors: [String(err && err.message || err)] }; } resKey = keyOf(P, gi); busy = false; draw(el, ctx); }, 30); };
   }
-  window.SBDAnalysisUI = { draw };
+  /* srcBar(o): the line at the top of an output tab that says which demands it shows (added 2026-10-30, report wiring PR).
+     o = { src: 'analysis' | 'project' | 'example' | 'file', auto (the tab's default, not chosen), rd (SBDAnalysis.ready()), g (girder label),
+     plName (file name), example (what the example is) }. The default: this project's analysis when the project is complete
+     (SBDAnalysis.ready), else the example; a tab without an example keeps the analysis and says what is missing. */
+  function srcBar(o) {
+    const rd = o.rd || { ok: true, why: [] }, an = o.src === 'analysis' || o.src === 'project';
+    const what = an ? `This project's analysis${o.g ? ` of ${esc(o.g)}` : ''}` : o.src === 'file' ? `Hand-off file${o.plName ? ' ' + esc(o.plName) : ' (none chosen yet)'}` : `Example${o.example ? ` (${esc(o.example)})` : ''}`;
+    const why = o.auto ? (an ? (rd.ok ? 'the default: the project is complete' : `the project is not complete: ${rd.why.map(esc).join(' ')}`) : o.src === 'example' && !rd.ok ? `the default while the project is not complete: ${rd.why.map(esc).join(' ')}` : 'the default') : 'as chosen below';
+    return `<div class="srcBar${an && !rd.ok ? ' warn' : o.src === 'example' ? ' ex' : ''}" role="status"><span>Demands:</span> <b>${what}</b> <span class="srcWhy">(${why})</span></div>`;
+  }
+  window.SBDAnalysisUI = { draw, srcBar };
 })();
