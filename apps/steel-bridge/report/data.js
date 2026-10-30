@@ -34,7 +34,7 @@
   const W = () => window;
   /* the analysis cache (LRU, at most 2 entries per girder + 4): key = project state | girder | options */
   const CACHE = new Map();
-  const pkOf = P => JSON.stringify({ ...P, rating: undefined });   // the rating factors (P.rating) are not read by the analysis
+  const pkOf = P => JSON.stringify({ ...P, rating: undefined, flexure: undefined });   // the rating factors (P.rating) and the f_ℓ entered on the Flexure tab (P.flexure) are not read by the analysis
   let RAW = null;   // engine/analysis.js analyzeGirder itself, once install() has put the cache in front of it
   function analysis(P, gi, o, pk, orig) {
     const AN = W().SBDAnalysis, run = orig || RAW || AN.analyzeGirder, k = (pk || pkOf(P)) + '|' + gi + '|' + JSON.stringify(o || {});

@@ -77,6 +77,7 @@ test('Shared analysis cache: switching between the output tabs runs no analysis 
   const n1 = runs; for (let k = 0; k < 3; k++) tabs.forEach(t => t());
   assert.equal(runs, n1, 'switching tabs again: cache hits only');
   W.SBDReportData.compute(P, 0); assert.equal(runs, n1, 'the report too');
+  P.flexure = { fl: 3 }; W.SBDShearUI.build({ P, g: 0, src: 'analysis' }); assert.equal(runs, n1, 'f_ℓ entered (P.flexure) is not in the analysis key'); delete P.flexure;
   // the cached result was not modified by any tab
   assert.equal(JSON.stringify(W.SBDAnalysis.analyzeGirder(P, 0)), JSON.stringify(RAW(P, 0)));
   // a change to the project: a new analysis

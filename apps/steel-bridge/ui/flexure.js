@@ -165,7 +165,7 @@
     on('fx_m', 'change', e => { S.method = e.target.value; redraw(); });
     ['Lb', 'Cb', 'flT', 'skew'].forEach(k => on('fx_' + k, 'change', e => { const v = Number(e.target.value); if (isFinite(v)) S[k] = v; redraw(); }));
     on('fx_fl', 'change', e => { const t = e.target.value, v = t === '' ? 0 : Number(t); if (!(isFinite(v) && v >= 0)) return;   // f_ℓ entered: saved in the project (SB2-W1)
-      const P = ctx.P; if (v > 0) P.flexure = { ...(P.flexure || {}), fl: v }; else if (P.flexure) delete P.flexure.fl; if (ctx.changed) ctx.changed(); else redraw(); });
+      const P = ctx.P; if (v > 0) P.flexure = { ...(P.flexure || {}), fl: v }; else if (P.flexure) { delete P.flexure.fl; if (!Object.keys(P.flexure).length) delete P.flexure; } if (ctx.changed) ctx.changed(); else redraw(); });
     on('fx_calc', 'click', () => { calc(ctx); redraw(); });
     host.querySelectorAll('[data-gotab]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${el.dataset.gotab}"]`); if (b) b.click(); }));   // link to another tab (Constructibility, SB2-O10)
     on('fx_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
