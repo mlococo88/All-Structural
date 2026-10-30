@@ -61,6 +61,7 @@ const cases = [...RECS.map(([pr, ow]) => ({ name: `${pr}_${ow}`, pr, ow })), { n
 for (const cs of cases) {
   if (filt.length && !filt.some(f => cs.name.includes(f))) { const kept = path.join(DIR, `ad_${cs.name}.json`); if (fs.existsSync(kept)) rows.push(JSON.parse(fs.readFileSync(kept, 'utf8'))); continue; }
   const kept = path.join(DIR, `ad_${cs.name}.json`); if (fs.existsSync(kept) && !process.env.FORCE) { rows.push(JSON.parse(fs.readFileSync(kept, 'utf8'))); console.log('have', cs.name); continue; }
+  if (!cs.app && !fs.existsSync(path.join(DIR, `legacy_${cs.name}.json`))) { console.log('no legacy record yet', cs.name); continue; }
   const t1 = Date.now(), ctx = {}, row = { name: cs.name, why: [] };
   if (!cs.app) {
     const Ppl = plProject(cs.pr, cs.ow, PLDEF), P = sbd2FromPL(Ppl, loadsRec(cs.pr, cs.ow), M), rec = JSON.parse(fs.readFileSync(path.join(DIR, `legacy_${cs.name}.json`), 'utf8'));

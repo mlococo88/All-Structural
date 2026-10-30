@@ -432,9 +432,9 @@
       return res; };
     for (let i = 0; i < jobs.length; i++) { const j = jobs[i]; const it = runJob(j); let s; while (!(s = it.next()).done) yield { f: 0.05 + 0.6 * (k + i / jobs.length) / Math.max(1, total()), msg: s.value.msg }; }
     if (S.mode === 'new' && ctx.DL) {   // around the best depth of each girder count: every depth increment within half a coarse step
-      const extra = []; nbList(P, S).forEach(nb => { const ok = out.filter(o => o.pass && o.job.nb === nb).sort((a, b) => key(a) - key(b))[0]; if (!ok) return;
-        extra.push({ nb, D: ok.L.D, minLines: null });   // the best coarse depth again, sized fully and trimmed
-        for (let D = ok.L.D - ctx.DL.step / 2; D <= ok.L.D + ctx.DL.step / 2 + 1e-9; D += Math.max(ctx.DL.inc, ctx.DL.step / 4)) { const Dr = r4(up(D, ctx.DL.inc)); if (Dr >= ctx.DL.lo - 1e-9 && Dr <= ctx.DL.hi + 1e-9) lines.forEach(ml => extra.push({ nb, D: Dr, minLines: ml })); } });
+      const extra = []; nbList(P, S).forEach(nb => out.filter(o => o.pass && o.job.nb === nb).sort((a, b) => key(a) - key(b)).slice(0, 2).forEach(ok => {   // around the two best coarse depths
+        extra.push({ nb, D: ok.L.D, minLines: null });   // the coarse depth again, sized fully and trimmed
+        for (let D = ok.L.D - ctx.DL.step / 2; D <= ok.L.D + ctx.DL.step / 2 + 1e-9; D += Math.max(ctx.DL.inc, ctx.DL.step / 4)) { const Dr = r4(up(D, ctx.DL.inc)); if (Dr >= ctx.DL.lo - 1e-9 && Dr <= ctx.DL.hi + 1e-9) lines.forEach(ml => extra.push({ nb, D: Dr, minLines: ml })); } }));
       for (let i = 0; i < extra.length; i++) { const it = runJob(extra[i]); let s; while (!(s = it.next()).done) yield { f: 0.45 + 0.25 * i / Math.max(1, extra.length), msg: s.value.msg }; }
     }
     // the 1-gage-line variant of the best designs whose splice flange widths the bolt fit raised (DT10): the objective then picks
@@ -460,7 +460,8 @@
         const ctx2 = { L0: o.L, maxIt: 6, ll: new Map() }, it2 = design(P, S, { nb: o.L.nb, D: o.L.D, refine: true, minLines: o.L.minLines }, ctx2); let s2;
         while (!(s2 = it2.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: resizing with the live load on its own stiffness — ${s2.value.msg}` };
         if (!s2.value.pass) break;
-        o = { ...o, L: s2.value.L, E: s2.value.E, cost: costOf(s2.value.L, S, s2.value.E.nStiff), polished: pol + 1 };
+        let r2 = s2.value; if (opt.trimTries !== 0) { const it3 = trim(P, S, r2, ctx2, 4); let s3; while (!(s3 = it3.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: ${s3.value.msg}` }; r2 = s3.value; }
+        o = { ...o, L: r2.L, E: r2.E, cost: costOf(r2.L, S, r2.E.nStiff), polished: pol + 1 };
       }
       if (E.pass && pr.ok) { cands.push({ ...cand(o, E, S, P), polished: o.polished || 0 }); continue; }
       const fl = E.fails.map(f => ({ mod: f.mod, id: f.id, title: f.title, r: f.r, x: f.x, gl: f.gl })), ck = curKeys();
