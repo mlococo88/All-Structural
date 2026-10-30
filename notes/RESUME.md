@@ -32,3 +32,12 @@ For PR2:
 Decision SB2-AD8 (lead, 2026-10-30): the splice auto-design uses the owner's edge distance for end distances (CTDOT 2 in); Auto design treats cross-frame bolt count (CF11) as a sizing rule. Implement in PR2.
 - Consistency PR #497 merged. Auto design PR2 must also take f_ℓ and brace points from `SBDFraming.design` (it currently uses f_ℓ = 0 during deck placement).
 - Open UI item: allow an explicit f_ℓ = 0 override on skewed bridges. Today 0 means "none entered".
+
+## All 4 in-flight PRs merged (2026-10-30, 1:15 PM ET)
+- #496 pedestrian load and owner η/m: merged.
+
+OPEN ISSUE, highest priority for next session (Opus, calculation):
+- Auto design's `payloadOf` (engine/autodesign.js, #494) builds a payload with no `V_LL` fields and passes it to `SBDShearUI.build`. Shear, transverse-stiffener and bearing checks inside Auto design may therefore run without LL+IM. This is unverified: read from code, not run. Verify, then fix. Auto design must not return a design as "passing" if its shear checks lacked live load.
+- Also: Auto design takes f_ℓ and brace points from `SBDFraming.design` (see the earlier note).
+
+Model plan: Sonnet 5.5 for presentation and UI work (grouping, graphics, Auto design compare/locks UI, switch-over plumbing); Opus 5.5 for anything touching calculations.
