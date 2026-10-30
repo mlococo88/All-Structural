@@ -1516,10 +1516,10 @@ Display and export only: no engineering formula, factor, unit or reference chang
 ### Open items
 - SB2-W1 (for the engineer): with this project's analysis, Flexure and Rating take f_ℓ = 0 unless entered; the file source takes the skew
   f_ℓ of C6.10.1 (1.25 × 10/7.5 ksi where a support is skewed > 20°). Whether the analysis path should take the skew f_ℓ too (it would change
-  the rating's flexure capacities on skewed bridges) is not decided here.
+  the rating's flexure capacities on skewed bridges) is not decided here. Closed 2026-10-30 (sb2-paths-consistent): the skew f_ℓ on every path.
 - SB2-W2: the analysis-source flexure (as the rating) takes its brace points from the stiffener layout's cross-frames (`P.stiffeners.layout
-  .frames`), the file source from the Framing tab (`SBDFraming.forGirder`). Same as the rating before this PR; noted for a later alignment.
-- The output tabs still run their own analysis (the report's cache is used by the Report tab only).
+  .frames`), the file source from the Framing tab (`SBDFraming.forGirder`). Same as the rating before this PR; noted for a later alignment. Closed 2026-10-30 (sb2-paths-consistent): the Framing tab on every path.
+- The output tabs still run their own analysis (the report's cache is used by the Report tab only). Closed 2026-10-30 (sb2-paths-consistent): one cache for every tab.
 - Display fix found by this PR's f_ℓ test (first test with flC > 0 where the amplification is undefined): `engine/constructibility.js` step
   `cn.fl` (anchor `sub: r.amC.req ?`) wrote `—(0.00)` (a KaTeX parse error) when AF = ∞ (SB2-R2); now `\infty(0.00)`, as `engine/flexure.js`
   step `fl`. Before: `${n3(r.amC.AF)}(…)`; after: `${isFinite(r.amC.AF) ? n3(r.amC.AF) : '\\infty'}(…)`. Text of the step only; the value
@@ -1716,3 +1716,169 @@ Display and export only: no engineering formula, factor, unit or reference chang
 ### Open items
 - Paper-space layouts (one layout per sheet with a viewport) need a DXF R2000+ writer in shared/dxf.js (SB2-DW6).
 - Flange-stress plots along the girder and the jacking / seismic reaction columns would be new calculations here (SB2-DW8, DW9).
+
+## 2026-10-30 — PR: sb2-paths-consistent — every demand path takes the same brace points and f_ℓ (SB2-W1, SB2-W2 closed); one analysis cache for every tab; Welds demand source and report section
+### Decisions (engineer, 2026-10-30; recorded with the reasoning)
+- SB2-W1 (f_ℓ). The skew f_ℓ of C6.10.1 is the default on every path (this project's analysis and a hand-off file) for Flexure,
+  Constructibility and Rating: 1.25 × 10 ksi on an interior girder and 1.25 × 7.5 ksi on an exterior girder where any support is skewed
+  more than 20°, else 0 (engine/framing.js flSkew, as GirderDetail and Preliminary sizing). An f_ℓ entered overrides it: on the Flexure
+  tab for Flexure and Rating (saved, `P.flexure.fl`), on the Constructibility tab for deck placement (`P.constr.flC`, as before).
+  Reasoning: C6.10.1 gives these values as the estimate to use in the absence of a refined analysis of the cross-frame forces on a skewed
+  bridge. Taking f_ℓ = 0 on one path and the estimate on another gave two answers for the same girder, and the 0 was unconservative on
+  skewed bridges. The C6.10.1 value is one unfactored total with no split by load, applied with γ = 1.25 at Strength I (SB2-O11, kept), the
+  same value at Service II, and the same value during deck placement. Deck placement is where the cross-frame forces from differential
+  deflection on a skewed bridge arise, so the C6.10.1 value applies there too. An entry of 0 or a blank means "none entered" and takes the
+  skew value, as the file path did before; to model a refined analysis that gives a very small f_ℓ, enter that value (> 0).
+- SB2-W2 (brace points). The Framing tab's stations (engine/framing.js forGirder: the girder's own bearings and cross-frames, its own
+  unbraced lengths) are the brace points on every path. This was already so for Constructibility and for the Flexure file path. It is new
+  for the Flexure analysis path and for Rating on both paths. Reasoning: the framing is the real framing (Preliminary sizing's layout, with
+  splice and shop-transition clearances and skewed-support rules, parity-tested in framing.test.mjs). The stiffener layout's
+  `frames.Lb` fallback (cross-frames evenly ≤ 25 ft) was not the framing the girder is built with. Fallback when the project has no framing
+  (version 1 projects) or the layout has errors: the stiffener layout's cross-frames, as before, said so on the tab. A file of another
+  bridge keeps the file's own spacing (SB2-O9, unchanged).
+- Flexure file path and owner rules (decided here, engineer's rule of 2026-10-29: accuracy). The Flexure tab's file path now takes the
+  file's owner (`pl.ownerRules.owner`; OWN8: haunch 0 in the section properties for RIDOT and MassDOT), as the Rating file path did.
+  Reasoning: GirderDetail computed the file's results with its owner's rules, and Rating takes its flexure from the Flexure tab now, so
+  one rule is needed. Keeping the owner keeps the Rating file results unchanged on this point.
+- One source. `engine/framing.js design(P, gi, o)` (new; anchor `function design(P, gi, o) {`) returns the brace points and f_ℓ. ui/flexure.js
+  (every source, including the example's f_ℓ), ui/constructibility.js and, through ui/flexure.js, ui/rating.js take them from there. The
+  Rating tab's flexure is now ui/flexure.js `build()` itself (`SBDFlexureUI.build(fromAn ? { P, g, src: 'analysis', an: { pl, R: AR },
+  method: 'auto' } : { P, g, src: 'file', pl, … })`; before, its own copy of the payload set-up). So the Rating, Flexure and Report flexure
+  cannot differ.
+- Shared cache. `report/data.js install()` (new; called once by index.html) puts every `SBDAnalysis.analyzeGirder` call through the
+  report's analysis cache (#490). That covers the Analysis, Flexure, Shear, Fatigue, Constructibility, Cross-frames, Splices, Rating and
+  Welds tabs and the report. The key is the project JSON without `rating` and `flexure` (the analysis reads neither; grep) | girder | options.
+- Welds. The demand source selector ("This project's analysis" / hand-off file, as the Rating tab) and the "Demands: …" line
+  (`SBDAnalysisUI.srcBar`). The file path uses `engine/welds.js demandsFromPayload` (unchanged engine) with this tab's F_EXX, weld size,
+  load factors and grinding (P.welds). Report: new section `wd` "Welds (flange-to-web, shop transitions)", after Splices, before Rating.
+  It has the governing FW and TR rows in the summary (groups "Welds: flange-to-web (FW1–FW4)", "Welds: shop flange transitions (TR1–TR4)",
+  so the every-girder scope has them too), the check table and the worked steps of the governing locations (all locations with detail
+  "all"). The engine's notes "see §sec.s" (a group of steps) are linked in the report to that section's ȳ step (`sec.s.yb`, `sec.c3.yb`,
+  `sec.cn.yb`, `sec.cr.yb`).
+### Where (anchor text; before → after)
+- `engine/framing.js`: new `design()` (anchor above), exported. `flSkew` step strings: before `sym: 'f_{\ell}', eq: … '\gamma f_{\ell,skew}'`
+  (single backslash in a JS string: shown as "f_{ell}", "gamma f_{ell,skew}"); after `'f_{\\ell}'`, `'\\gamma f_{\\ell,skew}'`. Display only.
+- `ui/flexure.js` `inputs(ctx)`: file branch `const D = FRM.design(P, ctx.g, { sup, line, skews, ext, fl: flIn })` (before: forGirder + flSkew
+  inline, same values). Analysis branch: before `const fr = ((P.stiffeners || {}).layout || {}).frames …; if (flIn > 0) fopt.fl = flIn;` →
+  after `const D = window.SBDFraming.design(P, gi, { fl: flIn }), fopt = { owner: own, rebar: d.rebar, fl: D.fl }; if (D.br) { fopt.braces =
+  D.braces; fopt.lenOf = D.lenOf; } else { …stiffener layout as before… }`. Example branch: `fl: S.fl` → `fl: DX.fl` (DX = design on the
+  project). `flIn = ctx.fl != null ? ctx.fl : S.fl` → `… : flEntered(P)` (P.flexure.fl). The input `#fx_fl` writes `P.flexure.fl` through
+  `ctx.changed()` (blank/0 removes it). `build(ctx)` takes `ctx.an` (a fromAnalysis result already run) and returns `D`.
+- `ui/rating.js build()`: the block from `// flexure: the Flexure tab's locations` to `const Gr = FX.girder(…)` → `const Gr =
+  window.SBDFlexureUI.build(…)` (above). `what` names the brace points and f_ℓ.
+- `ui/constructibility.js`: new `build(ctx)` (the old `calc()` body, now also used by the report); `flOf(P)` returns only an entry > 0;
+  `flC: flOf(P)` → `flC: D.fl` with `D = FRM.design(P, g, { fl: flOf(P) })` (file: `{ sup, line, skews, ext, fl }`); braces from `D.br` (same
+  as before). Input: blank or 0 removes `P.constr.flC`; the placeholder shows the skew value.
+- `engine/constructibility.js` step `cn.fl` note: "First-order f_ℓ during deck placement as entered;" → "… as entered, else from skew
+  (C6.10.1; Constructibility tab);". Text only.
+- `ui/welds.js`: `S.src`, `srcOf()`, `input(P, gi, pl)` (file branch), `build(ctx)` with `src`, `pl`, `plName`, `what`; the selector, file
+  input and `srcBar` line in `render`.
+- `report/data.js`: `install()`, `RAW`; flexure without `fl: 0`, and with the analysis taken from `B.rating.flex` (the same build);
+  constructibility from `SBDConstrUI.build` (the local `constr()` copy removed); `B.wd` from `SBDWeldsUI.build`; `pkOf` leaves out `flexure`.
+- `report/builders.js`: `SECTIONS` gains `['wd', 'Welds']`; new `wd(B, X)`; `flNote`, `brNote`. The Flexure note's "f_ℓ = 0" and
+  "cross-frame stations of the stiffener layout" are replaced by the actual source. The Constructibility note's "f_ℓ during deck placement
+  0 (the tab's default)" was wrong since #490 when an f_ℓ was saved; it now gives the value used.
+- `engine/model.js`: `flexure: { fl }` documented and validated (number ≥ 0; anchor `// added 2026-10-30 (paths PR, SB2-W1)`);
+  `constr.flC` doc updated.
+- `index.html`: `SBDReportData.install()` after the store set-up; the Flexure tab's ctx gains `changed`.
+### Governing provisions (AASHTO LRFD 10th Ed. 2024)
+- C6.10.1 (f_ℓ in lieu of a refined analysis: 10 ksi interior, 7.5 ksi exterior, total unfactored); 6.10.1.6 (f_ℓ ≤ 0.6F_yf, Eq.
+  6.10.1.6-1; amplification Eq. 6.10.1.6-4/-5); 6.10.3.2 (deck placement, Eqs. 6.10.3.2.1-1, -2, 6.10.3.2.2-1); 6.10.4.2.2 (Service II,
+  Eq. 6.10.4.2.2-2); 6.10.7.1 (Eq. 6.10.7.1.1-1, composite compact); 6.10.8.1 (Eqs. 6.10.8.1.1-1, 6.10.8.1.2-1, 6.10.8.1.3-1); 6.10.8.2.3
+  (L_b); 6.7.4.2.1 (cross-frame layout); MBE 6A.4.2 (rating). No equation, factor or unit changed: the inputs f_ℓ and L_b change.
+### §4 callout: before → after
+- Inputs before → after:
+  - f_ℓ (Strength I, Service II; Flexure and Rating, analysis path): before = entered, else 0; after = entered, else
+    1.25 × (10 interior / 7.5 exterior) ksi where max |support skew| > 20°, else 0.
+  - f_ℓ during deck placement (Constructibility, both paths): before = `P.constr.flC`, else 0; after = `P.constr.flC` if > 0, else the
+    same skew value.
+  - f_ℓ, Rating file path: before 0; after as the Flexure tab (entered, else the skew value).
+  - L_b (Flexure analysis path; Rating, both paths): before = the stiffener layout's `frames.at`, else every span divided evenly at
+    ≤ `frames.Lb` (25 ft default); a file used its own `bracing.Lb` evenly. After = the Framing tab's stations of that girder
+    (`forGirder`; own lengths via `lenOf`).
+  - Flexure file path, owner rules: before none (the payload's haunch in the section properties); after the file's owner
+    (`pl.ownerRules.owner`): OWN8, haunch 0 in the section properties for RIDOT and MassDOT. This is how GirderDetail stored the file and how
+    the Rating file path already took it; without it, Rating could not take its flexure from the Flexure tab and stay unchanged there.
+- Counts, this project's analysis. The built-in project plus the 100 girders of the 20 recorded projects (tests/projects/st/gd_*.json:
+  builtin, builtin28, curb, util, xsA × AASHTO, CTDOT, MassDOT, RIDOT × G1–G5). Each is an sbd2 project with its own cross-section
+  (n_b, spacing, skews), default framing settings and the file's field splices. Same project object before/after, in Node:
+  - f_ℓ changed at 7,420 of 37,467 locations: the 20 builtin28 girders (28° skew; 9.38 ksi exterior, 12.50 ksi interior). Every other
+    project is skewed 15° (≤ 20°) or 0°, so f_ℓ stays 0.
+  - L_b changed at 7,051 of 37,467 locations.
+    - built-in: 91 of 367;
+    - builtin28: 1,855 per owner (RIDOT 1,395); at 28° the frames are normal to the girders and staggered;
+    - all 15° projects: 0 (the framing equals the evenly spaced fallback).
+  - Flexure check ratios: 7,459 of 155,590 changed, plus 14,877 GS10 rows (Eq. 6.10.1.6-1, f_ℓ ≤ 0.6F_yf; the engine lists GS10 only
+    when f_ℓ > 0) on the skewed girders. Largest change: built-in, x = 251.00 ft GS7 0.769 → 1.184 (L_b 22.00 → 24.20 ft at the span 3
+    side of pier 2).
+    - Pass/fail flips: 13 location checks. 5 on the built-in (GS7 near pier 2; the girder already governed NG, 1.142 → 1.229) and 4 each on
+      builtin28 RIDOT G1/G5 (governing GS7 0.911 → 1.066, now NG; explained below).
+  - Constructibility ratios: 22,260 of 187,335 changed, all on the builtin28 girders. 0 flips.
+    - Governing, interior girders: 0.435–0.535 → 0.685–0.940 (CTDOT G3 0.535 → 0.940);
+    - Governing, exterior girders: the overhang brackets govern (OH, unchanged): 0.576 → 0.576, RIDOT 0.526 → 0.552.
+  - Rating RFs (Inventory and Operating): 29,832 of 350,384 changed.
+    - Flips: 15 RF values: built-in 7 (pier 2; the governing Inventory RF 0.739 → 0.608 was already < 1), RIDOT G1/G5 4 each.
+    - Governing Inventory RF on builtin28: AASHTO G1/G5 1.146 → 1.042, G3 1.288 → 1.117; CTDOT G1 1.231 → 1.118, G5 1.231 → 1.043;
+      MassDOT G1/G5 1.130 → 1.021; RIDOT G1/G5 1.177 → 0.873 (flip), G2–G4 1.305 → 1.139; interior G2/G4 at most −0.002.
+- Counts, file path (the same 100 payloads, each with its own project, so the file is "of this bridge" and the framing applies):
+  - Flexure tab: f_ℓ and brace points unchanged (already the framing and the skew f_ℓ).
+    - 81,255 of 168,756 ratios changed, all on MassDOT and RIDOT payloads (OWN8 haunch 0); governing +0.005 to +0.008.
+    - 18 local flips at GS7/GS8 near the piers of xsA MassDOT/RIDOT girders (0.988–0.998 → 1.001–1.009); those girders already
+      governed NG at 1.05–1.13.
+  - Rating: 39,504 of 346,944 RFs changed.
+    - Causes: f_ℓ on builtin28 (governing Inventory RF as on the analysis path, e.g. RIDOT G1 1.177 → 0.873); brace points everywhere.
+    - Brace points: the file's L_b = 23.33 ft divided span 2 (140 ft) into ⌈140/23.33⌉ = ⌈6.0009⌉ = 7 panels of 20.00 ft. The framing has
+      6 panels of 23.33 ft, the girder's real cross-frames.
+    - 56 RF flips: negative flexure at x = 111/112/248/249 ft of the xsA girders, e.g. AASHTO G2 x = 111 ft Inventory 1.157 → 0.846. They
+      are not the governing values (governing Inventory RF on xsA unchanged, 0.743–1.081).
+  - Rating's flexure = the Flexure tab's flexure on all 100 payloads (every ratio identical).
+- The RIDOT G1/G5 flip, explained (builtin28_RIDOT_G1, this project's analysis, governing GS7 Eq. 6.10.8.1.1-1 at x = 249.99 ft):
+  - before (L_b 22.00 ft evenly, f_ℓ = 0): f_bu = 39.326 ksi ≤ φ_fF_nc = 43.156 → 0.911;
+  - the framing alone (L_b 24.52 ft: span 3's first frame 24.52 ft from pier 2): F_nc 41.960 → 39.322/41.960 = 0.937;
+  - f_ℓ alone (9.38 ksi exterior, amplified 1.480 by Eq. 6.10.1.6-4 → 13.88): (39.326 + 13.88/3)/43.156 = 1.019;
+  - after, both: f_ℓ = 9.38 × 0.85/(1 − f_bu/F_cr) = 9.38 × 1.725 = 16.18 ksi; (39.322 + 16.18/3)/41.960 = 44.715/41.960 = 1.066 NG.
+    Inventory RF 1.177 → 0.873.
+  - Both inputs now are what the engineer decided (the real framing, the C6.10.1 estimate on a 28° skew), and the arithmetic is the
+    unchanged 6.10.8 / 6.10.1.6 path. No unexplained difference.
+### Check case (tests/engine/paths.test.mjs "Hand check (SB2-W1)")
+- Built-in project with every support skewed 28°, G1 (interior), x = 44 ft (span 1, positive flexure), this project's analysis.
+  f_ℓ = 1.25(10.00) = 12.50 ksi (largest skew 28° > 20°); before 0.
+  - GS12 Service II bottom flange (Eq. 6.10.4.2.2-2): f_f = 26.692 ksi, 0.95R_hF_yf = 0.95(1.0)(50) = 47.50 ksi.
+    Before: (26.692 + 0/2)/47.50 = 0.5619. After: (26.692 + 12.50/2)/47.50 = 32.942/47.50 = 0.6935.
+  - GS6 composite compact (Eq. 6.10.7.1.1-1): M_u = 4,998.44 kip-ft, S_xt = 1,775.29 in³, φ_fM_n = 9,616.14 kip-ft.
+    Before: 4,998.44/9,616.14 = 0.5198. After: (4,998.44 + 12.50(1,775.29)/3/12)/9,616.14 = (4,998.44 + 616.42)/9,616.14 = 5,614.86/9,616.14 = 0.5839.
+  - GS10 (Eq. 6.10.1.6-1): 12.50 ≤ 0.6(50) = 30 ksi, ratio 0.4167 (before 0).
+- Brace points (SB2-W2), built-in project (no skew), G1, x = 250.01 ft (pier 2, span 3 side): the Framing tab puts span 3's first frame
+  at 274.2 ft (spans 1 and 3 shifted 0.1 panel = 2.2 ft, because the frames at 88 and 272 ft would fall on the shop flange transitions at
+  88 and 272 ft). Before: the evenly spaced stiffener-layout fallback had it at 272 ft. L_b 22.00 → 24.20 ft. GS7 (Eq. 6.10.8.1.1-1, f_ℓ = 0):
+  F_nc = F_cr 34.968 → 32.499 ksi, ratio 1.1345 → 1.2207. The governing Flexure location of the girder moves from x = 110.01 ft
+  (1.142) to x = 249.99 ft (1.229). Inventory RF 0.739 → 0.608 (already < 1; GS7 was already NG: no flip).
+### How verified
+- `node tests/engine/run.mjs` (full suite). New `tests/engine/paths.test.mjs`:
+  - one source, analysis path: f_ℓ and brace points equal across Flexure, Constructibility and Rating, interior and exterior girders,
+    entries override, 0 returns to skew;
+  - one source, file path: the same;
+  - the cache: two analysis runs for six tabs, then none on switching; the report hits the cache; the cached result is unmodified; a
+    project change runs again; P.flexure is not in the key;
+  - the Welds report section: both detail levels, every girder, file; all references resolve, KaTeX parses;
+  - the hand check above.
+  Updated: report.test.mjs (13 sections, 10 with three left out), report-wiring.test.mjs (the report's flexure is now the rating's
+  object), flexure/rating tests load ui/flexure.js and engine/framing.js.
+- Before/after in Node: origin/main vs this branch, report/data.js compute on the same project object (scratch script, not committed).
+- `node tests/smoke/steel-bridge-paths.mjs` (headless Chromium, one run): Flexure calculates (one analysis); Rating, Shear, Fatigue and Welds then calculate in 3.6 s with no new analysis (cache size 1); Constructibility adds the dead-load run (2); back to Flexure, and the Report: still 2. The Welds tab shows "Demands: This project's analysis of G1 (the default: …)" and the selector [analysis, file]. f_ℓ 2.5 is written to `sbd2.project.current` (`flexure.fl`). The report (selected girder) has 13 sections, Welds among them. 0 console errors, 0 KaTeX errors.
+### Saved data (CLAUDE.md §5)
+- Additive: `P.flexure.fl` (optional; absent = none entered). `P.constr.flC` keeps its key and format; its meaning when absent or 0
+  changes from "0" to "the skew value" (the decision above). No migration is needed: an older project reads as "none entered". No
+  localStorage key changed.
+### Other copies
+- None. GirderDetail (`Steel Bridge Design.html`) is not changed: its Girder section already takes the skew f_ℓ from Preliminary sizing.
+### Open items
+- The governing Welds rows are the largest ratio of each group, as the tab shows them; on the built-in project that is FW4 (minimum
+  fillet size, ratio 1.000: the minimum size is used) and TR2 (taper 1:2.5, ratio 1.000). A strength-only governing row may read
+  better in the summary; not changed (display choice for the engineer).
+- The analysis cache key leaves out `rating` and `flexure`. Any other change to the project, even one the analysis does not read
+  (e.g. `constr.oh`, `welds`), runs the analysis again (safe, slower).
+- f_ℓ = 0 cannot be entered as an override on a skewed bridge (0 means "none entered", as on the file path before); enter a small
+  positive value if a refined analysis gives about 0.
+- The engineer asked for the skew f_ℓ "from crossframes.js". It lives in engine/framing.js (`flSkew`, added with the cross-frames PR #479);
+  that function is used, unchanged.

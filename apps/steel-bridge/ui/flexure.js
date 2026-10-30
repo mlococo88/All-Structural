@@ -58,7 +58,10 @@
       // f_ℓ: the value entered, else from the file's skews as GirderDetail takes it (C6.10.1: 1.25 × 10 / 7.5 ksi where a support is skewed > 20°)
       const pl = plIn, gd = pl.girderDetail || {}, FRM = window.SBDFraming;
       const D = FRM.design(P, ctx.g, { sup: (pl.member || {}).supports, line: (+gd.girder || 1) - 1, skews: (gd.skew || {}).bySupport || [0], ext: gd.position === 'exterior', fl: flIn }), frB = D.br, fl = D.fl;
-      const F = FX.fromPayload(pl, { fl, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });   // the payload's haunch as stated (the file does not say its owner)
+      // the file's owner (pl.ownerRules.owner; paths PR 2026-10-30: OWN8 haunch 0 in the section properties for RIDOT / MassDOT, as GirderDetail
+      // stored the file and as the Rating tab took it; before: the payload's haunch as stated); a file without ownerRules: as stated
+      const own = (pl.ownerRules || {}).owner;
+      const F = FX.fromPayload(pl, { fl, ...(own ? { owner: own } : {}), ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });
       F.prj.a6.method = meth;
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS: D.flS, frB, D, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; ${flText(D)}.` };
     }
