@@ -263,12 +263,16 @@
   /* girder(rows, opt): rows = every rating row of the girder; opt.owner. Returns { rows, gov: { inv, opr }, by: { flex+, flex−, shear,
      svc, fat }: the lowest Inventory row of each group, target, oos }. Fatigue rows count only against the owner's fatigue target. */
   function girder(rows, opt) {
-    const ok = rows.filter(q => !q.oos && isFinite(q.inv)), str = ok.filter(q => q.kind !== 'fat'), low = (L, k) => L.reduce((b, q) => (isFinite(q[k]) && (!b || q[k] < b[k]) ? q : b), null);
+    // SB2-R2 guard: an RF of −∞ (amplification undefined, f_l > 0 with f_bu ≥ F_cr) or NaN (an error, flagged q.err) governs; +∞ (NONE: no
+    // live-load effect) is no rating. Before: isFinite dropped −∞ and NaN.
+    const rk = v => (Number.isNaN(v) ? -Infinity : v), use = v => v !== NONE && v !== undefined;
+    rows.forEach(q => { if (!q.oos && (Number.isNaN(q.inv) || (q.kind !== 'fat' && Number.isNaN(q.opr)))) q.err = 'error: rating factor is NaN (calculation error; see the worked steps)'; });
+    const ok = rows.filter(q => !q.oos && use(q.inv)), str = ok.filter(q => q.kind !== 'fat'), low = (L, k) => L.reduce((b, q) => (use(q[k]) && (!b || rk(q[k]) < rk(b[k])) ? q : b), null);
     const grp = q => q.kind === 'flex' ? (q.region === 'pos' ? 'flexP' : 'flexN') : q.kind;
-    const by = {}; ok.forEach(q => { const k = grp(q); if (!by[k] || q.inv < by[k].inv) by[k] = q; });
+    const by = {}; ok.forEach(q => { const k = grp(q); if (!by[k] || rk(q.inv) < rk(by[k].inv)) by[k] = q; });
     const T = target(opt && opt.owner), gInv = low(str, 'inv'), gOpr = low(str, 'opr'), fat = by.fat || null;
     const res = { rows, gov: { inv: gInv, opr: gOpr }, by, target: T, oos: rows.some(q => q.oos) };
-    if (T) { res.tgt = { inv: T.rf ? { need: T.rf, rf: gInv ? gInv.inv : NaN, pass: !!gInv && gInv.inv >= T.rf - 1e-9 } : null,
+    if (T) { res.tgt = { inv: T.rf ? { need: T.rf, rf: gInv ? gInv.inv : NaN, pass: !!gInv && rk(gInv.inv) >= T.rf - 1e-9 } : null,
       fat: T.fat && fat ? { need: T.fat, rf: fat.inv, pass: fat.inv >= T.fat - 1e-9 } : null }; }
     return res;
   }

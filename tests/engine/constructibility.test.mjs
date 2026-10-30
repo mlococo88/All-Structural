@@ -329,3 +329,16 @@ test('SB2-C2: ohFill() ("Fill from cross-section", GirderDetail XS11): bracket d
   assert.equal(P.constr, undefined); assert.equal(C.OH_DEF.wOH, 30);
   delete P.xs; assert.ok(C.ohFill(P, 0).err);
 });
+
+
+test('SB2-R2: deck placement and overhang brackets with f_bu ≥ F_cr: f_l = 0 is 0 (no NaN); f_l > 0 is NG with the reason and governs', () => {
+  const F = C.fromPayload(readPayload(payloads[0])), L0 = F.locs.map(L => [L, C.location(L, F.prj).conC.f]).sort((a, b) => b[1] - a[1])[0][0];   // the largest deck-placement f_bu
+  const at = fl => C.location({ ...L0, LbC: 120, CbC: 1, npr: null, nprC: null, flC: fl }, F.prj);
+  const r0 = at(0), r1 = at(5);
+  assert.ok(r0.conC.f >= r0.ltC.Fcr, `f_bu ${r0.conC.f} F_cr ${r0.ltC.Fcr}`);
+  assert.equal(r0.amC.fl, 0); r0.checks.forEach(c => assert.ok(!Number.isNaN(c.ratio), c.id));   // before: GS14 NaN
+  const y = r1.checks.find(c => c.key === 'yield'); assert.equal(y.ratio, Infinity); assert.equal(y.ok, false); assert.equal(y.ng, FX.AMP_NG); assert.equal(r1.gov.ratio, Infinity);
+  // overhang brackets, L_b = 120 ft: f_bu 25.82 ≥ F_cr 1.94 ksi with f_l1 > 0 -> OH1, OH2, OH5 (compression flange) NG with the reason
+  const O = C.overhang([{ name: 'def', D: 60, tw: 0.5625, topB: 16, topT: 0.75, botB: 16, botT: 1.125, Lb: 120, MDC1: 1700, MCL: 180 }], {}, { Fyf: 50, Fyw: 50 }), o = O.rows[0];
+  assert.ok(o.und); ['OH1', 'OH2'].forEach(id => { const k = o.checks.find(c => c.id === id); assert.equal(k.ng, FX.AMP_NG); assert.equal(k.ok, false); }); assert.equal(o.gov.ratio, Infinity);
+});

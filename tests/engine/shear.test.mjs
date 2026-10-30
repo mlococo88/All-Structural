@@ -182,3 +182,12 @@ test('hand checks: GS11 and GS18 at GirderDetail\'s built-in Pier 1 row', () => 
   assert.equal(e.sh.eqn, '6.10.9.3.3-1'); assert.ok(Math.abs(e.sh.Vn - 565.73) < 0.01); assert.ok(!e.checks.find(c => c.id === 'GS18').inUse);
   const s = r.steps.find(q => q.id === 'sh.pan.Vp'); assert.equal(W.SharedSteps.line(s, false), 'V_p = 0.58F_(yw)Dt_w = 0.58(50.00)(60.00)(0.5625) = 978.75 kip');
 });
+
+
+test('SB2-R1: shear demands with pedestrianInLL take V_LL as is (no V_PL added)', () => {
+  const pl = JSON.parse(fs.readFileSync(path.join(ST, 'gd_xsA_CTDOT_G1.json'), 'utf8')).payload; assert.equal(pl.pedestrianInLL, true);
+  // at 110 ft (stations 109.999 and 110.001): the largest |V_LL| is V_LLneg = −104.326 at 110.001 (includes the pedestrian −9.314) -> LL = 104.326
+  // (before: 104.326 + 9.314 = 113.640)
+  const D = SH.demands(pl), D2 = SH.demands({ ...pl, pedestrianInLL: false });
+  assert.ok(Math.abs(D.at(109.999).LL - 104.326) < 1e-9, D.at(109.999).LL); assert.ok(Math.abs(D2.at(109.999).LL - 113.640) < 1e-9, D2.at(109.999).LL);
+});

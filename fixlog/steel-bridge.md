@@ -1181,6 +1181,82 @@ provision, check case. Closes SB2-A2, SB2-A4, SB2-A5, SB2-A7, SB2-O12, SB2-O14, 
 - SB2-A9. OWN19 sidewalk test: GirderDetail's Limits-tab override (sidewalk yes/no, Preliminary sizing `limits.sidewalk`) has no input here; the
   cross-section's sidewalks decide.
 
+## 2026-10-30 — PR: sb2-r2-r1-app — SB2-R2 (6.10.1.6 amplification with f_bu ≥ F_cr; NaN guard in every module) and SB2-R1 (pedestrian load counted twice) closed
+### Where
+- `engine/flexure.js`
+  - `function ampFl(`: before `fl: fl * AF`; after `fl: fl === 0 ? 0 : fl * AF`, plus `und: AF === Infinity && fl !== 0`.
+  - New `AMP_NG`, `guard(c)`, `gr(c)`, `govern(checks)` (exported). `location()` before:
+    `r.checks.filter(c => c.inUse && isFinite(c.ratio))` reduced by `c.ratio >`. After: `r.checks.forEach(guard); r.gov = govern(r.checks)`.
+  - The same change in `girder()` (PNA-OOS rows). The girder governing row is now compared with `gr`.
+  - GS7, GS9 a6c and GS10 (composite negative; noncomposite compression flange via `flLims` `und`) carry `ng: AMP_NG` when the
+    amplification is undefined.
+  - `fromPayload`: `M_PLpos` / `M_PLneg` are added to `M_LL…` only when `pl.pedestrianInLL !== true` (anchor `const PL = k =>`).
+- `engine/shear.js`
+  - `demands()`: `V_PLpos` / `V_PLneg` are added only when `pedestrianInLL !== true` (anchor `plIn = pl.pedestrianInLL === true`).
+  - `location()`: a non-finite ratio (not n/a) gets `ok = false`, `ng` and governs. Before, it was dropped by `isFinite`.
+  - The panel `gov` ranks NaN/∞ first.
+- `engine/constructibility.js`
+  - GS14 yield/buckling get `ng: AMP_NG` when `r.amC.und`.
+  - `overhang()`: `c.fl = c.fl1 === 0 ? 0 : c.fl1 * r.AF; r.und = …`; OH1, OH2 and OH5 (compression flange) get `ng`.
+  - `r.gov = FX().govern(r.checks)` for both GS rows and OH rows. `girder()` per-span `put`, `gov` and `govAll` compare with `gr`.
+- `engine/rating.js` `girder()`
+  - Before: `ok = rows.filter(q => !q.oos && isFinite(q.inv))`, `low` with `isFinite`, which dropped an RF of −∞ (f_ℓ > 0 with f_bu ≥ F_cr)
+    and NaN.
+  - After: only +∞ (NONE, no live-load effect) is left out. −∞ and NaN govern, and a NaN row is flagged `q.err`.
+- `engine/fatigue.js`, `studs.js`, `stiffeners.js`, `splices.js`: the `ckNew` / `add` NaN guard, as GirderDetail's `ckNew` after #485.
+  - An item with a NaN ratio (not na) is `err`, never a pass (pass → fail; a warning stays a warning).
+  - Within a check it ranks above every finite ratio.
+- UIs (`ui/flexure.js`, `constructibility.js`, `rating.js`, `shear.js`, `fatigue.js`, `splices.js`):
+  - A non-finite failing ratio is shown with its reason ("∞ (NG: f_bu ≥ F_cr, amplification undefined (6.10.1.6))",
+    "error: ratio is NaN", RF "−∞ (NG …)") and in the NG colour.
+  - The governing pickers (`govCk`, `stGov`, `gov`, `g17`, `strGov`) include failing items with a non-finite ratio and rank them first.
+  - The Flexure check table lists a check with `ng` (before, a non-finite ratio was shown as n/a).
+### Problem and decision (engineer's rule of 2026-10-29)
+- SB2-R2 is as in the rating entry above, and the same as GirderDetail (fixed in #485, fixlog/Steel Bridge Design.md).
+  - f_ℓ = 0: the amplified f_ℓ is 0. Eq. 6.10.1.6-4 multiplies f_ℓ1, so there is nothing to amplify.
+  - f_ℓ > 0 with f_bu ≥ F_cr: the amplification is undefined (the compression flange is beyond elastic LTB under the first-order f_ℓ).
+    The check is NG with ratio ∞ and governs. In the rating the f_ℓ term makes the RF −∞, which now governs.
+  - Provision: AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.6, Eqs. 6.10.1.6-4, -5. No capacity, demand or factor formula changed.
+- SB2-R1: with `pedestrianInLL: true` the hand-off LL+IM already includes the pedestrian load (HANDOFF.md §4.9). The Flexure, Shear and
+  Fatigue tabs (and the Constructibility and Rating paths through `fromPayload` / `demands`) take it as is, as the Rating tab already did
+  (`noDoublePL`). Without the flag, or with `false`, M_PL / V_PL are still added. This is less conservative and correct.
+  - The old app has no such double count: ST-Girder uses `llD`, which removes m from the pedestrian part only, and GirderDetail uses its
+    own analysis (#485).
+### Check cases (tests)
+- `flexure.test.mjs` "SB2-R2 hand check", built-in project, this app's analysis, G1, x = 109.99 ft:
+  - f_bu = 39.67 ksi. Nonprismatic L_b gives F_e = γ_e f_bu,gov = 0.88119(39.683) = 34.968 ksi = F_cr = F_nc.
+  - L_b 279.96 > 110.44 in, so Eq. -4 applies; f_bu/F_cr = 1.134, so AF is undefined.
+  - Before: GS7 NaN, not reported; Flexure governing ratio 0.973 (x = 114 ft).
+  - After: GS7 = 39.67/34.97 = **1.134 NG**, governing (girder: 1.1345 at x = 249.99 ft). GirderDetail (#485) gives the same ratio at the row.
+  - With f_ℓ = 7.5 ksi: ∞ with the reason, governing (before: GS10 7.91 at x = 114 ft).
+  - Unit cases: `ampFl(0, …)` = 0; `ampFl(7.5, …)` und; f_bu 20 ksi, AF = 0.85/(1 − 20/34.968) = 1.98575 (unchanged); `govern` with NaN and ∞.
+- `flexure.test.mjs` SB2-R1: gd_xsA_CTDOT_G1, pier station x = 109.999.
+  - M_LL+IM = −2,278.495 kip-ft (before −2,278.495 − 233.613 = −2,512.108).
+- `shear.test.mjs` SB2-R1: at 110 ft, LL+IM shear 104.326 kip (before 104.326 + 9.314 = 113.640).
+- `constructibility.test.mjs`: deck placement with L_b = 120 ft, f_bu ≥ F_cr. f_ℓ = 0 gives no NaN; f_ℓ = 5 ksi makes GS14 ∞ NG and governing.
+  Overhang L_b = 120 ft: OH1 and OH2 are NG with the reason.
+- `rating.test.mjs`: an RF of −∞ or NaN governs Inventory and Operating; +∞ does not.
+### How verified (this app's engine before (origin/main) / after, 100 payloads each also with f_ℓ = 7.5, plus the built-in project)
+- 588,285 check items and per-location governing ratios compared.
+- **Pedestrian (SB2-R1): the 18 payloads with `pedestrianInLL: true`** (xsA; RIDOT G3 and G4 carry none).
+  - Changed: 6,678 LL+IM moment stations and 6,534 LL+IM shear stations.
+  - Ratios drop in GS6–GS8, GS10, GS12 and GS13.
+  - **380 in-use checks flip from fail to pass, 0 from pass to fail**: GS7 and GS8 near the piers, e.g. xsA_AASHTO_G1 x = 109.99 GS8
+    1.080 → 1.000.
+  - The governing ratio drops on all 18 (e.g. xsA_AASHTO_G1 1.209 → 1.114; xsA_CTDOT_G1 1.010 → 0.965, now passing).
+  - 319 GS19 reversal notes change, from the opposite extreme without the doubled pedestrian load.
+- **SB2-R2:** no payload reaches f_bu ≥ F_cr (no change).
+  - Built-in project, this app's analysis: 10 GS7 items change from NaN to 1.134 (fail). The Flexure governing ratio goes from 0.973 to
+    1.134 (GS7). With f_ℓ 7.5, 10 GS7 items become ∞ NG and govern.
+  - Rating governing unchanged (Inventory 0.752 / Operating 0.975: f_ℓ = 0, so the term was already 0 there).
+- The parity tests with GirderDetail (flexure, constructibility, shear, fatigue, studs, stiffeners, splices) stay identical, with the old
+  file after #485. `node tests/engine/run.mjs` passes.
+- Headless page load (Rating, Flexure, Shear, Constructibility, Fatigue, Splices tabs, Calculate on each): 0 console errors.
+### Saved data
+None changed.
+### Open items
+None. SB2-R1 and SB2-R2 are closed.
+
 ## 2026-10-30 — PR: sbd2-drawings-3d — drawings (framing plan, girder elevation, typical section; DXF) and the 3D view (new files)
 Display and export only: no engineering formula, factor, unit or reference changed; no computed result changes (the engines are only read).
 ### Where
