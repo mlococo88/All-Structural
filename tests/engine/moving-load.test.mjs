@@ -534,3 +534,19 @@ test('live comparison with the original inline functions (git history)', () => {
     assert.equal(canon(runCase(S, c)), canon(runCase(O, c)), c[0]);
   }
 });
+
+test('deflection opt.neglect (added 2026-10-29, Steel Bridge SB2-A4): default unchanged; axles that do not add are left out', () => {
+  const S = sharedEngine(), run = (spans, neglect) => { const m = modelFrom(S.P, S.props, 'HL93-Truck', { spans }), R = S.analyze(m, {});
+    const o = { mode: 'lrfd', DF: 1, useIM: true }; if (neglect !== undefined) o.neglect = neglect; return S.deflection(R, o); };
+  // the option absent = false (the recorded hashes above cover the default on every case)
+  for (const sp of [[40, 40], [100, 120]]) assert.equal(JSON.stringify(plain(run(sp))), JSON.stringify(plain(run(sp, false))), `${sp}: absent = false`);
+  // one span: every ordinate of the deflection influence line is downward, so nothing is left out
+  const a1 = run([60], false), b1 = run([60], true); a1.res.forEach((r, i) => assert.ok(Math.abs(r.dn - b1.res[i].dn) < 1e-12, 'single span'));
+  // three short spans 20 + 20 + 20 ft: a 28–44 ft truck over the middle span always reaches into an end span, whose axles lift the section; left out, the downward
+  // deflection is at least as large everywhere, and larger somewhere
+  const a = run([20, 20, 20], false), b = run([20, 20, 20], true); let more = 0;
+  a.res.forEach((r, i) => { assert.ok(b.res[i].dn <= r.dn + 1e-12, `section ${i}: ${b.res[i].dn} vs ${r.dn}`); if (b.res[i].dn < r.dn - 1e-9) more++; });
+  assert.ok(more > 0, 'neglect matters on short continuous spans');
+  const mx = (D) => Math.max(...D.res.map(r => -r.dn));
+  console.log(`       20 + 20 + 20 ft, HL-93 truck per lane with IM: largest downward Δ ${mx(a).toFixed(5)} in (all axles) → ${mx(b).toFixed(5)} in (axles that add); ${more} of ${a.res.length} sections larger`);
+});

@@ -20,7 +20,8 @@
                            m.negX: optional [[x0,x1],…] (ft): M sections in these ranges also take the multi-vehicle
                            case for the minimum (added 2026-10-29 for Steel Bridge: GirderDetail's LL5 region).
    deflection(R, opt)      LL deflection envelope at the 1/20 points from analyze() result R.
-                           opt: {mode:'lrfd'|'veh', DF, useIM}.
+                           opt: {mode:'lrfd'|'veh', DF, useIM, neglect}. neglect (optional, added 2026-10-29; default off):
+                           axles that do not add to the deflection sought are left out (3.6.1.3.1).
    absScan(R, analyzeFn)   absolute maxima per span (extra output sections; analyzeFn defaults to analyze).
    staticAnalysis(spec)    dead-load / uniform-load analysis of the same variable-EI beam, any number of spans
                            (added 2026-10-29): moments, shears, reactions and deflections at stations. See its header.
@@ -420,11 +421,14 @@ function deflection(R,opt){
       let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
       if(!J.length&&sc===null)continue;
       let jc=0,tc=0;if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
-      secs.forEach((s,si)=>{const g=G[si];let v=0;for(let a=0;a<J.length;a++){const j=J[a];v+=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);}v*=im[si]*cc.aS;
+      secs.forEach((s,si)=>{const g=G[si];let v=0,vn=0,vp=0;for(let a=0;a<J.length;a++){const j=J[a],e=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);v+=e;if(e<0)vn+=e;else vp+=e;}
+        // opt.neglect (added 2026-10-29, apps/steel-bridge SB2-A4; off by default): axles that do not add to the deflection sought are neglected (3.6.1.3.1):
+        // the downward value sums only the downward axle effects, the upward value only the upward ones (GirderDetail LL8)
+        let vD,vU;if(opt.neglect){vD=vn*(im[si]*cc.aS);vU=vp*(im[si]*cc.aS);}else{v*=im[si]*cc.aS;vD=vU=v;}
         const uf=m.imp.onUdl&&useIM?im[si]:1;let uDn=0,uUp=0;
         if(sc!==null){const Dd=D[si],CIs=Dd.CI[jc]+(Dd.CI[jc+1]-Dd.CI[jc])*tc,u=(dir>0?CIs:Dd.end-CIs)*tr.w*uf;uDn=uUp=u;}
         if(cc.lane){const w=m.udl.w*uf;uDn+=m.udl.mode==='lane'?w*D[si].ln:w*D[si].end;uUp+=m.udl.mode==='lane'?w*D[si].lp:w*D[si].end;}
-        const vd=DF*(v+uDn),vu=DF*(v+uUp),r=res[si];
+        const vd=DF*(vD+uDn),vu=DF*(vU+uUp),r=res[si];
         if(vd<r.dn-1e-12){r.dn=vd;r.dnG={lab:cc.lab,p,dir};}
         if(vu>r.up+1e-12){r.up=vu;r.upG={lab:cc.lab,p,dir};}});
     }});

@@ -177,3 +177,20 @@ test('steps: format and rendering', () => {
   const cid = card.steps.map(x => x.id); assert.equal(new Set(cid).size, cid.length, 'card ids unique');
   card.steps.forEach(x => { assert.ok(!/undefined|NaN/.test(STEPS.line(x, true)), `${x.id}: ${STEPS.line(x, true)}`); });
 });
+
+test('SB2-O12: card() of a noncomposite girder shows no deck and no deck rebar (as engine/flexure.js), values as flexure\'s card', () => {
+  const p = { D: 60, tw: 0.5625, topB: 18, topT: 1.5, botB: 18, botT: 2 }, mat = { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 };
+  const rb = { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } };
+  for (const region of ['pos', 'neg']) {
+    const a = SEC.card(p, { composite: false, ts: 8, haunch: 2, beff: 114, rebar: rb }, mat, 8, { region });   // the Section properties tab
+    const b = SEC.card(p, { composite: false, ts: 8, haunch: 2, beff: 114, rebar: {} }, mat, 8, { region });   // engine/flexure.js (rebar {} when noncomposite)
+    assert.equal(a.comp, false); assert.equal(a.c3, null); assert.equal(a.cn, null);
+    for (const k of ['Mp', 'yp', 'Dcp', 'Rh', 'RhSteel', 'Dc', 'DcRebar']) assert.equal(a[k], b[k], `${region} ${k}`);
+    assert.equal(a.cr.A, a.s.A, `${region}: cr = the steel section`); assert.equal(a.cr.I, a.s.I);
+    // steel section 18 × 1.5 / 60 × 9/16 / 18 × 2: A = 27 + 33.75 + 36 = 96.75 in²; no rebar in the negative M_p either
+    assert.ok(Math.abs(a.s.A - 96.75) < 1e-12);
+    const ids = a.steps.map(x => x.id); assert.ok(!ids.some(i => /^sec\.cr\.|^dc\.steelrebar\.|^rh\.cr\.|^rh\.cn\.|\.Prt$|\.Prb$|^sec\.c3\.|^sec\.cn\./.test(i)), `${region}: no deck or rebar steps: ${ids.filter(i => /cr|rebar|Pr/.test(i)).join(', ')}`);
+    assert.equal(new Set(ids).size, ids.length, 'ids unique');
+    if (region === 'neg') assert.equal(a.Dc, a.DcSteel.bot, 'D_c of the steel section');
+  }
+});

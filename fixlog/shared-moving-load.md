@@ -116,3 +116,24 @@ Tests: `node tests/engine/run.mjs moving-load` (parity with the original page co
 - SML-O4 closed. The engineer decided on 2026-10-29: in simple-span mode the 90 % two-truck case stays on for the summed
   pier reactions (as implemented in #464). Test: `tests/engine/analysis.test.mjs` "SML-O4" (two simple spans 60 + 110 ft:
   pier R = 154.122 kips per lane, the two-truck case governs; pier moment 0).
+
+## 2026-10-29 — PR: sbd2-cleanup-decisions — `deflection()` option `opt.neglect` (added; existing results unchanged)
+### Where
+- `deflection(R,opt)`, anchor `secs.forEach((s,si)=>{const g=G[si];let v=0,vn=0,vp=0;`.
+  - Before: `secs.forEach((s,si)=>{const g=G[si];let v=0;for(let a=0;a<J.length;a++){const j=J[a];v+=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);}v*=im[si]*cc.aS;`
+    and `const vd=DF*(v+uDn),vu=DF*(v+uUp),r=res[si];`
+  - After: `secs.forEach((s,si)=>{const g=G[si];let v=0,vn=0,vp=0;for(let a=0;a<J.length;a++){const j=J[a],e=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);v+=e;if(e<0)vn+=e;else vp+=e;}`
+    `let vD,vU;if(opt.neglect){vD=vn*(im[si]*cc.aS);vU=vp*(im[si]*cc.aS);}else{v*=im[si]*cc.aS;vD=vU=v;}` and `const vd=DF*(vD+uDn),vu=DF*(vU+uUp),r=res[si];`
+  - Header comment: `opt.neglect` documented. Without the option the arithmetic is the same operation for operation (`v*=im*aS`).
+- Why: Steel Bridge (apps/steel-bridge, SB2-A4) applies GirderDetail's LL8 rule to the live load deflection: axles that do not add to the
+  deflection sought are neglected (the downward value sums only the downward axle effects, the upward only the upward ones).
+### Governing provision
+- AASHTO LRFD 10th Ed. Art. 3.6.1.3.1 (axles that do not contribute to the extreme force effect under consideration shall be neglected),
+  3.6.1.3.2. No formula, factor or unit changed for existing callers (Moving Load Generator does not pass the option).
+### Check case
+- Three spans 20 + 20 + 20 ft, HL-93 truck per lane with IM: largest downward deflection 0.00301 in (all axles) → 0.00305 in (`neglect: true`);
+  22 of 61 sections larger, none smaller; one span 60 ft: identical (every ordinate downward). Option absent = `false`: identical output.
+### How verified
+- `node tests/engine/run.mjs moving-load`: the 35 recorded parity cases hash identically; new test "deflection opt.neglect".
+### Other copies
+- None.

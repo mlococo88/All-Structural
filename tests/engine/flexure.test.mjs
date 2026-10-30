@@ -255,6 +255,9 @@ test('hand check: built-in positive-flexure row (Span 1), compact composite sect
   close(r.Mn0, r.pl.Mp * (1.07 - 0.7 * r.Dp / 71.875), 1e-12, 'M_n'); close(r.Mn0 / r.pl.Mp, 0.97208, 1e-5, 'M_n/M_p');
   const g6 = r.checks.find(c => c.id === 'GS6'); close(g6.demand, 5322.5, 1e-12, 'GS6 demand'); close(g6.capacity, Math.min(r.Mn0, r.cap13), 0, 'GS6 capacity');
   const g5 = r.checks.find(c => c.id === 'GS5'); close(g5.capacity, 0.42 * 71.875, 1e-12, 'GS5'); assert.equal(g5.ok, true);
+  // SB2-C1 (display only): each factor × moment is written with parentheses, also for a positive moment (before: "1.251450.00")
+  assert.equal(STEPS.line(r.steps.find(x => x.id === 'fx.Mu'), false).split(' = ').slice(-2).join(' = '), '1.25(1450.00) + 1.25(210.00) + 1.50(240.00) + 1.75(1650.00) = 5322.5 kip-ft');
+  assert.match(STEPS.line(r.steps.find(x => x.id === 'fx.Ms'), false), /1450\.00 \+ 210\.00 \+ 240\.00 \+ 1\.30\(1650\.00\)/);
 });
 
 test('factored demands as input give the same checks as the unfactored ones', () => {
@@ -268,9 +271,16 @@ test('factored demands as input give the same checks as the unfactored ones', ()
 
 test('steps: ids unique, no undefined/NaN, every check links to a step', () => {
   const pl = readP('gd_builtin_AASHTO_G2.json'), F = FX.fromPayload(pl, { fl: 5 });
-  const pick = F.locs.filter((L, i) => i % 23 === 0 || (L.npr && i % 5 === 0));
+  const pick = F.locs.filter((L, i) => i % 23 === 0 || (L.npr && i % 5 === 0)); let nA6 = 0;
   for (const L of pick) { const r = FX.location(L, F.prj), ids = r.steps.map(s => s.id);
     assert.equal(new Set(ids).size, ids.length, `${L.name} ids unique`);
     r.steps.forEach(s => assert.ok(!/undefined|NaN/.test(STEPS.line(s, true)), `${L.name} ${s.id}: ${STEPS.line(s, true)}`));
-    r.checks.forEach(c => { assert.ok(ids.includes(c.step), `${L.name} ${c.id} ${c.key}: step ${c.step}`); assert.match(c.ref, /AASHTO LRFD 10th Ed\./); }); }
+    r.checks.forEach(c => { assert.ok(ids.includes(c.step), `${L.name} ${c.id} ${c.key}: step ${c.step}`); assert.match(c.ref, /AASHTO LRFD 10th Ed\./); });
+    // SB2-O14 (text only): composite, the tension flange is continuously braced by the deck, Eq. A6.1.4-1 (was A6.1.2-1)
+  }
+  // a stocky web (D 36 × 3/4: 2D_c/t_w < λ_rw), negative flexure, composite: Appendix A6 permitted
+  const prj = { deck: { ts: 8, tdeck: 8.5, haunch: 2, rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } } }, mat: { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 }, n: SEC.modularRatio(4, 0.15, 1, 'exact').n, G: FX.factors(), a6: { method: 'auto', skews: [] } };
+  const rA = FX.location({ name: 'Pier', region: 'neg', cont: true, plates: { D: 36, tw: 0.75, topB: 18, topT: 1.5, botB: 18, botT: 2 }, beff: 114, Lb: 20, Cb: 1, fl: 0, M: { DC1: -900, DC2: -150, DW: -150, LLp: 300, LLn: -1000 } }, prj);
+  rA.checks.filter(c => c.key === 'a6t').forEach(c => { nA6++; assert.match(c.ref, /Eq\. A6\.1\.4-1/); assert.match(c.title, /continuously braced/); assert.match(rA.steps.find(s => s.id === 'fx.a6t.ok').ref, /Eq\. A6\.1\.4-1/); });
+  assert.ok(nA6 > 0, 'some A6 tension flange items');
 });

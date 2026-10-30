@@ -154,7 +154,7 @@ test('fromPayload: this engine on the 100 gd_* payloads = the stud results Girde
   assert.deepEqual(diffs.slice(0, 20), []);
 });
 
-test('option b_eff per girder (off by default): the difference on the built-in project (reported, not adopted)', () => {
+test('SB2-F1: b_eff per girder (the app default from 2026-10-29) vs bridge-wide (GirderDetail, fromPayload without the option): the built-in project', () => {
   const rows = [];
   for (const f of payloads.filter(f => /^gd_builtin_AASHTO_G\d\.json$/.test(f))) {
     const pl = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')).payload, a = SC.fromPayload(pl), b = SC.fromPayload(pl, { beffMode: 'girder' });
@@ -165,6 +165,9 @@ test('option b_eff per girder (off by default): the difference on the built-in p
   rows.forEach(o => console.log(`       ${o.g} (${o.pos}): b_eff ${o.beffBridge} → ${o.beffGirder} in; max SC1 ${o.sc1[0].toFixed(4)} → ${o.sc1[1].toFixed(4)}; max SC2 ${o.sc2[0].toFixed(4)} → ${o.sc2[1].toFixed(4)}; largest change of p_max ${(100 * o.dPreq).toFixed(2)}%; SC1/SC2 failures ${o.fails[0]} → ${o.fails[1]}`));
   assert.equal(rows.length, 5);
   assert.ok(rows.every(o => o.beffBridge === rows[0].beffBridge), 'one bridge-wide b_eff by default');
+  // SB2-F1 (reported in the PR): the interior girders G2–G4 b_eff 96 → 114 in, largest SC1 0.8746 → 0.8915; SC2 0.9938 unchanged; no failures
+  rows.forEach(o => { assert.equal(o.fails[0], 0); assert.equal(o.fails[1], 0); assert.equal(o.sc2[0].toFixed(4), '0.9938'); assert.equal(o.sc2[1].toFixed(4), '0.9938');
+    if (o.pos === 'interior') { assert.equal(o.beffGirder, 114); assert.equal(o.sc1[0].toFixed(4), '0.8746'); assert.equal(o.sc1[1].toFixed(4), '0.8915'); } else assert.equal(o.sc1[1], o.sc1[0]); });
 });
 
 test('hand checks: SC1 fatigue pitch and SC2 strength count (GirderDetail built-in inputs)', () => {
