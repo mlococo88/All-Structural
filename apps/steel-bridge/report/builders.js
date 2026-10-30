@@ -394,7 +394,7 @@
      Drawings-tab format, as a static SVG figure (display only: the rows of the table below); none when the graphics modules are not loaded */
   function summaryFig(B, X) {
     const G = window.SBDTabGfxB, D = window.SharedDxf; if (!G || !D || !window.SBDGraphics) return null;
-    try { const g = G.summary({ gov: X.gov }, B.P, { gi: B.g }); return { type: 'figure', svg: D.toSVG(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }), caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF).` }; }
+    try { const g = G.summary({ gov: X.gov }, B.P, { gi: B.g }); return { type: 'figure', svg: (window.SBDGraphics && window.SBDGraphics.tightSvg ? window.SBDGraphics.tightSvg : (DD, o) => D.toSVG(DD, o))(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }), caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF).` }; }
     catch (e) { return null; }
   }
   function summary(B, X, built) {

@@ -19,7 +19,7 @@
   /* a SBDGraphics.mount build() result from an engine graphic g (D, title, note, regions): pick = the smallest region under the point */
   function wrap(g, file) {
     const regs = g.regions || [], find = v => (v ? regs.find(r => r.k === v.k && r.i === v.i) : null);
-    const PRI = { bs: 0, ts: 0, fa: 0, fw: 0, tr: 0, sc: 1, loc: 2, rt: 3, pan: 4 };   // a mark on the girder wins over the panel behind it, then the smaller area
+    const PRI = { bs: -1, ts: 0, fa: 0, fw: 0, tr: 0, sc: 1, loc: 2, rt: 3, pan: 4 };   // a mark on the girder wins over the panel behind it, then the smaller area
     const pick = (x, y) => { let best = null, bp = Infinity, ba = Infinity; regs.forEach(r => { if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) { const p = PRI[r.k] != null ? PRI[r.k] : 5, a = (r.x1 - r.x0) * (r.y1 - r.y0); if (p < bp || (p === bp && a < ba)) { bp = p; ba = a; best = r; } } }); return best ? { k: best.k, i: best.i } : null; };
     return { D: g.D, regions: regs, title: g.title, file, note: g.note || (regs.length ? 'Click a location to select it in the tables below.' : ''), pick, readout: v => { const r = find(v); return r && r.lab ? r.lab : ''; },
       selMark: v => { const r = find(v); return r ? { x: (r.x0 + r.x1) / 2, y0: r.y0, y1: r.y1, label: '' } : null; } };

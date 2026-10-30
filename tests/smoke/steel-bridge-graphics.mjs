@@ -73,6 +73,14 @@ try {
     const sel1 = await p.evaluate(() => [...document.querySelectorAll('#out .fx-list tr')].findIndex(r => r.classList.contains('sel'))); assert.notEqual(sel1, sel0, `Flexure: click selected another row (${sel0} to ${sel1})`); }
   // Constructibility
   await tab('cn'); if (await p.isVisible('#cn_calc')) await p.click('#cn_calc'); await chk('tab-constructibility', '#gfx_cn .gfx-a', 30); await p.waitForSelector('#gfx_cn .gfx-b svg'); await shot('tab-constructibility-b');
+  // click-select on the Constructibility graphic: a click on the band row / elevation selects the location (the table's row follows, the blue line moves); another click, another row
+  { const selRow = () => p.evaluate(() => [...document.querySelectorAll('#out tr[data-cnsel]')].findIndex(r => r.classList.contains('sel'))), sel0 = await selRow();
+    await p.locator('#gfx_cn .gfx-a .sdx-view').scrollIntoViewIfNeeded(); let cb = await p.locator('#gfx_cn .gfx-a .sdx-view').boundingBox();
+    await p.mouse.click(cb.x + cb.width * 0.9, cb.y + cb.height * 0.4); await p.waitForTimeout(450); const sel1 = await selRow(); assert.notEqual(sel1, sel0, `Constructibility: a click selected another row (${sel0} to ${sel1})`);
+    assert.equal(await p.evaluate(() => document.querySelectorAll('#gfx_cn .gfx-a .sbg-sel line').length), 1, 'Constructibility: the selected-location line is drawn');
+    await p.locator('#gfx_cn .gfx-a .sdx-view').scrollIntoViewIfNeeded(); cb = await p.locator('#gfx_cn .gfx-a .sdx-view').boundingBox();
+    await p.mouse.click(cb.x + cb.width * 0.2, cb.y + cb.height * 0.4); await p.waitForTimeout(450); const sel2 = await selRow(); assert.notEqual(sel2, sel1, `Constructibility: a second click selected another row (${sel1} to ${sel2})`);
+    const rd = await p.evaluate(() => document.querySelector('#gfx_cn .gfx-a .sbg-read').textContent); assert.match(rd, /M_c = /, 'Constructibility: readout of the selected location'); }
   assert.deepEqual(errs, [], 'console errors (tabs)');
   // phone width: the graphics fit, no horizontal page scroll
   await p.setViewportSize({ width: 390, height: 800 }); await tab('flex'); await p.waitForSelector('#gfx_fx .gfx-a svg'); await p.waitForTimeout(300);

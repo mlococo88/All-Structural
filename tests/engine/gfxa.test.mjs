@@ -81,9 +81,13 @@ test('gfxa: Flexure graphics: bands coloured by the table ratios; stress checks 
     const gs = run(GA.flexure, { P, gi: 0, R, sel: 0 }); assert.equal(gs.length, 3, name); gs.forEach((g, i) => finite(g.D, `${name} fx${i}`));
     const col = r => GR.ratioColor(r.gov ? r.gov.ratio : NaN, r.gov ? !(r.gov.ng && !Number.isFinite(r.gov.ratio)) : false), want = { 3: 0, 2: 0, 1: 0 }; R.rows.forEach(r => want[col(r)]++);
     const lay = { 3: 'S-RATIO-OK', 2: 'S-RATIO-WARN', 1: 'S-RATIO-NG' };
-    // one row band (a closed 4-point polyline on the ratio layer) per location in its colour, plus one legend box per colour
+    // one band (a closed 4-point polyline on the ratio layer) per run of neighbouring locations of the same colour class (GR.mergeBands: the tables' classes, amber from 0.9), plus one legend box per colour
     const rects = c => gs[0].D.E.filter(e => e.l === lay[c] && e.t === 'PL' && e.closed && e.pts.length === 4).length;
-    [3, 2, 1].forEach(c => assert.equal(rects(c), want[c] + 1, `${name}: bands of colour ${c}`));
+    const srt = R.rows.map(r => ({ x: r.x, ratio: r.gov ? r.gov.ratio : NaN, ok: r.gov ? !(r.gov.ng && !Number.isFinite(r.gov.ratio)) : false })).filter(q => Number.isFinite(q.x)), merged = GR.mergeBands(srt, { x0: 0, x1: 360 }), wantB = { 3: 0, 2: 0, 1: 0 };
+    merged.forEach(b => wantB[GR.ratioColor(b.ratio, b.ok)]++); assert.ok(merged.length <= srt.length && merged.length < 40, `${name}: merged ${srt.length} locations into ${merged.length} bands`);
+    [3, 2, 1].forEach(c => assert.equal(rects(c), wantB[c] + 1, `${name}: bands of colour ${c}`));
+    // the classes are the tables': 0.8999 green, 0.9 amber, 1.0 amber, 1.0001 red
+    [[0.8999, 3], [0.9, 2], [1, 2], [1.0001, 1]].forEach(([r, c]) => assert.equal(GR.ratioColor(r, true), c));
     assert.ok(R.rows.length > 0 && gs[0].pick(R.rows[0].x * 12, 0) === 0, `${name}: click on the first row`); has(finite(gs[1].D, name), ['S-AXIS', 'S-GRID', 'S-CHART-S1'], name); has(finite(gs[2].D, name), ['S-ANNO-TEXT'], name); }
 });
 

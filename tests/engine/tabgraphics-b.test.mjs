@@ -71,11 +71,14 @@ function weldChecks(P, B, name) {
 }
 function rateChecks(P, B, name) {
   const before = JSON.stringify(B.sum), g = G.ratingChart(B, P, {}); sane(g, ['AXIS', 'GRID', 'CHART-S1', 'CHART-S2', 'CHART-LIMIT1', 'GOV'], `${name} rating`);
-  const sup = B.pl.member.supports, Lg = sup[sup.length - 1], Lin = Lg * 12, hgt = Lin / 4, one = ents(g, 'CHART-LIMIT1', 'LINE').find(e => e.pts[0][0] === 0 && Math.abs(e.pts[1][0] - Lin) < 1e-6), ymax = hgt / one.pts[0][1];
+  const sup = B.pl.member.supports, Lg = sup[sup.length - 1], Lin = Lg * 12, hgt = Lin * 0.16, one = ents(g, 'CHART-LIMIT1', 'LINE').find(e => e.pts[0][0] === 0 && Math.abs(e.pts[1][0] - Lin) < 1e-6), ymax = hgt / one.pts[0][1];
   assert.ok(num(ymax) && ymax >= 2, `${name}: RF = 1.0 line (chart top RF ${ymax})`);
   const m = new Map(); B.rows.forEach(r => { if (r.kind === 'flex' && num(r.x) && r.inv != null && !Number.isNaN(r.inv)) { const k = +r.x.toFixed(3); m.set(k, Math.min(m.has(k) ? m.get(k) : Infinity, r.inv)); } });
-  const s1 = ents(g, 'CHART-S1', 'PL')[0], exp = [...m.entries()].sort((a, b) => a[0] - b[0]); assert.equal(s1.pts.length, exp.length, `${name}: flexure series length`);
-  exp.forEach(([x, v], i) => { assert.ok(Math.abs(s1.pts[i][0] - x / Lg * Lin) < 1e-6 && Math.abs(s1.pts[i][1] - Math.min(Math.max(v, 0), ymax) / ymax * hgt) < 1e-4, `${name}: RF at ${x}`); st.rf++; });
+  // a value inside the scale is a vertex of the series line at its station; a value above it is cut at the top edge (a dashed cap and an arrow at the top, not a flat run)
+  const s1 = ents(g, 'CHART-S1', 'PL').filter(e => !e.closed), exp = [...m.entries()].sort((a, b) => a[0] - b[0]), verts = s1.flatMap(e => e.pts);
+  exp.forEach(([x, v]) => { if (v <= ymax) assert.ok(verts.some(p => Math.abs(p[0] - x / Lg * Lin) < 1e-6 && Math.abs(p[1] - Math.max(v, 0) / ymax * hgt) < 1e-4), `${name}: RF at ${x}`); else assert.ok(ents(g, 'CHART-S1', 'PL').some(e => e.closed && e.pts.length === 3), `${name}: arrow for RF ${v} above the scale`); st.rf++; });
+  assert.ok(!verts.some(p => p[1] > hgt + 1e-6), `${name}: nothing drawn above the plot`);
+  assert.ok(g.D.E.some(e => e.t === 'TEXT' && /SCALE CAPPED AT RF/.test(e.s)), `${name}: the legend says the scale is capped`);
   assert.equal(JSON.stringify(B.sum), before);
 }
 function sumChecks(P, Mod, name) {
@@ -126,9 +129,9 @@ test('Tab graphics B: five hand-off payloads (demands from the file), every grap
     st.cases++;
   }
 });
-test('Tab graphics B: the ratio bands are SBDGraphics.ratioColor\'s (green < 0.8, amber 0.8 to 1.0, red above 1.0 or NG)', () => {
+test('Tab graphics B: the ratio bands are SBDGraphics.ratioColor\'s (green < 0.9, amber 0.9 to 1.0, red above 1.0 or NG)', () => {
   const col = { ok: 3, hi: 2, ng: 1 };
-  [0, 0.3, 0.7999, 0.8, 0.95, 1, 1 + 1e-12, 1.0001, 1.5, 10, Infinity, NaN].forEach(r => { const c = G.ratioClass(r); if (c !== 'na') assert.equal(col[c], GR.ratioColor(r, true), `ratio ${r}`); });
+  [0, 0.3, 0.7999, 0.8, 0.8999, 0.9, 0.95, 1, 1 + 1e-12, 1.0001, 1.5, 10, Infinity, NaN].forEach(r => { const c = G.ratioClass(r); if (c !== 'na') assert.equal(col[c], GR.ratioColor(r, true), `ratio ${r}`); });
 });
 test('Tab graphics B: summary of the counts', () => {
   console.log(`       ${st.cases} projects, ${st.graphics} graphics, ${st.ents} entities, ${st.regions} click regions; ${st.panels} panels, ${st.stations} stations, ${st.details} fatigue details, ${st.welds} weld locations, ${st.rf} rating points checked against the results`);
