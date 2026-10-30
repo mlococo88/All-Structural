@@ -39,6 +39,7 @@ Plan: `docs/REBUILD_PLAN.md` (§3). Rules: `CLAUDE.md` §1, §3, §7, §8.
 | `steps.js` | `window.SharedSteps` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/sections.js`) |
 | `lldf.js` | `window.SharedLLDF` | `lldf.html`, `apps/steel-bridge/index.html` (adapter: `apps/steel-bridge/engine/lldf.js`) |
 | `report.js` | `window.SharedReport` | `apps/steel-bridge/index.html` (Report tab: `apps/steel-bridge/ui/report.js`, model from `apps/steel-bridge/report/`) |
+| `dxf.js` | `window.SharedDxf` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/drawings.js`). DXF R12 writer (display list → DXF and SVG preview), `validate()`, `download()`. Future: Base Plate, Gusset, Section Properties, Bridge Geometry (`fixlog/shared-dxf.md`) |
 
 ## Worked steps (`steps.js`)
 

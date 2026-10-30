@@ -22,7 +22,7 @@
     "babel-standalone@7.23.5": { "npm": "@babel/standalone@7.23.5", "license": "MIT", "used_by": ["index.html", "psbeam.html", "stgirder.html"] },
     "plotly.js@2.26.0": { "npm": "plotly.js-dist-min@2.26.0", "license": "MIT", "used_by": ["index.html"] },
     "plotly.js@2.27.0": { "npm": "plotly.js-dist-min@2.27.0", "license": "MIT", "used_by": ["psbeam.html", "stgirder.html", "Steel Bridge Beam Modules.html (and its Preliminary sizing page)"] },
-    "three@0.128.0": { "npm": "three@0.128.0", "license": "MIT", "used_by": ["index.html (r128)", "Steel Bridge Beam Modules.html (r128 + OrbitControls)"] },
+    "three@0.128.0": { "npm": "three@0.128.0", "license": "MIT", "used_by": ["index.html (r128)", "Steel Bridge Beam Modules.html (r128 + OrbitControls)", "apps/steel-bridge/index.html (r128 + OrbitControls, 3D view)"] },
     "mathjax@3.2.2": { "npm": "mathjax@3.2.2", "license": "Apache-2.0", "used_by": ["Steel Bridge Beam Modules.html (and its Preliminary sizing page)"] },
     "katex@0.16.9": { "npm": "katex@0.16.9", "license": "MIT", "used_by": ["index.html", "psbeam.html", "stgirder.html"], "note": "woff2 fonts only" },
     "chart.js@4.4.1": { "npm": "chart.js@4.4.1", "license": "MIT", "used_by": ["index.html"] }
