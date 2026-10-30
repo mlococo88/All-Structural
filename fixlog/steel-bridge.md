@@ -1315,6 +1315,62 @@ None. SB2-R1 and SB2-R2 are closed.
   step value (`KNOWN_NAN` is empty).
 - The report covers the girder selected on the Girders & plates tab; a report of every girder at once is not offered.
 
+## 2026-10-30 — PR: sb-welds — Welds: flange-to-web welds and shop flange transitions (GirderDetail GM.wt port)
+### Where
+- New `apps/steel-bridge/engine/welds.js` (`window.SBDWelds`): `compute(p, env)` and `checks(R)` port GirderDetail's Welds and
+  transitions module (anchor `GM.wt = {` in "Steel Bridge Design.html") operation for operation, with `WT_FSPEC`, `WT_TSPEC`, `numRows`,
+  `secSet`, `rowDk`, `wMinFor`, `modRatio` (engine/sections.js), `gdPLe` (engine/shear.js `plAdjust`), `gdOwnM(OWN_K.wt)`, `gdHP`, `gdUt`.
+  - FW1 weld metal, v_u = Σγ VQ/I ≤ R_r = 2(0.6)φ_e2F_exx(0.707w), φ_e2 = 0.80 (Art. 6.13.3.2.4b, Eq. 6.13.3.2.4b-1). DC1 and utilities on
+    the steel, DC2 and DW on 3n, LL+IM on n; Q at the top flange includes the transformed slab for the composite stages.
+  - FW2 web base metal, φ_vu 0.58F_u t_w, φ_vu = 0.80 (Art. 6.13.5.3). FW3 Category F throat shear, γV_fQ/I/(2(0.707w)) ≤ 8.0 ksi
+    (Table 6.6.1.2.3-1, Table 6.6.1.2.5-3). FW4 Table 6.13.3.4-1 minimum.
+  - TR1 butt splice fatigue γ(|f+| + |f−|) ≤ 16 ksi (B, ground) / 10 ksi (C) at mid-thickness of the smaller flange (Table 6.6.1.2.3-1,
+    Section 5); TR2 thickness slope ≤ 1:2.5, TR3 width taper ≤ 1:2.5 or radius ≥ 24 in (Art. 6.13.6.2); TR4 t_1/t_2 and A_1/A_2 ≥ 0.5
+    (practice, warning).
+  - The TeX `work` lines are replaced by worked steps (`steps(R, 'fw' | 'tr', i)`), each preceded by the section properties it uses
+    (engine/sections.js `steel`, `composite`, `withRebar`: the same arithmetic as `secSet`).
+  - New: `fromDemands(D, opt)` builds the module rows of one girder from its demands; `demandsFromPayload(pl)` gives D from a hand-off file.
+  - New: optional `p.layers` (the project's two deck reinforcement layers) in the steel + reinforcement section of TR1; without it, one
+    layer A_r at d_r as GirderDetail.
+- New `apps/steel-bridge/ui/welds.js` (`window.SBDWeldsUI`): the Welds output tab (inputs card, governing table, FW and TR tables, worked
+  steps of the selected row), demands from this app's analysis.
+- `engine/model.js`: `welds` (optional) and `defaultWelds()`; `validate` checks it. `index.html`: two script tags, the Welds tab.
+- Not here: stiffener and connection-plate welds (engine/stiffeners.js TS7, CP1, BS4, BS5, already ported).
+### Decisions (engineer's rule of 2026-10-29: accuracy, AASHTO 10th Ed.)
+- Weld locations. GirderDetail checks the rows Preliminary sizing sends: one per support, at x = support + 0.01 ft at the first
+  abutment and support − 0.01 ft elsewhere (so only the left side of a pier), with the shears of that element. This app checks each
+  side of every support (the left and right shears of the analysis, which differ at a pier: e.g. 110- and 140-ft spans) and each side
+  of every plate change (Q/I jumps there). More locations, no formula changed. On the built-in project the governing FW1 location is
+  Pier 2, left (span 2 side).
+- Weld size: the Table 6.13.3.4-1 minimum for the thickest plate at each location (Preliminary sizing's rule), or a size entered.
+- Transitions: each flange that changes at a plate change that is not a field splice (Framing tab, within its tolerance), tapers at
+  1:2.5 (L_t = 2.5Δt, L_w = 2.5Δb per side, as Preliminary sizing), ground flush unless set otherwise; ΔM± from the analysis fatigue
+  moments at the change.
+- Deck reinforcement in TR1's negative section: the project's two layers at their own depths (GirderDetail: one A_r at d_r).
+  Difference on a two-layer deck: the own-I term of the two bars about their centroid, under 0.1% of I.
+- TR1 overlaps the Fatigue tab's FA1 shop-transition row (outer face, Fatigue I or II): kept, because it is GirderDetail's check at
+  the butt weld (mid-thickness, threshold); the tab notes it.
+- Noncomposite girders: the tab says the checks are for composite girders (GirderDetail's module has no noncomposite path).
+### Check cases (tests/engine/welds.test.mjs)
+- GirderDetail built-in input (GM.wt.def), Abut. 1 interior, w = 5/16 in, E70:
+  - R_r = 2(0.6)(0.80)(70)(0.707)(0.3125) = 67.2 × 0.2209375 = 14.847 kip/in.
+  - Web: 0.80(0.58)(70)(0.5625) = 18.27 kip/in.
+  - Steel: A = 12 + 33.75 + 18 = 63.75 in²; ȳ = 1798.594/63.75 = 28.2132 in; Q_t = 12(61.5 − 28.2132) = 399.44 in³;
+    Q_b = 18(28.2132 − 0.5625) = 497.71 in³.
+  - FW4: top 3/4 in → 1/4 in (ratio 0.80); bottom 1 1/8 in → 5/16 in (ratio 1.00).
+  - TR1–TR4: bottom 16 × 1 1/8 to 16 × 1 1/2, L_t 1 in: slope 0.375 (TR2 ratio 0.9375); t_1/t_2 = A_1/A_2 = 0.75; Category B 16 ksi.
+### How verified
+- Parity, GirderDetail's own GM.wt.compute / checks in Node (gd-source.mjs pattern) against this engine:
+  - the built-in input and 9 variations (owner η, m and haunch 0; pedestrian part with m = 1.2; utilities; grades, n rounded; Category C,
+    radius, steep and missing tapers; row A_r; input errors);
+  - the 100 tests/projects/st/gd_*.json payloads: rows from each file's demands (2,200 weld locations, 800 transitions), 174,968 values and
+    18,600 check items: 0 differ, largest relative difference 0 (bit-identical).
+- `node tests/engine/run.mjs` passes. Headless page load of the Welds tab with Calculate: 0 console errors.
+### Saved data (CLAUDE.md §5)
+New optional `welds` in the sbd2 project (absent reads as `defaultWelds()`); no existing key or field changed.
+### Open items
+None.
+
 ## 2026-10-30 — PR: sbd2-report-wiring — wiring gaps found by the Report PR (#488): Flexure analysis source, deck-placement f_ℓ saved, every-girder report, default demand source
 ### Where
 - `apps/steel-bridge/ui/flexure.js` `inputs(ctx)`: new branch `if (src === 'analysis') {` (before the anchor `// owner rules as the Section

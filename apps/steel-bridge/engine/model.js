@@ -85,6 +85,9 @@
                   top, bot: { nl, g, g0, nr, s, ef, ep, bo, to, inner, bi, ti }, web: { h, t, nr, sv, nc, sh, ew, ewp } } ] (entered plates) }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
+     -- added 2026-10-30 (welds PR), optional: a version 1 project without it reads as defaultWelds() --
+     welds:     { Fexx (ksi), w (flange-to-web fillet weld size, in; '' = the minimum of Table 6.13.3.4-1 at each location),
+                  gam: { dc, dw, ll (Strength I), fat (Fatigue I) }, ground: 'yes' | 'no' (shop transition butt welds ground flush) }
    } */
 (function () {
   'use strict';
@@ -113,7 +116,8 @@
       studs: defaultStuds(),
       framing: defaultFraming(),
       crossframes: defaultCrossframes(),
-      splices: defaultSplices()
+      splices: defaultSplices(),
+      welds: defaultWelds()
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
@@ -164,6 +168,9 @@
   }
   /* defaultRating(): the load rating inputs (ST-Girder's defaults, rate: { phiC: 1.0, phiS: 1.0 }) */
   function defaultRating() { return { phiC: 1.0, phiS: 1.0 }; }
+  /* defaultWelds(): GirderDetail's built-in Welds and transitions settings (GM.wt.def: E70XX, γ 1.25 / 1.50 / 1.75, Fatigue I 1.75), the weld
+     size the minimum of Table 6.13.3.4-1 at each location (Preliminary sizing's rule), transitions ground flush */
+  function defaultWelds() { return { Fexx: 70, w: '', gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }, ground: 'yes' }; }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
   const isNum = v => typeof v === 'number' && isFinite(v);
@@ -290,6 +297,11 @@
     // added 2026-10-29 (load rating PR): the optional rating factors
     if (p.rating != null) { const Q = p.rating || {};
       [['phiC', 'Condition factor φ_c'], ['phiS', 'System factor φ_s']].forEach(([k, t]) => { if (!(isNum(Q[k]) && Q[k] > 0 && Q[k] <= 1)) E(`rating.${k}`, `${t} must be more than 0 and at most 1.0.`); }); }
+    // added 2026-10-30 (welds PR)
+    if (p.welds != null) { const Q = p.welds || {};
+      pos(Q.Fexx, 'welds.Fexx', 'F_EXX'); if (Q.w !== '' && Q.w != null) pos(Q.w, 'welds.w', 'Fillet weld size');
+      ['dc', 'dw', 'll', 'fat'].forEach(k => pos((Q.gam || {})[k], `welds.gam.${k}`, `Load factor ${k}`));
+      if (!['yes', 'no'].includes(Q.ground)) E('welds.ground', 'Transition butt welds: ground flush yes or no.'); }
     // added 2026-10-30 (report wiring PR): the optional f_ℓ during deck placement
     if (p.constr != null && p.constr.flC != null && !isNum(p.constr.flC)) E('constr.flC', 'f_ℓ during deck placement must be a number (ksi).');
     return { errors, warnings };
@@ -355,5 +367,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
