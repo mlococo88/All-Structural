@@ -110,3 +110,22 @@ test('Report: the Welds section (selected girder, both detail levels; every gird
   const MF = W.SBDReportBuild.model(BF, { detail: 'gov' }), dF = W.SharedReport.build(MF); assert.deepEqual(J(dF.unresolved), []); assert.ok(MF.sections.some(q => q.id === 'wd'));
   console.log(`       Welds: ${B.wd.R.fw.length} weld locations, ${B.wd.R.tr.length} transitions; governing ${list[0].rows.filter(q => q.mod === 'Welds').map(q => `${q.check} ${q.r.toFixed(3)}`).join('; ')}`);
 });
+
+test('Hand check (SB2-W1): built-in project skewed 28°, G1 interior, x = 44 ft (span 1, positive flexure), this project\'s analysis', () => {
+  // f_ℓ from skew (C6.10.1): largest support skew 28° > 20°, interior girder: f_ℓ = 1.25(10.00) = 12.50 ksi (before: 0 on this path)
+  const P = skewed(), A = W.SBDRatingUI.fromAnalysis(P, 0);
+  const F = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', an: A, method: 'auto' }), F0 = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', an: A, method: 'auto', fl: 1e-12 });
+  const r = F.rows.find(q => Math.abs(q.x - 44) < 1e-6), r0 = F0.rows.find(q => Math.abs(q.x - 44) < 1e-6), ck = (row, id, t) => row.checks.find(c => c.id === id && (!t || t.test(c.title)));
+  assert.equal(r.fl, 12.5);
+  // GS12, Service II bottom flange (Eq. 6.10.4.2.2-2): f_f + f_ℓ/2 ≤ 0.95R_hF_yf = 0.95(1.0)(50) = 47.50 ksi; f_f = 26.692 ksi (cross-frame weights in DC1, SB2-A6)
+  //   before: 26.692 + 0/2 = 26.692 → 26.692/47.50 = 0.5619; after: 26.692 + 12.50/2 = 32.942 → 32.942/47.50 = 0.6935
+  const s = ck(r, 'GS12', /bottom/), s0 = ck(r0, 'GS12', /bottom/);
+  assert.ok(Math.abs(s0.demand - 26.6923) < 1e-3 && Math.abs(s.demand - (s0.demand + 6.25)) < 1e-6 && s.capacity === 47.5, `${s0.demand} ${s.demand}`);
+  assert.ok(Math.abs(s0.ratio - 0.5619) < 1e-4 && Math.abs(s.ratio - 0.6935) < 1e-4);
+  // GS6, compact section (Eq. 6.10.7.1.1-1): M_u + f_ℓS_xt/3 ≤ φ_fM_n; M_u = 4,998.44 kip-ft, φ_fM_n = 9,616.14 kip-ft, S_xt = 1,775.29 in³
+  //   after: 4,998.44 + 12.50(1,775.29)/3/12 = 4,998.44 + 616.42 = 5,614.86 → 5,614.86/9,616.14 = 0.5839 (before 4,998.44/9,616.14 = 0.5198)
+  const g6 = ck(r, 'GS6'), g60 = ck(r0, 'GS6');
+  assert.ok(Math.abs(g60.ratio - 0.5198) < 1e-4 && Math.abs(g6.ratio - 0.5839) < 1e-4 && Math.abs(g6.demand - 5614.86) < 0.01, `${g6.demand}`);
+  // GS10 (Eq. 6.10.1.6-1): f_ℓ ≤ 0.6F_yf = 30 ksi: 12.50/30 = 0.4167
+  assert.ok(Math.abs(ck(r, 'GS10').ratio - 12.5 / 30) < 1e-12);
+});
