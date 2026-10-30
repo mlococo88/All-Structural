@@ -40,6 +40,8 @@
 <script src="ui/splices.js"></script>
 <script src="engine/rating.js"></script>
 <script src="ui/rating.js"></script>
+<script src="engine/welds.js"></script>
+<script src="ui/welds.js"></script>
 <script src="../../shared/report.js"></script>
 <script src="report/data.js"></script>
 <script src="report/builders.js"></script>
@@ -155,7 +157,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -287,6 +289,7 @@
     if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P, g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
     if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
     if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
+    if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
     if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
