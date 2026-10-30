@@ -172,6 +172,7 @@ test('steps: format and rendering', () => {
   assert.equal(STEPS.toText('\\frac{I}{\\bar{y}}'), 'I/ȳ');
   assert.equal(STEPS.toHTML('A_{d}'), 'A<sub>d</sub>');
   assert.equal(STEPS.toText('120{,}000K_{1}'), '120,000K_1');
+  assert.equal(STEPS.toText('L_{b} \\le \\ell'), 'L_b ≤ ℓ'); assert.equal(STEPS.toHTML('30^{\\circ}'), '30°');   // 2026-10-29: \\ell, \\circ (were 'ell', 'circ')
   const card = SEC.card({ D: 60, tw: 0.5625, topB: 18, topT: 1.5, botB: 18, botT: 2 }, { ts: 8, haunch: 2, beff: 114, rebar: { top: { A: 6.6, c: 2.5 }, bot: { A: 3.2, c: 1.75 } } },
     { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 }, 8, { region: 'neg' });
   const cid = card.steps.map(x => x.id); assert.equal(new Set(cid).size, cid.length, 'card ids unique');

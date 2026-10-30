@@ -65,7 +65,7 @@ It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the 
 
 - **Notation** of `sym`, `eq`, `sub`, `unit`: a small TeX subset — `_{…}`, `^{…}`, `\frac{a}{b}`, `\bar{x}`,
   `\sqrt{x}`, `\text{…}`, Greek letters, `\sum`, `\cdot`, `\times`, `\le`, `\ge`, `\lt`, `\gt`,
-  `\prime`, `\,`. Every string must also be valid KaTeX (`\minus` is the one subset-only macro; it is given to
+  `\prime`, `\ell` (ℓ), `\tan`, `\circ` (°; `^{\circ}` is shown as a plain degree sign), `\,`. Every string must also be valid KaTeX (`\minus` is the one subset-only macro; it is given to
   KaTeX as a macro for `-`). `SharedSteps.toHTML()` renders with KaTeX (`katex.renderToString`, `throwOnError: false`,
   options `SharedSteps.katexOpt`) when the page has loaded it (`window.katex`; `apps/steel-bridge/index.html` loads
   KaTeX 0.16.9 from cdnjs), and with the built-in renderer otherwise (offline, CDN blocked), so the steps always show.

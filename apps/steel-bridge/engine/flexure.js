@@ -204,7 +204,15 @@
     return { Fyr, lf, lpf, lrf, FLB, rt, Lp, Lr, Fcr, LTB, Fnc: Math.min(FLB, LTB), cap };
   }
   /* ampFl: f_l amplification 0.85/(1 − f_bu/F_cr) ≥ 1 where 6.10.1.6 requires it (L_b > 1.2L_p√(C_bR_b/(f_bu/F_yc)), Eq. 6.10.1.6-4). */
-  function ampFl(fl, fbu, Fyc, Lp, Lb, Cb, Rb, Fcr) { const lim = 1.2 * Lp * Math.sqrt(Cb * Rb / Math.max(fbu / Fyc, 1e-9)), req = Lb > lim; const AF = req ? (fbu < Fcr ? Math.max(0.85 / (1 - fbu / Fcr), 1) : Infinity) : 1; return { AF, fl: fl * AF, req, lim }; }
+  /* SB2-R2 (2026-10-30): f_l = 0 gives 0 (not 0 × ∞ = NaN where f_bu ≥ F_cr); und: f_l ≠ 0 with f_bu ≥ F_cr where Eq. 6.10.1.6-4 applies, the
+     amplification is undefined (the compression flange is beyond elastic LTB under the first-order f_l): the checks are NG (AMP_NG). */
+  function ampFl(fl, fbu, Fyc, Lp, Lb, Cb, Rb, Fcr) { const lim = 1.2 * Lp * Math.sqrt(Cb * Rb / Math.max(fbu / Fyc, 1e-9)), req = Lb > lim; const AF = req ? (fbu < Fcr ? Math.max(0.85 / (1 - fbu / Fcr), 1) : Infinity) : 1; return { AF, fl: fl === 0 ? 0 : fl * AF, req, lim, und: AF === Infinity && fl !== 0 }; }
+  /* SB2-R2 guard (every module's governing logic): a check with a non-finite ratio that is not "not applicable" (c.na) fails and says why
+     (c.ng: the undefined amplification, else "error: ratio is NaN"); gr ranks NaN and ∞ above every finite ratio, so it governs. */
+  const AMP_NG = 'NG: f_bu ≥ F_cr, amplification undefined (6.10.1.6)';
+  function guard(c) { if (!c || c.na != null || isFinite(c.ratio) || c.ratio === undefined) return c; c.ok = false; if (!c.ng) c.ng = Number.isNaN(c.ratio) ? 'error: ratio is NaN (calculation error; see the worked steps)' : 'NG: ratio unbounded'; return c; }
+  const gr = c => (!c ? -Infinity : isFinite(c.ratio) ? c.ratio : Infinity);
+  function govern(checks) { return checks.filter(c => c.inUse && c.na == null && c.ratio !== undefined).map(guard).reduce((b, c) => (!b || gr(c) > gr(b) ? c : b), null); }
   /* fcrw: F_crw, 6.10.1.9.1 (Eqs. 6.10.1.9.1-1, -2); k = 7.2 where both edges of the web are in compression (S2-2). */
   function fcrw(D, tw, Dc, Rh, Fyc, Fyw, both) { const b2 = both === true || Dc > D, k = b2 ? 7.2 : 9 / (Dc / D) ** 2; return { k, both: b2, F: Math.min(0.9 * ES * k / (D / tw) ** 2, Rh * Fyc, Fyw / 0.7), Fe: 0.9 * ES * k / (D / tw) ** 2 }; }
 
@@ -324,8 +332,7 @@
     r.checks = checksOf(r, prj);
     let stp = null;   // the worked steps, built when first read (a girder has hundreds of locations; the page shows one at a time)
     Object.defineProperty(r, 'steps', { enumerable: true, get() { return stp || (stp = worked(r, prj)); } });
-    const inUse = r.checks.filter(c => c.inUse && isFinite(c.ratio));
-    r.gov = inUse.reduce((b, c) => (!b || c.ratio > b.ratio ? c : b), null);
+    r.checks.forEach(guard); r.gov = govern(r.checks);   // SB2-R2: a non-finite ratio in use governs (was dropped by isFinite)
     return r;
   }
 
@@ -345,7 +352,7 @@
   /* flLims(r): noncomposite, f_l ≤ 0.6F_yf for each flange (6.10.1.6): the compression flange's f_l amplified (Eq. 6.10.1.6-4,
      6.10.8 L_p, as the composite negative path), the tension flange's first-order. */
   function flLims(r) {
-    const c = { lab: r.cF.lab, fl: r.am.fl, Fy: r.cF.Fy }, t = { lab: r.tF.lab, fl: r.tF.fl, Fy: r.tF.Fy };
+    const c = { lab: r.cF.lab, fl: r.am.fl, Fy: r.cF.Fy, und: r.am.und }, t = { lab: r.tF.lab, fl: r.tF.fl, Fy: r.tF.Fy };
     return [r.pos ? t : c, r.pos ? c : t].map((q, k) => ({ ...q, key: k ? 'flT' : 'fl', st: k ? 'flimT' : 'flim' }));   // bottom flange first (key fl), then top (flT)
   }
   /* ---------- checks: value, capacity, ratio, reference ---------- */
@@ -370,18 +377,18 @@
         out.push({ id: 'GS6', key: 'mn', title: 'Positive flexure resistance (6.10.7)', ref: `${ED} Art. 6.10.6.2.3`, na: 'Not applicable: noncomposite section. Checked by 6.10.8 (GS7, GS8) or App. A6 (GS9), top flange in compression (6.10.6.2.3).', inUse: false, ratio: NaN, step: 'fx.nc' });
       }
       const a = r.A6, lt = r.lt, dem = r.fbuC + r.am.fl / 3;
-      out.push(ck({ id: 'GS7', key: 'fnc', title: 'Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc', ref: `${ED} Eq. 6.10.8.1.1-1; 6.10.8.2.2, 6.10.8.2.3`, demand: dem, capacity: lt.Fnc, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnc.ok' }));
+      out.push(ck({ id: 'GS7', key: 'fnc', title: 'Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc', ref: `${ED} Eq. 6.10.8.1.1-1; 6.10.8.2.2, 6.10.8.2.3`, demand: dem, capacity: lt.Fnc, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnc.ok', ...(r.am.und ? { ng: AMP_NG } : {}) }));
       const f = Math.max(r.tF.f, 0), cap = r.Rh * r.tF.Fy;
       if (nc) out.push(ck({ id: 'GS8', key: 'fnt', title: 'Tension flange (discretely braced), f_bu + f_ℓ/3 ≤ φ_fF_nt', ref: `${ED} Eq. 6.10.8.1.2-1; 6.10.8.3`, demand: f + r.tF.fl / 3, capacity: cap, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnt.ok' }));
       else out.push(ck({ id: 'GS8', key: 'fnt', title: 'Tension flange, f_bu ≤ φ_fF_nt', ref: `${ED} Eq. 6.10.8.1.3-1; 6.10.8.3`, demand: f, capacity: cap, unit: 'ksi', inUse: !r.useA6, step: 'fx.fnt.ok' }));
       if (!a.ok) out.push({ id: 'GS9', key: 'a6', title: 'Appendix A6', ref: `${ED} Art. 6.10.6.2.3`, na: 'Appendix A6 is not permitted: ' + a.why.join('; '), inUse: false, ratio: NaN, step: 'fx.a6.ok' });
       else { const Mu = Math.abs(r.Mu), demC = Mu + a.am.fl * a.Sxc / 3 / 12;
-        out.push(ck({ id: 'GS9', key: 'a6c', title: 'App. A6, compression flange, M_u + f_ℓS_xc/3 ≤ φ_fM_nc', ref: `${ED} Eq. A6.1.1-1`, demand: demC, capacity: a.Mnc, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6c.ok' }));
+        out.push(ck({ id: 'GS9', key: 'a6c', title: 'App. A6, compression flange, M_u + f_ℓS_xc/3 ≤ φ_fM_nc', ref: `${ED} Eq. A6.1.1-1`, demand: demC, capacity: a.Mnc, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6c.ok', ...(a.am.und ? { ng: AMP_NG } : {}) }));
         if (nc) out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange (discretely braced), M_u + f_ℓS_xt/3 ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.2-1, A6.4`, demand: Mu + r.tF.fl * a.Sxt / 3 / 12, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' }));
         else out.push(ck({ id: 'GS9', key: 'a6t', title: 'App. A6, tension flange (continuously braced by the deck), M_u ≤ φ_fR_ptM_yt', ref: `${ED} Eq. A6.1.4-1, A6.4`, demand: Mu, capacity: a.Mnt, unit: 'kip-ft', inUse: r.useA6, step: 'fx.a6t.ok' })); }
     }
-    if (nc) flLims(r).forEach(q => { if (q.fl > 0) out.push(ck({ id: 'GS10', key: q.key, title: `Flange lateral bending, ${q.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: q.fl, capacity: 0.6 * q.Fy, unit: 'ksi', step: `fx.${q.st}.ok` })); });
-    else { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) out.push(ck({ id: 'GS10', key: 'fl', title: 'Flange lateral bending, f_ℓ ≤ 0.6F_yf', ref: `${ED} Eq. 6.10.1.6-1`, demand: fS, capacity: 0.6 * Fyb, unit: 'ksi', step: 'fx.flim.ok' })); }
+    if (nc) flLims(r).forEach(q => { if (q.fl > 0) out.push(ck({ id: 'GS10', key: q.key, title: `Flange lateral bending, ${q.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: q.fl, capacity: 0.6 * q.Fy, unit: 'ksi', step: `fx.${q.st}.ok`, ...(q.und ? { ng: AMP_NG } : {}) })); });
+    else { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) out.push(ck({ id: 'GS10', key: 'fl', title: 'Flange lateral bending, f_ℓ ≤ 0.6F_yf', ref: `${ED} Eq. 6.10.1.6-1`, demand: fS, capacity: 0.6 * Fyb, unit: 'ksi', step: 'fx.flim.ok', ...(!r.pos && r.am.und ? { ng: AMP_NG } : {}) })); }
     if (nc) [['top', r.svc.top, Fyt, Math.max(r.flT, 0)], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {   // noncomposite: both flanges, Eq. 6.10.4.2.2-3
       out.push(ck({ id: 'GS12', key: 'sv' + f[0], title: `Service II, ${f} flange (noncomposite), ${fl > 0 ? 'f_f + f_ℓ/2' : 'f_f'} ≤ 0.80R_hF_yf`, ref: `${ED} Eq. 6.10.4.2.2-3`, demand: Math.abs(v) + fl / 2, capacity: 0.80 * r.Rh * Fy, unit: 'ksi', step: `fx.sv${f[0]}.ok` })); });
     else [['top', r.svc.top, Fyt, 0], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {
@@ -534,8 +541,8 @@
     if (bad.length) { const ks = new Set(bad.map(r => spOf(r.x))), all = ks.has(null);
       rows.forEach(r => { if (r.pos && (r.below || all || spOf(r.x) == null || ks.has(spOf(r.x)))) { r.oos = true;
         r.checks.forEach(c => { if (c.id === 'GS5' || c.id === 'GS6') { c.inUse = false; c.ratio = NaN; c.na = 'Out of scope: a positive-flexure location of this span has its PNA below the web (Table D6.1-1).'; } });
-        const inUse = r.checks.filter(c => c.inUse && isFinite(c.ratio)); r.gov = inUse.reduce((b, c) => (!b || c.ratio > b.ratio ? c : b), null); } }); }
-    const gov = rows.reduce((b, r) => (r.gov && (!b || r.gov.ratio > b.gov.ratio) ? r : b), null);
+        r.gov = govern(r.checks); } }); }
+    const gov = rows.reduce((b, r) => (r.gov && (!b || gr(r.gov) > gr(b.gov)) ? r : b), null);
     return { rows, oos: bad.length > 0, gov };
   }
 
@@ -555,7 +562,8 @@
     const G = factors(opt.G), Lend = sup[sup.length - 1];
     const OW = opt.owner && window.SBDOwners ? window.SBDOwners : null, lfO = OW ? OW.loadFactors(opt.owner, {}, 0) : null, hP = OW ? OW.haunchInProps(dk.haunch, lfO) : dk.haunch;   // OWN8
     const xs = S.map(s => s.x), arr = k => S.map(s => +s[k] || 0);
-    const env = { xs, MDC1: arr('M_DC1'), MDC2: arr('M_DC2'), MDW: arr('M_DW'), Mp: S.map(s => (+s.M_LLpos || 0) + (+s.M_PLpos || 0)), Mn: S.map(s => (+s.M_LLneg || 0) + (+s.M_PLneg || 0)),
+    const PL = k => (pl.pedestrianInLL === true ? () => 0 : s => +s[k] || 0);   // SB2-R1: with pedestrianInLL the LL+IM already includes it (HANDOFF.md §4.9)
+    const env = { xs, MDC1: arr('M_DC1'), MDC2: arr('M_DC2'), MDW: arr('M_DW'), Mp: S.map(s => (+s.M_LLpos || 0) + PL('M_PLpos')(s)), Mn: S.map(s => (+s.M_LLneg || 0) + PL('M_PLneg')(s)),
       MUT: arr('M_UT'), MUF: arr('M_UF'), MfP: arr('M_FATpos'), MfN: arr('M_FATneg') };
     env.Mup = xs.map((_, i) => envelopeStrI({ DC1: env.MDC1[i], DC2: env.MDC2[i], DW: env.MDW[i], LLp: env.Mp[i], LLn: env.Mn[i], UT: env.MUT[i], UF: env.MUF[i] }, G).max);
     env.Mun = xs.map((_, i) => envelopeStrI({ DC1: env.MDC1[i], DC2: env.MDC2[i], DW: env.MDW[i], LLp: env.Mp[i], LLn: env.Mn[i], UT: env.MUT[i], UF: env.MUF[i] }, G).min);
@@ -584,5 +592,5 @@
     return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
 
-  window.SBDFlexure = { ES, crwOf, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
+  window.SBDFlexure = { ES, AMP_NG, guard, gr, govern, crwOf, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
 })();

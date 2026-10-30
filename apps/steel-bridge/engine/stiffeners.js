@@ -109,7 +109,9 @@
   }
 
   /* check list helpers (GirderDetail ckNew, rc) */
-  function ckNew() { const out = []; out.add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; if (!c.items.length && !c.naWhy) c.naWhy = 'Not applicable to any item.'; out.push(c); }; return out; }
+  function ckNew() { const out = []; out.add = c => { c.items.forEach(it => { if (typeof it.r === 'number' && Number.isNaN(it.r) && it.st !== 'na') { it.err = 'error: ratio is NaN'; if (RANK[it.st] < RANK.warn) it.st = 'fail'; } });   // SB2-R2 NaN guard: never a pass, ranks first
+    const nr = i => (Number.isNaN(i.r) || i.r === Infinity ? Infinity : i.r ?? -1);
+    c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && nr(it) > nr(c.items[gi]))) gi = k; }); c.gov = gi; if (!c.items.length && !c.naWhy) c.naWhy = 'Not applicable to any item.'; out.push(c); }; return out; }
   const rc = (loc, d, c, step, x) => ({ loc, demand: d, capacity: c, r: d / c, st: ge(c, d) ? 'pass' : 'fail', step, ...(x || {}) });
 
   /* transverseChecks(R): GM.ts.checks(R). Each check { id, grp, title, ref, items: [{ loc, r, st, demand, capacity, step }], naWhy, status, gov }. */
@@ -126,7 +128,7 @@
       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, q.Vu, q.phVn, `ts${r.i}.p${i + 1}.ok`)))); out.add(c); }
     { const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits', ref: `${ED} Art. 6.10.9.1, 6.10.9.3.3`, items: [] };
       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff;
-        c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, demand: q.do, capacity: lim, r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', step: `ts${r.i}.p${i + 1}.lim` }); }));   // TS5 step (was .st, the id of panelSteps' stiffened/unstiffened step: SB2-R1)
+        c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, demand: q.do, capacity: lim, r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', step: `ts${r.i}.p${i + 1}.lim` }); }));   // TS5 step (was .st, the id of panelSteps' stiffened/unstiffened step: SB2-R3)
       if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1; TS4 checks each panel as stiffened where its spacing is within the 6.10.9.1 limits (3D interior, 1.5D end panels) and as unstiffened where it is wider.'; }
       out.add(c); }
     { const c = { id: 'TS6', grp: G3, title: 'Web weld cutoff at the tension flange, 4t_w ≤ g ≤ 6t_w', ref: `${ED} Art. 6.10.11.1.1`, items: [] };

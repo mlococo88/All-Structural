@@ -20,7 +20,8 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const S = { src: 'analysis', pl: null, plName: '', R: null, key: '', err: '', sel: null };
-  const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : fmt(v, 3);   // SB2-R2
   const CATS = ['A', 'B', "B'", 'C', "C'", 'D', 'E', "E'"], ct = c => String(c).replace(/'/g, '′');
 
   /* ---------- input tab ---------- */
@@ -141,8 +142,8 @@
     let alt = null; if (!SR.errors.length) { const q = JSON.parse(JSON.stringify(scIn)); if (SR.beffMode === 'girder') { delete q.beffMode; delete q.beffG; } else { q.beffMode = 'girder'; q.beffG = pl ? dk.beff : G.beff; }
       const A = SC.compute(q, scEnv); if (!A.errors.length) { const C = SC.checks(A), mx = (CK, id) => Math.max(0, ...CK.find(c => c.id === id).items.map(i => i.r).filter(isFinite)); alt = { beff: A.dk.beff, sc1: mx(C, 'SC1'), sc2: mx(C, 'SC2'), sc1o: mx(SCC, 'SC1'), sc2o: mx(SCC, 'SC2') }; } }
     // governing of each list
-    const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if (isFinite(it.r) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || it.r > b.it.r)) b = { c, it, i }; })); return b; };
-    const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || it.r > b.it.r) b = { it, i }; }); return b; }, null) : null;
+    const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it, i }; })); return b; };
+    const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r)) b = { it, i }; }); return b; }, null) : null;
     return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
       what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
         : pl ? `${esc(S.plName)}: ${(pl.stations || []).length} stations, ${sup.length - 1} span(s), ${esc((pg || {}).label || '')}; fatigue moments and shears, plates and deck from the file; the stud zones and regions GirderDetail sends${(Q.zones || []).length ? ' (pitch zones from this project)' : ''}; this project's fatigue settings and studs.`
@@ -201,7 +202,7 @@
       <p class="note">${esc(FA.setText(R.set))}.</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
-      ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${fmt(q[0], 3)}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
+      ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
       ${R.FR.errors.length ? `<div class="alert err">Fatigue: ${R.FR.errors.map(esc).join('; ')}</div>` : ''}${R.SR.errors.length ? `<div class="alert err">Shear connectors: ${R.SR.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
     // fatigue details
     if (!R.FR.errors.length) { const C = R.FC, ck = id => C.find(c => c.id === id);

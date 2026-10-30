@@ -4,8 +4,8 @@
 //    "§<step id>" resolved in the item's scope (relative id) or item.see, lazy items, duplicate keys, unresolved keys, plain text.
 // 2. The full report of this app's built-in project (its own analysis) and of 5 hand-off payloads (tests/projects/st), every section,
 //    detail 'gov' and 'all': every cross-reference ("see §x.y", every § link) resolves to a step in the report; no duplicate anchor;
-//    no 'NaN', 'undefined', '[object', '§?' in the text; every step value finite except the known SB2-R2 case (GS7 f_ℓ = 0 × ∞, engine
-//    fix pending in engine/flexure.js), which the report must then list as "Not evaluated"; every $…$ the builders write parses in KaTeX.
+//    no 'NaN', 'undefined', '[object', '§?' in the text; every step value finite (KNOWN_NAN empty); every $…$ the builders write parses
+//    in KaTeX.
 // 3. The report shows the modules' own numbers: the summary's ratios are the modules' governing ratios (same objects); the analysis
 //    run once for the report (memoised in data.js) is not changed by any module (its JSON equals a fresh analysis).
 // 4. Sections not chosen: the summary keeps their rows without links; no reference dangles.
@@ -21,7 +21,7 @@ const FILES = ['units.js', 'steps.js', 'vehicles.js', 'moving-load.js', 'lldf.js
   'report/data.js', 'report/builders.js'].map(E));
 const STD = path.join(ROOT, 'tests/projects/st');
 const PAYLOADS = ['gd_builtin28_AASHTO_G1.json', 'gd_xsA_CTDOT_G1.json', 'gd_util_MassDOT_G3.json', 'gd_curb_RIDOT_G5.json', 'gd_builtin_AASHTO_G2.json'];
-const KNOWN_NAN = new Set(['fx.fl']);   // SB2-R2: f_ℓ = 0 × ∞ where f_bu ≥ F_cr (engine/flexure.js ampFl); remove when the engine fix lands
+const KNOWN_NAN = new Set([]);   // step ids allowed a non-finite value (then the report must list them); none since SB2-R2 (#487)
 const J = v => JSON.parse(JSON.stringify(v));   // a copy in this realm (deepEqual compares prototypes)
 const katex = (() => { const c = loadShared(path.join(ROOT, 'tests/libs/katex@0.16.9/dist/katex.min.js')); return c.katex; })();
 
@@ -95,7 +95,7 @@ test('Steel Bridge report: the built-in project (its own analysis), every sectio
   // sections not chosen: no dangling reference, the summary rows stay unlinked
   const M3 = W.SBDReportBuild.model(B, { detail: 'gov', include: { flex: false, an: false, sec: false } }), d3 = W.SharedReport.build(M3);
   assert.deepEqual(J(d3.unresolved), []); assert.equal(M3.sections.length, 9); assert.ok(M3.gov.find(q => q.mod === 'Flexure' && q.key === null && /not included/.test(q.loc)));
-  console.log(`       built-in: gov ${o.gov.steps} steps, ${o.gov.refs} references; all ${o.all.steps} steps, ${o.all.refs} references; all resolve; known SB2-R2 NaN steps ${o.gov.nf} (listed)`);
+  console.log(`       built-in: gov ${o.gov.steps} steps, ${o.gov.refs} references; all ${o.all.steps} steps, ${o.all.refs} references; all resolve; non-finite steps ${o.gov.nf}`);
 });
 
 test('Steel Bridge report: 5 hand-off payloads, every section, both detail levels', () => {

@@ -25,7 +25,8 @@
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, V: { DC1: 20, DC2: 3, DW: 3, LL: 40, CL: 3, f: 25, UT: 0, UF: 0 } },
     { name: 'Pier 1', x: 109.99, V: { DC1: 95, DC2: 14, DW: 16, LL: 105, CL: 12, f: 55, UT: 0, UF: 0 } }];
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
-  const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : fmt(v, 3);   // SB2-R2
 
   /* ---------- input tab ---------- */
   function ensure(P) { if (!P.stiffeners) P.stiffeners = window.SBDModel.defaultStiffeners(); return P.stiffeners; }
@@ -136,9 +137,9 @@
     const BS = SB.bearing({ D, gW: P.materials.steel.web, gS: st.bearing.gS, Fexx: st.bearing.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75 }, types: st.bearing.types, rows: bsRows }, env);
     const tsC = TS && !TS.errors.length ? SB.transverseChecks(TS) : null, bsC = !BS.errors.length ? SB.bearingChecks(BS) : null;
     // governing ratio of each list
-    const govCk = (C, rowIdx) => { let b = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!b || it.r > b.r)) b = { c, it, i: rowIdx(it) }; })); return b; };
+    const govCk = (C, rowIdx) => { let b = null; (C || []).forEach(c => c.items.forEach(it => { if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.r))) b = { c, it, i: rowIdx(it) }; })); return b; };
     const tsRowOf = it => TS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)), bsRowOf = it => { const k = BS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)); if (k >= 0) return k; const m = /^Type (\w+),/.exec(it.loc); return m ? Math.max(0, BS.rows.findIndex(r => r.type === m[1])) : 0; };   // BS1 is per stiffener type: its first bearing
-    const stGov = stations.reduce((b, r) => (r.gov && (!b || r.gov.ratio > b.gov.ratio) ? r : b), null);
+    const stGov = stations.reduce((b, r) => (r.gov && (!b || (x => isFinite(x) ? x : Infinity)(r.gov.ratio) > (x => isFinite(x) ? x : Infinity)(b.gov.ratio)) ? r : b), null);
     return { gm, D, Fyw, G, lf, bays, panels, stations, stGov, TS, tsC, tsGov: tsC ? govCk(tsC, tsRowOf) : null, BS, bsC, bsGov: bsC ? govCk(bsC, bsRowOf) : null, rxn: !!rxn, AR,
       what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((P.girders[g] || {}).label || '')} (Analysis tab: settings, loads, factors): ${pl.stations.length} stations, ${gm.sup.length - 1} span(s); the project's plates, stiffener layout and plates.${AR && AR.warnings && AR.warnings.length ? '<br>' + AR.warnings.map(esc).join('<br>') : ''}`
         : pl ? `${esc(S.plName)}: ${pl.stations.length} stations, ${gm.sup.length - 1} span(s), G${gm.gNo}; plates and shears from the file; the project's stiffener layout and plates.` : `Example: GirderDetail's built-in shears (Girder section, Transverse stiffeners and Bearing stiffeners rows) with this project's plates (${esc((P.girders[g] || {}).label || '')}) and stiffener inputs. Load a hand-off file for the shear in every panel.` };
@@ -195,7 +196,7 @@
     h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: governing</div><div class="secBody"><p class="note">${R.what}</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
-      ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${fmt(q[0], 3)}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
+      ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
       ${R.TS && R.TS.errors && R.TS.errors.length ? `<div class="alert err">Transverse stiffeners: ${R.TS.errors.map(esc).join('; ')}</div>` : ''}${R.BS.errors && R.BS.errors.length ? `<div class="alert err">Bearing stiffeners: ${R.BS.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
     // panels
     h += `<section class="sec"><div class="secHead">Web panels of the layout (G${R.gm.gNo}, D = ${fmt(R.D, 2)} in, F<sub>yw</sub> = ${fmt(R.Fyw, 0)} ksi)</div><div class="secBody">
@@ -206,7 +207,7 @@
     // stations
     h += `<section class="sec"><div class="secHead">Shear at the stations (GS11, GS16, GS18)</div><div class="secBody"><p class="note">d<sub>o</sub> and the end-panel flag from the layout panel containing the station (of two, the one with the larger V<sub>u</sub>/φV<sub>n</sub>); V<sub>u</sub> the larger of the shear at the station and the largest in its panel.</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Station</th><th>d<sub>o</sub> (in)</th><th>V<sub>u</sub> (kip)</th><th>φV<sub>n</sub> (kip)</th><th>GS11</th><th>GS16</th><th>GS18</th></tr></thead><tbody>
-      ${R.stations.map((r, i) => { const c = id => r.checks.find(q => q.id === id); const cell = q => q && q.inUse ? `<td class="${cls(q.ratio)}">${fmt(q.ratio, 3)}</td>` : '<td class="fx-na">n/a</td>';
+      ${R.stations.map((r, i) => { const c = id => r.checks.find(q => q.id === id); const cell = q => q && (q.inUse || q.ng) ? `<td class="${cls(q.ratio)}">${q.ng ? esc(q.ng) : rt3(q.ratio)}</td>` : '<td class="fx-na">n/a</td>';
         return `<tr data-sh="loc:${i}" class="${S.sel && S.sel.k === 'loc' && S.sel.i === i ? 'sel' : ''}${r === R.stGov ? ' fx-gov' : ''}"><td class="lft">${esc(r.name)}${r.end ? ' (end panel)' : ''}</td><td>${r.do > 0 ? fmt(r.do, 2) : '—'}</td><td>${fmt(r.VuP != null ? r.VuP : r.Vu, 1)}</td><td>${fmt(r.sh.Vn, 1)}</td>${cell(c('GS11'))}${cell(c('GS16'))}${cell(c('GS18'))}</tr>`; }).join('')}
       </tbody></table></div></div></section>`;
     // transverse stiffeners

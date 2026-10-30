@@ -352,7 +352,9 @@
   function checks(R, opt) {
     const wantSt = !(opt && opt.steps === false), w = wantSt ? St().work('sp') : null;
     const out = [], P = R.P, B = P.bolts, E = R.env;
-    const add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; out.push(c); };
+    const add = c => { c.items.forEach(it => { if (typeof it.r === 'number' && Number.isNaN(it.r) && it.st !== 'na') { it.err = 'error: ratio is NaN'; if (RANK[it.st] < RANK.warn) it.st = 'fail'; } });   // SB2-R2 NaN guard: never a pass, ranks first
+    const nr = i => (Number.isNaN(i.r) || i.r === Infinity ? Infinity : i.r ?? -1);
+    c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && nr(it) > nr(c.items[gi]))) gi = k; }); c.gov = gi; out.push(c); };
     const na = (c, why) => { c.items = []; c.naWhy = why; add(c); };
     const st = (dem, cap) => ge(cap, dem) ? 'pass' : 'fail';
     const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g0 = x => St().g(x, 0), lt = ok => ok ? '\\le' : '\\gt';
