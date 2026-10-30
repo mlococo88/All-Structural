@@ -13,9 +13,10 @@
        (anchors `function dfFoot(R) {`, `function dfApp(R) {`): typical cross-section with the deck, haunch, girders and appurtenances,
        dimensions and general notes;
      - dxfTable, dxfNotes, dxfTag (helpers).
-   Not ported (they need results this display module does not compute, or GirderDetail sheets outside this PR): splice plate outlines and
-   bolts (Field splices tab), the moment envelope and camber diagram and tables (Analysis tab), the weld symbol, quantities, paper-space
-   sheets with border and title block. Sheet references ("SEE SHEET ...") are left out of the tags.
+   Added 2026-10-30 (SB2-DW5): opt.k (draw at a given plot scale: the sheets of engine/sheets.js choose it) and opt.RS (the results of
+   engine/sheets.js results()): the top splice plates on the plan (GirderDetail dxfPlan) and the splice plates and web bolts on the
+   elevation, from the Field splices design (splR, splElev). The sheets with border and title block, the moment envelope, camber,
+   weld symbols, quantities and the detail sheets are in engine/sheets.js. Sheet references ("SEE SHEET ...") are left out of the tags.
 
    Geometry (model()): GirderDetail draws one set of plates for every girder at the same stations. Here each cross-section girder i takes
    the plates of the plate girder that loads it (girders[j].line = i; else the first girder of the same position, exterior for G1 and
