@@ -1370,3 +1370,102 @@ None. SB2-R1 and SB2-R2 are closed.
 New optional `welds` in the sbd2 project (absent reads as `defaultWelds()`); no existing key or field changed.
 ### Open items
 None.
+
+## 2026-10-30 — PR: sb-import — import of old projects (GirderDetail / Steel Bridge Design, Preliminary sizing, ST-Girder, old autosaves)
+### Where
+- New `apps/steel-bridge/engine/legacy.js` (`window.SBDLegacy`): `importLegacy(obj)`, `fromParts({ gd, pl, st })`, `fromStorage(storage)`,
+  `ownMigrate(pl)`, `summaryText(summary)`.
+- `engine/model.js`: `importLegacy(obj)` is no longer a stub. It calls `SBDLegacy.importLegacy` (anchor `function importLegacy(obj, opt)`).
+  `importJSON` routes old files there, as before. Schema comment: new optional `legacy` field.
+- New `apps/steel-bridge/ui/legacy.js` (`window.SBDLegacyUI.show`): the import summary panel.
+- `index.html`:
+  - two script tags;
+  - "Import JSON…" now also takes old files and shows their summary;
+  - new header button "From old app", which reads the old autosaves.
+### What is read
+- Steel Bridge Design project file (SBD4): `{ app: 'SteelBridgeDesign', v: 1, name, data (the modules; also accepted as gd), pl: { app:
+  'PlateLine', data }, st: { …, _schema: 'stgirder' } }`.
+  - A version above 1 is refused, as the old app refuses it.
+- The older formats: `{ app: 'GirderDetail', data }`, `{ app: 'PlateLine', data }`, ST-Girder `{ _schema: 'stgirder', … }`.
+- The old autosaves, **read only** (never written or deleted): `girderdetail_autosave_v1`, `plateline_autosave_v1`, `stgirder.session`.
+- Refused with a message: hand-off files (`stgirder-external-demands`) and PlateLine splice exports. These are demands, not projects.
+### Mapping
+- **Preliminary sizing** (the bridge):
+  - spans and continuity; girder count, spacing (equal, variable, exterior), overhangs, skews;
+  - deck edges: GirderDetail's XS9 edges when present; otherwise the barrier, or the curb and railing;
+  - deck t_s, haunch, t_sac (gives tdeck), f′c, w_c, w_c for E_c; flange and web grades;
+  - plates: every breakpoint of the top, bottom and web lists becomes one segment, for each of the n_b girders (one layout, as the old app);
+  - b_eff tributary (exterior S/2 + overhang, interior the mean of the adjacent bays), as GirderDetail's Structural analysis does;
+  - owner and η inputs; crack model; L/… deflection limit;
+  - framing: spacing, pier spacing and length, orientation, arrangement, clearances, tolerance, skew f_ℓ, field splices;
+  - stiffener layout (stiffened web, d_o/D, per-bay list); stiffener, connection-plate and bearing-stiffener plates; the minimum
+    cross-frame depth;
+  - wearing surface, SIP, detail allowance; project information.
+- **Preliminary sizing's own load-time migration** (`ownMigrate`, anchor `function migrateOwnDef(p)` / `function ownApply(`).
+  - Applies to a project saved without the owner defaults (no `ownDef`, or `ownDef.v` < 4).
+  - Each OWN14 default input still at its generic value moves to the owner's value, as the old app does when it opens the project.
+    Example: MassDOT f′c 4 → 5 ksi, grades 50W → 50.
+  - The moves are listed in the summary.
+- **GirderDetail** (the modules):
+  - LLDF and DLs (the inverse of `engine/loads.js fromModel`): sidewalks, pedestrian load, median, appurtenance w_c, fences, wearing
+    surface by thickness, added loads, overlays, edges, overrides, beam classes, method, gap, K_g, skew corrections;
+  - Structural analysis: crack, IM, fatigue IM, L/…, pour sequence;
+  - Girder section: deck rebar layers, F_yr, K_1, n rule, rebar in M_p, flange categories;
+  - Fatigue: limit, ADTT, p, life, γ, negative section, distortion details;
+  - studs: d, h, s_t, F_u, Q_n, γ, F_rc, w, splice entries;
+  - stiffener types and grades, F_EXX, bearing end distance;
+  - cross-frames: type, grades, primary, diaphragm, wind, members, connection, user forces, category, stability bracing;
+  - splice bolts, load factors, clearances; overhang brackets (to constructibility); welds F_EXX and γ.
+  - Without a Preliminary sizing part, the bridge comes from `df.bridge` (what Preliminary sizing last sent).
+- **ST-Girder**:
+  - with other parts: the rating factors φ_c, φ_s;
+  - alone: one simple span of one girder (plates or plate segments, grades from F_y/F_u, deck, rebar, cross-frame spacing, stiffeners,
+    studs, fatigue, rating).
+- **Not mapped, kept** under `project.legacy.unmapped.{gd,pl,st}` at their own paths, and listed in the summary:
+  - the module rows (location rows, stud zones, splice plates, overhang rows): this app makes them from its analysis;
+  - Preliminary sizing's sizing, cost and Suggest settings; the view state;
+  - GirderDetail's single-splice data;
+  - LLDF/DL fields this app does not have (e.g. util's cross-frame weight settings `xf, xfAllow, …`, noted);
+  - ST-Girder's own load inputs.
+  - Nothing is dropped: a reader records every path it reads; the rest is copied as is.
+### Decisions
+- Studs: an imported project keeps this app's default of b_eff per girder (SB2-F1). GirderDetail's single bridge-wide value is in
+  `legacy.unmapped.gd.sc`.
+- Weld size: the Table 6.13.3.4-1 minimum (the welds PR default). GirderDetail's weld rows are kept unmapped.
+- Old cross-frame members are GirderDetail's Cross-frames module inputs. These are the members the old app checked; its dead load
+  used Preliminary sizing's suggested frame (see the differences).
+### Check (tests/engine/legacy.test.mjs)
+- The 20 recorded projects were imported as Steel Bridge Design files: built-in, builtin28, xsA, curb, util × AASHTO, RIDOT, MassDOT, CTDOT.
+  - Parts: Preliminary sizing from `DEFAULT` after the page's own `migrateOwner`, or from the seeds; GirderDetail's built-in module
+    inputs, or the seeds; the owner set as the recorders do.
+  - Model against the 100 hand-off payloads: spans, plates, b_eff, position, skews, owner, t_s, haunch and f′c are exact.
+- Computed with this app (analysis; flexure on its framing, with the owner factors η and m applied in the test) for G1 and G2, against
+  GirderDetail's own results. Largest difference per quantity:
+
+| Quantity | Largest | Where | Cause |
+|---|---|---|---|
+| M_DC1 | 0.76 % (−2424.4 vs −2406.1 kip-ft) | builtin AASHTO G2 | Cross-frame point loads: GirderDetail weighed Preliminary sizing's suggested K-frame (L3x3x3/8 bottom chord and diagonals, 2.80 kip on G1); this app weighs the imported Cross-frames members (X, L5x5x3/8 × 3, 4.73 kip). Steel at 490/144 (SB2-A2, +0.08 % of the steel part) |
+| M_DC2, M_DW | 0.006 % | curb CTDOT / AASHTO | Hand-off round-off (0.001) and the station grids |
+| M_LL+IM, M_FAT (±) | 0.000 % | — | (pedestrian part of the hand-off taken out) |
+| Negative flexure GS7/GS9, GS8 | 0.26 % / 0.32 % | builtin CTDOT G2 span 1 | The M_DC1 above through f_bu; L_b and C_b from this app's framing |
+| Same, xsA (sidewalks) | 10.4 % / 9.6 % | xsA RIDOT G1 span 3 (1.040 vs 1.160) | GirderDetail adds the 75 psf pedestrian load to LL+IM; this app's analysis has no pedestrian load yet (engine/analysis.js warns) |
+
+- Further tests:
+  - Nothing dropped: GirderDetail's fatigue rows and stud zones are found unchanged under `legacy.unmapped`.
+  - Round trip: export, import, export gives the same text.
+  - The old autosaves are imported through a storage stand-in that throws on any write or delete; the result equals the file import.
+  - ST-Girder alone gives one simple span (φ_c and b_eff kept; `rateVeh` kept unmapped).
+  - Refusals: a hand-off file, and a file version above 1.
+- Headless smoke: Import JSON with the xsA project file shows the summary (MassDOT defaults applied: f′c 4 → 5, grades 50W → 50),
+  22 GirderDetail groups are kept unmapped, Welds Calculate runs, and "From old app" imports. The old keys are unchanged.
+  0 console errors.
+### Saved data (CLAUDE.md §5)
+- The old app's keys are read only. This app writes only its own `sbd2.project.current`, as before.
+- New optional field `legacy` in the sbd2 project. No existing key or format changed.
+### Open items (for the engineer)
+- Pedestrian load: this app's analysis does not have it. On bridges with sidewalks, negative flexure is up to 10 % lower than in
+  GirderDetail (xsA). Already warned on the Analysis tab.
+- Owner factors η and m (OWN6/OWN7): `engine/flexure.js` does not apply them yet (its header, "Not ported"). The test applied them to
+  compare. Without them the Flexure ratios of RIDOT projects (m = 1.2) are lower than GirderDetail's.
+- Cross-frame weight in DC1: map Preliminary sizing's suggested frame (`analysis.xf`, K-frame areas) into the cross-frame members on
+  import, or keep the Cross-frames module's members (now)?
