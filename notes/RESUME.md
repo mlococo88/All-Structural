@@ -21,3 +21,12 @@ Pilot, foundation, and these modules:
 4. Switch-over: final full comparison, then `Steel Bridge Design.html` redirects to `apps/steel-bridge`; update tools.html.
 
 Agent brief: notes/wave_common.md (copy it to the scratchpad). Use 2–4 agents, one PR each.
+
+## Auto design PR1 merged (#494)
+For PR2:
+- compare view, locks and cost editor;
+- the 15 pending parity rows;
+- rerun ST via `tests/engine/st-source.mjs`;
+- add Rating and Welds to the full check.
+
+Decision SB2-AD8 (lead, 2026-10-30): the splice auto-design uses the owner's edge distance for end distances (CTDOT 2 in); Auto design treats cross-frame bolt count (CF11) as a sizing rule. Implement in PR2.
