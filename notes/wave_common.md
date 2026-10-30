@@ -1,0 +1,54 @@
+## Common rules for every Steel Bridge rebuild agent
+- Repo: mlococo88/All-Structural. Branch from the latest origin/main and work in your own worktree.
+- Read these first:
+  - CLAUDE.md (binding)
+  - shared/README.md (the conventions and the worked-steps format)
+  - docs/REBUILD_PLAN.md §5
+  - fixlog/steel-bridge.md
+  - apps/steel-bridge/engine/sections.js and tests/engine/sections.test.mjs: copy their pattern
+  - tests/engine/gd-source.mjs: it loads GirderDetail's own code from "Steel Bridge Design.html" into Node for parity tests
+- Work lean:
+  - Use grep and line ranges. Never read the whole of "Steel Bridge Design.html" (3 MB).
+  - Do not spawn sub-agents.
+  - Run one headless smoke test of apps/steel-bridge/index.html at the end. Wrap it in `flock /tmp/claude-0/-home-user-All-Structural/9085651c-392a-5333-9756-05df816e0405/scratchpad/locks/browser.lock`. Playwright is preinstalled; never install it.
+- Two other agents are working in parallel on other modules. Keep to your own files:
+  - engine: apps/steel-bridge/engine/<module>.js
+  - user interface: apps/steel-bridge/ui/<module>.js (create ui/ if it doesn't exist)
+  - tests: tests/engine/<module>.test.mjs
+- Shared files take minimal, additive edits only:
+  - index.html: script tags and one tab or card registration
+  - model.js: only the fields you need
+  - fixlog/steel-bridge.md: append your own entry
+- Before merging, run `git fetch origin main && git merge origin/main`, resolve any conflicts and re-run the tests.
+- Every computed value goes through SharedSteps with an AASHTO LRFD 10th Ed. ref (CLAUDE.md §6). The UI card shows the steps.
+- Parity:
+  - Run all 100 tests/projects/st/gd_*.json payloads plus the built-in project against GirderDetail's own functions in Node.
+  - The target is exact or round-off agreement.
+  - If anything differs: report it with its cause. Do not "fix" either side (CLAUDE.md §4/§9).
+  - Add at least one hand-check case, with its arithmetic in comments.
+- Merge-on-pass is authorized. Squash-merge yourself once `node tests/engine/run.mjs` passes and the smoke test shows 0 console errors. Load mcp__github__create_pull_request and mcp__github__merge_pull_request via ToolSearch, and merge on the full head SHA.
+- Commit and push after each step; the container can restart.
+- Commit trailer:
+  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+  Claude-Session: https://claude.ai/code/session_01ERyVKJvXwkCLfDxubWUdbh
+- The PR body ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`, a blank line, then the session URL.
+- No model identifiers in repo files.
+- Final report (short):
+  - the PR URL and merge SHA
+  - parity counts and the largest difference
+  - the hand-check numbers
+  - wall-clock time
+  - anything that needs the engineer
+- Speed rules (from the engineer, 2026-10-29):
+  - Any PR that touches the old "Steel Bridge Design.html" verifies its calculations in Node with the tests/engine/gd-source.mjs pattern, comparing the patched file with origin/main.
+    - Use at most 2 browser runs: one targeted compare.mjs case and one sbd-verify.
+  - Only one agent at a time edits the old file.
+- UPDATED speed rules (engineer, 2026-10-29, supersede the ones above):
+  - No browser compare.mjs runs and no browser baseline re-recording for PRs on the old "Steel Bridge Design.html". Verify in Node only (gd-source.mjs pattern).
+  - Every PR still does ONE page-load smoke check (0 console errors) of the page it changes.
+    - New app (apps/steel-bridge): no flock needed. It's light.
+    - Old app: use flock.
+  - Browser recordings of GirderDetail inputs only when a module has no recorded inputs yet. Reuse tests/projects/sbd2-* first.
+  - Decide engineering questions yourself, using AASHTO 10th Ed., accuracy and not over-conservatism. Record each decision with its reasoning in the fixlog. Only stop and report for:
+    - an unexplained difference larger than round-off, or
+    - a pass/fail flip you can't explain.
