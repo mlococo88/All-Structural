@@ -145,5 +145,19 @@ test('hand checks: FW1–FW4 and TR1–TR4 on GirderDetail\'s built-in input', (
   assert.equal(JSON.stringify(it('TR4').map(i => [i.st, i.value])), '[["pass",0.75],["pass",0.75]]');
   // f+ = 650(12)(ȳ_n − 0.5625)/I_n, f− = 180(12)(ȳ_r − 0.5625)/I_r; γΔf = 1.75(f+ + f−)
   assert.ok(Math.abs(t.df - 1.75 * (650 * 12 * (t.S.cn.yb - 0.5625) / t.S.cn.I + 180 * 12 * (t.S.r.yb - 0.5625) / t.S.r.I)) < 1e-12);
-  const s = WT.steps(R, 'fw', 0).find(o => o.id === 'wf0.Rw'); assert.equal(W.SharedSteps.line(s, false), 'R_r = 2(0.6)φ_(e2)F_(exx)(0.707w) = 2(0.6)(0.80)(70)(0.707)(0.3125) = 14.847 kip/in');
+  const s = WT.steps(R, 'fw', 0).find(o => o.id === 'wf0.Rw');   // rendered line assert.equal(W.SharedSteps.line(s, false), 'R_r = 2(0.6)φ_(e2)F_(exx)(0.707w) = 2(0.6)(0.80)(70)(0.707)(0.3125) = 14.847 kip/in');
+});
+
+test('Welds tab (ui/welds.js build): the default project, every girder, from this app\'s analysis', () => {
+  const E = f => path.join(ROOT, 'apps/steel-bridge', f);
+  const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), 'lldf.js', E('engine/lldf.js'), E('engine/loads.js'),
+    E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/framing.js'), E('engine/analysis.js'), E('engine/welds.js'), E('ui/welds.js'));
+  const P = U.SBDModel.defaultProject(); assert.equal(U.SBDModel.validate(P).errors.length, 0);
+  P.girders.forEach((g, gi) => { const B = U.SBDWeldsUI.build({ P, g: gi }); assert.ok(!B.err, B.err);
+    // 3 spans: Abut. 1 R, Pier 1 L/R, Pier 2 L/R, Abut. 2 L (6) + 4 plate changes × 2 sides (8); plate changes at 88, 128, 232, 272 ft,
+    // field splices 82, 145, 215, 278 ft (none within 0.5 ft): 4 changes × 2 flanges = 8 transitions
+    assert.equal(B.R.fw.length, 14); assert.equal(B.R.tr.length, 8);
+    console.log(`       ${g.label}: FW1 ${B.gov.FW1.loc} ${B.gov.FW1.r.toFixed(4)}; FW2 ${B.gov.FW2.r.toFixed(4)}; FW3 ${B.gov.FW3.loc} ${B.gov.FW3.r.toFixed(4)}; TR1 ${B.gov.TR1.loc} ${B.gov.TR1.r.toFixed(4)}`);
+    B.C.forEach(c => c.items.forEach(it => assert.ok(!Number.isNaN(it.r), `${c.id} ${it.loc}`))); });
+  const p2 = JSON.parse(JSON.stringify(P)); p2.deck.composite = false; assert.ok(U.SBDWeldsUI.build({ P: p2, g: 0 }).err);
 });
