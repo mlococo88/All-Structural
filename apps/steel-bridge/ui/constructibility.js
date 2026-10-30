@@ -106,6 +106,7 @@
       const R = S.R, rows = R.rows, ga = R.govAll;
       const cell = o => !o ? '<td>—</td>' : o.row.checks && o.row.conC ? `<td class="${cls(o.ratio)}" data-cnsel="${rows.indexOf(o.row)}" title="${esc(o.check.id + ' ' + o.check.key + ' at ' + fmt(o.row.x, 2) + ' ft')}">${rtx(o.check)}<br><span class="cn-na">${fmt(o.row.x, 2)} ft</span></td>`
         : `<td class="${cls(o.ratio)}" data-ohsel="${R.oh.rows.indexOf(o.row)}">${rtx(o.check)}<br><span class="cn-na">${esc(o.check.id)}, ${fmt(o.row.x, 2)} ft</span></td>`;
+      h += '<div id="gfx_cn"></div>';   // graphics (ui/gfxa.js)
       h += `<section class="sec"><div class="secHead">Constructibility results</div><div class="secBody"><p class="note">${R.what}</p>
         ${ga ? `<p>Governing: <b>${esc(ga.check.id)}</b> ${tt(ga.check.title)} at x = ${fmt(ga.row.x, 2)} ft: ratio <b class="${cls(ga.ratio)}">${rtx(ga.check)}</b>.</p>` : ''}
         ${R.oh && R.oh.errors && R.oh.errors.length ? `<div class="alert err">Overhang brackets: ${esc(R.oh.errors.join(' '))}</div>` : ''}
@@ -130,6 +131,7 @@
           ${q ? `<h4 class="sub">${esc(q.name)}</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(q.checks, q.gov)}</tbody></table></div>${stepsHtml(q.steps)}` : ''}</div></section>`; }
     }
     host.innerHTML = h;
+    { const sl = host.querySelector('#gfx_cn'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.constr(sl, { P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
     on('#cn_src', 'change', e => { S.src = e.target.value; redraw(); });

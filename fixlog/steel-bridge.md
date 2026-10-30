@@ -2115,6 +2115,35 @@ Display and export only: no computed value changes, no saved-data change. Engine
 ### Open items
 - Tabs use the helper in the next PR (Section properties, Loads & LLDF, Analysis, Flexure, Constructibility); the other tabs are another agent's.
 
+## 2026-10-30 — PR: sb2-gfx-a-tabs — graphics on the Section properties, Loads & LLDF, Analysis, Flexure and Constructibility tabs, in the Drawings-tab format (ui/gfxa.js)
+Display and export only: no computed value, formula, factor, unit or saved-data change. Each graphic is drawn from the results the tab's own tables use (the tab's calc / build output); nothing is recomputed. Every graphic is a SharedDxf drawing with a Download DXF button (ui/graphics.js, PR sb2-gfx-helper).
+### Where
+- New `ui/gfxa.js` (`window.SBDGfxA`), script tag after `ui/graphics.js` in `index.html`. Additive hooks, anchor texts:
+  - `index.html` `drawOut()`: a card "Section graphic" (`<div id="gfx_sec">`) before the "Section properties" card, and after `$('out').innerHTML = h;` `SBDGfxA.section(...)`; the Loads tab: `UL.after(...)` after the output's innerHTML.
+  - `ui/loads.js`: `<div id="gfx_ld">` in `output()` and the function `after(el, P, R, ui)` (exported).
+  - `ui/analysis.js` `resultsHtml` (`<div id="gfx_an">` before the Diagrams card) and `draw` (mount after `el.innerHTML = h`).
+  - `ui/flexure.js` `render` (`<div id="gfx_fx">` before "Flexure results by location"; mount after `host.innerHTML = h`; a click on the graphic sets `S.sel` and redraws, as a click on the table row does).
+  - `ui/constructibility.js` `render`: the same (`gfx_cn`).
+- Graphics:
+  - Section properties: scaled cross-section (plates, haunch, deck over b_eff, rebar layers) with the neutral axes at the table's values (steel, 3n, n ȳ; PNA y_p) and a stress diagram for the chosen load case (DC1 steel, DC2/DW 3n, LL n).
+  - Loads & LLDF: cross-section with the appurtenance footprints of the Drawings tab, girders (selected one highlighted), lane bands, traffic faces, wheel positions of the case chosen (one-lane lever rule, multi-lane lever rule, rigid cross-section: the positions the LLDF steps use) and the lever-rule influence line of the girder.
+  - Analysis: girder elevation (supports, plate breaks, cross-frames CF, splices FS), moments and dead-load deflection (camber) aligned on the same stations, a station selector, click and hover readout.
+  - Flexure: elevation coloured by the governing ratio of each location (green below 0.8, amber 0.8 to 1.0, red above 1.0 or NG), demand and capacity bars (ksi checks) and the ratios of every check of the selected location with 1.0 marked, and an unbraced-length sketch (L_b, L_p, L_r, C_b, F_nc from the row).
+  - Constructibility: pour sequence over the elevation, M_DCc envelope against M_DC1, the governing deck-placement ratio per location, and the overhang-bracket sketch from the tab's bracket inputs.
+### Decisions (engineer's rule: decide small questions and log them)
+- Stress diagram of the Section properties tab: the tab has no moments, so it shows the stress per 1000 kip-ft of unit moment on the section the load case acts on, f = M(y − ȳ)/I with the table's I and ȳ (deck stress ÷ n or 3n). It is labelled as a unit-moment diagram; no design stress is shown. Hand check, built-in project, steel section (I = 37,472 in⁴, ȳ = 28.213 in, d = 61.875 in): top of steel 1000 × 12 × (61.875 − 28.213)/37,472 = 10.78 ksi (compression), bottom 1000 × 12 × (0 − 28.213)/37,472 = −9.04 ksi, the figures on the drawing.
+- Rigid-cross-section lane and wheel positions are laid out from the traffic face of the governing side using the rule the engine states (outer wheel 2 ft and inner wheel 8 ft from the lane edge, lane width N_L's), because the engine returns only the lane eccentricities.
+- The selected-station highlight is a live overlay (not in the DXF); the zoom and pan are kept across re-draws (key per view).
+### Check case / How verified
+- `tests/engine/gfxa.test.mjs`: the built-in project and 5 payloads: finite coordinates and valid DXF R12 for every graphic (Section: both regions and all three load cases, axes at the table's ȳ; Loads: every girder, region and case, wheels = lever1.wheels × 12 in; Analysis: supports and station readout/pick; Flexure: bands per ratio colour equal the table rows' colours; Constructibility: one rectangle per pour at the pour stations).
+- `tests/smoke/steel-bridge-graphics.mjs`: each tab's graphic appears, wheel zoom, the Loads and Section case selectors, click on the Analysis graphic moves the station selector, click on the Flexure graphic changes the selected row, phone width (390 px) with no horizontal scroll, screen and print screenshots; 0 console errors.
+### Saved data
+- No change.
+### Open items
+- Section properties, Loads, Analysis, Flexure, Constructibility are done; the other tabs' graphics are agent B's PR.
+- A 3D extruded section view (optional in the spec) is not added.
+- The grouped worked steps (spec section A) are a later job: the graphics sit in their own blocks above the step lists.
+
 ## 2026-10-30 — PR: sb2-gfx-b — graphics on Shear & stiffeners, Fatigue & studs, Cross-frames, Welds, Field splices, Rating and the Report summary
 Display only: no computed value, load factor, resistance or saved-data change; every graphic draws the tab's own build() result (no recomputation); the graphics do not change the results they read (tests compare the JSON before and after).
 ### Where
