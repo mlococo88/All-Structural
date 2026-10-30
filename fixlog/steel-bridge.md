@@ -1716,3 +1716,17 @@ Display and export only: no engineering formula, factor, unit or reference chang
 ### Open items
 - Paper-space layouts (one layout per sheet with a viewport) need a DXF R2000+ writer in shared/dxf.js (SB2-DW6).
 - Flange-stress plots along the girder and the jacking / seismic reaction columns would be new calculations here (SB2-DW8, DW9).
+
+## 2026-10-30 — PR: sb2-dwg-panzoom — Drawings tab: pan and zoom in the sheet preview (engineer's request)
+Display only: no computed value changes.
+### Where
+- `ui/drawings.js` `render`: the sheet preview uses `SharedDxf.viewer` (fixlog/shared-dxf.md) in a box 72vh high.
+  - Navigation: wheel zoom about the cursor, drag pan, pinch, double-click or double-tap to fit, and on-canvas +, − and Fit buttons.
+  - The Preview drop-down (Fit, 200, 400, 800 %) sets the zoom and follows the wheel, drag and buttons; other levels show as a "N %" entry.
+  - `ui.dwg.z` (existing) keeps the drop-down choice.
+  - Before: the preview was zoomed by widening the SVG inside a scrolling box.
+- `SBDDrawingsUI.viewer()` returns the preview's controller (for tests).
+### Check case / How verified
+- `tests/smoke/steel-bridge-drawings.mjs`: wheel zoom to about 400 %, the page not scrolled, the point under the cursor fixed, drag, +, the 200 % drop-down entry and double-click fit back to the original viewBox; 0 console errors.
+### Saved data
+- No change (`sbd2.ui` `dwg.z` as before).

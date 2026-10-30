@@ -27,8 +27,7 @@
   function css() {
     if (document.getElementById('dwg-css')) return;
     const st = document.createElement('style'); st.id = 'dwg-css';
-    st.textContent = `.dwg-box{overflow:auto;border:1px solid var(--line);background:#fff;max-height:72vh;-webkit-overflow-scrolling:touch;}
-      .dwg-box svg{display:block;height:auto;} .dwg-bar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:4px 0 8px;font-family:var(--font-ui);font-size:9pt;}
+    st.textContent = `.dwg-box{border:1px solid var(--line);background:#fff;} .dwg-bar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:4px 0 8px;font-family:var(--font-ui);font-size:9pt;}
       .dwg-bar select{width:auto;} .dwg-idx td,.dwg-idx th{padding:2px 6px;} .dwg-idx tr.on{background:#eef4ff;} .dwg-idx tr{cursor:pointer;}`;
     document.head.appendChild(st);
   }
@@ -70,7 +69,7 @@
       ${G.warnings.length ? `<div class="alert">${G.warnings.map(esc).join('<br>')}</div>` : ''}
       <p class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is drawn at its plot scale inside its border and title block (paper ${paper === 'D' ? 'D, 34 × 22' : 'B, 17 × 11'} in), side by side, GirderDetail's sheet layout; plot each sheet at its scale. Layers S-GRDR…, S-XFRM…, S-DIMS…, S-TBLK, S-BRDR; dimensions are DIMENSION entities. The previews are drawn from the same entities as the file. Display only: every value is worked on the tab linked in the index.</p></div></section>`;
     h += `<section class="sec"><div class="secHead">${esc(cur.n + '. ' + cur.title)} <span style="font-weight:400;text-transform:none">· scale ${esc(SN[cur.k] || '1:' + cur.k)}${cur.over ? ' · does not fit the sheet even at the largest scale' : ''}</span></div><div class="secBody">
-      <div class="dwg-box" data-dwg="${esc(cur.id)}"><div style="width:${100 * z}%">${window.SharedDxf.toSVG(B.D, { i0: cur.i0, i1: cur.i1, bg: '#fff', title: cur.title })}</div></div></div></section>`;
+      <div class="dwg-box" data-dwg="${esc(cur.id)}"></div><p class="note">Wheel: zoom about the cursor · drag: pan · pinch and two-finger drag on a touch screen · double-click or double-tap: fit.</p></div></section>`;
     h += `<section class="sec"><div class="secHead">Sheet index</div><div class="secBody"><div class="tscroll"><table class="tbl dwg-idx"><thead><tr><th>No.</th><th class="lft">Title</th><th>Scale</th><th class="lft">Worked on</th></tr></thead><tbody>
       ${sh.map(s => { const w = srcOf(s.id); return `<tr data-dsheet="${esc(s.id)}"${s === cur ? ' class="on"' : ''}><td>${s.n}</td><td class="lft">${esc(s.title)}</td><td>${esc(SN[s.k] || '1:' + s.k)}</td><td class="lft">${w ? link(w[0], w[1] + ' tab') : '—'}</td></tr>`; }).join('')}</tbody></table></div>
       ${B.miss.length ? `<p class="note"><b>Not in this set:</b> ${B.miss.map(([w, r]) => `${esc(w)} (${esc(r.toLowerCase())})`).join('; ')}.</p>` : ''}</div></section>`;
@@ -83,11 +82,16 @@
       ${Q.welds.map(q => `<tr><td class="lft">${esc(q.k.toLowerCase())}</td><td>${fr(q.w)}</td><td>${q.lines}</td><td>${fmt(q.Lft, 1)}</td><td class="lft">(${fmt(q.w, 4)})²/2 × ${fmt(q.L, 1)} in × ${fmt(gam, 5)} lb/in³ = <b>${fmt(q.wt, 1)} lb</b></td></tr>`).join('')}</tbody></table></div>
       <p class="note">Fillet weld sizes: flange-to-web as the Welds tab (entered size, else the minimum of Table 6.13.3.4-1 for the thickest plate, ${'AASHTO LRFD 10th Ed.'}); stiffeners and connection plates the w of their types (Shear &amp; stiffeners inputs). Welded lengths: stiffener D − clip − gap, connection plate D − 2 clips (+ 2 × (b − clip) to each flange), bearing stiffener D − 2 clips.</p></div></section>`;
     host.innerHTML = h;
-    host.querySelectorAll('.dwg-box svg').forEach(s => { s.style.width = '100%'; });
+    // the preview: pan and zoom (shared/dxf.js viewer); the Preview drop-down synced with the wheel, drag, pinch and buttons
+    const zs = host.querySelector('#dwg_z'), sync = L => { const m = ZOOM.find(q => Math.abs(q[0] - L) < 0.005); let c = zs.querySelector('option[data-custom]');
+      if (m) { zs.value = String(m[0]); if (c) c.hidden = true; return; }
+      if (!c) { c = document.createElement('option'); c.dataset.custom = '1'; c.value = 'c'; zs.appendChild(c); } c.hidden = false; c.textContent = `${Math.round(L * 100)} %`; zs.value = 'c'; };
+    const VW = window.SharedDxf.viewer(host.querySelector('.dwg-box'), window.SharedDxf.toSVG(B.D, { i0: cur.i0, i1: cur.i1, bg: '#fff', title: cur.title }), { height: '72vh', level: z, onchange: sync });
+    S.viewer = VW;
     const set = (k, v) => { ui.dwg[k] = v; ctx.saveUi && ctx.saveUi(); render(host, ctx); };
     host.querySelector('#dwg_paper').addEventListener('change', e => set('paper', e.target.value));
     host.querySelector('#dwg_sheet').addEventListener('change', e => set('sheet', e.target.value));
-    host.querySelector('#dwg_z').addEventListener('change', e => set('z', +e.target.value));
+    zs.addEventListener('change', e => { if (e.target.value === 'c') return; ui.dwg.z = +e.target.value; ctx.saveUi && ctx.saveUi(); VW.set(+e.target.value); });
     host.querySelectorAll('[data-dsheet]').forEach(tr => tr.addEventListener('click', e => { if (e.target.closest('a')) return; set('sheet', tr.dataset.dsheet); }));
     host.querySelectorAll('[data-dgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); ctx.goto && ctx.goto(a.dataset.dgo); }));
     host.querySelector('#dwg_dxf').addEventListener('click', () => {
@@ -99,5 +103,5 @@
     cb.addEventListener('click', () => { cb.disabled = true; cb.textContent = 'Calculating…'; setTimeout(() => { calc(P); render(host, ctx); }, 30); });
   }
 
-  window.SBDDrawingsUI = { render, results, calc };
+  window.SBDDrawingsUI = { render, results, calc, viewer: () => S.viewer };
 })();
