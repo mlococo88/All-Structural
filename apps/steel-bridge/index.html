@@ -46,6 +46,13 @@
 <script src="report/data.js"></script>
 <script src="report/builders.js"></script>
 <script src="ui/report.js"></script>
+<!-- three.js for the 3D view: the same pinned files as GirderDetail ("Steel Bridge Design.html"), r128 + OrbitControls (CLAUDE.md §2) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
+<script src="../../shared/dxf.js"></script>
+<script src="engine/drawings.js"></script>
+<script src="ui/drawings.js"></script>
+<script src="ui/view3d.js"></script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
   :root{
@@ -157,7 +164,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -291,6 +298,8 @@
     if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
     if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
     if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
+    if (ui.otab === 'dwg') { window.SBDDrawingsUI.render($('out'), { P, g: ui.g, ui, saveUi, goto: t => { ui.otab = t; saveUi(); drawOut(); } }); return; }   // Drawings tab (ui/drawings.js)
+    if (ui.otab === '3d') { window.SBD3DUI.render($('out'), { P, ui, saveUi }); return; }   // 3D view tab (ui/view3d.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
