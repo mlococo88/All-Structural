@@ -144,7 +144,7 @@
         kv([['$M_{p}$', `${f(c.Mp, 1)} kip-ft`, K(sc, `pl.${c.region}.Mp`)], ['PNA $y_{p}$ from bottom', `${f(c.yp, 3)} in`, K(sc, `pl.${c.region}.yp`)], ['D6.1 case', c.pl.cs], ['$D_{cp}$', `${f(c.Dcp, 3)} in`, K(sc, `pl.${c.region}.Dcp`)],
           ['$R_{h}$', f(c.Rh, 3), K(sc, !c.comp ? 'rh.s.Rh' : c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')]]),
         c.comp ? null : note('Noncomposite girder: the steel section alone (6.10.1.1.1a).'),
-        steps(sc, c.steps, { lazy: X.detail === 'all', title: 'Worked steps' })])); });
+        steps(sc, c.steps, { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
     return { title: 'Section properties', note: `Plates of ${gName(B.girder)}; y up from the bottom of the steel. As on the [[tab:sec|Section properties tab]]; the flexure and constructibility steps below repeat the properties of each location.`, subs };
   }
 
@@ -311,7 +311,7 @@
       } else if (R) items.push(note(R.errors.join(' '), true));
       if (s.CK) { items.push(tbl(['ID', 'Check', 'Governing item', 'Ratio', 'Status', ED], s.CK.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
           return [c.id, tt(c.title), it ? it.loc : c.naWhy || '', it && it.r != null ? R3(it.r, K(sc, it.step)) : { t: '—', key: it ? K(sc, it.step) : null }, STT[c.status] || c.status, String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')]; })));
-        items.push(steps(sc, SP.steps(R).concat(s.CK.steps), { title: 'Worked steps' })); }
+        items.push(steps(sc, SP.steps(R).concat(s.CK.steps), { title: 'Worked steps', lazy: !sg || sg.k !== k })); }   // the governing splice open, the others on demand
       subs.push(sub(sc, s.name, items)); });
     return { title: 'Field splices (bolted, 6.13.6.1)', subs };
   }

@@ -29,10 +29,12 @@
      html(doc, { lazy })        -> the document HTML (title block, cover, contents, sections); lazy=false fills every lazy item
      text(doc)                  -> plain text of the whole report (tests: NaN / undefined scan, "see §" check)
      mount(host, model, opt)    -> the viewer in host: bar (opt.controls HTML + search, Expand all, Collapse all, Print), nav tree, doc.
-                                   opt.onGoto(name) for [[tab:…]] links; opt.closed (a Set of closed heading ids, kept between mounts).
+                                   opt.onGoto(name) for [[tab:…]] links; opt.stick: the height of the host page's own sticky header
+                                   above the viewer (the bar sticks below it); opt.closed (a Set of closed heading ids, kept between mounts).
                                    Returns { doc, print(), jump(key) }.
      print(doc)                 -> prints the whole report (every section open, lazy items filled), alone on the page
      ref(doc, key)              -> '§x.y' or null
+     css()                      -> injects the viewer's styles (mount and print do it themselves)
    Styles: injected once (style#rp-css), class prefix rp-. */
 (function () {
   'use strict';
@@ -93,7 +95,13 @@
   const noteOf = (doc, it, t, html) => String(t).split(SEE).map((p, i) => i % 2 ? rich(doc, `[[${seeKey(doc, it, p)}]]`, html) : html ? esc(p) : p).join('');
   const ref = (doc, key) => { const e = doc.index.get(key); return e ? '§' + e.n : null; };
 
-  /* ---------- rich text: $tex$, [[key]], [[tab:name|text]] ---------- */
+  /* ---------- rich text: $tex$, [[key]], [[tab:name|text]] ----------
+     Notation in running text, titles and table cells is set by SharedSteps' built-in renderer (subscripts, Greek, fractions in the
+     text font), not KaTeX: a report of every station has thousands of cells, and KaTeX markup there made it slow and large. The worked
+     steps themselves are set by KaTeX when the page has it. Cached by string. */
+  const LITE = new Map();
+  const lite = t => { let h = LITE.get(t); if (h != null) return h; const w = typeof window !== 'undefined' ? window : null, K = w && w.katex;
+    try { if (K) w.katex = undefined; h = ST().toHTML(t); } finally { if (K) w.katex = K; } if (LITE.size < 20000) LITE.set(t, h); return h; };
   function rich(doc, s, html) {
     const parts = String(s == null ? '' : s).split(/(\[\[[^\]]+\]\]|\$[^$]+\$)/);
     return parts.map(p => {
@@ -104,7 +112,7 @@
         const e = doc.index.get(k), t = e ? '§' + e.n : '§?';
         return html ? (e ? `<a href="#${e.anchor}" class="rp-see" data-rpjump="${esc(k)}">${t}</a>` : `<span class="rp-bad" title="${esc(k)}">${t}</span>`) : t;
       }
-      if (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$') return html ? ST().toHTML(p.slice(1, -1)) : ST().toText(p.slice(1, -1));
+      if (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$') return html ? lite(p.slice(1, -1)) : ST().toText(p.slice(1, -1));
       return html ? esc(p) : p;
     }).join('');
   }
@@ -125,9 +133,9 @@
   }
   function itemHtml(doc, it, lazy) {
     if (it.type === 'steps') {
-      const body = `<div class="rp-steps">${stepsHtml(doc, it)}</div>`;
-      if (it.lazy) return `<details class="rp-lz" data-rplz="${it._lz}"${lazy ? '' : ' open'}><summary>${rich(doc, it.title || 'Worked steps', true)} <span class="rp-cnt">(${(it.steps || []).length} steps)</span></summary>${lazy ? '' : body}</details>`;
-      return (it.title ? `<h4 class="rp-h3">${rich(doc, it.title, true)}</h4>` : '') + body;
+      const body = () => `<div class="rp-steps">${stepsHtml(doc, it)}</div>`;   // not made for a lazy item until it is opened
+      if (it.lazy) return `<details class="rp-lz" data-rplz="${it._lz}"${lazy ? '' : ' open data-filled="1"'}><summary>${rich(doc, it.title || 'Worked steps', true)} <span class="rp-cnt">(${(it.steps || []).length} steps)</span></summary>${lazy ? '' : body()}</details>`;
+      return (it.title ? `<h4 class="rp-h3">${rich(doc, it.title, true)}</h4>` : '') + body();
     }
     if (it.type === 'table') return `${it.caption ? `<p class="rp-cap">${rich(doc, it.caption, true)}</p>` : ''}<div class="rp-tw"><table class="rp-tbl${it.wide ? ' rp-wide' : ''}"><thead><tr>${(it.head || []).map(c => cellHtml(doc, c, true)).join('')}</tr></thead><tbody>
       ${(it.rows || []).map(r => { const cells = Array.isArray(r) ? r : r.cells, cl = Array.isArray(r) ? '' : r.cls; return `<tr${cl ? ` class="rp-${cl}"` : ''}>${cells.map(c => cellHtml(doc, c, false)).join('')}</tr>`; }).join('')}</tbody></table></div>`;
@@ -176,14 +184,14 @@
   /* ---------- styles ---------- */
   const CSS = `
 .rp{font-family:"Times New Roman",Times,serif;color:#000;}
-.rp-bar{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:8px 0 12px;padding:8px 10px;background:#fff;border:1px solid #E4E7EB;border-radius:8px;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:9.5pt;}
+.rp-bar{position:sticky;top:var(--rp-stick,0px);z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:8px 0 12px;padding:8px 10px;background:#fff;border:1px solid #E4E7EB;border-radius:8px;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:9.5pt;}
 .rp-chips{display:flex;flex-wrap:wrap;gap:6px;}
 .rp-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;background:#F8FAFC;font-size:9pt;}
 .rp-chip:has(input:checked){background:#e8eef6;border-color:#64748b;}
 .rp-sp{flex:1;}
-.rp-q{width:150px!important;}
+.rp-q{width:150px!important;} .rp-bar select{width:auto!important;}
 .rp-body{display:grid;grid-template-columns:230px minmax(0,1fr);gap:16px;align-items:start;}
-.rp-toc{position:sticky;top:var(--rp-top,64px);max-height:calc(100vh - 150px - var(--rp-top,64px));overflow:auto;border:1px solid #E4E7EB;border-radius:8px;padding:6px 2px;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;scrollbar-width:thin;background:#fff;}
+.rp-toc{position:sticky;top:calc(var(--rp-stick,0px) + var(--rp-top,64px));max-height:calc(100vh - 150px - var(--rp-stick,0px) - var(--rp-top,64px));overflow:auto;border:1px solid #E4E7EB;border-radius:8px;padding:6px 2px;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;scrollbar-width:thin;background:#fff;}
 .rp-toc a{display:block;padding:2px 9px;border-left:2px solid transparent;color:#475569;text-decoration:none;font-size:9pt;line-height:1.35;}
 .rp-toc a.rp-l1{font-weight:600;color:#0F172A;margin-top:5px;}
 .rp-toc a.rp-l2{padding-left:20px;font-size:8.5pt;}
@@ -193,17 +201,18 @@
 .rp-cover{padding:0 0 12pt;margin:0 0 14pt;border-bottom:1pt solid #000;} .rp-cover h1{font:700 21pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 6pt;} .rp-cover p{font:700 12pt Arial,Helvetica,sans-serif;margin:0 0 4pt;} .rp-cover .rp-cp{font-weight:400;}
 .rp-ptoc{display:none;} .rp-ptoc ol{list-style:none;margin:0;padding:0;} .rp-ptoc ol ol{padding-left:18pt;font-size:10pt;}
 .rp-h1x{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:10pt 0 6pt;}
-.rp-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:16pt 0 8pt;cursor:pointer;scroll-margin-top:calc(var(--rp-top,64px) + 8px);}
-.rp-h2{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 5pt;cursor:pointer;scroll-margin-top:calc(var(--rp-top,64px) + 8px);}
+.rp-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:16pt 0 8pt;cursor:pointer;scroll-margin-top:calc(var(--rp-stick,0px) + var(--rp-top,64px) + 8px);}
+.rp-h2{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 5pt;cursor:pointer;scroll-margin-top:calc(var(--rp-stick,0px) + var(--rp-top,64px) + 8px);}
 .rp-h1::after,.rp-h2::after{content:'▾';display:inline-block;margin-left:6pt;font-size:9pt;color:#777;text-decoration:none;}
 .rp-closed>.rp-h1::after,.rp-closed>.rp-h2::after{content:'▸';}
+.rp-sub{content-visibility:auto;contain-intrinsic-size:auto 800px;}
 .rp-sec.rp-closed>:not(.rp-h1){display:none;} .rp-sub.rp-closed>:not(.rp-h2){display:none;}
 .rp-hide{display:none!important;}
 .rp-h3{font:italic 700 10.5pt "Times New Roman",Times,serif;margin:8pt 0 2pt;}
 .rp-note{font-size:9.5pt;font-style:italic;margin:3pt 0 7pt;}
 .rp-warn{font-style:normal;border-left:3px solid #B45309;padding-left:6pt;}
 .rp-cap{font-size:9.5pt;font-weight:700;margin:8pt 0 2pt;}
-.rp-step{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"d r" "m r" "n n";gap:1pt 12pt;padding:4pt 0 3pt;border-top:0.4pt solid #bbb;break-inside:avoid;scroll-margin-top:calc(var(--rp-top,64px) + 8px);}
+.rp-step{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"d r" "m r" "n n";gap:1pt 12pt;padding:4pt 0 3pt;border-top:0.4pt solid #bbb;break-inside:avoid;scroll-margin-top:calc(var(--rp-stick,0px) + var(--rp-top,64px) + 8px);}
 .rp-step .rp-d{grid-area:d;font-size:10pt;} .rp-step .rp-m{grid-area:m;padding-left:0.25in;overflow-x:auto;} .rp-step .rp-r{grid-area:r;align-self:center;text-align:right;white-space:nowrap;} .rp-step .rp-nt{grid-area:n;padding-left:0.25in;font-size:9pt;font-style:italic;color:#7a4a00;}
 .rp-ref{font-size:8.5pt;font-style:italic;color:#444;margin-left:8pt;}
 .rp-ng .rp-r,.rp-ngt{font-weight:700;text-decoration:underline;} .rp-okt{font-size:8.5pt;} .rp-ngt{font-size:8.5pt;}
@@ -230,7 +239,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   html:has(body.rp-printing),body.rp-printing{height:auto!important;overflow:visible!important;background:#fff!important;}
   body.rp-printing #rp-print{display:block!important;}
   .rp-bar,.rp-toc,.rp-go{display:none!important;}
-  .rp-body{display:block;}
+  .rp-body{display:block;} .rp-sub{content-visibility:visible;}
   .rp-doc{border:0;padding:0;max-width:none;box-shadow:none;}
   .rp-ptoc{display:block;break-after:page;}
   .rp-sec{break-before:page;} .rp-sec.rp-closed>*,.rp-sub.rp-closed>*{display:revert!important;} .rp-hide{display:revert!important;}
@@ -270,7 +279,8 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
       <button type="button" data-rpact="exp">Expand all</button><button type="button" data-rpact="col">Collapse all</button><button type="button" class="primary" data-rpact="print">Print report</button></div>
       <div class="rp-body"><nav class="rp-toc" aria-label="Report contents">${doc.toc.map(s => `<a href="#${s.id}" data-rpto="${s.id}" class="rp-l1">${s.n}. ${esc(s.title)}</a>${s.subs.map(q => `<a href="#${q.id}" data-rpto="${q.id}" class="rp-l2">${q.n} ${rich(doc, q.title, true)}</a>`).join('')}`).join('')}</nav>
       <article class="rp-doc">${html(doc, { lazy: true, closed })}</article></div></div>`;
-    const root = host.querySelector('.rp'), bar = root.querySelector('.rp-bar'), art = root.querySelector('.rp-doc');
+    const root = host.querySelector('.rp'); if (opt.stick) root.style.setProperty('--rp-stick', opt.stick + 'px');
+    const bar = root.querySelector('.rp-bar'), art = root.querySelector('.rp-doc');
     const size = () => { if (bar.offsetHeight) root.style.setProperty('--rp-top', (bar.offsetHeight + 8) + 'px'); }; size();
     const open = el => { let p = el.closest('.rp-closed'); while (p) { p.classList.remove('rp-closed'); closed.delete((p.querySelector('.rp-h1,.rp-h2') || {}).id); p = p.parentElement && p.parentElement.closest('.rp-closed'); } };
     const flash = el => { el.classList.remove('rp-flash'); void el.offsetWidth; el.classList.add('rp-flash'); setTimeout(() => el.classList.remove('rp-flash'), 1700); };
@@ -324,5 +334,5 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     window.addEventListener('afterprint', () => { document.body.classList.remove('rp-printing'); setPage(null); const b = document.getElementById('rp-print'); if (b) b.innerHTML = ''; });
   }
 
-  window.SharedReport = { build, html, text, mount, print, ref, keyOf };
+  window.SharedReport = { build, html, text, mount, print, ref, keyOf, css };
 })();
