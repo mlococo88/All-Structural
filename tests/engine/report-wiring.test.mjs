@@ -21,7 +21,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 const E = f => path.join(ROOT, 'apps/steel-bridge', f);
 const FILES = ['units.js', 'steps.js', 'vehicles.js', 'moving-load.js', 'lldf.js', 'report.js'].concat(['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js',
   'engine/lldf.js', 'engine/loads.js', 'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js',
-  'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js', 'ui/flexure.js', 'ui/loads.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/rating.js', 'ui/splices.js',
+  'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js', 'ui/flexure.js', 'ui/loads.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/rating.js', 'ui/splices.js', 'ui/constructibility.js', 'engine/welds.js', 'ui/welds.js',
   'report/data.js', 'report/builders.js'].map(E));
 const J = v => JSON.parse(JSON.stringify(v));
 const katex = (() => { const c = loadShared(path.join(ROOT, 'tests/libs/katex@0.16.9/dist/katex.min.js')); return c.katex; })();
@@ -60,7 +60,7 @@ test('Report: the Flexure section is the Flexure module\'s result; the rating li
   const B = W.SBDReportData.compute(P, 0);
   assert.equal(JSON.stringify(B.err), '{}');
   assert.equal(B.flexSame, true);
-  assert.notEqual(B.flex, B.rating.flex, 'the report\'s flexure comes from ui/flexure.js, not from the rating');
+  assert.equal(B.flex, B.rating.flex, 'paths PR: the rating\'s flexure is the Flexure module\'s build (ui/rating.js), taken once');
   const fx = new Set(B.flex.rows); let n = 0;
   B.rating.cap.forEach((r, q) => { if (q.kind === 'flex' || q.kind === 'svc' || q.kind === 'fat') { assert.ok(fx.has(r), q.name); n++; } });
   assert.ok(n > 0);

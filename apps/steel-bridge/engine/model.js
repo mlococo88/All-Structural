@@ -73,8 +73,9 @@
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)
-                constr.flC (ksi, added 2026-10-30, report wiring PR; optional, absent = 0): f_ℓ during deck placement, first order (GS14, GS15),
-                  entered on the Constructibility tab
+                constr.flC (ksi, added 2026-10-30, report wiring PR; optional): f_ℓ during deck placement, first order (GS14, GS15),
+                  entered on the Constructibility tab; absent, blank or 0: the skew value of C6.10.1 (engine/framing.js design; paths PR
+                  2026-10-30, SB2-W1; before: 0)
      -- added 2026-10-29 (field splices PR), optional, read by engine/splices.js (absent = defaultSplices()); the stations are framing.splices --
      splices:   { code: '10' | '8' (AASHTO LRFD edition of the design forces),
                   bolts: { d: '0.875' | '1' | '1.125', gr: 'A325' | 'A490', thr: 'excl' | 'incl', cls: 'A' | 'B', prep: 'drilled' | 'punched',
@@ -96,6 +97,9 @@
      -- added 2026-10-30 (welds PR), optional: a version 1 project without it reads as defaultWelds() --
      welds:     { Fexx (ksi), w (flange-to-web fillet weld size, in; '' = the minimum of Table 6.13.3.4-1 at each location),
                   gam: { dc, dw, ll (Strength I), fat (Fatigue I) }, ground: 'yes' | 'no' (shop transition butt welds ground flush) }
+     -- added 2026-10-30 (paths PR, SB2-W1), optional: absent = no f_ℓ entered --
+     flexure:   { fl (ksi): first-order f_ℓ of the girder design (Flexure and Rating, Strength I and Service II), entered on the Flexure
+                  tab; absent, blank or 0: the skew value of C6.10.1 (engine/framing.js design) }
    } */
 (function () {
   'use strict';
@@ -312,6 +316,8 @@
       if (!['yes', 'no'].includes(Q.ground)) E('welds.ground', 'Transition butt welds: ground flush yes or no.'); }
     // added 2026-10-30 (report wiring PR): the optional f_ℓ during deck placement
     if (p.constr != null && p.constr.flC != null && !isNum(p.constr.flC)) E('constr.flC', 'f_ℓ during deck placement must be a number (ksi).');
+    // added 2026-10-30 (paths PR, SB2-W1): the optional f_ℓ entered for the girder design (Flexure, Rating)
+    if (p.flexure != null && p.flexure.fl != null && p.flexure.fl !== '' && !(isNum(p.flexure.fl) && p.flexure.fl >= 0)) E('flexure.fl', 'f_ℓ (Flexure tab) must be a number, 0 or more (ksi).');
     return { errors, warnings };
   }
 

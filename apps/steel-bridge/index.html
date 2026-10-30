@@ -183,6 +183,7 @@
   const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = (() => { try { const k = '__sbd2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
   const memStore = { getItem: () => null, setItem: () => {} };
+  if (window.SBDReportData && window.SBDReportData.install) window.SBDReportData.install();   // one analysis cache for every output tab and the report (paths PR, 2026-10-30)
   const L = M.load(store || memStore);
   let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
   let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos', otab: 'sec', lg: 0, lr: 0 };
@@ -295,7 +296,7 @@
   function drawOut() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
-    if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g }); return; }   // Flexure tab (ui/flexure.js)
+    if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
     if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g }); return; }   // Shear & stiffeners tab (ui/shear.js)
     if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
     if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g }); return; }   // Fatigue & studs tab (ui/fatigue.js)

@@ -379,10 +379,28 @@
   function flSkew(skews, ext, F) {
     F = F || DEF; const num = v => (v === '' || v == null ? NaN : +v), skM = Math.max(...(skews || [0]).map(v => Math.abs(v))), gI = num(F.flSkI) || 10, gE = num(F.flSkE) || 7.5, gG = num(F.flSkG) || 1.25;
     const f0 = ext ? gE : gI, fl = skM > 20 + 1e-9 ? +(gG * f0).toFixed(2) : 0, w = St().work('flsk');
-    w.add({ id: 'fl', label: `Flange lateral bending from skew, ${ext ? 'exterior' : 'interior'} girder (largest support skew ${n2(skM)}° ${skM > 20 + 1e-9 ? '> 20°' : '≤ 20°: none'})`, sym: 'f_{\ell}', eq: skM > 20 + 1e-9 ? '\gamma f_{\ell,skew}' : '0', sub: skM > 20 + 1e-9 ? `${n2(gG)}(${n2(f0)})` : '', value: fl, unit: 'ksi', d: 2, ref: `${ED} C6.10.1`,
+    w.add({ id: 'fl', label: `Flange lateral bending from skew, ${ext ? 'exterior' : 'interior'} girder (largest support skew ${n2(skM)}° ${skM > 20 + 1e-9 ? '> 20°' : '≤ 20°: none'})`, sym: 'f_{\\ell}', eq: skM > 20 + 1e-9 ? '\\gamma f_{\\ell,skew}' : '0', sub: skM > 20 + 1e-9 ? `${n2(gG)}(${n2(f0)})` : '', value: fl, unit: 'ksi', d: 2, ref: `${ED} C6.10.1`,
       note: 'In lieu of a refined analysis: 10 ksi interior, 7.5 ksi exterior girders (unfactored), times the load factor; the same value is used at Service II (GirderDetail; SB2-O11).' });
     return { fl, skMax: skM, steps: w.steps };
   }
 
-  window.SBDFraming = { DEF, settings, modelOf, layout, compute, girderBraces, forGirder, flSkew, lineOf, plPierSp, plPierLen, plOwnXf, plXfDef, braceG, toG, toX, lbMax };
+  /* design(P, gi, o): the brace points and the first-order f_ℓ of one girder's design checks: ONE source for every demand path (added
+     2026-10-30, paths PR; engineer's decisions SB2-W1, SB2-W2): Flexure, Constructibility and Rating, with this project's analysis or a
+     hand-off file. Before, the analysis path took its brace points from the stiffener layout's cross-frames and f_ℓ = 0 unless entered.
+     o = { sup (the demands' supports, ft; absent: this project's analysis), line (a hand-off file's girder, 0-based cross-section line;
+           absent: plate girder gi of P), skews (the demands' support skews, deg; absent: P.xs.skews), ext (exterior girder; absent:
+           P.girders[gi].position === 'exterior'), fl (f_ℓ entered, ksi: > 0 overrides the skew value; blank, 0 or absent: none entered) }
+     Brace points: the Framing tab (forGirder: the girder's bearings and cross-frames as analysis stations, lenOf its own unbraced length);
+     null when the project has no framing, the layout has errors or the demands are of another bridge (the caller keeps its fallback and
+     says so). f_ℓ: as entered, else from skew (flSkew, C6.10.1, the project's framing settings flSkI, flSkE, flSkG).
+     Returns { br (forGirder result or null), braces, lenOf, fl (ksi), flSrc: 'entered' | 'skew', flS (flSkew: fl, skMax, steps) }. */
+  function design(P, gi, o) {
+    o = o || {}; const gs = (P && P.girders) || [], g = gs[gi] || gs[0] || {};
+    const br = P && P.framing ? forGirder(P, o.line != null ? { line: o.line } : { gi }, o.sup || null) : null;
+    const sk = Array.isArray(o.skews) && o.skews.length ? o.skews.map(v => +v || 0) : (((P && P.xs) || {}).skews || [0]).map(v => +v || 0);
+    const ext = o.ext != null ? !!o.ext : g.position === 'exterior', flS = flSkew(sk, ext, P && P.framing), en = +o.fl > 0;
+    return { br, braces: br ? br.braces : null, lenOf: br ? br.lenOf : null, fl: en ? +o.fl : flS.fl, flSrc: en ? 'entered' : 'skew', flS };
+  }
+
+  window.SBDFraming = { DEF, settings, modelOf, layout, compute, girderBraces, forGirder, flSkew, design, lineOf, plPierSp, plPierLen, plOwnXf, plXfDef, braceG, toG, toX, lbMax };
 })();

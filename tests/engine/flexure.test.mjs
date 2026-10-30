@@ -303,7 +303,7 @@ test('SB2-R2: ampFl with f_l = 0 is 0 (was 0 × ∞ = NaN); f_l > 0 with f_bu �
 test('SB2-R2 hand check: built-in project, this app\'s analysis, G1 x = 109.99 ft: GS7 1.134 NG governs (was NaN, governing 0.973)', () => {
   const A = f => path.join(ROOT, 'apps/steel-bridge', f);
   const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', A('engine/model.js'), A('engine/sections.js'), A('engine/flexure.js'), A('engine/owners.js'), 'lldf.js', A('engine/lldf.js'), A('engine/loads.js'),
-    A('engine/shear.js'), A('engine/stiffeners.js'), A('engine/analysis.js'), A('engine/fatigue.js'), A('engine/rating.js'), A('ui/shear.js'), A('ui/rating.js'));
+    A('engine/shear.js'), A('engine/stiffeners.js'), A('engine/analysis.js'), A('engine/fatigue.js'), A('engine/rating.js'), A('engine/framing.js'), A('ui/shear.js'), A('ui/flexure.js'), A('ui/rating.js'));
   const R = U.SBDRatingUI.build({ P: U.SBDModel.defaultProject(), g: 0, src: 'analysis' }); assert.ok(!R.err, R.err);
   const r = R.flex.rows.find(q => Math.abs(q.x - 109.99) < 1e-6), c = r.checks.find(q => q.id === 'GS7');
   // f_bu = 39.667 ksi; nonprismatic L_b (6.10.8.2.3c): F_e = γ_e f_bu,gov = 0.88119(39.683) = 34.968 ksi = F_cr = F_nc,LTB; F_nc,FLB = 50 -> F_nc = 34.968
