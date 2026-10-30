@@ -73,6 +73,8 @@
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)
+                constr.flC (ksi, added 2026-10-30, report wiring PR; optional, absent = 0): f_ℓ during deck placement, first order (GS14, GS15),
+                  entered on the Constructibility tab
      -- added 2026-10-29 (field splices PR), optional, read by engine/splices.js (absent = defaultSplices()); the stations are framing.splices --
      splices:   { code: '10' | '8' (AASHTO LRFD edition of the design forces),
                   bolts: { d: '0.875' | '1' | '1.125', gr: 'A325' | 'A490', thr: 'excl' | 'incl', cls: 'A' | 'B', prep: 'drilled' | 'punched',
@@ -300,6 +302,8 @@
       pos(Q.Fexx, 'welds.Fexx', 'F_EXX'); if (Q.w !== '' && Q.w != null) pos(Q.w, 'welds.w', 'Fillet weld size');
       ['dc', 'dw', 'll', 'fat'].forEach(k => pos((Q.gam || {})[k], `welds.gam.${k}`, `Load factor ${k}`));
       if (!['yes', 'no'].includes(Q.ground)) E('welds.ground', 'Transition butt welds: ground flush yes or no.'); }
+    // added 2026-10-30 (report wiring PR): the optional f_ℓ during deck placement
+    if (p.constr != null && p.constr.flC != null && !isNum(p.constr.flC)) E('constr.flC', 'f_ℓ during deck placement must be a number (ksi).');
     return { errors, warnings };
   }
 

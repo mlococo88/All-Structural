@@ -13,14 +13,19 @@
      - "This project's analysis" (added 2026-10-29, SB2-O16): engine/analysis.js for this girder (Analysis tab settings and loads), its
        stations as a hand-off-shaped object (fromAnalysis), the same paths as a file; the bearing stiffeners take the analysis support
        reactions (DC1, DC2, DW, UT, UF and the LL+IM reaction envelope g_V R_HL93) instead of the upper bound from the shears.
-   The demand choice is not saved.
+   The default (2026-10-30, report wiring PR): this project's analysis when the project is complete (SBDAnalysis.ready), else the
+   example; the line at the top of the tab names the source in use. The demand choice is not saved.
 
    inputs(P, h) / onClick(e, P, ui) for the input tab; render(host, ctx) for the output tab, ctx = { P, g } */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: 'example', pl: null, plName: '', R: null, key: '', err: '', sel: null, view: 'pan' };
+  const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: null, view: 'pan' };
+  /* the demand source (added 2026-10-30, report wiring PR): the one chosen (S.src), else the default: this project's analysis when the
+     project is complete (SBDAnalysis.ready), else the example */
+  const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
+  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
   // GirderDetail's built-in Girder section rows (GM.gs.def.rows): shears, unfactored, kip
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, V: { DC1: 20, DC2: 3, DW: 3, LL: 40, CL: 3, f: 25, UT: 0, UF: 0 } },
     { name: 'Pier 1', x: 109.99, V: { DC1: 95, DC2: 14, DW: 16, LL: 105, CL: 12, f: 55, UT: 0, UF: 0 } }];
@@ -105,7 +110,7 @@
   function build(ctx) {
     const P = ctx.P, M = window.SBDModel, SH = window.SBDShear, SB = window.SBDStiffeners, OW = window.SBDOwners, st = ensure(P), ly = st.layout, g = ctx.g || 0;
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0), env = { owner: own.owner, lf };
-    const src = ctx.src || S.src;   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
+    const src = ctx.src || srcOf(ctx);   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;   // ctx.pl: a payload given directly (tests)
     const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf);
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
@@ -144,7 +149,7 @@
       what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((P.girders[g] || {}).label || '')} (Analysis tab: settings, loads, factors): ${pl.stations.length} stations, ${gm.sup.length - 1} span(s); the project's plates, stiffener layout and plates.${AR && AR.warnings && AR.warnings.length ? '<br>' + AR.warnings.map(esc).join('<br>') : ''}`
         : pl ? `${esc(S.plName)}: ${pl.stations.length} stations, ${gm.sup.length - 1} span(s), G${gm.gNo}; plates and shears from the file; the project's stiffener layout and plates.` : `Example: GirderDetail's built-in shears (Girder section, Transverse stiffeners and Bearing stiffeners rows) with this project's plates (${esc((P.girders[g] || {}).label || '')}) and stiffener inputs. Load a hand-off file for the shear in every panel.` };
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx), S.plName]);
 
   /* ---------- output tab ---------- */
   function css() {
@@ -157,9 +162,11 @@
   function render(host, ctx) {
     css();
     const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
-    let h = `<section class="sec"><div class="secHead">Shear &amp; stiffeners: demands</div><div class="secBody">
-      <div class="fRow"><label for="sh_src">Demands</label><select id="sh_src">${opt('example', 'Example (GirderDetail built-in shears)', S.src)}${opt('analysis', 'This project\'s analysis (Analysis tab)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
-      ${S.src === 'file' ? `<div class="fRow"><label for="sh_file">File</label><input type="file" id="sh_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+    const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {}, src = srcOf(ctx);
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in shears' }) : '')
+      + `<section class="sec"><div class="secHead">Shear &amp; stiffeners: demands</div><div class="secBody">
+      <div class="fRow"><label for="sh_src">Demands</label><select id="sh_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in shears)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      ${src === 'file' ? `<div class="fRow"><label for="sh_file">File</label><input type="file" id="sh_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">Strength I γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, LL+IM 1.75 (shears are magnitudes: the maximum factors; with the owner's η and m, Loads &amp; LLDF tab); special fatigue loading 6.10.5.3: permanent shear + 1.75 V<sub>fat</sub>; deck placement 1.25 V<sub>DC1</sub> + 1.50 V<sub>CL</sub>. φ<sub>v</sub> = 1.0. Stiffener inputs: Stiffeners tab.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Shear results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="sh_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;

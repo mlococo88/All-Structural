@@ -1436,6 +1436,94 @@ Display and export only: no engineering formula, factor, unit or reference chang
 - SB2-DW5's list (splice plates and bolts on the plan and in 3D once the Field splices results are cached for display; camber and moment
   envelope sheets with the Analysis tab; paper-space sheets).
 
+## 2026-10-30 — PR: sbd2-report-wiring — wiring gaps found by the Report PR (#488): Flexure analysis source, deck-placement f_ℓ saved, every-girder report, default demand source
+### Where
+- `apps/steel-bridge/ui/flexure.js` `inputs(ctx)`: new branch `if (src === 'analysis') {` (before the anchor `// owner rules as the Section
+  properties tab`): `SBDRatingUI.fromAnalysis(P, gi)` → `SBDRating.noDoublePL` → `SBDFlexure.fromPayload(plR, { owner, rebar: P.deck.rebar,
+  braces: supports ∪ stiffener-layout frames.at | Lb: frames.Lb || 25, fl: entered if > 0 })`, then `prj.mat`, `prj.deck` (haunch by OWN8),
+  `prj.n` (OWN17 w_c), `prj.rebarInPositive` from the project: the same statements as `ui/rating.js build()` (anchor `if (fromAn) { const m =
+  P.materials`). `S.src` starts `null`; `srcOf(ctx) = S.src || (SBDAnalysis.ready(P, g).ok ? 'analysis' : 'example')`; the Demands select has
+  "This project's analysis (Analysis tab)" first; with it the L_b, C_b and skew inputs are hidden (as with a file).
+- `apps/steel-bridge/ui/shear.js`, `ui/fatigue.js`: `S.src: null` and the same `srcOf(ctx)` (anchor `const srcOf = ctx => S.src ||`) in
+  `build()`, `key()` and the select. Before: Shear defaulted to 'example', Fatigue to 'analysis' whatever the project.
+- `apps/steel-bridge/ui/rating.js`, `ui/constructibility.js`: `S.src: null`, `srcOf() = S.src || 'analysis'` / `'project'` (no example on these
+  tabs: unchanged default); the line at the top of the tab.
+- `apps/steel-bridge/engine/analysis.js`: new `ready(P, gi)` (anchor `function ready(P, gi) {`): complete = girder with plates, every span > 0,
+  valid analysis settings (the three checks of `analyzeGirder`), dead loads and distribution factors not the "none entered" fallback of
+  `loadsOf` / `dfOf`. No beam analysis (the loads module only, a few ms); memo of the last answer by `JSON.stringify([P, gi])`.
+- `apps/steel-bridge/ui/analysis.js`: new `srcBar(o)` (anchor `function srcBar(o) {`): the line "Demands: <source> (the default: … / as
+  chosen below)" at the top of the Flexure, Shear, Fatigue, Constructibility, Rating and Report tabs; `index.html`: its CSS (`.srcBar`, one rule
+  after `.alert[hidden]`).
+- `apps/steel-bridge/ui/constructibility.js`: f_ℓ during deck placement is `P.constr.flC` (`flOf(P)`; anchor `const flOf = P =>`), written on
+  change through `ctx.changed()` (saved); before: `S.flC`, in memory only. `engine/model.js`: `constr.flC` documented (optional, ksi, absent = 0)
+  and validated (a number; anchor `// added 2026-10-30 (report wiring PR)`). Additive: an older project reads as 0, the old default; no
+  migration needed.
+- `apps/steel-bridge/report/data.js`: flexure with this app's analysis from `SBDFlexureUI.build({ P, g, src: 'analysis', fl: 0, method:
+  'auto' })` (before: `B.rating.flex`); `linkRating()` checks it equals the rating's own flexure (`sameFlex`: every location's name, x, region,
+  M_u, M_s and every check's id, demand, capacity, ratio, `Object.is`) and then points the rating's capacity map at its locations (so the
+  rating still links to the Flexure section, `B.flexSame`); constructibility `flC = P.constr.flC` (anchor `const C = W().SBDConstr, FRM =
+  W().SBDFraming, flC =`). Analysis cache `analysis(P, gi, o)` (anchor `const CACHE = new Map();`): LRU of at most 2 × girders + 4 results,
+  key = JSON of the project without `rating` (the analysis does not read P.rating; checked by grep: only `ui/rating.js` does) | girder | options;
+  `compute()`'s memo now draws from it, so it is kept between builds.
+- `apps/steel-bridge/report/builders.js`: each summary row gets `grp` (its check group: 'Flexure (Strength I, Service II, Fatigue I)',
+  'Shear & stiffeners: Web panels', …, 'Rating: Inventory RF'); the Flexure section's note names the Flexure tab's source; new `govRows(B)`
+  (one girder's summary rows as data) and `allModel(P, list)` (the every-girder report: per check group the governing value of each girder, ◆ on
+  the controlling girder of the group, the controlling girder of the bridge named, then each girder's governing rows).
+- `apps/steel-bridge/ui/report.js`: Scope "Selected girder (detailed report)" (unchanged) / "Every girder (governing ratios)" (`ctx.opts.scope`,
+  kept in the existing `ui.rpt` of `sbd2.ui`; additive UI state). The every-girder build runs one girder per timer tick with progress; each
+  girder's rows are kept by `JSON.stringify([P, gi])` (`S.rows`), also from the selected girder's report.
+### Problem
+- The Flexure tab had no "This project's analysis" source; the report and the rating took the rating path's flexure.
+- f_ℓ during deck placement was not saved, so the report used 0 whatever the tab showed.
+- No view of every girder at once.
+- Default sources differed per tab (Shear: example; Flexure: example; Fatigue, Rating, Constructibility: analysis) and were not shown.
+### Governing provision
+- None changed (no calculation change). Values are the modules' own: AASHTO LRFD 10th Ed. (2024) 6.10 (flexure), 6.10.3 (constructibility,
+  f_ℓ in Eq. 6.10.3.2.1-2 and -3 as before, now the saved entry), MBE 6A.4.2 (rating).
+- Decision (lead, 2026-10-30, recorded per the engineer's 2026-10-29 rule): with this project's analysis the Flexure tab takes f_ℓ as entered and
+  0 when nothing is entered — the Rating tab's value — not the skew-derived f_ℓ the file source uses (C6.10.1). Reason: the task requires the
+  Flexure results to equal the rating path, and "no calculation changes"; adding the skew f_ℓ to the analysis path would change the rating's
+  capacities. Open item SB2-W1 below.
+- Decision: a project is "complete" when the analysis would run on real loads (dead loads and LLDF present). Missing framing, studs or fatigue
+  inputs do not make it incomplete: those tabs default them as before.
+### Check case
+- Built-in project, G1, this project's analysis: Flexure tab 367 locations, 2,406 checks; every demand, capacity and ratio equal to the
+  Rating tab's flexure (largest difference 0); governing GS7 ratio 1.142 at x = 110.01 ft (both paths); Inventory RF 0.739 at x = 110.01 ft
+  rated on that location. The report: same counts as #488 (gov 2,740 steps, 463 references; all 74,519 / 7,477), all resolved.
+- Hand check (built-in project, G1, x = 110.01 ft, negative flexure; the same numbers on the Flexure tab and in the Rating tab's capacity):
+  M_u = 1.25(−2538.59) + 1.25(−431.70) + 1.50(−357.56) + 1.75(−2319.41) = −3173.24 − 539.63 − 536.34 − 4058.97 = −8308.17 kip-ft (Table 3.4.1-1);
+  f_bu = 39.93 ksi (bottom flange, compression); F_nc = min(F_nc,FLB 50.00, F_nc,LTB 34.97) = 34.97 ksi; f_ℓ = 0;
+  GS7 (6.10.8.1.1-1): f_bu + f_ℓ/3 = 39.93 ≤ φ_f F_nc = 1.0 × 34.97 → ratio 39.93 / 34.97 = 1.142 NG — before (rating path) and after
+  (Flexure module) identical.
+- Constructibility, built-in project G1: f_ℓ = 0 → governing GS14 0.787 (as #488); f_ℓ = 2.5 ksi saved → GS14 1.140 (the report and
+  `engine/constructibility.js` with flC 2.5 agree).
+- Every girder, built-in project + a second girder G2 (exterior, bottom flanges < 1.5 in thickened 0.25 in): 14 check groups; G1 / G2:
+  SA3 0.334 / 0.307, flexure 1.142 / 1.087, FA1 0.706 / 1.007, GS17 0.501 / 0.723, SC2 0.959 / 0.877, GS14 0.787 / 3.114 (overhang brackets
+  of the exterior girder), Inventory RF 0.739 / 0.846; controlling girder G2 (constructibility 3.114). First build 24 s in Node (4 analysis
+  runs: full and dead-load per girder), again 4 s (0 runs).
+### How verified
+- `node tests/engine/run.mjs` (new `tests/engine/report-wiring.test.mjs`: flexure analysis source = rating path at every check; report
+  Flexure section from the Flexure module with the rating linked to it; default source complete / incomplete (invalid settings; no loads and
+  no factors; no plates; entered loads and factors complete it); f_ℓ saved, validated, through export/import, used by the report; the cache
+  (same state → same object and no run; rating factors not in the key; a change runs again and equals a fresh analysis; bounded); the
+  every-girder model (controlling girder per group, rows equal each girder's report, every reference resolves, KaTeX parses, no NaN, second
+  build runs no analysis). `tests/engine/report.test.mjs` unchanged and passing.
+- `node tests/smoke/steel-bridge-wiring.mjs` (headless Chromium, one run): each of the five tabs opens on "This project's analysis (the
+  default …)"; the Flexure tab calculates 367 locations with it; choosing Example says "as chosen below"; f_ℓ 1.5 written to
+  `sbd2.project.current` (`constr.flC`); the every-girder report builds; 0 console errors, 0 KaTeX errors.
+### Other copies
+- None.
+### Open items
+- SB2-W1 (for the engineer): with this project's analysis, Flexure and Rating take f_ℓ = 0 unless entered; the file source takes the skew
+  f_ℓ of C6.10.1 (1.25 × 10/7.5 ksi where a support is skewed > 20°). Whether the analysis path should take the skew f_ℓ too (it would change
+  the rating's flexure capacities on skewed bridges) is not decided here.
+- SB2-W2: the analysis-source flexure (as the rating) takes its brace points from the stiffener layout's cross-frames (`P.stiffeners.layout
+  .frames`), the file source from the Framing tab (`SBDFraming.forGirder`). Same as the rating before this PR; noted for a later alignment.
+- The output tabs still run their own analysis (the report's cache is used by the Report tab only).
+- Display fix found by this PR's f_ℓ test (first test with flC > 0 where the amplification is undefined): `engine/constructibility.js` step
+  `cn.fl` (anchor `sub: r.amC.req ?`) wrote `—(0.00)` (a KaTeX parse error) when AF = ∞ (SB2-R2); now `\infty(0.00)`, as `engine/flexure.js`
+  step `fl`. Before: `${n3(r.amC.AF)}(…)`; after: `${isFinite(r.amC.AF) ? n3(r.amC.AF) : '\\infty'}(…)`. Text of the step only; the value
+  and the check are unchanged.
 ## 2026-10-30 — PR: sb2-dw5-sheets — the drawing set (every GirderDetail sheet, border and title block), splice plates, moment envelope and camber, weld symbols and quantities; 3D diagrams, splice plates and single-girder close-up (SB2-DW5)
 Display and export only: no engineering formula, factor, unit or reference changed; no computed result changes (the engines are only read).
 ### Where

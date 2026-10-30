@@ -376,5 +376,32 @@
     return w.steps;
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder };
+  /* ready(project, gi): is the project complete enough for this app's analysis of girder gi to be the output tabs' default demand
+     source (added 2026-10-30, report wiring PR)? Complete: the girder exists with plates, every span length is positive, the analysis
+     settings are valid (as analyzeGirder checks them), and the girder has dead loads and live-load distribution factors (explicit,
+     from the loads module or entered: not the "none entered" fallback of loadsOf / dfOf). Cheap (no beam analysis; the loads module,
+     a few ms); the last answer is kept per project state. Returns { ok, why: [reasons it is not complete] }. Nothing is calculated
+     for the results here. */
+  let readyMemo = { k: null, v: null };
+  function ready(P, gi) {
+    let k; try { k = JSON.stringify([P, gi]); } catch (e) { k = null; }
+    if (k && readyMemo.k === k) return readyMemo.v;
+    const why = [], g = P && P.girders ? P.girders[gi] : null;
+    if (!g) why.push(`No girder ${gi + 1}.`);
+    else if (!Array.isArray(g.segments) || !g.segments.length) why.push('The girder has no plates.');
+    const L = P && P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths.map(Number) : [];
+    if (!L.length || !L.every(v => v > 0)) why.push('Span lengths are missing or not positive.');
+    if (!why.length) {
+      const S = settings(P);
+      if (!(S.im >= 0) || !(S.imf >= 0) || !(S.deflLimit > 0) || !['none', '15', 'dl'].includes(S.crack)) why.push('The analysis settings are not valid (Analysis tab).');
+      const mod = g.loads && g.df ? null : moduleOf(P, gi), LD = loadsOf(P, g, mod), DF = dfOf(P, g, L.length, mod);
+      if (LD.source === 'none entered') why.push('No dead loads for this girder (Loads & LLDF, or Analysis settings).');
+      if (DF.manual && /^none entered/.test(DF.src)) why.push('No live-load distribution factors for this girder (Loads & LLDF, or Analysis settings).');
+    }
+    const v = { ok: !why.length, why };
+    if (k) readyMemo = { k, v };
+    return v;
+  }
+
+  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder, ready };
 })();
