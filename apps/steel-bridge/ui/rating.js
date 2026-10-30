@@ -135,6 +135,7 @@
     host.querySelectorAll('[data-gotab]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${el.dataset.gotab}"]`); if (b) b.click(); }));
     host.querySelectorAll('.fx-list').forEach(el => el.addEventListener('click', e => { const tr = e.target.closest('[data-rt]'); if (!tr) return; S.sel = +tr.dataset.rt; redraw(); }));
     host.querySelectorAll('[data-rtgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); S.sel = +a.dataset.rtgo; redraw(); const t = host.querySelector('#rt-steps'); if (t) t.scrollIntoView({ block: 'start' }); }));
+    if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.rating(host, ctx, S.R, S.sel, v => { S.sel = v.i; redraw(); });   // the graphic (ui/tabgraphics-b.js): a click selects that station's row
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
   const grpOf = q => q.kind === 'flex' ? (q.region === 'pos' ? 'flexP' : 'flexN') : q.kind;
@@ -151,6 +152,7 @@
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing location and check</th><th>Inventory RF</th><th>Operating RF</th><th></th></tr></thead><tbody>
       ${GRP.filter(([k]) => s.by[k]).map(([k, t]) => { const q = s.by[k]; return `<tr><td class="lft">${t}</td><td class="lft">${esc(q.name)}: ${esc(q.title)}</td><td class="${cls(q.inv)}">${rfTxt(q.inv)}</td><td class="${q.kind === 'fat' ? '' : cls(q.opr)}">${q.kind === 'fat' ? '—' : rfTxt(q.opr)}</td><td>${lk(q)}</td></tr>`; }).join('')}
       </tbody></table></div></div></section>`;
+    h += `<section class="sec"><div class="secHead">Load rating: RF along the girder</div><div class="secBody"><div data-gfxb="rating"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the rows below
     h += `<section class="sec"><div class="secHead">Rating factors at every location (${R.rows.length})</div><div class="secBody"><p class="note">C: φ<sub>c</sub>φ<sub>s</sub>φR<sub>n</sub> (Strength) or f<sub>R</sub> (Service II); DC, DW, LL+IM unfactored, in the unit of the check. Click a row for its work.</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Location</th><th class="lft">Check</th><th>C</th><th>DC</th><th>DW</th><th>LL+IM</th><th>Unit</th><th>RF Inv.</th><th>RF Opr.</th></tr></thead><tbody>
       ${R.rows.map((q, i) => q.oos ? `<tr data-rt="${i}"><td class="lft">${esc(q.name)}</td><td class="lft fx-na" colspan="8">${esc(q.title)}</td></tr>`
