@@ -57,4 +57,34 @@ Loaded by: `apps/steel-bridge/index.html` (and its engine). Tests: `node tests/e
 ### Open items
 - The built-in fallback renderer has no symbol for `\ell`, `\tan` and `\circ` (used by the engines; KaTeX shows them correctly); without
   KaTeX they show as the words "ell", "tan", "circ", as before this PR. Adding them to `SYM` would also change `toText` output, so it was
-  left for the engineer to decide.
+  left for the engineer to decide. Closed 2026-10-29 (steps-fallback-symbols, below).
+
+## 2026-10-29 — PR: steps-fallback-symbols — shared/steps.js built-in renderer and toText: `\ell`, `\tan`, `\circ` as ℓ, tan, ° (display only)
+### Where
+- `SYM` (anchor `approx: '≈', ldots: '…', max: 'max', min: 'min'`): added `ell: 'ℓ', tan: 'tan', circ: '°'`. Before, they were not in `SYM`,
+  so `render` printed the command name: "ell", "tan", "circ".
+- `render`, command branch: new `else if (cmd === 'tan') { out += SYM.tan; if (/^[A-Za-z\\{]/.test(src.slice(i))) out += html ? '&thinsp;' : ' '; }`.
+  `\tan\theta` → "tan θ" (KaTeX also spaces the operator). `\tan 30` keeps the one space typed.
+- `render`, `_` / `^` branch: new `if (c === '^' && a === '°') { out += '°'; continue; }`. `30^{\circ}` → "30°", not "30^°" or a raised °.
+- Header comment and `shared/README.md` "Worked steps": `\ell`, `\tan` and `\circ` added to the notation list.
+- KaTeX rendering is unchanged (`toHTML` / `line` when window.katex exists).
+### Problem
+- Without KaTeX (offline, CDN blocked) and in the plain-text report (`toText`), the engines' `f_{\ell}`, `(\tan\theta)^{1.5}` and `30.00^{\circ}`
+  showed as "f_ell", "(tantheta)" and "30.00^(circ)". This was the open item above.
+- Engineer's decision 2026-10-29: map the three symbols. `toText` output changes for these symbols only.
+### Governing provision
+- None. This is rendering only: no value, digit, rounding, formula, factor, unit or code reference changed (`fmt` is untouched).
+### Check case (`tests/engine/tex.test.mjs`, last test)
+- `toText('1 - 0.0783(\tan 30.00^{\circ})^{1.5}')`: before `1 - 0.0783(tan 30.00^(circ))^(1.5)`, after `1 - 0.0783(tan 30.00°)^(1.5)`.
+- `toHTML('f_{\ell}')` without KaTeX: before `f<sub>ell</sub>`, after `f<sub>ℓ</sub>`.
+- Step r_V with value 1 + 0.2 tan 30° = 1.11547: `line` gives `… = 1 + 0.20tan 30.00° = 1.1155`. The value digits are as before.
+### How verified
+- `node tests/engine/run.mjs`: all tests pass. This includes:
+  - the new test;
+  - the updated steps test in `tests/engine/sections.test.mjs`;
+  - KaTeX parsing of every step string plus three new notation samples.
+- One headless load of apps/steel-bridge/index.html: 0 console errors.
+### Other copies
+- None. `steps.js` is loaded only by `apps/steel-bridge/index.html`.
+### Open items
+- None.
