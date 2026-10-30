@@ -63,8 +63,9 @@ test('The full check uses the Fatigue & studs tab\'s own payload (ui/fatigue.js 
 function runAD(P, settings) { const it = AD.run(P, { settings, maxIt: 5, trimTries: 2 }); let s; while (!(s = it.next()).done); return s.value; }
 function boltFitHeld(c, Q) {   // each flange next to a splice at least the bolt-fit width of its gage lines (DT10)
   const nl = c.minLines || 2;
-  c.L.spl.forEach(x => ['top', 'bot'].forEach(f => { const z = c.L[f].find(q => Math.abs(q.x1 - x) < 1e-6), tw = c.L.web.find(q => Math.abs(q.x1 - x) < 1e-6).tw;
-    assert.ok(z.b >= AD.boltFitWidth(Q, tw, nl) - 1e-9, `${f} flange at ${x} ft: ${z.b} in < ${AD.boltFitWidth(Q, tw, nl)} in`); }));
+  const zat = (l, x) => l.find(q => x >= q.x0 - 1e-9 && x < q.x1 - 1e-9);
+  c.L.spl.forEach(x => [x - 0.01, x + 0.01].forEach(xx => ['top', 'bot'].forEach(f => { const z = zat(c.L[f], xx), tw = Math.max(zat(c.L.web, x - 0.01).tw, zat(c.L.web, x + 0.01).tw);
+    assert.ok(z.b >= AD.boltFitWidth(Q, tw, nl) - 1e-9, `${f} flange at ${xx} ft: ${z.b} in < ${AD.boltFitWidth(Q, tw, nl)} in`); })));
 }
 test('Every candidate passes every module on the full check (Refine, the built-in project)', () => {
   const P = M.defaultProject(), R = runAD(P, { mode: 'refine', topN: 2 });
@@ -84,16 +85,19 @@ test('Every candidate passes every module on the full check (Refine, the built-i
 });
 test('CTDOT: the splice bolt fit (DT10) is a sizing constraint; details that fail whatever the plates are reported as blockers', () => {
   // CTDOT BRSDM V2 6.13.6.1: 2 in edges; the built-in 16 in flanges fail DT10 at every splice (SB2-SP7). Auto design widens the flanges at the
-  // splices to 17 in (hand check above) or uses one gage line. The built-in details also fail two CTDOT detail rules that the plates do not
-  // change (cross-frame bolts per member end CF11, splice end distances DT4): every design is "blocked" by them, never listed as passing.
+  // splices to 17 in (hand check above; 18 in on the 2 in increment) or uses one gage line. The built-in splices also fail CTDOT's end distance
+  // (DT4: e_f, e_p 1.75 in < 2 in, inputs the plates do not change): every design is "blocked" by it, never listed as passing.
   const P = M.defaultProject(); P.ownerRules.owner = 'CTDOT';
   const R = runAD(P, { mode: 'refine', topN: 1 });
   assert.equal(R.cands.length, 0); assert.ok(R.blocked.length >= 1, R.note);
+  // the narrow flanges show in the splice module as DT3 (inner plate edge, web side) and DT7 (web splice plates) on the current design
+  // (engine/splices.js autoDesign leaves the splice unchanged with the GD62 note: 17 in needed, 18 in on CTDOT's 2 in width increment)
   const cur = new Set(R.current.full.fails.map(f => `${f.mod} ${f.id}`));
-  assert.ok(cur.has('splices DT10'), 'the current design fails DT10 (SB2-SP7)');
-  for (const b of R.blocked) { assert.ok(b.blockers.every(k => cur.has(k)), 'blockers fail in the current design too'); assert.ok(!b.blockers.includes('splices DT10'), 'DT10 is not a blocker: Auto design sized for it');
+  assert.ok(cur.has('splices DT3') && cur.has('splices DT7'), `the current design fails the bolt fit (SB2-SP7): ${[...cur]}`);
+  for (const b of R.blocked) { assert.ok(b.blockers.every(k => cur.has(k)), 'blockers fail in the current design too');
+    ['splices DT3', 'splices DT7', 'splices DT10'].forEach(k => assert.ok(!b.blockers.includes(k), `${k} is not a blocker: Auto design sized the flanges for the splice bolts`));
     boltFitHeld(b, AD.projectWith(P, b.L)); }
-  assert.ok(/CF11/.test(R.note) && /DT4/.test(R.note), R.note);
+  assert.ok(/DT4/.test(R.note), R.note);
 });
 
 test('Apply writes the candidate; Undo restores the design before it', () => {

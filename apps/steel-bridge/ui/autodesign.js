@@ -85,7 +85,8 @@
     host.innerHTML = h;
     const redraw = () => render(host, ctx), on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     on('[data-ad]', 'change', e => { const a = ensure(P), id = e.target.dataset.ad, val = e.target.value, path = id.split('.'), o = path.length > 1 ? a[path[0]] : a, k = path[path.length - 1];
-      o[k] = val === 'true' ? true : val === 'false' ? false : val; if (ctx.changed) ctx.changed(false); redraw(); });
+      o[k] = val === 'true' ? true : val === 'false' ? false : val;
+      setTimeout(() => { if (ctx.changed) ctx.changed(false); else redraw(); }, 0); });   // after the event (a change fires on blur, while a click is under way)
     on('#ad_run', 'click', () => { S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw();
       AD().runChunked(JSON.parse(JSON.stringify(P)), {}, p => { S.prog = p; const bar = host.querySelector('.ad-bar>div'), nt = host.querySelector('.ad-bar + .note'); if (bar) bar.style.width = Math.round(100 * (p.f || 0)) + '%'; if (nt) nt.textContent = p.msg || ''; }, () => S.stop)
         .then(R => { S.running = false; S.prog = R ? null : { f: 0, msg: 'Stopped.' }; S.R = R; S.key = k; redraw(); })
