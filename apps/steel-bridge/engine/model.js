@@ -51,7 +51,8 @@
      studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I),
                   skew: 'auto' | 'yes' | 'no' (F_fat = F_rc/w on skewed > 20° or curved bridges; auto: from the support skews), Frc (kip), wv (in),
                   splX ('82, 145': field splice stations, ft), splL (top splice plate length, ft), splC (clearance at each plate end, in),
-                  beffMode: 'bridge' (GirderDetail: one b_eff for every girder, the largest-fatigue-shear girder's) | 'girder' (each girder its own),
+                  beffMode: 'girder' (each girder its own, AASHTO 6.10.10; the default from 2026-10-29, SB2-F1) | 'bridge' (GirderDetail: one b_eff
+                            for every girder, the largest-fatigue-shear girder's; kept for parity; a stored project keeps its value),
                   zones: [ { x1, x2 (ft), nr (studs per row), p (pitch, in) } ] (empty: the hand-off file's zones) },
      -- added 2026-10-29 (framing and cross-frames PR), optional: a version 1 project without them has no framing (the evenly spaced brace
         points of before) and reads the cross-frames as defaultCrossframes() --
@@ -152,7 +153,7 @@
       user: { StrI: Z(), Con: Z(), Fat: Z() }, fatCat: 'B', sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } };
   }
   function defaultStuds() {
-    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'bridge', zones: [] };
+    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'girder', zones: [] };   // beffMode 'girder' by default from 2026-10-29 (SB2-F1)
   }
   /* defaultSplices(): GirderDetail's built-in Field splice settings (GD_DEFAULT bolts, load factors, clearances), auto-design on */
   function defaultSplices() {

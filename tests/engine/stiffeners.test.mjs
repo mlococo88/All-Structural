@@ -206,3 +206,25 @@ test('model: the optional stiffener inputs (additive; a project without them sti
   assert.equal(JSON.stringify(M.defaultStiffeners().transverse.types), JSON.stringify(SB.TS_DEFAULT.types), 'model defaults = GirderDetail GM.ts.def types');
   assert.equal(JSON.stringify(M.defaultStiffeners().bearing.types), JSON.stringify(SB.BS_DEFAULT.types), 'model defaults = GirderDetail BS_DEFAULT types');
 });
+
+test('SB2-O16: bearing stiffeners take the support reactions of engine/analysis.js (Shear tab, "This project\'s analysis"); the file path is unchanged', () => {
+  const E = f => path.join(ROOT, 'apps/steel-bridge', f);
+  const U = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/sections.js'), E('engine/owners.js'), E('engine/lldf.js'), E('engine/loads.js'),
+    E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/analysis.js'), E('ui/shear.js'));
+  const P = U.SBDModel.defaultProject(); P.stiffeners = U.SBDModel.defaultStiffeners();
+  const A = U.SBDShearUI.fromAnalysis(P, 0); assert.equal(A.err, undefined);
+  const R = U.SBDShearUI.build({ P, g: 0, pl: A.pl }), AR = A.R; assert.match(AR.loads.source, /loads module/, 'dead loads and factors from the loads module');
+  assert.equal(R.err, undefined); assert.equal(R.rxn, true); assert.equal(R.BS.errors.length, 0); assert.equal(R.BS.rows.length, AR.sup.length);
+  R.BS.rows.forEach((r, k) => { assert.equal(r.RDC1, AR.st.DC1.R[k]); assert.equal(r.RDC2, AR.st.DC2.R[k]); assert.equal(r.RDW, AR.st.DW.R[k]); assert.equal(r.RLL, AR.llR[k].max);
+    // R_u = 1.25(R_DC1 + R_DC2) + 1.50 R_DW + 1.75 R_LL+IM (AASHTO default owner: η = 1, m = 1)
+    assert.ok(Math.abs(r.Ru - (1.25 * (r.RDC1 + r.RDC2) + 1.5 * r.RDW + 1.75 * r.RLL)) < 1e-9); });
+  // the interim upper bound (the same stations without the reactions: the jump in shear, the sum of the two LL+IM shear envelopes)
+  const pl0 = JSON.parse(JSON.stringify(A.pl)); delete pl0.reactions; const R0 = U.SBDShearUI.build({ P, g: 0, pl: pl0 });
+  assert.equal(R0.rxn, false);
+  const out = R.BS.rows.map((r, k) => { const q = R0.BS.rows[k];
+    // dead loads: the jump in shear across the support equals the reaction (statics), to the 0.005 ft station offset
+    assert.ok(Math.abs(q.RDC1 - r.RDC1) < 0.02 * Math.max(1, r.RDC1), `${r.name} R_DC1 ${q.RDC1} vs ${r.RDC1}`);
+    assert.ok(q.RLL >= r.RLL - 1e-6, `${r.name}: the shear sum is an upper bound of the LL+IM reaction`);
+    return `${r.name}: R_LL+IM ${r.RLL.toFixed(1)} (was ${q.RLL.toFixed(1)}, ${(100 * (q.RLL / r.RLL - 1)).toFixed(1)} %), R_u ${r.Ru.toFixed(1)} (was ${q.Ru.toFixed(1)})`; });
+  console.log('       default project, ' + out.join('; '));
+});
