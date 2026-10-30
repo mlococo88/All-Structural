@@ -86,6 +86,7 @@
     const Dser = [{ name: 'Steel + cross-frames', y: R.camber.steel }, { name: 'Wet deck', y: R.camber.wet }, { name: 'DC2 + DW', y: R.camber.sd }];
     if (R.camber.ut) Dser.push({ name: 'Utilities', y: R.camber.ut });
     Dser.push({ name: 'Total (camber)', y: R.camber.total, c: '#0F172A', w: 2 });
+    h += '<div id="gfx_an"></div>';   // graphic (ui/gfxa.js)
     h += card('Diagrams', `${chart(x, Mser, { title: 'Moments (unfactored, per girder; LL+IM with g)', unit: 'kip-ft', sup })}${chart(x, Vser, { title: 'Shears (V = sum of forces to the left, up +)', unit: 'kip', sup })}
       ${chart(x, Dser, { title: 'Dead-load deflections (downward +, drawn down)', unit: 'in', sup, invert: true })}
       <p class="note">Stations: GirderDetail's grid, ${N} points. ${R.cont ? 'Continuous' : 'Simple spans'}; ${R.crack.length ? `cracked zones ${R.crack.map(([a, b]) => `${f(a, 1)}–${f(b, 1)} ft`).join(', ')} ${wk('an.crack')}` : 'no cracked zones'}. Engine: shared beam elements (stiffness method), loads applied exactly.</p>`, 'an-diag');
@@ -125,6 +126,7 @@
     h += settingsHtml(P, gi);
     if (res && !stale) h += resultsHtml(res);
     el.innerHTML = h;
+    { const sl = el.querySelector('#gfx_an'); if (sl && res && !stale && window.SBDGfxA) window.SBDGfxA.analysis(sl, { P, gi, R: res }); }
     el.oninput = null; el.onchange = e => { if (e.target.id === 'an_view') { view = e.target.value; draw(el, ctx); return; } onInput(e, ctx); };
     el.onclick = e => { if (e.target.id !== 'anCalc') return; busy = true; draw(el, ctx);
       setTimeout(() => { try { res = AN().analyzeGirder(P, gi); } catch (err) { res = { errors: [String(err && err.message || err)] }; } resKey = keyOf(P, gi); busy = false; draw(el, ctx); }, 30); };

@@ -58,6 +58,7 @@
 <script src="engine/sheets.js"></script>
 <script src="ui/drawings.js"></script>
 <script src="ui/graphics.js"></script>
+<script src="ui/gfxa.js"></script>
 <script src="ui/view3d.js"></script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
@@ -313,13 +314,14 @@
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
-    if (ui.otab === 'loads') { $('out').innerHTML = h + UL.output(R && !stale && !R.errors ? R.loads : null, ui, R && !stale && R.errors); return; }
+    if (ui.otab === 'loads') { $('out').innerHTML = h + UL.output(R && !stale && !R.errors ? R.loads : null, ui, R && !stale && R.errors); if (UL.after) UL.after($('out'), P, R && !stale && !R.errors ? R.loads : null, ui); return; }
     h += `<div class="fRow"><label>Location</label><span>${esc(g ? g.label || g.id : '')}, segment ${ui.seg + 1}${s ? ` (x = ${U.fmt(s.x0, 2)} to ${U.fmt(s.x1, 2)} ft)` : ''}</span></div>
       <div class="fRow"><label for="o_region">Flexure region</label><select id="o_region"><option value="pos"${ui.region === 'pos' ? ' selected' : ''}>Positive (top flange in compression)</option><option value="neg"${ui.region === 'neg' ? ' selected' : ''}>Negative (bottom flange in compression)</option></select></div>`;
     if (R && R.errors) h += `<div class="alert err"><b>Input errors.</b><ul>${R.errors.map(e => `<li>${esc(e.msg)}</li>`).join('')}</ul></div>`;
     else if (R && !stale) {
       const c = R.c, row = (nm, q, id) => q ? `<tr><td class="lft">${nm}</td><td>${U.fmt(q.A, 2)}</td><td>${U.fmt(q.yb, 3)}</td><td>${U.fmtInt(q.I)}</td><td>${U.fmtInt(q.St)}</td><td>${U.fmtInt(q.Sb)}</td><td>${wk(id + '.I')}</td></tr>` : '';
       const kv = (k, v, id) => `<div><span>${k}</span><span>${v}${id ? ' ' + wk(id, '§') : ''}</span></div>`;
+      h += card('Section graphic', '<div id="gfx_sec"></div>');
       h += card('Section properties', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th>A (in²)</th><th>ȳ from bottom (in)</th><th>I (in⁴)</th><th>S top of steel (in³)</th><th>S bottom (in³)</th><th></th></tr></thead><tbody>
         ${row('Steel', c.s, 'sec.s')}${row('Long-term 3n', c.c3, 'sec.c3')}${row('Short-term n', c.cn, 'sec.cn')}${c.comp ? row('Steel + rebar', c.cr, 'sec.cr') : ''}</tbody></table></div>
         ${c.comp ? '' : '<p class="note">Noncomposite girder: the steel section alone, no deck and no deck reinforcement in any property or in M<sub>p</sub> (6.10.1.1.1a), as on the Flexure tab.</p>'}
@@ -333,6 +335,7 @@
       h += card('Worked steps', `<p class="note">Each value above links here (§). AASHTO LRFD 10th Ed. (2024). y is measured up from the bottom of the steel.</p>${stepsHtml(R.nr.steps.concat(c.steps))}`);
     }
     $('out').innerHTML = h;
+    if (window.SBDGfxA && $('gfx_sec') && R && !stale && !R.errors) window.SBDGfxA.section($('gfx_sec'), { P, R, seg: ui.seg + 1 });   // graphic (ui/gfxa.js)
   }
   $('out').addEventListener('click', e => { const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
     if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });

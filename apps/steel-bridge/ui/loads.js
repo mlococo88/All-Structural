@@ -100,6 +100,7 @@
     const N = R.dead.N, lg = Math.min(ui.lg || 0, N - 1), lr = Math.min(ui.lr || 0, R.regions.length - 1), g = `G${lg + 1}`, rg = R.regions[lr], L = R.lf;
     let h = `<div class="fRow"><label for="o_lg">Girder</label><select id="o_lg">${R.dead.cls.map((c, i) => `<option value="${i}"${i === lg ? ' selected' : ''}>G${i + 1} (${esc(LD().CLS[c] || c)})</option>`).join('')}</select>
       <label for="o_lr" style="min-width:0;margin-left:12px">Region</label><select id="o_lr">${R.regions.map((q, i) => `<option value="${i}"${i === lr ? ' selected' : ''}>${esc(q.label)}</option>`).join('')}</select></div>`;
+    h += '<div id="gfx_ld"></div>';   // graphic (ui/gfxa.js, mounted by after())
     const ownSteps = L.steps || O().loadFactors(L.o, {}, N).steps;
     h += card('Owner load rules', `<div class="kv"><div><span>Owner</span><span>${esc(L.o || 'AASHTO')}</span></div><div><span>η (max. Strength factors)</span><span>${f(L.eta, 3)} ${wk('own.eta')}</span></div><div><span>η (min. Strength factors)</span><span>${f(L.etaN, 3)} ${wk('own.etaN')}</span></div>
       <div><span>Design load multiplier m</span><span>${f(L.m, 2)} ${wk('own.m')}</span></div><div><span>Haunch in section properties</span><span>${L.h0 ? '0 (owner rule)' : 'as entered'} ${wk('own.h0')}</span></div></div>
@@ -123,5 +124,8 @@
     if (a.dataset.lg != null) ui.lg = +a.dataset.lg; if (a.dataset.lr != null) ui.lr = +a.dataset.lr; return a.getAttribute('href').slice(1); }
   function onOutChange(e, ui) { if (e.target.id === 'o_lg') { ui.lg = +e.target.value; return true; } if (e.target.id === 'o_lr') { ui.lr = +e.target.value; return true; } return false; }
 
-  window.SBDUiLoads = { ensure, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
+  /* after(el, P, R, ui): the cross-section graphic of the LLDF cases (ui/gfxa.js), after the page has set the output's HTML */
+  function after(el, P, R, ui) { const slot = el.querySelector('#gfx_ld'); if (!slot || !R || (R.errors && R.errors.length) || !window.SBDGfxA) return;
+    window.SBDGfxA.loads(slot, { P, R, lg: Math.min(ui.lg || 0, R.dead.N - 1), lr: Math.min(ui.lr || 0, R.regions.length - 1) }); }
+  window.SBDUiLoads = { after, ensure, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
 })();

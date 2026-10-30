@@ -145,6 +145,7 @@
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {
       const R = S.R, rows = R.rows, gv = R.gov;
+      h += '<div id="gfx_fx"></div>';   // graphics (ui/gfxa.js)
       h += `<section class="sec"><div class="secHead">Flexure results by location</div><div class="secBody"><p class="note">${R.what}</p>
         ${gv ? `<p>Governing: <b>${esc(gv.name)}</b>${gv.x != null ? ` (x = ${fmt(gv.x, 2)} ft)` : ''}, ${esc(gv.gov.id)} ${tt(gv.gov.title)}: ratio <b>${rtx(gv.gov)}</b>.</p>` : ''}
         ${R.oos ? '<div class="alert">A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported for that span.</div>' : ''}
@@ -166,6 +167,7 @@
       }
     }
     host.innerHTML = h;
+    { const sl = host.querySelector('#gfx_fx'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.flexure(sl, { P: ctx.P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); };
     const redraw = () => render(host, ctx);
     on('fx_src', 'change', e => { S.src = e.target.value; redraw(); });
