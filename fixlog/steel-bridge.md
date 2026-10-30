@@ -1760,6 +1760,9 @@ Display and export only: no engineering formula, factor, unit or reference chang
   when they are not 1. Callers `gelev` and `diag` pass `C.P`. `tests/engine/sheets.test.mjs` recomputes the envelope the same way
   (γ η (m LL + PL)), with the util RIDOT payload run under RIDOT rules (m = 1.2) and the xsA payload with its pedestrian load.
 - `tests/engine/splices.test.mjs` app path: compared with the payload's demands including the pedestrian load (was: taken out).
+- `engine/autodesign.js` (#494, merged meanwhile) `payloadOf`: the same change as `ui/fatigue.js fromAnalysis` (it is its copy:
+  `llPL`, `M_PL…`, `pedestrianInLL`), and its flexure `fromPayload` call passes `lf` (owner η, m) as the Flexure tab. Auto design's
+  candidates are checked with the same demands and factors as the tabs.
 
 ### Problem (both unconservative)
 1. The analysis had no pedestrian load. On bridges with sidewalks every Strength and Service demand lacked it: negative flexure up to
