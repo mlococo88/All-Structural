@@ -904,6 +904,152 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 - SB2-O23 closed.
 
 
+## 2026-10-29 — PR: sbd2-splices — bolted field splices, AASHTO LRFD 10th Ed. 6.13.6.1 (engine/splices.js, Splices and Field splices tabs)
+### Where
+- New `apps/steel-bridge/engine/splices.js` (`window.SBDSplices`), ported operation for operation from GirderDetail's Field splice module
+  (`Steel Bridge Design.html`, `MODS.splice`): `gdCompute` (anchor `function gdCompute(P) {`), `gdChecks` (`function gdChecks(R) {`),
+  `spCtNarrow`, `autoDesignSplice`, `fitSplice`, `spStdT`, `spNextT`, with GirderDetail's `GD_GR`, `BOLT`, `FUB`, `PHI`, `GD_DEFAULT`
+  (splice parts), `steelProps`, `addPart`, `modRatio`, `A610_shearC`, `A610_Vp`, `secEff`; the owner helpers `gdLF`, `gdOwnM(OWN_K.splice)`,
+  `gdPLq`, `gdUt`, `gdHP`, `gdOwnR('spl.ovs')` become `env` (owner, lf, rule, cite, minPlate). Preliminary sizing's `spliceExport`
+  (`function spliceExport(P, m, AN) {`) becomes `demandsAt` + `sectionAt` + `inputsAt`. TeX `work` lines replaced by SharedSteps
+  (`checks()` items each carry a step `sp.<check>.<k>`; `steps(R)` works the section, combinations, V_r, P_fy, M_r, bolt and plate
+  resistances, the web bolt group).
+- New `apps/steel-bridge/ui/splices.js` (`window.SBDSplicesUI`): the Splices input tab and the Field splices output tab.
+- `engine/model.js`: optional `splices` field (header, `defaultSplices()`, `validate`). The stations are `framing.splices` (the framing PR's
+  field, one list for both modules; the Splices tab edits the same list). Absent in a saved project = `defaultSplices()`. No key or saved format changed.
+- `apps/steel-bridge/index.html`: two script tags, the Splices input tab, the Field splices output tab, the change / click hooks, the
+  error-tab mapping (`splices.*` → Splices) and `splices.auto` in the redraw list.
+- New `tests/engine/splices.test.mjs`.
+### Problem
+- New module (docs/REBUILD_PLAN.md §5, Details: splices).
+### Governing provision
+- AASHTO LRFD 10th Ed. (2024): 6.13.6.1.1 (smaller section), 6.13.6.1.3 (10th Ed. design forces: P_fy = F_yf A_e, Eq. 6.13.6.1.3b-1, -2;
+  the flange couple M_r and H_w, C6.13.6.1.3b; V_r = φ_vV_n, 6.13.6.1.3c), 6.13.6.1.4 (8th Ed. method kept as an option), 6.13.6.1.5
+  (fillers), 6.13.2.7 (shear), 6.13.2.8 (slip), 6.13.2.9 (bearing and tearout), 6.13.2.6 (spacing, edge and end distances, sealing,
+  stitch bolts), 6.13.4 (block shear), 6.13.5.2, 6.13.5.3, 6.8.2/6.8.3 (plates, A_n ≤ 0.85A_g, holes + 1/16 in), 6.6.1.2 (Category B
+  fatigue), 6.7.3 (minimum plate), 6.10.9 (web V_n). Owner: CTDOT BRSDM V2 6.13.6.1 (spl.ovs), the load rules OWN6–OWN8, OWN14 def.minPlate.
+- No formula, factor, unit or reference differs from GirderDetail (parity below).
+### Check case (hand, in tests/engine/splices.test.mjs)
+- GirderDetail's built-in splice (left 16 × 3/4, 60 × 9/16, 16 × 1 1/8; right 18 × 1, 18 × 1 1/4; 7/8 in A325, 50W):
+  top P_fy = 50 × (0.80 × 70)/(0.95 × 50) × [12.0 − 4(15/16 + 1/16)(0.75)] = 50 × 1.17895 × 9.0 = 530.53 kip; bottom 795.79 kip;
+  φ_sR_n = 0.80(0.56)(0.6013)(120)(2) = 64.652 kip; filler 1/4 in: γ = 4.0/12.0, R = 0.800; TF1 left 530.53/(12 × 64.652 × 0.8) = 0.8548;
+  M_u (Strength I neg.) = 1.25(−120) + 1.25(−30) + 1.50(−35) + 1.75(−1,250) = −2,427.5 kip-ft; M_r = 530.53 × 60.9375/12 = 2,694.08 kip-ft
+  (MT1 0.9011); V_r = 0.40017 × 978.75 = 391.66 kip; I_p = 7,420.5 in², e = 3.5 in, R_u = 12.602 kip, WS1 = 0.1949.
+### How verified
+- Parity with GirderDetail's own functions in Node (gd-source.mjs pattern, `node tests/engine/run.mjs splices`): built-in splice × 4 owners
+  × 10th/8th Ed. × P_rs, plus a variant (utilities, pedestrian part with m, fatigue, stiffened web, threads included, Class A, punched,
+  eccentricity settings, no inner plates, one web column); the auto-design of the built-in splice per owner; all 400 field splices of the 100
+  `tests/projects/st/gd_*.json` payloads (inputs built from the payloads as spliceExport builds them): checks with GirderDetail's built-in
+  plates (400), auto-design and checks of the designed splice (every third payload, 136 splices), 8th Ed. (every fifth payload).
+  Every value of GirderDetail's result object, every check status and governing item, every item's ratio and status, and the designed
+  plates: 0 differences (largest relative difference 0). No browser recording was needed: the payloads hold every splice input.
+- App path (engine/analysis.js → girder()): demands at the splice vs the payload's: moments within 0.1 % of the largest moment at the
+  splice, shears within 1.3 % (the analysis' consistent loads vs GirderDetail's lumped loads, SB2-A3; the payload's pedestrian load
+  taken out, as analysis.test.mjs).
+- Headless load of apps/steel-bridge/index.html: Field splices tab calculated (4 splices, auto-designed, all OK), drawing, 187 worked steps,
+  0 KaTeX errors, Keep these plates → Splices tab entered plates, 0 console errors.
+### Other copies
+- None. GirderDetail keeps its own splice module until the switch-over.
+### Decisions (made here, per the engineer's rule of 2026-10-29)
+- SB2-SP1. Deck reinforcement: GirderDetail's splice module keeps its own default A_r = 9.3 in² at d_r = 4 in (spliceExport does not send
+  them); the new app uses the project's deck rebar (top + bottom layers, at their centroid). Accuracy; it changes P_rs (when included)
+  and the steel + reinforcement section of the negative-moment stresses only.
+- SB2-SP2. Web shear basis: GirderDetail's module keeps "unstiffened" unless the user changes it; the new app takes the stiffener panel at
+  the splice (Stiffeners tab layout): stiffened with its d_o, unstiffened where none. V_r = φ_vV_n of the actual web (6.13.6.1.3c),
+  not the smaller unstiffened value (which understates the web bolt demand).
+- SB2-SP3. Splice plate grade: GirderDetail keeps 50W; the new app defaults to the top flange grade (setting on the Splices tab).
+- SB2-SP4. R_h: the hybrid factor of the smaller steel section (engine/sections.js; 1.0 when homogeneous) instead of GirderDetail's
+  entered 1.0 (only differs for hybrid girders).
+- SB2-SP5. Element shear at the splice: the larger magnitude of the element's two ends (the shared engine applies distributed loads
+  exactly; GirderDetail's lumped loads give one shear per element), then GirderDetail's rule (the element and its neighbours).
+- SB2-SP6. Minimum plate of the auto-design: the owner's OWN14 def.minPlate (RIDOT 7/16, CTDOT 1/2 in), else 3/8 in (GirderDetail STD_DEF).
+- The module takes one flange grade (the top flange's) and one web depth (the left side's), as GirderDetail; a warning shows where the
+  project differs.
+### Open items
+- SB2-SP7. CTDOT: every splice of the CTDOT payloads (16 in flanges) fails DT10 in both apps: the 2 in edge distance and 1/2 in plates
+  of BRSDM V2 6.13.6.1 need a wider flange for 2 gage lines each side of the web (GirderDetail's GD62 note says so on the splice).
+- SB2-SP8. GirderDetail's user manual (Part 7, "Built-in example") quotes P_fy top = 541.6 kip (net area with d_h only); its code, and
+  this port, use d_h + 1/16 in (6.8.3): 530.53 kip. Manual text only; not changed here (old file).
+- Not ported (GirderDetail UI aids): "Suggest splice" (location from contraflexure and bolt-size cost comparison), the locks of the
+  auto-design, the DXF and 3D views of the splice.
+
+## 2026-10-29 — PR: sbd2-rating — load rating, LRFR design-load (HL-93) Inventory and Operating (engine/rating.js, Rating tab; new files)
+### Where
+- `engine/rating.js` (new, `window.SBDRating`): ST-Girder's rating method (`Steel Bridge Design.html`, st-src block, `computeAll`, anchor
+  `/* ---------- Load rating (LRFR, MBE) — station-based ---------- */` to `rating.govOpr=`, and `function RatingTab(`) with GirderDetail's GS20
+  owner targets (anchor `function gsRateCheck(`, `const gdRateRule =`). Functions: `factors`, `phi`, `rf`, `flexure`, `service`, `shear`,
+  `shearCases`, `noDoublePL`, `fatigue`, `target`, `girder`. Worked steps `rt.*` (φ_cφ_s, R_n with a link to the capacity's own step, C, DC, DW,
+  LL+IM, f_ℓ term, RF Inventory, RF Operating).
+- `ui/rating.js` (new, `window.SBDRatingUI`): the Rating tab: φ_c and φ_s inputs (MBE Tables 6A.4.2.3-1, 6A.4.2.4-1; saved), demands from this
+  app's analysis (default) or a hand-off file, governing Inventory / Operating RF, owner target, the governing row of each group, every location,
+  worked steps of the selected row followed by the flexure or shear work of that location (where R_n is worked). Capacities: `SBDFlexure.fromPayload`
+  + `girder` (the Flexure tab's locations) and `SBDShearUI.build` (the Shear tab's stations, V_n with the stiffener layout).
+- `engine/model.js`: `defaultRating()`, header comment, validation of `rating.phiC`, `rating.phiS` (0 < φ ≤ 1.0). `index.html`: two script tags,
+  the Rating tab button, one dispatch line.
+- `tests/engine/st-source.mjs` (new): ST-Girder's engine in Node (st-src babel script compiled with tests/libs Babel 7.23.5, React/DOM stubbed;
+  its own `gdCheck`/`gdAdopt` text applies a payload to DEFAULTS; `stSpan` = its "Span n" button; GirderDetail's `loadShedRbG`, `webFcrw` as the
+  host page, S2-2). Rating trace: additions after five statements of the rating section record ST-Girder's C, DC, DW, LL+IM; nothing computed changes.
+### Saved data (CLAUDE.md §5)
+- No new key. New optional project field `rating: { phiC, phiS }` (absent = 1.0, 1.0, ST-Girder's defaults), in `sbd2.project.current` and the
+  export file. Old projects read unchanged.
+### Governing provisions (AASHTO MBE 3rd Ed. (2018), Section 6A; resistances AASHTO LRFD 10th Ed. (2024)) — new behaviour in this app
+- RF = (C − γ_DC DC − γ_DW DW ± γ_P P)/(γ_LL (LL+IM)), Eq. 6A.4.2.1-1; C = φ_cφ_sφR_n, Eq. 6A.4.2.1-2; φ_cφ_s ≥ 0.85, Eq. 6A.4.2.1-3 (Strength only).
+- Table 6A.4.2.2-1, design-load rating: Strength I γ_DC 1.25, γ_DW 1.50, γ_LL 1.75 Inventory / 1.35 Operating; Service II γ_D 1.00, γ_LL 1.30 / 1.00.
+- Service II, 6A.6.4.2.2 (Eq. 6A.6.4.2.2-1): f_R = 0.95R_hF_yf composite (Eqs. 6.10.4.2.2-1, -2), 0.80R_hF_yf noncomposite (-3); web f_c ≤ F_crw (-4).
+- R_n: M_n 6.10.7.1.2 (with 1.3R_hM_y), F_nc = R_bR_hF_yc 6.10.7.2.2, F_nc 6.10.8.2.2/6.10.8.2.3 (incl. 6.10.8.2.3c), F_nt 6.10.8.3, App. A6 M_nc / R_ptM_yt,
+  V_n 6.10.9 (tension field, V_cr in end panels), F_crw 6.10.1.9.1; φ_f = φ_v = 1.0 (6.5.4.2). No owner η or design load multiplier (GS20).
+- ST-Girder does not state its MBE edition ("verify" in its references). The 3rd Ed. is cited; the article, table and equation numbers used are the
+  same in the 2nd Ed.
+### Check case (tests/engine/rating.test.mjs, arithmetic in the comments)
+- Flexure, payload gd_builtin28_AASHTO_G1, x = 44 ft, compact: C = 1.3(1.0)(7,468.216) = 9,708.680 kip-ft; DC 1,101.171, DW 159.930, LL+IM 2,092.218;
+  RF_inv = (9,708.680 − 1,376.464 − 239.895)/(1.75 × 2,092.218) = 8,092.322/3,661.382 = 2.2102; RF_op = 8,092.322/2,824.494 = 2.8651 (ST-Girder 2.2102 / 2.8651).
+  φ_c 0.95, φ_s 0.85 → 0.8075 < 0.85 → 0.85: C = 8,252.378, RF_inv = 6,636.019/3,661.382 = 1.8124.
+- Shear, same payload, x = 109.99 ft (station 109.999; 110.001 is across the pier): V_n = 903.547 kip; DC 81.520 + 23.868, DW 14.521, LL+IM 122.355;
+  RF_inv = (903.547 − 131.735 − 21.782)/214.121 = 750.030/214.121 = 3.5028; RF_op = 750.030/165.179 = 4.5407 (ST-Girder 3.5028 / 4.5407).
+- Service II: f_R 47.5, f_DC 12.905, f_DW 1.6665, f_LL 12.0274 ksi: RF_inv = 32.9285/15.63562 = 2.1060, RF_op = 2.7378 (ST-Girder 2.106 / 2.7378).
+- Before: none in this app.
+### How verified
+- Formula and factors: ST-Girder run in Node on the 100 tests/projects/st/gd_*.json payloads, every span (300 sessions), plus φ_c/φ_s variations
+  (0.95 × 0.85 floor, 0.95, 0.85) and two noncompact variants (ST-Girder's stress basis); every rating ST-Girder computes (flexure moment and stress
+  basis, pier negative flexure, shear at every station, Service II both flanges and LL signs) recomputed by `SBDRating.rf` from ST-Girder's own
+  C, DC, DW, LL+IM: all equal within 1e-9 relative (the count is printed by the test); its reported governing values equal.
+- Full path (this app's capacities, the same payloads, 300 spans): RF this app / ST-Girder, min · 10 % · median · 90 % · max:
+  positive flexure 0.9999 · 0.9999 · 1.0000 · 1.0000 · 1.0000; negative flexure 1.0193 · 1.0211 · 1.0268 · 1.0661 · 1.0722; shear 1.0000 (all);
+  Service II 1.0005 · 1.0005 · 1.0005 · 1.0006 · 1.0007; governing Inventory and Operating = negative flexure. No RF crosses 1.0.
+  Causes: negative flexure, the unified F_nc (6.10.8.2.3c nonprismatic unbraced length, γ_e; C 1.2 % to 3.7 % higher than ST-Girder's F_nc of the pier
+  section), LL+IM at 0.01 ft from the pier (−0.03 %); Service II and positive flexure, the location 0.01 ft inside the support / moments interpolated
+  (GirderDetail's Check at any location); shear identical: ST-Girder already has GirderDetail's V_n (S2-4, #455), so the +18–22 % expected from the
+  tension field does not appear against today's ST-Girder.
+- Built-in project, this app's analysis: Inventory 0.752 / Operating 0.975 in the Node test (its engine files), 0.74 / 0.96 on the page after the
+  merge of #479 (framing, loaded by the page); 6.10.8 compression flange at the piers; see SB2-R2.
+- Headless load of apps/steel-bridge/index.html: Rating tab, Calculate, a shear row, φ_c changed (saved, results stale, recalculated): 0 console errors.
+### Other copies
+- None. ST-Girder and GirderDetail keep their own ratings until the switch-over.
+### Decisions (made here, per the engineer's rule of 2026-10-29; accuracy, not over-conservatism)
+- Every location of the whole girder is rated (ST-Girder: the selected span; its negative flexure at one station, the largest −M_u).
+- Negative flexure (and noncomposite) by the method in use: App. A6 on the moment basis (M_nc, R_ptM_yt) where it is used, else 6.10.8 on the stress
+  basis, both flanges (ST-Girder: the bottom flange, 6.10.8 only). Positive noncompact: both flanges (as ST-Girder).
+- Service II: both flanges and, where 6.10.4.2.2 requires it, the web (f_c ≤ F_crw; GS20 includes GS13). F_crw depends on the load through D_c: the RF
+  is the load factor at which f_c = F_crw (bisection), as GS20's quadratic.
+- f_ℓ (as the design checks): f_ℓS_x/3 (moment basis), f_ℓ/3 (stress basis; the amplified value of the compression flange), f_ℓ/2 at Service II,
+  constant (not scaled with the live load). With f_ℓ = 0 the term is 0 even where the amplification is unbounded (see SB2-R2).
+- γ_DC = 1.25, γ_DW = 1.50 on the dead loads as they act, one factor (Table 6A.4.2.2-1, as ST-Girder). Utilities (MassDOT): UF with DC, UT with DW
+  where they add (no relief; ST-Girder GD54c default).
+- Shear by direction: at each location the stations on the same side of every support, each direction of shear with the dead loads as they act in
+  it (a relieving one taken as 0) and the LL+IM envelope of that direction; the lowest RF governs. (ST-Girder: |V_DC| with the larger LL+IM
+  magnitude; same governing RF on all 300 spans.)
+- φ_cφ_s on flexure and shear at the Strength limit state, not at Service II (as ST-Girder).
+- Pedestrian load: with `pedestrianInLL: true` the hand-off's LL+IM already includes it (HANDOFF.md §4.9); the rating does not add M_PL / V_PL again.
+- No legal or permit vehicles (ST-Girder has none); the owner's pending vehicle rows are listed as not rated. Fatigue RF = 1/(GS17 ratio) only for
+  an owner fatigue target (GS20).
+### Open items (need the engineer)
+- SB2-R1. engine/flexure.js and engine/shear.js `fromPayload` (and the Shear demands) add M_PL / V_PL to M_LL / V_LL even when the hand-off has
+  `pedestrianInLL: true`: the pedestrian load is counted twice on the Flexure, Shear and Fatigue tabs with a hand-off file (18 of the 100 payloads,
+  the xsA project; e.g. gd_xsA_CTDOT_G1 at the pier: M_LL+IM −2,511.3 instead of −2,278.5 kip-ft). The rating avoids it (`noDoublePL`). Not changed here.
+- SB2-R2. GS7 is not reported (ratio NaN) where f_bu ≥ F_cr with f_ℓ = 0: `ampFl` gives 0 × ∞. Same arithmetic in GirderDetail (`function ampFl(`,
+  and `r.AF = r.ampReq ? …`). Built-in project with this app's analysis: 10 pier locations with f_bu up to 39.67 > F_nc 34.97 ksi (ratio 1.134) show
+  no GS7, and the Flexure governing ratio is 0.973 elsewhere; the rating shows RF_inv 0.752 there. Not changed here (§4).
+
 ## 2026-10-29 — PR: sbd2-cleanup-decisions — engineer's and lead's decisions on open items (SB2-A2, A4, A5, A7, O12, O14, F1, O16, C1, C2)
 All ten items were decided by the engineer or the lead (2026-10-29); this PR implements them. Each one below: where, before / after,
 provision, check case. Closes SB2-A2, SB2-A4, SB2-A5, SB2-A7, SB2-O12, SB2-O14, SB2-F1, SB2-O16, SB2-C1, SB2-C2.
