@@ -94,7 +94,7 @@ test('full path: this app\'s capacities on the 100 payloads, every span — RF c
 /* 3. the tab's build */
 test('ui/rating.js build(): the built-in project from this app\'s analysis, and a hand-off file', () => {
   const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), 'lldf.js', E('engine/lldf.js'), E('engine/loads.js'),
-    E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/analysis.js'), E('engine/fatigue.js'), E('engine/rating.js'), E('ui/shear.js'), E('ui/rating.js'));
+    E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/analysis.js'), E('engine/fatigue.js'), E('engine/rating.js'), E('engine/framing.js'), E('ui/shear.js'), E('ui/flexure.js'), E('ui/rating.js'));
   const P = U.SBDModel.defaultProject(), R = U.SBDRatingUI.build({ P, g: 0, src: 'analysis' });
   assert.ok(!R.err, R.err); assert.ok(R.rows.length > 300, `${R.rows.length} rows`);
   const s = R.sum; ['flexP', 'flexN', 'shear', 'svc'].forEach(k => assert.ok(s.by[k] && isFinite(s.by[k].inv) && s.by[k].inv > 0, k));
