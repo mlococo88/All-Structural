@@ -108,11 +108,11 @@
       else if (a.k === 'rail' || a.k === 'fence') { const z = z0 + a.x * 12; prism('app', z - 1.5, z + 1.5, yb + a.h - 3, 3, MT.rail); prism('app', z - 1.5, z + 1.5, yb + a.h * 0.55 - 1.5, 3, MT.rail);
         const xa = ext(0, z / 12), xb = ext(kN, z / 12), n = Math.max(1, Math.round((xb - xa) / 96)), pts = []; for (let q = 0; q <= n; q++) pts.push([xa + (xb - xa) * q / n, yb + a.h / 2, z]); inst('app', pts, new T.BoxGeometry(3, a.h, 3), MT.rail); nApp++; } });
     // labels: girders at the Abut. 1 end, supports
-    const lsz = Math.max(18, Dmax * 0.35);
+    const lsz = Math.max(18, Dmax * 0.35, 0.012 * (G.sup[G.sup.length - 1] - G.sup[0]) * 12);
     G.girders.forEach(g => { const sp = label(g.label, lsz, '#1f4e8c'); sp.position.set(Xg(g, 0) - 6 * lsz, Dmax / 2, Z(g.i)); grp('lbl').add(sp); });
     G.sup.forEach((_, k) => { const sp = label(k === 0 ? 'Abut. 1' : k === kN ? 'Abut. 2' : `Pier ${k}`, lsz, '#333'); sp.position.set(FR.xb(k, nb - 1) * 12, yTop + 3 * lsz, (G.ys[nb - 1] + dk.ohR) * 12 + 2 * lsz); grp('lbl').add(sp); });
     const bb = new T.Box3().setFromObject(root), c = bb.getCenter(new T.Vector3()), sz = bb.getSize(new T.Vector3()), R = Math.max(sz.x, sz.y * 4, sz.z) * 0.62;
-    V.home = () => { V.cam.position.copy(c.clone().add(new T.Vector3(-0.55, 0.55, 1).normalize().multiplyScalar(R * 1.6))); if (V.ctl) { V.ctl.target.copy(c); V.ctl.update(); } else V.cam.lookAt(c); };
+    V.home = () => { V.cam.position.copy(c.clone().add(new T.Vector3(-0.55, 0.55, 1).normalize().multiplyScalar(R * 1.9))); if (V.ctl) { V.ctl.target.copy(c); V.ctl.update(); } else V.cam.lookAt(c); };
     V.cam.near = Math.max(0.5, R / 500); V.cam.far = R * 40; V.cam.updateProjectionMatrix();
     V.info = `${nb} girders, ${FR.frames.length} ${G.cf.dia ? 'diaphragms' : `cross-frames (type ${G.cf.type})`}, deck ${window.SharedDxf.frac(dk.ts)} in on a ${window.SharedDxf.frac(dk.haunch)} in haunch${nApp ? ', barriers, curbs, railings, sidewalks and median of the Cross-section & loads tab (barrier and railing heights schematic)' : ''}; skews ${G.skews.map(v => (+v).toFixed(1)).join(' / ')}°.`;
   }
