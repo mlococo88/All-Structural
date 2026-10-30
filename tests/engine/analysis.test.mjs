@@ -100,6 +100,25 @@ test('steps: format and rendering', () => {
   assert.ok(R.seq && R.seq.pours.length >= 3, 'pour sequence');
 });
 
+test('sb2-pour-sign: a round-off M_DC1 at an abutment makes no sliver pour; a real contraflexure point still splits', () => {
+  // Two equal spans L = 10 ft, w = 1 klf, nodes every 1 ft: span 1 M(x) = w(3Lx/8 − x²/2) = 3.75x − x²/2, span 2 its mirror.
+  //   zero at x = 0 and 7.5 ft (contraflexure), pier M(10) = 37.5 − 50 = −12.5 kip-ft, largest |M| = M(3.75) region: M(4) = 15 − 8 = 7 … pier 12.5.
+  //   nodes: M(7) = 26.25 − 24.5 = +1.75, M(8) = 30 − 32 = −2.00 → the first negative node is x = 8; mirror: M(12) = −2.00, M(13) = +1.75.
+  //   tolerance = 1e-6 × 12.5 = 1.25e-5 kip-ft.
+  const xs = Array.from({ length: 21 }, (_, i) => i), M = xs.map(x => { const u = x <= 10 ? x : 20 - x; return 3.75 * u - u * u / 2; });
+  M[0] = -1e-11; M[20] = -1.6e-11;   // round-off at the abutments, as the engine's M_DC1(0) = −1.6e-11 kip-ft on the built-in project
+  const str = ps => ps.map(q => `${q.a}-${q.b}`).join(' ');
+  // positive regions first, left to right, then negative: [0, 8], [13, 20], then [8, 13] (before the fix: [1, 8], [13, 20], [0, 1], [8, 13])
+  assert.equal(str(AN.pourRegions(xs, M)), '0-8 13-20 8-13');
+  M[0] = 0; M[20] = 0; assert.equal(str(AN.pourRegions(xs, M)), '0-8 13-20 8-13', 'exact zero: the same');
+  M[0] = 1e-11; assert.equal(str(AN.pourRegions(xs, M)), '0-8 13-20 8-13', 'positive round-off: the same');
+  // a negative moment above the tolerance at the end is a real sign change and still splits (−1e-3 > 1.25e-5 kip-ft)
+  M[0] = -1e-3; assert.equal(str(AN.pourRegions(xs, M)), '1-8 13-20 0-1 8-13', 'real negative end moment');
+  // a real contraflexure point on a node within the tolerance of zero counts as positive, as an exact zero always did: M(8) := −1e-7
+  M[0] = 0; const M2 = M.slice(); M2[8] = -1e-7; assert.equal(str(AN.pourRegions(xs, M2)), '0-9 13-20 9-13');
+  M2[8] = 0; assert.equal(str(AN.pourRegions(xs, M2)), '0-9 13-20 9-13', 'exact zero on the node: the same');
+});
+
 /* ---------- parity ---------- */
 const files = payloadFiles(), sample = ALL ? files : files.filter((f, i) => i % 10 === 0 || f === 'gd_xsA_RIDOT_G1.json');   // + one with a pedestrian load (sb-ped-owner PR)
 // bounds: largest |difference| / largest |value| of the quantity on the girder (causes in the header)
