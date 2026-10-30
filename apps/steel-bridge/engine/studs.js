@@ -12,10 +12,11 @@
    The TeX `work` lines of GirderDetail are replaced by worked steps (SharedSteps). tests/engine/studs.test.mjs checks every value and check
    item against GirderDetail's own functions in Node, and fromPayload() against the results GirderDetail sends in the hand-off (S2-6).
 
-   Bridge-wide b_eff (open question carried over, not changed): GirderDetail's module has ONE set of pitch zones and strength regions for
-   the bridge, with one b_eff (Preliminary sizing sends the b_eff of the girder type with the largest fatigue shear range, usually the
-   exterior girder). This engine does the same by default; the model option p.beffMode = 'girder' (off by default) uses the girder's own
-   b_eff instead (fromPayload: the payload girder's deck.beff). The difference is reported, not adopted.
+   b_eff (SB2-F1, decided 2026-10-29): GirderDetail's module has ONE set of pitch zones and strength regions for the bridge, with one
+   b_eff (Preliminary sizing sends the b_eff of the girder type with the largest fatigue shear range, usually the exterior girder). This
+   engine's compute() and fromPayload() do the same when p.beffMode is absent (the parity tests); p.beffMode = 'girder' uses the girder's
+   own b_eff (fromPayload: the payload girder's deck.beff), as AASHTO 6.10.10.1.2 (Q, I of the girder's own section) and 6.10.10.4.2
+   (P_1p with its own b_eff) require. The app (engine/model.js defaultStuds, ui/fatigue.js) uses 'girder' by default from 2026-10-29.
 
    Owner rules: env = { owner, lf: { h0 } (OWN8: haunch 0 in the composite properties), rule(id), cite(r), fat: { set, B } (the bridge's
    fatigue settings and supports, engine/fatigue.js settings() / supports(); default: settings(DEFAULT), no bridge) }. Rule used: stud (OWN22).

@@ -219,7 +219,7 @@ test('this app\'s pour sequence (engine/analysis.js) in place of the payload\'s 
   const ALL = !!process.env.SBD_CN_ALL, list = ALL ? payloads : payloads.filter((f, i) => i % 10 === 0), t0 = Date.now();
   let nLoc = 0, worstM = { rel: 0 }, worstR = { d: 0 }; const hist = { '≤ 0.05 %': 0, '0.05–0.5 %': 0, '> 0.5 %': 0 }, nearPier = { in: 0, out: 0 };
   for (const f of list) {
-    const pl = readPayload(f), P = projectFromPayload(pl), AR = AN.analyzeGirder(P, 0, { ll: false });
+    const pl = readPayload(f), P = projectFromPayload(pl), AR = AN.analyzeGirder(P, 0, { ll: false, steelPlf: 3.4 });   // GirderDetail's steel 3.4 lb/ft/in², so only SB2-A1 shows (SB2-A2: analysis.test.mjs)
     assert.deepEqual([...AR.errors], [], f); if (!AR.seq) continue;
     // the payload with M_DCc replaced by this app's (linear between this app's stations, which are GirderDetail's nodes); everything else the payload's
     const pl2 = clone(pl); pl2.stations.forEach(s => { if (s.M_DCc !== undefined) s.M_DCc = FX.feAt(AR.x, AR.seq.MDCc, s.x); });
@@ -314,4 +314,18 @@ test('hand check: overhang brackets on the exterior girder (OH1–OH5, GirderDet
   const oh5 = r.checks.find(c => c.id === 'OH5' && c.flange === 'top'); close(oh5.demand, r.c.fl1 * r.AF, 1e-12, 'OH5 top'); close(oh5.capacity, 30, 1e-12, '0.6F_y');
   // same as GirderDetail's own module on its built-in input
   const G = gd(), { R: Rg, CK } = G.oh(clone(G.ctx.GM.oh.def)); const s0 = stats.diffs.length; cmpOH(Rg, CK, R, 'GM.oh.def'); assert.equal(stats.diffs.length - s0, 0, stats.diffs.slice(s0).join('; '));
+});
+
+test('SB2-C2: ohFill() ("Fill from cross-section", GirderDetail XS11): bracket deck geometry from the cross-section', () => {
+  const P = W.SBDModel.defaultProject();
+  // built-in: overhangs 3.25 ft both sides (left when equal), narrowest top flange 16 in: w_OH = 12(3.25) − 16/2 = 39 − 8 = 31.00 in;
+  // t_OH = the total deck thickness 8.5 in (8 in slab + 1/2 in integral wearing surface); w_c = 0.150 kcf
+  let F = C.ohFill(P, 0); assert.equal(F.err, undefined); assert.equal(F.sd, 'L'); assert.equal(F.bf, 16);
+  assert.equal(JSON.stringify(F.vals), JSON.stringify({ wOH: 31, tOH: 8.5, wc: 0.15 }));
+  assert.equal(F.steps.find(s => s.id === 'oh.fill.wOH').value, 31);
+  // the larger overhang governs: right 3.6 ft gives 12(3.6) − 8 = 35.20 in
+  P.xs.ohR = 3.6; F = C.ohFill(P, 0); assert.equal(F.sd, 'R'); assert.equal(F.vals.wOH, 35.2);
+  // a new project's overhang inputs stay GirderDetail's defaults until the button is pressed (nothing automatic)
+  assert.equal(P.constr, undefined); assert.equal(C.OH_DEF.wOH, 30);
+  delete P.xs; assert.ok(C.ohFill(P, 0).err);
 });
