@@ -334,6 +334,8 @@
     const locOf = it => { const m = /^w([ft])(\d+)\./.exec((it && it.step) || ''); return m ? { k: m[1] === 'f' ? 'fw' : 'tr', i: +m[2] } : null; };
     const scOf = q => `wd@${q.k}${q.i}`, keyOf = it => { const q = locOf(it); return q ? K(scOf(q), it.step) : null; };
     const num = it => typeof it.r === 'number' && isFinite(it.r);
+    // the engine's notes name a section as "§sec.s" (a group of steps): the report links its first property, ȳ (sec.s.yb)
+    const wSteps = q => WT.steps(R, q.k, q.i).map(t => (t.note && /§sec\.(s|c3|cn|cr)\b(?!\.\w)/.test(t.note) ? { ...t, note: t.note.replace(/§sec\.(s|c3|cn|cr)\b(?!\.\w)/g, '§sec.$1.yb') } : t));
     // governing rows: the flange-to-web welds (FW1–FW4) and the shop transitions (TR1–TR4), the largest ratio of each
     const gv = ids => { let b = null; C.filter(c => ids.test(c.id)).forEach(c => c.items.forEach(it => { if (num(it) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
     const bad = ids => C.filter(c => ids.test(c.id)).flatMap(c => c.items.filter(it => !num(it) && (it.st === 'fail' || it.st === 'warn')).map(it => ({ c, it })));
@@ -349,11 +351,11 @@
     if (R.tr.length) subs.push(sub('tr', `Shop flange transitions: ${R.tr.length}`, [tbl(['Transition', 'Plates (in)', 'Cat.', 'γ(Δf) (ksi)'], R.tr.map(r => ({ cells: [r.name, `${f(r.b1, 2)} × ${f(r.t1, 4)} to ${f(r.b2, 2)} × ${f(r.t2, 4)}`, r.cat, N(r.df, 2)], cls: sel.has(scOf({ k: 'tr', i: r.i })) ? 'gov' : '' })))]));
     // worked steps: the governing locations open; with 'all', every other location on demand (each location's own scope)
     const locs = [...R.fw.map(r => ({ k: 'fw', i: r.i, name: r.name })), ...R.tr.map(r => ({ k: 'tr', i: r.i, name: r.name }))];
-    locs.filter(q => sel.has(scOf(q))).forEach(q => subs.push(sub(scOf(q), `${q.name} (governing)`, [steps(scOf(q), WT.steps(R, q.k, q.i), { title: 'Worked steps' })])));
+    locs.filter(q => sel.has(scOf(q))).forEach(q => subs.push(sub(scOf(q), `${q.name} (governing)`, [steps(scOf(q), wSteps(q), { title: 'Worked steps' })])));
     // every item's step that a table links to must be worked here: the governing locations, then (all, or the links of the governing table) the rest on demand
     const need = new Set(C.map(c => (c.gov >= 0 ? locOf(c.items[c.gov]) : null)).filter(Boolean).map(scOf));
     const rest = locs.filter(q => !sel.has(scOf(q)) && (all || need.has(scOf(q))));
-    if (rest.length) subs.push(sub('every', all ? 'Every other location' : 'Other governing locations of single checks', rest.map(q => steps(scOf(q), WT.steps(R, q.k, q.i), { lazy: true, title: q.name }))));
+    if (rest.length) subs.push(sub('every', all ? 'Every other location' : 'Other governing locations of single checks', rest.map(q => steps(scOf(q), wSteps(q), { lazy: true, title: q.name }))));
     return { title: 'Welds (flange-to-web, shop transitions)', subs };
   }
 

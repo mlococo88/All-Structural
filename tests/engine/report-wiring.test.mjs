@@ -60,7 +60,7 @@ test('Report: the Flexure section is the Flexure module\'s result; the rating li
   const B = W.SBDReportData.compute(P, 0);
   assert.equal(JSON.stringify(B.err), '{}');
   assert.equal(B.flexSame, true);
-  assert.notEqual(B.flex, B.rating.flex, 'the report\'s flexure comes from ui/flexure.js, not from the rating');
+  assert.equal(B.flex, B.rating.flex, 'paths PR: the rating\'s flexure is the Flexure module\'s build (ui/rating.js), taken once');
   const fx = new Set(B.flex.rows); let n = 0;
   B.rating.cap.forEach((r, q) => { if (q.kind === 'flex' || q.kind === 'svc' || q.kind === 'fat') { assert.ok(fx.has(r), q.name); n++; } });
   assert.ok(n > 0);
