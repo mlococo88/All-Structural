@@ -100,9 +100,10 @@
   /* ---------- calculation ---------- */
   function build(ctx) {
     const P = ensure(ctx.P), M = window.SBDModel, OW = window.SBDOwners, FA = window.SBDFatigue, SC = window.SBDStuds, FX = window.SBDFlexure, SB = window.SBDStiffeners, g = ctx.g || 0;
-    let pl = ctx.pl !== undefined ? ctx.pl : S.src === 'file' ? S.pl : null;
-    if (ctx.pl === undefined && S.src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-    if (ctx.pl === undefined && S.src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
+    const src = ctx.src || S.src;   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
+    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null;
+    if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
+    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
     const F = P.fatigue, Q = P.studs, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0);
     const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0];
     let sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));

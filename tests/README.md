@@ -43,6 +43,9 @@ node tests/compare.mjs --tool page --file lldf.html
 node tests/compare.mjs --tool gd --a 3ef3506 --b my-branch                  # git refs (same file name)
 node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # the old stand-alone page (a ref; read as a page) vs the view (read in its frame)
 
+# Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
+node tests/smoke/steel-bridge-report.mjs
+
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; GirderDetail's embedded Preliminary sizing page included
 node tests/check-syntax.mjs "Steel Bridge Design.html"                        # the merged tool includes its embedded pages (pl-src, st-src)
 ```
