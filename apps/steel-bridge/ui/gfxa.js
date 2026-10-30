@@ -35,25 +35,25 @@
   function secGraphic(P, R, cs, seg) {
     const G = GR(), c = R.c, s = R.s, OW = window.SBDOwners, deck = P.deck, comp = c.comp, d = c.s.d;
     const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +R.g.beff : 0, rb = deck.rebar || {};
-    const W = Math.max(be, s.topB, 30), H = d + hh + ts, h = Math.max(W, H) * 0.035, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
+    const W = Math.max(be, s.topB, 30), H = d + hh + ts, h = Math.max(W, H) * 0.045, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
     const ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), rb: D.layer('REBAR', 1), c: D.layer('CNTR', 8) };
     const ib = ibeam(D, ly.g, 0, 0, s); if (comp && hh > 0) D.rect(ly.dk, -s.topB / 2, d, s.topB / 2, d + hh);
     if (comp) { D.rect(ly.dk, -be / 2, d + hh, be / 2, d + hh + ts);
       [['rt', rb.top, d + hh + ts - (rb.top || {}).c], ['rb', rb.bot, d + hh + (rb.bot || {}).c]].forEach(([k, q, y], i) => { if (!q || !(q.A > 0) || !fin(y)) return;
         D.line(ly.rb, -be / 2 + h, y, be / 2 - h, y, D.ltype('DASHED')); for (let x = -be / 2 + 2 * h; x < be / 2; x += Math.max(6 * h, be / 8)) D.circle(ly.rb, x, y, 0.3 * h);
-        D.text(t, be / 2 + 0.5 * h, y - 0.3 * h, 0.7 * h, `${i ? 'BOT.' : 'TOP'} REBAR A = ${nf(q.A, 2)} IN2 @ ${nf(y, 2)} IN`); }); }
+        D.text(t, be / 2 + 0.5 * h, y - 0.3 * h, 0.7 * h, `${i ? 'BOT.' : 'TOP'} REBAR ${nf(q.A, 2)} IN2`); }); }
     D.line(ly.c, 0, -1.5 * h, 0, H + 1.5 * h, D.ltype('CENTER'));
     // dimensions: the plates and the deck
     D.dimV(dm, 0, d, -Math.max(be, s.topB) / 2 - 3 * h, -s.botB / 2, `d = ${nf(d, 3)} IN`);
-    if (comp) { D.dimV(dm, d + hh, H, be / 2 + 4 * h + 14 * h, be / 2, `t_s = ${nf(ts, 2)} IN`); D.dimH(dm, -be / 2, be / 2, H + 2.5 * h, H, `b_eff = ${nf(be, 2)} IN`); }
+    if (comp) { D.dimV(dm, d + hh, H, -Math.max(be, s.topB) / 2 - 3 * h, -be / 2, `t_s = ${nf(ts, 2)} IN`); D.dimH(dm, -be / 2, be / 2, H + 2.5 * h, H, `b_eff = ${nf(be, 2)} IN`); }
     // neutral axes (the lines the table gives): steel ȳ, long-term 3n, short-term n, PNA
-    const axes = [[c.s.yb, 'ENA STEEL', 5], ...(comp ? [[c.c3.yb, 'ENA 3n', 30], [c.cn.yb, 'ENA n', 6]] : []), [c.yp, `PNA (${c.region === 'pos' ? 'POS.' : 'NEG.'})`, 3]].filter(q => fin(q[0])).sort((a, b) => a[0] - b[0]);
+    const axes = [[c.s.yb, 'ENA STEEL', 5, 'STEEL'], ...(comp ? [[c.c3.yb, 'ENA 3n', 30, '3N'], [c.cn.yb, 'ENA n', 6, 'N']] : []), [c.yp, `PNA (${c.region === 'pos' ? 'POS.' : 'NEG.'})`, 3, 'PNA']].filter(q => fin(q[0])).sort((a, b) => a[0] - b[0]);
     const xl = -Math.max(be, s.topB) / 2 - 6 * h; let yPrev = -1e9, xr = Math.max(be, s.topB) / 2 + 2 * h;
-    axes.forEach(([y, lab, col]) => { const l = D.layer('NA-' + lab.replace(/[^A-Z0-9]+/g, ''), col); D.line(l, xl, y, xr, y, D.ltype('CENTER')); const ty = Math.max(y, yPrev + 1.3 * h); yPrev = ty;
+    axes.forEach(([y, lab, col, key]) => { const l = D.layer('NA-' + key, col); D.line(l, xl, y, xr, y, D.ltype('CENTER')); const ty = Math.max(y, yPrev + 1.3 * h); yPrev = ty;
       D.text(l, xl - 0.5 * h, ty - 0.3 * h, 0.8 * h, `${lab} y = ${nf(y, 3)} IN`, 2); if (Math.abs(ty - y) > 0.2 * h) D.line(l, xl - 0.4 * h, ty, xl, y); });
     // stress diagram for the selected load case (per 1000 kip-ft)
     const cases = { steel: { sec: c.s, f: 1, lab: 'DC1: STEEL SECTION' }, '3n': { sec: c.c3, f: 3 * R.nr.n, lab: 'DC2, DW: LONG-TERM 3n SECTION' }, n: { sec: c.cn, f: R.nr.n, lab: 'LL+IM: SHORT-TERM n SECTION' } };
-    const K = cases[comp ? cs : 'steel'] || cases.steel, sc = K.sec, M = 1000, ff = y => M * 12 * (y - sc.yb) / sc.I, x0 = xr + 16 * h + (comp ? 14 * h : 0);
+    const K = cases[comp ? cs : 'steel'] || cases.steel, sc = K.sec, M = 1000, ff = y => M * 12 * (y - sc.yb) / sc.I, x0 = xr + 16 * h;
     const mx = Math.max(Math.abs(ff(0)), Math.abs(ff(d)), comp && K.f > 1 ? Math.abs(ff(H)) / K.f : 0, 1e-9), kx = Math.max(be, s.topB) * 0.4 / mx;
     const lc = D.layer('STRESS-C', 5), lt = D.layer('STRESS-T', 1), segs = [[0, d, 1]]; if (comp && K.f > 1) segs.push([d + hh, H, 1 / K.f]);
     D.line(t, x0, -1 * h, x0, H + 1 * h); D.text(t, x0, H + 3 * h, 1.0 * h, `STRESS, M = 1000 KIP-FT (C + / T -)`, 1);
@@ -68,13 +68,13 @@
   function section(slot, o) {
     const cur = o.R.c.comp ? S.secCase : 'steel';
     const host = block(slot, { id: 'gfx_sec', cases: o.R.c.comp ? [['steel', 'DC1: steel section'], ['3n', 'DC2, DW: long-term (3n)'], ['n', 'LL+IM: short-term (n)']] : null, cur, caseLabel: 'Stress diagram, load case', onCase: v => { S.secCase = v; section(slot, o); } });
-    return GR().mount(host, () => secGraphic(o.P, o.R, cur, o.seg), { key: 'sec', height: '52vh' });
+    return GR().mount(host, () => secGraphic(o.P, o.R, cur, o.seg), { key: 'sec' });
   }
 
   /* ================= Loads & LLDF ================= */
   function loadsGraphic(P, R, lg, lr, cs) {
     const G = GR(), M = window.SBDDrawings.model(P); if (M.errors && M.errors.length) return { errors: M.errors };
-    const rg = R.regions[lr], mem = rg.members[lg], geo = rg.geo, Wd = R.dead.Wd, ft = 12, ts = +P.deck.ts, h = Wd * ft * 0.022, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
+    const rg = R.regions[lr], mem = rg.members[lg], geo = rg.geo, Wd = R.dead.Wd, ft = 12, ts = +P.deck.ts, h = Wd * ft * 0.03, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
     const ly = { dk: D.layer('DECK', 7), g: D.layer('GRDR', 5), sel: D.layer('SEL', 5), ap: D.layer('DECK-BARR', 8), ln: D.layer('LANE', 3, 'DASHED'), wh: D.layer('LL-WHEEL', 1), il: D.layer('INFLUENCE', 6) };
     const nb = R.dead.N, ohL = (P.xs && +P.xs.ohL) || 0, pos = geo.pos.map(p => ohL + p), seg = M.girders[Math.min(lg, M.girders.length - 1)].segs[0], hh = +P.deck.haunch || 0, X = x => x * ft;
     const yTopFl = 0; D.rect(ly.dk, 0, yTopFl + hh, X(Wd), yTopFl + hh + ts);
@@ -84,43 +84,43 @@
     let top = 0; if (M.app) M.app.items.forEach(a => { const y0 = hh + ts + (a.y0 || 0);
       if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') { D.rect(ly.ap, X(a.x0), y0, X(a.x1), y0 + (a.k === 'bar' ? 34 : a.h)); top = Math.max(top, (a.y0 || 0) + (a.k === 'bar' ? 34 : a.h)); D.text(t, X((a.x0 + a.x1) / 2), y0 + (a.k === 'bar' ? 34 : a.h) + 0.4 * h, 0.6 * h, a.k === 'sw' ? 'SIDEWALK' : a.k === 'med' ? 'MEDIAN' : a.k === 'curb' ? 'CURB' : 'BARRIER', 1); }
       else if (a.x != null) { D.line(ly.ap, X(a.x), y0, X(a.x), y0 + a.h); top = Math.max(top, (a.y0 || 0) + a.h); D.text(t, X(a.x), y0 + a.h + 0.4 * h, 0.6 * h, a.k === 'rail' ? 'RAILING' : 'FENCE', 1); } });
-    // roadway and lanes
-    const yd = hh + ts, deL = geo.deL, deR = geo.deR, lw = geo.laneW, NL = geo.NL, yLn = yd + top + 2.0 * h;
-    D.line(ly.ln, X(deL), yd, X(deL), yLn + h); D.line(ly.ln, X(Wd - deR), yd, X(Wd - deR), yLn + h);
-    D.text(t, X(deL), yLn + 1.4 * h, 0.7 * h, `TRAFFIC FACE de = ${nf(deL, 2)} FT`, 0); D.text(t, X(Wd - deR), yLn + 1.4 * h, 0.7 * h, `${nf(deR, 2)} FT`, 2);
+    // roadway and lanes (stacked above the deck: wheels, lane bands, traffic faces, spacing chain, texts)
+    const yd = hh + ts, yA = yd + top, deL = geo.deL, deR = geo.deR, lw = geo.laneW, NL = geo.NL, yLn = yA + 7.5 * h;
+    D.line(ly.ln, X(deL), yd, X(deL), yLn + 1.5 * h); D.line(ly.ln, X(Wd - deR), yd, X(Wd - deR), yLn + 1.5 * h);
+    D.text(t, X(deL) + 0.4 * h, yLn + 1.6 * h, 0.7 * h, `TRAFFIC FACE d_e = ${nf(deL, 2)} FT`, 0); D.text(t, X(Wd - deR) - 0.4 * h, yLn + 1.6 * h, 0.7 * h, `${nf(deR, 2)} FT`, 2);
     // cases: one lane lever rule, multi-lane lever rule, rigid cross-section
     const opts = [];
     if (mem.lever1) opts.push(['lever1', 'Lever rule, one lane (' + nf(mem.lever1.df, 4) + ')']);
     if (mem.alt && mem.alt.l2) opts.push(['lever2', `Lever rule, ${mem.alt.l2.N} trucks (${nf(mem.alt.l2.df, 4)})`]);
     if (mem.rig && mem.rig.ecc) opts.push(['rigid', `Rigid cross-section, ${mem.rig.nLoaded} lane${mem.rig.nLoaded > 1 ? 's' : ''} (${nf(mem.rig.g, 4)})`]);
-    const use = opts.some(q => q[0] === cs) ? cs : (opts[0] || ['none'])[0]; let wheels = [], desc = '', yw = yd + top;
+    const use = opts.some(q => q[0] === cs) ? cs : (opts[0] || ['none'])[0]; let wheels = [], desc = '';
     if (use === 'lever1') { wheels = mem.lever1.wheels; desc = `ONE LANE, LEVER RULE: g = m R = ${nf(mem.lever1.m, 2)} x ${nf(mem.lever1.R, 4)} = ${nf(mem.lever1.df, 4)}`; }
     else if (use === 'lever2') { wheels = mem.alt.l2.wheels; desc = `${mem.alt.l2.N} TRUCKS, LEVER RULE: g = m R = ${nf(mem.alt.l2.m, 2)} x ${nf(mem.alt.l2.R, 4)} = ${nf(mem.alt.l2.df, 4)}`; }
     else if (use === 'rigid') { const rg2 = mem.rig, left = rg2.side !== 'R'; for (let i = 0; i < rg2.nLoaded; i++) { const e0 = left ? deL + i * lw : Wd - deR - i * lw; wheels.push(...(left ? [e0 + 2, e0 + 8] : [e0 - 2, e0 - 8])); }
       desc = `RIGID CROSS-SECTION, ${rg2.nLoaded} LANE(S) LOADED: g = m R = ${nf(rg2.m, 2)} x ${nf(rg2.R, 4)} = ${nf(rg2.g, 4)}`; }
-    // lane boundaries across the roadway from the loaded side
     const side = use === 'rigid' && mem.rig ? mem.rig.side : 'L';
-    for (let i = 0; i < NL; i++) { const a = side === 'R' ? Wd - deR - (i + 1) * lw : deL + i * lw, b = a + lw; D.line(ly.ln, X(a), yd + top + 0.3 * h, X(b), yd + top + 0.3 * h); D.text(t, X((a + b) / 2), yd + top + 0.6 * h, 0.6 * h, `LANE ${i + 1}`, 1); }
-    wheels.forEach(w => { const x = X(w); D.circle(ly.wh, x, yd + top + 2.2 * h + h, 0.45 * h); arrow(D, ly.wh, x, yd + top + 2.8 * h + h, yd + top + 0.9 * h, h); });
+    for (let i = 0; i < NL; i++) { const a = side === 'R' ? Wd - deR - (i + 1) * lw : deL + i * lw, b = a + lw; D.line(ly.ln, X(a), yLn, X(b), yLn); D.line(ly.ln, X(a), yLn - 0.4 * h, X(a), yLn + 0.4 * h); D.line(ly.ln, X(b), yLn - 0.4 * h, X(b), yLn + 0.4 * h); D.text(t, X((a + b) / 2), yLn + 0.5 * h, 0.7 * h, `LANE ${i + 1}`, 1); }
+    wheels.forEach(w => { const x = X(w); arrow(D, ly.wh, x, yA + 5.5 * h, yA + 0.4 * h, h); D.circle(ly.wh, x, yA + 5.9 * h, 0.4 * h); });
     // lever rule: the influence line of the girder (statics about the adjacent girder), drawn below the girders
-    if (use === 'lever1' || use === 'lever2') { const yb0 = yTopFl - seg.topT - seg.D - seg.botT - 6 * h, unit = 5 * h, o = (i, v) => [X(pos[i]), yb0 + v * unit], pts = [];
+    if (use === 'lever1' || use === 'lever2') { const yb0 = yTopFl - seg.topT - seg.D - seg.botT - 6 * h, unit = 5 * h, pts = [];
       const ext = (x0, x1, v0, v1, x) => v0 + (v1 - v0) * (x - x0) / (x1 - x0);
-      const xs0 = 0, xs1 = Wd; const f = x => { for (let i = 0; i < nb; i++) { if (i === lg) continue; } const j = lg; const l = pos[j - 1], c0 = pos[j], r = pos[j + 1];
+      const f = x => { const j = lg, l = pos[j - 1], c0 = pos[j], r = pos[j + 1];
         if (x <= c0 && j > 0) return x < l ? 0 : (x - l) / (c0 - l); if (x <= c0) return nb > 1 ? ext(c0, r, 1, 0, x) : 1; if (j < nb - 1) return x > r ? 0 : (r - x) / (r - c0); return ext(l, c0, 0, 1, x); };
-      [xs0, ...pos, xs1].sort((a, b) => a - b).forEach(x => pts.push([X(x), yb0 + f(x) * unit])); D.line(ly.il, 0, yb0, X(Wd), yb0, D.ltype('DASHED')); D.pline(ly.il, pts, false);
-      D.text(t, 0, yb0 - 1.6 * h, 0.7 * h, `LEVER-RULE INFLUENCE LINE OF G${lg + 1} (1.0 AT G${lg + 1}, 0 AT THE ADJACENT GIRDERS; HINGE AT THE INTERIOR GIRDERS)`);
-      wheels.forEach(w => { const v = f(w); D.circle(ly.il, X(w), yb0 + v * unit, 0.25 * h); D.text(t, X(w), yb0 + v * unit + 0.5 * h, 0.55 * h, nf(v, 3), 1); }); }
-    D.chainH(dm, [0, ...pos.map(X), X(Wd)], yd + top + 6.5 * h + h, yd);
-    D.text(t, 0, yd + top + 12 * h, 1.4 * h, `LLDF: GIRDER G${lg + 1}, ${(rg.label || '').toUpperCase()}`);
-    D.text(t, 0, yd + top + 10.3 * h, 0.8 * h, desc || 'NO LEVER-RULE OR RIGID CASE FOR THIS GIRDER');
-    D.text(t, 0, yd + top + 8.8 * h, 0.7 * h, `WHEELS (6 FT APART, 2 FT FROM THE TRAFFIC FACE OR THE ADJACENT LANE EDGE); N_L = ${NL} LANES OF ${nf(lw, 2)} FT; GOVERNING g_M = ${nf(mem.gM, 4)}, g_V = ${nf(mem.gV, 4)} (TABLE BELOW)`);
+      [0, ...pos, Wd].sort((p, q) => p - q).forEach(x => pts.push([X(x), yb0 + f(x) * unit])); D.line(ly.il, 0, yb0, X(Wd), yb0, D.ltype('DASHED')); D.pline(ly.il, pts, false);
+      D.text(t, 0, yb0 - 1.8 * h, 0.7 * h, `LEVER-RULE INFLUENCE LINE OF G${lg + 1} (1.0 AT G${lg + 1}, 0 AT THE ADJACENT GIRDERS)`);
+      wheels.forEach(w => { const v = f(w); D.circle(ly.il, X(w), yb0 + v * unit, 0.25 * h); D.text(t, X(w) + 0.5 * h, yb0 + v * unit + 0.4 * h, 0.6 * h, nf(v, 3), 0); }); }
+    D.chainH(dm, [0, ...pos.map(X), X(Wd)], yLn + 5 * h, yd);
+    D.text(t, 0, yLn + 11 * h, 1.4 * h, `LLDF: GIRDER G${lg + 1}, ${(rg.label || '').toUpperCase()}`);
+    D.text(t, 0, yLn + 9.2 * h, 0.8 * h, desc || 'NO LEVER-RULE OR RIGID CASE FOR THIS GIRDER');
+    D.text(t, 0, yLn + 7.8 * h, 0.7 * h, `N_L = ${NL} LANES OF ${nf(lw, 2)} FT; GOVERNING g_M = ${nf(mem.gM, 4)}, g_V = ${nf(mem.gV, 4)}`);
+    D.text(t, 0, yLn + 6.5 * h, 0.7 * h, 'WHEELS 6 FT APART, OUTER WHEEL 2 FT FROM THE TRAFFIC FACE OR LANE EDGE');
     return { D, title: 'Cross-section: lanes and wheel positions of the LLDF cases', file: 'lldf-cross-section', opts, use, note: 'Wheel and lane positions are the ones the distribution-factor worked steps use (shared/lldf.js lever rule and rigid cross-section); the rigid-section lanes are placed from the traffic face of the governing side. Appurtenances as the Drawings tab.' };
   }
   function loads(slot, o) {
     const rg = o.R.regions[o.lr], mem = rg && rg.members[o.lg]; if (!mem) { slot.innerHTML = ''; return null; }
     const g0 = loadsGraphic(o.P, o.R, o.lg, o.lr, S.loadCase); if (g0.errors) { slot.innerHTML = `<div class="note">${esc(g0.errors.join(' '))}</div>`; return null; }
     const host = block(slot, { id: 'gfx_ld', cases: g0.opts, cur: g0.use, caseLabel: 'LLDF case', onCase: v => { S.loadCase = v; loads(slot, o); } });
-    return GR().mount(host, () => loadsGraphic(o.P, o.R, o.lg, o.lr, g0.use), { key: `loads${o.lg}.${o.lr}.${g0.use}`, height: '56vh' });
+    return GR().mount(host, () => loadsGraphic(o.P, o.R, o.lg, o.lr, g0.use), { key: `loads${o.lg}.${o.lr}.${g0.use}` });
   }
 
   /* ================= elevation helpers for the girder tabs ================= */
@@ -134,19 +134,18 @@
       const E = elev(P, o.gi, `GIRDER ${(P.girders[o.gi].label || P.girders[o.gi].id || '').toString().toUpperCase()}: ANALYSIS`, 'ELEVATION WITH SUPPORTS (S), PLATE BREAKS, CROSS-FRAMES (CF) AND FIELD SPLICES (FS); DIAGRAMS BELOW ON THE SAME STATIONS');
       if (E.errors.length) return { errors: E.errors };
       const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.1, 8 * E.h), x0 = E.X(E.L0), sup = R.sup || E.G.sup, s = R.st, ll = R.ll;
-      const mk = (title, ser, o2) => { const top = E.alloc(hg + 5 * E.h), C = G.chart({ D: E.D, at: [x0, top - hg], w, hgt: hg, h: E.h * 0.8, title, xr: [E.L0, E.L1], series: ser, vlines: sup.map(v => ({ x: v })), ...o2 }); E.alloc(1.5 * E.h); return C; };
+      const mk = (title, ser, o2) => { const top = E.alloc(hg + 9 * E.h), C = G.chart({ D: E.D, at: [x0, top - hg - 3 * E.h], w, hgt: hg, h: E.h * 0.8, title, xr: [E.L0, E.L1], series: ser, vlines: sup.map(v => ({ x: v })), ...o2 }); E.alloc(1.5 * E.h); return C; };
       const M = [{ name: 'M DC1', pts: R.x.map((x, i) => [x, s.DC1.M[i]]), color: 5 }, { name: 'M DC2', pts: R.x.map((x, i) => [x, s.DC2.M[i]]), color: 3 }, { name: 'M DW', pts: R.x.map((x, i) => [x, s.DW.M[i]]), color: 30 }];
       if (ll) { M.push({ name: 'M LL+IM max', pts: R.x.map((x, i) => [x, ll.Mpos[i]]), color: 1 }, { name: 'M LL+IM min', pts: R.x.map((x, i) => [x, ll.Mneg[i]]), color: 1, lt: 'DASHED' }); }
       mk('MOMENTS, KIP-FT (UNFACTORED, PER GIRDER)', M, { ylab: 'KIP-FT', fy: v => nf(v, 0) });
       const Cm = [{ name: 'TOTAL (CAMBER)', pts: R.x.map((x, i) => [x, -R.camber.total[i]]), color: 7 }, { name: 'STEEL + CF', pts: R.x.map((x, i) => [x, -R.camber.steel[i]]), color: 5 }, { name: 'WET DECK', pts: R.x.map((x, i) => [x, -R.camber.wet[i]]), color: 30 }, { name: 'DC2 + DW', pts: R.x.map((x, i) => [x, -R.camber.sd[i]]), color: 3 }];
       mk('DEAD-LOAD DEFLECTION, IN (DOWNWARD DRAWN DOWN; CAMBER = TOTAL, UPWARD)', Cm, { ylab: 'IN', fy: v => nf(v, 2) });
-      const i = Math.min(S.anSel, R.x.length - 1); if (fin(R.x[i])) G.mark(E, `STA ${nf(R.x[i], 1)} FT`, R.x[i]);
       return { D: E.D, title: 'Girder elevation, moments and deflection', file: 'analysis-elevation', pick: (x, y) => nearest(R.x, E.pick(x, y)), selMark: k => E.selMark(R.x[k]),
         readout: k => `x = ${nf(R.x[k], 2)} ft: M_DC1 ${nf(s.DC1.M[k], 1)}, M_DC2 ${nf(s.DC2.M[k], 1)}, M_DW ${nf(s.DW.M[k], 1)}${ll ? `, M_LL+IM ${nf(ll.Mneg[k], 0)} / ${nf(ll.Mpos[k], 0)}` : ''} kip-ft; camber ${nf(R.camber.total[k], 3)} in`, note: 'Stations, moments and deflections are the Analysis tab\'s results (the station table below); click a location to select it.' };
     };
     const opts = R.x.map((x, i) => [String(i), `x = ${nf(x, 2)} ft`]), cur = String(Math.min(S.anSel, R.x.length - 1));
     const host = block(slot, { id: 'gfx_an', cases: opts, cur, caseLabel: 'Station', onCase: v => { S.anSel = +v; analysis(slot, o); } });
-    return G.mount(host, build, { key: 'an', selected: +cur, onSelect: k => { S.anSel = k; const sl = slot.querySelector('select'); if (sl) sl.value = String(k); }, height: '70vh' });
+    return G.mount(host, build, { key: 'an', selected: +cur, onSelect: k => { S.anSel = k; const sl = slot.querySelector('select'); if (sl) sl.value = String(k); } });
   }
 
   /* ================= Flexure ================= */
@@ -156,13 +155,12 @@
     slot.innerHTML = '<div class="gfx-a"></div><div class="gfx-b"></div><div class="gfx-c"></div>';
     const A = slot.querySelector('.gfx-a'), B = slot.querySelector('.gfx-b'), C = slot.querySelector('.gfx-c');
     const bld = () => {
-      const E = elev(P, o.gi, 'FLEXURE: GOVERNING RATIO AT EACH LOCATION', 'GREEN < 0.80, AMBER 0.80 TO 1.00, RED > 1.00 OR NG; RATIO = GOVERNING CHECK OF THE LOCATION (FLEXURE RESULTS TABLE)');
+      const E = elev(P, o.gi, 'FLEXURE: GOVERNING RATIO AT EACH LOCATION', 'GREEN BELOW 0.80, AMBER 0.80 TO 1.00, RED ABOVE 1.00 OR NG; RATIO = GOVERNING CHECK OF THE LOCATION (RESULTS TABLE)');
       if (E.errors.length) return { errors: E.errors };
       const items = rows.map((q, i) => ({ x: fin(q.x) ? Math.max(E.L0, Math.min(E.L1, q.x)) : E.L0, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: String(i + 1) })); G.ratioLayer(E, items, { what: 'FLEXURE' });
-      if (fin(r.x)) G.mark(E, `${r.name}`, r.x);
       return { D: E.D, title: 'Girder elevation coloured by governing ratio', file: 'flexure-elevation', pick: (x, y) => nearest(xr.map(v => (fin(v) ? v : 1e9)), E.pick(x, y)), selMark: k => E.selMark(xr[k]), readout: k => `${rows[k].name}: ${rows[k].gov ? `${rows[k].gov.id} ratio ${fin(rows[k].gov.ratio) ? nf(rows[k].gov.ratio, 3) : 'NG'}` : 'no check'}`, note: 'One band per location of the results table (the tributary stretch to the mid-points of its neighbours); numbers are the table rows. Click a band to select the location.' };
     };
-    const H = G.mount(A, bld, { key: 'fx', selected: sel, onSelect: k => o.onSelect && o.onSelect(k), height: '52vh' });
+    const H = G.mount(A, bld, { key: 'fx', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
     // f_bu vs F_nc (and every check's demand and capacity) at the selected location
     const flangeCk = (r.checks || []).filter(q => q.unit === 'ksi' && fin(q.demand) && fin(q.capacity) && q.inUse !== false);
     G.mount(B, () => {
@@ -172,7 +170,7 @@
       const rt = (r.checks || []).filter(q => fin(q.ratio)), w2 = Math.max(60, 12 * rt.length);
       G.chart({ D, at: [w + 22 * h, 0], w: w2, hgt: 40, h, title: 'CHECK RATIOS (ALL CHECKS OF THE LOCATION)', cats: rt.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2) });
       return { D, title: `Stress checks at ${r.name}`, file: 'flexure-checks', note: 'Demand and capacity of the checks in the location table (checks in ksi); ratios of every check with 1.0 marked.' };
-    }, { key: 'fxb', height: '40vh' });
+    }, { key: 'fxb' });
     // unbraced length (LTB) sketch
     G.mount(C, () => {
       const lt = r.lt || {}, Lb = r.Lb, sg = r.seg, h = Math.max(Lb || 20, 20) * 12 * 0.025, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { f: D.layer('GRDR-PLAT', 4), b: D.layer('BRNG', 8), dm: D.layer('DIMS', 7), s: D.layer('SEL', 5), a: D.layer('LTB-LP', 3), c: D.layer('LTB-LR', 30), d: D.layer('LTB-LB', 1) };
@@ -188,7 +186,7 @@
       D.text(t, 0, y - 0.3 * h, 0.9 * h, `C_b = ${nf(r.Cb, 3)}; F_nc: FLB ${nf(lt.FLB, 2)} KSI, LTB ${nf(lt.LTB, 2)} KSI; ${regime.toUpperCase()}`);
       D.text(t, 0, tf + 7 * h, 1.3 * h, 'UNBRACED LENGTH OF THE COMPRESSION FLANGE (LTB)');
       return { D, title: 'Unbraced length (LTB) at the selected location', file: 'flexure-ltb', note: 'L_b, C_b, L_p, L_r and F_nc are the values of the location table (worked steps below); the brace points are the Framing tab\'s.' };
-    }, { key: 'fxc', height: '34vh' });
+    }, { key: 'fxc' });
     return H;
   }
 
@@ -202,14 +200,13 @@
       const E = elev(P, o.gi, 'CONSTRUCTIBILITY: DECK PLACEMENT SEQUENCE', sq ? 'POURS IN ORDER OVER THE ELEVATION; M_DCc ENVELOPE BELOW (NONCOMPOSITE MOMENT, KIP-FT)' : 'NO POUR SEQUENCE (SIMPLE SPANS, NONCOMPOSITE OR THE SEQUENCE IS OFF): M_DC1 IS USED');
       if (E.errors.length) return { errors: E.errors };
       const D = E.D, h = E.h, lp = D.layer('POUR', 30), t = E.ly.t, items = rows.map((q, i) => ({ x: q.x, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: String(i + 1) }));
-      if (sq) sq.pours.forEach((p, k) => { const a = E.X(p.a), b = E.X(p.b), y = E.yTop + 5 * h; D.rect(lp, a, y, b, y + 2.2 * h); for (let x = a + 0.8 * h; x < b; x += 1.6 * h) { const f = Math.min(1, (b - x) / (0.8 * h)); D.line(lp, x, y, x + 0.8 * h * f, y + 2.2 * h * f); } D.text(t, (a + b) / 2, y + 0.5 * h, 1.0 * h, `POUR ${k + 1}`, 1); D.text(t, (a + b) / 2, y + 2.6 * h, 0.6 * h, `${nf(p.a, 1)} TO ${nf(p.b, 1)} FT`, 1); });
+      if (sq) sq.pours.forEach((p, k) => { const a = E.X(p.a), b = E.X(p.b), y = E.yTop + 2.6 * h; D.rect(lp, a, y, b, y + 2.2 * h); for (let x = a + 0.8 * h; x < b; x += 1.6 * h) { const f = Math.min(1, (b - x) / (0.8 * h)); D.line(lp, x, y, x + 0.8 * h * f, y + 2.2 * h * f); } D.text(t, (a + b) / 2, y + 0.5 * h, 1.0 * h, `POUR ${k + 1}`, 1); D.text(t, (a + b) / 2, y + 2.5 * h, 0.55 * h, `${nf(p.a, 1)} TO ${nf(p.b, 1)} FT`, 1); });
       G.ratioLayer(E, items, { what: 'DECK PLACEMENT' });
-      if (sq && AR.x) { const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.1, 8 * E.h), top = E.alloc(hg + 5 * E.h);
-        G.chart({ D, at: [E.X(E.L0), top - hg], w, hgt: hg, h: h * 0.8, title: 'M_DCc ENVELOPE VS M_DC1 (KIP-FT)', xr: [E.L0, E.L1], series: [{ name: 'M_DCc (POUR SEQUENCE)', pts: AR.x.map((x, i) => [x, sq.MDCc[i]]), color: 6 }, { name: 'M_DC1 (DECK AT ONCE)', pts: AR.x.map((x, i) => [x, AR.st.DC1.M[i]]), color: 5, lt: 'DASHED' }], vlines: (AR.sup || E.G.sup).map(v => ({ x: v })), ylab: 'KIP-FT', fy: v => nf(v, 0) }); E.alloc(1.5 * h); }
-      if (fin(rows[sel].x)) G.mark(E, rows[sel].name, rows[sel].x);
+      if (sq && AR.x) { const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.1, 8 * E.h), top = E.alloc(hg + 9 * E.h);
+        G.chart({ D, at: [E.X(E.L0), top - hg - 3 * E.h], w, hgt: hg, h: h * 0.8, title: 'M_DCc ENVELOPE VS M_DC1 (KIP-FT)', xr: [E.L0, E.L1], series: [{ name: 'M_DCc (POUR SEQUENCE)', pts: AR.x.map((x, i) => [x, sq.MDCc[i]]), color: 6 }, { name: 'M_DC1 (DECK AT ONCE)', pts: AR.x.map((x, i) => [x, AR.st.DC1.M[i]]), color: 5, lt: 'DASHED' }], vlines: (AR.sup || E.G.sup).map(v => ({ x: v })), ylab: 'KIP-FT', fy: v => nf(v, 0) }); E.alloc(1.5 * h); }
       return { D, title: 'Deck pour sequence and moment envelope', file: 'constructibility-pours', pick: (x, y) => nearest(xr, E.pick(x, y)), selMark: k => E.selMark(xr[k]), readout: k => `${rows[k].name}: M_c = ${nf(rows[k].Mc, 1)} kip-ft; ${rows[k].gov ? `${rows[k].gov.id} ratio ${fin(rows[k].gov.ratio) ? nf(rows[k].gov.ratio, 3) : 'NG'}` : ''}`,
         note: 'Pours, M_DCc and M_DC1 are the Analysis results the checks use (Analysis tab, deck placement sequence); the band row is the governing deck-placement ratio at each location of the table.' };
-    }, { key: 'cn', selected: sel, onSelect: k => o.onSelect && o.onSelect(k), height: '70vh' });
+    }, { key: 'cn', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
     // overhang bracket sketch (exterior girder, project source)
     const oh = R.F && R.F.oh;
     G.mount(B, () => {
@@ -224,7 +221,7 @@
       arrow(D, ly.ld, x0 + wOH - 0.2 * h, ys + tOH + 7 * h, ys + tOH, h); D.text(t, x0 + wOH, ys + tOH + 7.2 * h, 0.7 * h, `FINISHING MACHINE ${nf(oh.Pfm, 1)} KIP; SCREED, RAIL, WALKWAY, CONSTR. LL`, 2);
       D.text(t, -sg.topB / 2, ys + tOH + 11 * h, 1.2 * h, 'OVERHANG BRACKET (EXTERIOR GIRDER), SCHEMATIC'); D.text(t, -sg.topB / 2, ys + tOH + 9.2 * h, 0.7 * h, 'DIMENSIONS ARE THE OVERHANG BRACKET INPUTS OF THE TAB; BRACKET MEMBERS SCHEMATIC (CONTRACTOR-DESIGNED)');
       return { D, title: 'Overhang bracket sketch (exterior girder)', file: 'overhang-bracket', note: 'Dimensions from the overhang-bracket inputs (a, h_b, w_OH, t_OH); loads are the tab\'s OH1–OH5 inputs. Schematic.' };
-    }, { key: 'cnb', height: '40vh' });
+    }, { key: 'cnb' });
     return H;
   }
 

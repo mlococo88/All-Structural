@@ -107,8 +107,8 @@
     let lowEdge = low;
     E.alloc = height => { const top = lowEdge - 0.6 * h; lowEdge = top - height; return top; };
     E.pick = (x, y) => Math.max(L0, Math.min(L1, x / 12));
-    E.title = (t, sub) => { D.text(ly.t, X(L0), E.yTop + 3.2 * h, h * 1.5, t); if (sub) D.text(ly.t, X(L0), E.yTop + 1.4 * h, h * 0.8, sub); };
-    E.selMark = ft => ({ x: X(ft), y0: lowEdge, y1: E.yTop + 1.2 * h, label: `STA ${nf(ft, 1)} FT` });
+    E.title = (t, sub) => { D.text(ly.t, X(L0), E.yTop + 12 * h, h * 1.5, t); if (sub) D.text(ly.t, X(L0), E.yTop + 9.8 * h, h * 0.8, sub); };
+    E.selMark = ft => ({ x: X(ft), y0: lowEdge, y1: E.yTop + 6.8 * h, label: `STA ${nf(ft, 1)} FT` });
     return E;
   }
 
@@ -121,14 +121,15 @@
     its.forEach((q, i) => {
       const a = fin(q.x0) ? q.x0 : i ? (its[i - 1].x + q.x) / 2 : E.L0, b = fin(q.x1) ? q.x1 : i < its.length - 1 ? (q.x + its[i + 1].x) / 2 : E.L1, c = ratioColor(q.ratio, q.ok), l = lay[c];
       cols.push({ x: q.x, color: c, x0: a, x1: b });
-      if (opts.hatch !== false) { const sp = 0.55 * h; for (let x = X(a) + sp / 2; x < X(b); x += sp) { const ft = x / 12; D.line(l, x, yb + 0.02 * h, x, yb + E.Yweb(ft) - 0.02 * h); } }
+      if (opts.hatch !== false) { const sp = 1.1 * h; for (let x = X(a) + sp / 2; x < X(b); x += sp) { const ft = x / 12; D.line(l, x, yb + 0.02 * h, x, yb + E.Yweb(ft) - 0.02 * h); } }
       D.rect(l, X(a), row - 2.0 * h, X(b), row); D.line(l, X(q.x), row, X(q.x), row + 0.5 * h);
-      D.text(txt, X((a + b) / 2), row - 1.3 * h, h * 0.8, q.ok === false || !fin(q.ratio) ? 'NG' : nf(q.ratio, 2), 1);
-      if (q.label) D.text(txt, X(q.x), row + 0.7 * h, h * 0.6, q.label, 1);
+      const bw = X(b) - X(a), pv = q.ok === false || !fin(q.ratio) ? 'NG' : nf(q.ratio, 2);
+      if (bw > pv.length * 0.8 * h * 0.9 + h) D.text(txt, X((a + b) / 2), row - 1.3 * h, h * 0.8, pv, 1);
+      if (q.label && bw > (String(q.label).length + 1) * 0.6 * h) D.text(txt, X(q.x), row + 0.7 * h, h * 0.6, q.label, 1);
     });
     // legend (in the drawing, so it is in the DXF): at the left of the row
     const lg = [[COL.green, '< 0.80'], [COL.amber, '0.80 TO 1.00'], [COL.red, '> 1.00 OR NG']], y = row - 2.0 * h - 2.2 * h; let x = X(E.L0);
-    D.text(txt, x, y, h * 0.8, (opts.what || 'RATIO') + ':'); x += h * 6.5;
+    const wh = (opts.what || 'RATIO') + ':'; D.text(txt, x, y, h * 0.8, wh); x += h * (wh.length * 0.75 + 2);
     lg.forEach(([c, t]) => { D.rect(lay[c], x, y - 0.1 * h, x + 1.4 * h, y + 0.9 * h); D.text(txt, x + 1.9 * h, y, h * 0.8, t); x += h * (2.6 + t.length * 0.85); });
     E.alloc(2.6 * h);
     return { legend: lg.map(q => q[1]), cols };
@@ -168,7 +169,7 @@
       else if (s.kind === 'points') pts.forEach(p => { D.circle(l, X(p[0]), Y(cl(p[1])), 0.35 * h); });
       else if (s.kind === 'step') { const q = []; pts.forEach((p, j) => { if (j) q.push([X(p[0]), Y(cl(pts[j - 1][1]))]); q.push([X(p[0]), Y(cl(p[1]))]); }); if (q.length > 1) D.pline(l, q, false); }
       else if (pts.length > 1) D.pline(l, pts.map(p => [X(p[0]), Y(cl(p[1]))]), false);
-      if (s.name) { const lx = x0 + w - 0.5 * h, ly2 = y0 + hg - (1.6 + 1.5 * ky++) * h; D.line(l, lx - 5 * h, ly2 + 0.3 * h, lx - 3.5 * h, ly2 + 0.3 * h); D.text(ly.t, lx - 3.1 * h, ly2, 0.8 * h, s.name); } });
+      if (s.name) { const lx = x0 + w + 1.0 * h, ly2 = y0 + hg - (1.2 + 1.5 * ky++) * h; D.line(l, lx, ly2 + 0.3 * h, lx + 2.5 * h, ly2 + 0.3 * h); D.text(ly.t, lx + 3.1 * h, ly2, 0.8 * h, s.name); } });
     (o.limits || []).forEach(q => { if (!fin(q.y) || q.y < yr[0] || q.y > yr[1]) return; const l = q.color ? D.layer('CHART-LIMIT' + q.color, q.color, 'DASHED') : ly.lim; D.line(l, x0, Y(q.y), x0 + w, Y(q.y), D.ltype('DASHED')); if (q.label) D.text(l, x0 + 0.5 * h, Y(q.y) + 0.4 * h, 0.8 * h, q.label); });
     (o.vlines || []).forEach(q => { if (!fin(q.x)) return; D.line(ly.v, X(q.x), y0, X(q.x), y0 + hg, D.ltype('CENTER')); if (q.label) D.text(ly.v, X(q.x) + 0.3 * h, y0 + hg - 1.2 * h, 0.7 * h, q.label); });
     if (o.title) D.text(ly.t, x0, y0 + hg + 1.2 * h, 1.1 * h, o.title);
@@ -203,7 +204,8 @@
     const read = el.querySelector('.sbg-read'), box = el.querySelector('.sbg-box');
     const H = { graphic: g, dxf: () => D.toDXF({ ltscale: 1 }) };
     const svg = X_().toSVG(D, { bg: '#fff', title: g.title }), mobile = window.innerWidth < 700;
-    const VW = H.viewer = X_().viewer(box, svg, { height: opts.height || (mobile ? '46vh' : '58vh') });
+    const bw0 = b[2] - b[0] + 2 * pad, bh0 = b[3] - b[1] + 2 * pad, cw = el.clientWidth || 900, maxPx = (opts.maxVh || (mobile ? 50 : 62)) / 100 * (window.innerHeight || 800);   // the box takes the drawing's shape
+    const VW = H.viewer = X_().viewer(box, svg, { height: opts.height || `${Math.round(Math.max(180, Math.min(maxPx, cw * bh0 / bw0 + 4)))}px` });
     const sv = H.el = VW.el, ns = 'http://www.w3.org/2000/svg';
     // restore the zoom and pan of the same view (same fit box), by zooming about a chosen point (the viewer's API has no pan)
     const base = sv.getAttribute('viewBox'), kp = opts.key && KEEP[opts.key];
