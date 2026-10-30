@@ -13,9 +13,10 @@
        (anchors `function dfFoot(R) {`, `function dfApp(R) {`): typical cross-section with the deck, haunch, girders and appurtenances,
        dimensions and general notes;
      - dxfTable, dxfNotes, dxfTag (helpers).
-   Not ported (they need results this display module does not compute, or GirderDetail sheets outside this PR): splice plate outlines and
-   bolts (Field splices tab), the moment envelope and camber diagram and tables (Analysis tab), the weld symbol, quantities, paper-space
-   sheets with border and title block. Sheet references ("SEE SHEET ...") are left out of the tags.
+   Added 2026-10-30 (SB2-DW5): opt.k (draw at a given plot scale: the sheets of engine/sheets.js choose it) and opt.RS (the results of
+   engine/sheets.js results()): the top splice plates on the plan (GirderDetail dxfPlan) and the splice plates and web bolts on the
+   elevation, from the Field splices design (splR, splElev). The sheets with border and title block, the moment envelope, camber,
+   weld symbols, quantities and the detail sheets are in engine/sheets.js. Sheet references ("SEE SHEET ...") are left out of the tags.
 
    Geometry (model()): GirderDetail draws one set of plates for every girder at the same stations. Here each cross-section girder i takes
    the plates of the plate girder that loads it (girders[j].line = i; else the first girder of the same position, exterior for G1 and
@@ -91,7 +92,7 @@
       let stiff = [];
       if (SB && ly.web !== 'unstiffened') { try { stiff = SB.girderBays(ly, Dmax, sup, m.cont, sup, ints, pg + 1).flatMap(B => SB.bayX(B)).map(toG); } catch (e) { warnings.push(`G${i + 1}: stiffener layout not drawn (${e.message}).`); } }
       const studs = zones0.filter(z => nm(z.x2) > nm(z.x1)).map(z => ({ s0: toG(+z.x1), s1: toG(+z.x2), nr: +z.nr, p: +z.p }));
-      return { i, label: `G${i + 1}`, y: g.y, x0: g.x0, bear: g.bear.slice(), pg, ext: i === 0 || i === nb - 1, segs, cps, stiff, studs, spl: m.splices.map(toG), Dmax,
+      return { i, label: `G${i + 1}`, y: g.y, x0: g.x0, bear: g.bear.slice(), pg, ext: i === 0 || i === nb - 1, segs, cps, stiff, studs, spl: m.splices.map(toG), splX: m.splices.slice(), Dmax,
         tTmax: Math.max(...segs.map(s => s.topT)), tBmax: Math.max(...segs.map(s => s.botT)), ints };
     });
     const xs = P.xs || (M ? M.defaultXs(P) : {}), d = P.deck || {};
@@ -132,14 +133,35 @@
     if (note) D.text(l, cx + dx * (r + 0.6 * h), cy - 0.4 * h, h * 0.75, note, dx < 0 ? 2 : 0);
   }
   const segAt = (segs, s) => segs.find(q => s >= q.s0 - 1e-9 && s <= q.s1 + 1e-9) || segs[segs.length - 1];
+  /* the field splice design (engine/splices.js girder(), Field splices tab) of splice k of girder g; RS = SBDSheets.results() (the results
+     of g's plate girder); null when not calculated or not designed (SB2-DW5) */
+  function splR(RS, g, k) {
+    const r = RS && RS.pg && RS.pg[g.pg], L = r && r.spl && r.spl.list; if (!L) return null;
+    const x = (g.splX || [])[k], q = L.find(s => x != null && Math.abs(s.x - x) < 1e-6) || null;
+    return q && q.R && q.R.fl && !(q.R.errors && q.R.errors.length) ? q.R : null;
+  }
+  /* splice plates and bolts on the elevation (SB2-DW5): outer flange plates (inner plates hidden), the bolt rows of the flanges as ticks,
+     the web plate with every web bolt; centered on the splice station xc; vertical exaggeration v */
+  function splElev(D, R, xc, yB, sL, sR, v, h) {
+    if (!R) return; const lp = D.layer('SPLC-PLAT', 1), lb = D.layer('BOLT', 2), hid = D.ltype('HIDDEN'), F = R.fl, W = R.web, gap = R.gap, rb = (R.bolt.dh || 1) / 2;
+    const Dw = R.D * v, tT = Math.max(sL.topT, sR.topT) * v, tB = Math.max(sL.botT, sR.botT) * v, yTo = yB + Dw + tT + F.top.to * v, yBo = yB - tB - F.bot.to * v;
+    D.rect(lp, xc - F.top.Lpl / 2, yB + Dw + tT, xc + F.top.Lpl / 2, yTo); D.rect(lp, xc - F.bot.Lpl / 2, yBo, xc + F.bot.Lpl / 2, yB - tB);
+    if (F.top.inner) D.rect(lp, xc - F.top.Lpl / 2, yB + Dw - F.top.ti * v, xc + F.top.Lpl / 2, yB + Dw, hid);
+    if (F.bot.inner) D.rect(lp, xc - F.bot.Lpl / 2, yB, xc + F.bot.Lpl / 2, yB + F.bot.ti * v, hid);
+    [['top', yTo, 1], ['bot', yBo, -1]].forEach(([k, y, s]) => { const f = F[k];
+      for (const sd of [-1, 1]) for (let r = 0; r < f.nr; r++) { const x = xc + sd * (gap / 2 + f.ef + r * f.s); D.line(lb, x, y, x, y + s * 0.6 * h); } });
+    const wpL = gap + 2 * (W.ew + (W.ncw - 1) * W.sh + W.ewp), yc = yB + Dw / 2; D.rect(lp, xc - wpL / 2, yc - W.hw * v / 2, xc + wpL / 2, yc + W.hw * v / 2);
+    W.bolts.forEach(b => [-1, 1].forEach(sd => D.circle(lb, xc + sd * (gap / 2 + W.xbar) + b.dx, yc + b.dy * v, rb)));
+  }
   const bwName = G => (window.SBDCrossframes && G.cf.dia ? 'DIAPHRAGM' : 'CROSS-FRAME');
   const brgType = (G, k) => { const B = ((G.stf || {}).bearing || {}).types || {}; return (k === 0 || k === G.sup.length - 1 ? B.A : B.B) || { np: 1, bt: 7, tp: 0.75, sp: 0 }; };
   const tsType = (G, r) => (((G.stf || {}).transverse || {}).types || {})[r] || { bt: 6, tp: 0.5 };
 
   /* ---------- 1: framing plan (GirderDetail dxfPlan) ---------- */
-  function plan(G, D) {
+  function plan(G, D, opt) {
+    opt = opt || {};
     const FR = G.FR, nb = G.nb, wid = G.ys[nb - 1], Lx = Math.max(...G.girders.map(g => g.x0 + g.bear[g.bear.length - 1])) - Math.min(...G.girders.map(g => g.x0));
-    D.k = scaleFor(Lx * 12 * 1.15, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
+    D.k = opt.k || scaleFor(Lx * 12 * 1.15, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
     const ly = { g: D.layer('GRDR', 5), b: D.layer('BRNG-CNTR', 8), x: D.layer('XFRM', 3), xe: D.layer('XFRM-END', 6), s: D.layer('SPLC', 1), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) };
     const cl = D.ltype('CENTER'), X = x => x * 12, Y = y => y * 12, sup = G.sup, BW = bwName(G);
     sup.forEach((xs, k) => { const ax = X(FR.xb(k, 0)), ay = Y(G.ys[0]), bx = X(FR.xb(k, nb - 1)), by = Y(wid), L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 3 * h;
@@ -165,7 +187,8 @@
         D.rect(lbr, xc - 0.6 * h, gy - 0.6 * h, xc + 0.6 * h, gy + 0.6 * h); });
       const sg = i === 0 ? 1 : -1; g.stiff.forEach(s => D.rect(lst, X(g.x0 + s) - ts.tp / 2, gy, X(g.x0 + s) + ts.tp / 2, gy + sg * (ts.bt + 0.3)));
       D.line(gcl, X(g.x0), gy, X(g.x0 + g.bear[g.bear.length - 1]), gy, cl); D.text(ly.t, X(g.x0 + g.bear[g.bear.length - 1]) + 2 * h, gy - h / 2, h, g.label);
-      g.spl.forEach(s => D.line(ly.s, X(g.x0 + s), gy - h * 0.8, X(g.x0 + s), gy + h * 0.8)); });
+      g.spl.forEach(s => D.line(ly.s, X(g.x0 + s), gy - h * 0.8, X(g.x0 + s), gy + h * 0.8));
+      g.spl.forEach((s, k) => { const R = splR(opt.RS, g, k); if (R) D.rect(D.layer('SPLC-PLAT', 1), X(g.x0 + s) - R.fl.top.Lpl / 2, gy - R.fl.top.bo / 2, X(g.x0 + s) + R.fl.top.Lpl / 2, gy + R.fl.top.bo / 2); }); });
     // dimensions: girder spacing, cross-frames along G1 and Gn, splices along Gn, spans along G1
     const xMin = Math.min(...sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), g0 = G.girders[0], gN = G.girders[nb - 1];
     D.chainV(ly.d, G.ys.map(Y), xMin - 4 * h, X(g0.x0) - h); D.dimV(ly.d, Y(0), Y(wid), xMin - 8 * h, null, '<> CL-CL EXT. GIRDERS');
@@ -183,14 +206,14 @@
     // framing data tables
     const y = Y(0) - 10 * h, rows = G.girders.map(g => [g.label, ...G.spans.map((_, k) => dFI(X(g.bear[k + 1] - g.bear[k]))), dFI(X(g.bear[g.bear.length - 1] - g.bear[0])), ...g.spl.map(s => dFI(X(s - g.bear[0]))), String(g.cps.length)]);
     const t1 = table(D, ly.tb, xMin, y, ['GIRDER', ...G.spans.map((_, k) => `SPAN ${k + 1}`), 'TOTAL', ...G.splices.map((_, k) => `FS${k + 1} FROM BRG.`), BW === 'DIAPHRAGM' ? 'INT. DIAPHRAGMS' : 'INT. X-FRAMES'], rows, 'GIRDER LENGTHS ALONG GIRDER CL (CL BRG. TO CL BRG.) AND FIELD SPLICE LOCATIONS');
-    table(D, ly.tb, xMin, t1.y - h, ['GIRDER', `INTERMEDIATE ${BW} LOCATIONS FROM CL BRG. ABUT. 1, ALONG GIRDER`], G.girders.map(g => [g.label, g.cps.map(q => dFI(X(q.s - g.bear[0]))).join(', ')]), `${BW} LOCATIONS`);
+    table(D, ly.tb, xMin, t1.y - h, ['GIRDER', `INTERMEDIATE ${BW} LOCATIONS FROM CL BRG. ABUT. 1, ALONG GIRDER`], G.girders.flatMap(g => { const L = g.cps.map(q => dFI(X(q.s - g.bear[0]))), out = []; for (let i = 0; i < Math.max(1, L.length); i += 12) out.push([i ? '' : g.label, L.slice(i, i + 12).join(', ')]); return out; }), `${BW} LOCATIONS`);
     return { id: 'plan', title: 'Framing plan', i0, i1: D.mark(), k: D.k, h: D.h };
   }
 
   /* ---------- 2: girder elevation (GirderDetail dxfElev) ---------- */
   function elevation(G, D, gi, opt) {
     opt = opt || {}; const g = G.girders[gi] || G.girders[0], v = +opt.vex || 1, S = g.segs, Lg = Math.max(S[S.length - 1].s1, g.bear[g.bear.length - 1]);
-    D.k = scaleFor(Lg * 12 * 1.1, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
+    D.k = opt.k || scaleFor(Lg * 12 * 1.1, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
     const ly = { p: D.layer('GRDR-PLAT', 4), w: D.layer('GRDR', 5), st: D.layer('GRDR-STIF', 30), s: D.layer('SPLC', 1), b: D.layer('BRNG', 8), sc: D.layer('STUD', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) };
     const X = x => x * 12, Dw = s => s.D * v, tmax = g.tTmax * v, bmax = g.tBmax * v, yTop = Math.max(...S.map(Dw)), yB = 0;
     S.forEach(s => { D.rect(ly.p, X(s.s0), yB + Dw(s), X(s.s1), yB + Dw(s) + s.topT * v); D.text(ly.t, X((s.s0 + s.s1) / 2), yTop + tmax + 0.6 * h, h * 0.8, `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, 1); });
@@ -212,6 +235,7 @@
       D.text(ly.t, (x1 + x2) / 2, yS + 0.4 * h, h * 0.75, `${z.nr} STUDS @ ${dIn(z.p)}`, 1); });
     if (!g.studs.length) D.text(ly.t, 0, yS, h * 0.75, 'STUD PITCH ZONES: NONE ENTERED (FATIGUE & STUDS INPUT TAB).');
     g.spl.forEach((s, k) => { D.line(ly.s, X(s), yB - bmax - h, X(s), yB + yTop + tmax + h); D.text(ly.t, X(s), yB + yTop + tmax + 6.6 * h, h * 0.8, `FS${k + 1}`, 1); });
+    g.spl.forEach((s, k) => splElev(D, splR(opt.RS, g, k), X(s), yB, segAt(S, s - 1e-6), segAt(S, s + 1e-6), v, h));
     g.bear.forEach(bx => { const tb = segAt(S, bx).botT * v; D.pline(ly.b, [[X(bx), yB - tb], [X(bx) - h * 0.7, yB - tb - h * 1.2], [X(bx) + h * 0.7, yB - tb - h * 1.2]], true); });
     // dimensions
     const brk = list => [0, ...list].filter((x, k, a) => k === 0 || Math.abs(x - a[k - 1]) > 1e-6);
@@ -234,9 +258,9 @@
   }
 
   /* ---------- 3: typical cross-section (GirderDetail dxfSection + dxfApp) ---------- */
-  function section(G, D) {
-    const dk = G.deck, nb = G.nb, xg = G.ys.map(y => y * 12), W = xg[nb - 1], xL = -dk.ohL * 12, xR = W + dk.ohR * 12;
-    D.k = scaleFor((xR - xL) * 1.3, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
+  function section(G, D, opt) {
+    opt = opt || {}; const dk = G.deck, nb = G.nb, xg = G.ys.map(y => y * 12), W = xg[nb - 1], xL = -dk.ohL * 12, xR = W + dk.ohR * 12;
+    D.k = opt.k || scaleFor((xR - xL) * 1.3, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
     const ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
     const ts = dk.ts, hh = dk.haunch, sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), yT = 0;
     D.rect(ly.dk, xL, yT + hh, xR, yT + hh + ts);
@@ -298,11 +322,11 @@
   function all(G, opt) {
     opt = opt || {}; const D = X_().drawing({ prefix: opt.prefix == null ? 'S-' : opt.prefix }), views = [];
     const place = v => { if (views.length) { const p = views[views.length - 1], bp = D.bbox(p.i0, p.i1), b = D.bbox(v.i0, v.i1); if (isFinite(b[0])) D.move(v.i0, bp[0] - b[0], bp[1] - 4 * p.h - b[3]); } views.push(v); };
-    place(plan(G, D)); place(elevation(G, D, opt.gi || 0, opt)); place(section(G, D));
+    place(plan(G, D, opt)); place(elevation(G, D, opt.gi || 0, opt)); place(section(G, D, opt));
     return { D, views };
   }
   /* dxf(G, opt): the DXF text of all() */
   function dxf(G, opt) { const A = all(G, opt); return A.D.toDXF({ ltscale: 1 }); }
 
-  window.SBDDrawings = { SCALES, SCALE_NAME, scaleFor, plateGirderOf, appOf, model, plan, elevation, section, all, dxf, table, notes, tag };
+  window.SBDDrawings = { SCALES, SCALE_NAME, TXT, scaleFor, plateGirderOf, appOf, model, plan, elevation, section, all, dxf, table, notes, tag, segAt, splR, brgType, tsType, bwName };
 })();

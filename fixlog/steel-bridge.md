@@ -1524,3 +1524,195 @@ Display and export only: no engineering formula, factor, unit or reference chang
   `cn.fl` (anchor `sub: r.amC.req ?`) wrote `—(0.00)` (a KaTeX parse error) when AF = ∞ (SB2-R2); now `\infty(0.00)`, as `engine/flexure.js`
   step `fl`. Before: `${n3(r.amC.AF)}(…)`; after: `${isFinite(r.amC.AF) ? n3(r.amC.AF) : '\\infty'}(…)`. Text of the step only; the value
   and the check are unchanged.
+
+## 2026-10-30 — PR: sb-import — import of old projects (GirderDetail / Steel Bridge Design, Preliminary sizing, ST-Girder, old autosaves)
+### Where
+- New `apps/steel-bridge/engine/legacy.js` (`window.SBDLegacy`): `importLegacy(obj)`, `fromParts({ gd, pl, st })`, `fromStorage(storage)`,
+  `ownMigrate(pl)`, `summaryText(summary)`.
+- `engine/model.js`: `importLegacy(obj)` is no longer a stub. It calls `SBDLegacy.importLegacy` (anchor `function importLegacy(obj, opt)`).
+  `importJSON` routes old files there, as before. Schema comment: new optional `legacy` field.
+- New `apps/steel-bridge/ui/legacy.js` (`window.SBDLegacyUI.show`): the import summary panel.
+- `index.html`:
+  - two script tags;
+  - "Import JSON…" now also takes old files and shows their summary;
+  - new header button "From old app", which reads the old autosaves.
+### What is read
+- Steel Bridge Design project file (SBD4): `{ app: 'SteelBridgeDesign', v: 1, name, data (the modules; also accepted as gd), pl: { app:
+  'PlateLine', data }, st: { …, _schema: 'stgirder' } }`.
+  - A version above 1 is refused, as the old app refuses it.
+- The older formats: `{ app: 'GirderDetail', data }`, `{ app: 'PlateLine', data }`, ST-Girder `{ _schema: 'stgirder', … }`.
+- The old autosaves, **read only** (never written or deleted): `girderdetail_autosave_v1`, `plateline_autosave_v1`, `stgirder.session`.
+- Refused with a message: hand-off files (`stgirder-external-demands`) and PlateLine splice exports. These are demands, not projects.
+### Mapping
+- **Preliminary sizing** (the bridge):
+  - spans and continuity; girder count, spacing (equal, variable, exterior), overhangs, skews;
+  - deck edges: GirderDetail's XS9 edges when present; otherwise the barrier, or the curb and railing;
+  - deck t_s, haunch, t_sac (gives tdeck), f′c, w_c, w_c for E_c; flange and web grades;
+  - plates: every breakpoint of the top, bottom and web lists becomes one segment, for each of the n_b girders (one layout, as the old app);
+  - b_eff tributary (exterior S/2 + overhang, interior the mean of the adjacent bays), as GirderDetail's Structural analysis does;
+  - owner and η inputs; crack model; L/… deflection limit;
+  - framing: spacing, pier spacing and length, orientation, arrangement, clearances, tolerance, skew f_ℓ, field splices;
+  - stiffener layout (stiffened web, d_o/D, per-bay list); stiffener, connection-plate and bearing-stiffener plates; the minimum
+    cross-frame depth;
+  - wearing surface, SIP, detail allowance; project information.
+- **Preliminary sizing's own load-time migration** (`ownMigrate`, anchor `function migrateOwnDef(p)` / `function ownApply(`).
+  - Applies to a project saved without the owner defaults (no `ownDef`, or `ownDef.v` < 4).
+  - Each OWN14 default input still at its generic value moves to the owner's value, as the old app does when it opens the project.
+    Example: MassDOT f′c 4 → 5 ksi, grades 50W → 50.
+  - The moves are listed in the summary.
+- **GirderDetail** (the modules):
+  - LLDF and DLs (the inverse of `engine/loads.js fromModel`): sidewalks, pedestrian load, median, appurtenance w_c, fences, wearing
+    surface by thickness, added loads, overlays, edges, overrides, beam classes, method, gap, K_g, skew corrections;
+  - Structural analysis: crack, IM, fatigue IM, L/…, pour sequence;
+  - Girder section: deck rebar layers, F_yr, K_1, n rule, rebar in M_p, flange categories;
+  - Fatigue: limit, ADTT, p, life, γ, negative section, distortion details;
+  - studs: d, h, s_t, F_u, Q_n, γ, F_rc, w, splice entries;
+  - stiffener types and grades, F_EXX, bearing end distance;
+  - cross-frames: type, grades, primary, diaphragm, wind, members, connection, user forces, category, stability bracing;
+  - splice bolts, load factors, clearances; overhang brackets (to constructibility); welds F_EXX and γ.
+  - Without a Preliminary sizing part, the bridge comes from `df.bridge` (what Preliminary sizing last sent).
+- **ST-Girder**:
+  - with other parts: the rating factors φ_c, φ_s;
+  - alone: one simple span of one girder (plates or plate segments, grades from F_y/F_u, deck, rebar, cross-frame spacing, stiffeners,
+    studs, fatigue, rating).
+- **Not mapped, kept** under `project.legacy.unmapped.{gd,pl,st}` at their own paths, and listed in the summary:
+  - the module rows (location rows, stud zones, splice plates, overhang rows): this app makes them from its analysis;
+  - Preliminary sizing's sizing, cost and Suggest settings; the view state;
+  - GirderDetail's single-splice data;
+  - LLDF/DL fields this app does not have (e.g. util's cross-frame weight settings `xf, xfAllow, …`, noted);
+  - ST-Girder's own load inputs.
+  - Nothing is dropped: a reader records every path it reads; the rest is copied as is.
+### Decisions
+- Studs: an imported project keeps this app's default of b_eff per girder (SB2-F1). GirderDetail's single bridge-wide value is in
+  `legacy.unmapped.gd.sc`.
+- Weld size: the Table 6.13.3.4-1 minimum (the welds PR default). GirderDetail's weld rows are kept unmapped.
+- Old cross-frame members are GirderDetail's Cross-frames module inputs. These are the members the old app checked; its dead load
+  used Preliminary sizing's suggested frame (see the differences).
+### Check (tests/engine/legacy.test.mjs)
+- The 20 recorded projects were imported as Steel Bridge Design files: built-in, builtin28, xsA, curb, util × AASHTO, RIDOT, MassDOT, CTDOT.
+  - Parts: Preliminary sizing from `DEFAULT` after the page's own `migrateOwner`, or from the seeds; GirderDetail's built-in module
+    inputs, or the seeds; the owner set as the recorders do.
+  - Model against the 100 hand-off payloads: spans, plates, b_eff, position, skews, owner, t_s, haunch and f′c are exact.
+- Computed with this app (analysis; flexure on its framing, with the owner factors η and m applied in the test) for G1 and G2, against
+  GirderDetail's own results. Largest difference per quantity:
+
+| Quantity | Largest | Where | Cause |
+|---|---|---|---|
+| M_DC1 | 0.76 % (−2424.4 vs −2406.1 kip-ft) | builtin AASHTO G2 | Cross-frame point loads: GirderDetail weighed Preliminary sizing's suggested K-frame (L3x3x3/8 bottom chord and diagonals, 2.80 kip on G1); this app weighs the imported Cross-frames members (X, L5x5x3/8 × 3, 4.73 kip). Steel at 490/144 (SB2-A2, +0.08 % of the steel part) |
+| M_DC2, M_DW | 0.006 % | curb CTDOT / AASHTO | Hand-off round-off (0.001) and the station grids |
+| M_LL+IM, M_FAT (±) | 0.000 % | — | (pedestrian part of the hand-off taken out) |
+| Negative flexure GS7/GS9, GS8 | 0.26 % / 0.32 % | builtin CTDOT G2 span 1 | The M_DC1 above through f_bu; L_b and C_b from this app's framing |
+| Same, xsA (sidewalks) | 10.4 % / 9.6 % | xsA RIDOT G1 span 3 (1.040 vs 1.160) | GirderDetail adds the 75 psf pedestrian load to LL+IM; this app's analysis has no pedestrian load yet (engine/analysis.js warns) |
+
+- Further tests:
+  - Nothing dropped: GirderDetail's fatigue rows and stud zones are found unchanged under `legacy.unmapped`.
+  - Round trip: export, import, export gives the same text.
+  - The old autosaves are imported through a storage stand-in that throws on any write or delete; the result equals the file import.
+  - ST-Girder alone gives one simple span (φ_c and b_eff kept; `rateVeh` kept unmapped).
+  - Refusals: a hand-off file, and a file version above 1.
+- Headless smoke: Import JSON with the xsA project file shows the summary (MassDOT defaults applied: f′c 4 → 5, grades 50W → 50),
+  22 GirderDetail groups are kept unmapped, Welds Calculate runs, and "From old app" imports. The old keys are unchanged.
+  0 console errors.
+### Saved data (CLAUDE.md §5)
+- The old app's keys are read only. This app writes only its own `sbd2.project.current`, as before.
+- New optional field `legacy` in the sbd2 project. No existing key or format changed.
+### Open items (for the engineer)
+- Pedestrian load: this app's analysis does not have it. On bridges with sidewalks, negative flexure is up to 10 % lower than in
+  GirderDetail (xsA). Already warned on the Analysis tab.
+- Owner factors η and m (OWN6/OWN7): `engine/flexure.js` does not apply them yet (its header, "Not ported"). The test applied them to
+  compare. Without them the Flexure ratios of RIDOT projects (m = 1.2) are lower than GirderDetail's.
+- Cross-frame weight in DC1: map Preliminary sizing's suggested frame (`analysis.xf`, K-frame areas) into the cross-frame members on
+  import, or keep the Cross-frames module's members (now)?
+## 2026-10-30 — PR: sb2-dw5-sheets — the drawing set (every GirderDetail sheet, border and title block), splice plates, moment envelope and camber, weld symbols and quantities; 3D diagrams, splice plates and single-girder close-up (SB2-DW5)
+Display and export only: no engineering formula, factor, unit or reference changed; no computed result changes (the engines are only read).
+### Where
+- `engine/sheets.js` (new, `window.SBDSheets`): `results(P, G)` (per plate girder used by a girder line: report/data.js `compute` (analysis,
+  field splices, fatigue, …), report/builders.js summary rows, ui/welds.js `build`; analyzeGirder memoised for the call, as report/data.js),
+  `build(G, RS, opt)` (the sheet set), `sheet` (scale search, border, title block), `env` (Strength I envelopes), `quantities`, `weld`.
+  Ported from GirderDetail ("Steel Bridge Design.html"), anchors `function dxfSheet(D, S, drawFn, ctx, ox) {`, `function dxfBuild(lay) {`,
+  `function dxfCover(D, C) {`, `function dxfErect(D, C) {`, `function dxfElev(D, C) {` (moment band, plate schedule, camber tables and
+  diagram), `function dxfSection(D, C) {` (weld symbols, notes, quantities), `function dxfSplice(D, C) {`, `function dxfPlot(`,
+  `function dxfLab(`, `function dxfDiag(D, C) {`, `function dxfSummary(D, C) {`, `function dxfReac(D, C) {`, `function dxfFat(D, C) {`,
+  `function dxfOH(D, C) {`, `function dxfBS(D, C) {`, `function dxfCF(D, C) {` (with `const cfCPpts =`), `function dxfTS(D, C) {`,
+  `function dxfSC(D, C) {`, `function dxfStd(D, C) {`, `function dxfWT(D, C) {`, `function dxfWeld(`.
+- Sheets (GirderDetail's list and order, `dxfBuild`): 1 cover and sheet index (with "drawings not in this set" and revisions), framing plan,
+  erection diagram and girder layout (piece marks, shipping pieces, steel by girder, work points), girder elevation and camber (all
+  girders), one elevation per girder line, typical section and notes (weld symbols, estimated quantities, weld quantities), field splice
+  (one sheet per splice and plate girder), analysis diagrams (one per plate girder), design summary, bearing reactions, fatigue and fracture,
+  deck overhang, bearing stiffener details, cross-frame or diaphragm details, stiffener and connection plate details, shear connector
+  details, standard details and staging notes, flange transition details. Paper D 34 × 22 in (or B 17 × 11), drawing area 31.75 × 17.45 in,
+  the smallest scale of GirderDetail's list not below the sheet's minimum (cover 1, plan / erection / elevations / diagrams 48, section 12,
+  overhang / stiffeners / cross-frames 4, splice / studs / standard / transitions 3) at which the sheet fits; title block cells PROJECT,
+  PROJECT NO., SHEET TITLE, SCALE, DESIGNED / CHECKED, SHEET n OF N from the project (`P.project`: name, number, designer, checker).
+- `engine/drawings.js`: `plan(G, D, opt)`, `elevation(G, D, gi, opt)`, `section(G, D, opt)` take `opt.k` (a plot scale chosen by the sheet;
+  default the old automatic choice) and `opt.RS`; new `splR` (the Field splices design of a girder's splice k) and `splElev`: top splice
+  plates on the plan (GirderDetail `dxfPlan`, layer S-SPLC-PLAT) and, new, the flange and web splice plates with every web bolt and the flange
+  bolt rows on the elevation; the cross-frame location table wraps at 12 locations per row (a long row could not fit any sheet); girder
+  model `splX` (the splice stations on the centerline). Exports `TXT, segAt, splR, brgType, tsType, bwName`.
+- `ui/drawings.js` (rewritten): the sheet set: Calculate results (one analysis per plate girder, kept until the project changes, not saved),
+  paper, sheet choice and preview (the sheet with its border, drawn from the file's entities), Download DXF (all sheets, validated), the sheet
+  index with the tab where each sheet's content is worked (link), the "not in this set" list, and the quantities with the weld metal worked
+  (w²/2 × L × γ, values substituted). `results(P)`, `calc(P)` for the 3D view. The "Stud zones from the analysis" button is replaced by the
+  results (the Fatigue & studs tab's zones, used when none are entered).
+- `ui/view3d.js`: GirderDetail `v3bSeries`, the diagram fences and `V3B.focus` of `v3bBuild`: View (whole bridge / girder Gi close-up), Diagram
+  (Strength I, Service II, LL+IM, DC1, DC2 + DW, fatigue moments; Strength I, LL+IM, dead-load shears), scale, "+ moment down", zoom to each
+  splice or bearing (close-up), the value under the pointer; splice plates of the design (every bolt in the close-up); layer "Diagram".
+  ui state `sbd2.ui` `v3d` gains optional `mode`, `dg`, `dsc`, `eng` (absent = whole bridge, Strength I moment, 1, on).
+- `index.html`: one script tag (`engine/sheets.js`). `tests/engine/sheets.test.mjs` (new), `tests/smoke/steel-bridge-drawings.mjs` (new).
+### Decisions (SB2-DW6 to DW13; engineer's rule of 2026-10-29)
+- SB2-DW6. Sheets in model space, each with its border and title block at its plot scale: GirderDetail's R12 sheet format (`dxfSheet`
+  without `lay`). GirderDetail's default "layouts" format (one paper-space layout per sheet with a locked viewport) was written by ezdxf
+  running in the browser (Pyodide, ~10 MB), which this app does not load (SB2-DW5 of #491); DXF R12 has a single paper space, so true
+  layouts need a DXF R2000+ writer (open item).
+- SB2-DW7. Results per plate girder: each girder line shows the moment envelope, camber and splice plates of the plate girder that loads it
+  (SB2-DW1), at the girder's own stations (SBDFraming.toG, SB2-DW2). The "all girders" camber table lists each girder at the tenth points of
+  the centerline spans (the same fraction of its own span). GirderDetail analysed each girder line G1…Gn.
+- SB2-DW8. Analysis diagrams: moments, shears and dead-load deflections as GirderDetail; shears drawn just left and right of every station
+  (the jumps at supports and point loads; GirderDetail plotted element midpoints). The flange-stress plots are left out: this app works the
+  flange stresses at its check locations (Flexure, Rating tabs), not along the girder; adding them would be a new calculation (CLAUDE.md §4).
+- SB2-DW9. Bearing reactions: DC1, DC2, DW, LL+IM max / min (Analysis tab) and the service sums DC1 + DC2 + DW + LL+IM. GirderDetail's jacking
+  (RIDOT OWN40 / 1.3 × permanent) and seismic horizontal (3.10.9.2) columns are left out: not worked in this app.
+- SB2-DW10. Quantities from this project (GirderDetail: Design all's cost list): plate steel Σ L(b_t t_t + b_b t_b + D t_w) × 490/1728
+  lb/in³ (no detail allowance), connection plates, stiffeners, bearing stiffener plates, field splices, splice bolts (4 n_rows n_lines per
+  flange + 2 × web bolts per splice), studs (⌊L/p + 1⌋ × n per zone on each girder's own length, GirderDetail `dxfSC`), shop CJP flange
+  splices (Welds tab transitions); weld quantities: flange-to-web 4 lines over each girder (size as the Welds tab: entered, else
+  Table 6.13.3.4-1 for the thickest plate), connection plates (D − 2c to the web, b − c to each flange), intermediate stiffeners (D − c − gap),
+  bearing stiffeners (D − 2c; + b − c to the bottom flange when welded), weld metal w²/2 × L × 490/1728 lb/in³.
+- SB2-DW11. Strength I envelope on the elevation, the diagram sheet and in 3D: engine/flexure.js `envelopeStrI` with `factors()` (1.25 / 0.90 DC,
+  1.50 / 0.65 DW, 1.75 LL+IM; AASHTO LRFD 10th Ed. Table 3.4.1-1, -2), the Flexure tab's combination; Service II 1.0 DC + 1.0 DW + 1.30 LL+IM
+  (`factors().sll`). GirderDetail's Strength I carried the owner η and m (OWN6/OWN7, gdLF); the drawings use the Flexure tab's combination
+  (one combination everywhere in this app); identical for η = m = 1 (AASHTO). Not a change to any check.
+- SB2-DW12. Shipping pieces: "with detail allowance" uses the Analysis tab's steel detail allowance (GirderDetail: a fixed 5 %); steel
+  490/1728 lb/in³ (the analysis's 3.4028 lb/ft per in², SB2-A2; GirderDetail 0.2836).
+- SB2-DW13. Design summary: the Report tab's summary of governing ratios (report/builders.js) of each plate girder (GirderDetail: its Girder
+  section checks and Design all status). Fatigue sheet: the Fatigue & studs tab's detail rows (detail description from engine/fatigue.js DET).
+### Governing provision
+- None (drawings and 3D display). Values shown are those of their tabs: analysis (Analysis tab), Strength I (Table 3.4.1-1 as the Flexure
+  tab), splices (6.13.6.1, Field splices tab), welds (6.13.3, Welds tab), studs (6.10.10, Fatigue & studs tab), cross-frames (6.7.4).
+### Check case (built-in project: 110-140-110 ft, 5 girders at 9.5 ft, one plate girder)
+- 25 sheets (15 without results: the 7 needing them listed as not generated).
+- FS1 at 82 ft (Field splices tab design): top flange 3 rows × 2 lines each side: 2 × 3 × 4 = 24 bolts; bottom 4 × 2: 32; web 11 × 2 per
+  side: 44; 100 bolts, 7/8 in bolts in 15/16 in holes (circles r = 0.46875 in); top outer plate 19.5 × 16 in. Quantities: 20 splices, 2000 bolts.
+- Flange-to-web welds 5/16 in (thicker part > 3/4 in, Table 6.13.3.4-1): 4 × 5 × 360 ft = 7200 ft = 86,400 in; weld metal
+  (0.3125)²/2 × 86,400 × 0.283565 = 1196.3 lb.
+- Strength I envelope on each elevation = 1.25(DC1 + DC2) + 1.50 DW + 1.75 LL+IM (0.90 / 0.65 where the dead load relieves), recomputed in
+  the test at every one of 361 stations.
+### How verified
+- `node tests/engine/run.mjs sheets`: the built-in project and the 5 payloads of #491 (3 to 7 girders, skews 0° to 40° equal and unequal,
+  0 to 4 splices), each with its results: 140 sheets; the sheet list; every sheet inside its drawing area, its border 34 × 22 in × k and its
+  title block (project, title, scale, n OF N); the cover index; 1560 splice bolts and the plate sizes against the Field splices design;
+  68 plan splice plates and the elevation plates and web bolts at each girder's own splice stations; 21,660 envelope points against the
+  envelope recomputed from the analysis; 10,830 camber points against the analysis camber; reactions, summary rows, transition locations,
+  flange-to-web weld length and studs against the results; largest coordinate difference 5.0e-7 in (the file's 6 decimals); ezdxf 1.4.4 opens
+  the 6 sets (R12, up to 2.5 MB) with no audit error and the same entity counts. `node tests/engine/run.mjs drawings` (#491) unchanged.
+- Headless browser (`tests/smoke/steel-bridge-drawings.mjs`, three.js from tests/libs): Drawings tab 15 → 25 sheets after Calculate results,
+  FS1 preview 100 bolt circles, Download DXF 2.5 MB (validated); 3D view 10 moment fences (5 girders × max / min), close-up G2 with its 9 zoom
+  targets, zoom to FS1, shear diagram; 0 console errors.
+### Saved data (CLAUDE.md §5)
+- No project field and no key changed. `sbd2.ui` (existing key): `dwg` gains optional `paper`, `sheet` (`gi` no longer read); `v3d` gains
+  optional `mode`, `dg`, `dsc`, `eng`, and `lay.dg`; absent = defaults. Results are not saved.
+### Other copies
+- None. The old `Steel Bridge Design.html` is unchanged.
+### Open items
+- Paper-space layouts (one layout per sheet with a viewport) need a DXF R2000+ writer in shared/dxf.js (SB2-DW6).
+- Flange-stress plots along the girder and the jacking / seismic reaction columns would be new calculations here (SB2-DW8, DW9).
