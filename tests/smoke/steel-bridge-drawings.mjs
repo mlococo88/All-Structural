@@ -28,6 +28,28 @@ try {
   await p.click('.dwg-idx tr[data-dsheet^="spl"] td.lft');
   const s2 = await p.evaluate(() => ({ title: document.querySelector('#dwg_sheet').selectedOptions[0].textContent, circles: document.querySelectorAll('.dwg-box svg circle').length }));
   assert.ok(/FIELD SPLICE FS1/.test(s2.title) && s2.circles === 100, JSON.stringify(s2));
+  // preview navigation (shared/dxf.js viewer): wheel zooms about the cursor without scrolling the page (also at fit), the drop-down follows,
+  // drag pans, + zooms, double-click fits; text stays SVG text (vector)
+  const vb = () => p.evaluate(() => document.querySelector('.dwg-box svg').getAttribute('viewBox'));
+  await p.locator('.dwg-box').scrollIntoViewIfNeeded();
+  const bx = await p.locator('.dwg-box svg').boundingBox(), cx = bx.x + bx.width * 0.3, cy = bx.y + bx.height * 0.3;
+  const sy0 = await p.evaluate(() => document.querySelector('#outputPanel') ? document.querySelector('#outputPanel').scrollTop + window.scrollY : window.scrollY);
+  const vb0 = await vb(); await p.mouse.move(cx, cy); for (let i = 0; i < 4; i++) await p.mouse.wheel(0, -240);
+  await p.waitForTimeout(150);
+  const z1 = await p.evaluate(() => ({ L: window.SBDDrawingsUI.viewer().level(), sel: document.querySelector('#dwg_z').selectedOptions[0].textContent, sy: document.querySelector('#outputPanel') ? document.querySelector('#outputPanel').scrollTop + window.scrollY : window.scrollY, text: document.querySelectorAll('.dwg-box svg text').length }));
+  assert.ok(z1.L > 2 && z1.sel !== 'Fit' && z1.sy === sy0 && z1.text > 10, JSON.stringify(z1));
+  // the point under the cursor stays put: the drawing point at (cx, cy) before and after another wheel step
+  const ptAt = () => p.evaluate(([x, y]) => { const s = document.querySelector('.dwg-box svg'), q = s.createSVGPoint(); q.x = x; q.y = y; const r = q.matrixTransform(s.getScreenCTM().inverse()); return [r.x, r.y]; }, [cx, cy]);
+  const pa = await ptAt(); await p.mouse.wheel(0, -120); await p.waitForTimeout(100); const pb = await ptAt();
+  assert.ok(Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < 1e-3 * Math.abs(pa[0] || 1) + 0.5, `zoom about the cursor: ${pa} vs ${pb}`);
+  z1.L = await p.evaluate(() => window.SBDDrawingsUI.viewer().level());
+  const vb1 = await vb(); await p.mouse.move(cx, cy); await p.mouse.down(); await p.mouse.move(cx + 120, cy + 60, { steps: 4 }); await p.mouse.up();
+  assert.notEqual(await vb(), vb1, 'drag pans');
+  await p.click('.dwg-box [data-sdx="in"]'); const z2 = await p.evaluate(() => window.SBDDrawingsUI.viewer().level()); assert.ok(Math.abs(z2 / z1.L - 1.5) < 1e-6, `+ button ${z2}`);
+  await p.selectOption('#dwg_z', '2'); assert.ok(Math.abs(await p.evaluate(() => window.SBDDrawingsUI.viewer().level()) - 2) < 1e-6, 'drop-down 200 %');
+  await p.dblclick('.dwg-box svg', { position: { x: 50, y: 50 } });
+  const z3 = await p.evaluate(() => ({ L: window.SBDDrawingsUI.viewer().level(), sel: document.querySelector('#dwg_z').selectedOptions[0].textContent }));
+  assert.ok(Math.abs(z3.L - 1) < 1e-9 && z3.sel === 'Fit' && (await vb()) === vb0, JSON.stringify(z3));
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#dwg_dxf')]);
   const fn = dl.suggestedFilename(), fp = await dl.path(), txt = (await import('fs')).readFileSync(fp, 'utf8');
   assert.ok(/_drawings\.dxf$/.test(fn) && /AC1009/.test(txt) && /S-TBLK/.test(txt) && txt.length > 1e6, `${fn} ${txt.length}`);
@@ -48,7 +70,7 @@ try {
   const shot = await p.locator('#v3d-host canvas').screenshot({ path: path.join(process.env.SHOT_DIR || '/tmp', 'sbd-3d-closeup.png') });
   assert.ok(shot.length > 10000);
   assert.deepEqual(errs, [], 'console errors');
-  console.log(`ok  Drawings: ${s0.n} sheets without results, ${s1.n} with; FS1 preview ${s2.circles} bolts; DXF ${fn} ${(txt.length / 1e6).toFixed(1)} MB. 3D: ${v1.fences} fences (whole bridge), close-up G2 ${v2.focus.length} targets, zoom to FS1; 0 console errors (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+  console.log(`ok  Drawings: ${s0.n} sheets without results, ${s1.n} with; FS1 preview ${s2.circles} bolts; wheel zoom to ${(z1.L * 100).toFixed(0)} % (page not scrolled), drag, +, drop-down, double-click fit; DXF ${fn} ${(txt.length / 1e6).toFixed(1)} MB. 3D: ${v1.fences} fences (whole bridge), close-up G2 ${v2.focus.length} targets, zoom to FS1; 0 console errors (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
   if (blocked.size) console.log('    blocked requests:', [...blocked].join(', '));
 } catch (e) {
   console.log('FAIL', e.message, '\n console errors:', errs.slice(0, 5)); process.exitCode = 1;

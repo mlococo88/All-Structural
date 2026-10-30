@@ -54,3 +54,25 @@ Future users (not switched in this PR; each keeps its own copy until its next PR
 - Switch Base Plate, Gusset, Section Properties and Bridge Geometry to this file, one tool per PR, with their own DXF tests.
 - Paper-space layouts (border, title block, viewports at a plot scale), which GirderDetail writes with ezdxf in Pyodide, are not in R12 from
   this writer; the drawings are model space at full size with the plot scale stated in each title.
+
+## 2026-10-30 — PR: sb2-dwg-panzoom — SharedDxf.viewer: pan and zoom of the SVG preview (engineer's request)
+No drawing, file or engineering value changes: a browser helper for the preview of toSVG().
+### Where
+- `shared/dxf.js`, new `viewer(host, svg, opt)` (anchor `function viewer(host, svg, opt) {`), exported as `SharedDxf.viewer`.
+- The navigation changes the SVG `viewBox` only, so text and lines stay vector and sharp at any zoom.
+  - Mouse wheel: zoom about the cursor (exp(−0.0015·deltaY) per event). `preventDefault` on the drawing, so the page does not scroll; at fit the wheel zooms in.
+  - Drag: pan with the left or middle button, or one finger.
+  - Two fingers: pinch zoom and pan about their midpoint.
+  - Double-click or double-tap (two taps within 300 ms): fit.
+  - On-canvas buttons: + (×1.5), − (÷1.5), Fit.
+- Zoom range 0.5 to 64 × fit. `opt.onchange(level)` lets a page sync its own zoom control.
+### Check case
+- Smoke test: the FS1 sheet.
+  - Four wheel steps zoom to over 200 %; the page does not scroll; the drawing point under the cursor stays put.
+  - Dragging changes the viewBox. + multiplies the zoom by exactly 1.5. The drop-down set to 200 % gives a zoom of 2.
+  - Double-click restores the original viewBox and the drop-down reads "Fit".
+### How verified
+- `tests/smoke/steel-bridge-drawings.mjs` (headless Chromium) checks the wheel, the drag, the + button, the drop-down and double-click fit.
+- Pinch and double-tap are not driven by the headless test; they use the same zoom and pan functions as the wheel and the drag.
+### Other copies
+- None.

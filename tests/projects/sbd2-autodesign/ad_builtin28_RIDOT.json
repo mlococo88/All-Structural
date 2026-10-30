@@ -1,0 +1,319 @@
+{
+ "name": "builtin28_RIDOT",
+ "why": [
+  "no design passes every module: detail checks that the current design fails too, whatever the plates, block every design (studs SC1, cross-frames CF3); the weight compared is that of the best blocked design, which passes every check the plates control",
+  "Preliminary sizing Full design fails this app's full check: stiffeners BS6 Stiffener width and flange connection — Abut. 1, G1 (Type A), width within narrower flange (G2): 1.037; stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.185; stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.185; stiffeners BS6 Stiffener width and flange connection — Abut. 2, G1 (Type A), width within narrower flange (G2): 1.037"
+ ],
+ "current": {
+  "w": 436031.9444444444,
+  "pass": false,
+  "passX": false,
+  "failKeys": [
+   "studs SC1",
+   "cross-frames CF3",
+   "flexure GS7",
+   "fatigue FA1",
+   "splices MT1"
+  ],
+  "ratio": 1.1712385930904718,
+  "gov": "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 296.52 ft, bottom flange, G1 (G1)",
+  "fails": [
+   "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.3L to 0.4L (G2): 1.016",
+   "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.8L to 0.9L (G2): 1.005",
+   "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.1L to 0.2L (G2): 1.005",
+   "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.6L to 0.7L (G2): 1.016"
+  ],
+  "prop": "",
+  "D": 60
+ },
+ "legacy": {
+  "what": "Preliminary sizing Full design",
+  "w": 401136.4583333334,
+  "pass": false,
+  "passX": false,
+  "failKeys": [
+   "stiffeners BS6",
+   "studs SC1",
+   "cross-frames CF3",
+   "flexure GS7",
+   "fatigue FA1"
+  ],
+  "ratio": 1.1851851851851851,
+  "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+  "fails": [
+   "stiffeners BS6 Stiffener width and flange connection — Abut. 1, G1 (Type A), width within narrower flange (G2): 1.037",
+   "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.185",
+   "stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.185",
+   "stiffeners BS6 Stiffener width and flange connection — Abut. 2, G1 (Type A), width within narrower flange (G2): 1.037"
+  ],
+  "prop": "",
+  "D": 69,
+  "splices": [
+   79,
+   141,
+   219,
+   281
+  ],
+  "legacyCost": 1578179.8437500002,
+  "spacing": 25,
+  "spPier": null,
+  "webType": "stiffened",
+  "passedLegacy": true
+ },
+ "ad": {
+  "pass": false,
+  "blocked": true,
+  "blockers": [
+   "studs SC1",
+   "cross-frames CF3"
+  ],
+  "w": 427046.484375,
+  "D": 65,
+  "nb": 5,
+  "ratio": 1.0731082216992638,
+  "gov": "cross-frames CF3 Slenderness limits (ℓ/r ≤ 120 compression, ≤ 140 tension) — Diagonals (L5x5x3/8)",
+  "minLines": null,
+  "nTr": 4,
+  "segments": [
+   {
+    "x0": 0,
+    "x1": 42,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 0.75,
+    "botB": 17,
+    "botT": 0.75
+   },
+   {
+    "x0": 42,
+    "x1": 69,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 0.75,
+    "botB": 17,
+    "botT": 1.375
+   },
+   {
+    "x0": 69,
+    "x1": 82,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 1,
+    "botB": 17,
+    "botT": 1.375
+   },
+   {
+    "x0": 82,
+    "x1": 145,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 1.125,
+    "botB": 19,
+    "botT": 1.375
+   },
+   {
+    "x0": 145,
+    "x1": 202,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 0.75,
+    "botB": 17,
+    "botT": 1.375
+   },
+   {
+    "x0": 202,
+    "x1": 215,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 1,
+    "botB": 17,
+    "botT": 1.375
+   },
+   {
+    "x0": 215,
+    "x1": 278,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 1.125,
+    "botB": 19,
+    "botT": 1.5
+   },
+   {
+    "x0": 278,
+    "x1": 303,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 0.75,
+    "botB": 16,
+    "botT": 1.375
+   },
+   {
+    "x0": 303,
+    "x1": 360,
+    "D": 65,
+    "tw": 0.5,
+    "topB": 17,
+    "topT": 0.75,
+    "botB": 16,
+    "botT": 0.875
+   }
+  ]
+ },
+ "screened": [
+  {
+   "nb": 5,
+   "D": 47,
+   "minLines": null,
+   "pass": true,
+   "w": 497169.2274305555,
+   "cost": 1739007.6822916665,
+   "ratio": 0.9813946128093322
+  },
+  {
+   "nb": 5,
+   "D": 57,
+   "minLines": null,
+   "pass": true,
+   "w": 461865.4079861111,
+   "cost": 1606846.2239583335,
+   "ratio": 0.9990545904984904
+  },
+  {
+   "nb": 5,
+   "D": 67,
+   "minLines": null,
+   "pass": true,
+   "w": 458164.88715277775,
+   "cost": 1561244.6614583333,
+   "ratio": 0.9574211014796186
+  },
+  {
+   "nb": 5,
+   "D": 77,
+   "minLines": null,
+   "pass": true,
+   "w": 461595.31249999994,
+   "cost": 1545285.9374999998,
+   "ratio": 0.9477315010480457
+  },
+  {
+   "nb": 5,
+   "D": 87,
+   "minLines": null,
+   "pass": true,
+   "w": 499512.89062499994,
+   "cost": 1661288.6718749998,
+   "ratio": 0.9315274564604794
+  },
+  {
+   "nb": 5,
+   "D": 67,
+   "minLines": null,
+   "pass": true,
+   "w": 432516.4496527778,
+   "cost": 1484299.3489583335,
+   "ratio": 0.9905824367577778
+  },
+  {
+   "nb": 5,
+   "D": 62,
+   "minLines": null,
+   "pass": true,
+   "w": 430927.77777777775,
+   "cost": 1497533.3333333333,
+   "ratio": 0.9893763262660197
+  },
+  {
+   "nb": 5,
+   "D": 65,
+   "minLines": null,
+   "pass": true,
+   "w": 427046.484375,
+   "cost": 1470889.453125,
+   "ratio": 0.9992106188082281
+  },
+  {
+   "nb": 5,
+   "D": 70,
+   "minLines": null,
+   "pass": true,
+   "w": 427201.7361111112,
+   "cost": 1474355.2083333335,
+   "ratio": 0.9923677510861957
+  },
+  {
+   "nb": 5,
+   "D": 72,
+   "minLines": null,
+   "pass": true,
+   "w": 438054.4704861111,
+   "cost": 1499413.4114583335,
+   "ratio": 0.9691901217476849
+  },
+  {
+   "nb": 5,
+   "D": 77,
+   "minLines": null,
+   "pass": true,
+   "w": 450251.30208333326,
+   "cost": 1511253.9062499998,
+   "ratio": 0.9907645145838105
+  },
+  {
+   "nb": 5,
+   "D": 75,
+   "minLines": null,
+   "pass": true,
+   "w": 428737.23958333326,
+   "cost": 1446711.7187499998,
+   "ratio": 0.9781452338307273
+  },
+  {
+   "nb": 5,
+   "D": 80,
+   "minLines": null,
+   "pass": true,
+   "w": 451654.9479166666,
+   "cost": 1519214.84375,
+   "ratio": 0.9705555926963475
+  },
+  {
+   "nb": 5,
+   "D": 82,
+   "minLines": null,
+   "pass": true,
+   "w": 454832.2916666666,
+   "cost": 1528746.875,
+   "ratio": 0.9865922749248973
+  },
+  {
+   "nb": 5,
+   "D": 65,
+   "minLines": 1,
+   "pass": true,
+   "w": 427046.484375,
+   "cost": 1470889.453125,
+   "ratio": 0.9992106188082281
+  },
+  {
+   "nb": 5,
+   "D": 70,
+   "minLines": 1,
+   "pass": true,
+   "w": 427201.7361111112,
+   "cost": 1474355.2083333335,
+   "ratio": 0.9923677510861957
+  }
+ ],
+ "legacyW": 401136.4583333334,
+ "legacyWhat": "Preliminary sizing Full design",
+ "seconds": 586
+}
