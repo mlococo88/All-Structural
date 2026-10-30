@@ -13,6 +13,8 @@
 <script src="../../shared/units.js"></script>
 <script src="../../shared/steps.js"></script>
 <script src="engine/model.js"></script>
+<script src="engine/legacy.js"></script>
+<script src="ui/legacy.js"></script>
 <script src="engine/sections.js"></script>
 <script src="engine/flexure.js"></script>
 <script src="ui/flexure.js"></script>
@@ -145,7 +147,8 @@
       </div>
       <div id="hdrBtns">
         <button type="button" id="bNew">New</button>
-        <button type="button" id="bImport">Import JSON…</button>
+        <button type="button" id="bImport" title="A project of this app, or of the old Steel Bridge Design (GirderDetail, Preliminary sizing, ST-Girder)">Import JSON…</button>
+        <button type="button" id="bOld" title="Import the project the old Steel Bridge Design autosaved in this browser (read only: the old app's saved data is not changed)">From old app</button>
         <button type="button" id="bExport">Export JSON</button>
         <input type="file" id="fImport" accept=".json,application/json" hidden>
       </div>
@@ -330,8 +333,13 @@
   $('bImport').addEventListener('click', () => $('fImport').click());
   $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
     rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
-      if (!r.ok) { alert(r.error); return; } P = r.project; ui.g = 0; ui.seg = 0; autosave = true; changed(true); };
+      if (!r.ok) { alert(r.error); return; } P = r.project; ui.g = 0; ui.seg = 0; autosave = true; changed(true);
+      if (r.summary) window.SBDLegacyUI.show(r.summary); };   // an old project (engine/legacy.js): its import summary
     rd.readAsText(f); });
+  // the old app's autosaves (girderdetail_autosave_v1, plateline_autosave_v1, stgirder.session): read only, never written or deleted
+  $('bOld').addEventListener('click', () => { const r = window.SBDLegacy.fromStorage(store || memStore); if (!r.ok) { alert(r.error); return; }
+    if (!confirm('Import the project the old Steel Bridge Design autosaved in this browser? It replaces the current project here (export it first to keep it). The old app\'s data is not changed.')) return;
+    P = r.project; ui.g = 0; ui.seg = 0; autosave = true; changed(true); window.SBDLegacyUI.show(r.summary); });
 
   $('projName').textContent = P.project.name || '';
   drawInputs(); calc();
