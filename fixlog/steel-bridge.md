@@ -488,7 +488,7 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
 ### Open items
 - SB2-O19 closed (the four GirderDetail / lldf.html differences of the sbd2-loads-lldf entry; engineer's decision 2026-10-29).
 - SB2-O23. Negative skews: GirderDetail (and this app) read a negative support skew as no skew (no moment reduction, no shear
-  correction); lldf.html uses |θ| (its LLDF-OH2). Kept as GirderDetail; engineer to decide (the model accepts −90° … 90°).
+  correction); lldf.html uses |θ| (its LLDF-OH2). Kept as GirderDetail; engineer to decide (the model accepts −90° … 90°). Closed 2026-10-29 (sb2-o23-skew-abs: |θ| in both, DFL6).
 - SB2-O24. Pier rule (decided 2026-10-29: a pier region loses the reduction if either adjacent span differs by more than 10°): in this app
   now; GirderDetail gets it in the follow-up PR on "Steel Bridge Design.html", which removes `PIER_RULE_PENDING` from loads.test.mjs.
   Done in claude/sbd-df-pier (DFL5, fixlog/Steel Bridge Design.md): `PIER_RULE_PENDING` removed, the DF parity is exact (33,032 values).
@@ -877,6 +877,31 @@ Tests: `node tests/engine/run.mjs sections model`. The old `Steel Bridge Design.
   1e-3 × h of a mesh node into that node.
 - SB2-X2. Not ported: Preliminary sizing's framing checks (`framingChecks`: X1–X4 and the owner skew warnings), Suggest's cross-frame
   auto-design, the cross-frame/diaphragm drawings and DXF. The layout records the splice conflicts it could not clear (Cross-frames tab).
+
+## 2026-10-29 — PR: sb2-o23-skew-abs — negative support skews enter the LLDF as |θ| (SB2-O23 closed; engineer's decision 2026-10-29)
+### Where
+- `engine/lldf.js` `momentSkew(rg, skews)`: before `thMin = Math.min(skA, skB), thMax = Math.max(skA, skB)` … `thM: noRed ? 0 : Math.max(0, thMin),
+  thV: Math.max(0, thMax)`; after `thMin = Math.min(Math.abs(skA), Math.abs(skB)), thMax = Math.max(Math.abs(skA), Math.abs(skB))` …
+  `thM: noRed ? 0 : thMin, thV: thMax`. `compute`: the region `pp.skewM` / `skewV` (not used by the factors) = `ms.thMin` / `ms.thV`.
+  Header and `momentSkew` comments updated. The 10° rule (`SharedLLDF.momentSkewNoReduction` / `…Pier`, `dTh`) still compares the signed
+  skews. `shared/lldf.js` unchanged (its `skewFactors` already reads |θ|); lldf.html bit-identical (tests/engine/lldf-hash.mjs: 1,592 cases, 0 differ).
+- GirderDetail: the same change (DFL6, fixlog/Steel Bridge Design.md), so the parity stays exact.
+### Decision and reasoning (engineer, 2026-10-29)
+- Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1 (AASHTO LRFD 10th Ed.) use the skew angle θ; the sign is only the direction, so θ = |θ|. Reading a
+  negative skew as 0 dropped the shear correction (unconservative). The 4.6.2.2.2e "differ by more than 10°" test is the angle between the
+  two support lines, so it keeps the signed difference (−35° / +35°: 70°).
+### Check case
+- Built-in bridge, support skews −30° at every line, span 1, G2 (S 9.5 ft, L 110 ft, t_s 8 in, K_g 869,918.955 in⁴): r_V 1.0 → 1.107048,
+  g_V 0.9180 → 1.0163; c₁ 0 → 0.078255, r_M 1.0 → 0.965670, g_M 0.7034 → 0.6792 (arithmetic in `tests/engine/loads.test.mjs`, test
+  "hand check SB2-O23").
+### How verified
+- `tests/engine/loads.test.mjs`: three new variations (−30° everywhere; −40/−45/−38/−65°; −35/35/35/−35° for the signed 10° rule):
+  20 recorded inputs + 31 variations, 35,105 values, 0 differ from GirderDetail (patched) in the same Node run.
+- `node tests/engine/run.mjs`: all pass. One headless load of apps/steel-bridge/index.html: 0 console errors.
+### Saved data
+- None (skews stored signed as before).
+### Open items
+- SB2-O23 closed.
 
 
 ## 2026-10-29 — PR: sbd2-splices — bolted field splices, AASHTO LRFD 10th Ed. 6.13.6.1 (engine/splices.js, Splices and Field splices tabs)

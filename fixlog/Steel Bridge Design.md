@@ -22509,3 +22509,43 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
   (#477, same rule). `lldf.html` takes the moment θ as entered (fixlog/lldf.md LLDF-SH1).
 - **Saved data:** none changed.
 - **Open items:** none new.
+
+## 2026-10-29 — PR: claude/sbd-df-negskew (DFL6: a negative support skew enters the LLDF as |θ|; SB2-O23, engineer decision 2026-10-29; PR link added after merge)
+### DFL6. Negative support skews in the skew factors (4.6.2.2.2e, 4.6.2.2.3c)   [CALCULATION CHANGE — bridges with a negative support skew; shear more conservative, moment reduced as the code allows]
+- **Problem:** the LLDF and DLs module read a negative support skew as no skew: `dfSkew` takes θ = min(θ_A, θ_B) for moment and
+  max(θ_A, θ_B) for shear with the signs as entered, so −30° gave tan θ < 0, no moment reduction (θ < 30°) and no shear correction
+  (θ ≤ 0). The skew sign only gives the direction of the skew (Bridge tab accepts −90° … 90°; the framing uses it for the bearing
+  offsets). lldf.html uses |θ| (LLDF-OH2), and so does Preliminary sizing (`skewSpan`, Math.abs). Dropping the shear correction is
+  unconservative.
+- **Engineer's decision (2026-10-29), reasoning:** AASHTO Tables 4.6.2.2.2e-1 and 4.6.2.2.3c-1 use the skew angle θ, the angle between
+  the support line and the normal to the girders; its sign is a drawing convention, so θ = |θ|. The 10° rule of 4.6.2.2.2e ("the
+  skews of two adjacent lines of supports differ by more than 10°") keeps the **signed** difference |θ_A − θ_B|: that is the angle
+  between the two support lines (−35° / +35° are 70° apart, not 0°), so `dfSkAdj` is unchanged.
+- **Governing provisions:** AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1 (moment reduction); Art. 4.6.2.2.3c,
+  Table 4.6.2.2.3c-1 (shear correction).
+- **Where:** `GM.df.compute`, region `pp` (anchor `const pp = { ...base, L: rg.L, skewM:`).
+  - Before: `skewM: Math.min(rg.skA, rg.skB), skewV: Math.max(rg.skA, rg.skB)`
+  - After: `skewM: Math.min(Math.abs(rg.skA), Math.abs(rg.skB)), skewV: Math.max(Math.abs(rg.skA), Math.abs(rg.skB))`
+  - `dfSkew`, `dfSkAdj`, the displays (they print thM / thV / thMin, now |θ|) unchanged. Preliminary sizing already used |θ| (no change).
+- **Before / after:** θ_M = min(θ_A, θ_B) → min(|θ_A|, |θ_B|); θ_V = max(θ_A, θ_B) → max(|θ_A|, |θ_B|). Non-negative skews: identical.
+- **Check case (built-in bridge, AASHTO, support skews −30° at every line; span 1, G2 interior):** S = 9.5 ft, L = 110 ft, t_s = 8 in,
+  K_g = 869,918.955 in⁴; 12 L t_s³/K_g = 675,840/869,918.955 = 0.776900.
+  - Shear: before θ_V = −30° → r_V = 1.0, g_V = max(0.74, 0.917993) = **0.9180**. After θ_V = 30°: r_V = 1 + 0.20(0.776900)^0.3 tan 30°
+    = 1 + 0.20 × 0.927064 × 0.577350 = **1.107048**; g_V,1 = 0.74 × 1.107048 = 0.819216, g_V,2 = 0.917993 × 1.107048 = 1.016263,
+    g_V = **1.0163** (+10.7 %).
+  - Moment: before r_M = 1.0, g_M = **0.7034** (0.703391). After: c₁ = 0.25(1.287167)^0.25 (9.5/110)^0.5 = 0.25 × 1.065145 × 0.293877
+    = 0.078255; r_M = 1 − 0.078255 (tan 30°)^1.5 = 1 − 0.078255 × 0.438691 = **0.965670**; g_M = 0.703391 × 0.965670 = **0.6792**.
+  - Fatigue (G2): g_fat,M 0.4010 → 0.3872; g_fat,V 0.6167 → 0.6827.
+- **How verified (Node, gd-source.mjs pattern, patched file vs origin/main a0a3dad; no browser compare per the speed rules):**
+  - GirderDetail's `GM.df.compute` on the 20 recorded inputs (tests/projects/sbd2-loads) and 31 variations, 15,177 values (K_g, r_M, r_V,
+    c₁, θ, every one-/multi-lane factor, g_M, g_V, fatigue factors, method, dead loads): 404 differ, all in the two negative-skew variations
+    (−30° everywhere; −40/−45/−38/−65°); the 20 recorded inputs, the other variations and the signed 10°-rule variation (−35/35/35/−35°)
+    are identical. The 100 gd_*.json payloads have no negative skew (no change).
+  - `tests/engine/loads.test.mjs`: the rebuild engine = GirderDetail exactly (35,105 values, 0 differ) including the three new variations;
+    new hand check (the numbers above).
+  - One page load (flock): 0 console errors.
+- **Other copies:** the rebuild adapter `apps/steel-bridge/engine/lldf.js` `momentSkew` (same PR, fixlog/steel-bridge.md); `shared/lldf.js`
+  `skewFactors` already took |θ| (unchanged; lldf.html bit-identical, tests/engine/lldf-hash.mjs). ST-Girder (`st-src`) clamps its own
+  skew input to 0 … 60° and gets the largest |θ| from GirderDetail's hand-off (unchanged).
+- **Saved data:** none changed (skews are stored as entered, signed).
+- **Open items:** none new.
