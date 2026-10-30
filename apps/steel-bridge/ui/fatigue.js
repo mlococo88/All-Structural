@@ -11,15 +11,21 @@
      - a hand-off file (schema stgirder-external-demands, GirderDetail → ST-Girder): GS17 at every station GirderDetail checks; the fatigue
        details of this girder (engine/fatigue.js detailsFromPayload); the studs per zone and region as GirderDetail sends them (fromPayload),
        with this project's stud inputs, splices and pitch zones where entered (V_f of a zone entered here: the largest V_FAT,pos − V_FAT,neg
-       of the file's stations in the zone).
-   The demand choice is not saved.
+       of the file's stations in the zone); or
+     - "This project's analysis" (fromAnalysis, below).
+   The default (2026-10-30, report wiring PR): this project's analysis when the project is complete (SBDAnalysis.ready), else the
+   example; the line at the top of the tab names the source in use. The demand choice is not saved.
 
    inputs(P, h, ui) / onClick(e, P, ui) for the input tab; render(host, ctx) for the output tab, ctx = { P, g }; build(ctx) (tests). */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: 'analysis', pl: null, plName: '', R: null, key: '', err: '', sel: null };
+  const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: null };
+  /* the demand source (added 2026-10-30, report wiring PR): the one chosen (S.src), else the default: this project's analysis when the
+     project is complete (SBDAnalysis.ready), else the example */
+  const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
+  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
   const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : fmt(v, 3);   // SB2-R2
   const CATS = ['A', 'B', "B'", 'C', "C'", 'D', 'E', "E'"], ct = c => String(c).replace(/'/g, '′');
@@ -100,7 +106,7 @@
   /* ---------- calculation ---------- */
   function build(ctx) {
     const P = ensure(ctx.P), M = window.SBDModel, OW = window.SBDOwners, FA = window.SBDFatigue, SC = window.SBDStuds, FX = window.SBDFlexure, SB = window.SBDStiffeners, g = ctx.g || 0;
-    const src = ctx.src || S.src;   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
+    const src = ctx.src || srcOf(ctx);   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null;
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
@@ -149,7 +155,7 @@
         : pl ? `${esc(S.plName)}: ${(pl.stations || []).length} stations, ${sup.length - 1} span(s), ${esc((pg || {}).label || '')}; fatigue moments and shears, plates and deck from the file; the stud zones and regions GirderDetail sends${(Q.zones || []).length ? ' (pitch zones from this project)' : ''}; this project's fatigue settings and studs.`
         : 'Example: GirderDetail\'s built-in Fatigue details and Shear connectors zones and regions, with this project\'s fatigue settings, studs, deck and materials. GS17 at every station needs a hand-off file.' };
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx), S.plName]);
 
   /* ---------- output tab ---------- */
   function css() {
@@ -162,9 +168,11 @@
   function render(host, ctx) {
     css();
     const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
-    let h = `<section class="sec"><div class="secHead">Fatigue &amp; studs: demands</div><div class="secBody">
-      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', S.src)}${opt('example', 'Example (GirderDetail built-in details and zones)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
-      ${S.src === 'file' ? `<div class="fRow"><label for="fa_file">File</label><input type="file" id="fa_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+    const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {}, src = srcOf(ctx);
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in details and zones' }) : '')
+      + `<section class="sec"><div class="secHead">Fatigue &amp; studs: demands</div><div class="secBody">
+      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in details and zones)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      ${src === 'file' ? `<div class="fRow"><label for="fa_file">File</label><input type="file" id="fa_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">Fatigue moments and shears are the unfactored fatigue truck with IM and the single-lane distribution factor (3.6.1.4); γ is applied here (Fatigue I or II, Table 3.4.1-1). Inputs: the Fatigue &amp; studs input tab.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Fatigue results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fa_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
