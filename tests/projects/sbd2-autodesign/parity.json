@@ -1,0 +1,324 @@
+{
+ "written": "2026-10-30T14:24:32.242Z",
+ "pending": [
+  "builtin_MassDOT",
+  "builtin_CTDOT",
+  "builtin28_MassDOT",
+  "builtin28_CTDOT",
+  "curb_AASHTO",
+  "curb_RIDOT",
+  "curb_MassDOT",
+  "curb_CTDOT",
+  "util_MassDOT",
+  "util_CTDOT",
+  "xsA_AASHTO",
+  "xsA_RIDOT",
+  "xsA_MassDOT",
+  "xsA_CTDOT",
+  "builtin_app"
+ ],
+ "rows": [
+  {
+   "name": "builtin_AASHTO",
+   "legacyW": 406113.02083333343,
+   "legacyWhat": "Preliminary sizing Full design",
+   "legacy": {
+    "w": 406113.02083333343,
+    "pass": false,
+    "passX": false,
+    "D": 66,
+    "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+    "fails": [
+     "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.103",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.103",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 1, G2 (Type B), width within narrower flange (G1): 1.103",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 2, G2 (Type B), width within narrower flange (G1): 1.103"
+    ]
+   },
+   "st": {
+    "w": 432169.7916666666,
+    "pass": false,
+    "passX": true,
+    "what": "ST-Girder Optimize (Δt_fb = -0.125 in, span 1)",
+    "fails": [
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.190",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.140",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 2, connection plate at cross-frame 156.67 ft, bottom flange, G1 (G1): 1.003",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.132"
+    ]
+   },
+   "current": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "fails": [
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.129",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.078",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.129",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, transverse stiffener weld toe on the web, G1 (G1): 1.078"
+    ]
+   },
+   "ad": {
+    "pass": true,
+    "blocked": false,
+    "blockers": [],
+    "w": 406234.24479166674,
+    "D": 70,
+    "nb": 5,
+    "ratio": 1,
+    "gov": "stiffeners TS7 Minimum fillet weld sizes — G1, stiffener at 5.50 ft (Type A), to web",
+    "minLines": null
+   },
+   "why": [
+    "Preliminary sizing Full design fails this app's full check: stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.103; stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.103; stiffeners BS6 Stiffener width and flange connection — Pier 1, G2 (Type B), width within narrower flange (G1): 1.103; stiffeners BS6 Stiffener width and flange connection — Pier 2, G2 (Type B), width within narrower flange (G1): 1.103",
+    "ST-Girder Optimize (Δt_fb = -0.125 in, span 1) fails this app's full check: fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.190; fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.140; fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 2, connection plate at cross-frame 156.67 ft, bottom flange, G1 (G1): 1.003; fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.132",
+    "heavier by 0.0 %: the legacy design places its own field splices (79, 141, 219, 281 ft) and its own cross-frame spacing, stiffened web; Auto design keeps the project's splices and framing (spec: splice locations from framing.splices)"
+   ]
+  },
+  {
+   "name": "builtin_RIDOT",
+   "legacyW": 406113.02083333343,
+   "legacyWhat": "Preliminary sizing Full design",
+   "legacy": {
+    "w": 406113.02083333343,
+    "pass": false,
+    "passX": false,
+    "D": 66,
+    "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+    "fails": [
+     "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.103",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.103",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 1, G2 (Type B), width within narrower flange (G1): 1.103",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 2, G2 (Type B), width within narrower flange (G1): 1.103"
+    ]
+   },
+   "current": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "fails": [
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.163",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.111",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.163",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, transverse stiffener weld toe on the web, G1 (G1): 1.111"
+    ]
+   },
+   "ad": {
+    "pass": true,
+    "blocked": false,
+    "blockers": [],
+    "w": 421153.2986111111,
+    "D": 62,
+    "nb": 5,
+    "ratio": 1,
+    "gov": "stiffeners TS7 Minimum fillet weld sizes — G1, stiffener at 4.40 ft (Type A), to web",
+    "minLines": null
+   },
+   "why": [
+    "Preliminary sizing Full design fails this app's full check: stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.103; stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.103; stiffeners BS6 Stiffener width and flange connection — Pier 1, G2 (Type B), width within narrower flange (G1): 1.103; stiffeners BS6 Stiffener width and flange connection — Pier 2, G2 (Type B), width within narrower flange (G1): 1.103",
+    "heavier by 3.7 %: the legacy design places its own field splices (79, 141, 219, 281 ft) and its own cross-frame spacing, stiffened web; Auto design keeps the project's splices and framing (spec: splice locations from framing.splices)"
+   ]
+  },
+  {
+   "name": "builtin28_AASHTO",
+   "legacyW": 436031.9444444444,
+   "legacyWhat": "ST-Girder Optimize (Δt_fb = +0.000 in, span 1)",
+   "legacy": {
+    "w": 401136.4583333334,
+    "pass": false,
+    "passX": false,
+    "D": 69,
+    "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+    "fails": [
+     "stiffeners BS6 Stiffener width and flange connection — Abut. 1, G1 (Type A), width within narrower flange (G2): 1.037",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.185",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.185",
+     "stiffeners BS6 Stiffener width and flange connection — Abut. 2, G1 (Type A), width within narrower flange (G2): 1.037"
+    ]
+   },
+   "st": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "passX": true,
+    "what": "ST-Girder Optimize (Δt_fb = +0.000 in, span 1)",
+    "fails": [
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.2L to 0.3L (G2): 1.007",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.3L to 0.4L (G2): 1.040",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.4L to 0.5L (G2): 1.024",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.5L to 0.6L (G2): 1.024"
+    ]
+   },
+   "current": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "fails": [
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.2L to 0.3L (G2): 1.007",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.3L to 0.4L (G2): 1.040",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.4L to 0.5L (G2): 1.024",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.5L to 0.6L (G2): 1.024"
+    ]
+   },
+   "ad": {
+    "pass": false,
+    "blocked": true,
+    "blockers": [
+     "studs SC1",
+     "cross-frames CF3"
+    ],
+    "w": 406412.890625,
+    "D": 72,
+    "nb": 5,
+    "ratio": 1.1092927628487228,
+    "gov": "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.6L to 0.7L",
+    "minLines": null
+   },
+   "why": [
+    "no design passes every module: detail checks that the current design fails too, whatever the plates, block every design (studs SC1, cross-frames CF3); the weight compared is that of the best blocked design, which passes every check the plates control",
+    "Preliminary sizing Full design fails this app's full check: stiffeners BS6 Stiffener width and flange connection — Abut. 1, G1 (Type A), width within narrower flange (G2): 1.037; stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.185; stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.185; stiffeners BS6 Stiffener width and flange connection — Abut. 2, G1 (Type A), width within narrower flange (G2): 1.037"
+   ]
+  },
+  {
+   "name": "builtin28_RIDOT",
+   "legacyW": 401136.4583333334,
+   "legacyWhat": "Preliminary sizing Full design",
+   "legacy": {
+    "w": 401136.4583333334,
+    "pass": false,
+    "passX": false,
+    "D": 69,
+    "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+    "fails": [
+     "stiffeners BS6 Stiffener width and flange connection — Abut. 1, G1 (Type A), width within narrower flange (G2): 1.037",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.185",
+     "stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.185",
+     "stiffeners BS6 Stiffener width and flange connection — Abut. 2, G1 (Type A), width within narrower flange (G2): 1.037"
+    ]
+   },
+   "current": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "fails": [
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.3L to 0.4L (G2): 1.016",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 1, 0.8L to 0.9L (G2): 1.005",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.1L to 0.2L (G2): 1.005",
+     "studs SC1 Fatigue pitch, p ≤ nZ_r/V_sr — Span 3, 0.6L to 0.7L (G2): 1.016"
+    ]
+   },
+   "ad": {
+    "pass": false,
+    "blocked": true,
+    "blockers": [
+     "studs SC1",
+     "cross-frames CF3"
+    ],
+    "w": 427046.484375,
+    "D": 65,
+    "nb": 5,
+    "ratio": 1.0731082216992638,
+    "gov": "cross-frames CF3 Slenderness limits (ℓ/r ≤ 120 compression, ≤ 140 tension) — Diagonals (L5x5x3/8)",
+    "minLines": null
+   },
+   "why": [
+    "no design passes every module: detail checks that the current design fails too, whatever the plates, block every design (studs SC1, cross-frames CF3); the weight compared is that of the best blocked design, which passes every check the plates control",
+    "Preliminary sizing Full design fails this app's full check: stiffeners BS6 Stiffener width and flange connection — Abut. 1, G1 (Type A), width within narrower flange (G2): 1.037; stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2): 1.185; stiffeners BS6 Stiffener width and flange connection — Pier 2, G1 (Type B), width within narrower flange (G2): 1.185; stiffeners BS6 Stiffener width and flange connection — Abut. 2, G1 (Type A), width within narrower flange (G2): 1.037"
+   ]
+  },
+  {
+   "name": "util_AASHTO",
+   "legacyW": 397206.25,
+   "legacyWhat": "Preliminary sizing Full design",
+   "legacy": {
+    "w": 397206.25,
+    "pass": false,
+    "passX": false,
+    "D": 69,
+    "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+    "fails": [
+     "flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.00 ft (G2): 1.023",
+     "flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.00 ft (G2): 1.001",
+     "flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.99 ft (G2): 1.101",
+     "flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.99 ft (G2): 1.042"
+    ]
+   },
+   "st": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "passX": true,
+    "what": "ST-Girder Optimize (Δt_fb = +0.000 in, span 1)",
+    "fails": [
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.126",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.075",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.126",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, transverse stiffener weld toe on the web, G1 (G1): 1.075"
+    ]
+   },
+   "current": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "fails": [
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.126",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.075",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.126",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, transverse stiffener weld toe on the web, G1 (G1): 1.075"
+    ]
+   },
+   "ad": {
+    "pass": true,
+    "blocked": false,
+    "blockers": [],
+    "w": 417448.5243055555,
+    "D": 70,
+    "nb": 5,
+    "ratio": 1,
+    "gov": "stiffeners TS7 Minimum fillet weld sizes — G1, stiffener at 5.22 ft (Type A), to web",
+    "minLines": null
+   },
+   "why": [
+    "Preliminary sizing Full design fails this app's full check: flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.00 ft (G2): 1.023; flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.00 ft (G2): 1.001; flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.99 ft (G2): 1.101; flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.99 ft (G2): 1.042",
+    "ST-Girder Optimize (Δt_fb = +0.000 in, span 1) fails this app's full check: fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.126; fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.075; fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, connection plate at cross-frame 294.00 ft, bottom flange, G1 (G1): 1.126; fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 3, transverse stiffener weld toe on the web, G1 (G1): 1.075",
+    "heavier by 5.1 %: the legacy design places its own field splices (79, 141, 219, 281 ft) and its own cross-frame spacing, stiffened web; Auto design keeps the project's splices and framing (spec: splice locations from framing.splices)"
+   ]
+  },
+  {
+   "name": "util_RIDOT",
+   "legacyW": 397206.25,
+   "legacyWhat": "Preliminary sizing Full design",
+   "legacy": {
+    "w": 397206.25,
+    "pass": false,
+    "passX": false,
+    "D": 69,
+    "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+    "fails": [
+     "flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.99 ft (G2): 1.069",
+     "flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.99 ft (G2): 1.020",
+     "flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 110.01 ft (G2): 1.069",
+     "flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 110.01 ft (G2): 1.020"
+    ]
+   },
+   "current": {
+    "w": 436031.9444444444,
+    "pass": false,
+    "fails": [
+     "splices MT1 Moment resistance of the flange splices — StrN, negative (G2): 1.068",
+     "splices MT1 Moment resistance of the flange splices — StrN, negative (G2): 1.068",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 66.00 ft, bottom flange, G1 (G1): 1.160",
+     "fatigue FA1 Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, transverse stiffener weld toe on the web, G1 (G1): 1.108"
+    ]
+   },
+   "ad": {
+    "pass": true,
+    "blocked": false,
+    "blockers": [],
+    "w": 424547.56944444444,
+    "D": 65,
+    "nb": 5,
+    "ratio": 1,
+    "gov": "stiffeners TS7 Minimum fillet weld sizes — G1, stiffener at 4.40 ft (Type A), to web",
+    "minLines": null
+   },
+   "why": [
+    "Preliminary sizing Full design fails this app's full check: flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.99 ft (G2): 1.069; flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.99 ft (G2): 1.020; flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 110.01 ft (G2): 1.069; flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 110.01 ft (G2): 1.020",
+    "heavier by 6.9 %: the legacy design places its own field splices (79, 141, 219, 281 ft) and its own cross-frame spacing, stiffened web; Auto design keeps the project's splices and framing (spec: splice locations from framing.splices)"
+   ]
+  }
+ ]
+}
