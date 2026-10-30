@@ -168,6 +168,16 @@
   const segsOf = sb => sb.map(q => ({ len: q[1] - q[0], I: q[2], bad: false }));
   const spanOfX = (sup, x) => { for (let k = 0; k < sup.length - 1; k++) if (x <= sup[k + 1] + 1e-9) return k; return sup.length - 2; };
 
+  // deck placement sequence (saSeq): the pours from the sign of M_DC1, positive regions first (left to right), then negative.
+  // A region runs from the first node of one sign to the first node of the next. Sign with a round-off tolerance (sb2-pour-sign):
+  // |M| ≤ 1e-6 max |M_DC1| counts as zero, and zero counts as positive (as an exact 0 always did), so a round-off value at an
+  // abutment (−1.6e-11 kip-ft) makes no sliver pour; a real contraflexure point splits exactly as before.
+  function pourRegions(xs, MD) {
+    const N = xs.length, tol = 1e-6 * Array.from(MD).reduce((a, v) => Math.max(a, Math.abs(v)), 0), sg = v => v < -tol ? -1 : 1, reg = []; let s = 0;
+    for (let i = 1; i < N; i++) if (sg(MD[i]) !== sg(MD[i - 1]) || i === N - 1) { reg.push({ a: xs[s], b: xs[i], pos: sg(MD[Math.floor((s + i) / 2)]) > 0 }); s = i; }
+    return [...reg.filter(r => r.pos), ...reg.filter(r => !r.pos)].map(r => ({ a: r.a, b: r.b }));
+  }
+
   /* analyzeGirder(project, gi, opt): the analysis of girder gi. opt.stations overrides the station grid (tests);
      opt.ll = false skips the live loads (dead loads, camber and the pour sequence only); opt.steelPlf (tests only): the steel
      weight in lb/ft per in² (GirderDetail's 3.4 for the parity tests; default STEEL_PLF = 490/144). Returns the result described at
@@ -312,8 +322,7 @@
       const MD = st.DC1.M; let pours = [];
       const cust = String(S.seqCustom || '').split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split('-').map(Number)).filter(q => q.length === 2 && q.every(isFinite) && q[1] > q[0]);
       if (cust.length) pours = cust.map(([a, b]) => ({ a: Math.max(0, a), b: Math.min(Lt, b) }));
-      else { const reg = []; let s = 0; for (let i = 1; i < N; i++) if (Math.sign(MD[i] || 1e-9) !== Math.sign(MD[i - 1] || 1e-9) || i === N - 1) { reg.push({ a: xs[s], b: xs[i], pos: MD[Math.floor((s + i) / 2)] >= 0 }); s = i; }
-        pours = [...reg.filter(r => r.pos), ...reg.filter(r => !r.pos)].map(r => ({ a: r.a, b: r.b })); }
+      else pours = pourRegions(xs, MD);
       const k3 = S.seqMod === '3n', nrS = k3 ? 3 * n : n, key = k3 ? 'I3u' : 'Inu';
       const inP = (x, q) => x >= q.a - 1e-6 && x <= q.b + 1e-6;
       const segAt = x => segs.find(s => x >= s.x0 - 1e-9 && x <= s.x1 + 1e-9 && (x < s.x1 - 1e-9 || s === segs[segs.length - 1])) || segs[segs.length - 1];
@@ -439,5 +448,5 @@
       R: (R.llR || []).map((r, k) => ({ max: r.max + (Q ? Q.R[k].max : 0), min: r.min + (Q ? Q.R[k].min : 0) })), pl: Q };
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder, ready, llPL };
+  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
 })();
