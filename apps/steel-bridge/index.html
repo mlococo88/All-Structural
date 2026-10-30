@@ -233,7 +233,7 @@
     };
   }
   function drawInputs() {
-    UL.ensure(P); window.SBDShearUI.ensure(P); window.SBDFatigueUI.ensure(P); window.SBDFramingUI.ensure(P); window.SBDSplicesUI.ensure(P);
+    UL.ensure(P); window.SBDShearUI.ensure(P); window.SBDFatigueUI.ensure(P); window.SBDFramingUI.ensure(P); window.SBDSplicesUI.ensure(P); window.SBDRatingUI.ensure(P);
     $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');

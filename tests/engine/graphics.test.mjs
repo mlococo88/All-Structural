@@ -2,7 +2,7 @@
 // Display only: nothing here computes a result. Checks, on the built-in project and 5 hand-off payloads (as drawings.test.mjs):
 //  1. elevation(): entities built, every coordinate finite, the expected layers, supports / plate breaks / cross-frames / splices on
 //     the model's stations (X = station x 12 in), the stations axis, the file validates as DXF R12;
-//  2. ratioLayer(): colours follow the ratio (green < 0.8, amber 0.8 to 1.0, red > 1.0 or NG), one band per location, a legend;
+//  2. ratioLayer(): colours follow the ratio (green < 0.9, amber 0.9 to 1.0, red > 1.0 or NG), one band per location, a legend;
 //  3. chart(): axes, grid on its own layer, series, limit line, bars; mapping X / Y / pick are inverses;
 //  4. hand check on the built-in project (arithmetic in the comments).
 import assert from 'node:assert/strict';
@@ -56,12 +56,12 @@ test('graphics: elevation of the built-in project and 5 payloads', () => {
     P.framing = { ...M.defaultFraming(), splices: o.spl }; P.stiffeners = M.defaultStiffeners(); P.crossframes = M.defaultCrossframes(); checkElev(P, f); }
 });
 
-test('graphics: ratio colours (green < 0.8, amber 0.8 to 1.0, red > 1.0 or NG) and the layer, legend and bands', () => {
-  assert.equal(GR.ratioColor(0.79), 3); assert.equal(GR.ratioColor(0.8), 2); assert.equal(GR.ratioColor(1.0), 2); assert.equal(GR.ratioColor(1.0001), 1);
+test('graphics: ratio colours (green < 0.9, amber 0.9 to 1.0, red > 1.0 or NG) and the layer, legend and bands', () => {
+  assert.equal(GR.ratioColor(0.8), 3); assert.equal(GR.ratioColor(0.8999), 3); assert.equal(GR.ratioColor(0.9), 2); assert.equal(GR.ratioColor(1.0), 2); assert.equal(GR.ratioColor(1.0001), 1);
   assert.equal(GR.ratioColor(0.2, false), 1); assert.equal(GR.ratioColor(NaN), 1);
   const P = J(M.defaultProject()), E = GR.elevation(P, 0), n0 = E.D.E.length;
   const items = [{ x: 0, ratio: 0.5 }, { x: 55, ratio: 0.85 }, { x: 110, ratio: 1.2 }, { x: 180, ratio: 0.3, ok: false }, { x: 250, ratio: 0.99 }, { x: 360, ratio: 0.1 }];
-  const R = GR.ratioLayer(E, items, { what: 'FLEXURE' }); assert.equal(R.cols.length, 6); assert.deepEqual(J(R.cols.map(c => c.color)), [3, 2, 1, 1, 2, 3]);
+  const R = GR.ratioLayer(E, items, { what: 'FLEXURE' }); assert.equal(R.cols.length, 6); assert.deepEqual(J(R.cols.map(c => c.color)), [3, 3, 1, 1, 2, 3]);
   assert.ok(E.D.E.length > n0); const used = checkFinite(E.D, 'ratio'); ['S-RATIO-OK', 'S-RATIO-WARN', 'S-RATIO-NG'].forEach(l => assert.ok(used.has(l), l));
   assert.equal(E.D.L['S-RATIO-OK'].color, 3); assert.equal(E.D.L['S-RATIO-WARN'].color, 2); assert.equal(E.D.L['S-RATIO-NG'].color, 1);
   // bands tile the girder: from L0 to L1 with the mid-points between locations
@@ -92,6 +92,26 @@ test('graphics hand check: built-in project (110-140-110 ft, plates change at 88
   // the stations axis: length 360 ft, step niceStep(360, 10) = 50 ft (raw 36: 3.6 -> 5 x 10 = 50): ticks 0, 50, ..., 350 (8)
   assert.equal(GR.niceStep(360, 10), 50);
   const lab = E.D.E.filter(e => e.t === 'TEXT' && /^\d+$/.test(e.s) && e.hh === E.h * 0.8).map(e => +e.s); assert.deepEqual(J(lab), [0, 50, 100, 150, 200, 250, 300, 350]);
-  // text height: 2 % of the length 4320 in = 86.4 in
-  assert.ok(Math.abs(E.h - 86.4) < 1e-9);
+  // text height: 2.4 % of the length 4320 in = 103.68 in
+  assert.ok(Math.abs(E.h - 103.68) < 1e-9);
+});
+
+test('graphics: label stacking, band merging, the text hierarchy (polish)', () => {
+  // stack(): the rightmost label takes row 0; no two labels in a row touch; a leader at a label's x crosses no label of a lower row
+  const items = [{ x: 0, w: 50 }, { x: 10, w: 50 }, { x: 20, w: 50 }, { x: 200, w: 30 }, { x: 205, w: 30 }], rows = GR.stack(items, { gap: 2 });
+  assert.equal(rows[4], 0); items.forEach((a, i) => items.forEach((b, j) => { if (i < j && rows[i] === rows[j]) assert.ok(a.x + a.w + 2 <= b.x || b.x + b.w + 2 <= a.x, `row ${rows[i]}: ${i} and ${j}`); if (rows[i] > rows[j]) assert.ok(!(a.x >= b.x && a.x <= b.x + b.w), `leader of ${i} crosses label ${j}`); }));
+  // declutter(): labels do not touch each other
+  const lab = [{ x: 0, y: 0, w: 30, hh: 10 }, { x: 5, y: 0, w: 30, hh: 10 }, { x: 10, y: 0, w: 30, hh: 10 }], by = GR.declutter(lab, { gap: 1 });
+  lab.forEach((a, i) => lab.forEach((b, j) => { if (i < j) assert.ok(Math.abs(by[i] - by[j]) >= 8.5, `declutter ${i} ${j}`); }));
+  // mergeBands(): neighbours of one colour class become one band; the class edges are the mid-points; only the largest ratio keeps its label
+  const mb = GR.mergeBands([{ x: 0, ratio: 0.3, label: 'a' }, { x: 10, ratio: 0.5, label: 'b' }, { x: 20, ratio: 0.95, label: 'c' }, { x: 30, ratio: 0.89, label: 'd' }, { x: 40, ratio: 1.2, label: 'e' }], { x0: 0, x1: 50 });
+  assert.deepEqual(J(mb.map(b => [b.x0, b.x1, b.label])), [[0, 15, ''], [15, 25, ''], [25, 35, ''], [35, 50, 'e']]); assert.equal(mb[0].x, 10);
+  // text widths are the Arial advance widths (not the shared bbox estimate of 0.9 per character): "ABC" is 667 + 667 + 722 per mille
+  assert.ok(Math.abs(GR.textW('ABC', 10) - 20.56) < 1e-9);
+  // the hierarchy: dimension text no larger than label text; the smallest text of a drawing is 0.72 of its text height
+  const D = GR.newDrawing(10), l = D.layer('X'); D.text(l, 0, 0, 3, 'SMALL'); D.dimH(l, 0, 100, 20, 0, '<>');
+  assert.ok(Math.abs(D.E[0].hh - 7.2) < 1e-9, 'minimum text 0.72 h'); const dm = D.E.find(e => e.t === 'DIM'); assert.ok(dm.hh <= GR.TXT.label * 10 && Math.abs(dm.hh - GR.TXT.dim * 10) < 1e-9, 'dimension text ' + dm.hh);
+  // tightSvg: the viewBox is narrower than the shared estimate for a drawing with long text
+  const D2 = GR.newDrawing(10), l2 = D2.layer('Y'); D2.line(l2, 0, 0, 100, 0); D2.text(l2, 0, 5, 8, 'A LONG LINE OF DRAWING TEXT THAT IS NOT QUITE SO LONG');
+  const vw = svg => +/viewBox="[\d.\-]+ [\d.\-]+ ([\d.]+)/.exec(svg)[1], w1 = vw(X.toSVG(D2, {})), w2 = vw(GR.tightSvg(D2, {})); assert.ok(w2 < w1, `tight ${w2} < ${w1}`);
 });

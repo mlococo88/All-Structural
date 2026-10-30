@@ -35,34 +35,37 @@
   function secGraphic(P, R, cs, seg) {
     const G = GR(), c = R.c, s = R.s, OW = window.SBDOwners, deck = P.deck, comp = c.comp, d = c.s.d;
     const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +R.g.beff : 0, rb = deck.rebar || {};
-    const W = Math.max(be, s.topB, 30), H = d + hh + ts, h = Math.max(W, H) * 0.045, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
+    const W = Math.max(be, s.topB, 30), H = d + hh + ts, h = Math.max(W, H * 1.4) * 0.095, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
     const ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), rb: D.layer('REBAR', 1), c: D.layer('CNTR', 8) };
     const ib = ibeam(D, ly.g, 0, 0, s); if (comp && hh > 0) D.rect(ly.dk, -s.topB / 2, d, s.topB / 2, d + hh);
     if (comp) { D.rect(ly.dk, -be / 2, d + hh, be / 2, d + hh + ts);
       [['rt', rb.top, d + hh + ts - (rb.top || {}).c], ['rb', rb.bot, d + hh + (rb.bot || {}).c]].forEach(([k, q, y], i) => { if (!q || !(q.A > 0) || !fin(y)) return;
         D.line(ly.rb, -be / 2 + h, y, be / 2 - h, y, D.ltype('DASHED')); for (let x = -be / 2 + 2 * h; x < be / 2; x += Math.max(6 * h, be / 8)) D.circle(ly.rb, x, y, 0.3 * h);
-        D.text(t, be / 2 + 0.5 * h, y - 0.3 * h, 0.7 * h, `${i ? 'BOT.' : 'TOP'} REBAR ${nf(q.A, 2)} IN2`); }); }
+        D.text(t, be / 2 + 5.5 * h, y - (i ? 1.0 : -0.1) * h, 0.8 * h, `${i ? 'BOT.' : 'TOP'} REBAR ${nf(q.A, 2)} IN2`); }); }
     D.line(ly.c, 0, -1.5 * h, 0, H + 1.5 * h, D.ltype('CENTER'));
     // dimensions: the plates and the deck
     D.dimV(dm, 0, d, -Math.max(be, s.topB) / 2 - 3 * h, -s.botB / 2, `d = ${nf(d, 3)} IN`);
-    if (comp) { D.dimV(dm, d + hh, H, -Math.max(be, s.topB) / 2 - 3 * h, -be / 2, `t_s = ${nf(ts, 2)} IN`); D.dimH(dm, -be / 2, be / 2, H + 2.5 * h, H, `b_eff = ${nf(be, 2)} IN`); }
+    if (comp) { D.dimV(dm, d + hh, H, Math.max(be, s.topB) / 2 + 3 * h, be / 2, `t_s = ${nf(ts, 2)} IN`); D.dimH(dm, -be / 2, be / 2, H + 2.5 * h, H, `b_eff = ${nf(be, 2)} IN`); }
     // neutral axes (the lines the table gives): steel ȳ, long-term 3n, short-term n, PNA
     const axes = [[c.s.yb, 'ENA STEEL', 5, 'STEEL'], ...(comp ? [[c.c3.yb, 'ENA 3n', 30, '3N'], [c.cn.yb, 'ENA n', 6, 'N']] : []), [c.yp, `PNA (${c.region === 'pos' ? 'POS.' : 'NEG.'})`, 3, 'PNA']].filter(q => fin(q[0])).sort((a, b) => a[0] - b[0]);
     const xl = -Math.max(be, s.topB) / 2 - 6 * h; let yPrev = -1e9, xr = Math.max(be, s.topB) / 2 + 2 * h;
     axes.forEach(([y, lab, col, key]) => { const l = D.layer('NA-' + key, col); D.line(l, xl, y, xr, y, D.ltype('CENTER')); const ty = Math.max(y, yPrev + 1.3 * h); yPrev = ty;
-      D.text(l, xl - 0.5 * h, ty - 0.3 * h, 0.8 * h, `${lab} y = ${nf(y, 3)} IN`, 2); if (Math.abs(ty - y) > 0.2 * h) D.line(l, xl - 0.4 * h, ty, xl, y); });
+      D.text(l, xl - 0.5 * h, ty - 0.3 * h, 0.8 * h, `${lab} ${nf(y, 3)}`, 2); if (Math.abs(ty - y) > 0.2 * h) D.line(l, xl - 0.4 * h, ty, xl, y); });
     // stress diagram for the selected load case (per 1000 kip-ft)
     const cases = { steel: { sec: c.s, f: 1, lab: 'DC1: STEEL SECTION' }, '3n': { sec: c.c3, f: 3 * R.nr.n, lab: 'DC2, DW: LONG-TERM 3n SECTION' }, n: { sec: c.cn, f: R.nr.n, lab: 'LL+IM: SHORT-TERM n SECTION' } };
-    const K = cases[comp ? cs : 'steel'] || cases.steel, sc = K.sec, M = 1000, ff = y => M * 12 * (y - sc.yb) / sc.I, x0 = xr + 16 * h;
+    const K = cases[comp ? cs : 'steel'] || cases.steel, sc = K.sec, M = 1000, ff = y => M * 12 * (y - sc.yb) / sc.I, x0 = xr + 15 * h;
     const mx = Math.max(Math.abs(ff(0)), Math.abs(ff(d)), comp && K.f > 1 ? Math.abs(ff(H)) / K.f : 0, 1e-9), kx = Math.max(be, s.topB) * 0.4 / mx;
-    const lc = D.layer('STRESS-C', 5), lt = D.layer('STRESS-T', 1), segs = [[0, d, 1]]; if (comp && K.f > 1) segs.push([d + hh, H, 1 / K.f]);
+    const ksi = [], lc = D.layer('STRESS-C', 5), lt = D.layer('STRESS-T', 1), segs = [[0, d, 1]]; if (comp && K.f > 1) segs.push([d + hh, H, 1 / K.f]);
     D.line(t, x0, -1 * h, x0, H + 1 * h); D.text(t, x0, H + 3 * h, 1.0 * h, `STRESS, M = 1000 KIP-FT (C + / T -)`, 1);
     D.text(t, x0, H + 1.6 * h, 0.7 * h, K.lab, 1);
     segs.forEach(([ya, yb, k]) => { const pts = []; for (let i = 0; i <= 8; i++) { const y = ya + (yb - ya) * i / 8; pts.push([x0 + ff(y) * k * kx, y]); } D.pline(ff((ya + yb) / 2) >= 0 ? lc : lt, [[x0, ya], ...pts, [x0, yb]], true);
       for (let y = ya; y <= yb + 1e-9; y += 0.8 * h) { const v = ff(y) * k; D.line(v >= 0 ? lc : lt, x0, y, x0 + v * kx, y); }
-      [ya, yb].forEach((y, i) => { const v = ff(y) * k, tx = x0 + (v >= 0 ? 1 : -1) * Math.max(Math.abs(v) * kx, 0) + (v >= 0 ? 0.5 : -0.5) * h; D.text(t, tx, y + (i ? -0.9 : 0.1) * h, 0.7 * h, `${nf(v, 2)} KSI`, v >= 0 ? 0 : 2); }); });
-    D.text(t, x0, -3 * h, 0.7 * h, `f = M(y - ybar)/I, I = ${nf(sc.I, 0)} IN4, ybar = ${nf(sc.yb, 3)} IN${comp && K.f > 1 ? `; DECK f / ${nf(K.f, 3)}` : ''}`, 1);
-    D.text(t, xl - 0.5 * h, H + 5.5 * h, 1.4 * h, `SECTION PROPERTIES: ${(R.g.label || R.g.id || '').toString().toUpperCase()}, SEGMENT ${seg || 1}`); void ib;
+      [ya, yb].forEach((y, i) => { const v = ff(y) * k, tx = x0 + (v >= 0 ? 1 : -1) * Math.max(Math.abs(v) * kx, 0) + (v >= 0 ? 0.5 : -0.5) * h; ksi.push({ x: tx, y: y + (i ? -0.9 : 0.1) * h, side: v >= 0 ? 0 : 2, s: `${nf(v, 2)} KSI` }); }); });
+    // the stress values: the labels of one side are kept a line apart (a thin deck's two values would touch), moving the upper one up
+    [0, 2].forEach(sd => { let yp = -Infinity; ksi.filter(q => q.side === sd).sort((a, b) => a.y - b.y).forEach(q => { q.y = Math.max(q.y, yp + 1.1 * 0.8 * h); yp = q.y; }); });
+    ksi.forEach(q => D.text(t, q.x, q.y, 0.8 * h, q.s, q.side));
+    G.wrap(`f = M(y - ybar)/I, I = ${nf(sc.I, 0)} IN4, ybar = ${nf(sc.yb, 3)} IN${comp && K.f > 1 ? `; DECK f / ${nf(K.f, 3)}` : ''}`, 30).forEach((q, i) => D.text(t, x0, -3 * h - i * 1.2 * h, 0.8 * h, q, 1));
+    D.text(t, xl - 0.5 * h, H + 6 * h, 1.3 * h, `SECTION PROPERTIES: ${(R.g.label || R.g.id || '').toString().toUpperCase()}, SEGMENT ${seg || 1}`); void ib;
     return { D, title: 'Section and neutral axes, stress diagram', file: 'section-properties', note: `Drawn from the tab's section properties (y up from the bottom of the steel). Stress diagram: a unit moment of 1000 kip-ft on the section the load case acts on, f = M(y − ȳ)/I with the table's I and ȳ (deck stress ÷ n or 3n).` };
   }
   function section(slot, o) {
@@ -101,19 +104,24 @@
     const side = use === 'rigid' && mem.rig ? mem.rig.side : 'L';
     for (let i = 0; i < NL; i++) { const a = side === 'R' ? Wd - deR - (i + 1) * lw : deL + i * lw, b = a + lw; D.line(ly.ln, X(a), yLn, X(b), yLn); D.line(ly.ln, X(a), yLn - 0.4 * h, X(a), yLn + 0.4 * h); D.line(ly.ln, X(b), yLn - 0.4 * h, X(b), yLn + 0.4 * h); D.text(t, X((a + b) / 2), yLn + 0.5 * h, 0.7 * h, `LANE ${i + 1}`, 1); }
     wheels.forEach(w => { const x = X(w); arrow(D, ly.wh, x, yA + 5.5 * h, yA + 0.4 * h, h); D.circle(ly.wh, x, yA + 5.9 * h, 0.4 * h); });
-    // lever rule: the influence line of the girder (statics about the adjacent girder), drawn below the girders
-    if (use === 'lever1' || use === 'lever2') { const yb0 = yTopFl - seg.topT - seg.D - seg.botT - 6 * h, unit = 5 * h, pts = [];
-      const ext = (x0, x1, v0, v1, x) => v0 + (v1 - v0) * (x - x0) / (x1 - x0);
+    // lever rule: the influence line of the girder (statics about the adjacent girder), in its own band below the girder labels: a baseline, the sloped line (1.0 at the girder,
+    // 0 at the adjacent girder), thin projection lines from the baseline up to the line at each wheel, and the ordinates printed at the wheels (stacked where they would touch)
+    let yBand = yTopFl - seg.topT - seg.D - seg.botT - 3.4 * h;   // the girder labels are just under the girders: the band starts below them
+    if (use === 'lever1' || use === 'lever2') { const unit = 4 * h, ext = (x0, x1, v0, v1, x) => v0 + (v1 - v0) * (x - x0) / (x1 - x0);
       const f = x => { const j = lg, l = pos[j - 1], c0 = pos[j], r = pos[j + 1];
         if (x <= c0 && j > 0) return x < l ? 0 : (x - l) / (c0 - l); if (x <= c0) return nb > 1 ? ext(c0, r, 1, 0, x) : 1; if (j < nb - 1) return x > r ? 0 : (r - x) / (r - c0); return ext(l, c0, 0, 1, x); };
-      [0, ...pos, Wd].sort((p, q) => p - q).forEach(x => pts.push([X(x), yb0 + f(x) * unit])); D.line(ly.il, 0, yb0, X(Wd), yb0, D.ltype('DASHED')); D.pline(ly.il, pts, false);
-      D.text(t, 0, yb0 - 1.8 * h, 0.7 * h, `LEVER-RULE INFLUENCE LINE OF G${lg + 1} (1.0 AT G${lg + 1}, 0 AT THE ADJACENT GIRDERS)`);
-      wheels.forEach(w => { const v = f(w); D.circle(ly.il, X(w), yb0 + v * unit, 0.25 * h); D.text(t, X(w) + 0.5 * h, yb0 + v * unit + 0.4 * h, 0.6 * h, nf(v, 3), 0); }); }
-    D.chainH(dm, [0, ...pos.map(X), X(Wd)], yLn + 5 * h, yd);
-    D.text(t, 0, yLn + 11 * h, 1.4 * h, `LLDF: GIRDER G${lg + 1}, ${(rg.label || '').toUpperCase()}`);
-    D.text(t, 0, yLn + 9.2 * h, 0.8 * h, desc || 'NO LEVER-RULE OR RIGID CASE FOR THIS GIRDER');
-    D.text(t, 0, yLn + 7.8 * h, 0.7 * h, `N_L = ${NL} LANES OF ${nf(lw, 2)} FT; GOVERNING g_M = ${nf(mem.gM, 4)}, g_V = ${nf(mem.gV, 4)}`);
-    D.text(t, 0, yLn + 6.5 * h, 0.7 * h, 'WHEELS 6 FT APART, OUTER WHEEL 2 FT FROM THE TRAFFIC FACE OR LANE EDGE');
+      const xs = [0, ...pos, Wd].sort((p, q) => p - q), vmax = Math.max(1, ...xs.map(f)), yb0 = yBand - vmax * unit - 1.2 * h, pts = xs.map(x => [X(x), yb0 + f(x) * unit]);
+      D.line(ly.il, 0, yb0, X(Wd), yb0, D.ltype('DASHED')); D.pline(ly.il, pts, false);
+      const lab = []; [[pos[lg], 'G' + (lg + 1)], ...(lg > 0 ? [[pos[lg - 1], 'G' + lg]] : []), ...(lg < nb - 1 ? [[pos[lg + 1], 'G' + (lg + 2)]] : [])].forEach(([x]) => { D.line(ly.il, X(x), yb0 - 0.3 * h, X(x), yb0 + 0.3 * h); });
+      wheels.forEach(w => { const v = f(w); D.line(ly.il, X(w), yb0, X(w), yb0 + v * unit, D.ltype('DASHED')); D.circle(ly.il, X(w), yb0 + v * unit, 0.25 * h); lab.push({ x: X(w) + 0.5 * h, y: yb0 + v * unit + 0.5 * h, w: G.textW(nf(v, 3), 0.8 * h) + 0.4 * h, hh: 0.8 * h, txt: nf(v, 3) }); });
+      [[pos[lg], 1, 'G' + (lg + 1)], ...(lg > 0 ? [[pos[lg - 1], 0, 'G' + lg]] : []), ...(lg < nb - 1 ? [[pos[lg + 1], 0, 'G' + (lg + 2)]] : [])].forEach(([x, v]) => { if (x < 0 || x > Wd) return; D.circle(ly.il, X(x), yb0 + v * unit, 0.35 * h); lab.push({ x: X(x) + 0.5 * h, y: yb0 + v * unit + 0.5 * h, w: G.textW(nf(v, 1), 0.8 * h) + 0.4 * h, hh: 0.8 * h, txt: nf(v, 1) }); });
+      const by = G.declutter(lab, { gap: 0.3 * h }); lab.forEach((q, i) => D.text(t, q.x, by[i], q.hh, q.txt, 0));
+      D.text(t, 0, yb0 - 1.9 * h, 0.85 * h, `INFLUENCE LINE OF G${lg + 1} (LEVER RULE: 1.0 AT G${lg + 1}, 0 AT THE ADJACENT GIRDER); ORDINATES UNDER THE WHEELS`); yBand = yb0 - 2.6 * h; }
+    // dimensions of the girder spacing, then (above them) the notes, then the title
+    const yDim = yLn + 5 * h; D.chainH(dm, [0, ...pos.map(X), X(Wd)], yDim, yd);
+    const nch = Math.max(30, Math.floor(X(Wd) / (0.85 * h * 0.58))), notes = [...G.wrap('WHEELS 6 FT APART, OUTER WHEEL 2 FT FROM THE TRAFFIC FACE OR LANE EDGE', nch).reverse(), ...G.wrap(`N_L = ${NL} LANES OF ${nf(lw, 2)} FT; GOVERNING g_M = ${nf(mem.gM, 4)}, g_V = ${nf(mem.gV, 4)}`, nch).reverse(), ...G.wrap(desc || 'NO LEVER-RULE OR RIGID CASE FOR THIS GIRDER', nch).reverse()];
+    let yN = yDim + 3.4 * h; notes.forEach(q => { D.text(t, 0, yN, 0.85 * h, q); yN += 1.35 * h; });
+    D.text(t, 0, yN + 0.6 * h, 1.3 * h, `LLDF: GIRDER G${lg + 1}, ${(rg.label || '').toUpperCase()}`);
     return { D, title: 'Cross-section: lanes and wheel positions of the LLDF cases', file: 'lldf-cross-section', opts, use, note: 'Wheel and lane positions are the ones the distribution-factor worked steps use (shared/lldf.js lever rule and rigid cross-section); the rigid-section lanes are placed from the traffic face of the governing side. Appurtenances as the Drawings tab.' };
   }
   function loads(slot, o) {
@@ -133,8 +141,8 @@
     const build = () => {
       const E = elev(P, o.gi, `GIRDER ${(P.girders[o.gi].label || P.girders[o.gi].id || '').toString().toUpperCase()}: ANALYSIS`, 'ELEVATION WITH SUPPORTS (S), PLATE BREAKS, CROSS-FRAMES (CF) AND FIELD SPLICES (FS); DIAGRAMS BELOW ON THE SAME STATIONS');
       if (E.errors.length) return { errors: E.errors };
-      const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.1, 8 * E.h), x0 = E.X(E.L0), sup = R.sup || E.G.sup, s = R.st, ll = R.ll;
-      const mk = (title, ser, o2) => { const top = E.alloc(hg + 9 * E.h), C = G.chart({ D: E.D, at: [x0, top - hg - 3 * E.h], w, hgt: hg, h: E.h * 0.8, title, xr: [E.L0, E.L1], series: ser, vlines: sup.map(v => ({ x: v })), ...o2 }); E.alloc(1.5 * E.h); return C; };
+      const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.08, 7 * E.h), x0 = E.X(E.L0), sup = R.sup || E.G.sup, s = R.st, ll = R.ll;
+      const mk = (title, ser, o2) => { const top = E.alloc(hg + 12 * E.h), C = G.chart({ D: E.D, at: [x0, top - hg - 3 * E.h], w, hgt: hg, h: E.h, title, xr: [E.L0, E.L1], series: ser, vlines: sup.map(v => ({ x: v })), ...o2 }); E.alloc(1.5 * E.h); return C; };
       const M = [{ name: 'M DC1', pts: R.x.map((x, i) => [x, s.DC1.M[i]]), color: 5 }, { name: 'M DC2', pts: R.x.map((x, i) => [x, s.DC2.M[i]]), color: 3 }, { name: 'M DW', pts: R.x.map((x, i) => [x, s.DW.M[i]]), color: 30 }];
       if (ll) { M.push({ name: 'M LL+IM max', pts: R.x.map((x, i) => [x, ll.Mpos[i]]), color: 1 }, { name: 'M LL+IM min', pts: R.x.map((x, i) => [x, ll.Mneg[i]]), color: 1, lt: 'DASHED' }); }
       mk('MOMENTS, KIP-FT (UNFACTORED, PER GIRDER)', M, { ylab: 'KIP-FT', fy: v => nf(v, 0) });
@@ -155,20 +163,20 @@
     slot.innerHTML = '<div class="gfx-a"></div><div class="gfx-b"></div><div class="gfx-c"></div>';
     const A = slot.querySelector('.gfx-a'), B = slot.querySelector('.gfx-b'), C = slot.querySelector('.gfx-c');
     const bld = () => {
-      const E = elev(P, o.gi, 'FLEXURE: GOVERNING RATIO AT EACH LOCATION', 'GREEN BELOW 0.80, AMBER 0.80 TO 1.00, RED ABOVE 1.00 OR NG; RATIO = GOVERNING CHECK OF THE LOCATION (RESULTS TABLE)');
+      const E = elev(P, o.gi, 'FLEXURE: GOVERNING RATIO AT EACH LOCATION', 'GREEN BELOW 0.90, AMBER 0.90 TO 1.00, RED ABOVE 1.00 OR NG; RATIO = GOVERNING CHECK OF THE LOCATION (RESULTS TABLE)');
       if (E.errors.length) return { errors: E.errors };
-      const items = rows.map((q, i) => ({ x: fin(q.x) ? Math.max(E.L0, Math.min(E.L1, q.x)) : E.L0, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: String(i + 1) })); G.ratioLayer(E, items, { what: 'FLEXURE' });
+      const items = rows.map((q, i) => ({ x: fin(q.x) ? Math.max(E.L0, Math.min(E.L1, q.x)) : E.L0, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: `GOVERNS (ROW ${i + 1})` })); G.ratioLayer(E, G.mergeBands(items, { x0: E.L0, x1: E.L1 }), { what: 'FLEXURE', flag: true });
       return { D: E.D, title: 'Girder elevation coloured by governing ratio', file: 'flexure-elevation', pick: (x, y) => nearest(xr.map(v => (fin(v) ? v : 1e9)), E.pick(x, y)), selMark: k => E.selMark(xr[k]), readout: k => `${rows[k].name}: ${rows[k].gov ? `${rows[k].gov.id} ratio ${fin(rows[k].gov.ratio) ? nf(rows[k].gov.ratio, 3) : 'NG'}` : 'no check'}`, note: 'One band per location of the results table (the tributary stretch to the mid-points of its neighbours); numbers are the table rows. Click a band to select the location.' };
     };
     const H = G.mount(A, bld, { key: 'fx', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
     // f_bu vs F_nc (and every check's demand and capacity) at the selected location
     const flangeCk = (r.checks || []).filter(q => q.unit === 'ksi' && fin(q.demand) && fin(q.capacity) && q.inUse !== false);
     G.mount(B, () => {
-      const h = 2.2, D = G.newDrawing(h), cats = flangeCk.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), mk = (name, f, col) => ({ name, kind: 'bars', color: col, pts: flangeCk.map((q, i) => [i, f(q)]) });
-      const w = Math.max(60, 16 * flangeCk.length);
-      G.chart({ D, at: [0, 0], w, hgt: 40, h, title: `STRESS CHECKS (KSI) AT ${String(r.name).toUpperCase()}: DEMAND (f_bu ...) VS CAPACITY (phi F_nc ...)`, cats, series: [mk('DEMAND', q => q.demand, 5), mk('CAPACITY', q => q.capacity, 3)], ylab: 'KSI', fy: v => nf(v, 0) });
-      const rt = (r.checks || []).filter(q => fin(q.ratio)), w2 = Math.max(60, 12 * rt.length);
-      G.chart({ D, at: [w + 22 * h, 0], w: w2, hgt: 40, h, title: 'CHECK RATIOS (ALL CHECKS OF THE LOCATION)', cats: rt.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2) });
+      const h = 6, hgt = 50, D = G.newDrawing(h), cats = flangeCk.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), mk = (name, f, col) => ({ name, kind: 'bars', color: col, pts: flangeCk.map((q, i) => [i, f(q)]) });
+      const w = Math.max(150, 32 * flangeCk.length), ttl = (t, y0) => G.wrap(t, 42).forEach((q, i, a) => D.text(D.layer('ANNO-TEXT', 7), 0, y0 + hgt + 1.4 * h + (a.length - 1 - i) * 1.4 * h, 1.1 * h, q));
+      G.chart({ D, at: [0, 0], w, hgt, h, cats, series: [mk('DEMAND', q => q.demand, 5), mk('CAPACITY', q => q.capacity, 3)], ylab: 'KSI', fy: v => nf(v, 0), legend: 'below' }); ttl(`STRESS CHECKS (KSI) AT ${String(r.name).toUpperCase()}: DEMAND (f_bu ...) VS CAPACITY (phi F_nc ...)`, 0);
+      const rt = (r.checks || []).filter(q => fin(q.ratio)), w2 = Math.max(150, 32 * rt.length), y2 = -(hgt + 17 * h);
+      G.chart({ D, at: [0, y2], w: w2, hgt, h, cats: rt.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2), legend: 'below' }); ttl('CHECK RATIOS (ALL CHECKS OF THE LOCATION)', y2);
       return { D, title: `Stress checks at ${r.name}`, file: 'flexure-checks', note: 'Demand and capacity of the checks in the location table (checks in ksi); ratios of every check with 1.0 marked.' };
     }, { key: 'fxb' });
     // unbraced length (LTB) sketch
@@ -197,13 +205,19 @@
     slot.innerHTML = '<div class="gfx-a"></div><div class="gfx-b"></div>';
     const A = slot.querySelector('.gfx-a'), B = slot.querySelector('.gfx-b');
     const H = G.mount(A, () => {
-      const E = elev(P, o.gi, 'CONSTRUCTIBILITY: DECK PLACEMENT SEQUENCE', sq ? 'POURS IN ORDER OVER THE ELEVATION; M_DCc ENVELOPE BELOW (NONCOMPOSITE MOMENT, KIP-FT)' : 'NO POUR SEQUENCE (SIMPLE SPANS, NONCOMPOSITE OR THE SEQUENCE IS OFF): M_DC1 IS USED');
-      if (E.errors.length) return { errors: E.errors };
-      const D = E.D, h = E.h, lp = D.layer('POUR', 30), t = E.ly.t, items = rows.map((q, i) => ({ x: q.x, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: String(i + 1) }));
-      if (sq) sq.pours.forEach((p, k) => { const a = E.X(p.a), b = E.X(p.b), y = E.yTop + 2.6 * h; D.rect(lp, a, y, b, y + 2.2 * h); for (let x = a + 0.8 * h; x < b; x += 1.6 * h) { const f = Math.min(1, (b - x) / (0.8 * h)); D.line(lp, x, y, x + 0.8 * h * f, y + 2.2 * h * f); } D.text(t, (a + b) / 2, y + 0.5 * h, 1.0 * h, `POUR ${k + 1}`, 1); D.text(t, (a + b) / 2, y + 2.5 * h, 0.55 * h, `${nf(p.a, 1)} TO ${nf(p.b, 1)} FT`, 1); });
-      G.ratioLayer(E, items, { what: 'DECK PLACEMENT' });
-      if (sq && AR.x) { const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.1, 8 * E.h), top = E.alloc(hg + 9 * E.h);
-        G.chart({ D, at: [E.X(E.L0), top - hg - 3 * E.h], w, hgt: hg, h: h * 0.8, title: 'M_DCc ENVELOPE VS M_DC1 (KIP-FT)', xr: [E.L0, E.L1], series: [{ name: 'M_DCc (POUR SEQUENCE)', pts: AR.x.map((x, i) => [x, sq.MDCc[i]]), color: 6 }, { name: 'M_DC1 (DECK AT ONCE)', pts: AR.x.map((x, i) => [x, AR.st.DC1.M[i]]), color: 5, lt: 'DASHED' }], vlines: (AR.sup || E.G.sup).map(v => ({ x: v })), ylab: 'KIP-FT', fy: v => nf(v, 0) }); E.alloc(1.5 * h); }
+      const E = GR().elevation(P, o.gi); if (E.errors.length) return { errors: E.errors };
+      const D = E.D, h = E.h, t = E.ly.t, items = rows.map((q, i) => ({ x: q.x, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: `GOVERNS (ROW ${i + 1})` })), lp = D.layer('POUR', 30);
+      // the pours in order over the elevation: an outlined box per pour with its number (the limits are in the sequence table below)
+      if (sq) sq.pours.forEach((p, k) => { const a = E.X(p.a), b = E.X(p.b), y = E.yTop + 2.6 * h, wb = b - a, tx = `POUR ${k + 1}`; D.rect(lp, a, y, b, y + 2.2 * h);
+        if (G.textW(tx, 0.9 * h) < wb * 0.94) D.text(t, (a + b) / 2, y + 0.6 * h, 0.9 * h, tx, 1); else if (G.textW(String(k + 1), 0.9 * h) < wb * 0.94) D.text(t, (a + b) / 2, y + 0.6 * h, 0.9 * h, String(k + 1), 1); });
+      if (sq) E.yTop += 5.4 * h;
+      E.title('CONSTRUCTIBILITY: DECK PLACEMENT SEQUENCE', sq ? 'POURS IN ORDER OVER THE ELEVATION (SEQUENCE TABLE BELOW); M_DCc ENVELOPE (NONCOMPOSITE MOMENT, KIP-FT); BANDS = GOVERNING DECK-PLACEMENT RATIO, MERGED WHERE THE COLOUR CLASS IS THE SAME' : 'NO POUR SEQUENCE (SIMPLE SPANS, NONCOMPOSITE OR THE SEQUENCE IS OFF): M_DC1 IS USED');
+      G.ratioLayer(E, G.mergeBands(items, { x0: E.L0, x1: E.L1 }), { what: 'DECK PLACEMENT', flag: true });
+      if (sq && AR.x) { const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.08, 7 * E.h), top = E.alloc(hg + 10.5 * E.h);
+        G.chart({ D, at: [E.X(E.L0), top - hg - 3 * E.h], w, hgt: hg, h, title: 'M_DCc ENVELOPE VS M_DC1 (KIP-FT)', xr: [E.L0, E.L1], series: [{ name: 'M_DCc (POUR SEQUENCE)', pts: AR.x.map((x, i) => [x, sq.MDCc[i]]), color: 6 }, { name: 'M_DC1 (DECK AT ONCE)', pts: AR.x.map((x, i) => [x, AR.st.DC1.M[i]]), color: 5, lt: 'DASHED' }], vlines: (AR.sup || E.G.sup).map(v => ({ x: v })), ylab: 'KIP-FT', fy: v => nf(v, 0) }); E.alloc(1.5 * h); }
+      E.freeze();
+      if (sq && window.SBDDrawings.table) { const nr = sq.pours.length, y = E.alloc((nr + 2) * 1.5 * h + 4 * h);
+        window.SBDDrawings.table(D, E.ly.t, E.X(E.L0), y - 0.5 * h, ['POUR (ORDER)', 'FROM, FT', 'TO, FT', 'LENGTH, FT'], sq.pours.map((p, k) => [String(k + 1), nf(p.a, 1), nf(p.b, 1), nf(p.b - p.a, 1)]), 'DECK PLACEMENT SEQUENCE: POURS IN THE ORDER PLACED'); }
       return { D, title: 'Deck pour sequence and moment envelope', file: 'constructibility-pours', pick: (x, y) => nearest(xr, E.pick(x, y)), selMark: k => E.selMark(xr[k]), readout: k => `${rows[k].name}: M_c = ${nf(rows[k].Mc, 1)} kip-ft; ${rows[k].gov ? `${rows[k].gov.id} ratio ${fin(rows[k].gov.ratio) ? nf(rows[k].gov.ratio, 3) : 'NG'}` : ''}`,
         note: 'Pours, M_DCc and M_DC1 are the Analysis results the checks use (Analysis tab, deck placement sequence); the band row is the governing deck-placement ratio at each location of the table.' };
     }, { key: 'cn', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });

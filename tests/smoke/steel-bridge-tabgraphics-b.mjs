@@ -66,7 +66,10 @@ try {
   const fig = await p.$eval('#out .rp-fig svg', s => ({ texts: s.querySelectorAll('text').length, w: s.getBoundingClientRect().width })); assert.ok(fig.texts > 10 && fig.w > 300, JSON.stringify(fig)); done.push('rpt/summary figure');
   await shot('report-summary', '#out .rp-fig');
   // phone width: the graphics fit without a horizontal page scroll
-  await p.setViewportSize({ width: 390, height: 800 }); await p.click('#tabBar [data-otab="shear"]'); await p.waitForTimeout(300); const stale = await p.$('#out .alert.stale:not([hidden])'); if (stale) await p.click('#sh_calc'); await p.waitForSelector(gfx('shear')); await p.waitForTimeout(300);
+  await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(400);
+  // a viewport resize must not mark a result out of date (the lazily created defaults of the Rating tab were what changed the project key of the other tabs): every calculated tab is still current
+  for (const [t, nm] of [['shear', 'shear'], ['fat', 'fatigue'], ['wt', 'welds'], ['spl', 'splice'], ['rt', 'rating']]) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(250); assert.equal(await p.$('#out .alert.stale:not([hidden])'), null, `${t}: not out of date after the resize`); await p.waitForSelector(gfx(nm)); }
+  await p.click('#tabBar [data-otab="shear"]'); await p.waitForSelector(gfx('shear')); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1), false, 'no horizontal scroll at phone width'); await shot('shear-phone', '#out [data-gfxb="shear"]');
   assert.deepEqual(errs, [], 'console errors');
   console.log(`ok  tab graphics B: ${done.length} graphics (${done.join(', ')}); wheel zoom, double-click fit, click-to-select, DXF, print; ${((Date.now() - t0) / 1000).toFixed(0)} s`);
