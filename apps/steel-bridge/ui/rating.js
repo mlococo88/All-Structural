@@ -21,7 +21,9 @@
   const PHI_C = [[1.00, 'Good or satisfactory (1.00)'], [0.95, 'Fair (0.95)'], [0.85, 'Poor (0.85)']];
   const PHI_S = [[1.00, 'All other girder bridges and slab bridges (1.00)'], [0.85, 'Welded members in two-girder, truss or arch bridges (0.85)'], [0.90, 'Riveted members in two-girder, truss or arch bridges (0.90)'],
     [0.85, 'Three-girder bridges, girder spacing ≤ 6 ft (0.85)'], [0.95, 'Four-girder bridges, girder spacing ≤ 4 ft (0.95)'], [0.85, 'Floorbeams > 12 ft apart, noncontinuous stringers (0.85)'], [1.00, 'Redundant stringer subsystems between floorbeams (1.00)']];
-  const rfTxt = v => !isFinite(v) ? '—' : fmt(v, 2), cls = v => !isFinite(v) ? '' : v < 1 - 1e-9 ? 'fx-ng' : v < 1.1 ? 'fx-hi' : 'fx-ok';
+  // SB2-R2: −∞ (amplification undefined, 6.10.1.6) and NaN (an error) are shown and fail; +∞ = no live-load effect (—)
+  const rfTxt = v => v === -Infinity ? '−∞ (NG: f_bu ≥ F_cr, amplification undefined (6.10.1.6))' : Number.isNaN(v) ? 'error: RF is NaN' : !isFinite(v) ? '—' : fmt(v, 2),
+    cls = v => v === -Infinity || Number.isNaN(v) ? 'fx-ng' : !isFinite(v) ? '' : v < 1 - 1e-9 ? 'fx-ng' : v < 1.1 ? 'fx-hi' : 'fx-ok';
 
   function ensure(P) { if (!P.rating) P.rating = window.SBDModel.defaultRating(); return P.rating; }
 

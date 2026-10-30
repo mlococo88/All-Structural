@@ -18,7 +18,9 @@
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const S = { src: 'project', pl: null, plName: '', flC: 0, R: null, key: '', sel: null, ohSel: 0, err: '', busy: false };
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
-  const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'cn-ng' : r >= 0.9 ? 'cn-hi' : 'cn-ok';
+  const cls = r => Number.isNaN(r) || r === Infinity ? 'cn-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'cn-ng' : r >= 0.9 ? 'cn-hi' : 'cn-ok';
+  /* SB2-R2: the ratio of a check as shown; a non-finite ratio that is not "not applicable" carries its reason (c.ng: NG or error) */
+  const rtx = c => !c ? '—' : isFinite(c.ratio) ? fmt(c.ratio, 3) : c.ng ? (Number.isNaN(c.ratio) ? esc(c.ng) : `∞ (${esc(c.ng)})`) : '—';
   const OHF = [['a', 'Bracket horizontal projection a', 'in'], ['hb', 'Bracket vertical projection h<sub>b</sub>', 'in'], ['wOH', 'Deck width carried by the brackets', 'in'], ['tOH', 'Overhang deck thickness', 'in'],
     ['wc', 'w<sub>c</sub>', 'kcf'], ['qForm', 'Overhang forms', 'ksf'], ['wScreed', 'Screed rail', 'k/ft'], ['wRail', 'Railing', 'k/ft'], ['wWalk', 'Walkway', 'k/ft'], ['qCL', 'Construction LL', 'ksf'],
     ['bCL', 'Width with construction LL', 'in'], ['Pfm', 'Finishing machine (per bracket)', 'kip'], ['Rh', 'R<sub>h</sub> (overhang checks)', ''], ['Cb', 'C<sub>b</sub> (overhang checks)', '']];
@@ -62,7 +64,7 @@
   }
 
   const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
-  const ckRows = (checks, gov) => checks.map(c => `<tr${gov === c ? ' class="cn-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${cls(c.ratio)}">${fmt(c.ratio, 3)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`).join('');
+  const ckRows = (checks, gov) => checks.map(c => `<tr${gov === c ? ' class="cn-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${cls(c.ratio)}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`).join('');
   const ckHead = '<thead><tr><th class="lft">Check</th><th>Demand</th><th>Capacity</th><th>Ratio</th><th class="lft">AASHTO LRFD 10th Ed.</th><th></th></tr></thead>';
 
   function render(host, ctx) {
@@ -84,16 +86,16 @@
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {
       const R = S.R, rows = R.rows, ga = R.govAll;
-      const cell = o => !o ? '<td>—</td>' : o.row.checks && o.row.conC ? `<td class="${cls(o.ratio)}" data-cnsel="${rows.indexOf(o.row)}" title="${esc(o.check.id + ' ' + o.check.key + ' at ' + fmt(o.row.x, 2) + ' ft')}">${fmt(o.ratio, 3)}<br><span class="cn-na">${fmt(o.row.x, 2)} ft</span></td>`
-        : `<td class="${cls(o.ratio)}" data-ohsel="${R.oh.rows.indexOf(o.row)}">${fmt(o.ratio, 3)}<br><span class="cn-na">${esc(o.check.id)}, ${fmt(o.row.x, 2)} ft</span></td>`;
+      const cell = o => !o ? '<td>—</td>' : o.row.checks && o.row.conC ? `<td class="${cls(o.ratio)}" data-cnsel="${rows.indexOf(o.row)}" title="${esc(o.check.id + ' ' + o.check.key + ' at ' + fmt(o.row.x, 2) + ' ft')}">${rtx(o.check)}<br><span class="cn-na">${fmt(o.row.x, 2)} ft</span></td>`
+        : `<td class="${cls(o.ratio)}" data-ohsel="${R.oh.rows.indexOf(o.row)}">${rtx(o.check)}<br><span class="cn-na">${esc(o.check.id)}, ${fmt(o.row.x, 2)} ft</span></td>`;
       h += `<section class="sec"><div class="secHead">Constructibility results</div><div class="secBody"><p class="note">${R.what}</p>
-        ${ga ? `<p>Governing: <b>${esc(ga.check.id)}</b> ${tt(ga.check.title)} at x = ${fmt(ga.row.x, 2)} ft: ratio <b class="${cls(ga.ratio)}">${fmt(ga.ratio, 3)}</b>.</p>` : ''}
+        ${ga ? `<p>Governing: <b>${esc(ga.check.id)}</b> ${tt(ga.check.title)} at x = ${fmt(ga.row.x, 2)} ft: ratio <b class="${cls(ga.ratio)}">${rtx(ga.check)}</b>.</p>` : ''}
         ${R.oh && R.oh.errors && R.oh.errors.length ? `<div class="alert err">Overhang brackets: ${esc(R.oh.errors.join(' '))}</div>` : ''}
         <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Span</th><th>Top flange in compression (GS14, GS15 web)</th><th>Bottom flange in compression</th><th>Tension flange (GS15)</th><th>Shear (GS16)</th>${R.oh ? '<th>Overhang OH1–OH4</th><th>f<sub>ℓ</sub> ≤ 0.6F<sub>y</sub> (OH5)</th>' : ''}</tr></thead><tbody>
         ${R.spans.map(s => `<tr><td class="lft">${s.span}</td>${cell(s.top)}${cell(s.bot)}${cell(s.tens)}${cell(s.shear)}${R.oh ? cell(s.oh) + cell(s.ohfl) : ''}</tr>`).join('')}</tbody></table></div>
         <p class="note">Each cell: the largest ratio in the span and the station; click it for the checks and the worked steps.</p>
         <div class="tscroll cn-list"><table class="tbl"><thead><tr><th class="lft">Location</th><th>x (ft)</th><th>M<sub>c</sub> (kip-ft)</th><th>Flange in compression</th><th class="lft">Governing check</th><th>Ratio</th></tr></thead><tbody>
-        ${rows.map((r, i) => `<tr data-cnsel="${i}" class="${i === S.sel ? 'sel' : ''}${r === R.gov ? ' cn-gov' : ''}"><td class="lft">${esc(r.name)}</td><td>${fmt(r.x, 2)}</td><td>${fmt(r.Mc, 1)}</td><td>${r.conC.lab}</td><td class="lft">${esc(r.gov.id)} ${tt(r.gov.title)}</td><td class="${cls(r.gov.ratio)}">${fmt(r.gov.ratio, 3)}</td></tr>`).join('')}
+        ${rows.map((r, i) => `<tr data-cnsel="${i}" class="${i === S.sel ? 'sel' : ''}${r === R.gov ? ' cn-gov' : ''}"><td class="lft">${esc(r.name)}</td><td>${fmt(r.x, 2)}</td><td>${fmt(r.Mc, 1)}</td><td>${r.conC.lab}</td><td class="lft">${esc(r.gov.id)} ${tt(r.gov.title)}</td><td class="${cls(r.gov.ratio)}">${rtx(r.gov)}</td></tr>`).join('')}
         </tbody></table></div></div></section>`;
       const r = rows[S.sel] || rows[0];
       if (r) {
@@ -106,7 +108,7 @@
         h += `<section class="sec"><div class="secHead">Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)</div><div class="secBody">
           <p class="note">One location per span: the largest 1.25M<sub>DC1</sub> + 1.5M<sub>CL</sub> (GirderDetail's placement), with its plates and deck-placement L<sub>b</sub>. w<sub>u</sub> = ${fmt(O.wu, 4)} kip/ft, F<sub>ℓ</sub> = ${fmt(O.Fl, 4)} kip/ft, P<sub>ℓ</sub> = ${fmt(O.Pl, 3)} kip <a class="wk" href="#st-oh.Fl">§</a>${O.given ? ' (as stored in the hand-off file)' : ''}.</p>
           <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Location</th><th>M<sub>u</sub> (kip-ft)</th><th>M<sub>ℓ</sub> (kip-in)</th><th class="lft">Governing</th><th>Ratio</th></tr></thead><tbody>
-          ${O.rows.map((o, i) => `<tr data-ohsel="${i}" class="${i === S.ohSel ? 'sel' : ''}"><td class="lft">${esc(o.name)}</td><td>${fmt(o.Mu, 1)}</td><td>${fmt(o.Ml, 1)}</td><td class="lft">${esc(o.gov.id)}</td><td class="${cls(o.gov.ratio)}">${fmt(o.gov.ratio, 3)}</td></tr>`).join('')}</tbody></table></div>
+          ${O.rows.map((o, i) => `<tr data-ohsel="${i}" class="${i === S.ohSel ? 'sel' : ''}"><td class="lft">${esc(o.name)}</td><td>${fmt(o.Mu, 1)}</td><td>${fmt(o.Ml, 1)}</td><td class="lft">${esc(o.gov.id)}</td><td class="${cls(o.gov.ratio)}">${rtx(o.gov)}</td></tr>`).join('')}</tbody></table></div>
           ${q ? `<h4 class="sub">${esc(q.name)}</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(q.checks, q.gov)}</tbody></table></div>${stepsHtml(q.steps)}` : ''}</div></section>`; }
     }
     host.innerHTML = h;

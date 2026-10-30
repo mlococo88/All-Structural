@@ -284,3 +284,48 @@ test('steps: ids unique, no undefined/NaN, every check links to a step', () => {
   rA.checks.filter(c => c.key === 'a6t').forEach(c => { nA6++; assert.match(c.ref, /Eq\. A6\.1\.4-1/); assert.match(c.title, /continuously braced/); assert.match(rA.steps.find(s => s.id === 'fx.a6t.ok').ref, /Eq\. A6\.1\.4-1/); });
   assert.ok(nA6 > 0, 'some A6 tension flange items');
 });
+
+
+/* ---------- SB2-R2 (2026-10-30): 6.10.1.6 amplification with f_bu ≥ F_cr; the NaN guard; SB2-R1 pedestrian load ---------- */
+test('SB2-R2: ampFl with f_l = 0 is 0 (was 0 × ∞ = NaN); f_l > 0 with f_bu ≥ F_cr is undefined (und); guard and govern', () => {
+  // f_bu 39.667 ≥ F_cr 34.968 ksi; L_b 279.96 in > 1.2(81.976)√(1/(39.667/50)) = 110.44 in -> Eq. 6.10.1.6-4 applies
+  const a0 = FX.ampFl(0, 39.667, 50, 81.976, 279.96, 1, 1, 34.968), a1 = FX.ampFl(7.5, 39.667, 50, 81.976, 279.96, 1, 1, 34.968);
+  assert.equal(a0.req, true); assert.equal(a0.AF, Infinity); assert.equal(a0.fl, 0); assert.equal(a0.und, false);
+  assert.equal(a1.fl, Infinity); assert.equal(a1.und, true);
+  const a2 = FX.ampFl(7.5, 20, 50, 81.976, 279.96, 1, 1, 34.968);   // AF = 0.85/(1 − 20/34.968) = 1.98575; f_l = 14.893 (unchanged)
+  assert.ok(Math.abs(a2.AF - 0.85 / (1 - 20 / 34.968)) < 1e-12 && !a2.und && Math.abs(a2.fl - 7.5 * a2.AF) < 1e-12);
+  // a NaN ratio in use is an error and governs; ∞ governs; n/a is ignored
+  const g = FX.govern([{ id: 'A', ratio: 0.9, ok: true, inUse: true }, { id: 'B', ratio: NaN, ok: true, inUse: true }, { id: 'C', ratio: NaN, inUse: false, na: 'n/a' }]);
+  assert.equal(g.id, 'B'); assert.equal(g.ok, false); assert.match(g.ng, /NaN/);
+  assert.equal(FX.govern([{ id: 'A', ratio: 1.2, inUse: true }, { id: 'D', ratio: Infinity, inUse: true, ng: FX.AMP_NG }]).id, 'D');
+});
+
+test('SB2-R2 hand check: built-in project, this app\'s analysis, G1 x = 109.99 ft: GS7 1.134 NG governs (was NaN, governing 0.973)', () => {
+  const A = f => path.join(ROOT, 'apps/steel-bridge', f);
+  const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', A('engine/model.js'), A('engine/sections.js'), A('engine/flexure.js'), A('engine/owners.js'), 'lldf.js', A('engine/lldf.js'), A('engine/loads.js'),
+    A('engine/shear.js'), A('engine/stiffeners.js'), A('engine/analysis.js'), A('engine/fatigue.js'), A('engine/rating.js'), A('ui/shear.js'), A('ui/rating.js'));
+  const R = U.SBDRatingUI.build({ P: U.SBDModel.defaultProject(), g: 0, src: 'analysis' }); assert.ok(!R.err, R.err);
+  const r = R.flex.rows.find(q => Math.abs(q.x - 109.99) < 1e-6), c = r.checks.find(q => q.id === 'GS7');
+  // f_bu = 39.667 ksi; nonprismatic L_b (6.10.8.2.3c): F_e = γ_e f_bu,gov = 0.88119(39.683) = 34.968 ksi = F_cr = F_nc,LTB; F_nc,FLB = 50 -> F_nc = 34.968
+  // f_bu/F_cr = 1.1344 ≥ 1: AF undefined; f_l = 0 -> amplified f_l = 0; GS7 = (39.667 + 0/3)/34.968 = 1.1344 (before: NaN, not reported)
+  // (the Rating tab's framing gives 39.670 / 34.968 here: L_b from the project's cross-frames)
+  assert.ok(Math.abs(r.fbuC - 39.667) < 0.01 && Math.abs(r.lt.Fcr - 34.968) < 0.01 && r.lt.Fnc === r.lt.Fcr && r.fbuC >= r.lt.Fcr, `${r.fbuC} ${r.lt.Fcr}`);
+  assert.equal(r.am.fl, 0); assert.ok(Math.abs(c.ratio - r.fbuC / r.lt.Fnc) < 1e-12 && Math.abs(c.ratio - 1.1344) < 1e-3, c.ratio); assert.equal(c.ok, false);
+  assert.equal(R.flex.gov.gov.id, 'GS7'); assert.ok(R.flex.gov.gov.ratio > 1.134);
+  R.flex.rows.forEach(q => q.checks.forEach(k => assert.ok(k.na != null || k.ratio === undefined || !Number.isNaN(k.ratio), `${q.name} ${k.id} NaN`)));
+  // with f_l = 7.5 ksi the amplification is undefined: NG with the reason, ∞, governs
+  const F = FX.fromPayload(R.pl, { owner: 'AASHTO', Lb: 25 }), G = FX.girder(F.locs.map(L => ({ ...L, fl: 7.5 })), F.prj, { supports: F.supports });
+  assert.equal(G.gov.gov.ratio, Infinity); assert.equal(G.gov.gov.ng, FX.AMP_NG); assert.equal(G.gov.gov.ok, false);
+  // GirderDetail (SB2-R2, #485) at that row: the same GS7 ratio, f_l = 0
+  const GS = gdGirderSection(), L = F.locs.find(q => Math.abs(q.x - 109.99) < 1e-6), mine = FX.girder([L], F.prj, {}).rows[0].checks.find(k => k.id === 'GS7');
+  const { R: GR, CK } = gdRunCase(GS, gdModule(GS, F.prj, [gdRow(GS, L, 0)]), (F.prj.a6 && F.prj.a6.skews) || []);
+  const it = CK.find(k => k.id === 'GS7').items[0]; assert.ok(Math.abs(it.r - mine.ratio) < 1e-9, `GirderDetail ${it.r} vs ${mine.ratio}`); assert.equal(GR.rows[0].am.fl, 0);
+});
+
+test('SB2-R1: with pedestrianInLL the hand-off LL+IM is taken as is (no M_PL added); without it the pedestrian load is added', () => {
+  const pl = readP('gd_xsA_CTDOT_G1.json'); assert.equal(pl.pedestrianInLL, true);
+  // pier station x = 109.999: M_LLneg = −2,278.495 (includes the pedestrian load), M_PLneg = −233.613. Before: −2,278.495 − 233.613 = −2,512.108
+  const F = FX.fromPayload(pl), i = F.env.xs.findIndex(x => Math.abs(x - 109.999) < 1e-9);
+  assert.equal(F.env.Mn[i], -2278.495);
+  const F2 = FX.fromPayload({ ...pl, pedestrianInLL: false }); assert.ok(Math.abs(F2.env.Mn[i] - (-2512.108)) < 1e-9, F2.env.Mn[i]);
+});
