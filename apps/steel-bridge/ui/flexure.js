@@ -32,15 +32,17 @@
 
   function inputs(ctx) {
     const P = ctx.P, M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, g = P.girders[ctx.g] || P.girders[0], SEC = window.SBDSections, FX = window.SBDFlexure;
-    if (S.src === 'file') {
-      if (!S.pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
+    // ctx.src / ctx.pl / ctx.plName / ctx.fl / ctx.method: the caller's choices (the Report tab, build()), else the tab's own (S)
+    const src = ctx.src || S.src, plIn = ctx.pl !== undefined ? ctx.pl : S.pl, plName = ctx.plName != null ? ctx.plName : S.plName, flIn = ctx.fl != null ? ctx.fl : S.fl, meth = ctx.method || S.method;
+    if (src === 'file') {
+      if (!plIn) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
       // brace points: this project's framing when the file is of this bridge (its supports), girder = the file's girder (SB2-O9); else every ≤ L_b
       // f_ℓ: the value entered, else from the file's skews as GirderDetail takes it (C6.10.1: 1.25 × 10 / 7.5 ksi where a support is skewed > 20°)
-      const pl = S.pl, gd = pl.girderDetail || {}, FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, { line: (+gd.girder || 1) - 1 }, (pl.member || {}).supports) : null;
-      const flS = FRM ? FRM.flSkew((gd.skew || {}).bySupport || [0], gd.position === 'exterior', P.framing) : { fl: 0 }, fl = S.fl > 0 ? S.fl : flS.fl;
+      const pl = plIn, gd = pl.girderDetail || {}, FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, { line: (+gd.girder || 1) - 1 }, (pl.member || {}).supports) : null;
+      const flS = FRM ? FRM.flSkew((gd.skew || {}).bySupport || [0], gd.position === 'exterior', P.framing) : { fl: 0 }, fl = flIn > 0 ? flIn : flS.fl;
       const F = FX.fromPayload(pl, { fl, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });   // the payload's haunch as stated (the file does not say its owner)
-      F.prj.a6.method = S.method;
-      return { prj: F.prj, locs: F.locs, supports: F.supports, what: `${esc(S.plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; f<sub>ℓ</sub> = ${fmt(fl, 2)} ksi ${S.fl > 0 ? 'as entered' : `from skew (C6.10.1; largest skew ${fmt(flS.skMax, 1)}°)`}.` };
+      F.prj.a6.method = meth;
+      return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS, frB, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; f<sub>ℓ</sub> = ${fmt(fl, 2)} ksi ${flIn > 0 ? 'as entered' : `from skew (C6.10.1; largest skew ${fmt(flS.skMax, 1)}°)`}.` };
     }
     // owner rules as the Section properties tab (index.html calc()): OWN8 haunch 0 in the section properties, OWN17 w_c for E_c
     const OW = window.SBDOwners, own = P.ownerRules || {}, lf = OW ? OW.loadFactors(own.owner, own.eta, P.xs && P.xs.nb) : null, hP = OW ? OW.haunchInProps(d.haunch, lf) : d.haunch;
@@ -63,6 +65,12 @@
     S.key = key(ctx);
   }
   const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName, S.Lb, S.Cb, S.fl, S.flT, S.skew, S.method]);
+  /* build(ctx): the tab's calculation without the page (the Report tab): ctx = { P, g, src, pl, plName, fl, method } (each optional,
+     else the tab's own choice); returns engine/flexure.js girder() { rows, gov, … } plus { prj, what, fl, flS, frB } or { err }. */
+  function build(ctx) {
+    const I = inputs(ctx); if (I.err) return { err: I.err };
+    return { ...window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }), prj: I.prj, what: I.what, fl: I.fl, flS: I.flS, frB: I.frB };
+  }
 
   function render(host, ctx) {
     css();
@@ -119,5 +127,5 @@
     const list = host.querySelector('.fx-list'); if (list) list.addEventListener('click', e => { const tr = e.target.closest('[data-fx]'); if (!tr) return; S.sel = +tr.dataset.fx; redraw(); });
   }
 
-  window.SBDFlexureUI = { render };
+  window.SBDFlexureUI = { render, build };
 })();

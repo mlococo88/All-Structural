@@ -105,10 +105,11 @@
   function build(ctx) {
     const P = ctx.P, M = window.SBDModel, SH = window.SBDShear, SB = window.SBDStiffeners, OW = window.SBDOwners, st = ensure(P), ly = st.layout, g = ctx.g || 0;
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0), env = { owner: own.owner, lf };
-    let pl = ctx.pl !== undefined ? ctx.pl : S.src === 'file' ? S.pl : null, AR = null;   // ctx.pl: a payload given directly (tests)
+    const src = ctx.src || S.src;   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
+    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;   // ctx.pl: a payload given directly (tests)
     const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf);
-    if (ctx.pl === undefined && S.src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-    if (ctx.pl === undefined && S.src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
+    if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
+    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
     const gm = geom(P, g, pl), D = gm.D;
     // sections along a range: both sides of every plate change inside (Preliminary sizing tsSecFns)
     const pts = (p, q) => { const xs = [p, q]; gm.chg.forEach(x => { if (x > p && x < q) xs.push(x - 1e-6, x + 1e-6); }); const Lt = gm.sup[gm.sup.length - 1]; return xs.map(x => Math.min(Math.max(x, 1e-6), Lt - 1e-6)); };
