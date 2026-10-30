@@ -95,12 +95,12 @@
     const ck = o => ({ ratio: o.demand / o.capacity, ok: o.capacity >= o.demand - 1e-9, inUse: true, unit: 'ksi', ...o });
     const f = r.conC.f, cf = r.conC.lab, tl = r.conT.lab;
     r.checks = [
-      ck({ id: 'GS14', key: 'yield', title: `Deck placement, ${cf} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: f + r.amC.fl, capacity: r.RhC * r.conC.Fy, step: 'cn.yield.ok' }),
-      ck({ id: 'GS14', key: 'buckling', title: `Deck placement, ${cf} flange (compression) flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: f + r.amC.fl / 3, capacity: r.ltC.Fnc, step: 'cn.buck.ok' }),
+      ck({ id: 'GS14', key: 'yield', title: `Deck placement, ${cf} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: f + r.amC.fl, capacity: r.RhC * r.conC.Fy, step: 'cn.yield.ok', ...(r.amC.und ? { ng: FX().AMP_NG } : {}) }),
+      ck({ id: 'GS14', key: 'buckling', title: `Deck placement, ${cf} flange (compression) flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: f + r.amC.fl / 3, capacity: r.ltC.Fnc, step: 'cn.buck.ok', ...(r.amC.und ? { ng: FX().AMP_NG } : {}) }),
       ck({ id: 'GS15', key: 'web', title: 'Deck placement, web bend-buckling, f_bu ≤ φ_fF_crw', ref: `${ED} Eq. 6.10.3.2.1-3; 6.10.1.9.1`, demand: f, capacity: r.webC.F, step: 'cn.web.ok' }),
       ck({ id: 'GS15', key: 'tension', title: `Deck placement, ${tl} flange (tension), f_bu + f_ℓ ≤ φ_fR_hF_yt`, ref: `${ED} Eq. 6.10.3.2.2-1`, demand: r.conT.f + r.flC, capacity: r.RhC * r.conT.Fy, step: 'cn.tens.ok' }),
       ck({ id: 'GS16', key: 'shear', title: 'Deck placement, web shear, V_u ≤ φ_vV_cr', ref: `${ED} Eq. 6.10.3.3-1`, demand: r.VuC, capacity: r.sh.Vcr, unit: 'kip', step: 'cn.sh.ok' })];
-    r.gov = r.checks.reduce((b, c) => (!b || c.ratio > b.ratio ? c : b), null);
+    r.gov = FX().govern(r.checks);   // SB2-R2: guard (NaN / ∞ fail and govern)
     Object.defineProperty(r, 'steps', { enumerable: false, configurable: true, get() { const st = worked(r); Object.defineProperty(r, 'steps', { value: st, enumerable: false }); return st; } });
     return r;
   }
@@ -133,7 +133,7 @@
       sub: Lb <= lt.Lp ? n2(cap) : Lb <= lt.Lr ? `${n3(r.CbCu)}\\left[1 - \\left(1 - \\frac{${n2(lt.Fyr)}}{${n2(cap)}}\\right)\\frac{${n2(Lb)} - ${n2(lt.Lp)}}{${n2(lt.Lr)} - ${n2(lt.Lp)}}\\right](${n2(cap)})` : `\\frac{${n3(r.CbCu)}(1.0)\\pi^{2}(29{,}000)}{(${n2(Lb)}/${n4(lt.rt)})^{2}} = ${n2(lt.Fcr)}`,
       value: lt.LTB, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.3-1, -2, -3, -8` });
     w.add({ id: 'Fnc', label: 'Nominal flexural resistance of the compression flange', sym: 'F_{nc}', eq: '\\min(F_{nc,FLB}, F_{nc,LTB})', sub: `\\min(${n2(lt.FLB)}, ${n2(lt.LTB)})`, value: lt.Fnc, unit: 'ksi', d: 3, ref: `${ED} Art. 6.10.8.2` });
-    w.add({ id: 'fl', label: r.amC.req ? 'Compression-flange lateral bending, amplified' : 'Compression-flange lateral bending (first order; amplification not required)', sym: 'f_{\\ell}', eq: r.amC.req ? '\\frac{0.85}{1 - f_{bu}/F_{cr}}f_{\\ell1} \\ge f_{\\ell1}' : 'f_{\\ell1}', sub: r.amC.req ? `${n3(r.amC.AF)}(${n2(r.flC)})` : n2(r.flC), value: r.amC.fl, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.1.6-4, -5`,
+    w.add({ id: 'fl', label: r.amC.req ? 'Compression-flange lateral bending, amplified' : 'Compression-flange lateral bending (first order; amplification not required)', sym: 'f_{\\ell}', eq: r.amC.req ? '\\frac{0.85}{1 - f_{bu}/F_{cr}}f_{\\ell1} \\ge f_{\\ell1}' : 'f_{\\ell1}', sub: r.amC.req ? `${isFinite(r.amC.AF) ? n3(r.amC.AF) : '\\infty'}(${n2(r.flC)})` : n2(r.flC), value: r.amC.fl, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.1.6-4, -5`,
       note: `L_b ${r.amC.req ? '>' : '≤'} 1.2L_p√(C_bR_b/(f_bu/F_yc)) = ${n2(r.amC.lim)} in. First-order f_ℓ during deck placement as entered; the overhang-bracket f_ℓ of an exterior girder is checked in OH1–OH5.` });
     const c = r.checks, dem = k => c.find(q => q.key === k);
     let q = dem('yield'); w.add({ id: 'yield.ok', label: `GS14, ${cF.lab} flange yielding`, sym: 'f_{bu} + f_{\\ell}', eq: '\\le \\phi_{f}R_{h}F_{yc}', sub: `${n2(cF.f)} + ${n2(r.amC.fl)} = ${n2(q.demand)} \\le 1.0(${n3(r.RhC)})(${n2(cF.Fy)}) = ${n2(q.capacity)}`, value: okv(q.demand, q.capacity), unit: '', ref: `${ED} Eq. 6.10.3.2.1-1`, ok: q.ok, note: `Ratio ${n3(q.ratio)}. Applied to every web (conservative for compact and noncompact webs; GirderDetail).` });
@@ -186,6 +186,27 @@
      w_c (kcf), forms qForm (ksf), screed rail, railing, walkway (klf), construction LL qCL (ksf) over bCL (in), finishing machine Pfm (kip
      per bracket); R_h, C_b of the module; γ_DC, γ construction. */
   const OH_DEF = { Rh: 1.0, Cb: 1.0, gam: { dc: 1.25, cl: 1.50 }, a: 36, hb: 54, wOH: 30, tOH: 9, wc: 0.150, qForm: 0.010, wScreed: 0.085, wRail: 0.025, wWalk: 0.125, qCL: 0.020, bCL: 30, Pfm: 3.0 };
+  /* ohFill(project, gi): "Fill from cross-section" (GirderDetail XS11, SB2-C2; a button with a confirmation, never automatic): the bracket
+     deck geometry from the Cross-section & loads inputs. Deck width carried by the brackets w_OH = 12·overhang − b_tf/2 (in, to 0.01; the
+     overhang from the exterior girder centerline to the deck edge, the side with the larger overhang, left when equal; b_tf the narrowest
+     top flange of this girder: the widest deck strip outside the flange), overhang deck thickness t_OH = the total deck thickness
+     (deck.tdeck: the structural slab plus the integral wearing surface, all placed on the brackets; GirderDetail takes t_s, its bridge
+     data having no wearing thickness), w_c = the deck concrete unit weight. Returns { vals: { wOH, tOH, wc }, sd, oh, bf, why, steps } or { err }. */
+  function ohFill(P, gi) {
+    const xs = P.xs, g = P.girders[gi], d = P.deck || {}, c = (P.materials || {}).concrete || {};
+    if (!xs || !(xs.ohL >= 0) || !(xs.ohR >= 0)) return { err: 'No cross-section: enter the overhangs on the Cross-section & loads tab.' };
+    if (!g || !g.segments || !g.segments.length) return { err: 'No girder plates.' };
+    const sd = +xs.ohR > +xs.ohL + 1e-9 ? 'R' : 'L', oh = sd === 'L' ? +xs.ohL : +xs.ohR, bf = Math.min(...g.segments.map(s => +s.topB));
+    const raw = Math.max(oh * 12 - bf / 2, 0), wOH = Math.round(raw * 100) / 100, tOH = +d.tdeck > 0 ? +d.tdeck : +d.ts, wc = +c.wc;
+    const w = St().work('oh.fill'), side = sd === 'L' ? 'left' : 'right';
+    w.add({ id: 'wOH', label: `Deck width carried by the brackets (${side} overhang ${n2(oh)} ft, narrowest top flange ${n2(bf)} in)`, sym: 'w_{OH}', eq: '12\\,OH - \\frac{b_{tf}}{2}', sub: `12(${n2(oh)}) - \\frac{${n2(bf)}}{2}`, value: wOH, unit: 'in', d: 2,
+      ref: 'C6.10.3.4', note: 'Overhang: exterior girder centerline to the deck edge (Cross-section & loads tab), the larger side. Rounded to 0.01 in.' });
+    w.add({ id: 'tOH', label: 'Overhang deck thickness (total deck thickness)', sym: 't_{OH}', eq: 't_{deck}', sub: '', value: tOH, unit: 'in', d: 2, note: 'Structural slab and integral wearing surface, all placed on the brackets; no overhang thickening in the project data.' });
+    w.add({ id: 'wc', label: 'Deck concrete unit weight', sym: 'w_{c}', eq: '', sub: '', value: wc, unit: 'kcf', d: 3, ref: 'Table 3.5.1-1' });
+    const why = { wOH: `${side} overhang ${n2(oh)} ft × 12 − ${n2(bf)}/2 in (the narrowest top flange)`, tOH: 'the total deck thickness (slab + integral wearing surface)', wc: 'the deck concrete unit weight' };
+    return { vals: { wOH, tOH, wc }, sd, oh, bf, why, steps: w.steps };
+  }
+
   /* ohLoads(p): the factored bracket load w_u (klf), its horizontal flange force F_ℓ = w_u a/h_b (klf) and the finishing machine
      P_ℓ = γ P_fm a/h_b (kip) (GM.oh.compute). p.loads = { wu, Fl, Pl } gives them directly (a hand-off's stored values). */
   function ohLoads(p) {
@@ -217,16 +238,16 @@
       r.FncL = LbIn <= r.Lp ? Rh * Fyf : LbIn <= r.Lr ? Math.min(Cb * (1 - (1 - r.Fyr / (Rh * Fyf)) * (LbIn - r.Lp) / (r.Lr - r.Lp)) * Rh * Fyf, Rh * Fyf) : Math.min(r.Fcr, Rh * Fyf);
       r.Fnc = Math.min(r.FncF, r.FncL);
       r.fbu = Math.max(c.f, 0); r.ampReq = LbIn > 1.2 * r.Lp * Math.sqrt(Cb / Math.max(r.fbu / Fyf, 1e-9));
-      r.AF = r.ampReq ? (r.fbu < r.Fcr ? Math.max(0.85 / (1 - r.fbu / r.Fcr), 1) : Infinity) : 1; c.fl = c.fl1 * r.AF; tf.fl = tf.fl1;
+      r.AF = r.ampReq ? (r.fbu < r.Fcr ? Math.max(0.85 / (1 - r.fbu / r.Fcr), 1) : Infinity) : 1; c.fl = c.fl1 === 0 ? 0 : c.fl1 * r.AF; tf.fl = tf.fl1; r.und = r.AF === Infinity && c.fl1 !== 0;   // SB2-R2
       r.k = 9 / (r.Dc / r.D) ** 2; r.Fcrw = Math.min(0.9 * ES * r.k / (r.D / r.tw) ** 2, Rh * Fyf, Fyw / 0.7); r.LbIn = LbIn;
       // checks OH1–OH5 (GM.oh.checks)
       const ck = o => ({ ratio: o.demand / o.capacity, ok: o.capacity >= o.demand - 1e-9, inUse: true, unit: 'ksi', ...o }), fb = Math.max(tf.f, 0);
-      r.checks = [ck({ id: 'OH1', key: 'yield', flange: c.lab, title: `Overhang brackets, ${c.lab} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: r.fbu + c.fl, capacity: Rh * Fyf, step: 'oh.yield.ok' }),
-        ck({ id: 'OH2', key: 'buckling', flange: c.lab, title: `Overhang brackets, ${c.lab} flange flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: r.fbu + c.fl / 3, capacity: r.Fnc, step: 'oh.buck.ok' }),
+      r.checks = [ck({ id: 'OH1', key: 'yield', flange: c.lab, title: `Overhang brackets, ${c.lab} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: r.fbu + c.fl, capacity: Rh * Fyf, step: 'oh.yield.ok', ...(r.und ? { ng: FX().AMP_NG } : {}) }),
+        ck({ id: 'OH2', key: 'buckling', flange: c.lab, title: `Overhang brackets, ${c.lab} flange flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: r.fbu + c.fl / 3, capacity: r.Fnc, step: 'oh.buck.ok', ...(r.und ? { ng: FX().AMP_NG } : {}) }),
         ck({ id: 'OH3', key: 'web', title: 'Overhang brackets, web bend-buckling, f_bu ≤ φ_fF_crw', ref: `${ED} Eq. 6.10.3.2.1-3; 6.10.1.9.1`, demand: r.fbu, capacity: r.Fcrw, step: 'oh.web.ok' }),
         ck({ id: 'OH4', key: 'tension', flange: tf.lab, title: `Overhang brackets, ${tf.lab} flange (tension) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yt`, ref: `${ED} Eq. 6.10.3.2.2-1`, demand: fb + tf.fl, capacity: Rh * Fyf, step: 'oh.tens.ok' }),
-        ...[c, tf].map(f => ck({ id: 'OH5', key: 'fl.' + f.lab, flange: f.lab, title: `Flange lateral bending, ${f.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: f.fl, capacity: 0.6 * Fyf, step: `oh.fl.${f.lab}.ok` }))];
-      r.gov = r.checks.reduce((b, k) => (!b || k.ratio > b.ratio ? k : b), null);
+        ...[c, tf].map(f => ck({ id: 'OH5', key: 'fl.' + f.lab, flange: f.lab, title: `Flange lateral bending, ${f.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: f.fl, capacity: 0.6 * Fyf, step: `oh.fl.${f.lab}.ok`, ...(r.und && f === c ? { ng: FX().AMP_NG } : {}) }))];
+      r.gov = FX().govern(r.checks);   // SB2-R2
       return r; });
     const R = { ...B, errors: [], rows: out, Rh, Cb, Fyf, Fyw };
     out.forEach(r => Object.defineProperty(r, 'steps', { enumerable: false, configurable: true, get() { const st = ohWorked(R, r); Object.defineProperty(r, 'steps', { value: st, enumerable: false }); return st; } }));
@@ -267,7 +288,7 @@
     opt = opt || {};
     const rows = locs.map(L => location(L, prj)), sup = opt.supports || null, spans = [];
     const spOf = x => { if (!sup || x == null) return 1; let k = 0; while (k < sup.length - 2 && x > sup[k + 1] + 1e-9) k++; return k + 1; };
-    const best = {}, put = (sp, k, o) => { const b = best[sp] = best[sp] || {}; if (!b[k] || b[k].ratio < o.ratio) b[k] = o; };
+    const gr = FX().gr, best = {}, put = (sp, k, o) => { const b = best[sp] = best[sp] || {}; if (!b[k] || gr(b[k]) < gr(o)) b[k] = o; };
     rows.forEach(r => { const sp = spOf(r.x), cf = r.conC.lab === 'top' ? 'top' : 'bot';
       r.checks.forEach(c => { const o = { ratio: c.ratio, row: r, check: c };
         if (c.id === 'GS16') put(sp, 'shear', o); else if (c.key === 'tension') put(sp, 'tens', o); else put(sp, cf, o); }); });
@@ -276,10 +297,10 @@
     let oh = null;
     if (opt.oh && opt.oh.rows && opt.oh.rows.length) { oh = overhang(opt.oh.rows, opt.oh.p, opt.oh.mat);
       if (!oh.errors.length) oh.rows.forEach(r => { const sp = r.span || spOf(r.x), b = spans[sp - 1]; if (!b) return;
-        r.checks.forEach(c => { const key = c.id === 'OH5' ? 'ohfl' : 'oh'; if (!b[key] || b[key].ratio < c.ratio) b[key] = { ratio: c.ratio, row: r, check: c }; }); }); }
-    let gov = null; rows.forEach(r => { if (r.gov && (!gov || r.gov.ratio > gov.gov.ratio)) gov = r; });
+        r.checks.forEach(c => { const key = c.id === 'OH5' ? 'ohfl' : 'oh'; if (!b[key] || gr(b[key]) < gr(c)) b[key] = { ratio: c.ratio, row: r, check: c }; }); }); }
+    let gov = null; rows.forEach(r => { if (r.gov && (!gov || gr(r.gov) > gr(gov.gov))) gov = r; });
     let govAll = gov ? { ratio: gov.gov.ratio, row: gov, check: gov.gov } : null;
-    if (oh && !oh.errors.length) oh.rows.forEach(r => { if (r.gov && (!govAll || r.gov.ratio > govAll.ratio)) govAll = { ratio: r.gov.ratio, row: r, check: r.gov, oh: true }; });
+    if (oh && !oh.errors.length) oh.rows.forEach(r => { if (r.gov && (!govAll || gr(r.gov) > gr(govAll))) govAll = { ratio: r.gov.ratio, row: r, check: r.gov, oh: true }; });
     return { rows, spans, oh, gov, govAll };
   }
 
@@ -369,5 +390,5 @@
     return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc };
   }
 
-  window.SBDConstr = { ES, OH_DEF, factors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
+  window.SBDConstr = { ES, OH_DEF, ohFill, factors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
 })();

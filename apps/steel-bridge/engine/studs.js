@@ -12,10 +12,11 @@
    The TeX `work` lines of GirderDetail are replaced by worked steps (SharedSteps). tests/engine/studs.test.mjs checks every value and check
    item against GirderDetail's own functions in Node, and fromPayload() against the results GirderDetail sends in the hand-off (S2-6).
 
-   Bridge-wide b_eff (open question carried over, not changed): GirderDetail's module has ONE set of pitch zones and strength regions for
-   the bridge, with one b_eff (Preliminary sizing sends the b_eff of the girder type with the largest fatigue shear range, usually the
-   exterior girder). This engine does the same by default; the model option p.beffMode = 'girder' (off by default) uses the girder's own
-   b_eff instead (fromPayload: the payload girder's deck.beff). The difference is reported, not adopted.
+   b_eff (SB2-F1, decided 2026-10-29): GirderDetail's module has ONE set of pitch zones and strength regions for the bridge, with one
+   b_eff (Preliminary sizing sends the b_eff of the girder type with the largest fatigue shear range, usually the exterior girder). This
+   engine's compute() and fromPayload() do the same when p.beffMode is absent (the parity tests); p.beffMode = 'girder' uses the girder's
+   own b_eff (fromPayload: the payload girder's deck.beff), as AASHTO 6.10.10.1.2 (Q, I of the girder's own section) and 6.10.10.4.2
+   (P_1p with its own b_eff) require. The app (engine/model.js defaultStuds, ui/fatigue.js) uses 'girder' by default from 2026-10-29.
 
    Owner rules: env = { owner, lf: { h0 } (OWN8: haunch 0 in the composite properties), rule(id), cite(r), fat: { set, B } (the bridge's
    fatigue settings and supports, engine/fatigue.js settings() / supports(); default: settings(DEFAULT), no bridge) }. Rule used: stud (OWN22).
@@ -44,7 +45,9 @@
     return { owner, lf: e.lf || { h0: false }, rule: e.rule || (id => (O ? O.rule(owner, id) : null)), cite: e.cite || (r => (O ? O.cite(r) : (r ? `${r.owner} ${r.sec}` : ''))),
       fat: { set: f.set || FA().settings(FA().DEFAULT), B: f.B || null } };
   }
-  function ckNew() { const out = []; out.add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; if (!c.items.length && !c.naWhy) c.naWhy = 'Not applicable to any item.'; out.push(c); }; return out; }
+  function ckNew() { const out = []; out.add = c => { c.items.forEach(it => { if (typeof it.r === 'number' && Number.isNaN(it.r) && it.st !== 'na') { it.err = 'error: ratio is NaN'; if (RANK[it.st] < RANK.warn) it.st = 'fail'; } });   // SB2-R2 NaN guard: never a pass, ranks first
+    const nr = i => (Number.isNaN(i.r) || i.r === Infinity ? Infinity : i.r ?? -1);
+    c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && nr(it) > nr(c.items[gi]))) gi = k; }); c.gov = gi; if (!c.items.length && !c.naWhy) c.naWhy = 'Not applicable to any item.'; out.push(c); }; return out; }
   const rc = (loc, d, c, step, x) => ({ loc, demand: d, capacity: c, r: d / c, st: ge(c, d) ? 'pass' : 'fail', step, ...(x || {}) });
 
   const ZSPEC = [['name', 'Name', '', 'text'], ['x1', 'From', 'ft', 'num', { min: 0 }], ['x2', 'To', 'ft', 'num', { min: 0 }], ['nr', 'Studs per row', '', 'num'], ['p', 'Pitch', 'in', 'dim'], ['Vfr', 'Fatigue shear range V<sub>f</sub>', 'kip', 'num', { min: 0 }],

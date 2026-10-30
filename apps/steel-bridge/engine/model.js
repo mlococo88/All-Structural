@@ -51,7 +51,8 @@
      studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I),
                   skew: 'auto' | 'yes' | 'no' (F_fat = F_rc/w on skewed > 20° or curved bridges; auto: from the support skews), Frc (kip), wv (in),
                   splX ('82, 145': field splice stations, ft), splL (top splice plate length, ft), splC (clearance at each plate end, in),
-                  beffMode: 'bridge' (GirderDetail: one b_eff for every girder, the largest-fatigue-shear girder's) | 'girder' (each girder its own),
+                  beffMode: 'girder' (each girder its own, AASHTO 6.10.10; the default from 2026-10-29, SB2-F1) | 'bridge' (GirderDetail: one b_eff
+                            for every girder, the largest-fatigue-shear girder's; kept for parity; a stored project keeps its value),
                   zones: [ { x1, x2 (ft), nr (studs per row), p (pitch, in) } ] (empty: the hand-off file's zones) },
      -- added 2026-10-29 (framing and cross-frames PR), optional: a version 1 project without them has no framing (the evenly spaced brace
         points of before) and reads the cross-frames as defaultCrossframes() --
@@ -72,6 +73,8 @@
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)
+                constr.flC (ksi, added 2026-10-30, report wiring PR; optional, absent = 0): f_ℓ during deck placement, first order (GS14, GS15),
+                  entered on the Constructibility tab
      -- added 2026-10-29 (field splices PR), optional, read by engine/splices.js (absent = defaultSplices()); the stations are framing.splices --
      splices:   { code: '10' | '8' (AASHTO LRFD edition of the design forces),
                   bolts: { d: '0.875' | '1' | '1.125', gr: 'A325' | 'A490', thr: 'excl' | 'incl', cls: 'A' | 'B', prep: 'drilled' | 'punched',
@@ -85,6 +88,11 @@
                   limits: { Dmin, Dmax, Dinc, twInc, tfInc, bfInc, twMin, tfMin, bfMin, tfMax, thkRatio, areaRatio, maxTrans, minSeg, lbRatio, topConst, maxDb,
                   depthRule, sLo, sHi } ('' = the owner's or Preliminary sizing's default), nbList (text), change: { nb, D },
                   undo: { girders, xs, framing, splices } (the design before the last Apply; one-step undo), applied: { at, nb, D, w } }
+     -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
+     rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
+     -- added 2026-10-30 (welds PR), optional: a version 1 project without it reads as defaultWelds() --
+     welds:     { Fexx (ksi), w (flange-to-web fillet weld size, in; '' = the minimum of Table 6.13.3.4-1 at each location),
+                  gam: { dc, dw, ll (Strength I), fat (Fatigue I) }, ground: 'yes' | 'no' (shop transition butt welds ground flush) }
    } */
 (function () {
   'use strict';
@@ -113,7 +121,8 @@
       studs: defaultStuds(),
       framing: defaultFraming(),
       crossframes: defaultCrossframes(),
-      splices: defaultSplices()
+      splices: defaultSplices(),
+      welds: defaultWelds()
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future
@@ -155,13 +164,18 @@
       user: { StrI: Z(), Con: Z(), Fat: Z() }, fatCat: 'B', sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } };
   }
   function defaultStuds() {
-    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'bridge', zones: [] };
+    return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'girder', zones: [] };   // beffMode 'girder' by default from 2026-10-29 (SB2-F1)
   }
   /* defaultSplices(): GirderDetail's built-in Field splice settings (GD_DEFAULT bolts, load factors, clearances), auto-design on */
   function defaultSplices() {
     return { code: '10', bolts: { d: '0.875', gr: 'A325', thr: 'excl', cls: 'B', prep: 'drilled', edge: 'cut', gap: 0.5, long: 'flange', eccS: 'incl', eccV: 'excl', minLines: 2, c1: '', stitch: 'req' },
       gam: { dcMax: 1.25, dcMin: 0.90, dwMax: 1.50, dwMin: 0.65, llS: 1.75, llSv: 1.30, fat: 1.75, dc1C: 1.25, clC: 1.50 }, clr: { cw: 0.5, cv: 1.5 }, prs: 'no', gP: '', auto: true, plates: [] };
   }
+  /* defaultRating(): the load rating inputs (ST-Girder's defaults, rate: { phiC: 1.0, phiS: 1.0 }) */
+  function defaultRating() { return { phiC: 1.0, phiS: 1.0 }; }
+  /* defaultWelds(): GirderDetail's built-in Welds and transitions settings (GM.wt.def: E70XX, γ 1.25 / 1.50 / 1.75, Fatigue I 1.75), the weld
+     size the minimum of Table 6.13.3.4-1 at each location (Preliminary sizing's rule), transitions ground flush */
+  function defaultWelds() { return { Fexx: 70, w: '', gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }, ground: 'yes' }; }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
   const isNum = v => typeof v === 'number' && isFinite(v);
@@ -285,6 +299,16 @@
       Object.entries(Q.clr || {}).forEach(([k, v]) => nn(v, `splices.clr.${k}`, `Clearance ${k}`));
       if (!['10', '8'].includes(String(Q.code))) E('splices.code', 'Edition: 10th or 8th.');
       if (Q.plates != null && !Array.isArray(Q.plates)) E('splices.plates', 'Entered splice plates must be a list.'); }
+    // added 2026-10-29 (load rating PR): the optional rating factors
+    if (p.rating != null) { const Q = p.rating || {};
+      [['phiC', 'Condition factor φ_c'], ['phiS', 'System factor φ_s']].forEach(([k, t]) => { if (!(isNum(Q[k]) && Q[k] > 0 && Q[k] <= 1)) E(`rating.${k}`, `${t} must be more than 0 and at most 1.0.`); }); }
+    // added 2026-10-30 (welds PR)
+    if (p.welds != null) { const Q = p.welds || {};
+      pos(Q.Fexx, 'welds.Fexx', 'F_EXX'); if (Q.w !== '' && Q.w != null) pos(Q.w, 'welds.w', 'Fillet weld size');
+      ['dc', 'dw', 'll', 'fat'].forEach(k => pos((Q.gam || {})[k], `welds.gam.${k}`, `Load factor ${k}`));
+      if (!['yes', 'no'].includes(Q.ground)) E('welds.ground', 'Transition butt welds: ground flush yes or no.'); }
+    // added 2026-10-30 (report wiring PR): the optional f_ℓ during deck placement
+    if (p.constr != null && p.constr.flC != null && !isNum(p.constr.flC)) E('constr.flC', 'f_ℓ during deck placement must be a number (ksi).');
     return { errors, warnings };
   }
 
@@ -348,5 +372,5 @@
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export or save.` };
   }
 
-  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

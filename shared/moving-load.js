@@ -20,7 +20,8 @@
                            m.negX: optional [[x0,x1],…] (ft): M sections in these ranges also take the multi-vehicle
                            case for the minimum (added 2026-10-29 for Steel Bridge: GirderDetail's LL5 region).
    deflection(R, opt)      LL deflection envelope at the 1/20 points from analyze() result R.
-                           opt: {mode:'lrfd'|'veh', DF, useIM}.
+                           opt: {mode:'lrfd'|'veh', DF, useIM, neglect}. neglect (optional, added 2026-10-29; default off):
+                           axles that do not add to the deflection sought are left out (3.6.1.3.1).
    absScan(R, analyzeFn)   absolute maxima per span (extra output sections; analyzeFn defaults to analyze).
    staticAnalysis(spec)    dead-load / uniform-load analysis of the same variable-EI beam, any number of spans
                            (added 2026-10-29): moments, shears, reactions and deflections at stations. See its header.
@@ -420,11 +421,14 @@ function deflection(R,opt){
       let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
       if(!J.length&&sc===null)continue;
       let jc=0,tc=0;if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
-      secs.forEach((s,si)=>{const g=G[si];let v=0;for(let a=0;a<J.length;a++){const j=J[a];v+=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);}v*=im[si]*cc.aS;
+      secs.forEach((s,si)=>{const g=G[si];let v=0,vn=0,vp=0;for(let a=0;a<J.length;a++){const j=J[a],e=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);v+=e;if(e<0)vn+=e;else vp+=e;}
+        // opt.neglect (added 2026-10-29, apps/steel-bridge SB2-A4; off by default): axles that do not add to the deflection sought are neglected (3.6.1.3.1):
+        // the downward value sums only the downward axle effects, the upward value only the upward ones (GirderDetail LL8)
+        let vD,vU;if(opt.neglect){vD=vn*(im[si]*cc.aS);vU=vp*(im[si]*cc.aS);}else{v*=im[si]*cc.aS;vD=vU=v;}
         const uf=m.imp.onUdl&&useIM?im[si]:1;let uDn=0,uUp=0;
         if(sc!==null){const Dd=D[si],CIs=Dd.CI[jc]+(Dd.CI[jc+1]-Dd.CI[jc])*tc,u=(dir>0?CIs:Dd.end-CIs)*tr.w*uf;uDn=uUp=u;}
         if(cc.lane){const w=m.udl.w*uf;uDn+=m.udl.mode==='lane'?w*D[si].ln:w*D[si].end;uUp+=m.udl.mode==='lane'?w*D[si].lp:w*D[si].end;}
-        const vd=DF*(v+uDn),vu=DF*(v+uUp),r=res[si];
+        const vd=DF*(vD+uDn),vu=DF*(vU+uUp),r=res[si];
         if(vd<r.dn-1e-12){r.dn=vd;r.dnG={lab:cc.lab,p,dir};}
         if(vu>r.up+1e-12){r.up=vu;r.upG={lab:cc.lab,p,dir};}});
     }});
@@ -485,9 +489,15 @@ function staticAnalysis(spec){
     return out;
   }
   // Mesh: supports, stations, segment and load boundaries, point loads; then subdivided to hmax
-  const key=[...sup,...st]; sb.forEach(b=>key.push(b[0],b[1])); dist.forEach(d=>key.push(d[0],d[1])); pts.forEach(p=>key.push(p[0]));
+  const key=[...sup,...st]; sb.forEach(b=>key.push(b[0],b[1])); dist.forEach(d=>key.push(d[0],d[1]));
+  /* SB2-X1 (2026-10-29): a point load closer than tolP = 0.05 hmax (but more than 1e-6 ft) to another mesh key is not made a node:
+     the very short element it would create (stiffness ∝ 1/l³) ill-conditions the solve (ΣR off by ~1e-4 of the loads at 0.01 ft).
+     It is applied inside its element with the exact fixed-end forces instead (inP), so its position is kept exactly. Every other
+     point load is a node as before (results unchanged where no point load is that close to a key). */
+  const hmax=spec.hmax||Lt/240, tolP=0.05*hmax, inP=[];
+  pts.forEach(p=>{const dm=Math.min(...key.map(v=>Math.abs(v-p[0])));if(dm>1e-6&&dm<tolP&&p[0]>0&&p[0]<Lt)inP.push(p);else key.push(p[0]);});
   const ks=[]; key.filter(v=>v>=-1e-9&&v<=Lt+1e-9).sort((a,b)=>a-b).forEach(v=>{if(!ks.length||v-ks[ks.length-1]>1e-6)ks.push(v);});
-  const hmax=spec.hmax||Lt/240, x=[ks[0]];
+  const x=[ks[0]];
   for(let i=1;i<ks.length;i++){const a=ks[i-1],b=ks[i],n=Math.max(1,Math.ceil((b-a)/hmax-1e-9));for(let j=1;j<=n;j++)x.push(a+(b-a)*j/n);}
   const nn=x.length, nd=2*nn;
   const idxOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return Math.abs(x[lo]-v)<=Math.abs(x[hi]-v)?lo:hi;};
@@ -499,8 +509,12 @@ function staticAnalysis(spec){
     let w=0; dist.forEach(d=>{if(xm>d[0]&&xm<d[1])w+=d[2];}); wE[e]=w;
     if(w){FEF[4*e]=w*l/2;FEF[4*e+1]=w*l*l/12;FEF[4*e+2]=w*l/2;FEF[4*e+3]=-w*l*l/12;}
   }
+  // inP (SB2-X1): fixed-end forces of a point load P at a from the start of element e (b = l − a), added to the element's FEF:
+  // R1 = P b²(3a + b)/l³, M1 = P a b²/l², R2 = P a²(a + 3b)/l³, M2 = −P a² b/l² (exact for the beam element; ΣR = P)
+  const eP=inP.map(p=>{let e=0;while(e<nn-2&&x[e+1]<=p[0])e++;const l=el[e],a=p[0]-x[e],b=l-a,P=p[1];
+    FEF[4*e]+=P*b*b*(3*a+b)/(l*l*l);FEF[4*e+1]+=P*a*b*b/(l*l);FEF[4*e+2]+=P*a*a*(a+3*b)/(l*l*l);FEF[4*e+3]-=P*a*a*b/(l*l);return {e,a,P};});
   const F=new Float64Array(nd); for(let e=0;e<nn-1;e++)for(let q=0;q<4;q++)F[2*e+q]-=FEF[4*e+q];
-  pts.forEach(p=>{F[2*idxOf(p[0])]-=p[1];});
+  pts.forEach(p=>{if(!inP.includes(p))F[2*idxOf(p[0])]-=p[1];});
   const supNodes=sup.map(idxOf), isSup=new Uint8Array(nd); supNodes.forEach(i=>isSup[2*i]=1);
   const free=[]; for(let d=0;d<nd;d++) if(!isSup[d])free.push(d);
   const nf=free.length, A=new Float64Array(nf*nf), bb=new Float64Array(nf);
@@ -513,7 +527,8 @@ function staticAnalysis(spec){
   const out={x:st,M:[],VL:[],VR:[],defl:[],R,sup,Lt,nn};
   st.forEach(v=>{const i=idxOf(v);
     const mR=i<nn-1?-m1[i]:null, l=i>0?el[i-1]:0, w=i>0?wE[i-1]:0;
-    const vL=i>0?f1[i-1]-w*l:0, mL=i>0?-m1[i-1]+f1[i-1]*l-w*l*l/2:null;
+    let vL=i>0?f1[i-1]-w*l:0, mL=i>0?-m1[i-1]+f1[i-1]*l-w*l*l/2:null;
+    eP.forEach(q=>{if(i>0&&q.e===i-1){vL-=q.P;mL-=q.P*(l-q.a);}});   // SB2-X1: a point load inside the element to the left
     out.M.push(mR!=null?mR:mL); out.VL.push(vL); out.VR.push(i<nn-1?f1[i]:0); out.defl.push(-12*d[2*i]);});
   return out;
 }

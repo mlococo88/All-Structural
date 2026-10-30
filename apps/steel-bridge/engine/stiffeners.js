@@ -109,7 +109,9 @@
   }
 
   /* check list helpers (GirderDetail ckNew, rc) */
-  function ckNew() { const out = []; out.add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; if (!c.items.length && !c.naWhy) c.naWhy = 'Not applicable to any item.'; out.push(c); }; return out; }
+  function ckNew() { const out = []; out.add = c => { c.items.forEach(it => { if (typeof it.r === 'number' && Number.isNaN(it.r) && it.st !== 'na') { it.err = 'error: ratio is NaN'; if (RANK[it.st] < RANK.warn) it.st = 'fail'; } });   // SB2-R2 NaN guard: never a pass, ranks first
+    const nr = i => (Number.isNaN(i.r) || i.r === Infinity ? Infinity : i.r ?? -1);
+    c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && nr(it) > nr(c.items[gi]))) gi = k; }); c.gov = gi; if (!c.items.length && !c.naWhy) c.naWhy = 'Not applicable to any item.'; out.push(c); }; return out; }
   const rc = (loc, d, c, step, x) => ({ loc, demand: d, capacity: c, r: d / c, st: ge(c, d) ? 'pass' : 'fail', step, ...(x || {}) });
 
   /* transverseChecks(R): GM.ts.checks(R). Each check { id, grp, title, ref, items: [{ loc, r, st, demand, capacity, step }], naWhy, status, gov }. */
@@ -126,7 +128,7 @@
       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, q.Vu, q.phVn, `ts${r.i}.p${i + 1}.ok`)))); out.add(c); }
     { const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits', ref: `${ED} Art. 6.10.9.1, 6.10.9.3.3`, items: [] };
       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff;
-        c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, demand: q.do, capacity: lim, r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', step: `ts${r.i}.p${i + 1}.st` }); }));
+        c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, demand: q.do, capacity: lim, r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', step: `ts${r.i}.p${i + 1}.lim` }); }));   // TS5 step (was .st, the id of panelSteps' stiffened/unstiffened step: SB2-R3)
       if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1; TS4 checks each panel as stiffened where its spacing is within the 6.10.9.1 limits (3D interior, 1.5D end panels) and as unstiffened where it is wider.'; }
       out.add(c); }
     { const c = { id: 'TS6', grp: G3, title: 'Web weld cutoff at the tension flange, 4t_w ≤ g ≤ 6t_w', ref: `${ED} Art. 6.10.11.1.1`, items: [] };
@@ -178,7 +180,7 @@
       note: r.rhow > 0 ? 'A panel relies on tension-field action.' : r.ntf ? 'Neither panel has V_u > φ_vV_cr: no tension field.' : 'A panel with V_u > φ_vV_cr cannot use the tension field (end or unstiffened panel; TS4 fails it).' });
     w.add({ id: 'Ireq', label: `Required moment of inertia (TS3, Eq. ${r.IreqEq})`, sym: 'I_{t} \\ge I_{req}', eq: r.rhow > 0 ? (r.It2 > r.It1 ? 'I_{t1} + (I_{t2} - I_{t1})\\rho_{w}' : 'I_{t2}') : r.ntf ? '\\min(I_{t1}, I_{t2})' : 'I_{t1}',
       sub: `${n2(r.It)} ${ge(r.It, r.Ireq) ? '\\ge' : '\\lt'} ${n2(r.Ireq)}`, value: r.Ireq / r.It, unit: '', d: 3, ref: `${ED} Eq. ${r.IreqEq}`, ok: ge(r.It, r.Ireq) });
-    [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D; w.add({ id: `p${i + 1}.st`, label: `Panel ${i + 1}: spacing limit (TS5)`, sym: 'd_{o}', eq: `d_{o} \\le ${q.end ? '1.5' : '3'}D`, sub: `${n2(q.do)} ${ge(lim, q.do) ? '\\le' : '\\gt'} ${n2(lim)}`, value: q.do / lim, unit: '', d: 3, ref: `${ED} Art. 6.10.9.1`, ok: ge(lim, q.do) || !q.stiff, note: ge(lim, q.do) ? '' : 'Wider than the limit: the panel is unstiffened for shear (TS4, k = 5, V_n = CV_p).' }); });
+    [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D; w.add({ id: `p${i + 1}.lim`, label: `Panel ${i + 1}: spacing limit (TS5)`, sym: 'd_{o}', eq: `d_{o} \\le ${q.end ? '1.5' : '3'}D`, sub: `${n2(q.do)} ${ge(lim, q.do) ? '\\le' : '\\gt'} ${n2(lim)}`, value: q.do / lim, unit: '', d: 3, ref: `${ED} Art. 6.10.9.1`, ok: ge(lim, q.do) || !q.stiff, note: ge(lim, q.do) ? '' : 'Wider than the limit: the panel is unstiffened for shear (TS4, k = 5, V_n = CV_p).' }); });
     if (t.role === 'int') w.add({ id: 'gap', label: 'Web weld cutoff at the tension flange (TS6)', sym: '4t_{w} \\le g \\le 6t_{w}', eq: '', sub: `${n2(4 * r.tw)} \\le ${n2(t.gap)} \\le ${n2(6 * r.tw)}`, value: t.gap, unit: 'in', d: 3, ref: `${ED} Art. 6.10.11.1.1`, ok: ge(t.gap, 4 * r.tw) && ge(6 * r.tw, t.gap) });
     { const m1 = wMinFor(Math.max(r.tw, t.tpF ?? t.tp)); w.add({ id: 'wW', label: 'Minimum fillet weld to the web (TS7)', sym: 'w \\ge w_{min}', eq: '', sub: `${n4(t.w)} ${ge(t.w, m1) ? '\\ge' : '\\lt'} ${n4(m1)}`, value: m1 / t.w, unit: '', d: 3, ref: `${ED} Table 6.13.3.4-1`, ok: ge(t.w, m1), note: `Thicker part ${frac(Math.max(r.tw, t.tpF ?? t.tp))} in.` }); }
     if (t.role === 'cp') { const tf = Math.max(r.tfc, r.tft, t.tpF ?? t.tp), m2 = wMinFor(tf);

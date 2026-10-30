@@ -38,6 +38,8 @@ Plan: `docs/REBUILD_PLAN.md` (§3). Rules: `CLAUDE.md` §1, §3, §7, §8.
 | `units.js` | `window.SharedUnits` | `apps/steel-bridge/index.html` |
 | `steps.js` | `window.SharedSteps` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/sections.js`) |
 | `lldf.js` | `window.SharedLLDF` | `lldf.html`, `apps/steel-bridge/index.html` (adapter: `apps/steel-bridge/engine/lldf.js`) |
+| `report.js` | `window.SharedReport` | `apps/steel-bridge/index.html` (Report tab: `apps/steel-bridge/ui/report.js`, model from `apps/steel-bridge/report/`) |
+| `dxf.js` | `window.SharedDxf` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/drawings.js`). DXF R12 writer (display list → DXF and SVG preview), `validate()`, `download()`. Future: Base Plate, Gusset, Section Properties, Bridge Geometry (`fixlog/shared-dxf.md`) |
 
 ## Worked steps (`steps.js`)
 
@@ -64,7 +66,7 @@ It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the 
 
 - **Notation** of `sym`, `eq`, `sub`, `unit`: a small TeX subset — `_{…}`, `^{…}`, `\frac{a}{b}`, `\bar{x}`,
   `\sqrt{x}`, `\text{…}`, Greek letters, `\sum`, `\cdot`, `\times`, `\le`, `\ge`, `\lt`, `\gt`,
-  `\prime`, `\,`. Every string must also be valid KaTeX (`\minus` is the one subset-only macro; it is given to
+  `\prime`, `\ell` (ℓ), `\tan`, `\circ` (°; `^{\circ}` is shown as a plain degree sign), `\,`. Every string must also be valid KaTeX (`\minus` is the one subset-only macro; it is given to
   KaTeX as a macro for `-`). `SharedSteps.toHTML()` renders with KaTeX (`katex.renderToString`, `throwOnError: false`,
   options `SharedSteps.katexOpt`) when the page has loaded it (`window.katex`; `apps/steel-bridge/index.html` loads
   KaTeX 0.16.9 from cdnjs), and with the built-in renderer otherwise (offline, CDN blocked), so the steps always show.
@@ -76,3 +78,11 @@ It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the 
   Results carry `steps: w.steps`; a composite result concatenates its parts' steps in order.
 - **Formatting substitutions:** `SharedSteps.n(x, d)` (fixed decimals), `SharedSteps.g(x, d)` (thousands grouped).
 - **Tests** compare `value`s, not strings; a hand-check test may also check a rendered line.
+
+## Calculation report (`report.js`)
+
+The Gusset-style report viewer: an app builds a report model (sections → subsections → items: worked steps, tables, SVG figures, notes,
+key–value lists; format in the file header) and `SharedReport.mount(host, model, opt)` shows it with a navigation tree, numbering §n.m,
+collapse / expand, search and Print (whole report, running header and page numbers). Steps render through `SharedSteps`. A step is anchored by
+`scope/stepId`; `[[key]]` in text or a cell's `key` is a "see §x.y" link; a step note's "§<step id>" is linked too. `build(model)` lists
+unresolved and duplicate keys: the app's tests assert both are empty.

@@ -11,16 +11,23 @@
      - a hand-off file (schema stgirder-external-demands, GirderDetail → ST-Girder): GS17 at every station GirderDetail checks; the fatigue
        details of this girder (engine/fatigue.js detailsFromPayload); the studs per zone and region as GirderDetail sends them (fromPayload),
        with this project's stud inputs, splices and pitch zones where entered (V_f of a zone entered here: the largest V_FAT,pos − V_FAT,neg
-       of the file's stations in the zone).
-   The demand choice is not saved.
+       of the file's stations in the zone); or
+     - "This project's analysis" (fromAnalysis, below).
+   The default (2026-10-30, report wiring PR): this project's analysis when the project is complete (SBDAnalysis.ready), else the
+   example; the line at the top of the tab names the source in use. The demand choice is not saved.
 
    inputs(P, h, ui) / onClick(e, P, ui) for the input tab; render(host, ctx) for the output tab, ctx = { P, g }; build(ctx) (tests). */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: 'analysis', pl: null, plName: '', R: null, key: '', err: '', sel: null };
-  const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: null };
+  /* the demand source (added 2026-10-30, report wiring PR): the one chosen (S.src), else the default: this project's analysis when the
+     project is complete (SBDAnalysis.ready), else the example */
+  const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
+  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
+  const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : fmt(v, 3);   // SB2-R2
   const CATS = ['A', 'B', "B'", 'C', "C'", 'D', 'E', "E'"], ct = c => String(c).replace(/'/g, '′');
 
   /* ---------- input tab ---------- */
@@ -40,7 +47,7 @@
         ${h.num('studs.Qn10', 'Q<sub>n</sub> entered (0 = Eq. 6.10.10.4.3-1)', 'kip')}${h.num('studs.gamFat', 'γ Fatigue I (studs)', '')}
         ${h.sel('studs.skew', 'Radial term F<sub>fat</sub> = F<sub>rc</sub>/w', [['auto', 'Auto: a support skewed more than 20°'], ['yes', 'Yes (skewed > 20° or curved)'], ['no', 'No']])}${h.num('studs.Frc', 'Cross-frame force range F<sub>rc</sub>', 'kip')}${h.num('studs.wv', 'Effective deck length w', 'in')}
         ${h.num('studs.splX', 'Field splice stations (no studs over the plates)', 'ft', { text: true })}${h.num('studs.splL', 'Top splice plate length', 'ft')}${h.num('studs.splC', 'Clearance at each plate end', 'in')}
-        ${h.sel('studs.beffMode', 'b<sub>eff</sub> for the studs', [['bridge', 'Bridge-wide, as GirderDetail (one set of zones)'], ['girder', 'Each girder its own b_eff (option)']])}
+        ${h.sel('studs.beffMode', 'b<sub>eff</sub> for the studs', [['girder', 'Each girder its own b_eff (6.10.10; default)'], ['bridge', 'Bridge-wide, as GirderDetail (one set of zones)']])}
         <p class="note">GirderDetail checks one set of pitch zones and strength regions for the whole bridge, with one b<sub>eff</sub> (the girder with the largest fatigue shear range, usually the exterior). "Each girder its own b<sub>eff</sub>" is an option, off by default; the difference is reported on the output tab. Splice stations: comma separated; with a hand-off file and none entered, the file's splice gaps are used.</p>`)
       + h.card('Pitch zones', `${Z.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>From (ft)</th><th>To (ft)</th><th>Studs per row</th><th>Pitch (in)</th><th></th></tr></thead><tbody>
           ${Z.map((z, i) => `<tr>${['x1', 'x2', 'nr', 'p'].map(k => `<td><input type="number" step="${k === 'nr' ? 1 : 'any'}" data-path="studs.zones.${i}.${k}" data-kind="num" value="${esc(z[k])}" aria-label="zone ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-fzdel="${i}" title="Remove this zone">×</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="note">No zones entered: the hand-off file\'s pitch zones (or GirderDetail\'s built-in zones in the example) are used.</p>'}
@@ -99,9 +106,10 @@
   /* ---------- calculation ---------- */
   function build(ctx) {
     const P = ensure(ctx.P), M = window.SBDModel, OW = window.SBDOwners, FA = window.SBDFatigue, SC = window.SBDStuds, FX = window.SBDFlexure, SB = window.SBDStiffeners, g = ctx.g || 0;
-    let pl = ctx.pl !== undefined ? ctx.pl : S.src === 'file' ? S.pl : null;
-    if (ctx.pl === undefined && S.src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-    if (ctx.pl === undefined && S.src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
+    const src = ctx.src || srcOf(ctx);   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
+    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null;
+    if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
+    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
     const F = P.fatigue, Q = P.studs, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0);
     const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0];
     let sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
@@ -140,14 +148,14 @@
     let alt = null; if (!SR.errors.length) { const q = JSON.parse(JSON.stringify(scIn)); if (SR.beffMode === 'girder') { delete q.beffMode; delete q.beffG; } else { q.beffMode = 'girder'; q.beffG = pl ? dk.beff : G.beff; }
       const A = SC.compute(q, scEnv); if (!A.errors.length) { const C = SC.checks(A), mx = (CK, id) => Math.max(0, ...CK.find(c => c.id === id).items.map(i => i.r).filter(isFinite)); alt = { beff: A.dk.beff, sc1: mx(C, 'SC1'), sc2: mx(C, 'SC2'), sc1o: mx(SCC, 'SC1'), sc2o: mx(SCC, 'SC2') }; } }
     // governing of each list
-    const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if (isFinite(it.r) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || it.r > b.it.r)) b = { c, it, i }; })); return b; };
-    const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || it.r > b.it.r) b = { it, i }; }); return b; }, null) : null;
+    const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it, i }; })); return b; };
+    const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r)) b = { it, i }; }); return b; }, null) : null;
     return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
       what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
         : pl ? `${esc(S.plName)}: ${(pl.stations || []).length} stations, ${sup.length - 1} span(s), ${esc((pg || {}).label || '')}; fatigue moments and shears, plates and deck from the file; the stud zones and regions GirderDetail sends${(Q.zones || []).length ? ' (pitch zones from this project)' : ''}; this project's fatigue settings and studs.`
         : 'Example: GirderDetail\'s built-in Fatigue details and Shear connectors zones and regions, with this project\'s fatigue settings, studs, deck and materials. GS17 at every station needs a hand-off file.' };
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx), S.plName]);
 
   /* ---------- output tab ---------- */
   function css() {
@@ -160,9 +168,11 @@
   function render(host, ctx) {
     css();
     const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
-    let h = `<section class="sec"><div class="secHead">Fatigue &amp; studs: demands</div><div class="secBody">
-      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', S.src)}${opt('example', 'Example (GirderDetail built-in details and zones)', S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></div>
-      ${S.src === 'file' ? `<div class="fRow"><label for="fa_file">File</label><input type="file" id="fa_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+    const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {}, src = srcOf(ctx);
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in details and zones' }) : '')
+      + `<section class="sec"><div class="secHead">Fatigue &amp; studs: demands</div><div class="secBody">
+      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in details and zones)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      ${src === 'file' ? `<div class="fRow"><label for="fa_file">File</label><input type="file" id="fa_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">Fatigue moments and shears are the unfactored fatigue truck with IM and the single-lane distribution factor (3.6.1.4); γ is applied here (Fatigue I or II, Table 3.4.1-1). Inputs: the Fatigue &amp; studs input tab.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Fatigue results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fa_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
@@ -200,7 +210,7 @@
       <p class="note">${esc(FA.setText(R.set))}.</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
-      ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${fmt(q[0], 3)}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
+      ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
       ${R.FR.errors.length ? `<div class="alert err">Fatigue: ${R.FR.errors.map(esc).join('; ')}</div>` : ''}${R.SR.errors.length ? `<div class="alert err">Shear connectors: ${R.SR.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
     // fatigue details
     if (!R.FR.errors.length) { const C = R.FC, ck = id => C.find(c => c.id === id);
@@ -216,8 +226,8 @@
     // studs
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, ck = id => C.find(c => c.id === id) || { items: [] };
       h += `<section class="sec"><div class="secHead">Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions</div><div class="secBody">
-        <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, option' : 'bridge-wide, as GirderDetail'}) ${go('sc', 0, 'sc.beff')}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in.</p>
-        ${R.alt ? `<p class="note">Open question (not changed): with ${Sr.beffMode === 'girder' ? 'the bridge-wide' : 'this girder\'s own'} b<sub>eff</sub> = ${fmt(R.alt.beff, 2)} in the largest SC1 ratio would be ${fmt(R.alt.sc1, 3)} (now ${fmt(R.alt.sc1o, 3)}) and the largest SC2 ratio ${fmt(R.alt.sc2, 3)} (now ${fmt(R.alt.sc2o, 3)}).</p>` : ''}
+        <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, 6.10.10 (default)' : 'bridge-wide, as GirderDetail (option)'}) ${go('sc', 0, 'sc.beff')}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in.</p>
+        ${R.alt ? `<p class="note">For comparison: with ${Sr.beffMode === 'girder' ? 'the bridge-wide (GirderDetail)' : 'this girder\'s own'} b<sub>eff</sub> = ${fmt(R.alt.beff, 2)} in the largest SC1 ratio would be ${fmt(R.alt.sc1, 3)} (now ${fmt(R.alt.sc1o, 3)}) and the largest SC2 ratio ${fmt(R.alt.sc2, 3)} (now ${fmt(R.alt.sc2o, 3)}).</p>` : ''}
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Zone</th><th>Studs</th><th>V<sub>f</sub> (kip)</th><th>Limit state</th><th>Z<sub>r</sub> (kip)</th><th>V<sub>sr</sub> (kip/in)</th><th>p<sub>max</sub> (in)</th><th>SC1</th><th>SC3</th><th>SC4</th></tr></thead><tbody>
         ${Sr.zones.map((z, i) => { const a = ck('SC1').items[i], b = ck('SC3').items[i], c4 = ck('SC4').items.filter(it => it.step && it.step.startsWith(`scz${z.i}.`)), w4 = c4.reduce((x, it) => it.st === 'fail' ? 'fail' : x, 'pass');
           return `<tr data-fa="sc:${i}"><td class="lft">${esc(z.name)} ${go('sc', 0, `scz${z.i}.ok`)}</td><td>${z.nr} @ ${fmt(z.p, 2)} in</td><td>${fmt(z.Vfr, 1)}</td><td>Fatigue ${z.fat.lim}</td><td>${fmt(z.Zr, 3)}</td><td>${fmt(z.Vsr, 3)}</td><td>${fmt(z.preq, 2)}</td><td class="${cls(a.r)}">${fmt(a.r, 3)}</td>${stCell(b.st)}${stCell(w4)}</tr>`; }).join('')}

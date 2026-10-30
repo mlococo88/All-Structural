@@ -13,7 +13,7 @@ import path from 'node:path';
 import { ROOT } from './harness.mjs';
 import { plDecl } from './pl-source.mjs';
 import { gdDecl } from './gd-source.mjs';
-import { stDecl, stAdopt } from './st-source.mjs';
+import { stDecl, stAdopt } from './st-legacy.mjs';
 import { legacyContext } from './legacy-closure.mjs';
 import { plProject, RECS } from './ad-fixture.mjs';
 

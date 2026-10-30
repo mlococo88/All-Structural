@@ -18,7 +18,7 @@ const parse = t => katex.renderToString(t, { ...W.SharedSteps.katexOpt, throwOnE
 
 test('KaTeX: the notation of shared/steps.js (README "Worked steps") parses', () => {
   ['\\bar{y}', '\\bar{y}_{s}', 'M_{p}', 'I^{2}', '\\frac{\\sum A y}{\\sum A}', '\\sqrt{\\frac{E}{F_{yc}}}', '\\text{if } x', '\\gamma \\phi \\lambda \\beta \\rho',
-    'a \\cdot b \\times c', 'a \\le b \\ge c \\lt d \\gt e \\ne f', 'a \\pm b', 'a \\minus b', "f\\prime_{c}", '1\\,234', '1{,}234', '\\max(a, b)']
+    'a \\cdot b \\times c', 'a \\le b \\ge c \\lt d \\gt e \\ne f', 'a \\pm b', 'a \\minus b', "f\\prime_{c}", '1\\,234', '1{,}234', '\\max(a, b)', 'f_{\\ell}', '(\\tan\\theta)^{1.5}', '\\tan 30.00^{\\circ}']
     .forEach(t => assert.doesNotThrow(() => parse(t), t));
   ['in', 'in^{2}', 'kip-ft', 'kip/ft', 'ksi', 'kcf', 'k/ft', ''].forEach(u => assert.doesNotThrow(() => parse(src(u, 'unit')), u));
 });
@@ -44,4 +44,18 @@ test('SharedSteps.line: KaTeX when window.katex exists, the built-in renderer wh
   // the plain-text report is the same with or without KaTeX: 51050 / 33.535 = 1522.29 -> "1522"
   assert.equal(K.SharedSteps.line(s, false), 'S_(bot) = I/ȳ = (51,050)/33.535 = 1522 in^3');
   assert.equal(W.SharedSteps.line(s, false), K.SharedSteps.line(s, false));
+});
+
+test('built-in renderer (no KaTeX) and toText: \\ell, \\tan, \\circ as ℓ, tan, ° (2026-10-29; before: the words ell, tan, circ)', () => {
+  const S = W.SharedSteps;   // W has no window.katex: toHTML uses the built-in renderer
+  assert.equal(S.toText('f_{\\ell}'), 'f_ℓ'); assert.equal(S.toHTML('f_{\\ell}'), 'f<sub>ℓ</sub>');
+  assert.equal(S.toText('1 - c_{1}(\\tan\\theta)^{1.5}'), '1 - c_1(tan θ)^(1.5)');
+  assert.equal(S.toHTML('1 - c_{1}(\\tan\\theta)^{1.5}'), '1 - c<sub>1</sub>(tan&thinsp;θ)<sup>1.5</sup>');
+  assert.equal(S.toText('1 - 0.0783(\\tan 30.00^{\\circ})^{1.5}'), '1 - 0.0783(tan 30.00°)^(1.5)');
+  assert.equal(S.toHTML('\\theta_{max} = 28.00^{\\circ}'), 'θ<sub>max</sub> = 28.00°');
+  assert.equal(S.toText('\\theta \\le 20^\\circ'), 'θ ≤ 20°');
+  // a whole line: the value and its digits are unchanged (fmt), only the symbols
+  const st = { id: 'x.scfV', label: 'r_V', sym: 'r_{V}', eq: '1 + 0.20\\tan\\theta', sub: '1 + 0.20\\tan 30.00^{\\circ}', value: 1 + 0.2 * Math.tan(Math.PI / 6), unit: '', d: 4 };
+  assert.equal(S.line(st, false), 'r_V = 1 + 0.20tan θ = 1 + 0.20tan 30.00° = 1.1155');
+  assert.ok(!/ell|circ/.test(S.line({ ...st, sym: 'f_{\\ell}' }, true)));
 });

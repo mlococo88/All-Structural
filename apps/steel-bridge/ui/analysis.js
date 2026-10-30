@@ -95,8 +95,10 @@
       ${sup.map((v, k) => `<tr><td class="lft">${k === 0 ? 'Abut. 1' : k === sup.length - 1 ? 'Abut. 2' : 'Pier ' + k} (x = ${f(v, 1)})</td><td>${f(rr(k, s.DC1), 2)}</td><td>${f(rr(k, s.DC2), 2)}</td><td>${f(rr(k, s.DW), 2)}</td><td>${f(rr(k, s.CL), 2)}</td>
         ${ll ? `<td>${f(R.llR[k].max, 2)} ${wk('an.R.LL.' + k)}${R.llR[k].two ? ' *' : ''}</td><td>${f(R.llR[k].min, 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       <p class="note">${ll ? '* 90 % of two design trucks + lane governs (3.6.1.3.1; on simple spans the summed pier reaction, engineer\'s decision 2026-10-29). ' : ''}Statics: ${['DC1steel', 'DC1wet', 'DC2', 'DW', 'CL'].map(k => wk('an.eq.' + k, k)).join(', ')}.</p>`);
-    if (R.lld) h += card('Live load deflection (SA3, 2.5.2.6.2)', `<table class="tbl"><thead><tr><th>Span</th><th>x (ft)</th><th>Δ<sub>LL</sub> (in)</th><th>L/${R.settings.deflLimit} (in)</th><th>Ratio</th><th></th></tr></thead><tbody>
-      ${R.lld.map(q => `<tr><td>${q.k + 1}</td><td>${f(q.x, 1)}</td><td>${f(q.d, 3)} ${wk('an.defl.LL' + (q.k + 1))}</td><td>${f(q.lim, 3)}</td><td>${f(q.d / q.lim, 2)}</td><td style="color:var(${q.ok ? '--pass' : '--fail'})">${q.ok ? 'OK' : 'Exceeds'}</td></tr>`).join('')}</tbody></table>`);
+    if (R.lld) { const O = R.lld[0] && R.lld[0].own, ST = { pass: ['--pass', 'OK'], fail: ['--fail', 'Exceeds'], warn: ['--warn', 'Exceeds the preferred limit (warning)'], na: ['--warn', 'Reported, not checked (exterior)'] };
+      h += card(`Live load deflection (SA3, ${O ? esc(O.cite) + ', mandatory; ' : ''}2.5.2.6.2)`, `<table class="tbl"><thead><tr><th>Span</th><th>x (ft)</th><th>Δ<sub>LL</sub> (in)</th><th>L/${R.lld[0] ? R.lld[0].ratio : R.settings.deflLimit} (in)</th>${O && O.pref ? `<th>L/${O.pref} preferred (in)</th>` : ''}<th>Ratio</th><th></th></tr></thead><tbody>
+      ${R.lld.map(q => `<tr><td>${q.k + 1}</td><td>${f(q.x, 1)}</td><td>${f(q.d, 3)} ${wk('an.defl.LL' + (q.k + 1))}</td><td>${f(q.lim, 3)} ${wk('an.defl.lim' + (q.k + 1))}</td>${O && O.pref ? `<td>${f(q.limP, 3)} ${wk('an.defl.pref' + (q.k + 1))}</td>` : ''}<td>${f(q.d / q.lim, 2)}</td><td style="color:var(${ST[q.status][0]})">${ST[q.status][1]}</td></tr>`).join('')}</tbody></table>
+      <p class="note">${O ? `Owner rule ${esc(O.cite)} (OWN19): ${esc(O.rule.text)}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (Cross-section &amp; loads tab), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.` : 'Optional criterion (2.5.2.6.2): the L/… entered above.'} Truck axles that do not add to the deflection are neglected (3.6.1.3.1).</p>`); }
     if (R.seq) { const Q = R.seq, fd = Math.max(...Q.fdk);
       h += card('Deck placement sequence (SA7, 6.10.3.4.1)', `<p class="note">Pours in order: ${Q.pours.map((q, k) => `${k + 1}: ${f(q.a, 1)}–${f(q.b, 1)} ft`).join('; ')}. Largest noncomposite moment M<sub>DCc</sub> ${f(Math.max(...Q.MDCc), 1)} kip-ft ${wk('an.seq.MDCc')}
         (deck at once ${f(Math.max(...R.st.DC1.M), 1)}). Deck tension in hardened pours ${f(fd, 3)} ksi vs φf<sub>r</sub> ${f(Q.phifr, 3)} ksi ${wk('an.seq.fdk')}.</p>`); }
@@ -127,5 +129,15 @@
     el.onclick = e => { if (e.target.id !== 'anCalc') return; busy = true; draw(el, ctx);
       setTimeout(() => { try { res = AN().analyzeGirder(P, gi); } catch (err) { res = { errors: [String(err && err.message || err)] }; } resKey = keyOf(P, gi); busy = false; draw(el, ctx); }, 30); };
   }
-  window.SBDAnalysisUI = { draw };
+  /* srcBar(o): the line at the top of an output tab that says which demands it shows (added 2026-10-30, report wiring PR).
+     o = { src: 'analysis' | 'project' | 'example' | 'file', auto (the tab's default, not chosen), rd (SBDAnalysis.ready()), g (girder label),
+     plName (file name), example (what the example is) }. The default: this project's analysis when the project is complete
+     (SBDAnalysis.ready), else the example; a tab without an example keeps the analysis and says what is missing. */
+  function srcBar(o) {
+    const rd = o.rd || { ok: true, why: [] }, an = o.src === 'analysis' || o.src === 'project';
+    const what = an ? `This project's analysis${o.g ? ` of ${esc(o.g)}` : ''}` : o.src === 'file' ? `Hand-off file${o.plName ? ' ' + esc(o.plName) : ' (none chosen yet)'}` : `Example${o.example ? ` (${esc(o.example)})` : ''}`;
+    const why = o.auto ? (an ? (rd.ok ? 'the default: the project is complete' : `the project is not complete: ${rd.why.map(esc).join(' ')}`) : o.src === 'example' && !rd.ok ? `the default while the project is not complete: ${rd.why.map(esc).join(' ')}` : 'the default') : 'as chosen below';
+    return `<div class="srcBar${an && !rd.ok ? ' warn' : o.src === 'example' ? ' ex' : ''}" role="status"><span>Demands:</span> <b>${what}</b> <span class="srcWhy">(${why})</span></div>`;
+  }
+  window.SBDAnalysisUI = { draw, srcBar };
 })();

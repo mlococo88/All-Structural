@@ -46,7 +46,7 @@
   const DIST = { pilecap: 'MassDOT pile-cap', equal: 'Equal', two: 'Two adjacent', r64: 'RIDOT 60/40' };
   const CLS = { 'ext-curb': 'Exterior safety curb beam', interior: 'Interior beam', 'first-int': '1st interior roadway beam', 'ext-sw': 'Exterior sidewalk beam', 'int-sw': 'Interior sidewalk beam', 'median-int': 'Median beam (continuous slab, interior)', 'median-ext': 'Median beam (joint, exterior)' };
   const METHODS = { massdot: 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)', aashto: 'Typical AASHTO (all loads equally to all beams)', ridot: 'RIDOT BDM 3.3.1 (barriers and sidewalks 60% fascia beams, 40% interior beams)' };
-  const STEEL_PLF = 3.4;   // lb per ft per in² of steel (490 pcf; GirderDetail SA_PLF: 490/144 = 3.403, taken as 3.4)
+  const STEEL_PLF = 490 / 144;   // lb per ft per in² of steel: 490 pcf / 144 in²/ft² = 3.4028 (Table 3.5.1-1; SB2-A2, 2026-10-29: GirderDetail's SA_PLF rounds it to 3.4)
 
   /* optional cross-section inputs (GirderDetail dfXsIn): appurtenance concrete w_c, sidewalk fences, wearing surface by thickness, overlays */
   function xsIn(p, errors) {
@@ -215,14 +215,14 @@
     return w.steps;
   }
 
-  /* steelWeight(segments, allow): girder self-weight per plate segment, w = (b_t t_t + b_b t_b + D t_w) × 3.4 lb/ft/in² / 1000 × (1 + allow/100)
-     (GirderDetail GM.sa.compute wSt), and the length-weighted average. GirderDetail's hand-off average weights its analysis nodes by their
+  /* steelWeight(segments, allow): girder self-weight per plate segment, w = (b_t t_t + b_b t_b + D t_w) × (490/144) lb/ft/in² / 1000 × (1 + allow/100)
+     (GirderDetail GM.sa.compute wSt, there with 3.4; SB2-A2), and the length-weighted average. GirderDetail's hand-off average weights its analysis nodes by their
      tributary lengths (the same integral on the analysis mesh). segments: [{ x0, x1, D, tw, topB, topT, botB, botT }]. */
   function steelWeight(segments, allow, label) {
     const w = St().work('dl.steel' + (label ? '.' + label : '')), out = segments.map((s, k) => {
       const A = s.topB * s.topT + s.botB * s.botT + s.D * s.tw, v = A * STEEL_PLF / 1000 * (1 + allow / 100);
-      w.add({ id: 'w' + (k + 1), label: `Girder steel, segment ${k + 1} (x = ${n2(s.x0)} to ${n2(s.x1)} ft), flanges and web at 490 pcf with the ${n2(allow)}% detail allowance`, sym: 'w_{st}', eq: '(b_{t}t_{t} + b_{b}t_{b} + Dt_{w})\\frac{3.4}{1000}(1 + \\frac{a}{100})',
-        sub: `(${n3(s.topB)}(${n4(s.topT)}) + ${n3(s.botB)}(${n4(s.botT)}) + ${n3(s.D)}(${n4(s.tw)}))\\frac{3.4}{1000}(1 + \\frac{${n2(allow)}}{100})`, value: v, unit: 'klf', d: 4, ref: `${ED} Table 3.5.1-1` });
+      w.add({ id: 'w' + (k + 1), label: `Girder steel, segment ${k + 1} (x = ${n2(s.x0)} to ${n2(s.x1)} ft), flanges and web at 490 pcf with the ${n2(allow)}% detail allowance`, sym: 'w_{st}', eq: '(b_{t}t_{t} + b_{b}t_{b} + Dt_{w})\\frac{490/144}{1000}(1 + \\frac{a}{100})',
+        sub: `(${n3(s.topB)}(${n4(s.topT)}) + ${n3(s.botB)}(${n4(s.botT)}) + ${n3(s.D)}(${n4(s.tw)}))\\frac{${n4(STEEL_PLF)}}{1000}(1 + \\frac{${n2(allow)}}{100})`, value: v, unit: 'klf', d: 4, ref: `${ED} Table 3.5.1-1`, note: 'Steel 490 pcf: 490/144 = 3.4028 lb/ft per in² of plate.' });
       return { x0: s.x0, x1: s.x1, A, w: v }; });
     const Lt = out.reduce((a, q) => a + (q.x1 - q.x0), 0), avg = Lt > 0 ? out.reduce((a, q) => a + q.w * (q.x1 - q.x0), 0) / Lt : 0;
     w.add({ id: 'avg', label: 'Girder steel, length-weighted average', sym: 'w_{st,avg}', eq: '\\frac{\\sum w_{st}L}{\\sum L}', sub: `\\frac{${out.map(q => `${n4(q.w)}(${n2(q.x1 - q.x0)})`).join(' + ')}}{${n2(Lt)}}`, value: avg, unit: 'klf', d: 4 });

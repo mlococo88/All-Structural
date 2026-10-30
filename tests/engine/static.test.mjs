@@ -21,6 +21,25 @@ test('simple span 100 ft, P = 10 kips at 30 ft: M = Pab/L, δ under the load = P
   close(r.defl[i], 10 * 900 * 4900 / (3 * EI * 100) * 12, 1e-7, 'δ');
 });
 
+test('SB2-X1: point load 0.005 ft from a node (station): exact ΣR, reactions, M and V (applied inside its element)', () => {
+  // Simple span 100 ft, w = 1 klf + P = 10 kips at a = 49.995 ft (station 50 ft is 0.005 ft away; h_max = 100/240 = 0.4167 ft, so
+  // 0.005 < 0.05 h_max: the load is not meshed as a 0.005 ft element). R_A = 50 + 10(100 − 49.995)/100 = 55.0005; R_B = 50 + 4.9995
+  // = 54.9995; ΣR = 110. M(50) = 1250 + 10(49.995)(50)/100 = 1250 + 249.975 = 1499.975 kip-ft; V(50) = 55.0005 − 50 − 10 = −4.9995.
+  // Tolerance 1e-7 as the file's other checks: the same solve with w alone is off by 1.6e-8 relative (round-off), and so is P at the node.
+  const r = S.staticAnalysis({ spans: [100], E, segs: [{ len: 0, I }], loads: { w: 1, P: [[49.995, 10]] } }), i = at(r, 50);
+  close(r.R[0], 55.0005, 1e-7, 'R_A'); close(r.R[1], 54.9995, 1e-7, 'R_B'); close(r.R[0] + r.R[1], 110, 1e-7, 'ΣR');
+  close(r.M[i], 1499.975, 1e-7, 'M(50)'); close(r.VL[i], -4.9995, 1e-7, 'V left of 50'); close(r.VR[i], -4.9995, 1e-7, 'V right of 50');
+  const j = at(r, 45); close(r.VL[j], 55.0005 - 45, 1e-7, 'V(45)'); close(r.M[j], 55.0005 * 45 - 45 * 45 / 2, 1e-7, 'M(45)');
+  // Continuous 110 + 140 + 110 ft, segments I 60000 / 120000 / 60000 in⁴, w = 1.2 klf, P = 1 kip at 222 − 0.005 ft (next to the 222 ft
+  // station): ΣR = 1.2(360) + 1 = 433 kips. Before the fix ΣR was off by 6.6e-3 kips (0.005 ft element; 0.31 kips at 0.001 ft).
+  const spans = [110, 140, 110], segs = [{ len: 100, I: 60000 }, { len: 30, I: 120000 }, { len: 100, I: 60000 }];
+  [0.005, 0.001, 1e-4].forEach(d => { const q = S.staticAnalysis({ spans, E, segs, loads: { w: 1.2, P: [[222 - d, 1]] } });
+    close(q.R.reduce((a, b) => a + b, 0), 433, 1e-11, `ΣR, load ${d} ft from the node`); });
+  // continuity: the moment at 222 ft tends to the value with the load at the node
+  const m0 = S.staticAnalysis({ spans, E, segs, loads: { w: 1.2, P: [[222, 1]] } }), m1 = S.staticAnalysis({ spans, E, segs, loads: { w: 1.2, P: [[222 - 1e-5, 1]] } }), k = at(m0, 222);
+  close(m1.M[k], m0.M[k], 1e-6, 'M(222) continuous in the load position');
+});
+
 test('2 equal spans 100 ft, w = 1: M_B = −wL²/8, R = 3/8, 10/8, 3/8 wL', () => {
   const r = S.staticAnalysis({ spans: [100, 100], E, segs: [{ len: 0, I }], loads: { w: 1 } });
   close(r.M[at(r, 100)], -1250, 1e-7, 'M_B'); close(r.R[0], 37.5, 1e-7, 'R_A'); close(r.R[1], 125, 1e-7, 'R_B');
