@@ -2201,4 +2201,5 @@ Display only: no engineering formula, load or resistance factor, unit, code refe
 - `tests/engine/tabgraphics-b.test.mjs` `hasRect`: a panel must lie inside a rectangle of its class layer (was: a rectangle exactly its width).
 ### Check case / How verified
 - Screenshots at 1280 (screen, print) and 390 px of Loads, Analysis, Flexure, Constructibility, Shear.
-- Built-in project, Shear: RATIO-OK polylines 442 -> 365 (the rest are station cells before this change merged; panel runs merged), hatch lines 602 -> 378; 486 panels and 2178 stations of 6 projects still checked against the results by the tabgraphics-b test.
+- Built-in project, Shear (browser): the panels and the station strip of the green class draw as a few rectangles (runs) instead of 442 outlined cells; 486 panels and 2178 stations of 6 projects are still checked against the results by `tabgraphics-b.test.mjs`.
+- Tests run (graphics files only, not the full suite): `graphics`, `gfxa`, `tabgraphics-b`, `graphics-overlap` (413 graphics, 10,153 texts, no overlap); smoke `steel-bridge-graphics.mjs` (Constructibility now expects 2 selected-location segments: elevation and plot), `steel-bridge-tabgraphics-b.mjs`.
