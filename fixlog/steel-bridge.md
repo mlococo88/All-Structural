@@ -1311,7 +1311,7 @@ Display and export only: no engineering formula, factor, unit or reference chang
   433 cross-frames, 250 plate segments, largest coordinate difference 4.8e-7 in (the file's 6 decimals). ezdxf 1.4.4 opens every file (R12) with
   no audit error.
 - Headless browser (apps/steel-bridge/index.html from file://, CDN libraries from tests/libs): Drawings tab previews, Download DXF (validated),
-  3D view (WebGL), one-finger touch orbit moves the camera, two-finger pinch zooms (distance 4458 → 1486 in), an input change keeps the camera,
+  3D view (WebGL), one-finger touch orbit moves the camera, two-finger pinch zooms (camera distance 5596 → 1865 in), an input change (span lengths) keeps the camera (shift 1e-4 in, damping residue),
   layer toggle; 0 console errors.
 ### Saved data (CLAUDE.md §5)
 - No project field and no key changed. The page's ui state (`sbd2.ui`, existing key) gains optional fields `dwg` ({ gi, z }) and `v3d`
