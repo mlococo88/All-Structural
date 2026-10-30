@@ -90,7 +90,11 @@
     // roadway and lanes (stacked above the deck: wheels, lane bands, traffic faces, spacing chain, texts)
     const yd = hh + ts, yA = yd + top, deL = geo.deL, deR = geo.deR, lw = geo.laneW, NL = geo.NL, yLn = yA + 7.5 * h;
     D.line(ly.ln, X(deL), yd, X(deL), yLn + 1.5 * h); D.line(ly.ln, X(Wd - deR), yd, X(Wd - deR), yLn + 1.5 * h);
-    D.text(t, X(deL) + 0.4 * h, yLn + 1.6 * h, 0.7 * h, `TRAFFIC FACE d_e = ${nf(deL, 2)} FT`, 0); D.text(t, X(Wd - deR) - 0.4 * h, yLn + 1.6 * h, 0.7 * h, `${nf(deR, 2)} FT`, 2);
+    // the traffic-face notes sit clear of the extension lines of the girder-spacing chain (only where the spacing changes: the chain's runs; they run from the deck up to the chain): a note that one would cross moves to the next gap
+    const xe = [...new Set([0, ...pos.filter((x, i) => i === 0 || i === pos.length - 1 || Math.abs(x - pos[i - 1] - (pos[i + 1] - x)) > 1e-6), Wd].map(X))].sort((a, b) => a - b), tL = `TRAFFIC FACE d_e = ${nf(deL, 2)} FT`, tR = `d_e = ${nf(deR, 2)} FT`, wL = G.textW(tL, 0.7 * h), wR = G.textW(tR, 0.7 * h);
+    let sL = X(deL) + 0.4 * h; xe.forEach(x => { if (x >= sL - 0.3 * h && x <= sL + wL + 0.3 * h) sL = x + 0.5 * h; });
+    let eR = X(Wd - deR) - 0.4 * h; xe.slice().reverse().forEach(x => { if (x >= eR - wR - 0.3 * h && x <= eR + 0.3 * h) eR = x - 0.5 * h; });
+    D.text(t, sL, yLn + 1.6 * h, 0.7 * h, tL, 0); D.text(t, eR, yLn + 1.6 * h, 0.7 * h, tR, 2);
     // cases: one lane lever rule, multi-lane lever rule, rigid cross-section
     const opts = [];
     if (mem.lever1) opts.push(['lever1', 'Lever rule, one lane (' + nf(mem.lever1.df, 4) + ')']);
@@ -142,7 +146,7 @@
       const E = elev(P, o.gi, `GIRDER ${(P.girders[o.gi].label || P.girders[o.gi].id || '').toString().toUpperCase()}: ANALYSIS`, 'ELEVATION WITH SUPPORTS (S), PLATE BREAKS, CROSS-FRAMES (CF) AND FIELD SPLICES (FS); DIAGRAMS BELOW ON THE SAME STATIONS');
       if (E.errors.length) return { errors: E.errors };
       const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.08, 7 * E.h), x0 = E.X(E.L0), sup = R.sup || E.G.sup, s = R.st, ll = R.ll;
-      const mk = (title, ser, o2) => { const top = E.alloc(hg + 12 * E.h), C = G.chart({ D: E.D, at: [x0, top - hg - 3 * E.h], w, hgt: hg, h: E.h, title, xr: [E.L0, E.L1], series: ser, vlines: sup.map(v => ({ x: v })), ...o2 }); E.alloc(1.5 * E.h); return C; };
+      const mk = (title, ser, o2) => { const top = E.alloc(hg + 12 * E.h), C = G.chart({ D: E.D, at: [x0, top - hg - 3 * E.h], w, hgt: hg, h: E.h, title, xr: [E.L0, E.L1], series: ser, vlines: sup.map(v => ({ x: v })), ...o2 }); E.band(top - hg - 3 * E.h, top - 3 * E.h); E.alloc(1.5 * E.h); return C; };
       const M = [{ name: 'M DC1', pts: R.x.map((x, i) => [x, s.DC1.M[i]]), color: 5 }, { name: 'M DC2', pts: R.x.map((x, i) => [x, s.DC2.M[i]]), color: 3 }, { name: 'M DW', pts: R.x.map((x, i) => [x, s.DW.M[i]]), color: 30 }];
       if (ll) { M.push({ name: 'M LL+IM max', pts: R.x.map((x, i) => [x, ll.Mpos[i]]), color: 1 }, { name: 'M LL+IM min', pts: R.x.map((x, i) => [x, ll.Mneg[i]]), color: 1, lt: 'DASHED' }); }
       mk('MOMENTS, KIP-FT (UNFACTORED, PER GIRDER)', M, { ylab: 'KIP-FT', fy: v => nf(v, 0) });
@@ -214,7 +218,7 @@
       E.title('CONSTRUCTIBILITY: DECK PLACEMENT SEQUENCE', sq ? 'POURS IN ORDER OVER THE ELEVATION (SEQUENCE TABLE BELOW); M_DCc ENVELOPE (NONCOMPOSITE MOMENT, KIP-FT); BANDS = GOVERNING DECK-PLACEMENT RATIO, MERGED WHERE THE COLOUR CLASS IS THE SAME' : 'NO POUR SEQUENCE (SIMPLE SPANS, NONCOMPOSITE OR THE SEQUENCE IS OFF): M_DC1 IS USED');
       G.ratioLayer(E, G.mergeBands(items, { x0: E.L0, x1: E.L1 }), { what: 'DECK PLACEMENT', flag: true });
       if (sq && AR.x) { const w = (E.L1 - E.L0) * 12, hg = Math.max(w * 0.08, 7 * E.h), top = E.alloc(hg + 10.5 * E.h);
-        G.chart({ D, at: [E.X(E.L0), top - hg - 3 * E.h], w, hgt: hg, h, title: 'M_DCc ENVELOPE VS M_DC1 (KIP-FT)', xr: [E.L0, E.L1], series: [{ name: 'M_DCc (POUR SEQUENCE)', pts: AR.x.map((x, i) => [x, sq.MDCc[i]]), color: 6 }, { name: 'M_DC1 (DECK AT ONCE)', pts: AR.x.map((x, i) => [x, AR.st.DC1.M[i]]), color: 5, lt: 'DASHED' }], vlines: (AR.sup || E.G.sup).map(v => ({ x: v })), ylab: 'KIP-FT', fy: v => nf(v, 0) }); E.alloc(1.5 * h); }
+        G.chart({ D, at: [E.X(E.L0), top - hg - 3 * E.h], w, hgt: hg, h, title: 'M_DCc ENVELOPE VS M_DC1 (KIP-FT)', xr: [E.L0, E.L1], series: [{ name: 'M_DCc (POUR SEQUENCE)', pts: AR.x.map((x, i) => [x, sq.MDCc[i]]), color: 6 }, { name: 'M_DC1 (DECK AT ONCE)', pts: AR.x.map((x, i) => [x, AR.st.DC1.M[i]]), color: 5, lt: 'DASHED' }], vlines: (AR.sup || E.G.sup).map(v => ({ x: v })), ylab: 'KIP-FT', fy: v => nf(v, 0) }); E.band(top - hg - 3 * E.h, top - 3 * E.h); E.alloc(1.5 * h); }
       E.freeze();
       if (sq && window.SBDDrawings.table) { const nr = sq.pours.length, y = E.alloc((nr + 2) * 1.5 * h + 4 * h);
         window.SBDDrawings.table(D, E.ly.t, E.X(E.L0), y - 0.5 * h, ['POUR (ORDER)', 'FROM, FT', 'TO, FT', 'LENGTH, FT'], sq.pours.map((p, k) => [String(k + 1), nf(p.a, 1), nf(p.b, 1), nf(p.b - p.a, 1)]), 'DECK PLACEMENT SEQUENCE: POURS IN THE ORDER PLACED'); }

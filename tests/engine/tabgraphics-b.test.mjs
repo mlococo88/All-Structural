@@ -31,7 +31,7 @@ function sane(g, layers, what) {
 }
 const ents = (g, layer, t) => g.D.E.filter(e => e.l === 'S-' + layer && (!t || e.t === t));
 const LAY = { ok: 'RATIO-OK', hi: 'RATIO-WARN', ng: 'RATIO-NG', na: 'RATIO-NA' };
-const hasRect = (g, layer, xa, xb) => ents(g, layer, 'PL').some(e => e.closed && e.pts.length === 4 && Math.abs(Math.min(...e.pts.map(p => p[0])) - xa) < 1e-6 && Math.abs(Math.max(...e.pts.map(p => p[0])) - xb) < 1e-6);
+const hasRect = (g, layer, xa, xb) => ents(g, layer, 'PL').some(e => e.closed && e.pts.length === 4 && Math.min(...e.pts.map(p => p[0])) <= xa + 1e-6 && Math.max(...e.pts.map(p => p[0])) >= xb - 1e-6);   // the panel lies inside a rectangle of its colour class (a run of neighbouring panels of one class is one rectangle)
 
 function shearChecks(P, R, name) {
   const before = JSON.stringify(R), g = G.shear(R, P, {}); sane(g, ['GRDR', 'GRDR-PLAT', 'GRDR-STIF', 'DIMS', 'ANNO-TEXT', 'BRNG', 'RATIO-OK', 'AXIS'], `${name} shear`);
