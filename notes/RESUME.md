@@ -41,3 +41,15 @@ OPEN ISSUE, highest priority for next session (Opus, calculation):
 - Also: Auto design takes f_ℓ and brace points from `SBDFraming.design` (see the earlier note).
 
 Model plan: Sonnet 5.5 for presentation and UI work (grouping, graphics, Auto design compare/locks UI, switch-over plumbing); Opus 5.5 for anything touching calculations.
+
+## Graphics merged (#498, #499, #500, polish #501), 2026-10-30
+Every output tab has a Drawings-style graphic with zoom/pan/DXF. Lead reviewed the screenshots; most is clean.
+
+Open items (small):
+- CALCULATION, Opus: analysis.js splits the deck-pour sequence where the sign of M_DC1 changes. At the abutment M_DC1(0) = -1.6e-11 (round-off) counts as negative, so a spurious 1 ft "pour 4" (0 to 1 ft) is created and placed after the positive pours. Add a small tolerance to the sign test. §4 callout with hand check; expect a negligible effect on M_DCc. Also compare against GirderDetail's pour sequence.
+- Test: tests/smoke/steel-bridge-report.mjs expects 12 report sections, there are now 13 (load rating). It fails on main. Update the expectation.
+- Constructibility graphic: the blue selected-station line runs through the whole figure including the table and legend text. Limit it to the elevation and the plots.
+- Loads graphic: a dimension extension line runs through the "TRAFFIC FACE" note.
+- Shear: the panel hatching is dense behind the web text. Consider lighter hatching or a thinner overlay.
+- Phone width (390 px): graphic text is 4 to 8 px, so the phone relies on zoom.
+- Skipped on purpose: the optional 3D extruded section view.
