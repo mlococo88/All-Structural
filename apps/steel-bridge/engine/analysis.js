@@ -22,6 +22,9 @@
      interior reactions (3.6.1.3.1); fatigue truck with IM_f (3.6.1.4.1). The distribution factor per station: the pier
      factor g_M in the region of negative permanent-load moment around each interior support, the span factor elsewhere;
      g_V of the span of the element; reactions the larger g_V of the adjacent spans; fatigue g's of the span.
+   - pedestrian load (added 2026-10-30, sb-ped-owner PR; 3.6.1.6, GirderDetail plRow / vSec): w_PL of this girder (the loads module's
+     share of the sidewalk load) on the + and − parts of each influence line (live-load stiffness): R.pl, apart from R.ll (HL-93);
+     llPL(R) gives LL+IM + PL, once, to the modules; not in fatigue, deck placement or the LL deflection.
    - LL deflection (SA3, 2.5.2.6.2): g_Δ max(Δ_truck(1 + IM), 0.25 Δ_truck(1 + IM) + Δ_lane) ≤ L/limit, per span; truck axles that
      do not add neglected (LL8, SB2-A4); the limit from the owner rule OWN19 where there is one (deflOwner, SB2-A5).
    - camber: dead-load deflection per stage (steel, wet deck, DC2 + DW, existing utilities) and the total.
@@ -46,7 +49,7 @@
                       exterior girder (position 'exterior') or the first interior girder
    Dead loads and distribution factors, in this order of precedence:
      1. girder.loads / girder.df: explicit values per girder (an imported hand-off; the parity tests)
-          loads { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }], steelAllowPct, source }
+          loads { DC1wet, DC2, DW, CL, UT, UF, PL (klf; PL: the pedestrian load on this girder), xf: [{ x (ft), P (kip) }], steelAllowPct, source }
           df    { spans: [{ gM, gV, fatM, fatV, gDef? }], piers: [{ gM }], gDef, source }
      2. the loads module (engine/loads.js + engine/lldf.js, window.SBDLoads): SBDLoads.compute(SBDLoads.fromModel(project,
         { girder })) and SBDLoads.girder(result, line): DC1 (deck, haunch, SIP, DC1 rows), DC2, DW, UT, UF, the detail allowance
