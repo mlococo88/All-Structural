@@ -36,12 +36,15 @@ export function gdSA(P, gi, n) {   // n: the modular ratio (as the new engine's,
     const LLp = new Float64Array(N), LLn = new Float64Array(N), FMp = new Float64Array(N), FMn = new Float64Array(N);
     for (let i = 0; i < N; i++) { const si = spanOf(xs[i]), rg = region[i], m = rg >= 1 ? memP(rg) : memS(si), ll = c.feIM(bN.MLL[i], im), ft = c.feFatIM(bN.MF[i], imf);
       LLp[i] = m.gM * ll.pos; LLn[i] = m.gM * Math.min(ll.neg, tw2[i] ? ll.neg2 : 0); const fm = memS(si).fatM; FMp[i] = fm * ft.max; FMn[i] = fm * ft.min; }
+    // pedestrian load (GM.sa.compute plRow, vSec Pp/Pn; added 2026-10-30, sb-ped-owner PR): w_PL on the + and − parts of each influence line
+    const wPL = L.PL || 0, plRow = row => { let pp = 0, nn = 0; for (let q = 0; q < N; q++) { const a = row[q] * trib[q] * wPL; if (a > 0) pp += a; else nn += a; } return { pp, nn }; };
+    const PLp = new Float64Array(N), PLn = new Float64Array(N); for (let i = 0; i < N; i++) { const q = plRow(bN.ILM.subarray(i * N, (i + 1) * N)); PLp[i] = q.pp; PLn[i] = q.nn; }
     const vSec = (e, r) => { const m = memS(spanOf((xs[e] + xs[e + 1]) / 2)), s = r ? bN.VLLr[e] : bN.VLL[e], lv = c.feIM(s, im), fv = c.feFatIM(r ? bN.VFr[e] : bN.VF[e], imf);
-      return { Lp: m.gV * lv.pos, Ln: m.gV * lv.neg, Fp: m.fatV * fv.max, Fn: m.fatV * fv.min }; };
+      return { Lp: m.gV * lv.pos, Ln: m.gV * lv.neg, Pp: s.lanePos / 0.64 * wPL, Pn: s.laneNeg / 0.64 * wPL, Fp: m.fatV * fv.max, Fn: m.fatV * fv.min }; };
     const rows = bm => sup.map(s => { const row = new Float64Array(N); for (let q = 0; q < N; q++) row[q] = (s < N - 1 ? bm.ILV[s * N + q] : 0) - (s > 0 ? bm.ILV[(s - 1) * N + q] : 0) + (q === s ? 1 : 0); return row; });
     const rS = rows(bS), r3 = rows(b3), rN = rows(bN), dot = (row, w) => { let t = 0; for (let q = 0; q < N; q++) t += row[q] * (typeof w === 'number' ? w : w[q]) * trib[q]; return t; };
     const reac = sup.map((s, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < spans.length), gV = Math.max(...adj.map(i => memS(i).gV)), interior = k > 0 && k < sup.length - 1;
-      const e = c.feIM(c.sgLLRow(bN, rN[k]), im); return { DC1: dot(rS[k], w1), DC2: dot(r3[k], wDC2), DW: dot(r3[k], wDW), CL: dot(rS[k], wCL), llMax: gV * (interior ? Math.max(e.pos, e.pos2) : e.pos), llMin: gV * e.neg }; });
+      const e = c.feIM(c.sgLLRow(bN, rN[k]), im); return { DC1: dot(rS[k], w1), DC2: dot(r3[k], wDC2), DW: dot(r3[k], wDW), CL: dot(rS[k], wCL), llMax: gV * (interior ? Math.max(e.pos, e.pos2) : e.pos), llMin: gV * e.neg, Pp: plRow(rN[k]).pp, Pn: plRow(rN[k]).nn }; });
     const ES = 29000, cOf = I => I.map((v, i) => trib[i] * 1728 / (ES * v)), nodeI = arr => xs.map((_, i) => { const a = i > 0 ? arr[i - 1] : arr[0], cc = i < N - 1 ? arr[i] : arr[N - 2]; return (a + cc) / 2; });
     const cS = cOf(nodeI(F.Is)), c3 = cOf(nodeI(F.I3)), cN = cOf(nodeI(F.In));
     const defl = (M, cc) => { const d = new Float64Array(N); for (let x = 0; x < N; x++) { let t = 0; for (let k = 0; k < N; k++) t += M[k] * b0.ILM[k * N + x] * cc[k]; d[x] = t; } return d; };
@@ -54,6 +57,6 @@ export function gdSA(P, gi, n) {   // n: the modular ratio (as the new engine's,
     const plates = { D: g.segments[0].D, top: g.segments.map(s => ({ x0: s.x0, x1: s.x1, b: s.topB, t: s.topT })), bot: g.segments.map(s => ({ x0: s.x0, x1: s.x1, b: s.botB, t: s.botT })), web: g.segments.map(s => ({ x0: s.x0, x1: s.x1, t: s.tw })) };
     const SQ = cont ? c.saSeq({ p: { seqOn: A.seq || 'on', seqMod: A.seqMod || 'n', seqCustom: A.seqCustom || '' }, cont, xs, trib, spans, n, beff, b: { tsDeck: ts, haunch: hh, plates, fc: P.materials.concrete.fc }, F, MDC1, wSX, wDeck }) : null;
     const MDCc = SQ ? Array.from(MDC1).map((v, i) => v >= 0 ? Math.max(v, SQ.envP[i]) : Math.min(v, SQ.envN[i])) : null;
-    return { xs: Array.from(xs), N, sup: Array.from(sup), region, tw2, crack: F.crack, Mperm, MS, MDk, MDC1, MDC2, MDW, MCL, VDC1, VDC2, VDW, VS, VCL, LLp, LLn, FMp, FMn, vSec, VLL: bN.VLL, reac, dS, dDk, dSD, lld, SQ, MDCc, n };
+    return { xs: Array.from(xs), N, sup: Array.from(sup), region, tw2, crack: F.crack, Mperm, MS, MDk, MDC1, MDC2, MDW, MCL, VDC1, VDC2, VDW, VS, VCL, LLp, LLn, PLp, PLn, FMp, FMn, vSec, VLL: bN.VLL, reac, dS, dDk, dSD, lld, SQ, MDCc, n };
   });
 }

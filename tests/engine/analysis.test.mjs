@@ -101,12 +101,13 @@ test('steps: format and rendering', () => {
 });
 
 /* ---------- parity ---------- */
-const files = payloadFiles(), sample = ALL ? files : files.filter((_, i) => i % 10 === 0);
+const files = payloadFiles(), sample = ALL ? files : files.filter((f, i) => i % 10 === 0 || f === 'gd_xsA_RIDOT_G1.json');   // + one with a pedestrian load (sb-ped-owner PR)
 // bounds: largest |difference| / largest |value| of the quantity on the girder (causes in the header)
 const BOUND_P = { M_DC1steel: 0.004, M_DC1wet: 2e-4, M_DC1: 1e-3, M_DC2: 2e-3, M_DW: 2e-4, M_CL: 2e-4, V_DC1: 0.012, V_DC2: 0.012, V_DW: 0.012, V_CL: 0.012, 'V_DC1 left of piers': 0.012,
   D_DC1steel: 0.005, D_DC1wet: 0.002, D_DC2DW: 0.003, M_DCc: 0.015, M_LLpos: 2e-4, M_LLneg: 2e-4, M_FATpos: 2e-4, M_FATneg: 2e-4, 'V_LL max': 2e-4, 'V_LL min': 2e-4,
-  'V_FAT max': 2e-4, 'V_FAT min': 2e-4, 'V_LL max left of piers': 2e-4, 'V_LL min left of piers': 2e-4, 'LL deflection per span': 0.002 };
-const BOUND_G = { ...BOUND_P, M_DC2: 2e-4, 'f_deck (pour sequence)': 0.05, R_DC1: 1e-3, R_DC2: 1e-5, R_DW: 1e-5, R_CL: 1e-5, 'R_LL max': 1e-5, 'R_LL min': 1e-5 };
+  'V_FAT max': 2e-4, 'V_FAT min': 2e-4, 'V_LL max left of piers': 2e-4, 'V_LL min left of piers': 2e-4, 'LL deflection per span': 0.002,
+  M_PLpos: 0.003, M_PLneg: 0.003, 'V_PL max': 0.003, 'V_PL min': 0.003 };   // PL (sb-ped-owner PR): difference 7, w_PL rounded to 4 decimals (xsA RIDOT G2: 0.0178 klf, 0.21 %)
+const BOUND_G = { ...BOUND_P, M_DC2: 2e-4, 'f_deck (pour sequence)': 0.05, R_DC1: 1e-3, R_DC2: 1e-5, R_DW: 1e-5, R_CL: 1e-5, 'R_LL max': 1e-5, 'R_LL min': 1e-5, 'R_PL max': 1e-5, 'R_PL min': 1e-5, M_PLpos: 1e-4, M_PLneg: 1e-4, 'V_PL max': 1e-5, 'V_PL min': 1e-5 };
 const cache = {};
 function run(f, o = {}) {
   const key = f + JSON.stringify(o); if (cache[key]) return cache[key];
