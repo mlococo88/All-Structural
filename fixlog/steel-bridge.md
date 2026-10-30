@@ -2094,3 +2094,23 @@ Display only: no computed value changes.
 - Auto design (engine/autodesign.js, #494, merged while this PR was open; not changed here, another module's file): its trial checks take
   the skew f_ℓ for flexure (as decided), but not an f_ℓ entered on the Flexure tab (`P.flexure.fl`), and `flC: 0` during deck placement
   (SB2-W1: the skew value, or `P.constr.flC`). Suggested follow-up: take both from `SBDFraming.design(P, gi, { fl })`.
+
+## 2026-10-30 — PR: sb2-gfx-helper — graphics helper for the output tabs in the Drawings-tab format (ui/graphics.js, window.SBDGraphics)
+Display and export only: no computed value changes, no saved-data change. Engineer (2026-10-30): "I love the format of the drawing in the Drawings output tab. Use that for graphics on the other tabs."
+### Where
+- New `ui/graphics.js` (script tag after `ui/drawings.js` in `index.html`). Not a shared library: one app file, API in its header comment.
+  - Every graphic is a `SharedDxf.drawing` (layers `S-GRDR`, `S-GRDR-PLAT`, `S-BRNG`, `S-DIMS`, `S-ANNO-TEXT`, `S-XFRM`, `S-SPLC`, text height h with `D.k = h / 0.10`, so the linetypes are the Drawings tab's), drawn by `SharedDxf.toSVG` and `SharedDxf.viewer` (wheel zoom at the cursor, drag, pinch, double-click fit, + / − / Fit).
+  - `elevation(P, gi, opts)`: girder `gi` from `SBDDrawings.model(P)` (supports, plate segments of `P.girders[gi]`, cross-frame stations of the first section girder loaded by it, splices) in analysis stations (ft × 12 in), with plate sizes, span dimensions and a stations axis (ticks at a 1-2-2.5-5 step, grid on layer `S-GRID`). Vertical exaggeration `vex` (auto, up to 6, labelled by the tab) so the girder reads. Returns the drawing, `X(ft)`, `Yweb(ft)`, `alloc(height)` (a new row under it), `pick(x, y)` (station) and `selMark(ft)`.
+  - `ratioLayer(E, items, opts)`: layers `S-RATIO-OK` (green, < 0.8), `S-RATIO-WARN` (amber, 0.8 to 1.0), `S-RATIO-NG` (red, > 1.0 or not ok): vertical hatching in the web, a row of bands with the values, a legend. Each location takes the stretch to the mid-points of its neighbours. `ratioColor(ratio, ok)`.
+  - `chart(opts)`: drafted XY plot (axes `S-AXIS`, grid `S-GRID`, series `S-CHART-S1…`, limit line `S-CHART-LIMIT`, vertical lines, bars with categories); `X`, `Y`, `pick`. Can draw into an existing drawing at a given origin and width (so a diagram can sit under an elevation on the same x scale, x = ft × 12 in).
+  - `mount(el, build, opts)`: title, readout, Download DXF (validated first), the viewer. Click (not a drag) calls `opts.onSelect(pick(x, y))` and moves a live highlight (overlay, not in the DXF); `H.select(v)` moves it from the tab's selector without rebuilding; hover shows `readout(v)`; `opts.key` keeps the zoom and pan across re-draws of the same view (restored by zooming about a computed point; the viewer has no pan call). Print: the box grows to its content and the buttons hide.
+### Check case / How verified
+- `tests/engine/graphics.test.mjs`: the built-in project and the 5 hand-off payloads (as drawings.test.mjs): every coordinate finite, expected layers, supports on the model's stations, plate rectangles on the segment stations, one CF line per cross-frame station, valid DXF R12; ratio colours at 0.79, 0.8, 1.0, 1.0001, not ok, NaN; bands tile the girder; chart mapping X / Y / pick inverse and the RF = 1.0 line at Y(1). Hand check, built-in project: supports 0, 1320, 3000, 4320 in; plate breaks 88, 128, 232, 272 ft; axis step 50 ft (36 → 3.6 → 5 × 10), labels 0, 50 … 350; text height 2 % × 4320 in = 86.4 in.
+- `tests/smoke/steel-bridge-graphics.mjs`: wheel zoom, click-select, drag pans without selecting, `H.select`, double-click fit, DXF download; 0 console errors.
+### Decisions (engineer's rule: decide small questions, log them)
+- Ratio colours: green < 0.8, amber 0.8 to 1.0 (a ratio of exactly 1.0 is amber, the check passes), red above 1.0 or NG (as requested).
+- The elevation is in analysis stations (the stations of the results), not in a girder's own stations, so a click gives the station the tab's tables use.
+### Saved data
+- No change. The zoom memory (`opts.key`) is in memory only.
+### Open items
+- Tabs use the helper in the next PR (Section properties, Loads & LLDF, Analysis, Flexure, Constructibility); the other tabs are another agent's.
