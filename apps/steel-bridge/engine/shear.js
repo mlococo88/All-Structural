@@ -127,7 +127,10 @@
       ck({ id: 'GS16', key: 'vc', title: 'Deck placement, V_u ≤ φ_vV_cr', ref: `${ED} Eq. 6.10.3.3-1`, demand: r.VuC, capacity: r.sh.Vcr, step: 'sh.okC' })];
     if (r.sh.stiff && !r.end) r.checks.push(ck({ id: 'GS18', key: 'vf', title: 'Special fatigue requirement for webs, V_u ≤ V_cr', ref: `${ED} Art. 6.10.5.3`, demand: r.VuF, capacity: r.sh.Vcr, step: 'sh.okF' }));
     else r.checks.push({ id: 'GS18', key: 'vf', title: 'Special fatigue requirement for webs', ref: `${ED} Art. 6.10.5.3`, na: r.sh.stiff ? 'Not applicable: end panel (6.10.5.3 applies to interior panels of webs with transverse stiffeners).' : 'Not applicable: unstiffened web (6.10.5.3 applies to interior panels of webs with transverse stiffeners).', inUse: false, ratio: NaN, step: 'sh.okF' });
-    r.gov = r.checks.filter(c => c.inUse && isFinite(c.ratio) && c.id !== 'GS16').reduce((b, c) => (!b || c.ratio > b.ratio ? c : b), null);
+    // SB2-R2 guard: a non-finite ratio (not n/a) fails, says why and governs (was dropped by isFinite)
+    r.checks.forEach(c => { if (c.na == null && c.ratio !== undefined && !isFinite(c.ratio)) { c.ok = false; c.ng = c.ng || (Number.isNaN(c.ratio) ? 'error: ratio is NaN' : 'NG: ratio unbounded'); } });
+    const gr = c => (isFinite(c.ratio) ? c.ratio : Infinity);
+    r.gov = r.checks.filter(c => c.inUse && c.na == null && c.ratio !== undefined && c.id !== 'GS16').reduce((b, c) => (!b || gr(c) > gr(b) ? c : b), null);
     Object.defineProperty(r, 'steps', { enumerable: false, configurable: true, get() { const s = worked(r); Object.defineProperty(r, 'steps', { value: s, enumerable: false }); return s; } });
     return r;
   }
@@ -171,7 +174,7 @@
         Object.defineProperty(q, 'steps', { value: w.steps, enumerable: false }); return w.steps; } });
       return q;
     });
-    const gov = rows.reduce((b, q) => (!b || q.r > b.r ? q : b), null);
+    const gov = rows.reduce((b, q) => (!b || (isFinite(q.r) || q.r == null ? q.r : Infinity) > (isFinite(b.r) || b.r == null ? b.r : Infinity) ? q : b), null);   // SB2-R2: NaN / ∞ govern
     return { rows, gov };
   }
 
@@ -184,7 +187,8 @@
   function demands(pl, G) {
     G = factors(G);
     const S = pl.stations || [], zones = (pl.section || {}).zones || [], xs = S.map(s => +s.x), A = k => S.map(s => +s[k] || 0);
-    const VDC1 = A('V_DC1'), VDC2 = A('V_DC2'), VDW = A('V_DW'), Vp = S.map(s => (+s.V_LLpos || 0) + (+s.V_PLpos || 0)), Vn = S.map(s => (+s.V_LLneg || 0) + (+s.V_PLneg || 0));
+    const VDC1 = A('V_DC1'), VDC2 = A('V_DC2'), VDW = A('V_DW'), plIn = pl.pedestrianInLL === true,   // SB2-R1: with pedestrianInLL the LL+IM already includes it (HANDOFF.md §4.9)
+      Vp = S.map(s => (+s.V_LLpos || 0) + (plIn ? 0 : +s.V_PLpos || 0)), Vn = S.map(s => (+s.V_LLneg || 0) + (plIn ? 0 : +s.V_PLneg || 0));
     const VUT = A('V_UT'), VUF = A('V_UF'), VCL = A('V_CL'), Vf = S.map(s => Math.max(Math.abs(+s.V_FATpos || 0), Math.abs(+s.V_FATneg || 0)));
     const gDCn = G.dcMin, gDWn = G.dwMin;
     const VuE = xs.map((_, e) => { const VDC = VDC1[e] + VDC2[e], vf = s => (s * VDC >= 0 ? G.dc : gDCn) * VDC + (s * VDW[e] >= 0 ? G.dw : gDWn) * VDW[e] + (s * VUT[e] >= 0 ? G.dw : gDWn) * VUT[e] + (s * VUF[e] >= 0 ? G.dc * VUF[e] : 0);

@@ -26,7 +26,9 @@
     document.head.appendChild(st);
   }
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9]+)\}?/g, '<sub>$1</sub>');   // check titles: f_bu -> f<sub>bu</sub>
-  const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
+  /* SB2-R2: the ratio of a check as shown; a non-finite ratio that is not "not applicable" carries its reason (c.ng: NG or error) */
+  const rtx = c => !c ? '—' : isFinite(c.ratio) ? fmt(c.ratio, 3) : c.ng ? (Number.isNaN(c.ratio) ? esc(c.ng) : `∞ (${esc(c.ng)})`) : '—';
 
   function inputs(ctx) {
     const P = ctx.P, M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, g = P.girders[ctx.g] || P.girders[0], SEC = window.SBDSections, FX = window.SBDFlexure;
@@ -83,16 +85,16 @@
     else if (S.R && !stale) {
       const R = S.R, rows = R.rows, gv = R.gov;
       h += `<section class="sec"><div class="secHead">Flexure results by location</div><div class="secBody"><p class="note">${R.what}</p>
-        ${gv ? `<p>Governing: <b>${esc(gv.name)}</b>${gv.x != null ? ` (x = ${fmt(gv.x, 2)} ft)` : ''}, ${esc(gv.gov.id)} ${tt(gv.gov.title)}: ratio <b>${fmt(gv.gov.ratio, 3)}</b>.</p>` : ''}
+        ${gv ? `<p>Governing: <b>${esc(gv.name)}</b>${gv.x != null ? ` (x = ${fmt(gv.x, 2)} ft)` : ''}, ${esc(gv.gov.id)} ${tt(gv.gov.title)}: ratio <b>${rtx(gv.gov)}</b>.</p>` : ''}
         ${R.oos ? '<div class="alert">A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported for that span.</div>' : ''}
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Location</th><th>x (ft)</th><th>Region</th><th>Method (6.10.8 / A6)</th><th class="lft">Governing check</th><th>Ratio</th></tr></thead><tbody>
         ${rows.map((r, i) => `<tr data-fx="${i}" class="${i === S.sel ? 'sel' : ''}${r === gv ? ' fx-gov' : ''}"><td class="lft">${esc(r.name)}</td><td>${r.x != null ? fmt(r.x, 2) : ''}</td><td>${r.pos ? 'positive' : 'negative'}</td>
-          <td>${r.p7 ? '' : r.useA6 ? 'App. A6' : '6.10.8'}</td><td class="lft">${r.gov ? esc(r.gov.id) + ' ' + tt(r.gov.title) : ''}</td><td class="${r.gov ? cls(r.gov.ratio) : ''}">${r.gov ? fmt(r.gov.ratio, 3) : '—'}</td></tr>`).join('')}
+          <td>${r.p7 ? '' : r.useA6 ? 'App. A6' : '6.10.8'}</td><td class="lft">${r.gov ? esc(r.gov.id) + ' ' + tt(r.gov.title) : ''}</td><td class="${r.gov ? cls(r.gov.ratio) : ''}">${r.gov ? rtx(r.gov) : '—'}</td></tr>`).join('')}
         </tbody></table></div></div></section>`;
       const r = rows[S.sel] || rows[0];
       if (r) {
         h += `<section class="sec"><div class="secHead">${esc(r.name)}${r.x != null ? `, x = ${fmt(r.x, 2)} ft` : ''}: checks</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Check</th><th>Demand</th><th>Capacity</th><th>Ratio</th><th class="lft">AASHTO LRFD 10th Ed.</th><th></th></tr></thead><tbody>
-          ${r.checks.map(c => isFinite(c.ratio) ? `<tr${r.gov === c ? ' class="fx-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}${c.inUse ? '' : ' <span class="fx-na">(not the method in use)</span>'}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${c.inUse ? cls(c.ratio) : ''}">${fmt(c.ratio, 3)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`
+          ${r.checks.map(c => isFinite(c.ratio) || c.ng ? `<tr${r.gov === c ? ' class="fx-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}${c.inUse ? '' : ' <span class="fx-na">(not the method in use)</span>'}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${c.inUse || c.ng ? cls(c.ratio) : ''}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`
             : `<tr><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td colspan="3" class="lft fx-na">${esc(c.na || '')}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td>${c.step ? `<a class="wk" href="#st-${esc(c.step)}">§</a>` : ''}</td></tr>`).join('')}
           </tbody></table></div>
           <div class="kv"><div><span>M<sub>u</sub> / M<sub>s</sub></span><span>${fmt(r.Mu, 1)} / ${fmt(r.Ms, 1)} kip-ft <a class="wk" href="#st-fx.Mu">§</a></span></div>

@@ -95,12 +95,12 @@
     const ck = o => ({ ratio: o.demand / o.capacity, ok: o.capacity >= o.demand - 1e-9, inUse: true, unit: 'ksi', ...o });
     const f = r.conC.f, cf = r.conC.lab, tl = r.conT.lab;
     r.checks = [
-      ck({ id: 'GS14', key: 'yield', title: `Deck placement, ${cf} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: f + r.amC.fl, capacity: r.RhC * r.conC.Fy, step: 'cn.yield.ok' }),
-      ck({ id: 'GS14', key: 'buckling', title: `Deck placement, ${cf} flange (compression) flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: f + r.amC.fl / 3, capacity: r.ltC.Fnc, step: 'cn.buck.ok' }),
+      ck({ id: 'GS14', key: 'yield', title: `Deck placement, ${cf} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: f + r.amC.fl, capacity: r.RhC * r.conC.Fy, step: 'cn.yield.ok', ...(r.amC.und ? { ng: FX().AMP_NG } : {}) }),
+      ck({ id: 'GS14', key: 'buckling', title: `Deck placement, ${cf} flange (compression) flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: f + r.amC.fl / 3, capacity: r.ltC.Fnc, step: 'cn.buck.ok', ...(r.amC.und ? { ng: FX().AMP_NG } : {}) }),
       ck({ id: 'GS15', key: 'web', title: 'Deck placement, web bend-buckling, f_bu ≤ φ_fF_crw', ref: `${ED} Eq. 6.10.3.2.1-3; 6.10.1.9.1`, demand: f, capacity: r.webC.F, step: 'cn.web.ok' }),
       ck({ id: 'GS15', key: 'tension', title: `Deck placement, ${tl} flange (tension), f_bu + f_ℓ ≤ φ_fR_hF_yt`, ref: `${ED} Eq. 6.10.3.2.2-1`, demand: r.conT.f + r.flC, capacity: r.RhC * r.conT.Fy, step: 'cn.tens.ok' }),
       ck({ id: 'GS16', key: 'shear', title: 'Deck placement, web shear, V_u ≤ φ_vV_cr', ref: `${ED} Eq. 6.10.3.3-1`, demand: r.VuC, capacity: r.sh.Vcr, unit: 'kip', step: 'cn.sh.ok' })];
-    r.gov = r.checks.reduce((b, c) => (!b || c.ratio > b.ratio ? c : b), null);
+    r.gov = FX().govern(r.checks);   // SB2-R2: guard (NaN / ∞ fail and govern)
     Object.defineProperty(r, 'steps', { enumerable: false, configurable: true, get() { const st = worked(r); Object.defineProperty(r, 'steps', { value: st, enumerable: false }); return st; } });
     return r;
   }
@@ -238,16 +238,16 @@
       r.FncL = LbIn <= r.Lp ? Rh * Fyf : LbIn <= r.Lr ? Math.min(Cb * (1 - (1 - r.Fyr / (Rh * Fyf)) * (LbIn - r.Lp) / (r.Lr - r.Lp)) * Rh * Fyf, Rh * Fyf) : Math.min(r.Fcr, Rh * Fyf);
       r.Fnc = Math.min(r.FncF, r.FncL);
       r.fbu = Math.max(c.f, 0); r.ampReq = LbIn > 1.2 * r.Lp * Math.sqrt(Cb / Math.max(r.fbu / Fyf, 1e-9));
-      r.AF = r.ampReq ? (r.fbu < r.Fcr ? Math.max(0.85 / (1 - r.fbu / r.Fcr), 1) : Infinity) : 1; c.fl = c.fl1 * r.AF; tf.fl = tf.fl1;
+      r.AF = r.ampReq ? (r.fbu < r.Fcr ? Math.max(0.85 / (1 - r.fbu / r.Fcr), 1) : Infinity) : 1; c.fl = c.fl1 === 0 ? 0 : c.fl1 * r.AF; tf.fl = tf.fl1; r.und = r.AF === Infinity && c.fl1 !== 0;   // SB2-R2
       r.k = 9 / (r.Dc / r.D) ** 2; r.Fcrw = Math.min(0.9 * ES * r.k / (r.D / r.tw) ** 2, Rh * Fyf, Fyw / 0.7); r.LbIn = LbIn;
       // checks OH1–OH5 (GM.oh.checks)
       const ck = o => ({ ratio: o.demand / o.capacity, ok: o.capacity >= o.demand - 1e-9, inUse: true, unit: 'ksi', ...o }), fb = Math.max(tf.f, 0);
-      r.checks = [ck({ id: 'OH1', key: 'yield', flange: c.lab, title: `Overhang brackets, ${c.lab} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: r.fbu + c.fl, capacity: Rh * Fyf, step: 'oh.yield.ok' }),
-        ck({ id: 'OH2', key: 'buckling', flange: c.lab, title: `Overhang brackets, ${c.lab} flange flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: r.fbu + c.fl / 3, capacity: r.Fnc, step: 'oh.buck.ok' }),
+      r.checks = [ck({ id: 'OH1', key: 'yield', flange: c.lab, title: `Overhang brackets, ${c.lab} flange (compression) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yc`, ref: `${ED} Eq. 6.10.3.2.1-1`, demand: r.fbu + c.fl, capacity: Rh * Fyf, step: 'oh.yield.ok', ...(r.und ? { ng: FX().AMP_NG } : {}) }),
+        ck({ id: 'OH2', key: 'buckling', flange: c.lab, title: `Overhang brackets, ${c.lab} flange flexural resistance, f_bu + f_ℓ/3 ≤ φ_fF_nc`, ref: `${ED} Eq. 6.10.3.2.1-2; 6.10.8.2.2, 6.10.8.2.3`, demand: r.fbu + c.fl / 3, capacity: r.Fnc, step: 'oh.buck.ok', ...(r.und ? { ng: FX().AMP_NG } : {}) }),
         ck({ id: 'OH3', key: 'web', title: 'Overhang brackets, web bend-buckling, f_bu ≤ φ_fF_crw', ref: `${ED} Eq. 6.10.3.2.1-3; 6.10.1.9.1`, demand: r.fbu, capacity: r.Fcrw, step: 'oh.web.ok' }),
         ck({ id: 'OH4', key: 'tension', flange: tf.lab, title: `Overhang brackets, ${tf.lab} flange (tension) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yt`, ref: `${ED} Eq. 6.10.3.2.2-1`, demand: fb + tf.fl, capacity: Rh * Fyf, step: 'oh.tens.ok' }),
-        ...[c, tf].map(f => ck({ id: 'OH5', key: 'fl.' + f.lab, flange: f.lab, title: `Flange lateral bending, ${f.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: f.fl, capacity: 0.6 * Fyf, step: `oh.fl.${f.lab}.ok` }))];
-      r.gov = r.checks.reduce((b, k) => (!b || k.ratio > b.ratio ? k : b), null);
+        ...[c, tf].map(f => ck({ id: 'OH5', key: 'fl.' + f.lab, flange: f.lab, title: `Flange lateral bending, ${f.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: f.fl, capacity: 0.6 * Fyf, step: `oh.fl.${f.lab}.ok`, ...(r.und && f === c ? { ng: FX().AMP_NG } : {}) }))];
+      r.gov = FX().govern(r.checks);   // SB2-R2
       return r; });
     const R = { ...B, errors: [], rows: out, Rh, Cb, Fyf, Fyw };
     out.forEach(r => Object.defineProperty(r, 'steps', { enumerable: false, configurable: true, get() { const st = ohWorked(R, r); Object.defineProperty(r, 'steps', { value: st, enumerable: false }); return st; } }));
@@ -288,7 +288,7 @@
     opt = opt || {};
     const rows = locs.map(L => location(L, prj)), sup = opt.supports || null, spans = [];
     const spOf = x => { if (!sup || x == null) return 1; let k = 0; while (k < sup.length - 2 && x > sup[k + 1] + 1e-9) k++; return k + 1; };
-    const best = {}, put = (sp, k, o) => { const b = best[sp] = best[sp] || {}; if (!b[k] || b[k].ratio < o.ratio) b[k] = o; };
+    const gr = FX().gr, best = {}, put = (sp, k, o) => { const b = best[sp] = best[sp] || {}; if (!b[k] || gr(b[k]) < gr(o)) b[k] = o; };
     rows.forEach(r => { const sp = spOf(r.x), cf = r.conC.lab === 'top' ? 'top' : 'bot';
       r.checks.forEach(c => { const o = { ratio: c.ratio, row: r, check: c };
         if (c.id === 'GS16') put(sp, 'shear', o); else if (c.key === 'tension') put(sp, 'tens', o); else put(sp, cf, o); }); });
@@ -297,10 +297,10 @@
     let oh = null;
     if (opt.oh && opt.oh.rows && opt.oh.rows.length) { oh = overhang(opt.oh.rows, opt.oh.p, opt.oh.mat);
       if (!oh.errors.length) oh.rows.forEach(r => { const sp = r.span || spOf(r.x), b = spans[sp - 1]; if (!b) return;
-        r.checks.forEach(c => { const key = c.id === 'OH5' ? 'ohfl' : 'oh'; if (!b[key] || b[key].ratio < c.ratio) b[key] = { ratio: c.ratio, row: r, check: c }; }); }); }
-    let gov = null; rows.forEach(r => { if (r.gov && (!gov || r.gov.ratio > gov.gov.ratio)) gov = r; });
+        r.checks.forEach(c => { const key = c.id === 'OH5' ? 'ohfl' : 'oh'; if (!b[key] || gr(b[key]) < gr(c)) b[key] = { ratio: c.ratio, row: r, check: c }; }); }); }
+    let gov = null; rows.forEach(r => { if (r.gov && (!gov || gr(r.gov) > gr(gov.gov))) gov = r; });
     let govAll = gov ? { ratio: gov.gov.ratio, row: gov, check: gov.gov } : null;
-    if (oh && !oh.errors.length) oh.rows.forEach(r => { if (r.gov && (!govAll || r.gov.ratio > govAll.ratio)) govAll = { ratio: r.gov.ratio, row: r, check: r.gov, oh: true }; });
+    if (oh && !oh.errors.length) oh.rows.forEach(r => { if (r.gov && (!govAll || gr(r.gov) > gr(govAll))) govAll = { ratio: r.gov.ratio, row: r, check: r.gov, oh: true }; });
     return { rows, spans, oh, gov, govAll };
   }
 

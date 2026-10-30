@@ -153,3 +153,12 @@ test('hand check: Service II, rf() with γ_D = 1.0; owner targets', () => {
   assert.equal(RT.target('AASHTO'), null); assert.equal(RT.target('RIDOT').rf, 1.10); assert.equal(RT.target('RIDOT').fat, 1.0); assert.equal(RT.target('CTDOT').rf, 1.20);
   assert.equal(RT.target('MassDOT').kind, 'report');
 });
+
+
+test('SB2-R2: an RF of −∞ (amplification undefined) or NaN governs; +∞ (no live-load effect) does not', () => {
+  const rows = [{ key: 'a', kind: 'flex', region: 'neg', name: 'a', inv: 0.9, opr: 1.2 }, { key: 'b', kind: 'flex', region: 'neg', name: 'b', inv: -Infinity, opr: -Infinity },
+    { key: 'c', kind: 'shear', name: 'c', inv: Infinity, opr: Infinity }];
+  let s = RT.girder(rows, { owner: 'AASHTO' }); assert.equal(s.gov.inv.name, 'b'); assert.equal(s.gov.opr.name, 'b');   // before: −∞ dropped by isFinite, 0.9 governed
+  s = RT.girder([rows[0], { key: 'd', kind: 'svc', name: 'd', inv: NaN, opr: NaN }], { owner: 'AASHTO' }); assert.equal(s.gov.inv.name, 'd'); assert.match(s.gov.inv.err, /NaN/);
+  assert.equal(RT.girder([rows[0], rows[2]], { owner: 'AASHTO' }).gov.inv.name, 'a');
+});

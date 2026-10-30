@@ -90,7 +90,7 @@
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
   /* the largest ratio among the strength checks (bolts, plates, web: TF1–TF5, BF1–BF5, WS1, WS2, WS4, WS5) */
-  const strGov = CK => { let b = null; (CK || []).filter(c => /^(TF|BF)[1245]$|^WS[1245]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.r != null && isFinite(it.r) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
+  const strGov = CK => { let b = null; (CK || []).filter(c => /^(TF|BF)[1245]$|^WS[1245]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.r != null && (isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it }; /* SB2-R2: NaN / ∞ failing items govern */ })); return b; };
   const plTxt = F => `${F.nl} line${F.nl > 1 ? 's' : ''} each side × ${F.nr} rows; outer PL ${SP().frac(F.bo)} × ${SP().frac(F.to)}${F.inner ? `, 2 inner PL ${SP().frac(F.bi)} × ${SP().frac(F.ti)}` : ''}`;
 
   function render(host, ctx) {
