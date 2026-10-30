@@ -49,18 +49,18 @@ try {
   // ---- Shear & stiffeners
   await p.click('#tabBar [data-otab="shear"]'); await p.click('#sh_calc'); const t1 = await common('shear', 'shear'); await common('shear', 'shear-detail');
   assert.ok(/S-RATIO-OK/.test(t1) && /S-GRDR-STIF/.test(t1)); await clickRegion('shear', 'pan', 30); await selRow('data-sh', 'pan:30'); await common('shear', 'shear'); await clickRegion('shear', 'bs', 1); await selRow('data-sh', 'bs:1');
-  await clickRegion('shear', 'loc', 20); await selRow('data-sh', 'loc:20'); await shot('shear', '#out section.sec:has([data-gfxb])');
+  await clickRegion('shear', 'loc', 20); await selRow('data-sh', 'loc:20'); await shot('shear', '#out [data-gfxb="shear"]');
   // ---- Fatigue & studs
-  await p.click('#tabBar [data-otab="fat"]'); await p.click('#fa_calc'); await common('fat', 'fatigue'); await common('fat', 'fatigue-chart'); await clickRegion('fatigue', 'fa', 3); await selRow('data-fa', 'fa:3'); await clickRegion('fatigue-chart', 'fa', 5); await selRow('data-fa', 'fa:5'); await shot('fatigue', '#out section.sec:has([data-gfxb])');
+  await p.click('#tabBar [data-otab="fat"]'); await p.click('#fa_calc'); await common('fat', 'fatigue'); await common('fat', 'fatigue-chart'); await clickRegion('fatigue', 'fa', 3); await selRow('data-fa', 'fa:3'); await clickRegion('fatigue-chart', 'fa', 5); await selRow('data-fa', 'fa:5'); await shot('fatigue-chart', '#out [data-gfxb="fatigue-chart"]'); await shot('fatigue', '#out [data-gfxb="fatigue"]');
   // ---- Cross-frames
-  await p.click('#tabBar [data-otab="cf"]'); const tcf = await common('cf', 'crossframe'); assert.ok(/S-GOV/.test(tcf), 'the governing members are on S-GOV'); await shot('crossframes', '#out section.sec:has([data-gfxb])');
+  await p.click('#tabBar [data-otab="cf"]'); const tcf = await common('cf', 'crossframe'); assert.ok(/S-GOV/.test(tcf), 'the governing members are on S-GOV'); await shot('crossframes', '#out [data-gfxb="crossframe"]');
   // ---- Welds
-  await p.click('#tabBar [data-otab="wt"]'); await p.click('#wt_calc'); await common('wt', 'welds'); await common('wt', 'weld-detail'); await clickRegion('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickRegion('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out section.sec:has([data-gfxb])');
+  await p.click('#tabBar [data-otab="wt"]'); await p.click('#wt_calc'); await common('wt', 'welds'); await common('wt', 'weld-detail'); await clickRegion('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickRegion('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out [data-gfxb="welds"]');
   // ---- Field splices
-  await p.click('#tabBar [data-otab="spl"]'); await p.click('#sp_calc'); const tsp = await common('spl', 'splice'); assert.ok(/S-GOV/.test(tsp), 'the governing group is on S-GOV'); await shot('splices', '#out section.sec:has([data-gfxb])');
+  await p.click('#tabBar [data-otab="spl"]'); await p.click('#sp_calc'); const tsp = await common('spl', 'splice'); assert.ok(/S-GOV/.test(tsp), 'the governing group is on S-GOV'); await shot('splices', '#out [data-gfxb="splice"]');
   // ---- Rating
   await p.click('#tabBar [data-otab="rt"]'); await p.click('#rt_calc'); await common('rt', 'rating'); const rowsN = await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions.length);
-  await clickRegion('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions[40].i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out section.sec:has([data-gfxb])');
+  await clickRegion('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions[40].i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out [data-gfxb="rating"]');
   // ---- Report: the summary section carries the figure
   await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('#out .rp-fig svg', { timeout: 240000 });
   const fig = await p.$eval('#out .rp-fig svg', s => ({ texts: s.querySelectorAll('text').length, w: s.getBoundingClientRect().width })); assert.ok(fig.texts > 10 && fig.w > 300, JSON.stringify(fig)); done.push('rpt/summary figure');
