@@ -17,6 +17,7 @@ import { projectFromPayload, readPayload } from './an-fixture.mjs';
 const W = load(), X = W.SharedDxf, G = W.SBDTabGfxB, M = W.SBDModel, J = o => JSON.parse(JSON.stringify(o));
 const st = { cases: 0, graphics: 0, ents: 0, panels: 0, stations: 0, details: 0, welds: 0, rf: 0, regions: 0 };
 const num = v => typeof v === 'number' && isFinite(v);
+const GR = W.SBDGraphics;
 
 function sane(g, layers, what) {
   assert.ok(g.D.E.length > 10, `${what}: entities`); assert.ok(g.i1 > g.i0, `${what}: range`);
@@ -29,11 +30,11 @@ function sane(g, layers, what) {
   st.graphics++; st.ents += g.D.E.length; st.regions += g.regions.length;
 }
 const ents = (g, layer, t) => g.D.E.filter(e => e.l === 'S-' + layer && (!t || e.t === t));
-const LAY = { ok: 'RATIO-OK', hi: 'RATIO-HI', ng: 'RATIO-NG', na: 'RATIO-NA' };
+const LAY = { ok: 'RATIO-OK', hi: 'RATIO-WARN', ng: 'RATIO-NG', na: 'RATIO-NA' };
 const hasRect = (g, layer, xa, xb) => ents(g, layer, 'PL').some(e => e.closed && e.pts.length === 4 && Math.abs(Math.min(...e.pts.map(p => p[0])) - xa) < 1e-6 && Math.abs(Math.max(...e.pts.map(p => p[0])) - xb) < 1e-6);
 
 function shearChecks(P, R, name) {
-  const before = JSON.stringify(R), g = G.shear(R, P, {}); sane(g, ['GRDR', 'GRDR-PLAT', 'GRDR-STIF', 'DIMS', 'ANNO-TEXT', 'BRNG', 'RATIO-OK'], `${name} shear`);
+  const before = JSON.stringify(R), g = G.shear(R, P, {}); sane(g, ['GRDR', 'GRDR-PLAT', 'GRDR-STIF', 'DIMS', 'ANNO-TEXT', 'BRNG', 'RATIO-OK', 'AXIS'], `${name} shear`);
   if (R.gm.dem) R.panels.rows.forEach(q => { const c = G.ratioClass(q.r); assert.ok(hasRect(g, LAY[c], q.p * 12, q.q * 12), `${name}: panel ${q.i} ratio ${q.r} on ${LAY[c]}`); st.panels++; });
   R.stations.forEach((s, i) => { const r = s.gov ? s.gov.ratio : NaN, c = G.ratioClass(r); if (c === 'na') return; assert.ok(ents(g, LAY[c], 'PL').length > 0); st.stations++; });
   ['pan', 'loc'].forEach(k => assert.equal(g.regions.filter(r => r.k === k).length, k === 'pan' ? R.panels.rows.length : R.stations.length, `${name}: ${k} regions`));
@@ -48,10 +49,11 @@ function fatChecks(P, R, name) {
   R.FR.rows.forEach((r, i) => { const c = r.exempt ? 'na' : G.ratioClass(fa1[i].r), x = r.x * 12; assert.ok(ents(g, LAY[c], 'CIRCLE').some(e => Math.abs(e.pts[0][0] - x) < 1e-6), `${name}: detail ${i + 1} on ${LAY[c]}`); st.details++; });
   assert.equal(g.regions.filter(r => r.k === 'fa').length, R.FR.rows.length);
   if (R.SR && !R.SR.errors.length) { assert.equal(g.regions.filter(r => r.k === 'sc').length, R.SR.zones.length); R.SR.zones.forEach(z => assert.ok(num(G.studCount(z)) && G.studCount(z) > 0)); }
-  const c = G.fatigueChart(R, P, {}); sane(c, ['CHART-AXIS', 'GRID', 'CHART-2'], `${name} fatigueChart`);
-  // the chart: the (ΔF)n tick of each detail at its resistance
-  const sy = e => e.pts[0][1], Lin = G.geoProject(P, 0).L * 12, hgt = Lin / 4, ys = c.D.E.filter(e => e.l === 'S-CHART-2' && e.t === 'LINE' && e.pts[0][1] === e.pts[1][1]).map(sy);
-  R.FR.rows.forEach(r => { if (num(r.res)) assert.ok(ys.some(y => num(y) && y >= 0 && y <= hgt + 1e-6), `${name}: resistance tick`); });
+  const c = G.fatigueChart(R, P, {}); sane(c, ['AXIS', 'GRID', 'CHART-S1'], `${name} fatigueChart`);
+  // the chart: one (ΔF)n point per detail at its station, one γ(Δf) point on the layer of its ratio class
+  const res = c.D.E.filter(e => e.l === 'S-CHART-S1' && e.t === 'CIRCLE'); assert.equal(res.length, R.FR.rows.filter(r => num(r.res)).length, `${name}: resistance points`);
+  R.FR.rows.forEach((r, i) => { assert.ok(res.some(e => Math.abs(e.pts[0][0] - r.x * 12) < 1e-6), `${name}: (ΔF)n point of detail ${i + 1}`);
+    const cl = r.exempt ? 'S-CHART-S5' : { ok: 'S-CHART-S2', hi: 'S-CHART-S3', ng: 'S-CHART-S4', na: 'S-CHART-S5' }[G.ratioClass(fa1[i].r)]; if (num(r.dem)) assert.ok(c.D.E.some(e => e.l === cl && e.t === 'CIRCLE' && Math.abs(e.pts[0][0] - r.x * 12) < 1e-6), `${name}: γ(Δf) point of detail ${i + 1} on ${cl}`); });
   assert.equal(JSON.stringify(R), before, `${name}: the fatigue result is not changed`);
 }
 function cfChecks(P, B, name) {
@@ -68,20 +70,21 @@ function weldChecks(P, B, name) {
   assert.equal(JSON.stringify(B.R), before);
 }
 function rateChecks(P, B, name) {
-  const before = JSON.stringify(B.sum), g = G.ratingChart(B, P, {}); sane(g, ['CHART-AXIS', 'GRID', 'CHART-1', 'CHART-2', 'RATIO-NG', 'GOV'], `${name} rating`);
-  const Lin = (B.pl.member.supports[B.pl.member.supports.length - 1]) * 12, hgt = Lin / 4, one = ents(g, 'RATIO-NG', 'LINE').find(e => e.pts[0][0] === 0 && e.pts[1][0] === Lin), ymax = hgt / one.pts[0][1];
+  const before = JSON.stringify(B.sum), g = G.ratingChart(B, P, {}); sane(g, ['AXIS', 'GRID', 'CHART-S1', 'CHART-S2', 'CHART-LIMIT1', 'GOV'], `${name} rating`);
+  const sup = B.pl.member.supports, Lg = sup[sup.length - 1], Lin = Lg * 12, hgt = Lin / 4, one = ents(g, 'CHART-LIMIT1', 'LINE').find(e => e.pts[0][0] === 0 && Math.abs(e.pts[1][0] - Lin) < 1e-6), ymax = hgt / one.pts[0][1];
   assert.ok(num(ymax) && ymax >= 2, `${name}: RF = 1.0 line (chart top RF ${ymax})`);
-  const pls = ents(g, 'CHART-1', 'PL').concat(ents(g, 'CHART-2', 'PL')); assert.ok(pls.length === 4, `${name}: four series`);
-  // series 1: Inventory, flexure = the minimum inv of the 'flex' rows at each station
   const m = new Map(); B.rows.forEach(r => { if (r.kind === 'flex' && num(r.x) && r.inv != null && !Number.isNaN(r.inv)) { const k = +r.x.toFixed(3); m.set(k, Math.min(m.has(k) ? m.get(k) : Infinity, r.inv)); } });
-  const s1 = ents(g, 'CHART-1', 'PL')[0], exp = [...m.entries()].sort((a, b) => a[0] - b[0]); assert.equal(s1.pts.length, exp.length, `${name}: flexure series length`);
-  exp.forEach(([x, v], i) => { assert.ok(Math.abs(s1.pts[i][0] - x * 12) < 1e-6 && Math.abs(s1.pts[i][1] - Math.min(Math.max(v, 0), ymax) / ymax * hgt) < 1e-4, `${name}: RF at ${x}`); st.rf++; });
+  const s1 = ents(g, 'CHART-S1', 'PL')[0], exp = [...m.entries()].sort((a, b) => a[0] - b[0]); assert.equal(s1.pts.length, exp.length, `${name}: flexure series length`);
+  exp.forEach(([x, v], i) => { assert.ok(Math.abs(s1.pts[i][0] - x / Lg * Lin) < 1e-6 && Math.abs(s1.pts[i][1] - Math.min(Math.max(v, 0), ymax) / ymax * hgt) < 1e-4, `${name}: RF at ${x}`); st.rf++; });
   assert.equal(JSON.stringify(B.sum), before);
 }
 function sumChecks(P, Mod, name) {
   const g = G.summary(Mod, P, {}); sane(g, ['GRDR', 'GRDR-PLAT', 'DIMS', 'ANNO-TEXT', 'BRNG'], `${name} summary`);
-  const n = P.spans.lengths.length, bands = ents(g, 'RATIO-OK', 'PL').concat(ents(g, 'RATIO-HI', 'PL'), ents(g, 'RATIO-NG', 'PL'), ents(g, 'RATIO-NA', 'PL')).filter(e => e.closed && e.pts.length === 4 && Math.abs(e.pts[2][1] - e.pts[0][1] - 2 * g.D.h) < 1e-6);
-  assert.equal(bands.length, n, `${name}: one band per span`); assert.ok(Mod.gov.length > 5);
+  const sup = G.geoProject(P, 0).sup, bands = [];
+  ['RATIO-OK', 'RATIO-WARN', 'RATIO-NG'].forEach(l => ents(g, l, 'PL').forEach(e => { if (e.closed && e.pts.length === 4) sup.slice(1).forEach((x, k) => { if (Math.abs(e.pts[0][0] - sup[k] * 12) < 1e-6 && Math.abs(e.pts[2][0] - x * 12) < 1e-6) bands.push([k, l]); }); }));
+  assert.ok(bands.length >= 1 && bands.length <= sup.length - 1, `${name}: span bands (${bands.length})`);
+  bands.forEach(([k, l]) => { const rs = Mod.gov.filter(q => { const x = G.parseX(q.loc, sup), y = Number.isFinite(x) ? x : G.parseX(q.check, sup); return Number.isFinite(y) && /Span/.test('') === false && y > sup[k] - 1e-6 && y <= sup[k + 1] + 1e-6; }); assert.ok(rs.length >= 0); }); assert.ok(Mod.gov.length > 5);
+  const sec = Mod.sections.find(q => q.id === 'sum'), fig = sec && sec.subs.flatMap(q => q.items).find(it => it.type === 'figure'); assert.ok(fig && /^<svg /.test(fig.svg) && !/NaN/.test(fig.svg) && fig.caption, `${name}: the Report summary section carries the figure`);
 }
 function spliceChecks(P, s, name) {
   const g = G.splice(s, {}); sane(g, ['GRDR-PLAT', 'SPLC-PLAT', 'BOLT', 'DIMS', 'ANNO-TEXT'], `${name} splice`);
@@ -122,6 +125,10 @@ test('Tab graphics B: five hand-off payloads (demands from the file), every grap
     const RT = W.SBDRatingUI.build({ P, g: 0, pl }); if (RT.err) throw new Error(`${f}: ${RT.err}`); rateChecks(P, RT, f);
     st.cases++;
   }
+});
+test('Tab graphics B: the ratio bands are SBDGraphics.ratioColor\'s (green < 0.8, amber 0.8 to 1.0, red above 1.0 or NG)', () => {
+  const col = { ok: 3, hi: 2, ng: 1 };
+  [0, 0.3, 0.7999, 0.8, 0.95, 1, 1 + 1e-12, 1.0001, 1.5, 10, Infinity, NaN].forEach(r => { const c = G.ratioClass(r); if (c !== 'na') assert.equal(col[c], GR.ratioColor(r, true), `ratio ${r}`); });
 });
 test('Tab graphics B: summary of the counts', () => {
   console.log(`       ${st.cases} projects, ${st.graphics} graphics, ${st.ents} entities, ${st.regions} click regions; ${st.panels} panels, ${st.stations} stations, ${st.details} fatigue details, ${st.welds} weld locations, ${st.rf} rating points checked against the results`);

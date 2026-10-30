@@ -23,7 +23,8 @@
   'use strict';
   const X_ = () => window.SharedDxf;
   const fin = v => typeof v === 'number' && isFinite(v);
-  const rcls = r => (Number.isNaN(r) || r === Infinity ? 'ng' : !fin(r) ? 'na' : r > 1 + 1e-9 ? 'ng' : r >= 0.9 ? 'hi' : 'ok');
+  /* the ratio bands of SBDGraphics.ratioColor (green < 0.8, amber 0.8 to 1.0, red > 1.0 or NG): the same colours on every tab graphic */
+  const rcls = r => (Number.isNaN(r) || r === Infinity ? 'ng' : !fin(r) ? 'na' : r > 1 + 1e-9 ? 'ng' : r >= 0.8 ? 'hi' : 'ok');
   const frac = v => X_().frac(v), dIn = v => `${X_().frac(v)}"`;   // sizes to the nearest 1/16 in (plate and weld sizes, as GirderDetail's frac)
   const f1 = v => (+v).toFixed(1), f2 = v => (+v).toFixed(2), f3 = v => (+v).toFixed(3);
   /* text of a result (a check title with TeX or Greek letters) as plain upper-case drafting text: the preview and the DXF both show it as written */
@@ -32,13 +33,11 @@
   const up = s => asc(s).toUpperCase();
 
   /* ---------- the drawing, its layers and the common pieces ---------- */
-  function newDrawing(h) {
-    const D = X_().drawing({ prefix: 'S-' }); D.h = h; D.k = h / 0.1;   // D.k: dimension ticks and linetypes scale with the text (Drawings: h = 0.10 k)
-    const L = { p: D.layer('GRDR-PLAT', 4), w: D.layer('GRDR', 5), st: D.layer('GRDR-STIF', 30), s: D.layer('SPLC', 1), b: D.layer('BRNG', 8), sc: D.layer('STUD', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7),
-      c: D.layer('CNTR', 8), bolt: D.layer('BOLT', 2), pl: D.layer('SPLC-PLAT', 1), dk: D.layer('DECK', 7), ok: D.layer('RATIO-OK', 3), hi: D.layer('RATIO-HI', 2), ng: D.layer('RATIO-NG', 1), na: D.layer('RATIO-NA', 9),
-      sel: D.layer('SEL', 30), gov: D.layer('GOV', 6), grid: D.layer('GRID', 9), ax: D.layer('CHART-AXIS', 7), s1: D.layer('CHART-1', 5), s2: D.layer('CHART-2', 3), s3: D.layer('CHART-3', 30), s4: D.layer('CHART-4', 6) };
-    return { D, L };
-  }
+  const layersOf = D => ({ p: D.layer('GRDR-PLAT', 4), w: D.layer('GRDR', 5), st: D.layer('GRDR-STIF', 30), s: D.layer('SPLC', 1), b: D.layer('BRNG', 8), sc: D.layer('STUD', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7),
+    c: D.layer('CNTR', 8), bolt: D.layer('BOLT', 2), pl: D.layer('SPLC-PLAT', 1), dk: D.layer('DECK', 7), ok: D.layer('RATIO-OK', 3), hi: D.layer('RATIO-WARN', 2), ng: D.layer('RATIO-NG', 1), na: D.layer('RATIO-NA', 9),
+    sel: D.layer('SEL', 5), gov: D.layer('GOV', 6), grid: D.layer('GRID', 9) });
+  /* a stand-alone drawing (the detail sketches) at text height h: as SBDGraphics.newDrawing */
+  function newDrawing(h) { const GR = window.SBDGraphics, D = GR ? GR.newDrawing(h) : X_().drawing({ prefix: 'S-' }); D.h = h; D.k = h / 0.1; return { D, L: layersOf(D) }; }
   /* 45° lines filling the rectangle (the preview has no fills: the ratio colour is a hatch on its own layer, which the DXF carries too) */
   function hatch(D, l, x0, y0, x1, y1, sp) {
     const w = x1 - x0, hh = y1 - y0; if (!(w > 0 && hh > 0)) return;
@@ -63,7 +62,7 @@
     D.text(L.t, x, y - 1.4 * h, h * 0.8, '0', 1); D.text(L.t, x + len / 2, y - 1.4 * h, h * 0.8, `${ft / 2}`, 1); D.text(L.t, x + len, y - 1.4 * h, h * 0.8, `${ft} FT`, 1);
   }
   const legend = (D, L, x, y, h, items) => { let xx = x; items.forEach(([lay, txt]) => { D.rect(lay, xx, y - 0.1 * h, xx + 1.6 * h, y + 1.1 * h); hatch(D, lay, xx, y - 0.1 * h, xx + 1.6 * h, y + 1.1 * h, 0.5 * h); D.text(L.t, xx + 2 * h, y, h * 0.85, txt); xx += (2.6 + txt.length * 0.82) * h; }); };
-  const RLEG = (L, ratio) => [[L.ok, ratio ? 'RATIO < 0.90' : 'RF >= 1.10'], [L.hi, ratio ? '0.90 TO 1.00' : '1.00 TO 1.10'], [L.ng, ratio ? 'RATIO > 1.00 (NG)' : 'RF < 1.00 (NG)']];
+  const RLEG = L => [[L.ok, 'RATIO < 0.80'], [L.hi, '0.80 TO 1.00'], [L.ng, 'RATIO > 1.00 OR NG']];
   const base = (id, title, D, i0, regions, note) => ({ id, title, D, i0, i1: D.mark(), regions: regions || [], note: note || '' });
 
   /* ---------- the girder: plates and supports from the project ---------- */
@@ -76,34 +75,22 @@
   const segAt = (G, x) => G.segs.find(s => x >= s.x0 - 1e-9 && x < s.x1 - 1e-9) || (x < G.segs[0].x0 ? G.segs[0] : G.segs[G.segs.length - 1]);
   const supName = (k, n) => (k === 0 ? 'ABUT. 1' : k === n - 1 ? 'ABUT. 2' : `PIER ${k}`);
 
-  /* the elevation of the girder (Drawings elevation: plates, web, supports, span dimensions) with room above for marks and below for the
-     station strip. Returns the frame { X, v, h, yB, Dw(x), tT(x), tB(x), yTop, yBot, Lin } */
-  function elevation(D, L, G, opt) {
-    opt = opt || {}; const Lin = G.L * 12, Dmax = Math.max(...G.segs.map(s => s.D));
-    const h = opt.h || Math.max(8, Lin / 70), v = opt.vex || Math.max(1, Math.min(10, Lin / (9 * Dmax)));
-    D.h = h; D.k = h / 0.1;
-    const X = x => x * 12, S = G.segs, Dw = x => segAt(G, x).D * v, tT = x => segAt(G, x).topT * v, tB = x => segAt(G, x).botT * v, yB = 0;
-    const tmax = Math.max(...S.map(s => s.topT)) * v, bmax = Math.max(...S.map(s => s.botT)) * v, yTop = Dmax * v + tmax;
-    S.forEach(s => { const a = X(s.x0), b = X(s.x1), d = s.D * v;
-      D.rect(L.p, a, yB + d, b, yB + d + s.topT * v); D.rect(L.p, a, yB - s.botT * v, b, yB);
-      D.line(L.w, a, yB, b, yB); D.line(L.w, a, yB + d, b, yB + d); });
-    S.forEach((s, k) => { const d = s.D * v, dp = k ? S[k - 1].D * v : 0; D.line(L.w, X(s.x0), yB, X(s.x0), yB + Math.max(d, dp)); if (k === S.length - 1) D.line(L.w, X(s.x1), yB, X(s.x1), yB + d); });
-    G.sup.forEach((x, k) => { const t = tB(Math.min(x, G.L - 1e-6)); D.pline(L.b, [[X(x), yB - t], [X(x) - h * 0.8, yB - t - h * 1.4], [X(x) + h * 0.8, yB - t - h * 1.4]], true);
-      D.text(L.t, X(x), yB - bmax - 3.4 * h, h * 0.8, supName(k, G.sup.length), 1); });
-    G.sup.slice(1).forEach((x, k) => D.dimH(L.d, X(G.sup[k]), X(x), yB - bmax - 6.6 * h, yB - bmax - 1.6 * h, `SPAN ${k + 1} = <>`));
-    return { X, v, h, yB, Dw, tT, tB, yTop, yBot: yB - bmax, tmax, bmax, Lin, Dmax };
+  /* frame(P, opt): the girder elevation of SBDGraphics.elevation (the Drawings elevation: plates and plate sizes, supports, splices, cross-frame lines, span
+     dimensions, station axis), with this file's layers and helpers: { D, L (layers), G (plates and supports of the project), F } where F = { E, X(ft),
+     v (vertical exaggeration), h (text height), yB (web bottom), yTop, Dw(ft) (web height there), tT, tB (flange thicknesses), alloc(height) (a row below
+     everything drawn: its top y), title(t, sub) }. opt.gi: the girder (index in P.girders). */
+  function frame(P, opt) {
+    opt = opt || {}; const GR = window.SBDGraphics; if (!GR) throw new Error('ui/graphics.js (SBDGraphics) is not loaded.');
+    const gi = opt.gi || 0, E = GR.elevation(P, gi, { vex: opt.vex, h: opt.h }); if (E.errors && E.errors.length) throw new Error(E.errors.join(' '));
+    const G = geoProject(P, gi), D = E.D, L = layersOf(D), v = E.vex;
+    const F = { E, gi, X: E.X, v, h: E.h, yB: E.yB, Dw: x => E.Yweb(x), tT: x => segAt(G, x).topT * v, tB: x => segAt(G, x).botT * v, alloc: n => E.alloc(n), title: (t, sub) => E.title(t, sub),
+      get yTop() { return E.yTop; }, set yTop(y) { E.yTop = y; } };
+    return { D, L, G, F };
   }
-  const titleText = (D, L, F, title, sub) => { D.text(L.t, 0, F.yTop + 9 * F.h, F.h * 1.6, title); if (sub) D.text(L.t, 0, F.yTop + 6.6 * F.h, F.h * 0.8, sub); };
 
   /* ====================================================================================================== */
   /* Shear & stiffeners                                                                                      */
   /* ====================================================================================================== */
-  /* the girder of a Shear-tab result: the plate changes and zAt of the demand source in use (R.gm) */
-  function shearGeo(R) {
-    const gm = R.gm, L = gm.sup[gm.sup.length - 1], br = [0, ...gm.chg.filter(x => x > 0 && x < L), L], segs = [];
-    for (let i = 0; i < br.length - 1; i++) { const z = gm.zAt((br[i] + br[i + 1]) / 2); segs.push({ x0: br[i], x1: br[i + 1], D: z.D, tw: z.tw, topB: z.topB, topT: z.topT, botB: z.botB, botT: z.botT }); }
-    return geoOf(gm.sup, segs);
-  }
   /* x of each intermediate stiffener / connection plate row of R.TS (the layout's panel joints, as SBDStiffeners.stiffenerRows finds them) */
   function tsStations(R) {
     const SB = window.SBDStiffeners, out = []; if (!R.TS || !R.TS.rows) return out;
@@ -111,42 +98,43 @@
     return R.TS.rows.map(r => { const m = /at ([\d.]+) ft/.exec(r.name || ''); return m ? +m[1] : NaN; });
   }
   /* shear(R, P, opt): the girder elevation with the stiffener layout, each web panel coloured by its shear ratio V_u/(φ_v V_n) (R.panels.rows[i].r),
-     bearing stiffeners, a strip with the ratio of every station, and the governing items marked. Clicks: pan, loc, ts, bs. */
+     bearing stiffeners, a strip with the ratio of every station, and the governing items marked. Clicks: pan, loc, ts, bs. opt.gi: the girder; opt.sel: the
+     tab's selection { k, i }. */
   function shear(R, P, opt) {
-    opt = opt || {}; const G = shearGeo(R), { D, L } = newDrawing(1), F = elevation(D, L, G, opt), i0 = 0, h = F.h, X = F.X, v = F.v, reg = [], sel = opt.sel || {};
-    const has = R.gm.dem, rows = R.panels.rows, gov = R.panels.gov, yS = F.yBot - 16 * h;
-    // the panels: colour by ratio (or the plain panel width and d_o where there is no shear envelope)
+    opt = opt || {}; const gi0 = opt.gi != null ? opt.gi : Math.max(0, (R.gm.gNo || 1) - 1), { D, L, G, F } = frame(P, { gi: Math.min(gi0, P.girders.length - 1) }), h = F.h, X = F.X, reg = [], sel = opt.sel || {};
+    const has = R.gm.dem, rows = R.panels.rows, gov = R.panels.gov;
+    // the panels: colour by ratio (or the plain panel width and d_o where there is no shear envelope); values on the notable ones
     rows.forEach(q => { const a = X(q.p), b = X(q.q), d = Math.min(F.Dw(q.p + 1e-6), F.Dw(q.q - 1e-6)), r = has ? q.r : NaN, hh = h * Math.min(0.9, (b - a) * 0.5 / (h * 1.2));
-      const show = has && (rcls(r) !== 'ok' || q === gov || (b - a) > 6.5 * h);
+      const show = has && (rcls(r) !== 'ok' || q === gov);
       if (has) ratioFill(D, L, r, a, F.yB, b, F.yB + d, Math.max(d / 3, (b - a) / 2));
-      if (show && hh > 0.35 * h) fitText(D, L.t, (a + b) / 2, F.yB + d / 2, b - a, d, f2(r), hh);
+      if (show && hh > 0.35 * h) fitText(D, L.t, (a + b) / 2, F.yB + d * 0.2, b - a, d * 0.4, f2(r), hh);
       if (sel.k === 'pan' && sel.i === q.i) D.rect(L.sel, a - 0.12 * h, F.yB - 0.12 * h, b + 0.12 * h, F.yB + d + 0.12 * h);
-      reg.push({ k: 'pan', i: q.i, x0: a, y0: F.yB, x1: b, y1: F.yB + d }); });
-    if (has && gov) { const a = X(gov.p), b = X(gov.q), d = F.Dw((gov.p + gov.q) / 2); D.rect(L.gov, a + 0.2 * h, F.yB + 0.2 * h, b - 0.2 * h, F.yB + d - 0.2 * h); D.text(L.gov, (a + b) / 2, F.yB + d + F.tT((gov.p + gov.q) / 2) + 1.2 * h, h * 0.9, `GOVERNS: ${f3(gov.r)}`, 1); }
+      reg.push({ k: 'pan', i: q.i, x0: a, y0: F.yB, x1: b, y1: F.yB + d, lab: `PANEL ${f2(q.p)}-${f2(q.q)} FT${q.end ? ' (END)' : ''}, d_o = ${f2(q.d)} IN${has ? `, V_u/PHI V_n = ${f3(q.r)}` : ''}` }); });
+    let top = F.yTop + 3 * h;
+    if (has && gov) { const a = X(gov.p), b = X(gov.q); D.rect(L.gov, a + 0.2 * h, F.yB + 0.2 * h, b - 0.2 * h, F.yB + F.Dw((gov.p + gov.q) / 2) - 0.2 * h); D.text(L.gov, (a + b) / 2, top, h * 0.9, `PANEL GOVERNS: ${f3(gov.r)}`, 1); }
     // stiffeners: connection plates (Type B) solid, intermediate stiffeners (Type A) hidden, as the Drawings elevation
     const tx = tsStations(R), hid = D.ltype('HIDDEN');
     R.TS && R.TS.rows.forEach((r, i) => { const x = tx[i]; if (!fin(x)) return; const d = F.Dw(x); D.line(L.st, X(x), F.yB, X(x), F.yB + d, r.type === 'B' ? undefined : hid);
       if (sel.k === 'ts' && sel.i === i) D.circle(L.sel, X(x), F.yB + d + 1.6 * h, 0.8 * h);
-      if (R.tsGov && R.tsGov.i === i) { D.circle(L.gov, X(x), F.yB + d + 1.6 * h, 0.8 * h); D.text(L.gov, X(x), F.yB + d + 3 * h, h * 0.8, `${r.type === 'B' ? 'CP' : 'TS'} ${f3(R.tsGov.it.r)}`, 1); }
-      reg.push({ k: 'ts', i, x0: X(x) - 0.5 * h, y0: F.yB, x1: X(x) + 0.5 * h, y1: F.yB + d + 1.8 * h }); });
-    R.BS && R.BS.rows.forEach((r, k) => { const x = G.sup[k]; if (x == null) return; const d = F.Dw(Math.min(x, G.L - 1e-6)), tp = 0.75;
-      [-1, 1].forEach(sg => D.line(L.st, X(x) + sg * tp, F.yB, X(x) + sg * tp, F.yB + d)); D.text(L.t, X(x), F.yB + d + F.tT(Math.min(x, G.L - 1e-6)) + 0.6 * h, h * 0.75, `BS${k + 1} (${r.type})`, k === 0 ? 0 : k === G.sup.length - 1 ? 2 : 1);
-      if (R.bsGov && R.bsGov.i === k) { D.circle(L.gov, X(x), F.yB + d + 3.4 * h, 0.8 * h); D.text(L.gov, X(x), F.yB + d + 4.6 * h, h * 0.8, `BS ${f3(R.bsGov.it.r)}`, k === 0 ? 0 : 1); }
+      if (R.tsGov && R.tsGov.i === i) { D.circle(L.gov, X(x), F.yB + d + 1.6 * h, 0.8 * h); D.text(L.gov, X(x), top + 1.6 * h, h * 0.8, `${r.type === 'B' ? 'CP' : 'TS'} ${f3(R.tsGov.it.r)}`, 1); }
+      D.circle(L.st, X(x), F.yB + d + 1.6 * h, 0.4 * h); reg.push({ k: 'ts', i, x0: X(x) - 0.7 * h, y0: F.yB + d, x1: X(x) + 0.7 * h, y1: F.yB + d + 2.4 * h, lab: up(r.name) }); });   // the mark above the web (a click on the web is the panel)
+    R.BS && R.BS.rows.forEach((r, k) => { const x = G.sup[k]; if (x == null) return; const d = F.Dw(Math.min(x, G.L - 1e-6)), tp = 0.75, bsx = X(x) + (k === 0 ? 1.2 * h : k === G.sup.length - 1 ? -1.2 * h : 0);
+      [-1, 1].forEach(sg => D.line(L.st, X(x) + sg * tp, F.yB, X(x) + sg * tp, F.yB + d)); D.text(L.t, bsx, F.yB + d * 0.5, h * 0.75, `BS${k + 1} (${r.type})`, k === 0 ? 0 : k === G.sup.length - 1 ? 2 : 1, 90);
+      if (R.bsGov && R.bsGov.i === k) { D.circle(L.gov, X(x), F.yB + d + 3.4 * h, 0.8 * h); D.text(L.gov, X(x), F.yB + d + 4.6 * h, h * 0.8, `BS ${f3(R.bsGov.it.r)}`, k === 0 ? 0 : k === G.sup.length - 1 ? 2 : 1); }
       if (sel.k === 'bs' && sel.i === k) D.circle(L.sel, X(x), F.yB + d + 3.4 * h, 0.8 * h);
-      reg.push({ k: 'bs', i: k, x0: X(x) - 1.5 * h, y0: F.yB, x1: X(x) + 1.5 * h, y1: F.yB + d + 1.8 * h }); });
+      D.circle(L.st, X(x), F.yB + d + 3.4 * h, 0.4 * h); reg.push({ k: 'bs', i: k, x0: X(x) - 1.5 * h, y0: F.yB + d + 2.4 * h, x1: X(x) + 1.5 * h, y1: F.yB + d + 4.8 * h, lab: up(r.name) }); });
     // the stations: a strip of cells coloured by each station's governing ratio (click: that station)
-    D.text(L.t, 0, yS + 2.4 * h, h * 0.8, 'STATIONS (GS11, GS16, GS18): GOVERNING RATIO AT EACH');
-    const st = R.stations, xs = st.map(s => s.x);
+    const rowTop = F.alloc(10 * h), yS = rowTop - 3 * h, st = R.stations, xs = st.map(s => s.x);
+    D.text(L.t, 0, rowTop - 0.6 * h, h * 0.8, 'STATIONS (GS11, GS16, GS18): GOVERNING RATIO AT EACH');
     st.forEach((s, i) => { const x = xs[i], a = i ? (xs[i - 1] + x) / 2 : x - 0.5, b = i < st.length - 1 ? (x + xs[i + 1]) / 2 : x + 0.5, r = s.gov ? s.gov.ratio : NaN, a1 = Math.max(0, a), b1 = Math.min(G.L, b);
       if (b1 <= a1) return; D.rect(L[rcls(r)], X(a1), yS, X(b1), yS + 1.6 * h); if (rcls(r) !== 'na') hatch(D, L[rcls(r)], X(a1), yS, X(b1), yS + 1.6 * h, 0.4 * h);
       if (sel.k === 'loc' && sel.i === i) D.rect(L.sel, X(a1) - 0.1 * h, yS - 0.3 * h, X(b1) + 0.1 * h, yS + 1.9 * h);
-      reg.push({ k: 'loc', i, x0: X(a1), y0: yS - 0.3 * h, x1: X(b1), y1: yS + 1.9 * h }); });
+      reg.push({ k: 'loc', i, x0: X(a1), y0: yS - 0.3 * h, x1: X(b1), y1: yS + 1.9 * h, lab: `${up(s.name)}${s.gov ? `, ${s.gov.id} ${f3(s.gov.ratio)}` : ''}` }); });
     if (R.stGov) { const x = X(R.stGov.x != null ? R.stGov.x : xs[st.indexOf(R.stGov)]); D.line(L.gov, x, yS - 0.3 * h, x, yS - 2.2 * h); D.text(L.gov, x, yS - 4 * h, h * 0.8, `${R.stGov.gov.id} ${f3(R.stGov.gov.ratio)}`, 1); }
-    scaleBar(D, L, 0, yS - 8 * h, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
-    legend(D, L, X(G.L) * 0.4, yS - 8.2 * h, h, RLEG(L, true));
-    titleText(D, L, F, `GIRDER ${P && P.girders && P.girders[(R.gm.gNo || 1) - 1] ? (P.girders[(R.gm.gNo || 1) - 1].label || 'G' + R.gm.gNo) : 'G' + R.gm.gNo}: SHEAR AND STIFFENER LAYOUT`,
-      `WEB PANELS COLOURED BY V_u / (PHI_v V_n), 6.10.9; ${has ? '' : 'NO SHEAR ENVELOPE FROM THIS SOURCE (PANEL RESISTANCE ONLY); '}VERT. EXAG. x${v.toFixed(1)}; STIFFENERS: SOLID = CONNECTION PLATE, DASHED = INTERMEDIATE STIFFENER`);
-    return base('shear', 'Shear and stiffener layout', D, i0, reg);
+    const yL = F.alloc(5 * h) - 2.4 * h; scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h); legend(D, L, X(G.L) * 0.4, yL, h, RLEG(L));
+    F.yTop = top + 3 * h; const lab = (P.girders[gi0] || {}).label || `G${gi0 + 1}`;
+    F.title(`GIRDER ${lab}: SHEAR AND STIFFENER LAYOUT`, `WEB PANELS COLOURED BY V_u / (PHI_v V_n), 6.10.9; ${has ? '' : 'NO SHEAR ENVELOPE FROM THIS SOURCE (PANEL RESISTANCE ONLY); '}VERT. EXAG. x${F.v.toFixed(1)}; SOLID = CONNECTION PLATE, DASHED = INTERMEDIATE STIFFENER; MAGENTA = GOVERNS`);
+    return base('shear', 'Shear and stiffener layout', D, 0, reg);
   }
 
   /* a zig-zag break mark across a width at height y */
@@ -204,24 +192,9 @@
     return base('shearDetail', 'Stiffener details', D, 0, []);
   }
 
-  /* ====================================================================================================== */
-  /* Charts in the drawing style (drafted axes, gridlines on their own layer, the same text)                */
-  /* ====================================================================================================== */
   const niceStep = (a, b, n) => { const raw = (b - a) / n || 1, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
-  /* chartFrame(D, L, c): axes box at (c.x0, c.y0) of c.w × c.hgt drawing inches for the ranges c.xr, c.yr; returns { sx, sy } (data -> drawing).
-     c: { x0, y0, w, hgt, xr, yr, xStep, yStep, xLab, yLab, title, h, xFmt, yFmt, vlines: [x] (dashed, e.g. supports) } */
-  function chartFrame(D, L, c) {
-    const h = c.h, sx = x => c.x0 + (x - c.xr[0]) / (c.xr[1] - c.xr[0]) * c.w, sy = y => c.y0 + (y - c.yr[0]) / (c.yr[1] - c.yr[0]) * c.hgt, xs = c.xStep || niceStep(c.xr[0], c.xr[1], 8), ys = c.yStep || niceStep(c.yr[0], c.yr[1], 5), hid = D.ltype('HIDDEN');
-    for (let y = Math.ceil(c.yr[0] / ys - 1e-9) * ys; y <= c.yr[1] + 1e-9; y += ys) { D.line(L.grid, c.x0, sy(y), c.x0 + c.w, sy(y)); D.text(L.t, c.x0 - 0.8 * h, sy(y) - 0.3 * h, h * 0.8, (c.yFmt || (v => +v.toFixed(2)))(y), 2); }
-    for (let x = Math.ceil(c.xr[0] / xs - 1e-9) * xs; x <= c.xr[1] + 1e-9; x += xs) { D.line(L.grid, sx(x), c.y0, sx(x), c.y0 + c.hgt); D.text(L.t, sx(x), c.y0 - 1.6 * h, h * 0.8, (c.xFmt || (v => +v.toFixed(2)))(x), 1); }
-    (c.vlines || []).forEach(x => D.line(L.c, sx(x), c.y0, sx(x), c.y0 + c.hgt, hid));
-    D.rect(L.ax, c.x0, c.y0, c.x0 + c.w, c.y0 + c.hgt);
-    D.text(L.t, c.x0 + c.w / 2, c.y0 - 3.4 * h, h * 0.85, c.xLab || '', 1); D.text(L.t, c.x0 - 4.2 * h, c.y0 + c.hgt / 2, h * 0.85, c.yLab || '', 1, 90);
-    if (c.title) D.text(L.t, c.x0, c.y0 + c.hgt + 1.2 * h, h * 1.2, c.title);
-    return { sx, sy };
-  }
-  const polyline = (D, l, pts, lt) => { if (pts.length > 1) D.pline(l, pts, false, lt); };
-  const legendLines = (D, L, x, y, h, items) => { let xx = x; items.forEach(([lay, lt, txt]) => { D.line(lay, xx, y + 0.35 * h, xx + 2.4 * h, y + 0.35 * h, lt); D.text(L.t, xx + 3 * h, y, h * 0.85, txt); xx += (4 + txt.length * 0.82) * h; }); };
+  /* a drafted chart over the girder length (SBDGraphics.chart: axes, grid layer, series, limit line): plot area as wide as the girder in inches */
+  const chartOver = (o) => { const GR = window.SBDGraphics; if (!GR) throw new Error('ui/graphics.js (SBDGraphics) is not loaded.'); return GR.chart(o); };
 
   /* x (ft) of a location named in text (Welds, Report rows): "x = 88.00 ft", "at 88.00 ft", "Abut. 1", "Pier 2" */
   function parseX(txt, sup) {
@@ -238,44 +211,45 @@
   /* the number of studs in a pitch zone (as the Drawings quantities, engine/sheets.js: ⌊L/p + 1⌋ × studs per row) */
   const studCount = z => (z.p > 0 ? (Math.floor(((z.x2 - z.x1) * 12) / z.p + 1e-9) + 1) * z.nr : 0);
   /* fatigue(R, P, opt): elevation with every fatigue detail of R.FR.rows marked at its station and height and coloured by its FA1 ratio, and the
-     stud pitch zones (pitch, rows, count) along the top flange coloured by SC1. Clicks: fa (detail), sc (zones). */
+     stud pitch zones (pitch, rows, count) along the top flange coloured by SC1. Clicks: fa (detail), sc (zones). opt.gi: the girder. */
   function fatigue(R, P, opt) {
-    opt = opt || {}; const G = geoProject(P, opt.gi || 0), { D, L } = newDrawing(1), F = elevation(D, L, G, opt), h = F.h, X = F.X, v = F.v, reg = [], sel = opt.sel || {};
+    opt = opt || {}; const { D, L, G, F } = frame(P, { gi: opt.gi || 0 }), h = F.h, X = F.X, v = F.v, reg = [], sel = opt.sel || {};
     const fa1 = R.FC ? (R.FC.find(c => c.id === 'FA1') || { items: [] }).items : [], rows = R.FR && !R.FR.errors.length ? R.FR.rows : [];
-    rows.forEach((r, i) => { const s = segAt(G, +r.x), y = (FLOC[r.loc] || FLOC.bfo)(F, s, v, r), x = X(+r.x), q = fa1[i], rat = r.exempt ? NaN : q ? q.r : NaN, lay = r.exempt ? L.na : L[rcls(rat)], lvl = (i % 3), top = y > s.D * v / 2;
+    const rowB = F.alloc(8.4 * h), yTopL = F.yTop + 3 * h;
+    rows.forEach((r, i) => { const s = segAt(G, Math.min(Math.max(+r.x, 1e-6), G.L - 1e-6)), y = (FLOC[r.loc] || FLOC.bfo)(F, s, v, r), x = X(+r.x), q = fa1[i], rat = r.exempt ? NaN : q ? q.r : NaN, lay = r.exempt ? L.na : L[rcls(rat)], lvl = i % 3, top = y > s.D * v / 2;
       D.circle(lay, x, F.yB + y, 0.9 * h); D.circle(lay, x, F.yB + y, 0.5 * h); D.circle(lay, x, F.yB + y, 0.15 * h);
-      const yl = top ? F.yTop + (3.2 + lvl * 1.5) * h + 2.4 * h : F.yBot - (3.5 + lvl * 1.5) * h - 8 * h;   // leader up (top flange / upper web) or down (bottom flange)
-      const ye = top ? Math.max(F.yTop, F.yB + y) : Math.min(F.yBot - 1.6 * h, F.yB + y); D.line(lay, x, F.yB + y + (top ? 0.9 : -0.9) * h, x, yl + (top ? -0.3 : 1.1) * h);
-      D.text(lay, x, yl + (top ? 0 : 0), h * 0.8, `F${i + 1} ${r.exempt ? 'EXEMPT' : f2(rat)}`, 1);
+      const yl = top ? yTopL + lvl * 1.5 * h : rowB - (1.4 + lvl * 1.7) * h;   // leader up (top flange, upper web) or down to a row under the axis (bottom flange)
+      D.line(lay, x, F.yB + y + (top ? 0.9 : -0.9) * h, x, top ? yl - 0.2 * h : yl + 1.1 * h);
+      D.text(lay, x, yl, h * 0.8, `F${i + 1} ${r.exempt ? 'EXEMPT' : f2(rat)}`, 1);
       if (sel.k === 'fa' && sel.i === i) D.circle(L.sel, x, F.yB + y, 1.5 * h);
-      reg.push({ k: 'fa', i, x0: x - 1.2 * h, y0: Math.min(F.yB + y, yl) - 1.4 * h, x1: x + 1.2 * h, y1: Math.max(F.yB + y, yl) + 1.2 * h }); });
-    // stud zones: a band on the top flange: pitch, rows and stud count; colour by SC1 of the zone
-    const zs = R.SR && !R.SR.errors.length ? R.SR.zones : [], sc1 = R.SCC ? (R.SCC.find(c => c.id === 'SC1') || { items: [] }).items : [], yS = F.yTop + 14 * h;
-    D.text(L.t, 0, yS + 3.2 * h, h * 0.8, 'SHEAR STUD PITCH ZONES (6.10.10): ROWS @ PITCH = COUNT; COLOUR = SC1 FATIGUE RATIO');
+      reg.push({ k: 'fa', i, x0: x - 1.2 * h, y0: Math.min(F.yB + y, yl) - 1.4 * h, x1: x + 1.2 * h, y1: Math.max(F.yB + y, yl) + 1.2 * h, lab: `F${i + 1} ${up(r.name)}${r.exempt ? ' (EXEMPT)' : `: ${f3(rat)}`}` }); });
+    // stud zones: a band above the labels: pitch, rows and stud count; colour by SC1 of the zone
+    const zs = R.SR && !R.SR.errors.length ? R.SR.zones : [], sc1 = R.SCC ? (R.SCC.find(c => c.id === 'SC1') || { items: [] }).items : [], yS = yTopL + 7 * h;
+    D.text(L.t, 0, yS + 3.2 * h, h * 0.8, 'SHEAR STUD PITCH ZONES (6.10.10): ROWS @ PITCH (IN) ABOVE; COUNT BELOW; COLOUR = SC1 FATIGUE RATIO');
     zs.forEach((z, i) => { const a = X(z.x1), b = X(z.x2), r = sc1[i] ? sc1[i].r : NaN, n = studCount(z); ratioFill(D, L, r, a, yS, b, yS + 2 * h, 0.7 * h); D.line(L.sc, a, yS - 0.5 * h, a, yS + 2.5 * h);
       const lab = `${z.nr}@${+(+z.p).toFixed(1)}`, hh = Math.min(0.75 * h, (b - a) / (lab.length * 0.9) * 0.95); if (hh >= 0.3 * h) D.text(L.t, (a + b) / 2, yS + 2.6 * h, hh, lab, 1);
       const cl = `${n}`, hc = Math.min(0.75 * h, (b - a) / (cl.length * 0.9) * 0.95); if (hc >= 0.3 * h) D.text(L.t, (a + b) / 2, yS - 1.6 * h, hc, cl, 1);
       if (sel.k === 'sc') D.rect(L.sel, a, yS - 0.2 * h, b, yS + 2.2 * h);
-      reg.push({ k: 'sc', i: 0, x0: a, y0: yS - 0.5 * h, x1: b, y1: yS + 3.4 * h }); });
+      reg.push({ k: 'sc', i: 0, x0: a, y0: yS - 0.5 * h, x1: b, y1: yS + 3.4 * h, lab: `STUD ZONE ${f2(z.x1)}-${f2(z.x2)} FT: ${z.nr} @ ${f2(z.p)} IN = ${n} STUDS, SC1 ${f3(r)}` }); });
     if (zs.length) { D.line(L.sc, X(zs[zs.length - 1].x2), yS - 0.5 * h, X(zs[zs.length - 1].x2), yS + 2.5 * h); D.text(L.t, X(G.L) + 1.5 * h, yS, h * 0.8, `TOTAL ${zs.reduce((s, z) => s + studCount(z), 0)} STUDS`); } else D.text(L.t, 0, yS, h * 0.8, 'NO STUD ZONES IN THESE RESULTS.');
-    legend(D, L, X(G.L) * 0.35, F.yBot - 16 * h, h, RLEG(L, true)); scaleBar(D, L, 0, F.yBot - 16 * h, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
-    D.text(L.t, 0, yS + 8 * h, h * 1.6, `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE DETAILS AND STUD ZONES`);
-    D.text(L.t, 0, yS + 5.8 * h, h * 0.8, `F1.. = THE FATIGUE DETAILS OF THE TABLE (RATIO = GAMMA(DELTA f) / (DELTA F)_n, FA1); VERT. EXAG. x${v.toFixed(1)}; PLATES OF THE PROJECT`);
+    const yL = F.alloc(5 * h) - 2.4 * h; legend(D, L, X(G.L) * 0.35, yL, h, RLEG(L)); scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
+    F.yTop = yS + 5 * h;
+    F.title(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE DETAILS AND STUD ZONES`, `F1.. = THE FATIGUE DETAILS OF THE TABLE (RATIO = GAMMA(DELTA f) / (DELTA F)_n, FA1); VERT. EXAG. x${v.toFixed(1)}; PLATES OF THE PROJECT`);
     return base('fatigue', 'Fatigue details and stud zones', D, 0, reg);
   }
-  /* fatigueChart(R, P, opt): γ(Δf) and (ΔF)_n of each detail along the girder, in the drawing style; marker colour = FA1 ratio */
+  /* fatigueChart(R, P, opt): γ(Δf) and (ΔF)_n of each detail along the girder (SBDGraphics.chart); marker colour = FA1 ratio. Click: fa. */
   function fatigueChart(R, P, opt) {
-    opt = opt || {}; const G = geoProject(P, opt.gi || 0), { D, L } = newDrawing(1), h = Math.max(8, G.L * 12 / 70); D.h = h; D.k = h / 0.1;
-    const rows = R.FR && !R.FR.errors.length ? R.FR.rows : [], fa1 = R.FC ? (R.FC.find(c => c.id === 'FA1') || { items: [] }).items : [], Lin = G.L * 12;
+    opt = opt || {}; const G = geoProject(P, opt.gi || 0), Lin = G.L * 12, h = Math.max(8, Lin / 70), rows = R.FR && !R.FR.errors.length ? R.FR.rows : [], fa1 = R.FC ? (R.FC.find(c => c.id === 'FA1') || { items: [] }).items : [];
     let ymax = 0; rows.forEach(r => { if (fin(r.dem)) ymax = Math.max(ymax, r.dem); if (fin(r.res)) ymax = Math.max(ymax, r.res); }); const ys = niceStep(0, ymax * 1.1 || 1, 5); ymax = Math.ceil(ymax * 1.1 / ys) * ys || 1;
-    const cw = Lin, ch = Lin / 4, fr = chartFrame(D, L, { x0: 0, y0: 0, w: cw, hgt: ch, xr: [0, G.L], yr: [0, ymax], yStep: ys, xStep: niceStep(0, G.L, 10), h, xLab: 'STATION ALONG THE GIRDER (FT)', yLab: 'STRESS RANGE (KSI)', title: `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE STRESS RANGE gamma(Df) vs NOMINAL RESISTANCE (DF)n`, vlines: G.sup }), reg = [];
-    rows.forEach((r, i) => { const x = fr.sx(+r.x), rat = r.exempt ? NaN : fa1[i] ? fa1[i].r : NaN, lay = r.exempt ? L.na : L[rcls(rat)];
-      if (fin(r.res)) { D.line(L.s2, x - 1.1 * h, fr.sy(r.res), x + 1.1 * h, fr.sy(r.res)); D.line(L.s2, x, fr.sy(r.res), x, fr.sy(r.dem), D.ltype('DASHED')); }
-      if (fin(r.dem)) { D.circle(lay, x, fr.sy(r.dem), 0.8 * h); D.circle(lay, x, fr.sy(r.dem), 0.4 * h); }
-      D.text(L.t, x, fr.sy(Math.max(r.dem || 0, r.res || 0)) + 1.2 * h, h * 0.75, `F${i + 1}`, 1);
-      if (opt.sel && opt.sel.k === 'fa' && opt.sel.i === i) D.circle(L.sel, x, fr.sy(r.dem), 1.4 * h);
-      reg.push({ k: 'fa', i, x0: x - 1.4 * h, y0: 0, x1: x + 1.4 * h, y1: ch }); });
-    legendLines(D, L, 0, ch + 4.2 * h, h, [[L.s2, undefined, '(DF)n NOMINAL RESISTANCE'], [L.ok, undefined, 'gamma(Df) <= 0.9 (DF)n'], [L.hi, undefined, '0.9 TO 1.0'], [L.ng, undefined, '> 1.0 (NG)']]);
+    const byC = { ok: [], hi: [], ng: [], na: [] }; rows.forEach((r, i) => { if (fin(r.dem)) byC[r.exempt ? 'na' : rcls(fa1[i] ? fa1[i].r : NaN)].push([+r.x * 12, r.dem]); });
+    const C = chartOver({ at: [0, 0], w: Lin, hgt: Lin / 4, h, xr: [0, Lin], yr: [0, ymax], ystep: ys, xstep: niceStep(0, G.L, 10) * 12, fx: v => String(Math.round(v / 12)), fy: v => (+v.toFixed(2)).toString(), file: 'fatigue-chart',
+      title: `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE STRESS RANGE gamma(Df) vs NOMINAL RESISTANCE (DF)n`, xlab: 'STATION ALONG THE GIRDER (FT)', ylab: 'STRESS RANGE (KSI)',
+      series: [{ name: '(DF)n RESISTANCE', kind: 'points', pts: rows.filter(r => fin(r.res)).map(r => [+r.x * 12, r.res]), color: 5 }, { name: 'gamma(Df) < 0.8 (DF)n', kind: 'points', pts: byC.ok, color: 3 }, { name: '0.8 TO 1.0 (DF)n', kind: 'points', pts: byC.hi, color: 2 },
+        { name: '> 1.0 (NG)', kind: 'points', pts: byC.ng, color: 1 }, { name: 'EXEMPT (FA2)', kind: 'points', pts: byC.na, color: 9 }], vlines: G.sup.map((x, k) => ({ x: x * 12, label: supName(k, G.sup.length) })) });
+    const D = C.D, L = layersOf(D), reg = [], hh = C.h;
+    rows.forEach((r, i) => { const x = C.X(+r.x * 12); if (fin(r.res) && fin(r.dem)) D.line(L.c, x, C.Y(r.dem), x, C.Y(r.res), D.ltype('DASHED')); D.text(L.t, x, C.Y(Math.max(r.dem || 0, r.res || 0)) + 1.2 * hh, hh * 0.75, `F${i + 1}`, 1);
+      if (opt.sel && opt.sel.k === 'fa' && opt.sel.i === i) D.circle(L.sel, x, C.Y(r.dem), 1.4 * hh);
+      const ya = C.Y(Math.min(r.dem || 0, r.res || 0)), yb = C.Y(Math.max(r.dem || 0, r.res || 0)); reg.push({ k: 'fa', i, x0: x - 1.4 * hh, y0: Math.max(C.plot[1], ya - 1.4 * hh), x1: x + 1.4 * hh, y1: Math.min(C.plot[3], yb + 2.4 * hh), lab: `F${i + 1} ${up(r.name)}: GAMMA(DF) ${f2(r.dem)} / (DF)n ${f2(r.res)} KSI` }); });
     return base('fatigueChart', 'Fatigue stress range along the girder', D, 0, reg);
   }
 
@@ -317,20 +291,20 @@
      checked locations R.fw (circle) and the shop flange transitions R.tr (diamond) at their stations, coloured by the largest ratio of their checks.
      Clicks: fw, tr. */
   function welds(B, P, opt) {
-    opt = opt || {}; const G = geoProject(P, opt.gi || 0), { D, L } = newDrawing(1), F = elevation(D, L, G, opt), h = F.h, X = F.X, v = F.v, reg = [], sel = opt.sel || {}, R = B.R;
+    opt = opt || {}; const { D, L, G, F } = frame(P, { gi: opt.gi || 0 }), h = F.h, X = F.X, v = F.v, reg = [], sel = opt.sel || {}, R = B.R, top = F.yTop + 3 * h;
     const wl = D.layer('WELD', 30); G.segs.forEach(s => { const d = s.D * v; [0, d].forEach(y => { D.line(wl, X(s.x0), F.yB + y + 0.35 * h * (y ? -1 : 1), X(s.x1), F.yB + y + 0.35 * h * (y ? -1 : 1)); D.line(wl, X(s.x0), F.yB + y, X(s.x1), F.yB + y); }); });
     R.fw.forEach((r, k) => { const x = parseX(r.name, G.sup); if (!fin(x)) return; const xx = Math.min(Math.max(X(x), 0), X(G.L)), s = segAt(G, Math.min(Math.max(x, 1e-6), G.L - 1e-6)), rat = maxRatio(B.C, `wf${r.i}.`), lay = L[rcls(rat)], off = (/right/.test(r.name) ? 1 : /left/.test(r.name) ? -1 : 0) * 0.9 * h, lvl = k % 3, y = F.yB + s.D * v / 2;
-      D.circle(lay, xx + off, y, 0.9 * h); D.circle(lay, xx + off, y, 0.45 * h); D.line(lay, xx + off, y + 0.9 * h, xx + off, F.yTop + (3 + lvl * 1.6) * h); D.text(lay, xx + off, F.yTop + (3.3 + lvl * 1.6) * h, h * 0.75, `W${r.i + 1} ${frac(r.w)}"`, 1);
+      D.circle(lay, xx + off, y, 0.9 * h); D.circle(lay, xx + off, y, 0.45 * h); D.line(lay, xx + off, y + 0.9 * h, xx + off, top + lvl * 1.6 * h - 0.2 * h); D.text(lay, xx + off, top + lvl * 1.6 * h, h * 0.75, `W${r.i + 1} ${frac(r.w)}"`, 1);
       if (sel.k === 'fw' && sel.i === r.i) D.circle(L.sel, xx + off, y, 1.6 * h);
-      reg.push({ k: 'fw', i: r.i, x0: xx + off - 1.2 * h, y0: F.yB, x1: xx + off + 1.2 * h, y1: F.yTop + 5 * h }); });
-    R.tr.forEach((r, k) => { const x = parseX(r.name, G.sup); if (!fin(x)) return; const xx = X(x), top = /^Top/i.test(r.name), rat = maxRatio(B.C, `wt${r.i}.`), lay = L[rcls(rat)], s = segAt(G, Math.min(Math.max(x, 1e-6), G.L - 1e-6)), y = top ? F.yB + s.D * v + s.topT * v / 2 : F.yB - s.botT * v / 2;
-      D.pline(lay, [[xx, y + 0.9 * h], [xx + 0.9 * h, y], [xx, y - 0.9 * h], [xx - 0.9 * h, y]], true); D.text(lay, xx, top ? y + 1.6 * h + (k % 2) * 1.3 * h : y - 2.6 * h - (k % 2) * 1.3 * h, h * 0.75, `T${r.i + 1} ${r.cat}`, 1);
+      reg.push({ k: 'fw', i: r.i, x0: xx + off - 1.2 * h, y0: F.yB, x1: xx + off + 1.2 * h, y1: top + 2.4 * h, lab: `W${r.i + 1} ${up(r.name)}: w = ${dIn(r.w)}, RATIO ${f3(rat)}` }); });
+    R.tr.forEach((r, k) => { const x = parseX(r.name, G.sup); if (!fin(x)) return; const xx = X(x), isTop = /^Top/i.test(r.name), rat = maxRatio(B.C, `wt${r.i}.`), lay = L[rcls(rat)], s = segAt(G, Math.min(Math.max(x, 1e-6), G.L - 1e-6)), y = isTop ? F.yB + s.D * v + s.topT * v / 2 : F.yB - s.botT * v / 2;
+      D.pline(lay, [[xx, y + 0.9 * h], [xx + 0.9 * h, y], [xx, y - 0.9 * h], [xx - 0.9 * h, y]], true); D.text(lay, xx, isTop ? y + 1.6 * h + (k % 2) * 1.3 * h : y - 2.6 * h - (k % 2) * 1.3 * h, h * 0.75, `T${r.i + 1} ${r.cat}`, 1);
       if (sel.k === 'tr' && sel.i === r.i) D.circle(L.sel, xx, y, 1.6 * h);
-      reg.push({ k: 'tr', i: r.i, x0: xx - 1.2 * h, y0: y - 1.4 * h, x1: xx + 1.2 * h, y1: y + 1.4 * h }); });
-    const yT0 = F.yBot - 14 * h; legend(D, L, X(G.L) * 0.35, yT0, h, RLEG(L, true)); scaleBar(D, L, 0, yT0, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
-    const yM = yT0 - 5 * h, xM = X(G.L) * 0.35; D.circle(L.t, xM, yM + 0.5 * h, 0.8 * h); D.text(L.t, xM + 1.6 * h, yM, h * 0.85, 'W = FLANGE-TO-WEB WELD CHECK'); D.pline(L.t, [[xM + 36 * h, yM + 1.4 * h], [xM + 37.2 * h, yM + 0.3 * h], [xM + 36 * h, yM - 0.8 * h], [xM + 34.8 * h, yM + 0.3 * h]], true); D.text(L.t, xM + 38.4 * h, yM, h * 0.85, 'T = SHOP FLANGE TRANSITION');
-    D.text(L.t, 0, F.yTop + 12 * h, h * 1.6, `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: WELD LOCATIONS`);
-    D.text(L.t, 0, F.yTop + 9.6 * h, h * 0.8, `FILLET WELDS FLANGE-TO-WEB, BOTH SIDES, FULL LENGTH (ORANGE); LOCATIONS CHECKED FW1-FW4 AND TR1-TR4, COLOUR = LARGEST RATIO; VERT. EXAG. x${v.toFixed(1)}`);
+      reg.push({ k: 'tr', i: r.i, x0: xx - 1.2 * h, y0: y - 1.4 * h, x1: xx + 1.2 * h, y1: y + 1.4 * h, lab: `T${r.i + 1} ${up(r.name)}: RATIO ${f3(rat)}` }); });
+    const yT0 = F.alloc(9 * h) - 2.4 * h; legend(D, L, X(G.L) * 0.35, yT0, h, RLEG(L)); scaleBar(D, L, 0, yT0, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
+    const yM = yT0 - 4 * h, xM = X(G.L) * 0.35; D.circle(L.t, xM, yM + 0.5 * h, 0.8 * h); D.text(L.t, xM + 1.6 * h, yM, h * 0.85, 'W = FLANGE-TO-WEB WELD CHECK'); D.pline(L.t, [[xM + 36 * h, yM + 1.4 * h], [xM + 37.2 * h, yM + 0.3 * h], [xM + 36 * h, yM - 0.8 * h], [xM + 34.8 * h, yM + 0.3 * h]], true); D.text(L.t, xM + 38.4 * h, yM, h * 0.85, 'T = SHOP FLANGE TRANSITION');
+    F.yTop = top + 6 * h;
+    F.title(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: WELD LOCATIONS`, `FILLET WELDS FLANGE-TO-WEB, BOTH SIDES, FULL LENGTH (ORANGE); LOCATIONS CHECKED FW1-FW4 AND TR1-TR4, COLOUR = LARGEST RATIO; VERT. EXAG. x${v.toFixed(1)}`);
     return base('welds', 'Weld locations', D, 0, reg);
   }
   /* weldDetail(B, P, opt): the flange-to-web fillet weld of location opt.i (default the governing one): the T-section of the flange and web with the
@@ -395,18 +369,24 @@
   /* ====================================================================================================== */
   /* the RF of one kind of row along the girder: min at each station (the load-rating factor of the governing check there) */
   function rfSeries(rows, kind, key) { const m = new Map(); rows.forEach(r => { if (r.kind !== kind || !fin(r.x)) return; const v = r[key]; if (v == null || Number.isNaN(v)) return; const k = +r.x.toFixed(3); m.set(k, Math.min(m.has(k) ? m.get(k) : Infinity, v)); }); return [...m.entries()].sort((a, b) => a[0] - b[0]); }
-  /* ratingChart(B, P, opt): B = SBDRatingUI.build() result: RF along the girder, Inventory and Operating, flexure and shear, RF = 1.0 marked (the governing
-     rows of B.sum marked). Values above opt.cap (default 5) are drawn at the top edge. Clicks: none (row index of the governing row is in note). */
+  /* ratingChart(B, P, opt): B = SBDRatingUI.build() result: RF along the girder (SBDGraphics.chart), Inventory and Operating, flexure and shear, RF = 1.0
+     marked (the governing rows of B.sum circled). Values above opt.cap (default 5) are drawn at the top edge. */
   function ratingChart(B, P, opt) {
-    opt = opt || {}; const sup = B.pl && B.pl.member && B.pl.member.supports ? B.pl.member.supports : geoProject(P, opt.gi || 0).sup, Lg = sup[sup.length - 1], { D, L } = newDrawing(1), h = Math.max(8, Lg * 12 / 70); D.h = h; D.k = h / 0.1;
-    const cap = opt.cap || 5, ser = [['flex', 'inv', L.s1, undefined, 'INVENTORY, FLEXURE'], ['shear', 'inv', L.s2, undefined, 'INVENTORY, SHEAR'], ['flex', 'opr', L.s1, D.ltype('DASHED'), 'OPERATING, FLEXURE'], ['shear', 'opr', L.s2, D.ltype('DASHED'), 'OPERATING, SHEAR']];
+    opt = opt || {}; const sup = B.pl && B.pl.member && B.pl.member.supports ? B.pl.member.supports : geoProject(P, opt.gi || 0).sup, Lg = sup[sup.length - 1], Lin = Lg * 12, h = Math.max(8, Lin / 70);
+    const cap = opt.cap || 5, ser = [['flex', 'inv', 5, undefined, 'INVENTORY, FLEXURE'], ['shear', 'inv', 3, undefined, 'INVENTORY, SHEAR'], ['flex', 'opr', 5, 'DASHED', 'OPERATING, FLEXURE'], ['shear', 'opr', 3, 'DASHED', 'OPERATING, SHEAR']];
     const data = ser.map(q => rfSeries(B.rows, q[0], q[1])); let ymax = 0; data.forEach(s => s.forEach(p => { if (fin(p[1])) ymax = Math.max(ymax, Math.min(p[1], cap)); })); ymax = Math.max(2, Math.ceil(ymax * 1.05 * 2) / 2);
-    const Lin = Lg * 12, fr = chartFrame(D, L, { x0: 0, y0: 0, w: Lin, hgt: Lin / 4, xr: [0, Lg], yr: [0, ymax], yStep: ymax > 6 ? 1 : 0.5, xStep: niceStep(0, Lg, 10), h, xLab: 'STATION ALONG THE GIRDER (FT)', yLab: 'RATING FACTOR RF', title: `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: LOAD RATING FACTOR ALONG THE GIRDER (LRFR)`, vlines: sup });
-    ser.forEach((q, k) => polyline(D, q[2], data[k].map(p => [fr.sx(p[0]), fr.sy(Math.min(Math.max(p[1], 0), ymax))]), q[3]));
-    D.line(L.ng, 0, fr.sy(1), Lin, fr.sy(1)); D.line(L.ng, 0, fr.sy(1) + 0.25 * h, Lin, fr.sy(1) + 0.25 * h); D.text(L.ng, Lin + 1.4 * h, fr.sy(1) - 0.3 * h, h * 0.9, 'RF = 1.0');
-    ['inv', 'opr'].forEach(k => { const g = B.sum && B.sum.gov && B.sum.gov[k]; if (g && fin(g.x) && fin(g[k])) { D.circle(L.gov, fr.sx(g.x), fr.sy(Math.min(g[k], ymax)), 1.1 * h); D.text(L.gov, fr.sx(g.x), fr.sy(Math.min(g[k], ymax)) + (k === 'inv' ? -2.6 : 1.6) * h, h * 0.85, `${k === 'inv' ? 'INV' : 'OPR'} RF ${f2(g[k])} AT ${f1(g.x)} FT`, 1); } });
-    legendLines(D, L, 0, Lin / 4 + 5 * h, h, ser.map(q => [q[2], q[3], q[4]]).concat([[L.ng, undefined, 'RF = 1.0']]));
-    return base('ratingChart', 'Rating factor along the girder', D, 0, [], `Values above RF ${cap} are drawn at the top edge.`);
+    const C = chartOver({ at: [0, 0], w: Lin, hgt: Lin / 4, h, xr: [0, Lg], yr: [0, ymax], ystep: ymax > 6 ? 1 : 0.5, xstep: niceStep(0, Lg, 10), file: 'rating-chart', xlab: 'STATION ALONG THE GIRDER (FT)', ylab: 'RATING FACTOR RF',
+      title: `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: LOAD RATING FACTOR ALONG THE GIRDER (LRFR)`, vlines: sup.map((x, k) => ({ x, label: supName(k, sup.length) })), limits: [{ y: 1, label: 'RF = 1.0', color: 1 }],
+      series: ser.map((q, k) => ({ name: q[4], kind: 'line', pts: data[k], color: q[2], lt: q[3] })) });
+    const D = C.D, L = layersOf(D), hh = C.h;
+    ['inv', 'opr'].forEach(k => { const g = B.sum && B.sum.gov && B.sum.gov[k]; if (g && fin(g.x) && fin(g[k])) { const yy = C.Y(Math.min(Math.max(g[k], 0), ymax)); D.circle(L.gov, C.X(g.x), yy, 1.1 * hh); D.text(L.gov, C.X(g.x), yy + (k === 'inv' ? -2.6 : 1.6) * hh, hh * 0.85, `${k === 'inv' ? 'INV' : 'OPR'} RF ${f2(g[k])} AT ${f1(g.x)} FT`, 1); } });
+    // click regions: one band per station, selecting the row with the smallest Inventory RF there (flexure or shear): the Rating tab's S.sel is a row index
+    const best = new Map(); B.rows.forEach((r, i) => { if ((r.kind !== 'flex' && r.kind !== 'shear') || !fin(r.x) || r.oos) return; const k = +r.x.toFixed(3), v = fin(r.inv) ? r.inv : Infinity; if (!best.has(k) || v < best.get(k).v) best.set(k, { v, i }); });
+    const xs = [...best.keys()].sort((a, b) => a - b), reg = [];
+    xs.forEach((x, j) => { const a = j ? (xs[j - 1] + x) / 2 : 0, b = j < xs.length - 1 ? (x + xs[j + 1]) / 2 : Lg, r = B.rows[best.get(x).i];
+      reg.push({ k: 'rt', i: best.get(x).i, x0: C.X(a), y0: C.plot[1], x1: C.X(b), y1: C.plot[3], lab: `${up(r.name)}: ${up(r.title)}: INV ${fin(r.inv) ? f2(r.inv) : '-'}, OPR ${fin(r.opr) ? f2(r.opr) : '-'}` }); });
+    if (opt.sel != null && B.rows[opt.sel] && fin(B.rows[opt.sel].x)) { const x = C.X(B.rows[opt.sel].x); D.line(L.sel, x, C.plot[1], x, C.plot[3]); D.circle(L.sel, x, C.plot[1], 0.6 * hh); }
+    return base('ratingChart', 'Rating factor along the girder', D, 0, reg, `Values above RF ${cap} are drawn at the top edge.`);
   }
 
   /* ====================================================================================================== */
@@ -418,26 +398,27 @@
   /* summary(M, P, opt): M = SBDReportBuild.model() result (its gov rows: the governing check of each group with its location). A small elevation with
      the regions (each span, each support) and, above it, the governing checks whose location lies in the region, with their ratio (RF for rating) */
   function summary(M, P, opt) {
-    opt = opt || {}; const G = geoProject(P, opt.gi || 0), { D, L } = newDrawing(1), F = elevation(D, L, G, opt), h = F.h, X = F.X, reg = [], rows = M.gov || [], n = G.sup.length;
+    opt = opt || {}; const { D, L, G, F } = frame(P, { gi: opt.gi || 0 }), h = F.h, X = F.X, reg = [], rows = M.gov || [], n = G.sup.length, GR = window.SBDGraphics;
     const regionOf = (x, name) => { const t = String(name || ''); let m = /Abut\. (\d)/i.exec(t); if (m) return { k: 'sup', i: +m[1] === 1 ? 0 : n - 1 }; m = /Pier (\d)/i.exec(t); if (m && +m[1] < n) return { k: 'sup', i: +m[1] }; if (!fin(x)) return null;
       for (let k = 0; k < n - 1; k++) if (x <= G.sup[k + 1] + 1e-6) return { k: 'span', i: k }; return { k: 'span', i: n - 2 }; };
     const buckets = new Map(), gen = []; rows.forEach(q => { const x0 = parseX(q.loc, G.sup), x = fin(x0) ? x0 : parseX(q.check, G.sup), rg = regionOf(x, fin(x0) ? q.loc : q.check); if (!rg) { gen.push(q); return; } const key = rg.k + rg.i; if (!buckets.has(key)) buckets.set(key, { rg, rows: [] }); buckets.get(key).rows.push({ q, x }); });
-    // region bands under the web: span bars coloured by the largest ratio in the span
-    const yR = F.yBot - 12 * h;
-    for (let k = 0; k < n - 1; k++) { const b = buckets.get('span' + k), rs = b ? b.rows.filter(o => o.q.rf == null && fin(o.q.r)).map(o => o.q.r) : [], rf = b ? b.rows.filter(o => o.q.rf != null && fin(o.q.rf)).map(o => o.q.rf) : [], r = rs.length ? Math.max(...rs) : NaN, bad = rf.some(v => v < 1 - 1e-9) || r > 1 + 1e-9, hi = rf.some(v => v < 1.1) || r >= 0.9;
-      const cl = rs.length || rf.length ? (bad ? 'ng' : hi ? 'hi' : 'ok') : 'na'; const a = X(G.sup[k]), z = X(G.sup[k + 1]); D.rect(L[cl], a, yR, z, yR + 2 * h); if (cl !== 'na') hatch(D, L[cl], a, yR, z, yR + 2 * h, 0.7 * h); D.text(L.t, (a + z) / 2, yR - 2 * h, h * 0.85, `SPAN ${k + 1}`, 1); }
+    // region bands: SBDGraphics.ratioLayer, one item per span: the largest ratio of its governing checks (a rating factor counts as 1 / RF)
+    const items = []; for (let k = 0; k < n - 1; k++) { const b = buckets.get('span' + k); if (!b) continue; const rs = b.rows.map(o => (o.q.rf != null ? (fin(o.q.rf) && o.q.rf > 0 ? 1 / o.q.rf : Infinity) : o.q.r)).filter(v => fin(v) || v === Infinity);
+      if (rs.length) { const r = Math.max(...rs); items.push({ x: (G.sup[k] + G.sup[k + 1]) / 2, x0: G.sup[k], x1: G.sup[k + 1], ratio: r, ok: r <= 1 + 1e-9, label: `SPAN ${k + 1}` }); } }
+    if (GR && items.length) GR.ratioLayer(F.E, items, { hatch: false, what: 'WORST CHECK OF THE SPAN' });
     // the governing checks: a column of text above the girder per region, ordered by station
-    const top = F.yTop + 4 * h; let maxLines = 0;
-    [...buckets.values()].sort((a, b) => (a.rg.k === 'sup' ? G.sup[a.rg.i] : (G.sup[a.rg.i] + G.sup[a.rg.i + 1]) / 2) - (b.rg.k === 'sup' ? G.sup[b.rg.i] : (G.sup[b.rg.i] + G.sup[b.rg.i + 1]) / 2)).forEach((b, bi) => {
+    const top = F.yTop + 3 * h; let maxLines = 0;
+    [...buckets.values()].sort((a, b) => (a.rg.k === 'sup' ? G.sup[a.rg.i] : (G.sup[a.rg.i] + G.sup[a.rg.i + 1]) / 2) - (b.rg.k === 'sup' ? G.sup[b.rg.i] : (G.sup[b.rg.i] + G.sup[b.rg.i + 1]) / 2)).forEach(b => {
       const xc = b.rg.k === 'sup' ? G.sup[b.rg.i] : (G.sup[b.rg.i] + G.sup[b.rg.i + 1]) / 2; b.rows.sort((p, q) => (q.q.rf != null ? 1 / (q.q.rf || 1e-9) : q.q.r) - (p.q.rf != null ? 1 / (p.q.rf || 1e-9) : p.q.r)); maxLines = Math.max(maxLines, b.rows.length);
-      b.rows.forEach((o, li) => { const q = o.q, v = q.rf != null ? `RF ${fin(q.rf) ? f2(q.rf) : '-'}` : f3(q.r), cl = q.rf != null ? (!fin(q.rf) ? 'na' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok') : rcls(q.r), xx = fin(o.x) ? X(o.x) : X(xc), yy = top + (2 + li * 1.5 + (bi % 2) * 0) * h;
-        D.line(L[cl], xx, F.yB + F.Dw(Math.min(Math.max(o.x, 1e-6), G.L - 1e-6)) * 1, xx, yy - 0.2 * h); D.circle(L[cl], xx, F.yB + F.Dw(Math.min(Math.max(o.x, 1e-6), G.L - 1e-6)), 0.5 * h);
-        D.text(L[cl], xx, yy, h * 0.75, `${sumLabel(q)} ${v}`, 1); }); });
-    gen.forEach((q, i) => D.text(L.t, 0, yR - 12 * h - i * 1.5 * h, h * 0.8, `${sumLabel(q)}: ${up(q.check).slice(0, 70)} ${q.rf != null ? `RF ${fin(q.rf) ? f2(q.rf) : '-'}` : f3(q.r)}`));
-    legend(D, L, X(G.L) * 0.4, yR - 6 * h, h, RLEG(L, true)); scaleBar(D, L, 0, yR - 6 * h, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
-    titleText(D, L, { ...F, yTop: F.yTop + 6 * h + maxLines * 1.5 * h }, `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: GOVERNING CHECKS BY REGION`, `EACH LABEL: THE GOVERNING CHECK OF A GROUP (SUMMARY TABLE) AT ITS LOCATION; RATIO <= 1.0 OK; RATING FACTORS RF >= 1.0 OK; VERT. EXAG. x${F.v.toFixed(1)}`);
+      b.rows.forEach((o, li) => { const q = o.q, v = q.rf != null ? `RF ${fin(q.rf) ? f2(q.rf) : '-'}` : f3(q.r), cl = q.rf != null ? (!fin(q.rf) ? 'na' : rcls(q.rf > 0 ? 1 / q.rf : Infinity)) : rcls(q.r), xo = fin(o.x) ? o.x : xc, xx = X(xo), yy = top + (li * 1.5) * h, yw = F.yB + F.Dw(Math.min(Math.max(xo, 1e-6), G.L - 1e-6));
+        D.line(L[cl], xx, yw, xx, yy - 0.2 * h); D.circle(L[cl], xx, yw, 0.5 * h); D.text(L[cl], xx, yy, h * 0.75, `${sumLabel(q)} ${v}`, 1);
+        reg.push({ k: q.key || 'chk', i: 0, x0: xx - 1.5 * h, y0: yw, x1: xx + 1.5 * h, y1: yy + h, lab: `${sumLabel(q)}: ${up(q.check).slice(0, 80)} ${v}` }); }); });
+    const yG = F.alloc(Math.max(2, gen.length) * 1.6 * h + 4 * h) - 2 * h; gen.forEach((q, i) => D.text(L.t, 0, yG - i * 1.5 * h, h * 0.8, `${sumLabel(q)}: ${up(q.check).slice(0, 70)} ${q.rf != null ? `RF ${fin(q.rf) ? f2(q.rf) : '-'}` : f3(q.r)}`));
+    const yL = F.alloc(5 * h) - 2.4 * h; scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h);
+    F.yTop = top + (maxLines + 2) * 1.5 * h;
+    F.title(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: GOVERNING CHECKS BY REGION`, `EACH LABEL: THE GOVERNING CHECK OF A GROUP (SUMMARY TABLE) AT ITS LOCATION; RATIO <= 1.0 OK; RATING FACTORS RF >= 1.0 OK; VERT. EXAG. x${F.v.toFixed(1)}`);
     return base('summary', 'Governing checks by region', D, 0, reg);
   }
 
-  window.SBDTabGfxB = { asc, strGov, geoOf, geoProject, ratioClass: rcls, hatch, parseX, studCount, shear, shearDetail, fatigue, fatigueChart, crossframe, welds, weldDetail, splice, ratingChart, summary, _internal: { newDrawing, elevation, ratioFill, fitText, scaleBar, legend, base, titleText, RLEG, segAt, supName, tsStations, shearGeo } };
+  window.SBDTabGfxB = { asc, strGov, geoOf, geoProject, ratioClass: rcls, hatch, parseX, studCount, shear, shearDetail, fatigue, fatigueChart, crossframe, welds, weldDetail, splice, ratingChart, summary, _internal: { newDrawing, frame, ratioFill, fitText, scaleBar, legend, base, RLEG, segAt, supName, tsStations } };
 })();

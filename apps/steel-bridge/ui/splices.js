@@ -118,6 +118,7 @@
     on('#sp_calc', 'click', () => { calc(ctx); redraw(); });
     on('[data-spsel]', 'click', e => { S.sel = +e.currentTarget.dataset.spsel; redraw(); });
     on('[data-gotab]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.gotab}"]`); if (b) b.click(); });
+    if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.splice(host, ctx, S.R.list[S.sel]);
     on('#sp_keep', 'click', () => { const q = S.R && S.R.list[S.sel]; if (!q) return; const Q = P.splices, gi = ctx.g || 0;
       Q.plates = (Q.plates || []).filter(z => !(Math.abs(+z.x - q.x) < 1e-6 && (z.g == null || +z.g === gi)));
       Q.plates.push({ x: q.x, g: gi, top: { ...q.p.top }, bot: { ...q.p.bot }, web: { ...q.p.web } }); Q.auto = false; if (ctx.changed) ctx.changed(true); else redraw(); });
@@ -134,6 +135,7 @@
     if (s.design) h += `<p class="note"><b>Auto-design${s.design.ok ? '' : ' (not every check passes)'}:</b> ${esc(s.design.msg)}</p>`;
     if (R && !R.errors.length) {
       h += `<p class="note">Top flange: ${plTxt(R.fl.top)}. Bottom flange: ${plTxt(R.fl.bot)}. Web: 2 PL ${X.frac(R.web.hw)} × ${X.frac(R.web.twp)}, ${R.web.nrw} rows × ${R.web.ncw} column${R.web.ncw > 1 ? 's' : ''} each side. Bolts ${X.frac(R.bolt.d)} in ${esc(s.p.bolts.gr)}; plates ${esc(s.p.sec.gP)}. <button type="button" id="sp_keep" title="Copy these plates and bolts to the Splices tab as entered values (auto-design off)">Keep these plates</button></p>`;
+      h += '<div data-gfxb="splice"></div>';   // the splice drawing with the governing plate and bolt group highlighted (ui/tabgraphics-b.js)
       const dw = X.svg(R); if (dw) h += `<div class="sp-dwg">${dw.flange}</div><div class="sp-dwg">${dw.web}</div><p class="note">Plan of the bottom flange splice (outer plate, bolt pattern) and elevation of the web splice; to scale.</p>`;
     } else if (R) h += `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>`;
     h += '</div></section>';
