@@ -263,8 +263,10 @@
   function demandsFromPayload(pl) {
     const S = pl.stations || [], zones = (pl.section || {}).zones || [], g = pl.girderDetail || {}, dk = g.deck || {}, m = g.materials || {}, ro = pl.ownerRules || {};
     const xs = S.map(s => +s.x), A = k => S.map(s => Math.abs(+s[k] || 0)), plIn = pl.pedestrianInLL === true;
-    const PL = S.map(s => plIn ? 0 : Math.max(Math.abs(+s.V_PLpos || 0), Math.abs(+s.V_PLneg || 0)));
-    const LL = S.map((s, i) => Math.max(Math.abs((+s.V_LLpos || 0)), Math.abs((+s.V_LLneg || 0))) + PL[i]);
+    // PL: the pedestrian part of LL (sb-ped-owner PR: also when it is already in LL+IM, pedestrianInLL, so that m stays off it, GD45); added
+    // to LL only when the file keeps it apart (SB2-R1)
+    const PL = S.map(s => plIn ? (Math.abs(+s.V_LLpos || 0) >= Math.abs(+s.V_LLneg || 0) ? Math.abs(+s.V_PLpos || 0) : Math.abs(+s.V_PLneg || 0)) : Math.max(Math.abs(+s.V_PLpos || 0), Math.abs(+s.V_PLneg || 0)));
+    const LL = S.map((s, i) => Math.max(Math.abs((+s.V_LLpos || 0)), Math.abs((+s.V_LLneg || 0))) + (plIn ? 0 : PL[i]));
     const V = { DC1: A('V_DC1'), DC2: A('V_DC2'), DW: A('V_DW'), LL, UT: A('V_UT'), UF: A('V_UF'), F: S.map(s => (+s.V_FATpos || 0) - (+s.V_FATneg || 0)), PL };
     const zAt = x => { const z = zones.find(q => x >= q.startX - 1e-9 && x < q.endX) || zones[zones.length - 1]; return { D: z.web.depth, tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness }; };
     const gaps = ((((g.details || {}).studs || {}).results || {}).gaps || []).map(q => +q.x);

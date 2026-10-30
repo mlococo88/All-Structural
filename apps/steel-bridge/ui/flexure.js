@@ -47,7 +47,9 @@
       // f_ℓ: the value entered, else from the file's skews as GirderDetail takes it (C6.10.1: 1.25 × 10 / 7.5 ksi where a support is skewed > 20°)
       const pl = plIn, gd = pl.girderDetail || {}, FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, { line: (+gd.girder || 1) - 1 }, (pl.member || {}).supports) : null;
       const flS = FRM ? FRM.flSkew((gd.skew || {}).bySupport || [0], gd.position === 'exterior', P.framing) : { fl: 0 }, fl = flIn > 0 ? flIn : flS.fl;
-      const F = FX.fromPayload(pl, { fl, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });   // the payload's haunch as stated (the file does not say its owner)
+      // the owner load rules the file states (ownerRules: eta max/min, llMultiplier m; GirderDetail's own checks apply them; sb-ped-owner PR)
+      const ro = pl.ownerRules || {}, re = ro.eta || {}, lfF = { eta: +re.max > 0 ? +re.max : 1, etaN: +re.min > 0 ? +re.min : 1, m: ro.llMultiplier && +ro.llMultiplier.m > 0 ? +ro.llMultiplier.m : 1, o: ro.owner || '' };
+      const F = FX.fromPayload(pl, { fl, lf: lfF, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });   // the payload's haunch as stated
       F.prj.a6.method = meth;
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS, frB, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; f<sub>ℓ</sub> = ${fmt(fl, 2)} ksi ${flIn > 0 ? 'as entered' : `from skew (C6.10.1; largest skew ${fmt(flS.skMax, 1)}°)`}.` };
     }
@@ -56,11 +58,13 @@
       const RUI = window.SBDRatingUI, RT = window.SBDRating, OW = window.SBDOwners, gi = P.girders[ctx.g] ? ctx.g : 0;
       if (!RUI || !RUI.fromAnalysis) return { err: 'ui/rating.js is not loaded (it puts the analysis in the shape of a hand-off).' };
       const A = RUI.fromAnalysis(P, gi); if (A.err) return { err: A.err };
-      const plR = RT ? RT.noDoublePL(A.pl) : A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO';
-      const fr = ((P.stiffeners || {}).layout || {}).frames || {}, fopt = { owner: own, rebar: d.rebar };
+      // A.pl as it is (sb-ped-owner PR): LL+IM includes the pedestrian load (pedestrianInLL) and M_PL gives its part, so that the owner
+      // multiplier m is kept off it; fromPayload does not add M_PL again (SB2-R1). The owner load rules η, m: factorsOwner (OWN6/OWN7)
+      const plR = A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO', lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
+      const fr = ((P.stiffeners || {}).layout || {}).frames || {}, fopt = { owner: own, rebar: d.rebar, lf };
       if (Array.isArray(fr.at) && fr.at.length) fopt.braces = [...new Set([...sup, ...fr.at.map(Number)])].sort((a, b) => a - b); else fopt.Lb = +fr.Lb || 25;
       if (flIn > 0) fopt.fl = flIn;   // as entered; 0 = none (the Rating tab: 0)
-      const F = FX.fromPayload(plR, fopt), lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
+      const F = FX.fromPayload(plR, fopt);
       F.prj.mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
       F.prj.deck = { composite: d.composite !== false, ts: d.ts, tdeck: d.tdeck, haunch: OW.haunchInProps(d.haunch, lf), rebar: d.rebar };
       F.prj.n = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule).n;
@@ -75,7 +79,7 @@
     const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
     const nc = d.composite === false;   // noncomposite: 6.10.8 / App. A6 in both regions, steel section alone (engine/flexure.js)
     const prj = { deck: { composite: !nc, ts: d.ts, tdeck: d.tdeck, haunch: hP, rebar: d.rebar }, mat: { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc },
-      n: nr.n, rebarInPositive: !!d.rebarInPositiveMp, G: FX.factors(), a6: { method: S.method, skews: [S.skew], curved: false } };
+      n: nr.n, rebarInPositive: !!d.rebarInPositiveMp, G: lf ? FX.factorsOwner(lf) : FX.factors(), a6: { method: S.method, skews: [S.skew], curved: false } };
     const segAt = x => g.segments.find(s => x >= s.x0 && x < s.x1) || g.segments[g.segments.length - 1];
     const cont = P.spans.continuity === 'continuous' && P.spans.lengths.length > 1;
     const locs = EX.filter(e => cont || e.region === 'pos').map(e => { const s = segAt(e.x); return { name: e.name, x: e.x, region: e.region, cont, plates: { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, beff: g.beff, Lb: S.Lb, Cb: S.Cb, fl: S.fl, flT: nc ? S.flT : 0, M: e.M }; });
@@ -114,7 +118,7 @@
       <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, bottom flange (first order; 0 with a file: from skew, C6.10.1; 0 with the analysis: none, as the Rating tab)</label><input type="number" step="any" id="fx_fl" value="${S.fl}"><span class="unit">ksi</span></div>
       ${nc ? `<div class="fRow"><label for="fx_flT">f<sub>ℓ</sub>, top flange (first order)</label><input type="number" step="any" id="fx_flT" value="${S.flT}"><span class="unit">ksi (noncomposite)</span></div>` : ''}
       <div class="fRow"><label for="fx_m">${nc ? 'Flexure (noncomposite)' : 'Negative flexure'}</label><select id="fx_m">${opt('auto', 'Appendix A6 where permitted, else 6.10.8', S.method)}${opt('6108', '6.10.8 only', S.method)}</select></div>
-      <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Choices here are not saved.</p>
+      <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Owner load rules (<a href="#" data-gotab="loads">Loads &amp; LLDF</a>; a file: its ownerRules): η on the Strength I factors (1/η on the minimum ones), m on HL-93 LL+IM at Strength I and Service II, not on the pedestrian load; worked in each location's steps. Choices here are not saved.</p>
       <p class="note">Constructibility (deck placement, 6.10.3: GS14–GS16, overhang brackets OH1–OH5) is checked with the construction-stage loads on the <a href="#" data-gotab="cn">Constructibility tab</a>.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Flexure results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fx_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;

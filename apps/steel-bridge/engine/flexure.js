@@ -13,7 +13,11 @@
    tests/engine/flexure.test.mjs checks it against GirderDetail's own functions run in Node.
 
    Not ported (other modules): shear GS11, constructibility GS14 to GS16, fatigue resistance GS17/GS18, proportions
-   GS1 to GS4, the design load rating GS20 (owner rules only), owner load rules (OWN6/7/8, the m multiplier).
+   GS1 to GS4, the design load rating GS20 (owner rules only).
+   Owner load rules OWN6/OWN7 (added 2026-10-30, sb-ped-owner PR; GirderDetail gdOwnM(OWN_K.gs), GD45): factorsOwner(lf) gives
+   γ_DC, γ_DW max × η, min × 1/η (η_N), γ_LL (Strength I) × η·m, Service II γ_LL × m; Fatigue I unchanged. The design load
+   multiplier m is on HL-93 LL+IM only: a location's loc.pl = { LLp: [M_PL part, M_LLp], LLn: [...] } has its pedestrian part
+   divided back by m (M_LL − M_PL + M_PL/m) so that γηm × it = γηm M_LL+IM + γη M_PL (gdPLe). OWN8 (haunch 0): the caller.
 
    Units: moments kip-ft (sagging +), stresses ksi (tension +), plates in, stations and L_b ft.
    Code: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). φ_f = 1.0 (6.5.4.2).
@@ -53,6 +57,10 @@
   /* factors(over): Strength I, Service II and Fatigue I load factors, AASHTO LRFD 10th Ed. Tables 3.4.1-1 and 3.4.1-2
      (GirderDetail's defaults: γ_DC 1.25 / 0.90, γ_DW 1.50 / 0.65, γ_LL 1.75, Service II 1.30, Fatigue I 1.75). */
   function factors(over) { return { dc: 1.25, dw: 1.50, dcMin: 0.90, dwMin: 0.65, ll: 1.75, sll: 1.30, fat: 1.75, ...(over || {}) }; }
+  /* factorsOwner(lf, over): factors() with the owner load rules (OWN6/OWN7, GirderDetail OWN_K.gs: mx dc, dw × η; mn dcMin, dwMin × η_N;
+     ll × η·m; sll × m), lf = SBDOwners.loadFactors(...) or { eta, etaN, m }. G.own = { eta, etaN, m } for the worked steps; G.m = m. */
+  function factorsOwner(lf, over) { const G = factors(over), e = lf && +lf.eta > 0 ? +lf.eta : 1, eN = lf && +lf.etaN > 0 ? +lf.etaN : 1, m = lf && +lf.m > 0 ? +lf.m : 1;
+    return { ...G, dc: G.dc * e, dw: G.dw * e, dcMin: G.dcMin * eN, dwMin: G.dwMin * eN, ll: G.ll * e * m, sll: G.sll * m, m, own: { eta: e, etaN: eN, m, o: (lf && lf.o) || '', cite: lf && lf.cite ? lf.cite.m || '' : '' } }; }
 
   /* envelopeStrI(v, G): Strength I max and min of the moments v = { DC1, DC2, DW, LLp, LLn, UT, UF } (kip-ft) at a
      station, as GirderDetail's Structural analysis (saComb, AASHTO base: DC1 + DC2 with one factor by the sign of their
@@ -166,7 +174,7 @@
       return { Ss: I / yb, Scr: Ic / ybc, Dc, rt: s.botB / Math.sqrt(12 * (1 + Dc * s.tw / (3 * s.botB * s.botT))) }; };
     const fBotN = (s, k) => { const M1 = env.MDC1[k], M2 = env.MDC2[k], Mw = env.MDW[k], gd = M1 + M2 <= 0 ? G.dc : G.dcMin, gw = Mw <= 0 ? G.dw : G.dwMin, p = crk(s);
       const uT = env.MUT ? env.MUT[k] : 0, uF = env.MUF ? env.MUF[k] : 0, Mu1 = (uT <= 0 ? G.dw : G.dwMin) * uT + (uF <= 0 ? G.dc : 0) * uF;
-      return -((gd * M1 + Mu1) * 12 / p.Ss + (gd * M2 + gw * Mw + G.ll * env.Mn[k]) * 12 / p.Scr); };
+      return -((gd * M1 + Mu1) * 12 / p.Ss + (gd * M2 + gw * Mw + G.ll * (env.MnE || env.Mn)[k]) * 12 / p.Scr); };   // MnE: m kept off the pedestrian part (GD45, as GirderDetail fBotN)
     const rbN = s => { const Dc = crk(s).Dc, aw0 = 2 * Dc * s.tw / (s.botB * s.botT), lrw = crwOf(aw0) * Math.sqrt(ES / opt.FyF); if (!(2 * Dc / s.tw > lrw)) return 1; const awc = Math.min(aw0, 10); return 1 - awc / (1200 + 300 * awc) * (2 * Dc / s.tw - lrw); };   // λ_rw with c_rw (SB2-O6)
     const govRec = gv => { if (!gv) return ''; const at = A => A[gv.i] * (1 - gv.t) + A[gv.i + 1] * gv.t, o = { x: r2(gv.x), topB: gv.s.topB, topT: gv.s.topT, botB: gv.s.botB, botT: gv.s.botT, tw: gv.s.tw };
       [['MDC1', 'MDC1'], ['MDC2', 'MDC2'], ['MDW', 'MDW'], ['MLL', 'Mn'], ['MUT', 'MUT'], ['MUF', 'MUF']].forEach(([k, a]) => { if (env[a]) o[k] = r1(at(env[a])); }); return o; };
@@ -228,9 +236,12 @@
     const s = card.s, c3 = card.c3, cn = card.cn, cr = card.cr, d = s.d;
     const r = { name: L.name, x: L.x, region: pos ? 'pos' : 'neg', pos, cont: L.cont !== false, D: p.D, tw: p.tw, topB: p.topB, topT: p.topT, botB: p.botB, botT: p.botT, beff: L.beff, d, Dt: card.Dt,
       Lb: +L.Lb, Cb: +L.Cb, fl: +L.fl || 0, nc, p7: pos && !nc, flT: nc ? (+L.flT || 0) : 0, seg: L.seg || null, cbParts: L.cbParts || null, card, G };
-    const M = L.M || {}, num = v => +v || 0;
-    const MDC1 = num(M.DC1), MDC2 = num(M.DC2), MDW = num(M.DW), MLLp = num(M.LLp), MLLn = num(M.LLn), MUT = num(M.UT), MUF = num(M.UF);
-    Object.assign(r, { MDC1, MDC2, MDW, MLLp, MLLn, MUT, MUF, ut: !!(MUT || MUF) });
+    const M = L.M || {}, num = v => +v || 0, mO = +G.m > 0 ? +G.m : 1, plAdj = [];
+    // GD45 (sb-ped-owner PR): m not on the pedestrian part of LL+IM (gdPLe): v − q + q/m while the value still equals the one tagged
+    const plU = (k, v) => { const q0 = L.pl && L.pl[k], q = mO !== 1 && !L.factored && Array.isArray(q0) && q0.length === 2 && isFinite(+q0[0]) && Math.abs(v - +q0[1]) < 1e-6 ? +q0[0] : 0;
+      if (!q) return v; const u = v - q + q / mO; plAdj.push({ k, v0: v, q, v: u }); return u; };
+    const MDC1 = num(M.DC1), MDC2 = num(M.DC2), MDW = num(M.DW), MLLp = plU('LLp', num(M.LLp)), MLLn = plU('LLn', num(M.LLn)), MUT = num(M.UT), MUF = num(M.UF);
+    Object.assign(r, { MDC1, MDC2, MDW, MLLp, MLLn, MUT, MUF, ut: !!(MUT || MUF), plAdj });
     const secs = nc ? { DC1: s, DC2: s, DW: s, LL: s } : pos ? { DC1: s, DC2: c3, DW: c3, LL: cn } : { DC1: s, DC2: cr, DW: cr, LL: cr };
     const fAt = (Mm, sec, y) => -Mm * 12 * (y - sec.yb) / sec.I;
     const st = (Mm, sec) => ({ M: Mm, sec, top: fAt(Mm, sec, d), bot: fAt(Mm, sec, 0) });
@@ -406,12 +417,20 @@
     const nc = r.nc, sec = nc ? { DC1: 'steel', DC2: 'steel', DW: 'steel', LL: 'steel' } : pos ? { DC1: 'steel', DC2: '3n', DW: '3n', LL: 'n' } : { DC1: 'steel', DC2: 'steel + rebar', DW: 'steel + rebar', LL: 'steel + rebar' };
     const okv = (dem, cap) => cap >= dem - 1e-9 ? 'OK' : 'NG';
     // load factors and moments
+    if (!r.factored && G.own && (G.own.eta !== 1 || G.own.etaN !== 1 || G.own.m !== 1)) {   // OWN6/OWN7 (sb-ped-owner PR)
+      const O = G.own, n3_ = v => St().n(v, 3);
+      w.add({ id: 'own.ll', label: `Owner load rules${O.o ? ` (${O.o})` : ''}: Strength I live load factor`, sym: '\gamma_{LL}', eq: '1.75\,\eta\,m', sub: `1.75(${n3_(O.eta)})(${n2(O.m)})`, value: G.ll, unit: '', d: 3,
+        ref: `${ED} Art. 1.3.2.1, Table 3.4.1-1${O.cite ? '; ' + O.cite : ''}`, note: `η = η_Dη_Rη_I = ${n3_(O.eta)} on the maximum Strength factors (γ_DC ${n3_(G.dc)}, γ_DW ${n3_(G.dw)}), 1/η = ${n3_(O.etaN)} on the minimum ones (γ_DC ${n3_(G.dcMin)}, γ_DW ${n3_(G.dwMin)}); m = ${n2(O.m)}: the owner's design load multiplier on HL-93 LL+IM at Strength I and Service II, not on the pedestrian load, fatigue or deck placement. Worked on the Loads & LLDF tab (Owner load rules).` });
+      w.add({ id: 'own.sll', label: 'Owner load rules: Service II live load factor', sym: '\gamma_{LL,SII}', eq: '1.30\,m', sub: `1.30(${n2(O.m)})`, value: G.sll, unit: '', d: 3, ref: `${ED} Table 3.4.1-1${O.cite ? '; ' + O.cite : ''}`, note: 'η = 1.0 at Service (1.3.2.1 applies to the Strength limit states).' });
+    }
+    if (!r.factored && r.plAdj && r.plAdj.length) r.plAdj.forEach(a => w.add({ id: 'pl.' + a.k, label: `${a.k === 'LLp' ? 'Positive' : 'Negative'} LL+IM moment used: m not on the pedestrian part`, sym: `M_{LL+IM,used}`, eq: 'M_{LL+IM+PL} - M_{PL} + \frac{M_{PL}}{m}',
+      sub: `${n2(a.v0)} - (${n2(a.q)}) + \frac{${n2(a.q)}}{${n2(G.m)}}`, value: a.v, unit: 'kip-ft', d: 1, ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'So that γ_LL ηm × it = γ_LL ηm M_LL+IM + γ_LL η M_PL (Strength I) and 1.30m × it = 1.30m M_LL+IM + 1.30 M_PL (Service II); GirderDetail GD45. M_PL: Analysis tab.' }));
     if (!r.factored) {
       [['DC1', 'dc', 'dcMin', r.MDC1], ['DC2', 'dc', 'dcMin', r.MDC2], ['DW', 'dw', 'dwMin', r.MDW]].forEach(([k, mx, mn, Mm]) =>
         w.add({ id: 'gam.' + k, label: `γ_p for ${k}: maximum where it adds to the ${pos ? 'positive' : 'negative'} moment, minimum where it relieves it`, sym: `\\gamma_{${k}}`, eq: '', sub: `M_{${k}} = ${n2(Mm)}\\text{ kip-ft}`, value: r.gm[k], unit: '', d: 2, ref: tbl }));
       if (r.ut) [['UT', r.MUT], ['UF', r.MUF]].forEach(([k, Mm]) => w.add({ id: 'gam.' + k, label: `γ for ${k === 'UT' ? 'existing utilities (DW factors)' : 'future utility allowance (γ_DC max, 0 min)'}`, sym: `\\gamma_{${k}}`, eq: '', sub: `M_{${k}} = ${n2(Mm)}`, value: r.gm[k], unit: '', d: 2, ref: tbl }));
       w.add({ id: 'Mu', label: 'Strength I factored moment', sym: 'M_{u}', eq: '\\gamma_{DC1}M_{DC1} + \\gamma_{DC2}M_{DC2} + \\gamma_{DW}M_{DW} + 1.75M_{LL+IM}' + (r.ut ? ' + \\gamma_{UT}M_{UT} + \\gamma_{UF}M_{UF}' : ''),
-        sub: `${n2(r.gm.DC1)}${pp(r.MDC1)} + ${n2(r.gm.DC2)}${pp(r.MDC2)} + ${n2(r.gm.DW)}${pp(r.MDW)} + ${n2(G.ll)}${pp(r.MLL)}` + (r.ut ? ` + ${n2(r.gm.UT)}${pp(r.MUT)} + ${n2(r.gm.UF)}${pp(r.MUF)}` : ''), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
+        sub: `${n2(r.gm.DC1)}${pp(r.MDC1)} + ${n2(r.gm.DC2)}${pp(r.MDC2)} + ${n2(r.gm.DW)}${pp(r.MDW)} + ${G.own ? n3(G.ll) : n2(G.ll)}${pp(r.MLL)}` + (r.ut ? ` + ${n2(r.gm.UT)}${pp(r.MUT)} + ${n2(r.gm.UF)}${pp(r.MUF)}` : ''), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
       w.add({ id: 'Ms', label: 'Service II moment', sym: 'M_{s}', eq: 'M_{DC1} + M_{DC2} + M_{DW} + 1.30M_{LL+IM}', sub: `${pa(r.MDC1)} + ${pa(r.MDC2)} + ${pa(r.MDW)} + ${n2(G.sll)}${pp(r.MLL)}` + (r.ut ? ` + ${pa(r.MUT)} + ${r.svU}${pp(r.MUF)}` : ''), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
     } else {
       w.add({ id: 'Mu', label: 'Strength I factored moment (factored demands as given)', sym: 'M_{u}', eq: '\\sum M_{u,i}', sub: ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => pa(r.fA[k])).join(' + '), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
@@ -559,14 +578,17 @@
   function fromPayload(pl, opt) {
     opt = opt || {};
     const g = pl.girderDetail || {}, m = g.materials || {}, dk = g.deck || {}, S = pl.stations || [], zones = (pl.section || {}).zones || [], sup = (pl.member || {}).supports || [];
-    const G = factors(opt.G), Lend = sup[sup.length - 1];
+    const G = opt.lf ? factorsOwner(opt.lf, opt.G) : factors(opt.G), Lend = sup[sup.length - 1];   // opt.lf: the owner load rules (sb-ped-owner PR)
     const OW = opt.owner && window.SBDOwners ? window.SBDOwners : null, lfO = OW ? OW.loadFactors(opt.owner, {}, 0) : null, hP = OW ? OW.haunchInProps(dk.haunch, lfO) : dk.haunch;   // OWN8
     const xs = S.map(s => s.x), arr = k => S.map(s => +s[k] || 0);
     const PL = k => (pl.pedestrianInLL === true ? () => 0 : s => +s[k] || 0);   // SB2-R1: with pedestrianInLL the LL+IM already includes it (HANDOFF.md §4.9)
     const env = { xs, MDC1: arr('M_DC1'), MDC2: arr('M_DC2'), MDW: arr('M_DW'), Mp: S.map(s => (+s.M_LLpos || 0) + PL('M_PLpos')(s)), Mn: S.map(s => (+s.M_LLneg || 0) + PL('M_PLneg')(s)),
       MUT: arr('M_UT'), MUF: arr('M_UF'), MfP: arr('M_FATpos'), MfN: arr('M_FATneg') };
-    env.Mup = xs.map((_, i) => envelopeStrI({ DC1: env.MDC1[i], DC2: env.MDC2[i], DW: env.MDW[i], LLp: env.Mp[i], LLn: env.Mn[i], UT: env.MUT[i], UF: env.MUF[i] }, G).max);
-    env.Mun = xs.map((_, i) => envelopeStrI({ DC1: env.MDC1[i], DC2: env.MDC2[i], DW: env.MDW[i], LLp: env.Mp[i], LLn: env.Mn[i], UT: env.MUT[i], UF: env.MUF[i] }, G).min);
+    // the pedestrian part of LL+IM (M_PL, in it or added above) and, for the Strength I envelope (C_b, region), LL+IM with m kept off it (GD45)
+    env.Pp = arr('M_PLpos'); env.Pn = arr('M_PLneg');
+    const mO = +G.m > 0 ? +G.m : 1, mAdj = (A, Q) => mO === 1 ? A : A.map((v, i) => v - Q[i] + Q[i] / mO), MpE = mAdj(env.Mp, env.Pp), MnE = mAdj(env.Mn, env.Pn); env.MnE = MnE;
+    env.Mup = xs.map((_, i) => envelopeStrI({ DC1: env.MDC1[i], DC2: env.MDC2[i], DW: env.MDW[i], LLp: MpE[i], LLn: MnE[i], UT: env.MUT[i], UF: env.MUF[i] }, G).max);
+    env.Mun = xs.map((_, i) => envelopeStrI({ DC1: env.MDC1[i], DC2: env.MDC2[i], DW: env.MDW[i], LLp: MpE[i], LLn: MnE[i], UT: env.MUT[i], UF: env.MUF[i] }, G).min);
     const zAt = x => { const z = zones.find(q => x >= q.startX - 1e-9 && x < q.endX) || zones[zones.length - 1]; return { D: z.web.depth, tw: z.web.thickness, topB: z.topFlange.width, topT: z.topFlange.thickness, botB: z.botFlange.width, botT: z.botFlange.thickness }; };
     const chg = zones.slice(0, -1).map(z => z.endX).filter((x, i) => { const a = zAt(x - 0.01), b = zAt(x + 0.01); return ['D', 'tw', 'topB', 'topT', 'botB', 'botT'].some(k => a[k] !== b[k]); });
     const list = [], add = x => { if (!list.some(o => Math.abs(o - x) < 0.005)) list.push(x); };
@@ -586,11 +608,12 @@
       const at = A => feAt(xs, A, x);
       const br = bracing(x, env, { braces, L: Lend, region, secAt: zAt, D: zAt(x).D, haunch: hP, Ar: top, yr: dk.ts / 2, FyF: Fy.Fyb, G, impl: opt.impl, lenOf: opt.lenOf });
       const npr = br.npr ? { kind: br.npr, b: br.lbB, t: br.lbT, K: br.lbK, geA: br.geA || null, gov: br.nprG || null, Ir: br.lbIr, why: br.nprWhy } : null;
-      return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, npr, seg: br.seg, cbParts: br.cbParts,
-        M: { DC1: at(env.MDC1), DC2: at(env.MDC2), DW: at(env.MDW), LLp: Math.max(0, at(env.Mp)), LLn: Math.min(0, at(env.Mn)), UT: at(env.MUT), UF: at(env.MUF), FATp: at(env.MfP), FATn: at(env.MfN) } };
+      const Mx = { DC1: at(env.MDC1), DC2: at(env.MDC2), DW: at(env.MDW), LLp: Math.max(0, at(env.Mp)), LLn: Math.min(0, at(env.Mn)), UT: at(env.MUT), UF: at(env.MUF), FATp: at(env.MfP), FATn: at(env.MfN) };
+      const qp = Mx.LLp > 0 ? at(env.Pp) : 0, qn = Mx.LLn < 0 ? at(env.Pn) : 0, plT = {}; if (qp) plT.LLp = [qp, Mx.LLp]; if (qn) plT.LLn = [qn, Mx.LLn];   // GD45: the pedestrian parts
+      return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, npr, seg: br.seg, cbParts: br.cbParts, M: Mx, ...(qp || qn ? { pl: plT } : {}) };
     });
     return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
 
-  window.SBDFlexure = { ES, AMP_NG, guard, gr, govern, crwOf, factors, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
+  window.SBDFlexure = { ES, AMP_NG, guard, gr, govern, crwOf, factors, factorsOwner, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
 })();

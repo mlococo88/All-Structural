@@ -29,13 +29,16 @@
     let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
     if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
     if (!R.ll || !R.fat) return { err: 'Analysis: no live load results.' };
-    const g = P.girders[gi], st = R.st, ll = R.ll, f = R.fat, abs = a => Array.from(a, v => Math.abs(v)), zero = R.x.map(() => 0);
-    const side = s => ({ DC1: abs(st.DC1['V' + s]), DC2: abs(st.DC2['V' + s]), DW: abs(st.DW['V' + s]), UT: st.UT ? abs(st.UT['V' + s]) : zero, UF: st.UF ? abs(st.UF['V' + s]) : zero,
-      LL: ll['V' + s + 'pos'].map((v, i) => Math.max(Math.abs(v), Math.abs(ll['V' + s + 'neg'][i]))), F: f['V' + s + 'pos'].map((v, i) => v - f['V' + s + 'neg'][i]) });
+    // LL+IM with the pedestrian load added once (SBDAnalysis.llPL); PL: its part in the envelope taken (m not on it, GD45; sb-ped-owner PR)
+    const g = P.girders[gi], st = R.st, ll = AN.llPL ? AN.llPL(R) : R.ll, q = R.pl, f = R.fat, abs = a => Array.from(a, v => Math.abs(v)), zero = R.x.map(() => 0);
+    const side = s => { const Vp = ll['V' + s + 'pos'], Vn = ll['V' + s + 'neg'], big = i => Math.abs(Vp[i]) >= Math.abs(Vn[i]);
+      return { DC1: abs(st.DC1['V' + s]), DC2: abs(st.DC2['V' + s]), DW: abs(st.DW['V' + s]), UT: st.UT ? abs(st.UT['V' + s]) : zero, UF: st.UF ? abs(st.UF['V' + s]) : zero,
+        LL: Vp.map((v, i) => Math.max(Math.abs(v), Math.abs(Vn[i]))), F: f['V' + s + 'pos'].map((v, i) => v - f['V' + s + 'neg'][i]),
+        ...(q ? { PL: Vp.map((_, i) => Math.abs(big(i) ? q['V' + s + 'pos'][i] : q['V' + s + 'neg'][i])) } : {}) }; };
     const segAt = x => { const s = g.segments.find(q => x >= q.x0 - 1e-9 && x < q.x1) || g.segments[g.segments.length - 1]; return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }; };
     const fr = P.framing || {}, d = P.deck, m = P.materials, rb = d.rebar || {}, T = rb.top || { A: 0, c: 0 }, B = rb.bot || { A: 0, c: 0 }, Ar = (+T.A || 0) + (+B.A || 0);
     const layers = [[+T.A || 0, +T.c || 0], [+B.A || 0, d.ts - (+B.c || 0)]];
-    const D = { x: R.x, sup: R.sup, segAt, segs: g.segments, V: { L: side('L'), R: side('R') }, MfP: Array.from(f.Mpos), MfN: Array.from(f.Mneg), splices: Array.isArray(fr.splices) ? fr.splices : [], tol: +fr.tol >= 0 ? +fr.tol : 0.5 };
+    const D = { x: R.x, sup: R.sup, segAt, segs: g.segments, V: { L: side('L'), R: side('R') }, PL: q ? true : undefined, MfP: Array.from(f.Mpos), MfN: Array.from(f.Mneg), splices: Array.isArray(fr.splices) ? fr.splices : [], tol: +fr.tol >= 0 ? +fr.tol : 0.5 };
     const gen = { gF: m.steel.top, gW: m.steel.web, Fexx: Wd.Fexx, gam: { ...Wd.gam }, ts: d.ts, hh: d.haunch, beff: g.beff, fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule,
       Ar, dr: Ar > 0 ? layers.reduce((s, q) => s + q[0] * q[1], 0) / Ar : 0, layers };
     const p = WT.fromDemands(D, { gen, w: Wd.w, ground: Wd.ground });

@@ -763,6 +763,12 @@
     const dem = { MDC1: r1(A.MDC1[i]), MDC2: r1(A.MDC2[i]), MDW: r1(A.MDW[i]), MLLp: r1(Math.max(0, A.Mp[i])), MLLn: r1(Math.min(0, A.Mn[i])), MCL: r1(A.MCL[i]),
       VDC1: r1(vmax(A.VDC1, e)), VDC2: r1(vmax(A.VDC2, e)), VDW: r1(vmax(A.VDW, e)), VLL: r1(Math.max(vmax(A.Vp, e), vmax(A.Vn, e))), VCL: r1(vmax(A.VCL, e)), dMp: r1(Math.max(0, A.MfP[i])), dMn: r1(Math.abs(Math.min(0, A.MfN[i]))) };
     if (A.MUT || A.MUF) dem.ut = { MUT: A.MUT ? r1(A.MUT[i]) : 0, MUF: A.MUF ? r1(A.MUF[i]) : 0, VUT: A.VUT ? r1(vmax(A.VUT, e)) : 0, VUF: A.VUF ? r1(vmax(A.VUF, e)) : 0 };
+    // GD45 (sb-ped-owner PR; Preliminary sizing spliceExport): the pedestrian part of each LL+IM value, dem.pl = { key: [part, value] } (A.PMp, PMn
+    // node arrays; A.PVp, PVn element arrays, signed as Vp, Vn): the owner multiplier m is kept off it
+    if (A.PMp && A.PMn && A.PVp && A.PVn) { const o = {}; let b = -1, qv = 0;
+      [[A.Vp, A.PVp], [A.Vn, A.PVn]].forEach(([V, Q]) => [e - 1, e, e + 1].filter(k => k >= 0 && k < V.length).forEach(k => { const v = Math.abs(V[k] || 0); if (v > b) { b = v; qv = Math.sign(V[k] || 0) * (Q[k] || 0); } }));
+      [['MLLp', A.Mp[i] > 0 ? A.PMp[i] : 0], ['MLLn', A.Mn[i] < 0 ? A.PMn[i] : 0], ['VLL', qv]].forEach(([k, q]) => { q = r1(q); if (q !== 0) o[k] = [q, dem[k]]; });
+      if (Object.keys(o).length) dem.pl = o; }
     return { i, e, xi: xs[i], dem };
   }
   /* arraysFromAnalysis(AR): demandsAt's arrays from engine/analysis.js (analyzeGirder, with live load). An element's shear is the larger
@@ -770,9 +776,14 @@
      GirderDetail's lumped loads give one shear per element. */
   function arraysFromAnalysis(AR) {
     const st = AR.st, N = AR.x.length, elv = (VR, VL) => Array.from({ length: N - 1 }, (_, k) => Math.max(Math.abs(VR[k]), Math.abs(VL[k + 1])));
+    // LL+IM with the pedestrian load added once (SBDAnalysis.llPL); PMp, PMn, PVp, PVn: its part (sb-ped-owner PR). Vp, Vn here are magnitudes,
+    // so their pedestrian parts are too (of the end giving the magnitude)
+    const LL = AR.ll ? (window.SBDAnalysis && window.SBDAnalysis.llPL ? window.SBDAnalysis.llPL(AR) : AR.ll) : null, Q = LL && LL.pl ? LL.pl : null;
+    const elq = (VR, VL, QR, QL) => Array.from({ length: N - 1 }, (_, k) => Math.abs(VR[k]) >= Math.abs(VL[k + 1]) ? Math.abs(QR[k]) : Math.abs(QL[k + 1]));
     const A = { xs: AR.x, MDC1: st.DC1.M, MDC2: st.DC2.M, MDW: st.DW.M, MCL: st.CL.M, VDC1: elv(st.DC1.VR, st.DC1.VL), VDC2: elv(st.DC2.VR, st.DC2.VL), VDW: elv(st.DW.VR, st.DW.VL), VCL: elv(st.CL.VR, st.CL.VL),
-      Mp: AR.ll ? AR.ll.Mpos : new Array(N).fill(0), Mn: AR.ll ? AR.ll.Mneg : new Array(N).fill(0), MfP: AR.fat ? AR.fat.Mpos : new Array(N).fill(0), MfN: AR.fat ? AR.fat.Mneg : new Array(N).fill(0),
-      Vp: AR.ll ? elv(AR.ll.VRpos, AR.ll.VLpos) : new Array(N - 1).fill(0), Vn: AR.ll ? elv(AR.ll.VRneg, AR.ll.VLneg) : new Array(N - 1).fill(0) };
+      Mp: LL ? LL.Mpos : new Array(N).fill(0), Mn: LL ? LL.Mneg : new Array(N).fill(0), MfP: AR.fat ? AR.fat.Mpos : new Array(N).fill(0), MfN: AR.fat ? AR.fat.Mneg : new Array(N).fill(0),
+      Vp: LL ? elv(LL.VRpos, LL.VLpos) : new Array(N - 1).fill(0), Vn: LL ? elv(LL.VRneg, LL.VLneg) : new Array(N - 1).fill(0) };
+    if (Q) { A.PMp = Q.Mpos; A.PMn = Q.Mneg; A.PVp = elq(LL.VRpos, LL.VLpos, Q.VRpos, Q.VLpos); A.PVn = elq(LL.VRneg, LL.VLneg, Q.VRneg, Q.VLneg); }
     if (st.UT) { A.MUT = st.UT.M; A.VUT = elv(st.UT.VR, st.UT.VL); }
     if (st.UF) { A.MUF = st.UF.M; A.VUF = elv(st.UF.VR, st.UF.VL); }
     return A;

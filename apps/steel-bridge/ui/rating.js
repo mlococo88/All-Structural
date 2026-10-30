@@ -38,16 +38,18 @@
     let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
     if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
     if (!R.ll) return { err: 'Analysis: no live load results.' };
-    const g = P.girders[gi], st = R.st, ll = R.ll, f = R.fat, Mof = (o, i) => (o ? o.M[i] : 0);
+    // LL+IM with the pedestrian load added once (SBDAnalysis.llPL; pedestrianInLL true, M_PL / V_PL its part, as GirderDetail's hand-off; sb-ped-owner PR)
+    const g = P.girders[gi], st = R.st, ll = AN.llPL ? AN.llPL(R) : R.ll, q = R.pl, f = R.fat, Mof = (o, i) => (o ? o.M[i] : 0);
     const stations = R.x.map((x, i) => {
       const perm = k => (st.DC1[k][i] + st.DC2[k][i] + st.DW[k][i]), side = Math.abs(perm('VL')) > Math.abs(perm('VR')) ? 'VL' : 'VR', V = (o) => (o ? o[side][i] : 0);
       return { x, M_DC1: st.DC1.M[i], M_DC2: st.DC2.M[i], M_DW: st.DW.M[i], M_LLpos: ll.Mpos[i], M_LLneg: ll.Mneg[i], M_UT: Mof(st.UT, i), M_UF: Mof(st.UF, i),
         M_FATpos: f ? f.Mpos[i] : 0, M_FATneg: f ? f.Mneg[i] : 0, V_DC1: V(st.DC1), V_DC2: V(st.DC2), V_DW: V(st.DW), V_UT: V(st.UT), V_UF: V(st.UF),
         V_LLpos: Math.max(ll.VRpos[i], ll.VLpos[i]), V_LLneg: Math.min(ll.VRneg[i], ll.VLneg[i]),
-        V_FATpos: f ? Math.max(f.VRpos[i], f.VLpos[i]) : 0, V_FATneg: f ? Math.min(f.VRneg[i], f.VLneg[i]) : 0 }; });
+        V_FATpos: f ? Math.max(f.VRpos[i], f.VLpos[i]) : 0, V_FATneg: f ? Math.min(f.VRneg[i], f.VLneg[i]) : 0,
+        ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i], V_PLpos: Math.max(q.VRpos[i], q.VLpos[i]), V_PLneg: Math.min(q.VRneg[i], q.VLneg[i]) } : {}) }; });
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
     const m = P.materials, d = P.deck, sk = ((P.xs || {}).skews || []).slice();
-    const pl = { _schema: 'sbd2-analysis', stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
+    const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
       ownerRules: { owner: (P.ownerRules || {}).owner || 'AASHTO', haunchInProperties: !R.h0 },
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc },
         deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
