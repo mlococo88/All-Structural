@@ -1,6 +1,6 @@
 // apps/steel-bridge/engine/model.js (schema v1) and shared/units.js: defaults valid, validation, save/load with a
 // stand-in storage (keys sbd2.* only; an unreadable saved project is kept, never overwritten), JSON export/import
-// round trip, old GirderDetail / ST-Girder files answered by the stub.
+// round trip, old GirderDetail / ST-Girder files refused without engine/legacy.js (the import itself: legacy.test.mjs).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,13 +39,13 @@ test('an unreadable saved project is kept under a backup key, not lost', () => {
   assert.equal(s.getItem('sbd2.project.current'), '{not json');   // untouched until the user's next save
 });
 
-test('JSON export / import; newer versions refused; old GirderDetail and ST-Girder files answered by the stub', () => {
+test('JSON export / import; newer versions refused; old GirderDetail and ST-Girder files refused without engine/legacy.js', () => {
   const p = M.defaultProject(), r = M.importJSON(M.exportJSON(p));
   assert.equal(r.ok, true); assert.deepEqual(plain(r.project), plain(p));
   assert.equal(M.importJSON(JSON.stringify({ ...p, version: 2 })).ok, false);
   assert.equal(M.importJSON('nope').ok, false);
   const gd = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/projects/st/gd_builtin_AASHTO_G1.json'), 'utf8')).payload;
-  const a = M.importJSON(JSON.stringify(gd)); assert.equal(a.ok, false); assert.equal(a.legacy, 'ST-Girder'); assert.match(a.error, /later version/);
+  const a = M.importJSON(JSON.stringify(gd)); assert.equal(a.ok, false); assert.equal(a.legacy, 'ST-Girder'); assert.match(a.error, /legacy\.js is not loaded/);   // without engine/legacy.js (tests/engine/legacy.test.mjs loads it)
   const b = M.importJSON(JSON.stringify({ app: 'SteelBridgeDesign', P: {} })); assert.equal(b.legacy, 'GirderDetail');
 });
 

@@ -85,6 +85,9 @@
                   top, bot: { nl, g, g0, nr, s, ef, ep, bo, to, inner, bi, ti }, web: { h, t, nr, sv, nc, sh, ew, ewp } } ] (entered plates) }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
+     -- added 2026-10-30 (legacy import PR), optional, written only by an import of an old project (engine/legacy.js) --
+     legacy:    { importedAt, source, parts: ['gd' | 'pl' | 'st'], unmapped: { gd, pl, st: every field of the old file not mapped, at its
+                  own path }, summary: { source, parts, unmapped: [{ part, label, field, what }], notes } }
      -- added 2026-10-30 (welds PR), optional: a version 1 project without it reads as defaultWelds() --
      welds:     { Fexx (ksi), w (flange-to-web fillet weld size, in; '' = the minimum of Table 6.13.3.4-1 at each location),
                   gam: { dc, dw, ll (Strength I), fat (Fatigue I) }, ground: 'yes' | 'no' (shop transition butt welds ground flush) }
@@ -327,11 +330,13 @@
     if (obj.app === 'PlateLine' || obj.app === 'PlateLine-splices') return 'Preliminary sizing (PlateLine)';
     return '';
   }
-  /* importLegacy(obj): STUB. Importing old GirderDetail, Preliminary sizing and ST-Girder projects comes in a later PR
-     (docs/REBUILD_PLAN.md §5, "Project files"). Until then it reports that and changes nothing. */
-  function importLegacy(obj) {
-    const k = legacyKind(obj);
-    return { ok: false, legacy: k, error: `${k || 'This'} project files cannot be imported yet: importing old GirderDetail, Preliminary sizing and ST-Girder projects comes in a later version of this app. The file was not changed.` };
+  /* importLegacy(obj): an old GirderDetail / Steel Bridge Design, Preliminary sizing or ST-Girder project, through engine/legacy.js
+     (window.SBDLegacy; added 2026-10-30): { ok, project, summary, errors, warnings, legacy } or { ok: false, error }. The project keeps
+     every field it could not map under project.legacy.unmapped (CLAUDE.md §5). Without engine/legacy.js loaded it reports that. */
+  function importLegacy(obj, opt) {
+    const k = legacyKind(obj), L = typeof window !== 'undefined' && window.SBDLegacy;
+    if (!L) return { ok: false, legacy: k, error: `${k || 'This'} project files cannot be imported: engine/legacy.js is not loaded. The file was not changed.` };
+    return { ...L.importLegacy(obj, opt), legacy: k };
   }
 
   /* exportJSON(p): the file text (pretty-printed). importJSON(text): { ok, project, errors, warnings } or { ok: false, error }. */
