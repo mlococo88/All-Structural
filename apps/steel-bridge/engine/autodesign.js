@@ -247,8 +247,10 @@
       // so they are in the screen too: each item to the flange it names (a detail at the web: the bottom flange in positive and the top flange in
       // negative flexure sets its stress, taken as the flange nearer the detail as worded), at the station in its location text
       const FB = window.SBDFatigueUI.build({ P, g: gi, pl }); mods['fat' + gi] = FB;
-      if (!full && !FB.err) (FB.FC || []).filter(c => c.id === 'FA1').forEach(c => c.items.forEach(it => { if (!isFinite(it.r)) return; const mx = /(\d+(?:\.\d+)?) ft/.exec(String(it.loc || ''));
-        const o = { ...gm, mod: 'fatigue', tab: 'fat', id: c.id, title: `${c.title} — ${it.loc}`, r: it.r, x: mx ? +mx[1] : null, step: it.step, part: /top/i.test(String(it.loc)) ? 'top' : 'bot', fail: !OKST.includes(it.st) }; hits.push(o); take(o); }));
+      if (!full && !FB.err) { const rowOf = loc => ((FB.FR && FB.FR.rows) || []).find(r => String(loc || '').startsWith(r.name));
+        (FB.FC || []).filter(c => c.id === 'FA1').forEach(c => c.items.forEach(it => { if (!isFinite(it.r)) return; const rw = rowOf(it.loc), mx = /(\d+(?:\.\d+)?) ft/.exec(String(it.loc || ''));
+          const x = rw && isFinite(+rw.x) ? +rw.x : mx ? +mx[1] : null, top = rw ? /^t/.test(String(rw.loc)) : /top/i.test(String(it.loc));
+          const o = { ...gm, mod: 'fatigue', tab: 'fat', id: c.id, title: `${c.title} — ${it.loc}`, r: it.r, x, step: it.step, part: top ? 'top' : 'bot', fail: !OKST.includes(it.st) }; hits.push(o); take(o); })); }
       if (!full) continue;
       // the rest of the shear tab: transverse and bearing stiffeners
       const lists = (C, mod, tab) => (C || []).forEach(c => c.items.forEach(it => { const bad = !OKST.includes(it.st); if (it.st === 'warn') warns.push({ ...gm, mod, id: c.id, title: c.title, loc: it.loc });
@@ -435,15 +437,28 @@
     /* a finalist whose every failing check (module and check id) fails in the current design too is "blocked" by those details (a detail input such
        as a splice end distance or the cross-frame bolts, which the plates do not change): listed apart, never with the passing candidates */
     const fkey = f => `${f.mod}|${f.id}`, curKeys = () => { if (!curFull) curFull = evaluate(P, { level: 'full', ctx }); return new Set(curFull.fails.map(fkey)); };
-    for (let i = 0; i < pool.length && cands.length < S.topN && cands.length + blocked.length < S.topN + 2; i++) { const o = pool[i];
+    /* the checks the plates control (never blockers): a finalist that fails one of them on the full check is resized from where it is, with the
+       live load on its own stiffness (the screen's reference was the current design's), and checked again (up to twice) */
+    const plateCk = f => ['flexure', 'shear', 'constructibility', 'analysis', 'model'].includes(f.mod) || (f.mod === 'fatigue' && (f.id === 'GS17' || f.id === 'FA1'))
+      || (f.mod === 'stiffeners' && f.id === 'BS6') || (f.mod === 'splices' && ['DT3', 'DT7', 'DT10'].includes(f.id));
+    for (let i = 0; i < pool.length && cands.length < S.topN && cands.length + blocked.length < S.topN + 2; i++) { let o = pool[i];
       yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: N_b = ${o.L.nb}, D = ${o.L.D} in (every module, live load on its own stiffness)…` };
       if (opt.fullChecks === false) { cands.push(cand(o, o.E, S, P)); continue; }
-      const Q = projectWith(P, o.L), E = evaluate(Q, { level: 'full', ctx }), pr = proportions(o.L, Q, S);
-      if (E.pass && pr.ok) { cands.push(cand(o, E, S, P)); continue; }
+      let Q, E, pr;
+      for (let pol = 0; ; pol++) {
+        Q = projectWith(P, o.L); E = evaluate(Q, { level: 'full', ctx }); pr = proportions(o.L, Q, S);
+        if ((E.pass && pr.ok) || !E.fails.some(plateCk) || pol >= 2 || opt.polish === false) break;
+        const ctx2 = { L0: o.L, maxIt: 6, ll: new Map() }, it2 = design(P, S, { nb: o.L.nb, D: o.L.D, refine: true, minLines: o.L.minLines }, ctx2); let s2;
+        while (!(s2 = it2.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: resizing with the live load on its own stiffness — ${s2.value.msg}` };
+        if (!s2.value.pass) break;
+        o = { ...o, L: s2.value.L, E: s2.value.E, cost: costOf(s2.value.L, S, s2.value.E.nStiff), polished: pol + 1 };
+      }
+      if (E.pass && pr.ok) { cands.push({ ...cand(o, E, S, P), polished: o.polished || 0 }); continue; }
       const fl = E.fails.map(f => ({ mod: f.mod, id: f.id, title: f.title, r: f.r, x: f.x, gl: f.gl })), ck = curKeys();
-      if (pr.ok && fl.length && fl.every(f => ck.has(fkey(f)))) blocked.push({ ...cand(o, E, S, P), blockers: [...new Set(fl.map(f => `${f.mod} ${f.id}`))], fails: fl.slice(0, 6) });
+      if (pr.ok && fl.length && fl.every(f => !plateCk(f) && ck.has(fkey(f)))) blocked.push({ ...cand(o, E, S, P), blockers: [...new Set(fl.map(f => `${f.mod} ${f.id}`))], fails: fl.slice(0, 6) });
       else rejected.push({ L: o.L, cost: o.cost, fails: fl.slice(0, 6), pr: pr.ok });
     }
+    cands.sort((a, b) => key(a) - key(b)); blocked.sort((a, b) => key(a) - key(b));
     let fullCur = null;
     if (opt.fullChecks !== false && S.mode === 'check') { yield { f: 0.99, msg: 'Full check of the current design…' }; fullCur = evaluate(P, { level: 'full', ctx }); }
     const blockers = [...new Set(blocked.flatMap(b => b.blockers))];

@@ -1,0 +1,1558 @@
+{
+ "project": "builtin28",
+ "owner": "RIDOT",
+ "seconds": 444,
+ "obj": "cost",
+ "costs": {
+  "steel": 3,
+  "trans": 1500,
+  "splice": 6000,
+  "stiff": 150,
+  "xf": 2500,
+  "bearing": 4000
+ },
+ "nb": 5,
+ "fast": {
+  "D": 63,
+  "tw": 0.5,
+  "web": [
+   {
+    "L": 360,
+    "t": 0.5
+   }
+  ],
+  "top": [
+   {
+    "L": 83,
+    "b": 18,
+    "t": 0.75
+   },
+   {
+    "L": 15,
+    "b": 18,
+    "t": 0.875
+   },
+   {
+    "L": 24,
+    "b": 18,
+    "t": 1.5
+   },
+   {
+    "L": 16,
+    "b": 18,
+    "t": 0.875
+   },
+   {
+    "L": 84,
+    "b": 18,
+    "t": 0.75
+   },
+   {
+    "L": 16,
+    "b": 18,
+    "t": 0.875
+   },
+   {
+    "L": 24,
+    "b": 18,
+    "t": 1.5
+   },
+   {
+    "L": 15,
+    "b": 18,
+    "t": 0.875
+   },
+   {
+    "L": 83,
+    "b": 18,
+    "t": 0.75
+   }
+  ],
+  "bot": [
+   {
+    "L": 83,
+    "b": 16,
+    "t": 1.25
+   },
+   {
+    "L": 16,
+    "b": 20,
+    "t": 1
+   },
+   {
+    "L": 24,
+    "b": 20,
+    "t": 1.625
+   },
+   {
+    "L": 15,
+    "b": 20,
+    "t": 0.875
+   },
+   {
+    "L": 84,
+    "b": 16,
+    "t": 1.25
+   },
+   {
+    "L": 15,
+    "b": 20,
+    "t": 0.875
+   },
+   {
+    "L": 24,
+    "b": 20,
+    "t": 1.625
+   },
+   {
+    "L": 16,
+    "b": 20,
+    "t": 1
+   },
+   {
+    "L": 83,
+    "b": 16,
+    "t": 1.25
+   }
+  ],
+  "splices": [
+   83,
+   138,
+   222,
+   277
+  ],
+  "cost": 1699635.546875,
+  "wTot": 441478.515625
+ },
+ "full": {
+  "D": 69,
+  "tw": 0.5,
+  "web": [
+   {
+    "L": 360,
+    "t": 0.5
+   }
+  ],
+  "top": [
+   {
+    "L": 79,
+    "b": 14,
+    "t": 0.75
+   },
+   {
+    "L": 62,
+    "b": 14,
+    "t": 1.125
+   },
+   {
+    "L": 78,
+    "b": 14,
+    "t": 0.75
+   },
+   {
+    "L": 62,
+    "b": 14,
+    "t": 1.125
+   },
+   {
+    "L": 79,
+    "b": 14,
+    "t": 0.75
+   }
+  ],
+  "bot": [
+   {
+    "L": 97,
+    "b": 19,
+    "t": 0.875
+   },
+   {
+    "L": 26,
+    "b": 19,
+    "t": 1.625
+   },
+   {
+    "L": 114,
+    "b": 19,
+    "t": 0.875
+   },
+   {
+    "L": 26,
+    "b": 19,
+    "t": 1.625
+   },
+   {
+    "L": 97,
+    "b": 19,
+    "t": 0.875
+   }
+  ],
+  "splices": [
+   79,
+   141,
+   219,
+   281
+  ],
+  "cost": 1578179.8437500002,
+  "wTot": 421193.28125000006,
+  "passed": true,
+  "spacing": 25,
+  "spPier": null,
+  "webType": "stiffened"
+ },
+ "st": [
+  {
+   "g": 1,
+   "base": 1.125,
+   "L": 110,
+   "rows": [
+    {
+     "t": 0.5,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "tf≥1.1tw",
+      "SrvII",
+      "Fatigue",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.375
+      }
+     ]
+    },
+    {
+     "t": 0.625,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "Fatigue",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.5
+      }
+     ]
+    },
+    {
+     "t": 0.75,
+     "pass": false,
+     "fail": [
+      "Fatigue",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.625
+      }
+     ]
+    },
+    {
+     "t": 0.875,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.75
+      }
+     ]
+    },
+    {
+     "t": 1,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.875
+      }
+     ]
+    },
+    {
+     "t": 1.125,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2
+      }
+     ]
+    },
+    {
+     "t": 1.25,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.125
+      }
+     ]
+    },
+    {
+     "t": 1.375,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.25
+      }
+     ]
+    },
+    {
+     "t": 1.5,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.375
+      }
+     ]
+    },
+    {
+     "t": 1.625,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.5
+      }
+     ]
+    },
+    {
+     "t": 1.75,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.625
+      }
+     ]
+    },
+    {
+     "t": 1.875,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 2
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.75
+      }
+     ]
+    }
+   ],
+   "best": null
+  },
+  {
+   "g": 2,
+   "base": 1.125,
+   "L": 110,
+   "rows": [
+    {
+     "t": 0.5,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "tf≥1.1tw",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.375
+      }
+     ]
+    },
+    {
+     "t": 0.625,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.5
+      }
+     ]
+    },
+    {
+     "t": 0.75,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.625
+      }
+     ]
+    },
+    {
+     "t": 0.875,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.75
+      }
+     ]
+    },
+    {
+     "t": 1,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.875
+      }
+     ]
+    },
+    {
+     "t": 1.125,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2
+      }
+     ]
+    },
+    {
+     "t": 1.25,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.125
+      }
+     ]
+    },
+    {
+     "t": 1.375,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.25
+      }
+     ]
+    },
+    {
+     "t": 1.5,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.375
+      }
+     ]
+    },
+    {
+     "t": 1.625,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.5
+      }
+     ]
+    },
+    {
+     "t": 1.75,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.625
+      }
+     ]
+    },
+    {
+     "t": 1.875,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 2
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.75
+      }
+     ]
+    }
+   ],
+   "best": null
+  },
+  {
+   "g": 3,
+   "base": 1.125,
+   "L": 110,
+   "rows": [
+    {
+     "t": 0.5,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "tf≥1.1tw",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.375
+      }
+     ]
+    },
+    {
+     "t": 0.625,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.5
+      }
+     ]
+    },
+    {
+     "t": 0.75,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.625
+      }
+     ]
+    },
+    {
+     "t": 0.875,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.75
+      }
+     ]
+    },
+    {
+     "t": 1,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.875
+      }
+     ]
+    },
+    {
+     "t": 1.125,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2
+      }
+     ]
+    },
+    {
+     "t": 1.25,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.125
+      }
+     ]
+    },
+    {
+     "t": 1.375,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.25
+      }
+     ]
+    },
+    {
+     "t": 1.5,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.375
+      }
+     ]
+    },
+    {
+     "t": 1.625,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.5
+      }
+     ]
+    },
+    {
+     "t": 1.75,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.625
+      }
+     ]
+    },
+    {
+     "t": 1.875,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 2
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.75
+      }
+     ]
+    }
+   ],
+   "best": null
+  },
+  {
+   "g": 4,
+   "base": 1.125,
+   "L": 110,
+   "rows": [
+    {
+     "t": 0.5,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "tf≥1.1tw",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.375
+      }
+     ]
+    },
+    {
+     "t": 0.625,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.5
+      }
+     ]
+    },
+    {
+     "t": 0.75,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.625
+      }
+     ]
+    },
+    {
+     "t": 0.875,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.75
+      }
+     ]
+    },
+    {
+     "t": 1,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.875
+      }
+     ]
+    },
+    {
+     "t": 1.125,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2
+      }
+     ]
+    },
+    {
+     "t": 1.25,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.125
+      }
+     ]
+    },
+    {
+     "t": 1.375,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.25
+      }
+     ]
+    },
+    {
+     "t": 1.5,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.375
+      }
+     ]
+    },
+    {
+     "t": 1.625,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.5
+      }
+     ]
+    },
+    {
+     "t": 1.75,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.625
+      }
+     ]
+    },
+    {
+     "t": 1.875,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 2
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.75
+      }
+     ]
+    }
+   ],
+   "best": null
+  },
+  {
+   "g": 5,
+   "base": 1.125,
+   "L": 110,
+   "rows": [
+    {
+     "t": 0.5,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "tf≥1.1tw",
+      "SrvII",
+      "Fatigue",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.375
+      }
+     ]
+    },
+    {
+     "t": 0.625,
+     "pass": false,
+     "fail": [
+      "bf/2tf",
+      "Fatigue",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.5
+      }
+     ]
+    },
+    {
+     "t": 0.75,
+     "pass": false,
+     "fail": [
+      "Fatigue",
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.625
+      }
+     ]
+    },
+    {
+     "t": 0.875,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 0.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.75
+      }
+     ]
+    },
+    {
+     "t": 1,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 110,
+       "tfb": 1.875
+      }
+     ]
+    },
+    {
+     "t": 1.125,
+     "pass": false,
+     "fail": [
+      "Neg flex",
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.125
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2
+      }
+     ]
+    },
+    {
+     "t": 1.25,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.25
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.125
+      }
+     ]
+    },
+    {
+     "t": 1.375,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.375
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.25
+      }
+     ]
+    },
+    {
+     "t": 1.5,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.5
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.375
+      }
+     ]
+    },
+    {
+     "t": 1.625,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.625
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.5
+      }
+     ]
+    },
+    {
+     "t": 1.75,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.75
+      },
+      {
+       "xEnd": 100,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.625
+      }
+     ]
+    },
+    {
+     "t": 1.875,
+     "pass": false,
+     "fail": [
+      "Deck −M"
+     ],
+     "segs": [
+      {
+       "xEnd": 82,
+       "tfb": 1.875
+      },
+      {
+       "xEnd": 100,
+       "tfb": 2
+      },
+      {
+       "xEnd": 110,
+       "tfb": 2.75
+      }
+     ]
+    }
+   ],
+   "best": null
+  }
+ ]
+}
