@@ -1754,6 +1754,12 @@ Display and export only: no engineering formula, factor, unit or reference chang
 - `ui/flexure.js`: analysis source passes `A.pl` as it is (not `noDoublePL`) with `lf`; file source takes the file's `ownerRules`
   (eta.max, eta.min, llMultiplier.m); example source `G = factorsOwner(lf)`. Note line on the tab.
 - `ui/fatigue.js`: `fromAnalysis` exported (for the single-count test).
+- `engine/sheets.js` (drawing set, #492; coordinator request): `env(A)` → `env(A, P)`. Before: `G = FX.factors()` and `ll = A.ll`. After:
+  `G = FX.factorsOwner(SBDOwners.loadFactors(owner, eta, nb))`; LL+IM from `SBDAnalysis.llPL(A)` (pedestrian load once), with m off the
+  pedestrian part for the combinations (`v − q + q/m`); the unfactored LL+IM columns show LL+IM + PL. The diagram title states η and m
+  when they are not 1. Callers `gelev` and `diag` pass `C.P`. `tests/engine/sheets.test.mjs` recomputes the envelope the same way
+  (γ η (m LL + PL)), with the util RIDOT payload run under RIDOT rules (m = 1.2) and the xsA payload with its pedestrian load.
+- `tests/engine/splices.test.mjs` app path: compared with the payload's demands including the pedestrian load (was: taken out).
 
 ### Problem (both unconservative)
 1. The analysis had no pedestrian load. On bridges with sidewalks every Strength and Service demand lacked it: negative flexure up to

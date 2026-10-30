@@ -367,20 +367,20 @@
         w.add({ id: `M.LL.s${k + 1}`, label: `Largest LL+IM moment, span ${k + 1}, at x = ${n2(x[ip])} ft`, sym: 'M_{LL+IM}', eq: 'g_{M}\\,M_{HL93}', sub: `${n3(R.ll.gM[ip])}(${n1(R.ll.perLane.Mmax[ip])})`, value: R.ll.Mpos[ip], unit: kft, d: 1,
           ref: `${ED} Art. 3.6.1.3.1, 3.6.2.1, 4.6.2.2`, note: `Per lane: design truck (rear spacing 14–30 ft) or tandem, with IM ${S.im} %, + lane 0.64 klf without IM.` }); }
       if (R.pl) { let ip = a; for (let i = a; i <= b; i++) if (R.pl.Mpos[i] > R.pl.Mpos[ip]) ip = i;
-        w.add({ id: `M.PL.s${k + 1}`, label: `Largest pedestrian load moment, span ${k + 1}, at x = ${n2(x[ip])} ft`, sym: 'M_{PL}', eq: 'w_{PL}\,A^{+}', sub: `${St().n(R.pl.w, 4)}(${n1(R.pl.Mpos[ip] / R.pl.w)})`, value: R.pl.Mpos[ip], unit: kft, d: 1,
+        w.add({ id: `M.PL.s${k + 1}`, label: `Largest pedestrian load moment, span ${k + 1}, at x = ${n2(x[ip])} ft`, sym: 'M_{PL}', eq: 'w_{PL}\\,A^{+}', sub: `${St().n(R.pl.w, 4)}(${n1(R.pl.Mpos[ip] / R.pl.w)})`, value: R.pl.Mpos[ip], unit: kft, d: 1,
           ref: `${ED} Art. 3.6.1.6`, note: 'A⁺: the positive area of the moment influence line (ft²; live-load stiffness). w_PL is this girder\'s share of the sidewalk load (Loads & LLDF): no distribution factor, no IM. Added to LL+IM once in every module (Strength I, Service I and II; not fatigue, deck placement or the LL deflection).' }); }
     }
     for (let k = 1; k < R.spans.length; k++) { const i = R.supIdx[k];
       w.add({ id: `M.perm.p${k}`, label: `Permanent-load moments at pier ${k} (x = ${n2(x[i])} ft)`, sym: 'M_{DC1} + M_{DC2} + M_{DW}', eq: '', sub: `${n1(R.st.DC1.M[i])} + ${n1(R.st.DC2.M[i])} + ${n1(R.st.DW.M[i])}`, value: R.st.DC1.M[i] + R.st.DC2.M[i] + R.st.DW.M[i], unit: kft, d: 1, ref: `${ED} Art. 4.6.2` });
       if (R.ll) w.add({ id: `M.LL.p${k}`, label: `Negative LL+IM moment at pier ${k}`, sym: 'M_{LL+IM}^{-}', eq: 'g_{M}\\,M_{HL93}^{-}', sub: `${n3(R.ll.gM[i])}(${n1(R.ll.perLane.Mmin[i])})`, value: R.ll.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2`, note: R.ll.perLane.twoM[i] ? 'Includes 90 % of two design trucks (headway ≥ 50 ft) + 90 % of the lane load (negative-moment influence line).' : '' });
-      if (R.pl) w.add({ id: `M.PL.p${k}`, label: `Negative pedestrian load moment at pier ${k}`, sym: 'M_{PL}^{-}', eq: 'w_{PL}\,A^{-}', sub: `${St().n(R.pl.w, 4)}(${n1(R.pl.Mneg[i] / R.pl.w)})`, value: R.pl.Mneg[i], unit: kft, d: 1,
+      if (R.pl) w.add({ id: `M.PL.p${k}`, label: `Negative pedestrian load moment at pier ${k}`, sym: 'M_{PL}^{-}', eq: 'w_{PL}\\,A^{-}', sub: `${St().n(R.pl.w, 4)}(${n1(R.pl.Mneg[i] / R.pl.w)})`, value: R.pl.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.6`, note: 'A⁻: the negative area of the moment influence line (ft²; live-load stiffness): the sidewalk loaded where it adds to the negative moment.' });
       if (R.pl && R.ll) w.add({ id: `M.LLPL.p${k}`, label: `Negative LL+IM + PL moment at pier ${k} (used by the modules)`, sym: 'M_{LL+IM+PL}^{-}', eq: 'M_{LL+IM}^{-} + M_{PL}^{-}', sub: `${n1(R.ll.Mneg[i])} + (${n1(R.pl.Mneg[i])})`, value: R.ll.Mneg[i] + R.pl.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'The pedestrian load acts with the vehicular live load (3.6.1.6) and takes its load factor; the owner multiplier m is not applied to it (GirderDetail GD45).' }); }
     if (R.llR) R.llR.forEach(r => w.add({ id: `R.LL.${r.k}`, label: `LL+IM reaction, support ${r.k + 1}`, sym: 'R_{LL+IM}', eq: 'g_{V}\\,R_{HL93}', sub: `${n3(r.gV)}(${n2(r.perLane.max)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2.3a`, note: (r.two ? '90 % of two trucks + lane governs (interior support). ' : '') + 'g_V = the larger of the adjacent spans.' }));
-    if (R.pl) R.pl.R.forEach(r => w.add({ id: `R.PL.${r.k}`, label: `Pedestrian load reaction, support ${r.k + 1}`, sym: 'R_{PL}', eq: 'w_{PL}\,A^{+}', sub: `${St().n(R.pl.w, 4)}(${n2(r.max / R.pl.w)})`, value: r.max, unit: kip, d: 2,
+    if (R.pl) R.pl.R.forEach(r => w.add({ id: `R.PL.${r.k}`, label: `Pedestrian load reaction, support ${r.k + 1}`, sym: 'R_{PL}', eq: 'w_{PL}\\,A^{+}', sub: `${St().n(R.pl.w, 4)}(${n2(r.max / R.pl.w)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.6`, note: 'A⁺: the positive area of the reaction influence line (ft). Added to R_LL+IM in the bearing checks.' }));
     if (R.lld) R.lld.forEach(q => { const O = q.own;
       w.add({ id: `defl.lim${q.k + 1}`, label: `LL deflection limit, span ${q.k + 1}${O ? ` (${O.cite}, mandatory)` : ''}`, sym: '\\Delta_{lim}', eq: `\\frac{12L}{${q.ratio}}`, sub: `\\frac{12(${n2(q.L)})}{${q.ratio}}`, value: q.lim, unit: 'in', d: 3,
