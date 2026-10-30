@@ -31,7 +31,7 @@
        D.toDXF(opt) -> the DXF text (opt.ltscale: $LTSCALE, default 1)
      SharedDxf.toSVG(D, opt) -> '<svg ...>' of entities opt.i0..opt.i1 (default all); opt: { width, pad, bg, cls, title }
      SharedDxf.str(s)        text as DXF R12 accepts it (degree %%d, diameter %%c, x for ×, CL for ℄, HTML tags removed)
-     SharedDxf.frac(v, den), fmtIn(inch), fmtFtIn(inch)   1 1/8, 1 1/8", 12'-4 1/2" (nearest 1/8 in by default)
+     SharedDxf.frac(v, den), fmtIn(inch), fmtFtIn(inch)   9/16 (nearest 1/16 by default), 1 1/8", 12'-4 1/2" (nearest 1/8 in)
      SharedDxf.parse(text)   -> { pairs, sections, tables, blocks, entities } (tests; any DXF this writer makes)
      SharedDxf.validate(text) -> { ok, errors, counts, layers }: structure checks (SECTION/ENDSEC pairs, HEADER $ACADVER, ENTITIES,
                                EOF, numeric group codes, POLYLINE ... SEQEND, every layer, linetype, dimension style and block used
@@ -50,17 +50,18 @@
       .replace(/[−–—]/g, '-').replace(/℄/g, 'CL').replace(/[′’]/g, "'").replace(/[″”“]/g, '"').replace(/±/g, '%%p').replace(/[\r\n\t]+/g, ' ')
       .replace(/[^\x20-\x7e]/g, c => '\\U+' + c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')).slice(0, 250);
   }
-  /* fractions of an inch: v to the nearest 1/den, "1 1/8" (den a power of 2) */
+  /* fractions of an inch: v to the nearest 1/den (default 1/16, as GirderDetail's frac for plate sizes), "1 1/8", "9/16" (den a power of 2) */
   function frac(v, den) {
-    den = den || 8; const sg = v < 0 ? '-' : ''; let n = Math.round(Math.abs(v) * den), w = Math.floor(n / den), r = n - w * den, d = den;
+    den = den || 16; const sg = v < 0 ? '-' : ''; let n = Math.round(Math.abs(v) * den), w = Math.floor(n / den), r = n - w * den, d = den;
     while (r && r % 2 === 0) { r /= 2; d /= 2; }
     return sg + (r ? (w ? `${w} ${r}/${d}` : `${r}/${d}`) : String(w));
   }
-  const fmtIn = inch => `${frac(inch)}"`;
+  /* inches to the nearest 1/8 (GirderDetail dxfIn), 7/8" */
+  const fmtIn = inch => `${frac(inch, 8)}"`;
   /* feet-inches (GirderDetail dxfFI): under 12 in as inches, else 12'-4 1/2" */
   function fmtFtIn(inch) {
-    const s = inch < 0 ? '-' : ''; const a = Math.round(Math.abs(inch) * 8) / 8; if (a < 12 - 1e-9) return `${s}${frac(a)}"`;
-    let ft = Math.floor(a / 12 + 1e-9), r = a - ft * 12; if (r >= 12 - 1e-9) { ft++; r = 0; } return `${s}${ft}'-${frac(r)}"`;
+    const s = inch < 0 ? '-' : ''; const a = Math.round(Math.abs(inch) * 8) / 8; if (a < 12 - 1e-9) return `${s}${frac(a, 8)}"`;
+    let ft = Math.floor(a / 12 + 1e-9), r = a - ft * 12; if (r >= 12 - 1e-9) { ft++; r = 0; } return `${s}${ft}'-${frac(r, 8)}"`;
   }
 
   /* the geometry of a linear dimension (GirderDetail DxfW._dimGeo): extension lines, dimension line, 45° ticks and the text, in world
