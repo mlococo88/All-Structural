@@ -2496,3 +2496,28 @@ C6.10.1 and 6.10.3.4 (overhang brackets), MBE 3rd Ed. 6A.4.2.1 (rating factor), 
 
 ### Other copies
 - None (ui/autodesign.js reads `VARS` from the engine).
+
+## 2026-10-31 — PR: sbd-autodesign-ui — Auto design tab: the design-variable table, the compare view, the details of a candidate
+No calculation change: display and inputs only (the engine is the sbd-autodesign-vars PR).
+### Where
+- `apps/steel-bridge/ui/autodesign.js`:
+  - `varsHtml(P, s)`, `curVal(P, id, k)` (new; anchor `function varsHtml`): one row per variable of `SBDAutoDesign.VARS` (grouped: girders and web,
+    flanges, details) with the mode (Auto / Lock / Range; a variable Auto design cannot size shows "Lock" with the reason), min / max / step for a
+    Range, the project's current value ("Now": what Lock keeps) and how it is sized; per field piece rows for the web and flange plates in a
+    collapsible list ("as all pieces" removes the piece's own entry). The overhang option (symmetric / left and right apart). Inputs saved in
+    `P.autodesign.vars` and `P.autodesign.ohSym` (handler `[data-adv]`; no new storage key).
+  - `runBar(P)` (Run / Stop / Undo and the progress, split out of `inputsHtml`).
+  - `compareHtml(P, R)` (new; anchor `compare view`): any two of the current design and the candidates side by side: N_b, overhangs, D, weight,
+    cost, transitions, stiffeners, governing ratio and what governs, the governing ratio of each module (links to the tab with its steps), the
+    sized details, the plates; the better of each pair green, the worse red. Selection in memory (`S.cmp`).
+  - The candidate's details (`c.det.rows`, notes) under its plates; the overhang column in the ranked list.
+  - Apply / Undo: the parts of the project `SBDAutoDesign.APPLY_KEYS` (the engine PR made these two lines use it).
+- `docs/steel-bridge-comparison.md`: rows F-5, F-6, F-7, F-14, K-5.
+### How verified
+- Playwright (Chromium, `file://`) at 1280 and 390 px: the variable table, a Refine run on the built-in project (43 s), the ranked list, the
+  candidate's details, the compare view (current vs candidate 1: weight 435,385 → 437,829 lb, cost $1,532,656 → $1,487,487, 8 → 4 transitions,
+  62 → 32 stiffeners per girder, every module below 1.0 after; current GS7 1.229, RT1 1.644), Apply then Undo shown; no horizontal page scroll at
+  390 px (scrollWidth 390); console errors: none from the page (two 404s are the test's blocked three.js CDN requests).
+- `node tests/engine/run.mjs autodesign` (unchanged engine).
+### Other copies
+- None.
