@@ -52,7 +52,7 @@
     const lf = B.loads && B.loads.lf ? B.loads.lf : window.SBDOwners.loadFactors(P.ownerRules.owner, P.ownerRules.eta, (P.xs || {}).nb);
     const line = AN ? AN.lineOf(P, g) : 0;
     return { title: 'Project and owner', subs: [
-      sub('p', 'Project', [kv([['Project', p.name || '—'], ['Project No', p.number || '—'], ['Owner', p.owner || '—'], ['Computed by', p.designer || '—'], ['Checked by', p.checker || '—'], ['Date', p.date || '—']]),
+      sub('p', 'Project', [kv([['Project', p.name || '—'], ['Project No', p.number || '—'], ['Client / owner', window.SBDModel.clientName(P) || '—'], ['Computed by', p.designer || '—'], ['Checked by', p.checker || '—'], ['Date', p.date || '—']]),
         p.notes ? note(p.notes) : null,
         kv([['Spans', `${P.spans.lengths.map(L => f(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'simple' || P.spans.lengths.length < 2 ? 'simple spans' : 'continuous'})`],
           ['Girder reported', `${gName(g)}, ${g.position}; cross-section girder G${line + 1} (dead loads and distribution factors)`], ['$b_{eff}$', `${f(g.beff, 2)} in`],
@@ -453,7 +453,7 @@
     if (on('sum')) secs.unshift({ id: 'sum', ...summary(B, X, built) });
     const girder = B.girder;
     return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
-      info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', p.owner]],
+      info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nGirder ${gName(girder)}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: secs, gov: X.gov };
   }
@@ -495,7 +495,7 @@
         ? [q.mod, q.check, q.loc, { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok' }, isFinite(q.rf) ? (q.rf >= 1 - 1e-9 ? 'OK' : 'RF < 1') : '—']
         : { cells: [q.mod, q.check, q.loc, R3(q.r), q.status === 'warn' ? 'Warning' : okT(q.r)], cls: q.r > 1 + 1e-9 ? 'gov' : '' }), { wide: true })]));
     return { title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
-      info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', p.owner]],
+      info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nEvery girder`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: [{ id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }], top, low, ctl: C };
   }

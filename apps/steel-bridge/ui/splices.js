@@ -47,7 +47,7 @@
         ${h.sel('splices.bolts.stitch', 'Stitch bolt limits (6.13.2.6.3)', [['req', 'Required'], ['adv', 'Advisory']])}`)
       + h.card('Load factors and clearances', `${[['dcMax', 'γ_DC max'], ['dcMin', 'γ_DC min'], ['dwMax', 'γ_DW max'], ['dwMin', 'γ_DW min'], ['llS', 'γ_LL Strength I'], ['llSv', 'γ_LL Service II'], ['fat', 'γ Fatigue I'], ['dc1C', 'γ_DC deck placement'], ['clC', 'γ construction LL']].map(([k, l]) => h.num(`splices.gam.${k}`, tt(l), '')).join('')}
         ${h.num('splices.clr.cw', 'Inner plate clearance to the web plate', 'in')}${h.num('splices.clr.cv', 'Web plate clearance to each flange', 'in')}
-        <p class="note">AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2 and 3.4.2.1; the owner's η and LL multiplier are applied on top (Cross-section &amp; loads tab).</p>`);
+        <p class="note">AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2 and 3.4.2.1; the owner's η and LL multiplier are applied on top (set on the Project tab).</p>`);
     if (Q.auto === false) {
       const rows = (Q.plates || []).map((q, i) => `<tr><td>${fmt(+q.x, 2)}${q.g != null ? `, G${+q.g + 1}` : ''}</td>${['top', 'bot'].map(k => PL_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.${k}.${f}" value="${esc((q[k] || {})[f])}"></td>`).join('')
         + `<td><select data-path="splices.plates.${i}.${k}.inner" data-kind="sel"><option value="true"${(q[k] || {}).inner ? ' selected' : ''}>yes</option><option value="false"${(q[k] || {}).inner ? '' : ' selected'}>no</option></select></td>`).join('')}${WB_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.web.${f}" value="${esc((q.web || {})[f])}"></td>`).join('')}<td><button type="button" data-spldel="${i}">×</button></td></tr>`).join('');

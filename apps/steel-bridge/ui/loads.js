@@ -19,17 +19,23 @@
   }
 
   /* ---------- inputs ---------- */
-  function inputs(P, h) {
-    const x = P.xs, own = P.ownerRules, o = own.owner, rI = O().rule(o, 'ld.etaI'), rD = O().rule(o, 'ld.etaD'), rR = O().rule(o, 'ld.etaR');
-    const opt = (path, label, unit, note) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="number" step="any" id="i_${path}" data-path="${path}" data-kind="xopt" value="${esc(get(P, path) == null ? '' : get(P, path))}" placeholder="${esc(note || '')}"><span class="unit">${unit || ''}</span></div>`;
-    const list = (path, label, unit) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="text" id="i_${path}" data-path="${path}" data-kind="xlist" value="${esc((get(P, path) || []).join(', '))}" style="width:180px"><span class="unit">${unit}</span></div>`;
-    const yn = [['no', 'No'], ['yes', 'Yes']], tf = [['false', 'No'], ['true', 'Yes']];
+  /* ownerCard(P, h): the "Bridge owner (DOT) rules" card. The page (index.html) draws it on the Project input tab, under the Project card
+     (moved from the Cross-section & loads tab, UI only: same paths ownerRules.*, same ownDef button, handled by onClick below). */
+  function ownerCard(P, h) {
+    const own = P.ownerRules, o = own.owner, rI = O().rule(o, 'ld.etaI'), rD = O().rule(o, 'ld.etaD'), rR = O().rule(o, 'ld.etaR');
+    const yn = [['no', 'No'], ['yes', 'Yes']];
     const defs = O().defaults(o);
-    const ownerCard = h.card('Bridge owner (DOT) rules', `${h.sel('ownerRules.owner', 'Owner', O().LIST.map(k => [k, k === 'AASHTO' ? 'AASHTO (no owner rules)' : `${k} (${O().RULES.owners[k].short})`]))}
+    return h.card('Bridge owner (DOT) rules', `${h.sel('ownerRules.owner', 'Client / owner (DOT)', O().LIST.map(k => [k, k === 'AASHTO' ? 'AASHTO (no owner rules)' : `${k} (${O().RULES.owners[k].short})`]))}
       ${o === 'AASHTO' ? `${h.num('ownerRules.eta.eD', 'η<sub>D</sub>', '')}${h.num('ownerRules.eta.eR', 'η<sub>R</sub>', '')}${h.num('ownerRules.eta.eI', 'η<sub>I</sub>', '')}`
         : `${rD && !rD.value.fixed ? h.sel('ownerRules.eta.D', 'Nonductile components (η<sub>D</sub>)', yn) : ''}${rR ? h.sel('ownerRules.eta.R', 'Nonredundant (η<sub>R</sub>)', [['auto', 'Automatic (3 girders or fewer)'], ['no', 'No'], ['yes', 'Yes']]) : ''}${rI ? h.sel('ownerRules.eta.I', esc(rI.value.q || 'η<sub>I</sub> question'), yn) : ''}`}
       <p class="note">${esc(O().RULES.owners[o].manual)}. The owner's load rules (η, design load multiplier m, haunch in the section properties) are worked on the Loads &amp; LLDF tab.</p>
       ${defs.length ? `<p class="note">${esc(o)} defaults: ${defs.map(d => `${esc(d.label)} ${esc(d.show)} (${esc(d.cite)})`).join('; ')}.</p><button type="button" data-xsact="ownDef">Apply ${esc(o)} defaults</button>` : ''}`);
+  }
+  function inputs(P, h) {
+    const x = P.xs;
+    const opt = (path, label, unit, note) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="number" step="any" id="i_${path}" data-path="${path}" data-kind="xopt" value="${esc(get(P, path) == null ? '' : get(P, path))}" placeholder="${esc(note || '')}"><span class="unit">${unit || ''}</span></div>`;
+    const list = (path, label, unit) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="text" id="i_${path}" data-path="${path}" data-kind="xlist" value="${esc((get(P, path) || []).join(', '))}" style="width:180px"><span class="unit">${unit}</span></div>`;
+    const tf = [['false', 'No'], ['true', 'Yes']];
     const edge = sd => { const k = `xs.edges.${sd}.`, e = x.edges[sd], s = sd === 'L' ? 'Left' : 'Right';
       return `${h.sel(k + 'type', `${s} deck edge`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']])}
         ${e.type === 'curb' ? `${h.num(k + 'cw', `${s} curb width`, 'in')}${h.num(k + 'ch', `${s} curb height`, 'in')}${h.num(k + 'rw', `${s} railing weight`, 'klf')}${h.num(k + 'rp', `${s} railing load point from edge`, 'ft')}${opt(k + 'rf', `${s} railing traffic face from edge`, 'ft', 'blank = load point')}`
@@ -45,8 +51,7 @@
     const ovl = `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Overlay</th><th>Entered as</th><th>psf</th><th>t<br>in</th><th>γ<br>kcf</th><th></th></tr></thead><tbody>
       ${(x.overlays || []).map((r, i) => `<tr>${cell(`xs.overlays.${i}.name`, 'text', r.name, 120)}${scell(`xs.overlays.${i}.mode`, [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']], r.mode)}${cell(`xs.overlays.${i}.psf`, 'xopt', r.psf == null ? '' : r.psf)}${cell(`xs.overlays.${i}.thk`, 'xopt', r.thk == null ? '' : r.thk)}${cell(`xs.overlays.${i}.gam`, 'xopt', r.gam == null ? '' : r.gam)}<td><button type="button" data-xsact="delOvl" data-i="${i}" title="Remove this overlay">×</button></td></tr>`).join('')}
       </tbody></table></div><button type="button" data-xsact="addOvl">Add overlay</button>`;
-    return ownerCard
-      + h.card('Girders and deck', `${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${list('xs.bays', 'Girder spacings', 'ft, left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
+    return h.card('Girders and deck', `${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${list('xs.bays', 'Girder spacings', 'ft, left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
         ${list('xs.skews', 'Support skews', '°, one per support line')}${opt('materials.concrete.wcE', 'w<sub>c</sub> for E<sub>c</sub> only', 'kcf', 'blank = w_c')}
         <p class="note">Deck thickness, haunch, f′c and w<sub>c</sub>: Materials &amp; deck tab. The total deck thickness above the structural slab is dead load only. The LLDF regions take their sections from the girder selected on the Girders &amp; plates tab.</p>`)
       + h.card('Deck edges', `${edge('L')}<hr>${edge('R')}<p class="note">Distances from the deck edge. A curb lower than 12 in is mountable (the railing face governs); an entered edge to traffic face governs.</p>`)
@@ -149,5 +154,5 @@
   function after(el, P, R, ui) { if (R && !(R.errors && R.errors.length)) window.SharedSteps.wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const slot = el.querySelector('#gfx_ld'); if (!slot || !R || (R.errors && R.errors.length) || !window.SBDGfxA) return;
     window.SBDGfxA.loads(slot, { P, R, lg: Math.min(ui.lg || 0, R.dead.N - 1), lr: Math.min(ui.lr || 0, R.regions.length - 1) }); }
-  window.SBDUiLoads = { TOPICS, groups, after, ensure, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
+  window.SBDUiLoads = { TOPICS, groups, after, ensure, ownerCard, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
 })();
