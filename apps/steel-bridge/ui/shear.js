@@ -85,11 +85,12 @@
      with the shears just right of it in the hand-off file's (MIDAS) sign, the opposite of this app's (the checks use magnitudes and the
      sign of each load against the others); at an interior support two stations 0.005 ft either side with the shears just left and just right; at
      the girder ends the inside shear. reactions[k] per support (kip, up +): DC1, DC2, DW, UT, UF (the stage reactions) and LL (the LL+IM
-     reaction envelope with the larger g_V of the adjacent spans, an.R.LL.k). Returns { pl, R } or { err }. */
-  function fromAnalysis(P, gi) {
+     reaction envelope with the larger g_V of the adjacent spans, an.R.LL.k). R0 (optional): SBDAnalysis.analyzeGirder(P, gi) already run
+     (Auto design's evaluate, so that its shear checks take this tab's payload; added 2026-10-31). Returns { pl, R } or { err }. */
+  function fromAnalysis(P, gi, R0) {
     const AN = window.SBDAnalysis, M = window.SBDModel;
     if (!AN) return { err: 'The analysis module is not loaded.' };
-    let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
+    let R = R0; if (!R) try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
     if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
     if (!R.ll || !R.fat || !R.llR) return { err: 'Analysis: no live load results.' };
     // LL+IM with the pedestrian load added once (SBDAnalysis.llPL), V_PL its part (pedestrianInLL, as GirderDetail's hand-off; sb-ped-owner PR)

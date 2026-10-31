@@ -2311,3 +2311,42 @@ Presentation only: no engineering formula, load or resistance factor, unit, code
 - Saved data: the `M.KEYS.ui` key and format are unchanged; a stored `itab: 'fr'` is mapped to `'spans'` on load (the stored key is not deleted or renamed). No project field, path, or localStorage key changed.
 ### Governing provision / check
 - None: no calculation, factor, unit or code reference changed. Check: `node tests/engine/run.mjs` unchanged results; the paths `data-path` of every framing input are identical, so edits flow to the same `P.framing.*`.
+
+## 2026-10-31 — PR: sbd-autodesign-ll — Auto design: shear and stiffeners with LL+IM, f_ℓ and brace points from the tabs' one source (C-1, C-16)
+**Calculation change (CLAUDE.md §4).** Auto design's full check (`evaluate`) ran the shear (GS11, GS16, GS18), transverse-stiffener and
+bearing-stiffener checks with no live load, and deck placement (GS14–GS16) with f_ℓ = 0; its flexure ignored an f_ℓ entered on the Flexure
+tab. The tabs were right; only Auto design's inputs to the same check functions change. Governing provisions (AASHTO LRFD 10th Ed.):
+3.4.1 (Strength I, 1.75 LL+IM), 6.10.9 (shear resistance), 6.10.11.1 / 6.10.11.2 (transverse and bearing stiffeners, R_u), 6.10.3.2
+(deck placement, f_bu + f_ℓ), 6.10.1.6 and C6.10.1 (f_ℓ, skew value in lieu of a refined analysis).
+### Where
+- `apps/steel-bridge/engine/autodesign.js`, `evaluate()`, anchor `// shear and stiffeners (ui/shear.js build on this analysis)`:
+  - before: `const SB = window.SBDShearUI.build({ P, g: gi, pl }); mods['shear' + gi] = SB;` (pl = `payloadOf`: stations with M_LL and V_FAT but no V_LLpos/V_LLneg, no V_PL, no `reactions`)
+  - after: `const SA = window.SBDShearUI.fromAnalysis(P, gi, R);` (error → a failing 'shear input' item and the girder is skipped) then `const SB = window.SBDShearUI.build({ P, g: gi, pl: SA.pl });` — the Shear tab's own payload of the same analysis R (V_LL+IM, V_PL, the support reactions R_LL+IM, the split stations at interior supports).
+- same function, anchor `const pl = payloadOf(P, gi, R), Fr =`:
+  - before: `Fr = FRM() && P.framing ? FRM().forGirder(P, { gi }, null) : null;` and, after the flexure payload, `const flS = FRM() ? FRM().flSkew(((P.xs || {}).skews) || [0], P.girders[gi].position === 'exterior', P.framing) : { fl: 0 }; d.locs.forEach(L => { L.fl = flS.fl || 0; });`
+  - after: `DF = FRM().design(P, gi, { fl: P.flexure.fl if > 0 })`, `DC = FRM().design(P, gi, { fl: P.constr.flC if > 0 })` (engine/framing.js `design`, as ui/flexure.js and ui/constructibility.js); `Fr = DF.br`; `d.locs.forEach(L => { L.fl = DF ? DF.fl || 0 : 0; });`
+- same function, constructibility: before `Cn.fromAnalysis(P, gi, R, { flC: 0, …, ...(Fr ? { braces: Fr.braces } : {}) })`; after `{ flC: DC ? DC.fl : 0, …, ...(DC && DC.br ? { braces: DC.braces } : {}) }`.
+- `apps/steel-bridge/ui/shear.js`, `fromAnalysis(P, gi)` → `fromAnalysis(P, gi, R0)`: optional analysis already run (`let R = R0; if (!R) try { R = AN.analyzeGirder(P, gi); } …`). The tab's own calls pass no R0: unchanged.
+- `payloadOf` is unchanged (the flexure, fatigue and stud checks still use it; its fatigue parity test is unchanged).
+### Before / after (Node, Auto design full check vs the tabs' builders on the same project)
+| Project, girder | V_u,max kip (AD before → after; tab) | V_LL+IM | shear ratio | R_LL+IM at supports, kip (before: 0) | deck placement f_ℓ ksi (before: 0) |
+|---|---|---|---|---|---|
+| built-in, G1 | 172.96 → 395.97; 395.97 | 0 → 129.16 | 0.271 → 0.437 | 107.8/215.3/215.3/107.8 | 0 (skew 0°); 2 with P.constr.flC = 2 |
+| builtin28_AASHTO, G2 / G1 | 166.86 → 414.79 / 155.19 → 374.23 | 0 → 142.20 / 125.55 | 0.279 → 0.459 / 0.269 → 0.409 | 118.1/236.5/… / 104.3/208.8/… | 0 → 12.5 / 9.38 (GS14–16 max 0.497 → 0.732 / 0.413 → 0.556) |
+| builtin_RIDOT, G2 / G1 | 154.08 → 438.50 / 146.15 → 397.41 | 0 → 135.85 / 119.94 | 0.252 → 0.478 / 0.251 → 0.433 | 113.0/226.0/… / 99.8/199.5/… | 0 (skew 15°) |
+| util_AASHTO, G2 / G1 | 166.73 → 430.21 / 155.03 → 364.25 | 0 → 135.84 / 119.93 | 0.264 → 0.469 / 0.259 → 0.397 | 113.0/225.9/… / 99.8/199.4/… | 0 (skew 15°) |
+After the fix every value above equals the tab's (Shear tab src 'analysis', Flexure tab src 'analysis', Constructibility tab), per girder, including the governing TS/BS ratios and the flexure and deck-placement maxima. Built-in with f_ℓ entered (P.flexure.fl = 3, P.constr.flC = 2): Auto design before took 0 / 0 (flexure max 1.229, deck placement 0.787); after 3 / 2 (4.166, 1.069), the tabs' values.
+### Check case (built-in project G1, AASHTO, η = 1)
+- Largest V_u, x = 110.01 ft (just right of Pier 1): V_u = 1.25(V_DC1 + V_DC2) + 1.50 V_DW + 1.75 V_LL+IM = 1.25(100.980 + 17.537) + 1.50(14.525) + 1.75(129.164) = 148.146 + 21.787 + 226.037 = **395.97 kip**; GS11 395.97 / 905.41 = 0.437. Before: no V_LL; the largest V_u was at 249.99 ft, 1.25(103.069 + 17.705) + 1.50(14.664) = **172.96 kip**; governing shear item GS18 0.271.
+- Bearing stiffener, Abut. 1: R_u = 1.25(R_DC1 + R_DC2) + 1.50 R_DW + 1.75 R_LL+IM = 1.25(55.360 + 9.853) + 1.50(8.161) + 1.75(107.842) = 81.516 + 12.241 + 188.724 = **282.48 kip** (before: R_LL+IM = 0 and the dead-load jump in shear, R_u = 93.08 kip).
+- Test: `tests/engine/autodesign.test.mjs` "The full check's shear, stiffeners, flexure and deck placement equal the Shear, Flexure and Constructibility tabs" (fails on the old code: R_LL+IM 0 vs 107.84).
+### Other copies
+- None.
+### Open items
+- With no framing on the Spans & framing tab, the Flexure tab falls back to the stiffener layout's cross-frame stations and Auto design's flexure to the payload's L_b (frames.Lb, 25 ft). Not changed here (every recorded project has framing).
+- The recorded Auto design parity (tests/projects/sbd2-autodesign/ad_*.json) was not re-run (minutes to ~26 min per project). Instead the 6 recorded
+  Auto designs were re-checked with `evaluate(level 'full')` before and after: builtin_AASHTO and util_AASHTO pass both ways (largest shear ratio
+  0.42 → 0.58 and 0.45 → 0.61); builtin28_AASHTO (skews 28°) gains a deck placement failure, GS14 1.194 with f_ℓ = 12.5 ksi (C-16), so its design
+  would change; builtin28_RIDOT, builtin_RIDOT and util_RIDOT fail the same flexure items (GS7/GS8/GS9, 1.05–1.08) before and after: those
+  records are already stale on main before this change (not caused here). No recorded design gains a shear or stiffener failure. Auto design
+  does not size stiffener plates (F-6), so the stiffener count is unchanged.

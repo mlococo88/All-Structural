@@ -60,6 +60,31 @@ test('The full check uses the Fatigue & studs tab\'s own payload (ui/fatigue.js 
   assert.deepEqual(pick(b), pick(a));
 });
 
+// C-1 and C-16 (docs/steel-bridge-comparison.md; fixed 2026-10-31): the full check's shear, transverse and bearing stiffeners carry LL+IM
+// (the Shear tab's own payload, ui/shear.js fromAnalysis) and its flexure and deck placement take f_ℓ and the brace points from
+// engine/framing.js design() (the Flexure and Constructibility tabs). Before, V_LL = V_PL = 0, R_LL+IM = 0 and f_ℓ = 0 in deck placement.
+test('The full check\'s shear, stiffeners, flexure and deck placement equal the Shear, Flexure and Constructibility tabs (LL+IM, f_ℓ entered)', () => {
+  const T = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
+    'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js',
+    'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/constructibility.js', 'engine/autodesign.js'].map(E));
+  const P = T.SBDModel.defaultProject(); P.flexure = { fl: 3 }; P.constr = { ...(P.constr || {}), flC: 2 };   // f_ℓ entered on both tabs (ksi)
+  const ev = T.SBDAutoDesign.evaluate(P, { level: 'full' }), A = ev.mods.shear0;
+  const S = T.SBDShearUI.build({ P, g: 0, src: 'analysis' }), FX = T.SBDFlexureUI.build({ P, g: 0, src: 'analysis' }), CN = T.SBDConstrUI.build({ P, g: 0, src: 'project' });
+  const vu = B => B.stations.map(r => [r.x, r.Vu, r.VLL, r.checks.map(c => c.ratio)]), rx = B => B.BS.rows.map(r => [r.RLL, r.Ru]);
+  assert.deepEqual(plain(vu(A)), plain(vu(S))); assert.deepEqual(plain(rx(A)), plain(rx(S)));
+  assert.deepEqual(plain([A.tsGov.it.r, A.bsGov.it.r]), plain([S.tsGov.it.r, S.bsGov.it.r]));
+  // largest V_u: x = 110.01 ft (just right of Pier 1), V_u = 1.25(V_DC1 + V_DC2) + 1.50 V_DW + 1.75 V_LL+IM = 1.25(100.980 + 17.537) + 1.50(14.525) + 1.75(129.164)
+  //   = 148.146 + 21.787 + 226.037 = 395.97 kip (before the fix: no V_LL, largest 172.96 kip at 249.99 ft); GS11 V_u/φ_vV_n = 395.97/905.41 = 0.437
+  const g = A.stations.reduce((a, r) => r.Vu > a.Vu ? r : a); near(g.x, 110.01, 1e-9, 'x of V_u,max'); near(g.Vu, 395.97, 0.005, 'V_u,max'); near(g.VLL, 129.16, 0.005, 'V_LL+IM');
+  near(g.checks.find(c => c.id === 'GS11').ratio, 0.437, 0.0005, 'GS11');
+  // bearing, Abut. 1: R_u = 1.25(R_DC1 + R_DC2) + 1.50 R_DW + 1.75 R_LL+IM = 1.25(55.360 + 9.853) + 1.50(8.161) + 1.75(107.842) = 81.516 + 12.241 + 188.724 = 282.48 kip
+  near(A.BS.rows[0].RLL, 107.84, 0.005, 'R_LL+IM Abut. 1'); near(A.BS.rows[1].RLL, 215.3, 0.05, 'R_LL+IM Pier 1'); near(A.BS.rows[0].Ru, 282.48, 0.005, 'R_u Abut. 1');
+  // f_ℓ: as entered, every flexure row 3 ksi and every deck placement row 2 ksi, the tabs' ratios
+  assert.ok(ev.mods.flex0.rows.every(r => r.fl === 3)); assert.ok(ev.mods.constr0.rows.every(r => r.flC === 2));
+  const rat = G => G.rows.map(r => r.checks.map(c => c.ratio));
+  assert.deepEqual(plain(rat(ev.mods.flex0)), plain(rat(FX))); assert.deepEqual(plain(rat(ev.mods.constr0)), plain(rat(CN)));
+});
+
 function runAD(P, settings) { const it = AD.run(P, { settings, maxIt: 5, trimTries: 2 }); let s; while (!(s = it.next()).done); return s.value; }
 function boltFitHeld(c, Q) {   // each flange next to a splice at least the bolt-fit width of its gage lines (DT10)
   const nl = c.minLines || 2;
