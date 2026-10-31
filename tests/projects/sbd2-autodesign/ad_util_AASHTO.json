@@ -33,10 +33,11 @@
    "flexure GS8",
    "stiffeners BS6",
    "studs SC2",
+   "rating RT1",
    "fatigue FA1"
   ],
-  "ratio": 1.1851851851851851,
-  "gov": "stiffeners BS6 Stiffener width and flange connection — Pier 1, G1 (Type B), width within narrower flange (G2)",
+  "ratio": 1.263365816334541,
+  "gov": "rating RT1 HL-93 inventory rating factor 0.792 ≥ 1.0 (flex neg, x = 249.99 ft) at 249.99 ft (G2)",
   "fails": [
    "flexure GS7 Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc at 109.00 ft (G2): 1.023",
    "flexure GS8 Tension flange, f_bu ≤ φ_fF_nt at 109.00 ft (G2): 1.001",
@@ -84,7 +85,7 @@
   "D": 70,
   "nb": 5,
   "ratio": 1,
-  "gov": "stiffeners TS7 Minimum fillet weld sizes — G1, stiffener at 5.22 ft (Type A), to web",
+  "gov": "stiffeners TS2 Projecting width limits, 16t_p ≥ b_t ≥ b_f/4 — G1, connection plate at 86.90 ft (Type B), b_f/4",
   "minLines": null,
   "nTr": 8,
   "segments": [
@@ -218,6 +219,568 @@
     "botB": 16,
     "botT": 0.75
    }
+  ],
+  "det": {
+   "stiffeners": {
+    "layout": {
+     "web": "stiffened",
+     "mode": "uniform",
+     "doRatio": 1.75,
+     "bays": [],
+     "frames": {
+      "Lb": 25
+     }
+    },
+    "transverse": {
+     "gS": "50W",
+     "Fexx": 70,
+     "types": {
+      "A": {
+       "name": "Intermediate stiffener",
+       "role": "int",
+       "sides": "1",
+       "bt": 5,
+       "tp": 0.375,
+       "w": 0.25,
+       "gap": 2.75,
+       "wf": 0.3125,
+       "c": 1,
+       "Fcp": 20
+      },
+      "B": {
+       "name": "Connection plate",
+       "role": "cp",
+       "sides": "1",
+       "bt": 5,
+       "tp": 0.375,
+       "w": 0.25,
+       "gap": 2.75,
+       "wf": 0.3125,
+       "c": 1,
+       "Fcp": 20
+      }
+     }
+    },
+    "bearing": {
+     "gS": "50W",
+     "Fexx": 70,
+     "ed": 9,
+     "types": {
+      "A": {
+       "name": "Abutment",
+       "np": 1,
+       "bt": 5.5,
+       "tp": 0.5,
+       "c": 1,
+       "sp": 12,
+       "w": 0.25,
+       "conn": "milled"
+      },
+      "B": {
+       "name": "Pier",
+       "np": 1,
+       "bt": 8,
+       "tp": 0.75,
+       "c": 1,
+       "sp": 12,
+       "w": 0.25,
+       "conn": "milled"
+      }
+     }
+    }
+   },
+   "crossframes": {
+    "type": "X",
+    "h": "",
+    "dMinXF": 48,
+    "gA": "36",
+    "gG": "50",
+    "primary": "auto",
+    "dia": {
+     "on": "no",
+     "shape": "W21x44",
+     "d": 20.7,
+     "bf": 6.5,
+     "tf": 0.45,
+     "tw": 0.35,
+     "gr": "50",
+     "nb": 4,
+     "pitch": 3,
+     "ecc": 3.5,
+     "end": "no",
+     "Rj": 0,
+     "aj": 12,
+     "P": 0
+    },
+    "wind": {
+     "V": 130,
+     "Kz": 1,
+     "G": 1,
+     "Cd": 1.3
+    },
+    "mem": {
+     "top": {
+      "sec": "L5x5x3/8",
+      "b1": 5,
+      "b2": 5,
+      "t": 0.375
+     },
+     "bot": {
+      "sec": "L5x5x3/8",
+      "b1": 5,
+      "b2": 5,
+      "t": 0.375
+     },
+     "diag": {
+      "sec": "L5x5x3/8",
+      "b1": 5,
+      "b2": 5,
+      "t": 0.375
+     }
+    },
+    "conn": {
+     "d": "0.875",
+     "gr": "A325",
+     "thr": "incl",
+     "n": 2,
+     "s": 3,
+     "e": 1.5,
+     "tg": 0.5
+    },
+    "user": {
+     "StrI": {
+      "top": 0,
+      "bot": 0,
+      "diag": 0
+     },
+     "Con": {
+      "top": 0,
+      "bot": 0,
+      "diag": 0
+     },
+     "Fat": {
+      "top": 0,
+      "bot": 0,
+      "diag": 0
+     }
+    },
+    "fatCat": "B",
+    "sb": {
+     "on": "yes",
+     "full": "auto",
+     "Mu": "",
+     "Cb": 1,
+     "bs": 5,
+     "tsp": 0.5
+    },
+    "weight": {
+     "mode": "auto",
+     "allow": 10,
+     "Wi": "",
+     "We": ""
+    }
+   },
+   "studs": {
+    "d": 0.875,
+    "h": 6,
+    "st": 4,
+    "Fu": 60,
+    "Qn10": 0,
+    "gamFat": 1.75,
+    "skew": "auto",
+    "Frc": 25,
+    "wv": 48,
+    "splX": "",
+    "splL": 0,
+    "splC": 3,
+    "beffMode": "girder",
+    "zones": [
+     {
+      "x1": 0,
+      "x2": 11,
+      "nr": 4,
+      "p": 12.5
+     },
+     {
+      "x1": 11,
+      "x2": 22,
+      "nr": 4,
+      "p": 14.5
+     },
+     {
+      "x1": 22,
+      "x2": 33,
+      "nr": 4,
+      "p": 17
+     },
+     {
+      "x1": 33,
+      "x2": 44,
+      "nr": 4,
+      "p": 18
+     },
+     {
+      "x1": 44,
+      "x2": 55,
+      "nr": 4,
+      "p": 17.5
+     },
+     {
+      "x1": 55,
+      "x2": 66,
+      "nr": 4,
+      "p": 17.5
+     },
+     {
+      "x1": 66,
+      "x2": 77,
+      "nr": 4,
+      "p": 17
+     },
+     {
+      "x1": 77,
+      "x2": 88,
+      "nr": 4,
+      "p": 15.5
+     },
+     {
+      "x1": 88,
+      "x2": 99,
+      "nr": 4,
+      "p": 14.5
+     },
+     {
+      "x1": 99,
+      "x2": 110,
+      "nr": 4,
+      "p": 7.5
+     },
+     {
+      "x1": 110,
+      "x2": 124,
+      "nr": 4,
+      "p": 7.5
+     },
+     {
+      "x1": 124,
+      "x2": 138,
+      "nr": 4,
+      "p": 13.5
+     },
+     {
+      "x1": 138,
+      "x2": 152,
+      "nr": 4,
+      "p": 15
+     },
+     {
+      "x1": 152,
+      "x2": 166,
+      "nr": 4,
+      "p": 16.5
+     },
+     {
+      "x1": 166,
+      "x2": 180,
+      "nr": 4,
+      "p": 17
+     },
+     {
+      "x1": 180,
+      "x2": 194,
+      "nr": 4,
+      "p": 17
+     },
+     {
+      "x1": 194,
+      "x2": 208,
+      "nr": 4,
+      "p": 16.5
+     },
+     {
+      "x1": 208,
+      "x2": 222,
+      "nr": 4,
+      "p": 15.5
+     },
+     {
+      "x1": 222,
+      "x2": 236,
+      "nr": 4,
+      "p": 13.5
+     },
+     {
+      "x1": 236,
+      "x2": 250,
+      "nr": 4,
+      "p": 7.5
+     },
+     {
+      "x1": 250,
+      "x2": 261,
+      "nr": 4,
+      "p": 7.5
+     },
+     {
+      "x1": 261,
+      "x2": 272,
+      "nr": 4,
+      "p": 14.5
+     },
+     {
+      "x1": 272,
+      "x2": 283,
+      "nr": 4,
+      "p": 15.5
+     },
+     {
+      "x1": 283,
+      "x2": 294,
+      "nr": 4,
+      "p": 16.5
+     },
+     {
+      "x1": 294,
+      "x2": 305,
+      "nr": 4,
+      "p": 17.5
+     },
+     {
+      "x1": 305,
+      "x2": 316,
+      "nr": 4,
+      "p": 17.5
+     },
+     {
+      "x1": 316,
+      "x2": 327,
+      "nr": 4,
+      "p": 18
+     },
+     {
+      "x1": 327,
+      "x2": 338,
+      "nr": 4,
+      "p": 17
+     },
+     {
+      "x1": 338,
+      "x2": 349,
+      "nr": 4,
+      "p": 14.5
+     },
+     {
+      "x1": 349,
+      "x2": 360,
+      "nr": 4,
+      "p": 12.5
+     }
+    ]
+   },
+   "welds": {
+    "Fexx": 70,
+    "w": "",
+    "gam": {
+     "dc": 1.25,
+     "dw": 1.5,
+     "ll": 1.75,
+     "fat": 1.75
+    },
+    "ground": "yes"
+   },
+   "splices": {
+    "code": "10",
+    "bolts": {
+     "d": "0.875",
+     "gr": "A325",
+     "thr": "excl",
+     "cls": "B",
+     "prep": "drilled",
+     "edge": "cut",
+     "gap": 0.5,
+     "long": "flange",
+     "eccS": "incl",
+     "eccV": "excl",
+     "minLines": 2,
+     "c1": "",
+     "stitch": "req"
+    },
+    "gam": {
+     "dcMax": 1.25,
+     "dcMin": 0.9,
+     "dwMax": 1.5,
+     "dwMin": 0.65,
+     "llS": 1.75,
+     "llSv": 1.3,
+     "fat": 1.75,
+     "dc1C": 1.25,
+     "clC": 1.5
+    },
+    "clr": {
+     "cw": 0.5,
+     "cv": 1.5
+    },
+    "prs": "no",
+    "gP": "",
+    "auto": true,
+    "plates": []
+   }
+  },
+  "oh": null,
+  "detRows": [
+   {
+    "id": "cf",
+    "label": "Cross-frame angles",
+    "value": "L5x5x3/8",
+    "how": "the lightest angle of the list passing CF1–CF3, CF5–CF9 on every girder"
+   },
+   {
+    "id": "tsSp",
+    "label": "Transverse stiffener spacing",
+    "value": "d_o/D = 1.75",
+    "how": "the widest of the list passing the shear checks (6.10.9), TS4 and TS5 on every girder"
+   },
+   {
+    "id": "tsA",
+    "label": "Intermediate stiffener (type A)",
+    "value": "5 × 3/8 in, web weld 1/4 in, cutoff 2.75 in",
+    "how": "the least plate area passing TS1–TS3, TS6–TS8 on every girder; welds the least passing"
+   },
+   {
+    "id": "tsB",
+    "label": "Connection plate (type B)",
+    "value": "5 × 3/8 in, web weld 1/4 in, flange welds 5/16 in",
+    "how": "the least plate area passing TS1–TS3, TS7, TS8, CP1 on every girder; welds the least passing"
+   },
+   {
+    "id": "bsA",
+    "label": "Bearing stiffeners, abutments (type A)",
+    "value": "1 pair(s) 5.5 × 1/2 in, weld 1/4 in",
+    "how": "the least steel passing BS1–BS3, BS6, BS7 on every girder, then the least weld passing BS4, BS5"
+   },
+   {
+    "id": "bsB",
+    "label": "Bearing stiffeners, piers (type B)",
+    "value": "1 pair(s) 8 × 3/4 in, weld 1/4 in",
+    "how": "the least steel passing BS1–BS3, BS6, BS7 on every girder, then the least weld passing BS4, BS5"
+   },
+   {
+    "id": "studs",
+    "label": "Stud pitch zones",
+    "value": "30 zones, pitch 7.5 to 18 in, 4 per row",
+    "how": "the analysis zones (span tenths), each pitch the largest on 1/2 in passing SC1–SC3 on every girder"
+   },
+   {
+    "id": "weld",
+    "label": "Flange-to-web fillet weld",
+    "value": "the Table 6.13.3.4-1 minimum at each location",
+    "how": "the least size passing FW1–FW4 on every girder"
+   }
+  ],
+  "mods": [
+   {
+    "mod": "flexure",
+    "id": "GS7",
+    "title": "Compression flange, f_bu + f_ℓ/3 ≤ φ_fF_nc",
+    "r": 0.9533940937928868,
+    "x": 260.01,
+    "gl": "G2",
+    "tab": "flex",
+    "step": "fx.fnc.ok",
+    "fail": false
+   },
+   {
+    "mod": "fatigue",
+    "id": "FA1",
+    "title": "Load-induced fatigue, γ(Δf) ≤ (ΔF)_n — Span 1, connection plate at cross-frame 64.90 ft, bottom flange, G1",
+    "r": 0.98762068352121,
+    "gl": "G1",
+    "tab": "fat",
+    "step": "fa1.ok",
+    "fail": false
+   },
+   {
+    "mod": "shear",
+    "id": "GS11",
+    "title": "Shear, V_u ≤ φ_vV_n",
+    "r": 0.7883951429488941,
+    "x": 353,
+    "gl": "G2",
+    "tab": "shear",
+    "step": "sh.ok",
+    "fail": false
+   },
+   {
+    "mod": "constructibility",
+    "id": "OH4",
+    "title": "Overhang brackets, bottom flange (tension) yielding, f_bu + f_ℓ ≤ φ_fR_hF_yt",
+    "r": 0.47165474109592426,
+    "x": 320,
+    "gl": "G1",
+    "tab": "cn",
+    "step": "oh.tens.ok",
+    "fail": false
+   },
+   {
+    "mod": "stiffeners",
+    "id": "TS2",
+    "title": "Projecting width limits, 16t_p ≥ b_t ≥ b_f/4 — G1, connection plate at 86.90 ft (Type B), b_f/4",
+    "r": 1,
+    "gl": "G2",
+    "tab": "shear",
+    "step": "ts11.bf4",
+    "fail": false
+   },
+   {
+    "mod": "studs",
+    "id": "SC2",
+    "title": "Number of connectors for strength, n ≥ P/Q_r — Abut. 1 to max. positive, Span 1",
+    "r": 0.9241504227153303,
+    "gl": "G2",
+    "tab": "fat",
+    "step": "scr0.ok",
+    "fail": false
+   },
+   {
+    "mod": "cross-frames",
+    "id": "CF3",
+    "title": "Slenderness limits (ℓ/r ≤ 140 compression, ≤ 240 tension) — Diagonals (L5x5x3/8)",
+    "r": 0.9365002946910479,
+    "gl": "G2",
+    "tab": "cf",
+    "step": "cf.diag.sl",
+    "fail": false
+   },
+   {
+    "mod": "splices",
+    "id": "DT2",
+    "title": "Maximum spacing for sealing — Web plate, column at plate end",
+    "r": 1,
+    "gl": "G2",
+    "tab": "spl",
+    "step": "sp.DT2.2",
+    "fail": false
+   },
+   {
+    "mod": "rating",
+    "id": "RT1",
+    "title": "HL-93 inventory rating factor 1.103 ≥ 1.0 (flex neg, x = 260.01 ft)",
+    "r": 0.9067659098951188,
+    "x": 260.01,
+    "gl": "G2",
+    "tab": "rt",
+    "fail": false
+   },
+   {
+    "mod": "welds",
+    "id": "FW4",
+    "title": "Minimum fillet weld size — Abut. 1, top",
+    "r": 1,
+    "gl": "G2",
+    "tab": "wt",
+    "step": "wf0.wminT",
+    "fail": false
+   }
   ]
  },
  "screened": [
@@ -235,8 +798,8 @@
    "D": 57,
    "minLines": null,
    "pass": true,
-   "w": 431353.125,
-   "cost": 1546809.375,
+   "w": 434568.75,
+   "cost": 1547456.25,
    "ratio": 0.9932729230889812
   },
   {
@@ -246,33 +809,33 @@
    "pass": true,
    "w": 444232.6388888889,
    "cost": 1550947.9166666665,
-   "ratio": 0.9618575101348243
+   "ratio": 0.9619074904235194
   },
   {
    "nb": 5,
    "D": 77,
    "minLines": null,
    "pass": true,
-   "w": 455408.63715277775,
-   "cost": 1576225.9114583333,
-   "ratio": 0.9829814574249758
+   "w": 453966.71006944444,
+   "cost": 1579400.1302083333,
+   "ratio": 0.9813387490600586
   },
   {
    "nb": 5,
    "D": 87,
    "minLines": null,
    "pass": true,
-   "w": 496539.71354166657,
-   "cost": 1680119.1406249998,
-   "ratio": 0.9349363675005643
+   "w": 526647.9166666666,
+   "cost": 1773443.75,
+   "ratio": 0.8569016659444731
   },
   {
    "nb": 5,
    "D": 57,
    "minLines": null,
    "pass": true,
-   "w": 419473.17708333326,
-   "cost": 1511169.5312499998,
+   "w": 420966.14583333326,
+   "cost": 1506648.4374999998,
    "ratio": 0.9932729230889812
   },
   {
@@ -282,7 +845,7 @@
    "pass": true,
    "w": 447401.4756944444,
    "cost": 1604704.427083333,
-   "ratio": 0.9974463764678709
+   "ratio": 0.9975019293166019
   },
   {
    "nb": 5,
@@ -318,7 +881,7 @@
    "pass": true,
    "w": 420794.9435763889,
    "cost": 1480634.8307291665,
-   "ratio": 0.9919524381561536
+   "ratio": 0.9920005246221606
   },
   {
    "nb": 5,
@@ -327,7 +890,7 @@
    "pass": true,
    "w": 429313.5850694444,
    "cost": 1528690.755208333,
-   "ratio": 0.9959855111007105
+   "ratio": 0.9960357071016078
   },
   {
    "nb": 5,
@@ -368,5 +931,5 @@
  ],
  "legacyW": 397206.25,
  "legacyWhat": "Preliminary sizing Full design",
- "seconds": 1612
+ "seconds": 748
 }

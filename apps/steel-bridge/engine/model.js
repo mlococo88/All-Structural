@@ -88,7 +88,11 @@
      autodesign: { mode: 'new' | 'refine' | 'check', objective: 'weight' | 'depth' | 'cost', topN, cost: { steel ($/lb), trans, splice, stiff ($ each) },
                   limits: { Dmin, Dmax, Dinc, twInc, tfInc, bfInc, twMin, tfMin, bfMin, tfMax, thkRatio, areaRatio, maxTrans, minSeg, lbRatio, topConst, maxDb,
                   depthRule, sLo, sHi } ('' = the owner's or Preliminary sizing's default), nbList (text), change: { nb, D },
-                  undo: { girders, xs, framing, splices } (the design before the last Apply; one-step undo), applied: { at, nb, D, w } }
+                  undo: { girders, xs, framing, splices } (the design before the last Apply; one-step undo), applied: { at, nb, D, w },
+                  -- added 2026-10-31 (Auto design PR 2), optional: absent = each variable's default (engine/autodesign.js VARS) --
+                  vars: { <id> | <id>#<field piece, 1-based>: { mode: 'auto' | 'lock' | 'range', min, max, step } } (the design variables: nb, D, tw, bt, tt,
+                  bb, tb, trans, spl, splPl, tsSp, tsA_b, tsA_t, tsB_b, tsB_t, bsA_n, bsA_b, bsA_t, bsB_n, bsB_b, bsB_t, scP, scN, cf, weld);
+                  undo also keeps stiffeners, crossframes, studs, welds (null: absent before the Apply) }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
      -- added 2026-10-30 (legacy import PR), optional, written only by an import of an old project (engine/legacy.js) --
