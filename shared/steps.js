@@ -1,5 +1,5 @@
 /* shared/steps.js — worked calculation steps (window.SharedSteps).
-   Classic script, no DOM. Created 2026-10-29 (Steel Bridge rebuild, docs/REBUILD_PLAN.md §5): every engine function
+   Classic script, no DOM at load (wire() and the print hook touch the page only in a browser). Created 2026-10-29 (Steel Bridge rebuild, docs/REBUILD_PLAN.md §5): every engine function
    returns its values and the steps that work them out, and the screen, the printed report and the tests all render
    those same steps. The format is documented in shared/README.md ("Worked steps"); keep the two in step.
 
@@ -122,5 +122,76 @@
     return parts.join(' = ');
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT };
+  /* ---------- topics: grouped worked steps (presentation spec A, 2026-10-31; first used on the Steel Bridge Shear & stiffeners tab) ----------
+     A long step list reads as topics, each with a one-line result, in the standard order of a check: inputs and geometry, section properties,
+     demands, intermediate quantities (one topic per code sub-article), resistance, check. Presentation only: the steps, their ids and values are
+     not changed or copied; group() only sorts them into topics (every step lands in exactly one, in its original order within the topic).
+       group(steps, topics, opt) -> [{ key, title, ref, see, steps, res, ratio, cls, chip }]
+         topics: [{ key, title, ref?, see?, ids: RegExp | (id) => bool }] tested in order on each step id without its work prefix (opt.strip,
+                 default /^[^.]+\./: 'ts3.p1.Vn' -> 'p1.Vn'); the first match takes the step; steps no topic takes go to a last topic
+                 'other' ('Other steps'); topics with no step are left out. Topic order = the order of topics.
+         res    the topic's result step: its governing test step (ok === false first, else the largest ratio), else its last step with a value
+         ratio  the largest ratio of its test steps (a test step whose value is a number without a unit: demand / capacity), NaN if none
+         cls    'ng' (a test fails or a ratio > 1), 'hi' (ratio >= opt.hi, default 0.9), 'ok', or '' (no test step); chip: the text of the status chip
+       summary(t, html) -> the one-line result of topic t: "label: sym = value unit" of its result step (KaTeX / built-in, as line())
+       groupsHTML(groups, o) -> HTML: an Expand all / Collapse all bar and one <details class="sg-t" data-sgk="key"> per topic (closed unless
+         o.open has its key) with the summary line and status chip; o.item(step) -> the HTML of one step (the page's own step rendering, so step
+         anchors such as id="st-<step id>" stay as they were); o.see(t) -> optional HTML after the topic title (a link to where a value is worked).
+       wire(root, o) (browser) -> the Expand all / Collapse all buttons inside root, and o.onToggle(key, open) when a topic opens or closes.
+       CSS: SharedSteps.groupCss (class prefix sg-), for the page to add once. On print every topic is opened (beforeprint) and closed again. */
+  const fin = v => typeof v === 'number' && isFinite(v);
+  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
+  function group(steps, topics, opt) {
+    opt = opt || {}; const strip = opt.strip || /^[^.]+\./, hi = opt.hi != null ? opt.hi : 0.9;
+    const T = (topics || []).map(t => ({ key: t.key, title: t.title, ref: t.ref || '', see: t.see || '', test: t.ids, steps: [] })), other = { key: 'other', title: 'Other steps', ref: '', see: '', steps: [] };
+    (steps || []).forEach(s => { const id = String(s.id).replace(strip, ''), t = T.find(q => (typeof q.test === 'function' ? q.test(id, s) : q.test.test(id))); (t || other).steps.push(s); });
+    return T.concat([other]).filter(t => t.steps.length).map(t => {
+      const tests = t.steps.filter(s => s.ok !== undefined), rs = tests.filter(isRatio), ng = tests.find(s => s.ok === false);
+      const ratio = rs.length ? Math.max(...rs.map(s => (fin(s.value) ? s.value : Infinity))) : NaN;
+      const gov = ng || (rs.length ? rs.reduce((a, b) => ((fin(b.value) ? b.value : Infinity) > (fin(a.value) ? a.value : Infinity) ? b : a)) : tests[tests.length - 1]);
+      const res = gov || [...t.steps].reverse().find(s => s.value != null && s.value !== '') || t.steps[t.steps.length - 1];
+      const cls = !tests.length ? '' : ng || ratio > 1 + 1e-9 || Number.isNaN(ratio) && rs.length ? 'ng' : ratio >= hi ? 'hi' : 'ok';
+      const chip = !tests.length ? '' : rs.length ? (fin(ratio) ? fmt(ratio, 3) : '∞') + (ng ? ' NG' : '') : ng ? 'NG' : 'OK';
+      return { key: t.key, title: t.title, ref: t.ref, see: t.see, steps: t.steps, res, ratio, cls, chip };
+    });
+  }
+  /* summary: inline notation (not display style), so the line stays one line high */
+  function summary(t, html) {
+    const s = t.res; if (!s) return '';
+    const R = html ? toHTML : toText, lab = html ? esc(s.label) : s.label, sym = s.sym ? R(s.sym) : '';
+    if (isRatio(s)) return `${lab}${sym ? ': ' + sym : ''}`;
+    const v = typeof s.value === 'number' ? R(fmt(s.value, s.d) + (s.unit ? (html ? '\\;' : ' ') + (html ? unitTeX(s.unit) : s.unit) : '')) : s.value == null ? '' : html ? esc(String(s.value)) : String(s.value);
+    return `${lab}${v ? ': ' + (sym && typeof s.value === 'number' ? sym + ' = ' : '') + v : ''}`;
+  }
+  const attr = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function groupsHTML(groups, o) {
+    o = o || {}; const open = o.open || new Set();
+    return `<div class="sg"><div class="sg-bar"><span class="sg-hint">${groups.length} topics; click a topic for its worked steps.</span><button type="button" data-sgall="1">Expand all</button><button type="button" data-sgall="0">Collapse all</button></div>`
+      + groups.map((t, k) => `<details class="sg-t${t.cls ? ' sg-' + t.cls : ''}" data-sgk="${attr(t.key)}"${open.has(t.key) ? ' open' : ''}><summary><span class="sg-n">${k + 1}</span><span class="sg-h"><span class="sg-ttl">${esc(t.title)}</span>${t.ref ? `<span class="sg-ref">${esc(t.ref)}</span>` : ''}${o.see ? o.see(t) || '' : ''}<span class="sg-sum">${summary(t, true)}</span></span>${t.chip ? `<span class="sg-chip">${esc(t.chip)}</span>` : ''}</summary>`
+        + `<ol class="steps">${t.steps.map(s => (o.item ? o.item(s) : `<li>${esc(s.label)}: ${line(s, true)}</li>`)).join('')}</ol></details>`).join('') + '</div>';
+  }
+  function wire(root, o) {
+    o = o || {}; if (!root || !root.addEventListener) return;
+    root.querySelectorAll('[data-sgall]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); const on = b.dataset.sgall === '1', box = b.closest('.sg') || root;
+      box.querySelectorAll('details.sg-t').forEach(d => { if (d.open !== on) d.open = on; }); }));
+    root.querySelectorAll('details.sg-t').forEach(d => d.addEventListener('toggle', () => { if (o.onToggle) o.onToggle(d.dataset.sgk, d.open); }));
+  }
+  const groupCss = `.sg-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0 6px;} .sg-bar .sg-hint{flex:1;font-size:8.5pt;color:#64748b;}
+    .sg-bar button{font-size:9pt;padding:2px 10px;}
+    details.sg-t{border:1px solid #d6dde6;border-radius:4px;margin:4px 0;background:#fff;} details.sg-t>summary{display:flex;gap:8px;align-items:flex-start;cursor:pointer;padding:5px 8px;list-style:none;}
+    details.sg-t>summary::-webkit-details-marker{display:none;} details.sg-t>summary::before{content:'\\25B8';color:#64748b;flex:none;} details.sg-t[open]>summary::before{content:'\\25BE';}
+    details.sg-t[open]>summary{border-bottom:1px solid #e5e9ef;background:#f6f8fb;} details.sg-t>ol.steps{margin:0;padding:2px 10px 6px;}
+    .sg-n{flex:none;font-weight:600;color:#475569;min-width:1.2em;} .sg-h{flex:1;min-width:0;} .sg-ttl{font-weight:600;} .sg-ref{font-size:8pt;color:#64748b;margin-left:6px;} .sg-see{font-size:8.5pt;margin-left:6px;}
+    .sg-sum{display:block;font-size:9pt;color:#334155;overflow-wrap:anywhere;} .sg-sum .katex{font-size:1em;}
+    .sg-chip{flex:none;font:600 9pt/1.4 system-ui,sans-serif;padding:1px 8px;border-radius:9px;background:#e2e8f0;color:#1e293b;white-space:nowrap;}
+    .sg-ok>summary .sg-chip{background:#1a8a3a;color:#fff;} .sg-hi>summary .sg-chip{background:#d9a400;color:#1e293b;} .sg-ng>summary .sg-chip{background:#c62828;color:#fff;}
+    @media print{details.sg-t{break-inside:auto;} .sg-bar{display:none;}}`;
+  // printing (Ctrl+P on a tab): every topic open, then back as it was
+  if (typeof window !== 'undefined' && window.addEventListener && typeof document !== 'undefined') {
+    let opened = [];
+    window.addEventListener('beforeprint', () => { opened = Array.from(document.querySelectorAll('details.sg-t:not([open])')); opened.forEach(d => { d.open = true; }); });
+    window.addEventListener('afterprint', () => { opened.forEach(d => { d.open = false; }); opened = []; });
+  }
+
+  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, groupCss };
 })();

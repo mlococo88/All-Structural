@@ -21,7 +21,7 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: null, view: 'pan' };
+  const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: null, view: 'pan', open: new Set() };   // open: the worked-step topics open (kept across selections)
   /* the demand source (added 2026-10-30, report wiring PR): the one chosen (S.src), else the default: this project's analysis when the
      project is complete (SBDAnalysis.ready), else the example */
   const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
@@ -159,7 +159,7 @@
     if (document.getElementById('fx-css') && document.getElementById('sh-css')) return;
     const st = document.createElement('style'); st.id = 'sh-css';
     st.textContent = `.fx-ok{background:#e7f4ec;} .fx-hi{background:#fdf3d8;} .fx-ng{background:#fbe1dd;font-weight:600;} tr.fx-gov td:first-child{box-shadow:inset 4px 0 0 #b23a2a;}
-      .fx-list{max-height:300px;overflow:auto;} .fx-list tr{cursor:pointer;} .fx-na{color:#64748b;font-style:italic;} h4.sub{margin:8px 0 2px;font-size:10pt;}`;
+      .fx-list{max-height:300px;overflow:auto;} .fx-list tr{cursor:pointer;} .fx-na{color:#64748b;font-style:italic;} h4.sub{margin:8px 0 2px;font-size:10pt;}` + window.SharedSteps.groupCss;
     document.head.appendChild(st);
   }
   function render(host, ctx) {
@@ -183,7 +183,12 @@
         S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { S.pl = null; S.plName = ''; alert('Cannot read this file: ' + er.message); } redraw(); };
       rd.readAsText(f); });
     host.querySelectorAll('.fx-list').forEach(el => el.addEventListener('click', e => { const tr = e.target.closest('[data-sh]'); if (!tr) return; const [k, i] = tr.dataset.sh.split(':'); S.sel = { k, i: +i }; redraw(); }));
-    host.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const [k, i, id] = a.dataset.go.split(':'); S.sel = { k, i: +i }; redraw(); const t = host.querySelector('#st-' + (id || '').replace(/[^\w.-]/g, '')); if (t) t.scrollIntoView({ block: 'center' }); }));
+    // a link to a step opens its topic (the topics start closed)
+    const show = id => { const t = host.querySelector('#st-' + String(id || '').replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (!t) return; const d = t.closest('details.sg-t'); if (d) { d.open = true; S.open.add(d.dataset.sgk); } t.scrollIntoView({ block: 'center' }); };
+    host.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const [k, i, id] = a.dataset.go.split(':'); S.sel = { k, i: +i }; redraw(); show(id); }));
+    host.querySelectorAll('[data-step]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.step); }));
+    host.querySelectorAll('[data-gotab]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${a.dataset.gotab}"]`); if (b) b.click(); }));
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) S.open.add(k); else S.open.delete(k); } });
     if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.shear(host, ctx, S.R, S.sel, v => { S.sel = v; redraw(); });   // the graphics (ui/tabgraphics-b.js): a click selects the same row
   }
   function defaultSel(R) {
@@ -194,7 +199,45 @@
     if (R.bsGov) c.push({ k: 'bs', i: R.bsGov.i, r: R.bsGov.it.r });
     return c.reduce((a, b) => (!a || b.r > a.r ? b : a), null) || { k: 'pan', i: 0 };
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepsHtml = list => `<ol class="steps">${list.map(s => stepLi(s, list)).join('')}</ol>`;
+  /* one worked step; a "§id" in its note (engine/shear.js "See §p1.Vn.") becomes a link to that step of the same list (CLAUDE.md §6) */
+  const stepLi = (s, list) => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>`;
+  const noteHtml = (t, list) => esc(t).replace(/§([A-Za-z](?:[\w.]*\w)?)/g, (m, id) => { const q = (list || []).find(x => x.id === id || String(x.id).endsWith('.' + id)); return q ? `<a class="wk" href="#st-${esc(q.id)}" data-step="${esc(q.id)}">§${esc(id)}</a>` : m; });
+
+  /* ---------- topics of the worked steps (presentation spec A, trial on this tab, 2026-10-31) ----------
+     SharedSteps.group sorts each list into topics in the standard order (inputs and geometry, section, demands, one topic per AASHTO
+     sub-article, resistance, check); ids are matched without their work prefix (ts3., bs0., bsTA., pn., sh.). Presentation only: the steps,
+     ids and values are the engines'. The Report tab uses the same topics (report/builders.js). */
+  const A = '10th Ed. Art. ';
+  const TOPICS = {
+    ts: [{ key: 'geo', title: 'Projecting width of the plate', ref: A + '6.10.11.1.2', ids: /^(bmin|bmax|bf4)$/ },
+      { key: 'dem', title: 'Demands: Strength I shear at the stiffener', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Vu)/ },
+      { key: 'lim', title: 'Panel spacing limits', ref: A + '6.10.9.1', ids: /^p[12]\.lim$/ },
+      { key: 'pan', title: 'Web shear resistance of the two adjacent panels', ref: A + '6.10.9.3', ids: /^p[12]\./ },
+      { key: 'It', title: 'Moment of inertia of the stiffener', ref: A + '6.10.11.1.3', ids: /^(It|J|It1|Fcrs|rhot|It2|rhow|Ireq)$/ },
+      { key: 'weld', title: 'Welds and weld cutoff', ref: A + '6.10.11.1.1, 6.13.3.4, 6.13.3.2.4b', ids: /^(gap|wW|wF|cp)$/ },
+      { key: 'fat', title: 'Fatigue at the stiffener weld toes', ref: A + '6.6.1.2', ids: /^fat$/ },
+      { key: 'own', title: 'Owner requirements', ref: '', ids: /^own$/ }],
+    bs: [{ key: 'geo', title: 'Projecting width of the plates', ref: A + '6.10.11.2.2', ids: /^b$/ },
+      { key: 'det', title: 'Plate width and flange connection', ref: A + '6.10.11.2.1', ids: /^(bw|conn)$/ },
+      { key: 'dem', title: 'Demands: Strength I reaction', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Ru$)/ },
+      { key: 'brg', title: 'Bearing resistance', ref: A + '6.10.11.2.3', ids: /^(bEff|Apn|Rsb|Rsb\.ok)$/ },
+      { key: 'sec', title: 'Effective column section', ref: A + '6.10.11.2.4', ids: /^(strip|sEnd|Lw|A|I|rs)$/ },
+      { key: 'col', title: 'Axial resistance of the effective column', ref: A + '6.10.11.2.4, 6.9.4.1.1, 6.9.2.1', ids: /^(sl|Po|Pe|Pn|Pr|Pr\.ok)$/ },
+      { key: 'weld', title: 'Stiffener-to-web welds', ref: A + '6.13.3.2.4b, 6.13.3.4', ids: /^(weld|weld\.ok|wmin)$/ },
+      { key: 'own', title: 'Owner requirements', ref: '', ids: /^own$/ }],
+    pan: [{ key: 'geo', title: 'Panel geometry', ref: '', ids: /^d$/ },
+      { key: 'dem', title: 'Demand: Strength I shear in the panel', ref: A + '6.10.9.3.1', ids: /^Vu$/ },
+      { key: 'res', title: 'Nominal shear resistance', ref: A + '6.10.9.2, 6.10.9.3', ids: /^v\./ },
+      { key: 'chk', title: 'Check', ref: A + '6.10.9.1', ids: /^ok$/ }],
+    loc: [{ key: 'sec', title: 'Section: flange areas', ref: '', ids: /^flgA$/ },
+      { key: 'dem', title: 'Demands: Strength I shear', ref: 'Tables 3.4.1-1, -2', ids: /^(Vu|VuPan|VuP)$/ },
+      { key: 'res', title: 'Nominal shear resistance of the panel', ref: A + '6.10.9.2, 6.10.9.3', ids: /^pan\./ },
+      { key: 'chk', title: 'Check, Strength I', ref: A + '6.10.9.1', ids: /^ok$/ },
+      { key: 'cn', title: 'Deck placement (constructibility)', ref: A + '6.10.3.3', ids: /^(VuC|okC)$/ },
+      { key: 'fat', title: 'Special fatigue requirement for webs', ref: A + '6.10.5.3', ids: /^(VuF|okF)$/ }]
+  };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind]);
   const go = (k, i, id, txt) => `<a class="wk" href="#st-${esc(id)}" data-go="${k}:${i}:${esc(id)}">${txt || '§'}</a>`;
   function results(R) {
     let h = '';
@@ -209,7 +252,7 @@
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
       ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
       ${R.TS && R.TS.errors && R.TS.errors.length ? `<div class="alert err">Transverse stiffeners: ${R.TS.errors.map(esc).join('; ')}</div>` : ''}${R.BS.errors && R.BS.errors.length ? `<div class="alert err">Bearing stiffeners: ${R.BS.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
-    h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: graphics</div><div class="secBody"><div data-gfxb="shear"></div><div data-gfxb="shear-detail"></div></div></section>`;   // drawn by ui/tabgraphics-b.js (engine/tabgraphics-b.js) from the results below
+    h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: graphics</div><div class="secBody"><div data-gfxb="shear"></div><div data-gfxb="shear-detail"></div><div data-gfxb="shear-bearing"></div></div></section>`;   // drawn by ui/tabgraphics-b.js (engine/tabgraphics-b.js) from the results below
     // panels
     h += `<section class="sec"><div class="secHead">Web panels of the layout (G${R.gm.gNo}, D = ${fmt(R.D, 2)} in, F<sub>yw</sub> = ${fmt(R.Fyw, 0)} ksi)</div><div class="secBody">
       <p class="note">${R.bays.length} bays, ${R.panels.rows.length} panels. V<sub>u</sub>: the largest Strength I shear in the panel (6.10.9.3.1)${R.gm.dem ? '' : ' (needs a hand-off file)'}; t<sub>w</sub> the thinnest web and 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) the largest in the panel.</p>
@@ -240,9 +283,12 @@
     else if (sel.k === 'loc' && R.stations[sel.i]) { const r = R.stations[sel.i]; title = r.name; list = r.steps; }
     else if (sel.k === 'ts' && R.TS && R.TS.rows[sel.i]) { const r = R.TS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = window.SBDStiffeners.transverseSteps(R.TS, r); }
     else if (sel.k === 'bs' && R.BS.rows[sel.i]) { const r = R.BS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = window.SBDStiffeners.bearingSteps(R.BS, r); }
-    if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024); E = 29,000 ksi.</p>${stepsHtml(list)}</div></section>`;
+    if (list.length) { const SS = window.SharedSteps, an = R.AR ? ' <a href="#" class="sg-see" data-gotab="an">worked on the Analysis tab</a>' : '';
+      // "see" links (CLAUDE.md §6): the shears and reactions of the demand topics are worked on the Analysis tab when the analysis is the source
+      h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above, or a location on the graphic, to show its work. AASHTO LRFD 10th Ed. (2024); E = 29,000 ksi. Topics in the order of the check: geometry, demands, intermediate values by sub-article, resistance, ratio.</p>
+        ${SS.groupsHTML(groups(sel.k, list), { open: S.open, item: s => stepLi(s, list), see: t => (t.key === 'dem' && (sel.k === 'ts' || sel.k === 'bs' || sel.k === 'loc') ? an : '') })}</div></section>`; }
     return h;
   }
 
-  window.SBDShearUI = { fromAnalysis, ensure, inputs, onClick, render, build };
+  window.SBDShearUI = { fromAnalysis, ensure, inputs, onClick, render, build, TOPICS, groups };
 })();

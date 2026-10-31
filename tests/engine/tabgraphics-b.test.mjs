@@ -40,7 +40,14 @@ function shearChecks(P, R, name) {
   ['pan', 'loc'].forEach(k => assert.equal(g.regions.filter(r => r.k === k).length, k === 'pan' ? R.panels.rows.length : R.stations.length, `${name}: ${k} regions`));
   assert.equal(g.regions.filter(r => r.k === 'bs').length, R.BS.rows.length); assert.equal(g.regions.filter(r => r.k === 'ts').length, R.TS.rows.filter((_, i) => num(G._internal.tsStations(R)[i])).length);
   const d = G.shearDetail(R, P, {}); sane(d, ['GRDR-STIF', 'DIMS', 'ANNO-TEXT'], `${name} shearDetail`);
-  const d2 = G.shearDetail(R, P, { ts: 'B', bs: 'B' }); sane(d2, ['GRDR-STIF'], `${name} shearDetail B`);
+  const d2 = G.shearDetail(R, P, { ts: 'B' }); sane(d2, ['GRDR-STIF'], `${name} shearDetail B`);
+  // the stiffener details (2026-10-31): every transverse row and every bearing draws; the panels and plates are solid fills on the ratio layers, no hatching
+  R.TS.rows.forEach((r, i) => { if (i % 9 && i !== R.TS.rows.length - 1) return; const di = G.shearDetail(R, P, { i }); sane(di, ['GRDR-STIF', 'DIMS', 'ANNO-TEXT'], `${name} shearDetail ${i}`);
+    assert.ok(di.D.E.some(e => e.t === 'SOLID' && /RATIO-/.test(e.l)), `${name}: TS${i + 1} panels filled`); });
+  R.BS.rows.forEach((r, i) => { const b = G.shearBearing(R, P, { i }); sane(b, ['GRDR-STIF', 'DIMS', 'ANNO-TEXT', 'BRNG'], `${name} shearBearing ${i}`);
+    const cl = { ok: 'S-RATIO-OK', hi: 'S-RATIO-WARN', ng: 'S-RATIO-NG' }[G.ratioClass(r.Ru / r.Pr)]; if (cl) assert.ok(b.D.E.some(e => e.t === 'SOLID' && e.l === cl), `${name}: BS${i + 1} effective column on ${cl}`); });
+  // the elevation: each panel run is a solid fill; nothing is hatched (no 45 degree lines on the ratio layers)
+  if (R.gm.dem) { assert.ok(g.D.E.some(e => e.t === 'SOLID' && /RATIO-/.test(e.l)), `${name}: solid fills`); assert.ok(!g.D.E.some(e => e.t === 'LINE' && /RATIO-/.test(e.l) && Math.abs(Math.abs(e.pts[1][0] - e.pts[0][0]) - Math.abs(e.pts[1][1] - e.pts[0][1])) < 1e-6 && e.pts[1][0] !== e.pts[0][0]), `${name}: no hatching`); }
   assert.equal(JSON.stringify(R), before, `${name}: the shear result is not changed`);
 }
 function fatChecks(P, R, name) {

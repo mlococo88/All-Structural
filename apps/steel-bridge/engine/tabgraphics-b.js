@@ -11,7 +11,8 @@
    text heights are generous (about 1/70 of the length) so that the drawing reads at fit.
 
    API (each takes the tab's result R and the project P; see each function):
-     shear(R, P, opt), shearDetail(R, P, opt)        Shear & stiffeners: panels coloured by shear ratio, stiffener layout; stiffener sketches
+     shear(R, P, opt), shearDetail(R, P, opt),       Shear & stiffeners: panels filled (solid) by shear ratio, stiffener layout and spacing; the transverse
+       shearBearing(R, P, opt)                         stiffener at a location (panels to scale, plan section) and the bearing stiffener (section, effective column)
      fatigue(R, P, opt), fatigueChart(R, P, opt)     Fatigue & studs: details coloured by FA1, stud zones; Δf vs (ΔF)n along the girder
      crossframe(B, P, opt)                           Cross-frames: X / K elevation sketch, members labelled, governing group highlighted
      welds(B, P, opt), weldDetail(B, P, opt)         Welds: weld locations on the elevation coloured by ratio; fillet weld size detail
@@ -50,6 +51,9 @@
       if (bx - ax > 1e-6) D.line(l, ax, ay, bx, by);
     }
   }
+  /* ratioSolid: the ratio colour of a rectangle as an outline and a solid fill (SharedDxf solid) on the layer of its class (Shear & stiffeners, 2026-10-31: the
+     engineer found the hatching confusing; the preview draws solids translucent behind every line and text) */
+  function ratioSolid(D, L, r, x0, y0, x1, y1) { const l = L[rcls(r)]; D.rect(l, x0, y0, x1, y1); if (rcls(r) !== 'na') D.solid(l, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]); return l; }
   /* the ratio colour of a rectangle: outline and hatch on the layer of its class */
   function ratioFill(D, L, r, x0, y0, x1, y1, sp) { const l = L[rcls(r)]; D.rect(l, x0, y0, x1, y1); if (rcls(r) !== 'na') hatch(D, l, x0, y0, x1, y1, sp); return l; }
   /* text that fits: horizontal when the width allows, else turned 90°, else skipped */
@@ -66,7 +70,10 @@
   /* the legend row: swatch and text per item, from x, or ending at o.right (the girder's end), so that it never runs past the drawing; returns its width */
   const legend = (D, L, x, y, h, items, o) => { const w = items.map(([, txt]) => 2 * h + TW(txt, h * 0.85, h) + 1.6 * h), tot = w.reduce((a, b) => a + b, 0) - 1.6 * h; let xx = o && o.right != null ? o.right - tot : x;
     items.forEach(([lay, txt, shape], i) => { if (shape === 'circle') D.circle(lay, xx + 0.8 * h, y + 0.5 * h, 0.6 * h); else if (shape === 'diamond') D.pline(lay, [[xx + 0.8 * h, y + 1.2 * h], [xx + 1.5 * h, y + 0.5 * h], [xx + 0.8 * h, y - 0.2 * h], [xx + 0.1 * h, y + 0.5 * h]], true);
-      else { D.rect(lay, xx, y - 0.1 * h, xx + 1.6 * h, y + 1.1 * h); hatch(D, lay, xx, y - 0.1 * h, xx + 1.6 * h, y + 1.1 * h, 0.5 * h); } D.text(L.t, xx + 2 * h, y, h * 0.85, txt); xx += w[i]; }); return tot; };
+      else if (shape === 'line') D.line(lay, xx + 0.8 * h, y - 0.2 * h, xx + 0.8 * h, y + 1.2 * h);
+      else if (shape === 'dash') [0, 1, 2].forEach(k => D.line(lay, xx + 0.8 * h, y - 0.2 * h + k * 0.5 * h, xx + 0.8 * h, y + 0.1 * h + k * 0.5 * h));
+      else if (shape === 'pair') [0.5, 1.1].forEach(u => D.line(lay, xx + u * h, y - 0.2 * h, xx + u * h, y + 1.2 * h));
+      else { D.rect(lay, xx, y - 0.1 * h, xx + 1.6 * h, y + 1.1 * h); if (o && o.solid) D.solid(lay, [[xx, y - 0.1 * h], [xx + 1.6 * h, y - 0.1 * h], [xx + 1.6 * h, y + 1.1 * h], [xx, y + 1.1 * h]]); else hatch(D, lay, xx, y - 0.1 * h, xx + 1.6 * h, y + 1.1 * h, 0.5 * h); } D.text(L.t, xx + 2 * h, y, h * 0.85, txt); xx += w[i]; }); return tot; };
   const RLEG = L => [[L.ok, 'RATIO < 0.90'], [L.hi, '0.90 TO 1.00'], [L.ng, 'RATIO > 1.00 OR NG']];
   const MLEG = L => [[L.gov, 'GOVERNING ITEM', 'circle'], [L.sel, 'SELECTED ITEM', 'circle']];   // the two kinds of marker the graphics draw besides the colour bands
   const base = (id, title, D, i0, regions, note) => ({ id, title, D, i0, i1: D.mark(), regions: regions || [], note: note || '' });
@@ -103,51 +110,63 @@
     if (R.gm.dem && SB) { const pans = R.bays.flatMap(SB.bayPanels); for (let j = 0; j < pans.length - 1; j++) if (Math.abs(pans[j + 1].p - pans[j].q) <= 0.01) out.push(pans[j].q); if (out.length === R.TS.rows.length) return out; }
     return R.TS.rows.map(r => { const m = /at ([\d.]+) ft/.exec(r.name || ''); return m ? +m[1] : NaN; });
   }
-  /* shear(R, P, opt): the girder elevation with the stiffener layout, each web panel coloured by its shear ratio V_u/(φ_v V_n) (R.panels.rows[i].r),
-     bearing stiffeners, a strip with the ratio of every station, and the governing items marked. Clicks: pan, loc, ts, bs. opt.gi: the girder; opt.sel: the
-     tab's selection { k, i }. */
+  /* shear(R, P, opt): the girder elevation with the stiffener layout, each web panel filled (solid) in the colour of its shear ratio V_u/(φ_v V_n)
+     (R.panels.rows[i].r), the stiffeners by kind (connection plates solid, intermediate stiffeners dashed, bearing stiffeners double, as GirderDetail's
+     elevation sheet dxfElev), their spacing dimensioned above the girder where the text fits (n @ d_o, d_o/D), a strip with the ratio of every station,
+     and the governing items flagged. Clicks: pan, loc, ts, bs. opt.gi: the girder; opt.sel: the tab's selection { k, i }.
+     2026-10-31 (stiffener tab PR): solid fills instead of hatching; spacing dimensions and stiffener tags; the bearing labels left the web. */
   function shear(R, P, opt) {
     opt = opt || {}; const gi0 = opt.gi != null ? opt.gi : Math.max(0, (R.gm.gNo || 1) - 1), { D, L, G, F } = frame(P, { gi: Math.min(gi0, P.girders.length - 1) }), h = F.h, X = F.X, reg = [], sel = opt.sel || {};
-    const has = R.gm.dem, rows = R.panels.rows, gov = R.panels.gov;
-    // the panels: colour by ratio (or the plain panel width and d_o where there is no shear envelope); values on the notable ones
-    // the colour fill is drawn once per run of neighbouring panels of the same colour class and web depth (one outline and a light hatch, not an outline and hatch per panel: many narrow
-    // panels made a dense wall of lines behind the web text); the panels keep their own text, selection and click regions below
-    if (has) { const dep = q => Math.min(F.Dw(q.p + 1e-6), F.Dw(q.q - 1e-6)); let run = null; const flush = () => { if (run) ratioFill(D, L, run.r, X(run.p), F.yB, X(run.q), F.yB + run.d, Math.min((X(run.q) - X(run.p) + run.d) / 4, 1.5 * run.d)); run = null; };
+    const has = R.gm.dem, rows = R.panels.rows, gov = R.panels.gov, hid = D.ltype('HIDDEN');
+    // the panels: one solid fill per run of neighbouring panels of the same colour class and web depth (no fill where there is no shear envelope)
+    if (has) { const dep = q => Math.min(F.Dw(q.p + 1e-6), F.Dw(q.q - 1e-6)); let run = null; const flush = () => { if (run) ratioSolid(D, L, run.r, X(run.p), F.yB, X(run.q), F.yB + run.d); run = null; };
       rows.forEach(q => { const d = dep(q), c = rcls(q.r); if (run && run.c === c && Math.abs(run.d - d) < 1e-6 && Math.abs(run.q - q.p) < 1e-6) run.q = q.q; else { flush(); run = { p: q.p, q: q.q, d, c, r: q.r }; } }); flush(); }
     rows.forEach(q => { const a = X(q.p), b = X(q.q), d = Math.min(F.Dw(q.p + 1e-6), F.Dw(q.q - 1e-6)), r = has ? q.r : NaN, hh = h * Math.min(0.9, (b - a) * 0.5 / (h * 1.2));
       const show = has && (rcls(r) !== 'ok' || q === gov);
       if (show && hh > 0.35 * h) fitText(D, L.t, (a + b) / 2, F.yB + d * 0.2, b - a, d * 0.4, f2(r), hh);
       if (sel.k === 'pan' && sel.i === q.i) D.rect(L.sel, a - 0.12 * h, F.yB - 0.12 * h, b + 0.12 * h, F.yB + d + 0.12 * h);
-      reg.push({ k: 'pan', i: q.i, x0: a, y0: F.yB, x1: b, y1: F.yB + d, lab: `PANEL ${f2(q.p)}-${f2(q.q)} FT${q.end ? ' (END)' : ''}, d_o = ${f2(q.d)} IN${has ? `, V_u/PHI V_n = ${f3(q.r)}` : ''}` }); });
-    // the governing marks (panel, stiffener, bearing stiffener) are flags in rows above the stiffener marks, each on a leader at its x (see stackRows)
-    const top0 = Math.max(F.yTop + 3 * h, F.yB + Math.max(...G.segs.map(q => q.D * F.v)) + 5.6 * h), gl = []; let top = top0;
-    if (has && gov) { const a = X(gov.p), b = X(gov.q), xm = (gov.p + gov.q) / 2; D.rect(L.gov, a + 0.2 * h, F.yB + 0.2 * h, b - 0.2 * h, F.yB + F.Dw(xm) - 0.2 * h); gl.push({ x: (a + b) / 2, y: F.yB + F.Dw(xm) + F.tT(xm) + 0.2 * h, txt: `PANEL GOVERNS: ${f3(gov.r)}` }); }
-    // stiffeners: connection plates (Type B) solid, intermediate stiffeners (Type A) hidden, as the Drawings elevation
-    const tx = tsStations(R), hid = D.ltype('HIDDEN');
-    R.TS && R.TS.rows.forEach((r, i) => { const x = tx[i]; if (!fin(x)) return; const d = F.Dw(x); D.line(L.st, X(x), F.yB, X(x), F.yB + d, r.type === 'B' ? undefined : hid);
-      if (sel.k === 'ts' && sel.i === i) { D.circle(L.sel, X(x), F.yB + d + 1.6 * h, 0.8 * h); D.text(L.sel, X(x) + 1.1 * h, F.yB + d + 1.2 * h, h * 0.8, `${r.type === 'B' ? 'CP' : 'TS'}${i + 1}`, 0); }
-      if (R.tsGov && R.tsGov.i === i) { D.circle(L.gov, X(x), F.yB + d + 1.6 * h, 0.8 * h); gl.push({ x: X(x), y: F.yB + d + 2.4 * h, txt: `${r.type === 'B' ? 'CP' : 'TS'} ${f3(R.tsGov.it.r)}` }); }
-      reg.push({ k: 'ts', i, x0: X(x) - 0.2 * h, y0: F.yB, x1: X(x) + 0.2 * h, y1: F.yB + d + (R.tsGov && R.tsGov.i === i || sel.k === 'ts' && sel.i === i ? 2.4 : 0) * h, lab: up(r.name) }); });   // the stiffener line is the click target   // the mark above the web (a click on the web is the panel)
-    R.BS && R.BS.rows.forEach((r, k) => { const x = G.sup[k]; if (x == null) return; const d = F.Dw(Math.min(x, G.L - 1e-6)), tp = 0.75, bsx = X(x) + (k === 0 ? 1.2 * h : k === G.sup.length - 1 ? -1.2 * h : 0);
-      [-1, 1].forEach(sg => D.line(L.st, X(x) + sg * tp, F.yB, X(x) + sg * tp, F.yB + d)); D.text(L.t, bsx, F.yB + d * 0.5, h * 0.75, `BS${k + 1}`, k === 0 ? 0 : k === G.sup.length - 1 ? 2 : 1, 90);
-      if (R.bsGov && R.bsGov.i === k) { D.circle(L.gov, X(x), F.yB + d + 3.4 * h, 0.8 * h); gl.push({ x: X(x), y: F.yB + d + 4.2 * h, txt: `BS ${f3(R.bsGov.it.r)}` }); }
-      if (sel.k === 'bs' && sel.i === k) { D.circle(L.sel, X(x), F.yB + d + 3.4 * h, 0.8 * h); D.text(L.sel, X(x) + 1.1 * h, F.yB + d + 3.0 * h, h * 0.8, `BS${k + 1}`, 0); }
-      reg.push({ k: 'bs', i: k, x0: X(x) - 0.45 * h, y0: F.yB, x1: X(x) + 0.45 * h, y1: F.yB + d, lab: up(r.name) }); });
-    top += stackRows(D, L.gov, gl, top, h, 0.9 * h);
+      reg.push({ k: 'pan', i: q.i, x0: a, y0: F.yB, x1: b, y1: F.yB + d, lab: `PANEL ${f2(q.p)}-${f2(q.q)} FT${q.end ? ' (END)' : ''}, d_o = ${f2(q.d)} IN = ${f2(q.d / R.D)}D${has ? `, V_u/PHI V_n = ${f3(q.r)}` : ''}` }); });
+    // stiffeners: connection plates (Type B) solid, intermediate stiffeners (Type A) dashed; bearing stiffeners a pair of lines at each support
+    const tx = tsStations(R);
+    R.TS && R.TS.rows.forEach((r, i) => { const x = tx[i]; if (!fin(x)) return; const d = F.Dw(x); D.line(L.st, X(x), F.yB, X(x), F.yB + d, r.type === 'B' ? undefined : hid); });
+    R.BS && R.BS.rows.forEach((r, k) => { const x = G.sup[k]; if (x == null) return; const d = F.Dw(Math.min(x, G.L - 1e-6)); [-1, 1].forEach(sg => D.line(L.st, X(x) + sg * 0.35 * h, F.yB, X(x) + sg * 0.35 * h, F.yB + d)); });
+    // above the girder, rows from the top of the elevation up: the spacing dimensions, the stiffener tags, the governing flags
+    let top = Math.max(F.yTop, F.yB + Math.max(...G.segs.map(q => q.D * F.v)) + 2.6 * h) + 2.4 * h;
+    // 1. spacing: the joints of the panels (supports and stiffeners) in runs of equal d_o; text n @ d_o (d_o/D) where it fits, staggered on two rows
+    { const xs = [...new Set(rows.flatMap(q => [q.p, q.q]).map(x => +x.toFixed(4)))].sort((a, b) => a - b), runs = [];
+      for (let j = 0; j < xs.length - 1;) { const dd = xs[j + 1] - xs[j]; let k = j + 1; while (k < xs.length - 1 && Math.abs((xs[k + 1] - xs[k]) - dd) < 1e-3) k++; runs.push({ a: xs[j], b: xs[k], n: k - j, d: dd }); j = k; }
+      const hh = 0.72 * h, ft = v => X_().fmtFtIn(v * 12), yr = top + 1.2 * h;
+      runs.forEach(q => { const room = (X(q.b) - X(q.a)) * 0.94;   // the text stays within its own run (the neighbours' extension lines are at its ends)
+        const tries = [`${q.n > 1 ? q.n + ' @ ' : ''}${ft(q.d)} (${f2(q.d * 12 / R.D)}D)`, `${q.n > 1 ? q.n + ' @ ' : ''}${ft(q.d)}`, `${q.n > 1 ? q.n + '@' : ''}${f2(q.d * 12 / R.D)}D`], txt = tries.find(t => TW(t, hh, h) <= room) || ' ';
+        D.dimH(L.d, X(q.a), X(q.b), yr, F.yTop + 0.4 * h, txt); });
+      top = yr + 1.8 * h; }
+    // 2. tags of the bearing stiffeners, the governing / selected stiffener and the governing panel: flags on leaders (SBDGraphics.stack rows)
+    const gl = [], yW = x => F.yB + F.Dw(Math.min(Math.max(x, 1e-6), G.L - 1e-6));
+    R.BS && R.BS.rows.forEach((r, k) => { const x = G.sup[k]; if (x == null) return; const isG = R.bsGov && R.bsGov.i === k, isS = sel.k === 'bs' && sel.i === k;
+      gl.push({ x: X(x), y: yW(x), txt: `BS${k + 1}${isG ? ` GOVERNS ${f3(R.bsGov.it.r)}` : ''}`, lay: isG ? L.gov : isS ? L.sel : L.t });
+      reg.push({ k: 'bs', i: k, x0: X(x) - 0.6 * h, y0: F.yB, x1: X(x) + 0.6 * h, y1: F.yB + F.Dw(Math.min(x, G.L - 1e-6)), lab: up(r.name) }); });
+    R.TS && R.TS.rows.forEach((r, i) => { const x = tx[i]; if (!fin(x)) return; const isG = R.tsGov && R.tsGov.i === i, isS = sel.k === 'ts' && sel.i === i, nm = `${r.type === 'B' ? 'CP' : 'TS'}${i + 1}`;
+      if (isG || isS) gl.push({ x: X(x), y: yW(x), txt: `${nm}${isG ? ` GOVERNS ${f3(R.tsGov.it.r)}` : ' SELECTED'}`, lay: isG ? L.gov : L.sel });
+      reg.push({ k: 'ts', i, x0: X(x) - 0.25 * h, y0: F.yB, x1: X(x) + 0.25 * h, y1: F.yB + F.Dw(x), lab: `${nm}: ${up(r.name)} (TYPE ${r.type})` }); });
+    if (has && gov) { const xm = (gov.p + gov.q) / 2; D.rect(L.gov, X(gov.p) + 0.2 * h, F.yB + 0.2 * h, X(gov.q) - 0.2 * h, F.yB + F.Dw(xm) - 0.2 * h); gl.push({ x: X(xm), y: yW(xm), txt: `PANEL GOVERNS ${f3(gov.r)}`, lay: L.gov }); }
+    gl.sort((a, b) => a.x - b.x); top += stackRows(D, L.t, gl, top, h, 0.8 * h);
     // the stations: a strip of cells coloured by each station's governing ratio (click: that station)
     const rowTop = F.alloc(10 * h), yS = rowTop - 3 * h, st = R.stations, xs = st.map(s => s.x);
     D.text(L.t, 0, rowTop - 0.6 * h, h * 0.8, 'STATIONS (GS11, GS16, GS18): GOVERNING RATIO AT EACH');
-    { let run = null; const flush = () => { if (run) { const l = L[run.c]; D.rect(l, X(run.a), yS, X(run.b), yS + 1.6 * h); if (run.c !== 'na') hatch(D, l, X(run.a), yS, X(run.b), yS + 1.6 * h, 1.2 * h); } run = null; };   // one cell per run of the same colour class
+    { let run = null; const flush = () => { if (run) { const l = L[run.c]; D.rect(l, X(run.a), yS, X(run.b), yS + 1.6 * h); if (run.c !== 'na') D.solid(l, [[X(run.a), yS], [X(run.b), yS], [X(run.b), yS + 1.6 * h], [X(run.a), yS + 1.6 * h]]); } run = null; };   // one cell per run of the same colour class
       st.forEach((s, i) => { const x = xs[i], a = Math.max(0, i ? (xs[i - 1] + x) / 2 : x - 0.5), b = Math.min(G.L, i < st.length - 1 ? (x + xs[i + 1]) / 2 : x + 0.5), c = rcls(s.gov ? s.gov.ratio : NaN); if (b <= a) return;
         if (run && run.c === c && Math.abs(run.b - a) < 1e-6) run.b = b; else { flush(); run = { a, b, c }; } }); flush(); }
-    st.forEach((s, i) => { const x = xs[i], a = i ? (xs[i - 1] + x) / 2 : x - 0.5, b = i < st.length - 1 ? (x + xs[i + 1]) / 2 : x + 0.5, r = s.gov ? s.gov.ratio : NaN, a1 = Math.max(0, a), b1 = Math.min(G.L, b);
+    st.forEach((s, i) => { const x = xs[i], a = i ? (xs[i - 1] + x) / 2 : x - 0.5, b = i < st.length - 1 ? (x + xs[i + 1]) / 2 : x + 0.5, a1 = Math.max(0, a), b1 = Math.min(G.L, b);
       if (b1 <= a1) return;
       if (sel.k === 'loc' && sel.i === i) D.rect(L.sel, X(a1) - 0.1 * h, yS - 0.3 * h, X(b1) + 0.1 * h, yS + 1.9 * h);
       reg.push({ k: 'loc', i, x0: X(a1), y0: yS - 0.3 * h, x1: X(b1), y1: yS + 1.9 * h, lab: `${up(s.name)}${s.gov ? `, ${s.gov.id} ${f3(s.gov.ratio)}` : ''}` }); });
     if (R.stGov) { const x = X(R.stGov.x != null ? R.stGov.x : xs[st.indexOf(R.stGov)]); D.line(L.gov, x, yS - 0.3 * h, x, yS - 2.2 * h); D.text(L.gov, x, yS - 4 * h, h * 0.8, `${R.stGov.gov.id} ${f3(R.stGov.gov.ratio)}`, 1); }
-    const yL = F.alloc(8.6 * h) - 2.4 * h; scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h); legend(D, L, 0, yL, h, RLEG(L), { right: X(G.L) }); legend(D, L, 0, yL - 3.8 * h, h, MLEG(L), { right: X(G.L) });
+    // legends: ratio colours (solid swatches), the stiffener kinds (line samples), the markers
+    const yL = F.alloc(12.4 * h) - 2.4 * h; scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h); legend(D, L, 0, yL, h, RLEG(L), { right: X(G.L), solid: true });
+    legend(D, L, 0, yL - 3.8 * h, h, [[L.st, 'CONNECTION PLATE (CP)', 'line'], [L.st, 'INTERMEDIATE STIFFENER (TS)', 'dash'], [L.st, 'BEARING STIFFENER (BS)', 'pair']], { right: X(G.L) });
+    legend(D, L, 0, yL - 7.6 * h, h, MLEG(L), { right: X(G.L) });
     F.yTop = top; const lab = (P.girders[gi0] || {}).label || `G${gi0 + 1}`;
-    F.title(`GIRDER ${lab}: SHEAR AND STIFFENER LAYOUT`, `WEB PANELS COLOURED BY V_u / (PHI_v V_n), 6.10.9; ${has ? '' : 'NO SHEAR ENVELOPE FROM THIS SOURCE (PANEL RESISTANCE ONLY); '}VERT. EXAG. x${F.v.toFixed(1)}; SOLID = CONNECTION PLATE, DASHED = INTERMEDIATE STIFFENER; MAGENTA = GOVERNS`);
+    F.title(`GIRDER ${lab}: SHEAR AND STIFFENER LAYOUT`, `WEB PANELS FILLED BY V_u / (PHI_v V_n), 6.10.9; ${has ? '' : 'NO SHEAR ENVELOPE FROM THIS SOURCE (PANEL RESISTANCE ONLY); '}STIFFENER SPACING ABOVE: n @ d_o (d_o/D) WHERE IT FITS; VERT. EXAG. x${F.v.toFixed(1)} (THE STIFFENER DETAILS BELOW ARE TO SCALE); CLICK A PANEL, STIFFENER OR BEARING FOR ITS WORK`);
     return base('shear', 'Shear and stiffener layout', D, 0, reg);
   }
 
@@ -159,61 +178,106 @@
     items.forEach((q, i) => { const yy = y0 + (dir || 1) * S.lv[i] * 1.5 * h; D.line(q.lay || lay, q.x, q.y, q.x, dir < 0 ? yy + 0.9 * h : yy + 0.9 * h); D.text(q.lay || lay, q.x + 0.3 * h, yy, hh, q.txt, 0); }); return S.n * 1.5 * h + 0.6 * h;
   }
   const stackRows = (D, lay, items, y0, h, hh) => stackDraw(D, lay, items, stackLv(items, h, hh), y0, h, hh, 1);
-  /* notes(D, l, x, y, txt, n, hh, j): the text wrapped to lines of at most n characters, stacked downward from y */
-  const notes = (D, l, x, y, txt, n, hh, j) => { window.SBDGraphics.wrap(txt, n).forEach((q, i) => D.text(l, x, y - i * 1.35 * hh, hh, q, j || 0)); };
+  /* notes(D, l, x, y, txt, n, hh, j): the text wrapped to lines of at most n characters, stacked downward from y; returns the y under the last line */
+  const notes = (D, l, x, y, txt, n, hh, j) => { const ls = window.SBDGraphics.wrap(txt, n); ls.forEach((q, i) => D.text(l, x, y - i * 1.35 * hh, hh, q, j || 0)); return y - ls.length * 1.35 * hh; };
   /* a zig-zag break mark across a width at height y */
   const brk = (D, l, x0, x1, y, h) => { const n = 6, pts = []; for (let i = 0; i <= n; i++) pts.push([x0 + (x1 - x0) * i / n, y + (i % 2 ? 0.5 : -0.5) * h * (i === 0 || i === n ? 0 : 1)]); D.pline(l, pts, false); };
+  /* a vertical break mark (zig-zag) along a height at x */
+  const brkV = (D, l, x, y0, y1, h) => { const n = 6, pts = []; for (let i = 0; i <= n; i++) pts.push([x + (i % 2 ? 0.5 : -0.5) * h * (i === 0 || i === n ? 0 : 1), y0 + (y1 - y0) * i / n]); D.pline(l, pts, false); };
   /* a fillet weld triangle (leg w) at the corner (x, y) opening toward (sx, sy) */
   const filletTri = (D, l, x, y, sx, sy, w) => D.pline(l, [[x, y], [x + sx * w, y], [x, y + sy * w]], true);
+  /* the largest ratio of a stiffener row's checks (as the tab's tables: the transverse row's largest check ratio; the bearing row's largest of R_u/(R_sb)_r, R_u/P_r, R_u/R_r) */
+  const tsRowRatio = (R, i) => { let m = NaN; const r = R.TS.rows[i]; (R.tsC || []).forEach(c => c.items.forEach(it => { if (it.loc.startsWith(`${r.name} (Type ${r.type})`) && fin(it.r) && !(m >= it.r)) m = it.r; })); return m; };
+  const bsRowRatio = r => Math.max(r.Ru / r.Rsb, r.Ru / r.Pr, r.Ru / r.Rweld);
+  const pick = (rows, fn, idx) => rows.reduce((b, r, i) => (idx(r, i) && (b < 0 || fn(i) > fn(b)) ? i : b), -1);
 
-  /* shearDetail(R, P, opt): the stiffener sketches of the stiffener inputs (P.stiffeners types) on the plates of the girder, in true inches with
-     breaks: row 1 a transverse stiffener / connection plate (plan section across the web, elevation of its ends), row 2 a bearing stiffener.
-     opt.ts / opt.bs: the type letters shown (default those of the governing items of R). */
+  /* shearDetail(R, P, opt): the transverse stiffener (or connection plate) at one location, after GirderDetail's stiffener drawings (tsElevSVG
+     "web panel elevation, to scale", the Drawings tab's stiffener plan): A the two web panels beside it in elevation TO SCALE (true inches: web,
+     flanges, the stiffener and its neighbours, d_o1 / d_o2 dimensioned with d_o/D, D, the weld cutoff g; each panel filled in the colour of its
+     shear ratio V_u/(φ_v V_n) of TS4), B a plan section through the plate (enlarged; sizes in true inches). opt.i: the row of R.TS (default: the
+     governing row, or with opt.ts a type letter, the row of that type with the largest ratio). 2026-10-31 (stiffener tab PR): replaced the
+     sketches "not to scale along the web". */
   function shearDetail(R, P, opt) {
-    opt = opt || {}; const st = P.stiffeners, { D, L } = newDrawing(2.4), h = D.h;
-    const tsT = opt.ts || (R.tsGov && R.TS.rows[R.tsGov.i] ? R.TS.rows[R.tsGov.i].type : 'A'), bsT = opt.bs || (R.bsGov && R.BS.rows[R.bsGov.i] ? R.BS.rows[R.bsGov.i].type : (R.BS.rows[0] || {}).type || 'A');
-    const T = st.transverse.types[tsT] || st.transverse.types.A, B = st.bearing.types[bsT] || st.bearing.types.A, Dw = R.D, z = R.gm.zAt(R.gm.sup[1] || 1);
-    const tw = z.tw, tf = z.topT, bf = z.topB, tfb = z.botT, bfb = z.botB, sides = +T.sides === 2 ? 2 : 1, bt = +T.bt || 6, tp = +T.tp || 0.5, w = +T.w || 0.25, gap = +T.gap || 0, cl = +T.c || 0, wf = +T.wf || 0;
-    const np = Math.max(1, Math.round(+B.np || 1)), sp = +B.sp || 0, bb = +B.bt || 7, bp = +B.tp || 0.75, bw = +B.w || 0.25, bc = +B.c || 0, hid = D.ltype('HIDDEN'), cen = D.ltype('CENTER');
-    const Y1 = 66, Y2 = 0, XA = 0, XB = 80, ttlT = (x0, y0, t) => { const ls = window.SBDGraphics.wrap(t, 32); ls.forEach((q, i) => D.text(L.t, x0, y0 + 24 + (ls.length - 1 - i) * 1.5 * h, h * 1.1, q)); };   // row bases (plan sections) and the columns
-    // ---- plan sections: web a horizontal bar, flange outline hidden, plates standing on the web faces
-    const plan = (x0, y0, fb, plates, ttl, lines) => {   // plates: [{ xc, w, t }] (x centre, thickness), bt = outstand
-      ttlT(x0, y0, ttl); const cx = x0 + 15, yc = y0 + 9;
-      D.rect(L.p, cx - 13, yc - tw / 2, cx + 13, yc + tw / 2); D.rect(L.p, cx - 13, yc - fb / 2, cx + 13, yc + fb / 2, hid); D.text(L.t, cx + 13.6, yc + fb / 2 - 1.2 * h, h * 0.8, 'FLANGE'); D.text(L.t, cx + 13.6, yc - 0.4 * h, h * 0.8, 'WEB');
-      D.line(L.c, cx, yc - fb / 2 - 2, cx, yc + fb / 2 + 2, cen); plates(cx, yc); { let yy = y0 - 7; lines.forEach(q0 => window.SBDGraphics.wrap(q0, 36).forEach(q => { D.text(L.t, x0, yy, h * 0.85, q); yy -= 1.4 * h; })); }; return { cx, yc };
-    };
-    plan(XA, Y1, bf, (cx, yc) => { [1, -1].slice(0, sides).forEach(sg => { const y0 = sg > 0 ? yc + tw / 2 : yc - tw / 2 - bt, y1 = sg > 0 ? yc + tw / 2 + bt : yc - tw / 2; D.rect(L.st, cx - tp / 2, y0, cx + tp / 2, y1);
-      [-1, 1].forEach(sx => filletTri(D, L.s, cx + sx * tp / 2, sg > 0 ? yc + tw / 2 : yc - tw / 2, sx, -sg, w)); });
-      const sg = 1; D.dimV(L.d, yc + tw / 2, yc + tw / 2 + bt, cx + 6, cx + tp / 2, `b_t = ${dIn(bt)}`); D.dimH(L.d, cx - tp / 2, cx + tp / 2, yc + tw / 2 + bt + 2.6, yc + tw / 2 + bt, `t_p = ${dIn(tp)}`); D.dimV(L.d, yc - tw / 2, yc + tw / 2, cx - 9, cx - 8, `t_w = ${dIn(tw)}`); },
-    `A  TRANSVERSE STIFFENER, TYPE ${tsT}: PLAN SECTION`, [`${sides === 2 ? 'PAIR OF PLATES, BOTH SIDES OF THE WEB' : 'PLATE ON ONE SIDE OF THE WEB'}`, `FILLET WELD TO WEB ${dIn(w)} (BOTH SIDES OF THE PLATE)`]);
-    plan(XA, Y2, bfb, (cx, yc) => { const grp = (np - 1) * sp; for (let q = 0; q < np; q++) { const xq = cx - grp / 2 + q * sp; [1, -1].forEach(sg => { D.rect(L.st, xq - bp / 2, sg > 0 ? yc + tw / 2 : yc - tw / 2 - bb, xq + bp / 2, sg > 0 ? yc + tw / 2 + bb : yc - tw / 2);
-      [-1, 1].forEach(sx => filletTri(D, L.s, xq + sx * bp / 2, sg > 0 ? yc + tw / 2 : yc - tw / 2, sx, -sg, bw)); }); }
-      D.dimV(L.d, yc + tw / 2, yc + tw / 2 + bb, cx + grp / 2 + 6, cx + grp / 2 + bp / 2, `b_t = ${dIn(bb)}`); D.dimH(L.d, cx + grp / 2 - bp / 2, cx + grp / 2 + bp / 2, yc + tw / 2 + bb + 2.6, yc + tw / 2 + bb, `t_p = ${dIn(bp)}`);
-      if (np > 1) D.dimH(L.d, cx - grp / 2, cx - grp / 2 + sp, yc - tw / 2 - bb - 3, yc - tw / 2 - bb, `${dIn(sp)} C-C`); },
-    `C  BEARING STIFFENER, TYPE ${bsT}: PLAN SECTION`, [`${np} PAIR${np > 1 ? 'S' : ''} OF PLATES, ${frac(bb)} x ${frac(bp)} EACH; FILLET WELD TO WEB ${dIn(bw)}`, ({ milled: 'MILLED TO BEAR ON THE BOTTOM FLANGE', cjp: 'CJP GROOVE WELD TO THE BOTTOM FLANGE', fillet: 'FILLET WELDS ONLY TO THE BOTTOM FLANGE' })[B.conn] || '']);
-    // ---- elevations: web, flange, plate, with a break
-    const elev = (x0, y0, ttl, tFl, bBot, body, lines) => {   // top part: flange then web down to the break
-      ttlT(x0, y0, ttl); const wx0 = x0 + 4, wx1 = x0 + 30, yb = y0 + 3, yt = y0 + 18;
-      D.rect(L.p, wx0 - 2, yt, wx1 + 2, yt + Math.max(tFl, 0.6)); D.line(L.w, wx0, yb, wx0, yt); D.line(L.w, wx1, yb, wx1, yt); brk(D, L.w, wx0, wx1, yb, h * 0.8); D.text(L.t, wx1 + 2.5, yt + 0.2, h * 0.8, 'FLANGE'); body(wx0, wx1, yb, yt);
-      { let yy = y0 - 7; lines.forEach(q0 => window.SBDGraphics.wrap(q0, 36).forEach(q => { D.text(L.t, x0, yy, h * 0.85, q); yy -= 1.4 * h; })); }; };
-    elev(XB, Y1, `B  TYPE ${tsT}: ELEVATION (TOP OF THE WEB; BROKEN)`, tf, 0, (wx0, wx1, yb, yt) => {
-      const xc = (wx0 + wx1) / 2, sx0 = xc - bt / 2, sx1 = xc + bt / 2, c = tsT === 'A' ? 0 : Math.min(cl, bt / 2);
-      D.pline(L.st, [[sx0 + c, yt], [sx1 - c, yt], [sx1, yt - c], [sx1, yb], [sx0, yb], [sx0, yt - c]], true);
-      D.text(L.t, sx1 + 2, yt - 3.2 * h, h * 0.8, `${dIn(w)} FILLET TO WEB`); [sx0, sx1].forEach(x => D.line(L.s, x, yt - (tsT === 'A' ? 0 : c), x, yb));
-      if (tsT === 'B') { D.dimH(L.d, sx0, sx0 + c, yt + 2.8, yt, `CLIP ${dIn(cl)}`); D.text(L.t, sx1 + 2, yt - 1.6 * h, h * 0.8, `${dIn(wf)} FILLET TO THE FLANGE`); }
-      D.dimH(L.d, sx0, sx1, yb - 2.4, yb, `b_t = ${dIn(bt)}`); },
-    tsT === 'A' ? [`WEB D = ${dIn(Dw)}`, `STIFFENER-TO-WEB WELD STOPS ${dIn(gap)} SHORT OF THE TENSION FLANGE (LOWER END, NOT SHOWN)`] : [`WEB D = ${dIn(Dw)}`, 'CONNECTION PLATE WELDED TO THE FLANGES AND THE WEB']);
-    elev(XB, Y2, `D  BEARING STIFFENER, TYPE ${bsT}: ELEVATION (BOTTOM OF THE WEB; BROKEN)`, 0, tfb, (wx0, wx1, yb, yt) => {
-      // the bottom flange at the foot, the break at the top: mirror of the plan above (drawn upside down: flange at yb)
-      D.rect(L.p, wx0 - 2, yb - Math.max(tfb, 0.6), wx1 + 2, yb); D.text(L.t, wx1 + 2.5, yb - 0.8, h * 0.8, 'BOTTOM FLANGE');
-      D.line(L.w, wx0, yb, wx0, yt); D.line(L.w, wx1, yb, wx1, yt); brk(D, L.w, wx0, wx1, yt, h * 0.8);
-      const xc = (wx0 + wx1) / 2, grp = (np - 1) * sp, c = Math.min(bc, bb);
-      for (let q = 0; q < np; q++) { const xq = xc - grp / 2 + q * sp; D.pline(L.st, [[xq - bb / 2, yt - 1], [xq + bb / 2, yt - 1], [xq + bb / 2, yb + c], [xq + bb / 2 - c, yb], [xq - bb / 2 + c, yb], [xq - bb / 2, yb + c]], true); }
-      D.dimH(L.d, xc - grp / 2 - bb / 2, xc - grp / 2 - bb / 2 + c, yb - Math.max(tfb, 0.6) - 3, yb, `CLIP ${dIn(bc)}`);
-      D.text(L.t, wx1 + 2.5, yb + 3 * h, h * 0.8, `${dIn(bw)} FILLET TO WEB`); },
-    [`${np} PAIR${np > 1 ? 'S' : ''}, EACH PLATE ${frac(bb)} x ${frac(bp)}; ${({ milled: 'MILLED TO BEAR', cjp: 'CJP GROOVE WELD', fillet: 'FILLET WELDS' })[B.conn] || ''}`]);
-    notes(D, L.t, 0, -34, `DRAWN FROM THE STIFFENER INPUTS (STIFFENERS TAB): TRANSVERSE TYPE ${tsT} ${T.name || ''}, BEARING TYPE ${bsT} ${B.name || ''}; THE GIRDER PLATES t_w = ${dIn(tw)}; SKETCHES IN INCHES, NOT TO SCALE ALONG THE WEB.`, 52, h * 0.8);
-    return base('shearDetail', 'Stiffener details', D, 0, []);
+    opt = opt || {}; const rows = (R.TS && !R.TS.errors.length && R.TS.rows) || [];
+    let i = opt.i != null && rows[opt.i] ? opt.i : opt.ts ? pick(rows, k => tsRowRatio(R, k), r => r.type === opt.ts) : R.tsGov ? R.tsGov.i : 0; if (!(i >= 0) || !rows[i]) i = 0;
+    const r = rows[i];
+    if (!r) { const { D, L } = newDrawing(2.4); D.text(L.t, 0, 0, 2.4, 'NO TRANSVERSE STIFFENER OR CONNECTION PLATE IN THE LAYOUT'); return base('shearDetail', 'Transverse stiffener', D, 0, []); }
+    const t = r.t, Dw = r.D, tw = r.tw, tfc = r.tfc || 0.75, tft = r.tft || 0.75, h = Math.max(1.6, Math.min(4, (r.do1 + r.do2 + 12) / 52)), { D, L } = newDrawing(h);
+    const nm = `${r.type === 'B' ? 'CP' : 'TS'}${i + 1}`, cp = t.role === 'cp', hid = D.ltype('HIDDEN'), x1 = r.do1, x2 = r.do1 + r.do2, e0 = -8, e1 = x2 + 8;
+    // ---- A: elevation to scale (x along the girder from the stiffener before, y up from the bottom of the web)
+    [[0, x1, r.p1], [x1, x2, r.p2]].forEach(([a, b, q], k) => { const rr = q && q.phVn > 0 ? q.Vu / q.phVn : NaN; ratioSolid(D, L, rr, a, 0, b, Dw);
+      const cx = (a + b) / 2, lines = [`PANEL ${k + 1}${q && q.end ? ' (END PANEL)' : ''}`, `d_o/D = ${f2((b - a) / Dw)}`, fin(rr) ? `V_u/PHI_v V_n = ${f3(rr)}` : ''].filter(Boolean);
+      lines.forEach((s, j) => { const hh = Math.min(0.9 * h, (b - a) * 0.9 / Math.max(1, s.length * 0.6)); D.text(L.t, cx, Dw * 0.62 - j * 1.5 * h, hh, s, 1); }); });
+    D.rect(L.p, e0, Dw, e1, Dw + tfc); D.rect(L.p, e0, -tft, e1, 0); D.line(L.w, e0, 0, e1, 0); D.line(L.w, e0, Dw, e1, Dw);
+    brkV(D, L.w, e0, -tft - 1, Dw + tfc + 1, h); brkV(D, L.w, e1, -tft - 1, Dw + tfc + 1, h);
+    // the stiffeners at the ends of the two panels (their own kind is not known here: outlines only) and the stiffener of this row, true thickness
+    [0, x2].forEach(x => D.rect(L.st, x - t.tp / 2, 0, x + t.tp / 2, Dw, hid));
+    const yb = cp ? 0 : t.gap; D.rect(L.st, x1 - t.tp / 2, yb, x1 + t.tp / 2, Dw); D.solid(L.st, [[x1 - t.tp / 2, yb], [x1 + t.tp / 2, yb], [x1 + t.tp / 2, Dw], [x1 - t.tp / 2, Dw]]);
+    D.text(L.t, x1 + t.tp / 2 + 0.5 * h, Dw - 1.6 * h, h * 0.8, nm, 0);
+    // dimensions: d_o1, d_o2 above the top flange (with d_o/D), D at the left, g at the stiffener foot
+    D.dimH(L.d, 0, x1, Dw + tfc + 3 * h, Dw + tfc, `d_o1 = ${f2(r.do1)}" (${f2(r.do1 / Dw)}D)`); D.dimH(L.d, x1, x2, Dw + tfc + 3 * h, Dw + tfc, `d_o2 = ${f2(r.do2)}" (${f2(r.do2 / Dw)}D)`);
+    D.dimV(L.d, 0, Dw, e0 - 3 * h, e0, `D = ${dIn(Dw)}`);
+    if (!cp && t.gap > 0) { D.line(L.d, x1 + t.tp / 2 + 0.4 * h, t.gap, x1 + t.tp / 2 + 2.6 * h, t.gap); D.text(L.d, x1 + t.tp / 2 + 0.8 * h, t.gap + 0.5 * h, h * 0.72, `g = ${dIn(t.gap)} (WELD CUTOFF)`, 0); }
+    D.text(L.t, e0, Dw + tfc + 8 * h, h * 1.1, `A  ${up(r.name)} (${nm}, TYPE ${r.type}): WEB PANELS, ELEVATION TO SCALE`);
+    let y = notes(D, L.t, e0, -tft - 3 * h, `${cp ? 'CONNECTION PLATE, WELDED TO BOTH FLANGES' : `INTERMEDIATE STIFFENER: TIGHT FIT AT THE COMPRESSION FLANGE, WEB WELD STOPS g = ${dIn(t.gap)} SHORT OF THE TENSION FLANGE`}; ${+t.sides === 2 ? 'PAIR' : 'ONE PLATE'} ${frac(t.bt)} x ${frac(t.tp)}; WEB ${dIn(Dw)} x ${dIn(tw)}; PANELS FILLED BY V_u/(PHI_v V_n) OF TS4 (6.10.9.3); DASHED: THE NEIGHBOURING STIFFENERS. I_t = ${f2(r.It)} IN^4, I_req = ${f2(r.Ireq)} IN^4.`, Math.max(40, Math.floor((e1 - e0) / (0.85 * h * 0.62))), 0.85 * h);
+    // ---- B: plan section through the plate, enlarged k times (sizes in true inches)
+    const sides = +t.sides === 2 ? 2 : 1, k = Math.max(1, Math.min(8, Math.round(0.45 * Dw / (2 * t.bt + tw)))), bx = e1 + 10 * h, by = Dw * 0.5, fb = Math.max(r.bfc || 0, 2 * t.bt + tw + 2) * k, half = 0.55 * fb, s = v => v * k;
+    D.rect(L.p, bx - half, by - s(tw) / 2, bx + half, by + s(tw) / 2); D.rect(L.p, bx - half, by - fb / 2, bx + half, by + fb / 2, hid);
+    [1, -1].slice(0, sides).forEach(sg => { const ya = sg > 0 ? by + s(tw) / 2 : by - s(tw) / 2 - s(t.bt), yz = ya + s(t.bt); D.rect(L.st, bx - s(t.tp) / 2, ya, bx + s(t.tp) / 2, yz); D.solid(L.st, [[bx - s(t.tp) / 2, ya], [bx + s(t.tp) / 2, ya], [bx + s(t.tp) / 2, yz], [bx - s(t.tp) / 2, yz]]);
+      [-1, 1].forEach(sx => filletTri(D, L.s, bx + sx * s(t.tp) / 2, sg > 0 ? by + s(tw) / 2 : by - s(tw) / 2, sx, sg, s(t.w))); });
+    D.dimV(L.d, by + s(tw) / 2, by + s(tw) / 2 + s(t.bt), bx + half + 2.5 * h, bx + s(t.tp) / 2, `b_t = ${dIn(t.bt)}`);
+    D.text(L.t, bx + s(t.tp) / 2 + 0.6 * h, by + s(tw) / 2 + s(t.bt) + 0.6 * h, h * 0.75, `PL ${frac(t.bt)} x ${frac(t.tp)} (t_p = ${dIn(t.tp)})`, 0);
+    D.text(L.t, bx + half + 1.0 * h, by - s(tw) / 2 - 1.6 * h, h * 0.75, `WEB t_w = ${dIn(tw)}`, 0);
+    D.text(L.t, bx - half, by + fb / 2 + 6 * h, h * 1.1, `B  PLAN SECTION (ENLARGED x${k})`);
+    notes(D, L.t, bx - half, by - fb / 2 - 2 * h, `FILLET WELD ${dIn(t.w)} TO THE WEB, BOTH SIDES OF THE PLATE${cp ? `; ${dIn(t.wf)} TO THE FLANGES` : ''}; FLANGE OUTLINE DASHED`, 30, 0.8 * h);
+    return base('shearDetail', `Transverse stiffener ${nm}`, D, 0, []);
+  }
+
+  /* shearBearing(R, P, opt): the bearing stiffener at one bearing, after GirderDetail's Bearing stiffeners drawings (bsSectionSVG "section at the
+     bearing, to scale", bsPlanSVG "effective column, to scale"): C the girder section at the bearing TO SCALE (flanges, web, the plate pair with
+     its clips, the bearing; the plates filled in the colour of the row's largest ratio), D the plan section at mid-depth through the stiffeners
+     (enlarged; sizes in true inches) with the effective column of 6.10.11.2.4 filled in the colour of R_u/P_r and its web strips dimensioned
+     from the result (9t_w, s_end, L_w, A). opt.i: the row of R.BS (default the governing one; opt.bs a type letter: the row of that type with the
+     largest ratio). Added 2026-10-31 (stiffener tab PR). */
+  function shearBearing(R, P, opt) {
+    opt = opt || {}; const rows = R.BS.rows || [];
+    let i = opt.i != null && rows[opt.i] ? opt.i : opt.bs ? pick(rows, k => bsRowRatio(rows[k]), r => r.type === opt.bs) : R.bsGov ? R.bsGov.i : 0; if (!(i >= 0) || !rows[i]) i = 0;
+    const r = rows[i];
+    if (!r) { const { D, L } = newDrawing(2.4); D.text(L.t, 0, 0, 2.4, 'NO BEARING STIFFENER'); return base('shearBearing', 'Bearing stiffener', D, 0, []); }
+    const t = R.BS.types[r.type], Dw = R.D, tw = r.tw, tfb = r.tfb || 1, bfb = r.bfb, bft = r.bft || bfb, sp0 = R.gm.sup || [], xs0 = R.gm.dem && sp0[i] != null ? Math.min(Math.max(sp0[i], 0.01), sp0[sp0.length - 1] - 0.01) : null;
+    const tft = xs0 != null && R.gm.zAt(xs0).topT > 0 ? R.gm.zAt(xs0).topT : 0.75;   // the top flange at the bearing (drawing only; GirderDetail's bsSectionSVG draws 0.75 in)
+    const h = Math.max(1.4, Math.min(4, (Dw + 6) / 30)), { D, L } = newDrawing(h), c = t.c || 0, nm = `BS${i + 1}`;
+    // ---- C: section at the bearing, to scale (x across the girder, web centre at 0; y up from the bottom of the web)
+    D.rect(L.p, -bft / 2, Dw, bft / 2, Dw + tft); D.rect(L.p, -tw / 2, 0, tw / 2, Dw); D.rect(L.p, -bfb / 2, -tfb, bfb / 2, 0);
+    D.rect(L.b, -bfb / 2 - 1, -tfb - 3, bfb / 2 + 1, -tfb);
+    const rr = bsRowRatio(r);
+    [1, -1].forEach(sg => { const xi = sg * tw / 2, xo = sg * (tw / 2 + t.bt), pts = [[xi, c], [xi + sg * c, 0], [xo, 0], [xo, Dw], [xi + sg * c, Dw], [xi, Dw - c]];
+      D.pline(L.st, pts, true); const l = L[rcls(rr)]; if (rcls(rr) !== 'na') D.solid(l, [[xi + sg * c, 0], [xo, 0], [xo, Dw], [xi + sg * c, Dw]]); });   // the fill: the plate clear of its clips
+    D.dimH(L.d, tw / 2, tw / 2 + t.bt, Dw + tft + 2.6 * h, Dw, `b_t = ${dIn(t.bt)}`);
+    D.dimV(L.d, 0, Dw, -Math.max(bft, bfb) / 2 - 3 * h, -tw / 2 - t.bt, `D = ${dIn(Dw)}`);
+    D.text(L.t, bfb / 2 + 1.6 * h, -tfb - 2.4, h * 0.75, 'BEARING', 0);
+    const xn = Math.max(bft, bfb) / 2 + 2 * h, nw = Math.max(...[`${'X'.repeat(30)}`].map(q => TW(q, 0.8 * h, h)));   // the notes column: 34 characters
+    let y = notes(D, L.t, xn, Dw - 1.5 * h, `${t.np} PAIR${t.np > 1 ? 'S' : ''} OF PLATES ${frac(t.bt)} x ${frac(t.tp)}, ONE EACH SIDE OF THE WEB; CLIP ${dIn(c)} AT THE FLANGE-TO-WEB WELDS; FILLET WELDS ${dIn(t.w)} TO THE WEB; ${({ milled: 'MILLED TO BEAR ON THE BOTTOM FLANGE', cjp: 'CJP GROOVE WELD TO THE BOTTOM FLANGE', fillet: 'FILLET WELDS TO THE BOTTOM FLANGE (NOT PERMITTED)' })[t.conn] || ''}; WEB ${dIn(tw)}; BOTTOM FLANGE ${frac(bfb)} x ${frac(tfb)}.`, 34, 0.8 * h);
+    y = notes(D, L.t, xn, y - 1.2 * h, `R_u = ${f1(r.Ru)} KIP; BEARING (R_sb)_r = ${f1(r.Rsb)}; COLUMN P_r = ${f1(r.Pr)}; WELDS R_r = ${f1(r.Rweld)} KIP; LARGEST RATIO ${f3(rr)} (PLATES FILLED IN ITS COLOUR).`, 34, 0.8 * h);
+    D.text(L.t, -Math.max(bft, bfb) / 2 - 3 * h, Dw + tft + 7 * h, h * 1.1, `C  ${up(r.name)} (${nm}, TYPE ${r.type}): SECTION AT THE BEARING, TO SCALE`);
+    // ---- D: plan section at mid-depth, the effective column (x along the girder, the stiffener group centred at 0), enlarged k times
+    const grp = (t.np - 1) * t.sp + t.tp, L0 = -(r.strip9 + grp / 2), L1 = grp / 2 + r.sEnd, k = Math.max(1, Math.min(8, Math.round(30 * h / Math.max(1, L1 - L0 + 12)))), s = v => v * k;
+    const ox = xn + nw + 6 * h, oy = Dw * 0.55, X = v => ox + s(v - (L0 - 6)), Y = v => oy + s(v), xmax = r.ed > 0 ? grp / 2 - t.tp / 2 + r.ed : L1 + 6;
+    const cr = r.Ru / r.Pr, cl = L[rcls(cr)];
+    D.rect(cl, X(L0), Y(-tw / 2), X(L1), Y(tw / 2)); if (rcls(cr) !== 'na') D.solid(cl, [[X(L0), Y(-tw / 2)], [X(L1), Y(-tw / 2)], [X(L1), Y(tw / 2)], [X(L0), Y(tw / 2)]]);
+    D.line(L.w, X(L0 - 6), Y(-tw / 2), X(xmax), Y(-tw / 2)); D.line(L.w, X(L0 - 6), Y(tw / 2), X(xmax), Y(tw / 2)); brkV(D, L.w, X(L0 - 6), Y(-tw / 2) - 1.2 * h, Y(tw / 2) + 1.2 * h, h);
+    if (r.ed > 0) { D.line(L.w, X(xmax), Y(-t.bt - tw / 2 - 1), X(xmax), Y(t.bt + tw / 2 + 1)); D.text(L.t, X(xmax) + 0.6 * h, Y(t.bt + tw / 2) - 0.4 * h, h * 0.75, 'GIRDER END', 0); }
+    else brkV(D, L.w, X(xmax), Y(-tw / 2) - 1.2 * h, Y(tw / 2) + 1.2 * h, h);
+    for (let q = 0; q < t.np; q++) { const xc = -grp / 2 + t.tp / 2 + q * t.sp;
+      [1, -1].forEach(sg => { const ya = sg > 0 ? tw / 2 : -tw / 2 - t.bt, P4 = [[X(xc - t.tp / 2), Y(ya)], [X(xc + t.tp / 2), Y(ya)], [X(xc + t.tp / 2), Y(ya + t.bt)], [X(xc - t.tp / 2), Y(ya + t.bt)]]; D.pline(L.st, P4, true); if (rcls(cr) !== 'na') D.solid(cl, P4); }); }
+    const yd = Y(-tw / 2 - t.bt) - 3 * h;
+    D.dimH(L.d, X(L0), X(-grp / 2), yd, Y(-tw / 2), `9t_w = ${f2(r.strip9)}"`);
+    if (t.np > 1) D.dimH(L.d, X(-grp / 2 + t.tp / 2), X(-grp / 2 + t.tp / 2 + (t.np - 1) * t.sp), yd - 3 * h, Y(-tw / 2 - t.bt), `${t.np - 1} @ ${f2(t.sp)}"`);
+    D.dimH(L.d, X(grp / 2), X(L1), yd, Y(-tw / 2), `${f2(r.sEnd)}"`);
+    D.dimH(L.d, X(L0), X(L1), yd - (t.np > 1 ? 6 : 3) * h, Y(-tw / 2), `EFFECTIVE COLUMN ${f2(r.Ltot)}", A = ${f2(r.A)} IN^2`);
+    D.text(L.t, X(L0 - 6), Y(t.bt + tw / 2) + 3.2 * h, h * 1.1, `D  EFFECTIVE COLUMN, PLAN AT MID-DEPTH (ENLARGED x${k})`);
+    notes(D, L.t, X(L0 - 6), yd - (t.np > 1 ? 9 : 6) * h, `FILLED: THE EFFECTIVE COLUMN OF 6.10.11.2.4 (PLATES AND WEB STRIPS), IN THE COLOUR OF R_u/P_r = ${f3(cr)}; WEB STRIPS FROM THE RESULT (9t_w EACH SIDE, s_end TO THE GIRDER END).`, 60, 0.8 * h);
+    return base('shearBearing', `Bearing stiffener ${nm}`, D, 0, []);
   }
 
   const niceStep = (a, b, n) => { const raw = (b - a) / n || 1, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
@@ -463,5 +527,5 @@
     return base('summary', 'Governing checks by region', D, 0, reg);
   }
 
-  window.SBDTabGfxB = { asc, strGov, geoOf, geoProject, ratioClass: rcls, hatch, parseX, studCount, shear, shearDetail, fatigue, fatigueChart, crossframe, welds, weldDetail, splice, ratingChart, summary, _internal: { newDrawing, frame, ratioFill, fitText, scaleBar, legend, base, RLEG, segAt, supName, tsStations } };
+  window.SBDTabGfxB = { asc, strGov, geoOf, geoProject, ratioClass: rcls, hatch, parseX, studCount, shear, shearDetail, shearBearing, fatigue, fatigueChart, crossframe, welds, weldDetail, splice, ratingChart, summary, _internal: { newDrawing, frame, ratioFill, fitText, scaleBar, legend, base, RLEG, segAt, supName, tsStations } };
 })();
