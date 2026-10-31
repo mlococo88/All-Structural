@@ -95,8 +95,8 @@
     on('[data-adsel]', 'click', e => { if (e.target.closest('[data-adgo]')) return; S.sel = +e.currentTarget.dataset.adsel; redraw(); });
     on('[data-adgo]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.adgo}"]`); if (b) b.click(); });
     on('#ad_apply', 'click', () => { const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
-      const r = AD().apply(P, c); ['girders', 'xs', 'framing', 'splices', 'autodesign'].forEach(k => { P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
-    on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['girders', 'xs', 'framing', 'splices', 'autodesign'].forEach(k => { P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
+      const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null;   /* with the sized details and the overhang (Auto design PR 2) */ if (ctx.changed) ctx.changed(true); else redraw(); });
+    on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
   window.SBDAutoDesignUI = { render };
 })();

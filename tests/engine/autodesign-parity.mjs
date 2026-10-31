@@ -44,7 +44,8 @@ function check(P, segs, spl, ctx, cur) {
 /* match-legacy settings from the Preliminary sizing project */
 function legacySettings(Ppl) {
   const L = Ppl.limits, SG = Ppl.suggest, n = v => +v;
-  return { mode: 'new', objective: 'weight', topN: 3, nbList: String(Ppl.bridge.nb), matchLegacy: true,
+  // the girder count and the overhangs as the project has them (Suggest and Full design change neither): locked (Auto design PR 2 variables)
+  return { mode: 'new', objective: 'weight', topN: 3, nbList: String(Ppl.bridge.nb), matchLegacy: true, vars: { oh: { mode: 'lock' } },
     cost: { steel: n(Ppl.costs.steel), trans: n(Ppl.costs.trans), splice: n(Ppl.costs.splice), stiff: n(Ppl.costs.stiff) },
     limits: { twMin: n(L.minTw), tfMin: n(L.minTf), bfMin: n(L.minBf), tfMax: n(L.maxTf), Dinc: n(L.incD), twInc: n(L.incTw), bfInc: n(L.incBf), tfInc: n(L.incTf), thkRatio: n(L.thkRatio), areaRatio: n(L.areaRatio),
       minSeg: n(L.minSeg), maxTrans: n(L.maxTrans), lbRatio: n(L.lbRatio), topConst: SG.topConst !== 'off', maxDb: n(SG.maxDb), depthRule: SG.depthRule !== 'off' } };
@@ -71,7 +72,7 @@ for (const cs of cases) {
     const it = AD.run(P, { settings: legacySettings(Ppl) }); let s; while (!(s = it.next()).done) { if (process.env.V) console.log('   ', s.value.msg); }
     const R = s.value, c = R.cands[0] || (R.blocked || [])[0];
     if (!R.cands[0] && c) row.why.push(`no design passes every module: detail checks that the current design fails too, whatever the plates, block every design (${R.blockers.join(', ')}); the weight compared is that of the best blocked design, which passes every check the plates control`);
-    row.ad = c ? { pass: !!R.cands[0], blocked: !R.cands[0], blockers: R.blockers, w: c.cost.w, D: c.D, nb: c.nb, ratio: c.ratio, gov: c.gov ? `${c.gov.mod} ${c.gov.id} ${c.gov.title}` : '', minLines: c.minLines, nTr: c.nTr, segments: c.segments } : { pass: false, note: R.note, rejected: R.rejected.map(r => r.fails) };
+    row.ad = c ? { pass: !!R.cands[0], blocked: !R.cands[0], blockers: R.blockers, w: c.cost.w, D: c.D, nb: c.nb, ratio: c.ratio, gov: c.gov ? `${c.gov.mod} ${c.gov.id} ${c.gov.title}` : '', minLines: c.minLines, nTr: c.nTr, segments: c.segments, det: c.det ? c.det.inputs : null, oh: c.L.oh || null, detRows: c.det ? c.det.rows : [], mods: c.mods } : { pass: false, note: R.note, rejected: R.rejected.map(r => r.fails) };
     row.screened = R.screened;
   } else {
     const P = M.defaultProject(), rec = JSON.parse(fs.readFileSync(path.join(DIR, 'legacy_builtin_AASHTO.json'), 'utf8'));
@@ -79,7 +80,7 @@ for (const cs of cases) {
     const sd = stDesign(P, rec); if (sd) row.st = { what: `ST-Girder Optimize (Δt_fb = ${sd.dt >= 0 ? '+' : ''}${sd.dt.toFixed(3)} in, span 1; the builtin_AASHTO hand-offs)`, ...check(P, sd.segs, P.framing.splices, ctx) };
     row.legacy = row.st ? { ...row.st } : null;
     const it = AD.run(P, { settings: { mode: 'refine', objective: 'weight', topN: 3 } }); let s; while (!(s = it.next()).done);
-    const c = s.value.cands[0]; row.ad = c ? { pass: true, w: c.cost.w, D: c.D, nb: c.nb, ratio: c.ratio, gov: c.gov ? `${c.gov.mod} ${c.gov.id} ${c.gov.title}` : '', minLines: c.minLines, nTr: c.nTr, segments: c.segments } : { pass: false, note: s.value.note };
+    const c = s.value.cands[0]; row.ad = c ? { pass: true, w: c.cost.w, D: c.D, nb: c.nb, ratio: c.ratio, gov: c.gov ? `${c.gov.mod} ${c.gov.id} ${c.gov.title}` : '', minLines: c.minLines, nTr: c.nTr, segments: c.segments, det: c.det ? c.det.inputs : null, oh: c.L.oh || null, detRows: c.det ? c.det.rows : [], mods: c.mods } : { pass: false, note: s.value.note };
   }
   // the legacy weight to beat: the lightest legacy design that passes this app's full check; none passing: the lightest legacy design (reported)
   const L = [row.legacy, row.st].filter(Boolean), Lp = L.filter(q => q.pass || (row.ad.blocked && q.passX));

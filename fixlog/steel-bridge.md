@@ -2350,3 +2350,149 @@ After the fix every value above equals the tab's (Shear tab src 'analysis', Flex
   would change; builtin28_RIDOT, builtin_RIDOT and util_RIDOT fail the same flexure items (GS7/GS8/GS9, 1.05–1.08) before and after: those
   records are already stale on main before this change (not caused here). No recorded design gains a shear or stiffener failure. Auto design
   does not size stiffener plates (F-6), so the stiffener count is unchanged.
+
+## 2026-10-31 — PR: sbd-autodesign-vars — Auto design: design variables (Lock / Range / Auto) for every sizable input, the overhang, detail sizing on the tabs' checks, Rating and Welds in the full check, the no-framing brace points
+**Calculation change (CLAUDE.md §4).** No formula, load or resistance factor, unit or code reference of any check module changed. What changes is
+which inputs Auto design sizes, which checks its full check counts, and the brace points it uses on a project without framing. Items 1 to 4 below
+change Auto design results; each has its before / after and a hand check. Governing provisions (AASHTO LRFD 10th Ed. (2024) unless noted):
+6.10.1.6, 6.10.8.2.3 (L_b), 6.10.9 and 6.10.11.1 (transverse stiffeners), 6.10.11.2 (bearing stiffeners), 6.10.10 (studs), 6.7.4 and 6.9.4.4,
+6.8.2 (cross-frames), 6.13.3 and Table 6.13.3.4-1 (fillet welds), 6.13.6.2 (transitions), 4.6.2.2.2d and 4.6.2.6.1 (exterior girder LLDF, b_eff),
+C6.10.1 and 6.10.3.4 (overhang brackets), MBE 3rd Ed. 6A.4.2.1 (rating factor), RIDOT BDM 9.4.1.4, CTDOT BRSDM V2 9.7.1.5 (overhang limits).
+
+### Where
+- `apps/steel-bridge/engine/autodesign.js`:
+  - `VARS`, `varsOf(P, s)` (new; anchor `const VARS = [`), read by `settings()` as `s.V` and `s.ohSym`. Saved as `P.autodesign.vars` (optional; absent = each
+    variable's default), `P.autodesign.ohSym` ('sym' default | 'asym'). No storage key changed (`sbd2.project.current` as before).
+  - `sizeFlanges`: anchor `// the design variables of each piece (Lock / Range / Auto` (width and thickness per field piece: Lock keeps the piece's current
+    width or zones, Range clamps, the width grows when a thickness range caps the area); `reclamp()` after the bolt-fit, bearing-width, top-constant and
+    width-change rules.
+  - `webVars` (new), `design()` (`zLock`: the transitions locked keep the current cut points; `ohJ`: the overhang of the girder count; stop when no
+    plate can change), `trim()` (skips locked plates and values outside a range), `depthList` / `nbList` (Lock and Range).
+  - `sizeDetails(Q, S, ctx)` (new; anchor `function* sizeDetails`): cross-frame angles, stiffener spacing, stiffener plates, bearing stiffeners, stud
+    pitch zones, flange-to-web weld, splice plates. Run on every finalist before its full check (`run()`, anchor `sizing the details`).
+  - `ohLimit`, `ohCands`, `pickOh` (new; anchor `the overhang variable`); `projectWith(P, L, det)` (the overhangs, the candidate's details; anchor
+    `const ohCh =`); `apply` / `undo` keep `APPLY_KEYS` (girders, xs, framing, splices, stiffeners, crossframes, studs, welds, constr).
+  - `evaluate()`: the Rating and Welds tabs' builders (anchor `// load rating (ui/rating.js build`), the per-module governing item `modGov`, the
+    no-framing brace points (anchor `const frIn =`), a failing item without a numeric ratio counted (anchor `const take = (o) =>`), the Cross-frames
+    build on a copy when the project has no framing (anchor `P.framing ? P : clone(P)`).
+  - `run()`: the infeasible note (anchor `const lk = lockText(S)`), the current design's full check always (the compare view).
+- `apps/steel-bridge/engine/model.js`: header only (the `autodesign.vars` and `ohSym` fields).
+- `apps/steel-bridge/ui/autodesign.js`: Apply / Undo write `['autodesign', ...SBDAutoDesign.APPLY_KEYS]` (before: girders, xs, framing, splices, autodesign), so the
+  candidate's details and overhangs reach the project. The variable table and the compare view are the next PR (sbd-autodesign-ui).
+- `tests/engine/autodesign-vars.test.mjs` (new), `tests/engine/autodesign.test.mjs` (the test window loads Rating and Welds; the re-check uses the
+  candidate's details), `tests/engine/autodesign-parity.mjs` (records the details and the overhang), `tests/projects/sbd2-autodesign/ad_*.json`, `parity.json`.
+
+### The variables (each Lock / Range / Auto unless noted; default Auto)
+| id | variable | Auto (how it is sized) | Range | notes |
+|---|---|---|---|---|
+| nb | girder count | New design: current ± 1 within the spacing limits (or the counts listed) | min … max | Refine / Check: held by the mode |
+| oh | deck overhang | the pair (symmetric by default) on 0.5 ft from 1.5 ft to the limit below whose screen of the starting design has the lowest governing ratio | min … max, step; the owner's shall-limit (RIDOT) still applies | N_b, S and the overhangs close to the same out-to-out deck width; Lock only without an exterior plate girder |
+| D | web depth | L/36 … L/18 (or the limits entered), the depth rule | min … max, step | |
+| tw, bt, tt, bb, tb | web thickness, flange widths and thicknesses, per field piece (an entry `id#k` per piece overrides) | as PR 1 (required areas, owner minimums, 6.10.2) | clamped; a thickness cap widens the flange | Lock: the piece's width, or its zones (cut points and thicknesses) |
+| trans | flange transition locations | as PR 1 | — | Lock: the current cut points |
+| spl | field splice locations | — | — | **Lock only**: choosing splice locations needs shipping-length and erection rules the engine does not have |
+| splPl | splice plates and bolts | the Field splices tab's auto-design | — | default Lock when that tab's auto-design is off |
+| tsSp | stiffener spacing d_o/D | widest of 3.0 … 0.5 passing the shear checks, TS4, TS5 | min … max | Lock only with per-bay spacing or an unstiffened web |
+| tsA_b/t, tsB_b/t | intermediate stiffener, connection plate | least b_t·t_p passing TS1–TS3, TS6–TS8 (B: and CP1); welds the least passing | min … max | the web weld the Table 6.13.3.4-1 minimum, the cutoff moved into 4t_w … 6t_w |
+| bsA_n/b/t, bsB_n/b/t | bearing stiffeners (pairs, b_t, t_p) | least n_p·b_t·t_p passing BS1–BS3, BS6 (width), BS7; then the least weld passing BS4, BS5 | min … max | a fillet-only flange connection (BS6) fails whatever the size |
+| scP, scN | stud pitch, studs per row | the analysis zones (span tenths), pitch the largest on 1/2 in passing SC1–SC3; one more stud per row only below the SC3 minimum | min … max | default Lock when zones are entered |
+| cf | cross-frames | the current frame type and bolts per member end first, then X / K and more bolts where CF4, CF10 or CF11 need them; the lightest angle of the Cross-frames list passing CF1–CF11 (one angle for every member) | leg size | Lock only with diaphragms (no shape list). Implements C-24 (CTDOT CF11, 4 bolts) and RIDOT's X or K by S/d |
+| weld | flange-to-web fillet weld | the Table 6.13.3.4-1 minimum, else the least size passing FW1–FW4 | min … max | default Lock when a size is entered |
+
+### 1. Rating and Welds in the full check
+- Before: `evaluate(level 'full')` ran flexure, fatigue, shear, stiffeners, constructibility, studs, cross-frames, splices. After: also `SBDRatingUI.build`
+  (RT1: the HL-93 inventory rating factor ≥ 1.0, ratio 1/RF; the owner's target (RIDOT 1.10, CTDOT 1.20) a warning, as engine/owners.js `rate.*`
+  says: "reported, the girder is not resized for it") and `SBDWeldsUI.build` (FW1–FW4, TR1–TR4 as the Welds tab).
+- Check case (built-in project, G1, as the Rating tab): the lowest inventory RF is 0.6085 (flexure, negative, x = 249.99 ft) → RT1 = 1/0.6085 = 1.644,
+  fails (the same section fails GS7, 1.229). A design that passes the Strength I and Service II checks at φ_c = φ_s = 1 rates RF ≥ 1 (refine candidate:
+  RT1 0.745, RF = 1.342).
+
+### 2. A failing check item without a numeric ratio now fails the full check
+- `evaluate` `take()`: before `if (!isFinite(o.r)) return;` (an item whose status is fail but has no ratio, such as BS6 "bottom flange connection",
+  TS8 "side of the web", an analysis or input error with r = Infinity, was dropped: the design could pass Auto design and fail on the tab);
+  after: such an item is a failure (`if (o.fail && o.r === Infinity) { fails.push(o); … }`). More conservative; matches the tabs.
+- Check case: built-in project with the abutment bearing stiffeners "fillet welds only": Shear & stiffeners tab BS6 fails at Abut. 1 and Abut. 2
+  (no ratio); Auto design before: 0 BS6 failures (15 in all); after: 2 (18 in all, with RT1).
+
+### 3. No framing: the stiffener layout's cross-frames as brace points (the Flexure tab's fallback)
+- `evaluate`: before, with no framing the flexure took `bracing.Lb = frames.Lb` (evenly spaced) even where the Stiffeners tab lists the cross-frame
+  stations (`frames.at`); after `braces = [...new Set([...R.sup, ...frames.at])]` as ui/flexure.js build. With `frames.at` empty nothing changes.
+- `projectWith`: before, a default framing was added to every candidate (`Q.framing = Q.framing || defaultFraming()`), which moved its brace
+  points to the framing module's; after, only when the layout has field splices.
+- The Cross-frames builder's `ensure()` added a default framing to the project being checked, so the next girder's flexure saw framing; it now
+  runs on a copy when the project has none.
+- Check case (built-in 110-140-110 ft, no framing, frames.at = 30, 60, 90, 130, 170, 210, 250, 290, 330 ft): x = 44 ft L_b before 110/⌈110/25⌉ =
+  22.00 ft, after 60 − 30 = 30.00 ft; x = 249.99 ft L_b before 140/⌈140/25⌉ = 23.33 ft, after 250 − 210 = 40.00 ft; largest flexure ratio GS7 at
+  249.99 ft 1.134 → 3.335 (the Flexure tab: 3.335; every flexure ratio now equals the tab's). Test "No framing: …".
+
+### 4. The detail and overhang variables (new sizing; the defaults change what Auto design returns)
+- The finalists' details are sized before their full check (table above), so a candidate carries its own stiffener spacing and plates, bearing
+  stiffeners, stud zones, cross-frame angles, flange-to-web weld and splice auto-design; Apply writes them (Undo puts them back).
+- The overhang (New design): `projectWith` keeps W_deck = oh_L + Σ bays + oh_R and spaces the girders equally between the overhangs; b_eff
+  (4.6.2.6.1) interior S, exterior S/2 + oh; the exterior girder's LLDF (lever rule, d_e) and dead loads follow through the loads module;
+  the overhang brackets' deck width (P.constr.oh.wOH, entered or GirderDetail's 30 in) moves by 12Δoh of the larger overhang.
+  Hand check (built-in cross-section, W_deck = 3.25 + 4(9.5) + 3.25 = 44.50 ft, oh = 3.5 ft, N_b = 5): S = (44.50 − 7.00)/4 = 9.375 ft;
+  b_eff interior 112.50 in, exterior 12(4.6875 + 3.5) = 98.25 in; w_OH = 30 + 12(0.25) = 33.00 in.
+- Refine, the built-in project (all defaults): spacing d_o/D 1.0 → 1.75 (fewer stiffeners), intermediate stiffeners and connection plates 6 × 1/2 →
+  5 1/2 × 3/8 in, bearing stiffeners abutments 1 pair 7 × 7/8 → 5 1/2 × 1/2 in, piers 2 pairs 8 × 1 → 1 pair 8 × 3/4 in, cross-frames L5x5x3/8 (kept,
+  the lightest passing), the studs explicit zones (pitch 7 1/2 to 18 1/2 in, 4 per row), weld the minimum; every module passes.
+
+### Parity re-run (tests/projects/sbd2-autodesign; every design judged by this app's full check, now with Rating and Welds)
+| project | before (record on main) | after (re-run) | details sized (cross-frames; d_o/D; pier bearing stiffeners; studs) | s |
+|---|---|---|---|---|
+| builtin_AASHTO | 406,234 lb, D 70, passes | 406,234 lb, D 70, passes (governing TS7 1.000) | X L5x5x3/8, 2 bolts; 1.75; 1 pair 8 × 3/4; pitch 7–18 in | 615 |
+| util_AASHTO | 417,449, D 70, passes | 417,449, D 70, passes (TS2 1.000) | X L5x5x3/8; 1.75; 1 pair 8 × 3/4; 7.5–18 in | 748 |
+| builtin28_AASHTO | 406,413, D 72, blocked (SC1, CF3) | 422,682, D 60, passes (TS2 1.000) | X L6x6x3/8; 1.75; 1 pair 6.5 × 1; 6–15.5 in | 694 |
+| builtin_RIDOT | 421,153, D 62, passes (stale) | 426,394, D 70, passes (TS7 1.000) | K L5x5x3/8, 2 bolts; 1.75; 1 pair 7.5 × 7/8; 7–18 in | 591 |
+| util_RIDOT | 424,548, D 65, passes (stale) | 439,003, D 75, passes (TS7 1.000) | X L5x5x3/8; 1.75; 1 pair 7.5 × 7/8; 7.5–19 in | 610 |
+| builtin28_RIDOT | 427,046, D 65, blocked (SC1, CF3) | 440,207, D 62, passes (TS7 1.000) | K L5x5x3/8; 1.5; 1 pair 8 × 7/8; 6.5–16 in | 600 |
+- Match-legacy settings now also lock the overhang (Suggest and Full design keep it): `legacySettings` `vars: { oh: { mode: 'lock' } }`.
+- Why they changed. AASHTO built-in and util: the same plates (the details now sized do not change the plates). builtin28_AASHTO and
+  builtin28_RIDOT were blocked by SC1 (stud fatigue pitch with the skew term at 28°) and CF3 (cross-frame slenderness): the stud zones and the
+  cross-frame angles are now sized, so both pass; the plates differ because the old blocked designs also failed deck placement (GS14 1.194 with
+  f_ℓ = 12.5 ksi, C-16, sbd-autodesign-ll). The RIDOT records were stale on main: their designs failed GS7–GS9 (1.05–1.08) since the C-1 / C-16
+  fixes; the re-run designs pass every module, heavier (+1.2 % and +3.4 %). On builtin_RIDOT the first re-run (before the cross-frame type was a
+  variable) was blocked by CF11 (RIDOT X or K by S/d, a failing item without a ratio that the full check did not count before, item 2); with the
+  type in the cross-frame search it takes K-frames and passes. Every legacy design still fails this app's full check (BS6, SC2, GS7/GS8, FA1:
+  parity.json), so no legacy weight is a weight to beat.
+- Run time per project 10 to 12.5 min (before 9 to 27 min). Memory: about 4 GB per run (the live-load cache); 3 runs at a time on this machine.
+- Still pending (not run here, the engineer's usage limit): the 15 projects of K-5 (builtin/builtin28 MassDOT, CTDOT; curb, xsA × 4; util
+  MassDOT, CTDOT; builtin_app).
+
+### How verified
+- `node tests/engine/run.mjs autodesign` (autodesign.test.mjs, autodesign-vars.test.mjs): saved data round trip; locks and ranges honoured;
+  candidate re-checked from scratch; Apply → the tabs' builders (Flexure, Shear & stiffeners, Fatigue & studs, Constructibility, Cross-frames,
+  Field splices, Rating, Welds) give the candidate's governing ratio per module exactly; the infeasible note; the no-framing L_b hand check;
+  the overhang hand check, limits and pickOh; the re-run parity designs re-checked from scratch with their details.
+- The full engine suite `node tests/engine/run.mjs`: 38 files, 204 passed, 0 failed (38 min 44 s).
+
+### Decisions (engineer's rule of 2026-10-29: accurate, not over-conservative)
+- SB2-AD10. Rating in the full check: RT1 HL-93 inventory RF ≥ 1.0 is a failure (it is the design load rating; at φ_c = φ_s = 1 it agrees with
+  the Strength I / Service II checks); the owner's higher targets (RIDOT 1.10, CTDOT 1.20) are warnings, as the owner rules themselves say
+  ("reported, the girder is not resized for it").
+- SB2-AD11. Defaults: Auto for every variable Auto design sizes, except where the tab's own automatic choice is off (stud zones entered, a weld size
+  entered, splice auto-design off): Lock, so a deliberate entry is not replaced unasked.
+- SB2-AD12. Overhang Auto limits: 1.5 ft (Preliminary sizing ws.ohMin) to min(0.40S, 4.0 ft) (Preliminary sizing Limits ohFrac, ohMax, its G6
+  practice check) on 0.5 ft (ws.ohS); the owner rule in its place (RIDOT 9.4.1.4 shall: min(d, S/2, 4 ft; 3 ft if d < 5 ft), applied in a
+  Range too; CTDOT 9.7.1.5 should: min(4 ft, d), Auto only); d = D + t_ft + t_fb of the shallowest section. **For the engineer to confirm.**
+  Seen in a study run (New design, overhang Auto, otherwise the parity settings): builtin_AASHTO took 1.5 ft (the lower limit; 398,740 lb, D = 57 in)
+  and util_AASHTO 2.0 ft (409,788 lb, D = 65 in), against 3.25 ft and 3.0 ft as entered: where the fascia girder governs, Auto moves the girders
+  outward to the lowest overhang allowed. The 1.5 ft minimum (the old app's) puts the girder line under a 1.5 ft barrier; a minimum tied to the barrier
+  (for example barrier width + 1 ft) may be wanted. The parity runs keep the project's overhangs (match legacy: Suggest does not change them).
+- SB2-AD13. Overhang choice: the lowest screen governing ratio of the starting design (the current plates at that girder count), once per girder
+  count; a plain search over the screen's own checks, not a new rule. Asymmetric: the right overhang only when a plate girder stands on the right
+  fascia line.
+- SB2-AD14. One cross-frame angle for every member; the frame type and the bolt count change only where a check fails at the current ones (RIDOT
+  then takes K-frames on the built-in and builtin28 projects, CTDOT 4 bolts per end); the detail checks counted as the full check counts them (a warning with a ratio above 1, such
+  as TS5, counts as a failure in sizing too).
+- Not changed, recorded: paper-space DXF later; the "Example" demand source kept; imported cross-frame DC1 weight stays from the Cross-frames
+  module's members (Auto design's angle choice feeds it through that module).
+
+### Lock only (Auto design cannot size these yet; the UI says so)
+- Field splice locations (shipping length, erection and contraflexure rules are not in the engine).
+- Diaphragms (rolled shapes): no shape list to search; cross-frame angles are sized when diaphragms are off.
+- Stiffener spacing with per-bay spacing or an unstiffened web (the per-bay table is the engineer's layout).
+- The overhang without an exterior plate girder.
+
+### Other copies
+- None (ui/autodesign.js reads `VARS` from the engine).

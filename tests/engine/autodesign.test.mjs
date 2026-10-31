@@ -18,7 +18,7 @@ const E = p => path.join(ROOT, 'apps/steel-bridge', p);
 export function adWindow() {
   return loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
     'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js',
-    'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'engine/autodesign.js'].map(E));
+    'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/autodesign.js'].map(E));   // rating and welds: in the full check (PR 2)
 }
 const W = adWindow(), AD = W.SBDAutoDesign, M = W.SBDModel;
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
@@ -96,7 +96,7 @@ test('Every candidate passes every module on the full check (Refine, the built-i
   const P = M.defaultProject(), R = runAD(P, { mode: 'refine', topN: 2 });
   assert.ok(R.cands.length >= 1, `no candidate: ${R.note} ${JSON.stringify(R.rejected.map(r => r.fails))}`);
   for (const c of R.cands) {
-    const Q = AD.projectWith(P, c.L), E2 = AD.evaluate(Q, { level: 'full', ctx: {} });
+    const Q = AD.projectWith(P, c.L, c.det), E2 = AD.evaluate(Q, { level: 'full', ctx: {} });   // with its sized details (PR 2)
     assert.ok(E2.pass, `candidate fails: ${JSON.stringify(E2.fails.slice(0, 3))}`);
     assert.ok(AD.proportions(c.L, Q, AD.settings(Q)).ok, '6.10.2');
     for (let g = 0; g < Q.girders.length; g++) {   // the tabs' own builders, each with its own analysis
