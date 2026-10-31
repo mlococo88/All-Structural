@@ -73,6 +73,19 @@
   }
 
   /* ---------- results ---------- */
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): the stiffness inputs, then the results by kind of effect ---------- */
+  const TOPICS = { x: () => [window.SBDFlexureUI.TP.n, { key: 'ann', title: 'Modular ratio for the stiffness', ref: A + '6.10.1.1.1b', ids: /^an\.n$/ }, ...TPX('steel', 'c3', 'cn', 'cr'),
+    { key: 'wst', title: 'Girder steel weight by segment', ref: A + '3.5.1', ids: /^an\.wst/ },
+    { key: 'I', title: 'Stiffness of each segment (steel, 3n, n)', ref: A + '4.6.2.1, 6.10.1.1.1', ids: /^an\.I\d+/ },
+    { key: 'eq', title: 'Equilibrium checks of the dead-load analyses', ref: '', ids: /^an\.eq\./ },
+    { key: 'dc', title: 'Permanent-load moments (DC1, DC2, DW)', ref: A + '4.6.2.1, 6.10.1.1.1', ids: /^an\.M\.(DC|perm)/ },
+    { key: 'll', title: 'Live-load envelopes and reactions (LL+IM)', ref: A + '3.6.1.2, 3.6.1.3.1, 3.6.2.1', ids: /^an\.(M\.LL|R\.LL)/ },
+    { key: 'defl', title: 'Live-load deflection', ref: A + '2.5.2.6.2, 3.6.1.3.2', ids: /^an\.defl\./ },
+    { key: 'camber', title: 'Dead-load deflection (camber)', ref: A + '6.7.2', ids: /^an\.camber/ },
+    { key: 'seq', title: 'Deck placement sequence', ref: A + '6.10.3.4.1', ids: /^an\.seq\./ }] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
   function resultsHtml(R) {
     if (R.errors && R.errors.length) return `<div class="alert err"><b>Analysis input errors.</b><ul>${R.errors.map(e => `<li>${esc(e.msg || e)}</li>`).join('')}</ul></div>`;
     const x = R.x, N = x.length, s = R.st, ll = R.ll, ft = R.fat, sup = R.sup, Vr = o => x.map((_, i) => i === N - 1 ? o.VL[i] : o.VR[i]), Vx = (o, k) => x.map((_, i) => i === N - 1 ? o['VL' + k][i] : o['VR' + k][i]);
@@ -114,7 +127,7 @@
       <div class="tscroll" style="max-height:420px;overflow-y:auto"><table class="tbl"><thead><tr><th>x (ft)</th>${cols.map(c => `<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>
       ${x.map((v, i) => `<tr${R.region[i] >= 1 ? ' style="background:#F8FAFC"' : ''}><td>${f(v, 2)}</td>${cols.map(c => `<td>${f(c[1][i], c[2] || (view === 'D' ? 3 : 1))}</td>`).join('')}</tr>${view === 'V' && supSet.has(i) ? `<tr><td>${f(v, 2)} left</td>${[['V', s.DC1.VL], ['', s.DC2.VL], ['', s.DW.VL], ...(ll ? [['', ll.VLpos], ['', ll.VLneg], ['', ft.VLpos], ['', ft.VLneg]] : []), ['', s.CL.VL]].map(c => `<td>${f(c[1][i], 1)}</td>`).join('')}</tr>` : ''}`).join('')}
       </tbody></table></div><p class="note">Shaded rows: pier regions (negative permanent-load moment), where the pier g<sub>M</sub> and the 90 % two-truck case apply (3.6.1.3.1). Each key value is worked in the steps below.</p>`);
-    h += card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). Moments and shears are stiffness-method results of the shared beam engine on the stiffness of each stage; their checks are the statics steps and, for LL+IM, the per-lane envelope × g.</p><ol class="steps">${R.steps.map(q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${esc(q.note)}</div>` : ''}</li>`).join('')}</ol>`);
+    h += card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). Moments and shears are stiffness-method results of the shared beam engine on the stiffness of each stage; their checks are the statics steps and, for LL+IM, the per-lane envelope × g.</p>${ST().groupsHTML(groups('x', R.steps), { open: OPEN, item: q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${esc(q.note)}</div>` : ''}</li>` })}`);
     return h;
   }
 
@@ -126,6 +139,7 @@
     h += settingsHtml(P, gi);
     if (res && !stale) h += resultsHtml(res);
     el.innerHTML = h;
+    ST().wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     { const sl = el.querySelector('#gfx_an'); if (sl && res && !stale && window.SBDGfxA) window.SBDGfxA.analysis(sl, { P, gi, R: res }); }
     el.oninput = null; el.onchange = e => { if (e.target.id === 'an_view') { view = e.target.value; draw(el, ctx); return; } onInput(e, ctx); };
     el.onclick = e => { if (e.target.id !== 'anCalc') return; busy = true; draw(el, ctx);
@@ -141,5 +155,5 @@
     const why = o.auto ? (an ? (rd.ok ? 'the default: the project is complete' : `the project is not complete: ${rd.why.map(esc).join(' ')}`) : o.src === 'example' && !rd.ok ? `the default while the project is not complete: ${rd.why.map(esc).join(' ')}` : 'the default') : 'as chosen below';
     return `<div class="srcBar${an && !rd.ok ? ' warn' : o.src === 'example' ? ' ex' : ''}" role="status"><span>Demands:</span> <b>${what}</b> <span class="srcWhy">(${why})</span></div>`;
   }
-  window.SBDAnalysisUI = { draw, srcBar };
+  window.SBDAnalysisUI = { draw, srcBar, TOPICS, groups };
 })();

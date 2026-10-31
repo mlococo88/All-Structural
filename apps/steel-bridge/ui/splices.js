@@ -88,7 +88,25 @@
     } catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): loads and section properties of the splice, then the flange and web splices ---------- */
+  const dm = (k, t) => ({ key: 'd' + k, title: t, ref: A + '6.13.6.1.4', ids: new RegExp('^sp\\.' + k + '\\.'), res: new RegExp('^sp\\.' + k + '\\.M$') });
+  const TOPICS = { x: () => [...TPX('own'), { key: 'n', title: 'Modular ratio', ref: A + '6.10.1.1.1b', ids: /^sp\.n$/ },
+    { key: 'sec', title: 'Smaller section: moment of inertia and stress points', ref: A + '6.13.6.1.4', ids: /^sp\.(Is|y|I\.)/ },
+    dm('Con', 'Demands: deck placement'), dm('StrP', 'Demands: Strength I, maximum positive flexure'), dm('StrN', 'Demands: Strength I, maximum negative flexure'),
+    dm('SvP', 'Demands: Service II, maximum positive flexure'), dm('SvN', 'Demands: Service II, maximum negative flexure'),
+    { key: 'fs', title: 'Flange stresses from the unfactored moments', ref: A + '6.13.6.1.4', ids: /^sp\.f\./ },
+    { key: 'fat', title: 'Fatigue I stress range at the splice', ref: A + '6.6.1.2, 6.13.6.1.4', ids: /^sp\.fat\./ },
+    { key: 'res', title: 'Resistance of the smaller section (design forces)', ref: A + '6.13.6.1.4, 6.10.9.2', ids: /^sp\.(Mr|Vn|Vr)/ },
+    { key: 'top', title: 'Top flange splice', ref: A + '6.13.6.1.4c, 6.13.2.8, 6.13.2.9', ids: /^sp\.(top\.|TF\d)/ },
+    { key: 'bot', title: 'Bottom flange splice', ref: A + '6.13.6.1.4c, 6.13.2.8, 6.13.2.9', ids: /^sp\.(bot\.|BF\d)/ },
+    { key: 'web', title: 'Web splice', ref: A + '6.13.6.1.4b, 6.13.2.8', ids: /^sp\.(web\.|WS\d)/ },
+    { key: 'mt', title: 'Moment resistance of the flange splice (MT)', ref: A + '6.13.6.1.4', ids: /^sp\.MT\d/ },
+    { key: 'dt', title: 'Detailing: bolt spacing and edge distance (DT)', ref: A + '6.13.2.6', ids: /^sp\.DT\d/ }] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
+  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   /* the largest ratio among the strength checks (bolts, plates, web: TF1–TF5, BF1–BF5, WS1, WS2, WS4, WS5) */
   const strGov = CK => { let b = null; (CK || []).filter(c => /^(TF|BF)[1245]$|^WS[1245]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.r != null && (isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it }; /* SB2-R2: NaN / ∞ failing items govern */ })); return b; };
   const plTxt = F => `${F.nl} line${F.nl > 1 ? 's' : ''} each side × ${F.nr} rows; outer PL ${SP().frac(F.bo)} × ${SP().frac(F.to)}${F.inner ? `, 2 inner PL ${SP().frac(F.bi)} × ${SP().frac(F.ti)}` : ''}`;
@@ -113,6 +131,7 @@
       if (s) h += splice(s, R);
     }
     host.innerHTML = h;
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
     on('#sp_calc', 'click', () => { calc(ctx); redraw(); });
@@ -149,5 +168,5 @@
     return h;
   }
 
-  window.SBDSplicesUI = { ensure, inputs, onChange, onClick, render, envOf };
+  window.SBDSplicesUI = { ensure, inputs, onChange, onClick, render, envOf, TOPICS, groups };
 })();

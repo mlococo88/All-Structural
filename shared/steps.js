@@ -127,8 +127,8 @@
      demands, intermediate quantities (one topic per code sub-article), resistance, check. Presentation only: the steps, their ids and values are
      not changed or copied; group() only sorts them into topics (every step lands in exactly one, in its original order within the topic).
        group(steps, topics, opt) -> [{ key, title, ref, see, steps, res, ratio, cls, chip }]
-         topics: [{ key, title, ref?, see?, ids: RegExp | (id) => bool, res?: RegExp (the step, by id, that sums up a topic without a test) }] tested in order on each step id without its work prefix (opt.strip,
-                 default /^[^.]+\./: 'ts3.p1.Vn' -> 'p1.Vn'); the first match takes the step; steps no topic takes go to a last topic
+         topics: [{ key, title, ref?, see?, ids: RegExp | (id) => bool, res?: RegExp (the step, by id, that sums up a topic without a test), info?: RegExp (steps whose ok flag only states which case applies, not a check: shown, but not counted in the topic's status) }] tested in order on each step id without its work prefix (opt.strip,
+                 default /^[^.]+\./: 'ts3.p1.Vn' -> 'p1.Vn'; false: the whole id, for lists that mix the ids of several works); the first match takes the step; steps no topic takes go to a last topic
                  'other' ('Other steps'); topics with no step are left out. Topic order = the order of topics.
          res    the topic's result step: its governing test step (ok === false first, else the largest ratio), else its last step with a value
          ratio  the largest ratio of its test steps (a test step whose value is a number without a unit: demand / capacity), NaN if none
@@ -142,14 +142,14 @@
   const fin = v => typeof v === 'number' && isFinite(v);
   const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
   function group(steps, topics, opt) {
-    opt = opt || {}; const strip = opt.strip || /^[^.]+\./, hi = opt.hi != null ? opt.hi : 0.9;
-    const T = (topics || []).map(t => ({ key: t.key, title: t.title, ref: t.ref || '', see: t.see || '', test: t.ids, pick: t.res, steps: [] })), other = { key: 'other', title: 'Other steps', ref: '', see: '', steps: [] };
-    (steps || []).forEach(s => { const id = String(s.id).replace(strip, ''), t = T.find(q => (typeof q.test === 'function' ? q.test(id, s) : q.test.test(id))); (t || other).steps.push(s); });
+    opt = opt || {}; const strip = opt.strip === false ? null : opt.strip || /^[^.]+\./, hi = opt.hi != null ? opt.hi : 0.9;
+    const T = (topics || []).map(t => ({ key: t.key, title: t.title, ref: t.ref || '', see: t.see || '', test: t.ids, pick: t.res, skip: t.info, steps: [] })), other = { key: 'other', title: 'Other steps', ref: '', see: '', steps: [] };
+    (steps || []).forEach(s => { const id = strip ? String(s.id).replace(strip, '') : String(s.id), t = T.find(q => (typeof q.test === 'function' ? q.test(id, s) : q.test.test(id))); (t || other).steps.push(s); });
     return T.concat([other]).filter(t => t.steps.length).map(t => {
-      const tests = t.steps.filter(s => s.ok !== undefined), rs = tests.filter(isRatio), ng = tests.find(s => s.ok === false);
+      const idf = s => (strip ? String(s.id).replace(strip, '') : String(s.id)), tests = t.steps.filter(s => s.ok !== undefined && !(t.skip && t.skip.test(idf(s)))), rs = tests.filter(isRatio), ng = tests.find(s => s.ok === false);
       const ratio = rs.length ? Math.max(...rs.map(s => (fin(s.value) ? s.value : Infinity))) : NaN;
       const gov = ng || (rs.length ? rs.reduce((a, b) => ((fin(b.value) ? b.value : Infinity) > (fin(a.value) ? a.value : Infinity) ? b : a)) : tests[tests.length - 1]);
-      const res = gov || (t.pick && t.steps.find(s => t.pick.test(String(s.id).replace(strip, '')))) || [...t.steps].reverse().find(s => s.value != null && s.value !== '') || t.steps[t.steps.length - 1];
+      const res = gov || (t.pick && t.steps.find(s => t.pick.test(strip ? String(s.id).replace(strip, '') : String(s.id)))) || [...t.steps].reverse().find(s => s.value != null && s.value !== '') || t.steps[t.steps.length - 1];
       const cls = !tests.length ? '' : ng || ratio > 1 + 1e-9 || Number.isNaN(ratio) && rs.length ? 'ng' : ratio >= hi ? 'hi' : 'ok';
       const chip = !tests.length ? '' : rs.length ? (fin(ratio) ? fmt(ratio, 3) : '∞') + (ng ? ' NG' : '') : ng ? 'NG' : 'OK';
       return { key: t.key, title: t.title, ref: t.ref, see: t.see, steps: t.steps, res, ratio, cls, chip };
@@ -170,8 +170,16 @@
       + groups.map((t, k) => `<details class="sg-t${t.cls ? ' sg-' + t.cls : ''}" data-sgk="${attr(t.key)}"${open.has(t.key) ? ' open' : ''}><summary><span class="sg-n">${k + 1}</span><span class="sg-h"><span class="sg-ttl">${esc(t.title)}</span>${t.ref ? `<span class="sg-ref">${esc(t.ref)}</span>` : ''}${o.see ? o.see(t) || '' : ''}<span class="sg-sum">${summary(t, true)}</span></span>${t.chip ? `<span class="sg-chip">${esc(t.chip)}</span>` : ''}</summary>`
         + `<ol class="steps">${t.steps.map(s => (o.item ? o.item(s) : `<li>${esc(s.label)}: ${line(s, true)}</li>`)).join('')}</ol></details>`).join('') + '</div>';
   }
+  /* reveal(root, id) (browser): the element of step id (id="st-<id>") inside root, with its topic opened first (a topic starts closed); null if none */
+  function reveal(root, id) {
+    if (!root || !root.querySelector) return null; const t = root.querySelector('[id="st-' + String(id == null ? '' : id).replace(/^st-/, '').replace(/["\\]/g, '\\$&') + '"]'); if (!t) return null;
+    const d = t.closest ? t.closest('details.sg-t') : null; if (d && !d.open) d.open = true; return t;
+  }
   function wire(root, o) {
     o = o || {}; if (!root || !root.addEventListener) return;
+    if (typeof document !== 'undefined' && document.head && !document.getElementById('sg-css')) { const st = document.createElement('style'); st.id = 'sg-css'; st.textContent = groupCss; document.head.appendChild(st); }   // the topics' CSS, once per page
+    // a link to a step ("§", href="#st-<id>") anywhere in root opens that step's topic before the browser scrolls to it (bound once per root)
+    if (!root.__sgLink) { root.__sgLink = true; root.addEventListener('click', e => { const a = e.target && e.target.closest ? e.target.closest('a[href^="#st-"]') : null; if (a) reveal(root, a.getAttribute('href').slice(4)); }); }
     root.querySelectorAll('[data-sgall]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); const on = b.dataset.sgall === '1', box = b.closest('.sg') || root;
       box.querySelectorAll('details.sg-t').forEach(d => { if (d.open !== on) d.open = on; }); }));
     root.querySelectorAll('details.sg-t').forEach(d => d.addEventListener('toggle', () => { if (o.onToggle) o.onToggle(d.dataset.sgk, d.open); }));
@@ -193,5 +201,5 @@
     window.addEventListener('afterprint', () => { opened.forEach(d => { d.open = false; }); opened = []; });
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, groupCss };
+  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss };
 })();

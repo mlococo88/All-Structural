@@ -73,7 +73,22 @@
     st.textContent = `.fx-ok{background:#e7f4ec;} .fx-hi{background:#fdf3d8;} .fx-ng{background:#fbe1dd;font-weight:600;} .fx-list{max-height:320px;overflow:auto;} .fx-list tr{cursor:pointer;} .fx-na{color:#64748b;font-style:italic;}`;
     document.head.appendChild(st);
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): flange-to-web welds, then the shop flange transitions ---------- */
+  const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr'),
+    { key: 'geo', title: 'Flange centroids above the bottom of the steel', ref: '', ids: /^wf\d+\.(yTf|yBf)$/ },
+    { key: 'flow', title: 'Factored shear flow at the flange-to-web junction', ref: A + '6.13.3.4', ids: /^wf\d+\.(t\d+\.|vuT$|vuB$)/, res: /\.vuT$/ },
+    { key: 'wmin', title: 'Minimum fillet weld size', ref: A + '6.13.3.4', ids: /^wf\d+\.wmin/ },
+    { key: 'res', title: 'Factored weld resistance', ref: A + '6.13.3.2.4b', ids: /^wf\d+\.(Rw|Rweb)$/, res: /\.Rw$/ },
+    { key: 'ffat', title: 'Fatigue shear stress range on the weld', ref: A + '6.6.1.2, 6.10.5.3', ids: /^wf\d+\.fat/ },
+    { key: 'fok', title: 'Check: weld metal and web base metal (FW1, FW2)', ref: A + '6.13.3.2.4b', ids: /^wf\d+\.ok/ },
+    { key: 'tfat', title: 'Fatigue at the butt splice (TR1)', ref: A + '6.6.1.2', ids: /^wt\d+\.(y|fp|fn|df|fat)$/, res: /\.fat$/ },
+    { key: 'tsl', title: 'Thickness and width transitions (TR2, TR3)', ref: A + '6.13.6.2', ids: /^wt\d+\.(slT|slW)$/ },
+    { key: 'tpr', title: 'Area and thickness proportions (TR4)', ref: A + '6.13.6.2', ids: /^wt\d+\.(pa|pt)$/ }] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
+  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const stCell = (st, r) => `<td class="${st === 'fail' ? 'fx-ng' : st === 'warn' ? 'fx-hi' : st === 'na' ? 'fx-na' : r != null ? cls(r) : 'fx-ok'}">${r != null && isFinite(r) ? fmt(r, 3) : { pass: 'OK', fail: 'Fail', warn: 'Warning', na: 'n/a' }[st] || esc(st)}</td>`;
 
   function render(host, ctx) {
@@ -94,6 +109,7 @@
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
     host.innerHTML = h;
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (id, ev, fn) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, fn); }, redraw = () => render(host, ctx), save = () => { if (ctx.changed) ctx.changed(); else redraw(); };
     const num = v => v === '' ? NaN : Number(v);
     on('wt_Fexx', 'change', e => { Wd.Fexx = num(e.target.value); save(); });
@@ -137,5 +153,5 @@
     return h;
   }
 
-  window.SBDWeldsUI = { ensure, input, build, render };
+  window.SBDWeldsUI = { ensure, input, build, render, TOPICS, groups };
 })();

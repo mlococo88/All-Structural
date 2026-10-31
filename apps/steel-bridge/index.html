@@ -295,7 +295,9 @@
     R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(P, ui.g) };
     stale = false; drawOut();
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${ST.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const secOpen = new Set();
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${ST.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepsHtml = list => ST.groupsHTML(window.SBDFlexureUI.groups('sec', list), { open: secOpen, item: stepLi });   // topics (SBDFlexureUI.TP), as the Flexure tab
   const wk = (id, txt) => `<a class="wk" href="#st-${id}">${txt || 'see work'}</a>`;
   function drawOut() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
@@ -337,10 +339,11 @@
       h += card('Worked steps', `<p class="note">Each value above links here (§). AASHTO LRFD 10th Ed. (2024). y is measured up from the bottom of the steel.</p>${stepsHtml(R.nr.steps.concat(c.steps))}`);
     }
     $('out').innerHTML = h;
+    ST.wire($('out'), { onToggle: (k, open) => { if (open) secOpen.add(k); else secOpen.delete(k); } });
     if (window.SBDGfxA && $('gfx_sec') && R && !stale && !R.errors) window.SBDGfxA.section($('gfx_sec'), { P, R, seg: ui.seg + 1 });   // graphic (ui/gfxa.js)
   }
   $('out').addEventListener('click', e => { const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
-    if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
+    if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = ST.reveal($('out'), id.replace(/^st-/, '')) || $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
   $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } else if (UL.onOutChange(e, ui)) { saveUi(); drawOut(); } });
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); drawOut(); });
 

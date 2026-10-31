@@ -87,7 +87,23 @@
     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
     return { L, I, R, C, fl, XF, br, line, G, A };
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): framing layout, wind, torsional bracing, then each cross-frame member ---------- */
+  const mem = (k, t) => ({ key: k, title: t, ref: A + '6.9.4.1, 6.8.2, 6.13.2.7, 6.13.2.9', ids: new RegExp('^cf\\.' + k + '\\.'), res: new RegExp('^cf\\.' + k + '\\.(Pr|Pt)$') });
+  const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr'),
+    { key: 'lay', title: 'Cross-frame spacing and orientation', ref: A + '6.7.4.2.1', ids: /^fr\.(s|k\d+\.)/, res: /^fr\.s$/ },
+    { key: 'lb', title: 'Unbraced lengths of the girders', ref: A + '6.7.4.2.1', ids: /^fr\.g\d+\./ },
+    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(dg|Lb|geo)$/ },
+    { key: 'lat', title: 'Flange lateral bending from skew', ref: A + 'C6.10.1', ids: /^flsk\./ },
+    { key: 'w3', title: 'Wind on the girders, Strength III', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wIII\./, res: /^cf\.wIII\.Fw$/ },
+    { key: 'w5', title: 'Wind on the girders, Strength V', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wV\./, res: /^cf\.wV\.Fw$/ },
+    { key: 'tr', title: 'Member forces per kip of wind force (truss model)', ref: A + '4.6.2.7', ids: /^cf\.tr\d+$/ },
+    { key: 'sb', title: 'Torsional bracing during deck placement', ref: A + '6.7.4.2.1, C6.7.4.2', ids: /^cf\.sb\./, res: /^cf\.sb\.bReq$/ },
+    mem('top', 'Top chord'), mem('bot', 'Bottom chord'), mem('diag', 'Diagonals')] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
+  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const wk = id => id ? `<a class="wk" href="#st-${esc(id)}" data-cfgo="${esc(id)}">§</a>` : '';
   const stName = st => ({ pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[st] || st);
   function results(B) {
@@ -137,9 +153,10 @@
     css(); const key = JSON.stringify([ctx.P, ctx.g]);
     if (key !== S.key) { S.key = key; try { S.R = build(ctx); } catch (e) { S.R = { err: 'Calculation error: ' + (e && e.message) }; } }
     host.innerHTML = S.R.err ? `<div class="alert err">${esc(S.R.err)}</div>` : results(S.R);
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     if (!S.R.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.crossframe(host, ctx, S.R);   // the cross-frame elevation (ui/tabgraphics-b.js)
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 
-  window.SBDFramingUI = { ensure, inputs, onChange, onClick, render, build, plan };
+  window.SBDFramingUI = { ensure, inputs, onChange, onClick, render, build, plan, TOPICS, groups };
 })();

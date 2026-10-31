@@ -90,7 +90,28 @@
       return R;
     } catch (e) { return { errors: [`The loads could not be computed: ${e.message}`] }; }
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): owner rules, geometry, dead loads, then the live-load distribution factors by sub-article ---------- */
+  const TOPICS = { x: () => [
+    { key: 'own', title: 'Owner load rules (η, m, haunch)', ref: '', ids: /^own\./, res: /^own\.eta$/ },
+    { key: 'geo', title: 'Cross-section geometry and live-load faces', ref: A + '3.6.1.1.1, 4.6.2.2.1', ids: /^(xs\.(?!n$)|df\.geo\.)/ },
+    { key: 'n', title: 'Modular ratio for the stiffness parameter', ref: A + '4.6.2.2.1', ids: /^(n\.|xs\.n$)/, res: /^n\.n$/ },
+    { key: 'steel', title: 'Girder steel self-weight (DC1)', ref: A + '3.5.1', ids: /^dl\.steel\./, res: /\.avg$/ },
+    { key: 'dc1', title: 'Deck, haunch and forms (DC1)', ref: A + '3.3.2, 3.5.1', ids: /^dl\.G\d+\.(trib|deck|haunch|sip|DC1)$/, res: /\.DC1$/ },
+    { key: 'dc2', title: 'Barriers and wearing surface (DC2, DW)', ref: A + '3.3.2, 3.5.1', ids: /^dl\.(xbar|S\d+$|load\.|G\d+\.(barL|barR|ws|DC2|DW)$)/, res: /\.DW$/ },
+    { key: 'kg', title: 'Longitudinal stiffness parameter', ref: A + '4.6.2.2.1', ids: /^df\.[sp]\d+\.(eg|Kg\d*|KgAvg)$/, res: /\.Kg$/ },
+    { key: 'int', title: 'Interior girder equations (one and two lanes)', ref: A + '4.6.2.2.2b, 4.6.2.2.3a', ids: /^df\.[sp]\d+\.G\d+\.(S|kterm|mom\d*|shr\d*)$/ },
+    { key: 'lev', title: 'Lever rule', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^df\.[sp]\d+\.G\d+\.lev\d*\./ },
+    { key: 'ext', title: 'Exterior girder: correction factor e', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^df\.[sp]\d+\.G\d+\.(de|eM|eV|mE|vE)$/ },
+    { key: 'rig', title: 'Rigid cross-section (special analysis)', ref: A + 'C4.6.2.2.2d', ids: /^df\.[sp]\d+\.G\d+\.rig/ },
+    { key: 'skew', title: 'Skew reduction and correction', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^df\.[sp]\d+\.(scfM|scfV)$/ },
+    { key: 'gov', title: 'Distribution factors used (moment, shear)', ref: A + '4.6.2.2', ids: /^df\.[sp]\d+\.G\d+\.g[MV]\d*$/, res: /\.gM$/ },
+    { key: 'fat', title: 'Fatigue factors (one lane, multiple presence removed)', ref: A + '3.6.1.4, 4.6.2.2.2b', ids: /^df\.[sp]\d+\.G\d+\.fat/ },
+    { key: 'def', title: 'Deflection distribution factor', ref: A + '2.5.2.6.2', ids: /^df\.[sp]\d+\.gDef$/ }] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
+  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const wk = (id, t, sel) => `<a class="wk" href="#st-${esc(id)}"${sel && sel.lg != null ? ` data-lg="${sel.lg}"` : ''}${sel && sel.lr != null ? ` data-lr="${sel.lr}"` : ''}>${t || '§'}</a>`;
   const card = (t, b) => `<section class="sec"><div class="secHead">${t}</div><div class="secBody">${b}</div></section>`;
   function output(R, ui, errors) {
@@ -125,7 +146,8 @@
   function onOutChange(e, ui) { if (e.target.id === 'o_lg') { ui.lg = +e.target.value; return true; } if (e.target.id === 'o_lr') { ui.lr = +e.target.value; return true; } return false; }
 
   /* after(el, P, R, ui): the cross-section graphic of the LLDF cases (ui/gfxa.js), after the page has set the output's HTML */
-  function after(el, P, R, ui) { const slot = el.querySelector('#gfx_ld'); if (!slot || !R || (R.errors && R.errors.length) || !window.SBDGfxA) return;
+  function after(el, P, R, ui) { if (R && !(R.errors && R.errors.length)) window.SharedSteps.wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
+    const slot = el.querySelector('#gfx_ld'); if (!slot || !R || (R.errors && R.errors.length) || !window.SBDGfxA) return;
     window.SBDGfxA.loads(slot, { P, R, lg: Math.min(ui.lg || 0, R.dead.N - 1), lr: Math.min(ui.lr || 0, R.regions.length - 1) }); }
-  window.SBDUiLoads = { after, ensure, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
+  window.SBDUiLoads = { TOPICS, groups, after, ensure, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
 })();

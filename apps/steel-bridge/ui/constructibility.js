@@ -79,7 +79,27 @@
     S.key = key(ctx);
   }
 
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): deck placement (6.10.3) and the overhang brackets ---------- */
+  const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'),
+    { key: 'dem', title: 'Demands: deck placement moments and shear', ref: A + '3.4.2, 6.10.3.2', ids: /^cn\.(Mc|Vu)$/, res: /^cn\.Mc$/ },
+    { key: 'str', title: 'Flange stresses and lateral bending', ref: A + '6.10.3.2.1, 6.10.1.6', ids: /^(cn\.(f\.|fbu$|fl$)|flsk\.)/, res: /^cn\.fbu$/ },
+    { key: 'web', title: 'Web bend-buckling resistance', ref: A + '6.10.1.9.1', ids: /^cn\.(Dc|k|Fcrw)$/, res: /^cn\.Fcrw$/ },
+    { key: 'rh', title: 'Hybrid factor', ref: A + '6.10.1.10.1', ids: /^cn\.Rh$/ },
+    { key: 'flb', title: 'Flange local buckling', ref: A + '6.10.8.2.2', ids: /^cn\.(Fyr|FLB)$/, res: /^cn\.FLB$/ },
+    { key: 'ltb', title: 'Lateral-torsional buckling', ref: A + '6.10.8.2.3', ids: /^cn\.(Cb|rt|rtE|Lp|Lr|Fe|ge|gov|LTB)$/, res: /^cn\.LTB$/ },
+    { key: 'fnc', title: 'Nominal flexural resistance of the compression flange', ref: A + '6.10.8.2.1', ids: /^cn\.Fnc$/ },
+    { key: 'gs14', title: 'GS14: top flange yielding and buckling', ref: A + '6.10.3.2.1', ids: /^cn\.(yield|buck)\.ok$/ },
+    { key: 'gs15', title: 'GS15: tension flange and web bend-buckling', ref: A + '6.10.3.2.2, 6.10.3.2.3', ids: /^cn\.(tens|web)\.ok$/ },
+    { key: 'gs16', title: 'GS16: web shear during deck placement', ref: A + '6.10.3.3', ids: /^cn\.sh\./ },
+    { key: 'ohl', title: 'Overhang bracket loads', ref: A + '6.10.3.4, C6.10.3.4', ids: /^oh\.(Fl|Pl|Ml|Mu)$/, res: /^oh\.Ml$/ },
+    { key: 'ohs', title: 'Overhang: flange stresses and lateral bending', ref: A + '6.10.3.2.1', ids: /^oh\.(AF|fbu|fl\d+\.)/, res: /^oh\.fbu$/ },
+    { key: 'ohr', title: 'Overhang: resistances', ref: A + '6.10.8.2, 6.10.1.9.1', ids: /^oh\.(Dc|k|Fcrw|FLB|LTB|rt)$/ },
+    { key: 'ohc', title: 'OH1 to OH5: checks', ref: A + '6.10.3.2', ids: /^oh\..*\.ok$/ }] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
+  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const ckRows = (checks, gov) => checks.map(c => `<tr${gov === c ? ' class="cn-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${cls(c.ratio)}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`).join('');
   const ckHead = '<thead><tr><th class="lft">Check</th><th>Demand</th><th>Capacity</th><th>Ratio</th><th class="lft">AASHTO LRFD 10th Ed.</th><th></th></tr></thead>';
 
@@ -131,6 +151,7 @@
           ${q ? `<h4 class="sub">${esc(q.name)}</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(q.checks, q.gov)}</tbody></table></div>${stepsHtml(q.steps)}` : ''}</div></section>`; }
     }
     host.innerHTML = h;
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     { const sl = host.querySelector('#gfx_cn'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.constr(sl, { P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
@@ -153,5 +174,5 @@
     on('[data-gotab]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.gotab}"]`); if (b) b.click(); });
   }
 
-  window.SBDConstrUI = { render, build };
+  window.SBDConstrUI = { render, build, TOPICS, groups };
 })();
