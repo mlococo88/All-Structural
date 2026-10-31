@@ -2521,3 +2521,23 @@ No calculation change: display and inputs only (the engine is the sbd-autodesign
 - `node tests/engine/run.mjs autodesign` (unchanged engine).
 ### Other copies
 - None.
+
+## 2026-10-31 — PR: sbd-owner-on-project — "Bridge owner (DOT) rules" card moved to the Project input tab; owner text in the title block and report (UI only)
+### What changed (no computed value, saved path, project format or storage key)
+- `apps/steel-bridge/ui/loads.js`: the card `h.card('Bridge owner (DOT) rules', …)` moved out of `inputs(P, h)` into a new function `ownerCard(P, h)` (exported on `window.SBDUiLoads`). Its code is the same (paths `ownerRules.owner`, `ownerRules.eta.*`, button `data-xsact="ownDef"`, handled by the same `onClick`); only the selector label changed from `'Owner'` to `'Client / owner (DOT)'`. `inputs()` now starts with `return h.card('Girders and deck', …` (the `x`, `tf` locals stay; `own, o, rI, rD, rR, yn, defs` went with the card).
+- `apps/steel-bridge/index.html`, `panes()` anchor `proj: card('Project',`: the `owner` field is labelled `Client name (title block, optional)` (path `project.owner` unchanged) with the note "blank = the selected DOT's name is used"; the Project card is followed by `+ UL.ownerCard(P, { num, sel, card, esc })`.
+- `index.html` `tabOf`: before `p.startsWith('xs') || p.startsWith('ownerRules') || … ? 'xs' : p.startsWith('project') ? 'proj'`; after `p.startsWith('xs') || … ? 'xs' : p.startsWith('project') || p.startsWith('ownerRules') ? 'proj'` (a validation error on `ownerRules.*` now badges the Project tab).
+- `engine/model.js`: new `clientName(P)` (exported on `SBDModel`): `project.owner` trimmed if not blank, else `ownerRules.owner` when not AASHTO, else `''`. Display text only.
+- `report/builders.js`: the report's Project card row "Owner" is now "Client / owner" = `clientName(P) || '—'`; the two `info` header rows `['Owner', p.owner]` use `clientName(P)`.
+- `engine/sheets.js`, cover sheet (anchor `D.text(l, 0, -6.5 * h, h,`): one added line `CLIENT / OWNER: <text>` at y = -8.3h, only when `clientName(P)` is not blank (AASHTO with a blank client: the sheet and DXF are byte-identical to before). The per-sheet title block cells are unchanged.
+- `ui/splices.js` note: "(Cross-section & loads tab)" for the owner η and LL multiplier is now "(set on the Project tab)".
+### Governing provision
+- None changed. The owner rules (AASHTO LRFD 10th Ed. Art. 1.3, 3.4.1 with each manual) are computed exactly as before.
+### Check case
+- Built-in project, `SBDLoads.fromModel` + `compute` for girder 0 with owner AASHTO, RIDOT, MassDOT, CTDOT: the complete result object (every step and value, 1.9 MB of JSON) from origin/main and from this branch is byte-identical.
+### How verified
+- `node tests/engine/run.mjs owners paths report report-wiring model sheets drawings`; Playwright at 1280 and 390 px (see the PR).
+### Other copies
+- None.
+### Open items
+- "Apply <DOT> defaults" still changes values on the Cross-section & loads and Materials & deck tabs (as before); it now sits on the Project tab. The per-sheet title block has no owner cell (not added: it would move the existing cells).

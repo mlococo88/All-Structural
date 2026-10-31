@@ -133,6 +133,7 @@
     const h = D.h, l = D.layer('ANNO-TEXT', 7), tb = D.layer('TABL', 7), G = C.G, pj = C.P.project || {}, T = DW().table;
     D.text(l, 0, 0, 3 * h, str(pj.name || 'BRIDGE').toUpperCase()); D.text(l, 0, -4 * h, 1.6 * h, 'STEEL GIRDER SUPERSTRUCTURE');
     D.text(l, 0, -6.5 * h, h, `${G.spans.length} SPAN${G.spans.length > 1 ? 'S' : ''} (${G.spans.map(f2).join(' + ')} FT), ${G.nb} GIRDERS, SKEW ${G.skews.map(f2).join(' / ')} DEG.`);
+    { const cl = window.SBDModel && window.SBDModel.clientName ? window.SBDModel.clientName(C.P) : ''; if (cl) D.text(l, 0, -8.3 * h, h, 'CLIENT / OWNER: ' + str(cl).toUpperCase()); }   // blank for AASHTO with no client name: the sheet is unchanged
     const t = T(D, tb, 0, -10 * h, ['SHEET', 'TITLE'], C.list.map((s, i) => [String(i + 1), s]), 'SHEET INDEX');
     if (C.miss.length) T(D, tb, 0, t.y - 2 * h, ['NOT GENERATED', 'REASON'], C.miss, 'DRAWINGS NOT IN THIS SET');
     T(D, tb, t.w + 10 * h, -10 * h, ['REV.', 'DATE', 'DESCRIPTION', 'BY'], [['0', C.date, 'ISSUED FROM STEEL BRIDGE DESIGN', str(pj.designer || '')], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']], 'REVISIONS');
