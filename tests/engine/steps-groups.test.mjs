@@ -51,6 +51,7 @@ test('Shear & stiffeners tab topics: every step of every panel, station, transve
   const doc = W.SharedReport.build(Mo); assert.equal(doc.unresolved.length, 0, JSON.stringify(doc.unresolved.slice(0, 3)));
   const tocSub = doc.toc.flatMap(s => s.subs).filter(q => q.items && q.items.length); assert.ok(tocSub.length >= 3);
   const html = W.SharedReport.html(doc, { lazy: false }), txt = W.SharedReport.text(doc);
-  assert.equal((html.match(/class="rp-top/g) || []).length, its.reduce((a, it) => a + it.topics.length, 0)); assert.ok(!/NaN/.test(txt) && txt.includes(`1. ${its[0].topics[0].title}`), "report text: topic lines");
+  const allTop = Mo.sections.flatMap(q => q.subs.flatMap(u => u.items)).filter(it => it.type === 'steps' && it.topics).reduce((a, it) => a + it.topics.length, 0);   // every tab's grouped items since the remaining tabs adopted topics
+  assert.equal((html.match(/class="rp-top/g) || []).length, allTop); assert.ok(!/NaN/.test(txt) && txt.includes(`1. ${its[0].topics[0].title}`), "report text: topic lines");
   console.log(`       ${n} steps sorted into topics (none left over); report: ${its.length} grouped items`);
 });

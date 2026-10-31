@@ -29,9 +29,9 @@
   const fromHtml = h => String(h == null ? '' : h).replace(/<sub>(.*?)<\/sub>/g, (m, a) => `$_{${a.replace(/<[^>]+>/g, '')}}$`).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
   const steps = (scope, list, o) => ({ type: 'steps', scope, steps: list || [], ...(o || {}) });
-  /* gsteps: worked steps in topics (presentation spec A; trial on Shear & stiffeners, 2026-10-31): the topics of the tab (SBDShearUI.groups,
+  /* gsteps: worked steps in topics (presentation spec A; trial on Shear & stiffeners, 2026-10-31; every output tab since): kind = 'UiName:kind' (the tab's UI file, groups(kind, list)) or, bare, a Shear & stiffeners kind. The topics of the tab (SBDShearUI.groups,
      SharedSteps.group), the steps in topic order with a sub-heading per topic (shared/report.js item.topics); ids and keys unchanged */
-  const gsteps = (kind, scope, list, o) => { const U = window.SBDShearUI, G = U && U.groups ? U.groups(kind, list || []) : null; if (!G) return steps(scope, list, o);
+  const gsteps = (kind, scope, list, o) => { const [ui, k] = /:/.test(kind) ? kind.split(':') : ['SBDShearUI', kind], U = window[ui], G = U && U.groups ? U.groups(k, list || []) : null; if (!G) return steps(scope, list, o);
     return steps(scope, [].concat(...G.map(t => t.steps)), { ...(o || {}), topics: G.map(t => ({ title: t.title, ref: t.ref, n: t.steps.length, cls: t.cls, chip: t.chip, res: t.res })) }); };
   const note = (text, warn) => ({ type: 'note', text, warn: !!warn });
   const tbl = (head, rows, o) => ({ type: 'table', head, rows, ...(o || {}) });
@@ -84,7 +84,7 @@
         tbl(['Region', 'Girder', '$g_{M}$', '$g_{V}$', '$g_{fat,M}$', '$g_{fat,V}$', 'Method'], R.regions.flatMap(q => gs.filter(j => q.members[j]).map(j => { const m = q.members[j];
           return [q.label, `${m.label} (${m.type === 'ext' ? 'ext.' : 'int.'})`, { ...N(m.gM, 4), key: `df.${q.id}.G${j + 1}.gM` }, q.kind === 'span' ? N(m.gV, 4) : '—', N(m.fatM, 4), q.kind === 'span' ? N(m.fatV, 4) : '—', m.method]; }))),
         R.ranges.filter(q => !q.ok).length ? note(`Outside the range of applicability (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1): ${R.ranges.filter(q => !q.ok).map(q => `${q.region} ${q.name} = ${f(q.value, q.key === 'Kg' ? 0 : 2)}`).join('; ')}.`, true) : null]),
-      sub('w', 'Worked steps', [steps('', [...R.steps, ...dead, ...R.steel.steps, ...regSteps])])] };
+      sub('w', 'Worked steps', [gsteps('SBDUiLoads:x', '', [...R.steps, ...dead, ...R.steel.steps, ...regSteps])])] };
   }
 
   /* ---------- 4. analysis ---------- */
@@ -140,7 +140,7 @@
     if (X.detail === 'all') subs.push(sub('t', 'Station table', [note('Stiffness-method results of the shared beam engine; their checks are the statics steps and the per-lane envelope × g (worked steps below).'),
       tbl(['x (ft)', '$M_{DC1}$', '$M_{DC2}$', '$M_{DW}$', ...(ll ? ['$M_{LL+IM}^{+}$', '$M_{LL+IM}^{-}$'] : []), '$V_{DC1}$', '$V_{DC2}$', '$V_{DW}$', ...(ll ? ['$V_{LL+IM}^{+}$', '$V_{LL+IM}^{-}$'] : [])],
         x.map((v, i) => [N(v, 2), N(s.DC1.M[i], 1), N(s.DC2.M[i], 1), N(s.DW.M[i], 1), ...(ll ? [N(ll.Mpos[i], 1), N(ll.Mneg[i], 1)] : []), N(Vr(s.DC1)[i], 1), N(Vr(s.DC2)[i], 1), N(Vr(s.DW)[i], 1), ...(ll ? [N(Vx(ll, 'pos')[i], 1), N(Vx(ll, 'neg')[i], 1)] : [])]), { caption: 'kip-ft, kip (shears just right of the station)' })]));
-    subs.push(sub('w', 'Worked steps', [steps('', A.steps)]));
+    subs.push(sub('w', 'Worked steps', [gsteps('SBDAnalysisUI:x', '', A.steps)]));
     return { title: 'Analysis', subs };
   }
 
@@ -154,7 +154,7 @@
         kv([['$M_{p}$', `${f(c.Mp, 1)} kip-ft`, K(sc, `pl.${c.region}.Mp`)], ['PNA $y_{p}$ from bottom', `${f(c.yp, 3)} in`, K(sc, `pl.${c.region}.yp`)], ['D6.1 case', c.pl.cs], ['$D_{cp}$', `${f(c.Dcp, 3)} in`, K(sc, `pl.${c.region}.Dcp`)],
           ['$R_{h}$', f(c.Rh, 3), K(sc, !c.comp ? 'rh.s.Rh' : c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')]]),
         c.comp ? null : note('Noncomposite girder: the steel section alone (6.10.1.1.1a).'),
-        steps(sc, c.steps, { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
+        gsteps('SBDFlexureUI:sec', sc, c.steps, { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
     return { title: 'Section properties', note: `Plates of ${gName(B.girder)}; y up from the bottom of the steel. As on the [[tab:sec|Section properties tab]]; the flexure and constructibility steps below repeat the properties of each location.`, subs };
   }
 
@@ -184,8 +184,8 @@
     const one = r => [checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
     const detailed = all ? (Gr.gov ? [Gr.gov] : []) : govRows;
-    detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), steps(scOf(r), r.steps, { title: 'Worked steps (flexure, then the section properties of this location)' })])));
-    if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => steps(scOf(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
+    detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), r.steps, { title: 'Worked steps (flexure, then the section properties of this location)' })])));
+    if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => gsteps('SBDFlexureUI:x', scOf(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
     if (Gr.gov) X.gov.push({ mod: 'Flexure', grp: 'Flexure (Strength I, Service II, Fatigue I)', check: `${Gr.gov.gov.id} ${tt(Gr.gov.gov.title)}`, loc: /x = /.test(Gr.gov.name) ? Gr.gov.name : `${Gr.gov.name}, x = ${f(Gr.gov.x, 2)} ft`, r: Gr.gov.gov.ratio, key: K(scOf(Gr.gov), Gr.gov.gov.step) });
     return { title: 'Flexure', subs };
   }
@@ -242,17 +242,17 @@
       subs.push(sub('fa', 'Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)', [note(`$ADTT_{SL}$ = ${f(R.FR.ADTTSL, 0)} trucks/day. Fatigue I where $ADTT_{SL}$ is at least the detail's infinite-life equivalent, else Fatigue II; exempt: net compression under the permanent loads (FA2).`),
         tbl(['Detail', 'Cat.', 'n', 'Limit state', 'γ(Δf) (ksi)', '$(\\Delta F)_{n}$ (ksi)', 'FA1'], rows.map((r, i) => { const a = ck('FA1').items[i] || {}; return { cells: [`${r.name}${r.exempt ? ' (exempt)' : ''}`, r.cat, String(r.nn), `Fatigue ${r.lim}`, N(r.dem, 2), N(r.res, 2),
           r.exempt ? { t: 'exempt', cls: 'ok' } : R3(a.r, sel.includes(i) && a.step ? K(fk(i), a.step) : null)], cls: i === faI ? 'gov' : '' }; })),
-        ...sel.map(i => steps(fk(i), FA.steps(R.FR, rows[i]), { lazy: all && i !== faI, title: rows[i].name }))])); }
+        ...sel.map(i => gsteps('SBDFatigueUI:x', fk(i), FA.steps(R.FR, rows[i]), { lazy: all && i !== faI, title: rows[i].name }))])); }
     if (R.gs17) { const sel = all ? R.gs17.map((q, i) => i) : R.g17 ? [R.g17.i] : [];
       subs.push(sub('gs', 'Flange stress range (GS17; 6.6.1.2, 6.10.5.1)', [note(`Top flange Category ${R.cats.T}, bottom flange Category ${R.cats.B}; n by station (Table 6.6.1.2.5-1).`),
         tbl(['Station', 'n', 'Top: limit state', 'Top ratio', 'Bottom: limit state', 'Bottom ratio'], sel.map(i => { const q = R.gs17[i]; return { cells: [q.r.name, String(q.o.fatN), `Fatigue ${q.o.fatT.lim}`, R3(q.o.items[0].r, K(gk(i), q.o.items[0].step)), `Fatigue ${q.o.fatB.lim}`, R3(q.o.items[1].r, K(gk(i), q.o.items[1].step))], cls: R.g17 && R.g17.i === i ? 'gov' : '' }; })),
-        ...sel.map(i => steps(gk(i), R.gs17[i].o.steps, { lazy: all && !(R.g17 && R.g17.i === i), title: `${R.gs17[i].r.name} (GS17)` }))])); }
+        ...sel.map(i => gsteps('SBDFatigueUI:x', gk(i), R.gs17[i].o.steps, { lazy: all && !(R.g17 && R.g17.i === i), title: `${R.gs17[i].r.name} (GS17)` }))])); }
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, cc = id => C.find(c => c.id === id) || { items: [] };
       subs.push(sub('sc', `Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions`, [
         kv([['Studs', `${f(Sr.d, 3)} × ${f(Sr.h, 2)} in`], ['$Q_{r}$', `${f(Sr.Qr, 2)} kip`, K('sc', 'sc.Qr')], ['$Z_{r}$ (Fatigue I)', `${f(Sr.Zr, 3)} kip`, K('sc', 'sc.ZrI')], ['$b_{eff}$', `${f(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? "this girder's own" : 'bridge-wide'})`, K('sc', 'sc.beff')]]),
         tbl(['Zone', 'Studs', '$V_{f}$ (kip)', 'Limit state', '$V_{sr}$ (kip/in)', '$p_{max}$ (in)', 'SC1'], Sr.zones.map((z, i) => { const a = cc('SC1').items[i] || {}; return [z.name, `${z.nr} @ ${f(z.p, 2)} in`, N(z.Vfr, 1), `Fatigue ${z.fat.lim}`, N(z.Vsr, 3), N(z.preq, 2), R3(a.r, K('sc', `scz${z.i}.ok`))]; })),
         tbl(['Region', 'P (kip)', 'n required', 'n provided', 'SC2'], Sr.regions.map((r, i) => { const a = cc('SC2').items[i] || {}; return [r.name, N(r.P, 1), N(r.nreq, 2), `${r.nprov}${r.lost ? ` − ${r.lost}` : ''}`, R3(a.r, K('sc', `scr${r.i}.ok`))]; })),
-        steps('sc', SC.steps(Sr), { lazy: all, title: 'Worked steps, shear connectors' })])); }
+        gsteps('SBDFatigueUI:x', 'sc', SC.steps(Sr), { lazy: all, title: 'Worked steps, shear connectors' })])); }
     return { title: 'Fatigue and studs', subs };
   }
 
@@ -271,13 +271,13 @@
       R.oh && R.oh.errors && R.oh.errors.length ? note('Overhang brackets: ' + R.oh.errors.join(' '), true) : null]));
     if (all) subs.push(sub('all', 'Results at every location', [tbl(['Location', 'x (ft)', '$M_{c}$ (kip-ft)', 'Flange in compression', 'Governing check', 'Ratio'], rows.map(r => ({ cells: [r.name, N(r.x, 2), N(r.Mc, 1), r.conC.lab, `${r.gov.id} ${tt(r.gov.title)}`, R3(r.gov.ratio, K(sc(r), r.gov.step))], cls: r === R.gov ? 'gov' : '' })))]));
     const one = r => [checksTbl(r, sc(r)), kv([['$M_{c}$', `${f(r.Mc, 1)} kip-ft`, K(sc(r), 'cn.Mc')], ['$L_{b}$ / $C_{b}$ (deck placement)', `${f(r.LbC, 2)} ft / ${f(r.CbCu, 3)}`, K(sc(r), 'cn.Cb')], ['$F_{nc}$ (FLB / LTB)', `${f(r.ltC.FLB, 2)} / ${f(r.ltC.LTB, 2)} ksi`, K(sc(r), 'cn.Fnc')]]),
-      steps(sc(r), r.steps, { title: 'Worked steps' })];
+      gsteps('SBDConstrUI:x', sc(r), r.steps, { title: 'Worked steps' })];
     shown.filter(r => gset.has(r)).forEach(r => subs.push(sub(sc(r), `${r.name}, x = ${f(r.x, 2)} ft${r === R.gov ? ' (governing)' : ''}`, one(r))));
-    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => steps(sc(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
+    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => gsteps('SBDConstrUI:x', sc(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
     if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh;
       subs.push(sub('oh', 'Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)', [kv([['$w_{u}$', `${f(O.wu, 4)} kip/ft`], ['$F_{\\ell}$ / $P_{\\ell}$', `${f(O.Fl, 4)} kip/ft / ${f(O.Pl, 3)} kip`, O.rows[0] ? K(oc(O.rows[0]), 'oh.Fl') : null]]),
         tbl(['Location', '$M_{u}$ (kip-ft)', '$M_{\\ell}$ (kip-in)', 'Governing', 'Ratio'], O.rows.map(o => [o.name, N(o.Mu, 1), N(o.Ml, 1), o.gov.id, R3(o.gov.ratio, K(oc(o), o.gov.step))])),
-        ...O.rows.map(o => [checksTbl(o, oc(o)), steps(oc(o), o.steps, { title: o.name })]).flat()])); }
+        ...O.rows.map(o => [checksTbl(o, oc(o)), gsteps('SBDConstrUI:x', oc(o), o.steps, { title: o.name })]).flat()])); }
     return { title: 'Constructibility (deck placement, 6.10.3)', subs };
   }
 
@@ -299,7 +299,7 @@
         isFinite(it.r) ? R3(it.r, lk(it.step)) : { t: '—', key: lk(it.step) }, { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
     if (R.frames) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
-    subs.push(sub('w', 'Worked steps', [steps('', work)]));
+    subs.push(sub('w', 'Worked steps', [gsteps('SBDFramingUI:x', '', work)]));
     return { title: 'Framing and cross-frames', subs };
   }
 
@@ -326,7 +326,7 @@
       } else if (R) items.push(note(R.errors.join(' '), true));
       if (s.CK) { items.push(tbl(['ID', 'Check', 'Governing item', 'Ratio', 'Status', ED], s.CK.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
           return [c.id, tt(c.title), it ? it.loc : c.naWhy || '', it && it.r != null ? R3(it.r, K(sc, it.step)) : { t: '—', key: it ? K(sc, it.step) : null }, STT[c.status] || c.status, String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')]; })));
-        items.push(steps(sc, SP.steps(R).concat(s.CK.steps), { title: 'Worked steps', lazy: !sg || sg.k !== k })); }   // the governing splice open, the others on demand
+        items.push(gsteps('SBDSplicesUI:x', sc, SP.steps(R).concat(s.CK.steps), { title: 'Worked steps', lazy: !sg || sg.k !== k })); }   // the governing splice open, the others on demand
       subs.push(sub(sc, s.name, items)); });
     return { title: 'Field splices (bolted, 6.13.6.1)', subs };
   }
@@ -355,11 +355,11 @@
     if (R.tr.length) subs.push(sub('tr', `Shop flange transitions: ${R.tr.length}`, [tbl(['Transition', 'Plates (in)', 'Cat.', 'γ(Δf) (ksi)'], R.tr.map(r => ({ cells: [r.name, `${f(r.b1, 2)} × ${f(r.t1, 4)} to ${f(r.b2, 2)} × ${f(r.t2, 4)}`, r.cat, N(r.df, 2)], cls: sel.has(scOf({ k: 'tr', i: r.i })) ? 'gov' : '' })))]));
     // worked steps: the governing locations open; with 'all', every other location on demand (each location's own scope)
     const locs = [...R.fw.map(r => ({ k: 'fw', i: r.i, name: r.name })), ...R.tr.map(r => ({ k: 'tr', i: r.i, name: r.name }))];
-    locs.filter(q => sel.has(scOf(q))).forEach(q => subs.push(sub(scOf(q), `${q.name} (governing)`, [steps(scOf(q), wSteps(q), { title: 'Worked steps' })])));
+    locs.filter(q => sel.has(scOf(q))).forEach(q => subs.push(sub(scOf(q), `${q.name} (governing)`, [gsteps('SBDWeldsUI:x', scOf(q), wSteps(q), { title: 'Worked steps' })])));
     // every item's step that a table links to must be worked here: the governing locations, then (all, or the links of the governing table) the rest on demand
     const need = new Set(C.map(c => (c.gov >= 0 ? locOf(c.items[c.gov]) : null)).filter(Boolean).map(scOf));
     const rest = locs.filter(q => !sel.has(scOf(q)) && (all || need.has(scOf(q))));
-    if (rest.length) subs.push(sub('every', all ? 'Every other location' : 'Other governing locations of single checks', rest.map(q => steps(scOf(q), wSteps(q), { lazy: true, title: q.name }))));
+    if (rest.length) subs.push(sub('every', all ? 'Every other location' : 'Other governing locations of single checks', rest.map(q => gsteps('SBDWeldsUI:x', scOf(q), wSteps(q), { lazy: true, title: q.name }))));
     return { title: 'Welds (flange-to-web, shop transitions)', subs };
   }
 
@@ -368,7 +368,7 @@
   function rt(B, X) {
     const R = B.rating, s = R.sum, all = X.detail === 'all', subs = [], rk = q => 'rt@' + R.rows.indexOf(q), rfStep = q => (q.steps.find(t => /(^|\.)inv$/.test(t.id)) || q.steps[q.steps.length - 1] || {}).id;
     let nCap = 0; const capOf = q => { const r = R.cap.get(q); if (!r) return { sc: null, item: null }; let sc = X.have.get(r), item = null;
-      if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = steps(sc, r.steps || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
+      if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = gsteps(q.kind === 'shear' ? 'SBDShearUI:loc' : 'SBDFlexureUI:x', sc, r.steps || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
       return { sc, item }; };
     const gi = s.gov.inv, go = s.gov.opr, rf = v => !isFinite(v) ? '—' : f(v, 2), rcls = v => !isFinite(v) ? '' : v < 1 - 1e-9 ? 'ng' : v < 1.1 ? 'hi' : 'ok';
     if (gi) X.gov.push({ mod: 'Rating', grp: 'Rating: Inventory RF', check: `Inventory RF, ${tt(gi.title)}`, loc: gi.name, rf: gi.inv, key: K(rk(gi), rfStep(gi)) });
@@ -384,11 +384,11 @@
       subs.push(sub(rk(q), `${q.name}: ${tt(q.title)}${q === gi ? ' (governing Inventory)' : ''}${q === go && q !== gi ? ' (governing Operating)' : ''}`, [
         tbl(['C', 'DC', 'DW', 'LL+IM', 'Unit', 'RF Inventory', 'RF Operating'], [[N(q.C, q.unit === 'ksi' ? 2 : 1), N(q.DC, q.unit === 'ksi' ? 2 : 1), N(q.DW, q.unit === 'ksi' ? 2 : 1), N(q.LL, q.unit === 'ksi' ? 2 : 1), q.unit || '', { t: rf(q.inv), cls: rcls(q.inv), n: true }, q.kind === 'fat' ? '—' : { t: rf(q.opr), cls: rcls(q.opr), n: true }]]),
         c.sc ? note(`$R_{n}$ is worked at ${R.cap.get(q).name}: [[${K(c.sc, (R.cap.get(q).steps || [{}])[0].id)}]].`) : null,
-        steps(rk(q), q.steps, { see: c.sc, title: `Rating (${window.SBDRating.MBE})` })])); });
+        gsteps('SBDRatingUI:x', rk(q), q.steps, { see: c.sc, title: `Rating (${window.SBDRating.MBE})` })])); });
     if (all) { const rest = R.rows.filter(q => !q.oos && !sel.includes(q));
       subs.push(sub('all', 'Rating factors at every location', [tbl(['Location', 'Check', 'C', 'DC', 'DW', 'LL+IM', 'Unit', 'RF Inv.', 'RF Opr.'], R.rows.map(q => q.oos ? [q.name, { t: q.title, cls: 'na', span: 8 }] : { cells: [q.name, tt(q.title), N(q.C, q.unit === 'ksi' ? 2 : 1), N(q.DC, q.unit === 'ksi' ? 2 : 1), N(q.DW, q.unit === 'ksi' ? 2 : 1), N(q.LL, q.unit === 'ksi' ? 2 : 1), q.unit || '',
         { t: rf(q.inv), cls: rcls(q.inv), n: true, key: K(rk(q), rfStep(q)) }, q.kind === 'fat' ? '—' : { t: rf(q.opr), cls: rcls(q.opr), n: true }], cls: q === gi ? 'gov' : '' })),
-        ...rest.map(q => { const c = capOf(q); if (c.item) caps.push(c.item); return steps(rk(q), q.steps, { see: c.sc, lazy: true, title: `${q.name}: ${tt(q.title)}, RF ${rf(q.inv)} / ${rf(q.opr)}` }); })])); }
+        ...rest.map(q => { const c = capOf(q); if (c.item) caps.push(c.item); return gsteps('SBDRatingUI:x', rk(q), q.steps, { see: c.sc, lazy: true, title: `${q.name}: ${tt(q.title)}, RF ${rf(q.inv)} / ${rf(q.opr)}` }); })])); }
     if (caps.length) subs.push(sub('cap', 'Capacities used by the rating (worked here: not shown in an earlier section of this report)', caps));
     return { title: 'Load rating (LRFR, design load)', subs };
   }

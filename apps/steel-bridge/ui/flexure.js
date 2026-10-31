@@ -36,6 +36,41 @@
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, region: 'pos', M: { DC1: 1450, DC2: 210, DW: 240, LLp: 1650, LLn: -400, UT: 0, UF: 0, FATp: 620, FATn: -150 } },
     { name: 'Pier 1', x: 109.99, region: 'neg', M: { DC1: -2300, DC2: -330, DW: -380, LLp: 250, LLn: -2400, UT: 0, UF: 0, FATp: 120, FATn: -520 } }];
 
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as the Shear & stiffeners tab, ui/shear.js) ----------
+     SharedSteps.group sorts a step list into topics in the order of the check (inputs, section properties, demands, one topic per AASHTO
+     sub-article, resistance, check); ids are matched whole (the list mixes the ids of several works: own., n., sec., pl., fx.). Presentation
+     only: the steps, ids and values are the engines'. TP holds the topics other tabs share (Section properties, Fatigue & studs, Constructibility,
+     Rating, Loads, ...): each tab takes the ones its list holds, the rest are left out when empty. */
+  const A = '10th Ed. Art. ';
+  const TP = {
+    own: { key: 'own', title: 'Owner load rules (η, m, haunch)', ref: '', ids: /^(own\.|fx\.own\.)/, res: /^own\.eta$/ },
+    n: { key: 'n', title: 'Modular ratio and deck modulus', ref: A + '6.10.1.1.1b', ids: /^n\./, res: /^n\.n$/ },
+    steel: { key: 'steel', title: 'Steel section properties', ref: A + '6.10.1.1.1a', ids: /^sec\.s\./, res: /^sec\.s\.I$/ },
+    c3: { key: 'c3', title: 'Composite section, long-term (3n)', ref: A + '6.10.1.1.1b', ids: /^sec\.c\d+\./, res: /^sec\.c\d+\.I$/ },
+    cn: { key: 'cn', title: 'Composite section, short-term (n)', ref: A + '6.10.1.1.1b', ids: /^sec\.cn\./, res: /^sec\.cn\.I$/ },
+    cr: { key: 'cr', title: 'Steel plus deck reinforcement (negative flexure)', ref: A + '6.10.1.1.1c', ids: /^sec\.cr\./, res: /^sec\.cr\.I$/ },
+    plPos: { key: 'plPos', title: 'Plastic moment, positive flexure', ref: 'App. D6.1, Table D6.1-1', ids: /^pl\.pos\./, res: /^pl\.pos\.Mp$/, info: /./ },
+    plNeg: { key: 'plNeg', title: 'Plastic moment, negative flexure', ref: 'App. D6.1, Table D6.1-2', ids: /^pl\.neg\./, res: /^pl\.neg\.Mp$/, info: /./ },
+    dcRh: { key: 'dcRh', title: 'Web depth in compression and hybrid factor', ref: A + '6.10.1.10.1', ids: /^(dc|rh)\./, res: /^rh\./ },
+    dem: { key: 'dem', title: 'Demands: factored moments and stresses', ref: 'Tables 3.4.1-1, -2', ids: /^fx\.(gam\.|Mu$|Ms$|str\.|svc\.)/, res: /^fx\.Mu$/ },
+    web: { key: 'web', title: 'Web bend-buckling resistance', ref: A + '6.10.1.9.1', ids: /^fx\.(DcS|Fcrw)$/, res: /^fx\.Fcrw$/ },
+    svc: { key: 'svc', title: 'Service II: permanent deformations', ref: A + '6.10.4.2.2', ids: /^fx\.(svt\.ok|svb\.ok|web\.)/ },
+    fat: { key: 'fat', title: 'Fatigue I stress range', ref: A + '6.6.1.2, 6.10.5.1', ids: /^fx\.fat[TB]$/, res: /^fx\.fatT$/ },
+    lat: { key: 'lat', title: 'Flange lateral bending', ref: A + '6.10.1.6', ids: /^(flsk\.|fx\.flim\.)/ },
+    yld: { key: 'yld', title: 'Yield moment and compactness', ref: A + '6.10.7.1.1', ids: /^fx\.(MyT|MyB|Rh|Dp|cmp|My|Sxt)$/, res: /^fx\.My$/, info: /^fx\.cmp$/ },
+    mn: { key: 'mn', title: 'Compact positive flexure: nominal resistance and ductility', ref: A + '6.10.7.1.2, 6.10.7.3', ids: /^fx\.(Mn\d*|cap\d*|mn\.ok|duct\.ok)$/ },
+    rev: { key: 'rev', title: 'Opposite extreme (moment reversal)', ref: '', ids: /^fx\.rev$/, info: /./ },
+    rb: { key: 'rb', title: 'Web load-shedding factor', ref: A + '6.10.1.10.2', ids: /^fx\.(Dc|Rb)$/, res: /^fx\.Rb$/ },
+    flb: { key: 'flb', title: 'Flange local buckling', ref: A + '6.10.8.2.2', ids: /^fx\.(Fyr|FLB)$/, res: /^fx\.FLB$/ },
+    ltb: { key: 'ltb', title: 'Lateral-torsional buckling', ref: A + '6.10.8.2.3', ids: /^fx\.(Cb|npr\.|rt|Lp|Lr|LTB)/, res: /^fx\.LTB$/ },
+    fnc: { key: 'fnc', title: 'Nominal flexural resistance of the compression flange', ref: A + '6.10.8.2.1', ids: /^fx\.Fnc$/ },
+    chk: { key: 'chk', title: 'Check, Strength I (6.10.8)', ref: A + '6.10.8.1', ids: /^fx\.(fbu|fl|fnc\.ok|fnt\.ok)$/ },
+    a6: { key: 'a6', title: 'Appendix A6 (web compact or noncompact)', ref: A + '6.10.6.2.3, App. A6', ids: /^fx\.a\d/, info: /^fx\.a\d+\.(ok|crw)$/ }
+  };
+  const TOPICS = { sec: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'].map(k => TP[k]), x: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh', 'dem', 'web', 'svc', 'fat', 'lat', 'yld', 'mn', 'rev', 'rb', 'flb', 'ltb', 'fnc', 'chk', 'a6'].map(k => TP[k]) };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind] || TOPICS.x, { strip: false });
+  const OPEN = new Set();
+
   function css() {
     if (document.getElementById('fx-css')) return;
     const st = document.createElement('style'); st.id = 'fx-css';
@@ -123,6 +158,7 @@
     return { ...window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }), prj: I.prj, what: I.what, fl: I.fl, flS: I.flS, frB: I.frB, D: I.D };
   }
 
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
   function render(host, ctx) {
     css();
     const stale = !S.R || S.key !== key(ctx), src = srcOf(ctx), rd = rdOf(ctx);
@@ -163,10 +199,11 @@
           ${r.p7 ? `<div><span>Section</span><span>${r.below ? 'PNA below the web' : r.compact ? 'compact' : 'noncompact'} <a class="wk" href="#st-fx.cmp">§</a></span></div>` : `<div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(r.lt.FLB, 2)} / ${fmt(r.lt.LTB, 2)} ksi <a class="wk" href="#st-fx.Fnc">§</a></span></div><div><span>App. A6</span><span>${r.A6.ok ? (r.useA6 ? 'permitted, used' : 'permitted, not selected') : 'not permitted'} <a class="wk" href="#st-fx.a6.ok">§</a></span></div>`}
           <div><span>D<sub>c</sub> (Service II)</span><span>${fmt(r.DcS, 3)} in <a class="wk" href="#st-fx.DcS">§</a></span></div><div><span>Fatigue I Δf top / bottom</span><span>${fmt(r.dfT, 2)} / ${fmt(r.dfB, 2)} ksi <a class="wk" href="#st-fx.fatT">§</a></span></div></div></div></section>`;
         h += `<section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}</div><div class="secBody"><p class="note">Flexure steps first, then the section properties of this location (also on the Section properties tab). AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +.</p>
-          <ol class="steps">${r.steps.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol></div></section>`;
+          ${window.SharedSteps.groupsHTML(groups('x', r.steps), { open: OPEN, item: stepLi })}</div></section>`;
       }
     }
     host.innerHTML = h;
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     { const sl = host.querySelector('#gfx_fx'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.flexure(sl, { P: ctx.P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); };
     const redraw = () => render(host, ctx);
@@ -184,5 +221,5 @@
     const list = host.querySelector('.fx-list'); if (list) list.addEventListener('click', e => { const tr = e.target.closest('[data-fx]'); if (!tr) return; S.sel = +tr.dataset.fx; redraw(); });
   }
 
-  window.SBDFlexureUI = { render, build };
+  window.SBDFlexureUI = { render, build, TP, TOPICS, groups };
 })();

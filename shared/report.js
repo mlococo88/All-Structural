@@ -99,7 +99,8 @@
     const m = (it.steps || []).find(t => String(t.id).endsWith('.' + id));   // an id relative to the engine's work prefix ('v.Vn' of 'pn.v.Vn')
     return keyOf(it.scope, m ? m.id : id);
   };
-  const noteOf = (doc, it, t, html) => String(t).split(SEE).map((p, i) => i % 2 ? rich(doc, `[[${seeKey(doc, it, p)}]]`, html) : html ? esc(p) : p).join('');
+  const noteOf = (doc, it, t, html) => { const ps = String(t).split(SEE);   // a note that already says "See §x" does not get the "see " of .rp-see in front a second time (class rp-seen)
+    return ps.map((p, i) => i % 2 ? (a => html && /\bsee\s*$/i.test(ps[i - 1]) ? a.replace('class="rp-see"', 'class="rp-see rp-seen"') : a)(rich(doc, `[[${seeKey(doc, it, p)}]]`, html)) : html ? esc(p) : p).join(''); };
   const ref = (doc, key) => { const e = doc.index.get(key); return e ? '§' + e.n : null; };
 
   /* ---------- rich text: $tex$, [[key]], [[tab:name|text]] ----------
@@ -261,7 +262,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   .rp-h1::after,.rp-h2::after{content:none!important;}
   .rp-h1,.rp-h2,.rp-h3,.rp-cap{break-after:avoid;}
   .rp-see{font-family:"Times New Roman",Times,serif;font-size:inherit;color:#000;text-decoration:none;}
-  .rp-see::before{content:"see ";}
+  .rp-see::before{content:"see ";} .rp-seen::before{content:none;}
   details.rp-lz>summary{list-style:none;} details.rp-lz>summary::-webkit-details-marker{display:none;}
   .rp-tbl td.rp-ok,.rp-tbl td.rp-hi,.rp-tbl td.rp-ng,.rp-tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rp-step .rp-m{overflow:visible;}

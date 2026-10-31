@@ -180,6 +180,7 @@
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
     host.innerHTML = h;
+    window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); }, redraw = () => render(host, ctx);
     on('fa_src', 'change', e => { S.src = e.target.value; redraw(); });
     on('fa_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = defaultSel(R); } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
@@ -198,7 +199,31 @@
     if (R.SCC) c.push({ k: 'sc', i: 0, r: R.scGov ? R.scGov.it.r : 0 });
     return c.reduce((a, b) => (!a || b.r > a.r ? b : a), null) || { k: 'sc', i: 0 };
   }
-  const stepsHtml = list => `<ol class="steps">${list.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`).join('')}</ol>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+
+  /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): fatigue details, GS17 flanges, shear connectors; the flexure work they quote uses the topics of the Flexure tab ---------- */
+  const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh', 'dem'),
+    { key: 'fdet', title: 'Detail and category', ref: A + '6.6.1.2.3', ids: /^fa\d+\.(y|cat)$/ },
+    { key: 'fstr', title: 'Stresses at the detail', ref: A + '6.6.1.2.1, 6.10.5.1', ids: /^fa\d+\.(fDL|fP|fN|fLLt|df)$/, res: /\.df$/ },
+    { key: 'fcyc', title: 'Cycles and limit state', ref: A + '6.6.1.2.5', ids: /^fa\d+\.(ADTTSL|eq|nn|lim)$/ },
+    { key: 'fdem', title: 'Factored stress range', ref: A + '3.4.1', ids: /^fa\d+\.dem$/ },
+    { key: 'fres', title: 'Nominal fatigue resistance', ref: A + '6.6.1.2.5', ids: /^fa\d+\.res$/ },
+    { key: 'fnet', title: 'Net-tension rule', ref: A + '6.6.1.2.1', ids: /^fa\d+\.net$/ },
+    { key: 'fok', title: 'Check, load-induced fatigue', ref: A + '6.6.1.2.2', ids: /^fa\d+\.ok/ },
+    { key: 'gT', title: 'GS17: top flange stress range', ref: A + '6.10.5.1, 6.6.1.2', ids: /^gs\d+\.(n|T\.)/ },
+    { key: 'gB', title: 'GS17: bottom flange stress range', ref: A + '6.10.5.1, 6.6.1.2', ids: /^gs\d+\.B\./ },
+    { key: 'sgeo', title: 'Stud dimensions, cover and penetration', ref: A + '6.10.10.1.4', ids: /^sc\.(Asc|hd|cov|pen)$/ },
+    { key: 'sn', title: 'Modular ratio and effective flange width', ref: A + '4.6.2.6.1, 6.10.1.1.1b', ids: /^sc\.(n|beff)$/ },
+    { key: 'sZ', title: 'Fatigue resistance of one stud', ref: A + '6.10.10.2', ids: /^sc\.(ZrI|Ffat)$|^scz\d+\.Zr$/ },
+    { key: 'sz', title: 'Fatigue pitch by zone', ref: A + '6.10.10.1.2, 6.10.10.2', ids: /^scz\d+\.(I|Q|Vfat|Vsr|lim|preq|ok)$/ },
+    { key: 'sp', title: 'Pitch limits and transverse spacing', ref: A + '6.10.10.1.2, 6.10.10.1.3', ids: /^scz\d+\.(pl|st|edge)$/ },
+    { key: 'sQ', title: 'Strength resistance of one stud', ref: A + '6.10.10.4.1, 6.10.10.4.3', ids: /^sc\.(QnE|Qr)$/ },
+    { key: 'sP', title: 'Longitudinal force in each region', ref: A + '6.10.10.4.2', ids: /^scr\d+\.(P|Pc|Pp|Ps|Pn|Pnc|Pns)$/ },
+    { key: 'sN', title: 'Number of connectors required and provided', ref: A + '6.10.10.4.1', ids: /^scr\d+\.(nreq|nprov|ok|net)/ },
+    { key: 'sg', title: 'Studs over splices', ref: A + '6.10.10.4.1', ids: /^scg\d+/ }] };
+  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
+  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const go = (k, i, id, txt) => `<a class="wk" href="#st-${esc(id)}" data-go="${k}:${i}:${esc(id)}">${txt || '§'}</a>`;
   const stCell = st => `<td class="${st === 'fail' ? 'fx-ng' : st === 'warn' ? 'fx-hi' : st === 'na' ? 'fx-na' : 'fx-ok'}">${{ pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[st] || esc(st)}</td>`;
   function results(R) {
@@ -249,5 +274,5 @@
     return h;
   }
 
-  window.SBDFatigueUI = { ensure, inputs, onClick, render, build, fromAnalysis };
+  window.SBDFatigueUI = { ensure, inputs, onClick, render, build, fromAnalysis, TOPICS, groups };
 })();
