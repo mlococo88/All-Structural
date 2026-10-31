@@ -1,5 +1,5 @@
 // Paths PR (2026-10-30; engineer's decisions SB2-W1, SB2-W2, shared cache, Welds): every demand path takes the same brace points and f_ℓ.
-// 1. One source: engine/framing.js design() gives the brace points (the Framing tab) and f_ℓ (entered, else from skew, C6.10.1) that the
+// 1. One source: engine/framing.js design() gives the brace points (the Spans & framing tab) and f_ℓ (entered, else from skew, C6.10.1) that the
 //    Flexure, Constructibility and Rating builds use, with this project's analysis and with a hand-off file; an entry overrides the skew value.
 // 2. The analysis cache (report/data.js install): switching between the output tabs runs no analysis again; results are not modified.
 // 3. The report's Welds section (both scopes; the analysis and a hand-off file).
@@ -41,7 +41,7 @@ test('One source of f_ℓ and brace points: Flexure, Constructibility and Rating
     const bs = new Set(D.braces.map(v => +v.toFixed(6)));
     [F, R.flex].forEach(G => G.rows.forEach(r => { if (r.seg) { assert.ok(bs.has(+r.seg.xa.toFixed(6)) && bs.has(+r.seg.xb.toFixed(6)), `${r.name} ${JSON.stringify(r.seg)}`); } }));
     assert.ok(W.SBDReportData.sameFlex(F, R.flex), 'the rating\'s flexure equals the Flexure tab\'s');
-    assert.match(F.what, /Framing tab/); assert.match(F.what, /from skew/);
+    assert.match(F.what, /Spans assert.match(F.what, /Framing tab/) framing tab/); assert.match(F.what, /from skew/);
     // entries override: Flexure (and so Rating) P.flexure.fl, Constructibility P.constr.flC; 0 / absent: back to skew
     P.flexure = { fl: 3 }; P.constr = { flC: 2 };
     const F2 = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', method: 'auto' }), R2 = W.SBDRatingUI.build({ P, g: 0, src: 'analysis' }), C2 = W.SBDConstrUI.build({ P, g: 0, src: 'project' });

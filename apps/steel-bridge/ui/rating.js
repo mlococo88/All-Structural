@@ -11,7 +11,7 @@
        stiffener layout (as the Shear & stiffeners tab).
    Capacities: the Flexure tab's locations and the Shear tab's stations (SBDShearUI.build: V_n with the stiffener layout). Since
    2026-10-30 (paths PR, SB2-W1, SB2-W2) the flexure is ui/flexure.js build() itself (Appendix A6 where permitted), so its brace points
-   (the Framing tab) and f_ℓ (entered on the Flexure tab, else from skew, C6.10.1: engine/framing.js design) are the Flexure tab's on
+   (the Spans &amp; framing tab) and f_ℓ (entered on the Flexure tab, else from skew, C6.10.1: engine/framing.js design) are the Flexure tab's on
    both sources; before, this tab built its own: the stiffener layout's cross-frames and f_ℓ = 0 (a file: its own spacing, f_ℓ = 0).
    Needs SBDFlexureUI and SBDFraming. The demand choice is not saved.
 
@@ -69,7 +69,7 @@
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
     const fromAn = !!AR, own = fromAn ? (P.ownerRules || {}).owner || 'AASHTO' : (pl.ownerRules || {}).owner || 'AASHTO';
     const plR = RT.noDoublePL(pl), sup = (pl.member || {}).supports || [];
-    // flexure: the Flexure module itself (ui/flexure.js build; SB2-W1, SB2-W2): its locations (every station), brace points (Framing tab)
+    // flexure: the Flexure module itself (ui/flexure.js build; SB2-W1, SB2-W2): its locations (every station), brace points (Spans &amp; framing tab)
     // and f_ℓ (entered on the Flexure tab, else from skew); with this app's analysis the project's grades, deck and owner rules
     const Gr = window.SBDFlexureUI.build(fromAn ? { P, g, src: 'analysis', an: { pl, R: AR }, method: 'auto' } : { P, g, src: 'file', pl, plName: S.plName || 'hand-off', method: 'auto' });
     if (Gr.err) return { err: 'Flexure: ' + Gr.err };
@@ -86,7 +86,7 @@
     if (T && T.fat && window.SBDFatigue && P.fatigue) { const FA = window.SBDFatigue, set = FA.settings(P.fatigue), spans = sup.slice(1).map((x, k) => x - sup[k]), B = FA.supports({ ok: true, spans, cont: sup.length > 2 });
       if (set.ok) Gr.rows.forEach(r => { const o = FA.flange(r, { set, B, catT: P.fatigue.catT, catB: P.fatigue.catB }); (o.items || []).forEach(it => { if (it.r > 0 && isFinite(it.r)) { const q = RT.fatigue(it, r); cap.set(q, r); rows.push(q); } }); }); }
     const sum = RT.girder(rows, { owner: own });
-    const bfl = `L<sub>b</sub>, C<sub>b</sub> ${Gr.frB ? `from the Framing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : fromAn ? "from the stiffener layout's cross-frames (no framing)" : "from the file's cross-frame spacing (not this project's bridge, or no framing)"}; f<sub>ℓ</sub> = ${fmt(Gr.fl, 2)} ksi ${Gr.D && Gr.D.flSrc === 'entered' ? 'as entered on the Flexure tab' : `from skew (C6.10.1; largest support skew ${fmt(Gr.flS.skMax, 1)}°)`}, as on the <a href="#" data-gotab="flex">Flexure tab</a>`;
+    const bfl = `L<sub>b</sub>, C<sub>b</sub> ${Gr.frB ? `from the Spans &amp; framing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : fromAn ? "from the stiffener layout's cross-frames (no framing)" : "from the file's cross-frame spacing (not this project's bridge, or no framing)"}; f<sub>ℓ</sub> = ${fmt(Gr.fl, 2)} ksi ${Gr.D && Gr.D.flSrc === 'entered' ? 'as entered on the Flexure tab' : `from skew (C6.10.1; largest support skew ${fmt(Gr.flS.skMax, 1)}°)`}, as on the <a href="#" data-gotab="flex">Flexure tab</a>`;
     const what = fromAn ? `This app's analysis of ${esc(P.girders[g].label || P.girders[g].id)}: ${pl.stations.length} stations, ${sup.length - 1} span(s); the project's plates, deck, materials and stiffener layout; ${bfl}.`
       : `${esc(S.plName || 'hand-off')}: ${pl.stations.length} stations, ${sup.length - 1} span(s), G${esc((pl.girderDetail || {}).girder || '')}; plates, deck and skews from the file, the project's stiffener layout; ${bfl}.${pl.pedestrianInLL === true ? ' The pedestrian load is in its LL+IM (pedestrianInLL): not added again.' : ''}`;
     return { rows, sum, cap, ph, G, own, T, what, flex: Gr, shear: SHR, pl };

@@ -7,7 +7,7 @@
      flexure      ui/flexure.js build() (the Flexure tab): this app's analysis (its "This project's analysis" source, Appendix A6 where
                   permitted; since 2026-10-30, report wiring PR: before, the flexure of ui/rating.js build()), or the hand-off file. f_ℓ and
                   the brace points are the tab's (paths PR, 2026-10-30: f_ℓ entered on the Flexure tab, else from skew, C6.10.1; the
-                  Framing tab's brace points; engine/framing.js design; before: f_ℓ = 0). Since the paths PR the rating's flexure IS this
+                  Spans & framing tab's brace points; engine/framing.js design; before: f_ℓ = 0). Since the paths PR the rating's flexure IS this
                   module's build (ui/rating.js), so with the analysis the report takes the rating's result (flexSame, checked here) and
                   the rating's capacity links point at the Flexure section's locations
      shear        ui/shear.js build() with the demand source 'analysis' or the file (Shear & stiffeners tab)

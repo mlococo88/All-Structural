@@ -52,7 +52,7 @@
        (connecting through) or at least d_min = max(min. offset, 4b_f) from every other frame on both girders it connects, and at least max(clear, 4b_f)
        from their bearings. b_f: the widest flange plate in the span.
      - field splices and shop transitions: where a frame falls within the splice clearance, the grid is shifted within the span (end offsets changed, same
-       number of frames); extra frames are used only where that clears every conflict; otherwise the conflicts are reported (check X4, Framing tab).
+       number of frames); extra frames are used only where that clears every conflict; otherwise the conflicts are reported (check X4, Spans & framing tab).
      - pier regions (FSP, 2026-10-15; optional framing.spPier, "Spacing near interior supports"): in a continuous unit, with s_p > 0 and below the target s,
        the frames next to each interior support are spaced s_p (the first one s_p, or e = max(clear, 4b_f, 0.4 s_p) at a support skewed more than 20°, from the
        obtuse-corner bearing) until the region is covered on every girder: framing.pierLen each side of the support (blank: 0.25 times the adjacent span, about
@@ -255,7 +255,7 @@
       const exM = Math.min(...all.map(r => r.ex)), pool = all.filter(r => r.ex < exM + 1e-6), nB = Math.min(...pool.map(r => r.g.fr.length));
       const zero = pool.filter(r => !r.c).sort((u, v) => u.g.fr.length - v.g.fr.length || u.sh - v.sh)[0];   // clear of every conflict: the fewest frames, then the smallest shift
       if (zero) return res(zero, nB);
-      // no shift or extra frame clears every conflict: the unshifted grid is kept (the conflicts are reported, X4 and the Framing tab)
+      // no shift or extra frame clears every conflict: the unshifted grid is kept (the conflicts are reported, X4 and the Spans & framing tab)
       return res(pool.includes(all[0]) ? all[0] : pool.filter(r => r.g.fr.length <= nB).sort((u, v) => u.sh - v.sh || u.c - v.c)[0], nB);
     }
     // per-girder own stations (from Abut. 1 bearing of that girder)
@@ -309,7 +309,7 @@
      field splices (framing.splices, ft) and every girder's plate changes (flange transitions and web thickness changes, as Preliminary sizing's
      buildModel: a transition within limits.tol of a splice is at the splice). Returns { errors, Pf, m }. */
   function modelOf(P) {
-    const F = settings(P), errors = []; if (!F) return { errors: ['The project has no framing (Framing tab).'] };
+    const F = settings(P), errors = []; if (!F) return { errors: ['The project has no framing (Spans & framing tab).'] };
     const spans = (P.spans.lengths || []).map(Number), sup = [0]; spans.forEach(L => sup.push(sup[sup.length - 1] + L));
     const xs = P.xs || (window.SBDModel ? window.SBDModel.defaultXs(P) : {}), nb = Math.round(+xs.nb), bays = (xs.bays || []).map(Number), skews = (xs.skews || []).map(Number);
     if (!(nb >= 2)) errors.push('Framing needs at least two girders in the cross-section.');
@@ -390,7 +390,7 @@
      o = { sup (the demands' supports, ft; absent: this project's analysis), line (a hand-off file's girder, 0-based cross-section line;
            absent: plate girder gi of P), skews (the demands' support skews, deg; absent: P.xs.skews), ext (exterior girder; absent:
            P.girders[gi].position === 'exterior'), fl (f_ℓ entered, ksi: > 0 overrides the skew value; blank, 0 or absent: none entered) }
-     Brace points: the Framing tab (forGirder: the girder's bearings and cross-frames as analysis stations, lenOf its own unbraced length);
+     Brace points: the Spans & framing tab (forGirder: the girder's bearings and cross-frames as analysis stations, lenOf its own unbraced length);
      null when the project has no framing, the layout has errors or the demands are of another bridge (the caller keeps its fallback and
      says so). f_ℓ: as entered, else from skew (flSkew, C6.10.1, the project's framing settings flSkI, flSkE, flSkG).
      Returns { br (forGirder result or null), braces, lenOf, fl (ksi), flSrc: 'entered' | 'skew', flS (flSkew: fl, skMax, steps) }. */
