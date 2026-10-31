@@ -53,3 +53,12 @@ Open items (small):
 - Shear: the panel hatching is dense behind the web text. Consider lighter hatching or a thinner overlay.
 - Phone width (390 px): graphic text is 4 to 8 px, so the phone relies on zoom.
 - Skipped on purpose: the optional 3D extruded section view.
+
+## Update 2026-10-31 (paused until Tuesday 2026-11-03 morning ET, weekly usage reset)
+Merged since last note: #502 graphics fix-up, #503 first-pour sign tolerance, #504 Shear & stiffeners tab (solid colours, new elevation + details, grouped worked steps trial; engineer approved the grouping look).
+Model rule (engineer): Sonnet for simple/presentation tasks, Opus for calculation work and when in doubt.
+Next, in order, when the engineer says go:
+1. Apply grouped steps (shared/steps.js group helpers, see ui/shear.js TOPICS) to every other tab + report (Sonnet).
+2. Auto design: verify missing V_LL in payloadOf (Opus); f_l and brace points from SBDFraming.design; AD8 splice end distances; CF11 bolt sizing; compare view PR2.
+3. Switch-over comparison vs old app (Opus), redirect, tools.html.
+Open small items: old-app first-pour sliver fix (ask engineer; one-line, own PR); Fatigue stud zones still hatched; "See see §" doubled word in report; STA label tight against FS1 and BARRIER label on Loads; f_l=0 override on skewed bridges.
