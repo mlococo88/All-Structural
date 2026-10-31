@@ -45,3 +45,6 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - None. The Gusset Plate Rating and Base Plate reports keep their own code until each moves to this viewer (one small PR per app).
 ### Open items
 - None.
+
+## 2026-10-31 — PR: sbd-stiffener-tab — topics in a steps item (presentation spec A)
+- Steps item `topics: [{ title, ref, n, cls, chip, res }]` (n steps each, in step order): `stepsHtml` puts a sub-heading (`.rp-top`) before each topic's first step; `text()` a topic line; `build()` adds nav entries (`rp-l3` item, `rp-l4` topics) for items that are not lazy. Anchors and keys unchanged; items without topics render as before. Verified by `tests/engine/steps-groups.test.mjs` (no unresolved reference, one heading per topic).

@@ -211,7 +211,7 @@
   const A = '10th Ed. Art. ';
   const TOPICS = {
     ts: [{ key: 'geo', title: 'Projecting width of the plate', ref: A + '6.10.11.1.2', ids: /^(bmin|bmax|bf4)$/ },
-      { key: 'dem', title: 'Demands: Strength I shear at the stiffener', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Vu)/ },
+      { key: 'dem', title: 'Demands: Strength I shear at the stiffener', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Vu)/, res: /^Vu$/ },
       { key: 'lim', title: 'Panel spacing limits', ref: A + '6.10.9.1', ids: /^p[12]\.lim$/ },
       { key: 'pan', title: 'Web shear resistance of the two adjacent panels', ref: A + '6.10.9.3', ids: /^p[12]\./ },
       { key: 'It', title: 'Moment of inertia of the stiffener', ref: A + '6.10.11.1.3', ids: /^(It|J|It1|Fcrs|rhot|It2|rhow|Ireq)$/ },
@@ -220,7 +220,7 @@
       { key: 'own', title: 'Owner requirements', ref: '', ids: /^own$/ }],
     bs: [{ key: 'geo', title: 'Projecting width of the plates', ref: A + '6.10.11.2.2', ids: /^b$/ },
       { key: 'det', title: 'Plate width and flange connection', ref: A + '6.10.11.2.1', ids: /^(bw|conn)$/ },
-      { key: 'dem', title: 'Demands: Strength I reaction', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Ru$)/ },
+      { key: 'dem', title: 'Demands: Strength I reaction', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Ru$)/, res: /^Ru$/ },
       { key: 'brg', title: 'Bearing resistance', ref: A + '6.10.11.2.3', ids: /^(bEff|Apn|Rsb|Rsb\.ok)$/ },
       { key: 'sec', title: 'Effective column section', ref: A + '6.10.11.2.4', ids: /^(strip|sEnd|Lw|A|I|rs)$/ },
       { key: 'col', title: 'Axial resistance of the effective column', ref: A + '6.10.11.2.4, 6.9.4.1.1, 6.9.2.1', ids: /^(sl|Po|Pe|Pn|Pr|Pr\.ok)$/ },
@@ -231,7 +231,7 @@
       { key: 'res', title: 'Nominal shear resistance', ref: A + '6.10.9.2, 6.10.9.3', ids: /^v\./ },
       { key: 'chk', title: 'Check', ref: A + '6.10.9.1', ids: /^ok$/ }],
     loc: [{ key: 'sec', title: 'Section: flange areas', ref: '', ids: /^flgA$/ },
-      { key: 'dem', title: 'Demands: Strength I shear', ref: 'Tables 3.4.1-1, -2', ids: /^(Vu|VuPan|VuP)$/ },
+      { key: 'dem', title: 'Demands: Strength I shear', ref: 'Tables 3.4.1-1, -2', ids: /^(Vu|VuPan|VuP)$/, res: /^VuP$/ },
       { key: 'res', title: 'Nominal shear resistance of the panel', ref: A + '6.10.9.2, 6.10.9.3', ids: /^pan\./ },
       { key: 'chk', title: 'Check, Strength I', ref: A + '6.10.9.1', ids: /^ok$/ },
       { key: 'cn', title: 'Deck placement (constructibility)', ref: A + '6.10.3.3', ids: /^(VuC|okC)$/ },

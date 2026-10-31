@@ -226,7 +226,7 @@
     [1, -1].slice(0, sides).forEach(sg => { const ya = sg > 0 ? by + s(tw) / 2 : by - s(tw) / 2 - s(t.bt), yz = ya + s(t.bt); D.rect(L.st, bx - s(t.tp) / 2, ya, bx + s(t.tp) / 2, yz); D.solid(L.st, [[bx - s(t.tp) / 2, ya], [bx + s(t.tp) / 2, ya], [bx + s(t.tp) / 2, yz], [bx - s(t.tp) / 2, yz]]);
       [-1, 1].forEach(sx => filletTri(D, L.s, bx + sx * s(t.tp) / 2, sg > 0 ? by + s(tw) / 2 : by - s(tw) / 2, sx, sg, s(t.w))); });
     D.dimV(L.d, by + s(tw) / 2, by + s(tw) / 2 + s(t.bt), bx + half + 2.5 * h, bx + s(t.tp) / 2, `b_t = ${dIn(t.bt)}`);
-    D.text(L.t, bx + s(t.tp) / 2 + 0.6 * h, by + s(tw) / 2 + s(t.bt) + 0.6 * h, h * 0.75, `PL ${frac(t.bt)} x ${frac(t.tp)} (t_p = ${dIn(t.tp)})`, 0);
+    D.text(L.t, bx - s(t.tp) / 2 - 0.6 * h, by + s(tw) / 2 + s(t.bt) - 1.2 * h, h * 0.75, `PL ${frac(t.bt)} x ${frac(t.tp)} (t_p = ${dIn(t.tp)})`, 2);
     D.text(L.t, bx + half + 1.0 * h, by - s(tw) / 2 - 1.6 * h, h * 0.75, `WEB t_w = ${dIn(tw)}`, 0);
     D.text(L.t, bx - half, by + fb / 2 + 6 * h, h * 1.1, `B  PLAN SECTION (ENLARGED x${k})`);
     notes(D, L.t, bx - half, by - fb / 2 - 2 * h, `FILLET WELD ${dIn(t.w)} TO THE WEB, BOTH SIDES OF THE PLATE${cp ? `; ${dIn(t.wf)} TO THE FLANGES` : ''}; FLANGE OUTLINE DASHED`, 30, 0.8 * h);

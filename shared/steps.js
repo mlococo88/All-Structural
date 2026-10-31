@@ -127,7 +127,7 @@
      demands, intermediate quantities (one topic per code sub-article), resistance, check. Presentation only: the steps, their ids and values are
      not changed or copied; group() only sorts them into topics (every step lands in exactly one, in its original order within the topic).
        group(steps, topics, opt) -> [{ key, title, ref, see, steps, res, ratio, cls, chip }]
-         topics: [{ key, title, ref?, see?, ids: RegExp | (id) => bool }] tested in order on each step id without its work prefix (opt.strip,
+         topics: [{ key, title, ref?, see?, ids: RegExp | (id) => bool, res?: RegExp (the step, by id, that sums up a topic without a test) }] tested in order on each step id without its work prefix (opt.strip,
                  default /^[^.]+\./: 'ts3.p1.Vn' -> 'p1.Vn'); the first match takes the step; steps no topic takes go to a last topic
                  'other' ('Other steps'); topics with no step are left out. Topic order = the order of topics.
          res    the topic's result step: its governing test step (ok === false first, else the largest ratio), else its last step with a value
@@ -143,13 +143,13 @@
   const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
   function group(steps, topics, opt) {
     opt = opt || {}; const strip = opt.strip || /^[^.]+\./, hi = opt.hi != null ? opt.hi : 0.9;
-    const T = (topics || []).map(t => ({ key: t.key, title: t.title, ref: t.ref || '', see: t.see || '', test: t.ids, steps: [] })), other = { key: 'other', title: 'Other steps', ref: '', see: '', steps: [] };
+    const T = (topics || []).map(t => ({ key: t.key, title: t.title, ref: t.ref || '', see: t.see || '', test: t.ids, pick: t.res, steps: [] })), other = { key: 'other', title: 'Other steps', ref: '', see: '', steps: [] };
     (steps || []).forEach(s => { const id = String(s.id).replace(strip, ''), t = T.find(q => (typeof q.test === 'function' ? q.test(id, s) : q.test.test(id))); (t || other).steps.push(s); });
     return T.concat([other]).filter(t => t.steps.length).map(t => {
       const tests = t.steps.filter(s => s.ok !== undefined), rs = tests.filter(isRatio), ng = tests.find(s => s.ok === false);
       const ratio = rs.length ? Math.max(...rs.map(s => (fin(s.value) ? s.value : Infinity))) : NaN;
       const gov = ng || (rs.length ? rs.reduce((a, b) => ((fin(b.value) ? b.value : Infinity) > (fin(a.value) ? a.value : Infinity) ? b : a)) : tests[tests.length - 1]);
-      const res = gov || [...t.steps].reverse().find(s => s.value != null && s.value !== '') || t.steps[t.steps.length - 1];
+      const res = gov || (t.pick && t.steps.find(s => t.pick.test(String(s.id).replace(strip, '')))) || [...t.steps].reverse().find(s => s.value != null && s.value !== '') || t.steps[t.steps.length - 1];
       const cls = !tests.length ? '' : ng || ratio > 1 + 1e-9 || Number.isNaN(ratio) && rs.length ? 'ng' : ratio >= hi ? 'hi' : 'ok';
       const chip = !tests.length ? '' : rs.length ? (fin(ratio) ? fmt(ratio, 3) : '∞') + (ng ? ' NG' : '') : ng ? 'NG' : 'OK';
       return { key: t.key, title: t.title, ref: t.ref, see: t.see, steps: t.steps, res, ratio, cls, chip };
