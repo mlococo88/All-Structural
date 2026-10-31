@@ -160,7 +160,10 @@
     E.title = (t, sub) => { const nch = Math.max(30, Math.floor(len / (0.8 * h * 0.6))), ls = sub ? wrap(sub, nch) : [], y0 = E.yTop + 4.2 * h;
       ls.forEach((q, i) => D.text(ly.t, X(L0), y0 + (ls.length - 1 - i) * 1.1 * h, h * 0.8, q)); D.text(ly.t, X(L0), y0 + ls.length * 1.1 * h + 0.4 * h, h * 1.3, t); };
     let selLow = null; E.freeze = () => { selLow = lowEdge; };   // the selected-station line runs down to here (not through tables drawn under the diagrams)
-    E.selMark = ft => { const top = elTop + 1.7 * h, segs = [[axisY, top], ...E.bands.map(b => [b[0] - 0.3 * h, b[1] + 0.3 * h])];
+    // the label of the selected station sits to the right of its line; where a field splice tag (FSk, centred on its splice, just above the web) falls under that label, the line (and the label with it) is carried up above the tag
+    E.selMark = ft => { let top = elTop + 1.7 * h; const lw = textW(`STA ${nf(ft, 1)} FT`, h * 0.9), lx0 = X(ft) + 0.8 * h, lx1 = lx0 + lw;
+      spl.forEach((x, k) => { const fw = textW(`FS${k + 1}`, h * 0.8) / 2 + 0.3 * h, tagTop = yB + E.Yweb(x) + tmax + 1.6 * h + 0.8 * h; if (X(x) + fw > lx0 && X(x) - fw < lx1 && tagTop + 0.3 * h > top) top = tagTop + 0.3 * h; });
+      const segs = [[axisY, top], ...E.bands.map(b => [b[0] - 0.3 * h, b[1] + 0.3 * h])];
       return { x: X(ft), y0: Math.min(...segs.map(q => q[0])), y1: top, segs, label: `STA ${nf(ft, 1)} FT` }; };
     return E;
   }

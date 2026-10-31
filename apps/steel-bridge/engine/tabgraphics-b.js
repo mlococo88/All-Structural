@@ -319,14 +319,14 @@
     // stud zones: a band above the labels: pitch, rows and stud count; colour by SC1 of the zone
     const zs = R.SR && !R.SR.errors.length ? R.SR.zones : [], sc1 = R.SCC ? (R.SCC.find(c => c.id === 'SC1') || { items: [] }).items : [], yS = yTopL + (nTop * 1.5 + 2.6) * h;
     D.text(L.t, 0, yS + 5.6 * h, h * 0.8, 'SHEAR STUD PITCH ZONES (6.10.10): ROWS @ PITCH (IN) ABOVE; COUNT BELOW; COLOUR = SC1 FATIGUE RATIO');
-    zs.forEach((z, i) => { const a = X(z.x1), b = X(z.x2), r = sc1[i] ? sc1[i].r : NaN, n = studCount(z); ratioFill(D, L, r, a, yS, b, yS + 2 * h, 0.7 * h); D.line(L.sc, a, yS - 0.5 * h, a, yS + 2.5 * h);
+    zs.forEach((z, i) => { const a = X(z.x1), b = X(z.x2), r = sc1[i] ? sc1[i].r : NaN, n = studCount(z); ratioSolid(D, L, r, a, yS, b, yS + 2 * h); D.line(L.sc, a, yS - 0.5 * h, a, yS + 2.5 * h);
       const lab = `${z.nr}@${+(+z.p).toFixed(1)}`, cl = `${n}`, hs = Math.max(0.75 * h, 0.72 * h), st = i % 2;   // narrow zones: the labels alternate between two rows, or are left out when even that is too narrow
       if (tw(lab, hs) <= (b - a) * (st || tw(lab, hs) > (b - a) * 0.96 ? 1.9 : 0.96)) D.text(L.t, (a + b) / 2, yS + (2.6 + 1.3 * (tw(lab, hs) > (b - a) * 0.96 ? st : 0)) * h, hs, lab, 1);
       if (tw(cl, hs) <= (b - a) * (st || tw(cl, hs) > (b - a) * 0.96 ? 1.9 : 0.96)) D.text(L.t, (a + b) / 2, yS - (1.6 + 1.3 * (tw(cl, hs) > (b - a) * 0.96 ? st : 0)) * h, hs, cl, 1);
       if (sel.k === 'sc') D.rect(L.sel, a, yS - 0.2 * h, b, yS + 2.2 * h);
       reg.push({ k: 'sc', i: 0, x0: a, y0: yS - 0.5 * h, x1: b, y1: yS + 3.4 * h, lab: `STUD ZONE ${f2(z.x1)}-${f2(z.x2)} FT: ${z.nr} @ ${f2(z.p)} IN = ${n} STUDS, SC1 ${f3(r)}` }); });
     if (zs.length) { D.line(L.sc, X(zs[zs.length - 1].x2), yS - 0.5 * h, X(zs[zs.length - 1].x2), yS + 2.5 * h); D.text(L.t, X(G.L), yS - 3.2 * h - 1.3 * h, h * 0.8, `TOTAL ${zs.reduce((s, z) => s + studCount(z), 0)} STUDS`, 2); } else D.text(L.t, 0, yS, h * 0.8, 'NO STUD ZONES IN THESE RESULTS.');
-    const yL = F.alloc(8.6 * h) - 2.4 * h; legend(D, L, 0, yL, h, RLEG(L), { right: X(G.L) }); scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h); legend(D, L, 0, yL - 3.8 * h, h, [[L.t, 'FATIGUE DETAIL (COLOUR = FA1 RATIO)', 'circle'], [L.na, 'EXEMPT (FA2)', 'circle'], [L.sel, 'SELECTED', 'circle']], { right: X(G.L) });
+    const yL = F.alloc(8.6 * h) - 2.4 * h; legend(D, L, 0, yL, h, RLEG(L), { right: X(G.L), solid: true }); scaleBar(D, L, 0, yL, Math.max(10, Math.round(G.L / 6 / 10) * 10), h); legend(D, L, 0, yL - 3.8 * h, h, [[L.t, 'FATIGUE DETAIL (COLOUR = FA1 RATIO)', 'circle'], [L.na, 'EXEMPT (FA2)', 'circle'], [L.sel, 'SELECTED', 'circle']], { right: X(G.L) });
     F.yTop = yS + 7.4 * h;
     F.title(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE DETAILS AND STUD ZONES`, `F1.. = THE FATIGUE DETAILS OF THE TABLE (RATIO = GAMMA(DELTA f) / (DELTA F)_n, FA1); VERT. EXAG. x${v.toFixed(1)}; PLATES OF THE PROJECT`);
     return base('fatigue', 'Fatigue details and stud zones', D, 0, reg);
