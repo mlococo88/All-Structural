@@ -2300,3 +2300,14 @@ Presentation only: no engineering formula, load or resistance factor, unit, code
 - None.
 ### Open items
 - Flexure / Constructibility web hatching and the Welds legend swatches could be made solid too (presentation only), if wanted.
+
+## 2026-10-31 — PR: sbd-spans-framing-tab — Spans and Framing input tabs combined into "Spans & framing" (UI only)
+### Where
+- `apps/steel-bridge/index.html`: `TABS` (`['spans', 'Spans']` -> `['spans', 'Spans & framing']`; `['fr', 'Framing']` removed), `panes()` (the `spans:` value is now the Spans card `+ window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui)`; the `fr:` entry removed), `markErrors()` `tabOf` (`framing.*` / `crossframes.*` now return `'spans'`, as `spans.*` did), and after the `ui` load from `M.KEYS.ui`: `if (ui.itab === 'fr') ui.itab = 'spans';`.
+- `apps/steel-bridge/ui/analysis.js`: the output-tab link `data-goto="fr"` -> `data-goto="spans"`.
+- Wording "Framing tab" -> "Spans & framing tab" in `ui/{welds,splices,shear,flexure,constructibility,rating,analysis,drawings}.js` (as `&amp;`), `report/{builders,data}.js`, `engine/{framing,owners,splices}.js` (comments and message text only); `tests/engine/paths.test.mjs` regex follows. `ui/gfxa.js` (a note string) left for the graphics PR.
+### Before / after
+- Before: two input tabs, `spans` (Spans card) and `fr` (framing cards). After: one tab key `spans` holding the Spans card, then the framing cards, in their existing layout.
+- Saved data: the `M.KEYS.ui` key and format are unchanged; a stored `itab: 'fr'` is mapped to `'spans'` on load (the stored key is not deleted or renamed). No project field, path, or localStorage key changed.
+### Governing provision / check
+- None: no calculation, factor, unit or code reference changed. Check: `node tests/engine/run.mjs` unchanged results; the paths `data-path` of every framing input are identical, so edits flow to the same `P.framing.*`.

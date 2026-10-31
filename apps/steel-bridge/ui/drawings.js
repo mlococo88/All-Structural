@@ -49,7 +49,7 @@
     css(); const P = ctx.P, ui = ctx.ui; ui.dwg = ui.dwg || {};
     const RS = results(P), stale = !RS && S.key && S.key !== keyOf(P);
     let G; try { G = model(P, RS); } catch (e) { G = { errors: [`The drawings could not be built: ${e.message}`] }; }
-    if (G.errors.length) { host.innerHTML = `<section class="sec"><div class="secHead">Drawings</div><div class="secBody"><div class="alert err">${G.errors.map(esc).join('<br>')}</div><p class="note">The drawings need the cross-section (Cross-section &amp; loads tab) and the framing (Framing tab).</p></div></section>`; return; }
+    if (G.errors.length) { host.innerHTML = `<section class="sec"><div class="secHead">Drawings</div><div class="secBody"><div class="alert err">${G.errors.map(esc).join('<br>')}</div><p class="note">The drawings need the cross-section (Cross-section &amp; loads tab) and the framing (Spans &amp; framing tab).</p></div></section>`; return; }
     const paper = ui.dwg.paper === 'B' ? 'B' : 'D', z = ZOOM.some(q => q[0] === ui.dwg.z) ? ui.dwg.z : 1;
     let B; try { B = window.SBDSheets.build(G, RS, { paper }); } catch (e) { host.innerHTML = `<div class="alert err">The drawings could not be drawn: ${esc(e.message)}</div>`; return; }
     const sh = B.sheets, cur = sh.find(s => s.id === ui.dwg.sheet) || sh[0], SN = window.SBDDrawings.SCALE_NAME;
