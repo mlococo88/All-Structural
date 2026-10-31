@@ -85,7 +85,11 @@
       D.text(t, X(x), yTopFl - s.topT - s.D - s.botT - 2.2 * h, 0.9 * h, `G${i + 1}`, 1); });
     // appurtenances: footprints from the drawings model (same as the Drawings tab's section)
     let top = 0; if (M.app) M.app.items.forEach(a => { const y0 = hh + ts + (a.y0 || 0);
-      if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') { D.rect(ly.ap, X(a.x0), y0, X(a.x1), y0 + (a.k === 'bar' ? 34 : a.h)); top = Math.max(top, (a.y0 || 0) + (a.k === 'bar' ? 34 : a.h)); D.text(t, X((a.x0 + a.x1) / 2), y0 + (a.k === 'bar' ? 34 : a.h) + 0.4 * h, 0.6 * h, a.k === 'sw' ? 'SIDEWALK' : a.k === 'med' ? 'MEDIAN' : a.k === 'curb' ? 'CURB' : 'BARRIER', 1); }
+      if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') { D.rect(ly.ap, X(a.x0), y0, X(a.x1), y0 + (a.k === 'bar' ? 34 : a.h)); top = Math.max(top, (a.y0 || 0) + (a.k === 'bar' ? 34 : a.h)); const al = a.k === 'sw' ? 'SIDEWALK' : a.k === 'med' ? 'MEDIAN' : a.k === 'curb' ? 'CURB' : 'BARRIER', aw = G.textW(al, 0.6 * h), ac = X((a.x0 + a.x1) / 2), ay = y0 + (a.k === 'bar' ? 34 : a.h) + 0.4 * h;
+        // the label is centred on its appurtenance; where a girder's extension line (the spacing chain's, from the deck up) would touch it, it moves to the nearer clear side of that line
+        const xl = [0, ...pos.map(X), X(Wd)], hit = (c, al2) => { const l0 = al2 === 1 ? c - aw / 2 : al2 === 0 ? c : c - aw, l1 = l0 + aw; return xl.some(x => x > l0 - 0.4 * h && x < l1 + 0.4 * h); };
+        let ax = ac, ah = 1; if (hit(ac, 1)) { const cs = []; xl.forEach(x => { cs.push([x + 0.5 * h, 0], [x - 0.5 * h, 2]); }); const ok = cs.filter(q => !hit(q[0], q[1])).sort((p1, p2) => Math.abs(p1[0] - ac) - Math.abs(p2[0] - ac))[0]; if (ok) { ax = ok[0]; ah = ok[1]; } }
+        D.text(t, ax, ay, 0.6 * h, al, ah); }
       else if (a.x != null) { D.line(ly.ap, X(a.x), y0, X(a.x), y0 + a.h); top = Math.max(top, (a.y0 || 0) + a.h); D.text(t, X(a.x), y0 + a.h + 0.4 * h, 0.6 * h, a.k === 'rail' ? 'RAILING' : 'FENCE', 1); } });
     // roadway and lanes (stacked above the deck: wheels, lane bands, traffic faces, spacing chain, texts)
     const yd = hh + ts, yA = yd + top, deL = geo.deL, deR = geo.deR, lw = geo.laneW, NL = geo.NL, yLn = yA + 7.5 * h;

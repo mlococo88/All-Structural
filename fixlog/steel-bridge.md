@@ -2286,6 +2286,21 @@ Presentation only: no engineering formula, load or resistance factor, unit, code
 - Rating topics carry no article reference (the MBE provisions are cited inside the steps).
 - Topic chips follow the steps' own ok flags: a topic with a failing check shows NG, as the check tables.
 
+## 2026-10-31 — PR: sbd-gfx-touchups — graphics touch-ups: Fatigue & studs stud zones in solid ratio colours, selected-station label clear of the FS tag, BARRIER label clear of the extension line
+Presentation only: no engineering formula, load or resistance factor, unit, code reference, computed result or saved-data format changes (CLAUDE.md §4, §5). The ratio classes (green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG) are the existing `ratioClass`; only how a rectangle is drawn changes.
+### Where
+- `apps/steel-bridge/engine/tabgraphics-b.js`, `fatigue()` (anchor `SHEAR STUD PITCH ZONES (6.10.10)`): `ratioFill(D, L, r, a, yS, b, yS + 2 * h, 0.7 * h)` → `ratioSolid(D, L, r, a, yS, b, yS + 2 * h)` (outline plus a solid on the class layer, as the Shear & stiffeners panels); the legend call `legend(D, L, 0, yL, h, RLEG(L), { right: X(G.L) })` → `{ right: X(G.L), solid: true }` (solid swatches). `hatch` and `ratioFill` stay (exported helper; `ratioFill` now unused).
+- `apps/steel-bridge/ui/graphics.js`, `elevation()` (anchor `E.selMark = ft =>`): the line, marker and the "STA x FT" label of the selected station are carried up above any field-splice tag "FSk" that lies under the label (same x range), so the two no longer touch. Used by the Analysis, Flexure and Constructibility elevations (the Shear & stiffeners elevation draws no STA label).
+- `apps/steel-bridge/ui/gfxa.js`, `loadsGraphic()` (anchor `const al = a.k === 'sw'`): the appurtenance label (BARRIER, SIDEWALK, CURB, MEDIAN) stays centred unless a girder or deck-edge extension line of the spacing chain would touch it; then it moves to the nearer clear side of that line (left- or right-aligned, 0.5 h off the line).
+### Check case / How verified
+- Values unchanged: a Node dump of the Fatigue tab build (`SBDFatigueUI.build`, built-in project, splice at 82 ft: every row, check item and step with value, unit, ok, ref, text; 31,274,901 bytes, 103,763 step refs) is identical before and after (md5 09374418fc52e9bbe905642691058ac5 both).
+- Other tabs that still hatch (not changed): `SBDGraphics.ratioLayer` draws vertical web hatching on the Flexure and Constructibility (deck placement) elevations (the Report summary already passes `hatch: false`; Shear & stiffeners does not use it); the Welds legend swatches use hatch (`legend` without `solid`).
+- `tests/engine/graphics-overlap.test.mjs` and `node tests/engine/run.mjs`: pass. Playwright screenshots at 1280 px of the Fatigue, Analysis (STA 77.0 FT with FS1) and Loads tabs.
+### Other copies
+- None.
+### Open items
+- Flexure / Constructibility web hatching and the Welds legend swatches could be made solid too (presentation only), if wanted.
+
 ## 2026-10-31 — PR: sbd-spans-framing-tab — Spans and Framing input tabs combined into "Spans & framing" (UI only)
 ### Where
 - `apps/steel-bridge/index.html`: `TABS` (`['spans', 'Spans']` -> `['spans', 'Spans & framing']`; `['fr', 'Framing']` removed), `panes()` (the `spans:` value is now the Spans card `+ window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui)`; the `fr:` entry removed), `markErrors()` `tabOf` (`framing.*` / `crossframes.*` now return `'spans'`, as `spans.*` did), and after the `ui` load from `M.KEYS.ui`: `if (ui.itab === 'fr') ui.itab = 'spans';`.
