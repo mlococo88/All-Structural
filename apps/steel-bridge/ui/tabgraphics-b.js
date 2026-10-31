@@ -4,7 +4,7 @@
    sets the tab's own selection and redraws the tab, so the graphic and the tables stay in step.
    Needs SBDGraphics (ui/graphics.js: mount with title, Download DXF, wheel zoom at the cursor, drag pan, pinch, double-click fit, + / − / Fit) and
    SBDTabGfxB. A tab puts an empty <div data-gfxb="NAME"></div> where the graphic goes and calls the function of its tab after it sets its HTML:
-     shear(host, ctx, R, onSel)      names shear, shear-detail          (R = SBDShearUI.build result; onSel({ k, i }): k pan, loc, ts, bs)
+     shear(host, ctx, R, onSel)      names shear, shear-detail, shear-bearing (R = SBDShearUI.build result; onSel({ k, i }): k pan, loc, ts, bs)
      fatigue(host, ctx, R, onSel)    names fatigue, fatigue-chart       (k fa, sc)
      crossframe(host, ctx, B)        name crossframe                    (B = SBDFramingUI.build result)
      welds(host, ctx, B, sel, onSel) names welds, weld-detail           (k fw, tr)
@@ -38,7 +38,9 @@
 
   function shear(host, ctx, R, sel, onSel) {
     put(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), onSel);
-    put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, {}));
+    // the stiffener details follow the selection: the selected transverse stiffener / bearing, else the governing one (2026-10-31)
+    put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, { i: sel && sel.k === 'ts' ? sel.i : undefined }));
+    put(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, { i: sel && sel.k === 'bs' ? sel.i : undefined }));
   }
   function fatigue(host, ctx, R, sel, onSel) {
     put(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), onSel);

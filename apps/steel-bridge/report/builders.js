@@ -29,6 +29,10 @@
   const fromHtml = h => String(h == null ? '' : h).replace(/<sub>(.*?)<\/sub>/g, (m, a) => `$_{${a.replace(/<[^>]+>/g, '')}}$`).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
   const steps = (scope, list, o) => ({ type: 'steps', scope, steps: list || [], ...(o || {}) });
+  /* gsteps: worked steps in topics (presentation spec A; trial on Shear & stiffeners, 2026-10-31): the topics of the tab (SBDShearUI.groups,
+     SharedSteps.group), the steps in topic order with a sub-heading per topic (shared/report.js item.topics); ids and keys unchanged */
+  const gsteps = (kind, scope, list, o) => { const U = window.SBDShearUI, G = U && U.groups ? U.groups(kind, list || []) : null; if (!G) return steps(scope, list, o);
+    return steps(scope, [].concat(...G.map(t => t.steps)), { ...(o || {}), topics: G.map(t => ({ title: t.title, ref: t.ref, n: t.steps.length, cls: t.cls, chip: t.chip, res: t.res })) }); };
   const note = (text, warn) => ({ type: 'note', text, warn: !!warn });
   const tbl = (head, rows, o) => ({ type: 'table', head, rows, ...(o || {}) });
   const kv = rows => ({ type: 'kv', rows });
@@ -203,23 +207,23 @@
     subs.push(sub('pan', `Web panels (D = ${f(R.D, 2)} in, $F_{yw}$ = ${f(R.Fyw, 0)} ksi)`, [
       tbl(['Panel (ft)', '$d_{o}$ (in)', 'Type', 'k', 'C', '$\\phi V_{n}$ (kip)', '$V_{u}$ (kip)', 'Ratio'], (all ? pans : pSel).map(q => ({ cells: [`${f(q.p, 2)}–${f(q.q, 2)}`, N(q.d, 2), q.end ? 'end' : q.stiff ? 'interior' : 'unstiffened', N(q.k, 3), N(q.C, 4), N(q.phVn, 1),
         R.gm.dem ? N(q.Vu, 1) : '—', R.gm.dem ? R3(q.r, K(pk(q.i), 'pn.ok')) : '—'], cls: q === R.panels.gov ? 'gov' : '' }))),
-      ...pSel.map(q => steps(pk(q.i), q.steps, { lazy: all && q !== R.panels.gov, title: `Panel ${f(q.p, 2)}–${f(q.q, 2)} ft${q === R.panels.gov ? ' (governing)' : ''}` }))]));
+      ...pSel.map(q => gsteps('pan', pk(q.i), q.steps, { lazy: all && q !== R.panels.gov, title: `Panel ${f(q.p, 2)}–${f(q.q, 2)} ft${q === R.panels.gov ? ' (governing)' : ''}` }))]));
     // stations
     const st = R.stations, sSel = all ? st : R.stGov ? [R.stGov] : [];
     const cell = (r, id) => { const q = r.checks.find(c => c.id === id); return q && q.inUse ? R3(q.ratio, sSel.includes(r) ? K(sk(st.indexOf(r)), q.step) : null) : { t: 'n/a', cls: 'na' }; };
     subs.push(sub('st', 'Shear at the stations (GS11, GS16, GS18)', [
       tbl(['Station', '$d_{o}$ (in)', '$V_{u}$ (kip)', '$\\phi V_{n}$ (kip)', 'GS11', 'GS16', 'GS18'], sSel.map(r => ({ cells: [`${r.name}${r.end ? ' (end panel)' : ''}`, r.do > 0 ? N(r.do, 2) : '—', N(r.VuP != null ? r.VuP : r.Vu, 1), N(r.sh.Vn, 1), cell(r, 'GS11'), cell(r, 'GS16'), cell(r, 'GS18')], cls: r === R.stGov ? 'gov' : '' }))),
-      ...sSel.map(r => steps(sk(st.indexOf(r)), r.steps, { lazy: all && r !== R.stGov, title: `${r.name}${r === R.stGov ? ' (governing)' : ''}` }))]));
+      ...sSel.map(r => gsteps('loc', sk(st.indexOf(r)), r.steps, { lazy: all && r !== R.stGov, title: `${r.name}${r === R.stGov ? ' (governing)' : ''}` }))]));
     // transverse stiffeners
     if (R.TS && !R.TS.errors.length) { const T = R.TS.rows, tSel = all ? T.map((r, i) => i) : R.tsGov ? [R.tsGov.i] : [];
       subs.push(sub('ts', 'Transverse stiffeners and connection plates (6.10.11.1)', [note(`Checks: ${R.tsC.map(c => `${c.id} ${tt(c.title)}${c.naWhy ? ' (n/a)' : ''}`).join('; ')}.`),
         tbl(['Location', '$d_{o1}$ / $d_{o2}$ (in)', '$I_{t}$ / $I_{req}$ (in⁴)'], tSel.map(i => { const r = T[i]; return { cells: [`${r.name} (Type ${r.type})`, `${f(r.do1, 2)} / ${f(r.do2, 2)}`, { t: `${f(r.It, 2)} / ${f(r.Ireq, 2)}`, n: true }], cls: R.tsGov && R.tsGov.i === i ? 'gov' : '' }; })),
-        ...tSel.map(i => steps(tk(i), SB.transverseSteps(R.TS, T[i]), { lazy: all && !(R.tsGov && R.tsGov.i === i), title: `${T[i].name} (Type ${T[i].type})` }))])); }
+        ...tSel.map(i => gsteps('ts', tk(i), SB.transverseSteps(R.TS, T[i]), { lazy: all && !(R.tsGov && R.tsGov.i === i), title: `${T[i].name} (Type ${T[i].type})` }))])); }
     // bearing stiffeners: every bearing
     if (!R.BS.errors.length) subs.push(sub('bs', 'Bearing stiffeners (6.10.11.2)', [note(R.rxn ? "Reactions: the support reactions of this project's analysis (Analysis section, reactions table)." : 'Reactions from the shears of the hand-off file (DC, DW: the jump in shear; LL+IM: the sum of the two envelopes beside the support, an upper bound).'),
       tbl(['Bearing', '$R_{u}$ (kip)', '$(R_{sb})_{r}$ (kip)', '$P_{r}$ (kip)', 'Welds $R_{r}$ (kip)'], R.BS.rows.map((r, i) => ({ cells: [`${r.name} (Type ${r.type})`, N(r.Ru, 1), N(r.Rsb, 1), N(r.Pr, 1), N(r.Rweld, 1)], cls: R.bsGov && R.bsGov.i === i ? 'gov' : '' }))),
       note(`Checks: ${R.bsC.map(c => `${c.id} ${tt(c.title)} (${c.status})`).join('; ')}.`),
-      ...R.BS.rows.map((r, i) => steps(bk(i), SB.bearingSteps(R.BS, r), { title: `${r.name} (Type ${r.type})` }))]));
+      ...R.BS.rows.map((r, i) => gsteps('bs', bk(i), SB.bearingSteps(R.BS, r), { title: `${r.name} (Type ${r.type})` }))]));
     return { title: 'Shear and stiffeners', subs };
   }
 

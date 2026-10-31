@@ -2243,3 +2243,26 @@ AASHTO LRFD 10th Ed. Art. 6.10.3.4.1 (deck placement: the moments of the sequenc
 - Tests: `tests/engine/analysis.test.mjs` "sb2-pour-sign" (−1e-11 and −1.6e-11 at the ends: no sliver; exact 0 and +1e-11 the same; −1e-3 at an end still splits; a real contraflexure node within the tolerance joins the positive side like an exact 0). `tests/smoke/steel-bridge-report.mjs`: 13 report sections (load rating added earlier), test only.
 ### Open items
 - GirderDetail `saSeq` keeps the sliver pour (see Decision); its hand-off M_DCc includes it (≤ 0.023 % of max).
+## 2026-10-31 — PR: sbd-stiffener-tab — Shear & stiffeners tab: solid ratio fills, to-scale stiffener details, grouped worked steps (trial of presentation spec A)
+Presentation only: no engineering formula, load or resistance factor, unit, code reference, computed result or saved-data format changes (CLAUDE.md §4, §5). The steps, their ids and values are the engines' own; grouping only sorts them into topics.
+### Where
+- `shared/steps.js` (anchor `/* ---------- topics: grouped worked steps`): new `SharedSteps.group(steps, topics, opt)`, `summary(t, html)`, `groupsHTML(groups, o)`, `wire(root, o)`, `groupCss`; a `beforeprint` hook opens every closed topic for printing and closes it again after. Reusable by any tab; applied to this tab only.
+- `apps/steel-bridge/ui/shear.js`: `TOPICS` (ts, bs, pan, loc; ids matched without the work prefix; order: geometry, demands, one topic per AASHTO sub-article, resistance, check), `groups(kind, list)`; the "Worked steps" section renders `SharedSteps.groupsHTML` (topics closed by default, Expand all / Collapse all, open topics kept in `S.open` across selections). A `§id` in a step note is now a link to that step (`noteHtml`); a link to a step opens its topic; the Demands topic links to the Analysis tab when the analysis is the source (CLAUDE.md §6).
+- `apps/steel-bridge/report/builders.js`: `gsteps(kind, scope, list, o)` for the panel, station, transverse and bearing items of section 7: steps in topic order with `topics: [{ title, ref, n, cls, chip, res }]`. Step keys are unchanged, so every `[[key]]` / "see §" resolves (test).
+- `shared/report.js`: steps item `topics` → a sub-heading per topic (number, title, reference, chip, one-line result) in screen, print and text; nav tree entries down to the topics for items that are not lazy (`rp-l3`, `rp-l4`).
+- `shared/dxf.js`: new entity `D.solid(l, pts)` (DXF R12 SOLID, corner order 1, 2, 4, 3); `toSVG` draws solids first (behind all lines and text), translucent (`opt.fill`, default 0.4).
+- `apps/steel-bridge/engine/tabgraphics-b.js`:
+  - `shear()`: panel runs and the station strip are solid fills (`ratioSolid`) instead of 45° hatching; legend swatches solid; stiffener-kind legend (CP solid, TS dashed, BS pair of lines, as GirderDetail's `dxfElev`); spacing dimensions above the girder per run of equal d_o, text `n @ d_o (d_o/D)` where it fits inside the run; BS tags and the governing / selected flags on leaders above (the rotated BS labels left the web).
+  - `shearDetail()` rewritten after GirderDetail's `tsElevSVG`: A the two web panels beside the selected (else governing) transverse stiffener, elevation TO SCALE, each panel filled in the colour of its TS4 ratio V_u/(φ_v V_n) (the row's own p1/p2 values), d_o1/d_o2 dimensioned with d_o/D, D, the weld cutoff g; B plan section through the plate (enlarged, sizes in true inches). `opt.i` row; `opt.ts` type letter.
+  - new `shearBearing()` after `bsSectionSVG` / `bsPlanSVG`: C section at the bearing to scale, plates filled in the colour of the row's largest ratio (as the table); D effective column plan at mid-depth from the result (9t_w, s_end, L_tot, A), filled in the colour of R_u/P_r.
+- `apps/steel-bridge/ui/tabgraphics-b.js`: the details follow the tab selection (`sel.k === 'ts'` / `'bs'`); new mount `shear-bearing`.
+- Tests: new `tests/engine/steps-groups.test.mjs`; `tabgraphics-b.test.mjs` (every bearing and sampled transverse rows draw, solid fills on the ratio layers, no hatching); `graphics-overlap.test.mjs` (the bearing details added).
+### Check case / How verified
+- Values unchanged: a Node dump of every step (id, value, ok, sub, eq, label, ref, note) of every panel, station, transverse stiffener and bearing, the check items and ratios of TS1–CP2 and BS1–BS7, and the report's step ids and values, for the built-in project (analysis and example sources) and five hand-off payloads: identical JSON before and after (sha256 equal).
+- 19,076 steps of the built-in project and the RIDOT payload sorted into topics, none left over, each in its original order (test).
+- `node tests/engine/run.mjs`: all pass. Playwright screenshots at 1280 (screen, print) and 390 px; Report tab with topic headings and nav; 0 console errors.
+### Other copies
+- None. The grouping helper is in `shared/steps.js` only; other tabs can adopt it with their own topic lists.
+### Open items
+- Other tabs: apply the topics (spec A) tab by tab.
+- The layout elevation keeps its vertical exaggeration (a 360 ft girder at true scale is a thin line at fit); the details are to scale.

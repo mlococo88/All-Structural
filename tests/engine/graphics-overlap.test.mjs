@@ -45,7 +45,7 @@ function allGraphics(P, name, pl) {
   const FX = W.SBDFlexureUI.build({ P, g: 0, ...src }); if (!FX.err) run(GA.flexure, { P, gi: 0, R: FX, sel: 0 }).forEach((g, i) => add(`flexure ${i}`, g));
   const CN = W.SBDConstrUI.build({ P, g: 0 }); if (!CN.err) run(GA.constr, { P, gi: 0, R: CN, sel: 0 }).forEach((g, i) => add(`constructibility ${i}`, g));
   // Shear, Fatigue, Cross-frames, Welds, Rating
-  const SH = W.SBDShearUI.build({ P, g: 0, ...(pl ? { pl } : {}) }); if (!SH.err) { add('shear', GB.shear(SH, P, {})); add('shear detail', GB.shearDetail(SH, P, {})); add('shear detail B', GB.shearDetail(SH, P, { ts: 'B', bs: 'B' })); }
+  const SH = W.SBDShearUI.build({ P, g: 0, ...(pl ? { pl } : {}) }); if (!SH.err) { add('shear', GB.shear(SH, P, {})); add('shear detail', GB.shearDetail(SH, P, {})); add('shear detail B', GB.shearDetail(SH, P, { ts: 'B' })); SH.BS.rows.forEach((r, i) => add(`shear bearing ${i}`, GB.shearBearing(SH, P, { i }))); }
   const FA = W.SBDFatigueUI.build({ P, g: 0, ...(pl ? { pl } : {}) }); if (!FA.err) { add('fatigue', GB.fatigue(FA, P, {})); add('fatigue chart', GB.fatigueChart(FA, P, {})); }
   const CF = W.SBDFramingUI.build({ P, g: 0 }); add('crossframe', GB.crossframe(CF, P, {}));
   const WB = W.SBDWeldsUI.build({ P, g: 0, ...(pl ? { src: 'file', pl, plName: name } : { src: 'analysis' }) }); if (!WB.err) { add('welds', GB.welds(WB, P, {})); add('weld detail', GB.weldDetail(WB, P, {})); }

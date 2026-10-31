@@ -23,6 +23,9 @@
        D.ltype(base)           -> a linetype name for base 'CENTER' | 'HIDDEN' | 'DASHED' | 'PHANTOM' scaled to D.k ('CENTER_96')
        D.line(l, x1, y1, x2, y2, lt), D.pline(l, pts, closed, lt), D.rect(l, x1, y1, x2, y2, lt), D.circle(l, x, y, r),
        D.arc(l, x, y, r, a0, a1)  (counterclockwise from a0 to a1, degrees)
+       D.solid(l, pts)         a filled triangle or quadrilateral (3 or 4 corners in polygon order), in the layer's colour: DXF SOLID (added 2026-10-31,
+                               Steel Bridge stiffener tab: ratio colours as solid fills instead of hatching); the SVG preview draws every solid
+                               behind the other entities, translucent (opt.fill, default 0.4 opacity), so lines and text on top stay readable
        D.text(l, x, y, hh, s, j, rot)  j: 0 left, 1 center, 2 right (at the baseline); rot degrees
        D.dim(l, p1, p2, b, ang, txt)   linear dimension between p1 and p2, dimension line through b, direction ang (deg);
                                txt may contain <> for the measured value (formatted by D.fmt, default feet-inches)
@@ -95,6 +98,7 @@
     D.rect = (l, x1, y1, x2, y2, lt) => D.pline(l, [[x1, y1], [x2, y1], [x2, y2], [x1, y2]], true, lt);
     D.circle = (l, x, y, r) => { D.E.push({ t: 'CIRCLE', l, r, pts: [[x, y]] }); };
     D.arc = (l, x, y, r, a0, a1) => { D.E.push({ t: 'ARC', l, r, a0, a1, pts: [[x, y]] }); };
+    D.solid = (l, pts) => { if (pts.length < 3 || pts.length > 4) throw new Error('SharedDxf solid: 3 or 4 corners'); D.E.push({ t: 'SOLID', l, pts: pts.map(p => [p[0], p[1]]) }); };
     D.text = (l, x, y, hh, s, j, rot) => { D.E.push({ t: 'TEXT', l, hh, s: str(s), j: j || 0, rot: rot || 0, pts: [[x, y]] }); };
     D.dim = (l, p1, p2, b, ang, txt) => {
       ang = ang || 0; const u = [Math.cos(ang * Math.PI / 180), Math.sin(ang * Math.PI / 180)], pr = p => { const d = (p[0] - b[0]) * u[0] + (p[1] - b[1]) * u[1]; return [b[0] + u[0] * d, b[1] + u[1] * d]; };
@@ -132,6 +136,8 @@
     const out = [], g = (c, v) => out.push(String(c).padStart(3), String(v));
     const ent = (e, lay) => { const L = lay || e.l;
       if (e.t === 'LINE') { g(0, 'LINE'); g(8, L); if (e.lt) g(6, e.lt); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0); g(11, num(e.pts[1][0])); g(21, num(e.pts[1][1])); g(31, 0); return; }
+      if (e.t === 'SOLID') { const q = e.pts.length === 4 ? [e.pts[0], e.pts[1], e.pts[3], e.pts[2]] : [e.pts[0], e.pts[1], e.pts[2], e.pts[2]];   // DXF corner order: 1, 2, 4, 3 of the polygon
+        g(0, 'SOLID'); g(8, L); q.forEach((p, k) => { g(10 + k, num(p[0])); g(20 + k, num(p[1])); g(30 + k, 0); }); return; }
       if (e.t === 'CIRCLE') { g(0, 'CIRCLE'); g(8, L); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0); g(40, num(e.r)); return; }
       if (e.t === 'ARC') { g(0, 'ARC'); g(8, L); g(10, num(e.pts[0][0])); g(20, num(e.pts[0][1])); g(30, 0); g(40, num(e.r)); g(50, num(e.a0)); g(51, num(e.a1)); return; }
       if (e.t === 'PL') { g(0, 'POLYLINE'); g(8, L); if (e.lt) g(6, e.lt); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, e.closed ? 1 : 0);
@@ -189,9 +195,10 @@
     const dash = lt => { if (!lt || lt === 'CONTINUOUS') return ''; const p = D.lt[lt] || BASE_LT[lt.split('_')[0]] || []; return p.length ? ` stroke-dasharray="${p.map(v => +Math.max(Math.abs(v), sw).toFixed(3)).join(' ')}"` : ''; };
     const anc = j => j === 1 ? ' text-anchor="middle"' : j === 2 ? ' text-anchor="end"' : '';
     const txt = (e, c) => `<text x="${X(e.pts[0][0])}" y="${Y(e.pts[0][1])}" font-size="${+e.hh.toFixed(3)}" fill="${c}"${anc(e.j)}${e.rot ? ` transform="rotate(${+(-e.rot).toFixed(3)} ${X(e.pts[0][0])} ${Y(e.pts[0][1])})"` : ''}>${esc(e.s)}</text>`;
-    const parts = [];
+    const parts = [], fills = [], fo = opt.fill != null ? opt.fill : 0.4;
     for (let i = i0; i < i1; i++) { const e = D.E[i], c = col(e.l), st = `stroke="${c}" stroke-width="${+sw.toFixed(4)}" fill="none"${dash(e.lt)}`;
-      if (e.t === 'LINE') parts.push(`<line x1="${X(e.pts[0][0])}" y1="${Y(e.pts[0][1])}" x2="${X(e.pts[1][0])}" y2="${Y(e.pts[1][1])}" ${st}/>`);
+      if (e.t === 'SOLID') fills.push(`<polygon points="${e.pts.map(p => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="${c}" fill-opacity="${fo}" stroke="none"/>`);   // behind everything
+      else if (e.t === 'LINE') parts.push(`<line x1="${X(e.pts[0][0])}" y1="${Y(e.pts[0][1])}" x2="${X(e.pts[1][0])}" y2="${Y(e.pts[1][1])}" ${st}/>`);
       else if (e.t === 'PL') parts.push(`<${e.closed ? 'polygon' : 'polyline'} points="${e.pts.map(p => `${X(p[0])},${Y(p[1])}`).join(' ')}" ${st}/>`);
       else if (e.t === 'CIRCLE') parts.push(`<circle cx="${X(e.pts[0][0])}" cy="${Y(e.pts[0][1])}" r="${+e.r.toFixed(3)}" ${st}/>`);
       else if (e.t === 'ARC') { const [cx, cy] = e.pts[0], r = e.r, a0 = e.a0 * Math.PI / 180, a1 = e.a1 * Math.PI / 180, sweep = ((e.a1 - e.a0) % 360 + 360) % 360;
@@ -199,7 +206,7 @@
       else if (e.t === 'TEXT') parts.push(txt(e, c));
       else if (e.t === 'DIM') dimGeo(e).g.forEach(q => parts.push(q.t === 'TEXT' ? txt(q, c) : `<line x1="${X(q.pts[0][0])}" y1="${Y(q.pts[0][1])}" x2="${X(q.pts[1][0])}" y2="${Y(q.pts[1][1])}" stroke="${c}" stroke-width="${+sw.toFixed(4)}"/>`)); }
     const w = opt.width ? ` width="${opt.width}"` : '';
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${+W.toFixed(3)} ${+H.toFixed(3)}"${w}${opt.cls ? ` class="${opt.cls}"` : ''} font-family="Arial, Helvetica, sans-serif" preserveAspectRatio="xMidYMid meet">${opt.title ? `<title>${esc(opt.title)}</title>` : ''}${opt.bg ? `<rect width="100%" height="100%" fill="${opt.bg}"/>` : ''}${parts.join('')}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${+W.toFixed(3)} ${+H.toFixed(3)}"${w}${opt.cls ? ` class="${opt.cls}"` : ''} font-family="Arial, Helvetica, sans-serif" preserveAspectRatio="xMidYMid meet">${opt.title ? `<title>${esc(opt.title)}</title>` : ''}${opt.bg ? `<rect width="100%" height="100%" fill="${opt.bg}"/>` : ''}${fills.join('')}${parts.join('')}</svg>`;
   }
 
   /* ---------- interactive preview (browser): pan and zoom of a toSVG() drawing ---------- */

@@ -15,6 +15,11 @@
                                                              scope + '/' + step.id (step.id alone when scope is ''); the first
                                                              occurrence of a key is its derivation. lazy: rendered when opened
                                                              (<details>), so a report of every station stays fast; print fills them.
+                                                             topics? (2026-10-31, presentation spec A): [{ title, ref, n, cls, chip, res }]
+                                                             in step order (n steps each; res: the topic's result step, SharedSteps.group):
+                                                             a sub-heading with the one-line result before each topic's steps (screen,
+                                                             print, text), and, for an item that is not lazy, nav-tree entries down to
+                                                             the topics.
      { type: 'table', caption?, head: [cell…], rows: [[cell…] | { cells, cls }], wide? }
      { type: 'figure', svg, caption? }                       an SVG string (made by the app)
      { type: 'note', text, warn? }
@@ -61,6 +66,8 @@
             doc.index.set(k, { n: num, anchor: a, sub: sub.id, lz: it.lazy ? it._lz : null });
             return a;
           });
+          if (it.topics && it.topics.length && !it.lazy) { let j0 = 0; const tops = it.topics.map(t => { const q = { title: t.title, anchor: it._anc[j0] }; j0 += t.n; return q; });   // nav: the item, then its topics
+            (sub.items || (sub.items = [])).push({ title: it.title || 'Worked steps', anchor: it._anc[0], tops }); }
         });
       });
     });
@@ -122,8 +129,12 @@
     const v = typeof s.value === 'number' || (s.value != null && s.value !== '') ? ST().line({ value: s.value, unit: s.unit, d: s.d }, true) : '';
     return v + (s.ok === true ? ' <span class="rp-okt">OK</span>' : s.ok === false ? ' <span class="rp-ngt">NG</span>' : '');
   };
+  /* the sub-heading of a topic (item.topics): number, title, reference, one-line result, status */
+  const topHtml = (t, k) => `<div class="rp-top${t.cls ? ' rp-top-' + t.cls : ''}"><span class="rp-tn">${k + 1}.</span> <span class="rp-tt">${esc(t.title)}</span>${t.ref ? ` <span class="rp-ref">${esc(t.ref)}</span>` : ''}${t.chip ? ` <span class="rp-tchip">${esc(t.chip)}</span>` : ''}${t.res ? `<div class="rp-tsum">${ST().summary(t, true)}</div>` : ''}</div>`;
+  const topAt = it => { const m = new Map(); let j = 0; (it.topics || []).forEach((t, k) => { m.set(j, topHtml(t, k)); j += t.n; }); return m; };
   function stepsHtml(doc, it) {
-    return (it.steps || []).map((s, i) => `<div class="rp-step${s.ok === false ? ' rp-ng' : ''}" id="${it._anc[i]}"><div class="rp-d">${esc(s.label)}${s.ref ? `<span class="rp-ref">${esc(s.ref)}</span>` : ''}</div>
+    const T = topAt(it);
+    return (it.steps || []).map((s, i) => `${T.get(i) || ''}<div class="rp-step${s.ok === false ? ' rp-ng' : ''}" id="${it._anc[i]}"><div class="rp-d">${esc(s.label)}${s.ref ? `<span class="rp-ref">${esc(s.ref)}</span>` : ''}</div>
       <div class="rp-m">${ST().line({ ...s, value: null, unit: '' }, true)}</div><div class="rp-r">${stepVal(s)}</div>${s.note ? `<div class="rp-nt">${noteOf(doc, it, s.note, true)}</div>` : ''}</div>`).join('');
   }
   function cellHtml(doc, c, th) {
@@ -169,7 +180,8 @@
       (s.subs || []).forEach((q, j) => {
         L.push('', `${i + 1}.${j + 1} ${T(q.title)}`);
         (q.items || []).forEach(it => {
-          if (it.type === 'steps') { if (it.title) L.push(T(it.title)); (it.steps || []).forEach(st => L.push(`  ${st.label}${st.ref ? ' [' + st.ref + ']' : ''}: ${ST().line(st, false)}${st.ok === true ? ' OK' : st.ok === false ? ' NG' : ''}${st.note ? ' (' + noteOf(doc, it, st.note, false) + ')' : ''}`)); }
+          if (it.type === 'steps') { if (it.title) L.push(T(it.title)); const tp = new Map(); { let j = 0; (it.topics || []).forEach((t, k) => { tp.set(j, `  ${k + 1}. ${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + ST().summary(t, false) : ''}`); j += t.n; }); }
+            (it.steps || []).forEach((st, i) => { if (tp.has(i)) L.push(tp.get(i)); L.push(`  ${st.label}${st.ref ? ' [' + st.ref + ']' : ''}: ${ST().line(st, false)}${st.ok === true ? ' OK' : st.ok === false ? ' NG' : ''}${st.note ? ' (' + noteOf(doc, it, st.note, false) + ')' : ''}`); }); }
           else if (it.type === 'table') { if (it.caption) L.push(T(it.caption)); const c = x => { const o = x && typeof x === 'object' ? x : { t: x }; return T(o.t) + (o.key ? ' ' + T(`[[${o.key}]]`) : ''); };
             L.push((it.head || []).map(c).join(' | ')); (it.rows || []).forEach(r => L.push((Array.isArray(r) ? r : r.cells).map(c).join(' | '))); }
           else if (it.type === 'figure') L.push('[Figure] ' + T(it.caption));
@@ -195,6 +207,9 @@
 .rp-toc a{display:block;padding:2px 9px;border-left:2px solid transparent;color:#475569;text-decoration:none;font-size:9pt;line-height:1.35;}
 .rp-toc a.rp-l1{font-weight:600;color:#0F172A;margin-top:5px;}
 .rp-toc a.rp-l2{padding-left:20px;font-size:8.5pt;}
+.rp-toc a.rp-l3{padding-left:30px;font-size:8pt;font-style:italic;} .rp-toc a.rp-l4{padding-left:40px;font-size:8pt;}
+.rp-top{margin:8pt 0 2pt;padding:2pt 0 2pt 6pt;border-left:2.5pt solid #64748b;break-after:avoid;page-break-after:avoid;} .rp-top .rp-tn,.rp-top .rp-tt{font-weight:700;} .rp-tsum{font-size:9.5pt;}
+.rp-tchip{font-size:8.5pt;font-weight:700;padding:0 5pt;border:0.6pt solid #64748b;border-radius:6pt;} .rp-top-ok{border-left-color:#1a8a3a;} .rp-top-hi{border-left-color:#d9a400;} .rp-top-ng{border-left-color:#c62828;}
 .rp-toc a:hover,.rp-toc a.on{color:#0F172A;border-left-color:#1E3A5F;background:#eef4fb;}
 .rp-doc{display:block;max-width:8.5in;padding:0.5in 0.6in 0.7in;border:1px solid #E4E7EB;border-radius:2px;background:#fff;font-size:10.5pt;line-height:1.3;}
 .rp-tb{width:100%;border-collapse:collapse;margin:0 0 18pt;font-size:10pt;} .rp-tb td{border-bottom:0.6pt solid #000;padding:3pt 8pt 3pt 0;vertical-align:bottom;} .rp-tb span{display:block;font-size:8pt;font-style:italic;}
@@ -277,7 +292,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     const doc = build(model), closed = opt.closed || new Set();
     host.innerHTML = `<div class="rp"><div class="rp-bar">${opt.controls || ''}<span class="rp-sp"></span><input type="search" class="rp-q" placeholder="Search the report" aria-label="Search the report">
       <button type="button" data-rpact="exp">Expand all</button><button type="button" data-rpact="col">Collapse all</button><button type="button" class="primary" data-rpact="print">Print report</button></div>
-      <div class="rp-body"><nav class="rp-toc" aria-label="Report contents">${doc.toc.map(s => `<a href="#${s.id}" data-rpto="${s.id}" class="rp-l1">${s.n}. ${esc(s.title)}</a>${s.subs.map(q => `<a href="#${q.id}" data-rpto="${q.id}" class="rp-l2">${q.n} ${rich(doc, q.title, true)}</a>`).join('')}`).join('')}</nav>
+      <div class="rp-body"><nav class="rp-toc" aria-label="Report contents">${doc.toc.map(s => `<a href="#${s.id}" data-rpto="${s.id}" class="rp-l1">${s.n}. ${esc(s.title)}</a>${s.subs.map(q => `<a href="#${q.id}" data-rpto="${q.id}" class="rp-l2">${q.n} ${rich(doc, q.title, true)}</a>${(q.items || []).map(it => `<a href="#${it.anchor}" data-rpto="${it.anchor}" class="rp-l3">${rich(doc, it.title, true)}</a>${it.tops.map((t, k) => `<a href="#${t.anchor}" data-rpto="${t.anchor}" class="rp-l4">${k + 1}. ${esc(t.title)}</a>`).join('')}`).join('')}`).join('')}`).join('')}</nav>
       <article class="rp-doc">${html(doc, { lazy: true, closed })}</article></div></div>`;
     const root = host.querySelector('.rp'); if (opt.stick) root.style.setProperty('--rp-stick', opt.stick + 'px');
     const bar = root.querySelector('.rp-bar'), art = root.querySelector('.rp-doc');
