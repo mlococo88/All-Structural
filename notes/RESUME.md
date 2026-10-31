@@ -68,3 +68,8 @@ Merged: #505 grouping all tabs, #506 Spans & framing combined tab, #507 graphics
 Engineer decisions: do NOT fix the old app at all; paper-space DXF later; keep "Example" demand source; Welds summary headlines governing strength check with min-size/taper listed under it; imported cross-frame DC1 weight from Cross-frames module members.
 In progress: Auto design finish (Opus): every sizable input Lock / Range / Auto, compare view, cost editor, Rating+Welds in full check, no-framing brace fallback, re-run stale parity records.
 Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcluded), bridgeSuite hand-offs, AD8/CF11, final comparison, redirect.
+
+## Next week (engineer, 2026-10-31)
+- Saved-project library in the new Steel Bridge app: save/open/rename/delete several bridges directly in the app (no export/import needed), like the engineer's other apps (check how those apps do it, e.g. their localStorage project lists, and follow the same pattern; keys prefixed sbd2.*; keep autosave and Export/Import JSON). Add Undo if cheap.
+- Pending engineer confirmation: Auto design overhang minimum tied to barrier width (Auto took 1.5 ft under a 1.5 ft barrier).
+- Not done yet: Welds summary display (headline governing strength check, min-size/taper under it).
