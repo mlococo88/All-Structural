@@ -41,7 +41,7 @@ test('One source of f_ℓ and brace points: Flexure, Constructibility and Rating
     const bs = new Set(D.braces.map(v => +v.toFixed(6)));
     [F, R.flex].forEach(G => G.rows.forEach(r => { if (r.seg) { assert.ok(bs.has(+r.seg.xa.toFixed(6)) && bs.has(+r.seg.xb.toFixed(6)), `${r.name} ${JSON.stringify(r.seg)}`); } }));
     assert.ok(W.SBDReportData.sameFlex(F, R.flex), 'the rating\'s flexure equals the Flexure tab\'s');
-    assert.match(F.what, /Spans & framing tab/); assert.match(F.what, /from skew/);
+    assert.match(F.what, /Spans (&amp;|&) framing tab/); assert.match(F.what, /from skew/);
     // entries override: Flexure (and so Rating) P.flexure.fl, Constructibility P.constr.flC; 0 / absent: back to skew
     P.flexure = { fl: 3 }; P.constr = { flC: 2 };
     const F2 = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', method: 'auto' }), R2 = W.SBDRatingUI.build({ P, g: 0, src: 'analysis' }), C2 = W.SBDConstrUI.build({ P, g: 0, src: 'project' });
