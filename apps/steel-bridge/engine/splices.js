@@ -796,7 +796,7 @@
 
   /* ---------- the splices of a girder of an sbd2 project ---------- */
   /* settings(P): P.splices with GirderDetail's module defaults filled in; x = the field splice stations P.framing.splices (one list, shared with
-     the Framing tab). P.splices = { code, bolts, gam, clr, Rh, aT, aB, prs,
+     the Spans & framing tab). P.splices = { code, bolts, gam, clr, Rh, aT, aB, prs,
      gP (splice plate grade; blank = the flange grade), auto: true | false (auto-design the plates and bolts of every splice; false: the
      entered plates), plates: [ { x, top, bot, web } ] (entered, per station) } */
   function settings(P) {

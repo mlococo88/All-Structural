@@ -192,6 +192,7 @@
   let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
   let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos', otab: 'sec', lg: 0, lr: 0 };
   try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* default tabs */ }
+  if (ui.itab === 'fr') ui.itab = 'spans';   // the Framing input tab was merged into Spans & framing; an old saved value opens it (stored key unchanged)
   const saveUi = () => { try { store && store.setItem(M.KEYS.ui, JSON.stringify(ui)); } catch (e) { /* not kept */ } };
 
   /* ---------- inputs ---------- */
@@ -201,7 +202,7 @@
   const sel = (path, label, opts, cur) => `<div class="fRow"><label for="i_${path}">${label}</label><select id="i_${path}" data-path="${path}" data-kind="sel">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(cur !== undefined ? cur : get(path)) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   const grades = Object.keys(M.GRADES).map(k => [k, `${k} (F_y ${M.GRADES[k].Fy} ksi)`]);
-  const TABS = [['proj', 'Project'], ['spans', 'Spans'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates'], ['xs', 'Cross-section & loads'], ['stf', 'Stiffeners'], ['fs', 'Fatigue & studs'], ['fr', 'Framing'], ['spl', 'Splices']];
+  const TABS = [['proj', 'Project'], ['spans', 'Spans & framing'], ['mat', 'Materials & deck'], ['gird', 'Girders & plates'], ['xs', 'Cross-section & loads'], ['stf', 'Stiffeners'], ['fs', 'Fatigue & studs'], ['spl', 'Splices']];
   // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
   // engine/analysis.js lineOf: the first exterior girder G1 for position 'exterior', else the first interior girder G2)
   const lineSel = g => { const nb = P.xs ? Math.round(P.xs.nb) : 0; if (!(nb > 0)) return '';
@@ -213,7 +214,7 @@
       proj: card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')),
       spans: card('Spans', `${sel('spans.continuity', 'Continuity', [['continuous', 'Continuous'], ['simple', 'Simple spans']])}
         <div class="fRow"><label for="i_spans">Span lengths</label><input type="text" id="i_spans" data-kind="spans" value="${esc(P.spans.lengths.join(', '))}" style="width:180px"><span class="unit">ft, comma separated</span></div>
-        <p class="note">Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`),
+        <p class="note">Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`) + window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // Spans & framing tab: the Spans card, then the framing cards
       mat: card('Steel (ASTM A709)', `${sel('materials.steel.top', 'Top flange', grades)}${sel('materials.steel.bot', 'Bottom flange', grades)}${sel('materials.steel.web', 'Web', grades)}${num('materials.Es', 'E<sub>s</sub>', 'ksi')}`)
         + card('Deck concrete and reinforcement', `${sel('deck.composite', 'Composite', [['true', 'Yes'], ['false', 'No (noncomposite)']])}${num('materials.concrete.fc', 'f′<sub>c</sub>', 'ksi')}${num('materials.concrete.wc', 'w<sub>c</sub>', 'kcf')}${num('materials.concrete.K1', 'K<sub>1</sub>', '')}
           ${sel('materials.concrete.nRule', 'Modular ratio n', [['exact', 'Exact (E_s/E_c)'], ['round', 'Rounded to an integer']])}${num('deck.ts', 'Structural slab t<sub>s</sub>', 'in')}${num('deck.tdeck', 'Total deck thickness', 'in')}${num('deck.haunch', 'Haunch', 'in')}
@@ -228,7 +229,6 @@
       xs: UL.inputs(P, { num, sel, card, esc }),
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
-      fr: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),
       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui)
     };
   }
@@ -243,7 +243,7 @@
     const v = M.validate(P), bad = new Set(v.errors.map(e => e.path));
     document.querySelectorAll('#inPanes [data-path]').forEach(el => el.classList.toggle('bad', bad.has(el.dataset.path)));
     const $s = $('i_spans'); if ($s) $s.classList.toggle('bad', [...bad].some(p => p.startsWith('spans.lengths')));
-    const tabOf = p => p.startsWith('splices') ? 'spl' : p.startsWith('framing') || p.startsWith('crossframes') ? 'fr' : p.startsWith('fatigue') || p.startsWith('studs') ? 'fs' : p.startsWith('stiffeners') ? 'stf' : p.startsWith('xs') || p.startsWith('ownerRules') || p === 'materials.concrete.wcE' ? 'xs' : p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
+    const tabOf = p => p.startsWith('splices') ? 'spl' : p.startsWith('framing') || p.startsWith('crossframes') ? 'spans' : p.startsWith('fatigue') || p.startsWith('studs') ? 'fs' : p.startsWith('stiffeners') ? 'stf' : p.startsWith('xs') || p.startsWith('ownerRules') || p === 'materials.concrete.wcE' ? 'xs' : p.startsWith('project') ? 'proj' : p.startsWith('spans') ? 'spans' : p.startsWith('girders') ? 'gird' : 'mat';
     const errTabs = new Set(v.errors.map(e => tabOf(e.path)));
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.classList.toggle('has-err', errTabs.has(b.dataset.itab)));
     return v;

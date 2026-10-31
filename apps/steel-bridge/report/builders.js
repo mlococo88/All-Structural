@@ -44,7 +44,7 @@
      value links to its step in the Framing section when that section works the same value */
   const flNote = (B, D, tab) => !D ? '' : D.flSrc === 'entered' ? `$f_{\\ell}$ = ${f(D.fl, 2)} ksi as entered on the ${tab}`
     : `$f_{\\ell}$ from skew (C6.10.1, in lieu of a refined analysis): largest support skew ${f(D.flS.skMax, 1)}°${D.flS.skMax > 20 + 1e-9 ? ` > 20°, $f_{\\ell}$ = ${D.flS.steps[0].sub} = ${f(D.fl, 2)} ksi` : ' ≤ 20°, $f_{\\ell}$ = 0'}${B.frm && B.frm.fl && B.frm.fl.fl === D.fl && B.frm.fl.skMax === D.flS.skMax ? ' [[flsk.fl]]' : ''}`;
-  const brNote = Gr => Gr.frB ? `the brace points of the Framing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : 'the cross-frame stations of the stiffener layout (the project has no framing)';
+  const brNote = Gr => Gr.frB ? `the brace points of the Spans & framing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : 'the cross-frame stations of the stiffener layout (the project has no framing)';
 
   /* ---------- 2. project and owner ---------- */
   function proj(B, X) {

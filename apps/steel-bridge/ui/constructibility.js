@@ -12,7 +12,7 @@
    f_ℓ during deck placement is saved in the project (P.constr.flC, ksi; added 2026-10-30, report wiring PR) and used by the Report tab.
    Since 2026-10-30 (paths PR, SB2-W1): blank or 0 (or absent) takes the skew value of C6.10.1 (1.25 × 10 / 7.5 ksi interior / exterior
    where a support is skewed more than 20°; before: 0), from engine/framing.js design(), the one source of the brace points and f_ℓ the
-   Flexure and Rating tabs use too; brace points from the Framing tab (as before). build(ctx) is the tab's calculation without the page
+   Flexure and Rating tabs use too; brace points from the Spans &amp; framing tab (as before). build(ctx) is the tab's calculation without the page
    (the Report tab calls it). The demand source lives in memory for this page view (default: this project; the line at the top of the
    tab names the source in use).
 
@@ -46,7 +46,7 @@
   const flTxt = D => `f<sub>ℓ</sub> during deck placement ${D.flSrc === 'entered' ? `${fmt(D.fl, 2)} ksi as entered` : `from skew (C6.10.1; largest support skew ${fmt(D.flS.skMax, 1)}° ${D.flS.skMax > 20 + 1e-9 ? `&gt; 20°: γf<sub>ℓ,skew</sub> = ${esc(D.flS.steps[0].sub)} = ${fmt(D.fl, 2)} ksi` : '≤ 20°: 0'}; <a href="#" data-gotab="cf">Cross-frames tab</a>)`}`;
 
   /* build(ctx): the calculation without the page (the tab, the Report tab). ctx = { P, g, src: 'project' | 'file' (else the tab's own),
-     pl (hand-off payload; else the tab's file), plName }. Brace points and f_ℓ: engine/framing.js design() (the Framing tab; f_ℓ entered,
+     pl (hand-off payload; else the tab's file), plName }. Brace points and f_ℓ: engine/framing.js design() (the Spans &amp; framing tab; f_ℓ entered,
      else from skew). Returns engine/constructibility.js girder() plus { what, ext, src, F (fromAnalysis / fromPayload), D (design) } or
      { err }. */
   function build(ctx) {
@@ -66,7 +66,7 @@
       const gg = P.girders[g];
       what = `${esc(gg.label || gg.id)}: ${F.locs.length} locations from this project's analysis (dead loads; <a href="#" data-gotab="an">Analysis tab</a>): M<sub>DC1</sub>, V<sub>DC1</sub> (steel and the whole wet deck), `
         + (F.seq ? 'M<sub>DCc</sub> = the noncomposite envelope of the deck placement sequence (an.seq.MDCc)' : 'no pour sequence (simple spans, noncomposite, or the sequence off): M<sub>DC1</sub>')
-        + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Framing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab; ${flTxt(D)}.`
+        + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Spans &amp; framing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab; ${flTxt(D)}.`
         + (AR.warnings && AR.warnings.length ? `<br>${AR.warnings.map(esc).join('<br>')}` : '');
     }
     const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });

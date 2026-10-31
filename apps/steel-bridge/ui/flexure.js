@@ -11,7 +11,7 @@
      - a hand-off file (schema stgirder-external-demands, GirderDetail → ST-Girder): its stations, plates and deck, every
        station GirderDetail's "Check at any location" checks.
    Brace points (L_b, C_b) and f_ℓ (added 2026-10-30, paths PR; engineer's decisions SB2-W1, SB2-W2): one source for every path,
-   engine/framing.js design(): the brace points of the Framing tab (the girder's bearings and cross-frames; a project without framing keeps
+   engine/framing.js design(): the brace points of the Spans &amp; framing tab (the girder's bearings and cross-frames; a project without framing keeps
    the stiffener layout's cross-frames, a file of another bridge its own spacing), and f_ℓ as entered on this tab (saved in the project,
    P.flexure.fl) or else from skew (C6.10.1: 1.25 × 10 / 7.5 ksi interior / exterior where a support is skewed more than 20°). The Rating tab
    takes its flexure from build() here, and the Constructibility tab the same brace points and skew f_ℓ (its own entry, P.constr.flC).
@@ -110,13 +110,13 @@
       // A.pl as it is (sb-ped-owner PR): LL+IM includes the pedestrian load (pedestrianInLL) and M_PL gives its part, so that the owner
       // multiplier m is kept off it; fromPayload does not add M_PL again (SB2-R1). The owner load rules η, m: factorsOwner (OWN6/OWN7)
       const plR = A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO', lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
-      // brace points and f_ℓ: engine/framing.js design() (SB2-W1, SB2-W2): the Framing tab, f_ℓ entered or from skew
+      // brace points and f_ℓ: engine/framing.js design() (SB2-W1, SB2-W2): the Spans &amp; framing tab, f_ℓ entered or from skew
       const D = window.SBDFraming.design(P, gi, { fl: flIn }), fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf };
       let bTxt;
-      if (D.br) { fopt.braces = D.braces; fopt.lenOf = D.lenOf; bTxt = `the Framing tab: G${D.br.line + 1}'s bearings and cross-frames (${D.braces.length} brace points; Cross-frames tab)`; }
-      else { const fr = ((P.stiffeners || {}).layout || {}).frames || {};   // no framing (Framing tab) or its layout has errors: the stiffener layout's cross-frames, as before
+      if (D.br) { fopt.braces = D.braces; fopt.lenOf = D.lenOf; bTxt = `the Spans &amp; framing tab: G${D.br.line + 1}'s bearings and cross-frames (${D.braces.length} brace points; Cross-frames tab)`; }
+      else { const fr = ((P.stiffeners || {}).layout || {}).frames || {};   // no framing (Spans &amp; framing tab) or its layout has errors: the stiffener layout's cross-frames, as before
         if (Array.isArray(fr.at) && fr.at.length) fopt.braces = [...new Set([...sup, ...fr.at.map(Number)])].sort((a, b) => a - b); else fopt.Lb = +fr.Lb || 25;
-        bTxt = `the cross-frames of the stiffener layout (the project has no framing on the Framing tab, or its layout has errors: ${fopt.braces ? `${fopt.braces.length} brace points` : `L<sub>b</sub> = ${fmt(fopt.Lb, 2)} ft`})`; }
+        bTxt = `the cross-frames of the stiffener layout (the project has no framing on the Spans &amp; framing tab, or its layout has errors: ${fopt.braces ? `${fopt.braces.length} brace points` : `L<sub>b</sub> = ${fmt(fopt.Lb, 2)} ft`})`; }
       const F = FX.fromPayload(plR, fopt);
       F.prj.mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
       F.prj.deck = { composite: d.composite !== false, ts: d.ts, tdeck: d.tdeck, haunch: OW.haunchInProps(d.haunch, lf), rebar: d.rebar };

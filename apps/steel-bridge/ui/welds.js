@@ -7,7 +7,7 @@
    shop transitions are ground flush (Category B) or not (Category C).
    Demands: this app's analysis of the girder (engine/analysis.js): the shears on each side of every support and plate change, the
    fatigue shear range and the fatigue moments; plates, deck (b_eff of this girder; both deck reinforcement layers) and materials of
-   the project; field splices from the Framing tab (no shop transition there). Section properties: engine/sections.js (shown in the work).
+   the project; field splices from the Spans &amp; framing tab (no shop transition there). Section properties: engine/sections.js (shown in the work).
    Demand source (added 2026-10-30, paths PR; as the Rating tab): "This project's analysis" (the default) or a hand-off file (schema
    stgirder-external-demands, GirderDetail → ST-Girder: engine/welds.js demandsFromPayload: its station shears, fatigue moments, plates,
    deck, materials, owner factors and splice stations; the electrode, weld size, load factors and grinding entered here); the line at the
@@ -62,7 +62,7 @@
     const R = WT.compute(I.p, I.env); if (R.errors.length) return { err: 'Welds: ' + R.errors.join(' ') };
     const C = WT.checks(R), gov = {}; C.forEach(c => { const it = c.items[c.gov]; if (it) gov[c.id] = it; });
     const what = pl ? `${esc(plName || 'Hand-off file')}: ${(pl.stations || []).length} stations, G${esc((pl.girderDetail || {}).girder || '')}; shears, fatigue moments, plates, deck, materials, owner factors and field splice stations from the file; F<sub>EXX</sub>, weld size, load factors and grinding as entered here.`
-      : `This project's analysis of ${esc(I.g.label || I.g.id)} (Analysis tab); plates, deck and materials of the project; field splices from the Framing tab.`;
+      : `This project's analysis of ${esc(I.g.label || I.g.id)} (Analysis tab); plates, deck and materials of the project; field splices from the Spans &amp; framing tab.`;
     return { R, C, gov, g: I.g, lf: I.env.lf, src, what };
   }
   const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(), S.plName]);
@@ -104,7 +104,7 @@
       <div class="fRow"><label for="wt_w">Flange-to-web fillet weld size</label><select id="wt_w">${opt('', 'Minimum of Table 6.13.3.4-1 at each location', Wd.w)}${[0.25, 0.3125, 0.375, 0.4375, 0.5, 0.5625, 0.625].map(v => opt(v, `${frac(v)} in`, Wd.w)).join('')}</select></div>
       ${nIn('wt_dc', 'γ<sub>DC</sub> (Strength I)', Wd.gam.dc, '')}${nIn('wt_dw', 'γ<sub>DW</sub> (Strength I)', Wd.gam.dw, '')}${nIn('wt_ll', 'γ<sub>LL</sub> (Strength I)', Wd.gam.ll, '')}${nIn('wt_fat', 'γ Fatigue I', Wd.gam.fat, '')}
       <div class="fRow"><label for="wt_gr">Shop transition butt welds</label><select id="wt_gr">${opt('yes', 'Ground flush (Category B)', Wd.ground)}${opt('no', 'Reinforcement not removed (Category C)', Wd.ground)}</select></div>
-      <p class="note">Two fillet welds per flange. The demand choice is not saved. Demands from this project's analysis (Analysis tab) of the selected girder, or from the hand-off file: each side of every support and plate change; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section; owner factors η and m from the Loads tab. Shop transitions: every flange change that is not a field splice (Framing tab), tapered 1:2.5. Stiffener and connection-plate welds: Shear &amp; stiffeners tab.</p></div></section>`;
+      <p class="note">Two fillet welds per flange. The demand choice is not saved. Demands from this project's analysis (Analysis tab) of the selected girder, or from the hand-off file: each side of every support and plate change; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section; owner factors η and m from the Loads tab. Shop transitions: every flange change that is not a field splice (Spans &amp; framing tab), tapered 1:2.5. Stiffener and connection-plate welds: Shear &amp; stiffeners tab.</p></div></section>`;
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Weld results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="wt_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
