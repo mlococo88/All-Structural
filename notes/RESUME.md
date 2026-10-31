@@ -62,3 +62,9 @@ Next, in order, when the engineer says go:
 2. Auto design: verify missing V_LL in payloadOf (Opus); f_l and brace points from SBDFraming.design; AD8 splice end distances; CF11 bolt sizing; compare view PR2.
 3. Switch-over comparison vs old app (Opus), redirect, tools.html.
 Open small items: old-app first-pour sliver fix (ask engineer; one-line, own PR); Fatigue stud zones still hatched; "See see §" doubled word in report; STA label tight against FS1 and BARRIER label on Loads; f_l=0 override on skewed bridges.
+
+## Update 2026-10-31 (later)
+Merged: #505 grouping all tabs, #506 Spans & framing combined tab, #507 graphics touch-ups, #508 paths test fix, #509 comparison doc (docs/steel-bridge-comparison.md), #510 Auto design LL + f_l fix.
+Engineer decisions: do NOT fix the old app at all; paper-space DXF later; keep "Example" demand source; Welds summary headlines governing strength check with min-size/taper listed under it; imported cross-frame DC1 weight from Cross-frames module members.
+In progress: Auto design finish (Opus): every sizable input Lock / Range / Auto, compare view, cost editor, Rating+Welds in full check, no-framing brace fallback, re-run stale parity records.
+Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcluded), bridgeSuite hand-offs, AD8/CF11, final comparison, redirect.
