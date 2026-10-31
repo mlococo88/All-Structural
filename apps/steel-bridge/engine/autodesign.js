@@ -223,14 +223,18 @@
       const gl = P.girders[gi].label || P.girders[gi].id, gm = { g: gi, gl };
       const R = withLL(ctx, !full, () => AN().analyzeGirder(P, gi));
       if (R.errors && R.errors.length) { const o = { ...gm, mod: 'analysis', id: 'analysis', title: R.errors.join(' '), r: Infinity, fail: true }; take(o); continue; }
-      const pl = payloadOf(P, gi, R), Fr = FRM() && P.framing ? FRM().forGirder(P, { gi }, null) : null;
+      // brace points and f_ℓ: engine/framing.js design(), the one source of the Flexure and Constructibility tabs (SB2-W1, SB2-W2): f_ℓ as
+      // entered on the Flexure tab (P.flexure.fl) or on the Constructibility tab (P.constr.flC), else from skew (C6.10.1) (C-16, 2026-10-31)
+      const flIn = o => { const v = +o; return isFinite(v) && v > 0 ? v : 0; };
+      const DF = FRM() ? FRM().design(P, gi, { fl: flIn((P.flexure || {}).fl) }) : null, DC = FRM() ? FRM().design(P, gi, { fl: flIn((P.constr || {}).flC) }) : null;
+      const pl = payloadOf(P, gi, R), Fr = DF && DF.br ? DF.br : null;
       // flexure (GS5–GS13) at every station, on this analysis (the Fatigue tab's GS17 path, the project's deck and materials)
       const d = FX().fromPayload(pl, { owner: own.owner, rebar: P.deck.rebar, lf: OW().loadFactors(own.owner, own.eta, (P.xs || {}).nb),   // lf: owner η, m (sb-ped-owner PR, as the Flexure tab)
         ...(Fr ? { braces: Fr.braces, lenOf: Fr.lenOf } : {}) }), m = P.materials, G = MD().GRADES;
       const nr = SEC().modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
       Object.assign(d.prj, { n: nr.n, mat: { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc }, rebarInPositive: !!P.deck.rebarInPositiveMp });
       d.prj.deck.tdeck = P.deck.tdeck; if (P.deck.composite === false) d.prj.deck.composite = false;
-      const flS = FRM() ? FRM().flSkew(((P.xs || {}).skews) || [0], P.girders[gi].position === 'exterior', P.framing) : { fl: 0 }; d.locs.forEach(L => { L.fl = flS.fl || 0; });
+      d.locs.forEach(L => { L.fl = DF ? DF.fl || 0 : 0; });
       const Gr = FX().girder(d.locs, d.prj, { supports: d.supports }); mods['flex' + gi] = Gr;
       Gr.rows.forEach(r => r.checks.forEach(c => { if (!c.inUse || !isFinite(c.ratio)) return; const o = { ...gm, mod: 'flexure', tab: 'flex', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: partOf(c, r.pos) }; hits.push(o); take(o); }));
       // flange fatigue GS17 (engine/fatigue.js flange on each flexure row, as the Fatigue & studs tab)
@@ -238,11 +242,15 @@
       Gr.rows.forEach(r => { const q = FA().flange(r, { set: FS, B, catT: (P.fatigue || {}).catT || 'B', catB: (P.fatigue || {}).catB || 'B' });
         q.items.forEach((it, k) => { const o = { ...gm, mod: 'fatigue', tab: 'fat', id: 'GS17', title: `Flange stress range, ${k ? 'bottom' : 'top'}`, r: it.r, x: r.x, step: it.step, part: k ? 'bot' : 'top' }; hits.push(o); take(o); }); });
       // shear and stiffeners (ui/shear.js build on this analysis)
-      const SB = window.SBDShearUI.build({ P, g: gi, pl }); mods['shear' + gi] = SB;
+      // the Shear tab's own payload of this analysis (ui/shear.js fromAnalysis: V_LL+IM, V_PL, the support reactions R_LL+IM), not payloadOf,
+      // which has no live load shears (C-1, 2026-10-31: before, V_LL = V_PL = 0 and R_LL+IM = 0 here; 3.4.1, 6.10.9, 6.10.11)
+      const SA = window.SBDShearUI.fromAnalysis(P, gi, R);
+      if (SA.err) { take({ ...gm, mod: 'shear', id: 'input', title: SA.err, r: Infinity, fail: true }); continue; }
+      const SB = window.SBDShearUI.build({ P, g: gi, pl: SA.pl }); mods['shear' + gi] = SB;
       SB.stations.forEach(r => r.checks.forEach(c => { if (!c.inUse || !isFinite(c.ratio)) return; const o = { ...gm, mod: 'shear', tab: 'shear', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: 'web' }; hits.push(o); take(o); }));
       nStiff += (SB.bays || []).reduce((a, b) => a + (+b.n || 0), 0) / P.girders.length;
       // constructibility (deck placement GS14–GS16, overhang brackets OH1–OH5)
-      const Cn = CN(), F = Cn.fromAnalysis(P, gi, R, { flC: 0, oh: { ...Cn.OH_DEF, ...((P.constr && P.constr.oh) || {}) }, ...(Fr ? { braces: Fr.braces } : {}) }), CR = Cn.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh }); mods['constr' + gi] = CR;
+      const Cn = CN(), F = Cn.fromAnalysis(P, gi, R, { flC: DC ? DC.fl : 0, oh: { ...Cn.OH_DEF, ...((P.constr && P.constr.oh) || {}) }, ...(DC && DC.br ? { braces: DC.braces } : {}) }), CR = Cn.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh }); mods['constr' + gi] = CR;
       CR.rows.forEach(r => r.checks.forEach(c => { if (!isFinite(c.ratio)) return; const o = { ...gm, mod: 'constructibility', tab: 'cn', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: c.id === 'GS16' ? 'web' : partOf(c, true, r.conC && r.conC.lab === 'top' ? 'top' : 'bot') }; hits.push(o); take(o); }));
       if (CR.oh && !CR.oh.errors.length) CR.oh.rows.forEach(r => r.checks.forEach(c => { if (!isFinite(c.ratio)) return; const o = { ...gm, mod: 'constructibility', tab: 'cn', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: c.id === 'OH5' ? 'top' : 'web' }; hits.push(o); take(o); }));
       // fatigue details FA1–FA7 and studs (ui/fatigue.js build on this analysis); the load-induced detail stress ranges (FA1) depend on the plates,
