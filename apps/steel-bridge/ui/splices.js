@@ -21,6 +21,22 @@
   const ST = { pass: 'OK', fail: 'NG', warn: 'warning', adv: 'advisory', na: 'n/a' };
 
   function ensure(P) { if (!P.splices) P.splices = window.SBDModel.defaultSplices(); return P; }
+  /* SPGAM (2026-11-01, engineer's "one source", as Welds #525): the splice design forces take the project's load factors (SBDSplices.projGam: the
+     Flexure tab's Tables 3.4.1-1, -2 factors, Fatigue I of the Fatigue & studs inputs, the Constructibility tab's deck placement factors), shown
+     read-only here with links; P.splices.gam (this tab's former inputs) stays in the file unchanged and unused; oldGam lists the saved values that differ. */
+  const GAM_L = { dcMax: 'γ_DC max', dcMin: 'γ_DC min', dwMax: 'γ_DW max', dwMin: 'γ_DW min', llS: 'γ_LL Strength I', llSv: 'γ_LL Service II', fat: 'γ Fatigue I', dc1C: 'γ_DC deck placement', clC: 'γ construction LL' };
+  const projGam = P => window.SBDSplices.projGam(P);
+  function oldGam(P) {
+    const g = ((P.splices || {}).gam) || {}, G = projGam(P);
+    return Object.keys(GAM_L).filter(k => g[k] != null && g[k] !== '' && !(Math.abs(+g[k] - G[k]) <= 1e-9)).map(k => ({ k, label: GAM_L[k], was: g[k], now: G[k] }));
+  }
+  function gamHtml(P) {
+    const G = projGam(P), O = oldGam(P), WH = { fx: '<a href="#" data-splgo="out:flex">Tables 3.4.1-1, -2 (as Flexure)</a>', fat: '<a href="#" data-splgo="in:fs:fatigue.gam.fI">Fatigue &amp; studs inputs</a>', cn: '<a href="#" data-splgo="out:cn">3.4.2.1 (as Constructibility)</a>' };
+    const row = (ks, where) => `<tr><td class="lft">${ks.map(k => `${tt(GAM_L[k])} <b>${fmt(G[k], 2)}</b>`).join('<br>')}</td><td class="lft">${where}</td></tr>`;
+    return `<p class="note"><b>Load factors</b> (the project's, AASHTO LRFD 10th Ed.; read-only here, × the owner's η and LL multiplier m, <a href="#" data-splgo="in:proj">Project tab</a>; worked in each splice's steps):</p>
+      <table class="tbl"><tbody>${row(['dcMax', 'dcMin', 'dwMax', 'dwMin', 'llS', 'llSv'], WH.fx)}${row(['fat'], WH.fat)}${row(['dc1C', 'clC'], WH.cn)}</tbody></table>
+      ${O.length ? `<div class="alert">This project has load factors saved from this tab's former inputs that differ from the project's and are <b>no longer used</b>: ${O.map(q => `${tt(q.label)} ${esc(q.was)} (now ${fmt(q.now, 2)})`).join('; ')}. They stay in the project file unchanged.</div>` : ''}`;
+  }
   /* the owner env: load factors (OWN6–OWN8) and the Owner standards minimum plate (OWN14 def.minPlate; GirderDetail's 3/8 in otherwise) */
   function envOf(P) {
     const OW = window.SBDOwners, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW ? OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0) : null;
@@ -45,9 +61,8 @@
         ${h.num('splices.bolts.gap', 'Gap between girder ends', 'in')}${h.num('splices.bolts.minLines', 'Minimum bolt lines each side of the web', '')}${h.num('splices.bolts.c1', 'Wrench clearance C₁ (blank: AISC table)', 'in')}
         ${h.sel('splices.bolts.long', '0.83 long-joint reduction', [['flange', 'Flange bolts only'], ['both', 'Flange and web bolts']])}${h.sel('splices.bolts.eccS', 'Web eccentricity, strength', yn)}${h.sel('splices.bolts.eccV', 'Web eccentricity, slip', yn)}
         ${h.sel('splices.bolts.stitch', 'Stitch bolt limits (6.13.2.6.3)', [['req', 'Required'], ['adv', 'Advisory']])}`)
-      + h.card('Load factors and clearances', `${[['dcMax', 'γ_DC max'], ['dcMin', 'γ_DC min'], ['dwMax', 'γ_DW max'], ['dwMin', 'γ_DW min'], ['llS', 'γ_LL Strength I'], ['llSv', 'γ_LL Service II'], ['fat', 'γ Fatigue I'], ['dc1C', 'γ_DC deck placement'], ['clC', 'γ construction LL']].map(([k, l]) => h.num(`splices.gam.${k}`, tt(l), '')).join('')}
-        ${h.num('splices.clr.cw', 'Inner plate clearance to the web plate', 'in')}${h.num('splices.clr.cv', 'Web plate clearance to each flange', 'in')}
-        <p class="note">AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2 and 3.4.2.1; the owner's η and LL multiplier are applied on top (set on the Project tab).</p>`);
+      + h.card('Load factors and clearances', `${gamHtml(P)}
+        ${h.num('splices.clr.cw', 'Inner plate clearance to the web plate', 'in')}${h.num('splices.clr.cv', 'Web plate clearance to each flange', 'in')}`);
     if (Q.auto === false) {
       const rows = (Q.plates || []).map((q, i) => `<tr><td>${fmt(+q.x, 2)}${q.g != null ? `, G${+q.g + 1}` : ''}</td>${['top', 'bot'].map(k => PL_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.${k}.${f}" value="${esc((q[k] || {})[f])}"></td>`).join('')
         + `<td><select data-path="splices.plates.${i}.${k}.inner" data-kind="sel"><option value="true"${(q[k] || {}).inner ? ' selected' : ''}>yes</option><option value="false"${(q[k] || {}).inner ? '' : ' selected'}>no</option></select></td>`).join('')}${WB_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.web.${f}" value="${esc((q.web || {})[f])}"></td>`).join('')}<td><button type="button" data-spldel="${i}">×</button></td></tr>`).join('');
@@ -62,6 +77,9 @@
     ensure(P); if (!P.framing) P.framing = window.SBDModel.defaultFraming(); P.framing.splices = el.value.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b); return true;
   }
   function onClick(e, P) {
+    const go = e.target.closest && e.target.closest('[data-splgo]');   // SPGAM: a link from the load factors to where each is set (no input change)
+    if (go) { e.preventDefault(); const [k, v, fld] = go.dataset.splgo.split(':'), b = document.querySelector(k === 'out' ? `#tabBar [data-otab="${v}"]` : `#inTabs [data-itab="${v}"]`); if (b) b.click();
+      const f = fld ? document.querySelector(`#inPanes [data-path="${fld}"]`) : null; if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } return false; }
     const d = e.target.closest && e.target.closest('[data-spldel]'); if (!d) return false;
     ensure(P); P.splices.plates.splice(+d.dataset.spldel, 1); return true;
   }
@@ -143,6 +161,7 @@
     let h = `<section class="sec"><div class="secHead">Field splices (bolted, AASHTO LRFD 10th Ed. 6.13.6.1)</div><div class="secBody">
       ${CD ? `<div class="fRow"><label for="sp_src">Demands</label><select id="sp_src">${opt('analysis', "This project's analysis (Analysis tab)")}${opt('custom', 'Custom (entered)')}</select><span class="unit">saved with the project</span></div>` : ''}
       <p class="note">${esc(g.label || g.id)}: splices at ${((P.framing || {}).splices || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices or Spans &amp; framing tab). ${src === 'custom' ? 'Demands: entered (Custom), the row at each splice station (below).' : `Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule).`} Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
+    { const O = oldGam(P); if (O.length) h += `<div class="alert">Load factors: the splices use the project's (Splices input tab); saved values of this tab's former inputs that differ are <b>no longer used</b>: ${O.map(q => `${tt(q.label)} ${esc(q.was)} (now ${fmt(q.now, 2)})`).join('; ')}.</div>`; }   // SPGAM
     if (src === 'custom' && CD) h += CD.card(P, 'spl', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Splice results are out of date: inputs changed or nothing calculated yet. The auto-design takes a few seconds per splice.</span><button type="button" class="primary" id="sp_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
@@ -198,5 +217,5 @@
     return h;
   }
 
-  window.SBDSplicesUI = { ensure, inputs, onChange, onClick, render, envOf, TOPICS, groups, build, stepsOf, demOf };
+  window.SBDSplicesUI = { ensure, inputs, onChange, onClick, render, envOf, TOPICS, groups, build, stepsOf, demOf, projGam, oldGam };
 })();
