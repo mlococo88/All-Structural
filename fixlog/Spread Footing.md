@@ -3540,3 +3540,45 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - "Pedestal Design tab".
 - **Before / after (example):** `on the [[tab:peddes|Pedestal Design tab]]` → `on the Pedestal Design tab[[tab:peddes| ↗]]`.
 - **How verified:** report on 12 projects (0 unresolved references, 0 KaTeX errors); `R` and `P2` unchanged; the report text keeps the tab names; `node tests/check-syntax.mjs` passes.
+
+## 2026-11-01 — PR: claude/sf-sf-rough — Shear-friction joint surface: default intentionally roughened, μ = 1.0λ (SFSR; calculation change) (PR link added after merge)
+
+### SFSR. Default "Joint surface" = intentionally roughened   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):**
+  - New projects default to intentionally roughened, μ = 1.0λ (ACI 318-19 Table 22.9.4.2).
+  - "Not intentionally roughened" (0.6λ) stays as an override.
+  - A stored choice is kept. Saves without the field (made before #568) get the new default.
+  - Kept as decided: N_u = dead load only; the worst-case tension area is deducted in every combination; the footing sides default to cast against earth.
+- **Where:**
+  - `newPed`:
+    - before: `sfJoint:'smooth'`
+    - after: `sfJoint:'rough'`
+  - `migrateState`:
+    - before: `if(p.reinf.sfJoint!=='rough')p.reinf.sfJoint='smooth';`
+    - after: `if(p.reinf.sfJoint!=='smooth'&&p.reinf.sfJoint!=='rough')p.reinf.sfJoint='rough';`
+  - `sfdShearFriction`:
+    - before: `const rough=rf.sfJoint==='rough'`
+    - after: `const rough=rf.sfJoint!=='smooth'`
+  - Pedestal card select: "Roughened" is listed first and is the fallback.
+  - The 5.6 note text is updated.
+  - Comments only: the misplaced comments on the `migrateState` lines (SFTC/SFDO) are moved to their own lines.
+- **Effect:** where the μ(A_vf f_y + N_u) term governs before and after, the DCR drops by the factor 0.6/1.0. Where V_n,max (22.9.4.4) governs after, the DCR drops less. Where V_n,max already governed, the DCR is unchanged. No project fails either way.
+- **Hand check:** `uplift_partial`, Ped 1, 0.9D + 1.0(+Wx). V_u = 40 k, A_vf = 2.29 in², N_u = 108.61 k.
+  - Before (μ = 0.6): V_n = 0.6(2.29·60 + 108.61) = 147.76 k, φV_n = 110.82 k, **DCR 0.361**.
+  - After (μ = 1.0): V_n = 1.0(137.66 + 108.61) = 246.27 k. Roughened normalweight limit min(0.2·4000, 480 + 0.08·4000, 1600)·324/1000 = 800·324/1000 = 259.2 k does not govern. φV_n = 184.70 k, **DCR 0.217** (= 0.6 × 0.361).
+- **Comparison** (origin/main vs the branch, 14 projects; governing DCR before → after):
+
+  | Project | Before → after | Why |
+  |---|---|---|
+  | uplift_partial | 0.361 → 0.217 | μ governs |
+  | offsets | 0.131 → 0.079 | μ governs, A_vf = 0 |
+  | direct | 0.047 → 0.041 | V_n,max governs after |
+  | direct_moment | 0.048 → 0.042 | V_n,max governs after |
+  | the other 10 | 0.041 unchanged | V_n,max already governed |
+
+  - Only `P2.shearFr` and `reinf.sfJoint` change; every other value of `R` and `P2` is identical.
+  - Saved data:
+    - no field → roughened;
+    - explicit "smooth" → kept (μ 0.6);
+    - explicit "rough" → kept.
+  - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid. `node tests/check-syntax.mjs` and the scroll test pass.
