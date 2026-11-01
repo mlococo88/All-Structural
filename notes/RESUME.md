@@ -104,3 +104,6 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Merged: #575 lldf slab W, #584 index full, #589 PSBD partial, #556 CF note, #563 studs γ, #590 factors one source, #591 abutment full, #581 subloads loads, #588 SF rough joint.
 - Light Pole: 14 PRs merged #537–#601 (harness/tests, C_f auto, nut area, anchor reinf default None + check, base plate LTS bending line (monopost/two-post now NG), ice factors + 2 combos, arm wind + torsion, V_c size effect, n1/Gf worked, JSON export, Report tab, Drawings/DXF, layout). Engineer: breakout ACI group form (running), keep πD/n with 'verify' note, I_i default 1.0 OK, add ice to sign panels (running), K_z constants NO change. Later: LTS 2nd Ed. mode; anchor export to BP.
 - Shared report.js: print tab links as plain text + equation wrap fix (running).
+- BP round-pier anchorage merged #600 #603 #606 #608 (shared/anchor-geom.js; anchorGroup receiver). Engineer: credit shaft cage as anchor reinforcement (running); round vs square shear difference acceptable; LTS articles stay 'verify'.
+- LP: breakout group form #602, verify note #604, sign ice #605. Running: anchor export, result chip, retire anchor tab (keep inputs).
+- PSBD old Report tab retired #599; lldf type d fatigue ÷1.2 #609.
