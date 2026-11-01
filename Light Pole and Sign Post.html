@@ -914,6 +914,18 @@
     </section>
 
     <!-- 9. ANCHOR BOLTS -->
+    <section class="card" data-tab="anchors" id="lpAnchCard">
+      <div class="card-h"><span class="num">A</span><h2>Anchorage app</h2><span class="hint">BasePlateAnchorDesigner · HANDOFF.md §4.11</span></div>
+      <div class="card-body">
+        <p class="tbl-note" style="margin-top:0">Send the anchor groups (one per post), the base plate, the shaft and every LRFD combination (ice combinations included; B₂·M; torsion) to the Base Plate &amp; Anchor Bolt Designer, which designs the anchorage. Factored, Light Pole sign convention (lightPole-v1), lb / lb-ft / in / psi.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn mini" id="lpAnchSend" type="button">Send anchors to the Anchorage app</button>
+          <button class="btn mini ghost" id="lpAnchExport" type="button">Export hand-off (JSON)</button>
+          <a class="btn mini ghost" href="BasePlateAnchorDesigner.html" target="_blank" rel="noopener">Open Anchorage app ↗</a>
+        </div>
+        <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p>
+      </div>
+    </section>
     <section class="card poleOnly" data-tab="anchors">
       <div class="card-h"><span class="num">9</span><h2>Anchor bolt design</h2><span class="hint">ASTM F1554 · ACI 318 Ch.17</span></div>
       <div class="card-body">
@@ -983,6 +995,81 @@
 </div>
 </div>
 
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const num=id=>parseFloat($(id).value)||0;
@@ -3979,9 +4066,15 @@ function calcSign(inp){
     // natural frequency (Rayleigh): post segments + this post's share of the panel at the panel centroid
     const b2r=lrfdCombos.map(x=>x.B2||1);
     const b2=Object.assign({}, {name:gLRFD.name, B2:gLRFD.B2||1, B2min:Math.min(...b2r), B2max:Math.max(...b2r)});
-    postDesigns.push({p:p+1,gASD,gLRFD,found,pstress,nat,b2});
+    postDesigns.push({p:p+1,gASD,gLRFD,found,pstress,nat,b2,lrfdB2:Object.fromEntries(lrfdCombos.map(x=>[x.name,x.B2||1]))});
   }
   window.__signPostGov=postGovList;
+  // anchorGroup hand-off (HANDOFF.md §4.11): per post, every LRFD combination at each wind direction; the post moment acts along the
+  // wind (panel normal ±x), × that combination's B₂ for the post; monopost torsion T = |F·x| (taken positive)
+  LPP_ANCH={mode:'sign', groups:postDesigns.map((pd,pi)=>({id:'post'+(pi+1), label:'Post '+(pi+1), combos:[].concat(...allCombos.filter(r=>r.fam==='LRFD').map(r=>{
+      const b2=(pd.lrfdB2&&pd.lrfdB2[r.name])||1;   // the B₂ of this post's combination (signPostStress), as the anchors use
+      return (r.dirs||[]).map(dr=>{ const pp=dr.posts[pi], c=Math.cos(dr.phi*RAD), s=Math.sin(dr.phi*RAD);
+        return {name:r.name+', wind '+fmt(dr.phi,0)+'°, Case '+pp.case, P:pp.axial, Vx:pp.P*c, Vy:pp.P*s, Mx:b2*pp.M*c, My:b2*pp.M*s, T:pp.T||0, B2:b2}; }); }))}))};
   renderSignLoadPath(inp,sw,pw,postGovList);
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
@@ -4509,11 +4602,12 @@ function calc(){
   // case); each run carries its own P-Δ amplifier B2 (AISC 360-16 App. 8). The governing run is the
   // one with the largest H1 ratio. The B2 of each combination at its governing azimuth also
   // amplifies the LRFD base moment passed to the shaft and anchors (second-order base moment).
-  const psAll=[], b2ByKey={};
+  const psAll=[], b2ByKey={}, b2Dir={};
   lrfdList.forEach(r=>{ (r.dirs||[r]).forEach(dr=>{
     const ps=poleStress(inp,poleSeg,comps,fxs,pw,dr);
     psAll.push(ps);
     if(dr.phi===r.phi) b2ByKey[r.key]=ps.p2;
+    b2Dir[r.key+'@'+dr.phi]=ps.p2.B2;   // anchorGroup hand-off: B₂ of every combination and direction (2026-11-01)
   }); });
   const pstress=psAll.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
   const lrfdCands=lrfdList.map(r=>{ const b2=(b2ByKey[r.key]||{B2:1}).B2;
@@ -4540,6 +4634,9 @@ function calc(){
   inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, lrfdCands);
   const shT=lppShaftTorsion(inp, lrfdCands);   // shaft torsion threshold (fixture/arm torsion, 2026-11-01)
+  // anchorGroup hand-off (HANDOFF.md §4.11): every LRFD combination at each wind direction, B₂·M (the same moments the anchors use)
+  LPP_ANCH={mode:'pole', groups:[{id:'pole', label:'Pole', combos:[].concat(...lrfdList.map(r=>(r.dirs||[r]).map(dr=>{ const b2=b2Dir[r.key+'@'+dr.phi]||1;
+    return {name:r.name+', wind '+fmt(dr.phi,0)+'°', P:dr.axial, Vx:dr.Vx, Vy:dr.Vy, Mx:b2*dr.Mx, My:b2*dr.My, T:dr.Tz||0, B2:b2}; })))}]};
 
   // ---- headline outputs (embedment from ASD gov) ----
   $('oDepth').innerHTML=fmt(d,2)+'<span class="u"> ft</span>';
@@ -6987,6 +7084,50 @@ function lpdElevGeometry(){
   const sv=box.querySelector('svg'); if(sv){ sv.style.width='100%'; sv.style.height='auto'; sv.style.maxHeight='520px'; }
   return true;
 }
+
+// ================= ANCHORAGE APP HAND-OFF (anchorGroup, HANDOFF.md §4.11; added 2026-11-01) =================
+// "Send anchors to the Anchorage app" publishes bridgeSuite.v1.anchorGroup with BridgeXfer (click only) and offers the same payload as a
+// JSON file. Every value is the tool's own input or result (no recomputation): the anchor pattern and plate inputs, the shaft (b, d, f'c,
+// bars, ties), and every LRFD combination at each wind direction with the moments the anchors use (B₂·M), axial, shears and torsion,
+// in the Light Pole sign convention (lightPole-v1: P + = compression; Mx = moment of the +x push, My of the +y push; T + CCW).
+let LPP_ANCH=null;
+function lppHash(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return ('00000000'+h.toString(16)).slice(-8); }
+function lppAnchorPayload(){
+  const ctx=LPP_SUMCTX, A=LPP_ANCH; if(!ctx||!A) return {error:'No results yet (correct any input errors first).'};
+  const inp=ctx.inp, notes=[];
+  if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
+  notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
+  notes.push('Moments are second-order (B₂·M, AISC 360-16 App. 8) at the top of the shaft; all LRFD combinations of ASCE 7-22 §2.3 incl. the atmospheric-ice ones, each at wind toward 0°, 90°, 180°, 270°.');
+  if(ctx.mode==='sign') notes.push('Sign posts: the post moment and shear act along the wind direction (panel normal); monopost torsion T = |F·x| (sign not carried).');
+  const groups=A.groups.map((g,gi)=>{ const st=ctx.stacks[Math.min(gi,ctx.stacks.length-1)], f=st.found, reo=f.reo, b=f.bolts;
+    return {id:g.id, label:g.label,
+      anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
+      base:{type:'doubleNut', standoffClear:0, grout:false, plate:{shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000},
+            pole:{shape:inp.poleShape==='round'?'round':inp.poleShape, D:inp.poleDiaBase}},
+      pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:f.d*12, cover:inp.cover,
+            longBars:'('+reo.long.n+') '+reo.long.bar.n, ties:reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in'},
+      combos:g.combos.map(c=>({name:c.name, P:c.P, Vx:c.Vx, Vy:c.Vy, Mx:c.Mx, My:c.My, T:c.T})),
+      lpRef:b?{Tmax:b.Tmax, phiNn:b.phiNn, inter:b.inter}:undefined}; });
+  const body={groups, units:{length:'in', force:'lb', moment:'lb-ft', stress:'psi'}, signConvention:'lightPole-v1'};
+  const inputsHash=lppHash(JSON.stringify(body));
+  return {payload:Object.assign({_schema:'bridge-anchor-group', schemaVersion:1, producer:'Light Pole and Sign Post', producerFile:'Light Pole and Sign Post.html',
+    project:{name:activeProject||'', bridgeId:''},
+    basis:{factored:true, method:'LRFD', combos:'ASCE 7-22 §2.3 (LRFD) incl. atmospheric ice; wind toward 0°/90°/180°/270°', B2:'AISC 360-16 App. 8 B₂ of each combination and direction applied to M'},
+    inputsHash, notes}, body)};
+}
+function lppAnchorStatus(msg){ const e=$('lpAnchStatus'); if(e) e.textContent=msg||''; }
+if($('lpAnchSend')) $('lpAnchSend').addEventListener('click',()=>{
+  const r=lppAnchorPayload(); if(r.error){ lppAnchorStatus(r.error); return; }
+  const res=BridgeXfer.publish('anchorGroup', r.payload, 'Light Pole and Sign Post', 'Light Pole and Sign Post.html');
+  if(res.error){ lppAnchorStatus(res.error); return; }
+  lppAnchorStatus('Sent '+r.payload.groups.length+' group(s), '+r.payload.groups.reduce((a,g)=>a+g.combos.length,0)+' combinations, '+new Date(res.payload.producedAt).toLocaleString()+' (inputs '+r.payload.inputsHash+'). In the Anchorage app: "Pull from Light Pole".');
+  toast('Anchors sent to the Anchorage app');
+});
+if($('lpAnchExport')) $('lpAnchExport').addEventListener('click',()=>{
+  const r=lppAnchorPayload(); if(r.error){ lppAnchorStatus(r.error); return; }
+  const p=Object.assign({}, r.payload, {producedAt:new Date().toISOString()});
+  BridgeXfer.exportFile('anchorGroup', p); lppAnchorStatus('Exported the hand-off file (import it in the Anchorage app with "Import hand-off (JSON)").');
+});
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
 const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
