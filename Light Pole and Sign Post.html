@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<script src="shared/steps.js"></script><!-- LPRP: worked steps and the shared report viewer (Report tab) -->
+<script src="shared/report.js"></script>
 <style>
   :root{
     --ink:#1a2230;--ink-soft:#5b6676;--paper:#f3f0e9;--panel:#ffffff;
@@ -364,7 +366,7 @@
   @media (prefers-reduced-motion: reduce){.wkFlash{animation:none}}
   @media print{
     header.masthead,#postSelBar,.lppRptBtn{display:none!important}
-    .tabpage:not(#page-report){display:none!important}
+    .tabpage:not(#page-calcsheet){display:none!important}
     .wrap{max-width:none;padding:0}.grid2{display:block;margin:0}
     section.card.report{border:0;margin:0;break-inside:auto}section.card.report>.card-h{display:none}
     #reportBody.crdoc{padding:0;font-size:10.5pt}
@@ -665,6 +667,7 @@
       <button data-tab="anchors">Anchors</button>
       <button data-tab="shaft">Shaft</button>
       <button data-tab="report">Report</button>
+      <button data-tab="calcsheet">Calc sheet</button>
       <button data-tab="manual">Manual</button>
     </div>
     <div id="lppInErr" role="alert"></div>
@@ -675,6 +678,7 @@
     <div class="tabpage" data-page="anchors" id="page-anchors"></div>
     <div class="tabpage" data-page="shaft" id="page-shaft"></div>
     <div class="tabpage" data-page="report" id="page-report"></div>
+    <div class="tabpage" data-page="calcsheet" id="page-calcsheet"></div>
     <div class="tabpage" data-page="manual" id="page-manual"></div>
     <div id="cardSource" style="display:none">
 
@@ -957,7 +961,8 @@
     </p>
 
     <!-- 11. FULL CALCULATION REPORT -->
-    <section class="card report" data-tab="report">
+    <section class="card lprCard" data-tab="report"><div class="card-body" id="lprHost"></div></section>
+    <section class="card report" data-tab="calcsheet">
       <div class="card-h"><span class="num">11</span><h2>Calculation report</h2><span class="hint">every equation, symbolic → numeric</span><button class="btn mini ghost noprint lppRptBtn" id="lppRptPrint" title="Print the calculation report, or save it as PDF">Print / PDF report</button></div>
       <div class="card-body" id="reportBody">
         <!-- generated -->
@@ -4245,6 +4250,7 @@ function drawSignSchematic(inp,sw,postDesigns){
 
 // ================= SIGN CALCULATION REPORT =================
 function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
+  LPP_LAST={mode:'sign',inp,sw,pw,allCombos,postDesigns,poleSeg};   // LPRP (shared Report tab)
   const nPost=inp.signPosts;
   let H='';
   // 0. basis
@@ -5676,7 +5682,7 @@ function renderSignWindExample(sw,inp){
 // derivation functions shared with the tabs).
 let LPP_SUMCTX=null;   // the Summary context of the last calc() (set by renderSummary)
 const lppEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft'};
+const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft',report:'Report',calcsheet:'Calc sheet'};
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
@@ -5855,6 +5861,7 @@ function lppReportDoc(H,meta){
   if(window.renderMathInElement){
     renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
   }
+  if(typeof lprRefresh==='function') lprRefresh();   // LPRP: rebuild the shared Report tab when it is shown
 }
 
 // ================= CALCULATION REPORT =================
@@ -5869,6 +5876,7 @@ function eqB(title, why, tex, result, ref){
 }
 function n(x,d=2){return fmt(x,d);}   // formatted number
 function buildReport(inp,allCombos,gov,embed,struct){
+  LPP_LAST={mode:'pole',inp,allCombos,gov,embed,struct};   // LPRP (shared Report tab) reads the same objects
   const b=inp.b, ratio=embed.d/b;
   const {govASD,govLRFD,pw}=gov;
   const comps=cablesEnabled?cables.map(c=>cableComponents(c,inp)):[];
@@ -6531,6 +6539,197 @@ function populateDetailStack(sfx, ctx){
   renderBromsExample(bromsEmbedment(inp, Mu/1000, Vu/1000), inp, {name:ctx.lrfdName||'governing LRFD'}, Mu, sfx);
 }
 
+// ================= REPORT TAB (shared viewer, LPRP, added 2026-11-01) =================
+// The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse / expand,
+// search, Print with a title block (no owner cell), running header and page numbers). Worked steps are shared/steps.js steps
+// grouped by topic. Every value is a value the tool has already computed (LPP_SUMCTX from renderSummary, LPP_LAST from the
+// report builders); only the substitution strings are formatted here. Nothing is saved. The former D11 calculation sheet is kept
+// unchanged in the "Calc sheet" tab (retired later, after the engineer accepts this report).
+let LPP_LAST=null;                    // the last report-builder arguments (set by buildReport / buildSignReport)
+const LPRP={closed:new Set(),api:null,doc:null};
+const lprN=(x,d)=>SharedSteps.n(x,d==null?2:d);
+const lprCell=(v,d)=>({t:(typeof v==='number')?(isFinite(v)?lprN(v,d):'∞'):String(v==null?'—':v),n:typeof v==='number'});
+const lprDC=v=>({t:(typeof v==='number'&&isFinite(v))?lprN(v,2):'—',n:true,cls:(typeof v==='number')?(v>1+1e-9?'ng':(v>=0.9?'hi':'ok')):'na'});
+const lprPlain=s=>String(s==null?'':s).replace(/<sub>(.*?)<\/sub>/g,'_$1').replace(/<sup>(.*?)<\/sup>/g,'^$1').replace(/<[^>]+>/g,'').replace(/&nbsp;/g,' ').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+function lprTopics(scope,list){
+  const L=list.filter(t=>t.steps&&t.steps.length);
+  const steps=[].concat(...L.map(t=>t.steps));
+  const topics=L.map(t=>{const g=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:()=>true}],{strip:false})[0];
+    return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res};});
+  return {type:'steps',scope,steps,topics};
+}
+function lprModel(){
+  const ctx=LPP_SUMCTX, L=LPP_LAST; if(!ctx||!L) throw new Error('no results yet');
+  const inp=ctx.inp, sign=ctx.mode==='sign', S=o=>SharedSteps.step(o), N=lprN, secs=[];
+  const stacks=ctx.stacks, lab=st=>st.label?' — post '+st.label.replace(/^P/,''):'';
+  /* 1. Project and scope */
+  secs.push({title:'Project and scope',subs:[{title:'Project',items:[{type:'kv',rows:[
+    ['Project',activeProject||'Untitled'],['Structure',$('appTitle')?$('appTitle').textContent:''],
+    ['Scope',$('lppScope')?$('lppScope').textContent.replace(/^Scope \(this mode\):\s*/,''):''],
+    ['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-22 (Ch. 2, 10, 26, 29) · AISC 360-16 · ACI 318-19 · AASHTO LRFDLTS (base plate bending-line method)'],
+    ['Units','lb, ft, in, psf / ksf unless noted']]},
+    {type:'note',text:'Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchors]], [[tab:shaft|Shaft]]). The former calculation sheet remains in the [[tab:calcsheet|Calc sheet]] tab.'}]}]});
+  /* 2. Design summary */
+  { const subs=[];
+    stacks.forEach((st,si)=>{
+      const C=collectChecks({found:st.found,pstress:st.pstress,inp,label:st.label});
+      const fails=C.filter(c=>!c.ok).length;
+      subs.push({title:'Checks'+lab(st),items:[
+        {type:'note',warn:!!fails,text:fails?fails+' check(s) fail: '+C.filter(c=>!c.ok).map(c=>c.name).join(', ')+'.':'All checks pass.'},
+        {type:'table',head:['Limit state','Code','Demand','Capacity','D/C','Status'],rows:C.slice().sort((a,b)=>b.ratio-a.ratio).map(c=>{
+          const d=c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0);
+          return {cells:[c.name,c.code,{t:lprN(c.demand,d)+' '+c.unit,n:true},{t:lprN(c.cap,d)+' '+c.unit,n:true},lprDC(c.ratio),{t:c.ok?'OK':'NG',cls:c.ok?'ok':'ng'}]};})}]});
+    });
+    secs.push({title:'Design summary',subs});
+  }
+  /* 3. Wind and ice */
+  { const subs=[];
+    if(!sign){
+      const pw=L.gov.pw, fxs=L.struct.fxs||[];
+      subs.push({title:'Velocity pressure and mast wind',items:[lprTopics('wind',[
+        {title:'Velocity pressure',ref:'ASCE 7-22 §26.10, Eq. 26.10-1 (K_e = 1.0); K_d per Eq. 29.4-1',steps:[
+          S({id:'kzm',label:'Exposure coefficient at mid-height',sym:'K_{z}(H/2)',eq:'2.01\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}',sub:'',value:pw.KzMid,unit:'',d:3}),
+          S({id:'kzt',label:'Exposure coefficient at the top',sym:'K_{z}(H)',eq:'2.01\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}',sub:'',value:pw.KzTop,unit:'',d:3}),
+          S({id:'qzm',label:'Velocity pressure times K_d at mid-height',sym:'q_{z}K_{d}',eq:'0.00256\\,K_{z}K_{zt}K_{e}V^{2}K_{d}',sub:'0.00256('+N(pw.KzMid,3)+')('+N(inp.Kzt)+')(1.00)('+N(inp.V,0)+')^{2}('+N(inp.Kd)+')',value:pw.qzMid,unit:'psf',d:1})]},
+        {title:'Pole force coefficient',ref:'ASCE 7-22 Fig. 29.4-1',steps:inp.cfAuto?[
+          S({id:'hD',label:'Height / width',sym:'h/D',eq:'\\frac{h}{D}',sub:'\\frac{'+N(inp.cfAuto.h)+'}{'+N(inp.cfAuto.D,3)+'}',value:inp.cfAuto.hD,unit:'',d:1}),
+          S({id:'cf',label:'C_f ('+inp.cfAuto.lbl+')'+(inp.cfPoleMode==='auto'?'':' — not used: manual C_f = '+N(inp.cfPole)),sym:'C_{f}',eq:'',sub:'',value:inp.cfAuto.cf,unit:'',d:3})]:[]},
+        {title:'Wind on the mast',ref:'ASCE 7-22 §29.4 (strip integration)',steps:[
+          S({id:'Fp',label:'Mast wind ('+pw.NSTRIP+' strips)',sym:'F_{pole}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,D(z_{i})\\,\\Delta z',sub:'',value:pw.Fpole,unit:'lb',d:0}),
+          S({id:'Mp',label:'Mast wind moment at the base',sym:'M_{pole}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Mpole,unit:'lb-ft',d:0}),
+          S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})]},
+        {title:'Design ice thickness',ref:'ASCE 7-22 §10.4.6',steps:[
+          S({id:'td',label:inp.iceBasis==='map'?'Design ice at the top (t_d = t f_z K_zt^0.35 I_i; cables use t)':'Uniform design ice (as entered)',sym:'t_{d}(H)',eq:inp.iceBasis==='map'?'t\\,f_{z}K_{zt}^{0.35}I_{i}':'t',sub:'',value:pw.tdTop,unit:'in',d:3}),
+          S({id:'Wim',label:'Ice on the mast',sym:'W_{ice,mast}',eq:'\\sum \\gamma_{ice}A_{ring}(t_{d})\\Delta z',sub:'',value:pw.WiceMast,unit:'lb',d:1})]}])]});
+      if(fxs.length) subs.push({title:'Fixtures and arms',items:[{type:'table',head:['Fixture','h (ft)','θ (°)','a (ft)','q_zK_dG (psf)','F_w (lb)','F_w,ice (lb)','W_ice (lb)','F_arm,max (lb)'],
+        rows:fxs.map((f,i)=>['F'+(i+1),lprCell(f.hf,1),lprCell(f.th,0),lprCell(f.x.a,1),lprCell(f.qz,2),lprCell(f.Fw,1),lprCell(f.Fwi,1),lprCell(f.Wice,1),lprCell(f.FarmMax||0,1)])},
+        {type:'note',text:'Worked on the [[tab:loading|Loading tab]] (fixture loads, arm wind and torsion T = Σ(F_w + ½F_arm)·a·sin(φ − θ)).'}]});
+    } else {
+      const sw=L.sw;
+      subs.push({title:'Sign panel wind',items:[lprTopics('swind',[
+        {title:'Velocity pressure at the top of the sign',ref:'ASCE 7-22 §26.10, §29.3',steps:[
+          S({id:'kzh',label:'Exposure coefficient at h',sym:'K_{z}(h)',eq:'',sub:'',value:sw.Kzh,unit:'',d:3}),
+          S({id:'qh',label:'q_h·K_d·G (sign K_d)',sym:'q_{h}K_{d}G',eq:'0.00256\\,K_{z}K_{zt}K_{e}V^{2}K_{d}G',sub:'0.00256('+N(sw.Kzh,3)+')('+N(inp.Kzt)+')(1.00)('+N(inp.V,0)+')^{2}('+N(inp.KdSign)+')('+N(inp.G)+')',value:sw.qh,unit:'psf',d:2})]},
+        {title:'Force coefficient and Case A',ref:'ASCE 7-22 Fig. 29.3-1, Eq. 29.3-1',steps:[
+          S({id:'cf',label:'C_f for B/s = '+N(sw.bs)+', s/h = '+N(sw.sh,3)+(sw.cfManual?' (manual)':''),sym:'C_{f}',eq:'',sub:'',value:sw.cfAB,unit:'',d:3}),
+          S({id:'FA',label:'Case A force',sym:'F_{A}',eq:'q_{h}K_{d}G\\,C_{f}A_{s}',sub:N(sw.qh)+'('+N(sw.cfAB,3)+')('+N(sw.As,1)+')',value:sw.F_A,unit:'lb',d:0})].concat(sw.caseC?[
+          S({id:'FC',label:'Case C force (stepped bands)',sym:'F_{C}',eq:'\\sum q_{h}K_{d}G\\,C_{f,i}A_{i}',sub:'',value:sw.caseC.F,unit:'lb',d:0}),
+          S({id:'eC',label:'Case C eccentricity, toward the windward edge',sym:'e_{C}',eq:'\\frac{B}{2} \\minus \\bar{x}',sub:N(sw.B/2)+' \\minus '+N(sw.caseC.xR),value:sw.caseC.e,unit:'ft'})]:[])},
+        {title:'Post force coefficient',ref:'ASCE 7-22 Fig. 29.4-1',steps:inp.cfAuto?[
+          S({id:'pcf',label:'C_f of the post ('+inp.cfAuto.lbl+')'+(inp.cfPoleMode==='auto'?'':' — not used: manual '+N(inp.cfPole)),sym:'C_{f}',eq:'',sub:'h/D = '+N(inp.cfAuto.hD,1),value:inp.cfAuto.cf,unit:'',d:3})]:[]}])]});
+    }
+    { const T=[];
+      const nat=inp.nat;
+      if(nat&&nat.n1>0) T.push({title:'Natural frequency (Rayleigh)',ref:'ASCE 7-22 §26.2',steps:[
+        S({id:'n1',label:'First natural frequency',sym:'n_{1}',eq:'\\frac{1}{2\\pi}\\sqrt{\\frac{g\\,\\sum W_{i}y_{i}}{\\sum W_{i}y_{i}^{2}}}',sub:'\\frac{1}{2\\pi}\\sqrt{\\frac{386.1('+N(nat.sWy,4)+')}{'+N(nat.sWy2,6)+'}}',value:nat.n1,unit:'Hz',d:3,note:nat.n1>=1?'rigid (≥ 1 Hz)':'flexible (< 1 Hz)'})]});
+      if(inp.gf) T.push({title:'Gust-effect factor, flexible structure',ref:'ASCE 7-22 §26.11.5',steps:[
+        S({id:'Gf',label:'Flexible gust-effect factor',sym:'G_{f}',eq:'0.925\\frac{1+1.7I_{\\bar{z}}\\sqrt{g_{Q}^{2}Q^{2}+g_{R}^{2}R^{2}}}{1+1.7g_{v}I_{\\bar{z}}}',sub:'0.925\\frac{1+1.7('+N(inp.gf.Iz,4)+')\\sqrt{3.4^{2}('+N(inp.gf.Q2,4)+')+'+N(inp.gf.gR,3)+'^{2}('+N(inp.gf.R2,4)+')}}{1+1.7(3.4)('+N(inp.gf.Iz,4)+')}',value:inp.gf.Gf,unit:'',d:4}),
+        S({id:'G',label:'G used',sym:'G',eq:'\\max(G,\\,G_{f})',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gf.Gf,3)+')',value:inp.G,unit:'',d:3})]});
+      if(T.length) subs.push({title:'Dynamic response',items:[lprTopics('dyn',T),{type:'note',text:'Worked in full on the [[tab:loading|Loading tab]] (weights, deflections, and every G_f term).'}]});
+    }
+    secs.push({title:'Wind and ice loads',subs});
+  }
+  /* 4. Load combinations */
+  { const subs=[];
+    if(!sign){
+      subs.push({title:'Base demand, every combination (governing azimuth)',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
+        rows:L.allCombos.map(r=>({cells:[r.fam,r.name,lprCell(r.phi,0),lprCell(r.P,0),lprCell(r.M,0),lprCell(r.h,2),lprCell(r.axial,0),lprCell(r.Tmax||0,0)],cls:(r.key===L.gov.govASD.key||r.key===L.gov.govLRFD.key)?'gov':''}))},
+        {type:'note',text:'ASCE 7-22 §2.3 (LRFD) and §2.4 (ASD), including the atmospheric-ice combinations. Wind is checked toward 0°, 90°, 180° and 270°; the largest moment governs each combination. Cable loads as on the [[tab:loading|Loading tab]].'}]});
+    } else {
+      L.postDesigns.forEach((pd,pi)=>subs.push({title:'Post '+(pi+1)+' demand, every combination',items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
+        rows:L.allCombos.map(r=>{const g=r.postGov[pi]; return {cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''};})}]}));
+    }
+    secs.push({title:'Load combinations',subs});
+  }
+  /* 5. Pole / post */
+  { const subs=[];
+    stacks.forEach((st,si)=>{ const ps=st.pstress; if(!ps||!ps.govRow) return; const r=ps.govRow;
+      const T=[{title:'Section and flexural strength',ref:'AISC 360-16 §F8 / §F7',steps:[
+        S({id:'A',label:'Area',sym:'A',eq:'',sub:'',value:r.A,unit:'in^{2}',d:3}),
+        S({id:'Z',label:'Plastic modulus',sym:'Z',eq:'',sub:'',value:r.Zx,unit:'in^{3}',d:3}),
+        S({id:'lam',label:'Slenderness ('+r.cls+')',sym:r.slendKind==='D/t'?'D/t':'b/t',eq:'',sub:'',value:r.Dt,unit:'',d:1}),
+        S({id:'Mc',label:'Design flexural strength ('+r.sub+')',sym:'\\phi M_{n}',eq:'0.90\\,M_{n}',sub:'0.90('+N(r.mnx.Mn,1)+')',value:r.Mcx,unit:'kip-in',d:1})]},
+        {title:'Compression',ref:'AISC 360-16 §E3',steps:[
+          S({id:'Pc',label:'Design compressive strength (K = '+N(ps.Kfac,1)+')',sym:'\\phi P_{n}',eq:'0.90\\,F_{cr}A',sub:'0.90('+N(r.pn.Fcr,2)+')('+N(r.A,3)+')',value:r.Pc,unit:'kip',d:1})]},
+        {title:'Interaction ('+(ps.prismatic?'base section':'governing segment, z = '+N(r.z,1)+' ft')+', '+ps.comboName+')',ref:r.form==='H3-6'?'AISC 360-16 §H3.2, Eq. H3-6':'AISC 360-16 §H1.1',steps:[
+          S({id:'Mr',label:'Second-order moment (B₂ = '+N(r.B2,3)+')',sym:'M_{r}',eq:'B_{2}M_{1}',sub:N(r.B2,3)+'('+N(r.M1,0)+')',value:r.M,unit:'lb-ft',d:0}),
+          S({id:'Pr',label:'Axial',sym:'P_{r}',eq:'',sub:'',value:r.Pr,unit:'kip',d:3})].concat(r.tv?[
+          S({id:'Tr',label:'Torsion / design torsional strength',sym:'T_{r}/T_{c}',eq:'',sub:N(r.tv.Tr,1)+'/'+N(r.tv.Tc,1),value:r.tv.trTc,unit:'',d:3})]:[]).concat([
+          S({id:'ratio',label:'Interaction ('+r.form+')',sym:'ratio',eq:'',sub:'',value:r.ratio,unit:'',d:3,ok:r.ok})])}];
+      subs.push({title:(sign?'Post':'Pole')+lab(st),items:[lprTopics('post'+si,T),{type:'note',text:'Worked in full on the [[tab:post|Post tab]].'}]});
+    });
+    if(subs.length) secs.push({title:sign?'Post check':'Pole check',subs});
+  }
+  /* 6. Base plate and anchors */
+  { const subs=[];
+    stacks.forEach((st,si)=>{ const b=st.found.bolts; if(!b) return; const p=(b.byCheck&&b.byCheck.BP)||b;
+      subs.push({title:'Base plate'+lab(st),items:[lprTopics('bp'+si,[{title:'Bending line at the pole face, double-nut base ('+(p.comboName||'')+')',ref:'AASHTO LRFDLTS bending-line method',steps:[
+        S({id:'P',label:'Governing rod force (tension or leveling-nut compression)',sym:'P_{rod}',eq:'\\max(T_{max},\\,C_{max})',sub:'\\max('+N(p.Tmax,0)+',\\,'+N(p.Cmax,0)+')',value:p.Prod,unit:'lb',d:0}),
+        S({id:'m',label:'Cantilever, rod to the pole face',sym:'m',eq:'\\frac{BC \\minus D}{2}',sub:'\\frac{'+N(p.BC)+' \\minus '+N(p.Dpole)+'}{2}',value:p.m,unit:'in'}),
+        S({id:'beff',label:'Effective width per rod at the pole face',sym:'b_{eff}',eq:'\\frac{\\pi D}{n}',sub:'\\frac{\\pi('+N(p.Dpole)+')}{'+p.n+'}',value:p.beff,unit:'in',d:3}),
+        S({id:'t',label:'Required thickness',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi F_{y}b_{eff}}}',sub:'\\sqrt{\\frac{4('+N(p.Prod,0)+')('+N(p.m)+')}{0.9('+N(p.Fyp*1000,0)+')('+N(p.beff,3)+')}}',value:p.tpReq,unit:'in',d:3}),
+        S({id:'dc',label:'Provided t = '+N(p.tpProv,3)+' in',sym:'(t_{req}/t)^{2}',eq:'',sub:'',value:Math.pow(p.tpReq/p.tpProv,2),unit:'',d:3,ok:!!p.tpOK})]}]),
+        {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17): every limit state, worked, on the [[tab:anchors|Anchors tab]]; the checks are listed in §2.'}]});
+    });
+    if(subs.length) secs.push({title:'Base plate and anchors',subs});
+  }
+  /* 7. Drilled shaft */
+  { const subs=[];
+    stacks.forEach((st,si)=>{ const f=st.found, reo=f.reo, Lg=reo.long, T=reo.tie, a=st.asd;
+      const last=f.emb.rows[f.emb.rows.length-1]||{};
+      const tp=[{title:'Embedment, IBC §1807.3.2.'+(constraint==='non'?'1 (non-constrained)':'2 (constrained)')+' ('+(a&&a.name||'')+')',ref:'IBC 2021 §1807.3, Table 1806.2',steps:[
+          S({id:'P',label:'Lateral load (ASD)',sym:'P',eq:'',sub:'',value:a.P,unit:'lb',d:0}),
+          S({id:'h',label:'Height of the resultant',sym:'h',eq:'\\frac{M}{P}',sub:'\\frac{'+N(a.M,0)+'}{'+N(a.P,0)+'}',value:a.h,unit:'ft'}),
+          S({id:'S1',label:'Lateral bearing at the final depth',sym:'S_{1}',eq:constraint==='non'?'S_{1,tab}\\frac{d}{3}':'S_{1,tab}d',sub:'',value:last.S1,unit:'psf',d:0}),
+          S({id:'d',label:'Embedment depth (iterated, '+f.emb.rows.length+' steps)',sym:'d',eq:constraint==='non'?'0.5A\\left(1+\\sqrt{1+\\frac{4.36h}{A}}\\right)':'\\sqrt{\\frac{4.25M}{S_{3}b}}',sub:'',value:f.d,unit:'ft'})]},
+        {title:'Flexure (P–M), governing '+((Lg.govDem&&Lg.govDem.name)||''),ref:'ACI 318-19 §22.4, Table 21.2.2',steps:[
+          S({id:'As',label:'Longitudinal bars ('+Lg.n+') '+Lg.bar.n,sym:'A_{s}',eq:'',sub:'',value:Lg.As,unit:'in^{2}'}),
+          S({id:'Mu',label:'Factored moment',sym:'M_{u}',eq:'',sub:'',value:f.Mu,unit:'lb-ft',d:0}),
+          S({id:'phiMn',label:'Design flexural strength at P_u',sym:'\\phi M_{n}',eq:'',sub:'',value:Lg.phiMn,unit:'lb-ft',d:0}),
+          S({id:'r',label:'Flexure D/C',sym:'M_{u}/\\phi M_{n}',eq:'',sub:'\\frac{'+N(f.Mu,0)+'}{'+N(Lg.phiMn,0)+'}',value:f.Mu/Lg.phiMn,unit:'',d:3,ok:Lg.phiMn>=f.Mu})]},
+        {title:'Shear',ref:'ACI 318-19 Table 22.5.5.1, §10.6.2',steps:[
+          S({id:'avm',label:'Minimum shear reinforcement at s = '+N(T.sTrial,1)+' in',sym:'A_{v,min}',eq:'\\max(0.75\\sqrt{'+'f^{\\prime}_{c}},\\,50)\\frac{b_{w}s}{f_{yt}}',sub:'',value:T.avMinPerS*T.sTrial,unit:'in^{2}',d:3}),
+          S({id:'vc',label:'Concrete shear strength, branch ('+T.vcBranch+')',sym:'\\phi V_{c}',eq:T.vcBranch==='a'?'0.75\\cdot 2\\lambda\\sqrt{f^{\\prime}_{c}}\\,b_{w}d':'0.75\\cdot 8\\lambda_{s}\\lambda\\rho_{w}^{1/3}\\sqrt{f^{\\prime}_{c}}\\,b_{w}d',sub:T.vcBranch==='a'?'':'\\lambda_{s} = '+N(T.lamS,3)+',\\ \\rho_{w} = '+N(T.rhoW,5),value:T.phiVc,unit:'lb',d:0}),
+          S({id:'vr',label:'Shear D/C',sym:'V_{u}/\\phi V_{c}',eq:'',sub:'\\frac{'+N(f.Vu,0)+'}{'+N(T.phiVc,0)+'}',value:f.Vu/T.phiVc,unit:'',d:3,ok:T.phiVc>=f.Vu}),
+          S({id:'s',label:'Ties '+T.bar.n+' ('+(T.mode==='min'?'minimum':'shear-designed')+')',sym:'s',eq:'\\le s_{limit}',sub:N(T.s,0)+' \\le '+N(T.sLimit,1),value:T.s,unit:'in',d:0})]},
+        {title:'Soil bearing ('+(f.bearing.comboName||'')+')',ref:'IBC 2021 Table 1806.2',steps:[
+          S({id:'q',label:'Bearing pressure',sym:'q',eq:'\\frac{N}{A_{base}}',sub:'\\frac{'+N(f.bearing.axial/1000,3)+'}{'+N(f.bearing.Abase,2)+'}',value:f.bearing.q,unit:'ksf',d:3}),
+          S({id:'qr',label:'Bearing D/C',sym:'q/q_{a}',eq:'',sub:'\\frac{'+N(f.bearing.q,3)+'}{'+N(f.bearing.qAllow)+'}',value:f.bearing.q/f.bearing.qAllow,unit:'',d:3,ok:f.bearing.ok})]}];
+      if(f.Tu>0) tp.push({title:'Torsion threshold',ref:'ACI 318-19 §22.7.1.1, Table 22.7.4.1(a)',steps:[
+        S({id:'tth',label:'Threshold torsion',sym:'\\phi T_{th}',eq:'0.75\\lambda\\sqrt{f^{\\prime}_{c}}\\frac{A_{cp}^{2}}{p_{cp}}',sub:'0.75\\sqrt{'+N(inp.fc,0)+'}\\frac{'+N(f.Acp,1)+'^{2}}{'+N(f.pcp,2)+'}\\cdot\\frac{1}{12}',value:f.phiTth,unit:'lb-ft',d:0}),
+        S({id:'tr',label:'Torsion may be neglected',sym:'T_{u}/\\phi T_{th}',eq:'',sub:N(f.Tu,0)+'/'+N(f.phiTth,0),value:f.Tu/f.phiTth,unit:'',d:3,ok:f.Tu<f.phiTth})]});
+      subs.push({title:'Shaft'+lab(st)+' ('+(inp.shaftShape==='square'?'':'Ø')+N(inp.b)+' ft'+(inp.shaftShape==='square'?' square':'')+')',items:[lprTopics('sh'+si,tp),
+        {type:'table',caption:'IBC embedment iteration',head:['Step','d assumed (ft)','S₁ (psf)','A','d computed (ft)'],rows:f.emb.rows.map(r=>[String(r.i),lprCell(r.dA),lprCell(r.S1,0),lprCell(r.A,3),lprCell(r.dC)])},
+        {type:'note',text:'Worked in full on the [[tab:shaft|Shaft tab]].'}]});
+      if(st.broms) subs.push({title:'Broms reference check'+lab(st),items:[{type:'kv',rows:[['Broms embedment (AASHTO LTS C13.6.1.1, reference only)',N(st.broms.L)+' ft'],['IBC §1807.3 embedment (governs)',N(f.d)+' ft']]}]});
+    });
+    secs.push({title:'Drilled shaft',subs});
+  }
+  /* 8. Assumptions, open items, references */
+  secs.push({title:'Assumptions and references',subs:[
+    {title:'Assumptions',items:[
+      'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
+      'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
+      'Anchor shear breakout (§17.7.2) and side-face blowout (§17.6.4) are not checked; the soil torsional resistance is not checked.',
+      'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base (article to be confirmed).',
+      'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>({type:'note',text:t}))},
+    {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:LPP_REFS.map(([a,b])=>[lprPlain(a),lprPlain(b)])}]}]});
+  return {title:($('appTitle')?$('appTitle').textContent:'Light Pole and Sign Post')+' — Calculation Report',subtitle:activeProject||'Untitled',code:'IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19',
+    info:[['Project',activeProject||'—'],['Project No.','—'],['Calculated by','—'],['Date','—'],['Checked by','—'],['Checked date','—']],
+    head:{left:'Project: '+String(activeProject||'—').slice(0,40),right:'Computed: — · Checked: —',foot:(activeProject||'Untitled')+' (Light Pole and Sign Post)'},
+    sections:secs};
+}
+function lprRender(){
+  const T=$('lprHost'); if(!T) return;
+  if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class="flag bad">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; return; }
+  if($('lppInErr')&&$('lppInErr').classList.contains('on')){ T.innerHTML='<div class="flag bad">No results: correct the input errors.</div>'; LPRP.api=null; LPRP.doc=null; return; }
+  let M; try{ M=lprModel(); }catch(e){ T.innerHTML='<div class="flag bad">Report error: '+lppEsc(e&&e.message)+'</div>'; LPRP.api=null; LPRP.doc=null; return; }
+  LPRP.api=SharedReport.mount(T,M,{closed:LPRP.closed,onGoto:lprGoto}); LPRP.doc=LPRP.api.doc;
+}
+function lprGoto(name){ if(lppOutTabValid(name)){ switchTab(name); const b=document.querySelector('#tabBar'); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
+function lprActive(){ const p=$('page-report'); return !!(p&&p.classList.contains('on')); }
+function lprRefresh(){ if(lprActive()) lprRender(); }
+
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
 const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
@@ -6832,6 +7031,7 @@ function switchTab(name){
   document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
   try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){}
+  if(name==='report' && typeof lprRender==='function') lprRender();   // LPRP: the shared Report tab is built when shown
 }
 document.querySelectorAll('#tabBar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 
@@ -7040,7 +7240,16 @@ window.addEventListener('load',()=>{
 window.addEventListener('beforeunload', saveSession);
 // D11: printing prints the calculation report (print CSS); the page header / "Page X of Y" footer apply only while printing
 if($('lppRptPrint')) $('lppRptPrint').addEventListener('click',()=>{ lppApplyPageCSS(true); window.print(); });
-window.addEventListener('beforeprint',()=>lppApplyPageCSS(true));
+window.addEventListener('beforeprint',()=>{
+  // LPRP: Ctrl+P while the Report tab is shown prints the shared report alone (shared/report.js layout and running header)
+  if(typeof lprActive==='function' && lprActive() && LPRP.doc){
+    if(document.body.classList.contains('rp-printing')) return;
+    let box=$('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
+    box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(LPRP.doc,{lazy:false})+'</article></div>';
+    document.body.classList.add('rp-printing'); return;
+  }
+  lppApplyPageCSS(true);
+});
 window.addEventListener('afterprint',()=>lppApplyPageCSS(false));
 </script>
 </body>

@@ -4481,7 +4481,7 @@ function cbcRptModel(){
   /* 3.–5. flexure, shear, torsion: every combination (an identical combination refers to the first) */
   const per=(title,pre,fn,tab,gov)=>{ const subs=CC.combos.map(r=>{
       const sa=r.sameAs!==undefined&amp;&amp;r.sameAs!==r.ci;
-      return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': see [['+pre+r.sameAs+'/DCR]].'}]
+      return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': see [['+pre+r.sameAs+'/'+({fx:'Mu',sh:'d',tq:'Acp'}[pre])+']].'}]
         :fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it).concat([{type:'note',text:'On screen: [[tab:'+tab+'|'+cbcTabName(tab)+' tab]].'}])}; });
     secs.push({title,subs}); };
   per('Flexure','fx',cbcRptFlex,'tabFlex',CC.govFlexIndex);
@@ -6366,7 +6366,7 @@ a.wkA:hover{text-decoration:underline;}
         <button class=&quot;tab&quot; data-tab=&quot;tsplice&quot;>Tension Splice</button>
         <button class=&quot;tab&quot; data-tab=&quot;csplice&quot;>Comp. Splice</button>
         <button class=&quot;tab&quot; data-tab=&quot;batch&quot;>Bar Schedule</button>
-        <button class=&quot;tab&quot; data-tab=&quot;report&quot;>Report</button>
+        <!-- CBRP-2 (2026-11-01): no Report tab button in this embedded copy; the suite's combined Report tab (chapter C) covers it -->
       </div>
       <div id=&quot;dashboard&quot; class=&quot;dash&quot;></div>
       <div id=&quot;tabcontent&quot; class=&quot;tabcontent&quot;></div>
