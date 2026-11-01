@@ -93,7 +93,11 @@ function cmpSplice(p, owner, where, withSteps) {
   return { Rg, Rm, CKg, CKm };
 }
 function cmpAuto(p, owner, where) {
-  const G = gd(), a = G.auto(clone(p), owner), b = S.autoDesign(clone(p), envOf(owner));
+  // SB2-AD8 (B4): this engine raises the end distances to DT4's e_min (the owner's edge distance where larger) before its search;
+  // GirderDetail's autoDesignSplice keeps the entered ones. GirderDetail runs on the inputs with the same end distances (AD8 applied by hand).
+  const pg = clone(p), R0 = S.compute(clone(p), envOf(owner)), em = R0.errors.length ? 0 : R0.emin, up = (o, f) => { if (!(S.parseDim(o[f]) >= em - 1e-9)) { o[f] = em; stats.ad8 = (stats.ad8 || 0) + 1; } };
+  if (em) { ['top', 'bot'].forEach(k => { up(pg[k], 'ef'); up(pg[k], 'ep'); }); up(pg.web, 'ew'); up(pg.web, 'ewp'); }
+  const G = gd(), b = S.autoDesign(clone(p), envOf(owner)), a = G.auto(/was not changed/.test(b.msg) ? clone(p) : pg, owner);   // not changed (DT10, too narrow): the entered end distances stay
   walk(a.p, { top: b.p.top, bot: b.p.bot, web: b.p.web }, `${where} auto`);
   walk({ ok: a.r.ok, fails: a.r.fails.join(',') }, { ok: b.ok, fails: b.fails.join(',') }, `${where} auto`);
   // messages: GirderDetail's mention its own buttons and tabs; the plate and bolt description is compared
@@ -101,7 +105,7 @@ function cmpAuto(p, owner, where) {
   if (!/flange is .* wide/.test(a.r.msg) && core(a.r.msg) !== core(b.msg)) stats.diffs.push(`${where} auto msg: ${b.msg}\n         vs GirderDetail ${a.r.msg}`);
   return { a, b };
 }
-const report = (name, t0) => { console.log(`       ${name}: ${stats.vals} values, ${stats.items} check items compared; largest relative difference ${stats.worst.rel.toExponential(2)}${stats.worst.what ? ' (' + stats.worst.what + ')' : ''}; ${((Date.now() - t0) / 1000).toFixed(1)} s`); };
+const report = (name, t0) => { console.log(`       ${name}: ${stats.vals} values, ${stats.items} check items compared; end distances raised by AD8 ${stats.ad8 || 0}; largest relative difference ${stats.worst.rel.toExponential(2)}${stats.worst.what ? ' (' + stats.worst.what + ')' : ''}; ${((Date.now() - t0) / 1000).toFixed(1)} s`); };
 const assertNoDiff = () => assert.equal(stats.diffs.length, 0, `${stats.diffs.length} difference(s):\n       ${stats.diffs.slice(0, 30).join('\n       ')}`);
 
 /* ---------- 1. built-in splice ---------- */
@@ -225,4 +229,24 @@ test('demandsAt: node nearest the splice, shears the largest of the element and 
   assert.deepEqual(JSON.parse(JSON.stringify(d.dem)), { MDC1: 80, MDC2: 2, MDW: 2, MLLp: 10, MLLn: -2, MCL: -3, VDC1: 12, VDC2: 4, VDW: 1, VLL: 6, VCL: 0, dMp: 7, dMn: 6 });
   // at 5 ft: element 0 (neighbours −1 dropped, 0 and 1): V_DC1 = max(10, 5) = 10, V_LL = max(3, 4, 7, 1) = 7
   const e = S.demandsAt(A, 5).dem; assert.equal(e.VDC1, 10); assert.equal(e.VLL, 7);
+});
+
+/* ---------- SB2-AD8 (B4, 2026-11-01): auto-design end distances = DT4's e_min (owner edge distance) ---------- */
+test('AD8: CTDOT auto-designed splice takes the owner\'s 2 in end distances and passes DT4; other owners keep 1.75 in', () => {
+  // Built-in splice, 7/8 in bolts, sheared/cut edge 'cut': Table 6.13.2.6.6-1 e_min = 1.125 in; CTDOT V2 6.13.6.1 edge 2 in -> e_min = max(1.125, 2) = 2.00 in.
+  // Entered e_f = e_p = e_w = e_wp = 1.75 in < 2.00 -> set to 2.00 (CTDOT); AASHTO / RIDOT / MassDOT: e_min = 1.125 ≤ 1.75 -> kept.
+  // the built-in splice with 20 in flanges (16 in is too narrow for 2 gage lines with CTDOT's 2 in edge distance: DT10, "not changed")
+  const G = gd(), P0 = clone(S.DEF); ['L', 'R'].forEach(k => { P0.sec[k].topB = 20; P0.sec[k].botB = 20; });
+  const narrow = S.autoDesign(clone(S.DEF), envOf('CTDOT')); assert.match(narrow.msg, /was not changed/); assert.equal(+narrow.p.top.ef, 1.75);
+  for (const owner of Object.keys(OWN)) {
+    const b = S.autoDesign(clone(P0), envOf(owner)), R = S.compute(b.p, envOf(owner)), C = S.checks(R, { steps: false }), dt4 = C.find(c => c.id === 'DT4');
+    const want = owner === 'CTDOT' ? 2 : 1.75;
+    for (const k of ['top', 'bot']) { assert.equal(+b.p[k].ef, want, `${owner} ${k} ef`); assert.equal(+b.p[k].ep, want, `${owner} ${k} ep`); }
+    assert.equal(+b.p.web.ew, want); assert.equal(+b.p.web.ewp, want);
+    assert.equal(R.emin, owner === 'CTDOT' ? 2 : 1.125);
+    assert.ok(dt4.items.every(i => i.st === 'pass'), `${owner} DT4: ${dt4.items.map(i => i.loc + ' ' + i.st).join('; ')}`);
+    if (owner === 'CTDOT') {   // before (GirderDetail's autoDesignSplice on the same input): DT4 fails at 1.75 < 2.00
+      const a = G.auto(clone(P0), owner); assert.ok(a.r.fails.includes('DT4'), 'GirderDetail CTDOT: DT4 fails (1.75 in < 2 in)'); assert.equal(+a.p.top.ef, 1.75);
+    }
+  }
 });

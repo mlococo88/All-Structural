@@ -2805,3 +2805,33 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   after; `node tests/engine/run.mjs lldf loads report steps tex static paths girderdetail` pass.
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-ad8 — Field splice auto-design: end distances at least the owner's edge distance (SB2-AD8; B4); CF11 verified
+### Change (calculation: splice auto-design inputs)
+- `engine/splices.js autoDesign(p0, env)`, after `const undo = clone({ top: P.top, bot: P.bot, web: P.web });`, added:
+  `const eMin = R0.emin, upE = (o, f) => { if (!(parseDim(o[f]) >= eMin - 1e-9)) o[f] = eMin; };`
+  `['top', 'bot'].forEach(k => { upE(P[k], 'ef'); upE(P[k], 'ep'); }); upE(P.web, 'ew'); upE(P.web, 'ewp');`
+  i.e. the flange and web end distances e_f, e_p, e_w, e_wp are raised to DT4's e_min = max(Table 6.13.2.6.6-1 value for the bolt and
+  edge, the owner's edge distance) before the search; a larger entered value is kept. When the search ends "not changed" (DT10, flange
+  too narrow) the entered values are restored with the rest, as before. Used by the Field splices tab (auto mode) and by Auto design's
+  full check (`girder()` auto-designs every splice without entered plates).
+- Decision: SB2-AD8 (lead, 2026-10-30): the splice auto-design uses the owner's edge distance for the end distances (CTDOT 2 in).
+### §4 callout
+- Provision: AASHTO LRFD 10th Ed. Art. 6.13.2.6.5 (end distance ≥ the Table 6.13.2.6.6-1 edge distance); owner CTDOT BRSDM V2 6.13.6.1
+  (2 in edge distance, rule spl.ovs, OWN25).
+- Before (GirderDetail autoDesignSplice and this app): e = 1.75 in as entered; every CTDOT splice the search designs fails DT4
+  (1.75 < 2.00). After: CTDOT e = 2.00 in; AASHTO / RIDOT / MassDOT unchanged (e_min = 1.125 in for 7/8 in bolts, cut edges ≤ 1.75).
+- Check case (built-in splice, 7/8 in A325 bolts, cut edges, flanges widened to 20 in, CTDOT): e_min = max(1.125, 2) = 2.00 in;
+  after: top 2 lines × 4 rows each side (32 bolts), outer PL 20 × 1/2, 2 inner PL 8 1/2 × 5/8; bottom 2 × 5 (40), PL 20 × 5/8 + 2 × 8 1/2 × 3/4;
+  web 2 PL 57 × 9/16, 9 × 2 each side (36); 108 bolts; DT4 2.00 ≥ 2.00 at all six ends (pass); top splice plate length 25.5 → 26.5 in.
+  The same plates with 1.75 in end distances: DT4 fails. GirderDetail's autoDesignSplice on the same input: DT4 fails.
+  The built-in 16 in flanges under CTDOT stay "not changed" (DT10: too narrow for 2 gage lines with 2 in edges), end distances 1.75 as entered.
+### Tests
+- tests/engine/splices.test.mjs: the auto-design parity now runs GirderDetail on the input with the same end distances (AD8 applied by
+  hand) and compares every plate, bolt and check: 0 differences (built-in every owner; 136 auto-designed splices of the payloads).
+  New test "AD8": end distances 2.00 (CTDOT) / 1.75 (others), DT4 passes for every owner; GirderDetail's search fails DT4 under CTDOT.
+### CF11 (verify only)
+- Auto design's cross-frame sizing rule for the bolts per member end (CF10 / CF11; CTDOT 4 bolts) is in `engine/autodesign.js`
+  (sizeDetails, ids CF1–CF11, "the current type and bolt count first, then the others"), merged in #511. Not changed here.
+### Other copies
+- None.
