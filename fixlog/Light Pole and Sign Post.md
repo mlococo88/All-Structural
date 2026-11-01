@@ -1224,3 +1224,26 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
 - **Open items:**
   - The tension-breakout A_Nc integration clips by a circle of radius b/2 for a square shaft too (`u*u+w*w>Redge*Redge`), i.e. the inscribed circle; conservative for a square. Unchanged (pre-existing; engineer to decide).
   - ψ_ed,N for a square shaft keeps c_a1 = b/2 − R even when no bolt sits on a face normal; conservative. Unchanged, per the group method.
+
+## 2026-11-01 — PR: claude/lp-pr0-harness (LP-0: test harness, scope line, manual Case B row; display only; PR link added after merge)
+
+Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer's decisions of 2026-11-01 (scope; LTS 2nd Ed. mode later; no change to anything cable-related).
+
+### LP0-1. Scope line (LP-R0)   [display] [no result change]
+- **Where:** masthead, after `<div class="codetag">`, anchor `id="lppScope"` (CSS `.masthead .lppScope`); report cover in `lppReportDoc()`, after the line `'IBC 2021 §1807.3 · ASCE/SEI 7-22 · ACI 318-19 · AISC 360-16'`: `ct.appendChild(mk('p','cr-cover-p',lppEsc($('lppScope')?$('lppScope').textContent:'')));`
+- **Text:** "Scope (this mode): IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19 — non-highway light poles and sign supports (site, parking, sports and private signs). AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming); do not use this mode for them."
+- **Engineer decision (2026-11-01):** keep this mode; an AASHTO LRFDLTS 2nd Ed. mode is added later by a separate PR.
+
+### LP0-2. Manual: Case B row (LP-R24)   [display]
+- **Where:** Manual §4A.4 table, anchor `["B","Offset e = 0.2B toward the windward edge",`.
+- **Before:** `"Two posts only"`. **After:** `"All configurations (two posts: unequal split; monopost: as torsion)"` (true since F19, 2026-10-12).
+
+### LP0-3. Test harness (no tool change)
+- `tests/engine/lp-source.mjs`: the tool's own declarations, pulled from the page text into a Node vm on first use (as gd-source.mjs); `lpDefaultInp()` = the page's default inputs as calc() builds them.
+- `tests/engine/lightpole.test.mjs`: the review's hand checks (§3 Cases 1–3: K_z, q_z, fixture and cable wind, cable pull, HSS properties and F8 M_n, IBC embedment, A_se, φN_sa, N_b, T_max, ψ_ed,N, sign q_h, Fig. 29.3-1 C_f, F_A, Case C) and TQ3. Note: the review's I = 91.06 in⁴ is a rounding slip; π/64·(10⁴ − 9.5⁴) = 91.05 (the tool's value; Z, S, M_n as in the review).
+- `tests/lightpole-compare.mjs`: headless Chromium, two versions, 13 cases (default pole; square shaft/HSS check mode; no cables rect HSS V 140; Broms + K_d override; single cable at 45°; 60 ft pole; 1 in ice; 1½ in bolts; offset arms; monopost; monopost square; two-post; wide two-post). Compares the argument objects of renderSummary / buildReport / buildSignReport, every cable value (components and reactions in every combination and azimuth, an explicit "unchanged" check), the text of every output tab, and an SVG hash per drawing. `--old-saves` opens A's project state in B.
+- `tests/libs`: KaTeX 0.16.9 `dist/contrib/auto-render.min.js` from the npm package, and the jsDelivr prefix in MANIFEST.json.
+
+### Verification
+- `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: pass. `node tests/engine/run.mjs lightpole`: 10 passed.
+- `node tests/lightpole-compare.mjs --a origin/main` (553e98d): all 13 cases — results identical, cable values identical, drawings identical, 0 console errors; the only text difference is the new scope line on the report cover (+1 line per case). Screenshots at 1280 and 390: no horizontal scroll.
