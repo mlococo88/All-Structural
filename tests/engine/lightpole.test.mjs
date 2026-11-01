@@ -101,3 +101,24 @@ test('TQ3: square shaft b 2 ft, (4) 1 in on BC 16 at θ_b 45°: c_a,min = 12 −
   near(b.ca17, 6.343, 0.001, 'c_a,min');
   assert.equal(b.edOK, true);
 });
+
+/* ---------- LP-R3: pole/post C_f from ASCE 7-22 Fig. 29.4-1 (added 2026-11-01) ---------- */
+test('Fig. 29.4-1: default pole (round 6–10 in, 35 ft): D√q_z > 2.5, h/D = 35/0.667 = 52.5 → moderately smooth 0.7', () => {
+  const lp = lpEngine();
+  const a = lp.call('cfPoleFig2941', lpDefaultInp({ cfPoleSurf: 'smooth' }));
+  // q_z(17.5) = 0.00256·2.01(17.5/900)^0.2105·13225; D = 8/12
+  near(a.hD, 52.5, 1e-9, 'h/D'); assert.equal(a.row, 'smooth'); assert.ok(a.Dsq > 2.5); near(a.cf, 0.7, 1e-12, 'C_f');
+});
+test('Fig. 29.4-1: 4 in round post, 16 ft: q_z(8 → 15 ft) = 0.00256·0.849·13225 = 28.74, D√q_z = 0.333·5.361 = 1.79 ≤ 2.5 → 1.2', () => {
+  const lp = lpEngine();
+  const a = lp.call('cfPoleFig2941', lpDefaultInp({ H: 16, poleDiaTop: 4, poleDiaBase: 4, cfPoleSurf: 'smooth' }));
+  near(a.qz, 28.74, 0.01, 'q_z'); near(a.Dsq, 1.787, 0.002, 'D√q_z'); assert.equal(a.row, 'lowq'); near(a.cf, 1.2, 1e-12, 'C_f');
+});
+test('Fig. 29.4-1: 8 in square post, 16 ft: h/D = 24 → 1.4 + (24 − 7)/(25 − 7)·(2.0 − 1.4) = 1.967; hex/oct pole 35 ft → 1.4', () => {
+  const lp = lpEngine();
+  const a = lp.call('cfPoleFig2941', lpDefaultInp({ H: 16, poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8 }));
+  near(a.cf, 1.4 + 17 / 18 * 0.6, 1e-12, 'square');
+  near(lp.call('cfPoleFig2941', lpDefaultInp({ cfPoleSurf: 'poly' })).cf, 1.4, 1e-12, 'poly');
+  // rectangular 8 × 6 in: D = least dimension 6 in → h/D = 35/0.5 = 70 → 2.0
+  near(lp.call('cfPoleFig2941', lpDefaultInp({ poleShape: 'rect', poleDiaTop: 8, poleDiaBase: 8, poleDepthTop: 6, poleDepthBase: 6 })).cf, 2.0, 1e-12, 'rect');
+});

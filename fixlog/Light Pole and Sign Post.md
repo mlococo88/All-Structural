@@ -1248,7 +1248,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: pass. `node tests/engine/run.mjs lightpole`: 10 passed.
 - `node tests/lightpole-compare.mjs --a origin/main` (553e98d): all 13 cases — results identical, cable values identical, drawings identical, 0 console errors; the only text difference is the new scope line on the report cover (+1 line per case). Screenshots at 1280 and 390: no horizontal scroll.
 
-## 2026-11-01 — PR: claude/lp-pr1-display (LP-1: off-axis arm warning, Case C eccentricity sign, ASCE 7-22 velocity-pressure form; no design result changes; PR link added after merge)
+## 2026-11-01 — PR #543: claude/lp-pr1-display (LP-1: off-axis arm warning, Case C eccentricity sign, ASCE 7-22 velocity-pressure form; no design result changes)
 
 ### LP1-1. Wind-direction warning for arms not on the wind axes (LP-R1, engineer decision 2026-11-01)   [warning] [no result change]
 - **Decision:** keep the 4 wind directions (0/90/180/270°); no sweep. Warn when an arm/fixture is not aligned with those axes. Cables are excluded from the warning (engineer 2026-11-01: no change to anything cable-related). Sign panels are always on the axes (panel normal = +x), so no sign warning.
@@ -1275,3 +1275,32 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 
 ### Open items (not changed)
 - ASCE 7-22 Table 26.11-1 constants (α, z_g) for K_z: the tool keeps the 7-16 values (difference < 1 %: Exp. C 35 ft 1.0147 vs ≈1.009). Engineer to decide whether to switch (a calc change).
+
+## 2026-11-01 — PR: claude/lp-pr2-cf (LP-2: pole/post C_f from ASCE 7-22 Fig. 29.4-1; engineer decision 2026-11-01; PR link added after merge)
+
+### LP2-1. Automatic pole/post force coefficient (LP-R3)   [calc change] [more conservative for square/rect HSS and small round posts; less for short round posts]
+- **Engineer decision (2026-11-01):** automatic lookup from ASCE 7-22 Fig. 29.4-1 by shape and h/D; the user override is kept; the "round ≈0.7, square ≈1.3" hint is fixed.
+- **Where:**
+  - Input card 2: the `poleCfLabel` row is replaced by `cfPoleMode` (Auto / Manual), `cfPoleSurf` (round moderately smooth / rough / very rough / hexagonal-octagonal; shown for a round section), the `cfPole` value row (shown for Manual, hint now quotes Fig. 29.4-1 at h/D ≥ 25), and notes `lppCfNote`, `cfMigNote`. `lppApplyCfUI()` above `applyShapeUI()`.
+  - New `CF2941`, `CF2941_LBL`, `cfPoleFig2941(inp)`, `lppApplyCfPole(inp)`, `cfPoleWorkedHTML(inp)` above `function poleWindNominal(`.
+  - `calc()`: inputs `cfPoleMode`, `cfPoleSurf`; `lppApplyCfPole(inp)` before `calcSign(inp)` (sign) and before `poleSegments` (pole). It sets `inp.cfPole` (Auto), which the existing mast wind (`poleWindNominal`, bare and iced strips) and sign-post drag (`signWind`, `cfPost`) already use.
+  - Worked step: `windWorkedHTML()` (before step 3), `signWindWorkedHTML()` (end), report section "Wind force on the pole" (before "Wind force on the pole shaft").
+  - `INPUT_IDS` + `cfPoleMode`, `cfPoleSurf`; `applyState()` migration (below).
+- **Before:** `C_f = inp.cfPole` as entered (default 0.7 for every shape).
+- **After (Auto):** C_f = Fig. 29.4-1 value, linear in h/D between 1, 7, 25 (constant beyond 25):
+  - square (wind normal to a face) 1.3 / 1.4 / 2.0; hexagonal-octagonal 1.0 / 1.2 / 1.4;
+  - round, D√q_z > 2.5: moderately smooth 0.5 / 0.6 / 0.7, rough 0.7 / 0.8 / 0.9, very rough 0.8 / 1.0 / 1.2;
+  - round, D√q_z ≤ 2.5 (all surfaces): 0.7 / 0.8 / 1.2.
+  - D = mean outside width (rect: least dimension), h = pole height (sign: post height to top of panel), q_z = 0.00256 K_z K_zt K_e V² at h/2 (K_e = 1.0, no K_d).
+- **Governing provision:** ASCE 7-22 §29.4.1, Fig. 29.4-1 (chimneys, tanks, rooftop equipment and similar structures). Values cited from the figure; verify against the engineer's copy.
+- **Cables:** not affected (cable C_f is the separate `cfCable` input; every cable value identical, checked).
+- **Saved data / migration:** new fields `inputs.cfPoleMode`, `inputs.cfPoleSurf`. A save without `cfPoleMode` opens as **Manual** with its saved C_f and the notice `cfMigNote` ⇒ old projects compute identically (verified). New projects (DEFAULT_STATE, New, empty storage) start on Auto, moderately smooth.
+- **Check cases** (V 115, Exp. C, K_zt 1):
+  - Default pole (round 6→10 in, 35 ft): D = 8/12 = 0.667 ft, q_z(17.5) = 0.00256·0.8769·13225 = 29.69 psf, D√q_z = 3.63 > 2.5, h/D = 52.5 → **0.7** (= old default; results unchanged).
+  - Square HSS 8 in, 35 ft: h/D = 52.5 → **2.0** (was 0.7). Square-shaft case: embedment 4.67 → 5.59 ft, M_u 18,640 → 31,864 lb·ft, T_bolt 9,082 → 15,694 lb.
+  - Rect HSS 8 × 6 in, 35 ft, V 140: D = 6 in, h/D = 70 → **2.0** (was 0.7): embedment 4.07 → 5.47 ft, M_u 15,905 → 35,910 lb·ft.
+  - Square post 8 in, sign h = 16 ft: h/D = 24 → 1.4 + (24 − 7)/18·0.6 = **1.967** (was 0.7): embedment 8.51 → 8.64 ft.
+  - Round post 8 in, sign h = 11 ft (wide two-post case): q_z(5.5 → 15 ft), D√q_z > 2.5, h/D = 16.5 → 0.6 + (16.5 − 7)/18·0.1 = **0.653** (was 0.7; less conservative, per the figure): embedment 9.126 → 9.122 ft.
+  - Round 4 in post, 16 ft: D√q_z = 0.333·√28.74 = 1.79 ≤ 2.5, h/D = 48 → **1.2** (Node test).
+- **How verified:** `node tests/engine/run.mjs lightpole` (13 passed, 3 new Fig. 29.4-1 tests). `node tests/lightpole-compare.mjs --a origin/main`: new projects — default pole, Broms, 45° cable, 60 ft pole, ice, 1½ in bolts, arms, monopost and two-post sign: results identical apart from the 4 new `inp` fields (cfPoleMode, cfPoleSurf, cfAuto, cfPoleEntered) since their C_f is 0.7 either way; square/rect/sign-square/wide two-post cases change as listed. `--old-saves` (main's saved state opened in the branch): all 13 cases identical apart from the 4 new `inp` fields; cable values identical in every case.
+- **Open items:** Fig. 29.4-1 has no rectangle row (the square row with D = least dimension is used); the D√q_z criterion uses q_z at mid-height (the figure does not state the height; engineer to confirm); square sections with wind along a diagonal (1.0/1.1/1.5) are not used (the tool's wind directions are normal to the faces).
