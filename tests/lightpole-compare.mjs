@@ -124,7 +124,7 @@ const PAGE_FN = async ({ mut, state, shots }) => {
   document.querySelectorAll('.tabpage').forEach(pg => {
     const id = pg.dataset.page; if (id === 'manual') return;
     text[id] = Array.from(pg.querySelectorAll(SEL)).map(e => (e.textContent || '').replace(/\s+/g, ' ').trim().replace(/\d{1,2}\/\d{1,2}\/\d{4}(, \d{1,2}:\d{2}(:\d{2})?\s?[AP]M)?/g, '<date>')).filter(Boolean);
-    pg.querySelectorAll('svg').forEach((s, i) => { let a = s.parentElement; while (a && !a.id) a = a.parentElement; const key = id + ':' + (a ? a.id : '?') + ':' + i;
+    Array.from(pg.querySelectorAll('svg')).filter(s => !s.closest('.katex')).forEach((s, i) => { let a = s.parentElement; while (a && !a.id) a = a.parentElement; const key = id + ':' + (a ? a.id : '?') + ':' + i;
       let h = 0; const str = s.outerHTML; for (let j = 0; j < str.length; j++) h = (h * 31 + str.charCodeAt(j)) | 0; svgs[key] = h + ':' + str.length; });
   });
   return { results, cables: cablesOut, text, svgs, applied };

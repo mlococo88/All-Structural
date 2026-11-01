@@ -66,9 +66,18 @@
     ltb: { key: 'ltb', title: 'Lateral-torsional buckling', ref: A + '6.10.8.2.3', ids: /^fx\.(Cb|npr\.|rt|Lp|Lr|LTB)/, res: /^fx\.LTB$/ },
     fnc: { key: 'fnc', title: 'Nominal flexural resistance of the compression flange', ref: A + '6.10.8.2.1', ids: /^fx\.Fnc$/ },
     chk: { key: 'chk', title: 'Check, Strength I (6.10.8)', ref: A + '6.10.8.1', ids: /^fx\.(fbu|fl|fnc\.ok|fnt\.ok)$/ },
-    a6: { key: 'a6', title: 'Appendix A6 (web compact or noncompact)', ref: A + '6.10.6.2.3, App. A6', ids: /^fx\.a\d/, info: /^fx\.a\d+\.(ok|crw)$/ }
+    a6: { key: 'a6', title: 'Appendix A6 (web compact or noncompact)', ref: A + '6.10.6.2.3, App. A6', ids: /^fx\.a\d/, info: /^fx\.a\d+\.(ok|crw)$/ },
+    prop: { key: 'prop', title: 'Cross-section proportions and minimum deck reinforcement (GS1–GS4)', ref: A + '6.10.2, 6.10.1.7', ids: /^fx\.gs(1|2|3|4|22)(\.|$)/ }   // engine/proportions.js (B3)
   };
-  const TOPICS = { sec: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'].map(k => TP[k]), x: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh', 'dem', 'web', 'svc', 'fat', 'lat', 'yld', 'mn', 'rev', 'rb', 'flb', 'ltb', 'fnc', 'chk', 'a6'].map(k => TP[k]) };
+  const TOPICS = { sec: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'].map(k => TP[k]), x: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh', 'prop', 'dem', 'web', 'svc', 'fat', 'lat', 'yld', 'mn', 'rev', 'rb', 'flb', 'ltb', 'fnc', 'chk', 'a6'].map(k => TP[k]) };
+  /* propHtml(rows): the proportion limits over the girder (engine/proportions.js summary): the largest ratio of each of GS1–GS4 with its
+     location (a link selects it), and the warnings (GS4 top-layer share, GS22) */
+  function propHtml(rows) {
+    const PR = window.SBDProportions; if (!PR) return '';
+    const S = PR.summary(rows); if (!S.gov.length && !S.warn.length) return '';
+    const w = [...new Set(S.warn.map(q => q.id))].map(id => { const L = S.warn.filter(q => q.id === id); return `${id} at ${L.length} location${L.length > 1 ? 's' : ''} (${esc(L[0].c.na)})`; });
+    return `<p class="note"><b>Proportions (6.10.2) and minimum deck reinforcement (6.10.1.7), largest ratio over the girder:</b> ${S.gov.map(q => `<a href="#" data-fxsel="${rows.indexOf(q.row)}">${esc(q.id)}</a> ${tt(q.c.title)} at ${esc(q.row.name)}: <span class="${cls(q.c.ratio)}">${fmt(q.c.ratio, 3)}</span>`).join('; ')}.${w.length ? ` <b>Warnings:</b> ${w.join('; ')}.` : ''}</p>`;
+  }
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind] || TOPICS.x, { strip: false });
   const OPEN = new Set();
 
@@ -221,6 +230,7 @@
       h += '<div id="gfx_fx"></div>';   // graphics (ui/gfxa.js)
       h += `<section class="sec"><div class="secHead">Flexure results by location</div><div class="secBody"><p class="note">${R.what}</p>
         ${gv ? `<p>Governing: <b>${esc(gv.name)}</b>${gv.x != null ? ` (x = ${fmt(gv.x, 2)} ft)` : ''}, ${esc(gv.gov.id)} ${tt(gv.gov.title)}: ratio <b>${rtx(gv.gov)}</b>.</p>` : ''}
+        ${propHtml(rows)}
         ${R.oos ? '<div class="alert">A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported for that span.</div>' : ''}
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Location</th><th>x (ft)</th><th>Region</th><th>Method (6.10.8 / A6)</th><th class="lft">Governing check</th><th>Ratio</th></tr></thead><tbody>
         ${rows.map((r, i) => `<tr data-fx="${i}" class="${i === S.sel ? 'sel' : ''}${r === gv ? ' fx-gov' : ''}"><td class="lft">${esc(r.name)}</td><td>${r.x != null ? fmt(r.x, 2) : ''}</td><td>${r.pos ? 'positive' : 'negative'}</td>
@@ -257,6 +267,7 @@
       rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
         S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { alert('Cannot read this file: ' + er.message); /* nothing changed: the previous file, if any, stays */ } redraw(); };
       rd.readAsText(f); });
+    host.querySelectorAll('[data-fxsel]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); S.sel = +el.dataset.fxsel; redraw(); }));   // B3: a proportions link selects its location
     const list = host.querySelector('.fx-list'); if (list) list.addEventListener('click', e => { const tr = e.target.closest('[data-fx]'); if (!tr) return; S.sel = +tr.dataset.fx; redraw(); });
   }
 

@@ -113,8 +113,11 @@ test('CTDOT: the splice bolt fit (DT10) is a sizing constraint; details that fai
   // splices to 17 in (hand check above; 18 in on the 2 in increment) or uses one gage line. The built-in splices also fail CTDOT's end distance
   // (DT4: e_f, e_p 1.75 in < 2 in, inputs the plates do not change): every design is "blocked" by it, never listed as passing.
   const P = M.defaultProject(); P.ownerRules.owner = 'CTDOT';
+  // SB2-AD8 (B4, 2026-11-01): the splice auto-design takes CTDOT's 2 in end distances, so DT4 no longer fails in the candidates and is no
+  // longer a blocker. The built-in project still has no CTDOT candidate: a candidate's splice fails TF3 (slip, oversized holes K_h = 0.85) on
+  // the full check (open item, fixlog sbd-ad8); before AD8 every candidate was "blocked" by DT4 instead.
   const R = runAD(P, { mode: 'refine', topN: 1 });
-  assert.equal(R.cands.length, 0); assert.ok(R.blocked.length >= 1, R.note);
+  assert.equal(R.cands.length, 0); assert.ok(!R.blocked.some(b => b.blockers.includes('splices DT4')), 'DT4 is not a blocker (AD8)');
   // the narrow flanges show in the splice module as DT3 (inner plate edge, web side) and DT7 (web splice plates) on the current design
   // (engine/splices.js autoDesign leaves the splice unchanged with the GD62 note: 17 in needed, 18 in on CTDOT's 2 in width increment)
   const cur = new Set(R.current.full.fails.map(f => `${f.mod} ${f.id}`));
@@ -122,7 +125,7 @@ test('CTDOT: the splice bolt fit (DT10) is a sizing constraint; details that fai
   for (const b of R.blocked) { assert.ok(b.blockers.every(k => cur.has(k)), 'blockers fail in the current design too');
     ['splices DT3', 'splices DT7', 'splices DT10'].forEach(k => assert.ok(!b.blockers.includes(k), `${k} is not a blocker: Auto design sized the flanges for the splice bolts`));
     boltFitHeld(b, AD.projectWith(P, b.L)); }
-  assert.ok(/DT4/.test(R.note), R.note);
+  assert.ok(!/DT4/.test(R.note), R.note);
 });
 
 test('Apply writes the candidate; Undo restores the design before it', () => {
