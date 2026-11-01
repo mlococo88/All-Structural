@@ -57,3 +57,19 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   Before, the single grid column took the min-content width of its widest table, so on a phone (390 px) the whole report was wider than the screen and its right part was cut off; now the column is the screen width and a wide table scrolls inside its own box (`.rp-tw`, as on desktop).
 - Display only; backward compatible (same markup, wide screens unchanged). Users: `apps/steel-bridge/index.html`, `Spread Footing.html`, `Timber Beam Check.html`.
 - Verified: `node tests/engine/run.mjs report steps steps-groups report-wiring` 14 passed; Timber Beam Check Report tab at 390 px (screenshot).
+
+## 2026-11-01 — PR: claude/rpt-cbc — optional chapter headings (`section.part`) for a report that joins several tabs (additive; models without it render as before)
+### Where
+- `shared/report.js`: header comment (model: `sections: [ { id, title, note?, part?, subs } ]`); `build()` (`sec.part = { title, id: 'rp-p<n>' }`); `html()` (an `<h1 class="rp-part">` before that section); `titleBlock()` (contents: a `li.rp-tp` line); `text()` (the chapter title in capitals); `mount()` (nav tree: an `a.rp-l0` entry); CSS `.rp-toc a.rp-l0`, `.rp-part`, `.rp-ptoc li.rp-tp`, print `.rp-part{break-before:page}` and `.rp-part+.rp-sec{break-before:auto}`.
+### Why
+- Engineer decision (2026-11-01): Concrete Beam Capacity.html has ONE combined Report tab with a chapter per embedded tab (Beam Capacity, ASD Beam Calcs, Development & Splice). The viewer had two heading levels (section, subsection); a chapter level above the numbered sections was missing. Section numbers run on through the chapters.
+### Backward compatibility
+- Only a section with `part` gets the new markup; every other path is unchanged (same HTML, text, nav, CSS rules for existing classes). `node tests/engine/run.mjs report steps steps-groups report-wiring` passes (Steel Bridge and Spread Footing report tests).
+### Loaded by
+- unchanged list, plus `Concrete Beam Capacity.html` (suite shell, combined Report tab) and its Development & Splice tab (the ACI Rebar app's Report tab).
+## 2026-11-01 — PR: claude/rpt-stonearch — item topics and lazy tables (backward compatible)
+- **Why:** the Stone Masonry Arch Load Rating Report tab maps the tool's own panels to the viewer; a panel's topics (its headings) hold tables and notes as well as worked steps, and the influence-coefficient and nodal tables are long.
+- **`topic` on any item** (anchor `if (it.topic) { it._tp = 'rp-tp'`): `{ title, ref?, no?, chip?, cls?, res? }`. `build()` gives it an anchor (`rp-tp<n>`) and a nav entry under the subsection ("no. title"); `itemHtml()` puts the same sub-heading as a steps item's topic (`topHtml`, numbered `no`) before the item; `text()` prints a topic line; the topic title is scanned for references. `itemHtml` is split into `itemHtml` (topic) + `itemBody` (unchanged item HTML).
+- **`lazy` on a table item** (anchor `if (it.type === 'table' && it.lazy)`): shown as a closed `<details class="rp-lz">` (summary: `title` or caption and the row count), rendered when opened, filled by `fillLazy` for print and by `jump`; the three lazy fill sites call `lazyBody(doc, it)` (steps or table). The table HTML moved unchanged into `tableHtml()`.
+- Items without `topic` and tables without `lazy` render exactly as before.
+- **How verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` (Steel Bridge and Spread Footing report tests): 4 files, 14 passed, 0 failed. Stone Arch Report tab in headless Chromium (topics, lazy tables, print with every lazy table filled).
