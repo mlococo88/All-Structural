@@ -4558,3 +4558,350 @@ index c70f37b..c4454e3 100644
    }
    /* CRITICAL-ROW SET-BACK (ACI Fig. R17.7.2.1b Case 2). §17.7.2.1.1 lets the
 ```
+
+## 2026-11-01 — BC-5: the pier cage of a circular pier credited as anchor reinforcement — longitudinal bars for tension (§17.5.2.1(a)), ties / spiral for shear (§17.5.2.1(b)), φ = 0.75, Condition A where it qualifies (calculation change for circular piers with the new cage input only; rectangular pedestals unchanged) (PR: claude/bpad-pier-cage, PR link added after merge)
+
+- **Engineer decision (2026-11-01):** credit the shaft / pier cage as anchor reinforcement for bolt circles on round piers: cage inputs (longitudinal bar size / count / cover, tie or spiral size and pitch), the effective bars (within 0.5h_ef of the anchor for tension per R17.5.2.1, ℓ_d on both sides of the failure plane; shear ties near the top), φ = 0.75, Condition A where the reinforcement qualifies, worked steps. Also (same answers): round vs square shear breakout difference accepted, no change; the LRFDLTS rod-bending waiver, bending-line article and b_eff stay flagged "verify", the rod-bending check stays on.
+- **New saved field:** `conc.cage = { present:false, nBars, barSize, grade, cover, angle0, topCover, topHook, tieType:"tie"|"spiral", tieSize, tieGrade, tieTop, pitch, ackDetail:false }` (default off; used only when `conc.shape === "circle"`).
+- **Where (anchor texts):** `bpCageOn()`, `bpCageGeom()`, `bpCageTension()`, `bpCageShear()`, `bpCageQual()` (new, before `function conditionA(kind, cc){`); `conditionA()` `if(bpCircPier()){ const q=bpCageQual(cc)` (circular piers: the cage decides Condition A; the rectangular branch below is unchanged); `comboCapacities()` `/* BC-5: circular pier — the cage replaces the concrete breakout` (`cageT`, `cageTSub`, `cageV`, `cageVSub`, the modes "Anchor reinforcement — pier cage (φNr)" / "… ties (φVr)", return fields); `allChecks()` / `dcrMatrix()` (`!cap.cageTSub`, `!cap.cageVSub`, rows `cgT` / `cgV`); `buildConcTab()` (section "Pier Cage as Anchor Reinforcement (§17.5.2.1)", side-face blowout kept when substituted); Pedestal input "Pier cage" rows; `validateInputs()` (cage fits, spacing, cover, anchor clearance); plan and breakout drawings (cage bars, effective ones in green).
+- **Method (stated on screen and in the steps):**
+  - *Tension (§17.5.2.1(a), R17.5.2.1(a)):* bars on a circle R_b = R − c_c − d_b,tie − d_b/2. A bar is effective when its plan distance to an anchor in tension is ≤ 0.5h_ef, it crosses the breakout surface (GB-1 body: z_c = h_ef − d_s/1.5, d_s = distance to the tension anchors' hull) and it is developed above (z_c − top of bar ≥ ℓ_d, or ℓ_dh with a top hook) and below ((H − 3 in) − z_c ≥ ℓ_d). ℓ_d by §25.4.2.4 (K_tr = 0, c_b = min(cover + d_b/2, s/2), ψ_t = 1.0 vertical, ψ_e = 1.0, ψ_s, ψ_g), ℓ_dh by §25.4.3.1 with ψ_r = 1.6, ψ_o = 1.0, ψ_c (the existing `tensionDevLengths()`). φN_r = 0.75·n_eff·A_b·f_y vs ΣT; per anchor T_i ≤ 0.75·n_i·A_b·f_y (bars within 0.5h_ef of that anchor); DCR = the larger.
+  - *Shear (§17.5.2.1(b), R17.5.2.1(b)):* each tie / spiral turn at depth z is a closed hoop of radius R_t = R − c_c − d_b,tie/2. In the governing shear breakout case (same row, direction and tangent-edge c_a1; with torsion, the governing sweep direction) a hoop is effective with 2 legs when z ≤ 0.5c_a1, it passes through the breakout body (x > 0 ahead of the row and max(lateral beyond the row, z) ≤ 1.5x) and its length outside the body is ≥ ℓ_d of the tie bar. φV_r = 0.75·n_legs·A_b·f_yt vs the case's V.
+  - *Use:* where at least one bar / leg qualifies (in the combination with the largest ΣT / V), the concrete breakout and side-face blowout are Condition A, φ = 0.75 (Table 17.5.3). When the engineer ticks "Cage detailing confirmed" (deformed bars, closed ties per §25.7.2 or spiral per §25.7.3, bars continuous through the failure surface), the cage strength replaces the concrete breakout in that combination (§17.5.2.1); side-face blowout and pryout stay checked (pryout φ 0.70).
+- **§4 callout.** Before (BC-2): a circular pier was plain concrete, Condition B (φ 0.70), with no anchor reinforcement. After: as above when the cage is entered; nothing changes when it is not, or for a rectangular pedestal.
+- **Check case H6** (C2 geometry with h_ef 36 in; `tests/bpad-circle.mjs`): 4 × 1 in at (±6, ±6), Ø36 pier, H 120, M_x = 480 kip·in, P = 5 kip compression, V_y = 3 kip; cage 8 #8 Gr 60 at 45° + k·45°, clear cover 3 in to #4 Gr 60 ties (first at max(3, 3 + 0.25) = 3.25 in, then every 4 in), bar tops 3 in below the surface, straight.
+  - R_b = 18 − 3 − 0.5 − 0.5 = 14 in; chord s = 2·14·sin 22.5° = 10.716 in; c_b = min(3.5 + 0.5, 5.358) = 4.0 → (c_b + K_tr)/d_b = 4.0 → 2.5; ℓ_d = 0.075·60000·1.0/(63.246·2.5)·1.0 = **28.46 in** (tool 28.4605).
+  - Tension anchors (±6, +6) (T = −1.25 + 480·6/144 = 18.75 kip each, ΣT = 37.5 kip). Bar 1 (45°) at (9.899, 9.899): 5.515 in from (6, 6) ≤ 18; z_c = 36 − 5.515/1.5 = 32.32 in; above 29.32 ≥ 28.46, below 117 − 32.32 = 84.7 → **effective**; bar 3 (135°) the same. Bar 2 (90°, (0, 14)): 8 in from the hull, z_c = 30.67, above 27.67 < 28.46 → not; bars 8 and 4 (0°, 180°): 10 in from the nearest anchor, z_c = 29.33, above 26.33 → not; the others farther or deeper.
+  - n_eff = 2: φN_r = 0.75·2·0.79·60 = **71.10 kip**; group 37.5/71.10 = **0.527**; per anchor 18.75/71.10 = 0.264 → DCR 0.527 (tool 0.52743).
+  - Shear: Case 2 governs (rear row y = −6, tangent-edge c_a1 = 21.657 in) → ties at z = 3.25 and 7.25 in (≤ 0.5c_a1 = 10.83) both cross the body, 2 legs each; length outside the body ≫ ℓ_d,#4 = 12 in → 4 legs: φV_r = 0.75·4·0.20·60 = **36.00 kip**; V = 3 kip → **0.083**.
+  - Not confirmed: tension breakout φ = 0.75 (Condition A) and still checked; confirmed: the Summary lists "Anchor Reinf. Tension (pier cage)" and "Anchor Reinf. Shear (cage ties)" instead of the two concrete breakouts.
+- **Existing projects:** `tests/bpad-circle.mjs` §1, 31 / 31 rectangular projects identical to origin/main (computeAll, capacities, checks, validation, report text, Report-tab model); `tests/bpad-profis.mjs` PASS; `tests/anchor-parity.mjs` PASS (38 cases; no cage there).
+- **Open items:** the 3-D view and the DXF do not draw the cage yet (plan and breakout drawings do); bars below the anchor heads are assumed to run the full shaft length (H − 3 in).
+
+```diff
+diff --git a/BasePlateAnchorDesigner.html b/BasePlateAnchorDesigner.html
+index c4454e3..b73cbd5 100644
+--- a/BasePlateAnchorDesigner.html
++++ b/BasePlateAnchorDesigner.html
+@@ -1024,5 +1024,8 @@ function defaultState(){
+               diameter D, centred at the pedestal origin; the plate offset places the anchors on it). circHefReduce: apply
+               the §17.6.2.1.2 h_ef reduction to a circular pier by analogy (engineer decision 2026-11-01: applied by default). */
+-           shape:"rect", D:36, circHefReduce:true },
++           shape:"rect", D:36, circHefReduce:true,
++           /* BC-5 (2026-11-01): the pier cage of a circular pier as anchor reinforcement (bpCageTension / bpCageShear) */
++           cage:{ present:false, nBars:8, barSize:"#8", grade:"gr60", cover:3.0, angle0:0, topCover:3.0, topHook:false,
++                  tieType:"tie", tieSize:"#4", tieGrade:"gr60", tieTop:3.0, pitch:4.0, ackDetail:false } },
+     /* shear distribution model */
+     shear:{ dist:"equal",     /* equal | frontrow — legacy demand split */
+@@ -3339,5 +3342,130 @@ function computeAll(){
+    and c_a1, which do not depend on φ. Cached per computeAll() result. */
+ let __condAGuard=false;
++/* ---------------------------------------------------------------
++   BC-5 (2026-11-01, engineer decision): the PIER CAGE of a circular pier as ANCHOR REINFORCEMENT
++   (ACI 318-19 §17.5.2.1(a) tension, §17.5.2.1(b) shear; φ = 0.75 for the anchor reinforcement, Table 17.5.3).
++   Input S.conc.cage: n longitudinal bars (size, grade) on a circle inside the ties, clear cover to the ties,
++   ties or a spiral (size, grade, depth of the first, spacing / pitch), the depth of the top of the bars and an
++   optional standard hook at the top; ackDetail = the engineer confirms what the program cannot see (deformed bars,
++   ties / spiral detailed per §25.7.2 / §25.7.3 with closed ends, bars continuous through the failure surface).
++   TENSION (§17.5.2.1(a), R17.5.2.1(a)): a longitudinal bar is effective for the anchors in tension when it is within
++   0.5h_ef of one of them (plan distance to the anchor centreline), it crosses the breakout surface (GB-1 body: flat
++   at h_ef under the tension anchors' hull, rising 1:1.5: z_c = h_ef − d_s/1.5) and it is developed on both sides of
++   the crossing: above, z_c − (top of the bar) ≥ ℓ_d (ℓ_dh with a top hook); below, (H − 3 in) − z_c ≥ ℓ_d
++   (§25.4.2.4 general equation, K_tr = 0, c_b from the cover and the bar spacing; §25.4.3.1 for the hook, ψ_r = 1.6).
++   φN_r = 0.75·n_eff·A_b·f_y against ΣT (group), and per anchor T_i ≤ 0.75·n_i·A_b·f_y with the effective bars within
++   0.5h_ef of that anchor.
++   SHEAR (§17.5.2.1(b), R17.5.2.1(b)): each tie (or spiral turn) at depth z is a closed hoop; where it passes through the
++   shear breakout body in front of the critical row (same row, direction and tangent-edge c_a1 as the shear breakout
++   check), its two crossings with the failure surface are two legs. A leg is effective when z ≤ 0.5c_a1 (as VT-1 for
++   ties), the hoop crosses the body (inside: x > 0 ahead of the row, max(lateral beyond the row, z) ≤ 1.5x) and the
++   hoop length outside the body (continuous behind the crossings) is ≥ ℓ_d of the tie bar. φV_r = 0.75·n_legs·A_b·f_yt
++   against the V of the governing case.
++   USE: where at least one bar (leg) is effective, the concrete breakout (and side-face blowout) is Condition A,
++   φ = 0.75 (Table 17.5.3); once the detailing is confirmed (ackDetail) the anchor-reinforcement strength replaces the
++   concrete breakout strength (§17.5.2.1) — tension breakout by φN_r, shear breakout by φV_r. Side-face blowout and
++   pryout stay checked (pryout φ 0.70). Rectangular pedestals: none of this runs.
++   --------------------------------------------------------------- */
++function bpCageOn(){ return bpCircPier() && !!(S.conc.cage && S.conc.cage.present); }
++function bpCageGeom(){
++  const C=S.conc, K=C.cage||{}, R=bpPierR(), rbL=rebarOf(K.barSize), rbT=rebarOf(K.tieSize);
++  const cover=Math.max(+K.cover||0,0);
++  const Rt=R-cover-rbT.db/2, Rb=R-cover-rbT.db-rbL.db/2;
++  const n=Math.max(4,Math.round(+K.nBars||0)), a0=(+K.angle0||0)*Math.PI/180;
++  const bars=[]; for(let k=0;k<n;k++){ const a=a0+2*Math.PI*k/n; bars.push({n:k+1,x:Rb*Math.cos(a),y:Rb*Math.sin(a)}); }
++  const chord=2*Rb*Math.sin(Math.PI/n);
++  const dev=tensionDevLengths({size:K.barSize,grade:K.grade,cover:cover+rbT.db,spacing:chord,epoxy:false,topbar:false,Ktr:0,
++    pieceType:"bar",hookTop:!!K.topHook,hookBot:false,hookConfined:false,hookAtEdge:false});
++  const devT=tensionDevLengths({size:K.tieSize,grade:K.tieGrade||K.grade,cover:cover,spacing:0,epoxy:false,topbar:false,Ktr:0,pieceType:"bar"});
++  return {R,Rt,Rb,rbL,rbT,cover,n,bars,chord,clear:chord-rbL.db,dev,devT,fy:rgrade(K.grade).fy,fyt:rgrade(K.tieGrade||K.grade).fy};
++}
++function bpCageTension(combo){
++  const K=S.conc.cage, G=bpCageGeom(), hef=S.anchor.hef, H=+S.conc.H||0, phi=0.75;
++  const per=(combo&&combo.perAnchor)||[], q=bpPierPts(anchorGeom().pts);
++  const ten=q.map((p,i)=>({x:p.x,y:p.y,t:(per[i]&&per[i].t)||0,n:i+1})).filter(o=>o.t>1e-9);
++  const topC=Math.max(+K.topCover||0,0), bot=H-3.0;
++  const ldTop=K.topHook? G.dev.ldh : G.dev.ld, ldBot=G.dev.ld;
++  if(!ten.length) return {none:true,nEff:0,dem:0,phiNr:0,dcr:0,G,bars:[],steps:[]};
++  const hulls=breakoutHulls(ten,hef);
++  const bars=G.bars.map(b=>{
++    const dA=Math.min(...ten.map(a=>Math.hypot(b.x-a.x,b.y-a.y))), ds=breakoutDist(b.x,b.y,hulls), zc=hef-ds/1.5;
++    const above=zc-topC, below=bot-zc, near=dA<=0.5*hef+1e-9, cross=zc>topC+1e-9;
++    const o={n:b.n,x:b.x,y:b.y,dA,ds,zc,above,below,near,cross,aboveOK:above>=ldTop-1e-9,belowOK:below>=ldBot-1e-9};
++    o.eff=near&&cross&&o.aboveOK&&o.belowOK;
++    o.why=o.eff? "" : (!near? "farther than 0.5h_ef = "+fmt(0.5*hef,2)+"″ from every anchor in tension ("+fmt(dA,2)+"″)"
++      : !cross? "the failure surface reaches the top of the bar (z_c = "+fmt(zc,2)+"″ ≤ "+fmt(topC,2)+"″)"
++      : !o.aboveOK? "above the crossing "+fmt(above,2)+"″ < "+(K.topHook?"ℓ_dh":"ℓ_d")+" "+fmt(ldTop,2)+"″"
++      : "below the crossing "+fmt(below,2)+"″ < ℓ_d "+fmt(ldBot,2)+"″");
++    return o; });
++  const Ab=G.rbL.Ab, fy=G.fy, nEff=bars.filter(b=>b.eff).length, dem=ten.reduce((a,o)=>a+o.t,0);
++  const phiNr=phi*nEff*Ab*fy;
++  const perA=ten.map(a=>{ const ni=bars.filter(b=>b.eff && Math.hypot(b.x-a.x,b.y-a.y)<=0.5*hef+1e-9).length;
++    return {n:a.n,t:a.t,ni,phi:phi*ni*Ab*fy,dcr:ni? a.t/(phi*ni*Ab*fy) : Infinity}; });
++  const dGrp=nEff? dem/phiNr : Infinity, dAnc=Math.max(...perA.map(o=>o.dcr));
++  const dcr=Math.max(dGrp,dAnc);
++  const effList=bars.filter(b=>b.eff).map(b=>b.n);
++  return {none:false,G,bars,nEff,Ab,fy,phi,dem,phiNr,perA,dGrp,dAnc,dcr,ldTop,ldBot,topC,bot,
++    phiEq:(isFinite(dcr)&&dcr>0)? dem/dcr : 0,
++    steps:[{title:"Pier cage as anchor reinforcement — tension",ref:"ACI 318-19 §17.5.2.1(a), R17.5.2.1(a); development §25.4.2.4"+(K.topHook?", §25.4.3.1":""),
++      lines:[
++        "\\text{bars: }n="+G.n+"\\ "+K.barSize+"\\ \\text{on a circle of radius }R_b=R-c_c-d_{b,t}-d_b/2="+fmt(G.R,3)+"-"+fmt(G.cover,3)+"-"+fmt(G.rbT.db,3)+"-"+fmt(G.rbL.db/2,3)+"="+fmt(G.Rb,3)+"\\ \\text{in}",
++        "\\text{effective: within }0.5h_{ef}="+fmt(0.5*hef,2)+"\\ \\text{in of an anchor in tension, crossing at }z_c=h_{ef}-\\frac{d_s}{1.5},\\ \\text{developed above and below}",
++        "\\ell_d="+fmt(G.dev.ld,2)+"\\ \\text{in}"+(K.topHook? ",\\ \\ell_{dh}="+fmt(G.dev.ldh,2)+"\\ \\text{in (top hook)}" : "")+";\\quad \\text{above: }z_c-"+fmt(topC,2)+"\\ge"+fmt(ldTop,2)+",\\ \\text{below: }("+fmt(H,1)+"-3)-z_c\\ge"+fmt(ldBot,2),
++        "n_{eff}="+nEff+"\\ \\text{(bars "+(effList.length? effList.join(", ") : "none")+")}",
++        "\\phi N_r=\\phi\\,n_{eff}A_bf_y="+fmt(phi,2)+"\\times"+nEff+"\\times"+fmt(Ab,2)+"\\times"+fmt(fy,0)+"="+fmt(phiNr,2)+"\\ \\text{kip}\\quad\\text{vs }N_{ua}=\\sum T="+fmt(dem,2)+"\\ \\text{kip}\\Rightarrow "+fmtDCR(dGrp,3),
++        "\\text{per anchor: }"+perA.map(o=>"T_{"+o.n+"}="+fmt(o.t,2)+"/(\\phi\\,"+o.ni+"A_bf_y="+fmt(o.phi,2)+")="+fmtDCR(o.dcr,3)).join(";\\ "),
++        "\\text{DCR}=\\max="+fmtDCR(dcr,3)],
++      vars:[["\\phi","0.75","anchor reinforcement, Table 17.5.3 / §17.5.2.1(a)"],["A_b",fmt(Ab,2)+" in^2",K.barSize],["f_y",fmt(fy,0)+" ksi",rgrade(K.grade).name],
++        ["\\ell_d","","§25.4.2.4 with K_tr = 0, c_b = min(cover + d_b/2, s/2) = "+fmt(G.dev.cb,3)+" in, ψ_t = 1.0 (vertical bars), ψ_e = 1.0, ψ_s = "+fmt(G.dev.psi_s,1)+", ψ_g = "+fmt(G.dev.psi_g,2)],
++        ["bars",bars.map(b=>b.n+": "+(b.eff?"effective":"not — "+b.why)).join("; "),"d_A = distance to the nearest anchor in tension, z_c = depth where the bar crosses the breakout surface"]]}]};
++}
++function bpCageShear(combo, dirOv, demOv){
++  const K=S.conc.cage, G=bpCageGeom(), phi=0.75;
++  const cb=(combo&&combo.raw)||combo||{};
++  const vc=dirOv? shearCasesCirc({Vx:demOv*dirOv.x,Vy:demOv*dirOv.y,Vres:demOv}) : shearCasesCirc(cb);
++  if(!vc || !vc.applicable || !vc.used) return {na:true,nEff:0,dem:0,phiVr:0,dcr:0,steps:[]};
++  const used=vc.used, sb=used.sb, perp=sb.evals[0], u=sb.dir, ca1=perp.ca1, t={x:-u.y,y:u.x};
++  const gp=anchorGeom().pts, rowP=bpPierPts(gp.filter((p,i)=>used.mask[i]));
++  const pc=Math.max(...rowP.map(p=>p.x*u.x+p.y*u.y)), tv=rowP.map(p=>p.x*t.x+p.y*t.y), tMin=Math.min(...tv), tMax=Math.max(...tv);
++  const z0=Math.max(+K.tieTop||0, G.cover+G.rbT.db/2), dz=Math.max(+K.pitch||3, G.rbT.db+0.5);
++  const hoops=[], N=1440;
++  for(let k=0;k<200;k++){ const z=z0+k*dz; if(z>1.5*ca1+1e-9) break;
++    let nIn=0, xc=[];
++    let prev=null;
++    for(let j=0;j<=N;j++){ const a=2*Math.PI*j/N, qx=G.Rt*Math.cos(a), qy=G.Rt*Math.sin(a);
++      const x=qx*u.x+qy*u.y-pc, s=qx*t.x+qy*t.y, d=Math.max(0,tMin-s,s-tMax);
++      const ins=(x>1e-9)&&(Math.max(d,z)<=1.5*x); if(ins&&j<N) nIn++;
++      if(prev!==null && ins!==prev) xc.push(x); prev=ins; }
++    const cross=nIn>0, Lout=(1-nIn/N)*2*Math.PI*G.Rt;
++    const near=z<=0.5*ca1+1e-9, devOK=Lout>=G.devT.ld-1e-9;
++    const eff=near&&cross&&devOK;
++    hoops.push({k:k+1,z,cross,near,devOK,Lout,xCross:xc.length? Math.max(...xc.map(v=>Math.max(v,0))) : null,legs:eff?2:0,
++      why:eff? "" : (!near? "deeper than 0.5c_a1 = "+fmt(0.5*ca1,2)+"″" : !cross? "does not reach the breakout body" : "length beyond the crossings "+fmt(Lout,2)+"″ < ℓ_d "+fmt(G.devT.ld,2)+"″")});
++  }
++  const nLegs=hoops.reduce((a,h)=>a+h.legs,0), Ab=G.rbT.Ab, fyt=G.fyt, phiVr=phi*nLegs*Ab*fyt;
++  const dem=dirOv? used.V : used.V, dcr=nLegs? dem/phiVr : Infinity;
++  return {na:false,G,hoops,nEff:nLegs,Ab,fyt,phi,dem,phiVr,dcr,ca1,dir:u,caseId:used.id,
++    steps:[{title:"Pier cage ties / spiral as anchor reinforcement — shear",ref:"ACI 318-19 §17.5.2.1(b), R17.5.2.1(b)",
++      lines:[
++        "\\text{hoop radius }R_t=R-c_c-d_{b,t}/2="+fmt(G.Rt,3)+"\\ \\text{in};\\ "+(K.tieType==="spiral"?"\\text{spiral, pitch }":"\\text{ties at }")+fmt(dz,2)+"\\ \\text{in from }z_1="+fmt(z0,2)+"\\ \\text{in}",
++        "\\text{critical row (same as the shear breakout check, "+(used.id==="single"?"single row":"Case "+used.id)+"): }c_{a1}="+fmt(ca1,3)+"\\ \\text{in};\\ \\text{effective: }z\\le0.5c_{a1}="+fmt(0.5*ca1,2)+"\\ \\text{in, crossing the body, }L_{out}\\ge\\ell_d="+fmt(G.devT.ld,2)+"\\ \\text{in}",
++        "\\text{hoops: }"+hoops.filter(h=>h.near).map(h=>"z="+fmt(h.z,2)+(h.legs?"\\ (2\\ \\text{legs})":"\\ (0)")).join(",\\ ")+(hoops.some(h=>!h.near)? "\\ \\text{(+ "+hoops.filter(h=>!h.near).length+" deeper than }0.5c_{a1}\\text{, not counted)}" : ""),
++        "\\phi V_r=\\phi\\,n_{legs}A_bf_{yt}="+fmt(phi,2)+"\\times"+nLegs+"\\times"+fmt(Ab,2)+"\\times"+fmt(fyt,0)+"="+fmt(phiVr,2)+"\\ \\text{kip}\\quad\\text{vs }V_{ua}="+fmt(dem,2)+"\\ \\text{kip}\\Rightarrow\\text{DCR}="+fmtDCR(dcr,3)],
++      vars:[["\\phi","0.75","anchor reinforcement, §17.5.2.1(b)"],["A_b",fmt(Ab,2)+" in^2",K.tieSize+" "+(K.tieType==="spiral"?"spiral":"ties")],
++        ["hoops",hoops.map(h=>h.k+" (z "+fmt(h.z,2)+"): "+(h.legs?"2 legs":"not — "+h.why)).join("; "),"each closed hoop crossing the breakout body gives two legs across the failure surface, anchored by the continuous hoop behind them"]]}]};
++}
++/* Condition A / substitution for the circular-pier cage: the combination with the largest ΣT (tension) and the
++   largest V (shear) decides whether the cage qualifies (as tensionRebarIntercept / shearRebarIntercept do) */
++function bpCageQual(cc){
++  if(!bpCageOn() || !cc) return {t:false,v:false};
++  if(cc.__cageQ) return cc.__cageQ;
++  let cT=null, cV=null;
++  cc.combos.forEach(c=>{ if(!cT || (c.Tu_group||0)>(cT.Tu_group||0)) cT=c; if(!cV || (c.Vres||0)>(cV.Vres||0)) cV=c; });
++  const qt=cT&&(cT.Tu_group||0)>1e-9? bpCageTension(cT) : null, qv=cV&&(cV.Vres||0)>1e-9? bpCageShear(cV) : null;
++  cc.__cageQ={t:!!(qt&&qt.nEff>0), v:!!(qv&&qv.nEff>0)};
++  return cc.__cageQ;
++}
+ function conditionA(kind, cc){
++  if(bpCircPier()){ const q=bpCageQual(cc); return !!(kind==="tension"? q.t : q.v); }   /* BC-5: the pier cage (rectangular: below, unchanged) */
+   const R=(kind==="tension")? S.tRebar : S.vRebar;
+   if(!R || !R.present || !cc || __condAGuard) return false;
+@@ -3422,6 +3550,13 @@ function comboCapacities(cc, combo){
+      JUSTIFIED, not merely claimed — see substitutionJustified() above */
+   const __J=substitutionJustified(cc);
+-  const tSubst = S.tRebar.present && (__J? __J.t.justified : true);
+-  const vSubst = S.vRebar.present && (__J? __J.v.justified : true);
++  /* BC-5: circular pier — the cage replaces the concrete breakout once it is effective in this combination and its
++     detailing is confirmed (§17.5.2.1); rectangular pedestals unchanged */
++  const cageT = bpCageOn()? bpCageTension(combo) : null;
++  const cageTSub = !!(cageT && !cageT.none && cageT.nEff>0 && S.conc.cage.ackDetail);
++  const tSubst = cageTSub || (S.tRebar.present && (__J? __J.t.justified : true));
++  let vSubst = S.vRebar.present && (__J? __J.v.justified : true);
++  if(cageTSub) tensionModes.push({label:"Anchor reinforcement — pier cage (φNr)", ref:"§17.5.2.1(a)", per:"group",
++    phiN:cageT.phiEq, obj:cageT, dem:cageT.dem,
++    why:"The longitudinal bars of the pier cage within 0.5h_ef of the anchors in tension, developed on both sides of the breakout surface, carry the tension (concrete breakout replaced, §17.5.2.1)."});
+   if(!tSubst){
+     tensionModes.push({label:"Concrete breakout (φNcbg)", ref:"§17.6.2", per:"group",
+@@ -3495,4 +3630,14 @@ function comboCapacities(cc, combo){
+       why:"Bending of the exposed rod is resisted by each anchor individually."});
+   }
++  /* BC-5: the cage ties / spiral for shear, in the governing breakout direction (with torsion: the sweep's) */
++  let cageV=null, cageVSub=false;
++  if(bpCageOn()){
++    cageV = (sbkUse.torsion)? bpCageShear(combo, sbkUse.torsion.dir, sbkUse.torsion.D) : bpCageShear(combo);
++    cageVSub = !!(cageV && !cageV.na && cageV.nEff>0 && S.conc.cage.ackDetail);
++    if(cageVSub){ vSubst=true;
++      shearModes.push({label:"Anchor reinforcement — pier cage ties (φVr)", ref:"§17.5.2.1(b)", per:"group",
++        phiV:cageV.phiVr, obj:cageV, dem:cageV.dem,
++        why:"The cage ties / spiral crossing the shear breakout body carry the shear (concrete breakout replaced, §17.5.2.1)."}); }
++  }
+   if(!vSubst){
+     shearModes.push({label:"Concrete breakout (φVcbg)", ref:"§17.7.2", per:"group",
+@@ -3523,4 +3668,5 @@ function comboCapacities(cc, combo){
+ 
+   return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,
++    cageT:cageT||undefined, cageV:cageV||undefined, cageTSub:cageTSub||undefined, cageVSub:cageVSub||undefined,   /* BC-5 (circular pier only) */
+     tDemand,vDemand,tDCR,vDCR,govTfor,govVfor,
+     Tu_group:combo.Tu_group, Vu_group:combo.Vres};
+@@ -5478,5 +5624,29 @@ function buildInputPanel(){
+       fRow(body,"Apply §17.6.2.1.2 h_ef reduction to the circle",chkInput(()=>S.conc.circHefReduce!==false,v=>S.conc.circHefReduce=v),"",
+         "ACI 318-19 §17.6.2.1.2 is written for anchors within 1.5h<sub>ef</sub> of three or more <b>straight</b> edges. Applied here by analogy: the circle counts when it lies within 1.5h<sub>ef</sub> of the anchor group over at least 270° of its circumference; h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3). <b>By ticking this you accept that analogy.</b> It lowers N<sub>b</sub> and A<sub>Nco</sub> and raises A<sub>Nc</sub>/A<sub>Nco</sub>; the net effect on φN<sub>cbg</sub> (usually an increase, i.e. the less conservative result — R17.6.2.1.2 calls the unreduced result overly conservative) is shown with both values in the Concrete Embedment tab. Engineer decision 2026-11-01: applied by default.");
+-      body.appendChild(el("div","note","Circular pier: A_Nc / A_Vc are the projected areas clipped by the circle (exact), c_a is measured to the circle (radial for ψ_ed,N and side-face blowout), and shear breakout uses the tangent-edge model (the edge is the tangent to the circle where the shear direction meets it). Anchor and pedestal reinforcement are not available for a circular pier in this version (plain concrete, Condition B)."));
++      body.appendChild(el("div","note","Circular pier: A_Nc / A_Vc are the projected areas clipped by the circle (exact), c_a is measured to the circle (radial for ψ_ed,N and side-face blowout), and shear breakout uses the tangent-edge model (the edge is the tangent to the circle where the shear direction meets it). The rectangular anchor / pedestal reinforcement inputs do not apply; enter the pier cage below to credit it (§17.5.2.1)."));
++      /* BC-5 (2026-11-01): the pier cage as anchor reinforcement */
++      const K=S.conc.cage;
++      body.appendChild(el("h3",null,"Pier cage (anchor reinforcement, §17.5.2.1)"));
++      fRow(body,"Credit the pier cage",chkInput(()=>!!K.present,v=>K.present=v),"",
++        "Longitudinal bars within 0.5h<sub>ef</sub> of the anchors in tension and developed on both sides of the breakout surface (§17.5.2.1(a)); ties / spiral turns within 0.5c<sub>a1</sub> of the top crossing the shear breakout body (§17.5.2.1(b)); φ = 0.75. Worked on the Concrete Embedment tab.");
++      if(K.present){
++        fRow(body,"Longitudinal bars n",numInput(()=>K.nBars,v=>K.nBars=Math.max(4,Math.round(v)),1),"");
++        fRow(body,"Bar size",selInput(LIB.rebar,()=>K.barSize,v=>K.barSize=v,o=>o.size,o=>o.size),"");
++        fRow(body,"Bar grade",selInput(LIB.rebarGrades,()=>K.grade,v=>K.grade=v,o=>o.name,o=>o.id),"");
++        fRow(body,"Rotation of bar 1",numInput(()=>K.angle0,v=>K.angle0=v,7.5),"deg","Counter-clockwise from +x, pier coordinates.");
++        fRow(body,"Clear cover to ties / spiral",numInput(()=>K.cover,v=>K.cover=v,0.25),"in");
++        fRow(body,"Top of bars below the surface",numInput(()=>K.topCover,v=>K.topCover=v,0.25),"in");
++        fRow(body,"Standard hook at the top of the bars",chkInput(()=>!!K.topHook,v=>K.topHook=v),"","Development above the breakout surface by ℓ<sub>dh</sub> (§25.4.3.1) instead of ℓ<sub>d</sub>.");
++        fRow(body,"Transverse reinforcement",selInput([["tie","Circular ties (hoops)"],["spiral","Spiral"]],()=>K.tieType||"tie",v=>K.tieType=v,o=>o[1],o=>o[0]),"");
++        fRow(body,"Tie / spiral bar size",selInput(LIB.rebar,()=>K.tieSize,v=>K.tieSize=v,o=>o.size,o=>o.size),"");
++        fRow(body,"Tie / spiral grade",selInput(LIB.rebarGrades,()=>K.tieGrade||K.grade,v=>K.tieGrade=v,o=>o.name,o=>o.id),"");
++        fRow(body,"First tie / turn below the surface",numInput(()=>K.tieTop,v=>K.tieTop=v,0.25),"in","To the bar centreline.");
++        fRow(body,(K.tieType==="spiral"?"Spiral pitch":"Tie spacing"),numInput(()=>K.pitch,v=>K.pitch=v,0.25),"in");
++        fRow(body,"Cage detailing confirmed",chkInput(()=>!!K.ackDetail,v=>K.ackDetail=v),"",
++          "I confirm: deformed bars; ties closed per §25.7.2 (or spiral per §25.7.3, with its anchorage); longitudinal bars continuous through the breakout surface over the lengths shown. <b>Until ticked</b>, the cage only makes the concrete checks Condition A (φ = 0.75) where it qualifies; <b>when ticked</b>, its strength replaces the concrete breakout (§17.5.2.1).");
++        const G=bpCageGeom(); const n=el("div","note");
++        n.innerHTML="Bars on a circle of radius "+fmt(G.Rb,2)+"″ (chord "+fmt(G.chord,2)+"″, clear "+fmt(G.clear,2)+"″); ties at radius "+fmt(G.Rt,2)+"″. ℓ<sub>d</sub> = "+fmt(G.dev.ld,1)+"″"+(K.topHook?", ℓ<sub>dh</sub> = "+fmt(G.dev.ldh,1)+"″":"")+" (bars), ℓ<sub>d</sub> = "+fmt(G.devT.ld,1)+"″ (ties).";
++        body.appendChild(n);
++      }
+     } else {
+     fRow(body,"Pedestal width Bx",numInput(()=>S.conc.Bx,v=>S.conc.Bx=v,1),"in");
+@@ -6420,15 +6590,18 @@ function allChecks(){
+     push("po","Pullout","§17.6.3",(c.Tmax_anchor!==undefined?c.Tmax_anchor:c.Tu_per)/cap.po.phiNpn,"tabAnchor");
+     const _J=substitutionJustified(CC)||{t:{justified:false},v:{justified:false}};
+-    if(!(S.tRebar.present && _J.t.justified))
++    if(!(S.tRebar.present && _J.t.justified) && !cap.cageTSub)
+       push("tb","Concrete Breakout (T)","§17.6.2",c.Tu_group/cap.tb.phiNcbg,"tabConc");
++    /* BC-5: the pier cage (circular pier) */
++    if(cap.cageT && !cap.cageT.none) push("cgT","Anchor Reinf. Tension (pier cage)","§17.5.2.1(a)",cap.cageT.dcr,"tabConc");
++    if(cap.cageV && !cap.cageV.na) push("cgV","Anchor Reinf. Shear (cage ties)","§17.5.2.1(b)",cap.cageV.dcr,"tabConc");
+     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
+     if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb,"tabConc");
+     push("stV","Steel Shear","§17.7.1",c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac),"tabAnchor");
+-    if(!(S.vRebar.present && _J.v.justified)) push("sbk","Concrete Breakout (V)","§17.7.2",(cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg,"tabConc");
++    if(!(S.vRebar.present && _J.v.justified) && !cap.cageVSub) push("sbk","Concrete Breakout (V)","§17.7.2",(cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg,"tabConc");
+     push("pry","Pryout","§17.7.3",(cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg,"tabConc");
+     const it=interaction(cap.tDCR(c,cap.govTfor(c)),1,cap.vDCR(c,cap.govVfor(c)),1);
+     push("int","Combined T–V Interaction","§17.8",it.dcr,"tabAnchor");
+   });
+-  ["stT","po","tb","sfb","stV","sbk","pry","int"].forEach(k=>{ if(modes[k]) checks.push(modes[k]); });
++  ["stT","po","tb","cgT","sfb","stV","sbk","cgV","pry","int"].forEach(k=>{ if(modes[k]) checks.push(modes[k]); });
+   /* BP-T1 (2026-10-21): torqued anchors — ACI 318-19 Table 17.9.2a minimum spacing and edge distance (6dₐ) */
+   installRows().forEach(r=>checks.push(Object.assign({combo:"\u2014",tab:"tabAnchor"},r)));
+@@ -6463,10 +6636,12 @@ function dcrMatrix(){
+     if(!cap.po.na) put("po","Pullout","§17.6.3", (c.Tmax_anchor!==undefined?c.Tmax_anchor:c.Tu_per)/cap.po.phiNpn);
+     const _J=substitutionJustified(CC)||{t:{justified:false},v:{justified:false}};
+-    if(!(S.tRebar.present && _J.t.justified))
++    if(!(S.tRebar.present && _J.t.justified) && !cap.cageTSub)
+       put("tb","Breakout (T)","§17.6.2", c.Tu_group/cap.tb.phiNcbg);
++    if(cap.cageT && !cap.cageT.none) put("cgT","Cage (T)","§17.5.2.1(a)", cap.cageT.dcr);   /* BC-5 */
++    if(cap.cageV && !cap.cageV.na) put("cgV","Cage ties (V)","§17.5.2.1(b)", cap.cageV.dcr);
+     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
+     if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb);
+     put("stV","Steel shear","§17.7.1", c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac));
+-    if(!(S.vRebar.present && _J.v.justified)) put("sbk","Breakout (V)","§17.7.2", (cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg);
++    if(!(S.vRebar.present && _J.v.justified) && !cap.cageVSub) put("sbk","Breakout (V)","§17.7.2", (cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg);
+     put("pry","Pryout","§17.7.3", (cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg);
+     const la=standoffLeverArm(c);
+@@ -7495,6 +7670,20 @@ function buildConcTab(pg){
+      is skipped only for a JUSTIFIED substitution; a provisional one keeps the
+      full check on the page with a note explaining its status. */
+-  const tJust = S.tRebar.present && rebarJustified("tension",CC).justified;
+-  const vJust = S.vRebar.present && rebarJustified("shear",CC).justified;
++  const tJust = (S.tRebar.present && rebarJustified("tension",CC).justified) || !!cap.cageTSub;   /* BC-5: or the pier cage */
++  const vJust = (S.vRebar.present && rebarJustified("shear",CC).justified) || !!cap.cageVSub;
++  if(bpCageOn()) mkSection("coCage","Pier Cage as Anchor Reinforcement (§17.5.2.1)",body=>{   /* BC-5 */
++    const K=S.conc.cage;
++    body.appendChild(el("div",K.ackDetail?"note":"warnBox",K.ackDetail
++      ? "Detailing confirmed: where bars / ties are effective, the anchor reinforcement replaces the concrete breakout (§17.5.2.1); side-face blowout and pryout stay checked. Where at least one bar (tie leg) is effective the concrete checks are Condition A (φ = 0.75, Table 17.5.3)."
++      : "Detailing NOT yet confirmed (Pedestal input, pier cage): the cage is counted as supplementary reinforcement only — Condition A (φ = 0.75) on the concrete breakout and side-face blowout where it qualifies — and the concrete breakout stays checked. Confirm the detailing to use the cage instead of the concrete breakout."));
++    if(cap.cageT && !cap.cageT.none){ renderSteps(body,cap.cageT.steps);
++      dcrBox(body,cap.cageT.dcr,false,{load:cap.cageT.dem*forceFactor(),cap:cap.cageT.phiNr*forceFactor(),unit:forceUnit(),loadSym:"N_ua",capSym:"\u03c6N_r",
++        basis:"tension anchors of this combination; the larger of the group ratio and the per-anchor ratios"}); }
++    else body.appendChild(el("div","note","No anchor in tension in this combination."));
++    if(cap.cageV && !cap.cageV.na){ renderSteps(body,cap.cageV.steps);
++      dcrBox(body,cap.cageV.dcr,false,{load:cap.cageV.dem*forceFactor(),cap:cap.cageV.phiVr*forceFactor(),unit:forceUnit(),loadSym:"V_ua",capSym:"\u03c6V_r",
++        basis:"the critical row of the governing shear breakout case"}); }
++    else body.appendChild(el("div","note","No shear in this combination."));
++  },pg);
+   if(!tJust){
+     mkSection("coTB","3. Concrete Breakout — Tension",body=>{
+@@ -7518,6 +7707,9 @@ function buildConcTab(pg){
+   } else {
+     mkSection("coTBna","3. Concrete Breakout — Tension",body=>{
+-      body.appendChild(el("div","warnBox","Tension anchor reinforcement is present and the \u00a717.5.2.1.1 substitution is justified: concrete breakout in tension is replaced by the anchor-reinforcement steel check (see Tension Rebar tab)."));
++      body.appendChild(el("div","warnBox",cap.cageTSub? "The pier cage replaces the concrete breakout in tension (§17.5.2.1(a)): see “Pier Cage as Anchor Reinforcement” above." : "Tension anchor reinforcement is present and the \u00a717.5.2.1.1 substitution is justified: concrete breakout in tension is replaced by the anchor-reinforcement steel check (see Tension Rebar tab)."));
+     },pg);
++    if(cap.cageTSub) mkSection("coSFB","4. Side-Face Blowout",body=>{ renderSteps(body,cap.sfb.steps);   /* BC-5: stays checked with the cage */
++      if(cap.sfb.na) body.appendChild(el("div","warnBox","Not applicable — see condition above."));
++      else dcrBox(body,cap.sfb.demand/cap.sfb.phiNsb,false,{load:cap.sfb.demand*forceFactor(),cap:cap.sfb.phiNsb*forceFactor(),unit:forceUnit(),loadSym:"N_ua,edge",capSym:"\u03c6N_sbg",basis:"edge-row anchors in tension at the circular edge (\u00a717.6.4.2)"}); },pg);
+   }
+   if(!vJust){
+@@ -7533,5 +7725,5 @@ function buildConcTab(pg){
+   } else {
+     mkSection("coVBna","5. Concrete Breakout — Shear",body=>{
+-      body.appendChild(el("div","warnBox",(S.vRebar.pieceType==="closedtie")?   /* RPT-1: ties are not hairpins */
++      body.appendChild(el("div","warnBox",cap.cageVSub? "The pier cage ties / spiral replace the concrete breakout in shear (§17.5.2.1(b)): see “Pier Cage as Anchor Reinforcement” above." : (S.vRebar.pieceType==="closedtie")?   /* RPT-1: ties are not hairpins */
+         "Shear anchor reinforcement is present and the \u00a717.5.2.1(b) substitution is justified: concrete breakout in shear is replaced by the closed-tie steel check (see Shear Rebar tab)." :
+         "Shear anchor reinforcement is present and the \u00a717.5.2.1.2 substitution is justified: concrete breakout in shear is replaced by the hairpin steel check (see Shear Rebar tab)."));
+@@ -8475,5 +8667,7 @@ function drawPlan(body){
+   /* pedestal (below plate — dashed outline, light fill); BC-2: circular pier as a circle */
+   if(bpCircPier()){ const pc=circ(s,X(0),Y(0),(C.D/2)*sc,"#f2efe8","#8a8577",1.2); pc.setAttribute("stroke-dasharray","6 4");
+-    txt(s,X(C.D/2*0.72)+4,Y(C.D/2*0.72)-4,"circular pier Ø"+fmt(C.D,2)+"\u2033","lblTxt","start",9,"#8a8577"); }
++    txt(s,X(C.D/2*0.72)+4,Y(C.D/2*0.72)-4,"circular pier Ø"+fmt(C.D,2)+"\u2033","lblTxt","start",9,"#8a8577");
++    if(bpCageOn()){ const G=bpCageGeom(); const tc=circ(s,X(0),Y(0),G.Rt*sc,"none","#2e7d32",1); tc.setAttribute("stroke-dasharray","3 3");   /* BC-5: pier cage */
++      G.bars.forEach(b=>circ(s,X(b.x),Y(b.y),Math.max(2,G.rbL.db/2*sc),"#2e7d32","#1b5e20",0.8)); } }
+   else {
+   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
+@@ -9879,4 +10073,7 @@ function drawBreakout(body,c){
+     ext.circ.squares.forEach(q=>{ const r=document.createElementNS(SVGNS,"rect"); r.setAttribute("x",X(q[0])); r.setAttribute("y",Y(q[3])); r.setAttribute("width",(q[1]-q[0])*sc); r.setAttribute("height",(q[3]-q[2])*sc);
+       r.setAttribute("fill","#f0c8c8"); r.setAttribute("stroke","none"); gg.appendChild(r); });
++    if(bpCageOn()){ const ct=bpCageTension(c||{perAnchor:[]}), G=bpCageGeom();   /* BC-5: cage bars, effective ones in green */
++      (ct.bars&&ct.bars.length? ct.bars : G.bars).forEach(b=>tip(circ(s,X(b.x+ext.circ.cx),Y(b.y+ext.circ.cy),Math.max(2.5,G.rbL.db/2*sc),b.eff?"#2e7d32":"#bdbdbd",b.eff?"#1b5e20":"#757575",0.8),
++        "Cage bar "+b.n+(b.eff===undefined? "" : (b.eff? " — effective anchor reinforcement (§17.5.2.1(a))" : " — not effective: "+b.why)))); }
+     tip(circ(s,X(ext.circ.cx),Y(ext.circ.cy),ext.circ.R*sc,"none","#555",1.2),"A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the union of the anchors' 1.5h_ef squares clipped by the pier circle (exact).");
+   } else
+@@ -12095,5 +12292,15 @@ function validateInputs(){
+       if(over) warns.push("The base plate extends beyond the pier circle (overhang).");
+     }
+-    if(S.tRebar.present || S.vRebar.present || (S.ped&&S.ped.present)) errs.push({block:true, code:"model", msg:"Anchor reinforcement and pedestal reinforcement are not available for a circular pier in this version (the layouts are rectangular). Turn them off: concrete breakout is then checked as plain concrete, Condition B."});
++    if(S.tRebar.present || S.vRebar.present || (S.ped&&S.ped.present)) errs.push({block:true, code:"model", msg:"The rectangular anchor / pedestal reinforcement inputs do not apply to a circular pier (the layouts are rectangular). Turn them off and enter the pier cage (Pedestal input) instead."});
++    if(bpCageOn()){ const G=bpCageGeom(), K=S.conc.cage;   /* BC-5 */
++      if(!(G.Rb>0)) errs.push({block:true, code:"geometry", msg:"Pier cage: the bars do not fit inside the pier (radius "+fmt(G.Rb,2)+"″)."});
++      else {
++        if(G.clear<G.rbL.db) warns.push("Pier cage: clear spacing of the longitudinal bars "+fmt(G.clear,2)+"″ < d_b (§25.2.3 / §25.4.2.3 conditions).");
++        if(K.cover<1.5) warns.push("Pier cage: clear cover "+fmt(K.cover,2)+"″ is below 1.5 in (§20.5.1.3); for a drilled shaft cast against earth 3 in is typical.");
++        const q=bpPierPts(anchorGeom().pts), dmin=Math.min(...q.map(p=>Math.abs(Math.hypot(p.x,p.y)-G.Rb)));
++        if(dmin<(S.anchor.dia+G.rbL.db)/2+1.0) warns.push("Pier cage: an anchor is within "+fmt(dmin,2)+"″ (radially) of the bar circle; check the clearance between the anchors and the cage.");
++      }
++      if(!(+K.pitch>0)) errs.push({block:true, code:"input", msg:"Pier cage: tie spacing / spiral pitch must be positive."});
++    }
+     if(!window.SharedAnchorGeom) errs.push({block:true, code:"files", msg:"shared/anchor-geom.js is not loaded: keep the shared folder next to this file (needed for a circular pier)."});
+   }
+```
