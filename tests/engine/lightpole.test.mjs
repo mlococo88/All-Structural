@@ -122,3 +122,14 @@ test('Fig. 29.4-1: 8 in square post, 16 ft: h/D = 24 → 1.4 + (24 − 7)/(25 �
   // rectangular 8 × 6 in: D = least dimension 6 in → h/D = 35/0.5 = 70 → 2.0
   near(lp.call('cfPoleFig2941', lpDefaultInp({ poleShape: 'rect', poleDiaTop: 8, poleDiaBase: 8, poleDepthTop: 6, poleDepthBase: 6 })).cf, 2.0, 1e-12, 'rect');
 });
+
+/* ---------- LP-R6: pullout bearing area of the heavy hex nut (added 2026-11-01) ---------- */
+test('Pullout: 1 in heavy hex nut F = 1.625 in, A_brg = 0.866·1.625² − 0.785·1² = 1.5015 in²; φN_p = 0.70·8·1.5015·4000 = 33,632 lb', () => {
+  const lp = lpEngine();
+  const b = lp.call('anchorBolts', lpDefaultInp(), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 });
+  near(b.nutF, 1.625, 1e-12, 'F');
+  near(b.Abrg, Math.sqrt(3) / 2 * 1.625 ** 2 - Math.PI / 4, 1e-12, 'A_brg'); near(b.Abrg, 1.5015, 0.0001, 'A_brg');
+  near(b.phiNp, 0.70 * 8 * b.Abrg * 4000, 1e-9, 'φN_p'); near(b.phiNp, 33632, 1, 'φN_p');
+  // 1½ in: F = 2.375, A_brg = 0.866·2.375² − 0.785·1.5² = 3.118 in²
+  near(lp.call('anchorBolts', lpDefaultInp({ boltDia: 1.5 }), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 }).Abrg, 3.118, 0.0005, 'A_brg 1.5');
+});

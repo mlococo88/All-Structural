@@ -3432,6 +3432,11 @@ function tensileStressArea(d){
   const nThreads={0.750:10,0.875:9,1.000:8,1.125:7,1.250:7,1.500:6,1.750:5,2.000:4.5}[d]||8;
   return Math.PI/4*Math.pow(d-0.9743/nThreads,2);
 }
+// Heavy hex nut width across flats F (in) by nominal diameter d (in): ASME B18.2.2 (heavy hex nuts), F = 1.5d + 1/8 in for
+// the 3/4 – 2 in sizes of the bolt-diameter list (3/4: 1-1/4, 7/8: 1-7/16, 1: 1-5/8, 1-1/8: 1-13/16, 1-1/4: 2,
+// 1-1/2: 2-3/8, 1-3/4: 2-3/4, 2: 3-1/8). Added 2026-11-01 (LP-R6).
+const HEAVY_HEX_F={0.750:1.250,0.875:1.4375,1.000:1.625,1.125:1.8125,1.250:2.000,1.500:2.375,1.750:2.750,2.000:3.125};
+function heavyHexF(d){ return HEAVY_HEX_F[d]!==undefined ? HEAVY_HEX_F[d] : 1.5*d+0.125; }
 function anchorBolts(inp,gov,struct){
   const d=inp.boltDia, gr=F1554[inp.boltGrade], n=inp.boltQty;
   const BC=inp.boltBC, R=BC/2, hef=inp.boltHef;
@@ -3546,9 +3551,12 @@ function anchorBolts(inp,gov,struct){
   const edProv = torq ? ca17 : ca17 - d/2;                     // in
   const edOK = edProv >= edReq - 1e-9;
 
-  // ---- pullout (ACI §17.6.3), cast-in heavy hex head ----
-  // Abrg = bearing area of head ≈ heavy hex: 0.5·(3d)·(3d)·(√3/2)-... use table approx.
-  const Abrg=(d*d)*0.9;                      // heavy hex head bearing area approx (in²)
+  // ---- pullout (ACI §17.6.3), cast-in rod with a heavy hex nut at the embedded end ----
+  // 2026-11-01 (LP-R6): A_brg = net bearing area of the heavy hex nut = hex area across flats − rod area,
+  // A_brg = (√3/2)·F² − π·d²/4, F = width across flats of a heavy hex nut (ASME B18.2.2; F = 1.5d + 1/8 in), from HEAVY_HEX_F.
+  // Was A_brg = 0.9·d² (an approximation, about 60 % of the nut's net area for 1 in).
+  const nutF=heavyHexF(d);
+  const Abrg=Math.sqrt(3)/2*nutF*nutF - Math.PI*d*d/4;   // in²
   const Np=8*Abrg*fc;                        // §17.6.3.2.2a, lb (single)
   const psi_cp_po=1.0;                       // §17.6.3.3 cracked
   const Npn=psi_cp_po*Np;
@@ -3582,7 +3590,7 @@ function anchorBolts(inp,gov,struct){
   return {d,gr,n,BC,R,hef,th0,thM,Ase,bolts,sumY2,Tmax,Vb,VbT,Tu,tension,nT,Tsum,Mu,Pu,Vu,fc,lam,
           futa,Nsa,phiNsa,Vsa,phiVsa,
           kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,sfbApplies,
-          Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
+          nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
           m,beff,Fyp,tpReq,Dpole,
           torq,sAnch,sMinReq,spOK,edReq,edProv,edOK,sqShaft,ca17,caGovK:(caGovB?caGovB.k:1),caGovAng:(caGovB?caGovB.ang:0),splitW};
 }
@@ -4755,7 +4763,8 @@ function boltWorkedHTML(bo,inp){
   // 4 — pullout
   H+=step(`4 · Pullout strength, N<sub>pn</sub> ${ref('§17.6.3')}`);
   H+=`<p class="eq-why">Cast-in headed anchor: bearing of the head on the concrete. A<sub>brg</sub> is the net bearing area of the heavy-hex head; ψ<sub>c,P</sub> = 1.0 (cracked, conservative).</p>`;
-  H+=g(`A_{brg} \\approx 0.9\\,d^2 = 0.9(${fmt(bo.d,3)})^2 = ${fmt(bo.Abrg,2)}\\ \\text{in}^2\\quad(\\text{heavy-hex head, net of shank})`);
+  H+=`<p class="eq-why">Heavy hex nut at the embedded end of the rod (no plate washer). Width across flats F = 1.5d + 1/8 in (ASME B18.2.2, heavy hex nuts); A<sub>brg</sub> = hex area − rod area.</p>`;
+  H+=g(`F = 1.5d+\\tfrac18 = 1.5(${fmt(bo.d,3)})+0.125 = ${fmt(bo.nutF,4)}\\ \\text{in}\\qquad A_{brg} = \\tfrac{\\sqrt3}{2}F^2-\\tfrac{\\pi}{4}d^2 = 0.866(${fmt(bo.nutF,4)})^2-0.785(${fmt(bo.d,3)})^2 = ${fmt(bo.Abrg,3)}\\ \\text{in}^2`);
   H+=g(`N_p = 8\\,A_{brg}\\,f'_c = 8(${fmt(bo.Abrg,2)})(${fmt(bo.fc,0)}) = ${fmt(bo.Np,0)}\\ \\text{lb}`);
   H+=g(`N_{pn} = \\psi_{c,P}\\,N_p = ${fmt(bo.Npn,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{pn} = 0.70N_{pn} = ${fmt(bo.phiNp,0)}\\ \\text{lb}`);
 
@@ -5481,6 +5490,7 @@ const LPP_REFS=[
   ['ACI 318-19','Ch. 17: §17.5.1.2, §17.5.2.1 (anchor reinforcement), §17.6.1 to §17.6.4 (tension), §17.7.1 to §17.7.3 (shear), §17.8 (interaction), §17.9.1 to §17.9.4 (minimum spacing and edge distance, Table 17.9.2(a)); §20.5.1.3 (cover); §21.2, §22.2, §22.4 (axial and flexure), §22.5 (shear), §22.7.1.1 (threshold torsion); §10.3.1.2, §10.6.1.1, §10.7.6; §25.2.3, §25.7.2 (bar spacing, ties)'],
   ['AISC 360-16','§E3 (flexural buckling; §E7 noted, not applied), §F7 (rectangular / square HSS), §F8 (round HSS), §H1.1 (interaction), §H3.2 (torsion), Tables B4.1a / B4.1b, Appendix 8 (B₂), Commentary Table C-A-7.1 (K = 2.1)'],
   ['ASTM F1554','Anchor rods, Grades 36, 55 and 105'],
+  ['ASME B18.2.2','Heavy hex nuts: width across flats F = 1.5d + 1/8 in (pullout bearing area of the embedded nut)'],
   ['AASHTO LTS','Structural Supports for Highway Signs, Luminaires, and Traffic Signals, Commentary C13.6.1.1 (Broms embedment, reference check only); anchor rod tightening (snug-tight, then turn-of-nut pretension), the basis of the Torqued default; edition and article: verify']];
 function lppPageCSS(){
   const q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,' ');
