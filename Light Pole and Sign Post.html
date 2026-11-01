@@ -9,6 +9,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 <script src="shared/steps.js"></script><!-- LPRP: worked steps and the shared report viewer (Report tab) -->
 <script src="shared/report.js"></script>
+<script src="shared/dxf.js"></script><!-- LPDW: DXF writer and drawing preview (Drawings tab, Geometry elevation) -->
 <style>
   :root{
     --ink:#1a2230;--ink-soft:#5b6676;--paper:#f3f0e9;--panel:#ffffff;
@@ -358,6 +359,7 @@
   #reportBody .eq-title,#reportBody .step-label{color:#000;break-after:avoid}
   #reportBody .eqn{overflow-x:auto}
   .lppRptBtn{float:right;margin-left:auto}
+  .lpdBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px} .lpdHead{margin:6px 0} .lpdBox{border:1px solid var(--line);background:#fff}
   /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" on screen, "see §n.k" in the report */
   .wkLink{font-size:11.5px;color:#5b6676;margin:4px 0 2px} a.wkA{color:var(--steel);text-decoration:none;cursor:pointer} a.wkA:hover{text-decoration:underline}
   td>a.wkA{font-size:11.5px}
@@ -666,6 +668,7 @@
       <button data-tab="post">Post</button>
       <button data-tab="anchors">Anchors</button>
       <button data-tab="shaft">Shaft</button>
+      <button data-tab="drawings">Drawings</button>
       <button data-tab="report">Report</button>
       <button data-tab="calcsheet">Calc sheet</button>
       <button data-tab="manual">Manual</button>
@@ -677,6 +680,7 @@
     <div class="tabpage" data-page="post" id="page-post"></div>
     <div class="tabpage" data-page="anchors" id="page-anchors"></div>
     <div class="tabpage" data-page="shaft" id="page-shaft"></div>
+    <div class="tabpage" data-page="drawings" id="page-drawings"></div>
     <div class="tabpage" data-page="report" id="page-report"></div>
     <div class="tabpage" data-page="calcsheet" id="page-calcsheet"></div>
     <div class="tabpage" data-page="manual" id="page-manual"></div>
@@ -961,6 +965,7 @@
     </p>
 
     <!-- 11. FULL CALCULATION REPORT -->
+    <section class="card lpdCard" data-tab="drawings"><div class="card-h"><span class="num">D</span><h2>Drawings</h2><span class="hint">to scale · DXF</span></div><div class="card-body" id="lpdHost"></div></section>
     <section class="card lprCard" data-tab="report"><div class="card-body" id="lprHost"></div></section>
     <section class="card report" data-tab="calcsheet">
       <div class="card-h"><span class="num">11</span><h2>Calculation report</h2><span class="hint">every equation, symbolic → numeric</span><button class="btn mini ghost noprint lppRptBtn" id="lppRptPrint" title="Print the calculation report, or save it as PDF">Print / PDF report</button></div>
@@ -5682,7 +5687,7 @@ function renderSignWindExample(sw,inp){
 // derivation functions shared with the tabs).
 let LPP_SUMCTX=null;   // the Summary context of the last calc() (set by renderSummary)
 const lppEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft',report:'Report',calcsheet:'Calc sheet'};
+const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft',drawings:'Drawings',report:'Report',calcsheet:'Calc sheet'};
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
@@ -5862,6 +5867,7 @@ function lppReportDoc(H,meta){
     renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
   }
   if(typeof lprRefresh==='function') lprRefresh();   // LPRP: rebuild the shared Report tab when it is shown
+  if(typeof lpdActive==='function' && lpdActive()) lpdRender();   // LPDW
 }
 
 // ================= CALCULATION REPORT =================
@@ -6174,6 +6180,9 @@ function arrow(x1,y1,x2,y2,color,w){
 
 // ---------- ELEVATION ----------
 function drawElev(b,d,H,hc,bars,shape){
+  // 2026-11-01 (LPDW): the elevation is drawn to scale from the drawing set (pole, arms, fixtures, cables, base plate, shaft);
+  // the former schematic below (shaft width clamped to 60–120 px) is only the fallback when shared/dxf.js is not loaded.
+  if(typeof lpdElevGeometry==='function' && lpdElevGeometry()) return;
   const W=460,Hh=420,cx=200,mT=20;
   const isSq=(shape==='square');
   const gradeY=mT+ (H/(H+d))*(Hh-60);
@@ -6730,6 +6739,206 @@ function lprGoto(name){ if(lppOutTabValid(name)){ switchTab(name); const b=docum
 function lprActive(){ const p=$('page-report'); return !!(p&&p.classList.contains('on')); }
 function lprRefresh(){ if(lprActive()) lprRender(); }
 
+// ================= DRAWINGS (LPDW, added 2026-11-01) =================
+// The drawing set as one DXF R12 file (shared/dxf.js: SharedDxf.drawing → toDXF), previewed in the Drawings tab from the same
+// entities (SharedDxf.toSVG, SharedDxf.viewer), as in Spread Footing (#521). Display and export only: every dimension comes from
+// the inputs and the tool's own results (LPP_SUMCTX: embedment d, bars, ties; LPP_LAST: the sign geometry). Model space, full
+// size in inches; each sheet is a B-size sheet (17 × 11 in) at its plot scale with border and title block (no owner cell), side by
+// side. The Geometry tab's elevation is the same elevation view, to scale (it replaces the schematic whose shaft width was clamped).
+// Nothing is saved except the chosen sheet (per-browser UI key lpp_dwgSheet_v1).
+const LPDW_SCALES=[[4,'3" = 1\'-0"'],[6,'2" = 1\'-0"'],[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[32,'3/8" = 1\'-0"'],[48,'1/4" = 1\'-0"'],[64,'3/16" = 1\'-0"'],[96,'1/8" = 1\'-0"'],[192,'1/16" = 1\'-0"']];
+const LPDW={W:17,H:11,m:0.375,tbH:1.0,key:'lpp_dwgSheet_v1',cur:null,B:null};
+function lpdLayers(D){ return {conc:D.layer('CONC',7),pole:D.layer('POLE',4),arm:D.layer('ARM',4),fix:D.layer('FIXT',2),cab:D.layer('CABLE',5,'DASHED'),
+  bar:D.layer('REBAR',1),dim:D.layer('DIMS',3),txt:D.layer('TEXT',7),cl:D.layer('CNTR',8,'CENTER'),soil:D.layer('SOIL',30),plate:D.layer('PLATE',6),bolt:D.layer('BOLT',30),tb:D.layer('TBLK',7),br:D.layer('BRDR',7),sign:D.layer('SIGN',2)}; }
+// geometry of one stack's shaft (inches): bars at their circle / square, ties
+function lpdShaft(st, inp){
+  const reo=st.found.reo, Lg=reo.long, T=reo.tie, b=inp.b*12, sq=inp.shaftShape==='square';
+  return {b, sq, d:st.found.d*12, n:Lg.n, bar:Lg.bar, rbar:Lg.rbar, tie:T.bar, s:T.s, sTop:T.sTop, zoneH:T.zoneH, cover:inp.cover,
+    pts: sq ? barLayoutSquare(Lg.n, Lg.rbar) : barLayoutRound(Lg.n, Lg.rbar)};
+}
+// ELEVATION (model inches, origin: grade at the pole / post-group centre line). k = plot scale (text heights in paper inches · k)
+function lpdElevation(D, L, k, ctx){
+  const inp=ctx.inp, h=0.1*k, sign=ctx.mode==='sign', st0=ctx.stacks[0];
+  const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
+  const H=inp.H*12, tP=inp.bpT>0?inp.bpT:0, bp=inp.bpDia||0;
+  const Db=inp.poleDiaBase, Dt=sign?inp.poleDiaBase:inp.poleDiaTop;
+  posts.forEach((px,pi)=>{
+    const st=ctx.stacks[Math.min(pi,ctx.stacks.length-1)], sh=lpdShaft(st,inp);
+    // shaft
+    D.rect(L.conc, px-sh.b/2, -sh.d, px+sh.b/2, 0);
+    const xr=sh.sq ? sh.rbar : sh.rbar;
+    D.line(L.bar, px-xr, -sh.d+sh.cover, px-xr, -2, D.ltype('HIDDEN')); D.line(L.bar, px+xr, -sh.d+sh.cover, px+xr, -2, D.ltype('HIDDEN'));
+    if(pi===posts.length-1) D.text(L.txt, px+sh.b/2+0.15*k, -sh.d/2, h, (posts.length>1?'EACH SHAFT: ':'')+'('+sh.n+') '+sh.bar.n+' VERT., '+sh.tie.n+' TIES @ '+fmt(sh.s,0)+'" ('+fmt(sh.sTop,0)+'" TOP '+fmt(sh.zoneH,0)+'")', 0);
+    // base plate and pole / post
+    if(bp>0) D.rect(L.plate, px-bp/2, 0, px+bp/2, tP);
+    D.pline(L.pole, [[px-Db/2,tP],[px-Dt/2,H],[px+Dt/2,H],[px+Db/2,tP]], true);
+    D.line(L.cl, px, -sh.d-0.3*k, px, H+0.3*k, D.ltype('CENTER'));
+    D.dimV(L.dim, -sh.d, 0, px-sh.b/2-0.6*k, px-sh.b/2, 'd = <>');
+    D.dimH(L.dim, px-sh.b/2, px+sh.b/2, -sh.d-0.5*k, -sh.d, (sh.sq?'b = <> SQ':'b = <> DIA'));
+  });
+  // grade
+  const xs=posts.map(p=>p), xmin=Math.min(...xs)-inp.b*12-2*k, xmax=Math.max(...xs)+inp.b*12+2*k;
+  D.line(L.soil, xmin, 0, xmax, 0);
+  for(let x=xmin; x<xmax-0.2*k; x+=0.25*k) D.line(L.soil, x, 0, x-0.12*k, -0.12*k);
+  D.text(L.txt, xmax, 0.05*k, h, 'GRADE', 2);
+  if(!sign){
+    D.dimV(L.dim, 0, H, -Math.max(inp.b*6, 24)-1.2*k, -Db/2, 'H = <>');
+    // arms and fixtures (projected on the x–z plane: x = a·cosθ)
+    fixtures.forEach((f,i)=>{ const z=f.hf*12, x=f.a*12*Math.cos(f.th*RAD), s=Math.max(Math.sqrt(Math.max(f.epa,0))*12, 6);
+      if(f.a>0) D.line(L.arm, 0, z, x, z);
+      D.rect(L.fix, x-s/2, z-s, x+s/2, z);
+      D.text(L.txt, x, z+0.1*k, h, 'F'+(i+1)+' (AZ '+fmt(f.th,0)+'°, a '+fmt(f.a,1)+'\')', 1); });
+    // cable attachments (direction projected on x)
+    if(cablesEnabled) cables.forEach((c,i)=>{ const z=c.hc*12, ux=Math.cos(c.th*RAD), len=2.0*k;
+      D.circle(L.cab, 0, z, 0.04*k); D.line(L.cab, 0, z, ux*len, z-0.4*k);
+      D.text(L.txt, ux*len+(ux>=0?0.05:-0.05)*k, z-0.45*k, 0.08*k, 'C'+(i+1)+' @ '+fmt(c.hc,1)+'\'', ux>=0?0:2); });
+  } else {
+    const B=inp.signB*12, s=inp.signS*12, clr=inp.signClr*12;
+    D.rect(L.sign, -B/2, clr, B/2, clr+s);
+    D.text(L.txt, 0, clr+s/2-h/2, h, 'SIGN PANEL '+fmt(inp.signB,1)+'\' x '+fmt(inp.signS,1)+'\'', 1);
+    D.dimV(L.dim, 0, clr, -B/2-0.8*k, -B/2, 'CLR = <>');
+    D.dimV(L.dim, clr, clr+s, -B/2-0.8*k, -B/2, '<>');
+    if(posts.length===2) D.dimH(L.dim, posts[0], posts[1], clr+s+0.6*k, clr+s, 'Lp = <>');
+  }
+  D.text(L.txt, xmin, -Math.max(...ctx.stacks.map(st=>st.found.d))*12-1.2*k, 0.14*k, 'ELEVATION', 0);
+}
+// PLAN (looking down; +x to the right, +y up)
+function lpdPlan(D, L, k, ctx){
+  const inp=ctx.inp, h=0.1*k, sign=ctx.mode==='sign';
+  const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
+  posts.forEach(px=>{ const b=inp.b*12;
+    if(inp.shaftShape==='square') D.rect(L.conc, px-b/2, -b/2, px+b/2, b/2); else D.circle(L.conc, px, 0, b/2);
+    if(inp.bpDia>0) D.circle(L.plate, px, 0, inp.bpDia/2);
+    if(inp.poleShape==='round') D.circle(L.pole, px, 0, inp.poleDiaBase/2);
+    else { const w=inp.poleDiaBase, dd=inp.poleShape==='rect'?inp.poleDepthTop:w; D.rect(L.pole, px-dd/2, -w/2, px+dd/2, w/2); }
+    const R=inp.boltBC/2; for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, px+R*Math.cos(a), R*Math.sin(a), inp.boltDia/2); }
+  });
+  const ext=Math.max(inp.b*6, 12)+1.0*k;
+  D.line(L.cl, -ext+Math.min(...posts), 0, ext+Math.max(...posts), 0, D.ltype('CENTER')); D.line(L.cl, 0, -ext, 0, ext, D.ltype('CENTER'));
+  D.text(L.txt, ext+Math.max(...posts)+0.06*k, -h/2, h, '+x (0°)', 0); D.text(L.txt, 0, ext+0.06*k, h, '+y (90°)', 1);
+  if(!sign){
+    fixtures.forEach((f,i)=>{ const x=f.a*12*Math.cos(f.th*RAD), y=f.a*12*Math.sin(f.th*RAD), s=Math.max(Math.sqrt(Math.max(f.epa,0))*12,6);
+      D.line(L.arm, 0, 0, x, y); D.rect(L.fix, x-s/2, y-s/2, x+s/2, y+s/2); D.text(L.txt, x, y+s/2+0.06*k, h, 'F'+(i+1), 1); });
+    if(cablesEnabled) cables.forEach((c,i)=>{ const ux=Math.cos(c.th*RAD), uy=Math.sin(c.th*RAD), r0=inp.b*6, r1=r0+2.5*k;
+      D.line(L.cab, ux*r0, uy*r0, ux*r1, uy*r1); D.text(L.txt, ux*(r1+0.15*k), uy*(r1+0.15*k)-h/2, h, 'C'+(i+1)+' '+fmt(c.th,0)+'°', ux>=0?0:2); });
+  } else {
+    const B=inp.signB*12; D.line(L.sign, -B/2, inp.poleDiaBase, B/2, inp.poleDiaBase); D.text(L.txt, 0, inp.poleDiaBase+0.08*k, h, 'SIGN PANEL (WIND NORMAL: ±x)', 1);
+  }
+  D.text(L.txt, -ext, -ext-0.4*k, 0.14*k, 'PLAN', 0);
+}
+// SHAFT SECTION (one per distinct shaft)
+function lpdSection(D, L, k, ctx, si){
+  const inp=ctx.inp, h=0.1*k, sh=lpdShaft(ctx.stacks[si], inp), b=sh.b;
+  if(sh.sq) D.rect(L.conc, -b/2, -b/2, b/2, b/2); else D.circle(L.conc, 0, 0, b/2);
+  const rt=sh.rbar+sh.bar.d/2+sh.tie.d/2;
+  if(sh.sq) D.rect(L.bar, -rt, -rt, rt, rt); else D.circle(L.bar, 0, 0, rt);
+  sh.pts.forEach(p=>D.circle(L.bar, p.x, p.y, sh.bar.d/2));
+  D.dimH(L.dim, -b/2, b/2, -b/2-0.5*k, -b/2, sh.sq?'<> SQ':'<> DIA');
+  D.text(L.txt, b/2+0.3*k, 0.2*k, h, '('+sh.n+') '+sh.bar.n+' EQ. SPACED', 0);
+  D.text(L.txt, b/2+0.3*k, 0, h, sh.tie.n+' TIES @ '+fmt(sh.s,0)+'" ('+fmt(sh.sTop,0)+'" WITHIN TOP '+fmt(sh.zoneH,0)+'")', 0);
+  D.text(L.txt, b/2+0.3*k, -0.2*k, h, fmt(sh.cover,1)+'" CLEAR COVER TO TIES', 0);
+  D.text(L.txt, -b/2, -b/2-1.1*k, 0.14*k, 'SHAFT SECTION'+(ctx.stacks.length>1?' — POST '+(si+1):''), 0);
+}
+// BASE PLATE (plan of the plate with the rod holes; thickness and grade from the inputs; t_req from the bending-line check)
+function lpdPlate(D, L, k, ctx){
+  const inp=ctx.inp, h=0.1*k, b=ctx.stacks[0].found.bolts, p=(b&&b.byCheck&&b.byCheck.BP)||b;
+  const R=inp.boltBC/2, rp=inp.bpDia/2;
+  D.circle(L.plate, 0, 0, rp);
+  if(inp.poleShape==='round') D.circle(L.pole, 0, 0, inp.poleDiaBase/2); else D.rect(L.pole, -inp.poleDiaBase/2, -inp.poleDiaBase/2, inp.poleDiaBase/2, inp.poleDiaBase/2);
+  D.circle(L.cl, 0, 0, R);
+  for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, R*Math.cos(a), R*Math.sin(a), inp.boltDia/2+0.0625); }
+  D.dimH(L.dim, -rp, rp, -rp-0.5*k, -rp, 'PL <> DIA');
+  D.dimH(L.dim, -R, R, rp+0.5*k, R, 'BC <>');
+  const lines=['PLATE '+fmt(inp.bpT,3)+'" THICK, Fy = '+fmt(inp.bpFy||36,0)+' KSI',
+    p?'t REQ = '+fmt(p.tpReq,3)+'" (BENDING LINE AT POLE FACE, DOUBLE-NUT)':'',
+    '('+inp.boltQty+') '+fmt(inp.boltDia,3)+'" F1554 GR '+inp.boltGrade+' RODS ON '+fmt(inp.boltBC,2)+'" BC, h_ef = '+fmt(inp.boltHef,1)+'"'];
+  lines.filter(Boolean).forEach((s,j)=>D.text(L.txt, rp+0.4*k, 0.2*k-j*0.2*k, h, s, 0));
+  D.text(L.txt, -rp, -rp-1.1*k, 0.14*k, 'BASE PLATE', 0);
+}
+function lpdBuild(){
+  const ctx=LPP_SUMCTX; if(!ctx) throw new Error('no results yet');
+  const D=SharedDxf.drawing({prefix:'S-'}), S=[], L=lpdLayers(D), proj=activeProject||'';
+  const AW=LPDW.W-2*LPDW.m-0.5, AH=LPDW.H-2*LPDW.m-LPDW.tbH-0.6;
+  let ox=0;
+  function sheet(id,title,content,fixedK){
+    const i0=D.mark(); let k=null, over=false;
+    const ks=fixedK?[fixedK]:LPDW_SCALES.map(s=>s[0]);
+    for(const kk of ks){ D.E.length=i0; D.k=kk; D.h=0.1*kk; content(kk); const b=D.bbox(i0);
+      if(!isFinite(b[0])||((b[2]-b[0])/kk<=AW&&(b[3]-b[1])/kk<=AH)){ k=kk; break; } }
+    if(k===null){ k=ks[ks.length-1]; over=true; }
+    const b=D.bbox(i0), W=LPDW.W*k, H=LPDW.H*k, mm=LPDW.m*k, tb=LPDW.tbH*k;
+    const cx=ox+W/2, cy=mm+tb+0.3*k+(AH*k)/2;
+    if(isFinite(b[0])) D.move(i0, cx-(b[0]+b[2])/2, cy-(b[1]+b[3])/2);
+    D.k=k; D.h=0.1*k;
+    D.rect(L.br, ox, 0, ox+W, H); D.rect(L.br, ox+mm, mm, ox+W-mm, H-mm);
+    const x0=ox+mm, y0=mm, w=(LPDW.W-2*LPDW.m)*k, r=tb/2, sc=k===1?'NTS':(LPDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1];
+    D.rect(L.tb, x0, y0, x0+w, y0+tb); D.line(L.tb, x0, y0+r, x0+w, y0+r);
+    const row1=[['PROJECT',proj,4.25],['PROJECT NO.','',2],['CALCULATED BY','',2],['DATE','',1.75],['CHECKED BY','',2],['CHECKED DATE','',1.75],['SCALE',sc,2.5]];
+    const row2=[['SHEET TITLE',title,8.25],['DRAWN BY','LIGHT POLE AND SIGN POST (DRAWINGS TAB)',5],['SHEET','?',3]];
+    let sheetEnt=null;
+    [[row1,y0+r],[row2,y0]].forEach(([row,yb])=>{ let x=x0; row.forEach(([lab,val,cw],ci)=>{
+      D.text(L.tb, x+0.05*k, yb+r-0.11*k, 0.065*k, lab, 0);
+      const mx=Math.floor((cw-0.12)/(0.13*0.9)); D.text(L.tb, x+0.05*k, yb+0.1*k, 0.13*k, String(val==null||val===''?'—':val).toUpperCase().slice(0,mx), 0);
+      if(lab==='SHEET') sheetEnt=D.E[D.E.length-1];
+      x+=cw*k; if(ci<row.length-1) D.line(L.tb, x, yb, x, yb+r); }); });
+    const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt}; S.push(sh); ox+=W+1*k; return sh;
+  }
+  sheet('elev', ctx.mode==='sign'?'SIGN ELEVATION':'POLE ELEVATION', k=>lpdElevation(D,L,k,ctx));
+  sheet('plan', 'PLAN', k=>lpdPlan(D,L,k,ctx));
+  ctx.stacks.forEach((st,si)=>{ if(si>0 && ctx.stacks[0].found.reo.long.n===st.found.reo.long.n && ctx.stacks[0].found.reo.long.bar.n===st.found.reo.long.bar.n) return;
+    sheet('sec'+si, 'SHAFT SECTION'+(si?' — POST '+(si+1):''), k=>lpdSection(D,L,k,ctx,si)); });
+  sheet('plate', 'BASE PLATE', k=>lpdPlate(D,L,k,ctx));
+  sheet('notes', 'GENERAL NOTES', ()=>{
+    const inp=ctx.inp, st=ctx.stacks;
+    const notes=['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-22 (WIND, ICE, COMBINATIONS), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT, ANCHORS); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
+      'EMBEDMENT d = '+st.map(s=>fmt(s.found.d,2)+'\'').join(' / ')+' BELOW GRADE (IBC §1807.3, '+(constraint==='non'?'NON-CONSTRAINED':'CONSTRAINED')+'), SHAFT '+(inp.shaftShape==='square'?'':'DIA. ')+fmt(inp.b,2)+'\''+(inp.shaftShape==='square'?' SQUARE':'')+'.',
+      'CONCRETE f\'c = '+fmt(inp.fc,0)+' PSI; REINFORCEMENT f_y = '+fmt(inp.fy,0)+' PSI; CLEAR COVER '+fmt(inp.cover,1)+'".',
+      'BASIC WIND SPEED V = '+fmt(inp.V,0)+' MPH, EXPOSURE '+inp.expo+'.'+(ctx.mode==='sign'?'':' ICE t = '+fmt(inp.tIce,2)+'" ('+(inp.iceBasis==='map'?'MAP VALUE, t_d BY HEIGHT':'UNIFORM')+'), V_ice = '+fmt(inp.Vice,0)+' MPH.'),
+      'ANCHOR RODS ASTM F1554 GR '+inp.boltGrade+', '+(inp.anchTq==='torqued'?'PRETENSIONED (TURN-OF-NUT)':'NOT PRETENSIONED')+'; LEVELING NUTS (DOUBLE-NUT BASE).',
+      'THE SOIL TORSIONAL RESISTANCE, ANCHOR SHEAR BREAKOUT AND SIDE-FACE BLOWOUT ARE NOT CHECKED BY THE TOOL.',
+      'SEE THE CALCULATION REPORT (REPORT TAB) FOR THE DESIGN; THESE DRAWINGS SHOW THE GEOMETRY AS ENTERED AND THE SHAFT AS DESIGNED / CHECKED BY THE TOOL.'];
+    D.text(L.txt, 0, 0.3, 0.16, 'GENERAL NOTES', 0);
+    let y=0; const hh=0.11, mx=Math.floor(15/(hh*0.9));
+    notes.forEach((s,j)=>{ const words=String(s).split(/\s+/); let line=(j+1)+'. '; const out=[];
+      words.forEach(w=>{ if((line+w).length>mx){ out.push(line); line='    '+w+' '; } else line+=w+' '; }); out.push(line);
+      out.forEach(l=>{ D.text(L.txt, 0, y, hh, l.trimEnd(), 0); y-=0.2; }); y-=0.08; });
+  }, 1);
+  S.forEach((s,j)=>{ s.sheetEnt.s=SharedDxf.str((j+1)+' OF '+S.length); });
+  return {D,S};
+}
+function lpdSheetSVG(B,s){ return SharedDxf.toSVG(B.D,{i0:s.i0,i1:s.i1,bg:'#fff',title:s.title,pad:0}); }
+function lpdRender(){
+  const T=$('lpdHost'); if(!T) return;
+  if(!window.SharedDxf){ T.innerHTML='<div class="flag bad">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>'; return; }
+  if($('lppInErr')&&$('lppInErr').classList.contains('on')){ T.innerHTML='<div class="flag bad">No drawings: correct the input errors.</div>'; return; }
+  let B; try{ B=lpdBuild(); }catch(e){ T.innerHTML='<div class="flag bad">The drawings could not be drawn: '+lppEsc(e&&e.message)+'</div>'; return; }
+  LPDW.B=B;
+  let want=LPDW.cur; if(!want){ try{ want=localStorage.getItem(LPDW.key)||''; }catch(e){ want=''; } }
+  const cur=B.S.find(s=>s.id===want)||B.S[0]; LPDW.cur=cur.id;
+  const scName=k=>k===1?'NTS (paper inches)':((LPDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
+  T.innerHTML='<div class="lpdBar"><label>Sheet <select id="lpdSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+lppEsc(s.title)+'</option>').join('')+'</select></label> '+
+    '<button type="button" class="btn mini ghost" id="lpdDxf">Download DXF ('+B.S.length+' sheets)</button></div>'+
+    '<p class="tbl-note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR.</p>'+
+    '<div class="lpdHead"><b>'+(B.S.indexOf(cur)+1)+'. '+lppEsc(cur.title)+'</b> · scale '+lppEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
+    '<div class="lpdBox"></div><p class="tbl-note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</p>';
+  SharedDxf.viewer(T.querySelector('.lpdBox'), lpdSheetSVG(B,cur), {height:'64vh'});
+  T.querySelector('#lpdSheet').addEventListener('change',e=>{ LPDW.cur=e.target.value; try{ localStorage.setItem(LPDW.key,LPDW.cur); }catch(er){} lpdRender(); });
+  T.querySelector('#lpdDxf').addEventListener('click',()=>{ const txt=B.D.toDXF({ltscale:1}), chk=SharedDxf.validate(txt);
+    if(!chk.ok){ alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n')); return; }
+    SharedDxf.download(txt, (activeProject||'light_pole').replace(/[^\w.-]+/g,'_')+'_drawings.dxf'); });
+}
+function lpdActive(){ const p=$('page-drawings'); return !!(p&&p.classList.contains('on')); }
+// The Geometry tab's elevation, to scale: the same elevation view (no sheet), as SVG
+function lpdElevGeometry(){
+  const box=$('elevDraw'); if(!box||!window.SharedDxf||!LPP_SUMCTX) return false;
+  const D=SharedDxf.drawing({prefix:'S-'}), L=lpdLayers(D);
+  const ctx=LPP_SUMCTX, ext=Math.max(ctx.inp.H*12, ctx.inp.b*12*3), k=Math.max(4, ext/16);   // screen: larger text than the sheets
+  D.k=k; D.h=0.1*k; lpdElevation(D,L,k,ctx);
+  box.innerHTML=SharedDxf.toSVG(D,{bg:'#fff',pad:0.04*ext,title:'Elevation, to scale'});
+  const sv=box.querySelector('svg'); if(sv){ sv.style.width='100%'; sv.style.height='auto'; sv.style.maxHeight='520px'; }
+  return true;
+}
+
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
 const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
@@ -7032,6 +7241,7 @@ function switchTab(name){
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
   try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){}
   if(name==='report' && typeof lprRender==='function') lprRender();   // LPRP: the shared Report tab is built when shown
+  if(name==='drawings' && typeof lpdRender==='function') lpdRender(); // LPDW: the Drawings tab is built when shown
 }
 document.querySelectorAll('#tabBar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 
