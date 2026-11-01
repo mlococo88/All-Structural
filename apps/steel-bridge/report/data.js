@@ -54,7 +54,7 @@
     // opt.src 'tabs' (custom demands PR, 2026-11-01): a module whose tab has "Custom (entered)" chosen (P.demandSrc) takes its entered rows,
     // the rest this project's analysis
     const CD = W().SBDCustomDemands, cu = k => opt.src === 'tabs' && !!CD && CD.srcGet(P, k) === 'custom';
-    const B = { P, g, src, pl, plName: opt.plName || '', err: {}, girder: P.girders[g] || P.girders[0], t: {}, custom: ['flex', 'shear', 'cn', 'fat', 'rt'].filter(cu).length ? { flex: cu('flex'), shear: cu('shear'), cn: cu('cn'), fat: cu('fat'), rt: cu('rt') } : null };
+    const B = { P, g, src, pl, plName: opt.plName || '', err: {}, girder: P.girders[g] || P.girders[0], t: {}, custom: ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(cu).length ? { flex: cu('flex'), shear: cu('shear'), cn: cu('cn'), fat: cu('fat'), rt: cu('rt'), spl: cu('spl'), wt: cu('wt') } : null };
     if (src === 'file' && !pl) { B.err.all = 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).'; return B; }
     const AN = W().SBDAnalysis, orig = AN && AN.analyzeGirder, memo = new Map();
     const pk = AN ? pkOf(P) : '';
@@ -76,9 +76,10 @@
       if (on('fat') || on('sum')) B.fat = run('fat', () => W().SBDFatigueUI.build(cu('fat') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
       if (on('cn') || on('sum')) B.cn = run('cn', () => W().SBDConstrUI.build(cu('cn') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'project' }));
       if (on('frm') || on('sum')) B.frm = run('frm', () => W().SBDFramingUI.build({ P, g }));
-      if ((on('spl') || on('sum')) && src === 'analysis') B.spl = run('spl', () => { if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
+      if ((on('spl') || on('sum')) && cu('spl')) B.spl = run('spl', () => W().SBDSplicesUI.build({ P, g, src: 'custom' }));
+      else if ((on('spl') || on('sum')) && src === 'analysis') B.spl = run('spl', () => { if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
         if (!B.an) return { err: B.err.an || 'No analysis.' }; return W().SBDSplices.girder(P, g, B.an, { env: W().SBDSplicesUI.envOf(P) }); });
-      if (on('wd') || on('sum')) B.wd = run('wd', () => W().SBDWeldsUI.build(src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'analysis' }));
+      if (on('wd') || on('sum')) B.wd = run('wd', () => W().SBDWeldsUI.build(cu('wt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'analysis' }));
     } finally { if (AN) AN.analyzeGirder = orig; }
     B.sup = B.an ? B.an.sup : pl ? ((pl.member || {}).supports || []).map(Number) : null;
     return B;

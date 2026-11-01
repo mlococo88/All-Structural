@@ -336,3 +336,66 @@ test('Report, each tab\'s choice: Constructibility, Fatigue and Rating on Custom
   for (const [id, n] of [['cn', 1], ['fat', 1], ['rt', 2]]) { const sec = M.sections.find(s => s.id === id), cds = sec.subs.filter(q => /^cd/.test(q.id)); assert.equal(cds.length, n, id); }
   const stF = M.sections.find(s => s.id === 'cn').subs.flatMap(q => q.items).filter(i => i.type === 'steps'); assert.ok(stF.some(i => i.steps.some(s => s.id === 'cd.src')));
 });
+
+/* splice rows from the analysis demands at each splice (engine/splices.js p.dem): LL+IM without the pedestrian part (its own column) */
+const splRows = G => G.list.map(s => { const d = s.p.dem, pl = d.pl || {}, q = k => (pl[k] ? pl[k][0] : 0), ut = d.ut || {};
+  return { x: s.x, M_DC1: d.MDC1, M_DC2: d.MDC2, M_DW: d.MDW, M_LLpos: d.MLLp - q('MLLp'), M_LLneg: d.MLLn - q('MLLn'), M_PLpos: q('MLLp'), M_PLneg: q('MLLn'), M_CL: d.MCL, M_UT: ut.MUT || 0, M_UF: ut.MUF || 0,
+    M_FATpos: d.dMp, M_FATneg: -d.dMn, V_DC1: d.VDC1, V_DC2: d.VDC2, V_DW: d.VDW, V_LL: d.VLL - q('VLL'), V_PL: q('VLL'), V_CL: d.VCL, V_UT: ut.VUT || 0, V_UF: ut.VUF || 0 }; });
+test('Field splices: custom rows = this project\'s analysis demands at each splice give the same design and checks', () => {
+  for (const [tag, P, g] of VARIANTS()) {
+    if (!((P.framing || {}).splices || []).length) { console.log(`       ${tag}: no splice stations`); continue; }
+    const A = W.SBDSplicesUI.build({ P, g, src: 'analysis' }); assert.ok(!A.err, tag + ': ' + A.err);
+    const Pc = J(P); setRows(Pc, 'spl', g, splRows(A));
+    const F = W.SBDSplicesUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.deepEqual(J(F.errors), J(A.errors));
+    assert.equal(F.list.length, A.list.length); let n = 0, maxd = 0;
+    F.list.forEach((s, i) => { const e = A.list[i]; assert.equal(s.dm.custom, true);
+      Object.keys(e.p.dem).forEach(k => { if (typeof e.p.dem[k] === 'number') maxd = Math.max(maxd, close(s.p.dem[k], e.p.dem[k], `${tag} ${s.name} ${k}`)); });
+      assert.deepEqual(J(s.p.top), J(e.p.top)); assert.deepEqual(J(s.p.web), J(e.p.web));
+      s.CK.forEach((c, j) => c.items.forEach((it, k) => { const q = A.list[i].CK[j].items[k]; assert.equal(it.loc, q.loc); if (typeof q.r === 'number' && isFinite(q.r)) { maxd = Math.max(maxd, close(it.r, q.r, `${tag} ${s.name} ${c.id} ${it.loc}`)); n++; } }));
+      const st = W.SBDSplicesUI.stepsOf(F, s); assert.equal(st[0].id, 'cd.src'); });
+    console.log(`       ${tag}: ${F.list.length} splices, the same plates and bolts; ${n} check ratios equal (largest difference ${maxd.toExponential(1)})`);
+  }
+  // a splice without a row is listed as not checked
+  const P = W.SBDModel.defaultProject(); if ((P.framing || {}).splices && P.framing.splices.length) { setRows(P, 'spl', 0, [{ x: P.framing.splices[0], M_DC1: -100, V_DC1: 20 }]);
+    const F = W.SBDSplicesUI.build({ P, g: 0, src: 'custom' }); assert.equal(F.list.length, 1); assert.equal(F.errors.length, P.framing.splices.length - 1); }
+});
+test('Field splices hand check: one splice row, the design moments and shears', () => {
+  // FS1 at 82 ft: M_DC1 100, M_DC2 20, M_DW 25, M_LL+IM +800 / −300 kip-ft; V_DC1 20, V_DC2 3, V_DW 3, V_LL+IM 40 kip (Splices tab load factors, AASHTO):
+  //   Strength I positive: 1.25(100 + 20) + 1.50(25) + 1.75(800) = 150 + 37.5 + 1400 = 1587.5 kip-ft
+  //   Strength I negative: 0.90(120) + 0.65(25) + 1.75(−300) = 108 + 16.25 − 525 = −400.75 kip-ft
+  //   Strength I shear: 1.25(23) + 1.50(3) + 1.75(40) = 103.25 kip; Service II positive: 145 + 1.30(800) = 1185 kip-ft
+  const P = W.SBDModel.defaultProject();
+  setRows(P, 'spl', 0, [{ x: P.framing.splices[0], M_DC1: 100, M_DC2: 20, M_DW: 25, M_LLpos: 800, M_LLneg: -300, V_DC1: 20, V_DC2: 3, V_DW: 3, V_LL: 40 }]);
+  const F = W.SBDSplicesUI.build({ P, g: 0, src: 'custom' }), st = W.SBDSplicesUI.stepsOf(F, F.list[0]), v = id => st.find(t => t.id === id).value;
+  assert.ok(Math.abs(v('sp.StrP.M') - 1587.5) < 1e-9 && Math.abs(v('sp.StrN.M') + 400.75) < 1e-9 && Math.abs(v('sp.StrP.V') - 103.25) < 1e-9 && Math.abs(v('sp.SvP.M') - 1185) < 1e-9);
+});
+
+/* weld rows from the analysis weld points (ui/welds.js input: engine/welds.js fromDemands rows): x − 0.005 ft for the left side, x + 0.005
+   for the right; LL+IM without the pedestrian part (its own column); the transitions' fatigue moments at the plate changes */
+const wtRows = p => { const out = [];
+  p.fw.forEach(r => { const q = r.pl && r.pl.VLL ? r.pl.VLL[0] : 0, tr = p.tr.find(t => Math.abs(t.x - r.x) < 1e-9);
+    out.push({ x: +(r.x + (r.side === 'L' ? -0.005 : 0.005)).toFixed(6), V_DC1: r.VDC1, V_DC2: r.VDC2, V_DW: r.VDW, V_LL: r.VLL - q, V_PL: q, V_UT: r.ut ? r.ut.VUT : 0, V_UF: r.ut ? r.ut.VUF : 0, V_FAT: r.Vfr,
+      ...(tr ? { M_FATpos: tr.dMp, M_FATneg: -tr.dMn } : {}) }); });
+  return out; };
+test('Welds: custom rows = this project\'s analysis at the weld points give the same weld and transition checks', () => {
+  for (const [tag, P, g] of VARIANTS()) {
+    const A = W.SBDWeldsUI.build({ P, g, src: 'analysis' }); assert.ok(!A.err, tag + ': ' + A.err);
+    const Pc = J(P); setRows(Pc, 'wt', g, wtRows(W.SBDWeldsUI.input(P, g).p));
+    const F = W.SBDWeldsUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.match(F.what, /^Demands: entered \(Custom\)/);
+    assert.equal(F.R.fw.length, A.R.fw.length); assert.equal(F.R.tr.length, A.R.tr.length); let n = 0, maxd = 0;
+    F.C.forEach((c, j) => c.items.forEach((it, k) => { const e = A.C[j].items[k]; assert.equal(it.loc, e.loc); if (typeof e.r === 'number' && isFinite(e.r)) { maxd = Math.max(maxd, close(it.r, e.r, `${tag} ${c.id} ${it.loc}`)); n++; } }));
+    const s0 = W.SBDWeldsUI.stepsOf(F, 'fw', F.R.fw[0].i), s1 = W.SBDWeldsUI.stepsOf(A, 'fw', A.R.fw[0].i); assert.equal(s0[0].id, 'cd.src'); assert.equal(s0.length, s1.length + 1);
+    console.log(`       ${tag}: ${F.R.fw.length} weld locations, ${F.R.tr.length} transitions; ${n} check ratios equal (largest difference ${maxd})`);
+  }
+});
+test('Welds hand check: one row at a pier serves both sides', () => {
+  // Pier 1 (x = 110 ft): V_DC1 95, V_DC2 14, V_DW 16, V_LL+IM 105 kip, one row for both sides. Welds tab factors γ_DC 1.25, γ_DW 1.50, γ_LL 1.75
+  // (AASHTO: η = m = 1); shear flow at the top flange from DC1 on the steel section: γV Q_t/I = 1.25(95)(909.99)/69,424 = 1.557 kip/in
+  const P = W.SBDModel.defaultProject(); setRows(P, 'wt', 0, [{ x: 110, V_DC1: 95, V_DC2: 14, V_DW: 16, V_LL: 105 }]);
+  const F = W.SBDWeldsUI.build({ P, g: 0, src: 'custom' }); assert.ok(!F.err, F.err);
+  assert.deepEqual(J(F.R.fw.map(r => r.name)), ['Pier 1, left', 'Pier 1, right']);
+  F.R.fw.forEach(r => { assert.equal(r.VDC1, 95); assert.equal(r.VLL, 105); });
+  const st = W.SBDWeldsUI.stepsOf(F, 'fw', F.R.fw[0].i), vt = st.find(t => /\.vt$/.test(t.id)); assert.ok(vt, 'top shear flow step');
+  assert.ok(Math.abs(vt.value - 1.25 * 95 * 909.99 / 69424) < 2e-4, `${vt.value}`);
+  console.log(`       ${F.R.fw.length} locations; top shear flow ${vt.sub} = ${vt.value.toFixed(3)} kip/in`);
+});

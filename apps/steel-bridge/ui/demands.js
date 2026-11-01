@@ -10,7 +10,7 @@
      P.demandSrc = { <module>: 'analysis' | 'example' | 'project' | 'custom' }: the demand source chosen on the module's tab (a hand-off
                    file is not saved: its choice lasts for the page view); absent: the tab's default (this project's analysis when the
                    project is complete, else the example), as before.
-   Module keys: flex (Flexure), shear (Shear & stiffeners), cn (Constructibility), fat (Fatigue & studs), rt (Rating: the flex and shear
+   Module keys: flex (Flexure), shear (Shear & stiffeners), cn (Constructibility), fat (Fatigue & studs), spl (Field splices), wt (Welds), rt (Rating: the flex and shear
    tables themselves, SPECS.rt.uses).
 
    Columns are the payload's own station fields (HANDOFF.md §4: M_DC1, M_LLpos, V_DC1, …), so a row means what a hand-off station means:
@@ -52,6 +52,15 @@
         ['M_DC1', 'M<sub>DC1</sub>', KM], ['M_DC2', 'M<sub>DC2</sub>', KM], ['M_DW', 'M<sub>DW</sub>', KM], ['M_LLpos', 'M<sub>LL+IM</sub> +', KM], ['M_LLneg', 'M<sub>LL+IM</sub> −', KM], ['M_PLpos', 'M<sub>PL</sub> +', KM], ['M_PLneg', 'M<sub>PL</sub> −', KM],
         ['M_UT', 'M<sub>UT</sub>', KM], ['M_UF', 'M<sub>UF</sub>', KM], ['V_DC1', 'V<sub>DC1</sub>', KP], ['V_DC2', 'V<sub>DC2</sub>', KP], ['V_DW', 'V<sub>DW</sub>', KP]],
         note: 'Unfactored per girder. The fatigue truck M<sub>FAT</sub>, V<sub>FAT</sub> (with IM 15% and the single-lane distribution factor, + and − envelopes; the stress and shear ranges are + minus −) is what the fatigue checks take; γ (Fatigue I or II) is applied by the tab. The permanent moments and LL+IM (Strength I) place the flexure regions and the stud strength regions (to the point of the largest positive moment); the permanent moments and shears enter the details\' and the web\'s stresses as in the analysis path. Fatigue details between the first and last entered rows are checked (moments linear between rows); GS17 at each entered station. Studs: the pitch zones entered on the Fatigue &amp; studs input tab, else zones made from these rows by span tenths (a tenth with no row has V<sub>f</sub> = 0).' } },
+    spl: { name: 'Field splices', tab: 'spl',
+      unf: { cols: [['M_DC1', 'M<sub>DC1</sub>', KM], ['M_DC2', 'M<sub>DC2</sub>', KM], ['M_DW', 'M<sub>DW</sub>', KM], ['M_LLpos', 'M<sub>LL+IM</sub> +', KM], ['M_LLneg', 'M<sub>LL+IM</sub> −', KM], ['M_PLpos', 'M<sub>PL</sub> +', KM], ['M_PLneg', 'M<sub>PL</sub> −', KM],
+        ['M_CL', 'M<sub>CL</sub>', KM], ['M_UT', 'M<sub>UT</sub>', KM], ['M_UF', 'M<sub>UF</sub>', KM], ['M_FATpos', 'M<sub>FAT</sub> +', KM], ['M_FATneg', 'M<sub>FAT</sub> −', KM],
+        ['V_DC1', 'V<sub>DC1</sub>', KP], ['V_DC2', 'V<sub>DC2</sub>', KP], ['V_DW', 'V<sub>DW</sub>', KP], ['V_LL', 'V<sub>LL+IM</sub>', KP], ['V_PL', 'V<sub>PL</sub>', KP], ['V_CL', 'V<sub>CL</sub>', KP], ['V_UT', 'V<sub>UT</sub>', KP], ['V_UF', 'V<sub>UF</sub>', KP]],
+        note: 'One row per field splice, at its station x (the Splices tab\'s stations; a splice without a row within 0.01 ft is not checked). Unfactored per girder: the moments at the splice (DC1 on the steel, DC2 and DW on the long-term, LL+IM + / − and the pedestrian load on the short-term composite section, the construction live load CL, utilities UT and UF, the Fatigue truck M<sub>FAT</sub> + / −) and the shear magnitudes. The tab applies the load factors of the Splices tab (with the owner\'s η and m) for the design forces of 6.13.6.1.4.' } },
+    wt: { name: 'Welds', tab: 'wt',
+      unf: { cols: [['V_DC1', 'V<sub>DC1</sub>', KP], ['V_DC2', 'V<sub>DC2</sub>', KP], ['V_DW', 'V<sub>DW</sub>', KP], ['V_LL', 'V<sub>LL+IM</sub>', KP], ['V_PL', 'V<sub>PL</sub>', KP], ['V_UT', 'V<sub>UT</sub>', KP], ['V_UF', 'V<sub>UF</sub>', KP],
+        ['V_FAT', 'ΔV<sub>FAT</sub>', KP], ['M_FATpos', 'M<sub>FAT</sub> +', KM], ['M_FATneg', 'M<sub>FAT</sub> −', KM]],
+        note: 'Unfactored shear magnitudes per girder at the weld locations: each side of every support and plate change (a row at x serves both sides; for different sides enter x − 0.005 and x + 0.005 ft); DC1 on the steel, DC2 and DW on the long-term, LL+IM (largest magnitude of the two envelopes) and the pedestrian load PL on the short-term composite section; ΔV<sub>FAT</sub> the Fatigue truck shear range (+ minus −); M<sub>FAT</sub> + / − at the plate changes (shop transitions). A weld location without a row is not checked. The tab applies its load factors (Welds tab) and the owner\'s η and m.' } },
     rt: { name: 'Rating', tab: 'rt', uses: ['flex', 'shear'],
       unf: { cols: [], note: 'The rating takes the unfactored moments entered on the Flexure tab and the shears entered on the Shear &amp; stiffeners tab (Custom); edit them here or there (one table each, saved once).' } }
   };
