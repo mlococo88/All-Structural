@@ -3449,7 +3449,7 @@ function bpCageShear(combo, dirOv, demOv){
       lines:[
         "\\text{hoop radius }R_t=R-c_c-d_{b,t}/2="+fmt(G.Rt,3)+"\\ \\text{in};\\ "+(K.tieType==="spiral"?"\\text{spiral, pitch }":"\\text{ties at }")+fmt(dz,2)+"\\ \\text{in from }z_1="+fmt(z0,2)+"\\ \\text{in}",
         "\\text{critical row (same as the shear breakout check, "+(used.id==="single"?"single row":"Case "+used.id)+"): }c_{a1}="+fmt(ca1,3)+"\\ \\text{in};\\ \\text{effective: }z\\le0.5c_{a1}="+fmt(0.5*ca1,2)+"\\ \\text{in, crossing the body, }L_{out}\\ge\\ell_d="+fmt(G.devT.ld,2)+"\\ \\text{in}",
-        "\\text{hoops: }"+hoops.map(h=>"z="+fmt(h.z,2)+(h.legs?"\\ (2\\ \\text{legs})":"\\ (0)")).join(",\\ "),
+        "\\text{hoops: }"+hoops.filter(h=>h.near).map(h=>"z="+fmt(h.z,2)+(h.legs?"\\ (2\\ \\text{legs})":"\\ (0)")).join(",\\ ")+(hoops.some(h=>!h.near)? "\\ \\text{(+ "+hoops.filter(h=>!h.near).length+" deeper than }0.5c_{a1}\\text{, not counted)}" : ""),
         "\\phi V_r=\\phi\\,n_{legs}A_bf_{yt}="+fmt(phi,2)+"\\times"+nLegs+"\\times"+fmt(Ab,2)+"\\times"+fmt(fyt,0)+"="+fmt(phiVr,2)+"\\ \\text{kip}\\quad\\text{vs }V_{ua}="+fmt(dem,2)+"\\ \\text{kip}\\Rightarrow\\text{DCR}="+fmtDCR(dcr,3)],
       vars:[["\\phi","0.75","anchor reinforcement, §17.5.2.1(b)"],["A_b",fmt(Ab,2)+" in^2",K.tieSize+" "+(K.tieType==="spiral"?"spiral":"ties")],
         ["hoops",hoops.map(h=>h.k+" (z "+fmt(h.z,2)+"): "+(h.legs?"2 legs":"not — "+h.why)).join("; "),"each closed hoop crossing the breakout body gives two legs across the failure surface, anchored by the continuous hoop behind them"]]}]};
