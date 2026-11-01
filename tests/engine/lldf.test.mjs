@@ -23,6 +23,17 @@ test('shared/lldf.js = lldf.html\'s engine before the move: every output of ~1,6
   console.log(`       ${r.cases} cases, ${r.members} girders, ${r.steps} worked steps, ${r.outputs} outputs; sha256 ${r.hashAfter.slice(0, 16)}…; ${r.diffs.length} differ`);
   assert.ok(r.cases > 1000 && r.members > 5000);
   assert.deepEqual(r.diffs, []); assert.equal(r.hashAfter, r.hashBefore);
+  assert.ok(r.changed.every(d => /^slab /.test(d)) && r.changedCases > 0, 'only the CIP slab cases change (LLSW)');
+});
+
+test('LLSW (2026-11-01): CIP slab strip width with W = edge-to-edge width (Art. 4.6.2.3, Eqs. 4.6.2.3-1 / -2)', () => {
+  // L = 35 ft, 3 lines at 10 ft, overhangs 4 ft: W = 4 + 20 + 4 = 28 ft; faces 1.5 ft: clear roadway w = 25 ft, N_L = INT(25/12) = 2.
+  //   L1 = 35; one lane W1 = min(28, 30) = 28: E = 10 + 5 sqrt(35 x 28) = 10 + 5(31.3050) = 166.525 in, g1 = 12/166.525 = 0.072061
+  //   two lanes W1 = min(28, 60) = 28: E = 84 + 1.44(31.3050) = 129.079 in <= 12(28)/2 = 168 in; g2 = 12/129.079 = 0.092966 (governs)
+  //   (before, with w = 25 ft: E1 = 157.902, E2 = 126.596, g = 0.094790)
+  const p = { type: 'slab', L: 35, spans: [35], ts: 18, depth: 18, skew: 0, skewV: null, OL: 4, OR: 4, rL: 1.5, rR: 1.5, spacings: [10, 10], Nb: 3, I: 0, A: 0, eg: 0, n: 1, boxB: 0, boxI: 0, boxJ: 0, truckGaps: [4, 4, 4] };
+  const R = SL.computeBridge(p), m = R.members[0];
+  c(m.r.Es, 166.5248, 'E one lane', 1e-3); c(m.r.Em, 129.0791, 'E two lanes', 1e-3); c(m.gM, 0.092966, 'g', 1e-6); c(m.fatM, 0.072061 / 1.2, 'g fatigue', 1e-6);
 });
 
 test('SharedLLDF: no DOM, one namespace; the per-span skew rule (4.6.2.2.2e)', () => {
