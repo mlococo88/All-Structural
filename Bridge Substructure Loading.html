@@ -3956,6 +3956,50 @@ function slrModel() {
     if (!r || r.err || !C) { secs.push({ title: u.name + ': ' + TYPE_NAME[u.type], subs: [{ title: 'Not computed', items: [{ type: 'note', warn: true, text: (r && r.err) || 'The combinations of this unit could not be computed; see the ' + slTabName('combo') + ' tab.' }] }] }); return; }
     const defs = r.UM.defs, RQ = slrResQ(defs), subs = [];
     if (!RQ) { secs.push({ title: u.name + ': ' + TYPE_NAME[u.type], subs: [{ title: 'Combinations', items: [{ type: 'note', text: 'No resultant section in this unit; see the ' + slrTab('combo', k) + '.' }] }] }); return; }
+    /* SLRF (2026-11-01): the unit's unfactored loads at the resultant, each with its source (tab, case): one topic per load; a load with
+       alternatives (directions, wind cases, floods, ice cases, 100/30 seismic, collision points) gives its largest and smallest value and the
+       case that gives it (the tool's own vectors: unitRes, phase3 to phase6, earthLoads; nothing is recomputed). */
+    { const LT = [], lsc = 'l' + k, p3 = phase3(k), p4 = phase4(k), p5 = phase5(k), p6 = phase6(k), D = r.DL, LLr = r.LL, qs = RQ.q.filter(x => x[0] === 'P' || x[0] === 'Mt' || x[0] === 'Ml');
+      let EL = null; try { EL = earthLoads(k); } catch (e) { EL = null; }
+      const fam = (key, title, ref, src, alts) => { alts = (alts || []).filter(a => a && a.v); if (!alts.length) return; const w = slrTopic(LT, key, title, ref);
+        qs.forEach(([nm, sym, q]) => { const d = defs[q], dd = d.u === 'kip-ft' ? 0 : 1, base = sym.replace(/_\{([^}]*)\}$/, '_{$1,' + key + '}').replace(/^P$/, 'P_{' + key + '}');
+          if (alts.length === 1) { w.add({ id: nm, label: slrPlain(d.label) + ' (' + src + (alts[0].nm ? '; ' + alts[0].nm : '') + ')', sym: base, eq: '', sub: '', value: alts[0].v[q], unit: d.u, d: dd }); return; }
+          let iA = 0, iB = 0; alts.forEach((a, i) => { if (a.v[q] > alts[iA].v[q]) iA = i; if (a.v[q] < alts[iB].v[q]) iB = i; });
+          w.add({ id: nm + 'max', label: slrPlain(d.label) + ', largest of ' + alts.length + ' cases: ' + alts[iA].nm, sym: base, eq: '', sub: '', value: alts[iA].v[q], unit: d.u, d: dd, note: src });
+          w.add({ id: nm + 'min', label: slrPlain(d.label) + ', smallest: ' + alts[iB].nm, sym: base, eq: '', sub: '', value: alts[iB].v[q], unit: d.u, d: dd }); }); };
+      if (D) { fam('DCsup', 'DC, superstructure', SLR_AA + 'Art. 3.5.1', 'girder DC1 + DC2 reactions of the Reactions tab through the unit model', [{ v: D.DCs }]);
+        fam('DCsub', 'DC, substructure self-weight', SLR_AA + 'Art. 3.5.1', 'self-weight by component, w_c = ' + slrN(nz(P.br.wc), 3) + ' kcf (Summary tab)', [{ v: D.DCsub }]);
+        fam('DW', 'DW, wearing surface and utilities', SLR_AA + 'Art. 3.5.1', 'girder DW reactions of the Reactions tab', [{ v: D.DW }]);
+        if (D.UF) fam('UF', 'Future utility allowance', 'MassDOT LRFD Bridge Manual', 'Dead load tab', [{ v: D.UF }]); }
+      if (LLr) { const w = slrTopic(LT, 'LL', 'LL + IM (HL-93, lanes stepped across the roadway, multiple presence)', SLR_AA + 'Art. 3.6.1');
+        qs.forEach(([nm, sym, q]) => { const d = defs[q], dd = d.u === 'kip-ft' ? 0 : 1, b = LLr.best[q], base = sym.replace(/_\{([^}]*)\}$/, '_{$1,LL}').replace(/^P$/, 'P_{LL}');
+          [['max', 'largest'], ['min', 'smallest']].forEach(([s, t]) => { const a = b[s]; w.add({ id: nm + s, label: slrPlain(d.label) + ', ' + t + ': ' + a.m + ' lane(s) loaded, m = ' + slrN(MPF(a.m || 1), 2) + (d.noIM ? ', no IM' : ', IM ' + slrN(nz(P.br.IM), 0) + ' %'), sym: base, eq: '', sub: '', value: a.v, unit: d.u, d: dd, note: 'influence lines on the line model of the spans; ' + LLr.pSteps + ' lane positions × ' + LLr.eSteps + ' load positions in each lane (Live load tab)' }); }); }); }
+      if (p3 && !p3.err) { fam('BR', 'Braking BR', SLR_AA + 'Art. 3.6.4', 'Braking and centrifugal tab; segment force × the unit share f_L of the Force distribution tab, 6 ft above the deck', p3.BR.map((v, i) => ({ v, nm: i ? 'toward back' : 'toward ahead' })));
+        if (p3.CE) fam('CE', 'Centrifugal CE', SLR_AA + 'Art. 3.6.3', 'C × truck reaction × multiple presence, 6 ft above the deck', [{ v: p3.CE }]);
+        const cn = windCases().map(caseName);
+        Object.keys(LS).forEach(key => { if (p3.WS[key]) fam('WS' + key, 'Wind on structure WS, ' + LS[key] + ' (V = ' + slrN(vLS(key), 0) + ' mph)', SLR_AA + 'Art. 3.8.1.2', 'Wind tab: superstructure pressure of §3 by attack angle (Table 3.8.1.2.3a-1) and the substructure components below', p3.WS[key].map((v, i) => ({ v, nm: cn[i] }))); });
+        fam('WL', 'Wind on live load WL', SLR_AA + 'Art. 3.8.1.3', 'Table 3.8.1.3-1, 6 ft above the deck', p3.WL.map((v, i) => ({ v, nm: cn[i] }))); }
+      if (p4 && !p4.err) { fam('TU', 'Uniform temperature TU', SLR_AA + 'Art. 3.12.2', 'Temperature tab: δ = α L ΔT from the point of fixity, bearing and pier stiffness', p4.TU.map((v, i) => ({ v, nm: i ? 'fall' : 'rise' })));
+        fam('FR', 'Friction at sliding bearings FR', SLR_AA + 'Art. 3.13', 'Temperature tab, μ = ' + slrN(nz(P.br.mu)), p4.FR.map((v, i) => ({ v, nm: i ? 'with the fall' : 'with the rise' })));
+        if (p4.SH) fam('SH', 'Shrinkage SH', SLR_AA + 'Art. 3.12.4', 'Temperature tab', [{ v: p4.SH }]);
+        const wet = P.units[k].type !== 'abut' && P.units[k].water && P.units[k].water.on === 'yes';
+        if (wet) { fam('WAd', 'Water load WA, design flood', SLR_AA + 'Art. 3.7.3', 'Water and scour tab: static, stream pressure p = C_D V²/1000, lateral C_L, debris', p4.WAd.map((v, i) => ({ v, nm: i ? 'flow from the other side' : 'flow as entered' })));
+          fam('WAc', 'Water load WA, check flood', SLR_AA + 'Art. 3.7.3', 'Water and scour tab, check-flood scour', p4.WAc.map((v, i) => ({ v, nm: i ? 'flow from the other side' : 'flow as entered' }))); }
+        if (p4.IC) fam('IC', 'Ice IC', SLR_AA + 'Art. 3.9.2', 'Ice tab: crushing / flexing, load cases of 3.9.2.4', p4.IC.map((v, i) => ({ v, nm: 'case ' + (i + 1) }))); }
+      if (p5 && !p5.err && p5.EQ) { const nm = []; [[1, 0.3], [0.3, 1]].forEach(([a, b]) => [1, -1].forEach(sL => [1, -1].forEach(sT => nm.push(slrN(a * 100, 0) + ' % longitudinal ' + (sL > 0 ? '+' : '−') + ', ' + slrN(b * 100, 0) + ' % transverse ' + (sT > 0 ? '+' : '−')))));
+        fam('EQ', 'Seismic EQ (100 / 30 combinations)', SLR_AA + 'Art. 3.10.8', 'Seismic tab: uniform load or single-mode spectral method, R-factors of 3.10.7' + (p5.massExempt ? '; ' + p5.massExempt : ''), p5.EQ.map((v, i) => ({ v, nm: nm[i] }))); }
+      if (p6 && !p6.err) { if (p6.CV) fam('CV', 'Vessel collision CV', SLR_AA + 'Art. 3.14', 'Vessel collision tab, P_s at mean high water', p6.CV.map((v, i) => ({ v, nm: p6.cvName[i] })));
+        if (p6.CT) fam('CT', 'Vehicle collision CT (600 kip, 5 ft above the ground)', SLR_AA + 'Art. 3.6.5', 'Vehicle collision tab', p6.CT.map((v, i) => ({ v, nm: p6.ctName[i] }))); }
+      if (EL && !EL.err && EL.vec) { const EN = { EH: 'Horizontal earth pressure EH', EV: 'Vertical earth load EV', ES: 'Earth surcharge ES', LSh: 'Live-load surcharge LS, horizontal', LSv: 'Live-load surcharge LS, vertical', ASdc: 'Approach slab DC', ASll: 'Live load on the approach slab', EQe: 'Seismic earth pressure and inertia' };
+        Object.keys(EN).forEach(cls => { if (EL.vec[cls]) fam('E' + cls, EN[cls], SLR_AA + 'Art. 3.11', 'Earth loads tab', [{ v: EL.vec[cls] }]); }); }
+      if (LT.length) subs.push({ title: 'Unfactored loads at the resultant, ' + slrPlain(RQ.loc), items: [{ type: 'note', text: 'Each load at the resultant section, unfactored, with its source. A load with several cases gives its largest and smallest value and the case. These are the loads the limit states below combine. Worked on: ' + ['dl', 'll', 'brce', 'wind', 'temp', 'water', 'ice', 'eq', 'cv', 'ct', 'earth'].map(t => slrTab(t, k)).join('; ') + '.' }, slrTopics(lsc, LT, { title: 'Unfactored loads' })] });
+      if (p3 && !p3.err && p3.subPts && p3.subPts.length) { const Wt = []; const w = slrTopic(Wt, 'sw', 'Wind on the substructure components, Strength III, normal wind', SLR_AA + 'Art. 3.8.1.2.4');
+        p3.subPts.forEach((pt, i) => { const cmp = pt.comp + (pt.i != null ? ' ' + (pt.i + 1) : '');
+          w.add({ id: 'Pz' + i, label: cmp + ': design pressure at z = ' + slrN(pt.z - nz(P.units[k].ground), 2) + ' ft above the ground', sym: 'P_{z}', eq: '2.56\\times 10^{\\minus 6} V^{2} K_{z} G C_{D}', sub: '', value: pt.Pz, unit: 'ksf', d: 4, ref: SLR_AA + 'Eq. 3.8.1.2.1-1' });
+          w.add({ id: 'Hn' + i, label: cmp + ': force normal to the unit line (front area A_f = ' + slrN(pt.Af, 1) + ' ft²)', sym: 'H_{n}', eq: '', sub: '', value: pt.Hn, unit: 'kip', d: 2 });
+          w.add({ id: 'Ht' + i, label: cmp + ': force along the unit line (end area A_e = ' + slrN(pt.Ae, 1) + ' ft²)', sym: 'H_{t}', eq: '', sub: '', value: pt.Ht, unit: 'kip', d: 2 }); });
+        subs.push({ title: 'Wind on the substructure components', items: [slrTopics('w' + k, Wt, { title: 'Worked steps' }), { type: 'note', text: 'Pressure P_z on each component, resolved on the unit skew into H_n and H_t (the projected-area option uses the projected area); as on the ' + slrTab('wind', k) + '.' }] }); }
+    }
     const scope = 'u' + k, T = [], CV = COMBOS.filter(c => C[c.id]);
     CV.forEach(c => { const X = comboComps(k, c); if (!X) return; const w = slrTopic(T, c.id, c.name, SLR_AA + 'Table 3.4.1-1');
       RQ.q.filter(x => x[0] === 'P' || x[0] === 'Mt' || x[0] === 'Ml').forEach(([nm, sym, q]) => { [1, -1].forEach(s => { if (nm !== 'P' && s < 0) return; slrComboStep(w, k, c, q, s, sym, defs[q], X, s > 0 ? C[c.id].max[q] : C[c.id].min[q]); }); }); });
