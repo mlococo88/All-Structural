@@ -799,10 +799,19 @@
      the Spans & framing tab). P.splices = { code, bolts, gam, clr, Rh, aT, aB, prs,
      gP (splice plate grade; blank = the flange grade), auto: true | false (auto-design the plates and bolts of every splice; false: the
      entered plates), plates: [ { x, top, bot, web } ] (entered, per station) } */
+  /* projGam(P) (SPGAM, 2026-11-01, engineer's "one source"): the project's load factors for the splice design forces, before the owner's η and m
+     (env, as before): Strength I γ_DC max / min, γ_DW max / min, γ_LL and Service II γ_LL of Tables 3.4.1-1, -2 (SBDFlexure.factors(), the
+     Flexure tab's), Fatigue I γ of the Fatigue & studs inputs (P.fatigue.gam.fI; 1.75 without one), deck placement γ_DC and construction LL
+     (SBDConstructibility.factors(), the Constructibility tab's; 3.4.2.1). P.splices.gam (this tab's former inputs) is kept in the file, not used. */
+  function projGam(P) {
+    const W = typeof window !== 'undefined' ? window : {}, F = W.SBDFlexure && W.SBDFlexure.factors ? W.SBDFlexure.factors() : { dc: 1.25, dcMin: 0.90, dw: 1.50, dwMin: 0.65, ll: 1.75, sll: 1.30 };
+    const C = W.SBDConstructibility && W.SBDConstructibility.factors ? W.SBDConstructibility.factors() : { cdc: 1.25, ccl: 1.50 }, fI = +((((P && P.fatigue) || {}).gam || {}).fI);
+    return { dcMax: F.dc, dcMin: F.dcMin, dwMax: F.dw, dwMin: F.dwMin, llS: F.ll, llSv: F.sll, fat: fI > 0 ? fI : 1.75, dc1C: C.cdc, clC: C.ccl };
+  }
   function settings(P) {
     const s = (P && P.splices) || {}, d = clone(DEF);
     const fx = P && P.framing && Array.isArray(P.framing.splices) ? P.framing.splices : [];
-    return { x: fx.map(Number).filter(v => isFinite(v)), code: s.code === '8' ? '8' : '10', bolts: { ...d.bolts, ...(s.bolts || {}) }, gam: { ...d.gam, ...(s.gam || {}) }, clr: { ...d.clr, ...(s.clr || {}) },
+    return { x: fx.map(Number).filter(v => isFinite(v)), code: s.code === '8' ? '8' : '10', bolts: { ...d.bolts, ...(s.bolts || {}) }, gam: projGam(P), clr: { ...d.clr, ...(s.clr || {}) },
       prs: s.prs === 'yes' ? 'yes' : 'no', gP: s.gP || '', auto: s.auto !== false, plates: Array.isArray(s.plates) ? s.plates : [] };
   }
   /* inputsAt(P, gi, AR, x, opt): the splice inputs (p, as GirderDetail's module receives them from spliceExport) for the splice at x of girder gi.
@@ -882,5 +891,5 @@
     return { web: h, flange: p2 };
   }
 
-  window.SBDSplices = { DEF, BOLT, GD_GR, PHI, env0, compute, checks, steps, autoDesign, fit, spCtNarrow, demandsAt, arraysFromAnalysis, sectionAt, settings, inputsAt, girder, svg, spStdT, spNextT, parseDim, frac };
+  window.SBDSplices = { DEF, projGam, BOLT, GD_GR, PHI, env0, compute, checks, steps, autoDesign, fit, spCtNarrow, demandsAt, arraysFromAnalysis, sectionAt, settings, inputsAt, girder, svg, spStdT, spNextT, parseDim, frac };
 })();

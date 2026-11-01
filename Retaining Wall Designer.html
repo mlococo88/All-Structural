@@ -597,6 +597,7 @@ a.wkA:hover { text-decoration: underline; }
   body { height: auto; overflow: visible; background: #fff; display: block; }
   .tab-panels { overflow: visible; }
   .tab-panel { display: block !important; max-width: none; }
+  #tab-report:not(.active) { display: none !important; }   /* RWRP: the Report tab prints itself; not part of the page printout */
   .card, .eq-block, .sc { box-shadow: none; break-inside: avoid; }
 }
 
@@ -634,6 +635,12 @@ window.MathJax = {
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" id="MathJax-main"></script>
+<!-- RWRP: KaTeX for the Report tab only (engineer-approved 2026-11-01; the result tabs keep MathJax), then the shared worked steps and
+     the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -1314,6 +1321,7 @@ window.MathJax = {
     <button class="tab-btn" data-tab="rebar">Rebar schedule</button>
     <button class="tab-btn" data-tab="diagram">Analysis diagram</button>
     <button class="tab-btn" data-tab="threed">3D model</button>
+    <button class="tab-btn" data-tab="report">Report</button>
   </nav>
   <div class="tab-panels">
     <div class="tab-panel active" id="tab-overview"></div>
@@ -1323,6 +1331,7 @@ window.MathJax = {
     <div class="tab-panel" id="tab-rebar"><div class="pending">Building rebar schedule…</div></div>
     <div class="tab-panel" id="tab-diagram"><div class="pending">Drawing analysis diagram…</div></div>
     <div class="tab-panel" id="tab-threed"><div class="pending">Building 3D model…</div></div>
+    <div class="tab-panel tex2jax_ignore" id="tab-report"></div>
   </div>
 </main>
 </div>
@@ -5537,6 +5546,7 @@ function onInputChange() {
   }
   flushPlots(activeTab());
   typesetActivePanel();
+  if (typeof renderRwReport === 'function' && document.getElementById('tab-report')?.classList.contains('active')) renderRwReport();   // RWRP
   scheduleAutosave();
 }
 
@@ -8686,6 +8696,517 @@ onInputChange();
   if (window._plotlyFailed) { flushPlots(activeTab()); return; }  // show message
   if (n < 100) setTimeout(() => waitPL(n+1), 150);
 })(0);
+</script>
+<script>
+// ================================================================
+// REPORT TAB (RWRP, 2026-11-01): the calculation report in the shared viewer
+// (shared/report.js: navigation tree, numbered sections §n.m, collapse / expand, search, Print with a title block,
+// running header and page numbers). Worked steps are shared/steps.js steps (equation → substituted values → result),
+// set by KaTeX 0.16.9 (Report tab only; the result tabs keep MathJax) or, without it, by the built-in renderer.
+// Every value shown is a value the tool has already computed (window._R from calcAll, and the D/C values of
+// rwResultRows used by the Export report); only the substitution strings are formatted here. The few products shown
+// on a tab without a field of _R (P_a,1..3, M_u,soil, θ, the column combinations, the crack-control terms) are the
+// tabs' own display expressions, copied. Nothing is saved: the report is rebuilt from _R when the tab is shown and
+// when the inputs change while it is shown. The Export report window (D11) is unchanged.
+// ================================================================
+const RWRP = { closed: new Set(), api: null, doc: null };
+const rwrN = (x, d) => SharedSteps.n(x, d == null ? 2 : d);
+const rwrP = (x, d) => (typeof x === 'number' && x < 0) ? '(' + rwrN(x, d) + ')' : rwrN(x, d);   // a negative value in parentheses inside a substitution
+const rwrPlain = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, '_$1').replace(/<sup>(.*?)<\/sup>/g, '^$1').replace(/<[^>]+>/g, '')
+  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ');
+const RWR_FC = "f^{\\prime}_{c}";
+const RWR_DEG = '^{\\circ}';
+/* a steps item; with more than one topic the steps are grouped (SharedSteps.group, one topic per list entry, in order) */
+function rwrItem(scope, list, opt) {
+  const L = list.filter(t => t && t.steps && t.steps.length);
+  const steps = [].concat(...L.map(t => t.steps));
+  const it = Object.assign({ type: 'steps', scope, steps }, opt || {});
+  if (L.length > 1) it.topics = L.map(t => { const g = SharedSteps.group(t.steps, [{ key: 'k', title: t.title, ref: t.ref, ids: () => true }], { strip: false })[0];
+    return { title: t.title, ref: t.ref || '', n: t.steps.length, cls: g.cls, chip: g.chip, res: g.res }; });
+  return it;
+}
+const rwrS = o => SharedSteps.step(o);
+const rwrCell = (v, d) => ({ t: (typeof v === 'number') ? (isFinite(v) ? rwrN(v, d) : (v > 0 ? '∞' : '—')) : String(v == null || v === '' ? '—' : v), n: typeof v === 'number' });
+
+function rwrModel(r) {
+  const inp = r.inp, A = inp.aashto, a = r.aashtoR, isA = r.isAASHTO;
+  const g = id => ((document.getElementById(id) || {}).value || '').trim();
+  const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk'), notes: g('proj_notes') };
+  const AA = s => 'AASHTO LRFD 10th Ed. ' + s;
+  const CK = {};   // r.checks key -> report key of the step that works it (for the summary)
+  const DC = {}; { const ks = Object.keys(r.checks); rwResultRows(r).forEach((x, i) => { DC[ks[i]] = x; }); }
+  const dcv = k => (DC[k] && typeof DC[k].dc === 'number') ? DC[k].dc : NaN;
+  const ok = k => !!(r.checks[k] && r.checks[k].ok);
+  const onTab = (key, txt) => (RW_CARDS[key] && rwCardTitle(key, isA)) ? { type: 'note', text: `[[tab:card:${key}|On screen: ${txt || (RW_TABNAME[RW_CARDS[key][0]] + ' tab · ' + rwCardTitle(key, isA))}]]` } : null;   // a note that is only the link: hidden in print (.rp-go)
+  const sub = (title, items) => ({ title, items: items.filter(Boolean) });
+  const fosRef = 'IBC 2021 §1807.2.3';
+  const secs = [];
+
+  /* ---------- 2. Inputs (built first; §1 summary is added in front at the end) ---------- */
+  {
+    const subs = [];
+    subs.push(sub('Project', [{ type: 'kv', rows: [
+      ['Project', meta.name || '—'], ['Project number', meta.num || '—'], ['Engineer of record', meta.eng || '—'], ['Checked by', meta.chk || '—'],
+      ...(meta.notes ? [['Notes / description', meta.notes]] : []),
+      ['Design basis', isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), limit-state design' : 'ACI 318-19 (concrete), IBC 2021 §1807.2.3 (stability, service loads), ASCE 7-22'],
+      ['Earth pressure', isA ? ((A.ep_method === 'coulomb' ? 'Coulomb' : 'Rankine') + ', ' + (A.ep_cond === 'atrest' ? 'at-rest' : 'active')) : 'Rankine, active']] },
+      { type: 'note', text: 'Units: lb, ft, psf, pcf unless noted; per foot of wall. Every value in this report is the value the tool computes on its result tabs (Stability, Stem design, Footing design, Rebar schedule).' }]));
+    const geo = [['Stem height H_s' + (inp.vh_enable ? ' (variable height: H_lo + 0.75(H_hi − H_lo), MassDOT §3.3.2.2)' : ''), rwrCell(inp.Hs, 2), 'ft'],
+      ['Footing thickness t_f', rwrCell(inp.tf, 1), 'in'], ['Stem thickness at base t_s,bot', rwrCell(inp.ts_bot, 1), 'in'], ['Stem thickness at top t_s,top', rwrCell(inp.ts_top, 1), 'in'],
+      ['Toe length L_t', rwrCell(inp.Lt, 2), 'ft'], ['Heel length L_h', rwrCell(inp.Lh, 2), 'ft'], ['Toe soil cover above footing D_f,add', rwrCell(inp.Df_add, 2), 'ft'],
+      ['Total toe embedment D_f = t_f + D_f,add', rwrCell(r.Df, 3), 'ft'], ['Footing width B', rwrCell(r.B, 3), 'ft'], ['Total wall height H = H_s + t_f', rwrCell(r.H, 3), 'ft'],
+      ...(inp.useShearKey ? [['Shear key depth d_k', rwrCell(inp.dk, 0), 'in']] : []),
+      ...(r.hasBarrier ? [['Barrier height / weight W_bar', rwrN(r.bar_h_ft, 2) + ' ft / ' + rwrN(r.W_bar, 0) + ' lb/ft', '–']] : [])];
+    const fig = (() => { try { return buildOverviewSVG(r); } catch (e) { return ''; } })();
+    subs.push(sub('Wall geometry', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: geo },
+      fig ? { type: 'figure', svg: fig, caption: 'Wall section (as on the Overview tab)' } : null]));
+    const soil = [['Soil unit weight γ_s', rwrCell(inp.gamma_s, 0), 'pcf'], ['Friction angle φ', rwrCell(inp.phi, 0), 'deg'], ['Cohesion c', rwrCell(inp.coh, 0), 'psf'],
+      ['Backfill slope β', rwrCell(inp.beta, 0), 'deg'], ['Surcharge q_s', rwrCell(inp.q_sur, 0), 'psf'], ['Allowable bearing q_a', rwrCell(inp.qa, 0), 'psf'],
+      ['Base friction coefficient μ (ACI basis)', rwrCell(inp.mu, 4), '–'], ['Passive resistance', inp.inclPassive ? 'included' : 'neglected', '–'],
+      ...(r.hasWT ? [['Water table depth from top d_WT', rwrCell(r.wt_d, 2), 'ft'], ['Water height at footing base h_w', rwrCell(r.hw, 3), 'ft'], ['Water unit weight γ_w', rwrCell(r.gamma_w, 1), 'pcf'],
+        ['Saturated / buoyant unit weight γ_sat / γ′', rwrN(r.gamma_sat, 1) + ' / ' + rwrN(r.gamma_s_sub, 1), 'pcf'], ['Hydrostatic uplift distribution', r.upliftTri ? 'triangular' : 'uniform', '–']] : [['Water table', 'none', '–']]),
+      ...(r.hasSeismic ? [['Seismic k_h / k_v', rwrN(inp.kh, 3) + ' / ' + rwrN(inp.kv, 3), '–'], ['M-O wall friction δ', rwrCell(inp.delta_mo, 0), 'deg']] : [])];
+    subs.push(sub('Soil, water and loading', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: soil }]));
+    const mat = [["Concrete f′c", rwrCell(inp.fc, 0), 'psi'], ['Steel f_y', rwrCell(inp.fy / 1000, 0), 'ksi'], ['Concrete unit weight γ_c', rwrCell(inp.gamma_c, 0), 'pcf'],
+      ['Stem cover (back face)', rwrCell(inp.cov_stem, 2), 'in'], ['Footing cover', rwrCell(inp.cov_ftg, 2), 'in'],
+      ['Heel design basis', { std: 'standard (upward relief credited)', norelief: 'no upward relief', envelope: 'envelope' }[inp.heel_basis] || inp.heel_basis, '–'],
+      ...(inp.massdot_ftg ? [['MassDOT §3.3.2.2 heel top steel rule', 'on', '–']] : [])];
+    if (isA) mat.push(['Load modifier η', rwrCell(a.eta, 2), '–'], ['φ_τ / φ_ep / φ_b', rwrN(A.phi_tau, 2) + ' / ' + rwrN(A.phi_ep, 2) + ' / ' + rwrN(A.phi_b, 2), '–'],
+      ['Base interface: ' + rwrPlain(a.fric_label), 'δ_b = ' + rwrN(a.delta_b, 1) + '°, tan δ_b = ' + rwrN(a.tanDelta, 3), '–'], ['Eccentricity limit', rwrPlain(a.e_limit_label), '–'],
+      ['Nominal bearing q_n', a.useManualQn ? 'from geotechnical report' : 'estimated as 3 q_a', '–'], ['Live-load surcharge', A.ll_surcharge ? 'on (h_eq ' + (A.heq_mode === 'manual' ? 'manual' : 'from Table 3.11.6.4.1-2') + ')' : 'off', '–'],
+      ['Shear method', A.shear_method || 'auto', '–'], ['Exposure factors γ_e (footing / stem)', rwrN(A.gamma_e1, 2) + ' / ' + rwrN(A.gamma_e2, 2), '–'],
+      ['Vehicular collision (Extreme Event II)', A.ct_enable ? 'on' : 'off', '–'], ['Interface shear check', A.ish_enable ? 'on' : 'off', '–']);
+    subs.push(sub('Materials, cover and design options', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: mat }]));
+    if (r.hasCol) subs.push(sub('Column / beam loads', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: [
+      ['Dead / live / snow reaction P_DL / P_LL / P_SL', rwrN(inp.col_DL, 1) + ' / ' + rwrN(inp.col_LL, 1) + ' / ' + rwrN(inp.col_SL, 1), 'kip'], ['Wind reaction P_WL (+ down)', rwrCell(inp.col_WL, 1), 'kip'],
+      ['Distribution length L_dist', rwrCell(inp.col_Ldist, 2), 'ft'], ['Column position', inp.col_pos + ' of stem', '–'], ['Moment arm from toe x_col', rwrCell(r.x_col, 3), 'ft']] }]));
+    secs.push({ title: 'Input parameters', subs });
+  }
+
+  /* ---------- 3. Stability ---------- */
+  if (!isA) {
+    const subs = [];
+    { const st = [];
+      if (inp.beta === 0) st.push(rwrS({ id: 'Ka', label: 'Active coefficient, level backfill', sym: 'K_{a}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{' + rwrN(inp.phi, 0) + RWR_DEG + '}{2}\\right)', value: r.Ka, unit: '', d: 4, ref: 'Rankine' }));
+      else st.push(rwrS({ id: 'Ka', label: 'Active coefficient, sloped backfill', sym: 'K_{a}', eq: '\\cos\\beta\\,\\frac{\\cos\\beta \\minus \\sqrt{\\cos^{2}\\beta \\minus \\cos^{2}\\phi}}{\\cos\\beta + \\sqrt{\\cos^{2}\\beta \\minus \\cos^{2}\\phi}}', sub: '\\phi = ' + rwrN(inp.phi, 0) + RWR_DEG + ',\\; \\beta = ' + rwrN(inp.beta, 0) + RWR_DEG, value: r.Ka, unit: '', d: 4, ref: 'Rankine' }));
+      st.push(rwrS({ id: 'Kp', label: 'Passive coefficient', sym: 'K_{p}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' + \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' + \\frac{' + rwrN(inp.phi, 0) + RWR_DEG + '}{2}\\right)', value: r.Kp, unit: '', d: 4, ref: 'Rankine' }));
+      subs.push(sub('Step 1 — Earth pressure coefficients', [rwrItem('st1', [{ title: 'Coefficients', steps: st }]), onTab('stabKa')])); }
+    { const T = [], s1 = [], Ka = rwrN(r.Ka, 4), gs = rwrN(inp.gamma_s, 0);
+      if (r.hasWT) {
+        s1.push(rwrS({ id: 'Pa1', label: 'Active force above the water table (moist soil)', sym: 'P_{a,1}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} h_{1}^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.h_above, 2) + ')^{2}', value: 0.5 * r.Ka * inp.gamma_s * r.h_above ** 2, unit: 'lb/ft', d: 1 }));
+        s1.push(rwrS({ id: 'Pa2', label: 'Active force below the water table, rectangular block from the soil above', sym: 'P_{a,2}', eq: 'K_{a} \\gamma_{s} h_{1} h_{2}', sub: '(' + Ka + ')(' + gs + ')(' + rwrN(r.h_above, 2) + ')(' + rwrN(r.h_below, 2) + ')', value: r.Ka * inp.gamma_s * r.h_above * r.h_below, unit: 'lb/ft', d: 1 }));
+        s1.push(rwrS({ id: 'Pa3', label: 'Active force below the water table, buoyant soil', sym: 'P_{a,3}', eq: '\\frac{1}{2} K_{a} \\gamma^{\\prime} h_{2}^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + rwrN(r.gamma_s_sub, 1) + ')(' + rwrN(r.h_below, 2) + ')^{2}', value: 0.5 * r.Ka * r.gamma_s_sub * r.h_below ** 2, unit: 'lb/ft', d: 1, note: 'γ′ = γ_sat − γ_w = ' + rwrN(r.gamma_sat, 1) + ' − ' + rwrN(r.gamma_w, 1) + ' pcf' }));
+        s1.push(rwrS({ id: 'Pa', label: 'Total active soil resultant', sym: 'P_{a}', eq: 'P_{a,1} + P_{a,2} + P_{a,3}', sub: '', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
+        s1.push(rwrS({ id: 'Fhyd', label: 'Hydrostatic force (water column)', sym: 'F_{hyd}', eq: '\\frac{1}{2}\\gamma_{w} h_{w}^{2}', sub: '\\frac{1}{2}(' + rwrN(r.gamma_w, 1) + ')(' + rwrN(r.hw, 2) + ')^{2}', value: r.F_hyd, unit: 'lb/ft', d: 1 }));
+      } else s1.push(rwrS({ id: 'Pa', label: 'Active soil resultant (triangular distribution)', sym: 'P_{a}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} H^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.H, 3) + ')^{2}', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
+      if (r.Pa_incl_deg > 0) { const iS = r.coulombThrust ? '(\\delta + \\omega)' : '\\beta';
+        s1.push(rwrS({ id: 'PaH', label: 'Horizontal component' + (r.coulombThrust ? ' (Coulomb: inclined at δ + ω)' : ' (inclined at β)'), sym: 'P_{a,H}', eq: 'P_{a}\\cos' + iS, sub: rwrN(r.Pa_tri, 1) + '\\cos(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_h, unit: 'lb/ft', d: 1 }));
+        s1.push(rwrS({ id: 'PaV', label: 'Vertical component (acts downward at the heel, stabilizing)', sym: 'P_{a,V}', eq: 'P_{a}\\sin' + iS, sub: rwrN(r.Pa_tri, 1) + '\\sin(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_v, unit: 'lb/ft', d: 1 })); }
+      T.push({ title: 'Active earth pressure' + (r.hasWT ? ' and water' : ''), steps: s1 });
+      const s2 = [rwrS({ id: 'Pasur', label: 'Surcharge lateral force (uniform over H)', sym: 'P_{a,sur}', eq: 'K_{a} q_{s} H', sub: '(' + Ka + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.H, 3) + ')', value: r.Pa_sur_h, unit: 'lb/ft', d: 1 })];
+      if (r.hasSeismic) s2.push(rwrS({ id: 'dPE', label: 'Seismic increment, Mononobe-Okabe (acts at 0.6H)', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_tri, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1, ref: 'ASCE 7-22 §11.8', note: 'k_h = ' + rwrN(inp.kh, 3) + ', k_v = ' + rwrN(inp.kv, 3) }));
+      s2.push(rwrS({ id: 'Fh', label: 'Total horizontal driving force', sym: 'F_{h}', eq: 'P_{a,H} + P_{a,sur}' + (r.hasWT ? ' + F_{hyd}' : ''), sub: rwrN(r.Pa_tri_h, 1) + ' + ' + rwrN(r.Pa_sur_h, 1) + (r.hasWT ? ' + ' + rwrN(r.F_hyd, 1) : ''), value: r.Fh, unit: 'lb/ft', d: 1 }));
+      T.push({ title: 'Surcharge' + (r.hasSeismic ? ', seismic' : '') + ' and total thrust', steps: s2 });
+      const s3 = [rwrS({ id: 'Pp', label: 'Passive resistance at the toe (embedment D_f = ' + rwrN(r.Df, 2) + ' ft)', sym: 'P_{p}', eq: '\\frac{1}{2} K_{p} \\gamma_{s} D_{f}^{2}', sub: '\\frac{1}{2}(' + rwrN(r.Kp, 4) + ')(' + gs + ')(' + rwrN(r.Df, 3) + ')^{2}', value: r.Pp_toe, unit: 'lb/ft', d: 1,
+        note: inp.inclPassive ? 'included in sliding and overturning (P_p = ' + rwrN(r.Pp_full, 0) + ' lb/ft)' : 'neglected (option off): P_p = ' + rwrN(r.Pp_full, 0) + ' lb/ft is not counted in sliding or overturning' })];
+      if (inp.useShearKey) s3.push(rwrS({ id: 'Ppkey', label: 'Additional passive from the shear key (d_k = ' + rwrN(inp.dk, 0) + ' in)', sym: 'P_{p,key}', eq: '\\frac{1}{2}K_{p}\\gamma_{s}(D_{f} + d_{k})^{2} \\minus P_{p,toe}', sub: '', value: r.Pp_key, unit: 'lb/ft', d: 1 }));
+      T.push({ title: 'Passive resistance', steps: s3 });
+      subs.push(sub('Step 2 — Lateral driving forces', [rwrItem('st2', T), r.hasSeismic ? { type: 'note', text: 'P_AE and the Mononobe-Okabe coefficient: [[st9/Pae]].' } : null])); }
+    { const st = [], gc = rwrN(inp.gamma_c, 0);
+      st.push(rwrS({ id: 'Wftg', label: 'Footing self-weight (arm x = ' + rwrN(r.x_ftg, 3) + ' ft)', sym: 'W_{ftg}', eq: '\\gamma_{c} B t_{f}', sub: '(' + gc + ')(' + rwrN(r.B, 3) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.Wftg, unit: 'lb/ft', d: 1 }));
+      st.push(rwrS({ id: 'Wstem', label: 'Stem self-weight, trapezoid (arm x = ' + rwrN(r.x_stem, 3) + ' ft)', sym: 'W_{stem}', eq: '\\gamma_{c}\\,\\frac{t_{s,top} + t_{s,bot}}{2}\\,H_{s}', sub: '(' + gc + ')\\frac{' + rwrN(inp.ts_top, 1) + ' + ' + rwrN(inp.ts_bot, 1) + '}{2\\cdot 12}(' + rwrN(inp.Hs, 2) + ')', value: r.Wstem, unit: 'lb/ft', d: 1 }));
+      st.push(rwrS({ id: 'Wsoil', label: 'Soil block on the heel (arm x = ' + rwrN(r.x_soil, 3) + ' ft)', sym: 'W_{soil}', eq: '\\gamma_{s} H_{s} L_{h}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')(' + rwrN(inp.Lh, 2) + ')', value: r.Wsoil, unit: 'lb/ft', d: 1 }));
+      if (inp.q_sur > 0) st.push(rwrS({ id: 'Wsur', label: 'Surcharge on the heel (arm x = ' + rwrN(r.x_soil, 3) + ' ft)', sym: 'W_{sur}', eq: 'q_{s} L_{h}', sub: '(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Lh, 2) + ')', value: r.Wsur, unit: 'lb/ft', d: 1 }));
+      if (inp.beta > 0) st.push(rwrS({ id: 'PaV3', label: 'Vertical earth pressure component at the heel (arm x = B = ' + rwrN(r.B, 3) + ' ft)', sym: 'P_{a,V}', eq: '', sub: '', value: r.Pa_tri_v, unit: 'lb/ft', d: 1 }));
+      if (r.hasCol) st.push(rwrS({ id: 'wcol', label: 'Column / beam service load DL + LL + SL over L_dist (arm x = ' + rwrN(r.x_col, 3) + ' ft)', sym: 'w_{col}', eq: '\\frac{P_{DL} + P_{LL} + P_{SL}}{L_{dist}}', sub: '\\frac{(' + rwrN(inp.col_DL, 1) + ' + ' + rwrN(inp.col_LL, 1) + ' + ' + rwrN(inp.col_SL, 1) + ')\\times 1000}{' + rwrN(inp.col_Ldist, 1) + '}', value: r.W_col, unit: 'lb/ft', d: 1 }));
+      if (r.hasWT) st.push(rwrS({ id: 'U', label: 'Hydrostatic uplift on the base, ' + (r.upliftTri ? 'triangular' : 'uniform') + ' (destabilizing; at x = ' + rwrN(r.x_uplift, 2) + ' ft)', sym: 'U', eq: (r.upliftTri ? '\\frac{1}{2}' : '') + '\\gamma_{w} h_{w} B', sub: (r.upliftTri ? '\\frac{1}{2}' : '') + '(' + rwrN(r.gamma_w, 1) + ')(' + rwrN(r.hw, 2) + ')(' + rwrN(r.B, 3) + ')', value: r.F_uplift, unit: 'lb/ft', d: 1 }));
+      st.push(rwrS({ id: 'SumV', label: 'Total vertical force', sym: '\\sum V', eq: '\\sum W_{i}' + (r.hasWT ? ' \\minus U' : ''), sub: '', value: r.SumV, unit: 'lb/ft', d: 1 }));
+      st.push(rwrS({ id: 'Ms', label: 'Total stabilizing (resisting) moment about the toe', sym: 'M_{stab}', eq: '\\sum W_{i} x_{i}' + (r.hasWT ? ' \\minus U x_{U}' : '') + (r.Ms_Pp > 0 ? ' + P_{p,toe}\\frac{D_{f}}{3}' : ''), sub: '', value: r.Ms, unit: 'lb-ft/ft', d: 1 }));
+      subs.push(sub('Step 3 — Vertical forces and stabilizing moments about the toe', [rwrItem('st3', [{ title: 'Weights and moments', steps: st }]), { type: 'note', text: 'Moments are taken about the front-bottom corner of the toe.' }])); }
+    { const T = [], s1 = [];
+      s1.push(rwrS({ id: 'Moa', label: 'Overturning moment, active soil (resultant height y_a)', sym: 'M_{o,a}', eq: 'P_{a,H}\\,y_{a}', sub: '(' + rwrN(r.Pa_tri_h, 1) + ')(' + rwrN(r.y_Pa, 3) + ')', value: r.Mo_tri, unit: 'lb-ft/ft', d: 1 }));
+      s1.push(rwrS({ id: 'Mos', label: "Overturning moment, surcharge (resultant at H'/2)", sym: 'M_{o,s}', eq: "P_{a,sur}\\frac{H^{\\prime}}{2}", sub: '(' + rwrN(r.Pa_sur_h, 1) + ')\\frac{' + rwrN(r.Hp, 3) + '}{2}', value: r.Mo_sur, unit: 'lb-ft/ft', d: 1 }));
+      if (r.hasWT) s1.push(rwrS({ id: 'Mow', label: 'Overturning moment, hydrostatic (resultant at h_w/3)', sym: 'M_{o,w}', eq: 'F_{hyd}\\frac{h_{w}}{3}', sub: '(' + rwrN(r.F_hyd, 1) + ')\\frac{' + rwrN(r.hw, 2) + '}{3}', value: r.Mo_hyd, unit: 'lb-ft/ft', d: 1 }));
+      if (r.hasSeismic) s1.push(rwrS({ id: 'MoE', label: 'Overturning moment, seismic increment (at 0.6H)', sym: 'M_{o,E}', eq: '\\Delta P_{E}\\cdot 0.6H', sub: '(' + rwrN(r.Pe_inc, 1) + ')(' + rwrN(0.6 * r.H, 2) + ')', value: r.Mo_seis, unit: 'lb-ft/ft', d: 1 }));
+      s1.push(rwrS({ id: 'Mo', label: 'Total overturning moment', sym: 'M_{OT}', eq: '\\sum M_{o}', sub: '', value: r.Mo, unit: 'lb-ft/ft', d: 1 }));
+      T.push({ title: 'Overturning moments', steps: s1 });
+      const s2 = [rwrS({ id: 'MsOT', label: 'Resisting moment relied on for overturning (surcharge and column live / snow excluded)', sym: 'M_{stab,OT}', eq: 'M_{stab} \\minus q_{sur}L_{h}x_{sur} \\minus (P_{LL} + P_{S})_{col}x_{col}', sub: rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Ms_OT_excl, 1), value: r.Ms_OT, unit: 'lb-ft/ft', d: 1,
+        note: 'loads that may be absent while the thrust acts are excluded from all resisting forces; they stay in the bearing check' }),
+        rwrS({ id: 'FOS', label: 'Factor of safety against overturning', sym: 'FOS_{OT}', eq: '\\frac{M_{stab,OT}}{M_{OT}}', sub: '\\frac{' + rwrN(r.Ms_OT, 1) + '}{' + rwrN(r.Mo, 1) + '}', value: r.FOS_OT, unit: '', d: 3, ref: fosRef }),
+        rwrS({ id: 'dc', label: 'Overturning check: FOS_OT ≥ 1.5 (D/C = 1.5 / FOS, as the Overview scorecard)', sym: 'D/C', eq: '\\frac{1.5}{FOS_{OT}}', sub: '\\frac{1.5}{' + rwrN(r.FOS_OT, 3) + '}', value: dcv('ot'), unit: '', d: 3, ok: ok('ot'), ref: fosRef })];
+      CK.ot = 'st4/dc';
+      T.push({ title: 'Factor of safety', ref: fosRef, steps: s2 });
+      subs.push(sub('Step 4 — Overturning check', [rwrItem('st4', T), onTab('stabOT')])); }
+    { const st = [rwrS({ id: 'SumVfr', label: 'Vertical load relied on for friction (surcharge and column live / snow excluded)', sym: '\\sum V_{fr}', eq: '\\sum V \\minus q_{sur}L_{h} \\minus (P_{LL} + P_{S})_{col}', sub: rwrN(r.SumV, 1) + ' \\minus ' + rwrN(r.V_slide_excl, 1), value: r.SumV_slide, unit: 'lb/ft', d: 1 }),
+      rwrS({ id: 'Ffr', label: 'Friction resistance at the base', sym: 'F_{fr}', eq: '\\mu\\,\\sum V_{fr}', sub: '(' + rwrN(inp.mu, 4) + ')(' + rwrN(r.SumV_slide, 1) + ')', value: inp.mu * r.SumV_slide, unit: 'lb/ft', d: 1 }),
+      rwrS({ id: 'Fr', label: 'Total sliding resistance (friction + passive)', sym: 'F_{r}', eq: '\\mu\\,\\sum V_{fr} + P_{p}', sub: rwrN(inp.mu * r.SumV_slide, 1) + ' + ' + rwrN(r.Pp, 1), value: r.Fr, unit: 'lb/ft', d: 1, note: inp.inclPassive ? 'P_p included' : 'P_p neglected (option off)' }),
+      rwrS({ id: 'FOS', label: 'Factor of safety against sliding', sym: 'FOS_{SL}', eq: '\\frac{F_{r}}{F_{h}' + (r.hasSeismic ? ' + \\Delta P_{E}' : '') + '}', sub: '\\frac{' + rwrN(r.Fr, 1) + '}{' + rwrN(r.Fh + (r.hasSeismic ? r.Pe_inc : 0), 1) + '}', value: r.FOS_SL, unit: '', d: 3, ref: fosRef }),
+      rwrS({ id: 'dc', label: 'Sliding check: FOS_SL ≥ 1.5 (D/C = 1.5 / FOS)', sym: 'D/C', eq: '\\frac{1.5}{FOS_{SL}}', sub: '\\frac{1.5}{' + rwrN(r.FOS_SL, 3) + '}', value: dcv('sliding'), unit: '', d: 3, ok: ok('sliding'), ref: fosRef })];
+      CK.sliding = 'st5/dc';
+      subs.push(sub('Step 5 — Sliding check (μ = ' + rwrN(inp.mu, 4) + ')', [rwrItem('st5', [{ title: 'Sliding', steps: st }]), onTab('stabSlide')])); }
+    { const st = [rwrS({ id: 'xR', label: 'Location of the resultant from the toe', sym: '\\bar{x}', eq: '\\frac{M_{stab} \\minus M_{OT}}{\\sum V}', sub: '\\frac{' + rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Mo, 1) + '}{' + rwrN(r.SumV, 1) + '}', value: r.x_R, unit: 'ft', d: 4 }),
+      rwrS({ id: 'e', label: 'Eccentricity from the footing centreline (B/6 = ' + rwrN(r.B / 6, 4) + ' ft)', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '\\frac{' + rwrN(r.B, 3) + '}{2} \\minus ' + rwrN(r.x_R, 4), value: r.e, unit: 'ft', d: 4 })];
+      if (!r.tension_zone) { st.push(rwrS({ id: 'qtoe', label: 'Bearing pressure at the toe, resultant within the kern (trapezoidal)', sym: 'q_{toe}', eq: '\\frac{\\sum V}{B}\\left(1 + \\frac{6e}{B}\\right)', sub: '\\frac{' + rwrN(r.SumV, 1) + '}{' + rwrN(r.B, 3) + '}\\left(1 + \\frac{6(' + rwrN(r.e, 4) + ')}{' + rwrN(r.B, 3) + '}\\right)', value: r.q_toe, unit: 'psf', d: 1 }));
+        st.push(rwrS({ id: 'qheel', label: 'Bearing pressure at the heel', sym: 'q_{heel}', eq: '\\frac{\\sum V}{B}\\left(1 \\minus \\frac{6e}{B}\\right)', sub: '\\frac{' + rwrN(r.SumV, 1) + '}{' + rwrN(r.B, 3) + '}\\left(1 \\minus \\frac{6(' + rwrN(r.e, 4) + ')}{' + rwrN(r.B, 3) + '}\\right)', value: r.q_heel, unit: 'psf', d: 1 })); }
+      else st.push(rwrS({ id: 'qmaxT', label: 'Peak bearing pressure, resultant outside the kern (triangular)', sym: 'q_{max}', eq: '\\frac{2\\sum V}{3\\bar{x}}', sub: '\\frac{2(' + rwrN(r.SumV, 1) + ')}{3(' + rwrN(r.x_R, 4) + ')}', value: r.q_max, unit: 'psf', d: 1 }));
+      st.push(rwrS({ id: 'dc', label: 'Bearing check: q_max ≤ q_a (service loads)', sym: '\\frac{q_{max}}{q_{a}}', eq: '', sub: '\\frac{' + rwrN(r.q_max, 1) + '}{' + rwrN(inp.qa, 0) + '}', value: dcv('bearing'), unit: '', d: 3, ok: ok('bearing') }));
+      CK.bearing = 'st6/dc';
+      const fig = (() => { try { return buildBearingDiagram(r); } catch (e) { return ''; } })();
+      subs.push(sub('Step 6 — Bearing pressure check (q_a = ' + rwrN(inp.qa, 0) + ' psf)', [rwrItem('st6', [{ title: 'Bearing', steps: st }]), fig ? { type: 'figure', svg: fig, caption: 'Service bearing pressure, toe to heel' } : null, onTab('stabBrg')])); }
+    { const st = [rwrS({ id: 'SumVu', label: 'Factored vertical load, U = 1.2D + 1.6H', sym: '\\sum V_{u}', eq: '1.2(W_{ftg} + W_{stem} + W_{soil}' + (r.W_bar > 0 ? ' + W_{bar}' : '') + ') + 1.6(W_{sur} + P_{a,V})' + (r.hasCol ? ' + w_{col,u}' : ''), sub: '', value: r.SumVu, unit: 'lb/ft', d: 1 }),
+      rwrS({ id: 'xRu', label: 'Factored resultant location from the toe', sym: '\\bar{x}_{u}', eq: '\\frac{M_{s,u} \\minus M_{o,u}}{\\sum V_{u}}', sub: '\\frac{' + rwrN(r.Msu, 1) + ' \\minus ' + rwrN(r.Mou, 1) + '}{' + rwrN(r.SumVu, 1) + '}', value: r.x_Ru, unit: 'ft', d: 4 }),
+      rwrS({ id: 'eu', label: 'Factored eccentricity', sym: 'e_{u}', eq: '\\frac{B}{2} \\minus \\bar{x}_{u}', sub: '\\frac{' + rwrN(r.B, 3) + '}{2} \\minus ' + rwrN(r.x_Ru, 4), value: r.e_u, unit: 'ft', d: 4 }),
+      rwrS({ id: 'qutoe', label: 'Factored bearing at the toe', sym: 'q_{u,toe}', eq: '', sub: '', value: r.qu_toe, unit: 'psf', d: 1 }),
+      rwrS({ id: 'quheel', label: 'Factored bearing at the heel', sym: 'q_{u,heel}', eq: '', sub: '', value: r.qu_heel, unit: 'psf', d: 1 }),
+      rwrS({ id: 'qufront', label: 'Factored bearing at the front (toe) face of the stem, x = ' + rwrN(inp.Lt, 2) + ' ft (linear interpolation)', sym: 'q_{u,front}', eq: '', sub: '', value: r.quf_front, unit: 'psf', d: 1 }),
+      rwrS({ id: 'quback', label: 'Factored bearing at the back (heel) face of the stem, x = ' + rwrN(inp.Lt + r.ts_bot_ft, 2) + ' ft', sym: 'q_{u,back}', eq: '', sub: '', value: r.quf_back, unit: 'psf', d: 1 })];
+      const sm = [rwrS({ id: 'SumVumin', label: 'Minimum-vertical case U = 0.9D + 1.6H (surcharge and column L / S / W omitted)', sym: '\\sum V_{u}', eq: '0.9(W_{ftg} + W_{stem} + W_{soil}' + (r.W_bar > 0 ? ' + W_{bar}' : '') + ' + P_{a,V}' + (r.hasCol ? ' + w_{col,D}' : '') + ')', sub: '', value: r.SumVu_min, unit: 'lb/ft', d: 1 }),
+        rwrS({ id: 'eumin', label: 'Factored eccentricity, minimum-vertical case', sym: 'e_{u}', eq: '', sub: '', value: r.e_u_min, unit: 'ft', d: 4 }),
+        rwrS({ id: 'qutoemin', label: 'Factored bearing at the toe, minimum-vertical case', sym: 'q_{u,toe}', eq: '', sub: '', value: r.qu_toe_min, unit: 'psf', d: 1 }),
+        rwrS({ id: 'quheelmin', label: 'Factored bearing at the heel, minimum-vertical case', sym: 'q_{u,heel}', eq: '', sub: '', value: r.qu_heel_min, unit: 'psf', d: 1 }),
+        rwrS({ id: 'qufrontmin', label: 'Factored bearing at the front face of the stem, minimum-vertical case', sym: 'q_{u,front}', eq: '', sub: '', value: r.quf_front_min, unit: 'psf', d: 1 }),
+        rwrS({ id: 'qubackmin', label: 'Factored bearing at the back face of the stem, minimum-vertical case', sym: 'q_{u,back}', eq: '', sub: '', value: r.quf_back_min, unit: 'psf', d: 1 })];
+      subs.push(sub('Step 7 — Factored bearing for footing design', [rwrItem('st7', [{ title: 'U = 1.2D + 1.6H (+ 1.0E)', ref: 'ACI 318-19 §5.3', steps: st }, { title: 'U = 0.9D + 1.6H (footing design envelope)', ref: 'ACI 318-19 §5.3', steps: sm }]), onTab('stabFactBrg')])); }
+    secs.push({ title: 'Stability analysis (service, unfactored)', subs, key: 'stab' });
+  } else {
+    const subs = [], E = a.ct ? a.ct.ee2 : null;
+    const lc = [['Strength I', 'γ_EH = ' + rwrN(a.gEH_max, 2) + ' / 0.90, γ_EV = 1.35 / 1.00, γ_LS = 1.75; φ_τ = ' + rwrN(A.phi_tau, 2) + ', φ_b = ' + rwrN(A.phi_b, 2),
+      { t: 'DCR ' + rwrN(a.sliding_dcr, 2), cls: a.sliding_ok_A ? 'ok' : 'ng', key: 'sa4/dc' }, { t: 'e = ' + rwrN(Math.abs(a.e_A), 2) + ' ≤ ' + rwrN(a.e_limit, 2), cls: a.ecc_ok_A ? 'ok' : 'ng', key: 'sa5/dc' }, { t: rwrN(a.q_ult_gov / 1000, 2) + ' ≤ ' + rwrN(a.q_R_A / 1000, 2) + ' ksf', cls: a.bearing_ok_A ? 'ok' : 'ng', key: 'sa6/dc' }]];
+    if (E) lc.push(['Extreme Event II (collision)', 'γ_CT = 1.0, γ_EH = ' + (E.ehDropped ? '0 (MassDOT)' : '1.0') + ', γ_LS = ' + rwrN(E.gLS_ct, 2) + '; φ = ' + rwrN(E.phi_ct, 2),
+      { t: 'DCR ' + rwrN(E.sliding_dcr_ct, 2), cls: E.sliding_ok_ct ? 'ok' : 'ng', key: 'sa7b/sl' }, { t: 'e = ' + rwrN(Math.abs(E.e_ct), 2) + ' ≤ ' + rwrN(E.e_lim_ct, 2), cls: E.ecc_ok_ct ? 'ok' : 'ng', key: 'sa7b/ec' }, { t: rwrN(E.q_ult_ct / 1000, 2) + ' ≤ ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf', cls: E.bearing_ok_ct ? 'ok' : 'ng', key: 'sa7b/br' }]);
+    lc.push(['Service I', 'all γ = 1.0', { t: '—', cls: 'na' }, { t: 'e = ' + rwrN(Math.abs(r.e), 2) + (Math.abs(r.e) <= r.B / 6 ? ' ≤ ' : ' > ') + 'B/6', cls: Math.abs(r.e) <= r.B / 6 ? 'ok' : 'ng' }, { t: rwrN(r.q_max / 1000, 2) + ' ≤ ' + rwrN(inp.qa / 1000, 2) + ' ksf', cls: r.bearing_ok ? 'ok' : 'ng' }]);
+    subs.push(sub('Load combination summary', [{ type: 'table', wide: true, caption: 'AASHTO LRFD 10th Ed. Table 3.4.1-1: governing result per check', head: ['Limit state', 'Key factors', 'Sliding', 'Eccentricity', 'Bearing'], rows: lc },
+      { type: 'note', text: 'Concrete design is enveloped separately: Strength I vs Extreme Event II' + (r.stem_ee2_governs ? ' (Extreme Event II governs the stem)' : '') + (r.heel_md_governs ? '; MassDOT §3.3.2.2 governs the heel top steel' : '') + '. The Service I row is a status-bar check of the tool (e ≤ B/6, q_max ≤ q_a with the service values of the ACI-format stability, not worked on the AASHTO tab).' }]));
+    { const st = [], ph = rwrN(inp.phi, 0) + RWR_DEG;
+      if (A.ep_cond === 'atrest') st.push(rwrS({ id: 'K', label: 'At-rest coefficient (Jaky, OCR-corrected)', sym: 'K_{0}', eq: '(1 \\minus \\sin\\phi)\\,OCR^{\\sin\\phi}', sub: '(1 \\minus \\sin ' + ph + ')(' + rwrN(A.ocr, 1) + ')^{\\sin ' + ph + '}', value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.2') }));
+      else if (A.ep_method === 'coulomb') { st.push(rwrS({ id: 'K', label: 'Coulomb active coefficient', sym: 'K_{a}', eq: '\\frac{\\sin^{2}(\\theta + \\phi)}{\\Gamma\\,\\sin^{2}\\theta\\,\\sin(\\theta \\minus \\delta)}', sub: '\\phi = ' + ph + ',\\; \\delta = ' + rwrN(A.delta, 0) + RWR_DEG + ',\\; \\beta = ' + rwrN(inp.beta, 0) + RWR_DEG + ',\\; \\theta = ' + rwrN(90 - A.batter, 2) + RWR_DEG, value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.3'),
+        note: 'Γ = [1 + √(sin(φ + δ) sin(φ − β) / (sin(θ − δ) sin(θ + β)))]²' + (r.coulombDeltaWarn ? '; Coulomb wall friction on a cantilever wall: see the warning on the Stability tab (heel ' + (r.heelLongForRankine ? 'long: Rankine for stability' : 'short') + ')' : '') })); }
+      else st.push(rwrS({ id: 'K', label: 'Rankine active coefficient', sym: 'K_{a}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{' + ph + '}{2}\\right)', value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.3') }));
+      st.push(rwrS({ id: 'Kp', label: 'Passive coefficient (toe resistance)', sym: 'K_{p}', eq: '', sub: '', value: r.Kp, unit: '', d: 4, ref: AA('Art. 3.11.5.4') }));
+      subs.push(sub('Step 1 — Earth pressure coefficient', [rwrItem('sa1', [{ title: 'Coefficients', steps: st }]), onTab('stabKa')])); }
+    if (A.ll_surcharge) subs.push(sub('Step 2 — Live-load surcharge (equivalent soil height)', [rwrItem('sa2', [{ title: 'Surcharge', steps: [
+      rwrS({ id: 'heq', label: A.heq_mode === 'manual' ? 'Equivalent height (manual override)' : 'Equivalent height from the wall height H = ' + rwrN(r.H, 2) + ' ft (interpolated)', sym: 'h_{eq}', eq: '', sub: '', value: a.heq, unit: 'ft', d: 2, ref: AA('Table 3.11.6.4.1-2') }),
+      rwrS({ id: 'qLS', label: 'Equivalent surcharge pressure', sym: 'q_{LS}', eq: '\\gamma_{s}\\,h_{eq}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(a.heq, 2) + ')', value: a.q_ll_aashto, unit: 'psf', d: 0, ref: AA('Art. 3.11.6.4') })] }]), onTab('stabLS')]));
+    { const st = [rwrS({ id: 'PEH', label: 'Horizontal earth pressure resultant EH (at y = ' + rwrN(a.y_EH, 2) + ' ft)', sym: 'P_{EH}', eq: r.hasWT ? '\\text{3-block effective-stress resultant on } H^{\\prime}' : '\\frac{1}{2}K_{a}\\gamma_{s} H^{\\prime 2}' + (inp.beta > 0 ? '\\cos\\beta' : ''), sub: r.hasWT ? '' : '\\frac{1}{2}(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 2) + ')^{2}' + (inp.beta > 0 ? '\\cos ' + rwrN(inp.beta, 0) + RWR_DEG : ''), value: a.P_EH, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.5') })];
+      if (A.ll_surcharge) st.push(rwrS({ id: 'PLS', label: "Live-load surcharge horizontal LS (at y = H'/2 = " + rwrN(a.y_LS, 2) + ' ft)', sym: 'P_{LS}', eq: 'K_{a}\\,q_{LS}\\,H^{\\prime}', sub: '(' + rwrN(r.Ka, 4) + ')(' + rwrN(a.q_ll_aashto, 0) + ')(' + rwrN(r.Hp, 2) + ')', value: a.P_LS, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.6.4') }));
+      st.push(rwrS({ id: 'VDC', label: 'Vertical dead load of the structure DC', sym: 'V_{DC}', eq: 'W_{ftg} + W_{stem}' + (r.W_bar > 0 ? ' + W_{bar}' : ''), sub: rwrN(r.Wftg, 0) + ' + ' + rwrN(r.Wstem, 0) + (r.W_bar > 0 ? ' + ' + rwrN(r.W_bar, 0) : ''), value: r.Wftg + r.Wstem + r.W_bar, unit: 'lb/ft', d: 0 }));
+      st.push(rwrS({ id: 'VEV', label: 'Vertical earth load EV' + (r.Wwedge > 0 ? ' (soil on the heel + slope wedge)' : ' (soil on the heel)'), sym: 'V_{EV}', eq: 'W_{soil}', sub: '', value: r.Wsoil, unit: 'lb/ft', d: 0 }));
+      if (r.Pa_tri_v > 0) st.push(rwrS({ id: 'VEHv', label: 'Vertical component of the earth thrust (factored as EH, not EV)', sym: 'V_{EH,v}', eq: 'P_{a,V}', sub: '', value: r.Pa_tri_v, unit: 'lb/ft', d: 0 }));
+      if (a.V_up > 0) st.push(rwrS({ id: 'U', label: 'Water uplift on the base (WA, γ = 1.0), subtracted', sym: 'U', eq: '\\gamma_{w} h_{w} B', sub: '', value: a.V_up, unit: 'lb/ft', d: 0 }));
+      subs.push(sub('Step 3 — Unfactored load components (per ft of wall)', [rwrItem('sa3', [{ title: 'Loads', steps: st }])])); }
+    { const st = [rwrS({ id: 'Q', label: 'Factored sliding demand (γ_EH = ' + rwrN(a.gEH_max, 2) + ', γ_LS = 1.75)', sym: '\\sum\\gamma Q', eq: '\\eta(' + rwrN(a.gEH_max, 2) + '\\,P_{EH} + 1.75\\,P_{LS}' + (a.P_ES > 0 ? ' + 1.50\\,P_{ES}' : '') + (a.P_hyd > 0 ? ' + 1.00\\,P_{WA}' : '') + ')', sub: rwrN(a.eta, 2) + '(' + rwrN(a.gEH_max, 2) + '\\cdot' + rwrN(a.P_EH, 0) + ' + 1.75\\cdot' + rwrN(a.P_LS, 0) + (a.P_ES > 0 ? ' + 1.50\\cdot' + rwrN(a.P_ES, 0) : '') + (a.P_hyd > 0 ? ' + 1.00\\cdot' + rwrN(a.P_hyd, 0) : '') + ')', value: a.H_drive_str, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') }),
+      rwrS({ id: 'RR', label: 'Factored friction resistance (minimum vertical 0.90DC + 1.00EV' + (r.Pa_tri_v > 0 ? ' + 0.90EH,v' : '') + ')', sym: 'R_{R}', eq: '\\phi_{\\tau}(0.90\\,V_{DC} + 1.00\\,V_{EV}' + (r.Pa_tri_v > 0 ? ' + 0.90\\,V_{EH,v}' : '') + (a.V_up > 0 ? ' \\minus U' : '') + ')\\tan\\delta_{b}', sub: '(' + rwrN(A.phi_tau, 2) + ')(' + rwrN(a.V_resist_min, 0) + ')(' + rwrN(a.tanDelta, 3) + ')', value: a.R_tau, unit: 'lb/ft', d: 0, ref: AA('Art. 10.6.3.4, Table 11.5.7-1'), note: 'δ_b = ' + rwrN(a.delta_b, 1) + '°, basis: ' + rwrPlain(a.fric_label) }),
+      rwrS({ id: 'Rep', label: 'Factored passive resistance' + (inp.inclPassive ? '' : ' (passive neglected, option off: P_p = ' + rwrN(r.Pp_full, 0) + ' lb/ft not counted)'), sym: '\\phi_{ep}P_{p}', eq: '', sub: '(' + rwrN(A.phi_ep, 2) + ')(' + rwrN(r.Pp, 0) + ')', value: a.R_ep, unit: 'lb/ft', d: 0 }),
+      rwrS({ id: 'Rs', label: 'Total sliding resistance', sym: 'R_{R} + \\phi_{ep}P_{p}', eq: '', sub: rwrN(a.R_tau, 0) + ' + ' + rwrN(a.R_ep, 0), value: a.R_slide, unit: 'lb/ft', d: 0 }),
+      rwrS({ id: 'dc', label: 'Sliding check: resistance ≥ demand', sym: 'DCR', eq: '\\frac{\\sum\\gamma Q}{R_{R} + \\phi_{ep}P_{p}}', sub: '\\frac{' + rwrN(a.H_drive_str, 0) + '}{' + rwrN(a.R_slide, 0) + '}', value: a.sliding_dcr, unit: '', d: 3, ok: ok('sliding'), ref: AA('Art. 10.6.3.4') })];
+      CK.sliding = 'sa4/dc';
+      subs.push(sub('Step 4 — Sliding resistance (Strength I)', [rwrItem('sa4', [{ title: 'Sliding', steps: st }]), onTab('stabSlide')])); }
+    { const st = [rwrS({ id: 'Mo', label: 'Factored overturning moment about the toe (maximum horizontal)', sym: 'M_{o}', eq: '\\eta(' + rwrN(a.gEH_max, 2) + '\\,P_{EH}y_{EH} + 1.75\\,P_{LS}y_{LS}' + (a.P_hyd > 0 ? ' + P_{WA}y_{WA}' : '') + ')', sub: '', value: a.Mo_str, unit: 'lb-ft/ft', d: 0 }),
+      rwrS({ id: 'Mr', label: 'Factored resisting moment (minimum vertical 0.90DC + 1.00EV' + (r.Pa_tri_v > 0 ? ' + 0.90EH,v' : '') + ')', sym: 'M_{r}', eq: '', sub: '', value: a.Mr_str_min, unit: 'lb-ft/ft', d: 0 }),
+      rwrS({ id: 'xR', label: 'Location of the resultant from the toe', sym: '\\bar{x}', eq: '\\frac{M_{r} \\minus M_{o}}{V}', sub: '', value: a.x_R_A, unit: 'ft', d: 3 }),
+      rwrS({ id: 'e', label: 'Eccentricity of the resultant', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '\\frac{' + rwrN(r.B, 2) + '}{2} \\minus ' + rwrN(a.x_R_A, 3), value: a.e_A, unit: 'ft', d: 3 }),
+      rwrS({ id: 'dc', label: 'Eccentricity check, foundation on ' + (a.onRock ? 'rock' : 'soil') + ': |e| ≤ ' + rwrPlain(a.e_limit_label) + ' = ' + rwrN(a.e_limit, 3) + ' ft', sym: '\\frac{|e|}{e_{lim}}', eq: '', sub: '\\frac{' + rwrN(Math.abs(a.e_A), 3) + '}{' + rwrN(a.e_limit, 3) + '}', value: dcv('ecc'), unit: '', d: 3, ok: ok('ecc'), ref: AA('Art. 11.6.3.3') })];
+      CK.ecc = 'sa5/dc';
+      subs.push(sub('Step 5 — Eccentricity limit (Strength I)', [rwrItem('sa5', [{ title: 'Eccentricity', steps: st }]), onTab('stabEcc')])); }
+    { const s1 = [rwrS({ id: 'Vu', label: 'Factored vertical load (maximum: 1.25DC + 1.35EV' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(a.gEH_max, 2) + 'EH,v' : '') + ' + 1.75LS' + (a.V_up > 0 ? ' − U' : '') + ')', sym: 'V_{u}', eq: '', sub: '', value: a.V_str_max, unit: 'lb/ft', d: 0 }),
+      rwrS({ id: 'e', label: 'Eccentricity for bearing', sym: 'e', eq: '', sub: '', value: a.e_brg, unit: 'ft', d: 3 }),
+      rwrS({ id: 'Beff', label: 'Effective width (Meyerhof)', sym: 'B^{\\prime}', eq: 'B \\minus 2e', sub: rwrN(r.B, 2) + ' \\minus 2(' + rwrN(a.e_brg, 3) + ')', value: a.B_eff, unit: 'ft', d: 3 })];
+      const inK = Math.abs(a.e_brg) <= r.B / 6;
+      if (a.onRock) s1.push(rwrS({ id: 'qu', label: 'Footing on rock: maximum factored bearing pressure (linear distribution)', sym: 'q_{u}', eq: inK ? '\\frac{V_{u}}{B}\\left(1 + \\frac{6e}{B}\\right)' : '\\frac{2V_{u}}{3(B/2 \\minus e)}', sub: inK ? '\\frac{' + rwrN(a.V_str_max, 0) + '}{' + rwrN(r.B, 2) + '}\\left(1 + \\frac{6(' + rwrN(Math.abs(a.e_brg), 3) + ')}{' + rwrN(r.B, 2) + '}\\right)\\frac{1}{1000}' : '\\frac{2(' + rwrN(a.V_str_max, 0) + ')}{3(' + rwrN(r.B / 2, 3) + ' \\minus ' + rwrN(Math.abs(a.e_brg), 3) + ')}\\frac{1}{1000}', value: a.q_ult_A / 1000, unit: 'ksf', d: 2, ref: AA('Art. 10.6.5, Eq. 11.6.3.2-' + (inK ? '2' : '3')) }));
+      else s1.push(rwrS({ id: 'qu', label: 'Uniform factored bearing pressure over the effective width', sym: 'q_{u}', eq: '\\frac{V_{u}}{B^{\\prime}}', sub: '\\frac{' + rwrN(a.V_str_max, 0) + '}{' + rwrN(a.B_eff, 3) + '}\\frac{1}{1000}', value: a.q_ult_A / 1000, unit: 'ksf', d: 2, ref: AA('Art. 10.6.3.1') }));
+      s1.push(rwrS({ id: 'qR', label: a.useManualQn ? 'Factored bearing resistance (from the geotechnical report)' : 'Factored bearing resistance (q_n ≈ 3 q_a = ' + rwrN(a.q_n_A, 0) + ' psf)', sym: 'q_{R}', eq: '\\phi_{b}\\,q_{n}', sub: a.useManualQn ? '' : '(' + rwrN(A.phi_b, 2) + ')(' + rwrN(a.q_n_A, 0) + ')\\frac{1}{1000}', value: a.q_R_A / 1000, unit: 'ksf', d: 2,
+        note: a.useManualQn ? '' : 'q_n estimated as 3 q_a (assumes the allowable was derived with FS ≈ 3); enter the geotechnical value for final design' }));
+      s1.push(rwrS({ id: 'okmax', label: 'Bearing check, Strength I (maximum vertical): q_u ≤ q_R', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(a.q_ult_A / 1000, 2) + '}{' + rwrN(a.q_R_A / 1000, 2) + '}', value: a.q_ult_A / a.q_R_A, unit: '', d: 3, ok: !!a.bearing_ok_max }));
+      const s2 = [rwrS({ id: 'BeffIa', label: a.onRock ? 'Strength Ia (minimum vertical 0.90DC + 1.00EV, maximum EH), same e as the eccentricity check' : "Strength Ia: effective width at the eccentricity of the eccentricity check", sym: a.onRock ? 'e' : 'B^{\\prime}', eq: a.onRock ? '' : 'B \\minus 2|e|', sub: a.onRock ? '' : rwrN(r.B, 2) + ' \\minus 2(' + rwrN(Math.abs(a.e_A), 3) + ')', value: a.onRock ? Math.abs(a.e_A) : a.B_eff_Ia, unit: 'ft', d: 3, note: 'V = ' + rwrN(a.V_str_min, 0) + ' lb/ft (minimum factored vertical)' }),
+        rwrS({ id: 'quIa', label: 'Factored bearing pressure, Strength Ia', sym: 'q_{u}', eq: a.onRock ? (Math.abs(a.e_A) <= r.B / 6 ? '\\frac{V}{B}\\left(1 + \\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2 \\minus e)}') : '\\frac{V}{B^{\\prime}}', sub: a.onRock ? '' : '\\frac{' + rwrN(a.V_str_min, 0) + '}{' + rwrN(a.B_eff_Ia, 3) + '}\\frac{1}{1000}', value: a.q_ult_Ia / 1000, unit: 'ksf', d: 2, ref: a.onRock ? AA('C11.5.6, Eq. 11.6.3.2-' + (Math.abs(a.e_A) <= r.B / 6 ? '2' : '3')) : AA('C11.5.6') }),
+        rwrS({ id: 'okIa', label: 'Bearing check, Strength Ia (minimum vertical): q_u ≤ q_R', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(a.q_ult_Ia / 1000, 2) + '}{' + rwrN(a.q_R_A / 1000, 2) + '}', value: a.q_ult_Ia / a.q_R_A, unit: '', d: 3, ok: !!a.bearing_ok_Ia }),
+        rwrS({ id: 'dc', label: 'Bearing: governing of Strength I and Ia (status-bar check)', sym: '\\frac{q_{u,gov}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(a.q_ult_gov / 1000, 2) + '}{' + rwrN(a.q_R_A / 1000, 2) + '}', value: dcv('bearing'), unit: '', d: 3, ok: ok('bearing') })];
+      CK.bearing = 'sa6/dc';
+      subs.push(sub('Step 6 — Bearing resistance (Strength I)', [rwrItem('sa6', [{ title: 'Strength I (maximum vertical)', ref: a.onRock ? AA('Art. 10.6.5, 11.6.3.2') : AA('Art. 10.6.3.1'), steps: s1 }, { title: 'Strength Ia (minimum vertical)', steps: s2 }]), onTab('stabBrg')])); }
+    if (a.ct) {
+      const c = a.ct, TLN = { tl23: 'TL-2 / TL-3', tl4: 'TL-4 (S3-MTL4)', tl5: 'TL-5 (CF-MTL5)', manual: 'manual' };
+      subs.push(sub('Step 7 — Vehicular collision load (Extreme Event II)', [rwrItem('sa7', [{ title: 'Collision', steps: [
+        rwrS({ id: 'Ft', label: 'Collision force per test level ' + (TLN[c.tl] || c.tl) + ' (L_t = ' + rwrN(A.ct_wh, 1) + ' ft, h_CT = ' + rwrN(A.ct_h_app, 0) + ' in above the roadway)', sym: 'F_{t}', eq: '', sub: '', value: c.Ft, unit: 'kip', d: 0, ref: 'MassDOT LRFD Bridge Manual Table 3.3.2-1' }),
+        rwrS({ id: 'CT', label: c.distMode === 'section' ? 'Distributed over the full wall section between joints' : 'Distributed over a 45° spread (capped at the joint spacing)', sym: 'CT', eq: '\\frac{F_{t}}{L_{dist}}', sub: '\\frac{' + rwrN(c.Ft, 0) + '}{' + rwrN(c.Ldist, 1) + '}', value: c.CT_h, unit: 'kip/ft', d: 3, ref: c.distMode === 'section' ? 'MassDOT LRFD Bridge Manual §3.3.2.4' : '' }),
+        rwrS({ id: 'yCT', label: 'Lever arm above the base of the footing (roadway at the top of the stem)', sym: 'y_{CT}', eq: 'H + h_{CT}', sub: rwrN(r.H, 2) + ' + ' + rwrN(A.ct_h_app / 12, 2), value: c.y_CT, unit: 'ft', d: 2 }),
+        rwrS({ id: 'MCT', label: 'Collision overturning moment about the toe', sym: 'M_{CT}', eq: 'CT\\cdot y_{CT}', sub: '(' + rwrN(c.CT_h, 3) + ')(' + rwrN(c.y_CT, 2) + ')', value: c.M_CT / 1000, unit: 'kip-ft/ft', d: 2 })] }])]));
+      const sb = [rwrS({ id: 'Q', label: 'Factored driving force' + (E.ehDropped ? ' (γ_EH = 0, MassDOT §3.3.2.4: the wall pulls away from the backfill)' : ' (γ_EH = 1.0, earth pressure concurrent)'), sym: '\\sum\\gamma Q', eq: '1.0\\,CT' + (E.ehDropped ? '' : ' + 1.0\\,P_{EH}') + ' + ' + rwrN(E.gLS_ct, 2) + '\\,P_{LS}', sub: rwrN(c.CT_h * 1000, 0) + (E.ehDropped ? '' : ' + ' + rwrN(a.P_EH, 0)) + ' + ' + rwrN(E.gLS_ct, 2) + '\\cdot' + rwrN(a.P_LS, 0), value: E.H_drive_ct, unit: 'lb/ft', d: 0 }),
+        rwrS({ id: 'V', label: 'Resisting vertical load (DC + EV at γ = 1.0)', sym: 'V', eq: '1.0(W_{ftg} + W_{stem}' + (r.hasBarrier ? ' + W_{bar}' : '') + ') + 1.0(W_{soil} + P_{a,V})', sub: '', value: E.V_ct_min, unit: 'lb/ft', d: 0 }),
+        rwrS({ id: 'sl', label: 'Sliding under collision', sym: 'DCR', eq: '\\frac{\\sum\\gamma Q}{\\phi(V\\tan\\delta + P_{p})}', sub: '\\frac{' + rwrN(E.H_drive_ct, 0) + '}{' + rwrN(E.R_ct, 0) + '}', value: E.sliding_dcr_ct, unit: '', d: 3, ok: ok('ctSliding'), note: 'φ = ' + rwrN(E.phi_ct, 2) + ', tan δ = ' + rwrN(a.tanDelta, 3) }),
+        rwrS({ id: 'e', label: 'Resultant location and eccentricity', sym: 'e', eq: '\\frac{B}{2} \\minus \\frac{M_{r} \\minus M_{o}}{V}', sub: '\\frac{' + rwrN(r.B, 2) + '}{2} \\minus \\frac{' + rwrN(E.Mr_ct, 0) + ' \\minus ' + rwrN(E.Mo_ct, 0) + '}{' + rwrN(E.V_ct_min, 0) + '}', value: E.e_ct, unit: 'ft', d: 3 }),
+        rwrS({ id: 'ec', label: 'Eccentricity limit under collision: |e| ≤ B/' + rwrN(E.eccDiv, 0) + ' = ' + rwrN(E.e_lim_ct, 3) + ' ft', sym: '\\frac{|e|}{e_{lim}}', eq: '', sub: '\\frac{' + rwrN(Math.abs(E.e_ct), 3) + '}{' + rwrN(E.e_lim_ct, 3) + '}', value: dcv('ctEcc'), unit: '', d: 3, ok: ok('ctEcc') }),
+        a.onRock ? rwrS({ id: 'qu', label: 'Bearing pressure on rock (linear distribution), e = ' + rwrN(Math.abs(E.e_brg_ct), 3) + ' ft', sym: 'q_{u}', eq: Math.abs(E.e_brg_ct) <= r.B / 6 ? '\\frac{V}{B}\\left(1 + \\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2 \\minus e)}', sub: '', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2, ref: AA('Art. 10.6.5, Eq. 11.6.3.2-' + (Math.abs(E.e_brg_ct) <= r.B / 6 ? '2' : '3')) })
+          : rwrS({ id: 'qu', label: "Effective width B' = B − 2|e| = " + rwrN(E.B_eff_ct, 3) + ' ft and bearing pressure (Meyerhof)', sym: 'q_{u}', eq: '\\frac{V}{B^{\\prime}}', sub: '\\frac{' + rwrN(E.V_ct_min, 0) + '}{' + rwrN(E.B_eff_ct, 3) + '}\\frac{1}{1000}', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2 }),
+        rwrS({ id: 'br', label: 'Bearing under collision: q_u ≤ q_R = φ q_n = ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(E.q_ult_ct / 1000, 2) + '}{' + rwrN(E.q_R_ct / 1000, 2) + '}', value: dcv('ctBearing'), unit: '', d: 3, ok: ok('ctBearing') })];
+      CK.ctSliding = 'sa7b/sl'; CK.ctEcc = 'sa7b/ec'; CK.ctBearing = 'sa7b/br';
+      subs.push(sub('Step 7b — Stability under collision (Extreme Event II)', [rwrItem('sa7b', [{ title: 'Sliding', steps: sb.slice(0, 3) }, { title: 'Eccentricity', steps: sb.slice(3, 5) }, { title: 'Bearing', steps: sb.slice(5) }]), onTab('stabCT')]));
+      if (c.yl) { const y = c.yl, k8 = y.isEnd ? '' : '8';
+        subs.push(sub('Step 7c — Barrier yield-line capacity (' + (y.isEnd ? 'end' : 'interior') + ' segment)', [rwrItem('sa7c', [{ title: 'Yield line', ref: AA('Art. A13.3.1'), steps: [
+          rwrS({ id: 'Lc', label: 'Critical length of the yield-line pattern', sym: 'L_{c}', eq: '\\frac{L_{t}}{2} + \\sqrt{\\left(\\frac{L_{t}}{2}\\right)^{2} + \\frac{' + k8 + 'H(M_{b} + M_{w})}{M_{c}}}', sub: '\\frac{' + rwrN(y.Lt_c, 1) + '}{2} + \\sqrt{\\left(\\frac{' + rwrN(y.Lt_c, 1) + '}{2}\\right)^{2} + \\frac{' + k8 + '(' + rwrN(y.Hb, 2) + ')(' + rwrN(y.Mb, 1) + ' + ' + rwrN(y.Mw, 1) + ')}{' + rwrN(y.Mc, 1) + '}}', value: y.Lc, unit: 'ft', d: 2, ref: AA('Art. A13.3.1') }),
+          rwrS({ id: 'Rw', label: 'Nominal railing resistance', sym: 'R_{w}', eq: '\\frac{2}{2L_{c} \\minus L_{t}}\\left(' + k8 + 'M_{b} + ' + k8 + 'M_{w} + \\frac{M_{c}L_{c}^{2}}{H}\\right)', sub: '', value: y.Rw, unit: 'kip', d: 1, ref: AA('Art. A13.3.1') }),
+          rwrS({ id: 'dc', label: 'Railing resistance vs the design impact: R_w ≥ F_t = ' + rwrN(y.Ft, 0) + ' kip', sym: '\\frac{F_{t}}{R_{w}}', eq: '', sub: '\\frac{' + rwrN(y.Ft, 0) + '}{' + rwrN(y.Rw, 1) + '}', value: dcv('ctYield'), unit: '', d: 3, ok: ok('ctYield') })] }]), onTab('stabYL')]));
+        CK.ctYield = 'sa7c/dc'; }
+    }
+    if (a.ish) { const s = a.ish, st = [rwrS({ id: 'Vn', label: 'Footing–subfooting nominal interface shear (least of three limits)', sym: 'V_{n}', eq: '\\min(c\\,A_{cv},\\; K_{1} ' + RWR_FC + ' A_{cv},\\; K_{2} A_{cv})', sub: 'c = ' + rwrN(A.ish_c, 3) + ',\\; A_{cv} = ' + rwrN(s.Acv_ftg, 0) + ',\\; K_{1} = ' + rwrN(A.ish_k1, 2) + ',\\; K_{2} = ' + rwrN(A.ish_k2, 2), value: s.Vn_ftg, unit: 'kip/ft', d: 1, ref: AA('Art. 5.7.4.3') }),
+      rwrS({ id: 'ftg', label: 'Footing interface: φV_n ≥ V_u' + (s.dowel_needed ? ' (concrete alone; dowels below)' : ''), sym: '\\frac{V_{u}}{\\phi V_{n}}', eq: '', sub: '\\frac{' + rwrN(s.Vu_ish, 1) + '}{' + rwrN(s.Vr_ftg, 1) + '}', value: s.Vu_ish / s.Vr_ftg, unit: '', d: 3, ok: !!s.ish_ftg_ok, note: 'φ_v = ' + rwrN(s.phi_v, 2) })];
+      if (s.dowel_needed) st.push(rwrS({ id: 'dow', label: 'Bedrock dowels #' + s.bar_d.num + ' at ' + rwrN(A.dowel_spc, 0) + ' in (A_vf = ' + rwrN(s.Avf_dowel, 3) + ' in²/ft): φμA_vf f_y ≥ deficit', sym: '\\frac{\\text{deficit}}{\\phi\\mu A_{vf} f_{y}}', eq: '', sub: '\\frac{' + rwrN(s.shear_deficit, 1) + '}{' + rwrN(s.Vr_dowel, 1) + '}', value: s.shear_deficit / s.Vr_dowel, unit: '', d: 3, ok: !!s.dowel_ok }));
+      st.push(rwrS({ id: 'ftgdc', label: 'Footing–subfooting interface outcome (status-bar check)', sym: 'D/C', eq: '', sub: '', value: dcv('ishFtg'), unit: '', d: 3, ok: ok('ishFtg') }));
+      st.push(rwrS({ id: 'stem', label: 'Stem–footing interface (S1 bars as shear friction): φV_n ≥ V_u', sym: '\\frac{V_{u}}{\\phi V_{n}}', eq: '', sub: '\\frac{' + rwrN(s.Vu_stem_ish, 1) + '}{' + rwrN(s.Vr_stem, 1) + '}', value: dcv('ishStem'), unit: '', d: 3, ok: ok('ishStem') }));
+      CK.ishFtg = 'sa8/ftgdc'; CK.ishStem = 'sa8/stem';
+      subs.push(sub('Step 8 — Interface shear', [rwrItem('sa8', [{ title: 'Interface shear', ref: AA('Art. 5.7.4.3'), steps: st }]), { type: 'note', text: 'V_u at the stem base: [[stb/s1.Vu]]; S1 bars: [[stb/s3.S1]].' }, onTab('stabISH')])); }
+    if (a.serv) { const sv = a.serv, T = [];
+      const cr = (k, nm, ge, M, mk) => { const c = sv[k].crack; return [
+        rwrS({ id: k + '.fss', label: nm + ': service tensile stress in the steel' + (c.fss_ok ? '' : ' (capped at 0.6 f_y, Art. 5.6.7)'), sym: 'f_{ss}', eq: '\\frac{M_{serv}}{A_{s} j d}', sub: 'M_{serv} = ' + rwrN(M / 1000, 1) + '\\;\\text{kip-ft/ft}', value: c.fss / 1000, unit: 'ksi', d: 1 }),
+        rwrS({ id: k + '.bs', label: nm + ': strain ratio factor', sym: '\\beta_{s}', eq: '1 + \\frac{d_{c}}{0.7(h \\minus d_{c})}', sub: '1 + \\frac{' + rwrN(c.dc, 3) + '}{0.7(' + rwrN(c.h, 2) + ' \\minus ' + rwrN(c.dc, 3) + ')}', value: c.beta_s, unit: '', d: 3 }),
+        rwrS({ id: k + '.smax', label: nm + ': maximum bar spacing (γ_e = ' + rwrN(ge, 2) + ')', sym: 's_{max}', eq: '\\min\\left(\\frac{700\\gamma_{e}}{\\beta_{s} f_{ss}} \\minus 2d_{c},\\; 1.5h,\\; 18\\right)', sub: '\\min\\left(\\frac{700(' + rwrN(ge, 2) + ')}{' + rwrN(c.beta_s, 3) + '(' + rwrN(c.fss / 1000, 2) + ')} \\minus 2(' + rwrN(c.dc, 3) + '),\\; ' + rwrN(1.5 * c.h, 1) + ',\\; 18\\right)', value: c.s_max, unit: 'in', d: 1, ref: AA('Eq. 5.6.7-1') }),
+        rwrS({ id: k + '.ok', label: nm + ' (' + mk + '): s ≤ s_max', sym: '\\frac{s}{s_{max}}', eq: '', sub: '\\frac{' + rwrN(sv[k].spacing, 1) + '}{' + rwrN(c.s_max, 1) + '}', value: dcv('crack' + k[0].toUpperCase() + k.slice(1)), unit: '', d: 3, ok: ok('crack' + k[0].toUpperCase() + k.slice(1)) })]; };
+      const mr = (k, nm) => { const m = sv[k].minR; return [
+        rwrS({ id: k + '.Mcr', label: nm + ': cracking moment', sym: 'M_{cr}', eq: '\\gamma_{3}\\gamma_{1} f_{r} S_{nc}', sub: 'f_{r} = ' + rwrN(sv.fr, 0) + '\\;\\text{psi}', value: m.Mcr / 1000, unit: 'kip-ft/ft', d: 1, ref: AA('Art. 5.6.3.3') }),
+        rwrS({ id: k + '.mr', label: nm + ': minimum reinforcement M_r ≥ min(M_cr, 1.33 M_u)', sym: '\\frac{\\min(M_{cr}, 1.33M_{u})}{M_{r}}', eq: '', sub: '\\frac{' + rwrN(m.demand / 1000, 1) + '}{' + rwrN(m.Mr / 1000, 1) + '}', value: dcv('minRf' + k[0].toUpperCase() + k.slice(1)), unit: '', d: 3, ok: ok('minRf' + k[0].toUpperCase() + k.slice(1)) })]; };
+      T.push({ title: 'Stem crack control', ref: AA('Art. 5.6.7'), steps: cr('stem', 'Stem', A.gamma_e2, sv.M_serv_stem, 'S1') });
+      T.push({ title: 'Heel crack control', ref: AA('Art. 5.6.7'), steps: cr('heel', 'Heel', A.gamma_e1, sv.M_serv_heel, 'F1') });
+      T.push({ title: 'Toe crack control', ref: AA('Art. 5.6.7'), steps: cr('toe', 'Toe', A.gamma_e1, sv.M_serv_toe, 'F2') });
+      T.push({ title: 'Minimum reinforcement', ref: AA('Art. 5.6.3.3'), steps: [].concat(mr('stem', 'Stem'), mr('heel', 'Heel'), mr('toe', 'Toe')) });
+      ['Stem', 'Heel', 'Toe'].forEach(x => { CK['crack' + x] = 'sa9/' + x.toLowerCase() + '.ok'; CK['minRf' + x] = 'sa9/' + x.toLowerCase() + '.mr'; });
+      subs.push(sub('Step 9 — Serviceability: crack control and minimum reinforcement', [rwrItem('sa9', T),
+        { type: 'note', text: 'n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1). Service I stem moment: ' + (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + '; heel: full downward load, no upward relief; toe: |M_u| / 1.5 (approximation of the tool). Heel and toe minimum reinforcement are status-bar checks without a card on the tab.' }, onTab('stabServ')])); }
+    secs.push({ title: 'Stability (AASHTO LRFD limit states)', subs, key: 'stab' });
+  }
+  /* column / beam loads (both bases: the tool computes them the same way) and seismic detail (ACI) */
+  {
+    const S = secs[secs.length - 1];
+    if (r.hasCol) { const fk = x => rwrN(x / 1000, 3);
+      S.subs.push(sub('Column / beam load combinations', [rwrItem('col', [{ title: 'Combinations', ref: 'ASCE 7-22 §2.3.1', steps: [
+        rwrS({ id: 'wsvc', label: 'Service load per foot', sym: 'w_{svc}', eq: '\\frac{(P_{DL} + P_{LL} + P_{SL})\\times 1000}{L_{dist}}', sub: '\\frac{(' + rwrN(inp.col_DL, 1) + ' + ' + rwrN(inp.col_LL, 1) + ' + ' + rwrN(inp.col_SL, 1) + ')\\times 1000}{' + rwrN(inp.col_Ldist, 1) + '}', value: r.P_col_svc, unit: 'lb/ft', d: 1 }),
+        rwrS({ id: 'c2', label: 'Combination 2', sym: '1.2D + 1.6L + 0.5S', eq: '', sub: '1.2(' + fk(r.pDL) + ') + 1.6(' + fk(r.pLL) + ') + 0.5(' + fk(r.pSL) + ')', value: (1.2 * r.pDL + 1.6 * r.pLL + 0.5 * r.pSL) / 1000, unit: 'kip/ft', d: 3 }),
+        rwrS({ id: 'c3', label: 'Combination 3', sym: '1.2D + 1.6S + 1.0L', eq: '', sub: '1.2(' + fk(r.pDL) + ') + 1.6(' + fk(r.pSL) + ') + 1.0(' + fk(r.pLL) + ')', value: (1.2 * r.pDL + 1.0 * r.pLL + 1.6 * r.pSL) / 1000, unit: 'kip/ft', d: 3 }),
+        rwrS({ id: 'c4', label: 'Combination 4', sym: '1.2D + 1.0W + 1.0L + 0.5S', eq: '', sub: '1.2(' + fk(r.pDL) + ') + 1.0(' + fk(r.pWL) + ') + 1.0(' + fk(r.pLL) + ') + 0.5(' + fk(r.pSL) + ')', value: (1.2 * r.pDL + 1.0 * r.pWL + 1.0 * r.pLL + 0.5 * r.pSL) / 1000, unit: 'kip/ft', d: 3 }),
+        rwrS({ id: 'c6', label: 'Combination 6 (uplift check)', sym: '0.9D + 1.0W', eq: '', sub: '0.9(' + fk(r.pDL) + ') + 1.0(' + fk(r.pWL) + ')', value: (0.9 * r.pDL + 1.0 * r.pWL) / 1000, unit: 'kip/ft', d: 3 }),
+        rwrS({ id: 'wumax', label: 'Governing envelope, maximum', sym: 'w_{u,max}', eq: '', sub: '', value: r.Puf_max / 1000, unit: 'kip/ft', d: 3, note: 'w_u,min = ' + fk(r.Puf_min) + ' kip/ft' })] },
+        { title: 'Stem axial', ref: 'ACI 318-19 §22.4', steps: [rwrS({ id: 'ax', label: 'Stem axial ratio (tied member, A_g = ' + rwrN(inp.ts_bot * 12, 0) + ' in² per ft)', sym: '\\frac{P_{u}}{\\phi P_{n,max}}', eq: '\\frac{P_{u}}{0.80(0.65)(0.85 ' + RWR_FC + ' A_{g})}', sub: '\\frac{' + rwrN(r.Pu_stem_axial, 0) + '}{0.80(0.65)(0.85\\cdot' + rwrN(inp.fc, 0) + '\\cdot' + rwrN(inp.ts_bot * 12, 0) + ')}', value: r.col_axial_ratio, unit: '', d: 4, ok: ok('colAxial'),
+          note: r.col_axial_ratio <= 0.10 ? 'P/φP_n ≤ 0.10: flexure governs the stem design' : 'P/φP_n > 0.10: perform a detailed P-M interaction check for the stem' })] }]),
+        isA ? { type: 'note', text: 'On the AASHTO basis the column card is not shown on the Stability tab; the values are the tool\'s own (status-bar check "Col. Axial").' } : onTab('stabCol')]));
+      CK.colAxial = 'col/ax'; }
+    if (r.hasSeismic && !isA) { const th = Math.atan(inp.kh / (1 - inp.kv)) * 180 / Math.PI;
+      S.subs.push(sub('Seismic — Mononobe-Okabe detail', [rwrItem('st9', [{ title: 'Mononobe-Okabe', ref: 'ASCE 7-22 §11.8', steps: [
+        rwrS({ id: 'th', label: 'Seismic inertia angle', sym: '\\theta', eq: '\\arctan\\left(\\frac{k_{h}}{1 \\minus k_{v}}\\right)', sub: '\\arctan\\left(\\frac{' + rwrN(inp.kh, 3) + '}{1 \\minus ' + rwrN(inp.kv, 3) + '}\\right)', value: th, unit: 'deg', d: 2 }),
+        rwrS({ id: 'Kae', label: 'M-O combined coefficient (δ = ' + rwrN(inp.delta_mo, 0) + '°)', sym: 'K_{AE}', eq: '\\frac{\\cos^{2}(\\phi \\minus \\theta)}{\\cos\\theta\\,\\cos(\\delta + \\theta)\\left[1 + \\sqrt{\\frac{\\sin(\\phi + \\delta)\\sin(\\phi \\minus \\theta \\minus \\beta)}{\\cos(\\delta + \\theta)\\cos\\beta}}\\right]^{2}}', sub: '', value: r.Kae, unit: '', d: 4 }),
+        rwrS({ id: 'Pae', label: 'Total seismic-active force', sym: 'P_{AE}', eq: '\\frac{1}{2}K_{AE}\\gamma_{s} H^{2}(1 \\minus k_{v})', sub: '\\frac{1}{2}(' + rwrN(r.Kae, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.H, 3) + ')^{2}(1 \\minus ' + rwrN(inp.kv, 3) + ')', value: r.Pae, unit: 'lb/ft', d: 1 }),
+        rwrS({ id: 'dPE', label: 'Seismic increment, applied at 0.6H = ' + rwrN(0.6 * r.H, 2) + ' ft above the base', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_tri, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1 })] }]),
+        { type: 'note', warn: true, text: 'Simplified M-O per Seed & Whitman (1970). Verify with the project geotechnical engineer; seismic FOS acceptance may be reduced to 1.1 per local practice (confirm with the AHJ).' }])); }
+  }
+
+  /* ---------- 4. Stem ---------- */
+  {
+    const subs = [], gEH = isA ? 1.50 : 1.6, gLS = isA ? 1.75 : 1.6, gES = isA ? 1.50 : 1.6, qll = isA ? r.q_ll_aashto : 0, ss = r.sel_stem;
+    const T1 = [rwrS({ id: 'Msoil', label: 'Factored moment, triangular soil pressure (γ' + (isA ? '_EH = 1.50' : ' = 1.6') + ')', sym: 'M_{u,soil}', eq: gEH + '\\cdot\\frac{K_{a}\\gamma_{s} H_{s}^{3}}{6}', sub: gEH + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{3}}{6}', value: gEH * r.Ka * inp.gamma_s * inp.Hs ** 3 / 6, unit: 'lb-ft/ft', d: 1})];
+    if (inp.q_sur > 0) T1.push(rwrS({ id: 'MES', label: 'Factored moment, dead surcharge (γ' + (isA ? '_ES = 1.50' : ' = 1.6') + ')', sym: 'M_{u,ES}', eq: gES + '\\cdot\\frac{K_{a} q_{s} H_{s}^{2}}{2}', sub: gES + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gES * r.Ka * inp.q_sur * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1 }));
+    if (isA && qll > 0) T1.push(rwrS({ id: 'MLS', label: 'Factored moment, live-load surcharge (γ_LS = 1.75)', sym: 'M_{u,LS}', eq: '1.75\\cdot\\frac{K_{a}\\gamma_{s}h_{eq}H_{s}^{2}}{2}', sub: '1.75\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(qll, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gLS * r.Ka * qll * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1}));
+    if (r.stem_water) T1.push(rwrS({ id: 'Mhyd', label: 'Water-table adjustment: buoyant soil below the water table + hydrostatic (h_2 = ' + rwrN(Math.max(0, inp.Hs - r.wt_d), 2) + ' ft)', sym: 'M_{u,hyd}', eq: (isA ? '\\gamma_{WA}' : '\\gamma') + '\\cdot\\frac{1}{2}\\gamma_{w} h_{2}^{2}\\cdot\\frac{h_{2}}{3}', sub: '', value: (isA ? 1.0 : 1.6) * r.sd_base_Mhyd, unit: 'lb-ft/ft', d: 1, ref: isA ? AA('Table 3.4.1-1, γ_WA = 1.0') : 'γ = 1.6 (ACI H)' }));
+    T1.push(rwrS({ id: 'Mu', label: 'Total factored design moment' + (r.stem_ee2_governs ? ' (Extreme Event II governs)' : ''), sym: 'M_{u}', eq: r.stem_ee2_governs ? '\\max(M_{u,StrI},\\, M_{u,EE2})' : '\\sum M_{u,i}', sub: r.stem_ee2_governs ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + rwrN(r.Mu_stem_ee2, 1) + ')' : '', value: r.Mu_stem_lbft, unit: 'lb-ft/ft', d: 1, note: r.stem_water ? 'water-aware: the 3-block effective-stress profile plus the hydrostatic triangle' : '' }));
+    T1.push(rwrS({ id: 'Vu', label: 'Factored shear at the base', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_stem, unit: 'lb/ft', d: 1, note: r.hasSeismic ? 'ΔP_E is not included in the stem design (as the tab)' : '' }));
+    const T2 = [rwrS({ id: 'd', label: 'Effective depth (S1 bar #' + ss.bar.num + ', d_b = ' + rwrN(ss.bar.db, 3) + ' in; tension on the back face)', sym: 'd', eq: 't_{s,bot} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.ts_bot, 1) + ' \\minus ' + rwrN(inp.cov_stem, 2) + ' \\minus ' + rwrN(ss.bar.db / 2, 4), value: r.d_stem, unit: 'in', d: 3 })];
+    const flex = (pre, Mu_in, d, Rn, Asr, Asm, Asd, h, sel, mark, okk, osd) => [
+      rwrS({ id: 'Rn', label: 'Required flexural resistance factor', sym: 'R_{n}', eq: '\\frac{M_{u}}{\\phi\\,b\\,d^{2}}', sub: '\\frac{' + rwrN(Mu_in, 0) + '}{(0.90)(12)(' + rwrN(d, 3) + ')^{2}}', value: Rn, unit: 'psi', d: 2 }),
+      rwrS({ id: 'Asr', label: 'Required steel, Whitney stress block', sym: 'A_{s,req}', eq: '\\frac{0.85 ' + RWR_FC + '}{f_{y}}\\left(1 \\minus \\sqrt{1 \\minus \\frac{2R_{n}}{0.85 ' + RWR_FC + '}}\\right)b\\,d', sub: '\\frac{0.85(' + rwrN(inp.fc, 0) + ')}{' + rwrN(inp.fy, 0) + '}\\left(1 \\minus \\sqrt{1 \\minus \\frac{2(' + rwrN(Rn, 2) + ')}{0.85(' + rwrN(inp.fc, 0) + ')}}\\right)(12)(' + rwrN(d, 3) + ')', value: Asr, unit: 'in^{2}/ft', d: 4 }),
+      rwrS({ id: 'Asm', label: 'Minimum flexural steel', sym: 'A_{s,min}', eq: isA ? '\\phi M_{n} \\ge \\min(M_{cr},\\, 1.33M_{u})' : '0.0018\\,b\\,h', sub: isA ? '' : '0.0018(12)(' + rwrN(h, 1) + ')', value: Asm, unit: 'in^{2}/ft', d: 4, ref: isA ? AA('Art. 5.6.3.3') : 'ACI 318-19 §7.6.1.1 (via §13.3.7)' }),
+      rwrS({ id: 'Asd', label: 'Design steel (greater of required and minimum)', sym: 'A_{s,des}', eq: '\\max(A_{s,req},\\, A_{s,min})', sub: '\\max(' + rwrN(Asr, 4) + ',\\, ' + rwrN(Asm, 4) + ')', value: Asd, unit: 'in^{2}/ft', d: 4 }),
+      rwrS({ id: mark, label: 'Bar selection ' + mark + ': #' + sel.bar.num + ' at ' + sel.spacing + ' in' + (sel.overridden ? ' (user override)' : '') + (osd ? '; section over-stressed (R_n > 0.383 f′c)' : ''), sym: 'A_{s,prov}', eq: '\\frac{12\\,A_{b}}{s} \\ge A_{s,des}', sub: '\\frac{12(' + rwrN(sel.bar.Ab, 2) + ')}{' + sel.spacing + '} \\ge ' + rwrN(Asd, 4), value: sel.As_prov, unit: 'in^{2}/ft', d: 4, ok: okk, ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5 / §22.2' })];
+    const T3 = flex('s3', r.Mu_stem_in, r.d_stem, r.Rn_stem, r.As_stem_req, r.As_s_min, r.As_stem_des, inp.ts_bot, ss, 'S1', ok('stemFlex'), r.stem_overstressed);
+    CK.stemFlex = 'stb/s3.S1';
+    const vc = (sh, Vc, d, h) => isA
+      ? [rwrS({ id: 'dv', label: 'Effective shear depth', sym: 'd_{v}', eq: '\\max(0.9d,\\; 0.72h)', sub: '\\max(0.9(' + rwrN(d, 2) + '),\\; 0.72(' + rwrN(h, 1) + '))', value: sh.dv, unit: 'in', d: 2, ref: AA('Art. 5.7.2.8') }),
+         ...(sh.useSimple ? [] : [rwrS({ id: 'beta', label: 'Shear transmission factor, general procedure (ε_s = ' + rwrN(sh.eps_s * 1000, 3) + '×10⁻³, s_xe = ' + rwrN(sh.sxe, 1) + ' in)', sym: '\\beta', eq: '\\frac{4.8}{1 + 750\\epsilon_{s}}\\cdot\\frac{51}{39 + s_{xe}}', sub: '\\frac{4.8}{1 + 750(' + rwrN(sh.eps_s, 6) + ')}\\cdot\\frac{51}{39 + ' + rwrN(sh.sxe, 1) + '}', value: sh.beta, unit: '', d: 3, ref: AA('Art. 5.7.3.4.2') })]),
+         rwrS({ id: 'Vc', label: 'Nominal concrete shear resistance, ' + rwrPlain(sh.method), sym: 'V_{c}', eq: '0.0316\\,\\beta\\sqrt{' + RWR_FC + '}\\,b_{v} d_{v}', sub: '0.0316(' + rwrN(sh.beta, 3) + ')\\sqrt{' + rwrN(inp.fc / 1000, 2) + '}(12)(' + rwrN(sh.dv, 2) + ')(1000)', value: Vc, unit: 'lb/ft', d: 0, ref: AA(sh.useSimple ? 'Art. 5.7.3.4.1' : 'Art. 5.7.3.4.2') })]
+      : [rwrS({ id: 'lams', label: 'Size-effect factor', sym: '\\lambda_{s}', eq: '\\sqrt{\\frac{2}{1 + d/10}} \\le 1', sub: '\\sqrt{\\frac{2}{1 + ' + rwrN(d, 2) + '/10}}', value: sh.lam_s, unit: '', d: 3 }),
+         rwrS({ id: 'rho', label: 'Longitudinal steel ratio', sym: '\\rho_{w}', eq: '\\frac{A_{s}}{b\\,d}', sub: '', value: sh.rho, unit: '', d: 5 }),
+         rwrS({ id: 'Vc', label: 'Nominal concrete shear, members without shear reinforcement (≤ 5λ√f′c b d)', sym: 'V_{c}', eq: '8\\lambda_{s}\\lambda\\,\\rho_{w}^{1/3}\\sqrt{' + RWR_FC + '}\\,b\\,d', sub: '8(' + rwrN(sh.lam_s, 3) + ')(1.0)(' + rwrN(sh.rho, 5) + ')^{1/3}\\sqrt{' + rwrN(inp.fc, 0) + '}(12)(' + rwrN(d, 2) + ')', value: Vc, unit: 'lb/ft', d: 0, ref: 'ACI 318-19 Table 22.5.5.1(c)' })];
+    const phiS = isA ? (r.stem_ee2_governs ? '1.00' : '0.90') : '0.75';
+    const T4 = vc(r.shearStem, r.Vc_stem, r.d_stem, inp.ts_bot).concat([
+      rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiS + '\\,V_{c}', sub: phiS + '(' + rwrN(r.Vc_stem, 0) + ')', value: r.phiVc_stem, unit: 'lb/ft', d: 0 }),
+      rwrS({ id: 'dc', label: 'One-way shear check: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_stem, 0) + '}{' + rwrN(r.phiVc_stem, 0) + '}', value: dcv('stemShear'), unit: '', d: 3, ok: ok('stemShear') })]);
+    CK.stemShear = 'stb/s4.dc';
+    const T5 = [];
+    if (isA) { const L = r.ldA_stem, H = r.ldhA_stem;
+      T5.push(rwrS({ id: 'ldb', label: 'Basic development length (λ_rl = λ_cf = 1.0, k_tr = 0)', sym: '\\ell_{db}', eq: '0.17\\,d_{b}\\left(\\frac{\\lambda_{er}f_{y} \\minus F_{h}/A_{b}}{1.97\\,\\lambda\\,(' + RWR_FC + ')^{0.25}}\\right)^{2}', sub: '0.17(' + rwrN(ss.bar.db, 3) + ')\\left(\\frac{' + rwrN(inp.fy / 1000, 1) + ' \\minus 0}{1.97(1.0)(' + rwrN(L.fc4, 4) + ')}\\right)^{2}', value: L.ldb, unit: 'in', d: 1, ref: AA('Eq. 5.10.8.2.1a-1, -2') }),
+        rwrS({ id: 'lrc', label: 'Reinforcement confinement factor (raw ' + rwrN(L.lam_rc_raw, 3) + ', limited)', sym: '\\lambda_{rc}', eq: '\\frac{d_{b}}{c_{b}}', sub: '\\frac{' + rwrN(ss.bar.db, 3) + '}{' + rwrN(L.cb, 3) + '}', value: L.lam_rc, unit: '', d: 3, ref: AA('Art. 5.10.8.2.1c') }),
+        rwrS({ id: 'ld', label: 'Tension development length', sym: '\\ell_{d}', eq: '\\max(\\ell_{db}\\lambda_{rl}\\lambda_{cf}\\lambda_{rc},\\; 12)', sub: '\\max(' + rwrN(L.ldb, 1) + '(1.0)(1.0)(' + rwrN(L.lam_rc, 3) + '),\\; 12)', value: r.ld_stem, unit: 'in', d: 1, ref: AA('Art. 5.10.8.2.1a') }),
+        rwrS({ id: 'R', label: 'Hook bend radius to the bar centre (minimum standard bend D = ' + H.Dmin + ' d_b)', sym: 'R', eq: '\\frac{D}{2} + \\frac{d_{b}}{2}', sub: '\\frac{' + H.Dmin + '(' + rwrN(H.db, 3) + ')}{2} + \\frac{' + rwrN(H.db, 3) + '}{2}', value: H.R, unit: 'in', d: 3, ref: AA('Table 5.10.2.3-1') }),
+        rwrS({ id: 'v', label: 'Hook bearing factor (0.45 ≤ v ≤ 0.65)', sym: 'v', eq: '0.85 \\minus \\frac{' + RWR_FC + '}{20}', sub: '', value: H.v, unit: '', d: 3 }),
+        rwrS({ id: 'Fh', label: 'Hook bearing force', sym: 'F_{h}', eq: 'd_{b} R v ' + RWR_FC, sub: '(' + rwrN(H.db, 3) + ')(' + rwrN(H.R, 3) + ')(' + rwrN(H.v, 3) + ')(' + rwrN(H.fcA, 2) + ')', value: H.Fh, unit: 'kip', d: 2 }),
+        rwrS({ id: 'ldbh', label: 'Basic development length of the hooked bar', sym: '\\ell_{db}', eq: '0.17\\,d_{b}\\left(\\frac{f_{y} \\minus F_{h}/A_{b}}{1.97\\,\\lambda\\,(' + RWR_FC + ')^{0.25}}\\right)^{2}', sub: '0.17(' + rwrN(H.db, 3) + ')\\left(\\frac{' + rwrN(inp.fy / 1000, 1) + ' \\minus ' + rwrN(H.Fh, 2) + '/' + rwrN(H.Ab, 2) + '}{1.97(1.0)(' + rwrN(H.fc4, 4) + ')}\\right)^{2}', value: H.ldb, unit: 'in', d: 1, ref: AA('Eq. 5.10.8.2.4a-1, -2') }),
+        rwrS({ id: 'ldH', label: 'Development length of the hooked bar', sym: '\\ell_{d}', eq: '\\ell_{db}\\lambda_{rl}\\lambda_{cf}\\lambda_{rc}', sub: rwrN(H.ldb, 1) + '(1.0)(1.0)(' + rwrN(H.lam_rc, 3) + ')', value: H.ld, unit: 'in', d: 1 }),
+        rwrS({ id: 'ldh', label: 'Hook development length (no tie reduction)', sym: '\\ell_{dh}', eq: '\\max(\\ell_{d} + R + \\frac{d_{b}}{2},\\; 8d_{b},\\; 6)', sub: '\\max(' + rwrN(H.ld, 1) + ' + ' + rwrN(H.R, 3) + ' + ' + rwrN(H.db / 2, 3) + ',\\; ' + rwrN(8 * H.db, 2) + ',\\; 6)', value: r.ldh_stem, unit: 'in', d: 1, ref: AA('Art. 5.10.8.2.4a') }));
+    } else {
+      T5.push(rwrS({ id: 'ld', label: 'Tension development length (ψ_t = 1.0, ψ_e = 1.0, ψ_s = ' + (ss.bar.db <= 0.75 ? '0.8' : '1.0') + ', ψ_g = ' + (inp.fy <= 60000 ? '1.0' : (inp.fy <= 80000 ? '1.15' : '1.3')) + '; c_b = min(cover to the bar centre, s/2))', sym: '\\ell_{d}', eq: '\\frac{3}{40}\\,\\frac{f_{y}\\,\\psi_{t}\\psi_{e}\\psi_{s}\\psi_{g}}{\\lambda\\sqrt{' + RWR_FC + '}\\left(\\frac{c_{b} + K_{tr}}{d_{b}}\\right)}\\,d_{b}', sub: '', value: r.ld_stem, unit: 'in', d: 1, ref: 'ACI 318-19 §25.4.2.4' }));
+      T5.push(rwrS({ id: 'ldh', label: 'Hook development length (ψ_r = 1.6, ψ_c = f′c/15000 + 0.6)', sym: '\\ell_{dh}', eq: '', sub: '', value: r.ldh_stem, unit: 'in', d: 1, ref: 'ACI 318-19 §25.4.3.1' }));
+    }
+    T5.push(rwrS({ id: 'hook', label: 'Stem bar standard hook into the footing: ℓ_dh ≤ t_f − c_c = ' + rwrN(r.ldh_avail, 1) + ' in', sym: '\\frac{\\ell_{dh}}{t_{f} \\minus c_{c}}', eq: '', sub: '\\frac{' + rwrN(r.ldh_stem, 1) + '}{' + rwrN(r.ldh_avail, 1) + '}', value: dcv('stemHook'), unit: '', d: 3, ok: ok('stemHook'), ref: isA ? AA('Art. 5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1' }));
+    CK.stemHook = 'stb/s5.hook';
+    if (r.z_cutoff !== null) T5.push(rwrS({ id: 'zcut', label: 'Alternate-bar cutoff: half the S1 bars (#' + ss.bar.num + ' at ' + r.s_rem + ' in) carry M_u above z_th = ' + rwrN(r.z_cut_theory, 2) + ' ft; terminated bars extend max(d, 12d_b) past it', sym: 'z_{cut}', eq: 'z_{th} \\minus ' + rwrN(r.cut_ext, 2), sub: rwrN(r.z_cut_theory, 2) + ' \\minus ' + rwrN(r.cut_ext, 2), value: r.z_cutoff, unit: 'ft', d: 2, ref: isA ? AA('Art. 5.10.8.1.2') : 'ACI 318-19 §9.7.3.3', note: 'full S1 bars up to ' + rwrN(r.z_cutoff_from_base, 2) + ' ft above the base' }));
+    const T6 = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = stem height ' + rwrN(r.b_TS_stem, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_stem, 0) + ')(' + rwrN(inp.ts_bot, 1) + ')}{2(' + rwrN(r.b_TS_stem, 0) + ' + ' + rwrN(inp.ts_bot, 1) + ')(' + rwrN(inp.fy / 1000, 0) + ')}', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
+      : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel (0.0018 gross area)', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{s,bot}', sub: '0.0018(12)(' + rwrN(inp.ts_bot, 1) + ')', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
+      rwrS({ id: 'S2', label: 'Bar selection S2 (horizontal): #' + r.sel_temp.bar.num + ' at ' + r.sel_temp.spacing + ' in' + (r.sel_temp.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_temp.As_prov, 4) + ' \\ge ' + rwrN(r.As_temp_stem, 4), value: r.sel_temp.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsStem') })];
+    CK.tsStem = 'stb/s6.S2';
+    const pre = (p, L) => L.map(s => Object.assign({}, s, { id: p + '.' + s.id }));
+    subs.push(sub('Base section: Steps 1 to 6', [rwrItem('stb', [
+      { title: 'Step 1 — Factored demands at the base of the stem', ref: isA ? AA('Table 3.4.1-1, Strength I: 1.50EH + 1.75LS') : 'ACI 318-19 §5.3, U = 1.6H', steps: pre('s1', T1) },
+      { title: 'Step 2 — Effective depth', steps: pre('s2', T2) }, { title: 'Step 3 — Flexural reinforcement (φ = 0.90)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5 / §22.2', steps: pre('s3', T3) },
+      { title: 'Step 4 — One-way shear check (φ = ' + phiS + ')', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('s4', T4) },
+      { title: 'Step 5 — Development length and bar cutoff', ref: isA ? AA('Art. 5.10.8') : 'ACI 318-19 §25.4 / §9.7.3', steps: pre('s5', T5) },
+      { title: 'Step 6 — Horizontal temperature and shrinkage steel', ref: isA ? AA('Art. 5.10.6') : 'ACI 318-19 §24.4.3.2', steps: pre('s6', T6) }], { title: 'Stem, base section (b = 12 in strip, cantilever fixed at the footing)' }),
+      { type: 'note', text: 'K_a: ' + (isA ? '[[sa1/K]]' : '[[st1/Ka]]') + (isA && qll > 0 ? '; q_LS: [[sa2/qLS]]' : '') + '.' },
+      { type: 'note', text: 'Critical section at the top of the footing.' }, onTab('stemFlex', 'Stem design tab (pressure and V(z), M(z) diagrams)')]));
+    const st = r.sel_stemT, M = [rwrS({ id: 'Msoil', label: 'Factored moment, soil + surcharge over the top half (h = ' + rwrN(r.Hs_mid, 2) + ' ft)', sym: 'M_{u,soil}', eq: '', sub: '', value: r.Mu_stemT_soil, unit: 'lb-ft/ft', d: 1 })];
+    if (r.Mu_stemT_ct > 0) M.push(rwrS({ id: 'Mct', label: 'Additional collision moment (Extreme Event II, γ_CT = 1.0)', sym: 'M_{u,CT}', eq: 'CT_{h}(h/2 + h_{CT})', sub: '', value: r.Mu_stemT_ct, unit: 'lb-ft/ft', d: 1, ref: AA('Art. 3.6.5') }));
+    M.push(rwrS({ id: 'Mu', label: 'Total factored design moment at mid-height', sym: 'M_{u}', eq: '', sub: '', value: r.Mu_stemT_lbft, unit: 'lb-ft/ft', d: 1 }));
+    M.push(rwrS({ id: 'd', label: 'Effective depth at mid-height (t_mid = ' + rwrN(r.ts_mid, 2) + ' in)', sym: 'd', eq: 't_{mid} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(r.ts_mid, 2) + ' \\minus ' + rwrN(inp.cov_stem, 2) + ' \\minus ' + rwrN(st.bar.db / 2, 4), value: r.d_stemT, unit: 'in', d: 2 }));
+    const M2 = [rwrS({ id: 'As', label: 'Required area of steel at mid-height', sym: 'A_{s,req}', eq: '', sub: '', value: r.As_stemT_des, unit: 'in^{2}/ft', d: 4 }),
+      rwrS({ id: 'S3', label: 'Bar selection S3 (mid-height vertical): #' + st.bar.num + ' at ' + st.spacing + ' in' + (st.overridden ? ' (user override)' : '') + (r.stemT_overstressed ? '; section over-stressed' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(st.As_prov, 4) + ' \\ge ' + rwrN(r.As_stemT_des, 4), value: st.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('stemMidFlex') }),
+      rwrS({ id: 'dc', label: 'One-way shear at mid-height (' + rwrPlain(r.shearStemT.method) + '): V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_stemT, 0) + '}{' + rwrN(r.phiVc_stemT, 0) + '}', value: dcv('stemMidShear'), unit: '', d: 3, ok: ok('stemMidShear') })];
+    CK.stemMidFlex = 'stm/m2.S3'; CK.stemMidShear = 'stm/m2.dc';
+    subs.push(sub('Mid-height (top-half) section', [rwrItem('stm', [{ title: 'Mid Step 1 — Factored demands at mid-height', steps: pre('m1', M) }, { title: 'Mid Step 2 — Flexural reinforcement and shear', steps: pre('m2', M2) }], { title: 'Stem, mid-height section (h_s/2 = ' + rwrN(r.Hs_mid, 2) + ' ft above the base)' }),
+      { type: 'note', text: 'The section at mid-height is designed as a cantilever fixed at mid-height.' }, onTab('stemMid', 'Stem design tab, Mid Step 2')]));
+    secs.push({ title: 'Stem design', subs });
+  }
+
+  /* ---------- 5. Footing ---------- */
+  {
+    const subs = [], down = r.Mu_heel_net >= 0, fk = x => rwrN(x / 1000, 3), phiF = isA ? '0.90' : '0.75';
+    const H1 = [rwrS({ id: 'wu', label: 'Factored downward load, uniform over the heel (' + (r.heel_min_governs ? (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') : (isA ? 'Strength I' : 'U = 1.2D + 1.6H')) + ' governs case A)', sym: 'w_{u}', eq: isA ? rwrN(r.gHeel[0], 2) + '\\,w_{EV} + ' + rwrN(r.gHeel[1], 2) + '\\gamma_{c} t_{f} + ' + rwrN(r.gHeel[2], 2) + '\\,q_{s} + ' + rwrN(r.gHeel[3], 2) + '\\,q_{LS}' : rwrN(r.gHeel[0], 1) + '(w_{EV} + \\gamma_{c} t_{f}) + ' + rwrN(r.gHeel[2], 1) + '\\,q_{s}', sub: 'w_{EV} = ' + rwrN(r.w_soil_col, 1) + ',\\; \\gamma_{c} t_{f} = ' + rwrN(inp.gamma_c * r.tf_ft, 1), value: r.wu_heel, unit: 'psf', d: 1 }),
+      rwrS({ id: 'q0', label: 'Factored upward bearing at the stem face', sym: 'q_{u}(0)', eq: 'q_{u,back}', sub: '', value: r.q0h, unit: 'psf', d: 1, note: isA ? 'AASHTO basis: the factored bearing for the footing design is not worked on a tab (open item)' : '' }),
+      rwrS({ id: 'qL', label: 'Factored upward bearing at the heel tip', sym: 'q_{u}(L_{h})', eq: 'q_{u,heel}', sub: '', value: r.qLh, unit: 'psf', d: 1 })];
+    const H2 = [rwrS({ id: 'Md', label: 'Moment of the downward load about the back face', sym: 'M_{down}', eq: '\\frac{w_{u} L_{h}^{2}}{2}', sub: '\\frac{(' + rwrN(r.wu_heel, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2}', value: r.Md_heel, unit: 'lb-ft/ft', d: 1 }),
+      rwrS({ id: 'Mup', label: 'Moment of the upward bearing about the back face (trapezoid)', sym: 'M_{up}', eq: '\\frac{q_{0} L_{h}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{h}^{2}}{3}', sub: '\\frac{(' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.qLh, 1) + ' \\minus ' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{3}', value: r.Mu_heel_up, unit: 'lb-ft/ft', d: 1 }),
+      rwrS({ id: 'MA', label: 'Case A, standard: net moment (upward relief credited)', sym: 'M_{u,A}', eq: 'M_{down} \\minus M_{up}', sub: rwrN(r.Md_heel, 1) + ' \\minus ' + rwrN(r.Mu_heel_up, 1), value: r.Mu_heel_std / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,A = |w_u L_h − (q_0 + q_L)/2 · L_h| = ' + fk(r.Vu_heel_std) + ' kip/ft' }),
+      rwrS({ id: 'MB', label: 'Case B, no upward relief: full factored downward cantilever', sym: 'M_{u,B}', eq: 'M_{down}', sub: '', value: r.Mu_heel_nr / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,B = w_u L_h = ' + fk(r.Vu_heel_nr) + ' kip/ft' })];
+    if (r.useMassDOTFtg) H2.push(rwrS({ id: 'MMD', label: 'MassDOT §3.3.2.2 heel top steel: DL only, no upward relief (γ = φ = 1.0)' + (r.heel_md_governs ? ', governs' : ', does not govern'), sym: 'M_{u,MD}', eq: '\\frac{w_{DL} L_{h}^{2}}{2}', sub: '\\frac{(' + rwrN(inp.gamma_s * inp.Hs + inp.gamma_c * r.tf_ft, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2}', value: r.Mu_heel_md, unit: 'lb-ft/ft', d: 1, ref: 'MassDOT LRFD Bridge Manual §3.3.2.2' }));
+    H2.push(rwrS({ id: 'Mu', label: 'Design moment at the stem face, basis ' + ({ std: 'standard', norelief: 'no upward relief', envelope: 'envelope' }[r.heelBasis] || 'standard') + (r.heel_md_governs ? ' (MassDOT governs)' : '') + ' (' + (down ? 'top' : 'bottom') + ' bars)', sym: 'M_{u}', eq: '', sub: '', value: r.Mu_heel_net, unit: 'lb-ft/ft', d: 1 }),
+      rwrS({ id: 'Vu', label: 'Design shear at the stem face', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_heel, unit: 'lb/ft', d: 1 }));
+    const sh = r.sel_heel, H3 = [rwrS({ id: 'd', label: 'Effective depth', sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(inp.cov_ftg, 2) + ' \\minus ' + rwrN(sh.bar.db / 2, 4), value: r.d_heel, unit: 'in', d: 3 })];
+    const flexF = (Mu_in, d, Rn, Asr, Asm, Asd, sel, mark, okk, osd) => [
+      rwrS({ id: 'Rn', label: 'Flexural resistance factor', sym: 'R_{n}', eq: '\\frac{M_{u}}{\\phi\\,b\\,d^{2}}', sub: '\\frac{' + rwrN(Mu_in, 0) + '}{(0.90)(12)(' + rwrN(d, 3) + ')^{2}}', value: Rn, unit: 'psi', d: 2 }),
+      rwrS({ id: 'Asr', label: 'Required steel', sym: 'A_{s,req}', eq: '\\frac{0.85 ' + RWR_FC + '}{f_{y}}\\left(1 \\minus \\sqrt{1 \\minus \\frac{2R_{n}}{0.85 ' + RWR_FC + '}}\\right)b\\,d', sub: '', value: Asr, unit: 'in^{2}/ft', d: 4 }),
+      rwrS({ id: 'Asm', label: 'Minimum steel', sym: 'A_{s,min}', eq: isA ? '\\phi M_{n} \\ge \\min(M_{cr},\\, 1.33M_{u})' : '0.0018\\,b\\,h', sub: isA ? '' : '0.0018(12)(' + rwrN(inp.tf, 1) + ')', value: Asm, unit: 'in^{2}/ft', d: 4, ref: isA ? AA('Art. 5.6.3.3') : 'ACI 318-19 §7.6.1.1 (via §13.3.7)' }),
+      rwrS({ id: mark, label: 'Bar selection ' + mark + ': #' + sel.bar.num + ' at ' + sel.spacing + ' in' + (sel.overridden ? ' (user override)' : '') + (osd ? '; section over-stressed' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(sel.As_prov, 4) + ' \\ge ' + rwrN(Asd, 4), value: sel.As_prov, unit: 'in^{2}/ft', d: 4, ok: okk, ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5 / §22.2' })];
+    H3.push(...flexF(r.Mu_heel_in, r.d_heel, r.Rn_heel, r.As_heel_req, r.As_h_min, r.As_heel_des, sh, 'F1', ok('heelFlex'), r.heel_overstressed));
+    const vcF = (shr, Vc, d) => isA
+      ? [rwrS({ id: 'dv', label: 'Effective shear depth', sym: 'd_{v}', eq: '\\max(0.9d,\\; 0.72h)', sub: '\\max(0.9(' + rwrN(d, 2) + '),\\; 0.72(' + rwrN(inp.tf, 1) + '))', value: shr.dv, unit: 'in', d: 2, ref: AA('Art. 5.7.2.8') }),
+         ...(shr.useSimple ? [] : [rwrS({ id: 'beta', label: 'Shear transmission factor, general procedure (ε_s = ' + rwrN(shr.eps_s * 1000, 3) + '×10⁻³, s_xe = ' + rwrN(shr.sxe, 1) + ' in)', sym: '\\beta', eq: '\\frac{4.8}{1 + 750\\epsilon_{s}}\\cdot\\frac{51}{39 + s_{xe}}', sub: '', value: shr.beta, unit: '', d: 3, ref: AA('Art. 5.7.3.4.2') })]),
+         rwrS({ id: 'Vc', label: 'Nominal concrete shear resistance, ' + rwrPlain(shr.method), sym: 'V_{c}', eq: '0.0316\\,\\beta\\sqrt{' + RWR_FC + '}\\,b_{v} d_{v}', sub: '0.0316(' + rwrN(shr.beta, 3) + ')\\sqrt{' + rwrN(inp.fc / 1000, 2) + '}(12)(' + rwrN(shr.dv, 2) + ')(1000)', value: Vc, unit: 'lb/ft', d: 0 })]
+      : [rwrS({ id: 'Vc', label: 'Nominal concrete shear, size effect (λ_s = ' + rwrN(shr.lam_s, 3) + ', ρ_w = ' + rwrN(shr.rho, 5) + ')', sym: 'V_{c}', eq: '8\\lambda_{s}\\lambda\\,\\rho_{w}^{1/3}\\sqrt{' + RWR_FC + '}\\,b\\,d', sub: '8(' + rwrN(shr.lam_s, 3) + ')(1.0)(' + rwrN(shr.rho, 5) + ')^{1/3}\\sqrt{' + rwrN(inp.fc, 0) + '}(12)(' + rwrN(d, 2) + ')', value: Vc, unit: 'lb/ft', d: 0, ref: 'ACI 318-19 Table 22.5.5.1(c)' })];
+    const H4 = vcF(r.shearHeel, r.Vc_heel, r.d_heel).concat([
+      rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiF + '\\,V_{c}', sub: phiF + '(' + rwrN(r.Vc_heel, 0) + ')', value: r.phiVc_heel, unit: 'lb/ft', d: 0 }),
+      rwrS({ id: 'dc', label: 'One-way shear at the face of the stem: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_heel, 0) + '}{' + rwrN(r.phiVc_heel, 0) + '}', value: dcv('heelShear'), unit: '', d: 3, ok: ok('heelShear') }),
+      rwrS({ id: 'ld', label: 'Development length, top bars (' + (isA ? 'λ_rl = 1.3' : 'ψ_t = 1.3') + ')', sym: '\\ell_{d}', eq: '', sub: '', value: r.ld_heel, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.1a') : 'ACI 318-19 §25.4.2' })]);
+    const pre = (p, L) => L.map(s => Object.assign({}, s, { id: p + '.' + s.id }));
+    CK.heelFlex = 'heel/h3.F1'; CK.heelShear = 'heel/h4.dc';
+    subs.push(sub('Heel: cantilever from the back face (L_h = ' + rwrN(inp.Lh, 2) + ' ft)', [rwrItem('heel', [
+      { title: 'Heel Step 1 — Factored loads', steps: pre('h1', H1) }, { title: 'Heel Step 2 — Design moment and shear at the face of the stem', steps: pre('h2', H2) },
+      { title: 'Heel Step 3 — Flexural steel (' + (down ? 'top' : 'bottom') + ' face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('h3', H3) },
+      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), isA ? null : { type: 'note', text: 'q_u,back and q_u,heel: [[st7/quback]], [[st7/quheel]] (and the minimum-vertical case, [[st7/qubackmin]]).' },
+      { type: 'note', text: 'Serviceability (crack control) uses the unfactored no-relief moment.' }, onTab('heelFlex', 'Footing design tab, Heel (shear and moment diagrams)')]));
+    const sT = r.sel_toe, T1 = [rwrS({ id: 'wsw', label: 'Factored self-weight of the footing (downward)' + (r.toe_min_governs ? '; bearing from ' + (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') + ' governs the toe' : ''), sym: 'w_{sw}', eq: '0.9\\,\\gamma_{c} t_{f}', sub: '0.9(' + rwrN(inp.gamma_c, 0) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.wu_toe_down, unit: 'psf', d: 1 }),
+      rwrS({ id: 'q0', label: 'Net upward pressure at the front face', sym: 'q_{net}(0)', eq: 'q_{u,front} \\minus w_{sw}', sub: '', value: r.net_q0t, unit: 'psf', d: 1, }),
+      rwrS({ id: 'qL', label: 'Net upward pressure at the toe tip', sym: 'q_{net}(L_{t})', eq: 'q_{u,toe} \\minus w_{sw}', sub: '', value: r.net_qLt, unit: 'psf', d: 1 })];
+    const T2 = [rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: '\\frac{q_{0} L_{t}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{t}^{2}}{3}', sub: '\\frac{(' + rwrN(r.net_q0t, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.net_qLt, 1) + ' \\minus ' + rwrN(r.net_q0t, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{3}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
+      rwrS({ id: 'Vu', label: 'Design shear at the front face', sym: 'V_{u}', eq: '\\frac{q_{0} + q_{L}}{2}\\,L_{t}', sub: '\\frac{' + rwrN(r.net_q0t, 1) + ' + ' + rwrN(r.net_qLt, 1) + '}{2}(' + rwrN(inp.Lt, 2) + ')', value: r.Vu_toe, unit: 'lb/ft', d: 1 })];
+    const T3 = [rwrS({ id: 'd', label: 'Effective depth', sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(inp.cov_ftg, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
+      .concat(flexF(r.Mu_toe_in, r.d_toe, r.Rn_toe, r.As_toe_req, r.As_t_min, r.As_toe_des, sT, 'F2', ok('toeFlex'), r.toe_overstressed));
+    const T4 = vcF(r.shearToe, r.Vc_toe, r.d_toe).concat([
+      rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiF + '\\,V_{c}', sub: phiF + '(' + rwrN(r.Vc_toe, 0) + ')', value: r.phiVc_toe, unit: 'lb/ft', d: 0 }),
+      rwrS({ id: 'dc', label: 'One-way shear at the front face: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_toe, 0) + '}{' + rwrN(r.phiVc_toe, 0) + '}', value: dcv('toeShear'), unit: '', d: 3, ok: ok('toeShear') }),
+      rwrS({ id: 'ld', label: 'Development length into the stem', sym: '\\ell_{d}', eq: '', sub: '', value: r.ld_toe, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.1a') : 'ACI 318-19 §25.4.2' })]);
+    CK.toeFlex = 'toe/t3.F2'; CK.toeShear = 'toe/t4.dc';
+    subs.push(sub('Toe: cantilever from the front face (L_t = ' + rwrN(inp.Lt, 2) + ' ft)', [rwrItem('toe', [
+      { title: 'Toe Step 1 — Net upward load', steps: pre('t1', T1) }, { title: 'Toe Step 2 — Design moment and shear at the front face', steps: pre('t2', T2) },
+      { title: 'Toe Step 3 — Flexural steel (bottom face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('t3', T3) },
+      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), isA ? null : { type: 'note', text: 'q_u,front and q_u,toe: [[st7/qufront]], [[st7/qutoe]].' },
+      onTab('toeFlex', 'Footing design tab, Toe')]));
+    const L = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = footing width ' + rwrN(r.b_TS_ftg, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_ftg, 0) + ')(' + rwrN(inp.tf, 1) + ')}{2(' + rwrN(r.b_TS_ftg, 0) + ' + ' + rwrN(inp.tf, 1) + ')(' + rwrN(inp.fy / 1000, 0) + ')}', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
+      : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{f}', sub: '0.0018(12)(' + rwrN(inp.tf, 1) + ')', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
+      rwrS({ id: 'F3', label: 'Bar selection F3 (longitudinal, both faces): #' + r.sel_ftg_long.bar.num + ' at ' + r.sel_ftg_long.spacing + ' in' + (r.sel_ftg_long.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_ftg_long.As_prov, 4) + ' \\ge ' + rwrN(r.As_ftg_long, 4), value: r.sel_ftg_long.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsFtg') })];
+    CK.tsFtg = 'lng/F3';
+    subs.push(sub('Longitudinal reinforcement: temperature and shrinkage parallel to the wall', [rwrItem('lng', [{ title: 'T&S', steps: L }]), onTab('ftgTS')]));
+    secs.push({ title: 'Footing design', subs });
+  }
+
+  /* ---------- 6. Reinforcement schedule (+ ACI crack control) ---------- */
+  {
+    const rows = [['S1', 'Stem — vertical (back face)', r.sel_stem, r.As_stem_des, r.ld_stem, r.stem_overstressed, 'stb/s3.S1'], ['S3', 'Stem — vertical mid-height (top half)', r.sel_stemT, r.As_stemT_des, null, r.stemT_overstressed, 'stm/m2.S3'],
+      ['S2', 'Stem — horizontal T&S (both faces)', r.sel_temp, r.As_temp_stem, null, false, 'stb/s6.S2'], ['F1', 'Heel — transverse ' + (r.Mu_heel_net >= 0 ? 'top' : 'bottom') + ' bars', r.sel_heel, r.As_heel_des, r.ld_heel, r.heel_overstressed, 'heel/h3.F1'],
+      ['F2', 'Toe — transverse bottom bars', r.sel_toe, r.As_toe_des, r.ld_toe, r.toe_overstressed, 'toe/t3.F2'], ['F3', 'Footing — longitudinal T&S (both faces)', r.sel_ftg_long, r.As_ftg_long, null, false, 'lng/F3']]
+      .map(([m, loc, s, req, ld, os, key]) => { const okk = !os && s.As_prov >= req - 0.001;
+        return { cells: [{ t: m + (s.overridden ? ' (override)' : ''), key }, loc, '#' + s.bar.num, rwrCell(s.spacing, 0), rwrCell(req, 4), rwrCell(s.As_prov, 4), rwrCell(s.As_prov / Math.max(req, 0.001), 2), ld == null ? '—' : rwrCell(ld, 1), { t: okk ? 'OK' : 'NG', cls: okk ? 'ok' : 'ng' }] }; });
+    const items = [{ type: 'table', wide: true, caption: 'Bar schedule per foot of wall (f′c = ' + rwrN(inp.fc, 0) + ' psi, f_y = ' + rwrN(inp.fy / 1000, 0) + ' ksi)', head: ['Mark', 'Location', 'Bar', 's (in)', 'A_s,req (in²/ft)', 'A_s,prov (in²/ft)', 'Ratio', 'ℓ_d (in)', 'Status'], rows },
+      { type: 'note', text: 'Each mark links to its bar selection.' }, { type: 'note', text: '[[tab:rebar|On screen: Rebar schedule tab]]' }];
+    const subs = [sub('Bar schedule', items)];
+    if (r.aciCr) {
+      const T = [['stem', 'Stem S1 (back face)', 'Stem'], ['heel', 'Heel F1', 'Heel'], ['toe', 'Toe F2', 'Toe']].map(([k, nm, K]) => { const x = r.aciCr[k];
+        CK['crack' + K] = 'crk/' + k + '.dc';
+        return { title: nm, ref: 'ACI 318-19 §24.3.2', steps: [
+          rwrS({ id: k + '.smax', label: nm + ': maximum bar spacing (f_s = ⅔ f_y = ' + rwrN(x.fs, 0) + ' psi, c_c = ' + rwrN(x.cc, 2) + ' in)', sym: 's_{max}', eq: '\\min\\left(15\\,\\frac{40000}{f_{s}} \\minus 2.5\\,c_{c},\\; 12\\,\\frac{40000}{f_{s}}\\right)', sub: '\\min(' + rwrN(15 * 40000 / x.fs - 2.5 * x.cc, 2) + ',\\; ' + rwrN(12 * 40000 / x.fs, 2) + ')', value: x.smax, unit: 'in', d: 2, ref: 'ACI 318-19 §24.3.2' }),
+          rwrS({ id: k + '.dc', label: nm + ': s ≤ s_max', sym: '\\frac{s}{s_{max}}', eq: '', sub: '\\frac{' + rwrN(x.spacing, 2) + '}{' + rwrN(x.smax, 2) + '}', value: dcv('crack' + K), unit: '', d: 3, ok: ok('crack' + K) })] }; });
+      subs.push(sub('Crack-control bar spacing', [rwrItem('crk', T), { type: 'note', text: 'ACI 318-19 §24.3.2 with f_s = ⅔ f_y. Not worked on a result tab (worked in the Export report §7 and here).' }]));
+    }
+    secs.push({ title: 'Reinforcement schedule', subs });
+  }
+
+  /* ---------- 7. Warnings and assumptions, 8. References ---------- */
+  {
+    const items = [];
+    if (meta.notes) items.push({ type: 'note', text: 'Project notes: ' + meta.notes });
+    (isA ? ['AASHTO LRFD limit-state design: load factors Tables 3.4.1-1/-2, resistance factors as entered (Design Options).',
+      'Earth pressure ' + (A.ep_method === 'coulomb' ? 'Coulomb' : 'Rankine') + ', ' + (A.ep_cond === 'atrest' ? 'at-rest' : 'active') + '; one coefficient is used for the stability and the stem design.',
+      'Concrete design is enveloped Strength I / Ia' + (a.ct ? ' and Extreme Event II' : '') + '; b = 12 in design strip.']
+      : ['Stability with service (unfactored) loads, FOS ≥ 1.5 (IBC 2021 §1807.2.3); concrete design with U = 1.2D + 1.6H and 0.9D + 1.6H (ACI 318-19 §5.3).',
+        'Rankine earth pressure; surcharge over the heel and column live / snow loads are excluded from the resisting forces and included in the bearing check.',
+        'b = 12 in design strip; no shear reinforcement (ACI 318-19 Table 22.5.5.1(c)).']).forEach(t => items.push({ type: 'note', text: t }));
+    (r.warnings || []).forEach(w => items.push({ type: 'note', warn: true, text: 'Warning: ' + rwrPlain(w) }));
+    secs.push({ title: 'Assumptions and warnings', subs: [sub('Assumptions and warnings', items)] });
+    secs.push({ title: 'References', subs: [sub('Codes and references cited', [{ type: 'table', head: ['Reference', 'Provisions used'], rows: RW_REFS[isA ? 'AASHTO' : 'ACI'].map(([x, y]) => [rwrPlain(x), rwrPlain(y)]) }])] });
+  }
+
+  /* ---------- 1. Design summary (in front) ---------- */
+  {
+    const rows = Object.entries(r.checks).map(([k, c]) => { const x = DC[k] || {}, dc = x.dc;
+      return { cells: [rwrPlain(c.label), c.val != null ? rwrPlain(c.val) : '—', { t: (typeof dc === 'number' && isFinite(dc)) ? rwrN(dc, 2) : (dc === Infinity ? '∞' : 'n/a'), n: true }, rwrPlain(x.ref || '') + (x.note ? '; ' + rwrPlain(x.note) : ''), { t: c.ok ? 'PASS' : 'FAIL', cls: c.ok ? 'ok' : 'ng' }, CK[k] ? { t: '', key: CK[k] } : '—'], cls: c.ok ? '' : 'gov' }; });
+    const nF = Object.values(r.checks).filter(c => !c.ok).length, nT = Object.keys(r.checks).length;
+    secs.unshift({ title: 'Design summary', subs: [sub(nF ? nF + ' of ' + nT + ' checks fail' : 'All ' + nT + ' checks pass', [{ type: 'table', wide: true, head: ['Check', 'Value', 'D/C', 'Basis', 'Status', 'Worked in'], rows },
+      { type: 'note', text: 'The checks of the status bar, with D/C as in the Export report (for a factor-of-safety check D/C = 1.5 / FOS). ' + (isA ? '' : 'Crack control (ACI 318-19 §24.3.2) is counted in the status bar. ') + '' }, { type: 'note', text: '[[tab:overview|On screen: Overview tab (scorecard)]]' }])] });
+  }
+  const codes = isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
+  return { title: 'Cantilever Retaining Wall — Calculation Report', subtitle: meta.name || 'Unnamed project', code: codes,
+    info: [['Project', meta.name], ['Project No.', meta.num], ['Calculated by', meta.eng], ['Date', ''], ['Checked by', meta.chk], ['Checked date', '']],
+    head: { left: 'Project No. ' + (meta.num || '—') + ' — ' + String(meta.notes || meta.name || '—').slice(0, 40), right: 'Computed: ' + (meta.eng || '—') + ' · Checked: ' + (meta.chk || '—'), foot: (meta.name || 'Unnamed project') + ' (RetainCalc Pro — Retaining Wall Designer)' },
+    sections: secs };
+}
+function renderRwReport() {
+  const T = document.getElementById('tab-report'); if (!T) return;
+  if (!window.SharedReport || !window.SharedSteps) { T.innerHTML = '<div class="alert fail">⚠ shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; RWRP.api = null; RWRP.doc = null; return; }
+  const r = window._R;
+  if (!r || r.fatal) { T.innerHTML = (r && r.errors ? r.errors : ['No results.']).map(e => `<div class="alert fail">⚠ ${e}</div>`).join('') + '<div class="alert info">Correct the input errors to see the report.</div>'; RWRP.api = null; RWRP.doc = null; return; }
+  let M;
+  try { M = rwrModel(r); } catch (e) { console.error(e); T.innerHTML = '<div class="alert fail">⚠ Report error: ' + String(e && e.message).replace(/</g, '&lt;') + '</div>'; RWRP.api = null; RWRP.doc = null; return; }
+  RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto });
+  RWRP.doc = RWRP.api.doc;
+}
+/* [[tab:…]] links of the report: a result tab, or "card:<key>" (the card on its tab, as the D11 "Worked in" links) */
+function rwrGoto(name) {
+  if (name.indexOf('card:') === 0) { rwGoto(name.slice(5)); return; }
+  const b = document.querySelector(`.tab-btn[data-tab="${name}"]`); if (b) b.click();
+  const P = document.querySelector('.tab-panels'); if (P) P.scrollTop = 0;
+}
+document.querySelector('.tab-btn[data-tab="report"]').addEventListener('click', renderRwReport);
+/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header);
+   from any other tab the page prints as before (the Report panel is hidden in print, see the RWRP rule in @media print) */
+window.addEventListener('beforeprint', () => {
+  const T = document.getElementById('tab-report');
+  if (!RWRP.doc || !T || !T.classList.contains('active') || document.body.classList.contains('rp-printing')) return;
+  let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
+  box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(RWRP.doc, { lazy: false }) + '</article></div>';
+  document.body.classList.add('rp-printing');
+});
 </script>
 
 <script>

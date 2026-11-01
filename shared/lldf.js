@@ -441,7 +441,8 @@ const KG_SIMPLE={m:1.02,c1:1.03,v:0.97};   // Table 4.6.2.2.1-3, type (a): (Kg/1
      rigid(w, rig, Nb)              rigid cross-section, Eq. C4.6.2.2.2d-1
      member(q, geo, Kg, sk, j, w, opt) the factors of girder j (memberDF) mapped to { j, label, type, S, r, gM, gV, fatM, fatV, method, … }
                                     and, with w, its worked steps (beam-slab types a, e, k)
-     withC(q, geo, j, L)            a lever-rule result with the influence ordinate c of each wheel line */
+     withC(q, geo, j, L)            a lever-rule result with the influence ordinate c of each wheel line
+     other(q, geo, sk, md, w)       the steps of the other cross-section types (f, g, bc, d, slab; added 2026-11-01, lldf.html Report tab) */
 const STEPS=(function(){
   const ED = 'AASHTO LRFD 10th Ed.';
   const St = () => window.SharedSteps;
@@ -550,7 +551,120 @@ const STEPS=(function(){
     w.add({ id: 'fatM', label: `${o.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(o.r.mom1)}}{1.2}`, value: o.fatM, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2` });
     w.add({ id: 'fatV', label: `${o.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{V,1}}{1.2}', sub: `\\frac{${n4(o.r.shr1)}}{1.2}`, value: o.fatV, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2` });
   }
-  return { ED, geometry, skew, emp, lever, rigid, member, withC };
+  /* ---- other cross-section types (added 2026-11-01 for lldf.html's Report tab; the Steel Bridge app does not call these) ----
+     other(q, geo, sk, md, w): the worked steps of girder (web, strip) md = memberDF(q, geo, null, sk, j) for types f, g (adjacent
+     boxes), bc (spread boxes), d (CIP multicell box, webs as members) and slab (equivalent strip). Every value is a field of md or sk
+     (the engine's own numbers, nothing computed again); the substitutions format those numbers. sk: skewFactors(q, geo, null).
+     Ids (inside the caller's work): the interior equations mom1, mom2, shr1, shr2 (before skew), the type's e-factors, rM, rV, then
+     gM1, gM2, gV1, gV2 (with skew), gM, gV, fatM, fatV. */
+  function skewOther(w, q, sk, md) {
+    const T = `${ED} Table 4.6.2.2.2e-1`, TV = `${ED} Table 4.6.2.2.3c-1`;
+    if (!sk.active) { w.add({ id: 'rM', label: 'Skew reduction factor for moment', sym: 'r_{M}', eq: '1.0', sub: '', value: 1, unit: '', d: 4, ref: T, note: 'No skew.' });
+      w.add({ id: 'rV', label: 'Skew correction factor for shear', sym: 'r_{V}', eq: '1.0', sub: '', value: md.fV != null ? md.fV : sk.scfV, unit: '', d: 4, ref: TV, note: 'No skew.' }); return; }
+    w.add({ id: 'rM', label: 'Skew reduction factor for moment', sym: 'r_{M}', eq: '\\min(1.0,\\ 1.05 - 0.25\\tan\\theta)', sub: `\\min(1.0,\\ 1.05 - 0.25\\tan ${n2(sk.thU)}^{\\circ})`, value: sk.scfM, unit: '', d: 4, ref: T,
+      note: sk.th > 60 ? 'θ > 60°: θ = 60° used.' : '' });
+    const tv = `\\tan ${n2(sk.thVU)}^{\\circ}`, nV = sk.thV > 60 ? 'θ_V > 60°: θ = 60° used.' : '';
+    if (sk.kind === 'box') w.add({ id: 'rV', label: 'Skew correction factor for shear (obtuse corner)', sym: 'r_{V}', eq: '1 + \\frac{12L}{90d}\\sqrt{\\tan\\theta}', sub: `1 + \\frac{12(${n2(q.L)})}{90(${n2(q.depth)})}\\sqrt{${tv}}`, value: sk.scfV, unit: '', d: 4, ref: TV, note: nV });
+    else if (sk.kind === 'spread') w.add({ id: 'rV', label: 'Skew correction factor for shear (obtuse corner)', sym: 'r_{V}', eq: '1 + \\frac{\\sqrt{Ld/12}}{6S}\\tan\\theta', sub: `1 + \\frac{\\sqrt{${n2(q.L)}(${n2(q.depth)})/12}}{6(${n3(md.S)})}${tv}`, value: md.fV, unit: '', d: 4, ref: TV, note: nV });
+    else if (sk.kind === 'multicell') w.add({ id: 'rV', label: md.type === 'ext' ? 'Skew correction factor for shear, exterior web' : 'Skew correction factor for shear, interior web (the first interior web\'s factor)', sym: 'r_{V}',
+      eq: md.type === 'ext' ? '1 + \\left(0.25 + \\frac{12L}{70d}\\right)\\tan\\theta' : '1 + \\left(0.042 + \\frac{12L}{420d}\\right)\\tan\\theta',
+      sub: md.type === 'ext' ? `1 + \\left(0.25 + \\frac{12(${n2(q.L)})}{70(${n2(q.depth)})}\\right)${tv}` : `1 + \\left(0.042 + \\frac{12(${n2(q.L)})}{420(${n2(q.depth)})}\\right)${tv}`, value: md.fV, unit: '', d: 4, ref: TV, note: nV });
+  }
+  function otherFinal(w, md, m1, m2, v1, v2) {   // m1 … v2: [eq, sub] of the four factors with skew
+    const r = md.r, ext = md.type === 'ext', M1 = ext ? r.momExt1 : r.mom1, M2 = ext ? r.momExt2 : r.mom2, V1 = ext ? r.shrExt1 : r.shr1, V2 = ext ? r.shrExt2 : r.shr2;
+    w.add({ id: 'gM1', label: 'Moment, one lane loaded, with the skew reduction', sym: 'g_{M,1}', eq: m1[0], sub: m1[1], value: M1, unit: '', d: 4, ref: m1[2] || '' });
+    w.add({ id: 'gM2', label: 'Moment, two or more lanes loaded, with the skew reduction', sym: 'g_{M,2}', eq: m2[0], sub: m2[1], value: M2, unit: '', d: 4, ref: m2[2] || '' });
+    w.add({ id: 'gV1', label: 'Shear, one lane loaded, with the skew correction', sym: 'g_{V,1}', eq: v1[0], sub: v1[1], value: V1, unit: '', d: 4, ref: v1[2] || '' });
+    w.add({ id: 'gV2', label: 'Shear, two or more lanes loaded, with the skew correction', sym: 'g_{V,2}', eq: v2[0], sub: v2[1], value: V2, unit: '', d: 4, ref: v2[2] || '' });
+    w.add({ id: 'gM', label: `${md.label}: live-load distribution factor for moment (${md.method})`, sym: 'g_{M}', eq: '\\max(g_{M,1}, g_{M,2})', sub: `\\max(${n4(M1)}, ${n4(M2)})`, value: md.gM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2` });
+    w.add({ id: 'gV', label: `${md.label}: live-load distribution factor for shear`, sym: 'g_{V}', eq: '\\max(g_{V,1}, g_{V,2})', sub: `\\max(${n4(V1)}, ${n4(V2)})`, value: md.gV, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.3` });
+    const FR = `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2`;
+    if (md.fatNote && /We\/14/.test(md.fatNote)) w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (W_e/14 used directly)`, sym: 'g_{fat,M}', eq: 'g_{M,1}', sub: n4(M1), value: md.fatM, unit: '', d: 4, ref: FR, note: 'The engine uses W_e/14 with the skew reduction for the fatigue moment, without removing 1.2 (verify).' });
+    else w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(M1)}}{1.2}`, value: md.fatM, unit: '', d: 4, ref: FR });
+    w.add({ id: 'fatV', label: `${md.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{V,1}}{1.2}', sub: `\\frac{${n4(V1)}}{1.2}`, value: md.fatV, unit: '', d: 4, ref: FR });
+  }
+  function other(q, geo, sk, md, w) {
+    const ext = md.type === 'ext', S = md.S, L = q.L, d = q.depth, j = md.j, rM = n4(sk.scfM);
+    const T2b = `${ED} Table 4.6.2.2.2b-1`, T3a = `${ED} Table 4.6.2.2.3a-1`, T2d = `${ED} Table 4.6.2.2.2d-1`, T3b = `${ED} Table 4.6.2.2.3b-1`;
+    const deStep = (lo, why) => w.add({ id: 'de', label: 'd_e used in the e-factors', sym: 'd_{e}', eq: lo == null ? 'o - f' : `\\max(d_{e}, ${n2(lo)})`, sub: lo == null ? `${n2(md.side === 'L' ? q.OL : q.OR)} - ${n2(md.side === 'L' ? q.rL : q.rR)}` : `\\max(${n2(md.side === 'L' ? geo.deL : geo.deR)}, ${n2(lo)})`, value: md.de, unit: 'ft', d: 2, ref: T2d, note: why || '' });
+    const lever1 = () => { const L1 = withC(q, geo, j, md.lever1); lever(w, 'lev1', L1, 'one lane'); return md.lever1 ? md.lever1.df : 0; };
+    if (q.type === 'f' || q.type === 'g') {
+      const bx = md.bx, b = q.boxB;
+      w.add({ id: 'k', label: 'Distribution factor coefficient', sym: 'k', eq: '2.5(N_{b})^{-0.2} \\ge 1.5', sub: `\\max(2.5(${q.Nb})^{-0.2}, 1.5)`, value: bx.k, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'IJ', label: 'Ratio of the moment of inertia to the St. Venant torsional constant', sym: '\\frac{I}{J}', eq: '', sub: `\\frac{${g0(q.boxI)}}{${g0(q.boxJ)}}`, value: bx.IJ, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'mom1', label: 'Interior moment equation, one lane loaded', sym: 'g_{M,1}', eq: 'k\\left(\\frac{b}{33.3L}\\right)^{0.5}\\left(\\frac{I}{J}\\right)^{0.25}', sub: `${n4(bx.k)}\\left(\\frac{${n2(b)}}{33.3(${n2(L)})}\\right)^{0.5}(${n4(bx.IJ)})^{0.25}`, value: bx.mom1, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'mom2', label: 'Interior moment equation, two or more lanes loaded', sym: 'g_{M,2}', eq: 'k\\left(\\frac{b}{305}\\right)^{0.6}\\left(\\frac{b}{12L}\\right)^{0.2}\\left(\\frac{I}{J}\\right)^{0.06}', sub: `${n4(bx.k)}\\left(\\frac{${n2(b)}}{305}\\right)^{0.6}\\left(\\frac{${n2(b)}}{12(${n2(L)})}\\right)^{0.2}(${n4(bx.IJ)})^{0.06}`, value: bx.mom2, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'shr1', label: 'Interior shear equation, one lane loaded', sym: 'g_{V,1}', eq: '\\left(\\frac{b}{130L}\\right)^{0.15}\\left(\\frac{I}{J}\\right)^{0.05}', sub: `\\left(\\frac{${n2(b)}}{130(${n2(L)})}\\right)^{0.15}(${n4(bx.IJ)})^{0.05}`, value: bx.shr1, unit: '', d: 4, ref: T3a });
+      w.add({ id: 'shr2', label: 'Interior shear equation, two or more lanes loaded', sym: 'g_{V,2}', eq: '\\left(\\frac{b}{156}\\right)^{0.4}\\left(\\frac{b}{12L}\\right)^{0.1}\\left(\\frac{I}{J}\\right)^{0.05}\\left(\\frac{b}{48}\\right)', sub: `\\left(\\frac{${n2(b)}}{156}\\right)^{0.4}\\left(\\frac{${n2(b)}}{12(${n2(L)})}\\right)^{0.1}(${n4(bx.IJ)})^{0.05}(${n4(Math.max(b / 48, 1))})`, value: bx.shr2, unit: '', d: 4, ref: T3a, note: 'b/48 is taken not less than 1.0.' });
+      skewOther(w, q, sk, md); const rV = n4(sk.scfV);
+      if (!ext) { otherFinal(w, md, ['g_{M,1}r_{M}', `${n4(bx.mom1)}(${rM})`], ['g_{M,2}r_{M}', `${n4(bx.mom2)}(${rM})`], ['g_{V,1}r_{V}', `${n4(bx.shr1)}(${rV})`], ['g_{V,2}r_{V}', `${n4(bx.shr2)}(${rV})`]); return md; }
+      deStep(null, md.de > 2 + 1e-9 ? 'd_e > 2.0 ft: outside the range of applicability; the e-equations are extrapolated (not limited).' : '');
+      w.add({ id: 'eM1', label: 'Correction factor e for moment, one lane', sym: 'e', eq: '1.125 + \\frac{d_{e}}{30} \\ge 1.0', sub: `\\max(1.125 + \\frac{${n2(md.de)}}{30}, 1.0)`, value: md.eM1, unit: '', d: 4, ref: T2d });
+      w.add({ id: 'eM2', label: 'Correction factor e for moment, two or more lanes', sym: 'e', eq: '1.04 + \\frac{d_{e}}{25} \\ge 1.0', sub: `\\max(1.04 + \\frac{${n2(md.de)}}{25}, 1.0)`, value: md.eM2, unit: '', d: 4, ref: T2d });
+      w.add({ id: 'eV1', label: 'Correction factor e for shear, one lane', sym: 'e', eq: '1.25 + \\frac{d_{e}}{20} \\ge 1.0', sub: `\\max(1.25 + \\frac{${n2(md.de)}}{20}, 1.0)`, value: md.eV1, unit: '', d: 4, ref: T3b });
+      w.add({ id: 'eV2', label: 'Correction factor e for shear, two or more lanes', sym: 'e', eq: '1 + \\left(\\frac{d_{e} + \\frac{b}{12} - 2.0}{40}\\right)^{0.5} \\ge 1.0', sub: `1 + \\left(\\frac{${n2(md.de)} + \\frac{${n2(b)}}{12} - 2.0}{40}\\right)^{0.5}`, value: md.eV2, unit: '', d: 4, ref: T3b, note: md.inV > 0 ? '' : 'The term under the root is not positive: e = 1.0.' });
+      w.add({ id: 'capV', label: 'Width factor for exterior shear, two or more lanes', sym: '\\frac{48}{b}', eq: '\\le 1.0', sub: `\\min(\\frac{48}{${n2(b)}}, 1.0)`, value: md.capV, unit: '', d: 4, ref: T3b });
+      otherFinal(w, md, ['e\\,g_{M,1}r_{M}', `${n4(md.eM1)}(${n4(bx.mom1)})(${rM})`, T2d], ['e\\,g_{M,2}r_{M}', `${n4(md.eM2)}(${n4(bx.mom2)})(${rM})`, T2d],
+        ['e\\,g_{V,1}r_{V}', `${n4(md.eV1)}(${n4(bx.shr1)})(${rV})`, T3b], ['\\frac{48}{b}e\\,g_{V,2}r_{V}', `${n4(md.capV)}(${n4(md.eV2)})(${n4(bx.shr2)})(${rV})`, T3b]);
+      return md;
+    }
+    if (q.type === 'bc') {
+      const sp = md.sp, frac = `\\frac{${n3(S)}(${n2(d)})}{12.0(${n2(L)})^{2}}`;
+      w.add({ id: 'S', label: ext ? 'Beam spacing (the adjacent bay)' : 'Beam spacing (average of the two adjacent bays)', sym: 'S', eq: '', sub: '', value: S, unit: 'ft', d: 3 });
+      w.add({ id: 'mom1', label: 'Interior moment equation, one lane loaded', sym: 'g_{M,1}', eq: '\\left(\\frac{S}{3.0}\\right)^{0.35}\\left(\\frac{Sd}{12.0L^{2}}\\right)^{0.25}', sub: `\\left(\\frac{${n3(S)}}{3.0}\\right)^{0.35}\\left(${frac}\\right)^{0.25}`, value: sp.mom1, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'mom2', label: 'Interior moment equation, two or more lanes loaded', sym: 'g_{M,2}', eq: '\\left(\\frac{S}{6.3}\\right)^{0.6}\\left(\\frac{Sd}{12.0L^{2}}\\right)^{0.125}', sub: `\\left(\\frac{${n3(S)}}{6.3}\\right)^{0.6}\\left(${frac}\\right)^{0.125}`, value: sp.mom2, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'shr1', label: 'Interior shear equation, one lane loaded', sym: 'g_{V,1}', eq: '\\left(\\frac{S}{10}\\right)^{0.6}\\left(\\frac{d}{12.0L}\\right)^{0.1}', sub: `\\left(\\frac{${n3(S)}}{10}\\right)^{0.6}\\left(\\frac{${n2(d)}}{12.0(${n2(L)})}\\right)^{0.1}`, value: sp.shr1, unit: '', d: 4, ref: T3a });
+      w.add({ id: 'shr2', label: 'Interior shear equation, two or more lanes loaded', sym: 'g_{V,2}', eq: '\\left(\\frac{S}{7.4}\\right)^{0.8}\\left(\\frac{d}{12.0L}\\right)^{0.1}', sub: `\\left(\\frac{${n3(S)}}{7.4}\\right)^{0.8}\\left(\\frac{${n2(d)}}{12.0(${n2(L)})}\\right)^{0.1}`, value: sp.shr2, unit: '', d: 4, ref: T3a,
+        note: md.tooWide ? 'S > 18 ft: the equations do not apply; the lever rule is used (shown for reference).' : '' });
+      skewOther(w, q, sk, md); const fV = n4(md.fV);
+      if (!ext) {
+        if (md.tooWide) { const lv = md.lvUsed || {}; lever(w, 'lev1', withC(q, geo, j, lv.lv1), 'one lane'); lever(w, 'lev2', withC(q, geo, j, lv.lv2), 'two or more lanes, the governing number of trucks');
+          const a = lv.lv1 ? lv.lv1.df : 0, b = lv.lv2 ? lv.lv2.df : 0, TL = `${ED} Table 4.6.2.2.2b-1 (S > 18 ft: lever rule)`;
+          otherFinal(w, md, ['g_{1}r_{M}', `${n4(a)}(${rM})`, TL], ['g_{2}r_{M}', `${n4(b)}(${rM})`, TL], ['g_{1}r_{V}', `${n4(a)}(${fV})`, TL], ['g_{2}r_{V}', `${n4(b)}(${fV})`, TL]); return md; }
+        otherFinal(w, md, ['g_{M,1}r_{M}', `${n4(sp.mom1)}(${rM})`], ['g_{M,2}r_{M}', `${n4(sp.mom2)}(${rM})`], ['g_{V,1}r_{V}', `${n4(sp.shr1)}(${fV})`], ['g_{V,2}r_{V}', `${n4(sp.shr2)}(${fV})`]); return md;
+      }
+      const l1 = lever1();
+      deStep(0, (md.side === 'L' ? geo.deL : geo.deR) > 4.5 + 1e-9 ? 'd_e > 4.5 ft: outside the range of applicability; the e-equations are extrapolated (not limited).' : '');
+      w.add({ id: 'eM', label: 'Correction factor e for moment', sym: 'e', eq: '0.97 + \\frac{d_{e}}{28.5}', sub: `0.97 + \\frac{${n2(md.de)}}{28.5}`, value: md.eM, unit: '', d: 4, ref: T2d });
+      w.add({ id: 'eV', label: 'Correction factor e for shear', sym: 'e', eq: '0.80 + \\frac{d_{e}}{10}', sub: `0.80 + \\frac{${n2(md.de)}}{10}`, value: md.eV, unit: '', d: 4, ref: T3b });
+      if (md.tooWide) { w.add({ id: 'mE', label: 'Moment and shear, two or more lanes (S > 18 ft: lever rule, the governing of 2 … N_L trucks)', sym: 'g_{2}', eq: '', sub: '', value: md.mE, unit: '', d: 4, ref: T2b }); }
+      else { w.add({ id: 'mE', label: 'Moment, two or more lanes: e × interior equation', sym: 'g_{M,2}', eq: 'e\\,g_{M,2,int}', sub: `${n4(md.eM)}(${n4(sp.mom2)})`, value: md.mE, unit: '', d: 4, ref: T2d });
+        w.add({ id: 'vE', label: 'Shear, two or more lanes: e × interior equation', sym: 'g_{V,2}', eq: 'e\\,g_{V,2,int}', sub: `${n4(md.eV)}(${n4(sp.shr2)})`, value: md.vE, unit: '', d: 4, ref: T3b }); }
+      otherFinal(w, md, ['g_{lever,1}r_{M}', `${n4(l1)}(${rM})`, T2d], ['g_{M,2}r_{M}', `${n4(md.mE)}(${rM})`, T2d], ['g_{lever,1}r_{V}', `${n4(l1)}(${fV})`, T3b], ['g_{V,2}r_{V}', `${n4(md.vE)}(${fV})`, T3b]);
+      return md;
+    }
+    if (q.type === 'd') {
+      const mc = md.mc, dl = `\\left(\\frac{${n2(d)}}{12.0(${n2(L)})}\\right)^{0.1}`;
+      w.add({ id: 'S', label: ext ? 'Web spacing (the adjacent cell)' : 'Web spacing (average of the two adjacent cells)', sym: 'S', eq: '', sub: '', value: S, unit: 'ft', d: 3 });
+      w.add({ id: 'Nc', label: 'Number of cells (webs − 1), as used in the moment equations (not more than 8)', sym: 'N_{c}', eq: '\\min(N_{b} - 1, 8)', sub: `\\min(${q.Nb} - 1, 8)`, value: mc.NcEq, unit: '', d: 0, ref: T2b });
+      w.add({ id: 'mom1', label: 'Interior moment equation, one lane loaded', sym: 'g_{M,1}', eq: '\\left(1.75 + \\frac{S}{3.6}\\right)\\left(\\frac{1}{L}\\right)^{0.35}\\left(\\frac{1}{N_{c}}\\right)^{0.45}', sub: `\\left(1.75 + \\frac{${n3(S)}}{3.6}\\right)\\left(\\frac{1}{${n2(L)}}\\right)^{0.35}\\left(\\frac{1}{${mc.NcEq}}\\right)^{0.45}`, value: mc.mom1, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'mom2', label: 'Interior moment equation, two or more lanes loaded', sym: 'g_{M,2}', eq: '\\left(\\frac{13}{N_{c}}\\right)^{0.3}\\left(\\frac{S}{5.8}\\right)\\left(\\frac{1}{L}\\right)^{0.25}', sub: `\\left(\\frac{13}{${mc.NcEq}}\\right)^{0.3}\\left(\\frac{${n3(S)}}{5.8}\\right)\\left(\\frac{1}{${n2(L)}}\\right)^{0.25}`, value: mc.mom2, unit: '', d: 4, ref: T2b });
+      w.add({ id: 'shr1', label: 'Interior shear equation, one lane loaded', sym: 'g_{V,1}', eq: '\\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{d}{12.0L}\\right)^{0.1}', sub: `\\left(\\frac{${n3(S)}}{9.5}\\right)^{0.6}${dl}`, value: mc.shr1, unit: '', d: 4, ref: T3a });
+      w.add({ id: 'shr2', label: 'Interior shear equation, two or more lanes loaded', sym: 'g_{V,2}', eq: '\\left(\\frac{S}{7.3}\\right)^{0.9}\\left(\\frac{d}{12.0L}\\right)^{0.1}', sub: `\\left(\\frac{${n3(S)}}{7.3}\\right)^{0.9}${dl}`, value: mc.shr2, unit: '', d: 4, ref: T3a });
+      skewOther(w, q, sk, md); const fV = n4(md.fV);
+      if (!ext) { otherFinal(w, md, ['g_{M,1}r_{M}', `${n4(mc.mom1)}(${rM})`], ['g_{M,2}r_{M}', `${n4(mc.mom2)}(${rM})`], ['g_{V,1}r_{V}', `${n4(mc.shr1)}(${fV})`], ['g_{V,2}r_{V}', `${n4(mc.shr2)}(${fV})`]); return md; }
+      const O = md.side === 'L' ? q.OL : q.OR;
+      w.add({ id: 'We', label: 'Exterior web width parameter: half the web spacing plus the overhang, not more than S', sym: 'W_{e}', eq: '\\min\\left(o + \\frac{S}{2}, S\\right)', sub: `\\min\\left(${n2(O)} + \\frac{${n3(S)}}{2}, ${n3(S)}\\right)`, value: md.We, unit: 'ft', d: 3, ref: T2d });
+      w.add({ id: 'gWe', label: 'Exterior moment, any number of lanes', sym: 'g_{M}', eq: '\\frac{W_{e}}{14}', sub: `\\frac{${n3(md.We)}}{14}`, value: md.gWe, unit: '', d: 4, ref: T2d });
+      const l1 = lever1();
+      deStep(-2, (md.side === 'L' ? geo.deL : geo.deR) > 5 + 1e-9 ? 'd_e > 5.0 ft: outside the range of applicability; the e-equation is extrapolated (not limited).' : '');
+      w.add({ id: 'eV', label: 'Correction factor e for shear', sym: 'e', eq: '0.64 + \\frac{d_{e}}{12.5}', sub: `0.64 + \\frac{${n2(md.de)}}{12.5}`, value: md.eV, unit: '', d: 4, ref: T3b });
+      w.add({ id: 'vE', label: 'Shear, two or more lanes: e × interior equation', sym: 'g_{V,2}', eq: 'e\\,g_{V,2,int}', sub: `${n4(md.eV)}(${n4(mc.shr2)})`, value: md.vE, unit: '', d: 4, ref: T3b });
+      otherFinal(w, md, ['\\frac{W_{e}}{14}r_{M}', `${n4(md.gWe)}(${rM})`, T2d], ['\\frac{W_{e}}{14}r_{M}', `${n4(md.gWe)}(${rM})`, T2d], ['g_{lever,1}r_{V}', `${n4(l1)}(${fV})`, T3b], ['g_{V,2}r_{V}', `${n4(md.vE)}(${fV})`, T3b]);
+      return md;
+    }
+    // slab, Art. 4.6.2.3
+    const r = md.r, L1 = Math.min(L, 60), W1 = Math.min(geo.roadway, 30), W1m = Math.min(geo.roadway, 60), FR = `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2`;
+    w.add({ id: 'Es', label: 'Equivalent strip width, one lane loaded (L_1 = min(L, 60 ft), W_1 = min(w, 30 ft))', sym: 'E', eq: '10 + 5\\sqrt{L_{1}W_{1}}', sub: `10 + 5\\sqrt{${n2(L1)}(${n2(W1)})}`, value: r.Es, unit: 'in', d: 1, ref: `${ED} Eq. 4.6.2.3-1` });
+    w.add({ id: 'Em', label: 'Equivalent strip width, two or more lanes loaded (W_1 = min(w, 60 ft))', sym: 'E', eq: '\\min\\left(84 + 1.44\\sqrt{L_{1}W_{1}}, \\frac{12w}{N_{L}}\\right)', sub: `\\min\\left(84 + 1.44\\sqrt{${n2(L1)}(${n2(W1m)})}, \\frac{12(${n2(geo.roadway)})}{${geo.NL}}\\right)`, value: r.Em, unit: 'in', d: 1, ref: `${ED} Eq. 4.6.2.3-2`,
+      note: 'w is the clear roadway width (as the engine takes it).' });
+    w.add({ id: 'gM1', label: 'Distribution factor, one lane, per 1-ft strip', sym: 'g_{1}', eq: '\\frac{12}{E}', sub: `\\frac{12}{${n2(r.Es)}}`, value: r.dS, unit: '', d: 4, ref: `${ED} Art. 4.6.2.3` });
+    w.add({ id: 'gM2', label: 'Distribution factor, two or more lanes, per 1-ft strip', sym: 'g_{2}', eq: '\\frac{12}{E}', sub: `\\frac{12}{${n2(r.Em)}}`, value: r.dM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.3` });
+    w.add({ id: 'gM', label: `${md.label}: distribution factor per 1-ft strip, moment and shear (${md.method})`, sym: 'g', eq: '\\max(g_{1}, g_{2})', sub: `\\max(${n4(r.dS)}, ${n4(r.dM)})`, value: md.gM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.3` });
+    w.add({ id: 'fatM', label: `${md.label}: fatigue factor (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat}', eq: '\\frac{g_{1}}{1.2}', sub: `\\frac{${n4(r.dS)}}{1.2}`, value: md.fatM, unit: '', d: 4, ref: FR });
+    return md;
+  }
+  return { ED, geometry, skew, emp, lever, rigid, member, withC, other };
 })();
 
 window.SharedLLDF={multiplePresence,RANGES,BEAM_SLAB,BOX,BOXR,SPREADR,CELLR,FAMILY,KG_SIMPLE,designL,spreadDF,multicellDF,geometry,

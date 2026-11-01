@@ -1964,3 +1964,221 @@ Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
 - **Open items:**
   - Field tooltips built by `inhHint` show raw `<b>` tags (label `title`). This is pre-existing and also affects the Tributary width tooltip; not changed.
   - The LL used for deflection defaults to 100 %; DG 3 often uses 50 %. Not changed.
+
+## 2026-11-01 — PR: claude/rpt-steelbeam — Report output tab in the shared report viewer, every mode (beam, member check, composite, batch) (SBRP; display only, no calculation change) (PR link added after merge)
+
+The file uses CRLF line endings; keep them. Every code site is tagged `SBRP`.
+
+### SBRP. "Report" output tab (shared/report.js, shared/steps.js)   [display only]
+- **Engineer request (2026-11-01, report rollout):** a Report output tab in the shared viewer (navigation tree, numbered sections, worked steps grouped by topic, "see §x.y" links, links back to the tabs, print with title block, running header and page numbers), for beam, member-check, composite and batch modes.
+- **Loads:** `<script src="shared/steps.js">` and `<script src="shared/report.js">` after the CDN libraries (classic scripts, relative path). KaTeX 0.16.11 was already loaded; no library added.
+- **How the report is made (deviation from the rollout's approach (a), recorded for the engineer):** this tool has 88 equation cards across four modes, built by many layered builder versions (three `renderTab`, four `TABS`, two `buildTabs`). Writing a second, parallel model of all of them would duplicate the tabs' logic. Instead `sbrModel()` builds each output tab of the current mode with its **own builder** into a detached holder (as the D11 print report `sbdReportDOM()` does) and reads it back:
+  - each card (`.sec`) becomes a subsection n.m, in the tab's order;
+  - each worked equation (`eqBlock`) becomes a worked step: label = card title, reference = its `[ref]` (AISC sections prefixed "AISC 360-16"), equation lines = the tab's own TeX (read from KaTeX's `annotation` source), result value = the tab's bold result `\mathbf{…}` read back from its last line (the number the tool formatted; never recomputed), D/C lines (`dcrLine`) carry their pass/fail; "where" variables become the step's note;
+  - consecutive steps under one heading form a topic (`SharedSteps.group`); tables, notes, warnings, SVG drawings and "Worked in" links (→ in-report § links to the card's first step) follow in order; Plotly diagrams stay on the tabs (a note links there);
+  - a first section "Summary of checks" is built from `AN.design.checks` (label, reference, governing combination, D/C via `sbdFmtDC`, status), each D/C linked to the card where it is worked (`sbdChkTarget`); a last section lists `sbdRefs()`.
+- **Changed lines:** `buildTabs()` (the live, last definition) appends the Report tab button (`sbrTabButton(bar)`); `renderTab()` (the live, last definition) returns into `sbrRender(pg)` while the Report tab is shown; the D11 `beforeprint` listener returns when the Report tab prints itself. The Report tab is an in-memory flag (`SBRP.on`): `S.ui.tab` keeps the last result tab, so nothing new is saved (`sbd_autosave_v1` keeps its format and values); building the report restores `S.ui.tab` and `S.ui.collapse`.
+- **Print:** Ctrl+P on the Report tab prints the report alone (title block Project / Project No. / Calculated by / Date / Checked by / Checked date, no owner cell; running header; Page X of Y). The D11 print dialog and Ctrl+P from any other tab print the D11 report as before.
+- **Saved data:** none added; no key or format change.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **How verified (headless Chromium, KaTeX 0.16.11 and Plotly 2.35.2 from npm pack):**
+  - 4 modes: beam (default W18X50, tributary loads), beam with composite on, member check (two cases with M_ux, V_ux, P_u, M_uy), batch (3 rows: W18X50, W12X26 failing, W10X49 column). Report sections: beam 17, composite 17, member 13, batch 3; 68 / 76 / 36 / 0 worked steps in 43 / 48 / 23 / 0 topics; 0 unresolved or duplicate references, 0 KaTeX errors, no NaN / undefined in `SharedReport.text()`; build 0.8–1.2 s.
+  - Spot values 33 / 38 / 26 / 3: every check D/C in the Summary of checks equals `sbdFmtDC(AN.design.checks[i].dcr)`; every numeric step result is the number shown on its tab; batch: each member's governing D/C (`runBatch().govDCR`) and status appear in the report.
+  - Building the report leaves `S` and localStorage unchanged, and every other tab's text is the same before and after it.
+  - Ctrl+P on the Report tab prints the report alone with the @page running header (beam default: 41 letter pages; no D11 `#printReport` built). 0 console errors.
+  - `node tests/check-syntax.mjs "Steel Beam Design - AISC 15th.html"`: all scripts pass.
+- **Other copies:** none. `shared/README.md` lists this tool as a user of `steps.js` and `report.js`.
+- **Open items:**
+  - Approach: the report reads the tabs back instead of writing steps from the result objects (see above). Step values are the tabs' formatted results (2–3 decimals as shown), not full precision. Engineer to confirm, or ask for a model-based report later.
+  - Plotly diagrams (moment/shear/deflection, capacity curves) are not in the report; a note on each links to the tab.
+  - Steps without a bold result on their last line (e.g. classification lines) carry no value in the right column; the equation lines still show the result.
+
+Diff (`Steel Beam Design - AISC 15th.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Steel Beam Design - AISC 15th.html b/Steel Beam Design - AISC 15th.html
+index 80ab977..ab363e3 100644
+--- a/Steel Beam Design - AISC 15th.html	
++++ b/Steel Beam Design - AISC 15th.html	
+@@ -9,0 +10,3 @@
++<!-- SBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -4722,0 +4726 @@ window.addEventListener('beforeprint',()=>{
++  if(typeof sbrWillPrint==='function'&&sbrWillPrint())return;   /* SBRP: the Report tab prints itself (shared/report.js) */
+@@ -7546,0 +7551 @@ function renderTab(){
++  if(SBRP.on){pg.id='page_tabReport';sbrRender(pg);return;}   /* SBRP: the Report tab */
+@@ -9514,0 +9520 @@ function buildTabs(){
++  sbrTabButton(bar);   /* SBRP: the Report tab (not saved in S.ui.tab) */
+@@ -9517,0 +9524,170 @@ function buildTabs(){
++/* =====================================================================
++   REPORT TAB (SBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers).
++   The report is made from the result tabs themselves: each tab of the current mode (beam, member check, composite,
++   batch) is built by its own builder into a detached holder, as the D11 print report does (sbdReportDOM), and read
++   back: each card (.sec) becomes a subsection n.m; each worked equation (eqBlock) becomes a worked step whose
++   equation lines are the tab's own TeX (read from KaTeX's source annotation) and whose result value is the tab's
++   bold result (\mathbf{…}) read back from that line (the number the tool formatted, never recomputed); tables, notes,
++   SVG drawings and "Worked in" links follow in order. Consecutive steps under one heading form a topic
++   (SharedSteps.group). A Summary of checks table is built from AN.design.checks (the tool's own D/C values).
++   Plotly diagrams are left on the tabs (a note links there). Nothing is saved: the Report tab is not stored in
++   S.ui.tab (SBRP.on is in memory only) and the collapsed sections are kept in memory (SBRP.closed). Display only.
++   ===================================================================== */
++const SBRP={on:false,closed:new Set(),api:null,doc:null};
++/* KaTeX source of a rendered element ('' if none) */
++function sbrAnn(k){const a=k&&k.querySelector('annotation[encoding="application/x-tex"]');return a?a.textContent:'';}
++/* the tool's TeX made readable by shared/steps.js's small renderer (used in notes and table cells only) */
++function sbrLite(t){return String(t||'').replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
++  .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,'\\;').replace(/\\(displaystyle|scriptstyle|limits|!)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
++  .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');}
++/* plain text of a node, KaTeX replaced by $notation$ for the report's rich text; ✓ ✗ kept */
++function sbrText(n){
++  const c=n.cloneNode(true);
++  c.querySelectorAll('.katex-display,.katex').forEach(k=>{if(!k.isConnected&&!c.contains(k))return;const t=sbrAnn(k);k.replaceWith(document.createTextNode(t?'$'+sbrLite(t)+'$':''));});
++  c.querySelectorAll('button,select,input,textarea,.svgTools,.noPrint').forEach(x=>x.remove());
++  return c.textContent.replace(/\s+/g,' ').trim();
++}
++/* "§F2.2" / "Eq. F2-1" / "Table B4.1b" -> "AISC 360-16 …"; others (ASCE, IBC, DG 9, statics) as written */
++function sbrRef(r){r=String(r||'').replace(/^\[|\]$/g,'').trim();return /^(\u00A7|Eqs?\.|Table [A-K]|Ch\.|Chapter|[A-K]\d)/.test(r)?'AISC 360-16 '+r:r;}
++/* the bold result of the last equation line: "=\mathbf{12.3}\ \text{kip}" -> {value, unit, d, eqLine without it} */
++function sbrResult(line){
++  const m=/=\s*\\mathbf\{([^{}]*)\}((?:\\\s*|\\,|\\;|\s)*\\text\{([^{}]*)\})?\s*$/.exec(line);
++  if(!m)return null;
++  const raw=m[1].replace(/\{,\}/g,'').replace(/,/g,'').trim(), v=parseFloat(raw);
++  if(!/^-?\d+(\.\d+)?$/.test(raw))return {value:m[1].replace(/\{,\}/g,','),unit:'',d:0,line:line.slice(0,m.index)};
++  return {value:v,unit:(m[3]||'').trim(),d:(raw.split('.')[1]||'').length,line:line.slice(0,m.index)};
++}
++/* one eqBlock -> one step */
++function sbrStep(eb,id){
++  const t=eb.querySelector('.eqTitle'),r=t&&t.querySelector('.eqRef');
++  const title=t?Array.from(t.childNodes).filter(x=>x!==r).map(x=>x.textContent).join('').trim():'';
++  const lines=Array.from(eb.querySelectorAll(':scope > .eqLine')).map(l=>sbrAnn(l)).filter(Boolean);
++  const vars=Array.from(eb.querySelectorAll(':scope > .varList > div, :scope > table.cr-where tr')).map(sbrText).filter(Boolean);
++  let value=null,unit='',d=2,ok;
++  const last=lines.length?lines[lines.length-1]:'';
++  const res=sbrResult(last);
++  if(res){value=res.value;unit=res.unit;d=res.d;lines[lines.length-1]=res.line;}
++  else{ /* a D/C line: "\text{DCR}=…=\mathbf{0.523}\ \le 1.0\ \checkmark" (dcrLine) */
++    const m=/\\text\{DCR\}[\s\S]*=\s*\\mathbf\{(-?\d+(?:\.\d+)?)\}/.exec(last);
++    if(m){value=parseFloat(m[1]);d=(m[1].split('.')[1]||'').length;ok=value<=1.0;}
++  }
++  const eq=lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');
++  const s={id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2/g,'^{2}').replace(/\u00B3/g,'^{3}').replace(/\u2074/g,'^{4}').replace(/\u00B7/g,'-'),d,ref:r?sbrRef(r.textContent):'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};   /* a code section "§G2.1" is not a step reference (shared/report.js reads "§<id>" in notes) */
++  if(ok!==undefined)s.ok=ok;
++  return s;
++}
++/* a built tab -> report subsections (one per card) */
++function sbrTab(tab,holder,links){
++  const subs=[],cardOf=new Map();
++  const items=()=>({list:[],run:null,head:''});
++  const flush=c=>{if(c.run&&c.run.steps.length){c.list.push({type:'steps',scope:c.scope,title:c.run.title,steps:c.run.steps,topics:null});}c.run=null;};
++  const walk=(node,c)=>{
++    Array.from(node.childNodes).forEach(ch=>{
++      if(ch.nodeType===3){const t=ch.textContent.trim();if(t){flush(c);c.list.push({type:'note',text:t});}return;}
++      if(ch.nodeType!==1)return;
++      const cl=ch.classList,tag=ch.tagName;
++      if(cl.contains('eqBlock')){if(!c.run)c.run={title:c.head||c.title,steps:[]};c.run.steps.push(sbrStep(ch,'s'+(++c.n)));return;}
++      if(tag==='BUTTON'||tag==='SELECT'||tag==='INPUT'||tag==='TEXTAREA'||tag==='SCRIPT'||tag==='STYLE'||cl.contains('btnRow')||cl.contains('fRow')||cl.contains('modeBar')||cl.contains('chip')||cl.contains('svgTools')||cl.contains('noPrint')||cl.contains('secHead'))return;
++      if(cl.contains('sec')){const h=ch.querySelector(':scope > .secHead .secTitle');flush(c);c.head=h?h.textContent.replace(/^\s*\d+\.\s*/,''):'';if(c.head)c.list.push({type:'note',text:'— '+c.head+' —'});walk(ch.querySelector(':scope > .secBody')||ch,c);flush(c);c.head='';return;}
++      if(cl.contains('plotHold')){flush(c);c.list.push({type:'note',text:'Diagram: shown on the [[tab:'+tab+'|'+(TABS().find(x=>x[0]===tab)||[0,tab])[1]+' tab]].'});return;}
++      if(tag==='TABLE'){flush(c);const rows=Array.from(ch.rows);if(!rows.length)return;
++        const hr=rows[0].querySelector('th')?rows.shift():null;
++        c.list.push({type:'table',head:hr?Array.from(hr.cells).map(sbrText):[],rows:rows.map(r=>Array.from(r.cells).map(td=>{const t=sbrText(td);return {t,n:/^[-−]?[\d.,]+$/.test(t),span:td.colSpan>1?td.colSpan:undefined};}))});return;}
++      if(tag==='svg'||tag==='SVG'){flush(c);c.list.push({type:'figure',svg:ch.outerHTML});return;}
++      if(cl.contains('wkLink')){flush(c);const as=Array.from(ch.querySelectorAll('a.wkA'));
++        c.list.push({type:'note',text:'Worked in: '+as.map(a=>{const L=links(a.dataset.tab,a.dataset.sec);return (a.dataset.txt?a.dataset.txt+' ':'')+(L?'[['+L+']]':'[[tab:'+a.dataset.tab+'|'+a.dataset.card+']]');}).join(' · ')});return;}
++      if(/^H[1-6]$/.test(tag)){flush(c);c.head=ch.textContent.trim();c.list.push({type:'note',text:'— '+c.head+' —'});return;}
++      if(cl.contains('note')||cl.contains('hint')||cl.contains('warnBox')||cl.contains('errBox')||cl.contains('okBox')||cl.contains('infoBox')||tag==='P'){
++        if(ch.querySelector('.eqBlock,table,svg,.sec')){walk(ch,c);return;}
++        const t=sbrText(ch);if(t){flush(c);c.list.push({type:'note',warn:cl.contains('warnBox')||cl.contains('errBox'),text:(cl.contains('errBox')?'Error: ':cl.contains('warnBox')?'Warning: ':cl.contains('okBox')?'OK: ':'')+t});}return;}
++      walk(ch,c);
++    });
++  };
++  let lead=null;
++  Array.from(holder.childNodes).forEach(ch=>{
++    if(ch.nodeType===1&&ch.classList.contains('sec')){
++      const h=ch.querySelector(':scope > .secHead .secTitle'),title=h?h.textContent.replace(/^\s*\d+\.\s*/,''):'Results',k=subs.length+1;
++      const c=Object.assign(items(),{scope:tab+'.'+k,title,n:0});
++      walk(ch.querySelector(':scope > .secBody')||ch,c);flush(c);
++      cardOf.set(ch.getAttribute('data-secid'),c);subs.push({title,c});
++    }else{
++      if(!lead){lead=Object.assign(items(),{scope:tab+'.0',title:'General',n:0});subs.unshift({title:'General',c:lead});}
++      const w=document.createElement('div');w.appendChild(ch.cloneNode(true));walk(w,lead);flush(lead);
++    }
++  });
++  return {subs,cardOf};
++}
++/* topics: each steps item is one topic (its heading), grouped by SharedSteps.group for its status and one-line result */
++function sbrTopics(it){
++  const g=SharedSteps.group(it.steps,[{key:'k',title:it.title,ids:()=>true}],{strip:false})[0];
++  it.topics=[{title:it.title,ref:'',n:it.steps.length,cls:g.cls,chip:g.chip,res:g.res}];it.title='Worked steps';return it;
++}
++function sbrModel(){
++  const f=S.proj||{},secs=[],names={};TABS().forEach(t=>names[t[0]]=t[1]);
++  const order=TABS().map(t=>t[0]).filter(id=>id!=='sep'&&id!=='tabManual');
++  const built={},cards={};
++  const saveTab=S.ui.tab,saveCol=JSON.stringify(S.ui.collapse||{});
++  try{
++    order.forEach(id=>{
++      const fn={tabSummary:buildSummaryTab,tabSchem:buildSchemTab,tabDerive:buildDeriveTab,tabAnalysis:buildAnalysisTab,tabMx:buildMxTab,tabMy:buildMyTab,
++        tabVx:buildVxTab,tabVy:buildVyTab,tabComp:buildCompTab,tabTors:buildTorsTab,tabJ10:buildJ10Tab,tabInter:buildInterTab,tabService:buildServiceTab,
++        tabSection:buildSectionTab,tabValid:buildValidTab,tabBatch:buildBatchTab}[id];
++      if(!fn)return;
++      const holder=document.createElement('div');resetSecNum();S.ui.tab=id;
++      if(AN&&AN.blockers&&AN.blockers.length&&id!=='tabValid'&&id!=='tabSchem'){holder.appendChild(el('div','errBox','<b>Output withheld \u2014 the model is not valid:</b><br>'+AN.blockers.map(x=>'\u2022 '+x).join('<br>')));}
++      else{try{fn(holder);}catch(e){holder.appendChild(el('div','errBox','Section failed to build: '+e.message));}}
++      built[id]=holder;
++    });
++  }finally{S.ui.tab=saveTab;S.ui.collapse=JSON.parse(saveCol);}
++  /* first step key of a card, for "Worked in" links and the summary table */
++  const firstKey={};
++  const conv={};
++  order.forEach(id=>{if(built[id])conv[id]=sbrTab(id,built[id],(tab,sec)=>firstKey[tab+'|'+sec]||null);});
++  order.forEach(id=>{const C=conv[id];if(!C)return;C.cardOf.forEach((c,sec)=>{const s=c.list.find(x=>x.type==='steps');if(s)firstKey[id+'|'+sec]=s.scope+'/'+s.steps[0].id;});});
++  /* second pass for the links now that every card's first step is known */
++  order.forEach(id=>{if(built[id])conv[id]=sbrTab(id,built[id],(tab,sec)=>firstKey[tab+'|'+sec]||null);});
++  /* summary of checks (the tool's own D/C values) */
++  const D=AN&&AN.design,chk=(D&&D.checks)||[];
++  if(chk.length){
++    const st=c=>c.na?{t:'N/A',cls:'na'}:(c.dcr>1.0001?{t:'FAIL',cls:'ng'}:{t:'PASS',cls:c.dcr>=0.9?'hi':'ok'});
++    secs.push({title:'Summary of checks',subs:[{title:'All checks with the governing '+(isMember()?'case':'combination'),items:[{type:'table',head:['Check','Reference','Governing','D/C','Status'],
++      rows:chk.map(c=>{const g=sbdChkTarget(c),k=g?firstKey[g[0]+'|'+g[1]]:null;return [c.label,sbrRef(c.ref||''),c.combo||'—',{t:c.na?'n/a':sbdFmtDC(c.dcr),n:true,key:k||undefined},st(c)];})},
++      {type:'note',text:'Each D/C links to the card where it is worked. On screen: [[tab:tabSummary|Summary tab]].'}]}]});
++  }
++  order.forEach(id=>{const C=conv[id];if(!C||!C.subs.length)return;
++    secs.push({title:names[id]||id,subs:C.subs.map(q=>({title:q.title,items:q.c.list.map(it=>it.type==='steps'?sbrTopics(it):it).concat([{type:'note',text:'On screen: [[tab:'+id+'|'+(names[id]||id)+' tab]].'}])}))});});
++  secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:sbdRefs().map(r=>[r[0],r[1]])}]}]});
++  const today=new Date().toISOString().slice(0,10),sect=AN&&AN.sect?AN.sect.lbl+' — '+AN.sect.mat.name:'';
++  return {title:isBatch()?'Steel Beam Batch Check':(isMember()?'Steel Member Capacity Check':'Steel Beam Design'),subtitle:(f.name||'Untitled')+(f.subject?' — '+f.subject:'')+(sect&&!isBatch()?' — '+sect:''),code:'AISC 360-16 (LRFD) · AISC Steel Construction Manual, 15th Ed.',
++    info:[['Project',f.name],['Project No.',f.num],['Calculated by',f.by||'Mario Lococo'],['Date',f.date||today],['Checked by',f.chk],['Checked date',f.chkDate]],
++    head:{left:'Project No. '+(f.num||'—')+' — '+String(f.name||'—').slice(0,40),right:'Computed: '+(f.by||'Mario Lococo')+' '+(f.date||today)+' · Checked: '+(f.chk||'—')+' '+(f.chkDate||''),foot:(f.name||'Untitled')+' (Steel Beam Designer)'},
++    sections:secs};
++}
++function sbrRender(pg){
++  if(!window.SharedReport||!window.SharedSteps){pg.appendChild(el('div','errBox','shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.'));SBRP.api=null;SBRP.doc=null;return;}
++  let M;try{M=sbrModel();}catch(e){pg.appendChild(el('div','errBox','Report error: '+sbdEsc(e&&e.message)));SBRP.api=null;SBRP.doc=null;return;}
++  const host=el('div','sbrHost');pg.appendChild(host);
++  const bar=$('tabBar');
++  SBRP.api=SharedReport.mount(host,M,{closed:SBRP.closed,onGoto:sbrGoto,stick:bar?bar.offsetHeight:0});SBRP.doc=SBRP.api.doc;
++}
++/* [[tab:…]] links of the report: the result tab (as its tab button) */
++function sbrGoto(name){if(!TABS().some(t=>t[0]===name))return;SBRP.on=false;S.ui.tab=name;autosave();buildTabs();}
++/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
++function sbrPrinting(){return document.body.classList.contains('rp-printing');}
++function sbrWillPrint(){return sbrPrinting()||!!(SBRP.on&&SBRP.doc);}
++window.addEventListener('beforeprint',()=>{
++  if(!SBRP.on||!SBRP.doc||sbrPrinting())return;
++  let box=document.getElementById('rp-print');if(!box){box=document.createElement('div');box.id='rp-print';document.body.appendChild(box);}
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(SBRP.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add('rp-printing');
++});
++
++/* SBRP: the Report tab button, after the result tabs; any other tab button leaves the Report tab */
++function sbrTabButton(bar){
++  if(!bar.__sbr){bar.__sbr=true;bar.addEventListener('click',e=>{const b=e.target.closest('button');if(b&&!b.classList.contains('sbrTab'))SBRP.on=false;},true);}
++  const s=el('span');s.style.cssText='width:9px;flex:0 0 9px;align-self:stretch;border-left:1px solid var(--line);margin:2px 3px 0';bar.appendChild(s);
++  const b=el('button','sbrTab','');b.appendChild(el('span',null,'Report'));b.title='Calculation report (navigation tree, worked steps, print)';
++  if(SBRP.on){bar.querySelectorAll('button.active').forEach(x=>x.classList.remove('active'));b.classList.add('active');}
++  b.addEventListener('click',()=>{SBRP.on=true;buildTabs();});bar.appendChild(b);
++}
+```

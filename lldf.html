@@ -241,6 +241,12 @@
   a.wkA{color:var(--accent);text-decoration:none;cursor:pointer} a.wkA:hover{text-decoration:underline}
   .calcstep.wkFlash{animation:wkflash 1.4s ease-out}
   @keyframes wkflash{from{background:#dde9f6}to{background:transparent}}
+  /* LLRP (2026-11-01): Calculation sheet / Report view tabs; the Report tab is the shared viewer (shared/report.js) */
+  .lldf-views{max-width:940px;margin:14px auto -12px;display:flex;gap:4px;padding:0 4px}
+  .lldf-views button{font:600 12.5px var(--body);padding:6px 14px;border:1px solid var(--rule,#cbd5e1);border-bottom:none;border-radius:6px 6px 0 0;background:#e9eef4;color:var(--muted);cursor:pointer}
+  .lldf-views button.on{background:var(--paper,#fff);color:var(--ink);box-shadow:0 -2px 0 var(--accent) inset}
+  .lldf-rptview{max-width:1180px;margin:12px auto 26px;padding:0 12px;background:transparent}
+  .lldf-rpterr{background:#fff3f3;border:1px solid #e3a5a5;color:#8a1c1c;padding:10px 14px;border-radius:6px;font:13px var(--body)}
   /* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format); printed instead of the sheet */
   #lldfReport{display:none}
   @media print{
@@ -401,6 +407,8 @@ var st=document.createElement('style'); st.textContent=css;
   </header>
 
   <div class="printhead" id="printHead"></div>
+  <nav class="lldf-views noprint" id="lldfViews" role="tablist" aria-label="View"><button type="button" class="on" data-view="sheet" role="tab" aria-selected="true">Calculation sheet</button><button type="button" data-view="report" role="tab" aria-selected="false">Report</button></nav>
+  <div class="lldf-rptview" id="lldfRptView" style="display:none"></div>
   <div class="sheet" id="sheet">
     <div class="titleblock">
       <div class="tb-id">
@@ -1678,6 +1686,9 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
 </script>
 
 <script src="shared/lldf.js"></script>
+<!-- LLRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -2255,8 +2266,9 @@ function showInputErrors(errs){
 function run(){
   const p=readInputs();
   const inErr=inputErrors(p);
-  if(inErr.length){ showInputErrors(inErr); return; }
+  if(inErr.length){ window.lldfLast=null; showInputErrors(inErr); if(window.lldfReportRefresh) window.lldfReportRefresh(); return; }   // LLRP: no results for the Report tab
   const R=computeBridge(p);
+  window.lldfLast={p,R};   // LLRP: the Report tab reads the results shown on the sheet (display only)
   const {geo,Kg,skew,members,warnings}=R;
   selectedMember=Math.max(0,Math.min(selectedMember,p.Nb-1));
   const md=members[selectedMember];
@@ -2272,6 +2284,7 @@ function run(){
   renderNotes(warnings);
   drawCrossSection(p,geo,md);
   drawLever(p,geo,md,la);
+  if(window.lldfReportRefresh) window.lldfReportRefresh();   // LLRP
 }
 
 /* ═══════════ 3.9 Reference images ══════════════════════════════════════════
@@ -4553,10 +4566,224 @@ window.lldfBuildReport=function(){
 /* Printing prints the report; the page header / footer apply only while printing. If the report
    cannot be built the sheet prints as before. */
 window.addEventListener("beforeprint",function(){
+  if(typeof window.lldfRptWillPrint==="function"&&window.lldfRptWillPrint()){ document.body.classList.remove("lldf-rpt"); applyPageCSS(false); return; }   /* LLRP: the Report tab prints itself (shared/report.js) */
   var ok=false; try{ ok=window.lldfBuildReport(); }catch(e){ console.warn("lldf report",e); }
   document.body.classList.toggle("lldf-rpt",!!ok); applyPageCSS(!!ok);
 });
 window.addEventListener("afterprint",function(){ applyPageCSS(false); });
+})();
+</script>
+<script>
+/* ===== LLRP (2026-11-01): REPORT TAB (shared viewer) — display only =====
+   The calculation report in the shared viewer (shared/report.js: navigation tree to the topics, numbered sections §n.m,
+   collapse / expand, search, Print with a title block, running header and page numbers). Worked steps are shared/steps.js steps;
+   the live-load steps are written by SharedLLDF.steps (shared/lldf.js, the same writer as the Steel Bridge app). Every step VALUE is
+   the page's own computed number: run() leaves its inputs and results in window.lldfLast = { p, R } (R = computeBridge(p), the same
+   object the sheet shows); dead loads come from MD.distribute(p, geo), the function the sheet's 3.6 / 4D cards use; the lever-rule
+   tables from leverAll, as section 4L. Nothing is saved. The D11 print report (Print / PDF from the sheet) is unchanged; Ctrl+P or
+   "Print report" while the Report tab shows prints this report. */
+(function(){
+"use strict";
+if(typeof run!=="function"||!window.SharedLLDF||!SharedLLDF.steps) return;
+var LLRP={closed:new Set(),api:null,doc:null,view:"sheet"};
+window.LLRP=LLRP;
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function el(id){ return document.getElementById(id); }
+function meta(id){ var e=el(id); return e?String(e.value||"").trim():""; }
+var N=function(x,d){ return SharedSteps.n(x,d); };
+var cell=function(v,d,key,cls){ return {t:(typeof v==="number")?(isFinite(v)?N(v,d):"—"):String(v==null?"—":v),n:typeof v==="number",key:key,cls:cls}; };
+var plain=function(s){ return String(s==null?"":s).replace(/<[^>]*>/g,"").replace(/\$/g,"").replace(/\[\[/g,"[ ["); };
+/* topics of one girder's steps (SharedSteps.group), in the order of the check */
+var LL_TOPICS=[
+  {key:"sp",title:"Spacing and the interior-girder equations",ref:"Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1",ids:/^(S|kterm|k|IJ|Nc|mom[12]|shr[12])$/},
+  {key:"strip",title:"Equivalent strip widths",ref:"Art. 4.6.2.3",ids:/^(Es|Em)$/},
+  {key:"lev",title:"Lever rule",ref:"Art. 4.6.2.2.1, C4.6.2.2.1",ids:/^lev/},
+  {key:"ext",title:"Exterior girder: e-factors",ref:"Tables 4.6.2.2.2d-1, 4.6.2.2.3b-1",ids:/^(de|eM\d?|eV\d?|capV|mE|vE|We|gWe)$/},
+  {key:"rig",title:"Rigid cross-section",ref:"Eq. C4.6.2.2.2d-1",ids:/^rig/},
+  {key:"skw",title:"Skew factors",ref:"Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1",ids:/^(rM|rV)$/},
+  {key:"fac",title:"Factors by number of lanes loaded",ref:"Art. 4.6.2.2.2, 4.6.2.2.3",ids:/^g[MV][12]$/},
+  {key:"gov",title:"Governing distribution factors",ref:"Art. 4.6.2.2",ids:/^(gM|gV)$/},
+  {key:"fat",title:"Fatigue",ref:"Art. 3.6.1.4.3b, C3.6.1.1.2",ids:/^(fat1|fatM|fatV)$/}
+];
+function topics(scope,steps,list,opt){
+  var G=SharedSteps.group(steps,list,{strip:false}), all=[];
+  G.forEach(function(g){ all=all.concat(g.steps); });
+  return Object.assign({type:"steps",scope:scope,steps:all,topics:G.map(function(g){ return {title:g.title,ref:g.ref,n:g.steps.length,cls:g.cls,chip:g.chip,res:g.res}; })},opt||{});
+}
+function one(scope,steps,title,ref,opt){ return topics(scope,steps,[{key:"t",title:title,ref:ref||"",ids:function(){ return true; }}],opt); }
+var TYPE_NAME=function(){ var b=el("bridgeType"); return b&&b.options[b.selectedIndex]?b.options[b.selectedIndex].text:""; };
+
+function model(){
+  var L=window.lldfLast, p=L.p, R=L.R, geo=R.geo, Kg=R.Kg, SS=SharedLLDF.steps, ED=SS.ED, secs=[];
+  var beam=BEAM_SLAB.has(p.type), box=BOX.has(p.type), slab=p.type==="slab", useLever=(beam||p.type==="bc"||p.type==="d");
+  var strip=slab?" per 1-ft strip":"";
+  var skB=Object.assign({},R.skew,{thM:R.skew.th,thV:R.skew.thV,noRed:false,dTh:0,thMin:R.skew.th});
+  /* ---------- 1. Design parameters ---------- */
+  {
+    var kv=[["Cross-section type (Table 4.6.2.2.1-1)",TYPE_NAME()],["Spans",p.spans.map(function(s,i){ return (p.spans.length>1?"L"+(i+1)+" = ":"L = ")+N(s,2)+" ft"; }).join(", ")]];
+    if(p.spans.length>1) kv.push(["Design region",p.Ldesc+" (L = "+N(p.L,2)+" ft)","geo/L"]);
+    kv.push(["Number of beams N_b",String(p.Nb)],["Beam spacings",p.spacings.map(function(s){ return N(s,3); }).join(", ")+" ft"],
+      ["Overhangs O_L / O_R",N(p.OL,2)+" / "+N(p.OR,2)+" ft"],["Deck edge to the interior face of the railing / curb / sidewalk, f_L / f_R",N(p.rL,2)+" / "+N(p.rR,2)+" ft"]);
+    if(!slab) kv.push(["Skew θ (moment) / θ_V (shear)",N(p.skew,1)+"° / "+(p.skewV!=null?N(p.skewV,1)+"°":"= θ")]);
+    if(beam) kv.push(["Slab thickness t_s",N(p.ts,2)+" in"],["Beam I / A / e_g",SharedSteps.g(p.I,0).replace(/\{,\}/g,",")+" in⁴ / "+N(p.A,1)+" in² / "+N(p.eg,2)+" in"],["Modular ratio n",N(p.n,3)]);
+    if(box) kv.push(["Box width b / I / J",N(p.boxB,2)+" in / "+SharedSteps.g(p.boxI,0).replace(/\{,\}/g,",")+" in⁴ / "+SharedSteps.g(p.boxJ,0).replace(/\{,\}/g,",")+" in⁴"]);
+    if(p.type==="bc"||p.type==="d"||box) kv.push(["Beam depth d",N(p.depth,2)+" in"]);
+    if(useLever) kv.push(["Gaps between adjacent trucks (wheel line to wheel line, ≥ 4 ft)",(p.truckGaps||[]).slice(0,Math.max(1,geo.NL-1)).map(function(g){ return N(Math.max(4,+g||4),1); }).join(", ")+" ft"]);
+    if(p.fcGirder||p.fcDeck) kv.push(["f′c girder / deck",(p.fcGirder?N(p.fcGirder,1):"—")+" / "+(p.fcDeck?N(p.fcDeck,1):"—")+" ksi"]);
+    secs.push({title:"Design parameters",subs:[{title:"Input",items:[{type:"kv",rows:kv},{type:"note",text:"As entered on the [[tab:inputs|calculation sheet (1.0 Design Parameters)]]."}]}]});
+  }
+  /* ---------- 2. Summary ---------- */
+  {
+    var rows=R.members.map(function(m){ var k="B"+(m.j+1)+"/";
+      return [m.label,m.type==="ext"?"exterior":"interior",cell(m.S,2),cell(m.gM,3,k+"gM"),cell(m.gV,3,k+(slab?"gM":"gV")),cell(m.fatM,3,k+"fatM"),cell(m.fatV,3,k+(slab?"fatM":"fatV")),m.method]; });
+    var items=[{type:"table",caption:"Distribution factors by member (lanes per girder"+strip+"; multiple presence and skew included)",head:["Girder","Type","S (ft)","g_M","g_V","Fatigue g_M","Fatigue g_V","Method"],rows:rows},
+      {type:"note",text:"The same table as the [[tab:summary|sheet's 2.0 summary]]. Each value links to its worked step (§)."}];
+    var gl=[];
+    ["int","ext"].forEach(function(t){ var ms=R.members.filter(function(m){ return m.type===t; }); if(!ms.length) return;
+      var bm=ms.reduce(function(a,b){ return b.gM>a.gM?b:a; }), bv=ms.reduce(function(a,b){ return b.gV>a.gV?b:a; }), nm=t==="int"?"Interior girders":"Exterior girders";
+      gl.push([nm+", moment: g_M (governs at "+bm.label+")",N(bm.gM,3)+strip,"B"+(bm.j+1)+"/gM"]);
+      gl.push([nm+", shear: g_V (governs at "+bv.label+")",N(bv.gV,3)+strip,"B"+(bv.j+1)+"/"+(slab?"gM":"gV")]); });
+    items.push({type:"kv",rows:gl});
+    if(p.spans.length>1) items.push({type:"note",text:"Design region: "+plain(p.Ldesc)+", L = "+N(p.L,2)+" ft ([[geo/L]]). The report is for the region selected on the sheet."});
+    secs.push({title:"Summary of distribution factors",subs:[{title:"Distribution factors by member",items:items}]});
+  }
+  /* ---------- 3. Geometry, stiffness, skew ---------- */
+  {
+    var subs=[], w=SharedSteps.work("");
+    SS.geometry(w,p,geo);
+    if(p.spans.length>1){ var d=designL(p.spans,p.region);
+      if(d.kind==="p") w.add({id:"L",label:"Design span length for the negative-moment region (average of the adjacent spans)",sym:"L",eq:"\\frac{L_{"+(d.i+1)+"} + L_{"+(d.i+2)+"}}{2}",sub:"\\frac{"+N(p.spans[d.i],2)+" + "+N(p.spans[d.i+1],2)+"}{2}",value:p.L,unit:"ft",d:2,ref:ED+" Table C4.6.2.2.1-2"});
+      else w.add({id:"L",label:"Design span length for the positive-moment and shear region",sym:"L",eq:"L_{"+(d.i+1)+"}",sub:"",value:p.L,unit:"ft",d:2,ref:ED+" Table C4.6.2.2.1-2",note:plain(p.Ldesc)}); }
+    var it=[one("geo",w.steps,"Deck, roadway, design lanes and girder layout",ED+" Art. 3.6.1.1.1")];
+    var svg=el("fig-xsec")&&el("fig-xsec").querySelector("svg");
+    if(svg) it.push({type:"figure",svg:svg.outerHTML,caption:"Typical cross-section (as Figure 1 of the [[tab:xsec|sheet]])."});
+    subs.push({title:"Cross-section geometry",items:it});
+    if(beam){ var wk=SharedSteps.work("");
+      wk.add({id:"Kg",label:"Longitudinal stiffness parameter",sym:"K_{g}",eq:"n(I + Ae_{g}^{2})",sub:N(p.n,3)+"("+SharedSteps.g(p.I,0)+" + "+N(p.A,2)+"("+N(p.eg,3)+")^{2})",value:Kg,unit:"in^{4}",d:0,ref:ED+" Eq. 4.6.2.2.1-1"});
+      var ws=SharedSteps.work("");
+      SS.skew(ws,{simple:false,L:p.L,ts:p.ts,geoSavg:geo.Savg,pier:false},skB,Kg);
+      subs.push({title:"Longitudinal stiffness parameter K_g",items:[one("kg",wk.steps,"Stiffness parameter",ED+" Eq. 4.6.2.2.1-1")]});
+      subs.push({title:"Skew factors",items:[one("sk",ws.steps,"Skew reduction and correction",ED+" Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1"),
+        {type:"note",text:"These factors multiply every girder's moment and shear factors (§4)."+(p.skewV!=null?" Separate skews: θ for the moment reduction, θ_V for the shear correction.":"")}]});
+    }
+    secs.push({title:"Geometry, stiffness and skew",subs:subs});
+  }
+  /* ---------- 4. Live-load distribution, one subsection per girder ---------- */
+  {
+    var subs4=[];
+    R.members.forEach(function(md){
+      var w=SharedSteps.work(""), sc="B"+(md.j+1);
+      if(beam) SS.member(p,geo,Kg,skB,md.j,w,{prefix:"B"}); else SS.other(p,geo,R.skew,md,w);
+      var items=[topics(sc,w.steps,LL_TOPICS)];
+      if(beam) items.push({type:"note",text:"Skew factors r_M, r_V: [[sk/scfM]], [[sk/scfV]]. Girder spacing S and K_g: [[kg/Kg]]."});
+      if(useLever){ var la=leverAll(p,geo,md.j);
+        if(la&&la.cfgs&&la.cfgs.length) items.push({type:"table",caption:"Lever rule, every truck configuration that fits (girder "+md.label+"; the train is moved to maximize this girder's reaction; wheel positions from the left deck edge)",
+          head:["Trucks","Wheel lines (ft)","R (lanes)","m","m·R"],rows:la.cfgs.map(function(c){ var gov=la.gov&&c.N===la.gov.N;
+            return {cells:[c.N+(gov?" (governs)":""),c.wheels.map(function(x){ return N(x,2); }).join(", "),cell(c.R,4),cell(c.m,2),cell(c.df,4,null,gov?"ok":"")],cls:gov?"ok":""}; })}); }
+      items.push({type:"note",text:"On the sheet: [[tab:member:"+md.j+"|4.0 Detailed Calculations, girder "+md.label+"]]."});
+      subs4.push({title:"Girder "+md.label+" ("+(md.type==="ext"?"exterior":"interior")+")",items:items});
+    });
+    secs.push({title:"Live-load distribution factors"+(slab?" (equivalent strip)":""),subs:subs4});
+  }
+  /* ---------- 5. Dead and pedestrian loads ---------- */
+  if(window.MD&&typeof MD.distribute==="function"){
+    var D=MD.distribute(p,geo), rw=D.rows, Nn=D.N, ub=D.ub, a=MD.readAppurt(), gc=a.uwConc>0?a.uwConc:0.150, subs5=[];
+    var w5=SharedSteps.work("");
+    rw.forEach(function(r,i){ var x=ub[i];
+      var eq=i===0?(Nn>1?"x_{1} + \\frac{x_{2} - x_{1}}{2}":"W"):i===Nn-1?"\\frac{x_{N} - x_{N-1}}{2} + (W - x_{N})":"\\frac{x_{i+1} - x_{i-1}}{2}";
+      var sub=i===0?(Nn>1?N(x,2)+" + \\frac{"+N(ub[1],2)+" - "+N(x,2)+"}{2}":N(geo.Wdeck,2)):i===Nn-1?"\\frac{"+N(x,2)+" - "+N(ub[i-1],2)+"}{2} + ("+N(geo.Wdeck,2)+" - "+N(x,2)+")":"\\frac{"+N(ub[i+1],2)+" - "+N(ub[i-1],2)+"}{2}";
+      w5.add({id:"trib.B"+(i+1),label:"Tributary deck width, beam B"+(i+1)+" ("+(D.CLS[r.cls]?D.CLS[r.cls].lbl:r.cls)+"; x = "+N(x,2)+" ft from the left deck edge)",sym:"w_{trib}",eq:eq,sub:sub,value:r.trib,unit:"ft",d:3}); });
+    rw.forEach(function(r,i){ w5.add({id:"dc1.B"+(i+1),label:"DC1, deck slab on the tributary width, beam B"+(i+1),sym:"w_{DC1}",eq:"w_{trib}\\frac{t_{s}}{12}\\gamma_{c}",sub:N(r.trib,3)+"\\left(\\frac{"+N(p.ts,2)+"}{12}\\right)("+N(gc,3)+")",value:r.deckDC1,unit:"klf",d:3,ref:"MassDOT LRFD Bridge Manual Part I §3.5.3.3"}); });
+    var w6=SharedSteps.work("");
+    w6.add({id:"xbar",label:"Centroid of the beam group (every beam A = 1)",sym:"\\bar{x}",eq:"\\frac{\\sum x_{i}}{N_{b}}",sub:"\\frac{"+N(ub.reduce(function(s,x){ return s+x; },0),2)+"}{"+Nn+"}",value:D.xbar,unit:"ft",d:3,ref:"MassDOT LRFD Bridge Manual Part I §3.5.3.4"});
+    w6.add({id:"S",label:"Second moment of the beam group about its centroid",sym:"S",eq:"\\sum (x_{i} - \\bar{x})^{2}",sub:D.c.map(function(c){ return "("+N(c,2)+")^{2}"; }).join(" + "),value:D.S,unit:"ft^{2}",d:2,ref:"MassDOT LRFD Bridge Manual Part I §3.5.3.4"});
+    var pl=D.perLoad.filter(function(q){ return q.dist==="pilecap"&&Math.abs(q.P)>0; }).sort(function(x,y){ return Math.abs(y.P)-Math.abs(x.P); })[0];
+    if(pl){ var gi=0; pl.r.forEach(function(v,i){ if(v>pl.r[gi]) gi=i; });
+      w6.add({id:"ex.e",label:"Worked example, the largest pile-cap load ("+plain(pl.L.desc)+"): eccentricity about the group centroid",sym:"e",eq:"x_{L} - \\bar{x}",sub:N(pl.x,2)+" - "+N(D.xbar,3),value:pl.e,unit:"ft",d:3});
+      w6.add({id:"ex.R",label:"Share of that load on beam B"+(gi+1)+" (pile-cap analogy, no uplift relief: not less than P/N_b)",sym:"R_{B"+(gi+1)+"}",eq:"\\max\\left(\\frac{P}{N_{b}}, \\frac{P}{N_{b}} + \\frac{P e c_{"+(gi+1)+"}}{S}\\right)",sub:"\\max\\left(\\frac{"+N(pl.P,3)+"}{"+Nn+"}, \\frac{"+N(pl.P,3)+"}{"+Nn+"} + \\frac{"+N(pl.P,3)+"("+N(pl.e,3)+")("+N(D.c[gi],3)+")}{"+N(D.S,2)+"}\\right)",value:pl.r[gi],unit:"klf",d:3,ref:"MassDOT LRFD Bridge Manual Part I §3.5.3.4–.5"}); }
+    subs5.push({title:"Deck slab (DC1) on the tributary widths",items:[topics("dl",w5.steps,[{key:"trib",title:"Tributary deck widths",ref:"",ids:/^trib/},{key:"dc1",title:"DC1, deck slab",ref:"MassDOT §3.5.3.3",ids:/^dc1/}]),
+      {type:"note",text:"Beam self-weight is not included in DC1 (the design app applies it from the section): "+N(D.selfWt,3)+" klf per beam, for reference. Distribution method: "+(D.method==="aashto"?"typical AASHTO (all beams equal)":"MassDOT §3.5.3")+". On the sheet: [[tab:dl|3.6 Deck appurtenances]], [[tab:dlsteps|4D Dead Load Distribution]]."}]});
+    subs5.push({title:"Beam group and the pile-cap analogy",items:[one("dlg",w6.steps,"Beam group properties"+(pl?" and a worked load":""),"MassDOT §3.5.3.4")]});
+    var DN={equal:"Equal",pilecap:"Pile-cap",two:"Two adjacent"};
+    subs5.push({title:"Every load distributed to the beams",items:[{type:"table",wide:true,head:["Load","Cat.","x_L (ft)","P (klf)","Rule"].concat(rw.map(function(r){ return "B"+(r.i+1); })),
+      rows:(D.perLoad.length?D.perLoad.map(function(q){ return [plain(q.L.desc)+(q.L.auto?"":" (user)"),q.L.cat,cell(q.x,2),cell(q.P,3),DN[q.dist]||q.dist].concat(q.r.map(function(v){ return v>0.0005||v<-0.0005?cell(v,3):"—"; })); }):[])
+        .concat([[ "Deck slab (tributary)","DC1","—",cell(rw.reduce(function(s,r){ return s+r.deckDC1; },0),3),"Tributary"].concat(rw.map(function(r,i){ return cell(r.deckDC1,3,"dl/dc1.B"+(i+1)); }))])}]});
+    var sum=function(k){ return rw.reduce(function(s,r){ return s+r[k]; },0); };
+    subs5.push({title:"Per-beam dead and pedestrian loads",items:[{type:"table",wide:true,head:["Component"].concat(rw.map(function(r){ return "B"+(r.i+1); })).concat(["Σ"]),
+      rows:[["Class"].concat(rw.map(function(r){ return D.CLS[r.cls]?D.CLS[r.cls].ab:r.cls; })).concat([""]),
+        ["DC1, deck slab (klf)"].concat(rw.map(function(r){ return cell(r.dc1,3); })).concat([cell(sum("dc1"),3)]),
+        ["DC2, superimposed (klf)"].concat(rw.map(function(r){ return cell(r.dc2,3); })).concat([cell(sum("dc2"),3)]),
+        ["DW, wearing surface (klf)"].concat(rw.map(function(r){ return cell(r.dw,3); })).concat([cell(sum("dw"),3)]),
+        ["PL, pedestrian live load (klf)"].concat(rw.map(function(r){ return cell(r.pl,3); })).concat([cell(sum("pl"),3)]),
+        {cells:["Total (klf)"].concat(rw.map(function(r){ return cell(r.total,3); })).concat([cell(sum("total"),3)]),cls:"ok"}]},
+      {type:"note",text:"The per-foot loads on each beam line (as the sheet's 4D summary and the hand-off to the design apps). Add the girder self-weight separately."}]});
+    secs.push({title:"Dead and pedestrian load distribution",subs:subs5});
+  }
+  /* ---------- 6. Range of applicability ---------- */
+  {
+    var tb=null, ref="";
+    if(beam){ tb=[["S",geo.Savg,RANGES.S,"geo/Savg"],["L",p.L,RANGES.L,null],["ts",p.ts,RANGES.ts,null],["Nb",p.Nb,RANGES.Nb,null],["Kg",Kg,RANGES.Kg,"kg/Kg"]]; ref="Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1"; }
+    else if(box){ tb=[["b",p.boxB,BOXR.b],["L",p.L,BOXR.L],["Nb",p.Nb,BOXR.Nb],["I",p.boxI,BOXR.I],["J",p.boxJ,BOXR.J]]; ref="Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1"; }
+    if(tb){ var rr=tb.map(function(x){ var r=x[2], v=x[1], ok=v>=r.min&&v<=r.max, hi=r.max===Infinity?"∞":String(r.max);
+      return [plain(r.name),{t:N(v,v>100?0:2)+" "+(r.unit||"").replace("^4","⁴"),n:true,key:x[3]||undefined},r.min+" – "+hi+" "+(r.unit||"").replace("^4","⁴"),{t:ok?"OK":"OUT OF RANGE",cls:ok?"ok":"ng"}]; });
+      secs.push({title:"Range of applicability",subs:[{title:"Range of applicability ("+ref+")",items:[{type:"table",head:["Parameter","Value","Range","Status"],rows:rr},{type:"note",text:"As the [[tab:appl|sheet's 5.0 table]]. d_e range: see the notes."}]}]}); }
+  }
+  /* ---------- 7. Notes ---------- */
+  {
+    var it7=(R.warnings||[]).map(function(x){ return {type:"note",warn:x.level!=="info",text:plain(x.msg)}; });
+    var dsc=document.querySelector("#sheet .disclaimer"); if(dsc) it7.push({type:"note",text:plain(dsc.textContent.replace(/\s+/g," ").trim())});
+    if(!it7.length) it7.push({type:"note",text:"No notes."});
+    secs.push({title:"Notes and assumptions",subs:[{title:"Notes and warnings",items:it7}]});
+  }
+  /* ---------- 8. References ---------- */
+  secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:[
+    ["AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)","Art. 3.6.1.1.1, Table 3.6.1.1.2-1, Art. 3.6.1.3.1, Art. 3.6.1.4.3b, C3.6.1.1.2; Art. 4.6.2.2 (Tables 4.6.2.2.1-1, 4.6.2.2.1-3, C4.6.2.2.1-2, 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1; Eqs. 4.6.2.2.1-1, C4.6.2.2.2d-1); Art. 4.6.2.3"],
+    ["MassDOT LRFD Bridge Manual Part I","§3.5.3 (3.5.3.3–3.5.3.5), §3.8 (adjacent beam systems); edition: verify"]]}]}]});
+  var pj=meta("mProject"), st=meta("mStruct"), by=meta("mBy"), dt=meta("mDate"), ck=meta("mChk");
+  return {title:"Live Load & Dead Load Distribution — Calculation Report",subtitle:pj||"Untitled",code:"AASHTO LRFD 10th Ed. (2024), Art. 4.6.2.2 · MassDOT Bridge Manual Part I §3.5.3",
+    info:[["Project",pj],["Structure No.",st],["Calculated by",by],["Date",dt],["Checked by",ck],["Checked date",""]],
+    head:{left:"Structure No. "+(st||"—")+" — "+String(pj||"—").slice(0,40),right:"Computed: "+(by||"—")+" "+(dt||"")+" · Checked: "+(ck||"—"),foot:(pj||"Untitled")+" (LL & DL Distribution)"},
+    sections:secs};
+}
+function host(){ return el("lldfRptView"); }
+function render(){
+  var T=host(); if(!T) return;
+  if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class="lldf-rpterr">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; LLRP.api=LLRP.doc=null; return; }
+  if(!window.lldfLast){ T.innerHTML='<div class="lldf-rpterr">No results: correct the input errors shown on the calculation sheet.</div>'; LLRP.api=LLRP.doc=null; return; }
+  var M; try{ M=model(); }catch(e){ T.innerHTML='<div class="lldf-rpterr">Report error: '+esc(e&&e.message)+'</div>'; LLRP.api=LLRP.doc=null; console.warn("lldf report",e); return; }
+  var ah=document.querySelector(".apphead");
+  LLRP.api=SharedReport.mount(T,M,{closed:LLRP.closed,onGoto:gotoSheet,stick:ah?ah.offsetHeight:0});
+  LLRP.doc=LLRP.api.doc;
+}
+LLRP.model=model; LLRP.render=render;
+/* [[tab:…]] links: back to the calculation sheet, at the card named */
+var GO={inputs:"bridgeType",summary:"summaryTable",xsec:"fig-xsec",steps:"steps",dl:"mdDistSec",dlsteps:"dlSteps",appl:"applSection",notes:"notesSection"};
+function gotoSheet(name){
+  var m=/^member:(\d+)$/.exec(name||"");
+  setView("sheet");
+  if(m){ var j=+m[1]; if(j!==selectedMember){ selectedMember=j; pushDesignBeam(); run(); } name="steps"; }
+  var t=el(GO[name]||"sheet"); if(!t) return; var s=t.closest(".section")||t;
+  var ah=document.querySelector(".apphead"); window.scrollTo(0,s.getBoundingClientRect().top+window.scrollY-(ah?ah.offsetHeight:0)-8);
+}
+function setView(v){
+  LLRP.view=v; var sh=el("sheet"), T=host();
+  if(sh) sh.style.display=v==="report"?"none":""; if(T) T.style.display=v==="report"?"":"none";
+  Array.prototype.forEach.call(document.querySelectorAll("#lldfViews button"),function(b){ var on=b.getAttribute("data-view")===v; b.classList.toggle("on",on); b.setAttribute("aria-selected",on?"true":"false"); });
+  if(v==="report"){ render(); window.scrollTo(0,0); }
+}
+LLRP.setView=setView;
+window.lldfReportRefresh=function(){ if(LLRP.view==="report") render(); };
+Array.prototype.forEach.call(document.querySelectorAll("#lldfViews button"),function(b){ b.addEventListener("click",function(){ setView(b.getAttribute("data-view")); }); });
+/* Ctrl+P (or Print / PDF) while the Report tab shows prints this report alone (shared/report.js print layout and running header);
+   from the sheet the D11 print report prints as before (its beforeprint handler checks lldfRptWillPrint). */
+function printing(){ return document.body.classList.contains("rp-printing"); }
+window.lldfRptWillPrint=function(){ return printing()||!!(LLRP.doc&&LLRP.view==="report"); };
+window.addEventListener("beforeprint",function(){
+  if(!LLRP.doc||LLRP.view!=="report"||printing()) return;
+  var box=el("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
+  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(LLRP.doc,{lazy:false})+'</article></div>';
+  document.body.classList.add("rp-printing");
+});
 })();
 </script>
 <script>

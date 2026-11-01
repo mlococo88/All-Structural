@@ -148,6 +148,21 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
  .inp,.out{position:relative}
 }
 
+/* SFPH (2026-11-01): narrow screens (phone, tablet portrait): the panels stack, inputs above outputs. Before, .inp's
+   min-width:400px in the flex row of .main squeezed the output panel to zero width at 390 px. Wide tables and plots scroll
+   inside their own box, so the page has no horizontal scroll. Screens >= 900 px are unchanged (the rules above). */
+#sfdJumpOut{display:none;margin:6px 0 10px 0;text-align:center;color:#1c4e80}
+@media screen and (max-width:899.98px){
+ .wrap{padding:8px 8px}
+ .main{flex-direction:column;align-items:stretch}
+ .inp{width:100%;min-width:0}
+ .out{width:100%;min-width:0}
+ .titleblock{grid-template-columns:repeat(2,minmax(0,1fr))}
+ table.tbl,table.ldtbl{display:block;max-width:100%;overflow-x:auto}
+ .tabpage{overflow-x:auto}
+ .row label{width:min(170px,45%)}
+ #sfdJumpOut{display:block}
+}
 /* ---- user manual ---- */
 .manNav{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 14px 0;border-bottom:1px solid #b9c4d0;padding-bottom:8px}
 .manNavBtn{border:1px solid #7a8aa0;background:#e2e8ef;font-size:11.5px;padding:4px 9px;cursor:pointer}
@@ -257,6 +272,7 @@ a.wkA:hover{text-decoration:underline}
  <span id="bxFlSrc" style="font-size:11px;font-style:italic"></span>
 </div>
 
+<a id="sfdJumpOut" href="#outputPanel" class="noprint">Jump to the results (dashboard and output tabs) &darr;</a>   <!-- SFPH: narrow screens only -->
 <div class="main">
 <!-- ============ INPUT PANEL ============ -->
 <div class="inp" id="inputPanel">
