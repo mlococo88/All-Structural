@@ -1141,3 +1141,242 @@ The default list's "Unfactored (1.0 All)" row is not a code combination. Its win
 - O10. **τ in envelope mode** is printed in §4 (τ = 1.5|V|/A or V/(d·t_w)) but not worked in any calculation card in envelope mode, so it has no "see §" link (CLAUDE.md §6 gap). Not changed (would add calculation content).
 - O11. **On-screen result cards** upper-case their labels (`.sc-l{text-transform:uppercase}`), so "σ max" / "δ max" show as "Σ MAX" / "Δ MAX". On-screen display only, not changed (UI kept as is).
 - O3 (cantilever span length for L/x) is still open: the cantilever check case above uses L = 6 ft for the overhang.
+
+
+## 2026-11-01 — PR: claude/rpt-smd — Report view in the shared report viewer (SMRP; analysis-only report; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SMRP`.
+
+### SMRP. "Report" view tab (shared/report.js, shared/steps.js)   [display only]
+- **Engineer request (2026-11-01, report rollout plan):** the shared Report output tab, as Spread Footing and Timber Beam Check. This tool has no output tabs, so a two-button view strip, **Analysis | Report**, is added above the output column. Analysis is the existing page, unchanged. Report shows the report instead. Nothing is moved: `.main.smd-rpt` hides the other children of `.main` while the Report view is shown.
+- **Analysis-only report:** the tool checks no member. Only the optional σ ≤ σ_allow and per-span δ ≤ L/x checks it already makes are shown with their D/C ratio.
+- **Coordinator decisions recorded:**
+  - The D11 "📄 Report" print button and "🖨 Print" (Ctrl+P) from the Analysis view are unchanged. Ctrl+P while the Report view is shown prints the report.
+  - Step values are the tool's own numbers: `nodeR`, `shD`, `moD`, `deD`, `env`, `crits`, `tabR`, `deflSpans()`. The maxima, σ = |M|c/I, τ (`tauOf`) and ΣF are taken exactly as the Engineering Calculations cards take them (`renderKaTeX`). Only the substitution strings are formatted.
+  - Missing title-block fields: the tool has a project name only, so Project No., Calculated by, Checked by and Checked date show "—". No new saved field was added.
+- **Saved data:** none changed. The existing storage keys were left as they are: `smd_saves_v1` / `smd_auto_v1` and the generic legacy keys `beamProSaves` / `beamProAuto` that `smdMigrateKeys` reads (engineer, 2026-11-01). The Analysis / Report choice is kept in memory only (`SMRP.on`). It is not saved, so a reload opens Analysis.
+- **Code:**
+  - `<script src="shared/steps.js">` and `<script src="shared/report.js">` after the CDN libraries.
+  - CSS for `#smdViewTabs` / `.main.smd-rpt` (anchor `SMRP: Analysis / Report view tabs`). `#smdViewTabs` is the first child of `.main`; `#smdRpt` is its last child.
+  - A new block before the start-up calls (anchor `REPORT VIEW (SMRP, 2026-11-01)`):
+    - `smrModel()` builds the report model.
+    - `smrTopics()`, `smrRich()`, `smrRender()` (mount), `smrView(on)`.
+    - A `MutationObserver` on `#cOut` rebuilds the report after every recalculation while it is shown.
+    - A `beforeprint` listener handles Ctrl+P.
+  - Diagrams:
+    - The loading diagram is the canvas as drawn. While the Report view hides it, the output is shown for one synchronous redraw and capture, with no paint in between.
+    - The V, M and δ diagrams are the Plotly charts through the D11 `diagImg()` (async). They are written into the model so that print has them. Without Plotly, the canvases are used.
+- **Sections:**
+  1. Summary: results table with § links; D/C for the σ and δ checks.
+  2. Model, loads and combinations: geometry, loads, combination factors, section properties.
+  3. Analysis. Single combination [stiffness method EI; reactions with ΣF, ΣR and the equilibrium flag; critical points (zero-shear moments, inflection points, |V|max, |M|max); section stresses σ, σ/σ_allow, τ; deflection δmax and per-span ratios]. Envelope [envelope |V|, |M|; σ; deflection per span; reactions max / min]. Also user positions.
+  4. Diagrams and tabular results (tenth points).
+  5. References (`smdRefs`).
+- **How verified (headless Chromium, KaTeX 0.16.9 and Plotly 2.27.0 served locally):**
+  - 9 cases: the five templates; two spans with section, σ_allow and L/240; three spans with user positions; cantilever 1.2D+1.6L; fixed-fixed envelope; cantilever envelope; W14×30 shape; unstable; no loads.
+  - 0 to 21 steps in up to 5 topics. 0 unresolved or duplicate references, 0 KaTeX errors, no raw TeX, no NaN / undefined.
+  - Step values equal the app's (reactions, |V|max, |M|max, ΣR, EI, σ, τ, δmax, per-span δ ratios; envelope R max / min, |V|env, |M|env). The values printed on the Analysis view's result cards and Engineering Calculations card are the same to the shown decimals.
+  - Building the report leaves the results unchanged. 0 console errors.
+  - The report follows an edit made while it is shown.
+  - The diagrams are PNG images of the Plotly charts.
+  - Ctrl+P in the Report view prints the report alone with the @page header (PDF 9 pages). From the Analysis view it is unchanged and the analysis output is shown again.
+  - origin/main vs the branch, all 9 cases: the result cards, the Engineering Calculations, the tabular results, the loads table, the gathered project and localStorage are identical (6 texts each).
+  - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"` passes.
+- **Check case (template "2-span continuous" 15 + 15 ft, DL 1.5 + LL 1.0 kip/ft, Unfactored):** R_A = R_C = 14.0625 kip, R_B = 46.8750 kip, ΣR = ΣF = 75.0000 kip; |M|max = 70.3127 kip-ft at x = 15. These are the same as the Engineering Calculations card (wL²/8 = 2.5 × 15² / 8 = 70.3125; the stations give 70.3127).
+- **Open item:** at 390 px the page is wider than the screen (908 px), because of the header buttons. This is the existing layout and is unchanged. The report itself fits the width.
+- **Other copies:** none. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
+
+Diff (`Shear and Moment Diagrams.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Shear and Moment Diagrams.html b/Shear and Moment Diagrams.html
+index 320e372..a5c90e0 100644
+--- a/Shear and Moment Diagrams.html	
++++ b/Shear and Moment Diagrams.html	
+@@ -9,0 +10,3 @@
++<!-- SMRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -258,0 +262,7 @@ a.wkA:hover{text-decoration:underline}
++/* SMRP: Analysis / Report view tabs above the output column; the Report view hides the analysis output (nothing is moved) */
++#smdViewTabs{display:flex;gap:2px;border-bottom:2px solid #1e40af;flex:none}
++#smdViewTabs button{font:600 12px system-ui,sans-serif;padding:5px 14px;border:1px solid var(--bd);border-bottom:none;border-radius:6px 6px 0 0;background:#f1f5f9;color:#475569;cursor:pointer}
++#smdViewTabs button.on{background:#1e40af;color:#fff;border-color:#1e40af}
++.main.smd-rpt>*:not(#smdViewTabs):not(#smdRpt){display:none!important}
++.main:not(.smd-rpt)>#smdRpt{display:none}
++@media print{#smdViewTabs{display:none!important}}
+@@ -358,0 +369 @@ a.wkA:hover{text-decoration:underline}
++  <div id="smdViewTabs" class="noprint" role="tablist" aria-label="Output view"><button type="button" data-v="ana" class="on">Analysis</button><button type="button" data-v="rpt">Report</button></div>
+@@ -419,0 +431 @@ a.wkA:hover{text-decoration:underline}
++  <div id="smdRpt"></div>
+@@ -2195,0 +2208,169 @@ window.addEventListener('afterprint',()=>{document.body.classList.remove('repMod
++/* ── REPORT VIEW (SMRP, 2026-11-01) ── the calculation report in the shared viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers), shown
++   in place of the analysis output by the "Report" view tab above it. Analysis-only report: model, loads, combinations,
++   reactions and equilibrium, critical points, section stresses and deflection, diagrams and the tabular results. Worked
++   steps are shared/steps.js steps grouped by topic (SharedSteps.group). Every value is a value the tool already has
++   (nodeR, shD, moD, deD, env, crits, tabR, deflSpans()); the maxima, σ, τ and ΣF are taken exactly as the Engineering
++   Calculations cards take them (renderKaTeX). Nothing is saved: the report is rebuilt whenever the calculation cards
++   are (after each edit) while the Report view is shown. The "📄 Report" print button (D11) is unchanged. */
++const SMRP={on:false,closed:new Set(),api:null,doc:null};
++const smrE=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
++const smrTx=s=>String(s==null?'':s).replace(/[\\{}$&#%_^~]/g,'');   // text placed inside \text{}
++const smrS=o=>SharedSteps.step(o);
++const smrC=(v,d)=>({t:(typeof v==='number'&&isFinite(v))?v.toFixed(d==null?3:d):'—',n:true});
++const smrDC=(v,ok,key)=>({t:(typeof v==='number'&&isFinite(v))?v.toFixed(3):'—',n:true,cls:ok?(v>=0.9?'hi':'ok'):'ng',key});
++function smrTopics(list,opt){
++  const L=list.filter(t=>t.steps&&t.steps.length),steps=[].concat(...L.map(t=>t.steps));
++  const topics=L.map(t=>{const q=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:()=>true,res:t.res}],{strip:false})[0];
++    return{title:t.title,ref:t.ref||'',n:t.steps.length,cls:q.cls,chip:q.chip,res:q.res};});
++  return Object.assign({type:'steps',scope:'sm',steps,topics},opt||{});
++}
++function smrModel(){
++  const nm=g('projNm').value.trim(),dt=new Date().toISOString().slice(0,10),ns=spans.length,U=`\\text{${smrTx(fu)}}`,FL=fu+'-'+lu;
++  const secs=[],sup=nodes.map((n2,j)=>n2.t!=='free'?j:-1).filter(j=>j>=0);
++  const ldTxt=ld=>{if(ld.type==='point')return`${ld.mag} ${fu} @ a = ${ld.pos} ${lu}`;if(ld.type==='moment')return`${ld.mag} ${fu}·${lu} (+CCW) @ a = ${ld.pos} ${lu}`;
++    if(ld.type==='uniform')return`${ld.mag} ${fu}/${lu}`;return`${ld.sm} → ${ld.em} ${fu}/${lu}, x from ${ld.sx} to ${ld.ex} ${lu}`;};
++  /* ---------- 2. Model, loads and combinations (built first: section 1 links into the later sections) ---------- */
++  const mSubs=[];
++  mSubs.push({title:'Geometry and supports',items:[{type:'table',head:['Span',`Length (${lu})`,'From node','To node'],rows:spans.map((sp,i)=>[String(i+1),smrC(sp.L,3),`${NN[i]} (${nodes[i].t})`,`${NN[i+1]} (${nodes[i+1].t})`])},
++    {type:'note',text:`${ns}-span beam, ${ns+1} nodes, total length ${totL.toFixed(3)} ${lu}. Units: ${fu}, ${lu}.`}]});
++  mSubs.push({title:'Applied loads (unfactored)',items:loads.length?[{type:'table',head:['#','Name','Type','Case','Location','Magnitude','Status'],rows:loads.map((ld,i)=>[String(i+1),ld.nm||'',typeLabel(ld.type),ld.lc,ld.allSpans?'Entire beam':`Span ${Math.min(ld.si||0,ns-1)+1}`,ldTxt(ld),ld.off?'EXCLUDED':'Included'])}].concat(loads.some(l=>l.off)?[{type:'note',warn:true,text:`${loads.filter(l=>l.off).length} load(s) are excluded and contribute nothing to the results.`}]:[]):[{type:'note',text:'No loads entered.'}]});
++  mSubs.push({title:'Load cases and combinations',items:[{type:'table',head:['Combination',...CASES.map(c=>c.id),'Envelope'],rows:combosArr.map(c=>({cls:!envOn&&!caseView&&c.id===cid?'gov':'',cells:[COMBOS[c.id].name,...CASES.map(cs=>c.f[cs.id]?fmtF(c.f[cs.id]):'—'),c.on!==false?'yes':'no']}))},
++    {type:'note',text:`Analysed: ${curName()}. ${CASES.map(c=>c.id+' = '+c.name).join(', ')}. Factors as entered in the combination table (presets: ASCE 7-16 Sec. 2.3.1 / 2.4.1 basic combinations).`}]});
++  if(secOn)mSubs.push({title:'Section properties',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[['E',smrC(Ev,0),`${fu}/${lu}²`],['I',smrC(Iv,6),`${lu}⁴`],['c',smrC(cv,4),lu],['A',smrC(Av,5),`${lu}²`],['Shape',shpW?shpW.nm:'custom section','—'],['Deflection limit',defLim>0?'L/'+defLim:'off','—'],['Allowable stress σ_allow',Fbv>0?String(Fbv):'off',`${fu}/${lu}²`]]}]});
++  /* ---------- 3. Analysis ---------- */
++  const aSubs=[],res=[];   // res: summary rows [quantity, value cell, limit, ratio cell]
++  if(window.unstable)aSubs.push({title:'Stability',items:[{type:'note',warn:true,text:'UNSTABLE STRUCTURE: the support configuration is a mechanism (provide at least one fixed support or two pinned nodes). Results are suppressed.'}]});
++  else if(!loads.length)aSubs.push({title:'Results',items:[{type:'note',text:'Add loads to generate results.'}]});
++  else if(envOn){
++    const T=[],vm=Math.max(...env.per.map(p2=>p2.vm)),mm=Math.max(...env.per.map(p2=>p2.mm)),vg=env.per.find(p2=>p2.vm===vm),mg=env.per.find(p2=>p2.mm===mm);
++    T.push({title:'Envelope of internal forces',ref:'statics; point-wise envelope',res:/\.Menv$/,steps:[
++      smrS({id:'env.Venv',label:`Largest |V| over the enabled combinations (governed by ${vg.name})`,sym:'|V|_{env}',eq:'\\max_{c} |V|_{max,c}',sub:'',value:vm,unit:fu,d:4}),
++      smrS({id:'env.Menv',label:`Largest |M| over the enabled combinations (governed by ${mg.name})`,sym:'|M|_{env}',eq:'\\max_{c} |M|_{max,c}',sub:'',value:mm,unit:FL,d:4})]});
++    res.push(['|V| envelope',{t:vm.toFixed(4)+' '+fu,n:true,key:'sm/env.Venv'},'—','—'],['|M| envelope',{t:mm.toFixed(4)+' '+fu+'·'+lu,n:true,key:'sm/env.Menv'},'—','—']);
++    if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv,st=[smrS({id:'env.sig',label:'Bending stress at the extreme fibre',sym:'\\sigma_{env}',eq:'\\frac{|M|_{env}\\,c}{I}',sub:`\\frac{${mm.toFixed(3)} \\times ${cv}}{${Iv}}`,value:sg,unit:`${fu}/${lu}^{2}`,d:4})];
++      if(Fbv>0)st.push(smrS({id:'env.sr',label:'Stress check (σ_allow = '+Fbv+', user input)',sym:'\\frac{\\sigma_{env}}{\\sigma_{allow}}',eq:'',sub:`\\frac{${sg.toFixed(3)}}{${Fbv}}`,value:sg/Fbv,unit:'',d:3,ok:sg<=Fbv}));
++      T.push({title:'Bending stress',ref:'σ = M c / I',res:/\.sig$/,steps:st});
++      res.push(['σ envelope = |M| c / I',{t:sg.toFixed(4)+` ${fu}/${lu}²`,n:true,key:'sm/env.sig'},Fbv>0?Fbv+` ${fu}/${lu}²`:'—',Fbv>0?smrDC(sg/Fbv,sg<=Fbv,'sm/env.sr'):'—']);}
++    if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),st=[smrS({id:'env.dm',label:'Largest |δ| over the enabled combinations (double integration of M/EI per combination)',sym:'|\\delta|_{env}',eq:'',sub:'',value:dm,unit:lu,d:6,note:'A factored combination gives a factored deflection: for a service-level check enable only service combinations, or use single-combination mode.'})];
++      if(defLim>0)deflSpans().forEach(s2=>{st.push(smrS({id:'env.dr'+s2.i,label:`Span ${s2.i+1}: |δ|max = ${s2.dm.toFixed(5)} ${lu}${s2.c&&COMBOS[s2.c]?' ('+COMBOS[s2.c].name+')':''} against L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,sym:'\\frac{\\delta_{max}}{L/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
++        res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`L/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/env.dr'+s2.i)]);});
++      else res.push(['|δ| envelope',{t:dm.toFixed(6)+' '+lu,n:true,key:'sm/env.dm'},'—','—']);
++      T.push({title:'Deflection',ref:defLim>0?'limit L/'+defLim+' (user input)':'',res:/\.dm$/,steps:st});}
++    aSubs.push({title:'Envelope results — all enabled combinations',items:[{type:'note',text:'Each enabled combination is solved independently by the direct stiffness method; the envelope is taken point-wise at the analysis stations.'},
++      {type:'table',head:['Combination',`|V|max (${fu})`,`|M|max (${fu}·${lu})`,...(env.D?[`|δ|max (${lu})`]:[])],rows:env.per.map(pc=>({cls:pc===vg||pc===mg?'gov':'',cells:[pc.name,smrC(pc.vm,3),smrC(pc.mm,3),...(env.D?[smrC(pc.dm,5)]:[])]}))},smrTopics(T)]});
++    const RS=[];sup.forEach(j=>{RS.push(smrS({id:'R'+NN[j]+'max',label:`Largest reaction at ${NN[j]} (${COMBOS[env.R[j].mc].name})`,sym:`R_{${NN[j]},max}`,eq:'',sub:'',value:env.R[j].mx,unit:fu,d:4}),
++      smrS({id:'R'+NN[j]+'min',label:`Smallest reaction at ${NN[j]} (${COMBOS[env.R[j].mnc]?COMBOS[env.R[j].mnc].name:''})${env.R[j].mn<-1e-9?' — UPLIFT':''}`,sym:`R_{${NN[j]},min}`,eq:'',sub:'',value:env.R[j].mn,unit:fu,d:4}));
++      res.unshift([`R_${NN[j]} max / min`,{t:env.R[j].mx.toFixed(4)+' / '+env.R[j].mn.toFixed(4)+' '+fu,n:true,key:'sm/R'+NN[j]+'max'},'—','—']);});
++    aSubs.push({title:'Support reactions — envelope max / min',items:[smrTopics([{title:'Reactions',ref:'direct stiffness method',steps:RS}])]});
++  } else {
++    const fac=curFac(),EI=secOn&&Ev>0&&Iv>0?Ev*Iv:1,T=[];
++    T.push({title:'Stiffness method',ref:'Euler-Bernoulli beam elements',steps:[smrS({id:'EI',label:secOn&&Ev>0&&Iv>0?'Flexural stiffness of the elements':'Flexural stiffness (section off: EI = 1; reactions, V and M of a prismatic beam do not depend on EI)',sym:'EI',eq:secOn&&Ev>0&&Iv>0?'E\\,I':'',sub:secOn&&Ev>0&&Iv>0?`${Ev} \\times ${Iv}`:'',value:EI,unit:`${fu}-${lu}^{2}`,d:2,
++      note:'Element stiffness k_e = EI/L³ [12, 6L, −12, 6L; 6L, 4L², −6L, 2L²; …]; global assembly; K_ff d_f = f_f solved by Gaussian elimination; R = f − K d. Supports: '+nodes.map((n2,j)=>NN[j]+' '+n2.t).join(', ')+'.'})]});
++    const tF=loads.reduce((s,ld)=>{const fk=fac[ld.lc]||0;   /* ΣF exactly as the Support Reactions card (renderKaTeX) */
++      if(ld.off||ld.type==='moment')return s;
++      if(ld.allSpans)return s+ld.mag*fk*totL;
++      const spL=spans[Math.min(ld.si||0,ns-1)].L;
++      if(ld.type==='point')return s+ld.mag*fk;
++      if(ld.type==='uniform')return s+ld.mag*fk*spL;
++      return s+((ld.sm+ld.em)/2)*fk*((ld.ex||spL)-(ld.sx||0));},0);
++    const tR=nodeR.reduce((s,r)=>s+(r?.v||0),0),eqOK=Math.abs(tR-tF)<=1e-6*Math.max(1,Math.abs(tF)),RS=[];
++    sup.forEach(j=>{RS.push(smrS({id:'R'+NN[j],label:`Reaction at ${NN[j]} (${nodes[j].t})`+(Math.abs(nodeR[j].m)>1e-6?`; reaction couple M_R = ${nodeR[j].m.toFixed(4)} ${fu}·${lu}`:''),sym:`R_{${NN[j]}}`,eq:'',sub:'',value:nodeR[j].v,unit:fu,d:4}));
++      res.push([`R_${NN[j]}`+(Math.abs(nodeR[j].m)>1e-6?` (M_R = ${nodeR[j].m.toFixed(4)})`:''),{t:nodeR[j].v.toFixed(4)+' '+fu,n:true,key:'sm/R'+NN[j]},'—','—']);});
++    RS.push(smrS({id:'sumF',label:'Total applied vertical load (applied moments excluded)',sym:'\\sum F',eq:'',sub:'',value:tF,unit:fu,d:4}),
++      smrS({id:'sumR',label:'Equilibrium: sum of the reactions'+(eqOK?' = ΣF':' ≠ ΣF: do not use these results; check the model'),sym:'\\sum R',eq:sup.map(j=>`R_{${NN[j]}}`).join(' + '),sub:sup.map(j=>{const v=nodeR[j].v.toFixed(4);return v[0]==='-'?'('+v+')':v;}).join(' + '),value:tR,unit:fu,d:4,ok:eqOK}));
++    T.push({title:'Support reactions and equilibrium',ref:'statics',res:/sumR$/,steps:RS});
++    const mvp=shD.reduce((m,p2)=>Math.abs(p2.y)>Math.abs(m.y)?p2:m,shD[0]),mmp=moD.reduce((m,p2)=>Math.abs(p2.y)>Math.abs(m.y)?p2:m,moD[0]),CS=[];
++    crits.zV.forEach((x,k)=>CS.push(smrS({id:'zV'+k,label:`Zero shear at x = ${x.toFixed(4)} ${lu}: moment extremum`,sym:'M',eq:'',sub:'',value:itp(moD,x),unit:FL,d:4})));
++    if(crits.inf.length)CS.push(smrS({id:'inf',label:'Inflection points (M = 0)',sym:'x',eq:'',sub:'',value:crits.inf.map(x=>x.toFixed(4)).join(', ')+' '+lu,unit:'',d:0}));
++    CS.push(smrS({id:'Vmax',label:`Largest |V| at x = ${mvp.x.toFixed(3)} ${lu}`,sym:'|V|_{max}',eq:'',sub:'',value:Math.abs(mvp.y),unit:fu,d:4}),
++      smrS({id:'Mmax',label:`Largest |M| at x = ${mmp.x.toFixed(3)} ${lu}`,sym:'|M|_{max}',eq:'',sub:'',value:Math.abs(mmp.y),unit:FL,d:4}));
++    T.push({title:'Critical points',ref:'left-segment statics at the analysis stations',res:/Mmax$/,steps:CS});
++    res.push(['|V| max',{t:Math.abs(mvp.y).toFixed(4)+' '+fu,n:true,key:'sm/Vmax'},'—','—'],['|M| max',{t:Math.abs(mmp.y).toFixed(4)+' '+fu+'·'+lu,n:true,key:'sm/Mmax'},'—','—']);
++    if(secOn&&Ev>0&&Iv>0){
++      const mm2=Math.max(...moD.map(p2=>Math.abs(p2.y))),mv2=Math.max(...shD.map(p2=>Math.abs(p2.y))),SS=[];
++      if(cv>0){const sg=mm2*cv/Iv;SS.push(smrS({id:'sig',label:'Bending stress at the extreme fibre',sym:'\\sigma_{max}',eq:'\\frac{|M|_{max}\\,c}{I}',sub:`\\frac{${mm2.toFixed(3)} \\times ${cv}}{${Iv}}`,value:sg,unit:`${fu}/${lu}^{2}`,d:4}));
++        if(Fbv>0)SS.push(smrS({id:'sr',label:`Stress check (σ_allow = ${Fbv} ${fu}/${lu}², user input)`,sym:'\\frac{\\sigma_{max}}{\\sigma_{allow}}',eq:'',sub:`\\frac{${sg.toFixed(3)}}{${Fbv}}`,value:sg/Fbv,unit:'',d:3,ok:sg<=Fbv}));
++        res.push(['σ max = |M| c / I',{t:sg.toFixed(4)+` ${fu}/${lu}²`,n:true,key:'sm/sig'},Fbv>0?Fbv+` ${fu}/${lu}²`:'—',Fbv>0?smrDC(sg/Fbv,sg<=Fbv,'sm/sr'):'—']);}
++      const tq=tauOf(mv2);
++      if(tq){const w=shpW&&shpW.d>0&&shpW.tw>0;SS.push(smrS({id:'tau',label:w?`Average web shear (${shpW.nm}: A_w = d t_w)`:'Shear stress, solid rectangle',sym:'\\tau_{max}',eq:w?'\\frac{|V|_{max}}{d\\,t_{w}}':'\\frac{3|V|_{max}}{2A}',sub:w?`\\frac{${mv2.toFixed(3)}}{${shpW.d.toPrecision(4)} \\times ${shpW.tw.toPrecision(4)}}`:`\\frac{3 \\times ${mv2.toFixed(3)}}{2 \\times ${Av}}`,value:tq.val,unit:`${fu}/${lu}^{2}`,d:4,ref:w?'AISC 360 Sec. G2.1 (edition: verify)':''}));
++        res.push(['τ max = '+tbrStrip(tq.lbl),{t:tq.val.toFixed(4)+` ${fu}/${lu}²`,n:true,key:'sm/tau'},'—','—']);}
++      if(SS.length)T.push({title:'Section stresses',ref:'σ = M c / I',res:/sig$/,steps:SS});
++      if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),DS=[smrS({id:'dm',label:'Largest deflection (double integration of M/EI; δ = 0 at the supports, cantilever: δ = 0 and slope = 0 at the fixed support)',sym:'\\delta_{max}',eq:'',sub:'',value:dm,unit:lu,d:6})];
++        if(defLim>0)deflSpans().forEach(s2=>{DS.push(smrS({id:'dr'+s2.i,label:`Span ${s2.i+1}: δmax = ${s2.dm.toFixed(5)} ${lu} at x = ${s2.x.toFixed(3)} against L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,sym:'\\frac{\\delta_{max}}{L/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
++          res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`L/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/dr'+s2.i)]);});
++        else res.push(['δ max',{t:dm.toFixed(6)+' '+lu,n:true,key:'sm/dm'},'—','—']);
++        T.push({title:'Deflection',ref:defLim>0?'limit L/'+defLim+' per span (user input)':'',res:/dm$/,steps:DS});}
++    } else if(secOn)aSubs.push({title:'Section analysis',items:[{type:'note',warn:true,text:'E and I must both be greater than 0: a blank, zero or negative value was entered, so deflection and section results are not computed.'}]});
++    aSubs.unshift({title:`Analysis for ${curName()}`,items:[smrTopics(T),{type:'note',text:'The same values are worked on the Analysis view (Engineering Calculations cards). Units: '+fu+', '+lu+'.'}]});
++  }
++  if(userX.length&&!window.unstable&&loads.length)aSubs.push({title:'User positions',items:[{type:'table',head:[`x (${lu})`,...(envOn?[`V min (${fu})`,`V max (${fu})`,`M min (${fu}·${lu})`,`M max (${fu}·${lu})`]:[`V (${fu})`,`M (${fu}·${lu})`,...(deD.length?[`δ (${lu})`]:[])])],
++    rows:userX.filter(ux=>ux>=0&&ux<=totL).map(ux=>envOn?[smrC(ux,3),smrC(itp(env.V.mn,ux),3),smrC(itp(env.V.mx,ux),3),smrC(itp(env.M.mn,ux),3),smrC(itp(env.M.mx,ux),3)]:[smrC(ux,3),smrC(itp(shD,ux),3),smrC(itp(moD,ux),3),...(deD.length?[smrC(itp(deD,ux),5)]:[])])}]});
++  /* ---------- 4. Diagrams and tabular results ---------- */
++  const dSubs=[];
++  if(!window.unstable&&loads.length){
++    /* the canvases are sized from their on-screen width: while the Report view hides them, show the analysis output for this synchronous redraw and capture (no paint in between) */
++    const mn=document.querySelector('.main'),hid=mn.classList.contains('smd-rpt');if(hid){mn.classList.remove('smd-rpt');drawAll();}
++    /* loading diagram: the canvas as drawn; V, M, δ: the Plotly charts when Plotly is loaded (filled in by smrRender through the D11 diagImg(), as the 📄 Report does), else their canvases */
++    const figs=[['cL','Loading diagram'],['cS','Shear force diagram'],['cM','Bending moment diagram'],['cD','Deflection curve (δ, down positive)']].filter(([id])=>id!=='cD'||(secOn&&deD.length)).map(([id,t])=>{const late=id!=='cL'&&hasPlotly();let u='';if(!late)try{u=g(id).toDataURL('image/png');}catch(e){}
++      return late||(u&&u.length>100)?{type:'figure',_img:late?id:null,svg:smrImg(u,t,late?id:''),caption:t+' ('+curName()+')'}:null;}).filter(Boolean);
++    if(hid)mn.classList.add('smd-rpt');
++    if(figs.length)dSubs.push({title:'Diagrams',items:figs});
++    const eD=!!(env&&env.D);
++    dSubs.push({title:'Tabular results (tenth points'+(userX.length?' and user positions':'')+')',items:[{type:'table',head:envOn?[`x (${lu})`,`V max (${fu})`,`V min (${fu})`,`M max (${fu}·${lu})`,`M min (${fu}·${lu})`,...(eD?[`δ max (${lu})`,`δ min (${lu})`]:[])]:[`x (${lu})`,`V (${fu})`,`M (${fu}·${lu})`,...(deD.length?[`δ (${lu})`]:[])],
++      rows:tabR.map(r=>envOn?[smrC(r.x,3),smrC(r.Vmx,3),smrC(r.Vmn,3),smrC(r.Mmx,3),smrC(r.Mmn,3),...(eD?[smrC(r.Dmx,5),smrC(r.Dmn,5)]:[])]:[smrC(r.x,3),smrC(r.V,3),smrC(r.M,3),...(deD.length?[smrC(r.D||0,5)]:[])])}]});
++  }
++  /* ---------- 1. Summary ---------- */
++  const sItems=[{type:'kv',rows:[['Analysis',curName()],['Spans',`${ns} (total length ${totL.toFixed(3)} ${lu})`],['Units',`${fu}, ${lu}`],['Method','Direct stiffness method, Euler-Bernoulli beam elements; internal forces by left-segment statics; deflection by double integration of M/EI']]}];
++  if(res.length)sItems.push({type:'table',head:['Quantity','Value','Limit','D/C'],rows:res},{type:'note',text:'Each value links to the step where it is taken. The deflection limit L/x and σ_allow are user inputs; the analysis (statics, beam theory) cites no design code.'});
++  else if(window.unstable)sItems.push({type:'note',warn:true,text:'UNSTABLE STRUCTURE: results suppressed.'});
++  secs.push({title:'Summary',subs:[{title:'Results',items:sItems}]});
++  secs.push({title:'Model, loads and combinations',subs:mSubs});
++  secs.push({title:'Analysis',subs:aSubs});
++  if(dSubs.length)secs.push({title:'Diagrams and tabular results',subs:dSubs});
++  secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:smdRefs().map(r=>r.map(tbrStrip))}]}]});
++  return{title:'Continuous Beam Analysis — Calculation Report',subtitle:nm||'Untitled',code:SMD_TOOL+' — shear, moment and deflection',
++    info:[['Project',nm],['Project No.',''],['Calculated by',''],['Date',dt],['Checked by',''],['Checked date','']],
++    head:{left:'Project No. — — '+(nm||'Beam analysis').slice(0,40),right:'Computed: — '+dt+' · Checked: —',foot:(nm||'Untitled')+' ('+SMD_TOOL+')'},sections:secs};
++}
++const smrImg=(u,t,id)=>`<img${id?` data-smrimg="${id}"`:''} src="${u||'data:,'}" alt="${smrE(t)}" style="width:100%;max-width:7in;border:1px solid #e2e8f0">`;
++function tbrStrip(s){return String(s==null?'':s).replace(/<sub>(.*?)<\/sub>/g,'$1').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&');}
++/* rich-text notation in tables and notes: 'R_A', 'σ_allow', 't_w' → $…$ (subscripts) */
++const smrNot=s=>String(s==null?'':s).replace(/([A-Za-zσδτ])_([A-Za-z0-9]+)/g,(m,a,b)=>'$'+a+'_{'+b+'}$');
++function smrRich(M2){const cell=c=>(c&&typeof c==='object')?Object.assign({},c,{t:smrNot(c.t)}):smrNot(c);
++  M2.sections.forEach(s=>s.subs.forEach(q=>q.items.forEach(it=>{
++    if(it.type==='note')it.text=smrNot(it.text);
++    else if(it.type==='table'){it.head=it.head.map(cell);it.rows=it.rows.map(r=>Array.isArray(r)?r.map(cell):Object.assign({},r,{cells:r.cells.map(cell)}));}
++    else if(it.type==='steps')it.steps.forEach(st=>{st.label=st.label.replace(/_/g,'');st.note=String(st.note||'').replace(/_/g,'');});})));
++  return M2;}
++function smrRender(){
++  const T=g('smdRpt');if(!T||!SMRP.on)return;
++  if(!window.SharedReport||!window.SharedSteps){T.innerHTML='<div class="empty">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>';SMRP.api=null;SMRP.doc=null;return;}
++  const m=document.querySelector('.main'),top=m?m.scrollTop:0;
++  let M2;try{M2=smrRich(smrModel());}catch(e){T.innerHTML='<div class="empty">Report error: '+smrE(e&&e.message)+'</div>';SMRP.api=null;SMRP.doc=null;console.error(e);return;}
++  SMRP.api=SharedReport.mount(T,M2,{closed:SMRP.closed});SMRP.doc=SMRP.api.doc;
++  /* Plotly diagrams as images (async): written into the model (for print) and into the page */
++  const tok=SMRP.tok=(SMRP.tok||0)+1;
++  M2.sections.forEach(sc=>sc.subs.forEach(q=>q.items.forEach(it=>{if(!it._img)return;
++    diagImg(it._img).then(u=>{if(tok!==SMRP.tok)return;it.svg=smrImg(u,it.caption,it._img);const im=T.querySelector(`img[data-smrimg="${it._img}"]`);if(im)im.src=u;}).catch(()=>{});})));
++  if(m)m.scrollTop=top;
++}
++function smrView(on){
++  SMRP.on=!!on;const m=document.querySelector('.main');m.classList.toggle('smd-rpt',SMRP.on);
++  document.querySelectorAll('#smdViewTabs button').forEach(b=>b.classList.toggle('on',(b.dataset.v==='rpt')===SMRP.on));
++  if(SMRP.on){readIn();solve();updStats();renderTable();drawAll();renderKaTeX();smrRender();}   /* the same refresh as the D11 report: results current before the report reads them */
++  else{drawAll();if(hasPlotly())['pS','pM','pD'].forEach(id=>{const d=g(id);if(d&&!d.classList.contains('hidden')&&d.data)try{Plotly.Plots.resize(d);}catch(e){}});}
++  m.scrollTop=0;
++}
++document.querySelectorAll('#smdViewTabs button').forEach(b=>b.addEventListener('click',()=>smrView(b.dataset.v==='rpt')));
++/* the report follows every recalculation: the Engineering Calculations cards (#cOut) are re-rendered after each edit */
++new MutationObserver(()=>{if(SMRP.on&&!document.body.classList.contains('repMode'))smrRender();}).observe(g('cOut'),{childList:true});
++/* Ctrl+P (🖨 Print) while the Report view is shown prints the report alone (shared/report.js print layout and running header);
++   from the Analysis view, and the 📄 Report button (D11), print as before. */
++window.addEventListener('beforeprint',()=>{
++  if(!SMRP.on||!SMRP.doc||document.body.classList.contains('rp-printing')||document.body.classList.contains('repMode'))return;
++  let box=g('rp-print');if(!box){box=document.createElement('div');box.id='rp-print';document.body.appendChild(box);}
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(SMRP.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add('rp-printing');
++});
++
+```
