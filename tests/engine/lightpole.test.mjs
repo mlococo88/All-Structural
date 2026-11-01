@@ -230,3 +230,23 @@ test('n₁ / G_f worked step: n₁ = √(386.1·ΣWy/ΣWy²)/2π; flexible case 
   assert.ok(h.includes('G_f = 0.925'), 'G_f equation'); assert.ok(h.includes(lp.call('fmt', gf.Gf, 4)), 'G_f value');
   assert.ok(!/NaN|undefined|ERR/.test(h), 'no NaN/undefined');
 });
+
+/* ---------- breakout in the ACI 318-19 group form (engineer, 2026-11-01) ---------- */
+test('Breakout, group form: ΣN_ua of the tension anchors / φN_cbg (ψ_ec,N in N_cbg); per-anchor steel and pullout separately', () => {
+  const lp = lpEngine();
+  lp.set('anchRe', 'no');
+  const b = lp.call('anchorBolts', lpDefaultInp(), { Mang: 0 }, { Mu: 21957, Pu: 1090, Vu: 877 });
+  near(b.trBrk, b.Tsum / b.phiNcbg, 1e-12, 'group ratio');
+  near(b.trAnc, b.Tmax / Math.min(b.phiNsa, b.phiNp), 1e-12, 'per-anchor ratio');
+  near(b.tr, Math.max(b.trBrk, b.trAnc), 0, 'governing tension ratio');
+  near(b.phiNn, Math.min(b.phiNsa, b.phiNp), 0, 'φN_n per anchor (no breakout/n_T)');
+  // the old form would be T_max/(φN_cbg/n_T) > the group ratio whenever the tension anchors are unequally loaded
+  assert.ok(b.Tmax / (b.phiNcbg / b.nT) > b.trBrk);
+});
+test('Breakout group form, the engineer\'s check case (default before arm wind: M_u 19,949 lb·ft, P_u 1,088 lb, wind toward 0°): ΣT 19,401 ≤ φN_cbg 22,323 → 0.87', () => {
+  const lp = lpEngine();
+  lp.set('anchRe', 'no');
+  const b = lp.call('anchorBolts', lpDefaultInp(), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 794 });
+  // at an azimuth of exactly 0°: ΣT = 19,405, φN_cbg = 22,408 → 0.866 (the app's moment azimuth is slightly off 0°: 19,401 / 22,323 = 0.869)
+  near(b.Tsum, 19405, 2, 'ΣT'); near(b.phiNcbg, 22408, 2, 'φN_cbg'); near(b.trBrk, 0.866, 0.001, 'D/C');
+});
