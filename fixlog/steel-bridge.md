@@ -2744,3 +2744,53 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
 - See the PR (tests, Playwright at 1280 and 390 px).
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-ext-demands — Demand files: GirderDetail hand-offs only, checked as ST-Girder checks them; selfWeightExcluded (B1)
+### Finding (the task's premise corrected)
+- The task asked to port the old app's readers of MCT Generator / MIDAS, PS-Beam (`psbeam-external-demands`) and steel-beam
+  (`steelbeam-external-demands`) envelopes and its `selfWeightExcluded` flag. The old app no longer reads them: since the engineer's
+  decision DISC (2026-10-19, fixlog/stgirder.md "DISC"), ST-Girder's Import (`const importJSON=` in the `st-src` block of
+  "Steel Bridge Design.html") takes a demands file only when it is GirderDetail's (`_schema === 'stgirder-external-demands'` and
+  `extFromGD(p)`: `producer === 'GirderDetail'` with a `girderDetail` block) and then applies it through `gdAdopt` after `gdCheck`; any
+  other demands file (the three schemas, or any JSON with a top-level `stations` array) is refused with "ST-Girder now takes demands
+  only from GirderDetail; this file is from <producer> and was not loaded. Nothing was changed." GirderDetail always writes
+  `selfWeightExcluded: false` (its M_DC1 includes the girder self-weight). The `swExcl` / `swContinuous` code in ST-Girder's compute
+  path is only reachable by a hand-edited GirderDetail file. docs/steel-bridge-comparison.md F-8 read the compute-path schema lists
+  (`extActive`, st-src) and missed the Import refusal.
+- The new app's tabs took any file with `_schema === 'stgirder-external-demands'` and a `stations` array, from any producer, and ignored
+  `selfWeightExcluded`: an MCT/MIDAS envelope written in that schema with the self-weight excluded would have under-counted DC1 (the
+  F-8 risk). This PR closes that by doing what the old app does.
+### Change
+- New `engine/demandfile.js` (`window.SBDDemandFile.check(j)`): ST-Girder's `extFromGD`, `gdCheck`, `gdLoadsCheck` and `externalSpans`
+  ported operation for operation, and the Import's refusal branch with its message (naming this app's choices instead of "Pull from
+  GirderDetail"). New here: a GirderDetail file with `selfWeightExcluded: true` is refused (ST-Girder would add its own continuous
+  self-weight, SW-CONT, on top of GirderDetail's M_DC1, which already holds it: see the check case).
+- The seven hand-off file readers (ui/flexure.js `fx_file`, ui/shear.js, ui/fatigue.js, ui/constructibility.js, ui/rating.js,
+  ui/welds.js, ui/report.js): before
+  `pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');`
+  after `ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;`; and on an error the previous
+  file stays (before: `S.pl = null; S.plName = '';`), as ST-Girder's "Nothing was changed".
+- index.html: one script tag `engine/demandfile.js` after engine/model.js.
+### §4 callout
+- No formula, factor, unit or code reference changed. Results change only for files that are now refused (no result instead of a
+  result): non-GirderDetail demand files, GirderDetail files that fail ST-Girder's gdCheck (units other than ft / ft-kip / kip,
+  factored, a non-numeric station value, bad ownerRules, an invalid span layout), and `selfWeightExcluded: true`. All 112 recorded
+  GirderDetail hand-offs (tests/projects/st) pass and are used unchanged (the same object as before), so every result on them is
+  unchanged. Governing provision for DC1 completeness: AASHTO LRFD 10th Ed. Art. 3.5.1 (DC includes the structural components' weight).
+- Check case (def15_AASHTO_G2, span 1 = 110 ft, x = 66 ft): the file's M_DC1 = 524.167 kip-ft, of which M_DC1steel = 88.124 kip-ft;
+  the new app takes 524.167 (Flexure `fromPayload` env.MDC1, nothing added): the self-weight counted once. The same file marked
+  `selfWeightExcluded: true` in ST-Girder gives M_DC1 = 602.223 kip-ft (+78.056, its own continuous self-weight 0.233 klf added on top:
+  the steel twice); in the new app it is refused. The MCT fixture (tests/projects/ext/mct_psbeam_selfweight_excluded.json, M_DC1 at
+  x = 66 = 524.167 − 88.124 = 436.043 kip-ft, no self-weight) is refused by both apps.
+### Fixtures and tests
+- tests/projects/ext: `mct_psbeam_selfweight_excluded.json` (MCT Generator export shape of index.html "Organize for PS-Beam tool",
+  def15 G2 stations every 6 ft with the steel removed from DC1), `mct_stgirder_schema.json` (same in the stgirder schema), 
+  `steelbeam_envelope.json` (60 ft simple span), `midas_bare_stations.json` (a bare station list).
+- tests/engine/demandfile.test.mjs: the 112 hand-offs taken unchanged (ST-Girder's gdAdopt takes a sample too); the four fixtures
+  refused with the producer named, and ST-Girder's refusal condition read from its source; eight gdCheck failures refused with
+  gdCheck's reason, each refused by ST-Girder's gdAdopt too; the selfWeightExcluded check case above.
+### Open (engineer)
+- If MIDAS / MCT envelopes are wanted in the new app after all, that reverses DISC for the new app and needs the self-weight addition
+  (SW-CONT) ported; not done here (CLAUDE.md §9).
+### Other copies
+- None (ST-Girder's code is read only, not changed).
