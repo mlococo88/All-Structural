@@ -2744,3 +2744,14 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
 - See the PR (tests, Playwright at 1280 and 390 px).
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: shared-lldf-steps (LLST) — the LLDF worked-step writer moved to shared/lldf.js (SharedLLDF.steps); no output change
+### Where
+- `apps/steel-bridge/engine/lldf.js`: `geometrySteps`, `skewSteps`, `empSteps`, `leverSteps`, `rigidSteps`, `member`, `memberSteps`,
+  `extSteps`, `finalSteps`, `withC` moved to `shared/lldf.js` (`SharedLLDF.steps`); the adapter calls them (`SS()`). Details, the
+  exact before → after and the verification: `fixlog/shared-lldf.md` (LLST).
+### Check case / How verified
+- 1,920 LLDF cases (every sbd2-loads fixture × geometry variants × options), 2,227,456 steps: full outputs hash identically before and
+  after; `node tests/engine/run.mjs lldf loads report steps tex static paths girderdetail` pass.
+### Other copies
+- None.
