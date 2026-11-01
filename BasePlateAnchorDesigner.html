@@ -1593,6 +1593,7 @@ function bpExportDxf(){
     W.text(LY.txt,[c[0]+0.6*A.dia,c[1]+0.6*A.dia],th*0.8,String(i+1)); });
   const pg=pedGeom();
   if(pg.present){ pg.bars.forEach(b=>W.circle(LY.pbar,[b.x,b.y],pg.rbB.db/2)); W.rect(LY.ptie,-pg.tieHx,-pg.tieHy,pg.tieHx,pg.tieHy); }
+  if(bpCageOn()){ const G=bpCageGeom(); G.bars.forEach(b=>W.circle(LY.pbar,[b.x,b.y],G.rbL.db/2)); W.circle(LY.ptie,[0,0],G.Rt); }   /* BC-6: pier cage (pier coordinates) */
   const isPedT=(S.tRebar.pieceType==="pedbars");
   const ic=S.tRebar.present? tensionRebarIntercept(CC) : null;
   if(ic&&ic.bars) ic.bars.forEach(b=>{ if(!b.fits && b.r===null) return;
@@ -1627,6 +1628,12 @@ function bpExportDxf(){
   { const seen=new Set();
     g.pts.forEach(p=>{ const st=stA(p.y,A.dia/2+0.05); if(st==="front") return; const x=+(p.x+px).toFixed(4), ly=lyOf(st,LY.anc), k=x+"|"+ly; if(seen.has(k)) return; seen.add(k);
       W.line(ly,[X(x),plateTop+1.5*A.dia],[X(x),headZ]); W.line(ly,[X(x)-0.8*A.dia,headZ],[X(x)+0.8*A.dia,headZ]); }); }
+  if(bpCageOn()){   /* BC-6: pier cage in the section — the two bars at ±R_b and every tie / spiral turn across (the cage outline) */
+    const G=bpCageGeom(), K=S.conc.cage, zt=C.H-Math.max(+K.topCover||0,0);
+    [-G.Rb,G.Rb].forEach(x=>W.line(LY.pbar,[X(x),3.0],[X(x),zt]));
+    bpCageTieDepths().forEach(z=>W.line(LY.ptie,[X(-G.Rt),C.H-z],[X(G.Rt),C.H-z]));
+    warns.push("Pier cage: the section shows the cage outline (bars at ±R_b = "+fmt(G.Rb,2)+" in, every tie / spiral turn).");
+  }
   if(pg.present){
     const zb=(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, zt=C.H-Math.max(+S.ped.barTop||0,0);
     { const seen=new Set(); pg.bars.forEach(b=>{ const st=stA(b.y,pg.rbB.db/2+0.05); if(st==="front") return; const x=+b.x.toFixed(4), ly=lyOf(st,LY.pbar), k=x+"|"+ly; if(seen.has(k)) return; seen.add(k);
@@ -3378,6 +3385,14 @@ function bpCageGeom(){
     pieceType:"bar",hookTop:!!K.topHook,hookBot:false,hookConfined:false,hookAtEdge:false});
   const devT=tensionDevLengths({size:K.tieSize,grade:K.tieGrade||K.grade,cover:cover,spacing:0,epoxy:false,topbar:false,Ktr:0,pieceType:"bar"});
   return {R,Rt,Rb,rbL,rbT,cover,n,bars,chord,clear:chord-rbL.db,dev,devT,fy:rgrade(K.grade).fy,fyt:rgrade(K.tieGrade||K.grade).fy};
+}
+/* BC-6 (2026-11-01, display only): depths of every tie / spiral turn of the cage along the shaft, for the drawings
+   (z from the top of the pier: the first at max(tieTop, cover + d_b,t/2), then every pitch, down to H − 3 in) */
+function bpCageTieDepths(){
+  const K=S.conc.cage||{}, G=bpCageGeom(), H=+S.conc.H||0;
+  const z0=Math.max(+K.tieTop||0, G.cover+G.rbT.db/2), dz=Math.max(+K.pitch||3, G.rbT.db+0.5), out=[];
+  for(let z=z0; z<=H-3+1e-9 && out.length<400; z+=dz) out.push(z);
+  return out;
 }
 function bpCageTension(combo){
   const K=S.conc.cage, G=bpCageGeom(), hef=S.anchor.hef, H=+S.conc.H||0, phi=0.75;
@@ -8967,6 +8982,12 @@ function drawElevation(body,view){
   /* pedestal */
   rect(s,X(-spanPed/2),pedTopY,spanPed*sc,C.H*sc,"#eae7df","#555",1.3);
   txt(s,X(-spanPed/2)+4,pedTopY+13,"concrete","lblTxt","start",9,"#777");
+  if(bpCageOn()){   /* BC-6 (display only): pier cage outline — bars at ±R_b, ties / spiral turns */
+    const G=bpCageGeom(), K=S.conc.cage, yTopBar=pedTopY+Math.max(+K.topCover||0,0)*sc, yBotBar=baseY-3.0*sc;
+    [-G.Rb,G.Rb].forEach(x=>line(s,X(x),yTopBar,X(x),yBotBar,"#2e7d32",1.2));
+    bpCageTieDepths().forEach(z=>line(s,X(-G.Rt),pedTopY+z*sc,X(G.Rt),pedTopY+z*sc,"#66bb6a",0.8));
+    txt(s,X(0),baseY-6,"cage "+G.n+"-"+K.barSize+", "+K.tieSize+(K.tieType==="spiral"?" spiral":" ties")+" @ "+fmt(K.pitch,2)+"\u2033","lblTxt","middle",8.5,"#2e7d32");
+  }
   /* plate offset along the drawn horizontal axis: view "x" shows our y (→ py); view "y" shows our x (→ px) */
   const hoff = (view==="x")? (C.plate_off_y||0) : (C.plate_off_x||0);
   const XP=x=>cx+(x+hoff)*sc;                            /* plate-frame horizontal mapping */
@@ -11684,6 +11705,15 @@ function build3D(container){
       [pg3.tieHx,pg3.tieHy,C.H-z],[-pg3.tieHx,pg3.tieHy,C.H-z]],mP,pg3.rbT.db/2,true));
   }
 
+  /* BC-6 (display only): the pier cage of a circular pier — longitudinal bars and ties / spiral (layer "ped") */
+  if(bpCageOn()){
+    const G=bpCageGeom(), K=S.conc.cage, mC=lam(RCOL.ped), zt=C.H-Math.max(+K.topCover||0,0), zb=3.0, zs=bpCageTieDepths();
+    G.bars.forEach(b=>rod(groups.ped,[b.x,b.y,zb],[b.x,b.y,zt],mC,G.rbL.db/2));
+    const ring=(zf,a0,a1,n)=>{ const pts=[]; for(let k=0;k<=n;k++){ const a=a0+(a1-a0)*k/n; pts.push([G.Rt*Math.cos(a),G.Rt*Math.sin(a),zf(a)]); } return pts; };
+    if(K.tieType==="spiral"){ if(zs.length>1){ const dz=zs[1]-zs[0], nT=zs.length-1, zTop=C.H-zs[0];
+        path3(groups.ped,ring(a=>zTop-dz*a/(2*Math.PI),0,2*Math.PI*nT,36*nT),mC,G.rbT.db/2,false); } }
+    else zs.forEach(z=>path3(groups.ped,ring(()=>C.H-z,0,2*Math.PI,48),mC,G.rbT.db/2,false));
+  }
   /* tension anchor reinforcement */
   if(icT && icT.bars && icT.bars.length){
     const rr=Math.max(icT.rb.db/2,0.12), dx=tIsPed?0:pxo, dy=tIsPed?0:pyo;
