@@ -1509,10 +1509,27 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Current default (with arm wind, governing combination at the max-moment azimuth):** ΣT = 19,130, φN_cbg = 19,641 → **0.974** OK (before 1.475 NG). Other cases (tension ratio before → after): square shaft 2.257 → 1.493; 1½ in rods 0.843 → 0.515; torsion case 0.870 → 0.573; monopost 2.539 → 1.688 (interaction 2.812 → 1.961); two-post 2.912 → 1.938.
 - **How verified:** `node tests/engine/run.mjs lightpole` 22 passed (2 new tests); `node tests/lightpole-compare.mjs --a origin/main`: only the anchor tension chain changes (phiNn, tr, trAnc, trBrk, tgov, inter, interOK and the check rows); cable values identical; 0 console errors.
 
-## 2026-11-01 — PR: claude/lp-pr15-bpnote (LP-15: base-plate "verify method" note; display only; engineer answer 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #604: claude/lp-pr15-bpnote (LP-15: base-plate "verify method" note; display only; engineer answer 2026-11-01)
 
 ### LP15-1. Base-plate verification note   [display] [no result change]
 - **Engineer answer (2026-11-01):** keep b_eff = πD/n; add a clear on-screen and report note "verify method / article (LRFDLTS 2nd Ed.)" on the base-plate check, listing the unverified items.
 - **Where:** new constant `LPP_BP_VERIFY` (above `function lppOffAxisFixtures(`); shown in the Summary "not checked" box (every stack with anchors), in `boltWorkedHTML()` step 8 (Anchors tab and the Calc sheet, as a highlighted box), and in the shared Report (base-plate note, warn; Assumptions).
 - **Text:** "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: (1) the governing article number; (2) the effective-width rule (b_eff = πD/n at the pole face is used; for square/rectangular poles the same πB/n is used, no flat-face rule); (3) anchor-rod bending in the double-nut standoff is not checked; (4) the minimum plate thickness rules of LRFDLTS are not checked."
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; text adds the note (Summary, Anchors, Calc sheet). Report: 0 unresolved references, 0 KaTeX errors, no NaN, 0 console errors (default pole, two-post sign, torsion, 60 ft pole at 1280 / 390 px).
+
+## 2026-11-01 — PR: claude/lp-pr16-signice (LP-16: atmospheric ice on sign panels and posts; engineer answer 2026-11-01; PR link added after merge)
+
+### LP16-1. Ice on signs (LP-R22)   [calc change] [more conservative or equal]
+- **Engineer answer (2026-11-01):** add ice to sign panels: t_d on the panel, ice weight and wind on the iced panel in the ice combinations.
+- **Where:** `signWind()`: block `// ---- atmospheric ice on the sign`, new fields `tdP, qhI, AsI, F_Ai, iceScale, WiPanel, FpostI, MpostI, tdPost, WiPost`, `caseC.FI`, `postStrips[i].FI`; `evalSignComboDir()`: case forces `FI`, `Fp = f.W·share(F) + f.Wi·share(F_i)`, post drag `+ f.Wi·F_post,i`, axial `+ f.Di·(W_i,panel/n + W_i,post)`; `calcSign()`: every combination applies (`SIGN_COMBO_KEYS=COMBO_KEYS.slice()`, was the non-ice ones only); `signPostStress()`: panel ice in N and P_story, post ice above the section, iced post drag strips; ice input card shown in sign mode; sign wind worked step "Ice on the sign"; load-path note and governing-demand step (ice combination); wording in the combination card / report and Manual §2.6.
+- **Expressions:** t_d per §10.4.6 at the panel centroid (panel) and at h/2 (post); panel ice volume = 0.8·A_s·t_d (§10.4.1, flat vertical plate: one side × t_d × 0.8 — as read; verify the factor and whether both faces apply); wind on ice (§10.5): (B + 2t_d)(s + 2t_d), same C_f, q_h at V_ice with the sign K_d and G; Cases B and C keep their eccentricity, scaled by F_A,i/F_A; posts: radial ice on the whole post (weight) and iced width D + 2t_d for the exposed drag at V_ice.
+- **Governing provision:** ASCE 7-22 §10.4.1 (ice on flat plates and cylinders), §10.4.6 (t_d), §10.5 (wind on ice-covered structures), §2.3.4 / §2.4.3 (combinations).
+- **Check case (default monopost: panel 12 × 6 ft, clearance 10 ft, post Ø6 in, t = 0.5 in map, V_ice 50 mph):**
+  - t_d(13 ft) = 0.5·(13/33)^0.1 = 0.4555 in; W_i,panel = 56·0.8·72·0.4555/12 = **122.4 lb**.
+  - Post: t_d(8 ft) = 0.4342 in; W_i,post = 56·π[(3.4342)² − 3²]/144·16 = **54.6 lb**.
+  - Bearing (max-axial ASD): before D + 0.6W, N = 586.4 lb, q = 0.083 ksf; after D + 0.7Di + 0.7Wi, N = 586.4 + 0.7·(122.4 + 54.6) = **710.3 lb**, q = 0.100 ksf.
+  - Wind on ice (50 mph) is well below the bare wind: embedment, M_u, post check, anchors and the plate are unchanged (wind governs).
+  - Two-post default: bearing N 374.8 → 457.8 lb per post (D + 0.7Di + 0.7Wi); all other governing values unchanged. B₂ range now includes the ice combinations (1.000–1.016).
+- **Old saves:** signs saved before this change get the ice too (engineer-directed; their stored t and basis are used: "Uniform" for saves without `iceBasis`). Default monopost / two-post as old saves: same governing values as above.
+- **How verified:** `node tests/engine/run.mjs lightpole` 23 passed (new sign-ice test); `node tests/lightpole-compare.mjs --a origin/main` (and `--old-saves` for the sign cases): pole cases identical (results and cable values); sign cases change only in the ice-combination rows, bearing and the B₂ range (diff paths filtered); 0 console errors.
+- **Open items:** confirm the flat-plate ice factor (0.8, one side) and whether both faces should be iced; the cable C_f row of the ice card shows in sign mode (unused there).
