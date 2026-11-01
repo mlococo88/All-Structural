@@ -1234,3 +1234,217 @@ Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V�
 
 ### Open items (not changed)
 - PL-O1. The engine-check block in `analyze` indexes theory values for 1–4 spans only (`{1:…,4:…}[ns]`); 5+ spans would throw there. The page allows 1–4 spans, so nothing changes today; see `fixlog/shared-moving-load.md`.
+
+## 2026-11-01 — PR: claude/rpt-mlg — Report output tab in the shared report viewer (MLRP; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `MLRP`.
+
+### MLRP. "Report" output tab (shared/report.js, shared/steps.js; KaTeX 0.16.9 optional)   [display only]
+- **Engineer request (2026-11-01, report rollout):** a Report output tab in the shared viewer: navigation tree to topic level, numbered sections §n.m, worked steps grouped by topic, links back to the result cards, print with a title block (no owner cell), running header and page numbers. "Slim report grouped by topic" for this tool.
+- **Engineer decision (2026-11-01):** KaTeX 0.16.9 is added for the Report tab (pinned, the same cdnjs files as `apps/steel-bridge/index.html`), with `defer` so the page never waits for it. The tool stays offline-capable: without the CDN the steps are set by the shared built-in renderer (checked: 0 KaTeX spans, steps readable, every other card unchanged; only the two blocked CDN files are logged by the browser).
+- **Loads:** after `shared/moving-load.js`: `shared/steps.js`, `shared/report.js` (classic scripts, relative path).
+- **UI:** a "Results | Report" tab bar at the top of the output column (`#mlgOutTabs`). Report hides the result cards (class `mlgRptOn` on `<main>`) and shows `#mlgReport`; Results shows the cards again and redraws the canvases. The multi-vehicle "Print Report" button (new window) is unchanged.
+- **New code** (one `<script>` block at the end, anchor `REPORT TAB (MLRP`): `mlrModel()` (the report model), `mlrRender()`, `mlrGoto()` (links back to a result card), `mlrShow()`, a `run` wrapper (a new analysis rebuilds the report while it is shown), a `beforeprint` hook (Ctrl+P on the Report tab prints the report alone).
+- **Values (nothing analysed or recomputed):** everything is read from `RES` / `DEF` or the tool's own functions:
+  - governing effects: `extremes(R, envData(R,true).F)` (the print report's functions), the per-lane value `R.res[ei].max/min`, the factor `g = R.dfOf(ef, value)`; the step shows M⁺ = γ_LL · g · M⁺_LL+IM with those numbers and the value `b.v` the tool computed;
+  - impact factor per span `R.imSpan[k]`, γ_LL `m.llf`, DFs `m.dfM`, `m.dfV`, `m.dfNeg`;
+  - girder segment properties `props(s, deckRead())`; vehicle axles `m.axles`; vehicle picture and envelopes drawn by the tool's `drawVehicle()` / `offPlot()` (as PNG in an SVG figure);
+  - the tenth-point envelope, plate-transition and reaction tables are the result cards' rows as shown (View selector: factored or per lane); the deflection steps take δ, the allowable and the ratio from the Live Load Deflection card's own cells (3 / 3 / 2 decimals as shown).
+- **Sections:** 1 Structure and analysis inputs (settings, girder segments, engine check and warnings), 2 Vehicle, 3 Load factors and impact, 4 Governing live load effects (six topics, one per extreme), 5 Envelopes and reactions, 6 Live load deflection (one topic per span, with the L/N check), 7 References (the tool's basis line).
+- **Title block:** Project and Computed by from the Print Report fields (`rProj`, `rBy`); the tool has no project number, date or checker fields, so those show "—" (no field added).
+- **Saved data:** nothing new is saved; the Report / Results choice is not remembered. The viewer's collapsed sections are kept in memory (`MLRP.closed`).
+- **How verified (headless Chromium; KaTeX served locally, and a second run with every CDN blocked):** 3 projects (default HL-93 2 × 100 ft; HS20 3 spans; Cooper E80 1 span, View = unfactored per lane):
+  - 0 unresolved or duplicate references, 0 KaTeX errors (KaTeX used online; built-in renderer offline), no NaN / undefined in `SharedReport.text()`, 0 console errors online;
+  - 25 / 26 / 24 report values equal the app's: the six governing factored values, their per-lane values and g, the impact factor per span, γ_LL, and the metric cards (Max ±M, ±V) against the governing steps;
+  - the Results text is unchanged after opening the Report tab, and identical to origin/main;
+  - Ctrl+P on the Report tab prints the report alone with the shared running header (PDF checked).
+  - `node tests/check-syntax.mjs "Moving Load Generator.html"` passes.
+- **Other copies:** none. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
+- **Open items:** at 390 px the report's result column runs past the right edge (the page layout is unchanged here; separate 390 px PR).
+
+Diff (`Moving Load Generator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Moving Load Generator.html b/Moving Load Generator.html
+index 5d77b0e..a819a1e 100644
+--- a/Moving Load Generator.html	
++++ b/Moving Load Generator.html	
+@@ -6,0 +7,4 @@
++<!-- MLRP: KaTeX 0.16.9 for the Report tab's worked steps (engineer-approved 2026-11-01; same pinned files as apps/steel-bridge/index.html).
++     Deferred, and optional: offline (CDN not reachable) the steps are set by the shared built-in renderer and the tool works as before. -->
++<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
++<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+@@ -271,0 +276,3 @@ tr.pier td{background:#f8fafc;font-weight:600}
++<!-- MLRP: shared worked steps and the shared report viewer (Report tab) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -2083,0 +2091,168 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
++<script>
++// ═══════════ REPORT TAB (MLRP, 2026-11-01) ═══════════
++/* The calculation report of the current analysis (RES, DEF) in the shared viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers; worked
++   steps through shared/steps.js, grouped by topic with SharedSteps.group). Nothing is analysed or recomputed: values are
++   read from RES / DEF and the tool's own functions (extremes, envData, R.dfOf, props, offPlot), and the tables are the
++   result cards' own rows as shown (factored or per lane, as the "View" selector). KaTeX when the CDN is reachable, else
++   the SharedSteps built-in renderer (offline). Nothing is saved: the viewer's collapsed sections are kept in memory only
++   (MLRP.closed). The multi-vehicle Print Report (new window) is unchanged. */
++const MLRP={closed:new Set(),api:null,doc:null,on:false};
++document.head.insertAdjacentHTML('beforeend','<style>#mlgOutTabs{display:flex;gap:0;border-bottom:2px solid #1e293b;margin:0 0 12px}#mlgOutTabs button{border:1px solid #cbd5e1;border-bottom:none;background:#f1f5f9;color:#475569;font:600 13px Inter,Segoe UI,sans-serif;padding:7px 16px;cursor:pointer;border-radius:6px 6px 0 0;margin-right:3px}#mlgOutTabs button.on{background:#fff;color:#0f172a;border-color:#1e293b}main.mlgRptOn>:not(#mlgOutTabs):not(#mlgReport){display:none!important}#mlgReport{background:#fff;border-radius:10px;padding:4px 10px}@media print{#mlgOutTabs{display:none!important}}</style>');
++document.querySelector('main').insertAdjacentHTML('afterbegin','<div id="mlgOutTabs" role="tablist" aria-label="Output"><button type="button" role="tab" data-ot="res" class="on">Results</button><button type="button" role="tab" data-ot="rpt">Report</button></div>');
++document.querySelector('main').insertAdjacentHTML('beforeend','<div id="mlgReport" hidden></div>');
++function mlrShow(on){
++  MLRP.on=!!on; const mn=document.querySelector('main');
++  mn.classList.toggle('mlgRptOn',MLRP.on); $('mlgReport').hidden=!MLRP.on;
++  $('mlgOutTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.ot==='rpt')===MLRP.on));
++  if(MLRP.on)mlrRender(); else {const c=document.querySelector('main canvas');if(c&&RES)render();}   // the canvases were hidden: redraw at their size
++}
++$('mlgOutTabs').addEventListener('click',e=>{const b=e.target.closest('[data-ot]');if(b)mlrShow(b.dataset.ot==='rpt');});
++const mlrN=(x,d)=>SharedSteps.n(x,d==null?2:d);
++const mlrP=(x,d)=>(typeof x==='number'&&x<0)?'('+mlrN(x,d)+')':mlrN(x,d);
++const mlrTx=s=>String(s==null?'':s).replace(/[\\{}$&#%_^~]/g,'');
++/* a steps item, one topic per list entry (SharedSteps.group: status chip and one-line result) */
++function mlrTopics(scope,list,opt){
++  const L=list.filter(t=>t.steps&&t.steps.length), steps=[].concat(...L.map(t=>t.steps));
++  const topics=L.map(t=>{const g=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:()=>true}],{strip:false})[0];
++    return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res};});
++  return Object.assign({type:'steps',scope,steps,topics},opt||{});
++}
++/* a result card's table as shown (header, rows, the text of each cell; numbers right-aligned) */
++function mlrDomTable(tb,caption){
++  if(!tb)return null; const t=tb.closest('table'); if(!t)return null;
++  const cell=c=>{const s=c.textContent.replace(/\s+/g,' ').trim();return {t:s.replace(/\$/g,'').replace(/\[\[/g,'[ ['),n:/^[−\-+]?[\d.,]+( [✓✗])?$/.test(s)};};
++  const head=t.tHead?[...t.tHead.rows[t.tHead.rows.length-1].cells].map(c=>c.textContent.trim()):[];
++  const rows=[...tb.rows].map(r=>{const cs=[...r.cells].map(cell);return r.classList.contains('pier')?{cells:cs,cls:'gov'}:cs;});
++  return rows.length?{type:'table',caption,head,rows,wide:true}:null;
++}
++/* a canvas plot of the tool (offPlot, the print report's own function) as an SVG figure */
++function mlrFig(series,o,w,h,caption){
++  try{const u=offPlot(series,o,w,h);return {type:'figure',svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><image href="${u}" width="${w}" height="${h}"/></svg>`,caption};}
++  catch(e){return {type:'note',text:caption+' (figure not available: '+String(e&&e.message||e)+')'};}
++}
++function mlrModel(){
++  const R=RES, m=R.m, dk=deckRead(), view=$('viewMode').value, fac=view==='f';
++  const E=envData(R,true), X=extremes(R,E.F), Lt=R.Lt, secs=[];
++  const loc=x=>{const s=R.sup;let k=0;while(k<s.length-2&&x>s[k+1]+1e-6)k++;return `span ${k+1}, ${((x-s[k])/(s[k+1]-s[k])).toFixed(2)}L`;};
++  const G=g=>g?(g.lane?`${g.lab} @ ${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`):'—';
++  const vName=m.short==='Custom'?'Custom vehicle':(P[m.short]?P[m.short].label:m.short);
++  const basis=$('mlgBasis')?$('mlgBasis').textContent.replace(/^Basis:\s*/,''):'';
++  /* ---------- 1. Structure and analysis inputs ---------- */
++  {
++    const subs=[];
++    subs.push({title:'Spans, stiffness, factors and analysis settings',items:[{type:'kv',rows:[
++      ['Spans',`${m.spans.join(' + ')} = ${Lt} ft, pinned supports`],
++      ['Live load stiffness',dk.comp?`Uncracked short-term composite, n = ${dk.n}, b_eff = ${dk.beff} in, t_s = ${dk.ts} in, haunch ${dk.th} in (${dk.inclH?'included':'excluded'})`:'Steel section alone'],
++      ['E',`${m.E} ksi`],['Live load factor γ_LL',String(m.llf)+' ('+($('lls')&&$('lls').selectedOptions[0]?$('lls').selectedOptions[0].text:'')+')'],
++      ['Distribution factors',m.spans.map((_,k)=>`span ${k+1}: moment ${m.dfM[k]}, shear ${m.dfV[k]}`).join(' · ')+(m.dfNeg>0?` · negative moment ${m.dfNeg}`:'')],
++      ['Impact',m.imp.method==='const'?`constant ${m.imp.val}`:m.imp.method==='std'?'Std. Spec. 50/(L + 125) ≤ 0.30':`AREMA formula, S = ${m.imp.S} ft${m.imp.bal?', ballasted deck (90%)':''}, L basis: ${$('aLb')?$('aLb').selectedOptions[0].text:'span'}`],
++      ['Analysis',`position step ${m.step} ft, spacing / headway step ${m.hStep} ft, ${m.dirs.length>1?'both travel directions':'one travel direction'}`],
++      ['Tables in this report',fac?`factored per girder (γ_LL ${m.llf} × DF), as the View selector`:'unfactored per lane, including impact, as the View selector'],
++      ['Code basis',basis]]},
++      {type:'note',text:'Set in the input panel. The results on screen: [[tab:card:cM|Results]].'}]});
++    let c=0;
++    const segRows=m.segs.map((s,i)=>{const last=i===m.segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c)),p=props(s,dk),a=c;c+=len;
++      return [String(i+1),`${a.toFixed(1)}–${(a+len).toFixed(1)}`,`${s.bt} × ${s.tt}`,`${s.D} × ${s.tw}`,`${s.bb} × ${s.tb}`,{t:p.A.toFixed(1),n:true},{t:p.yb.toFixed(2),n:true},
++        {t:Math.round(s.Io>0?s.Io:p.I).toLocaleString()+(s.Io>0?' *':''),n:true},{t:p.Sbs.toFixed(0),n:true},{t:p.Sts.toFixed(0),n:true},{t:p.Sdk?p.Sdk.toFixed(0):'—',n:true}];});
++    subs.push({title:'Girder segments',items:[{type:'table',caption:'Segments from the left abutment (dimensions in inches; * = I override used for stiffness)',head:['#','x (ft)','Top flg b × t','Web D × t','Bot flg b × t','A (in²)','ȳ (in)','I (in⁴)','S bot stl (in³)','S top stl (in³)','S deck (in³)'],rows:segRows,wide:true},
++      {type:'note',text:'Section properties per AASHTO LRFD 10th Ed. Art. 6.10.1.5 (uncracked short-term composite for live load). Only relative stiffness affects V, M and R; absolute EI matters for deflection.'}]});
++    const ck=document.createElement('div'); ck.innerHTML=R.check||'';
++    subs.push({title:'Analysis model and engine check',items:[{type:'note',text:ck.textContent.replace(/\s+/g,' ').trim()||'—'}].concat((R.warn||[]).map(w=>({type:'note',warn:true,text:'Warning: '+String(w).replace(/<[^>]+>/g,'')})))});
++    secs.push({title:'Structure and analysis inputs',subs});
++  }
++  /* ---------- 2. Vehicle ---------- */
++  {
++    let off=0; const ax=m.axles.map((a,j)=>{off+=j?+a[1]:0;const vs=R.varOK&&j+1===m.vK;return [String(j+1),{t:(+a[0]).toFixed(2),n:true},{t:j?(vs?m.vMin+'–'+m.vMax+' (varies)':(+a[1]).toFixed(2)):'—',n:true},{t:vs?'—':off.toFixed(2),n:true}];});
++    const vi=document.createElement('div'); vi.innerHTML=$('vehInfo')?$('vehInfo').innerHTML:'';
++    let svg=''; try{drawVehicle();const u=$('cVeh').toDataURL('image/png'),w=$('cVeh').width,h=$('cVeh').height;svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><image href="${u}" width="${w}" height="${h}"/></svg>`;}catch(e){}
++    secs.push({title:'Vehicle',subs:[{title:vName,items:[svg?{type:'figure',svg,caption:'Vehicle as analyzed (axle 1 is the lead axle)'}:{type:'note',text:''},
++      {type:'note',text:vi.textContent.replace(/\s+/g,' ').trim()},
++      {type:'table',head:['Axle','Load (kips)','Spacing from previous (ft)','Distance from axle 1 (ft)'],rows:ax},
++      {type:'note',text:'Axles that do not contribute: '+(m.neglect?'neglected (AASHTO LRFD 10th Ed. Art. 3.6.1.3.1)':'always included')+' · travel: '+(m.dirs.length>1?'both directions':'one direction')+'. On screen: [[tab:card:cVeh|Vehicle Configuration]].'}]}]});
++  }
++  /* ---------- 3. Load factors and impact ---------- */
++  {
++    const T=[], ims=(R.imSpan||[]);
++    T.push({title:'Dynamic load allowance',ref:m.imp.method==='std'?'AASHTO Std. Spec. 17th Ed. Art. 3.8.2':m.imp.method==='const'?'AASHTO LRFD 10th Ed. Art. 3.6.2':'AREMA Ch. 15 (edition: verify)',steps:ims.map((v,k)=>SharedSteps.step({id:'im'+k,label:`Impact factor applied in span ${k+1} (L = ${m.spans[k]} ft)`,sym:'1 + IM',eq:'',sub:'',value:v,unit:'',d:3,
++      note:m.imp.method==='std'?'IM = 50/(L + 125) ≤ 0.30':m.imp.method==='const'?'constant entered':'AREMA steel formula, L basis as entered'}))});
++    T.push({title:'Load and distribution factors',ref:'AASHTO LRFD 10th Ed. Table 3.4.1-1; Art. 4.6.2.2',steps:[SharedSteps.step({id:'llf',label:'Live load factor (limit state selected)',sym:'\\gamma_{LL}',value:m.llf,unit:'',d:2})]
++      .concat(m.spans.map((_,k)=>SharedSteps.step({id:'gm'+k,label:`Moment distribution factor, span ${k+1}`,sym:'g_{M}',value:m.dfM[k],unit:'',d:3})))
++      .concat(m.spans.map((_,k)=>SharedSteps.step({id:'gv'+k,label:`Shear distribution factor, span ${k+1}`,sym:'g_{V}',value:m.dfV[k],unit:'',d:3})))
++      .concat(m.dfNeg>0?[SharedSteps.step({id:'gn',label:'Negative moment distribution factor',sym:'g_{M}^{\\minus}',value:m.dfNeg,unit:'',d:3})]:[])});
++    secs.push({title:'Load factors and impact',subs:[{title:'Factors used',items:[mlrTopics('fac',T),{type:'note',text:'Multiple presence is included in the distribution factors entered (AASHTO LRFD 10th Ed. Art. 3.6.1.1.2), not applied again.'}]}]});
++  }
++  /* ---------- 4. Governing live load effects ---------- */
++  {
++    const T=[], sf={M:'kip-ft',V:'kips',R:'kips'};
++    [['Mp','M','^{+}',1,'Maximum positive moment'],['Mn','M','^{\\minus}',0,'Maximum negative moment'],['Vp','V','^{+}',1,'Maximum positive shear'],['Vn','V','^{\\minus}',0,'Maximum negative shear'],
++     ['Rp','R','^{+}',1,'Maximum reaction'],['Rn','R','^{\\minus}',0,'Minimum reaction (uplift if negative)']].forEach(([k,s,sg,isMax,lab])=>{
++      const b=X[k]; if(!b)return; const ei=R.effs.indexOf(b.ef); if(ei<0)return;
++      const raw=isMax?R.res[ei].max:R.res[ei].min, g=R.dfOf(b.ef,raw), ef=b.ef, u=sf[s];
++      const where=ef.t==='R'?`Support ${'ABCDE'[ef.q]} (x = ${b.x.toFixed(1)} ft)`:`x = ${b.x.toFixed(2)} ft (${loc(b.x)})`;
++      const gl=ef.t==='M'?(raw<0&&m.dfNeg>0?'negative-moment DF':'moment DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(z=>z+1).join(' and '):'span '+(ef.spans[0]+1))):'shear DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(z=>z+1).join(' and '):'span '+(ef.spans[0]+1));
++      T.push({title:lab+' — '+where,ref:'AASHTO LRFD 10th Ed. Table 3.4.1-1, Art. 3.6.2',steps:[
++        SharedSteps.step({id:k+'.lane',label:'Envelope value per lane, including impact (influence-line envelope)',sym:s+sg+'_{LL+IM}',value:raw,unit:u,d:2,note:'Governing: '+G(b.g)}),
++        SharedSteps.step({id:k+'.g',label:'Distribution factor ('+gl+(m.rail?', rail set':'')+')',sym:'g',value:g,unit:'',d:4}),
++        SharedSteps.step({id:k,label:lab+', factored per girder',sym:s+sg,eq:'\\gamma_{LL}\\, g\\, '+s+sg+'_{LL+IM}',sub:mlrN(m.llf,2)+'\\cdot '+mlrN(g,4)+'\\cdot '+mlrP(raw,2),value:b.v,unit:u,d:1})]});
++    });
++    secs.push({title:'Governing live load effects',note:'The values of the metric cards at the top of the Results tab, worked: γ_LL · g · (envelope value per lane including impact).',
++      subs:[{title:'Governing results, factored per girder',items:[mlrTopics('gov',T),{type:'note',text:'On screen: [[tab:card:cM|Moment Envelope]], [[tab:card:cV|Shear Envelope]], [[tab:card:rB|Support Reactions]]. Each governing position can be loaded into step mode from the envelope table ([[tab:card:envB|Envelope Table]]).'}]}]});
++  }
++  /* ---------- 5. Envelopes and reactions ---------- */
++  {
++    const E2=envData(R,fac), lab=fac?'factored per girder':'per lane, including impact';
++    const items=[mlrFig(E2.M,{Lt,sup:R.sup,ylab:'Moment (kip-ft)'},1100,300,'Moment envelope, '+lab+' (red: max, blue: min)'),
++      mlrFig(E2.V,{Lt,sup:R.sup,ylab:'Shear (kips)'},1100,300,'Shear envelope, '+lab+' (purple: max, teal: min)')];
++    const et=mlrDomTable($('envB'),'Tenth points, '+lab+'; governing case, direction and lead axle position of each extreme'); if(et){et.lazy=true;et.title='Envelope table — tenth points';items.push(et);}
++    const tt=$('trCard')&&!$('trCard').classList.contains('hidden')?mlrDomTable($('trB'),'Results at plate transitions (segment boundaries), '+lab):null; if(tt)items.push(tt);
++    const rt=mlrDomTable($('rB'),'Support reactions, '+lab+' (upward positive; a negative minimum is uplift)'); if(rt)items.push(rt);
++    items.push({type:'note',text:'Tables as on the [[tab:card:envB|Results tab]] (View: '+($('viewMode').selectedOptions[0]||{}).text+'). The absolute maxima per span are on screen only.'});
++    secs.push({title:'Envelopes and reactions',subs:[{title:'Moment and shear envelopes, reactions',items}]});
++  }
++  /* ---------- 6. Live load deflection ---------- */
++  if(DEF&&$('dB')&&$('dB').rows.length){
++    const N=Math.max(1,num('dLim',800)), items=[mlrFig([{pts:DEF.secs.map((s,j)=>[s.x,DEF.res[j].dn]),color:'#2563eb',fill:'rgba(37,99,235,.1)',peak:-1},{pts:DEF.secs.map((s,j)=>[s.x,DEF.res[j].up]),color:'#0d9488',fill:'rgba(13,148,136,.1)',peak:1}],{Lt,sup:R.sup,ylab:'Deflection (in)'},1100,240,'Live load deflection (blue: max downward, teal: max upward)')];
++    const T=[...$('dB').rows].map((tr,k)=>{const c=[...tr.cells].map(x=>x.textContent.trim()), d=parseFloat(c[2]), al=parseFloat(c[4]), ra=parseFloat(c[5]);
++      return {title:`Span ${k+1} (L = ${c[1]} ft)`,ref:'AASHTO LRFD 10th Ed. Art. 2.5.2.6.2',steps:[
++        SharedSteps.step({id:'d'+k,label:'Maximum downward deflection (service, LLF not applied)',sym:'\\delta',value:d,unit:'in',d:3,note:'at x = '+c[3]+' ft; '+c[7]}),
++        SharedSteps.step({id:'a'+k,label:'Allowable deflection',sym:'\\delta_{allow}',eq:'\\frac{12\\, L}{N}',sub:'\\frac{12\\cdot '+mlrTx(c[1])+'}{'+N+'}',value:al,unit:'in',d:3}),
++        SharedSteps.step({id:'r'+k,label:'Deflection ratio',sym:'\\frac{|\\delta|}{\\delta_{allow}}',sub:'\\frac{'+mlrN(Math.abs(d),3)+'}{'+mlrN(al,3)+'}',value:ra,unit:'',d:2,ok:ra<=1+1e-9})]};});
++    items.push(mlrTopics('dfl',T),{type:'note',text:`Load case: ${$('dCase').selectedOptions[0].text}; deflection DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}. Values as on the [[tab:card:dB|Live Load Deflection card]] (3 decimals).`});
++    secs.push({title:'Live load deflection',subs:[{title:'Deflection by span',items}]});
++  }
++  secs.forEach(sc=>sc.subs.forEach(q=>{q.items=q.items.filter(it=>!(it.type==='note'&&!String(it.text||'').trim()));}));   // no empty notes
++  /* ---------- 7. References ---------- */
++  secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'note',text:basis||'—'}]}]});
++  const pj=$('rProj')?$('rProj').value.trim():'', by=$('rBy')?$('rBy').value.trim():'';
++  return {title:'Moving Load Generator — Calculation Report',subtitle:(pj||'Untitled')+' · '+vName,code:'AASHTO LRFD 10th Ed. (2024) · AASHTO Std. Spec. 17th Ed. (2002) · AREMA (rail presets)',
++    info:[['Project',pj],['Project No.',''],['Computed by',by],['Date',''],['Checked by',''],['Checked date','']],
++    head:{left:'Project No. — — '+(pj||'—').slice(0,40),right:'Computed: '+(by||'—')+' · Checked: —',foot:(pj||'Untitled')+' (Moving Load Generator)'},sections:secs};
++}
++function mlrRender(){
++  const T=$('mlgReport'); if(!T||!MLRP.on)return;
++  if(!window.SharedReport||!window.SharedSteps){T.innerHTML='<div class="warn">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>';return;}
++  if(!RES){T.innerHTML='<div class="warn">No results: press Run (or correct the input errors).</div>';MLRP.api=null;MLRP.doc=null;return;}
++  let M;
++  try{M=mlrModel();}catch(e){console.error(e);T.innerHTML='<div class="warn">Report error: '+esc(e&&e.message)+'</div>';MLRP.api=null;MLRP.doc=null;return;}
++  const hd=document.querySelector('header.hdr'), st=hd&&getComputedStyle(hd).position==='sticky'?hd.offsetHeight:0;
++  MLRP.api=SharedReport.mount(T,M,{closed:MLRP.closed,onGoto:mlrGoto,stick:st});
++  MLRP.doc=MLRP.api.doc;
++}
++/* [[tab:card:<id>|…]] links: back to the Results tab, at that card */
++function mlrGoto(name){
++  mlrShow(false);
++  const id=String(name).replace(/^card:/,''), t=$(id), c=t&&t.closest('.card'); if(!c)return;
++  setTimeout(()=>{c.scrollIntoView({behavior:'smooth',block:'start'});c.classList.add('mlgWkFlash');setTimeout(()=>c.classList.remove('mlgWkFlash'),1200);},30);
++}
++// a new analysis while the Report tab is shown rebuilds it
++{const _r=run; run=function(){_r.apply(this,arguments);if(MLRP.on)mlrRender();};}
++/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
++window.addEventListener('beforeprint',()=>{
++  if(!MLRP.on||!MLRP.doc||document.body.classList.contains('rp-printing'))return;
++  let box=document.getElementById('rp-print');if(!box){box=document.createElement('div');box.id='rp-print';document.body.appendChild(box);}
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(MLRP.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add('rp-printing');
++});
++window.__mlrForTest=()=>({doc:MLRP.doc,RES,DEF,X:RES?extremes(RES,envData(RES,true).F):null});   /* tests only */
++</script>
+```

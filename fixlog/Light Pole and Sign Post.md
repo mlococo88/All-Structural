@@ -1225,7 +1225,7 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
   - The tension-breakout A_Nc integration clips by a circle of radius b/2 for a square shaft too (`u*u+w*w>Redge*Redge`), i.e. the inscribed circle; conservative for a square. Unchanged (pre-existing; engineer to decide).
   - ψ_ed,N for a square shaft keeps c_a1 = b/2 − R even when no bolt sits on a face normal; conservative. Unchanged, per the group method.
 
-## 2026-11-01 — PR: claude/lp-pr0-harness (LP-0: test harness, scope line, manual Case B row; display only; PR link added after merge)
+## 2026-11-01 — PR #537: claude/lp-pr0-harness (LP-0: test harness, scope line, manual Case B row; display only)
 
 Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer's decisions of 2026-11-01 (scope; LTS 2nd Ed. mode later; no change to anything cable-related).
 
@@ -1247,3 +1247,99 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 ### Verification
 - `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: pass. `node tests/engine/run.mjs lightpole`: 10 passed.
 - `node tests/lightpole-compare.mjs --a origin/main` (553e98d): all 13 cases — results identical, cable values identical, drawings identical, 0 console errors; the only text difference is the new scope line on the report cover (+1 line per case). Screenshots at 1280 and 390: no horizontal scroll.
+
+## 2026-11-01 — PR #543: claude/lp-pr1-display (LP-1: off-axis arm warning, Case C eccentricity sign, ASCE 7-22 velocity-pressure form; no design result changes)
+
+### LP1-1. Wind-direction warning for arms not on the wind axes (LP-R1, engineer decision 2026-11-01)   [warning] [no result change]
+- **Decision:** keep the 4 wind directions (0/90/180/270°); no sweep. Warn when an arm/fixture is not aligned with those axes. Cables are excluded from the warning (engineer 2026-11-01: no change to anything cable-related). Sign panels are always on the axes (panel normal = +x), so no sign warning.
+- **Where:** new `lppOffAxisFixtures(fx)` and `lppOffAxisMsg(L)` above `function evalCombo(`; used in `summaryHTML()` (pole mode, appended to the "not checked" box before the monopost torsion line) and in `calc()` flags (before `if(!cablesEnabled){`).
+- **Rule:** a fixture with arm a > 0 and (W > 0 or EPA > 0) whose θ mod 90° ≠ 0.
+- **Check case:** fixture at θ = 45°, a = 8 ft → "Fixture 1 (arm at θ = 45°) is not aligned with these axes … may be unconservative". The default pole (fixtures at 0° and 180°) shows no warning.
+
+### LP1-2. Sign Case C eccentricity sign (LP-R14)   [display; per-direction split mirrored] [governing results unchanged]
+- **Where:** `signWind()`, anchor `const eC=`; `signWindWorkedHTML()` line `e_C = \tfrac{B}{2}-\bar x`.
+- **Before:** `const eC=xR - B/2;` (negative toward the windward edge: Case C mirrored relative to Case B's +0.2B). **After:** `const eC=B/2 - xR;` (positive toward the windward edge, the Case B convention).
+- **Provision:** ASCE 7-22 Fig. 29.3-1 (Case C, higher pressure near the windward edge).
+- **Effect:** the monopost torsion uses |F·e| (unchanged). On two posts the Case C split at 0° and at 180° swap; each post's envelope over both directions is the same, so every governing value (per-post ASD/LRFD demand, foundation, post stress, Summary) is identical. Only the per-direction rows of the combination study differ.
+- **Check case (default monopost):** x̄ = (1,705·3 + 1,137·9)/2,842 = 5.40 ft from the windward edge; e_C before −0.60 ft, after +0.60 ft (= 6.00 − 5.40) toward the windward edge.
+
+### LP1-3. Velocity pressure shown in the ASCE 7-22 form (LP-R12, label/form only)   [display] [no result change]
+- **Before:** `q_z = 0.00256 K_z K_zt K_d V²` labelled "ASCE 7-22 Eq. 26.10-1" (that is the ASCE 7-16 form).
+- **After:** `q_z = 0.00256 K_z K_zt K_e V²` (ASCE 7-22 Eq. 26.10-1, K_e = 1.0 per §26.9) with K_d shown as part of the force equation (Eq. 29.3-1 signs, Eq. 29.4-1 other structures); the worked lines show the product q_z·K_d (·G) with K_e = (1.00) substituted. Numbers are unchanged (K_e = 1.0).
+- **Where:** Manual §(velocity pressure) `{p:"Velocity pressure follows ASCE 7-22 Eq. 26.10-1`; `windWorkedHTML()` step 2; `fixtureWorkedHTML()` q_z and q_zi lines; `signWindWorkedHTML()` step 1; sign load path post drag line; `buildReport()` eqB "Velocity pressure, q_z" and "Evaluated at the two reference heights".
+- **Not changed:** the cable worked equation (cable features are left exactly as they are, engineer 2026-11-01) still reads `q_W=0.00256 K_z(h_c)K_zt K_d G C_f V²` — numerically the same. K_z constants (7-16 Table 26.11-1 α/z_g) not changed: open question below.
+
+### Verification
+- `node tests/check-syntax.mjs`: pass; `node tests/engine/run.mjs lightpole`: 10 passed.
+- `node tests/lightpole-compare.mjs --a origin/main` (5f49cfc), 13 cases: results identical in all 9 pole cases; cable values identical (1,155 numbers on the default pole, 561 for the single 45° cable); drawings identical; 0 console errors. Sign cases: monopost 1 value (caseC.e sign); two-post 169 values, all in the per-direction rows of the combination study (posts[] of each azimuth, Case C split mirrored) plus caseC.e — every per-post governing demand (postGov), foundation stack, post stress and Summary value identical (checked by filtering the diff paths). Text: the relabelled equations, e_C, and the arm warning (arms case).
+
+### Open items (not changed)
+- ASCE 7-22 Table 26.11-1 constants (α, z_g) for K_z: the tool keeps the 7-16 values (difference < 1 %: Exp. C 35 ft 1.0147 vs ≈1.009). Engineer to decide whether to switch (a calc change).
+
+## 2026-11-01 — PR #548: claude/lp-pr2-cf (LP-2: pole/post C_f from ASCE 7-22 Fig. 29.4-1; engineer decision 2026-11-01)
+
+### LP2-1. Automatic pole/post force coefficient (LP-R3)   [calc change] [more conservative for square/rect HSS and small round posts; less for short round posts]
+- **Engineer decision (2026-11-01):** automatic lookup from ASCE 7-22 Fig. 29.4-1 by shape and h/D; the user override is kept; the "round ≈0.7, square ≈1.3" hint is fixed.
+- **Where:**
+  - Input card 2: the `poleCfLabel` row is replaced by `cfPoleMode` (Auto / Manual), `cfPoleSurf` (round moderately smooth / rough / very rough / hexagonal-octagonal; shown for a round section), the `cfPole` value row (shown for Manual, hint now quotes Fig. 29.4-1 at h/D ≥ 25), and notes `lppCfNote`, `cfMigNote`. `lppApplyCfUI()` above `applyShapeUI()`.
+  - New `CF2941`, `CF2941_LBL`, `cfPoleFig2941(inp)`, `lppApplyCfPole(inp)`, `cfPoleWorkedHTML(inp)` above `function poleWindNominal(`.
+  - `calc()`: inputs `cfPoleMode`, `cfPoleSurf`; `lppApplyCfPole(inp)` before `calcSign(inp)` (sign) and before `poleSegments` (pole). It sets `inp.cfPole` (Auto), which the existing mast wind (`poleWindNominal`, bare and iced strips) and sign-post drag (`signWind`, `cfPost`) already use.
+  - Worked step: `windWorkedHTML()` (before step 3), `signWindWorkedHTML()` (end), report section "Wind force on the pole" (before "Wind force on the pole shaft").
+  - `INPUT_IDS` + `cfPoleMode`, `cfPoleSurf`; `applyState()` migration (below).
+- **Before:** `C_f = inp.cfPole` as entered (default 0.7 for every shape).
+- **After (Auto):** C_f = Fig. 29.4-1 value, linear in h/D between 1, 7, 25 (constant beyond 25):
+  - square (wind normal to a face) 1.3 / 1.4 / 2.0; hexagonal-octagonal 1.0 / 1.2 / 1.4;
+  - round, D√q_z > 2.5: moderately smooth 0.5 / 0.6 / 0.7, rough 0.7 / 0.8 / 0.9, very rough 0.8 / 1.0 / 1.2;
+  - round, D√q_z ≤ 2.5 (all surfaces): 0.7 / 0.8 / 1.2.
+  - D = mean outside width (rect: least dimension), h = pole height (sign: post height to top of panel), q_z = 0.00256 K_z K_zt K_e V² at h/2 (K_e = 1.0, no K_d).
+- **Governing provision:** ASCE 7-22 §29.4.1, Fig. 29.4-1 (chimneys, tanks, rooftop equipment and similar structures). Values cited from the figure; verify against the engineer's copy.
+- **Cables:** not affected (cable C_f is the separate `cfCable` input; every cable value identical, checked).
+- **Saved data / migration:** new fields `inputs.cfPoleMode`, `inputs.cfPoleSurf`. A save without `cfPoleMode` opens as **Manual** with its saved C_f and the notice `cfMigNote` ⇒ old projects compute identically (verified). New projects (DEFAULT_STATE, New, empty storage) start on Auto, moderately smooth.
+- **Check cases** (V 115, Exp. C, K_zt 1):
+  - Default pole (round 6→10 in, 35 ft): D = 8/12 = 0.667 ft, q_z(17.5) = 0.00256·0.8769·13225 = 29.69 psf, D√q_z = 3.63 > 2.5, h/D = 52.5 → **0.7** (= old default; results unchanged).
+  - Square HSS 8 in, 35 ft: h/D = 52.5 → **2.0** (was 0.7). Square-shaft case: embedment 4.67 → 5.59 ft, M_u 18,640 → 31,864 lb·ft, T_bolt 9,082 → 15,694 lb.
+  - Rect HSS 8 × 6 in, 35 ft, V 140: D = 6 in, h/D = 70 → **2.0** (was 0.7): embedment 4.07 → 5.47 ft, M_u 15,905 → 35,910 lb·ft.
+  - Square post 8 in, sign h = 16 ft: h/D = 24 → 1.4 + (24 − 7)/18·0.6 = **1.967** (was 0.7): embedment 8.51 → 8.64 ft.
+  - Round post 8 in, sign h = 11 ft (wide two-post case): q_z(5.5 → 15 ft), D√q_z > 2.5, h/D = 16.5 → 0.6 + (16.5 − 7)/18·0.1 = **0.653** (was 0.7; less conservative, per the figure): embedment 9.126 → 9.122 ft.
+  - Round 4 in post, 16 ft: D√q_z = 0.333·√28.74 = 1.79 ≤ 2.5, h/D = 48 → **1.2** (Node test).
+- **How verified:** `node tests/engine/run.mjs lightpole` (13 passed, 3 new Fig. 29.4-1 tests). `node tests/lightpole-compare.mjs --a origin/main`: new projects — default pole, Broms, 45° cable, 60 ft pole, ice, 1½ in bolts, arms, monopost and two-post sign: results identical apart from the 4 new `inp` fields (cfPoleMode, cfPoleSurf, cfAuto, cfPoleEntered) since their C_f is 0.7 either way; square/rect/sign-square/wide two-post cases change as listed. `--old-saves` (main's saved state opened in the branch): all 13 cases identical apart from the 4 new `inp` fields; cable values identical in every case.
+- **Open items:** Fig. 29.4-1 has no rectangle row (the square row with D = least dimension is used); the D√q_z criterion uses q_z at mid-height (the figure does not state the height; engineer to confirm); square sections with wind along a diagonal (1.0/1.1/1.5) are not used (the tool's wind directions are normal to the faces).
+
+## 2026-11-01 — PR #550: claude/lp-pr3-pullout (LP-3: pullout bearing area of the heavy hex nut; engineer decision 2026-11-01)
+
+### LP3-1. Pullout A_brg from heavy hex nut dimensions (LP-R6)   [calc change] [less conservative = exact]
+- **Engineer decision (2026-11-01):** use the real heavy-hex nut bearing area by bolt diameter, citing the source table, instead of 0.9d².
+- **Where:** `anchorBolts()`, block `// ---- pullout (ACI §17.6.3)`; new `HEAVY_HEX_F` and `heavyHexF(d)` above `function anchorBolts(`; return field `nutF`; `boltWorkedHTML()` step 4 (new F and A_brg lines); `LPP_REFS` + ASME B18.2.2.
+- **Before:** `const Abrg=(d*d)*0.9;`
+- **After:** `const nutF=heavyHexF(d); const Abrg=Math.sqrt(3)/2*nutF*nutF - Math.PI*d*d/4;` with F (width across flats of a heavy hex nut, ASME B18.2.2, F = 1.5d + 1/8 in): ¾ 1.250, ⅞ 1.4375, 1 1.625, 1⅛ 1.8125, 1¼ 2.000, 1½ 2.375, 1¾ 2.750, 2 3.125 in. Net bearing = hex area across flats − gross rod area (no plate washer).
+- **Governing provision:** ACI 318-19 §17.6.3.2.2(a), N_p = 8A_brg f′c, φ = 0.70 (Condition B, Table 17.5.3); nut dimensions ASME B18.2.2.
+- **Check case (default, (6) 1 in Gr 55, f′c 4,000):**
+  - Before: A_brg = 0.9·1² = 0.900 in²; φN_p = 0.70·8·0.900·4,000 = 20,160 lb (governed φN_n; tension ratio 9,791/20,160 = 0.486).
+  - After: F = 1.625; A_brg = 0.8660·1.625² − 0.7854·1² = 2.2869 − 0.7854 = 1.5015 in²; φN_p = 0.70·8·1.5015·4,000 = 33,632 lb; φN_n = min(φN_sa 34,073, 33,632) = 33,632 lb → ratio 0.291.
+  - 1½ in: A_brg = 0.8660·2.375² − 0.7854·1.5² = 3.118 in² (was 2.025); φN_p 56,700 → 87,298 lb at f′c 5,000.
+- **Effect:** every case: φN_p and φN_n (when pullout governed) change; the anchor tension and interaction ratios drop. No other value changes (diff paths checked: only Abrg, Np, Npn, phiNp, phiNn, tr, inter, tgov). Cable values identical.
+- **How verified:** `node tests/engine/run.mjs lightpole` 14 passed (new pullout test); `node tests/lightpole-compare.mjs --a origin/main`: 13 cases, differences only in the pullout chain; cable values identical; 0 console errors.
+- **Open item:** a plate washer (larger A_brg) is not an input; the bare nut is used.
+
+## 2026-11-01 — PR: claude/lp-pr4-anchre (LP-4: anchor reinforcement default None and §17.5.2.1 check; engineer decision 2026-11-01; PR link added after merge)
+
+### LP4-1. "Anchor reinforcement" default None for new projects (LP-R2)   [default change] [more conservative: breakout checked]
+- **Where:** input card 7, `id="segAnchRe"` (the `on` class moves to None); state `let anchRe='no';` (was `'yes'`).
+- **Saved data (§5):** `anchRe` has been written by `captureState()` in every version since the first commit (c58cb6d, 2026-10-03), so **every saved project has it stored explicitly**: projects that chose (or kept) Provided keep Provided and now get the reinforcement check below; projects with None are unchanged. `applyState()` keeps `anchRe = st.anchRe || 'yes'`, so a hand-made save without the field also keeps the old behaviour. Only new projects (DEFAULT_STATE, New, empty storage) start on None.
+- **Effect on the default new project:** concrete breakout is now in φN_n (Condition B, φ 0.70): φN_cbg = 22,323 lb; φN_n = min(34,073, 33,632, 22,323/3) = 7,441 lb per anchor; T_max = 9,791 lb → anchor tension 1.32 **NG** (before: 0.29 with Provided). The group check of the anchors table (ΣT = 19,401 ≤ φN_cbg = 22,323, 0.87) passes; the tool's φN_n compares the most-loaded anchor with φN_cbg/n_T (pre-existing, conservative; not changed — open item).
+
+### LP4-2. Anchor reinforcement checked when Provided (ACI 318-19 §17.5.2.1)   [new checks] [more conservative]
+- **Where:** new inputs `arBars` (bars per tension anchor, default 2), `arBar` (default "shaft longitudinal bar", or #4–#11), `arX` (distance rod–bar, default 3 in), rows `.arRow` shown only when Provided (`lppApplyArUI()`); `INPUT_IDS` + the three; `applyState()` defaults when missing. `anchorBolts()`: new block `// ---- anchor reinforcement, ACI 318-19 §17.5.2.1`, return field `ar`; `inp.arShaftBar = reo.long.bar` before `anchorsAllCombos` (pole and sign). New `boltArRows(b)` in both anchor tables (the "carried by anchor reinforcement" row now reads "replaced by the anchor reinforcement (§17.5.2.1), checked below"). `collectChecks()`: three checks; `LPP_CHK2K`. `boltWorkedHTML()` step 3b.
+- **Checks:**
+  1. strength φN_ar = 0.75·A_s·f_y ≥ N_ua (most-loaded anchor, its governing combination), A_s = bars counted for that anchor;
+  2. location x ≤ 0.5h_ef (R17.5.2.1);
+  3. development above the breakout surface: l_avail = h_ef − x/1.5 − c ≥ l_d; l_d = max(f_y ψ_t ψ_e ψ_g/(25 or 20 · λ√f′c)·d_b, 12 in) (ACI 318-19 Table 25.4.2.3; 25 for #6 and smaller, 20 for #7 and larger; ψ_t = ψ_e = 1.0, ψ_g = 1.0 Gr 60 / 1.15 Gr 80, λ = 1.0); below the surface the shaft bars run the full depth (developed). No reduction for excess reinforcement.
+- **φN_n unchanged** when Provided: min(φN_sa, φN_p) (breakout replaced by the anchor reinforcement, which is now checked separately).
+- **Governing provision:** ACI 318-19 §17.5.2.1 and R17.5.2.1 (anchor reinforcement developed on both sides of the breakout surface, φ = 0.75), §25.4.2.3. Wording cited, not copied; verify (a)/(b) item numbering against the engineer's copy.
+- **Check case (default geometry with Provided; (6) 1 in, h_ef 18 in, (12) #6 shaft bars, cover 3 in, f′c 4,000, f_y 60,000):**
+  - φN_ar = 0.75·(2·0.44)·60,000 = 39,600 lb ≥ 9,791 lb → 0.25 OK.
+  - x = 3 ≤ 0.5·18 = 9 → OK.
+  - l_d = 60,000/(25·√4,000)·0.75 = 28.5 in; l_avail = 18 − 3/1.5 − 3 = 13.0 in → 2.19 **NG**.
+- **Effect on saved projects with Provided (every old default project):** the three checks are added; with the old defaults the development check fails (as above) and the verdict changes from "ALL CHECKS PASS" to "1 CHECK FAIL — Anchor reinforcement, development". No existing value changes (verified with `--old-saves`: only the new `inp` fields and the new `ar` objects differ).
+- **How verified:** `node tests/engine/run.mjs lightpole` 15 passed (new test). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every case identical except the new inputs and `ar` objects (+ the 3 new check rows); `node tests/lightpole-compare.mjs --a origin/main` (new projects): the cases that were on the old default change from "breakout carried" to breakout checked (Condition B); cable values identical in all 26 runs.
+- **Open items:** (1) the per-anchor breakout comparison T_max ≤ φN_cbg/n_T (conservative; ACI compares the group tension with φN_cbg) now governs the default new project (1.32 vs group 0.87) — engineer to decide whether to compare the group; (2) hooked/headed anchor-reinforcement bars, and bars lapped with hooks, are not modelled (straight bars only); (3) the 0.5h_ef zone and the 1:1.5 cone geometry follow R17.5.2.1 and A_Nco; confirm.

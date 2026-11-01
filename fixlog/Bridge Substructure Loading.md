@@ -1738,3 +1738,253 @@ index 6d5bece..2e97549 100644
 - **Why:** ST-Girder now also runs inside `Steel Bridge Design.html` (its Design & Rating view). There its `producerFile` default is the host file, the same file name GirderDetail's own payloads carry, so an ST-Girder payload is recognised by its producer: `'ST-Girder'` or, if a payload ever falls back to ST-Girder's page title (`BridgeXfer.stamp` default), a producer that starts with "ST-Girder". The file name alone never refuses a payload. ST-Girder publishes nothing today (DISC, 2026-10-19), so no current payload is affected. GirderDetail's superReactions payloads (`producer:'GirderDetail'`, `producerFile:'Steel Bridge Design.html'`) are accepted as before.
 - **Check case:** `isST({producer:'ST-Girder', producerFile:'Steel Bridge Design.html'})` → true (before: true); `isST({producer:'ST-Girder | AASHTO LRFD Steel Plate Girder Design', producerFile:'Steel Bridge Design.html'})` → true (before: false); `isST({producer:'GirderDetail', producerFile:'Steel Bridge Design.html'})` → false (before: false); `isST({producer:'X', producerFile:'stgirder.html'})` → true (before: true).
 - **Other copies:** index.html `capFromST`, lldf.html `isST`.
+
+## 2026-11-01 — PR: claude/rpt-subloads — Report output tab in the shared report viewer; KaTeX 0.16.9 added for it (SLRP; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SLRP`.
+
+### SLRP. "Report" output tab (shared/report.js, shared/steps.js, KaTeX 0.16.9)   [display only; new CDN library, engineer-approved]
+- **Request (coordinator plan 2026-11-01; engineer decision of the same day):**
+  - A Report output tab in the shared viewer, as Spread Footing (#518), Elastomeric (#531) and the Abutment.
+  - KaTeX 0.16.9 is added to this tool for its Report tab. It is pinned from cdnjs with the same tags as `apps/steel-bridge/index.html`.
+  - The calculation package (Print button) is kept.
+- **Loads:** after the three.js tags:
+  - `<link … KaTeX/0.16.9/katex.min.css>` and `<script … KaTeX/0.16.9/katex.min.js>`;
+  - `<script src="shared/steps.js">` and `<script src="shared/report.js">` (classic scripts, relative path).
+  - Without the CDN (offline), the built-in renderer of `shared/steps.js` sets the equations: the Report tab still works, and this was checked.
+  - Without the `shared` folder, only the Report tab shows a message.
+  - No other tab uses KaTeX.
+- **New code** (one `<script>` block before "start"):
+  - `slrModel()` builds the report model from `MODEL` and the tool's own functions: `phase3`, `combine`, `comboComps`, `unitRes`, `tempRange`, `eqSite`, `brLanes`, `lfOf`, `rxTotals`.
+  - `slrComboStep()` works one factored effect of one limit state from that limit state's components (`comboComps`), with the same rules as `combine`:
+    - for a permanent load, the maximum or minimum γ by the sign of the effect;
+    - for LL + IM, γ_LL times the live-load maximum or minimum;
+    - for an optional load, the extreme of its alternatives, or 0;
+    - for an alternative load, the extreme of its alternatives.
+  - `slrRender()` mounts the viewer.
+  - `slrGoto()` handles the `[[tab:<tab>~<unit>|open]]` links, through `slGoto`.
+  - `buildTabs`, `showTab` and `renderTab` are wrapped to add the tab, show it and keep it current.
+  - A `beforeprint` listener prints the report.
+- **Sections:**
+  1. **Project and design basis.** The basis lines of the calculation package, and the load factor table (`lfOf` per limit state).
+  2. **Bridge and substructure units.** Spans, girders, deck, design lanes; the units with the self-weight of each component; the superstructure DC / DW per unit.
+  3. **Bridge-wide load parameters (worked):**
+     - BR: Σ m, then the per-lane candidates and the total per continuous segment (Art. 3.6.4);
+     - CE: C = 4/3 v²/(g R), when a curve is entered (Eq. 3.6.3-1);
+     - wind on the superstructure for each wind limit state: K_z, P_z = 2.56×10⁻⁶ V² K_z G C_D, w_0 = P_z D (Art. 3.8.1.2);
+     - the design temperature rise and fall.
+  4. **One section per unit.** Every limit state is worked at the unit's resultant section (the section of the D11 results lines): P maximum and minimum, M_t maximum, M_l maximum, each as the sum of that limit state's loads. Then the limit-state table at the resultant, with every effect max and min.
+  5. **Governing design forces.** The Strength / Extreme Event envelope at each resultant, with the governing limit state and a § link to its worked step.
+  6. **Input checks and assumptions.**
+  7. **References** (`SL_REFS`).
+- **Values:**
+  - Every step `value` is the tool's own value: `combine(k)[id].max / min[q]`, `p3.br`, `p3.ce.Cf`, `p3.ws[key].kz / Pz / w0`, `tempRange().rise / fall`.
+  - The substituted terms of a combination are the components of `comboComps` at that section, to 2 decimals. In the tests they add up to the value within the rounding of the terms.
+  - The unfactored loads at every section stay on their own tabs. Each unit section links to them: Dead load, Live load, Braking and centrifugal, Wind, Temperature, Water and scour, Ice, Seismic, Vessel collision, Vehicle collision.
+- **Tab state:**
+  - The Report tab is added after Manual by the `buildTabs` wrapper. It is not in `TABS`, so the package chapters and the DXF are unchanged.
+  - It is shown on top of the saved tab (`SLR.on`, memory only). `P.ui.tab` never takes a new value, so the autosave, the project file and the hand-offs are unchanged.
+  - Any other tab switches it off.
+  - `recompute` (through `renderTab`) rebuilds the report while the tab is shown.
+- **Print:**
+  - The viewer's "Print report" button and Ctrl+P while the Report tab is shown print the report alone.
+  - The printed report has a title block (Project / Project No. / Calculated by / Date / Checked by / Checked date "—": the tool has no checked-date field), contents, a running header and "Page X of Y".
+  - The header Print button still prints the calculation package (D11), unchanged.
+  - While the package is printing (`body.printing`), the Report listener stands aside.
+- **Saved data:** nothing new. Collapsed sections are kept in memory only (`SLR.closed`).
+- **How verified (headless Chromium; KaTeX 0.16.9 and three.js r128 served from tests/libs):**
+  - **5 projects:**
+    - default: three spans, two abutments, a multi-column bent and a hammerhead;
+    - MassDOT owner with title-block data;
+    - seismic (22 S_a values, site class C);
+    - water and ice at Pier 1;
+    - a curve (R = 1200 ft, 55 mph) with Pier 2 as a wall pier.
+  - **Every report:**
+    - 137 or 138 steps in 36 or 37 topics;
+    - 0 unresolved or duplicate references, 0 KaTeX errors;
+    - no NaN / undefined / Infinity on screen or in `SharedReport.text()`;
+    - 0 console errors.
+  - **Step values:**
+    - **All** 120 combination steps per project equal `combine(k)` exactly (`===`), plus the bridge-wide steps (Σm, BR per lane and total, K_z, P_z, w_0 per limit state, C, ΔT): 137 or 138 values checked per project.
+    - The substituted terms of every combination step add up to its value within the rounding of the terms (2 decimals).
+  - `P` and every unit's `combine(k)` are unchanged by building the report. The Report tab is not saved in `P.ui.tab`. A report link opens the Combinations tab.
+  - **Offline (KaTeX blocked):** the report renders with the built-in renderer. 0 KaTeX elements, same text, same values.
+  - **origin/main vs the branch** on the 5 projects: identical.
+    - Compared: `P`; `combine(k)` of every unit; the sidebar; the strip; the text of the 15 output tabs (Summary to Manual, the 3D view excepted); the calculation package text (`rptPrint`).
+  - **Print:** Ctrl+P on the Report tab gives `body.rp-printing`, the report alone and the @page running header. The package's `sl-page` header is not applied. A 23-page PDF was checked.
+  - **At 390 px** the Report tab is no wider than the Summary tab. Both are 831 px wide: the tool's two-panel layout does not stack, which is the existing layout and is not changed here (coordinator plan item 7).
+  - `node tests/check-syntax.mjs "Bridge Substructure Loading.html"` passes. `shared/report.js` and `shared/steps.js` are unchanged.
+- **Other copies:** none. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
+- **Open items:**
+  - The unfactored loads of each unit (dead load at each bearing, live load arrangements, wind on each substructure component, temperature movements and forces, water, ice, seismic, collisions) are worked on their own tabs and linked from the report. They are not repeated as steps. Step writers for them can be added later from `phase3` to `phase6`.
+  - Cap, column and footing sections other than the resultant are tabulated on the Combinations tab (with the concurrent sets), not in the report.
+
+Diff (`Bridge Substructure Loading.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Bridge Substructure Loading.html b/Bridge Substructure Loading.html
+index 6f6ab6e..b034f69 100644
+--- a/Bridge Substructure Loading.html	
++++ b/Bridge Substructure Loading.html	
+@@ -184,0 +185,5 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
++<!-- SLRP: KaTeX for the Report tab (engineer-approved 2026-11-01; same pinned tags as apps/steel-bridge/index.html), then the shared worked steps and report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
++<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -3850,0 +3856,154 @@ function slReport() {
++</script>
++<script>
++/* =====================================================================
++   SLRP (2026-11-01): Report output tab in the shared report viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page
++   numbers). Worked steps are shared/steps.js steps (equation -> substituted values -> result), grouped by
++   topic with SharedSteps.group; KaTeX 0.16.9 sets them (engineer-approved for this Report tab, 2026-11-01),
++   the built-in renderer of shared/steps.js when the CDN is not reachable. Every value is a value the tool
++   has already computed (MODEL, unitRes, phase3, combine, comboComps, tempRange, eqSite); only the
++   substitution strings are formatted here. The bridge-wide load parameters are worked (lanes, braking,
++   centrifugal, wind pressure); each unit's factored effects at its resultant are worked load by load for
++   every limit state (the combination table's own components and factors), and the unfactored loads link
++   to the tab where they are worked. Nothing is saved: the Report tab is not stored in P.ui.tab (SLR.on,
++   memory only). The calculation package (Print button) is unchanged.
++   ===================================================================== */
++const SLR = { on: false, closed: new Set(), api: null, doc: null };
++const slrN = (x, d) => SharedSteps.n(+x, d == null ? 2 : d);
++const slrP = (x, d) => (+x < 0 ? '(' + slrN(x, d) + ')' : slrN(x, d));
++const slrPlain = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, '_$1').replace(/<sup>(.*?)<\/sup>/g, '^$1').replace(/<br\s*\/?>/g, '; ').replace(/<[^>]+>/g, '')
++  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
++const slrTx = s => String(s == null ? '' : s).replace(/[\\{}$&#%_^~]/g, '');   // text placed inside \text{}
++const slrCell = (v, d) => ({ t: (typeof v === 'number' && isFinite(v)) ? slrN(v, d) : String(v == null || v === '' ? '—' : v), n: typeof v === 'number' });
++const SLR_AA = 'AASHTO LRFD 10th Ed. ';
++/* a link back to a tab of the tool (and unit): the text reads in print, the link itself shows on screen only */
++const slrTab = (tb, k) => slTabName(tb) + ' tab' + (k != null && P.units[k] ? ', ' + P.units[k].name : '') + ' [[tab:' + tb + (k != null ? '~' + k : '') + '|open]]';
++function slrTopics(scope, list, opt) {
++  const L = list.filter(t => t.w.steps.length), steps = [].concat(...L.map(t => t.w.steps));
++  const topics = L.map(t => { const g = SharedSteps.group(t.w.steps, [{ key: 'k', title: t.title, ref: t.ref, ids: () => true }], { strip: false })[0];
++    return { title: t.title, ref: t.ref || '', n: t.w.steps.length, cls: g.cls, chip: g.chip, res: g.res }; });
++  return Object.assign({ type: 'steps', scope, steps, topics }, opt || {});
++}
++const slrTopic = (list, key, title, ref) => { const w = SharedSteps.work(key); w.key = key; list.push({ title, ref, w }); return w; };
++/* the resultant effects of unit k (the lowest resultant section, as the D11 results lines): q indices of P, M_t, M_l, V_t, V_l */
++function slrResQ(defs) {
++  let qi = -1; defs.forEach((d, j) => { if (d.grp === 'Resultant' && /^Axial/.test(d.label)) qi = j; }); if (qi < 0) return null;
++  const loc = defs[qi].label.replace(/^Axial, /, ''), f = lab => defs.findIndex(d => d.grp === 'Resultant' && d.label === lab + ', ' + loc);
++  return { loc, q: [['P', 'P', qi], ['Mt', 'M_{t}', f('M<sub>t</sub>')], ['Ml', 'M_{l}', f('M<sub>l</sub>')], ['Vt', 'V_{t}', f('V<sub>t</sub>')], ['Vl', 'V_{l}', f('V<sub>l</sub>')]].filter(x => x[2] >= 0) };
++}
++/* one factored effect of a limit state, worked from the combination's own components (comboComps): sign s = +1 maximum, −1 minimum */
++function slrComboStep(w, k, c, q, s, sym, d, X, val) {
++  const terms = [], names = []; let sum = 0;
++  X.comps.forEach(cp => {
++    if (cp.t === 'perm') { const v = cp.v[q], g = (s > 0) === (v >= 0) ? cp.g[0] : cp.g[1]; if (!v) return; terms.push(slrN(g, 2) + '\\cdot ' + slrP(v, 2)); names.push('\\gamma\\,\\text{' + slrTx(cp.nm) + '}'); sum += g * v; }
++    else if (cp.t === 'fix') { const v = cp.v[q]; if (!v) return; terms.push(slrP(v, 2)); names.push('\\text{' + slrTx(cp.nm) + '}'); sum += v; }
++    else if (cp.t === 'll') { const v = X.LL ? (s > 0 ? X.LL.best[q].max.v : X.LL.best[q].min.v) : 0; if (!v) return; terms.push(slrN(cp.g, 2) + '\\cdot ' + slrP(v, 2)); names.push('\\gamma_{LL}(\\text{LL + IM})'); sum += cp.g * v; }
++    else { let x = cp.t === 'opt' ? 0 : (s > 0 ? -Infinity : Infinity); cp.alts.forEach(v => { x = s > 0 ? Math.max(x, v[q]) : Math.min(x, v[q]); }); if (!x || !isFinite(x)) return; terms.push(slrP(x, 2)); names.push('\\text{' + slrTx(cp.nm) + '}'); sum += x; }
++  });
++  w.add({ id: sym.replace(/[^A-Za-z]/g, '') + (s > 0 ? 'max' : 'min'),   // the topic's work prefix is c.id: key <scope>/<c.id>.<P|Mt|Ml><max|min>
++    label: c.name + ', ' + (s > 0 ? 'maximum' : 'minimum'), sym: /_\{[^}]*\}$/.test(sym) ? sym.replace(/\}$/, ',' + (s > 0 ? 'max' : 'min') + '}') : sym + '_{' + (s > 0 ? 'max' : 'min') + '}',   // M_{t} -> M_{t,max}
++    eq: names.length ? names.join(' + ') : '', sub: terms.length ? terms.join(' + ') : '0', value: val, unit: d.u, d: d.u === 'kip-ft' ? 0 : 1 });
++  return sum;
++}
++function slrModel() {
++  const G = MODEL.G, m = P.meta || {}, secs = [], bad = needOK();
++  /* ---------- 1. Project and design basis ---------- */
++  { const T0 = tempRange(), S0 = eqSite(), BL = G && !G.E.length ? brLanes(G) : null, rows = [['Project', m.name || '—'], ['Project number', m.num || '—'], ['Designed / checked', (m.by || '—') + ' / ' + (m.chk || '—') + ', ' + (m.date || '—')],
++      ['Specification', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3' + (isMass() ? '; MassDOT LRFD Bridge Manual, Part I, Chapter 3 (owner MassDOT)' : '')]];
++    if (BL) rows.push(['Live load', 'HL-93, IM ' + slrN(nz(P.br.IM), 0) + ' %, ' + G.NL + ' design lanes, braking ' + BL.n + ' lane(s) in one direction (' + BL.why + ')']);
++    rows.push(['Wind', 'V = ' + slrN(nz(P.br.V), 0) + ' mph (Strength III), exposure ' + (P.br.exp || 'C') + ', G = ' + slrN(nz(P.br.Gf) || 1) + ', C_D ' + slrN(nz(P.br.CDsup) || 1.3) + ' (superstructure) / ' + slrN(nz(P.br.CDsub) || 1.6) + ' (substructure)'],
++      ['Temperature', 'Procedure ' + T0.proc + ', ' + slrN(T0.tmin, 0) + ' to ' + slrN(T0.tmax, 0) + ' °F, setting ' + slrN(T0.ts, 0) + ' °F, α = ' + slrN(T0.a * 1e6, 1) + '×10⁻⁶/°F, μ = ' + slrN(nz(P.br.mu))],
++      ['Seismic', S0.ok ? 'AASHTO-USGS risk-targeted S_a (3.10.4.1), site class ' + S0.sc + ': A_s = ' + slrN(S0.As, 3) + ', S_D1 = ' + slrN(S0.SD1, 3) + ', zone ' + S0.zone : 'not entered for the 10th Ed.']);
++    const lf = COMBOS.map(c => { const L = lfOf(c); return [c.name, slrN(L.dc[0]) + ' / ' + slrN(L.dc[1]), slrN(L.dw[0]) + ' / ' + slrN(L.dw[1]), L.ll ? slrN(L.ll) : c.llEq ? 'γ_EQ' : '—', L.gws ? slrN(L.gws) : '—', L.wl ? slrN(L.wl) : '—', L.tu ? slrN(L.tu) : '—']; });
++    secs.push({ title: 'Project and design basis', subs: [{ title: 'Project and basis', items: [{ type: 'kv', rows }, { type: 'note', text: 'Units: kip, ft, kip-ft unless noted. Every value in this report is the value the tool computes on its tabs; each load is worked on its own tab (links below). Entered on the Project and Bridge input tabs.' }] },
++      { title: 'Load factors', items: [{ type: 'table', head: ['Limit state', 'DC max / min', 'DW max / min', 'LL', 'WS', 'WL', 'TU'], rows: lf }, { type: 'note', text: 'AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2 and 3.4.1-6; a value entered on the Bridge tab replaces the default. Earth-load factors as on the Earth loads tab.' }] }] });
++  }
++  if (!G || G.E.length || bad) {
++    secs.push({ title: 'Input checks', subs: [{ title: 'Items to fix', items: (MODEL.C || []).filter(c => c[0] === 'fail').map(c => ({ type: 'note', warn: true, text: slrPlain(c[1] + ': ' + c[2]) })).concat([{ type: 'note', text: bad || 'Fix the input errors on the Summary tab.' }]) }] });
++    return slrDoc(secs);
++  }
++  /* ---------- 2. Bridge and substructure units ---------- */
++  { const rx = rxTotals(G);
++    secs.push({ title: 'Bridge and substructure units', subs: [
++      { title: 'Bridge', items: [{ type: 'kv', rows: [['Spans', G.spans.map(s => slrN(s, 1)).join(' + ') + ' ft (total ' + slrN(G.L, 1) + ' ft)'], ['Girders', G.nb + ' at ' + [...new Set(G.bays.map(b => slrN(b)))].join(', ') + ' ft'], ['Deck width / roadway between barriers', slrN(G.Wd) + ' / ' + slrN(G.rw) + ' ft'], ['Design lanes N_L (3.6.1.1.1)', String(G.NL)], ['Superstructure depth', slrN(G.dSup) + ' ft']] }] },
++      { title: 'Substructure units and self-weight', items: [{ type: 'table', head: ['Unit', 'Type', 'Component', 'Volume (ft³)', 'Weight (kip)'], rows: [].concat(...MODEL.UG.map((R, k) => R.comps.map((c, i) => [i ? '' : P.units[k].name, i ? '' : TYPE_NAME[P.units[k].type], c.name, c.steel ? 'steel' : slrCell(c.vol, 1), slrCell(c.wt, 2)]))) },
++        { type: 'table', caption: 'Superstructure reactions summed over the girders (unfactored)', head: ['Unit', 'DC (kip)', 'DW (kip)'], rows: P.units.map((u, k) => [u.name, rx[k].n ? slrCell(rx[k].dc, 1) : '—', rx[k].n ? slrCell(rx[k].dw, 1) : '—']) },
++        { type: 'note', text: 'Self-weight with w_c = ' + slrN(nz(P.br.wc), 3) + ' kcf, as on the ' + slrTab('summary') + '.' }] }] });
++  }
++  /* ---------- 3. Bridge-wide live, braking, centrifugal and wind parameters ---------- */
++  { const k0 = P.units.findIndex((u, k) => { const p = phase3(k); return p && !p.err; }), T = [];
++    if (k0 >= 0) { const p3 = phase3(k0), { BL, bm, brSeg } = p3.br;
++      let w = slrTopic(T, 'br', 'Braking force BR', SLR_AA + 'Art. 3.6.4');
++      w.add({ id: 'm', label: 'Lanes in one direction ' + BL.n + ' with multiple presence (the largest n·m)', sym: '\\sum m', eq: '\\max(n\\,m_{n})', sub: '', value: bm.f, unit: '', d: 2, ref: SLR_AA + 'Table 3.6.1.1.2-1' });
++      brSeg.forEach((s, i) => { w.add({ id: 'lane' + i, label: 'Segment ' + (i + 1) + ' (L = ' + slrN(s.Ls, 1) + ' ft): per lane, the greatest of 25 % of the truck (72 kip) or tandem (50 kip) axles and 5 % of truck or tandem + lane (0.64 klf)',
++          sym: 'BR_{lane}', eq: '\\max(0.25\\cdot 72,\\, 0.25\\cdot 50,\\, 0.05(72 + 0.64L),\\, 0.05(50 + 0.64L))', sub: '\\max(' + s.c.map(x => slrN(x[1], 2)).join(',\\,') + ')', value: s.lane, unit: 'kip', d: 2, note: 'governs: ' + s.g[0] });
++        w.add({ id: 'tot' + i, label: 'Segment ' + (i + 1) + ': braking force, applied 6 ft above the deck', sym: 'BR', eq: 'BR_{lane}\\sum m', sub: slrN(s.lane, 2) + '\\cdot ' + slrN(bm.f, 2), value: s.tot, unit: 'kip', d: 2 }); });
++      if (p3.ce) { const ce = p3.ce; w = slrTopic(T, 'ce', 'Centrifugal force CE', SLR_AA + 'Art. 3.6.3');
++        w.add({ id: 'Cf', label: 'Centrifugal factor (v = ' + slrN(ce.vs, 2) + ' ft/s, R = ' + slrN(ce.Rc, 0) + ' ft)', sym: 'C', eq: '\\frac{4}{3}\\frac{v^{2}}{g R}', sub: '\\frac{4}{3}\\frac{' + slrN(ce.vs, 2) + '^{2}}{32.2\\cdot ' + slrN(ce.Rc, 0) + '}', value: ce.Cf, unit: '', d: 4, ref: SLR_AA + 'Eq. 3.6.3-1' }); }
++      Object.keys(LS).forEach(key => { const W = p3.ws[key]; if (!W || !(W.V > 0)) return; w = slrTopic(T, 'ws' + key, 'Wind on the superstructure, ' + LS[key], SLR_AA + 'Art. 3.8.1.2');
++        w.add({ id: 'Kz', label: 'Pressure exposure and elevation coefficient at Z = ' + slrN(W.Z) + ' ft (exposure ' + (P.br.exp || 'C') + ')', sym: 'K_{z}', eq: '', sub: '', value: W.kz, unit: '', d: 3, ref: SLR_AA + 'Eqs. 3.8.1.2.1-2 to -4' });
++        w.add({ id: 'Pz', label: 'Design wind pressure (V = ' + slrN(W.V, 0) + ' mph)', sym: 'P_{z}', eq: '2.56\\times 10^{\\minus 6} V^{2} K_{z} G C_{D}', sub: '2.56\\times 10^{\\minus 6}\\cdot ' + slrN(W.V, 0) + '^{2}\\cdot ' + slrN(W.kz, 3) + '\\cdot ' + slrN(nz(P.br.Gf) || 1) + '\\cdot ' + slrN(nz(P.br.CDsup) || 1.3), value: W.Pz, unit: 'ksf', d: 4, ref: SLR_AA + 'Eq. 3.8.1.2.1-1' });
++        w.add({ id: 'w', label: 'Transverse load on the exposed depth D = ' + slrN(W.D) + ' ft (normal wind)', sym: 'w_{0}', eq: 'P_{z} D', sub: slrN(W.Pz, 4) + '\\cdot ' + slrN(W.D), value: W.w0, unit: 'klf', d: 3, note: key === 'III' && W.wT[0] > W.w0 ? 'Strength III at 0°: the 0.30 klf minimum governs (w = ' + slrN(W.wT[0], 3) + ' klf)' : '' }); }); }
++    const T0 = tempRange(), w2 = slrTopic(T, 'tu', 'Design temperature range', T0.proc === 'B' ? SLR_AA + 'Art. 3.12.2.2' : T0.proc === 'A' ? SLR_AA + 'Art. 3.12.2.1' : 'MassDOT LRFD Bridge Manual §3.1.8');
++    w2.add({ id: 'rise', label: 'Temperature rise from the setting temperature', sym: '\\Delta T_{rise}', eq: 'T_{max} \\minus T_{set}', sub: slrP(T0.tmax, 0) + ' \\minus ' + slrP(T0.ts, 0), value: T0.rise, unit: '°F', d: 0 });
++    w2.add({ id: 'fall', label: 'Temperature fall from the setting temperature', sym: '\\Delta T_{fall}', eq: 'T_{set} \\minus T_{min}', sub: slrN(T0.ts, 0) + ' \\minus ' + slrP(T0.tmin, 0), value: T0.fall, unit: '°F', d: 0 });
++    secs.push({ title: 'Bridge-wide load parameters', subs: [{ title: 'Braking, centrifugal, wind and temperature', items: [slrTopics('bw', T, { title: 'Worked steps' }), { type: 'note', text: 'The distribution of these forces to the units is on the ' + slrTab('dist') + '; the forces at each unit on the ' + slrTab('brce', P.ui.sel) + ', ' + slrTab('wind', P.ui.sel) + ' and ' + slrTab('temp', P.ui.sel) + '.' }] }] });
++  }
++  /* ---------- 4.. one section per unit: factored effects at the resultant, every limit state worked from its loads ---------- */
++  const gov = [];
++  P.units.forEach((u, k) => {
++    let r, C; try { r = unitRes(k); C = combine(k); } catch (e) { r = null; }
++    if (!r || r.err || !C) { secs.push({ title: u.name + ': ' + TYPE_NAME[u.type], subs: [{ title: 'Not computed', items: [{ type: 'note', warn: true, text: (r && r.err) || 'The combinations of this unit could not be computed; see the ' + slTabName('combo') + ' tab.' }] }] }); return; }
++    const defs = r.UM.defs, RQ = slrResQ(defs), subs = [];
++    if (!RQ) { secs.push({ title: u.name + ': ' + TYPE_NAME[u.type], subs: [{ title: 'Combinations', items: [{ type: 'note', text: 'No resultant section in this unit; see the ' + slrTab('combo', k) + '.' }] }] }); return; }
++    const scope = 'u' + k, T = [], CV = COMBOS.filter(c => C[c.id]);
++    CV.forEach(c => { const X = comboComps(k, c); if (!X) return; const w = slrTopic(T, c.id, c.name, SLR_AA + 'Table 3.4.1-1');
++      RQ.q.filter(x => x[0] === 'P' || x[0] === 'Mt' || x[0] === 'Ml').forEach(([nm, sym, q]) => { [1, -1].forEach(s => { if (nm !== 'P' && s < 0) return; slrComboStep(w, k, c, q, s, sym, defs[q], X, s > 0 ? C[c.id].max[q] : C[c.id].min[q]); }); }); });
++    subs.push({ title: 'Factored effects at the resultant, ' + slrPlain(RQ.loc), items: [{ type: 'note', text: 'Each limit state is the sum of its loads at the resultant section, with the factors of §1.2 (η = 1.0): a permanent load (DC, DW, EH, EV, ES) with the maximum or minimum γ_p that gives the extreme, LL + IM with γ_LL; BR, CE, LS, WS + WL, TU + FR, WA, IC, EQ, CV and CT are shown already factored (the governing case of each). Unfactored loads: ' + ['dl', 'll', 'brce', 'wind', 'temp', 'water', 'ice', 'eq', 'cv', 'ct'].map(t => slrTab(t, k)).join('; ') + '.' }, slrTopics(scope, T, { title: 'Worked steps' })] });
++    const env = RQ.q.map(([nm, sym, q]) => { const d = defs[q], dd = d.u === 'kip-ft' ? 0 : 1; gov.push([u.name, slrPlain(d.label), slrCell(C.env.max[q], dd), C.env.gmx[q] || '—', slrCell(C.env.min[q], dd), C.env.gmn[q] || '—', { t: '', key: CV.length && (nm === 'P' || nm === 'Mt' || nm === 'Ml') ? scope + '/' + (CV.find(c => c.name === C.env.gmx[q]) || CV[0]).id + '.' + sym.replace(/[^A-Za-z]/g, '') + 'max' : undefined }]);
++      return q; });
++    const lsRows = key => CV.map(c => [c.name, ...RQ.q.map(([nm, sym, q]) => slrCell(C[c.id][key][q], defs[q].u === 'kip-ft' ? 0 : 1))]), effH = RQ.q.map(([nm, sym, q]) => slrPlain(defs[q].label).replace(/, .*$/, '') + ' (' + defs[q].u + ')');
++    subs.push({ title: 'Limit-state table at the resultant', items: [{ type: 'table', wide: true, caption: 'Maximum effects at the resultant, ' + slrPlain(RQ.loc), head: ['Limit state', ...effH], rows: lsRows('max') },
++      { type: 'table', wide: true, caption: 'Minimum effects at the resultant, ' + slrPlain(RQ.loc), head: ['Limit state', ...effH], rows: lsRows('min') },
++      { type: 'note', text: 'Every section of the unit (cap, columns, footing) is tabulated on the ' + slrTab('combo', k) + ', with the concurrent design sets.' }] });
++    secs.push({ title: u.name + ': ' + TYPE_NAME[u.type], subs });
++  });
++  /* ---------- governing design forces ---------- */
++  secs.push({ title: 'Governing design forces', subs: [{ title: 'Strength and Extreme Event envelopes at each unit resultant', items: [{ type: 'table', wide: true, head: ['Unit', 'Effect', 'Max', 'Limit state', 'Min', 'Limit state', 'Worked in'], rows: gov.map(g => g[6].key ? g : g.slice(0, 6).concat(['—'])) }] }] });
++  /* ---------- checks, assumptions, references ---------- */
++  const C0 = MODEL.C || [], order = { fail: 0, warn: 1, info: 2, pass: 3 };
++  secs.push({ title: 'Input checks and assumptions', subs: [{ title: 'Input checks', items: C0.length ? C0.slice().sort((a, b) => order[a[0]] - order[b[0]]).map(c => ({ type: 'note', warn: c[0] === 'fail' || c[0] === 'warn', text: ({ fail: 'Fix', warn: 'Check', info: 'Note', pass: 'OK' }[c[0]]) + ' — ' + slrPlain(c[1]) + ': ' + slrPlain(c[2]) })) : [{ type: 'note', text: 'No input checks.' }] },
++    { title: 'Engineering assumptions', items: [{ type: 'note', text: slrPlain(m.notes || '—') }] }] });
++  return slrDoc(secs);
++}
++function slrDoc(secs) {
++  const m = P.meta || {};
++  secs.push({ title: 'References', subs: [{ title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: SL_REFS.map(([a, b]) => [a || '', slrPlain(b)]) }] }] });
++  return { title: 'Bridge Substructure Loads — Calculation Report', subtitle: m.name || 'Untitled', code: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3' + (isMass() ? ' · MassDOT LRFD Bridge Manual' : ''),
++    info: [['Project', m.name], ['Project No.', m.num], ['Calculated by', m.by], ['Date', m.date], ['Checked by', m.chk], ['Checked date', '']],
++    head: { left: 'Project No. ' + (m.num || '—') + ' — ' + String(m.name || '—').slice(0, 40), right: 'Computed: ' + (m.by || '—') + ' ' + (m.date || '') + ' · Checked: ' + (m.chk || '—'), foot: (m.name || 'Untitled') + ' (SubLoads: Bridge Substructure Loads)' },
++    sections: secs };
++}
++function slrRender() {
++  const T = document.getElementById('tab-report'); if (!T) return;
++  if (!window.SharedReport || !window.SharedSteps) { T.innerHTML = '<div class="card"><div class="card-b">The Report tab needs the shared folder (shared/steps.js, shared/report.js) next to this file.</div></div>'; SLR.api = null; SLR.doc = null; return; }
++  let M; try { M = slrModel(); } catch (e) { console.error(e); T.innerHTML = '<div class="card"><div class="card-b">Report error: ' + esc(e && e.message) + '</div></div>'; SLR.api = null; SLR.doc = null; return; }
++  SLR.api = SharedReport.mount(T, M, { closed: SLR.closed, onGoto: slrGoto }); SLR.doc = SLR.api.doc;
++}
++/* [[tab:<tab>~<unit>|…]] links of the report: the tool's tab, for that unit (slGoto) */
++function slrGoto(name) { const [t, k] = String(name).split('~'); slGoto(t, k == null ? '' : k, ''); }
++{ const bt = buildTabs; buildTabs = function () { bt();   // the Report tab after Manual (not in TABS: never stored in P.ui.tab)
++    $('#tab-bar').insertAdjacentHTML('beforeend', '<span class="tab-sep"></span><button type="button" class="tab-btn" data-tab="report">Report</button>');
++    if (!document.getElementById('tab-report')) { const d = document.createElement('div'); d.className = 'tab-panel'; d.id = 'tab-report'; $('#tab-panels').appendChild(d); } };
++  const st = showTab; showTab = function (id) { if (id === 'report') { SLR.on = true; document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'report')); document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-report')); slrRender(); return; }
++    SLR.on = false; st(id); };
++  const rt = renderTab; renderTab = function () { rt(); if (SLR.on) slrRender(); }; }
++/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); the Print button still prints the calculation package */
++window.addEventListener('beforeprint', () => {
++  if (!SLR.on || !SLR.doc || document.body.classList.contains('rp-printing') || document.body.classList.contains('printing')) return;
++  let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
++  box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(SLR.doc, { lazy: false }) + '</article></div>';
++  document.body.classList.add('rp-printing');
++});
++</script>
++<script>
+```

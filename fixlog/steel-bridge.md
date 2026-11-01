@@ -2795,6 +2795,53 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
 ### Other copies
 - None (ST-Girder's code is read only, not changed).
 
+## 2026-11-01 — PR: sbd-handoffs — Cross-tool hand-offs: projectMeta, lldf pull, superReactions (B2)
+### What GirderDetail does, and what this app now does (HANDOFF.md §4.1, §4.3, §4.4; keys and formats unchanged, CLAUDE.md §5)
+- projectMeta: GirderDetail's `Shared project info` script ("Use shared project info" / "Share project info"). Ported in `ui/handoffs.js`
+  (`pmFields`, `pmPayload`, `pmPlan`); fields projectName → project.name, jobNo → number, client → owner (Client name), preparedBy →
+  designer, checkedBy → checker, date → date; bridgeId and location: no field here, sent blank.
+- lldf: GirderDetail `gdLldfPlan` / `gdLldfDialog` / `gdLldfApply` (anchor `const GD_LLDF =`) ported as `lldfPlan`, a `<dialog>` and
+  `lldfApply`: the same refusals (unit, span count, perFootStrip, beam basis with another girder count, missing gM/gV), warnings (span
+  lengths > 0.5 ft, girder count, cross-section type, skew > 0.5°, no fatigue factors, no negative factors) and mapping (governingBySpan[i]
+  to span i when complete for every span, else governing; governingNeg.gM to every pier). Receiver id `steelbridge` (new adoption key
+  `bridgeSuite.v1.lldf.adopted.steelbridge`, same format). GirderDetail writes its manual factors (sa.dfm, sa.dfSrc = 'manual'); here:
+  new optional field `girders[i].dfPull` (engine/model.js header), read by `engine/analysis.js dfOf`.
+- superReactions: GirderDetail `gdSrPayload` (anchor `const GD_SR =`) ported as `srPayload`; the same envelope, supports (Abut. 1, Pier k,
+  Abut. 2), girders G1…Gn with position, DC1/DC2/DW (and UT/UF), allGirders, ownerRules, utilities, notes; channel key plus the copy
+  `superReactions.by.girderdetail`. producer "Steel Bridge Design", producerFile "apps/steel-bridge/index.html".
+- Not ported: girderDemands (GirderDetail → ST-Girder inside the old app; this app has both roles) and the PlateLine → GirderDetail inbox
+  (`girderdetail_inbox_v1`, internal to the old app; this app is one model).
+### §4 callout (calculation path: distribution factors)
+- `engine/analysis.js dfOf(P, g, ns, mod)`: before, the factors came from (1) girder.df, (2) the loads module, (3) girder.dfManual
+  (now `dfBase`, unchanged). After: `dfOf` = `dfBase`, then, only when `girders[i].dfPull` exists with `use !== false` and as many spans,
+  each of gM, gV, fatM, fatV per span and gM per pier is the pulled value where the payload had it (positive number), else the
+  `dfBase` value; gDef always `dfBase`. Source text: "pulled from LL & DL Distribution (lldf.html), produced …; for G2, LL & DL interior
+  envelope, per span[; fatM, fatV not in the hand-off: from …]; deflection factor from …" (Analysis tab card and report "Distribution
+  factors"). No formula, factor or unit changed; a project without dfPull computes exactly as before (test: dfOf deep-equal).
+- Governing provisions: AASHTO LRFD 10th Ed. Art. 4.6.2.2 (distribution factors, computed by lldf.html), 3.6.1.4.3b (fatigue one lane
+  ÷ 1.2), 3.6.1.1.2 (multiple presence, in lldf's gM/gV).
+- Check case (built-in project, plate girder G1 = cross-section girder G2, interior; spans 110-140-110 ft): span 2 g moment pulled as
+  0.800, module 0.6639; at x = 180 ft (span 2 midspan) M_LL+IM = g_M × M_per lane: the per-lane envelope is unchanged and M_LL+IM
+  scales by 0.800 / 0.6639 = 1.20500 (tests/engine/handoffs.test.mjs). Proof of path: LL & DL factors equal to the module's (to 4
+  decimals) give the module's factors (|Δ| < 5e-5).
+- superReactions hand checks: G2 (own line) reactions = its analysis' stage reactions to 0.001 kip; Σ DW reactions = w_DW × 360 ft for
+  every girder; G3 (borrowed plates) DC1/DC2/DW and LL+IM reactions equal a full run of that line. Built-in project, kip (DC1/DC2/DW):
+  Abut. 1 G1 46.19/13.41/8.16, G2 55.36/9.85/8.16, G3 55.36/6.29/8.16; Pier 1 G2 204.68/35.24/29.19.
+- Speed: a cross-section girder that borrows a plate girder's plates takes the HL-93 per-lane reactions (and pedestrian influence areas)
+  from that plate girder's full run × its own g_V (larger of adjacent spans, as analysis llR) and its own w_PL, and its dead loads from
+  its own run without live load (opt.ll = false): the same values as a full run (tested), without one moving-load run (~20 s) per girder.
+### Decisions recorded (CLAUDE.md §9; decided, not engineering formulas)
+- A cross-section girder with no plate girder of its own uses the plates of the first plate girder of its position, else the first plate
+  girder (GirderDetail had per-type plates from Preliminary sizing); the notes name each borrowed line.
+- The copy key is `by.girderdetail` (Substructure Loading lists only psbeam, mct, girderdetail); during the transition the old and the new
+  app overwrite each other's copy there. Producer text says which app sent it.
+### Files
+- New: `ui/bridgexfer.js` (BridgeXfer v1, verbatim HANDOFF.md §5 copy), `ui/handoffs.js`, `tests/engine/handoffs.test.mjs`.
+- Changed: `engine/analysis.js` (dfOf/dfBase), `engine/model.js` (header comment), `index.html` (two script tags, the Project-tab card,
+  click hook, init), HANDOFF.md (§4 table, §4.1, §4.3, §4.4 notes).
+### Other copies
+- BridgeXfer v1: `apps/steel-bridge/ui/bridgexfer.js` joins the existing verbatim copies (HANDOFF.md §5).
+
 ## 2026-11-01 — PR: shared-lldf-steps (LLST) — the LLDF worked-step writer moved to shared/lldf.js (SharedLLDF.steps); no output change
 ### Where
 - `apps/steel-bridge/engine/lldf.js`: `geometrySteps`, `skewSteps`, `empSteps`, `leverSteps`, `rigidSteps`, `member`, `memberSteps`,
@@ -2935,6 +2982,143 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - Studs: `studs.gamFat` is a second "γ Fatigue I (studs)" input on the Fatigue & studs tab (GirderDetail's sc.gam.fat); `engine/studs.js` hand-off
   path `gam: { fI: 1.75, fII: … }`. Question for the engineer: should the studs also take `fatigue.gam.fI`?
 - Cross-frames wind γ_WS = 1.0η (OWN7).
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: claude/sbd-splices-gamma — Field splices use the project's load factors (SPGAM; identical at the defaults; an old project's differing saved factors no longer used, shown); stale "demand choice is not saved" notes (WDNS)
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `SPGAM`.
+
+### 1. Splices: the project's load factors (engineer-approved 2026-11-01, "one source", the Welds pattern of #525)
+- `engine/splices.js`: new `projGam(P)` = `{ dcMax, dcMin, dwMax, dwMin, llS, llSv }` from `SBDFlexure.factors()` (`dc, dcMin, dw, dwMin, ll, sll`:
+  1.25, 0.90, 1.50, 0.65, 1.75, 1.30, Tables 3.4.1-1, -2, the Flexure tab's), `fat` = `P.fatigue.gam.fI` (1.75 without one), `{ dc1C, clC }` from
+  `SBDConstructibility.factors()` (`cdc, ccl`: 1.25, 1.50, 3.4.2.1, the Constructibility tab's); without those modules loaded, the same numbers.
+  `settings(P)`: before `gam: { ...d.gam, ...(s.gam || {}) }`; after `gam: projGam(P)`. The owner's η and m are applied on top by the engine (env), as before.
+  Exported `projGam`. Every caller goes through `settings` (the Splices tab, the Report, Auto design).
+- `engine/model.js` `validate`: before `Object.entries(Q.gam || {}).forEach(([k, v]) => pos(v, `splices.gam.${k}`, …))`; after: not checked (comment), so a
+  saved value that can no longer be edited cannot block the calculation. `P.splices.gam` stays in the file unchanged (CLAUDE.md §5); doc comment notes it is unused.
+- `ui/splices.js`: the nine `splices.gam.*` inputs of the "Load factors and clearances" card are replaced by a read-only table of the project's factors
+  with links (Tables 3.4.1-1, -2 → Flexure tab; γ Fatigue I → the Fatigue & studs input field; deck placement → Constructibility tab; η, m → Project tab;
+  `onClick` handles `[data-splgo]`, no input change); `oldGam(P)` lists saved values that differ ("no longer used … (now …)") on the input card and
+  on the output tab. Exported `projGam`, `oldGam`.
+- Governing provisions: AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2, Art. 3.4.2.1, Art. 6.13.6.1.4 (design forces). No factor value of a new
+  project changed (GirderDetail's module defaults = the project's factors).
+- Check case (default project, G1, FS1 at 82.00 ft, Strength I maximum positive flexure, bottom flange; Node, the page's modules):
+  - At the defaults: before = after (all 4 splices of G1, every check, every design, identical).
+  - An old project with saved `splices.gam.llS = 1.5`, `fat = 1.5`: f_b = 0.9(−2.17653) + 0.9(−0.26600) + 0.65(−0.22024) + γ_LL(6.63643) ksi
+    = −2.34144 + γ_LL(6.63643): before γ_LL = 1.5 → 7.6132 ksi; after 1.75 → 9.2723 ksi. Strength I max negative f_b −16.6145 → −18.8197 ksi.
+    Governing strength item unchanged (BF4, P_fy net fracture 397.89/399 = 0.997: the 10th Ed. design force P_fy does not depend on γ); auto-designed
+    plates and bolts unchanged; the tab shows "γ_LL Strength I 1.5 (now 1.75); γ Fatigue I 1.5 (now 1.75)".
+- Tests: `tests/engine/splices.test.mjs` new test (defaults = DEF.gam; saved values kept and unused; Fatigue I from the input; validate no longer blocks).
+
+### 2. Stale "The demand choice is not saved" (WDNS; text only)
+- `ui/welds.js` `render`, the inputs note: "Two fillet welds per flange. The demand choice is not saved." → "… The demand choice is saved with the project
+  (a hand-off file is not)." (saved since #522, `P.demandSrc.wt`).
+- The same stale sentence in the header comments of `ui/welds.js`, `ui/fatigue.js`, `ui/shear.js` corrected (comments only). Every other tab's note
+  checked: Shear, Rating, Splices, Constructibility, Fatigue say "saved" correctly; the Report tab's source is not saved (correct).
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: sbd-gs1-4 — Cross-section proportion limits and minimum deck reinforcement GS1–GS4, GS22 on the Flexure tab, in the report and in Auto design's full check (B3)
+### Change (calculation: new checks)
+- New `engine/proportions.js` (`window.SBDProportions`): GirderDetail Girder section `checks()` GS1, GS2, GS3, GS4 and GS22 (anchor
+  `id: 'GS1', grp: P1` in "Steel Bridge Design.html"), operation for operation, as check items of each flexure location, with worked steps
+  (ids fx.gs1.ok, fx.gs2.<flange>.bt|bD|tt, fx.gs3.Iy / .ok, fx.gs4.req / .ok / .top, fx.gs22) and `summary(rows)` (largest ratio of each
+  over the girder, warnings).
+- `engine/flexure.js location()`: before `r.checks = checksOf(r, prj);` after
+  `const PR = window.SBDProportions; r.checks = (PR ? PR.items(r, prj) : []).concat(checksOf(r, prj));` and the steps getter
+  `worked(r, prj).concat(PR ? PR.steps(r, prj) : [])`. The header's "Not ported … proportions GS1 to GS4" is updated.
+- `ui/flexure.js`: topic `prop` "Cross-section proportions and minimum deck reinforcement (GS1–GS4)" (ids /^fx\.gs(1|2|3|4|22)(\.|$)/)
+  after "Web depth in compression and hybrid factor"; a line under "Governing" with the largest ratio of each over the girder (links
+  select the location) and the warnings.
+- `report/builders.js flex()`: a sub-section "Cross-section proportions (6.10.2) and minimum deck reinforcement (6.10.1.7)" (table of
+  the largest ratio of each with a link to the location's steps; those locations are detailed), and a line in the governing summary.
+- `engine/autodesign.js partOf`: GS4 and GS22 map to 'deck' (no plate is sized from the deck reinforcement or the A6 method). The full
+  check takes every flexure item in use, so GS1–GS4 now count there (in the page; the Node autodesign tests do not load proportions.js).
+- `index.html`: script tag `engine/proportions.js` before engine/flexure.js.
+### §4 callout
+- New checks, AASHTO LRFD 10th Ed.:
+  - GS1 Art. 6.10.2.1.1, Eq. 6.10.2.1.1-1: D/t_w ≤ 150 (no longitudinal stiffeners); ratio (D/t_w)/150.
+  - GS2 Art. 6.10.2.2, Eqs. 6.10.2.2-1, -2, -3 for each flange: b_f/2t_f ≤ 12.0, b_f ≥ D/6, t_f ≥ 1.1t_w.
+  - GS3 Eq. 6.10.2.2-4: 0.1 ≤ I_yc/I_yt ≤ 10 (compression flange by the region); ratio max(0.1/v, v/10).
+  - GS4 Art. 6.10.1.7: A_r = A_top + A_bot ≥ 0.01 b_eff t_deck at every negative-flexure location (GirderDetail applies it there, not
+    only where the deck stress exceeds φf_r); the top-layer share ≥ 2/3 a warning ("should"). MassDOT Bridge Manual Part I 3.5.1.4
+    (OWN17) cited. Noncomposite: not applicable.
+  - GS22 MassDOT Part I 3.5.1.7 (OWN23): Appendix A6 should not be used: a warning where A6 is the method in use.
+- Before: no such checks in the new app (the limits existed only as Auto design sizing rules). After: as GirderDetail. Results change:
+  each flexure location has these items; a location's governing check and the girder's governing flexure ratio can now be one of them
+  (e.g. GS4 0.989 at the piers of the built-in project, below its flexure governing 1.229 GS7, so the governing ratio is unchanged there).
+- Check case (GirderDetail's built-in rows; tests/engine/proportions.test.mjs): Span 1, D = 60, t_w = 0.5625, top 16 × 0.75, bottom
+  16 × 1.125: GS1 60/0.5625 = 106.67, ratio 0.7111; GS2 top 16/(2·0.75) = 10.667 (0.8889), 16 ≥ 10 (0.625), 0.75 ≥ 0.61875 (0.825);
+  GS3 I_yc = 0.75(16³)/12 = 256, I_yt = 1.125(16³)/12 = 384, 0.667 → ratio 0.15. Pier 1, top 18 × 1.5, bottom 18 × 2, b_eff 114 in,
+  t_deck 8.5 in, A_r = 6.6 + 3.2 = 9.8 in²: GS3 972/729 = 1.333 → 0.1333; GS4 0.01(114)(8.5) = 9.69 ≤ 9.8, ratio 0.98878; top share
+  0.673 ≥ 0.667.
+- Hand-off file as the demand source (no project rebar given to `fromPayload`): GS4 is not evaluated (n/a with the reason): the hand-off's
+  A_r is GirderDetail's Structural analysis input (rebarPct % of b_eff t_s at mid-depth, e.g. 1 % × 96 × 8 = 7.68 in² on builtin G1), not
+  the deck bars that GirderDetail's Girder section checks (its module inputs), so 0.01 b_eff t_deck with t_deck = t_s + 0.5 would always
+  fail (8.16/7.68 = 1.063). `engine/flexure.js fromPayload` marks such a deck `arHandoff: true`; GS1–GS3 are evaluated as usual.
+### Parity
+- 100 gd_*.json payloads + GirderDetail's built-in rows (5 variants: as is, MassDOT with A6, MassDOT 6.10.8, top share 0.5, A_r 5 in²):
+  105 cases, 37,110 locations, 635,819 values (GS1 37,110, GS2 222,660, GS3 37,110, GS4 25,882, GS22 3,236 items): 0 differences,
+  largest relative difference 0 (ratios bit-identical).
+### Other copies
+- None.
+
+## 2026-11-01 — PR: sbd-ad8 — Field splice auto-design: end distances at least the owner's edge distance (SB2-AD8; B4); CF11 verified
+### Change (calculation: splice auto-design inputs)
+- `engine/splices.js autoDesign(p0, env)`, after `const undo = clone({ top: P.top, bot: P.bot, web: P.web });`, added:
+  `const eMin = R0.emin, upE = (o, f) => { if (!(parseDim(o[f]) >= eMin - 1e-9)) o[f] = eMin; };`
+  `['top', 'bot'].forEach(k => { upE(P[k], 'ef'); upE(P[k], 'ep'); }); upE(P.web, 'ew'); upE(P.web, 'ewp');`
+  i.e. the flange and web end distances e_f, e_p, e_w, e_wp are raised to DT4's e_min = max(Table 6.13.2.6.6-1 value for the bolt and
+  edge, the owner's edge distance) before the search; a larger entered value is kept. When the search ends "not changed" (DT10, flange
+  too narrow) the entered values are restored with the rest, as before. Used by the Field splices tab (auto mode) and by Auto design's
+  full check (`girder()` auto-designs every splice without entered plates).
+- Decision: SB2-AD8 (lead, 2026-10-30): the splice auto-design uses the owner's edge distance for the end distances (CTDOT 2 in).
+### §4 callout
+- Provision: AASHTO LRFD 10th Ed. Art. 6.13.2.6.5 (end distance ≥ the Table 6.13.2.6.6-1 edge distance); owner CTDOT BRSDM V2 6.13.6.1
+  (2 in edge distance, rule spl.ovs, OWN25).
+- Before (GirderDetail autoDesignSplice and this app): e = 1.75 in as entered; every CTDOT splice the search designs fails DT4
+  (1.75 < 2.00). After: CTDOT e = 2.00 in; AASHTO / RIDOT / MassDOT unchanged (e_min = 1.125 in for 7/8 in bolts, cut edges ≤ 1.75).
+- Check case (built-in splice, 7/8 in A325 bolts, cut edges, flanges widened to 20 in, CTDOT): e_min = max(1.125, 2) = 2.00 in;
+  after: top 2 lines × 4 rows each side (32 bolts), outer PL 20 × 1/2, 2 inner PL 8 1/2 × 5/8; bottom 2 × 5 (40), PL 20 × 5/8 + 2 × 8 1/2 × 3/4;
+  web 2 PL 57 × 9/16, 9 × 2 each side (36); 108 bolts; DT4 2.00 ≥ 2.00 at all six ends (pass); top splice plate length 25.5 → 26.5 in.
+  The same plates with 1.75 in end distances: DT4 fails. GirderDetail's autoDesignSplice on the same input: DT4 fails.
+  The built-in 16 in flanges under CTDOT stay "not changed" (DT10: too narrow for 2 gage lines with 2 in edges), end distances 1.75 as entered.
+### Tests
+- tests/engine/splices.test.mjs: the auto-design parity now runs GirderDetail on the input with the same end distances (AD8 applied by
+  hand) and compares every plate, bolt and check: 0 differences (built-in every owner; 136 auto-designed splices of the payloads).
+  New test "AD8": end distances 2.00 (CTDOT) / 1.75 (others), DT4 passes for every owner; GirderDetail's search fails DT4 under CTDOT.
+### Auto design (CTDOT, built-in project)
+- Before: no candidate; every design "blocked" by DT4 (1.75 in < 2 in, a detail input the plates do not change).
+- After: DT4 passes in the candidates and is no longer a blocker; still no candidate: a candidate's splice fails TF3 (slip resistance,
+  Service II, negative moment, oversized holes K_h = 0.85) at 1.076 on the full check, although the same splice auto-design passes
+  every check on the built-in demands with 17 in or 18 in flanges. Open item (Auto design: the splice demands at design time vs the
+  candidate's own analysis); not changed here. tests/engine/autodesign.test.mjs (CTDOT test) updated to this outcome.
+### CF11 (verify only)
+- Auto design's cross-frame sizing rule for the bolts per member end (CF10 / CF11; CTDOT 4 bolts) is in `engine/autodesign.js`
+  (sizeDetails, ids CF1–CF11, "the current type and bolt count first, then the others"), merged in #511. Not changed here.
+
+## 2026-11-01 — PR: claude/sbd-cf-note — Cross-frames member-force note: Strength I and Strength III / V are separate load combinations (CFNOTE; text only, no calculation change)
+
+Line numbers are approximate; search for the anchor text.
+
+### What changed (engineer decision 2026-11-01: fix the note text only)
+- `ui/framing.js` `render`, the "Member forces (truss model)" card note. Before:
+  `Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.`
+  After: `Each load combination is a separate case (AASHTO LRFD 10th Ed. Table 3.4.1-1), checked on its own; each member is designed for the largest.
+  Strength I: the entered member forces (nothing is computed for Strength I); Strength III and V: ± |wind force| f_wF_w alone (not added to the Strength I
+  forces); Constructibility: the entered forces ± brace force f_brM_br. The top chord work points are held by the deck.` (followed by `umNote(R)` as before).
+- `engine/crossframes.js` `steps`, step `cf.<m>.forces` label (same misstatement, text only). Before: `<member>: largest tension and compression (analysis force ±
+  wind and brace forces)`; after: `<member>: largest tension and compression of the separate combinations (Strength I: the entered forces; Strength III, V: ± wind
+  force alone; Constructibility: the entered forces ± brace force)`.
+- What the code does (unchanged, `compute`, `combos`): Strength I T = max(0, u), C = max(0, −u) with u the entered Strength force; Strength III and V
+  T = C = |f_w F_w| (u = 0); Constructibility T = max(0, u + |f_br M_br|), C = max(0, −u + |f_br M_br|); T_u, C_u the largest over the four (AASHTO LRFD
+  10th Ed. Table 3.4.1-1: Strength I, III and V are separate load combinations).
+- Governing provision: AASHTO LRFD 10th Ed. Table 3.4.1-1, Art. 4.6.2.7.1, 6.7.4.2. No formula, factor or value changed.
+- Check case: default project, G1, Cross-frames tab; before = after for every member force, T_u, C_u, check and ratio (Node, `SBDFramingUI.build`
+  at the default and with RIDOT η = 1.05, m = 1.2: 0 differences other than the step label).
 
 ### Other copies
 - None.

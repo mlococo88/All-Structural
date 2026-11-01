@@ -14,7 +14,7 @@
        stations as a hand-off-shaped object (fromAnalysis), the same paths as a file; the bearing stiffeners take the analysis support
        reactions (DC1, DC2, DW, UT, UF and the LL+IM reaction envelope g_V R_HL93) instead of the upper bound from the shears.
    The default (2026-10-30, report wiring PR): this project's analysis when the project is complete (SBDAnalysis.ready), else the
-   example; the line at the top of the tab names the source in use. The demand choice is not saved.
+   example; the line at the top of the tab names the source in use. The demand choice is saved with the project (P.demandSrc; a hand-off file is not).
 
    inputs(P, h) / onClick(e, P, ui) for the input tab; render(host, ctx) for the output tab, ctx = { P, g } */
 (function () {

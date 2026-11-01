@@ -469,7 +469,11 @@
         <div class="row" id="rowTwBase"><label>Wall thickness — base</label><div class="ctl"><input id="poleTwBase" type="number" value="0.25" step="0.0625"><span class="unit">in</span></div></div>
         <div class="row"><label>Yield strength, F<sub>y</sub><span class="note">steel: 50 ksi typ.</span></label><div class="ctl"><input id="poleFy" type="number" value="50" step="5"><span class="unit">ksi</span></div></div>
         <div class="row"><label>Material density<span class="note">steel: 490 pcf</span></label><div class="ctl"><input id="poleDen" type="number" value="490" step="10"><span class="unit">pcf</span></div></div>
-        <div class="row"><label id="poleCfLabel">Shaft C<sub>f</sub><span class="note">round ≈0.7, square ≈1.3</span></label><div class="ctl"><input id="cfPole" type="number" value="0.7" step="0.1"><span class="unit">—</span></div></div>
+        <div class="row"><label>Pole/post C<sub>f</sub> source<span class="note">auto = ASCE 7-22 Fig. 29.4-1 by shape and h/D</span></label><div class="ctl"><select id="cfPoleMode" class="combo-sel"><option value="auto" selected>Auto — Fig. 29.4-1</option><option value="manual">Manual — enter C_f</option></select></div></div>
+        <div class="row" id="rowCfPoleSurf"><label>Round section, surface / shape<span class="note">for Fig. 29.4-1 (round only)</span></label><div class="ctl"><select id="cfPoleSurf" class="combo-sel"><option value="smooth" selected>Round, moderately smooth (galvanized / painted)</option><option value="rough">Round, rough (D′/D = 0.02)</option><option value="vrough">Round, very rough (D′/D = 0.08)</option><option value="poly">Hexagonal or octagonal (multi-sided)</option></select></div></div>
+        <div class="row" id="rowCfPoleMan"><label id="poleCfLabel">Pole/post C<sub>f</sub><span class="note">manual value (ASCE 7-22 Fig. 29.4-1: h/D ≥ 25 → round smooth 0.7, round D√q<sub>z</sub> ≤ 2.5 → 1.2, hex/oct 1.4, square 2.0)</span></label><div class="ctl"><input id="cfPole" type="number" value="0.7" step="0.1"><span class="unit">—</span></div></div>
+        <p class="tbl-note" id="lppCfNote" style="margin:-4px 0 8px 0"></p>
+        <p class="tbl-note" id="cfMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row"><label>Misc. dead load<span class="note">self-weight added automatically</span></label><div class="ctl"><input id="DL" type="number" value="0" step="50"><span class="unit">lb</span></div></div>
       </div>
     </section>
@@ -628,7 +632,10 @@
         <div class="row"><label>Effective embedment, h<sub>ef</sub></label><div class="ctl"><input id="boltHef" type="number" value="18" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Base plate diameter</label><div class="ctl"><input id="bpDia" type="number" value="20" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
-          <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes" class="on">Provided</button><button data-v="no">None</button></div></div></div>
+          <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes">Provided</button><button data-v="no" class="on">None</button></div></div></div>
+        <div class="row arRow"><label>Anchor reinf.: bars per tension anchor<span class="note">vertical bars within 0.5h<sub>ef</sub> of each anchor rod (R17.5.2.1), counted for that anchor only</span></label><div class="ctl"><input id="arBars" type="number" value="2" step="1" min="1"><span class="unit">—</span></div></div>
+        <div class="row arRow"><label>Anchor reinf.: bar size<span class="note">straight vertical bars, Grade = reinf. f<sub>y</sub></span></label><div class="ctl"><select id="arBar" class="combo-sel"><option value="shaft" selected>Shaft longitudinal bar</option><option>#4</option><option>#5</option><option>#6</option><option>#7</option><option>#8</option><option>#9</option><option>#10</option><option>#11</option></select></div></div>
+        <div class="row arRow"><label>Anchor reinf.: distance from the rod<span class="note">horizontal, anchor rod axis to the bar axis</span></label><div class="ctl"><input id="arX" type="number" value="3" step="0.5" min="0"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor installation<span class="note">torqued = rods pretensioned after snug-tight (AASHTO LTS turn-of-nut); sets the ACI 318-19 §17.9.2 minimum spacing and edge distance</span></label>
           <div class="ctl"><div class="seg" id="segAnchTq"><button data-v="untorqued">Untorqued</button><button data-v="torqued" class="on">Torqued</button></div></div></div>
         <p class="tbl-note" id="anchTqMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
@@ -1023,7 +1030,9 @@ let isoFac=1,constraint='non';
 function setSeg(group,val){
   document.querySelectorAll('#'+group+' button').forEach(x=>x.classList.toggle('on', x.dataset.v==String(val)));
 }
-let anchRe='yes';
+// anchor reinforcement (ACI 318-19 §17.5.2.1): 'no' for new projects (2026-11-01, engineer: breakout checked by default);
+// saved projects keep their stored value (always stored since the first version; a save without it keeps the old 'yes')
+let anchRe='no';
 // anchor installation (ACI 318-19 Table 17.9.2(a)): 'torqued' (default for new projects) | 'untorqued'
 let anchTq='torqued';
 // splitting reinforcement at the shaft top (ACI 318-19 §17.9.1): 'no' (default) | 'yes' (waives the §17.9.2 minimums)
@@ -1051,7 +1060,9 @@ if($('signCfMode')) $('signCfMode').addEventListener('change',()=>{
 
 document.querySelectorAll('#segIso button').forEach(b=>b.onclick=()=>{setSeg('segIso',b.dataset.v);isoFac=+b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segCon button').forEach(b=>b.onclick=()=>{setSeg('segCon',b.dataset.v);constraint=b.dataset.v;markDirty();calc();});
-document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;markDirty();calc();});
+function lppApplyArUI(){ document.querySelectorAll('.arRow').forEach(r=>r.style.display=anchRe==='yes'?'':'none'); }
+document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;lppApplyArUI();markDirty();calc();});
+lppApplyArUI();
 document.querySelectorAll('#segSplitRe button').forEach(b=>b.onclick=()=>{setSeg('segSplitRe',b.dataset.v);splitRe=b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segAnchTq button').forEach(b=>b.onclick=()=>{setSeg('segAnchTq',b.dataset.v);anchTq=b.dataset.v;const mn=$('anchTqMigNote');if(mn)mn.style.display='none';markDirty();calc();});
 
@@ -1118,7 +1129,16 @@ function applyMode(){
   applyShapeUI();
   markDirty(); calc();
 }
+// pole/post C_f rows (added 2026-11-01): surface row for a round section, value row for Manual
+function lppApplyCfUI(){
+  const man=$('cfPoleMode')&&$('cfPoleMode').value==='manual', rnd=!$('poleShape')||$('poleShape').value==='round';
+  const r1=$('rowCfPoleSurf'), r2=$('rowCfPoleMan');
+  if(r1) r1.style.display=rnd?'':'none';
+  if(r2) r2.style.display=man?'':'none';
+}
+if($('cfPoleMode')) $('cfPoleMode').addEventListener('change',()=>{ lppApplyCfUI(); const mn=$('cfMigNote'); if(mn) mn.style.display='none'; });
 function applyShapeUI(){
+  lppApplyCfUI();
   const shape=$('poleShape')?$('poleShape').value:'round';
   const round=shape==='round', rect=shape==='rect';
   // Only a round light pole tapers (distinct top vs base). Square/rect HSS are prismatic —
@@ -1298,6 +1318,55 @@ function cableComponents(c,inp){
     }};
 }
 
+// ---- pole/post force coefficient, ASCE 7-22 Fig. 29.4-1 (chimneys, tanks and similar structures) (added 2026-11-01, LP-R3) ----
+// Rows: C_f at h/D = 1, 7, 25 (linear between; constant beyond 25, h/D < 1 takes the h/D = 1 value). D = mean width (in → ft),
+// the least horizontal dimension for square/rect. Round sections use the D√q_z > 2.5 rows (surface dependent) or the
+// D√q_z ≤ 2.5 row (all surfaces), q_z in psf = 0.00256·K_z·K_zt·K_e·V² (Eq. 26.10-1, K_e = 1.0, no K_d) at mid-height of
+// the pole/post. Square: wind normal to a face (the tool's wind directions are normal to the faces). Rectangular HSS:
+// the square row is used with D = the least dimension (Fig. 29.4-1 has no rectangle row; open item).
+const CF2941={hD:[1,7,25],
+  square:[1.3,1.4,2.0], poly:[1.0,1.2,1.4],
+  smooth:[0.5,0.6,0.7], rough:[0.7,0.8,0.9], vrough:[0.8,1.0,1.2], lowq:[0.7,0.8,1.2]};
+const CF2941_LBL={square:'square, wind normal to a face', poly:'hexagonal or octagonal', smooth:'round, D√q_z > 2.5, moderately smooth',
+  rough:'round, D√q_z > 2.5, rough (D′/D = 0.02)', vrough:'round, D√q_z > 2.5, very rough (D′/D = 0.08)', lowq:'round, D√q_z ≤ 2.5, all surfaces'};
+function cfPoleFig2941(inp){
+  const shape=inp.poleShape||'round', h=inp.H;
+  const Dm_in = shape==='rect' ? Math.min((inp.poleDiaTop+inp.poleDiaBase)/2,(inp.poleDepthTop+(inp.poleDepthBase!==undefined?inp.poleDepthBase:inp.poleDepthTop))/2)
+                               : (inp.poleDiaTop+inp.poleDiaBase)/2;
+  const D=Dm_in/12, hD=D>0?h/D:NaN;
+  const zq=h/2, Kzq=Kz(zq,inp.expo), qz=0.00256*Kzq*inp.Kzt*1.0*inp.V*inp.V;   // psf, K_e = 1.0, without K_d
+  const Dsq=D*Math.sqrt(qz);
+  let row;
+  if(shape!=='round') row='square';
+  else if(inp.cfPoleSurf==='poly') row='poly';
+  else if(!(Dsq>2.5)) row='lowq';
+  else row=({rough:'rough',vrough:'vrough'})[inp.cfPoleSurf]||'smooth';
+  const cf=interp1(CF2941.hD, CF2941[row], hD);
+  return {cf,row,lbl:CF2941_LBL[row],vals:CF2941[row],h,D,Dm_in,hD,zq,Kzq,qz,Dsq,shape};
+}
+// Sets inp.cfPole from Fig. 29.4-1 when the source is Auto; keeps the entered value when Manual. Records inp.cfAuto.
+function lppApplyCfPole(inp){
+  inp.cfAuto=cfPoleFig2941(inp);
+  inp.cfPoleEntered=inp.cfPole;
+  if(inp.cfPoleMode==='auto') inp.cfPole=inp.cfAuto.cf;
+  const nt=$('lppCfNote');
+  if(nt) nt.textContent = inp.cfPoleMode==='auto'
+    ? `C_f used = ${fmt(inp.cfPole,3)} (ASCE 7-22 Fig. 29.4-1, ${inp.cfAuto.lbl}, h/D = ${fmt(inp.cfAuto.hD,1)}).`
+    : `C_f used = ${fmt(inp.cfPole,2)} (manual); Fig. 29.4-1 would give ${fmt(inp.cfAuto.cf,3)} (${inp.cfAuto.lbl}, h/D = ${fmt(inp.cfAuto.hD,1)}).`;
+}
+// Worked step (tab and report): the Fig. 29.4-1 lookup.
+function cfPoleWorkedHTML(inp){
+  const a=inp.cfAuto; if(!a) return '';
+  const g=t=>`\\[${t}\\]`;
+  let H=`<div class="step-label">Pole/post force coefficient C<sub>f</sub> <span class="eq-ref">[ASCE 7-22 Fig. 29.4-1]</span></div>`;
+  H+=`<p class="eq-why">${inp.cfPoleMode==='auto'?'Auto (used):':'Manual C<sub>f</sub> = '+fmt(inp.cfPole,2)+' is used; the Fig. 29.4-1 value is shown for comparison:'} ${a.shape==='round'?(inp.cfPoleSurf==='poly'?'multi-sided section (hexagonal/octagonal row).':'round section; the row depends on D√q<sub>z</sub> (q<sub>z</sub> of Eq. 26.10-1 at mid-height, without K<sub>d</sub>).'):(a.shape==='rect'?'rectangular HSS: the square row with D = least dimension (Fig. 29.4-1 has no rectangle row).':'square HSS, wind normal to a face.')} D = mean outside ${a.shape==='rect'?'least dimension':'width'}; h = ${inp.mode==='sign'?'post height (grade to top of panel)':'pole height'}.</p>`;
+  if(a.shape==='round' && inp.cfPoleSurf!=='poly')
+    H+=g(`q_z(h/2) = 0.00256\\,K_z(${fmt(a.zq,1)})\\,K_{zt}K_eV^2 = 0.00256(${fmt(a.Kzq,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2 = ${fmt(a.qz,1)}\\ \\text{psf}\\qquad D\\sqrt{q_z} = ${fmt(a.D,3)}\\sqrt{${fmt(a.qz,1)}} = ${fmt(a.Dsq,2)}\\ ${a.Dsq>2.5?'>':'\\le'}\\ 2.5`);
+  H+=g(`h/D = ${fmt(a.h,2)}/${fmt(a.D,3)} = ${fmt(a.hD,1)}\\qquad C_f(h/D{=}1,7,25) = ${a.vals.map(v=>fmt(v,1)).join(',\\ ')}\\ \\Rightarrow\\ C_f = ${fmt(a.cf,3)}`);
+  H+=`<p class="eq-result">C<sub>f</sub> (Fig. 29.4-1, ${a.lbl}) = ${fmt(a.cf,3)}${inp.cfPoleMode==='auto'?' — used':' — not used (manual '+fmt(inp.cfPole,2)+')'}.</p>`;
+  return H;
+}
+
 // pole direct wind (regular wind, with gust). avg diameter = (top+base)/2
 // Fixture wind is now handled separately by fixtureComponents(); this covers the mast only.
 function poleWindNominal(inp){
@@ -1464,7 +1533,9 @@ function signWind(inp){
     });
     const Ftot=bands.reduce((a,x)=>a+x.Fr,0);
     const xR=Ftot>0? bands.reduce((a,x)=>a+x.Fr*x.xc,0)/Ftot : 0;   // net horiz centroid
-    const eC=xR - B/2;                              // eccentricity from panel center
+    // eccentricity from the panel center, positive TOWARD THE WINDWARD EDGE (the Case B convention, e = +0.2B);
+    // 2026-11-01 (LP-R14): was xR − B/2 (negative toward windward, a mirror of Case B; the 0°/180° envelope covered both)
+    const eC=B/2 - xR;
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
@@ -1933,6 +2004,18 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
           M_cable:Math.hypot(cMx,cMy), M_pole:poleWindM};
 }
 
+// Fixtures on an arm (a > 0) whose plan azimuth θ is not on one of the four wind axes (2026-11-01, engineer decision on
+// LP-R1: the four directions are kept; a warning is shown instead of a sweep). Arms and fixtures only (cables excluded,
+// engineer 2026-11-01). Returns [{i, th}] (i is 1-based).
+function lppOffAxisFixtures(fx){
+  const L=[];
+  (fx||[]).forEach((x,i)=>{ if(!(x.a>0) || !((x.W||0)>0 || (x.epa||0)>0)) return;
+    const r=((x.th%90)+90)%90; if(Math.min(r,90-r)>1e-6) L.push({i:i+1, th:x.th}); });
+  return L;
+}
+function lppOffAxisMsg(L){
+  return `<b>Wind directions:</b> the tool checks wind toward 0°, 90°, 180° and 270° only. ${L.map(o=>'Fixture '+o.i+' (arm at θ = '+fmt(o.th,0)+'°)').join(', ')} ${L.length>1?'are':'is'} not aligned with these axes: the arm's eccentric load and the wind may combine worst at a direction between them, so the results <b>may be unconservative</b>. Align the arms with the axes (rotate the plan) or check the intermediate directions separately.`;
+}
 // Evaluate a combination across all four wind azimuths; keep the one with the largest moment.
 function evalCombo(key,inp,comps,fxs,pw){
   const all=WIND_DIRS.map(phi=>evalComboDir(key,inp,comps,fxs,pw,phi));
@@ -2378,8 +2461,8 @@ manPart("p3","3. Output Reference",[
 /* ===== MANUAL PART 4A ===== */
 manPart("p4a","4A. Wind &amp; Load Path",[
 {h:"4A.1 Velocity pressure"},
-{p:"Velocity pressure follows ASCE 7-22 Eq. 26.10-1:"},
-{eqn:["q_z = 0.00256\\,K_z K_{zt} K_d V^2","psf, with V in mph"]},
+{p:"Velocity pressure follows ASCE 7-22 Eq. 26.10-1 (K<sub>e</sub> = 1.0, ground elevation factor, §26.9). In ASCE 7-22 the directionality factor K<sub>d</sub> is not in q<sub>z</sub>; it multiplies the force (Eq. 29.3-1 signs, Eq. 29.4-1 other structures), so the tool carries the product q<sub>z</sub>K<sub>d</sub>:"},
+{eqn:["q_z = 0.00256\\,K_z K_{zt} K_e V^2,\\qquad F = q_z\\,K_d\\,G\\,C_f\\,A_f","psf, with V in mph; K_e = 1.0"]},
 {p:"The exposure coefficient uses the power-law profile with the category's \u03b1 and z<sub>g</sub>:"},
 {eqn:["K_z = 2.01\\left(\\frac{z}{z_g}\\right)^{2/\\alpha}","evaluated at the relevant height z"]},
 {key:"K<sub>z</sub> is floored at z = 15 ft. For short poles and signs the whole structure sits below 15 ft, so K<sub>z</sub> is constant \u2014 mid-height and top values will be identical. That is correct, not a bug."},
@@ -2685,6 +2768,11 @@ function collectChecks(ctx){
     push('Anchor tension','ACI 318-19 Ch.17',bT.Tmax,bT.phiNn,'lb');
     push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
     push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
+    // anchor reinforcement replacing the breakout (ACI 318-19 §17.5.2.1), when Provided (added 2026-11-01)
+    if(b.ar){ const aT=bT.ar||b.ar;
+      push('Anchor reinforcement, tension','ACI 318-19 §17.5.2.1',bT.Tmax,aT.phiNar,'lb');
+      push('Anchor reinforcement, development','ACI 318-19 §17.5.2.1, §25.4.2.3',b.ar.ld,b.ar.lAvail,'in',b.ar.okLd,b.ar.ld/Math.max(b.ar.lAvail,1e-9)); C[C.length-1].dec=1;
+      push('Anchor reinforcement within 0.5h_ef','ACI 318-19 R17.5.2.1',b.ar.x,b.ar.xLim,'in',b.ar.okX); C[C.length-1].dec=1; }
     // §17.9.2 minimum geometry (load-independent): required ÷ provided, like the other minimum-type checks
     if(!b.splitW && b.n>=2){ push('Anchor min. spacing','ACI 318-19 §17.9.2',b.sMinReq,b.sAnch,'in',b.spOK,b.sMinReq/Math.max(b.sAnch,1e-9)); C[C.length-1].dec=2; }
     if(!b.splitW){ push('Anchor min. edge distance','ACI 318-19 §17.9.2'+(b.torq?'':', §20.5.1.3'),b.edReq,b.edProv,'in',b.edOK,b.edReq/Math.max(b.edProv,1e-9)); C[C.length-1].dec=2; }
@@ -2723,6 +2811,7 @@ function summaryHTML(ctx){
   const natL=stacks.map(st=>st.nat).filter(Boolean);
   if(natL.some(x=>!(x.n1>=1.0)))
     warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
+  if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push('Monopost torsion from the eccentric sign wind (Cases B/C): the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
@@ -2821,7 +2910,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:sw.zc});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
   H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${fmt(sw.clr,2)} ft (grade to bottom of panel). The drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:</p>`;
-  H+=g(`\\bar q_{z} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_d\\,G\\,V^2\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
+  H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_e V^2\\cdot K_d\\,G\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
   H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
     const sh=signPostSplit(cs.F,cs.x,Lp,nP);
@@ -3355,6 +3444,11 @@ function tensileStressArea(d){
   const nThreads={0.750:10,0.875:9,1.000:8,1.125:7,1.250:7,1.500:6,1.750:5,2.000:4.5}[d]||8;
   return Math.PI/4*Math.pow(d-0.9743/nThreads,2);
 }
+// Heavy hex nut width across flats F (in) by nominal diameter d (in): ASME B18.2.2 (heavy hex nuts), F = 1.5d + 1/8 in for
+// the 3/4 – 2 in sizes of the bolt-diameter list (3/4: 1-1/4, 7/8: 1-7/16, 1: 1-5/8, 1-1/8: 1-13/16, 1-1/4: 2,
+// 1-1/2: 2-3/8, 1-3/4: 2-3/4, 2: 3-1/8). Added 2026-11-01 (LP-R6).
+const HEAVY_HEX_F={0.750:1.250,0.875:1.4375,1.000:1.625,1.125:1.8125,1.250:2.000,1.500:2.375,1.750:2.750,2.000:3.125};
+function heavyHexF(d){ return HEAVY_HEX_F[d]!==undefined ? HEAVY_HEX_F[d] : 1.5*d+0.125; }
 function anchorBolts(inp,gov,struct){
   const d=inp.boltDia, gr=F1554[inp.boltGrade], n=inp.boltQty;
   const BC=inp.boltBC, R=BC/2, hef=inp.boltHef;
@@ -3469,9 +3563,12 @@ function anchorBolts(inp,gov,struct){
   const edProv = torq ? ca17 : ca17 - d/2;                     // in
   const edOK = edProv >= edReq - 1e-9;
 
-  // ---- pullout (ACI §17.6.3), cast-in heavy hex head ----
-  // Abrg = bearing area of head ≈ heavy hex: 0.5·(3d)·(3d)·(√3/2)-... use table approx.
-  const Abrg=(d*d)*0.9;                      // heavy hex head bearing area approx (in²)
+  // ---- pullout (ACI §17.6.3), cast-in rod with a heavy hex nut at the embedded end ----
+  // 2026-11-01 (LP-R6): A_brg = net bearing area of the heavy hex nut = hex area across flats − rod area,
+  // A_brg = (√3/2)·F² − π·d²/4, F = width across flats of a heavy hex nut (ASME B18.2.2; F = 1.5d + 1/8 in), from HEAVY_HEX_F.
+  // Was A_brg = 0.9·d² (an approximation, about 60 % of the nut's net area for 1 in).
+  const nutF=heavyHexF(d);
+  const Abrg=Math.sqrt(3)/2*nutF*nutF - Math.PI*d*d/4;   // in²
   const Np=8*Abrg*fc;                        // §17.6.3.2.2a, lb (single)
   const psi_cp_po=1.0;                       // §17.6.3.3 cracked
   const Npn=psi_cp_po*Np;
@@ -3482,6 +3579,28 @@ function anchorBolts(inp,gov,struct){
   const Vcp=kcp*NcbgAll;                     // §17.7.3.1 uses Ncbg of the whole group (all bolts)
   const phiVcp=0.70*Vcp;
 
+  // ---- anchor reinforcement, ACI 318-19 §17.5.2.1 (added 2026-11-01, LP-R2) ----
+  // When "Provided", the breakout strength is replaced by the strength of the anchor reinforcement, which is checked here:
+  //  (1) strength: φ·A_s·f_y ≥ N_ua of the most-loaded anchor, φ = 0.75 (§17.5.2.1), A_s = bars counted for that anchor;
+  //  (2) location: the bars are within 0.5h_ef of the anchor (R17.5.2.1);
+  //  (3) development on the anchor side of the breakout surface (§17.5.2.1, Ch. 25): the cone surface reaches a bar at
+  //      horizontal distance x at depth h_ef − x/1.5 (failure surface 1:1.5, as A_Nco); the straight length above it, to the
+  //      bar end at the clear cover below the shaft top, is l_avail = h_ef − x/1.5 − c ≥ l_d. Below the surface the vertical
+  //      shaft bars run the full shaft depth (taken as developed). l_d per ACI 318-19 §25.4.2.3 (Table 25.4.2.3), ψ_t = ψ_e = 1.0,
+  //      ψ_g = 1.0 (Grade 60) / 1.15 (Grade 80), λ = 1.0, spacing/cover/tie conditions of the first row taken as met; ≥ 12 in;
+  //      no reduction for excess reinforcement.
+  let ar=null;
+  if(hasAnchRe){
+    const bar = (inp.arBar && inp.arBar!=='shaft') ? barByName(inp.arBar) : (inp.arShaftBar || barByName('#6'));
+    const nb=Math.max(1,inp.arBars||1), x=inp.arX||0, fyr=inp.fy, cTop=inp.cover;
+    const As=nb*bar.a, phiNar=0.75*As*fyr;
+    const psiG = fyr>70000 ? 1.15 : 1.0;
+    const div = (bar.d<=0.75+1e-9) ? 25 : 20;               // #6 and smaller / #7 and larger
+    const ld = Math.max(12, fyr*psiG/(div*1.0*Math.sqrt(fc))*bar.d);
+    const lAvail = hef - x/1.5 - cTop;
+    ar={bar, nb, x, As, fyr, phiNar, psiG, div, ld, lAvail, cTop, xLim:0.5*hef,
+        okN: Tmax<=phiNar, okLd: lAvail>=ld-1e-9, okX: x<=0.5*hef+1e-9};
+  }
   // ---- governing tension capacity (per anchor for steel/pullout; group for breakout) ----
   let phiNn, tgov;
   if(hasAnchRe){ phiNn=Math.min(phiNsa, phiNp); tgov='steel / pullout (breakout carried by anchor reinforcement, §17.5.2.1)'; }
@@ -3504,8 +3623,8 @@ function anchorBolts(inp,gov,struct){
 
   return {d,gr,n,BC,R,hef,th0,thM,Ase,bolts,sumY2,Tmax,Vb,VbT,Tu,tension,nT,Tsum,Mu,Pu,Vu,fc,lam,
           futa,Nsa,phiNsa,Vsa,phiVsa,
-          kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,sfbApplies,
-          Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
+          kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,ar,sfbApplies,
+          nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
           m,beff,Fyp,tpReq,Dpole,
           torq,sAnch,sMinReq,spOK,edReq,edProv,edOK,sqShaft,ca17,caGovK:(caGovB?caGovB.k:1),caGovAng:(caGovB?caGovB.ang:0),splitW};
 }
@@ -3555,6 +3674,15 @@ function boltMinGeomRows(b){
   h+=`<tr><td style="${L}">Min. edge distance${b.torq?', c<sub>a,min</sub> ≥ 6d<sub>a</sub>':', cover c<sub>a,min</sub> − d<sub>a</sub>/2 (§20.5.1.3)'}${b.sqShaft?' (bolt '+b.caGovK+', nearest face)':''} (§17.9.2)</td><td>${fmt(b.edReq,2)} in</td><td>${fmt(b.edProv,2)} in</td><td>${fmt(b.edReq/Math.max(b.edProv,1e-9),2)}</td><td>${pill(b.edOK)}</td></tr>`;
   return h;
 }
+// ACI 318-19 §17.5.2.1 anchor reinforcement rows (when Provided); worked in boltWorkedHTML step 3b
+function boltArRows(b){
+  const a=b.ar; if(!a) return '';
+  const bT=(b.byCheck&&b.byCheck.T)||b, aT=bT.ar||a;
+  const pill=ok=>`<span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span>`, L='text-align:left';
+  return `<tr><td style="${L}">Anchor reinforcement, tension φA<sub>s</sub>f<sub>y</sub> (§17.5.2.1): ${a.nb} ${a.bar.n} per anchor</td><td>${fmt(bT.Tmax,0)}</td><td>${fmt(aT.phiNar,0)}</td><td>${fmt(bT.Tmax/aT.phiNar,2)}</td><td>${pill(bT.Tmax<=aT.phiNar)}</td></tr>`+
+    `<tr><td style="${L}">Anchor reinforcement, development above the breakout surface (in: l<sub>d</sub> · l<sub>avail</sub>)</td><td>${fmt(a.ld,1)}</td><td>${fmt(a.lAvail,1)}</td><td>${fmt(a.ld/Math.max(a.lAvail,1e-9),2)}</td><td>${pill(a.okLd)}</td></tr>`+
+    `<tr><td style="${L}">Anchor reinforcement within 0.5h<sub>ef</sub> of the rod (in: x · 0.5h<sub>ef</sub>)</td><td>${fmt(a.x,1)}</td><td>${fmt(a.xLim,1)}</td><td>${fmt(a.x/Math.max(a.xLim,1e-9),2)}</td><td>${pill(a.okX)}</td></tr>`;
+}
 function boltNotCheckedRows(b){
   const red='color:#a02818;font-weight:700;text-align:left';
   let h=`<tr><td style="text-align:left">Concrete breakout in shear (§17.7.2)</td><td colspan="4" style="${red}">NOT CHECKED — anchors near the shaft face are often governed by shear breakout; verify separately.</td></tr>`;
@@ -3582,6 +3710,7 @@ function designFoundationStack(inp, asd, lrfd, MangLRFD, lrfdAll, asdAll){
   // soil bearing: the MAXIMUM-axial ASD combination (not the max-moment one)
   const asdB=(asdAll&&asdAll.length)? asdAll.reduce((a,x)=>x.axial>a.axial?x:a) : asd;
   const bearing=bearingCheck(inp, asdB.axial); bearing.axial=asdB.axial; bearing.comboName=asdB.name;
+  inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, cands);
   // monopost torsion on the shaft: ACI 318-19 §22.7.1.1 — torsion may be neglected when
   // T_u < φT_th, T_th = λ√f'c·(A_cp²/p_cp) (Table 22.7.4.1(a), non-prestressed), φ = 0.75.
@@ -4083,6 +4212,7 @@ function calc(){
     H:num('H'),cfLum:num('cfLum'),poleShape:($('poleShape')?$('poleShape').value:'round'),
     poleDiaTop:num('poleDiaTop'),poleDiaBase:num('poleDiaBase'),
     poleDepthTop:num('poleDepthTop'),poleDepthBase:num('poleDepthBase'),cfPole:num('cfPole'),DL:num('DL'),
+    cfPoleMode:($('cfPoleMode')?$('cfPoleMode').value:'manual'),cfPoleSurf:($('cfPoleSurf')?$('cfPoleSurf').value:'smooth'),
     poleTwTop:num('poleTwTop'),poleTwBase:num('poleTwBase'),poleFy:num('poleFy'),poleDen:num('poleDen'),
     tIce:num('tIce'),iceDen:num('iceDen'),Vice:num('Vice'),cfCable:num('cfCable'),
     cableMethod:($('cableMethod')?$('cableMethod').value:'sag'),cableE:num('cableE'),
@@ -4100,7 +4230,7 @@ function calc(){
     b:num('b'),S1:num('S1'),qAllow:num('qAllow'),fc:num('fc'),fy:num('fy'),
     cover:num('cover'),minSteel:($('minSteel')?$('minSteel').value:'half'),
     boltDia:parseFloat($('boltDia')?$('boltDia').value:1),boltGrade:parseInt($('boltGrade')?$('boltGrade').value:55),
-    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),anchTq:anchTq,splitRe:splitRe,
+    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),anchTq:anchTq,arBars:Math.max(1,Math.round(num('arBars')||1)),arBar:($('arBar')?$('arBar').value:'shaft'),arX:num('arX'),splitRe:splitRe,
     // mode + sign
     mode:appMode, signPosts:signPosts,
     signB:num('signB'),signS:num('signS'),signClr:num('signClr'),signWt:num('signWt'),signSpacing:num('signSpacing'),
@@ -4126,8 +4256,10 @@ function calc(){
     // post runs from grade to the top of the panel: H = clearance + sign height
     inp.H = inp.signClr + inp.signS;
     if($('oSignHt')) $('oSignHt').textContent = fmt(inp.H,2)+' ft  (= '+fmt(inp.signClr,1)+' + '+fmt(inp.signS,1)+')';
+    lppApplyCfPole(inp);   // post C_f (ASCE 7-22 Fig. 29.4-1 when Auto)
     calcSign(inp); return;
   }
+  lppApplyCfPole(inp);     // pole C_f (ASCE 7-22 Fig. 29.4-1 when Auto)
 
   // discretize the pole & get self-weight (added to axial dead load)
   const poleSeg=poleSegments(inp);
@@ -4202,6 +4334,7 @@ function calc(){
   const bearing=bearingCheck(inp, govAxASD.axial); bearing.axial=govAxASD.axial; bearing.comboName=govAxASD.name;
 
   // anchor bolts (LRFD) — every LRFD combination, governing case per check (0.9D + W included)
+  inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, lrfdCands);
 
   // ---- headline outputs (embedment from ASD gov) ----
@@ -4223,6 +4356,7 @@ function calc(){
   f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); anchors: tension <b>${bolts.byCheck.T.comboName}</b>, shear <b>${bolts.byCheck.V.comboName}</b>, interaction <b>${bolts.byCheck.I.comboName}</b>.</div>`;
   f+=`<div class="flag${govB2.B2max>1.10?' bad':''}">P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations); each combination's B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft. Pole stress governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).</div>`;
   if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
+  { const oa=lppOffAxisFixtures(fixtures); if(oa.length) f+=`<div class="flag bad">${lppOffAxisMsg(oa)}</div>`; }
   if(!cablesEnabled){
     f+=`<div class="flag">Catenary system disabled — foundation driven by pole wind, fixtures, and self-weight only.</div>`;
   } else if(cables.length>=2){
@@ -4464,7 +4598,7 @@ function calc(){
     let bt=`<tr><th style="text-align:left">Limit state</th><th>Demand<span class="sym">(lb)</span></th><th>φ·Capacity<span class="sym">(lb)</span></th><th>Ratio</th><th>—</th></tr>`;
     bt+=row('Steel tension, per bolt (§17.6.1)',bolts.Tmax,bolts.phiNsa);
     if(!bolts.hasAnchRe) bt+=row('Concrete breakout, group (§17.6.2)',bolts.Tsum,bolts.phiNcbg);
-    else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">carried by anchor reinforcement (§17.5.2.1)</td></tr>`;
+    else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">replaced by the anchor reinforcement (§17.5.2.1), checked below</td></tr>`+boltArRows(bolts);
     bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
     bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
     bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
@@ -4666,7 +4800,17 @@ function boltWorkedHTML(bo,inp){
   H+=g(`N_{cbg} = ${fmt(bo.Ncbg,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{cbg} = ${fmt(bo.phiBrk,2)}N_{cbg} = ${fmt(bo.phiNcbg,0)}\\ \\text{lb}`);
   H+=`<p class="eq-why">φ = ${fmt(bo.phiBrk,2)} — ${bo.brkCond} (ACI 318-19 Table 17.5.3): ${bo.hasAnchRe?'reinforcement is selected as provided, taken as supplementary reinforcement crossing the failure surface':'no anchor/supplementary reinforcement selected'}.</p>`;
   if(bo.hasAnchRe){
-    H+=`<p class="eq-result">Anchor reinforcement is provided, so per §17.5.2.1 the breakout limit state is carried by the developed tie cage and need not govern the anchor tension. φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb is shown for reference.</p>`;
+    H+=`<p class="eq-result">Anchor reinforcement is provided, so per §17.5.2.1 the design strength of the anchor reinforcement is used instead of the breakout strength; it is checked in step 3b. φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb is shown for reference.</p>`;
+    const a=bo.ar;
+    if(a){
+      H+=step(`3b · Anchor reinforcement in tension ${ref('ACI 318-19 §17.5.2.1, R17.5.2.1; §25.4.2.3')}`);
+      H+=`<p class="eq-why">Vertical bars within 0.5h<sub>ef</sub> of each anchor rod, developed on both sides of the breakout surface, carry the anchor tension (φ = 0.75). Input: ${a.nb} ${a.bar.n}${inp.arBar==='shaft'||!inp.arBar?' (the shaft longitudinal bar)':''} per tension anchor at x = ${fmt(a.x,2)} in from the rod. Below the breakout surface the shaft bars run the full shaft depth (developed); above it the straight length to the bar end at the clear cover (c = ${fmt(a.cTop,2)} in) below the shaft top is checked against l<sub>d</sub>. The cone surface reaches the bar at depth h<sub>ef</sub> − x/1.5 (1 : 1.5 slope, as A<sub>Nco</sub>).</p>`;
+      H+=g(`\\phi N_{ar} = 0.75\\,A_s\\,f_y = 0.75(${a.nb}\\times${fmt(a.bar.a,2)})(${fmt(a.fyr,0)}) = ${fmt(a.phiNar,0)}\\ \\text{lb}\\ ${bo.Tmax<=a.phiNar?'\\ge':'<'}\\ N_{ua} = ${fmt(bo.Tmax,0)}\\ \\text{lb}`);
+      H+=g(`x = ${fmt(a.x,2)}\\ ${a.okX?'\\le':'>'}\\ 0.5h_{ef} = ${fmt(a.xLim,2)}\\ \\text{in}`);
+      H+=g(`l_d = \\max\\!\\left(\\frac{f_y\\,\\psi_t\\psi_e\\psi_g}{${a.div}\\,\\lambda\\sqrt{f'_c}}\\,d_b,\\ 12\\right) = \\max\\!\\left(\\frac{${fmt(a.fyr,0)}(1.0)(1.0)(${fmt(a.psiG,2)})}{${a.div}(1.0)\\sqrt{${fmt(bo.fc,0)}}}(${fmt(a.bar.d,3)}),\\ 12\\right) = ${fmt(a.ld,1)}\\ \\text{in}`);
+      H+=g(`l_{avail} = h_{ef}-\\frac{x}{1.5}-c = ${fmt(bo.hef,2)}-\\frac{${fmt(a.x,2)}}{1.5}-${fmt(a.cTop,2)} = ${fmt(a.lAvail,1)}\\ \\text{in}\\ ${a.okLd?'\\ge':'<'}\\ l_d`);
+      H+=`<p class="eq-result">Anchor reinforcement: strength ${bo.Tmax<=a.phiNar?'OK':'NG'} (${fmt(bo.Tmax/a.phiNar,2)}), development ${a.okLd?'OK':'NG'} (${fmt(a.ld/Math.max(a.lAvail,1e-9),2)}), location ${a.okX?'OK':'NG'}${a.okLd?'':' — lengthen h<sub>ef</sub>, move the bars closer, use hooked/headed bars (not modelled) or select None to check concrete breakout instead'}.</p>`;
+    }
   } else {
     H+=`<p class="eq-result">Group breakout φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb, i.e. ${fmt(bo.phiNcbg/bo.nT,0)} lb per tension bolt (${bo.nT} in tension).</p>`;
   }
@@ -4674,7 +4818,8 @@ function boltWorkedHTML(bo,inp){
   // 4 — pullout
   H+=step(`4 · Pullout strength, N<sub>pn</sub> ${ref('§17.6.3')}`);
   H+=`<p class="eq-why">Cast-in headed anchor: bearing of the head on the concrete. A<sub>brg</sub> is the net bearing area of the heavy-hex head; ψ<sub>c,P</sub> = 1.0 (cracked, conservative).</p>`;
-  H+=g(`A_{brg} \\approx 0.9\\,d^2 = 0.9(${fmt(bo.d,3)})^2 = ${fmt(bo.Abrg,2)}\\ \\text{in}^2\\quad(\\text{heavy-hex head, net of shank})`);
+  H+=`<p class="eq-why">Heavy hex nut at the embedded end of the rod (no plate washer). Width across flats F = 1.5d + 1/8 in (ASME B18.2.2, heavy hex nuts); A<sub>brg</sub> = hex area − rod area.</p>`;
+  H+=g(`F = 1.5d+\\tfrac18 = 1.5(${fmt(bo.d,3)})+0.125 = ${fmt(bo.nutF,4)}\\ \\text{in}\\qquad A_{brg} = \\tfrac{\\sqrt3}{2}F^2-\\tfrac{\\pi}{4}d^2 = 0.866(${fmt(bo.nutF,4)})^2-0.785(${fmt(bo.d,3)})^2 = ${fmt(bo.Abrg,3)}\\ \\text{in}^2`);
   H+=g(`N_p = 8\\,A_{brg}\\,f'_c = 8(${fmt(bo.Abrg,2)})(${fmt(bo.fc,0)}) = ${fmt(bo.Np,0)}\\ \\text{lb}`);
   H+=g(`N_{pn} = \\psi_{c,P}\\,N_p = ${fmt(bo.Npn,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{pn} = 0.70N_{pn} = ${fmt(bo.phiNp,0)}\\ \\text{lb}`);
 
@@ -5145,9 +5290,10 @@ function windWorkedHTML(pw, inp){
   H+=step(`1 · Velocity pressure exposure coefficient ${ref('ASCE 7-22 Table 26.10-1')}`);
   H+=`<p class="eq-why">K_z grows with height z above grade for the site exposure category. It is evaluated at the pole mid-height (for the distributed mast wind) and at the top.</p>`;
   H+=g(`K_z(z) = 2.01\\left(\\tfrac{z}{z_g}\\right)^{2/\\alpha}\\quad\\Rightarrow\\quad K_z(H/2) = ${fmt(pw.KzMid,3)},\\ \\ K_z(H) = ${fmt(pw.KzTop,3)}`);
-  H+=step(`2 · Velocity pressure ${ref('ASCE 7-22 Eq. 26.10-1')}`);
-  H+=`<p class="eq-why">The velocity pressure combines the basic wind speed V, the exposure coefficient, topographic factor K_zt, and directionality K_d.</p>`;
-  H+=g(`q_z = 0.00256\\,K_z K_{zt} K_d V^2 = 0.00256(${fmt(pw.KzMid,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.Kd,2)})(${inp.V})^2 = ${fmt(pw.qzMid,1)}\\ \\text{psf}`);
+  H+=step(`2 · Velocity pressure ${ref('ASCE 7-22 Eq. 26.10-1; K_d per Eq. 29.4-1')}`);
+  H+=`<p class="eq-why">The velocity pressure combines the basic wind speed V, the exposure coefficient K_z, the topographic factor K_zt and the ground elevation factor K_e (= 1.0, ASCE 7-22 §26.9). The directionality factor K_d belongs to the force equation (Eq. 29.4-1, F = q_z K_d G C_f A_f); it is carried with q_z here.</p>`;
+  H+=g(`q_z K_d = 0.00256\\,K_z K_{zt} K_e V^2\\cdot K_d = 0.00256(${fmt(pw.KzMid,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)}) = ${fmt(pw.qzMid,1)}\\ \\text{psf}`);
+  H+=cfPoleWorkedHTML(inp);
   H+=step(`3 · Wind force on the mast ${ref('ASCE 7-22 §29.4')}`);
   H+=`<p class="eq-why">The mast is treated as a slender element; the gust factor G amplifies for turbulence, and C_f is the shape drag coefficient. The mast is divided into ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip takes q_z at its own centroid height z_i and its own width D(z_i) (taper), and acts at z_i. The mid-height single-resultant values are shown first for reference only.</p>`;
   H+=g(`A_{pole} = \\bar D\\,H = ${fmt(pw.Davg,3)}(${fmt(inp.H,1)}) = ${fmt(pw.Apole,2)}\\ \\text{ft}^2`);
@@ -5281,12 +5427,12 @@ function fixtureWorkedHTML(fxs, inp){
   H+=`<p class="eq-why">Each fixture contributes four effects: a wind drag force at its mount height, an enlarged iced-wind force, an ice weight from the accreted glaze envelope, and — because it sits at the end of a mast arm — an eccentric gravity moment W·a directed along the arm azimuth θ. The eccentric moment is a fixed vector that does not rotate with the wind, so fixtures on opposing arms (0° / 180°) cancel in moment while still adding to axial load and base shear. Each step is worked for fixture F1; the table above lists all fixtures.</p>`;
   H+=step(`1 · Fixture wind force ${ref('ASCE 7-22 Ch. 29')}`);
   H+=`<p class="eq-why">The wind force uses the fixture's effective projected area (EPA), which bundles its drag coefficient; velocity pressure is evaluated at the mount height h with the gust factor G. Full EPA is taken as exposed for any wind azimuth.</p>`;
-  H+=g(`q_z(h) = 0.00256\\,K_z(h)K_{zt}K_d\\,G\\,V^2 = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.Kd,2)})(${fmt(inp.G,2)})(${inp.V})^2 = ${fmt(fg.qz,2)}\\ \\text{psf}`);
+  H+=g(`q_z(h)K_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)})(${fmt(inp.G,2)}) = ${fmt(fg.qz,2)}\\ \\text{psf}`);
   H+=g(`F_w = q_z\\,EPA\\,C_f = ${fmt(fg.qz,2)}(${fmt(fg.x.epa,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fw,0)}\\ \\text{lb}`);
   H+=step(`2 · Iced fixture wind ${ref('ASCE 7-22 Ch. 10')}`);
   H+=`<p class="eq-why">Under the wind-on-ice case the fixture face grows by the radial ice thickness t on every edge (face modeled as a square of side √EPA), and the concurrent wind speed V_ice applies with the same gust factor G:</p>`;
   H+=g(`EPA_i = \\left(\\sqrt{EPA}+2t\\right)^2 = \\left(${fmt(fg.side,2)}+2(${fmt(tft,3)})\\right)^2 = ${fmt(fg.epaI,2)}\\ \\text{ft}^2`);
-  H+=g(`q_{zi} = 0.00256\\,K_z K_{zt} K_d\\,G\\,V_{ice}^2 = ${fmt(fg.qzi,2)}\\ \\text{psf}\\qquad F_{wi} = q_{zi}\\,EPA_i\\,C_f = ${fmt(fg.qzi,2)}(${fmt(fg.epaI,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fwi,0)}\\ \\text{lb}`);
+  H+=g(`q_{zi}K_dG = 0.00256\\,K_z K_{zt} K_e V_{ice}^2\\cdot K_d\\,G = ${fmt(fg.qzi,2)}\\ \\text{psf}\\qquad F_{wi} = q_{zi}\\,EPA_i\\,C_f = ${fmt(fg.qzi,2)}(${fmt(fg.epaI,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fwi,0)}\\ \\text{lb}`);
   H+=step(`3 · Ice weight ${ref('ASCE 7-22 Ch. 10')}`);
   H+=`<p class="eq-why">Ice forms a glaze skin of radial thickness t over the wetted surface — both faces of the catch area plus a perimeter band over the catch depth d_ice:</p>`;
   H+=g(`A_{surf} = 2A_{ice}+4\\sqrt{EPA}\\,d_{ice} = 2(${fmt(fg.x.aIce,2)})+4(${fmt(fg.side,2)})(${fmt(fg.x.tIce,2)}) = ${fmt(fg.surf,2)}\\ \\text{ft}^2`);
@@ -5305,7 +5451,7 @@ function signWindWorkedHTML(sw, inp){
   H+=step(`1 · Panel geometry &amp; velocity pressure ${ref('ASCE 7-22 §26.10, §29.3')}`);
   H+=`<p class="eq-why">The sign is a solid freestanding wall. The velocity pressure is evaluated at the top of the sign, h = clearance + panel height; K_z follows the exposure power-law profile.</p>`;
   H+=g(`h = ${fmt(sw.clr,1)}+${fmt(sw.s,1)} = ${fmt(sw.h,1)}\\ \\text{ft}\\qquad A_s = B\\,s = ${fmt(sw.B,1)}(${fmt(sw.s,1)}) = ${fmt(sw.As,1)}\\ \\text{ft}^2`);
-  H+=g(`q_h = 0.00256\\,K_z(h)K_{zt}K_d\\,G\\,V^2 = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)})(${inp.V})^2 = ${fmt(sw.qh,1)}\\ \\text{psf}`);
+  H+=g(`q_hK_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qh,1)}\\ \\text{psf}`);
   H+=step(`2 · Force coefficient ${ref('ASCE 7-22 Fig. 29.3-1')}`);
   if(sw.cfManual){
     H+=`<p class="eq-why"><b>Manual override.</b> C_f has been set directly by the engineer; the Fig. 29.3-1 auto value is shown for comparison.</p>`;
@@ -5331,12 +5477,13 @@ function signWindWorkedHTML(sw, inp){
       const sFx=sw.caseC.bands.reduce((a,x)=>a+x.Fr*x.xc,0);
       H+=`<tr style="font-weight:700;border-top:2px solid var(--line-strong)"><td colspan="4" style="text-align:right">ΣF_i, ΣF_i·x_i =</td><td>${fmt(sw.caseC.F,0)}</td><td>—</td><td>${fmt(sFx,0)}</td></tr></table>`;
       H+=g(`F_C = \\Sigma F_i = ${fmt(sw.caseC.F,0)}\\ \\text{lb}\\qquad \\bar x = \\frac{\\Sigma F_i x_i}{\\Sigma F_i} = \\frac{${fmt(sFx,0)}}{${fmt(sw.caseC.F,0)}} = ${fmt(sw.caseC.xR,2)}\\ \\text{ft}`);
-      H+=g(`e_C = \\bar x-\\tfrac{B}{2} = ${fmt(sw.caseC.xR,2)}-${fmt(sw.B/2,2)} = ${fmt(sw.caseC.e,2)}\\ \\text{ft from panel center}`);
+      H+=g(`e_C = \\tfrac{B}{2}-\\bar x = ${fmt(sw.B/2,2)}-${fmt(sw.caseC.xR,2)} = ${fmt(sw.caseC.e,2)}\\ \\text{ft from panel center, toward the windward edge}`);
     } else {
       H+=`<p class="eq-why"><b>Case C</b> is not required because B/s = ${fmt(sw.bs,2)} &lt; 2.</p>`;
     }
   }
   H+=`<p class="eq-result"><b>${nPost===1?'Torsion':'Limitation — torsion'}:</b> ${nPost===1?'the eccentric Cases B/C twist the monopost (T = F·e); the post, anchor bolts and shaft threshold are checked for it, the soil torsional resistance is not.':'eccentric Cases B/C are applied as an unequal two-post force split, and no member is checked for torsion; if true torsional resistance is required, a separate analysis is needed.'} All applicable cases are enveloped per post in the load-combination matrix below.</p>`;
+  H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
   return H;
 }
 function renderSignWindExample(sw,inp){
@@ -5355,7 +5502,7 @@ const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
-  'Anchor T–V interaction':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
+  'Anchor T–V interaction':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
 const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
   asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
@@ -5398,6 +5545,7 @@ const LPP_REFS=[
   ['ACI 318-19','Ch. 17: §17.5.1.2, §17.5.2.1 (anchor reinforcement), §17.6.1 to §17.6.4 (tension), §17.7.1 to §17.7.3 (shear), §17.8 (interaction), §17.9.1 to §17.9.4 (minimum spacing and edge distance, Table 17.9.2(a)); §20.5.1.3 (cover); §21.2, §22.2, §22.4 (axial and flexure), §22.5 (shear), §22.7.1.1 (threshold torsion); §10.3.1.2, §10.6.1.1, §10.7.6; §25.2.3, §25.7.2 (bar spacing, ties)'],
   ['AISC 360-16','§E3 (flexural buckling; §E7 noted, not applied), §F7 (rectangular / square HSS), §F8 (round HSS), §H1.1 (interaction), §H3.2 (torsion), Tables B4.1a / B4.1b, Appendix 8 (B₂), Commentary Table C-A-7.1 (K = 2.1)'],
   ['ASTM F1554','Anchor rods, Grades 36, 55 and 105'],
+  ['ASME B18.2.2','Heavy hex nuts: width across flats F = 1.5d + 1/8 in (pullout bearing area of the embedded nut)'],
   ['AASHTO LTS','Structural Supports for Highway Signs, Luminaires, and Traffic Signals, Commentary C13.6.1.1 (Broms embedment, reference check only); anchor rod tightening (snug-tight, then turn-of-nut pretension), the basis of the Torqued default; edition and article: verify']];
 function lppPageCSS(){
   const q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,' ');
@@ -5590,14 +5738,14 @@ function buildReport(inp,allCombos,gov,embed,struct){
     'ASCE 7 Table 26.10-1');
   H+=eqB(
     'Velocity pressure, q_z',
-    `The velocity pressure converts the wind speed into a pressure. K_zt is the topographic factor (1.0 on level ground), K_d the directionality factor, and V the basic wind speed. The 0.00256 coefficient carries the air-density and unit conversions for V in mph and q_z in psf.`,
-    `q_z = 0.00256\\,K_z K_{zt} K_d V^2`,
+    `The velocity pressure converts the wind speed into a pressure. K_zt is the topographic factor (1.0 on level ground), K_e the ground elevation factor (taken as 1.0, ASCE 7-22 §26.9), and V the basic wind speed. The 0.00256 coefficient carries the air-density and unit conversions for V in mph and q_z in psf. In ASCE 7-22 the directionality factor K_d multiplies the force (Eq. 29.4-1); the values below carry it with q_z.`,
+    `q_z = 0.00256\\,K_z K_{zt} K_e V^2\\qquad (q_zK_d\\text{ used below})`,
     null,
     'ASCE 7 Eq. 26.10-1');
   H+=eqB(
     'Evaluated at the two reference heights',
-    `Substituting the site inputs (V = ${inp.V} mph, K_zt = ${n(inp.Kzt,2)}, K_d = ${n(inp.Kd,2)}):`,
-    `\\begin{aligned}q_{z,top}&=0.00256(${n(pw.KzTop,3)})(${n(inp.Kzt,2)})(${n(inp.Kd,2)})(${inp.V})^2 = ${n(pw.qzTop,1)}\\ \\text{psf}\\\\ q_{z,mid}&=0.00256(${n(pw.KzMid,3)})(${n(inp.Kzt,2)})(${n(inp.Kd,2)})(${inp.V})^2 = ${n(pw.qzMid,1)}\\ \\text{psf}\\end{aligned}`,
+    `Substituting the site inputs (V = ${inp.V} mph, K_zt = ${n(inp.Kzt,2)}, K_e = 1.00, K_d = ${n(inp.Kd,2)}):`,
+    `\\begin{aligned}q_{z,top}K_d&=0.00256(${n(pw.KzTop,3)})(${n(inp.Kzt,2)})(1.00)(${inp.V})^2(${n(inp.Kd,2)}) = ${n(pw.qzTop,1)}\\ \\text{psf}\\\\ q_{z,mid}K_d&=0.00256(${n(pw.KzMid,3)})(${n(inp.Kzt,2)})(1.00)(${inp.V})^2(${n(inp.Kd,2)}) = ${n(pw.qzMid,1)}\\ \\text{psf}\\end{aligned}`,
     `These pressures feed the direct wind force on the pole (${lppSecRef('2')})${cablesEnabled?` and, evaluated at each cable's height, the wind load on the cables (${lppSecRef('3')})`:''}.`);
   H+=`</div></details>`;
 
@@ -5609,6 +5757,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     `The pole tapers from ${n(inp.poleDiaTop,1)} in at the top to ${n(inp.poleDiaBase,1)} in at the base. For the projected wind area the mean diameter is used (converted to feet), multiplied by the pole height to give the silhouette the wind acts on.`,
     `\\bar D=\\tfrac{1}{2}(D_{top}+D_{base})=\\tfrac12(${n(inp.poleDiaTop,1)}+${n(inp.poleDiaBase,1)})=${n(pw.Davg_in,2)}\\ \\text{in}=${n(pw.Davg,3)}\\ \\text{ft}\\qquad A_{pole}=\\bar D\\,H=${n(pw.Apole,1)}\\ \\text{ft}^2`,
     null);
+  H+=cfPoleWorkedHTML(inp);
   H+=eqB(
     'Wind force on the pole shaft',
     `The distributed wind on the shaft is integrated over ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip uses q_z at its own centroid height z_i and its own width D(z_i), and acts at z_i (ASCE 7 §29.4.1 per strip). C_f is the drag coefficient for a round section (≈0.7). For reference, the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`,
@@ -6169,7 +6318,7 @@ function populateDetailStack(sfx, ctx){
   let bt=`<tr><th style="text-align:left">Limit state</th><th>Demand<span class="sym">(lb)</span></th><th>φ·Capacity<span class="sym">(lb)</span></th><th>Ratio</th><th>—</th></tr>`;
   bt+=row('Steel tension, per bolt (§17.6.1)',bolts.Tmax,bolts.phiNsa);
   if(!bolts.hasAnchRe) bt+=row('Concrete breakout, group (§17.6.2)',bolts.Tsum,bolts.phiNcbg);
-  else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">carried by anchor reinforcement (§17.5.2.1)</td></tr>`;
+  else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">replaced by the anchor reinforcement (§17.5.2.1), checked below</td></tr>`+boltArRows(bolts);
   bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
   bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
   bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu+(bolts.VbT||0)*bolts.n,bolts.phiVcp);
@@ -6203,7 +6352,7 @@ function populateDetailStack(sfx, ctx){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -6231,6 +6380,14 @@ function applyState(st){
   if(!st.inputs || st.inputs.poleDen===undefined) $('poleDen').value='490';
   if(!st.inputs || st.inputs.cableMethod===undefined) $('cableMethod').value='sag';
   if(!st.inputs || st.inputs.cableE===undefined) $('cableE').value='29000';
+  // pole/post C_f source (added 2026-11-01, LP-R3). Saves made before it have no cfPoleMode: they keep the entered C_f
+  // (Manual), so every earlier result is unchanged; new projects start on Auto (ASCE 7-22 Fig. 29.4-1).
+  { const mn=$('cfMigNote');
+    if($('cfPoleMode') && (!st.inputs || st.inputs.cfPoleMode===undefined)){
+      $('cfPoleMode').value='manual';
+      if(mn){ mn.textContent='Older save: the pole/post C_f source was not an input when this project was saved. It opens as Manual with the saved C_f = '+(st.inputs&&st.inputs.cfPole!==undefined?st.inputs.cfPole:$('cfPole').value)+', so results are unchanged. Select Auto to use ASCE 7-22 Fig. 29.4-1 (shown in the note above).'; mn.style.display=''; }
+    } else if(mn){ mn.style.display='none'; mn.textContent=''; }
+    if($('cfPoleSurf') && (!st.inputs || st.inputs.cfPoleSurf===undefined)) $('cfPoleSurf').value='smooth'; }
   // damping ratio for G_f (added 2026-10-12): older saves have none → default 0.005
   if($('lppBeta') && (!st.inputs || st.inputs.lppBeta===undefined)) $('lppBeta').value='0.005';
   // K_d source (added 2026-10). Saves made before it have no KdMode: a stored K_d of 0.85 was the
@@ -6258,6 +6415,10 @@ function applyState(st){
   setSeg('segIso', isoFac);
   setSeg('segCon', constraint);
   setSeg('segAnchRe', anchRe);
+  lppApplyArUI();
+  if($('arBars') && (!st.inputs || st.inputs.arBars===undefined)) $('arBars').value='2';
+  if($('arBar') && (!st.inputs || st.inputs.arBar===undefined)) $('arBar').value='shaft';
+  if($('arX') && (!st.inputs || st.inputs.arX===undefined)) $('arX').value='3';
   // anchor installation (added 2026-10-21). Saves made before it have no anchTq: they open as
   // Untorqued (no capacity depends on it; only the §17.9.2 checks use it) with a notice.
   anchTq = st.anchTq==='torqued' ? 'torqued' : 'untorqued';
