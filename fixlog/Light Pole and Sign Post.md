@@ -1225,7 +1225,7 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
   - The tension-breakout A_Nc integration clips by a circle of radius b/2 for a square shaft too (`u*u+w*w>Redge*Redge`), i.e. the inscribed circle; conservative for a square. Unchanged (pre-existing; engineer to decide).
   - ψ_ed,N for a square shaft keeps c_a1 = b/2 − R even when no bolt sits on a face normal; conservative. Unchanged, per the group method.
 
-## 2026-11-01 — PR: claude/lp-pr0-harness (LP-0: test harness, scope line, manual Case B row; display only; PR link added after merge)
+## 2026-11-01 — PR #537: claude/lp-pr0-harness (LP-0: test harness, scope line, manual Case B row; display only)
 
 Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer's decisions of 2026-11-01 (scope; LTS 2nd Ed. mode later; no change to anything cable-related).
 
@@ -1247,3 +1247,31 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 ### Verification
 - `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: pass. `node tests/engine/run.mjs lightpole`: 10 passed.
 - `node tests/lightpole-compare.mjs --a origin/main` (553e98d): all 13 cases — results identical, cable values identical, drawings identical, 0 console errors; the only text difference is the new scope line on the report cover (+1 line per case). Screenshots at 1280 and 390: no horizontal scroll.
+
+## 2026-11-01 — PR: claude/lp-pr1-display (LP-1: off-axis arm warning, Case C eccentricity sign, ASCE 7-22 velocity-pressure form; no design result changes; PR link added after merge)
+
+### LP1-1. Wind-direction warning for arms not on the wind axes (LP-R1, engineer decision 2026-11-01)   [warning] [no result change]
+- **Decision:** keep the 4 wind directions (0/90/180/270°); no sweep. Warn when an arm/fixture is not aligned with those axes. Cables are excluded from the warning (engineer 2026-11-01: no change to anything cable-related). Sign panels are always on the axes (panel normal = +x), so no sign warning.
+- **Where:** new `lppOffAxisFixtures(fx)` and `lppOffAxisMsg(L)` above `function evalCombo(`; used in `summaryHTML()` (pole mode, appended to the "not checked" box before the monopost torsion line) and in `calc()` flags (before `if(!cablesEnabled){`).
+- **Rule:** a fixture with arm a > 0 and (W > 0 or EPA > 0) whose θ mod 90° ≠ 0.
+- **Check case:** fixture at θ = 45°, a = 8 ft → "Fixture 1 (arm at θ = 45°) is not aligned with these axes … may be unconservative". The default pole (fixtures at 0° and 180°) shows no warning.
+
+### LP1-2. Sign Case C eccentricity sign (LP-R14)   [display; per-direction split mirrored] [governing results unchanged]
+- **Where:** `signWind()`, anchor `const eC=`; `signWindWorkedHTML()` line `e_C = \tfrac{B}{2}-\bar x`.
+- **Before:** `const eC=xR - B/2;` (negative toward the windward edge: Case C mirrored relative to Case B's +0.2B). **After:** `const eC=B/2 - xR;` (positive toward the windward edge, the Case B convention).
+- **Provision:** ASCE 7-22 Fig. 29.3-1 (Case C, higher pressure near the windward edge).
+- **Effect:** the monopost torsion uses |F·e| (unchanged). On two posts the Case C split at 0° and at 180° swap; each post's envelope over both directions is the same, so every governing value (per-post ASD/LRFD demand, foundation, post stress, Summary) is identical. Only the per-direction rows of the combination study differ.
+- **Check case (default monopost):** x̄ = (1,705·3 + 1,137·9)/2,842 = 5.40 ft from the windward edge; e_C before −0.60 ft, after +0.60 ft (= 6.00 − 5.40) toward the windward edge.
+
+### LP1-3. Velocity pressure shown in the ASCE 7-22 form (LP-R12, label/form only)   [display] [no result change]
+- **Before:** `q_z = 0.00256 K_z K_zt K_d V²` labelled "ASCE 7-22 Eq. 26.10-1" (that is the ASCE 7-16 form).
+- **After:** `q_z = 0.00256 K_z K_zt K_e V²` (ASCE 7-22 Eq. 26.10-1, K_e = 1.0 per §26.9) with K_d shown as part of the force equation (Eq. 29.3-1 signs, Eq. 29.4-1 other structures); the worked lines show the product q_z·K_d (·G) with K_e = (1.00) substituted. Numbers are unchanged (K_e = 1.0).
+- **Where:** Manual §(velocity pressure) `{p:"Velocity pressure follows ASCE 7-22 Eq. 26.10-1`; `windWorkedHTML()` step 2; `fixtureWorkedHTML()` q_z and q_zi lines; `signWindWorkedHTML()` step 1; sign load path post drag line; `buildReport()` eqB "Velocity pressure, q_z" and "Evaluated at the two reference heights".
+- **Not changed:** the cable worked equation (cable features are left exactly as they are, engineer 2026-11-01) still reads `q_W=0.00256 K_z(h_c)K_zt K_d G C_f V²` — numerically the same. K_z constants (7-16 Table 26.11-1 α/z_g) not changed: open question below.
+
+### Verification
+- `node tests/check-syntax.mjs`: pass; `node tests/engine/run.mjs lightpole`: 10 passed.
+- `node tests/lightpole-compare.mjs --a origin/main` (5f49cfc), 13 cases: results identical in all 9 pole cases; cable values identical (1,155 numbers on the default pole, 561 for the single 45° cable); drawings identical; 0 console errors. Sign cases: monopost 1 value (caseC.e sign); two-post 169 values, all in the per-direction rows of the combination study (posts[] of each azimuth, Case C split mirrored) plus caseC.e — every per-post governing demand (postGov), foundation stack, post stress and Summary value identical (checked by filtering the diff paths). Text: the relabelled equations, e_C, and the arm warning (arms case).
+
+### Open items (not changed)
+- ASCE 7-22 Table 26.11-1 constants (α, z_g) for K_z: the tool keeps the 7-16 values (difference < 1 %: Exp. C 35 ft 1.0147 vs ≈1.009). Engineer to decide whether to switch (a calc change).
