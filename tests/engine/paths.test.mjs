@@ -91,10 +91,11 @@ test('Report: the Welds section (selected girder, both detail levels; every gird
   for (const detail of ['gov', 'all']) {
     const M = W.SBDReportBuild.model(B, { detail }), doc = W.SharedReport.build(M), s = M.sections.find(q => q.id === 'wd');
     assert.ok(s, 'Welds section'); assert.deepEqual(J(doc.unresolved), []); assert.deepEqual(J(doc.dup), []);
-    const g = M.gov.filter(q => q.mod === 'Welds'); assert.equal(g.length, 2);
+    const g = M.gov.filter(q => q.mod === 'Welds'); assert.equal(g.length, 3);
     g.forEach(q => { assert.ok(q.key && doc.index.has(q.key), q.check); });
-    // the governing values are the Welds tab's (its build)
-    const fw = B.wd.C.filter(c => /^FW/.test(c.id)).flatMap(c => c.items).filter(it => typeof it.r === 'number' && isFinite(it.r)).reduce((m, it) => Math.max(m, it.r), -Infinity);
+    // the governing values are the Welds tab's (its build); the strength checks (FW1, FW2) first, not FW4 at 1.000 (2026-11-01)
+    assert.deepEqual(g.map(q => q.grp), ['Welds: strength (FW1, FW2)', 'Welds: fatigue (FW3, TR1)', 'Welds: detailing limits (FW4, TR2–TR4)']);
+    const fw = B.wd.C.filter(c => /^FW[12]$/.test(c.id)).flatMap(c => c.items).filter(it => typeof it.r === 'number' && isFinite(it.r)).reduce((m, it) => Math.max(m, it.r), -Infinity);
     assert.equal(g[0].r, fw);
     s.subs.forEach(q => q.items.forEach(it => { grab(it.text); (it.head || []).forEach(grab); (it.rows || []).forEach(r => (Array.isArray(r) ? r : r.cells).forEach(c => grab(c && typeof c === 'object' ? c.t : c))); }));
     assert.ok(!/NaN|undefined|\[object/.test(W.SharedReport.text(doc)));
@@ -103,7 +104,7 @@ test('Report: the Welds section (selected girder, both detail levels; every gird
   // every girder: the Welds groups are in the summary
   const list = P.girders.map((g, gi) => { const Bg = W.SBDReportData.compute(P, gi), r = W.SBDReportBuild.govRows(Bg); return { gi, label: g.label, rows: r.rows, err: r.err, B: Bg }; });
   const AM = W.SBDReportBuild.allModel(P, list), d2 = W.SharedReport.build(AM);
-  assert.deepEqual(J(d2.unresolved), []); assert.ok(AM.ctl.get('Welds: flange-to-web (FW1–FW4)')); assert.ok(AM.ctl.get('Welds: shop flange transitions (TR1–TR4)'));
+  assert.deepEqual(J(d2.unresolved), []); ['Welds: strength (FW1, FW2)', 'Welds: fatigue (FW3, TR1)', 'Welds: detailing limits (FW4, TR2–TR4)'].forEach(k => assert.ok(AM.ctl.get(k), k));
   // a hand-off file: the Welds tab's file source
   const pl = payload('gd_builtin_AASHTO_G1.json'), BF = W.SBDReportData.compute(P, 0, { src: 'file', pl, plName: 'gd_builtin_AASHTO_G1.json' });
   assert.ok(BF.wd && !BF.err.wd, BF.err.wd); assert.equal(BF.wd.src, 'file');

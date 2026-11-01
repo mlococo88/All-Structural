@@ -92,7 +92,9 @@
                   -- added 2026-10-31 (Auto design PR 2), optional: absent = each variable's default (engine/autodesign.js VARS) --
                   vars: { <id> | <id>#<field piece, 1-based>: { mode: 'auto' | 'lock' | 'range', min, max, step } } (the design variables: nb, D, tw, bt, tt,
                   bb, tb, trans, spl, splPl, tsSp, tsA_b, tsA_t, tsB_b, tsB_t, bsA_n, bsA_b, bsA_t, bsB_n, bsB_b, bsB_t, scP, scN, cf, weld);
-                  undo also keeps stiffeners, crossframes, studs, welds (null: absent before the Apply) }
+                  undo also keeps stiffeners, crossframes, studs, welds (null: absent before the Apply),
+                  -- added 2026-11-01, optional: absent = 2.5 ft --
+                  ohMin (ft, the minimum overhang Auto and Range may choose; ohSym: 'sym' | 'asym') }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
      -- added 2026-10-30 (legacy import PR), optional, written only by an import of an old project (engine/legacy.js) --
@@ -100,7 +102,8 @@
                   own path }, summary: { source, parts, unmapped: [{ part, label, field, what }], notes } }
      -- added 2026-10-30 (welds PR), optional: a version 1 project without it reads as defaultWelds() --
      welds:     { Fexx (ksi), w (flange-to-web fillet weld size, in; '' = the minimum of Table 6.13.3.4-1 at each location),
-                  gam: { dc, dw, ll (Strength I), fat (Fatigue I) }, ground: 'yes' | 'no' (shop transition butt welds ground flush) }
+                  gam: { dc, dw, ll (Strength I), fat (Fatigue I) } (kept, unused since 2026-11-01: the Welds tab uses the project's load
+                  factors, ui/welds.js projGam), ground: 'yes' | 'no' (shop transition butt welds ground flush) }
      -- added 2026-10-30 (paths PR, SB2-W1), optional: absent = no f_ℓ entered --
      flexure:   { fl (ksi): first-order f_ℓ of the girder design (Flexure and Rating, Strength I and Service II), entered on the Flexure
                   tab; absent, blank or 0: the skew value of C6.10.1 (engine/framing.js design) }
@@ -316,7 +319,7 @@
     // added 2026-10-30 (welds PR)
     if (p.welds != null) { const Q = p.welds || {};
       pos(Q.Fexx, 'welds.Fexx', 'F_EXX'); if (Q.w !== '' && Q.w != null) pos(Q.w, 'welds.w', 'Fillet weld size');
-      ['dc', 'dw', 'll', 'fat'].forEach(k => pos((Q.gam || {})[k], `welds.gam.${k}`, `Load factor ${k}`));
+      // welds.gam: no longer checked (2026-11-01): kept in the file unchanged but unused; the Welds tab takes the project's load factors
       if (!['yes', 'no'].includes(Q.ground)) E('welds.ground', 'Transition butt welds: ground flush yes or no.'); }
     // added 2026-10-30 (report wiring PR): the optional f_ℓ during deck placement
     if (p.constr != null && p.constr.flC != null && !isNum(p.constr.flC)) E('constr.flC', 'f_ℓ during deck placement must be a number (ksi).');
