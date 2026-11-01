@@ -169,7 +169,20 @@
       const St = pl ? pl.stations || [] : [], vf = (a, b) => Math.max(0, ...St.filter(s => +s.x >= a - 1e-9 && +s.x <= b + 1e-9).map(s => (+s.V_FATpos || 0) - (+s.V_FATneg || 0)));
       const ex = JSON.parse(JSON.stringify(SC.DEFAULT.zones)), vEx = (a, b) => Math.max(0, ...ex.filter(z => Math.min(z.x2, b) > Math.max(z.x1, a)).map(z => z.Vfr));
       scIn.zones = Q.zones.map((z, i) => ({ name: `Zone ${i + 1}, ${fmt(z.x1, 2)} to ${fmt(z.x2, 2)} ft`, x1: z.x1, x2: z.x2, nr: z.nr, p: z.p, Vfr: pl ? vf(z.x1, z.x2) : vEx(z.x1, z.x2), ...zAt((z.x1 + z.x2) / 2) })); }
-    const SR = SC.compute(scIn, scEnv), SCC = SR.errors.length ? null : SC.checks(SR);
+    // the app's own pitch zones (this project's analysis or Custom rows, no zones entered): Preliminary sizing's rule (studsOf: fatigue pitch per
+    // 0.1L from p_req = n_rZ_r/(1.75V_fQ/I), as GirderDetail received it) is then refined against this module's own checks (2026-11-01, D-2 of
+    // docs/steel-bridge-comparison.md §d): a zone whose pitch exceeds its SC1 p_req takes ⌊2p_req⌋/2, and the zones of a region with fewer studs
+    // than SC2 needs (n_prov < P/Q_r) take a pitch scaled by n_prov/n_req (rounded down to 1/2 in; at least 6d, 6.10.10.1.2), until both pass or
+    // the pitch is at 6d. Before, the layout could fail SC1 and SC2 (e.g. xsA G1 exterior, SC2 1.372). Entered zones and hand-off files: as given.
+    const autoZ = !!pl && (pl._schema === 'sbd2-analysis' || pl._schema === 'sbd2-custom') && !(Q.zones || []).length;
+    let SR = SC.compute(scIn, scEnv);
+    if (autoZ && !SR.errors.length) { const pMin = 6 * (+Q.d), fl2 = v => Math.floor(v * 2 + 1e-9) / 2;
+      for (let it = 0; it < 40; it++) { let ch = false; const zs = scIn.zones;
+        SR.zones.forEach((z, i) => { if (isFinite(z.preq) && z.p > z.preq + 1e-9) { const q = Math.max(pMin, fl2(z.preq)); if (q < zs[i].p - 1e-9) { zs[i].p = q; ch = true; } } });
+        SR.regions.forEach(r => { if (!(r.nprov < r.nreq - 1e-9)) return; const f = r.nprov / r.nreq;
+          r.parts.forEach(q => { const i = SR.zones.indexOf(q.z); if (i < 0) return; let v = Math.max(pMin, fl2(zs[i].p * f)); if (v >= zs[i].p - 1e-9) v = Math.max(pMin, zs[i].p - 0.5); if (v < zs[i].p - 1e-9) { zs[i].p = v; ch = true; } }); });
+        if (!ch) break; SR = SC.compute(scIn, scEnv); } }
+    const SCC = SR.errors.length ? null : SC.checks(SR);
     // the other b_eff mode, for the comparison line (GirderDetail open question)
     let alt = null; if (!SR.errors.length) { const q = JSON.parse(JSON.stringify(scIn)); if (SR.beffMode === 'girder') { delete q.beffMode; delete q.beffG; } else { q.beffMode = 'girder'; q.beffG = pl ? dk.beff : G.beff; }
       const A = SC.compute(q, scEnv); if (!A.errors.length) { const C = SC.checks(A), mx = (CK, id) => Math.max(0, ...CK.find(c => c.id === id).items.map(i => i.r).filter(isFinite)); alt = { beff: A.dk.beff, sc1: mx(C, 'SC1'), sc2: mx(C, 'SC2'), sc1o: mx(SCC, 'SC1'), sc2o: mx(SCC, 'SC2') }; } }

@@ -65,6 +65,8 @@ Fields marked *(existing)* already exist; their schemas are documented in `AUDIT
 | `memberReactions` | `bridge-member-reactions` | Steel Beam Design | BasePlateAnchorDesigner, Spread Footing |
 | `girderDemands` | `stgirder-external-demands` (ST-Girder's existing imported-demands schema, §4.9) | Steel Bridge Design (GirderDetail) | stgirder (ST-Girder, the Design & Rating view of Steel Bridge Design; the stand-alone `stgirder.html` was removed at the cut-over, 2026-10-22) |
 | `pileResults` | `bridge-pile-results` | Pile Designer | abutment_calculator (§4.10) |
+| `anchorGroup` | `bridge-anchor-group` | Light Pole and Sign Post (export: a later PR) | BasePlateAnchorDesigner (§4.11) |
+| `anchorGroupResult` | `bridge-anchor-group-result` | BasePlateAnchorDesigner | Light Pole and Sign Post (a later PR) (§4.12) |
 
 **File rename (2026-10-22, merge of GirderDetail and ST-Girder, PR 1).** GirderDetail's file `Steel Bridge Beam Modules.html` is now `Steel Bridge Design.html`; the old name is a small redirect page (no library, no data access) that forwards to the new file with the address's `#hash`. Payloads it sends carry `producerFile:"Steel Bridge Design.html"`; payloads sent before carry `"Steel Bridge Beam Modules.html"`, and receivers read both the same way (none of them checks GirderDetail's file name; they check `producer:"GirderDetail"`). No channel, key, schema or receiver id changed. ST-Girder (then `stgirder.html`; removed at the cut-over, see §4.9) is also embedded in Steel Bridge Design as its Design & Rating view (§4.9); when it runs there its `producerFile` default and its `appPaths` entry use the host file's name, so the receivers that refuse ST-Girder payloads (index `capFromST`, lldf `isST`, Substructure Loading `isST`) recognise them by `producer` (`ST-Girder`, or a producer that starts with "ST-Girder" from its page title), never by that file name alone.
 
@@ -452,6 +454,49 @@ Pile Designer's results for the piles the abutment calculator sent on `foundatio
   - *Use in the calculation.* In §4.4b (`pileCombined`) a limit state with a moment record takes M = that M_max, split on H_x, H_y like the entered p-y moment, without δ_s (the p-y solve already carries the axial load); it takes precedence over the panel I-7 p-y moment and the Matlock–Reese estimate for that limit state only. If the governing pile's P or H/n no longer matches what Pile Designer ran, a warning says so. **Stale (since PXR2):** while the content hash does not match (`PXR_STALE`), the calculation does not use the import: §4.4b takes the Matlock–Reese (or panel I-7 p-y) moment and shows the Pile Designer moment for reference only, and every imported input that still holds its imported value is computed with the value it held before the import (`S.pileRes.prev`; R_n, φ, D_f, the integral moments); the inputs keep showing the imported values, tagged "STALE, not used". Current results are used as before.
   - *Record and marking.* New optional field `S.pileRes` = `{ producer, producerFile, producedAt, project, via, adoptedAt, basis:{producer, producedAt, contentHash, target}, stateAtImport, casesRunAt, fields:{path:value}, prev:{path:value before the import} (PXR2), byLS, choices, pile, geo, fixity, struct, integral }` (saved with the project; part of the Input ID). Inputs in `fields` are highlighted like owner defaults ("PD · from Pile Designer …") while they hold the imported value. Panel I-7 (I-0a for integral) shows the source, the moments, R_n basis, minimum penetration, structural resistance and the stale status, with "Clear Pile Designer results" (removes `S.pileRes`; imported input values stay). A later import replaces the record. Report: a source line under the title and the §4.4b worked lines ("M = M_max,PD …").
 - Moments are factored for strength and extreme-event rows (the loads were factored); `pileResults` adds no load factors.
+
+### 4.11 `anchorGroup` (Light Pole and Sign Post → BasePlateAnchorDesigner; added 2026-11-01, BC-3)
+
+Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer instead of the Light Pole tool's anchor tab (engineer direction 2026-11-01). One entry per anchor group (a two-post sign has two). The receiver is built (BC-3). Sender: Light Pole and Sign Post (2026-11-01, LP anchor export): **"Send anchors to the Anchorage app"** in the Anchors tab (click only, `BridgeXfer.publish`) and **"Export hand-off (JSON)"**; units in / lb / lb-ft / psi, `signConvention:"lightPole-v1"`, every LRFD combination (atmospheric-ice ones included) at wind toward 0°, 90°, 180°, 270° with M = B₂·M, `standoffClear` sent as 0 (not a Light Pole input), `inputsHash` = FNV-1a of the groups, units and convention. Smoke test: `tests/smoke/lightpole-anchor-handoff.mjs`.
+
+```js
+{ ...envelope, _schema:"bridge-anchor-group", schemaVersion:1, producer:"Light Pole and Sign Post", producerFile:"Light Pole and Sign Post.html",
+  units:{ length:"in"|"ft", force:"kip"|"lb", moment:"kip-in"|"kip-ft"|"lb-in"|"lb-ft", stress:"ksi"|"psi" },
+  basis:{ factored:true, method:"LRFD", combos:"<text, e.g. ASCE 7-22 §2.3>", B2:"<text>" },   // factored must be true
+  signConvention:"lightPole-v1" | "basePlate-v1",
+  inputsHash:"<sender's hash of what it sent>"|null,     // echoed back on anchorGroupResult (stale check)
+  groups:[ { id:"post1", label:"Post 1",
+    anchor:{ pattern:"circle", n:<int ≥ 3>, BC, theta0:<deg, CCW from +x>, dia, grade:"f1554_36"|"f1554_55"|"f1554_105"|<other BP grade id>,
+             nut:"heavyHex"|"hex"|"square"|"heavySquare"|"plateWasher", hef, torqued:true|false },
+    base:{ type:"doubleNut"|"flush", standoffClear:<clear distance concrete to bottom of the leveling nut>, grout:false,
+           plate:{ shape:"circle", D, t, Fy } | { shape:"rect", B, N, t, Fy }, pole:{ shape:"round", D } },
+    pier:{ shape:"circle"|"square", D:<diameter or side>, fc, cracked:true, depth:<shaft length>, cover, longBars, ties },   // cover/bars/ties: informative
+    combos:[ { name, P, Vx, Vy, Mx, My, T } ],      // at the top of concrete, in signConvention
+    lpRef:{ Tmax, phiNn, inter } } ],              // optional, the sender's own numbers (parity while its tab exists)
+  notes:[ "…" ] }
+```
+
+- **Sign conventions.** `basePlate-v1`: this tool's own (P + = tension; M<sub>x</sub>, M<sub>y</sub> right-hand about +x, +y: +M<sub>x</sub> lifts the +y side, +M<sub>y</sub> lifts the −x side; T + = counter-clockwise about +z, seen from above). `lightPole-v1`: the Light Pole tool's (P + = compression; `Mx` = the moment of a push toward +x (force × height), `My` of a push toward +y; V<sub>x</sub>, V<sub>y</sub>, T as above). The receiver converts **P = −P<sub>LP</sub>, M<sub>y</sub> = +M<sub>x,LP</sub>, M<sub>x</sub> = −M<sub>y,LP</sub>**, V and T unchanged: a push toward +x puts the −x anchors in tension (pinned by `tests/bpad-circle.mjs`). Any other value is refused.
+- **Receiver: BasePlateAnchorDesigner** (receiver id `basePlate`). **"Pull from Light Pole"** (new-data marker) and **"Import hand-off (JSON)"** (a file whose `_schema` is `bridge-anchor-group`; any other file goes to the `memberReactions` dialog as before) open one dialog; nothing changes until **Import**. Validation: `_schema`, `schemaVersion` ≤ 1, known units, `basis.factored === true` (and LRFD), a known `signConvention`, and per group: circle pattern with integer n ≥ 3, a listed rod diameter and grade, a known nut, positive h<sub>ef</sub>, BC, plate and pier sizes and f′c, a round pole for a circular plate, finite P, V<sub>x</sub>, V<sub>y</sub>, M<sub>x</sub>, M<sub>y</sub> (and T) in every combination; otherwise refused with the reasons.
+  - *Options:* import every group into the project (the anchor-group picker; replaces the project's groups) or one group into the current design.
+  - *What it sets per group:* `anchor` (pattern "circle", nCircle, BC, theta0, dia, grade, head, hef, torqued), `plate` (shape, D or B × N, t, grade by F<sub>y</sub>), `col` (the round HSS of that OD, else a custom D × D column, with a warning), `conc` (shape "circle" or "rect", D, Bx = By = D, f′c, cracked, H = depth, no offset, no c<sub>a</sub> override), `standoff` (`doubleNut` → "clamp" with z = standoffClear; `flush` → "none"), `grout` (off for a double-nut base), `combos` (replaced; T kept only when non-zero); `tRebar`, `vRebar`, `ped` switched off (anchor reinforcement is not available for these layouts). Project information, units and report settings are kept.
+  - *Record:* new optional field `S.bxSrc.anchorGroup` = `{ producer, producerFile, producedAt, project, via, adoptedAt, inputsHash, signConvention, mode, groups:[{id,label}], notes }`, shown next to the hand-off buttons, in the Input Summary and in the printed report. The groups: new optional fields `S.groups = [{ id, label, srcId, data:{plate, col, anchor, grout, standoff, forceModel, levNut, conc, shear, tRebar, vRebar, ped, combos, serviceLoads, detailCombo} }]` and `S.groupActive`.
+
+### 4.12 `anchorGroupResult` (BasePlateAnchorDesigner → Light Pole and Sign Post; added 2026-11-01, BC-3)
+
+```js
+{ ...envelope, _schema:"bridge-anchor-group-result", schemaVersion:1, producer:"Base Plate & Anchor Bolt Designer", producerFile:"BasePlateAnchorDesigner.html",
+  units:{ force:"kip", moment:"kip-in", length:"in" },
+  source:{ producer, producedAt, inputsHash },     // of the anchorGroup payload these results are for (stale check: compare inputsHash)
+  results:[ { groupId, label,
+    governing:{ dcr, mode:"<check label>", combo },   // the largest ratio of every check (plate, anchors, concrete) over every combination
+    tension:{ dcr, mode, combo }, shear:{ dcr, mode, combo }, interaction:{ dcr, form:"parabolic"|"trilinear", combo },
+    ok:true|false, warnings:[ "…" ] } | { groupId, label, error } ],
+  notes:[ "…" ] }
+```
+
+- **Sender: BasePlateAnchorDesigner.** **"Send result to Light Pole"** (in the anchor-group bar, shown once an `anchorGroup` payload was imported) publishes with `BridgeXfer.publish` and offers the same payload as a JSON file (**Export hand-off**). Click only. Each group is computed in its own state.
+- **Receiver: Light Pole and Sign Post** (2026-11-01, LP anchor result; display only, read live from the key or from "Import result (JSON)" for the session; nothing saved): shows, in the Summary design table and the Anchors-tab Anchorage card, "Anchors (Anchorage app, <date>): D/C … — <mode>, <combo>", "stale" when its current `inputsHash` differs from `source.inputsHash`, and "not yet checked" without a result.
 
 ## 5. Shared helper (copy into each tool that sends or receives)
 

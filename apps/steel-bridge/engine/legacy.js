@@ -101,6 +101,9 @@
     else ['L', 'R'].forEach(s => { xs.edges[s] = { ...xs.edges[s], type: 'barrier', bw: bar, bwt: barW }; });
     if (isObj(X) && fin(X.wcA)) xs.wcA = num(X.wcA);
     xs.ws.psf = r.n('suggest.fws', xs.ws.psf); xs.sip = r.n('suggest.sip', xs.sip); xs.allow = r.n('limits.allow', xs.allow);
+    // OWN19 sidewalk override for the owner LL deflection limits (C-32, engineer 2026-11-01): Preliminary sizing limits.sidewalk 'yes' / 'no' →
+    // analysis.deflSidewalk; 'auto' (the old default) or absent: not set (this app's default 'auto': the cross-section's sidewalks)
+    { const v = r.get('limits.sidewalk'); if (v === 'yes' || v === 'no') { P.analysis = P.analysis || {}; P.analysis.deflSidewalk = v; } }
     // deck and materials
     const d = P.deck, c = P.materials.concrete;
     d.ts = r.n(b + 'ts', d.ts); d.haunch = r.n(b + 'haunch', d.haunch); d.tdeck = d.ts + Math.max(0, r.n(b + 'tsac', 0));
@@ -189,7 +192,17 @@
     if (r.has('sc')) { const Q = P.studs = P.studs || M().defaultStuds();
       Q.d = r.n('sc.d', Q.d); Q.h = r.n('sc.h', Q.h); Q.st = r.n('sc.st', Q.st); Q.Fu = r.n('sc.Fu', Q.Fu); Q.Qn10 = r.n('sc.Qn10', Q.Qn10); Q.gamFat = r.n('sc.gam.fat', Q.gamFat);
       Q.Frc = r.n('sc.Frc', Q.Frc); Q.wv = r.n('sc.wv', Q.wv); Q.splX = String(r.get('sc.splX', '') || ''); Q.splL = r.n('sc.splL', Q.splL); Q.splC = r.n('sc.splC', Q.splC);
-      r.mark('sc.skew'); /* GirderDetail's skew flag is set by Preliminary sizing from the support skews: this app's 'auto' does the same */ }
+      r.mark('sc.skew'); /* GirderDetail's skew flag is set by Preliminary sizing from the support skews: this app's 'auto' does the same */
+      // pitch zones (2026-11-01, D-2 of docs/steel-bridge-comparison.md §d): GirderDetail's zones as entered (or as loaded from Preliminary sizing)
+      // become this project's entered zones (studs.zones: the Fatigue & studs tab checks them as given; the app's own layout is not used then).
+      // GirderDetail's built-in example zones (GM.sc.def: 0–22 ft, 3 at 9 in; 22–55 ft, 3 at 12 in) are not a project's: left out, the app lays
+      // out its own. The strength regions (sc.regions) are not an input here: they are made from this project's analysis (largest positive moment).
+      const Z = r.has('sc.zones') ? g.sc.zones : null, key = z => [+z.x1, +z.x2, +z.nr, +z.p].join(',');
+      if (Array.isArray(Z) && Z.length && Z.every(z => isObj(z) && [z.x1, z.x2, z.nr, z.p].every(fin))) {
+        if (Z.map(key).join('|') !== '0,22,3,9|22,55,3,12') { Q.zones = Z.map(z => ({ x1: num(z.x1), x2: num(z.x2), nr: Math.round(num(z.nr)), p: num(z.p) }));
+          notes.push(`Shear connectors: GirderDetail's ${Z.length} pitch zone(s) imported as entered (Fatigue & studs tab, Pitch zones; Clear to use this app's own layout).`); }
+        else notes.push('Shear connectors: GirderDetail\'s zones are its built-in example (0 to 55 ft only): not imported; this app lays out its own pitch zones.');
+        r.mark('sc.zones'); } }
     // transverse and bearing stiffeners (GM.ts, bearing stiffeners bs): grades, electrode, plate types
     const ST = P.stiffeners = P.stiffeners || M().defaultStiffeners();
     if (r.has('ts')) { const gS = GRADE(r.get('ts.gS')); if (gS) ST.transverse.gS = gS; ST.transverse.Fexx = r.n('ts.Fexx', ST.transverse.Fexx);

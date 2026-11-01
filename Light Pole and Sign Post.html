@@ -9,6 +9,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 <script src="shared/steps.js"></script><!-- LPRP: worked steps and the shared report viewer (Report tab) -->
 <script src="shared/report.js"></script>
+<script src="shared/dxf.js"></script><!-- LPDW: DXF writer and drawing preview (Drawings tab, Geometry elevation) -->
 <style>
   :root{
     --ink:#1a2230;--ink-soft:#5b6676;--paper:#f3f0e9;--panel:#ffffff;
@@ -52,6 +53,12 @@
     .tabpage table{display:block;overflow-x:auto;max-width:100%}
     .row{grid-template-columns:minmax(0,1fr) minmax(0,auto)}.row .ctl{min-width:0}.row select{max-width:100%;min-width:0}
     .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}
+  /* 2026-11-01 (LP-13): below 600 px the masthead code tag is no longer absolutely positioned (it overlapped the eyebrow and
+     the title at 390 px); it flows below the subtitle. KaTeX's hidden MathML (position:absolute) is kept inside its formula, so
+     it can no longer widen the page (it gave a 1303 px page at 1280 px on the Anchors tab). */
+  @media(max-width:600px){.masthead .codetag{position:static;text-align:left;margin-top:8px}.masthead .codetag b{display:inline;margin-right:6px}}
+  .katex{position:relative}
+  @media screen{.tabpage .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}
   /* ---- input panel tabs (lppInputTabs; UI only) ---- */
   #lppInTabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:2px solid var(--ink);margin:16px 0 14px;position:sticky;top:0;background:var(--paper);z-index:6;padding-top:4px}
   #lppInTabs .lppInTab{display:inline-flex;align-items:center;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.02em;border:1px solid var(--line);border-bottom:0;background:#efeae0;color:var(--ink-soft);padding:7px 11px;cursor:pointer;border-radius:3px 3px 0 0;margin-bottom:-2px}
@@ -358,6 +365,7 @@
   #reportBody .eq-title,#reportBody .step-label{color:#000;break-after:avoid}
   #reportBody .eqn{overflow-x:auto}
   .lppRptBtn{float:right;margin-left:auto}
+  .lpdBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px} .lpdHead{margin:6px 0} .lpdBox{border:1px solid var(--line);background:#fff}
   /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" on screen, "see §n.k" in the report */
   .wkLink{font-size:11.5px;color:#5b6676;margin:4px 0 2px} a.wkA{color:var(--steel);text-decoration:none;cursor:pointer} a.wkA:hover{text-decoration:underline}
   td>a.wkA{font-size:11.5px}
@@ -666,6 +674,7 @@
       <button data-tab="post">Post</button>
       <button data-tab="anchors">Anchors</button>
       <button data-tab="shaft">Shaft</button>
+      <button data-tab="drawings">Drawings</button>
       <button data-tab="report">Report</button>
       <button data-tab="calcsheet">Calc sheet</button>
       <button data-tab="manual">Manual</button>
@@ -677,6 +686,7 @@
     <div class="tabpage" data-page="post" id="page-post"></div>
     <div class="tabpage" data-page="anchors" id="page-anchors"></div>
     <div class="tabpage" data-page="shaft" id="page-shaft"></div>
+    <div class="tabpage" data-page="drawings" id="page-drawings"></div>
     <div class="tabpage" data-page="report" id="page-report"></div>
     <div class="tabpage" data-page="calcsheet" id="page-calcsheet"></div>
     <div class="tabpage" data-page="manual" id="page-manual"></div>
@@ -831,7 +841,7 @@
     <section class="card" id="signComboCard" data-tab="loading" style="display:none">
       <div class="card-h"><span class="num">3b</span><h2>Load combinations — per-post demand</h2><span class="hint">non-ice ASCE 7 combinations</span></div>
       <div class="card-body">
-        <p class="tbl-note">Signs carry no ice load, so only the non-ice combinations apply. Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. Governing rows (largest M) are highlighted for each design family.</p>
+        <p class="tbl-note">Every combination applies, the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01). Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. Governing rows (largest M) are highlighted for each design family.</p>
         <table class="tbl" id="sgComboTbl"></table>
       </div>
     </section>
@@ -904,6 +914,20 @@
     </section>
 
     <!-- 9. ANCHOR BOLTS -->
+    <section class="card" data-tab="anchors" id="lpAnchCard">
+      <div class="card-h"><span class="num">A</span><h2>Anchorage app</h2><span class="hint">BasePlateAnchorDesigner · HANDOFF.md §4.11</span></div>
+      <div class="card-body">
+        <p class="tbl-note" style="margin-top:0">Send the anchor groups (one per post), the base plate, the shaft and every LRFD combination (ice combinations included; B₂·M; torsion) to the Base Plate &amp; Anchor Bolt Designer, which designs the anchorage. Factored, Light Pole sign convention (lightPole-v1), lb / lb-ft / in / psi.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn mini" id="lpAnchSend" type="button">Send anchors to the Anchorage app</button>
+          <button class="btn mini ghost" id="lpAnchExport" type="button">Export hand-off (JSON)</button>
+          <a class="btn mini ghost" href="BasePlateAnchorDesigner.html" target="_blank" rel="noopener">Open Anchorage app ↗</a>
+        </div>
+        <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p>
+        <div id="lpAnchResult" style="margin-top:8px"></div>
+        <div style="margin-top:6px"><button class="btn mini ghost" id="lpAnchImportRes" type="button">Import result (JSON)</button><input type="file" id="lpAnchResFile" accept=".json,application/json" style="display:none"></div>
+      </div>
+    </section>
     <section class="card poleOnly" data-tab="anchors">
       <div class="card-h"><span class="num">9</span><h2>Anchor bolt design</h2><span class="hint">ASTM F1554 · ACI 318 Ch.17</span></div>
       <div class="card-body">
@@ -961,6 +985,7 @@
     </p>
 
     <!-- 11. FULL CALCULATION REPORT -->
+    <section class="card lpdCard" data-tab="drawings"><div class="card-h"><span class="num">D</span><h2>Drawings</h2><span class="hint">to scale · DXF</span></div><div class="card-body" id="lpdHost"></div></section>
     <section class="card lprCard" data-tab="report"><div class="card-body" id="lprHost"></div></section>
     <section class="card report" data-tab="calcsheet">
       <div class="card-h"><span class="num">11</span><h2>Calculation report</h2><span class="hint">every equation, symbolic → numeric</span><button class="btn mini ghost noprint lppRptBtn" id="lppRptPrint" title="Print the calculation report, or save it as PDF">Print / PDF report</button></div>
@@ -972,6 +997,81 @@
 </div>
 </div>
 
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const num=id=>parseFloat($(id).value)||0;
@@ -1099,7 +1199,7 @@ function applyMode(){
   const cabCard=$('cableCard');
   if(fixCard) fixCard.style.display = sign?'none':'';
   if(cabCard) cabCard.style.display = sign?'none':'';
-  show('iceCard', !sign);   // ice & wind-on-ice: light-pole only (no ice on sign panel)
+  show('iceCard', true);    // ice & wind-on-ice: light pole and (2026-11-01) sign panel and posts
   show('rowFixCf', !sign);
   show('rowSpacing', sign && signPosts===2);
   // output panels that are light-pole-only
@@ -1593,8 +1693,27 @@ function signWind(inp){
     const eC=B/2 - xR;
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
+  // ---- atmospheric ice on the sign (added 2026-11-01, engineer decision; ASCE 7-22 Ch. 10) ----
+  // Panel: flat vertical plate. Ice volume per §10.4.1 (flat plates): the area of one side × t_d × 0.8 for a vertical plate
+  // (as read; verify), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
+  // edge, (B + 2t_d)(s + 2t_d), same C_f, at V_ice with the sign K_d and G; Cases B and C keep their eccentricity, scaled by the
+  // same factor. Posts: radial ice t_d (§10.4.1, cylinder) on the whole post (weight) and the iced width D + 2t_d for the exposed
+  // drag at V_ice.
+  const tdP=iceTd(inp, zc), tdPft=tdP/12;
+  const qhI=0.00256*Kzh*inp.Kzt*inp.KdSign*inp.G*inp.Vice*inp.Vice;
+  const AsI=(B+2*tdPft)*(s+2*tdPft);
+  const F_Ai=qhI*cfAB*AsI;
+  const iceScale = F_A>0 ? F_Ai/F_A : 0;
+  if(caseC) caseC.FI=caseC.F*iceScale;
+  const WiPanel=inp.iceDen*0.8*As*tdPft;                   // lb (total panel ice)
+  let FpostI=0, MpostI=0;
+  postStrips.forEach(st=>{ const td=iceTd(inp,st.z);
+    st.FI=0.00256*Kz(st.z,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
+  const tdPost=iceTd(inp, h/2);
+  const WiPost=iceWeight(tdPost, postW_in, inp.iceDen)*h;   // lb per post (whole post, grade to the top of the panel)
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
-          Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost};
+          Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost,
+          tdP,qhI,AsI,F_Ai,iceScale,WiPanel,FpostI,MpostI,tdPost,WiPost};
 }
 
 // ---- fixture load components (per fixture, unfactored, by source) ----
@@ -2107,6 +2226,8 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
           M_cable:Math.hypot(cMx,cMy), M_pole:poleWindM};
 }
 
+// Base-plate method note (engineer, 2026-11-01): keep b_eff = πD/n; state clearly what is not verified / not checked.
+const LPP_BP_VERIFY='VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: (1) the governing article number; (2) the effective-width rule (b_eff = πD/n at the pole face is used; for square/rectangular poles the same πB/n is used, no flat-face rule); (3) anchor-rod bending in the double-nut standoff is not checked; (4) the minimum plate thickness rules of LRFDLTS are not checked.';
 // Fixtures on an arm (a > 0) whose plan azimuth θ is not on one of the four wind axes (2026-11-01, engineer decision on
 // LP-R1: the four directions are kept; a warning is shown instead of a sweep). Arms and fixtures only (cables excluded,
 // engineer 2026-11-01). Returns [{i, th}] (i is 1-based).
@@ -2363,7 +2484,7 @@ manPart("p2","2. Input Reference",[
  ["Cable modulus, E","ksi","Stiffness method only: the EA term","29,000 ksi for steel strand is typical, but stranded cable has a lower <i>effective</i> modulus than solid steel \u2014 often 23,000 to 28,000 ksi. Use the manufacturer's value if available."]
 ]}},
 
-{h:"2.6 Ice (light pole only)"},
+{h:"2.6 Ice (light pole, and sign panel and posts since 2026-11-01)"},
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
  ["Radial ice thickness, t","in","Ice weight on cable, mast and fixtures; iced projected widths","Nominal thickness from the ASCE 7-22 ice map (Ch. 10) for the site and Risk Category. With the basis \"Map value\" the tool computes t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> for the mast and fixtures; cables use t as entered. Zero disables all ice cases."],
  ["Ice density","lb/ft\u00b3","Ice weight","56 lb/ft\u00b3 is the ASCE 7 value for glaze ice."],
@@ -2871,7 +2992,9 @@ function collectChecks(ctx){
   if(b){
     // each anchor check from its own governing LRFD combination (byCheck), when available
     const bT=(b.byCheck&&b.byCheck.T)||b, bV=(b.byCheck&&b.byCheck.V)||b, bI=(b.byCheck&&b.byCheck.I)||b;
-    push('Anchor tension','ACI 318-19 Ch.17',bT.Tmax,bT.phiNn,'lb');
+    { const bA=(b.allCombos||[bT]).reduce((a,x)=>((x.trAnc!==undefined?x.trAnc:x.tr)>(a.trAnc!==undefined?a.trAnc:a.tr)?x:a));   // the combination with the largest per-anchor ratio
+      push('Anchor tension','ACI 318-19 §17.6.1, §17.6.3',bA.Tmax,bA.phiNn,'lb'); }
+    if(!b.hasAnchRe){ const bB=(b.allCombos||[b]).reduce((a,x)=>(x.trBrk>a.trBrk?x:a)); push('Anchor breakout (group)','ACI 318-19 §17.6.2',bB.Tsum,bB.phiNcbg,'lb'); }
     push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
     push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
     // base plate (AASHTO LRFDLTS bending line, double-nut), governing LRFD combination (added 2026-11-01)
@@ -2921,6 +3044,7 @@ function summaryHTML(ctx){
   if(natL.some(x=>!(x.n1>=1.0)))
     warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
   if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
+  if(stacks.some(st=>st.found&&st.found.bolts)) warnL.push('<b>Base plate:</b> '+lppEsc(LPP_BP_VERIFY));
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push((mode==='sign'?'Monopost torsion from the eccentric sign wind (Cases B/C)':'Torsion from the wind on offset fixtures and arms')+': the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
@@ -2934,6 +3058,7 @@ function summaryHTML(ctx){
   drow('Ties',st=>`${st.found.reo.tie.bar.n} @ ${fmt(st.found.reo.tie.s,0)} in (top zone @ ${fmt(st.found.reo.tie.sTop,0)} in for ${fmt(st.found.reo.tie.zoneH,0)} in)`);
   drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in`:'—');
   drow('Anchor installation',st=>st.found.bolts?(st.found.bolts.torq?'Torqued (pretensioned)':'Untorqued')+`: s = ${st.found.bolts.n>=2?fmt(st.found.bolts.sAnch,2)+' in':'—'}, c<sub>a,min</sub> = ${fmt(st.found.bolts.ca17,2)} in${st.found.bolts.splitW?'; §17.9.2 minimums waived (splitting reinforcement, §17.9.1)':''} ${lppLink('anchors',stacks.indexOf(st))}`:'—');
+  drow('Anchors — Anchorage app',(st)=>{ if(typeof lppAnchorChipHTML!=='function'||!LPP_ANCH) return '—'; const g=LPP_ANCH.groups[Math.min(stacks.indexOf(st),LPP_ANCH.groups.length-1)]; return g?lppAnchorChipHTML(g.id):'—'; });
   drow('Base plate',st=>{ const b=st.found.bolts; if(!b) return '—'; const bP=(b.byCheck&&b.byCheck.BP)||b; return `Ø${fmt(inp.bpDia,1)} in × ${fmt(inp.bpT,3)} in, F<sub>y</sub> ${fmt(bP.Fyp,0)} ksi; t_req ${fmt(bP.tpReq,3)} in (double-nut, bending line at the pole face) ${lppLink('anchors',stacks.indexOf(st))}`; });
   H+=`</table>`;
   // ---- governing demands ----
@@ -2995,7 +3120,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   const two=nP===2;
   let H='';
   H+=`<p class="eq-why">Complete load path from the panel to each post's groundline demand: geometry and lever arms, the dead-load (axial) path, the wind-case force split between posts, and the shear/moment assembly. Every number here is the same computation that feeds the Shaft tab — the governing P, M, N below match the foundation demand exactly.</p>`;
-  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0"><b>Scope note — ice on signs.</b> Atmospheric ice (panel ice weight and wind-on-ice) is <b>not applied</b> to sign panels in this tool: the sign load path carries only dead (D) and bare wind (W). The ice combinations therefore produce no lateral demand for signs and never govern. If glaze ice on a large panel is a design condition at your site, it must be evaluated separately.</p></div>`;
+  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0"><b>Ice on signs (added 2026-11-01).</b> Atmospheric ice (ASCE 7-22 Ch. 10) is applied to the sign: panel ice weight ${fmt(sw.WiPanel,0)} lb (flat plate, §10.4.1), post ice ${fmt(sw.WiPost,0)} lb per post, and wind on the iced panel (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) and posts at V<sub>ice</sub> in the ice combinations. Worked in the sign wind section.</div>`;
 
   // ---- 1 · geometry & lever arms ----
   H+=step(`1 · Panel geometry &amp; lever arms`);
@@ -3050,6 +3175,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   postGovList.forEach((pg,p)=>{
     const gl=pg.gLRFD, cf=COMBOS[gl.key]||COMBOS.L1;
     const fW=cf.W, fD=cf.D;
+    if(cf.Wi>0||cf.Di>0){ H+=`<p class="eq-why" style="margin-top:10px"><b>Post ${p+1}</b> — governs under the ice combination <b>${gl.name}</b>, wind toward ${fmt(gl.phi||0,0)}°, Case ${gl.case}: V<sub>u</sub> = ${fmt(gl.P,0)} lb, M<sub>u</sub> = ${fmt(gl.M,0)} lb·ft, N<sub>u</sub> = ${fmt(gl.axial,0)} lb (wind on the iced panel and post and the ice weight, worked in the sign wind section).</p>`; return; }
     // rebuild this post's governing case at its own azimuth, exactly as evalSignComboDir does
     const phi=gl.phi||0;
     const faceFactor=Math.max(0,Math.cos(phi*RAD)), faceBack=Math.max(0,-Math.cos(phi*RAD));
@@ -3104,17 +3230,17 @@ function evalSignComboDir(key,inp,pw,sw,phi){
   // choose governing sign wind case per post
   // Case A: centered. Case B: e=0.2B. Case C: e = sw.caseC.e (net). Force magnitudes:
   const cases=[];
-  cases.push({name:'A', F:sw.F_A*onFace, x:0});
+  cases.push({name:'A', F:sw.F_A*onFace, FI:(sw.F_Ai||0)*onFace, x:0});
   // Cases B and C apply to every sign (ASCE 7-22 Fig. 29.3-1). On two posts their eccentricity is
   // resolved by statics into an unequal force split; on a MONOPOST it twists the post: torsion
   // T = F·|x| about the post axis (added 2026-10-12; previously only Case A was used on a monopost).
-  cases.push({name:'B', F:sw.F_A*onFace, x:0.2*sw.B*windSign});
-  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onFace, x:sw.caseC.e*windSign}); }
+  cases.push({name:'B', F:sw.F_A*onFace, FI:(sw.F_Ai||0)*onFace, x:0.2*sw.B*windSign});
+  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onFace, FI:(sw.caseC.FI||0)*onFace, x:sw.caseC.e*windSign}); }
   // post self-wind (drag on the EXPOSED post below the panel), acts along wind dir, per post.
   // Uses the clearance-height drag from signWind (sw.Fpost), NOT the full-height mast wind,
   // so the strip behind the panel is not double-counted.
-  const postWindEach = f.W*sw.Fpost;                  // lb (per post, nominal*factor)
-  const postWindMEach= f.W*sw.Mpost;                  // lb-ft
+  const postWindEach = f.W*sw.Fpost + f.Wi*(sw.FpostI||0);   // lb (per post, nominal*factor; + wind on the iced post, 2026-11-01)
+  const postWindMEach= f.W*sw.Mpost + f.Wi*(sw.MpostI||0);   // lb-ft
 
   // sign dead load split evenly; each post self-weight added
   const signWt=inp.signWt;                            // lb, total panel weight
@@ -3126,13 +3252,13 @@ function evalSignComboDir(key,inp,pw,sw,phi){
   for(let p=0;p<nPost;p++){
     let worst=null, worstT=null;
     cases.forEach(cs=>{
-      const shares=signPostSplit(cs.F, cs.x, Lp, nPost);
-      const Fp=f.W*shares[p];                          // factored wind share on this post
+      const shares=signPostSplit(cs.F, cs.x, Lp, nPost), sharesI=signPostSplit(cs.FI||0, cs.x, Lp, nPost);
+      const Fp=f.W*shares[p] + f.Wi*sharesI[p];        // factored wind share on this post (+ wind on the iced panel, 2026-11-01)
       // sign wind acts at zA (Case A/B) or its own height for C (use centroid)
       const zarm=cs.name==='C'? sw.zc : sw.zA;
       const Vwind=Fp + postWindEach;                   // + post's own drag
       const Mwind=Fp*zarm + postWindMEach;
-      const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0));   // + misc. dead load per post (2026-10-12)
+      const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0)) + f.Di*((sw.WiPanel||0)/nPost + (sw.WiPost||0));   // + misc. DL (2026-10-12); + ice (2026-11-01)
       const M=Mwind, P=Vwind;
       const T=nPost===1? Math.abs(Fp*cs.x) : 0;        // lb-ft, monopost torsion
       const rec={case:cs.name, Fp, P, M, h:P>0?M/P:0, axial, zarm, T};
@@ -3741,12 +3867,17 @@ function anchorBolts(inp,gov,struct){
   }
   // ---- governing tension capacity (per anchor for steel/pullout; group for breakout) ----
   let phiNn, tgov;
-  if(hasAnchRe){ phiNn=Math.min(phiNsa, phiNp); tgov='steel / pullout (breakout carried by anchor reinforcement, §17.5.2.1)'; }
-  else{ phiNn=Math.min(phiNsa, phiNp, phiNcbg/nT); tgov='min(steel, pullout, breakout/anchor)'; }
+  // 2026-11-01 (engineer): breakout checked in the ACI 318-19 group form, ΣN_ua of the tension anchors ≤ φN_cbg (ψ_ec,N in N_cbg);
+  // steel and pullout per anchor (most-loaded anchor). Before: the most-loaded anchor against φN_cbg/n_T. The tension ratio used in
+  // the §17.8 interaction is the larger of the two (the governing tension mode).
+  phiNn=Math.min(phiNsa, phiNp);
+  const trBrk = hasAnchRe ? 0 : (Tsum>0 ? Tsum/phiNcbg : 0);
+  if(hasAnchRe) tgov='steel / pullout (breakout carried by anchor reinforcement, §17.5.2.1)';
+  else tgov = (Tmax/phiNn >= trBrk) ? 'steel / pullout, per anchor' : 'concrete breakout, group (ΣN_ua / φN_cbg)';
   const phiVn=Math.min(phiVsa, phiVcp/n);
 
   // ---- interaction (ACI §17.8) ----
-  const tr=Tmax/phiNn, vr=Vb/phiVn;
+  const trAnc=Tmax/phiNn, tr=Math.max(trAnc, trBrk), vr=Vb/phiVn;
   let inter, interOK;
   if(vr<=0.2){inter=tr; interOK=tr<=1.0;}
   else if(tr<=0.2){inter=vr; interOK=vr<=1.0;}
@@ -3772,7 +3903,7 @@ function anchorBolts(inp,gov,struct){
   return {d,gr,n,BC,R,hef,th0,thM,Ase,bolts,sumY2,Tmax,Vb,VbT,Tu,tension,nT,Tsum,Mu,Pu,Vu,fc,lam,
           futa,Nsa,phiNsa,Vsa,phiVsa,
           kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,ar,sfbApplies,
-          nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
+          nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,trAnc,trBrk,vr,inter,interOK,
           m,beff,Fyp,tpReq,Dpole,Cmax,Prod,tpProv,tpOK,
           torq,sAnch,sMinReq,spOK,edReq,edProv,edOK,sqShaft,ca17,caGovK:(caGovB?caGovB.k:1),caGovAng:(caGovB?caGovB.ang:0),splitW};
 }
@@ -3897,8 +4028,9 @@ function calcSign(inp){
   const sw=signWind(inp);
 
   // evaluate all combos -> per-post governing demand
-  // signs carry no ice load, so only the non-ice combinations apply (drop L2/L3/A2/A3)
-  const SIGN_COMBO_KEYS=COMBO_KEYS.filter(k=>{const c=COMBOS[k];return c.Di===0&&c.Wi===0;});
+  // 2026-11-01: ice on the sign panel and posts (ASCE 7-22 Ch. 10) → every combination applies, the ice ones included
+  // (before: only the non-ice combinations; signs carried no ice)
+  const SIGN_COMBO_KEYS=COMBO_KEYS.slice();
   const allCombos=SIGN_COMBO_KEYS.map(k=>evalSignCombo(k,inp,pw,sw));
   const byKey={}; allCombos.forEach(r=>byKey[r.key]=r);
   const nPost=inp.signPosts;
@@ -3937,9 +4069,15 @@ function calcSign(inp){
     // natural frequency (Rayleigh): post segments + this post's share of the panel at the panel centroid
     const b2r=lrfdCombos.map(x=>x.B2||1);
     const b2=Object.assign({}, {name:gLRFD.name, B2:gLRFD.B2||1, B2min:Math.min(...b2r), B2max:Math.max(...b2r)});
-    postDesigns.push({p:p+1,gASD,gLRFD,found,pstress,nat,b2});
+    postDesigns.push({p:p+1,gASD,gLRFD,found,pstress,nat,b2,lrfdB2:Object.fromEntries(lrfdCombos.map(x=>[x.name,x.B2||1]))});
   }
   window.__signPostGov=postGovList;
+  // anchorGroup hand-off (HANDOFF.md §4.11): per post, every LRFD combination at each wind direction; the post moment acts along the
+  // wind (panel normal ±x), × that combination's B₂ for the post; monopost torsion T = |F·x| (taken positive)
+  LPP_ANCH={mode:'sign', groups:postDesigns.map((pd,pi)=>({id:'post'+(pi+1), label:'Post '+(pi+1), combos:[].concat(...allCombos.filter(r=>r.fam==='LRFD').map(r=>{
+      const b2=(pd.lrfdB2&&pd.lrfdB2[r.name])||1;   // the B₂ of this post's combination (signPostStress), as the anchors use
+      return (r.dirs||[]).map(dr=>{ const pp=dr.posts[pi], c=Math.cos(dr.phi*RAD), s=Math.sin(dr.phi*RAD);
+        return {name:r.name+', wind '+fmt(dr.phi,0)+'°, Case '+pp.case, P:pp.axial, Vx:pp.P*c, Vy:pp.P*s, Mx:b2*pp.M*c, My:b2*pp.M*s, T:pp.T||0, B2:b2}; }); }))}))};
   renderSignLoadPath(inp,sw,pw,postGovList);
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
@@ -3963,7 +4101,8 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
   const wMast=(sw.Fpost>0 && sw.postExpH>0)?(f.W*sw.Fpost)/sw.postExpH:0;   // post self-wind per ft over EXPOSED (clearance) height only
   const clrH=sw.clr||0;
   const Tu=gLRFD.T||0;                     // factored torsion on the post (lb-ft), monopost only
-  const Npanel=f.D*(inp.signWt||0)/(inp.signPosts||1);   // this post's share of the panel dead load
+  const Npanel=f.D*(inp.signWt||0)/(inp.signPosts||1) + f.Di*(sw.WiPanel||0)/(inp.signPosts||1);   // this post's share of the panel dead load (+ panel ice, 2026-11-01)
+  const wIcePost=(sw.WiPost||0)/Math.max(inp.H,1e-9);   // lb/ft of ice on the post (2026-11-01)
   // first-order moment / shear at height z
   const secM=(z)=>{
     let M=0,V=0;
@@ -3972,7 +4111,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     // above the panel bottom the post is shielded and the panel force already covers that wind.
     // 2026-10-12: the factored drag strips of signWind (q_z varies with height) replace the uniform w.
     if(sw.postStrips){
-      sw.postStrips.forEach(st=>{ if(st.z>z){ V+=f.W*st.F; M+=f.W*st.F*(st.z-z); } });
+      sw.postStrips.forEach(st=>{ if(st.z>z){ const Fs=f.W*st.F + f.Wi*(st.FI||0); V+=Fs; M+=Fs*(st.z-z); } });
     } else if(z < clrH){
       const hAbove=clrH - z;            // exposed length above this section, up to the panel bottom
       const Hm=wMast*hAbove;            // shear from the exposed strip above this cut
@@ -3980,14 +4119,14 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     }
     return {M,V};
   };
-  const p2=poleB2(inp, z=>({Mx:secM(z).M, My:0}), f.D*(poleSeg.totalW+(inp.DL||0))+Npanel);
+  const p2=poleB2(inp, z=>({Mx:secM(z).M, My:0}), f.D*(poleSeg.totalW+(inp.DL||0))+Npanel+f.Di*wIcePost*inp.H);
   const B2=p2.B2;
   const rows=poleSeg.segs.concat([poleBaseSection(poleSeg,inp)]).map(s=>{
     const z=s.zMid;
     const sm=secM(z);
     const M1=sm.M, M=B2*M1, V=sm.V;
     let N=0;
-    N+=f.D*(s.cumWabove+(inp.DL||0))+Npanel;
+    N+=f.D*(s.cumWabove+(inp.DL||0))+Npanel+f.Di*wIcePost*(inp.H-z);
     const Pr=N/1000;                                  // kip
     const Mr=M*12/1000;                               // kip-in (single axis: strong for the panel face)
     // wind on the sign acts on the panel face → bending about the axis perpendicular to the face.
@@ -4275,7 +4414,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // 2. load combinations per post (the Loading tab's own table)
   if($('sgComboTbl')&&$('sgComboTbl').innerHTML){
     H+=`<details class="rpt-sec" data-old="2" open><summary><span class="tag">2</span><h3>Load combinations — per-post demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-    H+=`<p class="eq-why">Signs carry no ice load, so only the non-ice combinations apply. Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. The governing row of each family (largest M on any post) is marked.</p>`;
+    H+=`<p class="eq-why">Every combination applies, the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01). Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. The governing row of each family (largest M on any post) is marked.</p>`;
     H+=`<table class="tbl">${$('sgComboTbl').innerHTML}</table>`;
     if(nPost===2){
       H+=eqB('Two-post force split',
@@ -4466,11 +4605,12 @@ function calc(){
   // case); each run carries its own P-Δ amplifier B2 (AISC 360-16 App. 8). The governing run is the
   // one with the largest H1 ratio. The B2 of each combination at its governing azimuth also
   // amplifies the LRFD base moment passed to the shaft and anchors (second-order base moment).
-  const psAll=[], b2ByKey={};
+  const psAll=[], b2ByKey={}, b2Dir={};
   lrfdList.forEach(r=>{ (r.dirs||[r]).forEach(dr=>{
     const ps=poleStress(inp,poleSeg,comps,fxs,pw,dr);
     psAll.push(ps);
     if(dr.phi===r.phi) b2ByKey[r.key]=ps.p2;
+    b2Dir[r.key+'@'+dr.phi]=ps.p2.B2;   // anchorGroup hand-off: B₂ of every combination and direction (2026-11-01)
   }); });
   const pstress=psAll.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
   const lrfdCands=lrfdList.map(r=>{ const b2=(b2ByKey[r.key]||{B2:1}).B2;
@@ -4497,6 +4637,9 @@ function calc(){
   inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, lrfdCands);
   const shT=lppShaftTorsion(inp, lrfdCands);   // shaft torsion threshold (fixture/arm torsion, 2026-11-01)
+  // anchorGroup hand-off (HANDOFF.md §4.11): every LRFD combination at each wind direction, B₂·M (the same moments the anchors use)
+  LPP_ANCH={mode:'pole', groups:[{id:'pole', label:'Pole', combos:[].concat(...lrfdList.map(r=>(r.dirs||[r]).map(dr=>{ const b2=b2Dir[r.key+'@'+dr.phi]||1;
+    return {name:r.name+', wind '+fmt(dr.phi,0)+'°', P:dr.axial, Vx:dr.Vx, Vy:dr.Vy, Mx:b2*dr.Mx, My:b2*dr.My, T:dr.Tz||0, B2:b2}; })))}]};
 
   // ---- headline outputs (embedment from ASD gov) ----
   $('oDepth').innerHTML=fmt(d,2)+'<span class="u"> ft</span>';
@@ -5001,8 +5144,9 @@ function boltWorkedHTML(bo,inp){
 
   // 7 — governing capacities + interaction
   H+=step(`7 · Governing capacities &amp; tension–shear interaction ${ref('§17.8')}`);
-  H+=g(`\\phi N_n = \\min(\\phi N_{sa},\\ \\phi N_{pn}${bo.hasAnchRe?'':',\\ \\phi N_{cbg}/n_T'}) = ${fmt(bo.phiNn,0)}\\ \\text{lb}\\qquad \\phi V_n = \\min(\\phi V_{sa},\\ \\phi V_{cpg}/n) = ${fmt(bo.phiVn,0)}\\ \\text{lb}`);
-  H+=g(`\\frac{N_{ua}}{\\phi N_n} = \\frac{${fmt(bo.Tmax,0)}}{${fmt(bo.phiNn,0)}} = ${fmt(bo.tr,3)}\\qquad \\frac{V_{ua}}{\\phi V_n} = \\frac{${fmt(bo.Vb,0)}}{${fmt(bo.phiVn,0)}} = ${fmt(bo.vr,3)}`);
+  H+=g(`\\phi N_n = \\min(\\phi N_{sa},\\ \\phi N_{pn}) = ${fmt(bo.phiNn,0)}\\ \\text{lb}\\qquad \\phi V_n = \\min(\\phi V_{sa},\\ \\phi V_{cpg}/n) = ${fmt(bo.phiVn,0)}\\ \\text{lb}`);
+  if(!bo.hasAnchRe) H+=g(`\\text{Breakout, group: }\\frac{\\Sigma N_{ua,g}}{\\phi N_{cbg}} = \\frac{${fmt(bo.Tsum,0)}}{${fmt(bo.phiNcbg,0)}} = ${fmt(bo.trBrk,3)}\\qquad \\text{per anchor: }\\frac{N_{ua}}{\\phi N_n} = \\frac{${fmt(bo.Tmax,0)}}{${fmt(bo.phiNn,0)}} = ${fmt(bo.trAnc,3)}`);
+  H+=g(`\\frac{N_{ua}}{\\phi N_n}\\Big|_{gov} = ${fmt(bo.tr,3)}\\qquad \\frac{V_{ua}}{\\phi V_n} = \\frac{${fmt(bo.Vb,0)}}{${fmt(bo.phiVn,0)}} = ${fmt(bo.vr,3)}`);
   let interEq;
   if(bo.vr<=0.2) interEq=`V_{ua}/\\phi V_n = ${fmt(bo.vr,2)}\\le 0.2 \\Rightarrow \\text{shear negligible; check tension only: } ${fmt(bo.tr,3)}\\le 1.0`;
   else if(bo.tr<=0.2) interEq=`N_{ua}/\\phi N_n = ${fmt(bo.tr,2)}\\le 0.2 \\Rightarrow \\text{tension negligible; check shear only: } ${fmt(bo.vr,3)}\\le 1.0`;
@@ -5017,6 +5161,7 @@ function boltWorkedHTML(bo,inp){
   H+=g(`C_{max} = \\frac{M_u\\,|y|}{\\sum y_i^2}+\\frac{P_u}{n} = ${fmt(bp.Cmax,0)}\\ \\text{lb}\\qquad P_{rod} = \\max(T_{max},C_{max}) = \\max(${fmt(bp.Tmax,0)},\\ ${fmt(bp.Cmax,0)}) = ${fmt(bp.Prod,0)}\\ \\text{lb}`);
   H+=g(`m = \\frac{BC-D_{pole}}{2} = \\frac{${fmt(bp.BC,2)}-${fmt(bp.Dpole,2)}}{2} = ${fmt(bp.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,D_{pole}}{n} = \\frac{\\pi(${fmt(bp.Dpole,2)})}{${bp.n}} = ${fmt(bp.beff,3)}\\text{ in}`);
   H+=g(`t_{p,req} = \\sqrt{\\frac{4\\,P_{rod}\\,m}{\\phi_f\\,F_y\\,b_{eff}}} = \\sqrt{\\frac{4(${fmt(bp.Prod,0)})(${fmt(bp.m,2)})}{0.9(${fmt(bp.Fyp*1000,0)})(${fmt(bp.beff,3)})}} = ${fmt(bp.tpReq,3)}\\text{ in}`);
+  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lppEsc(LPP_BP_VERIFY)}</div>`;
   H+=`<p class="eq-result">t<sub>req</sub> = ${fmt(bp.tpReq,3)} in ${bp.tpOK?'≤':'&gt;'} t<sub>provided</sub> = ${fmt(bp.tpProv,3)} in → <b>${bp.tpOK?'PASS':'FAIL'}</b> (M<sub>u</sub>/φM<sub>n</sub> = (t<sub>req</sub>/t)² = ${fmt(Math.pow(bp.tpReq/bp.tpProv,2),3)}).</p>`;
 
   // 9 — minimum spacing and edge distance (geometry; independent of the load combination)
@@ -5667,6 +5812,14 @@ function signWindWorkedHTML(sw, inp){
   }
   H+=`<p class="eq-result"><b>${nPost===1?'Torsion':'Limitation — torsion'}:</b> ${nPost===1?'the eccentric Cases B/C twist the monopost (T = F·e); the post, anchor bolts and shaft threshold are checked for it, the soil torsional resistance is not.':'eccentric Cases B/C are applied as an unequal two-post force split, and no member is checked for torsion; if true torsional resistance is required, a separate analysis is needed.'} All applicable cases are enveloped per post in the load-combination matrix below.</p>`;
   H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
+  if(sw.F_Ai!==undefined){
+    H+=step(`Ice on the sign ${ref('ASCE 7-22 §10.4.1, §10.4.6, §10.5')}`);
+    H+=`<p class="eq-why">Design ice thickness at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height; panel ice volume per §10.4.1 for a flat plate (one side × t<sub>d</sub> × 0.8 for a vertical plate, as read — verify); wind on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>; Cases B/C scaled by the same factor; posts: radial ice on the whole post and the iced width for the exposed drag.</p>`;
+    H+=g(`t_d = ${fmt(sw.tdP,3)}\\ \\text{in}\\qquad W_{i,panel} = \\gamma_{ice}(0.8)A_s\\,t_d = ${fmt(inp.iceDen,0)}(0.8)(${fmt(sw.As,1)})\\left(\\tfrac{${fmt(sw.tdP,3)}}{12}\\right) = ${fmt(sw.WiPanel,1)}\\ \\text{lb}`);
+    H+=g(`q_{hi}K_dG = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${fmt(inp.Vice,0)})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qhI,2)}\\ \\text{psf}\\qquad A_{s,i} = (B+2t_d)(s+2t_d) = ${fmt(sw.AsI,2)}\\ \\text{ft}^2`);
+    H+=g(`F_{A,i} = q_{hi}K_dG\\,C_f\\,A_{s,i} = ${fmt(sw.qhI,2)}(${fmt(sw.cfAB,3)})(${fmt(sw.AsI,2)}) = ${fmt(sw.F_Ai,0)}\\ \\text{lb}${sw.caseC?`\\qquad F_{C,i} = ${fmt(sw.caseC.FI,0)}\\ \\text{lb}`:''}`);
+    H+=g(`W_{i,post} = \\gamma_{ice}\\frac{\\pi[(D/2+t_d)^2-(D/2)^2]}{144}h = ${fmt(sw.WiPost,1)}\\ \\text{lb/post}\\ (t_d = ${fmt(sw.tdPost,3)}\\text{ in})\\qquad F_{post,i} = ${fmt(sw.FpostI,1)}\\ \\text{lb/post}`);
+  }
   H+=natGfWorkedHTML(inp);
   return H;
 }
@@ -5682,11 +5835,11 @@ function renderSignWindExample(sw,inp){
 // derivation functions shared with the tabs).
 let LPP_SUMCTX=null;   // the Summary context of the last calc() (set by renderSummary)
 const lppEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft',report:'Report',calcsheet:'Calc sheet'};
+const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft',drawings:'Drawings',report:'Report',calcsheet:'Calc sheet'};
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
-  'Anchor T–V interaction':'anchors','Base plate thickness':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
+  'Anchor T–V interaction':'anchors','Anchor breakout (group)':'anchors','Base plate thickness':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
 const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
   asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
@@ -5862,6 +6015,8 @@ function lppReportDoc(H,meta){
     renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
   }
   if(typeof lprRefresh==='function') lprRefresh();   // LPRP: rebuild the shared Report tab when it is shown
+  if(typeof lpdActive==='function' && lpdActive()) lpdRender();   // LPDW
+  if(typeof lppAnchorCardRefresh==='function') lppAnchorCardRefresh();   // anchorGroupResult chips
 }
 
 // ================= CALCULATION REPORT =================
@@ -6174,6 +6329,9 @@ function arrow(x1,y1,x2,y2,color,w){
 
 // ---------- ELEVATION ----------
 function drawElev(b,d,H,hc,bars,shape){
+  // 2026-11-01 (LPDW): the elevation is drawn to scale from the drawing set (pole, arms, fixtures, cables, base plate, shaft);
+  // the former schematic below (shaft width clamped to 60–120 px) is only the fallback when shared/dxf.js is not loaded.
+  if(typeof lpdElevGeometry==='function' && lpdElevGeometry()) return;
   const W=460,Hh=420,cx=200,mT=20;
   const isSq=(shape==='square');
   const gradeY=mT+ (H/(H+d))*(Hh-60);
@@ -6669,6 +6827,7 @@ function lprModel(){
         S({id:'beff',label:'Effective width per rod at the pole face',sym:'b_{eff}',eq:'\\frac{\\pi D}{n}',sub:'\\frac{\\pi('+N(p.Dpole)+')}{'+p.n+'}',value:p.beff,unit:'in',d:3}),
         S({id:'t',label:'Required thickness',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi F_{y}b_{eff}}}',sub:'\\sqrt{\\frac{4('+N(p.Prod,0)+')('+N(p.m)+')}{0.9('+N(p.Fyp*1000,0)+')('+N(p.beff,3)+')}}',value:p.tpReq,unit:'in',d:3}),
         S({id:'dc',label:'Provided t = '+N(p.tpProv,3)+' in',sym:'(t_{req}/t)^{2}',eq:'',sub:'',value:Math.pow(p.tpReq/p.tpProv,2),unit:'',d:3,ok:!!p.tpOK})]}]),
+        {type:'note',warn:true,text:LPP_BP_VERIFY},
         {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17): every limit state, worked, on the [[tab:anchors|Anchors tab]]; the checks are listed in §2.'}]});
     });
     if(subs.length) secs.push({title:'Base plate and anchors',subs});
@@ -6711,7 +6870,7 @@ function lprModel(){
       'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
       'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
       'Anchor shear breakout (§17.7.2) and side-face blowout (§17.6.4) are not checked; the soil torsional resistance is not checked.',
-      'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base (article to be confirmed).',
+      'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base. '+LPP_BP_VERIFY,
       'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>({type:'note',text:t}))},
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:LPP_REFS.map(([a,b])=>[lprPlain(a),lprPlain(b)])}]}]});
   return {title:($('appTitle')?$('appTitle').textContent:'Light Pole and Sign Post')+' — Calculation Report',subtitle:activeProject||'Untitled',code:'IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19',
@@ -6729,6 +6888,292 @@ function lprRender(){
 function lprGoto(name){ if(lppOutTabValid(name)){ switchTab(name); const b=document.querySelector('#tabBar'); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
 function lprActive(){ const p=$('page-report'); return !!(p&&p.classList.contains('on')); }
 function lprRefresh(){ if(lprActive()) lprRender(); }
+
+// ================= DRAWINGS (LPDW, added 2026-11-01) =================
+// The drawing set as one DXF R12 file (shared/dxf.js: SharedDxf.drawing → toDXF), previewed in the Drawings tab from the same
+// entities (SharedDxf.toSVG, SharedDxf.viewer), as in Spread Footing (#521). Display and export only: every dimension comes from
+// the inputs and the tool's own results (LPP_SUMCTX: embedment d, bars, ties; LPP_LAST: the sign geometry). Model space, full
+// size in inches; each sheet is a B-size sheet (17 × 11 in) at its plot scale with border and title block (no owner cell), side by
+// side. The Geometry tab's elevation is the same elevation view, to scale (it replaces the schematic whose shaft width was clamped).
+// Nothing is saved except the chosen sheet (per-browser UI key lpp_dwgSheet_v1).
+const LPDW_SCALES=[[4,'3" = 1\'-0"'],[6,'2" = 1\'-0"'],[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[32,'3/8" = 1\'-0"'],[48,'1/4" = 1\'-0"'],[64,'3/16" = 1\'-0"'],[96,'1/8" = 1\'-0"'],[192,'1/16" = 1\'-0"']];
+const LPDW={W:17,H:11,m:0.375,tbH:1.0,key:'lpp_dwgSheet_v1',cur:null,B:null};
+function lpdLayers(D){ return {conc:D.layer('CONC',7),pole:D.layer('POLE',4),arm:D.layer('ARM',4),fix:D.layer('FIXT',2),cab:D.layer('CABLE',5,'DASHED'),
+  bar:D.layer('REBAR',1),dim:D.layer('DIMS',3),txt:D.layer('TEXT',7),cl:D.layer('CNTR',8,'CENTER'),soil:D.layer('SOIL',30),plate:D.layer('PLATE',6),bolt:D.layer('BOLT',30),tb:D.layer('TBLK',7),br:D.layer('BRDR',7),sign:D.layer('SIGN',2)}; }
+// geometry of one stack's shaft (inches): bars at their circle / square, ties
+function lpdShaft(st, inp){
+  const reo=st.found.reo, Lg=reo.long, T=reo.tie, b=inp.b*12, sq=inp.shaftShape==='square';
+  return {b, sq, d:st.found.d*12, n:Lg.n, bar:Lg.bar, rbar:Lg.rbar, tie:T.bar, s:T.s, sTop:T.sTop, zoneH:T.zoneH, cover:inp.cover,
+    pts: sq ? barLayoutSquare(Lg.n, Lg.rbar) : barLayoutRound(Lg.n, Lg.rbar)};
+}
+// ELEVATION (model inches, origin: grade at the pole / post-group centre line). k = plot scale (text heights in paper inches · k)
+function lpdElevation(D, L, k, ctx){
+  const inp=ctx.inp, h=0.1*k, sign=ctx.mode==='sign', st0=ctx.stacks[0];
+  const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
+  const H=inp.H*12, tP=inp.bpT>0?inp.bpT:0, bp=inp.bpDia||0;
+  const Db=inp.poleDiaBase, Dt=sign?inp.poleDiaBase:inp.poleDiaTop;
+  posts.forEach((px,pi)=>{
+    const st=ctx.stacks[Math.min(pi,ctx.stacks.length-1)], sh=lpdShaft(st,inp);
+    // shaft
+    D.rect(L.conc, px-sh.b/2, -sh.d, px+sh.b/2, 0);
+    const xr=sh.sq ? sh.rbar : sh.rbar;
+    D.line(L.bar, px-xr, -sh.d+sh.cover, px-xr, -2, D.ltype('HIDDEN')); D.line(L.bar, px+xr, -sh.d+sh.cover, px+xr, -2, D.ltype('HIDDEN'));
+    if(pi===posts.length-1) D.text(L.txt, px+sh.b/2+0.15*k, -sh.d/2, h, (posts.length>1?'EACH SHAFT: ':'')+'('+sh.n+') '+sh.bar.n+' VERT., '+sh.tie.n+' TIES @ '+fmt(sh.s,0)+'" ('+fmt(sh.sTop,0)+'" TOP '+fmt(sh.zoneH,0)+'")', 0);
+    // base plate and pole / post
+    if(bp>0) D.rect(L.plate, px-bp/2, 0, px+bp/2, tP);
+    D.pline(L.pole, [[px-Db/2,tP],[px-Dt/2,H],[px+Dt/2,H],[px+Db/2,tP]], true);
+    D.line(L.cl, px, -sh.d-0.3*k, px, H+0.3*k, D.ltype('CENTER'));
+    D.dimV(L.dim, -sh.d, 0, px-sh.b/2-0.6*k, px-sh.b/2, 'd = <>');
+    D.dimH(L.dim, px-sh.b/2, px+sh.b/2, -sh.d-0.5*k, -sh.d, (sh.sq?'b = <> SQ':'b = <> DIA'));
+  });
+  // grade
+  const xs=posts.map(p=>p), xmin=Math.min(...xs)-inp.b*12-2*k, xmax=Math.max(...xs)+inp.b*12+2*k;
+  D.line(L.soil, xmin, 0, xmax, 0);
+  for(let x=xmin; x<xmax-0.2*k; x+=0.25*k) D.line(L.soil, x, 0, x-0.12*k, -0.12*k);
+  D.text(L.txt, xmax, 0.05*k, h, 'GRADE', 2);
+  if(!sign){
+    D.dimV(L.dim, 0, H, -Math.max(inp.b*6, 24)-1.2*k, -Db/2, 'H = <>');
+    // arms and fixtures (projected on the x–z plane: x = a·cosθ)
+    fixtures.forEach((f,i)=>{ const z=f.hf*12, x=f.a*12*Math.cos(f.th*RAD), s=Math.max(Math.sqrt(Math.max(f.epa,0))*12, 6);
+      if(f.a>0) D.line(L.arm, 0, z, x, z);
+      D.rect(L.fix, x-s/2, z-s, x+s/2, z);
+      D.text(L.txt, x, z+0.1*k, h, 'F'+(i+1)+' (AZ '+fmt(f.th,0)+'°, a '+fmt(f.a,1)+'\')', 1); });
+    // cable attachments (direction projected on x)
+    if(cablesEnabled) cables.forEach((c,i)=>{ const z=c.hc*12, ux=Math.cos(c.th*RAD), len=2.0*k;
+      D.circle(L.cab, 0, z, 0.04*k); D.line(L.cab, 0, z, ux*len, z-0.4*k);
+      D.text(L.txt, ux*len+(ux>=0?0.05:-0.05)*k, z-0.45*k, 0.08*k, 'C'+(i+1)+' @ '+fmt(c.hc,1)+'\'', ux>=0?0:2); });
+  } else {
+    const B=inp.signB*12, s=inp.signS*12, clr=inp.signClr*12;
+    D.rect(L.sign, -B/2, clr, B/2, clr+s);
+    D.text(L.txt, 0, clr+s/2-h/2, h, 'SIGN PANEL '+fmt(inp.signB,1)+'\' x '+fmt(inp.signS,1)+'\'', 1);
+    D.dimV(L.dim, 0, clr, -B/2-0.8*k, -B/2, 'CLR = <>');
+    D.dimV(L.dim, clr, clr+s, -B/2-0.8*k, -B/2, '<>');
+    if(posts.length===2) D.dimH(L.dim, posts[0], posts[1], clr+s+0.6*k, clr+s, 'Lp = <>');
+  }
+  D.text(L.txt, xmin, -Math.max(...ctx.stacks.map(st=>st.found.d))*12-1.2*k, 0.14*k, 'ELEVATION', 0);
+}
+// PLAN (looking down; +x to the right, +y up)
+function lpdPlan(D, L, k, ctx){
+  const inp=ctx.inp, h=0.1*k, sign=ctx.mode==='sign';
+  const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
+  posts.forEach(px=>{ const b=inp.b*12;
+    if(inp.shaftShape==='square') D.rect(L.conc, px-b/2, -b/2, px+b/2, b/2); else D.circle(L.conc, px, 0, b/2);
+    if(inp.bpDia>0) D.circle(L.plate, px, 0, inp.bpDia/2);
+    if(inp.poleShape==='round') D.circle(L.pole, px, 0, inp.poleDiaBase/2);
+    else { const w=inp.poleDiaBase, dd=inp.poleShape==='rect'?inp.poleDepthTop:w; D.rect(L.pole, px-dd/2, -w/2, px+dd/2, w/2); }
+    const R=inp.boltBC/2; for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, px+R*Math.cos(a), R*Math.sin(a), inp.boltDia/2); }
+  });
+  const ext=Math.max(inp.b*6, 12)+1.0*k;
+  D.line(L.cl, -ext+Math.min(...posts), 0, ext+Math.max(...posts), 0, D.ltype('CENTER')); D.line(L.cl, 0, -ext, 0, ext, D.ltype('CENTER'));
+  D.text(L.txt, ext+Math.max(...posts)+0.06*k, -h/2, h, '+x (0°)', 0); D.text(L.txt, 0, ext+0.06*k, h, '+y (90°)', 1);
+  if(!sign){
+    fixtures.forEach((f,i)=>{ const x=f.a*12*Math.cos(f.th*RAD), y=f.a*12*Math.sin(f.th*RAD), s=Math.max(Math.sqrt(Math.max(f.epa,0))*12,6);
+      D.line(L.arm, 0, 0, x, y); D.rect(L.fix, x-s/2, y-s/2, x+s/2, y+s/2); D.text(L.txt, x, y+s/2+0.06*k, h, 'F'+(i+1), 1); });
+    if(cablesEnabled) cables.forEach((c,i)=>{ const ux=Math.cos(c.th*RAD), uy=Math.sin(c.th*RAD), r0=inp.b*6, r1=r0+2.5*k;
+      D.line(L.cab, ux*r0, uy*r0, ux*r1, uy*r1); D.text(L.txt, ux*(r1+0.15*k), uy*(r1+0.15*k)-h/2, h, 'C'+(i+1)+' '+fmt(c.th,0)+'°', ux>=0?0:2); });
+  } else {
+    const B=inp.signB*12; D.line(L.sign, -B/2, inp.poleDiaBase, B/2, inp.poleDiaBase); D.text(L.txt, 0, inp.poleDiaBase+0.08*k, h, 'SIGN PANEL (WIND NORMAL: ±x)', 1);
+  }
+  D.text(L.txt, -ext, -ext-0.4*k, 0.14*k, 'PLAN', 0);
+}
+// SHAFT SECTION (one per distinct shaft)
+function lpdSection(D, L, k, ctx, si){
+  const inp=ctx.inp, h=0.1*k, sh=lpdShaft(ctx.stacks[si], inp), b=sh.b;
+  if(sh.sq) D.rect(L.conc, -b/2, -b/2, b/2, b/2); else D.circle(L.conc, 0, 0, b/2);
+  const rt=sh.rbar+sh.bar.d/2+sh.tie.d/2;
+  if(sh.sq) D.rect(L.bar, -rt, -rt, rt, rt); else D.circle(L.bar, 0, 0, rt);
+  sh.pts.forEach(p=>D.circle(L.bar, p.x, p.y, sh.bar.d/2));
+  D.dimH(L.dim, -b/2, b/2, -b/2-0.5*k, -b/2, sh.sq?'<> SQ':'<> DIA');
+  D.text(L.txt, b/2+0.3*k, 0.2*k, h, '('+sh.n+') '+sh.bar.n+' EQ. SPACED', 0);
+  D.text(L.txt, b/2+0.3*k, 0, h, sh.tie.n+' TIES @ '+fmt(sh.s,0)+'" ('+fmt(sh.sTop,0)+'" WITHIN TOP '+fmt(sh.zoneH,0)+'")', 0);
+  D.text(L.txt, b/2+0.3*k, -0.2*k, h, fmt(sh.cover,1)+'" CLEAR COVER TO TIES', 0);
+  D.text(L.txt, -b/2, -b/2-1.1*k, 0.14*k, 'SHAFT SECTION'+(ctx.stacks.length>1?' — POST '+(si+1):''), 0);
+}
+// BASE PLATE (plan of the plate with the rod holes; thickness and grade from the inputs; t_req from the bending-line check)
+function lpdPlate(D, L, k, ctx){
+  const inp=ctx.inp, h=0.1*k, b=ctx.stacks[0].found.bolts, p=(b&&b.byCheck&&b.byCheck.BP)||b;
+  const R=inp.boltBC/2, rp=inp.bpDia/2;
+  D.circle(L.plate, 0, 0, rp);
+  if(inp.poleShape==='round') D.circle(L.pole, 0, 0, inp.poleDiaBase/2); else D.rect(L.pole, -inp.poleDiaBase/2, -inp.poleDiaBase/2, inp.poleDiaBase/2, inp.poleDiaBase/2);
+  D.circle(L.cl, 0, 0, R);
+  for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, R*Math.cos(a), R*Math.sin(a), inp.boltDia/2+0.0625); }
+  D.dimH(L.dim, -rp, rp, -rp-0.5*k, -rp, 'PL <> DIA');
+  D.dimH(L.dim, -R, R, rp+0.5*k, R, 'BC <>');
+  const lines=['PLATE '+fmt(inp.bpT,3)+'" THICK, Fy = '+fmt(inp.bpFy||36,0)+' KSI',
+    p?'t REQ = '+fmt(p.tpReq,3)+'" (BENDING LINE AT POLE FACE, DOUBLE-NUT)':'',
+    '('+inp.boltQty+') '+fmt(inp.boltDia,3)+'" F1554 GR '+inp.boltGrade+' RODS ON '+fmt(inp.boltBC,2)+'" BC, h_ef = '+fmt(inp.boltHef,1)+'"'];
+  lines.filter(Boolean).forEach((s,j)=>D.text(L.txt, rp+0.4*k, 0.2*k-j*0.2*k, h, s, 0));
+  D.text(L.txt, -rp, -rp-1.1*k, 0.14*k, 'BASE PLATE', 0);
+}
+function lpdBuild(){
+  const ctx=LPP_SUMCTX; if(!ctx) throw new Error('no results yet');
+  const D=SharedDxf.drawing({prefix:'S-'}), S=[], L=lpdLayers(D), proj=activeProject||'';
+  const AW=LPDW.W-2*LPDW.m-0.5, AH=LPDW.H-2*LPDW.m-LPDW.tbH-0.6;
+  let ox=0;
+  function sheet(id,title,content,fixedK){
+    const i0=D.mark(); let k=null, over=false;
+    const ks=fixedK?[fixedK]:LPDW_SCALES.map(s=>s[0]);
+    for(const kk of ks){ D.E.length=i0; D.k=kk; D.h=0.1*kk; content(kk); const b=D.bbox(i0);
+      if(!isFinite(b[0])||((b[2]-b[0])/kk<=AW&&(b[3]-b[1])/kk<=AH)){ k=kk; break; } }
+    if(k===null){ k=ks[ks.length-1]; over=true; }
+    const b=D.bbox(i0), W=LPDW.W*k, H=LPDW.H*k, mm=LPDW.m*k, tb=LPDW.tbH*k;
+    const cx=ox+W/2, cy=mm+tb+0.3*k+(AH*k)/2;
+    if(isFinite(b[0])) D.move(i0, cx-(b[0]+b[2])/2, cy-(b[1]+b[3])/2);
+    D.k=k; D.h=0.1*k;
+    D.rect(L.br, ox, 0, ox+W, H); D.rect(L.br, ox+mm, mm, ox+W-mm, H-mm);
+    const x0=ox+mm, y0=mm, w=(LPDW.W-2*LPDW.m)*k, r=tb/2, sc=k===1?'NTS':(LPDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1];
+    D.rect(L.tb, x0, y0, x0+w, y0+tb); D.line(L.tb, x0, y0+r, x0+w, y0+r);
+    const row1=[['PROJECT',proj,4.25],['PROJECT NO.','',2],['CALCULATED BY','',2],['DATE','',1.75],['CHECKED BY','',2],['CHECKED DATE','',1.75],['SCALE',sc,2.5]];
+    const row2=[['SHEET TITLE',title,8.25],['DRAWN BY','LIGHT POLE AND SIGN POST (DRAWINGS TAB)',5],['SHEET','?',3]];
+    let sheetEnt=null;
+    [[row1,y0+r],[row2,y0]].forEach(([row,yb])=>{ let x=x0; row.forEach(([lab,val,cw],ci)=>{
+      D.text(L.tb, x+0.05*k, yb+r-0.11*k, 0.065*k, lab, 0);
+      const mx=Math.floor((cw-0.12)/(0.13*0.9)); D.text(L.tb, x+0.05*k, yb+0.1*k, 0.13*k, String(val==null||val===''?'—':val).toUpperCase().slice(0,mx), 0);
+      if(lab==='SHEET') sheetEnt=D.E[D.E.length-1];
+      x+=cw*k; if(ci<row.length-1) D.line(L.tb, x, yb, x, yb+r); }); });
+    const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt}; S.push(sh); ox+=W+1*k; return sh;
+  }
+  sheet('elev', ctx.mode==='sign'?'SIGN ELEVATION':'POLE ELEVATION', k=>lpdElevation(D,L,k,ctx));
+  sheet('plan', 'PLAN', k=>lpdPlan(D,L,k,ctx));
+  ctx.stacks.forEach((st,si)=>{ if(si>0 && ctx.stacks[0].found.reo.long.n===st.found.reo.long.n && ctx.stacks[0].found.reo.long.bar.n===st.found.reo.long.bar.n) return;
+    sheet('sec'+si, 'SHAFT SECTION'+(si?' — POST '+(si+1):''), k=>lpdSection(D,L,k,ctx,si)); });
+  sheet('plate', 'BASE PLATE', k=>lpdPlate(D,L,k,ctx));
+  sheet('notes', 'GENERAL NOTES', ()=>{
+    const inp=ctx.inp, st=ctx.stacks;
+    const notes=['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-22 (WIND, ICE, COMBINATIONS), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT, ANCHORS); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
+      'EMBEDMENT d = '+st.map(s=>fmt(s.found.d,2)+'\'').join(' / ')+' BELOW GRADE (IBC §1807.3, '+(constraint==='non'?'NON-CONSTRAINED':'CONSTRAINED')+'), SHAFT '+(inp.shaftShape==='square'?'':'DIA. ')+fmt(inp.b,2)+'\''+(inp.shaftShape==='square'?' SQUARE':'')+'.',
+      'CONCRETE f\'c = '+fmt(inp.fc,0)+' PSI; REINFORCEMENT f_y = '+fmt(inp.fy,0)+' PSI; CLEAR COVER '+fmt(inp.cover,1)+'".',
+      'BASIC WIND SPEED V = '+fmt(inp.V,0)+' MPH, EXPOSURE '+inp.expo+'.'+(ctx.mode==='sign'?'':' ICE t = '+fmt(inp.tIce,2)+'" ('+(inp.iceBasis==='map'?'MAP VALUE, t_d BY HEIGHT':'UNIFORM')+'), V_ice = '+fmt(inp.Vice,0)+' MPH.'),
+      'ANCHOR RODS ASTM F1554 GR '+inp.boltGrade+', '+(inp.anchTq==='torqued'?'PRETENSIONED (TURN-OF-NUT)':'NOT PRETENSIONED')+'; LEVELING NUTS (DOUBLE-NUT BASE).',
+      'THE SOIL TORSIONAL RESISTANCE, ANCHOR SHEAR BREAKOUT AND SIDE-FACE BLOWOUT ARE NOT CHECKED BY THE TOOL.',
+      'SEE THE CALCULATION REPORT (REPORT TAB) FOR THE DESIGN; THESE DRAWINGS SHOW THE GEOMETRY AS ENTERED AND THE SHAFT AS DESIGNED / CHECKED BY THE TOOL.'];
+    D.text(L.txt, 0, 0.3, 0.16, 'GENERAL NOTES', 0);
+    let y=0; const hh=0.11, mx=Math.floor(15/(hh*0.9));
+    notes.forEach((s,j)=>{ const words=String(s).split(/\s+/); let line=(j+1)+'. '; const out=[];
+      words.forEach(w=>{ if((line+w).length>mx){ out.push(line); line='    '+w+' '; } else line+=w+' '; }); out.push(line);
+      out.forEach(l=>{ D.text(L.txt, 0, y, hh, l.trimEnd(), 0); y-=0.2; }); y-=0.08; });
+  }, 1);
+  S.forEach((s,j)=>{ s.sheetEnt.s=SharedDxf.str((j+1)+' OF '+S.length); });
+  return {D,S};
+}
+function lpdSheetSVG(B,s){ return SharedDxf.toSVG(B.D,{i0:s.i0,i1:s.i1,bg:'#fff',title:s.title,pad:0}); }
+function lpdRender(){
+  const T=$('lpdHost'); if(!T) return;
+  if(!window.SharedDxf){ T.innerHTML='<div class="flag bad">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>'; return; }
+  if($('lppInErr')&&$('lppInErr').classList.contains('on')){ T.innerHTML='<div class="flag bad">No drawings: correct the input errors.</div>'; return; }
+  let B; try{ B=lpdBuild(); }catch(e){ T.innerHTML='<div class="flag bad">The drawings could not be drawn: '+lppEsc(e&&e.message)+'</div>'; return; }
+  LPDW.B=B;
+  let want=LPDW.cur; if(!want){ try{ want=localStorage.getItem(LPDW.key)||''; }catch(e){ want=''; } }
+  const cur=B.S.find(s=>s.id===want)||B.S[0]; LPDW.cur=cur.id;
+  const scName=k=>k===1?'NTS (paper inches)':((LPDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
+  T.innerHTML='<div class="lpdBar"><label>Sheet <select id="lpdSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+lppEsc(s.title)+'</option>').join('')+'</select></label> '+
+    '<button type="button" class="btn mini ghost" id="lpdDxf">Download DXF ('+B.S.length+' sheets)</button></div>'+
+    '<p class="tbl-note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR.</p>'+
+    '<div class="lpdHead"><b>'+(B.S.indexOf(cur)+1)+'. '+lppEsc(cur.title)+'</b> · scale '+lppEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
+    '<div class="lpdBox"></div><p class="tbl-note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</p>';
+  SharedDxf.viewer(T.querySelector('.lpdBox'), lpdSheetSVG(B,cur), {height:'64vh'});
+  T.querySelector('#lpdSheet').addEventListener('change',e=>{ LPDW.cur=e.target.value; try{ localStorage.setItem(LPDW.key,LPDW.cur); }catch(er){} lpdRender(); });
+  T.querySelector('#lpdDxf').addEventListener('click',()=>{ const txt=B.D.toDXF({ltscale:1}), chk=SharedDxf.validate(txt);
+    if(!chk.ok){ alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n')); return; }
+    SharedDxf.download(txt, (activeProject||'light_pole').replace(/[^\w.-]+/g,'_')+'_drawings.dxf'); });
+}
+function lpdActive(){ const p=$('page-drawings'); return !!(p&&p.classList.contains('on')); }
+// The Geometry tab's elevation, to scale: the same elevation view (no sheet), as SVG
+function lpdElevGeometry(){
+  const box=$('elevDraw'); if(!box||!window.SharedDxf||!LPP_SUMCTX) return false;
+  const D=SharedDxf.drawing({prefix:'S-'}), L=lpdLayers(D);
+  const ctx=LPP_SUMCTX, ext=Math.max(ctx.inp.H*12, ctx.inp.b*12*3), k=Math.max(4, ext/16);   // screen: larger text than the sheets
+  D.k=k; D.h=0.1*k; lpdElevation(D,L,k,ctx);
+  box.innerHTML=SharedDxf.toSVG(D,{bg:'#fff',pad:0.04*ext,title:'Elevation, to scale'});
+  const sv=box.querySelector('svg'); if(sv){ sv.style.width='100%'; sv.style.height='auto'; sv.style.maxHeight='520px'; }
+  return true;
+}
+
+// ================= ANCHORAGE APP HAND-OFF (anchorGroup, HANDOFF.md §4.11; added 2026-11-01) =================
+// "Send anchors to the Anchorage app" publishes bridgeSuite.v1.anchorGroup with BridgeXfer (click only) and offers the same payload as a
+// JSON file. Every value is the tool's own input or result (no recomputation): the anchor pattern and plate inputs, the shaft (b, d, f'c,
+// bars, ties), and every LRFD combination at each wind direction with the moments the anchors use (B₂·M), axial, shears and torsion,
+// in the Light Pole sign convention (lightPole-v1: P + = compression; Mx = moment of the +x push, My of the +y push; T + CCW).
+let LPP_ANCH=null;
+function lppHash(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return ('00000000'+h.toString(16)).slice(-8); }
+function lppAnchorPayload(){
+  const ctx=LPP_SUMCTX, A=LPP_ANCH; if(!ctx||!A) return {error:'No results yet (correct any input errors first).'};
+  const inp=ctx.inp, notes=[];
+  if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
+  notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
+  notes.push('Moments are second-order (B₂·M, AISC 360-16 App. 8) at the top of the shaft; all LRFD combinations of ASCE 7-22 §2.3 incl. the atmospheric-ice ones, each at wind toward 0°, 90°, 180°, 270°.');
+  if(ctx.mode==='sign') notes.push('Sign posts: the post moment and shear act along the wind direction (panel normal); monopost torsion T = |F·x| (sign not carried).');
+  const groups=A.groups.map((g,gi)=>{ const st=ctx.stacks[Math.min(gi,ctx.stacks.length-1)], f=st.found, reo=f.reo, b=f.bolts;
+    return {id:g.id, label:g.label,
+      anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
+      base:{type:'doubleNut', standoffClear:0, grout:false, plate:{shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000},
+            pole:{shape:inp.poleShape==='round'?'round':inp.poleShape, D:inp.poleDiaBase}},
+      pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:f.d*12, cover:inp.cover,
+            longBars:'('+reo.long.n+') '+reo.long.bar.n, ties:reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in'},
+      combos:g.combos.map(c=>({name:c.name, P:c.P, Vx:c.Vx, Vy:c.Vy, Mx:c.Mx, My:c.My, T:c.T})),
+      lpRef:b?{Tmax:b.Tmax, phiNn:b.phiNn, inter:b.inter}:undefined}; });
+  const body={groups, units:{length:'in', force:'lb', moment:'lb-ft', stress:'psi'}, signConvention:'lightPole-v1'};
+  const inputsHash=lppHash(JSON.stringify(body));
+  return {payload:Object.assign({_schema:'bridge-anchor-group', schemaVersion:1, producer:'Light Pole and Sign Post', producerFile:'Light Pole and Sign Post.html',
+    project:{name:activeProject||'', bridgeId:''},
+    basis:{factored:true, method:'LRFD', combos:'ASCE 7-22 §2.3 (LRFD) incl. atmospheric ice; wind toward 0°/90°/180°/270°', B2:'AISC 360-16 App. 8 B₂ of each combination and direction applied to M'},
+    inputsHash, notes}, body)};
+}
+// ---- anchorGroupResult (HANDOFF.md §4.12; added 2026-11-01): the Anchorage app's governing anchor D/C per group, display only ----
+// Read live from bridgeSuite.v1.anchorGroupResult (or a result file imported this session); never changes an input or saved field.
+// "stale" when the inputsHash the result was computed for differs from the hash of what this tool would send now.
+let LPP_AGR_FILE=null;
+function lppAnchorResult(){
+  if(LPP_AGR_FILE) return {payload:LPP_AGR_FILE, via:'file'};
+  if(!window.BridgeXfer) return null;
+  const r=BridgeXfer.read('anchorGroupResult','bridge-anchor-group-result',1);
+  return r.ok ? {payload:r.payload, via:'storage'} : (r.empty ? null : {error:r.error});
+}
+// per group: {state:'none'|'ok'|'stale'|'error', text, dcr, mode, combo, ok}
+function lppAnchorChip(groupId){
+  const R=lppAnchorResult();
+  if(!R) return {state:'none', text:'Anchors: not yet checked in the Anchorage app (send the anchors, design them there, then "Send result to Light Pole").'};
+  if(R.error) return {state:'error', text:'Anchors (Anchorage app): the stored result cannot be read — '+R.error};
+  const p=R.payload, res=(p.results||[]).find(x=>x.groupId===groupId);
+  if(!res) return {state:'none', text:'Anchors: no Anchorage-app result for '+groupId+' yet.'};
+  const cur=lppAnchorPayload(), hash=cur.payload?cur.payload.inputsHash:null, srcHash=p.source&&p.source.inputsHash;
+  const stale=!hash || srcHash!==hash;
+  if(res.error) return {state:stale?'stale':'error', text:'Anchors (Anchorage app): '+res.error+(stale?' — STALE (inputs changed since)':'')};
+  const g=res.governing||{}, when=p.producedAt?new Date(p.producedAt).toLocaleString():'?';
+  return {state:stale?'stale':'ok', dcr:g.dcr, mode:g.mode, combo:g.combo, ok:res.ok,
+    text:'Anchors (Anchorage app, '+when+'): D/C '+(isFinite(g.dcr)?fmt(g.dcr,2):'—')+' — '+(g.mode||'?')+(g.combo?', '+g.combo:'')+(stale?' — STALE: the inputs changed since these anchors were sent; send again and re-check':'')};
+}
+function lppAnchorChipHTML(groupId){
+  const c=lppAnchorChip(groupId);
+  const col = c.state==='ok' ? (c.dcr<=1&&c.ok!==false?'#1f6b3a':'#a02818') : (c.state==='stale'||c.state==='error' ? '#b45309' : '#5b6676');
+  return `<span class="lpAgChip" data-state="${c.state}" style="display:inline-block;border:1px solid ${col};color:${col};border-radius:3px;padding:2px 7px;font-size:12px">${lppEsc(c.text)}</span>`;
+}
+function lppAnchorCardRefresh(){
+  const box=$('lpAnchResult'); if(!box||!LPP_ANCH) return;
+  box.innerHTML=LPP_ANCH.groups.map(g=>`<div style="margin:3px 0"><b>${lppEsc(g.label)}:</b> ${lppAnchorChipHTML(g.id)}</div>`).join('');
+}
+if($('lpAnchImportRes')) $('lpAnchImportRes').addEventListener('click',()=>$('lpAnchResFile').click());
+if($('lpAnchResFile')) $('lpAnchResFile').addEventListener('change',e=>{
+  const fl=e.target.files&&e.target.files[0]; if(!fl) return;
+  BridgeXfer.importFile(fl,'bridge-anchor-group-result',1,r=>{ e.target.value='';
+    if(!r.ok){ toast('Import failed: '+r.error); return; }
+    LPP_AGR_FILE=r.payload; lppAnchorCardRefresh(); if(LPP_SUMCTX) renderSummary(LPP_SUMCTX); toast('Anchorage result imported (this session)'); });
+});
+window.addEventListener('storage',e=>{ if(e.key&&e.key.indexOf('bridgeSuite.v1.anchorGroupResult')===0){ lppAnchorCardRefresh(); if(LPP_SUMCTX) renderSummary(LPP_SUMCTX); } });
+window.addEventListener('focus',()=>{ lppAnchorCardRefresh(); if(LPP_SUMCTX&&$('page-summary')&&$('page-summary').classList.contains('on')) renderSummary(LPP_SUMCTX); });
+function lppAnchorStatus(msg){ const e=$('lpAnchStatus'); if(e) e.textContent=msg||''; }
+if($('lpAnchSend')) $('lpAnchSend').addEventListener('click',()=>{
+  const r=lppAnchorPayload(); if(r.error){ lppAnchorStatus(r.error); return; }
+  const res=BridgeXfer.publish('anchorGroup', r.payload, 'Light Pole and Sign Post', 'Light Pole and Sign Post.html');
+  if(res.error){ lppAnchorStatus(res.error); return; }
+  lppAnchorStatus('Sent '+r.payload.groups.length+' group(s), '+r.payload.groups.reduce((a,g)=>a+g.combos.length,0)+' combinations, '+new Date(res.payload.producedAt).toLocaleString()+' (inputs '+r.payload.inputsHash+'). In the Anchorage app: "Pull from Light Pole".');
+  toast('Anchors sent to the Anchorage app');
+});
+if($('lpAnchExport')) $('lpAnchExport').addEventListener('click',()=>{
+  const r=lppAnchorPayload(); if(r.error){ lppAnchorStatus(r.error); return; }
+  const p=Object.assign({}, r.payload, {producedAt:new Date().toISOString()});
+  BridgeXfer.exportFile('anchorGroup', p); lppAnchorStatus('Exported the hand-off file (import it in the Anchorage app with "Import hand-off (JSON)").');
+});
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
 const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
@@ -7032,6 +7477,7 @@ function switchTab(name){
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
   try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){}
   if(name==='report' && typeof lprRender==='function') lprRender();   // LPRP: the shared Report tab is built when shown
+  if(name==='drawings' && typeof lpdRender==='function') lpdRender(); // LPDW: the Drawings tab is built when shown
 }
 document.querySelectorAll('#tabBar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 
