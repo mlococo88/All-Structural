@@ -1663,3 +1663,41 @@ index d3de356..e28171a 100644
 +  put(/^Footing design/, /^Toe/, [fig('plt-toe-sm', 'Toe shear and moment diagrams (Footing design tab chart)')]);
 +}
 ```
+
+## 2026-11-01 — PR: claude/rpt-retwall-etot — calcAll returns the Strength I footing-design eccentricity; the report substitutes it with water uplift (RWETOT; exposure only, no result change) (PR link added after merge)
+
+The tool file uses CRLF line endings; keep them. Every code site is tagged `RWETOT`.
+
+### RWETOT. `aashtoR.x_R_tot`, `aashtoR.e_tot` returned by `calcAll`   [exposure only]
+- **Engineer / coordinator decision (2026-11-01):** after RWRP2 the report could not substitute the Strength I footing-design trapezoid with water uplift, because the eccentricity of that resultant (`e_tot`) was internal to `calcAll`. Return it as an extra output field (pure exposure, no formula change) and use it in the report.
+- **`calcAll`, AASHTO block, return object** (anchor `quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,`):
+  - Before: `      quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,`
+  - After: the same line, then `      x_R_tot, e_tot,   // RWETOT (2026-11-01): the Strength I footing-design resultant, returned for the report (exposure only)`
+  - `x_R_tot = (Mr_str_max_tot − Mo_str_max) / V_str_max_tot` and `e_tot = B/2 − x_R_tot` are the existing local constants that already set `quA_toe` / `quA_heel` (unchanged).
+- **Report (`rwrModel`, AASHTO subsection "Factored bearing for footing design")**: the Strength I trapezoid now uses `a.e_tot` and `a.x_R_tot` (before: `a.e_brg` without uplift, no substitution with uplift); the note about the missing eccentricity is removed.
+- **Provision:** none. No formula, factor, unit, code reference or computed value changed; two existing values are added to the output.
+- **Saved data:** none (`_R` is not saved).
+
+### How verified
+- main vs branch, 7 cases (as RWRP, including two with a water table): `_R` with the two new fields removed is identical; the status bar, the text of the Overview, Stability, Stem design, Footing design, Rebar schedule and Analysis diagram tabs and the storage keys are identical; 0 console errors. Without uplift `e_tot` equals `e_brg` (same V and M_r).
+- Report checks, 7 cases: 0 unresolved / duplicate references, 0 KaTeX errors, no NaN / raw TeX, spot values equal `_R`.
+- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: pass.
+
+Diff (`Retaining Wall Designer.html`, `git diff -U0` against origin/main; CR line ends removed here):
+
+```diff
+diff --git a/Retaining Wall Designer.html b/Retaining Wall Designer.html
+index e28171a..c713832 100644
+--- a/Retaining Wall Designer.html	
++++ b/Retaining Wall Designer.html	
+@@ -2390,0 +2391 @@ function calcAll(inp) {
++      x_R_tot, e_tot,   // RWETOT (2026-11-01): the Strength I footing-design resultant, returned for the report (exposure only)
+@@ -8982,2 +8983,2 @@ function rwrModel(r) {
+-      const eI = a.V_up > 0 ? null : a.e_brg;   // without uplift the footing-design resultant is the bearing-check resultant (same V and M_r, calcAll)
+-      sI.push(...rwrTrap('', a.V_str_max_tot, eI, r.B / 2 - (eI == null ? 0 : eI), a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
++      const eI = a.e_tot;   // RWETOT: the Strength I footing-design eccentricity returned by calcAll (with or without water uplift)
++      sI.push(...rwrTrap('', a.V_str_max_tot, eI, a.x_R_tot, a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
+@@ -8988 +8989 @@ function rwrModel(r) {
+-        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + (a.V_up > 0 ? ' With water uplift the tool does not return the eccentricity of the Strength I footing-design resultant, so the Strength I toe and heel pressures are shown without substitution.' : '') }])); }
++        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + '' }])); }
+```
