@@ -3328,6 +3328,13 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - Splices, FS1 deck placement combination: γ_DC 1.25 → 1.3125, γ_CL 1.50 → 1.575; M = −307.25 → −322.61 kip-ft.
 - Default (AASHTO, η = 1): every value identical (only the new metadata fields etaC, G.eta, G.base appear). Rating (MBE factors): RF identical.
 - `tests/engine/eta-constr.test.mjs` (new) holds these numbers.
+- Auto design, recorded project builtin_RIDOT (tests/projects/sbd2-autodesign, sbd2FromPL, match-legacy settings as autodesign-parity.mjs), Node:
+  - as recorded (η = 1.00, m = 1.2): η is 1 on construction, so before = after by construction (etaC = 1).
+  - with η_I yes (η = 1.05, m = 1.2): before 439,866 lb, D = 65 in; after 437,046 lb, D = 70 in (both ratio 1.000, stiffeners TS7). Cross-check:
+    every candidate of each run was evaluated with the other code: the after design (437,046 lb, D = 70) also passes every module with the
+    BEFORE code, and the before design (439,866 lb, D = 65) still passes with the after code. So η on deck placement makes no candidate fail
+    here; the lighter result is the search taking another path (the sizing and trim steps follow the governing ratios, which moved), not
+    a lighter requirement. Auto design is a heuristic search, not a proven optimum.
 
 ### Other copies
 - None.
