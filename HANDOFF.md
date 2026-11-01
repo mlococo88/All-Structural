@@ -457,7 +457,7 @@ Pile Designer's results for the piles the abutment calculator sent on `foundatio
 
 ### 4.11 `anchorGroup` (Light Pole and Sign Post → BasePlateAnchorDesigner; added 2026-11-01, BC-3)
 
-Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer instead of the Light Pole tool's anchor tab (engineer direction 2026-11-01). One entry per anchor group (a two-post sign has two). The receiver is built (BC-3); the Light Pole export is a later PR.
+Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer instead of the Light Pole tool's anchor tab (engineer direction 2026-11-01). One entry per anchor group (a two-post sign has two). The receiver is built (BC-3). Sender: Light Pole and Sign Post (2026-11-01, LP anchor export): **"Send anchors to the Anchorage app"** in the Anchors tab (click only, `BridgeXfer.publish`) and **"Export hand-off (JSON)"**; units in / lb / lb-ft / psi, `signConvention:"lightPole-v1"`, every LRFD combination (atmospheric-ice ones included) at wind toward 0°, 90°, 180°, 270° with M = B₂·M, `standoffClear` sent as 0 (not a Light Pole input), `inputsHash` = FNV-1a of the groups, units and convention. Smoke test: `tests/smoke/lightpole-anchor-handoff.mjs`.
 
 ```js
 { ...envelope, _schema:"bridge-anchor-group", schemaVersion:1, producer:"Light Pole and Sign Post", producerFile:"Light Pole and Sign Post.html",
