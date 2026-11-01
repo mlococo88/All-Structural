@@ -392,6 +392,9 @@
     <button class="pbtn" id="pbRename" title="Rename current project">Rename</button>
     <button class="pbtn danger" id="pbDelete" title="Delete current project">Delete</button>
     <button class="pbtn" id="pbNew" title="Start a fresh blank project">New</button>
+    <button class="pbtn" id="pbExport" title="Download the current inputs as a JSON file (backup, or to send to the checker)">Export JSON</button>
+    <button class="pbtn" id="pbImport" title="Open a JSON file exported from this tool">Import JSON</button>
+    <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none">
   </div>
 </div>
 
@@ -1860,9 +1863,10 @@ function poleNatFreq(inp, masses){
   if(!ms.length) return {n1:NaN};
   const Mfun=z=>{ let M=0; ms.forEach(m=>{ if(m.z>z) M+=m.W*(m.z-z); }); return {Mx:M,My:0}; };
   const df=poleDeflection(inp, Mfun);
-  let a=0,b=0; ms.forEach(m=>{ const y=df.at(Math.min(m.z,inp.H)).x; a+=m.W*y; b+=m.W*y*y; });
+  let a=0,b=0; const rows=[];
+  ms.forEach(m=>{ const y=df.at(Math.min(m.z,inp.H)).x; a+=m.W*y; b+=m.W*y*y; rows.push({z:m.z,W:m.W,y}); });
   const n1= b>0 ? Math.sqrt(386.1*a/b)/(2*Math.PI) : NaN;
-  return {n1, Wtot:ms.reduce((s,m)=>s+m.W,0), yTop:df.top};
+  return {n1, Wtot:ms.reduce((s,m)=>s+m.W,0), yTop:df.top, sWy:a, sWy2:b, rows};   // sWy, sWy2, rows: for the worked step (2026-11-01)
 }
 // ASCE 7-22 §26.11.5 gust-effect factor G_f for a FLEXIBLE structure (n1 < 1 Hz), Eqs. 26.11-10
 // to 26.11-15, Table 26.11-1 constants (verify). h = height (ft), B = width normal to the wind
@@ -1890,7 +1894,7 @@ function gustFlexible(expo, V, h, B, L, n1, beta){
 // Apply the flexible gust factor: when n1 < 1 Hz, G used = max(entered G, G_f). Mutates inp.G and
 // records inp.Ginput / inp.gf for display. Rigid (n1 ≥ 1 Hz): the entered G is used unchanged.
 function lppApplyGf(inp, nat, dims){
-  inp.Ginput=inp.G; inp.gf=null;
+  inp.Ginput=inp.G; inp.gf=null; inp.nat=nat; inp.gfDims=dims;   // nat, gfDims: kept for the worked step (2026-11-01)
   if(nat && nat.n1>0 && nat.n1<1.0){
     const beta=(inp.beta>0)?inp.beta:0.005;
     const gf=gustFlexible(inp.expo, inp.V, dims.h, dims.B, dims.L, nat.n1, beta);
@@ -1900,6 +1904,29 @@ function lppApplyGf(inp, nat, dims){
   if(nt) nt.textContent = !(nat&&nat.n1>0) ? '' : (inp.gf
     ? `n₁ ≈ ${fmt(nat.n1,2)} Hz < 1 Hz (flexible): G_f = ${fmt(inp.gf.Gf,3)} (ASCE 7-22 §26.11.5, β = ${fmt(inp.gf.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, ${fmt(inp.gf.Gf,3)}) = ${fmt(inp.G,3)}.`
     : `n₁ ≈ ${fmt(nat.n1,2)} Hz ≥ 1 Hz (rigid): G used = ${fmt(inp.G,2)} as entered; β not used.`);
+}
+// Worked steps for n₁ (Rayleigh) and G_f (ASCE 7-22 §26.11.5) (added 2026-11-01, CLAUDE.md §6: the values were quoted, not worked).
+// Reads only the values computed by poleNatFreq / gustFlexible / lppApplyGf (inp.nat, inp.gf, inp.gfDims).
+function natGfWorkedHTML(inp){
+  const nat=inp.nat; if(!nat || !(nat.n1>0)) return '';
+  const g=t=>`\\[${t}\\]`, step=t=>`<div class="step-label">${t}</div>`, ref=x=>`<span class="eq-ref">[${x}]</span>`;
+  let H=step(`Natural frequency n<sub>1</sub> (Rayleigh) ${ref('ASCE 7-22 §26.2, §26.11.3; Rayleigh method')}`);
+  H+=`<p class="eq-why">Each weight W<sub>i</sub> at height z<sub>i</sub> is applied as a lateral load; y<sub>i</sub> is the static deflection of the cantilever (fixed at the base, E = 29,000 ksi, section varying with height, 200 stations). ${inp.mode==='sign'?'Post segments and this post\'s share of the panel at the panel centroid.':'Pole segments, fixtures, the misc. dead load at the top and half of each cable\'s weight at its attachment.'}</p>`;
+  H+=`<table class="tbl"><tr><th>z (ft)</th><th>W (lb)</th><th>y (in)</th><th>W·y</th><th>W·y²</th></tr>${nat.rows.map(r=>`<tr><td>${fmt(r.z,2)}</td><td>${fmt(r.W,1)}</td><td>${fmt(r.y,5)}</td><td>${fmt(r.W*r.y,4)}</td><td>${fmt(r.W*r.y*r.y,6)}</td></tr>`).join('')}<tr style="font-weight:700"><td>Σ</td><td>${fmt(nat.Wtot,1)}</td><td>—</td><td>${fmt(nat.sWy,4)}</td><td>${fmt(nat.sWy2,6)}</td></tr></table>`;
+  H+=g(`n_1 = \\frac{1}{2\\pi}\\sqrt{\\frac{g\\,\\Sigma W_iy_i}{\\Sigma W_iy_i^2}} = \\frac{1}{2\\pi}\\sqrt{\\frac{386.1(${fmt(nat.sWy,4)})}{${fmt(nat.sWy2,6)}}} = ${fmt(nat.n1,3)}\\ \\text{Hz}\\ ${nat.n1>=1?'\\ge':'<'}\\ 1\\ \\text{Hz}\\ (${nat.n1>=1?'\\text{rigid}':'\\text{flexible}'})`);
+  const f=inp.gf;
+  if(!f){ H+=`<p class="eq-result">n<sub>1</sub> ≥ 1 Hz: rigid; G = ${fmt(inp.G,2)} as entered (G<sub>f</sub> not needed).</p>`; return H; }
+  const T=GF_TBL[inp.expo]||GF_TBL.C;
+  H+=step(`Gust-effect factor G<sub>f</sub>, flexible structure ${ref('ASCE 7-22 §26.11.5, Eq. 26.11-7 to 26.11-16, Table 26.11-1')}`);
+  H+=`<p class="eq-why">Exposure ${inp.expo}: â = ${fmt(T.aa,4)}, b̂ = ${fmt(T.ab,2)}, c = ${fmt(T.c,2)}, ℓ = ${fmt(T.l,0)} ft, ε̄ = ${fmt(T.eps,4)}, z<sub>min</sub> = ${fmt(T.zmin,0)} ft (Table 26.11-1 values as used by the tool). h = ${fmt(f.h,2)} ft, B = ${fmt(f.B,3)} ft, L = ${fmt(f.L,3)} ft, β = ${fmt(f.beta,3)}, V = ${fmt(inp.V,0)} mph.</p>`;
+  H+=g(`\\bar z = \\max(0.6h,\\ z_{min}) = ${fmt(f.zb,2)}\\ \\text{ft}\\qquad I_{\\bar z} = c\\left(\\frac{33}{\\bar z}\\right)^{1/6} = ${fmt(f.Iz,4)}\\qquad L_{\\bar z} = \\ell\\left(\\frac{\\bar z}{33}\\right)^{\\bar\\epsilon} = ${fmt(f.Lz,1)}\\ \\text{ft}`);
+  H+=g(`Q^2 = \\frac{1}{1+0.63\\left(\\frac{B+h}{L_{\\bar z}}\\right)^{0.63}} = ${fmt(f.Q2,4)}\\qquad \\bar V_{\\bar z} = \\hat b\\left(\\frac{\\bar z}{33}\\right)^{\\hat\\alpha}V\\,\\frac{88}{60} = ${fmt(f.Vz,2)}\\ \\text{ft/s}`);
+  H+=g(`N_1 = \\frac{n_1L_{\\bar z}}{\\bar V_{\\bar z}} = ${fmt(f.N1,4)}\\qquad R_n = \\frac{7.47N_1}{(1+10.3N_1)^{5/3}} = ${fmt(f.Rn,4)}`);
+  H+=g(`R_\\ell = \\frac{1}{\\eta}-\\frac{1-e^{-2\\eta}}{2\\eta^2}:\\quad R_h(\\eta{=}4.6n_1h/\\bar V_{\\bar z}) = ${fmt(f.Rh,4)},\\ R_B(\\eta{=}4.6n_1B/\\bar V_{\\bar z}) = ${fmt(f.RB,4)},\\ R_L(\\eta{=}15.4n_1L/\\bar V_{\\bar z}) = ${fmt(f.RL,4)}`);
+  H+=g(`R^2 = \\frac{1}{\\beta}R_nR_hR_B(0.53+0.47R_L) = ${fmt(f.R2,4)}\\qquad g_R = \\sqrt{2\\ln(3600n_1)}+\\frac{0.577}{\\sqrt{2\\ln(3600n_1)}} = ${fmt(f.gR,4)}`);
+  H+=g(`G_f = 0.925\\,\\frac{1+1.7I_{\\bar z}\\sqrt{g_Q^2Q^2+g_R^2R^2}}{1+1.7g_vI_{\\bar z}} = 0.925\\,\\frac{1+1.7(${fmt(f.Iz,4)})\\sqrt{3.4^2(${fmt(f.Q2,4)})+${fmt(f.gR,4)}^2(${fmt(f.R2,4)})}}{1+1.7(3.4)(${fmt(f.Iz,4)})} = ${fmt(f.Gf,4)}`);
+  H+=`<p class="eq-result">G used = max(entered ${fmt(inp.Ginput,2)}, G<sub>f</sub> ${fmt(f.Gf,3)}) = <b>${fmt(inp.G,3)}</b> for every wind force.</p>`;
+  return H;
 }
 // AISC 360-16 §H3.1 torsional strength and §G4/§G5 shear strength of the post (kip-in, kip).
 // Round: Fcr = max(1.23E/(√(L/D)(D/t)^1.25), 0.60E/(D/t)^1.5) ≤ 0.6Fy, C = π(D−t)²t/2 (H3-1..H3-2b);
@@ -3480,30 +3507,49 @@ function designRebar(inp,Mu,Pu,Vu,demands){
   const tieBar = manual ? choice.manTie : tieAuto;
   const dShaft=b_in, dEff=0.8*b_in;
   // (shape carried out on the result below for drawings & worked calcs)
-  // shear capacity of concrete (circular): Acv = 0.8 Ag
+  // ---- concrete shear strength, ACI 318-19 §22.5.5.1, Table 22.5.5.1 (2026-11-01, LP-R11: size-effect branch) ----
+  // A_cv = 0.8·A_g is the tool's b_w·d (unchanged). d = 0.8·b (§22.5.2.2). The axial term N_u/6A_g is neglected (conservative).
+  //  (a) A_v ≥ A_v,min:  V_c = 2λ√f'c·A_cv
+  //  (c) A_v < A_v,min:  V_c = 8λ_s·λ·(ρ_w)^(1/3)·√f'c·A_cv,  λ_s = √(2/(1 + d/10)) ≤ 1 (§22.5.5.1.3), ρ_w = A_s/(b_w·d) with
+  //      A_s = the bars in the tension half (half the longitudinal bars, conservative for a circular/square section);
+  //  V_c ≤ 5λ√f'c·A_cv (§22.5.5.1.1).
+  //  A_v,min = max(0.75√f'c, 50)·b_w·s/f_yt (§10.6.2.2 / Table 9.6.3.4), b_w = b; required where V_u > 0.5φV_c (§10.6.2.1).
+  // Before 2026-11-01: V_c = 2√f'c·A_cv always (branch (a) even when the ties are below A_v,min).
   const Acv=0.8*Ag;
-  const Vc=2*Math.sqrt(fc)*Acv;             // lb
-  const phiVc=0.75*Vc;
-  let tieMode, Vs=0, sShear=Infinity;
-  if(Vu<=0.5*phiVc){tieMode='min';}
-  else{
-    tieMode='shear';
-    Vs=Math.max(0, Vu/0.75 - Vc);
-    const Av=2*tieBar.a;                     // two legs
-    sShear=Vs>0? Av*fy*dEff/Vs : Infinity;  // lb-in -> in
-  }
+  const sqfc=Math.sqrt(fc), bw=b_in;
+  const VcA=2*sqfc*Acv;                                   // lb, Table 22.5.5.1(a)
+  const lamS=Math.min(1, Math.sqrt(2/(1+dEff/10)));
+  const AsT=choice.As/2, rhoW=AsT/(bw*dEff);
+  const VcB=Math.min(8*lamS*Math.cbrt(rhoW)*sqfc*Acv, 5*sqfc*Acv);   // lb, Table 22.5.5.1(c), capped by §22.5.5.1.1
+  const Av=2*tieBar.a;                                    // two legs
+  const avMinPerS=Math.max(0.75*sqfc,50)*bw/fy;           // in²/in
   // ACI §25.7.2.1 spacing limits
   const sLimit=Math.min(16*dLong, 48*tieBar.d, dShaft);
+  const sTrial = manual ? inp.manTieS : Math.max(3, Math.floor(sLimit));   // ties as detailed (no shear design)
+  const avOK0 = Av >= avMinPerS*sTrial - 1e-12;
+  let Vc = avOK0 ? VcA : VcB;
+  let vcBranch = avOK0 ? 'a' : 'c';
+  let phiVc=0.75*Vc;
+  let tieMode, Vs=0, sShear=Infinity, sAvMin=Infinity;
+  if(Vu<=0.5*phiVc){tieMode='min';}
+  else{
+    // shear reinforcement required (§10.6.2.1): A_v ≥ A_v,min, so branch (a) applies
+    tieMode='shear';
+    Vc=VcA; vcBranch='a'; phiVc=0.75*Vc;
+    Vs=Math.max(0, Vu/0.75 - Vc);
+    sShear=Vs>0? Av*fy*dEff/Vs : Infinity;  // lb-in -> in
+    sAvMin=Av/avMinPerS;                     // in, spacing at which A_v = A_v,min
+  }
   let sTie, tieChecks=null;
   if(manual){
     // check the PROVIDED spacing against both limits instead of choosing one
     sTie=inp.manTieS;
     tieChecks={ limit: sTie<=sLimit+1e-9,
-                shear: (tieMode==='min') || sTie<=sShear+1e-9,
+                shear: (tieMode==='min') || (sTie<=sShear+1e-9 && sTie<=sAvMin+1e-9),
                 sizeMin: tieBar.d >= tieAuto.d };            // §25.7.2.2 minimum tie size for the longitudinal bar
     tieChecks.ok = tieChecks.limit && tieChecks.shear && tieChecks.sizeMin;
   } else {
-    sTie=Math.min(sLimit, sShear);
+    sTie=Math.min(sLimit, sShear, sAvMin);
     sTie=Math.max(3, Math.floor(sTie));     // round down to whole inch, min 3"
   }
   // top confinement zone (anchor bolt region)
@@ -3512,7 +3558,7 @@ function designRebar(inp,Mu,Pu,Vu,demands){
 
   return {b_in,Ag,rhoMin,AsMin,AsMax,fc,fy,cover,shape,sq,
           manual,
-          long:choice, tie:{bar:tieBar,mode:tieMode,Vc,phiVc,Vs,sShear,sLimit,s:sTie,
+          long:choice, tie:{bar:tieBar,mode:tieMode,Vc,phiVc,Vs,sShear,sLimit,s:sTie,VcA,VcB,lamS,rhoW,AsT,Av,avMinPerS,sAvMin,sTrial,vcBranch,
                             manual, checks:tieChecks, tieAuto,
                             zoneH,sTop,dEff,Acv}};
 }
@@ -5134,13 +5180,17 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
   H+=`<p class="eq-result">${L.over?`Even (${L.n}) ${L.bar.n} does not reach M_u — increase shaft diameter.`:`Provide (${L.n}) ${L.bar.n} longitudinal bars — φM_n = ${fmt(L.phiMn,0)} lb·ft ≥ M_u = ${fmt(Mu,0)} lb·ft.`}</p>`;
 
   H+=step(`4 · Transverse ties / shear ${ref('§22.5, §25.7.2')}`);
-  H+=`<p class="eq-why">Concrete shear capacity of the circular section (effective shear area ≈ 0.8A<sub>g</sub>):</p>`;
-  H+=g(`\\phi V_c = 0.75\\cdot 2\\sqrt{f'_c}\\,(0.8A_g) = ${fmt(T.phiVc,0)}\\ \\text{lb}\\ ${T.phiVc>=Vu?'\\ge':'\\lt'}\\ V_u = ${fmt(Vu,0)}\\ \\text{lb}`);
+  H+=`<p class="eq-why">Concrete shear strength, ACI 318-19 Table 22.5.5.1 (effective shear area b<sub>w</sub>d ≈ 0.8A<sub>g</sub> = ${fmt(T.Acv,0)} in², d = 0.8b; axial term neglected). Branch (a) applies when the ties provide A<sub>v</sub> ≥ A<sub>v,min</sub>, branch (c) (size effect λ<sub>s</sub>) when they do not. ρ<sub>w</sub> uses the bars of the tension half (half of the longitudinal bars).</p>`;
+  H+=g(`A_{v,min} = \\max(0.75\\sqrt{f'_c},\\,50)\\frac{b_w\\,s}{f_{yt}} = ${fmt(Math.max(0.75*Math.sqrt(reo.fc),50),1)}\\frac{(${fmt(reo.b_in,1)})(${fmt(T.sTrial,1)})}{${fmt(reo.fy,0)}} = ${fmt(T.avMinPerS*T.sTrial,3)}\\ \\text{in}^2\\qquad A_v = 2A_{tie} = ${fmt(T.Av,3)}\\ \\text{in}^2\\ (${T.bar.n}\\ @\\ ${fmt(T.sTrial,1)}\\ \\text{in})`);
+  H+=g(`V_{c,(a)} = 2\\lambda\\sqrt{f'_c}\\,b_wd = 2(1.0)\\sqrt{${fmt(reo.fc,0)}}(${fmt(T.Acv,0)}) = ${fmt(T.VcA,0)}\\ \\text{lb}`);
+  H+=g(`\\lambda_s = \\sqrt{\\frac{2}{1+d/10}} = \\sqrt{\\frac{2}{1+${fmt(T.dEff,2)}/10}} = ${fmt(T.lamS,3)}\\qquad \\rho_w = \\frac{A_s/2}{b_wd} = \\frac{${fmt(T.AsT,2)}}{${fmt(reo.b_in,1)}(${fmt(T.dEff,2)})} = ${fmt(T.rhoW,5)}`);
+  H+=g(`V_{c,(c)} = \\min\\!\\left(8\\lambda_s\\lambda\\,\\rho_w^{1/3}\\sqrt{f'_c}\\,b_wd,\\ 5\\lambda\\sqrt{f'_c}\\,b_wd\\right) = ${fmt(T.VcB,0)}\\ \\text{lb}`);
+  H+=g(`\\phi V_c = 0.75\\,V_{c,(${T.vcBranch})} = ${fmt(T.phiVc,0)}\\ \\text{lb}\\ ${T.phiVc>=Vu?'\\ge':'\\lt'}\\ V_u = ${fmt(Vu,0)}\\ \\text{lb}\\quad(${T.vcBranch==='a'?'A_v \\ge A_{v,min}\\text{ or shear ties designed}':'A_v < A_{v,min}'})`);
   if(T.mode==='min'){
     H+=`<p class="eq-why">V<sub>u</sub> ≤ ½φV<sub>c</sub>, so only minimum ties are required. Spacing is governed by the §25.7.2.1 limits (16 d<sub>b,long</sub>, 48 d<sub>b,tie</sub>, and the shaft dimension):</p>`;
   } else {
     H+=`<p class="eq-why">V<sub>u</sub> exceeds ½φV<sub>c</sub>, so shear reinforcement is designed; the tie spacing is the smaller of the shear requirement and the §25.7.2.1 detailing limits:</p>`;
-    H+=g(`V_s = \\frac{V_u}{0.75}-V_c\\quad\\Rightarrow\\quad s = \\frac{A_v f_y d}{V_s} = ${T.sShear===Infinity?'\\infty':fmt(T.sShear,1)}\\ \\text{in}`);
+    H+=g(`V_s = \\frac{V_u}{0.75}-V_c\\quad\\Rightarrow\\quad s = \\frac{A_v f_y d}{V_s} = ${T.sShear===Infinity?'\\infty':fmt(T.sShear,1)}\\ \\text{in}\\qquad s_{A_{v,min}} = \\frac{A_v}{A_{v,min}/s} = ${fmt(T.sAvMin,1)}\\ \\text{in}\\ (\\S10.6.2.1)`);
   }
   H+=g(`s_{limit} = \\min(16d_{b},\\,48d_{tie},\\,b) = ${fmt(T.sLimit,1)}\\ \\text{in}`);
   H+=`<p class="eq-result">Ties: ${T.bar.n} @ ${fmt(T.s,0)} in o.c., tightened to ${T.bar.n} @ ${fmt(T.sTop,0)} in within the top ${fmt(T.zoneH,0)} in (anchorage zone).</p>`;
@@ -5417,6 +5467,7 @@ function windWorkedHTML(pw, inp){
   H+=g(`p(H/2) = q_z\\,G\\,C_f = ${fmt(pw.qzMid,1)}(${fmt(inp.G,2)})(${fmt(inp.cfPole,2)}) = ${fmt(pw.qzMid*inp.G*inp.cfPole,1)}\\ \\text{psf}\\qquad p(H/2)\\,A_{pole} = ${fmt(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)}\\ \\text{lb}`);
   H+=g(`F_{pole} = \\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
   H+=iceWorkedHTML(inp,pw,null);
+  H+=natGfWorkedHTML(inp);
   H+=`<p class="eq-result">Mast wind F_pole = ${fmt(pw.Fpole,0)} lb, resultant at z = ${fmt(pw.zF,2)} ft (H/2 = ${fmt(inp.H/2,2)} ft), giving base moment ${fmt(pw.Mpole,0)} lb·ft. Fixture and cable wind (tabulated above) use the same q_z form at their own heights.</p>`;
   return H;
 }
@@ -5610,6 +5661,7 @@ function signWindWorkedHTML(sw, inp){
   }
   H+=`<p class="eq-result"><b>${nPost===1?'Torsion':'Limitation — torsion'}:</b> ${nPost===1?'the eccentric Cases B/C twist the monopost (T = F·e); the post, anchor bolts and shaft threshold are checked for it, the soil torsional resistance is not.':'eccentric Cases B/C are applied as an unequal two-post force split, and no member is checked for torsion; if true torsional resistance is required, a separate analysis is needed.'} All applicable cases are enveloped per post in the load-combination matrix below.</p>`;
   H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
+  H+=natGfWorkedHTML(inp);
   return H;
 }
 function renderSignWindExample(sw,inp){
@@ -5885,6 +5937,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     null);
   H+=cfPoleWorkedHTML(inp);
   H+=iceWorkedHTML(inp,pw,fxs);
+  H+=natGfWorkedHTML(inp);
   H+=eqB(
     'Wind force on the pole shaft',
     `The distributed wind on the shaft is integrated over ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip uses q_z at its own centroid height z_i and its own width D(z_i), and acts at z_i (ASCE 7 §29.4.1 per strip). C_f is the drag coefficient for a round section (≈0.7). For reference, the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`,
@@ -6697,6 +6750,37 @@ $('projSelect').onchange=e=>{
   if(dirty){ confirmModal('Discard changes?','Loading a project will discard your current unsaved changes. Continue?','Load').then(ok=>{ if(ok) load(); else refreshProjectList(); }); }
   else load();
 };
+
+// ---- JSON export / import (added 2026-11-01) ----
+// File = { tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name, exported, state } where state is exactly
+// captureState() (the object stored under lpp_projects_v1 / lpp_session_v1; no storage key or format changes). Import accepts
+// that file or a bare state object and opens it through applyState(), so the migrations for fields added later apply.
+function lppExportJSON(){
+  const st=captureState();
+  const file={tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name:activeProject||'', exported:new Date().toISOString(), state:st};
+  const blob=new Blob([JSON.stringify(file,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=((activeProject||'light_pole_project').replace(/[^\w.-]+/g,'_'))+'.json';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  toast('Exported '+a.download);
+}
+function lppImportState(obj){
+  const st = obj && obj.format==='lpp-project' ? obj.state : obj;
+  if(!st || typeof st!=='object' || !st.inputs || typeof st.inputs!=='object') throw new Error('not a Light Pole and Sign Post project file');
+  applyState(st);
+  activeProject=null; dirty=true; refreshProjectList(''); updateStatus(); saveSession();
+  return obj && obj.name ? obj.name : '';
+}
+$('pbExport').onclick=lppExportJSON;
+$('pbImport').onclick=()=>{ const go=()=>$('pbImportFile').click();
+  if(dirty){ confirmModal('Discard changes?','Importing a file replaces the current unsaved inputs. Continue?','Import').then(ok=>{ if(ok) go(); }); } else go(); };
+$('pbImportFile').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ try{ const nm=lppImportState(JSON.parse(rd.result)); toast('Imported'+(nm?' "'+nm+'"':'')+' — use Save As to keep it in this browser'); }
+                  catch(err){ toast('Import failed: '+(err&&err.message||err)); } e.target.value=''; };
+  rd.readAsText(f);
+});
 
 // snapshot the factory defaults BEFORE any restore, for the "New" action
 const DEFAULT_STATE=captureState();

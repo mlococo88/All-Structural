@@ -3104,3 +3104,189 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **"§ in report" links:** each "Worked in" line and the Summary table's "Worked in" column carry a "§ in report" link (`a.rptJ`, `data-rptjump="tab|ci|card"`) that opens the Report tab at the section where that card is worked (`window.BPAD_CARDMAP`, set by `buildPrintReport`). Inside the report, "see §n.k" still goes to the source tab. The report itself never carries the "§ in report" links.
 - **Print:** unchanged — `buildPrintReport()` into `#printReport`, no bar, no tree, nothing collapsed. The printed PDF of the engineer's test project is identical to main's (35 pages, `pdftotext` equal).
 - **Checks (1500 × 1000 mouse, 1180 × 820 touch):** tree entries equal the report headings 1:1 (9 chapters, 39 sections); a tree jump puts the heading just under the tool bar and the tree highlights it; scroll-spy follows; heading tap collapses / expands; Collapse all closes 9 chapters, a jump into one opens it, the rest stay closed after a rebuild, Expand all clears them; "§ in report" from the Summary opens the Report tab at §5.1; "see §3.2" in the report goes to Base Plate; output column never scrolls sideways; 0 page errors. `node tests/bpad-profis.mjs` 5 / 5 `same`; `node tests/check-syntax.mjs` passes.
+
+## 2026-11-01 — RPT-4: the Report tab moves to the shared report viewer (shared/report.js); RPT-1/2/3 kept (display / report only; no result changes) (PR: claude/rpt-baseplate, PR link added after merge)
+- **Engineer request (2026-11-01, report rollout, item 9):** migrate the tool's own in-app Report tab (RPT-2/3, Gusset pattern) to the shared viewer used by the other tools, keeping every feature; replace the old one only if equivalent.
+- **What is unchanged:** the document. `buildPrintReport()` (RPT-2, with the RPT-1 corrections: closed-tie wording and references, plain-text TeX, clipping, combination statements, links) still builds the calculation sheet; Print / PDF (tool bar) still prints `#printReport` with `bpadPageCSS`; Ctrl+P from any other tab is unchanged.
+- **New (anchor `/* RPT-4 (2026-11-01)`, before `/* BP-T1 (2026-10-21)`):**
+  - `bprModel()` builds the RPT-2 sheet off screen (in the page, as RPT-3 built it in the tab, since some drawings measure their text) and reads it back into the viewer's model in order and with the same numbering: chapter (`section.cr-sec`) → section n, every card as `buildPrintReport` numbers them (`.sec`) → subsection n.k (a chapter's own content before its cards goes at the top of its first card, so the cards keep the numbers n.k of the old sheet and its "see §n.k" texts; its result lines → a last subsection "Results — <chapter>"), each worked equation (`eqBlock`) → a worked step (its TeX lines from KaTeX's source annotation; its "where" table → the step's note; the result read back from its last line "= value unit"), result lines → a table (D/C and PASS / FAIL / N/A), drawings with their "Figure n — …" captions, notes ("Note n."), "Notes / basis" B.n. Steps under one heading form a topic (`SharedSteps.group`). References → a last section.
+  - `bprReportTab(pg)` (was `buildReportTab`): mounts the viewer, debounced 250 ms as before; the tool bar keeps the RPT-3 controls (`bprControls`, `bprWire`): chapter chips (`S.print.sections`), "Include Detail Sheet appendix", every / governing combination (`S.print.combos.all`) — the same saved fields as before, nothing new; the viewer adds Search, Expand all, Collapse all, Print report.
+  - "§ in report" (RPT-3 `a.rptJ`, `BP_RPT_PENDING`): `BPRP_CARDMAP` maps each card to its viewer anchor; the viewer opens at it (`api.go`).
+  - "see §n.k" links inside the report still open the tab and card where the value is worked (`bprGoto` → `bpadGoto`).
+  - Ctrl+P while the Report tab is shown prints the viewer's report (title block without owner cell, running header, Page X of Y); `bprWillPrint()` makes the D11 `beforeprint` stand aside.
+- **shared/report.js (additive):** `opt.spy` (the RPT-3 scroll-spy: the tree highlights the heading being read and keeps it in view) and `api.go(anchorId)`. See `fixlog/shared-report.md`.
+- **Changed lines:** `buildOutput`: `case "tabReport": bprReportTab(pg)`; the D11 `beforeprint` listener returns first when the Report tab prints itself; two `<script src="shared/…">` tags. The RPT-3 helpers `bpCrScroller` (used) and `buildReportTab`, `bpCrSizeBar`, `bpCrJump`, `bpCrSpyOn/Off`, `BP_RPT_CLOSED` (no longer called) are left in place unchanged; the `.crv-*` CSS stays (Gusset pattern, CLAUDE.md §3).
+- **Side-by-side comparison, old (main, RPT-3) vs new, headless Chromium, 4 projects (default; MSA3A; torqued with 22 in. pedestal; the last built-in validation case):** chapters 1:1 (13 / 7 / 13 / 7), sections 1:1 (75 / 34 / 75 / 35), worked equations = steps (96 / 41 / 96 / 43), drawings 12 / 6 / 12 / 6 equal, every result-line D/C (58 / 22 / 70 / 24) in the new report, every number of the old sheet's text (1,282–3,383) present in the new one, tool bar controls equal (9 chapter chips, Detail Sheet appendix, combination selector); 0 unresolved references, 0 KaTeX errors, no NaN / undefined. Features: scroll-spy, Collapse all / Expand all, chapter chip removes the chapter, "§ in report" from the Summary opens the Report tab at the card (`tabPlate|2|pbBend` → §5.3), Ctrl+P prints the viewer's report. `S` after building the report differs only by `S.ui.printing` and `S.print.collapseIdentical`, which `buildPrintReport` sets on main as well.
+- Final run on the branch file: all of the above PASS for the 4 projects; every number of the old sheet's text present in the new one (0 missing of 1,282–3,383); "§ in report" `tabPlate|2|pbBend` → §5.2 as in the old sheet; Ctrl+P on the Report tab: viewer report alone, 53 letter pages (default, every combination). 0 page errors (the PDF.js CDN script is not served in the test kit, on main too).
+- `node tests/bpad-profis.mjs`: PASS (results origin/main vs branch: default, msa3a, struct2v1, struct2v2, torqued all `same`; export checks pass). `node tests/check-syntax.mjs BasePlateAnchorDesigner.html`: all scripts pass. `node tests/engine/run.mjs report steps steps-groups report-wiring`: 14 passed (shared/report.js changed).
+- **Decision:** equivalent (same chapters, sections, worked items, drawings, result lines and numbers; every RPT-3 feature kept) → the old viewer is replaced.
+- **Provision:** none. No formula, factor, unit, code reference or result changed. **Saved data:** none added.
+- **Open items:** the viewer's Print report prints the viewer's layout (shared title block and running header); the RPT-2 calculation sheet layout prints from Print / PDF in the tool bar, as before. The now-unused RPT-3 functions can be deleted in a later clean-up.
+
+Diff (`BasePlateAnchorDesigner.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/BasePlateAnchorDesigner.html b/BasePlateAnchorDesigner.html
+index 5a65298..c7c5f79 100644
+--- a/BasePlateAnchorDesigner.html
++++ b/BasePlateAnchorDesigner.html
+@@ -11,0 +12,3 @@
++<!-- RPT-4: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -5739 +5742 @@ function buildOutput(){
+-    case "tabReport":  buildReportTab(pg); break;   /* RPT-2 */
++    case "tabReport":  bprReportTab(pg); break;   /* RPT-4: the shared viewer (was RPT-2/3 buildReportTab) */
+@@ -5846,0 +5850,147 @@ document.addEventListener("click",e=>{ const a=e.target.closest&&e.target.closes
++/* RPT-4 (2026-11-01): the Report tab in the shared report viewer (shared/report.js, shared/steps.js; engineer's report
++   rollout). The document is the same one as before: buildPrintReport() builds the RPT-2 calculation sheet (same builder
++   as Print / PDF), and bprModel() reads it back into the viewer's model, in order and with the same numbering: each
++   chapter (section.cr-sec) a section n, each card (.sec, as buildPrintReport numbers them) a subsection n.k, each
++   worked equation (eqBlock) a worked step (its TeX lines from KaTeX's source annotation, its "where" table as the
++   step's note, its result read back from the line: the number the tool formatted, never recomputed), the result lines
++   of a chapter a table, drawings with their "Figure n" captions, notes, "Notes / basis" B.n. Steps under one heading
++   form a topic (SharedSteps.group). Kept from RPT-3: chapter chips, "Include Detail Sheet appendix", every / governing
++   combination, Expand / Collapse all, Print, navigation tree with scroll-spy, collapsible chapters and sections (state
++   kept for the session), "§ in report" jumps from the other tabs, "see §n.k" to the tab where a value is worked. New
++   from the viewer: search, topics in the tree. Print / PDF (toolbar button) is unchanged (#printReport). */
++const BPRP={closed:new Set(),api:null,doc:null};
++function bprAnn(k){const a=k&&k.querySelector('annotation[encoding="application/x-tex"]');return a?a.textContent:'';}
++function bprLite(t){return String(t||'').replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
++  .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,'\\;').replace(/\\(displaystyle|scriptstyle|limits|!)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
++  .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');}
++function bprText(n){
++  const c=n.cloneNode(true);
++  c.querySelectorAll('.katex-display,.katex').forEach(k=>{if(!c.contains(k))return;const t=bprAnn(k);k.replaceWith(document.createTextNode(t?'$'+bprLite(t)+'$':''));});
++  c.querySelectorAll('button,select,input,textarea,.svgTools,.noPrint').forEach(x=>x.remove());
++  return c.textContent.replace(/\s+/g,' ').trim();
++}
++/* the result at the end of the last line: "= 12.3\ \text{kip}" or "=\mathbf{12.3}" -> {value, unit, d, line} */
++function bprResult(line){
++  const m=/=\s*(?:\\mathbf\{)?\s*(-?[\d.,{}]+?)\s*\}?\s*((?:\\\s*|\\,|\\;|~|\s)*\\(?:text|mathrm)\{\s*([^{}]*)\})?\s*$/.exec(line);
++  if(!m)return null;
++  const raw=m[1].replace(/\{,\}/g,'').replace(/,/g,'').replace(/[{}]/g,'');
++  if(!/^-?\d+(\.\d+)?$/.test(raw))return null;
++  return {value:parseFloat(raw),unit:(m[3]||'').trim(),d:(raw.split('.')[1]||'').length,line:line.slice(0,m.index)};
++}
++function bprStep(eb,id){
++  const t=eb.querySelector('.eqTitle'),r=t&&t.querySelector('.eqRef');
++  const title=t?Array.from(t.childNodes).filter(x=>x!==r).map(x=>x.textContent).join('').trim():'';
++  const lines=Array.from(eb.querySelectorAll(':scope > .eqLine')).map(l=>bprAnn(l)).filter(Boolean);
++  const vars=Array.from(eb.querySelectorAll(':scope table.cr-wtab tr')).map(tr=>{const c=tr.cells;return c.length>=3?bprText(c[0])+' = '+bprText(c[2])+(bprText(c[1])?' ('+bprText(c[1])+')':''):bprText(tr);})
++    .concat(Array.from(eb.querySelectorAll(':scope > .varList > div')).map(bprText)).filter(Boolean);
++  let value=null,unit='',d=2;
++  const res=lines.length?bprResult(lines[lines.length-1]):null;
++  if(res){value=res.value;unit=res.unit;d=res.d;lines[lines.length-1]=res.line;}
++  const eq=lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');
++  return {id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2|\^2/g,'^{2}').replace(/\u00B3|\^3/g,'^{3}'),d,ref:r?r.textContent.replace(/^\[|\]$/g,'').trim():'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};
++}
++/* the RPT-2 document -> the viewer's model (same chapters, cards and numbering) */
++function bprModel(){
++  /* built in the page (off screen), as the RPT-3 tab built it: some drawings measure their text */
++  const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-30000px;top:0;width:8.5in;visibility:hidden;';tmp.setAttribute('aria-hidden','true');
++  (document.getElementById('tabPages')||document.body).appendChild(tmp);
++  try{buildPrintReport(tmp);}finally{tmp.remove();}
++  const body=tmp.querySelector('.cr-bodyall'), secs=[], cardKey={};
++  const wk=a=>{ /* "see §n.k" (D11 link rewritten by buildPrintReport): keep the text, open the tab where it is worked */
++    const tab=a.dataset.tab,card=a.dataset.card,ci=a.dataset.ci||'';return '[[tab:wk|'+tab+'|'+card+'|'+ci+'|'+a.textContent.replace(/[\]|]/g,'')+']]';};
++  Array.from(body.querySelectorAll(':scope > section.cr-sec')).forEach((sec,si)=>{
++    const h=sec.querySelector(':scope > .cr-h1'), title=(h?h.textContent:'').replace(/^\s*\d+\.\s*/,'').replace(/:\s*$/,'');
++    const cards=Array.from(sec.querySelectorAll('.sec')), subs=[];
++    const mk=(t,scope)=>({title:t,items:[],run:null,head:'',scope,n:0});
++    const flush=c=>{if(c.run&&c.run.steps.length){const g=SharedSteps.group(c.run.steps,[{key:'k',title:c.run.title,ids:()=>true}],{strip:false})[0];
++      c.items.push({type:'steps',scope:c.scope,title:'Worked steps',steps:c.run.steps,topics:[{title:c.run.title,ref:'',n:c.run.steps.length,cls:g.cls,chip:g.chip,res:g.res}]});}c.run=null;};
++    const linkText=n=>{const c=n.cloneNode(true);c.querySelectorAll('a.wkA').forEach(a=>a.replaceWith(document.createTextNode('\u0001'+wk(a)+'\u0001')));
++      c.querySelectorAll('a[href^="#"]').forEach(a=>a.replaceWith(document.createTextNode(a.textContent)));return bprText(c).replace(/\u0001/g,'');};
++    const walk=(node,c)=>{
++      Array.from(node.childNodes).forEach(ch=>{
++        if(ch.nodeType===3){const t=ch.textContent.trim();if(t){flush(c);c.items.push({type:'note',text:t});}return;}
++        if(ch.nodeType!==1)return;
++        const cl=ch.classList,tag=ch.tagName;
++        if(cl.contains('sec'))return;   /* every card is its own subsection (buildPrintReport's numbering) */
++        if(cl.contains('eqBlock')){if(!c.run)c.run={title:c.head||c.title,steps:[]};c.run.steps.push(bprStep(ch,'s'+(++c.n)));return;}
++        if(cl.contains('secHead')||tag==='BUTTON'||tag==='SCRIPT'||tag==='STYLE')return;
++        if(cl.contains('cr-results')){flush(c);c.items.push({type:'table',head:['Check','D/C','Status'],rows:Array.from(ch.querySelectorAll('.cr-line')).map(l=>{const st=bprText(l.querySelector('.cr-r')||l);
++          return [linkText(l.querySelector('.cr-d')||l).replace(/:$/,''),linkText(l.querySelector('.cr-m')||l),{t:st,cls:/FAIL/.test(st)?'ng':/PASS/.test(st)?'ok':'na'}];})});return;}
++        if(tag==='TABLE'&&!cl.contains('cr-wtab')){flush(c);const rows=Array.from(ch.rows);if(!rows.length)return;const hr=rows[0].querySelector('th')?rows.shift():null;
++          c.items.push({type:'table',head:hr?Array.from(hr.cells).map(linkText):[],rows:rows.map(r=>Array.from(r.cells).map(td=>{const t=linkText(td);return {t,n:/^[-−]?[\d.,]+$/.test(t),span:td.colSpan>1?td.colSpan:undefined};}))});Array.from(ch.querySelectorAll('svg')).filter(v=>!v.closest('.katex')).forEach(v=>c.items.push({type:'figure',svg:v.outerHTML}));   /* drawings laid out in a table */
++          return;}
++        if(tag.toLowerCase()==='svg'){flush(c);let cap='';const nx=(ch.parentElement&&ch.parentElement.querySelector(':scope > p.cr-cap'))||null;
++          const sib=ch.nextElementSibling&&ch.nextElementSibling.classList.contains('cr-cap')?ch.nextElementSibling:(ch.parentElement&&ch.parentElement.nextElementSibling&&ch.parentElement.nextElementSibling.classList.contains('cr-cap')?ch.parentElement.nextElementSibling:nx);
++          if(sib){cap=sib.textContent.trim();sib.dataset.used='1';}c.items.push({type:'figure',svg:ch.outerHTML,caption:cap});return;}
++        if(tag==='P'&&cl.contains('cr-cap')){if(ch.dataset.used)return;}
++        if(/^H[1-6]$/.test(tag)||cl.contains('cr-notesHd')||cl.contains('cr-resh')){flush(c);const t=ch.textContent.trim();if(t){c.head=t;c.items.push({type:'note',text:'— '+t+' —'});}return;}
++        if(ch.querySelector('.eqBlock,table,svg,.cr-results')){walk(ch,c);return;}
++        if(cl.contains('cr-bn')){flush(c);c.items.push({type:'note',text:linkText(ch)});return;}
++        const t=linkText(ch);if(t){flush(c);c.items.push({type:'note',warn:cl.contains('cr-noteBox')&&/^Note:/.test(t)&&!!ch.querySelector('b'),text:t});}
++      });
++    };
++    const lead=mk('General',('c'+(si+1))+'.0');
++    /* the chapter's own content outside the cards */
++    const clone=sec.cloneNode(true);clone.querySelectorAll('.sec').forEach(x=>x.remove());const hh=clone.querySelector(':scope > .cr-h1');if(hh)hh.remove();
++    walk(clone,lead);flush(lead);
++    cards.forEach((sc,k)=>{const t=sc.querySelector(':scope > .secHead .secTitle');const c=mk((t?t.textContent:'').replace(/^\s*\d+(\.\d+)*\.\s*/,'').replace(/:\s*$/,''),'c'+(si+1)+'.'+(k+1));
++      walk(sc.querySelector(':scope > .secBody')||sc,c);flush(c);subs.push(c);});
++    /* the lead content (cross-reference line, chapter result lines): before the cards, or after them for result lines */
++    const res=lead.items.filter(it=>it.type==='table'&&it.head[0]==='Check'), other=lead.items.filter(it=>res.indexOf(it)<0);
++    /* the chapter's own content before its cards goes at the top of its first card, so the cards keep buildPrintReport's numbers n.k
++       (the "see §n.k" texts); the "Results — …" heading is the title of the results subsection */
++    const other2=other.filter(it=>!(it.type==='note'&&/^— Results — /.test(it.text)));
++    const S2=[]; if(other2.length&&!subs.length) S2.push({title:title,items:other2}); else if(other2.length) subs[0].items=other2.concat(subs[0].items);
++    subs.forEach(c=>S2.push({title:c.title,items:c.items.length?c.items:[{type:'note',text:'—'}]}));
++    if(res.length) S2.push({title:'Results — '+title,items:res});
++    secs.push({title,subs:S2.length?S2:[{title:title,items:[{type:'note',text:'—'}]}],_cards:subs.length,_lead:0});
++  });
++  /* "§ in report": card -> subsection anchor of the viewer (rp-s<n>-<k>; k shifted by a leading "General") */
++  const map={}; Object.entries(window.BPAD_CARDMAP||{}).forEach(([k,v])=>{const m=/^crp-(\d+)-(\d+)$/.exec(v.id);if(!m)return;const s=secs[+m[1]-1];if(!s)return;map[k]='rp-s'+m[1]+'-'+(+m[2]+s._lead);});
++  window.BPRP_CARDMAP=map;
++  const P=S.proj||{};
++  return {title:'Base Plate & Anchor Bolt Design',subtitle:P.name||'Untitled',code:'ACI 318-19 Chapter 17 · AISC Design Guide 1',
++    info:[['Project',P.name],['Project No.',P.num],['Calculated by',P.by],['Date',P.date],['Checked by',P.chk],['Checked date',P.chkDate]],
++    head:{left:'Project No. '+(P.num||'—')+' — '+String(P.name||'—').slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:(P.name||'Untitled')+' (Base Plate & Anchor Bolt Designer)'},
++    sections:secs.map(s=>({title:s.title,subs:s.subs})).concat([{title:'References',subs:[{title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:BPAD_REFS.map(r=>[bprText(Object.assign(document.createElement('div'),{innerHTML:r[0]})),bprText(Object.assign(document.createElement('div'),{innerHTML:r[1]}))])}]}]}])};
++}
++/* RPT-4: the Report tab (replaces RPT-3's buildReportTab; same tool bar controls, same document) */
++function bprControls(){
++  const chips=TABS().filter(([id])=>!(id==="tabVisual"||id==="tabReport"||id==="tabDetail")).map(([id,label])=>{
++    const optIn=(id==="tabValidation"||id==="tabManual"), on=optIn? S.print.sections[id]===true : S.print.sections[id]!==false;
++    return '<label class="rp-chip"><input type="checkbox" data-bprsec="'+id+'"'+(on?' checked':'')+'>'+sbdEscB(label+(optIn?" (appendix)":""))+'</label>'; }).join("");
++  return '<div class="rp-chips" role="group" aria-label="Report chapters">'+chips+'</div>'
++    +'<label class="rp-chip"><input type="checkbox" data-bprsec="tabDetail"'+(S.print.sections.tabDetail===true?' checked':'')+'>Include Detail Sheet appendix</label>'
++    +'<select data-bprcombos><option value="all"'+(S.print.combos.all!==false?' selected':'')+'>Every combination worked</option><option value="gov"'+(S.print.combos.all===false?' selected':'')+'>Governing combination only</option></select>';
++}
++function sbdEscB(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
++function bprWire(host){
++  host.querySelectorAll("input[data-bprsec]").forEach(cb=>cb.addEventListener("change",()=>{ S.print.sections[cb.dataset.bprsec]=cb.checked; autosave(); buildOutput(); }));
++  const cs=host.querySelector("select[data-bprcombos]"); if(cs) cs.addEventListener("change",()=>{ S.print.combos.all=(cs.value==="all"); autosave(); buildOutput(); });
++}
++function bprReportTab(pg){
++  if(!window.SharedReport||!window.SharedSteps){ pg.appendChild(el("div","errBox","shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.")); return; }
++  const host=el("div","bprHost"); pg.appendChild(host);
++  host.appendChild(el("div","note","Building the calculation sheet…"));
++  /* building the whole sheet takes about a second: debounced so typing stays responsive (as RPT-2/3) */
++  clearTimeout(bpRptTimer);
++  bpRptTimer=setTimeout(()=>{ if(!host.isConnected || S.ui.tab!=="tabReport") return;
++    const sc=bpCrScroller(), keep=sc? sc.scrollTop : 0, tb=document.getElementById("tabBar");
++    let M; try{ M=bprModel(); }catch(e){ host.innerHTML=""; host.appendChild(el("div","errBox","Report error: "+sbdEscB(e&&e.message))); return; }
++    BPRP.api=SharedReport.mount(host,M,{closed:BPRP.closed,onGoto:bprGoto,controls:bprControls(),spy:true,stick:(sc&&tb)? tb.offsetHeight : 0});
++    BPRP.doc=BPRP.api.doc; bprWire(host);
++    if(sc) sc.scrollTop=keep;
++    if(BP_RPT_PENDING){ const [t,ci,card]=BP_RPT_PENDING.split("|"); BP_RPT_PENDING=null;
++      const m=window.BPRP_CARDMAP||{}, id=m[t+"|"+ci+"|"+card]||m[t+"||"+card]||m[t+"|"+(window.BPAD_GI)+"|"+card]; if(id) BPRP.api.go(id); }
++    host.dataset.ready="1"; },250);
++}
++/* [[tab:wk|tab|card|ci|text]]: "see §n.k" — to the tab and card where the value is worked (as the a.wkA links) */
++function bprGoto(name){ const p=String(name).split("|"); if(p[0]==="wk") bpadGoto(p[1],p[2],p[3]===""? null : p[3]); }
++function bprWillPrint(){ return document.body.classList.contains("rp-printing")||!!(BPRP.doc&&S.ui.tab==="tabReport"); }
++window.addEventListener("beforeprint",()=>{
++  if(!BPRP.doc||S.ui.tab!=="tabReport"||document.body.classList.contains("rp-printing")) return;
++  let box=document.getElementById("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(BPRP.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add("rp-printing");
++});
++
+@@ -12489 +12639,2 @@ function init(){
+-  window.addEventListener("beforeprint",()=>{ if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
++  window.addEventListener("beforeprint",()=>{ if(typeof bprWillPrint==="function"&&bprWillPrint()) return;   /* RPT-4: the Report tab prints itself (shared/report.js) */
++    if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
+```

@@ -111,3 +111,38 @@ Tests: `node tests/engine/run.mjs lldf` (hash harness against lldf.html before t
 - No change to any existing output: the Steel Bridge step dump (LLST, 1,920 cases) hashes the same (293fb98c…);
   `node tests/engine/run.mjs lldf loads report steps tex` pass. lldf.html headless checks (fixlog/lldf.md LLRP): every step value of
   types f, g, b/c (incl. S > 18 ft), d and slab equals the app's, 0 KaTeX errors.
+
+## 2026-11-01 — PR: lldf-slab-w (LLSW) — CIP slab equivalent strip: W = physical edge-to-edge width (CALCULATION CHANGE, engineer's decision; was LLRP-O1)
+### Where
+- `shared/lldf.js`, `memberDF`, the cast-in-place slab branch, anchor `// cast-in-place slab: equivalent strip`.
+- Before:
+  `const L1=Math.min(p.L,60), W1s=Math.min(geo.roadway,30), W1m=Math.min(geo.roadway,60);`
+  `const Es=10+5*Math.sqrt(L1*W1s), Em=Math.min(84+1.44*Math.sqrt(L1*W1m),12*geo.roadway/Math.max(1,geo.NL));`
+- After:
+  `const L1=Math.min(p.L,60), W1s=Math.min(geo.Wdeck,30), W1m=Math.min(geo.Wdeck,60);`
+  `const Es=10+5*Math.sqrt(L1*W1s), Em=Math.min(84+1.44*Math.sqrt(L1*W1m),12*geo.Wdeck/Math.max(1,geo.NL));`
+- `SharedLLDF.steps.other` (slab steps): W_1 and the 12W/N_L cap from `geo.Wdeck`; labels and note say W = edge-to-edge width.
+- `lldf.html` `memberSteps` (slab): the substituted W_1 is min(W, 30) with W = `geo.Wdeck`; the two-lane step lists W_1, W, N_L.
+### Problem
+- The strip widths used the clear roadway width (between the railing faces) for W and W_1. Art. 4.6.2.3 defines W as the physical
+  edge-to-edge width of the bridge and W_1 as the modified edge-to-edge width (the lesser of the actual width and 30 ft for one lane,
+  60 ft for multiple lanes); N_L stays per Art. 3.6.1.1.1 (clear roadway). A wider W gives wider strips and SMALLER distribution
+  factors (less conservative than before; it is the code's definition).
+### Governing provision
+- AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 4.6.2.3, Eqs. 4.6.2.3-1 and 4.6.2.3-2 (and Art. 3.6.1.1.1 for N_L).
+### Check case
+- L = 35 ft, three lines at 10 ft, overhangs 4 ft, faces 1.5 ft: W = 28 ft, w = 25 ft, N_L = 2, L_1 = 35 ft.
+  - Before (W → w = 25): E_1 = 10 + 5√(35 × 25) = 157.902 in, g_1 = 12/157.902 = 0.07600; E_2 = 84 + 1.44√(35 × 25) = 126.596 in
+    (≤ 12 × 25/2 = 150), g_2 = 0.09479; g = 0.0948; fatigue 0.0633.
+  - After (W = 28): E_1 = 10 + 5√(35 × 28) = 10 + 5(31.305) = 166.525 in, g_1 = 0.07206; E_2 = 84 + 1.44(31.305) = 129.079 in
+    (≤ 12 × 28/2 = 168), g_2 = 0.09297; g = 0.0930 (−1.9 %); fatigue 0.07206/1.2 = 0.0601.
+  - Test: `tests/engine/lldf.test.mjs` "LLSW".
+### Which outputs change (every consumer of shared/lldf.js)
+- Only cross-section type "slab" results. The hash harness (1,592 cases vs lldf.html before the move): the 48 slab cases are the
+  only ones that differ (CHANGED = /^slab /, 72 outputs: R and the slab steps); every other output hashes identically.
+- `apps/steel-bridge` (type a only): unchanged — the 1,920-case LLDF step dump hashes the same (293fb98c…); `node tests/engine/run.mjs
+  lldf loads report` pass.
+- `lldf.html`: slab results and steps change (sheet, D11 print, Report tab, the DF hand-off "Send DFs" for a slab bridge); every other
+  type identical (headless main vs branch).
+- `Prestressed Bridge Design.html`, `index.html`: do not load shared/lldf.js; they receive lldf.html's DFs only through the hand-off,
+  so only a slab-bridge hand-off would carry the new values.

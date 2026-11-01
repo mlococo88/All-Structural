@@ -4249,3 +4249,17 @@ The basis line on the zone card and in the report's capacity table now works out
   of "↓ Download MCT" (the download stays in the header).
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: rpt-index-full (IDRP-F) — Report step: every node's rating worked (engineer's decision; display only)
+### Where
+- `idxrModel` (anchor `/* every node worked (IDRP-F`): the governing-node steps became `nodeWork(r)` (the same steps, for any node:
+  C_M+, C_M−, C_V = φ_c φ_s φ R_n with R_n from `capAt(x)`, RF for M+, M−, V, governing RF, RT). §3.2 the governing node (open, scope
+  `gov`); new §3.3 "Worked rating at every other node" — one closed (lazy) item per node in order along the bridge, titled with its RF
+  and governing action (scope `n<node>`); the tables follow (§3.4). The RF cell of every node in the capacities table links (§) to that
+  node's worked steps.
+### Values
+- Unchanged source: every value is ratingData's (C, RF, RT) and the factors in reportState; nothing is recomputed.
+### How verified
+- Headless (scratchpad `rpt/idx/rp.mjs`), 5 variants: 0 unresolved / duplicate refs, 0 KaTeX errors (every lazy item filled), no NaN;
+  every worked value of every node (base: 328 steps, 41 nodes) found in the app's own text (AASHTO Rating step / Generate Report);
+  every number of the capacities / RF table too; no console errors; print fills every node.
