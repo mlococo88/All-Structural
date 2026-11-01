@@ -114,9 +114,10 @@ const PAGE_FN = async ({ mut, state, shots }) => {
     const pick = (o, ks) => { const r = {}; ks.forEach(k => { r[k] = o[k]; }); return r; };
     cablesOut = ser({
       components: comps.map(cp => pick(cp, ['wIce', 'KzC', 'qW', 'qWI', 'D_v', 'Di_v', 'W_h', 'Wi_h', 'A_cable'])),
-      combos: allCombos.map(r => ({ key: r.key, dirs: (r.dirs || [r]).map(d => ({ phi: d.phi,
+      // keyed by combination, so a combination added by a later version shows as new, not as a shift of the others
+      combos: Object.fromEntries(allCombos.map(r => [r.key, { dirs: (r.dirs || [r]).map(d => ({ phi: d.phi,
         ...pick(d, ['cableRes', 'cableAng', 'hcEff', 'sV', 'cableWindH', 'cableWindM', 'M_cable']),
-        per: (d.per || []).map(x => pick(x, ['wv', 'wh', 'Ht', 'Hpull', 'Vc', 'Hw', 'Hx', 'Hy', 'wRes'])) })) })),
+        per: (d.per || []).map(x => pick(x, ['wv', 'wh', 'Ht', 'Hpull', 'Vc', 'Hw', 'Hx', 'Hy', 'wRes'])) })) }])),
     }, 'cables');
   }
   const text = {}, svgs = {};
