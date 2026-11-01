@@ -2987,3 +2987,135 @@ index 7f96751..84f1b12 100644
 @@ -3358,0 +3624 @@ $('#tabbar').addEventListener('click',e=>{
 + if(b.dataset.tab==='tab-drawings')renderDrawings();   /* SFDW */
 ```
+
+## 2026-11-01 — PR: claude/sf-ped-cover — Pedestal P–M interaction: bar centres at cover + d_b/2 (cover to the bar face) (SFPC, calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFPC`.
+
+### SFPC. Pedestal longitudinal bars placed at cover + d_b/2 from each face in the biaxial P–M check   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):** the biaxial P–M check placed the corner and face bars with the cover measured to the bar **centre**, while the bar-fit check measured it to the bar **face**. Make the P–M check measure the cover to the bar face, and apply it everywhere pedestal bar positions are derived.
+- **How the app defines the pedestal cover input** (pedestal card, "Cover (in)", `peds[i].reinf.cover`): the **clear cover to the longitudinal (vertical) bars**. That is the basis of:
+  - the bar-fit clear-spacing check (`clrX = (b_x − 2c − d_b)/(n_x − 1) − d_b`, ACI 318-19 25.2.3);
+  - the bar layout rules of #519 (`sfdPedBars`: corner-bar centre span L_c = b − 2c − d_b);
+  - the drawings (`sfdwPedLayout`: centres at b/2 − c − d_b/2; note "COVER … CLR TO VERT BARS"; ties drawn outside the bars).
+  
+  So the bar centre is at **d′ = c + d_b/2** from each face. The tie diameter is **not** added: the input is not a cover to the ties. Clear cover to the ties is c − d_tie. ACI 318-19 20.5.1.3 states the specified cover to the outermost reinforcement, which in a tied pedestal is the tie; see open items.
+- **Where:**
+  - `computePhase2` → `pedDes` (anchor `const pmBars=pedBarCoords(`):
+    - before: `const pmBars=pedBarCoords(bx,by,cover,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);`
+    - after: `const dPr=num(cover)+(BAR_DIA[rf.longSize]||0)/2, dX=bx-dPr, dY=by-dPr;` then `const pmBars=pedBarCoords(bx,by,dPr,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);`
+    - Also returned: `pedDes[].dPr, dX, dY` (new keys, display only).
+  - `pedBarCoords`: unchanged. Its `coverIn` argument is face to bar centre; a comment says so.
+  - 3D view `buildRebar` (anchor `const cv=(rf.cover||2)/12`):
+    - before: `const cv=(rf.cover||2)/12;`, ties at the bar centrelines `tieLoop(x0,x1,y0,y1,…)`;
+    - after: `const cv=(rf.cover||2)/12+db/2;`; ties drawn outside the bars, as in the drawings: `const to=db/2+tie/2;` `tieLoop(x0-to,x1+to,y0-to,y1+to,…)`.
+  - Unchanged, because they already used the face basis: the bar-fit check, `sfdPedBars` (the #519 layout rules) and the drawings (`sfdwPedLayout`).
+  - The pedestal has no shear or flexure check that uses an effective depth. d_x and d_y are only the depths to the far bar row in the P–M section, and are shown for the hand check.
+- **Shown (§6):**
+  - Pedestal Design 6.x: a new equation block "Bar positions for the P–M interaction": d′ = c + d_b/2 and d_x = b_x − d′, d_y = b_y − d′, with values. The note under the P–M plot now names the bar-centre basis.
+  - Report §6, each pedestal: a new topic "Bar positions for the P–M interaction" (steps d′, d_x, d_y).
+  - User manual 2.7: defines the pedestal cover. Input-table header tooltip: "Clear cover to the longitudinal (vertical) bars".
+- **Governing provisions:**
+  - ACI 318-19 20.5.1.3: concrete cover, measured to the reinforcement surface (clear cover).
+  - ACI 318-19 22.2.1 to 22.2.2: strain compatibility, ε_cu = 0.003, 0.85f′c block, β1.
+  - ACI 318-19 21.2.2: φ by net tensile strain, 0.65 to 0.90.
+  - ACI 318-19 25.2.3: clear spacing (bar fit; unchanged).
+- **Before / after:** bar centres move inward by d_b/2 on every face. φP_n,max, ρ, ties, bar fit and every footing, bearing and stability result are unchanged. Only the P–M capacity contour changes, and it gets smaller, so the result is more conservative.
+- **Check case (hand), default project, Ped 1:**
+  - Input: 18 × 18 in, 8 #8 (3 per face, A_b = 0.79 in², d_b = 1.00 in), c = 2.00 in, f′c = 4000 psi, f_y = 60 ksi, E_s = 29 000 ksi, β1 = 0.85, P_u = 240.81 kip (envelope max). Uniaxial, bending about x (M_y = 0).
+  - Bar rows: 3 bars at d′ from the compression face, 2 at mid-depth (9 in), 3 at d.
+  - **Before** (d′ = 2.00, d = 16.00 in):
+    - c = 6.633 in, a = 5.638 in, C_c = 0.85·4·5.638·18 = 345.05 k;
+    - compression row ε = 0.00210, f_s = 60 − 3.4 = 56.60 ksi → 134.14 k;
+    - mid row ε = −0.00107, −31.05 ksi → −49.05 k;
+    - tension row ε_t = 0.00424, −60 ksi → −142.20 k;
+    - P_n = 287.94 k, φ = 0.65 + 0.25(0.00424 − 0.002)/0.003 = 0.836, φP_n = 240.8 k;
+    - M_n = 338.93 k-ft, **φM_nx = 283.5 k-ft**.
+  - **After** (d′ = 2.00 + 1.00/2 = 2.50, d = 15.50 in):
+    - c = 6.980 in, a = 5.933 in, C_c = 363.10 k;
+    - compression row ε = 0.00193, 55.84 − 3.40 = 52.44 ksi → 124.28 k;
+    - mid row ε = −0.00087, −25.18 ksi → −39.78 k;
+    - tension row ε_t = 0.00366, −60 ksi → −142.20 k;
+    - P_n = 305.40 k, φ = 0.789, φP_n = 240.8 k;
+    - M_n = 326.91 k-ft, **φM_nx = 257.8 k-ft** (−9.1 %).
+  - App (strip-integrated contour, 180 angles): 280.78 → 255.61 k-ft (−8.97 %). This agrees with the hand values within 1 %, the strip discretization of `pmContour`.
+  - Largest demand / contour ratio of Ped 1: 0.0570 → 0.0626.
+- **Effect on the comparison projects** (headless Chromium, origin/main vs the branch; φM_n at P_u,max from the contour along the axes; ratio = largest |M_u| / contour radius along the same direction, the plotted basis):
+
+  | Project | Pedestal | φM_nx before → after (k-ft) | φM_ny before → after (k-ft) | max ratio before → after | points inside the plotted contour |
+  |---|---|---|---|---|---|
+  | default | Ped 1 / Ped 2 | 280.78 → 255.61 / 238.69 → 225.52 | same as x | 0.0570 → 0.0626 / 0.0670 → 0.0709 | 9/9, 9/9 unchanged |
+  | direct | Ped 1 / Ped 2 | 269.05 → 249.18 / 232.25 → 222.52 | same | 0.0595 → 0.0642 / 0.0689 → 0.0719 | unchanged |
+  | wt_ecc_gate_3ped | Ped 1 / 2 / 3 (15 × 24) | 280.78 → 255.61 / 238.69 → 225.52 / 359.90 → 347.46 | Ped 3: 208.50 → 198.68 | 0.2671 → 0.2934 / 0.1718 → 0.1818 / 0.0384 → 0.0403 | unchanged |
+  | directqa_net_fail | Ped 1 (4 #8); Ped 2 patch | 233.28 → 225.09 | same | 0.0686 → 0.0711 | unchanged |
+  | single_moment | Ped 1 | 280.78 → 255.61 | same | 0.2346 → 0.2503 | unchanged |
+  | direct_moment | Ped 1 / Ped 2 | 275.81 → 252.95 / 249.28 → 233.11 | same | 0.1394 → 0.1488 / 0.1437 → 0.1541 | unchanged |
+  | fatal | — | no pedestal design | | | |
+  | extra: offsets | Ped 2 | 238.69 → 225.52 | same | **1.0639 → 1.1144** | **8/9 → 6/9** |
+  | extra: uplift_partial | Ped 1 | 280.78 → 255.61 | same | 0.7978 → 0.8763 | unchanged |
+  | extra: qty_modes | Ped 1 (14 #8) / Ped 2 (12 #8) | 327.83 → 303.17 / 281.28 → 263.87 | Ped 1: 363.65 → 332.61 | 0.0440 → 0.0481 / 0.0569 → 0.0606 | unchanged |
+
+  - The one pass/fail change: the offsets project (load offsets, Ped 2, already outside the contour at 1.06). Two more combinations fall outside the plotted contour. It is explained by the smaller contour.
+- **Nothing outside the pedestal P–M changes (proof):**
+  - On all 10 projects, every value of `R` and `P2`, the dashboard, warnings, self-consistency, state and saved storage are identical, except `P2.pedDes[].pmBars[].x/y`. New keys only: `pedDes[].dPr/dX/dY`.
+  - The result tab text differs only on Pedestal Design (the new block and the note).
+  - The DXF of the drawings is byte-identical on all 10 projects.
+  - The #519 layout rules (`sfdPedBars`: total-quantity split, spacing → ceil(L_c/s) + 1, L_c = b − 2c − d_b) are not touched, and `pedDes.PB` is identical in every project, including the quantity/spacing project.
+- **Saved data (§5):** no key or format change. Old projects load with the same inputs; only the P–M contour changes, as above.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Spread Footing.html"` passes.
+  - Headless Chromium comparison scripts (see above).
+  - The report builds with 0 KaTeX errors and 0 unresolved references.
+  - 0 console errors.
+- **Open items (not changed; §9):**
+  - **ACI 318-19 20.5.1.3:** cover is specified to the outermost steel (the ties). With the cover input defined as clear to the longitudinal bars, the tie cover is c − d_tie (default 2 − 0.375 = 1.625 in ≥ 1.5 in). There is no check of the tie cover. The engineer is to decide whether the input should become cover to the ties (bar centre = c + d_tie + d_b/2). That would also change the #519 layout L_c and the bar-fit check.
+  - The bar-fit check uses d_b = size/8 (#9 to #11: 1.125/1.25/1.375 in), while `sfdPedBars`, the drawings and now the P–M check use `BAR_DIA` (1.128/1.27/1.41 in). This is an existing difference, raised and not changed.
+  - The P–M result is shown only as the plot colouring (no DCR in the summary table or the dashboard), and the contour is drawn at P_u,max for every combination. This is existing behaviour.
+  - At 390 px the output panel collapses to zero width on origin/main as well. This is existing, and not in scope.
+
+Diff (`Spread Footing.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 84f1b12..c822dc3 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -798 +798 @@ function buildPedCards(){
+-  rt.innerHTML='<tr><th>Long. bar</th><th>n along x-face</th><th>n along y-face</th><th>Tie bar</th><th>Tie spc (in)</th><th>Cover (in)</th></tr>';
++  rt.innerHTML='<tr><th>Long. bar</th><th>n along x-face</th><th>n along y-face</th><th>Tie bar</th><th>Tie spc (in)</th><th title="Clear cover to the longitudinal (vertical) bars">Cover (in)</th></tr>';
+@@ -3160,0 +3161,4 @@ function sfrModel(){
++   T.push({title:'Bar positions for the P–M interaction',ref:'ACI 318-19 20.5.1.3 (cover), 22.2 (strain compatibility)',steps:[   /* SFPC */
++    S({id:'dpr',label:'Face to longitudinal-bar centre (cover = clear cover to the longitudinal bars)',sym:"d'",eq:'c + \\frac{d_{b}}{2}',sub:sfrN(num(rf.cover))+' + \\frac{'+sfrN(BAR_DIA[rf.longSize]||0,3)+'}{2}',value:pd.dPr,unit:'in',d:3}),
++    S({id:'dx',label:'Depth to the far bar row, bending about y',sym:'d_{x}',eq:"b_{x} \\minus d'",sub:sfrN(pd.bx,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dX,unit:'in',d:3}),
++    S({id:'dy',label:'Depth to the far bar row, bending about x',sym:'d_{y}',eq:"b_{y} \\minus d'",sub:sfrN(pd.by,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dY,unit:'in',d:3})]});
+@@ -4474 +4478,5 @@ function computePhase2(R){
+-  const pmBars=pedBarCoords(bx,by,cover,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);
++  /* SFPC (2026-11-01, engineer): the cover input is the clear cover to the longitudinal bars (the
++     bar-fit check, the sfdPedBars layout and the drawings); bar centres are cover + d_b/2 from each
++     face (before: cover to the bar centre). d_x, d_y = depth to the far bar row about each axis. */
++  const dPr=num(cover)+(BAR_DIA[rf.longSize]||0)/2, dX=bx-dPr, dY=by-dPr;
++  const pmBars=pedBarCoords(bx,by,dPr,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);
+@@ -4481 +4489 @@ function computePhase2(R){
+-   pmBars,pmPts,fc,fy,PB};
++   pmBars,pmPts,fc,fy,PB,dPr,dX,dY};
+@@ -4487,0 +4496 @@ function pedBarCoords(bx,by,coverIn,nx,ny,barArea){
++ // coverIn = face to bar CENTRE (SFPC: the caller passes cover + d_b/2)
+@@ -4994,0 +5004,4 @@ function renderPedestalDesign(){
++  b.appendChild(eqBlock('Bar positions for the P\u2013M interaction','ACI 318-19 20.5.1.3 (cover to the longitudinal bars, as entered), 22.2',   /* SFPC */
++   "d' = c + \\tfrac{d_b}{2},\\qquad d_x = b_x - d',\\qquad d_y = b_y - d'",
++   "d' = "+f2(num(state.peds[i].reinf.cover))+' + \\tfrac{'+f3(BAR_DIA[state.peds[i].reinf.longSize]||0)+"}{2} = "+f3(pd.dPr)+'\\;\\mathrm{in}',
++   'd_x = '+f2(pd.bx)+' - '+f3(pd.dPr)+' = '+f3(pd.dX)+'\\;\\mathrm{in},\\qquad d_y = '+f2(pd.by)+' - '+f3(pd.dPr)+' = '+f3(pd.dY)+'\\;\\mathrm{in}'));
+@@ -5009 +5022 @@ function renderPedestalDesign(){
+-  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal; points inside the contour pass. Because the contour size varies with axial load, points are shown against the contour at the maximum P_u (conservative for gravity-dominated cases). Verify any borderline point at its own axial level.'));
++  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout, bar centres at d\u2032 = cover + d<sub>b</sub>/2 from each face (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal; points inside the contour pass. Because the contour size varies with axial load, points are shown against the contour at the maximum P_u (conservative for gravity-dominated cases). Verify any borderline point at its own axial level.'));
+@@ -5308 +5321 @@ function buildRebar(){
+-  const cv=(rf.cover||2)/12;
++  const cv=(rf.cover||2)/12+db/2;   // SFPC: bar centre at cover + d_b/2 from the face (as the P-M check and the drawings)
+@@ -5323 +5336,2 @@ function buildRebar(){
+-   for(let k=0;k<=nt;k++){const zt=zc0+k*spc;if(zt>zc1)break;g.add(tieLoop(x0,x1,y0,y1,zt,tie,steel));}}
++   const to=db/2+tie/2;   // SFPC: tie centreline outside the bars (as the drawings)
++   for(let k=0;k<=nt;k++){const zt=zc0+k*spc;if(zt>zc1)break;g.add(tieLoop(x0-to,x1+to,y0-to,y1+to,zt,tie,steel));}}
+@@ -5794 +5808 @@ manPart("p2","2. Input Reference",[
+-{p:"Each pedestal card: label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the load table (per mode); and its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub>, tie size and spacing, cover, dowel size and count)."},
++{p:"Each pedestal card: label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the load table (per mode); and its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub>, tie size and spacing, cover, dowel size and count). The pedestal <b>cover</b> is the clear cover to the longitudinal bars: the bar-fit check, the bar layout, the P\u2013M interaction and the drawings all place the bar centres at cover + d<sub>b</sub>/2 from each face, with the ties outside the bars (clear cover to the ties = cover \u2212 d<sub>tie</sub>)."},
+```
