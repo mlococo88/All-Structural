@@ -141,6 +141,22 @@ async function circleChecks(src) {
         s.combos = [{ name: 'H2', P: 0, Vx: 2, Vy: 0, Mx: 0, My: -600 }];
         const r2 = run(s); const pb = plateBending(CC.combos[0], CC);
         out.hand.H2 = { Prod: pb.Prod, m: pb.m, beff: pb.beff, tReq: pb.tReq, dcr: pb.dcr, chk: r2.checks.find(c => c[0] === 'Base Plate Bending'), errs: r2.errs }; }
+      /* H3 (BC-2): comparison case C2 — 4 × 1 in Gr 55 at (±6, ±6) (BC 12√2, θ0 45°) on a Ø36 in round pier, h_ef 18,
+         f'c 4 ksi cracked, M_x = 480 kip·in (tension +y), P = 5 kip compression, V_y = 3 kip, elastic.
+         T = −5/4 + 480·6/144 = 18.75 kip on (±6, +6); ΣT = 37.5 kip, e'_N = 0.
+         §17.6.2.1.2 by analogy (default): c(θ) = 18 − 8.485·cos δ ∈ [9.515, 12] < 27 all round → applies;
+           c_a,max = 12, s = 16.971 → h'_ef = max(12/1.5, 16.971/3) = 8 in; N_b = 24·√4000·8^1.5 = 34.346 kip;
+           A_Nc = ([−18,18]×[−6,18]) ∩ disc = 508.938 + (6·16.971 + 324·asin(1/3)) = 720.868 in²; A_Nco = 576;
+           ψ_ed = 0.7 + 0.3·9.515/12 = 0.93787; φN_cbg = 0.70·(720.868/576)·0.93787·34.346 = 28.22 kip.
+         Without: h_ef 18, N_b = 16·√4000·18^(5/3) = 125.08 kip; A_Nc = the full disc 1017.876 in²; A_Nco = 2916;
+           ψ_ed = 0.7 + 0.3·9.515/27 = 0.80572; φN_cbg = 0.70·0.34907·0.80572·125.08 = 24.63 kip (the comparison's 24.63). */
+      { const mk = red => { const s = build({ case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 12 * Math.SQRT2, 'anchor.theta0': 45,
+          'conc.shape': 'circle', 'conc.D': 36, 'conc.circHefReduce': red } }); s.combos = [s.combos[0]]; return s; };
+        const a = run(mk(true)), b = run(mk(false));
+        const tb = a.res[0].tb, tb2 = b.res[0].tb;
+        out.hand.H3 = { hef: tb.hef, Nb: tb.Nb, ANc: tb.ANc, ANco: tb.ANco, psi_ed: tb.psi_ed, phiNcbg: tb.phiNcbg, altPhi: tb.alt && tb.alt.phiNcbg,
+          hef2: tb2.hef, Nb2: tb2.Nb, ANc2: tb2.ANc, psi_ed2: tb2.psi_ed, phiNcbg2: tb2.phiNcbg, Tg: a.res[0].Tg, sbk: a.res[0].sbk, sfbNa: a.res[0].sfb.na,
+          checks: a.checks, errs: a.errs.concat(b.errs) }; }
       return out;
     }, { CASES, VARIANTS, BUILD });
     return { r, errs };
@@ -172,7 +188,23 @@ chk('H2 m', r.hand.H2.m, 3.6875, 1e-9);
 chk('H2 b_eff', r.hand.H2.beff, 4.51604, 1e-5);
 chk('H2 t_req', r.hand.H2.tReq, 1.58751, 1e-5);
 chk('H2 DCR (Summary row)', r.hand.H2.chk && r.hand.H2.chk[1], 1.05834, 1e-5);
-for (const h of ['H1', 'H2']) if (r.hand[h].errs.length) { fail = true; console.log(`  ${h} validation errors: ${r.hand[h].errs.join(' | ')}`); }
+if (r.hand.H3) {
+  const h = r.hand.H3;
+  chk('H3 h\'_ef (circle, §17.6.2.1.2 analogy)', h.hef, 8, 1e-9);
+  chk('H3 N_b', h.Nb, 34.3460, 5e-4);
+  chk('H3 A_Nc (union ∩ disc)', h.ANc, 720.868, 5e-3);
+  chk('H3 A_Nco', h.ANco, 576, 1e-9);
+  chk('H3 ψ_ed,N', h.psi_ed, 0.93787, 5e-5);
+  chk('H3 φN_cbg (reduction applied)', h.phiNcbg, 28.22, 5e-3);
+  chk('H3 φN_cbg shown as the alternative (without)', h.altPhi, 24.63, 5e-3);
+  chk('H3 φN_cbg (option off)', h.phiNcbg2, 24.63, 5e-3);
+  chk('H3 A_Nc without = full disc', h.ANc2, Math.PI * 324, 1e-6);
+  chk('H3 ψ_ed,N without', h.psi_ed2, 0.80572, 5e-5);
+  chk('H3 ΣT', h.Tg, 37.5, 1e-9);
+  console.log(`  H3 shear breakout (tangent edge): c_a1 ${h.sbk.ca1.toFixed(3)}, c_a2 ${h.sbk.ca2.toFixed(3)}, A_Vc ${h.sbk.AVc.toFixed(2)}, φV_cbg ${h.sbk.phiVcbg.toFixed(3)} (${h.sbk.govEdge}); side-face blowout ${h.sfbNa ? 'N/A' : 'checked'}`);
+  console.log('  H3 Summary: ' + h.checks.map(c => c[0] + ' ' + (+c[1]).toFixed(3)).join('; '));
+}
+for (const h of ['H1', 'H2', 'H3'].filter(k => r.hand[k])) if (r.hand[h].errs.length) { fail = true; console.log(`  ${h} validation errors: ${r.hand[h].errs.join(' | ')}`); }
 console.log(`  console errors ${pe(cc.errs).length}`); pe(cc.errs).slice(0, 5).forEach(e => console.log('    ' + e));
 if (pe(cc.errs).length) fail = true;
 console.log(fail ? '\nFAIL' : '\nPASS');
