@@ -292,7 +292,7 @@
     else if (el.dataset.path) { const k = el.dataset.kind, v = el.value;
       set(el.dataset.path, k === 'num' ? (v === '' ? NaN : Number(v)) : k === 'sel' ? (v === 'true' ? true : v === 'false' ? false : v) : v); }
     else return;
-    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode)|stiffeners\.layout\.(mode|web)|framing\.|crossframes\.|splices\.auto)/.test(el.dataset.path || ''));
+    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode)|stiffeners\.layout\.(mode|web)|framing\.|crossframes\.|splices\.auto|fatigue\.gam\.fI$)/.test(el.dataset.path || ''));   // fatigue.gam.fI: the studs' read-only γ on the same input tab (SCGAM)
   });
   $('inPanes').addEventListener('click', e => {
     if (UL.onClick(e, P)) { changed(true); const od = UL.takeOwnerDefaults(); if (od) showOwnDef(od); return; }

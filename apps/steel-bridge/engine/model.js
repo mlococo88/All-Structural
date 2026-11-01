@@ -48,7 +48,7 @@
      fatigue:   { limit: 'auto' | 'I' | 'II', ADTT (one direction, trucks/day), p (lane fraction), life (years), gam: { fI, fII },
                   catT, catB (detail category of the top / bottom flange for GS17: 'A' … "E'"), negSec: 'cracked' | 'uncracked',
                   dist: { cp: 'yes' | 'no' | 'na', lat: 'yes' | 'no', latLoc: 'flange' | 'web', latStiff: 'yes' | 'no', latDist (in), latBf (in), skew: 'yes' | 'no' } },
-     studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I),
+     studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I; not used since 2026-11-01, SCGAM: the studs take fatigue.gam.fI; kept),
                   skew: 'auto' | 'yes' | 'no' (F_fat = F_rc/w on skewed > 20° or curved bridges; auto: from the support skews), Frc (kip), wv (in),
                   splX ('82, 145': field splice stations, ft), splL (top splice plate length, ft), splC (clearance at each plate end, in),
                   beffMode: 'girder' (each girder its own, AASHTO 6.10.10; the default from 2026-10-29, SB2-F1) | 'bridge' (GirderDetail: one b_eff
@@ -294,7 +294,7 @@
     if (p.studs != null) { const Q = p.studs || {};
       if (![0.75, 0.875, 1].includes(+Q.d)) E('studs.d', 'Stud diameter: 3/4, 7/8 or 1 in.');
       pos(Q.h, 'studs.h', 'Stud height'); pos(Q.st, 'studs.st', 'Transverse spacing'); pos(Q.Fu, 'studs.Fu', 'Stud F_u'); nn(Q.Qn10, 'studs.Qn10', 'Q_n entered');
-      pos(Q.gamFat, 'studs.gamFat', 'γ Fatigue I'); pos(Q.Frc, 'studs.Frc', 'F_rc'); pos(Q.wv, 'studs.wv', 'w'); nn(Q.splL, 'studs.splL', 'Splice plate length'); nn(Q.splC, 'studs.splC', 'Clearance');
+      /* studs.gamFat not checked since 2026-11-01 (SCGAM): kept in the file, not used (the studs take fatigue.gam.fI) */ pos(Q.Frc, 'studs.Frc', 'F_rc'); pos(Q.wv, 'studs.wv', 'w'); nn(Q.splL, 'studs.splL', 'Splice plate length'); nn(Q.splC, 'studs.splC', 'Clearance');
       if (!['bridge', 'girder'].includes(Q.beffMode)) E('studs.beffMode', 'b_eff for the studs: bridge-wide or per girder.');
       if (!Array.isArray(Q.zones)) E('studs.zones', 'Pitch zones must be a list.');
       else Q.zones.forEach((z, i) => { if (!(isNum(z.x1) && isNum(z.x2) && z.x2 > z.x1 && Number.isInteger(z.nr) && z.nr >= 1 && isNum(z.p) && z.p > 0)) E(`studs.zones.${i}`, `Zone ${i + 1}: from < to, a whole number of studs per row and a positive pitch.`); }); }
