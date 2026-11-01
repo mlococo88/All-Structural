@@ -2153,3 +2153,34 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
   results only). The engineer's rule ("retire only if everything matches") is not met yet.
 - PSRF-O2 (display, not changed): with t_h > 0 and the haunch NOT in the composite properties, the old tab shows y_d = h + t_h + t_s/2
   and A_h = n b_tf t_h, which are not the engine's (y_d = h + t_s/2, no A_h); the new report shows the engine's terms and a note.
+
+## 2026-11-01 — PR: rpt-psbd-port2 (PSRP2) — the rest of the old Report tab ported to the shared report; the old Report tab retired (display only)
+### Where
+- Engine `psbReportVals` (R.rv) gains the old tab's remaining display arithmetic, same expressions: `tie` (LongTieBody: T strands =
+  T_cap − T_mild, T/T_cap per shear station), `cont` (continuity: M_w(L/2), V_w(0), M_DC2 and M_DW at midspan, the two pier LL cases,
+  the restraint shear), `terms` (the evaluated terms of the worked lines: f_cgp, release bottom / top (gross and transformed), Service I
+  top, Service III bottom, f_cpe, d_v, V_n, min(M_cr, 1.33M_u), f_pe + permanent gains), `naSt` (neutral axis of the stress diagram at
+  release and Service III); helper `Aps0`.
+- New `psrPort(inp,R,secs)` (anchor `/* PSRP2 (2026-11-01, engineer's decision: every report self-contained)`): the stress heat map as a
+  figure (the four stages at their governing stations, neutral axes), the longitudinal tie at every station, release-tension steel,
+  the continuous analysis (SIDL three-moment, HL-93 influence lines, creep and shrinkage restraint, positive moment connection,
+  Service at the interior supports, pier moment and capacity), handling (overhang stresses, z_o, cracking FS), deck design
+  (Table A4-1, overhang, capacities), the shear rating and the midspan flexure rating; terms added to the stress, f_cgp, f_cpe, V_n,
+  d_v and gain steps; fatigue M_fat,girder and the concrete terms; precision as the old tab (losses 3 decimals, deck moments 3).
+- Retired: the tab id 'report' is now the shared report (`{tab==='report'&&<SharedReportTab …/>}`); `PBD.MODS` and the fallback
+  `TABS` list one Report tab; `function ReportTab` deleted (comment left at its place); "Worked in → Report · <card>" links find the
+  new report's headings (psbeam-goto handler, aliases for 'Loads — Dead, HL-93 & Distribution', 'Continuous Analysis', 'Owner
+  Requirements'). Helpers used only by the old tab (psbrNumber, psbrPrintMode, …) stay as dead code (no behaviour).
+### Pure refactor / display only
+- computeAll results without rv identical to main (JSON) in 6 cases (defaults; approximate losses + exterior; short span without
+  harped strands; transformed release + handling + deck; continuity on, two equal spans; continuity on, 100/120/100 ft span 2); the
+  text of every other tab identical to main.
+### "Everything matches" (the retirement rule)
+- Every number of the old Report tab's text (main) was looked up in the new report (value match at the old tab's precision, kip-in
+  / kip-ft both ways). What does not appear: section numbers, chart axis ticks of the old interactive plots, KaTeX text artefacts
+  (digits of two adjacent numbers run together), and PSRF-O2's terms (below). Every check value, result and intermediate is present.
+- 32–56 step values per case === R; 0 unresolved / duplicate refs; 0 KaTeX errors; no NaN; Ctrl+P prints the report.
+### PSRF-O2 (closed by the retirement)
+- The old tab showed, with t_h > 0 and the haunch NOT in the composite properties, y_d = h + t_h + t_s/2, A_h = n b_tf t_h and their
+  parallel-axis terms, which the engine does not use (inconsistent display). The old tab is gone; the new report shows the engine's
+  terms (and says the haunch is excluded).
