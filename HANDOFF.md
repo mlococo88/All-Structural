@@ -496,7 +496,7 @@ Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer ins
 ```
 
 - **Sender: BasePlateAnchorDesigner.** **"Send result to Light Pole"** (in the anchor-group bar, shown once an `anchorGroup` payload was imported) publishes with `BridgeXfer.publish` and offers the same payload as a JSON file (**Export hand-off**). Click only. Each group is computed in its own state.
-- **Receiver: Light Pole and Sign Post** (a later PR): shows "Anchors (Anchorage app, <date>): D/C … — <mode>, <combo>", "stale" when its current `inputsHash` differs from `source.inputsHash`, and "not yet checked" without a result.
+- **Receiver: Light Pole and Sign Post** (2026-11-01, LP anchor result; display only, read live from the key or from "Import result (JSON)" for the session; nothing saved): shows, in the Summary design table and the Anchors-tab Anchorage card, "Anchors (Anchorage app, <date>): D/C … — <mode>, <combo>", "stale" when its current `inputsHash` differs from `source.inputsHash`, and "not yet checked" without a result.
 
 ## 5. Shared helper (copy into each tool that sends or receives)
 
