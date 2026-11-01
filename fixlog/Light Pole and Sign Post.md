@@ -1582,7 +1582,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Check case:** default pole: base plate t_req = √(4·10,018·3.00 / (0.9·36,000·5.236)) = 0.842 in ≤ 1.250 in, (0.842/1.25)² = 0.454 — same before and after.
 - **How verified:** `node tests/check-syntax.mjs` pass; `node tests/engine/run.mjs lightpole` 23 passed; `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: "results identical" and cable values identical (1437 / 699 / 330 numbers) in all 14 cases, 0 console errors; only text (Summary, Anchorage, Calc sheet, Report) and the removed bolt-group drawing differ. `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS (one earlier run had a timing failure on the pole chip; passed on three reruns). Screenshots 1280 / 390 px: no horizontal overflow.
 
-## 2026-11-01 — PR: claude/lp-anchor-cleanup (LPA-4: input card 7 relabelled; unreachable anchor display code removed; no result or output change; PR link added after merge)
+## 2026-11-01 — PR #617: claude/lp-anchor-cleanup (LPA-4: input card 7 relabelled; unreachable anchor display code removed; no result or output change)
 
 ### LPA4-1. Input card 7 relabel   [display] [no result change]
 - **Coordinator answer (2026-11-01):** relabel card 7 and note that the anchor checks are done in the Anchorage app; keep all inputs.
