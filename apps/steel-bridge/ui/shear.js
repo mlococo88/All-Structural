@@ -119,7 +119,7 @@
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0), env = { owner: own.owner, lf };
     const src = ctx.src || srcOf(ctx);   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;   // ctx.pl: a payload given directly (tests)
-    const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf, { fat: fatI(P) });
+    const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf, { fat: fatI(P) }), G0 = SH.factors();   // G0 (FONE, 2026-11-01): the stiffeners' Strength I γ before η, m (engine/stiffeners.js applies the owner's η, m: OWN_K.ts, bstf); was the literals 1.25, 1.50, 1.75
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
     // custom (added 2026-11-01, custom demands PR): the rows and reactions entered on this tab (ui/demands.js payload), the same path as a
@@ -143,7 +143,7 @@
     // transverse stiffeners: every intermediate stiffener and connection plate of the layout (file), GirderDetail's built-in rows (example)
     let tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
     if (C) tsRows = tsRows.filter(r => { const a = pans.find(q => Math.abs(q.q - r.x) <= 0.01), b = pans.find(q => Math.abs(q.p - r.x) <= 0.01); return a && b && inPan(C.xs, a) && inPan(C.xs, b); });   // both panels reached
-    const TS = tsRows.length ? SB.transverse({ gW: P.materials.steel.web, gS: st.transverse.gS, Fexx: st.transverse.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: fatI(P) }, types: st.transverse.types, rows: tsRows }, env) : null;
+    const TS = tsRows.length ? SB.transverse({ gW: P.materials.steel.web, gS: st.transverse.gS, Fexx: st.transverse.Fexx, gam: { dc: G0.dc, dw: G0.dw, ll: G0.ll, fat: fatI(P) }, types: st.transverse.types, rows: tsRows }, env) : null;
     // bearings: one per support
     let bsRows;
     // reactions: the analysis support reactions where the demands come from this app's analysis (SB2-O16); from a file, the jump in shear
@@ -156,7 +156,7 @@
     if (C) bsRows = bsRows.filter((r, k) => rxn && rxn[k]);   // the supports with reactions entered
     if (C) { const keep = panels.rows.filter(q => inPan(C.xs, q)), mp = new Map(keep.map((q, j) => [q.i, j])); keep.forEach((q, j) => { q.i = j; }); stations.forEach(r => { r.pan = mp.has(r.pan) ? mp.get(r.pan) : null; });   // the panels with an entered station
       panels.rows = keep; panels.gov = keep.reduce((b, q) => (!b || (isFinite(q.r) || q.r == null ? q.r : Infinity) > (isFinite(b.r) || b.r == null ? b.r : Infinity) ? q : b), null); }   // as SH.panels gov (SB2-R2)
-    const BS = C && !bsRows.length ? { rows: [], errors: [], none: true } : SB.bearing({ D, gW: P.materials.steel.web, gS: st.bearing.gS, Fexx: st.bearing.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75 }, types: st.bearing.types, rows: bsRows }, env);   // none: custom, no reactions entered
+    const BS = C && !bsRows.length ? { rows: [], errors: [], none: true } : SB.bearing({ D, gW: P.materials.steel.web, gS: st.bearing.gS, Fexx: st.bearing.Fexx, gam: { dc: G0.dc, dw: G0.dw, ll: G0.ll }, types: st.bearing.types, rows: bsRows }, env);   // none: custom, no reactions entered
     const tsC = TS && !TS.errors.length ? SB.transverseChecks(TS) : null, bsC = BS.none ? [] : !BS.errors.length ? SB.bearingChecks(BS) : null;
     // governing ratio of each list
     const govCk = (C, rowIdx) => { let b = null; (C || []).forEach(c => c.items.forEach(it => { if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.r))) b = { c, it, i: rowIdx(it) }; })); return b; };
