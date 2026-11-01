@@ -2983,6 +2983,9 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   path `gam: { fI: 1.75, fII: … }`. Question for the engineer: should the studs also take `fatigue.gam.fI`?
 - Cross-frames wind γ_WS = 1.0η (OWN7).
 
+### Other copies
+- None.
+
 ## 2026-11-01 — PR: sbd-gs1-4 — Cross-section proportion limits and minimum deck reinforcement GS1–GS4, GS22 on the Flexure tab, in the report and in Auto design's full check (B3)
 ### Change (calculation: new checks)
 - New `engine/proportions.js` (`window.SBDProportions`): GirderDetail Girder section `checks()` GS1, GS2, GS3, GS4 and GS22 (anchor
