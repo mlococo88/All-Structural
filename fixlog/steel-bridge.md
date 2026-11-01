@@ -2883,3 +2883,58 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: claude/sbd-fatigue-gamma — Fatigue I γ from one source: Flexure, Shear & stiffeners and Cross-frames take it from the Fatigue & studs input (FGAM; calculation change only for a non-default γ; at 1.75 identical)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `FGAM`.
+
+### What changed (engineer-approved 2026-11-01, "one source", as Welds in #525)
+- New helper in `ui/flexure.js` and `ui/shear.js`: `const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };`
+- `ui/flexure.js` `build`:
+  - hand-off file: `FX.fromPayload(pl, { fl, lf: lfF, ...` → `FX.fromPayload(pl, { fl, lf: lfF, G: { fat: fatI(P) }, ...`
+  - analysis / Custom: `fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf }` → `fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf, G: { fat: fatI(P) } }`
+    (a factored Custom table still sets `fopt.G = FAC1`: the entered values are factored, γ 1)
+  - example: `G: lf ? FX.factorsOwner(lf) : FX.factors()` → `G: lf ? FX.factorsOwner(lf, { fat: fatI(P) }) : FX.factors({ fat: fatI(P) })`
+  - note: "Fatigue I 1.75" → "Fatigue I <γ> (Fatigue & studs inputs link; a factored Custom table: as entered)".
+- `ui/shear.js` `build`: `G = SH.factorsOwner(lf)` → `G = SH.factorsOwner(lf, { fat: fatI(P) })` (special fatigue requirement GS18, 6.10.5.3:
+  V_u = V_DC1 + V_DC2 + V_DW + V_UT + V_UF + γ V_fat); transverse stiffeners `gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }` →
+  `gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: fatI(P) }` (CP2, γ(Δf) at the stiffener weld toes); note: "permanent shear + 1.75 V_fat" → "Fatigue I γ <γ> (link),
+  permanent shear + γV_fat".
+- `engine/crossframes.js`: `compute` `gF = 1.75 * 0.65` → `gFI = nm(p.gFI) > 0 ? nm(p.gFI) : 1.75, gF = gFI * 0.65` (CF9; `R.gFI`); `inputsOf` sets
+  `p.gFI` from `P.fatigue.gam.fI` (1.75 without one; GirderDetail's own inputs have none, so the parity runs are at 1.75); CF9 note and step `cf.<m>.fat`
+  show γ (eq `γ_{Fat I}(0.65)ΔP/A_g`, sub `<γ>(0.65)ΔP/A_g`).
+- Fatigue II: none of these modules uses it (the Fatigue & studs module reads `gam.fII` itself already).
+- Governing provisions: AASHTO LRFD 10th Ed. Table 3.4.1-1 (Fatigue I γ), Art. 6.10.5.3 (special fatigue requirement for webs), Art. 6.6.1.2 (load-induced
+  fatigue: flexure stress ranges, stiffener weld toes, cross-frame members with the 0.65 factor). No formula changed; the factor's source changed.
+
+### Check case (default project, G1, this project's analysis; P.fatigue.gam.fI = 1.50; before = the hard-coded 1.75)
+- Flexure, x = 60.00 ft, bottom of steel: (Δf) = γ(|f(505.29)| + |f(−230.47)|) = 1.75(4.5822) = 8.019 ksi → 1.50(4.5822) = 6.873 ksi (top 0.986 → 0.845 ksi).
+  Every location scales by 1.50/1.75.
+- Shear GS18, x = 109.99 ft: V_u = 103.157 + 17.705 + 14.664 + 0 + 0 + γ(45.226) = 214.671 kip → 203.365 kip; V_cr = 786.63 kip; ratio 0.2729 → 0.2585.
+- Stiffener weld toes CP2: γ(Δf) with γ = 1.50 (no stiffener row has Δf > 0 in the default project, so no CP2 item changes there).
+- Cross-frames CF9 (diagonal, ΔP = 3 kip, A_g = 3.609 in²): 1.75(0.65)(3)/3.609375 = 0.9455 ksi → 1.50(0.65)(3)/3.609375 = 0.8104 ksi; ratio 0.0591 → 0.0506 (Category B 16 ksi).
+- At the default 1.75: identical (below).
+
+### Proof nothing else changes at the default
+- Scratch comparison (Node, the page's modules) before (claude/sbd-cf-replace) vs after, default project: Flexure (analysis, example), Shear (analysis,
+  example) build results identical; Cross-frames identical except the CF9 note text (now names the source).
+- `tests/engine/fatigue-gamma.test.mjs` (new): no fatigue inputs = 1.75 = before for Flexure, Shear and Cross-frames; the 1.50 case above.
+- `crossframes.test.mjs` parity with GirderDetail: 2041 cases, largest relative difference 0. `node tests/engine/run.mjs flexure shear stiffeners
+  custom-demands welds rating`: 7 files, 58 passed.
+
+### Other hard-coded load factors found (not changed here; listed for the engineer)
+- Rating (`engine/rating.js` `factors()`): MBE Table 6A.4.2.2-1 γ_DC 1.25, γ_DW 1.50, γ_P 1.00, γ_LL 1.75 / 1.35, Service II 1.30 / 1.00: specification
+  values of the design-load rating, no project input; the rating fatigue target uses `P.fatigue` already.
+- Constructibility (`engine/constructibility.js` `factors()`; also `engine/shear.js` `cdc`, `ccl`): deck placement 1.25 on DC, 1.50 on the construction LL
+  (3.4.2.1); no project input.
+- Shear & stiffeners (`ui/shear.js`): transverse stiffener `gam: { dc: 1.25, dw: 1.50, ll: 1.75 }` and bearing stiffener `gam: { dc: 1.25, dw: 1.50, ll: 1.75 }`
+  passed to engine/stiffeners.js without the owner's η and m (the Shear tab's own G has them).
+- Field splices: its own `splices.gam` inputs (next PR).
+- Auto design (`engine/autodesign.js`): stud pitch sizing `p_req = n_rZ_r/(1.75 V_f Q/I)` (also in `ui/fatigue.js` doc), and `FX_.factors()` (no owner
+  η, m) for the Strength I M_u that places the stud regions; Cross-frames `inputsOf` deck-placement M_u = 1.25M_DC1 + 1.5M_CL.
+- Studs: `studs.gamFat` is a second "γ Fatigue I (studs)" input on the Fatigue & studs tab (GirderDetail's sc.gam.fat); `engine/studs.js` hand-off
+  path `gam: { fI: 1.75, fII: … }`. Question for the engineer: should the studs also take `fatigue.gam.fI`?
+- Cross-frames wind γ_WS = 1.0η (OWN7).
+
+### Other copies
+- None.
