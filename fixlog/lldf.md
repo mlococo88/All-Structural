@@ -1798,3 +1798,9 @@ index 219cc2c..a3e337e 100644
   `${f0(Math.min(geo.Wdeck,30))}`, `V("W_1","min(W, 30), W = edge-to-edge width",…)`; the "Equivalent strip width — 2+ lanes" step now
   lists W_1 = min(W, 60), W and N_L and notes the change.
 - Check: L = 35 ft, W = 28 ft, w = 25 ft, N_L = 2: g = 0.0948 before → 0.0930 after (fatigue 0.0633 → 0.0601). Only slab results change.
+
+## 2026-11-01 — PR: lldf-d-fatigue (LLDF-D) — type (d) exterior web fatigue moment factor / 1.2 (CALCULATION CHANGE; was LLRP-O2)
+- Engine change in shared/lldf.js (memberDF, type d exterior): before `fatM:gWe*skew.scfM`, after `fatM:fat(gWe*skew.scfM)` (÷ 1.2,
+  AASHTO LRFD 10th Ed. Art. 3.6.1.4.3b); the "verify" fatNote removed. Details and check case in `fixlog/shared-lldf.md` (LLDF-D).
+- This file: no code change; the sheet's fatigue step now shows g_M,fat = g_M,1/1.20 for the exterior webs (its formula branch).
+- Check: W_e = 7.0 ft, θ = 30°: fatigue g_M 0.4528 → 0.3774.

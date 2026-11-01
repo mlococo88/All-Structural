@@ -98,7 +98,8 @@ function runAll(ctx, C) {
 export const ADDED = ['ecc'];
 // Calculation changes made on purpose after the move (engineer's decisions); those cases are expected to differ and are reported apart:
 //   LLSW (2026-11-01): the CIP slab strip width (Art. 4.6.2.3) uses W = the physical edge-to-edge width, not the clear roadway width.
-export const CHANGED = [/^slab /];
+//   LLDF-D (2026-11-01): type (d) exterior web fatigue moment factor W_e/14 x r_M / 1.2 (Art. 3.6.1.4.3b; was without / 1.2).
+export const CHANGED = [/^slab /, /^d sk/];
 const hash = o => crypto.createHash('sha256').update(JSON.stringify(o, (k, v) => ADDED.includes(k) ? undefined : v)).digest('hex');
 
 export function run(rev = BASE_REV) {
