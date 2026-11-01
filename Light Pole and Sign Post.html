@@ -1464,7 +1464,9 @@ function signWind(inp){
     });
     const Ftot=bands.reduce((a,x)=>a+x.Fr,0);
     const xR=Ftot>0? bands.reduce((a,x)=>a+x.Fr*x.xc,0)/Ftot : 0;   // net horiz centroid
-    const eC=xR - B/2;                              // eccentricity from panel center
+    // eccentricity from the panel center, positive TOWARD THE WINDWARD EDGE (the Case B convention, e = +0.2B);
+    // 2026-11-01 (LP-R14): was xR − B/2 (negative toward windward, a mirror of Case B; the 0°/180° envelope covered both)
+    const eC=B/2 - xR;
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
@@ -1933,6 +1935,18 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
           M_cable:Math.hypot(cMx,cMy), M_pole:poleWindM};
 }
 
+// Fixtures on an arm (a > 0) whose plan azimuth θ is not on one of the four wind axes (2026-11-01, engineer decision on
+// LP-R1: the four directions are kept; a warning is shown instead of a sweep). Arms and fixtures only (cables excluded,
+// engineer 2026-11-01). Returns [{i, th}] (i is 1-based).
+function lppOffAxisFixtures(fx){
+  const L=[];
+  (fx||[]).forEach((x,i)=>{ if(!(x.a>0) || !((x.W||0)>0 || (x.epa||0)>0)) return;
+    const r=((x.th%90)+90)%90; if(Math.min(r,90-r)>1e-6) L.push({i:i+1, th:x.th}); });
+  return L;
+}
+function lppOffAxisMsg(L){
+  return `<b>Wind directions:</b> the tool checks wind toward 0°, 90°, 180° and 270° only. ${L.map(o=>'Fixture '+o.i+' (arm at θ = '+fmt(o.th,0)+'°)').join(', ')} ${L.length>1?'are':'is'} not aligned with these axes: the arm's eccentric load and the wind may combine worst at a direction between them, so the results <b>may be unconservative</b>. Align the arms with the axes (rotate the plan) or check the intermediate directions separately.`;
+}
 // Evaluate a combination across all four wind azimuths; keep the one with the largest moment.
 function evalCombo(key,inp,comps,fxs,pw){
   const all=WIND_DIRS.map(phi=>evalComboDir(key,inp,comps,fxs,pw,phi));
@@ -2378,8 +2392,8 @@ manPart("p3","3. Output Reference",[
 /* ===== MANUAL PART 4A ===== */
 manPart("p4a","4A. Wind &amp; Load Path",[
 {h:"4A.1 Velocity pressure"},
-{p:"Velocity pressure follows ASCE 7-22 Eq. 26.10-1:"},
-{eqn:["q_z = 0.00256\\,K_z K_{zt} K_d V^2","psf, with V in mph"]},
+{p:"Velocity pressure follows ASCE 7-22 Eq. 26.10-1 (K<sub>e</sub> = 1.0, ground elevation factor, §26.9). In ASCE 7-22 the directionality factor K<sub>d</sub> is not in q<sub>z</sub>; it multiplies the force (Eq. 29.3-1 signs, Eq. 29.4-1 other structures), so the tool carries the product q<sub>z</sub>K<sub>d</sub>:"},
+{eqn:["q_z = 0.00256\\,K_z K_{zt} K_e V^2,\\qquad F = q_z\\,K_d\\,G\\,C_f\\,A_f","psf, with V in mph; K_e = 1.0"]},
 {p:"The exposure coefficient uses the power-law profile with the category's \u03b1 and z<sub>g</sub>:"},
 {eqn:["K_z = 2.01\\left(\\frac{z}{z_g}\\right)^{2/\\alpha}","evaluated at the relevant height z"]},
 {key:"K<sub>z</sub> is floored at z = 15 ft. For short poles and signs the whole structure sits below 15 ft, so K<sub>z</sub> is constant \u2014 mid-height and top values will be identical. That is correct, not a bug."},
@@ -2723,6 +2737,7 @@ function summaryHTML(ctx){
   const natL=stacks.map(st=>st.nat).filter(Boolean);
   if(natL.some(x=>!(x.n1>=1.0)))
     warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
+  if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push('Monopost torsion from the eccentric sign wind (Cases B/C): the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
@@ -2821,7 +2836,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:sw.zc});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
   H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${fmt(sw.clr,2)} ft (grade to bottom of panel). The drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:</p>`;
-  H+=g(`\\bar q_{z} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_d\\,G\\,V^2\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
+  H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_e V^2\\cdot K_d\\,G\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
   H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
     const sh=signPostSplit(cs.F,cs.x,Lp,nP);
@@ -4223,6 +4238,7 @@ function calc(){
   f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); anchors: tension <b>${bolts.byCheck.T.comboName}</b>, shear <b>${bolts.byCheck.V.comboName}</b>, interaction <b>${bolts.byCheck.I.comboName}</b>.</div>`;
   f+=`<div class="flag${govB2.B2max>1.10?' bad':''}">P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations); each combination's B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft. Pole stress governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).</div>`;
   if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
+  { const oa=lppOffAxisFixtures(fixtures); if(oa.length) f+=`<div class="flag bad">${lppOffAxisMsg(oa)}</div>`; }
   if(!cablesEnabled){
     f+=`<div class="flag">Catenary system disabled — foundation driven by pole wind, fixtures, and self-weight only.</div>`;
   } else if(cables.length>=2){
@@ -5145,9 +5161,9 @@ function windWorkedHTML(pw, inp){
   H+=step(`1 · Velocity pressure exposure coefficient ${ref('ASCE 7-22 Table 26.10-1')}`);
   H+=`<p class="eq-why">K_z grows with height z above grade for the site exposure category. It is evaluated at the pole mid-height (for the distributed mast wind) and at the top.</p>`;
   H+=g(`K_z(z) = 2.01\\left(\\tfrac{z}{z_g}\\right)^{2/\\alpha}\\quad\\Rightarrow\\quad K_z(H/2) = ${fmt(pw.KzMid,3)},\\ \\ K_z(H) = ${fmt(pw.KzTop,3)}`);
-  H+=step(`2 · Velocity pressure ${ref('ASCE 7-22 Eq. 26.10-1')}`);
-  H+=`<p class="eq-why">The velocity pressure combines the basic wind speed V, the exposure coefficient, topographic factor K_zt, and directionality K_d.</p>`;
-  H+=g(`q_z = 0.00256\\,K_z K_{zt} K_d V^2 = 0.00256(${fmt(pw.KzMid,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.Kd,2)})(${inp.V})^2 = ${fmt(pw.qzMid,1)}\\ \\text{psf}`);
+  H+=step(`2 · Velocity pressure ${ref('ASCE 7-22 Eq. 26.10-1; K_d per Eq. 29.4-1')}`);
+  H+=`<p class="eq-why">The velocity pressure combines the basic wind speed V, the exposure coefficient K_z, the topographic factor K_zt and the ground elevation factor K_e (= 1.0, ASCE 7-22 §26.9). The directionality factor K_d belongs to the force equation (Eq. 29.4-1, F = q_z K_d G C_f A_f); it is carried with q_z here.</p>`;
+  H+=g(`q_z K_d = 0.00256\\,K_z K_{zt} K_e V^2\\cdot K_d = 0.00256(${fmt(pw.KzMid,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)}) = ${fmt(pw.qzMid,1)}\\ \\text{psf}`);
   H+=step(`3 · Wind force on the mast ${ref('ASCE 7-22 §29.4')}`);
   H+=`<p class="eq-why">The mast is treated as a slender element; the gust factor G amplifies for turbulence, and C_f is the shape drag coefficient. The mast is divided into ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip takes q_z at its own centroid height z_i and its own width D(z_i) (taper), and acts at z_i. The mid-height single-resultant values are shown first for reference only.</p>`;
   H+=g(`A_{pole} = \\bar D\\,H = ${fmt(pw.Davg,3)}(${fmt(inp.H,1)}) = ${fmt(pw.Apole,2)}\\ \\text{ft}^2`);
@@ -5281,12 +5297,12 @@ function fixtureWorkedHTML(fxs, inp){
   H+=`<p class="eq-why">Each fixture contributes four effects: a wind drag force at its mount height, an enlarged iced-wind force, an ice weight from the accreted glaze envelope, and — because it sits at the end of a mast arm — an eccentric gravity moment W·a directed along the arm azimuth θ. The eccentric moment is a fixed vector that does not rotate with the wind, so fixtures on opposing arms (0° / 180°) cancel in moment while still adding to axial load and base shear. Each step is worked for fixture F1; the table above lists all fixtures.</p>`;
   H+=step(`1 · Fixture wind force ${ref('ASCE 7-22 Ch. 29')}`);
   H+=`<p class="eq-why">The wind force uses the fixture's effective projected area (EPA), which bundles its drag coefficient; velocity pressure is evaluated at the mount height h with the gust factor G. Full EPA is taken as exposed for any wind azimuth.</p>`;
-  H+=g(`q_z(h) = 0.00256\\,K_z(h)K_{zt}K_d\\,G\\,V^2 = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.Kd,2)})(${fmt(inp.G,2)})(${inp.V})^2 = ${fmt(fg.qz,2)}\\ \\text{psf}`);
+  H+=g(`q_z(h)K_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)})(${fmt(inp.G,2)}) = ${fmt(fg.qz,2)}\\ \\text{psf}`);
   H+=g(`F_w = q_z\\,EPA\\,C_f = ${fmt(fg.qz,2)}(${fmt(fg.x.epa,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fw,0)}\\ \\text{lb}`);
   H+=step(`2 · Iced fixture wind ${ref('ASCE 7-22 Ch. 10')}`);
   H+=`<p class="eq-why">Under the wind-on-ice case the fixture face grows by the radial ice thickness t on every edge (face modeled as a square of side √EPA), and the concurrent wind speed V_ice applies with the same gust factor G:</p>`;
   H+=g(`EPA_i = \\left(\\sqrt{EPA}+2t\\right)^2 = \\left(${fmt(fg.side,2)}+2(${fmt(tft,3)})\\right)^2 = ${fmt(fg.epaI,2)}\\ \\text{ft}^2`);
-  H+=g(`q_{zi} = 0.00256\\,K_z K_{zt} K_d\\,G\\,V_{ice}^2 = ${fmt(fg.qzi,2)}\\ \\text{psf}\\qquad F_{wi} = q_{zi}\\,EPA_i\\,C_f = ${fmt(fg.qzi,2)}(${fmt(fg.epaI,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fwi,0)}\\ \\text{lb}`);
+  H+=g(`q_{zi}K_dG = 0.00256\\,K_z K_{zt} K_e V_{ice}^2\\cdot K_d\\,G = ${fmt(fg.qzi,2)}\\ \\text{psf}\\qquad F_{wi} = q_{zi}\\,EPA_i\\,C_f = ${fmt(fg.qzi,2)}(${fmt(fg.epaI,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fwi,0)}\\ \\text{lb}`);
   H+=step(`3 · Ice weight ${ref('ASCE 7-22 Ch. 10')}`);
   H+=`<p class="eq-why">Ice forms a glaze skin of radial thickness t over the wetted surface — both faces of the catch area plus a perimeter band over the catch depth d_ice:</p>`;
   H+=g(`A_{surf} = 2A_{ice}+4\\sqrt{EPA}\\,d_{ice} = 2(${fmt(fg.x.aIce,2)})+4(${fmt(fg.side,2)})(${fmt(fg.x.tIce,2)}) = ${fmt(fg.surf,2)}\\ \\text{ft}^2`);
@@ -5305,7 +5321,7 @@ function signWindWorkedHTML(sw, inp){
   H+=step(`1 · Panel geometry &amp; velocity pressure ${ref('ASCE 7-22 §26.10, §29.3')}`);
   H+=`<p class="eq-why">The sign is a solid freestanding wall. The velocity pressure is evaluated at the top of the sign, h = clearance + panel height; K_z follows the exposure power-law profile.</p>`;
   H+=g(`h = ${fmt(sw.clr,1)}+${fmt(sw.s,1)} = ${fmt(sw.h,1)}\\ \\text{ft}\\qquad A_s = B\\,s = ${fmt(sw.B,1)}(${fmt(sw.s,1)}) = ${fmt(sw.As,1)}\\ \\text{ft}^2`);
-  H+=g(`q_h = 0.00256\\,K_z(h)K_{zt}K_d\\,G\\,V^2 = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)})(${inp.V})^2 = ${fmt(sw.qh,1)}\\ \\text{psf}`);
+  H+=g(`q_hK_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qh,1)}\\ \\text{psf}`);
   H+=step(`2 · Force coefficient ${ref('ASCE 7-22 Fig. 29.3-1')}`);
   if(sw.cfManual){
     H+=`<p class="eq-why"><b>Manual override.</b> C_f has been set directly by the engineer; the Fig. 29.3-1 auto value is shown for comparison.</p>`;
@@ -5331,7 +5347,7 @@ function signWindWorkedHTML(sw, inp){
       const sFx=sw.caseC.bands.reduce((a,x)=>a+x.Fr*x.xc,0);
       H+=`<tr style="font-weight:700;border-top:2px solid var(--line-strong)"><td colspan="4" style="text-align:right">ΣF_i, ΣF_i·x_i =</td><td>${fmt(sw.caseC.F,0)}</td><td>—</td><td>${fmt(sFx,0)}</td></tr></table>`;
       H+=g(`F_C = \\Sigma F_i = ${fmt(sw.caseC.F,0)}\\ \\text{lb}\\qquad \\bar x = \\frac{\\Sigma F_i x_i}{\\Sigma F_i} = \\frac{${fmt(sFx,0)}}{${fmt(sw.caseC.F,0)}} = ${fmt(sw.caseC.xR,2)}\\ \\text{ft}`);
-      H+=g(`e_C = \\bar x-\\tfrac{B}{2} = ${fmt(sw.caseC.xR,2)}-${fmt(sw.B/2,2)} = ${fmt(sw.caseC.e,2)}\\ \\text{ft from panel center}`);
+      H+=g(`e_C = \\tfrac{B}{2}-\\bar x = ${fmt(sw.B/2,2)}-${fmt(sw.caseC.xR,2)} = ${fmt(sw.caseC.e,2)}\\ \\text{ft from panel center, toward the windward edge}`);
     } else {
       H+=`<p class="eq-why"><b>Case C</b> is not required because B/s = ${fmt(sw.bs,2)} &lt; 2.</p>`;
     }
@@ -5590,14 +5606,14 @@ function buildReport(inp,allCombos,gov,embed,struct){
     'ASCE 7 Table 26.10-1');
   H+=eqB(
     'Velocity pressure, q_z',
-    `The velocity pressure converts the wind speed into a pressure. K_zt is the topographic factor (1.0 on level ground), K_d the directionality factor, and V the basic wind speed. The 0.00256 coefficient carries the air-density and unit conversions for V in mph and q_z in psf.`,
-    `q_z = 0.00256\\,K_z K_{zt} K_d V^2`,
+    `The velocity pressure converts the wind speed into a pressure. K_zt is the topographic factor (1.0 on level ground), K_e the ground elevation factor (taken as 1.0, ASCE 7-22 §26.9), and V the basic wind speed. The 0.00256 coefficient carries the air-density and unit conversions for V in mph and q_z in psf. In ASCE 7-22 the directionality factor K_d multiplies the force (Eq. 29.4-1); the values below carry it with q_z.`,
+    `q_z = 0.00256\\,K_z K_{zt} K_e V^2\\qquad (q_zK_d\\text{ used below})`,
     null,
     'ASCE 7 Eq. 26.10-1');
   H+=eqB(
     'Evaluated at the two reference heights',
-    `Substituting the site inputs (V = ${inp.V} mph, K_zt = ${n(inp.Kzt,2)}, K_d = ${n(inp.Kd,2)}):`,
-    `\\begin{aligned}q_{z,top}&=0.00256(${n(pw.KzTop,3)})(${n(inp.Kzt,2)})(${n(inp.Kd,2)})(${inp.V})^2 = ${n(pw.qzTop,1)}\\ \\text{psf}\\\\ q_{z,mid}&=0.00256(${n(pw.KzMid,3)})(${n(inp.Kzt,2)})(${n(inp.Kd,2)})(${inp.V})^2 = ${n(pw.qzMid,1)}\\ \\text{psf}\\end{aligned}`,
+    `Substituting the site inputs (V = ${inp.V} mph, K_zt = ${n(inp.Kzt,2)}, K_e = 1.00, K_d = ${n(inp.Kd,2)}):`,
+    `\\begin{aligned}q_{z,top}K_d&=0.00256(${n(pw.KzTop,3)})(${n(inp.Kzt,2)})(1.00)(${inp.V})^2(${n(inp.Kd,2)}) = ${n(pw.qzTop,1)}\\ \\text{psf}\\\\ q_{z,mid}K_d&=0.00256(${n(pw.KzMid,3)})(${n(inp.Kzt,2)})(1.00)(${inp.V})^2(${n(inp.Kd,2)}) = ${n(pw.qzMid,1)}\\ \\text{psf}\\end{aligned}`,
     `These pressures feed the direct wind force on the pole (${lppSecRef('2')})${cablesEnabled?` and, evaluated at each cable's height, the wind load on the cables (${lppSecRef('3')})`:''}.`);
   H+=`</div></details>`;
 
