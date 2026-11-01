@@ -873,3 +873,201 @@ Display/defaults only; no computed result changes (`R` identical to main for def
    - Before: `S.print[s.k]=true;`
    - After: `S.print[s.k]=(s.k!=="man");`
    - Only applies when no print selection has been saved; saved choices are kept.
+
+
+## 2026-11-01 — PR: claude/rpt-asce7 — Report output tab in the shared report viewer (A7RP; slim report by topic; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `A7RP`.
+
+### A7RP. "Report" output tab (shared/report.js, shared/steps.js)   [display only]
+- **Engineer request (2026-11-01, report rollout plan):** a slim report grouped by topic in the shared viewer: navigation tree, §n.m, search, collapse / expand, see-links, links to the tool's tabs, and print with a title block (no owner cell), running header and page numbers.
+- **Coordinator decisions recorded:**
+  - The D11 "Print / PDF" (`openPrint` / `runPrint`) is unchanged.
+  - Step values are values of `R` (`R.snow`, `R.wind`, `R.enc`, `R.site`, `R.seis`, `R.geom`, `R.checks`). Only the substitution strings are formatted, with `R2` / `RN` as on the tabs.
+  - Title block: Project, Project No. (Job No.), Calculated by, Date, Checked by, Checked date (Chk. Date). All are existing fields.
+- **Saved data:**
+  - The Report tab is kept out of the saved state. It is not added to `TABS`, and `S.tab` is not changed by it; `A7RP.on` is in memory only.
+  - So `asce7bldg.autosave` / `asce7bldg.projects` and exported files are unchanged, and an older copy of the tool never meets an unknown tab.
+  - Clicking any other tab, a Dashboard `goto()` link or an `a7Goto()` "Worked in" link leaves the Report.
+- **Code:**
+  - `<script src="shared/steps.js">` and `<script src="shared/report.js">` after KaTeX.
+  - `buildTabs()`: the existing buttons also clear `A7RP.on`, and a "Report" button is appended.
+  - `render()`: `if(A7RP.on){ renderReport(h); return; }`.
+  - `goto()`, `a7Goto()`: `A7RP.on=false`.
+  - A new block before Section K INIT (anchor `REPORT tab (A7RP, 2026-11-01)`):
+    - `a7Model()`, `a7Topics()`, `renderReport(h)`;
+    - a `beforeprint` listener. The print CSS hides `#outbody`, so the report goes into `#rp-print`. It does nothing while the D11 report (`#report`) is being printed.
+- **Sections and topics:**
+  1. Summary: governing design values with links to their steps; status register.
+  2. Project and building.
+  3. Snow:
+     - [flat roof p_g, C_e, C_t, I_s, p_f];
+     - [minimum and design p_m, p_f,des];
+     - [sloped C_s, p_s].
+  4. Wind:
+     - [basic V, K_d, G, GC_pi];
+     - [velocity pressure K_zt, K_h, K_e, q_h].
+  5. Seismic:
+     - [site coefficients S_s, S_1, F_a, F_v, S_MS, S_M1, S_DS, S_D1];
+     - [SDC];
+     - [period T_a, C_u T_a, T];
+     - [C_s base / max / min, C_s, V].
+  6. Notes: blocking errors, warnings and the scope statement.
+  - Wall, roof and component pressures, the story distribution and the combinations stay on their tabs (linked).
+- **How verified (headless Chromium, KaTeX 0.16.9 served locally):**
+  - 5 projects: default; gable 30° with Risk IV, Exposure D and title fields; 2D ridge topography at 900 ft elevation with C_u T_a; low p_g gable with Site Class E and high S_s / S_1; Site Class E with S_s = 1.8.
+  - 33 or 34 steps in 9 topics. 0 unresolved or duplicate references, 0 KaTeX errors, no raw TeX, no NaN.
+  - 24 step values per project equal `R` exactly (snow, wind, seismic). The Dashboard shows the same q_h, p_s, V and C_s.
+  - `R` and the saved snapshot are unchanged by opening the Report tab. 0 console errors.
+  - Ctrl+P on the Report tab prints the report alone with the @page header. A report link opens the Seismic tab. Ctrl+P on another tab does not print the report.
+  - origin/main vs the branch: the text of the 11 output tabs (3-D Model excluded), the input panel and the saved snapshot are identical.
+  - `node tests/check-syntax.mjs` passes.
+- **Open item:** at 390 px the page is 729 px wide because of the existing two-panel layout (input panel min-width 390 px) and title bar. Unchanged; the report itself fits its column.
+- **Other copies:** none. `shared/README.md` lists the tool.
+
+Diff (`ASCE7-16 Load Generator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/ASCE7-16 Load Generator.html b/ASCE7-16 Load Generator.html
+index cdf1ad0..01963af 100644
+--- a/ASCE7-16 Load Generator.html	
++++ b/ASCE7-16 Load Generator.html	
+@@ -288,0 +289,3 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
++<!-- A7RP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -1926,2 +1929,4 @@ function buildTabs(){
+-  TABS.forEach(([k,t])=>{const b=el("div","tab"+(S.tab===k?" on":""),esc(t));
+-    b.onclick=()=>{S.tab=k;autosave();render();};h.appendChild(b);});
++  TABS.forEach(([k,t])=>{const b=el("div","tab"+(S.tab===k&&!A7RP.on?" on":""),esc(t));
++    b.onclick=()=>{S.tab=k;A7RP.on=false;autosave();render();};h.appendChild(b);});
++  { const b=el("div","tab"+(A7RP.on?" on":""),"Report");   /* A7RP: the Report tab (not in TABS, not saved) */
++    b.onclick=()=>{A7RP.on=true;render();document.getElementById("outbody").scrollTop=0;};h.appendChild(b); }
+@@ -1932 +1937 @@ function goto(a){
+-  S.tab=m[a]||"basis"; render();
++  S.tab=m[a]||"basis"; A7RP.on=false; render();   /* A7RP: a link opens its tab */
+@@ -1947 +1952 @@ function a7Goto(tab,key){
+-  S.tab=tab; S.open[key]=true; autosave(); render();
++  S.tab=tab; S.open[key]=true; A7RP.on=false; autosave(); render();   /* A7RP */
+@@ -4318,0 +4324 @@ function render(){
++  if(A7RP.on){ renderReport(h); return; }   /* A7RP */
+@@ -4650,0 +4657,118 @@ function runPrint(){
++/* ==================================================================
++   REPORT tab (A7RP, 2026-11-01): a slim calculation report in the shared viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers),
++   grouped by topic (SharedSteps.group): snow, wind velocity pressure, seismic base shear, with the status register and
++   the governing design values. Every value is a value of R (R.snow, R.wind, R.enc, R.site, R.seis), as the output tabs
++   show them; only the substitution strings are formatted (R2 / RN, as the tabs). The detailed wind wall, roof and
++   component pressures, the story distribution and the combinations stay on their tabs (linked). The Report tab is kept
++   out of the saved state (S.tab is not changed by it; A7RP.on is in memory only), so saved projects are unchanged.
++   The D11 "Print / PDF" is unchanged.
++   ================================================================== */
++const A7RP={on:false,closed:new Set(),api:null,doc:null};
++const a7S=o=>SharedSteps.step(o);
++function a7Topics(list){
++  const L=list.filter(t=>t.steps&&t.steps.length),steps=[].concat(...L.map(t=>t.steps));
++  const topics=L.map(t=>{const q=SharedSteps.group(t.steps,[{key:"k",title:t.title,ref:t.ref,ids:()=>true,res:t.res}],{strip:false})[0];return{title:t.title,ref:t.ref||"",n:t.steps.length,cls:q.cls,chip:q.chip,res:q.res};});
++  return {type:"steps",scope:"a7",steps,topics};
++}
++const a7Plain=s=>String(s==null?"":s).replace(/<sub>(.*?)<\/sub>/g,(m,a)=>"$_{"+a+"}$").replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">");
++function a7Model(){
++  const tb={}; document.querySelectorAll("[data-tb]").forEach(i=>tb[i.id.slice(3)]=i.value);
++  const sn=R.snow,w=R.wind,g=R.geom,q=R.seis,st=R.site,e=R.enc,secs=[],A="ASCE 7-16 ";
++  /* ---------- snow ---------- */
++  const SN=[{title:"Flat roof snow load",ref:A+"Sec. 7.3",res:/pf$/,steps:[
++    a7S({id:"sn.pg",label:"Ground snow load ("+st.source+")",sym:"p_{g}",value:sn.pg,unit:"psf",d:2}),
++    a7S({id:"sn.Ce",label:"Exposure factor ("+sn.CeLabel+", "+CE_ROUGH[S.expCat]+")",sym:"C_{e}",value:sn.Ce,unit:"",d:2,ref:A+"Table 7.3-1"}),
++    a7S({id:"sn.Ct",label:"Thermal factor ("+S.thermal+")",sym:"C_{t}",value:sn.Ct,unit:"",d:2,ref:A+"Table 7.3-2"}),
++    a7S({id:"sn.Is",label:"Snow importance factor (Risk Category "+S.risk+")",sym:"I_{s}",value:sn.Is,unit:"",d:2,ref:A+"Table 1.5-2"}),
++    a7S({id:"sn.pf",label:"Flat roof snow load",sym:"p_{f}",eq:"0.7\\,C_{e}\\,C_{t}\\,I_{s}\\,p_{g}",sub:"0.7 \\times "+R2(sn.Ce)+" \\times "+R2(sn.Ct)+" \\times "+R2(sn.Is)+" \\times "+R2(sn.pg),value:sn.pf,unit:"psf",d:2,ref:A+"Eq. 7.3-1"})]}];
++  const mn=[];
++  if(sn.minApplies){
++    mn.push(a7S({id:"sn.pm",label:"Code minimum roof snow load"+(sn.pg<=20?" (p_g ≤ 20 psf)":" (p_g > 20 psf)"),sym:"p_{m}",eq:sn.pg<=20?"I_{s}\\,p_{g}":"20\\,I_{s}",sub:sn.pg<=20?R2(sn.Is)+" \\times "+R2(sn.pg):"20 \\times "+R2(sn.Is),value:sn.pmCode,unit:"psf",d:2,ref:A+"Sec. 7.3.4"}));
++    mn.push(a7S({id:"sn.pfDes",label:"Design flat roof snow load"+(sn.pmTab>0?" (with the 780 CMR Table 1604.11 note 1 minimum)":""),sym:"p_{f,des}",eq:"\\max(p_{f}, p_{m}, p_{f,min,tab})",sub:"\\max("+R2(sn.pf)+", "+R2(sn.pmCode)+", "+R2(sn.pmTab)+")",value:sn.pfDes,unit:"psf",d:2,note:sn.minGoverns?"The minimum governs: it is a separate uniform load case, not combined with drift, unbalanced or partial loading (Sec. 7.3.4).":""}));
++  } else mn.push(a7S({id:"sn.pfDes",label:"Design flat roof snow load (roof slope "+R2(g.theta)+"° ≥ 15°: the Sec. 7.3.4 minimum does not apply)",sym:"p_{f,des}",eq:"p_{f}",sub:"",value:sn.pfDes,unit:"psf",d:2}));
++  SN.push({title:"Minimum and design flat roof snow load",ref:A+"Sec. 7.3.4",res:/pfDes$/,steps:mn});
++  SN.push({title:"Sloped roof snow load",ref:A+"Sec. 7.4",res:/ps$/,steps:[
++    a7S({id:"sn.Cs",label:"Roof slope factor ("+sn.cs.branch+"; θ = "+R2(g.theta)+"°)",sym:"C_{s}",eq:g.theta<=sn.cs.lo?"":"1 - \\frac{\\theta - \\theta_{0}}{70 - \\theta_{0}}",sub:g.theta<=sn.cs.lo?"":"1 - \\frac{"+R2(g.theta)+" - "+R2(sn.cs.lo)+"}{70 - "+R2(sn.cs.lo)+"}",value:sn.cs.cs,unit:"",d:3,ref:A+"Fig. 7.4-1",note:g.theta<=sn.cs.lo?"θ ≤ "+R2(sn.cs.lo)+"°: C_s = 1.0.":""}),
++    a7S({id:"sn.ps",label:"Sloped roof (balanced) snow load",sym:"p_{s}",eq:"C_{s}\\,p_{f}",sub:RN(sn.cs.cs,3)+" \\times "+R2(sn.pf),value:sn.ps,unit:"psf",d:2,ref:A+"Eq. 7.4-1",note:sn.ros>0?"Rain-on-snow surcharge of "+R2(sn.ros)+" psf added to the balanced case only (Sec. 7.10).":""})]});
++  /* ---------- wind velocity pressure ---------- */
++  const kz=w.kzt;
++  const WP=[{title:"Basic parameters",ref:A+"Sec. 26.5, 26.6, 26.11",res:/\.V$/,steps:[
++    a7S({id:"wi.V",label:"Basic wind speed, Risk Category "+S.risk+" ("+st.source+")",sym:"V",value:w.V,unit:"mph",d:2,ref:A+"Sec. 26.5"}),
++    a7S({id:"wi.Kd",label:"Directionality factor, MWFRS",sym:"K_{d}",value:w.kdMWFRS,unit:"",d:2,ref:A+"Table 26.6-1"}),
++    a7S({id:"wi.G",label:"Gust-effect factor ("+(S.Goverride?"user override":"rigid structure")+")",sym:"G",value:w.G,unit:"",d:2,ref:A+"Sec. 26.11"}),
++    a7S({id:"wi.GCpi",label:"Internal pressure coefficient ("+e.cls+")",sym:"GC_{pi}",value:"±"+R2(e.gcpi.p),unit:"",d:2,ref:A+"Table 26.13-1"})]},
++   {title:"Velocity pressure at the mean roof height",ref:A+"Sec. 26.8–26.10",res:/qh$/,steps:[
++    a7S({id:"wi.Kzt",label:kz.none?"Topographic factor (no abrupt change in topography declared)":"Topographic factor at the mean roof height",sym:"K_{zt}",eq:kz.none?"":"(1 + K_{1} K_{2} K_{3})^{2}",sub:kz.none?"":"(1 + "+RN(kz.K1,4)+" \\cdot "+RN(kz.K2,4)+" \\cdot "+RN(kz.K3,4)+")^{2}",value:kz.kzt,unit:"",d:4,ref:kz.none?A+"Sec. 26.8.2":A+"Eq. 26.8-1"}),
++    a7S({id:"wi.Kh",label:"Velocity pressure exposure coefficient (Exposure "+S.expCat+(w.qh.kzInfo.floored?"; h < 15 ft: at 15 ft":"")+")",sym:"K_{h}",eq:"2.01\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}",sub:"2.01\\left(\\frac{"+R2(w.qh.kzInfo.zEff)+"}{"+w.qh.kzInfo.zg.toFixed(0)+"}\\right)^{2/"+w.qh.kzInfo.a.toFixed(1)+"}",value:w.qh.kz,unit:"",d:4,ref:A+"Table 26.10-1 note 1"}),
++    a7S({id:"wi.Ke",label:"Ground elevation factor (site elevation "+R2(S.siteElev)+" ft)",sym:"K_{e}",eq:"e^{-0.0000362\\,z_{g}}",sub:"e^{-0.0000362 \\times "+R2(S.siteElev)+"}",value:w.ke,unit:"",d:4,ref:A+"Table 26.9-1 note 2"}),
++    a7S({id:"wi.qh",label:"Velocity pressure at the mean roof height h = "+R2(g.h)+" ft",sym:"q_{h}",eq:"0.00256\\,K_{h} K_{zt} K_{d} K_{e} V^{2}",sub:"0.00256 \\times "+RN(w.qh.kz,4)+" \\times "+RN(kz.kzt,4)+" \\times "+R2(w.kdMWFRS)+" \\times "+RN(w.ke,4)+" \\times "+R2(w.V)+"^{2}",value:w.qh.q,unit:"psf",d:2,ref:A+"Eq. 26.10-1"})]}];
++  /* ---------- seismic ---------- */
++  const SE=[];
++  SE.push({title:"Site coefficients and design spectral accelerations",ref:A+"Sec. 11.4",res:/SD1$/,steps:[
++    a7S({id:"se.Ss",label:"Mapped MCE_R short-period acceleration ("+st.source+")",sym:"S_{s}",value:st.Ss,unit:"g",d:3}),
++    a7S({id:"se.S1",label:"Mapped MCE_R 1-second acceleration",sym:"S_{1}",value:st.S1,unit:"g",d:3})].concat(q.Fa===null?[]:[
++    a7S({id:"se.Fa",label:"Short-period site coefficient (Site Class "+S.siteClass+")",sym:"F_{a}",value:q.Fa,unit:"",d:3,ref:A+"Table 11.4-1"}),
++    a7S({id:"se.Fv",label:"Long-period site coefficient (Site Class "+S.siteClass+")",sym:"F_{v}",value:q.Fv,unit:"",d:3,ref:A+"Table 11.4-2"}),
++    a7S({id:"se.SMS",label:"MCE_R spectral response acceleration, short periods",sym:"S_{MS}",eq:"F_{a}\\,S_{s}",sub:RN(q.Fa,3)+" \\times "+RN(st.Ss,3),value:q.SMS,unit:"g",d:4,ref:A+"Eq. 11.4-1"}),
++    a7S({id:"se.SM1",label:"MCE_R spectral response acceleration, 1 s",sym:"S_{M1}",eq:"F_{v}\\,S_{1}",sub:RN(q.Fv,3)+" \\times "+RN(st.S1,3),value:q.SM1,unit:"g",d:4,ref:A+"Eq. 11.4-2"}),
++    a7S({id:"se.SDS",label:"Design spectral response acceleration, short periods",sym:"S_{DS}",eq:"\\frac{2}{3} S_{MS}",sub:"\\frac{2}{3} \\times "+RN(q.SMS,4),value:q.SDS,unit:"g",d:4,ref:A+"Eq. 11.4-3"}),
++    a7S({id:"se.SD1",label:"Design spectral response acceleration, 1 s",sym:"S_{D1}",eq:"\\frac{2}{3} S_{M1}",sub:"\\frac{2}{3} \\times "+RN(q.SM1,4),value:q.SD1,unit:"g",d:4,ref:A+"Eq. 11.4-4"})])});
++  if(q.Fa!==null){
++    SE.push({title:"Seismic design category",ref:A+"Sec. 11.6",res:/SDC$/,steps:[a7S({id:"se.SDC",label:"Seismic design category: the more severe of Table 11.6-1 ("+q.sdcS+", from S_DS) and Table 11.6-2 ("+q.sdc1+", from S_D1)",sym:"SDC",value:q.SDC,unit:"",d:0,ref:A+"Tables 11.6-1, 11.6-2",note:q.sdcOverride||""})]});
++    SE.push({title:"Fundamental period",ref:A+"Sec. 12.8.2",res:/Tused$/,steps:[
++      a7S({id:"se.Ta",label:"Approximate fundamental period",sym:"T_{a}",eq:"C_{t}\\,h_{n}^{x}",sub:q.Ct+" \\times "+R2(q.hn)+"^{"+q.x+"}",value:q.Ta,unit:"s",d:4,ref:A+"Eq. 12.8-7"}),
++      a7S({id:"se.CuTa",label:"Upper limit on the calculated period",sym:"C_{u} T_{a}",eq:"",sub:RN(q.Cu,3)+" \\times "+RN(q.Ta,4),value:q.T,unit:"s",d:4,ref:A+"Sec. 12.8.2"}),
++      a7S({id:"se.Tused",label:"Period used for C_s ("+(S.useTa?"T_a: permitted and conservative":"C_u T_a: requires a substantiated analysis")+")",sym:"T",value:q.Tused,unit:"s",d:4})]});
++    const cs=[a7S({id:"se.CsB",label:"Base value (R = "+R2(q.R)+", I_e = "+R2(q.Ie)+"; "+S.sfrs+")",sym:"C_{s}",eq:"\\frac{S_{DS}}{R/I_{e}}",sub:"\\frac{"+RN(q.SDS,4)+"}{"+R2(q.R)+"/"+R2(q.Ie)+"}",value:q.CsBase,unit:"",d:4,ref:A+"Eq. 12.8-2"})];
++    if(isFinite(q.CsMax))cs.push(a7S({id:"se.CsMax",label:"Upper limit"+(q.exc1148?" (Sec. 11.4.8 Exception 2: × 1.5)":""),sym:"C_{s,max}",eq:q.Tused<=q.TL?"\\frac{S_{D1}}{T (R/I_{e})}":"\\frac{S_{D1} T_{L}}{T^{2} (R/I_{e})}",sub:q.Tused<=q.TL?"\\frac{"+RN(q.SD1,4)+"}{"+RN(q.Tused,4)+" ("+R2(q.R)+"/"+R2(q.Ie)+")}":"\\frac{"+RN(q.SD1,4)+" \\times "+R2(q.TL)+"}{"+RN(q.Tused,4)+"^{2} ("+R2(q.R)+"/"+R2(q.Ie)+")}",value:q.CsMax,unit:"",d:4,ref:A+(q.Tused<=q.TL?"Eq. 12.8-3":"Eq. 12.8-4")}));
++    cs.push(a7S({id:"se.CsMin",label:"Lower limit"+(q.CsMinS1!==null?" (with Eq. 12.8-6, S_1 ≥ 0.6 g: "+RN(q.CsMinS1,4)+")":""),sym:"C_{s,min}",eq:"\\max(0.044\\,S_{DS} I_{e}, 0.01)",sub:"\\max(0.044 \\times "+RN(q.SDS,4)+" \\times "+R2(q.Ie)+", 0.01)",value:q.CsMin,unit:"",d:4,ref:A+"Eq. 12.8-5"}),
++      a7S({id:"se.Cs",label:"Governing seismic response coefficient",sym:"C_{s}",eq:"\\min(C_{s,base}, C_{s,max}) \\ge C_{s,min}",sub:"",value:q.Cs,unit:"",d:4,ref:A+"Sec. 12.8.1.1"}),
++      a7S({id:"se.V",label:"Seismic base shear (effective seismic weight W = "+R2(q.Wt)+" kip)",sym:"V",eq:"C_{s}\\,W",sub:RN(q.Cs,4)+" \\times "+R2(q.Wt),value:q.Vbase,unit:"kip",d:2,ref:A+"Eq. 12.8-1"}));
++    SE.push({title:"Seismic response coefficient and base shear",ref:A+"Sec. 12.8.1",res:/\.V$/,steps:cs});
++  }
++  /* ---------- 1. Summary ---------- */
++  const ck={ok:"OK",warn:"Review",err:"Blocked",na:"N/A"}, cls={ok:"ok",warn:"hi",err:"ng",na:"na"};
++  const gv=[["Enclosure classification","—",e.cls,"Sec. 26.2",""],["Internal pressure coefficient","GC_pi","±"+R2(e.gcpi.p),"Table 26.13-1","a7/wi.GCpi"],["Mean roof height","h",R2(g.h)+" ft","Sec. 26.2",""],
++    ["Velocity pressure at h","q_h",R2(w.qh.q)+" psf","Eq. 26.10-1","a7/wi.qh"],["Design flat roof snow load","p_f,des",R2(sn.pfDes)+" psf","Sec. 7.3","a7/sn.pfDes"],["Design balanced snow load","p_s",R2(sn.balanced)+" psf","Sec. 7.4","a7/sn.ps"]];
++  if(q.Fa!==null)gv.push(["Seismic design category","SDC",q.SDC,"Sec. 11.6","a7/se.SDC"],["Seismic response coefficient","C_s",RN(q.Cs,4),"Sec. 12.8.1.1","a7/se.Cs"],["Seismic base shear","V",R2(q.Vbase)+" kip","Eq. 12.8-1","a7/se.V"]);
++  secs.push({title:"Summary",subs:[{title:"Governing design values",items:[{type:"table",head:["Quantity","Symbol","Value","Reference"],rows:gv.map(r=>[r[0],r[1],{t:r[2],n:true,key:r[4]||undefined},A+r[3]])},
++      {type:"note",text:"Each value links to the step where it is worked. Design loads only: this tool makes no member or connection check. The same values are on the Dashboard[[tab:dash| ↗]]."}]},
++    {title:"Status register",items:[{type:"table",head:["Check","Status","Basis"],rows:R.checks.map(c=>[c.name,{t:c.state==="warn"&&c.standing?"Standing":ck[c.state],cls:cls[c.state]},a7Plain(c.detail)])},
++      {type:"note",text:"OK = method applied cleanly; Review = conservative fallback or unverified assumption; Blocked = input outside the method; N/A = does not apply; Standing = an assumption the tool always makes."}]}]});
++  /* ---------- 2. Inputs ---------- */
++  secs.push({title:"Project and building",subs:[{title:"Project and site",items:[{type:"kv",rows:[["Project",tb.project||"—"],["Subject",tb.subject||"—"],["Task",tb.task||"—"],["Job No.",tb.job||"—"],
++      ["Computed by",(tb.by||"—")+(tb.date?", "+tb.date:"")],["Checked by",(tb.chk||"—")+(tb.chkdate?", "+tb.chkdate:"")],["Risk Category",String(S.risk)],["Exposure category",S.expCat],["Site class",S.siteClass],
++      ["Mean roof height h",R2(g.h)+" ft"],["Roof slope θ",R2(g.theta)+"°"],["Site data",st.source]]},{type:"note",text:"All inputs are listed on the input tabs and in the Print / PDF report; the building geometry is shown on the Design Basis[[tab:basis| ↗]] and 3-D Model[[tab:3d| ↗]] tabs."}]}]});
++  secs.push({title:"Snow",subs:[{title:"Roof snow loads",items:[a7Topics(SN),{type:"note",text:"Unbalanced, drift and rain-on-snow details: Snow[[tab:snow| ↗]] tab."}]}]});
++  secs.push({title:"Wind",subs:[{title:"Velocity pressure",items:[a7Topics(WP),{type:"note",text:"Velocity pressure by height and the wall, roof and component pressures are worked on the Wind: Velocity Pressure[[tab:windp| ↗]], Wind: Walls[[tab:walls| ↗]], Wind: Roof[[tab:roof| ↗]] and Wind: Components[[tab:elem| ↗]] tabs."}]}]});
++  secs.push({title:"Seismic",subs:[{title:"Equivalent lateral force",items:(q.Fa===null?[{type:"note",warn:true,text:"No site coefficient is tabulated for Site Class "+S.siteClass+" at these accelerations: a site response analysis is required (Sec. 11.4.8); the seismic results are not computed."}]:[]).concat([a7Topics(SE),{type:"note",text:"Vertical distribution, story shears and overturning: Seismic[[tab:seis| ↗]] tab. Load combinations: Combinations[[tab:comb| ↗]] tab."}])}]});
++  const notes=[];(R.err||[]).forEach(m=>notes.push({type:"note",warn:true,text:"Blocking: "+a7Plain(m)}));(R.warn||[]).forEach(m=>notes.push({type:"note",warn:true,text:a7Plain(typeof m==="string"?m:(m.msg||m.text||JSON.stringify(m)))}));
++  if(!notes.length)notes.push({type:"note",text:"No warnings."});
++  secs.push({title:"Notes",subs:[{title:"Warnings and assumptions",items:notes.concat([{type:"note",text:"This tool generates design loads only. Snow drift and sliding snow, partial loading, components and cladding beyond the tabulated elements, torsional wind cases and the seismic provisions beyond base shear and its vertical distribution are outside its scope (User Manual)."}])}]});
++  /* rich notation: q_h, GC_pi, p_f,des → $…$ */
++  const not=s=>String(s==null?"":s).replace(/([A-Za-z])_([A-Za-z0-9]+(?:,[A-Za-z]+)?)/g,(m,a,b)=>"$"+a+"_{"+b+"}$"),cell=c=>(c&&typeof c==="object")?Object.assign({},c,{t:not(c.t)}):not(c);
++  secs.forEach(s=>s.subs.forEach(qq=>qq.items.forEach(it=>{if(it.type==="note")it.text=not(it.text);else if(it.type==="kv")it.rows=it.rows.map(r=>[not(r[0]),not(r[1])]);
++    else if(it.type==="table"){it.head=it.head.map(cell);it.rows=it.rows.map(r=>r.map(cell));}else if(it.type==="steps")it.steps.forEach(x=>{x.label=x.label.replace(/_/g,"");x.note=String(x.note||"").replace(/_/g,"");});})));
++  const today=new Date().toISOString().slice(0,10);
++  return {title:"ASCE 7-16 Building Loads — Calculation Report",subtitle:(tb.project||"Untitled")+(tb.subject?" — "+tb.subject:""),code:"ASCE 7-16: snow (Ch. 7), wind (Ch. 26–30), seismic (Ch. 11–12) · "+APP_VERSION,
++    info:[["Project",tb.project],["Project No.",tb.job],["Calculated by",tb.by],["Date",tb.date||today],["Checked by",tb.chk],["Checked date",tb.chkdate]],
++    head:{left:"Project No. "+(tb.job||"—")+" — "+String(tb.subject||tb.project||"Building loads").slice(0,40),right:"Computed: "+(tb.by||"—")+" "+(tb.date||today)+" · Checked: "+(tb.chk||"—")+" "+(tb.chkdate||""),foot:(tb.project||"Untitled")+" (ASCE 7-16 Building Load Generator)"},
++    sections:secs};
++}
++function renderReport(h){
++  if(!window.SharedReport||!window.SharedSteps){note(h,"shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.","e");A7RP.api=null;A7RP.doc=null;return;}
++  if(!R.enc||!R.geom||!R.wind||!R.snow||!R.seis){const b=panel(h,"o-rpb","1.","Report not available","");(R.err||[]).forEach(e=>note(b,esc(e),"e"));note(b,"The calculation did not complete; correct the blocking error and the report will be built.","e");A7RP.api=null;A7RP.doc=null;return;}
++  let Mo;try{Mo=a7Model();}catch(e){note(h,"Report error: "+esc(e&&e.message),"e");A7RP.api=null;A7RP.doc=null;console.error(e);return;}
++  const box=el("div","");h.appendChild(box);
++  A7RP.api=SharedReport.mount(box,Mo,{closed:A7RP.closed,onGoto:k=>{if(!TABS.some(t=>t[0]===k))return;A7RP.on=false;S.tab=k;autosave();render();document.getElementById("outbody").scrollTop=0;}});
++  A7RP.doc=A7RP.api.doc;
++}
++/* Ctrl+P while the Report tab is shown prints the report alone (the print CSS hides #outbody, so it goes into #rp-print); otherwise unchanged */
++window.addEventListener("beforeprint",()=>{
++  if(!A7RP.on||!A7RP.doc||document.body.classList.contains("rp-printing")||document.getElementById("report").innerHTML)return;
++  let box=document.getElementById("rp-print");if(!box){box=document.createElement("div");box.id="rp-print";document.body.appendChild(box);}
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(A7RP.doc,{lazy:false})+"</article></div>";
++  document.body.classList.add("rp-printing");
++});
++
+```
