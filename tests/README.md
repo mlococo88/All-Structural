@@ -46,6 +46,9 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
+node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three>]
+
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; GirderDetail's embedded Preliminary sizing page included
 node tests/check-syntax.mjs "Steel Bridge Design.html"                        # the merged tool includes its embedded pages (pl-src, st-src)
 ```

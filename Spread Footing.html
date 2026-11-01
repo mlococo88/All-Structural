@@ -142,6 +142,10 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
  .inp::-webkit-scrollbar,.out::-webkit-scrollbar{width:9px}
  .inp::-webkit-scrollbar-thumb,.out::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
  .tabbar{position:sticky;top:0;z-index:4;background:#fafafa}
+ /* SFSC (2026-11-01): the panels contain their absolutely positioned descendants (KaTeX's hidden MathML spans), which otherwise
+    escape .main's overflow clip, make the document taller than the window, and let scrollIntoView / scrollTo scroll the page
+    itself, which the user cannot scroll back (body overflow:hidden) */
+ .inp,.out{position:relative}
 }
 
 /* ---- user manual ---- */
@@ -3206,8 +3210,17 @@ function renderReport(){
 /* [[tab:…]] links of the report: an output tab, or an input tab (in-…) */
 function sfrGoto(name){
  if(name.indexOf('in-')===0){sfdGotoInput(name.slice(3),'sec-'+name.slice(3));return;}
- const b=$$('#tabbar button').find(x=>x.dataset.tab==='tab-'+name);if(b){b.click();window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10);}
+ const b=$$('#tabbar button').find(x=>x.dataset.tab==='tab-'+name);if(!b)return;b.click();
+ /* SFSC: in the two-panel screen layout scroll the output panel (tab page just below the sticky tab bar), never the page */
+ const P=document.getElementById('outputPanel'),pg=document.getElementById('tab-'+name);
+ if(sfdPanelLayout()&&P&&pg)P.scrollTop+=pg.getBoundingClientRect().top-P.getBoundingClientRect().top-b.parentElement.offsetHeight;
+ else window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10);
 }
+/* SFSC (2026-11-01): two-panel screen layout (body height:100vh, overflow:hidden; the input and output panels scroll). The page itself
+   must stay at scroll 0 there: it has no scroll bar and the wheel goes to the panels, so a page scrolled by script could not be
+   scrolled back. Any page scroll (a scrollIntoView, find-in-page, focus) is reset. */
+function sfdPanelLayout(){return !!(window.matchMedia&&window.matchMedia('screen and (min-width:900px)').matches);}
+window.addEventListener('scroll',()=>{if(sfdPanelLayout()&&(window.scrollY||window.scrollX))window.scrollTo(0,0);},{passive:true});
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
 function sfrPrinting(){return document.body.classList.contains('rp-printing');}
 function sfrWillPrint(){const T=document.getElementById('tab-report');return sfrPrinting()||!!(SFRP.doc&&T&&T.classList.contains('active'));}
