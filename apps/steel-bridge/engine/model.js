@@ -70,6 +70,9 @@
                   (absent: the first exterior girder for position 'exterior', else the first interior girder)
      girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
                   gV, fatM, fatV, gDef }: entered values, used where the loads module gives none (CL and xf: the module has none yet)
+     girders[i].dfPull (added 2026-11-01, B2 hand-offs; optional): { use, spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source: { producer,
+                  producerFile, producedAt, project, adoptedAt, line, girder, basis, basisLbl, fields } }: the factors pulled from LL & DL Distribution
+                  (bridgeSuite.v1.lldf, ui/handoffs.js), laid over this girder's factors field by field (engine/analysis.js dfOf); absent: unchanged
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)

@@ -2795,6 +2795,53 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
 ### Other copies
 - None (ST-Girder's code is read only, not changed).
 
+## 2026-11-01 — PR: sbd-handoffs — Cross-tool hand-offs: projectMeta, lldf pull, superReactions (B2)
+### What GirderDetail does, and what this app now does (HANDOFF.md §4.1, §4.3, §4.4; keys and formats unchanged, CLAUDE.md §5)
+- projectMeta: GirderDetail's `Shared project info` script ("Use shared project info" / "Share project info"). Ported in `ui/handoffs.js`
+  (`pmFields`, `pmPayload`, `pmPlan`); fields projectName → project.name, jobNo → number, client → owner (Client name), preparedBy →
+  designer, checkedBy → checker, date → date; bridgeId and location: no field here, sent blank.
+- lldf: GirderDetail `gdLldfPlan` / `gdLldfDialog` / `gdLldfApply` (anchor `const GD_LLDF =`) ported as `lldfPlan`, a `<dialog>` and
+  `lldfApply`: the same refusals (unit, span count, perFootStrip, beam basis with another girder count, missing gM/gV), warnings (span
+  lengths > 0.5 ft, girder count, cross-section type, skew > 0.5°, no fatigue factors, no negative factors) and mapping (governingBySpan[i]
+  to span i when complete for every span, else governing; governingNeg.gM to every pier). Receiver id `steelbridge` (new adoption key
+  `bridgeSuite.v1.lldf.adopted.steelbridge`, same format). GirderDetail writes its manual factors (sa.dfm, sa.dfSrc = 'manual'); here:
+  new optional field `girders[i].dfPull` (engine/model.js header), read by `engine/analysis.js dfOf`.
+- superReactions: GirderDetail `gdSrPayload` (anchor `const GD_SR =`) ported as `srPayload`; the same envelope, supports (Abut. 1, Pier k,
+  Abut. 2), girders G1…Gn with position, DC1/DC2/DW (and UT/UF), allGirders, ownerRules, utilities, notes; channel key plus the copy
+  `superReactions.by.girderdetail`. producer "Steel Bridge Design", producerFile "apps/steel-bridge/index.html".
+- Not ported: girderDemands (GirderDetail → ST-Girder inside the old app; this app has both roles) and the PlateLine → GirderDetail inbox
+  (`girderdetail_inbox_v1`, internal to the old app; this app is one model).
+### §4 callout (calculation path: distribution factors)
+- `engine/analysis.js dfOf(P, g, ns, mod)`: before, the factors came from (1) girder.df, (2) the loads module, (3) girder.dfManual
+  (now `dfBase`, unchanged). After: `dfOf` = `dfBase`, then, only when `girders[i].dfPull` exists with `use !== false` and as many spans,
+  each of gM, gV, fatM, fatV per span and gM per pier is the pulled value where the payload had it (positive number), else the
+  `dfBase` value; gDef always `dfBase`. Source text: "pulled from LL & DL Distribution (lldf.html), produced …; for G2, LL & DL interior
+  envelope, per span[; fatM, fatV not in the hand-off: from …]; deflection factor from …" (Analysis tab card and report "Distribution
+  factors"). No formula, factor or unit changed; a project without dfPull computes exactly as before (test: dfOf deep-equal).
+- Governing provisions: AASHTO LRFD 10th Ed. Art. 4.6.2.2 (distribution factors, computed by lldf.html), 3.6.1.4.3b (fatigue one lane
+  ÷ 1.2), 3.6.1.1.2 (multiple presence, in lldf's gM/gV).
+- Check case (built-in project, plate girder G1 = cross-section girder G2, interior; spans 110-140-110 ft): span 2 g moment pulled as
+  0.800, module 0.6639; at x = 180 ft (span 2 midspan) M_LL+IM = g_M × M_per lane: the per-lane envelope is unchanged and M_LL+IM
+  scales by 0.800 / 0.6639 = 1.20500 (tests/engine/handoffs.test.mjs). Proof of path: LL & DL factors equal to the module's (to 4
+  decimals) give the module's factors (|Δ| < 5e-5).
+- superReactions hand checks: G2 (own line) reactions = its analysis' stage reactions to 0.001 kip; Σ DW reactions = w_DW × 360 ft for
+  every girder; G3 (borrowed plates) DC1/DC2/DW and LL+IM reactions equal a full run of that line. Built-in project, kip (DC1/DC2/DW):
+  Abut. 1 G1 46.19/13.41/8.16, G2 55.36/9.85/8.16, G3 55.36/6.29/8.16; Pier 1 G2 204.68/35.24/29.19.
+- Speed: a cross-section girder that borrows a plate girder's plates takes the HL-93 per-lane reactions (and pedestrian influence areas)
+  from that plate girder's full run × its own g_V (larger of adjacent spans, as analysis llR) and its own w_PL, and its dead loads from
+  its own run without live load (opt.ll = false): the same values as a full run (tested), without one moving-load run (~20 s) per girder.
+### Decisions recorded (CLAUDE.md §9; decided, not engineering formulas)
+- A cross-section girder with no plate girder of its own uses the plates of the first plate girder of its position, else the first plate
+  girder (GirderDetail had per-type plates from Preliminary sizing); the notes name each borrowed line.
+- The copy key is `by.girderdetail` (Substructure Loading lists only psbeam, mct, girderdetail); during the transition the old and the new
+  app overwrite each other's copy there. Producer text says which app sent it.
+### Files
+- New: `ui/bridgexfer.js` (BridgeXfer v1, verbatim HANDOFF.md §5 copy), `ui/handoffs.js`, `tests/engine/handoffs.test.mjs`.
+- Changed: `engine/analysis.js` (dfOf/dfBase), `engine/model.js` (header comment), `index.html` (two script tags, the Project-tab card,
+  click hook, init), HANDOFF.md (§4 table, §4.1, §4.3, §4.4 notes).
+### Other copies
+- BridgeXfer v1: `apps/steel-bridge/ui/bridgexfer.js` joins the existing verbatim copies (HANDOFF.md §5).
+
 ## 2026-11-01 — PR: shared-lldf-steps (LLST) — the LLDF worked-step writer moved to shared/lldf.js (SharedLLDF.steps); no output change
 ### Where
 - `apps/steel-bridge/engine/lldf.js`: `geometrySteps`, `skewSteps`, `empSteps`, `leverSteps`, `rigidSteps`, `member`, `memberSteps`,
