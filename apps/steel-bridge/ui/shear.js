@@ -112,12 +112,14 @@
   /* ---------- calculation ---------- */
   /* inPan(xs, q): an entered station within the panel q (p..q, ft) */
   const inPan = (xs, q) => xs.some(x => x >= Math.min(q.p, q.q) - 1e-6 && x <= Math.max(q.p, q.q) + 1e-6);
+  /* fatI(P): Fatigue I γ of the Fatigue & studs inputs (P.fatigue.gam.fI), the one source for every module (FGAM, 2026-11-01); 1.75 without one */
+  const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };
   function build(ctx) {
     const P = ctx.P, M = window.SBDModel, SH = window.SBDShear, SB = window.SBDStiffeners, OW = window.SBDOwners, st = ensure(P), ly = st.layout, g = ctx.g || 0;
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0), env = { owner: own.owner, lf };
     const src = ctx.src || srcOf(ctx);   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;   // ctx.pl: a payload given directly (tests)
-    const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf);
+    const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf, { fat: fatI(P) });
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
     // custom (added 2026-11-01, custom demands PR): the rows and reactions entered on this tab (ui/demands.js payload), the same path as a
@@ -141,7 +143,7 @@
     // transverse stiffeners: every intermediate stiffener and connection plate of the layout (file), GirderDetail's built-in rows (example)
     let tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
     if (C) tsRows = tsRows.filter(r => { const a = pans.find(q => Math.abs(q.q - r.x) <= 0.01), b = pans.find(q => Math.abs(q.p - r.x) <= 0.01); return a && b && inPan(C.xs, a) && inPan(C.xs, b); });   // both panels reached
-    const TS = tsRows.length ? SB.transverse({ gW: P.materials.steel.web, gS: st.transverse.gS, Fexx: st.transverse.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }, types: st.transverse.types, rows: tsRows }, env) : null;
+    const TS = tsRows.length ? SB.transverse({ gW: P.materials.steel.web, gS: st.transverse.gS, Fexx: st.transverse.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: fatI(P) }, types: st.transverse.types, rows: tsRows }, env) : null;
     // bearings: one per support
     let bsRows;
     // reactions: the analysis support reactions where the demands come from this app's analysis (SB2-O16); from a file, the jump in shear
@@ -183,7 +185,7 @@
       + `<section class="sec"><div class="secHead">Shear &amp; stiffeners: demands</div><div class="secBody">
       <div class="fRow"><label for="sh_src">Demands</label><select id="sh_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in shears)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', src) : ''}</select></div>
       ${src === 'file' ? `<div class="fRow"><label for="sh_file">File</label><input type="file" id="sh_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
-      <p class="note">Strength I γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, LL+IM 1.75 (shears are magnitudes: the maximum factors; with the owner's η and m, Loads &amp; LLDF tab); special fatigue loading 6.10.5.3: permanent shear + 1.75 V<sub>fat</sub>; deck placement 1.25 V<sub>DC1</sub> + 1.50 V<sub>CL</sub>. φ<sub>v</sub> = 1.0. Stiffener inputs: Stiffeners tab. The demand source is saved with the project (a hand-off file is not).</p></div></section>`;
+      <p class="note">Strength I γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, LL+IM 1.75 (shears are magnitudes: the maximum factors; with the owner's η and m, Loads &amp; LLDF tab); special fatigue loading 6.10.5.3 and the stiffener weld toes (CP2): Fatigue I γ ${fmt(fatI(ctx.P), 2)} (<a href="#" data-goto="fs">Fatigue &amp; studs inputs</a>), permanent shear + γV<sub>fat</sub>; deck placement 1.25 V<sub>DC1</sub> + 1.50 V<sub>CL</sub>. φ<sub>v</sub> = 1.0. Stiffener inputs: Stiffeners tab. The demand source is saved with the project (a hand-off file is not).</p></div></section>`;
     if (src === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(ctx.P, 'shear', ctx.g);   // the entered rows and reactions (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Shear results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="sh_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;

@@ -17,7 +17,9 @@
   const S = { key: '', R: null, sel: null };
 
   /* ---------- input tab ---------- */
-  function ensure(P) { const M = window.SBDModel; if (!P.framing) P.framing = M.defaultFraming(); if (!P.crossframes) P.crossframes = M.defaultCrossframes(); return P; }
+  function ensure(P) { const M = window.SBDModel; if (!P.framing) P.framing = M.defaultFraming(); if (!P.crossframes) P.crossframes = M.defaultCrossframes();
+    if (!P.crossframes.userMode) P.crossframes.userMode = { StrI: 'add', Con: 'add' };   // CFRM (2026-11-01): absent in older projects = 'add', today's behaviour
+    return P; }
   /* plan(L): the framing plan as SVG: girders (blue), support lines (skewed), end and intermediate cross-frames, field splices (ticks) */
   function plan(L) {
     const FR = L.FR, m = L.m, W = 720, pad = 34, ys = FR.ys, yMax = ys[ys.length - 1];
@@ -60,7 +62,12 @@
       + h.card('Stability bracing during deck placement (6.7.4.2.2)', `${h.sel('crossframes.sb.on', 'Check stability bracing', [['yes', 'Yes'], ['no', 'No']])}${h.sel('crossframes.sb.full', 'Depth and connection plates', [['auto', 'Automatic (h ≥ 0.8D: full depth)'], ['yes', '≥ 0.8 girder depth, full-depth plates (2.4)'], ['no', 'Otherwise (3.6)']])}
         ${h.num('crossframes.sb.Mu', 'Factored deck-placement M<sub>u</sub> (blank: analysis)', 'kip-ft', { text: true })}${h.num('crossframes.sb.Cb', 'C<sub>b</sub>', '')}
         ${h.num('crossframes.sb.bs', 'Connection plate b<sub>s</sub> (no connection-plate type)', 'in')}${h.num('crossframes.sb.tsp', 'Connection plate t<sub>s</sub>', 'in')}`)
-      + h.card('Member forces from a refined analysis (optional)', `<p class="note">Factored, tension positive; they add to the wind and brace forces.</p><h4 class="sub">Strength I</h4>${usr('StrI')}<h4 class="sub">Constructibility</h4>${usr('Con')}<h4 class="sub">Fatigue ranges ΔP</h4>${usr('Fat')}
+      + h.card('Member forces from a refined analysis (optional)', `<p class="note">Factored, tension positive, per member of the angle cross-frame (not used with a diaphragm). For each group choose whether they add to the forces the tab computes or replace them.</p>
+        <h4 class="sub">Strength I</h4>${usr('StrI')}${h.sel('crossframes.userMode.StrI', 'With the computed forces', [['add', 'Add to computed'], ['replace', 'Replace computed']])}
+        <p class="note">${C.userMode.StrI === 'replace' ? 'The entered forces are the Strength design forces; the computed Strength III and V wind forces are not used.' : 'Strength I takes the entered forces; Strength III and V take the computed wind forces; each member is designed for the largest.'}</p>
+        <h4 class="sub">Constructibility</h4>${usr('Con')}${h.sel('crossframes.userMode.Con', 'With the computed forces', [['add', 'Add to computed'], ['replace', 'Replace computed']])}
+        <p class="note">${C.userMode.Con === 'replace' ? 'The entered forces are used alone; the stability bracing force is not added (CF7 not checked; CF8, the stiffness, still is).' : 'The stability bracing force from M<sub>br</sub> (6.7.4.2.2) is added to the entered forces.'}</p>
+        <h4 class="sub">Fatigue ranges ΔP</h4>${usr('Fat')}<p class="note">Used alone: the tab computes no cross-frame force range (a line-girder analysis gives none).</p>
         ${h.sel('crossframes.fatCat', 'Member end detail', [['B', 'Bolted, slip-critical (B)'], ['E', 'Welded end connection (E)'], ['Ep', 'Welded, eccentric (E′)']])}`)
       + h.card('Diaphragm in place of the cross-frame', `${h.sel('crossframes.dia.on', 'Intermediate bracing used', [['no', 'Cross-frame (angles)'], ['yes', 'Diaphragm: channel or rolled W']])}${C.dia.on === 'yes' ? `${h.sel('crossframes.dia.shape', 'Shape', shapes)}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
@@ -100,12 +107,20 @@
     { key: 'w3', title: 'Wind on the girders, Strength III', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wIII\./, res: /^cf\.wIII\.Fw$/ },
     { key: 'w5', title: 'Wind on the girders, Strength V', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wV\./, res: /^cf\.wV\.Fw$/ },
     { key: 'tr', title: 'Member forces per kip of wind force (truss model)', ref: A + '4.6.2.7', ids: /^cf\.tr\d+$/ },
+    { key: 'usr', title: 'Member forces entered from a refined analysis', ref: A + '6.7.4.2', ids: /^cf\.user\./ },
     { key: 'sb', title: 'Torsional bracing during deck placement', ref: A + '6.7.4.2.1, C6.7.4.2', ids: /^cf\.sb\./, res: /^cf\.sb\.bReq$/ },
     mem('top', 'Top chord'), mem('bot', 'Bottom chord'), mem('diag', 'Diagonals')] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
   const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const wk = id => id ? `<a class="wk" href="#st-${esc(id)}" data-cfgo="${esc(id)}">§</a>` : '';
   const stName = st => ({ pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[st] || st);
+  /* umNote(R): which way the entered member forces combine (CFRM), with a link to the input card and the worked step; '' when none is entered */
+  function umNote(R) {
+    const p = R.p || {}, UM = R.UM || { StrI: 'add', Con: 'add' }, any = g => ['top', 'bot', 'diag'].some(k => +(((p.user || {})[g] || {})[k]) || 0) || UM[g] === 'replace';
+    const part = (g, t) => any(g) ? `${t}: <b>${UM[g] === 'replace' ? 'Replace computed' : 'Add to computed'}</b> ${wk('cf.user.' + g)}` : '';
+    const s = [part('StrI', 'Strength'), part('Con', 'Constructibility')].filter(Boolean);
+    return s.length ? ` Entered member forces (<a href="#" data-goto="spans">Spans &amp; framing tab</a>): ${s.join('; ')}.` : '';
+  }
   function results(B) {
     const { L, R, C, fl, XF, br, line, I } = B, FR = L.FR; let h = '';
     // governing
@@ -115,7 +130,7 @@
       ${R.errors && R.errors.length ? `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>` : ''}
       <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk('cf.dg')}</span></div><div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
       <div><span>Deck placement M<sub>u</sub></span><span>${fmt(+I.p.sb.Mu, 1)} kip-ft</span></div><div><span>Stability span L, frames n</span><span>${fmt(I.p.sb.L, 2)} ft, ${I.p.sb.n}</span></div>${R.W ? `<div><span>F<sub>w</sub> Strength III / V</span><span>${fmt(R.W.III.Fw, 2)} / ${fmt(R.W.V.Fw, 2)} kip ${wk('cf.wIII.Fw')}</span></div>` : ''}</div>
-      <p class="note">M<sub>u</sub>: ${esc(I.src.Mu || '')}; ${esc(I.src.sb || '')}.</p></div></section>`;
+      <p class="note">M<sub>u</sub>: ${esc(I.src.Mu || '')}; ${esc(I.src.sb || '')}.${umNote(R)}</p></div></section>`;
     h += `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
     h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L)}
@@ -137,8 +152,8 @@
       <p class="note">References: ${C.map(c => `${esc(c.id)} ${esc(c.ref)}`).join('; ')}.</p></div></section>`;
     // member forces
     if (R.frames) h += `<section class="sec"><div class="secHead">Member forces (truss model)</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Member</th><th>Length (in)</th><th>per kip of F<sub>w</sub></th>${R.combos.map(c => `<th>${esc(c.id)} T / C (kip)</th>`).join('')}</tr></thead><tbody>
-      ${R.frames.map((e, i) => `<tr><td class="lft">${esc(e.lbl)}</td><td>${fmt(e.L, 2)}</td><td>${fmt(e.unit, 3)} ${wk(`cf.tr${i}`)}</td>${R.combos.map(c => `<td>${fmt(c.f[i].T, 2)} / ${fmt(c.f[i].Cc, 2)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-      <p class="note">Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.</p></div></section>`;
+      ${R.frames.map((e, i) => `<tr><td class="lft">${esc(e.lbl)}</td><td>${fmt(e.L, 2)}</td><td>${fmt(e.unit, 3)} ${wk(`cf.tr${i}`)}</td>${R.combos.map(c => c.off ? '<td class="fx-na">not used</td>' : `<td>${fmt(c.f[i].T, 2)} / ${fmt(c.f[i].Cc, 2)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="note">Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.${umNote(R)}</p></div></section>`;
     h += `<section class="sec"><div class="secHead">Worked steps</div><div class="secBody"><p class="note">Every value above links here (§). AASHTO LRFD 10th Ed. (2024).</p>${stepsHtml([...L.steps, ...fl.steps, ...(R.steps || [])])}</div></section>`;
     return h;
   }

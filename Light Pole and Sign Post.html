@@ -24,6 +24,7 @@
   .masthead .sub{color:var(--ink-soft);font-size:14px;max-width:70ch}
   .masthead .codetag{position:absolute;top:22px;right:28px;text-align:right;font-family:"Times New Roman",Times,serif;font-variant-numeric:tabular-nums;font-size:11px;color:var(--ink-soft);line-height:1.7}
   .masthead .codetag b{color:var(--ink);display:block;font-size:12px}
+  .masthead .lppScope{margin-top:10px;font-size:12px;color:#7a5a1e;background:#fdf8ee;border:1px solid #e0c48a;border-radius:4px;padding:5px 9px;max-width:110ch}
   .wrap{max-width:1500px;margin:0 auto;padding:0 20px 80px}
   .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:26px;margin-top:26px;align-items:start}
   .grid2 .col-in{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow-y:auto;padding-right:4px}
@@ -413,6 +414,7 @@
   <div class="byline">by Mario Lococo</div>
   <div class="sub" id="appSub">A pole carrying splayed catenary lighting cables plus its own wind. Each cable's dead, wind, ice, and wind-on-ice loads resolve to horizontal and vertical pole reactions; the unbalanced pull drives the IBC §1807.3 embedment and the ACI 318 shaft. Wind is enveloped at the worst direction for each component independently.</div>
   <div class="codetag"><b>IBC 2021 §1807.3</b>ASCE 7-22 wind + ice<br>ACI 318-19 shaft</div>
+  <div class="lppScope" id="lppScope"><b>Scope (this mode):</b> IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19 — non-highway light poles and sign supports (site, parking, sports and private signs). AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming); do not use this mode for them.</div>
 </header>
 
 <div class="wrap">
@@ -2407,7 +2409,7 @@ manPart("p4a","4A. Wind &amp; Load Path",[
 {p:"Panel force uses the ASCE 7-22 Fig. 29.3-1 force coefficient, a function of aspect ratio B/s and clearance ratio s/h. Three load cases apply:"},
 {tbl:{head:["Case","Resultant location","Applies to"],rows:[
  ["A","Centred on the panel","All configurations"],
- ["B","Offset e = 0.2B toward the windward edge","Two posts only"],
+ ["B","Offset e = 0.2B toward the windward edge","All configurations (two posts: unequal split; monopost: as torsion)"],
  ["C","Stepped pressure bands, net eccentricity computed","When B/s \u2265 2 (monopost: as torsion)"]
 ]}},
 {warn:"On a monopost, Cases B and C put the resultant off the post axis and twist it: T = F\u00b7e. The tool checks the post for combined torsion, shear, flexure and axial (AISC 360-16 \u00a7H3.2), adds T/(n\u00b7R) to every anchor bolt's shear, and checks the shaft against the ACI 318-19 \u00a722.7.1.1 threshold torsion. The torsional resistance of the soil around the shaft is NOT checked. (Before 2026-10-12, monoposts used Case A only.)"},
@@ -5509,6 +5511,7 @@ function lppReportDoc(H,meta){
   ct.appendChild(mk('p',null,lppEsc(activeProject||'Untitled')));
   ct.appendChild(mk('p','cr-cover-p',lppEsc(meta.sub)));
   ct.appendChild(mk('p','cr-cover-p','IBC 2021 §1807.3 · ASCE/SEI 7-22 · ACI 318-19 · AISC 360-16'));
+  ct.appendChild(mk('p','cr-cover-p',lppEsc($('lppScope')?$('lppScope').textContent:'')));
   ct.appendChild(mk('p','cr-cover-p','Light Pole and Sign Post, by Mario Lococo · '+lppEsc(new Date().toLocaleString())));
   cover.appendChild(ct);
   const hg=mk('div','rptHdrGrid');
