@@ -1489,7 +1489,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Before (origin/main, 1280 px):** page width 1528 px on Loading, 1303 px on Anchors, 1319 px on Calc sheet (long display equations). **After:** 1280 px on every tab; 390 px unchanged (390).
 - **How verified:** headless Chromium, every output tab at 1280 and 390 px (scratchpad lplayout.mjs; screenshots shots-lp/pr13-*); `node tests/lightpole-compare.mjs --a origin/main`: all 14 cases identical (results, cable values, text, drawings); 0 console errors.
 
-## 2026-11-01 — PR: claude/lp-pr14-breakout (LP-14: concrete breakout in the ACI 318-19 group form; engineer answer 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #602: claude/lp-pr14-breakout (LP-14: concrete breakout in the ACI 318-19 group form; engineer answer 2026-11-01)
 
 ### LP14-1. Tension breakout: ΣN_ua of the tension anchors ≤ φN_cbg   [calc change] [less conservative = the code form]
 - **Engineer answer (2026-11-01, open question of LP-4):** use the group form with ψ_ec,N for eccentricity instead of T_max·n_T.
@@ -1508,3 +1508,11 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Check case (the engineer's: default pole before the arm wind of LP-7, M_u 19,949 lb·ft, 1.2D + 1.0W, wind toward 0°):** ΣT = 19,401 lb, φN_cbg = 22,323 lb → **0.87** (Node test at exactly 0°: 19,405 / 22,408 = 0.866). Before: T_max / (φN_cbg/n_T) = 9,791 / (22,323/3) = 1.32.
 - **Current default (with arm wind, governing combination at the max-moment azimuth):** ΣT = 19,130, φN_cbg = 19,641 → **0.974** OK (before 1.475 NG). Other cases (tension ratio before → after): square shaft 2.257 → 1.493; 1½ in rods 0.843 → 0.515; torsion case 0.870 → 0.573; monopost 2.539 → 1.688 (interaction 2.812 → 1.961); two-post 2.912 → 1.938.
 - **How verified:** `node tests/engine/run.mjs lightpole` 22 passed (2 new tests); `node tests/lightpole-compare.mjs --a origin/main`: only the anchor tension chain changes (phiNn, tr, trAnc, trBrk, tgov, inter, interOK and the check rows); cable values identical; 0 console errors.
+
+## 2026-11-01 — PR: claude/lp-pr15-bpnote (LP-15: base-plate "verify method" note; display only; engineer answer 2026-11-01; PR link added after merge)
+
+### LP15-1. Base-plate verification note   [display] [no result change]
+- **Engineer answer (2026-11-01):** keep b_eff = πD/n; add a clear on-screen and report note "verify method / article (LRFDLTS 2nd Ed.)" on the base-plate check, listing the unverified items.
+- **Where:** new constant `LPP_BP_VERIFY` (above `function lppOffAxisFixtures(`); shown in the Summary "not checked" box (every stack with anchors), in `boltWorkedHTML()` step 8 (Anchors tab and the Calc sheet, as a highlighted box), and in the shared Report (base-plate note, warn; Assumptions).
+- **Text:** "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: (1) the governing article number; (2) the effective-width rule (b_eff = πD/n at the pole face is used; for square/rectangular poles the same πB/n is used, no flat-face rule); (3) anchor-rod bending in the double-nut standoff is not checked; (4) the minimum plate thickness rules of LRFDLTS are not checked."
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; text adds the note (Summary, Anchors, Calc sheet). Report: 0 unresolved references, 0 KaTeX errors, no NaN, 0 console errors (default pole, two-post sign, torsion, 60 ft pole at 1280 / 390 px).

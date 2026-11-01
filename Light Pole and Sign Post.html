@@ -2118,6 +2118,8 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
           M_cable:Math.hypot(cMx,cMy), M_pole:poleWindM};
 }
 
+// Base-plate method note (engineer, 2026-11-01): keep b_eff = πD/n; state clearly what is not verified / not checked.
+const LPP_BP_VERIFY='VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: (1) the governing article number; (2) the effective-width rule (b_eff = πD/n at the pole face is used; for square/rectangular poles the same πB/n is used, no flat-face rule); (3) anchor-rod bending in the double-nut standoff is not checked; (4) the minimum plate thickness rules of LRFDLTS are not checked.';
 // Fixtures on an arm (a > 0) whose plan azimuth θ is not on one of the four wind axes (2026-11-01, engineer decision on
 // LP-R1: the four directions are kept; a warning is shown instead of a sweep). Arms and fixtures only (cables excluded,
 // engineer 2026-11-01). Returns [{i, th}] (i is 1-based).
@@ -2934,6 +2936,7 @@ function summaryHTML(ctx){
   if(natL.some(x=>!(x.n1>=1.0)))
     warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
   if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
+  if(stacks.some(st=>st.found&&st.found.bolts)) warnL.push('<b>Base plate:</b> '+lppEsc(LPP_BP_VERIFY));
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push((mode==='sign'?'Monopost torsion from the eccentric sign wind (Cases B/C)':'Torsion from the wind on offset fixtures and arms')+': the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
@@ -5036,6 +5039,7 @@ function boltWorkedHTML(bo,inp){
   H+=g(`C_{max} = \\frac{M_u\\,|y|}{\\sum y_i^2}+\\frac{P_u}{n} = ${fmt(bp.Cmax,0)}\\ \\text{lb}\\qquad P_{rod} = \\max(T_{max},C_{max}) = \\max(${fmt(bp.Tmax,0)},\\ ${fmt(bp.Cmax,0)}) = ${fmt(bp.Prod,0)}\\ \\text{lb}`);
   H+=g(`m = \\frac{BC-D_{pole}}{2} = \\frac{${fmt(bp.BC,2)}-${fmt(bp.Dpole,2)}}{2} = ${fmt(bp.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,D_{pole}}{n} = \\frac{\\pi(${fmt(bp.Dpole,2)})}{${bp.n}} = ${fmt(bp.beff,3)}\\text{ in}`);
   H+=g(`t_{p,req} = \\sqrt{\\frac{4\\,P_{rod}\\,m}{\\phi_f\\,F_y\\,b_{eff}}} = \\sqrt{\\frac{4(${fmt(bp.Prod,0)})(${fmt(bp.m,2)})}{0.9(${fmt(bp.Fyp*1000,0)})(${fmt(bp.beff,3)})}} = ${fmt(bp.tpReq,3)}\\text{ in}`);
+  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lppEsc(LPP_BP_VERIFY)}</div>`;
   H+=`<p class="eq-result">t<sub>req</sub> = ${fmt(bp.tpReq,3)} in ${bp.tpOK?'≤':'&gt;'} t<sub>provided</sub> = ${fmt(bp.tpProv,3)} in → <b>${bp.tpOK?'PASS':'FAIL'}</b> (M<sub>u</sub>/φM<sub>n</sub> = (t<sub>req</sub>/t)² = ${fmt(Math.pow(bp.tpReq/bp.tpProv,2),3)}).</p>`;
 
   // 9 — minimum spacing and edge distance (geometry; independent of the load combination)
@@ -6692,6 +6696,7 @@ function lprModel(){
         S({id:'beff',label:'Effective width per rod at the pole face',sym:'b_{eff}',eq:'\\frac{\\pi D}{n}',sub:'\\frac{\\pi('+N(p.Dpole)+')}{'+p.n+'}',value:p.beff,unit:'in',d:3}),
         S({id:'t',label:'Required thickness',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi F_{y}b_{eff}}}',sub:'\\sqrt{\\frac{4('+N(p.Prod,0)+')('+N(p.m)+')}{0.9('+N(p.Fyp*1000,0)+')('+N(p.beff,3)+')}}',value:p.tpReq,unit:'in',d:3}),
         S({id:'dc',label:'Provided t = '+N(p.tpProv,3)+' in',sym:'(t_{req}/t)^{2}',eq:'',sub:'',value:Math.pow(p.tpReq/p.tpProv,2),unit:'',d:3,ok:!!p.tpOK})]}]),
+        {type:'note',warn:true,text:LPP_BP_VERIFY},
         {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17): every limit state, worked, on the [[tab:anchors|Anchors tab]]; the checks are listed in §2.'}]});
     });
     if(subs.length) secs.push({title:'Base plate and anchors',subs});
@@ -6734,7 +6739,7 @@ function lprModel(){
       'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
       'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
       'Anchor shear breakout (§17.7.2) and side-face blowout (§17.6.4) are not checked; the soil torsional resistance is not checked.',
-      'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base (article to be confirmed).',
+      'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base. '+LPP_BP_VERIFY,
       'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>({type:'note',text:t}))},
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:LPP_REFS.map(([a,b])=>[lprPlain(a),lprPlain(b)])}]}]});
   return {title:($('appTitle')?$('appTitle').textContent:'Light Pole and Sign Post')+' — Calculation Report',subtitle:activeProject||'Untitled',code:'IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19',
