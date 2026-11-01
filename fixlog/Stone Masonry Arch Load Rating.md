@@ -672,3 +672,374 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   - **Live Load tab, "Worked example — node …, the most heavily loaded node"** (anchor `const reg=ARCH.llRegime(M,xa);` in `liveLoadSection`). Every axle with `reg.conc` is worked as a concentrated strip load, even when a spread credit (1.15H or 1.75H) is in force and the solver spreads it. Already so on main for any credit; this change does not affect it. The printed contributions can differ from the solver's nodal load when a credit is selected.
   - **Node worked calculation (Nodal Results), note on 6.4.1 axles** (anchor `axles land on cover shallower than`). It says those axles are "not dispersed through the fill" even when a credit spreads them. Wording only; already so on main.
   - **Live Load figure with mixed regimes:** the figure still takes the rate of the first 6.4.1 axle for the whole cut, now corrected only by the node's own cover (item 5).
+
+## 2026-11-01 — PR: claude/rpt-stonearch — Report output tab in the shared report viewer (ARPT; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `ARPT`.
+
+### ARPT. "Report" output tab (shared/report.js, shared/steps.js)   [display only]
+- **Engineer request (2026-11-01, report rollout):** a Report output tab in the shared viewer used by the Steel Bridge app and Spread Footing: navigation tree to topic level, numbered sections §n.m, worked steps (equation → substituted values → result, CLAUDE.md §6), steps grouped by topic, "see §x.y" links and links back to the tabs, print with a title block (no owner cell), running header and page numbers.
+- **Loads:** `<script src="shared/steps.js">` and `<script src="shared/report.js">` (classic scripts, relative path) after the CDN libraries. The tool now needs the `shared` folder next to it. Without it only the Report tab shows a message; every other tab is unaffected. KaTeX 0.16.9 (already loaded by the tool) sets the worked steps.
+- **How the model is made (nothing recomputed):**
+  - `R.step()` / `R.eqLine()` (anchor `function cap(o){`): while `window.__archRptCap` is an array (only while the Report tab builds), each call also records its own arguments (label, ref, sym, sub, res, units, note) and tags its div `data-cap="<index>"`. Otherwise the returned HTML is byte-for-byte as before.
+  - `archReportModel(p)` calls `buildOutput(p)` once more (and `ratingSummary(p)`, which the Rating Summary tab builds on demand) with the recorder on, puts the panes in an off-screen box, draws the figures with the D11 report's own calls (`VEHTAB.draw`, `MODELFIG.draw`, `drawReportFigures`), and walks the panes in order: tab → section, top-level panel → subsection, h3/h4/h5 heading or nested panel → topic (an h5 directly over a table becomes the table's caption), step → `SharedSteps` step, table → table (more than 14 rows: closed, `lazy`), message box / note / paragraph / list → note, figure → SVG figure.
+  - A step's value is the result exactly as the tab prints it (`res`): a plain number becomes the value with the same decimals; anything else (a pair, an inequality, text) stays in the substitution line, as on the tab. Units of a non-numeric result are written as the tab writes them.
+  - "Worked in" links (`a.wkA`) and the dashboard's jump links become "see §x.y" (the first worked step of that panel, when it has one) plus a link back to the tab and panel (`archGoto`).
+  - TeX in running text (notes, table cells, titles) goes through the SharedSteps built-in renderer (shared/report.js), so `arptTex()` writes the few commands outside its subset in it (`\dfrac`→`\frac`, `\mathbf{x}`→x, `\quad`→thin space, `\Phi`→Φ, …). Worked steps keep their TeX (KaTeX).
+- **Sections:** 1 Project and inputs (the D11 input echo, `archInputRows`), 2 Summary, 3 Model, 4 Dead Load, 5 Live Load, 6 Vehicles, 7 Earth Pressure, 8 Diagrams, 9 Influence Lines, 10 Rating, 11 Rating Summary, 12 Nodal Results, 13 Verification, 14 References (`ARCH_REFS`). The Manual is not repeated (link to the Manual tab).
+- **Refactor (no result change):** the input-echo rows of `buildReport` moved unchanged into `archInputRows(p)`; `buildReport` and the Report tab both call it. Checked: D11 print report text identical main vs branch on 4 projects.
+- **Print:**
+  - The viewer's "Print report" button prints the report alone: title block Project / Project No. (—, the tool has no such field) / Subject / Computed by / Date / Task / Checked by / Checked date / Program (no owner cell), cover, contents, running header "Project No. — — <subject>" / "Computed … · Checked …", footer and "Page X of Y".
+  - Ctrl+P while the Report tab is shown prints the report too; `archRptWillPrint()` makes the D11 `beforeprint` handler stand aside, and the D11 `@page` style (`#arch-page`, if a D11 report was built earlier) is emptied for that print and restored after.
+  - The "Print / PDF Report" button (report modal) still prints the D11 report, also from the Report tab (`window.__archD11Print`). From any other tab Ctrl+P prints the D11 report as before.
+- **Saved data:** nothing new is saved. `activeTab` may now be `"rpt"` (saved in the existing `tab` field of the autosave / project file, as for any tab); an older copy of the tool opening such a file shows no tab selected until a tab is clicked. The viewer's collapsed sections are kept in memory only (`ARPT.closed`).
+- **Shared file:** `shared/report.js` gains two backward-compatible options (see `fixlog/shared-report.md`, 2026-11-01): `topic` on any item, `lazy` on a table.
+- **How verified (headless Chromium, pinned KaTeX 0.16.9 and Plotly 2.27.0 served locally):** see the PR description for the counts. Per project (default; pinned parabolic 60/12 ft, 20 elements, 2% grade, rating at each vehicle's own section; adverse influence + local impact + Bernoulli + 20/30 in ring + K = 0.4; railroad loading):
+  - 0 unresolved or duplicate references, 0 KaTeX errors, no NaN / undefined in `SharedReport.text()`, 0 console errors;
+  - the rating factor, rating in tons and gross weight of every vehicle, n_el, the number of load cases and n_dof in the report equal the app's (`results`, `secResults` at the selected section, `M`);
+  - main vs branch: the text of every other tab is identical, also after the Report tab has been built; the D11 print report text is identical (the Rating Summary's "Computed in x s" timing note is masked: it depends on machine load);
+  - Ctrl+P on the Report tab: `body.rp-printing`, the report alone, the shared running header, no D11 header (PDF checked).
+  - `node tests/check-syntax.mjs "Stone Masonry Arch Load Rating.html"` passes; `node tests/engine/run.mjs report steps steps-groups report-wiring` passes.
+- **Other copies:** none. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
+- **Open items:**
+  - At 390 px the tool's two-panel layout does not stack, so the Report tab (like every tab) scrolls sideways; existing layout, not changed here (separate 390 px PR).
+  - Building the report takes about 3 to 5 s (the panes are built a second time with the recorder on, ~2.4 MB of HTML); it is rebuilt on each input change only while the Report tab is shown.
+  - Step values are the tab's printed results (rounded as printed), not full precision: the tool's `step()` receives formatted strings. Changing every call site to pass the number is a larger change; ask the engineer if wanted.
+  - The tool's references carry "Edition: verify" for the MassDOT manual, MBE, Std. Spec. and AREMA (unchanged; listed in §14 of the report).
+
+Diff (`Stone Masonry Arch Load Rating.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Stone Masonry Arch Load Rating.html b/Stone Masonry Arch Load Rating.html
+index 6ad01f0..62d34a2 100644
+--- a/Stone Masonry Arch Load Rating.html	
++++ b/Stone Masonry Arch Load Rating.html	
+@@ -9,0 +10,3 @@
++<!-- ARPT: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -2755,0 +2759,8 @@ function setKatexReady(){katexReady=!!window.katex;}
++/* ARPT (2026-11-01): while the Report tab builds its model (window.__archRptCap is an array), every step and
++   equation line is also recorded as given (label, ref, sym, sub, res, units, note) and its div is tagged with the
++   record's index (data-cap), so the Report tab shows the same worked lines as the tabs. Otherwise nothing changes. */
++function cap(o){
++  const c=window.__archRptCap; if(!Array.isArray(c))return "";
++  c.push({label:o.label,ref:o.ref,sym:o.sym,sub:o.sub,res:o.res,units:o.units,note:o.note});
++  return ` data-cap="${c.length-1}"`;
++}
+@@ -2774 +2785 @@ function step(o){
+-  return `<div class="step">
++  return `<div class="step"${cap(o)}>
+@@ -2782 +2793 @@ function eqLine(label,e,ref,note){
+-  return `<div class="step">
++  return `<div class="step"${cap({label,sym:e,ref,note})}>
+@@ -11449 +11460 @@ const TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Loa
+-            ["ver","Verification"],["man","Manual"]];
++            ["ver","Verification"],["rpt","Report"],["man","Manual"]];   /* rpt: ARPT Report tab */
+@@ -11569,0 +11581 @@ function render(){
++  if(activeTab==="rpt")archRenderReport(p);   /* ARPT */
+@@ -12651,0 +12664 @@ window.addEventListener("beforeprint",()=>{
++  if(archRptWillPrint())return;   /* ARPT: the Report tab prints itself (shared/report.js) */
+@@ -12676,0 +12690 @@ function reportModal(){
++    window.__archD11Print=true;   /* ARPT: this print is the D11 report, also when the Report tab is shown */
+@@ -12880,28 +12894,3 @@ function archCalcSheet(rh){
+-function buildReport(sel){
+-  const p=readP();
+-  const t=id=>$(id)?esc($(id).value||"—"):"—";
+-  let n=0; const N=()=>++n;
+-  /* D11 (2026-10-18): cover page with the title block (it was the #rptHead box at the top of page 1).
+-     The tool has no project-number field, so Project No. prints "—". The controlling line repeats the
+-     dashboard's controlling result (same values). */
+-  const gvC=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
+-  const vC=gvC?ARCH.ALL_VEHICLES.find(x=>x.id===gvC.id):null;
+-  let h=`<section class="cr-cover"><div class="cr-cover-t">
+-      <h1>Stone Masonry Arch Load Rating</h1>
+-      <p>${$("tbProject")&&$("tbProject").value?esc($("tbProject").value):"Untitled"}</p>
+-      ${$("tbSubject")&&$("tbSubject").value?`<p class="cr-cover-p">${esc($("tbSubject").value)}</p>`:""}
+-      <p class="cr-cover-p">Allowable Stress Method, Inventory Level &middot; MassDOT Bridge Manual Part I §7.2.7 &middot;
+-        AASHTO MBE Art. 6A.9.1 &middot; ${p.loadMode==="rail"?"AREMA Ch. 8 (railroad loading)":"AASHTO Std. Spec. Art. 6.4, 3.8.2.3"}
+-        &middot; by Mario Lococo</p>`+
+-    (gvC?`<p class="cr-cover-p">Controlling result: <b>${esc(vC.name)}, RF = ${nfx(gvC.rf,3)}</b>
+-        (${nfx(gvC.tons,1)} tons${vC.eRef?`, E${(gvC.rf*vC.eRef).toFixed(0)}`:""}) at section ${esc(CALC.secTag(M,gvC.sec))}
+-        &mdash; <b>${gvC.rf>=1?"all selected vehicles rate at or above 1.0":"at least one vehicle rates below 1.0"}</b></p>`:"")+
+-    `</div>
+-    <table class="cr-tb"><tr><td><b>Project:</b> ${t("tbProject")}</td><td><b>Project No.:</b> —</td><td><b>Subject:</b> ${t("tbSubject")}</td></tr>
+-    <tr><td><b>Computed by:</b> ${t("tbBy")}</td><td><b>Date:</b> ${t("tbDate")}</td><td><b>Task:</b> ${t("tbTask")}</td></tr>
+-    <tr><td><b>Checked by:</b> ${t("tbChk")}</td><td><b>Checked date:</b> ${t("tbChkDate")}</td><td><b>Program:</b> Stone Arch LR ${BUILD_ID}</td></tr></table>
+-    </section><div class="rpt">`;
+-
+-  const sec=(title,body,cid)=>`<h2${cid?` data-cid="${cid}"`:""}>${N()}. ${title}</h2>${body}`;
+-
+-  if(sel.r_inputs){
++/* The input echo: one row per input as entered, {k, v, u} (moved unchanged from buildReport, ARPT 2026-11-01;
++   the D11 print report and the Report tab both call it). */
++function archInputRows(p){
+@@ -13019,0 +13009,31 @@ function buildReport(sel){
++  return rows;
++}
++function buildReport(sel){
++  const p=readP();
++  const t=id=>$(id)?esc($(id).value||"—"):"—";
++  let n=0; const N=()=>++n;
++  /* D11 (2026-10-18): cover page with the title block (it was the #rptHead box at the top of page 1).
++     The tool has no project-number field, so Project No. prints "—". The controlling line repeats the
++     dashboard's controlling result (same values). */
++  const gvC=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
++  const vC=gvC?ARCH.ALL_VEHICLES.find(x=>x.id===gvC.id):null;
++  let h=`<section class="cr-cover"><div class="cr-cover-t">
++      <h1>Stone Masonry Arch Load Rating</h1>
++      <p>${$("tbProject")&&$("tbProject").value?esc($("tbProject").value):"Untitled"}</p>
++      ${$("tbSubject")&&$("tbSubject").value?`<p class="cr-cover-p">${esc($("tbSubject").value)}</p>`:""}
++      <p class="cr-cover-p">Allowable Stress Method, Inventory Level &middot; MassDOT Bridge Manual Part I §7.2.7 &middot;
++        AASHTO MBE Art. 6A.9.1 &middot; ${p.loadMode==="rail"?"AREMA Ch. 8 (railroad loading)":"AASHTO Std. Spec. Art. 6.4, 3.8.2.3"}
++        &middot; by Mario Lococo</p>`+
++    (gvC?`<p class="cr-cover-p">Controlling result: <b>${esc(vC.name)}, RF = ${nfx(gvC.rf,3)}</b>
++        (${nfx(gvC.tons,1)} tons${vC.eRef?`, E${(gvC.rf*vC.eRef).toFixed(0)}`:""}) at section ${esc(CALC.secTag(M,gvC.sec))}
++        &mdash; <b>${gvC.rf>=1?"all selected vehicles rate at or above 1.0":"at least one vehicle rates below 1.0"}</b></p>`:"")+
++    `</div>
++    <table class="cr-tb"><tr><td><b>Project:</b> ${t("tbProject")}</td><td><b>Project No.:</b> —</td><td><b>Subject:</b> ${t("tbSubject")}</td></tr>
++    <tr><td><b>Computed by:</b> ${t("tbBy")}</td><td><b>Date:</b> ${t("tbDate")}</td><td><b>Task:</b> ${t("tbTask")}</td></tr>
++    <tr><td><b>Checked by:</b> ${t("tbChk")}</td><td><b>Checked date:</b> ${t("tbChkDate")}</td><td><b>Program:</b> Stone Arch LR ${BUILD_ID}</td></tr></table>
++    </section><div class="rpt">`;
++
++  const sec=(title,body,cid)=>`<h2${cid?` data-cid="${cid}"`:""}>${N()}. ${title}</h2>${body}`;
++
++  if(sel.r_inputs){
++    const rows=archInputRows(p);   /* ARPT: the input echo rows, shared with the Report tab (moved unchanged) */
+@@ -13143,0 +13164,235 @@ function buildReport(sel){
++/* ================= Report tab (ARPT, 2026-11-01) =================
++   The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse /
++   expand, search, Print with a title block, running header and page numbers; worked steps through shared/steps.js).
++   Nothing is computed here. The model is read from what the tabs themselves show: buildOutput(p) is called once more
++   with window.__archRptCap set, so every step() / eqLine() records its own label, reference, symbolic form,
++   substitution, result, units and note (R.step, ARPT) and tags its div; the panes' HTML is then walked in order:
++     tab -> report section, top-level panel -> subsection, panel heading h4 / h5 / nested panel -> topic,
++     step -> SharedSteps step (value: the result as the tab prints it), table -> table (long ones closed, lazy),
++     message box / note / paragraph -> note, figure -> SVG figure (drawn by the same functions as the D11 report).
++   "Worked in" links become "see §x.y" links (when the panel has worked steps in the report) and links back to the tab.
++   Nothing is saved: the viewer's collapsed sections are kept in memory only (ARPT.closed). */
++const ARPT={closed:new Set(),api:null,doc:null};
++const ARPT_TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Load"],["veh","Vehicles"],["lat","Earth Pressure"],
++  ["diag","Diagrams"],["il","Influence Lines"],["rate","Rating"],["rsum","Rating Summary"],["nodes","Nodal Results"],["ver","Verification"]];
++/* TeX for the report's running text (titles, notes, table cells): shared/report.js sets it with the SharedSteps built-in
++   renderer (a TeX subset), so the few commands outside that subset are written in it. Worked steps keep their TeX as is
++   (KaTeX). */
++function arptTex(t){
++  let s=String(t==null?"":t);
++  for(let k=0;k<3;k++)s=s.replace(/\\(?:mathbf|boldsymbol|mathit|bm)\{([^{}]*)\}/g,"$1").replace(/\\(?:mathrm|mathsf|textrm|textbf|textit|operatorname)\{([^{}]*)\}/g,"\\text{$1}")
++    .replace(/\\hat\{([^{}]*)\}/g,"$1̂").replace(/\\(?:tilde|vec|dot)\{([^{}]*)\}/g,"$1");
++  return s.replace(/\\[dt]frac/g,"\\frac").replace(/\\(?:q?quad|enspace|;|:|!)/g,"\\,").replace(/\\(?:big|Big|bigg|Bigg)[lr]?/g,"")
++    .replace(/\\neq\b/g,"\\ne").replace(/\\leq\b/g,"\\le").replace(/\\geq\b/g,"\\ge").replace(/\\Rightarrow\b/g,"\\to").replace(/\\rightarrow\b/g,"\\to")
++    .replace(/\\displaystyle|\\limits|\\nolimits/g,"").replace(/\\equiv\b/g,"≡").replace(/\\forall\b/g,"∀").replace(/\\int\b/g,"∫")
++    .replace(/\\(Phi|nu|kappa|xi|zeta|Gamma|Lambda|Omega|Pi|Theta|varphi|epsilon|varepsilon)\b/g,(m,x)=>({Phi:"Φ",nu:"ν",kappa:"κ",xi:"ξ",zeta:"ζ",Gamma:"Γ",Lambda:"Λ",Omega:"Ω",Pi:"Π",Theta:"Θ",varphi:"φ",epsilon:"ε",varepsilon:"ε"}[x]))
++    .replace(/\\%/g,"%").replace(/\$/g,"");
++}
++/* the text of an inline run: KaTeX back to $source$, <sub>/<sup> as _{…}/^{…}, "Worked in" links as § / tab links; no $ of its own */
++function arptInline(n,ctx){
++  if(n.nodeType===3)return n.textContent.replace(/\$/g,"").replace(/\[\[/g,"[ [");
++  if(n.nodeType!==1)return "";
++  const e=n, cl=e.classList;
++  if(cl.contains("katex")||cl.contains("katex-display")){const a=e.querySelector("annotation");return a?"$"+arptTex(a.textContent)+"$":e.textContent;}
++  if(cl.contains("noprint")||/^(SELECT|INPUT|BUTTON|TEXTAREA|SCRIPT|STYLE|SVG|svg)$/.test(e.tagName))return "";
++  if(e.tagName==="BR")return " ";
++  if(e.tagName==="SUB"||e.tagName==="SUP"){const t=e.textContent.replace(/[$\\{}]/g,"").trim();return t?"$"+(e.tagName==="SUB"?"_":"^")+"{\\text{"+t+"}}$":"";}
++  if(e.tagName==="A"&&cl.contains("wkA")){
++    const tab=e.getAttribute("data-wtab")||"", card=e.getAttribute("data-wcard")||"", txt=e.getAttribute("data-txt");
++    const lab=e.textContent.split(" → ").pop().replace(/[|\]\[]/g," ");
++    ctx.links.push(card);
++    return (txt?txt.replace(/[\[\]|]/g," ")+": ":"")+"⟦card:"+card+"⟧ [[tab:"+tab+"~"+card+"~"+(e.getAttribute("data-wsub")||"").replace(/[~|\]\[]/g," ")+"|"+lab+"]]";
++  }
++  if(e.tagName==="A"&&cl.contains("jump")&&e.getAttribute("data-go")){
++    const card=e.getAttribute("data-go"); ctx.links.push(card);
++    return [...e.childNodes].map(c=>arptInline(c,ctx)).join("")+" ⟦card:"+card+"⟧";
++  }
++  return [...e.childNodes].map(c=>arptInline(c,ctx)).join("");
++}
++const arptClean=s=>String(s||"").replace(/\s+/g," ").replace(/\$\s*\$/g,"").trim();
++const ARPT_INLINE=/^(B|I|EM|STRONG|SPAN|A|SUB|SUP|CODE|SMALL|U|BR|KBD|SAMP|ABBR|MARK|S|Q|LABEL)$/;
++/* a recorded step -> a SharedSteps step. The value is the result exactly as the tab prints it: a plain number becomes a
++   number shown with the same decimals; anything else (a pair, an inequality, text) stays in the substitution line. */
++function arptStep(o,id){
++  const res=o.res==null?"":String(o.res).trim(), num1=/^-?\d+(\.\d+)?$/.test(res);
++  let sub=o.sub==null?"":String(o.sub);
++  if(res&&!num1)sub=sub?sub+" = "+res:res;
++  const u=o.units?String(o.units).replace(/\\cdot\s*/g,"-").replace(/·/g,"-").replace(/\\;/g,",\\ "):"";
++  let sym=o.sym||"";
++  if(u&&!num1){if(sub)sub+="\\ \\text{"+u+"}";else sym+="\\ \\text{"+u+"}";}   /* units of a non-numeric result: as the tab writes them */
++  const d=num1?(res.split(".")[1]||"").length:2;
++  const nt=document.createElement("div"); nt.innerHTML=o.note||"";
++  return SharedSteps.step({id,label:String(o.label||"").trim()||"Step",sym,eq:"",sub,value:num1?+res:null,unit:num1?u:"",d,
++    ref:o.ref||"",note:arptClean(nt.textContent).replace(/§(?=[A-Za-z])/g,"§ ")});
++}
++const arptSlug=s=>String(s||"").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,36)||"step";
++/* a table element -> a report table (header: the last header row; badges -> cell status) */
++function arptTable(t,ctx){
++  const cell=c=>{const o={t:arptClean(arptInline(c,ctx))};
++    if(c.classList.contains("num")||c.classList.contains("v"))o.n=true;
++    const bd=c.querySelector(".badge"); if(bd)o.cls=bd.classList.contains("b-ok")?"ok":bd.classList.contains("b-bad")?"ng":bd.classList.contains("b-wn")?"hi":"na";
++    if(c.colSpan>1)o.span=c.colSpan; return o;};
++  const hr=t.tHead?[...t.tHead.rows]:[], body=[...t.querySelectorAll(":scope>tbody>tr,:scope>tfoot>tr,:scope>tr")];
++  let head=hr.length?[...hr[hr.length-1].cells].map(cell):[], rows=[];
++  hr.slice(0,-1).forEach(r=>rows.push({cells:[...r.cells].map(cell),cls:"gov"}));
++  if(!head.length&&body.length&&[...body[0].cells].every(c=>c.tagName==="TH")){head=[...body.shift().cells].map(cell);}
++  body.forEach(r=>{if(r.classList.contains("noprint"))return;const cs=[...r.cells].map(cell);if(!cs.length)return;
++    rows.push(r.classList.contains("gv")||r.classList.contains("rsGovRow")||r.classList.contains("sel")?{cells:cs,cls:"gov"}:cs);});
++  if(!head.length&&!rows.length)return null;
++  const it={type:"table",head,rows,wide:(head.length||0)>4};
++  return it;
++}
++/* one panel body -> items; topics at h3 / h4 / h5 and nested panels */
++function arptItems(body,scope,cap,ctx){
++  const items=[], ids=new Map();
++  let buf="", run=null, pend=null, tp=null, no=0, last=null, capt="";
++  const push=it=>{if(pend){it.topic=pend;pend=null;}items.push(it);last=it;return it;};
++  const flushTxt=()=>{const t=arptClean(buf);buf="";if(t)push({type:"note",text:t});};
++  const endRun=()=>{run=null;};
++  const topic=title=>{flushTxt();endRun();const t=arptClean(title);if(!t)return;no++;tp={no,title:t,steps:[]};ctx.topics.push(tp);pend=tp;};
++  const addStep=div=>{
++    flushTxt();
++    const k=+div.getAttribute("data-cap"), o=cap[k]; if(!o)return;
++    const base=arptSlug(o.label), n=(ids.get(base)||0)+1; ids.set(base,n);
++    const st=arptStep(o,base+(n>1?"-"+n:""));
++    if(!run){run={type:"steps",scope,steps:[]};push(run);}
++    run.steps.push(st); if(tp)tp.steps.push(st);
++    if(!ctx.first)ctx.first=SharedReport.keyOf(scope,st.id);
++  };
++  const walk=el=>{
++    for(const n of [...el.childNodes]){
++      if(n.nodeType!==1){buf+=arptInline(n,ctx);continue;}
++      const e=n, cl=e.classList, tag=e.tagName;
++      if(cl.contains("noprint")||cl.contains("btnrow")||cl.contains("figbar")||/^(SELECT|INPUT|BUTTON|TEXTAREA|SCRIPT|STYLE)$/.test(tag))continue;
++      if(cl.contains("step")){addStep(e);continue;}
++      if(cl.contains("pnl")||cl.contains("sub")){const hd=e.querySelector(":scope>.hd"), sp=hd&&hd.children[1];
++        topic((sp?sp.textContent:hd?hd.textContent:"").replace(/^\d+(\.\d+)*\.\s*/,""));
++        const tg=hd&&hd.querySelector(".tag"); if(tg&&arptClean(tg.textContent)&&arptClean(tg.textContent)!=="—")buf+=arptClean(tg.textContent)+" ";
++        if(e.id)ctx.cards.push(e.id);
++        const bd=e.querySelector(":scope>.bd"); if(bd)walk(bd); flushTxt(); continue;}
++      if(/^H[56]$/.test(tag)&&e.nextElementSibling&&(e.nextElementSibling.tagName==="TABLE"||e.nextElementSibling.querySelector(":scope>table"))){flushTxt();endRun();capt=arptClean(arptInline(e,ctx));continue;}   /* a minor heading over a table: its caption */
++      if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx));continue;}
++      if(tag==="TABLE"){flushTxt();endRun();const t=arptTable(e,ctx);if(t){if(capt){t.caption=capt;capt="";}if(t.rows.length>14){t.lazy=true;t.title=(t.caption||(tp?tp.title:"Table"))+" (table)";}push(t);}continue;}
++      if(tag==="FIGURE"){flushTxt();endRun();const sv=e.querySelector("svg"), fc=e.querySelector("figcaption");
++        if(sv&&sv.childNodes.length){const c=sv.cloneNode(true);c.removeAttribute("id");c.setAttribute("style","width:100%;height:auto");
++          push({type:"figure",svg:c.outerHTML,caption:fc?arptClean(arptInline(fc,ctx)):""});}
++        else if(fc)push({type:"note",text:"Figure (interactive, on the tab): "+arptClean(arptInline(fc,ctx))});
++        continue;}
++      if(cl.contains("msg")){flushTxt();endRun();const b=e.querySelector(":scope>b");let t="";
++        [...e.childNodes].forEach(c=>{t+=(c===b?arptInline(c,ctx)+": ":c.nodeType===1&&!ARPT_INLINE.test(c.tagName)?" "+arptInline(c,ctx)+" ":arptInline(c,ctx));});
++        t=arptClean(t).replace(/:\s*:/,":");if(t)push({type:"note",text:t,warn:cl.contains("m-err")||cl.contains("m-wrn")});continue;}
++      if(tag==="UL"||tag==="OL"){flushTxt();endRun();[...e.children].forEach((li,i)=>{const t=arptClean(arptInline(li,ctx));if(t)push({type:"note",text:(tag==="OL"?(i+1)+". ":"• ")+t});});continue;}
++      if(cl.contains("wkLink")){buf+=" "+arptInline(e,ctx).replace(/^\s*Worked in:\s*/,"Worked in: ")+" ";continue;}
++      if(ARPT_INLINE.test(tag)){buf+=arptInline(e,ctx);continue;}
++      if(tag==="P"||cl.contains("note")||tag==="PRE"||tag==="BLOCKQUOTE"){flushTxt();endRun();const t=arptClean(arptInline(e,ctx));if(t)push({type:"note",text:t});continue;}
++      flushTxt(); walk(e); flushTxt();
++    }
++  };
++  walk(body); flushTxt();
++  if(pend&&last){/* a heading with nothing under it */ }
++  return items;
++}
++/* the topic results (SharedSteps.group: the status chip and one-line result of its worked steps) */
++function arptTopics(ctx){
++  ctx.topics.forEach(t=>{if(!t.steps.length)return;
++    const g=SharedSteps.group(t.steps,[{key:"k",title:t.title,ids:()=>true}],{strip:false})[0];
++    t.res=g.res;t.chip=g.chip;t.cls=g.cls;delete t.steps;});
++  ctx.topics.forEach(t=>{delete t.steps;});
++}
++/* the panes of the tabs -> report sections (figures drawn as for the D11 report) */
++function archReportModel(p){
++  const cap=[];
++  let panes;
++  window.__archRptCap=cap;
++  try{panes=buildOutput(p);panes.rsum=ratingSummary(p);}finally{window.__archRptCap=null;}
++  const stage=document.createElement("div");
++  stage.setAttribute("aria-hidden","true");
++  stage.style.cssText="position:absolute;left:-12000px;top:0;width:1000px;visibility:hidden;";
++  document.body.appendChild(stage);
++  const secs=[], cardKey={}, ctxAll=[];
++  try{
++    stage.innerHTML=ARPT_TABS.map(t=>`<div data-arpt="${t[0]}">${panes[t[0]]||""}</div>`).join("");
++    /* figures: the same drawing calls as the D11 report (static SVG, no Plotly) */
++    stage.querySelectorAll("[id^='figVeh_']").forEach(sv=>{const v=ARCH.ALL_VEHICLES.find(q=>q.id===sv.id.replace("figVeh_",""));if(v){try{VEHTAB.draw(sv,v);}catch(e){}}});
++    stage.querySelectorAll("[id='figModel']").forEach(sv=>{try{const veh=ARCH.ALL_VEHICLES.find(v=>v.id===animVehId)||ARCH.vehiclesFor(M.p.loadMode)[0];
++      MODELFIG.draw(sv,M.p,M,{layers:mfLayers,veh,pos:(animPos!=null)?animPos:(results[0]?results[0].pos:M.g.xmin),ilSec:mfSec,dir:focusDir});}catch(e){}});
++    drawReportFigures(stage,p);
++    ARPT_TABS.forEach(([k,name])=>{
++      const box=stage.querySelector(`[data-arpt="${k}"]`); if(!box||!box.innerHTML.trim())return;
++      const subs=[]; let loose=document.createElement("div");
++      const flushLoose=()=>{if(!loose.childNodes.length)return;const ctx={links:[],cards:[],topics:[],first:null};
++        const items=arptItems(loose,k+".intro",cap,ctx);arptTopics(ctx);ctxAll.push(ctx);
++        if(items.length)subs.push({title:subs.length?"Notes":"Overview",items});loose=document.createElement("div");};
++      [...box.childNodes].forEach(n=>{
++        if(n.nodeType===1&&n.classList&&(n.classList.contains("pnl")||n.classList.contains("sub"))&&n.querySelector(":scope>.hd")){
++          flushLoose();
++          const hd=n.querySelector(":scope>.hd"), sp=hd.children[1], tg=hd.querySelector(".tag");
++          const title=arptClean((sp?sp.textContent:hd.textContent).replace(/^\d+(\.\d+)*\.\s*/,""));
++          const ctx={links:[],cards:[],topics:[],first:null};
++          const bd=n.querySelector(":scope>.bd"); const items=bd?arptItems(bd,k+"."+(n.id||"p"+subs.length),cap,ctx):[];
++          arptTopics(ctx); ctxAll.push(ctx);
++          const tag=tg?arptClean(tg.textContent):""; if(tag&&tag!=="—")items.unshift({type:"note",text:(/^(§|Std|MBE|AREMA|Check)/.test(tag)?"Reference: ":"")+tag});
++          [n.id].concat(ctx.cards).forEach(id=>{if(id&&ctx.first&&!cardKey[id])cardKey[id]=ctx.first;});
++          if(items.length)subs.push({title,items});
++        }else loose.appendChild(n);
++      });
++      flushLoose();
++      if(subs.length)secs.push({title:name,note:`On screen: the [[tab:${k}|${name} tab]].`,subs});
++    });
++  }finally{stage.remove();}
++  /* "Worked in" / jump links: "see §x.y" where the panel has worked steps here, the tab link always */
++  const fix=s=>String(s).replace(/⟦card:([^⟧]*)⟧/g,(m,c)=>cardKey[c]?"[["+cardKey[c]+"]]":"");
++  secs.forEach(s=>s.subs.forEach(q=>q.items.forEach(it=>{
++    if(it.type==="note")it.text=fix(it.text);
++    if(it.type==="figure")it.caption=fix(it.caption);
++    if(it.type==="table"){const c=x=>{if(x&&typeof x==="object")x.t=fix(x.t);};it.head.forEach(c);it.rows.forEach(r=>(Array.isArray(r)?r:r.cells).forEach(c));}
++  })));
++  /* 1. Project and inputs: the input echo of the D11 report (archInputRows) */
++  const ir=archInputRows(p);
++  secs.unshift({title:"Project and inputs",subs:[{title:"Input echo (all inputs as entered)",items:[
++    {type:"table",head:["Input","Value","Units"],rows:ir.map(r=>[String(r.k),String(r.v==null?"":r.v),String(r.u||"")]),wide:true},
++    {type:"note",text:"Units: kip, ft, psi unless noted; forces and moments are per foot of barrel width. Every value in this report is the value the tool shows on its tabs; the worked lines are the tabs' own. The User Manual is on the [[tab:man|Manual tab]]."}]}]});
++  secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:ARCH_REFS.map(r=>[r[0],r[1]]),wide:true}]}]});
++  const v=id=>{const e=$(id);return e&&e.value?String(e.value).trim():"";};
++  const gv=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null, vg=gv?ARCH.ALL_VEHICLES.find(x=>x.id===gv.id):null;
++  return {title:"Stone Masonry Arch Load Rating — Calculation Report",subtitle:v("tbProject")||"Untitled",
++    code:"Allowable Stress Method, Inventory Level · MassDOT Bridge Manual Part I §7.2.7 · AASHTO MBE Art. 6A.9.1 · "+(p.loadMode==="rail"?"AREMA Ch. 8 (railroad loading)":"AASHTO Std. Spec. Art. 6.4, 3.8.2.3")
++      +(gv?" · Controlling: "+vg.name+", RF = "+nfx(gv.rf,3)+" at "+CALC.secTag(M,gv.sec):""),
++    info:[["Project",v("tbProject")],["Project No.",""],["Subject",v("tbSubject")],["Computed by",v("tbBy")],["Date",v("tbDate")],["Task",v("tbTask")],
++      ["Checked by",v("tbChk")],["Checked date",v("tbChkDate")],["Program","Stone Arch LR "+BUILD_ID]],
++    head:{left:"Project No. — — "+(v("tbSubject")||v("tbProject")||"—").slice(0,40),right:"Computed: "+(v("tbBy")||"—")+" "+v("tbDate")+" · Checked: "+(v("tbChk")||"—")+" "+v("tbChkDate"),
++      foot:(v("tbProject")||"Untitled")+" (Stone Masonry Arch Load Rating) · Inventory level · Allowable Stress · MBE 6A.9.1"},
++    sections:secs, _cap:cap};
++}
++function archRenderReport(p){
++  const T=$("pane_rpt"); if(!T)return;
++  if(!window.SharedReport||!window.SharedSteps){T.innerHTML=msg("err","Report","shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.");return;}
++  if(!M){T.innerHTML=msg("err","Report","No results: correct the input errors first.");ARPT.api=null;ARPT.doc=null;return;}
++  let mdl;
++  try{mdl=archReportModel(p);}catch(e){T.innerHTML=msg("err","Report error",esc(e&&e.message));ARPT.api=null;ARPT.doc=null;return;}
++  const top=$("outTop");
++  ARPT.api=SharedReport.mount(T,mdl,{closed:ARPT.closed,onGoto:archRptGoto,stick:top?top.offsetHeight:0});
++  ARPT.doc=ARPT.api.doc;
++}
++/* [[tab:name~card~heading|text]] links of the report: the tab, with the panel (archGoto) */
++function archRptGoto(name){const [tab,card,sub]=String(name).split("~");if(card)archGoto(tab,card,sub||null);else{activeTab=tab;render();autosave();const sc=$("outPanel");if(sc)sc.scrollTop=0;}}
++/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); the
++   D11 report (Print / PDF Report button, or Ctrl+P on any other tab) is unchanged. */
++function archRptPrinting(){return document.body.classList.contains("rp-printing");}
++function archRptWillPrint(){return !window.__archD11Print&&(archRptPrinting()||!!(ARPT.doc&&activeTab==="rpt"));}
++let arptPageCss=null;
++window.addEventListener("beforeprint",()=>{
++  if(!archRptWillPrint())return;
++  const ap=document.getElementById("arch-page"); if(ap){arptPageCss=ap.textContent;ap.textContent="";}   /* the D11 page header would print over the report's */
++  if(archRptPrinting())return;
++  let box=document.getElementById("rp-print");if(!box){box=document.createElement("div");box.id="rp-print";document.body.appendChild(box);}
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(ARPT.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add("rp-printing");
++});
++window.addEventListener("afterprint",()=>{
++  if(arptPageCss!=null){const ap=document.getElementById("arch-page");if(ap)ap.textContent=arptPageCss;arptPageCss=null;}
++  window.__archD11Print=false;
++});
++window.__archRptForTest=()=>({doc:ARPT.doc,results,M,secResults:node=>secResults(M.p,M,node),focusNode,rateBasis});
++window.__archVehForTest=()=>ARCH.ALL_VEHICLES;   /* tests only (read-only) */
++
+```
