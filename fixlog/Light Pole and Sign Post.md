@@ -1305,7 +1305,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` (13 passed, 3 new Fig. 29.4-1 tests). `node tests/lightpole-compare.mjs --a origin/main`: new projects — default pole, Broms, 45° cable, 60 ft pole, ice, 1½ in bolts, arms, monopost and two-post sign: results identical apart from the 4 new `inp` fields (cfPoleMode, cfPoleSurf, cfAuto, cfPoleEntered) since their C_f is 0.7 either way; square/rect/sign-square/wide two-post cases change as listed. `--old-saves` (main's saved state opened in the branch): all 13 cases identical apart from the 4 new `inp` fields; cable values identical in every case.
 - **Open items:** Fig. 29.4-1 has no rectangle row (the square row with D = least dimension is used); the D√q_z criterion uses q_z at mid-height (the figure does not state the height; engineer to confirm); square sections with wind along a diagonal (1.0/1.1/1.5) are not used (the tool's wind directions are normal to the faces).
 
-## 2026-11-01 — PR: claude/lp-pr3-pullout (LP-3: pullout bearing area of the heavy hex nut; engineer decision 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #550: claude/lp-pr3-pullout (LP-3: pullout bearing area of the heavy hex nut; engineer decision 2026-11-01)
 
 ### LP3-1. Pullout A_brg from heavy hex nut dimensions (LP-R6)   [calc change] [less conservative = exact]
 - **Engineer decision (2026-11-01):** use the real heavy-hex nut bearing area by bolt diameter, citing the source table, instead of 0.9d².
@@ -1320,3 +1320,26 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Effect:** every case: φN_p and φN_n (when pullout governed) change; the anchor tension and interaction ratios drop. No other value changes (diff paths checked: only Abrg, Np, Npn, phiNp, phiNn, tr, inter, tgov). Cable values identical.
 - **How verified:** `node tests/engine/run.mjs lightpole` 14 passed (new pullout test); `node tests/lightpole-compare.mjs --a origin/main`: 13 cases, differences only in the pullout chain; cable values identical; 0 console errors.
 - **Open item:** a plate washer (larger A_brg) is not an input; the bare nut is used.
+
+## 2026-11-01 — PR: claude/lp-pr4-anchre (LP-4: anchor reinforcement default None and §17.5.2.1 check; engineer decision 2026-11-01; PR link added after merge)
+
+### LP4-1. "Anchor reinforcement" default None for new projects (LP-R2)   [default change] [more conservative: breakout checked]
+- **Where:** input card 7, `id="segAnchRe"` (the `on` class moves to None); state `let anchRe='no';` (was `'yes'`).
+- **Saved data (§5):** `anchRe` has been written by `captureState()` in every version since the first commit (c58cb6d, 2026-10-03), so **every saved project has it stored explicitly**: projects that chose (or kept) Provided keep Provided and now get the reinforcement check below; projects with None are unchanged. `applyState()` keeps `anchRe = st.anchRe || 'yes'`, so a hand-made save without the field also keeps the old behaviour. Only new projects (DEFAULT_STATE, New, empty storage) start on None.
+- **Effect on the default new project:** concrete breakout is now in φN_n (Condition B, φ 0.70): φN_cbg = 22,323 lb; φN_n = min(34,073, 33,632, 22,323/3) = 7,441 lb per anchor; T_max = 9,791 lb → anchor tension 1.32 **NG** (before: 0.29 with Provided). The group check of the anchors table (ΣT = 19,401 ≤ φN_cbg = 22,323, 0.87) passes; the tool's φN_n compares the most-loaded anchor with φN_cbg/n_T (pre-existing, conservative; not changed — open item).
+
+### LP4-2. Anchor reinforcement checked when Provided (ACI 318-19 §17.5.2.1)   [new checks] [more conservative]
+- **Where:** new inputs `arBars` (bars per tension anchor, default 2), `arBar` (default "shaft longitudinal bar", or #4–#11), `arX` (distance rod–bar, default 3 in), rows `.arRow` shown only when Provided (`lppApplyArUI()`); `INPUT_IDS` + the three; `applyState()` defaults when missing. `anchorBolts()`: new block `// ---- anchor reinforcement, ACI 318-19 §17.5.2.1`, return field `ar`; `inp.arShaftBar = reo.long.bar` before `anchorsAllCombos` (pole and sign). New `boltArRows(b)` in both anchor tables (the "carried by anchor reinforcement" row now reads "replaced by the anchor reinforcement (§17.5.2.1), checked below"). `collectChecks()`: three checks; `LPP_CHK2K`. `boltWorkedHTML()` step 3b.
+- **Checks:**
+  1. strength φN_ar = 0.75·A_s·f_y ≥ N_ua (most-loaded anchor, its governing combination), A_s = bars counted for that anchor;
+  2. location x ≤ 0.5h_ef (R17.5.2.1);
+  3. development above the breakout surface: l_avail = h_ef − x/1.5 − c ≥ l_d; l_d = max(f_y ψ_t ψ_e ψ_g/(25 or 20 · λ√f′c)·d_b, 12 in) (ACI 318-19 Table 25.4.2.3; 25 for #6 and smaller, 20 for #7 and larger; ψ_t = ψ_e = 1.0, ψ_g = 1.0 Gr 60 / 1.15 Gr 80, λ = 1.0); below the surface the shaft bars run the full depth (developed). No reduction for excess reinforcement.
+- **φN_n unchanged** when Provided: min(φN_sa, φN_p) (breakout replaced by the anchor reinforcement, which is now checked separately).
+- **Governing provision:** ACI 318-19 §17.5.2.1 and R17.5.2.1 (anchor reinforcement developed on both sides of the breakout surface, φ = 0.75), §25.4.2.3. Wording cited, not copied; verify (a)/(b) item numbering against the engineer's copy.
+- **Check case (default geometry with Provided; (6) 1 in, h_ef 18 in, (12) #6 shaft bars, cover 3 in, f′c 4,000, f_y 60,000):**
+  - φN_ar = 0.75·(2·0.44)·60,000 = 39,600 lb ≥ 9,791 lb → 0.25 OK.
+  - x = 3 ≤ 0.5·18 = 9 → OK.
+  - l_d = 60,000/(25·√4,000)·0.75 = 28.5 in; l_avail = 18 − 3/1.5 − 3 = 13.0 in → 2.19 **NG**.
+- **Effect on saved projects with Provided (every old default project):** the three checks are added; with the old defaults the development check fails (as above) and the verdict changes from "ALL CHECKS PASS" to "1 CHECK FAIL — Anchor reinforcement, development". No existing value changes (verified with `--old-saves`: only the new `inp` fields and the new `ar` objects differ).
+- **How verified:** `node tests/engine/run.mjs lightpole` 15 passed (new test). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every case identical except the new inputs and `ar` objects (+ the 3 new check rows); `node tests/lightpole-compare.mjs --a origin/main` (new projects): the cases that were on the old default change from "breakout carried" to breakout checked (Condition B); cable values identical in all 26 runs.
+- **Open items:** (1) the per-anchor breakout comparison T_max ≤ φN_cbg/n_T (conservative; ACI compares the group tension with φN_cbg) now governs the default new project (1.32 vs group 0.87) — engineer to decide whether to compare the group; (2) hooked/headed anchor-reinforcement bars, and bars lapped with hooks, are not modelled (straight bars only); (3) the 0.5h_ef zone and the 1:1.5 cone geometry follow R17.5.2.1 and A_Nco; confirm.
