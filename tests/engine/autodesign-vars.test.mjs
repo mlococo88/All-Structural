@@ -138,10 +138,11 @@ test('Overhang variable: the deck width closes, b_eff, LLDF, dead loads and the 
   near(AD.ohLimit(P, S, 9.375, 6).hi, 3.75, 1e-12, 'AASHTO limit');
   // from the minimum overhang (Auto design inputs; default 2.5 ft, engineer decision 2026-11-01; was 1.5 ft): 2.5, 3.0, 3.5 (4.0 out, above)
   assert.equal(S.ohMin, 2.5); assert.equal(JSON.stringify(AD.ohCands(P, S, L0, 5).map(o => o.L)), '[2.5,3,3.5]');
-  // entered 1.5 ft: the old candidates 1.5 … 3.5; a Range never goes below the minimum (min 1.0 → 2.5) but a Range min above it is kept (3.0)
+  // entered 1.5 ft: the old candidates 1.5 … 3.5; a Range never goes below the minimum (min 1.0 → 2.5) but a Range min above it is kept (3.0);
+  // a Range is not held to the AASHTO practice limit (not a shall), so its max 4.0 ft is tried
   const P15 = J(P); P15.autodesign.ohMin = '1.5'; assert.equal(JSON.stringify(AD.ohCands(P15, AD.settings(P15), L0, 5).map(o => o.L)), '[1.5,2,2.5,3,3.5]');
-  const Prg = J(P); Prg.autodesign.vars = { oh: { mode: 'range', min: '1', max: '4' } }; assert.equal(JSON.stringify(AD.ohCands(Prg, AD.settings(Prg), L0, 5).map(o => o.L)), '[2.5,3,3.5]');
-  Prg.autodesign.vars.oh.min = '3'; assert.equal(JSON.stringify(AD.ohCands(Prg, AD.settings(Prg), L0, 5).map(o => o.L)), '[3,3.5]');
+  const Prg = J(P); Prg.autodesign.vars = { oh: { mode: 'range', min: '1', max: '4' } }; assert.equal(JSON.stringify(AD.ohCands(Prg, AD.settings(Prg), L0, 5).map(o => o.L)), '[2.5,3,3.5,4]');
+  Prg.autodesign.vars.oh.min = '3'; assert.equal(JSON.stringify(AD.ohCands(Prg, AD.settings(Prg), L0, 5).map(o => o.L)), '[3,3.5,4]');
   // an old project (no ohMin) and a blank or bad entry: 2.5 ft; Lock: none tried
   [undefined, '', 'x', -1].forEach(v => { const Q2 = J(P); if (v !== undefined) Q2.autodesign.ohMin = v; assert.equal(AD.settings(Q2).ohMin, 2.5, String(v)); });
   const Plk = J(P); Plk.autodesign.vars = { oh: { mode: 'lock' } }; assert.equal(AD.ohCands(Plk, AD.settings(Plk), L0, 5), null);
