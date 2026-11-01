@@ -141,6 +141,9 @@
     return { ecc, edge, vEdge, lap, gap, em, bad };
   }
 
+  /* userModes(p): how the entered member forces combine with the computed ones, per group (CFRM, 2026-11-01): { StrI, Con: 'add' | 'replace' };
+     p.userMode absent (older projects, GirderDetail's inputs): 'add', today's behaviour */
+  function userModes(p) { const u = (p && p.userMode) || {}; return { StrI: u.StrI === 'replace' ? 'replace' : 'add', Con: u.Con === 'replace' ? 'replace' : 'add' }; }
   /* ================= compute (GM.cf.compute, unchanged arithmetic) ================= */
   function compute(p, env) {
     const E = env0(env), errors = [], g = k => nm(p[k]);
@@ -199,8 +202,12 @@
       const Cs = SB.full ? 2.4 : 3.6 / 0.75, bReq = Cs * L * Mu ** 2 / (n * ES * Iyeff * Cb ** 2);
       Object.assign(SB, { Rf, Ad, Lc, Ah, isX, bbr, deep, bs, tsp, cpTs: cpS.ts, bsec, ng, bg, bT, Cs, bReq, Ix: s0.I }); }
     const combos = [{ id: 'StrI', name: 'Strength I (analysis forces)', wind: 0, user: p.user.StrI }, { id: 'StrIII', name: 'Strength III (wind)', wind: W.III.Fw, user: null }, { id: 'StrV', name: 'Strength V (80 mph wind)', wind: W.V.Fw, user: null }, { id: 'Con', name: SB ? 'Constructibility (analysis forces + stability bracing)' : 'Constructibility (analysis forces)', wind: 0, user: p.user.Con, Mbr: SB ? SB.Mbr : 0 }];
+    // CFRM (2026-11-01): the entered forces of each group add to the computed ones ('add', default; absent in older projects) or replace them
+    // ('replace': Strength: the computed Strength III and V wind cases are not used; Constructibility: the stability bracing force is not added)
+    const UM = userModes(p); if (UM.StrI === 'replace') combos.filter(cb => cb.id === 'StrIII' || cb.id === 'StrV').forEach(cb => { cb.off = true; cb.name += ', not used: the entered Strength forces replace the computed'; });
+    if (UM.Con === 'replace') { const cb = combos[3]; cb.rep = true; cb.name = 'Constructibility (entered forces alone)'; }
     const frames = EL.filter(e => e.k !== 'web');
-    combos.forEach(cb => { cb.f = frames.map(e => { const w = Math.abs(e.unit * cb.wind) + Math.abs(e.ubr * (cb.Mbr || 0)), u = cb.user ? nm(cb.user[e.k]) : 0; return { e, w, u, br: Math.abs(e.ubr * (cb.Mbr || 0)), T: Math.max(0, u + w), Cc: Math.max(0, -(u - w)) }; }); });
+    combos.forEach(cb => { cb.f = frames.map(e => { const w = cb.off || cb.rep ? 0 : Math.abs(e.unit * cb.wind) + Math.abs(e.ubr * (cb.Mbr || 0)), u = cb.user ? nm(cb.user[e.k]) : 0; return { e, w, u, br: Math.abs(e.ubr * (cb.Mbr || 0)), T: Math.max(0, u + w), Cc: Math.max(0, -(u - w)) }; }); });
     // member design demands (max over combos, per member group)
     const Fy = GD_GR[p.gA].Fy, Fu = GD_GR[p.gA].Fu, bolt = BOLT[C.d], Fub = FUB[C.gr], thr = C.thr === 'excl' ? 0.56 : 0.45, s = nm(C.s), e0 = nm(C.e), tg = nm(C.tg), Fug = GD_GR[p.gG].Fu, dh = bolt.dh, dn = dh + 0.0625;   // dn: net-area hole width (6.8.3)
     Object.values(mem).forEach(m => { const els = frames.filter(e => e.k === m.k); m.L = Math.max(...els.map(e => e.L)); m.els = els;
@@ -215,8 +222,8 @@
       const brg = (t, F) => { let tot = 0; for (let i = 0; i < n; i++) { const Lc = i === 0 ? e0 - dh / 2 : s - dh; tot += Math.min(2.4 * bolt.d * t * F, 1.2 * Lc * t * F); } return PHI.bb * tot; };
       m.brgA = brg(m.t, Fu); m.brgG = brg(tg, Fug); m.brgR = Math.min(m.brgA, m.brgG);
       m.gage = ({ 3: 1.75, 3.5: 2, 4: 2.5, 5: 3, 6: 3.5, 7: 4, 8: 4.5 })[m.b1] || Math.round(m.b1 * 0.55 * 8) / 8; m.edge = m.b1 - m.gage; });
-    const FT = { B: 16, E: 4.5, Ep: 2.6 }[p.fatCat || 'B'], gF = 1.75 * 0.65; Object.values(mem).forEach(m => { m.dP = nm((p.user.Fat || {})[m.k]) || 0; m.df = gF * m.dP / m.A; });
-    const R = { errors: [], p, N, EL, frames, combos, W, SB, emin: bolt.emin.cut, mem, Fy, Fu, n, s, e0, tg, bolt, Fub, thr, dh, S, h, Lb, dft, FT, gF, primary: p.primary === 'yes', E, gWS };
+    const FT = { B: 16, E: 4.5, Ep: 2.6 }[p.fatCat || 'B'], gFI = nm(p.gFI) > 0 ? nm(p.gFI) : 1.75, gF = gFI * 0.65; Object.values(mem).forEach(m => { m.dP = nm((p.user.Fat || {})[m.k]) || 0; m.df = gF * m.dP / m.A; });
+    const R = { errors: [], p, N, EL, frames, combos, W, SB, emin: bolt.emin.cut, mem, Fy, Fu, n, s, e0, tg, bolt, Fub, thr, dh, S, h, Lb, dft, FT, gF, gFI, primary: p.primary === 'yes', E, gWS, UM };
     R.steps = steps(R);
     return R;
   }
@@ -252,6 +259,7 @@
     { const c = { id: 'CF7', grp: 'Members', title: 'Stability bracing strength during deck placement', ref: `${ED} Art. 6.7.4.2.2, Eqs. 6.7.4.2.2-14, -15`, items: [],
         note: 'M_br is applied to the truss as a horizontal couple M_br/h at the chord work points of one girder, reacted by the adjacent girder. Brace forces can act in either direction. The stiffness requirement is CF8.' };
       if (!R.SB) c.naWhy = 'Stability bracing check turned off.';
+      else if (R.UM && R.UM.Con === 'replace') c.naWhy = 'Constructibility member forces entered with "Replace computed": the entered forces are used alone (CF1, CF2), the brace force is not added. CF8 still checks the stiffness.';
       else { const cb = R.combos.find(x => x.id === 'Con');
         M.forEach(m => { const q = cb.f.filter(z => z.e.k === m.k), br = Math.max(...q.map(z => z.br)), tot = Math.max(m.Cu, m.Tu), cap = m.Cu >= m.Tu ? m.Pr : Math.min(m.Pyr, m.Pur);
           c.items.push(rc(`${m.l} (${m.name})`, [f2(br), f2(tot), f2(cap), f2(tot / cap)], tot, cap, 'cf.sb.Mbr')); }); }
@@ -264,7 +272,7 @@
         c.items.push({ loc: 'System, β_T', cells: [f0(S.bT), f0(S.bReq), f2(S.bReq / S.bT)], r: S.bReq / S.bT, st: S.bT >= S.bReq ? 'pass' : 'fail', demand: S.bReq, capacity: S.bT, step: 'cf.sb.bT' }); }
       out.add(c); }
     { const c = { id: 'CF9', grp: 'Members', title: 'Fatigue of cross-frame members', ref: `${ED} Art. 6.6.1.2, Table 3.4.1-1 (Fatigue I factor × 0.65 for cross-frames)`, items: [],
-        note: 'Force ranges from a refined analysis of the fatigue truck (a line-girder analysis gives none). γ = 1.75 × 0.65 for Fatigue I (10th Edition cross-frame provisions, NCHRP 12-113).' };
+        note: `Force ranges from a refined analysis of the fatigue truck (a line-girder analysis gives none). γ = ${f2(R.gFI)} × 0.65 for Fatigue I (Fatigue I γ of the Fatigue & studs inputs; 10th Edition cross-frame provisions, NCHRP 12-113).` };
       const Ms = M.filter(m => m.dP > 0); if (!Ms.length) c.naWhy = 'No fatigue force ranges entered (from a refined analysis).';
       Ms.forEach(m => c.items.push(rc(`${m.l} (${m.name})`, [f2(m.dP), f2(m.df), f2(R.FT), f2(m.df / R.FT)], m.df, R.FT, `cf.${m.k}.fat`))); out.add(c); }
     // diaphragm used: the angle checks CF1 to CF9 do not apply and are not listed (GirderDetail 2026-10-13)
@@ -345,6 +353,14 @@
       w.add({ id: `w${k}.W`, label: `Wind on the lower half of the exterior girder, carried by the bottom flange (γ_WS = 1.0η = ${n3(R.gWS)})`, sym: 'W', eq: '\\frac{\\gamma_{WS}P_{Z}d}{2}', sub: `\\frac{${n3(R.gWS)}(${n4(q.PZ)})(${n3(R.dft)})}{2}`, value: q.W, unit: 'kip/ft', d: 4, ref: `${ED} Art. 4.6.2.7.1` });
       w.add({ id: `w${k}.Fw`, label: `Wind force at the bottom flange per cross-frame, ${l}`, sym: 'F_{w}', eq: 'WL_{b}', sub: `${n4(q.W)}(${n2(R.Lb)})`, value: q.Fw, unit: 'kip', d: 2, ref: `${ED} Art. 4.6.2.7.1` }); });
     R.frames.forEach((e, i) => w.add({ id: `tr${i}`, label: `${e.lbl}: force per kip of F_w (truss model, top chord work points held by the deck) and per kip-in of brace moment`, sym: 'f_{w},\\ f_{br}', eq: '', sub: `${n4(e.unit)},\\ ${n4(e.ubr)}`, value: e.unit, unit: 'kip/kip', d: 4, note: `Length ${n2(e.L)} in.` }));
+    // CFRM: the entered member forces and how they combine (only where a force is entered or "Replace computed" is chosen)
+    const UM = R.UM || userModes(p), uOf = g => ['top', 'bot', 'diag'].map(k => nm(((p.user || {})[g] || {})[k]) || 0), uAny = g => uOf(g).some(v => v !== 0) || UM[g] === 'replace';
+    [['StrI', 'Strength I'], ['Con', 'Constructibility']].forEach(([g, nmG]) => { if (!uAny(g)) return; const v = uOf(g), rep = UM[g] === 'replace';
+      const note = g === 'StrI' ? (rep ? 'Replace computed: these forces are the Strength design forces, used alone; the computed Strength III and V wind cases (F_w) are not used.'
+        : 'Add to computed: Strength I takes these forces (nothing is computed for Strength I); Strength III and V take the computed wind forces f_w F_w. Each member is designed for the largest of the three.')
+        : (rep ? 'Replace computed: these forces are used alone; the stability bracing force f_br M_br is not added (CF7 not checked; CF8, the stiffness, still is).'
+        : R.SB ? 'Add to computed: T = P + |f_br M_br|, C = −P + |f_br M_br| with the stability bracing moment M_br (see the torsional bracing steps).' : 'Add to computed: the stability bracing check is off, so nothing is added: the entered forces alone.');
+      w.add({ id: `user.${g}`, label: `${nmG} member forces entered from a refined analysis (factored, tension +): ${rep ? 'Replace computed' : 'Add to computed'}`, sym: 'P_{top},\\ P_{bot},\\ P_{diag}', eq: '', sub: `${n2(v[0])},\\ ${n2(v[1])},\\ ${n2(v[2])}`, value: Math.max(...v.map(Math.abs)), unit: 'kip', d: 2, note }); });
     const SB = R.SB; if (SB) {
       w.add({ id: 'sb.Iyeff', label: 'Effective I_y of the girder for torsional bracing', sym: 'I_{yeff}', eq: 'I_{yc} + \\frac{t}{c}I_{yt}', sub: `${n2(SB.Iyc)} + \\frac{${n2(SB.tD)}}{${n2(SB.cD)}}(${n2(SB.Iyt)})`, value: SB.Iyeff, unit: 'in^{4}', d: 2, ref: `${ED} Art. 6.7.4.2.2` });
       w.add({ id: 'sb.ho', label: 'Distance between flange centroids', sym: 'h_{o}', eq: 'D + \\frac{t_{c} + t_{t}}{2}', sub: `${n2(SB.Dg)} + \\frac{${n3(SB.tc)} + ${n3(SB.tt)}}{2}`, value: SB.ho, unit: 'in', d: 2 });
@@ -357,7 +373,8 @@
       w.add({ id: 'sb.bReq', label: 'Required torsional brace stiffness', sym: '\\beta_{T,req}', eq: '\\frac{C_{s}LM_{u}^{2}}{nEI_{yeff}C_{b}^{2}}', sub: `\\frac{${n2(SB.Cs)}(${n0(SB.L)})(${n0(SB.Mu)})^{2}}{${n0(SB.n)}(29{,}000)(${n2(SB.Iyeff)})(${n2(SB.Cb)})^{2}}`, value: SB.bReq, unit: 'kip-in/rad', d: 0, ref: `${ED} Eq. 6.7.4.2.2-15`, ok: SB.bT >= SB.bReq }); }
     Object.values(R.mem).forEach(m => { const id = m.k, Fy = R.Fy;
       w.add({ id: `${id}.A`, label: `${m.l} ${m.name}: area and radii of gyration (leg rectangles)`, sym: 'A_{g},\\ r_{x},\\ r_{z}', eq: '', sub: `${n3(m.A)},\\ ${n3(m.rx)},\\ ${n3(m.rz)}`, value: m.A, unit: 'in^{2}', d: 3 });
-      w.add({ id: `${id}.forces`, label: `${m.l}: largest tension and compression (analysis force ± wind and brace forces)`, sym: 'T_{u},\\ C_{u}', eq: '', sub: `${n2(m.Tu)}\\ (\\text{${m.cT || 'none'}}),\\ ${n2(m.Cu)}\\ (\\text{${m.cC || 'none'}})`, value: m.Fmax, unit: 'kip', d: 2 });
+      w.add({ id: `${id}.forces`, label: `${m.l}: largest tension and compression (analysis force ± wind and brace forces)`, sym: 'T_{u},\\ C_{u}', eq: '', sub: `${n2(m.Tu)}\\ (\\text{${m.cT || 'none'}}),\\ ${n2(m.Cu)}\\ (\\text{${m.cC || 'none'}})`, value: m.Fmax, unit: 'kip', d: 2,
+        ...(uAny('StrI') || uAny('Con') ? { note: `Entered forces: Strength ${UM.StrI === 'replace' ? 'replace the computed (Strength III, V not used)' : 'add to the computed (Strength III, V wind kept)'}; Constructibility ${UM.Con === 'replace' ? 'replace the computed (no brace force)' : 'add to the computed brace force'}.` } : {}) });
       w.add({ id: `${id}.KLr`, label: `${m.l}: effective slenderness, single angle connected through one leg (ℓ = ${n2(m.L)} in, ℓ/r_x = ${n2(m.lrx)})`, sym: '\\left(\\frac{KL}{r}\\right)_{eff}', eq: m.lrx <= 80 ? '72 + 0.75\\frac{\\ell}{r_{x}}' : '32 + 1.25\\frac{\\ell}{r_{x}} \\le 200', sub: m.lrx <= 80 ? `72 + 0.75(${n2(m.lrx)})` : `32 + 1.25(${n2(m.lrx)})`, value: m.KLr, unit: '', d: 2, ref: `${ED} Eq. 6.9.4.4-${m.lrx <= 80 ? 1 : 2}` });
       w.add({ id: `${id}.Q`, label: `${m.l}: slender-leg reduction (b/t = ${n2(m.bt)}, 0.45√(E/F_y) = ${n2(m.lim)})`, sym: 'Q', eq: m.bt <= m.lim ? '1.0' : '', sub: '', value: m.Q, unit: '', d: 3, ref: `${ED} Art. 6.9.4.2.2` });
       w.add({ id: `${id}.Pe`, label: `${m.l}: elastic buckling resistance`, sym: 'P_{e}', eq: '\\frac{\\pi^{2}EA_{g}}{(KL/r)_{eff}^{2}}', sub: `\\frac{\\pi^{2}(29{,}000)(${n3(m.A)})}{(${n2(m.KLr)})^{2}}`, value: m.Pe, unit: 'kip', d: 2, ref: `${ED} Eq. 6.9.4.1.2-1` });
@@ -369,7 +386,7 @@
       w.add({ id: `${id}.sl`, label: `${m.l}: slenderness (CF3, ${R.primary ? 'primary' : 'secondary'} member)`, sym: '\\frac{\\ell}{r_{z}}', eq: '', sub: `\\frac{${n2(m.L)}}{${n3(m.rz)}}`, value: m.slC, unit: '', d: 2, ref: `${ED} Arts. 6.9.3, 6.8.4` });
       w.add({ id: `${id}.bolt`, label: `${m.l}: bolt shear resistance, ${R.n} bolts, single shear (CF4)`, sym: 'n\\phi_{s}R_{n}', eq: 'n(0.80)(0.45\\text{ or }0.56)A_{b}F_{ub}', sub: `${R.n}(0.80)(${n2(R.thr)})(${n4(R.bolt.Ab)})(${n0(R.Fub)})`, value: m.boltR, unit: 'kip', d: 2, ref: `${ED} Eq. 6.13.2.7-1, -2`, ok: ge(m.boltR, m.Fmax) });
       w.add({ id: `${id}.brg`, label: `${m.l}: bolt bearing, angle and gusset (CF5)`, sym: '\\sum\\phi_{bb}\\min(2.4dtF_{u},\\ 1.2L_{c}tF_{u})', eq: '', sub: `\\min(${n2(m.brgA)},\\ ${n2(m.brgG)})`, value: m.brgR, unit: 'kip', d: 2, ref: `${ED} Eqs. 6.13.2.9-1, -2`, ok: ge(m.brgR, m.Fmax) });
-      if (m.dP > 0) w.add({ id: `${id}.fat`, label: `${m.l}: factored stress range (CF9)`, sym: '\\gamma(\\Delta f)', eq: '1.75(0.65)\\frac{\\Delta P}{A_{g}}', sub: `${n4(R.gF)}\\frac{${n2(m.dP)}}{${n3(m.A)}}`, value: m.df, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2`, ok: ge(R.FT, m.df) }); });
+      if (m.dP > 0) w.add({ id: `${id}.fat`, label: `${m.l}: factored stress range (CF9)`, sym: '\\gamma(\\Delta f)', eq: '\\gamma_{Fat\\,I}(0.65)\\frac{\\Delta P}{A_{g}}', sub: `${n2(R.gFI)}(0.65)\\frac{${n2(m.dP)}}{${n3(m.A)}}`, value: m.df, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2`, ok: ge(R.FT, m.df) }); });
     w.add({ id: 'geo', label: 'Connection geometry (CF6)', sym: 's,\\ e_{end},\\ t_{g}', eq: '', sub: `${n3(R.s)},\\ ${n3(R.e0)},\\ ${n3(R.tg)}`, value: R.s, unit: 'in', d: 3, ref: `${ED} Art. 6.13.2.6, Table 6.13.2.6.6-1` });
     return w.steps;
   }
@@ -429,7 +446,7 @@
      = round(max(D − 8, 0.75D)) as Preliminary sizing; primary 'auto' = yes where any support is skewed more than 20°; sb.Mu '' = from the
      analysis (1.25M_DC1 + 1.5M_CL, the largest positive), weight: { mode 'auto' (member sizes) | 'ovr' (Wi, We kip per frame) | 'off', allow % } */
   function defaults() { const d = JSON.parse(JSON.stringify(DEF));
-    return { type: d.type, h: '', dMinXF: d.dMinXF, gA: d.gA, gG: d.gG, primary: 'auto', dia: d.dia, wind: d.wind, mem: d.mem, conn: d.conn, user: d.user, fatCat: d.fatCat,
+    return { type: d.type, h: '', dMinXF: d.dMinXF, gA: d.gA, gG: d.gG, primary: 'auto', dia: d.dia, wind: d.wind, mem: d.mem, conn: d.conn, user: d.user, userMode: { StrI: 'add', Con: 'add' }, fatCat: d.fatCat,
       sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } }; }
   /* inputsOf(P, opt): GirderDetail's Cross-frames input p for project P (the values Preliminary sizing sends: S = the largest girder spacing,
      h, d at the first support, L_b = the largest unbraced length on any girder, primary by skew; sb: the span with the largest factored
@@ -445,6 +462,7 @@
     const p = JSON.parse(JSON.stringify(c));
     p.S = r2(Math.max(...bays) * 12); p.dg = r2(s0.D + s0.topT + s0.botT); src.S = 'the largest girder spacing'; src.dg = 'D + t_top + t_bot at the first support';
     p.h = c.h === '' || c.h == null ? Math.round(Math.max(D - 8, D * 0.75)) : +c.h; src.h = c.h === '' || c.h == null ? 'round(max(D − 8, 0.75D))' : 'entered';
+    { const v = +(((P.fatigue || {}).gam || {}).fI); p.gFI = v > 0 ? v : 1.75; src.gFI = v > 0 ? 'the Fatigue & studs inputs (γ Fatigue I)' : 'no fatigue inputs: 1.75'; }   // FGAM (2026-11-01)
     p.primary = c.primary === 'auto' ? (skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no') : c.primary;
     p.Lb = L && !L.errors.length ? r2(FRM.lbMax(L.FR, L.FR.girders.map(g => g.i), L.m.sup)) : 25; src.Lb = L && !L.errors.length ? 'the largest unbraced length on any girder (framing)' : 'no framing: 25 ft';
     const A = opt.A && !(opt.A.errors && opt.A.errors.length) ? opt.A : null;
@@ -478,5 +496,5 @@
   }
 
   window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit,
-    env0, compute, checks, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads };
+    env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads };
 })();
