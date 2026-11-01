@@ -3144,3 +3144,154 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Check case:** default project, 1280×800, tab 5 (Footing Design), output panel scrolled to the bottom, click the first "Worked in" link. Before: `document.scrollingElement.scrollTop` = 219, the title row is 219 px above the window and cannot be scrolled back. After: 0; the panel scrolls to the card.
 - **Other copies:** none.
 - **Open items:** at 390 px wide the output panel collapses to zero width (`.inp{min-width:400px}` in the flex row of `.main`). Existing, not related to this fix (the two-panel scroll layout is not active below 900 px), not changed.
+
+## 2026-11-01 — PR: claude/sf-tie-cover — Pedestal clear cover to the ties checked against ACI 318-19 Table 20.5.1.3.1 (SFTC; new check, no existing result changes) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFTC`.
+
+### SFTC. Clear cover to the ties, c − d_b,tie ≥ specified cover for the pedestal exposure   [new check; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):** keep the pedestal "Cover" input as the clear cover to the vertical bars (no input change). Add a check that the clear cover to the ties, c − d_tie, meets the ACI 318-19 Table 20.5.1.3.1 minimum for the pedestal's exposure. Show it in the pedestal checks, the dashboard, the report and the drawings note. This closes the open item of SFPC ("20.5.1.3 states the cover to the outermost reinforcement, which in a tied pedestal is the tie").
+- **Exposure input (new):** the app had no exposure or "cast against earth" information for the pedestals (the footing's 3 in bottom-cover warning is a fixed rule). A per-pedestal select is added on the pedestal card, under the reinforcement row: `peds[i].reinf.exposure`.
+  - `'weather'` (default): exposed to weather or in contact with ground. Table 20.5.1.3.1 row "Exposed to weather or in contact with ground": No. 6 through No. 18 bars 2 in; No. 5 bar, W31 or D31 wire, and smaller 1-1/2 in. The minimum is chosen by the **tie** size.
+  - `'earth'`: cast against and permanently in contact with ground: 3 in (all members).
+  - `'interior'`: not exposed to weather or in contact with ground; row "Beams, columns, pedestals, and tension ties: primary reinforcement, stirrups, ties, spirals, and hoops": 1-1/2 in.
+  - Default reasoning: a bridge/foundation pedestal is formed (not cast against earth) and is backfilled or exposed, so "exposed to weather or in contact with ground" is the usual row. Engineer to confirm (open item).
+  - Constant `SFTC_EXP` (labels and minimums) and `sftcMin(exp, tieSize)` sit after `const BAR_SIZES=`.
+- **Where:**
+  - `computePhase2` → `pedDes`, after the anchor `const tieSizeOK=isPatch?…`:
+    ```js
+    const exposure=SFTC_EXP[rf.exposure]?rf.exposure:'weather', cov=num(cover), tieDb=BAR_DIA[rf.tieSize]||0;
+    const tieCov=cov-tieDb, tieCovMin=sftcMin(exposure,rf.tieSize), tieCovOK=isPatch?true:(tieCov>=tieCovMin-1e-9);
+    ```
+    returned as new keys `exposure, cov, tieDb, tieCov, tieCovMin, tieCovOK` (anchor `pmBars,pmPts,fc,fy,PB,dPr,dX,dY`). No other result reads them.
+  - Defaults: `newPed` → `reinf:{…,dowelN:8,exposure:'weather'}`; `migrateState` → `if(!SFTC_EXP[p.reinf.exposure])p.reinf.exposure='weather';` (old saves and imports: the default).
+- **Shown (§6):**
+  - Pedestal card (input): the exposure select, and the line "Clear cover to the ties c − d_b,tie = 2.00 − 0.375 = 1.625 in ≥ 1.50 in min (exposed to weather or in contact with ground, ACI 318-19 Table 20.5.1.3.1). Worked in: Pedestal Design · 6.x" (link).
+  - Pedestal Design 6.1 table: new column "Tie cover (in)" (1.625 ≥ 1.50, green / red).
+  - Pedestal Design 6.x: equation block "Clear cover to the ties" (c_tie = c − d_b,tie ≥ c_min; values; OK / NG), a note on the basis, and a red NG box when it fails.
+  - Dashboard: new chip "Pedestal tie cover" (PASS: the smallest margin, e.g. "min 1.625 ≥ 1.50 in (Ped 1)"; FAIL: each failing pedestal); its printed line cites Table 20.5.1.3.1 with D/C = c_min/(c − d_b,tie). The existing "Pedestal design" chip is unchanged. User manual 3.1 chip table: new row.
+  - Report §1.5 pedestal row: "cover 2.00 in (clear to the vertical bars; exposure: …)". §6 topic "Ties and slenderness": new steps c_min (Table 20.5.1.3.1 row and tie size) and c_tie = c − d_b,tie with OK / NG; topic reference adds 20.5.1.3 (Table 20.5.1.3.1).
+  - Drawings: pedestal plan-section note "#3 TIES @ 12"; COVER 2" CLR TO VERT BARS, 1 5/8" CLR TO TIES"; general note 6 lists, per pedestal, clear cover to the vertical bars / to the ties with the minimum and exposure ("PED 1 2" / 1 5/8" (MIN. 1 1/2", EXPOSED TO WEATHER OR IN CONTACT WITH GROUND)", "; NG" when it fails).
+- **Governing provision:** ACI 318-19 20.5.1.3 and Table 20.5.1.3.1 (specified concrete cover, cast-in-place nonprestressed members).
+- **Check cases (hand):**
+  - Default project, both pedestals: c = 2.00 in, #3 ties (d_b = 0.375 in), exposed: c_tie = 2.00 − 0.375 = **1.625 in ≥ 1.50 in → OK**. Before: no check. After: OK.
+  - #6 ties (d_b = 0.750 in), exposed: c_tie = 2.00 − 0.75 = **1.250 in < 2.00 in** (No. 6 and larger: 2 in) **→ NG**.
+  - #3 ties, cast against earth: 1.625 in < **3.00 in → NG**.
+  - #4 ties, interior: 2.00 − 0.50 = 1.50 ≥ 1.50 → OK.
+- **New failures on the 10 comparison projects:** none. Every project uses c = 2 in, #3 ties, default exposure → 1.625 ≥ 1.50 in (the bearing patch of directqa_net_fail, h = 0, is not checked). An extra test project (`tie_cover_fail`: Ped 1 #6 ties; Ped 2 cast against earth) fails both pedestals as above.
+- **How verified (headless Chromium, origin/main vs the branch, 10 projects + the extra one):**
+  - Every value of `R` and `P2`, the warnings, self-consistency, state and saved storage are identical. New keys only: `P2.pedDes[].exposure/cov/tieDb/tieCov/tieCovMin/tieCovOK` and `state.peds[].reinf.exposure`.
+  - Dashboard: the only change is the new chip (line diff: nothing removed; "Pedestal tie cover" + its value added).
+  - Pedestal Design tab: only the 6.1 table column and the new 6.x block. Other tabs' text identical.
+  - An origin/main save (no `exposure`) loads, is migrated to `'weather'`, and computes identically.
+  - Report on 11 projects: 0 unresolved references, 0 KaTeX errors, no NaN, step values = app values. Drawings on 11 projects: DXF valid, no text overlaps, all inside the border, R/P2 unchanged. 0 console errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Open items (not changed; CLAUDE.md §9):**
+  - Default exposure "exposed to weather or in contact with ground": engineer to confirm, or name another default.
+  - The vertical bars themselves are not checked against Table 20.5.1.3.1 (e.g. #6 and larger, exposed: 2 in to the vertical bar). With c = 2 in that row is met by the input; with a smaller cover it would not be. Raised, not added.
+  - The footing's own covers (bottom 3 in warning, top and side) are unchanged.
+
+## 2026-11-01 — PR: claude/sf-barfit-db — Pedestal bar-fit check: bar diameter from the bar table (SFBD; calculation change, #9–#11 only) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text.
+
+### SFBD. d_b in the pedestal bar-fit (clear spacing) check from `BAR_DIA`   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):** the bar-fit check used d_b = size/8, while everything else (bar layout `sfdPedBars`, P–M bar positions, drawings, development lengths) uses the `BAR_DIA` table. Use the table.
+- **Where:** `computePhase2` → `pedDes`, anchor `const dbL=`.
+  - Before: `const dbL=(rf.longSize||0)/8;`
+  - After: `const dbL=BAR_DIA[rf.longSize]||0;`
+  - `dbL` is now also returned (`pedDes[].dbL`) for the worked display.
+- **Formula (unchanged):** s_clear = (b − 2c − d_b)/(n_face − 1) − d_b ≥ s_min = max(1.5 d_b, 1.5 in).
+- **Governing provision:** ACI 318-19 25.2.3 (minimum clear spacing of longitudinal bars in columns/pedestals); nominal bar diameters per ASTM A615/A706 (the `BAR_DIA` table).
+- **Change in d_b:**
+
+  | Bar | before: size/8 | after: table | Δ |
+  |---|---|---|---|
+  | #3 to #8 | 0.375 to 1.000 | 0.375 to 1.000 | 0 (identical) |
+  | #9 | 1.125 | 1.128 | +0.003 in |
+  | #10 | 1.250 | 1.270 | +0.020 in |
+  | #11 | 1.375 | 1.410 | +0.035 in |
+
+- **Check cases (hand)**, 18 × 18 in pedestal, c = 2 in:
+  - #11, 3 per face: before (18 − 4 − 1.375)/2 − 1.375 = **4.938 in** vs s_min = 1.5·1.375 = **2.063 in**. After (18 − 4 − 1.41)/2 − 1.41 = 6.295 − 1.41 = **4.885 in** vs 1.5·1.41 = **2.115 in**. OK both.
+  - #10, 4 per face: before 12.75/3 − 1.25 = **3.000** vs **1.875**. After 12.73/3 − 1.27 = **2.973** vs **1.905**. OK both.
+  - #9, 5 per face: before 12.875/4 − 1.125 = **2.094** vs **1.688**. After 12.872/4 − 1.128 = **2.090** vs **1.692**. OK both.
+  - Pass/fail flips only where the margin is under about 0.1 in, e.g. #11 at s_clear between 2.063 and 2.115 in.
+- **Effect on the comparison projects:** the 10 projects (and `tie_cover_fail`) use #8 longitudinal bars → identical, every value of `R`, `P2`, dashboard, warnings, consistency, state and storage. Extra project `big_bars` (the three cases above): only `pedDes[].clrX/clrY/clrMin` change as listed; no pass/fail change; dashboard identical.
+- **Shown (§6):** Pedestal Design 6.x "Bar count and fit" now works the formula: s_clear = (b − 2c − d_b)/(n_face − 1) − d_b with d_b from the bar table and the substituted x-face values, and max(1.5 d_b, 1.5). Report §6 step "Bars and clear spacing" states the formula and d_b.
+- **How verified:** headless Chromium, origin/main vs the branch (12 projects); report builds on 12 projects (0 unresolved, 0 KaTeX errors, values = app); `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs` passes.
+- **Open item (not changed):** ACI 318-19 25.2.3 also has the (4/3)d_agg term; the app takes no aggregate size, so it is not checked (unchanged).
+
+## 2026-11-01 — PR: claude/sf-pm-ratio — Pedestal biaxial P–M ratio of every LRFD combination at its own P_u, reported (SFPM; new check, existing results unchanged) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFPM`.
+
+### SFPM. Interaction demand / capacity ratio at each combination's own P_u   [new check; CLAUDE.md §4]
+- **Engineer request (2026-11-01):** the pedestal biaxial P–M result was only the plot colouring, against one contour drawn at the largest P_u. For every LRFD combination, compute the interaction ratio at that combination's own P_u. Report the governing ratio and combination in the Pedestal Design summary, the dashboard and the report, with worked steps. Plot each combination against its own-P_u contour, or mark that the plotted contour is at P_u,max.
+- **Method (chosen to match the app's existing contour):** constant-axial-load **radial ratio** on the app's own load contour, i.e. the capacity surface cut at P = P_u.
+  - Contour: `pmContour`, unchanged. Strain compatibility (ACI 318-19 22.2: ε_cu = 0.003, 0.85f′c block, β1), φ by net tensile strain (21.2.2), bar centres at cover + d_b/2 (SFPC).
+  - For a combination (P_u, M_ux, M_uy):
+    - |M_u| = √(M_ux² + M_uy²) and θ = atan2(M_ux, M_uy), in the plot plane (x = M_uy, y = M_ux).
+    - The capacity point (φM_nx,θ, φM_ny,θ) is the point of the contour at P_u in direction θ. It is found by bisection on the neutral-axis angle α inside the demand's quadrant. The bar layout is doubly symmetric, so the capacity direction rises with α; tolerance 1e-5 rad, at most 40 steps.
+    - ratio = |M_u| / √(φM_nx,θ² + φM_ny,θ²).
+  - P_u > φP_n,max (ACI 318-19 22.4.2.1, the cap on the design axial strength of the tied section): no moment capacity at that P_u, so ratio = P_u/φP_n,max (mode `axial`).
+  - The section cannot reach P_u (the c search does not converge to within 1 kip, e.g. tension beyond its range): not computed (mode `range`). The dashboard then shows REVIEW and the card shows a warning.
+  - A combination with no moment has ratio 0. Its axial check is the existing axial DCR.
+  - Governing = the largest ratio.
+  - Source of the method: ACI 318-19 22.4 (axial strength with flexure) and R10.5; the load-contour concept of Bresler, B. (1960), "Design Criteria for Reinforced Columns under Axial Load and Biaxial Bending," ACI Journal 57(11). The ratio is the radial distance at constant P on the strain-compatibility contour; the Bresler α-exponent approximation is **not** used.
+- **Where:**
+  - `pmContour`: a new optional argument `angList` (neutral-axis angles to evaluate instead of the uniform grid), and `phiPn` added to each returned point. The uniform-grid output is unchanged (the plot is identical in shape).
+  - New functions after `pmContour`: `sfpmPoint`, `sfpmRatios`, `sfpmModeTxt`, `SFPM_REF`.
+  - `computePhase2` → `pedDes`, after the anchor `pmPts.push({name:c.cb.name`: `pmRat` (one row per combination: P, Mx, My, Md, theta, alpha, cMx, cMy, Rc, ratio, mode), `pmGov`, `pmRange`. These are new keys; nothing else reads them.
+- **Shown (§6):**
+  - Pedestal Design 6.1: new column "P–M ratio (own P_u)" with the governing combination.
+  - Pedestal Design 6.x:
+    - equation block "Biaxial P–M ratio at the combination's own P_u — governing: …" (symbolic → P_u, M_ux, M_uy, |M_u|, θ → capacity point, α, |φM_n|_θ → ratio);
+    - a table of every combination (P_u, M_ux, M_uy, |M_u|, φM_nx,θ, φM_ny,θ, |φM_n|_θ, ratio; governing row bold);
+    - a method note.
+  - Plot:
+    - the solid contour is labelled "at P_u,max (reference)";
+    - the dashed contour is the governing combination's own P_u (drawn when it differs from P_u,max), with a dotted ray to its capacity point;
+    - point colours are now the ratio at each combination's own P_u (before: inside/outside the P_u,max contour);
+    - the legend sits below the axis title.
+  - Dashboard: new chip "Pedestal P–M (biaxial)" (max ratio, pedestal, combination; FAIL > 1; REVIEW if not computed); printed line D/C = ratio. User manual 3.1 chip table: new row. The existing "Pedestal design" chip is unchanged.
+  - Report §6, per pedestal: new topic "Biaxial P–M ratio at each combination's own P_u" with the worked steps of the governing combination, and a table of every combination.
+- **Check case (hand):** default project, Ped 2, governing combination 1.2D + 1.0(+Wx) + L + 0.5S.
+  - P_u = 270.81 kip, M_ux = 0, M_uy = V_x·h = 8·2 = 16.00 kip-ft; θ = 0° (uniaxial about y, compression on the +x face).
+  - Section 18 × 18 in, 8 #8 (rows of 3 / 2 / 3 at 2.5 / 9.0 / 15.5 in from the compression face), f′c = 4 ksi, f_y = 60 ksi, E_s = 29 000 ksi, β1 = 0.85.
+  - Solve φP_n = 270.81:
+    - c = 7.727 in, a = 6.568 in, C_c = 0.85·4·6.568·18 = 401.96 k;
+    - row 1: ε = 0.002029, f_s = 58.85 − 3.40 → 131.42 k;
+    - row 2: ε = −0.000494, f_s = −14.33 ksi → −22.64 k;
+    - row 3: ε_t = 0.003018 → −60 ksi → −142.20 k;
+    - P_n = 368.54 k, φ = 0.65 + 0.25(0.003018 − 0.002)/0.003 = 0.7348, φP_n = 270.8 k.
+  - M_n = [401.96(9 − 3.284) + 131.42(6.5) − 22.64(0) + 142.20(6.5)]/12 = 339.68 k-ft; **φM_ny = 249.6 k-ft**.
+  - Ratio by hand = 16.00/249.6 = **0.0641**. App: |φM_n|_θ = 247.31 k-ft, ratio **0.0647** (−0.9 % capacity: the strip integration of `pmContour`, the same as SFPC).
+  - Before, the plotted basis was the contour at P_u,max = 318.81 k: largest |M_u|/radius = 0.0709 (same combination). After, at its own P_u (270.81 k): 0.0647.
+- **Before / after on the comparison projects:**
+  - "Before" = largest |M_u|/contour radius against the contour at P_u,max (180 angles, the plotted basis), and the number of points inside the plotted 28-angle contour.
+  - "After" = governing ratio at the combination's own P_u, and the number of combinations with ratio > 1.
+
+  | Project | Pedestal | before (at P_u,max) | inside before | after (own P_u) | governing combination (P_u, k) | > 1 after |
+  |---|---|---|---|---|---|---|
+  | default | Ped 1 / Ped 2 | 0.0626 / 0.0709 | 9/9, 9/9 | 0.0639 / 0.0647 | 0.9D + 1.0(+Wx) (108.61) / 1.2D + 1.0(+Wx) + L + 0.5S (270.81) | 0 |
+  | direct | Ped 1 / Ped 2 | 0.0642 / 0.0719 | 2/2, 2/2 | 0.0642 / 0.0719 | Direct LRFD (dead ×1.2) | 0 |
+  | wt_ecc_gate_3ped | Ped 1 / 2 / 3 | 0.2934 / 0.1818 / 0.0403 | all | 0.2826 / 0.1774 / 0.0438 | 1.2D + 1.0(+Wy) + L + 0.5S (194.81) / 1.2D + 1.6L + 0.5S (318.81) / 0.9D + 1.0(+Wx) (54.67) | 0 |
+  | directqa_net_fail | Ped 1 | 0.0711 | 9/9 | 0.0969 | 0.9D + 1.0(−Wx) (108.61) | 0 |
+  | single_moment | Ped 1 | 0.2503 | 10/10 | 0.2442 | 1.2D + 1.0(−Wy) + L (199.81) | 0 |
+  | direct_moment | Ped 1 / Ped 2 | 0.1488 / 0.1541 | 2/2 | 0.1493 / 0.1541 | Direct LRFD (dead ×1.2) | 0 |
+  | offsets | Ped 1 / **Ped 2** | 0.3020 / **1.1144** | 9/9, **6/9** | 0.2930 / **1.1160** | 1.2D + 1.0(−Wx) + L + 0.5S (204.81) / **1.2D + 1.6L + 0.5S (318.81)** | 0 / **2** |
+  | uplift_partial | Ped 1 / Ped 2 | 0.8763 / 0.3547 | 9/9 | 0.8502 / 0.3235 | 1.2D + 1.0(+Wx) + L + 0.5S | 0 |
+  | qty_modes | Ped 1 / Ped 2 | 0.0481 / 0.0606 | 9/9 | 0.0467 / 0.0561 | 1.2D + 1.0(+Wx) + L + 0.5S | 0 |
+  | fatal | — | — | | — | | |
+
+  - Pass/fail: the only project above 1 is offsets Ped 2 (it was already outside the plotted contour). Before, 3 combinations were outside the P_u,max contour; at their own P_u, 2 are above 1 (the third lies inside its own, larger contour). The dashboard now shows FAIL for it ("Pedestal P–M (biaxial)", ratio 1.12). The ratios where the combination's own P_u is below P_u,max can be higher (a smaller contour at low P, e.g. 0.9D combinations: default Ped 1 0.0626 → 0.0639, directqa_net_fail 0.0711 → 0.0969) or lower.
+  - Accuracy of the direction search: on all 12 projects the capacity radius agrees with a 360-angle contour polygon within 0.52 % (the polygon's own chord error).
+- **Nothing else changes (proof):** headless Chromium, origin/main vs the branch, 10 projects + 2 extra.
+  - Every value of `R` and `P2`, the warnings, consistency, state and storage are identical. New keys: `pedDes[].pmRat/pmGov/pmRange`.
+  - The dashboard line diff only adds the new chip. Only the Pedestal Design tab text changes.
+  - Report on 12 projects: 0 unresolved, 0 KaTeX errors, no NaN, step values = app values.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Cost:** `computePhase2` takes about 10–270 ms in headless Chromium (before: 10–50 ms). Uniaxial combinations need one contour point; biaxial ones need about 15–40.
+- **Open items (§9):**
+  - The axial cap is handled as ratio = P_u/φP_n,max only above the cap. Below it, the radial ratio does not include the cap's flat top. Where P_u is close to φP_n,max, read the axial DCR with it.
+  - Slenderness magnification is still not applied (existing "slender" flag).

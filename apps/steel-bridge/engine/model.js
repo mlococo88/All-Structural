@@ -61,7 +61,7 @@
                   flSkI, flSkE (ksi), flSkG (skew f_ℓ, C6.10.1) } (engine/framing.js)
      crossframes: { type: 'X' | 'Kb' | 'Kt', h (in; '' = from D), dMinXF (in), gA, gG, primary: 'auto' | 'yes' | 'no', dia: { on, shape, d, bf, tf, tw, gr, nb, pitch,
                   ecc, end, Rj, aj, eShape, eNb }, wind: { V, Kz, G, Cd }, mem: { top, bot, diag: { sec, b1, b2, t } }, conn: { d, gr, thr, n, s, e, tg },
-                  user: { StrI, Con, Fat: { top, bot, diag } (kip) }, fatCat, sb: { on, full: 'auto' | 'yes' | 'no', Mu (kip-ft; '' = from the analysis), Cb,
+                  user: { StrI, Con, Fat: { top, bot, diag } (kip) }, userMode: { StrI, Con: 'add' | 'replace' } (added 2026-11-01, optional: absent = 'add'), fatCat, sb: { on, full: 'auto' | 'yes' | 'no', Mu (kip-ft; '' = from the analysis), Cb,
                   bs, tsp }, weight: { mode: 'auto' | 'ovr' | 'off', allow (%), Wi, We (kip per frame) } } (engine/crossframes.js)
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
@@ -70,6 +70,9 @@
                   (absent: the first exterior girder for position 'exterior', else the first interior girder)
      girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
                   gV, fatM, fatV, gDef }: entered values, used where the loads module gives none (CL and xf: the module has none yet)
+     girders[i].dfPull (added 2026-11-01, B2 hand-offs; optional): { use, spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source: { producer,
+                  producerFile, producedAt, project, adoptedAt, line, girder, basis, basisLbl, fields } }: the factors pulled from LL & DL Distribution
+                  (bridgeSuite.v1.lldf, ui/handoffs.js), laid over this girder's factors field by field (engine/analysis.js dfOf); absent: unchanged
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } } }: the overhang bracket loads on an exterior girder (OH1–OH5)
@@ -181,7 +184,7 @@
     const A = () => ({ sec: 'L5x5x3/8', b1: 5, b2: 5, t: 0.375 }), Z = () => ({ top: 0, bot: 0, diag: 0 });
     return { type: 'X', h: '', dMinXF: 48, gA: '36', gG: '50', primary: 'auto', dia: { on: 'no', shape: 'W21x44', d: 20.7, bf: 6.5, tf: 0.45, tw: 0.35, gr: '50', nb: 4, pitch: 3, ecc: 3.5, end: 'no', Rj: 0, aj: 12, P: 0 },
       wind: { V: 130, Kz: 1.0, G: 1.0, Cd: 1.3 }, mem: { top: A(), bot: A(), diag: A() }, conn: { d: '0.875', gr: 'A325', thr: 'incl', n: 2, s: 3, e: 1.5, tg: 0.5 },
-      user: { StrI: Z(), Con: Z(), Fat: Z() }, fatCat: 'B', sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } };
+      user: { StrI: Z(), Con: Z(), Fat: Z() }, userMode: { StrI: 'add', Con: 'add' }, fatCat: 'B', sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } };
   }
   function defaultStuds() {
     return { d: 0.875, h: 6, st: 4, Fu: 60, Qn10: 0, gamFat: 1.75, skew: 'auto', Frc: 25, wv: 48, splX: '', splL: 0, splC: 3, beffMode: 'girder', zones: [] };   // beffMode 'girder' by default from 2026-10-29 (SB2-F1)
@@ -308,7 +311,8 @@
       if (!['X', 'Kb', 'Kt'].includes(C.type)) E(`${cp}.type`, 'Cross-frame type: X, K (bottom) or K (top).');
       if (C.h !== '' && C.h != null && !(isNum(C.h) && C.h > 0)) E(`${cp}.h`, 'Chord work-point depth must be positive (or blank).');
       ['V', 'Kz', 'G', 'Cd'].forEach(k => nn((C.wind || {})[k], `${cp}.wind.${k}`, `Wind ${k}`));
-      if (C.sb && C.sb.Mu !== '' && C.sb.Mu != null && !isNum(C.sb.Mu)) E(`${cp}.sb.Mu`, 'Deck-placement M_u must be a number (or blank: from the analysis).'); }
+      if (C.sb && C.sb.Mu !== '' && C.sb.Mu != null && !isNum(C.sb.Mu)) E(`${cp}.sb.Mu`, 'Deck-placement M_u must be a number (or blank: from the analysis).');
+      ['StrI', 'Con'].forEach(k => { const v = (C.userMode || {})[k]; if (v != null && !['add', 'replace'].includes(v)) E(`${cp}.userMode.${k}`, 'Entered member forces: add to or replace the computed forces.'); }); }
     // added 2026-10-29 (field splices PR): the optional field splice inputs
     if (p.splices != null) { const Q = p.splices || {}, B = Q.bolts || {};
       if (!['0.875', '1', '1.125'].includes(String(B.d))) E('splices.bolts.d', 'Bolt diameter: 7/8, 1 or 1 1/8 in.');

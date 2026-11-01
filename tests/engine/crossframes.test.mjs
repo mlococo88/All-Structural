@@ -190,3 +190,37 @@ test('Analysis takes the cross-frame point loads of the framing (SB2-A6): source
   assert.equal(AN.loadsOf(P2, P2.girders[0], null).src.xf, 'girder');
   P.crossframes.weight.mode = 'off'; assert.equal(AN.loadsOf(P, P.girders[0], null).src.xf, 'none');
 });
+
+test('Entered member forces: "Add to computed" (default, absent in older projects) or "Replace computed" per group (CFRM, 2026-11-01)', () => {
+  const run = mut => { const p = J(CF.DEF); p.user.StrI = { top: 6, bot: -8, diag: 12 }; p.user.Con = { top: 2, bot: -1.5, diag: 3 }; mut(p); const R = CF.compute(p, null); return { R, C: CF.checks(R) }; };
+  const strip = o => JSON.parse(JSON.stringify(o, (k, v) => k === 'steps' || k === 'p' || k === 'UM' || k === 'E' ? undefined : v));
+  // 1. userMode absent = { add, add } = today's results, bit for bit (members, combos, checks)
+  const A0 = run(() => {}), A1 = run(p => { p.userMode = { StrI: 'add', Con: 'add' }; });
+  assert.deepEqual(strip(A1.R.mem), strip(A0.R.mem)); assert.deepEqual(strip(A1.R.combos), strip(A0.R.combos)); assert.deepEqual(strip(A1.C), strip(A0.C));
+  assert.deepEqual(J(CF.userModes({})), { StrI: 'add', Con: 'add' }); assert.deepEqual(J(CF.defaults().userMode), { StrI: 'add', Con: 'add' });
+  // 2. Constructibility, hand check (GirderDetail's built-in inputs): h = 48 in, f_br = 1/h = 0.0208333 per kip-in, M_br = 389.226 kip-in
+  //    top chord: |f_br M_br| = 389.226/48 = 8.1089 kip; add: T = 2 + 8.1089 = 10.109, C = −(2 − 8.1089) = 6.109 kip; replace: T = 2, C = 0
+  const Rc = run(p => { p.userMode = { StrI: 'add', Con: 'replace' }; });
+  const top = R => R.combos.find(c => c.id === 'Con').f.find(q => q.e.k === 'top');
+  assert.ok(Math.abs(A0.R.SB.Mbr - 389.2263) < 1e-3); assert.ok(Math.abs(top(A0.R).T - (2 + A0.R.SB.Mbr / 48)) < 1e-9 && Math.abs(top(A0.R).Cc - (A0.R.SB.Mbr / 48 - 2)) < 1e-9);
+  assert.equal(top(Rc.R).T, 2); assert.equal(top(Rc.R).Cc, 0);
+  // top chord demands: add Tu 10.109 (Con), Cu 6.109 (Con); replace Tu 6 (Strength I), Cu 0; CF1 top 6.109/52.71 = 0.1159 → 0
+  assert.ok(Math.abs(A0.R.mem.top.Tu - 10.109) < 1e-3 && A0.R.mem.top.cT === 'Con'); assert.equal(Rc.R.mem.top.Tu, 6); assert.equal(Rc.R.mem.top.cT, 'StrI'); assert.equal(Rc.R.mem.top.Cu, 0);
+  const cf = (C, id) => C.find(c => c.id === id);
+  assert.ok(Math.abs(cf(A0.C, 'CF1').items[0].r - 0.1159) < 1e-4); assert.equal(cf(Rc.C, 'CF1').items[0].r, 0);
+  assert.ok(!cf(A0.C, 'CF7').naWhy && /Replace computed/.test(cf(Rc.C, 'CF7').naWhy) && cf(Rc.C, 'CF7').items.length === 0);
+  assert.deepEqual(strip(cf(Rc.C, 'CF8')), strip(cf(A0.C, 'CF8')), 'CF8 (stiffness) unchanged');
+  // 3. Strength, replace: the Strength III and V wind cases are not used; diagonal: add Cu = |−0.69511 × 3.6617| = 2.545 kip (Strength III); replace Cu = 0
+  const Rs = run(p => { p.userMode = { StrI: 'replace', Con: 'add' }; });
+  assert.ok(Rs.R.combos.filter(c => c.off).map(c => c.id).join() === 'StrIII,StrV' && Rs.R.combos.filter(c => c.off).every(c => c.f.every(q => q.T === 0 && q.Cc === 0)));
+  assert.ok(Math.abs(A0.R.mem.diag.Cu - 0.69511 * 3.6617) < 2e-4 && A0.R.mem.diag.cC === 'StrIII'); assert.equal(Rs.R.mem.diag.Cu, 0);
+  assert.equal(Rs.R.mem.diag.Tu, 12); assert.deepEqual(strip(Rs.R.mem.top), strip(A0.R.mem.top), 'top chord: Constructibility governs either way');
+  // 4. worked steps: which mode applies; none added where nothing is entered and the mode is the default
+  const st = R => R.steps.filter(s => /^cf\.user\./.test(s.id));
+  assert.deepEqual(J(st(A0.R).map(s => s.id)), ['cf.user.StrI', 'cf.user.Con']); assert.ok(st(A0.R).every(s => /Add to computed/.test(s.label)));
+  assert.ok(/Replace computed/.test(st(Rc.R)[1].label) && /not added/.test(st(Rc.R)[1].note)); assert.ok(/not used/.test(st(Rs.R)[0].note));
+  const D = CF.compute(J(CF.DEF), null); assert.equal(st(D).length, 0); assert.ok(!D.steps.find(s => s.id === 'cf.top.forces').note);
+  // 5. the diaphragm: the entered (angle member) forces do not apply, its checks are the same in either mode
+  const dia = m => { const p = J(CF.DEF); p.dia.on = 'yes'; p.userMode = { StrI: m, Con: m }; p.user.Con = { top: 2, bot: 0, diag: 0 }; return CF.checks(CF.compute(p, null)).filter(c => /^CF[DE]$/.test(c.id)); };
+  assert.deepEqual(strip(dia('replace')), strip(dia('add')));
+});

@@ -167,8 +167,8 @@
       if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(P, 'wt', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, P, 'wt', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('wt_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
-      rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
-        S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { S.pl = null; S.plName = ''; alert('Cannot read this file: ' + er.message); } redraw(); };
+      rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
+        S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { alert('Cannot read this file: ' + er.message); /* nothing changed: the previous file, if any, stays */ } redraw(); };
       rd.readAsText(f); });
     on('wt_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = defaultSel(R); } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
     host.querySelectorAll('[data-wt]').forEach(tr => tr.addEventListener('click', () => { const [k, i] = tr.dataset.wt.split(':'); S.sel = { k, i: +i }; redraw(); const t = host.querySelector('#wt-steps'); if (t) t.scrollIntoView({ block: 'start' }); }));
