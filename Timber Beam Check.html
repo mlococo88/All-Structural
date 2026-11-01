@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js" charset="utf-8"></script>
+<!-- TBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -1936,7 +1939,7 @@ function buildFactorsPane(P) {
    ===================================================================== */
 const OUT_TABS = [['sum', 'Summary'], ['sch', 'Schematic & Inputs'], ['ana', 'Analysis Results'], ['dv', 'Design Values'],
   ['bend', 'Bending'], ['shear', 'Shear'], ['bear', 'Bearing'], ['defl', 'Deflection'],
-  ['refv', 'Reference Values'], ['val', 'Validation'], ['man', 'Method & Manual']];
+  ['refv', 'Reference Values'], ['val', 'Validation'], ['man', 'Method & Manual'], ['rpt', 'Report']];   // rpt: TBRP
 const LS_TABS = { bend: () => R.dcr.b, shear: () => R.dcr.v, bear: () => R.dcr.c, defl: () => R.dcr.def };
 let PLOTQ = [], PLOTREG = {};
 function curTab() { const t = M.ui.outTab; return OUT_TABS.some(x => x[0] === t) ? t : 'sum'; }
@@ -1952,7 +1955,7 @@ function buildTabBar() {
     bar.appendChild(b);
   });
 }
-const BUILDERS = () => ({ sum: buildSummary, sch: buildSchem, ana: buildAnalysis, dv: buildDV, bend: buildBend, shear: buildShear, bear: buildBear, defl: buildDefl, refv: buildRefv, val: buildValid, man: buildManual });
+const BUILDERS = () => ({ sum: buildSummary, sch: buildSchem, ana: buildAnalysis, dv: buildDV, bend: buildBend, shear: buildShear, bear: buildBear, defl: buildDefl, refv: buildRefv, val: buildValid, man: buildManual, rpt: buildReport });   /* rpt: TBRP */
 function renderTab() {
   const pages = $('tabPages'); pages.innerHTML = ''; PLOTQ = [];
   const id = curTab(); const pg = el('div', 'tabPage'); pg.id = 'page_' + id; pages.appendChild(pg);
@@ -3058,6 +3061,280 @@ async function buildPrintReport(opts) {
   setTimeout(() => { window.print(); setTimeout(() => { if ($('printReport')) cleanup(); }, 1500); }, 60);
   return pr;
 }
+
+/* =====================================================================
+   REPORT tab (TBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
+   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers).
+   Worked steps are shared/steps.js steps (equation → substituted values → result), grouped by topic with
+   SharedSteps.group as in Spread Footing and the Steel Bridge app. Every value is a value the tool has already
+   computed (R, its combinations R.combos and governing cases R.gov, R.defl); only the substitution strings are
+   formatted here, with the tabs' own helpers (f0 … g4, fbFacs, fvFacs, fcpFacs, eFacs). Nothing is saved: the
+   report is rebuilt from R whenever the tab is shown or the inputs change while it is shown. The D11 "Print report"
+   button (header) is unchanged.
+   ===================================================================== */
+const TBRP = { closed: new Set(), api: null, doc: null };
+const tbrPlain = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, '_$1').replace(/<sup>(.*?)<\/sup>/g, '^$1').replace(/<br\s*\/?>/g, '; ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s*verify\s*$/, '').replace(/\s+/g, ' ').trim();
+const tbrTx = s => String(s == null ? '' : s).replace(/[\\{}$&#%_^~]/g, '');   // text placed inside \text{}
+const tbrCell = (v, d, cls) => ({ t: (typeof v === 'number') ? (isFinite(v) ? f(v, d == null ? 2 : d) : '—') : String(v == null || v === '' ? '—' : v), n: typeof v === 'number', cls });
+const tbrDC = (v, key) => ({ t: (typeof v === 'number' && isFinite(v)) ? f3(v) : '—', n: true, cls: (typeof v === 'number' && isFinite(v)) ? (v > 1 + 1e-12 ? 'ng' : (v >= 0.9 ? 'hi' : 'ok')) : 'na', key });
+const TB_NDS = 'NDS 2018 ';
+/* a steps item whose steps are grouped in topics (one topic per list entry, in order; SharedSteps.group sets each topic's status and result line) */
+function tbrTopics(list, opt) {
+  const L = list.filter(t => t.steps && t.steps.length);
+  const steps = [].concat(...L.map(t => t.steps));
+  const topics = L.map(t => { const g = SharedSteps.group(t.steps, [{ key: 'k', title: t.title, ref: t.ref, ids: () => true, res: t.res }], { strip: false })[0];
+    return { title: t.title, ref: t.ref || '', n: t.steps.length, cls: g.cls, chip: g.chip, res: g.res }; });
+  return Object.assign({ type: 'steps', scope: 'tb', steps, topics }, opt || {});
+}
+const tbrClean = s => String(s == null ? '' : s).replace(/_/g, '').replace(/\^/g, '');   // step labels and notes are plain text: 'F′_b' -> 'F′b'
+const tbrS = o => SharedSteps.step(Object.assign({}, o, { label: tbrClean(o.label), note: tbrClean(o.note) }));
+/* table cells, notes and sub-headings are the viewer's rich text: 'F′_b', 'f_v,n', 'F_bx^+' become $…$ notation (subscripts) */
+const tbrNot = s => String(s == null ? '' : s).replace(/([A-Za-zΔφλ]′?)_([A-Za-z0-9⊥]+(?:,[A-Za-z0-9]+)?)(\^[+−])?/g, (m, a, b, c) => '$' + a + '_{' + b + '}' + (c ? '^{' + c.slice(1) + '}' : '') + '$');
+function tbrRich(model) {
+  const cell = c => (c && typeof c === 'object') ? Object.assign({}, c, { t: tbrNot(c.t) }) : tbrNot(c);
+  model.sections.forEach(sec => { sec.title = tbrClean(sec.title); (sec.subs || []).forEach(q => { q.title = tbrNot(q.title); (q.items || []).forEach(it => {
+    if (it.type === 'note') it.text = tbrNot(it.text);
+    else if (it.type === 'figure') it.caption = tbrNot(it.caption);
+    else if (it.type === 'kv') it.rows = it.rows.map(r => [tbrNot(r[0]), tbrNot(r[1])].concat(r.slice(2)));
+    else if (it.type === 'table') { it.head = (it.head || []).map(cell); it.rows = (it.rows || []).map(r => Array.isArray(r) ? r.map(cell) : Object.assign({}, r, { cells: r.cells.map(cell) })); }
+    else if (it.type === 'steps' && it.topics) it.topics.forEach(t => { t.title = tbrClean(t.title); t.ref = tbrClean(t.ref); });
+  }); }); });
+  return model;
+}
+/* the product F = base · factors as eq / sub strings (the same symbols and values as facEq on the tabs) */
+const tbrFac = (base, facs) => ({ eq: base[0] + '\\,' + facs.map(x => x[0]).join('\\,'), sub: base[1] + ' \\times ' + facs.map(x => x[1]).join(' \\times ') });
+const tbrTbl = () => 'NDS 2018 Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : '');
+
+function tbrModel() {
+  const p = M.project || {}, mt = M.material, dz = M.design, secs = [], today = new Date().toISOString().slice(0, 10);
+  const gb = R.gov.b, gv = R.gov.v, gc = R.gov.c, d = R.defl, nt = shearIsNotch(gv), r = R.ref;
+  const bSign = R.legacyBend ? (gb.bend[0].Mp >= gb.bend[0].Mn ? 1 : -1) : gb.gbSign, bSpan = gb.gbSpan;
+  /* ---------- 1. Summary ---------- */
+  {
+    const rows = [
+      ['Bending', gb.name + ' (' + tfP(gb) + ')', bendLoc(gb), 'f_b = ' + f0(gb.fb) + ' psi', 'F′_b = ' + f0(gb.Fb_p) + ' psi', tbrDC(gb.r_b, 'tb/bd.r'), TB_NDS + '3.3'],
+      [nt ? 'Shear at notched end' : 'Shear', gv.name + ' (' + tfP(gv) + ')', nt ? 'end support reaction' : 'x = ' + f2(gv.xV) + ' ft', nt ? 'f_v,n = ' + f1(gv.fvn) + ' psi' : 'f_v = ' + f1(gv.fv) + ' psi', nt ? 'F′_v C_n' + (R.isGL ? ' C_vr' : '') + ' = ' + f1(gv.Fv_p * R.Cn * R.Cvr) + ' psi' : 'F′_v = ' + f1(gv.Fv_p) + ' psi', tbrDC(gv.r_v, nt ? 'tb/sh.rn' : 'tb/sh.r'), TB_NDS + (nt ? '3.4.3.2' : '3.4.2, 3.4.3.1')],
+      ['Bearing', gc.name, 'support ' + nodeN(gc.gcJ), 'f_c⊥ = ' + f0(gc.fcp) + ' psi', 'F′_c⊥ = ' + f0(gc.Fcp_p) + ' psi', tbrDC(gc.r_c, 'tb/br.r'), TB_NDS + '3.10'],
+      ['Deflection, live/snow', d.trName, R.nS > 1 ? spanLab(d.spanLL) : 'span', 'Δ = ' + f3(d.Dtr) + ' in.', 'L/' + g4(d.LLdiv) + ' = ' + f3(d.LLlim) + ' in.', tbrDC(d.r_dLL, 'tb/df.rLL'), 'IBC 2018 Table 1604.3'],
+      ['Deflection, total', 'K_cr·D + ' + d.totName, R.nS > 1 ? spanLab(d.spanTL) : 'span', 'Δ = ' + f3(d.Dtot) + ' in.', 'L/' + g4(d.TLdiv) + ' = ' + f3(d.TLlim) + ' in.', tbrDC(d.r_dTL, 'tb/df.rTL'), TB_NDS + '3.5.2; IBC 2018 Table 1604.3']];
+    const items = [{ type: 'kv', rows: [['Member', memberTxt()], ['Design method', 'NDS 2018 ' + methTxt() + (isLRFD() ? ' (Appendix N)' : '')],
+      ['Controlling limit state', (R.fails.length ? 'Code limit violated (NG)' : R.ctrlName) + ' — ' + pct(R.dcrMax) + ' (' + ctrlDetail() + ')'], ['Result', isNG() ? 'DOES NOT PASS' : 'All checks pass']] },
+      { type: 'table', head: ['Check', 'Governing combination', 'Location', 'Demand', 'Capacity / limit', 'Ratio', 'Reference'], rows: rows.map(x => ({ cells: x, cls: x[5].t === f3(R.dcrMax) ? 'gov' : '' })) },
+      { type: 'note', text: 'Ratio = demand / capacity; ≤ 1.000 passes. Each ratio links to the step where it is worked. ' + (isLRFD() ? 'LRFD: stresses from factored loads; adjusted values include K_F, φ and λ (NDS 2018 Appendix N). Deflection at service loads.' : 'Stresses are ASD (unfactored loads).') + ' The same values are on the Summary tab[[tab:sum| ↗]].' }];
+    if (R.fails.length) items.push({ type: 'note', warn: true, text: 'Code limit violated (NG): ' + R.fails.join(' ') });
+    secs.push({ title: 'Summary of results', subs: [{ title: 'Governing results', items }] });
+  }
+  /* ---------- 2. Project and inputs ---------- */
+  {
+    const subs = [], xN = nodeXs();
+    subs.push({ title: 'Project', items: [{ type: 'kv', rows: [['Project', p.name || '—'], ['Member / mark', p.member || '—'], ['Job #', p.job || '—'], ['Designer', (p.designer || '—') + (p.date ? ', ' + p.date : '')], ['Checked by', p.checker || '—'],
+      ['Codes', 'NDS 2018 (' + methTxt() + '), NDS Supplement 2018, ASCE 7-16 ' + (isLRFD() ? 'Sec. 2.3.1' : 'Sec. 2.4.1') + ', IBC 2018 Table 1604.3']] },
+      { type: 'note', text: 'Units: lb, ft, in., psi unless noted. Every value in this report is the value the tool computes on its result tabs (Design Values[[tab:dv| ↗]], Analysis Results[[tab:ana| ↗]], Bending[[tab:bend| ↗]], Shear[[tab:shear| ↗]], Bearing[[tab:bear| ↗]], Deflection[[tab:defl| ↗]]).' }] });
+    const sch = schematicSVG(), svg = (sch.querySelector && sch.querySelector('svg')) ? sch.querySelector('svg').outerHTML : '';
+    const gItems = [{ type: 'table', head: ['Span', 'From – to', 'Length (ft)', 'Type'], rows: M.geom.spans.map((s, i) => [String(i + 1), nodeN(i) + ' – ' + nodeN(i + 1), tbrCell(R.Ls[i], 2), (R.types[i] === 'free' || R.types[i + 1] === 'free') ? 'cantilever' : 'between supports']) },
+      { type: 'table', head: ['Support', 'x (ft)', 'Type', 'Bearing l_b (in.)', 'C_b permitted (≥ 3 in. from end)'], rows: M.geom.supports.map((s, j) => [nodeN(j), tbrCell(xN[j], 2), s.t === 'pin' ? 'pin / roller' : s.t === 'fixed' ? 'fixed' : 'free end', s.t === 'free' ? '—' : g4(s.lb), s.t === 'free' ? '—' : (s.cb ? 'yes' : 'no (end bearing)')]) },
+      { type: 'note', text: 'Member spacing s = ' + g4(M.geom.spacing) + ' in. (tributary width: [[tb/ld.t]]). Set on the Geometry input tab; the schematic is on the Schematic & Inputs tab[[tab:sch| ↗]].' }];
+    if (svg) gItems.push({ type: 'figure', svg, caption: 'Schematic (not to scale vertically; loads + down; point-load positions from the left end, node A)' });
+    subs.push({ title: 'Geometry and supports', items: gItems });
+    const lItems = [{ type: 'table', head: ['Load type', 'Area load (psf)', 'Line load w (plf)', isLRFD() ? 'C_D (ASD only; not used in LRFD)' : 'C_D (NDS 2018 Table 2.3.2)'], rows: ['D', 'L', 'Lr', 'S', 'W'].map(t => [t, g4(M.loads[t] || 0) + (t === 'D' && M.loads.selfWeight ? ' + self-weight' : ''), { t: f2(R.wu[t]), n: true, key: 'tb/ld.w' + t }, String(LOAD_CD[t])]) }];
+    if ((M.loads.points || []).length) lItems.push({ type: 'table', head: ['Point load', 'P (lb)', 'x (ft)', 'Type'], rows: M.loads.points.map((q, i) => ['P' + (i + 1), g4(q.mag), g4(q.loc), q.type || 'D']) });
+    lItems.push({ type: 'note', text: 'Point loads within d of a support (shear): ' + (dz.shearXd ? 'multiplied by x/d (NDS 2018 3.4.3.1(b)).' : 'at full value.') });
+    subs.push({ title: 'Loads', items: lItems });
+    const tyName = (TBC_MAT_TYPES.find(t => t[0] === mt.type) || [0, mt.type])[1];
+    const mrows = mt.type === 'glulam' ? [['Material type', tyName], ['Combination', mt.glulam.combo === 'Custom' ? 'custom values' : mt.glulam.combo], ['Species group', (GLULAM_GRP[glGrpOf(mt.glulam)] || {}).name || '?'], ['Section', 'b = ' + g4(R.b) + ' in., d = ' + g4(R.d) + ' in.' + (mt.glulam.customSize ? ' (custom)' : ' (' + g4(mt.glulam.nLam) + ' laminations)')]]
+      : mt.type === 'scl' ? [['Material type', tyName], ['Product', (SCL_KINDS[mt.scl.kind] || mt.scl.kind) + (mt.scl.name ? ' — ' + mt.scl.name : '')], ['Section', 'b = ' + g4(mt.scl.b) + ' in., d = ' + g4(mt.scl.d) + ' in.'], ['Size factor', 'C_V = (' + g4(mt.scl.dref) + '/d)^' + g4(mt.scl.n) + ' ≤ ' + g4(mt.scl.cvMax) + ' (manufacturer)']]
+      : [['Material type', tyName], ['Size', mt.size === 'Custom' ? 'Custom b = ' + g4(mt.customB) + ' in., d = ' + g4(mt.customD) + ' in.' : mt.size], ['Species / grade', mt.manual ? 'Manual reference values' : (mt.customMaterials || {})[mt.species] ? 'Custom species "' + mt.species + '"' : mt.species + ' (' + ((DEFAULT_SPECIES[mt.species] || {}).name || '?') + '), ' + ((GRADES_DB[mt.grade] || {}).name || mt.grade)]];
+    mrows.push(['Reference values', tbrPlain(R.src)], ['Orientation', dz.flatUse ? 'Flat (load on the wide face)' : 'Edgewise'], ['Wet service', dz.moisture === 'Wet' ? 'yes' : 'no'], ['Temperature', { Normal: 'T ≤ 100 °F', '100-125': '100–125 °F', '125-150': '125–150 °F' }[dz.temp] || dz.temp],
+      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'],
+      ['Lateral support, top edge', dz.latTop === 'Supports' ? 'at supports only, l_u = ' + (dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length') : 'continuous'],
+      ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? 'at supports only, l_u = ' + (dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length') : 'continuous'],
+      ['Creep factor K_cr', g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
+    subs.push({ title: 'Section, material and design settings', items: [{ type: 'table', head: ['Item', 'Value'], rows: mrows }] });
+    secs.push({ title: 'Project and inputs', subs });
+  }
+  /* ---------- 3. Section properties and loads ---------- */
+  {
+    const fl = R.flat, T = [];
+    T.push({ title: 'Section properties', ref: TB_NDS + '3.1.2' + (fl ? '; flat use: bending about the weak axis' : ''), res: /\.S$/, steps: [
+      tbrS({ id: 'sec.A', label: 'Gross area (b, d: ' + (R.isGL || R.isSCL || M.material.size === 'Custom' ? 'entered' : 'standard dressed size, NDS Supplement 2018 Table 1B') + ')', sym: 'A', eq: 'b\\,d', sub: g4(R.b) + ' \\times ' + g4(R.d), value: R.A, unit: 'in^{2}', d: 3, ref: TB_NDS + '3.1.2' }),
+      tbrS({ id: 'sec.S', label: 'Section modulus (bending axis; b_w = ' + (fl ? 'd' : 'b') + ', d_b = ' + (fl ? 'b' : 'd') + ')', sym: 'S', eq: '\\frac{b_{w} d_{b}^{2}}{6}', sub: '\\frac{' + g4(R.bw) + ' \\times ' + g4(R.dep) + '^{2}}{6}', value: R.S, unit: 'in^{3}', d: 3 }),
+      tbrS({ id: 'sec.I', label: 'Moment of inertia (bending axis)', sym: 'I', eq: '\\frac{b_{w} d_{b}^{3}}{12}', sub: '\\frac{' + g4(R.bw) + ' \\times ' + g4(R.dep) + '^{3}}{12}', value: R.I, unit: 'in^{4}', d: 3 })] });
+    const ls = [tbrS({ id: 'ld.t', label: 'Tributary width (member spacing s)', sym: 't', eq: '\\frac{s}{12}', sub: '\\frac{' + g4(R.spacing) + '}{12}', value: R.trib, unit: 'ft', d: 3 }),
+      tbrS({ id: 'ld.wsw', label: 'Self-weight' + (M.loads.selfWeight ? '' : ' (not included: input)'), sym: 'w_{sw}', eq: '\\frac{\\rho A}{144}', sub: M.loads.selfWeight ? '\\frac{' + g4(R.dens) + ' \\times ' + f3(R.A) + '}{144}' : '', value: R.w_self, unit: 'plf', d: 2, note: M.loads.selfWeight ? 'ρ = ' + g4(R.dens) + ' pcf (' + (R.userVals ? 'user-entered' : 'tool value for ' + (R.isGL ? 'the species group' : M.material.species)) + ').' : '' })];
+    ['D', 'L', 'Lr', 'S', 'W'].forEach(t => ls.push(tbrS({ id: 'ld.w' + t, label: 'Line load, ' + t, sym: 'w_{' + t + '}', eq: t === 'D' && M.loads.selfWeight ? 'p_{D}\\,t + w_{sw}' : 'p_{' + t + '}\\,t', sub: g4(M.loads[t] || 0) + ' \\times ' + f3(R.trib) + (t === 'D' && M.loads.selfWeight ? ' + ' + f2(R.w_self) : ''), value: R.wu[t], unit: 'plf', d: 2 })));
+    T.push({ title: 'Loads on the member', ref: 'statics', res: /\.wL$/, steps: ls });
+    secs.push({ title: 'Section properties and loads', subs: [{ title: 'Section properties and line loads', items: [tbrTopics(T)] }] });
+  }
+  /* ---------- 4. Design values ---------- */
+  {
+    const subs = [];
+    subs.push({ title: 'Reference design values', items: [
+      R.isGL ? { type: 'table', head: ['F_bx^+', 'F_bx^−', 'F_vx', 'F_c⊥x (tension face)', 'E_x', 'E_x,min'], rows: [[r.Fb, r.Fbn, r.Fv, r.Fcp, r.E, r.Emin].map(v => ({ t: g4(v), n: true }))] }
+        : { type: 'table', head: ['F_b', 'F_t', 'F_v', 'F_c⊥', 'F_c', 'E', 'E_min'], rows: [[g4(r.Fb), r.Ft ?? '—', g4(r.Fv), g4(r.Fcp), r.Fc ?? '—', g4(r.E), g4(r.Emin)].map(v => ({ t: String(v), n: true }))] },
+      { type: 'note', text: 'psi. Source: ' + tbrPlain(R.src) + (R.userVals ? '.' : ' (built-in value: verify against the printed NDS Supplement; every built-in value is listed with its table on the Reference Values tab[[tab:refv| ↗]]).') + ' F_t and F_c are listed only: this beam check has no axial load.' }] });
+    subs.push({ title: 'Adjustment factors (NDS 2018 Table ' + (R.isGL ? '5.3.1, glulam' : R.isSCL ? '8.3.1, SCL' : '4.3.1, sawn lumber') + ', ' + methTxt() + ')', items: [{ type: 'table', head: ['Factor', 'F_b', 'F_v', 'F_c⊥', 'E, E_min', 'Basis', 'Reference'], rows: factorRows().map(x => x.map(tbrPlain)) },
+      { type: 'note', text: 'C_L is worked per span and edge in §6 ([[tb/bd.CL]]); C_b per support in §8 ([[tb/br.Cb]]).' }] });
+    const sg = R.legacyBend ? 1 : gb.gbSign, T = [];
+    const fb = tbrFac(fbBase(sg), fbFacs(gb, gb.CL, gb.CV)), fv = tbrFac([R.isGL ? 'F_{vx}' : 'F_{v}', g4(r.Fv)], fvFacs(gv)), fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(gc.gcJ));
+    const fe = tbrFac(['E', g4(r.E)], eFacs(false)), fm = tbrFac(['E_{min}', g4(r.Emin)], eFacs(true));
+    T.push({ title: 'Bending: F′_b for ' + gb.name, ref: tbrTbl(), steps: [tbrS({ id: 'dv.Fb', label: 'Adjusted bending design value, ' + gb.name + (R.isGL ? (sg > 0 ? ' (M > 0, F_bx^+)' : ' (M < 0, F_bx^−)') : ''), sym: 'F^{\\prime}_{b}', eq: fb.eq, sub: fb.sub, value: gb.Fb_p, unit: 'psi', d: 0, ref: tbrTbl(), note: 'C_L and C_V: §bd.CL' + (sawnOnly() ? '' : ', §bd.CV') + '.' })] });
+    T.push({ title: 'Shear: F′_v for ' + gv.name, ref: tbrTbl(), steps: [tbrS({ id: 'dv.Fv', label: 'Adjusted shear design value, ' + gv.name, sym: 'F^{\\prime}_{v}', eq: fv.eq, sub: fv.sub, value: gv.Fv_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
+    T.push({ title: 'Bearing: F′_c⊥ at support ' + nodeN(gc.gcJ), ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'dv.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(gc.gcJ), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: gc.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
+    T.push({ title: 'Stiffness: E′ and E′_min', ref: tbrTbl(), res: /\.Emin$/, steps: [tbrS({ id: 'dv.E', label: 'Adjusted modulus of elasticity (deflection' + (isLRFD() ? ', service loads' : '') + ')', sym: 'E^{\\prime}', eq: fe.eq, sub: fe.sub, value: R.E_p, unit: 'psi', d: 0, ref: tbrTbl() }),
+      tbrS({ id: 'dv.Emin', label: 'Adjusted E_min (beam stability)' + (isLRFD() ? ', incl. K_F φ_s' : ''), sym: 'E^{\\prime}_{min}', eq: fm.eq, sub: fm.sub, value: R.Emin_p, unit: 'psi', d: 0, ref: tbrTbl() })] });
+    subs.push({ title: 'Adjusted design values (governing combinations)', items: [tbrTopics(T), { type: 'note', text: 'Each combination has its own ' + (isLRFD() ? 'λ' : 'C_D') + ': the values of every combination are in §6–§8 (tables) and on the Design Values tab[[tab:dv| ↗]].' }] });
+    secs.push({ title: 'Design values', subs });
+  }
+  /* ---------- 5. Analysis ---------- */
+  {
+    const sj = R.supJ;
+    const rows = R.combos.map(c => ({ cls: c === gb || c === gv || c === gc ? 'gov' : '', cells: [c.name, String(c.TF), tbrCell(c.w, 1), ...sj.map(j => tbrCell(c.R[j], 0)), tbrCell(bendM(c), 0), tbrCell(c.Vd, 0), tbrCell(c.sumF, 0), tbrCell(c.sumR, 0)] }));
+    const eqOK = R.combos.every(c => Math.abs(c.sumR - c.sumF) <= 1e-6 * Math.max(1, Math.abs(c.sumF)));
+    secs.push({ title: 'Analysis', subs: [{ title: isLRFD() ? 'LRFD load combinations (ASCE 7-16 Sec. 2.3.1): actions and reactions' : 'ASD load combinations (ASCE 7-16 Sec. 2.4.1): actions and reactions', items: [
+      { type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'w (plf)', ...sj.map(j => 'R_' + nodeN(j) + ' (lb)'), 'M (ft-lb)', 'V (lb)', 'ΣF (lb)', 'ΣR (lb)'], rows },
+      { type: 'note', text: 'Bold = governing for bending, shear or bearing. ' + (isLRFD() ? 'λ is the time effect factor of the combination (NDS 2018 Table N3).' : 'C_D is that of the shortest-duration load present in the combination (NDS 2018 2.3.2).') + ' M = ' + (R.legacyBend ? 'largest |M|' : 'moment of the governing bending region') + '; V = design shear (NDS 2018 3.4.3.1). Statics: ΣR = ΣF in ' + (eqOK ? 'every combination.' : 'NOT every combination (check).') },
+      { type: 'note', text: (R.simple ? 'Simple span: closed-form statics.' : 'Continuous beam / cantilever: direct stiffness method, one E′I for the member (EI does not affect the reactions of a prismatic member).') + ' Shear and moment diagrams and the peak values of every combination: Analysis Results tab[[tab:ana| ↗]].' }] }] });
+  }
+  /* ---------- 6. Bending ---------- */
+  {
+    const c = gb, i = bSpan, sign = bSign, be = c.bend[i], Mv = bendM(c), T = [];
+    T.push({ title: 'Bending stress (demand)', ref: TB_NDS + '3.3.2, Eq. 3.3-2', steps: [tbrS({ id: 'bd.fb', label: (R.legacyBend ? 'Largest |M|' : sign > 0 ? 'Largest positive moment' : 'Largest negative moment') + ' in ' + spanLab(i) + ', ' + c.name + ': M = ' + f0(Mv) + ' ft-lb (' + bendLoc(c) + ')', sym: 'f_{b}', eq: '\\frac{M}{S}', sub: '\\frac{' + f0(Mv) + ' \\times 12}{' + f3(R.S) + '}', value: c.fb, unit: 'psi', d: 0, ref: TB_NDS + 'Eq. 3.3-2', note: 'S: §sec.S. M: Analysis (§5.1).' })] });
+    const st = stabFor(i, sign), s = st.s, CL = sign > 0 ? be.CLt : be.CLb, cl = [];
+    if (!st.applies) cl.push(tbrS({ id: 'bd.CL', label: 'Beam stability factor (' + st.edge + ' edge)', sym: 'C_{L}', eq: '', sub: '', value: CL, unit: '', d: 3, ref: TB_NDS + '3.3.3.1, 3.3.3.3', note: R.dep <= R.bw ? 'd ≤ b: C_L = 1.0 (NDS 2018 3.3.3.1).' : 'The ' + st.edge + ' (compression) edge is braced continuously: C_L = 1.0 (NDS 2018 3.3.3.3).' }));
+    else {
+      const Fbs = sign > 0 ? c.Fb_star : c.Fbn_star, rr = s.FbE / Fbs, fs = tbrFac(fbBase(sign), fbStarFacs(c));
+      const leEq = /^2\.06/.test(s.leRule) ? ['2.06\\,l_{u}', '2.06 \\times ' + f1(s.lu)] : /^1\.84/.test(s.leRule) ? ['1.84\\,l_{u}', '1.84 \\times ' + f1(s.lu)] : ['1.63\\,l_{u} + 3d', '1.63 \\times ' + f1(s.lu) + ' + 3 \\times ' + g4(R.dep)];
+      cl.push(tbrS({ id: 'bd.lu', label: 'Unbraced length of the ' + st.edge + ' edge (' + ((sign > 0 ? dz.luTop : dz.luBot) > 0 ? 'entered' : 'span length') + '), ' + spanLab(i), sym: 'l_{u}', eq: '', sub: '', value: s.lu, unit: 'in', d: 1 }),
+        tbrS({ id: 'bd.luD', label: 'Slenderness of the unbraced length', sym: '\\frac{l_{u}}{d}', eq: '', sub: '\\frac{' + f1(s.lu) + '}{' + g4(R.dep) + '}', value: s.luD, unit: '', d: 2 }),
+        tbrS({ id: 'bd.le', label: 'Effective length: ' + s.leRule, sym: 'l_{e}', eq: leEq[0], sub: leEq[1], value: s.le, unit: 'in', d: 1, ref: TB_NDS + 'Table 3.3.3' + (R.fn1 ? ' footnote 1' : '') }),
+        tbrS({ id: 'bd.RB', label: 'Slenderness ratio for bending members', sym: 'R_{B}', eq: '\\sqrt{\\frac{l_{e}\\,d}{b^{2}}}', sub: '\\sqrt{\\frac{' + f1(s.le) + ' \\times ' + g4(R.dep) + '}{' + g4(R.bw) + '^{2}}}', value: s.RB, unit: '', d: 2, ref: TB_NDS + 'Eq. 3.3-5', note: s.RB > 50 ? 'R_B > 50: not permitted (NDS 2018 3.3.3.7) — NG.' : 'R_B ≤ 50 (NDS 2018 3.3.3.7).' }),
+        tbrS({ id: 'bd.FbE', label: 'Critical buckling design value', sym: 'F_{bE}', eq: '\\frac{1.20\\,E^{\\prime}_{min}}{R_{B}^{2}}', sub: '\\frac{1.20 \\times ' + f0(R.Emin_p) + '}{' + f2(s.RB) + '^{2}}', value: s.FbE, unit: 'psi', d: 0, ref: TB_NDS + '3.3.3.8', note: 'E′_min: §dv.Emin.' }),
+        tbrS({ id: 'bd.Fbs', label: 'F_b times all factors except C_L, C_V' + (R.isGL ? ' and C_fu' : '') + ' (' + c.name + ')', sym: 'F_{b}^{*}', eq: fs.eq, sub: fs.sub, value: Fbs, unit: 'psi', d: 0, ref: TB_NDS + '3.3.3.8' }),
+        tbrS({ id: 'bd.CL', label: 'Beam stability factor (' + st.edge + ' edge in compression, ' + spanLab(i) + ')', sym: 'C_{L}', eq: '\\frac{1 + F_{bE}/F_{b}^{*}}{1.9} - \\sqrt{\\left(\\frac{1 + F_{bE}/F_{b}^{*}}{1.9}\\right)^{2} - \\frac{F_{bE}/F_{b}^{*}}{0.95}}', sub: '\\frac{1 + ' + f3(rr) + '}{1.9} - \\sqrt{\\left(\\frac{1 + ' + f3(rr) + '}{1.9}\\right)^{2} - \\frac{' + f3(rr) + '}{0.95}}', value: CL, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.3-6', note: 'F_bE / F_b* = ' + f3(rr) + '; C_L ≤ 1.0.' }));
+    }
+    T.push({ title: 'Beam stability factor C_L', ref: TB_NDS + '3.3.3, Table 3.3.3', res: /\.CL$/, steps: cl });
+    if (!sawnOnly()) {
+      const CV = sign > 0 ? be.CVt : be.CVb, cv = [], gov = CV > 1 ? 'C_V > 1.0: C_L and C_V both apply (NDS 2018 8.3.6).' : (CL <= CV ? 'C_L' : 'C_V') + ' governs (C_L and C_V are not cumulative: the lesser applies).';
+      if (R.isGL) {
+        const z = sign > 0 ? be.zt : be.zb, x = R.glX;
+        if (!z) cv.push(tbrS({ id: 'bd.CV', label: 'Volume factor (no moment of this sign in the region)', sym: 'C_{V}', eq: '', sub: '', value: CV, unit: '', d: 3, ref: TB_NDS + '5.3.6' }));
+        else {
+          const raw = Math.pow(21 / z.Lz, 1 / x) * Math.pow(12 / R.dep, 1 / x) * Math.pow(5.125 / R.bw, 1 / x);   // display only, as the Bending tab (cvBlock)
+          cv.push(tbrS({ id: 'bd.Lz', label: 'Length between the points of zero moment (x₁ = ' + f3(z.xl) + ', x₂ = ' + f3(z.xr) + ' ft)', sym: 'L', eq: 'x_{2} - x_{1}', sub: f3(z.xr) + ' - ' + f3(z.xl), value: z.Lz, unit: 'ft', d: 3, ref: TB_NDS + '5.3.6' }),
+            tbrS({ id: 'bd.CV', label: 'Volume factor (' + (sign > 0 ? 'positive' : 'negative') + ' moment region, ' + spanLab(i) + '; x = ' + x + ')', sym: 'C_{V}', eq: '\\left(\\frac{21}{L}\\right)^{1/x}\\left(\\frac{12}{d}\\right)^{1/x}\\left(\\frac{5.125}{b}\\right)^{1/x} \\le 1.0', sub: '\\left(\\frac{21}{' + f3(z.Lz) + '}\\right)^{1/' + x + '}\\left(\\frac{12}{' + g4(R.dep) + '}\\right)^{1/' + x + '}\\left(\\frac{5.125}{' + g4(R.bw) + '}\\right)^{1/' + x + '}', value: CV, unit: '', d: 3, ref: TB_NDS + '5.3.6, Eq. 5.3-1', note: 'Product = ' + raw.toFixed(4) + (raw > 1 ? ' > 1.0, so C_V = 1.0' : '') + '. C_L = ' + f3(CL) + ': ' + gov }));
+        }
+      } else {
+        const raw = Math.pow(R.sclRef / R.dep, R.sclN);   // display only, as the Bending tab (cvBlock)
+        cv.push(tbrS({ id: 'bd.CV', label: 'Size factor of the manufacturer (n, d_ref, C_V,max user-entered)', sym: 'C_{V}', eq: '\\left(\\frac{d_{ref}}{d}\\right)^{n}', sub: '\\left(\\frac{' + g4(R.sclRef) + '}{' + g4(R.dep) + '}\\right)^{' + g4(R.sclN) + '}', value: CV, unit: '', d: 3, ref: TB_NDS + '8.3.6; manufacturer', note: 'Product = ' + raw.toFixed(4) + (raw > R.sclMax ? ' > ' + g4(R.sclMax) + ', so C_V = ' + g4(R.sclMax) : '') + '. C_L = ' + f3(CL) + ': ' + gov }));
+      }
+      T.push({ title: R.isGL ? 'Volume factor C_V (glulam)' : 'Size factor C_V (SCL)', ref: R.isGL ? TB_NDS + '5.3.6' : TB_NDS + '8.3.6', res: /\.CV$/, steps: cv });
+    }
+    const fb = tbrFac(fbBase(sign), fbFacs(c, c.CL, c.CV));
+    T.push({ title: 'Adjusted bending design value and check', ref: TB_NDS + '3.3.1; ' + tbrTbl(), steps: [
+      tbrS({ id: 'bd.Fbp', label: 'Adjusted bending design value (' + c.name + ', ' + tfP(c) + ')', sym: 'F^{\\prime}_{b}', eq: fb.eq, sub: fb.sub, value: c.Fb_p, unit: 'psi', d: 0, ref: tbrTbl(), note: R.isGL ? 'C_L and C_V are not cumulative: the lesser applies (NDS 2018 5.3.6).' : R.isSCL ? 'NDS 2018 8.3.6.' : 'Sawn lumber: no C_V.' }),
+      tbrS({ id: 'bd.r', label: 'Bending check', sym: '\\frac{f_{b}}{F^{\\prime}_{b}}', eq: '', sub: '\\frac{' + f0(c.fb) + '}{' + f0(c.Fb_p) + '}', value: c.r_b, unit: '', d: 3, ref: TB_NDS + '3.3.1', ok: c.r_b <= 1 })] });
+    const cvOn = !sawnOnly(), brows = [];
+    c.bend.forEach(e => { brows.push([spanLab(e.span), '+M (top)' + (R.isGL ? ', F_bx^+' : ''), tbrCell(e.Mp, 0), e.xp == null ? '—' : tbrCell(e.xp, 2), tbrCell(e.CLt, 3), ...(cvOn ? [tbrCell(e.CVt, 3)] : []), tbrCell(e.Fbp_t, 0), tbrCell(e.fbp, 0), tbrDC(e.rp)]);
+      brows.push([spanLab(e.span), '−M (bottom)' + (R.isGL ? ', F_bx^−' : ''), tbrCell(e.Mn, 0), e.xn == null ? '—' : tbrCell(e.xn, 2), tbrCell(e.CLb, 3), ...(cvOn ? [tbrCell(e.CVb, 3)] : []), tbrCell(e.Fbp_b, 0), tbrCell(e.fbn, 0), tbrDC(e.rn)]); });
+    const subs = [{ title: 'Bending check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'The same steps are on the Bending tab[[tab:bend| ↗]].' }] }];
+    if (R.nS > 1 || !R.legacyBend) subs.push({ title: 'Bending by span and sign (' + c.name + ')', items: [{ type: 'table', head: ['Span', 'Region', '|M| (ft-lb)', 'x (ft)', 'C_L', ...(cvOn ? ['C_V'] : []), 'F′_b (psi)', 'f_b (psi)', 'Ratio'], rows: brows },
+      { type: 'table', head: ['Span', 'top l_u (in.)', 'l_e', 'R_B', 'F_bE', 'bottom l_u (in.)', 'l_e', 'R_B', 'F_bE'], rows: R.stab.map((q, k) => [spanLab(k), tbrCell(q.top.lu, 1), tbrCell(q.top.le, 1), tbrCell(q.top.RB, 2), tbrCell(q.top.FbE, 0), tbrCell(q.bot.lu, 1), tbrCell(q.bot.le, 1), tbrCell(q.bot.RB, 2), tbrCell(q.bot.FbE, 0)]) },
+      { type: 'note', text: 'Top edge: ' + (R.stabilityApplies ? 'at supports only' : 'braced (C_L = 1.0)') + '; bottom edge: ' + (R.latBot === 'same' ? 'same as top edge' : (R.stabBot ? 'at supports only' : 'braced (C_L = 1.0)')) + '.' + (R.simple ? '' : ' Continuous beams and cantilevers use the general rule of NDS 2018 Table 3.3.3 footnote 1.') }] });
+    subs.push({ title: 'Bending ratio by combination', items: [{ type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'F_b* (psi)', 'Governing region', 'M (ft-lb)', 'C_L', ...(cvOn ? ['C_V'] : []), 'F′_b (psi)', 'f_b (psi)', 'Ratio'],
+      rows: R.combos.map(k => ({ cls: k === c ? 'gov' : '', cells: [k.name, String(k.TF), tbrCell(k.Fb_s, 0), bendLoc(k), tbrCell(bendM(k), 0), tbrCell(k.CL, 3), ...(cvOn ? [tbrCell(k.CV, 3)] : []), tbrCell(k.Fb_p, 0), tbrCell(k.fb, 0), tbrDC(k.r_b)] })) }] });
+    secs.push({ title: 'Bending', subs });
+  }
+  /* ---------- 7. Shear ---------- */
+  {
+    const c = gv, T = [];
+    const xdList = !c.xdUsed ? [] : (c.Pv || []).map((q, k) => q !== c.P[k] ? f0(c.P[k].mag) + ' lb at x = ' + f2(q.loc) + ' ft × ' + f3(q.mag / c.P[k].mag) + ' = ' + f0(q.mag) + ' lb' : null).filter(Boolean);
+    T.push({ title: 'Design shear and shear stress', ref: TB_NDS + '3.4.2, 3.4.3.1', res: /\.fv$/, steps: [
+      tbrS({ id: 'sh.V', label: c.vZone !== null ? 'Design shear at support ' + nodeN(c.vZone) + ' (uniform load within d ignored, point loads within d included), ' + c.name : 'Design shear: largest |V| at least d from each support face, ' + c.name, sym: 'V', eq: '', sub: '', value: c.Vd, unit: 'lb', d: 0, ref: R.shearXd ? TB_NDS + '3.4.3.1(a), (b)' : TB_NDS + '3.4.3.1(a)',
+        note: 'x = ' + f2(c.xV) + ' ft; d = ' + g4(R.dep) + ' in. = ' + f3(R.dep / 12) + ' ft. ' + (R.shearXd ? 'Point loads within d of a support multiplied by x/d (NDS 2018 3.4.3.1(b)): ' + (xdList.length ? xdList.join('; ') : 'not used in this combination') + '.' : 'Point loads within d of a support at full value (the x/d reduction of NDS 2018 3.4.3.1(b) is not used).') }),
+      tbrS({ id: 'sh.fv', label: 'Shear stress', sym: 'f_{v}', eq: '\\frac{3V}{2A}', sub: '\\frac{1.5 \\times ' + f0(c.Vd) + '}{' + f3(R.A) + '}', value: c.fv, unit: 'psi', d: 1, ref: TB_NDS + 'Eq. 3.4-2', note: 'A: §sec.A.' })] });
+    const fv = tbrFac([R.isGL ? 'F_{vx}' : 'F_{v}', g4(r.Fv)], fvFacs(c));
+    T.push({ title: 'Adjusted shear design value and check', ref: tbrTbl(), steps: [
+      tbrS({ id: 'sh.Fvp', label: 'Adjusted shear design value (' + c.name + ', ' + tfP(c) + ')', sym: 'F^{\\prime}_{v}', eq: fv.eq, sub: fv.sub, value: c.Fv_p, unit: 'psi', d: 1, ref: tbrTbl() }),
+      tbrS({ id: 'sh.r', label: 'Shear check (unnotched section)', sym: '\\frac{f_{v}}{F^{\\prime}_{v}}', eq: '', sub: '\\frac{' + f1(c.fv) + '}{' + f1(c.Fv_p) + '}', value: c.r_v1, unit: '', d: 3, ref: TB_NDS + '3.4.1', ok: c.r_v1 <= 1 })] });
+    if (R.hasNotch) T.push({ title: 'Notched ends (tension face at the end supports)', ref: TB_NDS + '3.4.3.2(a)' + (R.isGL ? '; 5.3.10; 5.4.4.1' : '; 4.4.3.2'), steps: [
+      tbrS({ id: 'sh.dn', label: 'Depth at the notch (n = ' + g4(R.notch) + ' in.; limit ' + (R.isGL ? 'min(d/10, 3 in.)' : 'd/4') + ' = ' + f2(R.notchLim) + ' in.' + (R.notch > R.notchLim ? ': exceeded, NG' : '') + ')', sym: 'd_{n}', eq: 'd - n', sub: g4(R.dep) + ' - ' + g4(R.notch), value: R.dn, unit: 'in', d: 3, ref: R.isGL ? TB_NDS + '5.4.4.1' : TB_NDS + '4.4.3.2' }),
+      tbrS({ id: 'sh.Cn', label: 'Notch factor', sym: 'C_{n}', eq: '\\left(\\frac{d_{n}}{d}\\right)^{2}', sub: '\\left(\\frac{' + f3(R.dn) + '}{' + g4(R.dep) + '}\\right)^{2}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.4-3' }),
+      tbrS({ id: 'sh.fvn', label: 'Shear stress at the notched end (R = largest |reaction| at a notched end support, ' + c.name + ')', sym: 'f_{v,n}', eq: '\\frac{3R}{2\\,b\\,d_{n}}', sub: '\\frac{1.5 \\times ' + f0(c.Rmax) + '}{' + g4(R.bw) + ' \\times ' + f3(R.dn) + '}', value: c.fvn, unit: 'psi', d: 1, ref: TB_NDS + 'Eq. 3.4-3' }),
+      tbrS({ id: 'sh.rn', label: 'Notched-end check', sym: R.isGL ? '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}\\,C_{vr}}' : '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}}', eq: '', sub: R.isGL ? '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + ' \\times ' + R.Cvr + '}' : '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + '}', value: c.r_vn, unit: '', d: 3, ref: TB_NDS + '3.4.3.2(a)', ok: c.r_vn <= 1 })] });
+    secs.push({ title: 'Shear', subs: [{ title: 'Shear check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'Shear ratio of the combination = the larger of the unnotched and notched-end ratios = ' + f3(c.r_v) + '. The same steps are on the Shear tab[[tab:shear| ↗]].' }] },
+      { title: 'Shear ratio by combination', items: [{ type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'V (lb)', 'x (ft)', 'f_v (psi)', 'F′_v (psi)', 'f_v/F′_v', ...(R.hasNotch ? ['R notch (lb)', 'f_v,n/(F′_v C_n)'] : []), 'Ratio'],
+        rows: R.combos.map(k => ({ cls: k === c ? 'gov' : '', cells: [k.name, String(k.TF), tbrCell(k.Vd, 0), tbrCell(k.xV, 2), tbrCell(k.fv, 1), tbrCell(k.Fv_p, 1), tbrCell(k.r_v1, 3), ...(R.hasNotch ? [tbrCell(k.Rmax, 0), tbrCell(k.r_vn, 3)] : []), tbrDC(k.r_v)] })) }] }] });
+  }
+  /* ---------- 8. Bearing ---------- */
+  {
+    const c = gc, j = c.gcJ, lb = R.lbs[j], Cb = R.Cbs[j], fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(j));
+    const T = [{ title: 'Bearing area factor', ref: TB_NDS + '3.10.4, Eq. 3.10-2', res: /\.Cb$/, steps: [tbrS({ id: 'br.Cb', label: 'Bearing area factor, support ' + nodeN(j) + ' (l_b = ' + g4(lb) + ' in.)', sym: 'C_{b}', eq: R.cbOn[j] && lb < 6 ? '\\frac{l_{b} + 0.375}{l_{b}}' : '', sub: R.cbOn[j] && lb < 6 ? '\\frac{' + g4(lb) + ' + 0.375}{' + g4(lb) + '}' : '', value: Cb, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.10-2',
+      note: R.cbOn[j] ? (lb < 6 ? 'Bearing ≥ 3 in. from the member end and l_b < 6 in.' : 'l_b ≥ 6 in.: C_b = 1.0.') : 'End bearing (less than 3 in. from the member end): C_b = 1.0.' })] },
+      { title: 'Adjusted compression perpendicular to grain', ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'br.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(j), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: c.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] },
+      { title: 'Bearing stress and check', ref: TB_NDS + '3.10.2', steps: [
+        tbrS({ id: 'br.fcp', label: 'Bearing stress (R = reaction at support ' + nodeN(j) + ', ' + c.name + '; uplift taken as 0)', sym: 'f_{c⊥}', eq: '\\frac{R}{b\\,l_{b}}', sub: '\\frac{' + f0(c.Rbear) + '}{' + g4(R.bw) + ' \\times ' + g4(lb) + '}', value: c.fcp, unit: 'psi', d: 1, ref: TB_NDS + '3.10.2' }),
+        tbrS({ id: 'br.r', label: 'Bearing check', sym: '\\frac{f_{c⊥}}{F^{\\prime}_{c⊥}}', eq: '', sub: '\\frac{' + f1(c.fcp) + '}{' + f1(c.Fcp_p) + '}', value: c.r_c, unit: '', d: 3, ref: TB_NDS + '3.10.2', ok: c.r_c <= 1 })] }];
+    const rows = R.supJ.map(jj => {
+      const best = R.combos.reduce((a, k) => { const e = k.bear.find(q => q.j === jj); return e.r > a.e.r ? { k, e } : a; }, { k: R.combos[0], e: R.combos[0].bear.find(q => q.j === jj) });
+      const Rmin = Math.min(...R.combos.map(k => k.R[jj]));
+      return { cls: jj === j ? 'gov' : '', cells: [nodeN(jj), g4(R.lbs[jj]), R.cbOn[jj] ? 'yes' : 'no', tbrCell(R.Cbs[jj], 3), tbrCell(best.e.Fcp_p, 1), best.k.name, tbrCell(best.e.R, 0), tbrCell(best.e.fcp, 1), tbrDC(best.e.r), tbrCell(Rmin, 0, Rmin < 0 ? 'ng' : '')] };
+    });
+    secs.push({ title: 'Bearing', subs: [{ title: 'Bearing perpendicular to grain at support ' + nodeN(j) + ' (' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'F_c⊥ is not adjusted by ' + (isLRFD() ? 'λ' : 'C_D') + ' (NDS 2018 Table 4.3.1). The same steps are on the Bearing tab[[tab:bear| ↗]].' }] },
+      { title: 'All supports (largest ratio over the combinations)', items: [{ type: 'table', wide: true, head: ['Support', 'l_b (in.)', '≥ 3 in. from end', 'C_b', 'F′_c⊥ (psi)', 'Governing combination', 'R (lb)', 'f_c⊥ (psi)', 'Ratio', 'R min (lb)'], rows },
+        { type: 'note', text: 'R min < 0 = net uplift in at least one combination: the bearing check uses only downward reactions; provide an uplift connection.' }] }] });
+  }
+  /* ---------- 9. Deflection ---------- */
+  {
+    const gLL = d.perSpan[d.spanLL], gTL = d.perSpan[d.spanTL];
+    const T = [{ title: 'Bending stiffness', ref: TB_NDS + '3.5.1', steps: [tbrS({ id: 'df.EI', label: 'Bending stiffness', sym: 'E^{\\prime}I', eq: '', sub: f0(R.E_p) + ' \\times ' + f3(R.I), value: R.E_p * R.I, unit: 'lb-in^{2}', d: 0, note: 'E′: §dv.E; I: §sec.I. ' + (R.simple ? 'Simple span: superposition of the uniform load and each point load (standard simple-beam expressions).' : 'Continuous beam / cantilever: chord between the nodal deflections of the stiffness solution + simple-beam deflection of the span’s own loads + effect of the end moments.') + ' Per load type (D, L, Lr, S) at the analysis stations; wind not included; shear deformation neglected.' })] },
+      { title: 'Live / snow deflection' + (R.nS > 1 ? ' (' + spanLab(d.spanLL) + ')' : ''), ref: 'IBC 2018 Table 1604.3', steps: [
+        tbrS({ id: 'df.LL', label: 'Largest transient deflection (case ' + d.trName + ')', sym: '\\Delta_{LL}', eq: '\\max(\\Delta_{L}, \\Delta_{Lr}, \\Delta_{S}, 0.75\\Delta_{L} + 0.75\\Delta_{Lr}, 0.75\\Delta_{L} + 0.75\\Delta_{S})', sub: '', value: d.Dtr, unit: 'in', d: 3 }),
+        tbrS({ id: 'df.limLL', label: 'Limit (L = ' + (gLL.cant ? 'twice the cantilever length, IBC 2018 Table 1604.3 footnote h' : 'span length') + ')', sym: '\\frac{L}{n_{LL}}', eq: '', sub: '\\frac{' + f1(gLL.Lref) + '}{' + g4(d.LLdiv) + '}', value: d.LLlim, unit: 'in', d: 3, ref: 'IBC 2018 Table 1604.3' }),
+        tbrS({ id: 'df.rLL', label: 'Live / snow deflection check (L/' + f0(gLL.Lref / d.Dtr) + ')', sym: '\\frac{\\Delta_{LL}}{L/n_{LL}}', eq: '', sub: '\\frac{' + f3(d.Dtr) + '}{' + f3(d.LLlim) + '}', value: d.r_dLL, unit: '', d: 3, ref: 'IBC 2018 Table 1604.3', ok: d.r_dLL <= 1 })] },
+      { title: 'Total deflection with creep' + (R.nS > 1 ? ' (' + spanLab(d.spanTL) + ')' : ''), ref: TB_NDS + '3.5.2, Eq. 3.5-1; IBC 2018 Table 1604.3', steps: [
+        tbrS({ id: 'df.T', label: 'Total deflection (K_cr = ' + g4(d.Kcr) + ' on the dead-load deflection; Δ_D largest = ' + f3(d.dD) + ' in.)', sym: '\\Delta_{T}', eq: 'K_{cr}\\,\\Delta_{D} + \\Delta_{LL}', sub: g4(d.Kcr) + '\\,\\Delta_{D} + \\Delta(\\text{' + tbrTx(d.totName) + '})', value: d.Dtot, unit: 'in', d: 3, ref: TB_NDS + 'Eq. 3.5-1', note: 'The largest value over the span of K_cr Δ_D(x) + Δ_LL(x) at the analysis stations (not the sum of the two maxima). K_cr applies to the dead load only.' }),
+        tbrS({ id: 'df.limTL', label: 'Limit (L = ' + (gTL.cant ? 'twice the cantilever length' : 'span length') + ')', sym: '\\frac{L}{n_{TL}}', eq: '', sub: '\\frac{' + f1(gTL.Lref) + '}{' + g4(d.TLdiv) + '}', value: d.TLlim, unit: 'in', d: 3, ref: 'IBC 2018 Table 1604.3' }),
+        tbrS({ id: 'df.rTL', label: 'Total deflection check (L/' + f0(gTL.Lref / d.Dtot) + ')', sym: '\\frac{\\Delta_{T}}{L/n_{TL}}', eq: '', sub: '\\frac{' + f3(d.Dtot) + '}{' + f3(d.TLlim) + '}', value: d.r_dTL, unit: '', d: 3, ref: TB_NDS + '3.5.2; IBC 2018 Table 1604.3', ok: d.r_dTL <= 1 })] }];
+    secs.push({ title: 'Deflection', subs: [{ title: 'Deflection checks (service loads)', items: [tbrTopics(T), { type: 'note', text: 'The deflected shapes are plotted on the Deflection tab[[tab:defl| ↗]].' }] },
+      { title: 'Deflection by span', items: [{ type: 'table', wide: true, head: ['Span', 'L for limit (in.)', 'Δ_D (in.)', 'LL case', 'Δ_LL (in.)', 'L/n_LL (in.)', 'Ratio', 'TL case', 'Δ_T (in.)', 'L/n_TL (in.)', 'Ratio'],
+        rows: d.perSpan.map(e => [spanLab(e.span) + (e.cant ? ' (cantilever)' : ''), tbrCell(e.Lref, 1), tbrCell(e.dD, 3), e.trName, tbrCell(e.Dtr, 3), tbrCell(e.LLlim, 3), tbrDC(e.r_dLL), e.totName, tbrCell(e.Dtot, 3), tbrCell(e.TLlim, 3), tbrDC(e.r_dTL)]) }] }] });
+  }
+  /* ---------- 10. Notes and references ---------- */
+  {
+    const items = [];
+    if ((p.notes || '').trim()) items.push({ type: 'note', text: 'Project notes and assumptions (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });
+    R.fails.forEach(m => items.push({ type: 'note', warn: true, text: 'Code limit violated: ' + m }));
+    R.notes.concat(R.adv).forEach(m => items.push({ type: 'note', warn: true, text: 'Note: ' + m }));
+    if (!items.length) items.push({ type: 'note', text: 'No notes.' });
+    secs.push({ title: 'Notes and references', subs: [{ title: 'Notes', items }, { title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: tbcRefs({}).map(x => x.map(tbrPlain)) }] }] });
+  }
+  return { title: 'Timber Beam Check — Calculation Report', subtitle: (p.name || 'Untitled') + (p.member ? ' — ' + p.member : ''), code: 'NDS 2018 (' + methTxt() + ') · NDS Supplement 2018 · ASCE 7-16 · IBC 2018',
+    info: [['Project', p.name], ['Project No.', p.job], ['Calculated by', p.designer], ['Date', p.date || today], ['Checked by', p.checker], ['Checked date', '']],
+    head: { left: 'Project No. ' + (p.job || '—') + ' — ' + String(p.member || p.name || 'Timber beam').slice(0, 40), right: 'Computed: ' + (p.designer || '—') + ' ' + (p.date || today) + ' · Checked: ' + (p.checker || '—'), foot: (p.name || 'Untitled') + ' (Timber Beam Check)' },
+    sections: secs };
+}
+function buildReport(pg) {
+  if (!window.SharedReport || !window.SharedSteps) { pg.appendChild(el('div', 'errBox', 'shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.')); TBRP.api = null; TBRP.doc = null; return; }
+  let Mo;
+  try { Mo = tbrRich(tbrModel()); } catch (e) { pg.appendChild(el('div', 'errBox', 'Report error: ' + esc(e && e.message))); TBRP.api = null; TBRP.doc = null; console.error(e); return; }
+  const tb = $('tabBar'), stick = tb && getComputedStyle(tb).position === 'sticky' ? tb.offsetHeight : 0;
+  TBRP.api = SharedReport.mount(pg, Mo, { closed: TBRP.closed, onGoto: tbrGoto, stick });
+  TBRP.doc = TBRP.api.doc;
+}
+/* [[tab:…]] links of the report: an output tab (as its tab button) */
+function tbrGoto(name) {
+  if (!OUT_TABS.some(t => t[0] === name)) return;
+  M.ui.outTab = name; autosave(); buildTabBar(); renderTab(); $('outputPanel').scrollTop = 0;
+  if ($('outputPanel').scrollHeight <= $('outputPanel').clientHeight + 1) window.scrollTo(0, $('tabBar').getBoundingClientRect().top + window.scrollY - 6);
+}
+/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); PRINT_CSS hides
+   #app in print, so the report goes into #rp-print. From any other tab Ctrl+P is unchanged. */
+window.addEventListener('beforeprint', () => {
+  if (!TBRP.doc || curTab() !== 'rpt' || document.body.classList.contains('rp-printing') || $('printReport')) return;
+  let box = $('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
+  box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(TBRP.doc, { lazy: false }) + '</article></div>';
+  document.body.classList.add('rp-printing');
+});
 
 /* =====================================================================
    START-UP
