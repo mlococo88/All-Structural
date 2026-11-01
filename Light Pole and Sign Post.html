@@ -53,6 +53,12 @@
     .tabpage table{display:block;overflow-x:auto;max-width:100%}
     .row{grid-template-columns:minmax(0,1fr) minmax(0,auto)}.row .ctl{min-width:0}.row select{max-width:100%;min-width:0}
     .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}
+  /* 2026-11-01 (LP-13): below 600 px the masthead code tag is no longer absolutely positioned (it overlapped the eyebrow and
+     the title at 390 px); it flows below the subtitle. KaTeX's hidden MathML (position:absolute) is kept inside its formula, so
+     it can no longer widen the page (it gave a 1303 px page at 1280 px on the Anchors tab). */
+  @media(max-width:600px){.masthead .codetag{position:static;text-align:left;margin-top:8px}.masthead .codetag b{display:inline;margin-right:6px}}
+  .katex{position:relative}
+  @media screen{.tabpage .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}
   /* ---- input panel tabs (lppInputTabs; UI only) ---- */
   #lppInTabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:2px solid var(--ink);margin:16px 0 14px;position:sticky;top:0;background:var(--paper);z-index:6;padding-top:4px}
   #lppInTabs .lppInTab{display:inline-flex;align-items:center;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.02em;border:1px solid var(--line);border-bottom:0;background:#efeae0;color:var(--ink-soft);padding:7px 11px;cursor:pointer;border-radius:3px 3px 0 0;margin-bottom:-2px}
