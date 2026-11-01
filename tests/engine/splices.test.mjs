@@ -226,3 +226,13 @@ test('demandsAt: node nearest the splice, shears the largest of the element and 
   // at 5 ft: element 0 (neighbours −1 dropped, 0 and 1): V_DC1 = max(10, 5) = 10, V_LL = max(3, 4, 7, 1) = 7
   const e = S.demandsAt(A, 5).dem; assert.equal(e.VDC1, 10); assert.equal(e.VLL, 7);
 });
+
+test('Splices take the project\'s load factors (SPGAM, 2026-11-01): defaults = the old built-in ones; saved splices.gam kept, unused; Fatigue I from the Fatigue & studs input', () => {
+  const SP = W.SBDSplices, M = W.SBDModel, J = o => JSON.parse(JSON.stringify(o));
+  const P = M.defaultProject(); assert.equal(JSON.stringify(SP.projGam(P)), JSON.stringify(SP.DEF.gam), 'the project factors = GirderDetail\'s module defaults');
+  assert.equal(JSON.stringify(SP.settings(P).gam), JSON.stringify(SP.DEF.gam));
+  const Q = J(P); Q.splices.gam = { ...Q.splices.gam, llS: 1.5, fat: 1.5 };   // an old project's saved values
+  assert.equal(JSON.stringify(SP.settings(Q).gam), JSON.stringify(SP.DEF.gam), 'saved values not used'); assert.equal(Q.splices.gam.llS, 1.5, 'kept in the project');
+  Q.fatigue.gam.fI = 1.6; assert.equal(SP.settings(Q).gam.fat, 1.6);
+  Q.splices.gam.llS = -1; assert.ok(!M.validate(Q).errors.some(e => /^splices\.gam/.test(e.path)), 'validate no longer blocks on splices.gam');
+});

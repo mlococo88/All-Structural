@@ -81,7 +81,7 @@
                   bolts: { d: '0.875' | '1' | '1.125', gr: 'A325' | 'A490', thr: 'excl' | 'incl', cls: 'A' | 'B', prep: 'drilled' | 'punched',
                            edge: 'cut' | 'sh', gap (in), long: 'flange' | 'both', eccS, eccV: 'incl' | 'excl', minLines, c1 (in; '' = table),
                            stitch: 'req' | 'adv' },
-                  gam: { dcMax, dcMin, dwMax, dwMin, llS, llSv, fat, dc1C, clC }, clr: { cw, cv (in) }, prs: 'yes' | 'no', gP (plate grade; '' = flange),
+                  gam: { dcMax, dcMin, dwMax, dwMin, llS, llSv, fat, dc1C, clC } (not used since 2026-11-01: the project's factors, SBDSplices.projGam; kept), clr: { cw, cv (in) }, prs: 'yes' | 'no', gP (plate grade; '' = flange),
                   auto: true | false (auto-design the plates and bolts of each splice), plates: [ { x, g (girder index; absent = every girder),
                   top, bot: { nl, g, g0, nr, s, ef, ep, bo, to, inner, bi, ti }, web: { h, t, nr, sv, nc, sh, ew, ewp } } ] (entered plates) }
      -- added 2026-10-30 (Auto design PR), optional, read by engine/autodesign.js (absent = its DEF) --
@@ -316,7 +316,7 @@
       if (!['A325', 'A490'].includes(B.gr)) E('splices.bolts.gr', 'Bolt grade: A325 or A490.');
       nn(B.gap, 'splices.bolts.gap', 'Gap between girder ends');
       if (!(Number.isInteger(+B.minLines) && +B.minLines >= 1)) E('splices.bolts.minLines', 'Minimum bolt lines: a whole number of at least 1.');
-      Object.entries(Q.gam || {}).forEach(([k, v]) => pos(v, `splices.gam.${k}`, `Load factor ${k}`));
+      // splices.gam: no longer checked (2026-11-01, SPGAM): kept in the file unchanged but unused; the Splices tab takes the project's load factors
       Object.entries(Q.clr || {}).forEach(([k, v]) => nn(v, `splices.clr.${k}`, `Clearance ${k}`));
       if (!['10', '8'].includes(String(Q.code))) E('splices.code', 'Edition: 10th or 8th.');
       if (Q.plates != null && !Array.isArray(Q.plates)) E('splices.plates', 'Entered splice plates must be a list.'); }

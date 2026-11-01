@@ -14,7 +14,7 @@
    Demand source (added 2026-10-30, paths PR; as the Rating tab): "This project's analysis" (the default) or a hand-off file (schema
    stgirder-external-demands, GirderDetail → ST-Girder: engine/welds.js demandsFromPayload: its station shears, fatigue moments, plates,
    deck, materials, owner factors and splice stations; the electrode, weld size and grinding entered here; the project's load factors); the line at the
-   top of the tab names the source in use. The choice is not saved.
+   top of the tab names the source in use. The choice is saved with the project (P.demandSrc.wt; a hand-off file is not).
 
    render(host, ctx), ctx = { P, g, changed() }; build(ctx) (tests, the Report tab): ctx = { P, g, src: 'analysis' | 'file', pl, plName }. */
 (function () {
@@ -148,7 +148,7 @@
       <div class="fRow"><label for="wt_w">Flange-to-web fillet weld size</label><select id="wt_w">${opt('', 'Minimum of Table 6.13.3.4-1 at each location', Wd.w)}${[0.25, 0.3125, 0.375, 0.4375, 0.5, 0.5625, 0.625].map(v => opt(v, `${frac(v)} in`, Wd.w)).join('')}</select></div>
       ${gamHtml(P, srcOf(P) === 'file')}
       <div class="fRow"><label for="wt_gr">Shop transition butt welds</label><select id="wt_gr">${opt('yes', 'Ground flush (Category B)', Wd.ground)}${opt('no', 'Reinforcement not removed (Category C)', Wd.ground)}</select></div>
-      <p class="note">Two fillet welds per flange. The demand choice is not saved. Demands from this project's analysis (Analysis tab) of the selected girder, or from the hand-off file: each side of every support and plate change; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section; owner factors η and m from the Project tab. Shop transitions: every flange change that is not a field splice (Spans &amp; framing tab), tapered 1:2.5. Stiffener and connection-plate welds: Shear &amp; stiffeners tab.</p></div></section>`;
+      <p class="note">Two fillet welds per flange. The demand choice is saved with the project (a hand-off file is not). Demands from this project's analysis (Analysis tab) of the selected girder, or from the hand-off file: each side of every support and plate change; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section; owner factors η and m from the Project tab. Shop transitions: every flange change that is not a field splice (Spans &amp; framing tab), tapered 1:2.5. Stiffener and connection-plate welds: Shear &amp; stiffeners tab.</p></div></section>`;
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(P, 'wt', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Weld results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="wt_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;

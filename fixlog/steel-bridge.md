@@ -2938,3 +2938,38 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: claude/sbd-splices-gamma — Field splices use the project's load factors (SPGAM; identical at the defaults; an old project's differing saved factors no longer used, shown); stale "demand choice is not saved" notes (WDNS)
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `SPGAM`.
+
+### 1. Splices: the project's load factors (engineer-approved 2026-11-01, "one source", the Welds pattern of #525)
+- `engine/splices.js`: new `projGam(P)` = `{ dcMax, dcMin, dwMax, dwMin, llS, llSv }` from `SBDFlexure.factors()` (`dc, dcMin, dw, dwMin, ll, sll`:
+  1.25, 0.90, 1.50, 0.65, 1.75, 1.30, Tables 3.4.1-1, -2, the Flexure tab's), `fat` = `P.fatigue.gam.fI` (1.75 without one), `{ dc1C, clC }` from
+  `SBDConstructibility.factors()` (`cdc, ccl`: 1.25, 1.50, 3.4.2.1, the Constructibility tab's); without those modules loaded, the same numbers.
+  `settings(P)`: before `gam: { ...d.gam, ...(s.gam || {}) }`; after `gam: projGam(P)`. The owner's η and m are applied on top by the engine (env), as before.
+  Exported `projGam`. Every caller goes through `settings` (the Splices tab, the Report, Auto design).
+- `engine/model.js` `validate`: before `Object.entries(Q.gam || {}).forEach(([k, v]) => pos(v, `splices.gam.${k}`, …))`; after: not checked (comment), so a
+  saved value that can no longer be edited cannot block the calculation. `P.splices.gam` stays in the file unchanged (CLAUDE.md §5); doc comment notes it is unused.
+- `ui/splices.js`: the nine `splices.gam.*` inputs of the "Load factors and clearances" card are replaced by a read-only table of the project's factors
+  with links (Tables 3.4.1-1, -2 → Flexure tab; γ Fatigue I → the Fatigue & studs input field; deck placement → Constructibility tab; η, m → Project tab;
+  `onClick` handles `[data-splgo]`, no input change); `oldGam(P)` lists saved values that differ ("no longer used … (now …)") on the input card and
+  on the output tab. Exported `projGam`, `oldGam`.
+- Governing provisions: AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2, Art. 3.4.2.1, Art. 6.13.6.1.4 (design forces). No factor value of a new
+  project changed (GirderDetail's module defaults = the project's factors).
+- Check case (default project, G1, FS1 at 82.00 ft, Strength I maximum positive flexure, bottom flange; Node, the page's modules):
+  - At the defaults: before = after (all 4 splices of G1, every check, every design, identical).
+  - An old project with saved `splices.gam.llS = 1.5`, `fat = 1.5`: f_b = 0.9(−2.17653) + 0.9(−0.26600) + 0.65(−0.22024) + γ_LL(6.63643) ksi
+    = −2.34144 + γ_LL(6.63643): before γ_LL = 1.5 → 7.6132 ksi; after 1.75 → 9.2723 ksi. Strength I max negative f_b −16.6145 → −18.8197 ksi.
+    Governing strength item unchanged (BF4, P_fy net fracture 397.89/399 = 0.997: the 10th Ed. design force P_fy does not depend on γ); auto-designed
+    plates and bolts unchanged; the tab shows "γ_LL Strength I 1.5 (now 1.75); γ Fatigue I 1.5 (now 1.75)".
+- Tests: `tests/engine/splices.test.mjs` new test (defaults = DEF.gam; saved values kept and unused; Fatigue I from the input; validate no longer blocks).
+
+### 2. Stale "The demand choice is not saved" (WDNS; text only)
+- `ui/welds.js` `render`, the inputs note: "Two fillet welds per flange. The demand choice is not saved." → "… The demand choice is saved with the project
+  (a hand-off file is not)." (saved since #522, `P.demandSrc.wt`).
+- The same stale sentence in the header comments of `ui/welds.js`, `ui/fatigue.js`, `ui/shear.js` corrected (comments only). Every other tab's note
+  checked: Shear, Rating, Splices, Constructibility, Fatigue say "saved" correctly; the Report tab's source is not saved (correct).
+
+### Other copies
+- None.
