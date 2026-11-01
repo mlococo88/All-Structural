@@ -118,6 +118,21 @@
   /* dfOf(project, g, ns, mod): distribution factors per span and pier (precedence in the header).
      { spans: [{ gM, gV, fatM, fatV, gDef }], piers: [{ gM }], src, manual } */
   function dfOf(P, g, ns, mod) {
+    const B = dfBase(P, g, ns, mod), U = g.dfPull;
+    // B2 (2026-11-01): factors pulled from LL & DL Distribution (lldf.html, channel bridgeSuite.v1.lldf; GirderDetail gdLldfApply, which fills
+    // its manual factors sa.dfm and sets sa.dfSrc = 'manual'). girder.dfPull { spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source } overlays
+    // the factors above field by field (a field the payload did not have, e.g. no fatigue factors, keeps the factor from the order above, as
+    // GirderDetail's mv(id, k) ?? module); gDef is not sent by lldf and is kept. Used only with the same span count. Absent: unchanged.
+    if (!U || U.use === false || !Array.isArray(U.spans) || U.spans.length !== ns) return B;
+    const v = (o, k) => o && isNum(o[k]) && o[k] > 0 ? o[k] : null;
+    const spans = B.spans.map((s, i) => { const q = U.spans[i] || {}; return { gM: v(q, 'gM') ?? s.gM, gV: v(q, 'gV') ?? s.gV, fatM: v(q, 'fatM') ?? s.fatM, fatV: v(q, 'fatV') ?? s.fatV, gDef: s.gDef }; });
+    const piers = B.piers.map((p, k) => ({ gM: v((U.piers || [])[k], 'gM') ?? p.gM }));
+    const so = U.source || {}, kept = ['gM', 'gV', 'fatM', 'fatV'].filter(k => U.spans.some(q => v(q, k) == null));
+    const src = `pulled from ${so.producer || 'LL & DL Distribution'} (${so.producerFile || 'lldf.html'}), produced ${so.producedAt || '?'}${so.project ? `, project "${so.project}"` : ''}; ${so.basisLbl || ''}`
+      + `${kept.length ? `; ${kept.join(', ')} not in the hand-off: from ${B.src}` : ''}; deflection factor from ${B.src}`;
+    return { spans, piers, src, manual: false, pulled: true, base: B.src };
+  }
+  function dfBase(P, g, ns, mod) {
     const D = g.df && Array.isArray(g.df.spans) && g.df.spans.length >= ns ? g.df : null, Mn = g.dfManual || {};
     const man = k => isNum(Mn[k]) && Mn[k] > 0 ? Mn[k] : 1;
     if (D) {

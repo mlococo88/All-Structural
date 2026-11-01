@@ -1736,3 +1736,57 @@ index 219cc2c..a3e337e 100644
   `skewDetail.moment` (bridge-wide: 0 when any adjacent supports differ by more than 10°). Per span maps onto this page as: for a span
   region enter 0 when that span's two support lines differ by more than 10°, else the smaller skew; for a pier region 0 when either
   adjacent span does. Not changed here; aligning Bridge Geometry's hand-off is a separate change.
+
+## 2026-11-01 — PR: rpt-lldf (LLRP) — Report tab: the calculation report in the shared viewer (display only; no result change)
+### Where
+- Head: after `<script src="shared/lldf.js"></script>` two classic scripts `shared/steps.js`, `shared/report.js` (relative path:
+  keep the shared folder next to the file). The page's inlined KaTeX 0.17.0 is used by SharedSteps (`window.katex`).
+- Body: before `<div class="sheet" id="sheet">` the view tabs `<nav class="lldf-views noprint" id="lldfViews">` (Calculation sheet /
+  Report) and the report host `<div class="lldf-rptview" id="lldfRptView">`. CSS after the anchor `/* LLRP (2026-11-01): Calculation
+  sheet / Report view tabs`.
+- `run()`: before → after
+  - `if(inErr.length){ showInputErrors(inErr); return; }` → `if(inErr.length){ window.lldfLast=null; showInputErrors(inErr); if(window.lldfReportRefresh) window.lldfReportRefresh(); return; }`
+  - after `const R=computeBridge(p);` added `window.lldfLast={p,R};`; after `drawLever(p,geo,md,la);` added
+    `if(window.lldfReportRefresh) window.lldfReportRefresh();`. Nothing else in run() changes; the sheet is drawn as before.
+- D11 print handler (`window.addEventListener("beforeprint",function(){ var ok=false; try{ ok=window.lldfBuildReport(); }`): first line
+  added `if(typeof window.lldfRptWillPrint==="function"&&window.lldfRptWillPrint()){ document.body.classList.remove("lldf-rpt"); applyPageCSS(false); return; }`
+  — Ctrl+P while the Report tab shows prints the new report; from the sheet the D11 report prints exactly as before.
+- New script block anchor `/* ===== LLRP (2026-11-01): REPORT TAB (shared viewer) — display only =====` (before the sync-drawer
+  script): `model()` builds the report model, `render()` mounts it (`SharedReport.mount`), `gotoSheet(name)` for the links back to
+  the sheet, `setView()`, the print hook. `window.LLRP` = { view, doc, api, model, render, setView } (tests).
+- `shared/lldf.js` (lldf.html's engine file): `SharedLLDF.steps.other(q, geo, sk, md, w)` added — the worked steps of types f, g, b/c,
+  d and slab (the beam-slab types use the existing `SharedLLDF.steps.member`, the Steel Bridge app's writer). Logged in
+  `fixlog/shared-lldf.md`.
+### Report contents
+1. Design parameters (inputs). 2. Summary table (g_M, g_V, fatigue per girder, each value a § link to its step) and the governing
+   lines. 3. Geometry (deck, roadway, N_L, S_avg, d_e, Σx², design L for a continuous region), the cross-section figure, K_g and the
+   skew factors (beam-slab). 4. One subsection per girder, steps grouped in topics (spacing and interior equations, lever rule,
+   exterior e-factors, rigid cross-section, skew factors, factors by lanes loaded, governing factors, fatigue) and the lever-rule
+   table of every truck configuration. 5. Dead and pedestrian loads (tributary widths, DC1 per beam, beam group x̄ and S, the
+   largest pile-cap load worked, every load distributed, per-beam summary). 6. Range of applicability. 7. Notes (the sheet's
+   warnings and basis). 8. References. Links back to the sheet's cards ([[tab:…]]); title block Project / Structure No. / Calculated
+   by / Date / Checked by / Checked date (no input: "—"); running header and page numbers in print.
+### Values
+- Every step value is the page's own number: `window.lldfLast.R` (= `computeBridge(p)`, the object the sheet shows), its members'
+  fields (memberDF), `R.skew`, `R.geo`; `MD.distribute(p, geo)` for dead loads (the function the 3.6 / 4D cards use); `leverAll`
+  for the lever table (as 4L). `SharedLLDF.steps.member` evaluates memberDF again with the same inputs (the Steel Bridge writer);
+  the test checks its values equal R's.
+### Governing provision
+- None changed (display only). AASHTO LRFD 10th Ed. (2024) Art. 3.6.1.1.1, Table 3.6.1.1.2-1, Art. 4.6.2.2, 4.6.2.3, C3.6.1.1.2;
+  MassDOT Bridge Manual Part I §3.5.3 — as the sheet cites them.
+### Check case
+- Type (a), 5 girders at 9.75 ft, L 140 ft, t_s 8.5 in, I 66,340 in⁴, A 63.5 in², e_g 49.4 in, n 8: K_g = 8(66,340 + 63.5 × 49.4²)
+  = 8(66,340 + 154,962.9) = 1,770,423 in⁴ (§3.2, = R.Kg); every girder's g_M, g_V, fatigue in §4 = the sheet's 2.0 table.
+### How verified
+- Headless Chromium (scratchpad `rpt/rp_lldf.mjs`), 11 cases (defaults k; a; a with N_b = 3, θ 40°, θ_V 50°; k with S = 17 ft and
+  35° skew; continuous pier region; f; g; b/c; b/c with S = 19 ft; d; slab): 0 unresolved / duplicate refs, 0 KaTeX errors (full
+  report, every lazy item), no NaN / undefined, 18–76 step values per case equal to the app's (g_M, g_V, fatigue of every girder,
+  rigid, e, interior equations, N_L, S_avg, d_e, w, K_g, r_M, r_V, L, tributary widths, DC1, x̄, S); computeBridge, the sheet's
+  text and the D11 print report's text identical to main; results unchanged by building the report; no console errors; Ctrl+P on
+  the Report tab prints the report alone, from the sheet the D11 report.
+### Other copies
+- None (the LLDF step writer is the one in shared/lldf.js).
+### Open items
+- LLRP-O1 (calc, not changed, CLAUDE.md §4/§9): the slab strip equation 4.6.2.3-2 uses the clear roadway width w for W (12W/N_L) and
+  W_1 (min(w, 60 ft)); AASHTO defines W as the physical edge-to-edge width of the bridge. Engineer to confirm.
+- LLRP-O2: the fatigue moment of a type (d) exterior web is W_e/14 × r_M without removing 1.2 (the engine's fatNote says "verify").
