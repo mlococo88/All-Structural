@@ -3144,3 +3144,79 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Check case:** default project, 1280×800, tab 5 (Footing Design), output panel scrolled to the bottom, click the first "Worked in" link. Before: `document.scrollingElement.scrollTop` = 219, the title row is 219 px above the window and cannot be scrolled back. After: 0; the panel scrolls to the card.
 - **Other copies:** none.
 - **Open items:** at 390 px wide the output panel collapses to zero width (`.inp{min-width:400px}` in the flex row of `.main`). Existing, not related to this fix (the two-panel scroll layout is not active below 900 px), not changed.
+
+## 2026-11-01 — PR: claude/sf-tie-cover — Pedestal clear cover to the ties checked against ACI 318-19 Table 20.5.1.3.1 (SFTC; new check, no existing result changes) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFTC`.
+
+### SFTC. Clear cover to the ties, c − d_b,tie ≥ specified cover for the pedestal exposure   [new check; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):** keep the pedestal "Cover" input as the clear cover to the vertical bars (no input change). Add a check that the clear cover to the ties, c − d_tie, meets the ACI 318-19 Table 20.5.1.3.1 minimum for the pedestal's exposure. Show it in the pedestal checks, the dashboard, the report and the drawings note. This closes the open item of SFPC ("20.5.1.3 states the cover to the outermost reinforcement, which in a tied pedestal is the tie").
+- **Exposure input (new):** the app had no exposure or "cast against earth" information for the pedestals (the footing's 3 in bottom-cover warning is a fixed rule). A per-pedestal select is added on the pedestal card, under the reinforcement row: `peds[i].reinf.exposure`.
+  - `'weather'` (default): exposed to weather or in contact with ground. Table 20.5.1.3.1 row "Exposed to weather or in contact with ground": No. 6 through No. 18 bars 2 in; No. 5 bar, W31 or D31 wire, and smaller 1-1/2 in. The minimum is chosen by the **tie** size.
+  - `'earth'`: cast against and permanently in contact with ground: 3 in (all members).
+  - `'interior'`: not exposed to weather or in contact with ground; row "Beams, columns, pedestals, and tension ties: primary reinforcement, stirrups, ties, spirals, and hoops": 1-1/2 in.
+  - Default reasoning: a bridge/foundation pedestal is formed (not cast against earth) and is backfilled or exposed, so "exposed to weather or in contact with ground" is the usual row. Engineer to confirm (open item).
+  - Constant `SFTC_EXP` (labels and minimums) and `sftcMin(exp, tieSize)` sit after `const BAR_SIZES=`.
+- **Where:**
+  - `computePhase2` → `pedDes`, after the anchor `const tieSizeOK=isPatch?…`:
+    ```js
+    const exposure=SFTC_EXP[rf.exposure]?rf.exposure:'weather', cov=num(cover), tieDb=BAR_DIA[rf.tieSize]||0;
+    const tieCov=cov-tieDb, tieCovMin=sftcMin(exposure,rf.tieSize), tieCovOK=isPatch?true:(tieCov>=tieCovMin-1e-9);
+    ```
+    returned as new keys `exposure, cov, tieDb, tieCov, tieCovMin, tieCovOK` (anchor `pmBars,pmPts,fc,fy,PB,dPr,dX,dY`). No other result reads them.
+  - Defaults: `newPed` → `reinf:{…,dowelN:8,exposure:'weather'}`; `migrateState` → `if(!SFTC_EXP[p.reinf.exposure])p.reinf.exposure='weather';` (old saves and imports: the default).
+- **Shown (§6):**
+  - Pedestal card (input): the exposure select, and the line "Clear cover to the ties c − d_b,tie = 2.00 − 0.375 = 1.625 in ≥ 1.50 in min (exposed to weather or in contact with ground, ACI 318-19 Table 20.5.1.3.1). Worked in: Pedestal Design · 6.x" (link).
+  - Pedestal Design 6.1 table: new column "Tie cover (in)" (1.625 ≥ 1.50, green / red).
+  - Pedestal Design 6.x: equation block "Clear cover to the ties" (c_tie = c − d_b,tie ≥ c_min; values; OK / NG), a note on the basis, and a red NG box when it fails.
+  - Dashboard: new chip "Pedestal tie cover" (PASS: the smallest margin, e.g. "min 1.625 ≥ 1.50 in (Ped 1)"; FAIL: each failing pedestal); its printed line cites Table 20.5.1.3.1 with D/C = c_min/(c − d_b,tie). The existing "Pedestal design" chip is unchanged. User manual 3.1 chip table: new row.
+  - Report §1.5 pedestal row: "cover 2.00 in (clear to the vertical bars; exposure: …)". §6 topic "Ties and slenderness": new steps c_min (Table 20.5.1.3.1 row and tie size) and c_tie = c − d_b,tie with OK / NG; topic reference adds 20.5.1.3 (Table 20.5.1.3.1).
+  - Drawings: pedestal plan-section note "#3 TIES @ 12"; COVER 2" CLR TO VERT BARS, 1 5/8" CLR TO TIES"; general note 6 lists, per pedestal, clear cover to the vertical bars / to the ties with the minimum and exposure ("PED 1 2" / 1 5/8" (MIN. 1 1/2", EXPOSED TO WEATHER OR IN CONTACT WITH GROUND)", "; NG" when it fails).
+- **Governing provision:** ACI 318-19 20.5.1.3 and Table 20.5.1.3.1 (specified concrete cover, cast-in-place nonprestressed members).
+- **Check cases (hand):**
+  - Default project, both pedestals: c = 2.00 in, #3 ties (d_b = 0.375 in), exposed: c_tie = 2.00 − 0.375 = **1.625 in ≥ 1.50 in → OK**. Before: no check. After: OK.
+  - #6 ties (d_b = 0.750 in), exposed: c_tie = 2.00 − 0.75 = **1.250 in < 2.00 in** (No. 6 and larger: 2 in) **→ NG**.
+  - #3 ties, cast against earth: 1.625 in < **3.00 in → NG**.
+  - #4 ties, interior: 2.00 − 0.50 = 1.50 ≥ 1.50 → OK.
+- **New failures on the 10 comparison projects:** none. Every project uses c = 2 in, #3 ties, default exposure → 1.625 ≥ 1.50 in (the bearing patch of directqa_net_fail, h = 0, is not checked). An extra test project (`tie_cover_fail`: Ped 1 #6 ties; Ped 2 cast against earth) fails both pedestals as above.
+- **How verified (headless Chromium, origin/main vs the branch, 10 projects + the extra one):**
+  - Every value of `R` and `P2`, the warnings, self-consistency, state and saved storage are identical. New keys only: `P2.pedDes[].exposure/cov/tieDb/tieCov/tieCovMin/tieCovOK` and `state.peds[].reinf.exposure`.
+  - Dashboard: the only change is the new chip (line diff: nothing removed; "Pedestal tie cover" + its value added).
+  - Pedestal Design tab: only the 6.1 table column and the new 6.x block. Other tabs' text identical.
+  - An origin/main save (no `exposure`) loads, is migrated to `'weather'`, and computes identically.
+  - Report on 11 projects: 0 unresolved references, 0 KaTeX errors, no NaN, step values = app values. Drawings on 11 projects: DXF valid, no text overlaps, all inside the border, R/P2 unchanged. 0 console errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Open items (not changed; CLAUDE.md §9):**
+  - Default exposure "exposed to weather or in contact with ground": engineer to confirm, or name another default.
+  - The vertical bars themselves are not checked against Table 20.5.1.3.1 (e.g. #6 and larger, exposed: 2 in to the vertical bar). With c = 2 in that row is met by the input; with a smaller cover it would not be. Raised, not added.
+  - The footing's own covers (bottom 3 in warning, top and side) are unchanged.
+
+## 2026-11-01 — PR: claude/sf-barfit-db — Pedestal bar-fit check: bar diameter from the bar table (SFBD; calculation change, #9–#11 only) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text.
+
+### SFBD. d_b in the pedestal bar-fit (clear spacing) check from `BAR_DIA`   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):** the bar-fit check used d_b = size/8, while everything else (bar layout `sfdPedBars`, P–M bar positions, drawings, development lengths) uses the `BAR_DIA` table. Use the table.
+- **Where:** `computePhase2` → `pedDes`, anchor `const dbL=`.
+  - Before: `const dbL=(rf.longSize||0)/8;`
+  - After: `const dbL=BAR_DIA[rf.longSize]||0;`
+  - `dbL` is now also returned (`pedDes[].dbL`) for the worked display.
+- **Formula (unchanged):** s_clear = (b − 2c − d_b)/(n_face − 1) − d_b ≥ s_min = max(1.5 d_b, 1.5 in).
+- **Governing provision:** ACI 318-19 25.2.3 (minimum clear spacing of longitudinal bars in columns/pedestals); nominal bar diameters per ASTM A615/A706 (the `BAR_DIA` table).
+- **Change in d_b:**
+
+  | Bar | before: size/8 | after: table | Δ |
+  |---|---|---|---|
+  | #3 to #8 | 0.375 to 1.000 | 0.375 to 1.000 | 0 (identical) |
+  | #9 | 1.125 | 1.128 | +0.003 in |
+  | #10 | 1.250 | 1.270 | +0.020 in |
+  | #11 | 1.375 | 1.410 | +0.035 in |
+
+- **Check cases (hand)**, 18 × 18 in pedestal, c = 2 in:
+  - #11, 3 per face: before (18 − 4 − 1.375)/2 − 1.375 = **4.938 in** vs s_min = 1.5·1.375 = **2.063 in**. After (18 − 4 − 1.41)/2 − 1.41 = 6.295 − 1.41 = **4.885 in** vs 1.5·1.41 = **2.115 in**. OK both.
+  - #10, 4 per face: before 12.75/3 − 1.25 = **3.000** vs **1.875**. After 12.73/3 − 1.27 = **2.973** vs **1.905**. OK both.
+  - #9, 5 per face: before 12.875/4 − 1.125 = **2.094** vs **1.688**. After 12.872/4 − 1.128 = **2.090** vs **1.692**. OK both.
+  - Pass/fail flips only where the margin is under about 0.1 in, e.g. #11 at s_clear between 2.063 and 2.115 in.
+- **Effect on the comparison projects:** the 10 projects (and `tie_cover_fail`) use #8 longitudinal bars → identical, every value of `R`, `P2`, dashboard, warnings, consistency, state and storage. Extra project `big_bars` (the three cases above): only `pedDes[].clrX/clrY/clrMin` change as listed; no pass/fail change; dashboard identical.
+- **Shown (§6):** Pedestal Design 6.x "Bar count and fit" now works the formula: s_clear = (b − 2c − d_b)/(n_face − 1) − d_b with d_b from the bar table and the substituted x-face values, and max(1.5 d_b, 1.5). Report §6 step "Bars and clear spacing" states the formula and d_b.
+- **How verified:** headless Chromium, origin/main vs the branch (12 projects); report builds on 12 projects (0 unresolved, 0 KaTeX errors, values = app); `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs` passes.
+- **Open item (not changed):** ACI 318-19 25.2.3 also has the (4/3)d_agg term; the app takes no aggregate size, so it is not checked (unchanged).
