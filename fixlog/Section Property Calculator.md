@@ -2910,3 +2910,12 @@ index 56a8a3f..13f8372 100644
 +});
 +
 ```
+
+
+## 2026-11-01 — PR: claude/rpt-secprop-print — Report tab: tab names kept in print (SPRP follow-up; display only)
+
+- **Problem:** in the printed report (and with the in-app links hidden) five notes of the Report tab (SPRP, #552) lost their tab name. For example, "The same values are on the [[tab:props|Properties]] tab." printed as "…on the  tab.". The viewer hides in-app tab links in print (`.rp-go`), and the link text was the tab name.
+- **Fix (`sprModel()`, notes):** the tab name is now plain text, and the link is a small "↗" after it: `[[tab:x|Name]] tab` → `Name tab[[tab:x| ↗]]`. This is the same form as Timber Beam Check and the ASCE 7-16 Load Generator. The 5 notes changed are the Properties, Section, Calc detail, Plastic and Torsion links.
+- **Before → after (one of five):** `'… the same values are on the [[tab:props|Properties]] tab.'` → `'… the same values are on the Properties tab[[tab:props| ↗]].'`
+- **No other change:** no value, step or calculation changed. No saved data changed.
+- **Verified:** headless Chromium, box2c project. The print text has "on the Properties tab." and "on the Calc detail tab."; all earlier report checks still pass (references, KaTeX, values, main vs branch).
