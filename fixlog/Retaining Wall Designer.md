@@ -1023,11 +1023,11 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
   - Ctrl+P on the Report tab: `body.rp-printing`, the report alone, @page running header (PDF: default 19 pages, AASHTO collision 22 pages). Ctrl+P on another tab: the page printout as before, the Report panel hidden.
   - Without KaTeX (CDN blocked): the report renders with the built-in renderer, same references and values.
 - main vs branch, the 7 cases: `_R`, the status bar, localStorage keys and the text of the Overview, Stability, Stem design, Footing design, Rebar schedule and Analysis diagram tabs are identical; 0 console errors.
-- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: all scripts pass. `node tests/engine/run.mjs report steps steps-groups report-wiring`: 14 passed (shared/report.js changed, see `fixlog/shared-report.md`).
+- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: all scripts pass. `node tests/engine/run.mjs report steps steps-groups report-wiring`: passed. The 390 px check found the report column wider than the screen; the same one-token fix to `shared/report.js` (`minmax(0,1fr)`) had just been merged by claude/rpt-timber (`fixlog/shared-report.md`), so this PR does not change any shared file.
 - Screenshots 1280 / 390 px and the print PDFs were checked by eye (title block, contents, running header, page numbers, worked steps).
 
 ### Other copies
-- None. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`. The narrow-screen fix in `shared/report.js` is logged in `fixlog/shared-report.md`.
+- None. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
 
 ### Open items (noticed, not changed)
 - The AASHTO footing bearing (q_u at the stem faces used by the heel and toe) is still not worked on a tab (open item of 2026-10-18); the report shows the values the footing uses, with a note.
