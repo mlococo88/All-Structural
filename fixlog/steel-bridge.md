@@ -2841,3 +2841,147 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   click hook, init), HANDOFF.md (§4 table, §4.1, §4.3, §4.4 notes).
 ### Other copies
 - BridgeXfer v1: `apps/steel-bridge/ui/bridgexfer.js` joins the existing verbatim copies (HANDOFF.md §5).
+
+## 2026-11-01 — PR: shared-lldf-steps (LLST) — the LLDF worked-step writer moved to shared/lldf.js (SharedLLDF.steps); no output change
+### Where
+- `apps/steel-bridge/engine/lldf.js`: `geometrySteps`, `skewSteps`, `empSteps`, `leverSteps`, `rigidSteps`, `member`, `memberSteps`,
+  `extSteps`, `finalSteps`, `withC` moved to `shared/lldf.js` (`SharedLLDF.steps`); the adapter calls them (`SS()`). Details, the
+  exact before → after and the verification: `fixlog/shared-lldf.md` (LLST).
+### Check case / How verified
+- 1,920 LLDF cases (every sbd2-loads fixture × geometry variants × options), 2,227,456 steps: full outputs hash identically before and
+  after; `node tests/engine/run.mjs lldf loads report steps tex static paths girderdetail` pass.
+## 2026-11-01 — PR: claude/sbd-scroll — scroll check: the Spread Footing "won't let me scroll up" bug (SFSC) is not present here; regression test added (SBSC; test only, no change to the app)
+
+### What was checked
+- Spread Footing (PR #524, fixlog SFSC in `fixlog/Spread Footing.md`): with `html,body{overflow:hidden}` and two scrolling panels, KaTeX's hidden
+  `span.katex-mathml` (`position:absolute`) escaped the unpositioned panels and made the document taller than the window, so `scrollIntoView` /
+  `focus()` / link jumps scrolled the page itself and it could not be scrolled back.
+- `apps/steel-bridge/index.html` has the same frame (`html,body{overflow:hidden}` at ≥ 900 px, `#inputPanel` and `#outputPanel` with `overflow-y:auto`),
+  but both panels are already `position:relative` (anchor `#inputPanel{flex:0 0 33%;…overflow-y:auto;position:relative;` and
+  `#outputPanel{flex:1 1 67%;…overflow-y:auto;position:relative;`), so they contain and clip the MathML spans. Measured with the real KaTeX 0.16.9 and
+  three.js r128 (tests/libs): on every output tab, calculated, with the Report built, the document is exactly the window height (overflow 0 px) and its
+  scroll stays 0 after every scripted scroll.
+- Proof the test catches the bug: a scratch copy with `position:relative` removed from both panels fails it (the Section properties tab 576 px taller than
+  the window; a "see work" link scrolls the page 282 px with the header off screen and not recoverable by the wheel; Constructibility 2147 px, …).
+
+### Change
+- New `tests/smoke/steel-bridge-scroll.mjs` (no app file changed). Headless Chromium, `file://`, 1280×800, 1366×768, 1920×1080: every output tab
+  (calculated with its own button, Report built), every input tab, up to two of each kind of script-scrolling link on every tab (grouped-steps "see §" /
+  "see work", the step links of Fatigue, Cross-frames, Rating, Welds, Shear, Auto design and Drawings, input-tab and output-tab links, Report "see §" and
+  contents links), `scrollIntoView` of the panel bottom and of the last report step, `focus()` on the last input, `window.scrollTo(0,400)`, a 3D canvas
+  drag, touch swipes; the document stays at 0, the panels wheel back to 0 with the header on screen; below 900 px the page still scrolls.
+- Saved data: none. Calculations: none.
+## 2026-11-01 — PR: claude/sbd-cf-replace — Cross-frames: entered member forces "Add to computed" (default) or "Replace computed", per group (CFRM; calculation change only when "Replace" is chosen; old projects identical)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `CFRM`.
+
+### What changed
+- Engineer's request (approved 2026-11-01): the Cross-frames card "Member forces from a refined analysis" adds the entered factored forces to the
+  computed ones; add a choice per force group: "Add to computed" (today, default) or "Replace computed" (the entered forces alone).
+- What "computed" is, per group (today's arithmetic, `engine/crossframes.js` `compute`, anchor `const combos = [{ id: 'StrI'`): Strength I takes the
+  entered forces only (nothing is computed for Strength I); Strength III and V take the computed wind forces f_w F_w only (4.6.2.7.1); Constructibility
+  takes the entered forces plus the stability bracing force |f_br M_br| (6.7.4.2.2). Each member is designed for the largest over the four cases.
+- **Decision (recorded, engineer's "decide yourself" rule):** the groups with a computed part are Strength (I, III, V) and Constructibility.
+  - Strength, Replace: the entered forces are the Strength design forces; the computed Strength III and V wind cases are not used (`cb.off`, their
+    member forces 0, the table shows "not used"). Reason: a refined analysis that gives the member forces is taken to cover the wind cases; otherwise the
+    engineer keeps "Add".
+  - Constructibility, Replace: the brace force is not added (`cb.rep`); CF7 (stability bracing strength, which only re-states the members under the
+    brace force) is not applicable with a reason; CF8 (stiffness, independent of the forces) still checked.
+  - Fatigue ranges ΔP: no choice; nothing is computed for fatigue (a line-girder analysis gives no cross-frame force range): the entered ranges are used
+    alone, as before; the card says so.
+  - The diaphragm option (CFD, CFE) does not use the entered angle-member forces in either mode (unchanged).
+- Code:
+  - `engine/crossframes.js`: new `userModes(p)` (`p.userMode` absent → `{ StrI: 'add', Con: 'add' }`), exported. In `compute`, before:
+    `const w = Math.abs(e.unit * cb.wind) + Math.abs(e.ubr * (cb.Mbr || 0))`; after: `const w = cb.off || cb.rep ? 0 : Math.abs(e.unit * cb.wind) + Math.abs(e.ubr * (cb.Mbr || 0))`
+    (`cb.off` on StrIII/StrV when Strength is Replace; `cb.rep` on Con when Constructibility is Replace). `R.UM` = the modes. `checks` CF7: `naWhy` when
+    Con is Replace. `steps`: new steps `cf.user.StrI`, `cf.user.Con` (the entered forces, which mode, what it means) when a force is entered or Replace is
+    chosen; `cf.<member>.forces` gets a note on the modes then. `defaults()`: `userMode: { StrI: 'add', Con: 'add' }`.
+  - `engine/model.js`: `defaultCrossframes()` `userMode: { StrI: 'add', Con: 'add' }`; `validate` accepts absent, 'add', 'replace'.
+  - `ui/framing.js`: `ensure` adds the default `userMode` to an older project (no result change); the input card has a "With the computed forces"
+    choice under Strength I and Constructibility and a note on what each means; the member-forces table shows "not used"; the governing card and the
+    table note say which mode applies, with a link to the Spans & framing input tab and to the worked step; new topic "Member forces entered from a
+    refined analysis" (`/^cf\.user\./`).
+  - `report/builders.js` `frm`: the member-forces table shows "not used" for the Strength III and V columns under Strength Replace.
+- Saved data: new optional field `P.crossframes.userMode`; absent = Add (today's results). No key or format changed.
+
+### Custom (entered) demand source on this tab (ui/demands.js): not added — reason
+- The Cross-frames tab takes one demand from the girder analysis: the factored deck-placement M_u for the stability bracing (6.7.4.2.2), and it already
+  has an input for it ("Factored deck-placement M_u (blank: analysis)"). The member forces themselves are not girder demands (they are not in the
+  hand-off station format the shared table writes); entering them is this card, now with Add / Replace. A Custom table of M_DC1 / M_CL rows would only
+  feed that one M_u, which is entered directly already. Raised for the engineer in the PR.
+
+### Check case (GirderDetail's built-in Cross-frames inputs `CF.DEF`, X-frame, h = 48 in, S = 114 in; entered Strength I {top 6, bot −8, diag 12}, Constructibility {top 2, bot −1.5, diag 3} kip)
+- M_br = 389.226 kip-in; f_br (top chord) = 1/h = 0.020833 per kip-in → |f_br M_br| = 389.226/48 = 8.1089 kip.
+- Constructibility, top chord: Add (before = after at the default): T = 2 + 8.1089 = 10.109 kip, C = −(2 − 8.1089) = 6.109 kip → top chord T_u 10.109 (Con),
+  C_u 6.109 (Con), CF1 top 6.109/52.71 = 0.1159, CF2 top 0.1254. Replace: T = 2, C = 0 → T_u = 6.00 (Strength I governs), C_u = 0; CF1 top 0.0000,
+  CF2 top 0.0744; CF7 not applicable; CF8 unchanged (0.0367, 0, 0.0838, 0.1205).
+- Strength, diagonal: Add: C_u = |−0.69511 × 3.6617| = 2.545 kip (Strength III), CF1 diag 0.0514. Replace: Strength III and V not used, C_u = 0, T_u = 12.00
+  (Strength I), CF1 diag 0.0000; CF3 diag 0.8927 → 0.5207 (the tension limit 240 applies when the member has no compression, the existing rule).
+- Governing articles: AASHTO LRFD 10th Ed. Arts. 4.6.2.7.1 (wind load distribution), 6.7.4.2.2 (stability bracing), Table 3.4.1-1 (the combinations).
+  No formula, factor or resistance changed.
+
+### Proof nothing else changes
+- `tests/engine/crossframes.test.mjs` (parity with GirderDetail's own GM.cf in Node): 2041 cases, 793,205 values, 58,248 check items, largest relative
+  difference 0; weight 27,480 point loads identical. New test (CFRM): absent = Add bit for bit; the hand check above; the steps; the diaphragm unchanged.
+- Scratch comparison origin/main vs this branch (126 cases: the 63 recorded GirderDetail cross-frame states of tests/projects/sbd2-fat and sbd2-stiff,
+  each also with entered forces, and 6 variations): checks, members, combos and every worked step other than the new `cf.user.*` steps and the
+  `.forces` note identical.
+- `tests/engine/model.test.mjs`: default add / add, absent valid, unknown value an error.
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: claude/sbd-fatigue-gamma — Fatigue I γ from one source: Flexure, Shear & stiffeners and Cross-frames take it from the Fatigue & studs input (FGAM; calculation change only for a non-default γ; at 1.75 identical)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `FGAM`.
+
+### What changed (engineer-approved 2026-11-01, "one source", as Welds in #525)
+- New helper in `ui/flexure.js` and `ui/shear.js`: `const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };`
+- `ui/flexure.js` `build`:
+  - hand-off file: `FX.fromPayload(pl, { fl, lf: lfF, ...` → `FX.fromPayload(pl, { fl, lf: lfF, G: { fat: fatI(P) }, ...`
+  - analysis / Custom: `fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf }` → `fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf, G: { fat: fatI(P) } }`
+    (a factored Custom table still sets `fopt.G = FAC1`: the entered values are factored, γ 1)
+  - example: `G: lf ? FX.factorsOwner(lf) : FX.factors()` → `G: lf ? FX.factorsOwner(lf, { fat: fatI(P) }) : FX.factors({ fat: fatI(P) })`
+  - note: "Fatigue I 1.75" → "Fatigue I <γ> (Fatigue & studs inputs link; a factored Custom table: as entered)".
+- `ui/shear.js` `build`: `G = SH.factorsOwner(lf)` → `G = SH.factorsOwner(lf, { fat: fatI(P) })` (special fatigue requirement GS18, 6.10.5.3:
+  V_u = V_DC1 + V_DC2 + V_DW + V_UT + V_UF + γ V_fat); transverse stiffeners `gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }` →
+  `gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: fatI(P) }` (CP2, γ(Δf) at the stiffener weld toes); note: "permanent shear + 1.75 V_fat" → "Fatigue I γ <γ> (link),
+  permanent shear + γV_fat".
+- `engine/crossframes.js`: `compute` `gF = 1.75 * 0.65` → `gFI = nm(p.gFI) > 0 ? nm(p.gFI) : 1.75, gF = gFI * 0.65` (CF9; `R.gFI`); `inputsOf` sets
+  `p.gFI` from `P.fatigue.gam.fI` (1.75 without one; GirderDetail's own inputs have none, so the parity runs are at 1.75); CF9 note and step `cf.<m>.fat`
+  show γ (eq `γ_{Fat I}(0.65)ΔP/A_g`, sub `<γ>(0.65)ΔP/A_g`).
+- Fatigue II: none of these modules uses it (the Fatigue & studs module reads `gam.fII` itself already).
+- Governing provisions: AASHTO LRFD 10th Ed. Table 3.4.1-1 (Fatigue I γ), Art. 6.10.5.3 (special fatigue requirement for webs), Art. 6.6.1.2 (load-induced
+  fatigue: flexure stress ranges, stiffener weld toes, cross-frame members with the 0.65 factor). No formula changed; the factor's source changed.
+
+### Check case (default project, G1, this project's analysis; P.fatigue.gam.fI = 1.50; before = the hard-coded 1.75)
+- Flexure, x = 60.00 ft, bottom of steel: (Δf) = γ(|f(505.29)| + |f(−230.47)|) = 1.75(4.5822) = 8.019 ksi → 1.50(4.5822) = 6.873 ksi (top 0.986 → 0.845 ksi).
+  Every location scales by 1.50/1.75.
+- Shear GS18, x = 109.99 ft: V_u = 103.157 + 17.705 + 14.664 + 0 + 0 + γ(45.226) = 214.671 kip → 203.365 kip; V_cr = 786.63 kip; ratio 0.2729 → 0.2585.
+- Stiffener weld toes CP2: γ(Δf) with γ = 1.50 (no stiffener row has Δf > 0 in the default project, so no CP2 item changes there).
+- Cross-frames CF9 (diagonal, ΔP = 3 kip, A_g = 3.609 in²): 1.75(0.65)(3)/3.609375 = 0.9455 ksi → 1.50(0.65)(3)/3.609375 = 0.8104 ksi; ratio 0.0591 → 0.0506 (Category B 16 ksi).
+- At the default 1.75: identical (below).
+
+### Proof nothing else changes at the default
+- Scratch comparison (Node, the page's modules) before (claude/sbd-cf-replace) vs after, default project: Flexure (analysis, example), Shear (analysis,
+  example) build results identical; Cross-frames identical except the CF9 note text (now names the source).
+- `tests/engine/fatigue-gamma.test.mjs` (new): no fatigue inputs = 1.75 = before for Flexure, Shear and Cross-frames; the 1.50 case above.
+- `crossframes.test.mjs` parity with GirderDetail: 2041 cases, largest relative difference 0. `node tests/engine/run.mjs flexure shear stiffeners
+  custom-demands welds rating`: 7 files, 58 passed.
+
+### Other hard-coded load factors found (not changed here; listed for the engineer)
+- Rating (`engine/rating.js` `factors()`): MBE Table 6A.4.2.2-1 γ_DC 1.25, γ_DW 1.50, γ_P 1.00, γ_LL 1.75 / 1.35, Service II 1.30 / 1.00: specification
+  values of the design-load rating, no project input; the rating fatigue target uses `P.fatigue` already.
+- Constructibility (`engine/constructibility.js` `factors()`; also `engine/shear.js` `cdc`, `ccl`): deck placement 1.25 on DC, 1.50 on the construction LL
+  (3.4.2.1); no project input.
+- Shear & stiffeners (`ui/shear.js`): transverse stiffener `gam: { dc: 1.25, dw: 1.50, ll: 1.75 }` and bearing stiffener `gam: { dc: 1.25, dw: 1.50, ll: 1.75 }`
+  passed to engine/stiffeners.js without the owner's η and m (the Shear tab's own G has them).
+- Field splices: its own `splices.gam` inputs (next PR).
+- Auto design (`engine/autodesign.js`): stud pitch sizing `p_req = n_rZ_r/(1.75 V_f Q/I)` (also in `ui/fatigue.js` doc), and `FX_.factors()` (no owner
+  η, m) for the Strength I M_u that places the stud regions; Cross-frames `inputsOf` deck-placement M_u = 1.25M_DC1 + 1.5M_CL.
+- Studs: `studs.gamFat` is a second "γ Fatigue I (studs)" input on the Fatigue & studs tab (GirderDetail's sc.gam.fat); `engine/studs.js` hand-off
+  path `gam: { fI: 1.75, fII: … }`. Question for the engineer: should the studs also take `fatigue.gam.fI`?
+- Cross-frames wind γ_WS = 1.0η (OWN7).
+
+### Other copies
+- None.

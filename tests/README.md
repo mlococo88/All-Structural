@@ -49,6 +49,9 @@ node tests/smoke/steel-bridge-report.mjs
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three>]
 
+# Light Pole and Sign Post: every computed result, every cable value, tab text and drawings, origin/main vs the working tree (13 cases)
+node tests/lightpole-compare.mjs [--cases default,sign1] [--old-saves] [--tol 1e-12]
+
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; GirderDetail's embedded Preliminary sizing page included
 node tests/check-syntax.mjs "Steel Bridge Design.html"                        # the merged tool includes its embedded pages (pl-src, st-src)
 ```

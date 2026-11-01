@@ -56,3 +56,10 @@ test('units: conversions and formatting', () => {
   assert.equal(U.frac(1.125), '1 1/8'); assert.equal(U.frac(0.5625), '9/16'); assert.equal(U.frac(60), '60'); assert.equal(U.frac(0.3), '0.300');
   assert.equal(U.parseDim('1 1/8'), 1.125); assert.equal(U.parseDim('1-1/8"'), 1.125); assert.equal(U.parseDim('3/4'), 0.75); assert.ok(Number.isNaN(U.parseDim('x')));
 });
+
+test('crossframes.userMode (CFRM, 2026-11-01): default add / add; absent (older projects) is valid; an unknown value is an error', () => {
+  const p = M.defaultProject(); assert.equal(JSON.stringify(p.crossframes.userMode), '{"StrI":"add","Con":"add"}');
+  delete p.crossframes.userMode; assert.equal(M.validate(p).errors.length, 0);
+  p.crossframes.userMode = { StrI: 'replace', Con: 'add' }; assert.equal(M.validate(p).errors.length, 0);
+  p.crossframes.userMode.Con = 'both'; assert.equal(M.validate(p).errors.map(e => e.path).join(), 'crossframes.userMode.Con');
+});
