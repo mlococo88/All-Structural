@@ -392,6 +392,9 @@
     <button class="pbtn" id="pbRename" title="Rename current project">Rename</button>
     <button class="pbtn danger" id="pbDelete" title="Delete current project">Delete</button>
     <button class="pbtn" id="pbNew" title="Start a fresh blank project">New</button>
+    <button class="pbtn" id="pbExport" title="Download the current inputs as a JSON file (backup, or to send to the checker)">Export JSON</button>
+    <button class="pbtn" id="pbImport" title="Open a JSON file exported from this tool">Import JSON</button>
+    <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none">
   </div>
 </div>
 
@@ -6747,6 +6750,37 @@ $('projSelect').onchange=e=>{
   if(dirty){ confirmModal('Discard changes?','Loading a project will discard your current unsaved changes. Continue?','Load').then(ok=>{ if(ok) load(); else refreshProjectList(); }); }
   else load();
 };
+
+// ---- JSON export / import (added 2026-11-01) ----
+// File = { tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name, exported, state } where state is exactly
+// captureState() (the object stored under lpp_projects_v1 / lpp_session_v1; no storage key or format changes). Import accepts
+// that file or a bare state object and opens it through applyState(), so the migrations for fields added later apply.
+function lppExportJSON(){
+  const st=captureState();
+  const file={tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name:activeProject||'', exported:new Date().toISOString(), state:st};
+  const blob=new Blob([JSON.stringify(file,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=((activeProject||'light_pole_project').replace(/[^\w.-]+/g,'_'))+'.json';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  toast('Exported '+a.download);
+}
+function lppImportState(obj){
+  const st = obj && obj.format==='lpp-project' ? obj.state : obj;
+  if(!st || typeof st!=='object' || !st.inputs || typeof st.inputs!=='object') throw new Error('not a Light Pole and Sign Post project file');
+  applyState(st);
+  activeProject=null; dirty=true; refreshProjectList(''); updateStatus(); saveSession();
+  return obj && obj.name ? obj.name : '';
+}
+$('pbExport').onclick=lppExportJSON;
+$('pbImport').onclick=()=>{ const go=()=>$('pbImportFile').click();
+  if(dirty){ confirmModal('Discard changes?','Importing a file replaces the current unsaved inputs. Continue?','Import').then(ok=>{ if(ok) go(); }); } else go(); };
+$('pbImportFile').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ try{ const nm=lppImportState(JSON.parse(rd.result)); toast('Imported'+(nm?' "'+nm+'"':'')+' — use Save As to keep it in this browser'); }
+                  catch(err){ toast('Import failed: '+(err&&err.message||err)); } e.target.value=''; };
+  rd.readAsText(f);
+});
 
 // snapshot the factory defaults BEFORE any restore, for the "New" action
 const DEFAULT_STATE=captureState();
