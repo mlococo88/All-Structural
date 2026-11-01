@@ -20057,23 +20057,29 @@ function idxrModel(cfg, rs, rows, zones, combos){
     const w=S.work('');
     w.add({id:'phiCS',label:'Condition and system factors',sym:'\\phi_{c}\\phi_{s}',eq:'',sub:N(rs.phiC,2)+'('+N(rs.phiS,2)+')',value:rs.phiC*rs.phiS,unit:'',d:3,ref:MBE+' Tables 6A.4.2.3-1, 6A.4.2.4-1'});
     w.add({id:'LLs',label:'Live-load scale on the MIDAS LL case (moment, positive)',sym:'k_{LL}',eq:'',sub:plain(rs.ratingLLScaleExpr||''),value:rs.ratingLLScale,unit:'',d:4,note:(rs.ratingLLScaleMn!=null&&rs.ratingLLScaleMn!==rs.ratingLLScale?'Negative moment: '+N(rs.ratingLLScaleMn,4)+'. ':'')+(rs.ratingLLScaleV!=null&&rs.ratingLLScaleV!==rs.ratingLLScale?'Shear: '+N(rs.ratingLLScaleV,4)+'.':'')});
-    const x=g.pos, cap=typeof rs.capAt==='function'?rs.capAt(x):null, wg=S.work('');
+    /* every node worked (IDRP-F, engineer's decision 2026-11-01): capacities C = φ_c φ_s φ R_n (R_n from capAt at the node, as the
+       app rates it) and the three rating factors, all values from ratingData */
+    const nodeWork=g0=>{ const x0=g0.pos, cap=typeof rs.capAt==='function'?rs.capAt(x0):null, wg=S.work('');
     const C=(id,lab,sym,Mn,phi,val)=>wg.add({id,label:lab,sym,eq:'\\phi_{c}\\phi_{s}\\phi\\,R_{n}',sub:cap?N(rs.phiC,2)+'('+N(rs.phiS,2)+')('+N(phi,2)+')('+N(Mn,1)+')':'',value:val,unit:id==='Cv'?'kip':'kip-ft',d:1,ref:MBE+' Eq. 6A.4.2.1-1'});
-    C('Cp','Capacity, positive moment','C_{M+}',cap&&cap.MnPos,rs.ratingPhiF,g.CmnPos); C('Cn','Capacity, negative moment','C_{M-}',cap&&cap.MnNeg,rs.ratingPhiF,g.CmnNeg); C('Cv','Capacity, shear','C_{V}',cap&&cap.Vn,rs.ratingPhiV,g.Cvn);
-    const RF=(id,lab,Cv,D,W,L,k,val,u)=>{ if(val==null) return; wg.add({id,label:lab,sym:'RF',eq:'\\frac{C - \\gamma_{DC}DC - \\gamma_{DW}DW}{\\gamma_{LL}(LL)}',sub:'\\frac{'+N(Cv,1)+' - '+N(rs.gamDC,2)+'('+N(D,2)+') - '+N(rs.gamDW,2)+'('+N(W,2)+')}{'+N(rs.gamLL,2)+'('+N(L,2)+')('+N(k,4)+')}',value:val,unit:'',d:3,ref:MBE+' Eq. 6A.4.2.1-1',note:val>=1?'RF ≥ 1.0':'RF < 1.0'}); };
-    RF('RFp','Rating factor, positive moment',g.CmnPos,g.Mdc,g.Mdw,g.Mllpos,rs.ratingLLScale,g.rfMpos);
-    RF('RFn','Rating factor, negative moment',g.CmnNeg,g.Mdc,g.Mdw,g.Mllneg,rs.ratingLLScaleMn!=null?rs.ratingLLScaleMn:rs.ratingLLScale,g.rfMneg);
-    RF('RFv','Rating factor, shear',g.Cvn,g.Vdc,g.Vdw,g.Vll,rs.ratingLLScaleV!=null?rs.ratingLLScaleV:rs.ratingLLScale,g.rfV);
-    wg.add({id:'RF',label:'Governing rating factor at node '+g.node+' ('+g.governs+')',sym:'RF',eq:'\\min(RF_{M+}, RF_{M-}, RF_{V})',sub:'',value:g.rfGov,unit:'',d:3,note:g.rfGov>=1?'RF ≥ 1.0':'RF < 1.0: below the rating level'});
-    wg.add({id:'RT',label:'Rating in tons ('+plain(rs.ratingVehicleName)+', '+N(rs.ratingVehicleTon,1)+' tons)',sym:'RT',eq:'RF\\,W',sub:N(g.rfGov,4)+'('+N(rs.ratingVehicleTon,1)+')',value:g.rfTons,unit:'tons',d:2});
+    C('Cp','Capacity, positive moment','C_{M+}',cap&&cap.MnPos,rs.ratingPhiF,g0.CmnPos); C('Cn','Capacity, negative moment','C_{M-}',cap&&cap.MnNeg,rs.ratingPhiF,g0.CmnNeg); C('Cv','Capacity, shear','C_{V}',cap&&cap.Vn,rs.ratingPhiV,g0.Cvn);
+    const RF=(id,lab,Cv,D,W,L,k,val)=>{ if(val==null) return; wg.add({id,label:lab,sym:'RF',eq:'\\frac{C - \\gamma_{DC}DC - \\gamma_{DW}DW}{\\gamma_{LL}(LL)}',sub:'\\frac{'+N(Cv,1)+' - '+N(rs.gamDC,2)+'('+N(D,2)+') - '+N(rs.gamDW,2)+'('+N(W,2)+')}{'+N(rs.gamLL,2)+'('+N(L,2)+')('+N(k,4)+')}',value:val,unit:'',d:3,ref:MBE+' Eq. 6A.4.2.1-1',note:val>=1?'RF ≥ 1.0':'RF < 1.0'}); };
+    RF('RFp','Rating factor, positive moment',g0.CmnPos,g0.Mdc,g0.Mdw,g0.Mllpos,rs.ratingLLScale,g0.rfMpos);
+    RF('RFn','Rating factor, negative moment',g0.CmnNeg,g0.Mdc,g0.Mdw,g0.Mllneg,rs.ratingLLScaleMn!=null?rs.ratingLLScaleMn:rs.ratingLLScale,g0.rfMneg);
+    RF('RFv','Rating factor, shear',g0.Cvn,g0.Vdc,g0.Vdw,g0.Vll,rs.ratingLLScaleV!=null?rs.ratingLLScaleV:rs.ratingLLScale,g0.rfV);
+    wg.add({id:'RF',label:'Governing rating factor at node '+g0.node+' ('+g0.governs+')',sym:'RF',eq:'\\min(RF_{M+}, RF_{M-}, RF_{V})',sub:'',value:g0.rfGov,unit:'',d:3,note:g0.rfGov>=1?'RF ≥ 1.0':'RF < 1.0: below the rating level'});
+    wg.add({id:'RT',label:'Rating in tons ('+plain(rs.ratingVehicleName)+', '+N(rs.ratingVehicleTon,1)+' tons)',sym:'RT',eq:'RF\\,W',sub:N(g0.rfGov,4)+'('+N(rs.ratingVehicleTon,1)+')',value:g0.rfTons,unit:'tons',d:2});
+    return wg.steps; };
+    const x=g.pos, keyOfNode=r=>r===g?'gov':'n'+String(r.node).replace(/[^A-Za-z0-9]+/g,'_');
+    const others=rd.filter(r=>r!==g).map(r=>Object.assign(one(keyOfNode(r),nodeWork(r),'Node '+r.node+' (x = '+N(r.pos,2)+' ft): RF = '+N(r.rfGov,3)+' ('+r.governs+')',MBE+' Art. 6A.4.2.1',/^RF$/),{lazy:true,title:'Node '+r.node+' (x = '+N(r.pos,2)+' ft): RF = '+N(r.rfGov,3)+' ('+r.governs+')'}));
     const subs=[{title:'Rating parameters ('+plain(lev)+')',items:[{type:'kv',rows:[['Load factors γ_DC / γ_DW / γ_LL',N(rs.gamDC,2)+' / '+N(rs.gamDW,2)+' / '+N(rs.gamLL,2)],['Resistance factors φ (flexure / shear)',N(rs.ratingPhiF,2)+' / '+N(rs.ratingPhiV,2)],
         ['Load cases DC / DW / LL+ / LL−',[rs.ratingDcLC,rs.ratingDwLC,rs.ratingLLposLC,rs.ratingLLnegLC].map(v=>plain(v)||'—').join(' / ')]]},one('par',w.steps,'Factors',MBE+' Art. 6A.4.2')]},
-      {title:'Governing node '+g.node+' (x = '+N(x,2)+' ft)',items:[one('gov',wg.steps,'Capacity and rating factors',MBE+' Art. 6A.4.2.1',/^RF$/),{type:'note',text:'Moments in kip-ft, shears in kip, as pasted from MIDAS. Every node: §3.3; the [[tab:AASHTO Rating|AASHTO Rating step]] (Summary, Demand vs. Cap).'}]},
+      {title:'Governing node '+g.node+' (x = '+N(x,2)+' ft)',items:[one('gov',nodeWork(g),'Capacity and rating factors',MBE+' Art. 6A.4.2.1',/^RF$/),{type:'note',text:'Moments in kip-ft, shears in kip, as pasted from MIDAS. Every other node is worked in the next subsection (closed; open a node to see its steps); tables of every node after it; the [[tab:AASHTO Rating|AASHTO Rating step]] (Summary, Demand vs. Cap).'}]},
+      {title:'Worked rating at every other node (in order along the bridge)',items:others.length?others:[{type:'note',text:'Only one node is rated.'}]},
       {title:'Rating factors at every node',items:[{type:'table',caption:'Demands (kip-ft, kip; LL as pasted, before the LL scale)',head:['Node','x (ft)','M_DC','M_DW','M_LL+','M_LL−','V_DC','V_DW','V_LL'],
         rows:rd.map(r=>[String(r.node),cell(r.pos,2),cell(r.Mdc,1),cell(r.Mdw,1),cell(r.Mllpos,1),cell(r.Mllneg,1),cell(r.Vdc,1),cell(r.Vdw,1),cell(r.Vll,1)])},
         {type:'table',caption:'Capacities C = φ_c φ_s φ R_n and rating factors',head:['Node','x (ft)','C_M+','C_M−','C_V','RF M+','RF M−','RF V','RF','Gov.'],
         rows:rd.map(r=>({cells:[String(r.node),cell(r.pos,2),cell(r.CmnPos,1),cell(r.CmnNeg,1),cell(r.Cvn,1),cell(r.rfMpos,3),cell(r.rfMneg,3),cell(r.rfV,3),
-          {t:N(r.rfGov,3),n:true,cls:r.rfGov<1?'ng':(r.rfGov<1.1?'hi':'ok'),key:r===g?'gov/RF':undefined},r.governs],cls:r===g?'ok':''}))}]}];
+          {t:N(r.rfGov,3),n:true,cls:r.rfGov<1?'ng':(r.rfGov<1.1?'hi':'ok'),key:keyOfNode(r)+'/RF'},r.governs],cls:r===g?'ok':''}))}]}];
     const post=(rs.legalPosting||[]).filter(o=>o.st!=='none');
     if(post.length){ const wp=S.work('');
       post.filter(o=>o.st==='post').forEach(o=>wp.add({id:'P.'+String(o.name).replace(/[^A-Za-z0-9]+/g,'_'),label:'Posting load, '+plain(o.label),sym:'P',eq:'\\frac{W}{0.7}(RF - 0.3)',sub:'\\frac{'+N(o.W,1)+'}{0.7}('+N(o.RF,3)+' - 0.3)',value:o.P,unit:'tons',d:1,ref:MBE+' Eq. 6A.8.3-1'}));

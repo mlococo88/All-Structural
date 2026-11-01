@@ -2118,3 +2118,38 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
 - PSRP-O1: the old Report tab is kept. The new report does not (yet) carry what the old one recomputes or draws (graphics, transformed
   release section, refined-loss coefficients by stage, anchorage zone, continuity, fatigue, handling, deck, owner requirements), so it
   cannot replace it without losing content. Engineer to decide the scope before the old tab is retired.
+
+## 2026-11-01 — PR: rpt-psbd-full (PSRF) — the old Report tab's intermediates move into the engine (R.rv); the new report covers most of the old tab (display only)
+### Where
+- Engine: new `psbReportVals(inp,R)` (anchor `/* PSRF (2026-11-01): the calculation report's intermediate values`, before the strand
+  optimizer): the block "recomputed intermediates for display (mirror the engine)" of `ReportTab`, moved line for line (A_d, y_d,
+  A_h, y_h, the parallel-axis terms I_c2…I_c6, e_m, I_g + e_m²A_g, M_g, k_td and its constant, γ_h, γ_st, M_bar, M_dw, P_e at midspan,
+  the shear components at the critical section, M_u used for ε_s, cot θ, the camber components, n_i and the transformed release
+  section at the release-compression station). `computeAll`: `return {g,cp,…}` → `const OUT={g,cp,…}; OUT.rv=psbReportVals(inp,OUT);
+  return OUT;` (one field added; nothing else changes).
+- `ReportTab`: the block replaced by `const rv=R.rv, {Ad,yd,…}=rv;` and `transAt=r=>rv.tRc` (it was called for the release-
+  compression row only); `cgsNum` (a TeX string) stays.
+- New report: `psrMore(inp,R,secs)` (anchor `/* PSRF (2026-11-01, engineer's decision`), called by `psrModel`: a Graphics section (M_u
+  and φM_n, V_u and φV_n, fiber stresses along the girder as SVG line plots of R.diagrams / R.flexFull / R.shearDiag / R.grid; the 3D
+  cage snapshot when captured), gross moduli and the parallel-axis terms, strand c.g., harp slope, M_g, f_pt, the refined-loss
+  coefficients (k_s, k_hs, k_hc, k_f, k_td, ε_bid, ε_bif, ψ, K_id, e_pc, K_df, Δf_cd) or γ_h, γ_st, P_e, elastic gains, strand force and
+  stress by row and stage, midspan moments, HL-93 closed forms, e_g, K_g and the distribution-factor equations (exterior lever rule,
+  e-factors, rigid section, skew), the six governing stresses worked, M_u, ε_t, f_r, f_cpe, M_cr, the shear critical section (V_u
+  components, ε_s, cot θ, V_s, D/C), interface shear, anchorage zone, confinement, release steel, longitudinal tie, camber components
+  and stages, Fatigue I, continuity (results), handling and deck (results), owner requirements, output tables.
+### Pure refactor (CLAUDE.md §4)
+- No formula changed: the moved expressions are identical; R gains `rv` only. Proof (headless, 4 cases incl. transformed release,
+  handling and deck on): `computeAll` results without `rv` identical main vs branch (JSON); the text of every tab, including the old
+  Report tab, identical main vs branch (only "Report (new)" differs).
+### How verified (new report)
+- 4 cases: 147–166 steps, 23 topics; 0 unresolved / duplicate refs; 0 KaTeX errors; no NaN; 46–47 step values per case === R
+  (incl. S_b, f_pt, P_e, M_td, e_g, M_cr, f_cpe, camber Δ_ps,s and erection, strand stress range, V_u and V_s at the critical section,
+  Service III and release stresses, k_td); every value shown was also found in the old Report tab's text (text match); Ctrl+P prints
+  the new report alone.
+### Old Report tab: kept (not retired)
+- PSRF-O1: still only in the old tab: the continuous-analysis worked steps (influence lines, restraint moments, positive moment
+  connection, pier negative-moment capacity worked), the handling and deck worked calculations (the old tab embeds those tabs), the
+  rating derivations (ratingDerivs), the stress heat-map graphic and the long-tie / release-steel bodies (the new report has their
+  results only). The engineer's rule ("retire only if everything matches") is not met yet.
+- PSRF-O2 (display, not changed): with t_h > 0 and the haunch NOT in the composite properties, the old tab shows y_d = h + t_h + t_s/2
+  and A_h = n b_tf t_h, which are not the engine's (y_d = h + t_s/2, no A_h); the new report shows the engine's terms and a note.
