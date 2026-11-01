@@ -1950,3 +1950,16 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 ### Open items (not changed)
 - **γ3 selector (5.6.3.3):** the options read "0.67 — A615 Gr 60", "0.75 — A706 Gr 60", "0.76 — A615 Gr 75". In the 10th Ed., A615 Gr 75 is 0.75 and 0.76 is A615 Gr 80 (A706 Gr 80 = 0.80 and A1035 Gr 100 = 0.67 are not offered). The 0.76 value is ≥ the Gr 75 value (conservative), but the label names the wrong grade. Relabel to "A615 Gr 80" and/or add options? Engineer decision.
 - Pre-existing (inventory): the dashboard cites "ACI 9.3.3 / 22.2" for flexure in AASHTO mode.
+
+
+## 2026-11-01 — PR: claude/retire-cbasd — the address #asd / #dev / #capacity opens that suite tab (CBAR; UI only)
+
+- **Why:** "Concrete Beam ASD.html" is retired (engineer decision, 2026-11-01). It now redirects to this file's ASD tab, and the tool list links to it directly. This is a cross-tool change allowed in one PR (CLAUDE.md §7 exception).
+- **Where:** the suite shell script, in `DOMContentLoaded`, after the `.suite-tab` click handlers (anchor `CBAR (2026-11-01)`).
+- **Added:**
+  ```js
+  var h0=String(location.hash||'').replace(/^#/,''); if(h0==='asd'||h0==='dev'||h0==='capacity') show(h0);
+  ```
+  `show()` is the existing tab switch: the same as clicking the tab, including the request for the Beam Capacity values when the ASD tab opens.
+- **Behaviour:** without a hash nothing changes (Beam Capacity opens). No calculation, no saved data, no key changed.
+- **Verified:** headless Chromium. No hash → Beam Capacity; `#asd` → ASD Beam Calcs; `#dev` → Development & Splice; `#capacity` → Beam Capacity; 0 console errors.

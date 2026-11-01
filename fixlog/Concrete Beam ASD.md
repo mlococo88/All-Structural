@@ -942,3 +942,23 @@ Line numbers are approximate; search for the anchor text. The tool file uses CRL
 ### Open items (not changed)
 - The tool has no project / title-block fields, so the title block and page header print "—". Adding optional fields (e.g. tool-prefixed keys in the saved JSON) is a decision for the engineer.
 - The suite's ASD tab cites the RF equation as "AASHTO MBE 6B (ASD)" and E_c as Std. Spec. 8.7.1. This tool cites neither, so its report does not either (adding them would be a code-reference change, CLAUDE.md §4).
+
+
+## 2026-11-01 — PR: claude/retire-cbasd — tool retired: the file is now a redirect page to the ASD tab of Concrete Beam Capacity (CBAR) (PR link added after merge)
+
+- **Engineer decision (2026-11-01):** retire "Concrete Beam ASD.html". It becomes a small redirect page to the ASD tab of "Concrete Beam Capacity.html", in the same way as `psbeam.html` and `Steel Bridge Beam Modules.html`.
+- **New file content (whole file replaced; the old tool is in git history at the commit before this PR):**
+  - The page forwards to `Concrete%20Beam%20Capacity.html` + `?query` + `#asd`. CBC opens its ASD tab for `#asd` (see `fixlog/Concrete Beam Capacity.md`, CBAR).
+  - Opened as `Concrete Beam ASD.html#old`, the page does not forward. It shows **"Open an old ASD project file"**: a file picker that reads a .json saved by the old tool and lists every value it holds, with unit and where to enter it in Concrete Beam Capacity. A "Copy as text" button copies the list.
+  - The page loads no library and writes no storage.
+- **Saved data (§5):**
+  - **Browser storage:** the old tool kept no project in browser storage. Its only key is `cbasd_inputTab_v1`, the input tab it showed (UI only). The redirect page does not read, change or delete it. No saved data is lost.
+  - **Project files:** the old projects are .json files saved with "Save". Their format is a flat `{id: value}` object: `fc`, `fy` (psi); `fc_inv`, `fs_inv`, `fc_op`, `fs_op` (psi, with `_allowOverride`); `b_eff`, `h_f`, `b_w`, `h_total`, `d_eff` (in); `as` (in²); `m_dl`, `m_ll` (kip-ft); `moment_type`; `section_shape`; `bar_count`; `bar_size`; `chk_inv`; `chk_op`; `cbasd_beff_lim`.
+  - **Why the files are not imported:** the ASD tab of Concrete Beam Capacity cannot open these files. Its export / import format is structured (`proj`, `mode`, `allow`, `loads`, `inherit`). Its section, materials and reinforcement are taken live from the Beam Capacity tab (bar layers, not a total A_s and d), and they overwrite the ASD tab's own values. A converted file would therefore be partly overwritten without notice.
+  - **What users do instead:** the `#old` reader lists the values, and the user enters them again. This is linked from tools.html, under "Open engineer checks".
+- **Other copies:** none.
+- **How verified (headless Chromium, 1280 and 390 px):**
+  - The redirect lands on `Concrete Beam Capacity.html#asd` with the ASD tab active, with 0 console errors.
+  - `#old` stays on the page and lists a sample old project file (21 values; allowables marked auto / override).
+  - CBC with no hash still opens Beam Capacity; `#dev` opens Development & Splice.
+  - tools.html now links to `Concrete%20Beam%20Capacity.html#asd`, and no longer to the old file.

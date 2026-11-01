@@ -7818,6 +7818,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.querySelectorAll('.suite-tab').forEach(function(b){
       b.addEventListener('click', function(){ show(b.getAttribute('data-target')); });
     });
+    /* CBAR (2026-11-01): an address ending in #asd, #dev or #capacity opens that tab (the retired "Concrete Beam ASD.html" and the tool list link to #asd) */
+    var h0=String(location.hash||'').replace(/^#/,''); if(h0==='asd'||h0==='dev'||h0==='capacity') show(h0);
   });
 })();
 </script>
