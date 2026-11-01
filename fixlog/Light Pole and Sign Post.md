@@ -1305,7 +1305,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` (13 passed, 3 new Fig. 29.4-1 tests). `node tests/lightpole-compare.mjs --a origin/main`: new projects — default pole, Broms, 45° cable, 60 ft pole, ice, 1½ in bolts, arms, monopost and two-post sign: results identical apart from the 4 new `inp` fields (cfPoleMode, cfPoleSurf, cfAuto, cfPoleEntered) since their C_f is 0.7 either way; square/rect/sign-square/wide two-post cases change as listed. `--old-saves` (main's saved state opened in the branch): all 13 cases identical apart from the 4 new `inp` fields; cable values identical in every case.
 - **Open items:** Fig. 29.4-1 has no rectangle row (the square row with D = least dimension is used); the D√q_z criterion uses q_z at mid-height (the figure does not state the height; engineer to confirm); square sections with wind along a diagonal (1.0/1.1/1.5) are not used (the tool's wind directions are normal to the faces).
 
-## 2026-11-01 — PR: claude/lp-pr3-pullout (LP-3: pullout bearing area of the heavy hex nut; engineer decision 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #550: claude/lp-pr3-pullout (LP-3: pullout bearing area of the heavy hex nut; engineer decision 2026-11-01)
 
 ### LP3-1. Pullout A_brg from heavy hex nut dimensions (LP-R6)   [calc change] [less conservative = exact]
 - **Engineer decision (2026-11-01):** use the real heavy-hex nut bearing area by bolt diameter, citing the source table, instead of 0.9d².
@@ -1320,3 +1320,52 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Effect:** every case: φN_p and φN_n (when pullout governed) change; the anchor tension and interaction ratios drop. No other value changes (diff paths checked: only Abrg, Np, Npn, phiNp, phiNn, tr, inter, tgov). Cable values identical.
 - **How verified:** `node tests/engine/run.mjs lightpole` 14 passed (new pullout test); `node tests/lightpole-compare.mjs --a origin/main`: 13 cases, differences only in the pullout chain; cable values identical; 0 console errors.
 - **Open item:** a plate washer (larger A_brg) is not an input; the bare nut is used.
+
+## 2026-11-01 — PR #557: claude/lp-pr4-anchre (LP-4: anchor reinforcement default None and §17.5.2.1 check; engineer decision 2026-11-01)
+
+### LP4-1. "Anchor reinforcement" default None for new projects (LP-R2)   [default change] [more conservative: breakout checked]
+- **Where:** input card 7, `id="segAnchRe"` (the `on` class moves to None); state `let anchRe='no';` (was `'yes'`).
+- **Saved data (§5):** `anchRe` has been written by `captureState()` in every version since the first commit (c58cb6d, 2026-10-03), so **every saved project has it stored explicitly**: projects that chose (or kept) Provided keep Provided and now get the reinforcement check below; projects with None are unchanged. `applyState()` keeps `anchRe = st.anchRe || 'yes'`, so a hand-made save without the field also keeps the old behaviour. Only new projects (DEFAULT_STATE, New, empty storage) start on None.
+- **Effect on the default new project:** concrete breakout is now in φN_n (Condition B, φ 0.70): φN_cbg = 22,323 lb; φN_n = min(34,073, 33,632, 22,323/3) = 7,441 lb per anchor; T_max = 9,791 lb → anchor tension 1.32 **NG** (before: 0.29 with Provided). The group check of the anchors table (ΣT = 19,401 ≤ φN_cbg = 22,323, 0.87) passes; the tool's φN_n compares the most-loaded anchor with φN_cbg/n_T (pre-existing, conservative; not changed — open item).
+
+### LP4-2. Anchor reinforcement checked when Provided (ACI 318-19 §17.5.2.1)   [new checks] [more conservative]
+- **Where:** new inputs `arBars` (bars per tension anchor, default 2), `arBar` (default "shaft longitudinal bar", or #4–#11), `arX` (distance rod–bar, default 3 in), rows `.arRow` shown only when Provided (`lppApplyArUI()`); `INPUT_IDS` + the three; `applyState()` defaults when missing. `anchorBolts()`: new block `// ---- anchor reinforcement, ACI 318-19 §17.5.2.1`, return field `ar`; `inp.arShaftBar = reo.long.bar` before `anchorsAllCombos` (pole and sign). New `boltArRows(b)` in both anchor tables (the "carried by anchor reinforcement" row now reads "replaced by the anchor reinforcement (§17.5.2.1), checked below"). `collectChecks()`: three checks; `LPP_CHK2K`. `boltWorkedHTML()` step 3b.
+- **Checks:**
+  1. strength φN_ar = 0.75·A_s·f_y ≥ N_ua (most-loaded anchor, its governing combination), A_s = bars counted for that anchor;
+  2. location x ≤ 0.5h_ef (R17.5.2.1);
+  3. development above the breakout surface: l_avail = h_ef − x/1.5 − c ≥ l_d; l_d = max(f_y ψ_t ψ_e ψ_g/(25 or 20 · λ√f′c)·d_b, 12 in) (ACI 318-19 Table 25.4.2.3; 25 for #6 and smaller, 20 for #7 and larger; ψ_t = ψ_e = 1.0, ψ_g = 1.0 Gr 60 / 1.15 Gr 80, λ = 1.0); below the surface the shaft bars run the full depth (developed). No reduction for excess reinforcement.
+- **φN_n unchanged** when Provided: min(φN_sa, φN_p) (breakout replaced by the anchor reinforcement, which is now checked separately).
+- **Governing provision:** ACI 318-19 §17.5.2.1 and R17.5.2.1 (anchor reinforcement developed on both sides of the breakout surface, φ = 0.75), §25.4.2.3. Wording cited, not copied; verify (a)/(b) item numbering against the engineer's copy.
+- **Check case (default geometry with Provided; (6) 1 in, h_ef 18 in, (12) #6 shaft bars, cover 3 in, f′c 4,000, f_y 60,000):**
+  - φN_ar = 0.75·(2·0.44)·60,000 = 39,600 lb ≥ 9,791 lb → 0.25 OK.
+  - x = 3 ≤ 0.5·18 = 9 → OK.
+  - l_d = 60,000/(25·√4,000)·0.75 = 28.5 in; l_avail = 18 − 3/1.5 − 3 = 13.0 in → 2.19 **NG**.
+- **Effect on saved projects with Provided (every old default project):** the three checks are added; with the old defaults the development check fails (as above) and the verdict changes from "ALL CHECKS PASS" to "1 CHECK FAIL — Anchor reinforcement, development". No existing value changes (verified with `--old-saves`: only the new `inp` fields and the new `ar` objects differ).
+- **How verified:** `node tests/engine/run.mjs lightpole` 15 passed (new test). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every case identical except the new inputs and `ar` objects (+ the 3 new check rows); `node tests/lightpole-compare.mjs --a origin/main` (new projects): the cases that were on the old default change from "breakout carried" to breakout checked (Condition B); cable values identical in all 26 runs.
+- **Open items:** (1) the per-anchor breakout comparison T_max ≤ φN_cbg/n_T (conservative; ACI compares the group tension with φN_cbg) now governs the default new project (1.32 vs group 0.87) — engineer to decide whether to compare the group; (2) hooked/headed anchor-reinforcement bars, and bars lapped with hooks, are not modelled (straight bars only); (3) the 0.5h_ef zone and the 1:1.5 cone geometry follow R17.5.2.1 and A_Nco; confirm.
+
+## 2026-11-01 — PR: claude/lp-pr5-baseplate (LP-5: base plate by the AASHTO LRFDLTS bending-line method, double-nut; F_y and provided-thickness inputs; engineer decision 2026-11-01; PR link added after merge)
+
+### LP5-1. Base-plate thickness (LP-R4)   [calc change] [more conservative] [new check]
+- **Engineer decision (2026-11-01):** AASHTO LRFDLTS bending-line method with a double-nut (leveling-nut) base; plate F_y input; provided-thickness input and check; effective width at the pole face. This method is used in both modes until the LTS 2nd Ed. mode is added.
+- **Where:** input card 7, new rows `bpFy` (default 36 ksi) and `bpT` (default 1.25 in) after `bpDia`; `INPUT_IDS`; `calc()` inputs; `anchorBolts()` block `// ---- base plate thickness: AASHTO LRFDLTS bending-line method`, new return fields `Cmax, Prod, tpProv, tpOK`; `anchorsAllCombos()` `byCheck.BP` (combination with the largest t_req); `collectChecks()` "Base plate thickness" (utilization (t_req/t)² = M_u/φM_n); `LPP_CHK2K`; Summary design row; `oBoltBp` (both modes); `boltWorkedHTML()` step 8 (the BP combination); `applyState()` defaults for old saves (F_y 36, t 1.25).
+- **Before:**
+  ```js
+  const m=Math.max(0,(BC-Dpole)/2); const beff=Math.PI*BC/n; const Fyp=36;
+  const tpReq=Math.sqrt(4*Tmax*m/(0.9*Fyp*1000*beff));
+  ```
+- **After:**
+  ```js
+  const m=Math.max(0,(BC-Dpole)/2); const beff=Math.PI*Dpole/n; const Fyp=inp.bpFy>0?inp.bpFy:36;
+  const Cmax=Math.max(0,...bolts.map(b=>-Mu*b.y/sumY2 + Pu/n)); const Prod=Math.max(Tmax,Cmax);
+  const tpReq=Math.sqrt(4*Prod*m/(0.9*Fyp*1000*beff));
+  ```
+  M_u = P_rod·m ≤ φ_f·F_y·b_eff·t²/4, φ_f = 0.90; check t_req ≤ t_provided.
+- **Governing provision:** AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections (bending line at the face of the tube, effective plate width at the bending line); the **article number and the exact effective-width expression are to be confirmed against the engineer's copy** (the review cited 1st Ed. Art. 5.6.6). b_eff = πD/n (the arc per rod at the pole face) is the review's proposal (LP-R4).
+- **Check case (default: D 10 in, BC 16 in, (6) rods, F_y 36, 1.2D + 1.0W, M_u = 19,949 lb·ft, P_u = 1,088 lb):**
+  - Before: b_eff = π·16/6 = 8.378 in, P = T_max = 9,791 lb, t_req = √(4·9,791·3/(0.9·36,000·8.378)) = **0.658 in**, no check.
+  - After: b_eff = π·10/6 = 5.236 in; C_max = 19,949·12·8/192 + 1,088/6 = 9,974 + 181 = 10,155 lb (the tool: 10,154 at the moment azimuth); P_rod = 10,154 lb; t_req = √(4·10,154·3/(0.9·36,000·5.236)) = **0.847 in** ≤ 1.25 in → (0.847/1.25)² = 0.46 OK.
+  - Other cases (t_req before → after): square HSS 8 in 0.962 → 1.381 (> 1.25 NG); rect 8×6 1.023 → 1.463 (NG); 60 ft pole 0.761 → 0.894; 1½ in rods 0.677 → 0.974; monopost sign (6 in post, BC 16) 1.182 → **1.943 (NG)**; two-post 1.266 → **2.075 (NG)**.
+- **Saved data:** new fields `bpFy`, `bpT`; old saves open with F_y 36 ksi (the former fixed value) and t = 1.25 in. t_req changes for every project (method change, above) and the new check is added; nothing else changes (diff paths checked: only tpReq, beff, Fyp, Cmax, Prod, tpProv, tpOK and byCheck.BP).
+- **How verified:** `node tests/engine/run.mjs lightpole` 16 passed (new base-plate test). `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: only the base-plate values above differ; cable values identical; 0 console errors.
+- **Open items:** (1) confirm the LTS 2nd Ed. article and effective-width rule (πD/n vs a chord/45° rule); (2) for square/rect poles the same b_eff = πB/n is used (no flat-face bending line); (3) the anchor-rod standoff (rod bending, LP-R17) is not checked; (4) LTS minimum plate thickness rules (e.g. ≥ rod diameter) are not checked.
