@@ -3182,3 +3182,23 @@ Zone "Span 2, 0.1L to 0.2L": V_f = 45.8 kip, Q = 1714.009 in³, I = 106168.02 in
   default (GS14–GS16 11–19 % low), D-2 stud zones and regions not imported (SC2 fails on 8 xsA exterior girders). No app code changed.
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-sidewalk-override — Owner sidewalk override for the LL deflection limits (C-32, engineer decision 2026-11-01)
+### Change
+- `engine/analysis.js`: `DEF.deflSidewalk = 'auto'`; `deflOwner`: before `on = ['L', 'R'].some(k => sw[k] && +sw[k].w > 0)`; after
+  `ov = S && S.deflSidewalk, on = ov === 'yes' ? true : ov === 'no' ? false : <the same cross-section test>`, plus `swHow` for the steps
+  and the Analysis tab note ("entered (Analysis settings)" / "cross-section sidewalks").
+- `ui/analysis.js` Analysis settings: select "Sidewalk or pedestrians, owner LL deflection limit (OWN19)": Automatic (default) / Yes / No.
+- `engine/legacy.js fromPL`: Preliminary sizing `limits.sidewalk` 'yes' / 'no' → `analysis.deflSidewalk` (GirderDetail's swOwn came from
+  it, plSidewalk); 'auto' or absent: not set. `engine/model.js` header: the new optional field.
+### §4 callout
+- Provisions: RIDOT BDM 2.4.2.6 (L/800; L/1000 with pedestrians), MassDOT LRFD Bridge Manual Part I 3.5.6.1 (L/1000 with sidewalks; L/800,
+  preferably L/1000, without), AASHTO LRFD 10th Ed. Art. 2.5.2.6.2. AASHTO and CTDOT: no owner rule, the override has no effect.
+- Before: the cross-section's sidewalks decided (no override). After: the same by default ('auto', or the field absent): every project
+  computes identically unless the override is set.
+- Check case (built-in project, interior girder, span 1 = 110 ft, MassDOT): auto (no sidewalk) L/800 → Δ_lim = 12(110)/800 = 1.650 in,
+  preferred L/1000; 'yes' → L/1000 = 1.320 in, no preferred limit; a 6 ft sidewalk with 'no' → 1.650 in. RIDOT: 'yes' L/1000, 'no' L/800.
+### Tests
+- tests/engine/sidewalk-override.test.mjs (2 tests): auto = before (deep-equal), yes / no for MassDOT, RIDOT, AASHTO; import of limits.sidewalk.
+### Other copies
+- None.
