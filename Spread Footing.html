@@ -671,7 +671,7 @@ function sftcMin(exp,tieSize){const e=SFTC_EXP[exp]||SFTC_EXP.weather;return e[2
 function newPed(n){return {label:'Ped '+n,x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loadEy:0,
  loads:TYPES.reduce((o,t)=>{o[t]={P:0,Vx:0,Vy:0,Mx:0,My:0};return o;},{}),
  direct:{P:0,Vx:0,Vy:0,Mx:0,My:0},
- reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8,exposure:'weather',dowelHook:'straight',dowelProj:'',sfJoint:'smooth'}};}
+ reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8,exposure:'weather',dowelHook:'straight',dowelProj:'',sfJoint:'rough'}};}
 function defaultState(){
  const p1=newPed(1);p1.x=-3;p1.loads.D.P=120;p1.loads.L.P=60;p1.loads.Wx.Vx=8;p1.direct={P:264,Vx:8,Vy:0,Mx:0,My:0};
  const p2=newPed(2);p2.x=3;p2.loads.D.P=150;p2.loads.L.P=80;p2.loads.Wx.Vx=8;p2.loads.S.P=20;p2.direct={P:338,Vx:8,Vy:0,Mx:0,My:0};
@@ -714,10 +714,10 @@ function migrateState(){
   if(!p.reinf)p.reinf={longSize:8,nx:3,ny:3,tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8};
   if(!p.loads)p.loads=newPed(1).loads;
   if(!p.reinf.longMode)p.reinf.longMode='faces';   /* SFRQ: older saves entered bars per face */
-  if(!SFTC_EXP[p.reinf.exposure])p.reinf.exposure='weather';
-  if(p.reinf.dowelHook!=='hook90')p.reinf.dowelHook='straight';
-  if(p.reinf.sfJoint!=='rough')p.reinf.sfJoint='smooth';   /* SFSF: interface surface; older saves: not intentionally roughened */   /* SFDO: dowel end in the footing; older saves: straight */
-  if(p.reinf.dowelProj===undefined||p.reinf.dowelProj===null)p.reinf.dowelProj='';   /* SFDO: blank = the required projection */   /* SFTC: pedestal exposure for the tie-cover check; older saves: exposed to weather or in contact with ground */
+  if(!SFTC_EXP[p.reinf.exposure])p.reinf.exposure='weather';   /* SFTC: pedestal exposure for the tie-cover check; older saves: exposed to weather or in contact with ground */
+  if(p.reinf.dowelHook!=='hook90')p.reinf.dowelHook='straight';   /* SFDO: dowel end in the footing; older saves: straight */
+  if(p.reinf.sfJoint!=='smooth'&&p.reinf.sfJoint!=='rough')p.reinf.sfJoint='rough';   /* SFSR: interface surface; a stored choice is kept, saves without the field (before #568): intentionally roughened, the default */
+  if(p.reinf.dowelProj===undefined||p.reinf.dowelProj===null)p.reinf.dowelProj='';   /* SFDO: blank = the required projection */
   if(p.loadEx===undefined)p.loadEx=0;   /* SFLO: load offset on the pedestal (ft); older saves: centred */
   if(p.loadEy===undefined)p.loadEy=0;
  });
@@ -865,13 +865,13 @@ function buildPedCards(){
   dr.appendChild(cell('<input type="number" step="1" data-path="peds.'+i+'.reinf.dowelN" data-num style="width:52px">'));
   dr.appendChild(cell('<select data-path="peds.'+i+'.reinf.dowelHook" style="width:auto"><option value="straight">Straight</option><option value="hook90">90\u00b0 hook</option></select>'));   /* SFDO */
   dr.appendChild(cell('<input type="number" step="1" min="0" data-path="peds.'+i+'.reinf.dowelProj" placeholder="auto" style="width:56px">'));
-  dr.appendChild(cell('<select data-path="peds.'+i+'.reinf.sfJoint" style="width:auto"><option value="smooth">Not roughened (\u03bc = 0.6\u03bb)</option><option value="rough">Roughened \u00bc in (\u03bc = 1.0\u03bb)</option></select>'));   /* SFSF */
+  dr.appendChild(cell('<select data-path="peds.'+i+'.reinf.sfJoint" style="width:auto"><option value="rough">Roughened \u00bc in (\u03bc = 1.0\u03bb)</option><option value="smooth">Not roughened (\u03bc = 0.6\u03bb)</option></select>'));   /* SFSF */
   dt.appendChild(dr);b.appendChild(dt);
   // set current values on the just-created selects/inputs
   [selL,selT,selD].forEach(td=>{const s=td.querySelector('select');s.value=getPath(state,s.dataset.path);});
   [...rr.querySelectorAll('input'),...dr.querySelectorAll('input')].forEach(inp=>{const v=getPath(state,inp.dataset.path);inp.value=(v===undefined||v===null)?'':v;});
   {const s=dr.querySelector('select[data-path$="dowelHook"]');s.value=state.peds[i].reinf.dowelHook||'straight';}
-  {const s=dr.querySelector('select[data-path$="sfJoint"]');s.value=state.peds[i].reinf.sfJoint==='rough'?'rough':'smooth';}
+  {const s=dr.querySelector('select[data-path$="sfJoint"]');s.value=state.peds[i].reinf.sfJoint==='smooth'?'smooth':'rough';}
   const del=el('button','danger','Remove pedestal');del.type='button';
   del.addEventListener('click',()=>{state.peds.splice(i,1);buildPedCards();recalc();saveAuto();});
   b.appendChild(del);
@@ -3980,7 +3980,7 @@ function sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam){
    V_u per LRFD combination: the factored applied shears at the pedestal (V_ux, V_uy; the pedestal self-weight adds none),
    V_u = sqrt(V_ux^2 + V_uy^2) (the shear plane is the whole interface, so both directions act on it together).
    phi V_n = 0.75 mu (A_vf f_y + N_u)   (22.9.4.2; 22.9.4.5: permanent net compression added to A_vf f_y; phi Table 21.2.1)
-   mu = 1.0 lambda (intentionally roughened to ~1/4 in) or 0.6 lambda (not intentionally roughened, default) (Table 22.9.4.2).
+   mu = 1.0 lambda (intentionally roughened to ~1/4 in; default, SFSR) or 0.6 lambda (not intentionally roughened) (Table 22.9.4.2).
    f_y <= 60 000 psi for shear friction (20.2.2.4).
    A_vf = the dowels crossing the interface less the area needed for tension (22.9.4.6: reinforcement for tension across
    the shear plane is added to the shear-friction reinforcement): A_vf = A_s,prov - A_s,req(SFDO), >= 0.
@@ -3991,7 +3991,8 @@ function sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam){
 function sfdShearFriction(i,p,Wped,pd,dw,combos,fc,fy,lam){
  const rf=state.peds[i].reinf, o={idx:i,label:p.label,isPatch:!!pd.isPatch};
  if(pd.isPatch)return o;
- const rough=rf.sfJoint==='rough', mu=(rough?1.0:0.6)*lam, fys=Math.min(fy,60000), Ac=pd.bx*pd.by, nw=lam>=1-1e-9;
+ const rough=rf.sfJoint!=='smooth',   // SFSR: default roughened
+  mu=(rough?1.0:0.6)*lam, fys=Math.min(fy,60000), Ac=pd.bx*pd.by, nw=lam>=1-1e-9;
  const lims=(rough&&nw)?[0.2*fc,480+0.08*fc,1600]:[0.2*fc,800], vlim=Math.min(...lims), VnMax=vlim*Ac/1000;
  const AsReqT=dw&&dw.tension&&isFinite(dw.AsReq)?dw.AsReq:0, Avf=Math.max(0,(dw?dw.AsProv:0)-AsReqT);
  Object.assign(o,{rough,mu,fys,Ac,nw,lims,vlim,VnMax,AsReqT,Avf,AsProv:dw?dw.AsProv:0});
@@ -5176,7 +5177,7 @@ function sfsfRender(bb){
   tt.innerHTML='<tr><th>Combination</th><th>V_ux</th><th>V_uy</th><th>V_u (k)</th><th>P_u</th><th>N_u (k)</th><th>\u03c6V_n (k)</th><th>DCR</th></tr>';
   z.rows.forEach(q=>{const tr=document.createElement('tr');[q.name,f2(q.Vx),f2(q.Vy),f2(q.Vu),f2(q.Pu),f2(q.Nu),f2(q.phiVn),isFinite(q.ratio)?f3(q.ratio):'\u221e'].forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k===7)td.style.color=q.ratio<=1?'#1b5e20':'#b71c1c';tr.appendChild(td);});if(q===g)tr.style.fontWeight='bold';tt.appendChild(tr);});
   bb.appendChild(tt);});
- bb.appendChild(el('div','note','Shear plane = the pedestal footprint A<sub>c</sub> = b<sub>x</sub>b<sub>y</sub> at the top of the footing. \u03bc: Table 22.9.4.2, set per pedestal on the pedestal card ("Joint surface"; default not intentionally roughened, 0.6\u03bb). A<sub>vf</sub>: the dowels less the area needed for tension at the interface (Dowels (2) above; 22.9.4.6). N<sub>u</sub>: permanent net compression only (dead load and pedestal self-weight at the combination\u2019s dead factor, not more than P<sub>u</sub>; 22.9.4.5). V<sub>n,max</sub>: 22.9.4.4 ('+(S[0].nw?'normalweight':'lightweight: \u201cother cases\u201d row')+').'));
+ bb.appendChild(el('div','note','Shear plane = the pedestal footprint A<sub>c</sub> = b<sub>x</sub>b<sub>y</sub> at the top of the footing. \u03bc: Table 22.9.4.2, set per pedestal on the pedestal card ("Joint surface"; default intentionally roughened, 1.0\u03bb; "not intentionally roughened", 0.6\u03bb, as an override). A<sub>vf</sub>: the dowels less the area needed for tension at the interface (Dowels (2) above; 22.9.4.6). N<sub>u</sub>: permanent net compression only (dead load and pedestal self-weight at the combination\u2019s dead factor, not more than P<sub>u</sub>; 22.9.4.5). V<sub>n,max</sub>: 22.9.4.4 ('+(S[0].nw?'normalweight':'lightweight: \u201cother cases\u201d row')+').'));
 }
 /* SFDO: Dowels topic per pedestal in 5.6 (worked) */
 function sfdoRender(bb){
