@@ -2011,4 +2011,4 @@ Concrete Beam Capacity: ONE combined Report tab, a chapter per sub-app. The coor
   ```
   `show()` is the existing tab switch: the same as clicking the tab, including the request for the Beam Capacity values when the ASD tab opens.
 - **Behaviour:** without a hash nothing changes (Beam Capacity opens). No calculation, no saved data, no key changed.
-- **Verified:** headless Chromium. No hash → Beam Capacity; `#asd` → ASD Beam Calcs; `#dev` → Development & Splice; `#capacity` → Beam Capacity; 0 console errors.
+- **Verified:** headless Chromium. No hash → Beam Capacity; `#asd` → ASD Beam Calcs; `#dev` → Development & Splice; `#capacity` → Beam Capacity. The console shows only the "failed to load" messages of the CDN files the test blocks, the same as without a hash.

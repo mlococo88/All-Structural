@@ -958,7 +958,7 @@ Line numbers are approximate; search for the anchor text. The tool file uses CRL
   - **What users do instead:** the `#old` reader lists the values, and the user enters them again. This is linked from tools.html, under "Open engineer checks".
 - **Other copies:** none.
 - **How verified (headless Chromium, 1280 and 390 px):**
-  - The redirect lands on `Concrete Beam Capacity.html#asd` with the ASD tab active, with 0 console errors.
+  - The redirect lands on `Concrete Beam Capacity.html#asd` with the ASD tab active. The console shows only the "failed to load" messages of the CDN files the test blocks; CBC opened without a hash shows the same.
   - `#old` stays on the page and lists a sample old project file (21 values; allowables marked auto / override).
   - CBC with no hash still opens Beam Capacity; `#dev` opens Development & Splice.
   - tools.html now links to `Concrete%20Beam%20Capacity.html#asd`, and no longer to the old file.
