@@ -1999,3 +1999,16 @@ Concrete Beam Capacity: ONE combined Report tab, a chapter per sub-app. The coor
 - At 390 px the suite's top bar (existing) shows only the first tabs; the Development & Splice and Report buttons are off screen (as Development & Splice is on main). Not changed (390 px layout fixes are a separate task).
 - The Development & Splice tab keeps its own Report tab (synced copy) besides the suite's combined one.
 - Beam Capacity's flexure steps work the layer with the largest moment and give the other layers in the layer table, as the Flexure tab does.
+
+
+## 2026-11-01 — PR: claude/retire-cbasd — the address #asd / #dev / #capacity opens that suite tab (CBAR; UI only)
+
+- **Why:** "Concrete Beam ASD.html" is retired (engineer decision, 2026-11-01). It now redirects to this file's ASD tab, and the tool list links to it directly. This is a cross-tool change allowed in one PR (CLAUDE.md §7 exception).
+- **Where:** the suite shell script, in `DOMContentLoaded`, after the `.suite-tab` click handlers (anchor `CBAR (2026-11-01)`).
+- **Added:**
+  ```js
+  var h0=String(location.hash||'').replace(/^#/,''); if(h0==='asd'||h0==='dev'||h0==='capacity') show(h0);
+  ```
+  `show()` is the existing tab switch: the same as clicking the tab, including the request for the Beam Capacity values when the ASD tab opens.
+- **Behaviour:** without a hash nothing changes (Beam Capacity opens). No calculation, no saved data, no key changed.
+- **Verified:** headless Chromium. No hash → Beam Capacity; `#asd` → ASD Beam Calcs; `#dev` → Development & Splice; `#capacity` → Beam Capacity. The console shows only the "failed to load" messages of the CDN files the test blocks, the same as without a hash.
