@@ -12,8 +12,9 @@
    Eq. 6.10.8.2.3b-1 from the Strength I envelope, and the nonprismatic data. Arithmetic copied operation for operation;
    tests/engine/flexure.test.mjs checks it against GirderDetail's own functions run in Node.
 
-   Not ported (other modules): shear GS11, constructibility GS14 to GS16, fatigue resistance GS17/GS18, proportions
-   GS1 to GS4, the design load rating GS20 (owner rules only).
+   Not ported (other modules): shear GS11, constructibility GS14 to GS16, fatigue resistance GS17/GS18, the design load rating
+   GS20 (owner rules only). The proportions GS1 to GS4 and GS22 are engine/proportions.js (2026-11-01), added to each location's checks
+   and steps here when that file is loaded.
    Owner load rules OWN6/OWN7 (added 2026-10-30, sb-ped-owner PR; GirderDetail gdOwnM(OWN_K.gs), GD45): factorsOwner(lf) gives
    γ_DC, γ_DW max × η, min × 1/η (η_N), γ_LL (Strength I) × η·m, Service II γ_LL × m; Fatigue I unchanged. The design load
    multiplier m is on HL-93 LL+IM only: a location's loc.pl = { LLp: [M_PL part, M_LLp], LLn: [...] } has its pedestrian part
@@ -340,9 +341,10 @@
     const minR = !nc && Art + Arb >= 0.01 * r.beff * dk.tdeck - 1e-9; r.fatNegSec = nc ? s : minR ? cn : cr; r.minR = minR; const fatPos = nc ? s : cn;   // noncomposite: the steel section
     const MfP = F && F.fat ? num(F.fat.p) : num(M.FATp), MfN = F && F.fat ? num(F.fat.n) : num(M.FATn), gf = F && F.fat ? 1 : G.fat; r.MfP = MfP; r.MfN = MfN; r.gfat = gf;
     r.dfT = gf * (Math.abs(fAt(MfP, fatPos, d)) + Math.abs(fAt(MfN, r.fatNegSec, d))); r.dfB = gf * (Math.abs(fAt(MfP, fatPos, 0)) + Math.abs(fAt(MfN, r.fatNegSec, 0)));
-    r.checks = checksOf(r, prj);
+    const PR = window.SBDProportions;   // GS1–GS4, GS22 (engine/proportions.js, B3 2026-11-01): first, as GirderDetail's Proportions group
+    r.checks = (PR ? PR.items(r, prj) : []).concat(checksOf(r, prj));
     let stp = null;   // the worked steps, built when first read (a girder has hundreds of locations; the page shows one at a time)
-    Object.defineProperty(r, 'steps', { enumerable: true, get() { return stp || (stp = worked(r, prj)); } });
+    Object.defineProperty(r, 'steps', { enumerable: true, get() { return stp || (stp = worked(r, prj).concat(PR ? PR.steps(r, prj) : [])); } });
     r.checks.forEach(guard); r.gov = govern(r.checks);   // SB2-R2: a non-finite ratio in use governs (was dropped by isFinite)
     return r;
   }

@@ -181,9 +181,21 @@
     const nan = rows.flatMap(r => r.checks.filter(c => c.inUse !== false && !isFinite(c.ratio) && !c.na).map(c => ({ r, c })));
     if (nan.length) { const t = `Not evaluated (ratio not a number) at ${nan.length} location check(s): ${[...new Set(nan.map(q => q.c.id))].join(', ')} at x = ${nan.slice(0, 12).map(q => f(q.r.x, 2)).join(', ')}${nan.length > 12 ? ', …' : ''} ft. The governing ratio above excludes them: review these locations on the Flexure and Rating tabs.`;
       subs[0].items.splice(1, 0, note(t, true)); X.warn.push('Flexure: ' + t); }
+    // B3: the proportion limits GS1–GS4 (and GS22) over the girder (engine/proportions.js summary), each with a link to its location's steps
+    const PR = window.SBDProportions, PS = PR ? PR.summary(rows) : null;
+    if (PS && (PS.gov.length || PS.warn.length)) {
+      PS.gov.forEach(q => { if (!X.have.has(q.row)) X.have.set(q.row, scOf(q.row)); });
+      subs.push(sub('prop', 'Cross-section proportions (6.10.2) and minimum deck reinforcement (6.10.1.7)', [
+        note('Checked at every location with the flexure checks (GS1 web D/t_w ≤ 150; GS2 b_f/2t_f ≤ 12.0, b_f ≥ D/6, t_f ≥ 1.1t_w; GS3 0.1 ≤ I_yc/I_yt ≤ 10; GS4 A_r ≥ 0.01b_eff t_deck at negative-flexure locations, top layer ≥ 2/3 a warning; GS22 the owner\'s Appendix A6 rule, a warning). The largest ratio of each over the girder:'),
+        tbl(['Check', 'Location', 'Demand', 'Capacity', 'Ratio', ED], PS.gov.map(q => ({ cells: [`${q.id} ${tt(q.c.title)}`, `${q.row.name}${q.row.x != null ? `, x = ${f(q.row.x, 2)} ft` : ''}`, { t: `${f(q.c.demand, 2)} ${q.c.unit || ''}`, n: true }, { t: `${f(q.c.capacity, 2)} ${q.c.unit || ''}`, n: true },
+          { ...R3(q.c.ratio, K(scOf(q.row), q.c.step)), cls: rc(q.c.ratio) }, String(q.c.ref || '').replace(ED + ' ', '')] }))),
+        PS.warn.length ? note(`Warnings: ${[...new Set(PS.warn.map(q => q.id))].map(id => { const L = PS.warn.filter(q => q.id === id); return `${id} at ${L.length} location(s), e.g. ${L[0].row.name}: ${L[0].c.na}`; }).join('; ')}`, true) : null]));
+      const pg = PS.gov.reduce((b, q) => (!b || q.c.ratio > b.c.ratio ? q : b), null);
+      if (pg) X.gov.push({ mod: 'Flexure', grp: 'Cross-section proportions and minimum deck reinforcement (GS1–GS4)', check: `${pg.id} ${tt(pg.c.title)}`, loc: `${pg.row.name}${pg.row.x != null ? `, x = ${f(pg.row.x, 2)} ft` : ''}`, r: pg.c.ratio, key: K(scOf(pg.row), pg.c.step) });
+    }
     const one = r => [checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
-    const detailed = all ? (Gr.gov ? [Gr.gov] : []) : govRows;
+    const detailed = all ? (Gr.gov ? [Gr.gov] : []) : [...new Set(govRows.concat(PS ? PS.gov.map(q => q.row) : []))].sort((a, b) => a.x - b.x);   // B3: the proportions' locations too (their links)
     const stF = r => (window.SBDFlexureUI.stepsOf ? window.SBDFlexureUI.stepsOf(Gr, r) : r.steps);   // with custom demands the step that names them first
     if (Gr.custom) subs.splice(1, 0, cdSub('flex', B));
     detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), stF(r), { title: 'Worked steps (flexure, then the section properties of this location)' })])));

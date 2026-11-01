@@ -2841,3 +2841,44 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   click hook, init), HANDOFF.md (§4 table, §4.1, §4.3, §4.4 notes).
 ### Other copies
 - BridgeXfer v1: `apps/steel-bridge/ui/bridgexfer.js` joins the existing verbatim copies (HANDOFF.md §5).
+
+## 2026-11-01 — PR: sbd-gs1-4 — Cross-section proportion limits and minimum deck reinforcement GS1–GS4, GS22 on the Flexure tab, in the report and in Auto design's full check (B3)
+### Change (calculation: new checks)
+- New `engine/proportions.js` (`window.SBDProportions`): GirderDetail Girder section `checks()` GS1, GS2, GS3, GS4 and GS22 (anchor
+  `id: 'GS1', grp: P1` in "Steel Bridge Design.html"), operation for operation, as check items of each flexure location, with worked steps
+  (ids fx.gs1.ok, fx.gs2.<flange>.bt|bD|tt, fx.gs3.Iy / .ok, fx.gs4.req / .ok / .top, fx.gs22) and `summary(rows)` (largest ratio of each
+  over the girder, warnings).
+- `engine/flexure.js location()`: before `r.checks = checksOf(r, prj);` after
+  `const PR = window.SBDProportions; r.checks = (PR ? PR.items(r, prj) : []).concat(checksOf(r, prj));` and the steps getter
+  `worked(r, prj).concat(PR ? PR.steps(r, prj) : [])`. The header's "Not ported … proportions GS1 to GS4" is updated.
+- `ui/flexure.js`: topic `prop` "Cross-section proportions and minimum deck reinforcement (GS1–GS4)" (ids /^fx\.gs(1|2|3|4|22)(\.|$)/)
+  after "Web depth in compression and hybrid factor"; a line under "Governing" with the largest ratio of each over the girder (links
+  select the location) and the warnings.
+- `report/builders.js flex()`: a sub-section "Cross-section proportions (6.10.2) and minimum deck reinforcement (6.10.1.7)" (table of
+  the largest ratio of each with a link to the location's steps; those locations are detailed), and a line in the governing summary.
+- `engine/autodesign.js partOf`: GS4 and GS22 map to 'deck' (no plate is sized from the deck reinforcement or the A6 method). The full
+  check takes every flexure item in use, so GS1–GS4 now count there (in the page; the Node autodesign tests do not load proportions.js).
+- `index.html`: script tag `engine/proportions.js` before engine/flexure.js.
+### §4 callout
+- New checks, AASHTO LRFD 10th Ed.:
+  - GS1 Art. 6.10.2.1.1, Eq. 6.10.2.1.1-1: D/t_w ≤ 150 (no longitudinal stiffeners); ratio (D/t_w)/150.
+  - GS2 Art. 6.10.2.2, Eqs. 6.10.2.2-1, -2, -3 for each flange: b_f/2t_f ≤ 12.0, b_f ≥ D/6, t_f ≥ 1.1t_w.
+  - GS3 Eq. 6.10.2.2-4: 0.1 ≤ I_yc/I_yt ≤ 10 (compression flange by the region); ratio max(0.1/v, v/10).
+  - GS4 Art. 6.10.1.7: A_r = A_top + A_bot ≥ 0.01 b_eff t_deck at every negative-flexure location (GirderDetail applies it there, not
+    only where the deck stress exceeds φf_r); the top-layer share ≥ 2/3 a warning ("should"). MassDOT Bridge Manual Part I 3.5.1.4
+    (OWN17) cited. Noncomposite: not applicable.
+  - GS22 MassDOT Part I 3.5.1.7 (OWN23): Appendix A6 should not be used: a warning where A6 is the method in use.
+- Before: no such checks in the new app (the limits existed only as Auto design sizing rules). After: as GirderDetail. Results change:
+  each flexure location has these items; a location's governing check and the girder's governing flexure ratio can now be one of them
+  (e.g. GS4 0.989 at the piers of the built-in project, below its flexure governing 1.229 GS7, so the governing ratio is unchanged there).
+- Check case (GirderDetail's built-in rows; tests/engine/proportions.test.mjs): Span 1, D = 60, t_w = 0.5625, top 16 × 0.75, bottom
+  16 × 1.125: GS1 60/0.5625 = 106.67, ratio 0.7111; GS2 top 16/(2·0.75) = 10.667 (0.8889), 16 ≥ 10 (0.625), 0.75 ≥ 0.61875 (0.825);
+  GS3 I_yc = 0.75(16³)/12 = 256, I_yt = 1.125(16³)/12 = 384, 0.667 → ratio 0.15. Pier 1, top 18 × 1.5, bottom 18 × 2, b_eff 114 in,
+  t_deck 8.5 in, A_r = 6.6 + 3.2 = 9.8 in²: GS3 972/729 = 1.333 → 0.1333; GS4 0.01(114)(8.5) = 9.69 ≤ 9.8, ratio 0.98878; top share
+  0.673 ≥ 0.667.
+### Parity
+- 100 gd_*.json payloads + GirderDetail's built-in rows (5 variants: as is, MassDOT with A6, MassDOT 6.10.8, top share 0.5, A_r 5 in²):
+  105 cases, 37,110 locations, 635,819 values (GS1 37,110, GS2 222,660, GS3 37,110, GS4 25,882, GS22 3,236 items): 0 differences,
+  largest relative difference 0 (ratios bit-identical).
+### Other copies
+- None.
