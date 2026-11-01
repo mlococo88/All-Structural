@@ -2073,3 +2073,83 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
 - **Check case:** in a folder where nothing has been recorded, `BridgeApps.path('psbeam')` returns `'Prestressed Bridge Design.html'` (before: `'psbeam.html'`, which redirected).
 - **How verified:** the shared blocks were compared after the edit. The big `appPaths` block differs between the three files only in its `BridgeApps.boot('<app>')` line, as before. The beam-roster and BridgeXfer blocks are identical in all three, and the handoff blocks are identical in index.html and Prestressed Bridge Design.html. `node tests/check-syntax.mjs index.html lldf.html "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
+
+## 2026-11-01 — PR: rpt-psbd (PSRP) — "Report (new)" tab: the calculation report in the shared viewer, alongside the Report tab (display only)
+### Where
+- Head, after the KaTeX 0.16.9 script tag: `<script src="shared/steps.js"></script>`, `<script src="shared/report.js"></script>` (classic
+  scripts, relative path: keep the shared folder next to the file).
+- `PBD.MODS` (anchor `{ id: 'report', label: 'Report', grp: 'Report' }`): added `{ id: 'rptnew', label: 'Report (new)', grp: 'Report' }`;
+  the fallback `TABS` list the same (`['report','Report'],['rptnew','Report (new)']`); in the tab switch
+  `{tab==='rptnew'&&<SharedReportTab inp={inp} R={R}/>}` after the Report line.
+- New block before `function ReportTab({inp,R}){`, anchor `/* ================= PSRP (2026-11-01): REPORT (NEW) TAB`: `psrModel(inp,R)`
+  (the report model) and `SharedReportTab` (mounts `SharedReport.mount`; Ctrl+P while it shows prints the report alone).
+  `window.PSRP` = { doc, api, model } while it is shown (tests).
+### Contents
+- 1 Design summary (every check of R.checks with its ratio; key quantities with § links; warnings). 2 Materials and section
+  properties (E_ci, E_c, E_c,d, n; gross library values; b_eff, A_c, ȳ_bc, I_c, S_bc, S_tg, S_td, deck load). 3 Strands and losses
+  (A_ps, e_m, ℓ_t; f_pbt, Δf_pES closed form, P_i, f_cgp; refined or approximate long-term losses; total loss, f_pe). 4 Loads and
+  distribution (w_g, DC1, DC2, DW, HL-93 per lane, DF_m, DF_v, M_LL+IM, V_LL+IM). 5 Stress limits and the governing stresses.
+  6 Strength I flexure at midspan (β_1, d_p, c, a, f_ps, M_n, φ, φM_n, the governing flexure and minimum-reinforcement ratios).
+  7 Shear at the governing section (d_v, V_u, V_p, ε_s, β, θ, V_c, V_s, V_n, φV_n, ratio, longitudinal tie). 8 Camber and deflection.
+  9 Load rating (RF Inventory / Operating, Service III). 10 References. Links back to the tabs ([[tab:…]] → psbGoto).
+- Title block: Project (proj.name), Project No. (proj.job), Calculated by, Date (the girder id in the subtitle); Checked by / Checked date
+  "—" (no such inputs; no new saved fields).
+### Values
+- Every step value is a number of R = computeAll(inp) (the object every tab shows): R.g, R.cp, R.ss, R.lo, R.refFin, R.LT,
+  R.totalLoss, R.fpe, R.df, R.hl, R.MLL, R.VLL, R.lim, R.fMid, R.flexGov, R.minGov, R.wShear, R.cam, R.rating, R.svcRating, R.checks.
+  Nothing is recomputed (the old ReportTab recomputes several intermediates, e.g. the transformed release section, ktd, the camber
+  components; those are not in the new report).
+### Governing provision
+- None changed (display only). AASHTO LRFD 10th Ed. (2024) articles as cited in the steps; MBE 6A (edition: verify), PCI multipliers.
+### Check case (defaults: PCI BT-72, L = 120 ft, 40 × 0.6 in strands, f′ci 6.8 / f′c 8.5 ksi)
+- E_ci = 120,000(1.0)(0.145)²(6.8)^0.33 = 2,523 × 1.8824 = 4,749 ksi (= R.lo.Eci 4,749.47).
+- V_c = 0.0316(4.840)(1.0)√8.5(6)(65.96) = 176.46 kip (= R.wShear.Vc).
+- RF_inv = (1.00(13,638.9) − 1.25(3,979.1) − 1.50(449.5)) / (1.75(2,628.7)) = 7,990.7 / 4,600.3 = 1.737 (= R.rating.RFinv).
+### How verified
+- Headless Chromium (scratchpad `rpt/rp_psbd.mjs`), 3 cases (defaults; approximate losses + exterior girder + L 96 ft; L 70 ft with no
+  harped strands): every existing tab's text (14 tabs incl. the old Report tab) identical main vs branch; 0 unresolved / duplicate
+  refs; 0 KaTeX errors (full report); no NaN / undefined; 32 step values per case === R's (E_ci, E_c, n, A_c, ȳ_bc, I_c, S_bc, A_ps,
+  e_m, Δf_pES, Δf_pLT, Δf_pT, f_pe, DF_m, DF_v, M_LL, M_HL93, limits, c, f_ps, M_n, φM_n, flexure ratio, V_c, V_s, V_n, shear ratio,
+  camber at release and final, RF inv / opr); every value the new report shows was also found in the old Report tab's text (text match at 0–4 decimals: presence, not a field-by-field proof); Ctrl+P on
+  the new tab prints it alone with the running header and page numbers.
+### Other copies
+- None.
+### Open items
+- PSRP-O1: the old Report tab is kept. The new report does not (yet) carry what the old one recomputes or draws (graphics, transformed
+  release section, refined-loss coefficients by stage, anchorage zone, continuity, fatigue, handling, deck, owner requirements), so it
+  cannot replace it without losing content. Engineer to decide the scope before the old tab is retired.
+
+## 2026-11-01 — PR: rpt-psbd-full (PSRF) — the old Report tab's intermediates move into the engine (R.rv); the new report covers most of the old tab (display only)
+### Where
+- Engine: new `psbReportVals(inp,R)` (anchor `/* PSRF (2026-11-01): the calculation report's intermediate values`, before the strand
+  optimizer): the block "recomputed intermediates for display (mirror the engine)" of `ReportTab`, moved line for line (A_d, y_d,
+  A_h, y_h, the parallel-axis terms I_c2…I_c6, e_m, I_g + e_m²A_g, M_g, k_td and its constant, γ_h, γ_st, M_bar, M_dw, P_e at midspan,
+  the shear components at the critical section, M_u used for ε_s, cot θ, the camber components, n_i and the transformed release
+  section at the release-compression station). `computeAll`: `return {g,cp,…}` → `const OUT={g,cp,…}; OUT.rv=psbReportVals(inp,OUT);
+  return OUT;` (one field added; nothing else changes).
+- `ReportTab`: the block replaced by `const rv=R.rv, {Ad,yd,…}=rv;` and `transAt=r=>rv.tRc` (it was called for the release-
+  compression row only); `cgsNum` (a TeX string) stays.
+- New report: `psrMore(inp,R,secs)` (anchor `/* PSRF (2026-11-01, engineer's decision`), called by `psrModel`: a Graphics section (M_u
+  and φM_n, V_u and φV_n, fiber stresses along the girder as SVG line plots of R.diagrams / R.flexFull / R.shearDiag / R.grid; the 3D
+  cage snapshot when captured), gross moduli and the parallel-axis terms, strand c.g., harp slope, M_g, f_pt, the refined-loss
+  coefficients (k_s, k_hs, k_hc, k_f, k_td, ε_bid, ε_bif, ψ, K_id, e_pc, K_df, Δf_cd) or γ_h, γ_st, P_e, elastic gains, strand force and
+  stress by row and stage, midspan moments, HL-93 closed forms, e_g, K_g and the distribution-factor equations (exterior lever rule,
+  e-factors, rigid section, skew), the six governing stresses worked, M_u, ε_t, f_r, f_cpe, M_cr, the shear critical section (V_u
+  components, ε_s, cot θ, V_s, D/C), interface shear, anchorage zone, confinement, release steel, longitudinal tie, camber components
+  and stages, Fatigue I, continuity (results), handling and deck (results), owner requirements, output tables.
+### Pure refactor (CLAUDE.md §4)
+- No formula changed: the moved expressions are identical; R gains `rv` only. Proof (headless, 4 cases incl. transformed release,
+  handling and deck on): `computeAll` results without `rv` identical main vs branch (JSON); the text of every tab, including the old
+  Report tab, identical main vs branch (only "Report (new)" differs).
+### How verified (new report)
+- 4 cases: 147–166 steps, 23 topics; 0 unresolved / duplicate refs; 0 KaTeX errors; no NaN; 46–47 step values per case === R
+  (incl. S_b, f_pt, P_e, M_td, e_g, M_cr, f_cpe, camber Δ_ps,s and erection, strand stress range, V_u and V_s at the critical section,
+  Service III and release stresses, k_td); every value shown was also found in the old Report tab's text (text match); Ctrl+P prints
+  the new report alone.
+### Old Report tab: kept (not retired)
+- PSRF-O1: still only in the old tab: the continuous-analysis worked steps (influence lines, restraint moments, positive moment
+  connection, pier negative-moment capacity worked), the handling and deck worked calculations (the old tab embeds those tabs), the
+  rating derivations (ratingDerivs), the stress heat-map graphic and the long-tie / release-steel bodies (the new report has their
+  results only). The engineer's rule ("retire only if everything matches") is not met yet.
+- PSRF-O2 (display, not changed): with t_h > 0 and the haunch NOT in the composite properties, the old tab shows y_d = h + t_h + t_s/2
+  and A_h = n b_tf t_h, which are not the engine's (y_d = h + t_s/2, no A_h); the new report shows the engine's terms and a note.

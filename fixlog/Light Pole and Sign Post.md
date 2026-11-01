@@ -1370,7 +1370,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` 16 passed (new base-plate test). `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: only the base-plate values above differ; cable values identical; 0 console errors.
 - **Open items:** (1) confirm the LTS 2nd Ed. article and effective-width rule (πD/n vs a chord/45° rule); (2) for square/rect poles the same b_eff = πB/n is used (no flat-face bending line); (3) the anchor-rod standoff (rod bending, LP-R17) is not checked; (4) LTS minimum plate thickness rules (e.g. ≥ rod diameter) are not checked.
 
-## 2026-11-01 — PR: claude/lp-pr6-ice (LP-6: ASCE 7-22 Ch. 10 design ice thickness by height; 0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi; engineer decision 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #564: claude/lp-pr6-ice (LP-6: ASCE 7-22 Ch. 10 design ice thickness by height; 0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi; engineer decision 2026-11-01)
 
 ### LP6-1. Design ice thickness t_d(z) (LP-R8)   [calc change] [mixed: less ice below 33 ft, more above]
 - **Engineer decision (2026-11-01):** the entered thickness is the ASCE 7 map value; apply the Chapter 10 height factor and the importance factor to get the design thickness per height. Cables: engineer decision of the same day — no change to anything cable-related, so the **cables keep the entered t** (reported).
@@ -1391,3 +1391,59 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Effect:** every pole-mode envelope now includes them (signs carry no ice and skip all ice combinations, as before). Default pole: L5 M = 6,428 lb·ft, N = 1,098 lb; A5 M = 4,494 lb·ft, N = 741 lb — neither governs (L1/L4, A1). The cables carry their existing loads in the new combinations (the cable model is unchanged); every existing combination's cable values are identical (harness check, keyed by combination).
 - **How verified:** `node tests/engine/run.mjs lightpole` 17 passed (new ice test: t_d, uniform = old mast ice, cable ice unchanged, L5/A5 factors). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every Summary/foundation/anchor/post value identical in all 13 cases (only the combination arrays gain L5/A5 and the new fields); new projects: ice values as above, governing results unchanged in all 13 cases except the bearing axial (D + 0.7Di). Cable values identical for L1–L4, A1–A4.
 - **Open items:** the 7-22 form of t_d (I_i and the 2.0 factor; see above); V_ice concurrent-wind map and its height factor are unchanged; ice on sign panels (LP-R22) unchanged.
+
+## 2026-11-01 — PR #570: claude/lp-pr7-torsion (LP-7: fixture torsion and arm wind in light-pole mode, LP-R5)
+
+### LP7-1. Wind on the arms   [calc change] [more conservative]
+- **Where:** fixture rows: new field `armD` (arm outside diameter, in; new rows 2.375 in; `fixTbl` column "Arm OD"); `renderFixtures()`, `addFix`; `applyState()` sets `armD = 0` on rows saved without it (no arm wind, the old behaviour) with notice `armMigNote`. `fixtureComponents()`: block `// ---- wind on the arm itself`, return fields `armDin, cfArm, armRow, armHD, armDsq, FarmMax, FarmMaxI`. `evalComboDir()` and `poleStress()` add the arm force for each azimuth.
+- **Expressions:** round arm of OD D and length a, horizontal at h_f along θ; wind toward φ: F_arm = q_z(h_f)·K_d·G·C_f·D·a·|sin(θ − φ)| along the wind at the arm mid-length (iced: D + 2t_d, V_ice). C_f from ASCE 7-22 Fig. 29.4-1 (round): D√q_z > 2.5 → moderately smooth row, else the D√q_z ≤ 2.5 row; h/D = a/D.
+- **Provision:** ASCE 7-22 §29.4 (Eq. 29.4-1), Fig. 29.4-1.
+
+### LP7-2. Torsion from the fixture and arm wind   [calc change] [more conservative]
+- **Where:** `evalComboDir()`: `Tz += F_w·(e_x·sin φ − e_y·cos φ) + ½F_arm·(e_x·sin φ − e_y·cos φ)`, returned `Tz, T` (|T| < 10⁻⁶ lb·ft → 0, the round-off of cancelling arms); `evalCombo()`: `Tmax` over the four directions; `lrfdCands` carry `T: r.Tmax`, so `anchorsAllCombos()` adds T/(n·R) to each bolt's shear (the existing sign-mode path); `poleStress()`: torsion above each section and AISC 360-16 §H3.2 (Eq. H3-6 when T_r > 0.2T_c, `hssTorsionShear`, as for the sign post), row field `tv`; new `lppShaftTorsion(inp,cands)` (the ACI 318-19 §22.7.1.1 threshold of `designFoundationStack`) in the pole Summary stack (`found.Tu, phiTth, Acp, pcp`) → the existing "Shaft torsion ≤ φT_th" check; worked in the Shaft tab (`lppTorsionHTML`) and the anchors table note; `fixtureWorkedHTML()` steps 5 (arm wind) and 6 (torsion); Manual §2.4 item; Summary warning wording (pole: "Torsion from the wind on offset fixtures and arms").
+- **Expression:** T = Σ (F_w,i + ½F_arm,i)·a_i·sin(φ − θ_i) (plan cross product r × F). T at the max-torsion azimuth is combined with the max-moment azimuth for the anchors and the shaft (conservative).
+- **Provision:** statics; AISC 360-16 §H3.1, §H3.2 (Eq. H3-6); ACI 318-19 §17.7 (bolt shear), §22.7.1.1 / Table 22.7.4.1(a).
+- **Check case (Node test):** fixture at θ 0°, a 6 ft, EPA 1.6, arm OD 2.375 in, 1.2D + 1.0W, wind toward 90°: q₀ = 0.00256·1.0147·13,225 = 34.35 psf, D√q₀ = 0.198·5.86 = 1.16 ≤ 2.5, h/D = 6/0.198 = 30.3 → C_f 1.2; F_arm = 29.20·1.2·0.198·6 = 41.6 lb; T = (51.4 + ½·41.6)·6 = 433 lb·ft. Wind toward 0°: T = 0. Arms at 0° and 180°: T = 0.
+- **Results (harness):**
+  - Default pole, new project (two arms at 0°/180°, OD 2.375 in): no torsion (arms cancel); arm wind at 90°/270° raises the governing LRFD M_u 19,949 → 21,957 lb·ft, embedment 6.244 → 6.464 ft; anchor tension 9,791 → 9,656 lb at the new governing azimuth.
+  - Old saves (no arm OD): default and symmetric cases identical; the "arms" case (fixtures at 45° and 200°) gets torsion from the fixture wind: T_u = 369 lb·ft vs φT_th 36,212 lb·ft; bolt shear 134 → 226 lb.
+  - One 10 ft arm at 90° (OD 3.5 in, no cables): embedment 5.17 → 5.45 ft, T_u = 1,427 lb·ft.
+  - Signs: identical. Cable values identical in every case.
+- **How verified:** `node tests/engine/run.mjs lightpole` 18 passed (new arm/torsion test); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (14 cases incl. the new "torsion" case): differences as listed; diff paths filtered.
+- **Open items:** the arm dead load is not separate (part of the fixture weight); arms are taken horizontal at h_f; the arm wind uses the projected area with the force along the wind (the normal-component form of §29.4 for inclined members is not used).
+
+## 2026-11-01 — PR #573: claude/lp-pr8-vc (LP-8: shaft V_c per ACI 318-19 Table 22.5.5.1 with the A_v,min / size-effect branch, LP-R11)
+
+### LP8-1. Concrete shear strength of the shaft   [calc change] [more conservative]
+- **Where:** `designRebar()`, block `// ---- concrete shear strength, ACI 318-19 §22.5.5.1` (replaces `// shear capacity of concrete (circular)` through the tie-spacing selection); tie result fields `VcA, VcB, lamS, rhoW, AsT, Av, avMinPerS, sAvMin, sTrial, vcBranch`; `rebarWorkedHTML()` step 4 (A_v,min, both branches, φV_c with the branch used, s for A_v,min).
+- **Before:**
+  ```js
+  const Acv=0.8*Ag; const Vc=2*Math.sqrt(fc)*Acv; const phiVc=0.75*Vc;
+  ```
+  always (branch (a)), also when the ties are below A_v,min.
+- **After:** with the ties as detailed (A_v = 2 legs, s = the §25.7.2.1 spacing or the manual s): A_v ≥ A_v,min = max(0.75√f′c, 50)·b_w·s/f_yt → V_c = 2λ√f′c·A_cv (a); otherwise V_c = min(8λ_s·λ·ρ_w^(1/3)·√f′c, 5λ√f′c)·A_cv (c, §22.5.5.1.1 cap), λ_s = √(2/(1 + d/10)) ≤ 1, d = 0.8b, ρ_w = (A_s/2)/(b_w·d) (bars of the tension half). Where V_u > ½φV_c the ties are designed for shear and must give A_v ≥ A_v,min (§10.6.2.1), so branch (a) applies and the spacing is also limited to s ≤ A_v/(A_v,min/s). A_cv = 0.8A_g (the tool's b_w·d) and the neglected N_u/6A_g term are unchanged.
+- **Governing provision:** ACI 318-19 §22.5.5.1 (Table 22.5.5.1 (a) and (c)), §22.5.5.1.1, §22.5.5.1.3 (λ_s), §22.5.2.2 (circular sections), §10.6.2.1 / §10.6.2.2 and Table 9.6.3.4 (A_v,min).
+- **Check case (default: 3 ft shaft, (12) #6, #3 ties @ 12 in, f′c 4,000, f_y 60,000):**
+  - A_v = 2·0.11 = 0.22 in² < A_v,min = 50·36·12/60,000 = 0.36 in² → branch (c).
+  - d = 0.8·36 = 28.8 in; λ_s = √(2/3.88) = 0.718; ρ_w = 2.64/(36·28.8) = 0.00255, ρ_w^(1/3) = 0.1366; A_cv = 0.8·1,017.9 = 814.3 in².
+  - V_c = 8·0.718·0.1366·63.25·814.3 = 40,393 lb; φV_c = **30,295 lb** (before: 0.75·2·63.25·814.3 = **77,251 lb**). V_u = 877 lb ≤ ½φV_c → minimum ties, spacing unchanged.
+  - Other cases: square shaft 98,359 → 44,117; 60 ft pole (3.5 ft, (16) bars) 105,148 → 38,632; two-post sign 98,359 → 42,455 lb. No case changes its tie spacing or verdict.
+- **How verified:** `node tests/engine/run.mjs lightpole` 19 passed (new V_c test). `node tests/lightpole-compare.mjs --a origin/main`: 14 cases, only φV_c / V_c and the new tie fields differ (13 values per stack; diff paths filtered); cable values identical. No saved data change.
+- **Open items:** ρ_w uses half the longitudinal bars (conservative; the code does not define A_s for a circular section); A_cv = 0.8A_g kept (vs D·0.8D = 1.02A_g); the axial term N_u/6A_g is neglected.
+
+## 2026-11-01 — PR #578: claude/lp-pr9-natgf (LP-9: n₁ and G_f worked steps; display only)
+
+### LP9-1. Natural frequency n₁ and gust-effect factor G_f worked (CLAUDE.md §6; D11 open item)   [display] [no result change]
+- **Where:** `poleNatFreq()` also returns `sWy, sWy2, rows` (the Rayleigh sums and each weight's height, weight and deflection; values unchanged); `lppApplyGf()` keeps `inp.nat`, `inp.gfDims`; new `natGfWorkedHTML(inp)` above `function hssTorsionShear(`; shown in `windWorkedHTML()` (pole, Loading tab), `signWindWorkedHTML()` (sign, Loading tab and the sign report) and the pole report's pole-wind section.
+- **Steps:** table of z_i, W_i, y_i, W_i·y_i, W_i·y_i²; n₁ = (1/2π)·√(g·ΣWy/ΣWy²) with the numbers; rigid/flexible; when flexible, z̄, I_z̄, L_z̄, Q², V̄_z̄, N₁, R_n, R_h, R_B, R_L, R², g_R and G_f (ASCE 7-22 Eq. 26.11-7 … 26.11-16) with the numbers, then G used = max(G, G_f).
+- **Check case (60 ft pole case):** ΣW·y = 7,213.94, ΣW·y² = 61,110.99 → n₁ = √(386.1·7,213.94/61,110.99)/(2π) = 6.751/6.283 = **1.0745 Hz** (rigid; the tool's value).
+- **How verified:** `node tests/engine/run.mjs lightpole` 20 passed (worked-step test, flexible case with n₁ = 0.82 Hz: G_f shown, no NaN). `node tests/lightpole-compare.mjs --a origin/main`: results identical apart from the added fields (`sWy`, `sWy2`, `rows`, `inp.nat`, `inp.gfDims`); cable values identical; text adds the worked steps (Loading tab, report); 0 console errors.
+
+## 2026-11-01 — PR: claude/lp-pr10-json (LP-10: JSON export / import of the project; no result change; PR link added after merge)
+
+### LP10-1. Export JSON / Import JSON   [feature] [no result change] [no storage change]
+- **Where:** project bar: buttons `pbExport`, `pbImport`, hidden `pbImportFile`; new `lppExportJSON()`, `lppImportState(obj)` and handlers above `const DEFAULT_STATE=captureState();`.
+- **File format (new, versioned):** `{ tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name, exported, state }`, where `state` is exactly `captureState()` — the same object already stored under `lpp_projects_v1` / `lpp_session_v1`. No localStorage key or saved format is changed (§5).
+- **Import:** accepts that file or a bare state object (`{inputs, …}`); opens it through `applyState()`, so every migration for fields added later applies (old files open with the old behaviour and the usual notices); the result is an unsaved working state ("Save As" stores it in the browser). A file without `inputs` is refused with a message. Unsaved changes ask for confirmation first.
+- **Saved-project list:** the tool already has one (the Project dropdown with Save / Save As / Rename / Delete / New); unchanged.
+- **How verified (headless Chromium, scratchpad lpjson.mjs):** two-post sign at V 133 exported → New → imported: the Summary text is identical and V = 133; a bare old-format state (no cfPoleMode / anchTq / arm OD …) imports with C_f Manual and anchor reinforcement Provided as stored; a file without `inputs` gives "Import failed: not a Light Pole and Sign Post project file"; localStorage holds only `lpp_session_v1` after the run; no console errors; 390 px: buttons wrap, no horizontal scroll. Calculations untouched (no engine code changed); `node tests/engine/run.mjs lightpole` 20 passed.

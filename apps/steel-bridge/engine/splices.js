@@ -807,10 +807,11 @@
   /* projGam(P) (SPGAM, 2026-11-01, engineer's "one source"): the project's load factors for the splice design forces, before the owner's η and m
      (env, as before): Strength I γ_DC max / min, γ_DW max / min, γ_LL and Service II γ_LL of Tables 3.4.1-1, -2 (SBDFlexure.factors(), the
      Flexure tab's), Fatigue I γ of the Fatigue & studs inputs (P.fatigue.gam.fI; 1.75 without one), deck placement γ_DC and construction LL
-     (SBDConstructibility.factors(), the Constructibility tab's; 3.4.2.1). P.splices.gam (this tab's former inputs) is kept in the file, not used. */
+     (SBDConstr.factors(), the Constructibility tab's; 3.4.2.1). P.splices.gam (this tab's former inputs) is kept in the file, not used. */
   function projGam(P) {
     const W = typeof window !== 'undefined' ? window : {}, F = W.SBDFlexure && W.SBDFlexure.factors ? W.SBDFlexure.factors() : { dc: 1.25, dcMin: 0.90, dw: 1.50, dwMin: 0.65, ll: 1.75, sll: 1.30 };
-    const C = W.SBDConstructibility && W.SBDConstructibility.factors ? W.SBDConstructibility.factors() : { cdc: 1.25, ccl: 1.50 }, fI = +((((P && P.fatigue) || {}).gam || {}).fI);
+    const C = W.SBDConstr && W.SBDConstr.factors ? W.SBDConstr.factors() : { cdc: 1.25, ccl: 1.50 },   // FONE: was W.SBDConstructibility (no such global: the literal fallback was used; same values)
+      fI = +((((P && P.fatigue) || {}).gam || {}).fI);
     return { dcMax: F.dc, dcMin: F.dcMin, dwMax: F.dw, dwMin: F.dwMin, llS: F.ll, llSv: F.sll, fat: fI > 0 ? fI : 1.75, dc1C: C.cdc, clC: C.ccl };
   }
   function settings(P) {

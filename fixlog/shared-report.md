@@ -73,3 +73,19 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **`lazy` on a table item** (anchor `if (it.type === 'table' && it.lazy)`): shown as a closed `<details class="rp-lz">` (summary: `title` or caption and the row count), rendered when opened, filled by `fillLazy` for print and by `jump`; the three lazy fill sites call `lazyBody(doc, it)` (steps or table). The table HTML moved unchanged into `tableHtml()`.
 - Items without `topic` and tables without `lazy` render exactly as before.
 - **How verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` (Steel Bridge and Spread Footing report tests): 4 files, 14 passed, 0 failed. Stone Arch Report tab in headless Chromium (topics, lazy tables, print with every lazy table filled).
+
+## 2026-11-01 — PR: claude/rpt-gusset — options for the Gusset Plate Rating report (backward compatible)
+- **Why:** the shared viewer is to reproduce the Gusset Plate Rating report (the viewer it was modelled on); these are the parts it lacked.
+- `subs[].ref` (anchor `rp-sref`): a reference shown right of the subsection heading (screen and print; `text()` adds " [ref]").
+- `sections[].key`, `subs[].key` (anchor `if (q.key) {`): put in the anchor index like a step key, so `[[key]]` prints "§n" / "§n.m" and `jump(key)` opens the heading; a repeated key is listed in `doc.dup`.
+- `refs: [[label, text], …]` (anchor `rp-refs`): a References table in the front matter, after the cover and before the contents; `text()` prints it.
+- `head.center` (top-centre running-header box) and `head.lines: true` (a '\n' in left / center / right is a new line, CSS `\A`; the top margin grows from 0.85 in to 0.95 in for two lines). Without `head.lines` a line break still prints as a space, as before (the Steel Bridge heads contain '\n' and are unchanged).
+- Models that use none of these render exactly as before.
+- **How verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` (Steel Bridge and Spread Footing report tests) passes; Gusset side-by-side comparison in headless Chromium (PR).
+## 2026-11-01 — PR: claude/rpt-baseplate — `opt.spy` (scroll-spy) and `api.go(anchorId)` for the Base Plate migration (additive)
+### Where
+- `shared/report.js`: header comment of `mount`; `mount()`: when `opt.spy` is set, a passive scroll listener on the scrolling column that holds the viewer (else the window) marks the nav entry of the last heading above the reading area `.on` (the existing `.rp-toc a.on` style) and scrolls the tree to keep it in view; the returned API gains `go(anchorId)` (the existing internal `go`: opens collapsed parents, scrolls, flashes).
+### Why
+- BasePlateAnchorDesigner.html's RPT-3 Report tab had scroll-spy and "§ in report" jumps to a card (a subsection anchor, not a step key); the migration to the shared viewer must keep them (rollout item 9).
+### Backward compatibility
+- Without `opt.spy` nothing is added; `go` is a new property of the returned object. `node tests/engine/run.mjs report steps steps-groups report-wiring` passes.

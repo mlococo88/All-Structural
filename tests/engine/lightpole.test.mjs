@@ -181,3 +181,52 @@ test('Ice: t_d(z) = t·(z/33)^0.10·K_zt^0.35·I_i: t 0.75, z 35, K_zt 1.2, I_i 
   const C = lp.run('COMBOS');
   assert.deepEqual([C.L5.D, C.L5.Di, C.L5.Wi, C.L5.W], [0.9, 1.0, 1.0, 0]); assert.deepEqual([C.A5.D, C.A5.Di, C.A5.Wi, C.A5.W], [0.6, 0.7, 0.7, 0]);
 });
+
+/* ---------- LP-R5: fixture torsion and arm wind (added 2026-11-01) ---------- */
+test('Arm wind and torsion: fixture at θ 0°, a 6 ft, arm OD 2.375 in, wind toward 90°: T = (F_w + ½F_arm)·6·sin(90°)', () => {
+  const lp = lpEngine();
+  const inp = lpDefaultInp();
+  const fx = lp.call('fixtureComponents', { hf: 35, th: 0, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55, armD: 2.375 }, inp);
+  // q0 = 0.00256·1.0147·13225 = 34.35 psf; D = 0.1979 ft; D√q0 = 1.160 ≤ 2.5 → row "all surfaces"; h/D = 6/0.1979 = 30.3 → 1.2
+  assert.equal(fx.armRow, 'lowq'); near(fx.armHD, 30.32, 0.01, 'h/D'); near(fx.cfArm, 1.2, 1e-12, 'C_f arm');
+  near(fx.FarmMax, fx.qz * 1.2 * (2.375 / 12) * 6, 1e-9, 'F_arm'); near(fx.FarmMax, 41.61, 0.02, 'F_arm');
+  const r = lp.call('evalComboDir', 'L1', inp, [], [fx], lp.call('poleWindNominal', inp), 90);
+  near(r.Tz, (fx.Fw + 0.5 * fx.FarmMax) * 6, 1e-9, 'T'); near(r.T, (51.39 + 20.81) * 6, 0.2, 'T ≈ 433 lb·ft');
+  // wind along the arm (0°): no arm wind, no torsion
+  const r0 = lp.call('evalComboDir', 'L1', inp, [], [fx], lp.call('poleWindNominal', inp), 0);
+  near(r0.T, 0, 1e-9, 'T at 0°');
+  // two opposite arms cancel
+  const fx2 = lp.call('fixtureComponents', { hf: 35, th: 180, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55, armD: 2.375 }, inp);
+  near(lp.call('evalComboDir', 'L1', inp, [], [fx, fx2], lp.call('poleWindNominal', inp), 90).T, 0, 1e-9, 'opposite arms');
+  // no arm OD (old saves): no arm force
+  near(lp.call('fixtureComponents', { hf: 35, th: 0, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55 }, inp).FarmMax, 0, 0, 'armD 0');
+});
+
+/* ---------- LP-R11: shaft V_c, ACI 318-19 Table 22.5.5.1 size-effect branch (added 2026-11-01) ---------- */
+test('Shaft V_c: 3 ft shaft, (12) #6, #3 ties @ 12: A_v 0.22 < A_v,min 0.36 → V_c = 8λ_s ρ_w^(1/3) √fc (0.8A_g), λ_s 0.718, ρ_w 0.00255', () => {
+  const lp = lpEngine();
+  const r = lp.call('designRebar', lpDefaultInp(), 19949, 1088, 794, [{ Mu: 19949, Pu: 1088 }]);
+  const T = r.tie;
+  assert.equal(r.long.n, 12); assert.equal(r.long.bar.n, '#6'); assert.equal(T.s, 12);
+  near(T.avMinPerS * 12, 50 * 36 * 12 / 60000, 1e-12, 'A_v,min = 50·36·12/60000 = 0.36');
+  near(T.lamS, Math.sqrt(2 / (1 + 28.8 / 10)), 1e-12, 'λ_s'); near(T.lamS, 0.718, 0.001, 'λ_s');
+  near(T.rhoW, 2.64 / (36 * 28.8), 1e-12, 'ρ_w');
+  const Acv = 0.8 * Math.PI / 4 * 36 * 36;
+  near(T.VcB, 8 * T.lamS * Math.cbrt(T.rhoW) * Math.sqrt(4000) * Acv, 1e-6, 'V_c(c)'); near(T.VcB, 40413, 30, 'V_c(c)');
+  assert.equal(T.vcBranch, 'c'); near(T.phiVc, 0.75 * T.VcB, 1e-9, 'φV_c');
+  near(T.VcA, 2 * Math.sqrt(4000) * Acv, 1e-6, 'V_c(a) (former value)');
+  assert.equal(T.mode, 'min');
+});
+
+/* ---------- n₁ and G_f worked steps (added 2026-11-01, display only) ---------- */
+test('n₁ / G_f worked step: n₁ = √(386.1·ΣWy/ΣWy²)/2π; flexible case shows G_f from gustFlexible', () => {
+  const lp = lpEngine();
+  // 60 ft pole case of the harness: ΣWy = 7,213.94, ΣWy² = 61,110.99 → n₁ = √(386.1·0.118047)/2π = 1.0745 Hz
+  near(Math.sqrt(386.1 * 7213.935752589796 / 61110.985252095226) / (2 * Math.PI), 1.0745, 0.0001, 'n₁ hand');
+  const gf = lp.call('gustFlexible', 'C', 115, 60, 0.75, 0.75, 0.82, 0.005);
+  const inp = lpDefaultInp({ H: 60, Ginput: 0.85, G: Math.max(0.85, gf.Gf), gf,
+    nat: { n1: 0.82, Wtot: 1000, sWy: 100, sWy2: 2000, rows: [{ z: 60, W: 1000, y: 2 }] } });
+  const h = lp.call('natGfWorkedHTML', inp);
+  assert.ok(h.includes('G_f = 0.925'), 'G_f equation'); assert.ok(h.includes(lp.call('fmt', gf.Gf, 4)), 'G_f value');
+  assert.ok(!/NaN|undefined|ERR/.test(h), 'no NaN/undefined');
+});
