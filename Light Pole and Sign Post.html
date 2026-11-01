@@ -924,6 +924,8 @@
           <a class="btn mini ghost" href="BasePlateAnchorDesigner.html" target="_blank" rel="noopener">Open Anchorage app ↗</a>
         </div>
         <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p>
+        <div id="lpAnchResult" style="margin-top:8px"></div>
+        <div style="margin-top:6px"><button class="btn mini ghost" id="lpAnchImportRes" type="button">Import result (JSON)</button><input type="file" id="lpAnchResFile" accept=".json,application/json" style="display:none"></div>
       </div>
     </section>
     <section class="card poleOnly" data-tab="anchors">
@@ -3056,6 +3058,7 @@ function summaryHTML(ctx){
   drow('Ties',st=>`${st.found.reo.tie.bar.n} @ ${fmt(st.found.reo.tie.s,0)} in (top zone @ ${fmt(st.found.reo.tie.sTop,0)} in for ${fmt(st.found.reo.tie.zoneH,0)} in)`);
   drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in`:'—');
   drow('Anchor installation',st=>st.found.bolts?(st.found.bolts.torq?'Torqued (pretensioned)':'Untorqued')+`: s = ${st.found.bolts.n>=2?fmt(st.found.bolts.sAnch,2)+' in':'—'}, c<sub>a,min</sub> = ${fmt(st.found.bolts.ca17,2)} in${st.found.bolts.splitW?'; §17.9.2 minimums waived (splitting reinforcement, §17.9.1)':''} ${lppLink('anchors',stacks.indexOf(st))}`:'—');
+  drow('Anchors — Anchorage app',(st)=>{ if(typeof lppAnchorChipHTML!=='function'||!LPP_ANCH) return '—'; const g=LPP_ANCH.groups[Math.min(stacks.indexOf(st),LPP_ANCH.groups.length-1)]; return g?lppAnchorChipHTML(g.id):'—'; });
   drow('Base plate',st=>{ const b=st.found.bolts; if(!b) return '—'; const bP=(b.byCheck&&b.byCheck.BP)||b; return `Ø${fmt(inp.bpDia,1)} in × ${fmt(inp.bpT,3)} in, F<sub>y</sub> ${fmt(bP.Fyp,0)} ksi; t_req ${fmt(bP.tpReq,3)} in (double-nut, bending line at the pole face) ${lppLink('anchors',stacks.indexOf(st))}`; });
   H+=`</table>`;
   // ---- governing demands ----
@@ -6013,6 +6016,7 @@ function lppReportDoc(H,meta){
   }
   if(typeof lprRefresh==='function') lprRefresh();   // LPRP: rebuild the shared Report tab when it is shown
   if(typeof lpdActive==='function' && lpdActive()) lpdRender();   // LPDW
+  if(typeof lppAnchorCardRefresh==='function') lppAnchorCardRefresh();   // anchorGroupResult chips
 }
 
 // ================= CALCULATION REPORT =================
@@ -7115,6 +7119,48 @@ function lppAnchorPayload(){
     basis:{factored:true, method:'LRFD', combos:'ASCE 7-22 §2.3 (LRFD) incl. atmospheric ice; wind toward 0°/90°/180°/270°', B2:'AISC 360-16 App. 8 B₂ of each combination and direction applied to M'},
     inputsHash, notes}, body)};
 }
+// ---- anchorGroupResult (HANDOFF.md §4.12; added 2026-11-01): the Anchorage app's governing anchor D/C per group, display only ----
+// Read live from bridgeSuite.v1.anchorGroupResult (or a result file imported this session); never changes an input or saved field.
+// "stale" when the inputsHash the result was computed for differs from the hash of what this tool would send now.
+let LPP_AGR_FILE=null;
+function lppAnchorResult(){
+  if(LPP_AGR_FILE) return {payload:LPP_AGR_FILE, via:'file'};
+  if(!window.BridgeXfer) return null;
+  const r=BridgeXfer.read('anchorGroupResult','bridge-anchor-group-result',1);
+  return r.ok ? {payload:r.payload, via:'storage'} : (r.empty ? null : {error:r.error});
+}
+// per group: {state:'none'|'ok'|'stale'|'error', text, dcr, mode, combo, ok}
+function lppAnchorChip(groupId){
+  const R=lppAnchorResult();
+  if(!R) return {state:'none', text:'Anchors: not yet checked in the Anchorage app (send the anchors, design them there, then "Send result to Light Pole").'};
+  if(R.error) return {state:'error', text:'Anchors (Anchorage app): the stored result cannot be read — '+R.error};
+  const p=R.payload, res=(p.results||[]).find(x=>x.groupId===groupId);
+  if(!res) return {state:'none', text:'Anchors: no Anchorage-app result for '+groupId+' yet.'};
+  const cur=lppAnchorPayload(), hash=cur.payload?cur.payload.inputsHash:null, srcHash=p.source&&p.source.inputsHash;
+  const stale=!hash || srcHash!==hash;
+  if(res.error) return {state:stale?'stale':'error', text:'Anchors (Anchorage app): '+res.error+(stale?' — STALE (inputs changed since)':'')};
+  const g=res.governing||{}, when=p.producedAt?new Date(p.producedAt).toLocaleString():'?';
+  return {state:stale?'stale':'ok', dcr:g.dcr, mode:g.mode, combo:g.combo, ok:res.ok,
+    text:'Anchors (Anchorage app, '+when+'): D/C '+(isFinite(g.dcr)?fmt(g.dcr,2):'—')+' — '+(g.mode||'?')+(g.combo?', '+g.combo:'')+(stale?' — STALE: the inputs changed since these anchors were sent; send again and re-check':'')};
+}
+function lppAnchorChipHTML(groupId){
+  const c=lppAnchorChip(groupId);
+  const col = c.state==='ok' ? (c.dcr<=1&&c.ok!==false?'#1f6b3a':'#a02818') : (c.state==='stale'||c.state==='error' ? '#b45309' : '#5b6676');
+  return `<span class="lpAgChip" data-state="${c.state}" style="display:inline-block;border:1px solid ${col};color:${col};border-radius:3px;padding:2px 7px;font-size:12px">${lppEsc(c.text)}</span>`;
+}
+function lppAnchorCardRefresh(){
+  const box=$('lpAnchResult'); if(!box||!LPP_ANCH) return;
+  box.innerHTML=LPP_ANCH.groups.map(g=>`<div style="margin:3px 0"><b>${lppEsc(g.label)}:</b> ${lppAnchorChipHTML(g.id)}</div>`).join('');
+}
+if($('lpAnchImportRes')) $('lpAnchImportRes').addEventListener('click',()=>$('lpAnchResFile').click());
+if($('lpAnchResFile')) $('lpAnchResFile').addEventListener('change',e=>{
+  const fl=e.target.files&&e.target.files[0]; if(!fl) return;
+  BridgeXfer.importFile(fl,'bridge-anchor-group-result',1,r=>{ e.target.value='';
+    if(!r.ok){ toast('Import failed: '+r.error); return; }
+    LPP_AGR_FILE=r.payload; lppAnchorCardRefresh(); if(LPP_SUMCTX) renderSummary(LPP_SUMCTX); toast('Anchorage result imported (this session)'); });
+});
+window.addEventListener('storage',e=>{ if(e.key&&e.key.indexOf('bridgeSuite.v1.anchorGroupResult')===0){ lppAnchorCardRefresh(); if(LPP_SUMCTX) renderSummary(LPP_SUMCTX); } });
+window.addEventListener('focus',()=>{ lppAnchorCardRefresh(); if(LPP_SUMCTX&&$('page-summary')&&$('page-summary').classList.contains('on')) renderSummary(LPP_SUMCTX); });
 function lppAnchorStatus(msg){ const e=$('lpAnchStatus'); if(e) e.textContent=msg||''; }
 if($('lpAnchSend')) $('lpAnchSend').addEventListener('click',()=>{
   const r=lppAnchorPayload(); if(r.error){ lppAnchorStatus(r.error); return; }
