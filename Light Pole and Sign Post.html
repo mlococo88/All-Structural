@@ -53,6 +53,12 @@
     .tabpage table{display:block;overflow-x:auto;max-width:100%}
     .row{grid-template-columns:minmax(0,1fr) minmax(0,auto)}.row .ctl{min-width:0}.row select{max-width:100%;min-width:0}
     .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}
+  /* 2026-11-01 (LP-13): below 600 px the masthead code tag is no longer absolutely positioned (it overlapped the eyebrow and
+     the title at 390 px); it flows below the subtitle. KaTeX's hidden MathML (position:absolute) is kept inside its formula, so
+     it can no longer widen the page (it gave a 1303 px page at 1280 px on the Anchors tab). */
+  @media(max-width:600px){.masthead .codetag{position:static;text-align:left;margin-top:8px}.masthead .codetag b{display:inline;margin-right:6px}}
+  .katex{position:relative}
+  @media screen{.tabpage .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}
   /* ---- input panel tabs (lppInputTabs; UI only) ---- */
   #lppInTabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:2px solid var(--ink);margin:16px 0 14px;position:sticky;top:0;background:var(--paper);z-index:6;padding-top:4px}
   #lppInTabs .lppInTab{display:inline-flex;align-items:center;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.02em;border:1px solid var(--line);border-bottom:0;background:#efeae0;color:var(--ink-soft);padding:7px 11px;cursor:pointer;border-radius:3px 3px 0 0;margin-bottom:-2px}
@@ -2876,7 +2882,9 @@ function collectChecks(ctx){
   if(b){
     // each anchor check from its own governing LRFD combination (byCheck), when available
     const bT=(b.byCheck&&b.byCheck.T)||b, bV=(b.byCheck&&b.byCheck.V)||b, bI=(b.byCheck&&b.byCheck.I)||b;
-    push('Anchor tension','ACI 318-19 Ch.17',bT.Tmax,bT.phiNn,'lb');
+    { const bA=(b.allCombos||[bT]).reduce((a,x)=>((x.trAnc!==undefined?x.trAnc:x.tr)>(a.trAnc!==undefined?a.trAnc:a.tr)?x:a));   // the combination with the largest per-anchor ratio
+      push('Anchor tension','ACI 318-19 §17.6.1, §17.6.3',bA.Tmax,bA.phiNn,'lb'); }
+    if(!b.hasAnchRe){ const bB=(b.allCombos||[b]).reduce((a,x)=>(x.trBrk>a.trBrk?x:a)); push('Anchor breakout (group)','ACI 318-19 §17.6.2',bB.Tsum,bB.phiNcbg,'lb'); }
     push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
     push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
     // base plate (AASHTO LRFDLTS bending line, double-nut), governing LRFD combination (added 2026-11-01)
@@ -3746,12 +3754,17 @@ function anchorBolts(inp,gov,struct){
   }
   // ---- governing tension capacity (per anchor for steel/pullout; group for breakout) ----
   let phiNn, tgov;
-  if(hasAnchRe){ phiNn=Math.min(phiNsa, phiNp); tgov='steel / pullout (breakout carried by anchor reinforcement, §17.5.2.1)'; }
-  else{ phiNn=Math.min(phiNsa, phiNp, phiNcbg/nT); tgov='min(steel, pullout, breakout/anchor)'; }
+  // 2026-11-01 (engineer): breakout checked in the ACI 318-19 group form, ΣN_ua of the tension anchors ≤ φN_cbg (ψ_ec,N in N_cbg);
+  // steel and pullout per anchor (most-loaded anchor). Before: the most-loaded anchor against φN_cbg/n_T. The tension ratio used in
+  // the §17.8 interaction is the larger of the two (the governing tension mode).
+  phiNn=Math.min(phiNsa, phiNp);
+  const trBrk = hasAnchRe ? 0 : (Tsum>0 ? Tsum/phiNcbg : 0);
+  if(hasAnchRe) tgov='steel / pullout (breakout carried by anchor reinforcement, §17.5.2.1)';
+  else tgov = (Tmax/phiNn >= trBrk) ? 'steel / pullout, per anchor' : 'concrete breakout, group (ΣN_ua / φN_cbg)';
   const phiVn=Math.min(phiVsa, phiVcp/n);
 
   // ---- interaction (ACI §17.8) ----
-  const tr=Tmax/phiNn, vr=Vb/phiVn;
+  const trAnc=Tmax/phiNn, tr=Math.max(trAnc, trBrk), vr=Vb/phiVn;
   let inter, interOK;
   if(vr<=0.2){inter=tr; interOK=tr<=1.0;}
   else if(tr<=0.2){inter=vr; interOK=vr<=1.0;}
@@ -3777,7 +3790,7 @@ function anchorBolts(inp,gov,struct){
   return {d,gr,n,BC,R,hef,th0,thM,Ase,bolts,sumY2,Tmax,Vb,VbT,Tu,tension,nT,Tsum,Mu,Pu,Vu,fc,lam,
           futa,Nsa,phiNsa,Vsa,phiVsa,
           kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,ar,sfbApplies,
-          nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
+          nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,trAnc,trBrk,vr,inter,interOK,
           m,beff,Fyp,tpReq,Dpole,Cmax,Prod,tpProv,tpOK,
           torq,sAnch,sMinReq,spOK,edReq,edProv,edOK,sqShaft,ca17,caGovK:(caGovB?caGovB.k:1),caGovAng:(caGovB?caGovB.ang:0),splitW};
 }
@@ -5006,8 +5019,9 @@ function boltWorkedHTML(bo,inp){
 
   // 7 — governing capacities + interaction
   H+=step(`7 · Governing capacities &amp; tension–shear interaction ${ref('§17.8')}`);
-  H+=g(`\\phi N_n = \\min(\\phi N_{sa},\\ \\phi N_{pn}${bo.hasAnchRe?'':',\\ \\phi N_{cbg}/n_T'}) = ${fmt(bo.phiNn,0)}\\ \\text{lb}\\qquad \\phi V_n = \\min(\\phi V_{sa},\\ \\phi V_{cpg}/n) = ${fmt(bo.phiVn,0)}\\ \\text{lb}`);
-  H+=g(`\\frac{N_{ua}}{\\phi N_n} = \\frac{${fmt(bo.Tmax,0)}}{${fmt(bo.phiNn,0)}} = ${fmt(bo.tr,3)}\\qquad \\frac{V_{ua}}{\\phi V_n} = \\frac{${fmt(bo.Vb,0)}}{${fmt(bo.phiVn,0)}} = ${fmt(bo.vr,3)}`);
+  H+=g(`\\phi N_n = \\min(\\phi N_{sa},\\ \\phi N_{pn}) = ${fmt(bo.phiNn,0)}\\ \\text{lb}\\qquad \\phi V_n = \\min(\\phi V_{sa},\\ \\phi V_{cpg}/n) = ${fmt(bo.phiVn,0)}\\ \\text{lb}`);
+  if(!bo.hasAnchRe) H+=g(`\\text{Breakout, group: }\\frac{\\Sigma N_{ua,g}}{\\phi N_{cbg}} = \\frac{${fmt(bo.Tsum,0)}}{${fmt(bo.phiNcbg,0)}} = ${fmt(bo.trBrk,3)}\\qquad \\text{per anchor: }\\frac{N_{ua}}{\\phi N_n} = \\frac{${fmt(bo.Tmax,0)}}{${fmt(bo.phiNn,0)}} = ${fmt(bo.trAnc,3)}`);
+  H+=g(`\\frac{N_{ua}}{\\phi N_n}\\Big|_{gov} = ${fmt(bo.tr,3)}\\qquad \\frac{V_{ua}}{\\phi V_n} = \\frac{${fmt(bo.Vb,0)}}{${fmt(bo.phiVn,0)}} = ${fmt(bo.vr,3)}`);
   let interEq;
   if(bo.vr<=0.2) interEq=`V_{ua}/\\phi V_n = ${fmt(bo.vr,2)}\\le 0.2 \\Rightarrow \\text{shear negligible; check tension only: } ${fmt(bo.tr,3)}\\le 1.0`;
   else if(bo.tr<=0.2) interEq=`N_{ua}/\\phi N_n = ${fmt(bo.tr,2)}\\le 0.2 \\Rightarrow \\text{tension negligible; check shear only: } ${fmt(bo.vr,3)}\\le 1.0`;
@@ -5691,7 +5705,7 @@ const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
-  'Anchor T–V interaction':'anchors','Base plate thickness':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
+  'Anchor T–V interaction':'anchors','Anchor breakout (group)':'anchors','Base plate thickness':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
 const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
   asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
