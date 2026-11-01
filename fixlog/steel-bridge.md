@@ -3283,5 +3283,54 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 ### Tests
 - tests/engine/legacy.test.mjs: new test (CL per girder, the note, cll read, M_CL/V_CL vs GirderDetail on builtin G2 and curb MassDOT G1,
   a file without cll unchanged); the 20-project import test unchanged.
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: sbd-import-studs — Stud pitch zones on import; the app's own stud layout meets SC1 and SC2 (D-2 of docs/steel-bridge-comparison.md §d)
+### 1. Import (saved data, no formula)
+- `engine/legacy.js fromGD`, after `r.mark('sc.skew')`: GirderDetail's `sc.zones` ({x1, x2, nr, p}) become `P.studs.zones` (entered zones: the
+  Fatigue & studs tab checks them as given). GirderDetail's built-in example zones (GM.sc.def: 0–22 ft 3 @ 9 in, 22–55 ft 3 @ 12 in, span 1
+  only) are left out (note), so the app lays out its own. `sc.regions` stay under legacy.unmapped: the strength regions are made from the
+  project's analysis (as Preliminary sizing made them for GirderDetail). Before: zones never imported.
+- The 20 recorded seeds hold the built-in example zones (the zones the recordings used came from Preliminary sizing's inbox, not saved
+  in the seeds), so the comparison's stud differences on them are the app's own layout against those inbox zones.
+### 2. The app's own stud layout (calculation change, §4)
+- Cause of SC2 failing (xsA G1, 1.372): `ui/fatigue.js studsOf` is Preliminary sizing's rule (pl-src: `preq = nr * Zr / (1.75 * vr * c.Q / c.I)`,
+  p = max(6d, min(24, ⌊2p_req⌋/2)) per 0.1L), a fatigue-only pitch; neither app checks SC2 (n ≥ P/Q_r, 6.10.10.4) when laying out. An exterior
+  girder with a sidewalk has little fatigue shear, so pitches reach 24 in and the end region gets too few studs. Also SC1 could fail because
+  the layout's Q, Z_r and γ (bridge b_eff of the exterior girder, Fatigue I 1.75) differ from the check's (this girder's b_eff, the fatigue
+  limit state and γ of the Fatigue & studs inputs, F_fat on skews).
+- Change: `ui/fatigue.js build`, for the app's own zones only (analysis or Custom source, no zones entered): after `SC.compute`, a zone with
+  p > p_req (SC1) takes ⌊2p_req⌋/2; the zones of a region with n_prov < n_req (SC2) take ⌊2·p·n_prov/n_req⌋/2 (at least 1/2 in less), both
+  ≥ 6d (6.10.10.1.2); repeated until nothing changes (≤ 40 passes). Entered zones and hand-off files are checked as given.
+- Provisions: AASHTO LRFD 10th Ed. Art. 6.10.10.1.2 (pitch limits), 6.10.10.2 (fatigue), 6.10.10.4 (strength).
+- Before/after: layouts that passed are unchanged (built-in project G1: SC1 0.742, SC2 0.959, 1,240 studs, identical; xsA G2, builtin
+  CTDOT G1 identical). xsA AASHTO G1: SC2 1.372 → 0.988, SC1 0.736 → 0.699, studs 888 → 1,108 (pitches 17–24 in → 8–20.5 in).
+- Hand check (one step of the rule): a region with n_prov = 100, n_req = 137.2 and a zone at 24 in → p = ⌊2 × 24 × 100/137.2⌋/2 = ⌊34.98⌋/2 = 17.0 in.
+### Tests
+- tests/engine/legacy.test.mjs: new test (built-in example zones left out; loaded zones imported and checked as given, SC2 0.956 as
+  GirderDetail's; the app's layout on xsA G1 SC2 0.988, pitches on 1/2 in, ≥ 6d); the "nothing dropped" test now keeps sc.regions.
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: sbd-sidewalk-override — Owner sidewalk override for the LL deflection limits (C-32, engineer decision 2026-11-01)
+### Change
+- `engine/analysis.js`: `DEF.deflSidewalk = 'auto'`; `deflOwner`: before `on = ['L', 'R'].some(k => sw[k] && +sw[k].w > 0)`; after
+  `ov = S && S.deflSidewalk, on = ov === 'yes' ? true : ov === 'no' ? false : <the same cross-section test>`, plus `swHow` for the steps
+  and the Analysis tab note ("entered (Analysis settings)" / "cross-section sidewalks").
+- `ui/analysis.js` Analysis settings: select "Sidewalk or pedestrians, owner LL deflection limit (OWN19)": Automatic (default) / Yes / No.
+- `engine/legacy.js fromPL`: Preliminary sizing `limits.sidewalk` 'yes' / 'no' → `analysis.deflSidewalk` (GirderDetail's swOwn came from
+  it, plSidewalk); 'auto' or absent: not set. `engine/model.js` header: the new optional field.
+### §4 callout
+- Provisions: RIDOT BDM 2.4.2.6 (L/800; L/1000 with pedestrians), MassDOT LRFD Bridge Manual Part I 3.5.6.1 (L/1000 with sidewalks; L/800,
+  preferably L/1000, without), AASHTO LRFD 10th Ed. Art. 2.5.2.6.2. AASHTO and CTDOT: no owner rule, the override has no effect.
+- Before: the cross-section's sidewalks decided (no override). After: the same by default ('auto', or the field absent): every project
+  computes identically unless the override is set.
+- Check case (built-in project, interior girder, span 1 = 110 ft, MassDOT): auto (no sidewalk) L/800 → Δ_lim = 12(110)/800 = 1.650 in,
+  preferred L/1000; 'yes' → L/1000 = 1.320 in, no preferred limit; a 6 ft sidewalk with 'no' → 1.650 in. RIDOT: 'yes' L/1000, 'no' L/800.
+### Tests
+- tests/engine/sidewalk-override.test.mjs (2 tests): auto = before (deep-equal), yes / no for MassDOT, RIDOT, AASHTO; import of limits.sidewalk.
 ### Other copies
 - None.

@@ -64,7 +64,7 @@
   const ED = 'AASHTO LRFD 10th Ed.';
   const ML = () => window.SharedMovingLoad, SEC = () => window.SBDSections, St = () => window.SharedSteps, VEH = () => window.SharedVehicles;
   const STEEL_PLF = 490 / 144;   // lb/ft per in² of steel: 490 pcf / 144 = 3.4028 (Table 3.5.1-1; SB2-A2, 2026-10-29: GirderDetail's SA_PLF is 3.4)
-  const DEF = { im: 33, imf: 15, crack: 'none', deflLimit: 800, seq: 'on', seqMod: 'n', seqCustom: '', steelAllowPct: 5, haunchInStiffness: null };
+  const DEF = { im: 33, imf: 15, crack: 'none', deflLimit: 800, seq: 'on', seqMod: 'n', seqCustom: '', steelAllowPct: 5, haunchInStiffness: null, deflSidewalk: 'auto' };
   const isNum = v => typeof v === 'number' && isFinite(v);
   const n1 = x => St().n(x, 1), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g0 = x => St().g(x, 0);
 
@@ -158,14 +158,16 @@
      Preliminary sizing A1, mandatory): RIDOT BDM 2.4.2.6 L/800, L/1000 with pedestrians; MassDOT 3.5.6.1 L/1000 with sidewalks, without
      them L/800 and preferably L/1000 (a warning), applied to the typical interior beam only (an exterior cross-section girder is
      reported, not checked). Sidewalk or pedestrians: a sidewalk in the cross-section (xs.sidewalks.L or .R width > 0; GirderDetail:
-     its LLDF and DLs sidewalks). The entered L/… (analysis.deflLimit) governs where stricter (rq = max). null for AASHTO and CTDOT
-     (no rule: the entered L/…, 2.5.2.6.2 optional criterion). Returns { rule, cite, sw, req, uR, rq, pref, rep, line, ext } */
+     its LLDF and DLs sidewalks), or the entered override analysis.deflSidewalk 'yes' / 'no' (C-32, engineer 2026-11-01; GirderDetail /
+     Preliminary sizing limits.sidewalk, plSidewalk; absent or 'auto': the cross-section). The entered L/… (analysis.deflLimit) governs where stricter (rq = max). null for AASHTO and CTDOT
+     (no rule: the entered L/…, 2.5.2.6.2 optional criterion). Returns { rule, cite, sw, swHow, req, uR, rq, pref, rep, line, ext } */
   function deflOwner(P, g, S) {
     const O = window.SBDOwners, own = P.ownerRules && P.ownerRules.owner, r = O && own ? O.rule(own, 'defl.ll') : null; if (!r) return null;
-    const xs = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), sw = (xs && xs.sidewalks) || {}, on = ['L', 'R'].some(k => sw[k] && +sw[k].w > 0);
+    const xs = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), sw = (xs && xs.sidewalks) || {}, ov = S && S.deflSidewalk, on = ov === 'yes' ? true : ov === 'no' ? false : ['L', 'R'].some(k => sw[k] && +sw[k].w > 0);
+    const swHow = ov === 'yes' || ov === 'no' ? 'entered (Analysis settings)' : 'cross-section sidewalks';
     const v = r.value, req = on ? v.ped : v.veh, uR = +S.deflLimit > 0 ? +S.deflLimit : 0, rq = Math.max(req, uR), pref = !on && v.pref ? Math.max(v.pref, rq) : 0;
     const nb = xs ? Math.round(xs.nb) : 0, j = lineOf(P, g), ext = j === 0 || j === nb - 1;
-    return { rule: r, cite: O.cite(r), sw: on, req, uR, rq, pref, rep: !!(v.intOnly && ext), line: j, ext };
+    return { rule: r, cite: O.cite(r), sw: on, swHow, req, uR, rq, pref, rep: !!(v.intOnly && ext), line: j, ext };
   }
 
   /* sbOf(segs, Ikey, crackIv, IcrKey): stiffness intervals [[x0, x1, I]] for staticAnalysis / analyze: each plate segment's
@@ -408,7 +410,7 @@
       ref: `${ED} Art. 3.6.1.6`, note: 'A⁺: the positive area of the reaction influence line (ft). Added to R_LL+IM in the bearing checks.' }));
     if (R.lld) R.lld.forEach(q => { const O = q.own;
       w.add({ id: `defl.lim${q.k + 1}`, label: `LL deflection limit, span ${q.k + 1}${O ? ` (${O.cite}, mandatory)` : ''}`, sym: '\\Delta_{lim}', eq: `\\frac{12L}{${q.ratio}}`, sub: `\\frac{12(${n2(q.L)})}{${q.ratio}}`, value: q.lim, unit: 'in', d: 3,
-        ref: O ? `${O.cite}; ${ED} Art. 2.5.2.6.2` : `${ED} Art. 2.5.2.6.2`, note: O ? `${O.cite}: ${O.rule.text}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (cross-section sidewalks), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.${O.rep ? ` Applied to the typical interior beam only: this plate girder takes cross-section girder G${O.line + 1} (exterior), so it is reported, not checked.` : ''}` : 'Optional criterion (2.5.2.6.2): the L/… entered under Analysis settings.' });
+        ref: O ? `${O.cite}; ${ED} Art. 2.5.2.6.2` : `${ED} Art. 2.5.2.6.2`, note: O ? `${O.cite}: ${O.rule.text}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.${O.rep ? ` Applied to the typical interior beam only: this plate girder takes cross-section girder G${O.line + 1} (exterior), so it is reported, not checked.` : ''}` : 'Optional criterion (2.5.2.6.2): the L/… entered under Analysis settings.' });
       if (q.limP) w.add({ id: `defl.pref${q.k + 1}`, label: `LL deflection, preferred limit, span ${q.k + 1} (${O.cite})`, sym: '\\Delta_{pref}', eq: `\\frac{12L}{${q.pref}}`, sub: `\\frac{12(${n2(q.L)})}{${q.pref}}`, value: q.limP, unit: 'in', d: 3,
         ref: `${O.cite}`, ok: q.status !== 'warn', note: q.status === 'warn' ? 'Exceeded: a warning (preferably L/' + q.pref + ').' : '' });
       w.add({ id: `defl.LL${q.k + 1}`, label: `LL deflection, span ${q.k + 1}, at x = ${n2(q.x)} ft`, sym: '\\Delta_{LL}', eq: 'g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})', sub: `${n3(q.gD)}(${n3(q.perLane)})`, value: q.d, unit: 'in', d: 3,
