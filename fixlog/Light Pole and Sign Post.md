@@ -1392,7 +1392,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` 17 passed (new ice test: t_d, uniform = old mast ice, cable ice unchanged, L5/A5 factors). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every Summary/foundation/anchor/post value identical in all 13 cases (only the combination arrays gain L5/A5 and the new fields); new projects: ice values as above, governing results unchanged in all 13 cases except the bearing axial (D + 0.7Di). Cable values identical for L1–L4, A1–A4.
 - **Open items:** the 7-22 form of t_d (I_i and the 2.0 factor; see above); V_ice concurrent-wind map and its height factor are unchanged; ice on sign panels (LP-R22) unchanged.
 
-## 2026-11-01 — PR: claude/lp-pr7-torsion (LP-7: fixture torsion and arm wind in light-pole mode, LP-R5; PR link added after merge)
+## 2026-11-01 — PR #570: claude/lp-pr7-torsion (LP-7: fixture torsion and arm wind in light-pole mode, LP-R5)
 
 ### LP7-1. Wind on the arms   [calc change] [more conservative]
 - **Where:** fixture rows: new field `armD` (arm outside diameter, in; new rows 2.375 in; `fixTbl` column "Arm OD"); `renderFixtures()`, `addFix`; `applyState()` sets `armD = 0` on rows saved without it (no arm wind, the old behaviour) with notice `armMigNote`. `fixtureComponents()`: block `// ---- wind on the arm itself`, return fields `armDin, cfArm, armRow, armHD, armDsq, FarmMax, FarmMaxI`. `evalComboDir()` and `poleStress()` add the arm force for each azimuth.
@@ -1411,3 +1411,30 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
   - Signs: identical. Cable values identical in every case.
 - **How verified:** `node tests/engine/run.mjs lightpole` 18 passed (new arm/torsion test); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (14 cases incl. the new "torsion" case): differences as listed; diff paths filtered.
 - **Open items:** the arm dead load is not separate (part of the fixture weight); arms are taken horizontal at h_f; the arm wind uses the projected area with the force along the wind (the normal-component form of §29.4 for inclined members is not used).
+
+## 2026-11-01 — PR #573: claude/lp-pr8-vc (LP-8: shaft V_c per ACI 318-19 Table 22.5.5.1 with the A_v,min / size-effect branch, LP-R11)
+
+### LP8-1. Concrete shear strength of the shaft   [calc change] [more conservative]
+- **Where:** `designRebar()`, block `// ---- concrete shear strength, ACI 318-19 §22.5.5.1` (replaces `// shear capacity of concrete (circular)` through the tie-spacing selection); tie result fields `VcA, VcB, lamS, rhoW, AsT, Av, avMinPerS, sAvMin, sTrial, vcBranch`; `rebarWorkedHTML()` step 4 (A_v,min, both branches, φV_c with the branch used, s for A_v,min).
+- **Before:**
+  ```js
+  const Acv=0.8*Ag; const Vc=2*Math.sqrt(fc)*Acv; const phiVc=0.75*Vc;
+  ```
+  always (branch (a)), also when the ties are below A_v,min.
+- **After:** with the ties as detailed (A_v = 2 legs, s = the §25.7.2.1 spacing or the manual s): A_v ≥ A_v,min = max(0.75√f′c, 50)·b_w·s/f_yt → V_c = 2λ√f′c·A_cv (a); otherwise V_c = min(8λ_s·λ·ρ_w^(1/3)·√f′c, 5λ√f′c)·A_cv (c, §22.5.5.1.1 cap), λ_s = √(2/(1 + d/10)) ≤ 1, d = 0.8b, ρ_w = (A_s/2)/(b_w·d) (bars of the tension half). Where V_u > ½φV_c the ties are designed for shear and must give A_v ≥ A_v,min (§10.6.2.1), so branch (a) applies and the spacing is also limited to s ≤ A_v/(A_v,min/s). A_cv = 0.8A_g (the tool's b_w·d) and the neglected N_u/6A_g term are unchanged.
+- **Governing provision:** ACI 318-19 §22.5.5.1 (Table 22.5.5.1 (a) and (c)), §22.5.5.1.1, §22.5.5.1.3 (λ_s), §22.5.2.2 (circular sections), §10.6.2.1 / §10.6.2.2 and Table 9.6.3.4 (A_v,min).
+- **Check case (default: 3 ft shaft, (12) #6, #3 ties @ 12 in, f′c 4,000, f_y 60,000):**
+  - A_v = 2·0.11 = 0.22 in² < A_v,min = 50·36·12/60,000 = 0.36 in² → branch (c).
+  - d = 0.8·36 = 28.8 in; λ_s = √(2/3.88) = 0.718; ρ_w = 2.64/(36·28.8) = 0.00255, ρ_w^(1/3) = 0.1366; A_cv = 0.8·1,017.9 = 814.3 in².
+  - V_c = 8·0.718·0.1366·63.25·814.3 = 40,393 lb; φV_c = **30,295 lb** (before: 0.75·2·63.25·814.3 = **77,251 lb**). V_u = 877 lb ≤ ½φV_c → minimum ties, spacing unchanged.
+  - Other cases: square shaft 98,359 → 44,117; 60 ft pole (3.5 ft, (16) bars) 105,148 → 38,632; two-post sign 98,359 → 42,455 lb. No case changes its tie spacing or verdict.
+- **How verified:** `node tests/engine/run.mjs lightpole` 19 passed (new V_c test). `node tests/lightpole-compare.mjs --a origin/main`: 14 cases, only φV_c / V_c and the new tie fields differ (13 values per stack; diff paths filtered); cable values identical. No saved data change.
+- **Open items:** ρ_w uses half the longitudinal bars (conservative; the code does not define A_s for a circular section); A_cv = 0.8A_g kept (vs D·0.8D = 1.02A_g); the axial term N_u/6A_g is neglected.
+
+## 2026-11-01 — PR: claude/lp-pr9-natgf (LP-9: n₁ and G_f worked steps; display only; PR link added after merge)
+
+### LP9-1. Natural frequency n₁ and gust-effect factor G_f worked (CLAUDE.md §6; D11 open item)   [display] [no result change]
+- **Where:** `poleNatFreq()` also returns `sWy, sWy2, rows` (the Rayleigh sums and each weight's height, weight and deflection; values unchanged); `lppApplyGf()` keeps `inp.nat`, `inp.gfDims`; new `natGfWorkedHTML(inp)` above `function hssTorsionShear(`; shown in `windWorkedHTML()` (pole, Loading tab), `signWindWorkedHTML()` (sign, Loading tab and the sign report) and the pole report's pole-wind section.
+- **Steps:** table of z_i, W_i, y_i, W_i·y_i, W_i·y_i²; n₁ = (1/2π)·√(g·ΣWy/ΣWy²) with the numbers; rigid/flexible; when flexible, z̄, I_z̄, L_z̄, Q², V̄_z̄, N₁, R_n, R_h, R_B, R_L, R², g_R and G_f (ASCE 7-22 Eq. 26.11-7 … 26.11-16) with the numbers, then G used = max(G, G_f).
+- **Check case (60 ft pole case):** ΣW·y = 7,213.94, ΣW·y² = 61,110.99 → n₁ = √(386.1·7,213.94/61,110.99)/(2π) = 6.751/6.283 = **1.0745 Hz** (rigid; the tool's value).
+- **How verified:** `node tests/engine/run.mjs lightpole` 20 passed (worked-step test, flexible case with n₁ = 0.82 Hz: G_f shown, no NaN). `node tests/lightpole-compare.mjs --a origin/main`: results identical apart from the added fields (`sWy`, `sWy2`, `rows`, `inp.nat`, `inp.gfDims`); cable values identical; text adds the worked steps (Loading tab, report); 0 console errors.

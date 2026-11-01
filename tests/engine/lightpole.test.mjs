@@ -201,3 +201,32 @@ test('Arm wind and torsion: fixture at θ 0°, a 6 ft, arm OD 2.375 in, wind tow
   // no arm OD (old saves): no arm force
   near(lp.call('fixtureComponents', { hf: 35, th: 0, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55 }, inp).FarmMax, 0, 0, 'armD 0');
 });
+
+/* ---------- LP-R11: shaft V_c, ACI 318-19 Table 22.5.5.1 size-effect branch (added 2026-11-01) ---------- */
+test('Shaft V_c: 3 ft shaft, (12) #6, #3 ties @ 12: A_v 0.22 < A_v,min 0.36 → V_c = 8λ_s ρ_w^(1/3) √fc (0.8A_g), λ_s 0.718, ρ_w 0.00255', () => {
+  const lp = lpEngine();
+  const r = lp.call('designRebar', lpDefaultInp(), 19949, 1088, 794, [{ Mu: 19949, Pu: 1088 }]);
+  const T = r.tie;
+  assert.equal(r.long.n, 12); assert.equal(r.long.bar.n, '#6'); assert.equal(T.s, 12);
+  near(T.avMinPerS * 12, 50 * 36 * 12 / 60000, 1e-12, 'A_v,min = 50·36·12/60000 = 0.36');
+  near(T.lamS, Math.sqrt(2 / (1 + 28.8 / 10)), 1e-12, 'λ_s'); near(T.lamS, 0.718, 0.001, 'λ_s');
+  near(T.rhoW, 2.64 / (36 * 28.8), 1e-12, 'ρ_w');
+  const Acv = 0.8 * Math.PI / 4 * 36 * 36;
+  near(T.VcB, 8 * T.lamS * Math.cbrt(T.rhoW) * Math.sqrt(4000) * Acv, 1e-6, 'V_c(c)'); near(T.VcB, 40413, 30, 'V_c(c)');
+  assert.equal(T.vcBranch, 'c'); near(T.phiVc, 0.75 * T.VcB, 1e-9, 'φV_c');
+  near(T.VcA, 2 * Math.sqrt(4000) * Acv, 1e-6, 'V_c(a) (former value)');
+  assert.equal(T.mode, 'min');
+});
+
+/* ---------- n₁ and G_f worked steps (added 2026-11-01, display only) ---------- */
+test('n₁ / G_f worked step: n₁ = √(386.1·ΣWy/ΣWy²)/2π; flexible case shows G_f from gustFlexible', () => {
+  const lp = lpEngine();
+  // 60 ft pole case of the harness: ΣWy = 7,213.94, ΣWy² = 61,110.99 → n₁ = √(386.1·0.118047)/2π = 1.0745 Hz
+  near(Math.sqrt(386.1 * 7213.935752589796 / 61110.985252095226) / (2 * Math.PI), 1.0745, 0.0001, 'n₁ hand');
+  const gf = lp.call('gustFlexible', 'C', 115, 60, 0.75, 0.75, 0.82, 0.005);
+  const inp = lpDefaultInp({ H: 60, Ginput: 0.85, G: Math.max(0.85, gf.Gf), gf,
+    nat: { n1: 0.82, Wtot: 1000, sWy: 100, sWy2: 2000, rows: [{ z: 60, W: 1000, y: 2 }] } });
+  const h = lp.call('natGfWorkedHTML', inp);
+  assert.ok(h.includes('G_f = 0.925'), 'G_f equation'); assert.ok(h.includes(lp.call('fmt', gf.Gf, 4)), 'G_f value');
+  assert.ok(!/NaN|undefined|ERR/.test(h), 'no NaN/undefined');
+});

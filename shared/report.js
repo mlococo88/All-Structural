@@ -49,6 +49,12 @@
      print(doc)                 -> prints the whole report (every section open, lazy items filled), alone on the page
      ref(doc, key)              -> '§x.y' or null
      css()                      -> injects the viewer's styles (mount and print do it themselves)
+   Added 2026-11-01 for the Gusset Plate Rating migration (its own viewer was the model of this one), all optional:
+     subs[].ref     a reference shown right of the subsection heading (screen, print, text)
+     sections[].key, subs[].key   an anchor key for a section / subsection: [[key]] is a "§n" / "§n.m" link and jump(key) opens it
+     refs: [[label, text], …]     a References table in the front matter (after the cover, before the contents)
+     head.center    a third running-header box (top centre); head.lines: true keeps the line breaks ('\n') of left / center /
+                    right as separate lines (without it a line break prints as a space, as before)
    Styles: injected once (style#rp-css), class prefix rp-. */
 (function () {
   'use strict';
@@ -63,9 +69,11 @@
     (model.sections || []).forEach((s, i) => {
       const n = i + 1, sec = { n: String(n), id: 'rp-s' + n, title: s.title, subs: [] };
       if (s.part) sec.part = { title: s.part, id: 'rp-p' + n };
+      if (s.key) { if (doc.index.has(s.key)) doc.dup.push(s.key); else doc.index.set(s.key, { n: String(n), anchor: sec.id, sub: null, lz: null }); }
       doc.toc.push(sec);
       (s.subs || []).forEach((q, j) => {
         const num = `${n}.${j + 1}`, sub = { n: num, id: `rp-s${n}-${j + 1}`, title: q.title };
+        if (q.key) { if (doc.index.has(q.key)) doc.dup.push(q.key); else doc.index.set(q.key, { n: num, anchor: sub.id, sub: sub.id, lz: null }); }
         sec.subs.push(sub);
         (q.items || []).forEach(it => {
           if (it.topic) { it._tp = 'rp-tp' + (++nTp); (sub.items || (sub.items = [])).push({ title: (it.topic.no != null ? it.topic.no + '. ' : '') + it.topic.title, anchor: it._tp, tops: [] }); }
@@ -186,6 +194,7 @@
     for (let i = 0; i < I.length; i += 3) rows.push(I.slice(i, i + 3));
     return `<table class="rp-tb">${rows.map(r => `<tr>${r.map(([l, v]) => `<td><span>${esc(l)}</span>${esc(v == null || v === '' ? '—' : v)}</td>`).join('')}</tr>`).join('')}</table>
       <section class="rp-cover"><h1>${esc(m.title || 'Calculation report')}</h1>${m.subtitle ? `<p>${esc(m.subtitle)}</p>` : ''}${m.code ? `<p class="rp-cp">${esc(m.code)}</p>` : ''}</section>
+      ${m.refs && m.refs.length ? `<section class="rp-refs"><h2 class="rp-h1x">References</h2><table class="rp-reft">${m.refs.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</table></section>` : ''}
       <section class="rp-ptoc"><h2 class="rp-h1x">Contents</h2><ol>${doc.toc.map(s => `${s.part ? `<li class="rp-tp">${esc(s.part.title)}</li>` : ''}<li>${s.n}. ${esc(s.title)}${s.subs.length ? `<ol>${s.subs.map(q => `<li>${q.n} ${rich(doc, q.title, true)}</li>`).join('')}</ol>` : ''}</li>`).join('')}</ol></section>`;
   }
   function html(doc, opt) {
@@ -193,19 +202,20 @@
     return titleBlock(doc) + (doc.model.sections || []).map((s, i) => { const T = doc.toc[i];
       return `${T.part ? `<h1 class="rp-part" id="${T.part.id}">${esc(T.part.title)}</h1>` : ''}<section class="rp-sec${closed.has(T.id) ? ' rp-closed' : ''}" data-rpsec="${T.id}"><h2 class="rp-h1" id="${T.id}">${T.n}. ${esc(s.title)}</h2>${s.note ? `<p class="rp-note">${rich(doc, s.note, true)}</p>` : ''}
         ${(s.subs || []).map((q, j) => { const Q = T.subs[j];
-          return `<div class="rp-sub${closed.has(Q.id) ? ' rp-closed' : ''}"><h3 class="rp-h2" id="${Q.id}">${Q.n} ${rich(doc, q.title, true)}</h3>${(q.items || []).map(it => itemHtml(doc, it, lazy)).join('')}</div>`; }).join('')}</section>`; }).join('');
+          return `<div class="rp-sub${closed.has(Q.id) ? ' rp-closed' : ''}"><h3 class="rp-h2" id="${Q.id}">${Q.n} ${rich(doc, q.title, true)}${q.ref ? `<span class="rp-sref">${esc(q.ref)}</span>` : ''}</h3>${(q.items || []).map(it => itemHtml(doc, it, lazy)).join('')}</div>`; }).join('')}</section>`; }).join('');
   }
 
   /* ---------- plain text ---------- */
   function text(doc) {
     const m = doc.model, L = [], T = s => rich(doc, s, false);
     L.push(m.title || '', m.subtitle || '', m.code || '');
+    if (m.refs && m.refs.length) { L.push('', 'References'); m.refs.forEach(([a, b]) => L.push(`${a}: ${b}`)); }
     (m.info || []).forEach(([l, v]) => L.push(`${l}: ${v == null || v === '' ? '—' : v}`));
     (m.sections || []).forEach((s, i) => {
       if (s.part) L.push('', String(s.part).toUpperCase());
       L.push('', `${i + 1}. ${s.title}`); if (s.note) L.push(T(s.note));
       (s.subs || []).forEach((q, j) => {
-        L.push('', `${i + 1}.${j + 1} ${T(q.title)}`);
+        L.push('', `${i + 1}.${j + 1} ${T(q.title)}${q.ref ? ' [' + q.ref + ']' : ''}`);
         (q.items || []).forEach(it => {
           if (it.topic) { const t = it.topic; L.push(`  ${t.no != null ? t.no + '. ' : ''}${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + ST().summary(t, false) : ''}`); }
           if (it.type === 'steps') { if (it.title) L.push(T(it.title)); const tp = new Map(); { let j = 0; (it.topics || []).forEach((t, k) => { tp.set(j, `  ${k + 1}. ${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + ST().summary(t, false) : ''}`); j += t.n; }); }
@@ -245,6 +255,8 @@
 .rp-doc{display:block;max-width:8.5in;padding:0.5in 0.6in 0.7in;border:1px solid #E4E7EB;border-radius:2px;background:#fff;font-size:10.5pt;line-height:1.3;}
 .rp-tb{width:100%;border-collapse:collapse;margin:0 0 18pt;font-size:10pt;} .rp-tb td{border-bottom:0.6pt solid #000;padding:3pt 8pt 3pt 0;vertical-align:bottom;} .rp-tb span{display:block;font-size:8pt;font-style:italic;}
 .rp-cover{padding:0 0 12pt;margin:0 0 14pt;border-bottom:1pt solid #000;} .rp-cover h1{font:700 21pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 6pt;} .rp-cover p{font:700 12pt Arial,Helvetica,sans-serif;margin:0 0 4pt;} .rp-cover .rp-cp{font-weight:400;}
+.rp-sref{float:right;font:italic 400 8.5pt "Times New Roman",Times,serif;color:#444;margin-left:10pt;}
+.rp-refs{margin:0 0 10pt;} .rp-reft{border-collapse:collapse;font-size:10pt;} .rp-reft td{padding:1pt 14pt 2pt 0;vertical-align:top;} .rp-reft td:first-child{white-space:nowrap;font-weight:700;}
 .rp-ptoc{display:none;} .rp-ptoc ol{list-style:none;margin:0;padding:0;} .rp-ptoc ol ol{padding-left:18pt;font-size:10pt;}
 .rp-h1x{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:10pt 0 6pt;}
 .rp-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:16pt 0 8pt;cursor:pointer;scroll-margin-top:calc(var(--rp-stick,0px) + var(--rp-top,64px) + 8px);}
@@ -305,9 +317,11 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   const cssStr = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
   function pageCss(doc) {
     const h = doc.model.head || {}, box = 'font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre;';
-    return `@page { size: letter portrait; margin: 0.85in 0.6in 0.7in 0.6in;
-      @top-left { content: "${cssStr(h.left || doc.model.title)}"; ${box} vertical-align: bottom; padding-bottom: 6pt; text-align: left; }
-      @top-right { content: "${cssStr(h.right || '')}"; ${box} vertical-align: bottom; padding-bottom: 6pt; text-align: right; }
+    const hs = t => (h.lines ? String(t == null ? '' : t).split('\n').map(cssStr).join('\\A ') : cssStr(t));   // head.lines: a line break is a new line ('\A')
+    return `@page { size: letter portrait; margin: ${h.lines ? '0.95in' : '0.85in'} 0.6in 0.7in 0.6in;
+      @top-left { content: "${hs(h.left || doc.model.title)}"; ${box} vertical-align: bottom; padding-bottom: 6pt; text-align: left; }${h.center ? `
+      @top-center { content: "${hs(h.center)}"; ${box} vertical-align: bottom; padding-bottom: 6pt; text-align: left; }` : ''}
+      @top-right { content: "${hs(h.right || '')}"; ${box} vertical-align: bottom; padding-bottom: 6pt; text-align: right; }
       @bottom-left { content: "${cssStr(h.foot || doc.model.title)}"; ${box} vertical-align: top; padding-top: 6pt; }
       @bottom-right { content: "Page " counter(page) " of " counter(pages); ${box} vertical-align: top; padding-top: 6pt; } }`;
   }
