@@ -101,6 +101,9 @@
     else ['L', 'R'].forEach(s => { xs.edges[s] = { ...xs.edges[s], type: 'barrier', bw: bar, bwt: barW }; });
     if (isObj(X) && fin(X.wcA)) xs.wcA = num(X.wcA);
     xs.ws.psf = r.n('suggest.fws', xs.ws.psf); xs.sip = r.n('suggest.sip', xs.sip); xs.allow = r.n('limits.allow', xs.allow);
+    // OWN19 sidewalk override for the owner LL deflection limits (C-32, engineer 2026-11-01): Preliminary sizing limits.sidewalk 'yes' / 'no' →
+    // analysis.deflSidewalk; 'auto' (the old default) or absent: not set (this app's default 'auto': the cross-section's sidewalks)
+    { const v = r.get('limits.sidewalk'); if (v === 'yes' || v === 'no') { P.analysis = P.analysis || {}; P.analysis.deflSidewalk = v; } }
     // deck and materials
     const d = P.deck, c = P.materials.concrete;
     d.ts = r.n(b + 'ts', d.ts); d.haunch = r.n(b + 'haunch', d.haunch); d.tdeck = d.ts + Math.max(0, r.n(b + 'tsac', 0));
