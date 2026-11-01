@@ -3174,7 +3174,7 @@ function sfrModel(){
    T.push({title:'Longitudinal steel',ref:'ACI 318-19 10.6.1.1, 10.7.3.1, 25.2.3',steps:[
     S({id:'Ast',label:'Longitudinal bars: '+sfdPedBarTxt(i),sym:'A_{st}',eq:'n A_{b}',sub:pd.nBars+'\\cdot'+sfrN(BAR_AREA[rf.longSize||0]),value:pd.Ast,unit:'in^{2}'}),
     S({id:'rho',label:'Steel ratio ('+(pd.isPedestal?'pedestal: upper limit 8% only':'column: 1% to 8%')+')',sym:'\\rho_{g}',eq:'\\frac{A_{st}}{A_{g}}',sub:'\\frac{'+sfrN(pd.Ast)+'}{'+sfrN(pd.Ag,1)+'}',value:pd.rho,unit:'',d:4,ok:!!pd.rhoOK}),
-    S({id:'fit',label:'Bars and clear spacing (n ≥ 4; s_clear ≥ max(1.5 d_b, 1.5 in) = '+sfrN(pd.clrMin)+' in)',sym:'s_{clear}',eq:'',sub:'s_{clear,x} = '+sfrN(pd.clrX)+',\\; s_{clear,y} = '+sfrN(pd.clrY),value:Math.min(pd.clrX,pd.clrY),unit:'in',ok:!!(pd.nBarsOK&&pd.barFitOK)})]});
+    S({id:'fit',label:'Bars and clear spacing (n ≥ 4; s_clear = (b − 2c − d_b)/(n_face − 1) − d_b ≥ max(1.5 d_b, 1.5 in) = '+sfrN(pd.clrMin)+' in; d_b = '+sfrN(pd.dbL,3)+' in, bar table)',sym:'s_{clear}',eq:'',sub:'s_{clear,x} = '+sfrN(pd.clrX)+',\\; s_{clear,y} = '+sfrN(pd.clrY),value:Math.min(pd.clrX,pd.clrY),unit:'in',ok:!!(pd.nBarsOK&&pd.barFitOK)})]});
    T.push({title:'Axial strength',ref:'ACI 318-19 22.4.2.1, 10.5.2',steps:[
     S({id:'P0',label:'Nominal axial strength',sym:'P_{0}',eq:'0.85 '+SFR_FC+' (A_{g} \\minus A_{st}) + f_{y} A_{st}',sub:'(0.85\\cdot'+sfrN(pd.fc,0)+'\\cdot('+sfrN(pd.Ag,1)+' \\minus '+sfrN(pd.Ast)+') + '+sfrN(pd.fy,0)+'\\cdot'+sfrN(pd.Ast)+')/1000',value:pd.P0,unit:'kip'}),
     S({id:'phiPn',label:'Maximum design axial strength (tied)',sym:'\\phi P_{n,max}',eq:'0.65\\cdot 0.80 P_{0}',sub:'0.65\\cdot 0.80\\cdot'+sfrN(pd.P0),value:pd.phiPn_max,unit:'kip'}),
@@ -4509,7 +4509,7 @@ function computePhase2(R){
   // Bar fit: minimum clear spacing between longitudinal bars = max(1.5*db, 1.5 in) per
   // ACI 318-19 25.2.3. Catches physically impossible layouts (e.g. a mistyped bar count)
   // that still pass the 1-8% rho limit.
-  const dbL=(rf.longSize||0)/8;
+  const dbL=BAR_DIA[rf.longSize]||0;   // SFBD (2026-11-01, engineer): nominal diameter from the bar table, as everywhere else (before: size/8)
   const clrX=PB.nx>1?((bx-2*cover-dbL)/(PB.nx-1)-dbL):Infinity; // bx,by already inches here
   const clrY=PB.ny>1?((by-2*cover-dbL)/(PB.ny-1)-dbL):Infinity;
   const clrMin=Math.max(1.5*dbL,1.5);
@@ -4529,7 +4529,7 @@ function computePhase2(R){
   combos.forEach(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(!pl)return;
    pmPts.push({name:c.cb.name,P:pl.P,Mx:pl.mxPed,My:pl.myPed});});
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
-   PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
+   PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,dbL,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
    pmBars,pmPts,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK};
  });
  return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,bearing,pedDes,pressMomentAbout,pressShearBeyond,pressResultant,
@@ -5037,7 +5037,8 @@ function renderPedestalDesign(){
    (pd.rhoOK?'\\text{within limits}\\;\\checkmark':'\\text{outside limits \u2014 NG}')));
   if(pd.isPedestal)b.appendChild(el('div','note','<b>The 1% lower limit is not applied here.</b> ACI 318-19 10.6.1.1 is a <b>column</b> provision (Chapter 10). This element is classified as a <b>pedestal</b> \u2014 height '+f2(pd.h)+' in \u2264 3 \u00d7 least plan dimension '+f2(pd.bmin)+' in \u2014 and ACI permits a pedestal to be plain concrete under Chapter 14, so there is no 1% floor on \u03c1. The minimum that does govern is the 0.005A<sub>g</sub> connection reinforcement of ACI 318-19 16.3.4.1, checked as the dowel minimum in \u00a75.6: '+f2(0.005*pd.bx*pd.by)+' in\u00b2 required. The 8% upper limit is a placement and consolidation limit and still applies. If you intend this element to be designed as a column, change the geometry or override the classification.'));
   b.appendChild(eqBlock('Bar count and fit','ACI 318-19 10.7.3.1, 25.2.3',
-   'n \\ge 4\\;\\text{(tied)},\\qquad s_{clear} \\ge \\max(1.5d_b,\\;1.5\\;\\mathrm{in})',
+   'n \\ge 4\\;\\text{(tied)},\\qquad s_{clear} = \\frac{b - 2c - d_b}{n_{face} - 1} - d_b \\ge \\max(1.5d_b,\\;1.5\\;\\mathrm{in})',
+   'd_b = '+f3(pd.dbL)+'\\;\\mathrm{in}\\;(\\#'+(state.peds[i].reinf.longSize||0)+'\\text{, bar table}),\\qquad s_{clear,x} = \\frac{'+f2(pd.bx)+' - 2\\cdot'+f2(num(state.peds[i].reinf.cover))+' - '+f3(pd.dbL)+'}{'+pd.PB.nx+' - 1} - '+f3(pd.dbL)+',\\qquad \\max(1.5\\cdot'+f3(pd.dbL)+',\\,1.5) = '+f3(pd.clrMin)+'\\;\\mathrm{in}',
    'n = '+pd.nBars+',\\qquad s_{clear,x} = '+f2(pd.clrX)+'\\;\\mathrm{in},\\; s_{clear,y} = '+f2(pd.clrY)+'\\;\\mathrm{in}\\;\\text{vs}\\;'+f2(pd.clrMin)+'\\;\\mathrm{in}',
    ((pd.nBarsOK&&pd.barFitOK)?'\\text{bars fit}\\;\\checkmark':'\\text{NG}')));
   if(!pd.rhoOK)b.appendChild(el('div','failbox','<b>NG \u2014 longitudinal steel ratio.</b> \u03c1 = '+f2(pd.rho*100)+'% is outside the '+(pd.isPedestal?'8% upper limit for a pedestal (ACI 318-19 10.6.1.1)':'1\u20138% limit for a column (ACI 318-19 10.6.1.1)')+'.'));
