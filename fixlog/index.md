@@ -4210,3 +4210,56 @@ The basis line on the zone card and in the report's capacity table now works out
 - **Check case:** in a folder where nothing has been recorded, `BridgeApps.path('psbeam')` returns `'Prestressed Bridge Design.html'` (before: `'psbeam.html'`, which redirected).
 - **How verified:** the shared blocks were compared after the edit. The big `appPaths` block differs between the three files only in its `BridgeApps.boot('<app>')` line, as before. The beam-roster and BridgeXfer blocks are identical in all three, and the handoff blocks are identical in index.html and Prestressed Bridge Design.html. `node tests/check-syntax.mjs index.html lldf.html "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
+
+## 2026-11-01 — PR: rpt-index (IDRP) — "Report" step: the model and the AASHTO rating as a calculation report in the shared viewer (display only)
+### Where
+- Head, after the KaTeX 0.16.9 script tag: `<script src="shared/steps.js"></script>`, `<script src="shared/report.js"></script>` (classic
+  scripts, relative path: keep the shared folder next to the file). The bridgeSuite bootstrap snippet is not touched.
+- `const STEPS=[…,"AREMA Rating"]` → `[…,"AREMA Rating","Report"]`; `STEP_ICONS` one icon added. The `steps` array in App gets
+  `<StepReport cfg={cfg} rows={resultsRows} reportState={reportState} zones={ratingCapZones} combos={resultsCombos} setStep={setStep}/>`
+  as its last entry (the sidebar lists it under Rating).
+- New block before `// ── Report Generator ──`, anchor `/* ================= IDRP (2026-11-01): REPORT STEP`: `idxrModel(cfg, rs, rows,
+  zones, combos)` (the report model) and `StepReport` (mounts `SharedReport.mount`; Ctrl+P while it shows prints the report alone).
+  `window.IDRP` = { doc, api, model } while it is shown (tests).
+### Contents
+- 1 Project and model (title data, spans, elements, vehicles, DLA; section zones; dead loads; active load combinations). 2 MIDAS
+  result cases. 3 AASHTO load rating: parameters and factors (φ_c φ_s, LL scale with its product as entered); the governing node worked
+  (C_M+, C_M−, C_V = φ_c φ_s φ R_n; RF for M+, M−, V; governing RF; rating in tons); demands and capacities / RF at every node; load
+  posting of the legal vehicles (P = W/0.7 (RF − 0.3), MBE 6A.8.3). 4 Capacity zones. 5 Notes and references. Links back to the steps.
+  Title block: Project, Bridge ID, Calculated by, Date; Checked by / Checked date "—" (no such inputs). No owner cell.
+### Values
+- Every value is the app's own: cfg; the pasted rows; reportState (ratingData per node — Mdc, Mdw, Mll±, Vll, CmnPos, CmnNeg, Cvn,
+  rfMpos, rfMneg, rfV, rfGov, governs, rfTons — govRating, the factors, capAt, legalPosting), pushed up by the Results / AASHTO Rating
+  step as for "Generate Report". Nothing is recomputed. The rating section needs the AASHTO Rating step opened once in the session
+  (as "Generate Report" does); the step says so.
+### Governing provision
+- None changed (display only). MBE Section 6A (edition: verify), AASHTO LRFD 10th Ed. (2024) as cited.
+### Check case (synthetic 4-span W21X55 line, manual zone M_n+ 900 / M_n− 700 kip-ft, V_n 220 kip; harness variant "base")
+- Node 131 (x = 60.75 ft): RF_M− = (700.0 − 1.25(36.91) − 1.50(7.69)) / (1.75(410.07)(1.0000)) = (700.0 − 46.14 − 11.54) / 717.62
+  = 0.895 (= ratingData rfMneg); RT = 0.8951 × 36.0 = 32.22 tons.
+### How verified
+- Headless Chromium (scratchpad `rpt/idx/rp.mjs`, harness from the D11 work): 5 variants (no results; 4-span LRFR; 2-span LFR with
+  g / g_V / g_M− split; 3-span quick-calc zone with IM and poor condition; legal vehicles with posting): 0 unresolved / duplicate
+  refs, 0 KaTeX errors, no NaN / undefined, every worked rating value (C, RF, RT, posting P) found in the app's own text (AASHTO
+  Rating step or "Generate Report"), and every number of the capacities / RF table (326 for the 4-span case);
+  Ctrl+P on the Report step prints the report alone with the running header and page numbers; no console errors.
+- Main vs branch (`rpt/idx/cmp.mjs`, 6 variants incl. AREMA; 97 readouts): every AASHTO Rating sub-tab, Results, Generate text, both
+  print reports' tables, the hand-off payloads and localStorage identical once the new sidebar entry ("Report") is removed from the
+  page text. The only other difference: on the AREMA Rating step (no longer the last step) the footer button reads "Next →" instead
+  of "↓ Download MCT" (the download stays in the header).
+### Other copies
+- None.
+
+## 2026-11-01 — PR: rpt-index-full (IDRP-F) — Report step: every node's rating worked (engineer's decision; display only)
+### Where
+- `idxrModel` (anchor `/* every node worked (IDRP-F`): the governing-node steps became `nodeWork(r)` (the same steps, for any node:
+  C_M+, C_M−, C_V = φ_c φ_s φ R_n with R_n from `capAt(x)`, RF for M+, M−, V, governing RF, RT). §3.2 the governing node (open, scope
+  `gov`); new §3.3 "Worked rating at every other node" — one closed (lazy) item per node in order along the bridge, titled with its RF
+  and governing action (scope `n<node>`); the tables follow (§3.4). The RF cell of every node in the capacities table links (§) to that
+  node's worked steps.
+### Values
+- Unchanged source: every value is ratingData's (C, RF, RT) and the factors in reportState; nothing is recomputed.
+### How verified
+- Headless (scratchpad `rpt/idx/rp.mjs`), 5 variants: 0 unresolved / duplicate refs, 0 KaTeX errors (every lazy item filled), no NaN;
+  every worked value of every node (base: 328 steps, 41 nodes) found in the app's own text (AASHTO Rating step / Generate Report);
+  every number of the capacities / RF table too; no console errors; print fills every node.

@@ -96,6 +96,9 @@ function runAll(ctx, C) {
 // Read-only outputs added to SharedLLDF after the move (for apps/steel-bridge's worked steps); not part of the page's results, so
 // left out of the hash: rigidMethod's ecc (the lane eccentricities it already computed).
 export const ADDED = ['ecc'];
+// Calculation changes made on purpose after the move (engineer's decisions); those cases are expected to differ and are reported apart:
+//   LLSW (2026-11-01): the CIP slab strip width (Art. 4.6.2.3) uses W = the physical edge-to-edge width, not the clear roadway width.
+export const CHANGED = [/^slab /];
 const hash = o => crypto.createHash('sha256').update(JSON.stringify(o, (k, v) => ADDED.includes(k) ? undefined : v)).digest('hex');
 
 export function run(rev = BASE_REV) {
@@ -105,14 +108,16 @@ export function run(rev = BASE_REV) {
   const C = cases(A.__E.SECTIONS, A.__E.boxJest, A.__E.rectJ);
   const ra = runAll(A, C), rb = runAll(B, C), diffs = [];
   let nOut = 0;
-  ra.forEach((a, i) => { const b = rb[i]; for (const k of Object.keys(a)) { nOut++; if (hash(a[k]) !== hash(b[k])) diffs.push(`${a.name}: ${k}`); } });
-  return { cases: C.length, outputs: nOut, diffs, hashBefore: hash(ra), hashAfter: hash(rb), errors: ra.filter(o => o.err).length,
+  const changed = [], keep = o => !CHANGED.some(re => re.test(o.name));
+  ra.forEach((a, i) => { const b = rb[i]; for (const k of Object.keys(a)) { nOut++; if (hash(a[k]) !== hash(b[k])) (keep(a) ? diffs : changed).push(`${a.name}: ${k}`); } });
+  return { cases: C.length, outputs: nOut, diffs, changed, changedCases: ra.filter(o => !keep(o)).length, hashBefore: hash(ra.filter(keep)), hashAfter: hash(rb.filter(keep)), errors: ra.filter(o => o.err).length,
     members: ra.reduce((s, o) => s + (o.R ? o.R.members.length : 0), 0), steps: ra.reduce((s, o) => s + (o.steps ? o.steps.reduce((t, x) => t + x.length, 0) : 0), 0) };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const r = run(process.argv[2] || BASE_REV);
   console.log(`${r.cases} cases (${r.errors} input-error cases), ${r.members} girders, ${r.steps} worked steps, ${r.outputs} outputs hashed`);
+  console.log(`${r.changedCases} cases changed on purpose (CHANGED), ${r.changed.length} of their outputs differ`);
   console.log(`before ${r.hashBefore}\nafter  ${r.hashAfter}\n${r.diffs.length} differ${r.diffs.length ? ':\n' + r.diffs.slice(0, 30).join('\n') : ''}`);
   process.exit(r.diffs.length ? 1 : 0);
 }

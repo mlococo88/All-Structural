@@ -1790,3 +1790,11 @@ index 219cc2c..a3e337e 100644
 - LLRP-O1 (calc, not changed, CLAUDE.md §4/§9): the slab strip equation 4.6.2.3-2 uses the clear roadway width w for W (12W/N_L) and
   W_1 (min(w, 60 ft)); AASHTO defines W as the physical edge-to-edge width of the bridge. Engineer to confirm.
 - LLRP-O2: the fatigue moment of a type (d) exterior web is W_e/14 × r_M without removing 1.2 (the engine's fatNote says "verify").
+
+## 2026-11-01 — PR: lldf-slab-w (LLSW) — CIP slab strip width with W = edge-to-edge width (CALCULATION CHANGE; was LLRP-O1)
+- Engine change in shared/lldf.js (memberDF slab branch): details, before / after, AASHTO LRFD 10th Ed. Art. 4.6.2.3 Eqs. 4.6.2.3-1/-2
+  and the check case in `fixlog/shared-lldf.md` (LLSW).
+- This file's own sheet steps (`memberSteps`, slab): before `${f0(Math.min(geo.roadway,30))}` and `V("W_1","min(w, 30)",…)`; after
+  `${f0(Math.min(geo.Wdeck,30))}`, `V("W_1","min(W, 30), W = edge-to-edge width",…)`; the "Equivalent strip width — 2+ lanes" step now
+  lists W_1 = min(W, 60), W and N_L and notes the change.
+- Check: L = 35 ft, W = 28 ft, w = 25 ft, N_L = 2: g = 0.0948 before → 0.0930 after (fatigue 0.0633 → 0.0601). Only slab results change.
