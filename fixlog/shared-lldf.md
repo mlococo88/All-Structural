@@ -54,3 +54,46 @@ Tests: `node tests/engine/run.mjs lldf` (hash harness against lldf.html before t
 ### Open items
 - SLLDF-O1. `bridgeWarnings` stays in lldf.html (page text, lock state). If another tool needs the same warnings, move it with an
   option for the lock state.
+
+## 2026-11-01 — PR: shared-lldf-steps (LLST) — the LLDF worked-step writer moved from the Steel Bridge app into shared/lldf.js (refactor, no result or step change)
+### Where
+- `shared/lldf.js`: new block `/* ---------- worked steps (SharedLLDF.steps) ---------- */` before `window.SharedLLDF={…}`, exported as
+  `SharedLLDF.steps = { ED, geometry, skew, emp, lever, rigid, member, withC }` (one namespace per file kept: a sub-object).
+- Moved from `apps/steel-bridge/engine/lldf.js`, line for line: `geometrySteps` → `steps.geometry`, `skewSteps` → `steps.skew`,
+  `empSteps` → `steps.emp`, `leverSteps` → `steps.lever`, `rigidSteps` → `steps.rigid`, `member` → `steps.member`, `memberSteps`,
+  `extSteps`, `finalSteps` (private), `withC` → `steps.withC`.
+- The only edits (before → after):
+  - `function geometrySteps(p, geo) { const w = St().work('df.geo'); … return w.steps; }` → `function geometry(w, p, geo) { … }`
+    (the caller passes the collector; the adapter keeps `geometrySteps(p, geo)` = `{ const w = St().work('df.geo');
+    SS().geometry(w, p, geo); return w.steps; }`).
+  - `skewSteps`: `${SIMPLE.c1}`, `${SIMPLE.v}` → `${KG_SIMPLE.c1}`, `${KG_SIMPLE.v}` (the same constants 1.03, 0.97).
+  - `function member(p, geo, Kg, sk, j, w) { const q = lp(p), md = SL().memberDF(q, …), … label = 'G' + (j + 1), … n3b = p.Nb === 3 …
+    empSteps(w, e, S, p.L, p.ts, Kg, p.simple) … extSteps(w, o, sk, p.Nb)` →
+    `function member(q, geo, Kg, sk, j, w, opt) { const md = memberDF(q, …), … label = ((opt && opt.prefix) || 'G') + (j + 1), …
+    n3b = q.Nb === 3 … emp(w, e, S, q.L, q.ts, Kg, q.kgSimple) … extSteps(w, o, sk, q.Nb)`. The adapter's `lp(p)` sets
+    `L: p.L, ts: p.ts, Nb: p.Nb, kgSimple: !!p.simple`: the same values (`simple` is only tested for truth).
+  - `SL().memberDF`, `SL().girderU`, `SL().leverContribution` → the file's own `memberDF`, `girderU`, `leverContribution`.
+- `apps/steel-bridge/engine/lldf.js`: the moved bodies replaced by one-line calls (`SS = () => window.SharedLLDF.steps`):
+  `geometrySteps`, `skewSteps`, `withC`, `member(p, …) { return SS().member(lp(p), geo, Kg, sk, j, w); }`. Region steps (e_g, K_g,
+  K_g,avg, K_g used, g_Δ, the exterior policy step) stay in the adapter (they use the app's plate sections). `window.SBDLldf` keeps
+  every export.
+### Why
+- Coordinator decision 2026-11-01 (Report tab rollout): lldf.html's new Report tab and the Steel Bridge app write the LLDF steps
+  with ONE copy of the writer.
+### Governing provision
+- None changed. AASHTO LRFD 10th Ed. (2024) Art. 3.6.1.1.1, Table 3.6.1.1.2-1, Art. 4.6.2.2 (Tables 4.6.2.2.2b-1 … 4.6.2.2.3c-1,
+  Eq. 4.6.2.2.1-1, Eq. C4.6.2.2.2d-1), Art. 3.6.1.4.3b, C3.6.1.1.2 — the refs in the step strings are unchanged.
+### Check case
+- Steel Bridge `tests/projects/sbd2-loads/xsA_AASHTO.json`, Span 1, G1 (exterior): `df.s0.G1.fatM` = 0.4474 (g_fat,M =
+  max(0.3316, 0.5368)(r_M)/1.2), `df.s0.G1.gM`, `df.s0.G1.gV`, every substitution string — identical before and after (see below).
+### How verified
+- Step dump (scratchpad `rpt/sbdump.mjs`): `SBDLoads.compute` (the loads module, which calls `SBDLldf.compute`: every region,
+  girder and worked step) on all 20 `tests/projects/sbd2-loads/*.json` fixtures × 12 geometry variants (as is, N_b = 3, S = 18 ft,
+  N_b = 3 with S = 17 ft, skews 45° / 65° / mixed 10–50° / signed ±32–40°, overhangs 7 / 1 ft, unequal bays, N_b = 7) × 8 options
+  (K_g max / avg / simple, shear skew exterior only, exterior-not-less-than-interior on / off, truck gap 6 ft) = 1,920 cases,
+  2,227,456 steps: the SHA-256 of every case's full output (values and step strings) is identical before and after
+  (whole-dump hash 293fb98c…).
+- `node tests/engine/run.mjs lldf loads report steps tex` (7 files, 33 passed) and `static paths girderdetail` (3 files, 16 passed).
+### Other copies
+- None. lldf.html's own in-app steps (`memberSteps`, KaTeX strings) are separate and unchanged; its Report tab (next PR) uses
+  `SharedLLDF.steps`.

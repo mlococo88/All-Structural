@@ -204,8 +204,8 @@
     if (src === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, ctx.P, 'fat', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('fa_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = defaultSel(R); } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
     on('fa_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
-      rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
-        S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { S.pl = null; S.plName = ''; alert('Cannot read this file: ' + er.message); } redraw(); };
+      rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
+        S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { alert('Cannot read this file: ' + er.message); /* nothing changed: the previous file, if any, stays */ } redraw(); };
       rd.readAsText(f); });
     host.querySelectorAll('.fx-list').forEach(el => el.addEventListener('click', e => { const tr = e.target.closest('[data-fa]'); if (!tr) return; const [k, i] = tr.dataset.fa.split(':'); S.sel = { k, i: +i }; redraw(); }));
     host.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const [k, i, id] = a.dataset.go.split(':'); S.sel = { k, i: +i }; redraw(); const t = host.querySelector('#st-' + (id || '').replace(/[^\w.-]/g, '')); if (t) t.scrollIntoView({ block: 'center' }); }));
