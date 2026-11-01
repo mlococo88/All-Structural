@@ -2541,3 +2541,77 @@ No calculation change: display and inputs only (the engine is the sbd-autodesign
 - None.
 ### Open items
 - "Apply <DOT> defaults" still changes values on the Cross-section & loads and Materials & deck tabs (as before); it now sits on the Project tab. The per-sheet title block has no owner cell (not added: it would move the existing cells).
+
+## 2026-11-01 — PR: sbd-project-library — saved-project list in the browser, Undo / Redo, "Apply <DOT> defaults" message (UI and storage only; no calculation change)
+### What changed (no computed value, no formula, no existing storage key or saved format)
+- New `apps/steel-bridge/engine/library.js` (`window.SBDLibrary`, classic script, no DOM) and `ui/library.js` (`window.SBDLibraryUI`, the "Saved projects" dialog). Script tags added in `index.html` right after `engine/model.js` (anchor `<script src="engine/legacy.js"></script>`).
+- `engine/model.js`, anchor `const KEYS = {`: three keys added after `ui: 'sbd2.ui'`: `libIndex: 'sbd2.lib.index'`, `libItem: 'sbd2.lib.p.'` (+ item id), `libCur: 'sbd2.lib.current'`. `current` (`sbd2.project.current`, the autosave), `backup` and `ui` are unchanged.
+- Saved formats (new, versioned): `sbd2.lib.index` = `{ schema: 'sbd2.library', version: 1, items: [{ id, name, number, saved (ISO UTC), size }] }`; `sbd2.lib.p.<id>` = the project file text exactly as Export JSON writes it (schema `sbd2.project` v1, read back through `SBDModel.importJSON`, so the migration path is the same); `sbd2.lib.current` = `{ id }`. A lost or unreadable index is kept under `sbd2.lib.index.unreadable.<time>` and rebuilt from the items.
+- Page (`index.html`): header buttons Save, Save as…, Saved projects…, Undo, Redo; a status text after the project name ("Saved", "Unsaved changes", "Not saved to the project list", or the autosave-failed message); Ctrl+S, Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z. The autosave (`M.save` on every change) and Export / Import JSON are unchanged. Opening a saved project, importing a file, replaces the open project only after a confirm when it has changes not saved to the list.
+- Undo / Redo: whole-project JSON snapshots taken in `changed()` (one step per input change, up to 100, session only, nothing stored). Starts again when a different project is opened, imported or started with New. Typing inside a field keeps the browser's own undo for that field until the field is committed.
+- Quota: every library write is wrapped; a refused write (QuotaExceededError or private mode) returns a message, restores the previous item text and index, and the open project is never touched (message shown, project still open and still autosaved). The dialog shows the characters held by every key of the origin against the ~5 M character (about 10 MB) Chrome / Edge quota, since all file:// pages share it.
+- `ui/loads.js`, anchor `else if (a === 'ownDef')`: before `O().defaults(P.ownerRules.owner).forEach(d => { if (d.path === 'deck.tsac') P.deck.tdeck = P.deck.ts + d.value; else { setp(P, d.path, d.value); if (d.path === 'xs.ws.psf') P.xs.ws.mode = 'psf'; } });`; after `lastOwnDef = applyOwnerDefaults(P);` where `applyOwnerDefaults` makes the same assignments in the same order and records, per input, tab, field, old and new (and which were already at the default). The page shows them in a message with an Undo button (`takeOwnerDefaults()`), and the click is one undo step. No default value, owner rule or citation changed.
+### Governing provision
+- None. Owner defaults are the OWN14 rows of `engine/owners.js` (CTDOT BRSDM V2 3.5.1, 9.7.1.1, 5.4.2.4, 4.6.2.2.1; MassDOT Bridge Manual Part I 4.2.2.3; RIDOT BDM 3.3.1, 9.4.7), applied as before.
+### Check case
+- `tests/engine/ownerdef-msg.test.mjs`: for AASHTO, MassDOT, CTDOT and RIDOT the project left by `applyOwnerDefaults` is byte-identical (JSON) to the project left by a copy of the previous inline code. CTDOT on the built-in project: Future wearing surface 25 → 38.75 psf, w_c for E_c only (blank) → 0.145 kcf, Dead load distribution MassDOT 3.5.3 → Typical AASHTO; total deck thickness 8 + 0.5 = 8.5 in and weight mode were already set (listed as "already at the default"). MassDOT: Concrete f′c 4 → 5 ksi.
+### How verified
+- `node tests/engine/run.mjs library ownerdef model` (save / open / list / rename / duplicate / delete round trip; keys outside `sbd2.lib.*` byte-identical after every operation; quota and refused-write paths; index rebuild; the old autosave loads as before; Eastern-time text EST / EDT); `node tests/smoke/steel-bridge-library.mjs` (Playwright at 1280 and 390: save, Save as, list, unsaved-changes warning, rename, duplicate, delete with confirm, quota error with the setItem patched to throw, reload keeps the link, an old autosave with no library keys still opens, 60 input changes then Ctrl+Z x55 / Ctrl+Y, the Apply defaults message and its Undo; 0 console errors).
+### Other copies
+- None (the pattern follows the project lists of Spread Footing, Base Plate and Pile Designer, which each keep their own copy).
+### Open items
+- A saved project is stored in addition to the autosave, so each project uses about twice its size in the shared ~5 MB; the dialog shows the use. Duplicate names are not allowed on Save as (the engineer is asked to replace); Rename and Duplicate allow them.
+## 2026-11-01 — PR: sbd-custom-demands (1 of n) — "Custom (entered)" demand source: the shared table, Flexure, Shear & stiffeners
+Engineer's request: "Each module should allow me to enter forces directly ... I may want to check flexural against manually entered moments."
+### What changed (a new demand source only: no formula, factor, unit or reference changed; every other source computes as before)
+- New `apps/steel-bridge/ui/demands.js` (`window.SBDCustomDemands`, loaded before `ui/flexure.js` in `index.html`): one table component for every
+  module. `SPECS[mod]` lists the columns (the hand-off station fields: `M_DC1`, `M_DC2`, `M_DW`, `M_LLpos`, `M_LLneg`, `M_PLpos`, `M_PLneg`, `M_UT`,
+  `M_UF`, `M_FATpos`, `M_FATneg` for Flexure; the `V_*` fields and `V_CL` for Shear, with a support reactions table `DC1, DC2, DW, LL, PL, UT, UF`;
+  Flexure also a factored set `Mu_s, Mu_l, Mu_n, Ms_s, Ms_l, Ms_n, Mf_p, Mf_n`). `payload(P, g, mod)` puts the rows in the shape of a hand-off
+  (schema `sbd2-custom`) with the project's supports, plates (`section.zones` from the girder's segments), deck, materials, skews and owner, as
+  `fromAnalysis` of ui/rating.js / ui/fatigue.js does; a single row is doubled 0.001 ft beside it (the engines interpolate between stations).
+  `card` / `wire`: the table (cell edits, paste from Excel into any cell: tab-separated, a header row skipped, `1,450` and `(25)` read; Add row,
+  Sort by x, Clear rows; the cell with the focus keeps it after the redraw). `rowsOf`: x inside the girder, no two rows at one x, numbers only.
+  `step(mod, C, x, o)`: the worked step `cd.src` "Demands: entered (Custom)" with the entered values. `report(P, mod, g)`: the entered table.
+- `ui/flexure.js` `inputs()`: anchor `if (src === 'analysis' || src === 'custom') {` — the custom rows go through the analysis branch unchanged
+  (`FX.fromPayload`, the project's deck, materials, owner factors, framing brace points, f_ℓ), then `cust(locs, C, pl)` keeps the locations at the
+  entered stations (`keepAt`, ±0.011 ft: both sides of a support or plate change there). C_b: the engine's (`bracing()`, from the entered moments
+  linear between rows) where the rows reach both brace points of the location's unbraced length (min x ≤ x_a + 0.25 ft and max x ≥ x_b − 0.25 ft),
+  else 1.0 with the nonprismatic γ_e from the local stress (`npr.geA`, `npr.gov` cleared). Factored rows (`mode: 'fac'`): `facPl` gives
+  `fromPayload` M_DC1 = M_u,steel, M_DC2 = M_u,long-term, both LL+IM = M_u,short-term with every factor 1 (`FAC1`, no η, m), so region and C_b come
+  from the entered Strength I M_u; each location then gets `loc.factored = { str, svc, fat }` (engine/flexure.js's existing factored path).
+  `stepsOf(R, r)` (exported) puts the custom step first; the "Demands" topic matches `cd.` ids.
+- `ui/shear.js` `build()`: `src === 'custom'` takes `CD.payload(P, g, 'shear')` on the file / analysis path; kept: stations at the entered x
+  (`keepAt`), panels holding an entered row (`inPan`; re-indexed, `stations[].pan` remapped), transverse stiffeners whose two panels hold one,
+  bearings at supports with reactions entered (`rxn[k]` not null; none: `BS = { rows: [], errors: [], none: true }`, no error). `stepsOf(R, kind, o)` (exported).
+- The source choice is saved: `P.demandSrc.flex`, `P.demandSrc.shear` (`CD.srcSet`; a hand-off file stays for the page view only). `srcOf` reads
+  `S.src` (file) → `P.demandSrc` → the old default. `index.html` passes `changed` to the Shear tab (as to Flexure).
+- `ui/analysis.js` `srcBar`: the source 'custom' ("Custom (entered on this tab, G1)").
+- `report/data.js`: `compute(P, g, { src: 'tabs' })` builds a module whose tab is on Custom with its rows, the rest with the analysis; the
+  analysis cache key `pkOf` leaves out `custom` and `demandSrc` (editing rows does not rerun the analysis). `report/builders.js`: the sub-section
+  "Custom demands entered on the … tab" (`cdSub`), the custom step in the worked steps, the Demands lines of the project card and summary.
+  `ui/report.js`: the Demands option "Each tab's choice (Custom where entered; else this project's analysis)".
+- `engine/model.js`: documented `custom` and `demandSrc` (optional; absent = as before); `validate` checks their shape only.
+### Saved data (CLAUDE.md §5)
+- New optional fields `P.custom = { flex | shear: { <girder id>: { mode, rows, sup } } }` and `P.demandSrc = { <module>: 'analysis' | 'example' |
+  'project' | 'custom' }`, no new storage key. A project without them loads, validates and computes as before (test "Saved data").
+### Decisions (recorded per the engineer's 2026-10-29 rule)
+- C_b with custom rows: computed from the entered moments where they span the unbraced length, else 1.0 (6.10.8.2.3 permits 1.0; the gradient
+  is unknown). A station beside a support or plate change (±0.01 ft) is interpolated between the entered rows, as the analysis path does.
+- Factored entry only where the engine takes factored demands: Flexure (engine/flexure.js `loc.factored`). Shear takes unfactored rows only (V_u,
+  deck placement and special fatigue loading combine the loads differently). With factored rows GS19 (moment reversal) is not made.
+### Check cases (tests/engine/custom-demands.test.mjs)
+- Flexure, built-in G1, x = 44 ft, M_DC1 1450, M_DC2 210, M_DW 240, M_LL+IM +1650 / −400 kip-ft: M_u = 1.25(1660) + 1.50(240) + 1.75(1650) =
+  5322.5 kip-ft; M_s = 1900 + 1.30(1650) = 4045 kip-ft; GS6 = 5322.5/9305.2 = 0.5720. RIDOT (η = 1, m = 1.2): M_u = 2075 + 360 + 1.2(2887.5) = 5900.0.
+  Pier 1 (x = 109.995 and 110.005): M_u = 1.25(−2630) + 1.50(−380) + 1.75(−2400) = −8057.5 kip-ft, C_b = 1.0 (rows do not reach the brace points).
+- Shear, x = 44 ft, V_DC1 20, V_DC2 3, V_DW 3, V_LL+IM 40, V_CL 3, V_FAT 25 kip: V_u = 1.25(23) + 1.50(3) + 1.75(40) = 103.25 kip; deck placement
+  1.25(20) + 1.50(3) = 29.5 kip; special fatigue 26 + 1.75(25) = 69.75 kip. Abut. 1 R_DC1 100, R_DC2 15, R_DW 17, R_LL+IM 120: R_u = 379.25 kip.
+- Proof of path: rows = this project's analysis at all 363 stations (built-in G1; RIDOT + sidewalk G1 with the pedestrian load): Flexure 367
+  locations, 2369 checks and every worked step equal to the 'analysis' source (largest difference 0); Shear 363 stations, 78 panels, 77 stiffeners,
+  4 bearings equal (largest difference 0). Factored rows = the unfactored rows × the Table 3.4.1-1 factors by hand: every check ratio equal.
+### How verified
+- `node tests/engine/run.mjs custom-demands` (9 tests) and `report-wiring report.test model static steps-groups flexure shear.test paths ped-owner
+  rating.test tex` (69 passed, unchanged). Playwright (file://, 1280 and 390 px): Flexure and Shear Custom tables, paste, Tab keeps the focus,
+  reload keeps the choice and rows, report with "each tab's choice"; 0 console errors; no horizontal page scroll at 390 px.
+### Other copies
+- None.

@@ -104,11 +104,17 @@
      -- added 2026-10-30 (paths PR, SB2-W1), optional: absent = no f_ℓ entered --
      flexure:   { fl (ksi): first-order f_ℓ of the girder design (Flexure and Rating, Strength I and Service II), entered on the Flexure
                   tab; absent, blank or 0: the skew value of C6.10.1 (engine/framing.js design) }
+     -- added 2026-11-01 (custom demands PR), optional: absent = no custom demands, each tab's default demand source (as before) --
+     custom:    { <module: 'flex' | 'shear'>: { <girder id>: { mode: 'unf' | 'fac' (factored; Flexure only), rows: [ { x (ft), <column>: number } ]
+                  (the columns of ui/demands.js SPECS: hand-off station fields, e.g. M_DC1, M_LLpos (kip-ft), V_DC1 (kip); a blank cell is absent),
+                  sup: [ { DC1, DC2, DW, LL, PL, UT, UF (kip) } ] (Shear: the support reactions, one per support) } } }: entered on the tab
+     demandSrc: { <module>: 'analysis' | 'example' | 'project' | 'custom' }: the demand source chosen on the tab (a hand-off file is not saved)
    } */
 (function () {
   'use strict';
   const SCHEMA = 'sbd2.project', VERSION = 1;
-  const KEYS = { current: 'sbd2.project.current', backup: 'sbd2.project.unreadable.', ui: 'sbd2.ui' };   // backup + ISO time; ui: the page's tab choices
+  const KEYS = { current: 'sbd2.project.current', backup: 'sbd2.project.unreadable.', ui: 'sbd2.ui',   // backup + ISO time; ui: the page's tab choices
+    libIndex: 'sbd2.lib.index', libItem: 'sbd2.lib.p.', libCur: 'sbd2.lib.current' };   // saved-project list (engine/library.js), added 2026-11-01
   // steel grades: F_y, F_u (ksi), as GirderDetail's GD_GR (ASTM A709)
   const GRADES = { '36': { Fy: 36, Fu: 58 }, '50': { Fy: 50, Fu: 65 }, '50W': { Fy: 50, Fu: 70 }, 'HPS50W': { Fy: 50, Fu: 70 }, 'HPS70W': { Fy: 70, Fu: 85 } };
 
@@ -321,6 +327,11 @@
     // added 2026-10-30 (report wiring PR): the optional f_ℓ during deck placement
     if (p.constr != null && p.constr.flC != null && !isNum(p.constr.flC)) E('constr.flC', 'f_ℓ during deck placement must be a number (ksi).');
     // added 2026-10-30 (paths PR, SB2-W1): the optional f_ℓ entered for the girder design (Flexure, Rating)
+    // custom demands (custom demands PR): the shape only; the rows themselves are checked by the tab (ui/demands.js rowsOf) when that source is used
+    if (p.custom != null && (typeof p.custom !== 'object' || Array.isArray(p.custom))) E('custom', 'Custom demands must be an object.');
+    else if (p.custom) Object.keys(p.custom).forEach(k => { const m = p.custom[k]; if (!m || typeof m !== 'object' || Array.isArray(m)) { E(`custom.${k}`, `Custom demands (${k}) must be an object.`); return; }
+      Object.keys(m).forEach(gk => { const e = m[gk]; if (!e || typeof e !== 'object' || (e.rows != null && !Array.isArray(e.rows)) || (e.sup != null && !Array.isArray(e.sup))) E(`custom.${k}.${gk}`, `Custom demands (${k}, ${gk}): rows and sup must be lists.`); }); });
+    if (p.demandSrc != null && (typeof p.demandSrc !== 'object' || Object.values(p.demandSrc).some(v => !['analysis', 'example', 'project', 'custom'].includes(v)))) E('demandSrc', 'Demand source choices must be analysis, example, project or custom.');
     if (p.flexure != null && p.flexure.fl != null && p.flexure.fl !== '' && !(isNum(p.flexure.fl) && p.flexure.fl >= 0)) E('flexure.fl', 'f_ℓ (Flexure tab) must be a number, 0 or more (ksi).');
     return { errors, warnings };
   }
