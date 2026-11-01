@@ -23,7 +23,7 @@ test('shared/lldf.js = lldf.html\'s engine before the move: every output of ~1,6
   console.log(`       ${r.cases} cases, ${r.members} girders, ${r.steps} worked steps, ${r.outputs} outputs; sha256 ${r.hashAfter.slice(0, 16)}…; ${r.diffs.length} differ`);
   assert.ok(r.cases > 1000 && r.members > 5000);
   assert.deepEqual(r.diffs, []); assert.equal(r.hashAfter, r.hashBefore);
-  assert.ok(r.changed.every(d => /^slab /.test(d)) && r.changedCases > 0, 'only the CIP slab cases change (LLSW)');
+  assert.ok(r.changed.every(d => /^slab |^d sk/.test(d)) && r.changedCases > 0, 'only the CIP slab (LLSW) and type (d) (LLDF-D) cases change');
 });
 
 test('LLSW (2026-11-01): CIP slab strip width with W = edge-to-edge width (Art. 4.6.2.3, Eqs. 4.6.2.3-1 / -2)', () => {
@@ -109,4 +109,13 @@ test('pier rule (4.6.2.2.2e, engineer 2026-10-29): skews 40 / 52 / 52 / 40°: pi
   assert.equal(s1.sk.noRed, false); c(s1.sk.scfM, 0.903885, 'span 2 r_M');
   assert.equal(SL.momentSkewNoReductionPier(40, 52, 52), true); assert.equal(SL.momentSkewNoReductionPier(45, 52, 52), false); assert.equal(SL.momentSkewNoReductionPier(null, 52, 70), true);
   assert.ok(p1.steps.some(s => s.id === 'df.p1.noRed'));
+});
+
+test('LLDF-D (2026-11-01): type (d) exterior web fatigue moment factor = W_e/14 r_M / 1.2 (Art. 3.6.1.4.3b)', () => {
+  // 6 webs at 8 ft, overhangs 3 ft: exterior W_e = min(3 + 8/2, 8) = 7.0 ft; g = W_e/14 = 0.5; no skew (r_M = 1).
+  //   fatigue: before 0.5 (the one-lane value as is); after 0.5/1.2 = 0.416667. Interior webs unchanged (g_M,1 / 1.2).
+  const p = { type: 'd', L: 120, spans: [120], ts: 8, depth: 72, skew: 0, skewV: null, OL: 3, OR: 3, rL: 1.5, rR: 1.5, spacings: [8, 8, 8, 8, 8], Nb: 6, I: 0, A: 0, eg: 0, n: 1, boxB: 0, boxI: 0, boxJ: 0, truckGaps: [4, 4, 4, 4] };
+  const R = SL.computeBridge(p), e = R.members[0], i = R.members[2];
+  c(e.We, 7.0, 'W_e'); c(e.gWe, 0.5, 'W_e/14'); c(e.fatM, 0.5 / 1.2, 'fatigue moment, exterior web', 1e-9);
+  c(i.fatM, i.r.mom1 / 1.2, 'fatigue moment, interior web', 1e-12);
 });

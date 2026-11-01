@@ -3183,6 +3183,110 @@ Zone "Span 2, 0.1L to 0.2L": V_f = 45.8 kip, Q = 1714.009 in³, I = 106168.02 in
 ### Other copies
 - None.
 
+## 2026-11-01 — PR: claude/sbd-factors-onesource — The remaining hard-coded load factors from one source (FONE): stiffeners, deck placement, Auto design / analysis stud sizing; owner η and m as the owner load rules apply them
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `FONE`.
+
+### Decisions (engineer decision 2026-11-01, item 3; recorded here)
+- One source, no new copies: Strength I base factors `SBDShear.factors()` / `SBDFlexure.factors()` (+ `factorsOwner(lf)` where η, m belong), deck placement
+  `SBDConstr.factors()` (engine/constructibility.js), Fatigue I `fatigue.gam.fI`, owner `SBDOwners.loadFactors(P.ownerRules…)`.
+- η and m "applied consistently" = the owner load rules already in force (OWN6–OWN8, engineer's decisions of 2026-10-15, GirderDetail plLF): η on the
+  Strength limit-state factors (max × η, min × η_N), m on HL-93 LL+IM at Strength and Service; neither on Fatigue nor on deck placement
+  (constructibility). So: stiffeners η, m (unchanged, see 1); deck placement 1.25 / 1.50 without η, m (unchanged values, one source, see 2);
+  stud regions on the owner's Strength I envelope (changed, see 3); pitch sizing with Fatigue I γ (no η, m; see 3). Open question for the engineer:
+  AASHTO LRFD 10th Ed. Art. 3.4.2.1 calls the construction check an evaluation at the Strength limit state, where Art. 1.3.2.1 would apply η; the
+  2026-10-15 rule keeps η off deck placement. Not changed here.
+- Rating's MBE Table 6A.4.2.2-1 factors stay (specification values, engineer). The Constructibility tab's deck overhang bracket factors
+  (`P.constr.oh.gam` dc 1.25 / cl 1.50) are inputs (GirderDetail's Deck overhang module), not hard-coded: not changed; listed for the engineer.
+
+### 1. Shear & stiffeners: stiffener Strength I factors (no value change)
+- `ui/shear.js` `build`: `G = SH.factorsOwner(lf, { fat: fatI(P) })` → `…, G0 = SH.factors()`; transverse `gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: fatI(P) }` →
+  `gam: { dc: G0.dc, dw: G0.dw, ll: G0.ll, fat: fatI(P) }`; bearing `gam: { dc: 1.25, dw: 1.50, ll: 1.75 }` → `gam: { dc: G0.dc, dw: G0.dw, ll: G0.ll }`.
+- The premise "without η, m" did not hold: engine/stiffeners.js applies the owner's η, m to these base factors (`gO`, OWN_K.ts / bstf: dc, dw × η; ll × η m)
+  from `env.lf` (the Shear tab's `loadFactors`). Base factors before η, m are passed (G, already × η, would apply η twice).
+- Check: default TS.g = { dc 1.25, dw 1.50, ll 1.75, fat 1.75 }; RIDOT η = 1.05 (η_I yes), m = 1.2: dc 1.25(1.05) = 1.3125, dw 1.50(1.05) = 1.575,
+  ll 1.75(1.05)(1.2) = 2.205, before = after (every Shear build identical, Node).
+
+### 2. Deck placement 1.25 / 1.50 (Art. 3.4.2.1): one source SBDConstr.factors() (no value change)
+- `engine/constructibility.js` `bracingC`: `Mc = env.Mc || xs.map((_, k) => 1.25 * env.MDC1[k] + 1.5 * env.MCL[k])` → `C0 = factors(), Mc = env.Mc || xs.map((_, k) =>
+  C0.cdc * env.MDC1[k] + C0.ccl * env.MCL[k])`; `ohRowsAt`: `Mc = env.xs.map((_, i) => 1.25 * env.MDC1[i] + 1.5 * env.MCL[i])` → `C0.cdc * … + C0.ccl * …`;
+  comment on `factors()` (the one source; no η, m).
+- `engine/shear.js` `factors(over)`: `cdc: 1.25, ccl: 1.50` → `cdc: C.cdc, ccl: C.ccl` with `C = window.SBDConstr.factors()` (literal fallback when the
+  module is not loaded). `factorsOwner` unchanged (no η, m on cdc, ccl).
+- `engine/crossframes.js` `inputsOf` (stability bracing M_u): `Mc = xs.map((_, i) => 1.25 * A.st.DC1.M[i] + 1.5 * (A.st.CL ? …))` → `C0.cdc * … + C0.ccl * …`
+  (`C0 = SBDConstr.factors()`); its source text names the factors' origin.
+- `engine/splices.js` `projGam`: `W.SBDConstructibility` → `W.SBDConstr` (the module's global is `SBDConstr`; before, the literal fallback 1.25 / 1.50
+  was always used: same values).
+- `ui/constructibility.js` overhang note: "the largest 1.25M_DC1 + 1.5M_CL" → `${fmt(SBDConstr.factors().cdc, 2)}M_DC1 + ${fmt(…ccl, 2)}M_CL` (display "1.50").
+- Check: default and RIDOT, Constructibility, Shear, Cross-frames, Splices builds identical before / after (Node), except the Cross-frames `I.src.Mu` text.
+  `tests/engine/factors-onesource.test.mjs` replaces `SBDConstr.factors` and sees Shear and Splices follow.
+
+### 3. Stud sizing: pitch with Fatigue I γ, regions on the owner's Strength I envelope (calculation change for an owner with η or m ≠ 1, or γ_FatI ≠ 1.75)
+- `ui/fatigue.js` `studsOf` (analysis / Custom payload when no pitch zones are entered) and `engine/autodesign.js` `payloadOf` (each candidate):
+  - pitch: `preq = vr > 0 ? nr * Zr / (1.75 * vr * Qs / c.I) : 48` → `fatI(P)` / `gFI` (= `fatigue.gam.fI`, 1.75 without one) in place of 1.75
+    (Art. 6.10.10.1.2, Table 3.4.1-1; no η, m on Fatigue I).
+  - regions: `const G = FX.factors(), Mup = stations.map(s => FX.envelopeStrI({ … LLp: s.M_LLpos, LLn: s.M_LLneg … }, G).max)` →
+    `G = FX.factorsOwner(SBDOwners.loadFactors(own.owner, own.eta, nb))`, LL+IM with m kept off the pedestrian part where LL+IM includes it
+    (`pe(v, q) = v − q + q/m`, GD45, as engine/flexure.js fromPayload; `studsOf(…, pedIn)`, new optional 8th argument: the Custom path passes
+    `pl.pedestrianInLL === true` (false): its rows carry M_PL in their own column, so there `pe = v + q/m`, M_PL added as the Flexure tab adds it
+    (before, the Custom path left M_PL out of the region envelope; the full suite's custom-demands test, Custom rows = this project's analysis for
+    RIDOT + sidewalk, found it: SC2 Abut. 1 region 0.9301 vs 0.9028 until both paths took the pedestrian part the same way)). Strength I Table 3.4.1-1 with η (Eq. 1.3.2.1-2, -3) and m (owner rule ld.mult).
+- Check case A (default project with RIDOT η_I yes: η = 1.05, m = 1.2; G1, analysis; no pitch zones entered), the Span 1 point of maximum positive moment:
+  - before (1.25 / 1.50 / 1.75): 43 ft 1.25(1059.355 + 191.730) + 1.50(158.802) + 1.75(1817.753) = 4983.13 > 44 ft 4981.45 kip-ft → region Abut. 1 0–43 ft;
+  - after (1.3125 / 1.575 / 2.205): 43 ft 1.3125(1251.085) + 1.575(158.802) + 2.205(1817.753) = 1642.05 + 250.11 + 4008.14 = 5900.31 < 44 ft
+    1.3125(1243.719) + 1.575(157.930) + 2.205(1822.803) = 1632.38 + 248.74 + 4019.28 = 5900.40 kip-ft → 0–44 ft (and Pier 1 region 44–110 ft).
+  - SC2 Abut. 1 region: n required 122.78 (unchanged), provided 132 → 136, ratio 0.9301 → 0.9028; governing SC2 0.9301 (the Span 3 abutment region,
+    unchanged); SC1 max 0.7409 unchanged. Default (AASHTO): identical.
+- Check case B (default project, γ Fatigue I 1.50): zone Span 1, 0–0.1L: V_f = 46.4 kip, Q = 1714.009 in³, I = 106168.02 in⁴, n_r = 4, Z_r = 7.0π(0.875)²/4 = 4.2092 kip;
+  p_req = 4(4.2092)/(γ(46.4)(1714.009)/106168.02): 1.75 → 12.844 in, p = ⌊2(12.844)⌋/2 = 12.5 in (before); 1.50 → 14.984 in, p = 14.5 in (after).
+- Auto design, recorded project builtin_RIDOT (tests/projects/sbd2-autodesign, sbd2FromPL, match-legacy settings as autodesign-parity.mjs; owner RIDOT,
+  η = 1.00, m = 1.2), Node: before = after (best candidate 426,394 lb, D = 70 in, ratio 1.000 stiffeners TS7; stud regions 0–44, 44–110, … 316–360 ft;
+  SC1 0.7065, SC2 0.9358 identical). The same project with η_I yes (η = 1.05, m = 1.2): best candidate identical before / after (439,866 lb, D = 65 in,
+  ratio 1.000 stiffeners TS7, every plate and stud pitch the same; SC1 0.7097, SC2 0.8379); the only change is the Span 3 stud region boundary
+  (Pier 2 to max. positive 250–317 → 250–316 ft, Abut. 2 317–360 → 316–360 ft), the owner's envelope placing the maximum positive moment 1 ft away.
+
+### 4. Cross-frames wind γ_WS = 1.0η (checked, no change)
+- `engine/crossframes.js` `compute`: `gWS = 1.0 * E.lf.eta`, `E.lf` from `envOf(P)` = `SBDOwners.loadFactors(P.ownerRules.owner, P.ownerRules.eta, P.xs.nb)`:
+  the project's η source, the same as every other tab (Project tab). RIDOT η_I yes: γ_WS = 1.05. No m (not HL-93). Table 3.4.1-1, Eq. 1.3.2.1-2.
+
+### Proof nothing else changes
+- Node, every tab's build (Flexure, Shear, Fatigue, Cross-frames, Constructibility, Splices, Rating, Welds; analysis and example), origin/main vs this
+  branch: default project 0 differences except the Cross-frames `I.src.Mu` text; RIDOT η 1.05 m 1.2: the same, plus the Fatigue tab's stud regions (3A).
+- `tests/engine/factors-onesource.test.mjs` (new), and the full `node tests/engine/run.mjs` (see the PR).
+
+### Other hard-coded factors left (for the engineer)
+- `ui/handoffs.js` superReactions meta `{ treatAs: 'DW', strMax: 1.50, strMin: 0.65 }`, `{ treatAs: 'DC', strMax: 1.25, strMin: 0 }`: descriptive fields
+  of the hand-off (the receiver applies its own factors), not used in a calculation here.
+- `engine/flexure.js` `envelopeStrI` UF factor `1.25 * G.dc / 1.25` (= G.dc, with η): already from G.
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: sbd-import-cll — Construction live load on import (D-1 of docs/steel-bridge-comparison.md §d)
+### Change (calculation input on import)
+- `engine/legacy.js fromParts`, before `if (P.__dlRest) {`: the old project's construction live load cll (psf; GirderDetail's
+  `df.bridge.cll`, else Preliminary sizing's `suggest.cll`) becomes each girder's `girders[i].loadsManual.CL = cll/1000 × b_eff/12` (klf), as
+  GirderDetail's Structural analysis (`GM.sa.compute`: `wCL = (nm(b.cll) || 0) / 1000 * beffFt`). An entered CL is kept; a file without cll is
+  unchanged. Import note: "Construction live load <cll> psf (<source>) × each girder's b_eff …". Before: not read (kept under
+  legacy.unmapped), so M_CL = V_CL = 0 on every imported project.
+- No other deck-placement input was missing: the pour sequence (sa.seqOn, seqMod, seqCustom) and f_ℓ were already imported;
+  GirderDetail's Girder section γ_cdc 1.25 / γ_ccl 1.50 equal this app's constructibility factors (gd.gs.gam stays unmapped, unused).
+### §4 callout
+- Provisions: AASHTO LRFD 10th Ed. Art. 3.4.2.1 (construction loads, γ 1.5 on CL), 6.10.3.4 (deck placement), 6.10.3.2 (GS14, GS15),
+  6.10.3.3 (GS16).
+- Before: CL = 0 → GS14/GS15 11–15 % and GS16 16–19 % below GirderDetail's recorded deck-placement results on every unskewed project
+  (comparison §d). After: GS14 within +0.67 / −0.80 %, GS15 within −0.95 % (C-3 pour boundaries, C-5 cross-frame weight); GS16 up to
+  −5.8 % (capacity: V_cr with the panel d_o of this project's stiffener layout, 52.8 in at Pier 2 of curb G1, vs GirderDetail's 60 in rows;
+  V_u 119.7 vs 118.8 kip, C-7).
+- Hand check (builtin, cll = 20 psf): G2 b_eff = 114 in = 9.5 ft → w_CL = 0.020 × 9.5 = 0.190 klf; G1 b_eff 96 in = 8.0 ft → 0.160 klf.
+  M_CL max G2 334.953 kip-ft vs GirderDetail 334.934 (0.006 %); V_CL 13.495 vs 13.400 kip (C-7).
+### Tests
+- tests/engine/legacy.test.mjs: new test (CL per girder, the note, cll read, M_CL/V_CL vs GirderDetail on builtin G2 and curb MassDOT G1,
+  a file without cll unchanged); the 20-project import test unchanged.
+
+### Other copies
+- None.
+
 ## 2026-11-01 — PR: sbd-sidewalk-override — Owner sidewalk override for the LL deflection limits (C-32, engineer decision 2026-11-01)
 ### Change
 - `engine/analysis.js`: `DEF.deflSidewalk = 'auto'`; `deflOwner`: before `on = ['L', 'R'].some(k => sw[k] && +sw[k].w > 0)`; after

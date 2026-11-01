@@ -12,6 +12,7 @@
 <!-- RPT-4: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/anchor-geom.js"></script>
 <style>
   :root{
     /* ---- primitive tokens (ui-ux-pro-max palette: navy professional) ---- */
@@ -357,8 +358,11 @@
       <button id="btnUseProjMeta" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
       <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
       <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into the ASCE 7-22 service loads (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
-      <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
-      <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span>
+      <button id="btnPullAnchorGroup" type="button" onclick="bxPullAnchorGroup()" title="Import pole / sign anchor groups from the Light Pole and Sign Post tool (HANDOFF.md, channel anchorGroup)">Pull from Light Pole<span id="bxAgNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+      <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()" title="A hand-off file: support reactions (memberReactions) or anchor groups (anchorGroup)">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportHandoff(event)">
+      <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span> <span id="bxAgSrc" style="font-size:9pt;font-style:italic"></span>
+    </div>
+    <div id="bpGroupBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
     </div>
     <div id="restoreStatus" style="font-size:9pt;font-style:italic;margin-top:4px;"></div>
   </div>
@@ -978,7 +982,8 @@ function defaultState(){
   return {
     proj:{name:"Untitled",num:"",by:"",date:new Date().toISOString().slice(0,10),chk:"",chkDate:""},
     /* geometry: plate */
-    plate:{ B:18, N:18, t:1.5, exc_x:0, exc_y:0, grade:"a36", holeDia:0 },   /* B along x (width), N along y (length); holeDia 0 = AISC DG1 Table 2.3 oversized hole */
+    plate:{ B:18, N:18, t:1.5, exc_x:0, exc_y:0, grade:"a36", holeDia:0,
+            shape:"rect", D:24 },   /* BC-1 (2026-11-01): shape "rect" (B × N, every save before BC-1) | "circle" (diameter D; double-nut pole base) */   /* B along x (width), N along y (length); holeDia 0 = AISC DG1 Table 2.3 oversized hole */
     /* column footprint — for schematic + DG1 bearing interface */
     col:{ shapeType:"W", shape:"W12X65", custom:false, d:12.1, b:12.0 },   /* d along y, b along x */
     /* anchors: layout by faces */
@@ -989,7 +994,10 @@ function defaultState(){
              washer_od:3.0,        /* plate washer outside dimension (in), used if head=platewasher */
              washer_id:0,          /* washer hole diameter (0 → use d+1/8) */
              futa_from_grade:true, futa:0,
-             torqued:false },      /* BP-T1 (2026-10-21): anchor installation, false = untorqued (default; saves without the field are untorqued), true = torqued (ACI 318-19 Table 17.9.2a) */
+             torqued:false,        /* BP-T1 (2026-10-21): anchor installation, false = untorqued (default; saves without the field are untorqued), true = torqued (ACI 318-19 Table 17.9.2a) */
+             /* BC-1 (2026-11-01): layout "grid" (nx × ny, every save before BC-1) | "circle" (n bolts on a bolt circle of
+                diameter BC, the first at theta0 degrees counter-clockwise from +x, about the plate centre) */
+             pattern:"grid", nCircle:8, BC:16, theta0:22.5 },
     /* grout / stand-off — unified PROFIS-style type selector */
     grout:{ present:true, tg:1.0, fc_grout:5, taper:"1to1" },
     /* stand-off type: "none" | "noclamp" | "clamp" | "grout"  (matches PROFIS four types) */
@@ -1011,7 +1019,11 @@ function defaultState(){
            plate_off_x:0, plate_off_y:0,     /* plate center position in pedestal-center coords (in) */
            edgeReinf:"none",                 /* none | bar | stirrups — drives psi_c,V §17.7.2.5 */
            psi_cV_override:false, psi_cV:1.0,
-           ca_override:false, ca_x_pos:0, ca_x_neg:0, ca_y_pos:0, ca_y_neg:0 },
+           ca_override:false, ca_x_pos:0, ca_x_neg:0, ca_y_pos:0, ca_y_neg:0,
+           /* BC-2 (2026-11-01): pier shape "rect" (Bx × By, every save before BC-2) | "circle" (drilled shaft / round pier,
+              diameter D, centred at the pedestal origin; the plate offset places the anchors on it). circHefReduce: apply
+              the §17.6.2.1.2 h_ef reduction to a circular pier by analogy (engineer decision 2026-11-01: applied by default). */
+           shape:"rect", D:36, circHefReduce:true },
     /* shear distribution model */
     shear:{ dist:"equal",     /* equal | frontrow — legacy demand split */
             weldedPlate:false,  /* anchors welded to a common plate (headed studs on an embed plate).
@@ -1116,7 +1128,7 @@ let S = defaultState();
 /* ------------------------- PERSISTENCE ------------------------- */
 function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);return true;}catch(e){return false;} }
-function autosave(){ lsSet(LS_AUTO, JSON.stringify(S)); }
+function autosave(){ if(Array.isArray(S.groups) && S.groups.length && typeof bpGroupSync==="function") bpGroupSync(); lsSet(LS_AUTO, JSON.stringify(S)); }   /* BC-3: the active anchor group's entry follows the live design */
 function loadAutosave(){
   /* Restore order:
      1. the autosaved working state (what you last had on screen)
@@ -1436,8 +1448,33 @@ function selInput(optList,get,set,labelFn,valFn){
    ===================================================================== */
 
 /* ---- anchor coordinates (plate-center origin) ---- */
+/* BC-1 (2026-11-01): bolt-circle layout and circular base plate. Both default off ("grid", "rect"); every save made
+   before BC-1 has neither field and takes the defaults, so its anchor coordinates and results are unchanged. */
+function bpCircPattern(){ return !!(S.anchor && S.anchor.pattern==="circle"); }
+function bpCircPlate(){ return !!(S.plate && S.plate.shape==="circle"); }
+function bpCircN(){ return Math.max(3, Math.round(+S.anchor.nCircle||0)); }
+/* BC-1: worked step for the bolt-circle layout (coordinates and the polar sums the elastic group uses) */
+function bpCircGeomStep(){
+  const A=S.anchor, n=bpCircN(), R=(+A.BC||0)/2, pts=anchorCoords();
+  const sx2=pts.reduce((a,p)=>a+p.x*p.x,0), sy2=pts.reduce((a,p)=>a+p.y*p.y,0);
+  return {title:"Bolt-circle layout",ref:"plan geometry (anchor coordinates used by every check)",
+    lines:["x_i=\\frac{BC}{2}\\cos\\left(\\theta_0+\\frac{360^\\circ (i-1)}{n}\\right),\\quad y_i=\\frac{BC}{2}\\sin\\left(\\theta_0+\\frac{360^\\circ (i-1)}{n}\\right)",
+      "\\frac{BC}{2}="+fmt(R,3)+"\\ \\text{in},\\ \\theta_0="+fmt(A.theta0,2)+"^\\circ,\\ n="+n+":\\quad "+pts.map((p,i)=>"("+fmt(p.x,3)+",\\,"+fmt(p.y,3)+")").join(",\\ "),
+      "\\sum x_i^2=\\sum y_i^2=\\frac{n\\,(BC/2)^2}{2}=\\frac{"+n+"\\times"+fmt(R,3)+"^2}{2}="+fmt(n*R*R/2,3)+"\\ \\text{in}^2\\quad(\\text{computed: }"+fmt(sx2,3)+",\\ "+fmt(sy2,3)+")",
+      "s=BC\\,\\sin(180^\\circ/n)="+fmt(2*R,3)+"\\times\\sin("+fmt(180/n,2)+"^\\circ)="+fmt(2*R*Math.sin(Math.PI/n),3)+"\\ \\text{in (chord between adjacent bolts)}"],
+    vars:[["BC",fmt(2*R,3)+" in","bolt-circle diameter"],["\\theta_0",fmt(A.theta0,2)+"°","angle of bolt 1, counter-clockwise from +x"],["n",String(n),"bolts (any n ≥ 3)"]]};
+}
 function anchorCoords(){
   const P=S.plate, A=S.anchor;
+  if(bpCircPattern()){
+    /* n bolts on the bolt circle of diameter BC: x_i = (BC/2)·cos(θ0 + 360°·i/n), y_i = (BC/2)·sin(θ0 + 360°·i/n),
+       in plate coordinates (origin at the plate centre). Same arithmetic as SharedAnchorGeom.circlePoints. */
+    const n=bpCircN(), R=Math.max(+A.BC||0,0)/2, a0=(+A.theta0||0)*Math.PI/180, pts=[];
+    for(let k=0;k<n;k++){ const a=a0+2*Math.PI*k/n; let x=R*Math.cos(a), y=R*Math.sin(a);
+      x=Math.round(x*1e10)/1e10; y=Math.round(y*1e10)/1e10;   /* snap to 1e-10 in, so 12√2·cos45°/2 is exactly 6 (no engineering effect) */
+      pts.push({i:k, x, y}); }
+    return pts;
+  }
   const nx=Math.max(1,Math.round(A.nx)), ny=Math.max(1,Math.round(A.ny));
   const xExtent=P.B/2 - A.edx;   /* outer bolt line offset from center, x */
   const yExtent=P.N/2 - A.edy;
@@ -1464,13 +1501,21 @@ function anchorGeom(){
   let ca_y_pos = C.By/2 - (ymax + py);
   let ca_y_neg = C.By/2 + (ymin + py);
   /* optional manual override of the four edge distances */
-  if(C.ca_override){
+  if(C.ca_override && !bpCircPier()){   /* BC-2: no c_a override on a circular pier */
     if(C.ca_x_pos>0) ca_x_pos=C.ca_x_pos;
     if(C.ca_x_neg>0) ca_x_neg=C.ca_x_neg;
     if(C.ca_y_pos>0) ca_y_pos=C.ca_y_pos;
     if(C.ca_y_neg>0) ca_y_neg=C.ca_y_neg;
   }
-  return {pts,xmax,xmin,ymax,ymin,px,py,ca_x_pos,ca_x_neg,ca_y_pos,ca_y_neg,
+  /* BC-2: circular pier — c_a along ±x / ±y are the distances from the anchors to the circle along those directions
+     (the smallest over the anchors); the edge-sensitive checks use the circle itself (radial and tangent-edge distances) */
+  let circ;
+  if(bpCircPier()){ const AG=bpAG(), R=bpPierR(), q=pts.map(p=>({x:p.x+px,y:p.y+py}));
+    const ray=(ux,uy)=>Math.min(...q.map(p=>AG.rayToCircle(p.x,p.y,ux,uy,0,0,R)));
+    ca_x_pos=ray(1,0); ca_x_neg=ray(-1,0); ca_y_pos=ray(0,1); ca_y_neg=ray(0,-1);
+    const caRad=q.map(p=>AG.radialEdge(p.x,p.y,0,0,R));
+    circ={R, caRad, caRadMin:Math.min(...caRad)}; }
+  return {pts,xmax,xmin,ymax,ymin,px,py,ca_x_pos,ca_x_neg,ca_y_pos,ca_y_neg,circ,
     sx:(pts.length>1? (xmax-xmin):0), sy:(pts.length>1?(ymax-ymin):0)};
 }
 
@@ -1531,7 +1576,9 @@ function bpExportDxf(){
   const hs=anchorHoleDG1(anchorSpec(A.dia).d), dh=(P.holeDia>0)? P.holeDia : hs.dh;
   const hx=C.Bx/2, hy=C.By/2, th=Math.max(0.6, Math.min(C.Bx,C.By)/40);
   /* ---------------- PLAN ---------------- */
+  if(bpCircPier()) W.circle(LY.ped,[0,0],C.D/2); else   /* BC-2 */
   W.rect(LY.ped,-hx,-hy,hx,hy);
+  if(bpCircPlate()) W.circle(LY.plate,[px,py],P.D/2); else   /* BC-1 */
   W.rect(LY.plate,px-P.B/2,py-P.N/2,px+P.B/2,py+P.N/2);
   W.line(LY.cl,[-hx-2,0],[hx+2,0]); W.line(LY.cl,[0,-hy-2],[0,hy+2]);
   { const k=colShape(), ex=px+(P.exc_x||0), ey=py+(P.exc_y||0);
@@ -1563,7 +1610,7 @@ function bpExportDxf(){
   if(cutB!==null){ const x=cutB+px, a=th*0.9; W.line(LY.sec,[x,-hy-3*th],[x,hy+3*th]);
     [-hy-3*th,hy+3*th].forEach(y=>{ W.pline(LY.sec,[[x-a*0.4,y-a/2],[x-a*0.4,y+a/2],[x-a*1.4,y]],true); W.text(LY.sec,[x+a*0.5,y-a*0.35],th,"B"); }); }
   W.text(LY.txt,[-hx,-hy-3*th],th*1.4,"PLAN");
-  W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+fmt(P.B,2)+" x "+fmt(P.N,2)+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
+  W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+(bpCircPlate()? "dia. "+fmt(P.D,2) : fmt(P.B,2)+" x "+fmt(P.N,2))+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+(bpCircPattern()? "on BC "+fmt(S.anchor.BC,2)+" in, " : "")+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
   /* ---------------- SECTION along x ---------------- */
   const ox=C.Bx+Math.max(24,C.Bx*0.6), X=x=>ox+x;
   W.rect(LY.ped,X(-hx),0,X(hx),C.H);
@@ -1618,7 +1665,7 @@ function bpExportDxf(){
    --------------------------------------------------------------- */
 function pedGeom(){
   const P=S.ped||{}, C=S.conc;
-  if(!P.present) return {present:false};
+  if(!P.present || bpCircPier()) return {present:false};   /* BC-2: pedestal bars / ties are rectangular; not available for a circular pier */
   const rbB=rebarOf(P.barSize), rbT=rebarOf(P.tieSize);
   const cover=Math.max(+P.cover||0,0);
   const offB=cover+rbT.db+rbB.db/2, offT=cover+rbT.db/2;
@@ -1768,7 +1815,50 @@ function breakoutRing(H,R,rect,nArc){
    spacing when no such pair exists). This prevents overestimating the breakout cone
    in a "tight" member (narrow pedestal). Returns the effective hef + narrative.
    --------------------------------------------------------------- */
+/* ---------------------------------------------------------------
+   BC-2 (2026-11-01): CIRCULAR PIER (drilled shaft / round pier). Engineer decisions 2026-11-01:
+   - A_Nc and A_Vc by the exact projected areas clipped by the pier circle (union of the 3h_ef squares of the
+     anchors, ∩ the disc: SharedAnchorGeom.unionRectsDiscArea), c_a to the circle (radial for ψ_ed,N and side-face
+     blowout), ψ_ed,N with c_a,min to the circle.
+   - §17.6.2.1.2 h_ef reduction: user-selectable, applied by default (conc.circHefReduce). The provision is written
+     for straight edges; applying it to a circle is an engineering analogy, stated on screen with both values.
+   - Shear breakout toward a round edge: tangent-edge model (the edge is the tangent to the circle at the point the
+     shear direction reaches from the critical anchor; §17.7.2.1, R17.7.2.1).
+   The geometry is in shared/anchor-geom.js (window.SharedAnchorGeom), tested in Node.
+   --------------------------------------------------------------- */
+function bpCircPier(){ return !!(S.conc && S.conc.shape==="circle"); }
+function bpAG(){ if(!window.SharedAnchorGeom) throw new Error("shared/anchor-geom.js is not loaded: keep the shared folder next to this file (needed for a circular pier)."); return window.SharedAnchorGeom; }
+function bpPierR(){ return Math.max(+S.conc.D||0,0)/2; }
+/* anchors in pier coordinates (origin at the pier centre) */
+function bpPierPts(pts){ const C=S.conc, ox=C.plate_off_x||0, oy=C.plate_off_y||0; return (pts||anchorCoords()).map(p=>Object.assign({},p,{x:p.x+ox,y:p.y+oy})); }
+/* §17.6.2.1.2 by analogy for a circle. c(θ) = distance from the anchor group to the tangent of the pier circle with
+   outward normal θ (SharedAnchorGeom.supportEdge), at 1° steps. "Within 1.5h_ef of three or more edges" is read as
+   c(θ) < 1.5h_ef over at least 270° of the circumference (three of the four sides of a rectangle). c_a,max = the
+   largest c(θ) over those directions; s = the largest extent of the group across the pier between two opposite
+   directions that are both within 1.5h_ef (BP-E1's "spacing across the member"), else the largest extent. */
+let __bpHefForce=null;   /* internal: forces the circle reduction on/off to work the alternative value */
+function bpHefCirc(hef){
+  const AG=bpAG(), R=bpPierR(), q=bpPierPts(anchorGeom().pts), lim=1.5*hef, N=360;
+  const c=[], h=[];
+  for(let k=0;k<N;k++){ const a=k*Math.PI/180, ux=Math.cos(a), uy=Math.sin(a);
+    c.push(AG.supportEdge(q,ux,uy,0,0,R)); h.push(Math.max(...q.map(p=>p.x*ux+p.y*uy))); }
+  const nearIdx=c.map((v,k)=>v<lim?k:-1).filter(k=>k>=0), nearDeg=nearIdx.length;
+  const geomApplies=nearDeg>=270;
+  const caMax=nearIdx.length? Math.max(...nearIdx.map(k=>c[k])) : Math.max(...c);
+  let sAcross=0, pair=false;
+  for(let k=0;k<N/2;k++){ const k2=k+N/2; if(c[k]<lim && c[k2]<lim){ pair=true; sAcross=Math.max(sAcross,h[k]+h[k2]); } }
+  let sAll=0; for(let k=0;k<N/2;k++) sAll=Math.max(sAll,h[k]+h[k+N/2]);
+  const s=pair? sAcross : sAll;
+  const opt=(S.conc.circHefReduce!==false);
+  const applies=geomApplies && (__bpHefForce===null? opt : __bpHefForce);
+  let hefEff=hef, gov="full";
+  if(applies){ const byEdge=caMax/1.5, byS=s/3; hefEff=Math.min(hef,Math.max(byEdge,byS)); gov=(byEdge>=byS)?"ca,max/1.5":"s/3"; }
+  return {hef, hefEff, applies, forced:false, near:(geomApplies?4:(nearDeg>=180?2:(nearDeg>0?1:0))), caMax, s,
+    sBasis:(pair? "the largest extent of the anchor group across the pier between two opposite directions both within 1.5·h_ef" : "the largest extent of the anchor group (no pair of opposite directions within 1.5·h_ef)"),
+    byEdge:caMax/1.5, byS:s/3, gov, circ:true, geomApplies, nearDeg, opt, R};
+}
 function hefEffective(){
+  if(bpCircPier()) return bpHefCirc(S.anchor.hef);
   const A=S.anchor, hef=A.hef, g=anchorGeom();
   const edges=[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg];
   const nearEdges=edges.filter(e=>e<1.5*hef);
@@ -1925,7 +2015,12 @@ function bearingCap(){
   const oX=Math.abs(C.plate_off_x||0), oY=Math.abs(C.plate_off_y||0);
   const Hs=Math.max(+C.H||0, 0);
   const kDepth=Math.min(1+4*Hs/A1_w, 1+4*Hs/A1_l);
-  const kSim=Math.max(1, Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2), kDepth));
+  /* BC-2: circular pier — the largest similar, concentric rectangle that fits in the circle: the corner
+     (|o_x| + k·A1_w/2, |o_y| + k·A1_l/2) on the circle, (a² + b²)k² + 2(o_x·a + o_y·b)k + (o_x² + o_y² − R²) = 0 */
+  const kFit=bpCircPier()? (()=>{ const a=A1_w/2, b=A1_l/2, R=bpPierR(), qa=a*a+b*b, qb=2*(oX*a+oY*b), qc=oX*oX+oY*oY-R*R, dd=qb*qb-4*qa*qc;
+                                   return dd>0? (-qb+Math.sqrt(dd))/(2*qa) : 0; })()
+                         : Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2));
+  const kSim=Math.max(1, Math.min(kFit, kDepth));
   const A2=A1*kSim*kSim;
   let sqrtRatio=Math.sqrt(A2/A1); if(sqrtRatio>2) sqrtRatio=2;
   let fp = 0.85*fc*sqrtRatio;
@@ -1934,7 +2029,7 @@ function bearingCap(){
   const fpGrout = G.present? 0.85*Math.min(G.fc_grout,10) : Infinity;
   const fp_gov = Math.min(fp, fpGrout);
   return {fc,A1,A2,A1_w,A1_l,sqrtRatio,fp,fpGrout,fp_gov,phi,phiFp:phi*fp_gov,kDepth,
-    depthGoverns:(kDepth<Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2)) && kDepth<2),
+    depthGoverns:(kDepth<kFit && kDepth<2),
     groutGoverns:(fpGrout<fp)};
 }
 
@@ -2065,14 +2160,17 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
      (geometric or overridden) plus its set-back from the outermost anchor line.
      (Previously c_a,min of ALL anchors.) Pryout keeps the all-anchor value
      (caAll / psi_edAll), matching its all-anchor cone. */
-  const caOf=p=>Math.min(g.ca_x_pos+(g.xmax-p.x), g.ca_x_neg+(p.x-g.xmin),
-                         g.ca_y_pos+(g.ymax-p.y), g.ca_y_neg+(p.y-g.ymin));
-  const caAll=ca_min;
+  const cir=bpCircPier(), Rp=cir? bpPierR() : 0;
+  /* BC-2: circular pier — c_a of an anchor is its radial distance to the circle, R − |p| (pier coordinates) */
+  const caOf=cir? (p=>Rp-Math.hypot(p.x+pxo,p.y+pyo))
+                : (p=>Math.min(g.ca_x_pos+(g.xmax-p.x), g.ca_x_neg+(p.x-g.xmin),
+                         g.ca_y_pos+(g.ymax-p.y), g.ca_y_neg+(p.y-g.ymin)));
+  const caAll=cir? Math.min(...g.pts.map(caOf)) : ca_min;
   const ca=Math.min(...tp.map(caOf));            /* ≥ caAll by construction */
   const psi_edAll = (caAll>=1.5*hef)?1.0:(0.7+0.3*caAll/(1.5*hef));
   const edges=[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg];
   const nearEdges=edges.filter(e=>e<1.5*hef).length;
-  const isCorner = nearEdges>=2;
+  const isCorner = cir? false : nearEdges>=2;
   const psi_ed = (ca>=1.5*hef)?1.0:(0.7+0.3*ca/(1.5*hef));
   const psi_c = C.cracked?1.0:1.25;
   const psi_cp=1.0;
@@ -2090,7 +2188,28 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
      intercept check shows it crossing the failure surface (condA === true). */
   const phi = (condA===true)?0.75:0.70;
   const Ncbg=ANcRatio*psi_ec*psi_ed*psi_c*psi_cp*Nb;
-  return {phi,hef,hefNom,hefEff:he,fc,ANco,ANc,ANcRatio,ANcAll,ANcRatioAll,nAll,caAll,psi_edAll,nTensPts:tp.length,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
+  /* BC-2: circular pier with the §17.6.2.1.2 analogy geometrically applicable — work the other choice too, so both
+     values are shown (engineer decision 2026-11-01) */
+  let alt=null;
+  if(cir && he.geomApplies && __bpHefForce===null){ __bpHefForce=!he.applies;
+    try{ alt=tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA); } finally{ __bpHefForce=null; } }
+  const circSteps=!cir? [] : [{title:"Circular pier — projected area A_Nc and edge distance",ref:"ACI 318-19 §17.6.2.1, Fig. R17.6.2.1(b); §17.6.2.4 (c_a to the circle)",
+       lines:[
+        "A_{Nc}=\\text{area}\\left(\\bigcup_{i\\in T}\\left[x_i\\pm1.5h_{ef}\\right]\\times\\left[y_i\\pm1.5h_{ef}\\right]\\ \\cap\\ \\text{pier disc }\\varnothing"+fmt(2*Rp,2)+"\\right)",
+        "1.5h_{ef}="+fmt(1.5*hef,3)+"\\ \\text{in};\\quad \\text{union of the squares}="+fmt(ext.circ.unionArea,2)+"\\ \\text{in}^2\\ \\to\\ \\cap\\ \\text{disc}="+fmt(ANc,2)+"\\ \\text{in}^2\\ \\text{(exact: "+ext.circ.cells+" cells, each rectangle}\\cap\\text{circle in closed form)}",
+        "c_{a,i}=R-\\sqrt{x_i^2+y_i^2}\\ (\\text{pier coordinates}):\\ "+tp.map(p=>fmt(caOf(p),3)).join(",\\ ")+"\\ \\Rightarrow\\ c_{a,min}="+fmt(ca,3)+"\\ \\text{in}"],
+       vars:[["R",fmt(Rp,3)+" in","pier radius"],["T","","the "+tp.length+" anchor"+(tp.length>1?"s":"")+" in tension (pier coordinates = plate coordinates + plate offset)"],
+             ["note","","ACI 318-19 draws rectangular members only; A_Nc is the projected area 'limited by edges' (§17.6.2.1) with the edge a circle, and c_a is the shortest distance from the anchor to that edge."]]}];
+  const hefCircStep=!(cir && he.geomApplies)? [] : [{title:"§17.6.2.1.2 applied to a circular pier — engineering analogy ("+(he.applies?"APPLIED":"NOT applied")+" by the user setting)",ref:"ACI 318-19 §17.6.2.1.2, R17.6.2.1.2",
+       lines:[
+        "\\text{the circle is within }1.5h_{ef}="+fmt(1.5*hefNom,2)+"\\text{ in of the anchor group over }"+he.nearDeg+"^\\circ\\ (\\ge270^\\circ\\text{: the analogue of three of four sides)}",
+        "h'_{ef}=\\max\\left(\\frac{c_{a,max}}{1.5},\\frac{s}{3}\\right)=\\max\\left(\\frac{"+fmt(he.caMax,3)+"}{1.5},\\frac{"+fmt(he.s,3)+"}{3}\\right)="+fmt(Math.min(hefNom,Math.max(he.byEdge,he.byS)),3)+"\\ \\text{in}\\quad(h_{ef}="+fmt(hefNom,3)+"\\ \\text{in})"]
+        .concat(alt? [
+        "\\text{with the reduction: }\\phi N_{cbg}="+fmt(he.applies? phi*Ncbg : alt.phiNcbg,2)+"\\ \\text{kip};\\quad\\text{without: }\\phi N_{cbg}="+fmt(he.applies? alt.phiNcbg : phi*Ncbg,2)+"\\ \\text{kip}"] : []),
+       vars:[["c_{a,max}",fmt(he.caMax,3)+" in","largest distance from the group to a tangent of the circle among the directions within 1.5h_ef"],
+             ["s",fmt(he.s,3)+" in",he.sBasis],
+             ["accepted","","The provision is written for members with straight edges (three or more edges within 1.5h_ef). Applying it to a circle treats the pier boundary as those edges: it caps h_ef at max(c_a,max/1.5, s/3), which lowers N_b and A_Nco but enlarges A_Nc/A_Nco. For this geometry the reduction "+(alt? ((he.applies? phi*Ncbg : alt.phiNcbg) >= (he.applies? alt.phiNcbg : phi*Ncbg) ? "RAISES" : "LOWERS")+" φN_cbg ("+fmt(he.applies? phi*Ncbg : alt.phiNcbg,2)+" vs "+fmt(he.applies? alt.phiNcbg : phi*Ncbg,2)+" kip): applying it is the "+(((he.applies? phi*Ncbg : alt.phiNcbg) >= (he.applies? alt.phiNcbg : phi*Ncbg))? "LESS":"MORE")+" conservative choice here" : "changes φN_cbg")+". R17.6.2.1.2 explains the unreduced concrete-capacity-design result is overly conservative in such members. Set on the Pedestal input (circular pier option); engineer decision 2026-11-01: applied by default."]]}];
+  return {phi,hef,hefNom,hefEff:he,alt:(alt? {phiNcbg:alt.phiNcbg,Ncbg:alt.Ncbg,hef:alt.hef,ANc:alt.ANc,ANco:alt.ANco,Nb:alt.Nb,psi_ed:alt.psi_ed,ANcAll:alt.ANcAll,ANcRatioAll:alt.ANcRatioAll,psi_edAll:alt.psi_edAll,applies:!he.applies} : undefined),fc,ANco,ANc,ANcRatio,ANcAll,ANcRatioAll,nAll,caAll,psi_edAll,nTensPts:tp.length,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
     steps:[
       {title:"Basic breakout strength of single anchor (tension)",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)"+(useAlt?" & §17.6.2.2.3":""),
        lines:[
@@ -2099,17 +2218,18 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
         ].concat(useAlt?["N_{b}=16\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{5/3} = "+fmt(NbAlt,2)+"\\ \\text{kip}\\;\\Rightarrow\\;\\text{used (headed anchor, }11\\le h_{ef}\\le25\\text{ in, §17.6.2.2.3)}"]:[]),
        vars:[["k_c","24","cast-in anchors §17.6.2.2.1"],["\\lambda_a","1.0","normalweight concrete"],
              ["f'_c",fmt(fc,2)+" ksi","capped 10 ksi"],["h_{ef}",fmt(hef,2)+" in",he.applies?("REDUCED per §17.6.2.1.2 (from nominal "+fmt(hefNom,2)+" in)"):"effective embedment (user input)"]]}
-        ].concat(he.applies?[{title:"Effective embedment reduction",ref:"ACI 318-19 §17.6.2.1.2",
+        ].concat(hefCircStep).concat((he.applies && !cir)?[{title:"Effective embedment reduction",ref:"ACI 318-19 §17.6.2.1.2",
        lines:[
         "h_{ef,eff}=\\max\\left(\\frac{c_{a,max}}{1.5},\\ \\frac{s}{3}\\right)=\\max\\left(\\frac{"+fmt(he.caMax,2)+"}{1.5},\\ \\frac{"+fmt(he.s,2)+"}{3}\\right)=\\max("+fmt(he.byEdge,2)+","+fmt(he.byS,2)+")="+fmt(he.hefEff,2)+"\\ \\text{in}"],
        vars:[["h_{ef,nom}",fmt(hefNom,2)+" in","nominal embedment (user input)"],
              ["c_{a,max}",fmt(he.caMax,2)+" in","largest edge distance"],
              ["s",fmt(he.s,2)+" in","anchor spacing "+he.sBasis],
              ["note","","Anchors are within 1.5·h_ef of "+he.near+" edges (≥3). ACI 318-19 §17.6.2.1.2 limits h_ef used in the breakout equations to prevent overestimating the failure cone in a tight member. This reduces N_b, A_Nco, and (through A_Nc) the group breakout — and carries into pryout, which is derived from N_cbg. Governs by "+he.gov+"."]]}]:[]).concat([
+      ].concat(circSteps).concat([
       {title:"Projected areas & modification factors",ref:"§17.6.2.1",
        lines:[
         "A_{Nco}=9h_{ef}^2 = 9\\times"+fmt(hef,2)+"^2 = "+fmt(ANco,1)+"\\ \\text{in}^2",
-        (ext.ANcRect-ANc>1e-6
+        (!cir && ext.ANcRect-ANc>1e-6
           ? "A_{Nc}=("+fmt(ext.x2-ext.x1,2)+")("+fmt(ext.y2-ext.y1,2)+") - "+fmt(ext.ANcRect-ANc,1)+" = "+fmt(ANc,1)+"\\ \\text{in}^2\\quad(\\text{bounding rectangle minus the area no anchor's }1.5h_{ef}\\text{ square covers; "+tp.length+" anchors in tension, clipped by edges})"
           : "A_{Nc}="+fmt(ANc,1)+"\\ \\text{in}^2\\quad(\\text{cone of the "+tp.length+" anchor"+(tp.length>1?"s":"")+" in tension, clipped by edges})"),
         "\\psi_{ec1,N}="+(eN1>1e-6?"\\frac{1}{1+2("+fmt(eN1,2)+")/(3\\times"+fmt(hef,2)+")}="+fmt(psi_ec1,3):"1.000")+"\\qquad \\psi_{ec2,N}="+(eN2>1e-6?"\\frac{1}{1+2("+fmt(eN2,2)+")/(3\\times"+fmt(hef,2)+")}="+fmt(psi_ec2,3):"1.000"),
@@ -2124,13 +2244,24 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
         "\\phi N_{cbg}="+fmt(phi)+"\\times"+fmt(ANcRatio,3)+"\\times"+fmt(psi_ec,2)+"\\times"+fmt(psi_ed,3)+"\\times"+fmt(psi_c,2)+"\\times"+fmt(psi_cp,2)+"\\times"+fmt(Nb,2)+
           "="+fmt(phi*Ncbg,2)+"\\ \\text{kip}"],
        vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — supplementary reinforcement crosses the failure surface (intercept check passes), Table 17.5.3":(S.tRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")]]}
-    ])};
+    ]))};
 }
 
 /* Projected tension-breakout rectangle (§17.6.2.1) for a set of anchor points:
    1.5·h_ef beyond the outermost points, clipped by the pedestal edges.
    Shared by tensionBreakoutGroup() and drawBreakout() so they cannot drift. */
 function breakoutExtents(pts, hef, C, pxo, pyo){
+  if(bpCircPier()){   /* BC-2: (∪ of the 1.5h_ef squares) ∩ the pier disc, exact; plate coordinates, disc centre (−pxo, −pyo) */
+    const AG=bpAG(), R=bpPierR(), cx=-(pxo||0), cy=-(pyo||0);
+    const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+    const xmin=Math.min(...xs), xmax=Math.max(...xs), ymin=Math.min(...ys), ymax=Math.max(...ys);
+    const ux1=xmin-1.5*hef, ux2=xmax+1.5*hef, uy1=ymin-1.5*hef, uy2=ymax+1.5*hef;
+    const sq=pts.map(p=>[p.x-1.5*hef,p.x+1.5*hef,p.y-1.5*hef,p.y+1.5*hef]);
+    const u=AG.unionRectsDiscArea(sq,cx,cy,R);
+    const x1=Math.max(ux1,cx-R), x2=Math.min(ux2,cx+R), y1=Math.max(uy1,cy-R), y2=Math.min(uy2,cy+R);
+    return {xmin,xmax,ymin,ymax,ux1,ux2,uy1,uy2,x1,x2,y1,y2,ANcRect:u.area,holes:[],ANc:u.area,
+            circ:{R,cx,cy,unionArea:u.rectArea,cells:u.cells,squares:sq}};
+  }
   const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
   const xmin=Math.min(...xs), xmax=Math.max(...xs), ymin=Math.min(...ys), ymax=Math.max(...ys);
   const ux1=xmin-1.5*hef, ux2=xmax+1.5*hef, uy1=ymin-1.5*hef, uy2=ymax+1.5*hef;
@@ -2173,6 +2304,7 @@ function breakoutExtents(pts, hef, C, pxo, pyo){
    Returns the summed tension of the anchors nearest the controlling edge.
    --------------------------------------------------------------------- */
 function sfbEdgeDemand(combo, g){
+  if(bpCircPier()){ const sf=sideFaceBlowoutCirc(combo,false); return sf.na? 0 : sf.demand; }   /* BC-2 */
   const per = combo.perAnchor||[];
   if(!per.length) return combo.Tu_group||0;
   const edges=[{k:"x",s:+1,c:g.ca_x_pos},{k:"x",s:-1,c:g.ca_x_neg},
@@ -2193,6 +2325,72 @@ function sfbEdgeDemand(combo, g){
   return best.N;
 }
 
+/* BC-2 (2026-11-01): SIDE-FACE BLOWOUT AT A CIRCULAR PIER (ACI 318-19 §17.6.4.1, §17.6.4.2).
+   c_a1 = the smallest radial distance from an anchor to the circle. The anchors at that edge distance (within the
+   row tolerance of sfbEdgeDemand) form the edge row. In this combination, the edge-row anchors in tension are taken
+   in angular order and split into chains wherever the chord to the next one is ≥ 6c_a1 (§17.6.4.2: anchors closer
+   than 6c_a1 act as a group). Each chain of k anchors: N_sbg = (1 + s/(6c_a1))·N_sb with s = the sum of the chords
+   between consecutive anchors (the "outer anchors along the edge" distance measured along the chain; k = 1: N_sb).
+   Demand = ΣT of the chain; the chain with the highest ratio governs. The corner factor of §17.6.4.1.1 is not used:
+   a circle has no perpendicular edge (c_a2 = c_a1 would give the 0.5 corner factor, which models a re-entrant
+   corner that does not exist). */
+function sideFaceBlowoutCirc(combo, condA){
+  const C=S.conc, A=S.anchor, hef=A.hef, fc=Math.min(C.fc,10), g=anchorGeom(), R=bpPierR();
+  const q=bpPierPts(g.pts), rad=q.map(p=>R-Math.hypot(p.x,p.y)), ca1=Math.min(...rad);
+  if(!(ca1 < 0.4*hef)){
+    return {na:true, ca1, circ:true, reason:"c_{a1} = "+fmt(ca1,2)+" in \\ge 0.4 h_{ef} = "+fmt(0.4*hef,2)+" in — side-face blowout need not be checked (§17.6.4.1).",
+      phiNsb:Infinity, steps:[{title:"Side-face blowout — applicability (circular pier)",ref:"§17.6.4.1",
+        lines:["c_{a1}=\\min_i\\left(R-\\sqrt{x_i^2+y_i^2}\\right)="+fmt(ca1,2)+"\\ge 0.4h_{ef}="+fmt(0.4*hef,2)+"\\Rightarrow\\text{ not applicable}"]}]};
+  }
+  const ab=abrgOf(), Abrg=ab.Abrg, phi=(condA===true)?0.75:0.70;
+  const Nsb=160*ca1*Math.sqrt(Abrg)*1.0*Math.sqrt(fc*1000)/1000;
+  const tol=1e-6+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const per=(combo&&combo.perAnchor)||[];
+  const row=q.map((p,i)=>({i,n:i+1,x:p.x,y:p.y,a:Math.atan2(p.y,p.x),t:(per[i]&&per[i].t)||0})).filter(o=>rad[o.i]<=ca1+tol);
+  const ten=row.filter(o=>o.t>1e-9).sort((u,v)=>u.a-v.a);
+  const chord=(u,v)=>Math.hypot(u.x-v.x,u.y-v.y);
+  let chains=[];
+  if(ten.length){
+    /* open the cyclic order at the largest gap, then split at gaps ≥ 6c_a1 */
+    let cut=0, big=-1; for(let k=0;k<ten.length;k++){ const gp=chord(ten[k],ten[(k+1)%ten.length]); if(ten.length>1 && gp>big){ big=gp; cut=(k+1)%ten.length; } }
+    const ord=ten.slice(cut).concat(ten.slice(0,cut));
+    let cur=[ord[0]];
+    for(let k=1;k<ord.length;k++){ if(chord(ord[k-1],ord[k])>=6*ca1){ chains.push(cur); cur=[ord[k]]; } else cur.push(ord[k]); }
+    chains.push(cur);
+  }
+  const evalChain=ch=>{ let L=0; for(let k=1;k<ch.length;k++) L+=chord(ch[k-1],ch[k]);
+    const grp=ch.length>1, aG=grp? 1+L/(6*ca1) : 1.0, Nsbg=aG*Nsb, dem=ch.reduce((a,o)=>a+o.t,0);
+    return {ch, L, grp, aG, Nsbg, phiNsbg:phi*Nsbg, dem, dcr:dem/(phi*Nsbg)}; };
+  const ev=chains.map(evalChain);
+  const gov=ev.length? ev.reduce((m,x)=>x.dcr>m.dcr?x:m, ev[0]) : {ch:[],L:0,grp:false,aG:1,Nsbg:Nsb,phiNsbg:phi*Nsb,dem:0,dcr:0};
+  return {na:false, circ:true, phi, ca1, ca2:ca1, Abrg, Nsb0:Nsb, alphaCorner:1, cornerApplies:false, Nsb, Nsbg:gov.Nsbg, alphaGroup:gov.aG,
+    sEdge:gov.L, groupApplies:gov.grp, phiNsb:gov.phiNsbg, demand:gov.dem, chain:gov.ch.map(o=>o.n), nEdgeRow:row.length, chains:ev.length,
+    steps:[
+      {title:"Side-face blowout — circular pier (single headed anchor)",ref:"§17.6.4.1, Eq.(17.6.4.1)",
+       lines:[
+        "c_{a1}=\\min_i\\left(R-\\sqrt{x_i^2+y_i^2}\\right)="+fmt(ca1,3)+"\\ \\text{in}<0.4h_{ef}="+fmt(0.4*hef,2)+"\\ \\text{in}",
+        "N_{sb}=160\\,c_{a1}\\sqrt{A_{brg}}\\,\\lambda_a\\sqrt{f'_c}=160\\times"+fmt(ca1,3)+"\\times\\sqrt{"+fmt(Abrg,3)+"}\\times\\sqrt{"+fmt(fc*1000,0)+"}="+fmt(Nsb,3)+"\\ \\text{kip}"],
+       vars:[["R",fmt(R,3)+" in","pier radius"],["A_{brg}",fmt(Abrg,3)+" in^2",ab.basis],
+             ["\\alpha_{corner}","1.000","§17.6.4.1.1 not used: a circle has no perpendicular edge"],
+             ["edge row",row.map(o=>o.n).join(", "),"anchors at c_a1 (within "+fmt(tol,3)+" in)"]]},
+      {title:"Group along the circular edge (this combination)",ref:"§17.6.4.2, Eq.(17.6.4.2)",
+       lines:[
+        gov.ch.length? ("\\text{governing chain: anchors }"+gov.ch.map(o=>o.n).join(",")+"\\ (T>0;\\ \\text{split where the chord}\\ge6c_{a1}="+fmt(6*ca1,2)+"\\text{ in})") : "\\text{no edge-row anchor in tension in this combination}",
+        gov.grp? ("N_{sbg}=\\left(1+\\frac{s}{6c_{a1}}\\right)N_{sb}=\\left(1+\\frac{"+fmt(gov.L,3)+"}{6\\times"+fmt(ca1,3)+"}\\right)"+fmt(Nsb,3)+"="+fmt(gov.Nsbg,3)+"\\ \\text{kip}") : ("N_{sbg}=N_{sb}="+fmt(Nsb,3)+"\\ \\text{kip}\\ (\\text{one anchor})"),
+        "\\phi N_{sbg}="+fmt(phi,2)+"\\times"+fmt(gov.Nsbg,3)+"="+fmt(gov.phiNsbg,3)+"\\ \\text{kip};\\quad N_{ua,edge}=\\sum T="+fmt(gov.dem,3)+"\\ \\text{kip}"],
+       vars:[["s",fmt(gov.L,3)+" in","sum of the chords between consecutive anchors of the chain (outer-anchor distance along the edge)"],
+             ["\\phi",fmt(phi,2),"Table 17.5.3, Condition B"],
+             ["chains",String(ev.length),"edge-row anchors in tension, grouped where closer than 6c_a1"]]}]};
+}
+/* BC-1: spread along the near edge of the anchors in the row nearest it (same row and tolerance as sfbEdgeDemand) */
+function bpSfbRowSpread(g, nearIsX){
+  const pos = nearIsX? (g.ca_x_pos<=g.ca_x_neg) : (g.ca_y_pos<=g.ca_y_neg);
+  const cv=g.pts.map(p=>nearIsX? p.x : p.y), av=g.pts.map(p=>nearIsX? p.y : p.x);
+  const lead=pos? Math.max(...cv) : Math.min(...cv);
+  const tol=1e-6+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const row=av.filter((v,i)=>Math.abs(cv[i]-lead)<=tol);
+  return row.length>1? Math.max(...row)-Math.min(...row) : 0;
+}
 function sideFaceBlowout(nT, ca1, condA){
   const C=S.conc, A=S.anchor, sp=anchorSpec(A.dia);
   const hef=A.hef, fc=Math.min(C.fc,10);
@@ -2212,7 +2410,9 @@ function sideFaceBlowout(nT, ca1, condA){
   const g=anchorGeom();
   /* spacing along the near edge: if the near edge is an x-edge, use y-spacing (along edge), else x-spacing */
   const nearIsX = Math.min(g.ca_x_pos,g.ca_x_neg) <= Math.min(g.ca_y_pos,g.ca_y_neg);
-  const sEdge0 = nearIsX ? (g.sy||0) : (g.sx||0);
+  /* BC-1 (2026-11-01): for a bolt circle s is the spread, along the edge, of the anchor row nearest that edge (the
+     anchors of sfbEdgeDemand), not the whole pattern's extent (a grid row spans the whole extent, so a grid is unchanged) */
+  const sEdge0 = bpCircPattern()? bpSfbRowSpread(g, nearIsX) : (nearIsX ? (g.sy||0) : (g.sx||0));
   const groupApplies0 = (nT>1 && sEdge0>1e-6 && sEdge0 < 6*ca1);
   /* §17.6.4.1.1 corner factor: if c_a2 < 3·c_a1, N_sb of a SINGLE headed anchor
      is multiplied by (1 + c_a2/c_a1)/4 with 1.0 ≤ c_a2/c_a1 ≤ 3.0. c_a2 = the
@@ -2227,7 +2427,7 @@ function sideFaceBlowout(nT, ca1, condA){
   const Nsb=alphaCorner*Nsb0;
   /* §17.6.4.2 group factor: for multiple headed anchors along the edge spaced s < 6·ca1,
      Nsbg = Nsb·(1 + s/(6·ca1)), where s is the spacing of the outer anchors along the edge. */
-  const sEdge = nearIsX ? (g.sy||0) : (g.sx||0);
+  const sEdge = sEdge0;
   const groupApplies = (nT>1 && sEdge>1e-6 && sEdge < 6*ca1);
   const alphaGroup = groupApplies ? (1 + sEdge/(6*ca1)) : 1.0;
   const Nsbg = alphaGroup*Nsb;
@@ -2285,6 +2485,7 @@ function sideFaceBlowout(nT, ca1, condA){
    than something the figure spells out, and it is labelled as such in the
    output and the manual.                                                    */
 function shearCases(cb, condA){
+  if(bpCircPier()) return shearCasesCirc(cb, condA);   /* BC-2 */
   const g=anchorGeom(), C=S.conc;
   /* accept either a RAW combination ({Vx,Vy}) or a COMPUTED one (which carries
      the factored input under .raw and the magnitude as .Vres) */
@@ -2342,7 +2543,7 @@ function shearCases(cb, condA){
 
   /* ---- evaluate each case with the SAME breakout math the main check uses --- */
   list.forEach(c=>{
-    const sb=shearBreakout(c.nRes, c.row.ca1, C.H, dir, c.row.setback, condA);
+    const sb=shearBreakout(c.nRes, c.row.ca1, C.H, dir, c.row.setback, condA, g.pts.filter((p,i)=>c.mask[i]));
     c.sb=sb; c.ca1=sb.ca1; c.phiVcbg=sb.phiVcbg;
     c.dcr = sb.phiVcbg>1e-9? (c.V/sb.phiVcbg) : Infinity;
   });
@@ -2362,7 +2563,148 @@ function shearCases(cb, condA){
           generalised: rows.length>2};
 }
 
-function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
+/* ---------------------------------------------------------------
+   BC-2 (2026-11-01): SHEAR BREAKOUT TOWARD A CIRCULAR PIER EDGE — tangent-edge model (engineer decision 2026-11-01;
+   ACI 318-19 §17.7.2.1, R17.7.2.1).
+   Rows: the anchors are grouped by their projection on the shear direction û (the same row tolerance and the same
+   Fig. R17.7.2.1b Case 1 / 2 / 3 logic as a rectangular member). For a row, each anchor's ray along û meets the
+   circle at E; the edge is the TANGENT to the circle at E, and c_a1 of the anchor is its distance to that tangent,
+   measured along the tangent's normal n̂ (c_a1 = R − p·n̂, never more than the ray length). The row's critical
+   anchor is the one with the smallest c_a1; its tangent defines the edge for the row. The whole V is taken as acting
+   perpendicular to that edge (no reduction for the inclination β between û and n̂: conservative).
+   c_a2 (each side) = the distance from the row's outer anchors to the circle along ±t̂ (the tangent direction);
+   A_Vc = (spread of the row along t̂ + min(1.5c_a1, c_a2⁻) + min(1.5c_a1, c_a2⁺)) × min(1.5c_a1, h_a);
+   ψ_ed,V from c_a2,min; §17.7.2.1.2 narrow-member limit with c_a2,max and h_a; ψ_c,V, ψ_h,V as for a rectangle.
+   Parallel check (§17.7.2.1(c) by analogy): the rows leading toward ±t̂ evaluated as if the shear acted toward
+   that side of the circle, ψ_ed,V = 1.0 and 2·V_cbg. The smallest φV_cbg governs.
+   --------------------------------------------------------------- */
+function bpPsiCV(){
+  const C=S.conc;
+  if(C.psi_cV_override && C.psi_cV>0) return [C.psi_cV,"user/imported override — edge reinforcement per §17.7.2.5"];
+  if(!C.cracked) return [1.4,"uncracked concrete (§17.7.2.5)"];
+  if(C.edgeReinf==="stirrups") return [1.4,"cracked, edge reinf. ≥ No.4 bar with stirrups ≤ 4 in. (§17.7.2.5)"];
+  if(C.edgeReinf==="bar") return [1.2,"cracked, edge reinf. ≥ No.4 bar (§17.7.2.5)"];
+  return [1.0,"cracked, no supplementary reinforcement (§17.7.2.5)"];
+}
+function bpCircRowsFor(u, q){
+  const g=anchorGeom(), tol=1e-6+0.02*Math.max(g.sx||1,g.sy||1,1);
+  const pr=q.map(p=>p.x*u.x+p.y*u.y), lead=Math.max(...pr), rows=[];
+  pr.forEach((v,i)=>{ const back=lead-v; let r=rows.find(o=>Math.abs(o.setback-back)<=tol); if(!r){ r={setback:back,n:0,idx:[]}; rows.push(r); } r.n++; r.idx.push(i); });
+  rows.sort((a,b)=>a.setback-b.setback); rows.forEach((r,i)=>r.index=i);
+  return rows;
+}
+/* one row toward û: geometry and V_cbg (parallel: ψ_ed,V = 1, ×2) */
+function bpCircShearRow(rowPtsPier, u, nV, ha, condA, parallel){
+  const AG=bpAG(), R=bpPierR(), A=S.anchor, sp=anchorSpec(A.dia), fc=Math.min(S.conc.fc,10), da=sp.d, le=Math.min(A.hef,8*da);
+  let crit=null;
+  rowPtsPier.forEach(p=>{ const te=AG.tangentEdge(p.x,p.y,u.x,u.y,0,0,R); if(!crit || te.c<crit.te.c) crit={p,te}; });
+  const te=crit.te, t={x:te.tx,y:te.ty};
+  const c1raw=Math.max(te.c,0.01);
+  const along=rowPtsPier.map(p=>p.x*t.x+p.y*t.y);
+  const spread=Math.max(...along)-Math.min(...along);
+  const c2p=Math.min(...rowPtsPier.map(p=>AG.rayToCircle(p.x,p.y,t.x,t.y,0,0,R)));
+  const c2n=Math.min(...rowPtsPier.map(p=>AG.rayToCircle(p.x,p.y,-t.x,-t.y,0,0,R)));
+  let c1=c1raw, narrow=null;
+  if(c2p<1.5*c1raw && c2n<1.5*c1raw && ha<1.5*c1raw){
+    const allAlong=[...new Set(bpPierPts(anchorGeom().pts).map(p=>+(p.x*t.x+p.y*t.y).toFixed(6)))].sort((a,b)=>a-b);
+    let sMax=0; for(let i=1;i<allAlong.length;i++) sMax=Math.max(sMax,allAlong[i]-allAlong[i-1]);
+    const lim=Math.max(Math.max(c2p,c2n)/1.5, ha/1.5, sMax/3);
+    if(lim<c1raw){ c1=Math.max(lim,0.01); narrow={c1raw,lim,ca2max:Math.max(c2p,c2n),sMax}; }
+  }
+  const VbA=7*Math.pow(le/da,0.2)*Math.sqrt(da)*1.0*Math.sqrt(fc*1000)/1000*Math.pow(c1,1.5);
+  const VbB=9*1.0*Math.sqrt(fc*1000)/1000*Math.pow(c1,1.5);
+  const Vb=Math.min(VbA,VbB), VbGov=(VbB<=VbA?"b":"a");
+  const AVco=4.5*c1*c1;
+  const width=spread+Math.min(1.5*c1,c2n)+Math.min(1.5*c1,c2p), depth=Math.min(1.5*c1,ha);
+  const AVc=Math.min(width*depth, AVco*nV), AVcRatio=Math.min(AVc/AVco,nV);
+  const ca2=Math.min(c2p,c2n);
+  const psi_edV=parallel? 1.0 : ((ca2>=1.5*c1)?1.0:(0.7+0.3*ca2/(1.5*c1)));
+  const [psi_cV,psi_cV_why]=bpPsiCV();
+  const psi_hV=(ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;
+  const phi=(condA===true)?0.75:0.70;
+  const Vcbg=AVcRatio*psi_edV*psi_cV*psi_hV*Vb*(parallel?2:1);
+  const ang=Math.atan2(te.ny,te.nx)*180/Math.PI;
+  return {name:"tangent at "+fmt((ang+360)%360,1)+"°"+(parallel?" (parallel)":""), parallel:!!parallel, ca1:c1, ca1Ray:te.ray, ca2, c2p, c2n, cosB:te.cosB,
+    crit:crit.p, tangentPt:{x:te.ex,y:te.ey}, nrm:{x:te.nx,y:te.ny}, tdir:t, spread, le, da, Vb, VbA, VbB, VbGov, castInHeaded:(A.head!=="plainrod"),
+    AVco, AVc, AVcRatio, psi_edV, psi_cV, psi_cV_why, psi_hV, narrow, width, depth, Vcbg, phiVcbg:phi*Vcbg, phi};
+}
+function shearBreakoutCirc(nV, rowPtsPlate, shearDir, ha, condA){
+  const q=bpPierPts(anchorGeom().pts);
+  let u=(shearDir && Math.hypot(shearDir.x,shearDir.y)>1e-9)? {x:shearDir.x,y:shearDir.y} : {x:1,y:0};
+  const L=Math.hypot(u.x,u.y); u={x:u.x/L,y:u.y/L};
+  const ox=S.conc.plate_off_x||0, oy=S.conc.plate_off_y||0;
+  const rowP=(rowPtsPlate&&rowPtsPlate.length)? rowPtsPlate.map(p=>({x:p.x+ox,y:p.y+oy})) : (()=>{ const r=bpCircRowsFor(u,q)[0]; return r.idx.map(i=>q[i]); })();
+  const cands=[bpCircShearRow(rowP,u,nV,ha,condA,false)];
+  [[-u.y,u.x],[u.y,-u.x]].forEach(([x,y])=>{ const v={x,y}; const r=bpCircRowsFor(v,q)[0];
+    cands.push(bpCircShearRow(r.idx.map(i=>q[i]),v,nV,ha,condA,true)); });
+  const gov=cands.reduce((m,x)=>x.phiVcbg<m.phiVcbg?x:m, cands[0]);
+  const p=cands[0], isCorner=(gov.ca2<1.5*gov.ca1);
+  return {phi:gov.phi,ca1:gov.ca1,ca2:gov.ca2,ha,le:gov.le,da:gov.da,Vb:gov.Vb,VbA:gov.VbA,VbB:gov.VbB,VbGov:gov.VbGov,castInHeaded:gov.castInHeaded,
+    AVco:gov.AVco,AVc:gov.AVc,AVcRatio:gov.AVcRatio,psi_edV:gov.psi_edV,psi_cV:gov.psi_cV,psi_cV_why:gov.psi_cV_why,psi_hV:gov.psi_hV,narrow:gov.narrow,
+    width:gov.width,depth:gov.depth,Vcbg:gov.Vcbg,phiVcbg:gov.phiVcbg,govEdge:gov.name,isCorner,evals:cands,circ:true,dir:u,
+    steps:[
+      {title:"Step 1 — Tangent edge and geometry (circular pier)",ref:"ACI 318-19 §17.7.2.1, R17.7.2.1 (tangent-edge model, engineer decision 2026-11-01)",
+       lines:[
+        "\\hat u=("+fmt(u.x,4)+",\\ "+fmt(u.y,4)+");\\ \\text{critical anchor }("+fmt(p.crit.x,3)+",\\ "+fmt(p.crit.y,3)+")\\ \\text{(pier coordinates)}",
+        "\\text{ray along }\\hat u\\text{ meets the circle at }E=("+fmt(p.tangentPt.x,3)+",\\ "+fmt(p.tangentPt.y,3)+"),\\ \\text{length }"+fmt(p.ca1Ray,3)+"\\ \\text{in};\\ \\hat n=E/R",
+        "c_{a1}=R-\\mathbf p\\cdot\\hat n="+fmt(p.narrow?p.narrow.c1raw:p.ca1,3)+"\\ \\text{in (distance to the tangent at }E\\text{)},\\quad \\cos\\beta=\\hat u\\cdot\\hat n="+fmt(p.cosB,4),
+        "c_{a2}^{-}="+fmt(p.c2n,3)+",\\ c_{a2}^{+}="+fmt(p.c2p,3)+"\\ \\text{in (to the circle along the tangent)},\\ \\text{row spread along the tangent }="+fmt(p.spread,3)+"\\ \\text{in}"]
+        .concat(gov.narrow? ["\\text{§17.7.2.1.2: } c_{a1}=\\max\\left(\\frac{c_{a2,max}}{1.5},\\frac{h_a}{1.5},\\frac{s}{3}\\right)=\\max\\left(\\frac{"+fmt(gov.narrow.ca2max,2)+"}{1.5},\\frac{"+fmt(ha,2)+"}{1.5},\\frac{"+fmt(gov.narrow.sMax,2)+"}{3}\\right)="+fmt(gov.ca1,3)+"\\ \\text{in}"] : []),
+       vars:[["model","tangent edge","the edge is the tangent to the pier at E; the whole V is taken perpendicular to it (no credit for the inclination β); the circle curves inside the tangent, which the c_a2 limits and ψ_ed,V account for"],
+             ["h_a",fmt(ha,3)+" in","member thickness (pier depth)"],["\\ell_e",fmt(gov.le,3)+" in","min(h_ef, 8d_a)"]]},
+      {title:"Step 2 — Basic single-anchor breakout strength V_b",ref:"ACI 318-19 §17.7.2.2.1",
+       lines:[
+        "\\text{(a) } V_b=7\\left(\\frac{\\ell_e}{d_a}\\right)^{0.2}\\sqrt{d_a}\\,\\lambda_a\\sqrt{f'_c}\\,c_{a1}^{1.5}="+fmt(gov.VbA,3)+"\\ \\text{kip}",
+        "\\text{(b) } V_b=9\\lambda_a\\sqrt{f'_c}\\,c_{a1}^{1.5}=9\\times\\sqrt{"+fmt(Math.min(S.conc.fc,10)*1000,0)+"}\\times"+fmt(gov.ca1,3)+"^{1.5}="+fmt(gov.VbB,3)+"\\ \\text{kip}",
+        "V_b=\\min="+fmt(gov.Vb,3)+"\\ \\text{kip}\\ [\\text{Eq.(17.7.2.2.1"+gov.VbGov+")}]"]},
+      {title:"Step 3 — Projected areas",ref:"ACI 318-19 §17.7.2.1.3",
+       lines:[
+        "A_{Vco}=4.5c_{a1}^2=4.5\\times"+fmt(gov.ca1,3)+"^2="+fmt(gov.AVco,2)+"\\ \\text{in}^2",
+        "A_{Vc}=\\left(s_t+\\min(1.5c_{a1},c_{a2}^-)+\\min(1.5c_{a1},c_{a2}^+)\\right)\\min(1.5c_{a1},h_a)="+fmt(gov.width,2)+"\\times"+fmt(gov.depth,2)+"="+fmt(gov.AVc,2)+"\\ \\text{in}^2\\ (\\le nA_{Vco})",
+        "A_{Vc}/A_{Vco}="+fmt(gov.AVcRatio,4)]},
+      {title:"Step 4 — Modification factors",ref:"ACI 318-19 §17.7.2.3 – §17.7.2.6",
+       lines:[
+        "\\psi_{ed,V}="+(gov.parallel? "1.0\\ (\\text{parallel case})" : (gov.ca2>=1.5*gov.ca1? "1.0" : "0.7+0.3\\frac{"+fmt(gov.ca2,3)+"}{1.5\\times"+fmt(gov.ca1,3)+"}="+fmt(gov.psi_edV,4))),
+        "\\psi_{c,V}="+fmt(gov.psi_cV,2)+",\\quad \\psi_{h,V}="+fmt(gov.psi_hV,4)+",\\quad \\psi_{ec,V}=1.0"],
+       vars:[["\\psi_{c,V}",fmt(gov.psi_cV,2),gov.psi_cV_why]]},
+      {title:"Step 5 — Concrete breakout strength in shear",ref:"ACI 318-19 Eq.(17.7.2.1b); \\phi per Table 17.5.3",
+       lines:[
+        "V_{cbg}="+fmt(gov.AVcRatio,4)+"\\times"+fmt(gov.psi_edV,4)+"\\times"+fmt(gov.psi_cV,2)+"\\times"+fmt(gov.psi_hV,4)+"\\times"+fmt(gov.Vb,3)+(gov.parallel?"\\times2":"")+"="+fmt(gov.Vcbg,3)+"\\ \\text{kip}",
+        "\\phi V_{cbg}="+fmt(gov.phi,2)+"\\times"+fmt(gov.Vcbg,3)+"="+fmt(gov.phiVcbg,3)+"\\ \\text{kip}"],
+       vars:[["candidates",cands.map(x=>x.name+": φV_cbg = "+fmt(x.phiVcbg,2)).join("; "),"toward the shear (perpendicular) and the two sides (parallel, §17.7.2.1(c) by analogy); the smallest governs ("+gov.name+")"]]}]};
+}
+/* Fig. R17.7.2.1b cases for a circular pier: rows by projection on û, c_a1 per row by the tangent-edge model */
+function shearCasesCirc(cb, condA){
+  const C=S.conc, g=anchorGeom();
+  const src=(cb && cb.Vx!==undefined)? cb : ((cb && cb.raw)? cb.raw : (cb||{}));
+  const Vx=+src.Vx||0, Vy=+src.Vy||0;
+  const Vres=(cb && cb.Vres!==undefined)? +cb.Vres : Math.hypot(Vx,Vy);
+  const nTot=g.pts.length;
+  if(Vres<=1e-9) return {applicable:false, why:"this combination has no shear", Vres:0};
+  const dir={x:Vx/Vres, y:Vy/Vres}, q=bpPierPts(g.pts), rows=bpCircRowsFor(dir,q);
+  rows.forEach(r=>{ const rr=bpCircShearRow(r.idx.map(i=>q[i]),dir,1,C.H,condA,false); r.ca1=rr.ca1; });
+  const ca11=rows[0].ca1, s=rows.length>1? (rows[1].setback-rows[0].setback) : 0;
+  const welded=!!S.shear.weldedPlate, multiRow=rows.length>1;
+  const ang=Math.atan2(dir.y,dir.x)*180/Math.PI, edgeName="pier (shear at "+fmt((ang+360)%360,1)+" deg)";
+  const list=[];
+  const maskFor=r=>g.pts.map((_,i)=>r.idx.includes(i));
+  const push=(id,label,row,V,note)=>list.push({id,label,row,V,nRes:row.n,note,mask:maskFor(row)});
+  if(!multiRow) push("single","Single anchor row — the full shear acts on it",rows[0],Vres,"Only one row of anchors perpendicular to the shear.");
+  else if(welded) rows.slice(1).forEach(r=>push("2","Case 2 — full V on the rear row (welded to a common plate)",r,Vres,"Welded to a common plate: per R17.7.2.1 only Case 2."));
+  else if(s<ca11) push("3","Case 3 — s < c_a1,1: the entire shear on the front row",rows[0],Vres,"With s < c_a1,1 the entire V on the front row (Fig. R17.7.2.1b Case 3).");
+  else {
+    push("1","Case 1 — tributary V on the front row",rows[0],Vres*rows[0].n/nTot,"The tributary share of V on the front row and its projected area.");
+    rows.slice(1).forEach(r=>push("2","Case 2 — full V on the row "+r.index+" set-back",r,Vres,"The entire V on the rear row and its projected area (c_a1 of that row by the tangent-edge model)."));
+  }
+  list.forEach(c=>{ const sb=shearBreakoutCirc(c.nRes, g.pts.filter((p,i)=>c.mask[i]), dir, C.H, condA);
+    c.sb=sb; c.ca1=sb.ca1; c.phiVcbg=sb.phiVcbg; c.dcr=sb.phiVcbg>1e-9? c.V/sb.phiVcbg : Infinity; });
+  const gov=list.reduce((m,x)=>x.dcr>m.dcr?x:m, list[0]);
+  const ov=S.shear.caseOverride||"auto", wanted=ov==="auto"? null : ({c1:"1",c2:"2",c3:"3"})[ov];
+  const forced=wanted? list.find(c=>c.id===wanted) : null, used=forced||gov;
+  return {applicable:true, rows, s, ca11, caLead:ca11, edgeName, dir, Vres, nTot, welded, multiRow, cases:list, gov, used, forced:!!forced,
+          overrideRequested:ov, overrideUnavailable:!!(wanted && !forced), lessConservative:!!(forced && forced.dcr<gov.dcr-1e-9), generalised:rows.length>2, circ:true};
+}
+function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
   const C=S.conc, A=S.anchor, sp=anchorSpec(A.dia);
   const fc=Math.min(C.fc,10), da=sp.d;
   const g=anchorGeom();
@@ -2407,7 +2749,17 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
        and h_a < 1.5c_a1, c_a1 used in A_Vc, A_Vco, V_b, ψ_ed,V and ψ_h,V is
        limited to the largest of c_a2,max/1.5, h_a/1.5 and s/3, where s is the
        maximum spacing perpendicular to the shear between anchors in the group. */
-    const pP = isX ? g.ca_y_pos : g.ca_x_pos, pN = isX ? g.ca_y_neg : g.ca_x_neg;
+    /* BC-1 (2026-11-01): for a bolt circle the width is that of the critical row (rowPts, the anchors the case puts
+       the shear on), not the whole pattern; a grid row spans the whole pattern, so a grid is unchanged.
+       BC-4 (2026-11-01): the perpendicular edge distances (narrow-member limit, A_Vc width, ψ_ed,V) are measured from
+       that row's outer anchors too (before: from the whole pattern's outer anchors — conservative but inconsistent) */
+    const alT = !shearDir? 0 : (e.name==="+x"?shearDir.x : e.name==="-x"?-shearDir.x : e.name==="+y"?shearDir.y : -shearDir.y);
+    const domX = !!shearDir && Math.abs(shearDir.x)>=Math.abs(shearDir.y);   /* shearCases builds the rows along the dominant shear axis */
+    const rp = (bpCircPattern() && rowPts && rowPts.length && !parallel && alT>0.05 && isX===domX)? rowPts : null;   /* the row is defined for the edge the shear pushes toward */
+    const alongMin = rp? Math.min(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymin : g.xmin);
+    const alongMax = rp? Math.max(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymax : g.xmax);
+    const shP = rp? ((isX? g.ymax : g.xmax) - alongMax) : 0, shN = rp? (alongMin - (isX? g.ymin : g.xmin)) : 0;
+    const pP = (isX ? g.ca_y_pos : g.ca_x_pos) + shP, pN = (isX ? g.ca_y_neg : g.ca_x_neg) + shN;
     let c1=c1raw, narrow=null;
     if(pP<1.5*c1raw && pN<1.5*c1raw && ha<1.5*c1raw){
       const along=[...new Set(g.pts.map(p=>+(isX?p.y:p.x).toFixed(6)))].sort((a,b)=>a-b);
@@ -2433,12 +2785,10 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
     /* Case 3 (row closest to edge): the projected area is the leading row's width along the
        edge × depth (1.5c1), clipped by 1.5c1 beyond the outer anchors, by the perpendicular
        concrete edges, and by member thickness ha. §17.7.2.1, Fig. R17.7.2.1b Case 3. */
-    /* extent of anchors ALONG the edge (perpendicular to shear direction) */
-    const alongMin = isX ? g.ymin : g.xmin;
-    const alongMax = isX ? g.ymax : g.xmax;
-    /* perpendicular concrete edges bounding the width */
-    const perpPos = isX ? g.ca_y_pos : g.ca_x_pos;   /* distance from outer anchor to +edge */
-    const perpNeg = isX ? g.ca_y_neg : g.ca_x_neg;
+    /* extent of anchors ALONG the edge (perpendicular to shear direction): alongMin / alongMax above */
+    /* perpendicular concrete edges bounding the width (BC-4: from the row's outer anchors for a bolt circle) */
+    const perpPos = pP;   /* distance from outer anchor to +edge */
+    const perpNeg = pN;
     /* width = anchor span + min(1.5c1, perp edge) on each side */
     const wLeft  = Math.min(1.5*c1, perpNeg);
     const wRight = Math.min(1.5*c1, perpPos);
@@ -2448,7 +2798,8 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
     const AVc_geom = width*depth;
     const AVc = Math.min(AVc_geom, AVco*nV);   /* cannot exceed n × single-anchor area */
     const AVcRatio=Math.min(AVc/AVco,nV);
-    let psi_edV=(e.ca2>=1.5*c1)?1.0:(0.7+0.3*e.ca2/(1.5*c1));
+    const ca2e = rp? Math.min(perpPos,perpNeg) : e.ca2;   /* BC-4: row-based c_a2 for a bolt circle */
+    let psi_edV=(ca2e>=1.5*c1)?1.0:(0.7+0.3*ca2e/(1.5*c1));
     /* §17.7.2.1(c): shear PARALLEL to an edge — evaluate as if perpendicular with
        psi_ed,V = 1.0, and twice the resulting Vcbg is permitted. */
     if(parallel) psi_edV=1.0;
@@ -2458,7 +2809,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
        in the main check — was used for every edge outside the narrow case.) */
     const psi_hV_e = (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;
     const Vcbg=AVcRatio*1.0*psi_edV*psi_cV*psi_hV_e*Vb*(parallel?2:1);
-    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:e.ca2,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
+    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:ca2e,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
   }
   /* CRITICAL-ROW SET-BACK (ACI Fig. R17.7.2.1b Case 2). §17.7.2.1.1 lets the
      half-pyramid be projected from "the axis of the anchor row selected as
@@ -2620,7 +2971,8 @@ function pryout(nV, tb){
         "N_{cbg} = \\frac{A_{Nc}}{A_{Nc0}}\\,\\psi_{ec,N}\\,\\psi_{ed,N}\\,\\psi_{c,N}\\,\\psi_{cp,N}\\,N_b",
         "N_{cbg} = "+fmt(tb.ANcRatioAll,4)+"\\times1.000\\times"+fmt(tb.psi_edAll,4)+"\\times"+fmt(tb.psi_c,3)+"\\times"+fmt(tb.psi_cp,3)+"\\times"+fmt(tb.Nb,3)+" = "+fmt(Ncbg,3)+"\\ \\text{kip}"],
        vars:[["N_{cbg}",fmt((Ncbg)*forceFactor(),3)+" "+forceUnit(),"group breakout used for pryout"],
-             ["tension N_{cbg}",fmt((tb.Ncbg)*forceFactor(),3)+" "+forceUnit(),"the tension-breakout value, which also includes \\psi_{ec,N}="+fmt(tb.psi_ec,4)]]},
+             ["tension N_{cbg}",fmt((tb.Ncbg)*forceFactor(),3)+" "+forceUnit(),"the tension-breakout value, which also includes \\psi_{ec,N}="+fmt(tb.psi_ec,4)]]
+             .concat(tb.alt? [["alternative",fmt(kcp*0.70*tb.alt.ANcRatioAll*tb.alt.psi_edAll*tb.psi_c*tb.psi_cp*tb.alt.Nb,3)+" kip","φV_cpg "+(tb.alt.applies?"with":"without")+" the §17.6.2.1.2 analogy for the circular pier (shown for comparison; the user setting governs)"]] : [])},
 
       {title:"Step 5 — Pryout strength of the group",ref:"ACI 318-19 §17.7.3.1b, Eq.(17.7.3.1b); \\phi per Table 17.5.3",
        lines:[
@@ -2808,7 +3160,7 @@ function computeAll(){
     const Pc = -cb.P;   /* compression positive */
     /* effective bearing width per direction = plate perp dimension (rigid) */
     /* --- bending about y (My): length L=B(x), width Wb=N(y) --- */
-    const fx = (P.B/2 - A.edx);   /* dist center->tension anchor line, x */
+    const fx = bpCircPattern()? Math.max(g.xmax,-g.xmin) : (P.B/2 - A.edx);   /* dist center->tension anchor line, x (BC-1: bolt circle → outermost bolt) */
     /* DG1 classifies eccentricity and solves the bearing length using the DESIGN
        bearing stress f_p,max = phi(0.85 f'c)sqrt(A2/A1) — phi included (DG1 2nd ed. §3.3).
        Using the nominal stress overstates e_crit, understates anchor tension, and
@@ -2816,7 +3168,7 @@ function computeAll(){
     const fpDesign = bc.phiFp;
     const resX = dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.My), P.B, P.N, fpDesign, fx);
     /* --- bending about x (Mx): length L=N(y), width Wb=B(x) --- */
-    const fy = (P.N/2 - A.edy);
+    const fy = bpCircPattern()? Math.max(g.ymax,-g.ymin) : (P.N/2 - A.edy);
     const resY = dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.Mx), P.N, P.B, fpDesign, fy);
 
     /* anchor tension per axis distributed to the tension-side anchors */
@@ -2916,7 +3268,7 @@ function computeAll(){
        for the per-anchor checks (steel, lever arm); the breakout case still sets nV and the
        breakout row */
     const hiltiDist=!!(S.shear&&S.shear.hiltiDist);
-    const Vu_per=hiltiDist? Vres/nTot : Vfront;
+    let Vu_per=hiltiDist? Vres/nTot : Vfront;
     if(hiltiDist && Vres>1e-9) frontDesc="all "+nTot+" anchors, V/n (Hilti PROFIS option; concrete breakout: "+frontDesc+")";
     /* annotate each anchor with its shear share and components (PROFIS-style table) */
     const uxr=(Vres>1e-9)?cb.Vx/Vres:0, uyr=(Vres>1e-9)?cb.Vy/Vres:0;
@@ -2926,17 +3278,37 @@ function computeAll(){
       p.V = p.inFront? Vu_per : 0;
       p.Vx = p.V*uxr; p.Vy = p.V*uyr;
     });
+    /* BC-3 (2026-11-01): TORSION T (kip-in, + counter-clockwise about +z, at the top of concrete). Elastic, polar about
+       the anchor-group centroid (coordinator decision 2026-11-01): each anchor takes the direct shear V/n plus the
+       torsion shear T·r_i/Σr² perpendicular to its radius, added as VECTORS:
+         V_i = (V_x/n − T·(y_i − ȳ)/J,  V_y/n + T·(x_i − x̄)/J),  J = Σ[(x_i − x̄)² + (y_i − ȳ)²].
+       Steel shear and the stand-off lever arm take max(the share above, max_i |V_i|); pryout takes Σ|V_i|; concrete
+       breakout is checked toward every direction (comboCapacities). T = 0 (every save before BC-3): unchanged. */
+    const Tz=+cb.T||0;
+    let tors;
+    if(Math.abs(Tz)>1e-9){
+      const xb=g.pts.reduce((a,p)=>a+p.x,0)/nTot, yb=g.pts.reduce((a,p)=>a+p.y,0)/nTot;
+      const J=g.pts.reduce((a,p)=>a+(p.x-xb)*(p.x-xb)+(p.y-yb)*(p.y-yb),0);
+      const vi=g.pts.map(p=>{ const tx=J>1e-12? -Tz*(p.y-yb)/J : 0, ty=J>1e-12? Tz*(p.x-xb)/J : 0;
+        const vx=(+cb.Vx||0)/nTot+tx, vy=(+cb.Vy||0)/nTot+ty; return {vx,vy,tx,ty,v:Math.hypot(vx,vy),r:Math.hypot(p.x-xb,p.y-yb)}; });
+      const vmax=Math.max(...vi.map(o=>o.v)), sumV=vi.reduce((a,o)=>a+o.v,0);
+      const shareV=Vu_per;
+      Vu_per=Math.max(Vu_per, vmax);
+      perAnchor.forEach((p,i)=>{ p.V=vi[i].v; p.Vx=vi[i].vx; p.Vy=vi[i].vy; p.Vt=Math.hypot(vi[i].tx,vi[i].ty); });
+      tors={T:Tz, J, xb, yb, vi, vmax, sumV, shareV, noTorsionResultant:J<=1e-12};
+      frontDesc+="; with torsion T = "+fmt(Tz,1)+" kip-in: max |V_i| = "+fmt(vmax,3)+" kip (vector sum of V/n and T·r/J)";
+    }
 
     return {ci,name:cb.name,raw:cb,Pc,resX,resY,fx,fy,nTx,nTy,TuX,TuY,Tu_perX,Tu_perY,uplift,
-      vCase,vCaseOffset,
-      Tu_per,nT,nV,Tu_group,Vres,Vu_per,frontDesc,eccN,eccN_x,eccN_y,perAnchor,Tmax_anchor,nT_dist,
+      vCase,vCaseOffset,vRowMask:((bpCircPattern()||bpCircPier())? frontSet : undefined),   /* BC-1: only for a bolt circle (a grid result object is unchanged) */
+      Tu_per,nT,nV,Tu_group,Vres,Vu_per,frontDesc,eccN,eccN_x,eccN_y,perAnchor,Tmax_anchor,nT_dist,tors,
       na:naRes, naUsed, openSO, Ixx, Iyy, nAll,
       ecc_regime:(resX.regime==="large"||resY.regime==="large")?"large":"small"};
   });
 
   /* capacities are geometry/material based (same every combo) */
   const stT=steelTension(1), stV=steelShear(1);
-  const ca_minT=Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
+  const ca_minT=bpCircPier()? g.circ.caRadMin : Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);   /* BC-2: radial c_a,min to the circle */
   return {combos,g,bc,nTot,sp,stT,stV,ca_minT};
 }
 
@@ -3012,7 +3384,7 @@ function comboCapacities(cc, combo){
   const tensPts = (combo.perAnchor||[]).filter(p=>p.t>1e-9);
   const tb = tensionBreakoutGroup(nT, ca_minT, combo.eccN_x, combo.eccN_y, tensPts, condAT);
   const ca1 = Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
-  const sfb = sideFaceBlowout(nT, ca1, condAT);
+  const sfb = bpCircPier()? sideFaceBlowoutCirc(combo, condAT) : sideFaceBlowout(nT, ca1, condAT);   /* BC-2 */
   /* ---- enveloped tension capacity -------------------------------------------
      THE DEMAND BASIS DIFFERS BY MODE, and ACI 318-19 Table 17.5.2 separates
      "individual anchor" from "anchor group" columns precisely for this reason:
@@ -3060,7 +3432,7 @@ function comboCapacities(cc, combo){
      for the concrete BREAKOUT strength only; side-face blowout (§17.6.4) is a
      separate mode at the head and stays checked with or without anchor reinforcement. */
   if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ref:"§17.6.4", per:"group",
-    phiN:sfb.phiNsb, obj:sfb,
+    phiN:sfb.phiNsb, obj:sfb, dem:(sfb.circ? sfb.demand : undefined),   /* BC-2: circular pier — the governing edge chain's ΣT */
     why:"Blowout is evaluated for the anchors near the edge acting together."});
   /* plain rod with no head/nut and no JUSTIFIED anchor reinforcement → no
      cast-in tension load path (a provisional substitution is no load path) */
@@ -3078,8 +3450,35 @@ function comboCapacities(cc, combo){
   const shearDir={x:combo.raw.Vx/Vr, y:combo.raw.Vy/Vr};
   /* the critical row is whichever the governing case selected, so the breakout
      must be projected from THAT row's axis (§17.7.2.1.1) */
-  const sbk = shearBreakout(nV, ca1v, C.H, shearDir, combo.vCaseOffset||0, condAV);
+  const sbk = bpCircPier()? shearBreakoutCirc(nV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null, shearDir, C.H, condAV)   /* BC-2 */
+            : shearBreakout(nV, ca1v, C.H, shearDir, combo.vCaseOffset||0, condAV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null);
   const pry = pryout(nV, tb);
+  /* BC-3: torsion — concrete breakout toward EVERY direction û (every 15°, and the resultant V): the shear pushing
+     toward that edge is D(û) = Σ_i max(0, V_i·û) (anchors pushing away do not load it; components along the edge are
+     the parallel case, which the breakout model checks separately). Each direction is evaluated with the same
+     Fig. R17.7.2.1b case logic and breakout model as a plain shear D(û)·û; the worst ratio governs. With T = 0 and
+     D(û_V) = V this is the ordinary check (that direction is in the set). Pryout: Σ|V_i| (conservative). */
+  let sbkUse=sbk, sbkDem, pryDem;
+  if(combo.tors){
+    const tv=combo.tors.vi, dirs=[];
+    for(let k=0;k<24;k++){ const a=k*Math.PI/12; dirs.push({x:Math.cos(a),y:Math.sin(a),deg:k*15}); }
+    const Vr0=Math.hypot(combo.raw.Vx||0,combo.raw.Vy||0); if(Vr0>1e-9) dirs.push({x:combo.raw.Vx/Vr0,y:combo.raw.Vy/Vr0,deg:((Math.atan2(combo.raw.Vy,combo.raw.Vx)*180/Math.PI)+360)%360,isV:true});
+    let best=null;
+    dirs.forEach(u=>{ const D=tv.reduce((a,o)=>a+Math.max(0,o.vx*u.x+o.vy*u.y),0); if(D<=1e-9) return;
+      const vc=shearCases({Vx:D*u.x,Vy:D*u.y,Vres:D}, condAV); if(!vc.applicable||!vc.used) return;
+      const sb=vc.used.sb, dcr=sb.phiVcbg>1e-9? vc.used.V/sb.phiVcbg : Infinity;
+      if(!best || dcr>best.dcr) best={dcr,u,D,dem:vc.used.V,sb,caseId:vc.used.id,nRes:vc.used.nRes}; });
+    if(best){
+      sbkUse=Object.assign({},best.sb,{torsion:{D:best.D,dir:best.u,dem:best.dem,caseId:best.caseId,dcr:best.dcr}});
+      sbkUse.steps=[{title:"Torsion — governing breakout direction",ref:"ACI 318-19 §17.7.2.1, R17.7.2.1 (elastic polar distribution, vector sum)",
+        lines:["V_i=\\left(\\frac{V_x}{n}-\\frac{T(y_i-\\bar y)}{J},\\ \\frac{V_y}{n}+\\frac{T(x_i-\\bar x)}{J}\\right),\\quad J=\\sum r_i^2="+fmt(combo.tors.J,3)+"\\ \\text{in}^2,\\ T="+fmt(combo.tors.T,2)+"\\ \\text{kip-in}",
+          "D(\\hat u)=\\sum_i\\max(0,\\ \\mathbf V_i\\cdot\\hat u)\\ \\text{for }\\hat u\\text{ every }15^\\circ\\text{ and along }V",
+          "\\text{governing: }\\hat u\\text{ at }"+fmt(best.u.deg,1)+"^\\circ,\\ D="+fmt(best.D,3)+"\\ \\text{kip};\\ \\text{"+(best.caseId==="single"?"single row":"Case "+best.caseId)+": }V_{ua}="+fmt(best.dem,3)+"\\ \\text{kip}\\ \\text{on }\\phi V_{cbg}="+fmt(best.sb.phiVcbg,3)+"\\ \\text{kip}"],
+        vars:[["V_i",tv.map((o,i)=>(i+1)+": "+fmt(o.v,3)).join(", ")+" kip","per-anchor shear, vector sum of the direct and torsion parts"]]}].concat(best.sb.steps||[]);
+      sbkDem=best.dem;
+    }
+    pryDem=combo.tors.sumV;
+  }
   /* Shear bases mirror the tension ones: steel rupture and stand-off bending are
      per-bolt; breakout and pryout envelop the group. */
   let shearModes=[ {label:"Steel (φVsa)", ref:"§17.7.1", per:"anchor",
@@ -3097,11 +3496,11 @@ function comboCapacities(cc, combo){
   }
   if(!vSubst){
     shearModes.push({label:"Concrete breakout (φVcbg)", ref:"§17.7.2", per:"group",
-      phiV:sbk.phiVcbg, obj:sbk,
+      phiV:sbkUse.phiVcbg, obj:sbkUse, dem:sbkDem,   /* BC-3: torsion — the governing direction's case demand */
       why:"One breakout wedge at the governing edge envelops the anchor row."});
   }
   shearModes.push({label:"Pryout (φVcpg)", ref:"§17.7.3", per:"group",
-    phiV:pry.phiVcpg, obj:pry,
+    phiV:pry.phiVcpg, obj:pry, dem:pryDem,   /* BC-3: torsion — Σ|V_i| */
     why:"Pryout is derived from the group breakout N_cbg, so it inherits the group basis."});
 
   /* ---- basis-aware demand / DCR -------------------------------------------
@@ -3110,10 +3509,10 @@ function comboCapacities(cc, combo){
      ITS OWN basis: the highest-loaded anchor for individual-anchor modes, the
      tension group for group modes. Returning the demand alongside the DCR lets
      the report state exactly what was compared. */
-  const tDemand=(c,mode)=> (mode.per==="anchor")
+  const tDemand=(c,mode)=> (mode.dem!==undefined)? mode.dem : (mode.per==="anchor")
       ? (c.Tmax_anchor!==undefined? c.Tmax_anchor : c.Tu_per)
       : c.Tu_group;
-  const vDemand=(c,mode)=> (mode.per==="anchor") ? c.Vu_per : c.Vres;
+  const vDemand=(c,mode)=> (mode.dem!==undefined)? mode.dem : (mode.per==="anchor") ? c.Vu_per : c.Vres;
   const tDCR=(c,mode)=>{ const d=tDemand(c,mode); return mode.phiN>0? d/mode.phiN : (d>0?Infinity:0); };
   const vDCR=(c,mode)=>{ const d=vDemand(c,mode); return mode.phiV>0? d/mode.phiV : (d>0?Infinity:0); };
   /* the governing mode is the one with the highest UTILISATION, which is the
@@ -3122,7 +3521,7 @@ function comboCapacities(cc, combo){
   const govTfor=(c)=> tensionModes.reduce((m,x)=> tDCR(c,x)>tDCR(c,m)?x:m, tensionModes[0]);
   const govVfor=(c)=> shearModes.reduce((m,x)=> vDCR(c,x)>vDCR(c,m)?x:m, shearModes[0]);
 
-  return {nT,nV,st,po,tb,sfb,sv,sbk,pry,la,tensionModes,shearModes,
+  return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,
     tDemand,vDemand,tDCR,vDCR,govTfor,govVfor,
     Tu_group:combo.Tu_group, Vu_group:combo.Vres};
 }
@@ -3201,7 +3600,55 @@ function interaction(Nua, phiNn, Vua, phiVn){
    b_eff = max(B,N)/2 for the tension strip. DG1 works per unit width and its
    examples assign each rod a tributary width; the half-plate strip is that
    assumption for a two-row layout. */
+/* BC-1 (2026-11-01): clear distance from each anchor centre to the plate edge, the smallest over the anchors.
+   Rectangular plate: min(B/2 − |x|, N/2 − |y|); circular plate: D/2 − r. Used for the tearout l_c and as the
+   tension-side fallback arm of a bolt-circle layout. The rectangular grid keeps min(e_x, e_y) (the same number). */
+function bpPlateEdgeMin(){
+  const P=S.plate, pts=anchorCoords();
+  if(!pts.length) return 0;
+  if(bpCircPlate()) return Math.min(...pts.map(p=>(+P.D||0)/2-Math.hypot(p.x,p.y)));
+  return Math.min(...pts.map(p=>Math.min(P.B/2-Math.abs(p.x), P.N/2-Math.abs(p.y))));
+}
+/* BC-1 (2026-11-01): circular base plate of a double-nut (leveling-nut) pole base — AASHTO LRFDLTS bending-line
+   method, as the Light Pole and Sign Post tool (LP-5, engineer decision 2026-11-01). AISC DG1 is written for a
+   rectangular plate bearing on concrete and is not used for a circular plate. The base has no bearing block (an open
+   stand-off is required for a circular plate, see validateInputs), so every rod force, tension or compression, loads
+   the plate through its nut: P_rod = max_i |T_i| from the elastic bolt group. The plate cantilevers from the bending
+   line at the pole face (tangent to the pole, normal to the radius through the rod) over m = (BC − D_pole)/2; the
+   effective width per rod at the pole face is b_eff = π·D_pole/n; plastic plate strip, φ_f = 0.90:
+     M_u = P_rod·m ≤ φ_f·F_y·b_eff·t²/4   ⇒   t_req = √(4·P_rod·m / (φ_f·F_y·b_eff)).
+   The LRFDLTS article and the exact b_eff expression are to be confirmed against the engineer's copy (as LP-5). */
+function plateBendingLTS(combo, cc){
+  const P=S.plate, pg=pgrade(P.grade), phi=0.90, Fy=pg.Fy, col=colDims();
+  const pts=(combo.perAnchor||[]), n=Math.max(pts.length,1);
+  const BC=bpCircPattern()? Math.max(+S.anchor.BC||0,0) : 2*Math.max(0,...pts.map(p=>Math.hypot(p.x,p.y)));
+  const round=(!S.col.custom && S.col.shapeType!=="W" && hssOf(S.col.shape).kind==="HSSround");
+  const Dp=round? col.b : Math.min(col.b,col.d);
+  let gov=null; pts.forEach(p=>{ if(!gov || Math.abs(p.t)>Math.abs(gov.t)) gov=p; });
+  const Prod=gov? Math.abs(gov.t) : 0;
+  const m=Math.max(0,(BC-Dp)/2), beff=Math.PI*Math.max(Dp,1e-6)/n;
+  const Mu=Prod*m;
+  const tReq=Math.sqrt(Math.max(0,4*Mu/(phi*Fy*beff)));
+  const dcr=P.t>0? tReq/P.t : Infinity;
+  return {lts:true,phi,Fy,BC,Dp,round,n,Prod,govN:gov?gov.n:null,govT:gov?gov.t:0,m,beff,Mu,tReq,tp:P.t,dcr,Tu_per:Prod,
+    steps:[
+      {title:"Circular base plate — bending line at the pole face (double-nut base)",ref:"AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections (bending-line method; article to be confirmed)",
+       lines:[
+        "m=\\frac{BC-D_{pole}}{2}=\\frac{"+fmt(BC,3)+"-"+fmt(Dp,3)+"}{2}="+fmt(m,3)+"\\ \\text{in}",
+        "b_{eff}=\\frac{\\pi D_{pole}}{n}=\\frac{\\pi\\times"+fmt(Dp,3)+"}{"+n+"}="+fmt(beff,3)+"\\ \\text{in}",
+        "P_{rod}=\\max_i|T_i|="+fmt(Prod,3)+"\\ \\text{kip}\\quad(\\text{anchor "+(gov?gov.n:"—")+", "+(gov&&gov.t<0?"compression through the leveling nut":"tension")+"})",
+        "M_u=P_{rod}\\,m="+fmt(Prod,3)+"\\times"+fmt(m,3)+"="+fmt(Mu,3)+"\\ \\text{kip-in}",
+        "t_{req}=\\sqrt{\\frac{4M_u}{\\phi_f F_y b_{eff}}}=\\sqrt{\\frac{4\\times"+fmt(Mu,3)+"}{0.90\\times"+fmt(Fy,0)+"\\times"+fmt(beff,3)+"}}="+fmt(tReq,3)+"\\ \\text{in}",
+        "\\text{DCR}=\\frac{t_{req}}{t_p}=\\frac{"+fmt(tReq,3)+"}{"+fmt(P.t,3)+"}="+fmt(dcr,3)],
+       vars:[["BC",fmt(BC,3)+" in","bolt-circle diameter"],
+             ["D_{pole}",fmt(Dp,3)+" in",round?"pole (round HSS) outside diameter at the base":"pole width at the base: the smaller of b and d (the column is not round — check the bending line for a non-round pole)"],
+             ["n",String(n),"anchor rods"],
+             ["P_{rod}",fmt(Prod,3)+" kip","largest rod force, tension or compression (no bearing block: the rods carry the compression through the leveling nuts)"],
+             ["\\phi_f","0.90","flexure of the plate strip (plastic section b_eff·t²/4)"],
+             ["F_y",fmt(Fy,0)+" ksi","plate yield strength"]]}]};
+}
 function plateBending(combo, cc){
+  if(bpCircPlate()) return plateBendingLTS(combo, cc);
   const P=S.plate, pg=pgrade(P.grade);
   const phi=0.90, Fy=pg.Fy;
   const col=colDims();
@@ -3254,7 +3701,7 @@ function plateBending(combo, cc){
   let armT, armNote;
   if(armCands.length){ armT=Math.min(...armCands);
     armNote="highest-tension anchor to the nearest DG1 critical section ("+(isRound?"0.80D / 0.80D":("0.95d / "+(isW?"0.80b_f":"0.95b")))+")"; }
-  else { armT=Math.min(S.anchor.edx,S.anchor.edy);
+  else { armT=bpCircPattern()? bpPlateEdgeMin() : Math.min(S.anchor.edx,S.anchor.edy);
     armNote="anchor lies INSIDE the column footprint — cantilever to a column face is undefined; falling back to the edge distance. Verify plate bending locally (web bending per DG1 Step 3)."; }
   const beff=Math.max(P.B,P.N)/2;
   const Mu_t=Tu_per*armT;
@@ -3318,7 +3765,7 @@ function plateTearout(combo){
      overstated l_c. S.plate.holeDia > 0 overrides (e.g. a drilled hole). */
   const hs=anchorHoleDG1(sp.d);
   const dh=(P.holeDia>0)? P.holeDia : hs.dh;
-  const lc=Math.min(S.anchor.edx,S.anchor.edy)-dh/2;  /* clear distance to edge */
+  const lc=((bpCircPattern()||bpCircPlate())? bpPlateEdgeMin() : Math.min(S.anchor.edx,S.anchor.edy))-dh/2;  /* clear distance to edge (BC-1: bolt circle / circular plate → smallest anchor-to-plate-edge distance) */
   const Rn_to=1.2*lc*t*Fu;   /* tearout */
   const Rn_br=2.4*sp.d*t*Fu; /* bearing */
   const Rn=Math.min(Rn_to,Rn_br);
@@ -4875,8 +5322,16 @@ function buildInputPanel(){
   __fieldSeq=0;   /* deterministic data-fkey assignment for focus restoration */
 
   mkSection("inGeom","1. Plate & Column Geometry",body=>{
+    /* BC-1 (2026-11-01): rectangular (default) or circular plate */
+    fRow(body,"Plate shape",selInput([["rect","Rectangular B × N"],["circle","Circular (pole base, double nut)"]],
+      ()=>S.plate.shape||"rect",v=>{ S.plate.shape=v; if(v==="circle"){ if(!(+S.plate.D>0)) S.plate.D=Math.max(S.plate.B,S.plate.N); S.plate.B=S.plate.D; S.plate.N=S.plate.D; } },o=>o[1],o=>o[0]),"");
+    if(bpCircPlate()){
+      fRow(body,"Plate diameter D",numInput(()=>S.plate.D,v=>{ S.plate.D=v; S.plate.B=v; S.plate.N=v; },0.5),"in");
+      body.appendChild(el("div","note","Circular plate: checked by the AASHTO LRFDLTS bending-line method at the pole face (Plate tab), with the bolt-circle layout and a double-nut (leveling-nut) stand-off. The drawings and the stand-off lever arm use D; B = N = D is kept for the bounding box."));
+    } else {
     fRow(body,"Plate width B (x)",numInput(()=>S.plate.B,v=>S.plate.B=v,0.5),"in");
     fRow(body,"Plate length N (y)",numInput(()=>S.plate.N,v=>S.plate.N=v,0.5),"in");
+    }
     fRow(body,"Plate thickness t",numInput(()=>S.plate.t,v=>S.plate.t=v,0.125),"in");
     fRow(body,"Anchor hole dia. d_h",numInput(()=>S.plate.holeDia||0,v=>S.plate.holeDia=v,0.0625),"in",
       "0 = AISC DG1 Table 2.3 oversized hole ("+fmt(anchorHoleDG1(S.anchor.dia).dh,4)+"″ for this rod). Used in the tearout check.");
@@ -4905,10 +5360,24 @@ function buildInputPanel(){
     fRow(body,"Diameter",selInput(LIB.anchorDias,()=>S.anchor.dia,v=>S.anchor.dia=parseFloat(v),o=>fmt(o.d,3)+" in",o=>o.d),"");
     fRow(body,"Grade",selInput(LIB.anchorGrades,()=>S.anchor.grade,v=>S.anchor.grade=v,o=>o.name,o=>o.id),"");
     fRow(body,"Effective embedment hef",numInput(()=>S.anchor.hef,v=>S.anchor.hef=v,0.5),"in");
+    /* BC-1 (2026-11-01): rectangular grid (default) or bolt circle */
+    fRow(body,"Layout",selInput([["grid","Rectangular grid nx × ny"],["circle","Bolt circle (n bolts)"]],
+      ()=>S.anchor.pattern||"grid",v=>{ S.anchor.pattern=v; if(v==="circle"){ S.tRebar.present=false; S.vRebar.present=false; } },o=>o[1],o=>o[0]),"");
+    if(bpCircPattern()){
+      fRow(body,"Number of bolts n",numInput(()=>S.anchor.nCircle,v=>S.anchor.nCircle=Math.max(3,Math.round(v)),1),"",
+        "Any n ≥ 3 (4, 6, 8 and 12 are the usual pole patterns).");
+      fRow(body,"Bolt-circle diameter BC",numInput(()=>S.anchor.BC,v=>S.anchor.BC=v,0.25),"in");
+      fRow(body,"Rotation θ₀ of bolt 1",numInput(()=>S.anchor.theta0,v=>S.anchor.theta0=v,7.5),"deg",
+        "Angle of the first bolt, counter-clockwise from +x. Bolt i is at θ₀ + 360°·(i − 1)/n.");
+      { const n=el("div","note"); const g0=anchorCoords();
+        n.innerHTML="Bolt i: x<sub>i</sub> = (BC/2)·cos(θ<sub>0</sub> + 360°·(i − 1)/n), y<sub>i</sub> = (BC/2)·sin(θ<sub>0</sub> + 360°·(i − 1)/n): "+g0.map((p,i)=>(i+1)+": ("+fmt(p.x,2)+", "+fmt(p.y,2)+")").join("; ")+" in. Chord between adjacent bolts s = BC·sin(180°/n) = "+fmt((+S.anchor.BC||0)*Math.sin(Math.PI/bpCircN()),3)+"″. Anchor reinforcement (Sections 7 / 8) is not available with a bolt circle in this version.";
+        body.appendChild(n); }
+    } else {
     fRow(body,"Bolts along x",numInput(()=>S.anchor.nx,v=>S.anchor.nx=Math.max(1,Math.round(v)),1),"");
     fRow(body,"Bolts along y",numInput(()=>S.anchor.ny,v=>S.anchor.ny=Math.max(1,Math.round(v)),1),"");
     fRow(body,"Edge dist. to bolt line, x",numInput(()=>S.anchor.edx,v=>S.anchor.edx=v,0.25),"in");
     fRow(body,"Edge dist. to bolt line, y",numInput(()=>S.anchor.edy,v=>S.anchor.edy=v,0.25),"in");
+    }
     fRow(body,"Head / bearing type",selInput(
       [["heavyhex","Hex head bolt"],["hvyhexhead","Heavy hex head bolt"],["sqhead","Square head bolt"],["hvysqhead","Heavy square bolt"],["stud","Welded headed stud (AWS D1.1 B)"],["platewasher","Plate washer"],["plainrod","Plain threaded rod (no head)"]],
       ()=>S.anchor.head,v=>S.anchor.head=v,o=>o[1],o=>o[0]),"");
@@ -5000,8 +5469,19 @@ function buildInputPanel(){
 
   mkSection("inConc","5. Concrete Pedestal",body=>{
     fRow(body,"f'c",numInput(()=>S.conc.fc,v=>S.conc.fc=v,0.5),"ksi");
+    /* BC-2 (2026-11-01): rectangular pedestal (default) or circular pier / drilled shaft */
+    fRow(body,"Pier shape",selInput([["rect","Rectangular Bx × By"],["circle","Circular (drilled shaft / round pier)"]],
+      ()=>S.conc.shape||"rect",v=>{ S.conc.shape=v; if(v==="circle"){ if(!(+S.conc.D>0)) S.conc.D=Math.max(S.conc.Bx,S.conc.By); S.conc.Bx=S.conc.D; S.conc.By=S.conc.D;
+        S.conc.ca_override=false; S.tRebar.present=false; S.vRebar.present=false; S.ped.present=false; } },o=>o[1],o=>o[0]),"");
+    if(bpCircPier()){
+      fRow(body,"Pier diameter D",numInput(()=>S.conc.D,v=>{ S.conc.D=v; S.conc.Bx=v; S.conc.By=v; },1),"in");
+      fRow(body,"Apply §17.6.2.1.2 h_ef reduction to the circle",chkInput(()=>S.conc.circHefReduce!==false,v=>S.conc.circHefReduce=v),"",
+        "ACI 318-19 §17.6.2.1.2 is written for anchors within 1.5h<sub>ef</sub> of three or more <b>straight</b> edges. Applied here by analogy: the circle counts when it lies within 1.5h<sub>ef</sub> of the anchor group over at least 270° of its circumference; h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3). <b>By ticking this you accept that analogy.</b> It lowers N<sub>b</sub> and A<sub>Nco</sub> and raises A<sub>Nc</sub>/A<sub>Nco</sub>; the net effect on φN<sub>cbg</sub> (usually an increase, i.e. the less conservative result — R17.6.2.1.2 calls the unreduced result overly conservative) is shown with both values in the Concrete Embedment tab. Engineer decision 2026-11-01: applied by default.");
+      body.appendChild(el("div","note","Circular pier: A_Nc / A_Vc are the projected areas clipped by the circle (exact), c_a is measured to the circle (radial for ψ_ed,N and side-face blowout), and shear breakout uses the tangent-edge model (the edge is the tangent to the circle where the shear direction meets it). Anchor and pedestal reinforcement are not available for a circular pier in this version (plain concrete, Condition B)."));
+    } else {
     fRow(body,"Pedestal width Bx",numInput(()=>S.conc.Bx,v=>S.conc.Bx=v,1),"in");
     fRow(body,"Pedestal depth By",numInput(()=>S.conc.By,v=>S.conc.By=v,1),"in");
+    }
     fRow(body,"Pedestal height H",numInput(()=>S.conc.H,v=>S.conc.H=v,1),"in");
     fRow(body,"Concrete condition",selInput([["cr","Cracked"],["un","Uncracked"]],
       ()=>S.conc.cracked?"cr":"un",v=>S.conc.cracked=(v==="cr"),o=>o[1],o=>o[0]),"");
@@ -5027,12 +5507,13 @@ function buildInputPanel(){
     /* live readout of resulting edge distances */
     const g=anchorGeom();
     const caNote=el("div","note");
+    if(bpCircPier()) caNote.innerHTML="Radial edge distances to the circle, c<sub>a,i</sub> = R − r<sub>i</sub>: "+g.circ.caRad.map((c,i)=>(i+1)+": "+fmt(c,2)+"″").join(", ")+" (c<sub>a,min</sub> = "+fmt(g.circ.caRadMin,2)+"″). Along ±x / ±y to the circle: "+fmt(g.ca_x_pos,2)+"″ / "+fmt(g.ca_x_neg,2)+"″ / "+fmt(g.ca_y_pos,2)+"″ / "+fmt(g.ca_y_neg,2)+"″."; else
     caNote.innerHTML="Resulting anchor edge distances to concrete: "+
       "c<sub>a,+x</sub>="+fmt(g.ca_x_pos,2)+'″, c<sub>a,−x</sub>='+fmt(g.ca_x_neg,2)+'″, '+
       "c<sub>a,+y</sub>="+fmt(g.ca_y_pos,2)+'″, c<sub>a,−y</sub>='+fmt(g.ca_y_neg,2)+'″.';
     body.appendChild(caNote);
-    fRow(body,"Manually override edge distances",chkInput(()=>S.conc.ca_override,v=>S.conc.ca_override=v),"");
-    if(S.conc.ca_override){
+    if(!bpCircPier()) fRow(body,"Manually override edge distances",chkInput(()=>S.conc.ca_override,v=>S.conc.ca_override=v),"");
+    if(S.conc.ca_override && !bpCircPier()){
       body.appendChild(el("div","note","Enter edge distances directly (0 = use geometric value). Useful when the pedestal is irregular or the controlling edge isn't a simple rectangle."));
       fRow(body,"c_a to +x edge",numInput(()=>S.conc.ca_x_pos,v=>S.conc.ca_x_pos=v,0.5),"in");
       fRow(body,"c_a to −x edge",numInput(()=>S.conc.ca_x_neg,v=>S.conc.ca_x_neg=v,0.5),"in");
@@ -5747,99 +6228,11 @@ function buildOutput(){
   if(window.katex) renderAllTex(pg);
 }
 function renderAllTex(){ /* eqBlock renders inline already */ }
-/* RPT-2 (2026-10-24): Report tab — the calculation sheet on screen. It is built by buildPrintReport()
-   into this tab (one source with Print / PDF), each time the tab is drawn, i.e. on opening it and on
-   every input change while it is open. Table-of-contents and "Basis" links scroll within the document;
-   "see §n.k" links jump to the tab and card where the value is worked (the global a.wkA handler). */
-/* RPT-3 (2026-10-24): the viewer of Gusset Plate Rating's Report tab (renderReportTab / crSizeBar /
-   crJump), duplicated per CLAUDE.md §3: sticky tool bar (chapter chips, Detail Sheet appendix, combinations,
-   Expand / Collapse all, Print), a sticky navigation tree beside the sheet with scroll-spy, collapsible
-   chapters and cards (state kept for the session), and "§ in report" jumps from the other tabs. */
-let bpRptTimer=0, BP_RPT_PENDING=null, bpCrSpy=null;
-const BP_RPT_CLOSED=new Set();
+/* RPT-4 (2026-11-01): the Report tab is the shared viewer (bprReportTab, below). Of the RPT-3 viewer (buildReportTab, bpCrKey,
+   bpCrSizeBar, bpCrJump, bpCrSpyOn/Off, BP_RPT_CLOSED and its resize listener; removed 2026-11-01, no longer called) only these stay:
+   the build debounce timer, the pending "§ in report" jump and the output column's scroller. */
+let bpRptTimer=0, BP_RPT_PENDING=null;
 function bpCrScroller(){ const op=document.getElementById("outputPanel"); return (op && /auto|scroll/.test(getComputedStyle(op).overflowY))? op : null; }
-function bpCrKey(box){ return box.classList.contains("cr-sec")? ((box.querySelector(":scope>.cr-h1")||{}).id||"") : (box.id||""); }
-function bpCrSizeBar(pg){
-  const sc=bpCrScroller(), tb=document.getElementById("tabBar"), bar=pg.querySelector(".crv-bar");
-  const top=(sc && tb)? tb.offsetHeight : 0, crv=top+(bar? bar.offsetHeight : 0)+10;
-  pg.style.setProperty("--crv-bar-top",top+"px"); pg.style.setProperty("--crv-top",crv+"px");
-  pg.style.setProperty("--crv-tocmax",Math.max(200,(sc? sc.clientHeight : window.innerHeight)-crv-16)+"px");
-}
-function bpCrJump(doc,id){
-  const t=doc.querySelector('[id="'+id+'"]'); if(!t) return false;
-  let p=t.closest(".cr-closed"); while(p){ p.classList.remove("cr-closed"); BP_RPT_CLOSED.delete(bpCrKey(p)); p=p.parentElement&&p.parentElement.closest(".cr-closed"); }
-  const box=t.classList.contains("cr-h1")? t.closest(".cr-sec") : t;
-  if(box && box.classList.contains("cr-closed")){ box.classList.remove("cr-closed"); BP_RPT_CLOSED.delete(bpCrKey(box)); }
-  t.scrollIntoView({behavior:"smooth",block:"start"}); t.classList.add("cr-flash"); setTimeout(()=>t.classList.remove("cr-flash"),1400);
-  return true;
-}
-function bpCrSpyOff(){ if(bpCrSpy){ bpCrSpy.tgt.removeEventListener("scroll",bpCrSpy.fn); bpCrSpy=null; } }
-function bpCrSpyOn(pg,doc,nav){
-  bpCrSpyOff();
-  const sc=bpCrScroller(), tgt=sc||window; let raf=0;
-  const fn=()=>{ if(raf) return; raf=requestAnimationFrame(()=>{ raf=0; if(!doc.isConnected){ bpCrSpyOff(); return; }
-    const lim=(sc? sc.getBoundingClientRect().top : 0)+parseFloat(getComputedStyle(pg).getPropertyValue("--crv-top")||"70")+8;
-    let cur=null; for(const a of nav.querySelectorAll("a[data-crjump]")){ const h=doc.querySelector('[id="'+a.dataset.crjump+'"]');
-      if(!h || !h.offsetParent) continue; if(h.getBoundingClientRect().top<=lim) cur=a; else break; }
-    nav.querySelectorAll("a.on").forEach(a=>{ if(a!==cur) a.classList.remove("on"); });
-    if(cur && !cur.classList.contains("on")){ cur.classList.add("on");
-      const nr=nav.getBoundingClientRect(), cr=cur.getBoundingClientRect();
-      if(cr.top<nr.top || cr.bottom>nr.bottom) nav.scrollTop+=cr.top-nr.top-nav.clientHeight/3; } }); };
-  tgt.addEventListener("scroll",fn,{passive:true}); bpCrSpy={tgt,fn}; fn();
-}
-function buildReportTab(pg){
-  const bar=el("div","crv-bar");
-  /* chapter chips: the report sections (the "Report contents" settings), the Detail Sheet appendix on its own */
-  const tog=el("div","crv-tog"); tog.setAttribute("role","group"); tog.setAttribute("aria-label","Report chapters");
-  TABS().forEach(([id,label])=>{ if(id==="tabVisual"||id==="tabReport"||id==="tabDetail") return;
-    const optIn=(id==="tabValidation"||id==="tabManual");
-    const lab=el("label","crv-chip"); const cb=document.createElement("input"); cb.type="checkbox";
-    cb.checked=optIn? S.print.sections[id]===true : S.print.sections[id]!==false;
-    cb.addEventListener("change",()=>{ S.print.sections[id]=cb.checked; autosave(); buildOutput(); });
-    lab.appendChild(cb); lab.appendChild(document.createTextNode(label+(optIn?" (appendix)":""))); tog.appendChild(lab); });
-  bar.appendChild(tog);
-  const lab=el("label","crv-chip"); const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(S.print.sections.tabDetail===true);
-  cb.addEventListener("change",()=>{ S.print.sections.tabDetail=cb.checked; autosave(); buildOutput(); });
-  lab.appendChild(cb); lab.appendChild(document.createTextNode("Include Detail Sheet appendix")); bar.appendChild(lab);
-  const cs=document.createElement("select"); [["all","Every combination worked"],["gov","Governing combination only"]].forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; cs.appendChild(o); });
-  cs.value=(S.print.combos.all!==false)? "all" : "gov"; cs.addEventListener("change",()=>{ S.print.combos.all=(cs.value==="all"); autosave(); buildOutput(); });
-  bar.appendChild(cs);
-  bar.appendChild(el("span","crv-sp"));
-  const ex=el("button",null,"Expand all"), co=el("button",null,"Collapse all"), pb=el("button","primary","Print this report");
-  bar.appendChild(ex); bar.appendChild(co); bar.appendChild(pb);
-  pb.addEventListener("click",()=>{ buildPrintReport(); bpadApplyPageCSS(true); setTimeout(()=>window.print(),120); });   /* one builder, printed without the bar or tree */
-  pg.appendChild(bar);
-  const body=el("div","crv-body"), nav=el("nav","crv-toc"), doc=el("article","crdoc crv-doc");
-  nav.setAttribute("aria-label","Report contents"); body.appendChild(nav); body.appendChild(doc); pg.appendChild(body);
-  doc.appendChild(el("div","note","Building the calculation sheet…"));
-  ex.addEventListener("click",()=>{ BP_RPT_CLOSED.clear(); doc.querySelectorAll(".cr-closed").forEach(x=>x.classList.remove("cr-closed")); });
-  co.addEventListener("click",()=>{ doc.querySelectorAll(".cr-sec").forEach(x=>{ if(x.closest(".cr-front")||!x.querySelector(":scope>.cr-h1")) return; x.classList.add("cr-closed"); BP_RPT_CLOSED.add(bpCrKey(x)); }); });
-  requestAnimationFrame(()=>bpCrSizeBar(pg));
-  /* building the whole sheet takes about a second: debounce it so typing stays responsive */
-  clearTimeout(bpRptTimer);
-  bpRptTimer=setTimeout(()=>{ if(!doc.isConnected || S.ui.tab!=="tabReport") return;
-    const sc=bpCrScroller(), keep=sc? sc.scrollTop : 0;
-    buildPrintReport(doc);
-    const toc=window.BPAD_TOC||[]; nav.innerHTML="";
-    toc.forEach(t=>{ const a=el("a","crv-l1",t.n+". "+t.t); a.href="#"+t.id; a.dataset.crjump=t.id; nav.appendChild(a);
-      t.subs.forEach((q,k)=>{ const b=el("a","crv-l2",t.n+"."+(k+1)+" "+q.t); b.href="#"+q.id; b.dataset.crjump=q.id; nav.appendChild(b); }); });
-    doc.querySelectorAll(".cr-sec,.sec").forEach(x=>{ const k=bpCrKey(x); if(k && BP_RPT_CLOSED.has(k)) x.classList.add("cr-closed"); });
-    if(sc) sc.scrollTop=keep;
-    bpCrSizeBar(pg); bpCrSpyOn(pg,doc,nav);
-    if(BP_RPT_PENDING){ const [tb,ci,card]=BP_RPT_PENDING.split("|"); BP_RPT_PENDING=null;
-      const m=window.BPAD_CARDMAP||{}, hit=m[tb+"|"+ci+"|"+card]||m[tb+"||"+card]||m[tb+"|"+(window.BPAD_GI)+"|"+card];
-      if(hit) bpCrJump(doc,hit.id); }
-    doc.dataset.ready="1"; },250);
-  nav.addEventListener("click",e=>{ const a=e.target.closest("a[data-crjump]"); if(!a) return; e.preventDefault(); bpCrJump(doc,a.dataset.crjump); });
-  doc.addEventListener("click",e=>{
-    const a=e.target.closest("a");
-    if(a){ if(a.classList.contains("wkA")) return;   /* "see §n.k": to the tab where it is worked (global handler) */
-      const h=a.getAttribute("href")||""; if(h.charAt(0)!=="#") return; e.preventDefault(); bpCrJump(doc,h.slice(1)); return; }
-    const hd=e.target.closest(".cr-sec>.cr-h1, .sec>.secHead"); if(!hd || hd.closest(".cr-front")) return;
-    const box=hd.classList.contains("cr-h1")? hd.closest(".cr-sec") : hd.closest(".sec"); if(!box) return;
-    box.classList.toggle("cr-closed"); const k=bpCrKey(box); if(box.classList.contains("cr-closed")) BP_RPT_CLOSED.add(k); else BP_RPT_CLOSED.delete(k); });
-}
-window.addEventListener("resize",()=>{ const pg=document.getElementById("page_tabReport"); if(pg && pg.classList.contains("active")) bpCrSizeBar(pg); });
 /* "§ in report": from any other tab, open the Report tab at the section where a card is worked (Gusset's data-rptjump) */
 function bpadRptJ(card,ci){ const cd=BPAD_CARDS[card]; if(!cd) return null;
   const a=el("a","rptJ","§ in report"); a.href="#"; a.dataset.rptjump=cd[0]+"|"+(ci!=null?ci:"")+"|"+card;
@@ -6007,7 +6400,7 @@ function allChecks(){
   /* base plate — governing combo */
   let bpGov={dcr:-1};
   CC.combos.forEach(c=>{ const pb=plateBending(c,CC); if(pb.dcr>bpGov.dcr) bpGov=Object.assign({combo:c.name},pb); });
-  checks.push({label:"Base Plate Bending",ref:"AISC DG1",dcr:bpGov.dcr,combo:bpGov.combo,tab:"tabPlate"});
+  checks.push({label:"Base Plate Bending",ref:(bpCircPlate()?"LRFDLTS bending line":"AISC DG1"),dcr:bpGov.dcr,combo:bpGov.combo,tab:"tabPlate"});
   let toGov={dcr:-1};
   CC.combos.forEach(c=>{ const to=plateTearout(c); if(to.dcr>toGov.dcr) toGov=Object.assign({combo:c.name},to); });
   checks.push({label:"Bolt Bearing / Tearout (plate)",ref:"§J3.10",dcr:toGov.dcr,combo:toGov.combo,tab:"tabPlate"});
@@ -6031,8 +6424,8 @@ function allChecks(){
     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
     if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb,"tabConc");
     push("stV","Steel Shear","§17.7.1",c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac),"tabAnchor");
-    if(!(S.vRebar.present && _J.v.justified)) push("sbk","Concrete Breakout (V)","§17.7.2",c.Vres/cap.sbk.phiVcbg,"tabConc");
-    push("pry","Pryout","§17.7.3",c.Vres/cap.pry.phiVcpg,"tabConc");
+    if(!(S.vRebar.present && _J.v.justified)) push("sbk","Concrete Breakout (V)","§17.7.2",(cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg,"tabConc");
+    push("pry","Pryout","§17.7.3",(cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg,"tabConc");
     const it=interaction(cap.tDCR(c,cap.govTfor(c)),1,cap.vDCR(c,cap.govVfor(c)),1);
     push("int","Combined T–V Interaction","§17.8",it.dcr,"tabAnchor");
   });
@@ -6074,8 +6467,8 @@ function dcrMatrix(){
     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
     if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb);
     put("stV","Steel shear","§17.7.1", c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac));
-    if(!(S.vRebar.present && _J.v.justified)) put("sbk","Breakout (V)","§17.7.2", c.Vres/cap.sbk.phiVcbg);
-    put("pry","Pryout","§17.7.3", c.Vres/cap.pry.phiVcpg);
+    if(!(S.vRebar.present && _J.v.justified)) put("sbk","Breakout (V)","§17.7.2", (cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg);
+    put("pry","Pryout","§17.7.3", (cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg);
     const la=standoffLeverArm(c);
     if(la && la.phiVMs>1e-12) put("so","Stand-off bending","lever arm", (c.Vu_per||0)/la.phiVMs);
     put("int","Interaction","§17.8", interaction(cap.tDCR(c,cap.govTfor(c)),1,cap.vDCR(c,cap.govVfor(c)),1).dcr);
@@ -6510,6 +6903,18 @@ function buildSummary(pg){
     const w=el("div","errBox noPrint"); w.innerHTML="<b>"+BP_PED_UNCONF+"</b> ";
     const b=el("button",null,"Open 7a. Pedestal Reinforcement \u2197"); b.addEventListener("click",e=>{ e.preventDefault(); bpadGoInSec("inPed"); });
     w.appendChild(b); pg.appendChild(w); }
+  if(Array.isArray(S.groups) && S.groups.length>1 && typeof bpGroupResultFor==="function"){   /* BC-3: every anchor group of the project */
+    mkSection("smGroups","Anchor Groups in this Project",body=>{
+      const t=el("table","tbl"); const hd=el("tr"); ["Group","Governing D/C","Check","Combination",""].forEach(x=>hd.appendChild(el("th",null,x))); t.appendChild(hd);
+      bpGroupSync();
+      S.groups.forEach((g,i)=>{ const r=bpGroupResultFor(i), tr=el("tr"); if(i===S.groupActive) tr.className="gov";
+        tr.appendChild(el("td","lft",(i+1)+". "+g.label+(i===S.groupActive?" (shown)":"")));
+        tr.appendChild(el("td",null,r.error? "error" : fmtDCR(r.gov.dcr,3))); tr.appendChild(el("td","lft",r.error? r.error : r.gov.label)); tr.appendChild(el("td","lft",r.error?"":r.gov.combo));
+        const td=el("td"); if(i!==S.groupActive){ const b=el("button",null,"Show"); b.addEventListener("click",()=>bpGroupSwitch(i)); td.appendChild(b); } tr.appendChild(td); t.appendChild(tr); });
+      body.appendChild(t);
+      body.appendChild(el("div","note","Each group is designed on its own (its anchors, plate, pier and combinations). The tabs show the selected group; switch with the Anchor group picker under the project fields."));
+    },pg);
+  }
   const dash=el("div"); dash.id="dash"; pg.appendChild(dash);
   const checks=allChecks();
   checks.forEach(c=>{
@@ -6752,9 +7157,9 @@ function buildInputEcho(pg){
   comboSelectorNote(pg);
   mkSection("ieSummary","Input Summary",body=>{
     const rows=[
-      ["Plate", S.plate.B+"″ × "+S.plate.N+"″ × "+S.plate.t+"″, "+pgrade(S.plate.grade).name],
+      ["Plate", (bpCircPlate()? "Ø"+S.plate.D+"″ (circular) × "+S.plate.t+"″" : S.plate.B+"″ × "+S.plate.N+"″ × "+S.plate.t+"″")+", "+pgrade(S.plate.grade).name],
       ["Column", colDims().label+", ecc ("+S.plate.exc_x+", "+S.plate.exc_y+")″"],
-      ["Anchors", S.anchor.nx+"×"+S.anchor.ny+" of "+fmt(S.anchor.dia,3)+"″ "+agrade(S.anchor.grade).name+", hef="+S.anchor.hef+"″, "+(S.anchor.torqued?"torqued":"untorqued")],
+      ["Anchors", (bpCircPattern()? bpCircN()+" on a bolt circle BC = "+fmt(S.anchor.BC,3)+"″ (θ₀ = "+fmt(S.anchor.theta0,2)+"°)" : S.anchor.nx+"×"+S.anchor.ny)+" of "+fmt(S.anchor.dia,3)+"″ "+agrade(S.anchor.grade).name+", hef="+S.anchor.hef+"″, "+(S.anchor.torqued?"torqued":"untorqued")],
       ["Grout", S.grout.present?(S.grout.tg+"″, f'c="+S.grout.fc_grout+" ksi, "+S.grout.taper):"none"],
       ["Concrete", "f'c="+S.conc.fc+" ksi, "+S.conc.Bx+"×"+S.conc.By+"×"+S.conc.H+"″, "+(S.conc.cracked?"cracked":"uncracked")],
       ["Shear distribution", "ACI Fig. R17.7.2.1b case selection ("+
@@ -6766,7 +7171,8 @@ function buildInputEcho(pg){
       ["Shear rebar", !S.vRebar.present? "none" : (S.vRebar.pieceType==="closedtie")? ("closed ties"+(S.ped.present? " (pedestal ties, "+S.ped.tieSize+")" : " (pedestal ties not entered: none counted)")) : (S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs")],
       ["Pedestal reinforcement", S.ped.present? (pedGeom().bars.length+"-"+S.ped.barSize+" vertical, "+S.ped.tieSize+" ties: "+S.ped.tieSets+" sets from "+fmt(pedGeom().ties[0],2)+"″"+(pedGeom().ties[0]>(+S.ped.tieTop||0)+1e-9? " (raised to cover + d_b/2; entered "+fmt(S.ped.tieTop,2)+"″)" : "")+" at "+fmt(S.ped.tieSpacing,2)+"″")   /* RPT-1: the depth actually used */ : "not entered"],
       ["Stand-off", standoffParams().label+(standoffParams().hasStandoff?(", z="+fmt(standoffParams().z,2)+String.fromCharCode(34)):"")]
-    ];
+    ].concat((Array.isArray(S.groups)&&S.groups.length)? [["Anchor group", (S.groupActive+1)+" of "+S.groups.length+": "+bpGroupLabel()]] : [])
+     .concat((typeof bxAgSourceLine==="function"&&bxAgSourceLine())? [["Hand-off source", bxAgSourceLine()]] : []);   /* BC-3 */
     const t=el("table","tbl"); rows.forEach(r=>{ const tr=el("tr");
       tr.appendChild(el("td","lft",r[0])); const td=el("td","lft",r[1]); tr.appendChild(td); t.appendChild(tr); });
     body.appendChild(t);
@@ -6775,10 +7181,11 @@ function buildInputEcho(pg){
   mkSection("ieLoads","Load Combinations (pre-factored)",body=>{
     const t=el("table","tbl"); const hd=el("tr");
     const Fu=forceUnit(), Mu=momentUnit();
-    ["Combo","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
+    const hasT=S.combos.some(c=>Math.abs(+c.T||0)>1e-12);   /* BC-3: torsion column only when a combination has T */
+    ["Combo","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")"].concat(hasT?["T ("+Mu+")"]:[]).forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
     const gi=governingComboIndex();
     S.combos.forEach((c,i)=>{ const tr=el("tr"); if(i===gi)tr.className="gov";
-      [c.name,fF(c.P),fF(c.Vx),fF(c.Vy),fM(c.Mx),fM(c.My)].forEach((v,idx)=>tr.appendChild(el("td",idx===0?"lft":null,String(v)))); t.appendChild(tr); });
+      [c.name,fF(c.P),fF(c.Vx),fF(c.Vy),fM(c.Mx),fM(c.My)].concat(hasT?[fM(+c.T||0)]:[]).forEach((v,idx)=>tr.appendChild(el("td",idx===0?"lft":null,String(v)))); t.appendChild(tr); });
     body.appendChild(t);
     body.appendChild(el("div","note","Highlighted row governs overall (max interaction DCR). All combinations are evaluated for every check. Values shown in "+Fu+" / "+Mu+"."));
   },pg);
@@ -6796,6 +7203,11 @@ function comboSelectorNote(pg){
 function buildPlateTab(pg){
   comboSelector(pg);
   const c=CC.combos[S.detailCombo];
+  if(bpCircPlate()){   /* BC-1: circular plate of a double-nut pole base — no DG1 bearing; bending line (LRFDLTS) */
+    mkSection("pbClass","1. Circular Base Plate — Model",body=>{
+      body.appendChild(el("div","note","Circular base plate Ø"+fmt(S.plate.D,2)+"″ × "+fmt(S.plate.t,3)+"″ on a double-nut (leveling-nut) base with an open stand-off. There is no bearing block: the anchor rods carry tension and compression (elastic bolt group, worked on the Anchor Bolts tab), and every rod force loads the plate through its nut. AISC DG1 (rectangular plate bearing on concrete) is not used. The plate is checked by the AASHTO LRFDLTS bending-line method (as the Light Pole and Sign Post tool, LP-5). The concrete bearing check does not apply."));
+    },pg);
+  } else
   mkSection("pbClass","1. Eccentricity Classification (DG1)",body=>{
     body.appendChild(el("div","note","Rigid base plate, iterative neutral-axis solution. Each moment axis is solved independently; the two are combined by SRSS on the resulting anchor tension demand. Bending about y uses plate length B in the bending direction; bending about x uses N."));
     const t=el("table","tbl"); const hd=el("tr");
@@ -6815,7 +7227,7 @@ function buildPlateTab(pg){
 
   mkSection("pbBend","2. Base Plate Bending",body=>{
     const soB=standoffParams();
-    if(soB.hasStandoff && !soB.groutFilled){
+    if(soB.hasStandoff && !soB.groutFilled && !bpCircPlate()){
       body.appendChild(el("div","warnBox","Open stand-off (no grout): the DG1 cantilever model below assumes the plate bears on concrete, which does not occur here. With an air gap the plate spans between anchors and is governed by anchor reactions, not bearing pressure — treat this result as indicative only and check the plate as a beam/plate spanning the anchor pattern."));
     }
     const pb=plateBending(c,CC); renderSteps(body,pb.steps);
@@ -6845,6 +7257,7 @@ function buildAnchorTab(pg){
     drawAnchorPlan(body,c);
     drawForceMap(body,c);   /* GFX-C: forces, neutral axis and bearing block for this combination */
     anchorForceTable(body,c);
+    if(bpCircPattern()) body.appendChild(eqBlock(bpCircGeomStep()));   /* BC-1: the bolt-circle coordinates, worked */
   },pg);
 
   mkSection("anResT",SN()+"Tension Load — Results Summary",body=>{
@@ -7094,6 +7507,10 @@ function buildConcTab(pg){
          basis:"ANCHOR GROUP, "+cap.nT+" anchors in tension \u2014 one shared breakout cone (\u00a717.6.2)"}); },pg);
     mkSection("coSFB","4. Side-Face Blowout",body=>{ renderSteps(body,cap.sfb.steps);
       if(cap.sfb.na){ body.appendChild(el("div","warnBox","Not applicable — see condition above.")); }
+      else if(cap.sfb.circ) dcrBox(body,cap.sfb.demand/cap.sfb.phiNsb,false,   /* BC-2: the governing edge chain */
+        {load:cap.sfb.demand*forceFactor(),cap:cap.sfb.phiNsb*forceFactor(),unit:forceUnit(),
+         loadSym:"N_ua,edge",capSym:"\u03c6N_sbg",
+         basis:"edge-row anchors in tension at the circular edge, chain "+cap.sfb.chain.join(", ")+" (\u00a717.6.4.2)"});
       else dcrBox(body,c.Tu_group/cap.sfb.phiNsb,false,
         {load:c.Tu_group*forceFactor(),cap:cap.sfb.phiNsb*forceFactor(),unit:forceUnit(),
          loadSym:"N_ua",capSym:"\u03c6N_sb",
@@ -7108,10 +7525,11 @@ function buildConcTab(pg){
       if(S.vRebar.present)
         body.appendChild(el("div","warnBox","Shear anchor reinforcement (hairpins) is present, but the \u00a717.5.2.1 substitution is NOT yet justified (see the Shear Rebar tab), so concrete breakout in shear is still evaluated and enforced here."));
       renderSteps(body,cap.sbk.steps);
-      dcrBox(body,c.Vres/cap.sbk.phiVcbg,false,
-        {load:c.Vres*forceFactor(),cap:cap.sbk.phiVcbg*forceFactor(),unit:forceUnit(),
+      {const vd=(cap.sbkDem!==undefined?cap.sbkDem:c.Vres);   /* BC-3 */
+      dcrBox(body,vd/cap.sbk.phiVcbg,false,
+        {load:vd*forceFactor(),cap:cap.sbk.phiVcbg*forceFactor(),unit:forceUnit(),
          loadSym:"V_ua",capSym:"\u03c6V_cbg",
-         basis:"ANCHOR GROUP \u2014 one breakout wedge at the governing edge (\u00a717.7.2)"}); },pg);
+         basis:"ANCHOR GROUP \u2014 one breakout wedge at the governing edge (\u00a717.7.2)"+(cap.sbk.torsion?"; torsion: the governing direction's case demand":"")}); } },pg);
   } else {
     mkSection("coVBna","5. Concrete Breakout — Shear",body=>{
       body.appendChild(el("div","warnBox",(S.vRebar.pieceType==="closedtie")?   /* RPT-1: ties are not hairpins */
@@ -7120,8 +7538,9 @@ function buildConcTab(pg){
     },pg);
   }
   mkSection("coPry","6. Pryout",body=>{ renderSteps(body,cap.pry.steps);
-    dcrBox(body,c.Vres/cap.pry.phiVcpg,false,
-      {load:c.Vres*forceFactor(),cap:cap.pry.phiVcpg*forceFactor(),unit:forceUnit(),
+    const vp=(cap.pryDem!==undefined?cap.pryDem:c.Vres);   /* BC-3: torsion — Σ|V_i| */
+    dcrBox(body,vp/cap.pry.phiVcpg,false,
+      {load:vp*forceFactor(),cap:cap.pry.phiVcpg*forceFactor(),unit:forceUnit(),
        loadSym:"V_ua",capSym:"\u03c6V_cpg",
        basis:"ANCHOR GROUP \u2014 derived from the group breakout N_cbg (\u00a717.7.3)"}); },pg);
   mkSection("coBreakGeo","7. Breakout Geometry",body=>{ drawBreakout(body,c); },pg);
@@ -8053,13 +8472,21 @@ function drawPlan(body){
   /* pedestal frame centered on canvas; plate frame shifted by (px,py) */
   const X=x=>cx+x*sc, Y=y=>cy-y*sc;                 /* pedestal coords */
   const XP=x=>cx+(x+px)*sc, YP=y=>cy-(y+py)*sc;     /* plate coords (offset onto pedestal) */
-  /* pedestal (below plate — dashed outline, light fill) */
+  /* pedestal (below plate — dashed outline, light fill); BC-2: circular pier as a circle */
+  if(bpCircPier()){ const pc=circ(s,X(0),Y(0),(C.D/2)*sc,"#f2efe8","#8a8577",1.2); pc.setAttribute("stroke-dasharray","6 4");
+    txt(s,X(C.D/2*0.72)+4,Y(C.D/2*0.72)-4,"circular pier Ø"+fmt(C.D,2)+"\u2033","lblTxt","start",9,"#8a8577"); }
+  else {
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
   txt(s,X(C.Bx/2)-4,Y(C.By/2)+13,"concrete pedestal","lblTxt","end",9,"#8a8577");
-  /* plate (shifted) */
-  rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#f6f4ee","#333",1.6);
+  }
+  /* plate (shifted); BC-1: circular plate as a circle */
+  if(bpCircPlate()) circ(s,XP(0),YP(0),(P.D/2)*sc,"#f6f4ee","#333",1.6);
+  else rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#f6f4ee","#333",1.6);
   /* column footprint (plate ecc, then plate offset) */
   colPlanDraw(s,XP,YP,sc);   /* G1: I-shape for W columns */
+  /* BC-1: bolt circle (dashed) through the anchor centres, with its diameter and the rotation of bolt 1 */
+  if(bpCircPattern()){ const rb=(+A.BC||0)/2*sc; const bc=circ(s,XP(0),YP(0),rb,"none","#7a4b00",1); bc.setAttribute("stroke-dasharray","5 4");
+    g.pts.forEach((p,i)=>txt(s,XP(p.x*1.0)+(p.x>=0?1:-1)*(Math.max(4,A.dia/2*sc)+3),YP(p.y)-Math.max(4,A.dia/2*sc)-2,String(i+1),"lblTxt",p.x>=0?"start":"end",8,"#7a4b00")); }
   /* anchors (plate coords) */
   const ar=Math.max(4,A.dia/2*sc);
   g.pts.forEach(p=>{ circ(s,XP(p.x),YP(p.y),ar,"#fff","#000"); });
@@ -8077,16 +8504,26 @@ function drawPlan(body){
   const lftLane = i => X(-C.Bx/2) - 16 - i*LN;    /* left of pedestal    */
 
   /* pedestal (outermost lanes) */
+  if(bpCircPier()){
+    clickableDim(s,"h",X(-C.D/2),X(C.D/2),topLane(1),"D = "+fmt(C.D,2)+'" (pier)',
+      {onEdit:()=>editNum("Pier diameter D (in)",C.D,applyGeomEdit(v=>{S.conc.D=v;S.conc.Bx=v;S.conc.By=v;}),'"')});
+  } else {
   clickableDim(s,"h",X(-C.Bx/2),X(C.Bx/2),topLane(1),"Bx = "+fmt(C.Bx,2)+'"',
     {onEdit:()=>editNum("Pedestal width Bx (in)",C.Bx,applyGeomEdit(v=>S.conc.Bx=v),'"')});
   clickableDim(s,"v",Y(C.By/2),Y(-C.By/2),rgtLane(1),"By = "+fmt(C.By,2)+'"',
     {onEdit:()=>editNum("Pedestal depth By (in)",C.By,applyGeomEdit(v=>S.conc.By=v),'"')});
+  }
 
   /* plate (inner lanes) */
+  if(bpCircPlate()){
+    clickableDim(s,"h",XP(-P.D/2),XP(P.D/2),topLane(0),"D = "+fmt(P.D,2)+'"',
+      {onEdit:()=>editNum("Plate diameter D (in)",P.D,applyGeomEdit(v=>{S.plate.D=v;S.plate.B=v;S.plate.N=v;}),'"')});
+  } else {
   clickableDim(s,"h",XP(-P.B/2),XP(P.B/2),topLane(0),"B = "+fmt(P.B,2)+'"',
     {onEdit:()=>editNum("Plate width B (in)",P.B,applyGeomEdit(v=>S.plate.B=v),'"')});
   clickableDim(s,"v",YP(P.N/2),YP(-P.N/2),lftLane(0),"N = "+fmt(P.N,2)+'"',
     {onEdit:()=>editNum("Plate length N (in)",P.N,applyGeomEdit(v=>S.plate.N=v),'"')});
+  }
 
   /* anchor spacing (inside the plate, below/right of the cluster).
      s_x / s_y: the spacing is set by the plate dimension and the edge distance,
@@ -8114,6 +8551,10 @@ function drawPlan(body){
             apply:v=>{ S.plate[plKey]=Math.max(1, v+2*edCur); } }
         ]);
   };
+  if(bpCircPattern()){   /* BC-1: the bolt circle is dimensioned by BC (and θ0), not by s_x / e_x */
+    clickableDim(s,"h",XP(-(+A.BC||0)/2),XP((+A.BC||0)/2),botLane(0),"BC = "+fmt(A.BC,2)+'" ('+bpCircN()+" bolts, θ₀ = "+fmt(A.theta0,1)+"°)",
+      {onEdit:()=>editNum("Bolt-circle diameter BC (in)",A.BC,applyGeomEdit(v=>S.anchor.BC=v),'"')});
+  } else {
   if(g.pts.length>1 && (g.xmax-g.xmin)>0.05){
     clickableDim(s,"h",XP(g.xmin),XP(g.xmax),botLane(0),"s_x = "+fmt(g.xmax-g.xmin,2)+'"',
       {onEdit:()=>spanEdit("x")});
@@ -8121,6 +8562,7 @@ function drawPlan(body){
   if(S.anchor.ny>1){
     clickableDim(s,"v",YP(g.ymax),YP(g.ymin),rgtLane(0),"s_y = "+fmt(g.ymax-g.ymin,2)+'"',
       {onEdit:()=>spanEdit("y")});
+  }
   }
   /* ---- anchor edge distance to PLATE edge, all four sides ----
      NOTE the bolt grid is symmetric by construction (anchorCoords builds it from
@@ -8160,10 +8602,12 @@ function drawPlan(body){
   };
   const edxEdit=()=>edgeEdit("x");
   const edyEdit=()=>edgeEdit("y");
+  if(!bpCircPattern() && !bpCircPlate()){
   clickableDim(s,"h",XP(-P.B/2),XP(g.xmin),botLane(1),"e_x="+fmt(A.edx,2)+'"',{onEdit:edxEdit});
   clickableDim(s,"h",XP(g.xmax),XP(P.B/2),botLane(1),"e_x="+fmt(P.B/2-g.xmax,2)+'"',{onEdit:edxEdit});
   clickableDim(s,"v",YP(-P.N/2),YP(g.ymin),lftLane(1),"e_y="+fmt(A.edy,2)+'"',{onEdit:edyEdit});
   clickableDim(s,"v",YP(g.ymax),YP(P.N/2),lftLane(1),"e_y="+fmt(P.N/2-g.ymax,2)+'"',{onEdit:edyEdit});
+  }
 
   /* ---- plate edge to PEDESTAL edge — the concrete ledge, per side ----
      These four ARE independent: they follow from the pedestal size and the plate
@@ -8205,10 +8649,12 @@ function drawPlan(body){
       (neg?"OVERHANG ":"")+"L="+fmt(val,2)+'"',
       {onEdit:()=>ledgeEdit(side)});
   }
+  if(!bpCircPier()){
   ledgeDim("h",XP(P.B/2),X(C.Bx/2),topLane(2),"xpos",C.Bx/2-(P.B/2+px));
   ledgeDim("h",X(-C.Bx/2),XP(-P.B/2),topLane(2),"xneg",C.Bx/2-(P.B/2-px));
   ledgeDim("v",YP(P.N/2),Y(C.By/2),rgtLane(2),"ypos",C.By/2-(P.N/2+py));
   ledgeDim("v",Y(-C.By/2),YP(-P.N/2),rgtLane(2),"yneg",C.By/2-(P.N/2-py));
+  }
 
   /* ---- clickable concrete edge distances (ca) on all four sides ---- */
   /* helper: draw a ca dim between the extreme anchor and the pedestal edge; click toggles/edits override */
@@ -8275,6 +8721,12 @@ function drawPlan(body){
      Horizontal ca dims ride just inside the top/bottom anchor rows; vertical ca dims
      ride just inside the left/right anchor columns, each nudged clear of the others. */
   const caGap=15;
+  if(bpCircPier()){   /* BC-2: radial c_a,min from the critical anchor to the circle */
+    const k=g.circ.caRad.indexOf(g.circ.caRadMin), p0=g.pts[k], qx=p0.x+px, qy=p0.y+py, r0=Math.hypot(qx,qy)||1, R=C.D/2;
+    const ex=qx/r0*R, ey=qy/r0*R; line(s,X(qx),Y(qy),X(ex),Y(ey),"#00427a",1.2);
+    const t=txt(s,X((qx+ex)/2)+6,Y((qy+ey)/2)-4,"c_a,min = "+fmt(g.circ.caRadMin,2)+'" (radial)',"dimTxt","start",11,"#00427a");
+    t.setAttribute("paint-order","stroke"); t.setAttribute("stroke","#fff"); t.setAttribute("stroke-width","3");
+  } else {
   /* +x edge (right): along a row below the top anchor row */
   caDim("h", XP(g.xmax), YP(g.ymax)-caGap, X(C.Bx/2), 0, "ca_x_pos", g.ca_x_pos);
   /* -x edge (left): along a row above the bottom anchor row */
@@ -8283,6 +8735,7 @@ function drawPlan(body){
   caDim("v", XP(g.xmin)+caGap, Y(C.By/2), 0, YP(g.ymax), "ca_y_pos", g.ca_y_pos);
   /* -y edge (bottom): along a column left of the right anchor column */
   caDim("v", XP(g.xmax)-caGap, YP(g.ymin), 0, Y(-C.By/2), "ca_y_neg", g.ca_y_neg);
+  }
 
   /* plate offset annotation */
   if(Math.abs(px)>0.01||Math.abs(py)>0.01)
@@ -8766,6 +9219,7 @@ function drawAnchorPlan(body, c){
 
   /* pedestal + plate outlines */
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.1,"6 4");
+  if(bpCircPlate()) circ(s,XP(0),YP(0),(P.D/2)*sc,"#fbfaf6","#333",1.4); else   /* BC-1 */
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#fbfaf6","#333",1.4);
   colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
 
@@ -8927,6 +9381,7 @@ function drawForceMap(body,c){
   const cx=W/2, cy=(H-60)/2+30, X=x=>cx+x*sc, Y=y=>cy-y*sc;
   const s=svg(W,H), tag=makeTagPlacer();
   const hx=P.B/2, hy=P.N/2;
+  if(bpCircPlate()) circ(s,X(0),Y(0),(P.D/2)*sc,"#fbfaf6","#333",1.4); else
   rect(s,X(-hx),Y(hy),P.B*sc,P.N*sc,"#fbfaf6","#333",1.4);
   /* bearing block */
   const na=c.na, so=standoffParams(), openGap=!!(so.hasStandoff && !so.groutFilled);
@@ -9034,6 +9489,7 @@ function drawSheetPlan(body){
   const cx=W/2+10, cy=H/2+18, X=x=>cx+x*sc, Y=y=>cy-y*sc, XP=x=>X(x+px), YP=y=>Y(y+py);
   const s=svg(W,H);
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
+  if(bpCircPlate()) circ(s,XP(0),YP(0),(P.D/2)*sc,"#f6f4ee","#333",1.6); else   /* BC-1 */
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#f6f4ee","#333",1.6);
   colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.10)",stroke:"#9db4cc",sw:1,label:false});
   const ar=Math.max(5,Math.min(11,A.dia*sc*0.6));
@@ -9405,7 +9861,8 @@ function drawBreakout(body,c){
       "Un-clipped projection: 1.5\u00b7h_ef = "+fmt(1.5*hef,2)+"\u2033 beyond the outermost anchors.\n"+
       "The concrete edges cut this down to the solid area.");
   }
-  /* pedestal */
+  /* pedestal (BC-2: circular pier as a circle) */
+  if(ext.circ) circ(s,X(ext.circ.cx),Y(ext.circ.cy),ext.circ.R*sc,"#f2efe8","#555",1.2); else
   rect(s,X(-C.Bx/2-pxo),Y(C.By/2-pyo),C.Bx*sc,C.By*sc,"#f2efe8","#555",1.2);
   /* A_Nco reference square, centred on the tension-anchor cluster centroid */
   const gcx=(ext.xmin+ext.xmax)/2, gcy=(ext.ymin+ext.ymax)/2, side=3*hef;
@@ -9414,7 +9871,15 @@ function drawBreakout(body,c){
     "Reference area of ONE anchor with no edge or spacing effects (\u00a717.6.2.1.4).\n"+
     "The capacity scales by A_Nc/A_Nco.");
   txt(s,X(gcx-side/2)+3,Y(gcy+side/2)+11,"A_Nco = 9h²ef","lblTxt","start",8.5,"#1f4e79");
-  /* the actual clipped group area */
+  /* the actual clipped group area (BC-2: circular pier — the union of the squares clipped by the circle) */
+  if(ext.circ){ const host=svgHost(s), id="bpclip"+(window.__bpClipN=(window.__bpClipN||0)+1);
+    const cp=document.createElementNS(SVGNS,"clipPath"); cp.setAttribute("id",id);
+    const cc=document.createElementNS(SVGNS,"circle"); cc.setAttribute("cx",X(ext.circ.cx)); cc.setAttribute("cy",Y(ext.circ.cy)); cc.setAttribute("r",ext.circ.R*sc); cp.appendChild(cc); host.appendChild(cp);
+    const gg=document.createElementNS(SVGNS,"g"); gg.setAttribute("clip-path","url(#"+id+")"); host.appendChild(gg);
+    ext.circ.squares.forEach(q=>{ const r=document.createElementNS(SVGNS,"rect"); r.setAttribute("x",X(q[0])); r.setAttribute("y",Y(q[3])); r.setAttribute("width",(q[1]-q[0])*sc); r.setAttribute("height",(q[3]-q[2])*sc);
+      r.setAttribute("fill","#f0c8c8"); r.setAttribute("stroke","none"); gg.appendChild(r); });
+    tip(circ(s,X(ext.circ.cx),Y(ext.circ.cy),ext.circ.R*sc,"none","#555",1.2),"A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the union of the anchors' 1.5h_ef squares clipped by the pier circle (exact).");
+  } else
   tip(rect(s,X(x1),Y(y2),(x2-x1)*sc,(y2-y1)*sc,"rgba(183,28,28,.14)","#b71c1c",1.6),
     "A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the projected failure area of the anchors in tension (§17.6.2.1).\n"+
     fmt(x2-x1,2)+"\u2033 \u00d7 "+fmt(y2-y1,2)+"\u2033"+(clipped?"  (clipped by the concrete edges)":""));
@@ -9468,6 +9933,7 @@ function drawBreakout(body,c){
     if(x2<ux2-1e-6) tags.push("+x");
     if(y1>uy1+1e-6) tags.push("−y");
     if(y2<uy2-1e-6) tags.push("+y");
+    if(ext.circ) txt(s,cx,H-40,"Union of the anchors' 1.5·h_ef squares clipped by the pier circle (exact area; dashed ghost = un-clipped extent)","lblTxt","middle",9,"#b71c1c"); else   /* BC-2 */
     txt(s,cx,H-40,"Projection clipped by the "+tags.join(", ")+" edge"+(tags.length>1?"s":"")+
       " (dashed ghost = un-clipped 1.5·h_ef extent)","lblTxt","middle",9,"#b71c1c");
   }
@@ -9590,6 +10056,7 @@ function drawHairpinPlan(body, cGov, opt){
   const XP=x=>cx+(x+px)*sc, YP=y=>cy-(y+py)*sc;
 
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
+  if(bpCircPlate()) circ(s,XP(0),YP(0),(P.D/2)*sc,"#fbfaf6","#333",1.3); else   /* BC-1 */
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#fbfaf6","#333",1.3);
   colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
   /* GFX-B: anchor spacings, edge distances (c_a2 to the faces along the governing edge),
@@ -10936,14 +11403,19 @@ function build3D(container){
   const setPos=(obj,x,y,z)=>{ const w=toW(x,y,z); obj.position.set(w[0],w[1],w[2]); };
   function box(gr,mat,w,d,h,cx,cy,cz){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); setPos(m,cx,cy,cz); gr.add(m);
     const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,h,d)),new THREE.LineBasicMaterial({color:0x333333})); e.position.copy(m.position); gr.add(e); return m; }
+  /* BC-1 (2026-11-01): vertical cylinder (circular plate / circular pier), axis along our z */
+  function cyl(gr,mat,D,h,cx,cy,cz){ const m=new THREE.Mesh(new THREE.CylinderGeometry(D/2,D/2,h,64),mat); setPos(m,cx,cy,cz); gr.add(m);
+    const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.CylinderGeometry(D/2,D/2,h,64),30),new THREE.LineBasicMaterial({color:0x333333})); e.position.copy(m.position); gr.add(e); return m; }
   /* z stack. plate frame offset on pedestal by (pxo,pyo) in our x,y (=three x,z) */
   const pxo=C.plate_off_x||0, pyo=C.plate_off_y||0;
   let z=0;
+  if(bpCircPier()) cyl(groups.concrete,concMat,C.D,C.H,0,0,z+C.H/2); else   /* BC-2 */
   box(groups.concrete,concMat,C.Bx,C.By,C.H,0,0,z+C.H/2); z+=C.H/2+C.H/2;
   let top=C.H;
-  if(G.present){ box(groups.grout,groutMat,P.B,P.N,G.tg,pxo,pyo,top+G.tg/2); top+=G.tg; }
+  if(G.present){ if(bpCircPlate()) cyl(groups.grout,groutMat,P.D,G.tg,pxo,pyo,top+G.tg/2); else box(groups.grout,groutMat,P.B,P.N,G.tg,pxo,pyo,top+G.tg/2); top+=G.tg; }
   const so3=standoffParams(), gap3=(so3.hasStandoff && !so3.groutFilled)? standoffClearGap() : 0;   /* G1: open stand-off gap */
   top+=gap3;
+  if(bpCircPlate()) cyl(groups.plate,plateMat,P.D,P.t,pxo,pyo,top+P.t/2); else
   box(groups.plate,plateMat,P.B,P.N,P.t,pxo,pyo,top+P.t/2); const plateTopZ=top+P.t;
   /* G1: column stub — W as an I-shape (two flanges + web), otherwise the outline box */
   { const k=colShape(), colMat=new THREE.MeshLambertMaterial({color:0x3a6ea5,transparent:true,opacity:0.55});
@@ -11561,7 +12033,7 @@ function installLimits(){
   for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
     const d=Math.hypot(pts[j].x-pts[i].x, pts[j].y-pts[i].y);
     if(d<sMin-1e-9){ sMin=d; pair=[pts[i],pts[j]]; } }
-  const edges=[["+x",g.ca_x_pos],["\u2212x",g.ca_x_neg],["+y",g.ca_y_pos],["\u2212y",g.ca_y_neg]];
+  const edges=bpCircPier()? [["pier (radial)",g.circ.caRadMin]] : [["+x",g.ca_x_pos],["\u2212x",g.ca_x_neg],["+y",g.ca_y_pos],["\u2212y",g.ca_y_neg]];   /* BC-2 */
   const ce=edges.reduce((m,e)=>(e[1]<m[1])?e:m, edges[0]);
   const kS=tq?6:4, sReq=kS*da, cReq=tq?6*da:null, has2=isFinite(sMin);
   return {tq, da, kS, sReq, cReq, edges,
@@ -11590,8 +12062,9 @@ function validateInputs(){
       const bcV=bearingCap(), noSol=[];
       (S.combos||[]).forEach(cb=>{
         const Pc=-(cb.P||0);
-        const rX=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.My||0), P.B, P.N, bcV.phiFp, P.B/2-A.edx);
-        const rY=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.Mx||0), P.N, P.B, bcV.phiFp, P.N/2-A.edy);
+        const fxV=bpCircPattern()? Math.max(g.xmax,-g.xmin) : P.B/2-A.edx, fyV=bpCircPattern()? Math.max(g.ymax,-g.ymin) : P.N/2-A.edy;   /* BC-1: as computeAll */
+        const rX=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.My||0), P.B, P.N, bcV.phiFp, fxV);
+        const rY=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.Mx||0), P.N, P.B, bcV.phiFp, fyV);
         if(rX.noSolution) noSol.push((cb.name||"(unnamed)")+" (My, DCR "+fmt(rX.bearDCR,2)+")");
         if(rY.noSolution) noSol.push((cb.name||"(unnamed)")+" (Mx, DCR "+fmt(rY.bearDCR,2)+")");
       });
@@ -11610,8 +12083,36 @@ function validateInputs(){
   }
   if(A.hef < 6*A.dia) warns.push("hef = "+fmt(A.hef,1)+'" is less than 6·d = '+fmt(6*A.dia,1)+'" (typical minimum embedment guidance).');
   if(C.fc>10) warns.push("f'c = "+C.fc+" ksi exceeds the 10 ksi cast-in breakout cap (§17.3.1); calculations use 10 ksi for breakout.");
-  if(A.edx<=0||A.edy<=0) errs.push({block:true, code:"geometry",
+  if(!bpCircPattern() && !bpCircPlate() && (A.edx<=0||A.edy<=0)) errs.push({block:true, code:"geometry",
     msg:"Anchor edge distance places bolts outside the plate — check edge distances vs. plate size."});
+  /* BC-2 (2026-11-01): circular pier */
+  if(bpCircPier()){
+    if(!(+C.D>0)) errs.push({block:true, code:"input", msg:"Pier diameter D must be positive."});
+    else {
+      if(!(g.circ.caRadMin>0)) errs.push({block:true, code:"geometry", msg:"An anchor lies on or outside the pier circle (c_a,min = "+fmt(g.circ.caRadMin,2)+"″)."});
+      const ox=C.plate_off_x||0, oy=C.plate_off_y||0, R=bpPierR();
+      const over=bpCircPlate()? (Math.hypot(ox,oy)+P.D/2>R+1e-9) : [[1,1],[1,-1],[-1,1],[-1,-1]].some(([a,b])=>Math.hypot(ox+a*P.B/2,oy+b*P.N/2)>R+1e-9);
+      if(over) warns.push("The base plate extends beyond the pier circle (overhang).");
+    }
+    if(S.tRebar.present || S.vRebar.present || (S.ped&&S.ped.present)) errs.push({block:true, code:"model", msg:"Anchor reinforcement and pedestal reinforcement are not available for a circular pier in this version (the layouts are rectangular). Turn them off: concrete breakout is then checked as plain concrete, Condition B."});
+    if(!window.SharedAnchorGeom) errs.push({block:true, code:"files", msg:"shared/anchor-geom.js is not loaded: keep the shared folder next to this file (needed for a circular pier)."});
+  }
+  /* BC-1 (2026-11-01): bolt circle and circular plate */
+  if(bpCircPattern()||bpCircPlate()){
+    if(bpCircPattern() && !(+A.BC>0)) errs.push({block:true, code:"geometry", msg:"Bolt-circle diameter BC must be positive."});
+    if(bpCircPattern() && Math.round(+A.nCircle||0)<3) errs.push({block:true, code:"geometry", msg:"A bolt circle needs at least 3 anchors (n = "+(A.nCircle)+")."});
+    if(bpPlateEdgeMin()<=0) errs.push({block:true, code:"geometry", msg:"An anchor lies on or outside the plate edge — check the bolt-circle diameter against the plate size."});
+    if(bpCircPlate() && !(+P.D>0)) errs.push({block:true, code:"input", msg:"Circular plate diameter D must be positive."});
+    if(bpCircPlate() && !bpCircPattern()) errs.push({block:true, code:"geometry", msg:"A circular base plate is checked by the bending-line method of a pole base and needs the bolt-circle anchor layout. Select Layout = Bolt circle."});
+    const soC=standoffParams();
+    if(bpCircPlate() && !(soC.hasStandoff && !soC.groutFilled)) errs.push({block:true, code:"model", msg:"A circular base plate is modelled as a double-nut (leveling-nut) pole base: the rods carry tension and compression, there is no bearing block. Select the stand-off type “with clamping” (double nut) or “without clamping”."});
+    if(bpCircPlate()){ const cd=colDims(); const Dp=(!S.col.custom && S.col.shapeType!=="W" && hssOf(S.col.shape).kind==="HSSround")? cd.b : Math.min(cd.b,cd.d);
+      if(bpCircPattern() && Dp>=(+A.BC||0)) errs.push({block:true, code:"geometry", msg:"The pole ("+fmt(Dp,2)+"″) is not inside the bolt circle (BC = "+fmt(A.BC,2)+"″): the bending line at the pole face needs BC > D_pole."});
+      if(Math.abs(P.exc_x||0)>1e-9 || Math.abs(P.exc_y||0)>1e-9) warns.push("Column eccentricity on a circular plate is not used by the bending-line check (the pole is taken concentric with the bolt circle).");
+      if(S.col.custom || S.col.shapeType==="W" || hssOf(S.col.shape).kind!=="HSSround") warns.push("Circular plate: the pole is not a round HSS; the bending line uses D_pole = the smaller of the column width and depth.");
+    }
+    if(S.tRebar.present || S.vRebar.present) errs.push({block:true, code:"model", msg:"Anchor reinforcement (tension or shear rebar) is not available with the bolt-circle layout in this version: the rebar layouts are built on anchor rows of a rectangular grid. Turn off Tension / Shear Reinforcement (concrete breakout is then checked as plain concrete, Condition B)."});
+  }
   if(g.ca_x_pos<1.5*A.dia||g.ca_y_pos<1.5*A.dia) warns.push("Anchor edge distance to concrete is small; splitting/blowout may govern (§17.9).");
   if(standoffParams().hasStandoff && standoffParams().z>8*S.anchor.dia) warns.push("Exposed stand-off length exceeds 8·d; bending may govern and lateral stability should be verified.");
   /* ---- ACI 318-19 §17.9 installation limits (cast-in), BP-T1 (2026-10-21) ----
@@ -11634,7 +12135,7 @@ function validateInputs(){
       warns.push("Member depth H = "+fmt(C.H,1)+"″ is less than hₑf + head + cover ≈ "+fmt(Hmin,1)+"″. The anchor head has insufficient concrete below it (PROFIS reports this as ‘minimum thickness of base material’). Increase H or reduce hₑf.");
   }
   { const soV=standoffParams();
-    if(soV.hasStandoff && !soV.groutFilled) warns.push("Open stand-off (no grout): the plate does not bear on concrete. Concrete bearing is not checked; compression goes through the rods (rod compression/buckling check runs instead). Plate bending by the DG1 bearing model is indicative only.");
+    if(soV.hasStandoff && !soV.groutFilled) warns.push("Open stand-off (no grout): the plate does not bear on concrete. Concrete bearing is not checked; compression goes through the rods (rod compression/buckling check runs instead)."+(bpCircPlate()? " The circular plate is checked by the bending-line method from the rod forces (Base Plate tab)." : " Plate bending by the DG1 bearing model is indicative only."));
   }
   /* ---- Load magnitude plausibility (catches lb entered as kip) ----
      Loads are entered PRE-FACTORED in kip and kip-in. A value transcribed from a
@@ -11733,7 +12234,7 @@ function openLoadEditor(){
     v=>{S.ui.axialPositive=v;autosave();redraw();refreshAll();},o=>o[1],o=>o[0]);
   aLbl.appendChild(aSel); bar.appendChild(aLbl);
   const conv=el("span","unit","Sign convention: "+axialLabel()+
-    ". Moments follow the right-hand rule about the named axis: +Mx lifts the +y side, +My lifts the \u2212x side (matches Hilti PROFIS). Forces at column centroid.");
+    ". Moments follow the right-hand rule about the named axis: +Mx lifts the +y side, +My lifts the \u2212x side (matches Hilti PROFIS); T = torsion about +z, + counter-clockwise seen from above. Forces at column centroid.");
   bar.appendChild(conv);
   {const warn=el("div","note");
    warn.innerHTML="<b>Check these two before entering or importing loads.</b> A moment entered as "+
@@ -11751,7 +12252,7 @@ function openLoadEditor(){
   /* paste import */
   const pasteWrap=el("div"); pasteWrap.style.marginTop="10px";
   {const ph=el("div","note");
-   ph.innerHTML="Paste from Excel (tab or comma separated): <b>Name, P, Vx, Vy, Mx, My</b> \u2014 "+
+   ph.innerHTML="Paste from Excel (tab or comma separated): <b>Name, P, Vx, Vy, Mx, My</b> [, <b>T</b>] \u2014 "+
      "read as <b>"+forceUnit()+"</b> for P/Vx/Vy and <b>"+momentUnit()+"</b> for Mx/My, with "+
      axialLabel()+". Set the selectors above to match your source before pasting.";
    pasteWrap.appendChild(ph);}
@@ -11765,9 +12266,11 @@ function openLoadEditor(){
     const parsed=[];
     rows.forEach(r=>{ const c=r.split(/\t|,/).map(s=>s.trim());
       const mf=momentFactor();
-      if(c.length>=6) parsed.push({name:c[0],
+      if(c.length>=6){ const o={name:c[0],
         P:(parseFloat(c[1])||0)/(uf*axialSign()), Vx:(parseFloat(c[2])||0)/uf, Vy:(parseFloat(c[3])||0)/uf,
-        Mx:(parseFloat(c[4])||0)/mf, My:(parseFloat(c[5])||0)/mf}); });
+        Mx:(parseFloat(c[4])||0)/mf, My:(parseFloat(c[5])||0)/mf};
+        if(c.length>=7 && parseFloat(c[6])) o.T=(parseFloat(c[6])||0)/mf;   /* BC-3: optional 7th column, torsion T */
+        parsed.push(o); } });
     if(parsed.length){ S.combos=parsed; ta.value=""; redraw(); refreshAll(); }
     else alert("No rows parsed. Each row needs 6 columns: Name, P, Vx, Vy, Mx, My");
   });
@@ -11787,7 +12290,7 @@ function openLoadEditor(){
     const uf=forceFactor(), Fu=forceUnit(), Mu=momentUnit();
     const t=el("table","tbl");
     const hd=el("tr");
-    ["#","Name","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")",""]
+    ["#","Name","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")","T ("+Mu+")",""]
       .forEach(h=>hd.appendChild(el("th",null,h)));
     t.appendChild(hd);
     S.combos.forEach((cb,i)=>{
@@ -11797,10 +12300,10 @@ function openLoadEditor(){
       tagField(nm,"mcombo"+i+"_name");
       nm.addEventListener("input",()=>{cb.name=nm.value;autosave();});
       const td0=el("td","lft"); td0.appendChild(nm); tr.appendChild(td0);
-      ["P","Vx","Vy","Mx","My"].forEach(k=>{
+      ["P","Vx","Vy","Mx","My","T"].forEach(k=>{   /* BC-3: T = torsion about +z (+ counter-clockwise seen from above), 0 when absent */
         /* Mx/My convert through the MOMENT factor, which may be kip-ft (÷12)
            independently of the force unit. P/Vx/Vy use the force factor. */
-        const isM=(k==="Mx"||k==="My");
+        const isM=(k==="Mx"||k==="My"||k==="T");
         /* P also carries the axial SIGN convention: internal storage is
            tension-positive, so compression-positive entry flips at the boundary. */
         const f = isM? momentFactor() : (k==="P"? uf*axialSign() : uf);
@@ -11808,9 +12311,9 @@ function openLoadEditor(){
         const dec = isM? ((mm==="kip-ft"||mm==="lb-ft")?3:(mm==="lb-in"?0:2))
                        : (unitMode()==="lb"?0:2);
         const td=el("td"); const inp=document.createElement("input");
-        inp.type="number"; inp.value=+(cb[k]*f).toFixed(dec);
+        inp.type="number"; inp.value=+((+cb[k]||0)*f).toFixed(dec);
         tagField(inp,"mcombo"+i+"_"+k);
-        inp.addEventListener("input",()=>{ cb[k]=(parseFloat(inp.value)||0)/f; autosave(); buildTabs(); });
+        inp.addEventListener("input",()=>{ const v=(parseFloat(inp.value)||0)/f; if(k==="T" && !v && cb.T===undefined) return; cb[k]=v; autosave(); buildTabs(); });
         td.appendChild(inp); tr.appendChild(td);
       });
       const tdx=el("td"); const x=el("button","danger","×"); x.style.padding="0 6px";
@@ -12416,6 +12919,7 @@ function buildPrintReport(target){
     const d=el("div"); d.innerHTML="<b>"+k+":</b> "+(v||"—"); hg.appendChild(d); });
   cover.appendChild(hg);
   if(typeof bxMrSourceLine==="function"&&bxMrSourceLine()) cover.appendChild(el("div","note",bxMrSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
+  if(typeof bxAgSourceLine==="function"&&bxAgSourceLine()) cover.appendChild(el("div","note",bxAgSourceLine()));   /* BC-3: anchorGroup source */
   front.appendChild(cover);
   const fm=el("section","cr-front");
   fm.appendChild(el("h2","cr-h1 cr-nonum","References:"));
@@ -12522,6 +13026,7 @@ function refreshAll(){
   }
   buildTabs();
   restoreUI(st);
+  if(typeof bpGroupBar==="function") bpGroupBar();   /* BC-3: anchor-group picker */
 }
 function refreshOutput(){ buildOutput(); }
 
@@ -12912,7 +13417,7 @@ function buildVCaseTab(pg){
   mkSection("vcGeom","2. Geometry Governing the Case Choice",body=>{
     body.appendChild(eqBlock({title:"Row set-out toward the loaded edge",
       ref:"ACI 318-19 §17.7.2.1.1",
-      lines:["\\text{shear resultant pushes toward the }"+r.edgeName+"\\text{ edge}",
+      lines:["\\text{shear resultant pushes toward the }"+(r.circ? "\\text{"+r.edgeName+"}" : r.edgeName)+"\\text{ edge}",   /* BC-2: circular pier name as text */
              "c_{a1,1}="+fmt(r.ca11,2)+"\\ \\text{in}\\quad(\\text{edge to the FRONT row})",
              "s="+fmt(r.s,2)+"\\ \\text{in}\\quad(\\text{front row to the next row})",
              "s "+(r.s>=r.ca11?"\\ge":"<")+" c_{a1,1}\\ \\Rightarrow\\ "+
@@ -14671,6 +15176,8 @@ function profisBuildPe(opts){
   /* ---- anchor plate ---- */
   const ap=at("AnchorPlate");
   fill(ap,{LengthA:mm(P.B), LengthB:mm(P.N), Thickness:mm(P.t)});
+  /* BC-1 (2026-11-01): a circular plate is written as its D × D bounding square (no circular plate in the template) */
+  if(bpCircPlate()) verify.push("Circular base plate Ø"+fmt(P.D,2)+" in is written as a "+fmt(P.D,2)+" × "+fmt(P.D,2)+" in rectangular plate (the template has no circular plate). Set the plate shape to circular in PROFIS.");
   row("Plate B × N × t", fmt(P.B,3)+" × "+fmt(P.N,3)+" × "+fmt(P.t,3)+" in",
       "LengthA "+fmt(mm(P.B),2)+", LengthB "+fmt(mm(P.N),2)+", Thickness "+fmt(mm(P.t),2)+" mm","ok");
   /* BP-X8 (2026-10-16): LengthA = l_x, LengthB = l_y confirmed (example 5: LengthB 406.4 mm printed as "lx x ly = 14 x 16 in") */
@@ -14791,7 +15298,11 @@ function profisBuildPe(opts){
   const g=anchorGeom();
   /* BP-X5 (2026-10-16): PROFIS stores Edge* from the plate (anchor-layout) origin, not from the nearest anchor
      (MeasureBaseMaterialEdgeFrom only changes how PROFIS displays them) -> c_a + outer anchor offset */
-  const eg=[g.ca_x_pos+g.xmax, g.ca_x_neg-g.xmin, g.ca_y_pos+g.ymax, g.ca_y_neg-g.ymin];
+  /* BC-2: a circular pier is written as its circumscribing square (edges at ±D/2 from the pier centre); PROFIS's own
+     member is rectangular, which is NOT conservative for a circle — say so */
+  const eg=bpCircPier()? [C.D/2-(C.plate_off_x||0), C.D/2+(C.plate_off_x||0), C.D/2-(C.plate_off_y||0), C.D/2+(C.plate_off_y||0)]
+                       : [g.ca_x_pos+g.xmax, g.ca_x_neg-g.xmin, g.ca_y_pos+g.ymax, g.ca_y_neg-g.ymin];
+  if(bpCircPier()) verify.push("Circular pier Ø"+fmt(C.D,2)+" in is written as the circumscribing "+fmt(C.D,2)+" × "+fmt(C.D,2)+" in square (PROFIS base material edges are straight). A square stand-in overstates the breakout areas of a round pier (unconservative): use this tool's circular-pier results.");
   fill(bm,{EdgeXPositive:mm(eg[0]), EdgeXNegative:mm(eg[1]), EdgeYPositive:mm(eg[2]), EdgeYNegative:mm(eg[3])});
   row("Concrete edges +x / −x / +y / −y from the plate centre (c_a "+[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg].map(v=>fmt(v,2)).join(" / ")+" in from the outer anchors)",
       eg.map(v=>fmt(v,3)).join(" / ")+" in",
@@ -14876,10 +15387,10 @@ function profisBuildPe(opts){
   const comboOut=S.combos.map((c,i)=>{
     const o={id:newId(i), name:c.name||("Combination "+(i+1)),
       ForceZ:(+c.P||0)*U.N, ForceX:(+c.Vx||0)*U.N, ForceY:(+c.Vy||0)*U.N,
-      MomentZ:0, MomentX:(+c.Mx||0)*U.Nmm, MomentY:(+c.My||0)*U.Nmm, app:c};
+      MomentZ:(+c.T||0)*U.Nmm, MomentX:(+c.Mx||0)*U.Nmm, MomentY:(+c.My||0)*U.Nmm, app:c};   /* BC-3: torsion T (0 when absent) */
     const n=proto.cloneNode(true);
     setT(kid(n,"Id"),o.id);
-    fill(n,{ForceZ:o.ForceZ, ForceX:o.ForceX, ForceY:o.ForceY, MomentZ:0, MomentX:o.MomentX, MomentY:o.MomentY,
+    fill(n,{ForceZ:o.ForceZ, ForceX:o.ForceX, ForceY:o.ForceY, MomentZ:o.MomentZ, MomentX:o.MomentX, MomentY:o.MomentY,
             ForceZVariable:0, ForceXVariable:0, ForceYVariable:0, MomentZVariable:0, MomentXVariable:0, MomentYVariable:0,
             LoadType:"Static", Comment:o.name});
     lcs.appendChild(n);
@@ -14887,7 +15398,7 @@ function profisBuildPe(opts){
   });
   const act=comboOut[gi];
   fill(ld,{IsLoadCombinationsActive:"true", LoadType:"Static", StaticLoadType:"Design", LoadDefinitionType:"PerPlate",
-           ForceZ:act.ForceZ, ForceX:act.ForceX, ForceY:act.ForceY, MomentZ:0, MomentX:act.MomentX, MomentY:act.MomentY,
+           ForceZ:act.ForceZ, ForceX:act.ForceX, ForceY:act.ForceY, MomentZ:act.MomentZ, MomentX:act.MomentX, MomentY:act.MomentY,
            ActiveLoadCombinationId:act.id});
   setT(at("Options","ReportLoadCombination"),act.id);
   row("Load combinations",S.combos.length+" factored (LRFD) combinations",
@@ -14897,7 +15408,8 @@ function profisBuildPe(opts){
   if(govNote) verify.push("Active combination: "+govNote+".");
   if(S.serviceLoads && (S.serviceLoads.useSeismic||S.serviceLoads.useOmega))
     verify.push("Seismic combinations are written as ordinary static design loads. Set the seismic design options (ACI 318-19 §17.10) in PROFIS.");
-  notes.push("Torsion MomentZ is written as 0 (this tool has no torsion input).");
+  if(S.combos.some(c=>Math.abs(+c.T||0)>1e-12)) verify.push("Torsion T is written as MomentZ (+ counter-clockwise about +z). The PROFIS sign of MomentZ is not confirmed by a test file: check the anchor shear forces in PROFIS.");
+  else notes.push("Torsion MomentZ is written as 0 (no combination has a torsion T).");
   notes.push("Display units in PROFIS are those of the template (inch, kip, ft-kip, ksi); the stored values are SI and do not depend on them.");
 
   /* ---- report notes inside the file ---- */
@@ -16263,6 +16775,280 @@ manPart("pA","A. Notation & References",[
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);
   setInterval(refreshBar,2000);
+})();
+/* =====================================================================
+   BC-3 (2026-11-01): ANCHOR GROUPS per project, the anchorGroup hand-off receiver and the anchorGroupResult sender
+   (HANDOFF.md §4.11 / §4.12). Engineer decision 2026-11-01: a two-post sign is ONE project with an anchor-group
+   picker. A project without S.groups (every save before BC-3) is a single group and is unchanged.
+   S.groups = [{id, label, srcId, data:{plate, col, anchor, …, combos}}], S.groupActive = index; the live S holds the
+   active group, and its entry in S.groups is refreshed whenever the group is switched, added or exported.
+   ===================================================================== */
+const BP_GROUP_KEYS=["plate","col","anchor","grout","standoff","forceModel","levNut","conc","shear","tRebar","vRebar","ped","combos","serviceLoads","detailCombo"];
+function bpGroupSnap(){ const o={}; BP_GROUP_KEYS.forEach(k=>{ if(S[k]!==undefined) o[k]=JSON.parse(JSON.stringify(S[k])); }); return o; }
+function bpGroupState(data){ const st=JSON.parse(JSON.stringify(S)); BP_GROUP_KEYS.forEach(k=>{ if(data && data[k]!==undefined) st[k]=JSON.parse(JSON.stringify(data[k])); }); return mergeState(st); }
+function bpGroupsOn(){ return Array.isArray(S.groups) && S.groups.length>0; }
+function bpGroupSync(){ if(bpGroupsOn()){ const a=Math.min(Math.max(0,S.groupActive||0),S.groups.length-1); S.groupActive=a; S.groups[a].data=bpGroupSnap(); } }
+function bpGroupLabel(){ return bpGroupsOn()? (S.groups[S.groupActive||0]||{}).label||"" : ""; }
+function bpGroupSwitch(i){
+  if(!bpGroupsOn() || i===S.groupActive || !S.groups[i]) return;
+  bpGroupSync();
+  const groups=S.groups, ns=bpGroupState(groups[i].data); ns.groups=groups; ns.groupActive=i;
+  S=ns; S.detailCombo=Math.min(S.detailCombo||0,(S.combos.length||1)-1);
+  autosave(); refreshAll();
+}
+function bpGroupAdd(){
+  const name=prompt("Name of the new anchor group (a copy of the current one):", "Group "+((S.groups||[]).length+(bpGroupsOn()?1:2)));
+  if(name===null) return;
+  if(!bpGroupsOn()){ S.groups=[{id:"g1",label:"Group 1",data:bpGroupSnap()}]; S.groupActive=0; }
+  bpGroupSync();
+  S.groups.push({id:"g"+(Date.now()%1e9).toString(36),label:name||("Group "+(S.groups.length+1)),data:bpGroupSnap()});
+  bpGroupSwitch(S.groups.length-1);
+}
+function bpGroupRename(){ if(!bpGroupsOn()) return; const g=S.groups[S.groupActive]; const n=prompt("Rename the anchor group:",g.label); if(n){ g.label=n; autosave(); refreshAll(); } }
+function bpGroupDelete(){
+  if(!bpGroupsOn()) return;
+  if(S.groups.length<2){ if(confirm("Remove the group list? The current design stays as the project's only anchor group.")){ delete S.groups; delete S.groupActive; autosave(); refreshAll(); } return; }
+  const a=S.groupActive; if(!confirm("Delete anchor group “"+S.groups[a].label+"”? Its inputs are removed from this project.")) return;
+  const groups=S.groups.filter((_,i)=>i!==a), j=Math.max(0,a-1), ns=bpGroupState(groups[j].data); ns.groups=groups; ns.groupActive=j;
+  S=ns; autosave(); refreshAll();
+}
+function bpGroupBar(){
+  const host=document.getElementById("bpGroupBar"); if(!host) return;
+  host.innerHTML="";
+  const lab=el("span",null,"Anchor group: "); lab.style.cssText="font-size:9.5pt;font-weight:bold"; host.appendChild(lab);
+  if(bpGroupsOn()){
+    const sel=document.createElement("select"); sel.id="bpGroupSel";
+    S.groups.forEach((g,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=(i+1)+". "+g.label; sel.appendChild(o); });
+    sel.value=S.groupActive||0; sel.addEventListener("change",()=>bpGroupSwitch(+sel.value)); host.appendChild(sel);
+    [["Rename",bpGroupRename],["Delete",bpGroupDelete]].forEach(([t,f])=>{ const b=el("button",null,t); b.type="button"; b.addEventListener("click",f); host.appendChild(b); });
+  } else host.appendChild(el("span","note","one group (this design)"));
+  const add=el("button",null,"+ Add group"); add.type="button"; add.title="Add another anchor group to this project (e.g. the second post of a two-post sign), starting as a copy of this one";
+  add.addEventListener("click",bpGroupAdd); host.appendChild(add);
+  if(S.bxSrc && S.bxSrc.anchorGroup){ const b=el("button",null,"Send result to Light Pole"); b.type="button"; b.id="btnSendAgResult";
+    b.title="Publish the governing D/C of every anchor group on channel anchorGroupResult (HANDOFF.md §4.12)"; b.addEventListener("click",()=>bxAg.sendResult(true)); host.appendChild(b); }
+}
+/* governing results of one group, computed in its own state (S and CC restored afterwards) */
+function bpGroupResultFor(i){
+  const saveS=S, saveCC=CC;
+  try{
+    const other=bpGroupsOn() && i!==S.groupActive;
+    if(other){ const ns=bpGroupState(S.groups[i].data); ns.groups=undefined; S=ns; }
+    CC=computeAll();
+    const checks=allChecks(); let gov={dcr:0,label:"—",combo:"—"};
+    checks.forEach(c=>{ const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na && v>gov.dcr) gov={dcr:v,label:c.label,combo:c.combo||"—"}; });
+    let tw={dcr:0,mode:"—",combo:"—"}, vw={dcr:0,mode:"—",combo:"—"}, iw={dcr:0,form:"—",combo:"—"};
+    CC.combos.forEach(c=>{ const cap=comboCapacities(CC,c), gT=cap.govTfor(c), gV=cap.govVfor(c), dT=cap.tDCR(c,gT), dV=cap.vDCR(c,gV), it=interaction(dT,1,dV,1);
+      if(dT>tw.dcr) tw={dcr:dT,mode:gT.label,combo:c.name}; if(dV>vw.dcr) vw={dcr:dV,mode:gV.label,combo:c.name}; if(it.dcr>iw.dcr) iw={dcr:it.dcr,form:it.governingForm,combo:c.name}; });
+    return {gov, tension:tw, shear:vw, interaction:iw, warnings:other? ["(validation messages are listed when this group is shown)"] : (VALIDATION&&VALIDATION.warns||[]).slice(0,10)};
+  } catch(e){ return {error:String(e&&e.message||e)}; }
+  finally{ S=saveS; CC=saveCC; }
+}
+
+/* ---- anchorGroup receiver ------------------------------------------------------------------------------ */
+(function(){
+  var CH='anchorGroup', SCHEMA='bridge-anchor-group', MAXV=1, RID='basePlate';
+  var RES_CH='anchorGroupResult', RES_SCHEMA='bridge-anchor-group-result';
+  var LEN={'in':1,'inch':1,'ft':12}, FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};
+  var MOM={'kip-in':1,'kip·in':1,'kip-ft':12,'kip·ft':12,'ft-kip':12,'lb-in':0.001,'lb-ft':0.012,'ft-lb':0.012};   /* -> kip-in */
+  var STRESS={ksi:1,psi:0.001};
+  var HEAD={heavyHex:'hvyhexhead',heavyhex:'hvyhexhead',hex:'heavyhex',hvyhexhead:'hvyhexhead',square:'sqhead',heavySquare:'hvysqhead',plateWasher:'platewasher'};
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function h(tag,cls,html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
+  function f(v,d){ return isNum(v)? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
+  /* validate + convert every group to this tool's fields; returns {err:[], warn:[], groups:[{id,label,set:{…},combos:[…],lpRef}]} */
+  function check(p){
+    var out={err:[],warn:[],groups:[]};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    var u=p.units||{}, kl=LEN[u.length], kf=FORCE[u.force], km=MOM[u.moment], ks=STRESS[u.stress||'ksi'];
+    if(!kl) out.err.push('Unknown length unit "'+(u.length||'')+'" (accepted: in, ft).');
+    if(!kf) out.err.push('Unknown force unit "'+(u.force||'')+'" (accepted: kip, lb).');
+    if(!km) out.err.push('Unknown moment unit "'+(u.moment||'')+'" (accepted: kip-in, kip-ft, lb-in, lb-ft).');
+    if(!ks) out.err.push('Unknown stress unit "'+(u.stress||'')+'" (accepted: ksi, psi).');
+    var b=p.basis||{};
+    if(b.factored!==true) out.err.push('The loads must be factored (basis.factored = true): this tool checks LRFD factored combinations.');
+    if(b.method && String(b.method).toUpperCase()!=='LRFD') out.err.push('basis.method "'+b.method+'" is not LRFD.');
+    var cv=p.signConvention;
+    if(cv!=='lightPole-v1' && cv!=='basePlate-v1') out.err.push('Unknown signConvention "'+(cv||'')+'" (accepted: lightPole-v1, basePlate-v1; HANDOFF.md §4.11).');
+    if(!Array.isArray(p.groups) || !p.groups.length) out.err.push('The payload has no anchor groups.');
+    if(out.err.length) return out;
+    if(kf!==1||km!==1||kl!==1) out.warn.push('Units converted to kip, kip-in and in (length × '+kl+', force × '+kf+', moment × '+km+').');
+    p.groups.forEach(function(g,gi){
+      var gid=String(g&&g.id!=null? g.id : 'g'+(gi+1)), lab=(g&&g.label)||('Group '+(gi+1)), E=function(m){ out.err.push(lab+': '+m); };
+      if(!g || typeof g!=='object'){ E('not an object.'); return; }
+      var a=g.anchor||{}, base=g.base||{}, pl=base.plate||{}, pole=base.pole||{}, pr=g.pier||{};
+      var set={anchor:{},plate:{},col:{},conc:{},standoff:{},grout:{}};
+      if(a.pattern!=='circle') E('anchor.pattern "'+a.pattern+'" is not supported (circle only).');
+      if(!(isNum(a.n) && a.n>=3 && Math.round(a.n)===a.n)) E('anchor.n must be an integer ≥ 3.');
+      if(!(isNum(a.BC) && a.BC>0)) E('anchor.BC must be positive.');
+      if(a.theta0!==undefined && !isNum(a.theta0)) E('anchor.theta0 is not a number.');
+      var dia=isNum(a.dia)? a.dia*kl : NaN, sp=LIB.anchorDias.find(function(x){ return Math.abs(x.d-dia)<1e-6; });
+      if(!sp) E('anchor.dia '+a.dia+' is not a listed rod diameter.');
+      var gr=LIB.anchorGrades.find(function(x){ return x.id===a.grade; }); if(!gr) E('anchor.grade "'+a.grade+'" is unknown (e.g. f1554_36, f1554_55, f1554_105).');
+      var hd=HEAD[a.nut||a.head||'heavyHex']; if(!hd) E('anchor.nut "'+(a.nut||a.head)+'" is unknown.');
+      if(!(isNum(a.hef) && a.hef>0)) E('anchor.hef must be positive.');
+      set.anchor={pattern:'circle',nCircle:a.n,BC:a.BC*kl,theta0:isNum(a.theta0)?a.theta0:0,dia:dia,grade:a.grade,head:hd,hef:a.hef*kl,torqued:!!a.torqued};
+      if(base.type==='doubleNut'){
+        if(!(isNum(base.standoffClear) && base.standoffClear>=0)) E('base.standoffClear must be ≥ 0.');
+        set.standoff={type:'clamp',z:(base.standoffClear||0)*kl}; set.grout={present:false};
+        if(base.grout) out.warn.push(lab+': grout under a double-nut base is taken as non-structural (the rods carry the compression).');
+      } else if(base.type==='flush'){ set.standoff={type:'none'}; set.grout={present:!!base.grout}; }
+      else E('base.type "'+base.type+'" is not supported (doubleNut, flush).');
+      if(pl.shape==='circle'){ if(!(isNum(pl.D)&&pl.D>0)) E('base.plate.D must be positive.'); set.plate={shape:'circle',D:pl.D*kl,B:pl.D*kl,N:pl.D*kl}; }
+      else if(pl.shape==='rect'){ if(!(isNum(pl.B)&&pl.B>0&&isNum(pl.N)&&pl.N>0)) E('base.plate.B / N must be positive.'); set.plate={shape:'rect',B:pl.B*kl,N:pl.N*kl}; }
+      else E('base.plate.shape "'+pl.shape+'" is unknown (circle, rect).');
+      if(!(isNum(pl.t)&&pl.t>0)) E('base.plate.t must be positive.'); else set.plate.t=pl.t*kl;
+      if(isNum(pl.Fy)){ var pg=LIB.plateGrades.find(function(x){ return Math.abs(x.Fy-pl.Fy*ks)<1e-9; }); if(pg) set.plate.grade=pg.id; else E('base.plate.Fy '+pl.Fy+' matches no plate grade (36, 42, 50, 60, 65 ksi).'); }
+      if(base.type==='doubleNut' && pl.shape==='circle' && !(pole.shape==='round' && isNum(pole.D)&&pole.D>0)) E('a circular plate needs base.pole {shape:"round", D}.');
+      if(pole.shape==='round' && isNum(pole.D)){
+        var Dp=pole.D*kl, hs=LIB.hss.find(function(x){ return x.kind==='HSSround' && Math.abs(x.b-Dp)<0.01; });
+        if(hs) set.col={custom:false,shapeType:'HSS',shape:hs.name};
+        else { set.col={custom:true,d:Dp,b:Dp}; out.warn.push(lab+': pole Ø'+f(Dp,3)+' in is not a listed round HSS; entered as a custom '+f(Dp,3)+' × '+f(Dp,3)+' in column (the bending line uses D = '+f(Dp,3)+' in; the drawings show a square).'); }
+      } else if(pole.shape) E('base.pole.shape "'+pole.shape+'" is not supported (round).');
+      if(pr.shape!=='circle' && pr.shape!=='square') E('pier.shape "'+pr.shape+'" is unknown (circle, square).');
+      if(!(isNum(pr.D)&&pr.D>0)) E('pier.D must be positive.');
+      if(!(isNum(pr.fc)&&pr.fc>0)) E('pier.fc must be positive.');
+      if(pr.depth!==undefined && !(isNum(pr.depth)&&pr.depth>0)) E('pier.depth must be positive.');
+      var Dpier=(pr.D||0)*kl;
+      set.conc={shape:pr.shape==='circle'?'circle':'rect',D:Dpier,Bx:Dpier,By:Dpier,fc:(pr.fc||0)*ks,cracked:pr.cracked!==false,plate_off_x:0,plate_off_y:0,ca_override:false};
+      if(isNum(pr.depth)) set.conc.H=pr.depth*kl;
+      if(pr.longBars||pr.ties) out.warn.push(lab+': the shaft reinforcement (bars / ties) is not imported — anchor reinforcement is not available for this layout; breakout is checked as plain concrete (Condition B).');
+      var combos=[];
+      if(!Array.isArray(g.combos) || !g.combos.length) E('no combinations.');
+      else g.combos.forEach(function(c,ci){
+        var bad=['P','Vx','Vy','Mx','My'].filter(function(k){ return !isNum(c[k]); });
+        if(c.T!==undefined && !isNum(c.T)) bad.push('T');
+        if(bad.length){ E('combination '+(ci+1)+' ('+(c.name||'')+'): '+bad.join(', ')+' not a finite number.'); return; }
+        var P=c.P*kf, Vx=c.Vx*kf, Vy=c.Vy*kf, Mx=c.Mx*km, My=c.My*km, T=(c.T||0)*km, o;
+        /* lightPole-v1: P + = compression (down); Mx = moment of a +x push (force × height), My = of a +y push; T + CCW.
+           this tool: P + = tension; right-hand moments: a +x push at height h is +My, a +y push is −Mx. */
+        if(cv==='lightPole-v1') o={name:String(c.name||('C'+(ci+1))),P:-P,Vx:Vx,Vy:Vy,Mx:-My,My:Mx};
+        else o={name:String(c.name||('C'+(ci+1))),P:P,Vx:Vx,Vy:Vy,Mx:Mx,My:My};
+        if(Math.abs(T)>1e-12) o.T=T;
+        combos.push(o);
+      });
+      out.groups.push({id:gid,label:lab,set:set,combos:combos,lpRef:g.lpRef||null});
+    });
+    return out;
+  }
+  function dataFor(G){
+    /* start from the current design's group data, overwrite the imported fields, reinforcement off */
+    var d=bpGroupSnap();
+    Object.keys(G.set).forEach(function(k){ d[k]=Object.assign({},d[k]||{},G.set[k]); });
+    d.combos=G.combos.map(function(c){ return Object.assign({},c); });
+    d.tRebar=Object.assign({},d.tRebar,{present:false}); d.vRebar=Object.assign({},d.vRebar,{present:false}); d.ped=Object.assign({},d.ped,{present:false});
+    d.detailCombo=0;
+    return d;
+  }
+  function apply(p,chk,o,via){
+    if(chk.err.length) return {err:chk.err};
+    var picked=o.mode==='all'? chk.groups : [chk.groups[o.pick||0]];
+    var src={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',project:p.project||'',via:via||'pull',
+             adoptedAt:new Date().toISOString(),inputsHash:p.inputsHash||null,signConvention:p.signConvention,mode:o.mode,
+             groups:picked.map(function(G){ return {id:G.id,label:G.label}; }),notes:(p.notes||[]).slice(0,20)};
+    if(o.mode==='all'){
+      var groups=picked.map(function(G){ return {id:G.id,label:G.label,srcId:G.id,data:dataFor(G)}; });
+      var ns=bpGroupState(groups[0].data); ns.groups=groups; ns.groupActive=0; S=ns;
+    } else {
+      var G=picked[0], ns2=bpGroupState(dataFor(G));
+      if(bpGroupsOn()){ ns2.groups=S.groups; ns2.groupActive=S.groupActive; ns2.groups[ns2.groupActive].srcId=G.id; ns2.groups[ns2.groupActive].label=G.label; }
+      S=ns2;
+    }
+    bpGroupSync();
+    if(!S.bxSrc || typeof S.bxSrc!=='object') S.bxSrc={};
+    S.bxSrc.anchorGroup=src;
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    return {ok:true,err:[]};
+  }
+  function openDialog(p,via){
+    var chk=check(p);
+    if(chk.err.length){ alert('Anchor-group hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    var old=document.getElementById('bxAgOverlay'); if(old) old.remove();
+    var ov=h('div','modal'); ov.id='bxAgOverlay'; var box=h('div','modalBox wide'); ov.appendChild(box);
+    box.appendChild(h('h3',null,'Import anchor group'+(chk.groups.length>1?'s':'')+' from '+esc(p.producer||'?')));
+    box.appendChild(h('div','note','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+' &middot; <b>sent</b> '+esc(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+
+      ' &middot; <b>project</b> '+esc((p.project&&p.project.name)||'—')+' &middot; factored LRFD'+(p.basis&&p.basis.combos?' ('+esc(p.basis.combos)+')':'')+(via==='file'?' &middot; from a JSON file':'')));
+    box.appendChild(h('div','warnBox','<b>Sign convention ('+esc(p.signConvention)+').</b> '+(p.signConvention==='lightPole-v1'
+      ? 'The Light Pole tool sends P + = compression, M<sub>x</sub> = moment of a push toward +x and M<sub>y</sub> of a push toward +y. This tool uses P + = tension and right-hand moments, so <b>P = −P<sub>LP</sub>, M<sub>y</sub> = +M<sub>x,LP</sub>, M<sub>x</sub> = −M<sub>y,LP</sub></b> (a push toward +x puts the −x anchors in tension). V<sub>x</sub>, V<sub>y</sub> and T (+ counter-clockwise) are unchanged.'
+      : 'The payload is already in this tool\'s convention (P + = tension, right-hand moments).')));
+    if(chk.warn.length) box.appendChild(h('div','warnBox',chk.warn.map(esc).join('<br>')));
+    if(p.notes&&p.notes.length) box.appendChild(h('div','note','<b>Sender notes:</b><br>'+p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>')));
+    var t=h('table','tbl'); t.innerHTML='<tr><th class="lft">Group</th><th>Anchors</th><th>Plate</th><th>Pier</th><th>Stand-off</th><th>Combinations</th></tr>';
+    chk.groups.forEach(function(G){ var s=G.set, tr=h('tr');
+      tr.innerHTML='<td class="lft">'+esc(G.label)+'</td><td>'+s.anchor.nCircle+' × '+f(s.anchor.dia,3)+' in '+esc(s.anchor.grade)+' on BC '+f(s.anchor.BC,2)+' in, θ₀ '+f(s.anchor.theta0,1)+'°, h<sub>ef</sub> '+f(s.anchor.hef,2)+' in</td>'+
+        '<td>'+(s.plate.shape==='circle'?'Ø'+f(s.plate.D,2):f(s.plate.B,2)+' × '+f(s.plate.N,2))+' × '+f(s.plate.t,3)+' in</td><td>'+(s.conc.shape==='circle'?'round Ø':'square ')+f(s.conc.D,2)+' in, f′c '+f(s.conc.fc,2)+' ksi'+(s.conc.H?', depth '+f(s.conc.H,1)+' in':'')+'</td>'+
+        '<td>'+(s.standoff.type==='clamp'?'double nut, clear '+f(s.standoff.z,2)+' in':'flush')+'</td><td>'+G.combos.length+(G.combos.some(function(c){ return c.T; })?' (with torsion)':'')+'</td>'; t.appendChild(tr); });
+    box.appendChild(t);
+    var md=h('div'); md.style.margin='8px 0';
+    md.innerHTML='<label><input type="radio" name="bxAgMode" id="bxAgAll"'+(chk.groups.length>1?' checked':'')+'> import every group into this project (anchor-group picker; replaces this project\'s groups)</label><br>'+
+      '<label><input type="radio" name="bxAgMode" id="bxAgOne"'+(chk.groups.length>1?'':' checked')+'> import one group into the current design: </label>';
+    var sel=document.createElement('select'); sel.id='bxAgPick'; chk.groups.forEach(function(G,i){ var op=document.createElement('option'); op.value=i; op.textContent=G.label; sel.appendChild(op); }); md.appendChild(sel);
+    box.appendChild(md);
+    box.appendChild(h('div','note','<b>Will overwrite</b> in each imported group: the anchors (bolt circle, diameter, grade, nut, h<sub>ef</sub>, torqued), the base plate, the column (pole), the pier (shape, size, f′c, cracked, depth), the stand-off and grout, and the load combinations (replaced). Anchor, shear and pedestal reinforcement are switched off. Project information, units and report settings are kept. The source is recorded in the project and printed in the report.'));
+    var foot=h('div','modalFoot'), ca=h('button',null,'Cancel'), go=h('button','primary','Import'); go.id='bxAgGo';
+    foot.appendChild(ca); foot.appendChild(go); box.appendChild(foot);
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      var o={mode:document.getElementById('bxAgAll').checked?'all':'one',pick:+sel.value};
+      var r=apply(p,chk,o,via); if(!r.ok){ alert(r.err.join('\n')); return; }
+      ov.remove(); autosave(); try{ refreshAll(); }catch(e){} refreshBar();
+    });
+    document.body.appendChild(ov);
+    return {overlay:ov,chk:chk};
+  }
+  function resultPayload(){
+    var src=S.bxSrc&&S.bxSrc.anchorGroup; if(!src) return null;
+    bpGroupSync();
+    var n=bpGroupsOn()? S.groups.length : 1, res=[];
+    for(var i=0;i<n;i++){
+      var g=bpGroupsOn()? S.groups[i] : {id:(src.groups&&src.groups[0]&&src.groups[0].id)||'g1',label:(src.groups&&src.groups[0]&&src.groups[0].label)||'Group 1'};
+      var r=bpGroupResultFor(i);
+      res.push(r.error? {groupId:g.srcId||g.id,label:g.label,error:r.error} :
+        {groupId:g.srcId||g.id,label:g.label,governing:{dcr:r.gov.dcr,mode:r.gov.label,combo:r.gov.combo},tension:r.tension,shear:r.shear,
+         interaction:r.interaction,ok:r.gov.dcr<=1+1e-9,warnings:r.warnings});
+    }
+    return {_schema:RES_SCHEMA,schemaVersion:1,units:{force:'kip',moment:'kip-in',length:'in'},
+      source:{producer:src.producer,producedAt:src.producedAt,inputsHash:src.inputsHash},
+      notes:['Design ratios (demand / design strength) by ACI 318-19 Ch. 17 in the Base Plate & Anchor Bolt Designer; the governing value is the largest of every check (plate, anchors, concrete) over every combination.'],
+      results:res};
+  }
+  function sendResult(interactive){
+    var pl=resultPayload(); if(!pl){ if(interactive) alert('No anchor-group hand-off has been imported into this project.'); return null; }
+    var r=BridgeXfer.publish(RES_CH,pl,'Base Plate & Anchor Bolt Designer','BasePlateAnchorDesigner.html');
+    if(interactive){
+      if(r.error){ if(confirm(r.error+'\n\nSave the result as a JSON file instead?')) BridgeXfer.exportFile(RES_CH,r.payload||pl); }
+      else if(confirm('Result sent on channel anchorGroupResult ('+pl.results.map(function(x){ return x.label+': D/C '+f(x.governing&&x.governing.dcr,3); }).join('; ')+').\n\nAlso save it as a JSON file (Export hand-off)?')) BridgeXfer.exportFile(RES_CH,r.payload);
+    }
+    return r;
+  }
+  function sourceLine(){
+    var s=S.bxSrc&&S.bxSrc.anchorGroup; if(!s) return '';
+    return 'Anchor group'+((s.groups||[]).length>1?'s':'')+' '+(s.groups||[]).map(function(g){ return g.label; }).join(', ')+' from '+(s.producer||'?')+', '+(s.producedAt? new Date(s.producedAt).toLocaleString():'?')+
+      ((s.project&&s.project.name)?' ('+s.project.name+')':'')+(s.via==='file'?', via JSON file':'')+' — signConvention '+(s.signConvention||'?');
+  }
+  function refreshBar(){
+    var nd=document.getElementById('bxAgNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
+    var sl=document.getElementById('bxAgSrc'); if(sl) sl.textContent=sourceLine();
+  }
+  window.bxPullAnchorGroup=function(){
+    var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+    if(!r.ok){ alert('Pull from Light Pole: '+r.error+(r.empty?'\n\nIn the Light Pole and Sign Post tool, send the anchor groups first (or use Import hand-off (JSON)).':'')); return null; }
+    return openDialog(r.payload,'pull');
+  };
+  /* "Import hand-off (JSON)": an anchorGroup file opens this dialog; any other file goes to the memberReactions receiver as before */
+  window.bxImportHandoff=function(ev){
+    var fl=ev && ev.target && ev.target.files && ev.target.files[0]; if(!fl) return;
+    var tgt=ev.target, fr=new FileReader();
+    fr.onload=function(){ var p=null; try{ p=JSON.parse(fr.result); }catch(e){}
+      if(p && p._schema===SCHEMA){ tgt.value=''; openDialog(p,'file'); }
+      else bxImportMemberReactions({target:{files:[fl],set value(v){ tgt.value=v; }}});
+    };
+    fr.readAsText(fl);
+  };
+  window.bxAgSourceLine=sourceLine;
+  window.bxAg={check:check,apply:apply,openDialog:openDialog,resultPayload:resultPayload,sendResult:sendResult,sourceLine:sourceLine,refreshBar:refreshBar};
+  document.addEventListener('DOMContentLoaded',function(){ setTimeout(refreshBar,200); });
+  window.addEventListener('focus',refreshBar); window.addEventListener('storage',refreshBar); setInterval(refreshBar,2000);
 })();
 </script>
 </body>
