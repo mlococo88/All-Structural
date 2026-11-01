@@ -923,3 +923,330 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 14.7.5.4 
 ### Open items (engineer)
 - **Default MassDOT pad:** it now needs restraint by 14.7.5.4. The 0.03 rad construction tolerance makes θs large; with the AASHTO 0.005 tolerance it passes. Should MassDOT designs with the 0.03 tolerance be expected to be anchored, or should the check use another θs basis?
 - **n:** increase by ½ per cover layer ≥ ½ hri (allowed by 14.7.5.4)?
+
+## 2026-11-01 — PR: claude/rpt-elastomeric — Report output tab in the shared report viewer (EDRP; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `EDRP`.
+
+### EDRP. "Report" output tab (shared/report.js, shared/steps.js)   [display only]
+- **Request (coordinator plan 2026-11-01, after Spread Footing PR #518):** a Report output tab in the shared viewer used by the Steel Bridge app and Spread Footing: navigation tree down to the topics, numbered sections §n.m, worked steps (equation → substituted values → result, CLAUDE.md §6), steps grouped by topic with `SharedSteps.group`, "see §x.y" links, links back to the tool's tabs, and print to PDF with a title block (no owner cell), running header and "Page X of Y".
+- **Loads:** `<script src="shared/steps.js">` and `<script src="shared/report.js">` (classic scripts, relative path) after the CDN libraries. The tool now needs the `shared` folder next to it (it is in the repository). Without it only the Report tab shows a message; every other tab is unaffected. KaTeX 0.16.11 (already loaded by the tool) sets the equations; without it the built-in renderer of `shared/steps.js` does.
+- **New code** (one `<script>` block before "postMessage linkage with the Abutment app"):
+  - `edrModel()` builds the report model from `LAST` (computeEDM), its dashboard `LAST.dash`, `thermalMovement()` (the same call as the Thermal Movement card) and `edmGirdRun()`.
+  - `edrTopics()` groups each list of steps into topics; `edrRender()` mounts the viewer (`SharedReport.mount`); `edrGoto()` handles the `[[tab:…]]` links (tab and card, through `edmGoto`); `edrShow()` shows the tab; `edrWillPrint()` and a `beforeprint` listener print it.
+- **Sections:** 1 Design summary (every dashboard check, its D/C and a § link to the step that works it); 2 Project and inputs (title block data, geometry and materials, loads and movements, toggles and coefficients, pad schematic); 3 Geometry and service stresses (A, S, h_rt, σ_DL, σ_LL, σ_s); 4 Rotation and movement (rotation build-up, θ_t,W for rectangular pads, thermal movement reference); 5 Design checks, one subsection per group (Method B: shear strains; stability; steel laminates and covers; anchorage, restraint and H_bu. Method A: stress and shear deformation; uplift; stability; laminates and covers; anchorage and H_bu. Plain: stress and shear deformation; stability; anchorage), one topic per check ending with its D/C step; 6 Girder run (only with a girder set, as the tab); 7 Warnings and assumptions; 8 References (`EDM_REFS`).
+- **Values:** every step `value` is the tool's own value (`LAST.A`, `LAST.S`, `LAST.strain.*`, `LAST.stab.*`, `LAST.reinf.*`, `LAST.anc.*`, `LAST.res.*`, `LAST.methodA.*`, …). Every D/C step value is the dashboard's `d.dc` and its OK/NG is the dashboard's `d.pass`. Two displayed quantities are the same arithmetic the tab shows: the friction resistance P_min/5 (`ancEq`) and the stability-thickness limit D/4 or min(L, W)/3 (`stabTEq`). Code references are those of the tabs, with the edition the tool states (AASHTO LRFD 10th Ed.; MassDOT LRFD Bridge Manual §3.5.7).
+- **Refactor (no result change):** the girder run of the Girder Run tab moved unchanged out of `renderGird` into `edmGirdRun()`; `renderGird` and the report both call it.
+- **Tab state:** the Report tab is shown on top of the saved tab (`EDR.on`, memory only); `S.ui.tab` never takes a new value, so the autosave, saved projects, JSON export and the Abutment hand-off are unchanged. `edmGoto`, the tab bar and the dashboard items switch it off.
+- **Print:** the viewer's "Print report" button, the toolbar "Print / PDF Report" button while the Report tab is shown, and Ctrl+P while it is shown print the new report alone (title block Project / Project No. / Calculated by / Date / Checked by / Checked date, contents, running header, page numbers). From any other tab, Ctrl+P and "Print / PDF Report" print the D11 report exactly as before (`edrWillPrint()` makes the D11 `beforeprint` handler stand aside only on the Report tab).
+- **CSS:** below 1000 px the viewer's single column is `minmax(0,1fr)` (`#tab-rpt .rp-body`), so the page does not scroll sideways at 390 px (before: 832 px wide); a wide equation scrolls inside its step.
+- **Saved data:** nothing new. The viewer's collapsed sections are kept in memory only (`EDR.closed`).
+- **How verified (headless Chromium, pinned KaTeX 0.16.11 and Plotly 2.35.2 served locally):**
+  - 10 projects (default circular Method B, rectangular B, rectangular B with the AASHTO tolerance and limit and P_min, circular A, rectangular A, plain pad, anchored + fixed + failing, rectangular failing with stability limit, girder set with title-block data, thermal inputs with a negative rotation). Each report has 20 to 47 steps in 9 to 16 topics, 0 unresolved or duplicate references, 0 KaTeX errors, no NaN / undefined / Infinity in `SharedReport.text()` or on screen, 0 console errors.
+  - 16 to 40 spot values per project equal the app's values exactly (`===`), including every dashboard D/C through the summary table's link.
+  - `LAST` and `S` are unchanged by building the report; the Report tab is not saved in `S.ui.tab`; a report link opens the Design Checks tab.
+  - origin/main vs the branch on the 10 projects: `LAST`, `S`, dashboard, input panel, the text of the five result tabs, the D11 report text and the self-test are identical.
+  - Ctrl+P on the Report tab gives `body.rp-printing`, the report alone and the @page running header, and no D11 report (PDF checked, 12 pages on the rectangular project). From the Design Checks tab Ctrl+P builds the D11 report as before.
+  - `node tests/check-syntax.mjs elastomeric_design_module.html` passes.
+- **Other copies:** none. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
+- **Open items (shared viewer, not changed here):** in a narrow window a long equation that wraps onto a second line can overlap the line above, and the top of a tall fraction in the equation column can be clipped on screen (`.rp-step .rp-m{overflow-x:auto}`); print is not affected. Same in every tool that uses `shared/report.js`.
+
+Diff (`elastomeric_design_module.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/elastomeric_design_module.html b/elastomeric_design_module.html
+index 13f0165..656e0f1 100644
+--- a/elastomeric_design_module.html
++++ b/elastomeric_design_module.html
+@@ -9,0 +10,3 @@
++<!-- EDRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -149 +152,3 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
+-@media print{html{background:#fff;}}   /* the screen's grey page colour filled the end of the last printed page */
++@media print{html{background:#fff;}}
++/* EDRP: Report tab below 1000 px: the viewer's single column may shrink below its widest equation (the equation scrolls inside its step), so the page does not scroll sideways */
++@media (max-width:1000px){#tab-rpt .rp-body{grid-template-columns:minmax(0,1fr);}}   /* the screen's grey page colour filled the end of the last printed page */
+@@ -757,0 +763 @@ function edmGoto(tab,card){
++  EDR.on=false;   /* EDRP */
+@@ -774 +780 @@ function renderInlineMath(root){ (root||document).querySelectorAll(".ktxi").forE
+-const TABS=[["tab-in","Geometry & Schematic"],["tab-des","Design Checks"],["tab-rot","Rotation & Movement"],["tab-gird","Girder Run"],["tab-warn","Warnings & Assumptions"]];
++const TABS=[["tab-in","Geometry & Schematic"],["tab-des","Design Checks"],["tab-rot","Rotation & Movement"],["tab-gird","Girder Run"],["tab-warn","Warnings & Assumptions"],["tab-rpt","Report"]];   // tab-rpt: EDRP Report tab (shown by edrShow, never stored in S.ui.tab)
+@@ -786,0 +793 @@ function renderAll(){
++  h+=`<div class="tabpane" id="tab-rpt"></div>`;   /* EDRP */
+@@ -791,0 +799 @@ function renderAll(){
++  edrShow();   /* EDRP: the Report tab, when it is the one shown */
+@@ -951 +959 @@ function renderGird(R){
+-  const run=gs.map((gd,i)=>{ const r=computeEDM(Object.assign({__tag:gd.tag||("G"+(i+1))},S.loads,gd)); return {tag:gd.tag||("G"+(i+1)),gov:Math.max(...r.dash.map(d=>d.dc||0)),fail:r.nFail}; });
++  const run=edmGirdRun();
+@@ -958,0 +967,4 @@ function renderGird(R){
++/* EDRP: the girder run (one computeEDM per girder), moved out of renderGird unchanged so the Report tab shows the same values */
++function edmGirdRun(){ const gs=S.girders||[];
++  const run=gs.map((gd,i)=>{ const r=computeEDM(Object.assign({__tag:gd.tag||("G"+(i+1))},S.loads,gd)); return {tag:gd.tag||("G"+(i+1)),gov:Math.max(...r.dash.map(d=>d.dc||0)),fail:r.nFail}; });
++  return run; }
+@@ -1033,2 +1045,2 @@ document.addEventListener("click",ev=>{ const head=ev.target.closest(".p-head");
+-  const tab=ev.target.closest(".tab"); if(tab){ S.ui.tab=tab.dataset.tab; renderAll(); scheduleSave(); return; }
+-  const di=ev.target.closest(".dash-item"); if(di&&di.dataset.goto){ if(di.dataset.chk){ edmGoto(di.dataset.goto,di.dataset.chk); return; } S.ui.tab=di.dataset.goto; renderAll(); } });
++  const tab=ev.target.closest(".tab"); if(tab){ if(tab.dataset.tab==="tab-rpt"){ EDR.on=true; renderAll(); return; } EDR.on=false; S.ui.tab=tab.dataset.tab; renderAll(); scheduleSave(); return; }
++  const di=ev.target.closest(".dash-item"); if(di&&di.dataset.goto){ if(di.dataset.chk){ edmGoto(di.dataset.goto,di.dataset.chk); return; } EDR.on=false; S.ui.tab=di.dataset.goto; renderAll(); } });
+@@ -1037,2 +1049,4 @@ document.addEventListener("click",ev=>{ const head=ev.target.closest(".p-head");
+-document.getElementById("btnPrint").addEventListener("click",()=>{ buildReport(); edmApplyPageCSS(true); window.print(); });
+-window.addEventListener("beforeprint",()=>{ buildReport(); edmApplyPageCSS(true); });
++document.getElementById("btnPrint").addEventListener("click",()=>{ if(EDR.on&&EDR.api){ EDR.api.print(); return; }   /* EDRP: on the Report tab the button prints that report */
++  buildReport(); edmApplyPageCSS(true); window.print(); });
++window.addEventListener("beforeprint",()=>{ if(typeof edrWillPrint==="function"&&edrWillPrint())return;   /* EDRP: the Report tab prints itself (shared/report.js) */
++  buildReport(); edmApplyPageCSS(true); });
+@@ -1166,0 +1181,252 @@ function buildReport(){ const R=LAST; if(!R)return; const P=S.proj;
++</script>
++<script>
++/* ================= Report tab (EDRP, 2026-11-01) =================
++   The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse /
++   expand, search, Print with a title block, running header and page numbers). Worked steps are shared/steps.js steps
++   (equation -> substituted values -> result), grouped by topic with SharedSteps.group. Every value shown is a value the
++   tool has already computed (LAST = computeEDM(), its dashboard D/C values, thermalMovement() and the girder run of the
++   Girder Run tab); only the substitution strings are formatted here. Nothing is saved: the Report tab is not stored in
++   S.ui.tab (EDR.on, memory only) and the report is rebuilt from LAST whenever the tab is shown or the inputs change. */
++const EDR={on:false,closed:new Set(),api:null,doc:null};
++const edrN=(x,d)=>SharedSteps.n(+x,d==null?2:d);
++const edrA=x=>edrN(Math.abs(+x),4);
++const EDR_AA="AASHTO LRFD 10th Ed. ", EDR_MD="MassDOT LRFD Bridge Manual ";
++const edrCell=(v,d)=>({t:(typeof v==="number"&&isFinite(v))?edrN(v,d):String(v==null||v===""?"—":v),n:typeof v==="number"});
++/* a steps item whose steps are grouped in topics (one topic per list entry, in order) */
++function edrTopics(scope,list,opt){
++  const L=list.filter(t=>t.w.steps.length), steps=[].concat(...L.map(t=>t.w.steps));
++  const topics=L.map(t=>{ const g=SharedSteps.group(t.w.steps,[{key:"k",title:t.title,ref:t.ref,ids:()=>true}],{strip:false})[0];
++    return {title:t.title,ref:t.ref||"",n:t.w.steps.length,cls:g.cls,chip:g.chip,res:g.res}; });
++  return Object.assign({type:"steps",scope,steps,topics},opt||{});
++}
++function edrModel(){
++  const R=LAST, P=S.proj||{}, g=S.geom, m=S.mat, L=S.loads, tg=S.tog, cf=S.coef, st=R.strain, circ=isCirc(), plain=isPlain();
++  const DS=id=>R.dash.find(x=>x.id===id)||{}, KEY={}, secs=[];
++  const kind=S.padType==="circRein"?"circular steel-reinforced":S.padType==="rectRein"?"rectangular steel-reinforced":"plain";
++  const meth=plain?"A (plain)":S.method;
++  const B=circ?"D":"L";
++  /* a D/C step of dashboard item id (value and pass = the dashboard's) */
++  const dcStep=(w,id,label,eq,sub,ref)=>{ const d=DS(id); KEY[id]="chk/"+w.key+".dc";
++    w.add({id:"dc",label,sym:"D/C",eq,sub,value:d.dc,unit:"",d:3,ok:d.pass!==false,ref}); };
++  let SUB="";   /* the subsection §n.k of the topics that follow (design checks) */
++  const topic=(list,key,title,ref)=>{ const w=SharedSteps.work(key); w.key=key; list.push({title,ref,w,sub:SUB}); return w; };
++  /* ---------- 1. Design summary ---------- */
++  const nChk=R.dash.filter(d=>d.pass!==null).length, gov=Math.max(...R.dash.map(d=>d.dc||0));
++  const sumIdx=secs.length; secs.push(null);   // filled at the end, when the step keys of §4 are known
++  /* ---------- 2. Project and inputs ---------- */
++  {
++    const subs=[];
++    subs.push({title:"Project",items:[{type:"kv",rows:[["Project",P.name||"—"],["Project number",P.num||"—"],["Calculated by",(P.calcBy||"—")+(P.date?", "+P.date:"")],["Checked by",(P.chkBy||"—")+(P.chkDate?", "+P.chkDate:"")],
++      ["Bearing",kind.charAt(0).toUpperCase()+kind.slice(1)+" pad, Method "+meth],["Codes","AASHTO LRFD 10th Ed. (2024) Art. 14.7.5 / 14.7.6; MassDOT LRFD Bridge Manual Part I §3.5.7 (see §7)"],
++      ["Link",document.getElementById("linkStatus")?document.getElementById("linkStatus").textContent:"Standalone"]]},
++      {type:"note",text:"Units: kip, in, ksi, rad unless noted; loads are service loads per bearing. Every value in this report is the value the tool computes on its tabs: Geometry & Schematic [[tab:in:o-geom|open]], Design Checks [[tab:des|open]], Rotation & Movement [[tab:rot:o-rot|open]], Girder Run [[tab:gird|open]], Warnings & Assumptions [[tab:warn|open]]."}]});
++    const gr=circ?[["Diameter D",edrCell(+g.D),"in"]]:[["Length L (longitudinal)",edrCell(+g.L),"in"],["Width W (transverse)",edrCell(+g.W),"in"]];
++    gr.push(["Internal layer thickness h_ri",edrCell(+g.hri,3),"in"]);
++    if(!plain) gr.push(["Number of internal layers n",edrCell(R.n,0),"–"],["Cover layer thickness c",edrCell(+g.cover,3),"in"],["Steel laminate thickness h_s",edrCell(+g.tSteel,4),"in"],["Edge cover of the steel laminates c_e",edrCell(+g.edge,3),"in"]);
++    gr.push(["Shear modulus G",edrCell(+m.G,3),"ksi"]); if(!plain) gr.push(["Laminate yield F_y",edrCell(+m.Fy,1),"ksi"]); gr.push(["Seat concrete f′c",edrCell(+m.fc,1),"ksi"]);
++    subs.push({title:"Pad geometry and materials",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr}]});
++    subs.push({title:"Loads and movements (service, per bearing)",items:[{type:"table",head:["Quantity","Value","Unit"],rows:[
++      ["Dead-load reaction P_DL",edrCell(+L.Pdl),"kip"],["Live-load reaction P_LL",edrCell(+L.Pll),"kip"],["Minimum permanent load P_min (anchorage)",(+L.Pmin>0)?edrCell(+L.Pmin):"= P_DL","kip"],
++      ["Profile-grade rotation θ_pg",edrCell(+L.thetaProfile,4),"rad"],["Dead-load rotation θ_DL",edrCell(+L.thetaDL,4),"rad"],["Live-load rotation θ_LL",edrCell(+L.thetaLL,4),"rad"],
++      ["Camber rotation θ_c",edrCell(+L.thetaCamber,4),"rad"],["Beam-seat slope",edrCell(+L.seatSlope,4),"rad"],["Transverse rotation θ_t",edrCell(+L.thetaTrans,4),"rad"],["Design shear movement Δ_s",edrCell(+L.deltaS,3),"in"]]}]});
++    subs.push({title:"MassDOT / AASHTO toggles and code coefficients",items:[{type:"table",head:["Setting","Value"],rows:[
++      ["Combined shear-strain limit",tg.exteriorCheck?"5.0 (exterior-beam check)":edrN(+tg.combLimit)],["Construction rotation tolerance",edrN(+tg.rotTol,3)+" rad"],["Thermal movement factor",edrN(+tg.thermalFactor,1)],
++      ["Bearing fixed against shear translation",tg.fixedShear?"yes":"no"],["Exterior-beam check",tg.exteriorCheck?"yes":"no"],["Pad anchored / doweled",tg.anchored?"yes":"no"]]},
++      {type:"table",head:["Coefficient","Value"],rows:[["D_a rectangular / circular",edrN(+cf.Da)+" / "+edrN(+cf.DaCirc)],["D_r rectangular / circular",edrN(+cf.DrRect,3)+" / "+edrN(+cf.DrCirc,3)],
++       ["Method A stress cap, reinforced / plain (ksi)",edrN(+cf.sigCapReinA)+" / "+edrN(+cf.sigCapPlainA)],["Method A G, highest / lowest of the durometer range (ksi)",edrN(+cf.GmaxA,3)+" / "+edrN(+cf.GminA,3)],
++       ["Method A G·S coefficient, plain pad",edrN(+cf.GSplainA)],["Method A rotation coefficient, circular",edrN(+cf.upliftCircA)],["ΔF_TH, Category A (ksi)",edrN(DFTH_A,1)]]},
++      {type:"note",text:"Set on the input tabs (panels I-1 to I-6)."}]});
++    const sv=document.getElementById("padSvg"), svg=sv&&sv.querySelector("svg")?sv.querySelector("svg").outerHTML:"";
++    if(svg) subs.push({title:"Pad schematic",items:[{type:"figure",svg,caption:"Elastomer layers (amber) with steel laminates (grey); dimensions to scale (Geometry & Schematic tab [[tab:in:o-geom|open]])."}]});
++    secs.push({title:"Project and inputs",subs});
++  }
++  /* ---------- 3. Geometry and service stresses ---------- */
++  {
++    const T=[];
++    let w=topic(T,"pl","Plan area and shape factor",EDR_AA+"Art. 14.7.5.1");
++    if(circ){ w.add({id:"A",label:"Plan area",sym:"A",eq:"\\frac{\\pi}{4}D^{2}",sub:"\\frac{\\pi}{4}\\cdot "+edrN(+g.D)+"^{2}",value:R.A,unit:"in^{2}",d:1});
++      w.add({id:"S",label:"Shape factor, circular",sym:"S",eq:"\\frac{D}{4\\,h_{ri}}",sub:"\\frac{"+edrN(+g.D)+"}{4\\cdot "+edrN(+g.hri,3)+"}",value:R.S,unit:"",d:2,ref:EDR_AA+"Art. 14.7.5.1"}); }
++    else { w.add({id:"A",label:"Plan area",sym:"A",eq:"L\\,W",sub:edrN(+g.L)+"\\cdot "+edrN(+g.W),value:R.A,unit:"in^{2}",d:1});
++      w.add({id:"S",label:"Shape factor, rectangular",sym:"S",eq:"\\frac{L\\,W}{2\\,h_{ri}(L + W)}",sub:"\\frac{"+edrN(+g.L)+"\\cdot "+edrN(+g.W)+"}{2\\cdot "+edrN(+g.hri,3)+"("+edrN(+g.L)+" + "+edrN(+g.W)+")}",value:R.S,unit:"",d:2,ref:EDR_AA+"Art. 14.7.5.1"}); }
++    w=topic(T,"ht","Total elastomer thickness",plain?"single layer":EDR_MD+"Fig. 3.5.7-5");
++    if(plain) w.add({id:"hrt",label:"Total elastomer thickness (one layer)",sym:"h_{rt}",eq:"h_{ri}",sub:edrN(+g.hri,3),value:R.hrt,unit:"in",d:3});
++    else w.add({id:"hrt",label:"Total elastomer thickness (for shear)",sym:"h_{rt}",eq:"n\\,h_{ri} + 2c",sub:R.n+"\\cdot "+edrN(+g.hri,3)+" + 2\\cdot "+edrN(+g.cover,3),value:R.hrt,unit:"in",d:3});
++    w=topic(T,"sg","Service compressive stresses","");
++    w.add({id:"DL",label:"Dead-load stress",sym:"\\sigma_{DL}",eq:"\\frac{P_{DL}}{A}",sub:"\\frac{"+edrN(R.Pdl)+"}{"+edrN(R.A,1)+"}",value:R.sigDL,unit:"ksi",d:3});
++    w.add({id:"LL",label:"Live-load stress",sym:"\\sigma_{LL}",eq:"\\frac{P_{LL}}{A}",sub:"\\frac{"+edrN(R.Pll)+"}{"+edrN(R.A,1)+"}",value:R.sigLL,unit:"ksi",d:3});
++    w.add({id:"TL",label:"Total service stress",sym:"\\sigma_{s}",eq:"\\frac{P_{DL} + P_{LL}}{A}",sub:"\\frac{"+edrN(R.Pdl)+" + "+edrN(R.Pll)+"}{"+edrN(R.A,1)+"}",value:R.sigTL,unit:"ksi",d:3});
++    secs.push({title:"Geometry and service stresses",subs:[{title:"Shape factor, thickness and stresses",items:[edrTopics("geo",T,{title:"Worked steps"}),
++      {type:"note",text:"As on the Geometry & Schematic tab, card Plan Geometry & Shape Factor [[tab:in:o-geom|open]]."}]}]});
++  }
++  /* ---------- 4. Rotation and movement ---------- */
++  {
++    const T=[], r=R.rot;
++    let w=topic(T,"th","Design rotation build-up",EDR_MD+"§3.5.7.6");
++    w.add({id:"st",label:"Longitudinal static rotation (profile grade, dead load, camber, seat slope)",sym:"\\theta_{long,st}",eq:"|\\theta_{pg}| + |\\theta_{DL}| + |\\theta_{c}| + |\\theta_{seat}|",sub:edrA(L.thetaProfile)+" + "+edrA(L.thetaDL)+" + "+edrA(L.thetaCamber)+" + "+edrA(L.seatSlope),value:r.thLongStatic,unit:"rad",d:4});
++    w.add({id:"cy",label:"Longitudinal cyclic rotation (live load)",sym:"\\theta_{long,cy}",eq:"|\\theta_{LL}|",sub:edrA(L.thetaLL),value:r.thLongCyclic,unit:"rad",d:4});
++    w.add({id:"tr",label:"Transverse rotation",sym:"\\theta_{t}",eq:"|\\theta_{trans}|",sub:edrA(L.thetaTrans),value:r.thTrans,unit:"rad",d:4});
++    w.add({id:"s",label:"Resultant design rotation (vector sum + construction tolerance)",sym:"\\theta_{s}",eq:"\\sqrt{(\\theta_{long,st} + \\theta_{long,cy})^{2} + \\theta_{t}^{2}} + \\theta_{tol}",sub:"\\sqrt{("+edrN(r.thLongStatic,4)+" + "+edrN(r.thLongCyclic,4)+")^{2} + "+edrN(r.thTrans,4)+"^{2}} + "+edrN(r.tol,3),value:r.thTotal,unit:"rad",d:4,ref:EDR_MD+"§3.5.7.6",
++      note:"the "+edrN(r.tol,3)+"-rad tolerance is added to the resultant, not to each direction"});
++    if(!circ&&!plain) w.add({id:"tW",label:"Transverse rotation used about W",sym:"\\theta_{t,W}",eq:"\\theta_{t} + \\theta_{tol,W}",sub:edrN(r.thTrans,4)+" + "+edrN(r.tolW,3),value:r.thTransW,unit:"rad",d:4,ref:EDR_AA+"Art. 14.4.2.1",
++      note:"θ_tol,W = 0.005 rad with the AASHTO tolerance, 0 with the MassDOT 0.03 rad (applied once, to the resultant)"});
++    const th=S.thermal||{span:75,alpha:6.5e-6,dT:100}, f=isFinite(+tg.thermalFactor)&&+tg.thermalFactor>0?+tg.thermalFactor:1.2;
++    w=topic(T,"tm","One-way thermal movement (reference)",EDR_MD+"§3.5.7.6, Fig. 3.5.7-2");
++    w.add({id:"D",label:"One-way thermal movement, half span (midspan neutral)",sym:"\\Delta",eq:"f\\cdot 0.5\\,\\alpha\\,(12 L_{span})\\,\\Delta T",sub:edrN(f,2)+"\\cdot 0.5\\cdot "+edrN(+th.alpha,7)+"\\cdot (12\\cdot "+edrN(+th.span)+")\\cdot "+edrN(+th.dT,0),value:thermalMovement(+th.span,+th.alpha,+th.dT,f),unit:"in",d:3,
++      note:"reference calculation; the design shear movement Δ_s = "+edrN(+L.deltaS,3)+" in is the input of panel I-4"});
++    secs.push({title:"Rotation and movement",subs:[{title:"Design rotation and thermal movement",items:[edrTopics("rot",T,{title:"Worked steps"}),{type:"note",text:"As on the Rotation & Movement tab [[tab:rot:o-rot|open]]."}]}]});
++  }
++  /* ---------- 5. Design checks ---------- */
++  {
++    const T=[], a=R.anc, ma=R.methodA;
++    const geo="Uses A [[geo/pl.A]], S [[geo/pl.S]], h_rt [[geo/ht.hrt]] and σ_s [[geo/sg.TL]]"+(plain?"":", θ_s [[rot/th.s]]")+(!circ&&!plain?", θ_t,W [[rot/th.tW]]":"")+".";
++    const stabT=(w,id,ref)=>{ const lim=circ&&!plain?(+g.D)/4:Math.min(R.planL,R.planW)/3;
++      w.add({id:"lim",label:"Stability thickness limit",sym:"h_{rt,max}",eq:circ&&!plain?"\\frac{D}{4}":"\\frac{\\min(L,\\,W)}{3}",sub:circ&&!plain?"\\frac{"+edrN(+g.D)+"}{4}":"\\frac{\\min("+edrN(R.planL)+",\\,"+edrN(R.planW)+")}{3}",value:lim,unit:"in",d:3,ref});
++      dcStep(w,id,"Stability thickness","\\frac{h_{rt}}{h_{rt,max}}","\\frac{"+edrN(R.hrt,3)+"}{"+edrN(lim,3)+"}",ref); };
++    const reinf=(w,id,ref)=>{
++      w.add({id:"svc",label:"Laminate thickness, service",sym:"h_{s,svc}",eq:"\\frac{3\\,h_{ri}\\,\\sigma_{s}}{F_{y}}",sub:"\\frac{3\\cdot "+edrN(+g.hri,3)+"\\cdot "+edrN(R.sigTL,3)+"}{"+edrN(+m.Fy)+"}",value:R.reinf.hsService,unit:"in",d:4,ref});
++      w.add({id:"fat",label:"Laminate thickness, fatigue (Category A)",sym:"h_{s,fat}",eq:"\\frac{2.0\\,h_{ri}\\,\\sigma_{L}}{\\Delta F_{TH}}",sub:"\\frac{2.0\\cdot "+edrN(+g.hri,3)+"\\cdot "+edrN(R.sigLL,3)+"}{"+edrN(DFTH_A,1)+"}",value:R.reinf.hsFatigue,unit:"in",d:4,ref:EDR_AA+"Table 6.6.1.2.5-3 (ΔF_TH)"});
++      w.add({id:"req",label:"Required laminate thickness",sym:"h_{s,req}",eq:"\\max(h_{s,svc},\\,h_{s,fat})",sub:"\\max("+edrN(R.reinf.hsService,4)+",\\,"+edrN(R.reinf.hsFatigue,4)+")",value:R.reinf.hsReq,unit:"in",d:4});
++      dcStep(w,id,"Steel laminate thickness","\\frac{h_{s,req}}{h_{s,prov}}","\\frac{"+edrN(R.reinf.hsReq,4)+"}{"+edrN(R.reinf.tProvided,4)+"}",ref); };
++    const cover=(w,id,ref)=>{
++      w.add({id:"max",label:"Largest cover layer",sym:"c_{max}",eq:"\\max(0.7\\,h_{ri},\\,5/16)",sub:"\\max(0.7\\cdot "+edrN(+g.hri,3)+",\\,0.3125)",value:R.coverMax,unit:"in",d:3,ref});
++      dcStep(w,id,"Cover layer","\\frac{c}{c_{max}}","\\frac{"+edrN(+g.cover,3)+"}{"+edrN(R.coverMax,3)+"}",ref); };
++    const edge=(w,id,ref)=>{ KEY[id]="chk/"+w.key+".ce";
++      w.add({id:"ce",label:"Edge cover of the steel laminates (plan cover, input I-2), at least 0.25 in",sym:"c_{e}",eq:"",sub:"",value:R.edge.ce,unit:"in",d:3,ok:R.edge.pass,ref,note:"minimum 0.25 in"}); };
++    const anc=(w,id)=>{
++      w.add({id:"H",label:"Shear force on the pad",sym:"H",eq:"\\frac{G\\,A\\,\\Delta_{s}}{h_{rt}}",sub:"\\frac{"+edrN(a.G,3)+"\\cdot "+edrN(R.A,1)+"\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:a.H,unit:"kip",d:2,ref:EDR_AA+"Art. 14.8.3.1",
++        note:a.mB?"G = specified shear modulus (Method B), Art. 14.7.5.2":"G = highest value of the durometer range (least favourable for the shear force), Art. 14.7.6.2"});
++      w.add({id:"Pf",label:"Friction resistance, coefficient 0.2"+(a.PminFromDL?" (P_min taken as P_DL)":""),sym:"0.2\\,P_{min}",eq:"\\frac{P_{min}}{5}",sub:"\\frac{"+edrN(a.Pmin,1)+"}{5}",value:a.Pmin/5,unit:"kip",d:2,ref:EDR_AA+"Art. C14.8.3.1"});
++      if(a.anchored){ KEY[id]="chk/"+w.key+".info"; w.add({id:"info",label:"Pad anchored / doweled (panel I-5): design the anchorage for H; H / (P_min/5) = "+edrN(a.dc)+" for reference",sym:"",eq:"",sub:"",value:"anchorage designed for H",unit:"",ref:EDR_AA+"Art. "+a.ref}); }
++      else dcStep(w,id,"Slip: H ≤ P_min/5","\\frac{H}{P_{min}/5}","\\frac{"+edrN(a.H,2)+"}{"+edrN(a.Pmin/5,2)+"}",EDR_AA+"Art. "+a.ref); };
++    const hbu=()=>{ const w=topic(T,"hbu","Horizontal force for substructure design (report only)",EDR_AA+"Art. 14.6.3.1");
++      w.add({id:"H",label:"Horizontal force per bearing (input G, Δ_u = Δ_s)",sym:"H_{bu}",eq:"\\frac{G\\,A\\,\\Delta_{u}}{h_{rt}}",sub:"\\frac{"+edrN(+m.G,3)+"\\cdot "+edrN(R.A,1)+"\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:R.Hbu,unit:"kip",d:2,ref:EDR_AA+"Art. 14.6.3.1"}); };
++    let w, intro;
++    if(plain){
++      intro="Plain pad, Method A [14.7.6.3].";
++      SUB="Compressive stress and shear deformation"; w=topic(T,"sig","Compressive stress",EDR_AA+"Art. 14.7.6.3.2");
++      w.add({id:"GS",label:"Stress limit from G·S (G = lowest of the durometer range)",sym:"\\sigma_{GS}",eq:"c\\,G\\,S",sub:edrN(+cf.GSplainA)+"\\cdot "+edrN(ma.GminA,3)+"\\cdot "+edrN(R.S),value:ma.sigGS,unit:"ksi",d:3,ref:EDR_AA+"Eq. 14.7.6.3.2-1"});
++      w.add({id:"cap",label:"Stress cap, plain pad",sym:"\\sigma_{cap}",eq:"",sub:"",value:+cf.sigCapPlainA,unit:"ksi",d:2});
++      dcStep(w,"sigP","Compressive stress","\\frac{\\sigma_{s}}{\\min(\\sigma_{GS},\\,\\sigma_{cap})}","\\frac{"+edrN(R.sigTL,3)+"}{\\min("+edrN(ma.sigGS,3)+",\\,"+edrN(+cf.sigCapPlainA)+")}",EDR_AA+"Art. 14.7.6.3.2");
++      w=topic(T,"shear","Shear deformation",EDR_AA+"Art. 14.7.6.3.4");
++      dcStep(w,"shearP","Shear deformation: h_rt ≥ 2Δ_s","\\frac{2\\,\\Delta_{s}}{h_{rt}}","\\frac{2\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",EDR_AA+"Art. 14.7.6.3.4");
++      SUB="Stability"; w=topic(T,"stabT","Stability thickness",""); stabT(w,"stabP","");
++      SUB="Anchorage"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"ancP");
++    } else if(S.method==="B"){
++      intro="Method B, combined shear strain [14.7.5.3].";
++      SUB="Shear strains"; w=topic(T,"gast","Axial shear strain",EDR_AA+"Eq. 14.7.5.3.3-3");
++      w.add({id:"st",label:"Axial shear strain, static (D_a = "+edrN(st.Da)+(circ?", circular":", rectangular")+")",sym:"\\gamma_{a,st}",eq:"\\frac{D_{a}\\,\\sigma_{DL}}{G\\,S}",sub:"\\frac{"+edrN(st.Da)+"\\cdot "+edrN(R.sigDL,3)+"}{"+edrN(+m.G,3)+"\\cdot "+edrN(R.S)+"}",value:st.ga_st,unit:"",d:3,ref:EDR_AA+"Eq. 14.7.5.3.3-3"});
++      w.add({id:"cy",label:"Axial shear strain, cyclic",sym:"\\gamma_{a,cy}",eq:"\\frac{D_{a}\\,\\sigma_{LL}}{G\\,S}",sub:"\\frac{"+edrN(st.Da)+"\\cdot "+edrN(R.sigLL,3)+"}{"+edrN(+m.G,3)+"\\cdot "+edrN(R.S)+"}",value:st.ga_cy,unit:"",d:3});
++      dcStep(w,"gast","Static axial strain: γ_a,st ≤ 3.0","\\frac{\\gamma_{a,st}}{3.0}","\\frac{"+edrN(st.ga_st,3)+"}{3.0}",EDR_AA+"Art. 14.7.5.3.3");
++      w=topic(T,"rot","Rotational shear strain",EDR_AA+"Eq. 14.7.5.3.3-6");
++      w.add({id:"th",label:circ?"Static rotation (resultant of longitudinal and transverse + tolerance)":"Static longitudinal rotation (+ tolerance)",sym:"\\theta_{st}",eq:circ?"\\sqrt{\\theta_{long,st}^{2} + \\theta_{t}^{2}} + \\theta_{tol}":"\\theta_{long,st} + \\theta_{tol}",
++        sub:circ?"\\sqrt{"+edrN(R.rot.thLongStatic,4)+"^{2} + "+edrN(R.rot.thTrans,4)+"^{2}} + "+edrN(R.rot.tol,3):edrN(R.rot.thLongStatic,4)+" + "+edrN(R.rot.tol,3),value:st.thSt,unit:"rad",d:4});
++      w.add({id:"st",label:"Rotational shear strain, static",sym:"\\gamma_{r,st}",eq:"D_{r}\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{st}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(st.thSt,4)+"}{"+R.n+"}",value:st.gr_st,unit:"",d:3,ref:EDR_AA+"Eq. 14.7.5.3.3-6"});
++      w.add({id:"cy",label:"Rotational shear strain, cyclic",sym:"\\gamma_{r,cy}",eq:"D_{r}\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{cy}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(st.thCy,4)+"}{"+R.n+"}",value:st.gr_cy,unit:"",d:3});
++      if(!circ) w.add({id:"W",label:"Rotational shear strain, transverse rotation about W",sym:"\\gamma_{r,st,W}",eq:"D_{r}\\left(\\frac{W}{h_{ri}}\\right)^{2}\\frac{\\theta_{t,W}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.planW)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTransW,4)+"}{"+R.n+"}",value:st.grW_st,unit:"",d:3});
++      w=topic(T,"gs","Shear strain from movement",EDR_AA+"Art. 14.7.5.3.2");
++      w.add({id:"st",label:"Shear strain from the design shear movement",sym:"\\gamma_{s}",eq:"\\frac{\\Delta_{s}}{h_{rt}}",sub:"\\frac{"+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:st.gs_st,unit:"",d:3});
++      dcStep(w,"shearB","Shear deformation: γ_s ≤ 0.50","\\frac{\\Delta_{s}}{0.5\\,h_{rt}}","\\frac{"+edrN(+L.deltaS,3)+"}{0.5\\cdot "+edrN(R.hrt,3)+"}",EDR_AA+"Art. 14.7.5.3.2");
++      w=topic(T,"comb","Combined static + cyclic shear strain",EDR_AA+"Eq. 14.7.5.3.3-1 / "+EDR_MD+"§3.5.7.6");
++      w.add({id:"L",label:circ?"Combined shear strain":"Combined shear strain, longitudinal",sym:"\\gamma_{comb}",eq:"(\\gamma_{a,st} + \\gamma_{r,st} + \\gamma_{s,st}) + 1.75(\\gamma_{a,cy} + \\gamma_{r,cy} + \\gamma_{s,cy})",
++        sub:"("+edrN(st.ga_st,3)+" + "+edrN(st.gr_st,3)+" + "+edrN(st.gs_st,3)+") + 1.75("+edrN(st.ga_cy,3)+" + "+edrN(st.gr_cy,3)+" + "+edrN(st.gs_cy,3)+")",value:st.combinedL,unit:"",d:3,ref:EDR_AA+"Eq. 14.7.5.3.3-1"});
++      if(!circ){ w.add({id:"W",label:"Combined shear strain, transverse",sym:"\\gamma_{comb,W}",eq:"(\\gamma_{a,st} + \\gamma_{r,st,W} + \\gamma_{s,st}) + 1.75(\\gamma_{a,cy} + 0 + \\gamma_{s,cy})",
++        sub:"("+edrN(st.ga_st,3)+" + "+edrN(st.grW_st,3)+" + "+edrN(st.gs_st,3)+") + 1.75("+edrN(st.ga_cy,3)+" + 0 + "+edrN(st.gs_cy,3)+")",value:st.combinedW,unit:"",d:3});
++        w.add({id:"g",label:"Governing combined shear strain",sym:"\\gamma_{comb}",eq:"\\max(\\gamma_{comb,L},\\,\\gamma_{comb,W})",sub:"\\max("+edrN(st.combinedL,3)+",\\,"+edrN(st.combinedW,3)+")",value:st.combined,unit:"",d:3}); }
++      dcStep(w,"comb","Combined shear strain (limit "+edrN(st.limit)+(tg.exteriorCheck?", exterior check":", MassDOT first interior 4.75 / AASHTO 5.0")+")","\\frac{\\gamma_{comb}}{"+edrN(st.limit)+"}","\\frac{"+edrN(st.combined,3)+"}{"+edrN(st.limit)+"}",EDR_AA+"Art. 14.7.5.3.3");
++      SUB="Stability"; w=topic(T,"stab","Stability",EDR_AA+"Art. 14.7.5.3.4");
++      const sb=R.stab;
++      w.add({id:"A",label:"Stability coefficient A"+(circ?" (square with W = L = 0.8D)":""),sym:"A",eq:"\\frac{1.92\\,h_{rt}/L}{\\sqrt{1 + 2L/W}}",sub:"\\frac{1.92\\cdot "+edrN(R.hrt,3)+"/"+edrN(sb.Lp)+"}{\\sqrt{1 + 2\\cdot "+edrN(sb.Lp)+"/"+edrN(sb.Wp)+"}}",value:sb.Ac,unit:"",d:4,ref:EDR_AA+"Art. 14.7.5.3.4"});
++      w.add({id:"B",label:"Stability coefficient B",sym:"B",eq:"\\frac{2.67}{(S + 2)(1 + L/(4W))}",sub:"\\frac{2.67}{("+edrN(R.S)+" + 2)(1 + "+edrN(sb.Lp)+"/(4\\cdot "+edrN(sb.Wp)+"))}",value:sb.Bc,unit:"",d:4});
++      if(sb.stable||sb.denom<=0){ KEY.stab="chk/stab.ok";
++        w.add({id:"ok",label:sb.stable?"2A ≤ B: stable, no stress limit":"Fixed against shear translation, A ≤ B: stable, no stress limit",sym:sb.stable?"2A":"A",eq:"",sub:"",value:sb.stable?edrN(2*sb.Ac,4)+" ≤ "+edrN(sb.Bc,4):edrN(sb.Ac,4)+" ≤ "+edrN(sb.Bc,4),unit:"",ok:DS("stab").pass!==false,ref:EDR_AA+"Art. 14.7.5.3.4"}); }
++      else { const dn=tg.fixedShear?"A \\minus B":"2A \\minus B";
++        w.add({id:"lim",label:"Stress limit for stability",sym:"\\sigma_{lim}",eq:"\\frac{G\\,S}{"+dn+"}",sub:"\\frac{"+edrN(+m.G,3)+"\\cdot "+edrN(R.S)+"}{"+edrN(sb.denom,4)+"}",value:sb.sigLim,unit:"ksi",d:3});
++        dcStep(w,"stab","Stability","\\frac{\\sigma_{s}}{\\sigma_{lim}}","\\frac{"+edrN(R.sigTL,3)+"}{"+edrN(sb.sigLim,3)+"}",EDR_AA+"Art. 14.7.5.3.4"); }
++      SUB="Steel laminates and covers"; w=topic(T,"reinf","Steel reinforcement thickness",EDR_AA+"Art. 14.7.5.3.5"); reinf(w,"reinf",EDR_AA+"Art. 14.7.5.3.5");
++      w=topic(T,"cover","Cover layer",EDR_AA+"Art. 14.7.5.1"); cover(w,"cover",EDR_AA+"Art. 14.7.5.1");
++      w=topic(T,"edge","Edge cover of the steel laminates",EDR_AA+"Art. 14.7.5.1"); edge(w,"edge",EDR_AA+"Art. 14.7.5.1");
++      SUB="Anchorage, restraint and horizontal force"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"anc");
++      if(R.res){ const r=R.res; w=topic(T,"res","Restraint of a bearing without bonded external plates",EDR_AA+"Eq. 14.7.5.4-1");
++        w.add({id:"sig",label:"Stress, static + 1.75 × cyclic",sym:"\\sigma_{s}",eq:"\\sigma_{DL} + 1.75\\,\\sigma_{LL}",sub:edrN(R.sigDL,4)+" + 1.75\\cdot "+edrN(R.sigLL,4),value:r.sigS,unit:"ksi",d:4});
++        w.add({id:"eps",label:"Axial strain (B_a = 1.6)",sym:"\\epsilon_{a}",eq:"\\frac{\\sigma_{s}}{3\\,B_{a}\\,G\\,S_{i}^{2}}",sub:"\\frac{"+edrN(r.sigS,4)+"}{3\\cdot "+edrN(r.Ba,1)+"\\cdot "+edrN(+m.G,3)+"\\cdot "+edrN(R.S,3)+"^{2}}",value:r.epsA,unit:"",d:5,ref:EDR_AA+"Eqs. 14.7.5.3.3-15 to -17"});
++        w.add({id:"thL",label:"Rotation, static + 1.75 × cyclic",sym:"\\theta_{s,L}",eq:"\\theta_{st} + 1.75\\,\\theta_{cy}",sub:edrN(st.thSt,4)+" + 1.75\\cdot "+edrN(st.thCy,4),value:r.thSL,unit:"rad",d:4});
++        if(!circ) w.add({id:"th",label:"Governing rotation (larger of θ_s,L and θ_t,W)",sym:"\\theta_{s}",eq:"\\max(\\theta_{s,L},\\,\\theta_{t,W})",sub:"\\max("+edrN(r.thSL,4)+",\\,"+edrN(r.thSW,4)+")",value:r.thS,unit:"rad",d:4});
++        w.add({id:"lhs",label:"Rotation per internal layer",sym:"\\frac{\\theta_{s}}{n}",eq:"",sub:"\\frac{"+edrN(r.thS,4)+"}{"+R.n+"}",value:r.lhs,unit:"",d:5});
++        w.add({id:"rhs",label:"Restraint threshold",sym:"\\frac{3\\,\\epsilon_{a}}{S_{i}}",eq:"",sub:"\\frac{3\\cdot "+edrN(r.epsA,5)+"}{"+edrN(R.S,3)+"}",value:r.rhs,unit:"",d:5});
++        if(r.anchored){ KEY.res="chk/res.info"; w.add({id:"info",label:"Pad anchored / doweled (panel I-5): restraint provided; ratio "+edrN(r.dc)+" for reference",sym:"",eq:"",sub:"",value:"restraint provided",unit:"",ref:EDR_AA+"Art. 14.7.5.4"}); }
++        else dcStep(w,"res","Restraint: a restraint system is required when θ_s/n ≥ 3ε_a/S_i","\\frac{\\theta_{s}/n}{3\\,\\epsilon_{a}/S_{i}}","\\frac{"+edrN(r.lhs,5)+"}{"+edrN(r.rhs,5)+"}",EDR_AA+"Art. 14.7.5.4"); }
++      hbu();
++    } else {
++      intro="Method A, stress and rotation [14.7.6].";
++      SUB="Compressive stress and shear deformation"; w=topic(T,"sig","Compressive stress",EDR_AA+"Art. 14.7.6.3.2");
++      w.add({id:"GS",label:"Stress limit from G·S (G = lowest of the durometer range)",sym:"\\sigma_{GS}",eq:"1.25\\,G\\,S",sub:"1.25\\cdot "+edrN(ma.GminA,3)+"\\cdot "+edrN(R.S),value:ma.sigGS,unit:"ksi",d:3,ref:EDR_AA+"Art. 14.7.6.3.2"});
++      w.add({id:"cap",label:"Stress cap, steel-reinforced",sym:"\\sigma_{cap}",eq:"",sub:"",value:ma.sigCap,unit:"ksi",d:2});
++      dcStep(w,"sigA","Compressive stress","\\frac{\\sigma_{s}}{\\min(\\sigma_{GS},\\,\\sigma_{cap})}","\\frac{"+edrN(R.sigTL,3)+"}{\\min("+edrN(ma.sigGS,3)+",\\,"+edrN(ma.sigCap)+")}",EDR_AA+"Art. 14.7.6.3.2");
++      w=topic(T,"shear","Shear deformation",EDR_AA+"Art. 14.7.6.3.4");
++      dcStep(w,"shearA","Shear deformation: h_rt ≥ 2Δ_s","\\frac{2\\,\\Delta_{s}}{h_{rt}}","\\frac{2\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",EDR_AA+"Art. 14.7.6.3.4");
++      SUB="Compression and rotation (uplift)"; w=topic(T,"uplift","Combined compression and rotation (uplift)",EDR_AA+"Art. 14.7.6.3.5");
++      w.add({id:"L",label:"Least stress to avoid uplift (G = "+edrN(ma.GmA,3)+" ksi, highest of the durometer range)",sym:"\\sigma_{up}",eq:edrN(ma.DrA,3)+"\\,G\\,S\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{s}}{n}",sub:edrN(ma.DrA,3)+"\\cdot "+edrN(ma.GmA,3)+"\\cdot "+edrN(R.S)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTotal,4)+"}{"+R.n+"}",value:ma.upliftA,unit:"ksi",d:3,ref:EDR_AA+"Art. 14.7.6.3.5"});
++      dcStep(w,"rotA","Compression–rotation (uplift)","\\frac{\\sigma_{up}}{\\sigma_{s}}","\\frac{"+edrN(ma.upliftA,3)+"}{"+edrN(R.sigTL,3)+"}",EDR_AA+"Art. 14.7.6.3.5");
++      if(!circ){ w=topic(T,"upliftW","Combined compression and rotation, transverse (uplift)",EDR_AA+"Art. 14.7.6.3.5");
++        w.add({id:"W",label:"Least stress to avoid uplift, transverse rotation about W",sym:"\\sigma_{up,W}",eq:edrN(ma.DrA,3)+"\\,G\\,S\\left(\\frac{W}{h_{ri}}\\right)^{2}\\frac{\\theta_{t,W}}{n}",sub:edrN(ma.DrA,3)+"\\cdot "+edrN(ma.GmA,3)+"\\cdot "+edrN(R.S)+"\\left(\\frac{"+edrN(R.planW)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTransW,4)+"}{"+R.n+"}",value:ma.upliftAW,unit:"ksi",d:3});
++        dcStep(w,"rotAW","Compression–rotation, transverse (uplift)","\\frac{\\sigma_{up,W}}{\\sigma_{s}}","\\frac{"+edrN(ma.upliftAW,3)+"}{"+edrN(R.sigTL,3)+"}",EDR_AA+"Art. 14.7.6.3.5"); }
++      SUB="Stability"; w=topic(T,"stabT","Stability thickness",EDR_AA+"Art. 14.7.6.3.6"); stabT(w,"stabA",EDR_AA+"Art. 14.7.6.3.6");
++      SUB="Steel laminates and covers"; w=topic(T,"reinf","Steel reinforcement thickness",EDR_AA+"Art. 14.7.6.3.7"); reinf(w,"reinfA",EDR_AA+"Art. 14.7.6.3.7");
++      w=topic(T,"cover","Cover layer",EDR_AA+"Art. 14.7.6.1"); cover(w,"coverA",EDR_AA+"Art. 14.7.6.1");
++      w=topic(T,"edge","Edge cover of the steel laminates",EDR_AA+"Art. 14.7.6.1"); edge(w,"edgeA",EDR_AA+"Art. 14.7.6.1");
++      SUB="Anchorage and horizontal force"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"ancA");
++      hbu();
++    }
++    const subs=[]; T.forEach(t=>{ let q=subs[subs.length-1]; if(!q||q.title!==t.sub){ q={title:t.sub,T:[]}; subs.push(q); } q.T.push(t); });
++    secs.push({title:"Design checks",note:intro+" "+geo+" Each check ends with its demand / capacity ratio as on the Design Checks tab [[tab:des|open]].",
++      subs:subs.map(q=>({title:q.title,items:[edrTopics("chk",q.T,{title:"Worked steps"})]}))});
++  }
++  /* ---------- 6. Girder run (only when a girder set is loaded, as on the tab) ---------- */
++  if(S.girders&&S.girders.length){
++    const run=edmGirdRun(), govAll=Math.max(...run.map(r=>r.gov));
++    secs.push({title:"Girder run",subs:[{title:"One pad checked against every girder",items:[{type:"table",head:["Girder","Governing D/C","Result"],rows:run.map(r=>({cells:[r.tag,edrCell(r.gov),r.fail?r.fail+" FAIL":"PASS"],cls:r.gov===govAll?"gov":""}))},
++      {type:"note",text:"Governing across all girders: D/C = "+edrN(govAll)+" (Girder Run tab [[tab:gird|open]]). Each girder is run through the same design engine with its own loads."}]}]});
++  }
++  /* ---------- 7. Warnings and assumptions ---------- */
++  secs.push({title:"Warnings and assumptions",subs:[{title:"Validation warnings and applicability",items:(R.warn&&R.warn.length?R.warn.map(x=>({type:"note",warn:true,text:String(x.msg).replace(/<sub>(.*?)<\/sub>/g,"_$1").replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"')})):[{type:"note",text:"No warnings: inputs within the range of applicability."}])},
++    {title:"Engineering assumptions",items:[{type:"note",text:S.assumptions||"—"}]}]});
++  /* ---------- 8. References ---------- */
++  secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:EDM_REFS.map(([a2,b2])=>[a2||"",b2])}]}]});
++  /* ---------- 1. Design summary (now that every check's step key is known) ---------- */
++  secs[sumIdx]={title:"Design summary",subs:[{title:"Summary of checks",items:[
++    {type:"note",text:kind.charAt(0).toUpperCase()+kind.slice(1)+" pad, Method "+meth+". "+(R.nInErr?R.nInErr+" input error(s): results not valid (see §6). ":"")+(R.nFail===0?"All "+nChk+" checks PASS.":R.nFail+" of "+nChk+" checks FAIL.")+" Governing D/C = "+edrN(gov)+"."},
++    {type:"table",head:["Check","D/C","Result","Worked in"],rows:R.dash.map(d=>({cells:[d.name,d.dc!=null?{t:edrN(d.dc),n:true,cls:d.pass===false?"ng":d.dc>=0.9?"hi":"ok"}:"—",d.pass===null?"INFO":d.pass?"PASS":"FAIL",KEY[d.id]?{t:"",key:KEY[d.id]}:"—"],cls:d.pass===false?"gov":""}))},
++    {type:"note",text:"The same checks as the dashboard and the Design Checks tab [[tab:des|open]]."}]}]};
++  const wi=secs.findIndex(s=>s&&s.title==="Warnings and assumptions")+1; secs[sumIdx].subs[0].items[0].text=secs[sumIdx].subs[0].items[0].text.replace("(see §6)","(see §"+wi+")");
++  return {title:"Elastomeric Bearing Design — Calculation Report",subtitle:P.name||"Untitled",code:"AASHTO LRFD 10th Ed. (2024) Art. 14.7 · MassDOT LRFD Bridge Manual Part I §3.5.7",
++    info:[["Project",P.name],["Project No.",P.num],["Calculated by",P.calcBy],["Date",P.date],["Checked by",P.chkBy],["Checked date",P.chkDate]],
++    head:{left:"Project No. "+(P.num||"—")+" — "+String(P.name||"—").slice(0,40),right:"Computed: "+(P.calcBy||"—")+" "+(P.date||"")+" · Checked: "+(P.chkBy||"—")+" "+(P.chkDate||""),foot:(P.name||"Untitled")+" (Elastomeric Bearing Design Module)"},
++    sections:secs};
++}
++function edrRender(){
++  const T=document.getElementById("tab-rpt"); if(!T)return;
++  if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class="warn-item err">The Report tab needs the shared folder (shared/steps.js, shared/report.js) next to this file.</div>'; EDR.api=null; EDR.doc=null; return; }
++  if(!LAST){ T.innerHTML=""; EDR.api=null; EDR.doc=null; return; }
++  let M; try{ M=edrModel(); }catch(e){ T.innerHTML='<div class="warn-item err">Report error: '+esc(e&&e.message)+'</div>'; EDR.api=null; EDR.doc=null; return; }
++  EDR.api=SharedReport.mount(T,M,{closed:EDR.closed,onGoto:edrGoto}); EDR.doc=EDR.api.doc;
++}
++/* [[tab:name|text]] links of the report: "des", "in:o-geom" (tab-<name>, then the card or check block) */
++function edrGoto(name){ const [t,c]=String(name).split(":"); EDR.on=false; edmGoto("tab-"+t,c||null); if(!c) window.scrollTo(0,(document.getElementById("tabbar").getBoundingClientRect().top+window.scrollY-10)); }
++/* the Report tab is shown on top of the saved tab (S.ui.tab is not changed, so nothing new is saved) */
++function edrShow(){
++  if(!EDR.on)return;
++  document.querySelectorAll("#tabbar .tab").forEach(t=>t.classList.toggle("active",t.dataset.tab==="tab-rpt"));
++  document.querySelectorAll("#tabs .tabpane").forEach(p=>p.classList.toggle("active",p.id==="tab-rpt"));
++  edrRender();
++}
++/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
++function edrPrinting(){ return document.body.classList.contains("rp-printing"); }
++function edrWillPrint(){ return edrPrinting()||!!(EDR.on&&EDR.doc); }
++window.addEventListener("beforeprint",()=>{
++  if(!EDR.on||!EDR.doc||edrPrinting())return;
++  let box=document.getElementById("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(EDR.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add("rp-printing");
++});
++</script>
++<script>
+```

@@ -191,8 +191,8 @@
       if (!confirm(`Fill the overhang bracket inputs from the cross-section?\n\n${K.map(([k, l, u, d]) => `${l}: ${cur[k]} → ${fmt(F.vals[k], d)} ${u} (${F.why[k]})`).join('\n')}\n\nThe permanent barrier or railing is not a bracket load (placed after the deck forms are stripped).`)) return;
       P.constr = P.constr || {}; P.constr.oh = { ...cur, ...(P.constr.oh || {}), wOH: F.vals.wOH, tOH: F.vals.tOH, wc: F.vals.wc }; if (ctx.changed) ctx.changed(); else redraw(); });
     on('#cn_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
-      rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
-        S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { S.pl = null; S.plName = ''; alert('Cannot read this file: ' + er.message); } redraw(); };
+      rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
+        S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { alert('Cannot read this file: ' + er.message); /* nothing changed: the previous file, if any, stays */ } redraw(); };
       rd.readAsText(f); });
     on('[data-cnsel]', 'click', e => { S.sel = +e.currentTarget.dataset.cnsel; redraw(); const t = host.querySelector('.cn-list tr.sel'); if (t) t.scrollIntoView({ block: 'nearest' }); });
     on('[data-ohsel]', 'click', e => { S.ohSel = +e.currentTarget.dataset.ohsel; redraw(); });

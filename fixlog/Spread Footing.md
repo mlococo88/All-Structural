@@ -3189,3 +3189,34 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Default exposure "exposed to weather or in contact with ground": engineer to confirm, or name another default.
   - The vertical bars themselves are not checked against Table 20.5.1.3.1 (e.g. #6 and larger, exposed: 2 in to the vertical bar). With c = 2 in that row is met by the input; with a smaller cover it would not be. Raised, not added.
   - The footing's own covers (bottom 3 in warning, top and side) are unchanged.
+
+## 2026-11-01 — PR: claude/sf-barfit-db — Pedestal bar-fit check: bar diameter from the bar table (SFBD; calculation change, #9–#11 only) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text.
+
+### SFBD. d_b in the pedestal bar-fit (clear spacing) check from `BAR_DIA`   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-01):** the bar-fit check used d_b = size/8, while everything else (bar layout `sfdPedBars`, P–M bar positions, drawings, development lengths) uses the `BAR_DIA` table. Use the table.
+- **Where:** `computePhase2` → `pedDes`, anchor `const dbL=`.
+  - Before: `const dbL=(rf.longSize||0)/8;`
+  - After: `const dbL=BAR_DIA[rf.longSize]||0;`
+  - `dbL` is now also returned (`pedDes[].dbL`) for the worked display.
+- **Formula (unchanged):** s_clear = (b − 2c − d_b)/(n_face − 1) − d_b ≥ s_min = max(1.5 d_b, 1.5 in).
+- **Governing provision:** ACI 318-19 25.2.3 (minimum clear spacing of longitudinal bars in columns/pedestals); nominal bar diameters per ASTM A615/A706 (the `BAR_DIA` table).
+- **Change in d_b:**
+
+  | Bar | before: size/8 | after: table | Δ |
+  |---|---|---|---|
+  | #3 to #8 | 0.375 to 1.000 | 0.375 to 1.000 | 0 (identical) |
+  | #9 | 1.125 | 1.128 | +0.003 in |
+  | #10 | 1.250 | 1.270 | +0.020 in |
+  | #11 | 1.375 | 1.410 | +0.035 in |
+
+- **Check cases (hand)**, 18 × 18 in pedestal, c = 2 in:
+  - #11, 3 per face: before (18 − 4 − 1.375)/2 − 1.375 = **4.938 in** vs s_min = 1.5·1.375 = **2.063 in**. After (18 − 4 − 1.41)/2 − 1.41 = 6.295 − 1.41 = **4.885 in** vs 1.5·1.41 = **2.115 in**. OK both.
+  - #10, 4 per face: before 12.75/3 − 1.25 = **3.000** vs **1.875**. After 12.73/3 − 1.27 = **2.973** vs **1.905**. OK both.
+  - #9, 5 per face: before 12.875/4 − 1.125 = **2.094** vs **1.688**. After 12.872/4 − 1.128 = **2.090** vs **1.692**. OK both.
+  - Pass/fail flips only where the margin is under about 0.1 in, e.g. #11 at s_clear between 2.063 and 2.115 in.
+- **Effect on the comparison projects:** the 10 projects (and `tie_cover_fail`) use #8 longitudinal bars → identical, every value of `R`, `P2`, dashboard, warnings, consistency, state and storage. Extra project `big_bars` (the three cases above): only `pedDes[].clrX/clrY/clrMin` change as listed; no pass/fail change; dashboard identical.
+- **Shown (§6):** Pedestal Design 6.x "Bar count and fit" now works the formula: s_clear = (b − 2c − d_b)/(n_face − 1) − d_b with d_b from the bar table and the substituted x-face values, and max(1.5 d_b, 1.5). Report §6 step "Bars and clear spacing" states the formula and d_b.
+- **How verified:** headless Chromium, origin/main vs the branch (12 projects); report builds on 12 projects (0 unresolved, 0 KaTeX errors, values = app); `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs` passes.
+- **Open item (not changed):** ACI 318-19 25.2.3 also has the (4/3)d_agg term; the app takes no aggregate size, so it is not checked (unchanged).
