@@ -1445,6 +1445,17 @@ function selInput(optList,get,set,labelFn,valFn){
 function bpCircPattern(){ return !!(S.anchor && S.anchor.pattern==="circle"); }
 function bpCircPlate(){ return !!(S.plate && S.plate.shape==="circle"); }
 function bpCircN(){ return Math.max(3, Math.round(+S.anchor.nCircle||0)); }
+/* BC-1: worked step for the bolt-circle layout (coordinates and the polar sums the elastic group uses) */
+function bpCircGeomStep(){
+  const A=S.anchor, n=bpCircN(), R=(+A.BC||0)/2, pts=anchorCoords();
+  const sx2=pts.reduce((a,p)=>a+p.x*p.x,0), sy2=pts.reduce((a,p)=>a+p.y*p.y,0);
+  return {title:"Bolt-circle layout",ref:"plan geometry (anchor coordinates used by every check)",
+    lines:["x_i=\\frac{BC}{2}\\cos\\left(\\theta_0+\\frac{360^\\circ (i-1)}{n}\\right),\\quad y_i=\\frac{BC}{2}\\sin\\left(\\theta_0+\\frac{360^\\circ (i-1)}{n}\\right)",
+      "\\frac{BC}{2}="+fmt(R,3)+"\\ \\text{in},\\ \\theta_0="+fmt(A.theta0,2)+"^\\circ,\\ n="+n+":\\quad "+pts.map((p,i)=>"("+fmt(p.x,3)+",\\,"+fmt(p.y,3)+")").join(",\\ "),
+      "\\sum x_i^2=\\sum y_i^2=\\frac{n\\,(BC/2)^2}{2}=\\frac{"+n+"\\times"+fmt(R,3)+"^2}{2}="+fmt(n*R*R/2,3)+"\\ \\text{in}^2\\quad(\\text{computed: }"+fmt(sx2,3)+",\\ "+fmt(sy2,3)+")",
+      "s=BC\\,\\sin(180^\\circ/n)="+fmt(2*R,3)+"\\times\\sin("+fmt(180/n,2)+"^\\circ)="+fmt(2*R*Math.sin(Math.PI/n),3)+"\\ \\text{in (chord between adjacent bolts)}"],
+    vars:[["BC",fmt(2*R,3)+" in","bolt-circle diameter"],["\\theta_0",fmt(A.theta0,2)+"°","angle of bolt 1, counter-clockwise from +x"],["n",String(n),"bolts (any n ≥ 3)"]]};
+}
 function anchorCoords(){
   const P=S.plate, A=S.anchor;
   if(bpCircPattern()){
@@ -1550,6 +1561,7 @@ function bpExportDxf(){
   const hx=C.Bx/2, hy=C.By/2, th=Math.max(0.6, Math.min(C.Bx,C.By)/40);
   /* ---------------- PLAN ---------------- */
   W.rect(LY.ped,-hx,-hy,hx,hy);
+  if(bpCircPlate()) W.circle(LY.plate,[px,py],P.D/2); else   /* BC-1 */
   W.rect(LY.plate,px-P.B/2,py-P.N/2,px+P.B/2,py+P.N/2);
   W.line(LY.cl,[-hx-2,0],[hx+2,0]); W.line(LY.cl,[0,-hy-2],[0,hy+2]);
   { const k=colShape(), ex=px+(P.exc_x||0), ey=py+(P.exc_y||0);
@@ -1581,7 +1593,7 @@ function bpExportDxf(){
   if(cutB!==null){ const x=cutB+px, a=th*0.9; W.line(LY.sec,[x,-hy-3*th],[x,hy+3*th]);
     [-hy-3*th,hy+3*th].forEach(y=>{ W.pline(LY.sec,[[x-a*0.4,y-a/2],[x-a*0.4,y+a/2],[x-a*1.4,y]],true); W.text(LY.sec,[x+a*0.5,y-a*0.35],th,"B"); }); }
   W.text(LY.txt,[-hx,-hy-3*th],th*1.4,"PLAN");
-  W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+fmt(P.B,2)+" x "+fmt(P.N,2)+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
+  W.text(LY.txt,[-hx,-hy-5*th],th*0.8,"Pedestal "+fmt(C.Bx,2)+" x "+fmt(C.By,2)+" in; plate "+(bpCircPlate()? "dia. "+fmt(P.D,2) : fmt(P.B,2)+" x "+fmt(P.N,2))+" x "+fmt(P.t,3)+" in; "+g.pts.length+" anchors "+(bpCircPattern()? "on BC "+fmt(S.anchor.BC,2)+" in, " : "")+fmt(A.dia,3)+" in dia., h_ef = "+fmt(A.hef,2)+" in; holes "+fmt(dh,3)+" in");
   /* ---------------- SECTION along x ---------------- */
   const ox=C.Bx+Math.max(24,C.Bx*0.6), X=x=>ox+x;
   W.rect(LY.ped,X(-hx),0,X(hx),C.H);
@@ -6768,9 +6780,9 @@ function buildInputEcho(pg){
   comboSelectorNote(pg);
   mkSection("ieSummary","Input Summary",body=>{
     const rows=[
-      ["Plate", S.plate.B+"″ × "+S.plate.N+"″ × "+S.plate.t+"″, "+pgrade(S.plate.grade).name],
+      ["Plate", (bpCircPlate()? "Ø"+S.plate.D+"″ (circular) × "+S.plate.t+"″" : S.plate.B+"″ × "+S.plate.N+"″ × "+S.plate.t+"″")+", "+pgrade(S.plate.grade).name],
       ["Column", colDims().label+", ecc ("+S.plate.exc_x+", "+S.plate.exc_y+")″"],
-      ["Anchors", S.anchor.nx+"×"+S.anchor.ny+" of "+fmt(S.anchor.dia,3)+"″ "+agrade(S.anchor.grade).name+", hef="+S.anchor.hef+"″, "+(S.anchor.torqued?"torqued":"untorqued")],
+      ["Anchors", (bpCircPattern()? bpCircN()+" on a bolt circle BC = "+fmt(S.anchor.BC,3)+"″ (θ₀ = "+fmt(S.anchor.theta0,2)+"°)" : S.anchor.nx+"×"+S.anchor.ny)+" of "+fmt(S.anchor.dia,3)+"″ "+agrade(S.anchor.grade).name+", hef="+S.anchor.hef+"″, "+(S.anchor.torqued?"torqued":"untorqued")],
       ["Grout", S.grout.present?(S.grout.tg+"″, f'c="+S.grout.fc_grout+" ksi, "+S.grout.taper):"none"],
       ["Concrete", "f'c="+S.conc.fc+" ksi, "+S.conc.Bx+"×"+S.conc.By+"×"+S.conc.H+"″, "+(S.conc.cracked?"cracked":"uncracked")],
       ["Shear distribution", "ACI Fig. R17.7.2.1b case selection ("+
@@ -6866,6 +6878,7 @@ function buildAnchorTab(pg){
     drawAnchorPlan(body,c);
     drawForceMap(body,c);   /* GFX-C: forces, neutral axis and bearing block for this combination */
     anchorForceTable(body,c);
+    if(bpCircPattern()) body.appendChild(eqBlock(bpCircGeomStep()));   /* BC-1: the bolt-circle coordinates, worked */
   },pg);
 
   mkSection("anResT",SN()+"Tension Load — Results Summary",body=>{
@@ -11696,7 +11709,7 @@ function validateInputs(){
       warns.push("Member depth H = "+fmt(C.H,1)+"″ is less than hₑf + head + cover ≈ "+fmt(Hmin,1)+"″. The anchor head has insufficient concrete below it (PROFIS reports this as ‘minimum thickness of base material’). Increase H or reduce hₑf.");
   }
   { const soV=standoffParams();
-    if(soV.hasStandoff && !soV.groutFilled) warns.push("Open stand-off (no grout): the plate does not bear on concrete. Concrete bearing is not checked; compression goes through the rods (rod compression/buckling check runs instead). Plate bending by the DG1 bearing model is indicative only.");
+    if(soV.hasStandoff && !soV.groutFilled) warns.push("Open stand-off (no grout): the plate does not bear on concrete. Concrete bearing is not checked; compression goes through the rods (rod compression/buckling check runs instead)."+(bpCircPlate()? " The circular plate is checked by the bending-line method from the rod forces (Base Plate tab)." : " Plate bending by the DG1 bearing model is indicative only."));
   }
   /* ---- Load magnitude plausibility (catches lb entered as kip) ----
      Loads are entered PRE-FACTORED in kip and kip-in. A value transcribed from a
