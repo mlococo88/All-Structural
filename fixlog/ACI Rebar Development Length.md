@@ -1264,3 +1264,6 @@ index be12315..75bfaab 100644
 +  RBRP.on=name==='report';   // RBRP: the Report tab is not stored as currentTab (not saved)
 +  if(!RBRP.on) currentTab=name;
 ```
+
+## 2026-11-01 — PR: claude/rpt-cbc — no change to this file
+- The RBRP Report tab of this tool (entry above) is synced to the Development & Splice tab of `Concrete Beam Capacity.html` (CLAUDE.md §3), whose combined Report tab also uses `rbrModel()` as its "C. Development & Splice" chapter. Tools that contain the snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html`.
