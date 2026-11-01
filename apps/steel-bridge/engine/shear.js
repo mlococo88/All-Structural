@@ -85,7 +85,8 @@
   /* factors(over): GirderDetail's Girder section defaults (Strength I γ_DC 1.25, γ_DW 1.50, LL+IM 1.75; Fatigue I 1.75; deck placement
      γ_DC 1.25, construction LL 1.50). factorsOwner(lf): the same with the owner's load rules (OWN_K.gs: η on the maximum γ_DC, γ_DW,
      η_N on the minimum ones, η·m on γ_LL; Fatigue I and deck placement unchanged), lf = SBDOwners.loadFactors(...) or { eta, m }. */
-  function factors(over) { return { dc: 1.25, dw: 1.50, dcMin: 0.90, dwMin: 0.65, ll: 1.75, fat: 1.75, cdc: 1.25, ccl: 1.50, m: 1, ...(over || {}) }; }
+  function factors(over) { const C = window.SBDConstr && window.SBDConstr.factors ? window.SBDConstr.factors() : { cdc: 1.25, ccl: 1.50 };   // FONE: deck placement from the Constructibility module (one source)
+    return { dc: 1.25, dw: 1.50, dcMin: 0.90, dwMin: 0.65, ll: 1.75, fat: 1.75, cdc: C.cdc, ccl: C.ccl, m: 1, ...(over || {}) }; }
   function factorsOwner(lf, over) { const G = factors(over), e = (lf && +lf.eta > 0) ? +lf.eta : 1, eN = (lf && +lf.etaN > 0) ? +lf.etaN : 1, m = (lf && +lf.m > 0) ? +lf.m : 1;
     return { ...G, dc: G.dc * e, dw: G.dw * e, dcMin: G.dcMin * eN, dwMin: G.dwMin * eN, ll: G.ll * e * m, m }; }
 

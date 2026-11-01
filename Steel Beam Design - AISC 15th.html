@@ -9534,7 +9534,7 @@ function buildTabs(){
    Plotly diagrams are left on the tabs (a note links there). Nothing is saved: the Report tab is not stored in
    S.ui.tab (SBRP.on is in memory only) and the collapsed sections are kept in memory (SBRP.closed). Display only.
    ===================================================================== */
-const SBRP={on:false,closed:new Set(),api:null,doc:null};
+const SBRP={on:false,closed:new Set(),api:null,doc:null,figs:{},imgs:new Map(),tok:0};   /* figs / imgs: SBRP-2 diagrams (in memory) */
 /* KaTeX source of a rendered element ('' if none) */
 function sbrAnn(k){const a=k&&k.querySelector('annotation[encoding="application/x-tex"]');return a?a.textContent:'';}
 /* the tool's TeX made readable by shared/steps.js's small renderer (used in notes and table cells only) */
@@ -9590,7 +9590,9 @@ function sbrTab(tab,holder,links){
       if(cl.contains('eqBlock')){if(!c.run)c.run={title:c.head||c.title,steps:[]};c.run.steps.push(sbrStep(ch,'s'+(++c.n)));return;}
       if(tag==='BUTTON'||tag==='SELECT'||tag==='INPUT'||tag==='TEXTAREA'||tag==='SCRIPT'||tag==='STYLE'||cl.contains('btnRow')||cl.contains('fRow')||cl.contains('modeBar')||cl.contains('chip')||cl.contains('svgTools')||cl.contains('noPrint')||cl.contains('secHead'))return;
       if(cl.contains('sec')){const h=ch.querySelector(':scope > .secHead .secTitle');flush(c);c.head=h?h.textContent.replace(/^\s*\d+\.\s*/,''):'';if(c.head)c.list.push({type:'note',text:'— '+c.head+' —'});walk(ch.querySelector(':scope > .secBody')||ch,c);flush(c);c.head='';return;}
-      if(cl.contains('plotHold')){flush(c);c.list.push({type:'note',text:'Diagram: shown on the [[tab:'+tab+'|'+(TABS().find(x=>x[0]===tab)||[0,tab])[1]+' tab]].'});return;}
+      if(cl.contains('plotHold')&&ch.dataset.sbrk&&SBRP.imgs.get(ch.dataset.sbrk)){flush(c);const P=SBRP.figs[ch.dataset.sbrk];
+        c.list.push({type:'figure',svg:'<img class="prPlotImg sbrPlot" alt="'+sbdEsc(P.title||'Diagram')+'" src="'+SBRP.imgs.get(ch.dataset.sbrk)+'" style="max-width:'+(P.w<700?(P.w/100).toFixed(2)+'in':'100%')+'">',caption:P.title?'Diagram — '+P.title:'Diagram'});return;}
+      if(cl.contains('plotHold')){flush(c);c.list.push({type:'note',text:'Diagram (Plotly not loaded): see the '+(TABS().find(x=>x[0]===tab)||[0,tab])[1]+' tab. [[tab:'+tab+'|Open the tab]]'});return;}
       if(tag==='TABLE'){flush(c);const rows=Array.from(ch.rows);if(!rows.length)return;
         const hr=rows[0].querySelector('th')?rows.shift():null;
         c.list.push({type:'table',head:hr?Array.from(hr.cells).map(sbrText):[],rows:rows.map(r=>Array.from(r.cells).map(td=>{const t=sbrText(td);return {t,n:/^[-−]?[\d.,]+$/.test(t),span:td.colSpan>1?td.colSpan:undefined};}))});return;}
@@ -9627,6 +9629,7 @@ function sbrModel(){
   const f=S.proj||{},secs=[],names={};TABS().forEach(t=>names[t[0]]=t[1]);
   const order=TABS().map(t=>t[0]).filter(id=>id!=='sep'&&id!=='tabManual');
   const built={},cards={};
+  SBRP.figs={};if(SBRP.imgs.size>80)SBRP.imgs.clear();   /* SBRP-2: this build's diagrams; images of earlier inputs dropped past 80 */
   const saveTab=S.ui.tab,saveCol=JSON.stringify(S.ui.collapse||{});
   try{
     order.forEach(id=>{
@@ -9637,6 +9640,7 @@ function sbrModel(){
       const holder=document.createElement('div');resetSecNum();S.ui.tab=id;
       if(AN&&AN.blockers&&AN.blockers.length&&id!=='tabValid'&&id!=='tabSchem'){holder.appendChild(el('div','errBox','<b>Output withheld \u2014 the model is not valid:</b><br>'+AN.blockers.map(x=>'\u2022 '+x).join('<br>')));}
       else{try{fn(holder);}catch(e){holder.appendChild(el('div','errBox','Section failed to build: '+e.message));}}
+      sbrPlotFigs(holder);   /* SBRP-2: the diagrams of this tab, as the D11 print report draws them */
       built[id]=holder;
     });
   }finally{S.ui.tab=saveTab;S.ui.collapse=JSON.parse(saveCol);}
@@ -9653,10 +9657,10 @@ function sbrModel(){
     const st=c=>c.na?{t:'N/A',cls:'na'}:(c.dcr>1.0001?{t:'FAIL',cls:'ng'}:{t:'PASS',cls:c.dcr>=0.9?'hi':'ok'});
     secs.push({title:'Summary of checks',subs:[{title:'All checks with the governing '+(isMember()?'case':'combination'),items:[{type:'table',head:['Check','Reference','Governing','D/C','Status'],
       rows:chk.map(c=>{const g=sbdChkTarget(c),k=g?firstKey[g[0]+'|'+g[1]]:null;return [c.label,sbrRef(c.ref||''),c.combo||'—',{t:c.na?'n/a':sbdFmtDC(c.dcr),n:true,key:k||undefined},st(c)];})},
-      {type:'note',text:'Each D/C links to the card where it is worked. On screen: [[tab:tabSummary|Summary tab]].'}]}]});
+      {type:'note',text:'Each D/C links to the card where it is worked. [[tab:tabSummary|On screen: Summary tab]]'}]}]});
   }
   order.forEach(id=>{const C=conv[id];if(!C||!C.subs.length)return;
-    secs.push({title:names[id]||id,subs:C.subs.map(q=>({title:q.title,items:q.c.list.map(it=>it.type==='steps'?sbrTopics(it):it).concat([{type:'note',text:'On screen: [[tab:'+id+'|'+(names[id]||id)+' tab]].'}])}))});});
+    secs.push({title:names[id]||id,subs:C.subs.map(q=>({title:q.title,items:q.c.list.map(it=>it.type==='steps'?sbrTopics(it):it).concat([{type:'note',text:'[[tab:'+id+'|On screen: '+(names[id]||id)+' tab]]'}])}))});});
   secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:sbdRefs().map(r=>[r[0],r[1]])}]}]});
   const today=new Date().toISOString().slice(0,10),sect=AN&&AN.sect?AN.sect.lbl+' — '+AN.sect.mat.name:'';
   return {title:isBatch()?'Steel Beam Batch Check':(isMember()?'Steel Member Capacity Check':'Steel Beam Design'),subtitle:(f.name||'Untitled')+(f.subject?' — '+f.subject:'')+(sect&&!isBatch()?' — '+sect:''),code:'AISC 360-16 (LRFD) · AISC Steel Construction Manual, 15th Ed.',
@@ -9670,7 +9674,29 @@ function sbrRender(pg){
   const host=el('div','sbrHost');pg.appendChild(host);
   const bar=$('tabBar');
   SBRP.api=SharedReport.mount(host,M,{closed:SBRP.closed,onGoto:sbrGoto,stick:bar?bar.offsetHeight:0});SBRP.doc=SBRP.api.doc;
+  /* SBRP-2: diagrams not yet drawn are drawn now (Plotly.toImage, PNG, as rasterisePlots), then the report is rebuilt with them */
+  const todo=Object.keys(SBRP.figs).filter(k=>!SBRP.imgs.has(k));
+  if(todo.length&&typeof Plotly!=='undefined'){const tok=++SBRP.tok;host.dataset.plots='pending';
+    Promise.all(todo.map(k=>{const P=SBRP.figs[k];return Plotly.toImage(P.fig,{format:'png',width:P.w,height:P.ht,scale:2}).then(u=>{SBRP.imgs.set(k,u);}).catch(()=>{SBRP.imgs.set(k,null);});   /* null: not drawn, the note stays (no retry loop) */}))
+      .then(()=>{if(tok!==SBRP.tok||!SBRP.on||!host.isConnected)return;const sc=host.closest('#outPanel,#outputPanel')||document.scrollingElement,top=sc?sc.scrollTop:0;renderTab();if(sc)sc.scrollTop=top;});}
+  else host.dataset.plots='done';
 }
+/* SBRP-2 (2026-11-01): the figure of each diagram holder of a built tab, keyed by its content (the same rule as rasterisePlots of
+   the D11 print report: shear, moment and deflection of the displayed combination, else the registered figure); images are kept
+   by key, so a rebuild with the same inputs reuses them */
+function sbrPlotFigs(holder){
+  const c=isMember()?null:(typeof curCombo==='function'?curCombo():null);
+  holder.querySelectorAll('.plotHold').forEach(h=>{
+    let fig=null,w=900,ht=250;
+    try{if(h.id==='plotV'&&c)fig=printFig('V',c);else if(h.id==='plotM'&&c)fig=printFig('M',c);else if(h.id==='plotD')fig=printFig('D',c);
+      else if(PLOTREG[h.id]){fig=PLOTREG[h.id];ht=(fig.layout&&fig.layout.height)||320;w=Math.round(ht*2.3);}}catch(e){fig=null;}
+    if(!fig)return;
+    const tt=fig.layout&&fig.layout.title,title=typeof tt==='string'?tt:(tt&&tt.text)||'';
+    let key;try{key=h.id+':'+w+'x'+ht+':'+JSON.stringify([fig.data,fig.layout]).length+':'+sbrHash(JSON.stringify([fig.data,fig.layout]));}catch(e){return;}
+    h.dataset.sbrk=key;SBRP.figs[key]={fig,w,ht,title:String(title).replace(/<[^>]+>/g,'')};
+  });
+}
+function sbrHash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36);}
 /* [[tab:…]] links of the report: the result tab (as its tab button) */
 function sbrGoto(name){if(!TABS().some(t=>t[0]===name))return;SBRP.on=false;S.ui.tab=name;autosave();buildTabs();}
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
