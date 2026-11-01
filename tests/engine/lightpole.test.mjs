@@ -133,3 +133,20 @@ test('Pullout: 1 in heavy hex nut F = 1.625 in, A_brg = 0.866·1.625² − 0.785
   // 1½ in: F = 2.375, A_brg = 0.866·2.375² − 0.785·1.5² = 3.118 in²
   near(lp.call('anchorBolts', lpDefaultInp({ boltDia: 1.5 }), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 }).Abrg, 3.118, 0.0005, 'A_brg 1.5');
 });
+
+/* ---------- LP-R2: anchor reinforcement check, ACI 318-19 §17.5.2.1 (added 2026-11-01) ---------- */
+test('Anchor reinforcement: 2 #6 per anchor, x 3 in, h_ef 18, cover 3: φA_sf_y = 0.75·0.88·60000 = 39,600 lb; l_d = 60000/(25√4000)·0.75 = 28.5 in > l_avail = 18 − 3/1.5 − 3 = 13.0 in', () => {
+  const lp = lpEngine();
+  lp.set('anchRe', 'yes');
+  const inp = lpDefaultInp({ arBars: 2, arBar: 'shaft', arX: 3 });
+  inp.arShaftBar = lp.call('barByName', '#6');
+  const b = lp.call('anchorBolts', inp, { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 });
+  near(b.ar.phiNar, 39600, 1e-6, 'φN_ar'); assert.equal(b.ar.okN, true);
+  near(b.ar.ld, 60000 / (25 * Math.sqrt(4000)) * 0.75, 1e-9, 'l_d'); near(b.ar.ld, 28.46, 0.01, 'l_d');
+  near(b.ar.lAvail, 13.0, 1e-9, 'l_avail'); assert.equal(b.ar.okLd, false); assert.equal(b.ar.okX, true);
+  // #8 bars (l_d uses 20): 60000/(20√4000)·1.0 = 47.4 in
+  const b8 = lp.call('anchorBolts', lpDefaultInp({ arBars: 2, arBar: '#8', arX: 3 }), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 });
+  near(b8.ar.ld, 60000 / (20 * Math.sqrt(4000)), 1e-9, 'l_d #8');
+  lp.set('anchRe', 'no');
+  assert.equal(lp.call('anchorBolts', inp, { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 }).ar, null);
+});

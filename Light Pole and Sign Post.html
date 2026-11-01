@@ -632,7 +632,10 @@
         <div class="row"><label>Effective embedment, h<sub>ef</sub></label><div class="ctl"><input id="boltHef" type="number" value="18" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Base plate diameter</label><div class="ctl"><input id="bpDia" type="number" value="20" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
-          <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes" class="on">Provided</button><button data-v="no">None</button></div></div></div>
+          <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes">Provided</button><button data-v="no" class="on">None</button></div></div></div>
+        <div class="row arRow"><label>Anchor reinf.: bars per tension anchor<span class="note">vertical bars within 0.5h<sub>ef</sub> of each anchor rod (R17.5.2.1), counted for that anchor only</span></label><div class="ctl"><input id="arBars" type="number" value="2" step="1" min="1"><span class="unit">—</span></div></div>
+        <div class="row arRow"><label>Anchor reinf.: bar size<span class="note">straight vertical bars, Grade = reinf. f<sub>y</sub></span></label><div class="ctl"><select id="arBar" class="combo-sel"><option value="shaft" selected>Shaft longitudinal bar</option><option>#4</option><option>#5</option><option>#6</option><option>#7</option><option>#8</option><option>#9</option><option>#10</option><option>#11</option></select></div></div>
+        <div class="row arRow"><label>Anchor reinf.: distance from the rod<span class="note">horizontal, anchor rod axis to the bar axis</span></label><div class="ctl"><input id="arX" type="number" value="3" step="0.5" min="0"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor installation<span class="note">torqued = rods pretensioned after snug-tight (AASHTO LTS turn-of-nut); sets the ACI 318-19 §17.9.2 minimum spacing and edge distance</span></label>
           <div class="ctl"><div class="seg" id="segAnchTq"><button data-v="untorqued">Untorqued</button><button data-v="torqued" class="on">Torqued</button></div></div></div>
         <p class="tbl-note" id="anchTqMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
@@ -1027,7 +1030,9 @@ let isoFac=1,constraint='non';
 function setSeg(group,val){
   document.querySelectorAll('#'+group+' button').forEach(x=>x.classList.toggle('on', x.dataset.v==String(val)));
 }
-let anchRe='yes';
+// anchor reinforcement (ACI 318-19 §17.5.2.1): 'no' for new projects (2026-11-01, engineer: breakout checked by default);
+// saved projects keep their stored value (always stored since the first version; a save without it keeps the old 'yes')
+let anchRe='no';
 // anchor installation (ACI 318-19 Table 17.9.2(a)): 'torqued' (default for new projects) | 'untorqued'
 let anchTq='torqued';
 // splitting reinforcement at the shaft top (ACI 318-19 §17.9.1): 'no' (default) | 'yes' (waives the §17.9.2 minimums)
@@ -1055,7 +1060,9 @@ if($('signCfMode')) $('signCfMode').addEventListener('change',()=>{
 
 document.querySelectorAll('#segIso button').forEach(b=>b.onclick=()=>{setSeg('segIso',b.dataset.v);isoFac=+b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segCon button').forEach(b=>b.onclick=()=>{setSeg('segCon',b.dataset.v);constraint=b.dataset.v;markDirty();calc();});
-document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;markDirty();calc();});
+function lppApplyArUI(){ document.querySelectorAll('.arRow').forEach(r=>r.style.display=anchRe==='yes'?'':'none'); }
+document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;lppApplyArUI();markDirty();calc();});
+lppApplyArUI();
 document.querySelectorAll('#segSplitRe button').forEach(b=>b.onclick=()=>{setSeg('segSplitRe',b.dataset.v);splitRe=b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segAnchTq button').forEach(b=>b.onclick=()=>{setSeg('segAnchTq',b.dataset.v);anchTq=b.dataset.v;const mn=$('anchTqMigNote');if(mn)mn.style.display='none';markDirty();calc();});
 
@@ -2761,6 +2768,11 @@ function collectChecks(ctx){
     push('Anchor tension','ACI 318-19 Ch.17',bT.Tmax,bT.phiNn,'lb');
     push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
     push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
+    // anchor reinforcement replacing the breakout (ACI 318-19 §17.5.2.1), when Provided (added 2026-11-01)
+    if(b.ar){ const aT=bT.ar||b.ar;
+      push('Anchor reinforcement, tension','ACI 318-19 §17.5.2.1',bT.Tmax,aT.phiNar,'lb');
+      push('Anchor reinforcement, development','ACI 318-19 §17.5.2.1, §25.4.2.3',b.ar.ld,b.ar.lAvail,'in',b.ar.okLd,b.ar.ld/Math.max(b.ar.lAvail,1e-9)); C[C.length-1].dec=1;
+      push('Anchor reinforcement within 0.5h_ef','ACI 318-19 R17.5.2.1',b.ar.x,b.ar.xLim,'in',b.ar.okX); C[C.length-1].dec=1; }
     // §17.9.2 minimum geometry (load-independent): required ÷ provided, like the other minimum-type checks
     if(!b.splitW && b.n>=2){ push('Anchor min. spacing','ACI 318-19 §17.9.2',b.sMinReq,b.sAnch,'in',b.spOK,b.sMinReq/Math.max(b.sAnch,1e-9)); C[C.length-1].dec=2; }
     if(!b.splitW){ push('Anchor min. edge distance','ACI 318-19 §17.9.2'+(b.torq?'':', §20.5.1.3'),b.edReq,b.edProv,'in',b.edOK,b.edReq/Math.max(b.edProv,1e-9)); C[C.length-1].dec=2; }
@@ -3567,6 +3579,28 @@ function anchorBolts(inp,gov,struct){
   const Vcp=kcp*NcbgAll;                     // §17.7.3.1 uses Ncbg of the whole group (all bolts)
   const phiVcp=0.70*Vcp;
 
+  // ---- anchor reinforcement, ACI 318-19 §17.5.2.1 (added 2026-11-01, LP-R2) ----
+  // When "Provided", the breakout strength is replaced by the strength of the anchor reinforcement, which is checked here:
+  //  (1) strength: φ·A_s·f_y ≥ N_ua of the most-loaded anchor, φ = 0.75 (§17.5.2.1), A_s = bars counted for that anchor;
+  //  (2) location: the bars are within 0.5h_ef of the anchor (R17.5.2.1);
+  //  (3) development on the anchor side of the breakout surface (§17.5.2.1, Ch. 25): the cone surface reaches a bar at
+  //      horizontal distance x at depth h_ef − x/1.5 (failure surface 1:1.5, as A_Nco); the straight length above it, to the
+  //      bar end at the clear cover below the shaft top, is l_avail = h_ef − x/1.5 − c ≥ l_d. Below the surface the vertical
+  //      shaft bars run the full shaft depth (taken as developed). l_d per ACI 318-19 §25.4.2.3 (Table 25.4.2.3), ψ_t = ψ_e = 1.0,
+  //      ψ_g = 1.0 (Grade 60) / 1.15 (Grade 80), λ = 1.0, spacing/cover/tie conditions of the first row taken as met; ≥ 12 in;
+  //      no reduction for excess reinforcement.
+  let ar=null;
+  if(hasAnchRe){
+    const bar = (inp.arBar && inp.arBar!=='shaft') ? barByName(inp.arBar) : (inp.arShaftBar || barByName('#6'));
+    const nb=Math.max(1,inp.arBars||1), x=inp.arX||0, fyr=inp.fy, cTop=inp.cover;
+    const As=nb*bar.a, phiNar=0.75*As*fyr;
+    const psiG = fyr>70000 ? 1.15 : 1.0;
+    const div = (bar.d<=0.75+1e-9) ? 25 : 20;               // #6 and smaller / #7 and larger
+    const ld = Math.max(12, fyr*psiG/(div*1.0*Math.sqrt(fc))*bar.d);
+    const lAvail = hef - x/1.5 - cTop;
+    ar={bar, nb, x, As, fyr, phiNar, psiG, div, ld, lAvail, cTop, xLim:0.5*hef,
+        okN: Tmax<=phiNar, okLd: lAvail>=ld-1e-9, okX: x<=0.5*hef+1e-9};
+  }
   // ---- governing tension capacity (per anchor for steel/pullout; group for breakout) ----
   let phiNn, tgov;
   if(hasAnchRe){ phiNn=Math.min(phiNsa, phiNp); tgov='steel / pullout (breakout carried by anchor reinforcement, §17.5.2.1)'; }
@@ -3589,7 +3623,7 @@ function anchorBolts(inp,gov,struct){
 
   return {d,gr,n,BC,R,hef,th0,thM,Ase,bolts,sumY2,Tmax,Vb,VbT,Tu,tension,nT,Tsum,Mu,Pu,Vu,fc,lam,
           futa,Nsa,phiNsa,Vsa,phiVsa,
-          kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,sfbApplies,
+          kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,ar,sfbApplies,
           nutF,Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
           m,beff,Fyp,tpReq,Dpole,
           torq,sAnch,sMinReq,spOK,edReq,edProv,edOK,sqShaft,ca17,caGovK:(caGovB?caGovB.k:1),caGovAng:(caGovB?caGovB.ang:0),splitW};
@@ -3640,6 +3674,15 @@ function boltMinGeomRows(b){
   h+=`<tr><td style="${L}">Min. edge distance${b.torq?', c<sub>a,min</sub> ≥ 6d<sub>a</sub>':', cover c<sub>a,min</sub> − d<sub>a</sub>/2 (§20.5.1.3)'}${b.sqShaft?' (bolt '+b.caGovK+', nearest face)':''} (§17.9.2)</td><td>${fmt(b.edReq,2)} in</td><td>${fmt(b.edProv,2)} in</td><td>${fmt(b.edReq/Math.max(b.edProv,1e-9),2)}</td><td>${pill(b.edOK)}</td></tr>`;
   return h;
 }
+// ACI 318-19 §17.5.2.1 anchor reinforcement rows (when Provided); worked in boltWorkedHTML step 3b
+function boltArRows(b){
+  const a=b.ar; if(!a) return '';
+  const bT=(b.byCheck&&b.byCheck.T)||b, aT=bT.ar||a;
+  const pill=ok=>`<span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span>`, L='text-align:left';
+  return `<tr><td style="${L}">Anchor reinforcement, tension φA<sub>s</sub>f<sub>y</sub> (§17.5.2.1): ${a.nb} ${a.bar.n} per anchor</td><td>${fmt(bT.Tmax,0)}</td><td>${fmt(aT.phiNar,0)}</td><td>${fmt(bT.Tmax/aT.phiNar,2)}</td><td>${pill(bT.Tmax<=aT.phiNar)}</td></tr>`+
+    `<tr><td style="${L}">Anchor reinforcement, development above the breakout surface (in: l<sub>d</sub> · l<sub>avail</sub>)</td><td>${fmt(a.ld,1)}</td><td>${fmt(a.lAvail,1)}</td><td>${fmt(a.ld/Math.max(a.lAvail,1e-9),2)}</td><td>${pill(a.okLd)}</td></tr>`+
+    `<tr><td style="${L}">Anchor reinforcement within 0.5h<sub>ef</sub> of the rod (in: x · 0.5h<sub>ef</sub>)</td><td>${fmt(a.x,1)}</td><td>${fmt(a.xLim,1)}</td><td>${fmt(a.x/Math.max(a.xLim,1e-9),2)}</td><td>${pill(a.okX)}</td></tr>`;
+}
 function boltNotCheckedRows(b){
   const red='color:#a02818;font-weight:700;text-align:left';
   let h=`<tr><td style="text-align:left">Concrete breakout in shear (§17.7.2)</td><td colspan="4" style="${red}">NOT CHECKED — anchors near the shaft face are often governed by shear breakout; verify separately.</td></tr>`;
@@ -3667,6 +3710,7 @@ function designFoundationStack(inp, asd, lrfd, MangLRFD, lrfdAll, asdAll){
   // soil bearing: the MAXIMUM-axial ASD combination (not the max-moment one)
   const asdB=(asdAll&&asdAll.length)? asdAll.reduce((a,x)=>x.axial>a.axial?x:a) : asd;
   const bearing=bearingCheck(inp, asdB.axial); bearing.axial=asdB.axial; bearing.comboName=asdB.name;
+  inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, cands);
   // monopost torsion on the shaft: ACI 318-19 §22.7.1.1 — torsion may be neglected when
   // T_u < φT_th, T_th = λ√f'c·(A_cp²/p_cp) (Table 22.7.4.1(a), non-prestressed), φ = 0.75.
@@ -4186,7 +4230,7 @@ function calc(){
     b:num('b'),S1:num('S1'),qAllow:num('qAllow'),fc:num('fc'),fy:num('fy'),
     cover:num('cover'),minSteel:($('minSteel')?$('minSteel').value:'half'),
     boltDia:parseFloat($('boltDia')?$('boltDia').value:1),boltGrade:parseInt($('boltGrade')?$('boltGrade').value:55),
-    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),anchTq:anchTq,splitRe:splitRe,
+    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),anchTq:anchTq,arBars:Math.max(1,Math.round(num('arBars')||1)),arBar:($('arBar')?$('arBar').value:'shaft'),arX:num('arX'),splitRe:splitRe,
     // mode + sign
     mode:appMode, signPosts:signPosts,
     signB:num('signB'),signS:num('signS'),signClr:num('signClr'),signWt:num('signWt'),signSpacing:num('signSpacing'),
@@ -4290,6 +4334,7 @@ function calc(){
   const bearing=bearingCheck(inp, govAxASD.axial); bearing.axial=govAxASD.axial; bearing.comboName=govAxASD.name;
 
   // anchor bolts (LRFD) — every LRFD combination, governing case per check (0.9D + W included)
+  inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, lrfdCands);
 
   // ---- headline outputs (embedment from ASD gov) ----
@@ -4553,7 +4598,7 @@ function calc(){
     let bt=`<tr><th style="text-align:left">Limit state</th><th>Demand<span class="sym">(lb)</span></th><th>φ·Capacity<span class="sym">(lb)</span></th><th>Ratio</th><th>—</th></tr>`;
     bt+=row('Steel tension, per bolt (§17.6.1)',bolts.Tmax,bolts.phiNsa);
     if(!bolts.hasAnchRe) bt+=row('Concrete breakout, group (§17.6.2)',bolts.Tsum,bolts.phiNcbg);
-    else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">carried by anchor reinforcement (§17.5.2.1)</td></tr>`;
+    else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">replaced by the anchor reinforcement (§17.5.2.1), checked below</td></tr>`+boltArRows(bolts);
     bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
     bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
     bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
@@ -4755,7 +4800,17 @@ function boltWorkedHTML(bo,inp){
   H+=g(`N_{cbg} = ${fmt(bo.Ncbg,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{cbg} = ${fmt(bo.phiBrk,2)}N_{cbg} = ${fmt(bo.phiNcbg,0)}\\ \\text{lb}`);
   H+=`<p class="eq-why">φ = ${fmt(bo.phiBrk,2)} — ${bo.brkCond} (ACI 318-19 Table 17.5.3): ${bo.hasAnchRe?'reinforcement is selected as provided, taken as supplementary reinforcement crossing the failure surface':'no anchor/supplementary reinforcement selected'}.</p>`;
   if(bo.hasAnchRe){
-    H+=`<p class="eq-result">Anchor reinforcement is provided, so per §17.5.2.1 the breakout limit state is carried by the developed tie cage and need not govern the anchor tension. φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb is shown for reference.</p>`;
+    H+=`<p class="eq-result">Anchor reinforcement is provided, so per §17.5.2.1 the design strength of the anchor reinforcement is used instead of the breakout strength; it is checked in step 3b. φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb is shown for reference.</p>`;
+    const a=bo.ar;
+    if(a){
+      H+=step(`3b · Anchor reinforcement in tension ${ref('ACI 318-19 §17.5.2.1, R17.5.2.1; §25.4.2.3')}`);
+      H+=`<p class="eq-why">Vertical bars within 0.5h<sub>ef</sub> of each anchor rod, developed on both sides of the breakout surface, carry the anchor tension (φ = 0.75). Input: ${a.nb} ${a.bar.n}${inp.arBar==='shaft'||!inp.arBar?' (the shaft longitudinal bar)':''} per tension anchor at x = ${fmt(a.x,2)} in from the rod. Below the breakout surface the shaft bars run the full shaft depth (developed); above it the straight length to the bar end at the clear cover (c = ${fmt(a.cTop,2)} in) below the shaft top is checked against l<sub>d</sub>. The cone surface reaches the bar at depth h<sub>ef</sub> − x/1.5 (1 : 1.5 slope, as A<sub>Nco</sub>).</p>`;
+      H+=g(`\\phi N_{ar} = 0.75\\,A_s\\,f_y = 0.75(${a.nb}\\times${fmt(a.bar.a,2)})(${fmt(a.fyr,0)}) = ${fmt(a.phiNar,0)}\\ \\text{lb}\\ ${bo.Tmax<=a.phiNar?'\\ge':'<'}\\ N_{ua} = ${fmt(bo.Tmax,0)}\\ \\text{lb}`);
+      H+=g(`x = ${fmt(a.x,2)}\\ ${a.okX?'\\le':'>'}\\ 0.5h_{ef} = ${fmt(a.xLim,2)}\\ \\text{in}`);
+      H+=g(`l_d = \\max\\!\\left(\\frac{f_y\\,\\psi_t\\psi_e\\psi_g}{${a.div}\\,\\lambda\\sqrt{f'_c}}\\,d_b,\\ 12\\right) = \\max\\!\\left(\\frac{${fmt(a.fyr,0)}(1.0)(1.0)(${fmt(a.psiG,2)})}{${a.div}(1.0)\\sqrt{${fmt(bo.fc,0)}}}(${fmt(a.bar.d,3)}),\\ 12\\right) = ${fmt(a.ld,1)}\\ \\text{in}`);
+      H+=g(`l_{avail} = h_{ef}-\\frac{x}{1.5}-c = ${fmt(bo.hef,2)}-\\frac{${fmt(a.x,2)}}{1.5}-${fmt(a.cTop,2)} = ${fmt(a.lAvail,1)}\\ \\text{in}\\ ${a.okLd?'\\ge':'<'}\\ l_d`);
+      H+=`<p class="eq-result">Anchor reinforcement: strength ${bo.Tmax<=a.phiNar?'OK':'NG'} (${fmt(bo.Tmax/a.phiNar,2)}), development ${a.okLd?'OK':'NG'} (${fmt(a.ld/Math.max(a.lAvail,1e-9),2)}), location ${a.okX?'OK':'NG'}${a.okLd?'':' — lengthen h<sub>ef</sub>, move the bars closer, use hooked/headed bars (not modelled) or select None to check concrete breakout instead'}.</p>`;
+    }
   } else {
     H+=`<p class="eq-result">Group breakout φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb, i.e. ${fmt(bo.phiNcbg/bo.nT,0)} lb per tension bolt (${bo.nT} in tension).</p>`;
   }
@@ -5447,7 +5502,7 @@ const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
-  'Anchor T–V interaction':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
+  'Anchor T–V interaction':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
 const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
   asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
@@ -6263,7 +6318,7 @@ function populateDetailStack(sfx, ctx){
   let bt=`<tr><th style="text-align:left">Limit state</th><th>Demand<span class="sym">(lb)</span></th><th>φ·Capacity<span class="sym">(lb)</span></th><th>Ratio</th><th>—</th></tr>`;
   bt+=row('Steel tension, per bolt (§17.6.1)',bolts.Tmax,bolts.phiNsa);
   if(!bolts.hasAnchRe) bt+=row('Concrete breakout, group (§17.6.2)',bolts.Tsum,bolts.phiNcbg);
-  else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">carried by anchor reinforcement (§17.5.2.1)</td></tr>`;
+  else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">replaced by the anchor reinforcement (§17.5.2.1), checked below</td></tr>`+boltArRows(bolts);
   bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
   bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
   bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu+(bolts.VbT||0)*bolts.n,bolts.phiVcp);
@@ -6297,7 +6352,7 @@ function populateDetailStack(sfx, ctx){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -6360,6 +6415,10 @@ function applyState(st){
   setSeg('segIso', isoFac);
   setSeg('segCon', constraint);
   setSeg('segAnchRe', anchRe);
+  lppApplyArUI();
+  if($('arBars') && (!st.inputs || st.inputs.arBars===undefined)) $('arBars').value='2';
+  if($('arBar') && (!st.inputs || st.inputs.arBar===undefined)) $('arBar').value='shaft';
+  if($('arX') && (!st.inputs || st.inputs.arX===undefined)) $('arX').value='3';
   // anchor installation (added 2026-10-21). Saves made before it have no anchTq: they open as
   // Untorqued (no capacity depends on it; only the §17.9.2 checks use it) with a notice.
   anchTq = st.anchTq==='torqued' ? 'torqued' : 'untorqued';

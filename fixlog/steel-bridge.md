@@ -3020,3 +3020,105 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-gs1-4 — Cross-section proportion limits and minimum deck reinforcement GS1–GS4, GS22 on the Flexure tab, in the report and in Auto design's full check (B3)
+### Change (calculation: new checks)
+- New `engine/proportions.js` (`window.SBDProportions`): GirderDetail Girder section `checks()` GS1, GS2, GS3, GS4 and GS22 (anchor
+  `id: 'GS1', grp: P1` in "Steel Bridge Design.html"), operation for operation, as check items of each flexure location, with worked steps
+  (ids fx.gs1.ok, fx.gs2.<flange>.bt|bD|tt, fx.gs3.Iy / .ok, fx.gs4.req / .ok / .top, fx.gs22) and `summary(rows)` (largest ratio of each
+  over the girder, warnings).
+- `engine/flexure.js location()`: before `r.checks = checksOf(r, prj);` after
+  `const PR = window.SBDProportions; r.checks = (PR ? PR.items(r, prj) : []).concat(checksOf(r, prj));` and the steps getter
+  `worked(r, prj).concat(PR ? PR.steps(r, prj) : [])`. The header's "Not ported … proportions GS1 to GS4" is updated.
+- `ui/flexure.js`: topic `prop` "Cross-section proportions and minimum deck reinforcement (GS1–GS4)" (ids /^fx\.gs(1|2|3|4|22)(\.|$)/)
+  after "Web depth in compression and hybrid factor"; a line under "Governing" with the largest ratio of each over the girder (links
+  select the location) and the warnings.
+- `report/builders.js flex()`: a sub-section "Cross-section proportions (6.10.2) and minimum deck reinforcement (6.10.1.7)" (table of
+  the largest ratio of each with a link to the location's steps; those locations are detailed), and a line in the governing summary.
+- `engine/autodesign.js partOf`: GS4 and GS22 map to 'deck' (no plate is sized from the deck reinforcement or the A6 method). The full
+  check takes every flexure item in use, so GS1–GS4 now count there (in the page; the Node autodesign tests do not load proportions.js).
+- `index.html`: script tag `engine/proportions.js` before engine/flexure.js.
+### §4 callout
+- New checks, AASHTO LRFD 10th Ed.:
+  - GS1 Art. 6.10.2.1.1, Eq. 6.10.2.1.1-1: D/t_w ≤ 150 (no longitudinal stiffeners); ratio (D/t_w)/150.
+  - GS2 Art. 6.10.2.2, Eqs. 6.10.2.2-1, -2, -3 for each flange: b_f/2t_f ≤ 12.0, b_f ≥ D/6, t_f ≥ 1.1t_w.
+  - GS3 Eq. 6.10.2.2-4: 0.1 ≤ I_yc/I_yt ≤ 10 (compression flange by the region); ratio max(0.1/v, v/10).
+  - GS4 Art. 6.10.1.7: A_r = A_top + A_bot ≥ 0.01 b_eff t_deck at every negative-flexure location (GirderDetail applies it there, not
+    only where the deck stress exceeds φf_r); the top-layer share ≥ 2/3 a warning ("should"). MassDOT Bridge Manual Part I 3.5.1.4
+    (OWN17) cited. Noncomposite: not applicable.
+  - GS22 MassDOT Part I 3.5.1.7 (OWN23): Appendix A6 should not be used: a warning where A6 is the method in use.
+- Before: no such checks in the new app (the limits existed only as Auto design sizing rules). After: as GirderDetail. Results change:
+  each flexure location has these items; a location's governing check and the girder's governing flexure ratio can now be one of them
+  (e.g. GS4 0.989 at the piers of the built-in project, below its flexure governing 1.229 GS7, so the governing ratio is unchanged there).
+- Check case (GirderDetail's built-in rows; tests/engine/proportions.test.mjs): Span 1, D = 60, t_w = 0.5625, top 16 × 0.75, bottom
+  16 × 1.125: GS1 60/0.5625 = 106.67, ratio 0.7111; GS2 top 16/(2·0.75) = 10.667 (0.8889), 16 ≥ 10 (0.625), 0.75 ≥ 0.61875 (0.825);
+  GS3 I_yc = 0.75(16³)/12 = 256, I_yt = 1.125(16³)/12 = 384, 0.667 → ratio 0.15. Pier 1, top 18 × 1.5, bottom 18 × 2, b_eff 114 in,
+  t_deck 8.5 in, A_r = 6.6 + 3.2 = 9.8 in²: GS3 972/729 = 1.333 → 0.1333; GS4 0.01(114)(8.5) = 9.69 ≤ 9.8, ratio 0.98878; top share
+  0.673 ≥ 0.667.
+- Hand-off file as the demand source (no project rebar given to `fromPayload`): GS4 is not evaluated (n/a with the reason): the hand-off's
+  A_r is GirderDetail's Structural analysis input (rebarPct % of b_eff t_s at mid-depth, e.g. 1 % × 96 × 8 = 7.68 in² on builtin G1), not
+  the deck bars that GirderDetail's Girder section checks (its module inputs), so 0.01 b_eff t_deck with t_deck = t_s + 0.5 would always
+  fail (8.16/7.68 = 1.063). `engine/flexure.js fromPayload` marks such a deck `arHandoff: true`; GS1–GS3 are evaluated as usual.
+### Parity
+- 100 gd_*.json payloads + GirderDetail's built-in rows (5 variants: as is, MassDOT with A6, MassDOT 6.10.8, top share 0.5, A_r 5 in²):
+  105 cases, 37,110 locations, 635,819 values (GS1 37,110, GS2 222,660, GS3 37,110, GS4 25,882, GS22 3,236 items): 0 differences,
+  largest relative difference 0 (ratios bit-identical).
+### Other copies
+- None.
+
+## 2026-11-01 — PR: sbd-ad8 — Field splice auto-design: end distances at least the owner's edge distance (SB2-AD8; B4); CF11 verified
+### Change (calculation: splice auto-design inputs)
+- `engine/splices.js autoDesign(p0, env)`, after `const undo = clone({ top: P.top, bot: P.bot, web: P.web });`, added:
+  `const eMin = R0.emin, upE = (o, f) => { if (!(parseDim(o[f]) >= eMin - 1e-9)) o[f] = eMin; };`
+  `['top', 'bot'].forEach(k => { upE(P[k], 'ef'); upE(P[k], 'ep'); }); upE(P.web, 'ew'); upE(P.web, 'ewp');`
+  i.e. the flange and web end distances e_f, e_p, e_w, e_wp are raised to DT4's e_min = max(Table 6.13.2.6.6-1 value for the bolt and
+  edge, the owner's edge distance) before the search; a larger entered value is kept. When the search ends "not changed" (DT10, flange
+  too narrow) the entered values are restored with the rest, as before. Used by the Field splices tab (auto mode) and by Auto design's
+  full check (`girder()` auto-designs every splice without entered plates).
+- Decision: SB2-AD8 (lead, 2026-10-30): the splice auto-design uses the owner's edge distance for the end distances (CTDOT 2 in).
+### §4 callout
+- Provision: AASHTO LRFD 10th Ed. Art. 6.13.2.6.5 (end distance ≥ the Table 6.13.2.6.6-1 edge distance); owner CTDOT BRSDM V2 6.13.6.1
+  (2 in edge distance, rule spl.ovs, OWN25).
+- Before (GirderDetail autoDesignSplice and this app): e = 1.75 in as entered; every CTDOT splice the search designs fails DT4
+  (1.75 < 2.00). After: CTDOT e = 2.00 in; AASHTO / RIDOT / MassDOT unchanged (e_min = 1.125 in for 7/8 in bolts, cut edges ≤ 1.75).
+- Check case (built-in splice, 7/8 in A325 bolts, cut edges, flanges widened to 20 in, CTDOT): e_min = max(1.125, 2) = 2.00 in;
+  after: top 2 lines × 4 rows each side (32 bolts), outer PL 20 × 1/2, 2 inner PL 8 1/2 × 5/8; bottom 2 × 5 (40), PL 20 × 5/8 + 2 × 8 1/2 × 3/4;
+  web 2 PL 57 × 9/16, 9 × 2 each side (36); 108 bolts; DT4 2.00 ≥ 2.00 at all six ends (pass); top splice plate length 25.5 → 26.5 in.
+  The same plates with 1.75 in end distances: DT4 fails. GirderDetail's autoDesignSplice on the same input: DT4 fails.
+  The built-in 16 in flanges under CTDOT stay "not changed" (DT10: too narrow for 2 gage lines with 2 in edges), end distances 1.75 as entered.
+### Tests
+- tests/engine/splices.test.mjs: the auto-design parity now runs GirderDetail on the input with the same end distances (AD8 applied by
+  hand) and compares every plate, bolt and check: 0 differences (built-in every owner; 136 auto-designed splices of the payloads).
+  New test "AD8": end distances 2.00 (CTDOT) / 1.75 (others), DT4 passes for every owner; GirderDetail's search fails DT4 under CTDOT.
+### Auto design (CTDOT, built-in project)
+- Before: no candidate; every design "blocked" by DT4 (1.75 in < 2 in, a detail input the plates do not change).
+- After: DT4 passes in the candidates and is no longer a blocker; still no candidate: a candidate's splice fails TF3 (slip resistance,
+  Service II, negative moment, oversized holes K_h = 0.85) at 1.076 on the full check, although the same splice auto-design passes
+  every check on the built-in demands with 17 in or 18 in flanges. Open item (Auto design: the splice demands at design time vs the
+  candidate's own analysis); not changed here. tests/engine/autodesign.test.mjs (CTDOT test) updated to this outcome.
+### CF11 (verify only)
+- Auto design's cross-frame sizing rule for the bolts per member end (CF10 / CF11; CTDOT 4 bolts) is in `engine/autodesign.js`
+  (sizeDetails, ids CF1–CF11, "the current type and bolt count first, then the others"), merged in #511. Not changed here.
+
+## 2026-11-01 — PR: claude/sbd-cf-note — Cross-frames member-force note: Strength I and Strength III / V are separate load combinations (CFNOTE; text only, no calculation change)
+
+Line numbers are approximate; search for the anchor text.
+
+### What changed (engineer decision 2026-11-01: fix the note text only)
+- `ui/framing.js` `render`, the "Member forces (truss model)" card note. Before:
+  `Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.`
+  After: `Each load combination is a separate case (AASHTO LRFD 10th Ed. Table 3.4.1-1), checked on its own; each member is designed for the largest.
+  Strength I: the entered member forces (nothing is computed for Strength I); Strength III and V: ± |wind force| f_wF_w alone (not added to the Strength I
+  forces); Constructibility: the entered forces ± brace force f_brM_br. The top chord work points are held by the deck.` (followed by `umNote(R)` as before).
+- `engine/crossframes.js` `steps`, step `cf.<m>.forces` label (same misstatement, text only). Before: `<member>: largest tension and compression (analysis force ±
+  wind and brace forces)`; after: `<member>: largest tension and compression of the separate combinations (Strength I: the entered forces; Strength III, V: ± wind
+  force alone; Constructibility: the entered forces ± brace force)`.
+- What the code does (unchanged, `compute`, `combos`): Strength I T = max(0, u), C = max(0, −u) with u the entered Strength force; Strength III and V
+  T = C = |f_w F_w| (u = 0); Constructibility T = max(0, u + |f_br M_br|), C = max(0, −u + |f_br M_br|); T_u, C_u the largest over the four (AASHTO LRFD
+  10th Ed. Table 3.4.1-1: Strength I, III and V are separate load combinations).
+- Governing provision: AASHTO LRFD 10th Ed. Table 3.4.1-1, Art. 4.6.2.7.1, 6.7.4.2. No formula, factor or value changed.
+- Check case: default project, G1, Cross-frames tab; before = after for every member force, T_u, C_u, check and ratio (Node, `SBDFramingUI.build`
+  at the default and with RIDOT η = 1.05, m = 1.2: 0 differences other than the step label).
+
+### Other copies
+- None.
