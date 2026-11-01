@@ -1,9 +1,10 @@
-# Steel Bridge Design: old app vs new app (comparison, 2026-10-31)
+# Steel Bridge Design: old app vs new app (comparison, 2026-10-31; final comparison 2026-11-01, §d)
 
 - **Old app:** `Steel Bridge Design.html`. Three apps in one file: GirderDetail (the modules), Preliminary sizing (PlateLine, `pl-src`) and ST-Girder (`st-src`). It is still the engineer's working tool.
 - **New app:** `apps/steel-bridge/` (engine/, ui/, report/), with `shared/*.js`.
 - **Basis:** origin/main at `cb8ae2a` (#508). The sources are `fixlog/steel-bridge.md`, `fixlog/Steel Bridge Design.md`, `docs/REBUILD_PLAN.md`, AUDIT.md, PENDING.md, ENGINEER_CHECKS.md, `tests/engine/*`, and the notes on branch `claude/sbd-s2-notes`. I also grepped both codebases and ran one targeted Node check (item C-1).
 - **Scope:** analysis only. No app code, formula, test or saved data changed in this PR.
+- **Update 2026-11-01 (B5, final comparison):** after #527 (B1 demand files), #529 (B2 hand-offs), #535 (B3 GS1–GS4, GS22), #534 (B4 AD8) and the other agent's #533, #539, #540, #545. The result, the remaining differences with their causes, and the switch-over readiness are in **§(d)**; the blocker lists in §(a) and §(c) are updated. Rows changed by these PRs say so.
 - **Code references:** AASHTO LRFD 10th Ed. (2024) articles unless stated; MBE = AASHTO MBE 3rd Ed. Articles are cited, not quoted.
 - **Legend:**
   - **Better:** the app that does it better (*old*, *new*, *equal*, or *?* where the engineer decides).
@@ -14,7 +15,7 @@
 
 ## (a) One-page summary
 
-**Where the two apps stand.** The new app has every girder check of the old app except the 6.10.2 proportion limits and the minimum deck reinforcement (GS1 to GS4, see C-2). On the 100 hand-off payloads and the 20 recorded projects it matches GirderDetail exactly or to round-off. The differences that remain are documented and each has a known cause. The largest are:
+**Where the two apps stand (updated 2026-11-01, §d).** The new app has every girder check of the old app (GS1–GS4 and GS22 added in #535). On identical demands every module matches GirderDetail (or ST-Girder for the rating) exactly or to round-off. Through the import path (the 20 recorded projects, 100 girders, §d) two new-app gaps remain: the **construction live load is not imported and defaults to 0** (deck placement GS14–GS16 11–19 % low, unconservative), and **GirderDetail's stud zones are not imported** (the app's own stud layout fails SC2 on 8 xsA exterior girders where GirderDetail's passes). The differences that remain are documented and each has a known cause. The largest are:
 
 | Difference | Size | More correct |
 |---|---|---|
@@ -37,11 +38,10 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 - **Tests.** Node tests with parity against the old code.
 
 **Where the old app is still ahead:**
-- **Cross-tool hand-offs.** The new app has none.
-- **Saved-project library and undo.**
-- **External-demand files.** The old app reads MIDAS/MCT, PS-Girder and SteelBeam envelopes, including a self-weight-excluded flag. The new app reads only `stgirder-external-demands`.
+- ~~Cross-tool hand-offs~~: done (#529: projectMeta, lldf pull, superReactions; girderDemands is internal to the old app).
+- ~~Saved-project library and undo~~: done (#516).
+- ~~External-demand files~~: corrected (#527): the old app refuses MIDAS/MCT, PS-Beam and steel-beam files since DISC (2026-10-19); the new app now does the same, and refuses `selfWeightExcluded: true`.
 - **Helpers not yet ported:**
-  - the GS1–GS4 proportion and minimum-reinforcement checks on the design tabs;
   - Preliminary sizing's framing checks X1–X4;
   - cross-frame and stiffener-plate auto-design;
   - flange-stress plots;
@@ -62,13 +62,11 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 - **Also:** Auto design takes f_ℓ = 0 during deck placement on skewed bridges (`flC: 0`) and ignores an entered Flexure f_ℓ.
 - **Consequence:** Auto design is not yet fit to approve a design.
 
-**Switch-over blockers** (detail in §c):
-1. the Auto design live-load and f_ℓ bugs;
-2. GS1–GS4 missing from the design checks;
-3. cross-tool hand-offs (lldf pull, superReactions, projectMeta, girderDemands);
-4. external-demand imports (MIDAS/MCT and the self-weight flag);
-5. a final full comparison on the recorded projects, done through the import path;
-6. the engineer's decisions listed in §(b) and §(c).
+**Switch-over blockers** (updated 2026-11-01; detail in §d):
+1. ~~Auto design live load and f_ℓ~~ (#511 area, C-1, C-16: done); ~~GS1–GS4~~ (#535); ~~hand-offs~~ (#529); ~~external demands~~ (#527); ~~AD8~~ (#534); ~~final comparison~~ (§d).
+2. **New (§d, D-1): construction live load** not imported (`gd.df.bridge.cll`, Preliminary sizing `suggest.cll` kept under `legacy.unmapped`) and 0 by default in the new app (only a warning): deck placement GS14/GS15 11–15 % and GS16 16–19 % below GirderDetail on every imported project. Unconservative: must be fixed (calculation PR) before switch-over.
+3. **New (§d, D-2): stud zones and regions** (`gd.sc.zones`, `gd.sc.regions`) not imported; the app's own layout (fatigue pitch per 0.1L) fails SC2 on 8 xsA exterior girders (up to 1.372) where GirderDetail's zones pass. Import them, or make the layout meet SC2.
+4. The engineer's decisions listed in §(b), §(c) and §(d).
 
 ---
 
@@ -79,7 +77,7 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 | # | Area | Old behaviour | New behaviour | Better | Why / evidence | Action |
 |---|---|---|---|---|---|---|
 | C-1 | **[CALC] Auto design: shear demands** | Suggest / Full design (PL) and Optimize (ST) check shear with LL+IM | `payloadOf` (engine/autodesign.js:163) builds stations with M_LL and V_FAT but **no V_LL** and no V_PL. `SBDShearUI.build({pl})` reads `V_LLpos`/`V_LLneg` as 0. So the shear checks (GS11, GS16, GS18), the transverse stiffeners (the panel V_u) and the bearing stiffeners (R_LL = 0) run without LL+IM | **old** | **Verified now (Node, built-in project G1):** V_u,max 172.96 vs 395.97 kip; V_LL 0 vs 129.16 kip; shear ratio 0.271 vs 0.437; bearing R_LL 0 vs 107.8/215.3/215.3/107.8 kip. The governing TS/BS ratios were equal (0.667 / 0.692) only because geometric items govern them on this project. 3.4.1, 6.10.9, 6.10.11.2 | **fix-new, blocker.** Build the payload from `ui/shear.js fromAnalysis` (it has V_LL, V_PL and the reactions), or add the V fields. Add a test that the Auto design and Shear tab ratios agree |
-| C-2 | **[CALC] 6.10.2 proportions, 6.10.1.7 minimum deck reinforcement (GS1–GS4)** | GirderDetail Girder section has GS1 web proportions, GS2 flange proportions, GS3 I_yc/I_yt, GS4 minimum negative-flexure deck rebar, and GS22 (owner: App. A6 not used) | Not ported. engine/flexure.js header: "Not ported … GS1 to GS4". The 6.10.2 limits exist only as Auto design sizing rules (`proportions`). The Analysis tab notes the 1 % rebar need as text only | **old** | grep: no GS1–GS4 in ui/, report/ or flexure. A girder entered by hand is never checked against 6.10.2 | **port, blocker** (calculation model) |
+| C-2 | **[CALC] 6.10.2 proportions, 6.10.1.7 minimum deck reinforcement (GS1–GS4)** | GirderDetail Girder section has GS1 web proportions, GS2 flange proportions, GS3 I_yc/I_yt, GS4 minimum negative-flexure deck rebar, and GS22 (owner: App. A6 not used) | Not ported. engine/flexure.js header: "Not ported … GS1 to GS4". The 6.10.2 limits exist only as Auto design sizing rules (`proportions`). The Analysis tab notes the 1 % rebar need as text only | **old** | grep: no GS1–GS4 in ui/, report/ or flexure. A girder entered by hand is never checked against 6.10.2 | **done** (#535, B3: parity 0 differences on 37,110 locations) |
 | C-3 | **[CALC] Deck placement sequence: pour boundaries (SB2-A1)** | `saSeq` loads a node on a pour boundary in both pours (inclusive ends), so about 1 ft of deck is counted twice per boundary | Each pour loaded exactly | **new** | M_DCc up to 1.04 % larger in old near piers (gd_builtin28_MassDOT_G4, x = 250 ft: −2452.4 vs −2426.0 kip-ft); largest GS14/15 ratio change 0.0040 (0.4308 → 0.4268). The engineer chose exact loads for the new app. 6.10.3.4.1 | **keep** new; **ENG**: fix old? (small, conservative) |
 | C-4 | **[CALC] First-pour sliver at an abutment** | `saSeq` treats M_DC1(0) = −3e-12 (round-off) as negative, creating a 0–1 ft "pour" placed after the positive pours | Fixed in #503: relative tolerance 1e-6·max\|M_DC1\| | **new** | Effect ≤ 0.023 % of max M_DCc (built-in G1 x = 1 ft: 59.457 → 60.033 kip-ft); GS14/GS15 ratios change ≤ 1.66e-4; the sliver occurs on 45 of 141 girders | **ENG**: one-line fix in old (own PR), or leave until switch-over |
 | C-5 | **[CALC] Cross-frame/diaphragm weight in DC1** | DC1 point loads from Preliminary sizing's *suggested* K-frame (e.g. L3x3x3/8; 2.80 kip on G1) | Weighs the cross-frame members actually checked (imported Cross-frames inputs, e.g. X with L5x5x3/8 × 3; 4.73 kip) | **new** (consistent) | M_DC1 0.76 % (−2424.4 vs −2406.1 kip-ft, builtin AASHTO G2); negative flexure GS7/GS9/GS8 then 0.26 % / 0.32 % (import entry, fixlog). 3.5.1 | **ENG**: on import, map PL's suggested frame or keep the module members (now)? |
@@ -100,7 +98,7 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 | C-20 | **[CALC] Studs b_eff (SB2-F1)** | One bridge-wide b_eff (the girder with the largest fatigue shear) | Each girder's own b_eff (default) | **new** | Interior b_eff 96 → 114 in; SC1 0.8746 → 0.8915; no pass/fail change; 6.10.10.1.2, 4.6.2.6 | keep |
 | C-21 | **[CALC] Rating (LRFR design load)** | ST-Girder: the selected span; −M at one station, bottom flange, 6.10.8 only. GirderDetail GS20 (girder section locations) | Every location of the whole girder; both flanges; A6 or 6.10.8 by the method in use; Service II both flanges plus web F_crw; shear by direction | **new** (more complete) | 300 spans: −M RF 1.02 to 1.07 × ST-Girder (unified F_nc with γ_e, D6.6.2); +M, shear and SII ≈ 1.000; no RF crosses 1.0. MBE 6A.4.2, 6A.6 | keep. Both lack legal and permit vehicles (owner rows "pending") |
 | C-22 | **[CALC] Splice demands (app path)** | Lumped-load element shear | Consistent loads | **new** | Moments within 0.1 %, shears within 1.3 % at the splice. 6.13.6.1. Splice formulas: parity 0 differences | keep |
-| C-23 | **[CALC] Splices under CTDOT (SB2-SP7, AD8)** | Every CTDOT splice fails DT10 (16 in flanges, 2 in edge) and DT4 with the 1.75 in default end distance | Same; Auto design adds a bolt-fit sizing rule (AD1). DT4 still blocks: the end distances are not set to the owner's 2 in | **new** (partly) | Decision SB2-AD8 (lead, 2026-10-30): splice auto-design uses the owner's edge distance | **fix-new** (implement AD8) |
+| C-23 | **[CALC] Splices under CTDOT (SB2-SP7, AD8)** | Every CTDOT splice fails DT10 (16 in flanges, 2 in edge) and DT4 with the 1.75 in default end distance | Same; Auto design adds a bolt-fit sizing rule (AD1). DT4 still blocks: the end distances are not set to the owner's 2 in | **new** (partly) | Decision SB2-AD8 (lead, 2026-10-30): splice auto-design uses the owner's edge distance | **done** (#534, B4: auto-design end distances = DT4 e_min, CTDOT 2 in; Auto design CTDOT built-in: TF3 slip open item) |
 | C-24 | **[CALC] Cross-frame bolts, CTDOT (CF11)** | Warning (CTDOT 4 bolts, PENDING #6) | Check; the built-in connection has 2 bolts per member end, so it blocks every CTDOT Auto design candidate | **?** | Decision: Auto design treats CF11 as a sizing rule | **fix-new** (implement as decided) |
 | C-25 | **[CALC] Auto design vs Suggest / Optimize** | PL Full design (`suggestFull`, 11–45 min/project); ST Optimize sweeps t_fb | Two-stage screen plus full check on every module; owner plate rules; BS6 and bolt fit as sizing rules (AD9, AD1) | **new** (once C-1 and C-16 are fixed) | 6 of 21 projects compared: no legacy design passes the new full check (BS6, GS7 at piers, FA1). builtin_AASHTO legacy 0.03 % lighter but fails BS6. **Note:** the passing new designs were judged without LL shear (C-1) | re-run the parity after the C-1 fix; the 15 pending projects; Rating and Welds in the full check |
 | C-26 | **[CALC] Noncomposite girders (SB2-O7, O10, O13)** | Composite only in Girder section | 6.10.8 + App. A6 noncomposite paths; constructibility shown as information | **new** | O13 (LTB of both flanges in reverse curvature) open | ENG on O10/O13 when needed |
@@ -125,8 +123,8 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 | F-6 | Stiffener-plate auto-design (AD.ts / AD.bstf), per-bay design (tsDesignBay) | Yes | Auto design variables: uniform d_o/D, intermediate stiffener, connection plate, bearing stiffeners (pairs, b_t, t_p, welds) on the TS/CP/BS checks; per-bay spacing Lock only | new (2026-10-31) | sbd-autodesign-vars | done (per-bay design: open) |
 | F-7 | TS&L alternatives study | PL "alts" | Auto design ranked list and compare view (any two of the current design and the candidates) | new | autodesign_spec | done |
 | F-8 | MIDAS/MCT and other external demand envelopes | ST-Girder refuses them since DISC (2026-10-19): Import takes only GirderDetail hand-offs (`extFromGD`, `gdCheck`); GirderDetail always sends `selfWeightExcluded: false` | Since B1 (2026-11-01): the same (engine/demandfile.js, a port of the Import checks); a `selfWeightExcluded: true` file is refused | equal | Corrected 2026-11-01: the earlier reading took the compute-path schema list for the Import. tests/engine/demandfile.test.mjs | done (B1) |
-| F-9 | Cross-tool hand-offs (HANDOFF.md) | `bridgeSuite.v1.lldf` pull, `superReactions` send (Substructure Loading), `projectMeta`, `girderDemands`, `appPaths`, inbox | None (grep: no `bridgeSuite` in apps/steel-bridge) | old | — | **port, blocker** (same keys, CLAUDE.md §5) |
-| F-10 | Saved-project library, undo | `girderdetail_projects_v1`, `plateline_projects_v1`, `stgirder.projects`, `plateline_undo_v1` | One autosaved project (`sbd2.project.current`) + Export/Import JSON; one-step Undo in Auto design only | old | model.js KEYS | port (small–medium; new `sbd2.*` keys) |
+| F-9 | Cross-tool hand-offs (HANDOFF.md) | `bridgeSuite.v1.lldf` pull, `superReactions` send (Substructure Loading), `projectMeta`, `girderDemands`, `appPaths`, inbox | None (grep: no `bridgeSuite` in apps/steel-bridge) | old | — | **done** (#529, B2: projectMeta, lldf pull, superReactions; tested with lldf.html and Bridge Substructure Loading) |
+| F-10 | Saved-project library, undo | `girderdetail_projects_v1`, `plateline_projects_v1`, `stgirder.projects`, `plateline_undo_v1` | One autosaved project (`sbd2.project.current`) + Export/Import JSON; one-step Undo in Auto design only | old | model.js KEYS | **done** (#516) |
 | F-11 | Per-module user manual / design basis | Each GirderDetail module has a "User manual (design basis)" report tab | None (the worked steps carry the article references) | old | `MODS[...].rpt` | port as a report appendix (Sonnet, medium) |
 | F-12 | Paper-space DXF layouts (one per sheet with a viewport) | Pyodide + ezdxf (unpinned), in the browser | Model space with borders, R12 (shared/dxf.js) | old (format) / new (no 10+ MB download) | SB2-DW6 | needs an R2000+ writer in shared/dxf.js (medium–large); ENG: needed? |
 | F-13 | Plotly charts (zoom, hover) | Plotly 2.27 | SVG/DXF graphics in the Drawings style with wheel zoom, pan, pinch | new (consistent, printable) | #498–#502, #507 | keep |
@@ -179,8 +177,8 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 |---|---|---|---|---|
 | K-1 | new | C-1 Auto design shear without LL+IM (verified) | High (blocker) | fix-new (calc) |
 | K-2 | new | C-16 Auto design f_ℓ = 0 in deck placement, ignores the entered Flexure f_ℓ | High (blocker) | fix-new: `SBDFraming.design` |
-| K-3 | new | C-2 GS1–GS4 not checked | High (blocker) | port |
-| K-4 | new | AD8 splice end distances = owner edge distance; CF11 as a sizing rule (decided, not built) | Medium | fix-new |
+| K-3 | new | C-2 GS1–GS4 not checked | High (blocker) | done (#535) |
+| K-4 | new | AD8 splice end distances = owner edge distance; CF11 as a sizing rule (decided, not built) | Medium | done (#534); CF11 verified (#511) |
 | K-5 | new | Auto design PR2: done (compare view, locks generalised to Lock / Range / Auto, cost editor, Rating and Welds in the full check); still open: the 15 pending parity projects, ST re-run via st-source.mjs | Medium | build (parity) |
 | K-6 | new | f_ℓ = 0 override impossible on skewed bridges | Low–medium | UI (small) |
 | K-7 | new | Paper-space DXF needs an R2000+ writer (SB2-DW6) | Low | ENG |
@@ -246,3 +244,88 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 - C-14 (owner m on every module) needs the final comparison.
 - The status of the AUDIT A14 items in the old app was not re-checked.
 - F-8 (self-weight-excluded files) is a code-reading finding. No such file was run.
+
+---
+
+## (d) Final comparison, new app vs old app (2026-11-01, B5)
+
+**Basis:** origin/main after #527, #529, #533, #534, #535, #539, #540 and #545. Node only (no browser compare runs, per the 2026-10-29 rules).
+
+### Method
+1. **Formulas on identical demands (every module).** These are the module parity tests of `node tests/engine/run.mjs`, from the full run on this main:
+
+   | Module | Compared against | Size | Differences |
+   |---|---|---|---|
+   | Flexure GS5–GS13, GS19 | GirderDetail GM.gs | 113 cases, 38,971 locations, 2.13 M values | 0 |
+   | Proportions GS1–GS4, GS22 | GirderDetail GM.gs | 105 cases, 37,110 locations | 0 |
+   | Shear, stiffeners | GirderDetail | 100 payloads + built-in, 65,342 locations; 40 recorded inputs, 325,460 values | 0 |
+   | Studs | GirderDetail | 238,220 values; 100 payloads, 3,000 zones | 0 |
+   | Fatigue | GirderDetail | 807,306 values; 29,720 flange items | 0 |
+   | Constructibility | GirderDetail | 44,520 locations, 222,600 GS14–GS16 items, 720 OH items | 0 |
+   | Cross-frames | GirderDetail | 2,041 cases, 793,205 values | 0 |
+   | Splices | GirderDetail | 136 auto-designed, 400 checked; 1.06 M values | 0 (AD8 applied to both) |
+   | Welds | GirderDetail | 100 payloads, 174,968 values | 0 |
+   | Rating | ST-Girder | 89,314 ratings | 0 on ST-Girder's own inputs |
+   | Loads and LLDF | GirderDetail | 204 module inputs, 171,380 values | 0 |
+   | Framing | Preliminary sizing | 1,320 layouts, 2.67 M values | 0 |
+
+   The rating's RF / ST-Girder ratio, −M only, is 1.019–1.072. This is a known design difference: C-21 (ST-Girder: one station, 6.10.8 only).
+
+2. **The import path.** `tests/engine/final-compare.mjs` (about 22 min) runs the 20 recorded projects (5 bridges × 4 owners) and every girder G1–G5, 100 girders in all.
+   - Each old project file is imported through "From old app" (`engine/legacy.js`).
+   - Every module is then computed twice with the report's data (`report/data.js`, `report/builders.js govRows`):
+     - **new:** this app's analysis on the imported project;
+     - **old:** GirderDetail's own demands (its hand-off for that girder) through the same module engines. Item 1 shows these engines are GirderDetail's formulas. The deck rebar is the imported module rebar, because the hand-off's A_r is an analysis input (B3).
+   - Also compared against GirderDetail's **recorded** results in each hand-off: negative flexure per span (GS7/GS9, GS8) and deck placement per span (GS14–GS16), 300 spans each.
+   - Also compared: the analysis envelopes.
+
+### Result (100 girders)
+| Check group / quantity | > 0.5 % | Largest | Cause | Class |
+|---|---|---|---|---|
+| Analysis M_DC1 | — | 0.76 % (builtin AASHTO G2) | C-5: cross-frame weight of the checked members | known, accepted |
+| Analysis V_DC1 | — | 1.49 % (builtin28 AASHTO G2) | C-7: exact station shear, not element shear | known, accepted |
+| Analysis M_DC2, M_DW, LL+IM, fatigue, V_LL | — | ≤ 0.01 % | round-off | equal |
+| Negative flexure vs GirderDetail recorded (300 spans) | 0 | 0.32 % | C-5 through f_bu; C_b/L_b from framing | known, accepted |
+| Flexure, proportions | 27 / 60 | 4.7 % | The old column has no GS4: GS4 is not evaluated on a hand-off file. New GS4 (0.931) vs old GS2 (0.889), same project | method, not a difference |
+| Shear (stations, panels), transverse and bearing stiffeners | 0–1 | 0.51 % | C-7 | known, accepted |
+| Fatigue details, flanges (GS17) | 0 | 0.00 % | — | equal |
+| Cross-frames, welds detailing | 0 | 0 % | — | equal |
+| Welds strength FW1 | 100 | 1.29 % | C-7 (V_DC at the station) | known, accepted |
+| Welds fatigue FW3, TR1 | 60 | 2.29 % | C-7 (shear at the station vs the hand-off's element shear) | known, accepted |
+| Rating Inventory / Operating RF | 0 | 0.44 % | C-5 through −M | known, accepted |
+| **Deck placement vs GirderDetail recorded, unskewed (240 spans)** | all | GS14/GS15 −11 to −15 %; GS16 −16 to −19 % | **D-1:** construction live load = 0 in the new app (M_CL, V_CL); GirderDetail uses Preliminary sizing's `cll` (20 psf, CTDOT 50 psf) × b_eff | **new-app bug (unconservative), blocker** |
+| Deck placement, builtin28 (skew 28°, 60 spans) | all | GS14/GS15 +22 to +67 % | C-16: the new app takes the skew f_ℓ of C6.10.1 during deck placement; GirderDetail used f_ℓ = 0. The −CL of D-1 is inside these numbers | known (new more conservative) |
+| Studs | 57 | SC2 1.372 vs 0.956 (xsA AASHTO G1) | **D-2:** GirderDetail's stud zones and regions are not imported; the new app lays out its own pitch per 0.1L from the fatigue shear. 8 xsA exterior girders fail SC2 only in the new app; 3 builtin RIDOT interior girders fail (1.007) only in the old one; SC5 and SC7 fail in both (inputs) | **new-app gap (data not carried), blocker** |
+| Field splices | — | — | Not on the file path; splices.test compares them with GirderDetail on the payloads (0 differences) | covered |
+| LL deflection SA3 | — | — | Only in the new app's analysis path; C-9 / SB2-A8 (≤ 0.11 %) | known |
+
+**Old-app bugs met:**
+- C-3: pour-boundary double count.
+- C-4: first-pour sliver.
+- The old app's `selfWeightExcluded` path (unreachable from GirderDetail) would count the girder steel twice on a GirderDetail file marked true (+78 kip-ft at x = 66 ft, def15 G2; #527).
+- No new old-app bug was found.
+
+**New-app open items found in B1–B4 (not blockers):**
+- Auto design under CTDOT: with AD8, the built-in candidates fail TF3 (slip, oversized holes) at 1.076 on the full check (fixlog sbd-ad8).
+- The superReactions copy `by.girderdetail` is shared with the old app during the transition.
+
+### Switch-over readiness (for the engineer)
+**Not ready yet.** Two new-app items must be fixed first, both calculation PRs with §4 callouts:
+- **D-1: construction live load.**
+  - Add the input to the new app (with the owner default: CTDOT 50 psf, OWN `cll`).
+  - Import it from Preliminary sizing's `suggest.cll` / GirderDetail's `df.bridge.cll`.
+  - Analysis: CL = cll × b_eff, as GirderDetail's `wCL`.
+- **D-2: stud zones and regions.**
+  - Import `gd.sc.zones` and `gd.sc.regions`.
+  - Or size the app's own layout for SC1 and SC2, not SC1 only.
+
+After them, re-run `node tests/engine/final-compare.mjs`. The expected result is that every remaining difference is a known, accepted item (C-3, C-5, C-7, C-9, C-16, C-21).
+
+The engineer's decisions from §(b) and §(c) still stand:
+- C-3, C-4 (fix the old app?);
+- C-5 (cross-frame weight on import);
+- C-32, C-33;
+- F-12;
+- W-4 (the Example source).
+
+The switch-over itself (the redirect page, tools.html, the copy-the-folder note) is **not** done here.
