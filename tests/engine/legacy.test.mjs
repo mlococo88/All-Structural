@@ -22,7 +22,7 @@ import { gdDecl, gdBlock } from './gd-source.mjs';
 
 const E = f => path.join(ROOT, 'apps/steel-bridge', f);
 const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/legacy.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), 'lldf.js', E('engine/lldf.js'),
-  E('engine/loads.js'), E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/framing.js'), E('engine/crossframes.js'), E('engine/analysis.js'), E('engine/fatigue.js'), E('engine/rating.js'), E('ui/shear.js'), E('ui/rating.js'));
+  E('engine/loads.js'), E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/framing.js'), E('engine/crossframes.js'), E('engine/analysis.js'), E('engine/fatigue.js'), E('engine/rating.js'), E('ui/shear.js'), E('ui/rating.js'), E('engine/studs.js'), E('ui/fatigue.js'));
 const M = U.SBDModel, LG = U.SBDLegacy, J = o => JSON.parse(JSON.stringify(o));
 const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'], PROJECTS = ['builtin', 'builtin28', 'xsA', 'curb', 'util'];
 
@@ -121,7 +121,7 @@ test('nothing dropped: every leaf of the old parts is mapped or kept under legac
     assert.ok(r.ok); assert.ok(r.summary.unmapped.length > 0);
     // module rows are not mapped (this app makes its own): kept, at their own path
     assert.equal(JSON.stringify(U0.gd.fa.rows), JSON.stringify(parts(pr, 'RIDOT').gd.fa.rows));
-    assert.equal(JSON.stringify(U0.gd.sc.zones), JSON.stringify(parts(pr, 'RIDOT').gd.sc.zones));
+    assert.equal(JSON.stringify(U0.gd.sc.regions), JSON.stringify(parts(pr, 'RIDOT').gd.sc.regions));   // the zones are read since D-2 (2026-11-01); the regions stay
     const txt = LG.summaryText(r.summary); assert.ok(/kept in the project under legacy\.unmapped/.test(txt));
     if (pr === 'util') assert.ok(r.summary.notes.some(n => /xf, xfAllow/.test(n)), r.summary.notes.join(' | '));
   }
@@ -151,4 +151,26 @@ test('other entry points: GirderDetail file, PlateLine file, ST-Girder alone (on
   assert.equal(c.project.materials.steel.top, '50W'); assert.equal(JSON.stringify(c.project.legacy.unmapped.st.rateVeh), '[{"name":"x"}]');
   assert.equal(M.importJSON(JSON.stringify({ _schema: 'stgirder-external-demands', stations: [] })).ok, false);
   assert.equal(M.importJSON(JSON.stringify({ app: 'SteelBridgeDesign', v: 2, data: {} })).ok, false);
+});
+
+test('stud pitch zones (D-2, 2026-11-01): GirderDetail\'s zones imported as entered; its built-in example left out; the app\'s own layout meets SC1 and SC2', () => {
+  const mx = (C, id) => Math.max(0, ...C.find(c => c.id === id).items.map(i => i.r).filter(isFinite));
+  // the recorded seeds hold GirderDetail's built-in example zones (0–22 ft 3 @ 9 in, 22–55 ft 3 @ 12 in): not imported
+  const f = sbdFile('xsA', 'AASHTO'), P0 = M.importJSON(JSON.stringify(f)).project;
+  assert.equal((P0.studs.zones || []).length, 0); assert.ok(P0.legacy.summary.notes.some(n => /built-in example/.test(n)));
+  assert.ok(!JSON.stringify(P0.legacy.unmapped).includes('"zones"'), 'sc.zones read');
+  // the app's own layout (xsA G1, exterior with a sidewalk: little fatigue shear, so Preliminary sizing's fatigue rule gives pitches up to 24 in):
+  // before, SC2 failed (Abut. 1 to max. positive, Span 1: n_prov 888 studs in the girder, ratio 1.372); now the zones of a short region are
+  // tightened by n_prov/n_req (rounded down to 1/2 in, ≥ 6d) until SC2 passes: ratio 0.988, 1108 studs.
+  const F0 = U.SBDFatigueUI.build({ P: P0, g: 0, src: 'analysis' });
+  assert.ok(mx(F0.SCC, 'SC2') <= 1 + 1e-9 && mx(F0.SCC, 'SC1') <= 1 + 1e-9, `SC1 ${mx(F0.SCC, 'SC1')}, SC2 ${mx(F0.SCC, 'SC2')}`);
+  assert.ok(Math.abs(mx(F0.SCC, 'SC2') - 0.988) < 5e-4, String(mx(F0.SCC, 'SC2')));
+  F0.SR.zones.forEach(z => assert.ok(z.p >= 6 * 0.875 - 1e-9 && Math.abs(z.p * 2 - Math.round(z.p * 2)) < 1e-9));
+  // zones a GirderDetail user loaded (the hand-off's, from Preliminary sizing): imported as entered, checked as given (not refined)
+  const Zg = readP('gd_xsA_AASHTO_G1.json').girderDetail.details.studs.zones; f.data.sc.zones = J(Zg);
+  const P1 = M.importJSON(JSON.stringify(f)).project;
+  assert.deepEqual(J(P1.studs.zones), Zg.map(z => ({ x1: z.x1, x2: z.x2, nr: z.nr, p: z.p })));
+  const F1 = U.SBDFatigueUI.build({ P: P1, g: 0, src: 'analysis' });
+  assert.deepEqual(J(F1.SR.zones.map(z => z.p)), Zg.map(z => z.p));
+  assert.ok(Math.abs(mx(F1.SCC, 'SC2') - 0.956) < 5e-4, String(mx(F1.SCC, 'SC2')));   // GirderDetail's own SC2 on this girder: 0.956 (C-20 aside)
 });
