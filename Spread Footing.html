@@ -11,6 +11,7 @@
 <!-- SFRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/dxf.js"></script><!-- SFDW: DXF writer and drawing preview (Drawings tab) -->
 <style>
 *{box-sizing:border-box}
 body{font-family:"Times New Roman",Times,serif;font-size:12px;color:#111;background:#fafafa;margin:0}
@@ -80,6 +81,12 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 .sfdInDot{display:none;width:7px;height:7px;border-radius:50%;background:#c62828;margin-left:5px}
 .sfdInTab.has-err .sfdInDot{display:inline-block}
 .sfdInTab[hidden],.sfdInPane[hidden]{display:none!important}
+/* SFDW: Drawings tab */
+.sfdwBar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:2px 0 6px}
+.sfdwBar select{width:auto;max-width:100%}
+.sfdwBox{border:1px solid #98a4b0;background:#fff;margin:6px 0}
+.sfdwHead{margin:8px 0 2px;font-size:12px}
+.sfdwIdx tr[data-sfdw]{cursor:pointer} .sfdwIdx tr.on{background:#eef4ff}
 .eq{margin:8px 0 16px 0;padding-left:4px}
 .eqt{font-weight:bold;font-size:12px;border-bottom:1px dotted #bbb;padding-bottom:2px;margin-bottom:2px}
 .eqr{float:right;font-style:italic;font-weight:normal;color:#333;font-size:11px}
@@ -178,7 +185,7 @@ a.wkA{color:#1c4e80;text-decoration:none;cursor:pointer}
 a.wkA:hover{text-decoration:underline}
 .wkPrt,.sfdRpt{display:none}
 @media print{
- .wrap>div:first-child,#titleblock,#tab-3d,#tab-report:not(.active){display:none !important}   /* screen title row and input title block: the cover replaces them; live 3D view not printed */
+ .wrap>div:first-child,#titleblock,#tab-3d,#tab-report:not(.active),#tab-drawings{display:none !important}   /* screen title row and input title block: the cover replaces them; live 3D view not printed */
  details.sec[open]>summary::before{content:""}                        /* the open-marker printed before every card title */
  .wkScr{display:none}
  .wkPrt{display:inline}
@@ -418,6 +425,7 @@ a.wkA:hover{text-decoration:underline}
   <button data-tab="tab-3d">7. 3D View</button>
   <button data-tab="tab-manual">8. User Manual</button>
   <button data-tab="tab-report">9. Report</button>
+  <button data-tab="tab-drawings">10. Drawings</button>
  </div>
  <div class="tabpage active" id="tab-schem"></div>
  <div class="tabpage" id="tab-combos"></div>
@@ -428,6 +436,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="tabpage" id="tab-3d"></div>
  <div class="tabpage" id="tab-manual"><div id="manualHost"></div></div>
  <div class="tabpage" id="tab-report"></div>
+ <div class="tabpage" id="tab-drawings"></div>
 </div>
 </div>
 </div>
@@ -2798,7 +2807,7 @@ function renderPrintHeader(){
  /* section headings and result lines around the result tabs */
  $$('.sfdRptH,.sfdRes,.sfdResH,.sfdNone').forEach(e=>e.remove());
  const tabs=$$('#tabbar button').map(b=>({id:b.dataset.tab,n:(b.textContent.match(/^(\d+)\./)||[])[1],t:b.textContent.replace(/^\d+\.\s*/,'')}))
-  .filter(s=>s.n&&s.id!=='tab-3d'&&s.id!=='tab-report'&&(s.id!=='tab-manual'||state.manPrint));
+  .filter(s=>s.n&&s.id!=='tab-3d'&&s.id!=='tab-report'&&s.id!=='tab-drawings'&&(s.id!=='tab-manual'||state.manPrint));
  const toc=[];
  tabs.forEach(s=>{const pg=document.getElementById(s.id);if(!pg)return;
   const h=el('h2','sfdRpt sfdRptH',s.n+'. '+sfdEsc(s.t));h.id='sfdRpt-'+s.id;pg.parentNode.insertBefore(h,pg);
@@ -3207,6 +3216,261 @@ window.addEventListener('beforeprint',()=>{
 });
 </script>
 <script>
+/* ================= 10. Drawings tab (SFDW, 2026-11-01) =================
+   The drawing set as one DXF R12 file (shared/dxf.js: SharedDxf.drawing → toDXF), previewed in the app from the same
+   entities (SharedDxf.toSVG, SharedDxf.viewer: wheel zoom at the cursor, drag pan, pinch, double-click fit, + / − / Fit).
+   Display and export only: geometry and bars come from the tool's own model (R.peds with their load offsets, state.geom,
+   sfdMat / sfdPedBars for the bars as entered, P2 for ℓ_d / ℓ_dc / available lengths, the governing bearing case).
+   Model space, full size in inches; each sheet is a B-size sheet (17 × 11 in) at its plot scale with border and title
+   block (no owner cell), placed side by side. Nothing is saved except the chosen sheet (per-browser UI key sfd_dwgSheet_v1). */
+const SFDW_SCALES=[[1,'1" = 1"'],[4,'3" = 1\'-0"'],[6,'2" = 1\'-0"'],[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[32,'3/8" = 1\'-0"'],[48,'1/4" = 1\'-0"'],[64,'3/16" = 1\'-0"'],[96,'1/8" = 1\'-0"'],[192,'1/16" = 1\'-0"']];
+const SFDW={W:17,H:11,m:0.375,tbH:1.0,key:'sfd_dwgSheet_v1',cur:null,B:null};
+const sfdwFI=v=>SharedDxf.fmtFtIn(v);
+const sfdwIn=v=>SharedDxf.fmtIn(v);
+/* the footing mats with their bar positions (in, across the width, from the footing centre line), as entered */
+function sfdwMats(){
+ const out={};
+ ['botX','botY','topX','topY'].forEach(k=>{const e=sfdMat(k);if(!e.size)return;
+  const half=e.w*6, st=-half+e.c+e.db/2, n=e.mode==='qty'?e.n:(e.spc>0?e.n:0), s=e.mode==='qty'?e.spc:e.spc;
+  const pos=[];for(let j=0;j<n;j++)pos.push(n>1?st+j*s:0);
+  out[k]=Object.assign({},e,{pos,len:(k.slice(-1)==='X'?R.B:R.L)*12-2*e.c});});
+ return out;
+}
+/* bar heights in the section (in above the bottom of the footing): x-bars on top of y-bars in the bottom mat (as d_x of the
+   design), top x-bars outermost in the top mat (as the 3D view) */
+function sfdwLevels(M){
+ const t=R.t*12, cvB=num(state.mat.coverBot), cvT=num(state.mat.coverTop), d=k=>M[k]?M[k].db:0;
+ return {botY:cvB+d('botY')/2, botX:cvB+d('botY')+d('botX')/2, topX:t-cvT-d('topX')/2, topY:t-cvT-d('topX')-d('topY')/2, topOfBot:cvB+d('botY')+d('botX')};
+}
+/* the pedestal bar layout of the drawings: centres at b/2 − cover − d_b/2 (cover to the bar face, the bar-fit basis of sfdPedBars) */
+function sfdwPedLayout(i){
+ const p=R.peds[i], rf=state.peds[i].reinf, PB=sfdPedBars(i), db=BAR_DIA[rf.longSize]||0, cov=num(rf.cover);
+ const ax=p.bx*6-cov-db/2, ay=p.by*6-cov-db/2, xs=[], ys=[];
+ for(let k=0;k<PB.nx;k++)xs.push(PB.nx>1?-ax+2*ax*k/(PB.nx-1):0);
+ for(let k=0;k<PB.ny;k++)ys.push(PB.ny>1?-ay+2*ay*k/(PB.ny-1):0);
+ const pts=[];xs.forEach(x=>{pts.push([x,-ay]);pts.push([x,ay]);});ys.forEach(y=>{if(y>-ay+1e-6&&y<ay-1e-6){pts.push([-ax,y]);pts.push([ax,y]);}});
+ const tie=BAR_DIA[rf.tieSize]||0, ts=num(rf.tieSpc), h=p.h*12;
+ const nt=(tie>0&&ts>0&&h>0)?Math.floor(h/ts+1e-9)+1:0;   // ties at 0, s, 2s, … ≤ h (the 3D view's rule)
+ return {PB,db,cov,ax,ay,xs,ys,pts,tie,ts,nt,h,rf,tx:ax+db/2+tie/2,ty:ay+db/2+tie/2};
+}
+function sfdwBuild(){
+ const D=SharedDxf.drawing({prefix:'S-'}), S=[], m=state.meta||{};
+ const L={out:D.layer('CONC',7),ped:D.layer('PED',7),bar:D.layer('REBAR',5),dim:D.layer('DIMS',3),txt:D.layer('TEXT',7),cl:D.layer('CNTR',8,'CENTER'),
+  ld:D.layer('LOAD',1),soil:D.layer('SOIL',30),hid:D.layer('HIDDEN',8,'HIDDEN'),tb:D.layer('TBLK',7),br:D.layer('BRDR',7),cut:D.layer('CUT',6)};
+ const M=sfdwMats(), LV=sfdwLevels(M), B12=R.B*12, L12=R.L*12, t12=R.t*12, Df12=R.Df*12;
+ const AW=SFDW.W-2*SFDW.m-0.5, AH=SFDW.H-2*SFDW.m-SFDW.tbH-0.6;   // drawing area (paper in)
+ let ox=0;
+ /* one sheet: content(k) draws around (0,0) at scale k; the smallest standard k it fits is used */
+ function sheet(id,title,content,fixedK){
+  const i0=D.mark();let k=null,over=false;
+  const ks=fixedK?[fixedK]:SFDW_SCALES.map(s=>s[0]).filter(v=>v>=4);
+  for(const kk of ks){D.E.length=i0;D.k=kk;D.h=0.1*kk;content(kk);const b=D.bbox(i0);
+   if(!isFinite(b[0])||((b[2]-b[0])/kk<=AW&&(b[3]-b[1])/kk<=AH)){k=kk;break;}}
+  if(k===null){k=ks[ks.length-1];over=true;}
+  const b=D.bbox(i0), W=SFDW.W*k, H=SFDW.H*k, mm=SFDW.m*k, tb=SFDW.tbH*k;
+  const cx=ox+W/2, cy=mm+tb+0.3*k+(AH*k)/2;
+  if(isFinite(b[0]))D.move(i0,cx-(b[0]+b[2])/2,cy-(b[1]+b[3])/2);
+  D.k=k;D.h=0.1*k;
+  D.rect(L.br,ox,0,ox+W,H);D.rect(L.br,ox+mm,mm,ox+W-mm,H-mm);
+  /* title block (no owner cell): two rows along the bottom of the sheet */
+  const x0=ox+mm, y0=mm, w=(SFDW.W-2*SFDW.m)*k, r=tb/2, sc=k===1?'NTS':(SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1];
+  D.rect(L.tb,x0,y0,x0+w,y0+tb);D.line(L.tb,x0,y0+r,x0+w,y0+r);
+  const row1=[['PROJECT',m.project,4.25],['PROJECT NO.',m.number,2],['CALCULATED BY',m.calcBy,2],['DATE',m.calcDate,1.75],['CHECKED BY',m.chkBy,2],['CHECKED DATE',m.chkDate,1.75],['SCALE',sc,2.5]];
+  const row2=[['SHEET TITLE',title,8.25],['DRAWN BY','SPREAD FOOTING DESIGN TOOL (DRAWINGS TAB)',5],['SHEET','?',3]];
+  let sheetEnt=null;
+  [[row1,y0+r],[row2,y0]].forEach(([row,yb])=>{let x=x0;row.forEach(([lab,val,cw],ci)=>{
+   D.text(L.tb,x+0.05*k,yb+r-0.11*k,0.065*k,lab,0);
+   const mx=Math.floor((cw-0.12)/(0.13*0.9));D.text(L.tb,x+0.05*k,yb+0.1*k,0.13*k,String(val==null||val===''?'—':val).toUpperCase().slice(0,mx),0);
+   if(lab==='SHEET')sheetEnt=D.E[D.E.length-1];
+   x+=cw*k;if(ci<row.length-1)D.line(L.tb,x,yb,x,yb+r);});});
+  const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt};S.push(sh);
+  ox+=W+1*k;
+  return sh;
+ }
+ const T=(l,x,y,hh,s,j,rot)=>D.text(l,x,y,hh,s,j,rot);
+ const ped=R.peds;
+ /* ---------- 1. Footing plan ---------- */
+ const yA=ped.length?ped[0].y*12:0, xB=ped.length?ped[0].x*12:0;
+ sheet('plan','FOOTING PLAN',k=>{
+  const h=0.1*k, x0=-B12/2, x1=B12/2, y0=-L12/2, y1=L12/2;
+  D.rect(L.out,x0,y0,x1,y1);
+  const ext=0.5*k;
+  D.line(L.cl,x0-ext,0,x1+ext,0,D.ltype('CENTER'));D.line(L.cl,0,y0-ext,0,y1+ext,D.ltype('CENTER'));
+  T(L.txt,x1+ext+0.06*k,-h/2,h,'+x',0);T(L.txt,0,y1+ext+0.06*k,h,'+y',1);
+  T(L.txt,0.06*k,y0-ext-0.04*k,0.08*k,'CL FTG',0);
+  ped.forEach((p,i)=>{const px=p.x*12,py=p.y*12,bx=p.bx*12,by=p.by*12;
+   D.rect(L.ped,px-bx/2,py-by/2,px+bx/2,py+by/2);
+   T(L.txt,px,py+by/2+0.08*k,h,sfdEsc(p.label).toUpperCase()+' '+sfdwFI(bx)+' x '+sfdwFI(by),1);
+   const lx=px+p.lex*12, ly=py+p.ley*12, r=0.05*k;
+   D.circle(L.ld,lx,ly,r);D.line(L.ld,lx-1.8*r,ly,lx+1.8*r,ly);D.line(L.ld,lx,ly-1.8*r,lx,ly+1.8*r);
+   if(Math.abs(p.lex)>1e-9||Math.abs(p.ley)>1e-9){D.line(L.ld,px,py,lx,ly,D.ltype('HIDDEN'));
+    T(L.ld,px,py-by/2-0.16*k,0.08*k,'LOAD PT e = '+sfdwFI(p.lex*12)+', '+sfdwFI(p.ley*12),1);}});
+  /* section cuts */
+  const cutE=0.85*k;
+  D.line(L.cut,x0-cutE,yA,x0-ext-0.35*k,yA);D.line(L.cut,x1+ext+0.35*k,yA,x1+cutE,yA);
+  T(L.cut,x0-cutE-0.05*k,yA-0.06*k,0.14*k,'A',2);T(L.cut,x1+cutE+0.05*k,yA-0.06*k,0.14*k,'A',0);
+  D.line(L.cut,xB,y0-cutE,xB,y0-ext-0.35*k);D.line(L.cut,xB,y1+ext+0.35*k,xB,y1+cutE);
+  T(L.cut,xB,y0-cutE-0.2*k,0.14*k,'B',1);T(L.cut,xB,y1+cutE+0.05*k,0.14*k,'B',1);
+  /* dimensions: pedestal centres from the edges, then the overall size */
+  const xs=[x0,...[...new Set(ped.map(p=>+(p.x*12).toFixed(4)))].sort((a,b)=>a-b),x1];
+  const ys=[y0,...[...new Set(ped.map(p=>+(p.y*12).toFixed(4)))].sort((a,b)=>a-b),y1];
+  D.chainH(L.dim,xs,y0-1.45*k,y0);D.dimH(L.dim,x0,x1,y0-1.85*k,y0);
+  D.chainV(L.dim,ys,x1+1.45*k,x1);D.dimV(L.dim,y0,y1,x1+1.85*k,x1);
+  /* axes triad */
+  const tx=x0-1.2*k, ty=y0-1.45*k;D.line(L.ld,tx,ty,tx+0.4*k,ty);D.line(L.dim,tx,ty,tx,ty+0.4*k);
+  T(L.ld,tx+0.45*k,ty-0.04*k,0.08*k,'+x',0);T(L.dim,tx,ty+0.46*k,0.08*k,'+y',1);
+  T(L.txt,0,y0-2.3*k,0.16*k,'FOOTING PLAN',1);T(L.txt,0,y0-2.52*k,0.09*k,'SCALE '+(SFDW_SCALES.find(s=>s[0]===k)||[0,'1:'+k])[1]+';  LOAD POINTS (RED) AT x + e_x, y + e_y',1);
+ });
+ /* ---------- 2./3. Sections ---------- */
+ function section(dir){
+  const along=dir==='A'?'X':'Y', across=dir==='A'?'Y':'X', W=dir==='A'?B12:L12, cutAt=dir==='A'?yA:xB;
+  return k=>{
+   const h=0.1*k, x0=-W/2, x1=W/2;
+   D.rect(L.out,x0,0,x1,t12);
+   const g=Df12, ext=1.2*k;
+   D.line(L.soil,x0-ext,g,x1+ext,g);T(L.soil,x0-ext,g+0.05*k,0.08*k,'GRADE',0);
+   if(R.covEff>0){const ys=t12+R.covEff*12;D.line(L.soil,x0,ys,x1,ys,D.ltype('DASHED'));}
+   if(R.dw!==Infinity&&R.dw<=R.Df+2){const yw=g-R.dw*12;D.line(L.soil,x0-ext,yw,x1+ext,yw,D.ltype('HIDDEN'));T(L.soil,x1+ext,yw+0.05*k,0.08*k,'W.T.',2);}
+   /* pedestals cut by this section */
+   const cut=ped.map((p,i)=>({p,i})).filter(({p})=>dir==='A'?Math.abs(p.y*12-cutAt)<p.by*6-1e-6:Math.abs(p.x*12-cutAt)<p.bx*6-1e-6);
+   cut.forEach(({p,i})=>{const c=(dir==='A'?p.x:p.y)*12,b=(dir==='A'?p.bx:p.by)*12,hh=p.h*12;if(hh<=0)return;
+    D.rect(L.ped,c-b/2,t12,c+b/2,t12+hh);
+    const Lp=sfdwPedLayout(i), a=dir==='A'?Lp.ax:Lp.ay;
+    [c-a,c+a].forEach(xb=>D.line(L.bar,xb,LV.topOfBot,xb,t12+hh-Lp.cov));
+    for(let j=0;j<Lp.nt;j++){const z=t12+Math.min(j*Lp.ts,hh-Lp.cov);D.line(L.bar,c-a-Lp.db/2-Lp.tie/2,z,c+a+Lp.db/2+Lp.tie/2,z);}
+    const lx=c+(dir==='A'?p.lex:p.ley)*12;D.line(L.ld,lx,t12+hh+0.55*k,lx,t12+hh+0.05*k);D.line(L.ld,lx,t12+hh+0.05*k,lx-0.04*k,t12+hh+0.14*k);D.line(L.ld,lx,t12+hh+0.05*k,lx+0.04*k,t12+hh+0.14*k);
+    T(L.ld,lx,t12+hh+0.62*k,0.08*k,'P'+((dir==='A'?p.lex:p.ley)?' (e = '+sfdwFI((dir==='A'?p.lex:p.ley)*12)+')':''),1);
+    D.dimV(L.dim,t12,t12+hh,c+b/2+0.45*k,c+b/2);
+    T(L.txt,c,t12+hh+0.82*k,h,sfdEsc(p.label).toUpperCase(),1);});
+   /* bars: the mats running along the section as lines, the others as dots */
+   const bars=[];
+   [['bot','bot'],['top','top']].forEach(([lv])=>{
+    const kAl=lv+along, kAc=lv+across;
+    if(M[kAl]){const y=LV[kAl];D.line(L.bar,x0+M[kAl].c,y,x1-M[kAl].c,y);bars.push({k:kAl,y,x:x1-M[kAl].c-0.3*k});}
+    if(M[kAc]){const y=LV[kAc];M[kAc].pos.forEach(x=>D.circle(L.bar,x,y,Math.max(M[kAc].db/2,0.012*k)));bars.push({k:kAc,y,x:M[kAc].pos.length?M[kAc].pos[M[kAc].pos.length-1]:x1});}
+   });
+   /* callouts in a column to the right, top to bottom, with leaders */
+   const lab={botX:'BOTTOM x-BARS',botY:'BOTTOM y-BARS',topX:'TOP x-BARS',topY:'TOP y-BARS'};
+   const cx=x1+1.7*k;bars.sort((a,b)=>b.y-a.y);
+   const step=0.22*k, ytop=t12/2+(bars.length-1)*step/2;
+   bars.forEach((q,j)=>{const ty=ytop-j*step;D.pline(L.bar,[[q.x,q.y],[cx-0.5*k,ty],[cx-0.08*k,ty]]);T(L.txt,cx,ty-h/2,h,lab[q.k]+': '+sfdMatTxt(q.k).replace('→','->').toUpperCase(),0);});
+   /* dimensions */
+   D.dimV(L.dim,0,t12,x0-0.45*k,x0);D.dimV(L.dim,0,g,x0-0.9*k,x0);D.dimH(L.dim,x0,x1,-0.55*k,0);
+   T(L.txt,x0,-0.95*k,0.08*k,'COVER: '+sfdwIn(num(state.mat.coverBot))+' CLR BOTTOM, '+sfdwIn(num(state.mat.coverTop))+' CLR TOP, '+sfdwIn(sfdEndCover())+' CLR SIDES / ENDS',0);
+   T(L.txt,0,-1.35*k,0.16*k,'SECTION '+dir+'-'+dir,1);T(L.txt,0,-1.57*k,0.09*k,'SCALE '+(SFDW_SCALES.find(s=>s[0]===k)||[0,'1:'+k])[1]+';  CUT ALONG '+(dir==='A'?'x AT y = ':'y AT x = ')+sfdwFI(cutAt),1);
+  };
+ }
+ sheet('secA','SECTION A-A (ALONG x)',section('A'));
+ sheet('secB','SECTION B-B (ALONG y)',section('B'));
+ /* ---------- 4. Pedestal details ---------- */
+ ped.forEach((p,i)=>{if(p.h<=0)return;
+  sheet('ped'+i,'PEDESTAL DETAIL, '+String(p.label).toUpperCase(),k=>{
+   const Lp=sfdwPedLayout(i), bx=p.bx*12, by=p.by*12, h=0.1*k, rf=Lp.rf;
+   /* plan section */
+   D.rect(L.ped,-bx/2,-by/2,bx/2,by/2);
+   D.rect(L.bar,-Lp.tx,-Lp.ty,Lp.tx,Lp.ty);
+   Lp.pts.forEach(([x,y])=>D.circle(L.bar,x,y,Math.max(Lp.db/2,0.012*k)));
+   D.chainH(L.dim,Lp.xs,-by/2-0.45*k,-by/2);D.dimH(L.dim,-bx/2,bx/2,-by/2-0.85*k,-by/2);
+   D.chainV(L.dim,Lp.ys,bx/2+0.45*k,bx/2);D.dimV(L.dim,-by/2,by/2,bx/2+0.85*k,bx/2);
+   const nts=[(Lp.PB.n+'-#'+rf.longSize+' VERT  ('+Lp.PB.nx+' PER x-FACE, '+Lp.PB.ny+' PER y-FACE)').toUpperCase(),
+    ('#'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc))+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS').toUpperCase(),('DOWELS '+(rf.dowelN||0)+'-#'+rf.dowelSize).toUpperCase()];
+   nts.forEach((q,j)=>T(L.txt,-bx/2,by/2+(0.5-0.2*j)*k,h,q,0));
+   T(L.txt,0,-by/2-1.3*k,0.14*k,'PLAN SECTION',1);
+   /* elevation, to the right of the plan section and of its notes */
+   const wN=Math.max(...nts.map(q=>q.length))*h*0.9, hh=p.h*12, ex=Math.max(bx/2+2.6*k,-bx/2+wN+1.2*k)+bx/2;
+   D.rect(L.ped,ex-bx/2,0,ex+bx/2,hh);D.line(L.out,ex-bx/2-0.6*k,0,ex+bx/2+0.6*k,0);T(L.txt,ex+bx/2+0.6*k,0.05*k,0.08*k,'TOP OF FTG',2);
+   [ex-Lp.ax,ex+Lp.ax].forEach(xb=>D.line(L.bar,xb,-(t12-LV.topOfBot),xb,hh-Lp.cov));
+   D.line(L.out,ex-bx/2-0.6*k,-(t12-LV.topOfBot),ex+bx/2+0.6*k,-(t12-LV.topOfBot),D.ltype('HIDDEN'));
+   T(L.txt,ex+bx/2+0.6*k,-(t12-LV.topOfBot)+0.05*k,0.08*k,'TOP OF BOT MAT',2);
+   const zs=[];for(let j=0;j<Lp.nt;j++){const z=Math.min(j*Lp.ts,hh-Lp.cov);zs.push(z);D.line(L.bar,ex-Lp.tx,z,ex+Lp.tx,z);}
+   D.dimV(L.dim,0,hh,ex-bx/2-0.45*k,ex-bx/2);
+   if(zs.length>1)D.chainV(L.dim,zs,ex+bx/2+0.35*k,ex+bx/2);
+   const bz=(P2&&P2.bearing&&P2.bearing[i])||null;
+   if(bz&&!bz.isPatch)T(L.txt,ex-bx/2,-(t12-LV.topOfBot)-0.3*k,0.09*k,('DOWEL EMBED. AVAILABLE '+sfdwIn(bz.availEmb)+' >= L_DC = '+sfdwIn(bz.Ldc)+(bz.ldcOK?'':' (NG)')).toUpperCase(),0);
+   T(L.txt,ex,-(t12-LV.topOfBot)-0.7*k,0.14*k,'ELEVATION',1);
+   T(L.txt,(ex)/2,-(t12-LV.topOfBot)-1.1*k,0.16*k,'PEDESTAL '+String(p.label).toUpperCase()+';  '+sfdwFI(bx)+' x '+sfdwFI(by)+' x '+sfdwFI(hh),1);
+  });});
+ /* ---------- 5. Reinforcement schedule (paper inches, k = 1) ---------- */
+ const rows=[];
+ const mk={botX:['F1','FOOTING BOTTOM, x-BARS','ACROSS L'],botY:['F2','FOOTING BOTTOM, y-BARS','ACROSS B'],topX:['F3','FOOTING TOP, x-BARS','ACROSS L'],topY:['F4','FOOTING TOP, y-BARS','ACROSS B']};
+ ['botX','botY','topX','topY'].forEach(k=>{const e=M[k];if(!e)return;
+  rows.push([mk[k][0],mk[k][1],'#'+e.size,String(e.pos.length),sfdwFI(e.len),(e.mode==='qty'?e.n+' BARS -> @ '+sfdwIn(e.spc):'@ '+sfdwIn(e.spc))+' '+mk[k][2],'STRAIGHT; '+sfdwIn(e.c)+' END COVER'+(e.mode==='qty'?'; ENTERED AS QTY':'')]);});
+ ped.forEach((p,i)=>{if(p.h<=0)return;const Lp=sfdwPedLayout(i),rf=Lp.rf,n='P'+(i+1),bz=(P2&&P2.bearing&&P2.bearing[i])||null;
+  rows.push([n+'V',String(p.label).toUpperCase()+' VERTICAL','#'+rf.longSize,String(Lp.PB.n),sfdwFI(Lp.h-Lp.cov),Lp.PB.nx+' PER x-FACE, '+Lp.PB.ny+' PER y-FACE','PED. HEIGHT LESS TOP COVER; EXTENSION INTO FTG BY DETAIL']);
+  if(Lp.tie>0)rows.push([n+'T',String(p.label).toUpperCase()+' TIES','#'+rf.tieSize,String(Lp.nt),sfdwFI(4*0+2*(2*Lp.tx)+2*(2*Lp.ty)),'@ '+sfdwIn(Lp.ts),'CLOSED TIE, PERIMETER ON CL; HOOKS NOT INCL.']);
+  if(rf.dowelN>0)rows.push([n+'D',String(p.label).toUpperCase()+' DOWELS','#'+rf.dowelSize,String(rf.dowelN),'—','—',bz?'EMBED >= L_DC '+sfdwIn(bz.Ldc)+' (AVAIL. '+sfdwIn(bz.availEmb)+'); PROJECTION BY DETAIL':'']);});
+ sheet('sched','REINFORCEMENT SCHEDULE',k=>{
+  const cols=[['MARK',0.7],['LOCATION',3.2],['SIZE',0.7],['NO.',0.6],['LENGTH',1.1],['SPACING / ARRANGEMENT',3.6],['NOTES',5.3]], rh=0.3, h=0.1;
+  const Wt=cols.reduce((a,c)=>a+c[1],0), y0=0;
+  T(L.txt,0,y0+0.25,0.16,'REINFORCEMENT SCHEDULE',0);
+  const all=[cols.map(c=>c[0]),...rows];
+  all.forEach((r,j)=>{let x=0;const y=y0-j*rh;
+   r.forEach((c,ci)=>{const w=cols[ci][1],mx=Math.floor((w-0.1)/(h*0.9));T(L.txt,x+0.05,y-rh+0.1,h,String(c).slice(0,mx),0);x+=w;});
+   D.line(L.tb,0,y-rh,Wt,y-rh);});
+  D.rect(L.tb,0,y0-all.length*rh,Wt,y0);let x=0;cols.forEach(c=>{x+=c[1];if(x<Wt-1e-9)D.line(L.tb,x,y0,x,y0-all.length*rh);});
+  D.line(L.tb,0,y0-rh,Wt,y0-rh);
+  const nt=['Bar counts and spacings are as entered on the Reinforcement and Pedestals tabs (spacing, or total quantity: s = (12w - 2c - db)/(n - 1)).',
+   'Footing bars straight, full length less the end cover; where Footing Design 5.4 reports "hooks required", hook the bars.',
+   'Pedestal vertical bars: count and faces as laid out by the tool; their extension into the footing and the dowel projection are detailed by the engineer.',
+   'Lengths are bar lengths in ft-in to the nearest 1/8 in; no laps.'];
+  nt.forEach((s,j)=>T(L.txt,0,y0-(all.length+1)*rh-j*0.2,h,s,0));
+ },1);
+ /* ---------- 6. General notes (k = 1) ---------- */
+ sheet('notes','GENERAL NOTES',k=>{
+  const G=R.govBear, cap=G&&G.cap, qa=cap?(cap.direct?cap.qa:cap.qall):null;
+  const notes=[
+   'DESIGN CODES: ACI 318-19 (CONCRETE); ASCE/SEI 7-16 SEC. 2.3.1 AND 2.4.1 (LOAD COMBINATIONS); IBC 2021.'+(state.stab.eccMode&&state.stab.eccMode.indexOf('a_')===0?' ECCENTRICITY LIMIT PER AASHTO LRFD 10TH ED. (2024).':''),
+   'BEARING CAPACITY: '+(state.soil.mode==='vesic'?'VESIC / MEYERHOF EFFECTIVE AREA, FS = '+f2(R.FSb)+(state.soil.qaOverride==='on'?' (ALLOWABLE BEARING OVERRIDDEN BY USER)':''):'ALLOWABLE BEARING PRESSURE GIVEN ('+String(state.soil.qaBasis).toUpperCase()+')')+'.',
+   'ALLOWABLE BEARING PRESSURE'+(state.soil.mode==='vesic'?' (GOVERNING CASE '+(G?G.cb.name:'')+')':'')+': '+(qa!=null?f2(qa)+' KSF':'N/A')+'. SOIL UNIT WEIGHT '+Math.round(R.gs*1000)+' PCF; WATER TABLE '+(R.dw===Infinity?'NOT PRESENT':f2(R.dw)+' FT BELOW GRADE')+'.',
+   "CONCRETE: F'C = "+Math.round(R.fc)+' PSI, UNIT WEIGHT '+Math.round(R.gc*1000)+' PCF'+(num(state.mat.lambda)<1?', LIGHTWEIGHT FACTOR '+f2(num(state.mat.lambda)):'')+'.',
+   'REINFORCEMENT: ASTM A615 / A706 BARS, FY = '+Math.round(num(state.mat.fy))+' PSI'+(state.mat.coating==='epoxy'?', EPOXY-COATED':', UNCOATED')+'.',
+   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS; PEDESTALS: '+state.peds.map(p=>String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))).join(', ')+'.',
+   'FOOTING: '+sfdwFI(R.B*12)+' (x) BY '+sfdwFI(R.L*12)+' (y) BY '+sfdwFI(R.t*12)+' THICK; BEARING '+sfdwFI(R.Df*12)+' BELOW GRADE; SOIL COVER '+sfdwFI(R.covEff*12)+'.',
+   'LOADS AT THE TOP OF EACH PEDESTAL AT THE LOAD POINT SHOWN (OFFSET e FROM THE PEDESTAL CENTROID). '+(R.directMode?'DIRECT FACTORED LOADS.':'SERVICE LOADS BY TYPE; COMBINATIONS GENERATED.'),
+   'AXES: ORIGIN AT THE FOOTING CENTROID; +x TOWARD THE B/2 EDGE, +y TOWARD THE L/2 EDGE.',
+   'SEE THE CALCULATION REPORT (REPORT TAB) FOR THE DESIGN; THESE DRAWINGS SHOW THE GEOMETRY AND BARS AS ENTERED AND CHECKED BY THE TOOL.'];
+  if(String(state.assump||'').trim())notes.push('PROJECT ASSUMPTIONS: '+String(state.assump).trim().toUpperCase());
+  T(L.txt,0,0.3,0.16,'GENERAL NOTES',0);
+  let y=0;const h=0.11,mx=Math.floor(15/(h*0.9));
+  notes.forEach((s,j)=>{const words=String(s).split(/\s+/);let line=(j+1)+'. ',first=true;const out=[];
+   words.forEach(w=>{if((line+w).length>mx){out.push(line);line='    '+w+' ';}else line+=w+' ';});out.push(line);
+   out.forEach(l=>{T(L.txt,0,y,h,l.trimEnd(),0);y-=0.2;});y-=0.08;});
+ },1);
+ S.forEach((s,j)=>{s.sheetEnt.s=SharedDxf.str((j+1)+' OF '+S.length);});
+ return {D,S};
+}
+/* SVG of one sheet: its entity range */
+function sfdwSheetSVG(B,s){return SharedDxf.toSVG(B.D,{i0:s.i0,i1:s.i1,bg:'#fff',title:s.title,pad:0});}
+function renderDrawings(){
+ const T=document.getElementById('tab-drawings');if(!T)return;
+ if(!window.SharedDxf){T.innerHTML='<div class="errbox">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>';return;}
+ if(!R||R.fatal){T.innerHTML='<div class="errbox">No drawings: correct the input errors shown in the Summary.</div>';return;}
+ let B;try{B=sfdwBuild();}catch(e){T.innerHTML='<div class="errbox">The drawings could not be drawn: '+sfEsc(e&&e.message)+'</div>';return;}
+ SFDW.B=B;
+ let want=SFDW.cur;if(!want){try{want=localStorage.getItem(SFDW.key)||'';}catch(e){want='';}}
+ const cur=B.S.find(s=>s.id===want)||B.S[0];SFDW.cur=cur.id;
+ const SRC={plan:['schem','Schematic'],secA:['footdes','Footing Design'],secB:['footdes','Footing Design'],sched:['footdes','Footing Design / Pedestal Design'],notes:['report','Report']};
+ const src=id=>SRC[id]||(/^ped/.test(id)?['peddes','Pedestal Design']:null);
+ const scName=k=>k===1?'NTS (paper inches)':((SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
+ T.innerHTML='<div class="sfdwBar"><label>Sheet <select id="sfdwSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+sfEsc(s.title)+'</option>').join('')+'</select></label>'+
+  '<button type="button" id="sfdwDxf">Download DXF ('+B.S.length+' sheets)</button></div>'+
+  '<div class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) drawn at its plot scale inside its border and title block, side by side; plot each sheet at its scale. Layers S-CONC, S-PED, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-LOAD, S-SOIL, S-CUT, S-TBLK, S-BRDR; dimensions are DIMENSION entities. The preview is drawn from the same entities as the file. Geometry and bars as entered; every value is worked on the tab named in the index.</div>'+
+  '<div class="sfdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+sfEsc(cur.title)+'</b> · scale '+sfEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
+  '<div class="sfdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch on a touch screen · double-click: fit · + / − / Fit buttons.</div>'+
+  '<table class="tbl sfdwIdx"><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked on</th></tr>'+B.S.map((s,j)=>{const w=src(s.id);
+   return '<tr data-sfdw="'+s.id+'"'+(s===cur?' class="on"':'')+'><td>'+(j+1)+'</td><td style="text-align:left">'+sfEsc(s.title)+'</td><td>'+sfEsc(scName(s.k))+'</td><td style="text-align:left">'+(w?'<a href="#" data-sfdwgo="'+w[0]+'">'+w[1]+' tab</a>':'—')+'</td></tr>';}).join('')+'</table>';
+ SharedDxf.viewer(T.querySelector('.sfdwBox'),sfdwSheetSVG(B,cur),{height:'68vh'});
+ const pick=id=>{SFDW.cur=id;try{localStorage.setItem(SFDW.key,id);}catch(e){}renderDrawings();};
+ T.querySelector('#sfdwSheet').addEventListener('change',e=>pick(e.target.value));
+ T.querySelectorAll('tr[data-sfdw]').forEach(tr=>tr.addEventListener('click',e=>{if(e.target.closest('a'))return;pick(tr.dataset.sfdw);}));
+ T.querySelectorAll('[data-sfdwgo]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();sfrGoto(a.dataset.sfdwgo);}));
+ T.querySelector('#sfdwDxf').addEventListener('click',()=>{
+  const txt=B.D.toDXF({ltscale:1}),chk=SharedDxf.validate(txt);
+  if(!chk.ok){alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n'));return;}
+  SharedDxf.download(txt,(state.meta.number||state.meta.project||'spread_footing').replace(/[^\w.-]+/g,'_')+'_drawings.dxf');});
+}
+</script>
+<script>
 /* ================= recalc & init ================= */
 /* item 4: internal self-consistency checks — fail loudly on any mismatch so a silent
    engine error can't slip through. All comparisons are against independently-derived quantities. */
@@ -3327,6 +3591,7 @@ function recalc(){
  else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes'].forEach(id=>{$('#'+id).innerHTML='';});}
  if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))renderView3D();
  if($('#tab-report').classList.contains('active'))renderReport();   /* SFRP */
+ if($('#tab-drawings').classList.contains('active'))renderDrawings();   /* SFDW */
  renderPrintHeader();
  sfdInputTabMarks();
  sfdRebarInfo();   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
@@ -3356,6 +3621,7 @@ $('#tabbar').addEventListener('click',e=>{
  b.classList.add('active');$('#'+b.dataset.tab).classList.add('active');
  if(b.dataset.tab==='tab-3d'){renderView3D();V3D.needsRender=true;}
  if(b.dataset.tab==='tab-report')renderReport();   /* SFRP */
+ if(b.dataset.tab==='tab-drawings')renderDrawings();   /* SFDW */
  renderPlots();
 });
 /* project manager */
