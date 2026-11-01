@@ -3173,3 +3173,12 @@ Zone "Span 2, 0.1L to 0.2L": V_f = 45.8 kip, Q = 1714.009 in³, I = 106168.02 in
 
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-final-compare — final comparison new vs old app (B5; no app change)
+- New `tests/engine/final-compare.mjs` (not part of the suite, about 22 min): the 20 recorded projects imported through "From old app", every
+  girder, every module new (this app's analysis) vs old (GirderDetail's hand-off demands through the parity-tested engines, the project's
+  deck rebar), plus GirderDetail's recorded negative flexure and deck placement per span and the analysis envelopes.
+- Result and classification: docs/steel-bridge-comparison.md §(d). New-app blockers found: D-1 construction live load not imported / 0 by
+  default (GS14–GS16 11–19 % low), D-2 stud zones and regions not imported (SC2 fails on 8 xsA exterior girders). No app code changed.
+### Other copies
+- None.
