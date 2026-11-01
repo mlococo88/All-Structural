@@ -150,3 +150,16 @@ test('Anchor reinforcement: 2 #6 per anchor, x 3 in, h_ef 18, cover 3: φA_sf_y 
   lp.set('anchRe', 'no');
   assert.equal(lp.call('anchorBolts', inp, { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 }).ar, null);
 });
+
+/* ---------- LP-R4: base plate, bending line at the pole face, double-nut (added 2026-11-01) ---------- */
+test('Base plate: D 10, BC 16, n 6, F_y 36: b_eff = π·10/6 = 5.236 in, m = 3 in; P_rod = max(T, C); t = √(4·P·3/(0.9·36000·5.236))', () => {
+  const lp = lpEngine();
+  const b = lp.call('anchorBolts', lpDefaultInp({ bpFy: 36, bpT: 1.25 }), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 500 });
+  near(b.beff, Math.PI * 10 / 6, 1e-12, 'b_eff'); near(b.m, 3, 1e-12, 'm');
+  // compression rod: 19,949·12·8/192 + 1,087.8/6 = 9,974.5 + 181.3 = 10,155.8 lb > T_max 9,793.2
+  near(b.Cmax, 19949 * 12 * 8 / 192 + 1087.8 / 6, 1e-6, 'C_max'); near(b.Prod, b.Cmax, 1e-9, 'P_rod');
+  near(b.tpReq, Math.sqrt(4 * b.Cmax * 3 / (0.9 * 36000 * Math.PI * 10 / 6)), 1e-12, 't_req'); near(b.tpReq, 0.848, 0.001, 't_req');
+  assert.equal(b.tpOK, true);
+  // P_u = 0: T = C = 9,974.5 lb → t = √(4·9974.5·3/(0.9·36000·5.236)) = 0.840 in
+  near(lp.call('anchorBolts', lpDefaultInp({ bpFy: 36, bpT: 1.25 }), { Mang: 0 }, { Mu: 19949, Pu: 0, Vu: 0 }).tpReq, 0.840, 0.002, 'P_u = 0');
+});
