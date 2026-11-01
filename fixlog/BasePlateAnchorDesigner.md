@@ -3772,7 +3772,7 @@ index 4945cc3..a0efc62 100644
        "LengthA "+fmt(mm(P.B),2)+", LengthB "+fmt(mm(P.N),2)+", Thickness "+fmt(mm(P.t),2)+" mm","ok");
 ```
 
-## 2026-11-01 — BC-2: circular pier (drilled shaft / round pier): A_Nc and A_Vc clipped by the circle, radial edge distances, §17.6.2.1.2 by analogy (user option, applied by default), side-face blowout and tangent-edge shear breakout at the circle (calculation change for NEW circular piers only; rectangular pedestals unchanged) (PR: claude/bpad-circle-pier, PR link added after merge)
+## 2026-11-01 — BC-2: circular pier (drilled shaft / round pier): A_Nc and A_Vc clipped by the circle, radial edge distances, §17.6.2.1.2 by analogy (user option, applied by default), side-face blowout and tangent-edge shear breakout at the circle (calculation change for NEW circular piers only; rectangular pedestals unchanged) (PR #603: https://github.com/mlococo88/All-Structural/pull/603)
 
 - **Engineer decisions (2026-11-01):** (1) circular pier and §17.6.2.1.2: user-selectable, **applied by default**, with an on-screen explanation of what the user accepts and both values in the worked steps; (2) shear breakout toward a round edge: **tangent-edge model** (§17.7.2.1 / R17.7.2.1), stated on screen.
 - **New saved fields (defaults reproduce every older save):** `conc.shape` ("rect" default | "circle"), `conc.D` (36 in), `conc.circHefReduce` (true). The pier is centred on the pedestal origin; the plate offset places the anchors on it. For a circle, Bx = By = D are kept (bounding box, elevations).
