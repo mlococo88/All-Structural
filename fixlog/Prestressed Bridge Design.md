@@ -2073,3 +2073,48 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
 - **Check case:** in a folder where nothing has been recorded, `BridgeApps.path('psbeam')` returns `'Prestressed Bridge Design.html'` (before: `'psbeam.html'`, which redirected).
 - **How verified:** the shared blocks were compared after the edit. The big `appPaths` block differs between the three files only in its `BridgeApps.boot('<app>')` line, as before. The beam-roster and BridgeXfer blocks are identical in all three, and the handoff blocks are identical in index.html and Prestressed Bridge Design.html. `node tests/check-syntax.mjs index.html lldf.html "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
+
+## 2026-11-01 — PR: rpt-psbd (PSRP) — "Report (new)" tab: the calculation report in the shared viewer, alongside the Report tab (display only)
+### Where
+- Head, after the KaTeX 0.16.9 script tag: `<script src="shared/steps.js"></script>`, `<script src="shared/report.js"></script>` (classic
+  scripts, relative path: keep the shared folder next to the file).
+- `PBD.MODS` (anchor `{ id: 'report', label: 'Report', grp: 'Report' }`): added `{ id: 'rptnew', label: 'Report (new)', grp: 'Report' }`;
+  the fallback `TABS` list the same (`['report','Report'],['rptnew','Report (new)']`); in the tab switch
+  `{tab==='rptnew'&&<SharedReportTab inp={inp} R={R}/>}` after the Report line.
+- New block before `function ReportTab({inp,R}){`, anchor `/* ================= PSRP (2026-11-01): REPORT (NEW) TAB`: `psrModel(inp,R)`
+  (the report model) and `SharedReportTab` (mounts `SharedReport.mount`; Ctrl+P while it shows prints the report alone).
+  `window.PSRP` = { doc, api, model } while it is shown (tests).
+### Contents
+- 1 Design summary (every check of R.checks with its ratio; key quantities with § links; warnings). 2 Materials and section
+  properties (E_ci, E_c, E_c,d, n; gross library values; b_eff, A_c, ȳ_bc, I_c, S_bc, S_tg, S_td, deck load). 3 Strands and losses
+  (A_ps, e_m, ℓ_t; f_pbt, Δf_pES closed form, P_i, f_cgp; refined or approximate long-term losses; total loss, f_pe). 4 Loads and
+  distribution (w_g, DC1, DC2, DW, HL-93 per lane, DF_m, DF_v, M_LL+IM, V_LL+IM). 5 Stress limits and the governing stresses.
+  6 Strength I flexure at midspan (β_1, d_p, c, a, f_ps, M_n, φ, φM_n, the governing flexure and minimum-reinforcement ratios).
+  7 Shear at the governing section (d_v, V_u, V_p, ε_s, β, θ, V_c, V_s, V_n, φV_n, ratio, longitudinal tie). 8 Camber and deflection.
+  9 Load rating (RF Inventory / Operating, Service III). 10 References. Links back to the tabs ([[tab:…]] → psbGoto).
+- Title block: Project (proj.name), Project No. (proj.job), Calculated by, Date (the girder id in the subtitle); Checked by / Checked date
+  "—" (no such inputs; no new saved fields).
+### Values
+- Every step value is a number of R = computeAll(inp) (the object every tab shows): R.g, R.cp, R.ss, R.lo, R.refFin, R.LT,
+  R.totalLoss, R.fpe, R.df, R.hl, R.MLL, R.VLL, R.lim, R.fMid, R.flexGov, R.minGov, R.wShear, R.cam, R.rating, R.svcRating, R.checks.
+  Nothing is recomputed (the old ReportTab recomputes several intermediates, e.g. the transformed release section, ktd, the camber
+  components; those are not in the new report).
+### Governing provision
+- None changed (display only). AASHTO LRFD 10th Ed. (2024) articles as cited in the steps; MBE 6A (edition: verify), PCI multipliers.
+### Check case (defaults: PCI BT-72, L = 120 ft, 40 × 0.6 in strands, f′ci 6.8 / f′c 8.5 ksi)
+- E_ci = 120,000(1.0)(0.145)²(6.8)^0.33 = 2,523 × 1.8824 = 4,749 ksi (= R.lo.Eci 4,749.47).
+- V_c = 0.0316(4.840)(1.0)√8.5(6)(65.96) = 176.46 kip (= R.wShear.Vc).
+- RF_inv = (1.00(13,638.9) − 1.25(3,979.1) − 1.50(449.5)) / (1.75(2,628.7)) = 7,990.7 / 4,600.3 = 1.737 (= R.rating.RFinv).
+### How verified
+- Headless Chromium (scratchpad `rpt/rp_psbd.mjs`), 3 cases (defaults; approximate losses + exterior girder + L 96 ft; L 70 ft with no
+  harped strands): every existing tab's text (14 tabs incl. the old Report tab) identical main vs branch; 0 unresolved / duplicate
+  refs; 0 KaTeX errors (full report); no NaN / undefined; 32 step values per case === R's (E_ci, E_c, n, A_c, ȳ_bc, I_c, S_bc, A_ps,
+  e_m, Δf_pES, Δf_pLT, Δf_pT, f_pe, DF_m, DF_v, M_LL, M_HL93, limits, c, f_ps, M_n, φM_n, flexure ratio, V_c, V_s, V_n, shear ratio,
+  camber at release and final, RF inv / opr); every value the new report shows was also found in the old Report tab's text (text match at 0–4 decimals: presence, not a field-by-field proof); Ctrl+P on
+  the new tab prints it alone with the running header and page numbers.
+### Other copies
+- None.
+### Open items
+- PSRP-O1: the old Report tab is kept. The new report does not (yet) carry what the old one recomputes or draws (graphics, transformed
+  release section, refined-loss coefficients by stage, anchorage zone, continuity, fatigue, handling, deck, owner requirements), so it
+  cannot replace it without losing content. Engineer to decide the scope before the old tab is retired.

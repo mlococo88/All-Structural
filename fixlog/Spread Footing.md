@@ -3329,3 +3329,131 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - `R`, `P2`, dashboard, warnings, consistency, state and storage are identical on 3 projects (layout only).
   - `tests/smoke/spread-footing-scroll.mjs` passes (it includes the below-900 check).
   - Screenshots at 390, 768 and 1280.
+
+## 2026-11-01 — PR: claude/sf-dowels — Full dowel checks per pedestal: ℓ_dc worked, dowels in tension at the interface, tension development, laps and projection (SFDO; new checks, existing results unchanged) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFDO`.
+
+### SFDO. Dowels topic in Footing Design 5.6, the report, the dashboard and the drawings   [new checks; CLAUDE.md §4]
+- **Engineer request (2026-11-01):** before this PR, only A_s,dow ≥ 0.005A_g (16.3.4.1) and ℓ_dc into the footing (25.4.9.2, value only) were checked. Add a full Dowels topic per pedestal:
+  1. ℓ_dc worked out;
+  2. dowels in tension where there is uplift or the moment puts the interface in tension: required steel, A_s provided, ℓ_d / ℓ_dh into the footing and the lap into the pedestal;
+  3. the dowel projection, fed to the Drawings.
+- **New inputs (pedestal card, dowel row), with defaults so old projects compute identically:**
+  - `reinf.dowelHook`: `'straight'` (default) | `'hook90'`.
+  - `reinf.dowelProj`: inches; blank (default) = use the required projection.
+  - `newPed` and `migrateState` set both defaults for old saves.
+- **Engine:** `sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam)` placed before `computePhase2`, with helpers `sfdLsc`, `sfdLdc`, `sfdLdh`. `computePhase2` returns `dowels` (a new key, read only by the display). The existing `bearing[]` (dowel minimum and ℓ_dc check) is unchanged.
+  1. **ℓ_dc**, term by term: 0.02 d_b f_y/(λ√f′c), 0.0003 d_b f_y, 8 in, with √f′c ≤ 100 psi (25.4.1.4).
+     - The governing term is named.
+     - No 25.4.9.3 modification factor is applied by the app (factor 1.0, stated).
+     - Available embedment: t − c_bot − d_b,x − d_b,y, unchanged.
+     - The value equals the existing `bearing[].Ldc`.
+  2. **Tension at the interface.**
+     - Which combinations: P_u < 0 (uplift), or the factored resultant outside the kern of the pedestal section, i.e. σ_min = P_u/A − |M_ux|/S_x − |M_uy|/S_y < 0. M is at the pedestal base, including V·h and the load-offset P·e (SFLO).
+     - **Method:** for those combinations the dowels are taken as the reinforcement of the interface section b_x × b_y, with the app's biaxial strain-compatibility routine at the combination's own P_u. This is `sfpmRatios`, the same as the pedestal P–M ratio (SFPM): ACI 318-19 22.2 and 22.4, with force transfer per 16.3.1.1 and 16.3.3 (compression by bearing, 22.8).
+     - Dowel positions: centres at c + d_b,dowel/2, at the vertical-bar layout positions. When the dowel count differs from the vertical-bar count, the dowel area is spread equally over those positions (total A_s,dow kept).
+     - **A_s,req** = k·A_s,prov, where k is the smallest scale on the dowel area giving ratio ≤ 1 for the governing combination (bisection; 12 steps after bracketing).
+     - **The dowels act in tension only where A_s,req > 0.** If the compression block alone carries P_u, M_u (ratio ≤ 1 with no dowels), no tension development or tension lap is required. This is stated on screen.
+     - **Tension development into the footing:**
+       - straight: ℓ_d (25.4.2.4, the app's `devLength`). c_b comes from the pedestal cover (conservative; the cover in the footing is larger) and the dowel c-c spacing around the bar perimeter. K_tr = 0. No 25.4.10 excess-reinforcement reduction.
+       - 90° hook: ℓ_dh = max(f_y ψ_e ψ_r ψ_o ψ_c /(55 λ √f′c) d_b^1.5, 8d_b, 6 in) (25.4.3.1(a)), with ψ_r = 1.6 (no confining ties around the hook in the footing), ψ_o = 1.0 (side cover in the footing ≥ 6d_b), ψ_c = f′c/15000 + 0.6 for f′c < 6000 psi, ψ_e = 1.2 if epoxy.
+       - Checked against the same available embedment.
+     - **Into the pedestal:** a Class B tension lap with the vertical bars (25.5.2.1). All dowels are spliced at one section, so Class A does not apply. ℓ_st = max(1.3 ℓ_d of the smaller bar, ℓ_d of the larger bar, 12 in) (25.5.2.2).
+  3. **Projection.**
+     - Compression lap ℓ_sc = max(0.0005 f_y d_b, 12 in) for f_y ≤ 60 ksi; (0.0009 f_y − 24) d_b for f_y ≤ 80 ksi; × 4/3 for f′c < 3000 psi (25.5.5.1, 25.5.5.3). Bars of different size: max(ℓ_dc of the larger bar, ℓ_sc of the smaller bar) (25.5.5.4).
+     - Required projection L_req = max(ℓ_sc, ℓ_st where the dowels are in tension).
+     - Available projection: h − c, with the pedestal cover taken as the top cover.
+     - If the lap does not fit, the dowels must run full height as the pedestal bars. Their development into the pedestal (ℓ_d in tension / ℓ_dc in compression) must then be ≤ h − c.
+     - An entered projection is checked: L_req ≤ L_prov ≤ h − c.
+- **Shown (§6):**
+  - Footing Design 5.6: a summary table per pedestal, then for each pedestal (1) ℓ_dc worked, (2a) the kern test worked for the governing combination, (2b) the interface ratio and A_s,req = k·A_s,prov worked, a table of every combination in tension, (2c) ℓ_d or ℓ_dh worked with all ψ factors, (2d) ℓ_st worked, and (3) the projection worked.
+  - Dashboard: new chip "Dowels (tension, laps)"; printed D/C = A_s,req/A_s,prov. User manual 3.1: new row.
+  - Report §5: new subsection "Dowels at the pedestals" (steps per pedestal plus the table of combinations in tension).
+  - Drawings:
+    - the pedestal elevation note adds L_D / L_DH (when in tension) and "PROJ. x" or "FULL HEIGHT";
+    - the schedule's dowel row now has a length (embedment + projection, + 12 d_b with a hook) and the note "EMBED a (L_DC b, L_D c); PROJ. p (COMPR. LAP / CLASS B LAP)". This replaces "PROJECTION BY DETAIL";
+    - the schedule's footnote is updated.
+- **Hand check:** `uplift_partial`, Ped 1, 18 × 18 in, 8 #8 dowels = verticals, f′c = 4 ksi, f_y = 60 ksi, c = 2 in, t = 2.5 ft, h = 2 ft. Governing combination 1.2D + 1.0(+Wx) + L + 0.5S: P_u = 204.81 k, M_ux = 0, M_uy = 224.00 k-ft.
+  - **Kern:** A = 324 in², S_y = 18·18²/6 = 972 in³. σ_min = 204.81/324 − 224·12/972 = 0.632 − 2.765 = **−2.133 ksi < 0** → interface in tension (9 of 9 combinations).
+  - **Section at φP_n = 204.81 k**, rows 3/2/3 #8 at 2.5/9/15.5 in:
+    - k = 1 (6.32 in²): c = 6.278 in, a = 5.336 in, C_c = 326.57 k, ε_t = 0.00441, φ = 0.851, φM_n = **265.5 k-ft**; ratio 224/265.5 = **0.844**. App 263.46 → **0.850** (strip integration, −0.8 %).
+    - k = 0 (no dowels): c = 4.375 in, φ = 0.90, φM_n = 121.9 k-ft; ratio 1.84 > 1, so dowels are needed in tension.
+    - Required k = 0.632 → **A_s,req = 3.99 in²** by hand (φM_n = 224.0 k-ft at c = 5.736 in). App **4.03 in²** (0.637·6.32) ≤ 6.32 → OK.
+  - **ℓ_d** (#8, straight): c_b = min(2 + 0.5, s/2 = 6.5/2) = 2.5, (c_b + K_tr)/d_b = 2.5, ψ all 1.0. ℓ_d = (3/40)(60 000/63.25)(1/2.5)(1.0) = **28.46 in** > 25.00 in available → **NG** (new failure).
+  - **Laps:** ℓ_st = max(1.3·28.46, 28.46, 12) = **37.00 in**; ℓ_sc = 0.0005·60 000·1.0 = **30.00 in**. L_req = 37.00 in > h − c = 22 in, so the dowels go full height; their development in the pedestal is 28.46 > 22 → **NG** (new failure).
+  - **Before:** only A_s,dow = 6.32 ≥ 0.005·324 = 1.62 OK and ℓ_dc = 18.97 ≤ 25.00 OK. Both are unchanged after.
+- **New failures on the comparison projects** (all existing checks identical; the "Dowels (tension, laps)" chip is new):
+
+  | Project | Interface in tension (kern) | A_s,req / A_s,prov (in²) | Dowels in tension? | New chip |
+  |---|---|---|---|---|
+  | default, direct, directqa_net_fail, direct_moment, qty_modes, tie_cover_fail, big_bars | none | — | no | PASS (projection: compression lap 30 in > 22 in → full height, ℓ_dc 18.97 ≤ 22 OK) |
+  | wt_ecc_gate_3ped | Ped 1: 10 of 15 | 0 / 6.32 | no (compression block carries it) | PASS |
+  | single_moment | Ped 1: 5 of 10 | 0 / 6.32 | no | PASS |
+  | offsets | Ped 1: 6 of 9 (A_s,req 0); **Ped 2: 9 of 9** | **8.35 / 6.32** | Ped 2 yes | **FAIL**: Ped 2 A_s,req > A_s,prov, ℓ_d 28.46 > 25.00, development in the pedestal |
+  | uplift_partial | **Ped 1: 9 of 9** (A_s,req 4.03); Ped 2: 4 of 9 (A_s,req 0) | 4.03 / 6.32 | Ped 1 yes | **FAIL**: Ped 1 ℓ_d 28.46 > 25.00, development in the pedestal 28.46 > 22 |
+  | fatal | — | — | — | — |
+
+- **Proof that nothing else changes:** headless Chromium, origin/main vs the branch, 10 projects + 2 extra.
+  - Every value of `R` and `P2`, the warnings, consistency, state and storage are identical. New keys only: `P2.dowels`, `state.peds[].reinf.dowelHook/dowelProj`.
+  - The dashboard line diff only adds the new chip.
+  - An origin/main save loads, is migrated to straight / blank, and `R` and `P2.bearing` are identical.
+  - Report (12 projects): 0 unresolved references, 0 KaTeX errors, no NaN, step values = app values. Drawings: DXF valid, no overlaps.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Open items (§9):**
+  - The tension criterion (kern) and "dowels act in tension only where A_s,req > 0": engineer to confirm.
+  - Class B for the tension lap (all dowels spliced at one section); the pedestal cover used as the top cover for the projection; c_b from the pedestal cover; ψ_r = 1.6 and ψ_o = 1.0 for the hook. Each is stated on screen.
+  - Shear friction across the interface (22.9) for V_u is not part of this PR (not requested).
+  - With a hook, ℓ_dc must fit in the straight part above the bend. The existing ℓ_dc check uses the full available depth (unchanged); a note says so.
+
+## 2026-11-01 — PR: claude/sf-shear-friction — Shear friction across the pedestal–footing interface, ACI 318-19 22.9 (SFSF; new check, existing results unchanged) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFSF`.
+
+### SFSF. Interface shear friction per pedestal and per LRFD combination   [new check; CLAUDE.md §4]
+- **Engineer request (2026-11-01).** Check shear friction across the interface (22.9), using:
+  - V_u per combination in both directions and as the resultant;
+  - μ for not-roughened vs roughened (a new input, with a stated default);
+  - A_vf = the dowels, less the area needed for tension;
+  - the 22.9.4.4 limits;
+  - the permanent net compression.
+- **Input (new):** `peds[i].reinf.sfJoint` on the pedestal card, dowel row, "Joint surface":
+  - `'smooth'` (default): placed against hardened concrete, not intentionally roughened, μ = 0.6λ.
+  - `'rough'`: intentionally roughened to about 1/4 in amplitude, μ = 1.0λ (Table 22.9.4.2).
+  - The default is the conservative row; the engineer selects "roughened" where the drawings require it. `migrateState` sets the default for old saves.
+- **Engine:** `sfdShearFriction(i,p,Wped,pd,dw,combos,fc,fy,lam)`, placed before `computePhase2`. `computePhase2` returns `shearFr` (a new key, display only).
+  - **V_u:** V_ux and V_uy are the factored applied shears at the pedestal (the pedestal self-weight adds no shear). V_u = √(V_ux² + V_uy²): the shear plane is the whole interface.
+  - **A_vf** = A_s,dow − A_s,req,ten, ≥ 0. A_s,req,ten is the area the dowels need for tension at the interface (SFDO, governing combination, applied to every combination: conservative). Per 22.9.4.6, tension reinforcement is in addition to the shear-friction reinforcement.
+  - **f_y** ≤ 60 ksi for shear friction (20.2.2.4).
+  - **N_u** (22.9.4.5, permanent net compression) = the combination's dead factor × (pedestal D load + pedestal self-weight), limited to P_u and ≥ 0. Direct mode has no dead/live split, so only the pedestal self-weight counts.
+  - **V_n** = μ(A_vf f_y + N_u) (22.9.4.2).
+  - **Upper limit** V_n,max (22.9.4.4), A_c = b_x b_y:
+    - normalweight and roughened: min(0.2f′c, 480 + 0.08f′c, 1600)·A_c;
+    - other cases (not roughened, or lightweight): min(0.2f′c, 800)·A_c.
+  - **φ** = 0.75 (Table 21.2.1). DCR = V_u / (0.75 min(V_n, V_n,max)).
+- **Shown (§6):**
+  - Footing Design 5.6: a summary table, then per pedestal a worked block for the governing combination (symbolic → values → DCR) and a table of every combination.
+  - Dashboard chip "Interface shear friction" (printed D/C); user manual 3.1 row.
+  - Report §5: subsection "Shear friction across the pedestal–footing interface" (steps + tables).
+  - Drawings: a general note on the construction-joint surface and μ per pedestal.
+- **Hand check:** `uplift_partial`, Ped 1, governing combination 0.9D + 1.0(+Wx).
+  - Demand: V_u = √(40² + 0²) = 40.00 k.
+  - μ = 0.6·1.0 = 0.60.
+  - A_vf = 6.32 − 4.03 = 2.29 in².
+  - N_u = min(0.9·(120 + 0.675), 108.61) = 108.61 k.
+  - V_n = 0.60(2.29·60 + 108.61) = 147.76 k. V_n,max = min(800, 800)·324/1000 = 259.2 k.
+  - φV_n = 0.75·147.76 = 110.82 k. **DCR = 40/110.82 = 0.361**. Before: no check.
+- **Results on the 12 projects:** no new failures. Largest DCR:
+  - uplift_partial 0.361 (Ped 1);
+  - offsets 0.131 (Ped 2: A_vf = 0, because the dowels are all needed for tension, so φV_n = 0.75·0.6·135.61);
+  - direct modes 0.05 (N_u = self-weight only);
+  - all others 0.02–0.05.
+- **Proof nothing else changes:** headless Chromium, origin/main vs the branch, 12 projects.
+  - Every value of `R` and `P2`, the warnings, consistency, state and storage are identical. New keys only: `P2.shearFr`, `reinf.sfJoint`.
+  - The dashboard line diff only adds the new chip. An old save loads and migrates with identical results.
+  - Report: 0 unresolved references, 0 KaTeX errors, values = app values. Drawings: DXF valid, no overlaps.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Open items:**
+  - Default μ = 0.6λ (not intentionally roughened): engineer to confirm, or set "roughened" where the drawings specify it.
+  - In direct mode the permanent compression is only the pedestal self-weight.
+  - A_s,req,ten from the governing tension combination is deducted in every combination (conservative).

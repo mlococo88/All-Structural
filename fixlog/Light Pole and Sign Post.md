@@ -1321,7 +1321,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` 14 passed (new pullout test); `node tests/lightpole-compare.mjs --a origin/main`: 13 cases, differences only in the pullout chain; cable values identical; 0 console errors.
 - **Open item:** a plate washer (larger A_brg) is not an input; the bare nut is used.
 
-## 2026-11-01 — PR: claude/lp-pr4-anchre (LP-4: anchor reinforcement default None and §17.5.2.1 check; engineer decision 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #557: claude/lp-pr4-anchre (LP-4: anchor reinforcement default None and §17.5.2.1 check; engineer decision 2026-11-01)
 
 ### LP4-1. "Anchor reinforcement" default None for new projects (LP-R2)   [default change] [more conservative: breakout checked]
 - **Where:** input card 7, `id="segAnchRe"` (the `on` class moves to None); state `let anchRe='no';` (was `'yes'`).
@@ -1343,3 +1343,51 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Effect on saved projects with Provided (every old default project):** the three checks are added; with the old defaults the development check fails (as above) and the verdict changes from "ALL CHECKS PASS" to "1 CHECK FAIL — Anchor reinforcement, development". No existing value changes (verified with `--old-saves`: only the new `inp` fields and the new `ar` objects differ).
 - **How verified:** `node tests/engine/run.mjs lightpole` 15 passed (new test). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every case identical except the new inputs and `ar` objects (+ the 3 new check rows); `node tests/lightpole-compare.mjs --a origin/main` (new projects): the cases that were on the old default change from "breakout carried" to breakout checked (Condition B); cable values identical in all 26 runs.
 - **Open items:** (1) the per-anchor breakout comparison T_max ≤ φN_cbg/n_T (conservative; ACI compares the group tension with φN_cbg) now governs the default new project (1.32 vs group 0.87) — engineer to decide whether to compare the group; (2) hooked/headed anchor-reinforcement bars, and bars lapped with hooks, are not modelled (straight bars only); (3) the 0.5h_ef zone and the 1:1.5 cone geometry follow R17.5.2.1 and A_Nco; confirm.
+
+## 2026-11-01 — PR #561: claude/lp-pr5-baseplate (LP-5: base plate by the AASHTO LRFDLTS bending-line method, double-nut; F_y and provided-thickness inputs; engineer decision 2026-11-01)
+
+### LP5-1. Base-plate thickness (LP-R4)   [calc change] [more conservative] [new check]
+- **Engineer decision (2026-11-01):** AASHTO LRFDLTS bending-line method with a double-nut (leveling-nut) base; plate F_y input; provided-thickness input and check; effective width at the pole face. This method is used in both modes until the LTS 2nd Ed. mode is added.
+- **Where:** input card 7, new rows `bpFy` (default 36 ksi) and `bpT` (default 1.25 in) after `bpDia`; `INPUT_IDS`; `calc()` inputs; `anchorBolts()` block `// ---- base plate thickness: AASHTO LRFDLTS bending-line method`, new return fields `Cmax, Prod, tpProv, tpOK`; `anchorsAllCombos()` `byCheck.BP` (combination with the largest t_req); `collectChecks()` "Base plate thickness" (utilization (t_req/t)² = M_u/φM_n); `LPP_CHK2K`; Summary design row; `oBoltBp` (both modes); `boltWorkedHTML()` step 8 (the BP combination); `applyState()` defaults for old saves (F_y 36, t 1.25).
+- **Before:**
+  ```js
+  const m=Math.max(0,(BC-Dpole)/2); const beff=Math.PI*BC/n; const Fyp=36;
+  const tpReq=Math.sqrt(4*Tmax*m/(0.9*Fyp*1000*beff));
+  ```
+- **After:**
+  ```js
+  const m=Math.max(0,(BC-Dpole)/2); const beff=Math.PI*Dpole/n; const Fyp=inp.bpFy>0?inp.bpFy:36;
+  const Cmax=Math.max(0,...bolts.map(b=>-Mu*b.y/sumY2 + Pu/n)); const Prod=Math.max(Tmax,Cmax);
+  const tpReq=Math.sqrt(4*Prod*m/(0.9*Fyp*1000*beff));
+  ```
+  M_u = P_rod·m ≤ φ_f·F_y·b_eff·t²/4, φ_f = 0.90; check t_req ≤ t_provided.
+- **Governing provision:** AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections (bending line at the face of the tube, effective plate width at the bending line); the **article number and the exact effective-width expression are to be confirmed against the engineer's copy** (the review cited 1st Ed. Art. 5.6.6). b_eff = πD/n (the arc per rod at the pole face) is the review's proposal (LP-R4).
+- **Check case (default: D 10 in, BC 16 in, (6) rods, F_y 36, 1.2D + 1.0W, M_u = 19,949 lb·ft, P_u = 1,088 lb):**
+  - Before: b_eff = π·16/6 = 8.378 in, P = T_max = 9,791 lb, t_req = √(4·9,791·3/(0.9·36,000·8.378)) = **0.658 in**, no check.
+  - After: b_eff = π·10/6 = 5.236 in; C_max = 19,949·12·8/192 + 1,088/6 = 9,974 + 181 = 10,155 lb (the tool: 10,154 at the moment azimuth); P_rod = 10,154 lb; t_req = √(4·10,154·3/(0.9·36,000·5.236)) = **0.847 in** ≤ 1.25 in → (0.847/1.25)² = 0.46 OK.
+  - Other cases (t_req before → after): square HSS 8 in 0.962 → 1.381 (> 1.25 NG); rect 8×6 1.023 → 1.463 (NG); 60 ft pole 0.761 → 0.894; 1½ in rods 0.677 → 0.974; monopost sign (6 in post, BC 16) 1.182 → **1.943 (NG)**; two-post 1.266 → **2.075 (NG)**.
+- **Saved data:** new fields `bpFy`, `bpT`; old saves open with F_y 36 ksi (the former fixed value) and t = 1.25 in. t_req changes for every project (method change, above) and the new check is added; nothing else changes (diff paths checked: only tpReq, beff, Fyp, Cmax, Prod, tpProv, tpOK and byCheck.BP).
+- **How verified:** `node tests/engine/run.mjs lightpole` 16 passed (new base-plate test). `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: only the base-plate values above differ; cable values identical; 0 console errors.
+- **Open items:** (1) confirm the LTS 2nd Ed. article and effective-width rule (πD/n vs a chord/45° rule); (2) for square/rect poles the same b_eff = πB/n is used (no flat-face bending line); (3) the anchor-rod standoff (rod bending, LP-R17) is not checked; (4) LTS minimum plate thickness rules (e.g. ≥ rod diameter) are not checked.
+
+## 2026-11-01 — PR: claude/lp-pr6-ice (LP-6: ASCE 7-22 Ch. 10 design ice thickness by height; 0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi; engineer decision 2026-11-01; PR link added after merge)
+
+### LP6-1. Design ice thickness t_d(z) (LP-R8)   [calc change] [mixed: less ice below 33 ft, more above]
+- **Engineer decision (2026-11-01):** the entered thickness is the ASCE 7 map value; apply the Chapter 10 height factor and the importance factor to get the design thickness per height. Cables: engineer decision of the same day — no change to anything cable-related, so the **cables keep the entered t** (reported).
+- **Where:** input card 5: `tIce` note; new `iceBasis` (Map value → t_d(z) / Uniform design t_d) and `iceIi` (I_i, default 1.0, shown for Map) with notes `iceNote`, `iceMigNote`; `lppApplyIceUI()`; `INPUT_IDS`; `calc()` inputs. New `iceTd(inp,z)`, `iceFz(z)`, `iceWorkedHTML(inp,pw,fxs)` above `function poleWindNominal(`. `poleWindNominal()`: each strip uses t_d(z_i) for the iced width and ice weight (`strips[i].td`, `.Wi`), `WiceMast` = Σ strips (Map) or the former mean-diameter form (Uniform), new `iceAbove(z)`, `tdTop`; `poleStress()` uses `pw.WiceMast` / `pw.iceAbove(z)` (was `pw.wIceMast·H`, `·(H − z)`). `fixtureComponents()`: t_d at the mount height (`td`), used for the iced EPA and the ice weight; `fixtureWorkedHTML()` shows it. Worked step in the Loading tab (wind) and the report (pole wind section).
+- **Before:** t used at every height for mast, fixtures and cables.
+- **After (Map):** t_d(z) = t·f_z·K_zt^0.35·I_i, f_z = (z/33)^0.10 (0 < z ≤ 900 ft); mast per strip, fixtures at h_f; cables t (unchanged).
+- **Governing provision:** ASCE 7-22 §10.4.6 (Eq. 10.4-4 f_z, Eq. 10.4-5 t_d). **Question for the engineer:** in ASCE 7-22 the ice maps are given per Risk Category and the 7-16 importance factor I_i (and the 2.0 factor of 7-16 Eq. 10.4-5) are not in Eq. 10.4-5 as I read it; the tool therefore offers I_i as an input with default 1.0 ("1.0 when t is read from the 7-22 map for the structure's Risk Category"). Confirm the form against your copy.
+- **Saved data:** new fields `iceBasis`, `iceIi`. Saves without `iceBasis` open as **Uniform** (the old behaviour) with a notice → identical results (verified). New projects start on Map.
+- **Check case (default pole, t = 0.5 in, K_zt 1.0, I_i 1.0):**
+  - t_d(35 ft) = 0.5·(35/33)^0.10 = 0.5·1.00590 = **0.5030 in** (fixtures at 35 ft: W_ice 13.37 → 13.45 lb, iced EPA 1.818 → 1.819 ft²).
+  - Mast ice: before 0.5 in uniform: π(4.5² − 4²)/144·56·35 = **181.7 lb**; after Σ strips with t_d(z) (f_z < 1 below 33 ft): **163.6 lb**.
+  - Bearing (ASD D + 0.7Di, max axial): 1,116.5 → 1,104.0 lb; q 0.158 → 0.156 ksf. No other governing value changes in the default (wind governs).
+  - Node test: t 0.75, z 35, K_zt 1.2: 0.75·1.00590·1.2^0.35 (1.06589) = 0.8041 in.
+
+### LP6-2. Ice combinations 0.9D + 1.0Di + 1.0Wi (LRFD) and 0.6D + 0.7Di + 0.7Wi (ASD) (LP-R9)   [calc change] [more conservative or equal]
+- **Where:** `COMBOS`: `L5`, `A5`; the combination selector (`comboSel`) options; wording "all ten combinations" (combination card hint, report caption, manual QA row).
+- **Governing provision:** ASCE 7-22 §2.3.4 (LRFD, atmospheric ice: 0.9D + 1.0D_i + 1.0W_i) and §2.4.3 (ASD: 0.6D + 0.7D_i + 0.7W_i) — section numbers as in 7-16; verify the 7-22 numbering.
+- **Effect:** every pole-mode envelope now includes them (signs carry no ice and skip all ice combinations, as before). Default pole: L5 M = 6,428 lb·ft, N = 1,098 lb; A5 M = 4,494 lb·ft, N = 741 lb — neither governs (L1/L4, A1). The cables carry their existing loads in the new combinations (the cable model is unchanged); every existing combination's cable values are identical (harness check, keyed by combination).
+- **How verified:** `node tests/engine/run.mjs lightpole` 17 passed (new ice test: t_d, uniform = old mast ice, cable ice unchanged, L5/A5 factors). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every Summary/foundation/anchor/post value identical in all 13 cases (only the combination arrays gain L5/A5 and the new fields); new projects: ice values as above, governing results unchanged in all 13 cases except the bearing axial (D + 0.7Di). Cable values identical for L1–L4, A1–A4.
+- **Open items:** the 7-22 form of t_d (I_i and the 2.0 factor; see above); V_ice concurrent-wind map and its height factor are unchanged; ice on sign panels (LP-R22) unchanged.
