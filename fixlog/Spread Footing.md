@@ -1617,3 +1617,95 @@ index 352c5eb..23de227 100644
 +    if(el.type==='integralAbutment' || el.abutmentType==='integral' || (p.reference && (p.reference.level==='pileHead' || p.reference.perPile)) || p.perPile){
 +      out.err.push('This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Spread Footing cannot design it; use Pile Designer (integral-abutment mode).'); return out; }
 ```
+
+
+## 2026-11-01 — PR: claude/sf-rebar-tab — Reinforcement input tab (presentation only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text.
+
+### RB1. Footing reinforcement gets its own "Reinforcement" input tab   [UI only]
+- **Engineer request (2026-11-01):** the footing reinforcement input existed but was hidden: section "Footing Reinforcement (Phase 2)" (`details#sec-rebar`, collapsed) placed on the Materials input tab.
+- **Before:** `SFD_IN_TABS` had no reinforcement tab; `SFD_IN_SEC` mapped `'sec-rebar':'mat'`; `<details class="sec" id="sec-rebar">` (closed) with summary "Footing Reinforcement (Phase 2)"; the table had Mat / Bar # / Spacing only.
+- **After:**
+  - `SFD_IN_TABS` gains `['rebar','Reinforcement']` after Materials; `SFD_IN_SEC` maps `'sec-rebar':'rebar'`; the section is `open` and titled "Footing Reinforcement".
+  - Three display columns next to each mat: A_b (from `BAR_AREA`), A_s = A_b·12/s worked out (from `barAreaPerFt`, the function the design uses) and "s vs s_max" (`P2.desX/desY.sMax`, `spcBotOK` / `spcTopOK`, `asMinTopReq`: the design's own values; s_max = min(3h, 18 in), ACI 318-19 7.7.2.3 / 13.3.4). A note under the table links to Footing Design 5.2 / 5.3 where the bars are used. Filled by the new `sfdRebarInfo()`, called at the end of `recalc()`.
+  - Footing Design 5.1 gets a line "Bars set on the Reinforcement tab (inputs) → bottom x #8 @ 9.00 in, …" (`a.sfdInA`); clicking it opens the Reinforcement input tab and flashes the section (`sfdGotoInput`). Printed as plain text.
+- **Unchanged:** every `data-path` (`freinf.botX.size` … `freinf.topY.spc`), the saved state and project JSON, `sfd_inputTab_v1` (a saved value `'mat'` still opens Materials; `'rebar'` is a new allowed value of that per-browser UI key).
+- **Check case (default project):** bottom x #8 @ 9 in → A_b = 0.79 in², A_s = 0.79·12/9 = 1.053 in²/ft, 9.00 ≤ 18.00 ✓ (h = 30 in → 3h = 90, s_max = 18 in). Setting s = 20 in shows A_s = 0.474 and "20.00 > 18.00 NG", the same NG the Footing Design card shows.
+- **How verified:** headless Chromium, origin/main vs the branch on 7 projects (default, direct mode, water table + AASHTO eccentricity + 3 pedestals + top mats, direct q_a net + override V_c, single pedestal with moments, direct mode with moments, fatal input): `R`, `P2`, dashboard, warnings, self-consistency, state and `sfd_auto` identical; the result tab text differs only in the new 5.1 link line; 0 console errors. `node tests/check-syntax.mjs "Spread Footing.html"` passes.
+- **Other copies:** none.
+
+Diff (`git diff -U0` against origin/main):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 23de227..ed56703 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -332,2 +332,2 @@ a.wkA:hover{text-decoration:underline}
+-<details class="sec" id="sec-rebar">
+-<summary>Footing Reinforcement (Phase 2)</summary>
++<details class="sec" id="sec-rebar" open>
++<summary>Footing Reinforcement</summary>
+@@ -336,5 +336,5 @@ a.wkA:hover{text-decoration:underline}
+- <table class="tbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing (in)</th></tr>
+- <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td></tr>
+- <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td></tr>
+- <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td></tr>
+- <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td></tr>
++ <table class="tbl sfdRbTbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing s (in)</th><th>A<sub>b</sub> (in&sup2;)</th><th>A<sub>s</sub> = A<sub>b</sub>&middot;12/s (in&sup2;/ft)</th><th>s vs s<sub>max</sub> (in)</th></tr>
++ <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botX"></td><td class="sfdRbAs" data-mat="botX"></td><td class="sfdRbS" data-mat="botX"></td></tr>
++ <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botY"></td><td class="sfdRbAs" data-mat="botY"></td><td class="sfdRbS" data-mat="botY"></td></tr>
++ <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topX"></td><td class="sfdRbAs" data-mat="topX"></td><td class="sfdRbS" data-mat="topX"></td></tr>
++ <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
+@@ -341,0 +342 @@ a.wkA:hover{text-decoration:underline}
++ <div class="note" id="sfdRbNote"></div>
+@@ -828 +829 @@ const SFD_IN_TABS=[
+- ['project','Project'],['geom','Geometry'],['mat','Materials'],['soil','Soil'],
++ ['project','Project'],['geom','Geometry'],['mat','Materials'],['rebar','Reinforcement'],['soil','Soil'],
+@@ -831 +832 @@ const SFD_IN_SEC={
+- 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'mat',
++ 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'rebar',
+@@ -910,0 +912,35 @@ function sfdInputTabMarks(){
++/* Reinforcement input tab (display only): bar area A_b (BAR_AREA), A_s per ft = A_b*12/s
++   (barAreaPerFt, the value the footing design uses), and the spacing against s_max from the
++   footing design (P2.desX / desY .sMax = min(3h, 18 in), ACI 318-19 7.7.2.3 / 13.3.4).
++   Nothing is computed here that the design does not already compute. */
++function sfdRebarInfo(){
++ const fr=state.freinf;if(!fr||!document.querySelector('.sfdRbAb'))return;
++ const des={X:(P2&&P2.desX)||null,Y:(P2&&P2.desY)||null};
++ ['botX','botY','topX','topY'].forEach(k=>{
++  const m=fr[k]||{},sz=m.size,spc=num(m.spc),Ab=BAR_AREA[sz]||0,As=barAreaPerFt(sz,spc);
++  const q=c=>document.querySelector('.'+c+'[data-mat="'+k+'"]');
++  const dir=k.slice(-1),d=des[dir],top=(k.slice(0,3)==='top');
++  q('sfdRbAb').innerHTML=sz?Ab.toFixed(2):'\u2014';
++  q('sfdRbAs').innerHTML=(sz&&spc>0)?Ab.toFixed(2)+'&middot;12/'+f2(spc)+' = <b>'+As.toFixed(3)+'</b>':(sz?'\u2014 (s = 0)':'\u2014 (no mat)');
++  let sTxt='\u2014';
++  if(sz&&spc>0&&d){
++   const chk=top?(d.asMinTopReq):true;   /* top mat: s_max applies only where it is a flexural mat (as the design) */
++   const ok=top?d.spcTopOK:d.spcBotOK;
++   sTxt=chk?(f2(spc)+(ok?' \u2264 ':' &gt; ')+f2(d.sMax)+(ok?' \u2713':' <b style="color:#b71c1c">NG</b>'))
++          :(f2(spc)+' (s<sub>max</sub> '+f2(d.sMax)+' n/a: no hogging)');
++  }else if(sz&&spc>0)sTxt=f2(spc);
++  q('sfdRbS').innerHTML=sTxt;
++ });
++ const n=document.getElementById('sfdRbNote');
++ if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design. s<sub>max</sub> = min(3h, 18 in) (ACI 318-19 7.7.2.3 / 13.3.4); top mats are checked only where hogging makes them flexural mats.'+
++  ((P2&&P2.desX)?' Worked in: '+sfdLink('o-fd-x','x-bars',['tab-footdes','5.2 Longitudinal (x-direction)'])+' · '+sfdLink('o-fd-y','y-bars',['tab-footdes','5.3 Transverse (y-direction)']):'');
++}
++/* link from an output card to an input tab (Reinforcement): open the tab and flash the section */
++function sfdGotoInput(tab,secId){
++ sfdSetInTab(tab,true);
++ const sec=document.getElementById(secId);if(!sec)return;
++ if(sec.tagName==='DETAILS'&&!sec.open)sec.open=true;
++ setTimeout(()=>{sec.scrollIntoView({behavior:'smooth',block:'start'});
++  const s=sec.querySelector('summary')||sec;const old=s.style.background;s.style.background='#fff3cd';setTimeout(()=>{s.style.background=old;},1100);},60);
++}
++document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.sfdInA');if(!a)return;e.preventDefault();sfdGotoInput(a.dataset.intab,a.dataset.insec);});
+@@ -2807,0 +2844 @@ function recalc(){
++ sfdRebarInfo();   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
+@@ -3832,0 +3870 @@ function flexureSVG(des,dir){
++function sfdBarTxt(m){m=m||{};return (m.size&&num(m.spc)>0)?'#'+m.size+' @ '+f2(num(m.spc))+' in':'none';}
+@@ -3849,0 +3888 @@ function renderFootingDesign(){
++ intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span></a>'));   /* link to the Reinforcement input tab */
+```
