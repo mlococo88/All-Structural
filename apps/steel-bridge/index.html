@@ -19,6 +19,7 @@
 <script src="ui/legacy.js"></script>
 <script src="engine/sections.js"></script>
 <script src="engine/flexure.js"></script>
+<script src="ui/demands.js"></script>
 <script src="ui/flexure.js"></script>
 <script src="engine/owners.js"></script>
 <script src="../../shared/lldf.js"></script>
@@ -396,7 +397,7 @@
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
-    if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g }); return; }   // Shear & stiffeners tab (ui/shear.js)
+    if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Shear & stiffeners tab (ui/shear.js)
     if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
     if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g }); return; }   // Fatigue & studs tab (ui/fatigue.js)
     if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P, g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)

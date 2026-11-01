@@ -56,7 +56,7 @@
         p.notes ? note(p.notes) : null,
         kv([['Spans', `${P.spans.lengths.map(L => f(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'simple' || P.spans.lengths.length < 2 ? 'simple spans' : 'continuous'})`],
           ['Girder reported', `${gName(g)}, ${g.position}; cross-section girder G${line + 1} (dead loads and distribution factors)`], ['$b_{eff}$', `${f(g.beff, 2)} in`],
-          ['Design specification', ED], ['Demands', B.src === 'file' ? `hand-off file ${B.plName || ''} (GirderDetail → ST-Girder), where a module takes it (see each section)` : "this project's analysis (Analysis tab)"]])]),
+          ['Design specification', ED], ['Demands', B.src === 'file' ? `hand-off file ${B.plName || ''} (GirderDetail → ST-Girder), where a module takes it (see each section)` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)} (see each section); this project's analysis (Analysis tab) for the rest` : "this project's analysis (Analysis tab)"]])]),
       sub('m', 'Materials and deck', [kv([['Steel, top / bottom flange, web', `${m.steel.top} / ${m.steel.bot} / ${m.steel.web} ($F_{y}$ = ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`], ['$E_{s}$', `${f(m.Es, 0)} ksi`],
         ["$f'_{c}$, $w_{c}$, $K_{1}$", `${f(m.concrete.fc, 2)} ksi, ${f(m.concrete.wc, 3)} kcf, ${f(m.concrete.K1, 2)}`], ['Deck', `${d.composite === false ? 'noncomposite' : 'composite'}; $t_{s}$ = ${f(d.ts, 2)} in, total ${f(d.tdeck, 2)} in, haunch ${f(d.haunch, 2)} in`],
         ['Deck rebar', `top ${f(d.rebar.top.A, 2)} in² at ${f(d.rebar.top.c, 2)} in, bottom ${f(d.rebar.bot.A, 2)} in² at ${f(d.rebar.bot.c, 2)} in; $F_{yr}$ = ${f(m.rebar.Fyr, 0)} ksi`]])]),
@@ -172,7 +172,7 @@
     const shown = all ? rows : govRows;
     shown.forEach(r => X.have.set(r, scOf(r)));
     subs.push(sub('res', all ? 'Results at every location' : 'Governing location of each span and region', [
-      note(B.src === 'file' ? fromHtml(Gr.what) : `This project's analysis, as the [[tab:flex|Flexure tab]] with that source (Appendix A6 where permitted): Strength I, Service II and Fatigue I flexure (engine/flexure.js) at every analysis station, with the project's plates, deck, materials and ${brNote(Gr)}; ${flNote(B, Gr.D, '[[tab:flex|Flexure tab]]')}; the same locations and capacities as rated on the [[tab:rt|Rating tab]]${B.flexSame === false ? ' (here they differ from the rating\'s: its capacities are worked in the Load rating section)' : ''}. Load factors Tables 3.4.1-1, -2; $\\phi_{f}$ = 1.0.`),
+      note(B.src === 'file' || Gr.custom ? fromHtml(Gr.what) : `This project's analysis, as the [[tab:flex|Flexure tab]] with that source (Appendix A6 where permitted): Strength I, Service II and Fatigue I flexure (engine/flexure.js) at every analysis station, with the project's plates, deck, materials and ${brNote(Gr)}; ${flNote(B, Gr.D, '[[tab:flex|Flexure tab]]')}; the same locations and capacities as rated on the [[tab:rt|Rating tab]]${B.flexSame === false ? ' (here they differ from the rating\'s: its capacities are worked in the Load rating section)' : ''}. Load factors Tables 3.4.1-1, -2; $\\phi_{f}$ = 1.0.`),
       Gr.oos ? note('A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported there.', true) : null,
       tbl(['Location', 'x (ft)', 'Region', 'Method', 'Governing check', 'Ratio'], shown.map(r => ({ cells: [r.name, N(r.x, 2), r.pos ? 'positive' : 'negative', r.p7 ? '' : r.useA6 ? 'App. A6' : '6.10.8',
         r.gov ? `${r.gov.id} ${tt(r.gov.title)}` : '', r.gov ? R3(r.gov.ratio, K(scOf(r), r.gov.step)) : '—'], cls: r === Gr.gov ? 'gov' : '' })))]));
@@ -184,16 +184,26 @@
     const one = r => [checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
     const detailed = all ? (Gr.gov ? [Gr.gov] : []) : govRows;
-    detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), r.steps, { title: 'Worked steps (flexure, then the section properties of this location)' })])));
-    if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => gsteps('SBDFlexureUI:x', scOf(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
+    const stF = r => (window.SBDFlexureUI.stepsOf ? window.SBDFlexureUI.stepsOf(Gr, r) : r.steps);   // with custom demands the step that names them first
+    if (Gr.custom) subs.splice(1, 0, cdSub('flex', B));
+    detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), stF(r), { title: 'Worked steps (flexure, then the section properties of this location)' })])));
+    if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => gsteps('SBDFlexureUI:x', scOf(r), stF(r), { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
     if (Gr.gov) X.gov.push({ mod: 'Flexure', grp: 'Flexure (Strength I, Service II, Fatigue I)', check: `${Gr.gov.gov.id} ${tt(Gr.gov.gov.title)}`, loc: /x = /.test(Gr.gov.name) ? Gr.gov.name : `${Gr.gov.name}, x = ${f(Gr.gov.x, 2)} ft`, r: Gr.gov.gov.ratio, key: K(scOf(Gr.gov), Gr.gov.gov.step) });
     return { title: 'Flexure', subs };
+  }
+
+  const cdMods = B => Object.keys(B.custom || {}).filter(k => B.custom[k]).map(k => window.SBDCustomDemands.SPECS[k].name).join(', ');   // the modules on custom demands
+  /* cdSub(mod, B): the custom demands entered on the module's tab, as a report table (ui/demands.js report; custom demands PR) */
+  function cdSub(mod, B) {
+    const T = window.SBDCustomDemands.report(B.P, mod, B.g);
+    return sub('cd', T.title, [note(T.note), tbl(T.head, T.rows), T.sup ? note('Support reactions (bearing stiffeners):') : null, T.sup ? tbl(T.sup.head, T.sup.rows) : null]);
   }
 
   /* ---------- 7. shear and stiffeners ---------- */
   function shear(B, X) {
     const R = B.shear, SB = window.SBDStiffeners, all = X.detail === 'all', subs = [], gl = [];
     const pk = i => 'sh.pan@' + i, sk = i => 'sh.st@' + i, tk = i => 'sh.ts@' + i, bk = i => 'sh.bs@' + i;
+    const stS = (k, o) => window.SBDShearUI.stepsOf(R, k, o);   // the worked steps (with custom demands the step that names them first; ui/shear.js)
     if (R.panels.gov && R.gm.dem) gl.push({ g: 'Web panels', it: `Panel ${f(R.panels.gov.p, 2)}–${f(R.panels.gov.q, 2)} ft${R.panels.gov.end ? ' (end panel)' : ''}: $V_{u}$ ≤ $\\phi_{v}V_{n}$ (6.10.9)`, r: R.panels.gov.r, key: K(pk(R.panels.gov.i), 'pn.ok') });
     if (R.stGov) gl.push({ g: 'Stations', it: `${R.stGov.name}: ${R.stGov.gov.id} ${tt(R.stGov.gov.title)}`, r: R.stGov.gov.ratio, key: K(sk(R.stations.indexOf(R.stGov)), R.stGov.gov.step) });
     if (R.tsGov) gl.push({ g: 'Transverse stiffeners', it: `${R.tsGov.it.loc}: ${R.tsGov.c.id} ${tt(R.tsGov.c.title)}`, r: R.tsGov.it.r, key: K(tk(R.tsGov.i), R.tsGov.it.step) });
@@ -202,28 +212,29 @@
     subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), note('Strength I $\\gamma_{DC}$ 1.25, $\\gamma_{DW}$ 1.50, LL+IM 1.75 (with the owner\'s η and m); special fatigue loading 6.10.5.3; deck placement 1.25$V_{DC1}$ + 1.50$V_{CL}$; $\\phi_{v}$ = 1.0. As on the [[tab:shear|Shear & stiffeners tab]].'),
       tbl(['Group', 'Governing item', 'Ratio'], gl.map(q => [q.g, q.it, R3(q.r, q.key)])),
       R.TS && R.TS.errors && R.TS.errors.length ? note('Transverse stiffeners: ' + R.TS.errors.join('; '), true) : null, R.BS.errors && R.BS.errors.length ? note('Bearing stiffeners: ' + R.BS.errors.join('; '), true) : null]));
+    if (R.custom) subs.push(cdSub('shear', B));
     // panels
     const pans = R.panels.rows, pSel = all ? pans : R.panels.gov && R.gm.dem ? [R.panels.gov] : [];
     subs.push(sub('pan', `Web panels (D = ${f(R.D, 2)} in, $F_{yw}$ = ${f(R.Fyw, 0)} ksi)`, [
       tbl(['Panel (ft)', '$d_{o}$ (in)', 'Type', 'k', 'C', '$\\phi V_{n}$ (kip)', '$V_{u}$ (kip)', 'Ratio'], (all ? pans : pSel).map(q => ({ cells: [`${f(q.p, 2)}–${f(q.q, 2)}`, N(q.d, 2), q.end ? 'end' : q.stiff ? 'interior' : 'unstiffened', N(q.k, 3), N(q.C, 4), N(q.phVn, 1),
         R.gm.dem ? N(q.Vu, 1) : '—', R.gm.dem ? R3(q.r, K(pk(q.i), 'pn.ok')) : '—'], cls: q === R.panels.gov ? 'gov' : '' }))),
-      ...pSel.map(q => gsteps('pan', pk(q.i), q.steps, { lazy: all && q !== R.panels.gov, title: `Panel ${f(q.p, 2)}–${f(q.q, 2)} ft${q === R.panels.gov ? ' (governing)' : ''}` }))]));
+      ...pSel.map(q => gsteps('pan', pk(q.i), stS('pan', q), { lazy: all && q !== R.panels.gov, title: `Panel ${f(q.p, 2)}–${f(q.q, 2)} ft${q === R.panels.gov ? ' (governing)' : ''}` }))]));
     // stations
     const st = R.stations, sSel = all ? st : R.stGov ? [R.stGov] : [];
     const cell = (r, id) => { const q = r.checks.find(c => c.id === id); return q && q.inUse ? R3(q.ratio, sSel.includes(r) ? K(sk(st.indexOf(r)), q.step) : null) : { t: 'n/a', cls: 'na' }; };
     subs.push(sub('st', 'Shear at the stations (GS11, GS16, GS18)', [
       tbl(['Station', '$d_{o}$ (in)', '$V_{u}$ (kip)', '$\\phi V_{n}$ (kip)', 'GS11', 'GS16', 'GS18'], sSel.map(r => ({ cells: [`${r.name}${r.end ? ' (end panel)' : ''}`, r.do > 0 ? N(r.do, 2) : '—', N(r.VuP != null ? r.VuP : r.Vu, 1), N(r.sh.Vn, 1), cell(r, 'GS11'), cell(r, 'GS16'), cell(r, 'GS18')], cls: r === R.stGov ? 'gov' : '' }))),
-      ...sSel.map(r => gsteps('loc', sk(st.indexOf(r)), r.steps, { lazy: all && r !== R.stGov, title: `${r.name}${r === R.stGov ? ' (governing)' : ''}` }))]));
+      ...sSel.map(r => gsteps('loc', sk(st.indexOf(r)), stS('loc', r), { lazy: all && r !== R.stGov, title: `${r.name}${r === R.stGov ? ' (governing)' : ''}` }))]));
     // transverse stiffeners
     if (R.TS && !R.TS.errors.length) { const T = R.TS.rows, tSel = all ? T.map((r, i) => i) : R.tsGov ? [R.tsGov.i] : [];
       subs.push(sub('ts', 'Transverse stiffeners and connection plates (6.10.11.1)', [note(`Checks: ${R.tsC.map(c => `${c.id} ${tt(c.title)}${c.naWhy ? ' (n/a)' : ''}`).join('; ')}.`),
         tbl(['Location', '$d_{o1}$ / $d_{o2}$ (in)', '$I_{t}$ / $I_{req}$ (in⁴)'], tSel.map(i => { const r = T[i]; return { cells: [`${r.name} (Type ${r.type})`, `${f(r.do1, 2)} / ${f(r.do2, 2)}`, { t: `${f(r.It, 2)} / ${f(r.Ireq, 2)}`, n: true }], cls: R.tsGov && R.tsGov.i === i ? 'gov' : '' }; })),
-        ...tSel.map(i => gsteps('ts', tk(i), SB.transverseSteps(R.TS, T[i]), { lazy: all && !(R.tsGov && R.tsGov.i === i), title: `${T[i].name} (Type ${T[i].type})` }))])); }
+        ...tSel.map(i => gsteps('ts', tk(i), stS('ts', T[i]), { lazy: all && !(R.tsGov && R.tsGov.i === i), title: `${T[i].name} (Type ${T[i].type})` }))])); }
     // bearing stiffeners: every bearing
-    if (!R.BS.errors.length) subs.push(sub('bs', 'Bearing stiffeners (6.10.11.2)', [note(R.rxn ? "Reactions: the support reactions of this project's analysis (Analysis section, reactions table)." : 'Reactions from the shears of the hand-off file (DC, DW: the jump in shear; LL+IM: the sum of the two envelopes beside the support, an upper bound).'),
+    if (!R.BS.errors.length) subs.push(sub('bs', 'Bearing stiffeners (6.10.11.2)', [note(R.custom ? 'Reactions: as entered on the Shear & stiffeners tab (Custom demands, support reactions table).' : R.rxn ? "Reactions: the support reactions of this project's analysis (Analysis section, reactions table)." : 'Reactions from the shears of the hand-off file (DC, DW: the jump in shear; LL+IM: the sum of the two envelopes beside the support, an upper bound).'),
       tbl(['Bearing', '$R_{u}$ (kip)', '$(R_{sb})_{r}$ (kip)', '$P_{r}$ (kip)', 'Welds $R_{r}$ (kip)'], R.BS.rows.map((r, i) => ({ cells: [`${r.name} (Type ${r.type})`, N(r.Ru, 1), N(r.Rsb, 1), N(r.Pr, 1), N(r.Rweld, 1)], cls: R.bsGov && R.bsGov.i === i ? 'gov' : '' }))),
       note(`Checks: ${R.bsC.map(c => `${c.id} ${tt(c.title)} (${c.status})`).join('; ')}.`),
-      ...R.BS.rows.map((r, i) => gsteps('bs', bk(i), SB.bearingSteps(R.BS, r), { title: `${r.name} (Type ${r.type})` }))]));
+      ...R.BS.rows.map((r, i) => gsteps('bs', bk(i), stS('bs', r), { title: `${r.name} (Type ${r.type})` }))]));
     return { title: 'Shear and stiffeners', subs };
   }
 
@@ -408,7 +419,7 @@
     const errs = Object.entries(B.err).filter(([k]) => built.includes(k) || k === 'all');
     const top = X.gov.filter(q => q.rf == null && isFinite(q.r)).reduce((a, q) => (!a || q.r > a.r ? q : a), null);
     return { title: 'Summary of governing ratios', subs: [sub('gov', `Girder ${gName(B.girder)}: governing demand / capacity of each check group`, [
-      note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : "this project's analysis"}. ${ED}.`),
+      note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)}; this project's analysis for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.`) : null,
       summaryFig(B, X),
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], rows, { wide: true }),
