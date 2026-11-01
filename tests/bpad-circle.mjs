@@ -209,6 +209,32 @@ async function circleChecks(src) {
         const bad = bxAg.check(Object.assign({}, pay, { signConvention: 'other' })).err.length + bxAg.check(Object.assign({}, pay, { basis: { factored: false } })).err.length;
         out.hand.H5 = { ok: ap.ok, warn: chk.warn, g1, g2, back, src: S.bxSrc && S.bxSrc.anchorGroup && S.bxSrc.anchorGroup.inputsHash, nGroups: S.groups.length,
           res: res && res.results.map(x => ({ id: x.groupId, dcr: x.governing && x.governing.dcr, mode: x.governing && x.governing.mode })), resHash: res && res.source.inputsHash, refused: bad, errs: VALIDATION.errs.map(e => e.msg) }; }
+      /* H6 (BC-5): pier cage as anchor reinforcement. C2 geometry with h_ef = 36 in: 4 × 1 in at (±6, ±6), Ø36 pier,
+         H 120, M_x = 480 kip·in, P = 5 kip compression, V_y = 3 kip. Cage: 8 #8 Gr 60 at 45° + k·45°, clear cover 3 in to
+         #4 ties at 3 in + 4 in, bar tops 3 in below the surface, straight.
+         R_b = 18 − 3 − 0.5 − 0.5 = 14 in; tension anchors (±6, +6), their hull is the segment between them.
+         ℓ_d (§25.4.2.4, K_tr 0): c_b = min(3.5 + 0.5, 10.716/2) = 4.0 → (c_b + K_tr)/d_b = 2.5;
+           ℓ_d = 0.075·60000/(63.246·2.5)·1.0 = 28.46 in.
+         Bar at 45° (9.899, 9.899): 5.515 in from (6, 6) (≤ 0.5h_ef = 18); z_c = 36 − 5.515/1.5 = 32.32; above = 29.32 ≥ 28.46;
+           below = 117 − 32.32 = 84.7 ≥ 28.46 → effective; bar at 135° the same. Bar at 0° (14, 0): 10 in from (6, 6),
+           z_c = 36 − 10/1.5 = 29.33, above 26.33 < 28.46 → not; bar at 90° (0, 14): 8 in from the segment, z_c = 30.67,
+           above 27.67 < 28.46 → not. n_eff = 2: φN_r = 0.75·2·0.79·60 = 71.10 kip; ΣT = 37.5 → 0.5274 (per anchor
+           18.75/71.10 = 0.2637) → DCR 0.5274.
+         Shear: Case 2 governs (rear row y = −6, c_a1 = 21.657 by the tangent edge) → ties at z ≤ 0.5c_a1 = 10.83: z = 3 and 7,
+           both cross the body, 2 legs each → 4 legs; φV_r = 0.75·4·0.20·60 = 36.00 kip; V = 3 → 0.0833.
+         Not confirmed: Condition A (φ 0.75) on the concrete breakout, breakout still checked; confirmed: breakout replaced. */
+      { const mk = ack => { const s = build({ case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 12 * Math.SQRT2, 'anchor.theta0': 45,
+          'conc.shape': 'circle', 'conc.D': 36, 'anchor.hef': 36 } }); s.combos = [s.combos[0]];
+          s.conc.cage = { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: ack }; return s; };
+        const a = run(mk(false)); texCheck('H6 supplementary');
+        const capA = comboCapacities(CC, CC.combos[0]);
+        const b = run(mk(true)); texCheck('H6 substituted');
+        const capB = comboCapacities(CC, CC.combos[0]);
+        const ct = capB.cageT, cv = capB.cageV;
+        out.hand.H6 = { ld: ct.G.dev.ld, Rb: ct.G.Rb, nEff: ct.nEff, effBars: ct.bars.filter(x => x.eff).map(x => x.n), phiNr: ct.phiNr, dcrT: ct.dcr, legs: cv.nEff, phiVr: cv.phiVr, dcrV: cv.dcr, ca1: cv.ca1,
+          phiTbA: capA.tb.phi, tbInA: capA.tensionModes.some(m => /breakout/.test(m.label)), tbInB: capB.tensionModes.some(m => /Concrete breakout/.test(m.label)),
+          cageModeB: capB.tensionModes.some(m => /pier cage/.test(m.label)) && capB.shearModes.some(m => /pier cage/.test(m.label)),
+          checksB: b.checks.map(x => x[0]), errs: a.errs.concat(b.errs) }; }
       out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
@@ -274,6 +300,21 @@ if (r.hand.H5) {
   if (!ok) fail = true;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} H5 anchorGroup import (lightPole-v1): post 1 P ${g1.P}, My ${g1.My}, Mx ${g1.Mx}, T ${g1.T} kip-in, tension at x = ${g1.tensionX.map(x => x.toFixed(2)).join(', ')}; post 2 Mx ${g2.Mx}, tension at y = ${g2.tensionY.map(y => y.toFixed(2)).join(', ')}; picker back to group 1 (n ${h.back.n}); result ${JSON.stringify(h.res)}; refused bad payloads ${h.refused}/2`);
   if (h.errs.length) console.log('    validation (group 1): ' + h.errs.join(' | '));
+}
+if (r.hand.H6) {
+  const h = r.hand.H6;
+  chk('H6 ℓ_d #8 (§25.4.2.4)', h.ld, 28.4605, 5e-3);
+  chk('H6 R_b', h.Rb, 14, 1e-9);
+  chk('H6 effective bars (45°, 135°)', h.nEff, 2, 0);
+  chk('H6 φN_r', h.phiNr, 71.10, 1e-6);
+  chk('H6 cage tension DCR', h.dcrT, 0.527426, 5e-6);
+  chk('H6 tie legs', h.legs, 4, 0);
+  chk('H6 φV_r', h.phiVr, 36.0, 1e-9);
+  chk('H6 cage shear DCR', h.dcrV, 3 / 36, 1e-9);
+  const ok = JSON.stringify(h.effBars) === '[1,3]' && h.phiTbA === 0.75 && h.tbInA && !h.tbInB && h.cageModeB && !h.checksB.includes('Concrete Breakout (T)') && !h.checksB.includes('Concrete Breakout (V)') && h.checksB.includes('Anchor Reinf. Tension (pier cage)');
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H6 bars ${h.effBars}; not confirmed: breakout φ ${h.phiTbA} (Condition A) and still checked; confirmed: breakout replaced by the cage (Summary: ${h.checksB.join(', ')})`);
+  if (h.errs.length) { fail = true; console.log('    H6 validation errors: ' + h.errs.join(' | ')); }
 }
 console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
 if (r.texBad.length) fail = true;
