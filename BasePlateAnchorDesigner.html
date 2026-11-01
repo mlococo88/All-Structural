@@ -358,8 +358,11 @@
       <button id="btnUseProjMeta" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
       <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
       <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into the ASCE 7-22 service loads (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
-      <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
-      <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span>
+      <button id="btnPullAnchorGroup" type="button" onclick="bxPullAnchorGroup()" title="Import pole / sign anchor groups from the Light Pole and Sign Post tool (HANDOFF.md, channel anchorGroup)">Pull from Light Pole<span id="bxAgNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+      <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()" title="A hand-off file: support reactions (memberReactions) or anchor groups (anchorGroup)">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportHandoff(event)">
+      <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span> <span id="bxAgSrc" style="font-size:9pt;font-style:italic"></span>
+    </div>
+    <div id="bpGroupBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
     </div>
     <div id="restoreStatus" style="font-size:9pt;font-style:italic;margin-top:4px;"></div>
   </div>
@@ -1125,7 +1128,7 @@ let S = defaultState();
 /* ------------------------- PERSISTENCE ------------------------- */
 function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);return true;}catch(e){return false;} }
-function autosave(){ lsSet(LS_AUTO, JSON.stringify(S)); }
+function autosave(){ if(Array.isArray(S.groups) && S.groups.length && typeof bpGroupSync==="function") bpGroupSync(); lsSet(LS_AUTO, JSON.stringify(S)); }   /* BC-3: the active anchor group's entry follows the live design */
 function loadAutosave(){
   /* Restore order:
      1. the autosaved working state (what you last had on screen)
@@ -3261,7 +3264,7 @@ function computeAll(){
        for the per-anchor checks (steel, lever arm); the breakout case still sets nV and the
        breakout row */
     const hiltiDist=!!(S.shear&&S.shear.hiltiDist);
-    const Vu_per=hiltiDist? Vres/nTot : Vfront;
+    let Vu_per=hiltiDist? Vres/nTot : Vfront;
     if(hiltiDist && Vres>1e-9) frontDesc="all "+nTot+" anchors, V/n (Hilti PROFIS option; concrete breakout: "+frontDesc+")";
     /* annotate each anchor with its shear share and components (PROFIS-style table) */
     const uxr=(Vres>1e-9)?cb.Vx/Vres:0, uyr=(Vres>1e-9)?cb.Vy/Vres:0;
@@ -3271,10 +3274,30 @@ function computeAll(){
       p.V = p.inFront? Vu_per : 0;
       p.Vx = p.V*uxr; p.Vy = p.V*uyr;
     });
+    /* BC-3 (2026-11-01): TORSION T (kip-in, + counter-clockwise about +z, at the top of concrete). Elastic, polar about
+       the anchor-group centroid (coordinator decision 2026-11-01): each anchor takes the direct shear V/n plus the
+       torsion shear T·r_i/Σr² perpendicular to its radius, added as VECTORS:
+         V_i = (V_x/n − T·(y_i − ȳ)/J,  V_y/n + T·(x_i − x̄)/J),  J = Σ[(x_i − x̄)² + (y_i − ȳ)²].
+       Steel shear and the stand-off lever arm take max(the share above, max_i |V_i|); pryout takes Σ|V_i|; concrete
+       breakout is checked toward every direction (comboCapacities). T = 0 (every save before BC-3): unchanged. */
+    const Tz=+cb.T||0;
+    let tors;
+    if(Math.abs(Tz)>1e-9){
+      const xb=g.pts.reduce((a,p)=>a+p.x,0)/nTot, yb=g.pts.reduce((a,p)=>a+p.y,0)/nTot;
+      const J=g.pts.reduce((a,p)=>a+(p.x-xb)*(p.x-xb)+(p.y-yb)*(p.y-yb),0);
+      const vi=g.pts.map(p=>{ const tx=J>1e-12? -Tz*(p.y-yb)/J : 0, ty=J>1e-12? Tz*(p.x-xb)/J : 0;
+        const vx=(+cb.Vx||0)/nTot+tx, vy=(+cb.Vy||0)/nTot+ty; return {vx,vy,tx,ty,v:Math.hypot(vx,vy),r:Math.hypot(p.x-xb,p.y-yb)}; });
+      const vmax=Math.max(...vi.map(o=>o.v)), sumV=vi.reduce((a,o)=>a+o.v,0);
+      const shareV=Vu_per;
+      Vu_per=Math.max(Vu_per, vmax);
+      perAnchor.forEach((p,i)=>{ p.V=vi[i].v; p.Vx=vi[i].vx; p.Vy=vi[i].vy; p.Vt=Math.hypot(vi[i].tx,vi[i].ty); });
+      tors={T:Tz, J, xb, yb, vi, vmax, sumV, shareV, noTorsionResultant:J<=1e-12};
+      frontDesc+="; with torsion T = "+fmt(Tz,1)+" kip-in: max |V_i| = "+fmt(vmax,3)+" kip (vector sum of V/n and T·r/J)";
+    }
 
     return {ci,name:cb.name,raw:cb,Pc,resX,resY,fx,fy,nTx,nTy,TuX,TuY,Tu_perX,Tu_perY,uplift,
       vCase,vCaseOffset,vRowMask:((bpCircPattern()||bpCircPier())? frontSet : undefined),   /* BC-1: only for a bolt circle (a grid result object is unchanged) */
-      Tu_per,nT,nV,Tu_group,Vres,Vu_per,frontDesc,eccN,eccN_x,eccN_y,perAnchor,Tmax_anchor,nT_dist,
+      Tu_per,nT,nV,Tu_group,Vres,Vu_per,frontDesc,eccN,eccN_x,eccN_y,perAnchor,Tmax_anchor,nT_dist,tors,
       na:naRes, naUsed, openSO, Ixx, Iyy, nAll,
       ecc_regime:(resX.regime==="large"||resY.regime==="large")?"large":"small"};
   });
@@ -3426,6 +3449,32 @@ function comboCapacities(cc, combo){
   const sbk = bpCircPier()? shearBreakoutCirc(nV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null, shearDir, C.H, condAV)   /* BC-2 */
             : shearBreakout(nV, ca1v, C.H, shearDir, combo.vCaseOffset||0, condAV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null);
   const pry = pryout(nV, tb);
+  /* BC-3: torsion — concrete breakout toward EVERY direction û (every 15°, and the resultant V): the shear pushing
+     toward that edge is D(û) = Σ_i max(0, V_i·û) (anchors pushing away do not load it; components along the edge are
+     the parallel case, which the breakout model checks separately). Each direction is evaluated with the same
+     Fig. R17.7.2.1b case logic and breakout model as a plain shear D(û)·û; the worst ratio governs. With T = 0 and
+     D(û_V) = V this is the ordinary check (that direction is in the set). Pryout: Σ|V_i| (conservative). */
+  let sbkUse=sbk, sbkDem, pryDem;
+  if(combo.tors){
+    const tv=combo.tors.vi, dirs=[];
+    for(let k=0;k<24;k++){ const a=k*Math.PI/12; dirs.push({x:Math.cos(a),y:Math.sin(a),deg:k*15}); }
+    const Vr0=Math.hypot(combo.raw.Vx||0,combo.raw.Vy||0); if(Vr0>1e-9) dirs.push({x:combo.raw.Vx/Vr0,y:combo.raw.Vy/Vr0,deg:((Math.atan2(combo.raw.Vy,combo.raw.Vx)*180/Math.PI)+360)%360,isV:true});
+    let best=null;
+    dirs.forEach(u=>{ const D=tv.reduce((a,o)=>a+Math.max(0,o.vx*u.x+o.vy*u.y),0); if(D<=1e-9) return;
+      const vc=shearCases({Vx:D*u.x,Vy:D*u.y,Vres:D}, condAV); if(!vc.applicable||!vc.used) return;
+      const sb=vc.used.sb, dcr=sb.phiVcbg>1e-9? vc.used.V/sb.phiVcbg : Infinity;
+      if(!best || dcr>best.dcr) best={dcr,u,D,dem:vc.used.V,sb,caseId:vc.used.id,nRes:vc.used.nRes}; });
+    if(best){
+      sbkUse=Object.assign({},best.sb,{torsion:{D:best.D,dir:best.u,dem:best.dem,caseId:best.caseId,dcr:best.dcr}});
+      sbkUse.steps=[{title:"Torsion — governing breakout direction",ref:"ACI 318-19 §17.7.2.1, R17.7.2.1 (elastic polar distribution, vector sum)",
+        lines:["V_i=\\left(\\frac{V_x}{n}-\\frac{T(y_i-\\bar y)}{J},\\ \\frac{V_y}{n}+\\frac{T(x_i-\\bar x)}{J}\\right),\\quad J=\\sum r_i^2="+fmt(combo.tors.J,3)+"\\ \\text{in}^2,\\ T="+fmt(combo.tors.T,2)+"\\ \\text{kip-in}",
+          "D(\\hat u)=\\sum_i\\max(0,\\ \\mathbf V_i\\cdot\\hat u)\\ \\text{for }\\hat u\\text{ every }15^\\circ\\text{ and along }V",
+          "\\text{governing: }\\hat u\\text{ at }"+fmt(best.u.deg,1)+"^\\circ,\\ D="+fmt(best.D,3)+"\\ \\text{kip};\\ \\text{"+(best.caseId==="single"?"single row":"Case "+best.caseId)+": }V_{ua}="+fmt(best.dem,3)+"\\ \\text{kip}\\ \\text{on }\\phi V_{cbg}="+fmt(best.sb.phiVcbg,3)+"\\ \\text{kip}"],
+        vars:[["V_i",tv.map((o,i)=>(i+1)+": "+fmt(o.v,3)).join(", ")+" kip","per-anchor shear, vector sum of the direct and torsion parts"]]}].concat(best.sb.steps||[]);
+      sbkDem=best.dem;
+    }
+    pryDem=combo.tors.sumV;
+  }
   /* Shear bases mirror the tension ones: steel rupture and stand-off bending are
      per-bolt; breakout and pryout envelop the group. */
   let shearModes=[ {label:"Steel (φVsa)", ref:"§17.7.1", per:"anchor",
@@ -3443,11 +3492,11 @@ function comboCapacities(cc, combo){
   }
   if(!vSubst){
     shearModes.push({label:"Concrete breakout (φVcbg)", ref:"§17.7.2", per:"group",
-      phiV:sbk.phiVcbg, obj:sbk,
+      phiV:sbkUse.phiVcbg, obj:sbkUse, dem:sbkDem,   /* BC-3: torsion — the governing direction's case demand */
       why:"One breakout wedge at the governing edge envelops the anchor row."});
   }
   shearModes.push({label:"Pryout (φVcpg)", ref:"§17.7.3", per:"group",
-    phiV:pry.phiVcpg, obj:pry,
+    phiV:pry.phiVcpg, obj:pry, dem:pryDem,   /* BC-3: torsion — Σ|V_i| */
     why:"Pryout is derived from the group breakout N_cbg, so it inherits the group basis."});
 
   /* ---- basis-aware demand / DCR -------------------------------------------
@@ -3459,7 +3508,7 @@ function comboCapacities(cc, combo){
   const tDemand=(c,mode)=> (mode.dem!==undefined)? mode.dem : (mode.per==="anchor")
       ? (c.Tmax_anchor!==undefined? c.Tmax_anchor : c.Tu_per)
       : c.Tu_group;
-  const vDemand=(c,mode)=> (mode.per==="anchor") ? c.Vu_per : c.Vres;
+  const vDemand=(c,mode)=> (mode.dem!==undefined)? mode.dem : (mode.per==="anchor") ? c.Vu_per : c.Vres;
   const tDCR=(c,mode)=>{ const d=tDemand(c,mode); return mode.phiN>0? d/mode.phiN : (d>0?Infinity:0); };
   const vDCR=(c,mode)=>{ const d=vDemand(c,mode); return mode.phiV>0? d/mode.phiV : (d>0?Infinity:0); };
   /* the governing mode is the one with the highest UTILISATION, which is the
@@ -3468,7 +3517,7 @@ function comboCapacities(cc, combo){
   const govTfor=(c)=> tensionModes.reduce((m,x)=> tDCR(c,x)>tDCR(c,m)?x:m, tensionModes[0]);
   const govVfor=(c)=> shearModes.reduce((m,x)=> vDCR(c,x)>vDCR(c,m)?x:m, shearModes[0]);
 
-  return {nT,nV,st,po,tb,sfb,sv,sbk,pry,la,tensionModes,shearModes,
+  return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,
     tDemand,vDemand,tDCR,vDCR,govTfor,govVfor,
     Tu_group:combo.Tu_group, Vu_group:combo.Vres};
 }
@@ -6371,8 +6420,8 @@ function allChecks(){
     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
     if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb,"tabConc");
     push("stV","Steel Shear","§17.7.1",c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac),"tabAnchor");
-    if(!(S.vRebar.present && _J.v.justified)) push("sbk","Concrete Breakout (V)","§17.7.2",c.Vres/cap.sbk.phiVcbg,"tabConc");
-    push("pry","Pryout","§17.7.3",c.Vres/cap.pry.phiVcpg,"tabConc");
+    if(!(S.vRebar.present && _J.v.justified)) push("sbk","Concrete Breakout (V)","§17.7.2",(cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg,"tabConc");
+    push("pry","Pryout","§17.7.3",(cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg,"tabConc");
     const it=interaction(cap.tDCR(c,cap.govTfor(c)),1,cap.vDCR(c,cap.govVfor(c)),1);
     push("int","Combined T–V Interaction","§17.8",it.dcr,"tabAnchor");
   });
@@ -6414,8 +6463,8 @@ function dcrMatrix(){
     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
     if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb);
     put("stV","Steel shear","§17.7.1", c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac));
-    if(!(S.vRebar.present && _J.v.justified)) put("sbk","Breakout (V)","§17.7.2", c.Vres/cap.sbk.phiVcbg);
-    put("pry","Pryout","§17.7.3", c.Vres/cap.pry.phiVcpg);
+    if(!(S.vRebar.present && _J.v.justified)) put("sbk","Breakout (V)","§17.7.2", (cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg);
+    put("pry","Pryout","§17.7.3", (cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg);
     const la=standoffLeverArm(c);
     if(la && la.phiVMs>1e-12) put("so","Stand-off bending","lever arm", (c.Vu_per||0)/la.phiVMs);
     put("int","Interaction","§17.8", interaction(cap.tDCR(c,cap.govTfor(c)),1,cap.vDCR(c,cap.govVfor(c)),1).dcr);
@@ -6850,6 +6899,18 @@ function buildSummary(pg){
     const w=el("div","errBox noPrint"); w.innerHTML="<b>"+BP_PED_UNCONF+"</b> ";
     const b=el("button",null,"Open 7a. Pedestal Reinforcement \u2197"); b.addEventListener("click",e=>{ e.preventDefault(); bpadGoInSec("inPed"); });
     w.appendChild(b); pg.appendChild(w); }
+  if(Array.isArray(S.groups) && S.groups.length>1 && typeof bpGroupResultFor==="function"){   /* BC-3: every anchor group of the project */
+    mkSection("smGroups","Anchor Groups in this Project",body=>{
+      const t=el("table","tbl"); const hd=el("tr"); ["Group","Governing D/C","Check","Combination",""].forEach(x=>hd.appendChild(el("th",null,x))); t.appendChild(hd);
+      bpGroupSync();
+      S.groups.forEach((g,i)=>{ const r=bpGroupResultFor(i), tr=el("tr"); if(i===S.groupActive) tr.className="gov";
+        tr.appendChild(el("td","lft",(i+1)+". "+g.label+(i===S.groupActive?" (shown)":"")));
+        tr.appendChild(el("td",null,r.error? "error" : fmtDCR(r.gov.dcr,3))); tr.appendChild(el("td","lft",r.error? r.error : r.gov.label)); tr.appendChild(el("td","lft",r.error?"":r.gov.combo));
+        const td=el("td"); if(i!==S.groupActive){ const b=el("button",null,"Show"); b.addEventListener("click",()=>bpGroupSwitch(i)); td.appendChild(b); } tr.appendChild(td); t.appendChild(tr); });
+      body.appendChild(t);
+      body.appendChild(el("div","note","Each group is designed on its own (its anchors, plate, pier and combinations). The tabs show the selected group; switch with the Anchor group picker under the project fields."));
+    },pg);
+  }
   const dash=el("div"); dash.id="dash"; pg.appendChild(dash);
   const checks=allChecks();
   checks.forEach(c=>{
@@ -7106,7 +7167,8 @@ function buildInputEcho(pg){
       ["Shear rebar", !S.vRebar.present? "none" : (S.vRebar.pieceType==="closedtie")? ("closed ties"+(S.ped.present? " (pedestal ties, "+S.ped.tieSize+")" : " (pedestal ties not entered: none counted)")) : (S.vRebar.qty+"-"+S.vRebar.size+" hairpin legs")],
       ["Pedestal reinforcement", S.ped.present? (pedGeom().bars.length+"-"+S.ped.barSize+" vertical, "+S.ped.tieSize+" ties: "+S.ped.tieSets+" sets from "+fmt(pedGeom().ties[0],2)+"″"+(pedGeom().ties[0]>(+S.ped.tieTop||0)+1e-9? " (raised to cover + d_b/2; entered "+fmt(S.ped.tieTop,2)+"″)" : "")+" at "+fmt(S.ped.tieSpacing,2)+"″")   /* RPT-1: the depth actually used */ : "not entered"],
       ["Stand-off", standoffParams().label+(standoffParams().hasStandoff?(", z="+fmt(standoffParams().z,2)+String.fromCharCode(34)):"")]
-    ];
+    ].concat((Array.isArray(S.groups)&&S.groups.length)? [["Anchor group", (S.groupActive+1)+" of "+S.groups.length+": "+bpGroupLabel()]] : [])
+     .concat((typeof bxAgSourceLine==="function"&&bxAgSourceLine())? [["Hand-off source", bxAgSourceLine()]] : []);   /* BC-3 */
     const t=el("table","tbl"); rows.forEach(r=>{ const tr=el("tr");
       tr.appendChild(el("td","lft",r[0])); const td=el("td","lft",r[1]); tr.appendChild(td); t.appendChild(tr); });
     body.appendChild(t);
@@ -7115,10 +7177,11 @@ function buildInputEcho(pg){
   mkSection("ieLoads","Load Combinations (pre-factored)",body=>{
     const t=el("table","tbl"); const hd=el("tr");
     const Fu=forceUnit(), Mu=momentUnit();
-    ["Combo","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
+    const hasT=S.combos.some(c=>Math.abs(+c.T||0)>1e-12);   /* BC-3: torsion column only when a combination has T */
+    ["Combo","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")"].concat(hasT?["T ("+Mu+")"]:[]).forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
     const gi=governingComboIndex();
     S.combos.forEach((c,i)=>{ const tr=el("tr"); if(i===gi)tr.className="gov";
-      [c.name,fF(c.P),fF(c.Vx),fF(c.Vy),fM(c.Mx),fM(c.My)].forEach((v,idx)=>tr.appendChild(el("td",idx===0?"lft":null,String(v)))); t.appendChild(tr); });
+      [c.name,fF(c.P),fF(c.Vx),fF(c.Vy),fM(c.Mx),fM(c.My)].concat(hasT?[fM(+c.T||0)]:[]).forEach((v,idx)=>tr.appendChild(el("td",idx===0?"lft":null,String(v)))); t.appendChild(tr); });
     body.appendChild(t);
     body.appendChild(el("div","note","Highlighted row governs overall (max interaction DCR). All combinations are evaluated for every check. Values shown in "+Fu+" / "+Mu+"."));
   },pg);
@@ -7458,10 +7521,11 @@ function buildConcTab(pg){
       if(S.vRebar.present)
         body.appendChild(el("div","warnBox","Shear anchor reinforcement (hairpins) is present, but the \u00a717.5.2.1 substitution is NOT yet justified (see the Shear Rebar tab), so concrete breakout in shear is still evaluated and enforced here."));
       renderSteps(body,cap.sbk.steps);
-      dcrBox(body,c.Vres/cap.sbk.phiVcbg,false,
-        {load:c.Vres*forceFactor(),cap:cap.sbk.phiVcbg*forceFactor(),unit:forceUnit(),
+      {const vd=(cap.sbkDem!==undefined?cap.sbkDem:c.Vres);   /* BC-3 */
+      dcrBox(body,vd/cap.sbk.phiVcbg,false,
+        {load:vd*forceFactor(),cap:cap.sbk.phiVcbg*forceFactor(),unit:forceUnit(),
          loadSym:"V_ua",capSym:"\u03c6V_cbg",
-         basis:"ANCHOR GROUP \u2014 one breakout wedge at the governing edge (\u00a717.7.2)"}); },pg);
+         basis:"ANCHOR GROUP \u2014 one breakout wedge at the governing edge (\u00a717.7.2)"+(cap.sbk.torsion?"; torsion: the governing direction's case demand":"")}); } },pg);
   } else {
     mkSection("coVBna","5. Concrete Breakout — Shear",body=>{
       body.appendChild(el("div","warnBox",(S.vRebar.pieceType==="closedtie")?   /* RPT-1: ties are not hairpins */
@@ -7470,8 +7534,9 @@ function buildConcTab(pg){
     },pg);
   }
   mkSection("coPry","6. Pryout",body=>{ renderSteps(body,cap.pry.steps);
-    dcrBox(body,c.Vres/cap.pry.phiVcpg,false,
-      {load:c.Vres*forceFactor(),cap:cap.pry.phiVcpg*forceFactor(),unit:forceUnit(),
+    const vp=(cap.pryDem!==undefined?cap.pryDem:c.Vres);   /* BC-3: torsion — Σ|V_i| */
+    dcrBox(body,vp/cap.pry.phiVcpg,false,
+      {load:vp*forceFactor(),cap:cap.pry.phiVcpg*forceFactor(),unit:forceUnit(),
        loadSym:"V_ua",capSym:"\u03c6V_cpg",
        basis:"ANCHOR GROUP \u2014 derived from the group breakout N_cbg (\u00a717.7.3)"}); },pg);
   mkSection("coBreakGeo","7. Breakout Geometry",body=>{ drawBreakout(body,c); },pg);
@@ -12165,7 +12230,7 @@ function openLoadEditor(){
     v=>{S.ui.axialPositive=v;autosave();redraw();refreshAll();},o=>o[1],o=>o[0]);
   aLbl.appendChild(aSel); bar.appendChild(aLbl);
   const conv=el("span","unit","Sign convention: "+axialLabel()+
-    ". Moments follow the right-hand rule about the named axis: +Mx lifts the +y side, +My lifts the \u2212x side (matches Hilti PROFIS). Forces at column centroid.");
+    ". Moments follow the right-hand rule about the named axis: +Mx lifts the +y side, +My lifts the \u2212x side (matches Hilti PROFIS); T = torsion about +z, + counter-clockwise seen from above. Forces at column centroid.");
   bar.appendChild(conv);
   {const warn=el("div","note");
    warn.innerHTML="<b>Check these two before entering or importing loads.</b> A moment entered as "+
@@ -12183,7 +12248,7 @@ function openLoadEditor(){
   /* paste import */
   const pasteWrap=el("div"); pasteWrap.style.marginTop="10px";
   {const ph=el("div","note");
-   ph.innerHTML="Paste from Excel (tab or comma separated): <b>Name, P, Vx, Vy, Mx, My</b> \u2014 "+
+   ph.innerHTML="Paste from Excel (tab or comma separated): <b>Name, P, Vx, Vy, Mx, My</b> [, <b>T</b>] \u2014 "+
      "read as <b>"+forceUnit()+"</b> for P/Vx/Vy and <b>"+momentUnit()+"</b> for Mx/My, with "+
      axialLabel()+". Set the selectors above to match your source before pasting.";
    pasteWrap.appendChild(ph);}
@@ -12197,9 +12262,11 @@ function openLoadEditor(){
     const parsed=[];
     rows.forEach(r=>{ const c=r.split(/\t|,/).map(s=>s.trim());
       const mf=momentFactor();
-      if(c.length>=6) parsed.push({name:c[0],
+      if(c.length>=6){ const o={name:c[0],
         P:(parseFloat(c[1])||0)/(uf*axialSign()), Vx:(parseFloat(c[2])||0)/uf, Vy:(parseFloat(c[3])||0)/uf,
-        Mx:(parseFloat(c[4])||0)/mf, My:(parseFloat(c[5])||0)/mf}); });
+        Mx:(parseFloat(c[4])||0)/mf, My:(parseFloat(c[5])||0)/mf};
+        if(c.length>=7 && parseFloat(c[6])) o.T=(parseFloat(c[6])||0)/mf;   /* BC-3: optional 7th column, torsion T */
+        parsed.push(o); } });
     if(parsed.length){ S.combos=parsed; ta.value=""; redraw(); refreshAll(); }
     else alert("No rows parsed. Each row needs 6 columns: Name, P, Vx, Vy, Mx, My");
   });
@@ -12219,7 +12286,7 @@ function openLoadEditor(){
     const uf=forceFactor(), Fu=forceUnit(), Mu=momentUnit();
     const t=el("table","tbl");
     const hd=el("tr");
-    ["#","Name","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")",""]
+    ["#","Name","P ("+Fu+")","Vx ("+Fu+")","Vy ("+Fu+")","Mx ("+Mu+")","My ("+Mu+")","T ("+Mu+")",""]
       .forEach(h=>hd.appendChild(el("th",null,h)));
     t.appendChild(hd);
     S.combos.forEach((cb,i)=>{
@@ -12229,10 +12296,10 @@ function openLoadEditor(){
       tagField(nm,"mcombo"+i+"_name");
       nm.addEventListener("input",()=>{cb.name=nm.value;autosave();});
       const td0=el("td","lft"); td0.appendChild(nm); tr.appendChild(td0);
-      ["P","Vx","Vy","Mx","My"].forEach(k=>{
+      ["P","Vx","Vy","Mx","My","T"].forEach(k=>{   /* BC-3: T = torsion about +z (+ counter-clockwise seen from above), 0 when absent */
         /* Mx/My convert through the MOMENT factor, which may be kip-ft (÷12)
            independently of the force unit. P/Vx/Vy use the force factor. */
-        const isM=(k==="Mx"||k==="My");
+        const isM=(k==="Mx"||k==="My"||k==="T");
         /* P also carries the axial SIGN convention: internal storage is
            tension-positive, so compression-positive entry flips at the boundary. */
         const f = isM? momentFactor() : (k==="P"? uf*axialSign() : uf);
@@ -12240,9 +12307,9 @@ function openLoadEditor(){
         const dec = isM? ((mm==="kip-ft"||mm==="lb-ft")?3:(mm==="lb-in"?0:2))
                        : (unitMode()==="lb"?0:2);
         const td=el("td"); const inp=document.createElement("input");
-        inp.type="number"; inp.value=+(cb[k]*f).toFixed(dec);
+        inp.type="number"; inp.value=+((+cb[k]||0)*f).toFixed(dec);
         tagField(inp,"mcombo"+i+"_"+k);
-        inp.addEventListener("input",()=>{ cb[k]=(parseFloat(inp.value)||0)/f; autosave(); buildTabs(); });
+        inp.addEventListener("input",()=>{ const v=(parseFloat(inp.value)||0)/f; if(k==="T" && !v && cb.T===undefined) return; cb[k]=v; autosave(); buildTabs(); });
         td.appendChild(inp); tr.appendChild(td);
       });
       const tdx=el("td"); const x=el("button","danger","×"); x.style.padding="0 6px";
@@ -12848,6 +12915,7 @@ function buildPrintReport(target){
     const d=el("div"); d.innerHTML="<b>"+k+":</b> "+(v||"—"); hg.appendChild(d); });
   cover.appendChild(hg);
   if(typeof bxMrSourceLine==="function"&&bxMrSourceLine()) cover.appendChild(el("div","note",bxMrSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
+  if(typeof bxAgSourceLine==="function"&&bxAgSourceLine()) cover.appendChild(el("div","note",bxAgSourceLine()));   /* BC-3: anchorGroup source */
   front.appendChild(cover);
   const fm=el("section","cr-front");
   fm.appendChild(el("h2","cr-h1 cr-nonum","References:"));
@@ -12954,6 +13022,7 @@ function refreshAll(){
   }
   buildTabs();
   restoreUI(st);
+  if(typeof bpGroupBar==="function") bpGroupBar();   /* BC-3: anchor-group picker */
 }
 function refreshOutput(){ buildOutput(); }
 
@@ -15314,10 +15383,10 @@ function profisBuildPe(opts){
   const comboOut=S.combos.map((c,i)=>{
     const o={id:newId(i), name:c.name||("Combination "+(i+1)),
       ForceZ:(+c.P||0)*U.N, ForceX:(+c.Vx||0)*U.N, ForceY:(+c.Vy||0)*U.N,
-      MomentZ:0, MomentX:(+c.Mx||0)*U.Nmm, MomentY:(+c.My||0)*U.Nmm, app:c};
+      MomentZ:(+c.T||0)*U.Nmm, MomentX:(+c.Mx||0)*U.Nmm, MomentY:(+c.My||0)*U.Nmm, app:c};   /* BC-3: torsion T (0 when absent) */
     const n=proto.cloneNode(true);
     setT(kid(n,"Id"),o.id);
-    fill(n,{ForceZ:o.ForceZ, ForceX:o.ForceX, ForceY:o.ForceY, MomentZ:0, MomentX:o.MomentX, MomentY:o.MomentY,
+    fill(n,{ForceZ:o.ForceZ, ForceX:o.ForceX, ForceY:o.ForceY, MomentZ:o.MomentZ, MomentX:o.MomentX, MomentY:o.MomentY,
             ForceZVariable:0, ForceXVariable:0, ForceYVariable:0, MomentZVariable:0, MomentXVariable:0, MomentYVariable:0,
             LoadType:"Static", Comment:o.name});
     lcs.appendChild(n);
@@ -15325,7 +15394,7 @@ function profisBuildPe(opts){
   });
   const act=comboOut[gi];
   fill(ld,{IsLoadCombinationsActive:"true", LoadType:"Static", StaticLoadType:"Design", LoadDefinitionType:"PerPlate",
-           ForceZ:act.ForceZ, ForceX:act.ForceX, ForceY:act.ForceY, MomentZ:0, MomentX:act.MomentX, MomentY:act.MomentY,
+           ForceZ:act.ForceZ, ForceX:act.ForceX, ForceY:act.ForceY, MomentZ:act.MomentZ, MomentX:act.MomentX, MomentY:act.MomentY,
            ActiveLoadCombinationId:act.id});
   setT(at("Options","ReportLoadCombination"),act.id);
   row("Load combinations",S.combos.length+" factored (LRFD) combinations",
@@ -15335,7 +15404,8 @@ function profisBuildPe(opts){
   if(govNote) verify.push("Active combination: "+govNote+".");
   if(S.serviceLoads && (S.serviceLoads.useSeismic||S.serviceLoads.useOmega))
     verify.push("Seismic combinations are written as ordinary static design loads. Set the seismic design options (ACI 318-19 §17.10) in PROFIS.");
-  notes.push("Torsion MomentZ is written as 0 (this tool has no torsion input).");
+  if(S.combos.some(c=>Math.abs(+c.T||0)>1e-12)) verify.push("Torsion T is written as MomentZ (+ counter-clockwise about +z). The PROFIS sign of MomentZ is not confirmed by a test file: check the anchor shear forces in PROFIS.");
+  else notes.push("Torsion MomentZ is written as 0 (no combination has a torsion T).");
   notes.push("Display units in PROFIS are those of the template (inch, kip, ft-kip, ksi); the stored values are SI and do not depend on them.");
 
   /* ---- report notes inside the file ---- */
@@ -16701,6 +16771,280 @@ manPart("pA","A. Notation & References",[
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);
   setInterval(refreshBar,2000);
+})();
+/* =====================================================================
+   BC-3 (2026-11-01): ANCHOR GROUPS per project, the anchorGroup hand-off receiver and the anchorGroupResult sender
+   (HANDOFF.md §4.11 / §4.12). Engineer decision 2026-11-01: a two-post sign is ONE project with an anchor-group
+   picker. A project without S.groups (every save before BC-3) is a single group and is unchanged.
+   S.groups = [{id, label, srcId, data:{plate, col, anchor, …, combos}}], S.groupActive = index; the live S holds the
+   active group, and its entry in S.groups is refreshed whenever the group is switched, added or exported.
+   ===================================================================== */
+const BP_GROUP_KEYS=["plate","col","anchor","grout","standoff","forceModel","levNut","conc","shear","tRebar","vRebar","ped","combos","serviceLoads","detailCombo"];
+function bpGroupSnap(){ const o={}; BP_GROUP_KEYS.forEach(k=>{ if(S[k]!==undefined) o[k]=JSON.parse(JSON.stringify(S[k])); }); return o; }
+function bpGroupState(data){ const st=JSON.parse(JSON.stringify(S)); BP_GROUP_KEYS.forEach(k=>{ if(data && data[k]!==undefined) st[k]=JSON.parse(JSON.stringify(data[k])); }); return mergeState(st); }
+function bpGroupsOn(){ return Array.isArray(S.groups) && S.groups.length>0; }
+function bpGroupSync(){ if(bpGroupsOn()){ const a=Math.min(Math.max(0,S.groupActive||0),S.groups.length-1); S.groupActive=a; S.groups[a].data=bpGroupSnap(); } }
+function bpGroupLabel(){ return bpGroupsOn()? (S.groups[S.groupActive||0]||{}).label||"" : ""; }
+function bpGroupSwitch(i){
+  if(!bpGroupsOn() || i===S.groupActive || !S.groups[i]) return;
+  bpGroupSync();
+  const groups=S.groups, ns=bpGroupState(groups[i].data); ns.groups=groups; ns.groupActive=i;
+  S=ns; S.detailCombo=Math.min(S.detailCombo||0,(S.combos.length||1)-1);
+  autosave(); refreshAll();
+}
+function bpGroupAdd(){
+  const name=prompt("Name of the new anchor group (a copy of the current one):", "Group "+((S.groups||[]).length+(bpGroupsOn()?1:2)));
+  if(name===null) return;
+  if(!bpGroupsOn()){ S.groups=[{id:"g1",label:"Group 1",data:bpGroupSnap()}]; S.groupActive=0; }
+  bpGroupSync();
+  S.groups.push({id:"g"+(Date.now()%1e9).toString(36),label:name||("Group "+(S.groups.length+1)),data:bpGroupSnap()});
+  bpGroupSwitch(S.groups.length-1);
+}
+function bpGroupRename(){ if(!bpGroupsOn()) return; const g=S.groups[S.groupActive]; const n=prompt("Rename the anchor group:",g.label); if(n){ g.label=n; autosave(); refreshAll(); } }
+function bpGroupDelete(){
+  if(!bpGroupsOn()) return;
+  if(S.groups.length<2){ if(confirm("Remove the group list? The current design stays as the project's only anchor group.")){ delete S.groups; delete S.groupActive; autosave(); refreshAll(); } return; }
+  const a=S.groupActive; if(!confirm("Delete anchor group “"+S.groups[a].label+"”? Its inputs are removed from this project.")) return;
+  const groups=S.groups.filter((_,i)=>i!==a), j=Math.max(0,a-1), ns=bpGroupState(groups[j].data); ns.groups=groups; ns.groupActive=j;
+  S=ns; autosave(); refreshAll();
+}
+function bpGroupBar(){
+  const host=document.getElementById("bpGroupBar"); if(!host) return;
+  host.innerHTML="";
+  const lab=el("span",null,"Anchor group: "); lab.style.cssText="font-size:9.5pt;font-weight:bold"; host.appendChild(lab);
+  if(bpGroupsOn()){
+    const sel=document.createElement("select"); sel.id="bpGroupSel";
+    S.groups.forEach((g,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=(i+1)+". "+g.label; sel.appendChild(o); });
+    sel.value=S.groupActive||0; sel.addEventListener("change",()=>bpGroupSwitch(+sel.value)); host.appendChild(sel);
+    [["Rename",bpGroupRename],["Delete",bpGroupDelete]].forEach(([t,f])=>{ const b=el("button",null,t); b.type="button"; b.addEventListener("click",f); host.appendChild(b); });
+  } else host.appendChild(el("span","note","one group (this design)"));
+  const add=el("button",null,"+ Add group"); add.type="button"; add.title="Add another anchor group to this project (e.g. the second post of a two-post sign), starting as a copy of this one";
+  add.addEventListener("click",bpGroupAdd); host.appendChild(add);
+  if(S.bxSrc && S.bxSrc.anchorGroup){ const b=el("button",null,"Send result to Light Pole"); b.type="button"; b.id="btnSendAgResult";
+    b.title="Publish the governing D/C of every anchor group on channel anchorGroupResult (HANDOFF.md §4.12)"; b.addEventListener("click",()=>bxAg.sendResult(true)); host.appendChild(b); }
+}
+/* governing results of one group, computed in its own state (S and CC restored afterwards) */
+function bpGroupResultFor(i){
+  const saveS=S, saveCC=CC;
+  try{
+    const other=bpGroupsOn() && i!==S.groupActive;
+    if(other){ const ns=bpGroupState(S.groups[i].data); ns.groups=undefined; S=ns; }
+    CC=computeAll();
+    const checks=allChecks(); let gov={dcr:0,label:"—",combo:"—"};
+    checks.forEach(c=>{ const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na && v>gov.dcr) gov={dcr:v,label:c.label,combo:c.combo||"—"}; });
+    let tw={dcr:0,mode:"—",combo:"—"}, vw={dcr:0,mode:"—",combo:"—"}, iw={dcr:0,form:"—",combo:"—"};
+    CC.combos.forEach(c=>{ const cap=comboCapacities(CC,c), gT=cap.govTfor(c), gV=cap.govVfor(c), dT=cap.tDCR(c,gT), dV=cap.vDCR(c,gV), it=interaction(dT,1,dV,1);
+      if(dT>tw.dcr) tw={dcr:dT,mode:gT.label,combo:c.name}; if(dV>vw.dcr) vw={dcr:dV,mode:gV.label,combo:c.name}; if(it.dcr>iw.dcr) iw={dcr:it.dcr,form:it.governingForm,combo:c.name}; });
+    return {gov, tension:tw, shear:vw, interaction:iw, warnings:other? ["(validation messages are listed when this group is shown)"] : (VALIDATION&&VALIDATION.warns||[]).slice(0,10)};
+  } catch(e){ return {error:String(e&&e.message||e)}; }
+  finally{ S=saveS; CC=saveCC; }
+}
+
+/* ---- anchorGroup receiver ------------------------------------------------------------------------------ */
+(function(){
+  var CH='anchorGroup', SCHEMA='bridge-anchor-group', MAXV=1, RID='basePlate';
+  var RES_CH='anchorGroupResult', RES_SCHEMA='bridge-anchor-group-result';
+  var LEN={'in':1,'inch':1,'ft':12}, FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};
+  var MOM={'kip-in':1,'kip·in':1,'kip-ft':12,'kip·ft':12,'ft-kip':12,'lb-in':0.001,'lb-ft':0.012,'ft-lb':0.012};   /* -> kip-in */
+  var STRESS={ksi:1,psi:0.001};
+  var HEAD={heavyHex:'hvyhexhead',heavyhex:'hvyhexhead',hex:'heavyhex',hvyhexhead:'hvyhexhead',square:'sqhead',heavySquare:'hvysqhead',plateWasher:'platewasher'};
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function h(tag,cls,html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
+  function f(v,d){ return isNum(v)? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
+  /* validate + convert every group to this tool's fields; returns {err:[], warn:[], groups:[{id,label,set:{…},combos:[…],lpRef}]} */
+  function check(p){
+    var out={err:[],warn:[],groups:[]};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    var u=p.units||{}, kl=LEN[u.length], kf=FORCE[u.force], km=MOM[u.moment], ks=STRESS[u.stress||'ksi'];
+    if(!kl) out.err.push('Unknown length unit "'+(u.length||'')+'" (accepted: in, ft).');
+    if(!kf) out.err.push('Unknown force unit "'+(u.force||'')+'" (accepted: kip, lb).');
+    if(!km) out.err.push('Unknown moment unit "'+(u.moment||'')+'" (accepted: kip-in, kip-ft, lb-in, lb-ft).');
+    if(!ks) out.err.push('Unknown stress unit "'+(u.stress||'')+'" (accepted: ksi, psi).');
+    var b=p.basis||{};
+    if(b.factored!==true) out.err.push('The loads must be factored (basis.factored = true): this tool checks LRFD factored combinations.');
+    if(b.method && String(b.method).toUpperCase()!=='LRFD') out.err.push('basis.method "'+b.method+'" is not LRFD.');
+    var cv=p.signConvention;
+    if(cv!=='lightPole-v1' && cv!=='basePlate-v1') out.err.push('Unknown signConvention "'+(cv||'')+'" (accepted: lightPole-v1, basePlate-v1; HANDOFF.md §4.11).');
+    if(!Array.isArray(p.groups) || !p.groups.length) out.err.push('The payload has no anchor groups.');
+    if(out.err.length) return out;
+    if(kf!==1||km!==1||kl!==1) out.warn.push('Units converted to kip, kip-in and in (length × '+kl+', force × '+kf+', moment × '+km+').');
+    p.groups.forEach(function(g,gi){
+      var gid=String(g&&g.id!=null? g.id : 'g'+(gi+1)), lab=(g&&g.label)||('Group '+(gi+1)), E=function(m){ out.err.push(lab+': '+m); };
+      if(!g || typeof g!=='object'){ E('not an object.'); return; }
+      var a=g.anchor||{}, base=g.base||{}, pl=base.plate||{}, pole=base.pole||{}, pr=g.pier||{};
+      var set={anchor:{},plate:{},col:{},conc:{},standoff:{},grout:{}};
+      if(a.pattern!=='circle') E('anchor.pattern "'+a.pattern+'" is not supported (circle only).');
+      if(!(isNum(a.n) && a.n>=3 && Math.round(a.n)===a.n)) E('anchor.n must be an integer ≥ 3.');
+      if(!(isNum(a.BC) && a.BC>0)) E('anchor.BC must be positive.');
+      if(a.theta0!==undefined && !isNum(a.theta0)) E('anchor.theta0 is not a number.');
+      var dia=isNum(a.dia)? a.dia*kl : NaN, sp=LIB.anchorDias.find(function(x){ return Math.abs(x.d-dia)<1e-6; });
+      if(!sp) E('anchor.dia '+a.dia+' is not a listed rod diameter.');
+      var gr=LIB.anchorGrades.find(function(x){ return x.id===a.grade; }); if(!gr) E('anchor.grade "'+a.grade+'" is unknown (e.g. f1554_36, f1554_55, f1554_105).');
+      var hd=HEAD[a.nut||a.head||'heavyHex']; if(!hd) E('anchor.nut "'+(a.nut||a.head)+'" is unknown.');
+      if(!(isNum(a.hef) && a.hef>0)) E('anchor.hef must be positive.');
+      set.anchor={pattern:'circle',nCircle:a.n,BC:a.BC*kl,theta0:isNum(a.theta0)?a.theta0:0,dia:dia,grade:a.grade,head:hd,hef:a.hef*kl,torqued:!!a.torqued};
+      if(base.type==='doubleNut'){
+        if(!(isNum(base.standoffClear) && base.standoffClear>=0)) E('base.standoffClear must be ≥ 0.');
+        set.standoff={type:'clamp',z:(base.standoffClear||0)*kl}; set.grout={present:false};
+        if(base.grout) out.warn.push(lab+': grout under a double-nut base is taken as non-structural (the rods carry the compression).');
+      } else if(base.type==='flush'){ set.standoff={type:'none'}; set.grout={present:!!base.grout}; }
+      else E('base.type "'+base.type+'" is not supported (doubleNut, flush).');
+      if(pl.shape==='circle'){ if(!(isNum(pl.D)&&pl.D>0)) E('base.plate.D must be positive.'); set.plate={shape:'circle',D:pl.D*kl,B:pl.D*kl,N:pl.D*kl}; }
+      else if(pl.shape==='rect'){ if(!(isNum(pl.B)&&pl.B>0&&isNum(pl.N)&&pl.N>0)) E('base.plate.B / N must be positive.'); set.plate={shape:'rect',B:pl.B*kl,N:pl.N*kl}; }
+      else E('base.plate.shape "'+pl.shape+'" is unknown (circle, rect).');
+      if(!(isNum(pl.t)&&pl.t>0)) E('base.plate.t must be positive.'); else set.plate.t=pl.t*kl;
+      if(isNum(pl.Fy)){ var pg=LIB.plateGrades.find(function(x){ return Math.abs(x.Fy-pl.Fy*ks)<1e-9; }); if(pg) set.plate.grade=pg.id; else E('base.plate.Fy '+pl.Fy+' matches no plate grade (36, 42, 50, 60, 65 ksi).'); }
+      if(base.type==='doubleNut' && pl.shape==='circle' && !(pole.shape==='round' && isNum(pole.D)&&pole.D>0)) E('a circular plate needs base.pole {shape:"round", D}.');
+      if(pole.shape==='round' && isNum(pole.D)){
+        var Dp=pole.D*kl, hs=LIB.hss.find(function(x){ return x.kind==='HSSround' && Math.abs(x.b-Dp)<0.01; });
+        if(hs) set.col={custom:false,shapeType:'HSS',shape:hs.name};
+        else { set.col={custom:true,d:Dp,b:Dp}; out.warn.push(lab+': pole Ø'+f(Dp,3)+' in is not a listed round HSS; entered as a custom '+f(Dp,3)+' × '+f(Dp,3)+' in column (the bending line uses D = '+f(Dp,3)+' in; the drawings show a square).'); }
+      } else if(pole.shape) E('base.pole.shape "'+pole.shape+'" is not supported (round).');
+      if(pr.shape!=='circle' && pr.shape!=='square') E('pier.shape "'+pr.shape+'" is unknown (circle, square).');
+      if(!(isNum(pr.D)&&pr.D>0)) E('pier.D must be positive.');
+      if(!(isNum(pr.fc)&&pr.fc>0)) E('pier.fc must be positive.');
+      if(pr.depth!==undefined && !(isNum(pr.depth)&&pr.depth>0)) E('pier.depth must be positive.');
+      var Dpier=(pr.D||0)*kl;
+      set.conc={shape:pr.shape==='circle'?'circle':'rect',D:Dpier,Bx:Dpier,By:Dpier,fc:(pr.fc||0)*ks,cracked:pr.cracked!==false,plate_off_x:0,plate_off_y:0,ca_override:false};
+      if(isNum(pr.depth)) set.conc.H=pr.depth*kl;
+      if(pr.longBars||pr.ties) out.warn.push(lab+': the shaft reinforcement (bars / ties) is not imported — anchor reinforcement is not available for this layout; breakout is checked as plain concrete (Condition B).');
+      var combos=[];
+      if(!Array.isArray(g.combos) || !g.combos.length) E('no combinations.');
+      else g.combos.forEach(function(c,ci){
+        var bad=['P','Vx','Vy','Mx','My'].filter(function(k){ return !isNum(c[k]); });
+        if(c.T!==undefined && !isNum(c.T)) bad.push('T');
+        if(bad.length){ E('combination '+(ci+1)+' ('+(c.name||'')+'): '+bad.join(', ')+' not a finite number.'); return; }
+        var P=c.P*kf, Vx=c.Vx*kf, Vy=c.Vy*kf, Mx=c.Mx*km, My=c.My*km, T=(c.T||0)*km, o;
+        /* lightPole-v1: P + = compression (down); Mx = moment of a +x push (force × height), My = of a +y push; T + CCW.
+           this tool: P + = tension; right-hand moments: a +x push at height h is +My, a +y push is −Mx. */
+        if(cv==='lightPole-v1') o={name:String(c.name||('C'+(ci+1))),P:-P,Vx:Vx,Vy:Vy,Mx:-My,My:Mx};
+        else o={name:String(c.name||('C'+(ci+1))),P:P,Vx:Vx,Vy:Vy,Mx:Mx,My:My};
+        if(Math.abs(T)>1e-12) o.T=T;
+        combos.push(o);
+      });
+      out.groups.push({id:gid,label:lab,set:set,combos:combos,lpRef:g.lpRef||null});
+    });
+    return out;
+  }
+  function dataFor(G){
+    /* start from the current design's group data, overwrite the imported fields, reinforcement off */
+    var d=bpGroupSnap();
+    Object.keys(G.set).forEach(function(k){ d[k]=Object.assign({},d[k]||{},G.set[k]); });
+    d.combos=G.combos.map(function(c){ return Object.assign({},c); });
+    d.tRebar=Object.assign({},d.tRebar,{present:false}); d.vRebar=Object.assign({},d.vRebar,{present:false}); d.ped=Object.assign({},d.ped,{present:false});
+    d.detailCombo=0;
+    return d;
+  }
+  function apply(p,chk,o,via){
+    if(chk.err.length) return {err:chk.err};
+    var picked=o.mode==='all'? chk.groups : [chk.groups[o.pick||0]];
+    var src={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',project:p.project||'',via:via||'pull',
+             adoptedAt:new Date().toISOString(),inputsHash:p.inputsHash||null,signConvention:p.signConvention,mode:o.mode,
+             groups:picked.map(function(G){ return {id:G.id,label:G.label}; }),notes:(p.notes||[]).slice(0,20)};
+    if(o.mode==='all'){
+      var groups=picked.map(function(G){ return {id:G.id,label:G.label,srcId:G.id,data:dataFor(G)}; });
+      var ns=bpGroupState(groups[0].data); ns.groups=groups; ns.groupActive=0; S=ns;
+    } else {
+      var G=picked[0], ns2=bpGroupState(dataFor(G));
+      if(bpGroupsOn()){ ns2.groups=S.groups; ns2.groupActive=S.groupActive; ns2.groups[ns2.groupActive].srcId=G.id; ns2.groups[ns2.groupActive].label=G.label; }
+      S=ns2;
+    }
+    bpGroupSync();
+    if(!S.bxSrc || typeof S.bxSrc!=='object') S.bxSrc={};
+    S.bxSrc.anchorGroup=src;
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    return {ok:true,err:[]};
+  }
+  function openDialog(p,via){
+    var chk=check(p);
+    if(chk.err.length){ alert('Anchor-group hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    var old=document.getElementById('bxAgOverlay'); if(old) old.remove();
+    var ov=h('div','modal'); ov.id='bxAgOverlay'; var box=h('div','modalBox wide'); ov.appendChild(box);
+    box.appendChild(h('h3',null,'Import anchor group'+(chk.groups.length>1?'s':'')+' from '+esc(p.producer||'?')));
+    box.appendChild(h('div','note','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+' &middot; <b>sent</b> '+esc(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+
+      ' &middot; <b>project</b> '+esc((p.project&&p.project.name)||'—')+' &middot; factored LRFD'+(p.basis&&p.basis.combos?' ('+esc(p.basis.combos)+')':'')+(via==='file'?' &middot; from a JSON file':'')));
+    box.appendChild(h('div','warnBox','<b>Sign convention ('+esc(p.signConvention)+').</b> '+(p.signConvention==='lightPole-v1'
+      ? 'The Light Pole tool sends P + = compression, M<sub>x</sub> = moment of a push toward +x and M<sub>y</sub> of a push toward +y. This tool uses P + = tension and right-hand moments, so <b>P = −P<sub>LP</sub>, M<sub>y</sub> = +M<sub>x,LP</sub>, M<sub>x</sub> = −M<sub>y,LP</sub></b> (a push toward +x puts the −x anchors in tension). V<sub>x</sub>, V<sub>y</sub> and T (+ counter-clockwise) are unchanged.'
+      : 'The payload is already in this tool\'s convention (P + = tension, right-hand moments).')));
+    if(chk.warn.length) box.appendChild(h('div','warnBox',chk.warn.map(esc).join('<br>')));
+    if(p.notes&&p.notes.length) box.appendChild(h('div','note','<b>Sender notes:</b><br>'+p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>')));
+    var t=h('table','tbl'); t.innerHTML='<tr><th class="lft">Group</th><th>Anchors</th><th>Plate</th><th>Pier</th><th>Stand-off</th><th>Combinations</th></tr>';
+    chk.groups.forEach(function(G){ var s=G.set, tr=h('tr');
+      tr.innerHTML='<td class="lft">'+esc(G.label)+'</td><td>'+s.anchor.nCircle+' × '+f(s.anchor.dia,3)+' in '+esc(s.anchor.grade)+' on BC '+f(s.anchor.BC,2)+' in, θ₀ '+f(s.anchor.theta0,1)+'°, h<sub>ef</sub> '+f(s.anchor.hef,2)+' in</td>'+
+        '<td>'+(s.plate.shape==='circle'?'Ø'+f(s.plate.D,2):f(s.plate.B,2)+' × '+f(s.plate.N,2))+' × '+f(s.plate.t,3)+' in</td><td>'+(s.conc.shape==='circle'?'round Ø':'square ')+f(s.conc.D,2)+' in, f′c '+f(s.conc.fc,2)+' ksi'+(s.conc.H?', depth '+f(s.conc.H,1)+' in':'')+'</td>'+
+        '<td>'+(s.standoff.type==='clamp'?'double nut, clear '+f(s.standoff.z,2)+' in':'flush')+'</td><td>'+G.combos.length+(G.combos.some(function(c){ return c.T; })?' (with torsion)':'')+'</td>'; t.appendChild(tr); });
+    box.appendChild(t);
+    var md=h('div'); md.style.margin='8px 0';
+    md.innerHTML='<label><input type="radio" name="bxAgMode" id="bxAgAll"'+(chk.groups.length>1?' checked':'')+'> import every group into this project (anchor-group picker; replaces this project\'s groups)</label><br>'+
+      '<label><input type="radio" name="bxAgMode" id="bxAgOne"'+(chk.groups.length>1?'':' checked')+'> import one group into the current design: </label>';
+    var sel=document.createElement('select'); sel.id='bxAgPick'; chk.groups.forEach(function(G,i){ var op=document.createElement('option'); op.value=i; op.textContent=G.label; sel.appendChild(op); }); md.appendChild(sel);
+    box.appendChild(md);
+    box.appendChild(h('div','note','<b>Will overwrite</b> in each imported group: the anchors (bolt circle, diameter, grade, nut, h<sub>ef</sub>, torqued), the base plate, the column (pole), the pier (shape, size, f′c, cracked, depth), the stand-off and grout, and the load combinations (replaced). Anchor, shear and pedestal reinforcement are switched off. Project information, units and report settings are kept. The source is recorded in the project and printed in the report.'));
+    var foot=h('div','modalFoot'), ca=h('button',null,'Cancel'), go=h('button','primary','Import'); go.id='bxAgGo';
+    foot.appendChild(ca); foot.appendChild(go); box.appendChild(foot);
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      var o={mode:document.getElementById('bxAgAll').checked?'all':'one',pick:+sel.value};
+      var r=apply(p,chk,o,via); if(!r.ok){ alert(r.err.join('\n')); return; }
+      ov.remove(); autosave(); try{ refreshAll(); }catch(e){} refreshBar();
+    });
+    document.body.appendChild(ov);
+    return {overlay:ov,chk:chk};
+  }
+  function resultPayload(){
+    var src=S.bxSrc&&S.bxSrc.anchorGroup; if(!src) return null;
+    bpGroupSync();
+    var n=bpGroupsOn()? S.groups.length : 1, res=[];
+    for(var i=0;i<n;i++){
+      var g=bpGroupsOn()? S.groups[i] : {id:(src.groups&&src.groups[0]&&src.groups[0].id)||'g1',label:(src.groups&&src.groups[0]&&src.groups[0].label)||'Group 1'};
+      var r=bpGroupResultFor(i);
+      res.push(r.error? {groupId:g.srcId||g.id,label:g.label,error:r.error} :
+        {groupId:g.srcId||g.id,label:g.label,governing:{dcr:r.gov.dcr,mode:r.gov.label,combo:r.gov.combo},tension:r.tension,shear:r.shear,
+         interaction:r.interaction,ok:r.gov.dcr<=1+1e-9,warnings:r.warnings});
+    }
+    return {_schema:RES_SCHEMA,schemaVersion:1,units:{force:'kip',moment:'kip-in',length:'in'},
+      source:{producer:src.producer,producedAt:src.producedAt,inputsHash:src.inputsHash},
+      notes:['Design ratios (demand / design strength) by ACI 318-19 Ch. 17 in the Base Plate & Anchor Bolt Designer; the governing value is the largest of every check (plate, anchors, concrete) over every combination.'],
+      results:res};
+  }
+  function sendResult(interactive){
+    var pl=resultPayload(); if(!pl){ if(interactive) alert('No anchor-group hand-off has been imported into this project.'); return null; }
+    var r=BridgeXfer.publish(RES_CH,pl,'Base Plate & Anchor Bolt Designer','BasePlateAnchorDesigner.html');
+    if(interactive){
+      if(r.error){ if(confirm(r.error+'\n\nSave the result as a JSON file instead?')) BridgeXfer.exportFile(RES_CH,r.payload||pl); }
+      else if(confirm('Result sent on channel anchorGroupResult ('+pl.results.map(function(x){ return x.label+': D/C '+f(x.governing&&x.governing.dcr,3); }).join('; ')+').\n\nAlso save it as a JSON file (Export hand-off)?')) BridgeXfer.exportFile(RES_CH,r.payload);
+    }
+    return r;
+  }
+  function sourceLine(){
+    var s=S.bxSrc&&S.bxSrc.anchorGroup; if(!s) return '';
+    return 'Anchor group'+((s.groups||[]).length>1?'s':'')+' '+(s.groups||[]).map(function(g){ return g.label; }).join(', ')+' from '+(s.producer||'?')+', '+(s.producedAt? new Date(s.producedAt).toLocaleString():'?')+
+      ((s.project&&s.project.name)?' ('+s.project.name+')':'')+(s.via==='file'?', via JSON file':'')+' — signConvention '+(s.signConvention||'?');
+  }
+  function refreshBar(){
+    var nd=document.getElementById('bxAgNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
+    var sl=document.getElementById('bxAgSrc'); if(sl) sl.textContent=sourceLine();
+  }
+  window.bxPullAnchorGroup=function(){
+    var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+    if(!r.ok){ alert('Pull from Light Pole: '+r.error+(r.empty?'\n\nIn the Light Pole and Sign Post tool, send the anchor groups first (or use Import hand-off (JSON)).':'')); return null; }
+    return openDialog(r.payload,'pull');
+  };
+  /* "Import hand-off (JSON)": an anchorGroup file opens this dialog; any other file goes to the memberReactions receiver as before */
+  window.bxImportHandoff=function(ev){
+    var fl=ev && ev.target && ev.target.files && ev.target.files[0]; if(!fl) return;
+    var tgt=ev.target, fr=new FileReader();
+    fr.onload=function(){ var p=null; try{ p=JSON.parse(fr.result); }catch(e){}
+      if(p && p._schema===SCHEMA){ tgt.value=''; openDialog(p,'file'); }
+      else bxImportMemberReactions({target:{files:[fl],set value(v){ tgt.value=v; }}});
+    };
+    fr.readAsText(fl);
+  };
+  window.bxAgSourceLine=sourceLine;
+  window.bxAg={check:check,apply:apply,openDialog:openDialog,resultPayload:resultPayload,sendResult:sendResult,sourceLine:sourceLine,refreshBar:refreshBar};
+  document.addEventListener('DOMContentLoaded',function(){ setTimeout(refreshBar,200); });
+  window.addEventListener('focus',refreshBar); window.addEventListener('storage',refreshBar); setInterval(refreshBar,2000);
 })();
 </script>
 </body>
