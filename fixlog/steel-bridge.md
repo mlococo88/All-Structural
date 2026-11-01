@@ -3261,3 +3261,27 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-import-cll — Construction live load on import (D-1 of docs/steel-bridge-comparison.md §d)
+### Change (calculation input on import)
+- `engine/legacy.js fromParts`, before `if (P.__dlRest) {`: the old project's construction live load cll (psf; GirderDetail's
+  `df.bridge.cll`, else Preliminary sizing's `suggest.cll`) becomes each girder's `girders[i].loadsManual.CL = cll/1000 × b_eff/12` (klf), as
+  GirderDetail's Structural analysis (`GM.sa.compute`: `wCL = (nm(b.cll) || 0) / 1000 * beffFt`). An entered CL is kept; a file without cll is
+  unchanged. Import note: "Construction live load <cll> psf (<source>) × each girder's b_eff …". Before: not read (kept under
+  legacy.unmapped), so M_CL = V_CL = 0 on every imported project.
+- No other deck-placement input was missing: the pour sequence (sa.seqOn, seqMod, seqCustom) and f_ℓ were already imported;
+  GirderDetail's Girder section γ_cdc 1.25 / γ_ccl 1.50 equal this app's constructibility factors (gd.gs.gam stays unmapped, unused).
+### §4 callout
+- Provisions: AASHTO LRFD 10th Ed. Art. 3.4.2.1 (construction loads, γ 1.5 on CL), 6.10.3.4 (deck placement), 6.10.3.2 (GS14, GS15),
+  6.10.3.3 (GS16).
+- Before: CL = 0 → GS14/GS15 11–15 % and GS16 16–19 % below GirderDetail's recorded deck-placement results on every unskewed project
+  (comparison §d). After: GS14 within +0.67 / −0.80 %, GS15 within −0.95 % (C-3 pour boundaries, C-5 cross-frame weight); GS16 up to
+  −5.8 % (capacity: V_cr with the panel d_o of this project's stiffener layout, 52.8 in at Pier 2 of curb G1, vs GirderDetail's 60 in rows;
+  V_u 119.7 vs 118.8 kip, C-7).
+- Hand check (builtin, cll = 20 psf): G2 b_eff = 114 in = 9.5 ft → w_CL = 0.020 × 9.5 = 0.190 klf; G1 b_eff 96 in = 8.0 ft → 0.160 klf.
+  M_CL max G2 334.953 kip-ft vs GirderDetail 334.934 (0.006 %); V_CL 13.495 vs 13.400 kip (C-7).
+### Tests
+- tests/engine/legacy.test.mjs: new test (CL per girder, the note, cll read, M_CL/V_CL vs GirderDetail on builtin G2 and curb MassDOT G1,
+  a file without cll unchanged); the 20-project import test unchanged.
+### Other copies
+- None.

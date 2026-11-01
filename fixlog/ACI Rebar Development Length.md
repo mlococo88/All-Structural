@@ -1267,3 +1267,6 @@ index be12315..75bfaab 100644
 
 ## 2026-11-01 — PR: claude/rpt-cbc — no change to this file
 - The RBRP Report tab of this tool (entry above) is synced to the Development & Splice tab of `Concrete Beam Capacity.html` (CLAUDE.md §3), whose combined Report tab also uses `rbrModel()` as its "C. Development & Splice" chapter. Tools that contain the snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html`.
+
+## 2026-11-01 — PR: claude/cbc-hide-dev-report — no change to this file
+- Inside `Concrete Beam Capacity.html` the embedded copy of this tool no longer shows its own Report tab button (the suite's combined Report tab covers it); this file keeps its Report tab. Recorded as an intentional embedded difference (CLAUDE.md §3). Tools that contain the snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html`.
