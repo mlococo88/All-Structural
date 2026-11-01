@@ -2685,3 +2685,6 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   Welds 14 locations and 8 transitions, 122 ratios equal (built-in; RIDOT + sidewalk the same); largest difference 0.
 ### Other copies
 - None.
+- Display fix found by the custom tests (`engine/studs.js`, the SC1 step `scz<i>.ok`, anchor `label: 'Fatigue pitch (SC1)'`): a pitch zone with
+  no fatigue shear (V_f = 0: p_req = ∞) wrote its substitution as `24.00 \le —`, which KaTeX cannot parse. Before
+  `${n2(z.preq)}`; after `${isFinite(z.preq) ? n2(z.preq) : '\\infty'}`. The value, ratio (0) and pass state are unchanged.
