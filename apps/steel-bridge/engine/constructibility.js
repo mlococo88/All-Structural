@@ -30,6 +30,7 @@
   const ES = 29000, ED = 'AASHTO LRFD 10th Ed.';
   const St = () => window.SharedSteps, SEC = () => window.SBDSections, FX = () => window.SBDFlexure, SH = () => window.SBDShear;
   const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), n4 = x => St().n(x, 4), g0 = x => St().g(x, 0);
+  const nf = x => Math.abs(x * 100 - Math.round(x * 100)) < 1e-9 ? n2(x) : n4(x);   // a load factor: 2 decimals, 4 when × η (ETAC)
   const pa = x => `(${n2(x)})`;
   const r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2), r3 = v => +(+v).toFixed(3);
   const okv = (dem, cap) => (cap >= dem - 1e-9 ? 'OK' : 'NG');
@@ -37,9 +38,14 @@
   /* factors(over): deck placement load factors (GirderDetail's Girder section gam.cdc, gam.ccl): γ_DC 1.25 on M_DCc (or M_DC1), 1.50 on the
      construction live load (AASHTO LRFD 10th Ed. 3.4.2.1). */
   // FONE (2026-11-01): the one source of the deck placement factors; engine/shear.js factors(), the Cross-frames bracing M_u and the Splices
-  // tab take them from here. No owner η or m (the owner load rules OWN6–OWN8, 2026-10-15: η on the Strength limit states of the permanent
-  // structure and m on HL-93 only; not on deck placement).
+  // tab take them from here. factorsOwner(lf, over) (ETAC, engineer decision 2026-11-01): × the owner's η (lf.etaC = η, SBDOwners.loadFactors;
+  // 3.4.2.1 evaluates construction at the Strength limit state, Eq. 1.3.2.1-2); m is not applied (HL-93 only). projFactors(P): the project's
+  // (P.ownerRules). The overhang bracket factors (OH1–OH5) are these too (since 2026-11-01; P.constr.oh.gam is kept in the file, unused).
   function factors(over) { return { cdc: 1.25, ccl: 1.50, ...(over || {}) }; }
+  function factorsOwner(lf, over) { const G = factors(over), e = lf && +lf.etaC > 0 ? +lf.etaC : 1; return { ...G, cdc: G.cdc * e, ccl: G.ccl * e, eta: e, base: { cdc: G.cdc, ccl: G.ccl } }; }
+  function lfOf(P) { const O = window.SBDOwners, own = (P && P.ownerRules) || {}; return O ? O.loadFactors(own.owner || 'AASHTO', own.eta, ((P && P.xs) || {}).nb || 0) : null; }
+  function projFactors(P) { return factorsOwner(lfOf(P)); }
+  const etaNote = G => G && G.eta && G.eta !== 1 ? ` Owner η = ${n3(G.eta)} on both (3.4.2.1 at the Strength limit state, Eq. 1.3.2.1-2; engineer decision 2026-11-01; m not applied): γ_DC = ${n2(G.base.cdc)}(${n3(G.eta)}) = ${n4(G.cdc)}, γ_CL = ${n2(G.base.ccl)}(${n3(G.eta)}) = ${n4(G.ccl)}.` : '';
   const fAt = (M, sec, y) => -M * 12 * (y - sec.yb) / sec.I;   // tension +
   const plates = q => ({ D: q.D, tw: q.tw, topB: q.topB, topT: q.topT, botB: q.botB, botT: q.botT });
   const rhOf = (s, q, mat) => SEC().hybrid(plates(q), s, { Fyt: mat.Fyt, Fyb: mat.Fyb, Fyw: mat.Fyw }, 'cn').Rh;   // GirderDetail rhFactor on the steel section
@@ -112,8 +118,8 @@
   function worked(r) {
     const w = St().work('cn'), G = r.G, s = r.s, cF = r.conC, tF = r.conT, lt = r.ltC, up = r.con.up, tbl = `${ED} Art. 3.4.2.1`;
     const seq = r.MDCc !== 0;
-    w.add({ id: 'Mc', label: 'Deck placement factored moment, noncomposite steel section', sym: 'M_{c}', eq: `\\gamma_{DC}M_{${seq ? 'DCc' : 'DC1'}} + \\gamma_{CL}M_{CL}`, sub: `${n2(G.cdc)}${pa(seq ? r.MDCc : r.MDC1)} + ${n2(G.ccl)}${pa(r.MCL)}`, value: r.Mc, unit: 'kip-ft', d: 1, ref: tbl,
-      note: seq ? `M_DCc: the noncomposite moment envelope of the deck placement sequence (Art. 6.10.3.4.1; Analysis tab, an.seq.MDCc); M_DC1 with the deck cast at once = ${n2(r.MDC1)} kip-ft.` : 'M_DC1: steel and the whole wet deck on the steel section (no pour sequence given).' });
+    w.add({ id: 'Mc', label: 'Deck placement factored moment, noncomposite steel section', sym: 'M_{c}', eq: `\\gamma_{DC}M_{${seq ? 'DCc' : 'DC1'}} + \\gamma_{CL}M_{CL}`, sub: `${nf(G.cdc)}${pa(seq ? r.MDCc : r.MDC1)} + ${nf(G.ccl)}${pa(r.MCL)}`, value: r.Mc, unit: 'kip-ft', d: 1, ref: tbl,
+      note: (seq ? `M_DCc: the noncomposite moment envelope of the deck placement sequence (Art. 6.10.3.4.1; Analysis tab, an.seq.MDCc); M_DC1 with the deck cast at once = ${n2(r.MDC1)} kip-ft.` : 'M_DC1: steel and the whole wet deck on the steel section (no pour sequence given).') + etaNote(G) });
     ['top', 'bot'].forEach(k => w.add({ id: 'f.' + k, label: `Stress, ${k === 'top' ? 'top' : 'bottom'} of steel (tension +)`, sym: `f_{${k}}`, eq: '\\frac{-M_{c}(12)(y - \\bar{y})}{I}', sub: `\\frac{-${pa(r.Mc)}(12)(${n3(k === 'top' ? r.d : 0)} - ${n3(s.yb)})}{${g0(s.I)}}`, value: r.con[k], unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.1.1.1a`, note: 'Steel section: see sec.s.yb, sec.s.I.' }));
     w.add({ id: 'fbu', label: `Compression flange: the ${cF.lab} flange (M_c ${up ? '≥' : '<'} 0)`, sym: 'f_{bu}', eq: `\\max(-f_{${up ? 'top' : 'bot'}}, 0)`, sub: n2(-r.con[up ? 'top' : 'bot']), value: cF.f, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.3.2.1`, note: 'Stress at the extreme fiber of the flange (conservative).' });
     w.add({ id: 'Dc', label: 'Depth of the web in compression, steel section', sym: 'D_{c}', eq: up ? '(d - t_{ft}) - \\bar{y}' : '\\bar{y} - t_{fb}', sub: up ? `(${n3(r.d)} - ${n3(r.topT)}) - ${n3(s.yb)}` : `${n3(s.yb)} - ${n3(r.botT)}`, value: r.DcC, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
@@ -145,7 +151,7 @@
     w.add({ id: 'Fcrw', label: 'Nominal web bend-buckling resistance', sym: 'F_{crw}', eq: '\\frac{0.9Ek}{(D/t_{w})^{2}} \\le \\min(R_{h}F_{yc}, \\frac{F_{yw}}{0.7})', sub: `\\frac{0.9(29{,}000)(${n3(r.webC.k)})}{(${n3(r.D)}/${n4(r.tw)})^{2}} = ${n2(r.webC.Fe)};\\ \\min(${n2(r.RhC * cF.Fy)}, ${n2(r.mat.Fyw / 0.7)})`, value: r.webC.F, unit: 'ksi', d: 3, ref: `${ED} Eq. 6.10.1.9.1-1` });
     q = dem('web'); w.add({ id: 'web.ok', label: 'GS15, web bend-buckling', sym: 'f_{bu}', eq: '\\le \\phi_{f}F_{crw}', sub: `${n2(q.demand)} \\le ${n2(q.capacity)}`, value: okv(q.demand, q.capacity), unit: '', ref: `${ED} Eq. 6.10.3.2.1-3`, ok: q.ok, note: `Ratio ${n3(q.ratio)}.` });
     q = dem('tension'); w.add({ id: 'tens.ok', label: `GS15, ${tF.lab} flange (tension) yielding`, sym: 'f_{bu} + f_{\\ell}', eq: '\\le \\phi_{f}R_{h}F_{yt}', sub: `${n2(tF.f)} + ${n2(r.flC)} = ${n2(q.demand)} \\le 1.0(${n3(r.RhC)})(${n2(tF.Fy)}) = ${n2(q.capacity)}`, value: okv(q.demand, q.capacity), unit: '', ref: `${ED} Eq. 6.10.3.2.2-1`, ok: q.ok, note: `Ratio ${n3(q.ratio)}. f_ℓ of the tension flange: the entered first-order value (no amplification for a tension flange).` });
-    w.add({ id: 'Vu', label: 'Deck placement factored shear', sym: 'V_{u}', eq: '\\gamma_{DC}V_{DC1} + \\gamma_{CL}V_{CL}', sub: `${n2(G.cdc)}(${n2(r.VDC1)}) + ${n2(G.ccl)}(${n2(r.VCL)})`, value: r.VuC, unit: 'kip', d: 2, ref: tbl, note: 'V_DC1: steel and the whole wet deck (GirderDetail GS16).' });
+    w.add({ id: 'Vu', label: 'Deck placement factored shear', sym: 'V_{u}', eq: '\\gamma_{DC}V_{DC1} + \\gamma_{CL}V_{CL}', sub: `${nf(G.cdc)}(${n2(r.VDC1)}) + ${nf(G.ccl)}(${n2(r.VCL)})`, value: r.VuC, unit: 'kip', d: 2, ref: tbl, note: 'V_DC1: steel and the whole wet deck (GirderDetail GS16).' + etaNote(G) });
     const ws = St().work('cn.sh'); SH().panelSteps(ws, 'p', r.sh, { D: r.D, tw: r.tw, Fyw: r.mat.Fyw, doIn: r.do, end: r.end, flgA: r.flgA }); w.take(ws.steps.filter(z => !/\.(rat|Vn)$/.test(z.id)));
     q = dem('shear'); w.add({ id: 'sh.ok', label: 'GS16, web shear during deck placement (no tension-field action)', sym: 'V_{u}', eq: '\\le \\phi_{v}V_{cr} = \\phi_{v}CV_{p}', sub: `${n2(q.demand)} \\le 1.0(${n4(r.sh.C)})(${n2(r.sh.Vp)}) = ${n2(q.capacity)}`, value: okv(q.demand, q.capacity), unit: '', ref: `${ED} Eq. 6.10.3.3-1`, ok: q.ok, note: `Ratio ${n3(q.ratio)}.` });
     return w.steps;
@@ -260,15 +266,15 @@
     const w = St().work('oh'), L = R.L, c = r.c, tf = r.tf, s = r.s, ref = `${ED} Art. C6.10.3.4`;
     if (!R.given) {
       w.add({ id: 'wu', label: 'Factored load on the overhang brackets (deck × γ_DC; forms, screed rail, railing, walkway and construction LL × γ construction)', sym: 'w_{u}', eq: '\\gamma_{DC}w_{deck} + \\gamma_{CL}(w_{form} + w_{screed} + w_{rail} + w_{walk} + w_{CLL})',
-        sub: `${n2(R.gd)}(${n4(L.deck)}) + ${n2(R.gc)}(${n4(L.form)} + ${n4(L.screed)} + ${n4(L.rail)} + ${n4(L.walk)} + ${n4(L.cll)})`, value: R.wu, unit: 'kip/ft', d: 4, ref: `${ED} Art. 3.4.2.1`,
-        note: `w_deck = w_c t_OH b_OH = ${n3(R.p.wc)}(${n2(R.p.tOH)}/12)(${n2(R.p.wOH)}/12); w_form = q_form b_OH; w_CLL = q_CL b_CL = ${n3(R.p.qCL)}(${n2(R.p.bCL)}/12).` });
+        sub: `${nf(R.gd)}(${n4(L.deck)}) + ${nf(R.gc)}(${n4(L.form)} + ${n4(L.screed)} + ${n4(L.rail)} + ${n4(L.walk)} + ${n4(L.cll)})`, value: R.wu, unit: 'kip/ft', d: 4, ref: `${ED} Art. 3.4.2.1`,
+        note: `γ_DC, γ_CL: the deck placement factors of the Constructibility tab (with the owner's η; one source since 2026-11-01). w_deck = w_c t_OH b_OH = ${n3(R.p.wc)}(${n2(R.p.tOH)}/12)(${n2(R.p.wOH)}/12); w_form = q_form b_OH; w_CLL = q_CL b_CL = ${n3(R.p.qCL)}(${n2(R.p.bCL)}/12).` });
       w.add({ id: 'Fl', label: 'Horizontal flange force from the brackets, distributed', sym: 'F_{\\ell}', eq: 'w_{u}\\frac{a}{h_{b}}', sub: `${n4(R.wu)}\\frac{${n2(R.p.a)}}{${n2(R.p.hb)}}`, value: R.Fl, unit: 'kip/ft', d: 4, ref });
-      w.add({ id: 'Pl', label: 'Horizontal flange force from the finishing machine', sym: 'P_{\\ell}', eq: '\\gamma_{CL}P_{fm}\\frac{a}{h_{b}}', sub: `${n2(R.gc)}(${n2(R.p.Pfm)})\\frac{${n2(R.p.a)}}{${n2(R.p.hb)}}`, value: R.Pl, unit: 'kip', d: 4, ref });
+      w.add({ id: 'Pl', label: 'Horizontal flange force from the finishing machine', sym: 'P_{\\ell}', eq: '\\gamma_{CL}P_{fm}\\frac{a}{h_{b}}', sub: `${nf(R.gc)}(${n2(R.p.Pfm)})\\frac{${n2(R.p.a)}}{${n2(R.p.hb)}}`, value: R.Pl, unit: 'kip', d: 4, ref });
     } else {
       w.add({ id: 'Fl', label: 'Horizontal flange force from the brackets, distributed (as given)', sym: 'F_{\\ell}', eq: '', sub: '', value: R.Fl, unit: 'kip/ft', d: 4, ref });
       w.add({ id: 'Pl', label: 'Horizontal flange force from the finishing machine (as given)', sym: 'P_{\\ell}', eq: '', sub: '', value: R.Pl, unit: 'kip', d: 4, ref });
     }
-    w.add({ id: 'Mu', label: 'Vertical bending, steel section', sym: 'M_{u}', eq: '\\gamma_{DC}M_{DC1} + \\gamma_{CL}M_{CL}', sub: `${n2(R.gd)}${pa(r.MDC1)} + ${n2(R.gc)}${pa(r.MCL)}`, value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Art. 3.4.2.1`, note: 'M_DC1 with the whole deck cast at once (GirderDetail Deck overhang module).' });
+    w.add({ id: 'Mu', label: 'Vertical bending, steel section', sym: 'M_{u}', eq: '\\gamma_{DC}M_{DC1} + \\gamma_{CL}M_{CL}', sub: `${nf(R.gd)}${pa(r.MDC1)} + ${nf(R.gc)}${pa(r.MCL)}`, value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Art. 3.4.2.1`, note: 'M_DC1 with the whole deck cast at once (GirderDetail Deck overhang module).' });
     w.add({ id: 'fbu', label: `Compression flange: the ${c.lab} flange (extreme fiber)`, sym: 'f_{bu}', eq: '\\frac{|M_{u}|(12)c}{I}', sub: `\\frac{${n2(Math.abs(r.Mu))}(12)(${n3(c.lab === 'top' ? s.d - s.yb : s.yb)})}{${g0(s.I)}}`, value: r.fbu, unit: 'ksi', d: 3, ref: `${ED} Art. 6.10.1.1.1a` });
     w.add({ id: 'Ml', label: 'Flange lateral bending moment (bracing at the cross-frames; distributed load plus the finishing machine at midpoint)', sym: 'M_{\\ell}', eq: '\\frac{F_{\\ell}L_{b}^{2}}{12}(12) + \\frac{P_{\\ell}L_{b}}{8}', sub: `\\frac{${n4(R.Fl)}(${n2(r.Lb)})^{2}}{12}(12) + \\frac{${n4(R.Pl)}(${n2(r.LbIn)})}{8}`, value: r.Ml, unit: 'kip-in', d: 2, ref });
     [c, tf].forEach(f => w.add({ id: 'fl1.' + f.lab, label: `First-order lateral bending stress, ${f.lab} flange`, sym: `f_{\\ell1,${f.lab}}`, eq: '\\frac{M_{\\ell}}{t_{f}b_{f}^{2}/6}', sub: `\\frac{${n2(r.Ml)}}{${n3(f.t)}(${n2(f.b)})^{2}/6}`, value: f.fl1, unit: 'ksi', d: 3, ref: `${ED} Art. C6.10.1.6` }));
@@ -347,13 +353,13 @@
     const Lb = opt.Lb != null ? opt.Lb : (g.bracing && g.bracing.Lb) || 25;
     const braces = opt.braces || (() => { const b = []; sup.slice(0, -1).forEach((x0, k) => { const x1 = sup[k + 1], n = Math.max(1, Math.ceil((x1 - x0) / Lb - 1e-9)); for (let j = 0; j < n; j++) b.push(x0 + (x1 - x0) * j / n); }); b.push(Lend); return b; })();
     const dem = SH().demands(pl), ts = ((g.details || {}).transverseStiffener || {}), doIn = opt.do != null ? +opt.do : (ts.spacings && +ts.spacings[0]) || 0, doFt = doIn / 12, cont = sup.length > 2, ends = cont ? [sup[0], sup[sup.length - 1]] : sup;
-    const mat = { Fyt: +m.Fyf || 50, Fyb: +m.Fyf || 50, Fyw: +m.Fyw || 50 }, prj = { mat, G: factors(opt.G) };
+    const mat = { Fyt: +m.Fyf || 50, Fyb: +m.Fyf || 50, Fyw: +m.Fyw || 50 }, prj = { mat, G: opt.lf ? factorsOwner(opt.lf, opt.G) : factors(opt.G) };   // ETAC: opt.lf, the project's owner η (the app passes it)
     const at = A => x => FX().feAt(xs, A, x), D = Math.max(...zones.map(z => z.web.depth));
     const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, impl: opt.impl, sp: Lb }), v = dem.at(x);
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: hasDCc ? at(env.MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: v.DC1, CL: v.CL },
         LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, flC: opt.flC || 0, do: doIn, end: doIn > 0 && ends.some(s => Math.abs(x - s) <= doFt + 1e-6) }; });
     const ext = g.position === 'exterior', st = ((g.checks || {}).constr || {}).oh;
-    const ohP = opt.oh || (st && st.inputs ? { Rh: st.inputs.Rh, Cb: st.inputs.Cb, gam: { dc: st.inputs.gDC, cl: st.inputs.gCL }, a: st.inputs.a, hb: st.inputs.hb, loads: { wu: st.inputs.wu, Fl: st.inputs.Fl, Pl: st.inputs.Pl } } : {});
+    const ohP = opt.oh ? { ...opt.oh, gam: { dc: prj.G.cdc, cl: prj.G.ccl } } : (st && st.inputs ? { Rh: st.inputs.Rh, Cb: st.inputs.Cb, gam: { dc: st.inputs.gDC, cl: st.inputs.gCL }, a: st.inputs.a, hb: st.inputs.hb, loads: { wu: st.inputs.wu, Fl: st.inputs.Fl, Pl: st.inputs.Pl } } : { gam: { dc: prj.G.cdc, cl: prj.G.ccl } });   // ETAC: the bracket factors = the deck placement factors (a file's stored loads as given)
     const oh = ext ? { rows: ohRowsAt(sup, env, locs), p: ohP, mat: { Fyf: st && st.inputs && +st.inputs.Fy || mat.Fyt, Fyw: mat.Fyw } } : null;
     return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D };
   }
@@ -368,7 +374,7 @@
   function fromAnalysis(P, gi, AR, opt) {
     opt = opt || {};
     const g = P.girders[gi], GR = (window.SBDModel && window.SBDModel.GRADES) || {}, ms = P.materials.steel || {}, Fy = k => (GR[ms[k]] || {}).Fy || 50;
-    const mat = { Fyt: Fy('top'), Fyb: Fy('bot'), Fyw: Fy('web') }, prj = { mat, G: factors(opt.G) };
+    const mat = { Fyt: Fy('top'), Fyb: Fy('bot'), Fyw: Fy('web') }, prj = { mat, G: opt.G ? factors(opt.G) : projFactors(P) };   // ETAC (2026-11-01): the project's factors with the owner's η (was factors(): no η)
     const xs = AR.x, sup = AR.sup, Lend = AR.Lt, segs = g.segments;
     const zAt = x => { const s = segs.find(q => x >= q.x0 - 1e-9 && x < q.x1) || segs[segs.length - 1]; return plates(s); };
     const chg = segs.slice(0, -1).map(s => s.x1).filter(x => { const a = zAt(x - 0.01), b = zAt(x + 0.01); return ['D', 'tw', 'topB', 'topT', 'botB', 'botT'].some(k => a[k] !== b[k]); });
@@ -389,9 +395,9 @@
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: MDCc ? at(MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: vAt(st.DC1, x), CL: vAt(st.CL, x) },
         LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
     const ext = g.position === 'exterior';
-    const oh = ext ? { rows: ohRowsAt(sup, env, locs), p: opt.oh || (P.constr && P.constr.oh) || {}, mat: { Fyf: Math.min(mat.Fyt, mat.Fyb), Fyw: mat.Fyw } } : null;
+    const oh = ext ? { rows: ohRowsAt(sup, env, locs), p: { ...(opt.oh || (P.constr && P.constr.oh) || {}), gam: { dc: prj.G.cdc, cl: prj.G.ccl } }, mat: { Fyf: Math.min(mat.Fyt, mat.Fyb), Fyw: mat.Fyw } } : null;   // ETAC: bracket γ = the deck placement factors (one source; P.constr.oh.gam kept, unused)
     return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc };
   }
 
-  window.SBDConstr = { ES, OH_DEF, ohFill, factors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
+  window.SBDConstr = { ES, OH_DEF, ohFill, factors, factorsOwner, lfOf, projFactors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
 })();
