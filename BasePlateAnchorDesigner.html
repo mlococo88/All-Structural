@@ -2682,7 +2682,7 @@ function shearCasesCirc(cb, condA){
   rows.forEach(r=>{ const rr=bpCircShearRow(r.idx.map(i=>q[i]),dir,1,C.H,condA,false); r.ca1=rr.ca1; });
   const ca11=rows[0].ca1, s=rows.length>1? (rows[1].setback-rows[0].setback) : 0;
   const welded=!!S.shear.weldedPlate, multiRow=rows.length>1;
-  const ang=Math.atan2(dir.y,dir.x)*180/Math.PI, edgeName="pier edge toward "+fmt((ang+360)%360,1)+"°";
+  const ang=Math.atan2(dir.y,dir.x)*180/Math.PI, edgeName="pier (shear at "+fmt((ang+360)%360,1)+" deg)";
   const list=[];
   const maskFor=r=>g.pts.map((_,i)=>r.idx.includes(i));
   const push=(id,label,row,V,note)=>list.push({id,label,row,V,nRes:row.n,note,mask:maskFor(row)});
@@ -9808,7 +9808,7 @@ function drawBreakout(body,c){
     const cc=document.createElementNS(SVGNS,"circle"); cc.setAttribute("cx",X(ext.circ.cx)); cc.setAttribute("cy",Y(ext.circ.cy)); cc.setAttribute("r",ext.circ.R*sc); cp.appendChild(cc); host.appendChild(cp);
     const gg=document.createElementNS(SVGNS,"g"); gg.setAttribute("clip-path","url(#"+id+")"); host.appendChild(gg);
     ext.circ.squares.forEach(q=>{ const r=document.createElementNS(SVGNS,"rect"); r.setAttribute("x",X(q[0])); r.setAttribute("y",Y(q[3])); r.setAttribute("width",(q[1]-q[0])*sc); r.setAttribute("height",(q[3]-q[2])*sc);
-      r.setAttribute("fill","#f0c8c8"); r.setAttribute("stroke","#b71c1c"); r.setAttribute("stroke-width","1"); gg.appendChild(r); });
+      r.setAttribute("fill","#f0c8c8"); r.setAttribute("stroke","none"); gg.appendChild(r); });
     tip(circ(s,X(ext.circ.cx),Y(ext.circ.cy),ext.circ.R*sc,"none","#555",1.2),"A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the union of the anchors' 1.5h_ef squares clipped by the pier circle (exact).");
   } else
   tip(rect(s,X(x1),Y(y2),(x2-x1)*sc,(y2-y1)*sc,"rgba(183,28,28,.14)","#b71c1c",1.6),
@@ -9864,6 +9864,7 @@ function drawBreakout(body,c){
     if(x2<ux2-1e-6) tags.push("+x");
     if(y1>uy1+1e-6) tags.push("−y");
     if(y2<uy2-1e-6) tags.push("+y");
+    if(ext.circ) txt(s,cx,H-40,"Union of the anchors' 1.5·h_ef squares clipped by the pier circle (exact area; dashed ghost = un-clipped extent)","lblTxt","middle",9,"#b71c1c"); else   /* BC-2 */
     txt(s,cx,H-40,"Projection clipped by the "+tags.join(", ")+" edge"+(tags.length>1?"s":"")+
       " (dashed ghost = un-clipped 1.5·h_ef extent)","lblTxt","middle",9,"#b71c1c");
   }
@@ -13343,7 +13344,7 @@ function buildVCaseTab(pg){
   mkSection("vcGeom","2. Geometry Governing the Case Choice",body=>{
     body.appendChild(eqBlock({title:"Row set-out toward the loaded edge",
       ref:"ACI 318-19 §17.7.2.1.1",
-      lines:["\\text{shear resultant pushes toward the }"+r.edgeName+"\\text{ edge}",
+      lines:["\\text{shear resultant pushes toward the }"+(r.circ? "\\text{"+r.edgeName+"}" : r.edgeName)+"\\text{ edge}",   /* BC-2: circular pier name as text */
              "c_{a1,1}="+fmt(r.ca11,2)+"\\ \\text{in}\\quad(\\text{edge to the FRONT row})",
              "s="+fmt(r.s,2)+"\\ \\text{in}\\quad(\\text{front row to the next row})",
              "s "+(r.s>=r.ca11?"\\ge":"<")+" c_{a1,1}\\ \\Rightarrow\\ "+
