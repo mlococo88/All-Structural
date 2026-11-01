@@ -1569,3 +1569,135 @@ index 147e490..d3de356 100644
 +});
 +</script>
 ```
+
+## 2026-11-01 — PR: claude/rpt-retwall-full — Report tab: the factored bearing trapezoids worked (ACI and AASHTO), the tab charts as figures (RWRP2; display only) (PR link added after merge)
+
+Every code site is tagged `RWRP2`. The tool file uses CRLF line endings; keep them.
+
+### RWRP2. Self-contained report: everything of the Export report now in the Report tab   [display only]
+- **Engineer decision (2026-11-01):** every report self-contained with full worked steps; work the AASHTO footing bearing q_u at the stem faces (display of the tool's own values; report anything not computed), and anything else of the Export report not yet worked in the Report tab.
+- **`rwrTrap()`** (new helper inside `rwrModel`, anchor `RWRP2: the factored bearing trapezoid`): four steps for a factored bearing trapezoid — q_u,toe and q_u,heel from V and e (kern: V/B (1 ± 6e/B); outside the kern: 2V/(3x̄) or 2V/(3(B − x̄)), the branches of `calcAll`), and q_u,front / q_u,back by q(x) = q_toe + (q_heel − q_toe) x/B. Values are the tool's own fields.
+- **ACI basis, §3 Step 7:** q_u,toe / q_u,heel / q_u,front / q_u,back of U = 1.2D + 1.6H (`r.qu_toe`, `r.quf_front`, …) and of U = 0.9D + 1.6H (`r.qu_toe_min`, …, with x̄_u = `r.x_Ru_min`, e_u = `r.e_u_min`) are now worked (before: values only).
+- **AASHTO basis, new §3 subsection "Factored bearing for footing design (Strength I / Ia, full width B)"** (scope `saf`): V_u = `a.V_str_max_tot` and the Strength I trapezoid `a.quA_toe`, `a.quA_heel`, `a.quA_front`, `a.quA_back`; Strength Ia: V = `a.V_str_min_tot`, e = `a.e_Ia` and `a.quIa_*`. **Not computed / not returned:** the eccentricity of the Strength I footing-design resultant (`e_tot` inside `calcAll`) is not returned in `_R`. Without water uplift it is by construction the bearing-check eccentricity `a.e_brg` (same V and M_r), which the substitution uses; with uplift the Strength I toe and heel pressures are shown without substitution (noted in the report). No calculation was added.
+- **Heel / toe notes** link to the trapezoid steps on both bases and say which case (maximum or minimum vertical) governs (`r.heel_min_governs`, `r.toe_min_governs`). This closes the 2026-10-18 open item "AASHTO footing bearing is not worked anywhere".
+- **Charts:** `rwrAddPlots()` adds the result tabs' six Plotly charts (bearing pressure, stem pressure, stem V/M, footing loads, heel V/M, toe V/M) as figures in the subsections they belong to, from `rwPlotImages()` (the images the Export report embeds). `renderRwReport()` draws them asynchronously once per result and mounts the report again when they are ready (`RWRP.imgs`, memory only).
+- **Saved data:** none. **Provision:** none (no formula, factor, unit, code reference or result changed).
+
+### Check case (default ACI project)
+- §3.7: q_u,front = q_u,toe + (q_u,heel − q_u,toe)·L_t/B with the values of Step 7; equals `r.quf_front` (spot-checked).
+
+### How verified (headless Chromium, pinned libraries served locally)
+- 7 cases (as RWRP): 107–149 steps, 21–26 subsections; 0 unresolved / duplicate references; 0 KaTeX errors; no NaN / undefined / raw TeX; 6 charts per report; spot values (now also `st7/qutoe`, `st7/qubackmin`, `saf/V`, `saf/qutoe`, `saf/quback`, `saf/qufrontIa`, `saf/eIa`) equal `_R`; `_R` unchanged; 0 console errors; Ctrl+P prints the report alone (AASHTO collision case 26 pages).
+- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: pass.
+
+### Other copies
+- None.
+
+Diff (`Retaining Wall Designer.html`, `git diff -U0` against origin/main; CR line ends removed here):
+
+```diff
+diff --git a/Retaining Wall Designer.html b/Retaining Wall Designer.html
+index d3de356..e28171a 100644
+--- a/Retaining Wall Designer.html	
++++ b/Retaining Wall Designer.html	
+@@ -8742,0 +8743,13 @@ function rwrModel(r) {
++  /* RWRP2: the factored bearing trapezoid under the footing: q at the toe and heel from V and e (kern or triangular, as calcAll),
++     and q at the stem faces by linear interpolation q(x) = q_toe + (q_heel - q_toe) x / B. e is null when the tool does not
++     return it (AASHTO Strength I footing trapezoid with water uplift): the equation is then shown without substitution. */
++  const rwrTrap = (k, V, e, xR, qt, qh, qf, qb, Vsym, tail) => { tail = tail || ''; const B = r.B, Bs = rwrN(B, 3), Vs = rwrN(V, 1), kern = e == null ? null : Math.abs(e) <= B / 6 + 1e-12;
++    const xf = inp.Lt, xb = inp.Lt + r.ts_bot_ft;
++    const toe = kern === null ? ['\\frac{' + Vsym + '}{B}\\left(1 + \\frac{6e}{B}\\right)\\;\\text{or}\\;\\frac{2' + Vsym + '}{3\\bar{x}}', ''] : kern ? ['\\frac{' + Vsym + '}{B}\\left(1 + \\frac{6e}{B}\\right)', '\\frac{' + Vs + '}{' + Bs + '}\\left(1 + \\frac{6(' + rwrP(e, 4) + ')}{' + Bs + '}\\right)'] : e > 0 ? ['\\frac{2' + Vsym + '}{3\\bar{x}}', '\\frac{2(' + Vs + ')}{3(' + rwrN(xR, 4) + ')}'] : ['0', ''];
++    const heel = kern === null ? ['\\frac{' + Vsym + '}{B}\\left(1 \\minus \\frac{6e}{B}\\right)\\;\\text{or}\\;\\frac{2' + Vsym + '}{3(B \\minus \\bar{x})}', ''] : kern ? ['\\frac{' + Vsym + '}{B}\\left(1 \\minus \\frac{6e}{B}\\right)', '\\frac{' + Vs + '}{' + Bs + '}\\left(1 \\minus \\frac{6(' + rwrP(e, 4) + ')}{' + Bs + '}\\right)'] : e > 0 ? ['0', ''] : ['\\frac{2' + Vsym + '}{3(B \\minus \\bar{x})}', '\\frac{2(' + Vs + ')}{3(' + Bs + ' \\minus ' + rwrN(xR, 4) + ')}'];
++    const ip = x => ['q_{u,toe} + (q_{u,heel} \\minus q_{u,toe})\\frac{x}{B}', rwrN(qt, 1) + ' + (' + rwrN(qh, 1) + ' \\minus ' + rwrN(qt, 1) + ')\\frac{' + rwrN(x, 2) + '}{' + Bs + '}'];
++    const note = kern === null ? '' : kern ? '|e| ≤ B/6: trapezoid' : 'resultant outside the kern: triangular distribution (no tension)';
++    return [rwrS({ id: 'qutoe' + k, label: 'Factored bearing at the toe' + tail, sym: 'q_{u,toe}', eq: toe[0], sub: toe[1], value: qt, unit: 'psf', d: 1, note }),
++      rwrS({ id: 'quheel' + k, label: 'Factored bearing at the heel' + tail, sym: 'q_{u,heel}', eq: heel[0], sub: heel[1], value: qh, unit: 'psf', d: 1 }),
++      rwrS({ id: 'qufront' + k, label: 'Factored bearing at the front (toe) face of the stem, x = ' + rwrN(xf, 2) + ' ft' + tail, sym: 'q_{u,front}', eq: ip(xf)[0], sub: ip(xf)[1], value: qf, unit: 'psf', d: 1 }),
++      rwrS({ id: 'quback' + k, label: 'Factored bearing at the back (heel) face of the stem, x = ' + rwrN(xb, 2) + ' ft' + tail, sym: 'q_{u,back}', eq: ip(xb)[0], sub: ip(xb)[1], value: qb, unit: 'psf', d: 1 })]; };
+@@ -8859,4 +8872 @@ function rwrModel(r) {
+-      rwrS({ id: 'qutoe', label: 'Factored bearing at the toe', sym: 'q_{u,toe}', eq: '', sub: '', value: r.qu_toe, unit: 'psf', d: 1 }),
+-      rwrS({ id: 'quheel', label: 'Factored bearing at the heel', sym: 'q_{u,heel}', eq: '', sub: '', value: r.qu_heel, unit: 'psf', d: 1 }),
+-      rwrS({ id: 'qufront', label: 'Factored bearing at the front (toe) face of the stem, x = ' + rwrN(inp.Lt, 2) + ' ft (linear interpolation)', sym: 'q_{u,front}', eq: '', sub: '', value: r.quf_front, unit: 'psf', d: 1 }),
+-      rwrS({ id: 'quback', label: 'Factored bearing at the back (heel) face of the stem, x = ' + rwrN(inp.Lt + r.ts_bot_ft, 2) + ' ft', sym: 'q_{u,back}', eq: '', sub: '', value: r.quf_back, unit: 'psf', d: 1 })];
++      ...rwrTrap('', r.SumVu, r.e_u, r.x_Ru, r.qu_toe, r.qu_heel, r.quf_front, r.quf_back, '\\sum V_{u}')];
+@@ -8864,5 +8874,3 @@ function rwrModel(r) {
+-        rwrS({ id: 'eumin', label: 'Factored eccentricity, minimum-vertical case', sym: 'e_{u}', eq: '', sub: '', value: r.e_u_min, unit: 'ft', d: 4 }),
+-        rwrS({ id: 'qutoemin', label: 'Factored bearing at the toe, minimum-vertical case', sym: 'q_{u,toe}', eq: '', sub: '', value: r.qu_toe_min, unit: 'psf', d: 1 }),
+-        rwrS({ id: 'quheelmin', label: 'Factored bearing at the heel, minimum-vertical case', sym: 'q_{u,heel}', eq: '', sub: '', value: r.qu_heel_min, unit: 'psf', d: 1 }),
+-        rwrS({ id: 'qufrontmin', label: 'Factored bearing at the front face of the stem, minimum-vertical case', sym: 'q_{u,front}', eq: '', sub: '', value: r.quf_front_min, unit: 'psf', d: 1 }),
+-        rwrS({ id: 'qubackmin', label: 'Factored bearing at the back face of the stem, minimum-vertical case', sym: 'q_{u,back}', eq: '', sub: '', value: r.quf_back_min, unit: 'psf', d: 1 })];
++        rwrS({ id: 'xRumin', label: 'Factored resultant location from the toe, minimum-vertical case', sym: '\\bar{x}_{u}', eq: '\\frac{M_{s,u} \\minus M_{o,u}}{\\sum V_{u}}', sub: '', value: r.x_Ru_min, unit: 'ft', d: 4 }),
++        rwrS({ id: 'eumin', label: 'Factored eccentricity, minimum-vertical case', sym: 'e_{u}', eq: '\\frac{B}{2} \\minus \\bar{x}_{u}', sub: '\\frac{' + rwrN(r.B, 3) + '}{2} \\minus ' + rwrN(r.x_Ru_min, 4), value: r.e_u_min, unit: 'ft', d: 4 }),
++        ...rwrTrap('min', r.SumVu_min, r.e_u_min, r.x_Ru_min, r.qu_toe_min, r.qu_heel_min, r.quf_front_min, r.quf_back_min, '\\sum V_{u}', ', minimum-vertical case')];
+@@ -8972,0 +8981,8 @@ function rwrModel(r) {
++    { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}) + V_{col}', sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
++      const eI = a.V_up > 0 ? null : a.e_brg;   // without uplift the footing-design resultant is the bearing-check resultant (same V and M_r, calcAll)
++      sI.push(...rwrTrap('', a.V_str_max_tot, eI, r.B / 2 - (eI == null ? 0 : eI), a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
++      const sIa = [rwrS({ id: 'VIa', label: 'Factored vertical load, Strength Ia minimum (total)', sym: 'V_{u}', eq: '0.90\\,DC + 1.00\\,EV + 0.90\\,P_{a,V}', sub: '', value: a.V_str_min_tot, unit: 'lb/ft', d: 0 }),
++        rwrS({ id: 'eIa', label: 'Eccentricity of the Strength Ia resultant (total vertical)', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '', value: a.e_Ia, unit: 'ft', d: 3 })];
++      sIa.push(...rwrTrap('Ia', a.V_str_min_tot, a.e_Ia, r.B / 2 - a.e_Ia, a.quIa_toe, a.quIa_heel, a.quIa_front, a.quIa_back, 'V_{u}', ', Strength Ia'));
++      subs.push(sub('Factored bearing for footing design (Strength I / Ia, full width B)', [rwrItem('saf', [{ title: 'Strength I (maximum vertical)', ref: AA('Table 3.4.1-1'), steps: sI }, { title: 'Strength Ia (minimum vertical)', ref: AA('C11.5.6'), steps: sIa }]),
++        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + (a.V_up > 0 ? ' With water uplift the tool does not return the eccentricity of the Strength I footing-design resultant, so the Strength I toe and heel pressures are shown without substitution.' : '') }])); }
+@@ -9077 +9093 @@ function rwrModel(r) {
+-      rwrS({ id: 'q0', label: 'Factored upward bearing at the stem face', sym: 'q_{u}(0)', eq: 'q_{u,back}', sub: '', value: r.q0h, unit: 'psf', d: 1, note: isA ? 'AASHTO basis: the factored bearing for the footing design is not worked on a tab (open item)' : '' }),
++      rwrS({ id: 'q0', label: 'Factored upward bearing at the stem face', sym: 'q_{u}(0)', eq: 'q_{u,back}', sub: '', value: r.q0h, unit: 'psf', d: 1, note: '' }),
+@@ -9107 +9123 @@ function rwrModel(r) {
+-      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), isA ? null : { type: 'note', text: 'q_u,back and q_u,heel: [[st7/quback]], [[st7/quheel]] (and the minimum-vertical case, [[st7/qubackmin]]).' },
++      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])') + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
+@@ -9124 +9140 @@ function rwrModel(r) {
+-      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), isA ? null : { type: 'note', text: 'q_u,front and q_u,toe: [[st7/qufront]], [[st7/qutoe]].' },
++      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])') + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
+@@ -9188,0 +9205,2 @@ function renderRwReport() {
++  if (RWRP.imgsFor !== r) { RWRP.imgsFor = r; RWRP.imgs = null; const tok = r;   // charts: drawn off screen by the tabs' own plot jobs (async), then the report is mounted again
++    rwPlotImages().then(im => { if (RWRP.imgsFor !== tok || !Object.keys(im).length) return; RWRP.imgs = im; const T2 = document.getElementById('tab-report'); if (T2 && T2.classList.contains('active')) renderRwReport(); }).catch(() => {}); }
+@@ -9190,0 +9209 @@ function renderRwReport() {
++  rwrAddPlots(M, RWRP.imgs || {});
+@@ -9193,0 +9213,9 @@ function renderRwReport() {
++/* RWRP2: the result tabs' Plotly charts as figures, after the subsection they belong to (images from rwPlotImages, as the Export report) */
++function rwrAddPlots(M, im) {
++  const fig = (id, cap) => im[id] ? { type: 'figure', svg: '<img src="' + im[id] + '" alt="" style="max-width:100%;height:auto">', caption: cap } : null;
++  const put = (secRe, subRe, items) => { const s = M.sections.find(x => secRe.test(x.title)); const q = s && s.subs.find(x => subRe.test(x.title)); if (q) q.items.push(...items.filter(Boolean)); };
++  put(/^Stability/, /Step 6/, [fig('plt-bearing', 'Bearing pressure distribution, toe to heel (Stability tab chart)')]);
++  put(/^Stem design/, /^Base section/, [fig('plt-stem-press', 'Lateral pressure distribution on the stem (Stem design tab chart)'), fig('plt-stem-sm', 'Factored shear and moment diagrams V(z), M(z) of the stem (Stem design tab chart)')]);
++  put(/^Footing design/, /^Heel/, [fig('plt-ftg-loads', 'Factored loads on the footing (Footing design tab chart)'), fig('plt-heel-sm', 'Heel shear and moment diagrams (Footing design tab chart)')]);
++  put(/^Footing design/, /^Toe/, [fig('plt-toe-sm', 'Toe shear and moment diagrams (Footing design tab chart)')]);
++}
+```
+
+## 2026-11-01 — PR: claude/rpt-retwall-etot — calcAll returns the Strength I footing-design eccentricity; the report substitutes it with water uplift (RWETOT; exposure only, no result change) (PR link added after merge)
+
+The tool file uses CRLF line endings; keep them. Every code site is tagged `RWETOT`.
+
+### RWETOT. `aashtoR.x_R_tot`, `aashtoR.e_tot` returned by `calcAll`   [exposure only]
+- **Engineer / coordinator decision (2026-11-01):** after RWRP2 the report could not substitute the Strength I footing-design trapezoid with water uplift, because the eccentricity of that resultant (`e_tot`) was internal to `calcAll`. Return it as an extra output field (pure exposure, no formula change) and use it in the report.
+- **`calcAll`, AASHTO block, return object** (anchor `quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,`):
+  - Before: `      quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,`
+  - After: the same line, then `      x_R_tot, e_tot,   // RWETOT (2026-11-01): the Strength I footing-design resultant, returned for the report (exposure only)`
+  - `x_R_tot = (Mr_str_max_tot − Mo_str_max) / V_str_max_tot` and `e_tot = B/2 − x_R_tot` are the existing local constants that already set `quA_toe` / `quA_heel` (unchanged).
+- **Report (`rwrModel`, AASHTO subsection "Factored bearing for footing design")**: the Strength I trapezoid now uses `a.e_tot` and `a.x_R_tot` (before: `a.e_brg` without uplift, no substitution with uplift); the note about the missing eccentricity is removed.
+- **Provision:** none. No formula, factor, unit, code reference or computed value changed; two existing values are added to the output.
+- **Saved data:** none (`_R` is not saved).
+
+### How verified
+- main vs branch, 7 cases (as RWRP, including two with a water table): `_R` with the two new fields removed is identical; the status bar, the text of the Overview, Stability, Stem design, Footing design, Rebar schedule and Analysis diagram tabs and the storage keys are identical; 0 console errors. Without uplift `e_tot` equals `e_brg` (same V and M_r).
+- Report checks, 7 cases: 0 unresolved / duplicate references, 0 KaTeX errors, no NaN / raw TeX, spot values equal `_R`.
+- `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: pass.
+
+Diff (`Retaining Wall Designer.html`, `git diff -U0` against origin/main; CR line ends removed here):
+
+```diff
+diff --git a/Retaining Wall Designer.html b/Retaining Wall Designer.html
+index e28171a..c713832 100644
+--- a/Retaining Wall Designer.html	
++++ b/Retaining Wall Designer.html	
+@@ -2390,0 +2391 @@ function calcAll(inp) {
++      x_R_tot, e_tot,   // RWETOT (2026-11-01): the Strength I footing-design resultant, returned for the report (exposure only)
+@@ -8982,2 +8983,2 @@ function rwrModel(r) {
+-      const eI = a.V_up > 0 ? null : a.e_brg;   // without uplift the footing-design resultant is the bearing-check resultant (same V and M_r, calcAll)
+-      sI.push(...rwrTrap('', a.V_str_max_tot, eI, r.B / 2 - (eI == null ? 0 : eI), a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
++      const eI = a.e_tot;   // RWETOT: the Strength I footing-design eccentricity returned by calcAll (with or without water uplift)
++      sI.push(...rwrTrap('', a.V_str_max_tot, eI, a.x_R_tot, a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
+@@ -8988 +8989 @@ function rwrModel(r) {
+-        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + (a.V_up > 0 ? ' With water uplift the tool does not return the eccentricity of the Strength I footing-design resultant, so the Strength I toe and heel pressures are shown without substitution.' : '') }])); }
++        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + '' }])); }
+```

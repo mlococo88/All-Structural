@@ -152,3 +152,22 @@ test('other entry points: GirderDetail file, PlateLine file, ST-Girder alone (on
   assert.equal(M.importJSON(JSON.stringify({ _schema: 'stgirder-external-demands', stations: [] })).ok, false);
   assert.equal(M.importJSON(JSON.stringify({ app: 'SteelBridgeDesign', v: 2, data: {} })).ok, false);
 });
+
+test('construction live load on import (D-1, 2026-11-01): w_CL = cll × b_eff per girder, M_CL and V_CL as GirderDetail\'s', () => {
+  // GirderDetail GM.sa.compute: wCL = cll/1000 × b_eff,ft; the recorded projects have cll = 20 psf (Preliminary sizing / GirderDetail's bridge).
+  // builtin G2 (interior): b_eff = 9.5 ft → w_CL = 0.020 × 9.5 = 0.190 klf; G1 (exterior): b_eff = 8.0 ft → 0.160 klf.
+  const P = M.importJSON(JSON.stringify(sbdFile('builtin', 'AASHTO'))).project;
+  assert.deepEqual(J(P.girders.map(g => g.loadsManual && g.loadsManual.CL)), [0.16, 0.19, 0.19, 0.19, 0.16]);
+  P.girders.forEach(g => assert.ok(Math.abs(g.loadsManual.CL - 0.02 * g.beff / 12) < 1e-9));
+  assert.ok(P.legacy.summary.notes.some(n => /^Construction live load 20 psf/.test(n)));
+  assert.ok(!JSON.stringify(P.legacy.unmapped).includes('"cll"'), 'cll read');
+  for (const [pr, ow, gi] of [['builtin', 'AASHTO', 1], ['curb', 'MassDOT', 0]]) {
+    const Q = M.importJSON(JSON.stringify(sbdFile(pr, ow))).project, R = U.SBDAnalysis.analyzeGirder(Q, gi), pl = readP(`gd_${pr}_${ow}_G${gi + 1}.json`);
+    const mx = a => Math.max(...Array.from(a).map(Math.abs)), ref = Math.max(...pl.stations.map(s => Math.abs(+s.M_CL || 0))), refV = Math.max(...pl.stations.map(s => Math.abs(+s.V_CL || 0)));
+    assert.ok(ref > 0 && Math.abs(mx(R.st.CL.M) - ref) / ref < 1e-3, `${pr} ${ow} G${gi + 1} M_CL ${mx(R.st.CL.M)} vs ${ref}`);
+    assert.ok(Math.abs(mx(R.st.CL.VL) - refV) / refV < 0.015, `${pr} ${ow} G${gi + 1} V_CL ${mx(R.st.CL.VL)} vs ${refV} (C-7: station vs element shear)`);
+  }
+  // an entered construction live load is kept; a file without cll leaves loadsManual alone
+  const f = sbdFile('builtin', 'AASHTO'); if (f.data.df && f.data.df.bridge) delete f.data.df.bridge.cll; delete f.pl.data.suggest.cll;
+  assert.ok(M.importJSON(JSON.stringify(f)).project.girders.every(g => !g.loadsManual));
+});
