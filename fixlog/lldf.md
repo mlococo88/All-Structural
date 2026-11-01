@@ -1804,3 +1804,8 @@ index 219cc2c..a3e337e 100644
   AASHTO LRFD 10th Ed. Art. 3.6.1.4.3b); the "verify" fatNote removed. Details and check case in `fixlog/shared-lldf.md` (LLDF-D).
 - This file: no code change; the sheet's fatigue step now shows g_M,fat = g_M,1/1.20 for the exterior webs (its formula branch).
 - Check: W_e = 7.0 ft, θ = 30°: fatigue g_M 0.4528 → 0.3774.
+- Browser check (type d, 6 webs at 8 ft, d = 72 in, L = 120 ft, θ = 30°): W_e = 8.00 ft, g = 8.00/14 = 0.5714,
+  skew 1.05 − 0.25·tan30° = 0.9057, g_M = 0.5175 (unchanged); exterior fatigue g_M 0.5175 → 0.5175/1.20 = 0.4313 on B1 and B6.
+  Everything else (results JSON, sheet, D11 print) is identical to main; the other 10 harness cases are identical.
+- Hand-off: `governing.exterior.fatM` for type (d) changes the same way. Prestressed Bridge Design (`loads.fatM`) and index.html
+  ("use LL & DL fatM") pick it up only when the user pulls the LLDF values again; their saved values are not changed.
