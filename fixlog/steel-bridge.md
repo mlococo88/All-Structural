@@ -2655,3 +2655,33 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   Fatigue, Rating Custom tables and results), 0 console errors, no horizontal page scroll.
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-custom-demands-3 (3 of 3) — "Custom (entered)" demands: Field splices and Welds
+### What changed (a new demand source only: no formula, factor, unit or reference changed; the analysis and file sources compute as before)
+- `ui/demands.js` `SPECS`: `spl` (one row per splice station: M_DC1, M_DC2, M_DW, M_LL+IM ±, M_PL ±, M_CL, M_UT, M_UF, M_FAT ±, V_DC1,
+  V_DC2, V_DW, V_LL+IM, V_PL, V_CL, V_UT, V_UF) and `wt` (V_DC1, V_DC2, V_DW, V_LL+IM, V_PL, V_UT, V_UF, ΔV_FAT, M_FAT ±).
+- `engine/splices.js` (plumbing, no calculation): `inputsAt(P, gi, AR, x, opt)` anchor `const p = clone(DEF), dm =`: before
+  `A = arraysFromAnalysis(AR), dm = demandsAt(A, x)`; after `dm = opt.dem ? opt.dem(x) : demandsAt(arraysFromAnalysis(AR), x)`. `girder()`:
+  with `opt.dem`, a splice whose `opt.dem(x)` is null is listed in `errors` ("no demands entered at this station") and not checked; AR then
+  only needs `{ Lt, sup, cont }`. Without `opt.dem` the code path is the one before (same calls in the same order).
+- `ui/splices.js`: a Demands choice on the Field splices tab (this project's analysis, the default / Custom; saved in `P.demandSrc.spl`);
+  `build(ctx)` (new, exported; `calc` calls it), `demOf(row)` (an entered row as `p.dem`: LL+IM with the pedestrian load, its part in `dem.pl`
+  as demandsAt gives it; shears as magnitudes; dMp ≥ 0, dMn ≥ 0); the row within 0.01 ft of each splice station; `stepsOf` (exported). The
+  demand note says "as entered (Custom), row x = …".
+- `ui/welds.js`: `custD(P, gi)` (new): the rows as `fromDemands`' arrays at the weld points themselves (each side of every support and plate
+  change): left = the row at x or just left (≤ 0.011 ft), right = at x or just right; a side without a row is dropped from `p.fw`, a
+  transition without a row on either side from `p.tr`. `input(P, gi, pl, cu)`: the analysis is not run with `cu`. `srcOf(P)` reads
+  `P.demandSrc.wt`; `stepsOf` (exported).
+- `report/data.js` / `report/builders.js` ("each tab's choice"): Field splices and Welds on Custom, with their entered tables and steps.
+### Cross-frames
+- Not changed: the Cross-frames tab already takes entered forces ("Member forces from a refined analysis (optional)": factored Strength I,
+  constructibility and fatigue-range member forces, added to the wind and brace forces; and the stability-bracing M_u, `crossframes.sb.Mu`).
+### Check cases (tests/engine/custom-demands.test.mjs)
+- Splice FS1 (82 ft): M_DC1 100, M_DC2 20, M_DW 25, M_LL+IM +800 / −300 kip-ft, V 20 / 3 / 3 / 40 kip: Strength I + 1.25(120) + 1.50(25) +
+  1.75(800) = 1587.5 kip-ft; Strength I − 0.90(120) + 0.65(25) + 1.75(−300) = −400.75 kip-ft; V 1.25(23) + 1.50(3) + 1.75(40) = 103.25 kip;
+  Service II + 145 + 1.30(800) = 1185 kip-ft.
+- Welds, Pier 1 one row (both sides): top shear flow from DC1 1.25(95)(909.99)/69,424 = 1.557 kip/in.
+- Proofs (rows = this project's analysis demands): Field splices 4 splices, the same auto-designed plates and bolts, 464 check ratios equal;
+  Welds 14 locations and 8 transitions, 122 ratios equal (built-in; RIDOT + sidewalk the same); largest difference 0.
+### Other copies
+- None.

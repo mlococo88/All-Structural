@@ -323,7 +323,7 @@
     // summary: the splice with the largest strength ratio
     const sg = G.list.reduce((b, s, k) => { const q = strGov(s.CK); return q && (!b || q.it.r > b.q.it.r) ? { s, q, k } : b; }, null);
     if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${sg.q.it.loc}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
-    subs.push(sub('list', `Splices of ${gName(B.girder)}`, [note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
+    subs.push(sub('list', `Splices of ${gName(B.girder)}`, [G.custom ? note('Demands: entered (Custom) on the Field splices tab, the row at each splice station (table below).') : note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
       G.errors.length ? note(G.errors.join(' '), true) : null,
       tbl(['Splice', 'Plates and bolts', 'Governing', 'Ratio', 'Largest strength ratio', 'Status'], G.list.map((s, k) => { const fl = s.R && s.R.fl, gv = s.gov, q = strGov(s.CK), bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
         return [s.name, fl ? `${s.own ? 'entered' : 'auto'}: ${fl.top.n + fl.bot.n + s.R.web.nw} bolts each side` : '—', gv ? `${gv.c.id} ${gv.it.loc}` : s.R && s.R.errors.length ? s.R.errors[0] : '', gv ? R3(gv.it.r, K('spl@' + k, gv.it.step)) : '—',
@@ -332,15 +332,16 @@
       if (s.warn && s.warn.length) items.push(note(s.warn.join(' '), true));
       items.push(kv([['$M_{DC1}$ / $M_{DC2}$ / $M_{DW}$', `${f(d.MDC1, 1)} / ${f(d.MDC2, 1)} / ${f(d.MDW, 1)} kip-ft`], ['$M_{LL+IM}^{+}$ / $M_{LL+IM}^{-}$', `${f(d.MLLp, 1)} / ${f(d.MLLn, 1)} kip-ft`], ['$M_{CL}$', `${f(d.MCL, 1)} kip-ft`],
         ['$V_{DC1}$ / $V_{DC2}$ / $V_{DW}$ / $V_{LL+IM}$ / $V_{CL}$', `${f(d.VDC1, 1)} / ${f(d.VDC2, 1)} / ${f(d.VDW, 1)} / ${f(d.VLL, 1)} / ${f(d.VCL, 1)} kip`], ['$\\Delta M_{fat}$ + / −', `${f(d.dMp, 1)} / ${f(d.dMn, 1)} kip-ft`]]));
-      items.push(note(`Unfactored, per girder; moments at the analysis station x = ${f(s.dm.xi, 2)} ft (Analysis section), shears the largest magnitude of elements ${s.dm.e} ± 1.${s.design ? ` Auto-design${s.design.ok ? '' : ' (not every check passes)'}: ${s.design.msg}` : ''}`));
+      items.push(note(`Unfactored, per girder; ${s.dm.custom ? `as entered (Custom), row x = ${f(s.dm.xi, 3)} ft.` : `moments at the analysis station x = ${f(s.dm.xi, 2)} ft (Analysis section), shears the largest magnitude of elements ${s.dm.e} ± 1.`}${s.design ? ` Auto-design${s.design.ok ? '' : ' (not every check passes)'}: ${s.design.msg}` : ''}`));
       if (R && !R.errors.length) {
         items.push(note(`Top flange: ${R.fl.top.nl} line(s) each side × ${R.fl.top.nr} rows, outer PL ${SP.frac(R.fl.top.bo)} × ${SP.frac(R.fl.top.to)}${R.fl.top.inner ? `, 2 inner PL ${SP.frac(R.fl.top.bi)} × ${SP.frac(R.fl.top.ti)}` : ''}. Bottom flange: ${R.fl.bot.nl} line(s) × ${R.fl.bot.nr} rows, outer PL ${SP.frac(R.fl.bot.bo)} × ${SP.frac(R.fl.bot.to)}${R.fl.bot.inner ? `, 2 inner PL ${SP.frac(R.fl.bot.bi)} × ${SP.frac(R.fl.bot.ti)}` : ''}. Web: 2 PL ${SP.frac(R.web.hw)} × ${SP.frac(R.web.twp)}, ${R.web.nrw} rows × ${R.web.ncw} column(s) each side. Bolts ${SP.frac(R.bolt.d)} in ${s.p.bolts.gr}; plates ${s.p.sec.gP}.`));
         const dw = SP.svg(R); if (dw) items.push({ type: 'figure', svg: dw.flange + dw.web, caption: 'Plan of the bottom flange splice and elevation of the web splice, to scale' });
       } else if (R) items.push(note(R.errors.join(' '), true));
       if (s.CK) { items.push(tbl(['ID', 'Check', 'Governing item', 'Ratio', 'Status', ED], s.CK.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
           return [c.id, tt(c.title), it ? it.loc : c.naWhy || '', it && it.r != null ? R3(it.r, K(sc, it.step)) : { t: '—', key: it ? K(sc, it.step) : null }, STT[c.status] || c.status, String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')]; })));
-        items.push(gsteps('SBDSplicesUI:x', sc, SP.steps(R).concat(s.CK.steps), { title: 'Worked steps', lazy: !sg || sg.k !== k })); }   // the governing splice open, the others on demand
+        items.push(gsteps('SBDSplicesUI:x', sc, window.SBDSplicesUI.stepsOf(B.spl, s), { title: 'Worked steps', lazy: !sg || sg.k !== k })); }   // the governing splice open, the others on demand
       subs.push(sub(sc, s.name, items)); });
+    if (G.custom) subs.splice(1, 0, cdSub('spl', B));
     return { title: 'Field splices (bolted, 6.13.6.1)', subs };
   }
 
@@ -352,7 +353,7 @@
     const scOf = q => `wd@${q.k}${q.i}`, keyOf = it => { const q = locOf(it); return q ? K(scOf(q), it.step) : null; };
     const num = it => typeof it.r === 'number' && isFinite(it.r);
     // the engine's notes name a section as "§sec.s" (a group of steps): the report links its first property, ȳ (sec.s.yb)
-    const wSteps = q => WT.steps(R, q.k, q.i).map(t => (t.note && /§sec\.(s|c3|cn|cr)\b(?!\.\w)/.test(t.note) ? { ...t, note: t.note.replace(/§sec\.(s|c3|cn|cr)\b(?!\.\w)/g, '§sec.$1.yb') } : t));
+    const wSteps = q => window.SBDWeldsUI.stepsOf(Bw, q.k, q.i).map(t => (t.note && /§sec\.(s|c3|cn|cr)\b(?!\.\w)/.test(t.note) ? { ...t, note: t.note.replace(/§sec\.(s|c3|cn|cr)\b(?!\.\w)/g, '§sec.$1.yb') } : t));
     // governing rows: the flange-to-web welds (FW1–FW4) and the shop transitions (TR1–TR4), the largest ratio of each
     const gv = ids => { let b = null; C.filter(c => ids.test(c.id)).forEach(c => c.items.forEach(it => { if (num(it) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
     const bad = ids => C.filter(c => ids.test(c.id)).flatMap(c => c.items.filter(it => !num(it) && (it.st === 'fail' || it.st === 'warn')).map(it => ({ c, it })));
@@ -373,6 +374,7 @@
     const need = new Set(C.map(c => (c.gov >= 0 ? locOf(c.items[c.gov]) : null)).filter(Boolean).map(scOf));
     const rest = locs.filter(q => !sel.has(scOf(q)) && (all || need.has(scOf(q))));
     if (rest.length) subs.push(sub('every', all ? 'Every other location' : 'Other governing locations of single checks', rest.map(q => gsteps('SBDWeldsUI:x', scOf(q), wSteps(q), { lazy: true, title: q.name }))));
+    if (Bw.custom) subs.splice(1, 0, cdSub('wt', B));   // the entered table (custom demands PR)
     return { title: 'Welds (flange-to-web, shop transitions)', subs };
   }
 

@@ -19,7 +19,8 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: null };   // src null: the default, this project's analysis (no example here)
-  const srcOf = () => S.src || 'analysis';
+  // the saved choice (P.demandSrc.wt, custom demands PR 2026-11-01; a hand-off file only for the page view), else this project's analysis
+  const srcOf = P => S.src || (window.SBDCustomDemands && P && window.SBDCustomDemands.srcGet(P, 'wt')) || 'analysis';
   const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : v == null ? '—' : fmt(v, 3);
   const frac = x => { if (!(x > 0)) return '—'; const w = Math.floor(x + 1e-9), f = Math.round((x - w) * 16); if (!f) return `${w}`; let a = f, b = 16; while (a % 2 === 0) { a /= 2; b /= 2; } return w ? `${w} ${a}/${b}` : `${a}/${b}`; };
@@ -27,7 +28,22 @@
   function ensure(P) { if (!P.welds) P.welds = window.SBDModel.defaultWelds(); return P.welds; }
 
   /* input(P, gi): the module input of girder gi from this app's analysis (engine/welds.js fromDemands) and the owner factors env */
-  function input(P, gi, pl) {
+  /* custD(P, gi) (custom demands PR, 2026-11-01): the rows entered on this tab as the demand arrays fromDemands reads, at the weld points
+     themselves (each side of every support and plate change): the left side takes the row at x or just left of it (within 0.011 ft), the
+     right side the row at x or just right; a side without a row is not checked (miss). Returns { D0, miss, C } or { err } */
+  function custD(P, gi) {
+    const CD = window.SBDCustomDemands, RW = CD.rowsOf(P, 'wt', gi); if (RW.err.length) return { err: 'Custom demands: ' + RW.err.join(' ') };
+    const g = P.girders[gi], sup = CD.supsOf(P), Lt = sup[sup.length - 1], rows = RW.rows.map(r => ({ ...r, x: +r.x }));
+    const xs = [...new Set(sup.concat(g.segments.slice(0, -1).map(q => q.x1).filter(x => x > 1e-6 && x < Lt - 1e-6)))].sort((a, b) => a - b);
+    const pick = (x, sd) => { const c = rows.filter(r => Math.abs(r.x - x) <= 0.011 + 1e-9 && (sd === 'L' ? r.x <= x + 1e-9 : r.x >= x - 1e-9)); return c.sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0] || null; };
+    const n = (r, k) => (r && typeof r[k] === 'number' && isFinite(r[k]) ? r[k] : 0), a = (r, k) => Math.abs(n(r, k));
+    const miss = new Set(), side = sd => { const o = { DC1: [], DC2: [], DW: [], UT: [], UF: [], LL: [], F: [], PL: [] };
+      xs.forEach(x => { const r = pick(x, sd); if (!r) miss.add(`${x}|${sd}`);
+        o.DC1.push(a(r, 'V_DC1')); o.DC2.push(a(r, 'V_DC2')); o.DW.push(a(r, 'V_DW')); o.UT.push(a(r, 'V_UT')); o.UF.push(a(r, 'V_UF')); o.LL.push(a(r, 'V_LL') + a(r, 'V_PL')); o.F.push(a(r, 'V_FAT')); o.PL.push(a(r, 'V_PL')); }); return o; };
+    const mf = k => xs.map(x => n(pick(x, 'L') || pick(x, 'R'), k));
+    return { D0: { x: xs, sup, V: { L: side('L'), R: side('R') }, PL: rows.some(r => n(r, 'V_PL')) ? true : undefined, MfP: mf('M_FATpos'), MfN: mf('M_FATneg') }, miss, C: { rows: RW.rows, mode: 'unf' } };
+  }
+  function input(P, gi, pl, cu) {
     const AN = window.SBDAnalysis, WT = window.SBDWelds, OWN = window.SBDOwners, M = window.SBDModel, Wd = ensure(P);
     if (pl) {   // a hand-off file: its demands, plates, deck, materials and owner factors; the inputs of this tab (P.welds)
       const d = WT.demandsFromPayload(pl), gen = { ...d.gen, Fexx: Wd.Fexx, gam: { ...Wd.gam } }, gd = pl.girderDetail || {};
@@ -36,11 +52,12 @@
     }
     if (!AN) return { err: 'The analysis module is not loaded.' };
     if (P.deck && P.deck.composite === false) return { err: 'The flange-to-web weld checks here are for a composite girder (DC2, DW and LL+IM on the composite sections). This girder is noncomposite.' };
-    let R; try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
-    if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
-    if (!R.ll || !R.fat) return { err: 'Analysis: no live load results.' };
+    const CU = cu ? custD(P, gi) : null; if (CU && CU.err) return CU;
+    let R = null; if (!CU) { try { R = AN.analyzeGirder(P, gi); } catch (e) { return { err: 'Analysis: ' + (e && e.message) }; }
+      if (R.errors && R.errors.length) return { err: 'Analysis: ' + R.errors.join(' ') };
+      if (!R.ll || !R.fat) return { err: 'Analysis: no live load results.' }; }
     // LL+IM with the pedestrian load added once (SBDAnalysis.llPL); PL: its part in the envelope taken (m not on it, GD45; sb-ped-owner PR)
-    const g = P.girders[gi], st = R.st, ll = AN.llPL ? AN.llPL(R) : R.ll, q = R.pl, f = R.fat, abs = a => Array.from(a, v => Math.abs(v)), zero = R.x.map(() => 0);
+    const g = P.girders[gi], st = R && R.st, ll = R ? (AN.llPL ? AN.llPL(R) : R.ll) : null, q = R && R.pl, f = R && R.fat, abs = a => Array.from(a, v => Math.abs(v)), zero = R ? R.x.map(() => 0) : [];
     const side = s => { const Vp = ll['V' + s + 'pos'], Vn = ll['V' + s + 'neg'], big = i => Math.abs(Vp[i]) >= Math.abs(Vn[i]);
       return { DC1: abs(st.DC1['V' + s]), DC2: abs(st.DC2['V' + s]), DW: abs(st.DW['V' + s]), UT: st.UT ? abs(st.UT['V' + s]) : zero, UF: st.UF ? abs(st.UF['V' + s]) : zero,
         LL: Vp.map((v, i) => Math.max(Math.abs(v), Math.abs(Vn[i]))), F: f['V' + s + 'pos'].map((v, i) => v - f['V' + s + 'neg'][i]),
@@ -48,24 +65,28 @@
     const segAt = x => { const s = g.segments.find(q => x >= q.x0 - 1e-9 && x < q.x1) || g.segments[g.segments.length - 1]; return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }; };
     const fr = P.framing || {}, d = P.deck, m = P.materials, rb = d.rebar || {}, T = rb.top || { A: 0, c: 0 }, B = rb.bot || { A: 0, c: 0 }, Ar = (+T.A || 0) + (+B.A || 0);
     const layers = [[+T.A || 0, +T.c || 0], [+B.A || 0, d.ts - (+B.c || 0)]];
-    const D = { x: R.x, sup: R.sup, segAt, segs: g.segments, V: { L: side('L'), R: side('R') }, PL: q ? true : undefined, MfP: Array.from(f.Mpos), MfN: Array.from(f.Mneg), splices: Array.isArray(fr.splices) ? fr.splices : [], tol: +fr.tol >= 0 ? +fr.tol : 0.5 };
+    const D = { ...(CU ? CU.D0 : { x: R.x, sup: R.sup, V: { L: side('L'), R: side('R') }, PL: q ? true : undefined, MfP: Array.from(f.Mpos), MfN: Array.from(f.Mneg) }), segAt, segs: g.segments, splices: Array.isArray(fr.splices) ? fr.splices : [], tol: +fr.tol >= 0 ? +fr.tol : 0.5 };
     const gen = { gF: m.steel.top, gW: m.steel.web, Fexx: Wd.Fexx, gam: { ...Wd.gam }, ts: d.ts, hh: d.haunch, beff: g.beff, fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule,
       Ar, dr: Ar > 0 ? layers.reduce((s, q) => s + q[0] * q[1], 0) / Ar : 0, layers };
     const p = WT.fromDemands(D, { gen, w: Wd.w, ground: Wd.ground });
+    if (CU) { p.fw = p.fw.filter(r => !CU.miss.has(`${r.x}|${r.side}`)); p.tr = p.tr.filter(t => !CU.miss.has(`${t.x}|L`) || !CU.miss.has(`${t.x}|R`)); }   // only where a row is entered
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OWN ? OWN.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0) : { eta: 1, etaN: 1, m: 1, h0: false };
-    return { p, env: { lf }, an: R, g };
+    return { p, env: { lf }, an: R, g, custom: CU ? CU.C : null };
   }
   function build(ctx) {
-    const P = ctx.P, gi = ctx.g || 0, WT = window.SBDWelds, src = ctx.src || (ctx.pl ? 'file' : srcOf()), pl = src === 'file' ? (ctx.pl !== undefined ? ctx.pl : S.pl) : null, plName = ctx.plName != null ? ctx.plName : S.plName;
+    const P = ctx.P, gi = ctx.g || 0, WT = window.SBDWelds, src = ctx.src || (ctx.pl ? 'file' : srcOf(P)), pl = src === 'file' ? (ctx.pl !== undefined ? ctx.pl : S.pl) : null, plName = ctx.plName != null ? ctx.plName : S.plName;
     if (src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-    const I = input(P, gi, pl); if (I.err) return I;
+    const I = input(P, gi, pl, src === 'custom'); if (I.err) return I;
     const R = WT.compute(I.p, I.env); if (R.errors.length) return { err: 'Welds: ' + R.errors.join(' ') };
     const C = WT.checks(R), gov = {}; C.forEach(c => { const it = c.items[c.gov]; if (it) gov[c.id] = it; });
     const what = pl ? `${esc(plName || 'Hand-off file')}: ${(pl.stations || []).length} stations, G${esc((pl.girderDetail || {}).girder || '')}; shears, fatigue moments, plates, deck, materials, owner factors and field splice stations from the file; F<sub>EXX</sub>, weld size, load factors and grinding as entered here.`
       : `This project's analysis of ${esc(I.g.label || I.g.id)} (Analysis tab); plates, deck and materials of the project; field splices from the Spans &amp; framing tab.`;
-    return { R, C, gov, g: I.g, lf: I.env.lf, src, what };
+    return { R, C, gov, g: I.g, lf: I.env.lf, src, what: I.custom ? `Demands: entered (Custom), unfactored, on ${esc(I.g.label || I.g.id)}: ${I.custom.rows.length} row(s); ${R.fw.length} flange-to-web weld location(s) and ${R.tr.length} shop transition(s) with a row (each side of a support or plate change: the row at x or just beside it, within 0.011 ft); plates, deck and materials of the project; field splices from the Spans &amp; framing tab.` : what, custom: I.custom || null };
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(), S.plName]);
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx.P), S.plName]);
+  /* stepsOf(B, k, i): the worked steps of a weld location ('fw') or transition ('tr'); with custom demands the step that names them first */
+  const stepsOf = (B, k, i) => { const list = window.SBDWelds.steps(B.R, k, i); if (!B.custom) return list; const r = (k === 'fw' ? B.R.fw : B.R.tr).find(q => q.i === i);
+    return [window.SBDCustomDemands.step('wt', B.custom, r ? +r.x : NaN)].concat(list); };
 
   function css() {
     if (document.getElementById('fx-css') || document.getElementById('fa-css') || document.getElementById('wt-css')) return;
@@ -96,15 +117,16 @@
     const P = ctx.P, Wd = ensure(P), stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const nIn = (id, lbl, v, unit) => `<div class="fRow"><label for="${id}">${lbl}</label><input type="number" step="any" id="${id}" value="${esc(v)}"><span class="unit">${unit}</span></div>`;
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis, gl = P.girders[ctx.g] || P.girders[0] || {};
-    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(), auto: !S.src, rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: gl.label || gl.id, plName: S.plName }) : '')
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(P), auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(P, 'wt')), rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: gl.label || gl.id, plName: S.plName }) : '')
       + `<section class="sec"><div class="secHead">Welds: inputs (saved in the project)</div><div class="secBody">
-      <div class="fRow"><label for="wt_src">Demands</label><select id="wt_src">${opt('analysis', "This project's analysis (Analysis tab)", srcOf())}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf())}</select></div>
-      ${srcOf() === 'file' ? `<div class="fRow"><label for="wt_file">File</label><input type="file" id="wt_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+      <div class="fRow"><label for="wt_src">Demands</label><select id="wt_src">${opt('analysis', "This project's analysis (Analysis tab)", srcOf(P))}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', srcOf(P)) : ''}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf())}</select></div>
+      ${srcOf(P) === 'file' ? `<div class="fRow"><label for="wt_file">File</label><input type="file" id="wt_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       ${nIn('wt_Fexx', 'Electrode F<sub>EXX</sub>', Wd.Fexx, 'ksi')}
       <div class="fRow"><label for="wt_w">Flange-to-web fillet weld size</label><select id="wt_w">${opt('', 'Minimum of Table 6.13.3.4-1 at each location', Wd.w)}${[0.25, 0.3125, 0.375, 0.4375, 0.5, 0.5625, 0.625].map(v => opt(v, `${frac(v)} in`, Wd.w)).join('')}</select></div>
       ${nIn('wt_dc', 'γ<sub>DC</sub> (Strength I)', Wd.gam.dc, '')}${nIn('wt_dw', 'γ<sub>DW</sub> (Strength I)', Wd.gam.dw, '')}${nIn('wt_ll', 'γ<sub>LL</sub> (Strength I)', Wd.gam.ll, '')}${nIn('wt_fat', 'γ Fatigue I', Wd.gam.fat, '')}
       <div class="fRow"><label for="wt_gr">Shop transition butt welds</label><select id="wt_gr">${opt('yes', 'Ground flush (Category B)', Wd.ground)}${opt('no', 'Reinforcement not removed (Category C)', Wd.ground)}</select></div>
       <p class="note">Two fillet welds per flange. The demand choice is not saved. Demands from this project's analysis (Analysis tab) of the selected girder, or from the hand-off file: each side of every support and plate change; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section; owner factors η and m from the Loads tab. Shop transitions: every flange change that is not a field splice (Spans &amp; framing tab), tapered 1:2.5. Stiffener and connection-plate welds: Shear &amp; stiffeners tab.</p></div></section>`;
+    if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(P, 'wt', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Weld results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="wt_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
@@ -116,7 +138,9 @@
     on('wt_w', 'change', e => { Wd.w = e.target.value === '' ? '' : Number(e.target.value); save(); });
     ['dc', 'dw', 'll', 'fat'].forEach(k => on('wt_' + k, 'change', e => { Wd.gam[k] = num(e.target.value); save(); }));
     on('wt_gr', 'change', e => { Wd.ground = e.target.value; save(); });
-    on('wt_src', 'change', e => { S.src = e.target.value; redraw(); });
+    on('wt_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.wt), a file for the page view
+      if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(P, 'wt', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
+    if (srcOf(P) === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, P, 'wt', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('wt_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
       rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
         S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { S.pl = null; S.plName = ''; alert('Cannot read this file: ' + er.message); } redraw(); };
@@ -149,9 +173,9 @@
         return `<tr data-wt="tr:${r.i}" class="${S.sel && S.sel.k === 'tr' && S.sel.i === r.i ? 'sel' : ''}"><td class="lft">${esc(r.name)}</td><td>${fmt(r.b1, 2)} × ${frac(r.t1)} to ${fmt(r.b2, 2)} × ${frac(r.t2)}</td><td>${r.cat}</td><td>${fmt(r.df, 2)}</td><td class="${cls(t1.r)}">${rt3(t1.r)}</td>${t2 ? `<td class="${cls(t2.r)}">${rt3(t2.r)}</td>` : '<td class="fx-na">n/a</td>'}${t3 ? stCell(t3.st, t3.r) : '<td class="fx-na">n/a</td>'}${stCell(t4.some(it => it.st === 'warn') ? 'warn' : 'pass')}</tr>`; }).join('')}
       </tbody></table></div><p class="note">TR1 is the butt splice in the smaller flange at mid-thickness; the Fatigue tab also checks the flange face at each shop transition (FA1, Category B, Fatigue I or II).</p></div></section>`;
     const sel = S.sel || { k: 'fw', i: 0 }, list = (sel.k === 'fw' ? R.fw : R.tr).find(r => r.i === sel.i);
-    if (list) h += `<section class="sec" id="wt-steps"><div class="secHead">Worked steps, ${esc(list.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). The section properties used come first; y is measured up from the bottom of the steel.</p>${stepsHtml(WT.steps(R, sel.k, sel.i))}</div></section>`;
+    if (list) h += `<section class="sec" id="wt-steps"><div class="secHead">Worked steps, ${esc(list.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). The section properties used come first; y is measured up from the bottom of the steel.</p>${stepsHtml(stepsOf(B, sel.k, sel.i))}</div></section>`;
     return h;
   }
 
-  window.SBDWeldsUI = { ensure, input, build, render, TOPICS, groups };
+  window.SBDWeldsUI = { ensure, input, build, render, TOPICS, groups, stepsOf };
 })();
