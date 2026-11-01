@@ -2615,3 +2615,43 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   reload keeps the choice and rows, report with "each tab's choice"; 0 console errors; no horizontal page scroll at 390 px.
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-custom-demands-2 (2 of n) — "Custom (entered)" demands: Constructibility, Fatigue & studs, Rating
+### What changed (a new demand source only: no formula, factor, unit or reference changed; the other sources compute as before)
+- `ui/demands.js` `SPECS`: `cn` (M_DC1, M_DCc, M_CL; V_DC1 and V_CL just left and just right of the row, a blank right = left), `fat`
+  (M_FAT ±, V_FAT ±, M_DC1, M_DC2, M_DW, M_LL+IM ±, M_PL ±, M_UT, M_UF, V_DC1, V_DC2, V_DW), `rt` (no table of its own: `uses: ['flex', 'shear']`).
+  `step()`: a step with no station (the studs) lists the row count.
+- `ui/constructibility.js`: `arOf(P, g)` (new) gives the entered rows in the shape `SBDConstr.fromAnalysis` reads of an analysis (`x, sup, Lt,
+  cont, st.DC1 / st.CL { M, VL, VR }, seq.MDCc` only where M_DCc is entered); `build()` branch `src === 'custom'` runs `fromAnalysis` on it,
+  keeps the entered stations (`keepAt`) and places the overhang rows among them (`ohRowsAt`). `srcOf(P)` reads `P.demandSrc.cn`. `stepsOf` (exported).
+- `ui/fatigue.js`: `studsOf(P, gi, stations, sup, spans, h0, cont)` split out of `fromAnalysis` unchanged (the auto pitch zones and strength
+  regions; `fromAnalysis` now calls it: identical payload, proved by the analysis tests and the custom = analysis test). `build()` branch
+  `src === 'custom'`: the payload of the rows with `studsOf` details; the framing lookup treats `sbd2-custom` as this project (`{ gi }`, as
+  `sbd2-analysis`); the fatigue details between the first and last row; GS17 at the entered stations. `stepsOf` (exported). `index.html`
+  passes `changed` to the Fatigue tab.
+- `ui/rating.js`: `buildCustom(ctx)` (new): the Flexure module's custom build and the Shear module's custom build (their tables), rated as
+  `build()` rates the analysis (RT.flexure, RT.service, RT.shear with `RT.shearCases` of the shear rows, the owner's fatigue target); the tab
+  shows both tables (edited there or on their own tabs, saved once). Factored flexure rows: an error (the rating needs DC, DW and LL+IM apart).
+  The capacity steps shown take the custom step (`stepsOf` of Flexure / Shear).
+- `report/data.js` ("each tab's choice"): `cn`, `fat`, `rt` too; the Flexure section takes the rating's flexure only when the rating is not on
+  Custom. `report/builders.js`: the entered tables (`cdSub`) in the Constructibility, Fatigue and Rating sections (the Rating section: both).
+### Decisions
+- Fatigue details between the first and last entered row are checked with moments linear between rows (as the hand-off/analysis path
+  interpolates); outside that range they are not checked. Studs: the project's pitch zones when entered, else zones made from the rows by span
+  tenths (a tenth with no row: V_f = 0, as with no analysis station).
+- Rating on Custom takes the Shear tab's rows as entered. Its 'analysis' path takes one station per analysis station (the side with the larger
+  permanent shear, ui/rating.js fromAnalysis) while the Shear tab takes both sides of a support (x ± 0.005 ft); with the Shear tab's own
+  analysis rows the support stations differ from the Rating tab's analysis by that choice (an existing difference between the two tabs, not
+  changed here).
+### Check cases (tests/engine/custom-demands.test.mjs)
+- Constructibility, x = 44 ft: M_DC1 1200, M_DCc 1350, M_CL 60 kip-ft, V_DC1 30, V_CL 2 kip: M_c = 1.25(1350) + 1.50(60) = 1777.5 kip-ft;
+  V_u = 1.25(30) + 1.50(2) = 40.5 kip.
+- Fatigue GS17, x = 44 ft, M_FAT +620 / −150 kip-ft: Δf bottom = 770(12)(55.100)/106168.0 = 4.795 ksi; γ = 1.75 (Fatigue I): 8.392 ksi.
+- Proofs (rows = this project's analysis): Constructibility 367 locations (+3 overhang rows on an exterior G1), 1835–1853 ratios equal;
+  Fatigue 23 details, 367 GS17 locations, 30 stud zones, 6 regions, 1250 values equal; Rating (the rating's own analysis rows in both tables)
+  1720 rows, 3440 RF equal; RIDOT + sidewalk the same; largest difference 0 in every case.
+### How verified
+- `node tests/engine/run.mjs custom-demands` (15 tests) and the module tests listed in the PR; Playwright at 1280 and 390 px (Constructibility,
+  Fatigue, Rating Custom tables and results), 0 console errors, no horizontal page scroll.
+### Other copies
+- None.

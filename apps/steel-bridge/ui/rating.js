@@ -13,7 +13,8 @@
    2026-10-30 (paths PR, SB2-W1, SB2-W2) the flexure is ui/flexure.js build() itself (Appendix A6 where permitted), so its brace points
    (the Spans &amp; framing tab) and f_ℓ (entered on the Flexure tab, else from skew, C6.10.1: engine/framing.js design) are the Flexure tab's on
    both sources; before, this tab built its own: the stiffener layout's cross-frames and f_ℓ = 0 (a file: its own spacing, f_ℓ = 0).
-   Needs SBDFlexureUI and SBDFraming. The demand choice is not saved.
+   Needs SBDFlexureUI and SBDFraming. The demand choice is saved (P.demandSrc.rt, custom demands PR; a hand-off file is not). "Custom": the
+   Flexure and Shear & stiffeners tabs' entered tables (buildCustom).
 
    render(host, ctx), ctx = { P, g, changed() }; build(ctx) (tests: ctx.pl gives a payload directly; ctx.src 'analysis'). */
 (function () {
@@ -21,7 +22,8 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const S = { src: null, pl: null, plName: '', R: null, key: '', err: '', sel: 0 };   // src null: the default, this app's analysis (no example here)
-  const srcOf = () => S.src || 'analysis';
+  // the saved choice (P.demandSrc.rt, custom demands PR 2026-11-01), else this app's analysis
+  const srcOf = P => S.src || (window.SBDCustomDemands && P && window.SBDCustomDemands.srcGet(P, 'rt')) || 'analysis';
   const PHI_C = [[1.00, 'Good or satisfactory (1.00)'], [0.95, 'Fair (0.95)'], [0.85, 'Poor (0.85)']];
   const PHI_S = [[1.00, 'All other girder bridges and slab bridges (1.00)'], [0.85, 'Welded members in two-girder, truss or arch bridges (0.85)'], [0.90, 'Riveted members in two-girder, truss or arch bridges (0.90)'],
     [0.85, 'Three-girder bridges, girder spacing ≤ 6 ft (0.85)'], [0.95, 'Four-girder bridges, girder spacing ≤ 4 ft (0.95)'], [0.85, 'Floorbeams > 12 ft apart, noncontinuous stringers (0.85)'], [1.00, 'Redundant stringer subsystems between floorbeams (1.00)']];
@@ -63,7 +65,8 @@
   /* ---------- calculation ---------- */
   function build(ctx) {
     const P = ctx.P, M = window.SBDModel, OW = window.SBDOwners, FX = window.SBDFlexure, SH = window.SBDShear, RT = window.SBDRating, SB = window.SBDStiffeners, g = ctx.g || 0;
-    const rt = ensure(P), src = ctx.src || srcOf();
+    const rt = ensure(P), src = ctx.src || srcOf(P);
+    if (ctx.pl === undefined && src === 'custom') return buildCustom(ctx);
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
@@ -91,7 +94,27 @@
       : `${esc(S.plName || 'hand-off')}: ${pl.stations.length} stations, ${sup.length - 1} span(s), G${esc((pl.girderDetail || {}).girder || '')}; plates, deck and skews from the file, the project's stiffener layout; ${bfl}.${pl.pedestrianInLL === true ? ' The pedestrian load is in its LL+IM (pedestrianInLL): not added again.' : ''}`;
     return { rows, sum, cap, ph, G, own, T, what, flex: Gr, shear: SHR, pl };
   }
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(), S.plName]);
+  /* buildCustom(ctx) (custom demands PR, 2026-11-01): the unfactored moments entered on the Flexure tab and the shears entered on the Shear &
+     stiffeners tab (their Custom tables; the Flexure and Shear modules' own builds on them), rated as build() rates the analysis */
+  function buildCustom(ctx) {
+    const P = ctx.P, g = ctx.g || 0, CD = window.SBDCustomDemands, RT = window.SBDRating, rt = ensure(P);
+    if (!CD) return { err: 'ui/demands.js is not loaded.' };
+    if (CD.get(P, 'flex', g).mode === 'fac') return { err: 'Rating needs the unfactored moments by load case: the Flexure tab\'s Custom table holds factored moments (choose "Unfactored, by load case" there).' };
+    const Gr = window.SBDFlexureUI.build({ P, g, src: 'custom', method: 'auto' }); if (Gr.err) return { err: 'Flexure (Custom table of the Flexure tab): ' + Gr.err };
+    const SHR = window.SBDShearUI.build({ P, g, src: 'custom' }); if (SHR.err) return { err: 'Shear (Custom table of the Shear & stiffeners tab): ' + SHR.err };
+    const pl = CD.payload(P, g, 'shear').pl, own = (P.ownerRules || {}).owner || 'AASHTO', sup = pl.member.supports;
+    const cases = RT.shearCases(pl), ph = RT.phi(rt.phiC, rt.phiS), G = RT.factors(), opt = { G, phi: ph, mat: Gr.prj.mat };
+    const rows = [], cap = new Map();
+    Gr.rows.forEach(r => { RT.flexure(r, opt).forEach(q => { cap.set(q, r); rows.push(q); }); RT.service(r, opt).forEach(q => { cap.set(q, r); rows.push(q); }); });
+    SHR.stations.forEach(r => { const q = RT.shear(r, { ...opt, cases: cases(r.x) }); cap.set(q, r); rows.push(q); });
+    const T = RT.target(own);
+    if (T && T.fat && window.SBDFatigue && P.fatigue) { const FA = window.SBDFatigue, set = FA.settings(P.fatigue), spans = sup.slice(1).map((x, k) => x - sup[k]), B = FA.supports({ ok: true, spans, cont: sup.length > 2 });
+      if (set.ok) Gr.rows.forEach(r => { const o = FA.flange(r, { set, B, catT: P.fatigue.catT, catB: P.fatigue.catB }); (o.items || []).forEach(it => { if (it.r > 0 && isFinite(it.r)) { const q = RT.fatigue(it, r); cap.set(q, r); rows.push(q); } }); }); }
+    const sum = RT.girder(rows, { owner: own });
+    const what = `Demands: entered (Custom), unfactored: the moments of the <a href="#" data-gotab="flex">Flexure tab</a>'s Custom table (${Gr.custom.rows.length} row(s), ${Gr.rows.length} location(s)) and the shears of the <a href="#" data-gotab="shear">Shear &amp; stiffeners tab</a>'s (${SHR.custom.rows.length} row(s), ${SHR.stations.length} station(s)) of ${esc(P.girders[g].label || P.girders[g].id)}; capacities, brace points and f<sub>ℓ</sub> as on those tabs.`;
+    return { rows, sum, cap, ph, G, own, T, what, flex: Gr, shear: SHR, pl, custom: { flex: Gr.custom, shear: SHR.custom } };
+  }
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx.P), S.plName]);
 
   /* ---------- output tab ---------- */
   function css() {
@@ -109,15 +132,16 @@
     const phc = PHI_C.some(([v]) => v === +rt.phiC) ? +rt.phiC : 'other', phs = PHI_S.findIndex(([v]) => v === +rt.phiS);
     const phsSel = phs < 0 ? -1 : S.phsI != null && PHI_S[S.phsI] && PHI_S[S.phsI][0] === +rt.phiS ? S.phsI : phs;   // φ_s repeats a value: the row chosen
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis, gl = P.girders[ctx.g] || P.girders[0] || {};
-    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(), auto: !S.src, rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: gl.label || gl.id, plName: S.plName }) : '')
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(P), auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(P, 'rt')), rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: gl.label || gl.id, plName: S.plName }) : '')
       + `<section class="sec"><div class="secHead">Load rating: factors and demands</div><div class="secBody">
       <div class="fRow"><label for="rt_phiC">Condition factor φ<sub>c</sub></label><select id="rt_phiC">${PHI_C.map(([v, t]) => opt(v, t, phc)).join('')}${phc === 'other' ? opt('other', `Entered (${fmt(rt.phiC, 2)})`, 'other') : ''}</select><span class="unit">MBE Table 6A.4.2.3-1</span></div>
       <div class="fRow"><label for="rt_phiS">System factor φ<sub>s</sub></label><select id="rt_phiS">${PHI_S.map(([v, t], i) => opt(i, t, phsSel)).join('')}${phs < 0 ? opt(-1, `Entered (${fmt(rt.phiS, 2)})`, -1) : ''}</select><span class="unit">MBE Table 6A.4.2.4-1</span></div>
-      <div class="fRow"><label for="rt_src">Demands</label><select id="rt_src">${opt('analysis', "This app's analysis (Analysis tab)", srcOf())}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf())}</select></div>
-      ${srcOf() === 'file' ? `<div class="fRow"><label for="rt_file">File</label><input type="file" id="rt_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+      <div class="fRow"><label for="rt_src">Demands</label><select id="rt_src">${opt('analysis', "This app's analysis (Analysis tab)", srcOf(P))}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf(P))}${window.SBDCustomDemands ? opt('custom', 'Custom (the Flexure and Shear tabs\' entered tables)', srcOf(P)) : ''}</select></div>
+      ${srcOf(P) === 'file' ? `<div class="fRow"><label for="rt_file">File</label><input type="file" id="rt_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">LRFR design-load rating, HL-93 (MBE 6A.4.2): RF = (C − γ<sub>DC</sub>DC − γ<sub>DW</sub>DW ± γ<sub>P</sub>P)/(γ<sub>LL</sub>(LL+IM)), C = φ<sub>c</sub>φ<sub>s</sub>φR<sub>n</sub> with φ<sub>c</sub>φ<sub>s</sub> ≥ 0.85.
         Strength I: γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, γ<sub>LL</sub> 1.75 Inventory, 1.35 Operating; Service II: γ<sub>D</sub> 1.00, γ<sub>LL</sub> 1.30 / 1.00 (Table 6A.4.2.2-1). No owner η or design load multiplier (GirderDetail GS20).
-        Capacities from the <a href="#" data-gotab="flex">Flexure</a> and <a href="#" data-gotab="shear">Shear &amp; stiffeners</a> modules (AASHTO LRFD 10th Ed.). φ<sub>c</sub>, φ<sub>s</sub> are saved with the project; the demand choice is not. Legal and permit vehicles are not rated.</p></div></section>`;
+        Capacities from the <a href="#" data-gotab="flex">Flexure</a> and <a href="#" data-gotab="shear">Shear &amp; stiffeners</a> modules (AASHTO LRFD 10th Ed.). φ<sub>c</sub>, φ<sub>s</sub> and the demand choice are saved with the project (a hand-off file is not). Legal and permit vehicles are not rated.</p></div></section>`;
+    if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += `<p class="note">${window.SBDCustomDemands.SPECS.rt.unf.note}</p>` + window.SBDCustomDemands.card(P, 'flex', ctx.g) + window.SBDCustomDemands.card(P, 'shear', ctx.g);   // the two tables (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Rating results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="rt_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
@@ -127,7 +151,9 @@
     const save = () => { if (ctx.changed) ctx.changed(); else redraw(); };
     on('rt_phiC', 'change', e => { if (e.target.value === 'other') return; rt.phiC = +e.target.value; save(); });
     on('rt_phiS', 'change', e => { const i = +e.target.value; if (!(i >= 0)) return; S.phsI = i; rt.phiS = PHI_S[i][0]; save(); });
-    on('rt_src', 'change', e => { S.src = e.target.value; redraw(); });
+    on('rt_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.rt), a file for the page view
+      if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(P, 'rt', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
+    if (srcOf(P) === 'custom' && window.SBDCustomDemands) ['flex', 'shear'].forEach(m => window.SBDCustomDemands.wire(host, P, m, ctx.g, save));
     on('rt_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; const gi = R.sum.gov.inv; S.sel = gi ? R.rows.indexOf(gi) : 0; } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
     on('rt_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
       rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
@@ -173,7 +199,7 @@
         : `<tr data-rt="${i}" class="${i === S.sel ? 'sel' : ''}${q === gi ? ' fx-gov' : ''}"><td class="lft">${esc(q.name)}</td><td class="lft">${esc(q.title)}</td><td>${q.kind === 'fat' ? '' : fmt(q.C, q.unit === 'ksi' ? 2 : 1)}</td><td>${q.kind === 'fat' ? '' : fmt(q.DC, q.unit === 'ksi' ? 2 : 1)}</td><td>${q.kind === 'fat' ? '' : fmt(q.DW, q.unit === 'ksi' ? 2 : 1)}</td><td>${q.kind === 'fat' ? '' : fmt(q.LL, q.unit === 'ksi' ? 2 : 1)}</td><td>${esc(q.unit || '')}</td><td class="${cls(q.inv)}">${rfTxt(q.inv)}</td><td class="${q.kind === 'fat' ? '' : cls(q.opr)}">${q.kind === 'fat' ? '—' : rfTxt(q.opr)}</td></tr>`).join('')}
       </tbody></table></div></div></section>`;
     const q = R.rows[S.sel] || gi;
-    if (q && !q.oos) { const r = R.cap.get(q), cst = r ? r.steps : [];
+    if (q && !q.oos) { const r = R.cap.get(q), cst = r ? (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flex, r)) : [];   // with custom demands their step first
       h += `<section class="sec" id="rt-steps"><div class="secHead">Worked steps, ${esc(q.name)}: ${esc(q.title)}</div><div class="secBody"><p class="note">The rating first (${esc(window.SBDRating.MBE)}), then the ${q.kind === 'shear' ? 'shear' : 'flexure'} work of this location (the same steps as the ${q.kind === 'shear' ? 'Shear &amp; stiffeners' : 'Flexure'} tab), where R<sub>n</sub> is worked. AASHTO LRFD 10th Ed. (2024).</p>
         ${stepsHtml(q.steps)}${cst && cst.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">${q.kind === 'shear' ? 'Shear' : 'Flexure'} at ${esc(r.name)}</h4>${stepsHtml(cst, capGroups(q, cst))}` : ''}</div></section>`; }
     return h;

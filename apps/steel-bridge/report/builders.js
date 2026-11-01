@@ -249,21 +249,22 @@
     gl.forEach(q => X.gov.push({ mod: 'Fatigue & studs', grp: 'Fatigue & studs: ' + q.g, check: q.it, loc: q.g, r: q.r, key: q.key }));
     subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), note(FA.setText(R.set) + '. As on the [[tab:fat|Fatigue & studs tab]].'), tbl(['Group', 'Governing item', 'Ratio'], gl.map(q => [q.g, q.it, R3(q.r, q.key)])),
       R.FR.errors.length ? note('Fatigue: ' + R.FR.errors.join('; '), true) : null, R.SR.errors.length ? note('Shear connectors: ' + R.SR.errors.join('; '), true) : null]));
+    if (R.custom) subs.push(cdSub('fat', B));
     if (!R.FR.errors.length) { const rows = R.FR.rows, sel = all ? rows.map((r, i) => i) : faI >= 0 ? [faI] : [];
       subs.push(sub('fa', 'Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)', [note(`$ADTT_{SL}$ = ${f(R.FR.ADTTSL, 0)} trucks/day. Fatigue I where $ADTT_{SL}$ is at least the detail's infinite-life equivalent, else Fatigue II; exempt: net compression under the permanent loads (FA2).`),
         tbl(['Detail', 'Cat.', 'n', 'Limit state', 'γ(Δf) (ksi)', '$(\\Delta F)_{n}$ (ksi)', 'FA1'], rows.map((r, i) => { const a = ck('FA1').items[i] || {}; return { cells: [`${r.name}${r.exempt ? ' (exempt)' : ''}`, r.cat, String(r.nn), `Fatigue ${r.lim}`, N(r.dem, 2), N(r.res, 2),
           r.exempt ? { t: 'exempt', cls: 'ok' } : R3(a.r, sel.includes(i) && a.step ? K(fk(i), a.step) : null)], cls: i === faI ? 'gov' : '' }; })),
-        ...sel.map(i => gsteps('SBDFatigueUI:x', fk(i), FA.steps(R.FR, rows[i]), { lazy: all && i !== faI, title: rows[i].name }))])); }
+        ...sel.map(i => gsteps('SBDFatigueUI:x', fk(i), window.SBDFatigueUI.stepsOf(R, 'fa', rows[i]), { lazy: all && i !== faI, title: rows[i].name }))])); }
     if (R.gs17) { const sel = all ? R.gs17.map((q, i) => i) : R.g17 ? [R.g17.i] : [];
       subs.push(sub('gs', 'Flange stress range (GS17; 6.6.1.2, 6.10.5.1)', [note(`Top flange Category ${R.cats.T}, bottom flange Category ${R.cats.B}; n by station (Table 6.6.1.2.5-1).`),
         tbl(['Station', 'n', 'Top: limit state', 'Top ratio', 'Bottom: limit state', 'Bottom ratio'], sel.map(i => { const q = R.gs17[i]; return { cells: [q.r.name, String(q.o.fatN), `Fatigue ${q.o.fatT.lim}`, R3(q.o.items[0].r, K(gk(i), q.o.items[0].step)), `Fatigue ${q.o.fatB.lim}`, R3(q.o.items[1].r, K(gk(i), q.o.items[1].step))], cls: R.g17 && R.g17.i === i ? 'gov' : '' }; })),
-        ...sel.map(i => gsteps('SBDFatigueUI:x', gk(i), R.gs17[i].o.steps, { lazy: all && !(R.g17 && R.g17.i === i), title: `${R.gs17[i].r.name} (GS17)` }))])); }
+        ...sel.map(i => gsteps('SBDFatigueUI:x', gk(i), window.SBDFatigueUI.stepsOf(R, 'gs', R.gs17[i]), { lazy: all && !(R.g17 && R.g17.i === i), title: `${R.gs17[i].r.name} (GS17)` }))])); }
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, cc = id => C.find(c => c.id === id) || { items: [] };
       subs.push(sub('sc', `Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions`, [
         kv([['Studs', `${f(Sr.d, 3)} × ${f(Sr.h, 2)} in`], ['$Q_{r}$', `${f(Sr.Qr, 2)} kip`, K('sc', 'sc.Qr')], ['$Z_{r}$ (Fatigue I)', `${f(Sr.Zr, 3)} kip`, K('sc', 'sc.ZrI')], ['$b_{eff}$', `${f(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? "this girder's own" : 'bridge-wide'})`, K('sc', 'sc.beff')]]),
         tbl(['Zone', 'Studs', '$V_{f}$ (kip)', 'Limit state', '$V_{sr}$ (kip/in)', '$p_{max}$ (in)', 'SC1'], Sr.zones.map((z, i) => { const a = cc('SC1').items[i] || {}; return [z.name, `${z.nr} @ ${f(z.p, 2)} in`, N(z.Vfr, 1), `Fatigue ${z.fat.lim}`, N(z.Vsr, 3), N(z.preq, 2), R3(a.r, K('sc', `scz${z.i}.ok`))]; })),
         tbl(['Region', 'P (kip)', 'n required', 'n provided', 'SC2'], Sr.regions.map((r, i) => { const a = cc('SC2').items[i] || {}; return [r.name, N(r.P, 1), N(r.nreq, 2), `${r.nprov}${r.lost ? ` − ${r.lost}` : ''}`, R3(a.r, K('sc', `scr${r.i}.ok`))]; })),
-        gsteps('SBDFatigueUI:x', 'sc', SC.steps(Sr), { lazy: all, title: 'Worked steps, shear connectors' })])); }
+        gsteps('SBDFatigueUI:x', 'sc', window.SBDFatigueUI.stepsOf(R, 'sc'), { lazy: all, title: 'Worked steps, shear connectors' })])); }
     return { title: 'Fatigue and studs', subs };
   }
 
@@ -276,15 +277,16 @@
     const cell = o => !o ? '—' : { ...R3(o.ratio, keyOf(o)), t: `${f(o.ratio, 3)} (${o.row.conC ? '' : o.check.id + ', '}${f(o.row.x, 2)} ft)` };
     const ga = R.govAll;
     if (ga) X.gov.push({ mod: 'Constructibility', grp: 'Constructibility (deck placement)', check: `${ga.check.id} ${tt(ga.check.title)}`, loc: `x = ${f(ga.row.x, 2)} ft`, r: ga.ratio, key: keyOf(ga) });
-    const wh = B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gName(B.girder)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
+    const wh = R.custom ? fromHtml(R.what) : B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gName(B.girder)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
     subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = 1.25$M_{DCc}$ + 1.50$M_{CL}$, $V_{u}$ = 1.25$V_{DC1}$ + 1.50$V_{CL}$ on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; ${R.D ? flNote(B, R.D, '[[tab:cn|Constructibility tab]]').replace('$f_{\\ell}$', '$f_{\\ell}$ during deck placement') : ''}.`),
       tbl(['Span', 'Top flange in compression', 'Bottom flange in compression', 'Tension flange', 'Shear (GS16)', ...(R.oh ? ['Overhang OH1–OH4', 'OH5'] : [])], R.spans.map(s => [String(s.span), cell(s.top), cell(s.bot), cell(s.tens), cell(s.shear), ...(R.oh ? [cell(s.oh), cell(s.ohfl)] : [])])),
       R.oh && R.oh.errors && R.oh.errors.length ? note('Overhang brackets: ' + R.oh.errors.join(' '), true) : null]));
+    if (R.custom) subs.push(cdSub('cn', B));
     if (all) subs.push(sub('all', 'Results at every location', [tbl(['Location', 'x (ft)', '$M_{c}$ (kip-ft)', 'Flange in compression', 'Governing check', 'Ratio'], rows.map(r => ({ cells: [r.name, N(r.x, 2), N(r.Mc, 1), r.conC.lab, `${r.gov.id} ${tt(r.gov.title)}`, R3(r.gov.ratio, K(sc(r), r.gov.step))], cls: r === R.gov ? 'gov' : '' })))]));
     const one = r => [checksTbl(r, sc(r)), kv([['$M_{c}$', `${f(r.Mc, 1)} kip-ft`, K(sc(r), 'cn.Mc')], ['$L_{b}$ / $C_{b}$ (deck placement)', `${f(r.LbC, 2)} ft / ${f(r.CbCu, 3)}`, K(sc(r), 'cn.Cb')], ['$F_{nc}$ (FLB / LTB)', `${f(r.ltC.FLB, 2)} / ${f(r.ltC.LTB, 2)} ksi`, K(sc(r), 'cn.Fnc')]]),
-      gsteps('SBDConstrUI:x', sc(r), r.steps, { title: 'Worked steps' })];
+      gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { title: 'Worked steps' })];
     shown.filter(r => gset.has(r)).forEach(r => subs.push(sub(sc(r), `${r.name}, x = ${f(r.x, 2)} ft${r === R.gov ? ' (governing)' : ''}`, one(r))));
-    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => gsteps('SBDConstrUI:x', sc(r), r.steps, { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
+    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
     if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh;
       subs.push(sub('oh', 'Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)', [kv([['$w_{u}$', `${f(O.wu, 4)} kip/ft`], ['$F_{\\ell}$ / $P_{\\ell}$', `${f(O.Fl, 4)} kip/ft / ${f(O.Pl, 3)} kip`, O.rows[0] ? K(oc(O.rows[0]), 'oh.Fl') : null]]),
         tbl(['Location', '$M_{u}$ (kip-ft)', '$M_{\\ell}$ (kip-in)', 'Governing', 'Ratio'], O.rows.map(o => [o.name, N(o.Mu, 1), N(o.Ml, 1), o.gov.id, R3(o.gov.ratio, K(oc(o), o.gov.step))])),
@@ -379,7 +381,7 @@
   function rt(B, X) {
     const R = B.rating, s = R.sum, all = X.detail === 'all', subs = [], rk = q => 'rt@' + R.rows.indexOf(q), rfStep = q => (q.steps.find(t => /(^|\.)inv$/.test(t.id)) || q.steps[q.steps.length - 1] || {}).id;
     let nCap = 0; const capOf = q => { const r = R.cap.get(q); if (!r) return { sc: null, item: null }; let sc = X.have.get(r), item = null;
-      if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = gsteps(q.kind === 'shear' ? 'SBDShearUI:loc' : 'SBDFlexureUI:x', sc, r.steps || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
+      if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = gsteps(q.kind === 'shear' ? 'SBDShearUI:loc' : 'SBDFlexureUI:x', sc, (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flex, r)) || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
       return { sc, item }; };
     const gi = s.gov.inv, go = s.gov.opr, rf = v => !isFinite(v) ? '—' : f(v, 2), rcls = v => !isFinite(v) ? '' : v < 1 - 1e-9 ? 'ng' : v < 1.1 ? 'hi' : 'ok';
     if (gi) X.gov.push({ mod: 'Rating', grp: 'Rating: Inventory RF', check: `Inventory RF, ${tt(gi.title)}`, loc: gi.name, rf: gi.inv, key: K(rk(gi), rfStep(gi)) });
@@ -401,6 +403,7 @@
         { t: rf(q.inv), cls: rcls(q.inv), n: true, key: K(rk(q), rfStep(q)) }, q.kind === 'fat' ? '—' : { t: rf(q.opr), cls: rcls(q.opr), n: true }], cls: q === gi ? 'gov' : '' })),
         ...rest.map(q => { const c = capOf(q); if (c.item) caps.push(c.item); return gsteps('SBDRatingUI:x', rk(q), q.steps, { see: c.sc, lazy: true, title: `${q.name}: ${tt(q.title)}, RF ${rf(q.inv)} / ${rf(q.opr)}` }); })])); }
     if (caps.length) subs.push(sub('cap', 'Capacities used by the rating (worked here: not shown in an earlier section of this report)', caps));
+    if (R.custom) { subs.push(cdSub('flex', B)); subs[subs.length - 1].id = 'cdf'; subs.push(cdSub('shear', B)); subs[subs.length - 1].id = 'cds'; }   // the tables the rating took (custom demands PR)
     return { title: 'Load rating (LRFR, design load)', subs };
   }
 
