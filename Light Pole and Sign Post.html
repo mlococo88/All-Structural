@@ -841,7 +841,7 @@
     <section class="card" id="signComboCard" data-tab="loading" style="display:none">
       <div class="card-h"><span class="num">3b</span><h2>Load combinations — per-post demand</h2><span class="hint">non-ice ASCE 7 combinations</span></div>
       <div class="card-body">
-        <p class="tbl-note">Signs carry no ice load, so only the non-ice combinations apply. Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. Governing rows (largest M) are highlighted for each design family.</p>
+        <p class="tbl-note">Every combination applies, the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01). Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. Governing rows (largest M) are highlighted for each design family.</p>
         <table class="tbl" id="sgComboTbl"></table>
       </div>
     </section>
@@ -1110,7 +1110,7 @@ function applyMode(){
   const cabCard=$('cableCard');
   if(fixCard) fixCard.style.display = sign?'none':'';
   if(cabCard) cabCard.style.display = sign?'none':'';
-  show('iceCard', !sign);   // ice & wind-on-ice: light-pole only (no ice on sign panel)
+  show('iceCard', true);    // ice & wind-on-ice: light pole and (2026-11-01) sign panel and posts
   show('rowFixCf', !sign);
   show('rowSpacing', sign && signPosts===2);
   // output panels that are light-pole-only
@@ -1604,8 +1604,27 @@ function signWind(inp){
     const eC=B/2 - xR;
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
+  // ---- atmospheric ice on the sign (added 2026-11-01, engineer decision; ASCE 7-22 Ch. 10) ----
+  // Panel: flat vertical plate. Ice volume per §10.4.1 (flat plates): the area of one side × t_d × 0.8 for a vertical plate
+  // (as read; verify), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
+  // edge, (B + 2t_d)(s + 2t_d), same C_f, at V_ice with the sign K_d and G; Cases B and C keep their eccentricity, scaled by the
+  // same factor. Posts: radial ice t_d (§10.4.1, cylinder) on the whole post (weight) and the iced width D + 2t_d for the exposed
+  // drag at V_ice.
+  const tdP=iceTd(inp, zc), tdPft=tdP/12;
+  const qhI=0.00256*Kzh*inp.Kzt*inp.KdSign*inp.G*inp.Vice*inp.Vice;
+  const AsI=(B+2*tdPft)*(s+2*tdPft);
+  const F_Ai=qhI*cfAB*AsI;
+  const iceScale = F_A>0 ? F_Ai/F_A : 0;
+  if(caseC) caseC.FI=caseC.F*iceScale;
+  const WiPanel=inp.iceDen*0.8*As*tdPft;                   // lb (total panel ice)
+  let FpostI=0, MpostI=0;
+  postStrips.forEach(st=>{ const td=iceTd(inp,st.z);
+    st.FI=0.00256*Kz(st.z,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
+  const tdPost=iceTd(inp, h/2);
+  const WiPost=iceWeight(tdPost, postW_in, inp.iceDen)*h;   // lb per post (whole post, grade to the top of the panel)
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
-          Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost};
+          Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost,
+          tdP,qhI,AsI,F_Ai,iceScale,WiPanel,FpostI,MpostI,tdPost,WiPost};
 }
 
 // ---- fixture load components (per fixture, unfactored, by source) ----
@@ -2376,7 +2395,7 @@ manPart("p2","2. Input Reference",[
  ["Cable modulus, E","ksi","Stiffness method only: the EA term","29,000 ksi for steel strand is typical, but stranded cable has a lower <i>effective</i> modulus than solid steel \u2014 often 23,000 to 28,000 ksi. Use the manufacturer's value if available."]
 ]}},
 
-{h:"2.6 Ice (light pole only)"},
+{h:"2.6 Ice (light pole, and sign panel and posts since 2026-11-01)"},
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
  ["Radial ice thickness, t","in","Ice weight on cable, mast and fixtures; iced projected widths","Nominal thickness from the ASCE 7-22 ice map (Ch. 10) for the site and Risk Category. With the basis \"Map value\" the tool computes t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> for the mast and fixtures; cables use t as entered. Zero disables all ice cases."],
  ["Ice density","lb/ft\u00b3","Ice weight","56 lb/ft\u00b3 is the ASCE 7 value for glaze ice."],
@@ -3011,7 +3030,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   const two=nP===2;
   let H='';
   H+=`<p class="eq-why">Complete load path from the panel to each post's groundline demand: geometry and lever arms, the dead-load (axial) path, the wind-case force split between posts, and the shear/moment assembly. Every number here is the same computation that feeds the Shaft tab — the governing P, M, N below match the foundation demand exactly.</p>`;
-  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0"><b>Scope note — ice on signs.</b> Atmospheric ice (panel ice weight and wind-on-ice) is <b>not applied</b> to sign panels in this tool: the sign load path carries only dead (D) and bare wind (W). The ice combinations therefore produce no lateral demand for signs and never govern. If glaze ice on a large panel is a design condition at your site, it must be evaluated separately.</p></div>`;
+  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0"><b>Ice on signs (added 2026-11-01).</b> Atmospheric ice (ASCE 7-22 Ch. 10) is applied to the sign: panel ice weight ${fmt(sw.WiPanel,0)} lb (flat plate, §10.4.1), post ice ${fmt(sw.WiPost,0)} lb per post, and wind on the iced panel (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) and posts at V<sub>ice</sub> in the ice combinations. Worked in the sign wind section.</div>`;
 
   // ---- 1 · geometry & lever arms ----
   H+=step(`1 · Panel geometry &amp; lever arms`);
@@ -3066,6 +3085,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   postGovList.forEach((pg,p)=>{
     const gl=pg.gLRFD, cf=COMBOS[gl.key]||COMBOS.L1;
     const fW=cf.W, fD=cf.D;
+    if(cf.Wi>0||cf.Di>0){ H+=`<p class="eq-why" style="margin-top:10px"><b>Post ${p+1}</b> — governs under the ice combination <b>${gl.name}</b>, wind toward ${fmt(gl.phi||0,0)}°, Case ${gl.case}: V<sub>u</sub> = ${fmt(gl.P,0)} lb, M<sub>u</sub> = ${fmt(gl.M,0)} lb·ft, N<sub>u</sub> = ${fmt(gl.axial,0)} lb (wind on the iced panel and post and the ice weight, worked in the sign wind section).</p>`; return; }
     // rebuild this post's governing case at its own azimuth, exactly as evalSignComboDir does
     const phi=gl.phi||0;
     const faceFactor=Math.max(0,Math.cos(phi*RAD)), faceBack=Math.max(0,-Math.cos(phi*RAD));
@@ -3120,17 +3140,17 @@ function evalSignComboDir(key,inp,pw,sw,phi){
   // choose governing sign wind case per post
   // Case A: centered. Case B: e=0.2B. Case C: e = sw.caseC.e (net). Force magnitudes:
   const cases=[];
-  cases.push({name:'A', F:sw.F_A*onFace, x:0});
+  cases.push({name:'A', F:sw.F_A*onFace, FI:(sw.F_Ai||0)*onFace, x:0});
   // Cases B and C apply to every sign (ASCE 7-22 Fig. 29.3-1). On two posts their eccentricity is
   // resolved by statics into an unequal force split; on a MONOPOST it twists the post: torsion
   // T = F·|x| about the post axis (added 2026-10-12; previously only Case A was used on a monopost).
-  cases.push({name:'B', F:sw.F_A*onFace, x:0.2*sw.B*windSign});
-  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onFace, x:sw.caseC.e*windSign}); }
+  cases.push({name:'B', F:sw.F_A*onFace, FI:(sw.F_Ai||0)*onFace, x:0.2*sw.B*windSign});
+  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onFace, FI:(sw.caseC.FI||0)*onFace, x:sw.caseC.e*windSign}); }
   // post self-wind (drag on the EXPOSED post below the panel), acts along wind dir, per post.
   // Uses the clearance-height drag from signWind (sw.Fpost), NOT the full-height mast wind,
   // so the strip behind the panel is not double-counted.
-  const postWindEach = f.W*sw.Fpost;                  // lb (per post, nominal*factor)
-  const postWindMEach= f.W*sw.Mpost;                  // lb-ft
+  const postWindEach = f.W*sw.Fpost + f.Wi*(sw.FpostI||0);   // lb (per post, nominal*factor; + wind on the iced post, 2026-11-01)
+  const postWindMEach= f.W*sw.Mpost + f.Wi*(sw.MpostI||0);   // lb-ft
 
   // sign dead load split evenly; each post self-weight added
   const signWt=inp.signWt;                            // lb, total panel weight
@@ -3142,13 +3162,13 @@ function evalSignComboDir(key,inp,pw,sw,phi){
   for(let p=0;p<nPost;p++){
     let worst=null, worstT=null;
     cases.forEach(cs=>{
-      const shares=signPostSplit(cs.F, cs.x, Lp, nPost);
-      const Fp=f.W*shares[p];                          // factored wind share on this post
+      const shares=signPostSplit(cs.F, cs.x, Lp, nPost), sharesI=signPostSplit(cs.FI||0, cs.x, Lp, nPost);
+      const Fp=f.W*shares[p] + f.Wi*sharesI[p];        // factored wind share on this post (+ wind on the iced panel, 2026-11-01)
       // sign wind acts at zA (Case A/B) or its own height for C (use centroid)
       const zarm=cs.name==='C'? sw.zc : sw.zA;
       const Vwind=Fp + postWindEach;                   // + post's own drag
       const Mwind=Fp*zarm + postWindMEach;
-      const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0));   // + misc. dead load per post (2026-10-12)
+      const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0)) + f.Di*((sw.WiPanel||0)/nPost + (sw.WiPost||0));   // + misc. DL (2026-10-12); + ice (2026-11-01)
       const M=Mwind, P=Vwind;
       const T=nPost===1? Math.abs(Fp*cs.x) : 0;        // lb-ft, monopost torsion
       const rec={case:cs.name, Fp, P, M, h:P>0?M/P:0, axial, zarm, T};
@@ -3918,8 +3938,9 @@ function calcSign(inp){
   const sw=signWind(inp);
 
   // evaluate all combos -> per-post governing demand
-  // signs carry no ice load, so only the non-ice combinations apply (drop L2/L3/A2/A3)
-  const SIGN_COMBO_KEYS=COMBO_KEYS.filter(k=>{const c=COMBOS[k];return c.Di===0&&c.Wi===0;});
+  // 2026-11-01: ice on the sign panel and posts (ASCE 7-22 Ch. 10) → every combination applies, the ice ones included
+  // (before: only the non-ice combinations; signs carried no ice)
+  const SIGN_COMBO_KEYS=COMBO_KEYS.slice();
   const allCombos=SIGN_COMBO_KEYS.map(k=>evalSignCombo(k,inp,pw,sw));
   const byKey={}; allCombos.forEach(r=>byKey[r.key]=r);
   const nPost=inp.signPosts;
@@ -3984,7 +4005,8 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
   const wMast=(sw.Fpost>0 && sw.postExpH>0)?(f.W*sw.Fpost)/sw.postExpH:0;   // post self-wind per ft over EXPOSED (clearance) height only
   const clrH=sw.clr||0;
   const Tu=gLRFD.T||0;                     // factored torsion on the post (lb-ft), monopost only
-  const Npanel=f.D*(inp.signWt||0)/(inp.signPosts||1);   // this post's share of the panel dead load
+  const Npanel=f.D*(inp.signWt||0)/(inp.signPosts||1) + f.Di*(sw.WiPanel||0)/(inp.signPosts||1);   // this post's share of the panel dead load (+ panel ice, 2026-11-01)
+  const wIcePost=(sw.WiPost||0)/Math.max(inp.H,1e-9);   // lb/ft of ice on the post (2026-11-01)
   // first-order moment / shear at height z
   const secM=(z)=>{
     let M=0,V=0;
@@ -3993,7 +4015,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     // above the panel bottom the post is shielded and the panel force already covers that wind.
     // 2026-10-12: the factored drag strips of signWind (q_z varies with height) replace the uniform w.
     if(sw.postStrips){
-      sw.postStrips.forEach(st=>{ if(st.z>z){ V+=f.W*st.F; M+=f.W*st.F*(st.z-z); } });
+      sw.postStrips.forEach(st=>{ if(st.z>z){ const Fs=f.W*st.F + f.Wi*(st.FI||0); V+=Fs; M+=Fs*(st.z-z); } });
     } else if(z < clrH){
       const hAbove=clrH - z;            // exposed length above this section, up to the panel bottom
       const Hm=wMast*hAbove;            // shear from the exposed strip above this cut
@@ -4001,14 +4023,14 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     }
     return {M,V};
   };
-  const p2=poleB2(inp, z=>({Mx:secM(z).M, My:0}), f.D*(poleSeg.totalW+(inp.DL||0))+Npanel);
+  const p2=poleB2(inp, z=>({Mx:secM(z).M, My:0}), f.D*(poleSeg.totalW+(inp.DL||0))+Npanel+f.Di*wIcePost*inp.H);
   const B2=p2.B2;
   const rows=poleSeg.segs.concat([poleBaseSection(poleSeg,inp)]).map(s=>{
     const z=s.zMid;
     const sm=secM(z);
     const M1=sm.M, M=B2*M1, V=sm.V;
     let N=0;
-    N+=f.D*(s.cumWabove+(inp.DL||0))+Npanel;
+    N+=f.D*(s.cumWabove+(inp.DL||0))+Npanel+f.Di*wIcePost*(inp.H-z);
     const Pr=N/1000;                                  // kip
     const Mr=M*12/1000;                               // kip-in (single axis: strong for the panel face)
     // wind on the sign acts on the panel face → bending about the axis perpendicular to the face.
@@ -4296,7 +4318,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // 2. load combinations per post (the Loading tab's own table)
   if($('sgComboTbl')&&$('sgComboTbl').innerHTML){
     H+=`<details class="rpt-sec" data-old="2" open><summary><span class="tag">2</span><h3>Load combinations — per-post demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-    H+=`<p class="eq-why">Signs carry no ice load, so only the non-ice combinations apply. Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. The governing row of each family (largest M on any post) is marked.</p>`;
+    H+=`<p class="eq-why">Every combination applies, the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01). Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. The governing row of each family (largest M on any post) is marked.</p>`;
     H+=`<table class="tbl">${$('sgComboTbl').innerHTML}</table>`;
     if(nPost===2){
       H+=eqB('Two-post force split',
@@ -5690,6 +5712,14 @@ function signWindWorkedHTML(sw, inp){
   }
   H+=`<p class="eq-result"><b>${nPost===1?'Torsion':'Limitation — torsion'}:</b> ${nPost===1?'the eccentric Cases B/C twist the monopost (T = F·e); the post, anchor bolts and shaft threshold are checked for it, the soil torsional resistance is not.':'eccentric Cases B/C are applied as an unequal two-post force split, and no member is checked for torsion; if true torsional resistance is required, a separate analysis is needed.'} All applicable cases are enveloped per post in the load-combination matrix below.</p>`;
   H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
+  if(sw.F_Ai!==undefined){
+    H+=step(`Ice on the sign ${ref('ASCE 7-22 §10.4.1, §10.4.6, §10.5')}`);
+    H+=`<p class="eq-why">Design ice thickness at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height; panel ice volume per §10.4.1 for a flat plate (one side × t<sub>d</sub> × 0.8 for a vertical plate, as read — verify); wind on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>; Cases B/C scaled by the same factor; posts: radial ice on the whole post and the iced width for the exposed drag.</p>`;
+    H+=g(`t_d = ${fmt(sw.tdP,3)}\\ \\text{in}\\qquad W_{i,panel} = \\gamma_{ice}(0.8)A_s\\,t_d = ${fmt(inp.iceDen,0)}(0.8)(${fmt(sw.As,1)})\\left(\\tfrac{${fmt(sw.tdP,3)}}{12}\\right) = ${fmt(sw.WiPanel,1)}\\ \\text{lb}`);
+    H+=g(`q_{hi}K_dG = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${fmt(inp.Vice,0)})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qhI,2)}\\ \\text{psf}\\qquad A_{s,i} = (B+2t_d)(s+2t_d) = ${fmt(sw.AsI,2)}\\ \\text{ft}^2`);
+    H+=g(`F_{A,i} = q_{hi}K_dG\\,C_f\\,A_{s,i} = ${fmt(sw.qhI,2)}(${fmt(sw.cfAB,3)})(${fmt(sw.AsI,2)}) = ${fmt(sw.F_Ai,0)}\\ \\text{lb}${sw.caseC?`\\qquad F_{C,i} = ${fmt(sw.caseC.FI,0)}\\ \\text{lb}`:''}`);
+    H+=g(`W_{i,post} = \\gamma_{ice}\\frac{\\pi[(D/2+t_d)^2-(D/2)^2]}{144}h = ${fmt(sw.WiPost,1)}\\ \\text{lb/post}\\ (t_d = ${fmt(sw.tdPost,3)}\\text{ in})\\qquad F_{post,i} = ${fmt(sw.FpostI,1)}\\ \\text{lb/post}`);
+  }
   H+=natGfWorkedHTML(inp);
   return H;
 }

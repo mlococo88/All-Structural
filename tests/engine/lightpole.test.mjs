@@ -250,3 +250,16 @@ test('Breakout group form, the engineer\'s check case (default before arm wind: 
   // at an azimuth of exactly 0°: ΣT = 19,405, φN_cbg = 22,408 → 0.866 (the app's moment azimuth is slightly off 0°: 19,401 / 22,323 = 0.869)
   near(b.Tsum, 19405, 2, 'ΣT'); near(b.phiNcbg, 22408, 2, 'φN_cbg'); near(b.trBrk, 0.866, 0.001, 'D/C');
 });
+
+/* ---------- ice on sign panels (engineer, 2026-11-01) ---------- */
+test('Sign ice: t_d at the panel centroid; W_i = 56·0.8·72·t_d/12; F_A,i = q_hi·C_f·(B+2t_d)(s+2t_d) at V_ice', () => {
+  const lp = lpEngine();
+  const inp = lpDefaultInp({ mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'map', iceIi: 1, tIce: 0.5 });
+  const sw = lp.call('signWind', inp);
+  // z_c = 13 ft: t_d = 0.5·(13/33)^0.1 = 0.4555 in
+  near(sw.tdP, 0.5 * Math.pow(13 / 33, 0.1), 1e-12, 't_d'); near(sw.tdP, 0.4555, 0.0001, 't_d');
+  near(sw.WiPanel, 56 * 0.8 * 72 * sw.tdP / 12, 1e-9, 'panel ice'); near(sw.WiPanel, 122.4, 0.1, 'panel ice');
+  near(sw.qhI, 0.00256 * sw.Kzh * 0.85 * 0.85 * 50 * 50, 1e-9, 'q_hi');
+  near(sw.F_Ai, sw.qhI * sw.cfAB * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i');
+  assert.ok(sw.F_Ai < 0.3 * sw.F_A, 'wind on ice (50 mph) well below the bare wind');
+});
