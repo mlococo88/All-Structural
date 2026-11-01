@@ -9389,6 +9389,178 @@ function abrModel(){
       secTopics(T,"ia",k,c.sec,{F:id+"F",V:id+"V",Min:id+"Min",Crack:id+"Crack"},nm,"tab-iab");
       subs.push({title:nm,items:[abrTopics("ia",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-iab","o-str-"+c.sec.name)+"."}]}); });
     if(subs.length) secs.push({title:Q.integ?"Integral abutment":"Semi-integral end diaphragm",note:"The thermal movement, earth pressure on the moving wall and the member demands are worked on "+abrTab("tab-iab")+".",subs}); }
+  /* ---------- ABRF (2026-11-01): worked steps for the remaining check families (engineer: every report self-contained). Each family
+     writes the tool's own result fields (R.checks.pileStr / pileCF / punching / dowel, R.bwEE, R.wing.ts / dev / stab, R.iab.pile / wEE / dEE,
+     R.apShelf, R.apDes) and ends with the dashboard's D/C step (dcStep: the dashboard value and pass). Placed in the section of its tab. ---------- */
+  { const C=R.checks, addSub=(title,sub)=>{ let s=secs.find(x=>x&&x.title===title); if(!s){ s={title,subs:[]}; secs.push(s); } s.subs.push(sub); };
+    const fc=+m.fc, fy=+m.fy, sq=x=>"\\sqrt{"+abrN(x,1)+"}";
+    /* piles: structural axial, combined axial and flexure, shear, punching */
+    if(has("pileS")||has("pileM")||has("punching")){ const T=[];
+      const ps=C.pileStr; if(ps&&ps.ok&&has("pileS")){ const w=topic(T,"pS","Pile structural axial resistance",ABR_AA+"Art. 10.7.3.13, 6.9.4");
+        w.add({id:"Pu",label:"Factored structural pile load ("+(ps.PuLs||"")+(ps.DR>0?"; with the drag load":"")+")",sym:"P_{u}",eq:ps.DR>0?"P_{max} + \\gamma_{DR} DR":"P_{max}",sub:ps.DR>0?abrN(ps.PuTop,1)+" + "+abrN(ps.gDR)+"\\cdot "+abrN(ps.DR,1):abrN(ps.PuTop,1),value:ps.Pu,unit:"kip",d:1});
+        if(ps.user) w.add({id:"Pr",label:"Factored structural resistance, entered (square / precast pile)",sym:"P_{r}",eq:"",sub:"",value:ps.Pr,unit:"kip",d:1});
+        else{ if(ps.buck) w.add({id:"Fcr",label:"Flexural buckling over the unsupported length (KL/r = "+abrN(ps.buck.KLr,1)+", P_o/P_e = "+abrN(ps.buck.ratio,3)+")",sym:"F_{cr}",eq:ps.buck.ratio<=2.25?"0.658^{P_{o}/P_{e}} F_{y}":"0.877 P_{e}/A",sub:"",value:ps.Fcr,unit:"ksi",d:2,ref:ABR_AA+"Eqs. 6.9.4.1.1-1, -2"});
+          else w.add({id:"Fcr",label:"Fully embedded: no flexural buckling",sym:"F_{cr}",eq:"F_{y}",sub:abrN(ps.Fy,1),value:ps.Fcr,unit:"ksi",d:2});
+          w.add({id:"Ae",label:ps.shp==="hp"?"Effective area "+ps.sec+" (flange "+(ps.fl.slender?"slender":"nonslender")+", web "+(ps.wb.slender?"slender":"nonslender")+")":"Effective area, "+ps.sec+" ("+ps.mode+")",sym:"A_{eff}",eq:"",sub:"",value:ps.Aeff,unit:"in^{2}",d:2,ref:ABR_AA+"Art. 6.9.4.2.2"});
+          w.add({id:"Pn",label:"Nominal axial resistance",sym:"P_{n}",eq:"F_{cr} A_{eff}",sub:abrN(ps.Fcr,2)+"\\cdot "+abrN(ps.Aeff,2),value:ps.Pn,unit:"kip",d:1});
+          w.add({id:"Pr",label:"Factored resistance ("+ps.drive+" driving)",sym:"P_{r}",eq:"\\phi_{c} P_{n}",sub:abrN(ps.phiC)+"\\cdot "+abrN(ps.Pn,1),value:ps.Pr,unit:"kip",d:1,ref:ABR_AA+"Art. 6.5.4.2"}); }
+        w.add({id:"rS",label:"Ratio at strength",sym:"\\frac{P_{u}}{P_{r}}",eq:"",sub:"\\frac{"+abrN(ps.Pu,1)+"}{"+abrN(ps.Pr,1)+"}",value:ps.dcS,unit:"",d:3});
+        if(ps.dcE!=null) w.add({id:"rE",label:"Ratio at Extreme Event I (φ = 1.0)",sym:"\\frac{P_{ee}}{P_{n}}",eq:"",sub:"\\frac{"+abrN(ps.Pee,1)+"}{"+abrN(ps.PrEE,1)+"}",value:ps.dcE,unit:"",d:3,ref:ABR_AA+"Art. 6.5.5"});
+        dcStep(w,"fd","pileS","Pile structural axial (the larger ratio)","","",ABR_AA+"Art. 10.7.3.13"); }
+      const pf=C.pileCF; if(pf&&pf.ok&&has("pileM")){ const g=pf.gI, eqn=g.eqn; let w=topic(T,"pM","Pile combined axial and flexure",ABR_AA+"Art. 6.9.2.2.1");
+        w.add({id:"Pu",label:"Factored pile load, "+g.ls+" (pile "+g.pile+")",sym:"P_{u}",eq:"",sub:"",value:g.Pu,unit:"kip",d:1});
+        w.add({id:"Pr",label:"Factored axial resistance (φ_c for combined loading)",sym:"P_{r}",eq:"\\phi_{c} P_{n}",sub:abrN(g.phiC)+"\\cdot "+abrN(pf.Pn,1),value:g.Pr,unit:"kip",d:1,ref:ABR_AA+"Art. 6.5.4.2"});
+        w.add({id:"rP",label:"Axial ratio",sym:"\\frac{P_{u}}{P_{r}}",eq:"",sub:"\\frac{"+abrN(g.Pu,1)+"}{"+abrN(g.Pr,1)+"}",value:g.rP,unit:"",d:3});
+        const src=g.src==="pd"?"Pile Designer p-y moment":g.src==="py"?"entered p-y moment":"elastic Matlock–Reese solution";
+        w.add({id:"ML",label:"Moment, longitudinal H ("+src+(g.dL!==1?"; δ_s = "+abrN(g.dL,3):"")+")",sym:"M_{u,L}",eq:"\\delta_{s} M_{L}",sub:abrN(g.dL,3)+"\\cdot "+abrN(g.ML,1),value:g.MuL,unit:"kip-in",d:1});
+        w.add({id:"MT",label:"Moment, transverse H",sym:"M_{u,T}",eq:"\\delta_{s} M_{T}",sub:abrN(g.dT,3)+"\\cdot "+abrN(g.MT,1),value:g.MuT,unit:"kip-in",d:1});
+        w.add({id:"MnL",label:"Flexural resistance, axis of the longitudinal H (φ_f = 1.0)",sym:"M_{r,L}",eq:"",sub:"",value:pf.MnL,unit:"kip-in",d:1,ref:ABR_AA+"Art. 6.12.2.2"});
+        w.add({id:"MnT",label:"Flexural resistance, axis of the transverse H",sym:"M_{r,T}",eq:"",sub:"",value:pf.MnT,unit:"kip-in",d:1});
+        w.add({id:"mS",label:"Flexure sum",sym:"\\sum\\frac{M_{u}}{M_{r}}",eq:"\\frac{M_{u,L}}{M_{r,L}} + \\frac{M_{u,T}}{M_{r,T}}",sub:"\\frac{"+abrN(g.MuL,1)+"}{"+abrN(pf.MnL,1)+"} + \\frac{"+abrN(g.MuT,1)+"}{"+abrN(pf.MnT,1)+"}",value:g.mS,unit:"",d:3});
+        const eqT=eqn==="6.9.2.2.1-2"?"\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\sum\\frac{M_{u}}{M_{r}}":eqn==="6.9.2.2.1-1"?"\\frac{P_{u}}{2P_{r}} + \\sum\\frac{M_{u}}{M_{r}}":"\\frac{P_{u}}{P_{r}} + \\sum\\frac{M_{u}}{M_{r}}";
+        const sbT=eqn==="6.9.2.2.1-2"?abrN(g.rP,3)+" + \\frac{8}{9}\\cdot "+abrN(g.mS,3):eqn==="6.9.2.2.1-1"?"\\frac{"+abrN(g.rP,3)+"}{2} + "+abrN(g.mS,3):abrN(g.rP,3)+" + "+abrN(g.mS,3);
+        dcStep(w,"fd","pileM","Interaction, Eq. "+eqn+(pf.cmpAll?"":" (an element not compact: linear)"),eqT,sbT,ABR_AA+"Eq. "+eqn);
+        if(has("pileV")){ const v=pf.gV; w=topic(T,"pV","Pile shear (φ_v = 1.0)",ABR_AA+"Art. 6.10.9.2, 6.12.1.2.3");
+          w.add({id:"VnL",label:"Shear resistance, longitudinal H",sym:"V_{n,L}",eq:"",sub:"",value:pf.VnL,unit:"kip",d:1});
+          w.add({id:"VnT",label:"Shear resistance, transverse H",sym:"V_{n,T}",eq:"",sub:"",value:pf.VnT,unit:"kip",d:1});
+          dcStep(w,"fd","pileV","Pile shear, "+v.ls+" (H per pile = H/n)","\\max\\left(\\frac{|H_{x}|}{V_{n,L}},\\,\\frac{|H_{y}|}{V_{n,T}}\\right)","\\max\\left(\\frac{"+abrN(Math.abs(v.Hx),2)+"}{"+abrN(pf.VnL,1)+"},\\,\\frac{"+abrN(Math.abs(v.Hy),2)+"}{"+abrN(pf.VnT,1)+"}\\right)",ABR_AA+"Art. 6.10.9.2"); } }
+      const pu=C.punching; if(pu&&has("punching")){ const w=topic(T,"pun","Punching shear at the governing pile (pile "+pu.pile+")",ABR_AA+"Art. 5.12.8.6");
+        w.add({id:"de",label:"Effective depth over the pile heads (h_p = "+abrN(pu.hP,1)+" in, clear cover "+abrN(pu.clrTop,1)+" in, two layers of d_b)",sym:"d_{e}",eq:"h_{p} \\minus c \\minus d_{b}",sub:abrN(pu.hP,1)+" \\minus "+abrN(pu.clrTop,1)+" \\minus "+abrN(pu.db,3),value:pu.de,unit:"in",d:2});
+        w.add({id:"dv",label:"Effective shear depth",sym:"d_{v}",eq:"\\max(0.9 d_{e},\\,0.72 h_{p})",sub:"\\max(0.9\\cdot "+abrN(pu.de)+",\\,0.72\\cdot "+abrN(pu.hP,1)+")",value:pu.dv,unit:"in",d:2,ref:ABR_AA+"Art. 5.7.2.8"});
+        w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
+        w.add({id:"Vn",label:"Nominal two-way shear resistance (β_c = "+abrN(pu.betaC,1)+")",sym:"V_{n}",eq:"\\left(0.063 + \\frac{0.126}{\\beta_{c}}\\right)\\sqrt{f^{\\prime}_{c}}\\,b_{0} d_{v} \\le 0.126\\sqrt{f^{\\prime}_{c}}\\,b_{0} d_{v}",sub:abrN(pu.vnCoef,3)+"\\cdot "+sq(fc)+"\\cdot "+abrN(pu.b0,1)+"\\cdot "+abrN(pu.dv),value:pu.Vn,unit:"kip",d:1,ref:ABR_AA+"Eq. 5.12.8.6.3-1"});
+        w.add({id:"Vu",label:"Pile reaction ("+(pu.ls||"")+")",sym:"V_{u}",eq:"",sub:"",value:pu.Vu,unit:"kip",d:1});
+        dcStep(w,"fd","punching","Punching shear","\\frac{V_{u}}{0.9 V_{n}}","\\frac{"+abrN(pu.Vu,1)+"}{0.9\\cdot "+abrN(pu.Vn,1)+"}",ABR_AA+"Art. 5.12.8.6"); }
+      if(T.length) addSub("Foundation and piles",{title:"Pile structural checks and punching",items:[abrTopics("fd",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-found","o-pilestr")+"."}]}); }
+    /* structural: stem dowels, backwall at the extreme event / seismic stop, approach-slab shelf and slab reinforcement */
+    { const T=[], tbS=iabType()==="integral"?"tab-iab":"tab-struct";
+      const dw=C.dowel; if(dw&&has("dowelDev")){ let w=topic(T,"dwD","Stem dowels: development into the footing",ABR_AA+"Art. "+(dw.hook?"5.10.8.2.4":"5.10.8.2.1a"));
+        w.add({id:"lAv",label:"Available embedment: footing less the bottom cover and two layers of the bottom mat",sym:"\\ell_{av}",eq:"12 t_{f} \\minus c_{bot} \\minus 2 d_{b,toe}",sub:abrN(g.tf*12,1)+" \\minus "+abrN(dw.cBot,2)+" \\minus 2\\cdot "+abrN(dw.dbT,3),value:dw.lAv,unit:"in",d:2});
+        if(dw.hook){ w.add({id:"Fh",label:"Force in the bend (R_h = "+abrN(dw.Rh,3)+" in, ν = "+abrN(dw.nu,3)+")",sym:"F_{h}",eq:"d_{b} R_{h} \\nu f^{\\prime}_{c}",sub:abrN(dw.db,3)+"\\cdot "+abrN(dw.Rh,3)+"\\cdot "+abrN(dw.nu,3)+"\\cdot "+abrN(fc,1),value:dw.Fh,unit:"kip",d:2,ref:ABR_AA+"Eq. 5.10.8.2.4a-2"});
+          w.add({id:"ldb",label:"Basic development length with F_h",sym:"\\ell_{db}",eq:"0.17 d_{b}\\left(\\frac{f_{y} \\minus F_{h}/A_{b}}{1.97 f^{\\prime 0.25}_{c}}\\right)^{2}",sub:"0.17\\cdot "+abrN(dw.db,3)+"\\left(\\frac{"+abrN(fy,1)+" \\minus "+abrN(dw.Fh,2)+"/"+abrN(dw.Ab,2)+"}{1.97\\cdot "+abrN(dw.fc4,3)+"}\\right)^{2}",value:dw.ldbH,unit:"in",d:2,ref:ABR_AA+"Eq. 5.10.8.2.1a-2"});
+          w.add({id:"ld",label:"With λ_rc = "+abrN(dw.lrcF,3)+" (c_b = half the spacing)",sym:"\\ell_{d}",eq:"\\ell_{db}\\lambda_{rc}",sub:abrN(dw.ldbH,2)+"\\cdot "+abrN(dw.lrcF,3),value:dw.ldH,unit:"in",d:2});
+          w.add({id:"ldh",label:"Hooked development length",sym:"\\ell_{dh}",eq:"\\max(\\ell_{d} + R_{h} + d_{b}/2,\\,8 d_{b},\\,6)",sub:"\\max("+abrN(dw.ldhRaw,2)+",\\,"+abrN(dw.ldhMin,2)+")",value:dw.ldh,unit:"in",d:2,ref:ABR_AA+"Eq. 5.10.8.2.4a-1"}); }
+        else{ w.add({id:"ldb",label:"Basic development length",sym:"\\ell_{db}",eq:"0.17 d_{b}\\left(\\frac{f_{y}}{1.97 f^{\\prime 0.25}_{c}}\\right)^{2}",sub:"0.17\\cdot "+abrN(dw.db,3)+"\\left(\\frac{"+abrN(fy,1)+"}{1.97\\cdot "+abrN(dw.fc4,3)+"}\\right)^{2}",value:dw.ldbS,unit:"in",d:2,ref:ABR_AA+"Eq. 5.10.8.2.1a-2"});
+          w.add({id:"ld",label:"Straight development length (λ_rc = "+abrN(dw.lrcF,3)+", at least 12 in)",sym:"\\ell_{d}",eq:"\\max(12,\\,\\ell_{db}\\lambda_{rc})",sub:"\\max(12,\\,"+abrN(dw.ldbS,2)+"\\cdot "+abrN(dw.lrcF,3)+")",value:dw.ldS,unit:"in",d:2}); }
+        dcStep(w,"sx","dowelDev","Dowel development","\\frac{\\ell_{req}}{\\ell_{av}}","\\frac{"+abrN(dw.lReq,2)+"}{"+abrN(dw.lAv,2)+"}",ABR_AA+"Art. "+(dw.hook?"5.10.8.2.4":"5.10.8.2.1a"));
+        if(has("dowelLap")){ w=topic(T,"dwL","Stem dowels: lap splice with the stem bars",ABR_AA+"Art. 5.10.8.4.3a");
+          w.add({id:"ld",label:"Tension development length in the stem (λ_rc = "+abrN(dw.lrcL,3)+", c_b = "+abrN(dw.cbL,3)+" in)",sym:"\\ell_{d}",eq:"\\max(12,\\,\\ell_{db}\\lambda_{rc})",sub:"\\max(12,\\,"+abrN(dw.ldbS,2)+"\\cdot "+abrN(dw.lrcL,3)+")",value:dw.ldL,unit:"in",d:2});
+          w.add({id:"lap",label:"Class "+(dw.classA?"A":"B")+" lap (A_s,prov/A_s,req = "+(isFinite(dw.ratio)?abrN(dw.ratio,2):"∞")+", "+abrN(dw.pct,0)+" % spliced)",sym:"\\ell_{lap}",eq:"\\max(12,\\,k\\,\\ell_{d})",sub:"\\max(12,\\,"+abrN(dw.kLap,1)+"\\cdot "+abrN(dw.ldL,2)+")",value:dw.lapReq,unit:"in",d:2,ref:ABR_AA+"Art. 5.10.8.4.3a"});
+          dcStep(w,"sx","dowelLap","Lap provided",dw.lapProv>0?"\\frac{\\ell_{lap}}{\\ell_{lap,prov}}":"",dw.lapProv>0?"\\frac{"+abrN(dw.lapReq,2)+"}{"+abrN(dw.lapProv,1)+"}":"",ABR_AA+"Art. 5.10.8.4.3a"); } }
+      const B=R.bwEE; if(B&&B.ee&&has("bwEEF")){ const e=B.ee, w=topic(T,"bwE","Backwall at Extreme Event I (φ = 1.0)",ABR_AA+"Art. 11.6.5.1, 5.6.3, 5.7.3");
+        w.add({id:"dP",label:"Seismic increment on the backwall (Δk_h = "+abrN(e.dKh,4)+(e.nc?", case "+e.nc+": f_P = "+abrN(e.fP,2):"")+")",sym:"\\Delta P_{AE}",eq:"f_{P}\\,\\frac{1}{2}\\Delta K\\,\\gamma\\,h_{bw}^{2}",sub:abrN(e.fP,2)+"\\cdot "+abrN(e.dP0,3),value:e.dP,unit:"kip/ft",d:3});
+        w.add({id:"Wi",label:"Backwall inertia (k_h = "+abrN(e.kh,3)+(e.nc?", f_I = "+abrN(e.fI,2):"")+")",sym:"W_{i}",eq:"f_{I} k_{h} t_{bw} h_{bw}\\gamma_{c}",sub:abrN(e.fI,2)+"\\cdot "+abrN(e.Wi0,3),value:e.Wi,unit:"kip/ft",d:3});
+        w.add({id:"Mu",label:"Factored moment at the backwall base ("+abrN(e.gEH,2)+"·EH + ΔP_AE at "+abrN(e.zP,2)+" ft + W_i at "+abrN(e.zI,2)+" ft"+(e.gq>0?" + "+abrN(e.gq,2)+"·(LS, LL)":"")+")",sym:"M_{u}",eq:"",sub:"",value:e.Mu,unit:"kip-ft/ft",d:2});
+        w.add({id:"Mn",label:"Flexural resistance, φ = 1.0",sym:"M_{n}",eq:"\\phi M_{n}/\\phi_{f}",sub:abrN(e.c.phiMn)+"/"+abrN(e.c.phiF,3),value:e.Mn,unit:"kip-ft/ft",d:2});
+        dcStep(w,"sx","bwEEF","Flexure","\\frac{M_{u}}{M_{n}}","\\frac{"+abrN(e.Mu)+"}{"+abrN(e.Mn)+"}",ABR_AA+"Art. 11.6.5.1");
+        w.add({id:"Vu",label:"Factored shear",sym:"V_{u}",eq:"",sub:"",value:e.Vu,unit:"kip/ft",d:2});
+        w.add({id:"Vn",label:"Shear resistance, φ = 1.0",sym:"V_{n}",eq:"V_{c}",sub:"",value:e.Vn,unit:"kip/ft",d:2});
+        dcStep(w,"sx","bwEEV","Shear","\\frac{V_{u}}{V_{n}}","\\frac{"+abrN(e.Vu)+"}{"+abrN(e.Vn)+"}",ABR_AA+"Art. 11.6.5.1"); }
+      if(B&&B.stop&&has("bwStopF")){ const s=B.stop, w=topic(T,"bwS","Backwall as the seismic stop","MassDOT LRFD Bridge Manual §3.4.8.1");
+        w.add({id:"F",label:"Superstructure force (c = "+abrN(s.cBW,3)+", W_sup = "+abrN(s.Wsup,1)+" kip"+(s.user?", entered":"")+")",sym:"F",eq:"c\\,W_{sup}",sub:abrN(s.cBW,3)+"\\cdot "+abrN(s.Wsup,1),value:s.F,unit:"kip",d:1});
+        w.add({id:"w",label:"Per foot of the wall length L_ab",sym:"w",eq:"\\frac{F}{L_{ab}}",sub:"\\frac{"+abrN(s.F,1)+"}{"+abrN(Lab)+"}",value:s.w,unit:"kip/ft",d:3});
+        w.add({id:"Mu",label:"Moment at mid-height of the backwall"+(s.apM?" + the slab dead-load couple":""),sym:"M_{u}",eq:s.apM?"w\\,\\frac{h_{bw}}{2} + M_{ap}":"w\\,\\frac{h_{bw}}{2}",sub:abrN(s.w,3)+"\\cdot "+abrN(s.arm,2)+(s.apM?" + "+abrN(s.apM,2):""),value:s.Mu,unit:"kip-ft/ft",d:2});
+        w.add({id:"Mn",label:"Flexural resistance, φ = 1.0",sym:"M_{n}",eq:"",sub:"",value:s.Mn,unit:"kip-ft/ft",d:2});
+        dcStep(w,"sx","bwStopF","Flexure","\\frac{M_{u}}{M_{n}}","\\frac{"+abrN(s.Mu)+"}{"+abrN(s.Mn)+"}","MassDOT LRFD Bridge Manual §3.4.8.1");
+        w.add({id:"Vn",label:"Shear resistance, φ = 1.0",sym:"V_{n}",eq:"",sub:"",value:s.Vn,unit:"kip/ft",d:2});
+        dcStep(w,"sx","bwStopV","Shear","\\frac{V_{u}}{V_{n}}","\\frac{"+abrN(s.Vu,3)+"}{"+abrN(s.Vn)+"}","MassDOT LRFD Bridge Manual §3.4.8.1"); }
+      const H=R.apShelf; if(H&&has("apShAs")){ const w=topic(T,"apS","Approach-slab shelf (bracket)",ABR_AA+"Art. 5.8.4.2");
+        w.add({id:"Vu",label:"Factored shear on the shelf, Strength I ("+abrN(H.gDC,2)+"·DC + "+abrN(H.gDW,2)+"·DW + "+abrN(H.gLL,2)+"·LL from the slab, + shelf weight)",sym:"V_{u}",eq:"V_{u,slab} + V_{u,shelf}",sub:abrN(H.VuS,3)+" + "+abrN(H.VuW,3),value:H.Vu,unit:"kip/ft",d:3});
+        w.add({id:"Nuc",label:"Horizontal tension"+(H.slide?" (at least 0.2 V_u; slab friction)":" (at least 0.2 V_u)"),sym:"N_{uc}",eq:"\\max(0.2V_{u},\\,N_{fr})",sub:"\\max("+abrN(H.Nmin,3)+",\\,"+abrN(H.Nfr,3)+")",value:H.Nuc,unit:"kip/ft",d:3,ref:ABR_AA+"Art. 5.8.4.2.1"});
+        w.add({id:"Mu",label:"Moment at the face (a_v = "+abrN(H.av,1)+" in, d = "+abrN(H.d,2)+" in)",sym:"M_{u}",eq:"V_{u,slab} a_{v} + V_{u,shelf} x + N_{uc}(h \\minus d)",sub:"",value:H.Mu,unit:"kip-in/ft",d:2});
+        w.add({id:"An",label:"Steel for the tension",sym:"A_{n}",eq:"\\frac{N_{uc}}{0.9 f_{y}}",sub:"\\frac{"+abrN(H.Nuc,3)+"}{0.9\\cdot "+abrN(fy,1)+"}",value:H.An,unit:"in^{2}/ft",d:3});
+        if(H.corbel){ w.add({id:"Af",label:"Steel for the moment",sym:"A_{f}",eq:"",sub:"",value:H.Af,unit:"in^{2}/ft",d:3});
+          w.add({id:"Avf",label:"Shear-friction steel (μ = 1.4, f_y ≤ 60 ksi)",sym:"A_{vf}",eq:"\\frac{V_{u}}{0.9\\mu f_{y}}",sub:"\\frac{"+abrN(H.Vu,3)+"}{0.9\\cdot 1.4\\cdot "+abrN(H.fyv,1)+"}",value:H.Avf,unit:"in^{2}/ft",d:3});
+          w.add({id:"AsR",label:"Primary tie required",sym:"A_{s,req}",eq:"\\max(A_{f} + A_{n},\\,\\frac{2}{3}A_{vf} + A_{n},\\,0.04\\frac{f^{\\prime}_{c}}{f_{y}} b d)",sub:"\\max("+abrN(H.Asr1,3)+",\\,"+abrN(H.Asr2,3)+",\\,"+abrN(H.AsMin,3)+")",value:H.AsReq,unit:"in^{2}/ft",d:3,ref:ABR_AA+"Art. 5.8.4.2.2"}); }
+        else w.add({id:"AsR",label:"Primary tie required (cantilever section + A_n)",sym:"A_{s,req}",eq:"A_{s,flex} + A_{n}",sub:abrN(H.sec.AsReq,3)+" + "+abrN(H.An,3),value:H.AsReq,unit:"in^{2}/ft",d:3});
+        dcStep(w,"sx","apShAs","Primary tie","\\frac{A_{s,req}}{A_{s}}","\\frac{"+abrN(H.AsReq,3)+"}{"+abrN(H.As,3)+"}",ABR_AA+"Art. 5.8.4.2");
+        if(H.corbel&&has("apShAh")){ w.add({id:"AhR",label:"Closed ties required",sym:"A_{h,req}",eq:"\\max(0.5A_{s},\\,0.5(A_{s} \\minus A_{n}))",sub:"\\max("+abrN(H.Ah1,3)+",\\,"+abrN(H.Ah2,3)+")",value:H.AhReq,unit:"in^{2}/ft",d:3});
+          dcStep(w,"sx","apShAh","Closed ties","\\frac{A_{h,req}}{A_{h}}","\\frac{"+abrN(H.AhReq,3)+"}{"+abrN(H.Ah,3)+"}",ABR_AA+"Art. 5.8.4.2.2"); }
+        if(H.corbel){ w.add({id:"Vnm",label:"Shear-friction limit",sym:"V_{n,max}",eq:"\\min(0.2 f^{\\prime}_{c} b d,\\,0.8 b d)",sub:"\\min("+abrN(H.Vn1,1)+",\\,"+abrN(H.Vn2,1)+")",value:H.Vnmax,unit:"kip/ft",d:1});
+          dcStep(w,"sx","apShV","Shear","\\frac{V_{u}}{0.9 V_{n,max}}","\\frac{"+abrN(H.Vu,3)+"}{0.9\\cdot "+abrN(H.Vnmax,1)+"}",ABR_AA+"Art. 5.8.4.2.2"); }
+        else dcStep(w,"sx","apShV","Shear, cantilever section","\\frac{V_{u}}{\\phi V_{n}}","\\frac{"+abrN(H.Vu,3)+"}{"+abrN(H.sec.phiVn,2)+"}",ABR_AA+"Art. 5.7.3");
+        w.add({id:"qb",label:"Bearing stress of the slab on the seat (b = "+abrN(H.bS,1)+" in)",sym:"q_{b}",eq:"\\frac{V_{u,slab}}{A_{1}}",sub:"\\frac{"+abrN(H.VuS,3)+"}{"+abrN(H.A1,1)+"}",value:H.qb,unit:"ksi",d:4});
+        w.add({id:"qR",label:"Bearing resistance (φ_b = 0.70, m = 1)",sym:"q_{R}",eq:"0.70\\cdot 0.85 f^{\\prime}_{c}",sub:"0.70\\cdot 0.85\\cdot "+abrN(fc,1),value:H.qR,unit:"ksi",d:3,ref:ABR_AA+"Art. 5.6.5"});
+        dcStep(w,"sx","apShB","Bearing","\\frac{q_{b}}{q_{R}}","\\frac{"+abrN(H.qb,4)+"}{"+abrN(H.qR,3)+"}",ABR_AA+"Art. 5.6.5");
+        dcStep(w,"sx","apShE","Depth at the outer edge, at least h/2","\\frac{h/2}{h_{E}}","\\frac{"+abrN(H.h/2,1)+"}{"+abrN(H.hE,1)+"}",ABR_AA+"Art. 5.8.4.2.1"); }
+      const D=R.apDes; if(D&&has("apDD")){ const w=topic(T,"apR","Approach slab: distribution and S&T reinforcement",ABR_AA+"Art. 9.7.3.2, 5.10.6");
+        w.add({id:"pct",label:"Bottom distribution steel, percent of the main steel (at most 50 %)",sym:"\\%",eq:"\\min\\left(50,\\,\\frac{100}{\\sqrt{L_{s}}}\\right)",sub:"\\min\\left(50,\\,\\frac{100}{"+sq(D.Ls)+"}\\right)",value:D.pct,unit:"",d:1,ref:ABR_AA+"Art. 9.7.3.2"});
+        w.add({id:"req",label:"Required (not less than S&T, A_s,ST = "+abrN(D.sec.AsST,3)+")",sym:"A_{s,D,req}",eq:"\\max(\\frac{\\%}{100}A_{s},\\,A_{s,ST})",sub:"\\max("+abrN(D.pct/100,3)+"\\cdot "+abrN(D.sec.As,3)+",\\,"+abrN(D.sec.AsST,3)+")",value:D.AsDreq,unit:"in^{2}/ft",d:3});
+        dcStep(w,"sx","apDD","Bottom distribution reinforcement","\\frac{A_{s,D,req}}{A_{s,D}}","\\frac{"+abrN(D.AsDreq,3)+"}{"+abrN(D.AsD,3)+"}",ABR_AA+"Art. 9.7.3.2");
+        if(has("apDT")) dcStep(w,"sx","apDT","Top S&T reinforcement","\\frac{A_{s,ST}}{A_{s,T}}","\\frac{"+abrN(D.sec.AsST,3)+"}{"+abrN(D.AsT,3)+"}",ABR_AA+"Art. 5.10.6"); }
+      if(T.length) addSub(iabType()==="integral"?"Integral abutment":"Structural design",{title:"Dowels, backwall at the extreme event, approach-slab shelf and reinforcement",items:[abrTopics("sx",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab(tbS)+"."}]}); }
+    /* wingwalls: S&T bars, junction bars, simplified stability */
+    if(R.wing){ const W=R.wing, T=[];
+      if(has("wTS")){ const s=W.ts, w=topic(T,"wts","Wing "+s.dir+" bars: shrinkage and temperature",ABR_AA+"Art. 5.10.6");
+        w.add({id:"As",label:"Provided, #"+s.bar+" at "+abrN(s.sp,1)+" in each face",sym:"A_{s}",eq:"",sub:"",value:s.As,unit:"in^{2}/ft",d:3});
+        w.add({id:"req",label:"Required each face",sym:"A_{s,ST}",eq:"\\frac{1.30 b h}{2(b + h) f_{y}}",sub:"",value:s.req,unit:"in^{2}/ft",d:3,ref:ABR_AA+"Eq. 5.10.6-1"});
+        w.add({id:"sMax",label:"Largest spacing",sym:"s_{max}",eq:"",sub:"",value:s.sMax,unit:"in",d:1});
+        dcStep(w,"wg","wTS","S&T bars (the larger ratio)","\\max\\left(\\frac{A_{s,ST}}{A_{s}},\\,\\frac{s}{s_{max}}\\right)","\\max\\left(\\frac{"+abrN(s.req,3)+"}{"+abrN(s.As,3)+"},\\,\\frac{"+abrN(s.sp,1)+"}{"+abrN(s.sMax,1)+"}\\right)",ABR_AA+"Art. 5.10.6"); }
+      if(W.dev&&has("wDev")){ const v=W.dev, w=topic(T,"wdv","Wing junction bars into the abutment",ABR_AA+"Art. 11.6.1.5.2");
+        w.add({id:"lAv",label:v.inline?"Available length along the abutment wall (L_ab/2)":"Available length across the wall (thickness less the cover)",sym:"\\ell_{av}",eq:"",sub:"",value:v.lAv,unit:"in",d:2});
+        w.add({id:"ld",label:"Straight development length (the section's ℓ_d)",sym:"\\ell_{d}",eq:"",sub:"",value:v.ld,unit:"in",d:2,ref:ABR_AA+"Art. 5.10.8.2.1a"});
+        if(!v.straightOK) w.add({id:"ldh",label:"Hooked development length (F_h = "+abrN(v.Fh,2)+" kip, ℓ_db = "+abrN(v.ldbH,2)+" in)",sym:"\\ell_{dh}",eq:"\\max(\\ell_{d} + R_{h} + d_{b}/2,\\,8 d_{b},\\,6)",sub:"",value:v.ldh,unit:"in",d:2,ref:ABR_AA+"Eq. 5.10.8.2.4a-1"});
+        dcStep(w,"wg","wDev",v.straightOK?"Development, straight":"Development, hooked","\\frac{\\ell_{req}}{\\ell_{av}}","\\frac{"+abrN(v.lReq,2)+"}{"+abrN(v.lAv,2)+"}",ABR_AA+"Art. 11.6.1.5.2"); }
+      if(W.stab&&has("wSlide")){ const st=W.stab, sl=st.sl, ec=st.ec, w=topic(T,"wst","Wing footing stability (simplified, per ft)",ABR_AA+"Art. 10.6.3, 11.6.3.3");
+        w.add({id:"RR",label:"Sliding resistance, "+sl.ls+" (φ_τ = "+abrN(sl.phiT)+")",sym:"R_{R}",eq:st.rock?"\\phi_{\\tau}(\\mu V + c_{a} B)":"\\phi_{\\tau} V\\tan\\delta_{base}",sub:"",value:sl.RR,unit:"kip/ft",d:3});
+        dcStep(w,"wg","wSlide","Sliding","\\frac{H}{R_{R}}","\\frac{"+abrN(sl.Hh,3)+"}{"+abrN(sl.RR,3)+"}",ABR_AA+"Art. 10.6.3.4");
+        w.add({id:"e",label:"Eccentricity, "+ec.ls,sym:"e",eq:"\\left|\\frac{B}{2} \\minus \\bar{x}\\right|",sub:"\\left|\\frac{"+abrN(st.B,2)+"}{2} \\minus "+abrN(ec.xb,3)+"\\right|",value:Math.abs(ec.e),unit:"ft",d:3});
+        w.add({id:"eLim",label:"Limit",sym:"e_{lim}",eq:"",sub:"",value:ec.eLim,unit:"ft",d:3});
+        dcStep(w,"wg","wEcc","Eccentricity","\\frac{e}{e_{lim}}","\\frac{"+abrN(Math.abs(ec.e),3)+"}{"+abrN(ec.eLim,3)+"}",ABR_AA+"Art. 11.6.3.3");
+        if(st.br&&!st.brOut){ const b=st.br; w.add({id:"q",label:"Bearing pressure, "+b.ls,sym:"q",eq:st.rock?"":"\\frac{V}{B \\minus 2e}",sub:st.rock?"":"\\frac{"+abrN(b.V,3)+"}{"+abrN(st.B,2)+" \\minus 2\\cdot "+abrN(Math.abs(b.e),3)+"}",value:b.q,unit:"ksf",d:3});
+          dcStep(w,"wg","wBrg","Bearing","\\frac{q}{\\phi_{b} q_{n}}","\\frac{"+abrN(b.q,3)+"}{"+abrN(b.phiB)+"\\cdot "+abrN(st.qn)+"}",ABR_AA+"Art. 10.6.3.1"); }
+        else dcStep(w,"wg","wBrg","Bearing: the resultant is outside the base","","",ABR_AA+"Art. 10.6.3.1"); }
+      if(T.length) addSub("Wingwalls",{title:"Wing reinforcement, junction bars and stability",items:[abrTopics("wg",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-wing")+"."}]}); }
+    /* integral abutment with an approach slab: the slab section (worked in the structural section for the other types) */
+    if(iabType()==="integral"&&R.apDes&&has("apDF")){ const T=[], ids={F:"apDF",V:"apDV",Min:"apDMin",Crack:"apDCr"}; Object.keys(ids).forEach(q=>{ if(!has(ids[q])) delete ids[q]; });
+      secTopics(T,"ia","apd",R.apDes.sec,ids,"Approach slab","tab-iab");
+      addSub("Integral abutment",{title:"Approach slab",items:[abrTopics("ia",T,{title:"Worked steps"}),{type:"note",text:"Slab span L_s = "+abrN(R.apDes.Ls)+" ft; the shear check is information (5.12.2.1). As on "+abrTab("tab-iab","o-ap-des")+"."}]}); }
+    /* integral / semi-integral: piles and the extreme event */
+    if(R.iab){ const Q=R.iab, P=Q.pile, T=[];
+      if(Q.integ&&P&&has("iabPile")){ let w=topic(T,"ip","Integral piles: gravity load per pile and the pile check",P.md?"MassDOT LRFD Bridge Manual §3.10.11":ABR_AA+"Art. 6.9.2.2.1");
+        w.add({id:"Pdl",label:"Dead load per pile, Strength I",sym:"P_{DL}",eq:"",sub:"",value:P.Pdl,unit:"kip",d:2});
+        w.add({id:"Pll",label:"Live load per pile, Strength I"+(P.eLL?" (rigid-cap eccentricity)":"")+(P.IM?" (IM removed)":""),sym:"P_{LL}",eq:"",sub:"",value:P.Pll,unit:"kip",d:2});
+        w.add({id:"Pg",label:"Factored gravity load per pile",sym:"P_{g}",eq:"P_{DL} + P_{LL}",sub:abrN(P.Pdl,2)+" + "+abrN(P.Pll,2),value:P.Pg,unit:"kip",d:2});
+        if(P.md&&P.md.ok){ w.add({id:"Pt",label:"Table capacity ("+P.md.key+", soil "+P.md.si+", by skew)",sym:"P_{u,tab}",eq:"",sub:"",value:P.md.PuTab,unit:"kip",d:1,ref:"MassDOT LRFD Bridge Manual §3.10.11.4"});
+          dcStep(w,"ia","iabPile","Integral pile, MassDOT table","\\frac{P_{g}}{P_{u,tab}}","\\frac{"+abrN(P.Pg,1)+"}{"+abrN(P.md.PuTab,1)+"}","MassDOT LRFD Bridge Manual §3.10.11.4");
+          if(has("iabTip")) dcStep(w,"ia","iabTip","Pile length at least L_f + 5 ft","\\frac{L_{f} + 5}{L_{pile}}","\\frac{"+abrN(P.md.Lf+5,0)+"}{"+abrN(+S.iab.Lpile,1)+"}","MassDOT LRFD Bridge Manual §3.10.11.2"); }
+        else if(P.md) dcStep(w,"ia","iabPile","Integral pile, MassDOT method: section not in the tables","","","MassDOT LRFD Bridge Manual §3.10.11");
+        else{ w.add({id:"Pr",label:"Axial resistance, fully braced (φ_c = 0.70)",sym:"P_{r}",eq:"0.70 F_{y} A_{s}",sub:"0.70\\cdot "+abrN(P.Pn,1),value:P.Pr,unit:"kip",d:1,ref:ABR_AA+"Art. 6.9.2.1"});
+          w.add({id:"Mr",label:"Flexural resistance (φ_f = 1.0)",sym:"M_{r}",eq:"",sub:"",value:P.Mr,unit:"kip-in",d:1,ref:ABR_AA+"Art. 6.12.2.2"});
+          const I=P.ct? P.ct.I : P.py.I, Pu=P.ct? P.ct.Pu : P.Pg, Mu=P.ct? P.ct.Mu : P.py.Mu;
+          if(P.ct){ w.add({id:"RT",label:"Thermal reaction per pile (CTDOT)",sym:"R_{T}",eq:"",sub:"",value:P.ct.RT,unit:"kip",d:2,ref:"CTDOT BRSDM Eq. CT11.1.1.4.2c-5"});
+            w.add({id:"Pu",label:"Pile load",sym:"P_{u}",eq:"P_{g} + R_{T}",sub:abrN(P.Pg,2)+" + "+abrN(P.ct.RT,2),value:P.ct.Pu,unit:"kip",d:2});
+            w.add({id:"Mu",label:"Pile moment, at most M_p",sym:"M_{u}",eq:"\\min(M_{p},\\,M_{T} + M_{W})",sub:"\\min("+abrN(P.Mp,1)+",\\,"+abrN(P.ct.MT,1)+" + "+abrN(P.ct.MW,1)+")",value:P.ct.Mu,unit:"kip-in",d:1}); }
+          else w.add({id:"Mu",label:"Pile-head moment from the p-y analysis (entered)",sym:"M_{u}",eq:"",sub:"",value:P.py.Mu,unit:"kip-in",d:1});
+          w.add({id:"r",label:"Axial ratio",sym:"\\frac{P_{u}}{P_{r}}",eq:"",sub:"\\frac{"+abrN(Pu,2)+"}{"+abrN(P.Pr,1)+"}",value:I.r,unit:"",d:3});
+          dcStep(w,"ia","iabPile","Interaction, Eq. 6.9.2.2.1-"+I.eq+(I.biax?" (biaxial)":""),"","",ABR_AA+"Eq. 6.9.2.2.1-"+I.eq,(I.biax?"":"M_u/M_r = "+abrN(Mu/P.Mr,3))); }
+        const G=P.geo; if(G&&has("iabGeo")){ w=topic(T,"ig","Integral piles: geotechnical axial resistance",ABR_AA+"Art. 10.5.5.2.3");
+          if(G.on){ w.add({id:"R",label:"Factored geotechnical resistance",sym:"\\phi_{c} R_{n}",eq:"",sub:abrN(G.phiC)+"\\cdot "+abrN(G.Rn,1),value:G.phiC*G.Rn,unit:"kip",d:1});
+            dcStep(w,"ia","iabGeo","Geotechnical axial","\\frac{P_{u}}{\\phi_{c} R_{n}}","\\frac{"+abrN(G.Pu,1)+"}{"+abrN(G.phiC*G.Rn,1)+"}",ABR_AA+"Art. 10.5.5.2.3"); }
+          else dcStep(w,"ia","iabGeo","Geotechnical axial: R_n not entered","","",ABR_AA+"Art. 10.5.5.2.3");
+          if(has("iabUp")){ w.add({id:"Pmin",label:"Smallest pile load (γ_min dead load, far-side live load"+(G.RT?", − R_T":"")+")",sym:"P_{min}",eq:"",sub:"",value:G.Pmin,unit:"kip",d:2});
+            dcStep(w,"ia","iabUp","Uplift",G.RnUp>0?"\\frac{\\minus P_{min}}{\\phi_{up} R_{n,up}}":"",G.RnUp>0?"\\frac{"+abrN(-G.Pmin,2)+"}{"+abrN(G.phiUp*G.RnUp,1)+"}":"",ABR_AA+"Art. 10.5.5.2.3"); }
+          if(G.ee&&has("iabGeoEE")){ w.add({id:"Pee",label:"Pile load at Extreme Event I",sym:"P_{ee}",eq:"",sub:"",value:G.ee.Pee,unit:"kip",d:2});
+            dcStep(w,"ia","iabGeoEE","Geotechnical axial, Extreme Event I",G.on?"\\frac{P_{ee}}{\\phi R_{n}}":"",G.on?"\\frac{"+abrN(G.ee.Pee,1)+"}{"+abrN(G.ee.phiE*G.Rn,1)+"}":"",ABR_AA+"Art. 10.5.5.3.3"); } } }
+      const E=Q.wEE; if(E&&has("iabEEP")){ const w=topic(T,"iee","Integral abutment at Extreme Event I",ABR_AA+"Art. 11.6.5.5");
+        w.add({id:"Fd",label:"Longitudinal seismic force (superstructure, abutment, wings"+(E.Fap?", approach slab":"")+")",sym:"F",eq:"F_{sup} + F_{ab} + F_{wing}"+(E.Fap?" + F_{ap}":""),sub:abrN(E.Fsup,1)+" + "+abrN(E.Fab,1)+" + "+abrN(E.Fwg,1)+(E.Fap?" + "+abrN(E.Fap,1):""),value:E.Fd,unit:"kip",d:1});
+        w.add({id:"PPE",label:"Seismic passive resistance (K_PE = "+abrN(E.KpE,3)+(E.user?", entered":", Figure A11.4-2")+")",sym:"P_{PE}",eq:"\\frac{1}{2}K_{PE}\\gamma H^{2} L_{ab}",sub:"\\frac{1}{2}\\cdot "+abrN(E.KpE,3)+"\\cdot "+abrN(gam,3)+"\\cdot "+abrN(Q.H,2)+"^{2}\\cdot "+abrN(Lab),value:E.PPE,unit:"kip",d:1});
+        dcStep(w,"ia","iabEEP","Seismic force vs passive resistance","\\frac{F}{P_{PE}}","\\frac{"+abrN(E.Fd,1)+"}{"+abrN(E.PPE,1)+"}",ABR_AA+"Art. 11.6.5.5");
+        w.add({id:"pB",label:"Wall pressure at the base, mobilized fraction f = "+abrN(E.f,3),sym:"p_{B}",eq:"f K_{PE}\\gamma H",sub:abrN(E.f,3)+"\\cdot "+abrN(E.KpE,3)+"\\cdot "+abrN(gam,3)+"\\cdot "+abrN(Q.H,2),value:E.pB,unit:"ksf",d:3});
+        [["c2","Integral wall","iabEEWF","iabEEWV"],["c3","Pile cap rear face","iabEERF","iabEERV"]].forEach(([k,nm,iF,iV])=>{ const c=E[k]; if(!has(iF)) return;
+          w.add({id:k+"Mu",label:nm+": factored moment",sym:"M_{u}",eq:"",sub:"",value:c.Mu,unit:"kip-ft/ft",d:2});
+          w.add({id:k+"Mn",label:nm+": flexural resistance, φ = 1.0",sym:"M_{n}",eq:"",sub:"",value:c.Mn,unit:"kip-ft/ft",d:2});
+          dcStep(w,"ia",iF,nm+": flexure","\\frac{M_{u}}{M_{n}}","\\frac{"+abrN(c.Mu)+"}{"+abrN(c.Mn)+"}",ABR_AA+"Art. 11.6.5, 5.6.3");
+          dcStep(w,"ia",iV,nm+": shear","\\frac{V_{u}}{V_{n}}","\\frac{"+abrN(c.Vu,3)+"}{"+abrN(c.Vn)+"}",ABR_AA+"Art. 11.6.5, 5.7.3"); }); }
+      const De=Q.dEE; if(De&&has("iabDEF")){ const w=topic(T,"dee","End diaphragm, 70 % seismic passive","MassDOT LRFD Bridge Manual §3.4.6.1");
+        w.add({id:"pB",label:"Pressure at the base (K_PE = "+abrN(De.KpE,3)+")",sym:"p_{B}",eq:"0.70 K_{PE}\\gamma H",sub:"0.70\\cdot "+abrN(De.KpE,3)+"\\cdot "+abrN(gam,3)+"\\cdot "+abrN(De.H,2),value:De.pB,unit:"ksf",d:3});
+        w.add({id:"Mu",label:"Moment on 0.8 of the simple span between girders (s = "+abrN(Q.sG,2)+" ft)",sym:"M_{u}",eq:"0.8\\frac{w s^{2}}{8}",sub:"0.8\\frac{"+abrN(De.wu,3)+"\\cdot "+abrN(Q.sG,2)+"^{2}}{8}",value:De.Mu,unit:"kip-ft/ft",d:2});
+        w.add({id:"Mn",label:"Flexural resistance, φ = 1.0",sym:"M_{n}",eq:"",sub:"",value:De.Mn,unit:"kip-ft/ft",d:2});
+        dcStep(w,"ia","iabDEF","Flexure","\\frac{M_{u}}{M_{n}}","\\frac{"+abrN(De.Mu)+"}{"+abrN(De.Mn)+"}","MassDOT LRFD Bridge Manual §3.4.6.1");
+        w.add({id:"Vu",label:"Shear",sym:"V_{u}",eq:"\\frac{w s}{2}",sub:"\\frac{"+abrN(De.wu,3)+"\\cdot "+abrN(Q.sG,2)+"}{2}",value:De.Vu,unit:"kip/ft",d:2});
+        dcStep(w,"ia","iabDEV","Shear","\\frac{V_{u}}{V_{n}}","\\frac{"+abrN(De.Vu)+"}{"+abrN(De.Vn)+"}","MassDOT LRFD Bridge Manual §3.4.6.1"); }
+      if(T.length) addSub(Q.integ?"Integral abutment":"Semi-integral end diaphragm",{title:Q.integ?"Integral piles and the extreme event":"End diaphragm at the extreme event",items:[abrTopics("ia",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-iab")+"."}]}); }
+  }
   /* ---------- every other dashboard check: its D/C, governing case and the panel where it is worked ---------- */
   { const left=R.dash.filter(d=>!KEY[d.id]); if(left.length){ const by={}; left.forEach(d=>{ (by[d.tab]||(by[d.tab]=[])).push(d); });
       const subs=Object.keys(by).map(tb=>{ const T=[]; by[tb].forEach(d=>{ const w=topic(T,"x"+d.id,d.name.replace(/\s*\[[^\]]*\]\s*$/,""),refOf(d)); dcStep(w,"ot",d.id,d.name.replace(/\s*\[[^\]]*\]\s*$/,""),"","",refOf(d)); });
