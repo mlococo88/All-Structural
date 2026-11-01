@@ -643,10 +643,17 @@ const COMP_UNIT={P:'kips',Vx:'kips',Vy:'kips',Mx:'kip-ft',My:'kip-ft'};
 const BAR_AREA={0:0,3:0.11,4:0.20,5:0.31,6:0.44,7:0.60,8:0.79,9:1.00,10:1.27,11:1.56};
 const BAR_DIA ={0:0,3:0.375,4:0.500,5:0.625,6:0.750,7:0.875,8:1.000,9:1.128,10:1.270,11:1.410};
 const BAR_SIZES=[0,3,4,5,6,7,8,9,10,11];
+/* SFTC (2026-11-01): pedestal exposure rows of ACI 318-19 Table 20.5.1.3.1 (cast-in-place nonprestressed) and the
+   specified (minimum) clear cover they give a pedestal tie of size n: [label, short label, min(n)]. */
+const SFTC_EXP={
+ weather:['Exposed to weather or in contact with ground','exposed to weather or in contact with ground',n=>n>=6?2:1.5],   // No. 6 through No. 18: 2 in; No. 5 and smaller: 1-1/2 in
+ earth:['Cast against and permanently in contact with ground','cast against and permanently in contact with ground',n=>3],   // all members: 3 in
+ interior:['Not exposed to weather or in contact with ground','not exposed to weather or in contact with ground',n=>1.5]};   // beams, columns, pedestals: ties 1-1/2 in
+function sftcMin(exp,tieSize){const e=SFTC_EXP[exp]||SFTC_EXP.weather;return e[2](tieSize||0);}
 function newPed(n){return {label:'Ped '+n,x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loadEy:0,
  loads:TYPES.reduce((o,t)=>{o[t]={P:0,Vx:0,Vy:0,Mx:0,My:0};return o;},{}),
  direct:{P:0,Vx:0,Vy:0,Mx:0,My:0},
- reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8}};}
+ reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8,exposure:'weather'}};}
 function defaultState(){
  const p1=newPed(1);p1.x=-3;p1.loads.D.P=120;p1.loads.L.P=60;p1.loads.Wx.Vx=8;p1.direct={P:264,Vx:8,Vy:0,Mx:0,My:0};
  const p2=newPed(2);p2.x=3;p2.loads.D.P=150;p2.loads.L.P=80;p2.loads.Wx.Vx=8;p2.loads.S.P=20;p2.direct={P:338,Vx:8,Vy:0,Mx:0,My:0};
@@ -689,6 +696,7 @@ function migrateState(){
   if(!p.reinf)p.reinf={longSize:8,nx:3,ny:3,tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8};
   if(!p.loads)p.loads=newPed(1).loads;
   if(!p.reinf.longMode)p.reinf.longMode='faces';   /* SFRQ: older saves entered bars per face */
+  if(!SFTC_EXP[p.reinf.exposure])p.reinf.exposure='weather';   /* SFTC: pedestal exposure for the tie-cover check; older saves: exposed to weather or in contact with ground */
   if(p.loadEx===undefined)p.loadEx=0;   /* SFLO: load offset on the pedestal (ft); older saves: centred */
   if(p.loadEy===undefined)p.loadEy=0;
  });
@@ -811,6 +819,13 @@ function buildPedCards(){
   rr.appendChild(cell('<input type="number" step="0.5" data-path="peds.'+i+'.reinf.tieSpc" data-num style="width:52px">'));
   rr.appendChild(cell('<input type="number" step="0.25" data-path="peds.'+i+'.reinf.cover" data-num style="width:52px">'));
   rt.appendChild(rr);b.appendChild(rt);
+  /* SFTC: exposure of the pedestal, for the clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
+  const et=document.createElement('table');et.className='tbl';et.style.fontSize='11px';
+  et.innerHTML='<tr><th title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties">Exposure (tie cover, ACI Table 20.5.1.3.1)</th></tr>';
+  const er=document.createElement('tr');
+  er.appendChild(cell('<select data-path="peds.'+i+'.reinf.exposure" style="width:auto;max-width:100%">'+Object.keys(SFTC_EXP).map(k=>'<option value="'+k+'">'+SFTC_EXP[k][0]+'</option>').join('')+'</select>'));
+  et.appendChild(er);b.appendChild(et);
+  {const s=er.querySelector('select');s.value=state.peds[i].reinf.exposure||'weather';}
   /* SFRQ: how the longitudinal bars are entered: n per face (as before), a total quantity, or a spacing */
   const mt=document.createElement('table');mt.className='tbl';mt.style.fontSize='11px';
   mt.innerHTML='<tr><th>Long. bars entered as</th><th>Total qty</th><th>Spacing c-c (in)</th></tr>';
@@ -1043,7 +1058,11 @@ function sfdPedBarInfo(){
   const show=(path,on)=>{const x=card.querySelector('[data-path="peds.'+i+'.reinf.'+path+'"]');if(x)x.disabled=!on;};
   show('nx',b.mode==='faces');show('ny',b.mode==='faces');show('nTot',b.mode==='total');show('longSpc',b.mode==='spacing');
   d.innerHTML='Longitudinal bars: '+sfEsc(sfdPedBarTxt(i))+'. Corner-bar centre span L<sub>c</sub> = b \u2212 2&middot;cover \u2212 d<sub>b</sub> = '+f2(b.Lx)+' in (x-face), '+f2(b.Ly)+' in (y-face).'+
-   (b.mode==='spacing'?' Bars per face = ceil(L<sub>c</sub>/s) + 1.':b.mode==='total'?' Split so the two faces have spacings as equal as possible.':'');});
+   (b.mode==='spacing'?' Bars per face = ceil(L<sub>c</sub>/s) + 1.':b.mode==='total'?' Split so the two faces have spacings as equal as possible.':'')+
+   (P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?' '+sftcTxt(P2.pedDes[i])+' Worked in: '+sfdLink('o-pd-'+i,'',['tab-peddes','6.'+(i+2)+' '+P2.pedDes[i].label+' \u2014 Detailed Checks']):'');});
+}
+/* SFTC: one line for the clear cover to the ties */
+function sftcTxt(pd){return 'Clear cover to the ties c \u2212 d<sub>b,tie</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.');
 }
 /* link from an output card to an input tab (Reinforcement): open the tab and flash the section */
 function sfdGotoInput(tab,secId){
@@ -1680,6 +1699,10 @@ function renderDashboard(){
   if(!realPeds.length)d.appendChild(chip('Pedestal design','no pedestals \u2014 bearing patches only','na',undefined,{tab:'tab-peddes',sec:'o-pd-intro'}));
   else d.appendChild(chip('Pedestal design',why.length?why.join('; '):'axial DCR '+f2(pedmax)+', ties and bars OK',
    why.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-intro'}));
+  /* SFTC: clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
+  if(realPeds.length){const tcBad=realPeds.filter(z=>!z.tieCovOK), tcGov=realPeds.reduce((a,z)=>(!a||z.tieCov-z.tieCovMin<a.tieCov-a.tieCovMin)?z:a,null);
+   d.appendChild(chip('Pedestal tie cover',tcBad.length?tcBad.map(z=>z.label+' '+f3(z.tieCov)+' < '+f2(z.tieCovMin)+' in').join('; '):'min '+f3(tcGov.tieCov)+' \u2265 '+f2(tcGov.tieCovMin)+' in ('+tcGov.label+')',
+    tcBad.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+P2.pedDes.indexOf(tcGov)}));}
  }else if(P2&&P2.noCombo){
   d.appendChild(chip('Structural design','No valid LRFD combo','na',undefined,{tab:'tab-footdes'}));
  }
@@ -2788,7 +2811,8 @@ function sfdResultRows(){
   'Dowel steel (min 0.005A_g)':()=>['ACI 318-19 §16.3.4.1; D/C = A<sub>s,min</sub>/A<sub>s,prov</sub>',mx(real.map(z=>z.AsDowProv>0?z.AsDowMin/z.AsDowProv:Infinity)),['o-fd-bear']],
   'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; D/C = ℓ<sub>dc</sub>/available',mx(real.map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)),['o-fd-bear']],
   'Pedestal design':()=>['ACI 318-19 §22.4.2.1 (axial; D/C shown); §10.6.1.1, §10.7.3.1, §25.7.2',
-   mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.dcrAxial)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
+   mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.dcrAxial)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+  'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
   const st=['pass','fail','warn','na'].find(k=>c.classList.contains(k))||'na';
@@ -2919,7 +2943,7 @@ function sfrModel(){
    {type:'steps',scope:'rb',steps:w.steps,title:'Steel area per foot of width (the value used in §5)'},
    {type:'note',text:'Set on the [[tab:in-rebar|Reinforcement]] input tab. Bars in the x-direction resist bending about the y-axis.'}]});
   const pr=R.peds.map((p,i)=>{const rf=(state.peds[i]||{}).reinf||{};return [p.label,sfrCell(p.x),sfrCell(p.y),sfrN(p.bx)+' × '+sfrN(p.by)+' × '+sfrN(p.h),sfrN(p.lex,3)+', '+sfrN(p.ley,3),
-   p.h>1e-9?(sfdPedBarTxt(i)+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in; dowels '+rf.dowelN+' #'+rf.dowelSize):'bearing patch (h = 0)'];});
+   p.h>1e-9?(sfdPedBarTxt(i)+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in (clear to the vertical bars; exposure: '+(SFTC_EXP[rf.exposure]||SFTC_EXP.weather)[1]+')'+'; dowels '+rf.dowelN+' #'+rf.dowelSize):'bearing patch (h = 0)'];});
   const lr=[];
   R.peds.forEach(p=>{
    if(R.directMode){const d=p.direct||{};lr.push([p.label,'factored',...['P','Vx','Vy','Mx','My'].map(k=>sfrCell(num(d[k])))]);}
@@ -3150,7 +3174,7 @@ function sfrModel(){
    T.push({title:'Longitudinal steel',ref:'ACI 318-19 10.6.1.1, 10.7.3.1, 25.2.3',steps:[
     S({id:'Ast',label:'Longitudinal bars: '+sfdPedBarTxt(i),sym:'A_{st}',eq:'n A_{b}',sub:pd.nBars+'\\cdot'+sfrN(BAR_AREA[rf.longSize||0]),value:pd.Ast,unit:'in^{2}'}),
     S({id:'rho',label:'Steel ratio ('+(pd.isPedestal?'pedestal: upper limit 8% only':'column: 1% to 8%')+')',sym:'\\rho_{g}',eq:'\\frac{A_{st}}{A_{g}}',sub:'\\frac{'+sfrN(pd.Ast)+'}{'+sfrN(pd.Ag,1)+'}',value:pd.rho,unit:'',d:4,ok:!!pd.rhoOK}),
-    S({id:'fit',label:'Bars and clear spacing (n ≥ 4; s_clear ≥ max(1.5 d_b, 1.5 in) = '+sfrN(pd.clrMin)+' in)',sym:'s_{clear}',eq:'',sub:'s_{clear,x} = '+sfrN(pd.clrX)+',\\; s_{clear,y} = '+sfrN(pd.clrY),value:Math.min(pd.clrX,pd.clrY),unit:'in',ok:!!(pd.nBarsOK&&pd.barFitOK)})]});
+    S({id:'fit',label:'Bars and clear spacing (n ≥ 4; s_clear = (b − 2c − d_b)/(n_face − 1) − d_b ≥ max(1.5 d_b, 1.5 in) = '+sfrN(pd.clrMin)+' in; d_b = '+sfrN(pd.dbL,3)+' in, bar table)',sym:'s_{clear}',eq:'',sub:'s_{clear,x} = '+sfrN(pd.clrX)+',\\; s_{clear,y} = '+sfrN(pd.clrY),value:Math.min(pd.clrX,pd.clrY),unit:'in',ok:!!(pd.nBarsOK&&pd.barFitOK)})]});
    T.push({title:'Axial strength',ref:'ACI 318-19 22.4.2.1, 10.5.2',steps:[
     S({id:'P0',label:'Nominal axial strength',sym:'P_{0}',eq:'0.85 '+SFR_FC+' (A_{g} \\minus A_{st}) + f_{y} A_{st}',sub:'(0.85\\cdot'+sfrN(pd.fc,0)+'\\cdot('+sfrN(pd.Ag,1)+' \\minus '+sfrN(pd.Ast)+') + '+sfrN(pd.fy,0)+'\\cdot'+sfrN(pd.Ast)+')/1000',value:pd.P0,unit:'kip'}),
     S({id:'phiPn',label:'Maximum design axial strength (tied)',sym:'\\phi P_{n,max}',eq:'0.65\\cdot 0.80 P_{0}',sub:'0.65\\cdot 0.80\\cdot'+sfrN(pd.P0),value:pd.phiPn_max,unit:'kip'}),
@@ -3166,9 +3190,11 @@ function sfrModel(){
     S({id:'dpr',label:'Face to longitudinal-bar centre (cover = clear cover to the longitudinal bars)',sym:"d'",eq:'c + \\frac{d_{b}}{2}',sub:sfrN(num(rf.cover))+' + \\frac{'+sfrN(BAR_DIA[rf.longSize]||0,3)+'}{2}',value:pd.dPr,unit:'in',d:3}),
     S({id:'dx',label:'Depth to the far bar row, bending about y',sym:'d_{x}',eq:"b_{x} \\minus d'",sub:sfrN(pd.bx,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dX,unit:'in',d:3}),
     S({id:'dy',label:'Depth to the far bar row, bending about x',sym:'d_{y}',eq:"b_{y} \\minus d'",sub:sfrN(pd.by,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dY,unit:'in',d:3})]});
-   T.push({title:'Ties and slenderness',ref:'ACI 318-19 25.7.2, 6.2.5',steps:[
+   T.push({title:'Ties and slenderness',ref:'ACI 318-19 25.7.2, 20.5.1.3 (Table 20.5.1.3.1), 6.2.5',steps:[
     S({id:'tmax',label:'Tie spacing limit',sym:'s_{max}',eq:'\\min(16 d_{b},\\, 48 d_{b,tie},\\, b_{min})',sub:'\\min(16\\cdot'+sfrN(BAR_DIA[rf.longSize||8],3)+',\\,48\\cdot'+sfrN(BAR_DIA[rf.tieSize||3],3)+',\\,'+sfrN(pd.bmin)+')',value:pd.tieMax,unit:'in'}),
     S({id:'ties',label:'Ties #'+rf.tieSize+' at s'+(pd.tieSizeOK?'':' (tie bar too small, 25.7.2.2)'),sym:'s',eq:'\\le s_{max}',sub:sfrN(num(rf.tieSpc))+(pd.tieOK?' \\le ':' \\gt ')+sfrN(pd.tieMax),value:num(rf.tieSpc),unit:'in',ok:!!(pd.tieOK&&pd.tieSizeOK)}),
+    S({id:'tcmin',label:'Specified cover for #'+(rf.tieSize||0)+' ties, '+SFTC_EXP[pd.exposure][1]+' (Table 20.5.1.3.1)',sym:'c_{min}',eq:'',sub:'',value:pd.tieCovMin,unit:'in'}),   /* SFTC */
+    S({id:'tcov',label:'Clear cover to the ties (c = clear cover to the vertical bars)',sym:'c_{tie}',eq:'c \\minus d_{b,tie}',sub:sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,note:'≥ c_min = '+sfrN(pd.tieCovMin)+' in'}),
     S({id:'klr',label:'Slenderness (k = 1, ℓ_u = h, r = 0.3 b_min)',sym:'k \\ell_{u}/r',eq:'\\frac{h}{0.3 b_{min}}',sub:'\\frac{'+sfrN(pd.h)+'}{0.3\\cdot'+sfrN(pd.bmin)+'}',value:pd.klu_r,unit:'',d:2}),
     S({id:'sl',label:'Slender (k ℓ_u/r > 22: moment magnification needed, not done here)?',sym:'',eq:'',sub:'',value:pd.slenderFlag?'yes':'no',ok:!pd.slenderFlag})]});
    subs.push({title:pd.label+' ('+(pd.isPedestal?'pedestal':'column')+', '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[sfrTopics('pd'+i,T),
@@ -3390,7 +3416,7 @@ function sfdwBuild(){
    D.chainH(L.dim,Lp.xs,-by/2-0.45*k,-by/2);D.dimH(L.dim,-bx/2,bx/2,-by/2-0.85*k,-by/2);
    D.chainV(L.dim,Lp.ys,bx/2+0.45*k,bx/2);D.dimV(L.dim,-by/2,by/2,bx/2+0.85*k,bx/2);
    const nts=[(Lp.PB.n+'-#'+rf.longSize+' VERT  ('+Lp.PB.nx+' PER x-FACE, '+Lp.PB.ny+' PER y-FACE)').toUpperCase(),
-    ('#'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc))+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS').toUpperCase(),('DOWELS '+(rf.dowelN||0)+'-#'+rf.dowelSize).toUpperCase()];
+    ('#'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc))+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS, '+sfdwIn(Lp.cov-Lp.tie)+' CLR TO TIES').toUpperCase(),('DOWELS '+(rf.dowelN||0)+'-#'+rf.dowelSize).toUpperCase()];
    nts.forEach((q,j)=>T(L.txt,-bx/2,by/2+(0.5-0.2*j)*k,h,q,0));
    T(L.txt,0,-by/2-1.3*k,0.14*k,'PLAN SECTION',1);
    /* elevation, to the right of the plan section and of its notes */
@@ -3441,7 +3467,7 @@ function sfdwBuild(){
    'ALLOWABLE BEARING PRESSURE'+(state.soil.mode==='vesic'?' (GOVERNING CASE '+(G?G.cb.name:'')+')':'')+': '+(qa!=null?f2(qa)+' KSF':'N/A')+'. SOIL UNIT WEIGHT '+Math.round(R.gs*1000)+' PCF; WATER TABLE '+(R.dw===Infinity?'NOT PRESENT':f2(R.dw)+' FT BELOW GRADE')+'.',
    "CONCRETE: F'C = "+Math.round(R.fc)+' PSI, UNIT WEIGHT '+Math.round(R.gc*1000)+' PCF'+(num(state.mat.lambda)<1?', LIGHTWEIGHT FACTOR '+f2(num(state.mat.lambda)):'')+'.',
    'REINFORCEMENT: ASTM A615 / A706 BARS, FY = '+Math.round(num(state.mat.fy))+' PSI'+(state.mat.coating==='epoxy'?', EPOXY-COATED':', UNCOATED')+'.',
-   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS; PEDESTALS: '+state.peds.map(p=>String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))).join(', ')+'.',
+   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS; PEDESTALS (CLEAR TO VERTICAL BARS / TO TIES; MIN. TO TIES PER ACI 318-19 TABLE 20.5.1.3.1): '+state.peds.map((p,i)=>{const pd=P2&&P2.pedDes&&P2.pedDes[i];return String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))+(p.h>0?' / '+sfdwIn(num(p.reinf.cover)-(BAR_DIA[p.reinf.tieSize]||0))+(pd?' (MIN. '+sfdwIn(pd.tieCovMin)+', '+SFTC_EXP[pd.exposure][1].toUpperCase()+(pd.tieCovOK?')':'; NG)'):''):'');}).join(', ')+'.',
    'FOOTING: '+sfdwFI(R.B*12)+' (x) BY '+sfdwFI(R.L*12)+' (y) BY '+sfdwFI(R.t*12)+' THICK; BEARING '+sfdwFI(R.Df*12)+' BELOW GRADE; SOIL COVER '+sfdwFI(R.covEff*12)+'.',
    'LOADS AT THE TOP OF EACH PEDESTAL AT THE LOAD POINT SHOWN (OFFSET e FROM THE PEDESTAL CENTROID). '+(R.directMode?'DIRECT FACTORED LOADS.':'SERVICE LOADS BY TYPE; COMBINATIONS GENERATED.'),
    'AXES: ORIGIN AT THE FOOTING CENTROID; +x TOWARD THE B/2 EDGE, +y TOWARD THE L/2 EDGE.',
@@ -4464,6 +4490,11 @@ function computePhase2(R){
   const tieMax=Math.min(16*BAR_DIA[rf.longSize||8],48*BAR_DIA[rf.tieSize||3],bmin);
   const tieOK=isPatch?true:((rf.tieSpc<=tieMax+1e-6)&&(rf.tieSize>0));
   const tieSizeOK=isPatch?true:((rf.longSize<=10)?(rf.tieSize>=3):(rf.tieSize>=4));
+  /* SFTC (2026-11-01, engineer): the cover input is the clear cover to the vertical bars; the ties are outside them, so the
+     clear cover to the ties is c - d_b,tie. Checked against the specified cover of ACI 318-19 Table 20.5.1.3.1 for the
+     pedestal's exposure (input; default exposed to weather or in contact with ground). A new check: no other result uses it. */
+  const exposure=SFTC_EXP[rf.exposure]?rf.exposure:'weather', cov=num(cover), tieDb=BAR_DIA[rf.tieSize]||0;
+  const tieCov=cov-tieDb, tieCovMin=sftcMin(exposure,rf.tieSize), tieCovOK=isPatch?true:(tieCov>=tieCovMin-1e-9);
   const nBarsOK=isPatch?true:(nBars>=4);
   /* ACI 318-19 10.6.1.1 (1% <= rho <= 8%) is a COLUMN provision, in Chapter 10. A pedestal
      - a compression member whose height is no more than 3x its least lateral dimension - is
@@ -4478,7 +4509,7 @@ function computePhase2(R){
   // Bar fit: minimum clear spacing between longitudinal bars = max(1.5*db, 1.5 in) per
   // ACI 318-19 25.2.3. Catches physically impossible layouts (e.g. a mistyped bar count)
   // that still pass the 1-8% rho limit.
-  const dbL=(rf.longSize||0)/8;
+  const dbL=BAR_DIA[rf.longSize]||0;   // SFBD (2026-11-01, engineer): nominal diameter from the bar table, as everywhere else (before: size/8)
   const clrX=PB.nx>1?((bx-2*cover-dbL)/(PB.nx-1)-dbL):Infinity; // bx,by already inches here
   const clrY=PB.ny>1?((by-2*cover-dbL)/(PB.ny-1)-dbL):Infinity;
   const clrMin=Math.max(1.5*dbL,1.5);
@@ -4498,8 +4529,8 @@ function computePhase2(R){
   combos.forEach(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(!pl)return;
    pmPts.push({name:c.cb.name,P:pl.P,Mx:pl.mxPed,My:pl.myPed});});
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
-   PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
-   pmBars,pmPts,fc,fy,PB,dPr,dX,dY};
+   PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,dbL,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
+   pmBars,pmPts,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK};
  });
  return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,bearing,pedDes,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
@@ -4983,13 +5014,14 @@ function renderPedestalDesign(){
  const intro=secPanel(T,'o-pd-intro','6.1  Classification & Reinforcement Summary');
  intro.appendChild(el('p','note','Each pedestal is classified as a pedestal (height \u2264 3\u00d7 least plan dimension) or a column, and checked against axial\u2013moment demand, tie provisions (ACI 318-19 25.7.2), longitudinal steel limits (1\u20138% A_g, min 4 bars), and slenderness. Biaxial interaction is reported via the axial demand ratio with the Bresler framework; moment magnification for slender pedestals is deferred to v2 (flagged).'));
  const t=document.createElement('table');t.className='tbl';
- t.innerHTML='<tr><th>Pedestal</th><th>Class</th><th>b\u2093\u00d7b\u1D67\u00d7h (in)</th><th>n bars</th><th>A_st (in\u00b2)</th><th>\u03c1 (%)</th><th>\u03c6P_n,max (k)</th><th>P_u (k)</th><th>Axial DCR</th><th>Ties</th><th>Slender?</th></tr>';
+ t.innerHTML='<tr><th>Pedestal</th><th>Class</th><th>b\u2093\u00d7b\u1D67\u00d7h (in)</th><th>n bars</th><th>A_st (in\u00b2)</th><th>\u03c1 (%)</th><th>\u03c6P_n,max (k)</th><th>P_u (k)</th><th>Axial DCR</th><th>Ties</th><th>Tie cover (in)</th><th>Slender?</th></tr>';
  P2.pedDes.forEach(pd=>{const tr=document.createElement('tr');
   const tiesTxt=(pd.tieOK&&pd.tieSizeOK)?'OK':'CHECK';
-  [pd.label,pd.isPedestal?'Pedestal':'Column',f2(pd.bx)+'\u00d7'+f2(pd.by)+'\u00d7'+f2(pd.h),pd.nBars,f2(pd.Ast),f2(pd.rho*100),f2(pd.phiPn_max),f2(pd.PuMax),f2(pd.dcrAxial),tiesTxt,pd.slenderFlag?'YES':'No'].forEach((x,k)=>{
+  [pd.label,pd.isPedestal?'Pedestal':'Column',f2(pd.bx)+'\u00d7'+f2(pd.by)+'\u00d7'+f2(pd.h),pd.nBars,f2(pd.Ast),f2(pd.rho*100),f2(pd.phiPn_max),f2(pd.PuMax),f2(pd.dcrAxial),tiesTxt,pd.isPatch?'\u2014':f3(pd.tieCov)+(pd.tieCovOK?' \u2265 ':' < ')+f2(pd.tieCovMin),pd.slenderFlag?'YES':'No'].forEach((x,k)=>{
    const td=document.createElement('td');td.textContent=x;
    if(k===8&&pd.dcrAxial>1)td.style.color='#b71c1c';
-   if(k===9)td.style.color=tiesTxt==='OK'?'#1b5e20':'#b71c1c';tr.appendChild(td);});
+   if(k===9)td.style.color=tiesTxt==='OK'?'#1b5e20':'#b71c1c';
+   if(k===10&&!pd.isPatch)td.style.color=pd.tieCovOK?'#1b5e20':'#b71c1c';tr.appendChild(td);});
   if(!pd.rhoOK||!pd.nBarsOK||!pd.barFitOK)tr.style.background='#fff8e1';t.appendChild(tr);});
  intro.appendChild(t);
  intro.appendChild(sfdWorkedIn(P2.pedDes.map((pd,i)=>['o-pd-'+i,pd.label,['tab-peddes','6.'+(i+2)+' '+pd.label+' \u2014 Detailed Checks']])));   /* D11 links */
@@ -5005,7 +5037,8 @@ function renderPedestalDesign(){
    (pd.rhoOK?'\\text{within limits}\\;\\checkmark':'\\text{outside limits \u2014 NG}')));
   if(pd.isPedestal)b.appendChild(el('div','note','<b>The 1% lower limit is not applied here.</b> ACI 318-19 10.6.1.1 is a <b>column</b> provision (Chapter 10). This element is classified as a <b>pedestal</b> \u2014 height '+f2(pd.h)+' in \u2264 3 \u00d7 least plan dimension '+f2(pd.bmin)+' in \u2014 and ACI permits a pedestal to be plain concrete under Chapter 14, so there is no 1% floor on \u03c1. The minimum that does govern is the 0.005A<sub>g</sub> connection reinforcement of ACI 318-19 16.3.4.1, checked as the dowel minimum in \u00a75.6: '+f2(0.005*pd.bx*pd.by)+' in\u00b2 required. The 8% upper limit is a placement and consolidation limit and still applies. If you intend this element to be designed as a column, change the geometry or override the classification.'));
   b.appendChild(eqBlock('Bar count and fit','ACI 318-19 10.7.3.1, 25.2.3',
-   'n \\ge 4\\;\\text{(tied)},\\qquad s_{clear} \\ge \\max(1.5d_b,\\;1.5\\;\\mathrm{in})',
+   'n \\ge 4\\;\\text{(tied)},\\qquad s_{clear} = \\frac{b - 2c - d_b}{n_{face} - 1} - d_b \\ge \\max(1.5d_b,\\;1.5\\;\\mathrm{in})',
+   'd_b = '+f3(pd.dbL)+'\\;\\mathrm{in}\\;(\\#'+(state.peds[i].reinf.longSize||0)+'\\text{, bar table}),\\qquad s_{clear,x} = \\frac{'+f2(pd.bx)+' - 2\\cdot'+f2(num(state.peds[i].reinf.cover))+' - '+f3(pd.dbL)+'}{'+pd.PB.nx+' - 1} - '+f3(pd.dbL)+',\\qquad \\max(1.5\\cdot'+f3(pd.dbL)+',\\,1.5) = '+f3(pd.clrMin)+'\\;\\mathrm{in}',
    'n = '+pd.nBars+',\\qquad s_{clear,x} = '+f2(pd.clrX)+'\\;\\mathrm{in},\\; s_{clear,y} = '+f2(pd.clrY)+'\\;\\mathrm{in}\\;\\text{vs}\\;'+f2(pd.clrMin)+'\\;\\mathrm{in}',
    ((pd.nBarsOK&&pd.barFitOK)?'\\text{bars fit}\\;\\checkmark':'\\text{NG}')));
   if(!pd.rhoOK)b.appendChild(el('div','failbox','<b>NG \u2014 longitudinal steel ratio.</b> \u03c1 = '+f2(pd.rho*100)+'% is outside the '+(pd.isPedestal?'8% upper limit for a pedestal (ACI 318-19 10.6.1.1)':'1\u20138% limit for a column (ACI 318-19 10.6.1.1)')+'.'));
@@ -5038,6 +5071,13 @@ function renderPedestalDesign(){
    's_{max} = \\min(16\\cdot'+f2(BAR_DIA[state.peds[i].reinf.longSize||8])+',\\,48\\cdot'+f2(BAR_DIA[state.peds[i].reinf.tieSize||3])+',\\,'+f2(pd.bmin)+')',
    's_{max} = '+f2(pd.tieMax)+'\\;\\mathrm{in},\\;s_{prov} = '+f2(state.peds[i].reinf.tieSpc)+'\\;\\mathrm{in}'+((pd.tieOK&&pd.tieSizeOK)?'\\;\\checkmark':'\\;\\text{NG}')));
   if(!pd.tieSizeOK)b.appendChild(el('div','warnbox','Tie bar too small: #3 min for \u2264#10 longitudinal, #4 for \u2265#11 (ACI 318-19 25.7.2.2).'));
+  if(!pd.isPatch){   /* SFTC */
+   b.appendChild(eqBlock('Clear cover to the ties','ACI 318-19 20.5.1.3, Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+')',
+    'c_{tie} = c - d_{b,tie} \\ge c_{min}',
+    'c_{tie} = '+f2(pd.cov)+' - '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+'\\;\\mathrm{in},\\qquad c_{min} = '+f2(pd.tieCovMin)+'\\;\\mathrm{in}\\;(\\#'+(state.peds[i].reinf.tieSize||0)+'\\;\\text{tie})',
+    pd.tieCovOK?'\\text{tie cover OK}\\;\\checkmark':'\\text{NG}'));
+   b.appendChild(el('div','note','c = the pedestal cover input, the clear cover to the vertical bars; the ties lie outside the vertical bars. The exposure is set on the pedestal card (Pedestals input tab).'));
+   if(!pd.tieCovOK)b.appendChild(el('div','failbox','<b>NG \u2014 clear cover to the ties.</b> c \u2212 d<sub>b,tie</sub> = '+f3(pd.tieCov)+' in is less than the '+f2(pd.tieCovMin)+' in of ACI 318-19 Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+'). Increase the cover or use a smaller tie.'));}
   b.appendChild(eqBlock('Slenderness screen','ACI 318-19 6.2.5 (k=1, l_u=h assumed)',
    'r = 0.3 b_{min},\\quad k l_u/r \\le 22',
    'r = 0.3\\cdot'+f2(pd.bmin)+' = '+f2(pd.r)+',\\;kl_u/r = '+f2(pd.klu_r),
@@ -5839,7 +5879,8 @@ manPart("p3","3. Output Reference",[
  ["Flexure / One-way shear / Punching","max DCR over LRFD combos \u2264 1"],
  ["Concrete bearing","Pu/\u03c6Pnb \u2264 1 at each pedestal interface"],
  ["Dowel steel","provided \u2265 0.005A_g (REVIEW when short)"],
- ["Pedestal design","axial DCR, ties, \u03c1 limits, bar fit, min bars \u2014 all pedestals"]
+ ["Pedestal design","axial DCR, ties, \u03c1 limits, bar fit, min bars \u2014 all pedestals"],
+ ["Pedestal tie cover","clear cover to the ties c \u2212 d<sub>b,tie</sub> \u2265 ACI 318-19 Table 20.5.1.3.1 minimum for the pedestal exposure (input on the pedestal card)"]
 ]}},
 {h:"3.2 Report sections"},
 {ul:[

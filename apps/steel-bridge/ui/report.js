@@ -50,8 +50,8 @@
       on('rp_scope', 'change', e => { o.scope = e.target.value; if (ctx.save) ctx.save(); render(host, ctx); });
       on('rp_build', 'click', () => build(host, ctx));
       on('rp_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
-        rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
-          S.pl = pl; S.plName = f.name; } catch (er) { S.pl = null; S.plName = ''; alert('Cannot read this file: ' + er.message); } render(host, ctx); };
+        rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
+          S.pl = pl; S.plName = f.name; } catch (er) { alert('Cannot read this file: ' + er.message); /* nothing changed: the previous file, if any, stays */ } render(host, ctx); };
         rd.readAsText(f); });
     };
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis;
