@@ -250,3 +250,13 @@ test('AD8: CTDOT auto-designed splice takes the owner\'s 2 in end distances and 
     }
   }
 });
+
+test('Splices take the project\'s load factors (SPGAM, 2026-11-01): defaults = the old built-in ones; saved splices.gam kept, unused; Fatigue I from the Fatigue & studs input', () => {
+  const SP = W.SBDSplices, M = W.SBDModel, J = o => JSON.parse(JSON.stringify(o));
+  const P = M.defaultProject(); assert.equal(JSON.stringify(SP.projGam(P)), JSON.stringify(SP.DEF.gam), 'the project factors = GirderDetail\'s module defaults');
+  assert.equal(JSON.stringify(SP.settings(P).gam), JSON.stringify(SP.DEF.gam));
+  const Q = J(P); Q.splices.gam = { ...Q.splices.gam, llS: 1.5, fat: 1.5 };   // an old project's saved values
+  assert.equal(JSON.stringify(SP.settings(Q).gam), JSON.stringify(SP.DEF.gam), 'saved values not used'); assert.equal(Q.splices.gam.llS, 1.5, 'kept in the project');
+  Q.fatigue.gam.fI = 1.6; assert.equal(SP.settings(Q).gam.fat, 1.6);
+  Q.splices.gam.llS = -1; assert.ok(!M.validate(Q).errors.some(e => /^splices\.gam/.test(e.path)), 'validate no longer blocks on splices.gam');
+});

@@ -276,6 +276,7 @@
   /* part of a flexure / constructibility check: 'top', 'bot', 'web' (by its title, as the tabs word them; compression / tension by the region) */
   function partOf(c, pos, comp) {
     const t = String(c.title || ''), k = String(c.key || '');
+    if (c.id === 'GS4' || c.id === 'GS22') return 'deck';   // B3: deck reinforcement / method, not a plate (no plate sizing from it)
     if (/web|shear/i.test(t) || k === 'web' || k === 'shear' || k === 'v' || k === 'vf' || k === 'vc') return 'web';
     if (/top flange/i.test(t) || k === 'svt') return 'top'; if (/bottom flange/i.test(t) || k === 'svb') return 'bot';
     const cf = comp || (pos ? 'top' : 'bot'), tf = cf === 'top' ? 'bot' : 'top';

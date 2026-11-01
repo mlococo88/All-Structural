@@ -97,3 +97,17 @@ Tests: `node tests/engine/run.mjs lldf` (hash harness against lldf.html before t
 ### Other copies
 - None. lldf.html's own in-app steps (`memberSteps`, KaTeX strings) are separate and unchanged; its Report tab (next PR) uses
   `SharedLLDF.steps`.
+
+## 2026-11-01 — PR: rpt-lldf (LLRP) — SharedLLDF.steps.other: worked steps of types f, g, b/c, d and slab (new, display only)
+### Where
+- `shared/lldf.js`, inside the `STEPS` block: new `skewOther`, `otherFinal`, `other(q, geo, sk, md, w)`; exported
+  `SharedLLDF.steps.other`. Anchor `/* ---- other cross-section types (added 2026-11-01`.
+- Used by lldf.html's Report tab only (the Steel Bridge app does not call it). Every value written is a field of the engine's own
+  results (`memberDF` → md.bx, md.sp, md.mc, md.r, md.eM1 …; `skewFactors` → sk.scfM, sk.scfV; md.fV); nothing is computed again.
+### Governing provision
+- None changed. AASHTO LRFD 10th Ed. (2024) Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1,
+  4.6.2.2.3c-1; Eqs. 4.6.2.3-1, 4.6.2.3-2; Art. 3.6.1.4.3b, C3.6.1.1.2 (as the engine and lldf.html's sheet cite them).
+### How verified
+- No change to any existing output: the Steel Bridge step dump (LLST, 1,920 cases) hashes the same (293fb98c…);
+  `node tests/engine/run.mjs lldf loads report steps tex` pass. lldf.html headless checks (fixlog/lldf.md LLRP): every step value of
+  types f, g, b/c (incl. S > 18 ft), d and slab equals the app's, 0 KaTeX errors.

@@ -19,6 +19,7 @@
 <script src="engine/legacy.js"></script>
 <script src="ui/legacy.js"></script>
 <script src="engine/sections.js"></script>
+<script src="engine/proportions.js"></script>
 <script src="engine/flexure.js"></script>
 <script src="ui/demands.js"></script>
 <script src="ui/flexure.js"></script>
@@ -54,6 +55,8 @@
 <script src="report/data.js"></script>
 <script src="report/builders.js"></script>
 <script src="ui/report.js"></script>
+<script src="ui/bridgexfer.js"></script>
+<script src="ui/handoffs.js"></script>
 <!-- three.js for the 3D view: the same pinned files as GirderDetail ("Steel Bridge Design.html"), r128 + OrbitControls (CLAUDE.md §2) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
@@ -239,7 +242,8 @@
     return {
       proj: card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
           + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>')
-        + UL.ownerCard(P, { num, sel, card, esc }),   // moved here from the Cross-section & loads tab (UI only)
+        + UL.ownerCard(P, { num, sel, card, esc })   // moved here from the Cross-section & loads tab (UI only)
+        + (window.SBDHandoffUI ? window.SBDHandoffUI.card(P, ui) : ''),   // B2: hand-offs to and from the other tools (ui/handoffs.js)
       spans: card('Spans', `${sel('spans.continuity', 'Continuity', [['continuous', 'Continuous'], ['simple', 'Simple spans']])}
         <div class="fRow"><label for="i_spans">Span lengths</label><input type="text" id="i_spans" data-kind="spans" value="${esc(P.spans.lengths.join(', '))}" style="width:180px"><span class="unit">ft, comma separated</span></div>
         <p class="note">Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`) + window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // Spans & framing tab: the Spans card, then the framing cards
@@ -295,6 +299,7 @@
     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }
     if (window.SBDFatigueUI.onClick(e, P, ui)) { changed(true); return; }
     if (window.SBDSplicesUI.onClick(e, P, ui)) { changed(true); return; }
+    if (window.SBDHandoffUI && window.SBDHandoffUI.onClick(e, P, ui)) { changed(true); return; }   // B2
     const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
     if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
     if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
@@ -311,6 +316,7 @@
     if (!restoring) { const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++; if (toastStep !== stepNo) closeToast(); } }   // one undo step per input change; a message with an Undo button closes when a later change is made
     syncBar();
   }
+  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r) });   // B2: the LL & DL pull dialog applies after its confirm
   /* ---------- undo / redo (session only: nothing is stored) ---------- */
   function restore(from, to) {
     if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);
