@@ -12,7 +12,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { openPage, resolveFile, hash, diff, REPO } from './lib.mjs';
+import { openPage, resolveFile, hash, diff, REPO, HERE } from './lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
@@ -99,7 +99,17 @@ async function circleChecks(src) {
   const { b, p, errs } = await openPage(src.file);
   try {
     await ready(p);
+    /* KaTeX for the TeX check below: the tool's pinned version, or the test kit's copy when that one is not served */
+    if (!(await p.evaluate(() => !!window.katex))) await p.addScriptTag({ path: path.join(HERE, 'libs', 'katex@0.16.9', 'dist', 'katex.min.js') });
     const r = await p.evaluate(({ CASES, VARIANTS, BUILD }) => {
+      /* every worked line of the current design's steps must typeset (no raw TeX on screen or in the report) */
+      const texBad = [];
+      const texCheck = tag => { const steps = [];
+        const add = o => { if (o && Array.isArray(o.steps)) o.steps.forEach(st => steps.push(st)); };
+        CC.combos.forEach(c => { const cap = comboCapacities(CC, c); [cap.st, cap.po, cap.tb, cap.sfb, cap.sv, cap.sbk, cap.pry].forEach(add); add(plateBending(c, CC)); add(plateTearout(c)); });
+        add(bearingCheck(CC)); add(levelingNutCheck(CC)); add(standoffCompressionCheck(CC));
+        if (typeof bpCircGeomStep === 'function' && bpCircPattern()) steps.push(bpCircGeomStep());
+        steps.forEach(st => (st.lines || []).concat((st.vars || []).map(v => v[0])).forEach(l => { try { katex.renderToString(String(l), { throwOnError: true, strict: false }); } catch (e) { texBad.push(tag + ' | ' + st.title + ' | ' + String(e.message).slice(0, 120)); } })); };
       const build = eval(BUILD);
       const strip = o => JSON.parse(JSON.stringify(o, (k, v) => (k === 'steps' || typeof v === 'function') ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v)));
       const run = s => { S = mergeState(s); S.proj.date = '2026-01-01'; refreshAll(); CC = computeAll();
@@ -128,7 +138,7 @@ async function circleChecks(src) {
       { const s = defaultState(); s.anchor.pattern = 'circle'; s.anchor.nCircle = 8; s.anchor.BC = 20; s.anchor.theta0 = 22.5; s.anchor.dia = 1; s.anchor.grade = 'f1554_55'; s.anchor.hef = 24;
         s.plate.B = 26; s.plate.N = 26; s.conc.Bx = 120; s.conc.By = 120; s.conc.H = 120; s.grout.present = false; s.forceModel.method = 'elastic';
         s.combos = [{ name: 'H1', P: -3, Vx: 0, Vy: 5, Mx: 960, My: 0 }];
-        const r1 = run(s); out.hand.H1 = { Tmax: r1.res[0].Tmax, Tg: r1.res[0].Tg, errs: r1.errs }; }
+        const r1 = run(s); texCheck('H1'); out.hand.H1 = { Tmax: r1.res[0].Tmax, Tg: r1.res[0].Tg, errs: r1.errs }; }
       /* H2: circular plate D = 24, t = 1.5, A36, 6 × 1 in on BC 16 (θ0 0), pole HSS8.625 round, double nut (clamp, 1 in),
          P = 0, M = 600 kip-in about y (My = −600 → tension on +x … elastic: T_i = −My·x_i/Σx²), Σx² = 6·64/2 = 192,
          x_max = 8 → |T| = 600·8/192 = 25.0 kip (tension rod at +x, compression rod at −x, equal magnitude).
@@ -139,7 +149,7 @@ async function circleChecks(src) {
         s.col.custom = false; s.col.shapeType = 'HSS'; s.col.shape = 'HSS8.625 (round)';
         s.conc.Bx = 48; s.conc.By = 48; s.conc.H = 60; s.grout.present = false; s.standoff.type = 'clamp'; s.standoff.z = 1.0;
         s.combos = [{ name: 'H2', P: 0, Vx: 2, Vy: 0, Mx: 0, My: -600 }];
-        const r2 = run(s); const pb = plateBending(CC.combos[0], CC);
+        const r2 = run(s); texCheck('H2'); const pb = plateBending(CC.combos[0], CC);
         out.hand.H2 = { Prod: pb.Prod, m: pb.m, beff: pb.beff, tReq: pb.tReq, dcr: pb.dcr, chk: r2.checks.find(c => c[0] === 'Base Plate Bending'), errs: r2.errs }; }
       /* H3 (BC-2): comparison case C2 — 4 × 1 in Gr 55 at (±6, ±6) (BC 12√2, θ0 45°) on a Ø36 in round pier, h_ef 18,
          f'c 4 ksi cracked, M_x = 480 kip·in (tension +y), P = 5 kip compression, V_y = 3 kip, elastic.
@@ -152,11 +162,12 @@ async function circleChecks(src) {
            ψ_ed = 0.7 + 0.3·9.515/27 = 0.80572; φN_cbg = 0.70·0.34907·0.80572·125.08 = 24.63 kip (the comparison's 24.63). */
       { const mk = red => { const s = build({ case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 12 * Math.SQRT2, 'anchor.theta0': 45,
           'conc.shape': 'circle', 'conc.D': 36, 'conc.circHefReduce': red } }); s.combos = [s.combos[0]]; return s; };
-        const a = run(mk(true)), b = run(mk(false));
+        const a = run(mk(true)); texCheck('H3 reduced'); const b = run(mk(false)); texCheck('H3 full');
         const tb = a.res[0].tb, tb2 = b.res[0].tb;
         out.hand.H3 = { hef: tb.hef, Nb: tb.Nb, ANc: tb.ANc, ANco: tb.ANco, psi_ed: tb.psi_ed, phiNcbg: tb.phiNcbg, altPhi: tb.alt && tb.alt.phiNcbg,
           hef2: tb2.hef, Nb2: tb2.Nb, ANc2: tb2.ANc, psi_ed2: tb2.psi_ed, phiNcbg2: tb2.phiNcbg, Tg: a.res[0].Tg, sbk: a.res[0].sbk, sfbNa: a.res[0].sfb.na,
           checks: a.checks, errs: a.errs.concat(b.errs) }; }
+      out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
     return { r, errs };
@@ -205,6 +216,8 @@ if (r.hand.H3) {
   console.log('  H3 Summary: ' + h.checks.map(c => c[0] + ' ' + (+c[1]).toFixed(3)).join('; '));
 }
 for (const h of ['H1', 'H2', 'H3'].filter(k => r.hand[k])) if (r.hand[h].errs.length) { fail = true; console.log(`  ${h} validation errors: ${r.hand[h].errs.join(' | ')}`); }
+console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
+if (r.texBad.length) fail = true;
 console.log(`  console errors ${pe(cc.errs).length}`); pe(cc.errs).slice(0, 5).forEach(e => console.log('    ' + e));
 if (pe(cc.errs).length) fail = true;
 console.log(fail ? '\nFAIL' : '\nPASS');

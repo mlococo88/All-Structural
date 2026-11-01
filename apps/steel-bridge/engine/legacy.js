@@ -273,6 +273,13 @@
     if (o.gd) read.gd = fromGD(o.gd, P, notes, !!o.pl);
     if (o.st) read.st = fromST(o.st, P, notes, !o.pl && !o.gd);
     if (!o.pl && !o.gd && !o.st) return { ok: false, error: 'The file has no project part (GirderDetail, Preliminary sizing or ST-Girder).' };
+    // construction live load (2026-11-01, D-1 of docs/steel-bridge-comparison.md §d): GirderDetail's Structural analysis loads each girder with
+    // w_CL = cll/1000 × b_eff (ft) (GM.sa.compute `wCL = (nm(b.cll) || 0) / 1000 * beffFt`), cll (psf) from its bridge (df.bridge.cll, sent by
+    // Preliminary sizing), else Preliminary sizing's own suggest.cll (its Suggest: SG.cll). This app takes the construction live load per girder
+    // from girders[i].loadsManual.CL (klf; engine/analysis.js loadsOf), which nothing filled on import before (M_CL, V_CL = 0).
+    { const g = read.gd && read.gd.n('df.bridge.cll', NaN), q = read.pl && read.pl.n('suggest.cll', NaN), cll = fin(g) ? g : fin(q) ? q : NaN;
+      if (fin(cll) && cll > 0 && Array.isArray(P.girders)) { P.girders.forEach(G => { if (G.loadsManual && fin(G.loadsManual.CL)) return; G.loadsManual = { ...(G.loadsManual || {}), CL: +(cll / 1000 * G.beff / 12).toFixed(6) }; });
+        notes.push(`Construction live load ${cll} psf (${fin(g) ? 'GirderDetail' : 'Preliminary sizing'}) × each girder's b_eff, as GirderDetail's Structural analysis: Analysis settings, construction live load per girder.`); } }
     if (P.__dlRest) { notes.push(`GirderDetail LLDF and DLs: ${Object.keys(P.__dlRest).join(', ')} not in this app's cross-section yet (kept unmapped).`); delete P.__dlRest; }
     if (!Object.keys(P.analysis).length) delete P.analysis;
     if (o.name && (!P.project.name || P.project.name === 'New steel bridge')) P.project.name = o.name;
