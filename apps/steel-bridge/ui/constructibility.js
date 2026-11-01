@@ -22,7 +22,8 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const S = { src: null, pl: null, plName: '', R: null, key: '', sel: null, ohSel: 0, err: '', busy: false };
-  const srcOf = () => S.src || 'project';   // src null: the default, this project (no example on this tab)
+  // src null: the saved choice (P.demandSrc.cn, custom demands PR 2026-11-01), else the default, this project (no example on this tab)
+  const srcOf = P => S.src || (window.SBDCustomDemands && P && window.SBDCustomDemands.srcGet(P, 'cn')) || 'project';
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
   const cls = r => Number.isNaN(r) || r === Infinity ? 'cn-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'cn-ng' : r >= 0.9 ? 'cn-hi' : 'cn-ok';
   /* SB2-R2: the ratio of a check as shown; a non-finite ratio that is not "not applicable" carries its reason (c.ng: NG or error) */
@@ -39,7 +40,7 @@
     document.head.appendChild(st);
   }
   const ohInputs = P => ({ ...window.SBDConstr.OH_DEF, ...((P.constr && P.constr.oh) || {}) });
-  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(), S.plName]);   // f_ℓ is in ctx.P (P.constr.flC)
+  const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx.P), S.plName]);   // f_ℓ is in ctx.P (P.constr.flC)
   /* f_ℓ during deck placement entered (first order, ksi): saved in the project, P.constr.flC; absent, not a number or ≤ 0: none entered
      (the skew value of C6.10.1 is used: engine/framing.js design, SB2-W1) */
   const flOf = P => { const v = P.constr && +P.constr.flC; return isFinite(v) && v > 0 ? v : 0; };
@@ -49,8 +50,20 @@
      pl (hand-off payload; else the tab's file), plName }. Brace points and f_ℓ: engine/framing.js design() (the Spans &amp; framing tab; f_ℓ entered,
      else from skew). Returns engine/constructibility.js girder() plus { what, ext, src, F (fromAnalysis / fromPayload), D (design) } or
      { err }. */
+  /* arOf(P, g): the rows entered on this tab (ui/demands.js) in the shape engine/constructibility.js fromAnalysis reads of an analysis:
+     { x, sup, Lt, cont, st: { DC1, CL: { M, VL, VR } }, seq: { MDCc } (only when M_DCc is entered in a row) }; one row alone is doubled
+     0.001 ft beside it. Returns { AR, xs, C, seq } or { err }. */
+  function arOf(P, g) {
+    const CD = window.SBDCustomDemands, RW = CD.rowsOf(P, 'cn', g); if (RW.err.length) return { err: 'Custom demands: ' + RW.err.join(' ') };
+    const sup = CD.supsOf(P), Lt = sup[sup.length - 1], n = v => (typeof v === 'number' && isFinite(v) ? v : 0), rv = (r, k) => (typeof r[k + 'R'] === 'number' && isFinite(r[k + 'R']) ? r[k + 'R'] : n(r[k]));
+    let rows = RW.rows.map(r => ({ ...r, x: +r.x })); if (rows.length === 1) { const q = rows[0], dx = q.x + 0.001 <= Lt ? 0.001 : -0.001; rows = [q, { ...q, x: q.x + dx }].sort((a, b) => a.x - b.x); }
+    const seq = RW.rows.some(r => typeof r.M_DCc === 'number' && isFinite(r.M_DCc)), col = k => rows.map(r => n(r[k]));
+    const AR = { x: rows.map(r => r.x), sup, Lt, cont: P.spans.continuity !== 'simple' && sup.length > 2,
+      st: { DC1: { M: col('M_DC1'), VL: col('V_DC1'), VR: rows.map(r => rv(r, 'V_DC1')) }, CL: { M: col('M_CL'), VL: col('V_CL'), VR: rows.map(r => rv(r, 'V_CL')) } }, seq: seq ? { MDCc: col('M_DCc') } : null };
+    return { AR, xs: RW.rows.map(r => +r.x), C: { rows: RW.rows, mode: 'unf' }, seq };
+  }
   function build(ctx) {
-    const P = ctx.P, g = ctx.g || 0, C = window.SBDConstr, FRM = window.SBDFraming, src = ctx.src || (ctx.pl ? 'file' : srcOf()), pl = ctx.pl !== undefined ? ctx.pl : S.pl, plName = ctx.plName != null ? ctx.plName : S.plName;
+    const P = ctx.P, g = ctx.g || 0, C = window.SBDConstr, FRM = window.SBDFraming, src = ctx.src || (ctx.pl ? 'file' : srcOf(P)), pl = ctx.pl !== undefined ? ctx.pl : S.pl, plName = ctx.plName != null ? ctx.plName : S.plName;
     let F, what, D;
     if (src === 'file') {
       if (!pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
@@ -58,6 +71,15 @@
       D = FRM.design(P, g, { sup: (pl.member || {}).supports, line: (+gdF.girder || 1) - 1, skews: (gdF.skew || {}).bySupport || [0], ext: gdF.position === 'exterior', fl: flOf(P) });   // this bridge's framing (SB2-O9), skew f_ℓ (SB2-W1)
       F = C.fromPayload(pl, { flC: D.fl, ...(D.br ? { braces: D.braces } : {}) });
       what = `${esc(plName)}: ${F.locs.length} stations; plates and materials from the file; M<sub>DCc</sub>${F.locs.some(L => L.M.DCc !== 0) ? ' (GirderDetail\'s pour sequence)' : ' not in the file (M<sub>DC1</sub> used)'}, M<sub>CL</sub>, V<sub>DC1</sub>, V<sub>CL</sub> from the file; L<sub>b</sub> ${D.br ? "from this project's framing (Cross-frames tab)" : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft`}; ${flTxt(D)}.`;
+    } else if (src === 'custom') {   // custom demands PR (2026-11-01): the rows entered on this tab, as an analysis (arOf), the project's path
+      const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' };
+      const A = arOf(P, g); if (A.err) return { err: A.err };
+      D = FRM.design(P, g, { fl: flOf(P) });
+      F = C.fromAnalysis(P, g, A.AR, { flC: D.fl, oh: ohInputs(P), ...(D.br ? { braces: D.braces } : {}) }); F.frA = D.br;
+      F.locs = CD.keepAt(F.locs, A.xs); if (F.oh) F.oh.rows = C.ohRowsAt(F.supports, F.env, F.locs);   // the entered stations; the overhang rows among them
+      F.custom = A.C;
+      const gg = P.girders[g];
+      what = `Demands: entered (Custom), unfactored, on ${esc(gg.label || gg.id)}: ${A.C.rows.length} row(s), ${F.locs.length} location(s) checked (each entered station; both sides of a support or plate change there); M<sub>DC1</sub>, ${A.seq ? 'M<sub>DCc</sub> as entered' : 'no M<sub>DCc</sub> entered: M<sub>DC1</sub>'}, M<sub>CL</sub> linear between the rows; V<sub>DC1</sub>, V<sub>CL</sub> left and right of each row. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Spans &amp; framing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; the project's plates and stiffener panels; ${flTxt(D)}.`;
     } else {
       const AR = window.SBDAnalysis.analyzeGirder(P, g, { ll: false });
       if (AR.errors && AR.errors.length) return { err: 'Analysis: ' + AR.errors.join(' ') };
@@ -70,7 +92,7 @@
         + (AR.warnings && AR.warnings.length ? `<br>${AR.warnings.map(esc).join('<br>')}` : '');
     }
     const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });
-    return { ...R, what, ext: F.ext, src, F, D };
+    return { ...R, what, ext: F.ext, src, F, D, custom: F.custom || null };
   }
   function calc(ctx) {
     S.err = ''; S.R = null; S.sel = null; S.ohSel = 0;
@@ -84,7 +106,7 @@
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): deck placement (6.10.3) and the overhang brackets ---------- */
   const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'),
-    { key: 'dem', title: 'Demands: deck placement moments and shear', ref: A + '3.4.2, 6.10.3.2', ids: /^cn\.(Mc|Vu)$/, res: /^cn\.Mc$/ },
+    { key: 'dem', title: 'Demands: deck placement moments and shear', ref: A + '3.4.2, 6.10.3.2', ids: /^(cn\.(Mc|Vu)|cd\.src)$/, res: /^cn\.Mc$/ },
     { key: 'str', title: 'Flange stresses and lateral bending', ref: A + '6.10.3.2.1, 6.10.1.6', ids: /^(cn\.(f\.|fbu$|fl$)|flsk\.)/, res: /^cn\.fbu$/ },
     { key: 'web', title: 'Web bend-buckling resistance', ref: A + '6.10.1.9.1', ids: /^cn\.(Dc|k|Fcrw)$/, res: /^cn\.Fcrw$/ },
     { key: 'rh', title: 'Hybrid factor', ref: A + '6.10.1.10.1', ids: /^cn\.Rh$/ },
@@ -105,21 +127,22 @@
 
   function render(host, ctx) {
     css();
-    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = srcOf() === 'file' ? null : g.position === 'exterior', oh = ohInputs(P);
+    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = srcOf(P) === 'file' ? null : g.position === 'exterior', oh = ohInputs(P);
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis;
-    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(), auto: !S.src, rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: g.label || g.id, plName: S.plName }) : '')
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(P), auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(P, 'cn')), rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: g.label || g.id, plName: S.plName }) : '')
       + `<section class="sec"><div class="secHead">Constructibility (deck placement): demands and options</div><div class="secBody">
-      <div class="fRow"><label for="cn_src">Demands</label><select id="cn_src">${opt('project', 'This project (analysis, pour sequence)', srcOf())}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf())}</select></div>
-      ${srcOf() === 'file' ? `<div class="fRow"><label for="cn_file">File</label><input type="file" id="cn_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
+      <div class="fRow"><label for="cn_src">Demands</label><select id="cn_src">${opt('project', 'This project (analysis, pour sequence)', srcOf(P))}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf(P))}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', srcOf(P)) : ''}</select></div>
+      ${srcOf(P) === 'file' ? `<div class="fRow"><label for="cn_file">File</label><input type="file" id="cn_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <div class="fRow"><label for="cn_flC">f<sub>ℓ</sub> during deck placement (first order; blank or 0: from skew, C6.10.1)</label><input type="number" step="any" min="0" id="cn_flC" value="${flOf(P) || ''}" placeholder="${fmt(window.SBDFraming.design(P, ctx.g).fl, 2)} (skew)"><span class="unit">ksi (GS14, GS15; saved with the project)</span></div>
       <p class="note">M<sub>c</sub> = 1.25M<sub>DCc</sub> + 1.50M<sub>CL</sub> and V<sub>u</sub> = 1.25V<sub>DC1</sub> + 1.50V<sub>CL</sub> on the noncomposite steel section (AASHTO LRFD 10th Ed. 3.4.2.1, 6.10.3.4.1); φ<sub>f</sub> = φ<sub>v</sub> = 1.0.
-      GS14: Eqs. 6.10.3.2.1-1, -2 (F<sub>nc</sub> from 6.10.8.2 with R<sub>b</sub> = 1.0); GS15: Eq. 6.10.3.2.1-3 and 6.10.3.2.2-1; GS16: Eq. 6.10.3.3-1.${ext ? ' Exterior girder: OH1–OH5 with the overhang bracket loads below (C6.10.3.4).' : ''} The demand source is not saved; f<sub>ℓ</sub> entered is.</p></div></section>`;
+      GS14: Eqs. 6.10.3.2.1-1, -2 (F<sub>nc</sub> from 6.10.8.2 with R<sub>b</sub> = 1.0); GS15: Eq. 6.10.3.2.1-3 and 6.10.3.2.2-1; GS16: Eq. 6.10.3.3-1.${ext ? ' Exterior girder: OH1–OH5 with the overhang bracket loads below (C6.10.3.4).' : ''} The demand source (a hand-off file is not) and f<sub>ℓ</sub> entered is.</p></div></section>`;
     if (ext) h += `<section class="sec"><div class="secHead">Overhang brackets, exterior girder (saved with the project)</div><div class="secBody">
       ${OHF.map(([k, l, u]) => `<div class="fRow"><label for="cn_oh_${k}">${l}</label><input type="number" step="any" id="cn_oh_${k}" data-oh="${k}" value="${esc(oh[k])}"><span class="unit">${u}</span></div>`).join('')}
       <div class="fRow"><label for="cn_oh_gdc">γ<sub>DC</sub> / γ construction</label><input type="number" step="any" id="cn_oh_gdc" data-ohg="dc" value="${esc(oh.gam.dc)}" style="width:70px"><input type="number" step="any" id="cn_oh_gcl" data-ohg="cl" value="${esc(oh.gam.cl)}" style="width:70px"><span class="unit"></span></div>
       <div class="fRow"><button type="button" id="cn_oh_fill" title="Deck width carried by the brackets, overhang deck thickness and w_c from the Cross-section &amp; loads and Materials &amp; deck tabs">Fill from cross-section</button><span class="unit">${(() => { const F = window.SBDConstr.ohFill(P, ctx.g); return F.err ? esc(F.err) : `from the cross-section: w<sub>OH</sub> ${fmt(F.vals.wOH, 2)} in, t<sub>OH</sub> ${fmt(F.vals.tOH, 2)} in, w<sub>c</sub> ${fmt(F.vals.wc, 3)} kcf <details style="display:inline"><summary class="wk">§ worked</summary>${stepsHtml(F.steps)}</details>`; })()}</span></div>
       <p class="note">GirderDetail's Deck overhang defaults (common planning values; confirm against the contractor's brackets and finishing machine). The deck weight is factored by γ<sub>DC</sub>, all other bracket loads by the construction factor. The deck slab and overhang design are not part of this app; only the girder's flange lateral bending is checked.</p></div></section>`;
+    if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(P, 'cn', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Constructibility results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="cn_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {
@@ -141,7 +164,7 @@
         h += `<section class="sec"><div class="secHead">${esc(r.name)}: deck placement checks</div><div class="secBody"><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(r.checks, r.gov)}</tbody></table></div>
           <div class="kv"><div><span>M<sub>c</sub></span><span>${fmt(r.Mc, 1)} kip-ft <a class="wk" href="#st-cn.Mc">§</a></span></div><div><span>L<sub>b</sub> / C<sub>b</sub> (deck placement)</span><span>${fmt(r.LbC, 2)} ft / ${fmt(r.CbCu, 3)}${r.ltC.npr ? ` (nonprismatic, ${r.ltC.npr.kind === 'ge' ? '6.10.8.2.3c' : 'simplification'})` : ''} <a class="wk" href="#st-cn.Cb">§</a></span></div>
           <div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(r.ltC.FLB, 2)} / ${fmt(r.ltC.LTB, 2)} ksi <a class="wk" href="#st-cn.Fnc">§</a></span></div><div><span>Panel</span><span>${r.do > 0 ? `d<sub>o</sub> = ${fmt(r.do, 1)} in${r.end ? ', end panel' : ''}` : 'unstiffened'}</span></div></div></div></section>
-          <section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The steel section properties are worked on the Section properties tab (sec.s).</p>${stepsHtml(r.steps)}</div></section>`;
+          <section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The steel section properties are worked on the Section properties tab (sec.s).</p>${stepsHtml(stepsOf(R, r))}</div></section>`;
       }
       if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh, q = O.rows[S.ohSel] || O.rows[0];
         h += `<section class="sec"><div class="secHead">Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)</div><div class="secBody">
@@ -155,7 +178,9 @@
     { const sl = host.querySelector('#gfx_cn'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.constr(sl, { P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
-    on('#cn_src', 'change', e => { S.src = e.target.value; redraw(); });
+    on('#cn_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.cn), a file for the page view
+      if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(P, 'cn', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
+    if (srcOf(P) === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, P, 'cn', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('#cn_flC', 'change', e => { const t = e.target.value, v = t === '' ? 0 : Number(t); if (!(isFinite(v) && v >= 0)) return; P.constr = P.constr || {}; if (v > 0) P.constr.flC = v; else delete P.constr.flC; if (ctx.changed) ctx.changed(); else redraw(); });
     on('[data-oh]', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; P.constr.oh = { ...ohInputs(P), ...(P.constr.oh || {}), [e.target.dataset.oh]: v }; if (ctx.changed) ctx.changed(); else redraw(); });
     on('[data-ohg]', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; const o = { ...ohInputs(P), ...(P.constr.oh || {}) }; o.gam = { ...o.gam, [e.target.dataset.ohg]: v }; P.constr.oh = o; if (ctx.changed) ctx.changed(); else redraw(); });
@@ -174,5 +199,7 @@
     on('[data-gotab]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.gotab}"]`); if (b) b.click(); });
   }
 
-  window.SBDConstrUI = { render, build, TOPICS, groups };
+  /* stepsOf(R, r): the worked steps of location r; with custom demands the step that names them first (custom demands PR) */
+  const stepsOf = (R, r) => (R && R.custom ? [window.SBDCustomDemands.step('cn', R.custom, r.x)].concat(r.steps) : r.steps);
+  window.SBDConstrUI = { render, build, TOPICS, groups, stepsOf };
 })();

@@ -237,3 +237,102 @@ test('Report: "each tab\'s choice" takes the entered rows of a tab set to Custom
   // 'analysis' (default) ignores the tab choices, as before
   const B0 = W.SBDReportData.compute(P, 0, { want: { flex: true } }); assert.equal(B0.custom, null); assert.ok(B0.flex.rows.length > 100);
 });
+
+/* constructibility rows from the dead-load analysis (engine/analysis.js, ll: false), as ui/constructibility.js takes it */
+const cnRows = (P, g) => { const AR = W.SBDAnalysis.analyzeGirder(P, g, { ll: false }), st = AR.st;
+  return AR.x.map((x, i) => ({ x, M_DC1: st.DC1.M[i], ...(AR.seq ? { M_DCc: AR.seq.MDCc[i] } : {}), M_CL: st.CL.M[i], V_DC1: st.DC1.VL[i], V_DC1R: st.DC1.VR[i], V_CL: st.CL.VL[i], V_CLR: st.CL.VR[i] })); };
+test('Constructibility: custom rows = this project\'s dead-load analysis give the same locations, checks, overhang checks and steps', () => {
+  const P1 = W.SBDModel.defaultProject(); P1.girders[0].position = 'exterior';   // the overhang checks OH1–OH5 too
+  for (const [tag, P, g] of VARIANTS().concat([['built-in, G1 exterior', P1, 0]])) {
+    const A = W.SBDConstrUI.build({ P, g, src: 'project' }); assert.ok(!A.err, tag + ': ' + A.err);
+    const Pc = J(P); setRows(Pc, 'cn', g, cnRows(P, g));
+    const F = W.SBDConstrUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.match(F.what, /^Demands: entered \(Custom\)/);
+    assert.equal(F.rows.length, A.rows.length, tag + ' locations'); let n = 0, maxd = 0;
+    F.rows.forEach((r, i) => { const q = A.rows[i]; assert.equal(r.name, q.name);
+      r.checks.forEach((c, j) => { const e = q.checks[j]; assert.equal(c.id, e.id); if (isFinite(e.ratio)) { maxd = Math.max(maxd, close(c.ratio, e.ratio, `${tag} ${r.name} ${c.id}`)); n++; } });
+      const sF = W.SBDConstrUI.stepsOf(F, r), sA = W.SBDConstrUI.stepsOf(A, q); assert.equal(sF[0].id, 'cd.src'); assert.equal(sF.length, sA.length + 1);
+      sA.forEach((s, k) => { assert.equal(sF[k + 1].id, s.id); if (typeof s.value === 'number') close(sF[k + 1].value, s.value, `${tag} ${r.name} ${s.id}`); }); });
+    if (A.oh) { assert.equal(F.oh.rows.length, A.oh.rows.length); F.oh.rows.forEach((o, i) => o.checks.forEach((c, j) => { if (isFinite(c.ratio)) { close(c.ratio, A.oh.rows[i].checks[j].ratio, `${tag} ${o.name} ${c.id}`); n++; } })); }
+    assert.equal(F.govAll.ratio, A.govAll.ratio);
+    console.log(`       ${tag}: ${F.rows.length} locations${A.oh ? `, ${A.oh.rows.length} overhang rows` : ''}, ${n} ratios equal (largest difference ${maxd}); governing ${F.govAll.check.id} ${F.govAll.ratio.toFixed(4)}`);
+  }
+});
+
+test('Constructibility hand check: one station entered', () => {
+  // x = 44 ft: M_DC1 = 1200, M_DCc = 1350, M_CL = 60 kip-ft; V_DC1 = 30, V_CL = 2 kip
+  //   M_c = 1.25 M_DCc + 1.50 M_CL = 1687.5 + 90 = 1777.5 kip-ft;  V_u = 1.25(30) + 1.50(2) = 40.5 kip (GS16)
+  const P = W.SBDModel.defaultProject();
+  setRows(P, 'cn', 0, [{ x: 44, M_DC1: 1200, M_DCc: 1350, M_CL: 60, V_DC1: 30, V_CL: 2 }]);
+  const R = W.SBDConstrUI.build({ P, g: 0, src: 'custom' }); assert.ok(!R.err, R.err);
+  assert.equal(R.rows.length, 1); const r = R.rows[0];
+  assert.ok(Math.abs(r.Mc - 1777.5) < 1e-9, `${r.Mc}`); assert.ok(Math.abs(r.VuC - 40.5) < 1e-9 || Math.abs((r.Vu != null ? r.Vu : r.VuC) - 40.5) < 1e-9, JSON.stringify(Object.keys(r)));
+  console.log(`       M_c = ${r.Mc}, governing ${r.gov.id} ${r.gov.ratio.toFixed(4)}`);
+});
+
+/* fatigue rows from the fatigue tab's analysis payload (ui/fatigue.js fromAnalysis): LL+IM without the pedestrian part (its own column) */
+const fatRows = pl => pl.stations.map(s => { const o = { x: s.x }; CD.SPECS.fat.unf.cols.forEach(([k]) => { o[k] = +s[k] || 0; });
+  if (pl.pedestrianInLL) { o.M_LLpos = (+s.M_LLpos || 0) - (+s.M_PLpos || 0); o.M_LLneg = (+s.M_LLneg || 0) - (+s.M_PLneg || 0); } return o; });
+function fatEqual(F, A, tag) {
+  let n = 0, maxd = 0; const m = d => { maxd = Math.max(maxd, d); n++; };
+  assert.equal(F.FR.rows.length, A.FR.rows.length, tag + ' details');
+  F.FC.forEach((c, j) => c.items.forEach((it, k) => { const e = A.FC[j].items[k]; assert.equal(it.loc, e.loc); if (typeof e.r === 'number' && isFinite(e.r)) m(close(it.r, e.r, `${tag} ${c.id} ${it.loc}`)); }));
+  assert.equal(F.gs17.length, A.gs17.length, tag + ' GS17 locations');
+  F.gs17.forEach((q, i) => q.o.items.forEach((it, k) => { const e = A.gs17[i].o.items[k]; if (isFinite(e.r)) m(close(it.r, e.r, `${tag} GS17 ${q.r.name}`)); }));
+  assert.equal(F.SR.zones.length, A.SR.zones.length, tag + ' stud zones'); assert.equal(F.SR.regions.length, A.SR.regions.length);
+  F.SCC.forEach((c, j) => c.items.forEach((it, k) => { const e = A.SCC[j].items[k]; assert.equal(it.loc, e.loc); if (typeof e.r === 'number' && isFinite(e.r)) m(close(it.r, e.r, `${tag} ${c.id} ${it.loc}`)); }));
+  const s0 = W.SBDFatigueUI.stepsOf(F, 'sc'), s1 = W.SBDFatigueUI.stepsOf(A, 'sc'); assert.equal(s0[0].id, 'cd.src'); assert.equal(s0.length, s1.length + 1);
+  s1.forEach((s, k) => { assert.equal(s0[k + 1].id, s.id); if (typeof s.value === 'number') m(close(s0[k + 1].value, s.value, `${tag} ${s.id}`)); });
+  return { n, maxd };
+}
+test('Fatigue & studs: custom rows = this project\'s analysis give the same details, GS17, stud zones, regions and steps', () => {
+  for (const [tag, P, g] of VARIANTS()) {
+    const A = W.SBDFatigueUI.build({ P, g, src: 'analysis' }); assert.ok(!A.err, tag + ': ' + A.err);
+    const Pc = J(P); setRows(Pc, 'fat', g, fatRows(W.SBDFatigueUI.fromAnalysis(P, g).pl));
+    const F = W.SBDFatigueUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.match(F.what, /^Demands: entered \(Custom\)/);
+    const o = fatEqual(F, A, tag);
+    console.log(`       ${tag}: ${F.FR.rows.length} details, ${F.gs17.length} GS17 locations, ${F.SR.zones.length} stud zones, ${F.SR.regions.length} regions; ${o.n} values equal (largest difference ${o.maxd})`);
+  }
+});
+test('Fatigue hand check: GS17 at one station', () => {
+  // x = 44 ft, M_FAT = +620 / −150 kip-ft (unfactored), positive region (M_DC1 1450, M_LL+IM +1650): bottom flange Δf = (620 + 150)·12·y_b/I_n
+  // on the short-term composite section (the engine's section card); γ(Δf) with γ Fatigue I = 1.75 (or II 0.80 by n) — ratio = γΔf/(ΔF)_TH-based limit.
+  const P = W.SBDModel.defaultProject();
+  setRows(P, 'fat', 0, [{ x: 44, M_FATpos: 620, M_FATneg: -150, M_DC1: 1450, M_DC2: 210, M_DW: 240, M_LLpos: 1650, M_LLneg: -400, V_FATpos: 25, V_FATneg: -4 }]);
+  const R = W.SBDFatigueUI.build({ P, g: 0, src: 'custom' }); assert.ok(!R.err, R.err);
+  assert.equal(R.gs17.length, 1); const q = R.gs17[0], r = q.r;
+  const sec = r.card.cn, dfB = (620 + 150) * 12 * sec.yb / sec.I;   // ksi, the stress range at the bottom of the steel
+  // built-in project: Fatigue I, γ = 1.75: γΔf = 1.75 × 4.795 = 8.392 ksi (Δf = 770 × 12 × 55.100 / 106168.0 = 4.795 ksi)
+  assert.equal(r.gfat, 1.75); assert.ok(Math.abs(r.dfB - 1.75 * dfB) < 1e-9, `Δf bottom ${r.dfB} vs hand 1.75 × ${dfB}`);
+  console.log(`       Δf bottom = (620 + 150)(12)(${sec.yb.toFixed(3)})/${sec.I.toFixed(1)} = ${dfB.toFixed(3)} ksi; engine ${r.dfB.toFixed(3)}; GS17 ratios ${q.o.items.map(it => it.r.toFixed(3)).join(' / ')}`);
+});
+
+test('Rating: custom = the Flexure and Shear tabs\' entered tables (= this project\'s analysis) give the same rating factors', () => {
+  for (const [tag, P, g] of VARIANTS()) {
+    const A = W.SBDRatingUI.build({ P, g, src: 'analysis' }); assert.ok(!A.err, tag + ': ' + A.err);
+    // the rating's own analysis payload (ui/rating.js fromAnalysis: one station per analysis station, the shears of the side with the larger
+    // permanent shear, LL+IM of both sides) in both tables: the rating takes its shears so (its V_n at the Shear tab's layout)
+    const rp = W.SBDRatingUI.fromAnalysis(P, g).pl, Pc = J(P); setRows(Pc, 'flex', g, flexRows(rp)); setRows(Pc, 'shear', g, shearRows(rp));
+    const F = W.SBDRatingUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.match(F.what, /^Demands: entered \(Custom\)/);
+    assert.equal(F.rows.length, A.rows.length); let n = 0, maxd = 0;
+    F.rows.forEach((q, i) => { const e = A.rows[i]; assert.equal(q.name, e.name); ['inv', 'opr'].forEach(k => { if (isFinite(e[k])) { maxd = Math.max(maxd, close(q[k], e[k], `${tag} ${q.name} ${k}`)); n++; } else assert.ok(Object.is(q[k], e[k])); }); });
+    assert.equal(F.sum.gov.inv.inv, A.sum.gov.inv.inv);
+    console.log(`       ${tag}: ${F.rows.length} rating rows, ${n} RF equal (largest difference ${maxd}); Inventory RF ${F.sum.gov.inv.inv.toFixed(3)}`);
+  }
+  const P = W.SBDModel.defaultProject(); setRows(P, 'flex', 0, [{ x: 44, Mu_s: 1 }], { mode: 'fac' }); setRows(P, 'shear', 0, [{ x: 44, V_DC1: 1 }]);
+  assert.match(W.SBDRatingUI.build({ P, g: 0, src: 'custom' }).err, /unfactored/);
+});
+
+test('Report, each tab\'s choice: Constructibility, Fatigue and Rating on Custom show their tables and steps', () => {
+  const P = W.SBDModel.defaultProject();
+  setRows(P, 'flex', 0, [{ x: 44, M_DC1: 1450, M_DC2: 210, M_DW: 240, M_LLpos: 1650, M_LLneg: -400 }]);
+  setRows(P, 'shear', 0, [{ x: 44, V_DC1: 20, V_DC2: 3, V_DW: 3, V_LLpos: 40 }]);
+  setRows(P, 'cn', 0, [{ x: 44, M_DC1: 1200, M_CL: 60, V_DC1: 30, V_CL: 2 }]);
+  setRows(P, 'fat', 0, [{ x: 44, M_FATpos: 620, M_FATneg: -150, M_DC1: 1450, M_LLpos: 1650, V_FATpos: 25, V_FATneg: -4 }]);
+  ['cn', 'fat', 'rt'].forEach(k => CD.srcSet(P, k, 'custom'));
+  const B = W.SBDReportData.compute(P, 0, { src: 'tabs', want: { flex: true, cn: true, fat: true, rt: true } });
+  assert.deepEqual(J(B.err), {}); assert.ok(B.custom.cn && B.custom.fat && B.custom.rt && !B.custom.flex);
+  assert.ok(B.flex.rows.length > 100, 'the Flexure section keeps this project\'s analysis'); assert.equal(B.rating.flex.rows.length, 1);
+  const M = W.SBDReportBuild.model(B, { detail: 'gov' }), doc = W.SharedReport.build(M); assert.deepEqual(J(doc.unresolved), []);
+  for (const [id, n] of [['cn', 1], ['fat', 1], ['rt', 2]]) { const sec = M.sections.find(s => s.id === id), cds = sec.subs.filter(q => /^cd/.test(q.id)); assert.equal(cds.length, n, id); }
+  const stF = M.sections.find(s => s.id === 'cn').subs.flatMap(q => q.items).filter(i => i.type === 'steps'); assert.ok(stF.some(i => i.steps.some(s => s.id === 'cd.src')));
+});

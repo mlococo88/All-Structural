@@ -10,7 +10,8 @@
      P.demandSrc = { <module>: 'analysis' | 'example' | 'project' | 'custom' }: the demand source chosen on the module's tab (a hand-off
                    file is not saved: its choice lasts for the page view); absent: the tab's default (this project's analysis when the
                    project is complete, else the example), as before.
-   Module keys: flex (Flexure), shear (Shear & stiffeners).
+   Module keys: flex (Flexure), shear (Shear & stiffeners), cn (Constructibility), fat (Fatigue & studs), rt (Rating: the flex and shear
+   tables themselves, SPECS.rt.uses).
 
    Columns are the payload's own station fields (HANDOFF.md §4: M_DC1, M_LLpos, V_DC1, …), so a row means what a hand-off station means:
    unfactored per girder, moments kip-ft (sagging +), shears kip, LL+IM with impact and the distribution factor, the pedestrian load
@@ -41,7 +42,18 @@
         ['V_PLpos', 'V<sub>PL</sub> +', KP], ['V_PLneg', 'V<sub>PL</sub> −', KP], ['V_UT', 'V<sub>UT</sub>', KP], ['V_UF', 'V<sub>UF</sub>', KP], ['V_CL', 'V<sub>CL</sub>', KP], ['V_FATpos', 'V<sub>FAT</sub> +', KP], ['V_FATneg', 'V<sub>FAT</sub> −', KP]],
         note: 'Unfactored shears per girder in the hand-off sign (one sign convention for every column; the checks take magnitudes, with the minimum factors where a permanent load is of the opposite sign to the live load, Table 3.4.1-2): LL+IM with the shear distribution factor (+ and − envelopes), the pedestrian load PL, utilities UT and UF, the construction live load CL (deck placement, 6.10.3.3) and the Fatigue truck V<sub>FAT</sub> (special fatigue loading 6.10.5.3). At a support enter a row just left and just right (e.g. x ± 0.005 ft). A web panel, stiffener or connection plate is checked when its panel(s) contain an entered row; each station is checked with the shear of the stiffener panel it is in.' },
       sup: { cols: [['DC1', 'R<sub>DC1</sub>', KP], ['DC2', 'R<sub>DC2</sub>', KP], ['DW', 'R<sub>DW</sub>', KP], ['LL', 'R<sub>LL+IM</sub>', KP], ['PL', 'R<sub>PL</sub>', KP], ['UT', 'R<sub>UT</sub>', KP], ['UF', 'R<sub>UF</sub>', KP]],
-        note: 'Unfactored support reactions of this girder (kip, up +) for the bearing stiffeners (6.10.11.2): LL+IM the reaction envelope with the shear distribution factor, PL the pedestrian load. A support with no value entered is not checked.' } }
+        note: 'Unfactored support reactions of this girder (kip, up +) for the bearing stiffeners (6.10.11.2): LL+IM the reaction envelope with the shear distribution factor, PL the pedestrian load. A support with no value entered is not checked.' } },
+    cn: { name: 'Constructibility', tab: 'cn',
+      unf: { cols: [['M_DC1', 'M<sub>DC1</sub>', KM], ['M_DCc', 'M<sub>DCc</sub>', KM], ['M_CL', 'M<sub>CL</sub>', KM], ['V_DC1', 'V<sub>DC1</sub> left', KP], ['V_DC1R', 'V<sub>DC1</sub> right', KP], ['V_CL', 'V<sub>CL</sub> left', KP], ['V_CLR', 'V<sub>CL</sub> right', KP]],
+        note: 'Unfactored deck-placement demands per girder on the noncomposite steel section: M<sub>DC1</sub> (steel and the whole wet deck), M<sub>DCc</sub> the envelope of the deck placement sequence (leave the column blank where there is no sequence: M<sub>DC1</sub> is used, as the tab does without one), M<sub>CL</sub> the construction live load; V<sub>DC1</sub>, V<sub>CL</sub> just left and just right of the station (they differ at a support; a blank "right" is the "left" value). The tab applies 1.25 and 1.50 (3.4.2.1). An exterior girder\'s overhang checks (OH1–OH5) take the span\'s entered row with the largest 1.25M<sub>DC1</sub> + 1.50M<sub>CL</sub>.' } }
+,
+    fat: { name: 'Fatigue & studs', tab: 'fat',
+      unf: { cols: [['M_FATpos', 'M<sub>FAT</sub> +', KM], ['M_FATneg', 'M<sub>FAT</sub> −', KM], ['V_FATpos', 'V<sub>FAT</sub> +', KP], ['V_FATneg', 'V<sub>FAT</sub> −', KP],
+        ['M_DC1', 'M<sub>DC1</sub>', KM], ['M_DC2', 'M<sub>DC2</sub>', KM], ['M_DW', 'M<sub>DW</sub>', KM], ['M_LLpos', 'M<sub>LL+IM</sub> +', KM], ['M_LLneg', 'M<sub>LL+IM</sub> −', KM], ['M_PLpos', 'M<sub>PL</sub> +', KM], ['M_PLneg', 'M<sub>PL</sub> −', KM],
+        ['M_UT', 'M<sub>UT</sub>', KM], ['M_UF', 'M<sub>UF</sub>', KM], ['V_DC1', 'V<sub>DC1</sub>', KP], ['V_DC2', 'V<sub>DC2</sub>', KP], ['V_DW', 'V<sub>DW</sub>', KP]],
+        note: 'Unfactored per girder. The fatigue truck M<sub>FAT</sub>, V<sub>FAT</sub> (with IM 15% and the single-lane distribution factor, + and − envelopes; the stress and shear ranges are + minus −) is what the fatigue checks take; γ (Fatigue I or II) is applied by the tab. The permanent moments and LL+IM (Strength I) place the flexure regions and the stud strength regions (to the point of the largest positive moment); the permanent moments and shears enter the details\' and the web\'s stresses as in the analysis path. Fatigue details between the first and last entered rows are checked (moments linear between rows); GS17 at each entered station. Studs: the pitch zones entered on the Fatigue &amp; studs input tab, else zones made from these rows by span tenths (a tenth with no row has V<sub>f</sub> = 0).' } },
+    rt: { name: 'Rating', tab: 'rt', uses: ['flex', 'shear'],
+      unf: { cols: [], note: 'The rating takes the unfactored moments entered on the Flexure tab and the shears entered on the Shear &amp; stiffeners tab (Custom); edit them here or there (one table each, saved once).' } }
   };
   const gidOf = (P, g) => { const G = (P.girders || [])[g] || (P.girders || [])[0] || {}; return String(G.id || 'G' + (g + 1)); };
   function get(P, mod, g) { const E = ((P.custom || {})[mod] || {})[gidOf(P, g)]; return { mode: E && E.mode === 'fac' && SPECS[mod].fac ? 'fac' : 'unf', rows: E && Array.isArray(E.rows) ? E.rows : [], sup: E && Array.isArray(E.sup) ? E.sup : [] }; }
@@ -106,6 +118,7 @@
     let note;
     if (o.sup != null && SP.sup) { const r = (C.sup || [])[o.sup]; note = r ? `Reactions entered at this support: ${txt(r, SP.sup.cols)}.` : 'No reactions entered at this support.'; }
     else if (o.range) { const rs = C.rows.filter(r => r.x >= Math.min(...o.range) - 1e-6 && r.x <= Math.max(...o.range) + 1e-6); note = `Rows entered in this panel (the largest magnitudes are taken): ${rs.map(r => `x = ${fmt(r.x, 3)} ft: ${txt(r, cols)}`).join(' | ') || 'none'}.`; }
+    else if (!isN(x)) note = `${C.rows.length} row(s) entered (the Custom table of the tab; the report lists them).`;
     else { const r = nearest(C.rows, x); note = r ? `Row x = ${fmt(r.x, 3)} ft${Math.abs(r.x - x) > 1e-9 ? ` (this location, x = ${fmt(x, 3)} ft, is ${fmt(Math.abs(r.x - x), 3)} ft from it${mod === 'flex' ? ': linear between the entered rows' : ': the rows within 0.011 ft are taken'})` : ''}: ${txt(r, cols)}.` : ''; }
     return { id: 'cd.src', label: 'Demands: entered (Custom)', sym: '', eq: '', sub: '', value: `entered on the ${SP.name} tab, Custom demands table${F ? `, factored (${F.combo})` : ', unfactored by load case'}`, unit: '', ref: '', note };
   }

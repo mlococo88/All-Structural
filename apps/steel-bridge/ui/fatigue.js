@@ -25,7 +25,8 @@
   /* the demand source (added 2026-10-30, report wiring PR): the one chosen (S.src), else the default: this project's analysis when the
      project is complete (SBDAnalysis.ready), else the example */
   const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
-  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
+  // the choice made on the tab is saved with the project (P.demandSrc.fat, custom demands PR 2026-11-01; a hand-off file only for the page view)
+  const srcOf = ctx => S.src || (window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'fat')) || (rdOf(ctx).ok ? 'analysis' : 'example');
   const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : fmt(v, 3);   // SB2-R2
   const CATS = ['A', 'B', "B'", 'C', "C'", 'D', 'E', "E'"], ct = c => String(c).replace(/'/g, '′');
@@ -89,7 +90,16 @@
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
         deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
         skew: { bySupport: ((P.xs || {}).skews || []).slice(), max: Math.max(0, ...((P.xs || {}).skews || []).map(Math.abs)) }, details: {} } };
-    // studs: the project's zones (build() takes them over), or Preliminary sizing's auto zones and regions
+    // studs: the project's zones (build() takes them over), or Preliminary sizing's auto zones and regions (studsOf, the same for custom rows)
+    pl.girderDetail.details = studsOf(P, gi, stations, R.sup, R.spans, h0, R.cont);
+    return { pl, R };
+  }
+  /* studsOf(P, gi, stations, sup, spans, h0, cont): the payload's details.studs and details.fatigue made from the stations (split out of
+     fromAnalysis unchanged, custom demands PR 2026-11-01, so that custom rows take the same zones and regions; a zone without a row there has
+     V_f = 0, as the analysis path gives a zone without stations) */
+  function studsOf(P, gi, stations, sup, spans, h0, cont) {
+    const FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, g = P.girders[gi], m = P.materials, d = P.deck, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
+    const R = { sup, spans, cont };
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
     const n = window.SBDSections.modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
     const vRng = (a, b) => Math.max(0, ...stations.filter(s => s.x >= a - 1e-9 && s.x <= b + 1e-9).map(s => s.V_FATpos - s.V_FATneg));
@@ -100,9 +110,8 @@
     const G = FX.factors(), Mup = stations.map(s => FX.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: s.M_LLpos, LLn: s.M_LLneg, UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
     const regions = []; R.spans.forEach((L, k) => { const x0 = R.sup[k]; let xm = x0 + L / 2, mx = -Infinity; stations.forEach((s, i) => { if (s.x > x0 && s.x < x0 + L && Mup[i] > mx) { mx = Mup[i]; xm = s.x; } });
       [[x0, k], [x0 + L, k + 1]].forEach(([xs0, ks]) => regions.push({ name: `${supN(ks)} to max. positive, Span ${k + 1}`, kind: ks > 0 && ks < ns && R.cont ? 'pier' : 'end', x1: r2(Math.min(xs0, xm)), x2: r2(Math.max(xs0, xm)) })); });
-    pl.girderDetail.details.studs = { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: Q.gamFat, QnEntered: false } };
-    pl.girderDetail.details.fatigue = { ADTT: P.fatigue.ADTT, p: P.fatigue.p, life: P.fatigue.life, limit: P.fatigue.limit };
-    return { pl, R };
+    return { studs: { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: Q.gamFat, QnEntered: false } },
+      fatigue: { ADTT: P.fatigue.ADTT, p: P.fatigue.p, life: P.fatigue.life, limit: P.fatigue.limit } };
   }
 
   /* ---------- calculation ---------- */
@@ -112,6 +121,10 @@
     let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null;
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
+    // custom (custom demands PR, 2026-11-01): the rows entered on this tab (ui/demands.js payload), the analysis path; the stud zones and regions
+    // made from them (studsOf; enter the pitch zones on the input tab to check a given stud layout); the details between the first and last row, GS17 at the rows (below)
+    let CU = null; if (ctx.pl === undefined && src === 'custom') { const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' }; CU = CD.payload(P, g, 'fat'); if (CU.err) return { err: CU.err }; pl = CU.pl;
+      const s0 = pl.member.supports; pl.girderDetail.details = studsOf(P, g, pl.stations, s0, pl.member.spans, pl.ownerRules.haunchInProperties === false, P.spans.continuity !== 'simple' && s0.length > 2); }
     const F = P.fatigue, Q = P.studs, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0);
     const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0];
     let sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
@@ -120,18 +133,19 @@
     const env = { owner: own.owner, lf, fat: { set, B } };
     // ---- fatigue details (FA1–FA7)
     const pg = pl ? pl.girderDetail || {} : null, dk = pg ? pg.deck || {} : null, pm = pg ? pg.materials || {} : null;
-    const FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, pl && pl._schema !== 'sbd2-analysis' ? { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 } : { gi: g }, sup) : null;   // the project's framing (SB2-O17)
+    const FRM = window.SBDFraming, frB = FRM && P.framing ? FRM.forGirder(P, pl && pl._schema !== 'sbd2-analysis' && pl._schema !== 'sbd2-custom' ? { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 } : { gi: g }, sup) : null;   // the project's framing (SB2-O17)
     const frames = frB ? frB.ints : (P.stiffeners && P.stiffeners.layout && P.stiffeners.layout.frames && P.stiffeners.layout.frames.at) || SB.framesDefault(sup, (P.stiffeners && P.stiffeners.layout && P.stiffeners.layout.frames && P.stiffeners.layout.frames.Lb) || 25);
     const splX = String(Q.splX || '').split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0);
     const plSpl = pl ? (((pg.details || {}).studs || {}).results || {}).gaps || [] : [];
     const rows = pl ? FA.detailsFromPayload(pl, { frames, stiffened: !P.stiffeners || P.stiffeners.layout.web !== 'unstiffened', splices: splX.length ? splX : plSpl.map(q => q.x) }) : JSON.parse(JSON.stringify(FA.DEFAULT.rows));
+    if (CU && Array.isArray(rows)) { const x0 = Math.min(...CU.xs), x1 = Math.max(...CU.xs); rows.splice(0, rows.length, ...rows.filter(r => +r.x >= x0 - 1e-6 && +r.x <= x1 + 1e-6)); }
     const faIn = { limit: F.limit, gam: { ...F.gam }, ADTT: F.ADTT, p: F.p, life: F.life, gW: m.steel.web, negSec: F.negSec, dist: { ...F.dist }, ev: { on: 'no' },
       ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : G.beff, fc: pl ? +pm.fc : m.concrete.fc, wc: pl ? +pm.wc || 0.15 : m.concrete.wc, K1: pl ? 1 : m.concrete.K1, nRule: pl ? 'exact' : m.concrete.nRule,
       Ar: pl ? +dk.Ar || 0 : (P.deck.rebar.top.A || 0) + (P.deck.rebar.bot.A || 0), dr: pl ? dk.ts / 2 : P.deck.ts / 2, rows };
     const FR = FA.compute(faIn, { owner: own.owner, lf }), FC = FR.errors.length ? null : FA.checks(FR);
     // ---- GS17 (file only): every station GirderDetail checks
     let gs17 = null;
-    if (pl) { const d = FX.fromPayload(pl, { owner: own.owner, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) }), Gr = FX.girder(d.locs, d.prj, { supports: d.supports });
+    if (pl) { const d = FX.fromPayload(pl, { owner: own.owner, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) }), Gr = FX.girder(CU ? window.SBDCustomDemands.keepAt(d.locs, CU.xs) : d.locs, d.prj, { supports: d.supports });
       gs17 = Gr.rows.map(r => ({ r, o: FA.flange(r, { set, B, catT: F.catT, catB: F.catB }) })); }
     // ---- studs (SC1–SC7)
     let scIn, scEnv = env;
@@ -153,7 +167,9 @@
     const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it, i }; })); return b; };
     const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r)) b = { it, i }; }); return b; }, null) : null;
     return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
-      what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
+      custom: CU ? { rows: CU.rows, mode: 'unf' } : null,
+      what: CU ? `Demands: entered (Custom), unfactored, on ${esc((pg || {}).label || '')}: ${CU.rows.length} row(s); GS17 at each entered station (${gs17 ? gs17.length : 0} location(s)); the fatigue details of the layout between the first and last row (${(FR.rows || []).length}; moments linear between the rows); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones (span tenths) and strength regions made from the rows as Preliminary sizing makes them (a zone with no row has V<sub>f</sub> = 0: enter the pitch zones on the Fatigue &amp; studs input tab to check a given stud layout)'}; the project's plates, deck and materials; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
+        : pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
         : pl ? `${esc(S.plName)}: ${(pl.stations || []).length} stations, ${sup.length - 1} span(s), ${esc((pg || {}).label || '')}; fatigue moments and shears, plates and deck from the file; the stud zones and regions GirderDetail sends${(Q.zones || []).length ? ' (pitch zones from this project)' : ''}; this project's fatigue settings and studs.`
         : 'Example: GirderDetail\'s built-in Fatigue details and Shear connectors zones and regions, with this project\'s fatigue settings, studs, deck and materials. GS17 at every station needs a hand-off file.' };
   }
@@ -171,18 +187,21 @@
     css();
     const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {}, src = srcOf(ctx);
-    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in details and zones' }) : '')
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'fat')), rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in details and zones' }) : '')
       + `<section class="sec"><div class="secHead">Fatigue &amp; studs: demands</div><div class="secBody">
-      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in details and zones)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      <div class="fRow"><label for="fa_src">Demands</label><select id="fa_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in details and zones)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', src) : ''}</select></div>
       ${src === 'file' ? `<div class="fRow"><label for="fa_file">File</label><input type="file" id="fa_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <p class="note">Fatigue moments and shears are the unfactored fatigue truck with IM and the single-lane distribution factor (3.6.1.4); γ is applied here (Fatigue I or II, Table 3.4.1-1). Inputs: the Fatigue &amp; studs input tab.</p></div></section>`;
+    if (src === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(ctx.P, 'fat', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Fatigue results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fa_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); }, redraw = () => render(host, ctx);
-    on('fa_src', 'change', e => { S.src = e.target.value; redraw(); });
+    on('fa_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.fat), a file for the page view
+      if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(ctx.P, 'fat', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
+    if (src === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, ctx.P, 'fat', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('fa_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = defaultSel(R); } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
     on('fa_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
       rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
@@ -267,12 +286,18 @@
         </tbody></table></div><p class="note">${C.filter(c => ['SC5', 'SC7'].includes(c.id)).map(c => `${esc(c.id)} ${esc(c.title)}: ${c.items.map(it => `${esc(it.loc)} — ${it.st === 'pass' ? 'OK' : 'fails'}`).join('; ')}`).join('. ')}. ${ck('SC6').naWhy ? 'SC6: ' + esc(ck('SC6').naWhy) : ''}</p></div></section>`; }
     // worked steps of the selection
     const sel = S.sel || { k: 'sc', i: 0 }; let title = '', list = [];
-    if (sel.k === 'fa' && R.FR.rows && R.FR.rows[sel.i]) { const r = R.FR.rows[sel.i]; title = r.name; list = FA.steps(R.FR, r); }
-    else if (sel.k === 'gs' && R.gs17 && R.gs17[sel.i]) { const q = R.gs17[sel.i]; title = `${q.r.name} (GS17)`; list = q.o.steps; }
-    else if (!R.SR.errors.length) { title = 'shear connectors'; list = SC.steps(R.SR); }
+    if (sel.k === 'fa' && R.FR.rows && R.FR.rows[sel.i]) { const r = R.FR.rows[sel.i]; title = r.name; list = stepsOf(R, 'fa', r); }
+    else if (sel.k === 'gs' && R.gs17 && R.gs17[sel.i]) { const q = R.gs17[sel.i]; title = `${q.r.name} (GS17)`; list = stepsOf(R, 'gs', q); }
+    else if (!R.SR.errors.length) { title = 'shear connectors'; list = stepsOf(R, 'sc'); }
     if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024).</p>${stepsHtml(list)}</div></section>`;
     return h;
   }
 
-  window.SBDFatigueUI = { ensure, inputs, onClick, render, build, fromAnalysis, TOPICS, groups };
+  /* stepsOf(R, kind, o): the worked steps of a fatigue detail ('fa', o = its row), GS17 location ('gs', o = { r, o }) or the shear connectors
+     ('sc'); with custom demands the step that names them first (custom demands PR) */
+  function stepsOf(R, kind, o) {
+    const list = kind === 'fa' ? window.SBDFatigue.steps(R.FR, o) : kind === 'gs' ? o.o.steps : window.SBDStuds.steps(R.SR);
+    return R.custom ? [window.SBDCustomDemands.step('fat', R.custom, kind === 'sc' ? NaN : kind === 'gs' ? o.r.x : +o.x)].concat(list) : list;
+  }
+  window.SBDFatigueUI = { ensure, inputs, onClick, render, build, fromAnalysis, studsOf, stepsOf, TOPICS, groups };
 })();
