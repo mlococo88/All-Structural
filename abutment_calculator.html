@@ -361,8 +361,6 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
 #figTip{position:fixed;z-index:10000;display:none;max-width:460px;background:#fffef6;color:#222;border:1px solid #b9a66b;border-radius:3px;box-shadow:0 2px 8px rgba(0,0,0,.18);padding:6px 9px;font:12px/1.4 "Times New Roman",serif;pointer-events:none}
 #figTip .figtip-go{margin-top:3px;color:#2e5077;font-style:italic}
 @media print{ .figctl,#figTip{display:none !important} }
-/* ABRP: Report tab below 1000 px: the viewer's single column may shrink below its widest equation (the equation scrolls inside its step), so the page does not scroll sideways */
-@media (max-width:1000px){#tab-rpt .rp-body{grid-template-columns:minmax(0,1fr);}}
 </style>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */

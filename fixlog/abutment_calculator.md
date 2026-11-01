@@ -14602,7 +14602,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - The printed report has a title block (Project / Project No. / Calculated by / Date / Checked by / Checked date), contents, a running header, and a footer with the Input ID and "Page X of Y".
   - The D11 report's @page header (`abut-page`), which stays applied after a D11 print, is cleared for this print. Its next D11 print sets it again.
   - From any other tab, "Print / PDF Report" opens the D11 report dialog exactly as before.
-- **CSS:** below 1000 px the viewer's single column is `minmax(0,1fr)` (`#tab-rpt .rp-body`), so the page does not scroll sideways at 390 px. A wide equation scrolls inside its step.
+- **CSS:** none added. At 390 px the shared viewer's single column (`minmax(0,1fr)` in shared/report.js, changed on main by #536/#538) keeps the page from scrolling sideways.
 - **Saved data:** nothing new. The viewer's collapsed sections are kept in memory only (`ABRP.closed`).
 - **How verified (headless Chromium, pinned KaTeX 0.16.11, Plotly 2.35.2 and three.js r128 served locally):**
   - **11 projects:**
@@ -14642,29 +14642,26 @@ Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
 
 ```diff
 diff --git a/abutment_calculator.html b/abutment_calculator.html
-index 1091904..5506995 100644
+index 1091904..cedb10f 100644
 --- a/abutment_calculator.html
 +++ b/abutment_calculator.html
 @@ -22,0 +23,3 @@
 +<!-- ABRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 +<script src="shared/steps.js"></script>
 +<script src="shared/report.js"></script>
-@@ -360,0 +364,2 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
-+/* ABRP: Report tab below 1000 px: the viewer's single column may shrink below its widest equation (the equation scrolls inside its step), so the page does not scroll sideways */
-+@media (max-width:1000px){#tab-rpt .rp-body{grid-template-columns:minmax(0,1fr);}}
-@@ -5997,0 +6003 @@ function buildTabs(){
+@@ -5997,0 +6001 @@ function buildTabs(){
 +  ABRP.on=false;   /* ABRP: a rebuilt tab bar shows the saved tab */
-@@ -5999 +6005,2 @@ function buildTabs(){
+@@ -5999 +6003,2 @@ function buildTabs(){
 -    `<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${l}</div>`).join("");
 +    `<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${l}</div>`).join("")
 +    +`<div class="tab" data-tab="tab-rpt" title="Calculation report: worked steps, navigation, print">Report</div>`;   /* ABRP: Report tab (not in TABS) */
-@@ -6001 +6008 @@ function buildTabs(){
+@@ -6001 +6006 @@ function buildTabs(){
 -    `<div class="tabpage${S.ui.tab===id?" active":""}" id="${id}"></div>`).join("");
 +    `<div class="tabpage${S.ui.tab===id?" active":""}" id="${id}"></div>`).join("")+`<div class="tabpage" id="tab-rpt"></div>`;
-@@ -6004,0 +6012,2 @@ function activateTab(id){
+@@ -6004,0 +6010,2 @@ function activateTab(id){
 +  if(id==="tab-rpt"){ abrShow(); return; }   /* ABRP: the Report tab is shown on top of the saved tab and never stored in S.ui.tab */
 +  ABRP.on=false;
-@@ -9155,0 +9165,285 @@ function addCsvButtons(container){
+@@ -9155,0 +9163,285 @@ function addCsvButtons(container){
 +<script>
 +/* ================= Report tab (ABRP, 2026-11-01) =================
 +   The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse /
@@ -14950,9 +14947,9 @@ index 1091904..5506995 100644
 +  document.body.classList.add("rp-printing");
 +});
 +</script>
-@@ -9208,0 +9503 @@ function recalcAll(){
+@@ -9208,0 +9501 @@ function recalcAll(){
 +  if(ABRP.on) abrRender();   /* ABRP: the Report tab follows the inputs while it is shown */
-@@ -9866 +10161,2 @@ async function generateReport(){
+@@ -9866 +10159,2 @@ async function generateReport(){
 -document.getElementById("btnPrint").addEventListener("click",()=>{ syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
 +document.getElementById("btnPrint").addEventListener("click",()=>{ if(ABRP.on&&ABRP.api){ ABRP.api.print(); return; }   /* ABRP: on the Report tab the button prints that report */
 +  syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
