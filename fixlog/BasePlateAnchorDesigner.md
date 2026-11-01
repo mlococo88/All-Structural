@@ -4559,7 +4559,7 @@ index c70f37b..c4454e3 100644
    /* CRITICAL-ROW SET-BACK (ACI Fig. R17.7.2.1b Case 2). §17.7.2.1.1 lets the
 ```
 
-## 2026-11-01 — BC-5: the pier cage of a circular pier credited as anchor reinforcement — longitudinal bars for tension (§17.5.2.1(a)), ties / spiral for shear (§17.5.2.1(b)), φ = 0.75, Condition A where it qualifies (calculation change for circular piers with the new cage input only; rectangular pedestals unchanged) (PR: claude/bpad-pier-cage, PR link added after merge)
+## 2026-11-01 — BC-5: the pier cage of a circular pier credited as anchor reinforcement — longitudinal bars for tension (§17.5.2.1(a)), ties / spiral for shear (§17.5.2.1(b)), φ = 0.75, Condition A where it qualifies (calculation change for circular piers with the new cage input only; rectangular pedestals unchanged) (PR #611: https://github.com/mlococo88/All-Structural/pull/611)
 
 - **Engineer decision (2026-11-01):** credit the shaft / pier cage as anchor reinforcement for bolt circles on round piers: cage inputs (longitudinal bar size / count / cover, tie or spiral size and pitch), the effective bars (within 0.5h_ef of the anchor for tension per R17.5.2.1, ℓ_d on both sides of the failure plane; shear ties near the top), φ = 0.75, Condition A where the reinforcement qualifies, worked steps. Also (same answers): round vs square shear breakout difference accepted, no change; the LRFDLTS rod-bending waiver, bending-line article and b_eff stay flagged "verify", the rod-bending check stays on.
 - **New saved field:** `conc.cage = { present:false, nBars, barSize, grade, cover, angle0, topCover, topHook, tieType:"tie"|"spiral", tieSize, tieGrade, tieTop, pitch, ackDetail:false }` (default off; used only when `conc.shape === "circle"`).
@@ -4905,3 +4905,9 @@ index c4454e3..b73cbd5 100644
      if(!window.SharedAnchorGeom) errs.push({block:true, code:"files", msg:"shared/anchor-geom.js is not loaded: keep the shared folder next to this file (needed for a circular pier)."});
    }
 ```
+
+## 2026-11-01 — BC-6: the pier cage drawn in the 3-D view, the elevations and the DXF (display only; no result changes) (PR: claude/bp-cage-draw, PR link added after merge)
+
+- **Where (anchor texts):** `bpCageTieDepths()` (new, before `function bpCageTension(combo){`: the depth of every tie / spiral turn, z₁ = max(tieTop, cover + d_b,t/2), then every pitch, to H − 3 in; used only by the drawings); `build3D()` `/* BC-6 (display only): the pier cage` (bars as rods from 3 in above the bottom to the bar top; ties as circles of radius R_t, a spiral as one helix; layer "Pedestal reinforcement"); `bpExportDxf()` plan: bar circles on BP-PED-BARS and the tie circle on BP-PED-TIES, section: the cage outline (bars at ±R_b, every tie / spiral turn) with a note in the export warnings; `drawElevation()` `/* BC-6 (display only): pier cage outline` (bars at ±R_b, tie lines, a label).
+- **No calculation change.** `tests/bpad-circle.mjs` §1 now also compares two round-pier projects with the cage (supplementary only, and substituted) on the computed results (computeAll, comboCapacities, allChecks, validation): identical to origin/main; the 31 rectangular projects stay identical in every field including the report text. `tests/bpad-profis.mjs` PASS.
+- **Check:** the H6 design exports 8 bar circles, 1 tie circle, 2 bar lines and 29 tie lines (H = 120 in: z = 3.25 + 4k ≤ 117 in → 29 ties).

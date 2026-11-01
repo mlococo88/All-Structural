@@ -67,6 +67,11 @@ IDENT.push(
   { id: 'noclamp', patch: { 'standoff.type': 'noclamp', 'standoff.z': 2 } },
   { id: 'case-c2-welded', patch: { 'shear.caseOverride': 'c2', 'shear.weldedPlate': true, 'anchor.nx': 3 } },
   { id: 'uncracked-lb', patch: { 'conc.cracked': false, 'ui.units': 'lb', 'ui.momentUnits': 'kip-ft', 'anchor.head': 'platewasher' } },
+  /* round pier with the pier cage (BC-5), compared on the computed results only (calcOnly: drawings in the report text may differ) */
+  { id: 'cage-supp', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 8, 'anchor.BC': 20, 'anchor.theta0': 22.5, 'anchor.hef': 36,
+    'conc.shape': 'circle', 'conc.D': 42, 'conc.Bx': 42, 'conc.By': 42, 'conc.cage': { present: true, nBars: 10, barSize: '#9', grade: 'gr60', cover: 3, angle0: 0, topCover: 3, topHook: false, tieType: 'spiral', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 3, ackDetail: false } } },
+  { id: 'cage-subst', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 16.970562748477143, 'anchor.theta0': 45, 'anchor.hef': 36,
+    'conc.shape': 'circle', 'conc.D': 36, 'conc.Bx': 36, 'conc.By': 36, 'conc.cage': { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: true } } },
   { id: 'narrow', patch: { 'conc.Bx': 14, 'conc.By': 40, 'conc.H': 16, 'plate.B': 12, 'anchor.hef': 10, 'anchor.torqued': true } },
 );
 
@@ -86,6 +91,7 @@ async function identity(src) {
         let rep = '';
         try { buildPrintReport(); const h = document.getElementById('printReport'); rep = h ? h.innerText : ''; if (h) h.innerHTML = ''; } catch (e) { rep = 'ERR ' + e; }
         let model = ''; try { model = JSON.stringify(bprModel()); } catch (e) { model = 'ERR ' + e; }
+        if (spec.calcOnly) { rep = ''; model = ''; }
         out[spec.id] = { cc: strip(CC), caps, checks: strip(allChecks()), validation: strip(VALIDATION), report: rep.replace(/\d{4}-\d\d-\d\d/g, '(date)'), model: model.replace(/\d{4}-\d\d-\d\d/g, '(date)') };
       }
       return out;
