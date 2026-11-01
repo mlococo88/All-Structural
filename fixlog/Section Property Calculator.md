@@ -2694,3 +2694,219 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **How verified (Tier 0):** `node tests/check-syntax.mjs "Section Property Calculator.html"`: all scripts pass. `node tests/compare.mjs --tool page --file "Section Property Calculator.html"`: page text identical; storage differs only in the random part ids of the autosave (`parts[i].id`, generated on every load, the same between two runs of main). The result object `R` main vs branch, with the part ids normalised: identical (0 differences). The 2 console errors are the KaTeX CDN files the test kit does not serve (same on main).
 - **Other copies:** none.
 - **Open items:** none.
+
+
+## 2026-11-01 — PR: claude/rpt-secprop — Report output tab in the shared report viewer (SPRP; slim report by topic; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SPRP`.
+
+### SPRP. "Report" output tab (shared/report.js, shared/steps.js)   [display only]
+- **Engineer request (2026-11-01, report rollout plan):** a slim report grouped by topic, with the long parts tables collapsed. It uses the shared viewer of Spread Footing, Timber Beam Check and the Steel Bridge app: navigation tree, §n.m, search, collapse / expand, see-links, links to the tool's tabs, and print with a title block (no client / owner cell), running header and page numbers.
+- **Coordinator decisions recorded:**
+  - The D11 "Print report" (header button, `openPrintDialog` / `buildPrintReport`) is unchanged.
+  - Step values are values of `R` (and of `ext('bk')` / `ext('w')`, as the Properties tab shows them), converted to the display units with `toD()`. They are shown with the significant figures of the settings, as `nf`.
+  - Only the substitution strings are formatted (`nt`, as the Calc detail tab). The rows of sums in the parallel-axis substitutions are summed from `R.rows`, as the Calc detail tab does.
+  - The tool has no checked-date field, so "Checked date" shows "—". No new saved field.
+- **Loads:** `<script src="shared/steps.js">` and `<script src="shared/report.js">` after KaTeX. The `shared` folder must be next to the file.
+- **Code:**
+  - `OUT_TABS`: `['rpt', 'Report']` appended. `BUILDERS`: `rpt: buildReport`.
+  - A new block before START-UP (anchor `REPORT tab (SPRP, 2026-11-01)`):
+    - `sprModel()` returns `{ model }`.
+    - `sprS()` makes one step in display units; `sprTopics()` groups them.
+    - `buildReport(pg)` mounts the viewer.
+    - `sprGoto()` handles the tab links; a `beforeprint` listener handles Ctrl+P.
+- **Sections and topics:**
+  1. Summary: key properties table, each value linked to its step; model warnings.
+  2. Inputs:
+     - project and settings;
+     - **Parts** table (a closed lazy table when there are more than 3 parts);
+     - **Part geometry** (a closed lazy table when there are more than 3 parts).
+  3. Area, centroid and moments of inertia:
+     - topics: [area and centroid A, x̄, ȳ] [moments of inertia I_x, I_y, I_xy, I_p, parallel-axis sums];
+     - **Parallel-axis table** (always a closed lazy table: 13 columns).
+  4. Section moduli and principal axes, with the Mohr's circle figure:
+     - [extreme fibres c, S_x,top/bot, S_y,left/right, r_x, r_y];
+     - [principal axes I_1, I_2, θ_p, S_1, S_2, r_1, r_min].
+  5. Plastic moduli:
+     - [Z_x, Z_y, Z_1, Z_2 with PNA and A_1 d_1 + A_2 d_2];
+     - [shape factors].
+  6. Torsion, buckling parameters and weight (thin-wall approximation; verify):
+     - [J, C_w, x_o, y_o, r̄_o, H, r_ts];
+     - [weight per length].
+  7. Notes and references: project notes, warnings, `spcRefs`.
+- **Collapsed tables:** they use the lazy tables of `shared/report.js` (`{ type: 'table', lazy: true, title }`, added on main 2026-11-01 for Concrete Beam Capacity). The table is shown closed with its row count, built when opened, and filled in print.
+- **Print:** the closed tables print in full. Ctrl+P on the Report tab prints the report. `PRINT_CSS` hides `#app` in print, so the report goes into `#rp-print`. Other tabs are unchanged.
+- **Saved data:** no key or format change. `M.ui.outTab` may now be `'rpt'`; an older copy of the tool falls back to Section through `curTab()`. Collapsed state is in memory only.
+- **How verified (headless Chromium, KaTeX 0.16.11 served locally):**
+  - 7 projects: default, girder, double angle, box with 2 channels plus project fields, cover-plated W in mm, rectangle, empty.
+  - 32 to 38 steps in 8 topics; 0 unresolved or duplicate references; 0 KaTeX errors (after the θ_p unit was changed from `^{\circ}` to `deg` during development); no raw TeX; no NaN / undefined.
+  - 28 to 30 step values per project equal `toD(R…)` exactly: A, x̄, ȳ, I_x, I_y, I_xy, I_p, c, S, r, I_1, I_2, S_1, S_2, r_min, Z_x, Z_y, Z_1, Z_2, shape factors, J, C_w, r̄_o, H. The Properties tab shows the same numbers (`nf`).
+  - `R` is unchanged by building the report. 0 console errors. The empty project shows the input-error panel.
+  - Ctrl+P prints the report alone, with the collapsed parallel-axis table in full. Ctrl+P on another tab does not print the report.
+  - origin/main vs the branch: the text of the 9 other tabs, the governing strip and the saved model are identical (11 texts each).
+  - `node tests/check-syntax.mjs` passes.
+- **Check case (template "box2c", 4 parts):** A = 24.095 in², I_x = 726.41 in⁴ = 257.66 + 468.75 (Σ n I_xo + Σ n A d_y²), I_y = 368.15 in⁴, J = 499.74 in⁴. These are the same as the governing strip and the Properties tab.
+- **Other copies:** none. `shared/README.md` lists the tool.
+
+Diff (`Section Property Calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Section Property Calculator.html b/Section Property Calculator.html
+index 56a8a3f..13f8372 100644
+--- a/Section Property Calculator.html	
++++ b/Section Property Calculator.html	
+@@ -8,0 +9,3 @@
++<!-- SPRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -5453 +5456 @@ function wireKeys() {
+-const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc detail'], ['plas', 'Plastic'], ['tors', 'Torsion'], ['q', 'Q & shear flow'], ['stress', 'Stresses'], ['val', 'Validation'], ['man', 'Method']];
++const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc detail'], ['plas', 'Plastic'], ['tors', 'Torsion'], ['q', 'Q & shear flow'], ['stress', 'Stresses'], ['val', 'Validation'], ['man', 'Method'], ['rpt', 'Report']];   // rpt: SPRP
+@@ -5468 +5471 @@ function buildTabBar() {
+-const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, stress: buildStress, val: buildValid, man: buildManual });
++const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, stress: buildStress, val: buildValid, man: buildManual, rpt: buildReport });   /* rpt: SPRP */
+@@ -7129,0 +7133,143 @@ async function buildPrintReport(opts) {
++/* =====================================================================
++   REPORT tab (SPRP, 2026-11-01): a slim calculation report in the shared viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers),
++   grouped by topic (SharedSteps.group). Every value is a value of R (or of ext('bk') / ext('w'), as the Properties tab
++   shows them), converted to the display units with toD() and shown with the significant figures of the settings;
++   only the substitution strings are formatted (nt, as the Calc detail tab). The long parts, part-geometry and
++   parallel-axis tables start closed (lazy tables of shared/report.js: opened on a click, printed in full). Nothing is saved:
++   the report is rebuilt from R whenever the tab is shown. The D11 "Print report" (header) is unchanged.
++   ===================================================================== */
++const SPRP = { closed: new Set(), api: null, doc: null };
++const sprU = k => String(un(k) || '').replace(/²/g, '^{2}').replace(/³/g, '^{3}').replace(/⁴/g, '^{4}').replace(/⁶/g, '^{6}').replace(/·/g, '-');   // display unit as step notation
++const sprD = (v, k) => { const x = toD(v, k), p = (M.settings && M.settings.prec) || 5; if (!isNum(x) || x === 0) return 3; return Math.min(10, Math.max(0, p - 1 - Math.floor(Math.log10(Math.abs(+x.toPrecision(p)))))); };
++/* one step: value = the tool's value in display units (toD), decimals = the settings' significant figures (as nf) */
++const sprS = (id, label, sym, eq, sub, v, k, ref, note) => SharedSteps.step({ id, label, sym, eq, sub, value: toD(v, k), unit: sprU(k), d: sprD(v, k), ref: ref || '', note: note || '' });
++const sprC = (v, k) => ({ t: nf(v, k), n: true });
++const sprNot = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, (m, a) => '$_{' + a + '}$').replace(/<sup>(.*?)<\/sup>/g, (m, a) => '$^{' + a + '}$').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s*verify\s*$/, '');
++function sprTopics(list, opt) {
++  const L = list.filter(t => t.steps && t.steps.length), steps = [].concat(...L.map(t => t.steps));
++  const topics = L.map(t => { const q = SharedSteps.group(t.steps, [{ key: 'k', title: t.title, ref: t.ref, ids: () => true, res: t.res }], { strip: false })[0]; return { title: t.title, ref: t.ref || '', n: t.steps.length, cls: q.cls, chip: q.chip, res: q.res }; });
++  return Object.assign({ type: 'steps', scope: 'sp', steps, topics }, opt || {});
++}
++function sprModel() {
++  const p = M.project || {}, today = new Date().toISOString().slice(0, 10), T = R.tors || {}, bk = ext('bk') || {}, Wt = ext('w'), secs = [];
++  const sm = k => R.rows.reduce((s, r) => s + r[k], 0), sA = R.A, sAx = sm('Ax'), sAy = sm('Ay');
++  const tn = R.anyN ? ' (transformed, n-weighted)' : '';
++  /* ---------- 3. Area, centroid, moments of inertia (steps first: section 1 links to them) ---------- */
++  const T3 = [{ title: 'Area and centroid', ref: 'statics', res: /\.cy$/, steps: [
++    sprS('ac.A', 'Area' + tn + (R.anyHole ? ', net of holes' : ''), 'A', '\\sum n_{i} A_{i}', '', R.A, 'A'),
++    sprS('ac.cx', 'Centroid from the origin, x', '\\bar{x}', '\\frac{\\sum n_{i} A_{i} \\bar{x}_{i}}{\\sum n_{i} A_{i}}', '\\frac{' + nt(sAx, 'S') + '}{' + nt(sA, 'A') + '}', R.cx, 'L'),
++    sprS('ac.cy', 'Centroid from the origin, y', '\\bar{y}', '\\frac{\\sum n_{i} A_{i} \\bar{y}_{i}}{\\sum n_{i} A_{i}}', '\\frac{' + nt(sAy, 'S') + '}{' + nt(sA, 'A') + '}', R.cy, 'L')] },
++  { title: 'Moments of inertia about the centroid', ref: 'parallel-axis theorem', res: /\.Ix$/, steps: [
++    sprS('in.Ix', 'Moment of inertia about the centroidal x axis', 'I_{x}', '\\sum n_{i} (I_{xo,i} + A_{i} d_{y,i}^{2})', nt(sm('Ixo'), 'I') + ' + ' + nt(sm('Ady2'), 'I'), R.Ix, 'I'),
++    sprS('in.Iy', 'Moment of inertia about the centroidal y axis', 'I_{y}', '\\sum n_{i} (I_{yo,i} + A_{i} d_{x,i}^{2})', nt(sm('Iyo'), 'I') + ' + ' + nt(sm('Adx2'), 'I'), R.Iy, 'I'),
++    sprS('in.Ixy', 'Product of inertia (positive when the material is mainly in quadrants 1 and 3)', 'I_{xy}', '\\sum n_{i} (I_{xyo,i} + A_{i} d_{x,i} d_{y,i})', nt(sm('Ixyo'), 'I') + ' + ' + nt(sm('Adxdy'), 'I'), R.Ixy, 'I'),
++    sprS('in.Ip', 'Polar moment of inertia', 'I_{p}', 'I_{x} + I_{y}', nt(R.Ix, 'I') + ' + ' + nt(R.Iy, 'I'), R.Ip, 'I')] }];
++  /* ---------- 4. Section moduli, radii, principal axes ---------- */
++  const T4 = [{ title: 'Extreme fibres, elastic section moduli and radii of gyration', ref: 'S = I/c, r = √(I/A)', res: /\.rx$/, steps: [
++    sprS('sm.ct', 'Centroid to the top fibre', 'c_{top}', 'y_{max} - \\bar{y}', nt(R.bbox[3], 'L') + ' - ' + nt(R.cy, 'L'), R.ct, 'L'),
++    sprS('sm.cb', 'Centroid to the bottom fibre', 'c_{bot}', '\\bar{y} - y_{min}', nt(R.cy, 'L') + ' - ' + nt(R.bbox[1], 'L'), R.cb, 'L'),
++    sprS('sm.cl', 'Centroid to the left fibre', 'c_{left}', '\\bar{x} - x_{min}', nt(R.cx, 'L') + ' - ' + nt(R.bbox[0], 'L'), R.cl, 'L'),
++    sprS('sm.cr', 'Centroid to the right fibre', 'c_{right}', 'x_{max} - \\bar{x}', nt(R.bbox[2], 'L') + ' - ' + nt(R.cx, 'L'), R.cr, 'L'),
++    sprS('sm.Sxt', 'Elastic section modulus, top', 'S_{x,top}', '\\frac{I_{x}}{c_{top}}', '\\frac{' + nt(R.Ix, 'I') + '}{' + nt(R.ct, 'L') + '}', R.Sxt, 'S'),
++    sprS('sm.Sxb', 'Elastic section modulus, bottom', 'S_{x,bot}', '\\frac{I_{x}}{c_{bot}}', '\\frac{' + nt(R.Ix, 'I') + '}{' + nt(R.cb, 'L') + '}', R.Sxb, 'S'),
++    sprS('sm.Syl', 'Elastic section modulus, left', 'S_{y,left}', '\\frac{I_{y}}{c_{left}}', '\\frac{' + nt(R.Iy, 'I') + '}{' + nt(R.cl, 'L') + '}', R.Syl, 'S'),
++    sprS('sm.Syr', 'Elastic section modulus, right', 'S_{y,right}', '\\frac{I_{y}}{c_{right}}', '\\frac{' + nt(R.Iy, 'I') + '}{' + nt(R.cr, 'L') + '}', R.Syr, 'S'),
++    sprS('sm.rx', 'Radius of gyration about x', 'r_{x}', '\\sqrt{\\frac{I_{x}}{A}}', '\\sqrt{\\frac{' + nt(R.Ix, 'I') + '}{' + nt(R.A, 'A') + '}}', R.rx, 'L'),
++    sprS('sm.ry', 'Radius of gyration about y', 'r_{y}', '\\sqrt{\\frac{I_{y}}{A}}', '\\sqrt{\\frac{' + nt(R.Iy, 'I') + '}{' + nt(R.A, 'A') + '}}', R.ry, 'L')] },
++  { title: 'Principal axes', ref: 'Mohr’s circle', res: /\.I2$/, steps: [
++    sprS('pa.I1', 'Major principal moment of inertia', 'I_{1}', '\\frac{I_{x} + I_{y}}{2} + \\sqrt{\\left(\\frac{I_{x} - I_{y}}{2}\\right)^{2} + I_{xy}^{2}}', nt((R.Ix + R.Iy) / 2, 'I') + ' + ' + nt(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I'), R.I1, 'I'),
++    sprS('pa.I2', 'Minor principal moment of inertia', 'I_{2}', '\\frac{I_{x} + I_{y}}{2} - \\sqrt{\\left(\\frac{I_{x} - I_{y}}{2}\\right)^{2} + I_{xy}^{2}}', nt((R.Ix + R.Iy) / 2, 'I') + ' - ' + nt(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I'), R.I2, 'I'),
++    SharedSteps.step({ id: 'pa.th', label: 'Angle from +x to the major axis 1, counter-clockwise', sym: '\\theta_{p}', eq: '\\frac{1}{2} \\text{atan2}(-2 I_{xy}, I_{x} - I_{y})', sub: '', value: R.thp * 180 / Math.PI, unit: 'deg', d: 3 }),
++    sprS('pa.S1', 'Section modulus about axis 1 (c perpendicular to axis 1)', 'S_{1}', '\\frac{I_{1}}{c_{2,max}}', '', R.S1, 'S'),
++    sprS('pa.S2', 'Section modulus about axis 2', 'S_{2}', '\\frac{I_{2}}{c_{1,max}}', '', R.S2, 'S'),
++    sprS('pa.r1', 'Radius of gyration about axis 1', 'r_{1}', '\\sqrt{\\frac{I_{1}}{A}}', '\\sqrt{\\frac{' + nt(R.I1, 'I') + '}{' + nt(R.A, 'A') + '}}', R.r1, 'L'),
++    sprS('pa.r2', 'Least radius of gyration', 'r_{min}', '\\sqrt{\\frac{I_{2}}{A}}', '\\sqrt{\\frac{' + nt(R.I2, 'I') + '}{' + nt(R.A, 'A') + '}}', R.r2, 'L')] }];
++  /* ---------- 5. Plastic ---------- */
++  const zs = (id, lab, sym, pl, axis) => sprS(id, lab + ' (PNA at ' + axis + ' = ' + nf(pl.c, 'L') + ' ' + un('L') + (pl.flat ? '; in a gap with no material' : '') + ')', sym, 'A_{1} d_{1} + A_{2} d_{2}', nt(pl.Aup, 'A') + ' \\times ' + nt(pl.dUp, 'L') + ' + ' + nt(pl.Adn, 'A') + ' \\times ' + nt(pl.dDn, 'L'), pl.Z, 'S', '', 'A₁ = A₂ = A/2 = ' + nf(R.Ageo / 2, 'A') + ' ' + un('A') + '.');
++  const T5 = [{ title: 'Plastic section moduli', ref: 'equal-area plastic neutral axis', res: /\.Zx$/, steps: [zs('pl.Zx', 'Plastic modulus about x', 'Z_{x}', R.plX, 'y'), zs('pl.Zy', 'Plastic modulus about y', 'Z_{y}', R.plY, 'x'), zs('pl.Z1', 'Plastic modulus about the major principal axis', 'Z_{1}', R.pl1, 's₂'), zs('pl.Z2', 'Plastic modulus about the minor principal axis', 'Z_{2}', R.pl2, 's₁')] },
++    { title: 'Shape factors', ref: '', res: /\.SFx$/, steps: [
++      SharedSteps.step({ id: 'pl.SFx', label: 'Shape factor about x', sym: '\\frac{Z_{x}}{S_{x,min}}', eq: '', sub: '\\frac{' + nt(R.Zx, 'S') + '}{' + nt(Math.min(R.Sxt, R.Sxb), 'S') + '}', value: R.SFx, unit: '', d: 4 }),
++      SharedSteps.step({ id: 'pl.SFy', label: 'Shape factor about y', sym: '\\frac{Z_{y}}{S_{y,min}}', eq: '', sub: '\\frac{' + nt(R.Zy, 'S') + '}{' + nt(Math.min(R.Syl, R.Syr), 'S') + '}', value: R.SFy, unit: '', d: 4 })] }];
++  /* ---------- 6. Torsion, buckling parameters, weight ---------- */
++  const tor = [];
++  if (isNum(T.J)) tor.push(sprS('to.J', 'St. Venant torsion constant (thin-wall approximation' + (T.comps && T.comps.length > 1 ? ', Σ of ' + T.comps.length + ' separate pieces' : '') + ')', 'J', T.comps && T.comps.length === 1 && T.comps[0].Jc != null && T.comps[0].Jo != null ? 'J_{closed} + J_{open}' : '', T.comps && T.comps.length === 1 && T.comps[0].Jc != null && T.comps[0].Jo != null ? nt(T.comps[0].Jc || 0, 'I') + ' + ' + nt(T.comps[0].Jo || 0, 'I') : '', T.J, 'I', 'AISC Design Guide 9', (T.comps || []).map(C => C.method).filter(Boolean).join('; ')));
++  if (isNum(T.Cw)) tor.push(sprS('to.Cw', 'Warping constant (thin-wall approximation)', 'C_{w}', '\\int \\omega_{n}^{2}\\,t\\,ds', '', T.Cw, 'W', 'AISC Design Guide 9 App. C; Vlasov', T.cwMethod || ''));
++  if (T.sc) tor.push(sprS('to.xo', 'Shear centre from the centroid, x (shear centre at x = ' + nf(T.sc[0], 'L') + ' ' + un('L') + ' from the origin)', 'x_{o}', '', '', T.xo, 'L'), sprS('to.yo', 'Shear centre from the centroid, y (at y = ' + nf(T.sc[1], 'L') + ' ' + un('L') + ' from the origin)', 'y_{o}', '', '', T.yo, 'L'));
++  if (bk.sc) tor.push(sprS('bk.ro', 'Polar radius of gyration about the shear centre', '\\bar{r}_{o}', '\\sqrt{x_{o}^{2} + y_{o}^{2} + \\frac{I_{x} + I_{y}}{A}}', '\\sqrt{' + nt(T.xo, 'L') + '^{2} + ' + nt(T.yo, 'L') + '^{2} + \\frac{' + nt(R.Ix + R.Iy, 'I') + '}{' + nt(R.A, 'A') + '}}', bk.ro, 'L', 'AISC 360-16 Eq. E4-9 (equation number: verify)'),
++    SharedSteps.step({ id: 'bk.H', label: 'Flexural constant', sym: 'H', eq: '1 - \\frac{x_{o}^{2} + y_{o}^{2}}{\\bar{r}_{o}^{2}}', sub: '', value: bk.H, unit: '', d: 4, ref: 'AISC 360-16 Eq. E4-8 (equation number: verify)' }));
++  if (isNum(bk.rts)) tor.push(sprS('bk.rts', 'Effective radius of gyration (doubly symmetric I-shape)', 'r_{ts}', '\\sqrt{\\frac{\\sqrt{I_{y} C_{w}}}{S_{x}}}', '', bk.rts, 'L', 'AISC 360-16 Eq. F2-7 (equation number: verify)'));
++  const T6 = [{ title: 'Torsion and buckling parameters (thin-wall approximation)', ref: 'AISC Design Guide 9; AISC 360-16 Ch. E4, F2', res: /\.J$/, steps: tor }];
++  if (Wt && isNum(Wt.w)) T6.push({ title: 'Weight per length', ref: 'Σ A ρ', steps: [sprS('wt.w', 'Weight per length (net of holes; n does not change the weight)', 'w', '\\sum A_{i}\\,\\rho_{i}', '', Wt.w, 'wt')] });
++  /* ---------- 1. Summary ---------- */
++  const krow = (lab, v, k, key) => [lab, { t: isNum(v) ? nf(v, k) : 'n/a', n: true, key: isNum(v) ? key : undefined }, un(k)];
++  secs.push({ title: 'Summary', subs: [{ title: 'Key section properties', items: [{ type: 'kv', rows: [['Section', M.parts.length + ' part' + (M.parts.length === 1 ? '' : 's') + (p.member ? ' — ' + p.member : '')], ['Units', unitSys() === 'mm' ? 'mm, kN' : 'in, kip'], ['Significant figures', String((M.settings && M.settings.prec) || 5)]] },
++    { type: 'table', head: ['Property', 'Value', 'Unit'], rows: [krow('A' + tn, R.A, 'A', 'sp/ac.A'), krow('x̄, centroid from the origin', R.cx, 'L', 'sp/ac.cx'), krow('ȳ, centroid from the origin', R.cy, 'L', 'sp/ac.cy'),
++      krow('I_x', R.Ix, 'I', 'sp/in.Ix'), krow('I_y', R.Iy, 'I', 'sp/in.Iy'), krow('I_xy', R.Ixy, 'I', 'sp/in.Ixy'), krow('I_1 (major)', R.I1, 'I', 'sp/pa.I1'), krow('I_2 (minor)', R.I2, 'I', 'sp/pa.I2'),
++      ['θ_p (x → axis 1, CCW)', { t: ang(R.thp), n: true, key: 'sp/pa.th' }, '°'],
++      krow('S_x,top', R.Sxt, 'S', 'sp/sm.Sxt'), krow('S_x,bottom', R.Sxb, 'S', 'sp/sm.Sxb'), krow('S_y,left', R.Syl, 'S', 'sp/sm.Syl'), krow('S_y,right', R.Syr, 'S', 'sp/sm.Syr'),
++      krow('Z_x', R.Zx, 'S', 'sp/pl.Zx'), krow('Z_y', R.Zy, 'S', 'sp/pl.Zy'), krow('r_x', R.rx, 'L', 'sp/sm.rx'), krow('r_y', R.ry, 'L', 'sp/sm.ry'), krow('r_min', R.r2, 'L', 'sp/pa.r2'),
++      krow('J (thin-wall)', T.J, 'I', 'sp/to.J'), krow('C_w (thin-wall)', T.Cw, 'W', 'sp/to.Cw'), ...(Wt && isNum(Wt.w) ? [krow('Weight per length', Wt.w, 'wt', 'sp/wt.w')] : [])] },
++    { type: 'note', text: 'Each value links to the step where it is worked; the same values are on the [[tab:props|Properties]] tab.' + (R.anyN ? ' Transformed section: A, I, S, Z are in units of the reference material (n = 1).' : '') }].concat(R.warnings.length ? [{ type: 'note', warn: true, text: 'Check the model: ' + R.warnings.join(' ') }] : []) }] });
++  /* ---------- 2. Inputs ---------- */
++  const partsRows = R.rows.map(r => { const q = partById(r.id); return [r.lbl, partDesc(q), sprC(r.x, 'L'), sprC(r.y, 'L'), (+(+q.rot || 0).toFixed(3)) + '°', q.mir ? 'yes' : '', String(+(r.n).toPrecision(4)), sprC(r.A, 'A'), r.tab ? 'AISC tab.' : (q.type === 'shape' ? 'plate model' : 'geometry')]; });
++  const geoRows = M.parts.map(q => { const G = SPC.partGeom(q); return [q.lbl, (q.hole ? 'hole: ' : '') + (q.type === 'shape' ? G.desc + ' as plates' : SPC.TYPES[q.type].name), Object.keys(G.dims).map(k => k + ' = ' + nf(G.dims[k], 'L', 4)).join(', ') + (q.type === 'poly' ? (G.prims[0] ? G.prims[0].pts.length + ' vertices' : '') : '')]; });
++  secs.push({ title: 'Inputs', subs: [
++    { title: 'Project and settings', items: [{ type: 'kv', rows: [['Project', p.name || '—'], ['Member / description', p.member || '—'], ['Job #', p.job || '—'], ['Prepared by', (p.designer || '—') + (p.date ? ', ' + p.date : '')], ['Checked by', p.checker || '—'], ['Units', unitSys() === 'mm' ? 'mm, kN' : 'in, kip'], ['Parts', String(M.parts.length)]] },
++      { type: 'note', text: 'The parts are drawn on the [[tab:sec|Section]] tab. Units: ' + [un('L'), un('A'), un('S'), un('I')].join(', ') + '.' }] },
++    { title: 'Parts (' + R.rows.length + ')', items: [{ type: 'table', wide: true, lazy: R.rows.length > 3, title: 'Parts table', head: ['Label', 'Description', 'x (centroid)', 'y (centroid)', 'Rotation', 'Mirr.', 'n', 'A', 'Basis'], rows: partsRows }] },
++    { title: 'Part geometry (plate model)', items: [{ type: 'table', wide: true, lazy: M.parts.length > 3, title: 'Part dimensions', head: ['Part', 'Model', 'Dimensions'], rows: geoRows }] }] });
++  /* ---------- 3. ---------- */
++  const paRows = R.rows.map(r => [r.lbl, String(+r.n.toPrecision(4)), sprC(r.nA, 'A'), sprC(r.x, 'L'), sprC(r.y, 'L'), sprC(r.Ixo, 'I'), sprC(r.Iyo, 'I'), sprC(r.Ixyo, 'I'), sprC(r.dx, 'L'), sprC(r.dy, 'L'), sprC(r.Ady2, 'I'), sprC(r.Adx2, 'I'), sprC(r.Adxdy, 'I')]);
++  paRows.push({ cls: 'gov', cells: ['Σ', '', sprC(sm('nA'), 'A'), '', '', sprC(sm('Ixo'), 'I'), sprC(sm('Iyo'), 'I'), sprC(sm('Ixyo'), 'I'), '', '', sprC(sm('Ady2'), 'I'), sprC(sm('Adx2'), 'I'), sprC(sm('Adxdy'), 'I')] });
++  secs.push({ title: 'Area, centroid and moments of inertia', subs: [
++    { title: 'Area, centroid and moments of inertia', items: [sprTopics(T3), { type: 'note', text: 'Each part about its own centroid (in the section x–y directions), then transferred: d_x = $\\bar{x}_{i}$ − x̄, d_y = $\\bar{y}_{i}$ − ȳ. Holes have negative A. The same steps are on the [[tab:calc|Calc detail]] tab.' }] },
++    { title: 'Parallel-axis table (' + R.rows.length + ' parts)', items: [{ type: 'table', wide: true, lazy: true, title: 'Parallel-axis table', head: ['Part', 'n', 'n·A_i', '$\\bar{x}_{i}$', '$\\bar{y}_{i}$', 'n·I_xo', 'n·I_yo', 'n·I_xyo', 'd_x', 'd_y', 'n·A·d_y²', 'n·A·d_x²', 'n·A·d_x d_y'], rows: paRows }] }] });
++  /* ---------- 4.–6. ---------- */
++  let mohr = ''; try { mohr = mohrSVG(R.Ix, R.Iy, R.Ixy); } catch (e) { mohr = ''; }
++  secs.push({ title: 'Section moduli and principal axes', subs: [{ title: 'Section moduli, radii of gyration and principal axes', items: [sprTopics(T4)].concat(mohr ? [{ type: 'figure', svg: mohr, caption: 'Mohr’s circle of inertia (I horizontal, I_xy upward)' }] : []) }] });
++  secs.push({ title: 'Plastic moduli', subs: [{ title: 'Plastic section moduli and shape factors', items: [sprTopics(T5), { type: 'note', text: 'PNA: the line that divides the ' + (R.anyN ? 'n-weighted ' : '') + 'area into two equal halves; Z = A_1 d_1 + A_2 d_2 (distances from the PNA to the centroids of the halves). Plate model geometry (fillets neglected). The same steps are on the [[tab:plas|Plastic]] tab.' }] }] });
++  const t6 = T6.filter(t => t.steps.length);
++  secs.push({ title: 'Torsion, buckling parameters and weight', subs: [{ title: 'Torsion, buckling parameters and weight', items: (t6.length ? [sprTopics(t6)] : []).concat([{ type: 'note', warn: true, text: 'Thin-wall approximation — verify: J and C_w are computed on the centre-line model of the plates (thin-walled beam theory, AISC Design Guide 9; Vlasov); fillets are neglected.' + (isNum(T.J) ? '' : ' J: n/a — ' + (T.why || '') + '.') + (isNum(T.Cw) ? '' : ' C_w: n/a — ' + (T.cwWhy || '') + '.') + ' Worked on the [[tab:tors|Torsion]] tab.' }]) }] });
++  /* ---------- 7. Notes and references ---------- */
++  const notes = [];
++  if ((p.notes || '').trim()) notes.push({ type: 'note', text: 'Project notes (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });
++  R.warnings.forEach(w => notes.push({ type: 'note', warn: true, text: w }));
++  (T.warn || []).forEach(w => notes.push({ type: 'note', warn: true, text: w }));
++  if (!notes.length) notes.push({ type: 'note', text: 'No notes or warnings.' });
++  secs.push({ title: 'Notes and references', subs: [{ title: 'Notes and warnings', items: notes }, { title: 'References cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: spcRefs({ props: true, calc: true, tors: true }).map(r => r.map(sprNot)) }] }] });
++  /* rich notation in tables and notes: I_x, n·A_i, d_y² … → $…$ (subscripts) */
++  const not = s => String(s == null ? '' : s).replace(/([A-Za-zθ])_([A-Za-z0-9]+(?:,[A-Za-z]+)?)/g, (m, a, b) => '$' + a + '_{' + b + '}$');
++  const cell = c => (c && typeof c === 'object') ? Object.assign({}, c, { t: not(c.t) }) : not(c);
++  secs.forEach((s, i) => s.subs.forEach((q, j) => { q.items.forEach(it => {
++    if (it.type === 'note') it.text = not(it.text); else if (it.type === 'figure') it.caption = not(it.caption);
++    else if (it.type === 'kv') it.rows = it.rows.map(r => [not(r[0]), not(r[1])]);
++    else if (it.type === 'table') { it.head = it.head.map(cell); it.rows = it.rows.map(r => Array.isArray(r) ? r.map(cell) : Object.assign({}, r, { cells: r.cells.map(cell) })); }
++    else if (it.type === 'steps') it.steps.forEach(st => { st.label = st.label.replace(/_/g, ''); st.note = String(st.note || '').replace(/_/g, ''); }); }); }));
++  return { model: { title: 'Section Properties — Calculation Report', subtitle: (p.name || 'Untitled') + (p.member ? ' — ' + p.member : ''), code: 'Section properties by the parallel-axis theorem; plastic moduli; thin-wall torsion (AISC Design Guide 9)',
++    info: [['Project', p.name], ['Project No.', p.job], ['Calculated by', p.designer], ['Date', p.date || today], ['Checked by', p.checker], ['Checked date', '']],
++    head: { left: 'Project No. ' + (p.job || '—') + ' — ' + String(p.member || p.name || 'Section').slice(0, 40), right: 'Computed: ' + (p.designer || '—') + ' ' + (p.date || today) + ' · Checked: ' + (p.checker || '—'), foot: (p.name || 'Untitled') + ' (Section Property Calculator)' },
++    sections: secs } };
++}
++function buildReport(pg) {
++  if (!window.SharedReport || !window.SharedSteps) { pg.appendChild(el('div', 'errBox', 'shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.')); SPRP.api = null; SPRP.doc = null; return; }
++  let o;
++  try { o = sprModel(); } catch (e) { pg.appendChild(el('div', 'errBox', 'Report error: ' + esc(e && e.message))); SPRP.api = null; SPRP.doc = null; console.error(e); return; }
++  const tb = $('tabBar'), stick = tb && getComputedStyle(tb).position === 'sticky' ? tb.offsetHeight : 0;
++  SPRP.api = SharedReport.mount(pg, o.model, { closed: SPRP.closed, onGoto: sprGoto, stick });
++  SPRP.doc = SPRP.api.doc;
++}
++/* [[tab:…]] links of the report: an output tab (as its tab button) */
++function sprGoto(name) {
++  if (!OUT_TABS.some(t => t[0] === name)) return;
++  M.ui.outTab = name; autosave(); buildTabBar(); renderTab(); const op = $('outputPanel'); op.scrollTop = 0;
++  if (op.scrollHeight <= op.clientHeight + 1) window.scrollTo(0, $('tabBar').getBoundingClientRect().top + window.scrollY - 6);
++}
++/* Ctrl+P while the Report tab is shown prints the report alone (PRINT_CSS hides #app in print, so it goes into #rp-print); other tabs unchanged */
++window.addEventListener('beforeprint', () => {
++  if (!SPRP.doc || curTab() !== 'rpt' || document.body.classList.contains('rp-printing') || $('printReport')) return;
++  let box = $('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
++  box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(SPRP.doc, { lazy: false }) + '</article></div>';
++  document.body.classList.add('rp-printing');
++});
++
+```
