@@ -3099,5 +3099,77 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 ### CF11 (verify only)
 - Auto design's cross-frame sizing rule for the bolts per member end (CF10 / CF11; CTDOT 4 bolts) is in `engine/autodesign.js`
   (sizeDetails, ids CF1–CF11, "the current type and bolt count first, then the others"), merged in #511. Not changed here.
+
+## 2026-11-01 — PR: claude/sbd-cf-note — Cross-frames member-force note: Strength I and Strength III / V are separate load combinations (CFNOTE; text only, no calculation change)
+
+Line numbers are approximate; search for the anchor text.
+
+### What changed (engineer decision 2026-11-01: fix the note text only)
+- `ui/framing.js` `render`, the "Member forces (truss model)" card note. Before:
+  `Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.`
+  After: `Each load combination is a separate case (AASHTO LRFD 10th Ed. Table 3.4.1-1), checked on its own; each member is designed for the largest.
+  Strength I: the entered member forces (nothing is computed for Strength I); Strength III and V: ± |wind force| f_wF_w alone (not added to the Strength I
+  forces); Constructibility: the entered forces ± brace force f_brM_br. The top chord work points are held by the deck.` (followed by `umNote(R)` as before).
+- `engine/crossframes.js` `steps`, step `cf.<m>.forces` label (same misstatement, text only). Before: `<member>: largest tension and compression (analysis force ±
+  wind and brace forces)`; after: `<member>: largest tension and compression of the separate combinations (Strength I: the entered forces; Strength III, V: ± wind
+  force alone; Constructibility: the entered forces ± brace force)`.
+- What the code does (unchanged, `compute`, `combos`): Strength I T = max(0, u), C = max(0, −u) with u the entered Strength force; Strength III and V
+  T = C = |f_w F_w| (u = 0); Constructibility T = max(0, u + |f_br M_br|), C = max(0, −u + |f_br M_br|); T_u, C_u the largest over the four (AASHTO LRFD
+  10th Ed. Table 3.4.1-1: Strength I, III and V are separate load combinations).
+- Governing provision: AASHTO LRFD 10th Ed. Table 3.4.1-1, Art. 4.6.2.7.1, 6.7.4.2. No formula, factor or value changed.
+- Check case: default project, G1, Cross-frames tab; before = after for every member force, T_u, C_u, check and ratio (Node, `SBDFramingUI.build`
+  at the default and with RIDOT η = 1.05, m = 1.2: 0 differences other than the step label).
+
+### Other copies
+- None.
+
+## 2026-11-01 — PR: claude/sbd-studs-gamma — Studs: Fatigue I γ from one source, the Fatigue & studs input γ Fatigue I (SCGAM; identical at the default; an old project's differing studs.gamFat no longer used, shown)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SCGAM`.
+
+### What changed (engineer decision 2026-11-01, item 2: "one source", the Welds #525 / Splices #545 pattern)
+- `ui/fatigue.js`:
+  - new helpers after `ensure`: `const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };` and
+    `oldGamFat(P)` (`{ was, now }` when the saved `studs.gamFat` differs from `fatI(P)`, else null); both exported.
+  - `inputs`, the "Shear connectors: studs (6.10.10)" card: before `${h.num('studs.gamFat', 'γ Fatigue I (studs)', '')}`; after a read-only row
+    "γ Fatigue I (studs) <fatI(P)>" with the link `<a href="#" data-fsgo="fatigue.gam.fI">γ Fatigue I above</a>` (one source, Table 3.4.1-1) and,
+    when `oldGamFat(P)`, the warning "… saved from this tab's former input … no longer used: <was> (now <now>). It stays in the project file unchanged."
+  - `onClick`: `[data-fsgo]` focuses the `fatigue.gam.fI` field (no input change, returns false).
+  - `build`: before `Object.assign(scIn, { … gam: { fat: Q.gamFat }, … })`; after `gam: { fat: fatI(P) }` (every demand path: analysis, hand-off file,
+    Custom, example). `SC.fromPayload(pl, { beffMode: Q.beffMode })` → `SC.fromPayload(pl, { beffMode: Q.beffMode, fI: fatI(P) })`. Result `oldFat: oldGamFat(P)`.
+  - `studsOf` (the analysis / Custom payload): `results: { …, gamI: Q.gamFat, … }` → `gamI: fatI(P)`.
+  - output tab, studs note: "; γ Fatigue I = <γ> (the Fatigue & studs input, one source)." and, with `R.oldFat`, the "no longer used" alert.
+- `engine/studs.js` `fromPayload(pl, opt)` (the hand-off path): `gam: { fat: q.gamI || 1.75 }` → `gam: { fat: opt.fI > 0 ? +opt.fI : q.gamI || 1.75 }`;
+  the fatigue settings `gam: { fI: 1.75, … }` → `gam: { fI: opt.fI > 0 ? +opt.fI : 1.75, … }`. Without `opt.fI` (the ST-Girder parity tests) as before.
+- `engine/autodesign.js` (payload of each candidate): `gamI: Q.gamFat` → `gamI: (v => v > 0 ? v : 1.75)(+((P.fatigue || {}).gam || {}).fI)`.
+  (Auto design checks the studs through `SBDFatigueUI.build`, so it takes `fatI(P)` already through `scIn`.)
+- `engine/model.js` `validate`: the line `pos(Q.gamFat, 'studs.gamFat', 'γ Fatigue I');` removed (comment): a value that can no longer be edited must
+  not block the calculation. Doc comment: gamFat not used since 2026-11-01, kept.
+- `index.html` (one-line, additive): the input-change redraw regex also matches `fatigue\.gam\.fI$`, so the studs' read-only γ on the same input tab
+  updates when γ Fatigue I is changed.
+- Saved data (CLAUDE.md §5): `P.studs.gamFat` stays in the file unchanged (defaultStuds() still writes 1.75; the GirderDetail import still fills it from
+  sc.gam.fat); unused. No key or format changed.
+- Governing provision: AASHTO LRFD 10th Ed. Table 3.4.1-1 (Fatigue I γ), Art. 6.10.10.2 (V_sr = √(V_fat² + F_fat²), V_fat = γ V_f Q/I, p ≤ n Z_r/V_sr),
+  Art. 6.6.1.2 (Fatigue I where ADTT_SL ≥ the infinite-life equivalent; that decision already used `fatigue.gam.fI`). Fatigue I takes neither the owner's
+  η (Art. 1.3.3–1.3.5: 1.00 at limit states other than Strength) nor m (the owner's multiplier is on HL-93 at Strength and Service), so an owner with η
+  or m ≠ 1 gives the same studs before and after.
+
+### Check case (default project, G1, analysis; Fatigue limit state "Fatigue I for every detail" so that γ_I acts; Node, the page's modules)
+Zone "Span 2, 0.1L to 0.2L": V_f = 45.8 kip, Q = 1714.009 in³, I = 106168.02 in⁴, n_r = 4, Z_r = 4.2092 kip, p = 13 in, F_fat = 0.
+- Default (fatigue.gam.fI = 1.75, studs.gamFat = 1.75): before = after. V_fat = 1.75(45.8)(1714.009)/106168.02 = 1.2940 kip/in;
+  p_req = 4(4.2092)/1.2940 = 13.012 in; SC1 = 13/13.012 = 0.9991.
+- Old project with studs.gamFat = 1.50 (fI 1.75): before V_fat = 1.50(45.8)(1714.009)/106168.02 = 1.1091 kip/in, p_req = 15.181 in, SC1 = 0.8564;
+  after 1.2940 kip/in, 13.012 in, 0.9991 (the input tab and the output tab show "1.5 … no longer used (now 1.75)").
+- fatigue.gam.fI = 1.50 (studs.gamFat 1.75): before 1.2940 / 13.012 / 0.9991 (the studs ignored the project's γ); after 1.1091 / 15.181 / 0.8564.
+- Owner RIDOT (η = 1.05 with η_I, m = 1.2), governing zone "Span 1, 0.4L to 0.5L" (V_f 33.6 kip, Q 1627.578, I 99484.85, p 17.5 in): at the defaults
+  before = after (V_fat = 1.75(33.6)(1627.578)/99484.85 = 0.9620 kip/in, p_req = 4(4.2092)/0.9620 = 17.503 in, SC1 = 0.9999); with studs.gamFat = 1.50:
+  before V_fat 0.8245, p_req 20.420, SC1 0.8570 → after 0.9620, 17.503, 0.9999.
+- With the default "By ADTT" limit state the default project's zones are all Fatigue II (γ_II used), so only `SR.gf` changes there.
+
+### Proof nothing else changes
+- Node, every tab's build (Flexure, Shear, Fatigue, Cross-frames, Constructibility, Splices, Rating, Welds), origin/main vs this branch, default project
+  and RIDOT η 1.05 m 1.2: 0 differences; an old project with studs.gamFat = 1.5: only Fatigue `SR.gf` 1.5 → 1.75.
+- `tests/engine/studs-gamma.test.mjs` (new): the check case, old value kept and flagged, validate, payload gamI, fromPayload opt.fI.
+
 ### Other copies
 - None.

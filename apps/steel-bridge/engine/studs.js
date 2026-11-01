@@ -185,7 +185,8 @@
      girder's deck.beff); the splice gaps from studs.results.gaps (clearance 3 in); the skew from skew.max (> 20°: F_fat = 25/48 kip/in,
      GirderDetail's defaults F_rc = 25 kip, w = 48 in); t_deck = t_s + 0.5 in (Preliminary sizing). The fatigue settings from
      details.fatigue (ADTT, p, life, limit; γ_II from the zones' results, 0.80 when no zone is in Fatigue II; γ_I 1.75) and the bridge
-     from member.spans. Returns { p, env } or null when the payload has no stud results. */
+     from member.spans. opt.fI (SCGAM, 2026-11-01): the project's Fatigue I γ (the Fatigue & studs input), used for the studs and γ_I when given
+     (the app passes it; without it, as before: the file's gamI / 1.75). Returns { p, env } or null when the payload has no stud results. */
   function fromPayload(pl, opt) {
     opt = opt || {};
     const g = pl.girderDetail || {}, D0 = g.details || {}, sd = D0.studs, q = sd && sd.results; if (!q || !Array.isArray(q.zones) || !q.zones.length) return null;
@@ -198,10 +199,10 @@
     const gaps = q.gaps || [], splC = 3, halfL = gaps.length ? (gaps[0].b - gaps[0].a) / 2 : 0;
     const gr = k => (GRADES[k] ? k : '50');
     const p = { splX: gaps.map(o => o.x).join(', '), splL: gaps.length ? 2 * (halfL - splC / 12) : 0, splC, d: String(sd.d), h: sd.h, st: sd.transverseSpacing, Fu: sd.Fu, fc: +m.fc, wc: +m.wc || 0.15, K1: 1, nRule: 'exact', Qn10: q.QnEntered ? q.Qn : 0,
-      ts: dk.ts, hh: dk.haunch, tdeck: dk.ts + 0.5, beff: q.beff, gF: gr(m.gradeFlange), gW: gr(m.gradeWeb), gam: { fat: q.gamI || 1.75 }, skew: ((g.skew || {}).max || 0) > 20 ? 'yes' : 'no', Frc: 25, wv: 48,
+      ts: dk.ts, hh: dk.haunch, tdeck: dk.ts + 0.5, beff: q.beff, gF: gr(m.gradeFlange), gW: gr(m.gradeWeb), gam: { fat: opt.fI > 0 ? +opt.fI : q.gamI || 1.75 }, skew: ((g.skew || {}).max || 0) > 20 ? 'yes' : 'no', Frc: 25, wv: 48,
       zones: zs, regions: rg, ...(opt.beffMode === 'girder' ? { beffMode: 'girder', beffG: dk.beff } : {}) };
     const F = D0.fatigue || {}, zII = q.zones.find(z => z.lim === 'II'), spans = (pl.member || {}).spans || sup.slice(1).map((x, k) => x - sup[k]);
-    const set = FA().settings({ limit: F.limit || 'auto', ADTT: F.ADTT, p: F.p, life: F.life, gam: { fI: 1.75, fII: zII ? zII.gam : 0.80 } });
+    const set = FA().settings({ limit: F.limit || 'auto', ADTT: F.ADTT, p: F.p, life: F.life, gam: { fI: opt.fI > 0 ? +opt.fI : 1.75, fII: zII ? zII.gam : 0.80 } });
     const ro = pl.ownerRules || {}, owner = ro.owner || 'AASHTO';
     const env = { owner, lf: { h0: ro.haunchInProperties === false }, fat: { set, B: FA().supports({ ok: true, spans: spans.map(Number), cont: sup.length > 2 }) } };
     return { p, env };
