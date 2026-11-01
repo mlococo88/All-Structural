@@ -500,14 +500,15 @@
       <div class="card-body">
         <div class="lppTblScroll"><table class="cable-tbl" id="fixTbl">
           <thead><tr>
-            <th>#</th><th>Mount<br>ht (ft)</th><th>Plan θ<br>(° from X)</th><th>Arm<br>a (ft)</th><th>EPA<br>(ft²)</th><th>Ice area<br>(ft²)</th><th>Ice depth<br>(ft)</th><th>Weight<br>(lb)</th><th></th>
+            <th>#</th><th>Mount<br>ht (ft)</th><th>Plan θ<br>(° from X)</th><th>Arm<br>a (ft)</th><th>EPA<br>(ft²)</th><th>Ice area<br>(ft²)</th><th>Ice depth<br>(ft)</th><th>Weight<br>(lb)</th><th>Arm OD<br>(in)</th><th></th>
           </tr></thead>
           <tbody id="fixBody"></tbody>
         </table></div>
         <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
           <button class="btn mini ghost" id="addFix">+ Add fixture</button>
-          <span style="font-size:11px;color:var(--ink-soft)">θ = azimuth of the mast arm. Arm <i>a</i> = horizontal offset of the fixture from the pole centerline.</span>
+          <span style="font-size:11px;color:var(--ink-soft)">θ = azimuth of the mast arm. Arm <i>a</i> = horizontal offset of the fixture from the pole centerline. Arm OD = outside diameter of the (round) arm for its own wind (0 = no arm wind).</span>
         </div>
+        <p class="tbl-note" id="armMigNote" style="margin:8px 0 0 0;display:none;color:#b45309"></p>
       </div>
     </section>
 
@@ -1178,8 +1179,8 @@ if($('poleShape')) $('poleShape').addEventListener('change',()=>{applyShapeUI();
 // Each fixture: mount height hf (ft), plan azimuth th (deg), cantilever arm a (ft),
 // wind EPA (ft^2), ice catch area Aice (ft^2), ice catch depth tf (ft), weight W (lb).
 let fixtures=[
-  {hf:35,th:0,a:6,epa:1.6,aIce:1.6,tIce:0.5,W:55},
-  {hf:35,th:180,a:6,epa:1.6,aIce:1.6,tIce:0.5,W:55},
+  {hf:35,th:0,a:6,epa:1.6,aIce:1.6,tIce:0.5,W:55,armD:2.375},
+  {hf:35,th:180,a:6,epa:1.6,aIce:1.6,tIce:0.5,W:55,armD:2.375},
 ];
 function renderFixtures(){
   const tb=$('fixBody'); if(!tb) return; tb.innerHTML='';
@@ -1194,6 +1195,7 @@ function renderFixtures(){
       `<td><input type="number" data-i="${i}" data-k="aIce" value="${x.aIce}" step="0.1"></td>`+
       `<td><input type="number" data-i="${i}" data-k="tIce" value="${x.tIce}" step="0.1"></td>`+
       `<td><input type="number" data-i="${i}" data-k="W" value="${x.W}" step="5"></td>`+
+      `<td><input type="number" data-i="${i}" data-k="armD" value="${x.armD||0}" step="0.25"></td>`+
       `<td><button class="del" data-del="${i}">×</button></td>`;
     tb.appendChild(tr);
   });
@@ -1202,7 +1204,7 @@ function renderFixtures(){
   }));
   tb.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{fixtures.splice(+btn.dataset.del,1);renderFixtures();markDirty();calc();});
 }
-if($('addFix')) $('addFix').onclick=()=>{fixtures.push({hf:num('H'),th:0,a:6,epa:1.6,aIce:1.6,tIce:0.5,W:55});renderFixtures();markDirty();calc();};
+if($('addFix')) $('addFix').onclick=()=>{fixtures.push({hf:num('H'),th:0,a:6,epa:1.6,aIce:1.6,tIce:0.5,W:55,armD:2.375});renderFixtures();markDirty();calc();};
 
 // ---- cable rows ----
 let cablesEnabled=true;
@@ -1617,7 +1619,21 @@ function fixtureComponents(x,inp){
   const WiceFull = inp.iceDen * tft * surf;                       // lb
   const th=x.th*RAD;
   const ex=x.a*Math.cos(th), ey=x.a*Math.sin(th);                 // plan eccentricity (ft)
-  return {x, Kzf, qz, qzi, Fw, Fwi, epaI, side, td,
+  // ---- wind on the arm itself (added 2026-11-01, LP-R5) ----
+  // Round arm of outside diameter armD (in) and length a (ft), horizontal at the mount height, along θ. Wind toward φ sees the
+  // projected area a·D·|sin(θ − φ)|; the force acts along the wind at the arm mid-length (a/2 along θ). C_f per ASCE 7-22
+  // Fig. 29.4-1 (round, moderately smooth): h/D = a/D, D√q_z with q_z = 0.00256·K_z·K_zt·K_e·V² at h_f (no K_d).
+  // F_arm,max (|sin| = 1) = q_z·K_d·G·C_f·D·a (bare) and the iced value with D + 2t_d and V_ice.
+  const armDin=x.armD>0?x.armD:0, La=x.a>0?x.a:0;
+  let cfArm=0, armRow='—', armHD=0, armDsq=0, FarmMax=0, FarmMaxI=0;
+  if(armDin>0 && La>0){
+    const Dft=armDin/12, q0=0.00256*Kzf*inp.Kzt*1.0*inp.V*inp.V;
+    armDsq=Dft*Math.sqrt(q0); armHD=La/Dft; armRow = armDsq>2.5 ? 'smooth' : 'lowq';
+    cfArm=interp1(CF2941.hD, CF2941[armRow], armHD);
+    FarmMax=qz*cfArm*Dft*La;                                        // lb, bare, wind normal to the arm
+    FarmMaxI=qzi*cfArm*((armDin+2*td)/12)*La;                       // lb, iced
+  }
+  return {x, Kzf, qz, qzi, Fw, Fwi, epaI, side, td, armDin, cfArm, armRow, armHD, armDsq, FarmMax, FarmMaxI,
           Wdead:x.W, Wice:WiceFull, volIce, surf,
           ex, ey, hf:x.hf, th:x.th};
 }
@@ -2020,6 +2036,7 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   Mx+=MHw*cw; My+=MHw*sw;
 
   // ---------- fixtures ----------
+  let Tz=0;                                             // torsion about the pole axis (lb·ft), added 2026-11-01 (LP-R5)
   fxs.forEach(fc=>{
     const Fw = f.W*fc.Fw + f.Wi*fc.Fwi;                 // factored wind on the fixture (lb)
     const Wg = f.D*fc.Wdead + f.Di*fc.Wice;             // factored vertical (dead + ice) (lb)
@@ -2027,11 +2044,16 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
     const Fwx=Fw*cw, Fwy=Fw*sw;
     Vx+=Fwx; Vy+=Fwy;
     Mx+=Fwx*fc.hf; My+=Fwy*fc.hf;
+    // wind on the arm (projected normal to the wind), along the wind at the arm mid-length, at h_f
+    const Fa=(f.W*(fc.FarmMax||0) + f.Wi*(fc.FarmMaxI||0))*Math.abs(Math.sin((fc.th-phi)*RAD));
+    Vx+=Fa*cw; Vy+=Fa*sw; Mx+=Fa*cw*fc.hf; My+=Fa*sw*fc.hf;
+    // torsion T = r × F (plan): fixture at (e_x, e_y), arm force at (e_x, e_y)/2
+    Tz+=Fw*(fc.ex*sw - fc.ey*cw) + Fa*0.5*(fc.ex*sw - fc.ey*cw);
     // gravity at the arm tip -> eccentric moment along the fixture azimuth (FIXED)
     const Mex=Wg*fc.ex, Mey=Wg*fc.ey;
     Mx+=Mex; My+=Mey;
     N+=Wg;
-    perF.push({fc,Fw,Wg,Fwx,Fwy,Mex,Mey,Mw:Fw*fc.hf});
+    perF.push({fc,Fw,Wg,Fwx,Fwy,Mex,Mey,Mw:Fw*fc.hf,Fa});
   });
 
   // ---------- mast ----------
@@ -2047,7 +2069,7 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   const h=P>0?M/P:0;                         // equivalent lever arm
 
   return {key,fam:f.fam,name:f.name,factors:f,phi,
-          Vx,Vy,Mx,My,P,M,Mang,h,axial:N,
+          Vx,Vy,Mx,My,P,M,Mang,h,axial:N,Tz,T:(Math.abs(Tz)<1e-6?0:Math.abs(Tz)),   // round-off of cancelling arms → 0
           cableRes,cableAng,hcEff,sV,poleWind,poleWindM,cableWindH:sHw,cableWindM:MHw,
           per:perC, perF,
           M_cable:Math.hypot(cMx,cMy), M_pole:poleWindM};
@@ -2069,7 +2091,9 @@ function lppOffAxisMsg(L){
 function evalCombo(key,inp,comps,fxs,pw){
   const all=WIND_DIRS.map(phi=>evalComboDir(key,inp,comps,fxs,pw,phi));
   const gov=all.reduce((a,x)=>x.M>a.M?x:a);
-  return {...gov, dirs:all};
+  // largest torsion over the four directions (2026-11-01): combined with the max-moment direction for the anchors and the
+  // shaft (conservative)
+  return {...gov, dirs:all, Tmax:Math.max(0,...all.map(x=>x.T||0))};
 }
 
 // ================= SIGN MODE — per-post demand =================
@@ -2290,7 +2314,8 @@ manPart("p2","2. Input Reference",[
 {ol:[
  "<b>Wind drag</b> \u2014 F = q<sub>z</sub>(h)\u00b7EPA\u00b7C<sub>f</sub> at the mount height, acting along the wind direction. The full EPA is exposed regardless of wind azimuth, since EPA already embeds shape effects.",
  "<b>Axial load</b> \u2014 the fixture and its accreted ice add directly to N at the base.",
- "<b>Eccentric gravity moment</b> \u2014 the weight acting at the cantilever arm a produces a moment W\u00b7a directed along the arm azimuth \u03b8. This moment is a <b>fixed vector</b>: it does not rotate with the wind."
+ "<b>Eccentric gravity moment</b> \u2014 the weight acting at the cantilever arm a produces a moment W\u00b7a directed along the arm azimuth \u03b8. This moment is a <b>fixed vector</b>: it does not rotate with the wind.",
+ "<b>Arm wind and torsion</b> (added 2026-11-01) \u2014 the round arm (input: arm OD) takes wind on its projected area a\u00b7D\u00b7|sin(\u03b8 \u2212 \u03c6)| with C<sub>f</sub> from ASCE 7-22 Fig. 29.4-1; the fixture wind (at the tip) and the arm wind (at mid-arm) twist the pole, T = \u03a3(F<sub>w</sub> + \u00bdF<sub>arm</sub>)\u00b7a\u00b7sin(\u03c6 \u2212 \u03b8). The pole is checked by AISC 360-16 \u00a7H3.2, the bolts carry T/(n\u00b7R) and the shaft is checked against \u03c6T<sub>th</sub>."
 ]},
 {key:"Two fixtures at opposing azimuths (0° and 180°) <b>cancel in moment</b> but <b>add in axial load and in wind shear</b>. A symmetric twin-arm pole therefore has no dead-load overturning but twice the axial and twice the fixture wind."},
 
@@ -2865,7 +2890,7 @@ function summaryHTML(ctx){
     warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
   if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
   if(stacks.some(st=>st.found&&st.found.Tu>0))
-    warnL.push('Monopost torsion from the eccentric sign wind (Cases B/C): the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
+    warnL.push((mode==='sign'?'Monopost torsion from the eccentric sign wind (Cases B/C)':'Torsion from the wind on offset fixtures and arms')+': the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
   // ---- design summary ----
   H+=`<div class="step-label" style="margin-top:14px">Design — as ${stacks[0].found.reo.manual?'specified (check mode)':'designed'}</div>`;
@@ -3125,7 +3150,8 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
   const lam_p=fcr0.lp, lam_r=fcr0.lr;
 
   const fList=fxs.map(fc=>({hf:fc.hf, Fw:f.W*fc.Fw + f.Wi*fc.Fwi, Wg:f.D*fc.Wdead+f.Di*fc.Wice,
-                            ex:fc.ex, ey:fc.ey}));
+                            ex:fc.ex, ey:fc.ey,
+                            Fa:(f.W*(fc.FarmMax||0) + f.Wi*(fc.FarmMaxI||0))*Math.abs(Math.sin((fc.th-phi)*RAD))}));
   // cable reactions: along-cable pull (Hx,Hy) + transverse wind reaction Hw along the wind direction
   const cList=gov.per.map(r=>({hc:r.cp.c.hc, Hx:r.Hx+(r.Hw||0)*cw, Hy:r.Hy+(r.Hw||0)*sw, Vc:r.Vc}));
   // mast wind: the factored strips of poleWindNominal (same distribution as the base moment)
@@ -3135,7 +3161,7 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
   const secForces=(z)=>{
     let Mx=0,My=0, Vx=0,Vy=0;
     fList.forEach(fc=>{ if(fc.hf>=z){
-      const Fwx=fc.Fw*cw, Fwy=fc.Fw*sw;
+      const Fwx=(fc.Fw+fc.Fa)*cw, Fwy=(fc.Fw+fc.Fa)*sw;   // fixture + arm wind (2026-11-01)
       Vx+=Fwx; Vy+=Fwy;
       Mx+=Fwx*(fc.hf-z); My+=Fwy*(fc.hf-z);
       Mx+=fc.Wg*fc.ex;  My+=fc.Wg*fc.ey;
@@ -3184,13 +3210,22 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
     const mterm = shape==='round' ? (M*12/1000)/Mcx : (Mrx/Mcx + Mry/Mcy);
     if(prPc>=0.2){ ratio = prPc + (8/9)*mterm; form='H1-1a'; }
     else { ratio = prPc/2 + mterm; form='H1-1b'; }
+    // torsion from the fixture and arm wind above the section (2026-11-01, LP-R5): §H3.2, Eq. H3-6 when T_r > 0.2T_c
+    let tv=null;
+    const Tz=fList.reduce((a,fc)=>a+(fc.hf>=z?(fc.Fw+0.5*fc.Fa)*(fc.ex*sw-fc.ey*cw):0),0);   // lb·ft
+    if(Math.abs(Tz)>=1e-6){   // round-off of cancelling arms is not torsion
+      const ts=hssTorsionShear(shape, s, inp.H, Fy, E);
+      const Tr=Math.abs(Tz)*12/1000, Vr=Math.hypot(Vx,Vy)/1000;   // kip-in, kip
+      tv={...ts, Tr, Vr, trTc:ts.Tc>0?Tr/ts.Tc:Infinity, applies:Tr>0.2*ts.Tc};
+      if(tv.applies){ ratio=(prPc+mterm)+Math.pow(Vr/ts.Vc+Tr/ts.Tc,2); form='H3-6'; }
+    }
 
     const fa=Pr/s.A_in2, fb=(M*12/1000)/(shape==='round'?s.Sx:Math.min(s.Sx,s.Sy));
 
     return {i:s.i, z, Do:s.Do, tw:s.tw, B:s.B, Ht:s.Ht, Dt:s.Dt_ratio, slendKind:s.slendKind, A:s.A_in2,
             Sx:s.Sx, Sy:s.Sy, Zx:s.Zx, Zy:s.Zy, cls:mnx.cls, sub:mnx.sub,
             Pr, Mrx, Mry, M, M1, B2, N, Vsh:Math.hypot(Vx,Vy),
-            mnx, mny, Mcx, Mcy, pn, Pc, prPc, mterm, fa, fb,
+            mnx, mny, Mcx, Mcy, pn, Pc, prPc, mterm, fa, fb, tv,
             ratio, form, ok:ratio<=1.0,
             Z:(shape==='round'?s.Sx:Math.min(s.Sx,s.Sy)), Fcr:mnx.Fcr, Fb:phib*mnx.Fcr, Fa:phic*Fy};
   });
@@ -3787,6 +3822,16 @@ function designFoundationStack(inp, asd, lrfd, MangLRFD, lrfdAll, asdAll){
           pick:`(${reo.long.n}) ${reo.long.bar.n}`, Ag:reo.Ag, phiVc:reo.tie.phiVc, dEff:reo.tie.dEff};
 }
 
+// Shaft torsion threshold, ACI 318-19 §22.7.1.1 / Table 22.7.4.1(a), φ = 0.75 — the same expressions as designFoundationStack
+// (light-pole mode, added 2026-11-01 with the fixture/arm torsion of LP-R5). T_u = largest torsion of the LRFD combinations.
+function lppShaftTorsion(inp,cands){
+  const Tu=Math.max(0,...cands.map(c=>c.T||0));
+  const bIn=inp.b*12;
+  const Acp=inp.shaftShape==='square'? bIn*bIn : Math.PI*bIn*bIn/4;
+  const pcp=inp.shaftShape==='square'? 4*bIn : Math.PI*bIn;
+  const phiTth=0.75*1.0*Math.sqrt(inp.fc)*Acp*Acp/pcp/12;
+  return {Tu,phiTth,Acp,pcp};
+}
 // ================= SIGN MODE CALC =================
 function calcSign(inp){
   // post section properties (prismatic) + self-weight
@@ -4377,7 +4422,7 @@ function calc(){
   }); });
   const pstress=psAll.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
   const lrfdCands=lrfdList.map(r=>{ const b2=(b2ByKey[r.key]||{B2:1}).B2;
-    return {name:r.name, M:r.M*b2, M1:r.M, B2:b2, axial:r.axial, P:r.P, Mang:r.Mang}; });
+    return {name:r.name, M:r.M*b2, M1:r.M, B2:b2, axial:r.axial, P:r.P, Mang:r.Mang, T:r.Tmax||0}; });
   const VuMax=Math.max(...lrfdCands.map(c=>c.P));
   const reo=designRebar(inp,govLRFD.M,govLRFD.axial,VuMax,lrfdCands.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
   const shaftGov=reo.long.govDem||{Mu:govLRFD.M,Pu:govLRFD.axial,name:govLRFD.name};
@@ -4399,6 +4444,7 @@ function calc(){
   // anchor bolts (LRFD) — every LRFD combination, governing case per check (0.9D + W included)
   inp.arShaftBar=reo.long.bar;   // anchor reinforcement "shaft longitudinal bar" option
   const bolts=anchorsAllCombos(inp, lrfdCands);
+  const shT=lppShaftTorsion(inp, lrfdCands);   // shaft torsion threshold (fixture/arm torsion, 2026-11-01)
 
   // ---- headline outputs (embedment from ASD gov) ----
   $('oDepth').innerHTML=fmt(d,2)+'<span class="u"> ft</span>';
@@ -4665,6 +4711,7 @@ function calc(){
     bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
     bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
     bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
+    if(bolts.VbT>0) bt+=`<tr><td colspan="5" style="text-align:left;font-size:11px">Torsion from the wind on offset fixtures and arms, T<sub>u</sub> = ${fmt(bolts.Tu/12,0)} lb·ft: each bolt's shear includes T<sub>u</sub>/(n·R) = ${fmt(bolts.VbT,0)} lb, added to V<sub>u</sub>/n = ${fmt(bolts.Vu/bolts.n,0)} lb (conservative scalar sum). Shaft torsion check (ACI 318-19 §22.7.1.1): T<sub>u</sub> = ${fmt(shT.Tu,0)} vs φT<sub>th</sub> = ${fmt(shT.phiTth,0)} lb·ft (worked in the Shaft tab). Soil torsional resistance is not checked.</td></tr>`;
     bt+=boltMinGeomRows(bolts);
     bt+=boltNotCheckedRows(bolts);
     $('boltTbl').innerHTML=bt;
@@ -4680,12 +4727,15 @@ function calc(){
   renderDemandExample(govASD,inp);
   renderEmbedExample(emb,inp,govASD.P,govASD.M,govASD.h);
   renderRebarExample(reo,inp,Mu,Pu,Vu);
+  if(shT.Tu>0 && $('rebarExample')){ const tb=document.createElement('div');
+    tb.innerHTML=`<div class="step-label">Shaft torsion threshold <span class="eq-ref">[ACI 318-19 §22.7.1.1]</span></div>`+lppTorsionHTML(shT,inp);
+    $('rebarExample').appendChild(tb); if(window.renderMathInElement) renderMathInElement(tb,{delimiters:[{left:'\\[',right:'\\]',display:true}],throwOnError:false}); }
   renderBearingExample(bearing,bearing.axial,inp);
   // Broms reference check — LRFD demands, kip units per AASHTO
   renderBromsExample(bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000), inp, govLRFD, Mu);
   // ---- summary tab (reads the same objects the tabs above consume) ----
   renderSummary({inp, mode:'pole',
-    stacks:[{label:'', found:{emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts},
+    stacks:[{label:'', found:{emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,...shT},
              pstress, asd:govASD, lrfd:govLRFD, nat, b2:govB2,
              broms:bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000)}]});
 
@@ -4792,7 +4842,7 @@ function poleWorkedBody(pstress, inp, r){
   H+=g(`\\frac{P_r}{\\phi_c P_n} = \\frac{${fmt(r.Pr,2)}}{${fmt(r.Pc,1)}} = ${fmt(r.prPc,3)}\\ ${r.prPc>=0.2?'\\ge':'\\lt'}\\ 0.2\\ \\Rightarrow\\ \\text{Eq. ${r.form==='H1-1a'?'H1-1a':'H1-1b'}}`);
   if(r.tv){
     const tv=r.tv;
-    H+=step(`6a · Torsion (monopost, Case B/C eccentricity) ${ref(tv.ref)}`);
+    H+=step(`6a · Torsion (${inp&&inp.mode==='sign'?'monopost, Case B/C eccentricity':'wind on offset fixtures and arms'}) ${ref(tv.ref)}`);
     H+=`<p class="eq-why">The eccentric sign wind twists the post. φ<sub>T</sub>T<sub>n</sub> = 0.90·F<sub>cr</sub>·C and the shear strength φ<sub>v</sub>V<sub>n</sub> use the full post height as L (conservative). When T<sub>r</sub> &gt; 0.2T<sub>c</sub>, §H3.2 Eq. H3-6 replaces H1.</p>`;
     H+=g(`C = ${fmt(tv.C,2)}\\ \\text{in}^3\\quad F_{cr} = ${fmt(tv.FcrT,1)}\\ \\text{ksi}\\quad T_c = \\phi_T F_{cr} C = ${fmt(tv.Tc,1)}\\ \\text{kip-in}\\qquad V_c = ${fmt(tv.Vc,1)}\\ \\text{kip}`);
     H+=g(`\\frac{T_r}{T_c} = \\frac{${fmt(tv.Tr,1)}}{${fmt(tv.Tc,1)}} = ${fmt(tv.trTc,3)}\\ ${tv.applies?'\\gt':'\\le'}\\ 0.2`);
@@ -5507,6 +5557,15 @@ function fixtureWorkedHTML(fxs, inp){
   H+=step(`4 · Eccentric gravity moment`);
   H+=`<p class="eq-why">The fixture dead load acts at the arm tip, a horizontal distance a from the pole centerline, producing an overturning moment directed along the arm azimuth θ — resolved as M_x = W·a·cosθ, M_y = W·a·sinθ:</p>`;
   H+=g(`\\vec M_{ecc} = W\\,a\\,(\\cos\\theta,\\ \\sin\\theta) = ${fmt(fg.Wdead,0)}(${fmt(fg.x.a,1)})(\\cos${fmt(fg.th,0)}°,\\ \\sin${fmt(fg.th,0)}°) = (${fmt(fg.Wdead*fg.x.a*Math.cos(fg.th*RAD),0)},\\ ${fmt(fg.Wdead*fg.x.a*Math.sin(fg.th*RAD),0)})\\ \\text{lb}{\\cdot}\\text{ft}`);
+  if(fg.armDin>0){
+    H+=step(`5 · Wind on the arm ${ref('ASCE 7-22 §29.4, Fig. 29.4-1')}`);
+    H+=`<p class="eq-why">Round arm, OD ${fmt(fg.armDin,3)} in, length a = ${fmt(fg.x.a,2)} ft, horizontal at the mount height along θ. Wind toward φ sees the projected area a·D·|sin(θ − φ)|; the force acts along the wind at the arm mid-length. C<sub>f</sub> from Fig. 29.4-1 (round; ${fg.armRow==='smooth'?'D√q<sub>z</sub> &gt; 2.5, moderately smooth':'D√q<sub>z</sub> ≤ 2.5'}), h/D = a/D.</p>`;
+    H+=g(`D\\sqrt{q_z} = ${fmt(fg.armDin/12,3)}\\sqrt{${fmt(fg.qz/(inp.Kd*inp.G),1)}} = ${fmt(fg.armDsq,2)}\\qquad h/D = \\frac{${fmt(fg.x.a,2)}}{${fmt(fg.armDin/12,3)}} = ${fmt(fg.armHD,1)}\\ \\Rightarrow\\ C_f = ${fmt(fg.cfArm,3)}`);
+    H+=g(`F_{arm} = q_zK_dG\\,C_f\\,D\\,a\\,|\\sin(\\theta-\\phi)| = ${fmt(fg.qz,2)}(${fmt(fg.cfArm,3)})(${fmt(fg.armDin/12,3)})(${fmt(fg.x.a,2)})|\\sin(\\theta-\\phi)| = ${fmt(fg.FarmMax,1)}\\,|\\sin(\\theta-\\phi)|\\ \\text{lb}\\qquad F_{arm,i} = ${fmt(fg.FarmMaxI,1)}\\,|\\sin(\\theta-\\phi)|\\ \\text{lb (iced, } D+2t_d\\text{, }V_{ice})`);
+  }
+  H+=step(`${fg.armDin>0?6:5} · Torsion about the pole axis ${ref('statics; AISC 360-16 §H3.2')}`);
+  H+=`<p class="eq-why">The fixture wind acts at the arm tip and the arm wind at mid-arm, both off the pole axis, so they twist the pole: T = Σ (r × F) in plan. The pole is checked by §H3.2 (Eq. H3-6 when T<sub>r</sub> &gt; 0.2T<sub>c</sub>), the bolts carry T/(n·R), and the shaft is checked against φT<sub>th</sub>. Opposite arms (0°/180°) cancel.</p>`;
+  H+=g(`T = \\sum_i \\left(F_{w,i}+\\tfrac12F_{arm,i}\\right)a_i\\,\\sin(\\phi-\\theta_i)`);
   return H;
 }
 
@@ -6513,6 +6572,10 @@ function applyState(st){
   signPosts = st.signPosts || 1;
   if(Array.isArray(st.cables)) cables=JSON.parse(JSON.stringify(st.cables));
   if(Array.isArray(st.fixtures)) fixtures=JSON.parse(JSON.stringify(st.fixtures));
+  // arm OD (added 2026-11-01, LP-R5): fixture rows saved before it have none → 0 (no arm wind, the old behaviour), with a notice
+  { const mn=$('armMigNote'); let miss=false;
+    fixtures.forEach(x=>{ if(x.armD===undefined){ x.armD=0; miss=true; } });
+    if(mn){ if(miss){ mn.textContent='Older save: the arm outside diameter was not an input when this project was saved; the arms are set to 0 (no wind on the arms, as before). Enter the arm OD to include the arm wind.'; mn.style.display=''; } else { mn.style.display='none'; mn.textContent=''; } } }
   renderCables();
   renderFixtures();
   applyCablesEnabled();
