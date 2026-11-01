@@ -51,3 +51,17 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 
 ## 2026-10-31 — PR: sbd-grouping-rest — no doubled "see" in step notes
 - `noteOf` (anchor `a note that already says "See §x"`): when the text before a `§id` in a step note ends in "see" (engine notes: "See §p1.Vn.", "…see §fx.Mn"), the link gets class `rp-see rp-seen`; CSS `.rp-seen::before{content:none}` drops the "see " that `.rp-see` prints in front of every cross-reference (print). Before: "See see §3.2"; after: "See §3.2". Notes that do not say "see" are unchanged ("see §3.2" from the CSS). Text output unchanged. Verified by `tests/engine/steps-groups-tabs.test.mjs`.
+
+## 2026-11-01 — PR: claude/rpt-retwall — narrow screens: the report column can shrink (no horizontal page scroll)
+- **Where:** `CSS`, the narrow-screen rule (anchor `@media (max-width:1000px){.rp-body`).
+- **Before:** `@media (max-width:1000px){.rp-body{grid-template-columns:1fr;} …}`
+- **After:** `@media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} …}`
+- **Problem:** a `1fr` grid column cannot be narrower than its widest content (a long display equation or a wide table), so at a 390 px
+  viewport the whole report (nav and document) became 830 px wide and the page scrolled sideways (found on the Retaining Wall Report tab).
+  With `minmax(0,1fr)` the column takes the screen width; wide equations and tables scroll inside their own boxes (`.rp-step .rp-m`,
+  `.rp-tw`, both `overflow-x:auto`), as on wide screens.
+- **Governing provision:** none (display only).
+- **Check case:** Retaining Wall Report tab at 390 px, AASHTO with collision: `document.documentElement.scrollWidth` 830 → 390.
+  Wide screens (> 1000 px) are unchanged (the rule does not apply). Print is unchanged (`.rp-body{display:block}` in print).
+- **How verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring`: 14 passed.
+- **Other copies:** none. Every tool with the shared Report tab gets it (Steel Bridge app, Spread Footing, Retaining Wall).
