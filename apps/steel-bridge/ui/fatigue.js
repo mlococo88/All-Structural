@@ -14,7 +14,7 @@
        of the file's stations in the zone); or
      - "This project's analysis" (fromAnalysis, below).
    The default (2026-10-30, report wiring PR): this project's analysis when the project is complete (SBDAnalysis.ready), else the
-   example; the line at the top of the tab names the source in use. The demand choice is not saved.
+   example; the line at the top of the tab names the source in use. The demand choice is saved with the project (P.demandSrc; a hand-off file is not).
 
    inputs(P, h, ui) / onClick(e, P, ui) for the input tab; render(host, ctx) for the output tab, ctx = { P, g }; build(ctx) (tests). */
 (function () {

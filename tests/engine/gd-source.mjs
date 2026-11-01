@@ -67,6 +67,9 @@ export function gdGirderSection() {
   // compute() used by the tests run once here: GirderDetail's built-in rows as is, hybrid, rebar in +Mp, n rounded.
   const def = () => JSON.parse(JSON.stringify(ctx.GM.gs.def));
   [{}, { gT: 'HPS70W', gB: 'HPS70W' }, { rebarMp: 'incl' }, { nRule: 'round' }].forEach(o => GS.compute({ ...def(), ...o }, { base: true }));
+  // checks() once with a MassDOT bridge (GS4's owner citation and GS22, tests/engine/proportions.test.mjs, 2026-11-01): the owner functions
+  // (gdOwnRules, gdOwnCite, gdOwnR, …) are added before checks() is run many times by the other tests and optimized
+  { const R = GS.compute(def(), { base: true }); ctx.P.df.bridge = { owner: 'MassDOT' }; gdRun(ctx, c => c.GM.gs.checks(R), loaded); ctx.P.df.bridge = {}; }
   return GS;
 }
 
