@@ -2963,6 +2963,12 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - tests/engine/splices.test.mjs: the auto-design parity now runs GirderDetail on the input with the same end distances (AD8 applied by
   hand) and compares every plate, bolt and check: 0 differences (built-in every owner; 136 auto-designed splices of the payloads).
   New test "AD8": end distances 2.00 (CTDOT) / 1.75 (others), DT4 passes for every owner; GirderDetail's search fails DT4 under CTDOT.
+### Auto design (CTDOT, built-in project)
+- Before: no candidate; every design "blocked" by DT4 (1.75 in < 2 in, a detail input the plates do not change).
+- After: DT4 passes in the candidates and is no longer a blocker; still no candidate: a candidate's splice fails TF3 (slip resistance,
+  Service II, negative moment, oversized holes K_h = 0.85) at 1.076 on the full check, although the same splice auto-design passes
+  every check on the built-in demands with 17 in or 18 in flanges. Open item (Auto design: the splice demands at design time vs the
+  candidate's own analysis); not changed here. tests/engine/autodesign.test.mjs (CTDOT test) updated to this outcome.
 ### CF11 (verify only)
 - Auto design's cross-frame sizing rule for the bolts per member end (CF10 / CF11; CTDOT 4 bolts) is in `engine/autodesign.js`
   (sizeDetails, ids CF1–CF11, "the current type and bolt count first, then the others"), merged in #511. Not changed here.
