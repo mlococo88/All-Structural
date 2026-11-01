@@ -354,16 +354,18 @@
     const num = it => typeof it.r === 'number' && isFinite(it.r);
     // the engine's notes name a section as "§sec.s" (a group of steps): the report links its first property, ȳ (sec.s.yb)
     const wSteps = q => window.SBDWeldsUI.stepsOf(Bw, q.k, q.i).map(t => (t.note && /§sec\.(s|c3|cn|cr)\b(?!\.\w)/.test(t.note) ? { ...t, note: t.note.replace(/§sec\.(s|c3|cn|cr)\b(?!\.\w)/g, '§sec.$1.yb') } : t));
-    // governing rows: the flange-to-web welds (FW1–FW4) and the shop transitions (TR1–TR4), the largest ratio of each
+    // governing rows (2026-11-01, display only): the strength checks first (weld metal FW1, web base metal FW2), then fatigue (FW3, TR1), then
+    // the detailing limits (minimum weld size FW4, transition slopes TR2, TR3, proportions TR4), the largest ratio of each group; every item still counts
     const gv = ids => { let b = null; C.filter(c => ids.test(c.id)).forEach(c => c.items.forEach(it => { if (num(it) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
     const bad = ids => C.filter(c => ids.test(c.id)).flatMap(c => c.items.filter(it => !num(it) && (it.st === 'fail' || it.st === 'warn')).map(it => ({ c, it })));
     const sel = new Set();
-    [[/^FW/, 'Welds: flange-to-web (FW1–FW4)'], [/^TR/, 'Welds: shop flange transitions (TR1–TR4)']].forEach(([ids, grp]) => { const q = gv(ids); if (!q) return;
+    [[/^FW[12]$/, 'Welds: strength (FW1, FW2)'], [/^(FW3|TR1)$/, 'Welds: fatigue (FW3, TR1)'], [/^(FW4|TR[234])$/, 'Welds: detailing limits (FW4, TR2–TR4)']].forEach(([ids, grp]) => { const q = gv(ids); if (!q) return;
       const L = locOf(q.it); if (L) sel.add(scOf(L));
       X.gov.push({ mod: 'Welds', grp, check: `${q.c.id} ${tt(q.c.title)}`, loc: q.it.loc, r: q.it.r, key: keyOf(q.it), ...(q.it.st === 'warn' ? { status: 'warn' } : {}) });
       bad(ids).forEach(z => X.warn.push(`Welds: ${z.c.id} ${z.it.loc}: ${STT[z.it.st] || z.it.st}.`)); });
     subs.push(sub('gov', `Governing checks, ${gName(Bw.g)}`, [note(`${fromHtml(Bw.what)} Two fillet welds per flange; DC1 and utilities on the steel, DC2 and DW on the long-term (3n), LL+IM and the fatigue shear range on the short-term (n) composite section. $\\gamma_{DC}$ ${f(R.g.dc, 3)}, $\\gamma_{DW}$ ${f(R.g.dw, 3)}, $\\gamma_{LL}$ ${f(R.g.ll, 3)}, $\\gamma_{fat}$ ${f(R.g.fat, 2)}; n = ${f(R.MR.n, 3)}. As on the [[tab:wt|Welds tab]]. ${ED}.`),
-      tbl(['Check', 'Governing location', 'Ratio', 'Status', 'Reference'], C.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
+      ...(() => { const q = gv(/^FW[12]$/); return q ? [note(`Governing strength check: ${q.c.id} ${tt(q.c.title)}, ${q.it.loc}: ratio ${f(q.it.r, 3)}. The detailing limits (minimum weld size, transitions) are listed after the strength and fatigue checks; the status counts every item.`)] : []; })(),
+      tbl(['Check', 'Governing location', 'Ratio', 'Status', 'Reference'], ['FW1', 'FW2', 'FW3', 'TR1', 'FW4', 'TR2', 'TR3', 'TR4'].map(id => C.find(c => c.id === id)).filter(Boolean).concat(C.filter(c => !/^(FW[1-4]|TR[1-4])$/.test(c.id))).map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
         return it ? [`${c.id} ${tt(c.title)}`, it.loc, num(it) ? R3(it.r, keyOf(it)) : { t: '—', key: keyOf(it) }, STT[it.st] || it.st, String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')] : [`${c.id} ${tt(c.title)}`, { t: c.naWhy || 'n/a', cls: 'na' }, '—', 'n/a', String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')]; }))]));
     subs.push(sub('fw', `Flange-to-web welds: ${R.fw.length} locations`, [tbl(['Location', 'w (in)', '$v_{u}$ top / bottom (kip/in)', '$R_{r}$ (kip/in)'], R.fw.map(r => ({ cells: [r.name, f(r.w, 4), `${f(r.vuT, 3)} / ${f(r.vuB, 3)}`, N(r.Rw, 3)], cls: sel.has(scOf({ k: 'fw', i: r.i })) ? 'gov' : '' })))]));
     if (R.tr.length) subs.push(sub('tr', `Shop flange transitions: ${R.tr.length}`, [tbl(['Transition', 'Plates (in)', 'Cat.', 'γ(Δf) (ksi)'], R.tr.map(r => ({ cells: [r.name, `${f(r.b1, 2)} × ${f(r.t1, 4)} to ${f(r.b2, 2)} × ${f(r.t2, 4)}`, r.cat, N(r.df, 2)], cls: sel.has(scOf({ k: 'tr', i: r.i })) ? 'gov' : '' })))]));

@@ -2688,3 +2688,59 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
 - Display fix found by the custom tests (`engine/studs.js`, the SC1 step `scz<i>.ok`, anchor `label: 'Fatigue pitch (SC1)'`): a pitch zone with
   no fatigue shear (V_f = 0: p_req = ∞) wrote its substitution as `24.00 \le —`, which KaTeX cannot parse. Before
   `${n2(z.preq)}`; after `${isFinite(z.preq) ? n2(z.preq) : '\\infty'}`. The value, ratio (0) and pass state are unchanged.
+
+## 2026-11-01 — PR: sbd-welds-overhang — Welds tab uses the project's load factors; strength check headlines the welds summary; Auto design minimum overhang (engineer-approved)
+### 1. Welds tab load factors (calculation input change, §4)
+- `apps/steel-bridge/ui/welds.js`, `input(P, gi, pl)`: anchor `gam: { ...Wd.gam }` (two places: the hand-off file branch `gen = { ...d.gen, Fexx: Wd.Fexx, gam: { ...Wd.gam } }`
+  and the analysis branch `const gen = { gF: m.steel.top, gW: m.steel.web, Fexx: Wd.Fexx, gam: { ...Wd.gam }, `). Before: `gam: { ...Wd.gam }` (the tab's own inputs
+  `P.welds.gam`). After: `gam: projGam(P)`, new function
+  `function projGam(P) { const G = window.SBDShear && window.SBDShear.factors ? window.SBDShear.factors() : { dc: 1.25, dw: 1.50, ll: 1.75 }, F = ((P.fatigue || {}).gam || {}).fI; return { dc: G.dc, dw: G.dw, ll: G.ll, fat: F != null && F !== '' ? +F : 1.75 }; }`
+  Strength I γ_DC 1.25, γ_DW 1.50, γ_LL 1.75 (AASHTO LRFD 10th Ed. Table 3.4.1-1, the Shear tab's `SBDShear.factors()`); Fatigue I γ from the Fatigue & studs
+  input `fatigue.gam.fI` (Table 3.4.1-1, default 1.75). The Custom (entered) demand source of #522 takes the same `projGam(P)` (its branch shares
+  the analysis branch's `gen`; merged 2026-11-01 keeping both). Owner η and m (Project tab; a file: its owner factors) are applied by engine/welds.js as before (unchanged).
+- `render()`: the four inputs `nIn('wt_dc' …) … nIn('wt_fat' …)` and their handler `['dc', 'dw', 'll', 'fat'].forEach(k => on('wt_' + k, …))` removed; replaced by
+  `gamHtml(P, file)`: the four factors read-only, links to the Flexure tab (Table 3.4.1-1 note), the Project input tab (η, m) and the Fatigue & studs input
+  (`data-goin="fs" data-gofld="fatigue.gam.fI"`, which opens that input tab and focuses the field). `oldGam(P)`: each saved `P.welds.gam` value that differs from
+  the project's factor is listed in a warning ("no longer used", with the value now used).
+- Saved data (§5): `P.welds.gam` stays in the project file unchanged (defaultWelds() still writes it; GirderDetail import still fills it); unused.
+  `engine/model.js` validate: the line `['dc', 'dw', 'll', 'fat'].forEach(k => pos((Q.gam || {})[k], `welds.gam.${k}`, `Load factor ${k}`));` removed (an unused value
+  that can no longer be edited must not block the calculation).
+- Decision (coordinator, engineer's "one source" rule): Fatigue I from the Fatigue & studs input. Follow-ups, not changed here: the Shear tab (transverse
+  stiffener welds, `gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }`) and the Flexure engine (`factors()`) hard-code Fatigue I 1.75; the Splices tab keeps its own
+  load factor inputs `splices.gam`.
+- Check case (default project, G1, Node, engine modules as tests/engine/welds.test.mjs loads them), FW1 governing at Pier 2 left, top, w = 5/16 in:
+  LL+IM term v = γ_LL V Q/I = 1.75(129.164)(2549.405)/162131.93 = 3.5543 kip/in; DC1 1.6324, DC2 0.3300, DW 0.3280 kip/in;
+  v_u = 1.6324 + 0.3300 + 0.3280 + 3.5543 = 5.8446 kip/in; R_r = 2(0.6)(0.80)(70)(0.707)(0.3125) = 14.847 kip/in; FW1 = 0.3937.
+  - Default factors: before = after, every check item identical (FW1 0.3937, FW2 0.3199, FW3 0.3927, TR1 0.4326).
+  - An old project with `welds.gam = { dc: 1.25, dw: 1.50, ll: 1.50, fat: 1.50 }`: before (the saved factors used) LL term 1.50(129.164)(2549.405)/162131.93 = 3.0465,
+    v_u = 5.3369 kip/in, FW1 0.3595, FW2 0.2921, FW3 0.3366, TR1 0.3708; after (the project's 1.75 / 1.75) FW1 0.3937, FW2 0.3199, FW3 0.3927, TR1 0.4326
+    (more conservative; the tab shows the warning "γ_LL (Strength I) 1.5 (now 1.75), γ Fatigue I 1.5 (now 1.75)").
+  - Fatigue & studs γ Fatigue I = 1.50: FW3 and TR1 × 1.50/1.75; FW1, FW2 unchanged.
+- Note (browser vs Node, not a code difference): in the page G1's FW1 is 0.3951 at Pier 1 right; in the Node test 0.3937 at Pier 2 left. Same project, same
+  LL+IM, DC2, DW; DC1 differs (100.980 vs 99.631 kip) because the page loads engine/crossframes.js and the analysis adds the cross-frame weights as point loads
+  (analysis.js `SBDCrossframes.pointLoads`); the welds Node test does not load it. Pier 1 right and Pier 2 left are a symmetric near-tie (5.86670 vs 5.86665 kip/in).
+### 2. Welds summary (display only)
+- `ui/welds.js` `results(B)`: the governing table is grouped (`SUM`): Strength (FW1, FW2), Fatigue (FW3, TR1), Detailing limits (FW4, TR2, TR3, TR4), with the
+  headline "Governing strength check: <FW1|FW2>, <location>: ratio" (`strengthGov(C)`) and a status line counting every item of every check. `defaultSel(R)`:
+  the worked steps open on the strength-governing location (before: the largest ratio of any check, often FW4 at 1.000).
+- `report/builders.js` `wd(B, X)`: anchor `[[/^FW/, 'Welds: flange-to-web (FW1–FW4)'], [/^TR/, 'Welds: shop flange transitions (TR1–TR4)']]` → three summary
+  groups `[[/^FW[12]$/, 'Welds: strength (FW1, FW2)'], [/^(FW3|TR1)$/, 'Welds: fatigue (FW3, TR1)'], [/^(FW4|TR[234])$/, 'Welds: detailing limits (FW4, TR2–TR4)']]`;
+  the governing table in the order FW1, FW2, FW3, TR1, FW4, TR2, TR3, TR4 with a strength headline note. No check, ratio or status changed.
+### 3. Auto design minimum overhang (engineer decision 2026-11-01)
+- `engine/autodesign.js`: `const OH_MIN = 2.5;` and in `settings(P)`: `s.ohMin = a.ohMin !== '' && a.ohMin != null && isFinite(+a.ohMin) && +a.ohMin >= 0 ? +a.ohMin : OH_MIN;`
+  `ohCands`: before `lo = q.mode === 'range' && q.min != null ? q.min : 1.5`; after `lo = Math.max(S.ohMin, q.mode === 'range' && q.min != null ? q.min : S.ohMin)`.
+  Lock unchanged; the Range max, the spacing limits and the owner's limits (RIDOT BDM 9.4.1.4, CTDOT BRSDM V2 9.7.1.5, `ohLimit`) still apply on top.
+- `ui/autodesign.js`: input "Minimum overhang" (`data-ad="ohMin"`, ft) next to "Overhangs". Saved as `P.autodesign.ohMin` (new optional field; absent = 2.5 ft).
+  An old project's Auto design result can change where an overhang below 2.5 ft was chosen.
+- Governing provision: practice / owner limits, not an AASHTO article (the old 1.5 ft was Preliminary sizing's ws.ohMin).
+- Check case (Auto design study, Node, scratch script; builtin_AASHTO of tests/engine/ad-fixture.mjs, the match-legacy settings of
+  autodesign-parity.mjs but the overhang Auto (the SB2-AD12 study run); N_b = 5, W_deck = 3.25 + 4(9.5) + 3.25 = 44.50 ft):
+  - Before (origin/main): overhangs tried 1.5, 2.0, 2.5, 3.0, 3.5 ft; chosen 1.5 ft (S = (44.50 − 2(1.5))/4 = 10.375 ft); best candidate 398,740 lb (all girders),
+    D = 57 in, governing ratio 1.000 (stiffeners TS7 minimum fillet weld size). Same as the earlier study.
+  - After: overhangs tried 2.5, 3.0, 3.5 ft; chosen 2.5 ft (S = (44.50 − 2(2.5))/4 = 9.875 ft); best candidate 419,822 lb, D = 62 in, governing ratio 1.000
+    (stiffeners TS2 projecting width b_f/4). +21,082 lb (+5.3 %) for the 2.5 ft minimum.
+  - Hand check of the candidate list: seq(max(2.5, —), min(4.0, …), 0.5) = 2.5, 3.0, 3.5 (4.0 out: S = 9.125 ft, 0.40S = 3.65 ft < 4.0 ft).
+### How verified
+- See the PR (tests, Playwright at 1280 and 390 px).
+### Other copies
+- None.

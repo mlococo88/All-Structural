@@ -398,4 +398,8 @@ test('Welds hand check: one row at a pier serves both sides', () => {
   const st = W.SBDWeldsUI.stepsOf(F, 'fw', F.R.fw[0].i), vt = st.find(t => /\.vt$/.test(t.id)); assert.ok(vt, 'top shear flow step');
   assert.ok(Math.abs(vt.value - 1.25 * 95 * 909.99 / 69424) < 2e-4, `${vt.value}`);
   console.log(`       ${F.R.fw.length} locations; top shear flow ${vt.sub} = ${vt.value.toFixed(3)} kip/in`);
+  // the project's load factors on the Custom source too (sbd-welds-overhang, 2026-11-01): a saved P.welds.gam is not used; Fatigue I from fatigue.gam.fI
+  const Q = J(P); Q.welds.gam = { dc: 1.25, dw: 1.50, ll: 1.50, fat: 1.50 }; const FQ = W.SBDWeldsUI.build({ P: Q, g: 0, src: 'custom' });
+  assert.equal(JSON.stringify(FQ.R.g), JSON.stringify({ dc: 1.25, dw: 1.5, ll: 1.75, fat: 1.75 })); assert.equal(JSON.stringify(FQ.C.map(c => c.items.map(it => it.r))), JSON.stringify(F.C.map(c => c.items.map(it => it.r))));
+  const Qf = J(P); Qf.fatigue.gam.fI = 1.5; assert.equal(W.SBDWeldsUI.build({ P: Qf, g: 0, src: 'custom' }).R.g.fat, 1.5);
 });

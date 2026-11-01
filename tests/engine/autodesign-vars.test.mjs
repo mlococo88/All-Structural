@@ -136,7 +136,16 @@ test('Overhang variable: the deck width closes, b_eff, LLDF, dead loads and the 
   assert.ok(gx(Q, 'gM') !== gx(P, 'gM'), 'exterior g_M changes with the overhang'); assert.ok(dl(Q).DC1wet !== dl(P).DC1wet, 'exterior DC1 changes');
   // limits (AASHTO: Preliminary sizing's G6, min(0.40S, 4.0 ft)): oh = 3.5: S = 9.375, 0.40S = 3.75 ≥ 3.5 in; oh = 4.0: S = 9.125, 0.40S = 3.65 < 4.0 out
   near(AD.ohLimit(P, S, 9.375, 6).hi, 3.75, 1e-12, 'AASHTO limit');
-  assert.equal(JSON.stringify(AD.ohCands(P, S, L0, 5).map(o => o.L)), '[1.5,2,2.5,3,3.5]');
+  // from the minimum overhang (Auto design inputs; default 2.5 ft, engineer decision 2026-11-01; was 1.5 ft): 2.5, 3.0, 3.5 (4.0 out, above)
+  assert.equal(S.ohMin, 2.5); assert.equal(JSON.stringify(AD.ohCands(P, S, L0, 5).map(o => o.L)), '[2.5,3,3.5]');
+  // entered 1.5 ft: the old candidates 1.5 … 3.5; a Range never goes below the minimum (min 1.0 → 2.5) but a Range min above it is kept (3.0);
+  // a Range is not held to the AASHTO practice limit (not a shall), so its max 4.0 ft is tried
+  const P15 = J(P); P15.autodesign.ohMin = '1.5'; assert.equal(JSON.stringify(AD.ohCands(P15, AD.settings(P15), L0, 5).map(o => o.L)), '[1.5,2,2.5,3,3.5]');
+  const Prg = J(P); Prg.autodesign.vars = { oh: { mode: 'range', min: '1', max: '4' } }; assert.equal(JSON.stringify(AD.ohCands(Prg, AD.settings(Prg), L0, 5).map(o => o.L)), '[2.5,3,3.5,4]');
+  Prg.autodesign.vars.oh.min = '3'; assert.equal(JSON.stringify(AD.ohCands(Prg, AD.settings(Prg), L0, 5).map(o => o.L)), '[3,3.5,4]');
+  // an old project (no ohMin) and a blank or bad entry: 2.5 ft; Lock: none tried
+  [undefined, '', 'x', -1].forEach(v => { const Q2 = J(P); if (v !== undefined) Q2.autodesign.ohMin = v; assert.equal(AD.settings(Q2).ohMin, 2.5, String(v)); });
+  const Plk = J(P); Plk.autodesign.vars = { oh: { mode: 'lock' } }; assert.equal(AD.ohCands(Plk, AD.settings(Plk), L0, 5), null);
   // RIDOT 9.4.1.4: min(d, S/2, 4 ft; 3 ft if d < 5 ft): d = 4.9 ft → 3 ft; d = 6 ft, S = 9.375 → min(6, 4.6875, 4) = 4 ft
   const R = J(P); R.ownerRules.owner = 'RIDOT'; const SR = AD.settings(R);
   near(AD.ohLimit(R, SR, 9.375, 4.9).hi, 3, 1e-12, 'RIDOT d < 5 ft'); near(AD.ohLimit(R, SR, 9.375, 6).hi, 4, 1e-12, 'RIDOT'); assert.ok(AD.ohLimit(R, SR, 9.375, 6).shall);

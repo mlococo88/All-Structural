@@ -19,7 +19,8 @@ import { gdBlock, gdDecl } from './gd-source.mjs';
 const ENG = f => path.join(ROOT, 'apps/steel-bridge/engine', f);
 const W = loadShared('units.js', 'steps.js', ENG('sections.js'), ENG('shear.js'), ENG('welds.js'));
 const WT = W.SBDWelds;
-const clone = o => JSON.parse(JSON.stringify(o));
+const clone = o => JSON.parse(JSON.stringify(o)), J = clone;
+const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
 
 /* ---------- GirderDetail in Node ---------- */
 const TAG = '\n// welds.test.mjs';
@@ -160,4 +161,28 @@ test('Welds tab (ui/welds.js build): the default project, every girder, from thi
     console.log(`       ${g.label}: FW1 ${B.gov.FW1.loc} ${B.gov.FW1.r.toFixed(4)}; FW2 ${B.gov.FW2.r.toFixed(4)}; FW3 ${B.gov.FW3.loc} ${B.gov.FW3.r.toFixed(4)}; TR1 ${B.gov.TR1.loc} ${B.gov.TR1.r.toFixed(4)}`);
     B.C.forEach(c => c.items.forEach(it => assert.ok(!Number.isNaN(it.r), `${c.id} ${it.loc}`))); });
   const p2 = JSON.parse(JSON.stringify(P)); p2.deck.composite = false; assert.ok(U.SBDWeldsUI.build({ P: p2, g: 0 }).err);
+});
+
+test('Welds tab load factors (2026-11-01): the project\'s, not P.welds.gam (kept, unused, reported); the strength check headlines the summary', () => {
+  const E = f => path.join(ROOT, 'apps/steel-bridge', f);
+  const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', E('engine/model.js'), E('engine/sections.js'), E('engine/flexure.js'), E('engine/owners.js'), 'lldf.js', E('engine/lldf.js'), E('engine/loads.js'),
+    E('engine/shear.js'), E('engine/stiffeners.js'), E('engine/framing.js'), E('engine/analysis.js'), E('engine/welds.js'), E('ui/welds.js'));
+  const UI = U.SBDWeldsUI, P = U.SBDModel.defaultProject(), B0 = UI.build({ P, g: 0 });
+  // the defaults: γ_DC 1.25, γ_DW 1.50, γ_LL 1.75 (Table 3.4.1-1), Fatigue I 1.75 (the Fatigue & studs input), the same as the old defaults of P.welds.gam
+  assert.equal(JSON.stringify(UI.projGam(P)), '{"dc":1.25,"dw":1.5,"ll":1.75,"fat":1.75}'); assert.equal(JSON.stringify(B0.R.g), JSON.stringify(UI.projGam(P))); assert.equal(UI.oldGam(P).length, 0);
+  // an old project with γ_LL 1.50 and Fatigue I 1.50 saved on this tab: the results are the default project's; the values stay in the file and are reported
+  const Q = J(P); Q.welds.gam = { dc: 1.25, dw: 1.50, ll: 1.50, fat: 1.50 }; const BQ = UI.build({ P: Q, g: 0 });
+  assert.equal(JSON.stringify(BQ.C.map(c => c.items.map(it => it.r))), JSON.stringify(B0.C.map(c => c.items.map(it => it.r))));
+  assert.equal(JSON.stringify(Q.welds.gam), '{"dc":1.25,"dw":1.5,"ll":1.5,"fat":1.5}'); assert.equal(U.SBDModel.validate(Q).errors.length, 0);
+  assert.equal(JSON.stringify(UI.oldGam(Q).map(o => [o.k, o.was, o.now])), '[["ll",1.5,1.75],["fat",1.5,1.75]]');
+  // hand check, G1 Pier 2 left, top (FW1 governing): v_u = Σ γ V Q/I; the LL+IM term 1.75(129.164)(2549.405)/162131.93 = 3.5543 kip/in (with the old
+  // γ_LL 1.50: 3.0465); v_u = 1.6324 + 0.3300 + 0.3280 + 3.5543 = 5.8446 kip/in; R_r = 14.847 kip/in; FW1 = 5.8446/14.847 = 0.3937 (was 0.3595)
+  const r = B0.R.fw.find(q => B0.gov.FW1.loc === `${q.name}, top`), t = r.terms.find(q => q.n === 'LL+IM');
+  near(t.vt, 1.75 * t.V * t.Qt / t.I, 1e-12, 'LL term'); near(t.vt, 3.5543, 1e-4, 'LL term value'); near(r.vuT, 5.8446, 1e-4, 'v_u'); near(B0.gov.FW1.r, 0.3937, 1e-4, 'FW1');
+  // the Fatigue I factor follows the Fatigue & studs input: 1.50 → FW3 and TR1 × 1.50/1.75
+  const F = J(P); F.fatigue.gam.fI = 1.5; const BF = UI.build({ P: F, g: 0 }); near(BF.gov.FW3.r, B0.gov.FW3.r * 1.5 / 1.75, 1e-12, 'FW3'); near(BF.gov.TR1.r, B0.gov.TR1.r * 1.5 / 1.75, 1e-12, 'TR1');
+  assert.equal(BF.gov.FW1.r, B0.gov.FW1.r);
+  // the summary: the strength check (FW1 / FW2) headlines, not FW4 at 1.000 (the minimum weld size)
+  assert.equal(B0.gov.FW4.r, 1); const sg = UI.strengthGov(B0.C); assert.equal(sg.c.id, 'FW1'); assert.equal(sg.it, B0.gov.FW1);
+  assert.equal(JSON.stringify(UI.SUM.flatMap(q => q[2]).sort()), JSON.stringify(B0.C.map(c => c.id).sort()), 'every check is in a summary group');
 });

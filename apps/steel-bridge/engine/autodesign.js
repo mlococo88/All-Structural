@@ -41,6 +41,7 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   const up = (x, inc) => Math.ceil(x / inc - 1e-9) * inc, r4 = v => +(+v).toFixed(4);
   const OKST = ['pass', 'na', 'adv', 'warn'];
+  const OH_MIN = 2.5;   // the default minimum overhang, ft (engineer decision 2026-11-01; was 1.5 ft, Preliminary sizing ws.ohMin)
 
   /* ---------- settings (saved in the project as P.autodesign; absent = these defaults) ---------- */
   const DEF = {
@@ -71,6 +72,8 @@
     s.owner = owner; s.cite = cite; s.topN = Math.max(1, Math.round(+s.topN || 8));
     if (!['new', 'refine', 'check'].includes(s.mode)) s.mode = 'new'; if (!['weight', 'depth', 'cost'].includes(s.objective)) s.objective = 'weight';
     s.V = varsOf(P, s); s.ohSym = a.ohSym === 'asym' ? 'asym' : 'sym';   // overhangs: symmetric (default) or left and right sized apart
+    // the minimum overhang (ft) Auto and Range may choose (added 2026-11-01, engineer decision: default 2.5 ft; absent or not a number ≥ 0 = 2.5 ft)
+    s.ohMin = a.ohMin !== '' && a.ohMin != null && isFinite(+a.ohMin) && +a.ohMin >= 0 ? +a.ohMin : OH_MIN;
     return s;
   }
 
@@ -86,7 +89,7 @@
   const VARS = [
     { id: 'nb', grp: 'Girders and web', label: 'Girder count N_b', unit: '', int: true, only: ['auto', 'lock', 'range'], note: 'Auto (New design): the current count ± 1 within the spacing limits (or the counts listed); equal spacing over the same out-to-out girder width' },
     { id: 'oh', grp: 'Girders and web', label: 'Deck overhang (exterior girder ℄ to deck edge)', unit: 'ft', step: true, only: ['auto', 'lock', 'range'],
-      lockIf: P => !(P.girders || []).some(g => g.position === 'exterior') ? 'no exterior girder among the plate girders, so no check would see the overhang: Lock only (add the fascia girder on the Girders tab)' : !((P.xs || {}).bays || []).length ? 'no cross-section: Lock only' : '', note: 'with N_b and the spacing S closing to the same out-to-out deck width; symmetric unless set otherwise (left and right); Auto: 1.5 ft to min(0.40S, 4.0 ft) on 0.5 ft (Preliminary sizing ws.ohMin and its G6 practice limit), the owner\'s limit in its place (RIDOT 9.4.1.4: min(d, S/2, 4 ft; 3 ft if d < 5 ft); CTDOT V2 9.7.1.5: min(4 ft, d)), the owner\'s shall-limit also in a Range; the overhang whose screen of the starting design has the lowest governing ratio' },
+      lockIf: P => !(P.girders || []).some(g => g.position === 'exterior') ? 'no exterior girder among the plate girders, so no check would see the overhang: Lock only (add the fascia girder on the Girders tab)' : !((P.xs || {}).bays || []).length ? 'no cross-section: Lock only' : '', note: 'with N_b and the spacing S closing to the same out-to-out deck width; symmetric unless set otherwise (left and right); Auto: the minimum overhang (Auto design inputs, default 2.5 ft) to min(0.40S, 4.0 ft) on 0.5 ft (its G6 practice limit), the owner\'s limit in its place (RIDOT 9.4.1.4: min(d, S/2, 4 ft; 3 ft if d < 5 ft); CTDOT V2 9.7.1.5: min(4 ft, d)), the owner\'s shall-limit also in a Range; the overhang whose screen of the starting design has the lowest governing ratio' },
     { id: 'D', grp: 'Girders and web', label: 'Web depth D', unit: 'in', step: true, only: ['auto', 'lock', 'range'], note: 'Auto: L/36 to L/18 (or the depth limits entered), the minimum depth of Table 2.5.2.6.3-1 when applied; Range: min, max and step' },
     { id: 'tw', grp: 'Girders and web', label: 'Web thickness t_w', unit: 'in', piece: true, only: ['auto', 'lock', 'range'], note: 'per field piece; Auto: at least D/150 (6.10.2.1.1) and the owner minimum' },
     { id: 'bt', grp: 'Flanges', label: 'Top flange width b_t', unit: 'in', piece: true, only: ['auto', 'lock', 'range'], note: 'per field piece (constant in a piece)' },
@@ -636,12 +639,13 @@
     return { hi: Math.min(0.40 * Sp, 4.0), shall: false, cite: 'Preliminary sizing G6 practice limit, 0.40S and 4.0 ft' };
   }
   /* ohCands(P, S, L, nb): the overhang pairs { L, R } to try for nb girders and layout L (its depth), or null (locked / no cross-section).
+     From the minimum overhang S.ohMin (Auto design inputs, default 2.5 ft; a Range's min below it is raised to it, 2026-11-01) up.
      Symmetric: oh_L = oh_R. Asymmetric: each side on its own, the right one only when a plate girder of the project stands on the right fascia
      line (else it stays as it is: no girder would check it). Every pair keeps the spacing within the limits (S.lim.sLo … sHi). */
   function ohCands(P, S, L, nb) {
     const q = S.V.oh, xs = P.xs; if (!q || q.mode === 'lock' || !xs || !(xs.bays || []).length) return null;
     const Wd = +xs.ohL + xs.bays.reduce((a, v) => a + +v, 0) + +xs.ohR, segs = segmentsOf(L), d = (L.D + Math.min(...segs.map(z => z.topT + z.botT))) / 12;
-    const st = q.step > 0 ? q.step : 0.5, lo = q.mode === 'range' && q.min != null ? q.min : 1.5, hiA = q.mode === 'range' && q.max != null ? q.max : 4.0, vals = seq(lo, hiA, st);
+    const st = q.step > 0 ? q.step : 0.5, lo = Math.max(S.ohMin, q.mode === 'range' && q.min != null ? q.min : S.ohMin), hiA = q.mode === 'range' && q.max != null ? q.max : 4.0, vals = seq(lo, hiA, st);
     const rightOn = (P.girders || []).some(g => g.line === nb - 1 && nb > 1), pairs = [];
     const ok = (a, b) => { const Sp = (Wd - a - b) / (nb - 1); if (!(Sp >= S.lim.sLo - 1e-9 && Sp <= S.lim.sHi + 1e-9)) return false;
       const lm = ohLimit(P, S, Sp, d); if (q.mode === 'range' && !lm.shall) return true; return Math.max(a, S.ohSym === 'asym' && !rightOn ? a : b) <= lm.hi + 1e-9; };
