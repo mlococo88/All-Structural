@@ -3490,3 +3490,15 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - `agg_tight` (d_agg = 1.5 in): only `pedDes[0..1].clrMin` 1.5 → 2.0 and `pedDes[1].barFitOK` true → false (the flip shown above) change.
   - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid.
   - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+
+## 2026-11-01 — PR: claude/sf-report-tablinks — Report tab links keep the tab name in print (SFTL; display only) (PR link added after merge)
+
+### SFTL. `[[tab:x|Name]]` → `Name tab[[tab:x| ↗]]` in the Report notes   [display only]
+- **Problem (coordinator, 2026-11-01):** the shared viewer prints a `[[tab:x|text]]` link as its text only in the app. In print the link (and with it the tab name) is dropped. The other tools adopted `Name[[tab:x| ↗]]`, which keeps the name as plain text.
+- **Where:** `buildReportDoc` notes (anchor `[[tab:`). 11 links:
+  - the §1 note listing the result tabs (Schematic, Load Combinations, Bearing, Stability, Footing Design, Pedestal Design);
+  - "Set on the Reinforcement input tab";
+  - three "Footing Design tab" notes;
+  - "Pedestal Design tab".
+- **Before / after (example):** `on the [[tab:peddes|Pedestal Design tab]]` → `on the Pedestal Design tab[[tab:peddes| ↗]]`.
+- **How verified:** report on 12 projects (0 unresolved references, 0 KaTeX errors); `R` and `P2` unchanged; the report text keeps the tab names; `node tests/check-syntax.mjs` passes.
