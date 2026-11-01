@@ -255,7 +255,7 @@
     const G = FX_.factors(), Mup = stations.map(s => FX_.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: s.M_LLpos, LLn: s.M_LLneg, UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
     const regions = []; R.spans.forEach((L, k) => { const x0 = R.sup[k]; let xm = x0 + L / 2, mx = -Infinity; stations.forEach((s, i) => { if (s.x > x0 && s.x < x0 + L && Mup[i] > mx) { mx = Mup[i]; xm = s.x; } });
       [[x0, k], [x0 + L, k + 1]].forEach(([xs0, ks]) => regions.push({ name: `${supN(ks)} to max. positive, Span ${k + 1}`, kind: ks > 0 && ks < ns && R.cont ? 'pier' : 'end', x1: r2(Math.min(xs0, xm)), x2: r2(Math.max(xs0, xm)) })); });
-    pl.girderDetail.details.studs = { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: Q.gamFat, QnEntered: false } };
+    pl.girderDetail.details.studs = { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: (v => v > 0 ? v : 1.75)(+((P.fatigue || {}).gam || {}).fI), QnEntered: false } };   // SCGAM (2026-11-01): was gamI: Q.gamFat
     pl.girderDetail.details.fatigue = { ADTT: P.fatigue.ADTT, p: P.fatigue.p, life: P.fatigue.life, limit: P.fatigue.limit };
     return pl;
   }

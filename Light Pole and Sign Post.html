@@ -538,7 +538,11 @@
     <section class="card" id="iceCard">
       <div class="card-h"><span class="num">5</span><h2>Ice &amp; wind-on-ice</h2><span class="hint">ASCE 7 Ch.10</span></div>
       <div class="card-body">
-        <div class="row"><label>Radial ice thickness, t</label><div class="ctl"><input id="tIce" type="number" value="0.5" step="0.25"><span class="unit">in</span></div></div>
+        <div class="row"><label>Radial ice thickness, t<span class="note">nominal ice thickness from the ASCE 7-22 ice map (Ch. 10) for the structure's Risk Category</span></label><div class="ctl"><input id="tIce" type="number" value="0.5" step="0.25"><span class="unit">in</span></div></div>
+        <div class="row"><label>Ice thickness basis<span class="note">map value: t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> per height (ASCE 7-22 §10.4.6); uniform: t used at every height as entered</span></label><div class="ctl"><select id="iceBasis" class="combo-sel"><option value="map" selected>Map value t → t_d(z) (ASCE 7-22 Ch. 10)</option><option value="design">Uniform design t_d (as entered)</option></select></div></div>
+        <div class="row" id="rowIceIi"><label>Ice importance factor, I<sub>i</sub><span class="note">1.0 when t is read from the ASCE 7-22 map for the structure's Risk Category (the maps include the risk level)</span></label><div class="ctl"><input id="iceIi" type="number" value="1.0" step="0.05"><span class="unit">—</span></div></div>
+        <p class="tbl-note" id="iceNote" style="margin:-4px 0 8px 0"></p>
+        <p class="tbl-note" id="iceMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row"><label>Ice density</label><div class="ctl"><input id="iceDen" type="number" value="56" step="1"><span class="unit">pcf</span></div></div>
         <div class="row"><label>Wind-on-ice speed, V<sub>ice</sub><span class="note">concurrent gust, ASCE 7 ice-wind map</span></label><div class="ctl"><input id="Vice" type="number" value="50" step="1"><span class="unit">mph</span></div></div>
         <div class="row"><label>Cable drag coeff., C<sub>f,cable</sub><span class="note">~1.1 round cylinder</span></label><div class="ctl"><input id="cfCable" type="number" value="1.1" step="0.05"><span class="unit">—</span></div></div>
@@ -773,12 +777,14 @@
               <option value="L2">1.2D + 1.0Di + 1.0Wi</option>
               <option value="L3">1.2D + 1.0Di</option>
               <option value="L4">0.9D + 1.0W</option>
+              <option value="L5">0.9D + 1.0Di + 1.0Wi</option>
             </optgroup>
             <optgroup label="ASD (service)">
               <option value="A1" selected>D + 0.6W</option>
               <option value="A2">D + 0.7Di + 0.7Wi</option>
               <option value="A3">D + 0.7Di</option>
               <option value="A4">0.6D + 0.6W</option>
+              <option value="A5">0.6D + 0.7Di + 0.7Wi</option>
             </optgroup>
           </select>
           <span class="pill" id="comboFam" style="background:var(--steel-soft);color:var(--steel)">—</span>
@@ -808,7 +814,7 @@
 
     <!-- 5b. LOAD COMBINATIONS MATRIX -->
     <section class="card poleOnly" data-tab="loading">
-      <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all eight ASCE 7 combinations</span></div>
+      <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all ten ASCE 7 combinations</span></div>
       <div class="card-body">
         <p class="tbl-note">Every ASCE 7 combination is evaluated at its own worst wind direction. The embedment (a service check against presumptive soil bearing) is driven by the worst <b>ASD</b> row; the reinforced-concrete shaft (a strength check) by the worst <b>LRFD</b> row. Governing rows are highlighted.</p>
         <table class="tbl" id="comboMatrixTbl"></table>
@@ -1132,6 +1138,8 @@ function applyMode(){
   markDirty(); calc();
 }
 // pole/post C_f rows (added 2026-11-01): surface row for a round section, value row for Manual
+function lppApplyIceUI(){ const r=$('rowIceIi'); if(r) r.style.display=($('iceBasis')&&$('iceBasis').value==='map')?'':'none'; }
+if($('iceBasis')) $('iceBasis').addEventListener('change',()=>{ lppApplyIceUI(); const mn=$('iceMigNote'); if(mn) mn.style.display='none'; });
 function lppApplyCfUI(){
   const man=$('cfPoleMode')&&$('cfPoleMode').value==='manual', rnd=!$('poleShape')||$('poleShape').value==='round';
   const r1=$('rowCfPoleSurf'), r2=$('rowCfPoleMan');
@@ -1140,7 +1148,7 @@ function lppApplyCfUI(){
 }
 if($('cfPoleMode')) $('cfPoleMode').addEventListener('change',()=>{ lppApplyCfUI(); const mn=$('cfMigNote'); if(mn) mn.style.display='none'; });
 function applyShapeUI(){
-  lppApplyCfUI();
+  lppApplyCfUI(); lppApplyIceUI();
   const shape=$('poleShape')?$('poleShape').value:'round';
   const round=shape==='round', rect=shape==='rect';
   // Only a round light pole tapers (distinct top vs base). Square/rect HSS are prismatic —
@@ -1369,6 +1377,34 @@ function cfPoleWorkedHTML(inp){
   return H;
 }
 
+// ---- ice design thickness by height, ASCE 7-22 §10.4.6 (added 2026-11-01, LP-R8; engineer decision) ----
+// The entered t is the nominal (map) thickness: t_d(z) = t·f_z·(K_zt)^0.35·I_i, f_z = (z/33)^0.10 for 0 < z ≤ 900 ft
+// (Eq. 10.4-4/10.4-5). Basis "design" (saves made before 2026-11-01): t_d = t at every height (the old behaviour).
+// Used for the mast (per strip) and the fixtures (at their mount height). The cables keep the entered t (engineer,
+// 2026-11-01: no change to anything cable-related).
+function iceTd(inp, z){
+  if(inp.iceBasis!=='map') return inp.tIce;
+  const fz=Math.pow(Math.min(Math.max(z,0),900)/33,0.10);
+  return inp.tIce*fz*Math.pow(inp.Kzt,0.35)*(inp.iceIi>0?inp.iceIi:1.0);
+}
+function iceFz(z){ return Math.pow(Math.min(Math.max(z,0),900)/33,0.10); }
+// Worked step (tab and report): the design ice thickness by height
+function iceWorkedHTML(inp, pw, fxs){
+  const g=t=>`\\[${t}\\]`;
+  let H=`<div class="step-label">Design ice thickness t<sub>d</sub>(z) <span class="eq-ref">[ASCE 7-22 §10.4.6, Eq. 10.4-4, 10.4-5]</span></div>`;
+  if(inp.iceBasis!=='map'){
+    H+=`<p class="eq-why">Basis: uniform design thickness (as entered): t<sub>d</sub> = t = ${fmt(inp.tIce,3)} in at every height (mast and fixtures). Cables always use the entered t.</p>`;
+    return H;
+  }
+  const kz=Math.pow(inp.Kzt,0.35), Ii=inp.iceIi>0?inp.iceIi:1.0;
+  H+=`<p class="eq-why">The entered t = ${fmt(inp.tIce,3)} in is the nominal (map) ice thickness. It is increased with height by f<sub>z</sub> and for topography by K<sub>zt</sub><sup>0.35</sup>, times the ice importance factor I<sub>i</sub>. The mast uses t<sub>d</sub> at each of its ${pw.NSTRIP} strips (ice weight and the iced width for wind-on-ice); each fixture uses t<sub>d</sub> at its mount height. The cables keep the entered t (cable features unchanged, engineer 2026-11-01).</p>`;
+  H+=g(`t_d(z) = t\\,f_z\\,K_{zt}^{0.35}\\,I_i,\\qquad f_z = \\left(\\frac{z}{33}\\right)^{0.10}`);
+  H+=g(`t_d(H{=}${fmt(inp.H,1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(inp.H),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,inp.H),3)}\\ \\text{in}\\qquad t_d(H/2) = ${fmt(inp.tIce,3)}(${fmt(iceFz(inp.H/2),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,inp.H/2),3)}\\ \\text{in}`);
+  (fxs||[]).forEach((fc,i)=>{ H+=g(`\\text{Fixture ${i+1}: } t_d(${fmt(fc.hf,1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(fc.hf),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(fc.td,3)}\\ \\text{in}`); });
+  H+=g(`W_{ice,mast} = \\sum_i \\frac{\\pi\\left[(D_i/2+t_{d,i})^2-(D_i/2)^2\\right]}{144}\\,\\gamma_{ice}\\,\\Delta z = ${fmt(pw.WiceMast,1)}\\ \\text{lb}`);
+  return H;
+}
+
 // pole direct wind (regular wind, with gust). avg diameter = (top+base)/2
 // Fixture wind is now handled separately by fixtureComponents(); this covers the mast only.
 function poleWindNominal(inp){
@@ -1392,14 +1428,21 @@ function poleWindNominal(inp){
     const w_in=inp.poleDiaTop+(inp.poleDiaBase-inp.poleDiaTop)*(inp.H-z)/inp.H;   // in, local width
     const Kzs=Kz(z,inp.expo);
     const F =0.00256*Kzs*inp.Kzt*inp.Kd*inp.V*inp.V*inp.G*inp.cfPole*(w_in/12)*dzs;               // lb
-    const FI=0.00256*Kzs*inp.Kzt*inp.Kd*inp.Vice*inp.Vice*inp.G*inp.cfPole*((w_in+2*inp.tIce)/12)*dzs; // lb
-    strips.push({z,F,FI});
+    const td=iceTd(inp,z);                                                                         // in, design ice at z
+    const FI=0.00256*Kzs*inp.Kzt*inp.Kd*inp.Vice*inp.Vice*inp.G*inp.cfPole*((w_in+2*td)/12)*dzs; // lb
+    const Wi=iceWeight(td, w_in, inp.iceDen)*dzs;                                                  // lb, ice on the strip
+    strips.push({z,F,FI,td,Wi});
     Fpole+=F; Mpole+=F*z; FpoleI+=FI; MpoleI+=FI*z;
   }
-  const wIceMast=iceWeight(inp.tIce, Davg_in, inp.iceDen);
-  const WiceMast=wIceMast*inp.H;
+  // mast ice weight: basis 'design' keeps the former mean-diameter form (identical results for old saves); basis 'map'
+  // sums the strips (t_d varies with height)
+  const iceMap=inp.iceBasis==='map';
+  const WiceMast=iceMap ? strips.reduce((a,st)=>a+st.Wi,0) : iceWeight(inp.tIce, Davg_in, inp.iceDen)*inp.H;
+  const wIceMast=WiceMast/inp.H;
+  // ice weight above height z (lb)
+  const iceAbove=z=> iceMap ? strips.reduce((a,st)=>a+(st.z>z?st.Wi:0),0) : wIceMast*(inp.H-z);
   return {Wpole:Fpole, Mpole, Fpole, FpoleI, MpoleI, strips, NSTRIP, zF:Fpole>0?Mpole/Fpole:inp.H/2,
-          WiceMast, wIceMast, Apole, ApoleI, Davg, Davg_in, qzTop, qzMid, qzMidI, KzTop, KzMid};
+          WiceMast, wIceMast, iceAbove, tdTop:iceTd(inp,inp.H), Apole, ApoleI, Davg, Davg_in, qzTop, qzMid, qzMidI, KzTop, KzMid};
 }
 
 // ================= ASCE 7-22 Ch.29 SOLID SIGN WIND (Fig 29.3-1) =================
@@ -1560,11 +1603,12 @@ function fixtureComponents(x,inp){
   // iced fixture presents a slightly larger area: grow EPA by a perimeter-based ice band.
   // Approximate the fixture as a square face of side √EPA; radial ice t adds 2t to each side.
   const side = Math.sqrt(Math.max(x.epa,0));                      // ft
-  const tft  = inp.tIce/12;                                       // ft
+  const td   = iceTd(inp, x.hf);                                  // in, design ice at the mount height (2026-11-01)
+  const tft  = td/12;                                             // ft
   const epaI = side>0 ? Math.pow(side+2*tft,2) : 0;               // ft^2, iced EPA
   const Fwi = qzi*epaI*inp.cfLum;                                 // lb, iced fixture
   const volIce = x.aIce * x.tIce;                                 // ft^3 of ice envelope
-  const Wice = inp.iceDen * (inp.tIce/12) * x.aIce;               // lb — see note below
+  const Wice = inp.iceDen * tft * x.aIce;                         // lb — see note below
   // NOTE on ice weight: the accreted ice volume is the catch AREA times the radial ice
   // THICKNESS (a skin of ice on the exposed face), and the catch DEPTH extends that skin
   // around the body. Total exposed surface ≈ 2·A_ice + perimeter·depth; conservatively we
@@ -1573,7 +1617,7 @@ function fixtureComponents(x,inp){
   const WiceFull = inp.iceDen * tft * surf;                       // lb
   const th=x.th*RAD;
   const ex=x.a*Math.cos(th), ey=x.a*Math.sin(th);                 // plan eccentricity (ft)
-  return {x, Kzf, qz, qzi, Fw, Fwi, epaI, side,
+  return {x, Kzf, qz, qzi, Fw, Fwi, epaI, side, td,
           Wdead:x.W, Wice:WiceFull, volIce, surf,
           ex, ey, hf:x.hf, th:x.th};
 }
@@ -1912,10 +1956,13 @@ const COMBOS={
   L2:{name:'1.2D + 1.0Di + 1.0Wi',fam:'LRFD',D:1.2,W:0,Di:1.0,Wi:1.0},
   L3:{name:'1.2D + 1.0Di',fam:'LRFD',D:1.2,W:0,Di:1.0,Wi:0},
   L4:{name:'0.9D + 1.0W',fam:'LRFD',D:0.9,W:1.0,Di:0,Wi:0},
+  // 2026-11-01 (LP-R9): the low-dead-load atmospheric-ice combinations, ASCE 7-22 §2.3.4 (LRFD) / §2.4.3 (ASD)
+  L5:{name:'0.9D + 1.0Di + 1.0Wi',fam:'LRFD',D:0.9,W:0,Di:1.0,Wi:1.0},
   A1:{name:'D + 0.6W',fam:'ASD',D:1.0,W:0.6,Di:0,Wi:0},
   A2:{name:'D + 0.7Di + 0.7Wi',fam:'ASD',D:1.0,W:0,Di:0.7,Wi:0.7},
   A3:{name:'D + 0.7Di',fam:'ASD',D:1.0,W:0,Di:0.7,Wi:0},
   A4:{name:'0.6D + 0.6W',fam:'ASD',D:0.6,W:0.6,Di:0,Wi:0},
+  A5:{name:'0.6D + 0.7Di + 0.7Wi',fam:'ASD',D:0.6,W:0,Di:0.7,Wi:0.7},
 };
 const COMBO_KEYS=Object.keys(COMBOS);
 
@@ -2261,7 +2308,7 @@ manPart("p2","2. Input Reference",[
 
 {h:"2.6 Ice (light pole only)"},
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
- ["Radial ice thickness, t","in","Ice weight on cable, mast and fixtures; iced projected widths","From ASCE 7-22 Fig. 10.4-2 for the site, adjusted for height. Zero disables all ice cases."],
+ ["Radial ice thickness, t","in","Ice weight on cable, mast and fixtures; iced projected widths","Nominal thickness from the ASCE 7-22 ice map (Ch. 10) for the site and Risk Category. With the basis \"Map value\" the tool computes t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> for the mast and fixtures; cables use t as entered. Zero disables all ice cases."],
  ["Ice density","lb/ft\u00b3","Ice weight","56 lb/ft\u00b3 is the ASCE 7 value for glaze ice."],
  ["Concurrent wind speed, V<sub>ice</sub>","mph","Wind-on-ice pressure","Much lower than the basic speed \u2014 ASCE 7 pairs a reduced wind with the ice case because the two extremes do not coincide. Typically 30\u201350 mph."]
 ]}},
@@ -2665,7 +2712,7 @@ manPart("p5","5. Verification",[
  ["Broms cohesionless cubic","Bisection residual","f(L) = 0 to machine precision; K<sub>p</sub> = 3.000 exactly at \u03c6 = 30°"],
  ["IBC embedment self-consistency","Back-substitution of d into A and the depth equation","Consistent within 0.02 ft"],
  ["Gust factor application","Reconstruction of F with G applied once vs twice","Single application confirmed for pole, sign, and ice cases"],
- ["Load combination factors","ASCE 7-22 tabulated factors","All eight combinations correct; no combination mixes W with W<sub>i</sub>"],
+ ["Load combination factors","ASCE 7-22 tabulated factors","All ten combinations correct (0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi added 2026-11-01); no combination mixes W with W<sub>i</sub>"],
  ["Sign post force split","\u03a3 shares vs total case force","Sums exactly for Cases A, B and C"],
  ["Cable resultant decomposition","\u03a3 perpendicular components in the aligned frame","Sums to zero \u2014 built-in check"]
 ]}},
@@ -3105,7 +3152,7 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
   };
   // axial at the base (all gravity above z = 0) → P_story for the P-Δ amplifier
   // (misc. dead load DL has no stated height; it is applied over the full height — conservative)
-  const Nbase=fList.reduce((a,fc)=>a+fc.Wg,0)+cList.reduce((a,c)=>a+c.Vc,0)+f.D*(poleSeg.totalW+(inp.DL||0))+f.Di*(pw.wIceMast*inp.H);
+  const Nbase=fList.reduce((a,fc)=>a+fc.Wg,0)+cList.reduce((a,c)=>a+c.Vc,0)+f.D*(poleSeg.totalW+(inp.DL||0))+f.Di*pw.WiceMast;
   const p2=poleB2(inp, secForces, Nbase);
   const B2=p2.B2;
 
@@ -3115,7 +3162,7 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
     let N=0;
     fList.forEach(fc=>{ if(fc.hf>=z) N+=fc.Wg; });
     cList.forEach(c=>{ if(c.hc>=z) N+=c.Vc; });
-    N+=f.D*(s.cumWabove+(inp.DL||0)) + f.Di*(pw.wIceMast*(inp.H-z));
+    N+=f.D*(s.cumWabove+(inp.DL||0)) + f.Di*(pw.iceAbove?pw.iceAbove(z):pw.wIceMast*(inp.H-z));
     const M1=Math.hypot(sf.Mx,sf.My);                 // first-order moment (lb-ft)
     const Mx=B2*sf.Mx, My=B2*sf.My, Vx=sf.Vx, Vy=sf.Vy; // second-order (App. 8 B2 on the whole moment)
 
@@ -4229,7 +4276,7 @@ function calc(){
     poleDepthTop:num('poleDepthTop'),poleDepthBase:num('poleDepthBase'),cfPole:num('cfPole'),DL:num('DL'),
     cfPoleMode:($('cfPoleMode')?$('cfPoleMode').value:'manual'),cfPoleSurf:($('cfPoleSurf')?$('cfPoleSurf').value:'smooth'),
     poleTwTop:num('poleTwTop'),poleTwBase:num('poleTwBase'),poleFy:num('poleFy'),poleDen:num('poleDen'),
-    tIce:num('tIce'),iceDen:num('iceDen'),Vice:num('Vice'),cfCable:num('cfCable'),
+    tIce:num('tIce'),iceBasis:($('iceBasis')?$('iceBasis').value:'design'),iceIi:($('iceIi')?(num('iceIi')||1.0):1.0),iceDen:num('iceDen'),Vice:num('Vice'),cfCable:num('cfCable'),
     cableMethod:($('cableMethod')?$('cableMethod').value:'sag'),cableE:num('cableE'),
     shaftShape:($('shaftShape')?$('shaftShape').value:'round'),
     soilClass:($('soilClass')?$('soilClass').value:'sand'),
@@ -4299,6 +4346,7 @@ function calc(){
   const comps=cablesEnabled?cables.map(c=>cableComponents(c,inp)):[];
   const fxs=fixtures.map(x=>fixtureComponents(x,inp));
   const pw=poleWindNominal(inp);
+  if($('iceNote')) $('iceNote').textContent = inp.iceBasis==='map' ? `t_d = t·f_z·K_zt^0.35·I_i: ${fmt(iceTd(inp,inp.H),3)} in at the top (${fmt(inp.H,1)} ft), ${fmt(iceTd(inp,inp.H/2),3)} in at mid-height (ASCE 7-22 §10.4.6). Cables use t = ${fmt(inp.tIce,3)} in.` : `Uniform: t_d = t = ${fmt(inp.tIce,3)} in at every height.`;
   renderWindExample(pw,inp,fxs);
   renderCableExample(comps,inp);
   const allCombos=COMBO_KEYS.map(k=>evalCombo(k,inp,comps,fxs,pw));
@@ -5318,6 +5366,7 @@ function windWorkedHTML(pw, inp){
   H+=`<p class="eq-why">Reference only (not used for the force): the design pressure at mid-height and the single resultant it would give:</p>`;
   H+=g(`p(H/2) = q_z\\,G\\,C_f = ${fmt(pw.qzMid,1)}(${fmt(inp.G,2)})(${fmt(inp.cfPole,2)}) = ${fmt(pw.qzMid*inp.G*inp.cfPole,1)}\\ \\text{psf}\\qquad p(H/2)\\,A_{pole} = ${fmt(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)}\\ \\text{lb}`);
   H+=g(`F_{pole} = \\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
+  H+=iceWorkedHTML(inp,pw,null);
   H+=`<p class="eq-result">Mast wind F_pole = ${fmt(pw.Fpole,0)} lb, resultant at z = ${fmt(pw.zF,2)} ft (H/2 = ${fmt(inp.H/2,2)} ft), giving base moment ${fmt(pw.Mpole,0)} lb·ft. Fixture and cable wind (tabulated above) use the same q_z form at their own heights.</p>`;
   return H;
 }
@@ -5440,7 +5489,7 @@ function cableWorkedHTML(comps,inp){
 function fixtureWorkedHTML(fxs, inp){
   if(!fxs || !fxs.length) return '';
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
-  const fg=fxs[0], tft=inp.tIce/12;
+  const fg=fxs[0], tft=(fg.td!==undefined?fg.td:inp.tIce)/12;
   let H='';
   H+=`<p class="eq-why">Each fixture contributes four effects: a wind drag force at its mount height, an enlarged iced-wind force, an ice weight from the accreted glaze envelope, and — because it sits at the end of a mast arm — an eccentric gravity moment W·a directed along the arm azimuth θ. The eccentric moment is a fixed vector that does not rotate with the wind, so fixtures on opposing arms (0° / 180°) cancel in moment while still adding to axial load and base shear. Each step is worked for fixture F1; the table above lists all fixtures.</p>`;
   H+=step(`1 · Fixture wind force ${ref('ASCE 7-22 Ch. 29')}`);
@@ -5776,6 +5825,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     `\\bar D=\\tfrac{1}{2}(D_{top}+D_{base})=\\tfrac12(${n(inp.poleDiaTop,1)}+${n(inp.poleDiaBase,1)})=${n(pw.Davg_in,2)}\\ \\text{in}=${n(pw.Davg,3)}\\ \\text{ft}\\qquad A_{pole}=\\bar D\\,H=${n(pw.Apole,1)}\\ \\text{ft}^2`,
     null);
   H+=cfPoleWorkedHTML(inp);
+  H+=iceWorkedHTML(inp,pw,fxs);
   H+=eqB(
     'Wind force on the pole shaft',
     `The distributed wind on the shaft is integrated over ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip uses q_z at its own centroid height z_i and its own width D(z_i), and acts at z_i (ASCE 7 §29.4.1 per strip). C_f is the drag coefficient for a round section (≈0.7). For reference, the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`,
@@ -5804,7 +5854,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`<details class="rpt-sec" data-old="4" open><summary><span class="tag">4</span><h3>Load combinations — pole base demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
   H+=`<p class="eq-why">The nominal loads (dead, wind, ice, wind-on-ice) are combined using the ASCE 7 load combinations, applied separately for strength design (LRFD) and allowable-stress design (ASD). Within each combination the factored line loads are w_v = f_D·g + f_Di·w_ice (vertical) and w_h = f_W·w_W + f_Wi·w_Wi (wind); these produce the cable pulls and vertical reactions, which are summed over all cables and added to the factored direct pole wind. The result is the pole base demand — lateral shear P, overturning moment M, and axial N — for every combination.</p>`;
   H+=`<p class="eq-why">The foundation uses the correct family for each check: the drilled-shaft <b>embedment</b> is an allowable-stress (service) check paired with presumptive soil bearing, so it is driven by the worst <b>ASD</b> combination; the reinforced-concrete <b>shaft</b> is a strength check, so it is driven by the worst <b>LRFD</b> combination. Both governing rows are highlighted below.</p>`;
-  H+=`<table class="matrix"><caption>Pole base demand for all eight combinations. Highlighted rows govern each design family (largest overturning moment).</caption>`;
+  H+=`<table class="matrix"><caption>Pole base demand for all ten combinations. Highlighted rows govern each design family (largest overturning moment).</caption>`;
   H+=`<thead><tr><th>Design<br>family</th><th>Load combination</th><th>Net cable pull<span class="sym">R_cable (lb)</span></th><th>Pull direction<span class="sym">φ (°)</span></th><th>Total lateral<span class="sym">P (lb)</span></th><th>Overturning moment<span class="sym">M (lb·ft)</span></th><th>Resultant height<span class="sym">h = M/P (ft)</span></th><th>Axial<span class="sym">N (lb)</span></th></tr></thead><tbody>`;
   allCombos.forEach(r=>{
     const isGov=(r.key===govASD.key||r.key===govLRFD.key);
@@ -6370,7 +6420,7 @@ function populateDetailStack(sfx, ctx){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -6406,6 +6456,14 @@ function applyState(st){
       if(mn){ mn.textContent='Older save: the pole/post C_f source was not an input when this project was saved. It opens as Manual with the saved C_f = '+(st.inputs&&st.inputs.cfPole!==undefined?st.inputs.cfPole:$('cfPole').value)+', so results are unchanged. Select Auto to use ASCE 7-22 Fig. 29.4-1 (shown in the note above).'; mn.style.display=''; }
     } else if(mn){ mn.style.display='none'; mn.textContent=''; }
     if($('cfPoleSurf') && (!st.inputs || st.inputs.cfPoleSurf===undefined)) $('cfPoleSurf').value='smooth'; }
+  // ice basis (added 2026-11-01, LP-R8). Saves made before it have no iceBasis: their t was used uniformly at every height,
+  // so they open as "Uniform design t_d" (identical results) with a notice; new projects start on "Map value".
+  { const mn=$('iceMigNote');
+    if($('iceBasis') && (!st.inputs || st.inputs.iceBasis===undefined)){
+      $('iceBasis').value='design';
+      if(mn){ mn.textContent='Older save: the ice thickness basis was not an input when this project was saved. It opens as "Uniform design t_d" (t used at every height, as before), so results are unchanged. Select "Map value" to apply the ASCE 7-22 height factor f_z, K_zt^0.35 and I_i (§10.4.6).'; mn.style.display=''; }
+    } else if(mn){ mn.style.display='none'; mn.textContent=''; }
+    if($('iceIi') && (!st.inputs || st.inputs.iceIi===undefined)) $('iceIi').value='1.0'; }
   // damping ratio for G_f (added 2026-10-12): older saves have none → default 0.005
   if($('lppBeta') && (!st.inputs || st.inputs.lppBeta===undefined)) $('lppBeta').value='0.005';
   // K_d source (added 2026-10). Saves made before it have no KdMode: a stored K_d of 0.85 was the

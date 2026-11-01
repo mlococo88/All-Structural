@@ -163,3 +163,21 @@ test('Base plate: D 10, BC 16, n 6, F_y 36: b_eff = π·10/6 = 5.236 in, m = 3 i
   // P_u = 0: T = C = 9,974.5 lb → t = √(4·9974.5·3/(0.9·36000·5.236)) = 0.840 in
   near(lp.call('anchorBolts', lpDefaultInp({ bpFy: 36, bpT: 1.25 }), { Mang: 0 }, { Mu: 19949, Pu: 0, Vu: 0 }).tpReq, 0.840, 0.002, 'P_u = 0');
 });
+
+/* ---------- LP-R8/R9: ice design thickness by height and the low-dead ice combinations (added 2026-11-01) ---------- */
+test('Ice: t_d(z) = t·(z/33)^0.10·K_zt^0.35·I_i: t 0.75, z 35, K_zt 1.2, I_i 1.0 → 0.75·1.00590·1.06589 = 0.8041 in; uniform basis = t', () => {
+  const lp = lpEngine();
+  const inp = lpDefaultInp({ tIce: 0.75, Kzt: 1.2, iceBasis: 'map', iceIi: 1.0 });
+  near(lp.call('iceTd', inp, 35), 0.75 * Math.pow(35 / 33, 0.1) * Math.pow(1.2, 0.35), 1e-12, 't_d'); near(lp.call('iceTd', inp, 35), 0.8041, 0.0001, 't_d');
+  near(lp.call('iceTd', lpDefaultInp({ tIce: 0.75, iceBasis: 'design' }), 35), 0.75, 0, 'uniform');
+  // mast: uniform basis gives the former mean-diameter ice weight exactly; map basis sums the strips
+  const pwD = lp.call('poleWindNominal', lpDefaultInp({ iceBasis: 'design' }));
+  near(pwD.WiceMast, lp.call('iceWeight', 0.5, 8, 56) * 35, 1e-9, 'uniform mast ice');
+  const pwM = lp.call('poleWindNominal', lpDefaultInp({ iceBasis: 'map', iceIi: 1 }));
+  assert.ok(pwM.WiceMast < pwD.WiceMast, 'f_z < 1 below 33 ft');
+  // cables keep the entered t in both bases
+  const c1 = lp.call('cableComponents', { hc: 32, th: 15, L: 80, s: 4, D: 0.75, g: 0.35 }, lpDefaultInp({ iceBasis: 'map' }));
+  near(c1.wIce, lp.call('iceWeight', 0.5, 0.75, 56), 0, 'cable ice unchanged');
+  const C = lp.run('COMBOS');
+  assert.deepEqual([C.L5.D, C.L5.Di, C.L5.Wi, C.L5.W], [0.9, 1.0, 1.0, 0]); assert.deepEqual([C.A5.D, C.A5.Di, C.A5.Wi, C.A5.W], [0.6, 0.7, 0.7, 0]);
+});
