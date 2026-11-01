@@ -1617,3 +1617,271 @@ index 352c5eb..23de227 100644
 +    if(el.type==='integralAbutment' || el.abutmentType==='integral' || (p.reference && (p.reference.level==='pileHead' || p.reference.perPile)) || p.perPile){
 +      out.err.push('This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Spread Footing cannot design it; use Pile Designer (integral-abutment mode).'); return out; }
 ```
+
+
+## 2026-11-01 — PR: claude/sf-rebar-tab — Reinforcement input tab (presentation only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text.
+
+### RB1. Footing reinforcement gets its own "Reinforcement" input tab   [UI only]
+- **Engineer request (2026-11-01):** the footing reinforcement input existed but was hidden: section "Footing Reinforcement (Phase 2)" (`details#sec-rebar`, collapsed) placed on the Materials input tab.
+- **Before:** `SFD_IN_TABS` had no reinforcement tab; `SFD_IN_SEC` mapped `'sec-rebar':'mat'`; `<details class="sec" id="sec-rebar">` (closed) with summary "Footing Reinforcement (Phase 2)"; the table had Mat / Bar # / Spacing only.
+- **After:**
+  - `SFD_IN_TABS` gains `['rebar','Reinforcement']` after Materials; `SFD_IN_SEC` maps `'sec-rebar':'rebar'`; the section is `open` and titled "Footing Reinforcement".
+  - Three display columns next to each mat: A_b (from `BAR_AREA`), A_s = A_b·12/s worked out (from `barAreaPerFt`, the function the design uses) and "s vs s_max" (`P2.desX/desY.sMax`, `spcBotOK` / `spcTopOK`, `asMinTopReq`: the design's own values; s_max = min(3h, 18 in), ACI 318-19 7.7.2.3 / 13.3.4). A note under the table links to Footing Design 5.2 / 5.3 where the bars are used. Filled by the new `sfdRebarInfo()`, called at the end of `recalc()`.
+  - Footing Design 5.1 gets a line "Bars set on the Reinforcement tab (inputs) → bottom x #8 @ 9.00 in, …" (`a.sfdInA`); clicking it opens the Reinforcement input tab and flashes the section (`sfdGotoInput`). Printed as plain text.
+- **Unchanged:** every `data-path` (`freinf.botX.size` … `freinf.topY.spc`), the saved state and project JSON, `sfd_inputTab_v1` (a saved value `'mat'` still opens Materials; `'rebar'` is a new allowed value of that per-browser UI key).
+- **Check case (default project):** bottom x #8 @ 9 in → A_b = 0.79 in², A_s = 0.79·12/9 = 1.053 in²/ft, 9.00 ≤ 18.00 ✓ (h = 30 in → 3h = 90, s_max = 18 in). Setting s = 20 in shows A_s = 0.474 and "20.00 > 18.00 NG", the same NG the Footing Design card shows.
+- **How verified:** headless Chromium, origin/main vs the branch on 7 projects (default, direct mode, water table + AASHTO eccentricity + 3 pedestals + top mats, direct q_a net + override V_c, single pedestal with moments, direct mode with moments, fatal input): `R`, `P2`, dashboard, warnings, self-consistency, state and `sfd_auto` identical; the result tab text differs only in the new 5.1 link line; 0 console errors. `node tests/check-syntax.mjs "Spread Footing.html"` passes.
+- **Other copies:** none.
+
+Diff (`git diff -U0` against origin/main):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 23de227..ed56703 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -332,2 +332,2 @@ a.wkA:hover{text-decoration:underline}
+-<details class="sec" id="sec-rebar">
+-<summary>Footing Reinforcement (Phase 2)</summary>
++<details class="sec" id="sec-rebar" open>
++<summary>Footing Reinforcement</summary>
+@@ -336,5 +336,5 @@ a.wkA:hover{text-decoration:underline}
+- <table class="tbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing (in)</th></tr>
+- <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td></tr>
+- <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td></tr>
+- <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td></tr>
+- <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td></tr>
++ <table class="tbl sfdRbTbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing s (in)</th><th>A<sub>b</sub> (in&sup2;)</th><th>A<sub>s</sub> = A<sub>b</sub>&middot;12/s (in&sup2;/ft)</th><th>s vs s<sub>max</sub> (in)</th></tr>
++ <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botX"></td><td class="sfdRbAs" data-mat="botX"></td><td class="sfdRbS" data-mat="botX"></td></tr>
++ <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botY"></td><td class="sfdRbAs" data-mat="botY"></td><td class="sfdRbS" data-mat="botY"></td></tr>
++ <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topX"></td><td class="sfdRbAs" data-mat="topX"></td><td class="sfdRbS" data-mat="topX"></td></tr>
++ <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
+@@ -341,0 +342 @@ a.wkA:hover{text-decoration:underline}
++ <div class="note" id="sfdRbNote"></div>
+@@ -828 +829 @@ const SFD_IN_TABS=[
+- ['project','Project'],['geom','Geometry'],['mat','Materials'],['soil','Soil'],
++ ['project','Project'],['geom','Geometry'],['mat','Materials'],['rebar','Reinforcement'],['soil','Soil'],
+@@ -831 +832 @@ const SFD_IN_SEC={
+- 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'mat',
++ 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'rebar',
+@@ -910,0 +912,35 @@ function sfdInputTabMarks(){
++/* Reinforcement input tab (display only): bar area A_b (BAR_AREA), A_s per ft = A_b*12/s
++   (barAreaPerFt, the value the footing design uses), and the spacing against s_max from the
++   footing design (P2.desX / desY .sMax = min(3h, 18 in), ACI 318-19 7.7.2.3 / 13.3.4).
++   Nothing is computed here that the design does not already compute. */
++function sfdRebarInfo(){
++ const fr=state.freinf;if(!fr||!document.querySelector('.sfdRbAb'))return;
++ const des={X:(P2&&P2.desX)||null,Y:(P2&&P2.desY)||null};
++ ['botX','botY','topX','topY'].forEach(k=>{
++  const m=fr[k]||{},sz=m.size,spc=num(m.spc),Ab=BAR_AREA[sz]||0,As=barAreaPerFt(sz,spc);
++  const q=c=>document.querySelector('.'+c+'[data-mat="'+k+'"]');
++  const dir=k.slice(-1),d=des[dir],top=(k.slice(0,3)==='top');
++  q('sfdRbAb').innerHTML=sz?Ab.toFixed(2):'\u2014';
++  q('sfdRbAs').innerHTML=(sz&&spc>0)?Ab.toFixed(2)+'&middot;12/'+f2(spc)+' = <b>'+As.toFixed(3)+'</b>':(sz?'\u2014 (s = 0)':'\u2014 (no mat)');
++  let sTxt='\u2014';
++  if(sz&&spc>0&&d){
++   const chk=top?(d.asMinTopReq):true;   /* top mat: s_max applies only where it is a flexural mat (as the design) */
++   const ok=top?d.spcTopOK:d.spcBotOK;
++   sTxt=chk?(f2(spc)+(ok?' \u2264 ':' &gt; ')+f2(d.sMax)+(ok?' \u2713':' <b style="color:#b71c1c">NG</b>'))
++          :(f2(spc)+' (s<sub>max</sub> '+f2(d.sMax)+' n/a: no hogging)');
++  }else if(sz&&spc>0)sTxt=f2(spc);
++  q('sfdRbS').innerHTML=sTxt;
++ });
++ const n=document.getElementById('sfdRbNote');
++ if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design. s<sub>max</sub> = min(3h, 18 in) (ACI 318-19 7.7.2.3 / 13.3.4); top mats are checked only where hogging makes them flexural mats.'+
++  ((P2&&P2.desX)?' Worked in: '+sfdLink('o-fd-x','x-bars',['tab-footdes','5.2 Longitudinal (x-direction)'])+' · '+sfdLink('o-fd-y','y-bars',['tab-footdes','5.3 Transverse (y-direction)']):'');
++}
++/* link from an output card to an input tab (Reinforcement): open the tab and flash the section */
++function sfdGotoInput(tab,secId){
++ sfdSetInTab(tab,true);
++ const sec=document.getElementById(secId);if(!sec)return;
++ if(sec.tagName==='DETAILS'&&!sec.open)sec.open=true;
++ setTimeout(()=>{sec.scrollIntoView({behavior:'smooth',block:'start'});
++  const s=sec.querySelector('summary')||sec;const old=s.style.background;s.style.background='#fff3cd';setTimeout(()=>{s.style.background=old;},1100);},60);
++}
++document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.sfdInA');if(!a)return;e.preventDefault();sfdGotoInput(a.dataset.intab,a.dataset.insec);});
+@@ -2807,0 +2844 @@ function recalc(){
++ sfdRebarInfo();   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
+@@ -3832,0 +3870 @@ function flexureSVG(des,dir){
++function sfdBarTxt(m){m=m||{};return (m.size&&num(m.spc)>0)?'#'+m.size+' @ '+f2(num(m.spc))+' in':'none';}
+@@ -3849,0 +3888 @@ function renderFootingDesign(){
++ intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span></a>'));   /* link to the Reinforcement input tab */
+```
+
+
+## 2026-11-01 — PR: claude/sf-load-offset — Load location on the pedestal: per-pedestal load offsets e_x, e_y (SFLO, calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFLO`.
+
+### SFLO. Loads may act off the pedestal centroid   [calculation change, CLAUDE.md §4]
+- **Engineer request (2026-11-01):** "I want to be able to define the location of the load on the pedestal. It may not always be centered."
+- **Input:** two new fields on each pedestal card, "Load offset e_x / e_y (from ped. centroid)", in **ft** (the units of the pedestal x, y, b_x, b_y). They are measured at the top of the pedestal and use the axes and signs of the "Axes & sign convention" note, which gets a new bullet. Saved as `peds[i].loadEx`, `peds[i].loadEy`. `newPed` sets them to 0, and `migrateState` sets them to 0 when they are missing, so older saves and imports are unchanged. The offset applies to P of every load type (D, L, Lr, S, Wx, Wy) and to the direct factored P. It does not apply to the pedestal self-weight, which acts at the centroid.
+- **Where P·e enters (each path once):**
+  1. **Stability / bearing resultant** (`computeAll` → `resultant(f)`, anchor `SFLO: P acts at the load point`). P is placed at the load point: vertex `x: p.x+p.lex, y: p.y+p.ley`, and `Mx += P·(p.y+p.ley)`, `My += P·(p.x+p.lex)`. The applied-moment sums `MaX`/`MaY` are unchanged. This is the place where pedestal loads are resolved to the footing centroid for bearing, eccentricity limits, sliding and overturning. Placing P at its real location gives the true lever arm about each overturning edge.
+     - Before: `Mx+=ft*(Pp*p.y+mx+vy*coupleLever(p));My+=ft*(Pp*p.x+my+vx*coupleLever(p));` (same form in direct mode, without `ft`)
+     - After: `Mx+=ft*(Pp*(p.y+p.ley)+mx+vy*coupleLever(p));My+=ft*(Pp*(p.x+p.lex)+my+vx*coupleLever(p));`
+  2. **Structural (Phase 2) net resultant** (`computePhase2` → `netResultant(f)`, anchor `SFLO: a load applied at e_x, e_y`). The pedestal hands the load to the footing over its own footprint, so it delivers P at its centroid plus the interface moments P·e_y (about x, +Mx) and P·e_x (about y, +My). These are added to the applied moment of each load, at the footing base (`mx`, `my`: footing flexure, one-way shear, the pedestal's equivalent interface pressure, punching relief) and at the pedestal base (`mxPed`, `myPed`: pedestal biaxial P–M, punching moment transfer per ACI 318-19 8.4.4.2).
+     - Before: `mxi+=ft*(mx+vy*(t+p.h)*hFac2); … mxp+=ft*(mx+vy*p.h*hFac2);`
+     - After: `mxi+=ft*(mx+Pp*p.ley+vy*(t+p.h)*hFac2); … mxp+=ft*(mx+Pp*p.ley+vy*p.h*hFac2);` (and `my…+Pp*p.lex…`)
+  - Both paths give the same footing-centroid resultant: Σ(P·x_load) = Σ(P·x_centroid) + Σ(P·e_x). This is checked for every LRFD combination: |ΔP|, |ΔMx|, |ΔMy| < 1e-9 between `R.lrfd[i].r` and `P2.combos[i].nr`, so nothing is counted twice.
+- **Warning:** "Pedestal "…": the load point (e_x = …, e_y = … from its centroid) is outside the pedestal top …" when |e_x| > b_x/2 or |e_y| > b_y/2. The load is still applied at that point.
+- **Shown (§6):**
+  - The resultant breakdown lists P at the load point and adds a note "x + e_x = …".
+  - Pedestal Design gets a worked block "Load offset on the pedestal": M_ux = M_x,app + V_y h + P_u,a e_y with values, for the combination that governs each axis.
+  - The punching card adds a note with the P·e share of M_ux and M_uy.
+  - The input echo gets an "e_x, e_y" column.
+  - The plan schematic shows the load point (red dot, dashed leader and "load e = (…)" when offset). The elevation draws the P arrow at x + e_x. The 3D view draws the P arrow at the load point.
+- **Governing provisions:** statics (resultant of a load at a point); ACI 318-19 8.4.4.2 (moment transfer by eccentricity of shear, unchanged method), 10.4.1 / 22.4 (pedestal axial with moment, unchanged method). No formula, factor or reference changed, only the load position.
+- **Check case:** B = L = 8 ft, t = 2 ft, D_f = 4 ft, no soil cover, γ_c = 150 pcf. One 2 × 2 × 2 ft pedestal at the centre, D = 100 k, L = 50 k. Direct q_a = 4 ksf gross. e_x = 0 (before) vs 0.5 ft (after).
+  - Service D + L: P = 150 + W_f 8·8·2·0.150 = 19.2 + W_ped 2·2·2·0.150 = 1.2 = **170.4 k** (both).
+  - M_y = 150 × 0.5 = **75.0 k-ft** (before 0). e_x = 75.0 / 170.4 = **0.440 ft** (before 0) < B/6 = 1.333 ft, so full contact.
+  - q = P/(BL) ± 6M_y/(L B²) = 2.6625 ± 6·75/(8·64) = 2.6625 ± 0.8789 → **q_max = 3.541, q_min = 1.784 ksf** (before 2.663 uniform). Bearing DCR = 3.541/4 = **0.885** (before 0.666).
+  - Overturning about +x: M_r = 681.6 → 606.6 k-ft (150 k × 0.5 ft less lever); no overturning moment, FS = ∞ in both.
+  - Pedestal, 1.2D + 1.6L: P_u,a = 120 + 80 = 200 k; M_uy = 200 × 0.5 = **100.0 k-ft** (before 0); P_u = 200 + 1.2·1.2 = 201.44 k (unchanged).
+  - Footing flexure x at the pedestal face x = +1 ft: net structural pressure q = 201.44/64 + (100/341.33)·x (I_y = 8·8³/12 = 341.33 ft⁴). M = 8·[3.1475·∫₁⁴(x−1)dx + 0.29297·∫₁⁴x(x−1)dx] = 8·[3.1475·4.5 + 0.29297·13.5] = **144.95 k-ft** (before 8·14.164 = 113.31); DCR 0.160 → **0.204**. Flexure y: 113.31 (unchanged).
+  - Punching v_u = 45.21 → **54.05 psi** (M_uy = 100 k-ft transferred), DCR 0.292 → 0.349.
+- **How verified (headless Chromium, origin/main vs the branch):**
+  - Old projects identical: 7 projects (default, direct, water table + AASHTO eccentricity + 3 pedestals, direct q_a net fail, single pedestal with moments, direct with moments, fatal): every existing value of `R` and `P2`, the dashboard, warnings and self-consistency are identical (new keys only: `peds[].lex/ley`, `pl.Pa/lex/ley/PeMx/PeMy`, `punch.detail` copies, `pedDes.govMx/govMy`).
+  - A save made by origin/main, loaded on the branch: identical results, migrated to loadEx = loadEy = 0, 0 console errors.
+  - Offset vs the same loads with P·e typed in as applied moments: footing flexure, one-way shear, punching, pedestal P–M points, ASD resultants, e, q_max and bearing DCR identical. Overturning differs by design: P sits at its real lever arm instead of a separate overturning couple.
+  - Self-consistency checks pass with offsets.
+  - Warning shown at e_x = 0.9 ft on a 1.5 ft pedestal, not at e_x = 0.75 ft.
+  - `node tests/check-syntax.mjs "Spread Footing.html"` passes.
+- **Other copies:** none. The hand-off receivers (memberReactions, foundationLoads) write loads only and leave the offsets as they are.
+
+Diff (`git diff -U0` against origin/main):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index ed56703..642e9e3 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -383,0 +384 @@ a.wkA:hover{text-decoration:underline}
++  &bull; <b>Load offset e<sub>x</sub>, e<sub>y</sub></b> (per pedestal): where the loads act on the pedestal top, measured from the pedestal centroid, same axes. P of every load type (and the direct factored P) acts there, so +P&middot;e<sub>x</sub> adds to M<sub>y</sub> and +P&middot;e<sub>y</sub> adds to M<sub>x</sub> for the footing and the pedestal. 0 = centred.
+@@ -626 +627 @@ const BAR_SIZES=[0,3,4,5,6,7,8,9,10,11];
+-function newPed(n){return {label:'Ped '+n,x:0,y:0,bx:1.5,by:1.5,h:2,
++function newPed(n){return {label:'Ped '+n,x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loadEy:0,
+@@ -669,0 +671,2 @@ function migrateState(){
++  if(p.loadEx===undefined)p.loadEx=0;   /* SFLO: load offset on the pedestal (ft); older saves: centred */
++  if(p.loadEy===undefined)p.loadEy=0;
+@@ -746,0 +750,5 @@ function buildPedCards(){
++  /* SFLO: point of application of the loads on the pedestal top, from the pedestal centroid
++     (same x / y axes and signs as the footing). Applies to P of every load type and to the
++     direct factored P; 0 = centred (older projects). */
++  b.appendChild(rowInput('Load offset e\u2093 (from ped. centroid)','peds.'+i+'.loadEx','num','ft',p.loadEx||0));
++  b.appendChild(rowInput('Load offset e\u1D67 (from ped. centroid)','peds.'+i+'.loadEy','num','ft',p.loadEy||0));
+@@ -1171 +1179,2 @@ function computeAll(){
+- const peds=state.peds.map(p=>({label:p.label,x:num(p.x),y:num(p.y),bx:Math.max(num(p.bx),0),by:Math.max(num(p.by),0),h:Math.max(num(p.h),0),loads:p.loads,direct:p.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0}}));
++ const peds=state.peds.map(p=>({label:p.label,x:num(p.x),y:num(p.y),bx:Math.max(num(p.bx),0),by:Math.max(num(p.by),0),h:Math.max(num(p.h),0),loads:p.loads,direct:p.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0},
++  lex:num(p.loadEx),ley:num(p.loadEy)}));   /* SFLO: load offset from the pedestal centroid (ft) */
+@@ -1175 +1184,3 @@ function computeAll(){
+-   W.push({lvl:'err',msg:'Pedestal "'+p.label+'": footprint extends beyond the footing edge.'});});
++   W.push({lvl:'err',msg:'Pedestal "'+p.label+'": footprint extends beyond the footing edge.'});
++  if(Math.abs(p.lex)>p.bx/2+1e-9||Math.abs(p.ley)>p.by/2+1e-9)   /* SFLO */
++   W.push({lvl:'warn',msg:'Pedestal "'+p.label+'": the load point (e\u2093 = '+f2(p.lex)+' ft, e\u1D67 = '+f2(p.ley)+' ft from its centroid) is outside the pedestal top ('+f2(p.bx)+' \u00d7 '+f2(p.by)+' ft, |e| \u2264 b/2). The load is still applied there; check the input and the bearing / bracket detail.'});});
+@@ -1256 +1267,2 @@ function computeAll(){
+-    if(Pp!==0){P+=Pp;verts.push({w:Pp,x:p.x,y:p.y,src:p.label+' (factored)',f:1,mag:Pp});}
++    /* SFLO: P acts at the load point (x + e_x, y + e_y) on the pedestal top: its lever about the footing centroid is p.x + e_x, p.y + e_y */
++    if(Pp!==0){P+=Pp;verts.push({w:Pp,x:p.x+p.lex,y:p.y+p.ley,src:p.label+' (factored)',f:1,mag:Pp});}
+@@ -1258 +1270 @@ function computeAll(){
+-    Mx+=(Pp*p.y+mx+vy*coupleLever(p));My+=(Pp*p.x+my+vx*coupleLever(p));
++    Mx+=(Pp*(p.y+p.ley)+mx+vy*coupleLever(p));My+=(Pp*(p.x+p.lex)+my+vx*coupleLever(p));
+@@ -1263 +1275 @@ function computeAll(){
+-    if(Pp!==0){P+=ft*Pp;verts.push({w:ft*Pp,x:p.x,y:p.y,src:p.label+' '+tp,f:ft,mag:Pp});}
++    if(Pp!==0){P+=ft*Pp;verts.push({w:ft*Pp,x:p.x+p.lex,y:p.y+p.ley,src:p.label+' '+tp,f:ft,mag:Pp});}   // SFLO: at the load point
+@@ -1265 +1277 @@ function computeAll(){
+-    Mx+=ft*(Pp*p.y+mx+vy*coupleLever(p));My+=ft*(Pp*p.x+my+vx*coupleLever(p));
++    Mx+=ft*(Pp*(p.y+p.ley)+mx+vy*coupleLever(p));My+=ft*(Pp*(p.x+p.lex)+my+vx*coupleLever(p));
+@@ -1616,2 +1628,7 @@ function planSVG(){
+- peds.forEach(p=>{s+='<text x="'+X(p.x)+'" y="'+(Y(p.y)+4)+'" text-anchor="middle" font-weight="bold">'+p.label+'</text>';
+-  s+='<text x="'+X(p.x)+'" y="'+(Y(p.y)+16)+'" text-anchor="middle" font-size="9">('+f2(p.x)+', '+f2(p.y)+')</text>';});
++ /* SFLO: load point on each pedestal (x + e_x, y + e_y): red cross-hair; dashed leader from the centroid when offset */
++ peds.forEach(p=>{const lx=X(p.x+p.lex),ly=Y(p.y+p.ley),off=(Math.abs(p.lex)>1e-12||Math.abs(p.ley)>1e-12);
++  if(off)s+='<line x1="'+X(p.x)+'" y1="'+Y(p.y)+'" x2="'+lx+'" y2="'+ly+'" stroke="#b00" stroke-width="1" stroke-dasharray="2,2"/>';
++  s+='<circle cx="'+lx+'" cy="'+ly+'" r="3.2" fill="#b00" stroke="#fff" stroke-width="0.8"><title>'+sfEsc(p.label)+' load point'+(off?' (e\u2093 = '+f3(p.lex)+', e\u1D67 = '+f3(p.ley)+' ft)':' (centred)')+'</title></circle>';
++  if(off)s+='<text x="'+X(p.x)+'" y="'+(Y(p.y-p.by/2)+11)+'" text-anchor="middle" font-size="9" fill="#b00">load e = ('+f2(p.lex)+', '+f2(p.ley)+') ft</text>';});
++ peds.forEach(p=>{s+='<text x="'+X(p.x)+'" y="'+(Y(p.y)+15)+'" text-anchor="middle" font-weight="bold">'+p.label+'</text>';   /* SFLO: below the load-point dot */
++  s+='<text x="'+X(p.x)+'" y="'+(Y(p.y)+26)+'" text-anchor="middle" font-size="9">('+f2(p.x)+', '+f2(p.y)+')</text>';});
+@@ -1675 +1692,2 @@ function sectSVG(){
+-  s+='<line x1="'+X(p.x)+'" y1="'+(topY-arrowLen)+'" x2="'+X(p.x)+'" y2="'+(topY-3)+'" stroke="#c00" stroke-width="2.5" marker-end="url(#ar)"/>';
++  const lxp=X(p.x+p.lex);   // SFLO: arrow at the load point (offset e_x in this elevation)
++  s+='<line x1="'+lxp+'" y1="'+(topY-arrowLen)+'" x2="'+lxp+'" y2="'+(topY-3)+'" stroke="#c00" stroke-width="2.5" marker-end="url(#ar)"/>';
+@@ -1681 +1699 @@ function sectSVG(){
+-  if(Pdisp!==null&&Math.abs(Pdisp)>1e-9)s+='<text x="'+(X(p.x)+4)+'" y="'+(topY-arrowLen+4)+'" fill="#c00" font-size="10">P='+f2(Math.abs(Pdisp))+' k</text>';
++  if(Pdisp!==null&&Math.abs(Pdisp)>1e-9)s+='<text x="'+(lxp+4)+'" y="'+(topY-arrowLen+4)+'" fill="#c00" font-size="10">P='+f2(Math.abs(Pdisp))+' k'+(Math.abs(p.lex)>1e-12?' (e\u2093='+f2(p.lex)+' ft)':'')+'</text>';
+@@ -1718 +1736 @@ function buildInputEcho(){
+- let h2='<tr><th rowspan="2">Pedestal</th><th rowspan="2">x (ft)</th><th rowspan="2">y (ft)</th><th rowspan="2">b\u2093\u00d7b\u1D67\u00d7h (ft)</th><th rowspan="2">'+(R.directMode?'Basis':'Type')+'</th><th colspan="5">Applied loads at top of pedestal</th></tr><tr><th>P (k)</th><th>Vx (k)</th><th>Vy (k)</th><th>Mx (k-ft)</th><th>My (k-ft)</th></tr>';
++ let h2='<tr><th rowspan="2">Pedestal</th><th rowspan="2">x (ft)</th><th rowspan="2">y (ft)</th><th rowspan="2">b\u2093\u00d7b\u1D67\u00d7h (ft)</th><th rowspan="2">Load offset e\u2093, e\u1D67 (ft)</th><th rowspan="2">'+(R.directMode?'Basis':'Type')+'</th><th colspan="5">Applied loads at top of pedestal</th></tr><tr><th>P (k)</th><th>Vx (k)</th><th>Vy (k)</th><th>Mx (k-ft)</th><th>My (k-ft)</th></tr>';
+@@ -1722 +1740 @@ function buildInputEcho(){
+-   [p.label,f2(p.x),f2(p.y),f2(p.bx)+'\u00d7'+f2(p.by)+'\u00d7'+f2(p.h),'LRFD',f2(num(d2.P)),f2(num(d2.Vx)),f2(num(d2.Vy)),f2(num(d2.Mx)),f2(num(d2.My))].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
++   [p.label,f2(p.x),f2(p.y),f2(p.bx)+'\u00d7'+f2(p.by)+'\u00d7'+f2(p.h),f3(p.lex)+', '+f3(p.ley),'LRFD',f2(num(d2.P)),f2(num(d2.Vx)),f2(num(d2.Vy)),f2(num(d2.Mx)),f2(num(d2.My))].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
+@@ -1730 +1748,2 @@ function buildInputEcho(){
+-     const td=document.createElement('td');td.rowSpan=use.length;td.textContent=f2(p.bx)+'\u00d7'+f2(p.by)+'\u00d7'+f2(p.h);tr.appendChild(td);}
++     const td=document.createElement('td');td.rowSpan=use.length;td.textContent=f2(p.bx)+'\u00d7'+f2(p.by)+'\u00d7'+f2(p.h);tr.appendChild(td);
++     const te=document.createElement('td');te.rowSpan=use.length;te.textContent=f3(p.lex)+', '+f3(p.ley);tr.appendChild(te);}   /* SFLO */
+@@ -1840,0 +1860 @@ function resultantBreakdown(a){
++ if(R.peds.some(p=>p.lex||p.ley))det.appendChild(el('p','note','<b>Load offsets on the pedestals:</b> pedestal loads act at the load point (x + e<sub>x</sub>, y + e<sub>y</sub>), so their x, y above include the offset: '+R.peds.filter(p=>p.lex||p.ley).map(p=>sfEsc(p.label)+': '+f2(p.x)+' + '+f3(p.lex)+' = '+f3(p.x+p.lex)+', '+f2(p.y)+' + '+f3(p.ley)+' = '+f3(p.y+p.ley)+' ft').join('; ')+'. Pedestal self-weight stays at the pedestal centroid.'));   /* SFLO */
+@@ -3012 +3032 @@ function computePhase2(R){
+-   let Pi=0,mxi=0,myi=0,mxp=0,myp=0;
++   let Pi=0,mxi=0,myi=0,mxp=0,myp=0,Pa=0;
+@@ -3013,0 +3034,6 @@ function computePhase2(R){
++   /* SFLO: a load applied at e_x, e_y from the pedestal centroid reaches the pedestal (and
++      through it the footing) as P at the centroid plus the moments P*e_y (about x, +Mx) and
++      P*e_x (about y, +My): added once here, to the applied moment of every load, so they
++      act at the footing base (mx, my: footing flexure, one-way shear, punching relief) and
++      at the pedestal base (mxPed, myPed: pedestal P-M, punching moment transfer). The
++      pedestal self-weight is at the centroid (no offset). */
+@@ -3016,3 +3042,3 @@ function computePhase2(R){
+-    Pi+=Pp;
+-    mxi+=(mx+vy*(t+p.h)*hFac2); myi+=(my+vx*(t+p.h)*hFac2); // footing base
+-    mxp+=(mx+vy*p.h*hFac2);     myp+=(my+vx*p.h*hFac2);     // pedestal base
++    Pi+=Pp;Pa+=Pp;
++    mxi+=(mx+Pp*p.ley+vy*(t+p.h)*hFac2); myi+=(my+Pp*p.lex+vx*(t+p.h)*hFac2); // footing base
++    mxp+=(mx+Pp*p.ley+vy*p.h*hFac2);     myp+=(my+Pp*p.lex+vx*p.h*hFac2);     // pedestal base
+@@ -3022,3 +3048,3 @@ function computePhase2(R){
+-     Pi+=ft*Pp;
+-     mxi+=ft*(mx+vy*(t+p.h)*hFac2); myi+=ft*(my+vx*(t+p.h)*hFac2);
+-     mxp+=ft*(mx+vy*p.h*hFac2);     myp+=ft*(my+vx*p.h*hFac2);});
++     Pi+=ft*Pp;Pa+=ft*Pp;
++     mxi+=ft*(mx+Pp*p.ley+vy*(t+p.h)*hFac2); myi+=ft*(my+Pp*p.lex+vx*(t+p.h)*hFac2);
++     mxp+=ft*(mx+Pp*p.ley+vy*p.h*hFac2);     myp+=ft*(my+Pp*p.lex+vx*p.h*hFac2);});
+@@ -3027 +3053,2 @@ function computePhase2(R){
+-   pl.push({x:p.x,y:p.y,bx:p.bx,by:p.by,P:Pi,mx:mxi,my:myi,mxPed:mxp,myPed:myp,idx:i});
++   pl.push({x:p.x,y:p.y,bx:p.bx,by:p.by,P:Pi,mx:mxi,my:myi,mxPed:mxp,myPed:myp,idx:i,
++    Pa,lex:p.lex,ley:p.ley,PeMx:Pa*p.ley,PeMy:Pa*p.lex});   // SFLO: factored applied P and its offset moments P*e_y (in mx), P*e_x (in my)
+@@ -3569 +3596,2 @@ function computePhase2(R){
+-   if(vu>vuMax){vuMax=vu;govC=c;detail={q,Acrit,AcritFull,Vu,relief,bodyIn,MuX,MuY,Mu:Math.hypot(MuX,MuY),gvX,gvY,JcX,JcY,cExtX,cExtY,vshear,vmomX,vmomY,vmom};}
++   if(vu>vuMax){vuMax=vu;govC=c;detail={q,Acrit,AcritFull,Vu,relief,bodyIn,MuX,MuY,Mu:Math.hypot(MuX,MuY),gvX,gvY,JcX,JcY,cExtX,cExtY,vshear,vmomX,vmomY,vmom,
++    Pa:pl.Pa,lex:pl.lex,ley:pl.ley,PeMx:pl.PeMx,PeMy:pl.PeMy};}   // SFLO: the load-offset part of mxPed / myPed, for display
+@@ -3671 +3699 @@ function computePhase2(R){
+-  let PuMax=0,MuxMax=0,MuyMax=0,govC=null;
++  let PuMax=0,MuxMax=0,MuyMax=0,govC=null,govMx=null,govMy=null;
+@@ -3673,0 +3702,2 @@ function computePhase2(R){
++   if(Math.abs(pl.mxPed)>MuxMax||!govMx)govMx={name:c.cb.name,pl};   // SFLO: display only (P*e share of the governing moments)
++   if(Math.abs(pl.myPed)>MuyMax||!govMy)govMy={name:c.cb.name,pl};
+@@ -3712 +3742 @@ function computePhase2(R){
+-   PuMax,MuxMax,MuyMax,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
++   PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
+@@ -3883 +3913 @@ function renderFootingDesign(){
+- intro.appendChild(el('p','note','Structural design uses strength (LRFD) combinations (ASCE 7-16 \u00a72.3.1 / ACI 318-19 \u00a75.3). The net soil pressure driving footing shear and moment is computed from the pedestal-delivered factored loads (axial, applied moment, and V\u00b7h shear couples) plus pedestal self-weight; footing self-weight, EV, and buoyancy are uniform reactions carried directly to the soil and are excluded from the structural pressure per standard practice. The footing is analyzed as a rigid body on a compression-only (no-tension) soil; the factored base-pressure plane is solved for each combination and the moment and shear at each critical section are obtained by <b>direct integration of that pressure solid</b> over the region outboard of the section, with the uplifted (zero-pressure) area excluded. Moments are reported by the direction of the resisting bars: the x-direction moment is taken at the pedestal face normal to x. <b>Reinforcement convention:</b> flexural and shear capacities are computed on a <b>per-foot</b> basis, A<sub>s</sub> = A<sub>b</sub>&times;12/s, and are therefore independent of any assumed discrete bar count; the 3D view draws a floor-based count starting at cover + d<sub>b</sub>/2, which can show one fewer bar than a schedule would list. Reconcile the schedule against the spacing, not against the drawn count. Programs that label a moment by the axis it bends about (e.g. RISAFoundation M<sub>xx</sub>) will show these two values transposed.'));
++ intro.appendChild(el('p','note','Structural design uses strength (LRFD) combinations (ASCE 7-16 \u00a72.3.1 / ACI 318-19 \u00a75.3). The net soil pressure driving footing shear and moment is computed from the pedestal-delivered factored loads (axial, applied moment, and V\u00b7h shear couples'+(R.peds.some(p=>p.lex||p.ley)?', and P\u00b7e from the load offsets on the pedestals':'')+') plus pedestal self-weight; footing self-weight, EV, and buoyancy are uniform reactions carried directly to the soil and are excluded from the structural pressure per standard practice. The footing is analyzed as a rigid body on a compression-only (no-tension) soil; the factored base-pressure plane is solved for each combination and the moment and shear at each critical section are obtained by <b>direct integration of that pressure solid</b> over the region outboard of the section, with the uplifted (zero-pressure) area excluded. Moments are reported by the direction of the resisting bars: the x-direction moment is taken at the pedestal face normal to x. <b>Reinforcement convention:</b> flexural and shear capacities are computed on a <b>per-foot</b> basis, A<sub>s</sub> = A<sub>b</sub>&times;12/s, and are therefore independent of any assumed discrete bar count; the 3D view draws a floor-based count starting at cover + d<sub>b</sub>/2, which can show one fewer bar than a schedule would list. Reconcile the schedule against the spacing, not against the drawn count. Programs that label a moment by the axis it bends about (e.g. RISAFoundation M<sub>xx</sub>) will show these two values transposed.'));
+@@ -4175,0 +4206 @@ function renderPunching(parent){
++  if(Math.abs(gov.detail.lex||0)>1e-12||Math.abs(gov.detail.ley||0)>1e-12)b.appendChild(el('div','note','<b>Load offset on '+sfEsc(gov.label)+':</b> M<sub>ux</sub> and M<sub>uy</sub> above are the moments transferred at the pedestal base and include P<sub>u,a</sub>\u00b7e from the load point: P<sub>u,a</sub>e<sub>y</sub> = '+f2(gov.detail.Pa)+' \u00d7 '+f3(gov.detail.ley)+' = '+f2(gov.detail.PeMx)+' k-ft in M<sub>ux</sub>, P<sub>u,a</sub>e<sub>x</sub> = '+f2(gov.detail.Pa)+' \u00d7 '+f3(gov.detail.lex)+' = '+f2(gov.detail.PeMy)+' k-ft in M<sub>uy</sub> (ACI 318-19 8.4.4.2).'));   /* SFLO */
+@@ -4219,0 +4251,9 @@ function renderPedestalDesign(){
++  if(pd.govMx&&pd.govMy&&(Math.abs(pd.govMx.pl.ley)>1e-12||Math.abs(pd.govMx.pl.lex)>1e-12)){   /* SFLO: the load-offset part of M_ux, M_uy, worked */
++   const gx=pd.govMx.pl, gy=pd.govMy.pl;
++   const tn=x=>String(x).replace(/[\\{}$&#%_^~]/g,'');   // combination name inside \text{}
++   b.appendChild(eqBlock('Load offset on the pedestal — moments P·e in M_ux, M_uy','ACI 318-19 10.4.1 (factored moments with the axial force); statics',
++    'M_{ux} = M_{x,app} + V_y h + P_{u,a}\\,e_y,\\qquad M_{uy} = M_{y,app} + V_x h + P_{u,a}\\,e_x',
++    '\\text{'+tn(pd.govMx.name)+'}:\\;P_{u,a}e_y = '+f2(gx.Pa)+'\\cdot '+f3(gx.ley)+' = '+f2(gx.PeMx)+',\\;M_{ux} = '+f2(gx.mxPed-gx.PeMx)+' + '+f2(gx.PeMx)+' = '+f2(gx.mxPed)+'\\;\\mathrm{k\\text{-}ft}',
++    '\\text{'+tn(pd.govMy.name)+'}:\\;P_{u,a}e_x = '+f2(gy.Pa)+'\\cdot '+f3(gy.lex)+' = '+f2(gy.PeMy)+',\\;M_{uy} = '+f2(gy.myPed-gy.PeMy)+' + '+f2(gy.PeMy)+' = '+f2(gy.myPed)+'\\;\\mathrm{k\\text{-}ft}\\quad(|M_{ux}|_{max} = '+f2(pd.MuxMax)+',\\;|M_{uy}|_{max} = '+f2(pd.MuyMax)+')'));
++   b.appendChild(el('div','note','M at the pedestal base; P<sub>u,a</sub> = factored applied load at the load point (the pedestal self-weight acts at the centroid). The same P\u00b7e reaches the footing as an interface moment (flexure, one-way shear, punching moment transfer).'));
++  }
+@@ -4610,0 +4651 @@ function buildLoads(item){
++  const lp=e2v(p.x+(p.lex||0),p.y+(p.ley||0),p.h);   // SFLO: P drawn at the load point on the pedestal top
+@@ -4612 +4653 @@ function buildLoads(item){
+-   addArrow(g,top,new THREE.Vector3(0,P>0?-1:1,0),len,0xc0392b,f2(Math.abs(P))+' k'); }
++   addArrow(g,lp,new THREE.Vector3(0,P>0?-1:1,0),len,0xc0392b,f2(Math.abs(P))+' k'); }
+```

@@ -113,7 +113,8 @@
 (function () {
   'use strict';
   const SCHEMA = 'sbd2.project', VERSION = 1;
-  const KEYS = { current: 'sbd2.project.current', backup: 'sbd2.project.unreadable.', ui: 'sbd2.ui' };   // backup + ISO time; ui: the page's tab choices
+  const KEYS = { current: 'sbd2.project.current', backup: 'sbd2.project.unreadable.', ui: 'sbd2.ui',   // backup + ISO time; ui: the page's tab choices
+    libIndex: 'sbd2.lib.index', libItem: 'sbd2.lib.p.', libCur: 'sbd2.lib.current' };   // saved-project list (engine/library.js), added 2026-11-01
   // steel grades: F_y, F_u (ksi), as GirderDetail's GD_GR (ASTM A709)
   const GRADES = { '36': { Fy: 36, Fu: 58 }, '50': { Fy: 50, Fu: 65 }, '50W': { Fy: 50, Fu: 70 }, 'HPS50W': { Fy: 50, Fu: 70 }, 'HPS70W': { Fy: 70, Fu: 85 } };
 
