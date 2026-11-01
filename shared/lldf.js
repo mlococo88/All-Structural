@@ -381,7 +381,9 @@ function memberDF(p,geo,Kg,skew,j){
     const shrExt1=l1*fVext, shrExt2=vE*fVext;
     return {j,label,type,S,de,side,mc,We,gWe,fV:fVext,lever1,eV,vE,
       r:{momExt1,momExt2,shrExt1,shrExt2},gM:Math.max(momExt1,momExt2),gV:Math.max(shrExt1,shrExt2),
-      fatM:gWe*skew.scfM,fatV:fat(shrExt1),fatNote:"We/14 used directly for fatigue moment (verify)",method:"We/14 + e-factor"};
+      /* LLDF-D (2026-11-01, engineer's decision; was LLRP-O2): the fatigue moment factor removes the 1.2 multiple presence factor from the
+         one-lane value W_e/14 x r_M, as every other factor here (AASHTO LRFD 10th Ed. Art. 3.6.1.4.3b). Was: fatM = gWe*skew.scfM. */
+      fatM:fat(gWe*skew.scfM),fatV:fat(shrExt1),method:"We/14 + e-factor"};
   }
 
   // cast-in-place slab: equivalent strip
@@ -582,8 +584,7 @@ const STEPS=(function(){
     w.add({ id: 'gM', label: `${md.label}: live-load distribution factor for moment (${md.method})`, sym: 'g_{M}', eq: '\\max(g_{M,1}, g_{M,2})', sub: `\\max(${n4(M1)}, ${n4(M2)})`, value: md.gM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2` });
     w.add({ id: 'gV', label: `${md.label}: live-load distribution factor for shear`, sym: 'g_{V}', eq: '\\max(g_{V,1}, g_{V,2})', sub: `\\max(${n4(V1)}, ${n4(V2)})`, value: md.gV, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.3` });
     const FR = `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2`;
-    if (md.fatNote && /We\/14/.test(md.fatNote)) w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (W_e/14 used directly)`, sym: 'g_{fat,M}', eq: 'g_{M,1}', sub: n4(M1), value: md.fatM, unit: '', d: 4, ref: FR, note: 'The engine uses W_e/14 with the skew reduction for the fatigue moment, without removing 1.2 (verify).' });
-    else w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(M1)}}{1.2}`, value: md.fatM, unit: '', d: 4, ref: FR });
+    w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(M1)}}{1.2}`, value: md.fatM, unit: '', d: 4, ref: FR });
     w.add({ id: 'fatV', label: `${md.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{V,1}}{1.2}', sub: `\\frac{${n4(V1)}}{1.2}`, value: md.fatV, unit: '', d: 4, ref: FR });
   }
   function other(q, geo, sk, md, w) {

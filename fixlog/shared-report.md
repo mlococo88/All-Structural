@@ -89,3 +89,19 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - BasePlateAnchorDesigner.html's RPT-3 Report tab had scroll-spy and "§ in report" jumps to a card (a subsection anchor, not a step key); the migration to the shared viewer must keep them (rollout item 9).
 ### Backward compatibility
 - Without `opt.spy` nothing is added; `go` is a new property of the returned object. `node tests/engine/run.mjs report steps steps-groups report-wiring` passes.
+
+## 2026-11-01 — PR: claude/shared-report-print-links — in-app tab links print as plain text (no more gaps in printed sentences)
+- **Where:** `CSS`, `@media print` block (anchor `.rp-bar,.rp-toc`).
+- **Before:**
+  ```
+    .rp-bar,.rp-toc,.rp-go{display:none!important;}
+  ```
+- **After:**
+  ```
+    .rp-bar,.rp-toc{display:none!important;}
+    .rp-go{font-family:inherit;font-size:inherit;color:#000;text-decoration:none;white-space:normal;}
+  ```
+- **Why:** a `[[tab:name|label]]` link (`a.rp-go`) was hidden in print, so a sentence that names a tab printed with a hole ("On screen: .", "on the  tab", "( , , )"). It now prints its label in the surrounding text's font, black, not underlined; `text()` already printed the label. Screen display unchanged.
+- Display only; no calculation, saved-data or markup change. Notes that are only a link (Retaining Wall Designer `onTab`: "On screen: Stability tab · …") now print that line instead of an empty note.
+- **Check:** on any tool, Report tab → Print report: e.g. Moving Load Generator, Inputs: "… travel: both directions. On screen: ." → "… On screen: Vehicle Configuration."
+- **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` 14 passed; printed-text check (headless Chromium, print media, "Print report") on 16 tools: links hidden in print 400 → 0; empty-gap fragments 61 → 20, the 20 left being the same in both (KaTeX math lines split by innerText in Base Plate and Concrete Beam Capacity, "axleLs()" in Stone Arch prose), i.e. link gaps 41 → 0.
