@@ -3490,3 +3490,41 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - `agg_tight` (d_agg = 1.5 in): only `pedDes[0..1].clrMin` 1.5 → 2.0 and `pedDes[1].barFitOK` true → false (the flip shown above) change.
   - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid.
   - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+
+## 2026-11-01 — PR: claude/sf-cover — Concrete cover of the pedestal vertical bars and of the footing mats vs ACI 318-19 Table 20.5.1.3.1 (SFCV; new checks, existing results unchanged) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFCV`.
+
+### SFCV. Vertical-bar cover and footing covers   [new checks; CLAUDE.md §4]
+- **Engineer request (2026-11-01):** check the clear cover to the pedestal vertical bars, and the footing mats' covers if they were not already checked, against Table 20.5.1.3.1 for the chosen exposure, alongside the tie cover check (SFTC). Before this PR the only footing cover item was a warning for a bottom cover below 3 in; that warning is kept unchanged.
+- **Pedestal vertical bars** (`pedDes`, after the anchor `const tieCov=`): `vertCovMin = sftcMin(exposure, longSize)`, `vertCovOK = cov >= vertCovMin`. The rows are the pedestal exposure input of SFTC:
+  - exposed to weather or in contact with ground: No. 6 and larger 2 in, No. 5 and smaller 1.5 in;
+  - cast against earth: 3 in;
+  - not exposed: pedestals, primary reinforcement 1.5 in.
+- **Footing** (`computePhase2`, `covChk`):
+  - bottom: cast against and permanently in contact with ground, 3 in;
+  - top (only when top bars are entered): in contact with ground, by the largest top bar: 2 in for No. 6 and larger, 1.5 in for No. 5 and smaller;
+  - sides and ends: c = `sfdEndCover()` (side cover input, blank = bottom), checked against the row set by a **new input** `mat.sideExp`:
+    - `'earth'` (cast against earth, 3 in) is the default, because footings are usually cast against the excavation;
+    - `'weather'` (formed, in contact with ground) uses the largest bar of any mat.
+  - `migrateState` backfills `'earth'` for old saves.
+- **Shown:**
+  - Footing Design 5.1: block "Concrete cover, footing" plus an NG box.
+  - Pedestal Design 6.x: block "Clear cover to the vertical bars" plus an NG box.
+  - Pedestal card note: vertical-bar cover line before the tie cover line.
+  - Dashboard: new chip "Concrete cover" (footing and vertical bars); user manual row. The "Pedestal tie cover" chip is unchanged.
+  - Report §5: new subsection "Concrete cover (Table 20.5.1.3.1)". Report §6 ties topic: new step "Clear cover to the vertical bars".
+  - Drawings, general note 6: the minimum covers and NG.
+- **Check cases (hand):**
+  - default: bottom 3 ≥ 3, side 3 (blank = bottom) ≥ 3, no top bars (n/a); vertical #8, exposed: 2.00 ≥ 2.00 → OK.
+  - `cover_fail`: top cover 1.25 in with #6 top bars → 1.25 < 2.00 **NG**; Ped 1 #6 verticals at c = 1.5 → 1.5 < 2.0 **NG** (its ties 1.125 < 1.5 NG too, SFTC); Ped 2 interior → 2.0 ≥ 1.5 OK.
+- **New failures on the comparison projects:**
+  - `wt_ecc_gate_3ped`: side cover entered as 2 in < 3 in (cast against earth, the default) → **FAIL**. If its sides are formed, choose "Formed" → 2 ≥ 2 (#8) OK.
+  - `tie_cover_fail` (extra project, Ped 2 cast against earth): vertical 2.00 < 3.00 → **FAIL**.
+  - All other projects PASS.
+- **Proof nothing else changes:** headless Chromium, origin/main vs the branch, 14 projects.
+  - Every value of `R` and `P2`, the warnings, consistency, state and storage are identical. New keys only: `P2.covChk`, `pedDes[].vertCovMin/vertCovOK`, `mat.sideExp`.
+  - The dashboard only adds the new chip. An old save loads with identical results.
+  - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Open item:** the default for the footing sides is "cast against earth" (3 in). Engineer to confirm, or set "Formed" per project.
