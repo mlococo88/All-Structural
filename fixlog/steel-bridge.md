@@ -2876,6 +2876,10 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
   GS3 I_yc = 0.75(16³)/12 = 256, I_yt = 1.125(16³)/12 = 384, 0.667 → ratio 0.15. Pier 1, top 18 × 1.5, bottom 18 × 2, b_eff 114 in,
   t_deck 8.5 in, A_r = 6.6 + 3.2 = 9.8 in²: GS3 972/729 = 1.333 → 0.1333; GS4 0.01(114)(8.5) = 9.69 ≤ 9.8, ratio 0.98878; top share
   0.673 ≥ 0.667.
+- Hand-off file as the demand source (no project rebar given to `fromPayload`): GS4 is not evaluated (n/a with the reason): the hand-off's
+  A_r is GirderDetail's Structural analysis input (rebarPct % of b_eff t_s at mid-depth, e.g. 1 % × 96 × 8 = 7.68 in² on builtin G1), not
+  the deck bars that GirderDetail's Girder section checks (its module inputs), so 0.01 b_eff t_deck with t_deck = t_s + 0.5 would always
+  fail (8.16/7.68 = 1.063). `engine/flexure.js fromPayload` marks such a deck `arHandoff: true`; GS1–GS3 are evaluated as usual.
 ### Parity
 - 100 gd_*.json payloads + GirderDetail's built-in rows (5 variants: as is, MassDOT with A6, MassDOT 6.10.8, top share 0.5, A_r 5 in²):
   105 cases, 37,110 locations, 635,819 values (GS1 37,110, GS2 222,660, GS3 37,110, GS4 25,882, GS22 3,236 items): 0 differences,

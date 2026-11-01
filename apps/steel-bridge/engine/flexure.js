@@ -599,7 +599,7 @@
     (opt.xs || xs).forEach(x => stations(x).forEach(add)); sup.slice(1, -1).forEach(v => add(v + 0.01)); list.sort((a, b) => a - b);
     const Lb = opt.Lb != null ? opt.Lb : (g.bracing && g.bracing.Lb) || 25;
     const braces = opt.braces || (() => { const b = []; sup.slice(0, -1).forEach((x0, k) => { const x1 = sup[k + 1], n = Math.max(1, Math.ceil((x1 - x0) / Lb - 1e-9)); for (let j = 0; j < n; j++) b.push(x0 + (x1 - x0) * j / n); }); b.push(Lend); return b; })();
-    const top = (dk.Ar || 0), deck = { ts: dk.ts, tdeck: dk.ts + 0.5, haunch: hP, rebar: opt.rebar || { top: { A: top, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } } };
+    const top = (dk.Ar || 0), deck = { ts: dk.ts, tdeck: dk.ts + 0.5, haunch: hP, rebar: opt.rebar || { top: { A: top, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } }, ...(opt.rebar ? {} : { arHandoff: true }) };   // arHandoff: A_r is the hand-off's (B3: GS4 not evaluated on it)
     const Fy = { Fyt: +m.Fyf || 50, Fyb: +m.Fyf || 50, Fyw: +m.Fyw || 50, Fyr: 60, fc: +m.fc };
     const prj = { deck, mat: Fy, n: SEC().modularRatio(+m.fc, +m.wc || 0.15, 1, 'exact').n, wc: +m.wc || 0.15, rebarInPositive: false, G, a6: { method: 'auto', skews: ((g.skew || {}).bySupport || []).slice(), curved: false } };
     const cont = sup.length > 2;

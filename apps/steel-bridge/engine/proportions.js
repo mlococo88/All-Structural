@@ -30,7 +30,7 @@
   const rule = (o, id) => (window.SBDOwners && o && o !== 'AASHTO' ? window.SBDOwners.rule(o, id) : null);
   const cite = q => (q && window.SBDOwners ? window.SBDOwners.cite(q) : '');
   const flanges = r => [['top', r.topB, r.topT], ['bottom', r.botB, r.botT]];
-  const deckOf = prj => { const dk = (prj && prj.deck) || {}, rb = dk.rebar || {}; return { nc: dk.composite === false, tdeck: dk.tdeck, Art: (rb.top && rb.top.A) || 0, Arb: (rb.bot && rb.bot.A) || 0 }; };
+  const deckOf = prj => { const dk = (prj && prj.deck) || {}, rb = dk.rebar || {}; return { nc: dk.composite === false, hand: !!dk.arHandoff, tdeck: dk.tdeck, Art: (rb.top && rb.top.A) || 0, Arb: (rb.bot && rb.bot.A) || 0 }; };
 
   /* items(r, prj): the GS1–GS4 (and GS22) check items of a flexure location r (engine/flexure.js location) */
   function items(r, prj) {
@@ -47,6 +47,7 @@
     if (!r.pos) {
       const rM = rule(own, 'deck.rebar1'), ref = `${ED} Art. 6.10.1.7${rM ? '; ' + cite(rM) : ''}`;
       if (dk.nc) out.push({ id: 'GS4', key: 'ar', title: 'Minimum negative-flexure deck reinforcement', ref, na: 'Not applicable: noncomposite section (no deck reinforcement in the section).', inUse: false, ratio: NaN, step: 'fx.gs4.req' });
+      else if (dk.hand) out.push({ id: 'GS4', key: 'ar', title: 'Minimum negative-flexure deck reinforcement', ref, na: 'Not checked on a hand-off file: its A_r is GirderDetail\'s Structural analysis input (a percentage of b_eff t_s at mid-depth), not the deck bars. Checked with this project\'s deck reinforcement on its analysis (Flexure tab, This project\'s analysis).', inUse: false, ratio: NaN, step: 'fx.gs4.req' });
       else { const req = 0.01 * r.beff * dk.tdeck, Ar = dk.Art + dk.Arb, sh = Ar > 0 ? dk.Art / Ar : 0;
         out.push(ck({ id: 'GS4', key: 'ar', title: 'Minimum negative-flexure deck reinforcement, A_r ≥ 0.01b_eff t_deck', ref, demand: req, capacity: Ar, unit: 'in²', step: 'fx.gs4.ok' }));
         out.push({ id: 'GS4', key: 'top', title: 'Deck reinforcement, top-layer share ≥ 2/3 (should)', ref: `${ED} Art. 6.10.1.7`, demand: sh, capacity: 2 / 3, unit: '', ratio: NaN, inUse: false, warn: !(sh >= 2 / 3 - 1e-3), ok: sh >= 2 / 3 - 1e-3,
@@ -72,6 +73,7 @@
     if (!r.pos) {
       const own = ownerOf(r, prj), dk = deckOf(prj), rM = rule(own, 'deck.rebar1');
       if (dk.nc) w.add({ id: 'gs4.req', label: 'Minimum negative-flexure deck reinforcement', sym: 'A_{r}', eq: '', sub: '', value: 'n/a (noncomposite)', unit: '', ref: `${ED} Art. 6.10.1.7` });
+      else if (dk.hand) w.add({ id: 'gs4.req', label: 'Minimum negative-flexure deck reinforcement', sym: 'A_{r}', eq: '', sub: '', value: 'not checked (hand-off file)', unit: '', ref: `${ED} Art. 6.10.1.7`, note: 'The hand-off\'s A_r is GirderDetail\'s Structural analysis input (rebarPct % of b_eff t_s at mid-depth), not the deck bars.' });
       else { const req = 0.01 * r.beff * dk.tdeck, Ar = dk.Art + dk.Arb, sh = Ar > 0 ? dk.Art / Ar : 0;
         w.add({ id: 'gs4.req', label: 'Minimum longitudinal deck reinforcement, negative flexure (1 % of the deck area)', sym: 'A_{r,min}', eq: '0.01\\,b_{eff}\\,t_{deck}', sub: `0.01(${n2(r.beff)})(${n2(dk.tdeck)})`, value: req, unit: 'in^{2}', d: 2, ref: `${ED} Art. 6.10.1.7${rM ? '; ' + cite(rM) : ''}`,
           note: (rM ? `${cite(rM)}: ${rM.text}. ` : '') + 'Applied at every negative-flexure location (GirderDetail GS4). Bars F_y ≥ 60 ksi, not larger than No. 6, at no more than 12 in: not checked (no bar input).' });

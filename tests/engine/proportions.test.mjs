@@ -68,13 +68,20 @@ test('parity with GirderDetail Girder section GS1–GS4, GS22 at every location 
   run(GS, 'built-in, top share 0.5', { ...prjB, deck: { ...prjB.deck, rebar: { top: { A: 4.9, c: 2.5 }, bot: { A: 4.9, c: 1.75 } } } }, locsB, [], null, { gT: '50W', gB: '50W', gW: '50W' });
   run(GS, 'built-in, rebar 5 in²', { ...prjB, deck: { ...prjB.deck, rebar: { top: { A: 5, c: 2.5 }, bot: { A: 0, c: 1.75 } } } }, locsB, [], null, { gT: '50W', gB: '50W', gW: '50W' });
   for (const f of payloads) {
-    const pl = readP(f), owner = /_MassDOT_/.test(f) ? 'MassDOT' : null, F = FX.fromPayload(pl);
+    const pl = readP(f), owner = /_MassDOT_/.test(f) ? 'MassDOT' : null, dk = pl.girderDetail.deck, F = FX.fromPayload(pl, { rebar: { top: { A: dk.Ar || 0, c: dk.ts / 2 }, bot: { A: 0, c: dk.ts / 2 } } });   // the same A_r, given as the project's (a hand-off alone: GS4 not evaluated, see below)
     run(GS, f, F.prj, F.locs, pl.girderDetail.skew.bySupport, owner);
   }
   console.log(`       ${stats.cases} cases, ${stats.rows} locations, ${stats.items} values compared in ${((Date.now() - t0) / 1000).toFixed(1)} s; items by check: ${Object.entries(stats.ids).map(([k, v]) => `${k} ${v}`).join(', ')}; ${stats.diffs.length} differ; largest relative difference ${stats.worst.toExponential(1)}`);
   stats.diffs.slice(0, 25).forEach(s => console.log('       ' + s));
   assert.equal(stats.diffs.length, 0, 'differences from GirderDetail (listed above)');
   assert.ok(stats.rows > 30000); assert.ok(stats.ids.GS22 > 0 && stats.ids.GS4 > 0);
+});
+
+test('a hand-off file alone: GS4 not evaluated (its A_r is an analysis input), the other items as with the project\'s rebar', () => {
+  const pl = readP('gd_builtin_AASHTO_G1.json'), F = FX.fromPayload(pl), G = FX.girder(F.locs, F.prj, {});
+  const neg = G.rows.filter(r => !r.pos); assert.ok(neg.length > 10);
+  neg.forEach(r => { const c = r.checks.find(q => q.id === 'GS4' && q.key === 'ar'); assert.equal(c.inUse, false); assert.ok(Number.isNaN(c.ratio)); assert.match(c.na, /hand-off/); assert.equal(r.checks.filter(q => q.id === 'GS4').length, 1); });
+  assert.ok(G.rows.every(r => r.checks.some(q => q.id === 'GS1' && q.inUse)));
 });
 
 test('hand check: GirderDetail\'s built-in rows', () => {
