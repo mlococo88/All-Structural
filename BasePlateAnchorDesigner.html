@@ -5747,99 +5747,11 @@ function buildOutput(){
   if(window.katex) renderAllTex(pg);
 }
 function renderAllTex(){ /* eqBlock renders inline already */ }
-/* RPT-2 (2026-10-24): Report tab — the calculation sheet on screen. It is built by buildPrintReport()
-   into this tab (one source with Print / PDF), each time the tab is drawn, i.e. on opening it and on
-   every input change while it is open. Table-of-contents and "Basis" links scroll within the document;
-   "see §n.k" links jump to the tab and card where the value is worked (the global a.wkA handler). */
-/* RPT-3 (2026-10-24): the viewer of Gusset Plate Rating's Report tab (renderReportTab / crSizeBar /
-   crJump), duplicated per CLAUDE.md §3: sticky tool bar (chapter chips, Detail Sheet appendix, combinations,
-   Expand / Collapse all, Print), a sticky navigation tree beside the sheet with scroll-spy, collapsible
-   chapters and cards (state kept for the session), and "§ in report" jumps from the other tabs. */
-let bpRptTimer=0, BP_RPT_PENDING=null, bpCrSpy=null;
-const BP_RPT_CLOSED=new Set();
+/* RPT-4 (2026-11-01): the Report tab is the shared viewer (bprReportTab, below). Of the RPT-3 viewer (buildReportTab, bpCrKey,
+   bpCrSizeBar, bpCrJump, bpCrSpyOn/Off, BP_RPT_CLOSED and its resize listener; removed 2026-11-01, no longer called) only these stay:
+   the build debounce timer, the pending "§ in report" jump and the output column's scroller. */
+let bpRptTimer=0, BP_RPT_PENDING=null;
 function bpCrScroller(){ const op=document.getElementById("outputPanel"); return (op && /auto|scroll/.test(getComputedStyle(op).overflowY))? op : null; }
-function bpCrKey(box){ return box.classList.contains("cr-sec")? ((box.querySelector(":scope>.cr-h1")||{}).id||"") : (box.id||""); }
-function bpCrSizeBar(pg){
-  const sc=bpCrScroller(), tb=document.getElementById("tabBar"), bar=pg.querySelector(".crv-bar");
-  const top=(sc && tb)? tb.offsetHeight : 0, crv=top+(bar? bar.offsetHeight : 0)+10;
-  pg.style.setProperty("--crv-bar-top",top+"px"); pg.style.setProperty("--crv-top",crv+"px");
-  pg.style.setProperty("--crv-tocmax",Math.max(200,(sc? sc.clientHeight : window.innerHeight)-crv-16)+"px");
-}
-function bpCrJump(doc,id){
-  const t=doc.querySelector('[id="'+id+'"]'); if(!t) return false;
-  let p=t.closest(".cr-closed"); while(p){ p.classList.remove("cr-closed"); BP_RPT_CLOSED.delete(bpCrKey(p)); p=p.parentElement&&p.parentElement.closest(".cr-closed"); }
-  const box=t.classList.contains("cr-h1")? t.closest(".cr-sec") : t;
-  if(box && box.classList.contains("cr-closed")){ box.classList.remove("cr-closed"); BP_RPT_CLOSED.delete(bpCrKey(box)); }
-  t.scrollIntoView({behavior:"smooth",block:"start"}); t.classList.add("cr-flash"); setTimeout(()=>t.classList.remove("cr-flash"),1400);
-  return true;
-}
-function bpCrSpyOff(){ if(bpCrSpy){ bpCrSpy.tgt.removeEventListener("scroll",bpCrSpy.fn); bpCrSpy=null; } }
-function bpCrSpyOn(pg,doc,nav){
-  bpCrSpyOff();
-  const sc=bpCrScroller(), tgt=sc||window; let raf=0;
-  const fn=()=>{ if(raf) return; raf=requestAnimationFrame(()=>{ raf=0; if(!doc.isConnected){ bpCrSpyOff(); return; }
-    const lim=(sc? sc.getBoundingClientRect().top : 0)+parseFloat(getComputedStyle(pg).getPropertyValue("--crv-top")||"70")+8;
-    let cur=null; for(const a of nav.querySelectorAll("a[data-crjump]")){ const h=doc.querySelector('[id="'+a.dataset.crjump+'"]');
-      if(!h || !h.offsetParent) continue; if(h.getBoundingClientRect().top<=lim) cur=a; else break; }
-    nav.querySelectorAll("a.on").forEach(a=>{ if(a!==cur) a.classList.remove("on"); });
-    if(cur && !cur.classList.contains("on")){ cur.classList.add("on");
-      const nr=nav.getBoundingClientRect(), cr=cur.getBoundingClientRect();
-      if(cr.top<nr.top || cr.bottom>nr.bottom) nav.scrollTop+=cr.top-nr.top-nav.clientHeight/3; } }); };
-  tgt.addEventListener("scroll",fn,{passive:true}); bpCrSpy={tgt,fn}; fn();
-}
-function buildReportTab(pg){
-  const bar=el("div","crv-bar");
-  /* chapter chips: the report sections (the "Report contents" settings), the Detail Sheet appendix on its own */
-  const tog=el("div","crv-tog"); tog.setAttribute("role","group"); tog.setAttribute("aria-label","Report chapters");
-  TABS().forEach(([id,label])=>{ if(id==="tabVisual"||id==="tabReport"||id==="tabDetail") return;
-    const optIn=(id==="tabValidation"||id==="tabManual");
-    const lab=el("label","crv-chip"); const cb=document.createElement("input"); cb.type="checkbox";
-    cb.checked=optIn? S.print.sections[id]===true : S.print.sections[id]!==false;
-    cb.addEventListener("change",()=>{ S.print.sections[id]=cb.checked; autosave(); buildOutput(); });
-    lab.appendChild(cb); lab.appendChild(document.createTextNode(label+(optIn?" (appendix)":""))); tog.appendChild(lab); });
-  bar.appendChild(tog);
-  const lab=el("label","crv-chip"); const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(S.print.sections.tabDetail===true);
-  cb.addEventListener("change",()=>{ S.print.sections.tabDetail=cb.checked; autosave(); buildOutput(); });
-  lab.appendChild(cb); lab.appendChild(document.createTextNode("Include Detail Sheet appendix")); bar.appendChild(lab);
-  const cs=document.createElement("select"); [["all","Every combination worked"],["gov","Governing combination only"]].forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; cs.appendChild(o); });
-  cs.value=(S.print.combos.all!==false)? "all" : "gov"; cs.addEventListener("change",()=>{ S.print.combos.all=(cs.value==="all"); autosave(); buildOutput(); });
-  bar.appendChild(cs);
-  bar.appendChild(el("span","crv-sp"));
-  const ex=el("button",null,"Expand all"), co=el("button",null,"Collapse all"), pb=el("button","primary","Print this report");
-  bar.appendChild(ex); bar.appendChild(co); bar.appendChild(pb);
-  pb.addEventListener("click",()=>{ buildPrintReport(); bpadApplyPageCSS(true); setTimeout(()=>window.print(),120); });   /* one builder, printed without the bar or tree */
-  pg.appendChild(bar);
-  const body=el("div","crv-body"), nav=el("nav","crv-toc"), doc=el("article","crdoc crv-doc");
-  nav.setAttribute("aria-label","Report contents"); body.appendChild(nav); body.appendChild(doc); pg.appendChild(body);
-  doc.appendChild(el("div","note","Building the calculation sheet…"));
-  ex.addEventListener("click",()=>{ BP_RPT_CLOSED.clear(); doc.querySelectorAll(".cr-closed").forEach(x=>x.classList.remove("cr-closed")); });
-  co.addEventListener("click",()=>{ doc.querySelectorAll(".cr-sec").forEach(x=>{ if(x.closest(".cr-front")||!x.querySelector(":scope>.cr-h1")) return; x.classList.add("cr-closed"); BP_RPT_CLOSED.add(bpCrKey(x)); }); });
-  requestAnimationFrame(()=>bpCrSizeBar(pg));
-  /* building the whole sheet takes about a second: debounce it so typing stays responsive */
-  clearTimeout(bpRptTimer);
-  bpRptTimer=setTimeout(()=>{ if(!doc.isConnected || S.ui.tab!=="tabReport") return;
-    const sc=bpCrScroller(), keep=sc? sc.scrollTop : 0;
-    buildPrintReport(doc);
-    const toc=window.BPAD_TOC||[]; nav.innerHTML="";
-    toc.forEach(t=>{ const a=el("a","crv-l1",t.n+". "+t.t); a.href="#"+t.id; a.dataset.crjump=t.id; nav.appendChild(a);
-      t.subs.forEach((q,k)=>{ const b=el("a","crv-l2",t.n+"."+(k+1)+" "+q.t); b.href="#"+q.id; b.dataset.crjump=q.id; nav.appendChild(b); }); });
-    doc.querySelectorAll(".cr-sec,.sec").forEach(x=>{ const k=bpCrKey(x); if(k && BP_RPT_CLOSED.has(k)) x.classList.add("cr-closed"); });
-    if(sc) sc.scrollTop=keep;
-    bpCrSizeBar(pg); bpCrSpyOn(pg,doc,nav);
-    if(BP_RPT_PENDING){ const [tb,ci,card]=BP_RPT_PENDING.split("|"); BP_RPT_PENDING=null;
-      const m=window.BPAD_CARDMAP||{}, hit=m[tb+"|"+ci+"|"+card]||m[tb+"||"+card]||m[tb+"|"+(window.BPAD_GI)+"|"+card];
-      if(hit) bpCrJump(doc,hit.id); }
-    doc.dataset.ready="1"; },250);
-  nav.addEventListener("click",e=>{ const a=e.target.closest("a[data-crjump]"); if(!a) return; e.preventDefault(); bpCrJump(doc,a.dataset.crjump); });
-  doc.addEventListener("click",e=>{
-    const a=e.target.closest("a");
-    if(a){ if(a.classList.contains("wkA")) return;   /* "see §n.k": to the tab where it is worked (global handler) */
-      const h=a.getAttribute("href")||""; if(h.charAt(0)!=="#") return; e.preventDefault(); bpCrJump(doc,h.slice(1)); return; }
-    const hd=e.target.closest(".cr-sec>.cr-h1, .sec>.secHead"); if(!hd || hd.closest(".cr-front")) return;
-    const box=hd.classList.contains("cr-h1")? hd.closest(".cr-sec") : hd.closest(".sec"); if(!box) return;
-    box.classList.toggle("cr-closed"); const k=bpCrKey(box); if(box.classList.contains("cr-closed")) BP_RPT_CLOSED.add(k); else BP_RPT_CLOSED.delete(k); });
-}
-window.addEventListener("resize",()=>{ const pg=document.getElementById("page_tabReport"); if(pg && pg.classList.contains("active")) bpCrSizeBar(pg); });
 /* "§ in report": from any other tab, open the Report tab at the section where a card is worked (Gusset's data-rptjump) */
 function bpadRptJ(card,ci){ const cd=BPAD_CARDS[card]; if(!cd) return null;
   const a=el("a","rptJ","§ in report"); a.href="#"; a.dataset.rptjump=cd[0]+"|"+(ci!=null?ci:"")+"|"+card;
