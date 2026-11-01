@@ -298,7 +298,8 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   body.rp-printing>*:not(#rp-print){display:none!important;}
   html:has(body.rp-printing),body.rp-printing{height:auto!important;overflow:visible!important;background:#fff!important;}
   body.rp-printing #rp-print{display:block!important;}
-  .rp-bar,.rp-toc,.rp-go{display:none!important;}
+  .rp-bar,.rp-toc{display:none!important;}
+  .rp-go{font-family:inherit;font-size:inherit;color:#000;text-decoration:none;white-space:normal;}
   .rp-body{display:block;} .rp-sub{content-visibility:visible;}
   .rp-doc{border:0;padding:0;max-width:none;box-shadow:none;}
   .rp-ptoc{display:block;break-after:page;}
