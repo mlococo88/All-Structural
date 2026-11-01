@@ -2965,7 +2965,7 @@ function sfrModel(){
    ['Load input',R.directMode?'Direct factored (LRFD envelope) per pedestal'+(R.aashtoDirect?'; imported AASHTO case "'+R.aashtoDirect.caseName+'" ('+R.aashtoDirect.ls+')':''):'By load type (D, L, Lr, S, Wx, Wy); ASCE 7-16 combinations generated'],
    ['Codes','ACI 318-19 (concrete); ASCE 7-16 §2.3.1 / §2.4.1 (combinations); IBC 2021; bearing capacity per Vesić / Meyerhof (see §8)'],
    ...hand.map(h=>['Hand-off source',h])]},
-   {type:'note',text:'Units: kip, ft, ksf unless noted; bar sizes and covers in in, f′c and f_y in psi. Every value in this report is the value the tool computes on its result tabs ([[tab:schem|Schematic]], [[tab:combos|Load Combinations]], [[tab:bearing|Bearing]], [[tab:stab|Stability]], [[tab:footdes|Footing Design]], [[tab:peddes|Pedestal Design]]).'}]});
+   {type:'note',text:'Units: kip, ft, ksf unless noted; bar sizes and covers in in, f′c and f_y in psi. Every value in this report is the value the tool computes on its result tabs (Schematic[[tab:schem| ↗]], Load Combinations[[tab:combos| ↗]], Bearing[[tab:bearing| ↗]], Stability[[tab:stab| ↗]], Footing Design[[tab:footdes| ↗]], Pedestal Design[[tab:peddes| ↗]]).'}]});
   subs.push({title:'Geometry and materials',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[
    ['Footing width B (x)',sfrCell(R.B),'ft'],['Footing length L (y)',sfrCell(R.L),'ft'],['Footing thickness t',sfrCell(R.t),'ft'],['Embedment D_f (grade to bearing)',sfrCell(R.Df),'ft'],
    ['Concrete unit weight γ_c',sfrCell(R.gc*1000,0),'pcf'],["Concrete f′c",sfrCell(fc,0),'psi'],['Steel f_y',sfrCell(fy,0),'psi'],['Lightweight factor λ',sfrCell(num(state.mat.lambda)),'–'],
@@ -2999,7 +2999,7 @@ function sfrModel(){
    {type:'table',head:['Mat','Bar','Entered as','Entered → derived','A_b (in²)'],rows:[['botX','Bottom, x-bars'],['botY','Bottom, y-bars'],['topX','Top, x-bars'],['topY','Top, y-bars']].map(([k,lab])=>{const e=sfdMat(k);
     return [lab,e.size?'#'+e.size:'none',e.size?(e.mode==='qty'?'total quantity':'spacing'):'—',e.size?sfdMatTxt(k):'—',e.size?sfrCell(e.Ab):'—'];})},
    {type:'steps',scope:'rb',steps:w.steps,title:'Steel area per foot of width (the value used in §5)'},
-   {type:'note',text:'Set on the [[tab:in-rebar|Reinforcement]] input tab. Bars in the x-direction resist bending about the y-axis.'}]});
+   {type:'note',text:'Set on the Reinforcement input tab[[tab:in-rebar| ↗]]. Bars in the x-direction resist bending about the y-axis.'}]});
   const pr=R.peds.map((p,i)=>{const rf=(state.peds[i]||{}).reinf||{};return [p.label,sfrCell(p.x),sfrCell(p.y),sfrN(p.bx)+' × '+sfrN(p.by)+' × '+sfrN(p.h),sfrN(p.lex,3)+', '+sfrN(p.ley,3),
    p.h>1e-9?(sfdPedBarTxt(i)+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in (clear to the vertical bars; exposure: '+(SFTC_EXP[rf.exposure]||SFTC_EXP.weather)[1]+')'+'; dowels '+rf.dowelN+' #'+rf.dowelSize):'bearing patch (h = 0)'];});
   const lr=[];
@@ -3148,7 +3148,7 @@ function sfrModel(){
    S({id:'dx',label:'Effective depth, bottom x-bars (on top of the y-bars)',sym:'d_{x}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,x}}{2} \\minus d_{b,y}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx/2,3)+' \\minus '+sfrN(dby,3),value:P2.dBotX,unit:'in',d:3}),
    S({id:'dy',label:'Effective depth, bottom y-bars',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3}),
    S({id:'davg',label:'Average depth (two-way shear)',sym:'d_{avg}',eq:'\\frac{d_{x} + d_{y}}{2}',sub:'\\frac{'+sfrN(P2.dBotX,3)+' + '+sfrN(P2.dBotY,3)+'}{2}',value:P2.dAvg,unit:'in',d:3})]},
-   {type:'note',text:'Strength (LRFD) combinations (§2.3). The net factored pressure is solved for each combination on a rigid footing with no-tension soil from the pedestal loads (axial, applied moments, V·h couples and P·e from load offsets) and the body forces; moments and shears at each critical section are integrated from that pressure solid. Capacities per foot of width, A_s = 12 A_b / s (§1.4). Shear and moment diagrams: [[tab:footdes|Footing Design tab]].'}]});
+   {type:'note',text:'Strength (LRFD) combinations (§2.3). The net factored pressure is solved for each combination on a rigid footing with no-tension soil from the pedestal loads (axial, applied moments, V·h couples and P·e from load offsets) and the body forces; moments and shears at each critical section are integrated from that pressure solid. Capacities per foot of width, A_s = 12 A_b / s (§1.4). Shear and moment diagrams: Footing Design tab[[tab:footdes| ↗]].'}]});
   ['x','y'].forEach(dir=>{
    const des=dir==='x'?P2.desX:P2.desY, k='fd'+dir, cb=des.capBot, mt=dir==='x'?state.freinf.botX:state.freinf.botY;
    const T=[];
@@ -3189,7 +3189,7 @@ function sfrModel(){
     S({id:'avail',label:'Available from the governing section to the edge, less end cover',sym:'\\ell_{avail}',eq:'12(\\tfrac{B}{2} \\minus |x_{sec}|) \\minus c_{end}'.replace('\\tfrac','\\frac'),sub:'12\\cdot('+sfrN(dd.hf,3)+' \\minus '+sfrN(Math.abs(dd.sec),3)+') \\minus '+sfrN(sfdEndCover()),value:dd.avail,unit:'in'}),
     S({id:'ldok',label:dd.dv.Ld<=dd.avail?'Straight bars develop':'Hooks required',sym:'\\ell_{d}',eq:'\\le \\ell_{avail}',sub:sfrN(dd.dv.Ld)+(dd.dv.Ld<=dd.avail?' \\le ':' \\gt ')+sfrN(dd.avail),value:dd.dv.Ld,unit:'in',ok:dd.dv.Ld<=dd.avail})]});
    subs.push({title:(dir==='x'?'Longitudinal (x-direction) bars':'Transverse (y-direction) bars')+': flexure, minimum steel, spacing, one-way shear, development',items:[sfrTopics(k,T),
-    {type:'note',text:'Bars in the '+dir+'-direction resist bending about the '+(dir==='x'?'y':'x')+'-axis. Effective depth: [[fd/d'+dir+']]. Moment and shear diagrams: [[tab:footdes|Footing Design tab]].'}]});
+    {type:'note',text:'Bars in the '+dir+'-direction resist bending about the '+(dir==='x'?'y':'x')+'-axis. Effective depth: [[fd/d'+dir+']]. Moment and shear diagrams: Footing Design tab[[tab:footdes| ↗]].'}]});
   });
   /* punching */
   const PT=[];
@@ -3247,7 +3247,7 @@ function sfrModel(){
      S({id:q+'DCR',label:'Shear friction: demand / capacity (φ = 0.75)',sym:'DCR',eq:'\\frac{V_{u}}{0.75 \\min(V_{n}, V_{n,max})}',sub:'\\frac{'+sfrN(g.Vu)+'}{0.75\\cdot'+sfrN(g.Vn)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});
     ftab.push({type:'table',head:[z.label+': combination','V_ux','V_uy','V_u (kip)','N_u (kip)','φV_n (kip)','DCR'],rows:z.rows.map(r=>({cells:[r.name,sfrCell(r.Vx),sfrCell(r.Vy),sfrCell(r.Vu),sfrCell(r.Nu),sfrCell(r.phiVn),sfrDC(r.ratio)],cls:r===g?'gov':''}))});});
     if(FT.length)subs.push({title:'Shear friction across the pedestal–footing interface',items:[sfrTopics('sf',FT),...ftab]});}
-   if(DT.length)subs.push({title:'Dowels at the pedestals (tension at the interface, development, laps, projection)',items:[sfrTopics('dow',DT),...tabs,{type:'note',text:'A combination puts the interface in tension when P_u < 0 or the resultant is outside the kern (σ_min < 0). For those combinations the dowels are checked as the reinforcement of the interface section with the strain-compatibility routine of the pedestal P–M check. Worked on the [[tab:footdes|Footing Design tab]], 5.6.'}]});}
+   if(DT.length)subs.push({title:'Dowels at the pedestals (tension at the interface, development, laps, projection)',items:[sfrTopics('dow',DT),...tabs,{type:'note',text:'A combination puts the interface in tension when P_u < 0 or the resultant is outside the kern (σ_min < 0). For those combinations the dowels are checked as the reinforcement of the interface section with the strain-compatibility routine of the pedestal P–M check. Worked on the Footing Design tab[[tab:footdes| ↗]], 5.6.'}]});}
   const bc=P2.bandChk;
   if(bc&&bc.applies)subs.push({title:'Short-direction band reinforcement (advisory)',items:[{type:'steps',scope:'band',steps:[
    S({id:'gs',label:'Banded fraction',sym:'\\gamma_{s}',eq:'\\frac{2}{\\beta + 1}',sub:'\\frac{2}{'+sfrN(bc.beta,3)+' + 1}',value:bc.gs,unit:'',d:3,ref:'ACI 318-19 13.3.3.3'}),
@@ -3305,7 +3305,7 @@ function sfrModel(){
     ...(pd.pmRat&&pd.pmRat.length?[{type:'table',wide:true,head:['Combination','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','|M_u| (kip-ft)','|φM_n|_θ (kip-ft)','ratio'],   /* SFPM */
      rows:pd.pmRat.map(z=>({cells:[z.name+(z.mode==='radial'?'':' ('+sfpmModeTxt(z)+')'),sfrCell(z.P),sfrCell(z.Mx),sfrCell(z.My),sfrCell(z.Md),z.Rc==null?sfrCell('—'):sfrCell(z.Rc),isNaN(z.ratio)?sfrCell('n/a'):sfrDC(z.ratio)],cls:z===pd.pmGov?'gov':''}))},
      {type:'note',text:'Each combination is checked on the contour at its own P_u, in the direction of its moment (same procedure as the governing row, worked above). Combination with no moment: ratio 0 (axial: see Axial strength).'}]:[]),
-    {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the [[tab:peddes|Pedestal Design tab]]. Combination actions: §2.3; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'}]});
+    {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the Pedestal Design tab[[tab:peddes| ↗]]. Combination actions: §2.3; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'}]});
   });
   secs.push({title:'Pedestal design',subs});
  }
