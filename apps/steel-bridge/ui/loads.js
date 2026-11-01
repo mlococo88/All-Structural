@@ -18,6 +18,31 @@
     if (!P.ownerRules.eta) P.ownerRules.eta = { D: 'no', R: 'auto', I: 'no', eD: 1, eR: 1, eI: 1 };
   }
 
+  /* applyOwnerDefaults(P): the "Apply <DOT> defaults" button. The same assignments as before (deck.tsac sets the total deck thickness to t_s + the
+     sacrificial thickness; xs.ws.psf also switches the wearing surface to weight mode); the inputs it changes are recorded, UI message only:
+     { owner, changes: [{ tab, field, unit, from, to }], same: [{ tab, field }] } (same: already at the default). Nothing computed changes. */
+  const OD_LABEL = { 'materials.concrete.fc': ['Materials & deck', 'Concrete f′c', 'ksi'], 'deck.tdeck': ['Materials & deck', 'Total deck thickness', 'in'],
+    'materials.concrete.wcE': ['Cross-section & loads', 'w_c for E_c only', 'kcf'], 'xs.ws.psf': ['Cross-section & loads', 'Future wearing surface', 'psf'],
+    'xs.ws.mode': ['Cross-section & loads', 'Wearing surface entered as', ''], 'xs.dlMethod': ['Cross-section & loads', 'Dead load distribution', ''] };
+  let lastOwnDef = null;
+  function odText(path, v) {
+    if (v == null || (typeof v === 'number' && !isFinite(v)) || v === '') return '(blank)';
+    if (path === 'xs.ws.mode') return v === 'psf' ? 'Weight (psf)' : v === 'thk' ? 'Thickness × unit weight' : String(v);
+    if (path === 'xs.dlMethod') return LD().METHODS[v] || String(v);
+    return String(v);
+  }
+  function applyOwnerDefaults(P) {
+    const owner = P.ownerRules.owner, changes = [], same = [];
+    const assign = (path, v) => { const old = get(P, path); setp(P, path, v); const lab = OD_LABEL[path] || ['', path, ''];
+      if (old === v) same.push({ tab: lab[0], field: lab[1] }); else changes.push({ tab: lab[0], field: lab[1], unit: lab[2], from: odText(path, old), to: odText(path, v) }); };
+    O().defaults(owner).forEach(d => {
+      if (d.path === 'deck.tsac') assign('deck.tdeck', P.deck.ts + d.value);
+      else { assign(d.path, d.value); if (d.path === 'xs.ws.psf') assign('xs.ws.mode', 'psf'); } });
+    return { owner, changes, same };
+  }
+  /* takeOwnerDefaults(): the record of the last "Apply defaults" click (once), or null. The page shows it as a message. */
+  function takeOwnerDefaults() { const r = lastOwnDef; lastOwnDef = null; return r; }
+
   /* ---------- inputs ---------- */
   /* ownerCard(P, h): the "Bridge owner (DOT) rules" card. The page (index.html) draws it on the Project input tab, under the Project card
      (moved from the Cross-section & loads tab, UI only: same paths ownerRules.*, same ownDef button, handled by onClick below). */
@@ -80,7 +105,7 @@
     else if (a === 'delExtra') x.extra.splice(+b.dataset.i, 1);
     else if (a === 'addOvl') x.overlays.push({ name: `Overlay ${x.overlays.length + 1}`, mode: 'psf', psf: 0, thk: null, gam: null });
     else if (a === 'delOvl') x.overlays.splice(+b.dataset.i, 1);
-    else if (a === 'ownDef') { O().defaults(P.ownerRules.owner).forEach(d => { if (d.path === 'deck.tsac') P.deck.tdeck = P.deck.ts + d.value; else { setp(P, d.path, d.value); if (d.path === 'xs.ws.psf') P.xs.ws.mode = 'psf'; } }); }
+    else if (a === 'ownDef') { lastOwnDef = applyOwnerDefaults(P); }
     else return false;
     return true;
   }
@@ -154,5 +179,5 @@
   function after(el, P, R, ui) { if (R && !(R.errors && R.errors.length)) window.SharedSteps.wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const slot = el.querySelector('#gfx_ld'); if (!slot || !R || (R.errors && R.errors.length) || !window.SBDGfxA) return;
     window.SBDGfxA.loads(slot, { P, R, lg: Math.min(ui.lg || 0, R.dead.N - 1), lr: Math.min(ui.lr || 0, R.regions.length - 1) }); }
-  window.SBDUiLoads = { TOPICS, groups, after, ensure, ownerCard, inputs, onChange, onClick, calc, output, onOutChange, onOutClick };
+  window.SBDUiLoads = { TOPICS, groups, after, ensure, ownerCard, inputs, onChange, onClick, takeOwnerDefaults, applyOwnerDefaults, calc, output, onOutChange, onOutClick };
 })();

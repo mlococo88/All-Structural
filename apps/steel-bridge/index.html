@@ -13,6 +13,8 @@
 <script src="../../shared/units.js"></script>
 <script src="../../shared/steps.js"></script>
 <script src="engine/model.js"></script>
+<script src="engine/library.js"></script>
+<script src="ui/library.js"></script>
 <script src="engine/legacy.js"></script>
 <script src="ui/legacy.js"></script>
 <script src="engine/sections.js"></script>
@@ -147,20 +149,35 @@
   a.wk{font-family:var(--font-ui);font-size:8.5pt;}
   .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin:6px 0;}
   .kv div{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:2px 0;}
-  @media print{ #hdrBtns,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+  /* saved-project list, undo / redo and the change message (2026-11-01) */
+  #hdrBtns button:disabled{opacity:.4;cursor:default;} #saveState{font-family:var(--font-ui);font-size:9pt;} #saveState.dirty{color:#FDE68A;font-weight:600;} #saveState.err{color:#FECACA;font-weight:600;}
+  #libDlg{border:1px solid var(--slate-400);border-radius:8px;padding:12px 16px;width:min(860px,94vw);max-height:86vh;overflow:auto;font-family:var(--font-ui);font-size:10pt;color:var(--ink);}
+  #libDlg::backdrop{background:rgba(15,23,42,.45);} #libDlg .libHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12pt;}
+  #libDlg .libAct{white-space:nowrap;text-align:right;} #libDlg .libAct button{margin-left:4px;font-size:9pt;padding:2px 8px;}
+  #libDlg .libUse{display:flex;gap:10px;align-items:center;font-size:9pt;color:#475569;margin:8px 0;} .libBar{flex:0 0 140px;height:10px;border-radius:5px;background:var(--slate-200);overflow:hidden;} .libBar i{display:block;height:100%;background:var(--green-600);}
+  .libBar.high i{background:var(--amber-700);} .libBar.full i{background:var(--fail);}
+  #toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;font-family:var(--font-ui);font-size:9.5pt;}
+  #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
+  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
 </style>
 </head>
 <body>
+<div id="toast" role="status" hidden></div>
 <div id="app">
   <header id="hdr">
     <div class="titleRow">
       <div>
         <h1>Steel Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
-        <div class="byline">AASHTO LRFD 10th Ed. (2024) · <span id="projName"></span></div>
+        <div class="byline">AASHTO LRFD 10th Ed. (2024) · <span id="projName"></span> · <span id="saveState" aria-live="polite"></span></div>
         <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
       <div id="hdrBtns">
+        <button type="button" id="bSave" title="Save the open project in this browser's project list (Ctrl+S)">Save</button>
+        <button type="button" id="bSaveAs" title="Save the open project under a new name">Save as…</button>
+        <button type="button" id="bLib" title="The projects saved in this browser: open, rename, duplicate, delete">Saved projects…</button>
+        <button type="button" id="bUndo" title="Undo the last input change (Ctrl+Z)" disabled>Undo</button>
+        <button type="button" id="bRedo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
         <button type="button" id="bNew">New</button>
         <button type="button" id="bImport" title="A project of this app, or of the old Steel Bridge Design (GirderDetail, Preliminary sizing, ST-Girder)">Import JSON…</button>
         <button type="button" id="bOld" title="Import the project the old Steel Bridge Design autosaved in this browser (read only: the old app's saved data is not changed)">From old app</button>
@@ -190,6 +207,13 @@
   if (window.SBDReportData && window.SBDReportData.install) window.SBDReportData.install();   // one analysis cache for every output tab and the report (paths PR, 2026-10-30)
   const L = M.load(store || memStore);
   let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
+  const LIB = window.SBDLibrary, LS = store || memStore;
+  /* saved-project link (engine/library.js): cur.id = the library item the open project was last saved to / opened from; cur.text = its
+     normalised file text then (null: not saved anywhere in the browser). The open project is "unsaved" when its normalised text differs. */
+  const ensureAll = Q => { UL.ensure(Q); window.SBDShearUI.ensure(Q); window.SBDFatigueUI.ensure(Q); window.SBDFramingUI.ensure(Q); window.SBDSplicesUI.ensure(Q); window.SBDRatingUI.ensure(Q); };
+  const norm = Q => { const c = JSON.parse(JSON.stringify(Q)); ensureAll(c); return M.exportJSON(c); };
+  let cur = { id: null, text: null }, autoFailed = false, snap = '', undoS = [], redoS = [], stepNo = 0, toastStep = -1;
+  const UNDO_MAX = 100;   // steps kept in this session (the brief asks for at least 50)
   let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos', otab: 'sec', lg: 0, lr: 0 };
   try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* default tabs */ }
   if (ui.itab === 'fr') ui.itab = 'spans';   // the Framing input tab was merged into Spans & framing; an old saved value opens it (stored key unchanged)
@@ -265,7 +289,7 @@
     changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode)|stiffeners\.layout\.(mode|web)|framing\.|crossframes\.|splices\.auto)/.test(el.dataset.path || ''));
   });
   $('inPanes').addEventListener('click', e => {
-    if (UL.onClick(e, P)) { changed(true); return; }
+    if (UL.onClick(e, P)) { changed(true); const od = UL.takeOwnerDefaults(); if (od) showOwnDef(od); return; }
     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }
     if (window.SBDFatigueUI.onClick(e, P, ui)) { changed(true); return; }
     if (window.SBDSplicesUI.onClick(e, P, ui)) { changed(true); return; }
@@ -275,14 +299,81 @@
     if (e.target.id === 'bAddSeg') { const S = P.girders[ui.g].segments, last = S[S.length - 1], tot = P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), mid = (last.x0 + last.x1) / 2;
       S.splice(S.length - 1, 1, { ...last, x1: mid }, { ...last, x0: mid, x1: last.x1 > 0 ? last.x1 : tot }); changed(true); }
   });
-  function changed(redraw) {
+  function changed(redraw, restoring) {
     // keep the segments contiguous: each x0 is the x1 before it
     P.girders.forEach(g => g.segments.forEach((s, i) => { if (i) s.x0 = g.segments[i - 1].x1; }));
-    if (autosave) M.save(store || memStore, P);
+    if (autosave) autoFailed = !M.save(LS, P);   // false: storage refused (full); the project stays open and the header says so
     $('projName').textContent = P.project.name || '';
     if (redraw) drawInputs(); else markErrors();
     markStale();
+    if (!restoring) { const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++; if (toastStep !== stepNo) closeToast(); } }   // one undo step per input change; a message with an Undo button closes when a later change is made
+    syncBar();
   }
+  /* ---------- undo / redo (session only: nothing is stored) ---------- */
+  function restore(from, to) {
+    if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);
+    ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = Math.min(ui.seg, P.girders[ui.g].segments.length - 1);
+    closeToast(); changed(true, true);
+  }
+  const undo = () => restore(undoS, redoS), redo = () => restore(redoS, undoS);
+  /* ---------- saved projects (engine/library.js, ui/library.js) ---------- */
+  const isDirty = () => cur.text == null || norm(P) !== cur.text;
+  function syncBar() {
+    $('bUndo').disabled = !undoS.length; $('bRedo').disabled = !redoS.length;
+    const el = $('saveState'), d = isDirty();
+    el.className = autoFailed ? 'err' : d ? 'dirty' : '';
+    el.textContent = autoFailed ? 'Autosave failed: browser storage is full. Export JSON now.' : cur.id ? (d ? 'Unsaved changes' : 'Saved') : 'Not saved to the project list';
+    if (window.SBDLibraryUI) window.SBDLibraryUI.refresh();
+  }
+  function toast(html, o) { o = o || {}; const t = $('toast'); t.className = o.err ? 'err' : ''; toastStep = o.undo ? stepNo : -1;
+    t.innerHTML = html + '<div class="tBtns">' + (o.undo ? '<button type="button" id="tUndo">Undo</button>' : '') + '<button type="button" id="tClose">Close</button></div>'; t.hidden = false; }
+  /* the Apply <DOT> defaults message (ui/loads.js takeOwnerDefaults): exactly the inputs that changed, tab, field, old to new */
+  function showOwnDef(od) {
+    if (!od.changes.length) { toast(`<strong>${esc(od.owner)} defaults:</strong> no input changed; every default is already entered.`); return; }
+    toast(`<strong>${esc(od.owner)} defaults applied: ${od.changes.length} input${od.changes.length > 1 ? 's' : ''} changed</strong><ul>${od.changes.map(c => `<li><span class="tFld">${esc(c.tab)} › ${esc(c.field)}</span>: ${esc(c.from)} <span class="tArr">→</span> ${esc(c.to)}${c.unit ? ' ' + esc(c.unit) : ''}</li>`).join('')}</ul>`
+      + (od.same.length ? `<div class="note">Already at the default, not changed: ${od.same.map(c => esc(c.field)).join(', ')}.</div>` : ''), { undo: true });
+  }
+  function closeToast() { $('toast').hidden = true; }
+  $('toast').addEventListener('click', e => { if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
+  const loadAs = (proj, id, textFn) => { P = proj; ui.g = 0; ui.seg = 0; autosave = true; undoS = []; redoS = []; closeToast(); changed(true, true); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); snap = JSON.stringify(P); syncBar(); };   // a different project: the undo history starts again
+  function doSave(asNew) {
+    let id = asNew ? null : cur.id;
+    if (!id) {
+      const n0 = String(P.project.name || '').trim(); let n = prompt(asNew ? 'Save as (project name):' : 'Save to the project list as:', asNew && cur.id ? n0 + ' (2)' : n0 || 'Untitled'); if (n == null) return false; n = n.trim(); if (!n) { alert('Enter a project name.'); return false; }
+      const same = LIB.list(LS).find(i => i.name === n);
+      if (same) { if (!confirm('A saved project named "' + n + '" already exists. Replace it with the open project?')) return false; id = same.id; }
+      P.project.name = n; $('projName').textContent = n;
+    }
+    const r = LIB.save(LS, P, id);
+    if (!r.ok) { toast('<strong>Not saved.</strong> ' + esc(r.message), { err: true }); syncBar(); return false; }
+    cur = { id: r.id, text: norm(P) }; LIB.setCur(LS, r.id); if (autosave) autoFailed = !M.save(LS, P);
+    const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); redoS.length = 0; snap = t; }   // the name change, if any
+    drawInputs(); syncBar(); return true;
+  }
+  /* guard(): true when it is fine to replace the open project (nothing unsaved, or the engineer chose to go on) */
+  const guard = what => !isDirty() || confirm('The open project has changes that are not saved to the project list (the autosave keeps them only until another project replaces them).\n\nContinue and ' + what + '? Choose Cancel, then Save (or Export JSON) first.');
+  function openSaved(id) {
+    if (!guard('open the other project')) return false;
+    const r = LIB.open(LS, id); if (!r.ok) { alert(r.error); return false; }
+    loadAs(r.project, id, norm); return true;
+  }
+  window.SBDLibraryUI.init({ store: LS, curId: () => cur.id, open: openSaved,
+    renamed: (id, name, text) => { P.project.name = name; const q = M.importJSON(text); cur.text = q.ok ? norm(q.project) : cur.text; changed(true); },
+    unlinked: () => { cur = { id: null, text: null }; syncBar(); } });
+  $('bSave').addEventListener('click', () => { if (doSave(false)) { const n = P.project.name; $('saveState').textContent = 'Saved "' + n + '"'; setTimeout(syncBar, 2500); } });
+  $('bSaveAs').addEventListener('click', () => doSave(true));
+  $('bLib').addEventListener('click', () => window.SBDLibraryUI.show());
+  $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
+  document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
+  document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
+  document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return; const k = e.key.toLowerCase(), t = e.target;
+    if (k === 's') { e.preventDefault(); $('bSave').click(); return; }
+    if (t && t.dataset && t.dataset.typing) return;   // text being typed in a field: the browser's own undo for that field
+    if (document.getElementById('libDlg').open) return;
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+  });
 
   /* ---------- results ---------- */
   function markStale() { stale = true; drawOut(); }
@@ -350,7 +441,7 @@
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); drawOut(); });
 
   /* ---------- header ---------- */
-  $('bNew').addEventListener('click', () => { if (!confirm('Start a new project? The current one is replaced (export it first to keep it).')) return; P = M.defaultProject(); ui.g = 0; ui.seg = 0; autosave = true; changed(true); });
+  $('bNew').addEventListener('click', () => { if (!confirm('Start a new project? The current one is replaced (export it first to keep it).')) return; loadAs(M.defaultProject(), null, norm); });
   $('bExport').addEventListener('click', () => {
     const a = document.createElement('a'), name = (P.project.name || 'steel-bridge').replace(/[^\w.-]+/g, '_');
     a.href = URL.createObjectURL(new Blob([M.exportJSON(P)], { type: 'application/json' })); a.download = name + '.sbd2.json'; document.body.appendChild(a); a.click();
@@ -359,16 +450,20 @@
   $('bImport').addEventListener('click', () => $('fImport').click());
   $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
     rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
-      if (!r.ok) { alert(r.error); return; } P = r.project; ui.g = 0; ui.seg = 0; autosave = true; changed(true);
+      if (!r.ok) { alert(r.error); return; } if (!guard('import the file')) return; loadAs(r.project, null, null);
       if (r.summary) window.SBDLegacyUI.show(r.summary); };   // an old project (engine/legacy.js): its import summary
     rd.readAsText(f); });
   // the old app's autosaves (girderdetail_autosave_v1, plateline_autosave_v1, stgirder.session): read only, never written or deleted
   $('bOld').addEventListener('click', () => { const r = window.SBDLegacy.fromStorage(store || memStore); if (!r.ok) { alert(r.error); return; }
     if (!confirm('Import the project the old Steel Bridge Design autosaved in this browser? It replaces the current project here (export it first to keep it). The old app\'s data is not changed.')) return;
-    P = r.project; ui.g = 0; ui.seg = 0; autosave = true; changed(true); window.SBDLegacyUI.show(r.summary); });
+    loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
 
   $('projName').textContent = P.project.name || '';
   drawInputs(); calc();
+  { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (nothing to lose when it is a blank new project)
+    if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
+    else if (L.source === 'default') cur = { id: null, text: norm(P) };
+    snap = JSON.stringify(P); syncBar(); }
 })();
 </script>
 </body>
