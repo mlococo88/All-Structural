@@ -704,6 +704,11 @@
     const E = env0(env), P = clone(p0);
     const R0 = compute(P, E); if (R0.errors.length) return { ok: false, msg: 'Fix the splice input errors first.', fails: ['input errors'], p: P };
     const undo = clone({ top: P.top, bot: P.bot, web: P.web });
+    // SB2-AD8 (lead decision 2026-10-30; B4 2026-11-01): the end distances e_f, e_p (flanges) and e_w, e_wp (web) are at least DT4's minimum
+    // e_min = max(Art. 6.13.2.6.5 with Table 6.13.2.6.6-1, the owner's edge distance: CTDOT BRSDM V2 6.13.6.1, 2 in); a larger entered value is kept. GirderDetail's
+    // autoDesignSplice keeps the entered ones (1.75 in by default), so every CTDOT splice it designs fails DT4.
+    const eMin = R0.emin, upE = (o, f) => { if (!(parseDim(o[f]) >= eMin - 1e-9)) o[f] = eMin; };
+    ['top', 'bot'].forEach(k => { upE(P[k], 'ef'); upE(P[k], 'ep'); }); upE(P.web, 'ew'); upE(P.web, 'ewp');
     const bt = BOLT[P.bolts.d] || BOLT['0.875'], d = bt.d, em = Math.max(bt.emin[P.bolts.edge === 'sh' ? 'sh' : 'cut'], (E.rule('spl.ovs') || { value: { edge: 0 } }).value.edge);   // OWN25: owner edge distance
     const q4 = v => Math.floor(v * 4 + 1e-6) / 4, u4 = v => Math.ceil(v * 4 - 1e-6) / 4, q2 = v => Math.floor(v * 2 + 1e-6) / 2;
     const cw = parseDim(P.clr.cw), cv = parseDim(P.clr.cv), g = u4(Math.max(3, 3 * d)), OK = ['pass', 'na', 'adv'], DT = ['DT1', 'DT2', 'DT3', 'DT4', 'DT5', 'DT6', 'DT7', 'DT8', 'DT9', 'DT10', 'DT11'];
