@@ -4476,13 +4476,13 @@ function cbcRptModel(){
     const st=c=>{ if(c.na) return {t:'N/A',cls:'na'}; const ok=c.forceOK!=null?c.forceOK:(c.dcr<=1.0001); return {t:ok?'PASS':'FAIL',cls:ok?(c.dcr>=0.9&amp;&amp;c.forceOK==null?'hi':'ok'):'ng'}; };
     secs.push({title:'Summary of checks',subs:[{title:'All checks, enveloped over the load combinations',items:[{type:'table',head:['Check','Reference','D/C','Governing combination','Status'],
       rows:K.map(c=>[c.label,cRef(c.ref),{t:c.na||c.dcr==null?'—':(isFinite(c.dcr)?fmt(c.dcr,3):'∞'),n:true,key:keyOf(c)},c.na?'—':c.combo,st(c)])},
-      {type:'note',text:'Each D/C links to the step where it is worked. On screen: [[tab:tabSummary|Summary tab]].'}]}]});
+      {type:'note',text:'Each D/C links to the step where it is worked. [[tab:tabSummary|On screen: Summary tab]]'}]}]});
   }
   /* 3.–5. flexure, shear, torsion: every combination (an identical combination refers to the first) */
   const per=(title,pre,fn,tab,gov)=>{ const subs=CC.combos.map(r=>{
       const sa=r.sameAs!==undefined&amp;&amp;r.sameAs!==r.ci;
-      return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': see [['+pre+r.sameAs+'/DCR]].'}]
-        :fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it).concat([{type:'note',text:'On screen: [[tab:'+tab+'|'+cbcTabName(tab)+' tab]].'}])}; });
+      return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': see [['+pre+r.sameAs+'/'+({fx:'Mu',sh:'d',tq:'Acp'}[pre])+']].'}]
+        :fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it).concat([{type:'note',text:'[[tab:'+tab+'|On screen: '+cbcTabName(tab)+' tab]]'}])}; });
     secs.push({title,subs}); };
   per('Flexure','fx',cbcRptFlex,'tabFlex',CC.govFlexIndex);
   per('Shear','sh',cbcRptShear,'tabShear',CC.govShearIndex);
@@ -4501,7 +4501,7 @@ function cbcRptModel(){
         cS({id:'need',label:'Required resistance',sym:'\\min\\left(M_{cr},\\;1.33M_u\\right)',eq:'',sub:'\\min\\left('+fmt(McrF)+',\\;'+(Math.abs(g.Mu)>0?fmt(1.33*Math.abs(g.Mu)):'\\text{n/a}')+'\\right)',value:need,unit:'kip-ft'}),
         cS({id:'minr',label:'Minimum reinforcement: required / M_r ('+cn(g)+')',sym:'\\dfrac{\\min(M_{cr},1.33M_u)}{\\phi M_n}',eq:'',sub:'\\dfrac{'+fmt(need)+'}{'+fmt(g.phiMn)+'}',value:g.phiMn>0?need/g.phiMn:Infinity,d:3,ok,note:'φM_n: see §phiMn'})]});
     }
-    subs.push({title:'Cracking moment and minimum reinforcement ('+cn(g)+')',items:[{type:'topics',scope:'sv',see:'fx'+g.ci,title:'Worked steps',list:T},{type:'note',text:'Deflection and crack-width control are not evaluated by this tool. On screen: [[tab:tabServ|Serviceability tab]].'}]});
+    subs.push({title:'Cracking moment and minimum reinforcement ('+cn(g)+')',items:[{type:'topics',scope:'sv',see:'fx'+g.ci,title:'Worked steps',list:T},{type:'note',text:'Deflection and crack-width control are not evaluated by this tool. [[tab:tabServ|On screen: Serviceability tab]]'}]});
     if(S.crack.check&amp;&amp;S.crack.fsBasis==='calc'){
       [[false,'Positive moment — bottom face in tension',Math.abs(S.crack.MsPos||0),'p'],[true,'Negative moment — top face in tension',Math.abs(S.crack.MsNeg||0),'n']].forEach(cse=>{
         const SS=serviceSteelStress(cse[0],cse[2]); if(!SS) return;
@@ -4521,7 +4521,7 @@ function cbcRptModel(){
     const L=ENV.filter(E=>!E.na).map(E=>{ const d=E.entry, dp=d.unit==='in²/in'?4:(d.unit===''?5:3);
       return {title:d.name+' ('+E.combo+')',ref:cRef(d.ref),steps:d.deriv.map((q,k)=>cS({id:d.id+'.'+k,label:q[2]||d.name,sym:'',eq:q[0],sub:q[1]||'',value:null})).concat([
         cS({id:d.id+'.cmp',label:'Provided '+(d.cmp==='\\ge'?'≥':'≤')+' required',sym:'\\text{provided}',eq:d.cmp+'\\;\\text{required}',sub:fmt(d.have,dp)+' '+d.cmp+' '+fmt(d.need,dp),value:d.have,unit:cU(d.unit),d:dp,ok:!!d.ok,note:E.allOk?'':'fails for at least one combination'})])}; });
-    if(L.length) subs.push({title:'Worked detailing checks',items:[{type:'topics',scope:'dt',title:'Worked steps',list:L},{type:'note',text:'On screen: [[tab:tabDetail|Detailing tab]].'}]});
+    if(L.length) subs.push({title:'Worked detailing checks',items:[{type:'topics',scope:'dt',title:'Worked steps',list:L},{type:'note',text:'[[tab:tabDetail|On screen: Detailing tab]]'}]});
     const na=ENV.filter(E=>E.na); if(na.length) subs.push({title:'Not applicable',items:na.map(E=>({type:'note',text:E.entry.name+': '+E.naWhy}))});
     secs.push({title:'Detailing',subs});
   }
@@ -6025,7 +6025,7 @@ function asdRptModel(){
     {type:'table',caption:'Load rating summary',head:['Rating level','$M_{all}$ (kip-ft)','Controlled by','RF','Status'],rows:[].concat(
       S.mode.inv?[['Inventory',{t:F(R.M_inv),n:true,key:'an/inv.M'},R.ctrl_inv,{t:isFinite(R.rf_inv)?F(R.rf_inv):'—',n:true,key:'an/inv.RF'},isFinite(R.rf_inv)?{t:R.rf_inv>=1?'PASS':'FAIL',cls:R.rf_inv>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[],
       S.mode.op?[['Operating',{t:F(R.M_op),n:true,key:'an/op.M'},R.ctrl_op,{t:isFinite(R.rf_op)?F(R.rf_op):'—',n:true,key:'an/op.RF'},isFinite(R.rf_op)?{t:R.rf_op>=1?'PASS':'FAIL',cls:R.rf_op>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[])},
-    {type:'note',text:'Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15); compression steel (8.15.3) is ignored and ASD shear (8.15.5) is not checked. A rating level passes when RF ≥ 1.00. On screen: [[tab:tabAnalysis|Analysis tab]].'+(R.A.fc_op>0.60*R.fc+1e-9?' Operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.6.2.3): confirm the owner\'s basis.':'')}])}]});
+    {type:'note',text:'Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15); compression steel (8.15.3) is ignored and ASD shear (8.15.5) is not checked. A rating level passes when RF ≥ 1.00. [[tab:tabAnalysis|On screen: Analysis tab]]'+(R.A.fc_op>0.60*R.fc+1e-9?' Operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.6.2.3): confirm the owner\'s basis.':'')}])}]});
   return {title:'ASD Beam Rating',code:'AASHTO Std. Spec. 8.15 (working stress); AASHTO MBE 6B',proj:P,refs:ASD_REFS,sections:secs};
 }
 
@@ -6366,7 +6366,7 @@ a.wkA:hover{text-decoration:underline;}
         <button class=&quot;tab&quot; data-tab=&quot;tsplice&quot;>Tension Splice</button>
         <button class=&quot;tab&quot; data-tab=&quot;csplice&quot;>Comp. Splice</button>
         <button class=&quot;tab&quot; data-tab=&quot;batch&quot;>Bar Schedule</button>
-        <button class=&quot;tab&quot; data-tab=&quot;report&quot;>Report</button>
+        <!-- CBRP-2 (2026-11-01): no Report tab button in this embedded copy; the suite's combined Report tab (chapter C) covers it -->
       </div>
       <div id=&quot;dashboard&quot; class=&quot;dash&quot;></div>
       <div id=&quot;tabcontent&quot; class=&quot;tabcontent&quot;></div>
@@ -8302,7 +8302,7 @@ function rbrModel(){
     const subs=[];
     subs.push({title:'Project',items:[{type:'kv',rows:[['Project',inp.projName||'—'],['Project number',inp.projNo||'—'],
       ['Calculated by',(inp.calcBy||'—')+(inp.calcDate?', '+inp.calcDate:'')],['Checked by',(inp.chkBy||'—')+(inp.chkDate?', '+inp.chkDate:'')],['Design code',codeName]]},
-      {type:'note',text:'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its tabs ('+tabLink('tension','Tension l_d')+', '+tabLink('hook','Hook l_dh')+', '+tabLink('compression','Compression l_dc')+', '+tabLink('tsplice','Tension Splice')+', '+tabLink('csplice','Comp. Splice')+', '+tabLink('batch','Bar Schedule')+').'}]});
+      {type:'note',text:'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.'}]});
     const yn=b=>b?'yes':'no';
     const rows=[['Design code',codeName,'–'],['Bar size','#'+inp.barSize+' ($d_{b}$ = '+rbN(f.db,3)+' in., $A_{b}$ = '+rbN(f.Ab)+' in²)','–'],
       ['Yield strength $f_{y}$',rbG(inp.fy,0).replace('{,}',','),'psi'],['Concrete strength $f^{\\prime}_{c}$',rbG(inp.fc,0).replace('{,}',','),'psi'],
@@ -8329,16 +8329,16 @@ function rbrModel(){
   const hk=hookSchematic(inp,f,calcHook(inp,f)), hsvg=(hk.match(/<svg[\s\S]*<\/svg>/)||[''])[0];
   secs.push({title:'Tension development',subs:[{title:'Tension development length $l_{d}$',items:[
     {type:'figure',svg:sch,caption:'Input schematic: bar in section (c_b controls)'},
-    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:'On screen: '+tabLink('tension','Tension l_d tab')+' (with the sensitivity charts).'}]}]});
+    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('tension','On screen: Tension l_d tab (with the sensitivity charts)')}]}]});
   secs.push({title:'Standard hook',subs:[{title:'Standard hook development length $l_{dh}$',items:[
     {type:'figure',svg:hsvg,caption:'Hook geometry (90° standard hook, schematic; '+(A?'AASHTO 5.10.2.1':'ACI 318-19 25.3.1')+')'},
-    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:'On screen: '+tabLink('hook','Hook l_dh tab')+'.'}]}]});
+    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('hook','On screen: Hook l_dh tab')}]}]});
   secs.push({title:'Compression development',subs:[{title:'Compression development length $l_{dc}$',items:[
-    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:'On screen: '+tabLink('compression','Compression l_dc tab')+'.'}]}]});
+    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('compression','On screen: Compression l_dc tab')}]}]});
   secs.push({title:'Tension lap splice',subs:[{title:'Tension lap splice length $l_{st}$',items:[
-    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:'On screen: '+tabLink('tsplice','Tension Splice tab')+'.'}]}]});
+    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('tsplice','On screen: Tension Splice tab')}]}]});
   secs.push({title:'Compression lap splice',subs:[{title:'Compression lap splice length $l_{sc}$',items:[
-    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:'On screen: '+tabLink('csplice','Comp. Splice tab')+'.'}]}]});
+    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}]});
   /* 7. bar schedule (tabBatch: the same functions for every bar size) */
   {
     const rows=BAR_ORDER.map(b=>{
@@ -8349,7 +8349,7 @@ function rbrModel(){
     });
     secs.push({title:'Bar development schedule',subs:[{title:'Development and splice lengths, all bar sizes',items:[
       {type:'table',head:['Bar','$d_{b}$ (in.)','Tension $l_{d}$','Hook $l_{dh}$','Comp. $l_{dc}$','Tens. splice ('+inp.tensClass+')','Comp. splice'],rows,wide:true},
-      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted (ACI 318-19 25.5.1.1).')+' On screen: '+tabLink('batch','Bar Schedule tab')+'.'}]}]});
+      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted (ACI 318-19 25.5.1.1).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}]});
   }
   /* 8. references */
   secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]});

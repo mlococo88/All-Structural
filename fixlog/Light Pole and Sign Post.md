@@ -1439,7 +1439,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Check case (60 ft pole case):** ΣW·y = 7,213.94, ΣW·y² = 61,110.99 → n₁ = √(386.1·7,213.94/61,110.99)/(2π) = 6.751/6.283 = **1.0745 Hz** (rigid; the tool's value).
 - **How verified:** `node tests/engine/run.mjs lightpole` 20 passed (worked-step test, flexible case with n₁ = 0.82 Hz: G_f shown, no NaN). `node tests/lightpole-compare.mjs --a origin/main`: results identical apart from the added fields (`sWy`, `sWy2`, `rows`, `inp.nat`, `inp.gfDims`); cable values identical; text adds the worked steps (Loading tab, report); 0 console errors.
 
-## 2026-11-01 — PR: claude/lp-pr10-json (LP-10: JSON export / import of the project; no result change; PR link added after merge)
+## 2026-11-01 — PR #582: claude/lp-pr10-json (LP-10: JSON export / import of the project; no result change)
 
 ### LP10-1. Export JSON / Import JSON   [feature] [no result change] [no storage change]
 - **Where:** project bar: buttons `pbExport`, `pbImport`, hidden `pbImportFile`; new `lppExportJSON()`, `lppImportState(obj)` and handlers above `const DEFAULT_STATE=captureState();`.
@@ -1447,3 +1447,33 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Import:** accepts that file or a bare state object (`{inputs, …}`); opens it through `applyState()`, so every migration for fields added later applies (old files open with the old behaviour and the usual notices); the result is an unsaved working state ("Save As" stores it in the browser). A file without `inputs` is refused with a message. Unsaved changes ask for confirmation first.
 - **Saved-project list:** the tool already has one (the Project dropdown with Save / Save As / Rename / Delete / New); unchanged.
 - **How verified (headless Chromium, scratchpad lpjson.mjs):** two-post sign at V 133 exported → New → imported: the Summary text is identical and V = 133; a bare old-format state (no cfPoleMode / anchTq / arm OD …) imports with C_f Manual and anchor reinforcement Provided as stored; a file without `inputs` gives "Import failed: not a Light Pole and Sign Post project file"; localStorage holds only `lpp_session_v1` after the run; no console errors; 390 px: buttons wrap, no horizontal scroll. Calculations untouched (no engine code changed); `node tests/engine/run.mjs lightpole` 20 passed.
+
+## 2026-11-01 — PR #593: claude/lp-pr11-report (LP-11: Report tab in the shared viewer; the D11 calculation sheet kept as "Calc sheet"; display only)
+
+### LP11-1. Report tab (shared/report.js + shared/steps.js)   [display] [no result change]
+- **Coordinator rules applied (scratchpad/report_plan.md):** model builder `lprModel()` whose step values are the tool's own computed numbers (LPP_SUMCTX from `renderSummary`, `LPP_LAST` from `buildReport` / `buildSignReport`; nothing recomputed); steps grouped by topic (`SharedSteps.group`, `lprTopics`); nav tree to topic level; [[tab:…]] links back to the tabs; print with title block (no owner cell, "—" for the fields the tool does not have; no new saved fields), running header, page numbers. KaTeX 0.16.9 (already loaded). Old D11 report kept (engineer decision 2026-11-01: retired later).
+- **Where:**
+  - `<head>`: `<script src="shared/steps.js">`, `<script src="shared/report.js">`.
+  - Tabs: `Report` (data-tab `report`, host `#lprHost` in a new card) is the shared viewer; the former Report card is now the `Calc sheet` tab (data-tab `calcsheet`, page `#page-calcsheet`; content, D11 links, "Print / PDF report" button and its print CSS unchanged — the print rule now targets `#page-calcsheet`). `LPP_TABNAME` + report / calcsheet.
+  - New block `// ================= REPORT TAB (shared viewer, LPRP` before the project-management section: `LPP_LAST`, `LPRP`, `lprModel()`, `lprRender()`, `lprGoto()`, `lprActive()`, `lprRefresh()`.
+  - `switchTab()`: renders the report when the Report tab is shown; `lppReportDoc()` ends with `lprRefresh()` (rebuilt after every calc while shown).
+  - `beforeprint`: Report tab shown → the shared report prints alone (`#rp-print`, `body.rp-printing`); any other tab → the D11 calculation sheet as before.
+  - `shared/README.md`: Light Pole added to the steps.js and report.js "Loaded by" rows (no shared file changed).
+- **Sections:** 1 Project and scope · 2 Design summary (every check of every stack, sorted by D/C) · 3 Wind and ice (velocity pressure, C_f Fig. 29.4-1, mast wind, t_d, fixtures/arms table or sign panel wind with Cases A/C, n₁ and G_f) · 4 Load combinations (pole: every combination; sign: per post) · 5 Pole/post check (section, φM_n, φP_n, B₂·M, torsion, interaction) · 6 Base plate (bending-line steps) — anchors only listed in §2 with a link to the Anchors tab (engineer, 2026-11-01: no new anchor presentation) · 7 Drilled shaft (IBC embedment + iteration table, P–M, V_c branch, ties, bearing, torsion threshold, Broms reference) · 8 Assumptions and references.
+- **How verified (headless Chromium, KaTeX local):** default pole, two-post sign, torsion case, 60 ft pole at 1280 and 390 px: 0 unresolved references, 0 duplicate keys, 0 `.katex-error`, no NaN/undefined/Infinity in `SharedReport.text`, 0 console errors, no horizontal scroll; print PDF (11 pages, default) inspected. 18 report values spot-checked equal to the app's (d, M_u, φM_n, φV_c, V_u, q, A_base, A_s, P, h, post ratio, φM_n post, φP_n, n₁, t_req, b_eff, P_rod, C_f), pole and monopost. `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; the old Report text moved unchanged to the Calc sheet tab (line counts equal). Screenshots and PDFs: scratchpad/shots-lp/pr11-*.
+- **Open items:** Project No. / Computed by / Checked by / dates are not inputs (shown "—"); retire the D11 Calc sheet once the engineer accepts this report.
+
+## 2026-11-01 — PR: claude/lp-pr12-drawings (LP-12: Drawings tab with DXF via shared/dxf.js; Geometry elevation to scale; display only; PR link added after merge)
+
+### LP12-1. Drawings tab and DXF export   [display] [no result change]
+- **Where:** `<head>`: `<script src="shared/dxf.js">`; tab `Drawings` (data-tab `drawings`, card host `#lpdHost`); `switchTab()` renders it when shown; `lppReportDoc()` re-renders it after each calc while shown; new block `// ================= DRAWINGS (LPDW` (before the project-management section): `LPDW_SCALES`, `LPDW`, `lpdLayers`, `lpdShaft`, `lpdElevation`, `lpdPlan`, `lpdSection`, `lpdPlate`, `lpdBuild`, `lpdSheetSVG`, `lpdRender`, `lpdActive`, `lpdElevGeometry`; CSS `.lpdBar`, `.lpdHead`, `.lpdBox`; `LPP_TABNAME` + drawings; `shared/README.md` dxf.js "Loaded by" row (no shared file changed).
+- **Sheets (B-size 17 × 11 in, border and title block without owner cell, smallest standard scale that fits; one DXF R12 file, model space full size in inches, `SharedDxf.validate` before download):** 1 pole or sign elevation (to scale: tapered pole / posts, base plate, arms and fixtures projected on x–z, cable attachments, sign panel, shaft(s) with the designed embedment, bars and ties; dimensions H, d, b, clearance, L_p); 2 plan (shaft, plate, pole, rods, arms and fixtures at θ, cable directions, axes); 3 shaft section (bars at their radius, tie, cover; one per distinct shaft); 4 base plate (plate, pole, bolt circle and holes, thickness / F_y / t_req); 5 general notes. Per-browser UI key `lpp_dwgSheet_v1` (chosen sheet only).
+- **Anchors:** the plate sheet shows the rods as plate geometry only (engineer, 2026-11-01: no new anchor presentation; the anchor design may move to BasePlateAnchorDesigner).
+- **Cables:** drawn for information only (attachment height and direction), no cable value changes.
+
+### LP12-2. Geometry tab elevation to scale (review §5: "the shaft width is clamped to 60–120 px")   [display]
+- **Where:** `drawElev()` first calls `lpdElevGeometry()` (the elevation view of the drawing set, as SVG, to scale); the former schematic is kept as the fallback when shared/dxf.js is not loaded.
+
+### Verification
+- Headless Chromium, default pole / two-post sign / one-arm torsion case: 5 sheets each, `SharedDxf.validate` ok, no NaN/undefined in the DXF, 0 console errors, 390 px without horizontal scroll; every sheet screenshot inspected (scratchpad/shots-lp/pr12-*).
+- `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; the only differences are the Geometry elevation SVG and the new Drawings tab.

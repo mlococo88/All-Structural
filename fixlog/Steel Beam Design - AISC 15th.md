@@ -2182,3 +2182,13 @@ index 80ab977..ab363e3 100644
 +  b.addEventListener('click',()=>{SBRP.on=true;buildTabs();});bar.appendChild(b);
 +}
 ```
+
+## 2026-11-01 — PR: claude/steelbeam-rpt-plots — the Plotly diagrams in the Report tab as figures (SBRP-2; display only)
+- **Coordinator / engineer (2026-11-01):** every report self-contained: the diagrams must be in the report and print.
+- **Where (tag `SBRP-2`):**
+  - `sbrModel()`: after each tab is built, `sbrPlotFigs(holder)` records each diagram holder's figure by the rule of the D11 print report (`rasterisePlots`): shear `printFig('V', curCombo())`, moment `printFig('M', …)`, deflection `printFig('D', …)`, else the registered figure `PLOTREG[id]` (width 2.3 × height); each holder gets a content key (`data-sbrk`, FNV hash of the figure JSON).
+  - `sbrTab()`: a holder whose image exists becomes a figure item: `<img class="prPlotImg sbrPlot">` (PNG data URL) with the caption "Diagram — <the figure's title>"; otherwise the note stays.
+  - `sbrRender()`: after mounting, the diagrams not yet drawn are drawn with `Plotly.toImage(fig, {format:'png', width, height, scale:2})` (as `rasterisePlots`), then the tab is rebuilt with them (the output column keeps its scroll). Images are kept in memory by key (`SBRP.imgs`, cleared past 80), so a rebuild with unchanged inputs reuses them; a failed image is recorded as `null` (note stays, no retry loop). Without Plotly (offline) the notes stay.
+  - The "On screen: … tab" notes are now one link (`[[tab:…|On screen: … tab]]`), so the printed report no longer shows "On screen: ." (the viewer hides tab links in print).
+- **Saved data:** none (images in memory only). **Provision:** none.
+- **How verified (headless Chromium, Plotly 2.35.2 and KaTeX 0.16.11 from npm pack):** beam / composite / member / batch: 16 / 21 / 7 / 1 diagrams, every one an image in the report (all loaded), 0 left as notes; Ctrl+P on the Report tab prints them (16 images in the print box, beam default 47 pages; PDF page with shear and moment diagrams looked at); the earlier checks still pass (0 unresolved references, 0 KaTeX errors, 33 / 38 / 26 / 3 spot values, `S`, storage and other tabs unchanged). `node tests/check-syntax.mjs` passes.
