@@ -329,16 +329,17 @@ a.wkA:hover{text-decoration:underline}
 </div>
 </details>
 
-<details class="sec" id="sec-rebar">
-<summary>Footing Reinforcement (Phase 2)</summary>
+<details class="sec" id="sec-rebar" open>
+<summary>Footing Reinforcement</summary>
 <div class="secbody">
  <div class="note">Bottom mat resists positive (cantilever/sagging) moment; top mat resists negative moment between pedestals. Bars in the x-direction resist bending about the y-axis. Enter #0 spacing to omit a mat. Check-only: the tool reports DCR and required A<sub>s</sub>.</div>
- <table class="tbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing (in)</th></tr>
- <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td></tr>
- <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td></tr>
- <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td></tr>
- <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td></tr>
+ <table class="tbl sfdRbTbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing s (in)</th><th>A<sub>b</sub> (in&sup2;)</th><th>A<sub>s</sub> = A<sub>b</sub>&middot;12/s (in&sup2;/ft)</th><th>s vs s<sub>max</sub> (in)</th></tr>
+ <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botX"></td><td class="sfdRbAs" data-mat="botX"></td><td class="sfdRbS" data-mat="botX"></td></tr>
+ <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botY"></td><td class="sfdRbAs" data-mat="botY"></td><td class="sfdRbS" data-mat="botY"></td></tr>
+ <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topX"></td><td class="sfdRbAs" data-mat="topX"></td><td class="sfdRbS" data-mat="topX"></td></tr>
+ <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
  </table>
+ <div class="note" id="sfdRbNote"></div>
 </div>
 </details>
 
@@ -825,10 +826,10 @@ document.addEventListener('change',e=>{if(e.target.tagName==='SELECT')handleFiel
    sfd_inputTab_v1 (never in state, so autosave and the project JSON are
    unchanged). */
 const SFD_IN_TABS=[
- ['project','Project'],['geom','Geometry'],['mat','Materials'],['soil','Soil'],
+ ['project','Project'],['geom','Geometry'],['mat','Materials'],['rebar','Reinforcement'],['soil','Soil'],
  ['stab','Stability'],['peds','Pedestals &amp; Loads'],['assump','Assumptions']];
 const SFD_IN_SEC={
- 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'mat',
+ 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'rebar',
  'sec-soil':'soil','sec-ev':'soil','sec-stab':'stab','sec-peds':'peds','sec-assump':'assump'};
 /* input errors from computeAll() (red ERROR boxes), mapped to the tab holding the input */
 const SFD_IN_ERR=[
@@ -908,6 +909,41 @@ function sfdInputTabMarks(){
   b.title=bad[k]?'An input on this tab has an error':'';
  });
 }
+/* Reinforcement input tab (display only): bar area A_b (BAR_AREA), A_s per ft = A_b*12/s
+   (barAreaPerFt, the value the footing design uses), and the spacing against s_max from the
+   footing design (P2.desX / desY .sMax = min(3h, 18 in), ACI 318-19 7.7.2.3 / 13.3.4).
+   Nothing is computed here that the design does not already compute. */
+function sfdRebarInfo(){
+ const fr=state.freinf;if(!fr||!document.querySelector('.sfdRbAb'))return;
+ const des={X:(P2&&P2.desX)||null,Y:(P2&&P2.desY)||null};
+ ['botX','botY','topX','topY'].forEach(k=>{
+  const m=fr[k]||{},sz=m.size,spc=num(m.spc),Ab=BAR_AREA[sz]||0,As=barAreaPerFt(sz,spc);
+  const q=c=>document.querySelector('.'+c+'[data-mat="'+k+'"]');
+  const dir=k.slice(-1),d=des[dir],top=(k.slice(0,3)==='top');
+  q('sfdRbAb').innerHTML=sz?Ab.toFixed(2):'\u2014';
+  q('sfdRbAs').innerHTML=(sz&&spc>0)?Ab.toFixed(2)+'&middot;12/'+f2(spc)+' = <b>'+As.toFixed(3)+'</b>':(sz?'\u2014 (s = 0)':'\u2014 (no mat)');
+  let sTxt='\u2014';
+  if(sz&&spc>0&&d){
+   const chk=top?(d.asMinTopReq):true;   /* top mat: s_max applies only where it is a flexural mat (as the design) */
+   const ok=top?d.spcTopOK:d.spcBotOK;
+   sTxt=chk?(f2(spc)+(ok?' \u2264 ':' &gt; ')+f2(d.sMax)+(ok?' \u2713':' <b style="color:#b71c1c">NG</b>'))
+          :(f2(spc)+' (s<sub>max</sub> '+f2(d.sMax)+' n/a: no hogging)');
+  }else if(sz&&spc>0)sTxt=f2(spc);
+  q('sfdRbS').innerHTML=sTxt;
+ });
+ const n=document.getElementById('sfdRbNote');
+ if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design. s<sub>max</sub> = min(3h, 18 in) (ACI 318-19 7.7.2.3 / 13.3.4); top mats are checked only where hogging makes them flexural mats.'+
+  ((P2&&P2.desX)?' Worked in: '+sfdLink('o-fd-x','x-bars',['tab-footdes','5.2 Longitudinal (x-direction)'])+' · '+sfdLink('o-fd-y','y-bars',['tab-footdes','5.3 Transverse (y-direction)']):'');
+}
+/* link from an output card to an input tab (Reinforcement): open the tab and flash the section */
+function sfdGotoInput(tab,secId){
+ sfdSetInTab(tab,true);
+ const sec=document.getElementById(secId);if(!sec)return;
+ if(sec.tagName==='DETAILS'&&!sec.open)sec.open=true;
+ setTimeout(()=>{sec.scrollIntoView({behavior:'smooth',block:'start'});
+  const s=sec.querySelector('summary')||sec;const old=s.style.background;s.style.background='#fff3cd';setTimeout(()=>{s.style.background=old;},1100);},60);
+}
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.sfdInA');if(!a)return;e.preventDefault();sfdGotoInput(a.dataset.intab,a.dataset.insec);});
 </script>
 <script>
 /* SFAD (2026-10-20): "Direct factored" mode with an imported AASHTO case (foundationLoads hand-off from the abutment calculator or
@@ -2805,6 +2841,7 @@ function recalc(){
  if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))renderView3D();
  renderPrintHeader();
  sfdInputTabMarks();
+ sfdRebarInfo();   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
  if(typeof buildManualTab==='function'&&$('#manualHost')&&!$('#manualHost').childNodes.length)buildManualTab();
 }
 let rcTimer=null;
@@ -3830,6 +3867,7 @@ function flexureSVG(des,dir){
  s+='</svg>';
  const wrap=el('div');wrap.innerHTML=s;return wrap;
 }
+function sfdBarTxt(m){m=m||{};return (m.size&&num(m.spc)>0)?'#'+m.size+' @ '+f2(num(m.spc))+' in':'none';}
 function renderFootingDesign(){
  const T=$('#tab-footdes');T.innerHTML='';
  if(R.fatal){return;}
@@ -3847,6 +3885,7 @@ function renderFootingDesign(){
   ["f'_c",'Concrete strength',P2.fc,'psi'],['f_y','Steel yield',P2.fy,'psi'],['\\lambda','Lightweight factor',P2.lam,'\u2013'],
   ['d_{bot,x}','Eff. depth, bottom x-bars',P2.dBotX,'in'],['d_{bot,y}','Eff. depth, bottom y-bars',P2.dBotY,'in'],
   ['d_{avg}','Average d (two-way shear)',P2.dAvg,'in']]));
+ intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span></a>'));   /* link to the Reinforcement input tab */
  ['x','y'].forEach(dir=>{
   const des=(dir==='x')?P2.desX:P2.desY;
   const b=secPanel(T,'o-fd-'+dir,'5.'+(dir==='x'?2:3)+'  '+(dir==='x'?'Longitudinal (x-direction)':'Transverse (y-direction)')+' \u2014 Flexure & One-Way Shear');
