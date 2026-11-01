@@ -4455,7 +4455,7 @@ index a0efc62..c3cebaf 100644
    row("Concrete edges +x / −x / +y / −y from the plate centre (c_a "+[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg].map(v=>fmt(v,2)).join(" / ")+" in from the outer anchors)",
 ```
 
-## 2026-11-01 — BC-3: torsion T in the load combinations (vector-sum anchor shear), anchor-group picker (several groups per project), `anchorGroup` hand-off receiver and `anchorGroupResult` sender (calculation change only for combinations with T ≠ 0; every existing project unchanged) (PR: claude/bpad-pole-loads, PR link added after merge)
+## 2026-11-01 — BC-3: torsion T in the load combinations (vector-sum anchor shear), anchor-group picker (several groups per project), `anchorGroup` hand-off receiver and `anchorGroupResult` sender (calculation change only for combinations with T ≠ 0; every existing project unchanged) (PR #606: https://github.com/mlococo88/All-Structural/pull/606)
 
 - **Engineer / coordinator decisions (2026-11-01):** pole-type load rows (P, V_x, V_y, M_x, M_y, T per combination); two-post signs = one project with an anchor-group picker; per-anchor shear with torsion = the vector sum of the direct shear and the torsion shear (elastic, polar), stated; the existing interaction (worse of trilinear / parabolic) and the steel-shear share are unchanged for existing geometries; the receiver for `bridgeSuite.v1.anchorGroup` with the sign mapping M_y = +M_x,LP, M_x = −M_y,LP, P = −P_LP, and the optional result channel `anchorGroupResult`; both documented in HANDOFF.md (§4.11, §4.12); JSON file import fallback.
 - **New saved fields (optional; absent = before):** a combination's `T` (kip-in, + counter-clockwise about +z seen from above; the load editor writes it only when a value is entered); `S.groups`, `S.groupActive`; `S.bxSrc.anchorGroup`. No key or format change.
@@ -4475,3 +4475,86 @@ index a0efc62..c3cebaf 100644
 - **Hand-off check case H5:** a `lightPole-v1` payload with a push toward +x (LP M_x = +40 kip·ft, P = 5 kip compression, T = 2 kip·ft) imports as P = −5 kip, M_y = +480 kip·in, M_x = 0, T = 24 kip·in, and the anchors in tension are all at x < 0 (the windward side); a second group with LP M_y = +25 kip·ft imports as M_x = −300 kip·in (tension at y < 0). Both groups go into the picker; switching keeps each group's inputs; the result payload carries both groups and echoes `inputsHash`. A payload with an unknown `signConvention` or `basis.factored` ≠ true is refused.
 - **Other copies:** `BridgeXfer` unchanged (already in this file).
 - **Open items:** (a) the Light Pole export (sender) and its D/C chip (a later PR, LP side); (b) the generator (ASCE 7-22 service loads) has no T: enter torsion in the factored combinations or import it.
+
+## 2026-11-01 — BC-4: anchor parity suite Light Pole ↔ Base Plate (38 pole anchor groups) and one bolt-circle fix: shear breakout c_a2 and A_Vc width measured from the critical row's outer anchors (calculation change for bolt circles on rectangular piers only, new since BC-1; grids unchanged) (PR: claude/bpad-anchor-parity, PR link added after merge)
+
+- **Purpose (engineer direction 2026-11-01):** the Light Pole anchor tab is retired once this tool covers 4 / 6 / 8 / 12-bolt circles on round and square shafts, with torsion and a stand-off. New test `tests/anchor-parity.mjs` runs the Light Pole tool's own `anchorBolts()` (Node, `tests/engine/lp-source.mjs`) and this tool on the comparison cases C1–C6 and the matrix 4 / 6 / 8 / 12 bolts × round / square × T 0 / 6 kip·ft × clear stand-off 0 / 1.5 in (38 cases). `tests/README.md` documents it and `tests/bpad-circle.mjs`.
+- **Parity result (all 38 pass):** T_max and ΣT identical to 1e-9 (elastic group, double nut); φN_sa, φN_pn, φV_sa within 0.042 % / 0.030 % / 0.042 % (A_se: AISC / ASME table 0.606 in² here vs the formula 0.6057 in² in the Light Pole tool); shear per bolt with torsion = the vector sum (e.g. 3.226 vs the Light Pole's 3.250 kip for 4 bolts, T 6 kip·ft), never more than the Light Pole's sum of magnitudes. Concrete modes are listed with their known causes (Light Pole: square shaft clipped by its inscribed circle, no §17.6.2.1.2, 24-form N_b only, T_max vs φN_cbg/n_T; no shear breakout, side-face blowout or stand-off rod bending). Examples: C2 (round Ø36) φN_cbg LP 22.82, this tool 28.22 (24.63 without §17.6.2.1.2); C6 (8 bolts, round Ø42, T) LP 25.62, this tool 38.34 (29.00 without); stand-off bending with a 1.5 in clear stand-off governs most 4-bolt cases (not checked by the Light Pole tool).
+- **Fix found by the parity run (bolt circle on a rectangular pier).** `shearBreakout()` `evalEdge()`: BC-1 took the A_Vc width from the critical row's spread but still measured the perpendicular edge distances (c_a2 for ψ_ed,V, the width limits and the §17.7.2.1.2 narrow-member test) from the whole pattern's outer anchors. For a row narrower than the pattern that understates c_a2 (conservative but inconsistent).
+  - **Before:** `const pP = isX ? g.ca_y_pos : g.ca_x_pos, pN = isX ? g.ca_y_neg : g.ca_x_neg;` … `const perpPos = isX ? g.ca_y_pos : g.ca_x_pos; const perpNeg = isX ? g.ca_y_neg : g.ca_x_neg;` … `let psi_edV=(e.ca2>=1.5*c1)?…`
+  - **After:** `const shP = rp? ((isX? g.ymax : g.xmax) - alongMax) : 0, shN = rp? (alongMin - (isX? g.ymin : g.xmin)) : 0; const pP = (…) + shP, pN = (…) + shN;` `const perpPos = pP; const perpNeg = pN;` `const ca2e = rp? Math.min(perpPos,perpNeg) : e.ca2; let psi_edV=(ca2e>=1.5*c1)?…`; the result's `ca2:ca2e`. `rp` (the row) exists only for a bolt circle and only for the edge the shear pushes toward, so a grid and every other edge are unchanged.
+  - **Governing provision:** ACI 318-19 §17.7.2.1.3 (A_Vc), §17.7.2.4 (ψ_ed,V, c_a2 = the distance from the anchor(s) to the perpendicular edge), §17.7.2.1.2.
+  - **Check case** (parity case n6-square-T0-z0): 6 × 1 in Gr 55 on BC 16 (θ₀ 0), 36 in square pier, h_ef 18, V = 4 kip at 30°. Rows along x: x = 8 (1 anchor), 4, −4, −8; s = 4 < c_a1,1 = 18 − 8 = 10 in → Case 3, the full V on the front anchor (8, 0). V_b = min(7·(8)^0.2·√1·√4000·10^1.5 = 21.22, 9·√4000·10^1.5 = 18.00) = 18.00 kip; A_Vco = 450 in².
+    - Before: c_a2 = 18 − 6.928 = 11.07 in (from the anchors at y = ±6.93); width = 2·min(15, 11.07) = 22.14 in; A_Vc = 22.14·15 = 332.1 in²; ψ_ed,V = 0.7 + 0.3·11.07/15 = 0.9214; φV_cbg = 0.70·0.738·0.9214·18.00 = **8.57 kip**.
+    - After: c_a2 = 18 in (from the row's anchor at y = 0); width = 2·min(15, 18) = 30 in; A_Vc = 450 in²; ψ_ed,V = 1.0; φV_cbg = 0.70·1.0·1.0·18.00 = **12.60 kip** (tool 12.60).
+  - Grids: unchanged (`tests/bpad-circle.mjs` §1, 31 / 31 identical to origin/main; the 4-bolt circle = 2×2 grid check passes, its rows span the whole pattern).
+- **Complete hand check, round pier (comparison case C2; tool values from `tests/bpad-circle.mjs` H3):** 4 × 1 in F1554 Gr 55, heavy hex (A_brg = 1.501 in²), at (±6, ±6) (BC = 16.971 in, θ₀ 45°); Ø36 in pier (R = 18 in), centred; h_ef = 18 in; f′c = 4,000 psi, cracked; M_x = 480 kip·in (tension +y), P = 5 kip compression, V_y = 3 kip; elastic group.
+  1. Forces: Σy² = 4·36 = 144 in²; T = −5/4 + 480·6/144 = 18.75 kip on (±6, +6), compression on (±6, −6); N_ua = ΣT = 37.50 kip; e′_N = 0 → ψ_ec,N = 1.0.
+  2. §17.6.2.1.2 by analogy: c(θ) = 18 − 8.485·cos δ (δ = angle to the nearest bolt, ≤ 45°) ∈ [9.515, 12.000] in < 1.5·18 = 27 in over 360° (≥ 270°) → applies. c_a,max = 12.000 in; s = the largest extent across = 2·8.485 = 16.971 in; h′_ef = max(12/1.5, 16.971/3) = max(8.000, 5.657) = **8.000 in**.
+  3. N_b (h′_ef = 8 < 11 in → §17.6.2.2.1 form): 24·1.0·√4000·8^1.5 = 24·63.246·22.627 = **34.346 kip**.
+  4. A_Nco = 9·8² = **576 in²**.
+  5. A_Nc: squares 1.5h′_ef = 12 in around the tension anchors: [−6, 18] × [−6, 18] and [−18, 6] × [−6, 18]; union [−18, 18] × [−6, 18]; ∩ disc R = 18: the half disc above y = 0, πR²/2 = 508.938 in², plus the strip −6 < y < 0, 2∫₀⁶√(324 − u²)du = 6·16.971 + 324·asin(1/3) = 101.823 + 110.107 = 211.930 in²; **A_Nc = 720.868 in²** (tool 720.86855); A_Nc/A_Nco = 1.2515 (≤ n = 2).
+  6. ψ_ed,N: c_a,min = 18 − 8.485 = 9.515 in < 1.5·8 = 12 → 0.7 + 0.3·9.515/12 = **0.93787**; ψ_c,N = 1.0 (cracked); ψ_cp,N = 1.0 (cast-in).
+  7. N_cbg = 1.2515·1.0·0.93787·1.0·1.0·34.346 = 40.314 kip; φ = 0.70 (Condition B) → **φN_cbg = 28.22 kip** (tool 28.21952); D/C = 37.50/28.22 = **1.329** (tool's Summary 1.329).
+  8. Without the reduction (option off): h_ef = 18 in → §17.6.2.2.3 (headed, 11 ≤ h_ef ≤ 25) N_b = 16·√4000·18^(5/3) = 125.08 kip; squares 27 in cover the disc → A_Nc = π·18² = 1017.876 in²; A_Nco = 2916 in²; ψ_ed,N = 0.7 + 0.3·9.515/27 = 0.80572; φN_cbg = 0.70·0.34907·0.80572·125.08 = **24.63 kip** (tool 24.62974); D/C 1.523.
+- **How verified:** `node tests/anchor-parity.mjs` PASS (38 cases), `node tests/bpad-circle.mjs` PASS (31 / 31 identical, H1–H5), `node tests/bpad-profis.mjs` PASS, `node tests/engine/run.mjs anchor-geom` 4 / 4.
+- **Observation for the engineer (not changed):** with shear inclined to the axes, the tangent-edge model on a round pier can give a slightly larger φV_cbg than the same bolt circle on the circumscribing square pier (n6, V at 30°: round 13.15 kip, square 12.60 kip), because the square takes the full V perpendicular to the most-aligned straight edge (c_a1 = 10 in) while the round takes it perpendicular to the tangent where the shear direction meets the circle (c_a1 = 10.36 in). Both follow the decided models.
+
+```diff
+diff --git a/BasePlateAnchorDesigner.html b/BasePlateAnchorDesigner.html
+index c70f37b..c4454e3 100644
+--- a/BasePlateAnchorDesigner.html
++++ b/BasePlateAnchorDesigner.html
+@@ -2750,5 +2750,15 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
+        limited to the largest of c_a2,max/1.5, h_a/1.5 and s/3, where s is the
+        maximum spacing perpendicular to the shear between anchors in the group. */
+-    const pP = isX ? g.ca_y_pos : g.ca_x_pos, pN = isX ? g.ca_y_neg : g.ca_x_neg;
++    /* BC-1 (2026-11-01): for a bolt circle the width is that of the critical row (rowPts, the anchors the case puts
++       the shear on), not the whole pattern; a grid row spans the whole pattern, so a grid is unchanged.
++       BC-4 (2026-11-01): the perpendicular edge distances (narrow-member limit, A_Vc width, ψ_ed,V) are measured from
++       that row's outer anchors too (before: from the whole pattern's outer anchors — conservative but inconsistent) */
++    const alT = !shearDir? 0 : (e.name==="+x"?shearDir.x : e.name==="-x"?-shearDir.x : e.name==="+y"?shearDir.y : -shearDir.y);
++    const domX = !!shearDir && Math.abs(shearDir.x)>=Math.abs(shearDir.y);   /* shearCases builds the rows along the dominant shear axis */
++    const rp = (bpCircPattern() && rowPts && rowPts.length && !parallel && alT>0.05 && isX===domX)? rowPts : null;   /* the row is defined for the edge the shear pushes toward */
++    const alongMin = rp? Math.min(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymin : g.xmin);
++    const alongMax = rp? Math.max(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymax : g.xmax);
++    const shP = rp? ((isX? g.ymax : g.xmax) - alongMax) : 0, shN = rp? (alongMin - (isX? g.ymin : g.xmin)) : 0;
++    const pP = (isX ? g.ca_y_pos : g.ca_x_pos) + shP, pN = (isX ? g.ca_y_neg : g.ca_x_neg) + shN;
+     let c1=c1raw, narrow=null;
+     if(pP<1.5*c1raw && pN<1.5*c1raw && ha<1.5*c1raw){
+@@ -2776,15 +2786,8 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
+        edge × depth (1.5c1), clipped by 1.5c1 beyond the outer anchors, by the perpendicular
+        concrete edges, and by member thickness ha. §17.7.2.1, Fig. R17.7.2.1b Case 3. */
+-    /* extent of anchors ALONG the edge (perpendicular to shear direction) */
+-    /* BC-1 (2026-11-01): for a bolt circle the width is that of the critical row (rowPts, the anchors the case puts
+-       the shear on), not the whole pattern; a grid row spans the whole pattern, so a grid is unchanged */
+-    const alT = !shearDir? 0 : (e.name==="+x"?shearDir.x : e.name==="-x"?-shearDir.x : e.name==="+y"?shearDir.y : -shearDir.y);
+-    const domX = !!shearDir && Math.abs(shearDir.x)>=Math.abs(shearDir.y);   /* shearCases builds the rows along the dominant shear axis */
+-    const rp = (bpCircPattern() && rowPts && rowPts.length && !parallel && alT>0.05 && isX===domX)? rowPts : null;   /* the row is defined for the edge the shear pushes toward */
+-    const alongMin = rp? Math.min(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymin : g.xmin);
+-    const alongMax = rp? Math.max(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymax : g.xmax);
+-    /* perpendicular concrete edges bounding the width */
+-    const perpPos = isX ? g.ca_y_pos : g.ca_x_pos;   /* distance from outer anchor to +edge */
+-    const perpNeg = isX ? g.ca_y_neg : g.ca_x_neg;
++    /* extent of anchors ALONG the edge (perpendicular to shear direction): alongMin / alongMax above */
++    /* perpendicular concrete edges bounding the width (BC-4: from the row's outer anchors for a bolt circle) */
++    const perpPos = pP;   /* distance from outer anchor to +edge */
++    const perpNeg = pN;
+     /* width = anchor span + min(1.5c1, perp edge) on each side */
+     const wLeft  = Math.min(1.5*c1, perpNeg);
+@@ -2796,5 +2799,6 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
+     const AVc = Math.min(AVc_geom, AVco*nV);   /* cannot exceed n × single-anchor area */
+     const AVcRatio=Math.min(AVc/AVco,nV);
+-    let psi_edV=(e.ca2>=1.5*c1)?1.0:(0.7+0.3*e.ca2/(1.5*c1));
++    const ca2e = rp? Math.min(perpPos,perpNeg) : e.ca2;   /* BC-4: row-based c_a2 for a bolt circle */
++    let psi_edV=(ca2e>=1.5*c1)?1.0:(0.7+0.3*ca2e/(1.5*c1));
+     /* §17.7.2.1(c): shear PARALLEL to an edge — evaluate as if perpendicular with
+        psi_ed,V = 1.0, and twice the resulting Vcbg is permitted. */
+@@ -2806,5 +2810,5 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
+     const psi_hV_e = (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;
+     const Vcbg=AVcRatio*1.0*psi_edV*psi_cV*psi_hV_e*Vb*(parallel?2:1);
+-    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:e.ca2,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
++    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:ca2e,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
+   }
+   /* CRITICAL-ROW SET-BACK (ACI Fig. R17.7.2.1b Case 2). §17.7.2.1.1 lets the
+```

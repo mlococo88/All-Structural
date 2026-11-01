@@ -2749,7 +2749,17 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
        and h_a < 1.5c_a1, c_a1 used in A_Vc, A_Vco, V_b, ψ_ed,V and ψ_h,V is
        limited to the largest of c_a2,max/1.5, h_a/1.5 and s/3, where s is the
        maximum spacing perpendicular to the shear between anchors in the group. */
-    const pP = isX ? g.ca_y_pos : g.ca_x_pos, pN = isX ? g.ca_y_neg : g.ca_x_neg;
+    /* BC-1 (2026-11-01): for a bolt circle the width is that of the critical row (rowPts, the anchors the case puts
+       the shear on), not the whole pattern; a grid row spans the whole pattern, so a grid is unchanged.
+       BC-4 (2026-11-01): the perpendicular edge distances (narrow-member limit, A_Vc width, ψ_ed,V) are measured from
+       that row's outer anchors too (before: from the whole pattern's outer anchors — conservative but inconsistent) */
+    const alT = !shearDir? 0 : (e.name==="+x"?shearDir.x : e.name==="-x"?-shearDir.x : e.name==="+y"?shearDir.y : -shearDir.y);
+    const domX = !!shearDir && Math.abs(shearDir.x)>=Math.abs(shearDir.y);   /* shearCases builds the rows along the dominant shear axis */
+    const rp = (bpCircPattern() && rowPts && rowPts.length && !parallel && alT>0.05 && isX===domX)? rowPts : null;   /* the row is defined for the edge the shear pushes toward */
+    const alongMin = rp? Math.min(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymin : g.xmin);
+    const alongMax = rp? Math.max(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymax : g.xmax);
+    const shP = rp? ((isX? g.ymax : g.xmax) - alongMax) : 0, shN = rp? (alongMin - (isX? g.ymin : g.xmin)) : 0;
+    const pP = (isX ? g.ca_y_pos : g.ca_x_pos) + shP, pN = (isX ? g.ca_y_neg : g.ca_x_neg) + shN;
     let c1=c1raw, narrow=null;
     if(pP<1.5*c1raw && pN<1.5*c1raw && ha<1.5*c1raw){
       const along=[...new Set(g.pts.map(p=>+(isX?p.y:p.x).toFixed(6)))].sort((a,b)=>a-b);
@@ -2775,17 +2785,10 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
     /* Case 3 (row closest to edge): the projected area is the leading row's width along the
        edge × depth (1.5c1), clipped by 1.5c1 beyond the outer anchors, by the perpendicular
        concrete edges, and by member thickness ha. §17.7.2.1, Fig. R17.7.2.1b Case 3. */
-    /* extent of anchors ALONG the edge (perpendicular to shear direction) */
-    /* BC-1 (2026-11-01): for a bolt circle the width is that of the critical row (rowPts, the anchors the case puts
-       the shear on), not the whole pattern; a grid row spans the whole pattern, so a grid is unchanged */
-    const alT = !shearDir? 0 : (e.name==="+x"?shearDir.x : e.name==="-x"?-shearDir.x : e.name==="+y"?shearDir.y : -shearDir.y);
-    const domX = !!shearDir && Math.abs(shearDir.x)>=Math.abs(shearDir.y);   /* shearCases builds the rows along the dominant shear axis */
-    const rp = (bpCircPattern() && rowPts && rowPts.length && !parallel && alT>0.05 && isX===domX)? rowPts : null;   /* the row is defined for the edge the shear pushes toward */
-    const alongMin = rp? Math.min(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymin : g.xmin);
-    const alongMax = rp? Math.max(...rp.map(p=>isX?p.y:p.x)) : (isX ? g.ymax : g.xmax);
-    /* perpendicular concrete edges bounding the width */
-    const perpPos = isX ? g.ca_y_pos : g.ca_x_pos;   /* distance from outer anchor to +edge */
-    const perpNeg = isX ? g.ca_y_neg : g.ca_x_neg;
+    /* extent of anchors ALONG the edge (perpendicular to shear direction): alongMin / alongMax above */
+    /* perpendicular concrete edges bounding the width (BC-4: from the row's outer anchors for a bolt circle) */
+    const perpPos = pP;   /* distance from outer anchor to +edge */
+    const perpNeg = pN;
     /* width = anchor span + min(1.5c1, perp edge) on each side */
     const wLeft  = Math.min(1.5*c1, perpNeg);
     const wRight = Math.min(1.5*c1, perpPos);
@@ -2795,7 +2798,8 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
     const AVc_geom = width*depth;
     const AVc = Math.min(AVc_geom, AVco*nV);   /* cannot exceed n × single-anchor area */
     const AVcRatio=Math.min(AVc/AVco,nV);
-    let psi_edV=(e.ca2>=1.5*c1)?1.0:(0.7+0.3*e.ca2/(1.5*c1));
+    const ca2e = rp? Math.min(perpPos,perpNeg) : e.ca2;   /* BC-4: row-based c_a2 for a bolt circle */
+    let psi_edV=(ca2e>=1.5*c1)?1.0:(0.7+0.3*ca2e/(1.5*c1));
     /* §17.7.2.1(c): shear PARALLEL to an edge — evaluate as if perpendicular with
        psi_ed,V = 1.0, and twice the resulting Vcbg is permitted. */
     if(parallel) psi_edV=1.0;
@@ -2805,7 +2809,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
        in the main check — was used for every edge outside the narrow case.) */
     const psi_hV_e = (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;
     const Vcbg=AVcRatio*1.0*psi_edV*psi_cV*psi_hV_e*Vb*(parallel?2:1);
-    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:e.ca2,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
+    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:ca2e,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
   }
   /* CRITICAL-ROW SET-BACK (ACI Fig. R17.7.2.1b Case 2). §17.7.2.1.1 lets the
      half-pyramid be projected from "the axis of the anchor row selected as
