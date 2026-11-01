@@ -704,6 +704,11 @@
     const E = env0(env), P = clone(p0);
     const R0 = compute(P, E); if (R0.errors.length) return { ok: false, msg: 'Fix the splice input errors first.', fails: ['input errors'], p: P };
     const undo = clone({ top: P.top, bot: P.bot, web: P.web });
+    // SB2-AD8 (lead decision 2026-10-30; B4 2026-11-01): the end distances e_f, e_p (flanges) and e_w, e_wp (web) are at least DT4's minimum
+    // e_min = max(Art. 6.13.2.6.5 with Table 6.13.2.6.6-1, the owner's edge distance: CTDOT BRSDM V2 6.13.6.1, 2 in); a larger entered value is kept. GirderDetail's
+    // autoDesignSplice keeps the entered ones (1.75 in by default), so every CTDOT splice it designs fails DT4.
+    const eMin = R0.emin, upE = (o, f) => { if (!(parseDim(o[f]) >= eMin - 1e-9)) o[f] = eMin; };
+    ['top', 'bot'].forEach(k => { upE(P[k], 'ef'); upE(P[k], 'ep'); }); upE(P.web, 'ew'); upE(P.web, 'ewp');
     const bt = BOLT[P.bolts.d] || BOLT['0.875'], d = bt.d, em = Math.max(bt.emin[P.bolts.edge === 'sh' ? 'sh' : 'cut'], (E.rule('spl.ovs') || { value: { edge: 0 } }).value.edge);   // OWN25: owner edge distance
     const q4 = v => Math.floor(v * 4 + 1e-6) / 4, u4 = v => Math.ceil(v * 4 - 1e-6) / 4, q2 = v => Math.floor(v * 2 + 1e-6) / 2;
     const cw = parseDim(P.clr.cw), cv = parseDim(P.clr.cv), g = u4(Math.max(3, 3 * d)), OK = ['pass', 'na', 'adv'], DT = ['DT1', 'DT2', 'DT3', 'DT4', 'DT5', 'DT6', 'DT7', 'DT8', 'DT9', 'DT10', 'DT11'];
@@ -799,10 +804,19 @@
      the Spans & framing tab). P.splices = { code, bolts, gam, clr, Rh, aT, aB, prs,
      gP (splice plate grade; blank = the flange grade), auto: true | false (auto-design the plates and bolts of every splice; false: the
      entered plates), plates: [ { x, top, bot, web } ] (entered, per station) } */
+  /* projGam(P) (SPGAM, 2026-11-01, engineer's "one source"): the project's load factors for the splice design forces, before the owner's η and m
+     (env, as before): Strength I γ_DC max / min, γ_DW max / min, γ_LL and Service II γ_LL of Tables 3.4.1-1, -2 (SBDFlexure.factors(), the
+     Flexure tab's), Fatigue I γ of the Fatigue & studs inputs (P.fatigue.gam.fI; 1.75 without one), deck placement γ_DC and construction LL
+     (SBDConstructibility.factors(), the Constructibility tab's; 3.4.2.1). P.splices.gam (this tab's former inputs) is kept in the file, not used. */
+  function projGam(P) {
+    const W = typeof window !== 'undefined' ? window : {}, F = W.SBDFlexure && W.SBDFlexure.factors ? W.SBDFlexure.factors() : { dc: 1.25, dcMin: 0.90, dw: 1.50, dwMin: 0.65, ll: 1.75, sll: 1.30 };
+    const C = W.SBDConstructibility && W.SBDConstructibility.factors ? W.SBDConstructibility.factors() : { cdc: 1.25, ccl: 1.50 }, fI = +((((P && P.fatigue) || {}).gam || {}).fI);
+    return { dcMax: F.dc, dcMin: F.dcMin, dwMax: F.dw, dwMin: F.dwMin, llS: F.ll, llSv: F.sll, fat: fI > 0 ? fI : 1.75, dc1C: C.cdc, clC: C.ccl };
+  }
   function settings(P) {
     const s = (P && P.splices) || {}, d = clone(DEF);
     const fx = P && P.framing && Array.isArray(P.framing.splices) ? P.framing.splices : [];
-    return { x: fx.map(Number).filter(v => isFinite(v)), code: s.code === '8' ? '8' : '10', bolts: { ...d.bolts, ...(s.bolts || {}) }, gam: { ...d.gam, ...(s.gam || {}) }, clr: { ...d.clr, ...(s.clr || {}) },
+    return { x: fx.map(Number).filter(v => isFinite(v)), code: s.code === '8' ? '8' : '10', bolts: { ...d.bolts, ...(s.bolts || {}) }, gam: projGam(P), clr: { ...d.clr, ...(s.clr || {}) },
       prs: s.prs === 'yes' ? 'yes' : 'no', gP: s.gP || '', auto: s.auto !== false, plates: Array.isArray(s.plates) ? s.plates : [] };
   }
   /* inputsAt(P, gi, AR, x, opt): the splice inputs (p, as GirderDetail's module receives them from spliceExport) for the splice at x of girder gi.
@@ -882,5 +896,5 @@
     return { web: h, flange: p2 };
   }
 
-  window.SBDSplices = { DEF, BOLT, GD_GR, PHI, env0, compute, checks, steps, autoDesign, fit, spCtNarrow, demandsAt, arraysFromAnalysis, sectionAt, settings, inputsAt, girder, svg, spStdT, spNextT, parseDim, frac };
+  window.SBDSplices = { DEF, projGam, BOLT, GD_GR, PHI, env0, compute, checks, steps, autoDesign, fit, spCtNarrow, demandsAt, arraysFromAnalysis, sectionAt, settings, inputsAt, girder, svg, spStdT, spNextT, parseDim, frac };
 })();

@@ -153,7 +153,7 @@
     // member forces
     if (R.frames) h += `<section class="sec"><div class="secHead">Member forces (truss model)</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Member</th><th>Length (in)</th><th>per kip of F<sub>w</sub></th>${R.combos.map(c => `<th>${esc(c.id)} T / C (kip)</th>`).join('')}</tr></thead><tbody>
       ${R.frames.map((e, i) => `<tr><td class="lft">${esc(e.lbl)}</td><td>${fmt(e.L, 2)}</td><td>${fmt(e.unit, 3)} ${wk(`cf.tr${i}`)}</td>${R.combos.map(c => c.off ? '<td class="fx-na">not used</td>' : `<td>${fmt(c.f[i].T, 2)} / ${fmt(c.f[i].Cc, 2)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-      <p class="note">Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.${umNote(R)}</p></div></section>`;
+      <p class="note">Each load combination is a separate case (AASHTO LRFD 10th Ed. Table 3.4.1-1), checked on its own; each member is designed for the largest. Strength I: the entered member forces (nothing is computed for Strength I); Strength III and V: ± |wind force| f<sub>w</sub>F<sub>w</sub> alone (not added to the Strength I forces); Constructibility: the entered forces ± brace force f<sub>br</sub>M<sub>br</sub>. The top chord work points are held by the deck.${umNote(R)}</p></div></section>`;
     h += `<section class="sec"><div class="secHead">Worked steps</div><div class="secBody"><p class="note">Every value above links here (§). AASHTO LRFD 10th Ed. (2024).</p>${stepsHtml([...L.steps, ...fl.steps, ...(R.steps || [])])}</div></section>`;
     return h;
   }
