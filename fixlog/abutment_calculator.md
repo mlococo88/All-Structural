@@ -14954,3 +14954,73 @@ index 1091904..cedb10f 100644
 +document.getElementById("btnPrint").addEventListener("click",()=>{ if(ABRP.on&&ABRP.api){ ABRP.api.print(); return; }   /* ABRP: on the Report tab the button prints that report */
 +  syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
 ```
+
+## 2026-11-01 — PR: claude/rpt-abutment-full — Report: worked steps for every remaining check family (ABRF; display only, no calculation change) (PR link added after merge)
+
+### ABRF. Report tab: the "Further checks" families worked step by step   [display only]
+- **Engineer decision (2026-11-01):** every report is self-contained, with full worked steps.
+- **Where:** `abrModel()`, one new block (anchor `ABRF (2026-11-01)`) before "every other dashboard check". Each family is added to the section of its tab:
+  - **Foundation and piles: pile structural axial** (`R.checks.pileStr`, AASHTO LRFD 10th Ed. 10.7.3.13, 6.9.4):
+    - P_u = P_max + γ_DR·DR;
+    - F_cr (buckling over L_u, or F_y);
+    - A_eff;
+    - P_n = F_cr A_eff;
+    - P_r = φ_c P_n, or P_r entered;
+    - the strength and Extreme Event ratios.
+  - **Foundation and piles: pile combined axial and flexure** (`pileCF.gI`, 6.9.2.2.1):
+    - P_u, P_r, P_u/P_r;
+    - M_u,L and M_u,T (δ_s × M, with the moment source);
+    - M_r,L and M_r,T;
+    - Σ M_u/M_r;
+    - the interaction equation in use.
+  - **Foundation and piles: pile shear** (`pileCF.gV`): V_n,L and V_n,T; max(|H_x|/V_n,L, |H_y|/V_n,T).
+  - **Foundation and piles: punching** (`R.checks.punching`, 5.12.8.6): d_e, d_v, b_0, V_n, V_u.
+  - **Structural design: stem dowels** (`R.checks.dowel`):
+    - ℓ_av;
+    - hooked: F_h, ℓ_db, ℓ_d, ℓ_dh; or straight: ℓ_db, ℓ_d;
+    - the lap: ℓ_d in the stem and the class A / B lap.
+  - **Structural design: backwall at Extreme Event I** (`R.bwEE.ee`): ΔP_AE, W_i, M_u, M_n (φ = 1.0), V_u, V_n.
+  - **Structural design: backwall as the seismic stop** (`R.bwEE.stop`, MassDOT §3.4.8.1): F = c W_sup, w = F/L_ab, M_u, M_n, V_n.
+  - **Approach-slab shelf** (`R.apShelf`, 5.8.4.2), in the structural section or the integral section:
+    - V_u, N_uc, M_u, A_n;
+    - corbel: A_f, A_vf, A_s,req, A_h,req, V_n,max; cantilever: A_s,req and the section's φV_n;
+    - q_b and q_R;
+    - the edge depth.
+  - **Approach-slab reinforcement** (`R.apDes`): the distribution percentage, A_s,D,req, and top S&T.
+  - **Wingwalls** (`R.wing`):
+    - S&T bars: A_s, A_s,ST, s_max;
+    - junction bars: ℓ_av, ℓ_d / ℓ_dh;
+    - simplified stability: R_R, e and e_lim, q, or the resultant outside the base.
+  - **Integral / semi-integral** (`R.iab`):
+    - integral piles: P_DL, P_LL, P_g; then the MassDOT table capacity and pile length, or P_r, M_r, R_T and M_u (CTDOT) or the p-y M_u, with the axial ratio and the interaction equation;
+    - geotechnical: φ_c R_n, uplift P_min, Extreme Event P_ee;
+    - Extreme Event I: F, P_PE, p_B, and the wall and rear-face M_u / M_n;
+    - end diaphragm at 70 % seismic passive: p_B, M_u, V_u, M_n.
+- **Values:**
+  - Every step value is the tool's own result field. Nothing is recomputed.
+  - Each family ends with the dashboard's D/C step (`dcStep`: the dashboard value and pass/fail), so the summary table now links to these steps.
+  - A check the tool marks as not evaluated is shown with its reason and no pass or fail: pile section not valid, R_n not entered, lap not detailed, or an integral section outside the MassDOT tables.
+- **"Further checks":** this section now appears only for a check without a step writer. None remains in the 15 projects tested (see How verified).
+- **Saved data:** nothing new.
+- **How verified (headless Chromium, pinned KaTeX 0.16.11, Plotly 2.35.2 and three.js r128 served locally):**
+  - **15 projects:** the 11 of ABRP, plus four more:
+    - round pipe piles with L_u = 6 ft and a detailed dowel lap;
+    - integral, seismic, with a p-y moment and R_n;
+    - semi-integral, MassDOT, seismic, with an approach slab;
+    - conventional, MassDOT, seismic, with the backwall as the seismic stop.
+  - Each report has 101 to 218 steps.
+  - **"Further checks" holds 0 checks in all 15 projects:** every dashboard check is worked step by step.
+  - Every dashboard row links to a step, and every numeric D/C step equals the dashboard D/C exactly (`===`).
+  - **New spot values** equal the result fields exactly, where the project has them:
+    - pile P_u, P_n, P_r, A_eff, P_u/P_r, Σ M_u/M_r, M_u,L, V_n,L;
+    - punching V_n, b_0, d_v;
+    - dowel ℓ_av, ℓ_dh, F_h, ℓ_lap;
+    - backwall ΔP_AE, M_u, M_n, stop F and M_u;
+    - shelf V_u, N_uc, A_s,req, q_b;
+    - slab distribution % and A_s,D,req;
+    - wing A_s,ST, ℓ_av, R_R, e_lim;
+    - integral P_g, P_r, axial ratio, F, P_PE, p_B;
+    - end diaphragm M_u and p_B.
+  - In every project: 0 unresolved references, 0 KaTeX errors, no NaN, 0 console errors. `LAST_R` and `S` are unchanged by the report.
+  - **origin/main vs the branch** on the 15 projects: see the PR (`LAST_R`, `S`, dashboard, warnings, inputs, D11 report text, Tabs 1–6 and 8–10).
+  - `node tests/check-syntax.mjs abutment_calculator.html` passes.
