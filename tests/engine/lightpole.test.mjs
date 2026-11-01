@@ -181,3 +181,23 @@ test('Ice: t_d(z) = t·(z/33)^0.10·K_zt^0.35·I_i: t 0.75, z 35, K_zt 1.2, I_i 
   const C = lp.run('COMBOS');
   assert.deepEqual([C.L5.D, C.L5.Di, C.L5.Wi, C.L5.W], [0.9, 1.0, 1.0, 0]); assert.deepEqual([C.A5.D, C.A5.Di, C.A5.Wi, C.A5.W], [0.6, 0.7, 0.7, 0]);
 });
+
+/* ---------- LP-R5: fixture torsion and arm wind (added 2026-11-01) ---------- */
+test('Arm wind and torsion: fixture at θ 0°, a 6 ft, arm OD 2.375 in, wind toward 90°: T = (F_w + ½F_arm)·6·sin(90°)', () => {
+  const lp = lpEngine();
+  const inp = lpDefaultInp();
+  const fx = lp.call('fixtureComponents', { hf: 35, th: 0, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55, armD: 2.375 }, inp);
+  // q0 = 0.00256·1.0147·13225 = 34.35 psf; D = 0.1979 ft; D√q0 = 1.160 ≤ 2.5 → row "all surfaces"; h/D = 6/0.1979 = 30.3 → 1.2
+  assert.equal(fx.armRow, 'lowq'); near(fx.armHD, 30.32, 0.01, 'h/D'); near(fx.cfArm, 1.2, 1e-12, 'C_f arm');
+  near(fx.FarmMax, fx.qz * 1.2 * (2.375 / 12) * 6, 1e-9, 'F_arm'); near(fx.FarmMax, 41.61, 0.02, 'F_arm');
+  const r = lp.call('evalComboDir', 'L1', inp, [], [fx], lp.call('poleWindNominal', inp), 90);
+  near(r.Tz, (fx.Fw + 0.5 * fx.FarmMax) * 6, 1e-9, 'T'); near(r.T, (51.39 + 20.81) * 6, 0.2, 'T ≈ 433 lb·ft');
+  // wind along the arm (0°): no arm wind, no torsion
+  const r0 = lp.call('evalComboDir', 'L1', inp, [], [fx], lp.call('poleWindNominal', inp), 0);
+  near(r0.T, 0, 1e-9, 'T at 0°');
+  // two opposite arms cancel
+  const fx2 = lp.call('fixtureComponents', { hf: 35, th: 180, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55, armD: 2.375 }, inp);
+  near(lp.call('evalComboDir', 'L1', inp, [], [fx, fx2], lp.call('poleWindNominal', inp), 90).T, 0, 1e-9, 'opposite arms');
+  // no arm OD (old saves): no arm force
+  near(lp.call('fixtureComponents', { hf: 35, th: 0, a: 6, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55 }, inp).FarmMax, 0, 0, 'armD 0');
+});
