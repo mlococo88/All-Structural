@@ -3290,3 +3290,11 @@ index 5a65298..c7c5f79 100644
 +  window.addEventListener("beforeprint",()=>{ if(typeof bprWillPrint==="function"&&bprWillPrint()) return;   /* RPT-4: the Report tab prints itself (shared/report.js) */
 +    if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
 ```
+
+## 2026-11-01 — RPT-4b: the unused RPT-3 report viewer code removed (pure removal; no behaviour change) (PR: claude/bpad-rpt3-cleanup, PR link added after merge)
+- **Coordinator request (2026-11-01):** delete the RPT-3 functions that RPT-4 (#580) left in place but no longer calls.
+- **Removed** (anchor before: `/* RPT-2 (2026-10-24): Report tab — the calculation sheet on screen.`, through the `resize` listener that called `bpCrSizeBar`): the RPT-2/RPT-3 comments, `bpCrSpy`, `BP_RPT_CLOSED`, `bpCrKey`, `bpCrSizeBar`, `bpCrJump`, `bpCrSpyOff`, `bpCrSpyOn`, `buildReportTab` and `window.addEventListener("resize", … bpCrSizeBar(pg) …)`. None of them is referenced by any remaining code (checked by search: each name now occurs only in comments).
+- **Kept** (used by RPT-4 `bprReportTab` and the "§ in report" handler): `let bpRptTimer=0, BP_RPT_PENDING=null;` and `bpCrScroller()`, under a new comment `/* RPT-4 (2026-11-01): the Report tab is the shared viewer …`. The `.crv-*` CSS stays: `buildPrintReport(target)` still gives the off-screen sheet the class `crdoc crv-doc` (its drawings are laid out with it).
+- **Re-apply by hand:** delete the block named above and put back the two kept lines.
+- **How verified (no behaviour change):** headless Chromium, origin/main (RPT-4) vs branch, 4 projects (default, MSA3A, torqued, last built-in validation case): the text of every output tab, the Report tab's text (`SharedReport.text`) and navigation tree, the "§ in report" jump target, `S` and localStorage identical; a `resize` event raises no error; 0 page errors. `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+- **Provision:** none. **Saved data:** none.
