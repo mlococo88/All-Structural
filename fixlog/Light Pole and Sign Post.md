@@ -1478,7 +1478,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - Headless Chromium, default pole / two-post sign / one-arm torsion case: 5 sheets each, `SharedDxf.validate` ok, no NaN/undefined in the DXF, 0 console errors, 390 px without horizontal scroll; every sheet screenshot inspected (scratchpad/shots-lp/pr12-*).
 - `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; the only differences are the Geometry elevation SVG and the new Drawings tab.
 
-## 2026-11-01 — PR: claude/lp-pr13-layout (LP-13: masthead at 390 px, wide equations at 1280 px; display only; PR link added after merge)
+## 2026-11-01 — PR #601: claude/lp-pr13-layout (LP-13: masthead at 390 px, wide equations at 1280 px; display only)
 
 ### LP13-1. Masthead code tag at narrow widths (review §5)   [UI]
 - **Where:** CSS after the `@media(max-width:900px)` block: `@media(max-width:600px){.masthead .codetag{position:static;text-align:left;margin-top:8px}.masthead .codetag b{display:inline;margin-right:6px}}`.
@@ -1488,3 +1488,23 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Where:** `.katex{position:relative}` and `@media screen{.tabpage .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}` (the same rule the tool already applied below 900 px; screen only, so printing is unchanged).
 - **Before (origin/main, 1280 px):** page width 1528 px on Loading, 1303 px on Anchors, 1319 px on Calc sheet (long display equations). **After:** 1280 px on every tab; 390 px unchanged (390).
 - **How verified:** headless Chromium, every output tab at 1280 and 390 px (scratchpad lplayout.mjs; screenshots shots-lp/pr13-*); `node tests/lightpole-compare.mjs --a origin/main`: all 14 cases identical (results, cable values, text, drawings); 0 console errors.
+
+## 2026-11-01 — PR: claude/lp-pr14-breakout (LP-14: concrete breakout in the ACI 318-19 group form; engineer answer 2026-11-01; PR link added after merge)
+
+### LP14-1. Tension breakout: ΣN_ua of the tension anchors ≤ φN_cbg   [calc change] [less conservative = the code form]
+- **Engineer answer (2026-11-01, open question of LP-4):** use the group form with ψ_ec,N for eccentricity instead of T_max·n_T.
+- **Where:** `anchorBolts()`, block above `const tr=`; return fields `trAnc, trBrk`; `collectChecks()`: "Anchor tension" (steel / pullout, the combination with the largest per-anchor ratio) and new "Anchor breakout (group)" (ΣN_ua vs φN_cbg, the combination with the largest group ratio; anchor reinforcement None only); `LPP_CHK2K`; `boltWorkedHTML()` step 7.
+- **Before:**
+  ```js
+  phiNn=Math.min(phiNsa, phiNp, phiNcbg/nT);  const tr=Tmax/phiNn;
+  ```
+- **After:**
+  ```js
+  phiNn=Math.min(phiNsa, phiNp);  const trBrk = hasAnchRe ? 0 : Tsum/phiNcbg;
+  const trAnc=Tmax/phiNn, tr=Math.max(trAnc, trBrk);
+  ```
+  N_cbg already carries ψ_ec,N (eccentricity of the tension resultant from the tension-anchor centroid) and A_Nc of the tension anchors only (F6). The §17.8 interaction uses the governing tension ratio tr.
+- **Governing provision:** ACI 318-19 §17.6.2.1 (group: N_cbg for the anchors in tension, compared with the factored tension of the group, §17.5.1.1 / Table 17.5.2), §17.6.2.3 (ψ_ec,N), §17.8.
+- **Check case (the engineer's: default pole before the arm wind of LP-7, M_u 19,949 lb·ft, 1.2D + 1.0W, wind toward 0°):** ΣT = 19,401 lb, φN_cbg = 22,323 lb → **0.87** (Node test at exactly 0°: 19,405 / 22,408 = 0.866). Before: T_max / (φN_cbg/n_T) = 9,791 / (22,323/3) = 1.32.
+- **Current default (with arm wind, governing combination at the max-moment azimuth):** ΣT = 19,130, φN_cbg = 19,641 → **0.974** OK (before 1.475 NG). Other cases (tension ratio before → after): square shaft 2.257 → 1.493; 1½ in rods 0.843 → 0.515; torsion case 0.870 → 0.573; monopost 2.539 → 1.688 (interaction 2.812 → 1.961); two-post 2.912 → 1.938.
+- **How verified:** `node tests/engine/run.mjs lightpole` 22 passed (2 new tests); `node tests/lightpole-compare.mjs --a origin/main`: only the anchor tension chain changes (phiNn, tr, trAnc, trBrk, tgov, inter, interOK and the check rows); cable values identical; 0 console errors.
