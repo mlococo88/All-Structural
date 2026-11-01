@@ -1431,10 +1431,19 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` 19 passed (new V_c test). `node tests/lightpole-compare.mjs --a origin/main`: 14 cases, only φV_c / V_c and the new tie fields differ (13 values per stack; diff paths filtered); cable values identical. No saved data change.
 - **Open items:** ρ_w uses half the longitudinal bars (conservative; the code does not define A_s for a circular section); A_cv = 0.8A_g kept (vs D·0.8D = 1.02A_g); the axial term N_u/6A_g is neglected.
 
-## 2026-11-01 — PR: claude/lp-pr9-natgf (LP-9: n₁ and G_f worked steps; display only; PR link added after merge)
+## 2026-11-01 — PR #578: claude/lp-pr9-natgf (LP-9: n₁ and G_f worked steps; display only)
 
 ### LP9-1. Natural frequency n₁ and gust-effect factor G_f worked (CLAUDE.md §6; D11 open item)   [display] [no result change]
 - **Where:** `poleNatFreq()` also returns `sWy, sWy2, rows` (the Rayleigh sums and each weight's height, weight and deflection; values unchanged); `lppApplyGf()` keeps `inp.nat`, `inp.gfDims`; new `natGfWorkedHTML(inp)` above `function hssTorsionShear(`; shown in `windWorkedHTML()` (pole, Loading tab), `signWindWorkedHTML()` (sign, Loading tab and the sign report) and the pole report's pole-wind section.
 - **Steps:** table of z_i, W_i, y_i, W_i·y_i, W_i·y_i²; n₁ = (1/2π)·√(g·ΣWy/ΣWy²) with the numbers; rigid/flexible; when flexible, z̄, I_z̄, L_z̄, Q², V̄_z̄, N₁, R_n, R_h, R_B, R_L, R², g_R and G_f (ASCE 7-22 Eq. 26.11-7 … 26.11-16) with the numbers, then G used = max(G, G_f).
 - **Check case (60 ft pole case):** ΣW·y = 7,213.94, ΣW·y² = 61,110.99 → n₁ = √(386.1·7,213.94/61,110.99)/(2π) = 6.751/6.283 = **1.0745 Hz** (rigid; the tool's value).
 - **How verified:** `node tests/engine/run.mjs lightpole` 20 passed (worked-step test, flexible case with n₁ = 0.82 Hz: G_f shown, no NaN). `node tests/lightpole-compare.mjs --a origin/main`: results identical apart from the added fields (`sWy`, `sWy2`, `rows`, `inp.nat`, `inp.gfDims`); cable values identical; text adds the worked steps (Loading tab, report); 0 console errors.
+
+## 2026-11-01 — PR: claude/lp-pr10-json (LP-10: JSON export / import of the project; no result change; PR link added after merge)
+
+### LP10-1. Export JSON / Import JSON   [feature] [no result change] [no storage change]
+- **Where:** project bar: buttons `pbExport`, `pbImport`, hidden `pbImportFile`; new `lppExportJSON()`, `lppImportState(obj)` and handlers above `const DEFAULT_STATE=captureState();`.
+- **File format (new, versioned):** `{ tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name, exported, state }`, where `state` is exactly `captureState()` — the same object already stored under `lpp_projects_v1` / `lpp_session_v1`. No localStorage key or saved format is changed (§5).
+- **Import:** accepts that file or a bare state object (`{inputs, …}`); opens it through `applyState()`, so every migration for fields added later applies (old files open with the old behaviour and the usual notices); the result is an unsaved working state ("Save As" stores it in the browser). A file without `inputs` is refused with a message. Unsaved changes ask for confirmation first.
+- **Saved-project list:** the tool already has one (the Project dropdown with Save / Save As / Rename / Delete / New); unchanged.
+- **How verified (headless Chromium, scratchpad lpjson.mjs):** two-post sign at V 133 exported → New → imported: the Summary text is identical and V = 133; a bare old-format state (no cfPoleMode / anchTq / arm OD …) imports with C_f Manual and anchor reinforcement Provided as stored; a file without `inputs` gives "Import failed: not a Light Pole and Sign Post project file"; localStorage holds only `lpp_session_v1` after the run; no console errors; 390 px: buttons wrap, no horizontal scroll. Calculations untouched (no engine code changed); `node tests/engine/run.mjs lightpole` 20 passed.
