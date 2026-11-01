@@ -1,0 +1,91 @@
+{
+ "_schema": "steelbeam-external-demands",
+ "_version": 1,
+ "producer": "Steel Beam",
+ "generatedAt": "2026-09-30T12:00:00.000Z",
+ "project": "Fixture simple span",
+ "units": {
+  "force": "kip",
+  "length": "ft",
+  "moment": "ft-kip"
+ },
+ "factored": false,
+ "selfWeightExcluded": false,
+ "member": {
+  "supports": [
+   0,
+   60
+  ],
+  "spans": [
+   60
+  ],
+  "totalLength": 60
+ },
+ "stations": [
+  {
+   "x": 0,
+   "M_DC1": 0,
+   "V_DC1": -36,
+   "M_DC2": 0,
+   "V_DC2": -6,
+   "M_DW": 0,
+   "V_DW": -4.5,
+   "M_LLpos": 0,
+   "M_LLneg": 0,
+   "V_LLpos": 70.4,
+   "V_LLneg": -70.4
+  },
+  {
+   "x": 15,
+   "M_DC1": 405,
+   "V_DC1": -18,
+   "M_DC2": 67.5,
+   "V_DC2": -3,
+   "M_DW": 50.625,
+   "V_DW": -2.25,
+   "M_LLpos": 567,
+   "M_LLneg": 0,
+   "V_LLpos": 45.2,
+   "V_LLneg": -45.2
+  },
+  {
+   "x": 30,
+   "M_DC1": 540,
+   "V_DC1": 0,
+   "M_DC2": 90,
+   "V_DC2": 0,
+   "M_DW": 67.5,
+   "V_DW": 0,
+   "M_LLpos": 756,
+   "M_LLneg": 0,
+   "V_LLpos": 20,
+   "V_LLneg": -20
+  },
+  {
+   "x": 45,
+   "M_DC1": 405,
+   "V_DC1": 18,
+   "M_DC2": 67.5,
+   "V_DC2": 3,
+   "M_DW": 50.625,
+   "V_DW": 2.25,
+   "M_LLpos": 567,
+   "M_LLneg": 0,
+   "V_LLpos": 45.2,
+   "V_LLneg": -45.2
+  },
+  {
+   "x": 60,
+   "M_DC1": 0,
+   "V_DC1": 36,
+   "M_DC2": 0,
+   "V_DC2": 6,
+   "M_DW": 0,
+   "V_DW": 4.5,
+   "M_LLpos": 0,
+   "M_LLneg": 0,
+   "V_LLpos": 70.4,
+   "V_LLneg": -70.4
+  }
+ ]
+}

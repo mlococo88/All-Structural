@@ -9,7 +9,10 @@
      { title, subtitle, code,                       cover lines ('Steel Bridge Design', 'Girder G1', 'AASHTO LRFD 10th Ed. (2024)')
        info: [[label, value], …],                   title block (project, number, computed / checked by, dates), three per row
        head: { left, right, foot },                 running header / footer text in print (strings; optional)
-       sections: [ { id, title, note?, subs: [ { id, title, items: [item, …] } ] } ] }
+       sections: [ { id, title, note?, part?, subs: [ { id, title, items: [item, …] } ] } ] }
+   part (2026-11-01, optional): a chapter heading shown before that section (screen, nav tree, contents, print, text), for a
+   report that joins the reports of several tabs (Concrete Beam Capacity.html: one chapter per tab). Section numbers run on
+   through the chapters. A model without part renders exactly as before.
    Items:
      { type: 'steps', scope, steps: [step…], title?, lazy? }   worked steps (shared/steps.js format). Each step's anchor key is
                                                              scope + '/' + step.id (step.id alone when scope is ''); the first
@@ -59,6 +62,7 @@
     let nSt = 0, nTp = 0;
     (model.sections || []).forEach((s, i) => {
       const n = i + 1, sec = { n: String(n), id: 'rp-s' + n, title: s.title, subs: [] };
+      if (s.part) sec.part = { title: s.part, id: 'rp-p' + n };
       doc.toc.push(sec);
       (s.subs || []).forEach((q, j) => {
         const num = `${n}.${j + 1}`, sub = { n: num, id: `rp-s${n}-${j + 1}`, title: q.title };
@@ -182,12 +186,12 @@
     for (let i = 0; i < I.length; i += 3) rows.push(I.slice(i, i + 3));
     return `<table class="rp-tb">${rows.map(r => `<tr>${r.map(([l, v]) => `<td><span>${esc(l)}</span>${esc(v == null || v === '' ? '—' : v)}</td>`).join('')}</tr>`).join('')}</table>
       <section class="rp-cover"><h1>${esc(m.title || 'Calculation report')}</h1>${m.subtitle ? `<p>${esc(m.subtitle)}</p>` : ''}${m.code ? `<p class="rp-cp">${esc(m.code)}</p>` : ''}</section>
-      <section class="rp-ptoc"><h2 class="rp-h1x">Contents</h2><ol>${doc.toc.map(s => `<li>${s.n}. ${esc(s.title)}${s.subs.length ? `<ol>${s.subs.map(q => `<li>${q.n} ${rich(doc, q.title, true)}</li>`).join('')}</ol>` : ''}</li>`).join('')}</ol></section>`;
+      <section class="rp-ptoc"><h2 class="rp-h1x">Contents</h2><ol>${doc.toc.map(s => `${s.part ? `<li class="rp-tp">${esc(s.part.title)}</li>` : ''}<li>${s.n}. ${esc(s.title)}${s.subs.length ? `<ol>${s.subs.map(q => `<li>${q.n} ${rich(doc, q.title, true)}</li>`).join('')}</ol>` : ''}</li>`).join('')}</ol></section>`;
   }
   function html(doc, opt) {
     const lazy = !opt || opt.lazy !== false, closed = (opt && opt.closed) || new Set();
     return titleBlock(doc) + (doc.model.sections || []).map((s, i) => { const T = doc.toc[i];
-      return `<section class="rp-sec${closed.has(T.id) ? ' rp-closed' : ''}" data-rpsec="${T.id}"><h2 class="rp-h1" id="${T.id}">${T.n}. ${esc(s.title)}</h2>${s.note ? `<p class="rp-note">${rich(doc, s.note, true)}</p>` : ''}
+      return `${T.part ? `<h1 class="rp-part" id="${T.part.id}">${esc(T.part.title)}</h1>` : ''}<section class="rp-sec${closed.has(T.id) ? ' rp-closed' : ''}" data-rpsec="${T.id}"><h2 class="rp-h1" id="${T.id}">${T.n}. ${esc(s.title)}</h2>${s.note ? `<p class="rp-note">${rich(doc, s.note, true)}</p>` : ''}
         ${(s.subs || []).map((q, j) => { const Q = T.subs[j];
           return `<div class="rp-sub${closed.has(Q.id) ? ' rp-closed' : ''}"><h3 class="rp-h2" id="${Q.id}">${Q.n} ${rich(doc, q.title, true)}</h3>${(q.items || []).map(it => itemHtml(doc, it, lazy)).join('')}</div>`; }).join('')}</section>`; }).join('');
   }
@@ -198,6 +202,7 @@
     L.push(m.title || '', m.subtitle || '', m.code || '');
     (m.info || []).forEach(([l, v]) => L.push(`${l}: ${v == null || v === '' ? '—' : v}`));
     (m.sections || []).forEach((s, i) => {
+      if (s.part) L.push('', String(s.part).toUpperCase());
       L.push('', `${i + 1}. ${s.title}`); if (s.note) L.push(T(s.note));
       (s.subs || []).forEach((q, j) => {
         L.push('', `${i + 1}.${j + 1} ${T(q.title)}`);
@@ -229,6 +234,8 @@
 .rp-toc{position:sticky;top:calc(var(--rp-stick,0px) + var(--rp-top,64px));max-height:calc(100vh - 150px - var(--rp-stick,0px) - var(--rp-top,64px));overflow:auto;border:1px solid #E4E7EB;border-radius:8px;padding:6px 2px;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;scrollbar-width:thin;background:#fff;}
 .rp-toc a{display:block;padding:2px 9px;border-left:2px solid transparent;color:#475569;text-decoration:none;font-size:9pt;line-height:1.35;}
 .rp-toc a.rp-l1{font-weight:600;color:#0F172A;margin-top:5px;}
+.rp-toc a.rp-l0{font-weight:700;color:#0F172A;margin-top:9px;text-transform:uppercase;font-size:8.5pt;letter-spacing:.3px;border-bottom:1px solid #E4E7EB;}
+.rp-part{font:700 15pt Arial,Helvetica,sans-serif;margin:22pt 0 4pt;padding:0 0 4pt;border-bottom:1.5pt solid #000;scroll-margin-top:calc(var(--rp-stick,0px) + var(--rp-top,64px) + 8px);} .rp-ptoc li.rp-tp{font-weight:700;margin-top:6pt;}
 .rp-toc a.rp-l2{padding-left:20px;font-size:8.5pt;}
 .rp-toc a.rp-l3{padding-left:30px;font-size:8pt;font-style:italic;} .rp-toc a.rp-l4{padding-left:40px;font-size:8pt;}
 .rp-top{margin:8pt 0 2pt;padding:2pt 0 2pt 6pt;border-left:2.5pt solid #64748b;break-after:avoid;page-break-after:avoid;} .rp-top .rp-tn,.rp-top .rp-tt{font-weight:700;} .rp-tsum{font-size:9.5pt;}
@@ -272,7 +279,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
 .rp-doc .katex{font-size:1.05em;} .rp-doc .katex .katex-error{color:#DC2626;}
 .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;} .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;} .st-frac>.st-den{padding:0 2px;} .st-bar{text-decoration:overline;}
 #rp-print{display:none;}
-@media (max-width:1000px){.rp-body{grid-template-columns:1fr;} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
+@media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
 @media print{
   body.rp-printing>*:not(#rp-print){display:none!important;}
   html:has(body.rp-printing),body.rp-printing{height:auto!important;overflow:visible!important;background:#fff!important;}
@@ -281,7 +288,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   .rp-body{display:block;} .rp-sub{content-visibility:visible;}
   .rp-doc{border:0;padding:0;max-width:none;box-shadow:none;}
   .rp-ptoc{display:block;break-after:page;}
-  .rp-sec{break-before:page;} .rp-sec.rp-closed>*,.rp-sub.rp-closed>*{display:revert!important;} .rp-hide{display:revert!important;}
+  .rp-sec{break-before:page;} .rp-part{break-before:page;break-after:avoid;} .rp-part+.rp-sec{break-before:auto;} .rp-sec.rp-closed>*,.rp-sub.rp-closed>*{display:revert!important;} .rp-hide{display:revert!important;}
   .rp-h1::after,.rp-h2::after{content:none!important;}
   .rp-h1,.rp-h2,.rp-h3,.rp-cap{break-after:avoid;}
   .rp-see{font-family:"Times New Roman",Times,serif;font-size:inherit;color:#000;text-decoration:none;}
@@ -316,7 +323,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     const doc = build(model), closed = opt.closed || new Set();
     host.innerHTML = `<div class="rp"><div class="rp-bar">${opt.controls || ''}<span class="rp-sp"></span><input type="search" class="rp-q" placeholder="Search the report" aria-label="Search the report">
       <button type="button" data-rpact="exp">Expand all</button><button type="button" data-rpact="col">Collapse all</button><button type="button" class="primary" data-rpact="print">Print report</button></div>
-      <div class="rp-body"><nav class="rp-toc" aria-label="Report contents">${doc.toc.map(s => `<a href="#${s.id}" data-rpto="${s.id}" class="rp-l1">${s.n}. ${esc(s.title)}</a>${s.subs.map(q => `<a href="#${q.id}" data-rpto="${q.id}" class="rp-l2">${q.n} ${rich(doc, q.title, true)}</a>${(q.items || []).map(it => `<a href="#${it.anchor}" data-rpto="${it.anchor}" class="rp-l3">${rich(doc, it.title, true)}</a>${it.tops.map((t, k) => `<a href="#${t.anchor}" data-rpto="${t.anchor}" class="rp-l4">${k + 1}. ${esc(t.title)}</a>`).join('')}`).join('')}`).join('')}`).join('')}</nav>
+      <div class="rp-body"><nav class="rp-toc" aria-label="Report contents">${doc.toc.map(s => `${s.part ? `<a href="#${s.part.id}" data-rpto="${s.part.id}" class="rp-l0">${esc(s.part.title)}</a>` : ''}<a href="#${s.id}" data-rpto="${s.id}" class="rp-l1">${s.n}. ${esc(s.title)}</a>${s.subs.map(q => `<a href="#${q.id}" data-rpto="${q.id}" class="rp-l2">${q.n} ${rich(doc, q.title, true)}</a>${(q.items || []).map(it => `<a href="#${it.anchor}" data-rpto="${it.anchor}" class="rp-l3">${rich(doc, it.title, true)}</a>${it.tops.map((t, k) => `<a href="#${t.anchor}" data-rpto="${t.anchor}" class="rp-l4">${k + 1}. ${esc(t.title)}</a>`).join('')}`).join('')}`).join('')}`).join('')}</nav>
       <article class="rp-doc">${html(doc, { lazy: true, closed })}</article></div></div>`;
     const root = host.querySelector('.rp'); if (opt.stick) root.style.setProperty('--rp-stick', opt.stick + 'px');
     const bar = root.querySelector('.rp-bar'), art = root.querySelector('.rp-doc');
