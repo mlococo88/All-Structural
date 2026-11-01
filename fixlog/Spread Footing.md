@@ -3457,3 +3457,36 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Default μ = 0.6λ (not intentionally roughened): engineer to confirm, or set "roughened" where the drawings specify it.
   - In direct mode the permanent compression is only the pedestal self-weight.
   - A_s,req,ten from the governing tension combination is deducted in every combination (conservative).
+
+## 2026-11-01 — PR: claude/sf-agg — Aggregate size input and the (4/3)·d_agg clear-spacing term; minimum clear spacing of the footing mats (SFAG; calculation change, no change at the default) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFAG`.
+
+### SFAG. d_agg (default 3/4 in) in every minimum-clear-spacing check   [calculation change + new check; CLAUDE.md §4]
+- **Engineer request (2026-11-01):** add an aggregate-size input (default 3/4 in) and the (4/3)·d_agg clear-spacing term in every bar-spacing check that uses the minimum clear spacing (footing mats and pedestal bars).
+- **Input:** `state.mat.dagg` (in), Materials tab, "Max. aggregate size d_agg". `defaultState` = 0.75; `migrateState` backfills 0.75 for old saves. Helper `sfdDagg()`.
+- **Pedestal bars** (`computePhase2` → `pedDes`, anchor `const clrMin=`):
+  - Before: `const clrMin=Math.max(1.5*dbL,1.5);`
+  - After: `const clrMin=Math.max(1.5*dbL,1.5,4/3*sfdDagg());`
+  - Provision: ACI 318-19 25.2.3, minimum clear spacing of column/pedestal longitudinal bars: the greatest of 1.5 in, 1.5d_b and (4/3)d_agg.
+- **Footing mats** (new check, `directionDesign`, after the anchor `const spcTopOK=`):
+  - Each mat entered: clear spacing s − d_b ≥ max(1 in, d_b, (4/3)d_agg) (ACI 318-19 25.2.1), with s as entered or derived from a quantity (SFRQ).
+  - The app had no minimum-spacing check for the mats before, only s_max.
+  - New keys: `desX/desY.clrMinB, clrB, clrBotOK, clrMinT, clrT, clrTopOK, dagg, dbB, dbT`.
+- **Shown:**
+  - Footing Design 5.2 / 5.3: block "Minimum clear spacing, x/y-bars" (worked).
+  - Pedestal Design 6.x "Bar count and fit" and the report step now include the 4/3 d_agg term and its value.
+  - Report §5 "Bar spacing" topic: new steps for bottom / top clear spacing.
+  - Dashboard: new chip "Footing bar clear spacing"; user manual 3.1 row.
+  - Drawings, general note 4: "MAX. AGGREGATE 3/4"".
+- **Check cases (hand):**
+  - Default, d_agg = 3/4 in → (4/3)(0.75) = 1.00 in. That is never more than 1.5 in (pedestal) and never more than max(1 in, d_b) (mats), so **every result at the default is identical to before**.
+  - d_agg = 1.5 in → (4/3)(1.5) = **2.00 in**:
+    - pedestal 18 in, cover 2 in, #8, 6 per x-face: s_clear = (18 − 4 − 1)/5 − 1 = **1.60 in**. Before: ≥ 1.50 → OK. After: < 2.00 → **NG** (Pedestal design chip: "bars do not fit").
+    - pedestal 5 per face: (13)/4 − 1 = 2.25 ≥ 2.00 → OK.
+    - mat #8 @ 3 in: s − d_b = 3 − 1 = **2.00 ≥ max(1, 1, 2.00) → OK** (margin 0).
+- **Comparison (12 projects + `agg_tight`):**
+  - The 12 projects use the default: `R` and `P2` are identical to before (new keys only). New chip PASS; the smallest mat margin is 6.13 in.
+  - `agg_tight` (d_agg = 1.5 in): only `pedDes[0..1].clrMin` 1.5 → 2.0 and `pedDes[1].barFitOK` true → false (the flip shown above) change.
+  - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
