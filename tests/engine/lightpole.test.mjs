@@ -217,3 +217,16 @@ test('Shaft V_c: 3 ft shaft, (12) #6, #3 ties @ 12: A_v 0.22 < A_v,min 0.36 → 
   near(T.VcA, 2 * Math.sqrt(4000) * Acv, 1e-6, 'V_c(a) (former value)');
   assert.equal(T.mode, 'min');
 });
+
+/* ---------- n₁ and G_f worked steps (added 2026-11-01, display only) ---------- */
+test('n₁ / G_f worked step: n₁ = √(386.1·ΣWy/ΣWy²)/2π; flexible case shows G_f from gustFlexible', () => {
+  const lp = lpEngine();
+  // 60 ft pole case of the harness: ΣWy = 7,213.94, ΣWy² = 61,110.99 → n₁ = √(386.1·0.118047)/2π = 1.0745 Hz
+  near(Math.sqrt(386.1 * 7213.935752589796 / 61110.985252095226) / (2 * Math.PI), 1.0745, 0.0001, 'n₁ hand');
+  const gf = lp.call('gustFlexible', 'C', 115, 60, 0.75, 0.75, 0.82, 0.005);
+  const inp = lpDefaultInp({ H: 60, Ginput: 0.85, G: Math.max(0.85, gf.Gf), gf,
+    nat: { n1: 0.82, Wtot: 1000, sWy: 100, sWy2: 2000, rows: [{ z: 60, W: 1000, y: 2 }] } });
+  const h = lp.call('natGfWorkedHTML', inp);
+  assert.ok(h.includes('G_f = 0.925'), 'G_f equation'); assert.ok(h.includes(lp.call('fmt', gf.Gf, 4)), 'G_f value');
+  assert.ok(!/NaN|undefined|ERR/.test(h), 'no NaN/undefined');
+});

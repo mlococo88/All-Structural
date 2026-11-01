@@ -9,6 +9,9 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<!-- RPT-4: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <style>
   :root{
     /* ---- primitive tokens (ui-ux-pro-max palette: navy professional) ---- */
@@ -5736,7 +5739,7 @@ function buildOutput(){
     case "tabTRebar":  buildTRebarTab(pg); break;
     case "tabVRebar":  buildVRebarTab(pg); break;
     case "tabDetail":  buildDetailTab(pg); break;   /* GFX-D */
-    case "tabReport":  buildReportTab(pg); break;   /* RPT-2 */
+    case "tabReport":  bprReportTab(pg); break;   /* RPT-4: the shared viewer (was RPT-2/3 buildReportTab) */
     case "tabVisual":  buildVisualTab(pg); break;
     case "tabValidation": buildValidationTab(pg); break;
     case "tabManual": buildManualTab(pg); break;
@@ -5843,6 +5846,153 @@ function bpadRptJ(card,ci){ const cd=BPAD_CARDS[card]; if(!cd) return null;
   a.title="Open the Report tab at the section where this is worked"; return a; }
 document.addEventListener("click",e=>{ const a=e.target.closest&&e.target.closest("a.rptJ"); if(!a || a.closest(".crdoc")) return;
   e.preventDefault(); BP_RPT_PENDING=a.dataset.rptjump; S.ui.tab="tabReport"; autosave(); buildTabs(); });
+
+/* RPT-4 (2026-11-01): the Report tab in the shared report viewer (shared/report.js, shared/steps.js; engineer's report
+   rollout). The document is the same one as before: buildPrintReport() builds the RPT-2 calculation sheet (same builder
+   as Print / PDF), and bprModel() reads it back into the viewer's model, in order and with the same numbering: each
+   chapter (section.cr-sec) a section n, each card (.sec, as buildPrintReport numbers them) a subsection n.k, each
+   worked equation (eqBlock) a worked step (its TeX lines from KaTeX's source annotation, its "where" table as the
+   step's note, its result read back from the line: the number the tool formatted, never recomputed), the result lines
+   of a chapter a table, drawings with their "Figure n" captions, notes, "Notes / basis" B.n. Steps under one heading
+   form a topic (SharedSteps.group). Kept from RPT-3: chapter chips, "Include Detail Sheet appendix", every / governing
+   combination, Expand / Collapse all, Print, navigation tree with scroll-spy, collapsible chapters and sections (state
+   kept for the session), "§ in report" jumps from the other tabs, "see §n.k" to the tab where a value is worked. New
+   from the viewer: search, topics in the tree. Print / PDF (toolbar button) is unchanged (#printReport). */
+const BPRP={closed:new Set(),api:null,doc:null};
+function bprAnn(k){const a=k&&k.querySelector('annotation[encoding="application/x-tex"]');return a?a.textContent:'';}
+function bprLite(t){return String(t||'').replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
+  .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,'\\;').replace(/\\(displaystyle|scriptstyle|limits|!)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
+  .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');}
+function bprText(n){
+  const c=n.cloneNode(true);
+  c.querySelectorAll('.katex-display,.katex').forEach(k=>{if(!c.contains(k))return;const t=bprAnn(k);k.replaceWith(document.createTextNode(t?'$'+bprLite(t)+'$':''));});
+  c.querySelectorAll('button,select,input,textarea,.svgTools,.noPrint').forEach(x=>x.remove());
+  return c.textContent.replace(/\s+/g,' ').trim();
+}
+/* the result at the end of the last line: "= 12.3\ \text{kip}" or "=\mathbf{12.3}" -> {value, unit, d, line} */
+function bprResult(line){
+  const m=/=\s*(?:\\mathbf\{)?\s*(-?[\d.,{}]+?)\s*\}?\s*((?:\\\s*|\\,|\\;|~|\s)*\\(?:text|mathrm)\{\s*([^{}]*)\})?\s*$/.exec(line);
+  if(!m)return null;
+  const raw=m[1].replace(/\{,\}/g,'').replace(/,/g,'').replace(/[{}]/g,'');
+  if(!/^-?\d+(\.\d+)?$/.test(raw))return null;
+  return {value:parseFloat(raw),unit:(m[3]||'').trim(),d:(raw.split('.')[1]||'').length,line:line.slice(0,m.index)};
+}
+function bprStep(eb,id){
+  const t=eb.querySelector('.eqTitle'),r=t&&t.querySelector('.eqRef');
+  const title=t?Array.from(t.childNodes).filter(x=>x!==r).map(x=>x.textContent).join('').trim():'';
+  const lines=Array.from(eb.querySelectorAll(':scope > .eqLine')).map(l=>bprAnn(l)).filter(Boolean);
+  const vars=Array.from(eb.querySelectorAll(':scope table.cr-wtab tr')).map(tr=>{const c=tr.cells;return c.length>=3?bprText(c[0])+' = '+bprText(c[2])+(bprText(c[1])?' ('+bprText(c[1])+')':''):bprText(tr);})
+    .concat(Array.from(eb.querySelectorAll(':scope > .varList > div')).map(bprText)).filter(Boolean);
+  let value=null,unit='',d=2;
+  const res=lines.length?bprResult(lines[lines.length-1]):null;
+  if(res){value=res.value;unit=res.unit;d=res.d;lines[lines.length-1]=res.line;}
+  const eq=lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');
+  return {id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2|\^2/g,'^{2}').replace(/\u00B3|\^3/g,'^{3}'),d,ref:r?r.textContent.replace(/^\[|\]$/g,'').trim():'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};
+}
+/* the RPT-2 document -> the viewer's model (same chapters, cards and numbering) */
+function bprModel(){
+  /* built in the page (off screen), as the RPT-3 tab built it: some drawings measure their text */
+  const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-30000px;top:0;width:8.5in;visibility:hidden;';tmp.setAttribute('aria-hidden','true');
+  (document.getElementById('tabPages')||document.body).appendChild(tmp);
+  try{buildPrintReport(tmp);}finally{tmp.remove();}
+  const body=tmp.querySelector('.cr-bodyall'), secs=[], cardKey={};
+  const wk=a=>{ /* "see §n.k" (D11 link rewritten by buildPrintReport): keep the text, open the tab where it is worked */
+    const tab=a.dataset.tab,card=a.dataset.card,ci=a.dataset.ci||'';return '[[tab:wk|'+tab+'|'+card+'|'+ci+'|'+a.textContent.replace(/[\]|]/g,'')+']]';};
+  Array.from(body.querySelectorAll(':scope > section.cr-sec')).forEach((sec,si)=>{
+    const h=sec.querySelector(':scope > .cr-h1'), title=(h?h.textContent:'').replace(/^\s*\d+\.\s*/,'').replace(/:\s*$/,'');
+    const cards=Array.from(sec.querySelectorAll('.sec')), subs=[];
+    const mk=(t,scope)=>({title:t,items:[],run:null,head:'',scope,n:0});
+    const flush=c=>{if(c.run&&c.run.steps.length){const g=SharedSteps.group(c.run.steps,[{key:'k',title:c.run.title,ids:()=>true}],{strip:false})[0];
+      c.items.push({type:'steps',scope:c.scope,title:'Worked steps',steps:c.run.steps,topics:[{title:c.run.title,ref:'',n:c.run.steps.length,cls:g.cls,chip:g.chip,res:g.res}]});}c.run=null;};
+    const linkText=n=>{const c=n.cloneNode(true);c.querySelectorAll('a.wkA').forEach(a=>a.replaceWith(document.createTextNode('\u0001'+wk(a)+'\u0001')));
+      c.querySelectorAll('a[href^="#"]').forEach(a=>a.replaceWith(document.createTextNode(a.textContent)));return bprText(c).replace(/\u0001/g,'');};
+    const walk=(node,c)=>{
+      Array.from(node.childNodes).forEach(ch=>{
+        if(ch.nodeType===3){const t=ch.textContent.trim();if(t){flush(c);c.items.push({type:'note',text:t});}return;}
+        if(ch.nodeType!==1)return;
+        const cl=ch.classList,tag=ch.tagName;
+        if(cl.contains('sec'))return;   /* every card is its own subsection (buildPrintReport's numbering) */
+        if(cl.contains('eqBlock')){if(!c.run)c.run={title:c.head||c.title,steps:[]};c.run.steps.push(bprStep(ch,'s'+(++c.n)));return;}
+        if(cl.contains('secHead')||tag==='BUTTON'||tag==='SCRIPT'||tag==='STYLE')return;
+        if(cl.contains('cr-results')){flush(c);c.items.push({type:'table',head:['Check','D/C','Status'],rows:Array.from(ch.querySelectorAll('.cr-line')).map(l=>{const st=bprText(l.querySelector('.cr-r')||l);
+          return [linkText(l.querySelector('.cr-d')||l).replace(/:$/,''),linkText(l.querySelector('.cr-m')||l),{t:st,cls:/FAIL/.test(st)?'ng':/PASS/.test(st)?'ok':'na'}];})});return;}
+        if(tag==='TABLE'&&!cl.contains('cr-wtab')){flush(c);const rows=Array.from(ch.rows);if(!rows.length)return;const hr=rows[0].querySelector('th')?rows.shift():null;
+          c.items.push({type:'table',head:hr?Array.from(hr.cells).map(linkText):[],rows:rows.map(r=>Array.from(r.cells).map(td=>{const t=linkText(td);return {t,n:/^[-−]?[\d.,]+$/.test(t),span:td.colSpan>1?td.colSpan:undefined};}))});Array.from(ch.querySelectorAll('svg')).filter(v=>!v.closest('.katex')).forEach(v=>c.items.push({type:'figure',svg:v.outerHTML}));   /* drawings laid out in a table */
+          return;}
+        if(tag.toLowerCase()==='svg'){flush(c);let cap='';const nx=(ch.parentElement&&ch.parentElement.querySelector(':scope > p.cr-cap'))||null;
+          const sib=ch.nextElementSibling&&ch.nextElementSibling.classList.contains('cr-cap')?ch.nextElementSibling:(ch.parentElement&&ch.parentElement.nextElementSibling&&ch.parentElement.nextElementSibling.classList.contains('cr-cap')?ch.parentElement.nextElementSibling:nx);
+          if(sib){cap=sib.textContent.trim();sib.dataset.used='1';}c.items.push({type:'figure',svg:ch.outerHTML,caption:cap});return;}
+        if(tag==='P'&&cl.contains('cr-cap')){if(ch.dataset.used)return;}
+        if(/^H[1-6]$/.test(tag)||cl.contains('cr-notesHd')||cl.contains('cr-resh')){flush(c);const t=ch.textContent.trim();if(t){c.head=t;c.items.push({type:'note',text:'— '+t+' —'});}return;}
+        if(ch.querySelector('.eqBlock,table,svg,.cr-results')){walk(ch,c);return;}
+        if(cl.contains('cr-bn')){flush(c);c.items.push({type:'note',text:linkText(ch)});return;}
+        const t=linkText(ch);if(t){flush(c);c.items.push({type:'note',warn:cl.contains('cr-noteBox')&&/^Note:/.test(t)&&!!ch.querySelector('b'),text:t});}
+      });
+    };
+    const lead=mk('General',('c'+(si+1))+'.0');
+    /* the chapter's own content outside the cards */
+    const clone=sec.cloneNode(true);clone.querySelectorAll('.sec').forEach(x=>x.remove());const hh=clone.querySelector(':scope > .cr-h1');if(hh)hh.remove();
+    walk(clone,lead);flush(lead);
+    cards.forEach((sc,k)=>{const t=sc.querySelector(':scope > .secHead .secTitle');const c=mk((t?t.textContent:'').replace(/^\s*\d+(\.\d+)*\.\s*/,'').replace(/:\s*$/,''),'c'+(si+1)+'.'+(k+1));
+      walk(sc.querySelector(':scope > .secBody')||sc,c);flush(c);subs.push(c);});
+    /* the lead content (cross-reference line, chapter result lines): before the cards, or after them for result lines */
+    const res=lead.items.filter(it=>it.type==='table'&&it.head[0]==='Check'), other=lead.items.filter(it=>res.indexOf(it)<0);
+    /* the chapter's own content before its cards goes at the top of its first card, so the cards keep buildPrintReport's numbers n.k
+       (the "see §n.k" texts); the "Results — …" heading is the title of the results subsection */
+    const other2=other.filter(it=>!(it.type==='note'&&/^— Results — /.test(it.text)));
+    const S2=[]; if(other2.length&&!subs.length) S2.push({title:title,items:other2}); else if(other2.length) subs[0].items=other2.concat(subs[0].items);
+    subs.forEach(c=>S2.push({title:c.title,items:c.items.length?c.items:[{type:'note',text:'—'}]}));
+    if(res.length) S2.push({title:'Results — '+title,items:res});
+    secs.push({title,subs:S2.length?S2:[{title:title,items:[{type:'note',text:'—'}]}],_cards:subs.length,_lead:0});
+  });
+  /* "§ in report": card -> subsection anchor of the viewer (rp-s<n>-<k>; k shifted by a leading "General") */
+  const map={}; Object.entries(window.BPAD_CARDMAP||{}).forEach(([k,v])=>{const m=/^crp-(\d+)-(\d+)$/.exec(v.id);if(!m)return;const s=secs[+m[1]-1];if(!s)return;map[k]='rp-s'+m[1]+'-'+(+m[2]+s._lead);});
+  window.BPRP_CARDMAP=map;
+  const P=S.proj||{};
+  return {title:'Base Plate & Anchor Bolt Design',subtitle:P.name||'Untitled',code:'ACI 318-19 Chapter 17 · AISC Design Guide 1',
+    info:[['Project',P.name],['Project No.',P.num],['Calculated by',P.by],['Date',P.date],['Checked by',P.chk],['Checked date',P.chkDate]],
+    head:{left:'Project No. '+(P.num||'—')+' — '+String(P.name||'—').slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:(P.name||'Untitled')+' (Base Plate & Anchor Bolt Designer)'},
+    sections:secs.map(s=>({title:s.title,subs:s.subs})).concat([{title:'References',subs:[{title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:BPAD_REFS.map(r=>[bprText(Object.assign(document.createElement('div'),{innerHTML:r[0]})),bprText(Object.assign(document.createElement('div'),{innerHTML:r[1]}))])}]}]}])};
+}
+/* RPT-4: the Report tab (replaces RPT-3's buildReportTab; same tool bar controls, same document) */
+function bprControls(){
+  const chips=TABS().filter(([id])=>!(id==="tabVisual"||id==="tabReport"||id==="tabDetail")).map(([id,label])=>{
+    const optIn=(id==="tabValidation"||id==="tabManual"), on=optIn? S.print.sections[id]===true : S.print.sections[id]!==false;
+    return '<label class="rp-chip"><input type="checkbox" data-bprsec="'+id+'"'+(on?' checked':'')+'>'+sbdEscB(label+(optIn?" (appendix)":""))+'</label>'; }).join("");
+  return '<div class="rp-chips" role="group" aria-label="Report chapters">'+chips+'</div>'
+    +'<label class="rp-chip"><input type="checkbox" data-bprsec="tabDetail"'+(S.print.sections.tabDetail===true?' checked':'')+'>Include Detail Sheet appendix</label>'
+    +'<select data-bprcombos><option value="all"'+(S.print.combos.all!==false?' selected':'')+'>Every combination worked</option><option value="gov"'+(S.print.combos.all===false?' selected':'')+'>Governing combination only</option></select>';
+}
+function sbdEscB(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function bprWire(host){
+  host.querySelectorAll("input[data-bprsec]").forEach(cb=>cb.addEventListener("change",()=>{ S.print.sections[cb.dataset.bprsec]=cb.checked; autosave(); buildOutput(); }));
+  const cs=host.querySelector("select[data-bprcombos]"); if(cs) cs.addEventListener("change",()=>{ S.print.combos.all=(cs.value==="all"); autosave(); buildOutput(); });
+}
+function bprReportTab(pg){
+  if(!window.SharedReport||!window.SharedSteps){ pg.appendChild(el("div","errBox","shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.")); return; }
+  const host=el("div","bprHost"); pg.appendChild(host);
+  host.appendChild(el("div","note","Building the calculation sheet…"));
+  /* building the whole sheet takes about a second: debounced so typing stays responsive (as RPT-2/3) */
+  clearTimeout(bpRptTimer);
+  bpRptTimer=setTimeout(()=>{ if(!host.isConnected || S.ui.tab!=="tabReport") return;
+    const sc=bpCrScroller(), keep=sc? sc.scrollTop : 0, tb=document.getElementById("tabBar");
+    let M; try{ M=bprModel(); }catch(e){ host.innerHTML=""; host.appendChild(el("div","errBox","Report error: "+sbdEscB(e&&e.message))); return; }
+    BPRP.api=SharedReport.mount(host,M,{closed:BPRP.closed,onGoto:bprGoto,controls:bprControls(),spy:true,stick:(sc&&tb)? tb.offsetHeight : 0});
+    BPRP.doc=BPRP.api.doc; bprWire(host);
+    if(sc) sc.scrollTop=keep;
+    if(BP_RPT_PENDING){ const [t,ci,card]=BP_RPT_PENDING.split("|"); BP_RPT_PENDING=null;
+      const m=window.BPRP_CARDMAP||{}, id=m[t+"|"+ci+"|"+card]||m[t+"||"+card]||m[t+"|"+(window.BPAD_GI)+"|"+card]; if(id) BPRP.api.go(id); }
+    host.dataset.ready="1"; },250);
+}
+/* [[tab:wk|tab|card|ci|text]]: "see §n.k" — to the tab and card where the value is worked (as the a.wkA links) */
+function bprGoto(name){ const p=String(name).split("|"); if(p[0]==="wk") bpadGoto(p[1],p[2],p[3]===""? null : p[3]); }
+function bprWillPrint(){ return document.body.classList.contains("rp-printing")||!!(BPRP.doc&&S.ui.tab==="tabReport"); }
+window.addEventListener("beforeprint",()=>{
+  if(!BPRP.doc||S.ui.tab!=="tabReport"||document.body.classList.contains("rp-printing")) return;
+  let box=document.getElementById("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
+  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(BPRP.doc,{lazy:false})+'</article></div>';
+  document.body.classList.add("rp-printing");
+});
 
 /* BP-T1 (2026-10-21): the §17.9 PASS/FAIL rows, torqued anchors only (untorqued spacing < 4dₐ blocks the output) */
 function installRows(){
@@ -12486,7 +12636,8 @@ function init(){
       el0.style.color="var(--warn)";
     }
   }
-  window.addEventListener("beforeprint",()=>{ if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
+  window.addEventListener("beforeprint",()=>{ if(typeof bprWillPrint==="function"&&bprWillPrint()) return;   /* RPT-4: the Report tab prints itself (shared/report.js) */
+    if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
   window.addEventListener("afterprint",()=>bpadApplyPageCSS(false));   /* D11: header/footer only while printing */
   window.addEventListener("afterprint",()=>{ const h=document.getElementById("printReport"); if(h)h.innerHTML=""; });
   /* last-ditch save when the tab closes */
