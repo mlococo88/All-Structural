@@ -1276,7 +1276,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 ### Open items (not changed)
 - ASCE 7-22 Table 26.11-1 constants (α, z_g) for K_z: the tool keeps the 7-16 values (difference < 1 %: Exp. C 35 ft 1.0147 vs ≈1.009). Engineer to decide whether to switch (a calc change).
 
-## 2026-11-01 — PR: claude/lp-pr2-cf (LP-2: pole/post C_f from ASCE 7-22 Fig. 29.4-1; engineer decision 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #548: claude/lp-pr2-cf (LP-2: pole/post C_f from ASCE 7-22 Fig. 29.4-1; engineer decision 2026-11-01)
 
 ### LP2-1. Automatic pole/post force coefficient (LP-R3)   [calc change] [more conservative for square/rect HSS and small round posts; less for short round posts]
 - **Engineer decision (2026-11-01):** automatic lookup from ASCE 7-22 Fig. 29.4-1 by shape and h/D; the user override is kept; the "round ≈0.7, square ≈1.3" hint is fixed.
@@ -1304,3 +1304,19 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
   - Round 4 in post, 16 ft: D√q_z = 0.333·√28.74 = 1.79 ≤ 2.5, h/D = 48 → **1.2** (Node test).
 - **How verified:** `node tests/engine/run.mjs lightpole` (13 passed, 3 new Fig. 29.4-1 tests). `node tests/lightpole-compare.mjs --a origin/main`: new projects — default pole, Broms, 45° cable, 60 ft pole, ice, 1½ in bolts, arms, monopost and two-post sign: results identical apart from the 4 new `inp` fields (cfPoleMode, cfPoleSurf, cfAuto, cfPoleEntered) since their C_f is 0.7 either way; square/rect/sign-square/wide two-post cases change as listed. `--old-saves` (main's saved state opened in the branch): all 13 cases identical apart from the 4 new `inp` fields; cable values identical in every case.
 - **Open items:** Fig. 29.4-1 has no rectangle row (the square row with D = least dimension is used); the D√q_z criterion uses q_z at mid-height (the figure does not state the height; engineer to confirm); square sections with wind along a diagonal (1.0/1.1/1.5) are not used (the tool's wind directions are normal to the faces).
+
+## 2026-11-01 — PR: claude/lp-pr3-pullout (LP-3: pullout bearing area of the heavy hex nut; engineer decision 2026-11-01; PR link added after merge)
+
+### LP3-1. Pullout A_brg from heavy hex nut dimensions (LP-R6)   [calc change] [less conservative = exact]
+- **Engineer decision (2026-11-01):** use the real heavy-hex nut bearing area by bolt diameter, citing the source table, instead of 0.9d².
+- **Where:** `anchorBolts()`, block `// ---- pullout (ACI §17.6.3)`; new `HEAVY_HEX_F` and `heavyHexF(d)` above `function anchorBolts(`; return field `nutF`; `boltWorkedHTML()` step 4 (new F and A_brg lines); `LPP_REFS` + ASME B18.2.2.
+- **Before:** `const Abrg=(d*d)*0.9;`
+- **After:** `const nutF=heavyHexF(d); const Abrg=Math.sqrt(3)/2*nutF*nutF - Math.PI*d*d/4;` with F (width across flats of a heavy hex nut, ASME B18.2.2, F = 1.5d + 1/8 in): ¾ 1.250, ⅞ 1.4375, 1 1.625, 1⅛ 1.8125, 1¼ 2.000, 1½ 2.375, 1¾ 2.750, 2 3.125 in. Net bearing = hex area across flats − gross rod area (no plate washer).
+- **Governing provision:** ACI 318-19 §17.6.3.2.2(a), N_p = 8A_brg f′c, φ = 0.70 (Condition B, Table 17.5.3); nut dimensions ASME B18.2.2.
+- **Check case (default, (6) 1 in Gr 55, f′c 4,000):**
+  - Before: A_brg = 0.9·1² = 0.900 in²; φN_p = 0.70·8·0.900·4,000 = 20,160 lb (governed φN_n; tension ratio 9,791/20,160 = 0.486).
+  - After: F = 1.625; A_brg = 0.8660·1.625² − 0.7854·1² = 2.2869 − 0.7854 = 1.5015 in²; φN_p = 0.70·8·1.5015·4,000 = 33,632 lb; φN_n = min(φN_sa 34,073, 33,632) = 33,632 lb → ratio 0.291.
+  - 1½ in: A_brg = 0.8660·2.375² − 0.7854·1.5² = 3.118 in² (was 2.025); φN_p 56,700 → 87,298 lb at f′c 5,000.
+- **Effect:** every case: φN_p and φN_n (when pullout governed) change; the anchor tension and interaction ratios drop. No other value changes (diff paths checked: only Abrg, Np, Npn, phiNp, phiNn, tr, inter, tgov). Cable values identical.
+- **How verified:** `node tests/engine/run.mjs lightpole` 14 passed (new pullout test); `node tests/lightpole-compare.mjs --a origin/main`: 13 cases, differences only in the pullout chain; cable values identical; 0 console errors.
+- **Open item:** a plate washer (larger A_brg) is not an input; the bare nut is used.
