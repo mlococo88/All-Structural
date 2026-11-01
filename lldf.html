@@ -2064,13 +2064,13 @@ function memberSteps(p,geo,Kg,skew,md){
 
   // ================= SLAB (equivalent strip) =================
   add("Equivalent strip width — one lane",
-    `E_1=10+5\\sqrt{L_1 W_1}=10+5\\sqrt{${f0(Math.min(p.L,60))}\\times ${f0(Math.min(geo.roadway,30))}}=\\boxed{${f1(md.r.Es)}\\ \\text{in}}`,
-    "Eq. 4.6.2.3-1","",[V("L_1","min(L, 60)",f0(Math.min(p.L,60)),"ft"),V("W_1","min(w, 30)",f0(Math.min(geo.roadway,30)),"ft")]);
+    `E_1=10+5\\sqrt{L_1 W_1}=10+5\\sqrt{${f0(Math.min(p.L,60))}\\times ${f0(Math.min(geo.Wdeck,30))}}=\\boxed{${f1(md.r.Es)}\\ \\text{in}}`,
+    "Eq. 4.6.2.3-1","",[V("L_1","min(L, 60)",f0(Math.min(p.L,60)),"ft"),V("W_1","min(W, 30), W = edge-to-edge width",f0(Math.min(geo.Wdeck,30)),"ft")]);
   add("Distribution factor — one lane",
     `g_1=\\frac{12}{E_1}=\\frac{12}{${f1(md.r.Es)}}=\\boxed{${f3(md.r.dS)}}`,"4.6.2.3","Per 1-ft design strip.",[]);
   add("Equivalent strip width — 2+ lanes",
     `E_{2+}=84+1.44\\sqrt{L_1 W_1}\\le \\frac{12W}{N_L}=\\boxed{${f1(md.r.Em)}\\ \\text{in}}`,
-    "Eq. 4.6.2.3-2","",[]);
+    "Eq. 4.6.2.3-2","LLSW (2026-11-01): W is the physical edge-to-edge width of the bridge (was the clear roadway width).",[V("W_1","min(W, 60)",f0(Math.min(geo.Wdeck,60)),"ft"),V("W","edge-to-edge width",f2(geo.Wdeck),"ft"),V("N_L","design lanes (clear roadway)",String(geo.NL),"")]);
   add("Distribution factor — 2+ lanes",
     `g_{2+}=\\frac{12}{E_{2+}}=\\frac{12}{${f1(md.r.Em)}}=\\boxed{${f3(md.r.dM)}}`,"4.6.2.3","Per 1-ft design strip.",[]);
   fatStep(); govStep(); return S;

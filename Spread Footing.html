@@ -325,6 +325,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Cover, bottom (cast on soil)</label><input type="number" step="0.25" data-path="mat.coverBot" data-num><span class="unit">in</span></div>
  <div class="row"><label>Max. aggregate size d<sub>agg</sub></label><input type="number" step="0.125" min="0" data-path="mat.dagg" data-num><span class="unit">in</span><span class="hint">ACI 25.2.1 / 25.2.3: clear spacing &ge; 4/3 d<sub>agg</sub></span></div>   <!-- SFAG -->
  <div class="row"><label>Cover, top (formed)</label><input type="number" step="0.25" data-path="mat.coverTop" data-num><span class="unit">in</span></div>
+ <div class="row"><label>Footing sides (cover)</label><select data-path="mat.sideExp"><option value="earth">Cast against earth (3 in)</option><option value="weather">Formed: exposed / in contact with ground</option></select><span class="hint">ACI Table 20.5.1.3.1</span></div>   <!-- SFCV -->
  <div class="row"><label>Side/end cover, bottom bars</label><input type="text" data-path="mat.sfdCoverSide" placeholder="blank = bottom"><span class="unit">in</span><span class="hint">c<sub>b</sub> for &ell;<sub>d</sub></span></div>
  <div class="row"><label>Subgrade modulus k<sub>s</sub></label><input type="number" step="10" data-path="mat.ks" data-num><span class="unit">pci</span><span class="hint">(rigidity check)</span></div>
  <div class="row"><label>Footing self-weight</label><select data-path="mat.swMode" id="swMode"><option value="auto">Auto-compute</option><option value="user">User override</option></select></div>
@@ -677,7 +678,7 @@ function defaultState(){
  return {meta:{project:'',number:'',calcBy:'',calcDate:'',chkBy:'',chkDate:''},
  loadMode:'type',
  geom:{B:10,L:8,t:2.5,Df:4},
- mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none',dagg:0.75},
+ mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none',dagg:0.75,sideExp:'earth'},
  soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off'},
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'}},
@@ -695,7 +696,7 @@ function migrateState(){
  if(!state.manPart)state.manPart='p0';
  if(!state.freinf)state.freinf=defaultState().freinf;
  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
- const dm=defaultState().mat;['fy','lambda','coverBot','coverTop','vcMode','coating','dagg'].forEach(k=>{if(state.mat[k]===undefined)state.mat[k]=dm[k];});   /* SFAG: dagg, older saves 3/4 in */
+ const dm=defaultState().mat;['fy','lambda','coverBot','coverTop','vcMode','coating','dagg','sideExp'].forEach(k=>{if(state.mat[k]===undefined)state.mat[k]=dm[k];});   /* SFAG: dagg, older saves 3/4 in; SFCV: sideExp, older saves cast against earth */
  if(state.mat.vcMode!=='a'&&state.mat.vcMode!=='c')state.mat.vcMode='c';
  // Backfill any stab / soil / ev keys absent from older exports (e.g. shearCouple, qaOverride).
  // Object.assign(defaultState(), imported) is shallow, so an imported stab/soil object
@@ -1089,7 +1090,7 @@ function sfdPedBarInfo(){
    (P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?' '+sftcTxt(P2.pedDes[i])+' Worked in: '+sfdLink('o-pd-'+i,'',['tab-peddes','6.'+(i+2)+' '+P2.pedDes[i].label+' \u2014 Detailed Checks']):'');});
 }
 /* SFTC: one line for the clear cover to the ties */
-function sftcTxt(pd){return 'Clear cover to the ties c \u2212 d<sub>b,tie</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.');
+function sftcTxt(pd){return 'Clear cover to the vertical bars c = '+f2(pd.cov)+' in '+(pd.vertCovOK?'\u2265':'<')+' '+f2(pd.vertCovMin)+' in min'+(pd.vertCovOK?'':' \u2014 NG')+'. Clear cover to the ties c \u2212 d<sub>b,tie</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.');
 }
 /* link from an output card to an input tab (Reinforcement): open the tab and flash the section */
 function sfdGotoInput(tab,secId){
@@ -1743,6 +1744,10 @@ function renderDashboard(){
    const txt=gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed';
    d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; not computed for some combinations ('+nr.map(z=>z.label).join(', ')+')':''),
     gv&&gv.pmGov.ratio>1?'fail':((nr.length||!gv)?'warn':'pass'),undefined,{tab:'tab-peddes',sec:gv?'o-pd-'+P2.pedDes.indexOf(gv):'o-pd-intro'}));}
+  /* SFCV: concrete cover, footing and pedestal vertical bars (ACI 318-19 Table 20.5.1.3.1) */
+  {const bad=[];(P2.covChk?P2.covChk.rows:[]).filter(z=>z.applies&&!z.ok).forEach(z=>bad.push('footing '+z.k+' '+f2(z.c)+' < '+f2(z.min)+' in'));
+   realPeds.filter(z=>!z.vertCovOK).forEach(z=>bad.push(z.label+' vertical bars '+f2(z.cov)+' < '+f2(z.vertCovMin)+' in'));
+   d.appendChild(chip('Concrete cover',bad.length?bad.join('; '):'footing and pedestal vertical bars \u2265 Table 20.5.1.3.1',bad.length?'fail':'pass',undefined,{tab:'tab-footdes',sec:'o-fd-basis'}));}
   /* SFTC: clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
   if(realPeds.length){const tcBad=realPeds.filter(z=>!z.tieCovOK), tcGov=realPeds.reduce((a,z)=>(!a||z.tieCov-z.tieCovMin<a.tieCov-a.tieCovMin)?z:a,null);
    d.appendChild(chip('Pedestal tie cover',tcBad.length?tcBad.map(z=>z.label+' '+f3(z.tieCov)+' < '+f2(z.tieCovMin)+' in').join('; '):'min '+f3(tcGov.tieCov)+' \u2265 '+f2(tcGov.tieCovMin)+' in ('+tcGov.label+')',
@@ -2864,6 +2869,7 @@ function sfdResultRows(){
   'Interface shear friction':()=>['ACI 318-19 §22.9.4.2, Table 22.9.4.2, §22.9.4.4–22.9.4.6; D/C = V<sub>u</sub>/φV<sub>n</sub>',mx((P2.shearFr||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),['o-fd-bear']],
   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); D/C = A<sub>s,req</sub>/A<sub>s,prov</sub>',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.tension?(z.AsProv>0?z.AsReq/z.AsProv:Infinity):0)),['o-fd-bear']],
   'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)',mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov&&!isNaN(z.pmGov.ratio)).map(z=>z.pmGov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+  'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
   'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
@@ -3247,6 +3253,8 @@ function sfrModel(){
    S({id:'gs',label:'Banded fraction',sym:'\\gamma_{s}',eq:'\\frac{2}{\\beta + 1}',sub:'\\frac{2}{'+sfrN(bc.beta,3)+' + 1}',value:bc.gs,unit:'',d:3,ref:'ACI 318-19 13.3.3.3'}),
    S({id:'req',label:'Steel required in the '+sfrN(bc.shortDim)+' ft band',sym:'\\gamma_{s} A_{s}',eq:'',sub:sfrN(bc.gs,3)+'\\cdot'+sfrN(bc.AsTot,3),value:bc.AsBandReq,unit:'in^{2}',note:'uniform layout delivers '+sfrN(bc.AsBandProv,3)+' in² in the band'+(bc.ok?'':' (less: concentrate bars in the band)')})]},
    {type:'note',text:'Advisory: the tool distributes the bars uniformly and takes no band-steel input.'}]});
+  if(P2.covChk){const st=P2.covChk.rows.filter(z=>z.applies).map(z=>S({id:'cov'+z.k,label:z.label+' (min '+sfrN(z.min)+' in)',sym:'c_{'+z.k+'}',eq:'',sub:sfrN(z.c)+(z.ok?' \\ge ':' \\lt ')+sfrN(z.min),value:z.c,unit:'in',ok:!!z.ok}));   /* SFCV */
+   subs.push({title:'Concrete cover (Table 20.5.1.3.1)',items:[sfrTopics('fcov',[{title:'Footing covers',ref:'ACI 318-19 20.5.1.3, Table 20.5.1.3.1',steps:st}])]});}
   secs.push({title:'Footing design',subs});
  }else secs.push({title:'Footing design',subs:[{title:'Not computed',items:[{type:'note',warn:true,text:'No valid strength combination produced downward load for the structural design.'}]}]});
  /* ---------- 6. Pedestal design ---------- */
@@ -3289,6 +3297,7 @@ function sfrModel(){
     S({id:'tmax',label:'Tie spacing limit',sym:'s_{max}',eq:'\\min(16 d_{b},\\, 48 d_{b,tie},\\, b_{min})',sub:'\\min(16\\cdot'+sfrN(BAR_DIA[rf.longSize||8],3)+',\\,48\\cdot'+sfrN(BAR_DIA[rf.tieSize||3],3)+',\\,'+sfrN(pd.bmin)+')',value:pd.tieMax,unit:'in'}),
     S({id:'ties',label:'Ties #'+rf.tieSize+' at s'+(pd.tieSizeOK?'':' (tie bar too small, 25.7.2.2)'),sym:'s',eq:'\\le s_{max}',sub:sfrN(num(rf.tieSpc))+(pd.tieOK?' \\le ':' \\gt ')+sfrN(pd.tieMax),value:num(rf.tieSpc),unit:'in',ok:!!(pd.tieOK&&pd.tieSizeOK)}),
     S({id:'tcmin',label:'Specified cover for #'+(rf.tieSize||0)+' ties, '+SFTC_EXP[pd.exposure][1]+' (Table 20.5.1.3.1)',sym:'c_{min}',eq:'',sub:'',value:pd.tieCovMin,unit:'in'}),   /* SFTC */
+    S({id:'vcov',label:'Clear cover to the vertical bars (#'+(rf.longSize||0)+'; min '+sfrN(pd.vertCovMin)+' in, Table 20.5.1.3.1)',sym:'c',eq:'',sub:sfrN(pd.cov)+(pd.vertCovOK?' \\ge ':' \\lt ')+sfrN(pd.vertCovMin),value:pd.cov,unit:'in',ok:!!pd.vertCovOK}),   /* SFCV */
     S({id:'tcov',label:'Clear cover to the ties (c = clear cover to the vertical bars)',sym:'c_{tie}',eq:'c \\minus d_{b,tie}',sub:sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,note:'≥ c_min = '+sfrN(pd.tieCovMin)+' in'}),
     S({id:'klr',label:'Slenderness (k = 1, ℓ_u = h, r = 0.3 b_min)',sym:'k \\ell_{u}/r',eq:'\\frac{h}{0.3 b_{min}}',sub:'\\frac{'+sfrN(pd.h)+'}{0.3\\cdot'+sfrN(pd.bmin)+'}',value:pd.klu_r,unit:'',d:2}),
     S({id:'sl',label:'Slender (k ℓ_u/r > 22: moment magnification needed, not done here)?',sym:'',eq:'',sub:'',value:pd.slenderFlag?'yes':'no',ok:!pd.slenderFlag})]});
@@ -3571,7 +3580,7 @@ function sfdwBuild(){
    'ALLOWABLE BEARING PRESSURE'+(state.soil.mode==='vesic'?' (GOVERNING CASE '+(G?G.cb.name:'')+')':'')+': '+(qa!=null?f2(qa)+' KSF':'N/A')+'. SOIL UNIT WEIGHT '+Math.round(R.gs*1000)+' PCF; WATER TABLE '+(R.dw===Infinity?'NOT PRESENT':f2(R.dw)+' FT BELOW GRADE')+'.',
    "CONCRETE: F'C = "+Math.round(R.fc)+' PSI, UNIT WEIGHT '+Math.round(R.gc*1000)+' PCF'+', MAX. AGGREGATE '+sfdwIn(sfdDagg())+(num(state.mat.lambda)<1?', LIGHTWEIGHT FACTOR '+f2(num(state.mat.lambda)):'')+'.',
    'REINFORCEMENT: ASTM A615 / A706 BARS, FY = '+Math.round(num(state.mat.fy))+' PSI'+(state.mat.coating==='epoxy'?', EPOXY-COATED':', UNCOATED')+'.',
-   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS; PEDESTALS (CLEAR TO VERTICAL BARS / TO TIES; MIN. TO TIES PER ACI 318-19 TABLE 20.5.1.3.1): '+state.peds.map((p,i)=>{const pd=P2&&P2.pedDes&&P2.pedDes[i];return String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))+(p.h>0?' / '+sfdwIn(num(p.reinf.cover)-(BAR_DIA[p.reinf.tieSize]||0))+(pd?' (MIN. '+sfdwIn(pd.tieCovMin)+', '+SFTC_EXP[pd.exposure][1].toUpperCase()+(pd.tieCovOK?')':'; NG)'):''):'');}).join(', ')+'.',
+   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS'+(P2&&P2.covChk?' (MIN. PER ACI 318-19 TABLE 20.5.1.3.1: '+P2.covChk.rows.filter(z=>z.applies).map(z=>z.k.toUpperCase()+' '+sfdwIn(z.min)).join(', ')+(P2.covChk.ok?')':'; NG)'):'')+'; PEDESTALS (CLEAR TO VERTICAL BARS / TO TIES; MIN. TO TIES PER ACI 318-19 TABLE 20.5.1.3.1): '+state.peds.map((p,i)=>{const pd=P2&&P2.pedDes&&P2.pedDes[i];return String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))+(p.h>0?' / '+sfdwIn(num(p.reinf.cover)-(BAR_DIA[p.reinf.tieSize]||0))+(pd?' (MIN. '+sfdwIn(pd.tieCovMin)+', '+SFTC_EXP[pd.exposure][1].toUpperCase()+(pd.tieCovOK?')':'; NG)'):''):'');}).join(', ')+'.',
    'FOOTING: '+sfdwFI(R.B*12)+' (x) BY '+sfdwFI(R.L*12)+' (y) BY '+sfdwFI(R.t*12)+' THICK; BEARING '+sfdwFI(R.Df*12)+' BELOW GRADE; SOIL COVER '+sfdwFI(R.covEff*12)+'.',
    'LOADS AT THE TOP OF EACH PEDESTAL AT THE LOAD POINT SHOWN (OFFSET e FROM THE PEDESTAL CENTROID). '+(R.directMode?'DIRECT FACTORED LOADS.':'SERVICE LOADS BY TYPE; COMBINATIONS GENERATED.'),
    'PEDESTAL / FOOTING CONSTRUCTION JOINT (SHEAR FRICTION, ACI 318-19 22.9): '+state.peds.map((p,i)=>{const z=P2&&P2.shearFr&&P2.shearFr[i];return z&&!z.isPatch?String(p.label).toUpperCase()+' '+(z.rough?'INTENTIONALLY ROUGHENED TO 1/4 IN AMPLITUDE, CLEAN':'CLEAN, NOT INTENTIONALLY ROUGHENED')+' (MU = '+f2(z.mu)+')':null;}).filter(Boolean).join('; ')+'.',
@@ -4716,6 +4725,8 @@ function computePhase2(R){
      pedestal's exposure (input; default exposed to weather or in contact with ground). A new check: no other result uses it. */
   const exposure=SFTC_EXP[rf.exposure]?rf.exposure:'weather', cov=num(cover), tieDb=BAR_DIA[rf.tieSize]||0;
   const tieCov=cov-tieDb, tieCovMin=sftcMin(exposure,rf.tieSize), tieCovOK=isPatch?true:(tieCov>=tieCovMin-1e-9);
+  /* SFCV (2026-11-01, engineer): the clear cover to the vertical bars (the input c) against the same table row, by the vertical bar size */
+  const vertCovMin=sftcMin(exposure,rf.longSize), vertCovOK=isPatch?true:(cov>=vertCovMin-1e-9);
   const nBarsOK=isPatch?true:(nBars>=4);
   /* ACI 318-19 10.6.1.1 (1% <= rho <= 8%) is a COLUMN provision, in Chapter 10. A pedestal
      - a compression member whose height is no more than 3x its least lateral dimension - is
@@ -4755,12 +4766,21 @@ function computePhase2(R){
   const pmRange=pmRat.filter(z=>z.mode==='range').map(z=>z.name);
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
    PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,dbL,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
-   pmBars,pmPts,pmRat,pmGov,pmRange,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK};
+   pmBars,pmPts,pmRat,pmGov,pmRange,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK,vertCovMin,vertCovOK};
  });
  /* ----- SFDO: full dowel checks per pedestal (new; no other result reads them) ----- */
+ /* SFCV: footing covers vs ACI 318-19 Table 20.5.1.3.1: bottom cast against earth 3 in; top in contact with ground (No. 6+ 2 in,
+    No. 5 and smaller 1-1/2 in, by the largest top bar); sides/ends per mat.sideExp (cast against earth 3 in, default; formed: as the top,
+    by the largest bar of any mat) */
+ const covChk=(()=>{const fr=state.freinf, sz=k=>(fr[k]&&fr[k].size)||0, row=n=>n>=6?2:1.5;
+  const topMax=Math.max(sz('topX'),sz('topY')), allMax=Math.max(sz('botX'),sz('botY'),topMax), side=state.mat.sideExp==='weather'?'weather':'earth';
+  const L=[{k:'bot',label:'Bottom (cast against and permanently in contact with ground)',c:cvB,min:3,applies:true},
+   {k:'top',label:'Top (in contact with ground; #'+topMax+' top bars)',c:cvT,min:row(topMax),applies:topMax>0},
+   {k:'side',label:'Sides and ends ('+(side==='earth'?'cast against earth':'formed, in contact with ground; #'+allMax+' bars')+')',c:sfdEndCover(),min:side==='earth'?3:row(allMax),applies:true}];
+  L.forEach(z=>z.ok=!z.applies||z.c>=z.min-1e-9);return {side,rows:L,ok:L.every(z=>z.ok)};})();
  const dowels=peds.map((p,i)=>sfdDowelCheck(i,p,bearing[i],pedDes[i],combos,fc,fy,lam));
  const shearFr=peds.map((p,i)=>sfdShearFriction(i,p,R.Wpeds[i],pedDes[i],dowels[i],combos,fc,fy,lam));   /* SFSF */
- return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,bearing,pedDes,dowels,shearFr,pressMomentAbout,pressShearBeyond,pressResultant,
+ return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,bearing,pedDes,dowels,shearFr,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
 }
 /* ---- pedestal longitudinal bar coordinates (perimeter arrangement), centered at section center ---- */
@@ -4998,6 +5018,12 @@ function renderFootingDesign(){
   ["f'_c",'Concrete strength',P2.fc,'psi'],['f_y','Steel yield',P2.fy,'psi'],['\\lambda','Lightweight factor',P2.lam,'\u2013'],
   ['d_{bot,x}','Eff. depth, bottom x-bars',P2.dBotX,'in'],['d_{bot,y}','Eff. depth, bottom y-bars',P2.dBotY,'in'],
   ['d_{avg}','Average d (two-way shear)',P2.dAvg,'in']]));
+ if(P2.covChk){const cc=P2.covChk.rows.filter(z=>z.applies);   /* SFCV */
+  intro.appendChild(eqBlock('Concrete cover, footing','ACI 318-19 20.5.1.3, Table 20.5.1.3.1',
+   'c \\ge c_{min}\\;\\text{(cast against earth 3 in; in contact with ground: No. 6+ 2 in, No. 5 and smaller 1.5 in)}',
+   cc.map(z=>'\\text{'+z.k+'}: '+f2(z.c)+(z.ok?' \\ge ':' < ')+f2(z.min)).join(',\\quad '),
+   P2.covChk.ok?'\\text{covers OK}\\;\\checkmark':'\\text{NG}'));
+  if(!P2.covChk.ok)intro.appendChild(el('div','failbox','<b>NG \u2014 concrete cover.</b> '+cc.filter(z=>!z.ok).map(z=>z.label+': '+f2(z.c)+' in < '+f2(z.min)+' in').join('; ')+' (ACI 318-19 Table 20.5.1.3.1).'));}
  intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdMatTxt('botX')+', bottom y '+sfdMatTxt('botY')+', top x '+sfdMatTxt('topX')+', top y '+sfdMatTxt('topY')+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdMatTxt('botX')+', bottom y '+sfdMatTxt('botY')+', top x '+sfdMatTxt('topX')+', top y '+sfdMatTxt('topY')+'</span></a>'));   /* link to the Reinforcement input tab */
  ['x','y'].forEach(dir=>{
   const des=(dir==='x')?P2.desX:P2.desY;
@@ -5447,6 +5473,11 @@ function renderPedestalDesign(){
     'c_{tie} = '+f2(pd.cov)+' - '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+'\\;\\mathrm{in},\\qquad c_{min} = '+f2(pd.tieCovMin)+'\\;\\mathrm{in}\\;(\\#'+(state.peds[i].reinf.tieSize||0)+'\\;\\text{tie})',
     pd.tieCovOK?'\\text{tie cover OK}\\;\\checkmark':'\\text{NG}'));
    b.appendChild(el('div','note','c = the pedestal cover input, the clear cover to the vertical bars; the ties lie outside the vertical bars. The exposure is set on the pedestal card (Pedestals input tab).'));
+   b.appendChild(eqBlock('Clear cover to the vertical bars','ACI 318-19 20.5.1.3, Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+')',   /* SFCV */
+    'c \\ge c_{min}',
+    'c = '+f2(pd.cov)+'\\;\\mathrm{in},\\qquad c_{min} = '+f2(pd.vertCovMin)+'\\;\\mathrm{in}\\;(\\#'+(state.peds[i].reinf.longSize||0)+'\\;\\text{vertical bars})',
+    pd.vertCovOK?'\\text{vertical-bar cover OK}\\;\\checkmark':'\\text{NG}'));
+   if(!pd.vertCovOK)b.appendChild(el('div','failbox','<b>NG \u2014 clear cover to the vertical bars.</b> c = '+f2(pd.cov)+' in is less than the '+f2(pd.vertCovMin)+' in of ACI 318-19 Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+').'));
    if(!pd.tieCovOK)b.appendChild(el('div','failbox','<b>NG \u2014 clear cover to the ties.</b> c \u2212 d<sub>b,tie</sub> = '+f3(pd.tieCov)+' in is less than the '+f2(pd.tieCovMin)+' in of ACI 318-19 Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+'). Increase the cover or use a smaller tie.'));}
   b.appendChild(eqBlock('Slenderness screen','ACI 318-19 6.2.5 (k=1, l_u=h assumed)',
    'r = 0.3 b_{min},\\quad k l_u/r \\le 22',
@@ -6254,6 +6285,7 @@ manPart("p3","3. Output Reference",[
  ["Interface shear friction","V<sub>u</sub> = \u221a(V<sub>ux</sub>\u00b2+V<sub>uy</sub>\u00b2) \u2264 \u03c6V<sub>n</sub> = 0.75 min(\u03bc(A<sub>vf</sub>f<sub>y</sub> + N<sub>u</sub>), V<sub>n,max</sub>) at each pedestal, every LRFD combination (ACI 318-19 22.9)"],
  ["Dowels (tension, laps)","where a combination puts the interface in tension (uplift, or the resultant outside the kern): dowel area \u2265 the area required by strain compatibility, tension development into the footing (straight or hooked) \u2264 available; projection \u2265 the compression lap and (with tension) the Class B tension lap, within h \u2212 cover"],
  ["Pedestal P\u2013M (biaxial)","largest ratio |M<sub>u</sub>|/|\u03c6M<sub>n</sub>|<sub>\u03b8</sub> over the LRFD combinations, each on the \u03c6M<sub>nx</sub>\u2013\u03c6M<sub>ny</sub> contour at its own P<sub>u</sub> (P<sub>u</sub>/\u03c6P<sub>n,max</sub> above the axial cap) \u2264 1; REVIEW where it could not be computed"],
+ ["Concrete cover","footing bottom (cast against earth, 3 in), top (in contact with ground, by bar size), sides/ends (cast against earth, or formed) and the pedestal vertical bars (pedestal exposure, by bar size) \u2265 ACI 318-19 Table 20.5.1.3.1"],
  ["Pedestal tie cover","clear cover to the ties c \u2212 d<sub>b,tie</sub> \u2265 ACI 318-19 Table 20.5.1.3.1 minimum for the pedestal exposure (input on the pedestal card)"]
 ]}},
 {h:"3.2 Report sections"},
